@@ -509,6 +509,62 @@ GROUP BY a.key ORDER BY 3, 2, 1;
  key-1 | (key-1,value-2,"Wed Jan 01 00:00:00 2020") |     1
 (2 rows)
 
+-- Of the target list entries, v1-v3 should be wrapped in any_value as they do
+-- not appear in GROUP BY. The append happens on the coordinator in that case.
+-- Vars in the HAVING that do not appear in the GROUP BY are also wrapped.
+SELECT
+  a.key as k1,
+  a.key as k2,
+  a.key || '_append' as k3,
+  a.value as v1,
+  a.value as v2,
+  a.value || '_notgrouped' as v3,
+  a.value || '_append' as va1,
+  a.value || '_append' as va2,
+  a.value || '_append' || '_more' as va2,
+  count(*)
+FROM items a LEFT JOIN other_items b ON (a.key = b.key)
+GROUP BY a.key, a.value ||'_append'
+HAVING length(a.key) + length(a.value) < length(a.value || '_append')
+ORDER BY 1;
+  k1   |  k2   |      k3      |   v1    |   v2    |         v3         |      va1       |      va2       |         va2         | count
+---------------------------------------------------------------------
+ key-1 | key-1 | key-1_append | value-2 | value-2 | value-2_notgrouped | value-2_append | value-2_append | value-2_append_more |     1
+ key-2 | key-2 | key-2_append | value-1 | value-1 | value-1_notgrouped | value-1_append | value-1_append | value-1_append_more |     1
+(2 rows)
+
+SELECT coordinator_plan($$
+EXPLAIN (VERBOSE ON, COSTS OFF)
+SELECT
+  a.key as k1,
+  a.key as k2,
+  a.key || '_append' as k3,
+  a.value as v1,
+  a.value as v2,
+  a.value || '_notgrouped' as v3,
+  a.value || '_append' as va1,
+  a.value || '_append' as va2,
+  a.value || '_append' || '_more' as va3,
+  count(*)
+FROM items a LEFT JOIN other_items b ON (a.key = b.key)
+GROUP BY a.key, a.value ||'_append'
+HAVING length(a.key) + length(a.value) < length(a.value || '_append')
+ORDER BY 1
+$$);
+                                                                                                                                         coordinator_plan
+---------------------------------------------------------------------
+ Sort
+   Output: remote_scan.k1, remote_scan.k2, remote_scan.k3, (any_value(remote_scan.v1)), (any_value(remote_scan.v2)), ((any_value(remote_scan.v3) || '_notgrouped'::text)), remote_scan.va1, remote_scan.va2, remote_scan.va3, (COALESCE((pg_catalog.sum(remote_scan.count))::bigint, '0'::bigint))
+   Sort Key: remote_scan.k1
+   ->  HashAggregate
+         Output: remote_scan.k1, remote_scan.k2, remote_scan.k3, any_value(remote_scan.v1), any_value(remote_scan.v2), (any_value(remote_scan.v3) || '_notgrouped'::text), remote_scan.va1, remote_scan.va2, remote_scan.va3, COALESCE((pg_catalog.sum(remote_scan.count))::bigint, '0'::bigint)
+         Group Key: remote_scan.k1, remote_scan.va1
+         Filter: ((length(remote_scan.worker_column_11) + length(any_value(remote_scan.worker_column_12))) < length((any_value(remote_scan.worker_column_13) || '_append'::text)))
+         ->  Custom Scan (Citus Adaptive)
+               Output: remote_scan.k1, remote_scan.k2, remote_scan.k3, remote_scan.v1, remote_scan.v2, remote_scan.v3, remote_scan.va1, remote_scan.va2, remote_scan.va3, remote_scan.count, remote_scan.worker_column_11, remote_scan.worker_column_12, remote_scan.worker_column_13
+               Task Count: 4
+(10 rows)
+
 SELECT a FROM items a ORDER BY key;
                      a
 ---------------------------------------------------------------------

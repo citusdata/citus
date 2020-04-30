@@ -497,7 +497,10 @@ extern Task * CreateBasicTask(uint64 jobId, uint32 taskId, TaskType taskType,
 							  char *queryString);
 
 extern OpExpr * MakeOpExpression(Var *variable, int16 strategyNumber);
-extern Node * AddAnyValueAggregates(Node *node, void *context);
+extern Node *  WrapUngroupedVarsInAnyValueAggregate(Node *expression,
+													List *groupClauseList,
+													List *targetList,
+													bool checkExpressionEquality);
 
 /*
  * Function declarations for building, updating constraints and simple operator
