@@ -237,7 +237,7 @@ jobs:
   check-merge-to-enterprise:
     docker:
       - image: buildpack-deps:stretch
-    working_directory: /home/circleci/project  
+    working_directory: /home/circleci/project
     steps:
       - checkout
       - run:
