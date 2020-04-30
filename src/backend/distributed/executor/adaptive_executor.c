@@ -208,7 +208,7 @@ typedef struct DistributedExecution
 	 * Flag to indiciate that the set of connections we are interested
 	 * in has changed and waitEventSet needs to be rebuilt.
 	 */
-	bool connectionSetChanged;
+	bool rebuildWaitEventSet;
 
 	/*
 	 * Flag to indiciate that the set of wait events we are interested
@@ -1064,7 +1064,7 @@ CreateDistributedExecution(RowModifyLevel modLevel, List *taskList,
 
 	execution->raiseInterrupts = true;
 
-	execution->connectionSetChanged = false;
+	execution->rebuildWaitEventSet = false;
 	execution->waitFlagsChanged = false;
 
 	execution->jobIdList = jobIdList;
@@ -2142,7 +2142,7 @@ RunDistributedExecution(DistributedExecution *execution)
 		int eventSetSize = GetEventSetSize(execution->sessionList);
 
 		/* always (re)build the wait event set the first time */
-		execution->connectionSetChanged = true;
+		execution->rebuildWaitEventSet = true;
 
 		while (execution->unfinishedTaskCount > 0 && !cancellationReceived)
 		{
@@ -2154,7 +2154,7 @@ RunDistributedExecution(DistributedExecution *execution)
 				ManageWorkerPool(workerPool);
 			}
 
-			if (execution->connectionSetChanged)
+			if (execution->rebuildWaitEventSet)
 			{
 				if (events != NULL)
 				{
@@ -2236,7 +2236,7 @@ RebuildWaitEventSet(DistributedExecution *execution)
 	}
 
 	execution->waitEventSet = BuildWaitEventSet(execution->sessionList);
-	execution->connectionSetChanged = false;
+	execution->rebuildWaitEventSet = false;
 	execution->waitFlagsChanged = false;
 
 	return GetEventSetSize(execution->sessionList);
@@ -2482,7 +2482,7 @@ ManageWorkerPool(WorkerPool *workerPool)
 	}
 
 	INSTR_TIME_SET_CURRENT(workerPool->lastConnectionOpenTime);
-	execution->connectionSetChanged = true;
+	execution->rebuildWaitEventSet = true;
 }
 
 
@@ -2752,6 +2752,14 @@ ConnectionStateMachine(WorkerSession *session)
 				}
 
 				PostgresPollingStatusType pollMode = PQconnectPoll(connection->pgConn);
+
+				/*
+				 * Always rebuild the wait events after PQconnectPoll(). The reason is
+				 * that PQconnectPoll() may change the underlying socket, and there is no
+				 * proper way for us to understand that.
+				 */
+				execution->rebuildWaitEventSet = true;
+
 				if (pollMode == PGRES_POLLING_FAILED)
 				{
 					connection->connectionState = MULTI_CONNECTION_FAILED;
@@ -2855,7 +2863,7 @@ ConnectionStateMachine(WorkerSession *session)
 				ShutdownConnection(connection);
 
 				/* remove connection from wait event set */
-				execution->connectionSetChanged = true;
+				execution->rebuildWaitEventSet = true;
 
 				/*
 				 * Reset the transaction state machine since CloseConnection()
