@@ -888,9 +888,9 @@ SELECT regular_func('yes');
 CREATE OR REPLACE PROCEDURE regular_procedure(p invite_resp)
 AS $$
 BEGIN
-PERFORM * FROM event_responses WHERE response = $1;
-PERFORM * FROM event_responses e1 LEFT JOIN event_responses e2 USING (event_id) WHERE e2.response = $1;
-PERFORM  * FROM (SELECT * FROM event_responses WHERE response = $1 LIMIT 5) as foo;
+PERFORM * FROM event_responses WHERE response = $1 ORDER BY 1 DESC, 2 DESC, 3 DESC;
+PERFORM * FROM event_responses e1 LEFT JOIN event_responses e2 USING (event_id) WHERE e2.response = $1 ORDER BY 1 DESC, 2 DESC, 3 DESC, 4 DESC;
+PERFORM  * FROM (SELECT * FROM event_responses WHERE response = $1 LIMIT 5) as foo ORDER BY 1 DESC, 2 DESC, 3 DESC;
 END;
 $$ LANGUAGE plpgsql;
 
@@ -902,7 +902,7 @@ CALL regular_procedure('no');
 CALL regular_procedure('no');
 CALL regular_procedure('no');
 
-PREPARE multi_shard_no_dist_key(invite_resp) AS select * from event_responses where response = $1::invite_resp LIMIT 1;
+PREPARE multi_shard_no_dist_key(invite_resp) AS select * from event_responses where response = $1::invite_resp ORDER BY 1 DESC, 2 DESC, 3 DESC LIMIT 1;
 EXECUTE multi_shard_no_dist_key('yes');
 EXECUTE multi_shard_no_dist_key('yes');
 EXECUTE multi_shard_no_dist_key('yes');
@@ -911,7 +911,7 @@ EXECUTE multi_shard_no_dist_key('yes');
 EXECUTE multi_shard_no_dist_key('yes');
 EXECUTE multi_shard_no_dist_key('yes');
 
-PREPARE multi_shard_with_dist_key(int, invite_resp) AS select * from event_responses where event_id > $1 AND response = $2::invite_resp LIMIT 1;
+PREPARE multi_shard_with_dist_key(int, invite_resp) AS select * from event_responses where event_id > $1 AND response = $2::invite_resp ORDER BY 1 DESC, 2 DESC, 3 DESC LIMIT 1;
 EXECUTE multi_shard_with_dist_key(1, 'yes');
 EXECUTE multi_shard_with_dist_key(1, 'yes');
 EXECUTE multi_shard_with_dist_key(1, 'yes');
@@ -920,7 +920,7 @@ EXECUTE multi_shard_with_dist_key(1, 'yes');
 EXECUTE multi_shard_with_dist_key(1, 'yes');
 EXECUTE multi_shard_with_dist_key(1, 'yes');
 
-PREPARE query_pushdown_no_dist_key(invite_resp) AS select * from event_responses e1 LEFT JOIN event_responses e2 USING(event_id) where e1.response = $1::invite_resp LIMIT 1;
+PREPARE query_pushdown_no_dist_key(invite_resp) AS select * from event_responses e1 LEFT JOIN event_responses e2 USING(event_id) where e1.response = $1::invite_resp ORDER BY 1 DESC, 2 DESC, 3 DESC, 4 DESC LIMIT 1;
 EXECUTE query_pushdown_no_dist_key('yes');
 EXECUTE query_pushdown_no_dist_key('yes');
 EXECUTE query_pushdown_no_dist_key('yes');
@@ -947,7 +947,7 @@ EXECUTE insert_select_pushdown('yes');
 EXECUTE insert_select_pushdown('yes');
 EXECUTE insert_select_pushdown('yes');
 
-PREPARE router_select_with_no_dist_key_filter(invite_resp) AS select * from event_responses where event_id = 1 AND response = $1::invite_resp LIMIT 1;
+PREPARE router_select_with_no_dist_key_filter(invite_resp) AS select * from event_responses where event_id = 1 AND response = $1::invite_resp ORDER BY 1 DESC, 2 DESC, 3 DESC LIMIT 1;
 EXECUTE router_select_with_no_dist_key_filter('yes');
 EXECUTE router_select_with_no_dist_key_filter('yes');
 EXECUTE router_select_with_no_dist_key_filter('yes');
