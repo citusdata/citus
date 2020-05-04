@@ -191,12 +191,16 @@ SubqueryColocated(Query *subquery, ColocatedJoinChecker *checker)
 	/*
 	 * There are no relations in the input subquery, such as a subquery
 	 * that consist of only intermediate results or without FROM
-	 * clause.
+	 * clause or subquery in WHERE clause anded with FALSE.
+	 *
+	 * Note that for the subquery in WHERE clause, the input original
+	 * subquery (a.k.a., which didn't go through standard_planner()) may
+	 * contain distributed relations, but postgres is smart enough to
+	 * not generate the restriction information. That's the reason for
+	 * not asserting non-existence of distributed relations.
 	 */
 	if (list_length(filteredRestrictionList) == 0)
 	{
-		Assert(!FindNodeCheck((Node *) subquery, IsDistributedTableRTE));
-
 		return true;
 	}
 
