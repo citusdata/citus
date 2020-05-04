@@ -87,11 +87,18 @@ typedef struct CitusTableCacheEntrySlot
 	CitusTableCacheEntry *ref;
 } CitusTableCacheEntrySlot;
 
+/*
+ * ShardIdIndexSlot is entry type for CitusTableCacheEntry's ShardIdIndexHash.
+ */
+typedef struct ShardIdIndexSlot
+{
+	uint64 shardId;
+	int shardIndex;
+} ShardIdIndexSlot;
 
 /*
- * State which should be cleared upon DROP EXTENSION.  When the configuration
- * changes, e.g. because the extension is dropped, these summarily get set to
- * 0.
+ * State which should be cleared upon DROP EXTENSION. When the configuration
+ * changes, e.g. because extension is dropped, these summarily get set to 0.
  */
 typedef struct MetadataCacheData
 {
@@ -214,8 +221,8 @@ static void CachedRelationNamespaceLookup(const char *relationName, Oid relnames
 										  Oid *cachedOid);
 static ShardPlacement * ResolveGroupShardPlacement(
 	GroupShardPlacement *groupShardPlacement,
-	CitusTableCacheEntry *tableEntry, int
-	shardIndex);
+	CitusTableCacheEntry *tableEntry,
+	int shardIndex);
 static Oid LookupEnumValueId(Oid typeId, char *valueName);
 static void InvalidateDistTableCache(void);
 static void InvalidateDistObjectCache(void);
@@ -401,8 +408,7 @@ LoadShardInterval(uint64 shardId)
 
 
 /*
- * RelationIdOfShard returns the relationId of the given
- * shardId.
+ * RelationIdOfShard returns the relationId of the given shardId.
  */
 Oid
 RelationIdForShard(uint64 shardId)
@@ -826,13 +832,13 @@ LookupShardIndex(int64 shardId, int *shardIndex)
 	CitusTableCacheEntryRef *tableRef = GetCitusTableCacheEntry(relationId);
 	CitusTableCacheEntry *tableEntry = tableRef->cacheEntry;
 
-	for (int index = 0; index < tableEntry->shardIntervalArrayLength; index++)
+	ShardIdIndexSlot *idIndexSlot =
+		hash_search(tableEntry->shardIdIndexHash, &shardId, HASH_FIND, NULL);
+
+	if (idIndexSlot != NULL)
 	{
-		if (tableEntry->sortedShardIntervalArray[index]->shardId == shardId)
-		{
-			*shardIndex = index;
-			return tableRef;
-		}
+		*shardIndex = idIndexSlot->shardIndex;
+		return tableRef;
 	}
 
 	ereport(ERROR, (errmsg("could not find valid entry for shard "
@@ -1362,6 +1368,16 @@ BuildCachedShardList(CitusTableCacheEntry *cacheEntry)
 	cacheEntry->sortedShardIntervalArray = sortedShardIntervalArray;
 	cacheEntry->shardIntervalArrayLength = 0;
 
+	HASHCTL info;
+	memset(&info, 0, sizeof(info));
+	info.keysize = sizeof(uint64);
+	info.entrysize = sizeof(ShardIdIndexSlot);
+	info.hcxt = TopMemoryContext;
+	info.hash = tag_hash;
+	int hashFlags = HASH_ELEM | HASH_FUNCTION | HASH_CONTEXT;
+	cacheEntry->shardIdIndexHash =
+		hash_create("ShardId to Index Hash", shardIntervalArrayLength, &info, hashFlags);
+
 	/* maintain shardId->(table,ShardInterval) cache */
 	for (int shardIndex = 0; shardIndex < shardIntervalArrayLength; shardIndex++)
 	{
@@ -1396,6 +1412,12 @@ BuildCachedShardList(CitusTableCacheEntry *cacheEntry)
 
 		/* store the shard index in the ShardInterval */
 		shardInterval->shardIndex = shardIndex;
+
+		ShardIdIndexSlot *idIndexSlot =
+			hash_search(cacheEntry->shardIdIndexHash, &shardInterval->shardId, HASH_ENTER,
+						NULL);
+		idIndexSlot->shardId = shardInterval->shardId;
+		idIndexSlot->shardIndex = shardIndex;
 	}
 
 	cacheEntry->shardColumnCompareFunction = shardColumnCompareFunction;
@@ -3323,6 +3345,12 @@ ResetCitusTableCacheEntry(CitusTableCacheEntry *cacheEntry)
 	{
 		pfree(cacheEntry->partitionColumn);
 		cacheEntry->partitionColumn = NULL;
+	}
+
+	if (cacheEntry->shardIdIndexHash != NULL)
+	{
+		hash_destroy(cacheEntry->shardIdIndexHash);
+		cacheEntry->shardIdIndexHash = NULL;
 	}
 
 	if (cacheEntry->shardIntervalArrayLength == 0)

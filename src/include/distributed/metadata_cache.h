@@ -66,6 +66,9 @@ typedef struct
 	int shardIntervalArrayLength;
 	ShardInterval **sortedShardIntervalArray;
 
+	/* map of shardId to index in sortedShardIntervalArray */
+	HTAB *shardIdIndexHash;
+
 	/* comparator for partition column's type, NULL if DISTRIBUTE_BY_NONE */
 	FmgrInfo *shardColumnCompareFunction;
 
