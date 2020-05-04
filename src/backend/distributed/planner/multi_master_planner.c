@@ -177,6 +177,20 @@ CitusCustomScanPathPlan(PlannerInfo *root,
 {
 	CitusCustomScanPath *citusPath = (CitusCustomScanPath *) best_path;
 
+	/*
+	 * Columns could have been pruned from the target list by the standard planner.
+	 * A situation in which this might happen is a CASE that is proven to be always the
+	 * same causing the other column to become useless;
+	 *   CASE WHEN ... <> NULL
+	 *     THEN ...
+	 *     ELSE ...
+	 *   END
+	 * Since nothing is equal to NULL it will always end up in the else branch. The final
+	 * target list the planenr needs from our node is passed in as tlist. By placing that
+	 * as the target list on our scan the internal rows will be projected to this one.
+	 */
+	citusPath->remoteScan->scan.plan.targetlist = tlist;
+
 	/* clauses might have been added by the planner, need to add them to our scan */
 	RestrictInfo *restrictInfo = NULL;
 	List **quals = &citusPath->remoteScan->scan.plan.qual;
