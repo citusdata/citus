@@ -471,6 +471,37 @@ IN
 ORDER BY
 	generate_series ASC;
 
+-- non-colocated subquery in WHERE clause ANDed with false
+SELECT count(*)
+FROM users_Table
+WHERE (FALSE AND EXISTS (SELECT * FROM events_table));
+
+-- multiple non-colocated subqueries in WHERE clause ANDed with false
+SELECT count(*)
+FROM users_Table
+WHERE value_1 IN
+    (SELECT value_1
+     FROM users_Table) OR (FALSE AND EXISTS (SELECT * FROM events_table));
+
+-- multiple non-colocated subqueries in WHERE clause ANDed with false
+SELECT count(*)
+FROM users_Table
+WHERE value_1 IN
+    (SELECT value_1
+     FROM users_Table) AND (FALSE AND EXISTS (SELECT * FROM events_table));
+
+-- non-colocated subquery in WHERE clause ANDed with true
+SELECT count(*)
+FROM users_Table
+WHERE (TRUE AND EXISTS (SELECT * FROM events_table));
+
+-- multiple non-colocated subqueries in WHERE clause ANDed with true
+SELECT count(*)
+FROM users_Table
+WHERE value_1 IN
+    (SELECT value_1
+     FROM users_Table) OR (EXISTS (SELECT * FROM events_table));
+
 -- Local tables also planned recursively, so using it as part of the FROM clause
 -- make the clause recurring
 CREATE TABLE local_table(id int, value_1 int);
