@@ -1,7 +1,7 @@
 
 # check-merge-to-enterprise Job
 
-When you open a PR on community, if it creates a conflict with enterprise-master, the check-merge-to-enterprise will fail. Say your branch name is `X`, we will refer to `X` on community as `community/X` and on enterprise as `enterprise/X`. In order to make the job pass:
+When you open a PR on community, if it creates a conflict with enterprise-master, the check-merge-to-enterprise will fail. Say your branch name is `X`, we will refer to `X` on community as `community/X` and on enterprise as `enterprise/X`. If the job already passes, you are done, nothing further required! Otherwise follow the below steps:
 
 - You first need to get approval from your reviewer for `community/X`. Only follow the next steps after you are about to merge the branch to community master. Otherwise, the `check-merge-to-enterprise` check might falsely pass. (For example when you added new commits to `community/X` but forgot to update `enterprise/X`).
 - You need to synchronize the same branch, `X` locally on enterprise (ideally don't push yet). For example if `community` is added as a remote in your enterprise repo, you can do the following:
