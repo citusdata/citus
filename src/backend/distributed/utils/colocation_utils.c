@@ -240,6 +240,12 @@ CreateColocationGroupForRelation(Oid sourceRelationId)
 static void
 MarkTablesColocated(Oid sourceRelationId, Oid targetRelationId)
 {
+	if (IsCitusLocalTable(sourceRelationId) || IsCitusLocalTable(targetRelationId))
+	{
+		ereport(ERROR, (errmsg(
+							"citus local tables cannot be colocated with other tables")));
+	}
+
 	CheckReplicationModel(sourceRelationId, targetRelationId);
 	CheckDistributionColumnType(sourceRelationId, targetRelationId);
 
