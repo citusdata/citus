@@ -3769,6 +3769,34 @@ IsReferenceTable(Oid relationId)
 
 
 /*
+ * IscitusLocalTable returns whether the given relation ID identifies a citus
+ * local table.
+ */
+bool
+IsCitusLocalTable(Oid relationId)
+{
+	CitusTableCacheEntry *tableEntry = GetCitusTableCacheEntry(relationId);
+
+	if (!tableEntry->isCitusTable)
+	{
+		return false;
+	}
+
+	if (tableEntry->partitionMethod != DISTRIBUTE_BY_NONE)
+	{
+		return false;
+	}
+
+	if (tableEntry->replicationModel == REPLICATION_MODEL_2PC)
+	{
+		return false;
+	}
+
+	return true;
+}
+
+
+/*
  * LookupShardRelation returns the logical relation oid a shard belongs to.
  *
  * Errors out if the shardId does not exist and missingOk is false.
