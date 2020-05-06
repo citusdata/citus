@@ -5,6 +5,10 @@ SET search_path TO sqlsmith_failures, public;
 SET citus.shard_replication_factor TO 1;
 SET citus.next_shard_id TO 1280000;
 
+SHOW server_version \gset
+SELECT substring(:'server_version', '\d+')::int > 11 AS server_version_above_eleven
+\gset
+
 begin;
 
 SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
@@ -24,6 +28,8 @@ create table orgs (
 );
 select create_distributed_table('orgs', 'id');
 
+\if :server_version_above_eleven
+-- pg12 and above support generated columns
 create table users (
       id bigserial
     , org_id bigint references orgs(id)
@@ -33,6 +39,19 @@ create table users (
     , score bigint generated always as (id + country_id) stored
     , primary key (org_id, id)
 );
+\else
+-- pg11 and below don't have generated columns, use a normal column
+create table users (
+      id bigserial
+    , org_id bigint references orgs(id)
+    , name text
+    , created_at timestamptz default now()
+    , country_id int -- references countries(id)
+    , score bigint
+    , primary key (org_id, id)
+);
+\endif
+
 select create_distributed_table('users', 'org_id');
 alter table users add constraint fk_user_country foreign key (country_id) references countries(id);
 
