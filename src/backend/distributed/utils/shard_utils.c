@@ -56,7 +56,7 @@ GetLocalShardOidOfTableWithoutDistributionKey(Oid noDistKeyTableOid)
 			   cacheEntry->partitionMethod));
 
 	const ShardInterval *shardInterval = cacheEntry->sortedShardIntervalArray[0];
-	uint64 referenceTableShardId = shardInterval->shardId;
+	uint64 localShardId = shardInterval->shardId;
 
-	return GetTableLocalShardOid(noDistKeyTableOid, referenceTableShardId);
+	return GetTableLocalShardOid(noDistKeyTableOid, localShardId);
 }

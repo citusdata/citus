@@ -278,6 +278,8 @@ CREATE TABLE local_table(a int, b int);
 SELECT count(*) FROM citus_local_table, reference_table WHERE citus_local_table.a = reference_table.a;
 DEBUG:  Creating citus local plan
 NOTICE:  executing the command locally: SELECT count(*) AS count FROM ONLY citus_local_tables_test_schema.citus_local_table_1504030, ONLY citus_local_tables_test_schema.reference_table WHERE (citus_local_table_1504030.a OPERATOR(pg_catalog.=) reference_table.a)
+DEBUG:  Creating citus local plan
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM ONLY citus_local_tables_test_schema.citus_local_table_1504030, ONLY citus_local_tables_test_schema.reference_table_1504032 WHERE (citus_local_table_1504030.a OPERATOR(pg_catalog.=) reference_table_1504032.a)
  count
 ---------------------------------------------------------------------
      0

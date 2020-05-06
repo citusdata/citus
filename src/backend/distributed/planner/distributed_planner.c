@@ -125,9 +125,10 @@ static void PopPlannerRestrictionContext(void);
 static void ResetPlannerRestrictionContext(
 	PlannerRestrictionContext *plannerRestrictionContext);
 static bool CanSkipCitusPlanners(Query *parse, RTEListProperties *rteListProperties);
+static bool IsLocalReferenceJoin(Query *parse, RTEListProperties *rteListProperties);
 static RTEListProperties * GetRTEListProperties(List *rangeTableList);
 static PlannedStmt * PlanCitusLocalStmt(DistributedPlanningContext *planContext,
-										List *rangeTableList);
+										List *rangeTableList, bool IsLocalReferenceJoin);
 static PlannedStmt * PlanFastPathDistributedStmt(DistributedPlanningContext *planContext,
 												 Node *distributionKeyValue);
 static PlannedStmt * PlanDistributedStmt(DistributedPlanningContext *planContext,
@@ -143,7 +144,10 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 	bool citusLocalQuery = false;
 	Node *distributionKeyValue = NULL;
 
+	bool isLocalReferenceJoin = false;
+
 	List *rangeTableList = ExtractRangeTableEntryList(parse);
+	RTEListProperties *rteListProperties = GetRTEListProperties(rangeTableList);
 
 	if (cursorOptions & CURSOR_OPT_FORCE_DISTRIBUTED)
 	{
@@ -154,32 +158,14 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 	}
 	else if (CitusHasBeenLoaded())
 	{
-		RTEListProperties *rteListProperties = GetRTEListProperties(rangeTableList);
+		isLocalReferenceJoin = IsLocalReferenceJoin(parse, rteListProperties);
 
-		/* TODO: want to move this downward on top CreateCitusLocalPlan */
-
-		/*
-		 * Actually, we will replace citus local tables with their shards
-		 * anyway and as we will behaving them as local tables, we could
-		 * error out for the cases that we are not supporting citus local
-		 * tables in planner as well. However, error messages for those cases
-		 * would print the placement name of the citus local table in that
-		 * case. As that would seem to be a bit weird, we will error out here
-		 * for unsupported queries with citus local tables.
-		 */
-		ErrorIfUnsupportedQueryWithCitusLocalTables(parse, rteListProperties);
-
-		bool canSkipCitusPlanners = CanSkipCitusPlanners(parse, rteListProperties);
-
-		if (canSkipCitusPlanners)
+		if (isLocalReferenceJoin)
 		{
-			List *referenceTableRTEList = ExtractTableRTEListByDistMethod(rangeTableList,
-																		  DISTRIBUTE_BY_NONE);
-
-			UpdateTablesWithoutDistKeysWithShards(parse, referenceTableRTEList);
+			needsDistributedPlanning = true;
+			citusLocalQuery = true;
 		}
-
-		if (!canSkipCitusPlanners && rteListProperties->hasCitusTable)
+		else if (rteListProperties->hasCitusTable)
 		{
 			needsDistributedPlanning = true;
 
@@ -208,6 +194,21 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 		.cursorOptions = cursorOptions,
 		.boundParams = boundParams,
 	};
+
+	/* TODO: we should check this before standard_planner modifies the query */
+	if (citusLocalQuery)
+	{
+		/*
+		 * Actually, we will replace citus local tables with their shards
+		 * anyway and as we will behaving them as local tables, we could
+		 * error out for the cases that we are not supporting citus local
+		 * tables in planner as well. However, error messages for those cases
+		 * would print the placement name of the citus local table in that
+		 * case. As that would seem to be a bit weird, we will error out here
+		 * for unsupported queries with citus local tables.
+		 */
+		ErrorIfUnsupportedQueryWithCitusLocalTables(parse, rteListProperties);
+	}
 
 	if (fastPathRouterQuery || citusLocalQuery)
 	{
@@ -289,7 +290,8 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 		}
 		else if (citusLocalQuery)
 		{
-			result = PlanCitusLocalStmt(&planContext, rangeTableList);
+			result = PlanCitusLocalStmt(&planContext, rangeTableList,
+										isLocalReferenceJoin);
 		}
 		else
 		{
@@ -659,23 +661,17 @@ IsModifyDistributedPlan(DistributedPlan *distributedPlan)
  * table entries here to prevent another recursive pass on query tree.
  */
 static PlannedStmt *
-PlanCitusLocalStmt(DistributedPlanningContext *planContext, List *rangeTableList)
+PlanCitusLocalStmt(DistributedPlanningContext *planContext, List *rangeTableList, bool
+				   isLocalReferenceJoin)
 {
 	PlannerRestrictionContext *plannerRestrictionContext =
 		planContext->plannerRestrictionContext;
-
-	/*
-	 * As we decided to use CitusLocalPlanner, we know that it can't be a
-	 * FastPathRouterQuery
-	 */
-	Assert(!plannerRestrictionContext->fastPathRestrictionContext->fastPathRouterQuery);
 
 	CitusLocalPlanRestrictionContext *citusLocalPlanRestrictionContext =
 		plannerRestrictionContext->citusLocalPlanRestrictionContext;
 
 	citusLocalPlanRestrictionContext->citusLocalQuery = true;
-	citusLocalPlanRestrictionContext->citusLocalTableRTEList =
-		ExtractTableRTEListByDistMethod(rangeTableList, CITUS_LOCAL_TABLE);
+	citusLocalPlanRestrictionContext->isLocalReferenceJoin = isLocalReferenceJoin;
 
 	return CreateDistributedPlannedStmt(planContext);
 }
@@ -2414,7 +2410,7 @@ HasUnresolvedExternParamsWalker(Node *expression, ParamListInfo boundParams)
 
 
 /*
- * CanSkipCitusPlanners returns true if the query can skip citus planners, which
+ * IsLocalReferenceJoin returns true if the query can skip citus planners, which
  * depends on the following conditions:
  *
  *  - If query includes distributed tables, citus local tables, views or function,
@@ -2424,21 +2420,12 @@ HasUnresolvedExternParamsWalker(Node *expression, ParamListInfo boundParams)
  *    with a coordinator local table.
  */
 static bool
-CanSkipCitusPlanners(Query *parse, RTEListProperties *rteListProperties)
+IsLocalReferenceJoin(Query *parse, RTEListProperties *rteListProperties)
 {
 	if (rteListProperties->hasDistributedTable)
 	{
 		/*
 		 * If query includes a distributed table, we should not skip distributed
-		 * planner.
-		 */
-		return false;
-	}
-
-	if (rteListProperties->hasCitusLocalTable)
-	{
-		/*
-		 * If query includes a citus local table, we should not skip distributed
 		 * planner.
 		 */
 		return false;
@@ -2481,12 +2468,13 @@ CanSkipCitusPlanners(Query *parse, RTEListProperties *rteListProperties)
 	if (!rteListProperties->hasReferenceTable)
 	{
 		/* we may only have local tables in query */
-		return true;
+		return false;
 	}
 
 	/*
 	 * If query has reference table, we can skip distributed planner only if:
-	 *  - it is a simple select query with a local table and
+	 *  - it is a simple select query with a local table or a citus local
+	 *    table and
 	 *  - we are in the coordinator and
 	 *  - coordinator have reference table placements.
 	 */

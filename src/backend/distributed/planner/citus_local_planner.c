@@ -51,8 +51,8 @@
 #include "optimizer/clauses.h"
 #endif
 
-static Job * CreateCitusLocalPlanJob(Query *query, List *citusLocalTableRTEList);
-static List * CitusLocalPlanTaskList(Query *query, List *citusLocalTableRTEList);
+static Job * CreateCitusLocalPlanJob(Query *query, List *noDistKeyTableRTEList);
+static List * CitusLocalPlanTaskList(Query *query, List *noDistKeyTableRTEList);
 
 /*
  * CreateCitusLocalPlan creates the distributed plan to process given query
@@ -64,18 +64,27 @@ CreateCitusLocalPlan(Query *query, PlannerRestrictionContext *plannerRestriction
 {
 	ereport(DEBUG2, (errmsg("Creating citus local plan")));
 
-	CitusLocalPlanRestrictionContext *citusLocalPlanRestrictionContext =
-		plannerRestrictionContext->citusLocalPlanRestrictionContext;
+	List *rangeTableList = ExtractRangeTableEntryList(query);
 
-	List *citusLocalTableRTEList =
-		citusLocalPlanRestrictionContext->citusLocalTableRTEList;
+	List *noDistKeyTableRTEList = ExtractTableRTEListByDistMethod(rangeTableList,
+																  CITUS_LOCAL_TABLE);
 
-	Assert(citusLocalTableRTEList != NIL);
+	if (plannerRestrictionContext->citusLocalPlanRestrictionContext->isLocalReferenceJoin)
+	{
+		List *referenceTableRTEList = ExtractTableRTEListByDistMethod(rangeTableList,
+																	  DISTRIBUTE_BY_NONE);
+
+		noDistKeyTableRTEList = list_concat(noDistKeyTableRTEList,
+											referenceTableRTEList);
+	}
+
+	Assert(noDistKeyTableRTEList != NIL);
 
 	DistributedPlan *distributedPlan = CitusMakeNode(DistributedPlan);
 
 	distributedPlan->modLevel = RowModifyLevelForQuery(query);
-	distributedPlan->workerJob = CreateCitusLocalPlanJob(query, citusLocalTableRTEList);
+	distributedPlan->workerJob = CreateCitusLocalPlanJob(query,
+														 noDistKeyTableRTEList);
 
 	/* make the final changes on the query */
 
@@ -83,7 +92,7 @@ CreateCitusLocalPlan(Query *query, PlannerRestrictionContext *plannerRestriction
 	 * Replace citus local tables with their local shards and acquire necessary
 	 * locks
 	 */
-	UpdateTablesWithoutDistKeysWithShards(query, citusLocalTableRTEList);
+	UpdateTablesWithoutDistKeysWithShards(query, noDistKeyTableRTEList);
 
 	/* convert list of expressions into expression tree for further processing */
 	FromExpr *joinTree = query->jointree;
@@ -104,11 +113,11 @@ CreateCitusLocalPlan(Query *query, PlannerRestrictionContext *plannerRestriction
  * will be executed by the other planners.
  */
 static Job *
-CreateCitusLocalPlanJob(Query *query, List *citusLocalTableRTEList)
+CreateCitusLocalPlanJob(Query *query, List *noDistKeyTableRTEList)
 {
 	Job *job = CreateJob(query);
 
-	job->taskList = CitusLocalPlanTaskList(query, citusLocalTableRTEList);
+	job->taskList = CitusLocalPlanTaskList(query, noDistKeyTableRTEList);
 
 	return job;
 }
@@ -119,31 +128,37 @@ CreateCitusLocalPlanJob(Query *query, List *citusLocalTableRTEList)
  * task to execute the given query with citus local table(s) properly.
  */
 static List *
-CitusLocalPlanTaskList(Query *query, List *citusLocalTableRTEList)
+CitusLocalPlanTaskList(Query *query, List *noDistKeyTableRTEList)
 {
-	List *shardPlacements = NIL;
+	List *taskPlacementList = NIL;
 
 	/* extract shard placements & shardIds for citus local tables in the query */
 	RangeTblEntry *rte = NULL;
-	foreach_ptr(rte, citusLocalTableRTEList)
+	foreach_ptr(rte, noDistKeyTableRTEList)
 	{
-		Oid oid = rte->relid;
+		Oid tableOid = rte->relid;
 
-		Assert(IsCitusTable(oid) && (PartitionMethod(oid) == CITUS_LOCAL_TABLE));
+		Assert(IsCitusTable(tableOid) && CitusTableWithoutDistributionKey(PartitionMethod(
+																			  tableOid)));
 
-		List *localShardPlacements = GroupShardPlacementsForTableOnGroup(oid,
-																		 COORDINATOR_GROUP_ID);
+		const CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(tableOid);
 
-		Assert(list_length(localShardPlacements) == 1);
+		Assert(cacheEntry != NULL && CitusTableWithoutDistributionKey(
+				   cacheEntry->partitionMethod));
 
-		shardPlacements = list_concat(shardPlacements, localShardPlacements);
+		const ShardInterval *shardInterval = cacheEntry->sortedShardIntervalArray[0];
+		uint64 localShardId = shardInterval->shardId;
+
+		List *shardPlacements = ActiveShardPlacementList(localShardId);
+
+		taskPlacementList = list_concat(taskPlacementList, shardPlacements);
 	}
 
 	/* prevent possible self dead locks */
-	shardPlacements = SortList(shardPlacements, CompareShardPlacementsByShardId);
+	taskPlacementList = SortList(taskPlacementList, CompareShardPlacementsByShardId);
 
 	/* pick the shard having the lowest shardId as the anchor shard */
-	uint64 anchorShardId = ((ShardPlacement *) linitial(shardPlacements))->shardId;
+	uint64 anchorShardId = ((ShardPlacement *) linitial(taskPlacementList))->shardId;
 
 	TaskType taskType = TASK_TYPE_INVALID_FIRST;
 
@@ -163,7 +178,7 @@ CitusLocalPlanTaskList(Query *query, List *citusLocalTableRTEList)
 	Task *task = CreateTask(taskType);
 
 	task->anchorShardId = anchorShardId;
-	task->taskPlacementList = shardPlacements;
+	task->taskPlacementList = taskPlacementList;
 	SetTaskQueryIfShouldLazyDeparse(task, query);
 
 	return list_make1(task);
