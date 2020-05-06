@@ -1,3 +1,5 @@
+### citus v9.3.0 (May 6, 2020) ###
+
 ### citus v9.2.4 (March 30, 2020) ###
 
 * Fixes a release problem in 9.2.3
