@@ -127,7 +127,7 @@ CreateDistributedUnionPlan(PlannerInfo *root,
 
 		Task *sqlTask = CreateBasicTask(workerJob->jobId, i, SELECT_TASK, buf.data);
 		sqlTask->anchorShardId = shardInterval->shardId;
-		sqlTask->taskPlacementList = FinalizedShardPlacementList(shardInterval->shardId);
+		sqlTask->taskPlacementList = ActiveShardPlacementList(shardInterval->shardId);
 		workerJob->taskList = lappend(workerJob->taskList, sqlTask);
 		i++;
 	}
@@ -164,7 +164,7 @@ ShardIntervalListForRelationPartitionValue(Oid relationId, Expr *partitionValue)
 		/* prune shard list to target */
 		Const *partitionValueConst = castNode(Const, partitionValue);
 		/* TODO assert the constant is of the correct value */
-		DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(relationId);
+		CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
 		return list_make1(FindShardInterval(partitionValueConst->constvalue, cacheEntry));
 	}
 
@@ -223,7 +223,7 @@ PathBasedPlannerRelationHook(PlannerInfo *root,
 							 Index restrictionIndex,
 							 RangeTblEntry *rte)
 {
-	if (!IsDistributedTable(rte->relid))
+	if (!IsCitusTable(rte->relid))
 	{
 		/* table accessed is not distributed, no paths to change */
 		return;
@@ -707,7 +707,7 @@ CanOptimizeAggPath(PlannerInfo *root, AggPath *apath)
 			Index rteIndex = targetVar->varno;
 			RangeTblEntry *rte = root->simple_rte_array[rteIndex];
 
-			DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(rte->relid);
+			CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(rte->relid);
 			if (cacheEntry->partitionColumn == NULL)
 			{
 				/* a table that is not distributed by a particular column, reference table? */
