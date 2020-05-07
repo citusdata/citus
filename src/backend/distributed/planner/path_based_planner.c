@@ -383,6 +383,13 @@ PathBasedPlannerJoinHook(PlannerInfo *root,
 						 JoinType jointype,
 						 JoinPathExtraData *extra)
 {
+	/*
+	 * Adding a path to a list includes lappend which might be destructive. Since we are
+	 * looping over the paths we are adding to we should keep a list of new paths to add
+	 * and only add them after we have found all the paths we want to add.
+	 */
+	List *newPaths = NIL;
+
 	if (jointype == JOIN_INNER)
 	{
 		ListCell *pathCell = NULL;
@@ -392,9 +399,15 @@ PathBasedPlannerJoinHook(PlannerInfo *root,
 			Path *optimizedPath = OptimizeJoinPath(originalPath);
 			if (optimizedPath)
 			{
-				add_path(joinrel, optimizedPath);
+				newPaths = lappend(newPaths, optimizedPath);
 			}
 		}
+	}
+
+	Path *path = NULL;
+	foreach_ptr(path, newPaths)
+	{
+		add_path(joinrel, path);
 	}
 }
 
