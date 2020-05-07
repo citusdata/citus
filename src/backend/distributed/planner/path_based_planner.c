@@ -21,6 +21,8 @@
 #include "optimizer/pathnode.h"
 #include "optimizer/restrictinfo.h"
 
+typedef Path * (*optimizeFn)(Path *originalPath);
+
 static Plan * CreateDistributedUnionPlan(PlannerInfo *root, RelOptInfo *rel, struct CustomPath *best_path, List *tlist, List *clauses, List *custom_plans);
 static List * ReparameterizeDistributedUnion(PlannerInfo *root, List *custom_private, RelOptInfo *child_rel);
 static CustomPath * WrapTableAccessWithDistributedUnion(Path *originalPath, uint32 colocationId, Expr *partitionValue, Oid sampleRelid);
@@ -34,6 +36,11 @@ static List * ShardIntervalListForRelationPartitionValue(Oid relationId, Expr *p
 static void PathBasedPlannerGroupAgg(PlannerInfo *root, RelOptInfo *input_rel, RelOptInfo *output_rel, void *extra);
 static Path * OptimizeGroupAgg(PlannerInfo *root, Path *originalPath);
 static bool CanOptimizeAggPath(PlannerInfo *root, AggPath *apath);
+
+/* list of functions that will be called to optimized in the joinhook*/
+static optimizeFn joinOptimizations[] = {
+	OptimizeJoinPath,
+};
 
 typedef struct DistributedUnionPath
 {
@@ -338,7 +345,7 @@ OptimizeJoinPath(Path *originalPath)
 		case T_HashJoin:
 		{
 			const JoinPath *jpath = (JoinPath *) originalPath;
-			if (CanOptimizeJoinPath(jpath))
+			if (jpath->jointype == JOIN_INNER && CanOptimizeJoinPath(jpath))
 			{
 				/* we can only optimize the Distributed union if the colocationId's are the same, taking any would suffice */
 				DistributedUnionPath *baseDistUnion = (DistributedUnionPath *) jpath->innerjoinpath;
@@ -390,16 +397,16 @@ PathBasedPlannerJoinHook(PlannerInfo *root,
 	 */
 	List *newPaths = NIL;
 
-	if (jointype == JOIN_INNER)
+	ListCell *pathCell = NULL;
+	foreach(pathCell, joinrel->pathlist)
 	{
-		ListCell *pathCell = NULL;
-		foreach(pathCell, joinrel->pathlist)
+		Path *originalPath = lfirst(pathCell);
+		for (int i=0; i < sizeof(joinOptimizations)/sizeof(joinOptimizations[1]); i++)
 		{
-			Path *originalPath = lfirst(pathCell);
-			Path *optimizedPath = OptimizeJoinPath(originalPath);
-			if (optimizedPath)
+			Path *alternativePath = joinOptimizations[i](originalPath);
+			if (alternativePath)
 			{
-				newPaths = lappend(newPaths, optimizedPath);
+				newPaths = lappend(newPaths, alternativePath);
 			}
 		}
 	}
