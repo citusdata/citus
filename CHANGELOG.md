@@ -1,3 +1,81 @@
+### citus v9.3.0 (May 6, 2020) ###
+
+* Adds `max_shared_pool_size` to control number of connections across sessions
+
+* Adds support for window functions on coordinator
+
+* Improves shard pruning logic to understand OR-conditions
+
+* Prevents using an extra connection for intermediate result multi-casts
+
+* Adds propagation of `ALTER ROLE .. SET` statements
+
+* Adds `update_distributed_table_colocation` UDF to update colocation of tables
+
+* Introduces a UDF to truncate local data after distributing a table
+
+* Adds support for creating temp schemas in parallel
+
+* Adds support for evaluation of `nextval` in the target list on coordinator
+
+* Adds support for local execution of `COPY/TRUNCATE/DROP/DDL` commands
+
+* Adds support for local execution of shard creation
+
+* Uses local execution in a transaction block
+
+* Adds support for querying distributed table sizes concurrently
+
+* Allows `master_copy_shard_placement` to replicate placements to new nodes
+
+* Allows table type to be used in target list
+
+* Avoids having multiple maintenance daemons active for a single database
+
+* Defers reference table replication to shard creation time
+
+* Enables joins between local tables and reference tables in transaction blocks
+
+* Ignores pruned target list entries in coordinator plan
+
+* Improves `SIGTERM` handling of maintenance daemon
+
+* Increases the default of `citus.node_connection_timeout` to 30 seconds
+
+* Fixes a bug that occurs when creating remote tasks in local execution
+
+* Fixes a bug that causes some DML queries containing aggregates to fail
+
+* Fixes a bug that could cause failures in queries with subqueries or CTEs
+
+* Fixes a bug that may cause some connection failures to throw errors
+
+* Fixes a bug which caused queries with SRFs and function evalution to fail
+
+* Fixes a bug with generated columns when executing `COPY dist_table TO file`
+
+* Fixes a crash when using non-constant limit clauses
+
+* Fixes a failure when composite types used in prepared statements
+
+* Fixes a possible segfault when dropping dist. table in a transaction block
+
+* Fixes a possible segfault when non-pushdownable aggs are solely used in HAVING
+
+* Fixes a segfault when executing queries using `GROUPING`
+
+* Fixes an error when using `LEFT JOIN with GROUP BY` on primary key
+
+* Fixes an issue with distributing tables having generated cols not at the end
+
+* Fixes automatic SSL permission issue when using "initdb --allow-group-access"
+
+* Fixes errors which could occur when subqueries are parameters to aggregates
+
+* Fixes possible issues by invalidating the plan cache in `master_update_node`
+
+* Fixes timing issues which could be caused by changing system clock
+
 ### citus v9.2.4 (March 30, 2020) ###
 
 * Fixes a release problem in 9.2.3
