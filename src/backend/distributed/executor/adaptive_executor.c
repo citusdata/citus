@@ -628,7 +628,6 @@ static void ProcessWaitEvents(DistributedExecution *execution, WaitEvent *events
 							  eventCount, bool *cancellationReceived);
 static long MillisecondsBetweenTimestamps(instr_time startTime, instr_time endTime);
 
-
 /*
  * AdaptiveExecutorPreExecutorRun gets called right before postgres starts its executor
  * run. Given that the result of our subplans would be evaluated before the first call to
@@ -787,10 +786,12 @@ static void
 RunLocalExecution(CitusScanState *scanState, DistributedExecution *execution)
 {
 	EState *estate = ScanStateGetExecutorState(scanState);
+	bool isUtilityCommand = false;
 	uint64 rowsProcessed = ExecuteLocalTaskListExtended(execution->localTaskList,
 														estate->es_param_list_info,
 														scanState->distributedPlan,
-														scanState->tuplestorestate);
+														scanState->tuplestorestate,
+														isUtilityCommand);
 
 	/*
 	 * We're deliberately not setting execution->rowsProcessed here. The main reason
@@ -819,57 +820,21 @@ AdjustDistributedExecutionAfterLocalExecution(DistributedExecution *execution)
 
 
 /*
- * ExecuteUtilityTaskListWithoutResults is a wrapper around executing task
- * list for utility commands. For remote tasks, it simply calls in adaptive
- * executor's task execution function. For local tasks (if any), kicks Process
- * Utility via CitusProcessUtility for utility commands. As some local utility
- * commands can trigger udf calls, this function also processes those udf calls
- * locally.
+ * ExecuteUtilityTaskList is a wrapper around executing task
+ * list for utility commands.
  */
-void
-ExecuteUtilityTaskListWithoutResults(List *taskList, bool localExecutionSupported)
+uint64
+ExecuteUtilityTaskList(List *utilityTaskList, bool localExecutionSupported)
 {
-	RowModifyLevel rowModifyLevel = ROW_MODIFY_NONE;
+	RowModifyLevel modLevel = ROW_MODIFY_NONE;
+	ExecutionParams *executionParams = CreateBasicExecutionParams(
+		modLevel, utilityTaskList, MaxAdaptiveExecutorPoolSize, localExecutionSupported
+		);
+	executionParams->xactProperties =
+		DecideTransactionPropertiesForTaskList(modLevel, utilityTaskList, false);
+	executionParams->isUtilityCommand = true;
 
-	List *localTaskList = NIL;
-	List *remoteTaskList = NIL;
-
-	/*
-	 * Divide tasks into two if localExecutionSupported is set to true and execute
-	 * the local tasks
-	 */
-	if (localExecutionSupported && ShouldExecuteTasksLocally(taskList))
-	{
-		/*
-		 * Either we are executing a utility command or a UDF call triggered
-		 * by such a command, it has to be a modifying one
-		 */
-		bool readOnlyPlan = false;
-
-		/* set local (if any) & remote tasks */
-		ExtractLocalAndRemoteTasks(readOnlyPlan, taskList, &localTaskList,
-								   &remoteTaskList);
-
-		/* execute local tasks */
-		ExecuteLocalUtilityTaskList(localTaskList);
-	}
-	else
-	{
-		/* all tasks should be executed via remote connections */
-		remoteTaskList = taskList;
-	}
-
-	/* execute remote tasks if any */
-	if (list_length(remoteTaskList) > 0)
-	{
-		/*
-		 * We already executed tasks locally. We should ideally remove this method and
-		 * let ExecuteTaskListExtended handle the local execution.
-		 */
-		localExecutionSupported = false;
-		ExecuteTaskList(rowModifyLevel, remoteTaskList, MaxAdaptiveExecutorPoolSize,
-						localExecutionSupported);
-	}
+	return ExecuteTaskListExtended(executionParams);
 }
 
 
@@ -977,8 +942,15 @@ ExecuteTaskListExtended(ExecutionParams *executionParams)
 		ErrorIfTransactionAccessedPlacementsLocally();
 	}
 
-	locallyProcessedRows += ExecuteLocalTaskList(localTaskList,
-												 executionParams->tupleStore);
+	if (executionParams->isUtilityCommand)
+	{
+		locallyProcessedRows += ExecuteLocalUtilityTaskList(localTaskList);
+	}
+	else
+	{
+		locallyProcessedRows += ExecuteLocalTaskList(localTaskList,
+													 executionParams->tupleStore);
+	}
 
 	if (MultiShardConnectionType == SEQUENTIAL_CONNECTION)
 	{
@@ -1020,6 +992,7 @@ CreateBasicExecutionParams(RowModifyLevel modLevel,
 	executionParams->tupleStore = NULL;
 	executionParams->tupleDescriptor = NULL;
 	executionParams->hasReturning = false;
+	executionParams->isUtilityCommand = false;
 	executionParams->jobIdList = NIL;
 
 	return executionParams;

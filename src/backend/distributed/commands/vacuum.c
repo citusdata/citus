@@ -16,6 +16,7 @@
 #include "commands/defrem.h"
 #endif
 #include "commands/vacuum.h"
+#include "distributed/adaptive_executor.h"
 #include "distributed/commands.h"
 #include "distributed/commands/utility_hook.h"
 #include "distributed/deparse_shard_query.h"
@@ -112,8 +113,7 @@ PostprocessVacuumStmt(VacuumStmt *vacuumStmt, const char *vacuumCommand)
 
 			/* local execution is not implemented for VACUUM commands */
 			bool localExecutionSupported = false;
-
-			ExecuteUtilityTaskListWithoutResults(taskList, localExecutionSupported);
+			ExecuteUtilityTaskList(taskList, localExecutionSupported);
 			executedVacuumCount++;
 		}
 		relationIndex++;
