@@ -386,8 +386,8 @@ ConvertToInsertSelect(Query *parse)
 	insertSelectQuery->resultRelation = targetRelationRangeTableRef->rtindex;
 
 
-	StringInfo buf = makeStringInfo();
-	deparse_shard_query(insertSelectQuery, 0,  0, buf);
+	//StringInfo buf = makeStringInfo();
+	//deparse_shard_query(insertSelectQuery, 0,  0, buf);
 
 	insertSelectQuery->returningList = parse->returningList;
 	insertSelectQuery->onConflict = parse->onConflict;
