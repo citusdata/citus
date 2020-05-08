@@ -1159,6 +1159,16 @@ RegisterCitusConfigVariables(void)
 		GUC_STANDARD,
 		NULL, NULL, NULL);
 
+	DefineCustomBoolVariable(
+		"citus.use_custom_path_broadcast_join",
+		gettext_noop("Allow broadcast joins to be used during path based planning"),
+		NULL,
+		&EnableBroadcastJoin,
+		true,
+		PGC_USERSET,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
+
 	DefineCustomIntVariable(
 		"citus.local_shared_pool_size",
 		gettext_noop(
