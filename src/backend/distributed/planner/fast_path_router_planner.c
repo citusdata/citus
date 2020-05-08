@@ -184,6 +184,10 @@ FastPathRouterQuery(Query *query, Node **distributionKeyValue)
 		/* we don't support INSERT..SELECT in the fast-path */
 		return false;
 	}
+	else if (IsMultiRowInsert(query))
+	{
+		return false;
+	}
 	else if (query->commandType == CMD_INSERT)
 	{
 		/* we don't need to do any further checks, all INSERTs are fast-path */
