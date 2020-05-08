@@ -8,6 +8,8 @@
 #include "nodes/parsenodes.h"
 #include "nodes/pathnodes.h"
 
+extern bool EnableBroadcastJoin;
+
 extern void PathBasedPlannerRelationHook(PlannerInfo *root,
 										 RelOptInfo *relOptInfo,
 										 Index restrictionIndex,
