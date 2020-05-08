@@ -327,14 +327,6 @@ DistributedInsertSelectSupported(Query *queryTree, RangeTblEntry *insertRte,
 
 	Query *subquery = subqueryRte->subquery;
 
-	if (!NeedsDistributedPlanning(subquery))
-	{
-		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-							 "distributed INSERT ... SELECT can only select from "
-							 "distributed tables",
-							 NULL, NULL);
-	}
-
 	/* we do not expect to see a view in modify target */
 	foreach(rangeTableCell, queryTree->rtable)
 	{
@@ -347,6 +339,16 @@ DistributedInsertSelectSupported(Query *queryTree, RangeTblEntry *insertRte,
 								 NULL, NULL);
 		}
 	}
+
+	if (false && !NeedsDistributedPlanning(subquery))
+	{
+		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+							 "distributed INSERT ... SELECT can only select from "
+							 "distributed tables",
+							 NULL, NULL);
+	}
+
+
 
 	if (FindNodeCheck((Node *) queryTree, CitusIsVolatileFunction))
 	{
@@ -1118,7 +1120,7 @@ InsertPartitionColumnMatchesSelect(Query *query, RangeTblEntry *insertRte,
 static DistributedPlan *
 CreateCoordinatorInsertSelectPlan(uint64 planId, Query *parse)
 {
-	Query *insertSelectQuery = copyObject(parse);
+	Query *insertSelectQuery = (parse);
 
 	RangeTblEntry *insertRte = ExtractResultRelationRTE(insertSelectQuery);
 	Oid targetRelationId = insertRte->relid;

@@ -407,16 +407,15 @@ GetSingleValue(Query *insertSelectQuery)
 	List *valuesLists = valuesRte->values_lists;
 	Node *firstValue = linitial(valuesLists);
 
-	valuesRte->values_lists = list_make1(firstValue);
+	valuesRte->values_lists = NIL;
 
 	Query *copyQuery = copyObject(insertSelectQuery);
-
-	valuesRte->values_lists = valuesLists;
-
 	RangeTblEntry *copySubqueryRte = ExtractSelectRangeTableEntry(copyQuery);
 
 	RangeTblEntry *valuesRteInCopy = linitial(copySubqueryRte->subquery->rtable);
 	valuesRteInCopy->values_lists = list_make1(firstValue);
+
+	valuesRte->values_lists = valuesLists;
 
 	return copyQuery;
 }

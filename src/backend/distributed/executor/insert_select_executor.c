@@ -128,7 +128,7 @@ CoordinatorInsertSelectExecScanInternal(CustomScanState *node)
 		EState *executorState = ScanStateGetExecutorState(scanState);
 		ParamListInfo paramListInfo = executorState->es_param_list_info;
 		DistributedPlan *distributedPlan = scanState->distributedPlan;
-		Query *insertSelectQuery = copyObject(distributedPlan->insertSelectQuery);
+		Query *insertSelectQuery = (distributedPlan->insertSelectQuery);
 		List *insertTargetList = insertSelectQuery->targetList;
 		RangeTblEntry *selectRte = ExtractSelectRangeTableEntry(insertSelectQuery);
 		RangeTblEntry *insertRte = ExtractResultRelationRTE(insertSelectQuery);
@@ -174,10 +174,6 @@ CoordinatorInsertSelectExecScanInternal(CustomScanState *node)
 		//PlannedStmt *origselectPlan = pg_plan_query(selectQuery, cursorOptions,
 		//										paramListInfo);
 		//elog(ERROR, "selectQuery after: %s", pretty_format_node_dump(nodeToString(selectQuery)));
-
-		Form_pg_attribute att_tup0 = TupleDescAttr(node->ss.ss_ScanTupleSlot->tts_tupleDescriptor, 0);
-		Form_pg_attribute att_tup1 = TupleDescAttr(node->ss.ss_ScanTupleSlot->tts_tupleDescriptor, 1);
-		Form_pg_attribute att_tup2 = TupleDescAttr(node->ss.ss_ScanTupleSlot->tts_tupleDescriptor, 2);
 
 		//elog(INFO, "%d-%d-%d", att_tup0->atttypid,att_tup1->atttypid,att_tup2->atttypid);
 
@@ -442,7 +438,7 @@ GenerateValuesPlannedStmt(Query *parse)
 	/* there is only a single relation rte */
 	valuesScanNode->values_lists = rte2->values_lists;
 
-	valuesScanNode->values_lists = (List *) eval_const_expressions(NULL, (Node *) valuesScanNode->values_lists);
+	//valuesScanNode->values_lists = (List *) eval_const_expressions(NULL, (Node *) valuesScanNode->values_lists);
 
 	plan->targetlist =
 		copyObject(FetchStatementTargetList((Node *) parse));
