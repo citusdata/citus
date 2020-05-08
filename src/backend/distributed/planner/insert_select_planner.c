@@ -322,6 +322,8 @@ DistributedInsertSelectSupported(Query *queryTree, RangeTblEntry *insertRte,
 	char targetPartitionMethod = PartitionMethod(targetRelationId);
 	ListCell *rangeTableCell = NULL;
 
+	return false;
+
 	/* we only do this check for INSERT ... SELECT queries */
 	AssertArg(InsertSelectIntoCitusTable(queryTree));
 

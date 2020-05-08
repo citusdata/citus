@@ -268,6 +268,13 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 			 * restriction information per table and parse tree transformations made by
 			 * postgres' planner.
 			 */
+
+			RangeTblEntry *subqueryRte = ExtractSelectRangeTableEntry(planContext.originalQuery);
+					subqueryRte = linitial(subqueryRte->subquery->rtable);
+					RangeTblEntry *valuesRte = linitial(subqueryRte->subquery->rtable);
+					elog(INFO, "valuesRte: %d len: %d",valuesRte->rtekind, list_length(valuesRte->values_lists));
+
+
 			planContext.plan = standard_planner(planContext.query,
 												planContext.cursorOptions,
 												planContext.boundParams);
