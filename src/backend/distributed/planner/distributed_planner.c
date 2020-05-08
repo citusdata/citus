@@ -269,10 +269,10 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 			 * postgres' planner.
 			 */
 
-			RangeTblEntry *subqueryRte = ExtractSelectRangeTableEntry(planContext.originalQuery);
-					subqueryRte = linitial(subqueryRte->subquery->rtable);
-					RangeTblEntry *valuesRte = linitial(subqueryRte->subquery->rtable);
-					elog(INFO, "valuesRte: %d len: %d",valuesRte->rtekind, list_length(valuesRte->values_lists));
+//			RangeTblEntry *subqueryRte = ExtractSelectRangeTableEntry(planContext.originalQuery);
+//					subqueryRte = linitial(subqueryRte->subquery->rtable);
+//					RangeTblEntry *valuesRte = linitial(subqueryRte->subquery->rtable);
+//					elog(INFO, "valuesRte: %d len: %d",valuesRte->rtekind, list_length(valuesRte->values_lists));
 
 
 			planContext.plan = standard_planner(planContext.query,

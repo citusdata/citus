@@ -322,7 +322,9 @@ DistributedInsertSelectSupported(Query *queryTree, RangeTblEntry *insertRte,
 	char targetPartitionMethod = PartitionMethod(targetRelationId);
 	ListCell *rangeTableCell = NULL;
 
-	return false;
+	return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+						 "cannot insert into view over distributed table",
+						 NULL, NULL);
 
 	/* we only do this check for INSERT ... SELECT queries */
 	AssertArg(InsertSelectIntoCitusTable(queryTree));
