@@ -159,6 +159,8 @@ typedef struct DistributedPlanningContext
 
 	/* Our custom restriction context */
 	PlannerRestrictionContext *plannerRestrictionContext;
+
+	Query *convertedQuery;
 } DistributedPlanningContext;
 
 
