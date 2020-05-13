@@ -73,6 +73,7 @@
 #include "rewrite/rewriteManip.h"
 #include "utils/builtins.h"
 #include "utils/catcache.h"
+#include "utils/datum.h"
 #include "utils/fmgroids.h"
 #include "utils/guc.h"
 #include "utils/lsyscache.h"
@@ -94,6 +95,24 @@ bool EnableUniqueJobIds = true;
 static List *OperatorCache = NIL;
 
 
+/* context passed down in AddAnyValueAggregates mutator */
+typedef struct AddAnyValueAggregatesContext
+{
+	/* SortGroupClauses corresponding to the GROUP BY clause */
+	List *groupClauseList;
+
+	/* TargetEntry's to which the GROUP BY clauses refer */
+	List *groupByTargetEntryList;
+
+	/*
+	 * haveNonVarGrouping is true if there are expressions in the
+	 * GROUP BY target entries. We use this as an optimisation to
+	 * skip expensive checks when possible.
+	 */
+	bool haveNonVarGrouping;
+} AddAnyValueAggregatesContext;
+
+
 /* Local functions forward declarations for job creation */
 static Job * BuildJobTree(MultiTreeRoot *multiTree);
 static MultiNode * LeftMostNode(MultiTreeRoot *multiTree);
@@ -104,6 +123,7 @@ static Query * BuildReduceQuery(MultiExtendedOp *extendedOpNode, List *dependent
 static List * BaseRangeTableList(MultiNode *multiNode);
 static List * QueryTargetList(MultiNode *multiNode);
 static List * TargetEntryList(List *expressionList);
+static Node * AddAnyValueAggregates(Node *node, AddAnyValueAggregatesContext *context);
 static List * QueryGroupClauseList(MultiNode *multiNode);
 static List * QuerySelectClauseList(MultiNode *multiNode);
 static List * QueryJoinClauseList(MultiNode *multiNode);
@@ -695,13 +715,11 @@ BuildJobQuery(MultiNode *multiNode, List *dependentJobList)
 	 */
 	if (groupClauseList != NIL && isRepartitionJoin)
 	{
-		targetList = (List *) expression_tree_mutator((Node *) targetList,
-													  AddAnyValueAggregates,
-													  groupClauseList);
+		targetList = (List *) WrapUngroupedVarsInAnyValueAggregate(
+			(Node *) targetList, groupClauseList, targetList, true);
 
-		havingQual = expression_tree_mutator((Node *) havingQual,
-											 AddAnyValueAggregates,
-											 groupClauseList);
+		havingQual = WrapUngroupedVarsInAnyValueAggregate(
+			(Node *) havingQual, groupClauseList, targetList, false);
 	}
 
 	/*
@@ -973,23 +991,116 @@ TargetEntryList(List *expressionList)
 
 
 /*
- * AddAnyValueAggregates wraps all vars that do not appear in the GROUP BY
- * clause or are inside an aggregate function in an any_value aggregate
- * function. This is needed for repartition joins because primary keys are not
- * present on intermediate tables.
+ * WrapUngroupedVarsInAnyValueAggregate finds Var nodes in the expression
+ * that do not refer to any GROUP BY column and wraps them in an any_value
+ * aggregate. These columns are allowed when the GROUP BY is on a primary
+ * key of a relation, but not if we wrap the relation in a subquery.
+ * However, since we still know the value is unique, any_value gives the
+ * right result.
  */
 Node *
-AddAnyValueAggregates(Node *node, void *context)
+WrapUngroupedVarsInAnyValueAggregate(Node *expression, List *groupClauseList,
+									 List *targetList, bool checkExpressionEquality)
 {
-	List *groupClauseList = context;
+	if (expression == NULL)
+	{
+		return NULL;
+	}
+
+	AddAnyValueAggregatesContext context;
+	context.groupClauseList = groupClauseList;
+	context.groupByTargetEntryList = GroupTargetEntryList(groupClauseList, targetList);
+	context.haveNonVarGrouping = false;
+
+	if (checkExpressionEquality)
+	{
+		/*
+		 * If the GROUP BY contains non-Var expressions, we need to do an expensive
+		 * subexpression equality check.
+		 */
+		TargetEntry *targetEntry = NULL;
+		foreach_ptr(targetEntry, context.groupByTargetEntryList)
+		{
+			if (!IsA(targetEntry->expr, Var))
+			{
+				context.haveNonVarGrouping = true;
+				break;
+			}
+		}
+	}
+
+	/* put the result in the same memory context */
+	MemoryContext nodeContext = GetMemoryChunkContext(expression);
+	MemoryContext oldContext = MemoryContextSwitchTo(nodeContext);
+
+	Node *result = expression_tree_mutator(expression, AddAnyValueAggregates,
+										   &context);
+
+	MemoryContextSwitchTo(oldContext);
+
+	return result;
+}
+
+
+/*
+ * AddAnyValueAggregates wraps all vars that do not appear in the GROUP BY
+ * clause or are inside an aggregate function in an any_value aggregate
+ * function. This is needed because postgres allows columns that are not
+ * in the GROUP BY to appear on the target list as long as the primary key
+ * of the table is in the GROUP BY, but we sometimes wrap the join tree
+ * in a subquery in which case the primary key information is lost.
+ *
+ * This function copies parts of the node tree, but may contain references
+ * to the original node tree.
+ *
+ * The implementation is derived from / inspired by
+ * check_ungrouped_columns_walker.
+ */
+static Node *
+AddAnyValueAggregates(Node *node, AddAnyValueAggregatesContext *context)
+{
 	if (node == NULL)
 	{
 		return node;
 	}
 
-	if (IsA(node, Var))
+	if (IsA(node, Aggref) || IsA(node, GroupingFunc))
+	{
+		/* any column is allowed to appear in an aggregate or grouping */
+		return node;
+	}
+	else if (IsA(node, Var))
 	{
 		Var *var = (Var *) node;
+
+		/*
+		 * Check whether this Var appears in the GROUP BY.
+		 */
+		TargetEntry *groupByTargetEntry = NULL;
+		foreach_ptr(groupByTargetEntry, context->groupByTargetEntryList)
+		{
+			if (!IsA(groupByTargetEntry->expr, Var))
+			{
+				continue;
+			}
+
+			Var *groupByVar = (Var *) groupByTargetEntry->expr;
+
+			/* we should only be doing this at the top level of the query */
+			Assert(groupByVar->varlevelsup == 0);
+
+			if (var->varno == groupByVar->varno &&
+				var->varattno == groupByVar->varattno)
+			{
+				/* this Var is in the GROUP BY, do not wrap it */
+				return node;
+			}
+		}
+
+		/*
+		 * We have found a Var that does not appear in the GROUP BY.
+		 * Wrap it in an any_value aggregate.
+		 */
 		Aggref *agg = makeNode(Aggref);
 		agg->aggfnoid = CitusAnyValueFunctionId();
 		agg->aggtype = var->vartype;
@@ -1001,31 +1112,24 @@ AddAnyValueAggregates(Node *node, void *context)
 		agg->aggcollid = exprCollation((Node *) var);
 		return (Node *) agg;
 	}
-	if (IsA(node, TargetEntry))
+	else if (context->haveNonVarGrouping)
 	{
-		TargetEntry *targetEntry = (TargetEntry *) node;
-
-
 		/*
-		 * Stop searching this part of the tree if the targetEntry is part of
-		 * the group by clause.
+		 * The GROUP BY contains at least one expression. Check whether the
+		 * current expression is equal to one of the GROUP BY expressions.
+		 * Otherwise, continue to descend into subexpressions.
 		 */
-		if (targetEntry->ressortgroupref != 0)
+		TargetEntry *groupByTargetEntry = NULL;
+		foreach_ptr(groupByTargetEntry, context->groupByTargetEntryList)
 		{
-			SortGroupClause *sortGroupClause = NULL;
-			foreach_ptr(sortGroupClause, groupClauseList)
+			if (equal(node, groupByTargetEntry->expr))
 			{
-				if (sortGroupClause->tleSortGroupRef == targetEntry->ressortgroupref)
-				{
-					return node;
-				}
+				/* do not descend into mutator, all Vars are safe */
+				return node;
 			}
 		}
 	}
-	if (IsA(node, Aggref) || IsA(node, GroupingFunc))
-	{
-		return node;
-	}
+
 	return expression_tree_mutator(node, AddAnyValueAggregates, context);
 }
 
@@ -1610,6 +1714,8 @@ BuildSubqueryJobQuery(MultiNode *multiNode)
 	jobQuery->windowClause = windowClause;
 	jobQuery->hasSubLinks = checkExprHasSubLink((Node *) jobQuery);
 
+	Assert(jobQuery->hasWindowFuncs == contain_window_function((Node *) jobQuery));
+
 	return jobQuery;
 }
 
@@ -1966,10 +2072,21 @@ BuildMapMergeJob(Query *jobQuery, List *dependentJobList, Var *partitionKey,
 			 RANGE_PARTITION_TYPE)
 	{
 		CitusTableCacheEntry *cache = GetCitusTableCacheEntry(baseRelationId);
-		uint32 shardCount = cache->shardIntervalArrayLength;
-		ShardInterval **sortedShardIntervalArray = cache->sortedShardIntervalArray;
+		int shardCount = cache->shardIntervalArrayLength;
+		ShardInterval **cachedSortedShardIntervalArray =
+			cache->sortedShardIntervalArray;
+		bool hasUninitializedShardInterval =
+			cache->hasUninitializedShardInterval;
 
-		bool hasUninitializedShardInterval = cache->hasUninitializedShardInterval;
+		ShardInterval **sortedShardIntervalArray =
+			palloc0(sizeof(ShardInterval) * shardCount);
+
+		for (int shardIndex = 0; shardIndex < shardCount; shardIndex++)
+		{
+			sortedShardIntervalArray[shardIndex] =
+				CopyShardInterval(cachedSortedShardIntervalArray[shardIndex]);
+		}
+
 		if (hasUninitializedShardInterval)
 		{
 			ereport(ERROR, (errmsg("cannot range repartition shard with "
@@ -1977,7 +2094,7 @@ BuildMapMergeJob(Query *jobQuery, List *dependentJobList, Var *partitionKey,
 		}
 
 		mapMergeJob->partitionType = partitionType;
-		mapMergeJob->partitionCount = shardCount;
+		mapMergeJob->partitionCount = (uint32) shardCount;
 		mapMergeJob->sortedShardIntervalArray = sortedShardIntervalArray;
 		mapMergeJob->sortedShardIntervalArrayLength = shardCount;
 	}
@@ -2116,12 +2233,29 @@ BuildJobTreeTaskList(Job *jobTree, PlannerRestrictionContext *plannerRestriction
 		List *assignedSqlTaskList = AssignTaskList(sqlTaskList);
 		AssignDataFetchDependencies(assignedSqlTaskList);
 
-		/* now assign merge task's data fetch dependencies */
+		/* if the parameters has not been resolved, record it */
+		job->parametersInJobQueryResolved =
+			!HasUnresolvedExternParamsWalker((Node *) job->jobQuery, NULL);
+
+		/*
+		 * Make final adjustments for the assigned tasks.
+		 *
+		 * First, update SELECT tasks' parameters resolved field.
+		 *
+		 * Second, assign merge task's data fetch dependencies.
+		 */
 		foreach(assignedSqlTaskCell, assignedSqlTaskList)
 		{
 			Task *assignedSqlTask = (Task *) lfirst(assignedSqlTaskCell);
-			List *assignedMergeTaskList = FindDependentMergeTaskList(assignedSqlTask);
 
+			/* we don't support parameters in the physical planner */
+			if (assignedSqlTask->taskType == SELECT_TASK)
+			{
+				assignedSqlTask->parametersInQueryStringResolved =
+					job->parametersInJobQueryResolved;
+			}
+
+			List *assignedMergeTaskList = FindDependentMergeTaskList(assignedSqlTask);
 			AssignDataFetchDependencies(assignedMergeTaskList);
 		}
 
@@ -2505,11 +2639,13 @@ QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 			anchorShardId = shardInterval->shardId;
 		}
 
-		taskShardList = lappend(taskShardList, list_make1(shardInterval));
+		ShardInterval *copiedShardInterval = CopyShardInterval(shardInterval);
+
+		taskShardList = lappend(taskShardList, list_make1(copiedShardInterval));
 
 		RelationShard *relationShard = CitusMakeNode(RelationShard);
-		relationShard->relationId = shardInterval->relationId;
-		relationShard->shardId = shardInterval->shardId;
+		relationShard->relationId = copiedShardInterval->relationId;
+		relationShard->shardId = copiedShardInterval->shardId;
 
 		relationShardList = lappend(relationShardList, relationShard);
 	}
@@ -2571,6 +2707,11 @@ QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 bool
 CoPartitionedTables(Oid firstRelationId, Oid secondRelationId)
 {
+	if (firstRelationId == secondRelationId)
+	{
+		return true;
+	}
+
 	CitusTableCacheEntry *firstTableCache = GetCitusTableCacheEntry(firstRelationId);
 	CitusTableCacheEntry *secondTableCache = GetCitusTableCacheEntry(secondRelationId);
 
@@ -3470,8 +3611,12 @@ UpdateConstraint(Node *baseConstraint, ShardInterval *shardInterval)
 	Const *minConstant = (Const *) minNode;
 	Const *maxConstant = (Const *) maxNode;
 
-	minConstant->constvalue = shardInterval->minValue;
-	maxConstant->constvalue = shardInterval->maxValue;
+	minConstant->constvalue = datumCopy(shardInterval->minValue,
+										shardInterval->valueByVal,
+										shardInterval->valueTypeLen);
+	maxConstant->constvalue = datumCopy(shardInterval->maxValue,
+										shardInterval->valueByVal,
+										shardInterval->valueTypeLen);
 
 	minConstant->constisnull = false;
 	maxConstant->constisnull = false;

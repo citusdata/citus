@@ -409,6 +409,13 @@ OpenConnectionsToWorkersInParallel(TargetWorkerSet targetWorkerSet, const char *
 		MultiConnection *connection = StartNodeUserDatabaseConnection(connectionFlags,
 																	  nodeName, nodePort,
 																	  user, NULL);
+
+		/*
+		 * connection can only be NULL for optional connections, which we don't
+		 * support in this codepath.
+		 */
+		Assert((connectionFlags & OPTIONAL_CONNECTION) == 0);
+		Assert(connection != NULL);
 		connectionList = lappend(connectionList, connection);
 	}
 	return connectionList;
@@ -476,6 +483,12 @@ SendCommandToWorkersParamsInternal(TargetWorkerSet targetWorkerSet, const char *
 																	  nodeName, nodePort,
 																	  user, NULL);
 
+		/*
+		 * connection can only be NULL for optional connections, which we don't
+		 * support in this codepath.
+		 */
+		Assert((connectionFlags & OPTIONAL_CONNECTION) == 0);
+		Assert(connection != NULL);
 		MarkRemoteTransactionCritical(connection);
 
 		connectionList = lappend(connectionList, connection);

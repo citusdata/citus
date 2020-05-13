@@ -443,8 +443,15 @@ SetTaskQueryIfShouldLazyDeparse(Task *task, Query *query)
 void
 SetTaskQueryString(Task *task, char *queryString)
 {
-	task->taskQuery.queryType = TASK_QUERY_TEXT;
-	task->taskQuery.data.queryStringLazy = queryString;
+	if (queryString == NULL)
+	{
+		task->taskQuery.queryType = TASK_QUERY_NULL;
+	}
+	else
+	{
+		task->taskQuery.queryType = TASK_QUERY_TEXT;
+		task->taskQuery.data.queryStringLazy = queryString;
+	}
 }
 
 
@@ -466,6 +473,7 @@ SetTaskPerPlacementQueryStrings(Task *task, List *perPlacementQueryStringList)
 void
 SetTaskQueryStringList(Task *task, List *queryStringList)
 {
+	Assert(queryStringList != NIL);
 	task->taskQuery.queryType = TASK_QUERY_TEXT_LIST;
 	task->taskQuery.data.queryStringList = queryStringList;
 }
@@ -520,16 +528,32 @@ GetTaskQueryType(Task *task)
 char *
 TaskQueryStringForAllPlacements(Task *task)
 {
-	if (GetTaskQueryType(task) == TASK_QUERY_TEXT_LIST)
+	int taskQueryType = GetTaskQueryType(task);
+	if (taskQueryType == TASK_QUERY_NULL)
+	{
+		/* if task query type is TASK_QUERY_NULL then the data will be NULL,
+		 * this is unexpected state */
+		ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
+						errmsg("unexpected task query state: task query type is null"),
+						errdetail("Please report this to the Citus core team.")));
+	}
+	else if (taskQueryType == TASK_QUERY_TEXT_LIST)
 	{
 		return StringJoin(task->taskQuery.data.queryStringList, ';');
 	}
-	if (GetTaskQueryType(task) == TASK_QUERY_TEXT)
+	else if (taskQueryType == TASK_QUERY_TEXT)
 	{
 		return task->taskQuery.data.queryStringLazy;
 	}
+
 	Query *jobQueryReferenceForLazyDeparsing =
 		task->taskQuery.data.jobQueryReferenceForLazyDeparsing;
+
+	/*
+	 *	At this point task query type should be TASK_QUERY_OBJECT.
+	 *  if someone calls this method inappropriately with TASK_QUERY_TEXT_PER_PLACEMENT case
+	 *  (instead of TaskQueryStringForPlacement), they will hit this assert.
+	 */
 	Assert(task->taskQuery.queryType == TASK_QUERY_OBJECT &&
 		   jobQueryReferenceForLazyDeparsing != NULL);
 

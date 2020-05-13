@@ -129,9 +129,7 @@ WHERE
 ORDER BY 1;
  no_connection_to_node
 ---------------------------------------------------------------------
- t
- t
-(2 rows)
+(0 rows)
 
 -- now, ensure this from the workers perspective
 -- we should only see the connection/backend that is running the command below

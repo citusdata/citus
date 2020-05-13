@@ -196,6 +196,7 @@ extern void multi_join_restriction_hook(PlannerInfo *root,
 										RelOptInfo *innerrel,
 										JoinType jointype,
 										JoinPathExtraData *extra);
+extern bool HasUnresolvedExternParamsWalker(Node *expression, ParamListInfo boundParams);
 extern bool IsModifyCommand(Query *query);
 extern bool IsModifyDistributedPlan(struct DistributedPlan *distributedPlan);
 extern void EnsurePartitionTableNotReplicated(Oid relationId);

@@ -37,6 +37,7 @@
 #include "commands/dbcommands.h"
 #include "commands/defrem.h"
 #include "commands/tablecmds.h"
+#include "distributed/adaptive_executor.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/commands.h"
 #include "distributed/commands/multi_copy.h"
@@ -558,14 +559,10 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		if (IsA(parsetree, RenameStmt) && ((RenameStmt *) parsetree)->renameType ==
 			OBJECT_ROLE && EnableAlterRolePropagation)
 		{
-			ereport(NOTICE, (errmsg("Citus partially supports ALTER ROLE for "
-									"distributed databases"),
-
-							 errdetail(
-								 "Citus does not propagate ALTER ROLE ... RENAME TO "
-								 "commands to workers"),
-
-							 errhint("You can manually alter roles on workers.")));
+			ereport(NOTICE, (errmsg("not propagating ALTER ROLE ... RENAME TO commands "
+									"to worker nodes"),
+							 errhint("Connect to worker nodes directly to manually "
+									 "rename the role")));
 		}
 	}
 
@@ -684,14 +681,6 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 		EnsurePartitionTableNotReplicated(targetRelationId);
 	}
 
-	/*
-	 * If it is a local placement of a distributed table or a reference table,
-	 * then execute the DDL command locally.
-	 * Here we set localExecutionSupported to true regardless of whether the
-	 * DDL command is run for/on a distributed table as
-	 * ExecuteUtilityTaskListWithoutResults would already identify those
-	 * DDL tasks not accessing any of the local placements.
-	 */
 	bool localExecutionSupported = true;
 
 	if (!ddlJob->concurrentIndexCmd)
@@ -714,7 +703,7 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 			SendCommandToWorkersWithMetadata((char *) ddlJob->commandString);
 		}
 
-		ExecuteUtilityTaskListWithoutResults(ddlJob->taskList, localExecutionSupported);
+		ExecuteUtilityTaskList(ddlJob->taskList, localExecutionSupported);
 	}
 	else
 	{
@@ -725,8 +714,7 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 
 		PG_TRY();
 		{
-			ExecuteUtilityTaskListWithoutResults(ddlJob->taskList,
-												 localExecutionSupported);
+			ExecuteUtilityTaskList(ddlJob->taskList, localExecutionSupported);
 
 			if (shouldSyncMetadata)
 			{

@@ -208,7 +208,7 @@ typedef struct DistributedExecution
 	 * Flag to indiciate that the set of connections we are interested
 	 * in has changed and waitEventSet needs to be rebuilt.
 	 */
-	bool connectionSetChanged;
+	bool rebuildWaitEventSet;
 
 	/*
 	 * Flag to indiciate that the set of wait events we are interested
@@ -628,7 +628,6 @@ static void ProcessWaitEvents(DistributedExecution *execution, WaitEvent *events
 							  eventCount, bool *cancellationReceived);
 static long MillisecondsBetweenTimestamps(instr_time startTime, instr_time endTime);
 
-
 /*
  * AdaptiveExecutorPreExecutorRun gets called right before postgres starts its executor
  * run. Given that the result of our subplans would be evaluated before the first call to
@@ -787,10 +786,12 @@ static void
 RunLocalExecution(CitusScanState *scanState, DistributedExecution *execution)
 {
 	EState *estate = ScanStateGetExecutorState(scanState);
+	bool isUtilityCommand = false;
 	uint64 rowsProcessed = ExecuteLocalTaskListExtended(execution->localTaskList,
 														estate->es_param_list_info,
 														scanState->distributedPlan,
-														scanState->tuplestorestate);
+														scanState->tuplestorestate,
+														isUtilityCommand);
 
 	/*
 	 * We're deliberately not setting execution->rowsProcessed here. The main reason
@@ -819,57 +820,21 @@ AdjustDistributedExecutionAfterLocalExecution(DistributedExecution *execution)
 
 
 /*
- * ExecuteUtilityTaskListWithoutResults is a wrapper around executing task
- * list for utility commands. For remote tasks, it simply calls in adaptive
- * executor's task execution function. For local tasks (if any), kicks Process
- * Utility via CitusProcessUtility for utility commands. As some local utility
- * commands can trigger udf calls, this function also processes those udf calls
- * locally.
+ * ExecuteUtilityTaskList is a wrapper around executing task
+ * list for utility commands.
  */
-void
-ExecuteUtilityTaskListWithoutResults(List *taskList, bool localExecutionSupported)
+uint64
+ExecuteUtilityTaskList(List *utilityTaskList, bool localExecutionSupported)
 {
-	RowModifyLevel rowModifyLevel = ROW_MODIFY_NONE;
+	RowModifyLevel modLevel = ROW_MODIFY_NONE;
+	ExecutionParams *executionParams = CreateBasicExecutionParams(
+		modLevel, utilityTaskList, MaxAdaptiveExecutorPoolSize, localExecutionSupported
+		);
+	executionParams->xactProperties =
+		DecideTransactionPropertiesForTaskList(modLevel, utilityTaskList, false);
+	executionParams->isUtilityCommand = true;
 
-	List *localTaskList = NIL;
-	List *remoteTaskList = NIL;
-
-	/*
-	 * Divide tasks into two if localExecutionSupported is set to true and execute
-	 * the local tasks
-	 */
-	if (localExecutionSupported && ShouldExecuteTasksLocally(taskList))
-	{
-		/*
-		 * Either we are executing a utility command or a UDF call triggered
-		 * by such a command, it has to be a modifying one
-		 */
-		bool readOnlyPlan = false;
-
-		/* set local (if any) & remote tasks */
-		ExtractLocalAndRemoteTasks(readOnlyPlan, taskList, &localTaskList,
-								   &remoteTaskList);
-
-		/* execute local tasks */
-		ExecuteLocalUtilityTaskList(localTaskList);
-	}
-	else
-	{
-		/* all tasks should be executed via remote connections */
-		remoteTaskList = taskList;
-	}
-
-	/* execute remote tasks if any */
-	if (list_length(remoteTaskList) > 0)
-	{
-		/*
-		 * We already executed tasks locally. We should ideally remove this method and
-		 * let ExecuteTaskListExtended handle the local execution.
-		 */
-		localExecutionSupported = false;
-		ExecuteTaskList(rowModifyLevel, remoteTaskList, MaxAdaptiveExecutorPoolSize,
-						localExecutionSupported);
-	}
+	return ExecuteTaskListExtended(executionParams);
 }
 
 
@@ -977,8 +942,15 @@ ExecuteTaskListExtended(ExecutionParams *executionParams)
 		ErrorIfTransactionAccessedPlacementsLocally();
 	}
 
-	locallyProcessedRows += ExecuteLocalTaskList(localTaskList,
-												 executionParams->tupleStore);
+	if (executionParams->isUtilityCommand)
+	{
+		locallyProcessedRows += ExecuteLocalUtilityTaskList(localTaskList);
+	}
+	else
+	{
+		locallyProcessedRows += ExecuteLocalTaskList(localTaskList,
+													 executionParams->tupleStore);
+	}
 
 	if (MultiShardConnectionType == SEQUENTIAL_CONNECTION)
 	{
@@ -1020,6 +992,7 @@ CreateBasicExecutionParams(RowModifyLevel modLevel,
 	executionParams->tupleStore = NULL;
 	executionParams->tupleDescriptor = NULL;
 	executionParams->hasReturning = false;
+	executionParams->isUtilityCommand = false;
 	executionParams->jobIdList = NIL;
 
 	return executionParams;
@@ -1064,7 +1037,7 @@ CreateDistributedExecution(RowModifyLevel modLevel, List *taskList,
 
 	execution->raiseInterrupts = true;
 
-	execution->connectionSetChanged = false;
+	execution->rebuildWaitEventSet = false;
 	execution->waitFlagsChanged = false;
 
 	execution->jobIdList = jobIdList;
@@ -2008,6 +1981,7 @@ FindOrCreateWorkerSession(WorkerPool *workerPool, MultiConnection *connection)
 	session->connection = connection;
 	session->workerPool = workerPool;
 	session->commandsSent = 0;
+
 	dlist_init(&session->pendingTaskQueue);
 	dlist_init(&session->readyTaskQueue);
 
@@ -2142,7 +2116,7 @@ RunDistributedExecution(DistributedExecution *execution)
 		int eventSetSize = GetEventSetSize(execution->sessionList);
 
 		/* always (re)build the wait event set the first time */
-		execution->connectionSetChanged = true;
+		execution->rebuildWaitEventSet = true;
 
 		while (execution->unfinishedTaskCount > 0 && !cancellationReceived)
 		{
@@ -2154,7 +2128,7 @@ RunDistributedExecution(DistributedExecution *execution)
 				ManageWorkerPool(workerPool);
 			}
 
-			if (execution->connectionSetChanged)
+			if (execution->rebuildWaitEventSet)
 			{
 				if (events != NULL)
 				{
@@ -2236,7 +2210,7 @@ RebuildWaitEventSet(DistributedExecution *execution)
 	}
 
 	execution->waitEventSet = BuildWaitEventSet(execution->sessionList);
-	execution->connectionSetChanged = false;
+	execution->rebuildWaitEventSet = false;
 	execution->waitFlagsChanged = false;
 
 	return GetEventSetSize(execution->sessionList);
@@ -2482,7 +2456,7 @@ ManageWorkerPool(WorkerPool *workerPool)
 	}
 
 	INSTR_TIME_SET_CURRENT(workerPool->lastConnectionOpenTime);
-	execution->connectionSetChanged = true;
+	execution->rebuildWaitEventSet = true;
 }
 
 
@@ -2751,7 +2725,15 @@ ConnectionStateMachine(WorkerSession *session)
 					break;
 				}
 
+				int beforePollSocket = PQsocket(connection->pgConn);
 				PostgresPollingStatusType pollMode = PQconnectPoll(connection->pgConn);
+
+				if (beforePollSocket != PQsocket(connection->pgConn))
+				{
+					/* rebuild the wait events if PQconnectPoll() changed the socket */
+					execution->rebuildWaitEventSet = true;
+				}
+
 				if (pollMode == PGRES_POLLING_FAILED)
 				{
 					connection->connectionState = MULTI_CONNECTION_FAILED;
@@ -2759,10 +2741,16 @@ ConnectionStateMachine(WorkerSession *session)
 				else if (pollMode == PGRES_POLLING_READING)
 				{
 					UpdateConnectionWaitFlags(session, WL_SOCKET_READABLE);
+
+					/* we should have a valid socket */
+					Assert(PQsocket(connection->pgConn) != -1);
 				}
 				else if (pollMode == PGRES_POLLING_WRITING)
 				{
 					UpdateConnectionWaitFlags(session, WL_SOCKET_WRITEABLE);
+
+					/* we should have a valid socket */
+					Assert(PQsocket(connection->pgConn) != -1);
 				}
 				else
 				{
@@ -2771,6 +2759,9 @@ ConnectionStateMachine(WorkerSession *session)
 											  WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE);
 
 					connection->connectionState = MULTI_CONNECTION_CONNECTED;
+
+					/* we should have a valid socket */
+					Assert(PQsocket(connection->pgConn) != -1);
 				}
 
 				break;
@@ -2855,7 +2846,7 @@ ConnectionStateMachine(WorkerSession *session)
 				ShutdownConnection(connection);
 
 				/* remove connection from wait event set */
-				execution->connectionSetChanged = true;
+				execution->rebuildWaitEventSet = true;
 
 				/*
 				 * Reset the transaction state machine since CloseConnection()

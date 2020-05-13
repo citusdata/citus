@@ -27,7 +27,13 @@ INSERT INTO collections (key, ts, collection_id, value) VALUES (4, '2009-01-01',
 -- already existing partitioninong hierarcy
 SELECT create_distributed_table('collections', 'key');
 NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$partitioned_table_replicated.collections_1$$)
 NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$partitioned_table_replicated.collections_2$$)
  create_distributed_table
 ---------------------------------------------------------------------
 
@@ -41,6 +47,9 @@ CREATE TABLE collections_4 AS SELECT * FROM collections LIMIT 0;
 INSERT INTO collections_4 SELECT i, '2009-01-01', 4, i FROM generate_series (0, 10) i;
 ALTER TABLE collections ATTACH PARTITION collections_4 FOR VALUES IN ( 4 );
 NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$partitioned_table_replicated.collections_4$$)
 -- finally attach a distributed table to a distributed table
 CREATE TABLE collections_5 AS SELECT * FROM collections LIMIT 0;
 SELECT create_distributed_table('collections_5', 'key');
@@ -157,7 +166,7 @@ ADD CONSTRAINT
 REFERENCES
 	fkey_test(key) ON DELETE CASCADE;
 ERROR:  cannot create foreign key constraint
-DETAIL:  Citus Community Edition currently supports foreign key constraints only for "citus.shard_replication_factor = 1".
+DETAIL:  Citus currently supports foreign key constraints only for "citus.shard_replication_factor = 1".
 HINT:  Please change "citus.shard_replication_factor to 1". To learn more about using foreign keys with other replication factors, please contact us at https://citusdata.com/about/contact_us.
 -- we should be able to attach and detach partitions
 -- given that those DDLs are on the parent table

@@ -17,7 +17,6 @@ extern int MaxSharedPoolSize;
 extern void InitializeSharedConnectionStats(void);
 extern void WaitForSharedConnection(void);
 extern void WakeupWaiterBackendsForSharedConnection(void);
-extern void RemoveInactiveNodesFromSharedConnections(void);
 extern int GetMaxSharedPoolSize(void);
 extern bool TryToIncrementSharedConnectionCounter(const char *hostname, int port);
 extern void WaitLoopForSharedConnection(const char *hostname, int port);

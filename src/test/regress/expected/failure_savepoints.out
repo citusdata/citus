@@ -40,8 +40,7 @@ INSERT INTO artists VALUES (5, 'Asher Lev');
 SAVEPOINT s1;
 WARNING:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
-WARNING:  connection error: localhost:xxxxx
-DETAIL:  connection not open
+WARNING:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
 WARNING:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
 WARNING:  connection not open
@@ -74,8 +73,7 @@ RELEASE SAVEPOINT s1;
 WARNING:  AbortSubTransaction while in COMMIT state
 WARNING:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
-WARNING:  connection error: localhost:xxxxx
-DETAIL:  connection not open
+WARNING:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
 WARNING:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
 WARNING:  connection not open
@@ -132,8 +130,7 @@ RELEASE SAVEPOINT s2;
 WARNING:  AbortSubTransaction while in COMMIT state
 WARNING:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
-WARNING:  connection error: localhost:xxxxx
-DETAIL:  connection not open
+WARNING:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
 WARNING:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
 WARNING:  connection not open
@@ -213,7 +210,7 @@ ROLLBACK TO SAVEPOINT s1;
 WARNING:  connection not open
 WARNING:  connection not open
 WARNING:  connection not open
-WARNING:  connection error: localhost:xxxxx
+WARNING:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
 WARNING:  connection not open
 WARNING:  connection not open
 COMMIT;
@@ -248,7 +245,7 @@ BEGIN;
 INSERT INTO researchers VALUES (7, 4, 'Jan Plaza');
 SAVEPOINT s1;
 WARNING:  connection not open
-WARNING:  connection error: localhost:xxxxx
+WARNING:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
 WARNING:  connection not open
 WARNING:  connection not open
 ERROR:  connection not open
@@ -321,7 +318,7 @@ ROLLBACK TO s1;
 RELEASE SAVEPOINT s1;
 WARNING:  AbortSubTransaction while in COMMIT state
 WARNING:  connection not open
-WARNING:  connection error: localhost:xxxxx
+WARNING:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
 WARNING:  connection not open
 WARNING:  connection not open
 WARNING:  savepoint "savepoint_3" does not exist
@@ -370,10 +367,10 @@ WARNING:  connection not open
 WARNING:  connection not open
 SELECT * FROM ref;
 WARNING:  connection not open
-WARNING:  connection error: localhost:xxxxx
+WARNING:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
 WARNING:  connection not open
 WARNING:  connection not open
-ERROR:  connection error: localhost:xxxxx
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: connection not open
 END;
 -- clean up
 SELECT citus.mitmproxy('conn.allow()');

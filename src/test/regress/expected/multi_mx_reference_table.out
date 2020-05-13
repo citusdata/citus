@@ -909,6 +909,37 @@ LOG:  join order: [ "colocated_table_test" ][ reference join "reference_table_te
 
 SET client_min_messages TO NOTICE;
 SET citus.log_multi_join_order TO FALSE;
--- clean up tables
 \c - - - :master_port
-DROP TABLE reference_table_test, reference_table_test_second, reference_table_test_third;;
+-- issue 3766
+CREATE TABLE numbers(a int);
+SELECT create_reference_table('numbers');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SET client_min_messages TO debug4;
+INSERT INTO numbers VALUES (1), (2), (3), (4);
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+DEBUG:  query before rebuilding: (null)
+DEBUG:  query after rebuilding:  INSERT INTO public.numbers_1250015 AS citus_table_alias (a) VALUES (1), (2), (3), (4)
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  opening 1 new connections to localhost:xxxxx
+DEBUG:  established connection to localhost:xxxxx for session 4
+DEBUG:  opening 1 new connections to localhost:xxxxx
+DEBUG:  established connection to localhost:xxxxx for session 5
+DEBUG:  Total number of commands sent over the session 4: 1
+DEBUG:  Total number of commands sent over the session 5: 1
+SELECT count(*) FROM numbers;
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ count
+---------------------------------------------------------------------
+     4
+(1 row)
+
+RESET client_min_messages;
+-- clean up tables
+DROP TABLE reference_table_test, reference_table_test_second, reference_table_test_third, numbers;

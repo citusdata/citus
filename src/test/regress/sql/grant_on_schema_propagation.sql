@@ -77,6 +77,8 @@ SET citus.enable_alter_role_propagation TO ON;
 ALTER ROLE role_1 SUPERUSER;
 SET citus.enable_alter_role_propagation TO OFF;
 SET ROLE role_1;
+-- this is only supported on citus enterprise where multiple users can be managed
+-- The output of the nspname select below will indicate if the create has been granted
 GRANT CREATE ON SCHEMA dist_schema TO CURRENT_USER;
 \c - - - :worker_1_port
 SELECT nspname, nspacl FROM pg_namespace WHERE nspname IN ('dist_schema', 'another_dist_schema', 'non_dist_schema') ORDER BY nspname;

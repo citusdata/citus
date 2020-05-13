@@ -351,6 +351,43 @@ SELECT a.key, a, count(b)
 FROM items a LEFT JOIN other_items b ON (a.key = b.key)
 GROUP BY a.key ORDER BY 3, 2, 1;
 
+-- Of the target list entries, v1-v3 should be wrapped in any_value as they do
+-- not appear in GROUP BY. The append happens on the coordinator in that case.
+-- Vars in the HAVING that do not appear in the GROUP BY are also wrapped.
+SELECT
+  a.key as k1,
+  a.key as k2,
+  a.key || '_append' as k3,
+  a.value as v1,
+  a.value as v2,
+  a.value || '_notgrouped' as v3,
+  a.value || '_append' as va1,
+  a.value || '_append' as va2,
+  a.value || '_append' || '_more' as va2,
+  count(*)
+FROM items a LEFT JOIN other_items b ON (a.key = b.key)
+GROUP BY a.key, a.value ||'_append'
+HAVING length(a.key) + length(a.value) < length(a.value || '_append')
+ORDER BY 1;
+
+SELECT coordinator_plan($$
+EXPLAIN (VERBOSE ON, COSTS OFF)
+SELECT
+  a.key as k1,
+  a.key as k2,
+  a.key || '_append' as k3,
+  a.value as v1,
+  a.value as v2,
+  a.value || '_notgrouped' as v3,
+  a.value || '_append' as va1,
+  a.value || '_append' as va2,
+  a.value || '_append' || '_more' as va3,
+  count(*)
+FROM items a LEFT JOIN other_items b ON (a.key = b.key)
+GROUP BY a.key, a.value ||'_append'
+HAVING length(a.key) + length(a.value) < length(a.value || '_append')
+ORDER BY 1
+$$);
 SELECT a FROM items a ORDER BY key;
 SELECT a FROM items a WHERE key = 'key-1';
 SELECT a FROM (SELECT a, random() FROM items a) b ORDER BY a;

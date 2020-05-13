@@ -246,7 +246,7 @@ static void ProcessWindowFunctionsForWorkerQuery(List *windowClauseList,
 												 List *originalTargetEntryList,
 												 QueryWindowClause *queryWindowClause,
 												 QueryTargetList *queryTargetList);
-static void ProcessWindowFunctionPullUpForWorkerQuery(MultiExtendedOp *originalOpNode,
+static void ProcessWindowFunctionPullUpForWorkerQuery(List *windowClause,
 													  QueryTargetList *queryTargetList);
 static void ProcessLimitOrderByForWorkerQuery(OrderByLimitReference orderByLimitReference,
 											  Node *originalLimitCount, Node *limitOffset,
@@ -2247,15 +2247,23 @@ WorkerExtendedOpNode(MultiExtendedOp *originalOpNode,
 									  &queryHavingQual, &queryTargetList,
 									  &queryGroupClause);
 
-	if (extendedOpNodeProperties->onlyPushableWindowFunctions)
+	/*
+	 * Planner optimizations may leave window clauses with hasWindowFuncs as false.
+	 * Ignore window clauses in that case.
+	 */
+	if (extendedOpNodeProperties->hasWindowFuncs)
 	{
-		ProcessWindowFunctionsForWorkerQuery(originalWindowClause,
-											 originalTargetEntryList,
-											 &queryWindowClause, &queryTargetList);
-	}
-	else
-	{
-		ProcessWindowFunctionPullUpForWorkerQuery(originalOpNode, &queryTargetList);
+		if (extendedOpNodeProperties->onlyPushableWindowFunctions)
+		{
+			ProcessWindowFunctionsForWorkerQuery(originalWindowClause,
+												 originalTargetEntryList,
+												 &queryWindowClause, &queryTargetList);
+		}
+		else
+		{
+			ProcessWindowFunctionPullUpForWorkerQuery(originalWindowClause,
+													  &queryTargetList);
+		}
 	}
 
 	if (ShouldProcessDistinctOrderAndLimitForWorker(extendedOpNodeProperties,
@@ -2545,8 +2553,6 @@ ProcessWindowFunctionsForWorkerQuery(List *windowClauseList,
 {
 	if (windowClauseList == NIL)
 	{
-		queryWindowClause->hasWindowFunctions = false;
-
 		return;
 	}
 
@@ -2589,12 +2595,12 @@ ProcessWindowFunctionsForWorkerQuery(List *windowClauseList,
 
 /* ProcessWindowFunctionPullUpForWorkerQuery pulls up inputs for window functions */
 static void
-ProcessWindowFunctionPullUpForWorkerQuery(MultiExtendedOp *originalOpNode,
+ProcessWindowFunctionPullUpForWorkerQuery(List *windowClause,
 										  QueryTargetList *queryTargetList)
 {
-	if (originalOpNode->windowClause != NIL)
+	if (windowClause != NIL)
 	{
-		List *columnList = pull_var_clause_default((Node *) originalOpNode->windowClause);
+		List *columnList = pull_var_clause_default((Node *) windowClause);
 
 		Expr *newExpression = NULL;
 		foreach_ptr(newExpression, columnList)

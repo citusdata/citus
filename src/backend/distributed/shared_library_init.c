@@ -450,7 +450,7 @@ RegisterCitusConfigVariables(void)
 		gettext_noop("Sets the maximum duration to connect to worker nodes."),
 		NULL,
 		&NodeConnectionTimeout,
-		5 * MS_PER_SECOND, 10 * MS, MS_PER_HOUR,
+		30 * MS_PER_SECOND, 10 * MS, MS_PER_HOUR,
 		PGC_USERSET,
 		GUC_UNIT_MS | GUC_STANDARD,
 		NULL, NULL, NULL);
@@ -840,12 +840,23 @@ RegisterCitusConfigVariables(void)
 
 	DefineCustomBoolVariable(
 		"citus.enable_alter_role_propagation",
-		gettext_noop("Enables propagating role passwords statements to workers"),
+		gettext_noop("Enables propagating ALTER ROLE statements to workers (excluding "
+					 "ALTER ROLE SET)"),
 		NULL,
 		&EnableAlterRolePropagation,
-		false,
+		true,
 		PGC_USERSET,
-		GUC_STANDARD,
+		GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		"citus.enable_alter_role_set_propagation",
+		gettext_noop("Enables propagating ALTER ROLE SET statements to workers"),
+		NULL,
+		&EnableAlterRoleSetPropagation,
+		true,
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
 
 	/*

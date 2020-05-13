@@ -18,9 +18,11 @@
 #include "access/table.h"
 #endif
 #include "catalog/catalog.h"
+#include "catalog/pg_auth_members.h"
 #include "catalog/pg_authid.h"
 #include "catalog/pg_db_role_setting.h"
 #include "catalog/pg_type.h"
+#include "catalog/objectaddress.h"
 #include "commands/dbcommands.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/citus_safe_lib.h"
@@ -29,6 +31,7 @@
 #include "distributed/deparser.h"
 #include "distributed/listutils.h"
 #include "distributed/master_protocol.h"
+#include "distributed/metadata/distobject.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/worker_transaction.h"
 #include "miscadmin.h"
@@ -45,9 +48,11 @@
 static const char * ExtractEncryptedPassword(Oid roleOid);
 static const char * CreateAlterRoleIfExistsCommand(AlterRoleStmt *stmt);
 static const char * CreateAlterRoleSetIfExistsCommand(AlterRoleSetStmt *stmt);
-static bool ShouldPropagateAlterRoleSetQueries(HeapTuple tuple,
-											   TupleDesc DbRoleSettingDescription);
+static char * CreateCreateOrAlterRoleCommand(const char *roleName,
+											 CreateRoleStmt *createRoleStmt,
+											 AlterRoleStmt *alterRoleStmt);
 static DefElem * makeDefElemInt(char *name, int value);
+static List * GenerateRoleOptionsList(HeapTuple tuple);
 
 static char * GetRoleNameFromDbRoleSetting(HeapTuple tuple,
 										   TupleDesc DbRoleSettingDescription);
@@ -59,9 +64,58 @@ static Node * makeFloatConst(char *str, int location);
 static const char * WrapQueryInAlterRoleIfExistsCall(const char *query, RoleSpec *role);
 static VariableSetStmt * MakeVariableSetStmt(const char *config);
 static int ConfigGenericNameCompare(const void *lhs, const void *rhs);
+static ObjectAddress RoleSpecToObjectAddress(RoleSpec *role, bool missing_ok);
 
 /* controlled via GUC */
-bool EnableAlterRolePropagation = false;
+bool EnableAlterRolePropagation = true;
+bool EnableAlterRoleSetPropagation = true;
+
+
+/*
+ * AlterRoleStmtObjectAddress returns the ObjectAddress of the role in the
+ * AlterRoleStmt. If missing_ok is set to false an error will be raised if postgres
+ * was unable to find the role that was the target of the statement.
+ */
+ObjectAddress
+AlterRoleStmtObjectAddress(Node *node, bool missing_ok)
+{
+	AlterRoleStmt *stmt = castNode(AlterRoleStmt, node);
+	return RoleSpecToObjectAddress(stmt->role, missing_ok);
+}
+
+
+/*
+ * AlterRoleSetStmtObjectAddress returns the ObjectAddress of the role in the
+ * AlterRoleSetStmt. If missing_ok is set to false an error will be raised if postgres
+ * was unable to find the role that was the target of the statement.
+ */
+ObjectAddress
+AlterRoleSetStmtObjectAddress(Node *node, bool missing_ok)
+{
+	AlterRoleSetStmt *stmt = castNode(AlterRoleSetStmt, node);
+	return RoleSpecToObjectAddress(stmt->role, missing_ok);
+}
+
+
+/*
+ * RoleSpecToObjectAddress returns the ObjectAddress of a Role associated with a
+ * RoleSpec. If missing_ok is set to false an error will be raised by postgres
+ * explaining the Role could not be found.
+ */
+static ObjectAddress
+RoleSpecToObjectAddress(RoleSpec *role, bool missing_ok)
+{
+	ObjectAddress address = { 0 };
+
+	if (role != NULL)
+	{
+		/* roles can be NULL for statements on ALL roles eg. ALTER ROLE ALL SET ... */
+		Oid roleOid = get_rolespec_oid(role, missing_ok);
+		ObjectAddressSet(address, AuthIdRelationId, roleOid);
+	}
+
+	return address;
+}
 
 
 /*
@@ -72,12 +126,18 @@ bool EnableAlterRolePropagation = false;
 List *
 PostprocessAlterRoleStmt(Node *node, const char *queryString)
 {
-	AlterRoleStmt *stmt = castNode(AlterRoleStmt, node);
+	ObjectAddress address = GetObjectAddressFromParseTree(node, false);
+	if (!ShouldPropagateObject(&address))
+	{
+		return NIL;
+	}
 
 	if (!EnableAlterRolePropagation || !IsCoordinator())
 	{
 		return NIL;
 	}
+
+	AlterRoleStmt *stmt = castNode(AlterRoleStmt, node);
 
 	/*
 	 * Make sure that no new nodes are added after this point until the end of the
@@ -120,14 +180,28 @@ PostprocessAlterRoleStmt(Node *node, const char *queryString)
 List *
 PreprocessAlterRoleSetStmt(Node *node, const char *queryString)
 {
-	if (!EnableAlterRolePropagation)
+	if (!ShouldPropagate())
 	{
 		return NIL;
 	}
 
-	EnsureCoordinator();
+	if (!EnableAlterRoleSetPropagation)
+	{
+		return NIL;
+	}
 
 	AlterRoleSetStmt *stmt = castNode(AlterRoleSetStmt, node);
+	ObjectAddress address = GetObjectAddressFromParseTree(node, false);
+
+	/*
+	 * stmt->role could be NULL when the statement is on 'ALL' roles, we do propagate for
+	 * ALL roles. If it is not NULL the role is for a specific role. If that role is not
+	 * distributed we will not propagate the statement
+	 */
+	if (stmt->role != NULL && !IsObjectDistributed(&address))
+	{
+		return NIL;
+	}
 
 	QualifyTreeNode((Node *) stmt);
 	const char *sql = DeparseTreeNode((Node *) stmt);
@@ -195,6 +269,40 @@ WrapQueryInAlterRoleIfExistsCall(const char *query, RoleSpec *role)
 					 quote_literal_cstr(query));
 
 	return buffer.data;
+}
+
+
+/*
+ * CreateCreateOrAlterRoleCommand creates ALTER ROLE command, from the alter role node
+ *  using the alter_role_if_exists() UDF.
+ */
+static char *
+CreateCreateOrAlterRoleCommand(const char *roleName,
+							   CreateRoleStmt *createRoleStmt,
+							   AlterRoleStmt *alterRoleStmt)
+{
+	StringInfoData createOrAlterRoleQueryBuffer = { 0 };
+	const char *createRoleQuery = "null";
+	const char *alterRoleQuery = "null";
+
+	if (createRoleStmt != NULL)
+	{
+		createRoleQuery = quote_literal_cstr(DeparseTreeNode((Node *) createRoleStmt));
+	}
+
+	if (alterRoleStmt != NULL)
+	{
+		alterRoleQuery = quote_literal_cstr(DeparseTreeNode((Node *) alterRoleStmt));
+	}
+
+	initStringInfo(&createOrAlterRoleQueryBuffer);
+	appendStringInfo(&createOrAlterRoleQueryBuffer,
+					 "SELECT worker_create_or_alter_role(%s, %s, %s)",
+					 quote_literal_cstr(roleName),
+					 createRoleQuery,
+					 alterRoleQuery);
+
+	return createOrAlterRoleQueryBuffer.data;
 }
 
 
@@ -309,144 +417,118 @@ MakeVariableSetStmt(const char *config)
 
 
 /*
- * GenerateAlterRoleIfExistsCommand generate ALTER ROLE command that copies a role from
- * the pg_authid table.
+ * GenerateRoleOptionsList returns the list of options set on a user based on the record
+ * in pg_authid. It requires the HeapTuple for a user entry to access both its fixed
+ * length and variable length fields.
  */
-static const char *
-GenerateAlterRoleIfExistsCommand(HeapTuple tuple, TupleDesc pgAuthIdDescription)
+static List *
+GenerateRoleOptionsList(HeapTuple tuple)
 {
-	char *rolPassword = "";
-	char *rolValidUntil = "infinity";
-	bool isNull = true;
 	Form_pg_authid role = ((Form_pg_authid) GETSTRUCT(tuple));
-	AlterRoleStmt *stmt = makeNode(AlterRoleStmt);
-	const char *rolename = NameStr(role->rolname);
 
-	stmt->role = makeNode(RoleSpec);
-	stmt->role->roletype = ROLESPEC_CSTRING;
-	stmt->role->location = -1;
-	stmt->role->rolename = pstrdup(rolename);
-	stmt->action = 1;
-	stmt->options = NIL;
+	List *options = NIL;
+	options = lappend(options, makeDefElemInt("superuser", role->rolsuper));
+	options = lappend(options, makeDefElemInt("createdb", role->rolcreatedb));
+	options = lappend(options, makeDefElemInt("createrole", role->rolcreaterole));
+	options = lappend(options, makeDefElemInt("inherit", role->rolinherit));
+	options = lappend(options, makeDefElemInt("canlogin", role->rolcanlogin));
+	options = lappend(options, makeDefElemInt("isreplication", role->rolreplication));
+	options = lappend(options, makeDefElemInt("bypassrls", role->rolbypassrls));
+	options = lappend(options, makeDefElemInt("connectionlimit", role->rolconnlimit));
 
-	stmt->options =
-		lappend(stmt->options,
-				makeDefElemInt("superuser", role->rolsuper));
-
-	stmt->options =
-		lappend(stmt->options,
-				makeDefElemInt("createdb", role->rolcreatedb));
-
-	stmt->options =
-		lappend(stmt->options,
-				makeDefElemInt("createrole", role->rolcreaterole));
-
-	stmt->options =
-		lappend(stmt->options,
-				makeDefElemInt("inherit", role->rolinherit));
-
-	stmt->options =
-		lappend(stmt->options,
-				makeDefElemInt("canlogin", role->rolcanlogin));
-
-	stmt->options =
-		lappend(stmt->options,
-				makeDefElemInt("isreplication", role->rolreplication));
-
-	stmt->options =
-		lappend(stmt->options,
-				makeDefElemInt("bypassrls", role->rolbypassrls));
-
-
-	stmt->options =
-		lappend(stmt->options,
-				makeDefElemInt("connectionlimit", role->rolconnlimit));
-
-
-	Datum rolPasswordDatum = heap_getattr(tuple, Anum_pg_authid_rolpassword,
-										  pgAuthIdDescription, &isNull);
+	/* load password from heap tuple, use NULL if not set */
+	bool isNull = true;
+	Datum rolPasswordDatum = SysCacheGetAttr(AUTHNAME, tuple, Anum_pg_authid_rolpassword,
+											 &isNull);
 	if (!isNull)
 	{
-		rolPassword = pstrdup(TextDatumGetCString(rolPasswordDatum));
-		stmt->options = lappend(stmt->options, makeDefElem("password",
-														   (Node *) makeString(
-															   rolPassword),
-														   -1));
+		char *rolPassword = pstrdup(TextDatumGetCString(rolPasswordDatum));
+		Node *passwordStringNode = (Node *) makeString(rolPassword);
+		DefElem *passwordOption = makeDefElem("password", passwordStringNode, -1);
+		options = lappend(options, passwordOption);
 	}
 	else
 	{
-		stmt->options = lappend(stmt->options, makeDefElem("password", NULL, -1));
+		options = lappend(options, makeDefElem("password", NULL, -1));
 	}
 
-	Datum rolValidUntilDatum = heap_getattr(tuple, Anum_pg_authid_rolvaliduntil,
-											pgAuthIdDescription, &isNull);
+	/* load valid unitl data from the heap tuple, use default of infinity if not set */
+	Datum rolValidUntilDatum = SysCacheGetAttr(AUTHNAME, tuple,
+											   Anum_pg_authid_rolvaliduntil, &isNull);
+	char *rolValidUntil = "infinity";
 	if (!isNull)
 	{
 		rolValidUntil = pstrdup((char *) timestamptz_to_str(rolValidUntilDatum));
 	}
 
-	stmt->options = lappend(stmt->options, makeDefElem("validUntil",
-													   (Node *) makeString(rolValidUntil),
-													   -1));
+	Node *validUntilStringNode = (Node *) makeString(rolValidUntil);
+	DefElem *validUntilOption = makeDefElem("validUntil", validUntilStringNode, -1);
+	options = lappend(options, validUntilOption);
 
-	return CreateAlterRoleIfExistsCommand(stmt);
+	return options;
 }
 
 
 /*
- * GenerateAlterRoleIfExistsCommandAllRoles creates ALTER ROLE commands
- * that copies all roles from the pg_authid table.
+ * GenerateCreateOrAlterRoleCommand generates ALTER ROLE command that copies a role from
+ * the pg_authid table.
  */
 List *
-GenerateAlterRoleIfExistsCommandAllRoles()
+GenerateCreateOrAlterRoleCommand(Oid roleOid)
 {
-	Relation pgAuthId = heap_open(AuthIdRelationId, AccessShareLock);
-	TupleDesc pgAuthIdDescription = RelationGetDescr(pgAuthId);
-	HeapTuple tuple = NULL;
-	List *commands = NIL;
-	const char *alterRoleQuery = NULL;
+	HeapTuple roleTuple = SearchSysCache1(AUTHOID, ObjectIdGetDatum(roleOid));
+	Form_pg_authid role = ((Form_pg_authid) GETSTRUCT(roleTuple));
 
-#if PG_VERSION_NUM >= PG_VERSION_12
-	TableScanDesc scan = table_beginscan_catalog(pgAuthId, 0, NULL);
-#else
-	HeapScanDesc scan = heap_beginscan_catalog(pgAuthId, 0, NULL);
-#endif
-
-	while ((tuple = heap_getnext(scan, ForwardScanDirection)) != NULL)
+	CreateRoleStmt *createRoleStmt = NULL;
+	AlterRoleStmt *alterRoleStmt = NULL;
+	if (EnableAlterRolePropagation)
 	{
-		const char *rolename = NameStr(((Form_pg_authid) GETSTRUCT(tuple))->rolname);
-
-		/*
-		 * The default roles are skipped, because reserved roles
-		 * cannot be altered.
-		 */
-		if (IsReservedName(rolename))
-		{
-			continue;
-		}
-		alterRoleQuery = GenerateAlterRoleIfExistsCommand(tuple, pgAuthIdDescription);
-		commands = lappend(commands, (void *) alterRoleQuery);
+		alterRoleStmt = makeNode(AlterRoleStmt);
+		alterRoleStmt->role = makeNode(RoleSpec);
+		alterRoleStmt->role->roletype = ROLESPEC_CSTRING;
+		alterRoleStmt->role->location = -1;
+		alterRoleStmt->role->rolename = pstrdup(NameStr(role->rolname));
+		alterRoleStmt->action = 1;
+		alterRoleStmt->options = GenerateRoleOptionsList(roleTuple);
 	}
 
-	heap_endscan(scan);
-	heap_close(pgAuthId, AccessShareLock);
+	ReleaseSysCache(roleTuple);
 
-	return commands;
+	List *completeRoleList = NIL;
+	if (createRoleStmt != NULL || alterRoleStmt != NULL)
+	{
+		/* add a worker_create_or_alter_role command if any of them are set */
+		char *createOrAlterRoleQuery = CreateCreateOrAlterRoleCommand(
+			pstrdup(NameStr(role->rolname)),
+			createRoleStmt,
+			alterRoleStmt);
+
+		completeRoleList = lappend(completeRoleList, createOrAlterRoleQuery);
+	}
+
+	if (EnableAlterRoleSetPropagation)
+	{
+		/* append ALTER ROLE ... SET commands fot this specific user */
+		List *alterRoleSetCommands = GenerateAlterRoleSetCommandForRole(roleOid);
+		completeRoleList = list_concat(completeRoleList, alterRoleSetCommands);
+	}
+
+	return completeRoleList;
 }
 
 
 /*
- * GenerateAlterRoleSetIfExistsCommands creates ALTER ROLE .. SET commands
- * that copies all session defaults for roles from the pg_db_role_setting table.
+ * GenerateAlterRoleSetCommandForRole returns the list of database wide settings for a
+ * specifc role. If the roleid is InvalidOid it returns the commands that apply to all
+ * users for the database or postgres wide.
  */
 List *
-GenerateAlterRoleSetIfExistsCommands()
+GenerateAlterRoleSetCommandForRole(Oid roleid)
 {
 	Relation DbRoleSetting = heap_open(DbRoleSettingRelationId, AccessShareLock);
 	TupleDesc DbRoleSettingDescription = RelationGetDescr(DbRoleSetting);
 	HeapTuple tuple = NULL;
 	List *commands = NIL;
-	List *alterRoleSetQueries = NIL;
 
 
 #if PG_VERSION_NUM >= PG_VERSION_12
@@ -457,12 +539,23 @@ GenerateAlterRoleSetIfExistsCommands()
 
 	while ((tuple = heap_getnext(scan, ForwardScanDirection)) != NULL)
 	{
-		if (ShouldPropagateAlterRoleSetQueries(tuple, DbRoleSettingDescription))
+		Form_pg_db_role_setting roleSetting = (Form_pg_db_role_setting) GETSTRUCT(tuple);
+		if (roleSetting->setrole != roleid)
 		{
-			alterRoleSetQueries =
-				GenerateAlterRoleSetIfExistsCommandList(tuple, DbRoleSettingDescription);
-			commands = list_concat(commands, alterRoleSetQueries);
+			/* not the user we are looking for */
+			continue;
 		}
+
+		if (OidIsValid(roleSetting->setdatabase) &&
+			roleSetting->setdatabase != MyDatabaseId)
+		{
+			/* setting is database specific for a different database */
+			continue;
+		}
+
+		List *alterRoleSetQueries = GenerateAlterRoleSetIfExistsCommandList(tuple,
+																			DbRoleSettingDescription);
+		commands = list_concat(commands, alterRoleSetQueries);
 	}
 
 	heap_endscan(scan);
@@ -682,48 +775,4 @@ ConfigGenericNameCompare(const void *a, const void *b)
 	 * not use this function to order the guc list.
 	 */
 	return pg_strcasecmp(confa->name, confb->name);
-}
-
-
-/*
- * ShouldPropagateAlterRoleSetQueries decides if the set of AlterRoleSetStmt
- * queries should be propagated to worker nodes
- *
- * A single DbRoleSetting tuple can be used to create multiple AlterRoleSetStmt
- * queries as all of the configs are stored in a text[] column and each entry
- * creates a seperate statement
- */
-static bool
-ShouldPropagateAlterRoleSetQueries(HeapTuple tuple,
-								   TupleDesc DbRoleSettingDescription)
-{
-	if (!ShouldPropagate())
-	{
-		return false;
-	}
-
-	const char *currentDatabaseName = CurrentDatabaseName();
-	const char *databaseName =
-		GetDatabaseNameFromDbRoleSetting(tuple, DbRoleSettingDescription);
-	const char *roleName = GetRoleNameFromDbRoleSetting(tuple, DbRoleSettingDescription);
-
-	/*
-	 * session defaults for databases other than the current one are not propagated
-	 */
-	if (databaseName != NULL &&
-		pg_strcasecmp(databaseName, currentDatabaseName) != 0)
-	{
-		return false;
-	}
-
-	/*
-	 * default roles are skipped, because reserved roles
-	 * cannot be altered.
-	 */
-	if (roleName != NULL && IsReservedName(roleName))
-	{
-		return false;
-	}
-
-	return true;
 }

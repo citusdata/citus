@@ -7,6 +7,7 @@
 #include "postgres.h"
 #include "miscadmin.h"
 #include "funcapi.h"
+#include "utils/plancache.h"
 
 
 #include "access/genam.h"
@@ -96,6 +97,7 @@ static void InsertNodeRow(int nodeid, char *nodename, int32 nodeport, NodeMetada
 static void DeleteNodeRow(char *nodename, int32 nodeport);
 static void SetUpDistributedTableDependencies(WorkerNode *workerNode);
 static WorkerNode * TupleToWorkerNode(TupleDesc tupleDescriptor, HeapTuple heapTuple);
+static void PropagateNodeWideObjects(WorkerNode *newWorkerNode);
 static WorkerNode * ModifiableWorkerNode(const char *nodeName, int32 nodePort);
 static void UpdateNodeLocation(int32 nodeId, char *newNodeName, int32 newNodePort);
 static bool UnsetMetadataSyncedForAll(void);
@@ -294,9 +296,6 @@ master_disable_node(PG_FUNCTION_ARGS)
 	bool onlyConsiderActivePlacements = false;
 	MemoryContext savedContext = CurrentMemoryContext;
 
-	/* remove the shared connection counters to have some space */
-	RemoveInactiveNodesFromSharedConnections();
-
 	PG_TRY();
 	{
 		if (NodeIsPrimary(workerNode))
@@ -381,6 +380,9 @@ master_set_node_property(PG_FUNCTION_ARGS)
  * - All dependencies (e.g., types, schemas)
  * - Reference tables, because they are needed to handle queries efficiently.
  * - Distributed functions
+ *
+ * Note that we do not create the distributed dependencies on the coordinator
+ * since all the dependencies should be present in the coordinator already.
  */
 static void
 SetUpDistributedTableDependencies(WorkerNode *newWorkerNode)
@@ -388,8 +390,22 @@ SetUpDistributedTableDependencies(WorkerNode *newWorkerNode)
 	if (NodeIsPrimary(newWorkerNode))
 	{
 		EnsureNoModificationsHaveBeenDone();
-		ReplicateAllDependenciesToNode(newWorkerNode->workerName,
-									   newWorkerNode->workerPort);
+
+		if (ShouldPropagate() && !NodeIsCoordinator(newWorkerNode))
+		{
+			PropagateNodeWideObjects(newWorkerNode);
+			ReplicateAllDependenciesToNode(newWorkerNode->workerName,
+										   newWorkerNode->workerPort);
+		}
+		else if (!NodeIsCoordinator(newWorkerNode))
+		{
+			ereport(WARNING, (errmsg("citus.enable_object_propagation is off, not "
+									 "creating distributed objects on worker"),
+							  errdetail("distributed objects are only kept in sync when "
+										"citus.enable_object_propagation is set to on. "
+										"Newly activated nodes will not get these "
+										"objects created")));
+		}
 
 		if (ReplicateReferenceTablesOnActivate)
 		{
@@ -413,27 +429,38 @@ SetUpDistributedTableDependencies(WorkerNode *newWorkerNode)
 
 
 /*
- * PropagateRolesToNewNode copies the roles' attributes in the new node. Roles that do
- * not exist in the workers are not created and simply skipped.
+ * PropagateNodeWideObjects is called during node activation to propagate any object that
+ * should be propagated for every node. These are generally not linked to any distributed
+ * object but change system wide behaviour.
  */
 static void
-PropagateRolesToNewNode(WorkerNode *newWorkerNode)
+PropagateNodeWideObjects(WorkerNode *newWorkerNode)
 {
-	if (!EnableAlterRolePropagation)
+	/* collect all commands */
+	List *ddlCommands = NIL;
+
+	if (EnableAlterRoleSetPropagation)
 	{
-		return;
+		/*
+		 * Get commands for database and postgres wide settings. Since these settings are not
+		 * linked to any role that can be distributed we need to distribute them seperately
+		 */
+		List *alterRoleSetCommands = GenerateAlterRoleSetCommandForRole(InvalidOid);
+		ddlCommands = list_concat(ddlCommands, alterRoleSetCommands);
 	}
 
-	List *ddlCommands = NIL;
-	List *alterRoleCommands = GenerateAlterRoleIfExistsCommandAllRoles();
-	List *alterRoleSetCommands = GenerateAlterRoleSetIfExistsCommands();
+	if (list_length(ddlCommands) > 0)
+	{
+		/* if there are command wrap them in enable_ddl_propagation off */
+		ddlCommands = lcons(DISABLE_DDL_PROPAGATION, ddlCommands);
+		ddlCommands = lappend(ddlCommands, ENABLE_DDL_PROPAGATION);
 
-	ddlCommands = list_concat(ddlCommands, alterRoleCommands);
-	ddlCommands = list_concat(ddlCommands, alterRoleSetCommands);
-
-	SendCommandListToWorkerInSingleTransaction(newWorkerNode->workerName,
-											   newWorkerNode->workerPort,
-											   CitusExtensionOwnerName(), ddlCommands);
+		/* send commands to new workers*/
+		SendCommandListToWorkerInSingleTransaction(newWorkerNode->workerName,
+												   newWorkerNode->workerPort,
+												   CitusExtensionOwnerName(),
+												   ddlCommands);
+	}
 }
 
 
@@ -608,15 +635,11 @@ ActivateNode(char *nodeName, int nodePort)
 {
 	bool isActive = true;
 
-	/* remove the shared connection counters to have some space */
-	RemoveInactiveNodesFromSharedConnections();
-
 	/* take an exclusive lock on pg_dist_node to serialize pg_dist_node changes */
 	LockRelationOid(DistNodeRelationId(), ExclusiveLock);
 
 	WorkerNode *newWorkerNode = SetNodeState(nodeName, nodePort, isActive);
 
-	PropagateRolesToNewNode(newWorkerNode);
 	SetUpDistributedTableDependencies(newWorkerNode);
 	return newWorkerNode->nodeId;
 }
@@ -652,9 +675,6 @@ master_update_node(PG_FUNCTION_ARGS)
 	BackgroundWorkerHandle *handle = NULL;
 
 	CheckCitusVersion(ERROR);
-
-	/* remove the shared connection counters to have some space */
-	RemoveInactiveNodesFromSharedConnections();
 
 	WorkerNode *workerNodeWithSameAddress = FindWorkerNodeAnyCluster(newNodeNameString,
 																	 newNodePort);
@@ -723,6 +743,12 @@ master_update_node(PG_FUNCTION_ARGS)
 		placementList = AllShardPlacementsOnNodeGroup(workerNode->groupId);
 		LockShardsInPlacementListMetadata(placementList, AccessExclusiveLock);
 	}
+
+	/*
+	 * if we have planned statements such as prepared statements, we should clear the cache so that
+	 * the planned cache doesn't return the old nodename/nodepost.
+	 */
+	ResetPlanCache();
 
 	UpdateNodeLocation(nodeId, newNodeNameString, newNodePort);
 
@@ -1024,9 +1050,6 @@ ReadDistNode(bool includeNodesFromOtherClusters)
 static void
 RemoveNodeFromCluster(char *nodeName, int32 nodePort)
 {
-	/* remove the shared connection counters to have some space */
-	RemoveInactiveNodesFromSharedConnections();
-
 	WorkerNode *workerNode = ModifiableWorkerNode(nodeName, nodePort);
 	if (NodeIsPrimary(workerNode))
 	{

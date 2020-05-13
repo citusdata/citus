@@ -1,5 +1,6 @@
 SET citus.next_shard_id TO 1220000;
 ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 1390000;
+SET citus.enable_object_propagation TO off; -- prevent object propagation on add node during setup
 -- Tests functions related to cluster membership
 -- before starting the test, lets try to create reference table and see a
 -- meaningful error
@@ -9,12 +10,16 @@ ERROR:  cannot create reference table "test_reference_table"
 DETAIL:  There are no active worker nodes.
 -- add the nodes to the cluster
 SELECT 1 FROM master_add_node('localhost', :worker_1_port);
+WARNING:  citus.enable_object_propagation is off, not creating distributed objects on worker
+DETAIL:  distributed objects are only kept in sync when citus.enable_object_propagation is set to on. Newly activated nodes will not get these objects created
  ?column?
 ---------------------------------------------------------------------
         1
 (1 row)
 
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+WARNING:  citus.enable_object_propagation is off, not creating distributed objects on worker
+DETAIL:  distributed objects are only kept in sync when citus.enable_object_propagation is set to on. Newly activated nodes will not get these objects created
  ?column?
 ---------------------------------------------------------------------
         1
@@ -59,6 +64,8 @@ SELECT master_get_active_worker_nodes();
 
 -- try to disable a node with no placements see that node is removed
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+WARNING:  citus.enable_object_propagation is off, not creating distributed objects on worker
+DETAIL:  distributed objects are only kept in sync when citus.enable_object_propagation is set to on. Newly activated nodes will not get these objects created
  ?column?
 ---------------------------------------------------------------------
         1
@@ -80,6 +87,8 @@ SELECT master_get_active_worker_nodes();
 SET citus.shard_count TO 16;
 SET citus.shard_replication_factor TO 1;
 SELECT * FROM master_activate_node('localhost', :worker_2_port);
+WARNING:  citus.enable_object_propagation is off, not creating distributed objects on worker
+DETAIL:  distributed objects are only kept in sync when citus.enable_object_propagation is set to on. Newly activated nodes will not get these objects created
  master_activate_node
 ---------------------------------------------------------------------
                     3
@@ -169,6 +178,7 @@ SELECT master_update_node(nodeid, 'localhost', :worker_2_port + 3) FROM pg_dist_
 ERROR:  permission denied for function master_update_node
 -- try to manipulate node metadata via privileged user
 SET ROLE node_metadata_user;
+SET citus.enable_object_propagation TO off; -- prevent master activate node to actually connect for this test
 BEGIN;
 SELECT 1 FROM master_add_inactive_node('localhost', :worker_2_port + 1);
  ?column?
@@ -177,6 +187,8 @@ SELECT 1 FROM master_add_inactive_node('localhost', :worker_2_port + 1);
 (1 row)
 
 SELECT 1 FROM master_activate_node('localhost', :worker_2_port + 1);
+WARNING:  citus.enable_object_propagation is off, not creating distributed objects on worker
+DETAIL:  distributed objects are only kept in sync when citus.enable_object_propagation is set to on. Newly activated nodes will not get these objects created
  ?column?
 ---------------------------------------------------------------------
         1
@@ -195,6 +207,8 @@ SELECT 1 FROM master_remove_node('localhost', :worker_2_port + 1);
 (1 row)
 
 SELECT 1 FROM master_add_node('localhost', :worker_2_port + 1);
+WARNING:  citus.enable_object_propagation is off, not creating distributed objects on worker
+DETAIL:  distributed objects are only kept in sync when citus.enable_object_propagation is set to on. Newly activated nodes will not get these objects created
  ?column?
 ---------------------------------------------------------------------
         1
@@ -224,6 +238,7 @@ SELECT nodename, nodeport, noderole FROM pg_dist_node ORDER BY nodeport;
 ABORT;
 \c - postgres - :master_port
 SET citus.next_shard_id TO 1220016;
+SET citus.enable_object_propagation TO off; -- prevent object propagation on add node during setup
 SELECT master_get_active_worker_nodes();
  master_get_active_worker_nodes
 ---------------------------------------------------------------------
@@ -232,6 +247,8 @@ SELECT master_get_active_worker_nodes();
 
 -- restore the node for next tests
 SELECT * FROM master_activate_node('localhost', :worker_2_port);
+WARNING:  citus.enable_object_propagation is off, not creating distributed objects on worker
+DETAIL:  distributed objects are only kept in sync when citus.enable_object_propagation is set to on. Newly activated nodes will not get these objects created
  master_activate_node
 ---------------------------------------------------------------------
                     3
@@ -349,6 +366,8 @@ SELECT * FROM cluster_management_test;
 ERROR:  there is a shard placement in node group 3 but there are no nodes in that group
 -- clean-up
 SELECT master_add_node('localhost', :worker_2_port) AS new_node \gset
+WARNING:  citus.enable_object_propagation is off, not creating distributed objects on worker
+DETAIL:  distributed objects are only kept in sync when citus.enable_object_propagation is set to on. Newly activated nodes will not get these objects created
 SELECT groupid AS new_group FROM pg_dist_node WHERE nodeid = :new_node \gset
 UPDATE pg_dist_placement SET groupid = :new_group WHERE groupid = :worker_2_group;
 -- test that you are allowed to remove secondary nodes even if there are placements
@@ -382,6 +401,8 @@ SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 (1 row)
 
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+WARNING:  citus.enable_object_propagation is off, not creating distributed objects on worker
+DETAIL:  distributed objects are only kept in sync when citus.enable_object_propagation is set to on. Newly activated nodes will not get these objects created
  ?column?
 ---------------------------------------------------------------------
         1
@@ -408,6 +429,7 @@ SELECT nodename, nodeport FROM pg_dist_node WHERE nodename='localhost' AND nodep
 (0 rows)
 
 \c - - - :master_port
+SET citus.enable_object_propagation TO off; -- prevent object propagation on add node during setup
 -- check that added nodes are not propagated to nodes without metadata
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
  stop_metadata_sync_to_node
@@ -416,6 +438,8 @@ SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
 (1 row)
 
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+WARNING:  citus.enable_object_propagation is off, not creating distributed objects on worker
+DETAIL:  distributed objects are only kept in sync when citus.enable_object_propagation is set to on. Newly activated nodes will not get these objects created
  ?column?
 ---------------------------------------------------------------------
         1
@@ -428,6 +452,7 @@ SELECT nodename, nodeport FROM pg_dist_node WHERE nodename='localhost' AND nodep
 (0 rows)
 
 \c - - - :master_port
+SET citus.enable_object_propagation TO off; -- prevent object propagation on add node during setup
 -- check that removing two nodes in the same transaction works
 SELECT
 	master_remove_node('localhost', :worker_1_port),
@@ -447,6 +472,10 @@ SELECT count(1) FROM pg_dist_node;
 SELECT
 	master_add_node('localhost', :worker_1_port),
 	master_add_node('localhost', :worker_2_port);
+WARNING:  citus.enable_object_propagation is off, not creating distributed objects on worker
+DETAIL:  distributed objects are only kept in sync when citus.enable_object_propagation is set to on. Newly activated nodes will not get these objects created
+WARNING:  citus.enable_object_propagation is off, not creating distributed objects on worker
+DETAIL:  distributed objects are only kept in sync when citus.enable_object_propagation is set to on. Newly activated nodes will not get these objects created
  master_add_node | master_add_node
 ---------------------------------------------------------------------
               11 |              12
@@ -468,6 +497,8 @@ SELECT master_remove_node('localhost', :worker_2_port);
 (1 row)
 
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+WARNING:  citus.enable_object_propagation is off, not creating distributed objects on worker
+DETAIL:  distributed objects are only kept in sync when citus.enable_object_propagation is set to on. Newly activated nodes will not get these objects created
  ?column?
 ---------------------------------------------------------------------
         1
@@ -493,6 +524,8 @@ SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 
 BEGIN;
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+WARNING:  citus.enable_object_propagation is off, not creating distributed objects on worker
+DETAIL:  distributed objects are only kept in sync when citus.enable_object_propagation is set to on. Newly activated nodes will not get these objects created
  ?column?
 ---------------------------------------------------------------------
         1
@@ -505,6 +538,8 @@ SELECT master_remove_node('localhost', :worker_2_port);
 (1 row)
 
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+WARNING:  citus.enable_object_propagation is off, not creating distributed objects on worker
+DETAIL:  distributed objects are only kept in sync when citus.enable_object_propagation is set to on. Newly activated nodes will not get these objects created
  ?column?
 ---------------------------------------------------------------------
         1
@@ -525,6 +560,7 @@ SELECT nodename, nodeport FROM pg_dist_node WHERE nodename='localhost' AND nodep
 (1 row)
 
 \c - - - :master_port
+SET citus.enable_object_propagation TO off; -- prevent object propagation on add node during setup
 SELECT master_remove_node(nodename, nodeport) FROM pg_dist_node;
  master_remove_node
 ---------------------------------------------------------------------
@@ -533,12 +569,16 @@ SELECT master_remove_node(nodename, nodeport) FROM pg_dist_node;
 (2 rows)
 
 SELECT 1 FROM master_add_node('localhost', :worker_1_port);
+WARNING:  citus.enable_object_propagation is off, not creating distributed objects on worker
+DETAIL:  distributed objects are only kept in sync when citus.enable_object_propagation is set to on. Newly activated nodes will not get these objects created
  ?column?
 ---------------------------------------------------------------------
         1
 (1 row)
 
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+WARNING:  citus.enable_object_propagation is off, not creating distributed objects on worker
+DETAIL:  distributed objects are only kept in sync when citus.enable_object_propagation is set to on. Newly activated nodes will not get these objects created
  ?column?
 ---------------------------------------------------------------------
         1
@@ -554,6 +594,8 @@ SELECT master_remove_node('localhost', :worker_2_port);
 
 BEGIN;
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+WARNING:  citus.enable_object_propagation is off, not creating distributed objects on worker
+DETAIL:  distributed objects are only kept in sync when citus.enable_object_propagation is set to on. Newly activated nodes will not get these objects created
  ?column?
 ---------------------------------------------------------------------
         1
@@ -596,6 +638,7 @@ DELETE FROM pg_dist_shard;
 DELETE FROM pg_dist_placement;
 DELETE FROM pg_dist_node;
 \c - - - :master_port
+SET citus.enable_object_propagation TO off; -- prevent object propagation on add node during setup
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
  stop_metadata_sync_to_node
 ---------------------------------------------------------------------

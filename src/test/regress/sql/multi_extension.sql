@@ -130,6 +130,7 @@ ALTER EXTENSION citus UPDATE TO '9.2-4';
  */
 ALTER EXTENSION citus UPDATE TO '9.3-1';
 ALTER EXTENSION citus UPDATE TO '9.3-2';
+ALTER EXTENSION citus UPDATE TO '9.4-1';
 
 -- show running version
 SHOW citus.version;
@@ -332,6 +333,7 @@ CREATE DATABASE another;
 
 \c another
 CREATE EXTENSION citus;
+SET citus.enable_object_propagation TO off; -- prevent distributed transactions during add node
 SELECT FROM master_add_node('localhost', :worker_1_port);
 
 \c - - - :worker_1_port

@@ -971,6 +971,9 @@ INSERT INTO table_3 SELECT i, i FROM generate_series(0,100) i;
 BEGIN;
 	SELECT create_distributed_table('table_3', 'key');
 NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$access_tracking.table_3$$)
  create_distributed_table
 ---------------------------------------------------------------------
 

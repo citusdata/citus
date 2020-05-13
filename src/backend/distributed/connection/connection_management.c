@@ -41,7 +41,7 @@
 #include "utils/memutils.h"
 
 
-int NodeConnectionTimeout = 5000;
+int NodeConnectionTimeout = 30000;
 int MaxCachedConnectionsPerWorker = 1;
 
 HTAB *ConnectionHash = NULL;
@@ -193,7 +193,16 @@ GetNodeConnection(uint32 flags, const char *hostname, int32 port)
 MultiConnection *
 StartNodeConnection(uint32 flags, const char *hostname, int32 port)
 {
-	return StartNodeUserDatabaseConnection(flags, hostname, port, NULL, NULL);
+	MultiConnection *connection = StartNodeUserDatabaseConnection(flags, hostname, port,
+																  NULL, NULL);
+
+	/*
+	 * connection can only be NULL for optional connections, which we don't
+	 * support in this codepath.
+	 */
+	Assert((flags & OPTIONAL_CONNECTION) == 0);
+	Assert(connection != NULL);
+	return connection;
 }
 
 
@@ -208,6 +217,13 @@ GetNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port,
 {
 	MultiConnection *connection = StartNodeUserDatabaseConnection(flags, hostname, port,
 																  user, database);
+
+	/*
+	 * connection can only be NULL for optional connections, which we don't
+	 * support in this codepath.
+	 */
+	Assert((flags & OPTIONAL_CONNECTION) == 0);
+	Assert(connection != NULL);
 
 	FinishConnectionEstablishment(connection);
 
@@ -235,6 +251,13 @@ StartWorkerListConnections(List *workerNodeList, uint32 flags, const char *user,
 		MultiConnection *connection = StartNodeUserDatabaseConnection(connectionFlags,
 																	  nodeName, nodePort,
 																	  user, database);
+
+		/*
+		 * connection can only be NULL for optional connections, which we don't
+		 * support in this codepath.
+		 */
+		Assert((flags & OPTIONAL_CONNECTION) == 0);
+		Assert(connection != NULL);
 
 		connectionList = lappend(connectionList, connection);
 	}

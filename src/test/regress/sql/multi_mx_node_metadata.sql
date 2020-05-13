@@ -13,6 +13,8 @@ SET citus.shard_count TO 8;
 SET citus.shard_replication_factor TO 1;
 SET citus.replicate_reference_tables_on_activate TO off;
 
+\set VERBOSITY terse
+
 -- Simulates a readonly node by setting default_transaction_read_only.
 CREATE FUNCTION mark_node_readonly(hostname TEXT, port INTEGER, isreadonly BOOLEAN)
     RETURNS TEXT
@@ -85,7 +87,6 @@ SELECT nodeid, hasmetadata, metadatasynced FROM pg_dist_node;
 --------------------------------------------------------------------------
 -- Test updating a node when another node is in readonly-mode
 --------------------------------------------------------------------------
-
 SELECT master_add_node('localhost', :worker_2_port) AS nodeid_2 \gset
 SELECT 1 FROM start_metadata_sync_to_node('localhost', :worker_2_port);
 
@@ -139,6 +140,30 @@ ROLLBACK;
 
 SELECT verify_metadata('localhost', :worker_1_port),
        verify_metadata('localhost', :worker_2_port);
+
+--------------------------------------------------------------------------
+-- Test that master_update_node invalidates the plan cache
+--------------------------------------------------------------------------
+
+PREPARE foo AS SELECT COUNT(*) FROM dist_table_1 WHERE a = 1;
+
+SET citus.log_remote_commands = ON;
+-- trigger caching for prepared statements
+EXECUTE foo;
+EXECUTE foo;
+EXECUTE foo;
+EXECUTE foo;
+EXECUTE foo;
+EXECUTE foo;
+EXECUTE foo;
+
+SELECT master_update_node(:nodeid_1, '127.0.0.1', :worker_1_port);
+SELECT wait_until_metadata_sync(30000);
+
+-- make sure the nodename changed.
+EXECUTE foo;
+
+SET citus.log_remote_commands TO OFF;
 
 --------------------------------------------------------------------------
 -- Test that master_update_node can appear in a prepared transaction.

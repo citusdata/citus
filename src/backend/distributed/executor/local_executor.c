@@ -147,8 +147,30 @@ ExecuteLocalTaskList(List *taskList, Tuplestorestate *tupleStoreState)
 	}
 	DistributedPlan *distributedPlan = NULL;
 	ParamListInfo paramListInfo = NULL;
+	bool isUtilityCommand = false;
 	return ExecuteLocalTaskListExtended(taskList, paramListInfo, distributedPlan,
-										tupleStoreState);
+										tupleStoreState, isUtilityCommand);
+}
+
+
+/*
+ * ExecuteLocalUtilityTaskList executes the given tasks locally.
+ *
+ * The function returns totalRowsProcessed.
+ */
+uint64
+ExecuteLocalUtilityTaskList(List *utilityTaskList)
+{
+	if (list_length(utilityTaskList) == 0)
+	{
+		return 0;
+	}
+	DistributedPlan *distributedPlan = NULL;
+	ParamListInfo paramListInfo = NULL;
+	Tuplestorestate *tupleStoreState = NULL;
+	bool isUtilityCommand = true;
+	return ExecuteLocalTaskListExtended(utilityTaskList, paramListInfo, distributedPlan,
+										tupleStoreState, isUtilityCommand);
 }
 
 
@@ -163,9 +185,11 @@ ExecuteLocalTaskList(List *taskList, Tuplestorestate *tupleStoreState)
  * The function returns totalRowsProcessed.
  */
 uint64
-ExecuteLocalTaskListExtended(List *taskList, ParamListInfo orig_paramListInfo,
+ExecuteLocalTaskListExtended(List *taskList,
+							 ParamListInfo orig_paramListInfo,
 							 DistributedPlan *distributedPlan,
-							 Tuplestorestate *tupleStoreState)
+							 Tuplestorestate *tupleStoreState,
+							 bool isUtilityCommand)
 {
 	ParamListInfo paramListInfo = copyParamList(orig_paramListInfo);
 	int numParams = 0;
@@ -202,6 +226,11 @@ ExecuteLocalTaskListExtended(List *taskList, ParamListInfo orig_paramListInfo,
 		}
 		LogLocalCommand(task);
 
+		if (isUtilityCommand)
+		{
+			LocallyExecuteUtilityTask(TaskQueryStringForAllPlacements(task));
+			continue;
+		}
 
 		PlannedStmt *localPlan = GetCachedLocalPlan(task, distributedPlan);
 
@@ -271,7 +300,6 @@ ExecuteLocalTaskListExtended(List *taskList, ParamListInfo orig_paramListInfo,
 			localPlan = planner(shardQuery, cursorOptions, paramListInfo);
 		}
 
-
 		char *shardQueryString = NULL;
 		if (GetTaskQueryType(task) == TASK_QUERY_TEXT)
 		{
@@ -329,39 +357,6 @@ ExtractParametersForLocalExecution(ParamListInfo paramListInfo, Oid **parameterT
 {
 	ExtractParametersFromParamList(paramListInfo, parameterTypes,
 								   parameterValues, true);
-}
-
-
-/*
- * ExecuteLocalUtilityTaskList executes a list of tasks locally. This function
- * also logs local execution notice for each task and sets
- * TransactionAccessedLocalPlacement to true for next set of possible queries
- * & commands within the current transaction block. See the comment in function.
- */
-void
-ExecuteLocalUtilityTaskList(List *localTaskList)
-{
-	Task *localTask = NULL;
-
-	foreach_ptr(localTask, localTaskList)
-	{
-		const char *localTaskQueryCommand = TaskQueryStringForAllPlacements(localTask);
-
-		/* we do not expect tasks with INVALID_SHARD_ID for utility commands */
-		Assert(localTask->anchorShardId != INVALID_SHARD_ID);
-
-		Assert(TaskAccessesLocalNode(localTask));
-
-		/*
-		 * We should register the access to local placement to force the local
-		 * execution of the following commands withing the current transaction.
-		 */
-		SetLocalExecutionStatus(LOCAL_EXECUTION_REQUIRED);
-
-		LogLocalCommand(localTask);
-
-		LocallyExecuteUtilityTask(localTaskQueryCommand);
-	}
 }
 
 
@@ -468,29 +463,19 @@ ExtractLocalAndRemoteTasks(bool readOnly, List *taskList, List **localTaskList,
 		/* either the local or the remote should be non-nil */
 		Assert(!(localTaskPlacementList == NIL && remoteTaskPlacementList == NIL));
 
-		if (list_length(task->taskPlacementList) == 1)
+		if (localTaskPlacementList == NIL)
 		{
-			/*
-			 * At this point, the task has a single placement (e.g,. anchor shard
-			 * is distributed table's shard). So, it is either added to local or
-			 * remote taskList.
-			 */
-			if (localTaskPlacementList == NIL)
-			{
-				*remoteTaskList = lappend(*remoteTaskList, task);
-			}
-			else
-			{
-				*localTaskList = lappend(*localTaskList, task);
-			}
+			*remoteTaskList = lappend(*remoteTaskList, task);
+		}
+		else if (remoteTaskPlacementList == NIL)
+		{
+			*localTaskList = lappend(*localTaskList, task);
 		}
 		else
 		{
 			/*
-			 * At this point, we're dealing with reference tables or intermediate
-			 * results where the task has placements on both local and remote
-			 * nodes. We always prefer to use local placement, and require remote
-			 * placements only for modifications.
+			 * At this point, we're dealing with a task that has placements on both
+			 * local and remote nodes.
 			 */
 			task->partiallyLocalOrRemote = true;
 
@@ -505,6 +490,8 @@ ExtractLocalAndRemoteTasks(bool readOnly, List *taskList, List **localTaskList,
 			}
 			else
 			{
+				/* since shard replication factor > 1, we should have at least 1 remote task */
+				Assert(remoteTaskPlacementList != NIL);
 				Task *remoteTask = copyObject(task);
 				remoteTask->taskPlacementList = remoteTaskPlacementList;
 

@@ -29,11 +29,12 @@ extern enum LocalExecutionStatus CurrentLocalExecutionStatus;
 /* extern function declarations */
 extern uint64 ExecuteLocalTaskList(List *taskList,
 								   Tuplestorestate *tupleStoreState);
+extern uint64 ExecuteLocalUtilityTaskList(List *utilityTaskList);
 extern uint64 ExecuteLocalTaskListExtended(List *taskList, ParamListInfo
 										   orig_paramListInfo,
 										   DistributedPlan *distributedPlan,
-										   Tuplestorestate *tupleStoreState);
-extern void ExecuteLocalUtilityTaskList(List *localTaskList);
+										   Tuplestorestate *tupleStoreState,
+										   bool isUtilityCommand);
 extern void ExtractLocalAndRemoteTasks(bool readOnlyPlan, List *taskList,
 									   List **localTaskList, List **remoteTaskList);
 extern bool ShouldExecuteTasksLocally(List *taskList);

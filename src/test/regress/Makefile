@@ -134,7 +134,7 @@ check-isolation: all  $(isolation_test_files)
 
 check-isolation-base: all  $(isolation_test_files)
 	$(pg_regress_multi_check) --load-extension=citus --isolationtester \
-	-- $(MULTI_REGRESS_OPTS) $(EXTRA_TESTS)
+	-- $(MULTI_REGRESS_OPTS) --inputdir=$(citus_abs_srcdir)/build --schedule=$(citus_abs_srcdir)/base_isolation_schedule $(EXTRA_TESTS)
 
 check-vanilla: all
 	# it is possible that sometimes vanilla tests will fail, which is related to postgres.

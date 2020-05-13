@@ -61,6 +61,9 @@ INSERT INTO r1 (id, name) VALUES
 (3,'baz');
 SELECT create_reference_table('r1');
 NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$fail_connect.r1$$)
  create_reference_table
 ---------------------------------------------------------------------
 
@@ -224,7 +227,7 @@ RESET client_min_messages;
 -- verify get_global_active_transactions works when a timeout happens on a connection
 SELECT get_global_active_transactions();
 WARNING:  could not establish connection after 400 ms
-WARNING:  connection error: localhost:xxxxx
+WARNING:  connection to the remote node localhost:xxxxx failed
  get_global_active_transactions
 ---------------------------------------------------------------------
 (0 rows)

@@ -4,18 +4,6 @@ SET client_min_messages TO DEBUG;
 SET citus.next_shard_id TO 1570000;
 SET citus.replicate_reference_tables_on_activate TO off;
 SELECT * FROM master_add_node('localhost', :master_port, groupid := 0);
-DEBUG:  schema "public" already exists, skipping
-DETAIL:  from localhost:xxxxx
-DEBUG:  extension "plpgsql" already exists, skipping
-DETAIL:  from localhost:xxxxx
-DEBUG:  schema "citus_mx_test_schema" already exists, skipping
-DETAIL:  from localhost:xxxxx
-DEBUG:  schema "citus_mx_test_schema_join_1" already exists, skipping
-DETAIL:  from localhost:xxxxx
-DEBUG:  schema "citus_mx_test_schema_join_2" already exists, skipping
-DETAIL:  from localhost:xxxxx
-DEBUG:  schema "citus_mx_schema_for_xacts" already exists, skipping
-DETAIL:  from localhost:xxxxx
  master_add_node
 ---------------------------------------------------------------------
               32
@@ -502,6 +490,9 @@ SELECT create_reference_table('ref_table');
 NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1330000, 'local_shard_copy', 'CREATE TABLE local_shard_copy.ref_table (a integer)');SELECT worker_apply_shard_ddl_command (1330000, 'local_shard_copy', 'ALTER TABLE local_shard_copy.ref_table OWNER TO postgres')
 NOTICE:  executing the copy locally for shard xxxxx
 NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$local_shard_copy.ref_table$$)
  create_reference_table
 ---------------------------------------------------------------------
 

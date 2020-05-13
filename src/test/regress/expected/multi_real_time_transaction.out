@@ -207,7 +207,13 @@ INSERT INTO partitioning_test VALUES (1, '2009-06-06');
 INSERT INTO partitioning_test VALUES (2, '2010-07-07');
 SELECT create_distributed_table('partitioning_test', 'id');
 NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$multi_real_time_transaction.partitioning_test_2009$$)
 NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$multi_real_time_transaction.partitioning_test_2010$$)
  create_distributed_table
 ---------------------------------------------------------------------
 

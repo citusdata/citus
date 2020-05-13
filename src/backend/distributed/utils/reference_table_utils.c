@@ -210,11 +210,15 @@ EnsureReferenceTablesExistOnAllNodes(void)
 
 		if (PQstatus(connection->pgConn) == CONNECTION_OK)
 		{
+			UseCoordinatedTransaction();
+
+			RemoteTransactionBegin(connection);
 			StringInfo placementCopyCommand =
 				CopyShardPlacementToWorkerNodeQuery(sourceShardPlacement,
 													newWorkerNode,
-													TRANSFER_MODE_AUTOMATIC);
+													TRANSFER_MODE_BLOCK_WRITES);
 			ExecuteCriticalRemoteCommand(connection, placementCopyCommand->data);
+			RemoteTransactionCommit(connection);
 		}
 		else
 		{

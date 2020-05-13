@@ -207,6 +207,9 @@ SELECT * FROM t2 ORDER BY a;
 
 SELECT create_distributed_table('t2', 'a');
 NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$upgrade_basic.t2$$)
  create_distributed_table
 ---------------------------------------------------------------------
 

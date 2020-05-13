@@ -293,6 +293,9 @@ CREATE TABLE test_seq_truncate (a int);
 INSERT INTO test_seq_truncate SELECT i FROM generate_series(0, 100) i;
 SELECT create_distributed_table('test_seq_truncate', 'a');
 NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$test_seq_ddl.test_seq_truncate$$)
  create_distributed_table
 ---------------------------------------------------------------------
 

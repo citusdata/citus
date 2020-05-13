@@ -26,7 +26,13 @@ INSERT INTO partitioning_test_2010 VALUES (4, '2010-03-03');
 -- distribute partitioned table
 SELECT create_distributed_table('partitioning_test', 'id');
 NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$public.partitioning_test_2009$$)
 NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$public.partitioning_test_2010$$)
  create_distributed_table
 ---------------------------------------------------------------------
 
@@ -134,6 +140,9 @@ INSERT INTO partitioning_test_2012 VALUES (5, '2012-06-06');
 INSERT INTO partitioning_test_2012 VALUES (6, '2012-07-07');
 ALTER TABLE partitioning_test ATTACH PARTITION partitioning_test_2012 FOR VALUES FROM ('2012-01-01') TO ('2013-01-01');
 NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$public.partitioning_test_2012$$)
 -- see from MX node, attached partition is distributed as well
 \c - - - :worker_1_port
 SELECT

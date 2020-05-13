@@ -10,13 +10,17 @@
  */
 
 #include "postgres.h"
+#include "miscadmin.h"
 
 #include <stddef.h>
 
 #include "commands/tablecmds.h"
 #include "commands/trigger.h"
+#include "distributed/citus_ruleutils.h"
+#include "distributed/adaptive_executor.h"
 #include "distributed/commands/utility_hook.h"
 #include "distributed/deparse_shard_query.h"
+#include "distributed/foreign_key_relationship.h"
 #include "distributed/listutils.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/master_protocol.h"
@@ -26,6 +30,7 @@
 #include "distributed/resource_lock.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
+#include "utils/regproc.h"
 #include "utils/rel.h"
 
 static List * TruncateTaskList(Oid relationId);
@@ -33,6 +38,9 @@ static List * TruncateTaskList(Oid relationId);
 
 /* exports for SQL callable functions */
 PG_FUNCTION_INFO_V1(citus_truncate_trigger);
+PG_FUNCTION_INFO_V1(truncate_local_data_after_distributing_table);
+
+void EnsureLocalTableCanBeTruncated(Oid relationId);
 
 
 /*
@@ -78,8 +86,7 @@ citus_truncate_trigger(PG_FUNCTION_ARGS)
 		 * then execute TRUNCATE command locally.
 		 */
 		bool localExecutionSupported = true;
-
-		ExecuteUtilityTaskListWithoutResults(taskList, localExecutionSupported);
+		ExecuteUtilityTaskList(taskList, localExecutionSupported);
 	}
 
 	PG_RETURN_DATUM(PointerGetDatum(NULL));
@@ -138,4 +145,77 @@ TruncateTaskList(Oid relationId)
 	}
 
 	return taskList;
+}
+
+
+/*
+ * truncate_local_data_after_distributing_table truncates the local records of a distributed table.
+ *
+ * The main advantage of this function is to truncate all local records after creating a
+ * distributed table, and prevent constraints from failing due to outdated local records.
+ */
+Datum
+truncate_local_data_after_distributing_table(PG_FUNCTION_ARGS)
+{
+	Oid relationId = PG_GETARG_OID(0);
+
+	CheckCitusVersion(ERROR);
+	EnsureCoordinator();
+	EnsureLocalTableCanBeTruncated(relationId);
+
+	TruncateStmt *truncateStmt = makeNode(TruncateStmt);
+
+	char *relationName = generate_qualified_relation_name(relationId);
+	List *names = stringToQualifiedNameList(relationName);
+	truncateStmt->relations = list_make1(makeRangeVarFromNameList(names));
+	truncateStmt->restart_seqs = false;
+	truncateStmt->behavior = DROP_CASCADE;
+
+	set_config_option("citus.enable_ddl_propagation", "false",
+					  (superuser() ? PGC_SUSET : PGC_USERSET), PGC_S_SESSION,
+					  GUC_ACTION_LOCAL, true, 0, false);
+	ExecuteTruncate(truncateStmt);
+	set_config_option("citus.enable_ddl_propagation", "true",
+					  (superuser() ? PGC_SUSET : PGC_USERSET), PGC_S_SESSION,
+					  GUC_ACTION_LOCAL, true, 0, false);
+
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * EnsureLocalTableCanBeTruncated performs the necessary checks to make sure it
+ * is safe to truncate the local table of a distributed table
+ */
+void
+EnsureLocalTableCanBeTruncated(Oid relationId)
+{
+	/* error out if the relation is not a distributed table */
+	if (!IsCitusTable(relationId))
+	{
+		ereport(ERROR, (errmsg("supplied parameter is not a distributed relation"),
+						errdetail("This UDF only truncates local records of distributed "
+								  "tables.")));
+	}
+
+	/* make sure there are no foreign key references from a local table */
+	SetForeignConstraintRelationshipGraphInvalid();
+	List *referencingRelationList = ReferencingRelationIdList(relationId);
+
+	Oid referencingRelation = InvalidOid;
+	foreach_oid(referencingRelation, referencingRelationList)
+	{
+		/* we do not truncate a table if there is a local table referencing it */
+		if (!IsCitusTable(referencingRelation))
+		{
+			char *referencedRelationName = get_rel_name(relationId);
+			char *referencingRelationName = get_rel_name(referencingRelation);
+
+			ereport(ERROR, (errmsg("cannot truncate a table referenced in a "
+								   "foreign key constraint by a local table"),
+							errdetail("Table \"%s\" references \"%s\"",
+									  referencingRelationName,
+									  referencedRelationName)));
+		}
+	}
 }

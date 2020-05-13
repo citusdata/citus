@@ -185,9 +185,12 @@ extern List * PreprocessRenameAttributeStmt(Node *stmt, const char *queryString)
 /* role.c - forward declarations*/
 extern List * PostprocessAlterRoleStmt(Node *stmt, const char *queryString);
 extern List * PreprocessAlterRoleSetStmt(Node *stmt, const char *queryString);
-extern List * GenerateAlterRoleIfExistsCommandAllRoles(void);
-extern List * GenerateAlterRoleSetIfExistsCommands(void);
-
+extern List * GenerateAlterRoleSetCommandForRole(Oid roleid);
+extern ObjectAddress AlterRoleStmtObjectAddress(Node *node,
+												bool missing_ok);
+extern ObjectAddress AlterRoleSetStmtObjectAddress(Node *node,
+												   bool missing_ok);
+extern List * GenerateCreateOrAlterRoleCommand(Oid roleOid);
 
 /* schema.c - forward declarations */
 extern List * PreprocessDropSchemaStmt(Node *dropSchemaStatement,
@@ -268,7 +271,7 @@ extern char * GetFunctionDDLCommand(const RegProcedure funcOid, bool useCreateOr
 extern char * GenerateBackupNameForProcCollision(const ObjectAddress *address);
 extern ObjectWithArgs * ObjectWithArgsFromOid(Oid funcOid);
 
-/* vacuum.c - froward declarations */
+/* vacuum.c - forward declarations */
 extern void PostprocessVacuumStmt(VacuumStmt *vacuumStmt, const char *vacuumCommand);
 
 extern bool ShouldPropagateSetCommand(VariableSetStmt *setStmt);

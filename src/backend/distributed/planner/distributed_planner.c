@@ -124,7 +124,6 @@ static PlannerRestrictionContext * CurrentPlannerRestrictionContext(void);
 static void PopPlannerRestrictionContext(void);
 static void ResetPlannerRestrictionContext(
 	PlannerRestrictionContext *plannerRestrictionContext);
-static bool HasUnresolvedExternParamsWalker(Node *expression, ParamListInfo boundParams);
 static bool IsLocalReferenceTableJoin(Query *parse, List *rangeTableList);
 static bool QueryIsNotSimpleSelect(Node *node);
 static void UpdateReferenceTablesWithShard(List *rangeTableList);
@@ -2242,7 +2241,7 @@ ResetPlannerRestrictionContext(PlannerRestrictionContext *plannerRestrictionCont
  * has external parameters that are not contained in boundParams, false
  * otherwise.
  */
-static bool
+bool
 HasUnresolvedExternParamsWalker(Node *expression, ParamListInfo boundParams)
 {
 	if (expression == NULL)

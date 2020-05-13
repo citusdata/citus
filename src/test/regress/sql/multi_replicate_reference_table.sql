@@ -560,6 +560,19 @@ SELECT 1 FROM master_remove_node('localhost', :worker_2_port);
 
 SELECT count(*) - :ref_table_placements FROM pg_dist_shard_placement WHERE shardid = :ref_table_shard;
 
+-- verify that master_create_empty_shard replicates reference table shards
+CREATE TABLE range_table(a int);
+SELECT create_distributed_table('range_table', 'a', 'range');
+
+SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+
+SELECT count(*) - :ref_table_placements FROM pg_dist_shard_placement WHERE shardid = :ref_table_shard;
+SELECT 1 FROM master_create_empty_shard('range_table');
+SELECT count(*) - :ref_table_placements FROM pg_dist_shard_placement WHERE shardid = :ref_table_shard;
+
+DROP TABLE range_table;
+SELECT 1 FROM master_remove_node('localhost', :worker_2_port);
+
 -- test setting citus.replicate_reference_tables_on_activate to on
 -- master_add_node
 SET citus.replicate_reference_tables_on_activate TO on;
@@ -634,13 +647,45 @@ SET search_path TO replicate_reference_table;
 
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
 
+--
+-- The following case used to get stuck on create_distributed_table() instead
+-- of detecting the distributed deadlock.
+--
+SET citus.replicate_reference_tables_on_activate TO off;
+SET citus.shard_replication_factor TO 1;
+
+select master_remove_node('localhost', :worker_2_port);
+
+CREATE TABLE ref (a int primary key, b int);
+SELECT create_reference_table('ref');
+CREATE TABLE test (x int, y int references ref(a));
+select 1 FROM master_add_node('localhost', :worker_2_port);
+BEGIN;
+DROP TABLE test;
+CREATE TABLE test (x int, y int references ref(a));
+SELECT create_distributed_table('test','x');
+END;
+
 -- test adding an invalid node while we have reference tables to replicate
 -- set client message level to ERROR and verbosity to terse to supporess
 -- OS-dependent host name resolution warnings
-SET client_min_messages to ERROR;
 \set VERBOSITY terse
-
-SELECT master_add_node('invalid-node-name', 9999);
+SET client_min_messages to ERROR;
+DO $$
+DECLARE
+        errors_received INTEGER;
+BEGIN
+errors_received := 0;
+        BEGIN
+		SELECT master_add_node('invalid-node-name', 9999);
+        EXCEPTION WHEN OTHERS THEN
+                IF SQLERRM LIKE 'connection to the remote node%%' THEN
+                        errors_received := errors_received + 1;
+                END IF;
+        END;
+RAISE '(%/1) failed to add node', errors_received;
+END;
+$$;
 
 -- drop unnecassary tables
 DROP TABLE initially_not_replicated_reference_table;

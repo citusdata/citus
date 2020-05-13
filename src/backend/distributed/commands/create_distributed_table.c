@@ -1340,6 +1340,18 @@ DoCopyFromLocalTableIntoShards(Relation distributedRelation,
 		ereport(DEBUG1, (errmsg("Copied " UINT64_FORMAT " rows", rowsCopied)));
 	}
 
+	if (rowsCopied > 0)
+	{
+		char *qualifiedRelationName =
+			generate_qualified_relation_name(RelationGetRelid(distributedRelation));
+		ereport(NOTICE, (errmsg("copying the data has completed"),
+						 errdetail("The local data in the table is no longer visible, "
+								   "but is still on disk."),
+						 errhint("To remove the local data, run: SELECT "
+								 "truncate_local_data_after_distributing_table($$%s$$)",
+								 qualifiedRelationName)));
+	}
+
 	MemoryContextSwitchTo(oldContext);
 
 	/* finish reading from the local table */
