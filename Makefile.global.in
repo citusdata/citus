@@ -23,7 +23,14 @@ PGXS:=$(shell $(PG_CONFIG) --pgxs)
 # release
 ifneq (@GIT_BIN@,)
 ifneq (@HAS_DOTGIT@,)
-	GIT_VERSION := "$(shell @GIT_BIN@ describe --dirty --always --tags)"
+	# try to find a tag that exactly matches the current branch, swallow the error if cannot find such a tag
+	GIT_VERSION := "$(shell @GIT_BIN@ describe --exact-match --dirty --always --tags 2>/dev/null)"
+
+	# if there is not a tag that exactly matches the branch, then GIT_VERSION would still be empty
+	# in that case, set GIT_VERSION with current branch's name and the short sha of the HEAD
+ifeq ($(GIT_VERSION),"")
+	GIT_VERSION := "$(shell @GIT_BIN@ rev-parse --abbrev-ref HEAD)(sha: $(shell @GIT_BIN@ rev-parse --short HEAD))"
+endif
 endif
 endif
 
