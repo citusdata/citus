@@ -24,7 +24,7 @@ SELECT 1 FROM master_add_node('localhost', :master_port, groupId => 0);
 (1 row)
 
 -- test that coordinator pg_dist_node entry is synced to the workers
-SELECT wait_until_metadata_sync();
+SELECT wait_until_metadata_sync(30000);
  wait_until_metadata_sync
 ---------------------------------------------------------------------
 
@@ -172,7 +172,7 @@ SELECT master_remove_node('localhost', :master_port);
 (1 row)
 
 -- test that coordinator pg_dist_node entry was removed from the workers
-SELECT wait_until_metadata_sync();
+SELECT wait_until_metadata_sync(30000);
  wait_until_metadata_sync
 ---------------------------------------------------------------------
 

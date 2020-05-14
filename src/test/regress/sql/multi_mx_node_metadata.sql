@@ -62,7 +62,7 @@ END;
 
 -- wait until maintenance daemon does the next metadata sync, and then
 -- check if metadata is synced again
-SELECT wait_until_metadata_sync();
+SELECT wait_until_metadata_sync(30000);
 SELECT nodeid, hasmetadata, metadatasynced FROM pg_dist_node;
 
 SELECT verify_metadata('localhost', :worker_1_port);
@@ -76,12 +76,12 @@ SELECT nodeid, nodename, nodeport, hasmetadata, metadatasynced FROM pg_dist_node
 END;
 
 -- maintenace daemon metadata sync should fail, because node is still unwriteable.
-SELECT wait_until_metadata_sync();
+SELECT wait_until_metadata_sync(30000);
 SELECT nodeid, hasmetadata, metadatasynced FROM pg_dist_node;
 
 -- update it back to :worker_1_port, now metadata should be synced
 SELECT 1 FROM master_update_node(:nodeid_1, 'localhost', :worker_1_port);
-SELECT wait_until_metadata_sync();
+SELECT wait_until_metadata_sync(30000);
 SELECT nodeid, hasmetadata, metadatasynced FROM pg_dist_node;
 
 --------------------------------------------------------------------------
@@ -110,7 +110,7 @@ SELECT nodeid, hasmetadata, metadatasynced FROM pg_dist_node ORDER BY nodeid;
 
 -- Make the node writeable.
 SELECT mark_node_readonly('localhost', :worker_2_port, FALSE);
-SELECT wait_until_metadata_sync();
+SELECT wait_until_metadata_sync(30000);
 
 -- Mark the node readonly again, so the following master_update_node warns
 SELECT mark_node_readonly('localhost', :worker_2_port, TRUE);
@@ -121,11 +121,11 @@ SELECT 1 FROM master_update_node(:nodeid_1, 'localhost', :worker_1_port);
 SELECT count(*) FROM dist_table_2;
 END;
 
-SELECT wait_until_metadata_sync();
+SELECT wait_until_metadata_sync(30000);
 
 -- Make the node writeable.
 SELECT mark_node_readonly('localhost', :worker_2_port, FALSE);
-SELECT wait_until_metadata_sync();
+SELECT wait_until_metadata_sync(30000);
 
 SELECT 1 FROM master_update_node(:nodeid_1, 'localhost', :worker_1_port);
 SELECT verify_metadata('localhost', :worker_1_port),
@@ -173,7 +173,7 @@ SELECT 1 FROM master_update_node(:nodeid_1, 'localhost', 12345);
 PREPARE TRANSACTION 'tx01';
 COMMIT PREPARED 'tx01';
 
-SELECT wait_until_metadata_sync();
+SELECT wait_until_metadata_sync(30000);
 SELECT nodeid, hasmetadata, metadatasynced FROM pg_dist_node ORDER BY nodeid;
 
 BEGIN;
@@ -181,7 +181,7 @@ SELECT 1 FROM master_update_node(:nodeid_1, 'localhost', :worker_1_port);
 PREPARE TRANSACTION 'tx01';
 COMMIT PREPARED 'tx01';
 
-SELECT wait_until_metadata_sync();
+SELECT wait_until_metadata_sync(30000);
 SELECT nodeid, hasmetadata, metadatasynced FROM pg_dist_node ORDER BY nodeid;
 
 SELECT verify_metadata('localhost', :worker_1_port),
@@ -203,7 +203,7 @@ SELECT verify_metadata('localhost', :worker_1_port);
 -- Test master_disable_node() when the node that is being disabled is actually down
 ------------------------------------------------------------------------------------
 SELECT master_update_node(:nodeid_2, 'localhost', 1);
-SELECT wait_until_metadata_sync();
+SELECT wait_until_metadata_sync(30000);
 
 -- set metadatasynced so we try porpagating metadata changes
 UPDATE pg_dist_node SET metadatasynced = TRUE WHERE nodeid IN (:nodeid_1, :nodeid_2);
@@ -218,7 +218,7 @@ SELECT 1 FROM master_disable_node('localhost', 1);
 SELECT verify_metadata('localhost', :worker_1_port);
 
 SELECT master_update_node(:nodeid_2, 'localhost', :worker_2_port);
-SELECT wait_until_metadata_sync();
+SELECT wait_until_metadata_sync(30000);
 
 SELECT 1 FROM master_activate_node('localhost', :worker_2_port);
 SELECT verify_metadata('localhost', :worker_1_port);
@@ -229,7 +229,7 @@ SELECT verify_metadata('localhost', :worker_1_port);
 ------------------------------------------------------------------------------------
 -- node 1 is down.
 SELECT master_update_node(:nodeid_1, 'localhost', 1);
-SELECT wait_until_metadata_sync();
+SELECT wait_until_metadata_sync(30000);
 
 -- set metadatasynced so we try porpagating metadata changes
 UPDATE pg_dist_node SET metadatasynced = TRUE WHERE nodeid IN (:nodeid_1, :nodeid_2);
@@ -243,7 +243,7 @@ SELECT 1 FROM master_disable_node('localhost', :worker_2_port);
 
 -- bring up node 1
 SELECT master_update_node(:nodeid_1, 'localhost', :worker_1_port);
-SELECT wait_until_metadata_sync();
+SELECT wait_until_metadata_sync(30000);
 
 SELECT 1 FROM master_activate_node('localhost', :worker_2_port);
 

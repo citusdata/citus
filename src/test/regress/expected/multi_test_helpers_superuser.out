@@ -16,7 +16,7 @@ CREATE OR REPLACE FUNCTION verify_metadata(hostname TEXT, port INTEGER, master_p
     RETURNS BOOLEAN
     LANGUAGE sql
     AS $$
-SELECT wait_until_metadata_sync();
+SELECT wait_until_metadata_sync(30000);
 WITH dist_node_summary AS (
     SELECT 'SELECT jsonb_agg(ROW(nodeid, groupid, nodename, nodeport, isactive) ORDER BY nodeid) FROM  pg_dist_node' as query
 ), dist_node_check AS (

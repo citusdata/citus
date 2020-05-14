@@ -487,7 +487,7 @@ SELECT run_command_on_workers($$SELECT proowner::regrole FROM pg_proc WHERE pron
  (localhost,57638,t,usage_access)
 (2 rows)
 
-SELECT wait_until_metadata_sync();
+SELECT wait_until_metadata_sync(30000);
  wait_until_metadata_sync
 ---------------------------------------------------------------------
 

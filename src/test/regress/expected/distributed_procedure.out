@@ -49,7 +49,7 @@ SELECT create_distributed_function('raise_info(text)', '$1', colocate_with := 'c
 
 (1 row)
 
-SELECT wait_until_metadata_sync();
+SELECT wait_until_metadata_sync(30000);
  wait_until_metadata_sync
 ---------------------------------------------------------------------
 

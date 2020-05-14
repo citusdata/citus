@@ -16,7 +16,7 @@ ALTER ROLE reprefuser WITH CREATEDB;
 SELECT 1 FROM master_add_node('localhost', :master_port, groupId => 0);
 
 -- test that coordinator pg_dist_node entry is synced to the workers
-SELECT wait_until_metadata_sync();
+SELECT wait_until_metadata_sync(30000);
 
 SELECT verify_metadata('localhost', :worker_1_port),
        verify_metadata('localhost', :worker_2_port);
@@ -82,7 +82,7 @@ SELECT count(*) FROM run_command_on_workers('SELECT recover_prepared_transaction
 SELECT master_remove_node('localhost', :master_port);
 
 -- test that coordinator pg_dist_node entry was removed from the workers
-SELECT wait_until_metadata_sync();
+SELECT wait_until_metadata_sync(30000);
 SELECT verify_metadata('localhost', :worker_1_port),
        verify_metadata('localhost', :worker_2_port);
 

@@ -67,7 +67,7 @@ SELECT 1 FROM master_add_node('localhost', :worker_2_port);
         1
 (1 row)
 
-SELECT public.wait_until_metadata_sync();
+SELECT public.wait_until_metadata_sync(30000);
  wait_until_metadata_sync
 ---------------------------------------------------------------------
 
