@@ -1,6 +1,7 @@
 version: 2.1
 orbs:
   codecov: codecov/codecov@1.0.5
+  azure-cli: circleci/azure-cli@1.0.0
 
 jobs:
   build:
@@ -243,7 +244,34 @@ jobs:
       - run:
           command: |
             ./src/test/scripts/check_enterprise_merge.sh
-
+  ch_benchmark:
+    docker:
+      - image: buildpack-deps:stretch
+    working_directory: /home/circleci/project
+    steps:
+      - checkout
+      - azure-cli/install
+      - azure-cli/login-with-service-principal
+      - run:
+          command: |
+            cd ./src/test/hammerdb
+            sh run_hammerdb.sh citusbot_ch_benchmark_rg
+          name: install dependencies and run ch_benchmark tests
+          no_output_timeout: 20m
+  tpcc_benchmark:
+    docker:
+      - image: buildpack-deps:stretch
+    working_directory: /home/circleci/project
+    steps:
+      - checkout
+      - azure-cli/install
+      - azure-cli/login-with-service-principal
+      - run:
+          command: |
+            cd ./src/test/hammerdb
+            sh run_hammerdb.sh citusbot_tpcc_benchmark_rg
+          name: install dependencies and run ch_benchmark tests
+          no_output_timeout: 20m
 
 
 workflows:
@@ -283,3 +311,15 @@ workflows:
       - test-11_check-citus-upgrade:
           requires: [build]
 
+      - ch_benchmark:
+          requires: [build]
+          filters:
+            branches:
+              only:
+                - /ch_benchmark\/.*/ # match with ch_benchmark/ prefix
+      - tpcc_benchmark:
+          requires: [build]
+          filters:
+            branches:
+              only:
+                - /tpcc_benchmark\/.*/ # match with tpcc_benchmark/ prefix
