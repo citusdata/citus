@@ -68,8 +68,7 @@
 
 /* Local functions forward declarations */
 static uint64 * AllocateUint64(uint64 value);
-static void RecordDistributedRelationDependencies(Oid distributedRelationId,
-												  Node *distributionKey);
+static void RecordDistributedRelationDependencies(Oid distributedRelationId);
 static GroupShardPlacement * TupleToGroupShardPlacement(TupleDesc tupleDesc,
 														HeapTuple heapTuple);
 static uint64 DistributedTableSize(Oid relationId, char *sizeQuery);
@@ -996,7 +995,7 @@ InsertIntoPgDistPartition(Oid relationId, char distributionMethod,
 
 	CitusInvalidateRelcacheByRelid(relationId);
 
-	RecordDistributedRelationDependencies(relationId, (Node *) distributionColumn);
+	RecordDistributedRelationDependencies(relationId);
 
 	CommandCounterIncrement();
 	heap_close(pgDistPartition, NoLock);
@@ -1017,7 +1016,7 @@ InsertIntoPgDistPartition(Oid relationId, char distributionMethod,
  * distribution column be changed (c.f. ATExecAlterColumnType).
  */
 static void
-RecordDistributedRelationDependencies(Oid distributedRelationId, Node *distributionKey)
+RecordDistributedRelationDependencies(Oid distributedRelationId)
 {
 	ObjectAddress relationAddr = { 0, 0, 0 };
 	ObjectAddress citusExtensionAddr = { 0, 0, 0 };
