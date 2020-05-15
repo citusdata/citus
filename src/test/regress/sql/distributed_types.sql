@@ -9,17 +9,20 @@ SET search_path TO type_tests;
 SET citus.shard_count TO 4;
 
 -- single statement transactions with a simple type used in a table
-CREATE TYPE tc1 AS (a int, b int);
+CREATE TYPE tc1 AS (a int, b varchar(20));
 CREATE TABLE t1 (a int PRIMARY KEY, b tc1);
 SELECT create_distributed_table('t1','a');
-INSERT INTO t1 VALUES (1, (2,3)::tc1);
+INSERT INTO t1 VALUES (1, (2,'3')::tc1);
 SELECT * FROM t1;
 ALTER TYPE tc1 RENAME TO tc1_newname;
-INSERT INTO t1 VALUES (3, (4,5)::tc1_newname); -- insert with a cast would fail if the rename didn't propagate
+INSERT INTO t1 VALUES (3, (4,'5')::tc1_newname); -- insert with a cast would fail if the rename didn't propagate
 ALTER TYPE tc1_newname SET SCHEMA type_tests2;
-INSERT INTO t1 VALUES (6, (7,8)::type_tests2.tc1_newname); -- insert with a cast would fail if the rename didn't propagate
+INSERT INTO t1 VALUES (6, (7,'8')::type_tests2.tc1_newname); -- insert with a cast would fail if the rename didn't propagate
 
--- single statement transactions with a an enum used in a table
+-- verify typmod was propagated
+SELECT run_command_on_workers($$SELECT atttypmod FROM pg_attribute WHERE attnum = 2 AND attrelid = (SELECT typrelid FROM pg_type WHERE typname = 'tc1_newname');$$);
+
+-- single statement transactions with an enum used in a table
 CREATE TYPE te1 AS ENUM ('one', 'two', 'three');
 CREATE TABLE t2 (a int PRIMARY KEY, b te1);
 SELECT create_distributed_table('t2','a');
@@ -40,11 +43,14 @@ INSERT INTO t2 VALUES (3, 'three'::type_tests2.te1_newname);
 
 -- transaction block with simple type
 BEGIN;
-CREATE TYPE tc2 AS (a int, b int);
+CREATE TYPE tc2 AS (a varchar(10), b int);
 CREATE TABLE t3 (a int PRIMARY KEY, b tc2);
 SELECT create_distributed_table('t3','a');
-INSERT INTO t3 VALUES (4, (5,6)::tc2);
+INSERT INTO t3 VALUES (4, ('5',6)::tc2);
 SELECT * FROM t3;
+
+-- verify typmod was propagated
+SELECT run_command_on_workers($$SELECT atttypmod FROM pg_attribute WHERE attnum = 1 AND attrelid = (SELECT typrelid FROM pg_type WHERE typname = 'tc2');$$);
 COMMIT;
 
 -- transaction block with simple type
