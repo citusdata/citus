@@ -102,7 +102,9 @@ static void EnsureTableNotDistributed(Oid relationId);
 static Oid SupportFunctionForColumn(Var *partitionColumn, Oid accessMethodId,
 									int16 supportFunctionNumber);
 static void EnsureLocalTableEmptyIfNecessary(Oid relationId, char distributionMethod,
-											 bool viaDepracatedAPI);
+											 bool viaDeprecatedAPI);
+static bool ShouldLocalTableBeEmpty(Oid relationId, char distributionMethod, bool
+									viaDeprecatedAPI);
 static bool LocalTableEmpty(Oid tableId);
 static void CopyLocalDataIntoShards(Oid relationId);
 static List * TupleDescColumnNameList(TupleDesc tupleDescriptor);
@@ -849,33 +851,57 @@ EnsureTableCanBeColocatedWith(Oid relationId, char replicationModel,
 
 
 /*
- * EnsureLocalTableEmptyIfNecessary only checks for emptiness if only an empty
- * relation can be distributed in given configuration.
- *
- * In some cases, it is possible and safe to send local data to shards while
- * distributing the table. In those cases, we can distribute non-empty local
- * tables. This function checks the distributionMethod and relation kind to
- * see whether we need to be ensure emptiness of local table. If we need to
- * be sure, this function calls EnsureLocalTableEmpty function to ensure
- * that local table does not contain any data.
+ * EnsureLocalTableEmptyIfNecessary errors out if the function should be empty
+ * according to ShouldLocalTableBeEmpty but it is not.
  */
 static void
 EnsureLocalTableEmptyIfNecessary(Oid relationId, char distributionMethod,
-								 bool viaDepracatedAPI)
+								 bool viaDeprecatedAPI)
 {
-	if (viaDepracatedAPI)
+	if (ShouldLocalTableBeEmpty(relationId, distributionMethod, viaDeprecatedAPI))
 	{
 		EnsureLocalTableEmpty(relationId);
+	}
+}
+
+
+/*
+ * ShouldLocalTableBeEmpty returns true if the local table should be empty
+ * before creating a citus table.
+ * In some cases, it is possible and safe to send local data to shards while
+ * distributing the table. In those cases, we can distribute non-empty local
+ * tables. This function checks the distributionMethod and relation kind to
+ * see whether we need to be ensure emptiness of local table.
+ */
+static bool
+ShouldLocalTableBeEmpty(Oid relationId, char distributionMethod,
+						bool viaDeprecatedAPI)
+{
+	bool shouldLocalTableBeEmpty = false;
+	if (viaDeprecatedAPI)
+	{
+		/* we don't support copying local data via deprecated API */
+		shouldLocalTableBeEmpty = true;
 	}
 	else if (distributionMethod != DISTRIBUTE_BY_HASH &&
 			 distributionMethod != DISTRIBUTE_BY_NONE)
 	{
-		EnsureLocalTableEmpty(relationId);
+		/*
+		 * We only support hash distributed tables and reference tables
+		 * for initial data loading
+		 */
+		shouldLocalTableBeEmpty = true;
 	}
 	else if (!RegularTable(relationId))
 	{
-		EnsureLocalTableEmpty(relationId);
+		/*
+		 * We only support tables and partitioned tables for initial
+		 * data loading
+		 */
+		shouldLocalTableBeEmpty = true;
 	}
+
+	return shouldLocalTableBeEmpty;
 }
 
 
