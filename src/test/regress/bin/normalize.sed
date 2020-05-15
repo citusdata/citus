@@ -76,7 +76,7 @@ s/ *$//g
 
 # pg12 changes
 s/Partitioned table "/Table "/g
-s/\) TABLESPACE pg_default$/\)/g
+s/\) TABLESPACE pg_default/\)/g
 s/invalid input syntax for type /invalid input syntax for /g
 s/_id_ref_id_fkey/_id_fkey/g
 s/_ref_id_id_fkey_/_ref_id_fkey_/g
