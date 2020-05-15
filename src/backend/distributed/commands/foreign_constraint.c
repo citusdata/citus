@@ -42,6 +42,7 @@ static void ForeignConstraintFindDistKeys(HeapTuple pgConstraintTuple,
 										  Var *referencedDistColumn,
 										  int *referencingAttrIndex,
 										  int *referencedAttrIndex);
+static Oid get_relation_constraint_oid_compat(Form_pg_constraint constraintForm);
 
 /*
  * ConstraintIsAForeignKeyToReferenceTable checks if the given constraint is a
@@ -514,9 +515,7 @@ GetTableForeignConstraintCommands(Oid relationId)
 
 		if (!inheritedConstraint && constraintForm->contype == CONSTRAINT_FOREIGN)
 		{
-			Oid constraintId = get_relation_constraint_oid(relationId,
-														   constraintForm->conname.data,
-														   true);
+			Oid constraintId = get_relation_constraint_oid_compat(constraintForm);
 			char *statementDef = pg_get_constraintdef_command(constraintId);
 
 			tableForeignConstraints = lappend(tableForeignConstraints, statementDef);
@@ -533,6 +532,32 @@ GetTableForeignConstraintCommands(Oid relationId)
 	PopOverrideSearchPath();
 
 	return tableForeignConstraints;
+}
+
+
+/*
+ * get_relation_constraint_oid_compat returns OID of the constraint represented
+ * by the given constraintForm. OID of the contraint is already stored in the
+ * constraintForm object if major PostgreSQL version is 12 . However, in the
+ * older versions, we cannot retrieve OID of a constraint directly.
+ */
+static Oid
+get_relation_constraint_oid_compat(Form_pg_constraint constraintForm)
+{
+	Assert(constraintForm != NULL);
+
+	Oid constraintOid = InvalidOid;
+
+#if PG_VERSION_NUM >= PG_VERSION_12
+	constraintOid = constraintForm->oid;
+#else
+	Oid relationOid = constraintForm->conrelid;
+	const char *constraintName = constraintForm->conname.data;
+	bool missingOk = true;
+	constraintOid = get_relation_constraint_oid(relationOid, constraintName, missingOk);
+#endif
+
+	return constraintOid;
 }
 
 
