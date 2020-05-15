@@ -135,6 +135,7 @@ extern void DeleteShardPlacementRow(uint64 placementId);
 extern void CreateDistributedTable(Oid relationId, Var *distributionColumn,
 								   char distributionMethod, char *colocateWithTableName,
 								   bool viaDeprecatedAPI);
+extern void CreateCitusLocalTable(Oid relationOid);
 extern void CreateTruncateTrigger(Oid relationId);
 
 extern void EnsureDependenciesExistOnAllNodes(const ObjectAddress *target);

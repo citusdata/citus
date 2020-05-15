@@ -52,6 +52,7 @@
 #include "distributed/reference_table_utils.h"
 #include "distributed/relation_access_tracking.h"
 #include "distributed/remote_commands.h"
+#include "distributed/commands/utility_hook.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/worker_transaction.h"
 #include "distributed/version_compat.h"
@@ -85,6 +86,8 @@ int ReplicationModel = REPLICATION_MODEL_COORDINATOR;
 
 
 /* local function forward declarations */
+static void CreateShellTableForCitusLocalTable(List *tableRecreateCommands);
+static void InsertMetadataForCitusLocalTable(Oid citusLocalTableOid, uint64 shardId);
 static char AppropriateReplicationModel(char distributionMethod, bool viaDeprecatedAPI);
 static void CreateHashDistributedTableShards(Oid relationId, Oid colocatedTableId,
 											 bool localTableEmpty);
@@ -120,6 +123,7 @@ static void DoCopyFromLocalTableIntoShards(Relation distributedRelation,
 PG_FUNCTION_INFO_V1(master_create_distributed_table);
 PG_FUNCTION_INFO_V1(create_distributed_table);
 PG_FUNCTION_INFO_V1(create_reference_table);
+PG_FUNCTION_INFO_V1(create_citus_local_table);
 
 
 /*
@@ -324,6 +328,82 @@ create_reference_table(PG_FUNCTION_ARGS)
 
 
 /*
+ * create_citus_local_table creates a citus table from the table with relationId.
+ * The created table would have the following properties:
+ *  - it will have only one shard,
+ *  - its distribution method will be DISTRIBUTE_BY_NONE,
+ *  - its replication model will be ReplicationModel,
+ *  - its replication factor will be set to 1.
+ * On the contrary of reference tables, a citus local table has only one placement
+ * and that placement will only be in the coordinator for now.
+ * In fact, the above is the definition of a citus local tables.
+ */
+Datum
+create_citus_local_table(PG_FUNCTION_ARGS)
+{
+	Oid relationOid = PG_GETARG_OID(0);
+
+	CheckCitusVersion(ERROR);
+	EnsureCoordinator();
+	EnsureTableOwner(relationOid);
+
+	ObjectAddress tableAddress = { 0 };
+	ObjectAddressSet(tableAddress, RelationRelationId, relationOid);
+
+	/*
+	 * Ensure dependencies first as we will create shell table on the other nodes
+	 * in the MX case.
+	 */
+	EnsureDependenciesExistOnAllNodes(&tableAddress);
+
+	/*
+	 * Lock target relation with an exclusive lock - there's no way to make
+	 * sense of this table until we've committed, and we don't want multiple
+	 * backends manipulating this relation.
+	 */
+	Relation relation = try_relation_open(relationOid, ExclusiveLock);
+
+	if (relation == NULL)
+	{
+		ereport(ERROR, (errmsg("could not create citus local table: "
+							   "relation does not exist")));
+	}
+
+	/* TODO: what to do with heap access method and below call ? */
+	EnsureRelationKindSupported(relationOid);
+
+	if (PartitionTable(relationOid) || PartitionedTable(relationOid))
+	{
+		/* TODO: prevent also ALTER TABLE ATTACH PARTITION COMMANDS */
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("citus local tables can not be involved in a "
+							   "partition relationship")));
+	}
+
+	EnsureTableNotDistributed(relationOid);
+
+	if (!CoordinatorAddedAsWorkerNode())
+	{
+		const char *relationName = get_rel_name(relationOid);
+
+		Assert(relationName != NULL);
+
+		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+						errmsg(
+							"cannot create citus local table \"%s\", citus local "
+							"tables can only be created from coordinator node if "
+							"it is added to pg_dist_node", relationName)));
+	}
+
+	CreateCitusLocalTable(relationOid);
+
+	relation_close(relation, NoLock);
+
+	PG_RETURN_VOID();
+}
+
+
+/*
  * CreateDistributedTable creates distributed table in the given configuration.
  * This functions contains all necessary logic to create distributed tables. It
  * performs necessary checks to ensure distributing the table is safe. If it is
@@ -435,10 +515,172 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 
 
 /*
+ * CreateCitusLocalTable is the internal method to create citus local table's
+ * shard and metadata.
+ * Note that this function does not perform any validation on the table as it
+ * is already done in create_citus_local_table.
+ */
+void
+CreateCitusLocalTable(Oid relationOid)
+{
+	/*
+	 * Make sure that existing reference tables have been replicated to all
+	 * the nodes such that we can create foreign keys and joins work immediately
+	 * after creation.
+	 */
+	EnsureReferenceTablesExistOnAllNodes();
+
+	/*
+	 * Get an exclusive lock on relation with relationOid the operations done
+	 * in this function should be automic.
+	 */
+
+	/* TODO: do we need this ? we already locked relation in udf ? */
+	LockRelationOid(relationOid, ExclusiveLock);
+
+	/* TODO: if LockRelationOid is needless here, then move EnsureTableOwner to udf as well */
+	EnsureTableOwner(relationOid);
+
+	/*
+	 * Get necessary commands to re-create the shell table before renaming the
+	 * given relation to the shard relation.
+	 */
+	List *foreignConstraintCommands = GetTableAllForeignConstraintCommands(relationOid);
+	List *tableDDLEvents = GetTableDDLEvents(relationOid, true);
+	tableDDLEvents = list_concat(tableDDLEvents, foreignConstraintCommands);
+
+	uint64 shardId = GetNextShardId();
+
+	char *relationName = get_rel_name(relationOid);
+	Oid schemaOid = get_rel_namespace(relationOid);
+
+	/* below we convert relation with relationOid to the shard relation */
+	CreateCitusLocalTableShard(relationOid, shardId);
+
+	/* below we recreate shell table */
+	CreateShellTableForCitusLocalTable(tableDDLEvents);
+
+	/* update relationOid so it points to the shell table that we just created */
+	relationOid = get_relname_relid(relationName, schemaOid);
+
+	/* assert that we created the shell table properly in the same schema */
+	Assert(OidIsValid(relationOid));
+
+	InsertMetadataForCitusLocalTable(relationOid, shardId);
+
+	/* foreign tables does not support TRUNCATE trigger */
+	if (RegularTable(relationOid))
+	{
+		CreateTruncateTrigger(relationOid);
+	}
+
+	if (ShouldSyncTableMetadata(relationOid))
+	{
+		CreateTableMetadataOnWorkers(relationOid);
+	}
+
+	/*
+	 * We've a custom way of foreign key graph invalidation,
+	 * see InvalidateForeignKeyGraph().
+	 */
+	if (TableReferenced(relationOid) || TableReferencing(relationOid))
+	{
+		InvalidateForeignKeyGraph();
+	}
+}
+
+
+/*
+ * CreateShellTableForCitusLocalTable creates the shell table for the citus
+ * local tables by executing the given commands necessary to re-create the
+ * table properly.
+ */
+static void
+CreateShellTableForCitusLocalTable(List *tableRecreateCommands)
+{
+	Assert(tableRecreateCommands != NIL);
+
+	char *ddlCommand = NULL;
+	foreach_ptr(ddlCommand, tableRecreateCommands)
+	{
+		StringInfo semicolonEndedCommand = makeStringInfo();
+		appendStringInfo(semicolonEndedCommand, "%s;", ddlCommand);
+
+		const char *commandString = semicolonEndedCommand->data;
+
+		Node *parseTree = ParseTreeNode(commandString);
+
+		/*
+		 * If the command defines a constraint, initially do not validate it
+		 * as shell table has no data in it. Note that this is only needed
+		 * before inserting metadata for citus local table. This is because
+		 * after that, we already won't process constraints on the shell table.
+		 */
+		if (IsA(parseTree, AlterTableStmt))
+		{
+			AlterTableStmt *alterTableStmt = castNode(AlterTableStmt, parseTree);
+
+			/* we create ALTER TABLE commands so they only have one subcommand */
+			Assert(list_length(alterTableStmt->cmds) == 1);
+			AlterTableCmd *alterTableCmd = castNode(AlterTableCmd, linitial(
+														alterTableStmt->cmds));
+
+			if (alterTableCmd->subtype == AT_AddConstraint)
+			{
+				Constraint *constraint = (Constraint *) alterTableCmd->def;
+				constraint->skip_validation = true;
+			}
+		}
+
+		CitusProcessUtility(parseTree, commandString, PROCESS_UTILITY_TOPLEVEL,
+							NULL, None_Receiver, NULL);
+	}
+}
+
+
+/*
+ * InsertMetadataForCitusLocalTable inserts necessary metadata for the citus
+ * local table to the following metadata tables:
+ * pg_dist_partition, pg_dist_shard & pg_dist_placement.
+ */
+static void
+InsertMetadataForCitusLocalTable(Oid citusLocalTableOid, uint64 shardId)
+{
+	Assert(OidIsValid(citusLocalTableOid));
+	Assert(shardId != INVALID_SHARD_ID);
+
+	char distributionMethod = DISTRIBUTE_BY_NONE;
+	char replicationModel = ReplicationModel;
+
+	uint32 colocationId = INVALID_COLOCATION_ID;
+	Var *distributionColumn = NULL;
+	InsertIntoPgDistPartition(citusLocalTableOid, distributionMethod, distributionColumn,
+							  colocationId, replicationModel);
+
+	/* set shard storage type according to relation type */
+	char shardStorageType = ShardStorageType(citusLocalTableOid);
+
+	text *shardMinValue = NULL;
+	text *shardMaxValue = NULL;
+	InsertShardRow(citusLocalTableOid, shardId, shardStorageType,
+				   shardMinValue, shardMaxValue);
+
+	List *nodeList = CitusLocalTablePlacementNodeList();
+
+	int replicationFactor = 1;
+	int workerStartIndex = 0;
+	InsertShardPlacementRows(citusLocalTableOid, shardId, nodeList,
+							 workerStartIndex, replicationFactor);
+}
+
+
+/*
  * AppropriateReplicationModel function decides which replication model should be
  * used depending on given distribution configuration and global ReplicationModel
  * variable. If ReplicationModel conflicts with distribution configuration, this
  * function errors out.
+ * Note that this function assumes a reference table when DISTRIBUTE_BY_NONE is
+ * given.
  */
 static char
 AppropriateReplicationModel(char distributionMethod, bool viaDeprecatedAPI)
@@ -1036,7 +1278,7 @@ LocalTableEmpty(Oid tableId)
 	Oid schemaId = get_rel_namespace(tableId);
 	char *schemaName = get_namespace_name(schemaId);
 	char *tableName = get_rel_name(tableId);
-	char *tableQualifiedName = quote_qualified_identifier(schemaName, tableName);
+	char *qualifiedRelationName = quote_qualified_identifier(schemaName, tableName);
 
 	StringInfo selectExistQueryString = makeStringInfo();
 
@@ -1054,7 +1296,7 @@ LocalTableEmpty(Oid tableId)
 		ereport(ERROR, (errmsg("could not connect to SPI manager")));
 	}
 
-	appendStringInfo(selectExistQueryString, SELECT_EXIST_QUERY, tableQualifiedName);
+	appendStringInfo(selectExistQueryString, SELECT_EXIST_QUERY, qualifiedRelationName);
 
 	int spiQueryResult = SPI_execute(selectExistQueryString->data, readOnly, 0);
 	if (spiQueryResult != SPI_OK_SELECT)

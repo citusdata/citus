@@ -17,6 +17,7 @@
 #include "commands/dbcommands.h"
 #include "distributed/hash_helpers.h"
 #include "distributed/listutils.h"
+#include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_client_executor.h"
 #include "distributed/worker_manager.h"
@@ -402,6 +403,21 @@ NodeIsPrimaryWorker(WorkerNode *node)
 
 
 /*
+ * CoordinatorAddedAsWorkerNode returns true if coordinator is added to the
+ * pg_dist_node.
+ */
+bool
+CoordinatorAddedAsWorkerNode()
+{
+	bool groupContainsNodes = false;
+
+	PrimaryNodeForGroup(COORDINATOR_GROUP_ID, &groupContainsNodes);
+
+	return groupContainsNodes;
+}
+
+
+/*
  * ReferenceTablePlacementNodeList returns the set of nodes that should have
  * reference table placements. This includes all primaries, including the
  * coordinator if known.
@@ -411,6 +427,33 @@ ReferenceTablePlacementNodeList(LOCKMODE lockMode)
 {
 	EnsureModificationsCanRun();
 	return FilterActiveNodeListFunc(lockMode, NodeIsPrimary);
+}
+
+
+/*
+ * CitusLocalTablePlacementNodeList returns a single element list containing
+ * the coordinator node if coordinator is added to pg_dist_node, otherwise
+ * errors out.
+ */
+List *
+CitusLocalTablePlacementNodeList()
+{
+	/* note that we supoort citus local tables only from coordinator for now */
+	if (!CoordinatorAddedAsWorkerNode())
+	{
+		ereport(ERROR, (errmsg("couldn't find any nodes containing citus local "
+							   "tables as the coordinator is not added to "
+							   "pg_dist_node.")));
+	}
+
+	EnsureModificationsCanRun();
+
+	WorkerNode *coordinatorNode = LookupNodeForGroup(COORDINATOR_GROUP_ID);
+
+	WorkerNode *workerNodeCopy = palloc0(sizeof(WorkerNode));
+	*workerNodeCopy = *coordinatorNode;
+
+	return list_make1(workerNodeCopy);
 }
 
 

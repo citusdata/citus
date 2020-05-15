@@ -102,6 +102,7 @@ extern void ErrorIfUnsupportedForeignConstraintExists(Relation relation,
 extern bool ColumnAppearsInForeignKeyToReferenceTable(char *columnName, Oid
 													  relationId);
 extern List * GetTableForeignConstraintCommands(Oid relationId);
+extern List * GetTableAllForeignConstraintCommands(Oid relationId);
 extern bool HasForeignKeyToReferenceTable(Oid relationId);
 extern bool TableReferenced(Oid relationId);
 extern bool TableReferencing(Oid relationId);

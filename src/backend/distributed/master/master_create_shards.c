@@ -23,8 +23,15 @@
 #include <string.h>
 #include <stdint.h>
 
+#include "access/genam.h"
+#include "access/htup_details.h"
 #include "catalog/namespace.h"
 #include "catalog/pg_class.h"
+#include "catalog/pg_constraint.h"
+#include "catalog/pg_constraint_d.h"
+#include "commands/tablecmds.h"
+#include "distributed/colocation_utils.h"
+#include "distributed/commands.h"
 #include "distributed/listutils.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/master_protocol.h"
@@ -38,8 +45,11 @@
 #include "distributed/resource_lock.h"
 #include "distributed/shardinterval_utils.h"
 #include "distributed/transaction_management.h"
+#include "distributed/commands/utility_hook.h"
 #include "distributed/worker_manager.h"
+#include "distributed/worker_protocol.h"
 #include "lib/stringinfo.h"
+#include "nodes/makefuncs.h"
 #include "nodes/pg_list.h"
 #include "nodes/primnodes.h"
 #include "postmaster/postmaster.h"
@@ -49,6 +59,7 @@
 #include "utils/builtins.h"
 #include "utils/elog.h"
 #include "utils/errcodes.h"
+#include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
 #include "utils/palloc.h"
 
@@ -56,6 +67,14 @@
 /* declarations for dynamic loading */
 PG_FUNCTION_INFO_V1(master_create_worker_shards);
 
+/* utility functions for lazy shard creation of citus local tables */
+static void RenameRelationToShardRelation(Oid relationOid, uint64 shardId);
+static void RenameShardRelationConstraints(Oid relationOid, uint64 shardId);
+static List * GetRelationConstraintNames(Oid relationOid);
+static void RenameForeignConstraintsReferencingToShard(Oid relationOid, uint64 shardId);
+static List * GetForeignConstraintsReferencingToShard(Oid relationOid);
+static void RenameShardRelationIndexes(Oid relationOid, uint64 shardId);
+static List * GetShardRelationIndexNames(Oid relationOid);
 
 /*
  * master_create_worker_shards is a user facing function to create worker shards
@@ -383,6 +402,336 @@ CreateReferenceTableShard(Oid distributedTableId)
 
 	CreateShardsOnWorkers(distributedTableId, insertedShardPlacements,
 						  useExclusiveConnection, colocatedShard);
+}
+
+
+/*
+ * CreateCitusLocalTableShard creates the one and only shard of the citus
+ * local table lazily. That means, this function suffixes shardId to:
+ *  - relation name,
+ *  - all the objects "defined on" the relation and
+ *  - the foreign keys referencing to the relation.
+ */
+void
+CreateCitusLocalTableShard(Oid relationOid, uint64 shardId)
+{
+	RenameRelationToShardRelation(relationOid, shardId);
+	RenameShardRelationConstraints(relationOid, shardId);
+	RenameForeignConstraintsReferencingToShard(relationOid, shardId);
+	RenameShardRelationIndexes(relationOid, shardId);
+}
+
+
+/*
+ * RenameRelationToShardRelation appends given shardId to the end of the name
+ * of relation with relationOid.
+ */
+static void
+RenameRelationToShardRelation(Oid relationOid, uint64 shardId)
+{
+	Oid schemaOid = get_rel_namespace(relationOid);
+	char *schemaName = get_namespace_name(schemaOid);
+	char *relationName = get_rel_name(relationOid);
+	char *qualifiedRelationName = quote_qualified_identifier(schemaName, relationName);
+
+	char *shardRelationName = pstrdup(relationName);
+	AppendShardIdToName(&shardRelationName, shardId);
+
+	StringInfo renameCommand = makeStringInfo();
+	appendStringInfo(renameCommand, "ALTER TABLE %s RENAME TO %s;",
+					 qualifiedRelationName, shardRelationName);
+
+	const char *commandString = renameCommand->data;
+
+	Node *parseTree = ParseTreeNode(commandString);
+
+	CitusProcessUtility(parseTree, commandString, PROCESS_UTILITY_TOPLEVEL,
+						NULL, None_Receiver, NULL);
+}
+
+
+/*
+ * RenameShardRelationConstraints appends given shardId to the end of the name
+ * of constraints "defined on" the relation with relationOid. This function
+ * utilizes GetRelationConstraintNames to pick the constraints to be renamed,
+ * see more details on that function's comment.
+ */
+static void
+RenameShardRelationConstraints(Oid relationOid, uint64 shardId)
+{
+	Oid schemaOid = get_rel_namespace(relationOid);
+	char *schemaName = get_namespace_name(schemaOid);
+	char *relationName = get_rel_name(relationOid);
+	char *qualifiedRelationName = quote_qualified_identifier(schemaName, relationName);
+
+	List *constraintNameList = GetRelationConstraintNames(relationOid);
+
+	char *constraintName = NULL;
+	foreach_ptr(constraintName, constraintNameList)
+	{
+		char *shardConstraintName = pstrdup(constraintName);
+		AppendShardIdToName(&shardConstraintName, shardId);
+
+		StringInfo renameCommand = makeStringInfo();
+		appendStringInfo(renameCommand, "ALTER TABLE %s RENAME CONSTRAINT %s TO %s;",
+						 qualifiedRelationName, constraintName, shardConstraintName);
+
+		const char *commandString = renameCommand->data;
+
+		Node *parseTree = ParseTreeNode(commandString);
+
+		CitusProcessUtility(parseTree, commandString, PROCESS_UTILITY_TOPLEVEL, NULL,
+							None_Receiver, NULL);
+	}
+}
+
+
+/*
+ * GetRelationConstraintNames returns a list constraint names "defined on"
+ * the relation with relationOid. Those constraints can be:
+ *  - "check" constraints or,
+ *  - "primary key" constraints or,
+ *  - "unique" constraints or,
+ *  - "trigger" constraints or,
+ *  - "exclusion" constraints or,
+ *  - "foreign key" constraints in which the relation is the "referencing"
+ *     relation (including the self-referencing foreign keys).
+ */
+static List *
+GetRelationConstraintNames(Oid relationOid)
+{
+	List *constraintNames = NIL;
+
+	ScanKeyData scanKey[1];
+	int scanKeyCount = 1;
+	bool indexOk = true;
+
+	Relation pgConstraint = heap_open(ConstraintRelationId, AccessShareLock);
+	ScanKeyInit(&scanKey[0], Anum_pg_constraint_conrelid, BTEqualStrategyNumber,
+				F_OIDEQ, relationOid);
+	SysScanDesc scanDescriptor = systable_beginscan(pgConstraint,
+													ConstraintRelidTypidNameIndexId,
+													indexOk, NULL,
+													scanKeyCount, scanKey);
+
+	HeapTuple heapTuple = systable_getnext(scanDescriptor);
+	while (HeapTupleIsValid(heapTuple))
+	{
+		Form_pg_constraint constraintForm = (Form_pg_constraint) GETSTRUCT(heapTuple);
+
+		constraintNames = lappend(constraintNames, pstrdup(constraintForm->conname.data));
+
+		heapTuple = systable_getnext(scanDescriptor);
+	}
+
+	/* clean up scan and close system catalog */
+	systable_endscan(scanDescriptor);
+	heap_close(pgConstraint, NoLock);
+
+	return constraintNames;
+}
+
+
+/*
+ * RenameForeignConstraintsReferencingToShard appends given shardId to the
+ * end of the name of foreign key constraints in which the relation with
+ * relationOid is the "referenced one" except the self-referencing foreign
+ * keys. This is because, we already renamed self-referencing foreign keys
+ * via RenameShardRelationConstraints function.
+ */
+static void
+RenameForeignConstraintsReferencingToShard(Oid relationOid, uint64 shardId)
+{
+	List *foreignConstraintForms = GetForeignConstraintsReferencingToShard(relationOid);
+
+	Form_pg_constraint foreignConstraintForm = NULL;
+	foreach_ptr(foreignConstraintForm, foreignConstraintForms)
+	{
+		Oid referencedTableOid = foreignConstraintForm->conrelid;
+		Oid referencedTableSchemaOid = get_rel_namespace(referencedTableOid);
+		char *referencedTableSchemaName = get_namespace_name(referencedTableSchemaOid);
+		char *referencedRelationName = get_rel_name(referencedTableOid);
+		char *referencedRelationQualifiedName = quote_qualified_identifier(
+			referencedTableSchemaName, referencedRelationName);
+
+		char *constraintName = foreignConstraintForm->conname.data;
+
+		char *shardConstraintName = pstrdup(constraintName);
+		AppendShardIdToName(&shardConstraintName, shardId);
+
+		StringInfo renameCommand = makeStringInfo();
+		appendStringInfo(renameCommand, "ALTER TABLE %s RENAME CONSTRAINT %s TO %s;",
+						 referencedRelationQualifiedName, constraintName,
+						 shardConstraintName);
+
+		const char *commandString = renameCommand->data;
+
+		Node *parseTree = ParseTreeNode(commandString);
+
+		CitusProcessUtility(parseTree, commandString, PROCESS_UTILITY_TOPLEVEL,
+							NULL, None_Receiver, NULL);
+	}
+}
+
+
+/*
+ * GetForeignConstraintsReferencingToShard returns a list constraint form
+ * objects for the relation with relationOid representing the foreign keys
+ * in which the relation is the "referenced" relation except the
+ * "self-referencing foreign keys".
+ */
+static List *
+GetForeignConstraintsReferencingToShard(Oid relationOid)
+{
+	List *constraintForms = NIL;
+
+	ScanKeyData scanKey[1];
+	int scanKeyCount = 1;
+	Oid scanIndexId = InvalidOid;
+	bool indexOk = false;
+
+	Relation pgConstraint = heap_open(ConstraintRelationId, AccessShareLock);
+
+	ScanKeyInit(&scanKey[0], Anum_pg_constraint_confrelid, BTEqualStrategyNumber, F_OIDEQ,
+				relationOid);
+	SysScanDesc scanDescriptor = systable_beginscan(pgConstraint, scanIndexId,
+													indexOk, NULL, scanKeyCount,
+													scanKey);
+
+	HeapTuple heapTuple = systable_getnext(scanDescriptor);
+
+	while (HeapTupleIsValid(heapTuple))
+	{
+		Form_pg_constraint constraintForm = (Form_pg_constraint) GETSTRUCT(heapTuple);
+
+		if (constraintForm->contype != CONSTRAINT_FOREIGN)
+		{
+			heapTuple = systable_getnext(scanDescriptor);
+			continue;
+		}
+
+		if (constraintForm->conrelid == constraintForm->confrelid)
+		{
+			/* skip self referencing foreign keys */
+			heapTuple = systable_getnext(scanDescriptor);
+			continue;
+		}
+
+		constraintForms = lappend(constraintForms, constraintForm);
+
+		heapTuple = systable_getnext(scanDescriptor);
+	}
+
+	systable_endscan(scanDescriptor);
+	heap_close(pgConstraint, NoLock);
+
+	return constraintForms;
+}
+
+
+/*
+ * RenameShardRelationIndexes appends given shardId to the end of the names
+ * of shard relation indexes except the ones that are already renamed via
+ * RenameShardRelationConstraints. This function utilizes
+ * GetShardRelationIndexNames to pick the indexes to be renamed, see more
+ * details on that function's comment.
+ */
+static void
+RenameShardRelationIndexes(Oid relationOid, uint64 shardId)
+{
+	List *indexNameList = GetShardRelationIndexNames(relationOid);
+
+	char *indexName = NULL;
+	foreach_ptr(indexName, indexNameList)
+	{
+		char *shardIndexName = pstrdup(indexName);
+		AppendShardIdToName(&shardIndexName, shardId);
+
+		StringInfo renameCommand = makeStringInfo();
+		appendStringInfo(renameCommand, "ALTER INDEX %s RENAME TO %s;", indexName,
+						 shardIndexName);
+
+		const char *commandString = renameCommand->data;
+
+		Node *parseTree = ParseTreeNode(commandString);
+
+		CitusProcessUtility(parseTree, commandString, PROCESS_UTILITY_TOPLEVEL,
+							NULL, None_Receiver, NULL);
+	}
+}
+
+
+/*
+ * GetShardRelationIndexNames returns a list of index names "defined on" the
+ * relation with relationOid explicitly by the CREATE INDEX command. That
+ * means, all the constraints defined on the relation except:
+ *  - primary indexes,
+ *  - unique indexes and
+ *  - exclusion indexes
+ * that are applied by the related constraints.
+ */
+static List *
+GetShardRelationIndexNames(Oid relationOid)
+{
+	List *indexNames = NIL;
+
+	ScanKeyData scanKey[1];
+	int scanKeyCount = 1;
+	bool indexOk = true;
+
+	/*
+	 * Set search_path to NIL so that all objects outside of pg_catalog will be
+	 * schema-prefixed. pg_catalog will be added automatically when we call
+	 * PushOverrideSearchPath(), since we set addCatalog to true;
+	 */
+	OverrideSearchPath *overridePath = GetOverrideSearchPath(CurrentMemoryContext);
+	overridePath->schemas = NIL;
+	overridePath->addCatalog = true;
+	PushOverrideSearchPath(overridePath);
+
+	/* open system catalog and scan all indexes that belong to this table */
+	Relation pgIndex = heap_open(IndexRelationId, AccessShareLock);
+
+	ScanKeyInit(&scanKey[0], Anum_pg_index_indrelid,
+				BTEqualStrategyNumber, F_OIDEQ, relationOid);
+
+	SysScanDesc scanDescriptor = systable_beginscan(pgIndex, IndexIndrelidIndexId,
+													indexOk, NULL, scanKeyCount,
+													scanKey);
+
+	HeapTuple heapTuple = systable_getnext(scanDescriptor);
+	while (HeapTupleIsValid(heapTuple))
+	{
+		Form_pg_index indexForm = (Form_pg_index) GETSTRUCT(heapTuple);
+
+		if (indexForm->indisprimary || indexForm->indisunique ||
+			indexForm->indisexclusion)
+		{
+			/*
+			 * Skip the indexes that are not implied by explicitly executing
+			 * a CREATE INDEX command.
+			 */
+			heapTuple = systable_getnext(scanDescriptor);
+			continue;
+		}
+
+		Oid indexId = indexForm->indexrelid;
+
+		char *indexName = get_rel_name(indexId);
+
+		indexNames = lappend(indexNames, pstrdup(indexName));
+
+		heapTuple = systable_getnext(scanDescriptor);
+	}
+
+	/* clean up scan and close system catalog */
+	systable_endscan(scanDescriptor);
+	heap_close(pgIndex, AccessShareLock);
+
+	/* revert back to original search_path */
+	PopOverrideSearchPath();
+
+	return indexNames;
 }
 
 

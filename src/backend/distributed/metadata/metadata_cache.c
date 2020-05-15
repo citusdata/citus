@@ -3616,16 +3616,22 @@ ReferenceTableOidList()
 	while (HeapTupleIsValid(heapTuple))
 	{
 		bool isNull = false;
-		Datum relationIdDatum = heap_getattr(heapTuple,
-											 Anum_pg_dist_partition_logicalrelid,
-											 tupleDescriptor, &isNull);
-		Oid relationId = DatumGetObjectId(relationIdDatum);
 		char partitionMethod = heap_getattr(heapTuple,
 											Anum_pg_dist_partition_partmethod,
 											tupleDescriptor, &isNull);
+		char replicationModel = heap_getattr(heapTuple,
+											 Anum_pg_dist_partition_repmodel,
+											 tupleDescriptor, &isNull);
 
-		if (partitionMethod == DISTRIBUTE_BY_NONE)
+		if (partitionMethod == DISTRIBUTE_BY_NONE && replicationModel ==
+			REPLICATION_MODEL_2PC)
 		{
+			Datum relationIdDatum = heap_getattr(heapTuple,
+												 Anum_pg_dist_partition_logicalrelid,
+												 tupleDescriptor, &isNull);
+
+			Oid relationId = DatumGetObjectId(relationIdDatum);
+
 			referenceTableOidList = lappend_oid(referenceTableOidList, relationId);
 		}
 

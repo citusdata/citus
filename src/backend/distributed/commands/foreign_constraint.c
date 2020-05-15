@@ -17,9 +17,7 @@
 #include "access/htup_details.h"
 #include "catalog/namespace.h"
 #include "catalog/pg_constraint.h"
-#if (PG_VERSION_NUM >= PG_VERSION_12)
 #include "access/genam.h"
-#endif
 #include "catalog/pg_type.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/commands.h"
@@ -476,8 +474,59 @@ ColumnAppearsInForeignKeyToReferenceTable(char *columnName, Oid relationId)
 
 
 /*
- * GetTableForeignConstraints takes in a relationId, and returns the list of foreign
- * constraint commands needed to reconstruct foreign constraints of that table.
+ * GetTableAllForeignConstraintCommands takes in a relationId, and returns the
+ * list of foreign constraint commands needed to reconstruct foreign key constraints
+ * that the table is involved in either as the "referencing" one or the "referenced"
+ * one.
+ */
+List *
+GetTableAllForeignConstraintCommands(Oid relationId)
+{
+	List *tableForeignConstraints = NIL;
+
+	ScanKeyData scanKey[1];
+	int scanKeyCount = 1;
+
+	Relation pgConstraint = heap_open(ConstraintRelationId, AccessShareLock);
+	ScanKeyInit(&scanKey[0], Anum_pg_constraint_contype, BTEqualStrategyNumber,
+				F_CHAREQ, CharGetDatum(CONSTRAINT_FOREIGN));
+	SysScanDesc scanDescriptor = systable_beginscan(pgConstraint,
+													InvalidOid,
+													false, NULL,
+													scanKeyCount, scanKey);
+
+	HeapTuple heapTuple = systable_getnext(scanDescriptor);
+
+	while (HeapTupleIsValid(heapTuple))
+	{
+		Form_pg_constraint constraintForm = (Form_pg_constraint) GETSTRUCT(heapTuple);
+
+		if (constraintForm->confrelid == relationId ||
+			constraintForm->conrelid == relationId)
+		{
+			Oid constraintId = get_relation_constraint_oid_compat(constraintForm);
+			char *statementDef = pg_get_constraintdef_command(constraintId);
+
+			tableForeignConstraints = lappend(tableForeignConstraints, statementDef);
+		}
+
+		heapTuple = systable_getnext(scanDescriptor);
+		continue;
+	}
+
+	/* clean up scan and close system catalog */
+
+	systable_endscan(scanDescriptor);
+	heap_close(pgConstraint, AccessShareLock);
+
+	return tableForeignConstraints;
+}
+
+
+/*
+ * GetTableForeignConstraintCommands takes in a relationId, and returns the list
+ * of foreign constraint commands needed to reconstruct foreign key constraints
+ * that the table is involved in as the "referencing" one.
  */
 List *
 GetTableForeignConstraintCommands(Oid relationId)
