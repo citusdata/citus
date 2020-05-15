@@ -42,6 +42,7 @@ static void ForeignConstraintFindDistKeys(HeapTuple pgConstraintTuple,
 										  Var *referencedDistColumn,
 										  int *referencingAttrIndex,
 										  int *referencedAttrIndex);
+static Oid get_relation_constraint_oid_compat(HeapTuple heapTuple);
 
 /*
  * ConstraintIsAForeignKeyToReferenceTable checks if the given constraint is a
@@ -514,9 +515,7 @@ GetTableForeignConstraintCommands(Oid relationId)
 
 		if (!inheritedConstraint && constraintForm->contype == CONSTRAINT_FOREIGN)
 		{
-			Oid constraintId = get_relation_constraint_oid(relationId,
-														   constraintForm->conname.data,
-														   true);
+			Oid constraintId = get_relation_constraint_oid_compat(heapTuple);
 			char *statementDef = pg_get_constraintdef_command(constraintId);
 
 			tableForeignConstraints = lappend(tableForeignConstraints, statementDef);
@@ -533,6 +532,31 @@ GetTableForeignConstraintCommands(Oid relationId)
 	PopOverrideSearchPath();
 
 	return tableForeignConstraints;
+}
+
+
+/*
+ * get_relation_constraint_oid_compat returns OID of the constraint represented
+ * by the constraintForm, which is passed as an heapTuple. OID of the contraint
+ * is already stored in the constraintForm struct if major PostgreSQL version is
+ * 12. However, in the older versions, we should utilize HeapTupleGetOid to deduce
+ * that OID with no cost.
+ */
+static Oid
+get_relation_constraint_oid_compat(HeapTuple heapTuple)
+{
+	Assert(heapTuple != NULL);
+
+	Oid constraintOid = InvalidOid;
+
+#if PG_VERSION_NUM >= PG_VERSION_12
+	Form_pg_constraint constraintForm = (Form_pg_constraint) GETSTRUCT(heapTuple);
+	constraintOid = constraintForm->oid;
+#else
+	constraintOid = HeapTupleGetOid(heapTuple);
+#endif
+
+	return constraintOid;
 }
 
 
