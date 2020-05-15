@@ -575,17 +575,6 @@ IsUpdateOrDelete(Query *query)
 
 
 /*
- * IsModifyDistributedPlan returns true if the multi plan performs modifications,
- * false otherwise.
- */
-bool
-IsModifyDistributedPlan(DistributedPlan *distributedPlan)
-{
-	return distributedPlan->modLevel > ROW_MODIFY_READONLY;
-}
-
-
-/*
  * PlanFastPathDistributedStmt creates a distributed planned statement using
  * the FastPathPlanner.
  */
@@ -805,7 +794,7 @@ InlineCtesAndCreateDistributedPlannedStmt(uint64 planId,
 	/* after inlining, we shouldn't have any inlinable CTEs */
 	Assert(!QueryTreeContainsInlinableCTE(copyOfOriginalQuery));
 
-	#if PG_VERSION_NUM < PG_VERSION_12
+#if PG_VERSION_NUM < PG_VERSION_12
 	Query *query = planContext->query;
 
 	/*

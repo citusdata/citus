@@ -93,8 +93,8 @@ typedef struct ExecutionParams
 	/* tupleStore is where the results will be stored for this execution */
 	Tuplestorestate *tupleStore;
 
-	/* hasReturning is true if this execution will return some result. */
-	bool hasReturning;
+	/* expectResults is true if this execution will return some result. */
+	bool expectResults;
 
 	/* targetPoolSize is the maximum amount of connections per worker */
 	int targetPoolSize;

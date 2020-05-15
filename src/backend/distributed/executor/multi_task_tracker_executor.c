@@ -635,7 +635,7 @@ TopLevelTask(Task *task)
 	 * SQL tasks can only appear at the top level in our query tree. Further, no
 	 * other task type can appear at the top level in our tree.
 	 */
-	if (task->taskType == SELECT_TASK)
+	if (task->taskType == READ_TASK)
 	{
 		topLevelTask = true;
 	}
@@ -1063,7 +1063,7 @@ ManageTaskExecution(TaskTracker *taskTracker, TaskTracker *sourceTaskTracker,
 			 * We finally queue this task for execution. Note that we queue sql and
 			 * other tasks slightly differently.
 			 */
-			if (taskType == SELECT_TASK)
+			if (taskType == READ_TASK)
 			{
 				TrackerQueueSqlTask(taskTracker, task);
 			}
@@ -1253,7 +1253,7 @@ ManageTransmitExecution(TaskTracker *transmitTracker,
 	TransmitExecStatus *transmitStatusArray = taskExecution->transmitStatusArray;
 	TransmitExecStatus currentTransmitStatus = transmitStatusArray[currentNodeIndex];
 	TransmitExecStatus nextTransmitStatus = EXEC_TRANSMIT_INVALID_FIRST;
-	Assert(task->taskType == SELECT_TASK);
+	Assert(task->taskType == READ_TASK);
 
 	switch (currentTransmitStatus)
 	{
@@ -1852,7 +1852,7 @@ ConstrainedNonMergeTaskList(List *taskAndExecutionList, Task *task)
 	List *dependentTaskList = NIL;
 
 	TaskType taskType = task->taskType;
-	if (taskType == SELECT_TASK || taskType == MAP_TASK)
+	if (taskType == READ_TASK || taskType == MAP_TASK)
 	{
 		upstreamTask = task;
 		dependentTaskList = upstreamTask->dependentTaskList;
@@ -1928,7 +1928,7 @@ ConstrainedMergeTaskList(List *taskAndExecutionList, Task *task)
 	 * given task is a SQL or map task, we simply need to find its merge task
 	 * dependencies -- if any.
 	 */
-	if (taskType == SELECT_TASK || taskType == MAP_TASK)
+	if (taskType == READ_TASK || taskType == MAP_TASK)
 	{
 		constrainedMergeTaskList = MergeTaskList(task->dependentTaskList);
 	}
@@ -2008,7 +2008,7 @@ ReassignTaskList(List *taskList)
 		TaskExecution *taskExecution = task->taskExecution;
 
 		bool transmitCompleted = TransmitExecutionCompleted(taskExecution);
-		if ((task->taskType == SELECT_TASK) && transmitCompleted)
+		if ((task->taskType == READ_TASK) && transmitCompleted)
 		{
 			completedTaskList = lappend(completedTaskList, task);
 		}

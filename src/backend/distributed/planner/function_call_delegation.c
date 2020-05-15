@@ -367,7 +367,7 @@ TryToDelegateFunctionCall(DistributedPlanningContext *planContext)
 	ereport(DEBUG1, (errmsg("pushing down the function call")));
 
 	task = CitusMakeNode(Task);
-	task->taskType = SELECT_TASK;
+	task->taskType = READ_TASK;
 	task->taskPlacementList = placementList;
 	SetTaskQueryIfShouldLazyDeparse(task, planContext->query);
 	task->anchorShardId = shardInterval->shardId;
@@ -382,7 +382,7 @@ TryToDelegateFunctionCall(DistributedPlanningContext *planContext)
 	distributedPlan->workerJob = job;
 	distributedPlan->masterQuery = NULL;
 	distributedPlan->routerExecutable = true;
-	distributedPlan->hasReturning = false;
+	distributedPlan->expectResults = true;
 
 	/* worker will take care of any necessary locking, treat query as read-only */
 	distributedPlan->modLevel = ROW_MODIFY_READONLY;

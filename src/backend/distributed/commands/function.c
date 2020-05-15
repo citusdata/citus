@@ -300,7 +300,7 @@ GetDistributionArgIndex(Oid functionOid, char *distributionArgumentName,
 	}
 
 	/*
-	 * The user didn't provid "$paramIndex" but potentially the name of the paramater.
+	 * The user didn't provid "$paramIndex" but potentially the name of the parameter.
 	 * So, loop over the arguments and try to find the argument name that matches
 	 * the parameter that user provided.
 	 */

@@ -184,7 +184,7 @@ OutDistributedPlan(OUTFUNC_ARGS)
 
 	WRITE_UINT64_FIELD(planId);
 	WRITE_ENUM_FIELD(modLevel, RowModifyLevel);
-	WRITE_BOOL_FIELD(hasReturning);
+	WRITE_BOOL_FIELD(expectResults);
 	WRITE_BOOL_FIELD(routerExecutable);
 
 	WRITE_NODE_FIELD(workerJob);

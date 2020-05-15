@@ -118,11 +118,11 @@ bool EnableRouterExecution = true;
 
 
 /* planner functions forward declarations */
-static void CreateSingleTaskRouterPlan(DistributedPlan *distributedPlan,
-									   Query *originalQuery,
-									   Query *query,
-									   PlannerRestrictionContext *
-									   plannerRestrictionContext);
+static void CreateSingleTaskRouterSelectPlan(DistributedPlan *distributedPlan,
+											 Query *originalQuery,
+											 Query *query,
+											 PlannerRestrictionContext *
+											 plannerRestrictionContext);
 static Oid ResultRelationOidForQuery(Query *query);
 static bool IsTidColumn(Node *node);
 static DeferredErrorMessage * MultiShardModifyQuerySupported(Query *originalQuery,
@@ -184,8 +184,8 @@ CreateRouterPlan(Query *originalQuery, Query *query,
 
 	if (distributedPlan->planningError == NULL)
 	{
-		CreateSingleTaskRouterPlan(distributedPlan, originalQuery, query,
-								   plannerRestrictionContext);
+		CreateSingleTaskRouterSelectPlan(distributedPlan, originalQuery, query,
+										 plannerRestrictionContext);
 	}
 
 	distributedPlan->fastPathRouterPlan =
@@ -207,6 +207,8 @@ CreateModifyPlan(Query *originalQuery, Query *query,
 	Job *job = NULL;
 	DistributedPlan *distributedPlan = CitusMakeNode(DistributedPlan);
 	bool multiShardQuery = false;
+
+	Assert(originalQuery->commandType != CMD_SELECT);
 
 	distributedPlan->modLevel = RowModifyLevelForQuery(query);
 
@@ -238,13 +240,8 @@ CreateModifyPlan(Query *originalQuery, Query *query,
 	distributedPlan->workerJob = job;
 	distributedPlan->masterQuery = NULL;
 	distributedPlan->routerExecutable = true;
-	distributedPlan->hasReturning = false;
+	distributedPlan->expectResults = originalQuery->returningList != NIL;
 	distributedPlan->targetRelationId = ResultRelationOidForQuery(query);
-
-	if (list_length(originalQuery->returningList) > 0)
-	{
-		distributedPlan->hasReturning = true;
-	}
 
 	distributedPlan->fastPathRouterPlan =
 		plannerRestrictionContext->fastPathRestrictionContext->fastPathRouterQuery;
@@ -255,20 +252,19 @@ CreateModifyPlan(Query *originalQuery, Query *query,
 
 
 /*
- * CreateSingleTaskRouterPlan creates a physical plan for given query. The created plan is
- * either a modify task that changes a single shard, or a router task that returns
- * query results from a single worker. Supported modify queries (insert/update/delete)
- * are router plannable by default. If query is not router plannable the returned plan
- * has planningError set to a description of the problem.
+ * CreateSingleTaskRouterPlan creates a physical plan for given SELECT query.
+ * The returned plan is a router task that returns query results from a single worker.
+ * If not router plannable, the returned plan's planningError describes the problem.
  */
 static void
-CreateSingleTaskRouterPlan(DistributedPlan *distributedPlan, Query *originalQuery,
-						   Query *query,
-						   PlannerRestrictionContext *plannerRestrictionContext)
+CreateSingleTaskRouterSelectPlan(DistributedPlan *distributedPlan, Query *originalQuery,
+								 Query *query,
+								 PlannerRestrictionContext *plannerRestrictionContext)
 {
+	Assert(query->commandType == CMD_SELECT);
+
 	distributedPlan->modLevel = RowModifyLevelForQuery(query);
 
-	/* we cannot have multi shard update/delete query via this code path */
 	Job *job = RouterJob(originalQuery, plannerRestrictionContext,
 						 &distributedPlan->planningError);
 
@@ -283,7 +279,7 @@ CreateSingleTaskRouterPlan(DistributedPlan *distributedPlan, Query *originalQuer
 	distributedPlan->workerJob = job;
 	distributedPlan->masterQuery = NULL;
 	distributedPlan->routerExecutable = true;
-	distributedPlan->hasReturning = false;
+	distributedPlan->expectResults = true;
 }
 
 
@@ -1414,6 +1410,8 @@ TargetEntryChangesValue(TargetEntry *targetEntry, Var *column, FromExpr *joinTre
 static Job *
 RouterInsertJob(Query *originalQuery)
 {
+	Assert(originalQuery->commandType == CMD_INSERT);
+
 	bool isMultiRowInsert = IsMultiRowInsert(originalQuery);
 	if (isMultiRowInsert)
 	{
@@ -1809,7 +1807,7 @@ SingleShardSelectTaskList(Query *query, uint64 jobId, List *relationShardList,
 						  List *placementList, uint64 shardId,
 						  bool parametersInQueryResolved)
 {
-	Task *task = CreateTask(SELECT_TASK);
+	Task *task = CreateTask(READ_TASK);
 	List *relationRowLockList = NIL;
 
 	RowLocksOnRelations((Node *) query, &relationRowLockList);
@@ -3116,7 +3114,7 @@ ExtractInsertPartitionKeyValue(Query *query)
 /*
  * MultiRouterPlannableQuery checks if given select query is router plannable,
  * setting distributedPlan->planningError if not.
- * The query is router plannable if it is a modify query, or if its is a select
+ * The query is router plannable if it is a modify query, or if it is a select
  * query issued on a hash partitioned distributed table. Router plannable checks
  * for select queries can be turned off by setting citus.enable_router_execution
  * flag to false.
@@ -3177,7 +3175,7 @@ MultiRouterPlannableQuery(Query *query)
 
 			/*
 			 * Currently, we don't support tables with replication factor > 1,
-			 * except reference tables with SELECT ... FOR UDPATE queries. It is
+			 * except reference tables with SELECT ... FOR UPDATE queries. It is
 			 * also not supported from MX nodes.
 			 */
 			if (query->hasForUpdate)

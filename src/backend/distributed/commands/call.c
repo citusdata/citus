@@ -164,7 +164,7 @@ CallFuncExprRemotely(CallStmt *callStmt, DistObjectCacheEntry *procedure,
 		TupleDesc tupleDesc = CallStmtResultDesc(callStmt);
 		TupleTableSlot *slot = MakeSingleTupleTableSlotCompat(tupleDesc,
 															  &TTSOpsMinimalTuple);
-		bool hasReturning = true;
+		bool expectResults = true;
 		Task *task = CitusMakeNode(Task);
 
 		task->jobId = INVALID_JOB_ID;
@@ -196,7 +196,7 @@ CallFuncExprRemotely(CallStmt *callStmt, DistObjectCacheEntry *procedure,
 			);
 		executionParams->tupleStore = tupleStore;
 		executionParams->tupleDescriptor = tupleDesc;
-		executionParams->hasReturning = hasReturning;
+		executionParams->expectResults = expectResults;
 		executionParams->xactProperties = xactProperties;
 		ExecuteTaskListExtended(executionParams);
 
