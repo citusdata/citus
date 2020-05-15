@@ -770,11 +770,10 @@ UpdateRelationColocationGroup(Oid distributedRelationId, uint32 colocationId)
 uint32
 TableColocationId(Oid distributedTableId)
 {
-	CitusTableCacheEntryRef *cacheRef = GetCitusTableCacheEntry(distributedTableId);
+	CitusTableCacheEntry *cacheEntry =
+		GetCitusTableCacheEntryDirect(distributedTableId);
 
-	uint32 colocationId = cacheRef->cacheEntry->colocationId;
-	ReleaseTableCacheEntry(cacheRef);
-	return colocationId;
+	return cacheEntry->colocationId;
 }
 
 
@@ -918,11 +917,12 @@ ColocatedShardIntervalList(ShardInterval *shardInterval)
 	Oid distributedTableId = shardInterval->relationId;
 	List *colocatedShardList = NIL;
 
-	CitusTableCacheEntryRef *cacheRef = GetCitusTableCacheEntry(distributedTableId);
-	char partitionMethod = cacheRef->cacheEntry->partitionMethod;
+	CitusTableCacheEntry *cacheEntry =
+		GetCitusTableCacheEntryDirect(distributedTableId);
+	char partitionMethod = cacheEntry->partitionMethod;
 	int shardIntervalArrayLength PG_USED_FOR_ASSERTS_ONLY =
-		cacheRef->cacheEntry->shardIntervalArrayLength;
-	ReleaseTableCacheEntry(cacheRef);
+		cacheEntry->shardIntervalArrayLength;
+	cacheEntry = NULL;
 
 	/*
 	 * If distribution type of the table is not hash or reference, each shard of

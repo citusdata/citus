@@ -1857,14 +1857,13 @@ multi_relation_restriction_hook(PlannerInfo *root, RelOptInfo *relOptInfo,
 	 * We're also keeping track of whether all participant
 	 * tables are reference tables.
 	 */
-	if (distributedTable)
+	if (distributedTable && relationRestrictionContext->allReferenceTables)
 	{
-		CitusTableCacheEntryRef *cacheRef = GetCitusTableCacheEntry(rte->relid);
+		CitusTableCacheEntry *cacheEntry =
+			GetCitusTableCacheEntryDirect(rte->relid);
 
-		relationRestrictionContext->allReferenceTables &=
-			(cacheRef->cacheEntry->partitionMethod == DISTRIBUTE_BY_NONE);
-
-		ReleaseTableCacheEntry(cacheRef);
+		relationRestrictionContext->allReferenceTables =
+			(cacheEntry->partitionMethod == DISTRIBUTE_BY_NONE);
 	}
 
 	relationRestrictionContext->relationRestrictionList =

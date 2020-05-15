@@ -390,11 +390,14 @@ SetLocktagForShardDistributionMetadata(int64 shardId, LOCKTAG *tag)
 {
 	ShardInterval *shardInterval = LoadShardInterval(shardId);
 	Oid citusTableId = shardInterval->relationId;
-	CitusTableCacheEntryRef *citusTableRef = GetCitusTableCacheEntry(citusTableId);
-	uint32 colocationId = citusTableRef->cacheEntry->colocationId;
+	CitusTableCacheEntry *cacheEntry =
+		GetCitusTableCacheEntryDirect(citusTableId);
+	uint32 colocationId = cacheEntry->colocationId;
+	char partitionMethod = cacheEntry->partitionMethod;
+	cacheEntry = NULL;
 
 	if (colocationId == INVALID_COLOCATION_ID ||
-		citusTableRef->cacheEntry->partitionMethod != DISTRIBUTE_BY_HASH)
+		partitionMethod != DISTRIBUTE_BY_HASH)
 	{
 		SET_LOCKTAG_SHARD_METADATA_RESOURCE(*tag, MyDatabaseId, shardId);
 	}
@@ -403,8 +406,6 @@ SetLocktagForShardDistributionMetadata(int64 shardId, LOCKTAG *tag)
 		SET_LOCKTAG_COLOCATED_SHARDS_METADATA_RESOURCE(*tag, MyDatabaseId, colocationId,
 													   shardInterval->shardIndex);
 	}
-
-	ReleaseTableCacheEntry(citusTableRef);
 }
 
 

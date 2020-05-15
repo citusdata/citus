@@ -1891,10 +1891,11 @@ SingleShardModifyTaskList(Query *query, uint64 jobId, List *relationShardList,
 	RangeTblEntry *updateOrDeleteRTE = GetUpdateOrDeleteRTE(query);
 	Assert(updateOrDeleteRTE != NULL);
 
-	CitusTableCacheEntryRef *modificationTableRef = GetCitusTableCacheEntry(
-		updateOrDeleteRTE->relid);
-	char modificationPartitionMethod =
-		modificationTableRef->cacheEntry->partitionMethod;
+	CitusTableCacheEntry *modificationTable =
+		GetCitusTableCacheEntryDirect(updateOrDeleteRTE->relid);
+	char modificationPartitionMethod = modificationTable->partitionMethod;
+	char modificationReplicationModel = modificationTable->replicationModel;
+	modificationTable = NULL;
 
 	if (modificationPartitionMethod == DISTRIBUTE_BY_NONE &&
 		SelectsFromDistributedTable(rangeTableList, query))
@@ -1909,10 +1910,9 @@ SingleShardModifyTaskList(Query *query, uint64 jobId, List *relationShardList,
 	task->anchorShardId = shardId;
 	task->jobId = jobId;
 	task->relationShardList = relationShardList;
-	task->replicationModel = modificationTableRef->cacheEntry->replicationModel;
+	task->replicationModel = modificationReplicationModel;
 	task->parametersInQueryStringResolved = parametersInQueryResolved;
 
-	ReleaseTableCacheEntry(modificationTableRef);
 	return list_make1(task);
 }
 

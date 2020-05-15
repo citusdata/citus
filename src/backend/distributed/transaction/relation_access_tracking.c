@@ -689,12 +689,16 @@ CheckConflictingRelationAccesses(Oid relationId, ShardPlacementAccessType access
 		return;
 	}
 
-	CitusTableCacheEntryRef *cacheRef = GetCitusTableCacheEntry(relationId);
+	CitusTableCacheEntry *cacheEntry =
+		GetCitusTableCacheEntryDirect(relationId);
+	char partitionMethod = cacheEntry->partitionMethod;
+	bool hasReferencingRelationsViaForeignKey =
+		cacheEntry->referencingRelationsViaForeignKey != NIL;
+	cacheEntry = NULL;
 
-	if (!(cacheRef->cacheEntry->partitionMethod == DISTRIBUTE_BY_NONE &&
-		  cacheRef->cacheEntry->referencingRelationsViaForeignKey != NIL))
+	if (!(partitionMethod == DISTRIBUTE_BY_NONE &&
+		  hasReferencingRelationsViaForeignKey))
 	{
-		ReleaseTableCacheEntry(cacheRef);
 		return;
 	}
 
@@ -741,7 +745,7 @@ CheckConflictingRelationAccesses(Oid relationId, ShardPlacementAccessType access
 									"\'sequential\';\"")));
 		}
 	}
-	else if (cacheRef->cacheEntry->referencingRelationsViaForeignKey != NIL &&
+	else if (hasReferencingRelationsViaForeignKey &&
 			 accessType > PLACEMENT_ACCESS_SELECT)
 	{
 		char *relationName = get_rel_name(relationId);
@@ -790,8 +794,6 @@ CheckConflictingRelationAccesses(Oid relationId, ShardPlacementAccessType access
 			SetLocalMultiShardModifyModeToSequential();
 		}
 	}
-
-	ReleaseTableCacheEntry(cacheRef);
 }
 
 
@@ -813,14 +815,18 @@ CheckConflictingParallelRelationAccesses(Oid relationId, ShardPlacementAccessTyp
 		return;
 	}
 
-	CitusTableCacheEntryRef *cacheRef = GetCitusTableCacheEntry(relationId);
-	if (!(cacheRef->cacheEntry->partitionMethod == DISTRIBUTE_BY_HASH &&
-		  cacheRef->cacheEntry->referencedRelationsViaForeignKey != NIL))
+	CitusTableCacheEntry *cacheEntry =
+		GetCitusTableCacheEntryDirect(relationId);
+	char partitionMethod = cacheEntry->partitionMethod;
+	bool hasReferencedRelationsViaForeignKey =
+		cacheEntry->referencedRelationsViaForeignKey != NIL;
+	cacheEntry = NULL;
+
+	if (!(partitionMethod == DISTRIBUTE_BY_HASH &&
+		  hasReferencedRelationsViaForeignKey))
 	{
-		ReleaseTableCacheEntry(cacheRef);
 		return;
 	}
-	ReleaseTableCacheEntry(cacheRef);
 
 	if (MultiShardConnectionType == PARALLEL_CONNECTION &&
 		HoldsConflictingLockWithReferencedRelations(relationId, accessType,
@@ -882,7 +888,6 @@ static bool
 HoldsConflictingLockWithReferencedRelations(Oid relationId, ShardPlacementAccessType
 											placementAccess,
 											Oid *conflictingRelationId,
-
 											ShardPlacementAccessType *
 											conflictingAccessMode)
 {

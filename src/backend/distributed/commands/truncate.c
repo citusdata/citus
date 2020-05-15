@@ -188,17 +188,16 @@ LockTruncatedRelationMetadataInWorkers(TruncateStmt *truncateStatement)
 
 		distributedRelationList = lappend_oid(distributedRelationList, relationId);
 
-		CitusTableCacheEntryRef *cacheRef = GetCitusTableCacheEntry(relationId);
+		CitusTableCacheEntry *cacheEntry =
+			GetCitusTableCacheEntryDirect(relationId);
+		List *referencingTableList = cacheEntry->referencingRelationsViaForeignKey;
+		cacheEntry = NULL;
 
-		List *referencingTableList =
-			cacheRef->cacheEntry->referencingRelationsViaForeignKey;
 		foreach_oid(referencingRelationId, referencingTableList)
 		{
 			distributedRelationList = list_append_unique_oid(distributedRelationList,
 															 referencingRelationId);
 		}
-
-		ReleaseTableCacheEntry(cacheRef);
 	}
 
 	if (distributedRelationList != NIL)

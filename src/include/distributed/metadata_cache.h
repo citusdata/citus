@@ -134,6 +134,7 @@ extern Var * ForceDistPartitionKey(Oid relationOid);
 extern ShardPlacement * FindShardPlacementOnGroup(int32 groupId, uint64 shardId);
 extern GroupShardPlacement * LoadGroupShardPlacement(uint64 shardId, uint64 placementId);
 extern ShardPlacement * LoadShardPlacement(uint64 shardId, uint64 placementId);
+extern CitusTableCacheEntry * GetCitusTableCacheEntryDirect(Oid distributedRelationId);
 extern CitusTableCacheEntryRef * GetCitusTableCacheEntry(Oid distributedRelationId);
 extern DistObjectCacheEntry * LookupDistObjectCacheEntry(Oid classid, Oid objid, int32
 														 objsubid);

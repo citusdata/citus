@@ -811,9 +811,9 @@ static void
 EnsureTableCanBeColocatedWith(Oid relationId, char replicationModel,
 							  Oid distributionColumnType, Oid sourceRelationId)
 {
-	CitusTableCacheEntryRef *sourceTableRef = GetCitusTableCacheEntry(sourceRelationId);
+	CitusTableCacheEntry *sourceTable = GetCitusTableCacheEntryDirect(sourceRelationId);
 
-	char sourceDistributionMethod = sourceTableRef->cacheEntry->partitionMethod;
+	char sourceDistributionMethod = sourceTable->partitionMethod;
 	if (sourceDistributionMethod != DISTRIBUTE_BY_HASH)
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
@@ -822,11 +822,10 @@ EnsureTableCanBeColocatedWith(Oid relationId, char replicationModel,
 								  "for hash distributed tables.")));
 	}
 
-	char sourceReplicationModel = sourceTableRef->cacheEntry->replicationModel;
-	Oid sourceDistributionColumnType =
-		sourceTableRef->cacheEntry->partitionColumn->vartype;
+	char sourceReplicationModel = sourceTable->replicationModel;
+	Oid sourceDistributionColumnType = sourceTable->partitionColumn->vartype;
 
-	ReleaseTableCacheEntry(sourceTableRef);
+	sourceTable = NULL;
 
 	if (sourceReplicationModel != replicationModel)
 	{

@@ -2328,16 +2328,19 @@ QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 		List *prunedShardList = (List *) lfirst(prunedRelationShardCell);
 		ListCell *shardIntervalCell = NULL;
 
-		CitusTableCacheEntryRef *cacheRef = GetCitusTableCacheEntry(relationId);
-		if (cacheRef->cacheEntry->partitionMethod == DISTRIBUTE_BY_NONE)
+		CitusTableCacheEntry *cacheEntry =
+			GetCitusTableCacheEntryDirect(relationId);
+		char partitionMethod = cacheEntry->partitionMethod;
+		int colocatedShardCount = cacheEntry->shardIntervalArrayLength;
+		cacheEntry = NULL;
+
+		if (partitionMethod == DISTRIBUTE_BY_NONE)
 		{
-			ReleaseTableCacheEntry(cacheRef);
 			continue;
 		}
 
 		/* we expect distributed tables to have the same shard count */
-		if (shardCount > 0 && shardCount !=
-			cacheRef->cacheEntry->shardIntervalArrayLength)
+		if (shardCount > 0 && shardCount != colocatedShardCount)
 		{
 			ereport(ERROR, (errmsg("shard counts of co-located tables do not "
 								   "match")));
@@ -2345,15 +2348,13 @@ QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 
 		if (taskRequiredForShardIndex == NULL)
 		{
-			shardCount = cacheRef->cacheEntry->shardIntervalArrayLength;
+			shardCount = colocatedShardCount;
 			taskRequiredForShardIndex = (bool *) palloc0(shardCount);
 
 			/* there is a distributed table, find the shard range */
 			minShardOffset = shardCount;
 			maxShardOffset = -1;
 		}
-
-		ReleaseTableCacheEntry(cacheRef);
 
 		/*
 		 * For left joins we don't care about the shards pruned for the right hand side.
@@ -2511,8 +2512,9 @@ ErrorIfUnsupportedShardDistribution(Query *query)
 		}
 		else
 		{
-			CitusTableCacheEntryRef *cacheRef = GetCitusTableCacheEntry(relationId);
-			if (cacheRef->cacheEntry->hasOverlappingShardInterval)
+			CitusTableCacheEntry *cacheEntry =
+				GetCitusTableCacheEntryDirect(relationId);
+			if (cacheEntry->hasOverlappingShardInterval)
 			{
 				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 								errmsg("cannot push down this subquery"),
@@ -2520,7 +2522,6 @@ ErrorIfUnsupportedShardDistribution(Query *query)
 										  "with overlapping shard intervals are "
 										  "not supported")));
 			}
-			ReleaseTableCacheEntry(cacheRef);
 
 			appendDistributedRelationCount++;
 		}

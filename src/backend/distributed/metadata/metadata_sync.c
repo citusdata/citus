@@ -221,16 +221,16 @@ ClusterHasKnownMetadataWorkers()
 bool
 ShouldSyncTableMetadata(Oid relationId)
 {
-	CitusTableCacheEntryRef *tableRef = GetCitusTableCacheEntry(relationId);
+	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntryDirect(relationId);
+	char partitionMethod = cacheEntry->partitionMethod;
+	char replicationModel = cacheEntry->replicationModel;
+	cacheEntry = NULL;
 
-	bool hashDistributed = (tableRef->cacheEntry->partitionMethod == DISTRIBUTE_BY_HASH);
-	bool streamingReplicated =
-		(tableRef->cacheEntry->replicationModel == REPLICATION_MODEL_STREAMING);
+	bool hashDistributed = (partitionMethod == DISTRIBUTE_BY_HASH);
+	bool streamingReplicated = (replicationModel == REPLICATION_MODEL_STREAMING);
 
 	bool mxTable = (streamingReplicated && hashDistributed);
-	bool referenceTable = (tableRef->cacheEntry->partitionMethod == DISTRIBUTE_BY_NONE);
-
-	ReleaseTableCacheEntry(tableRef);
+	bool referenceTable = (partitionMethod == DISTRIBUTE_BY_NONE);
 
 	if (mxTable || referenceTable)
 	{

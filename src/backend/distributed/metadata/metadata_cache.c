@@ -173,7 +173,7 @@ static ScanKeyData DistObjectScanKey[3];
 static void DecrementCacheEntryRefCount(CitusTableCacheEntry *cacheEntry);
 static bool IsCitusTableViaCatalog(Oid relationId);
 static CitusTableCacheEntryRef * LookupShardIndex(int64 shardId, int *shardIndex);
-static CitusTableCacheEntryRef * LookupCitusTableCacheEntry(Oid relationId);
+static CitusTableCacheEntry * LookupCitusTableCacheEntry(Oid relationId);
 static CitusTableCacheEntryRef * InitCitusTableCacheEntryRef(MemoryContext memoryContext,
 															 CitusTableCacheEntry *
 															 cacheEntry);
@@ -293,20 +293,18 @@ ReleaseTableCacheEntry(CitusTableCacheEntryRef *ref)
 bool
 IsCitusTable(Oid relationId)
 {
-	CitusTableCacheEntryRef *ref = LookupCitusTableCacheEntry(relationId);
+	CitusTableCacheEntry *cacheEntry = LookupCitusTableCacheEntry(relationId);
 
 	/*
 	 * If extension hasn't been created, or has the wrong version and the table
-	 * isn't a distributed one, LookupCitusTableCacheEntryData() will return NULL.
+	 * isn't distributed, LookupCitusTableCacheEntry will return NULL.
 	 */
-	if (ref == NULL)
+	if (cacheEntry == NULL)
 	{
 		return false;
 	}
 
-	bool isCitusTable = ref->cacheEntry->isCitusTable;
-	ReleaseTableCacheEntry(ref);
-	return isCitusTable;
+	return cacheEntry->isCitusTable;
 }
 
 
@@ -347,8 +345,8 @@ IsCitusTableViaCatalog(Oid relationId)
 
 
 /*
- * CitusTableList returns a list that includes all the valid distributed table
- * cache entries.
+ * CitusTableList returns a list of CitusTableCacheEntryRefs which
+ * includes all the valid distributed table cache entries.
  */
 List *
 CitusTableList(void)
@@ -419,11 +417,8 @@ bool
 ReferenceTableShardId(uint64 shardId)
 {
 	Oid relationId = LookupShardRelation(shardId, false);
-	CitusTableCacheEntryRef *tableRef = GetCitusTableCacheEntry(relationId);
-	char partitionMethod = tableRef->cacheEntry->partitionMethod;
-	ReleaseTableCacheEntry(tableRef);
-
-	return partitionMethod == DISTRIBUTE_BY_NONE;
+	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntryDirect(relationId);
+	return cacheEntry->partitionMethod == DISTRIBUTE_BY_NONE;
 }
 
 
@@ -432,11 +427,9 @@ char
 PartitionMethod(Oid relationId)
 {
 	/* errors out if not a distributed table */
-	CitusTableCacheEntryRef *partitionRef = GetCitusTableCacheEntry(relationId);
+	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntryDirect(relationId);
 
-	char partitionMethod = partitionRef->cacheEntry->partitionMethod;
-	ReleaseTableCacheEntry(partitionRef);
-	return partitionMethod;
+	return cacheEntry->partitionMethod;
 }
 
 
@@ -445,11 +438,9 @@ char
 TableReplicationModel(Oid relationId)
 {
 	/* errors out if not a distributed table */
-	CitusTableCacheEntryRef *partitionRef = GetCitusTableCacheEntry(relationId);
+	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntryDirect(relationId);
 
-	char replicationModel = partitionRef->cacheEntry->replicationModel;
-	ReleaseTableCacheEntry(partitionRef);
-	return replicationModel;
+	return cacheEntry->replicationModel;
 }
 
 
@@ -492,18 +483,15 @@ PartitionColumn(Oid relationId, uint32 rangeTableId)
 Var *
 DistPartitionKey(Oid relationId)
 {
-	CitusTableCacheEntryRef *partitionRef = GetCitusTableCacheEntry(relationId);
+	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntryDirect(relationId);
 
 	/* reference tables do not have partition column */
-	if (partitionRef->cacheEntry->partitionMethod == DISTRIBUTE_BY_NONE)
+	if (cacheEntry->partitionMethod == DISTRIBUTE_BY_NONE)
 	{
-		ReleaseTableCacheEntry(partitionRef);
 		return NULL;
 	}
 
-	Var *partitionColumn = copyObject(partitionRef->cacheEntry->partitionColumn);
-	ReleaseTableCacheEntry(partitionRef);
-	return partitionColumn;
+	return copyObject(cacheEntry->partitionColumn);
 }
 
 
@@ -842,20 +830,21 @@ LookupShardIndex(int64 shardId, int *shardIndex)
 
 
 /*
- * GetCitusTableCacheEntry looks up a pg_dist_partition entry for a
- * relation.
+ * GetCitusTableCacheEntryDirect looks up a CitusTableCacheEntry,
+ * returning a short lived pointer. If an invalidation might occur
+ * during the pointer's lifetime, call GetCitusTableCacheEntry instead.
  *
  * Errors out if no relation matching the criteria could be found.
  */
-CitusTableCacheEntryRef *
-GetCitusTableCacheEntry(Oid distributedRelationId)
+CitusTableCacheEntry *
+GetCitusTableCacheEntryDirect(Oid distributedRelationId)
 {
-	CitusTableCacheEntryRef *ref =
+	CitusTableCacheEntry *cacheEntry =
 		LookupCitusTableCacheEntry(distributedRelationId);
 
-	if (ref != NULL && ref->cacheEntry->isCitusTable)
+	if (cacheEntry != NULL && cacheEntry->isCitusTable)
 	{
-		return ref;
+		return cacheEntry;
 	}
 	else
 	{
@@ -875,10 +864,25 @@ GetCitusTableCacheEntry(Oid distributedRelationId)
 
 
 /*
- * LookupCitusTableCacheEntry returns the distributed table metadata for the
- * passed relationId. For efficiency it caches lookups.
+ * GetCitusTableCacheEntry returns a CitusTableCacheEntryRef for the given
+ * distributed relation id, raising an error if the table is not distributed.
  */
-static CitusTableCacheEntryRef *
+CitusTableCacheEntryRef *
+GetCitusTableCacheEntry(Oid distributedRelationId)
+{
+	CitusTableCacheEntry *cacheEntry =
+		GetCitusTableCacheEntryDirect(distributedRelationId);
+	return InitCitusTableCacheEntryRef(CurrentMemoryContext, cacheEntry);
+}
+
+
+/*
+ * LookupCitusTableCacheEntry returns the CitusTableCacheEntry for the given
+ * relationId directly. This pointer is very short lived: do not let it live
+ * beyond any calls into postgres call or a future lookup. If it must live
+ * longer, then register it with InitCitusTableCacheEntryRef.
+ */
+CitusTableCacheEntry *
 LookupCitusTableCacheEntry(Oid relationId)
 {
 	bool foundInCache = false;
@@ -941,7 +945,7 @@ LookupCitusTableCacheEntry(Oid relationId)
 			return NULL;
 		}
 
-		return InitCitusTableCacheEntryRef(CurrentMemoryContext, cacheSlot->ref);
+		return cacheSlot->ref;
 	}
 
 	/* zero out entry, but not the key part */
@@ -962,7 +966,7 @@ LookupCitusTableCacheEntry(Oid relationId)
 
 	RESUME_INTERRUPTS();
 
-	return InitCitusTableCacheEntryRef(CurrentMemoryContext, cacheEntry);
+	return cacheEntry;
 }
 
 
