@@ -98,6 +98,9 @@ static shmem_startup_hook_type prev_shmem_startup_hook = NULL;
 
 
 /* local function declarations */
+static SharedConnStatsHashKey CreateSharedConnectionKey(const char *hostname, int port);
+static bool IncrementSharedConnectionCounterInternal(const char *hostname, int port, bool
+													 forcedIncrement);
 static void StoreAllRemoteConnectionStats(Tuplestorestate *tupleStore, TupleDesc
 										  tupleDescriptor);
 static void LockConnectionSharedMemory(LWLockMode lockMode);
@@ -228,98 +231,40 @@ WaitLoopForSharedConnection(const char *hostname, int port)
 bool
 TryToIncrementSharedConnectionCounter(const char *hostname, int port)
 {
-	if (GetMaxSharedPoolSize() == DISABLE_CONNECTION_THROTTLING)
-	{
-		/* connection throttling disabled */
-		return true;
-	}
-
-	bool counterIncremented = false;
-	SharedConnStatsHashKey connKey;
-
-	strlcpy(connKey.hostname, hostname, MAX_NODE_LENGTH);
-	if (strlen(hostname) > MAX_NODE_LENGTH)
-	{
-		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-						errmsg("hostname exceeds the maximum length of %d",
-							   MAX_NODE_LENGTH)));
-	}
-
-	connKey.port = port;
-	connKey.databaseOid = MyDatabaseId;
-
-	LockConnectionSharedMemory(LW_EXCLUSIVE);
-
-	/*
-	 * As the hash map is  allocated in shared memory, it doesn't rely on palloc for
-	 * memory allocation, so we could get NULL via HASH_ENTER_NULL when there is no
-	 * space in the shared memory. That's why we prefer continuing the execution
-	 * instead of throwing an error.
-	 */
-	bool entryFound = false;
-	SharedConnStatsHashEntry *connectionEntry =
-		hash_search(SharedConnStatsHash, &connKey, HASH_ENTER_NULL, &entryFound);
-
-	/*
-	 * It is possible to throw an error at this point, but that doesn't help us in anyway.
-	 * Instead, we try our best, let the connection establishment continue by-passing the
-	 * connection throttling.
-	 */
-	if (!connectionEntry)
-	{
-		UnLockConnectionSharedMemory();
-		return true;
-	}
-
-	if (!entryFound)
-	{
-		/* we successfully allocated the entry for the first time, so initialize it */
-		connectionEntry->connectionCount = 1;
-
-		counterIncremented = true;
-	}
-	else if (connectionEntry->connectionCount + 1 > GetMaxSharedPoolSize())
-	{
-		/* there is no space left for this connection */
-		counterIncremented = false;
-	}
-	else
-	{
-		connectionEntry->connectionCount++;
-		counterIncremented = true;
-	}
-
-	UnLockConnectionSharedMemory();
-
-	return counterIncremented;
+	bool forcedIncrement = false;
+	return IncrementSharedConnectionCounterInternal(hostname, port, forcedIncrement);
 }
 
 
 /*
- * IncrementSharedConnectionCounter increments the shared counter
- * for the given hostname and port.
+ * ForceIncrementSharedConnectionCounter increments the shared counter
+ * for the given hostname and port. Tt doesn't check if it the new connection count
+ * exceeds the MaxSharedPoolSize.
  */
 void
-IncrementSharedConnectionCounter(const char *hostname, int port)
+ForceIncrementSharedConnectionCounter(const char *hostname, int port)
 {
-	SharedConnStatsHashKey connKey;
+	bool forcedIncrement = true;
+	IncrementSharedConnectionCounterInternal(hostname, port, forcedIncrement);
+}
 
+
+/*
+ * IncrementSharedConnectionCounterInternal increments the shared counter for the
+ * given hostname and port.
+ * If forcedIncrement is set, it doesn't check if it the new connection count
+ * exceeds the MaxSharedPoolSize.
+ */
+static bool
+IncrementSharedConnectionCounterInternal(const char *hostname, int port, bool
+										 forcedIncrement)
+{
 	if (GetMaxSharedPoolSize() == DISABLE_CONNECTION_THROTTLING)
 	{
 		/* connection throttling disabled */
-		return;
+		return true;
 	}
-
-	strlcpy(connKey.hostname, hostname, MAX_NODE_LENGTH);
-	if (strlen(hostname) > MAX_NODE_LENGTH)
-	{
-		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-						errmsg("hostname exceeds the maximum length of %d",
-							   MAX_NODE_LENGTH)));
-	}
-
-	connKey.port = port;
-	connKey.databaseOid = MyDatabaseId;
+	SharedConnStatsHashKey connKey = CreateSharedConnectionKey(hostname, port);
 
 	LockConnectionSharedMemory(LW_EXCLUSIVE);
 
@@ -332,19 +277,23 @@ IncrementSharedConnectionCounter(const char *hostname, int port)
 	SharedConnStatsHashEntry *connectionEntry =
 		hash_search(SharedConnStatsHash, &connKey, HASH_ENTER_NULL, &entryFound);
 
-	/*
-	 * It is possible to throw an error at this point, but that doesn't help us in anyway.
-	 * Instead, we try our best, let the connection establishment continue by-passing the
-	 * connection throttling.
-	 */
 	if (!connectionEntry)
 	{
 		UnLockConnectionSharedMemory();
 
-		ereport(DEBUG4, (errmsg("No entry found for node %s:%d while incrementing "
-								"connection counter", hostname, port)));
+		if (forcedIncrement)
+		{
+			ereport(DEBUG4, (errmsg("No entry found for node %s:%d while incrementing "
+									"connection counter", hostname, port)));
+		}
 
-		return;
+		/*
+		 * It is possible to throw an error at this point even if it is not forced increment,
+		 * but that doesn't help us in anyway.
+		 * Instead, we try our best, let the connection establishment continue by-passing the
+		 * connection throttling.
+		 */
+		return true;
 	}
 
 	if (!entryFound)
@@ -352,10 +301,41 @@ IncrementSharedConnectionCounter(const char *hostname, int port)
 		/* we successfully allocated the entry for the first time, so initialize it */
 		connectionEntry->connectionCount = 0;
 	}
+	else if (!forcedIncrement && connectionEntry->connectionCount + 1 >
+			 GetMaxSharedPoolSize())
+	{
+		UnLockConnectionSharedMemory();
+
+		/* there is no space left for this connection */
+		return false;
+	}
 
 	connectionEntry->connectionCount += 1;
 
 	UnLockConnectionSharedMemory();
+	return true;
+}
+
+
+/*
+ * CreateSharedConnectionKey creates the key to use in shared connection hash.
+ */
+static SharedConnStatsHashKey
+CreateSharedConnectionKey(const char *hostname, int port)
+{
+	SharedConnStatsHashKey connKey;
+
+	strlcpy(connKey.hostname, hostname, MAX_NODE_LENGTH);
+	if (strlen(hostname) > MAX_NODE_LENGTH)
+	{
+		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+						errmsg("hostname exceeds the maximum length of %d",
+							   MAX_NODE_LENGTH)));
+	}
+
+	connKey.port = port;
+	connKey.databaseOid = MyDatabaseId;
+	return connKey;
 }
 
 

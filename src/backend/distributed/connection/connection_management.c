@@ -386,7 +386,7 @@ StartNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port,
 		 *
 		 * Still, we keep track of the connnection counter.
 		 */
-		IncrementSharedConnectionCounter(hostname, port);
+		ForceIncrementSharedConnectionCounter(hostname, port);
 	}
 
 

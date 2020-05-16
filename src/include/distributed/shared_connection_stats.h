@@ -21,6 +21,6 @@ extern int GetMaxSharedPoolSize(void);
 extern bool TryToIncrementSharedConnectionCounter(const char *hostname, int port);
 extern void WaitLoopForSharedConnection(const char *hostname, int port);
 extern void DecrementSharedConnectionCounter(const char *hostname, int port);
-extern void IncrementSharedConnectionCounter(const char *hostname, int port);
+extern void ForceIncrementSharedConnectionCounter(const char *hostname, int port);
 
 #endif /* SHARED_CONNECTION_STATS_H */
