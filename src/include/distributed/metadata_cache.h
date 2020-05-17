@@ -37,6 +37,11 @@ extern int ReadFromSecondaries;
  */
 #define GROUP_ID_UPGRADING -2
 
+
+/* internal type used by metadata_cache.c to cache shard indexes */
+struct ShardIdIndexSlot;
+
+
 /*
  * Representation of a table's metadata that is frequently used for
  * distributed execution. Cached.
@@ -67,7 +72,7 @@ typedef struct
 	ShardInterval **sortedShardIntervalArray;
 
 	/* map of shardId to index in sortedShardIntervalArray */
-	HTAB *shardIdIndexHash;
+	struct ShardIdIndexSlot *shardIdIndexHash;
 
 	/* comparator for partition column's type, NULL if DISTRIBUTE_BY_NONE */
 	FmgrInfo *shardColumnCompareFunction;
