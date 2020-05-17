@@ -85,7 +85,7 @@ int ReplicationModel = REPLICATION_MODEL_COORDINATOR;
 
 
 /* local function forward declarations */
-static char AppropriateReplicationModel(char distributionMethod, bool viaDeprecatedAPI);
+static char DecideReplicationModel(char distributionMethod, bool viaDeprecatedAPI);
 static void CreateHashDistributedTableShards(Oid relationId, Oid colocatedTableId,
 											 bool localTableEmpty);
 static uint32 ColocationIdForNewTable(Oid relationId, Var *distributionColumn,
@@ -341,8 +341,8 @@ void
 CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributionMethod,
 					   char *colocateWithTableName, bool viaDeprecatedAPI)
 {
-	char replicationModel = AppropriateReplicationModel(distributionMethod,
-														viaDeprecatedAPI);
+	char replicationModel = DecideReplicationModel(distributionMethod,
+												   viaDeprecatedAPI);
 
 	/*
 	 * ColocationIdForNewTable assumes caller acquires lock on relationId. In our case,
@@ -437,13 +437,13 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 
 
 /*
- * AppropriateReplicationModel function decides which replication model should be
+ * DecideReplicationModel function decides which replication model should be
  * used depending on given distribution configuration and global ReplicationModel
  * variable. If ReplicationModel conflicts with distribution configuration, this
  * function errors out.
  */
 static char
-AppropriateReplicationModel(char distributionMethod, bool viaDeprecatedAPI)
+DecideReplicationModel(char distributionMethod, bool viaDeprecatedAPI)
 {
 	if (viaDeprecatedAPI)
 	{
