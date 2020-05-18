@@ -1,6 +1,6 @@
 /*-------------------------------------------------------------------------
  *
- * ruleutils_12.c
+ * ruleutils_13.c
  *	  Functions to convert stored expressions/querytrees back to
  *	  source text
  *
@@ -9,7 +9,7 @@
  *
  *
  * IDENTIFICATION
- *	  src/backend/distributed/utils/ruleutils_12.c
+ *	  src/backend/distributed/deparser/ruleutils_13.c
  *
  * This needs to be closely in sync with the core code.
  *-------------------------------------------------------------------------
@@ -18,7 +18,7 @@
 
 #include "pg_config.h"
 
-#if (PG_VERSION_NUM >= PG_VERSION_12) && (PG_VERSION_NUM < PG_VERSION_13)
+#if (PG_VERSION_NUM >= PG_VERSION_13) && (PG_VERSION_NUM < PG_VERSION_14)
 
 #include "postgres.h"
 
@@ -55,7 +55,6 @@
 #include "common/keywords.h"
 #include "distributed/citus_nodefuncs.h"
 #include "distributed/citus_ruleutils.h"
-#include "distributed/namespace_utils.h"
 #include "executor/spi.h"
 #include "foreign/foreign.h"
 #include "funcapi.h"
@@ -63,6 +62,7 @@
 #include "miscadmin.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
+#include "nodes/pathnodes.h"
 #include "optimizer/optimizer.h"
 #include "parser/parse_node.h"
 #include "parser/parse_agg.h"
@@ -103,7 +103,6 @@
 /* Pretty flags */
 #define PRETTYFLAG_PAREN		0x0001
 #define PRETTYFLAG_INDENT		0x0002
-#define PRETTYFLAG_SCHEMA		0x0004
 
 /* Default line length for pretty-print wrapping: 0 means wrap always */
 #define WRAP_COLUMN_DEFAULT		0
@@ -111,7 +110,6 @@
 /* macros to test if pretty action needed */
 #define PRETTY_PAREN(context)	((context)->prettyFlags & PRETTYFLAG_PAREN)
 #define PRETTY_INDENT(context)	((context)->prettyFlags & PRETTYFLAG_INDENT)
-#define PRETTY_SCHEMA(context)	((context)->prettyFlags & PRETTYFLAG_SCHEMA)
 
 
 /* ----------
@@ -134,6 +132,7 @@ typedef struct
 	int64		shardid;		/* a distributed table's shardid, if positive */
 	ParseExprKind special_exprkind; /* set only for exprkinds needing special
 									 * handling */
+	Bitmapset  *appendparents;								
 } deparse_context;
 
 /*
@@ -429,8 +428,6 @@ static void get_from_clause_coldeflist(RangeTblFunction *rtfunc,
 						   deparse_context *context);
 static void get_tablesample_def(TableSampleClause *tablesample,
 					deparse_context *context);
-static char *pg_get_triggerdef_worker(Oid trigid, bool pretty);
-static void set_simple_column_names(deparse_namespace *dpns);
 static void get_opclass_name(Oid opclass, Oid actual_datatype,
 				 StringInfo buf);
 static Node *processIndirection(Node *node, deparse_context *context);
@@ -468,9 +465,18 @@ pg_get_rule_expr(Node *expression)
 {
 	bool showImplicitCasts = true;
 	deparse_context context;
+	OverrideSearchPath *overridePath = NULL;
 	StringInfo buffer = makeStringInfo();
 
-	PushOverrideEmptySearchPath(CurrentMemoryContext);
+	/*
+	 * Set search_path to NIL so that all objects outside of pg_catalog will be
+	 * schema-prefixed. pg_catalog will be added automatically when we call
+	 * PushOverrideSearchPath(), since we set addCatalog to true;
+	 */
+	overridePath = GetOverrideSearchPath(CurrentMemoryContext);
+	overridePath->schemas = NIL;
+	overridePath->addCatalog = true;
+	PushOverrideSearchPath(overridePath);
 
 	context.buf = buffer;
 	context.namespaces = NIL;
@@ -968,7 +974,6 @@ set_relation_column_names(deparse_namespace *dpns, RangeTblEntry *rte,
 	int			ncolumns;
 	char	  **real_colnames;
 	bool		changed_any;
-	bool        has_anonymous;
 	int			noldcolumns;
 	int			i;
 	int			j;
@@ -1056,7 +1061,6 @@ set_relation_column_names(deparse_namespace *dpns, RangeTblEntry *rte,
 	 */
 	noldcolumns = list_length(rte->eref->colnames);
 	changed_any = false;
-	has_anonymous = false;
 	j = 0;
 	for (i = 0; i < ncolumns; i++)
 	{
@@ -1094,13 +1098,6 @@ set_relation_column_names(deparse_namespace *dpns, RangeTblEntry *rte,
 		/* Remember if any assigned aliases differ from "real" name */
 		if (!changed_any && strcmp(colname, real_colname) != 0)
 			changed_any = true;
-
-		/*
-		 * Remember if there is a reference to an anonymous column as named by
-		 * char * FigureColname(Node *node)
-		 */
-		if (!has_anonymous && strcmp(real_colname, "?column?") == 0)
-			has_anonymous = true;
 	}
 
 	/*
@@ -1130,7 +1127,7 @@ set_relation_column_names(deparse_namespace *dpns, RangeTblEntry *rte,
 	else if (rte->alias && rte->alias->colnames != NIL)
 		colinfo->printaliases = true;
 	else
-		colinfo->printaliases = changed_any || has_anonymous;
+		colinfo->printaliases = changed_any;
 }
 
 /*
@@ -1848,20 +1845,18 @@ static void
 push_ancestor_plan(deparse_namespace *dpns, ListCell *ancestor_cell,
 				   deparse_namespace *save_dpns)
 {
-	PlanState  *ps = (PlanState *) lfirst(ancestor_cell);
-	List	   *ancestors;
+	Plan	   *plan = (Plan *) lfirst(ancestor_cell);
 
 	/* Save state for restoration later */
 	*save_dpns = *dpns;
 
 	/* Build a new ancestor list with just this node's ancestors */
-	ancestors = NIL;
-	while ((ancestor_cell = lnext(ancestor_cell)) != NULL)
-		ancestors = lappend(ancestors, lfirst(ancestor_cell));
-	dpns->ancestors = ancestors;
+	dpns->ancestors =
+		list_copy_tail(dpns->ancestors,
+					   list_cell_number(dpns->ancestors, ancestor_cell) + 1);
 
 	/* Set attention on selected ancestor */
-	set_deparse_planstate(dpns, ps);
+	set_deparse_plan(dpns, plan);
 }
 
 /*
@@ -1928,6 +1923,8 @@ get_query_def_extended(Query *query, StringInfo buf, List *parentnamespace,
 	deparse_context context;
 	deparse_namespace dpns;
 
+	OverrideSearchPath *overridePath = NULL;
+
 	/* Guard against excessively long or deeply-nested queries */
 	CHECK_FOR_INTERRUPTS();
 	check_stack_depth();
@@ -1943,7 +1940,15 @@ get_query_def_extended(Query *query, StringInfo buf, List *parentnamespace,
 	 */
 	AcquireRewriteLocks(query, false, false);
 
-	PushOverrideEmptySearchPath(CurrentMemoryContext);
+	/*
+	 * Set search_path to NIL so that all objects outside of pg_catalog will be
+	 * schema-prefixed. pg_catalog will be added automatically when we call
+	 * PushOverrideSearchPath(), since we set addCatalog to true;
+	 */
+	overridePath = GetOverrideSearchPath(CurrentMemoryContext);
+	overridePath->schemas = NIL;
+	overridePath->addCatalog = true;
+	PushOverrideSearchPath(overridePath);
 
 	context.buf = buf;
 	context.namespaces = lcons(&dpns, list_copy(parentnamespace));
@@ -3059,7 +3064,7 @@ get_insert_query_def(Query *query, deparse_context *context)
 	/* INSERT requires AS keyword for target alias */
 	if (rte->alias != NULL)
 		appendStringInfo(buf, "AS %s ",
-						 quote_identifier(get_rtable_name(query->resultRelation, context)));
+						 quote_identifier(rte->alias->aliasname));
 
 	/*
 	 * Add the insert-column-names list.  Any indirection decoration needed on
@@ -3258,7 +3263,7 @@ get_update_query_def(Query *query, deparse_context *context)
 
 		if(rte->eref != NULL)
 			appendStringInfo(buf, " %s",
-					quote_identifier(get_rtable_name(query->resultRelation, context)));
+					quote_identifier(rte->eref->aliasname));
 	}
 	else
 	{
@@ -3270,7 +3275,7 @@ get_update_query_def(Query *query, deparse_context *context)
 
 		if (rte->alias != NULL)
 			appendStringInfo(buf, " %s",
-							 quote_identifier(get_rtable_name(query->resultRelation, context)));
+							 quote_identifier(rte->alias->aliasname));
 	}
 
 	appendStringInfoString(buf, " SET ");
@@ -3406,7 +3411,7 @@ get_update_query_targetlist_def(Query *query, List *targetList,
 				((Param *) expr)->paramkind == PARAM_MULTIEXPR)
 			{
 				cur_ma_sublink = (SubLink *) lfirst(next_ma_cell);
-				next_ma_cell = lnext(next_ma_cell);
+				next_ma_cell = lnext(ma_sublinks, next_ma_cell);
 				remaining_ma_columns = count_nonjunk_tlist_entries(
 																   ((Query *) cur_ma_sublink->subselect)->targetList);
 				Assert(((Param *) expr)->paramid ==
@@ -3490,7 +3495,7 @@ get_delete_query_def(Query *query, deparse_context *context)
 
 		if(rte->eref != NULL)
 			appendStringInfo(buf, " %s",
-					quote_identifier(get_rtable_name(query->resultRelation, context)));
+					quote_identifier(rte->eref->aliasname));
 	}
 	else
 	{
@@ -3502,7 +3507,7 @@ get_delete_query_def(Query *query, deparse_context *context)
 
 		if (rte->alias != NULL)
 			appendStringInfo(buf, " %s",
-							 quote_identifier(get_rtable_name(query->resultRelation, context)));
+							 quote_identifier(rte->alias->aliasname));
 	}
 
 	/* Add the USING clause if given */
@@ -3569,7 +3574,7 @@ get_utility_query_def(Query *query, deparse_context *context)
 																 context->shardid, NIL);
 			appendStringInfo(buf, " %s", relationName);
 
-			if (lnext(relationCell) != NULL)
+			if (lnext(relationList, relationCell) != NULL)
 			{
 				appendStringInfo(buf, ",");
 			}
@@ -5017,7 +5022,7 @@ get_rule_expr(Node *node, deparse_context *context,
 			{
 				BoolExpr   *expr = (BoolExpr *) node;
 				Node	   *first_arg = linitial(expr->args);
-				ListCell   *arg = lnext(list_head(expr->args));
+				ListCell   *arg = list_second_cell(expr->args);
 
 				switch (expr->boolop)
 				{
@@ -5031,7 +5036,7 @@ get_rule_expr(Node *node, deparse_context *context,
 							appendStringInfoString(buf, " AND ");
 							get_rule_expr_paren((Node *) lfirst(arg), context,
 												false, node);
-							arg = lnext(arg);
+							arg = lnext(expr->args, arg);
 						}
 						if (!PRETTY_PAREN(context))
 							appendStringInfoChar(buf, ')');
@@ -5047,7 +5052,7 @@ get_rule_expr(Node *node, deparse_context *context,
 							appendStringInfoString(buf, " OR ");
 							get_rule_expr_paren((Node *) lfirst(arg), context,
 												false, node);
-							arg = lnext(arg);
+							arg = lnext(expr->args, arg);
 						}
 						if (!PRETTY_PAREN(context))
 							appendStringInfoChar(buf, ')');
@@ -5106,7 +5111,7 @@ get_rule_expr(Node *node, deparse_context *context,
 						appendStringInfo(buf, "hashed %s", splan->plan_name);
 					else
 						appendStringInfoString(buf, splan->plan_name);
-					if (lnext(lc))
+					if (lnext(asplan->subplans, lc))
 						appendStringInfoString(buf, " or ");
 				}
 				appendStringInfoChar(buf, ')');
@@ -6214,7 +6219,7 @@ get_func_expr(FuncExpr *expr, deparse_context *context,
 	{
 		if (nargs++ > 0)
 			appendStringInfoString(buf, ", ");
-		if (use_variadic && lnext(l) == NULL)
+		if (use_variadic && lnext(expr->args, l) == NULL)
 			appendStringInfoString(buf, "VARIADIC ");
 		get_rule_expr((Node *) lfirst(l), context, true);
 	}
@@ -7478,307 +7483,6 @@ get_tablesample_def(TableSampleClause *tablesample, deparse_context *context)
 	}
 }
 
-char *
-pg_get_triggerdef_command(Oid triggerId)
-{
-	Assert(OidIsValid(triggerId));
-
-	/* no need to have pretty SQL command */
-	bool prettyOutput = false;
-	return pg_get_triggerdef_worker(triggerId, prettyOutput);
-}
-
-static char *
-pg_get_triggerdef_worker(Oid trigid, bool pretty)
-{
-	HeapTuple	ht_trig;
-	Form_pg_trigger trigrec;
-	StringInfoData buf;
-	Relation	tgrel;
-	ScanKeyData skey[1];
-	SysScanDesc tgscan;
-	int			findx = 0;
-	char	   *tgname;
-	char	   *tgoldtable;
-	char	   *tgnewtable;
-	Oid			argtypes[1];	/* dummy */
-	Datum		value;
-	bool		isnull;
-
-	/*
-	 * Fetch the pg_trigger tuple by the Oid of the trigger
-	 */
-	tgrel = table_open(TriggerRelationId, AccessShareLock);
-
-	ScanKeyInit(&skey[0],
-				Anum_pg_trigger_oid,
-				BTEqualStrategyNumber, F_OIDEQ,
-				ObjectIdGetDatum(trigid));
-
-	tgscan = systable_beginscan(tgrel, TriggerOidIndexId, true,
-								NULL, 1, skey);
-
-	ht_trig = systable_getnext(tgscan);
-
-	if (!HeapTupleIsValid(ht_trig))
-	{
-		systable_endscan(tgscan);
-		table_close(tgrel, AccessShareLock);
-		return NULL;
-	}
-
-	trigrec = (Form_pg_trigger) GETSTRUCT(ht_trig);
-
-	/*
-	 * Start the trigger definition. Note that the trigger's name should never
-	 * be schema-qualified, but the trigger rel's name may be.
-	 */
-	initStringInfo(&buf);
-
-	tgname = NameStr(trigrec->tgname);
-	appendStringInfo(&buf, "CREATE %sTRIGGER %s ",
-					 OidIsValid(trigrec->tgconstraint) ? "CONSTRAINT " : "",
-					 quote_identifier(tgname));
-
-	if (TRIGGER_FOR_BEFORE(trigrec->tgtype))
-		appendStringInfoString(&buf, "BEFORE");
-	else if (TRIGGER_FOR_AFTER(trigrec->tgtype))
-		appendStringInfoString(&buf, "AFTER");
-	else if (TRIGGER_FOR_INSTEAD(trigrec->tgtype))
-		appendStringInfoString(&buf, "INSTEAD OF");
-	else
-		elog(ERROR, "unexpected tgtype value: %d", trigrec->tgtype);
-
-	if (TRIGGER_FOR_INSERT(trigrec->tgtype))
-	{
-		appendStringInfoString(&buf, " INSERT");
-		findx++;
-	}
-	if (TRIGGER_FOR_DELETE(trigrec->tgtype))
-	{
-		if (findx > 0)
-			appendStringInfoString(&buf, " OR DELETE");
-		else
-			appendStringInfoString(&buf, " DELETE");
-		findx++;
-	}
-	if (TRIGGER_FOR_UPDATE(trigrec->tgtype))
-	{
-		if (findx > 0)
-			appendStringInfoString(&buf, " OR UPDATE");
-		else
-			appendStringInfoString(&buf, " UPDATE");
-		findx++;
-		/* tgattr is first var-width field, so OK to access directly */
-		if (trigrec->tgattr.dim1 > 0)
-		{
-			int			i;
-
-			appendStringInfoString(&buf, " OF ");
-			for (i = 0; i < trigrec->tgattr.dim1; i++)
-			{
-				char	   *attname;
-
-				if (i > 0)
-					appendStringInfoString(&buf, ", ");
-				attname = get_attname(trigrec->tgrelid,
-									  trigrec->tgattr.values[i], false);
-				appendStringInfoString(&buf, quote_identifier(attname));
-			}
-		}
-	}
-	if (TRIGGER_FOR_TRUNCATE(trigrec->tgtype))
-	{
-		if (findx > 0)
-			appendStringInfoString(&buf, " OR TRUNCATE");
-		else
-			appendStringInfoString(&buf, " TRUNCATE");
-		findx++;
-	}
-
-	/*
-	 * In non-pretty mode, always schema-qualify the target table name for
-	 * safety.  In pretty mode, schema-qualify only if not visible.
-	 */
-	appendStringInfo(&buf, " ON %s ",
-					 pretty ?
-					 generate_relation_name(trigrec->tgrelid, NIL) :
-					 generate_qualified_relation_name(trigrec->tgrelid));
-
-	if (OidIsValid(trigrec->tgconstraint))
-	{
-		if (OidIsValid(trigrec->tgconstrrelid))
-			appendStringInfo(&buf, "FROM %s ",
-							 generate_relation_name(trigrec->tgconstrrelid, NIL));
-		if (!trigrec->tgdeferrable)
-			appendStringInfoString(&buf, "NOT ");
-		appendStringInfoString(&buf, "DEFERRABLE INITIALLY ");
-		if (trigrec->tginitdeferred)
-			appendStringInfoString(&buf, "DEFERRED ");
-		else
-			appendStringInfoString(&buf, "IMMEDIATE ");
-	}
-
-	value = fastgetattr(ht_trig, Anum_pg_trigger_tgoldtable,
-						tgrel->rd_att, &isnull);
-	if (!isnull)
-		tgoldtable = NameStr(*DatumGetName(value));
-	else
-		tgoldtable = NULL;
-	value = fastgetattr(ht_trig, Anum_pg_trigger_tgnewtable,
-						tgrel->rd_att, &isnull);
-	if (!isnull)
-		tgnewtable = NameStr(*DatumGetName(value));
-	else
-		tgnewtable = NULL;
-	if (tgoldtable != NULL || tgnewtable != NULL)
-	{
-		appendStringInfoString(&buf, "REFERENCING ");
-		if (tgoldtable != NULL)
-			appendStringInfo(&buf, "OLD TABLE AS %s ",
-							 quote_identifier(tgoldtable));
-		if (tgnewtable != NULL)
-			appendStringInfo(&buf, "NEW TABLE AS %s ",
-							 quote_identifier(tgnewtable));
-	}
-
-	if (TRIGGER_FOR_ROW(trigrec->tgtype))
-		appendStringInfoString(&buf, "FOR EACH ROW ");
-	else
-		appendStringInfoString(&buf, "FOR EACH STATEMENT ");
-
-	/* If the trigger has a WHEN qualification, add that */
-	value = fastgetattr(ht_trig, Anum_pg_trigger_tgqual,
-						tgrel->rd_att, &isnull);
-	if (!isnull)
-	{
-		Node	   *qual;
-		char		relkind;
-		deparse_context context;
-		deparse_namespace dpns;
-		RangeTblEntry *oldrte;
-		RangeTblEntry *newrte;
-
-		appendStringInfoString(&buf, "WHEN (");
-
-		qual = stringToNode(TextDatumGetCString(value));
-
-		relkind = get_rel_relkind(trigrec->tgrelid);
-
-		/* Build minimal OLD and NEW RTEs for the rel */
-		oldrte = makeNode(RangeTblEntry);
-		oldrte->rtekind = RTE_RELATION;
-		oldrte->relid = trigrec->tgrelid;
-		oldrte->relkind = relkind;
-		oldrte->rellockmode = AccessShareLock;
-		oldrte->alias = makeAlias("old", NIL);
-		oldrte->eref = oldrte->alias;
-		oldrte->lateral = false;
-		oldrte->inh = false;
-		oldrte->inFromCl = true;
-
-		newrte = makeNode(RangeTblEntry);
-		newrte->rtekind = RTE_RELATION;
-		newrte->relid = trigrec->tgrelid;
-		newrte->relkind = relkind;
-		newrte->rellockmode = AccessShareLock;
-		newrte->alias = makeAlias("new", NIL);
-		newrte->eref = newrte->alias;
-		newrte->lateral = false;
-		newrte->inh = false;
-		newrte->inFromCl = true;
-
-		/* Build two-element rtable */
-		memset(&dpns, 0, sizeof(dpns));
-		dpns.rtable = list_make2(oldrte, newrte);
-		dpns.ctes = NIL;
-		set_rtable_names(&dpns, NIL, NULL);
-		set_simple_column_names(&dpns);
-
-		/* Set up context with one-deep namespace stack */
-		context.buf = &buf;
-		context.namespaces = list_make1(&dpns);
-		context.windowClause = NIL;
-		context.windowTList = NIL;
-		context.varprefix = true;
-		context.prettyFlags = pretty ? (PRETTYFLAG_PAREN | PRETTYFLAG_INDENT | PRETTYFLAG_SCHEMA) : PRETTYFLAG_INDENT;
-		context.wrapColumn = WRAP_COLUMN_DEFAULT;
-		context.indentLevel = PRETTYINDENT_STD;
-		context.special_exprkind = EXPR_KIND_NONE;
-
-		get_rule_expr(qual, &context, false);
-
-		appendStringInfoString(&buf, ") ");
-	}
-
-	appendStringInfo(&buf, "EXECUTE FUNCTION %s(",
-					 generate_function_name(trigrec->tgfoid, 0,
-											NIL, argtypes,
-											false, NULL, EXPR_KIND_NONE));
-
-	if (trigrec->tgnargs > 0)
-	{
-		char	   *p;
-		int			i;
-
-		value = fastgetattr(ht_trig, Anum_pg_trigger_tgargs,
-							tgrel->rd_att, &isnull);
-		if (isnull)
-			elog(ERROR, "tgargs is null for trigger %u", trigid);
-		p = (char *) VARDATA_ANY(DatumGetByteaPP(value));
-		for (i = 0; i < trigrec->tgnargs; i++)
-		{
-			if (i > 0)
-				appendStringInfoString(&buf, ", ");
-			simple_quote_literal(&buf, p);
-			/* advance p to next string embedded in tgargs */
-			while (*p)
-				p++;
-			p++;
-		}
-	}
-
-	/* We deliberately do not put semi-colon at end */
-	appendStringInfoChar(&buf, ')');
-
-	/* Clean up */
-	systable_endscan(tgscan);
-
-	table_close(tgrel, AccessShareLock);
-
-	return buf.data;
-}
-
-/*
- * set_simple_column_names: fill in column aliases for non-query situations
- *
- * This handles EXPLAIN and cases where we only have relation RTEs.  Without
- * a join tree, we can't do anything smart about join RTEs, but we don't
- * need to (note that EXPLAIN should never see join alias Vars anyway).
- * If we do hit a join RTE we'll just process it like a non-table base RTE.
- */
-static void
-set_simple_column_names(deparse_namespace *dpns)
-{
-	ListCell   *lc;
-	ListCell   *lc2;
-
-	/* Initialize dpns->rtable_columns to contain zeroed structs */
-	dpns->rtable_columns = NIL;
-	while (list_length(dpns->rtable_columns) < list_length(dpns->rtable))
-		dpns->rtable_columns = lappend(dpns->rtable_columns,
-									   palloc0(sizeof(deparse_columns)));
-
-	/* Assign unique column aliases within each RTE */
-	forboth(lc, dpns->rtable, lc2, dpns->rtable_columns)
-	{
-		RangeTblEntry *rte = (RangeTblEntry *) lfirst(lc);
-		deparse_columns *colinfo = (deparse_columns *) lfirst(lc2);
-
-		set_relation_column_names(dpns, rte, colinfo);
-	}
-}
-
 /*
  * get_opclass_name			- fetch name of an index operator class
  *
@@ -7924,7 +7628,7 @@ printSubscripts(SubscriptingRef *sbsref, deparse_context *context)
 			/* If subexpression is NULL, get_rule_expr prints nothing */
 			get_rule_expr((Node *) lfirst(lowlist_item), context, false);
 			appendStringInfoChar(buf, ':');
-			lowlist_item = lnext(lowlist_item);
+			lowlist_item = lnext(sbsref->refupperindexpr, lowlist_item);
 		}
 		/* If subexpression is NULL, get_rule_expr prints nothing */
 		get_rule_expr((Node *) lfirst(uplist_item), context, false);
