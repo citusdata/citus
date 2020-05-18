@@ -628,10 +628,9 @@ ExecutePlanIntoDestReceiver(PlannedStmt *queryPlan, ParamListInfo params,
 	/* don't display the portal in pg_cursors, it is for internal use only */
 	portal->visible = false;
 
-	PortalDefineQuery(portal,
+	PortalDefineQuerySelectCompat(portal,
 					  NULL,
 					  "",
-					  "SELECT",
 					  list_make1(queryPlan),
 					  NULL);
 
