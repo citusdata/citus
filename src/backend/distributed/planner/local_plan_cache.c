@@ -17,6 +17,7 @@
 #include "distributed/deparse_shard_query.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/version_compat.h"
 #if PG_VERSION_NUM >= PG_VERSION_12
 #include "optimizer/optimizer.h"
 #else
@@ -89,7 +90,7 @@ CacheLocalPlanForShardQuery(Task *task, DistributedPlan *originalDistributedPlan
 	LockRelationOid(rangeTableEntry->relid, lockMode);
 
 	LocalPlannedStatement *localPlannedStatement = CitusMakeNode(LocalPlannedStatement);
-	localPlan = planner(shardQuery, 0, NULL);
+	localPlan = planner_compat(shardQuery, NULL, 0, NULL);
 	localPlannedStatement->localPlan = localPlan;
 	localPlannedStatement->shardId = task->anchorShardId;
 	localPlannedStatement->localGroupId = GetLocalGroupId();

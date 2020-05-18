@@ -1388,7 +1388,7 @@ CreateNonPushableInsertSelectPlan(uint64 planId, Query *parse, ParamListInfo bou
 
 	/* plan the subquery, this may be another distributed query */
 	int cursorOptions = CURSOR_OPT_PARALLEL_OK;
-	PlannedStmt *selectPlan = pg_plan_query(selectQueryCopy, cursorOptions,
+	PlannedStmt *selectPlan = pg_plan_query_compat(selectQueryCopy, NULL, cursorOptions,
 											boundParams);
 
 	bool repartitioned = IsRedistributablePlan(selectPlan->planTree) &&
