@@ -217,7 +217,8 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 			 * restriction information per table and parse tree transformations made by
 			 * postgres' planner.
 			 */
-			planContext.plan = standard_planner(planContext.query,
+			planContext.plan = standard_planner_compat(planContext.query,
+												NULL,
 												planContext.cursorOptions,
 												planContext.boundParams);
 			if (needsDistributedPlanning)
@@ -1047,7 +1048,7 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
 		 * being contiguous.
 		 */
 
-		standard_planner(newQuery, 0, boundParams);
+		standard_planner_compat(newQuery, NULL, 0, boundParams);
 
 		/* overwrite the old transformed query with the new transformed query */
 		*query = *newQuery;

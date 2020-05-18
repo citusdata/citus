@@ -33,6 +33,7 @@
 #define list_delete_cell_compat(l,c,p) list_delete_cell(l,c) 
 #define pg_plan_query_compat(p,q,c,b) pg_plan_query(p,q,c,b)
 #define planner_compat(p,q,c,b) planner(p,q,c,b)
+#define standard_planner_compat(a,b,c,d) standard_planner(a,b,c,d)
 #define PortalDefineQuerySelectCompat(a,b,c,e,f) PortalDefineQuery(a,b,c,CMDTAG_SELECT,e,f)
 #define getOwnedSequencesCompat(a,b) getOwnedSequences(a)
 #else /* pre PG13 */
@@ -40,6 +41,7 @@
 #define list_delete_cell_compat(l,c,p) list_delete_cell(l,c,p) 
 #define pg_plan_query_compat(p,q,c,b) pg_plan_query(p,c,b)
 #define planner_compat(p,q,c,b) planner(p,c,b) 
+#define standard_planner_compat(a,b,c,d) standard_planner(a,c,d)
 #define PortalDefineQuerySelectCompat(a,b,c,e,f) PortalDefineQuery(a,b,c,"SELECT",e,f)
 #define getOwnedSequencesCompat(a,b) getOwnedSequences(a,b)
 #endif
