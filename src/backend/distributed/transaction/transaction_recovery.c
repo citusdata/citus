@@ -95,7 +95,7 @@ LogTransactionRecord(int32 groupId, char *transactionName)
 	values[Anum_pg_dist_transaction_gid - 1] = CStringGetTextDatum(transactionName);
 
 	/* open transaction relation and insert new tuple */
-	Relation pgDistTransaction = heap_open(DistTransactionRelationId(), RowExclusiveLock);
+	Relation pgDistTransaction = table_open(DistTransactionRelationId(), RowExclusiveLock);
 
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistTransaction);
 	HeapTuple heapTuple = heap_form_tuple(tupleDescriptor, values, isNulls);
@@ -105,7 +105,7 @@ LogTransactionRecord(int32 groupId, char *transactionName)
 	CommandCounterIncrement();
 
 	/* close relation and invalidate previous cache entry */
-	heap_close(pgDistTransaction, NoLock);
+	table_close(pgDistTransaction, NoLock);
 }
 
 
@@ -171,7 +171,7 @@ RecoverWorkerTransactions(WorkerNode *workerNode)
 	MemoryContext oldContext = MemoryContextSwitchTo(localContext);
 
 	/* take table lock first to avoid running concurrently */
-	Relation pgDistTransaction = heap_open(DistTransactionRelationId(),
+	Relation pgDistTransaction = table_open(DistTransactionRelationId(),
 										   ShareUpdateExclusiveLock);
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistTransaction);
 
@@ -344,7 +344,7 @@ RecoverWorkerTransactions(WorkerNode *workerNode)
 	}
 
 	systable_endscan(scanDescriptor);
-	heap_close(pgDistTransaction, NoLock);
+	table_close(pgDistTransaction, NoLock);
 
 	if (!recoveryFailed)
 	{

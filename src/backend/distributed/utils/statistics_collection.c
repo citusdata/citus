@@ -197,14 +197,14 @@ DistributedTablesSize(List *distTableOids)
 		if (PartitionMethod(relationId) == DISTRIBUTE_BY_HASH &&
 			!SingleReplicatedTable(relationId))
 		{
-			heap_close(relation, AccessShareLock);
+			table_close(relation, AccessShareLock);
 			continue;
 		}
 
 		Datum tableSizeDatum = DirectFunctionCall1(citus_table_size,
 												   ObjectIdGetDatum(relationId));
 		totalSize += DatumGetInt64(tableSizeDatum);
-		heap_close(relation, AccessShareLock);
+		table_close(relation, AccessShareLock);
 	}
 
 	return totalSize;

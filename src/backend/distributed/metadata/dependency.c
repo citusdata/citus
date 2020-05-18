@@ -25,6 +25,7 @@
 #include "distributed/metadata/dependency.h"
 #include "distributed/metadata/distobject.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/version_compat.h"
 #include "miscadmin.h"
 #include "utils/fmgroids.h"
 #include "utils/hsearch.h"
@@ -304,7 +305,7 @@ DependencyDefinitionFromPgDepend(ObjectAddress target)
 	/*
 	 * iterate the actual pg_depend catalog
 	 */
-	Relation depRel = heap_open(DependRelationId, AccessShareLock);
+	Relation depRel = table_open(DependRelationId, AccessShareLock);
 
 	/* scan pg_depend for classid = $1 AND objid = $2 using pg_depend_depender_index */
 	ScanKeyInit(&key[0], Anum_pg_depend_classid, BTEqualStrategyNumber, F_OIDEQ,
@@ -346,7 +347,7 @@ DependencyDefinitionFromPgShDepend(ObjectAddress target)
 	/*
 	 * iterate the actual pg_shdepend catalog
 	 */
-	Relation shdepRel = heap_open(SharedDependRelationId, AccessShareLock);
+	Relation shdepRel = table_open(SharedDependRelationId, AccessShareLock);
 
 	/*
 	 * Scan pg_shdepend for dbid = $1 AND classid = $2 AND objid = $3 using
@@ -621,7 +622,7 @@ IsObjectAddressOwnedByExtension(const ObjectAddress *target,
 	HeapTuple depTup = NULL;
 	bool result = false;
 
-	Relation depRel = heap_open(DependRelationId, AccessShareLock);
+	Relation depRel = table_open(DependRelationId, AccessShareLock);
 
 	/* scan pg_depend for classid = $1 AND objid = $2 using pg_depend_depender_index */
 	ScanKeyInit(&key[0], Anum_pg_depend_classid, BTEqualStrategyNumber, F_OIDEQ,
@@ -647,7 +648,7 @@ IsObjectAddressOwnedByExtension(const ObjectAddress *target,
 	}
 
 	systable_endscan(depScan);
-	heap_close(depRel, AccessShareLock);
+	table_close(depRel, AccessShareLock);
 
 	return result;
 }

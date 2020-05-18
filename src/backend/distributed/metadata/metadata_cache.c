@@ -323,7 +323,7 @@ IsCitusTableViaCatalog(Oid relationId)
 	ScanKeyData scanKey[1];
 	bool indexOK = true;
 
-	Relation pgDistPartition = heap_open(DistPartitionRelationId(), AccessShareLock);
+	Relation pgDistPartition = table_open(DistPartitionRelationId(), AccessShareLock);
 
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_partition_logicalrelid,
 				BTEqualStrategyNumber, F_OIDEQ, ObjectIdGetDatum(relationId));
@@ -334,7 +334,7 @@ IsCitusTableViaCatalog(Oid relationId)
 
 	HeapTuple partitionTuple = systable_getnext(scanDescriptor);
 	systable_endscan(scanDescriptor);
-	heap_close(pgDistPartition, AccessShareLock);
+	table_close(pgDistPartition, AccessShareLock);
 
 	return HeapTupleIsValid(partitionTuple);
 }
@@ -1006,7 +1006,7 @@ LookupDistObjectCacheEntry(Oid classid, Oid objid, int32 objsubid)
 	cacheEntry->key.objid = objid;
 	cacheEntry->key.objsubid = objsubid;
 
-	Relation pgDistObjectRel = heap_open(DistObjectRelationId(), AccessShareLock);
+	Relation pgDistObjectRel = table_open(DistObjectRelationId(), AccessShareLock);
 	TupleDesc pgDistObjectTupleDesc = RelationGetDescr(pgDistObjectRel);
 
 	ScanKeyInit(&pgDistObjectKey[0], Anum_pg_dist_object_classid,
@@ -1059,14 +1059,14 @@ LookupDistObjectCacheEntry(Oid classid, Oid objid, int32 objsubid)
 static CitusTableCacheEntry *
 BuildCitusTableCacheEntry(Oid relationId)
 {
-	Relation pgDistPartition = heap_open(DistPartitionRelationId(), AccessShareLock);
+	Relation pgDistPartition = table_open(DistPartitionRelationId(), AccessShareLock);
 	HeapTuple distPartitionTuple =
 		LookupDistPartitionTuple(pgDistPartition, relationId);
 
 	if (distPartitionTuple == NULL)
 	{
 		/* not a distributed table, done */
-		heap_close(pgDistPartition, NoLock);
+		table_close(pgDistPartition, NoLock);
 		return NULL;
 	}
 
@@ -1166,7 +1166,7 @@ BuildCitusTableCacheEntry(Oid relationId)
 
 	MemoryContextSwitchTo(oldContext);
 
-	heap_close(pgDistPartition, NoLock);
+	table_close(pgDistPartition, NoLock);
 
 	cacheEntry->isValid = true;
 
@@ -1201,7 +1201,7 @@ BuildCachedShardList(CitusTableCacheEntry *cacheEntry)
 	int shardIntervalArrayLength = list_length(distShardTupleList);
 	if (shardIntervalArrayLength > 0)
 	{
-		Relation distShardRelation = heap_open(DistShardRelationId(), AccessShareLock);
+		Relation distShardRelation = table_open(DistShardRelationId(), AccessShareLock);
 		TupleDesc distShardTupleDesc = RelationGetDescr(distShardRelation);
 		int arrayIndex = 0;
 
@@ -1236,7 +1236,7 @@ BuildCachedShardList(CitusTableCacheEntry *cacheEntry)
 			arrayIndex++;
 		}
 
-		heap_close(distShardRelation, AccessShareLock);
+		table_close(distShardRelation, AccessShareLock);
 	}
 
 	/* look up value comparison function */
@@ -1847,7 +1847,7 @@ InstalledExtensionVersion(void)
 
 	InitializeCaches();
 
-	Relation relation = heap_open(ExtensionRelationId, AccessShareLock);
+	Relation relation = table_open(ExtensionRelationId, AccessShareLock);
 
 	ScanKeyInit(&entry[0], Anum_pg_extension_extname, BTEqualStrategyNumber, F_NAMEEQ,
 				CStringGetDatum("citus"));
@@ -1889,7 +1889,7 @@ InstalledExtensionVersion(void)
 
 	systable_endscan(scandesc);
 
-	heap_close(relation, AccessShareLock);
+	table_close(relation, AccessShareLock);
 
 	return installedExtensionVersion;
 }
@@ -2400,7 +2400,7 @@ CitusExtensionOwner(void)
 		return MetadataCache.extensionOwner;
 	}
 
-	Relation relation = heap_open(ExtensionRelationId, AccessShareLock);
+	Relation relation = table_open(ExtensionRelationId, AccessShareLock);
 
 	ScanKeyInit(&entry[0],
 				Anum_pg_extension_extname,
@@ -2440,7 +2440,7 @@ CitusExtensionOwner(void)
 
 	systable_endscan(scandesc);
 
-	heap_close(relation, AccessShareLock);
+	table_close(relation, AccessShareLock);
 
 	return MetadataCache.extensionOwner;
 }
@@ -3228,7 +3228,7 @@ GetLocalGroupId(void)
 		return 0;
 	}
 
-	Relation pgDistLocalGroupId = heap_open(localGroupTableOid, AccessShareLock);
+	Relation pgDistLocalGroupId = table_open(localGroupTableOid, AccessShareLock);
 
 	SysScanDesc scanDescriptor = systable_beginscan(pgDistLocalGroupId,
 													InvalidOid, false,
@@ -3260,7 +3260,7 @@ GetLocalGroupId(void)
 	}
 
 	systable_endscan(scanDescriptor);
-	heap_close(pgDistLocalGroupId, AccessShareLock);
+	table_close(pgDistLocalGroupId, AccessShareLock);
 
 	return groupId;
 }
@@ -3671,7 +3671,7 @@ DistTableOidList(void)
 	int scanKeyCount = 0;
 	List *distTableOidList = NIL;
 
-	Relation pgDistPartition = heap_open(DistPartitionRelationId(), AccessShareLock);
+	Relation pgDistPartition = table_open(DistPartitionRelationId(), AccessShareLock);
 
 	SysScanDesc scanDescriptor = systable_beginscan(pgDistPartition,
 													InvalidOid, false,
@@ -3693,7 +3693,7 @@ DistTableOidList(void)
 	}
 
 	systable_endscan(scanDescriptor);
-	heap_close(pgDistPartition, AccessShareLock);
+	table_close(pgDistPartition, AccessShareLock);
 
 	return distTableOidList;
 }
@@ -3713,7 +3713,7 @@ ReferenceTableOidList()
 	int scanKeyCount = 0;
 	List *referenceTableOidList = NIL;
 
-	Relation pgDistPartition = heap_open(DistPartitionRelationId(), AccessShareLock);
+	Relation pgDistPartition = table_open(DistPartitionRelationId(), AccessShareLock);
 
 	SysScanDesc scanDescriptor = systable_beginscan(pgDistPartition,
 													InvalidOid, false,
@@ -3742,7 +3742,7 @@ ReferenceTableOidList()
 	}
 
 	systable_endscan(scanDescriptor);
-	heap_close(pgDistPartition, AccessShareLock);
+	table_close(pgDistPartition, AccessShareLock);
 
 	return referenceTableOidList;
 }
@@ -3856,7 +3856,7 @@ LookupDistShardTuples(Oid relationId)
 	List *distShardTupleList = NIL;
 	ScanKeyData scanKey[1];
 
-	Relation pgDistShard = heap_open(DistShardRelationId(), AccessShareLock);
+	Relation pgDistShard = table_open(DistShardRelationId(), AccessShareLock);
 
 	/* copy scankey to local copy, it will be modified during the scan */
 	scanKey[0] = DistShardScanKey[0];
@@ -3878,7 +3878,7 @@ LookupDistShardTuples(Oid relationId)
 	}
 
 	systable_endscan(scanDescriptor);
-	heap_close(pgDistShard, AccessShareLock);
+	table_close(pgDistShard, AccessShareLock);
 
 	return distShardTupleList;
 }
@@ -3896,7 +3896,7 @@ LookupShardRelationFromCatalog(int64 shardId, bool missingOk)
 	ScanKeyData scanKey[1];
 	int scanKeyCount = 1;
 	Form_pg_dist_shard shardForm = NULL;
-	Relation pgDistShard = heap_open(DistShardRelationId(), AccessShareLock);
+	Relation pgDistShard = table_open(DistShardRelationId(), AccessShareLock);
 	Oid relationId = InvalidOid;
 
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_shard_shardid,
@@ -3924,7 +3924,7 @@ LookupShardRelationFromCatalog(int64 shardId, bool missingOk)
 	}
 
 	systable_endscan(scanDescriptor);
-	heap_close(pgDistShard, NoLock);
+	table_close(pgDistShard, NoLock);
 
 	return relationId;
 }
@@ -4206,7 +4206,7 @@ CitusInvalidateRelcacheByShardId(int64 shardId)
 	ScanKeyData scanKey[1];
 	int scanKeyCount = 1;
 	Form_pg_dist_shard shardForm = NULL;
-	Relation pgDistShard = heap_open(DistShardRelationId(), AccessShareLock);
+	Relation pgDistShard = table_open(DistShardRelationId(), AccessShareLock);
 
 	/*
 	 * Load shard, to find the associated relation id. Can't use
@@ -4249,7 +4249,7 @@ CitusInvalidateRelcacheByShardId(int64 shardId)
 	}
 
 	systable_endscan(scanDescriptor);
-	heap_close(pgDistShard, NoLock);
+	table_close(pgDistShard, NoLock);
 
 	/* bump command counter, to force invalidation to take effect */
 	CommandCounterIncrement();
@@ -4274,7 +4274,7 @@ DistNodeMetadata(void)
 		ereport(ERROR, (errmsg("pg_dist_node_metadata was not found")));
 	}
 
-	Relation pgDistNodeMetadata = heap_open(metadataTableOid, AccessShareLock);
+	Relation pgDistNodeMetadata = table_open(metadataTableOid, AccessShareLock);
 	SysScanDesc scanDescriptor = systable_beginscan(pgDistNodeMetadata,
 													InvalidOid, false,
 													NULL, scanKeyCount, scanKey);
@@ -4295,7 +4295,7 @@ DistNodeMetadata(void)
 	}
 
 	systable_endscan(scanDescriptor);
-	heap_close(pgDistNodeMetadata, AccessShareLock);
+	table_close(pgDistNodeMetadata, AccessShareLock);
 
 	return metadata;
 }

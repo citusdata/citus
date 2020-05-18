@@ -94,6 +94,10 @@ FileCompatFromFileStart(File fileDesc)
 
 
 #else /* pre PG12 */
+#define table_open(r, l) heap_open(r, l)
+#define table_openrv(r, l) heap_openrv(r, l)
+#define table_openrv_extended(r, l, m) heap_openrv_extended(r, l, m)
+#define table_close(r, l) heap_close(r, l)
 #define QTW_EXAMINE_RTES_BEFORE QTW_EXAMINE_RTES
 #define MakeSingleTupleTableSlotCompat(tupleDesc, tts_opts) \
 	MakeSingleTupleTableSlot(tupleDesc)

@@ -33,6 +33,7 @@
 #include "distributed/coordinator_protocol.h"
 #include "distributed/metadata/distobject.h"
 #include "distributed/metadata_sync.h"
+#include "distributed/version_compat.h"
 #include "distributed/worker_transaction.h"
 #include "miscadmin.h"
 #include "nodes/makefuncs.h"
@@ -315,7 +316,7 @@ CreateCreateOrAlterRoleCommand(const char *roleName,
 static const char *
 ExtractEncryptedPassword(Oid roleOid)
 {
-	Relation pgAuthId = heap_open(AuthIdRelationId, AccessShareLock);
+	Relation pgAuthId = table_open(AuthIdRelationId, AccessShareLock);
 	TupleDesc pgAuthIdDescription = RelationGetDescr(pgAuthId);
 	HeapTuple tuple = SearchSysCache1(AUTHOID, roleOid);
 	bool isNull = true;
@@ -328,7 +329,7 @@ ExtractEncryptedPassword(Oid roleOid)
 	Datum passwordDatum = heap_getattr(tuple, Anum_pg_authid_rolpassword,
 									   pgAuthIdDescription, &isNull);
 
-	heap_close(pgAuthId, AccessShareLock);
+	table_close(pgAuthId, AccessShareLock);
 	ReleaseSysCache(tuple);
 
 	if (isNull)
@@ -527,7 +528,7 @@ GenerateCreateOrAlterRoleCommand(Oid roleOid)
 List *
 GenerateAlterRoleSetCommandForRole(Oid roleid)
 {
-	Relation DbRoleSetting = heap_open(DbRoleSettingRelationId, AccessShareLock);
+	Relation DbRoleSetting = table_open(DbRoleSettingRelationId, AccessShareLock);
 	TupleDesc DbRoleSettingDescription = RelationGetDescr(DbRoleSetting);
 	HeapTuple tuple = NULL;
 	List *commands = NIL;
@@ -561,7 +562,7 @@ GenerateAlterRoleSetCommandForRole(Oid roleid)
 	}
 
 	heap_endscan(scan);
-	heap_close(DbRoleSetting, AccessShareLock);
+	table_close(DbRoleSetting, AccessShareLock);
 
 	return commands;
 }

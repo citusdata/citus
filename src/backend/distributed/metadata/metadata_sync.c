@@ -989,7 +989,7 @@ UpdateDistNodeBoolAttr(const char *nodeName, int32 nodePort, int attrNum, bool v
 	bool isnull[Natts_pg_dist_node];
 	bool replace[Natts_pg_dist_node];
 
-	Relation pgDistNode = heap_open(DistNodeRelationId(), RowExclusiveLock);
+	Relation pgDistNode = table_open(DistNodeRelationId(), RowExclusiveLock);
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistNode);
 
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_node_nodename,
@@ -1022,7 +1022,7 @@ UpdateDistNodeBoolAttr(const char *nodeName, int32 nodePort, int attrNum, bool v
 	CommandCounterIncrement();
 
 	systable_endscan(scanDescriptor);
-	heap_close(pgDistNode, NoLock);
+	table_close(pgDistNode, NoLock);
 }
 
 

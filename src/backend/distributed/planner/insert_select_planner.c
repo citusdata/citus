@@ -1494,7 +1494,7 @@ AddInsertSelectCasts(List *insertTargetList, List *selectTargetList,
 	 */
 	Assert(list_length(insertTargetList) <= list_length(selectTargetList));
 
-	Relation distributedRelation = heap_open(targetRelationId, RowExclusiveLock);
+	Relation distributedRelation = table_open(targetRelationId, RowExclusiveLock);
 	TupleDesc destTupleDescriptor = RelationGetDescr(distributedRelation);
 
 	int targetEntryIndex = 0;
@@ -1579,7 +1579,7 @@ AddInsertSelectCasts(List *insertTargetList, List *selectTargetList,
 		selectTargetEntry->resno = entryResNo++;
 	}
 
-	heap_close(distributedRelation, NoLock);
+	table_close(distributedRelation, NoLock);
 
 	return selectTargetList;
 }

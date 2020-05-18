@@ -3564,7 +3564,7 @@ AggregateFunctionOid(const char *functionName, Oid inputType)
 	ScanKeyData scanKey[1];
 	int scanKeyCount = 1;
 
-	Relation procRelation = heap_open(ProcedureRelationId, AccessShareLock);
+	Relation procRelation = table_open(ProcedureRelationId, AccessShareLock);
 
 	ScanKeyInit(&scanKey[0], Anum_pg_proc_proname,
 				BTEqualStrategyNumber, F_NAMEEQ, CStringGetDatum(functionName));
@@ -3605,7 +3605,7 @@ AggregateFunctionOid(const char *functionName, Oid inputType)
 	}
 
 	systable_endscan(scanDescriptor);
-	heap_close(procRelation, AccessShareLock);
+	table_close(procRelation, AccessShareLock);
 
 	return functionOid;
 }

@@ -190,7 +190,7 @@ DistributedTableSize(Oid relationId, char *sizeQuery)
 		totalRelationSize += relationSizeOnNode;
 	}
 
-	heap_close(relation, AccessShareLock);
+	table_close(relation, AccessShareLock);
 
 	return totalRelationSize;
 }
@@ -633,7 +633,7 @@ NodeGroupHasShardPlacements(int32 groupId, bool onlyConsiderActivePlacements)
 
 	ScanKeyData scanKey[2];
 
-	Relation pgPlacement = heap_open(DistPlacementRelationId(),
+	Relation pgPlacement = table_open(DistPlacementRelationId(),
 									 AccessShareLock);
 
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_placement_groupid,
@@ -654,7 +654,7 @@ NodeGroupHasShardPlacements(int32 groupId, bool onlyConsiderActivePlacements)
 	bool hasActivePlacements = HeapTupleIsValid(heapTuple);
 
 	systable_endscan(scanDescriptor);
-	heap_close(pgPlacement, NoLock);
+	table_close(pgPlacement, NoLock);
 
 	return hasActivePlacements;
 }
@@ -731,7 +731,7 @@ BuildShardPlacementList(ShardInterval *shardInterval)
 	int scanKeyCount = 1;
 	bool indexOK = true;
 
-	Relation pgPlacement = heap_open(DistPlacementRelationId(), AccessShareLock);
+	Relation pgPlacement = table_open(DistPlacementRelationId(), AccessShareLock);
 
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_placement_shardid,
 				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(shardId));
@@ -755,7 +755,7 @@ BuildShardPlacementList(ShardInterval *shardInterval)
 	}
 
 	systable_endscan(scanDescriptor);
-	heap_close(pgPlacement, NoLock);
+	table_close(pgPlacement, NoLock);
 
 	return shardPlacementList;
 }
@@ -774,7 +774,7 @@ AllShardPlacementsOnNodeGroup(int32 groupId)
 	int scanKeyCount = 1;
 	bool indexOK = true;
 
-	Relation pgPlacement = heap_open(DistPlacementRelationId(), AccessShareLock);
+	Relation pgPlacement = table_open(DistPlacementRelationId(), AccessShareLock);
 
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_placement_groupid,
 				BTEqualStrategyNumber, F_INT4EQ, Int32GetDatum(groupId));
@@ -798,7 +798,7 @@ AllShardPlacementsOnNodeGroup(int32 groupId)
 	}
 
 	systable_endscan(scanDescriptor);
-	heap_close(pgPlacement, NoLock);
+	table_close(pgPlacement, NoLock);
 
 	return shardPlacementList;
 }
@@ -879,7 +879,7 @@ InsertShardRow(Oid relationId, uint64 shardId, char storageType,
 	}
 
 	/* open shard relation and insert new tuple */
-	Relation pgDistShard = heap_open(DistShardRelationId(), RowExclusiveLock);
+	Relation pgDistShard = table_open(DistShardRelationId(), RowExclusiveLock);
 
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistShard);
 	HeapTuple heapTuple = heap_form_tuple(tupleDescriptor, values, isNulls);
@@ -890,7 +890,7 @@ InsertShardRow(Oid relationId, uint64 shardId, char storageType,
 	CitusInvalidateRelcacheByRelid(relationId);
 
 	CommandCounterIncrement();
-	heap_close(pgDistShard, NoLock);
+	table_close(pgDistShard, NoLock);
 }
 
 
@@ -923,7 +923,7 @@ InsertShardPlacementRow(uint64 shardId, uint64 placementId,
 	values[Anum_pg_dist_placement_groupid - 1] = Int32GetDatum(groupId);
 
 	/* open shard placement relation and insert new tuple */
-	Relation pgDistPlacement = heap_open(DistPlacementRelationId(), RowExclusiveLock);
+	Relation pgDistPlacement = table_open(DistPlacementRelationId(), RowExclusiveLock);
 
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistPlacement);
 	HeapTuple heapTuple = heap_form_tuple(tupleDescriptor, values, isNulls);
@@ -933,7 +933,7 @@ InsertShardPlacementRow(uint64 shardId, uint64 placementId,
 	CitusInvalidateRelcacheByShardId(shardId);
 
 	CommandCounterIncrement();
-	heap_close(pgDistPlacement, NoLock);
+	table_close(pgDistPlacement, NoLock);
 
 	return placementId;
 }
@@ -953,7 +953,7 @@ InsertIntoPgDistPartition(Oid relationId, char distributionMethod,
 	bool newNulls[Natts_pg_dist_partition];
 
 	/* open system catalog and insert new tuple */
-	Relation pgDistPartition = heap_open(DistPartitionRelationId(), RowExclusiveLock);
+	Relation pgDistPartition = table_open(DistPartitionRelationId(), RowExclusiveLock);
 
 	/* form new tuple for pg_dist_partition */
 	memset(newValues, 0, sizeof(newValues));
@@ -991,7 +991,7 @@ InsertIntoPgDistPartition(Oid relationId, char distributionMethod,
 	RecordDistributedRelationDependencies(relationId);
 
 	CommandCounterIncrement();
-	heap_close(pgDistPartition, NoLock);
+	table_close(pgDistPartition, NoLock);
 }
 
 
@@ -1038,7 +1038,7 @@ DeletePartitionRow(Oid distributedRelationId)
 	ScanKeyData scanKey[1];
 	int scanKeyCount = 1;
 
-	Relation pgDistPartition = heap_open(DistPartitionRelationId(), RowExclusiveLock);
+	Relation pgDistPartition = table_open(DistPartitionRelationId(), RowExclusiveLock);
 
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_partition_logicalrelid,
 				BTEqualStrategyNumber, F_OIDEQ, ObjectIdGetDatum(distributedRelationId));
@@ -1064,7 +1064,7 @@ DeletePartitionRow(Oid distributedRelationId)
 	/* increment the counter so that next command can see the row */
 	CommandCounterIncrement();
 
-	heap_close(pgDistPartition, NoLock);
+	table_close(pgDistPartition, NoLock);
 }
 
 
@@ -1079,7 +1079,7 @@ DeleteShardRow(uint64 shardId)
 	int scanKeyCount = 1;
 	bool indexOK = true;
 
-	Relation pgDistShard = heap_open(DistShardRelationId(), RowExclusiveLock);
+	Relation pgDistShard = table_open(DistShardRelationId(), RowExclusiveLock);
 
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_shard_shardid,
 				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(shardId));
@@ -1106,7 +1106,7 @@ DeleteShardRow(uint64 shardId)
 	CitusInvalidateRelcacheByRelid(distributedRelationId);
 
 	CommandCounterIncrement();
-	heap_close(pgDistShard, NoLock);
+	table_close(pgDistShard, NoLock);
 }
 
 
@@ -1122,7 +1122,7 @@ DeleteShardPlacementRow(uint64 placementId)
 	bool indexOK = true;
 	bool isNull = false;
 
-	Relation pgDistPlacement = heap_open(DistPlacementRelationId(), RowExclusiveLock);
+	Relation pgDistPlacement = table_open(DistPlacementRelationId(), RowExclusiveLock);
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistPlacement);
 
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_placement_placementid,
@@ -1154,7 +1154,7 @@ DeleteShardPlacementRow(uint64 placementId)
 	CitusInvalidateRelcacheByShardId(shardId);
 
 	CommandCounterIncrement();
-	heap_close(pgDistPlacement, NoLock);
+	table_close(pgDistPlacement, NoLock);
 }
 
 
@@ -1251,7 +1251,7 @@ UpdateShardPlacementState(uint64 placementId, char shardState)
 	bool replace[Natts_pg_dist_placement];
 	bool colIsNull = false;
 
-	Relation pgDistPlacement = heap_open(DistPlacementRelationId(), RowExclusiveLock);
+	Relation pgDistPlacement = table_open(DistPlacementRelationId(), RowExclusiveLock);
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistPlacement);
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_placement_placementid,
 				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(placementId));
@@ -1288,7 +1288,7 @@ UpdateShardPlacementState(uint64 placementId, char shardState)
 	CommandCounterIncrement();
 
 	systable_endscan(scanDescriptor);
-	heap_close(pgDistPlacement, NoLock);
+	table_close(pgDistPlacement, NoLock);
 }
 
 

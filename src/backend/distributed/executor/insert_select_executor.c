@@ -34,6 +34,7 @@
 #include "distributed/shardinterval_utils.h"
 #include "distributed/subplan_execution.h"
 #include "distributed/transaction_management.h"
+#include "distributed/version_compat.h"
 #include "executor/executor.h"
 #include "nodes/execnodes.h"
 #include "nodes/makefuncs.h"

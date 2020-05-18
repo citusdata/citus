@@ -296,7 +296,7 @@ PopulateAdjacencyLists(void)
 	Oid prevReferencedOid = InvalidOid;
 	List *frelEdgeList = NIL;
 
-	Relation pgConstraint = heap_open(ConstraintRelationId, AccessShareLock);
+	Relation pgConstraint = table_open(ConstraintRelationId, AccessShareLock);
 
 	ScanKeyInit(&scanKey[0], Anum_pg_constraint_contype, BTEqualStrategyNumber, F_CHAREQ,
 				CharGetDatum(CONSTRAINT_FOREIGN));
@@ -345,7 +345,7 @@ PopulateAdjacencyLists(void)
 	}
 
 	systable_endscan(scanDescriptor);
-	heap_close(pgConstraint, AccessShareLock);
+	table_close(pgConstraint, AccessShareLock);
 }
 
 

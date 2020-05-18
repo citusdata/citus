@@ -64,6 +64,7 @@
 #include "distributed/remote_commands.h"
 #include "distributed/transaction_management.h"
 #include "distributed/worker_create_or_replace.h"
+#include "distributed/version_compat.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_transaction.h"
 #include "miscadmin.h"
@@ -791,7 +792,7 @@ EnumValsList(Oid typeOid)
 				BTEqualStrategyNumber, F_OIDEQ,
 				ObjectIdGetDatum(typeOid));
 
-	Relation enum_rel = heap_open(EnumRelationId, AccessShareLock);
+	Relation enum_rel = table_open(EnumRelationId, AccessShareLock);
 	SysScanDesc enum_scan = systable_beginscan(enum_rel,
 											   EnumTypIdSortOrderIndexId,
 											   true, NULL,
@@ -805,7 +806,7 @@ EnumValsList(Oid typeOid)
 	}
 
 	systable_endscan(enum_scan);
-	heap_close(enum_rel, AccessShareLock);
+	table_close(enum_rel, AccessShareLock);
 	return vals;
 }
 
