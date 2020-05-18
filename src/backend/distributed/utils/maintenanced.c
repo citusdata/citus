@@ -16,6 +16,8 @@
 
 #include "postgres.h"
 
+#include "distributed/pg_version_constants.h"
+
 #include <time.h>
 
 #include "miscadmin.h"
@@ -49,6 +51,9 @@
 #include "storage/lmgr.h"
 #include "storage/lwlock.h"
 #include "tcop/tcopprot.h"
+#if PG_VERSION_NUM >= PG_VERSION_13 
+#include "common/hashfn.h"
+#endif
 #include "utils/memutils.h"
 #include "utils/lsyscache.h"
 

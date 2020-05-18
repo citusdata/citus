@@ -21,6 +21,9 @@
 #include "distributed/query_utils.h"
 #include "distributed/worker_manager.h"
 #include "utils/builtins.h"
+#if PG_VERSION_NUM >= PG_VERSION_13
+#include "common/hashfn.h"
+#endif
 
 /* controlled via GUC, used mostly for testing */
 bool LogIntermediateResults = false;

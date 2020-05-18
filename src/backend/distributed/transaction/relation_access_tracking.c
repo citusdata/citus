@@ -15,6 +15,8 @@
  */
 #include "postgres.h"
 
+#include "distributed/pg_version_constants.h"
+
 #include "miscadmin.h"
 
 #include "access/xact.h"
@@ -27,6 +29,9 @@
 #include "distributed/metadata_cache.h"
 #include "distributed/relation_access_tracking.h"
 #include "utils/hsearch.h"
+#if PG_VERSION_NUM >= PG_VERSION_13 
+#include "common/hashfn.h"
+#endif
 #include "utils/lsyscache.h"
 
 

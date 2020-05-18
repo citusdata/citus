@@ -13,6 +13,8 @@
 #include "postgres.h"
 #include "pgstat.h"
 
+#include "distributed/pg_version_constants.h"
+
 #include "libpq-fe.h"
 
 #include "miscadmin.h"
@@ -33,8 +35,12 @@
 #include "distributed/time_constants.h"
 #include "distributed/tuplestore.h"
 #include "utils/builtins.h"
-#include "utils/hashutils.h"
+#if PG_VERSION_NUM < PG_VERSION_13
 #include "utils/hsearch.h"
+#include "utils/hashutils.h"
+#else
+#include "common/hashfn.h"
+#endif
 #include "storage/ipc.h"
 
 

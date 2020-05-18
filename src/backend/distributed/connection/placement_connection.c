@@ -11,6 +11,8 @@
 
 #include "postgres.h"
 
+#include "distributed/pg_version_constants.h"
+
 #include "access/hash.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/connection_management.h"
@@ -24,6 +26,9 @@
 #include "distributed/placement_connection.h"
 #include "distributed/relation_access_tracking.h"
 #include "utils/hsearch.h"
+#if PG_VERSION_NUM >= PG_VERSION_13 
+#include "common/hashfn.h"
+#endif
 #include "utils/memutils.h"
 
 

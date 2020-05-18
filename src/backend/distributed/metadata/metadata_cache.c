@@ -65,6 +65,9 @@
 #include "utils/datum.h"
 #include "utils/elog.h"
 #include "utils/hsearch.h"
+#if PG_VERSION_NUM >= PG_VERSION_13 
+#include "common/hashfn.h"
+#endif
 #include "utils/inval.h"
 #include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
