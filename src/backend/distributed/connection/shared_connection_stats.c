@@ -25,6 +25,7 @@
 #include "distributed/connection_management.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/placement_connection.h"
 #include "distributed/shared_connection_stats.h"
 #include "distributed/time_constants.h"
 #include "distributed/tuplestore.h"
@@ -104,6 +105,7 @@ static void LockConnectionSharedMemory(LWLockMode lockMode);
 static void UnLockConnectionSharedMemory(void);
 static void SharedConnectionStatsShmemInit(void);
 static size_t SharedConnectionStatsShmemSize(void);
+static bool ShouldWaitForConnection(int currentSessionConnectionCount);
 static int SharedConnectionHashCompare(const void *a, const void *b, Size keysize);
 static uint32 SharedConnectionHashHash(const void *key, Size keysize);
 
@@ -584,6 +586,82 @@ SharedConnectionStatsShmemInit(void)
 	{
 		prev_shmem_startup_hook();
 	}
+}
+
+
+/*
+ * ConnectionFlagForSharedConnectionStats returns the connection flag that
+ */
+int
+ConnectionFlagForSharedConnectionStats(int currentSessionConnectionCount)
+{
+	if (UseConnectionPerPlacement())
+	{
+		/*
+		 * User wants one connection per placement, so no throttling is desired
+		 * and we do not set any flags.
+		 *
+		 * The primary reason for this is that allowing multiple backends to use
+		 * connection per placement could lead to unresolved self deadlocks. In other
+		 * words, each backend may stuck waiting for other backends to get a slot
+		 * in the shared connection counters.
+		 */
+		return 0;
+	}
+	else if (ShouldWaitForConnection(currentSessionConnectionCount))
+	{
+		/*
+		 * We need this connection to finish the execution. If it is not
+		 * available based on the current number of connections to the worker
+		 * then wait for it.
+		 */
+		return WAIT_FOR_CONNECTION;
+	}
+	else
+	{
+		/*
+		 * The executor can finish the execution with a single connection,
+		 * remaining are optional. If the executor can get more connections,
+		 * it can increase the parallelism.
+		 */
+		return OPTIONAL_CONNECTION;
+	}
+}
+
+
+/*
+ * ShouldWaitForConnection returns true if the workerPool should wait to
+ * get the next connection until one slot is empty within
+ * citus.max_shared_pool_size on the worker. Note that, if there is an
+ * empty slot, the connection will not wait anyway.
+ */
+static bool
+ShouldWaitForConnection(int currentConnectionCount)
+{
+	if (currentConnectionCount == 0)
+	{
+		/*
+		 * We definitely need at least 1 connection to finish the execution.
+		 * All single shard queries hit here with the default settings.
+		 */
+		return true;
+	}
+
+	if (currentConnectionCount < MaxCachedConnectionsPerWorker)
+	{
+		/*
+		 * Until this session caches MaxCachedConnectionsPerWorker connections,
+		 * this might lead some optional connections to be considered as non-optional
+		 * when MaxCachedConnectionsPerWorker > 1.
+		 *
+		 * However, once the session caches MaxCachedConnectionsPerWorker (which is
+		 * the second transaction executed in the session), Citus would utilize the
+		 * cached connections as much as possible.
+		 */
+		return true;
+	}
+
+	return false;
 }
 
 

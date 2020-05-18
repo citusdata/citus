@@ -18,6 +18,7 @@
 #include "distributed/listutils.h"
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/multi_executor.h"
 #include "distributed/distributed_planner.h"
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/placement_connection.h"
@@ -209,6 +210,12 @@ GetPlacementConnection(uint32 flags, ShardPlacement *placement, const char *user
 {
 	MultiConnection *connection = StartPlacementConnection(flags, placement, userName);
 
+
+	if (connection == NULL)
+	{
+		return NULL;
+	}
+
 	FinishConnectionEstablishment(connection);
 	return connection;
 }
@@ -293,13 +300,10 @@ StartPlacementListConnection(uint32 flags, List *placementAccessList,
 		 */
 		chosenConnection = StartNodeUserDatabaseConnection(flags, nodeName, nodePort,
 														   userName, NULL);
-
-		/*
-		 * chosenConnection can only be NULL for optional connections, which we
-		 * don't support in this codepath.
-		 */
-		Assert((flags & OPTIONAL_CONNECTION) == 0);
-		Assert(chosenConnection != NULL);
+		if (chosenConnection == NULL)
+		{
+			return NULL;
+		}
 
 		if ((flags & CONNECTION_PER_PLACEMENT) &&
 			ConnectionAccessedDifferentPlacement(chosenConnection, placement))
@@ -320,13 +324,6 @@ StartPlacementListConnection(uint32 flags, List *placementAccessList,
 															   FORCE_NEW_CONNECTION,
 															   nodeName, nodePort,
 															   userName, NULL);
-
-			/*
-			 * chosenConnection can only be NULL for optional connections,
-			 * which we don't support in this codepath.
-			 */
-			Assert((flags & OPTIONAL_CONNECTION) == 0);
-			Assert(chosenConnection != NULL);
 
 			Assert(!ConnectionAccessedDifferentPlacement(chosenConnection, placement));
 		}
@@ -1172,6 +1169,19 @@ InitPlacementConnectionManagement(void)
 
 	/* (relationId) = [relationAccessMode] hash */
 	AllocateRelationAccessHash();
+}
+
+
+/*
+ * UseConnectionPerPlacement returns whether we should use as separate connection
+ * per placement even if another connection is idle. We mostly use this in testing
+ * scenarios.
+ */
+bool
+UseConnectionPerPlacement(void)
+{
+	return ForceMaxQueryParallelization &&
+		   MultiShardConnectionType != SEQUENTIAL_CONNECTION;
 }
 
 

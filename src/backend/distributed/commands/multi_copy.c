@@ -85,6 +85,7 @@
 #include "distributed/remote_transaction.h"
 #include "distributed/resource_lock.h"
 #include "distributed/shard_pruning.h"
+#include "distributed/shared_connection_stats.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/local_multi_copy.h"
@@ -3589,6 +3590,15 @@ CopyGetPlacementConnection(HTAB *connectionStateHash, ShardPlacement *placement,
 	}
 
 	/*
+	 * Enforce the requirements for adaptive connection connection
+	 * management (a.k.a., throttle connections if citus.max_shared_pool_size
+	 * reached)
+	 */
+	int sharedConnectionFlag =
+		ConnectionFlagForSharedConnectionStats(list_length(connectionStateList));
+	connectionFlags |= sharedConnectionFlag;
+
+	/*
 	 * For placements that haven't been assigned a connection by a previous command
 	 * in the current transaction, we use a separate connection per placement for
 	 * hash-distributed tables in order to get the maximum performance.
@@ -3600,6 +3610,14 @@ CopyGetPlacementConnection(HTAB *connectionStateHash, ShardPlacement *placement,
 	}
 
 	connection = GetPlacementConnection(connectionFlags, placement, nodeUser);
+	if (connection == NULL)
+	{
+		connection =
+			GetLeastUtilisedCopyConnection(connectionStateList, nodeName, nodePort);
+		Assert(connection != NULL);
+
+		return connection;
+	}
 
 	if (PQstatus(connection->pgConn) != CONNECTION_OK)
 	{

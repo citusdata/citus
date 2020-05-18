@@ -75,6 +75,7 @@ extern void CitusExecutorRun(QueryDesc *queryDesc, ScanDirection direction, uint
 extern void AdaptiveExecutorPreExecutorRun(CitusScanState *scanState);
 extern TupleTableSlot * AdaptiveExecutor(CitusScanState *scanState);
 
+
 /*
  * ExecutionParams contains parameters that are used during the execution.
  * Some of these can be the zero value if it is not needed during the execution.

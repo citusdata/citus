@@ -193,6 +193,60 @@ COMMIT;
 BEGIN;
 	-- now allow at most 2 connections for COPY
 	SET LOCAL citus.max_adaptive_executor_pool_size TO 2;
+COPY test FROM STDIN;
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+\.
+
+	SELECT
+		connection_count_to_node
+	FROM
+		citus_remote_connection_stats()
+	WHERE
+		port IN (SELECT node_port FROM master_get_active_worker_nodes()) AND
+		database_name = 'regression'
+	ORDER BY
+		hostname, port;
+ROLLBACK;
+
+-- now, show that COPY doesn't open more connections than the shared_pool_size
+
+-- now, decrease the shared pool size, and show that COPY doesn't exceed that
+ALTER SYSTEM SET citus.max_shared_pool_size TO 3;
+SELECT pg_reload_conf();
+SELECT pg_sleep(0.1);
+
+BEGIN;
 
 COPY test FROM STDIN;
 1
@@ -239,6 +293,10 @@ COPY test FROM STDIN;
 	ORDER BY
 		hostname, port;
 ROLLBACK;
+
+ALTER SYSTEM RESET citus.max_shared_pool_size;
+SELECT pg_reload_conf();
+SELECT pg_sleep(0.1);
 
 -- now show that when max_cached_conns_per_worker > 1
 -- Citus forces the first execution to open at least 2

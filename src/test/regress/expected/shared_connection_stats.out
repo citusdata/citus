@@ -340,6 +340,52 @@ COPY test FROM STDIN;
 (2 rows)
 
 ROLLBACK;
+-- now, show that COPY doesn't open more connections than the shared_pool_size
+-- now, decrease the shared pool size, and show that COPY doesn't exceed that
+ALTER SYSTEM SET citus.max_shared_pool_size TO 3;
+SELECT pg_reload_conf();
+ pg_reload_conf
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT pg_sleep(0.1);
+ pg_sleep
+---------------------------------------------------------------------
+
+(1 row)
+
+BEGIN;
+COPY test FROM STDIN;
+	SELECT
+		connection_count_to_node
+	FROM
+		citus_remote_connection_stats()
+	WHERE
+		port IN (SELECT node_port FROM master_get_active_worker_nodes()) AND
+		database_name = 'regression'
+	ORDER BY
+		hostname, port;
+ connection_count_to_node
+---------------------------------------------------------------------
+                        3
+                        3
+(2 rows)
+
+ROLLBACK;
+ALTER SYSTEM RESET citus.max_shared_pool_size;
+SELECT pg_reload_conf();
+ pg_reload_conf
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT pg_sleep(0.1);
+ pg_sleep
+---------------------------------------------------------------------
+
+(1 row)
+
 -- now show that when max_cached_conns_per_worker > 1
 -- Citus forces the first execution to open at least 2
 -- connections that are cached. Later, that 2 cached
