@@ -38,6 +38,7 @@
 #include "distributed/insert_select_executor.h"
 #include "distributed/intermediate_result_pruning.h"
 #include "distributed/local_executor.h"
+#include "distributed/locally_reserved_shared_connections.h"
 #include "distributed/maintenanced.h"
 #include "distributed/metadata_utility.h"
 #include "distributed/coordinator_protocol.h"
@@ -284,6 +285,7 @@ _PG_init(void)
 	InitPlacementConnectionManagement();
 	InitializeCitusQueryStats();
 	InitializeSharedConnectionStats();
+	InitializeLocallyReservedSharedConnections();
 
 	/* enable modification of pg_catalog tables during pg_upgrade */
 	if (IsBinaryUpgrade)
@@ -426,6 +428,13 @@ CitusCleanupConnectionsAtExit(int code, Datum arg)
 {
 	/* properly close all the cached connections */
 	ShutdownAllConnections();
+
+	/*
+	 * Make sure that we give the shared connections back to the shared
+	 * pool if any. This operation is a no-op if the reserved connections
+	 * are already given away.
+	 */
+	DeallocateReservedConnections();
 }
 
 

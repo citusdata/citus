@@ -46,18 +46,19 @@ int MaxCachedConnectionsPerWorker = 1;
 
 HTAB *ConnectionHash = NULL;
 HTAB *ConnParamsHash = NULL;
+
 MemoryContext ConnectionContext = NULL;
 
 static uint32 ConnectionHashHash(const void *key, Size keysize);
 static int ConnectionHashCompare(const void *a, const void *b, Size keysize);
 static void StartConnectionEstablishment(MultiConnection *connectionn,
 										 ConnectionHashKey *key);
+static MultiConnection * FindAvailableConnection(dlist_head *connections, uint32 flags);
 static void FreeConnParamsHashEntryFields(ConnParamsHashEntry *entry);
 static void AfterXactHostConnectionHandling(ConnectionHashEntry *entry, bool isCommit);
 static bool ShouldShutdownConnection(MultiConnection *connection, const int
 									 cachedConnectionCount);
 static void ResetConnection(MultiConnection *connection);
-static MultiConnection * FindAvailableConnection(dlist_head *connections, uint32 flags);
 static bool RemoteTransactionIdle(MultiConnection *connection);
 static int EventSetSizeForConnectionList(List *connections);
 
@@ -494,6 +495,38 @@ CloseAllConnectionsAfterTransaction(void)
 			connection->forceCloseAtTransactionEnd = true;
 		}
 	}
+}
+
+
+/*
+ * ConnectionAvailableToNode returns a MultiConnection if the session has at least
+ * one connection established and avaliable to use to the give node. Else, returns
+ * false.
+ */
+MultiConnection *
+ConnectionAvailableToNode(char *hostName, int nodePort, const char *userName,
+						  const char *database)
+{
+	ConnectionHashKey key;
+	bool found = false;
+
+	strlcpy(key.hostname, hostName, MAX_NODE_LENGTH);
+	key.port = nodePort;
+	strlcpy(key.user, userName, NAMEDATALEN);
+	strlcpy(key.database, database, NAMEDATALEN);
+
+	ConnectionHashEntry *entry =
+		(ConnectionHashEntry *) hash_search(ConnectionHash, &key, HASH_FIND, &found);
+
+	if (!found)
+	{
+		return false;
+	}
+
+	int flags = 0;
+	MultiConnection *connection = FindAvailableConnection(entry->connections, flags);
+
+	return connection;
 }
 
 
