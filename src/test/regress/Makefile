@@ -148,11 +148,6 @@ check-multi-mx: all
 	$(pg_regress_multi_check) --load-extension=citus \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/multi_mx_schedule $(EXTRA_TESTS)
 
-check-multi-task-tracker-extra: all
-	$(pg_regress_multi_check) --load-extension=citus \
-	--server-option=citus.task_executor_type=task-tracker \
-	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/multi_task_tracker_extra_schedule $(EXTRA_TESTS)
-
 check-follower-cluster: all
 	$(pg_regress_multi_check) --load-extension=citus --follower-cluster \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/multi_follower_schedule $(EXTRA_TESTS)

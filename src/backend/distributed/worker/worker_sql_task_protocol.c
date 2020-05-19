@@ -80,6 +80,7 @@ worker_execute_sql_task(PG_FUNCTION_ARGS)
 	PG_RETURN_INT64(0);
 }
 
+
 /*
  * CreateFileDestReceiver creates a DestReceiver for writing query results
  * to a file.

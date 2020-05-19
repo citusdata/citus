@@ -66,7 +66,7 @@ jobs:
       - codecov/upload:
           flags: 'test_11,multi'
 
-  test-11_check-tt-van-mx:
+  test-11_check-van-mx:
     docker:
       - image: 'citus/exttester-11:latest'
     working_directory: /home/circleci/project
@@ -74,11 +74,11 @@ jobs:
       - attach_workspace:
           at: .
       - run:
-          name: 'Install and Test (check-tt-van-mx)'
-          command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext check-multi-task-tracker-extra check-vanilla check-multi-mx'
+          name: 'Install and Test (check-van-mx)'
+          command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext check-vanilla check-multi-mx'
           no_output_timeout: 2m
       - codecov/upload:
-          flags: 'test_11,tracker,vanilla,mx'
+          flags: 'test_11,vanilla,mx'
   test-11_check-iso-work-fol:
     docker:
       - image: 'citus/exttester-11:latest'
@@ -152,7 +152,7 @@ jobs:
           no_output_timeout: 2m
       - codecov/upload:
           flags: 'test_12,multi'
-  test-12_check-tt-van-mx:
+  test-12_check-van-mx:
     docker:
       - image: 'citus/exttester-12:latest'
     working_directory: /home/circleci/project
@@ -160,11 +160,11 @@ jobs:
       - attach_workspace:
           at: .
       - run:
-          name: 'Install and Test (check-tt-van-mx)'
-          command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext check-multi-task-tracker-extra check-vanilla check-multi-mx'
+          name: 'Install and Test (check-van-mx)'
+          command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext check-vanilla check-multi-mx'
           no_output_timeout: 2m
       - codecov/upload:
-          flags: 'test_12,tracker,vanilla,mx'
+          flags: 'test_12,vanilla,mx'
   test-12_check-iso-work-fol:
     docker:
       - image: 'citus/exttester-12:latest'
@@ -285,7 +285,7 @@ workflows:
 
       - test-11_check-multi:
           requires: [build]
-      - test-11_check-tt-van-mx:
+      - test-11_check-van-mx:
           requires: [build]
       - test-11_check-iso-work-fol:
           requires: [build]
@@ -296,7 +296,7 @@ workflows:
 
       - test-12_check-multi:
           requires: [build]
-      - test-12_check-tt-van-mx:
+      - test-12_check-van-mx:
           requires: [build]
       - test-12_check-iso-work-fol:
           requires: [build]
