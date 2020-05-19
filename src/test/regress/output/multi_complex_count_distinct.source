@@ -29,8 +29,8 @@ SELECT create_distributed_table('lineitem_hash', 'l_orderkey', 'hash');
 
 (1 row)
 
-\copy lineitem_hash FROM '/home/talha/citus/src/test/regress/data/lineitem.1.data' with delimiter '|'
-\copy lineitem_hash FROM '/home/talha/citus/src/test/regress/data/lineitem.2.data' with delimiter '|'
+\copy lineitem_hash FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
+\copy lineitem_hash FROM '@abs_srcdir@/data/lineitem.2.data' with delimiter '|'
 ANALYZE lineitem_hash;
 SET citus.task_executor_type to "task-tracker";
 -- count(distinct) is supported on top level query if there
