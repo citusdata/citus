@@ -3,7 +3,6 @@
 --
 SET citus.next_shard_id TO 570000;
 \a\t
-RESET citus.task_executor_type;
 SET citus.explain_distributed_queries TO on;
 SET citus.enable_repartition_joins to ON;
 -- Function that parses explain output as JSON
@@ -944,7 +943,6 @@ Custom Scan (Citus Adaptive)
                     ->  Hash
                           ->  Seq Scan on orders_hash_part_360045 orders_hash_part
 -- Test track tracker
-SET citus.task_executor_type TO 'task-tracker';
 EXPLAIN (COSTS FALSE)
 	SELECT avg(l_linenumber) FROM lineitem WHERE l_orderkey > 9030;
 Aggregate
@@ -1135,7 +1133,6 @@ Aggregate
               ->  Aggregate
                     ->  Seq Scan on lineitem_290001 lineitem
                           Filter: (l_orderkey > 9030)
-RESET citus.task_executor_type;
 PREPARE router_executor_query AS SELECT l_quantity FROM lineitem WHERE l_orderkey = 5;
 EXPLAIN EXECUTE router_executor_query;
 Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=100000 width=18)

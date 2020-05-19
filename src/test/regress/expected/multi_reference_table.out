@@ -1086,7 +1086,6 @@ LOG:  join order: [ "colocated_table_test" ][ reference join "reference_table_te
        2
 (2 rows)
 
-SET citus.task_executor_type to "task-tracker";
 SET citus.enable_repartition_joins to ON;
 SELECT
 	colocated_table_test.value_2
@@ -1118,7 +1117,6 @@ LOG:  join order: [ "colocated_table_test" ][ reference join "reference_table_te
 
 SET citus.log_multi_join_order TO FALSE;
 SET citus.shard_count TO DEFAULT;
-SET citus.task_executor_type to "adaptive";
 -- some INSERT .. SELECT queries that involve both hash distributed and reference tables
 -- should go via coordinator since we're inserting into reference table where
 -- not all the participants are reference tables

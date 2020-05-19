@@ -93,12 +93,10 @@ SELECT * FROM ((SELECT * FROM local_test) INTERSECT (SELECT * FROM test ORDER BY
 -- set operations and the sublink can be recursively planned
 SELECT * FROM ((SELECT x FROM test) UNION (SELECT x FROM (SELECT x FROM local_test) as foo WHERE x IN (SELECT x FROM test))) u ORDER BY 1;
 
-SET citus.task_executor_type TO 'task-tracker';
 
 --  repartition is recursively planned before the set operation
 (SELECT x FROM test) INTERSECT (SELECT t1.x FROM test as t1, test as t2 WHERE t1.x = t2.y LIMIT 2) INTERSECT (((SELECT x FROM local_test) UNION ALL (SELECT x FROM test)) INTERSECT (SELECT i FROM generate_series(0, 100) i)) ORDER BY 1 DESC;
 
-SET citus.task_executor_type TO 'adaptive';
 
 RESET client_min_messages;
 DROP SCHEMA recursive_set_local CASCADE;

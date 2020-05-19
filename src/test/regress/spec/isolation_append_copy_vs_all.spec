@@ -26,8 +26,7 @@ step "s1-router-select" { SELECT * FROM append_copy WHERE id = 1; }
 step "s1-real-time-select" { SELECT * FROM append_copy ORDER BY 1, 2; }
 step "s1-task-tracker-select"
 {
-	SET citus.task_executor_type TO "task-tracker";
-	SET citus.enable_repartition_joins TO ON;
+		SET citus.enable_repartition_joins TO ON;
 	SELECT * FROM append_copy AS t1 JOIN append_copy AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 }
 step "s1-insert" { INSERT INTO append_copy VALUES(0, 'k', 0); }
@@ -60,8 +59,7 @@ step "s2-router-select" { SELECT * FROM append_copy WHERE id = 1; }
 step "s2-real-time-select" { SELECT * FROM append_copy ORDER BY 1, 2; }
 step "s2-task-tracker-select"
 {
-	SET citus.task_executor_type TO "task-tracker";
-	SET citus.enable_repartition_joins TO ON;
+		SET citus.enable_repartition_joins TO ON;
 	SELECT * FROM append_copy AS t1 JOIN append_copy AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 }
 step "s2-insert" { INSERT INTO append_copy VALUES(0, 'k', 0); }

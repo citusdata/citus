@@ -11,7 +11,6 @@ SET citus.next_shard_id TO 710000;
 
 BEGIN;
 SET client_min_messages TO DEBUG3;
-SET citus.task_executor_type TO 'task-tracker';
 SET citus.enable_repartition_joins to ON;
 
 -- Single range repartition join to test anchor-shard based task assignment and

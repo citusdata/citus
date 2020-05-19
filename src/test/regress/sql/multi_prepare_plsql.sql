@@ -147,7 +147,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-SET citus.task_executor_type TO 'task-tracker';
 SET client_min_messages TO INFO;
 
 -- now, run PL/pgsql functions
@@ -176,7 +175,6 @@ SELECT plpgsql_test_2();
 
 -- run the tests which do not require re-partition
 -- with real-time executor
-RESET citus.task_executor_type;
 
 -- now, run PL/pgsql functions
 SELECT plpgsql_test_1();
@@ -365,7 +363,6 @@ SELECT real_time_partition_column_select(5);
 SELECT real_time_partition_column_select(6);
 
 -- check task-tracker executor
-SET citus.task_executor_type TO 'task-tracker';
 
 CREATE FUNCTION task_tracker_non_partition_column_select(value_arg int)
 	RETURNS TABLE(key int, value int) AS $$
@@ -420,7 +417,6 @@ SELECT task_tracker_partition_column_select(4);
 SELECT task_tracker_partition_column_select(5);
 SELECT task_tracker_partition_column_select(6);
 
-RESET citus.task_executor_type;
 
 -- check updates
 CREATE FUNCTION partition_parameter_update(int, int) RETURNS void as $$

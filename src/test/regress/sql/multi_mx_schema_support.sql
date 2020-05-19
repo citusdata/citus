@@ -147,7 +147,6 @@ WHERE
     n1.n_nationkey = n2.n_nationkey;
 
 -- single repartition joins
-SET citus.task_executor_type TO "task-tracker";
 
 -- check when search_path is public,
 -- join of two tables which are in different schemas,
@@ -218,7 +217,6 @@ WHERE
     n1.n_regionkey = n2.n_regionkey;
 
 -- set task_executor back to adaptive
-SET citus.task_executor_type TO "adaptive";
 
 -- connect to the master and do some test
 -- regarding DDL support on schemas where

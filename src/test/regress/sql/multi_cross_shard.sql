@@ -114,7 +114,6 @@ INSERT INTO tt2 VALUES(1, 'Ahmet', 5);
 INSERT INTO tt2 VALUES(2, 'Mehmet', 15);
 
 -- Should notice since it is a task-tracker query
-SET citus.task_executor_type to "task-tracker";
 SELECT tt1.id, tt2.count from tt1,tt2 where tt1.id = tt2.id;
 
 SET citus.task_executor_type to DEFAULT;

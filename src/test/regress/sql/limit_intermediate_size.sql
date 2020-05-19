@@ -1,6 +1,5 @@
 SET citus.enable_repartition_joins to ON;
 
-SET citus.task_executor_type to 'task-tracker';
 -- prevent PG 11 - PG 12 outputs to diverge
 SET citus.enable_cte_inlining TO false;
 

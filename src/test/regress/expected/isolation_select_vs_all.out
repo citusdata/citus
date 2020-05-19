@@ -55,8 +55,7 @@ id             data           int_data
 
 1               b             1
 step s2-task-tracker-select:
- SET citus.task_executor_type TO "task-tracker";
- SET citus.enable_repartition_joins TO ON;
+  SET citus.enable_repartition_joins TO ON;
  SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
 id             data           int_data       id             data           int_data
@@ -139,8 +138,7 @@ id             data           int_data
 3               d             3
 4               e             4
 step s2-task-tracker-select:
- SET citus.task_executor_type TO "task-tracker";
- SET citus.enable_repartition_joins TO ON;
+  SET citus.enable_repartition_joins TO ON;
  SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
 id             data           int_data       id             data           int_data
@@ -163,8 +161,7 @@ create_distributed_table
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-task-tracker-select:
- SET citus.task_executor_type TO "task-tracker";
- SET citus.enable_repartition_joins TO ON;
+  SET citus.enable_repartition_joins TO ON;
  SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
 id             data           int_data       id             data           int_data
@@ -191,8 +188,7 @@ create_distributed_table
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-task-tracker-select:
- SET citus.task_executor_type TO "task-tracker";
- SET citus.enable_repartition_joins TO ON;
+  SET citus.enable_repartition_joins TO ON;
  SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
 id             data           int_data       id             data           int_data
@@ -223,8 +219,7 @@ create_distributed_table
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-task-tracker-select:
- SET citus.task_executor_type TO "task-tracker";
- SET citus.enable_repartition_joins TO ON;
+  SET citus.enable_repartition_joins TO ON;
  SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
 id             data           int_data       id             data           int_data
@@ -235,8 +230,7 @@ id             data           int_data       id             data           int_d
 3               d             3              3               d             3
 4               e             4              4               e             4
 step s2-task-tracker-select:
- SET citus.task_executor_type TO "task-tracker";
- SET citus.enable_repartition_joins TO ON;
+  SET citus.enable_repartition_joins TO ON;
  SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
 id             data           int_data       id             data           int_data
@@ -1561,8 +1555,7 @@ create_distributed_table
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-task-tracker-select:
- SET citus.task_executor_type TO "task-tracker";
- SET citus.enable_repartition_joins TO ON;
+  SET citus.enable_repartition_joins TO ON;
  SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
 id             data           int_data       id             data           int_data
@@ -1586,8 +1579,7 @@ create_distributed_table
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-task-tracker-select:
- SET citus.task_executor_type TO "task-tracker";
- SET citus.enable_repartition_joins TO ON;
+  SET citus.enable_repartition_joins TO ON;
  SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
 id             data           int_data       id             data           int_data
@@ -1611,8 +1603,7 @@ create_distributed_table
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-task-tracker-select:
- SET citus.task_executor_type TO "task-tracker";
- SET citus.enable_repartition_joins TO ON;
+  SET citus.enable_repartition_joins TO ON;
  SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
 id             data           int_data       id             data           int_data
@@ -1636,8 +1627,7 @@ create_distributed_table
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-task-tracker-select:
- SET citus.task_executor_type TO "task-tracker";
- SET citus.enable_repartition_joins TO ON;
+  SET citus.enable_repartition_joins TO ON;
  SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
 id             data           int_data       id             data           int_data
@@ -1661,8 +1651,7 @@ create_distributed_table
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-task-tracker-select:
- SET citus.task_executor_type TO "task-tracker";
- SET citus.enable_repartition_joins TO ON;
+  SET citus.enable_repartition_joins TO ON;
  SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
 id             data           int_data       id             data           int_data
@@ -1687,8 +1676,7 @@ create_distributed_table
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-task-tracker-select:
- SET citus.task_executor_type TO "task-tracker";
- SET citus.enable_repartition_joins TO ON;
+  SET citus.enable_repartition_joins TO ON;
  SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
 id             data           int_data       id             data           int_data
@@ -1711,8 +1699,7 @@ create_distributed_table
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-task-tracker-select:
- SET citus.task_executor_type TO "task-tracker";
- SET citus.enable_repartition_joins TO ON;
+  SET citus.enable_repartition_joins TO ON;
  SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
 id             data           int_data       id             data           int_data
@@ -1742,8 +1729,7 @@ step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 
 step s1-ddl-create-index: CREATE INDEX select_append_index ON select_append(id);
 step s1-begin: BEGIN;
 step s1-task-tracker-select:
- SET citus.task_executor_type TO "task-tracker";
- SET citus.enable_repartition_joins TO ON;
+  SET citus.enable_repartition_joins TO ON;
  SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
 id             data           int_data       id             data           int_data
@@ -1773,8 +1759,7 @@ create_distributed_table
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-task-tracker-select:
- SET citus.task_executor_type TO "task-tracker";
- SET citus.enable_repartition_joins TO ON;
+  SET citus.enable_repartition_joins TO ON;
  SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
 id             data           int_data       id             data           int_data
@@ -1803,8 +1788,7 @@ create_distributed_table
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-task-tracker-select:
- SET citus.task_executor_type TO "task-tracker";
- SET citus.enable_repartition_joins TO ON;
+  SET citus.enable_repartition_joins TO ON;
  SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
 id             data           int_data       id             data           int_data
@@ -1835,8 +1819,7 @@ step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 
 step s1-ddl-add-column: ALTER TABLE select_append ADD new_column int DEFAULT 0;
 step s1-begin: BEGIN;
 step s1-task-tracker-select:
- SET citus.task_executor_type TO "task-tracker";
- SET citus.enable_repartition_joins TO ON;
+  SET citus.enable_repartition_joins TO ON;
  SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
 id             data           int_data       new_column     id             data           int_data       new_column
@@ -1866,8 +1849,7 @@ create_distributed_table
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-task-tracker-select:
- SET citus.task_executor_type TO "task-tracker";
- SET citus.enable_repartition_joins TO ON;
+  SET citus.enable_repartition_joins TO ON;
  SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
 id             data           int_data       id             data           int_data
@@ -1897,8 +1879,7 @@ create_distributed_table
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-task-tracker-select:
- SET citus.task_executor_type TO "task-tracker";
- SET citus.enable_repartition_joins TO ON;
+  SET citus.enable_repartition_joins TO ON;
  SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
 id             data           int_data       id             data           int_data
@@ -1925,8 +1906,7 @@ create_distributed_table
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-task-tracker-select:
- SET citus.task_executor_type TO "task-tracker";
- SET citus.enable_repartition_joins TO ON;
+  SET citus.enable_repartition_joins TO ON;
  SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
 id             data           int_data       id             data           int_data
@@ -1951,8 +1931,7 @@ step s1-drop: DROP TABLE select_append;
 step s1-create-non-distributed-table: CREATE TABLE select_append(id integer, data text, int_data int);
 step s1-begin: BEGIN;
 step s1-task-tracker-select:
- SET citus.task_executor_type TO "task-tracker";
- SET citus.enable_repartition_joins TO ON;
+  SET citus.enable_repartition_joins TO ON;
  SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
 id             data           int_data       id             data           int_data
@@ -1975,8 +1954,7 @@ step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 
 step s1-begin: BEGIN;
 step s1-insert: INSERT INTO select_append VALUES(0, 'k', 0);
 step s2-task-tracker-select:
- SET citus.task_executor_type TO "task-tracker";
- SET citus.enable_repartition_joins TO ON;
+  SET citus.enable_repartition_joins TO ON;
  SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
 id             data           int_data       id             data           int_data
@@ -2000,8 +1978,7 @@ step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 
 step s1-begin: BEGIN;
 step s1-insert-select: INSERT INTO select_append SELECT * FROM select_append;
 step s2-task-tracker-select:
- SET citus.task_executor_type TO "task-tracker";
- SET citus.enable_repartition_joins TO ON;
+  SET citus.enable_repartition_joins TO ON;
  SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
 id             data           int_data       id             data           int_data
@@ -2025,8 +2002,7 @@ step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 
 step s1-begin: BEGIN;
 step s1-update: UPDATE select_append SET data = 'l' WHERE id = 0;
 step s2-task-tracker-select:
- SET citus.task_executor_type TO "task-tracker";
- SET citus.enable_repartition_joins TO ON;
+  SET citus.enable_repartition_joins TO ON;
  SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
 id             data           int_data       id             data           int_data
@@ -2050,8 +2026,7 @@ step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 
 step s1-begin: BEGIN;
 step s1-delete: DELETE FROM select_append WHERE id = 1;
 step s2-task-tracker-select:
- SET citus.task_executor_type TO "task-tracker";
- SET citus.enable_repartition_joins TO ON;
+  SET citus.enable_repartition_joins TO ON;
  SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
 id             data           int_data       id             data           int_data
@@ -2075,8 +2050,7 @@ step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 
 step s1-begin: BEGIN;
 step s1-truncate: TRUNCATE select_append;
 step s2-task-tracker-select:
- SET citus.task_executor_type TO "task-tracker";
- SET citus.enable_repartition_joins TO ON;
+  SET citus.enable_repartition_joins TO ON;
  SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
  <waiting ...>
 step s1-commit: COMMIT;
@@ -2096,8 +2070,7 @@ step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 
 step s1-begin: BEGIN;
 step s1-drop: DROP TABLE select_append;
 step s2-task-tracker-select:
- SET citus.task_executor_type TO "task-tracker";
- SET citus.enable_repartition_joins TO ON;
+  SET citus.enable_repartition_joins TO ON;
  SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
  <waiting ...>
 step s1-commit: COMMIT;
@@ -2114,8 +2087,7 @@ step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 
 step s1-begin: BEGIN;
 step s1-ddl-create-index: CREATE INDEX select_append_index ON select_append(id);
 step s2-task-tracker-select:
- SET citus.task_executor_type TO "task-tracker";
- SET citus.enable_repartition_joins TO ON;
+  SET citus.enable_repartition_joins TO ON;
  SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
 id             data           int_data       id             data           int_data
@@ -2145,8 +2117,7 @@ step s1-ddl-create-index: CREATE INDEX select_append_index ON select_append(id);
 step s1-begin: BEGIN;
 step s1-ddl-drop-index: DROP INDEX select_append_index;
 step s2-task-tracker-select:
- SET citus.task_executor_type TO "task-tracker";
- SET citus.enable_repartition_joins TO ON;
+  SET citus.enable_repartition_joins TO ON;
  SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
  <waiting ...>
 step s1-commit: COMMIT;
@@ -2176,8 +2147,7 @@ step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 
 step s1-begin: BEGIN;
 step s1-ddl-add-column: ALTER TABLE select_append ADD new_column int DEFAULT 0;
 step s2-task-tracker-select:
- SET citus.task_executor_type TO "task-tracker";
- SET citus.enable_repartition_joins TO ON;
+  SET citus.enable_repartition_joins TO ON;
  SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
  <waiting ...>
 step s1-commit: COMMIT;
@@ -2208,8 +2178,7 @@ step s1-ddl-add-column: ALTER TABLE select_append ADD new_column int DEFAULT 0;
 step s1-begin: BEGIN;
 step s1-ddl-drop-column: ALTER TABLE select_append DROP new_column;
 step s2-task-tracker-select:
- SET citus.task_executor_type TO "task-tracker";
- SET citus.enable_repartition_joins TO ON;
+  SET citus.enable_repartition_joins TO ON;
  SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
  <waiting ...>
 step s1-commit: COMMIT;
@@ -2239,8 +2208,7 @@ step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 
 step s1-begin: BEGIN;
 step s1-ddl-rename-column: ALTER TABLE select_append RENAME data TO new_column;
 step s2-task-tracker-select:
- SET citus.task_executor_type TO "task-tracker";
- SET citus.enable_repartition_joins TO ON;
+  SET citus.enable_repartition_joins TO ON;
  SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
  <waiting ...>
 step s1-commit: COMMIT;
@@ -2273,8 +2241,7 @@ citus_total_relation_size
 
 32768
 step s2-task-tracker-select:
- SET citus.task_executor_type TO "task-tracker";
- SET citus.enable_repartition_joins TO ON;
+  SET citus.enable_repartition_joins TO ON;
  SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
 id             data           int_data       id             data           int_data
@@ -2298,8 +2265,7 @@ step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 
 step s1-begin: BEGIN;
 step s1-master-modify-multiple-shards: DELETE FROM select_append;
 step s2-task-tracker-select:
- SET citus.task_executor_type TO "task-tracker";
- SET citus.enable_repartition_joins TO ON;
+  SET citus.enable_repartition_joins TO ON;
  SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
 id             data           int_data       id             data           int_data
@@ -2327,8 +2293,7 @@ create_distributed_table
 
 
 step s2-task-tracker-select:
- SET citus.task_executor_type TO "task-tracker";
- SET citus.enable_repartition_joins TO ON;
+  SET citus.enable_repartition_joins TO ON;
  SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
 id             data           int_data       id             data           int_data

@@ -106,21 +106,18 @@ INSERT INTO test VALUES (2);
 SELECT count(*) FROM test;
 SELECT count(*) FROM test WHERE id = 1;
 
-SET citus.task_executor_type TO 'task-tracker';
 SET citus.enable_repartition_joins to ON;
 SELECT count(*), min(current_user) FROM test;
 
 -- test re-partition query (needs to transmit intermediate results)
 SELECT count(*) FROM test a JOIN test b ON (a.val = b.val) WHERE a.id = 1 AND b.id = 2;
 
-SET citus.task_executor_type TO 'adaptive';
 SET citus.enable_repartition_joins TO true;
 SELECT count(*) FROM test a JOIN test b ON (a.val = b.val) WHERE a.id = 1 AND b.id = 2;
 
 -- should not be able to transmit directly
 COPY "postgresql.conf" TO STDOUT WITH (format transmit);
 
-RESET citus.task_executor_type;
 
 -- should not be able to transmit directly
 COPY "postgresql.conf" TO STDOUT WITH (format transmit);
@@ -143,14 +140,12 @@ INSERT INTO test VALUES (2);
 SELECT count(*) FROM test;
 SELECT count(*) FROM test WHERE id = 1;
 
-SET citus.task_executor_type TO 'task-tracker';
 SET citus.enable_repartition_joins to ON;
 SELECT count(*), min(current_user) FROM test;
 
 -- test re-partition query (needs to transmit intermediate results)
 SELECT count(*) FROM test a JOIN test b ON (a.val = b.val) WHERE a.id = 1 AND b.id = 2;
 
-SET citus.task_executor_type TO 'adaptive';
 SET citus.enable_repartition_joins TO true;
 SELECT count(*) FROM test a JOIN test b ON (a.val = b.val) WHERE a.id = 1 AND b.id = 2;
 
@@ -163,7 +158,6 @@ SELECT lock_relation_if_exists('test', 'ACCESS SHARE');
 SELECT lock_relation_if_exists('test', 'EXCLUSIVE');
 ABORT;
 
-RESET citus.task_executor_type;
 
 -- check no permission
 SET ROLE no_access;
@@ -175,21 +169,18 @@ INSERT INTO test VALUES (2);
 SELECT count(*) FROM test;
 SELECT count(*) FROM test WHERE id = 1;
 
-SET citus.task_executor_type TO 'task-tracker';
 SET citus.enable_repartition_joins to ON;
 SELECT count(*), min(current_user) FROM test;
 
 -- test re-partition query
 SELECT count(*) FROM test a JOIN test b ON (a.val = b.val) WHERE a.id = 1 AND b.id = 2;
 
-SET citus.task_executor_type TO 'adaptive';
 SET citus.enable_repartition_joins TO true;
 SELECT count(*) FROM test a JOIN test b ON (a.val = b.val) WHERE a.id = 1 AND b.id = 2;
 
 -- should not be able to transmit directly
 COPY "postgresql.conf" TO STDOUT WITH (format transmit);
 
-RESET citus.task_executor_type;
 
 -- should be able to use intermediate results as any user
 BEGIN;

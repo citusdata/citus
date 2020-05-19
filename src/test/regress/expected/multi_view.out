@@ -198,7 +198,6 @@ SELECT count(*) FROM priority_orders JOIN air_shipped_lineitems ON (o_custkey = 
    192
 (1 row)
 
-SET citus.task_executor_type to "task-tracker";
 -- single view repartition subqueries are not supported
 SELECT l_suppkey, count(*) FROM
 	(SELECT l_suppkey, l_shipdate, count(*)

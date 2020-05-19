@@ -141,7 +141,6 @@ SELECT count(*) FROM test WHERE id = 1;
      1
 (1 row)
 
-SET citus.task_executor_type TO 'task-tracker';
 SET citus.enable_repartition_joins to ON;
 SELECT count(*), min(current_user) FROM test;
  count |     min
@@ -156,7 +155,6 @@ SELECT count(*) FROM test a JOIN test b ON (a.val = b.val) WHERE a.id = 1 AND b.
      0
 (1 row)
 
-SET citus.task_executor_type TO 'adaptive';
 SET citus.enable_repartition_joins TO true;
 SELECT count(*) FROM test a JOIN test b ON (a.val = b.val) WHERE a.id = 1 AND b.id = 2;
  count
@@ -168,7 +166,6 @@ SELECT count(*) FROM test a JOIN test b ON (a.val = b.val) WHERE a.id = 1 AND b.
 COPY "postgresql.conf" TO STDOUT WITH (format transmit);
 ERROR:  operation is not allowed
 HINT:  Run the command with a superuser.
-RESET citus.task_executor_type;
 -- should not be able to transmit directly
 COPY "postgresql.conf" TO STDOUT WITH (format transmit);
 ERROR:  operation is not allowed
@@ -225,7 +222,6 @@ SELECT count(*) FROM test WHERE id = 1;
      1
 (1 row)
 
-SET citus.task_executor_type TO 'task-tracker';
 SET citus.enable_repartition_joins to ON;
 SELECT count(*), min(current_user) FROM test;
  count |     min
@@ -240,7 +236,6 @@ SELECT count(*) FROM test a JOIN test b ON (a.val = b.val) WHERE a.id = 1 AND b.
      0
 (1 row)
 
-SET citus.task_executor_type TO 'adaptive';
 SET citus.enable_repartition_joins TO true;
 SELECT count(*) FROM test a JOIN test b ON (a.val = b.val) WHERE a.id = 1 AND b.id = 2;
  count
@@ -263,7 +258,6 @@ SELECT lock_relation_if_exists('test', 'ACCESS SHARE');
 SELECT lock_relation_if_exists('test', 'EXCLUSIVE');
 ERROR:  permission denied for table test
 ABORT;
-RESET citus.task_executor_type;
 -- check no permission
 SET ROLE no_access;
 EXECUTE prepare_insert(1);
@@ -276,14 +270,12 @@ SELECT count(*) FROM test;
 ERROR:  permission denied for table test
 SELECT count(*) FROM test WHERE id = 1;
 ERROR:  permission denied for table test
-SET citus.task_executor_type TO 'task-tracker';
 SET citus.enable_repartition_joins to ON;
 SELECT count(*), min(current_user) FROM test;
 ERROR:  permission denied for table test
 -- test re-partition query
 SELECT count(*) FROM test a JOIN test b ON (a.val = b.val) WHERE a.id = 1 AND b.id = 2;
 ERROR:  permission denied for table test
-SET citus.task_executor_type TO 'adaptive';
 SET citus.enable_repartition_joins TO true;
 SELECT count(*) FROM test a JOIN test b ON (a.val = b.val) WHERE a.id = 1 AND b.id = 2;
 ERROR:  permission denied for table test
@@ -291,7 +283,6 @@ ERROR:  permission denied for table test
 COPY "postgresql.conf" TO STDOUT WITH (format transmit);
 ERROR:  operation is not allowed
 HINT:  Run the command with a superuser.
-RESET citus.task_executor_type;
 -- should be able to use intermediate results as any user
 BEGIN;
 SELECT create_intermediate_result('topten', 'SELECT s FROM generate_series(1,10) s');

@@ -890,7 +890,6 @@ WHERE
 (1 row)
 
 -- single repartition joins
-SET citus.task_executor_type TO "task-tracker";
 -- check when search_path is public,
 -- join of two tables which are in different schemas,
 -- join on partition column and non-partition column
@@ -983,7 +982,6 @@ WHERE
 (1 row)
 
 -- set task_executor back to adaptive
-SET citus.task_executor_type TO "adaptive";
 -- test ALTER TABLE SET SCHEMA
 SET search_path TO public;
 CREATE SCHEMA old_schema;
@@ -1308,7 +1306,6 @@ SELECT sum(result::int) FROM run_command_on_shards('run_test_schema.test_table',
 (1 row)
 
 -- test capital letters on both table and schema names
-SET citus.task_executor_type to "adaptive";
 -- create schema with weird names
 CREATE SCHEMA "CiTuS.TeeN";
 CREATE SCHEMA "CiTUS.TEEN2";

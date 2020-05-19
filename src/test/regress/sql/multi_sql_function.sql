@@ -40,7 +40,6 @@ CREATE FUNCTION sql_test_no_4() RETURNS bigint AS '
 		o_orderkey = l_orderkey;
 ' LANGUAGE SQL;
 
-SET citus.task_executor_type TO 'task-tracker';
 SET client_min_messages TO INFO;
 
 -- now, run plain SQL functions
@@ -51,7 +50,6 @@ SELECT sql_test_no_4();
 
 -- run the tests which do not require re-partition
 -- with real-time executor
-RESET citus.task_executor_type;
 
 -- now, run plain SQL functions
 SELECT sql_test_no_1();

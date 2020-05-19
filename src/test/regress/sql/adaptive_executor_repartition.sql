@@ -1,7 +1,6 @@
 CREATE SCHEMA adaptive_executor;
 SET search_path TO adaptive_executor;
 
-SET citus.task_executor_type to 'adaptive';
 SET citus.shard_replication_factor to 1;
 SET citus.enable_repartition_joins TO true;
 

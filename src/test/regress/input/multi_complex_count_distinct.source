@@ -34,7 +34,6 @@ SELECT create_distributed_table('lineitem_hash', 'l_orderkey', 'hash');
 
 ANALYZE lineitem_hash;
 
-SET citus.task_executor_type to "task-tracker";
 
 -- count(distinct) is supported on top level query if there
 -- is a grouping on the partition key
@@ -545,7 +544,6 @@ SELECT *
    ORDER BY 2 DESC, 1
    LIMIT 10;
 
-RESET citus.task_executor_type;
 
 -- count distinct pushdown is enabled
 SELECT *

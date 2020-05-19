@@ -211,7 +211,6 @@ SELECT create_distributed_table('wide_table', 'long_column_001');
 
 (1 row)
 
-SET citus.task_executor_type TO 'task-tracker';
 SHOW citus.max_task_string_size;
  citus.max_task_string_size
 ---------------------------------------------------------------------
@@ -243,4 +242,3 @@ SELECT u.long_column_001, u.long_column_002, u.long_column_003 FROM wide_table u
 RESET client_min_messages;
 DROP TABLE wide_table;
 RESET citus.shard_count;
-RESET citus.task_executor_type;

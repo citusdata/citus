@@ -110,7 +110,6 @@ ORDER BY
 	cust_nation,
 	l_year;
 
-SET citus.task_executor_type TO 'task-tracker';
 SET client_min_messages TO INFO;
 
 -- execute prepared statements
@@ -142,7 +141,6 @@ CREATE TEMP TABLE prepared_sql_test_7 AS EXECUTE prepared_test_7('UNITED KINGDOM
 SELECT * from prepared_sql_test_7;
 
 -- now, run some of the tests with real-time executor
-RESET citus.task_executor_type;
 
 -- execute prepared statements
 EXECUTE prepared_test_1;
@@ -396,7 +394,6 @@ EXECUTE prepared_real_time_partition_column_select(5);
 EXECUTE prepared_real_time_partition_column_select(6);
 
 -- check task-tracker executor
-SET citus.task_executor_type TO 'task-tracker';
 
 PREPARE prepared_task_tracker_non_partition_column_select(int) AS
 	SELECT
@@ -437,7 +434,6 @@ EXECUTE prepared_task_tracker_partition_column_select(4);
 EXECUTE prepared_task_tracker_partition_column_select(5);
 EXECUTE prepared_task_tracker_partition_column_select(6);
 
-RESET citus.task_executor_type;
 
 -- check updates
 PREPARE prepared_partition_parameter_update(int, int) AS

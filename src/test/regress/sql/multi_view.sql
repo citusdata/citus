@@ -85,7 +85,6 @@ RESET client_min_messages;
 
 SELECT count(*) FROM priority_orders JOIN air_shipped_lineitems ON (o_custkey = l_suppkey);
 
-SET citus.task_executor_type to "task-tracker";
 
 -- single view repartition subqueries are not supported
 SELECT l_suppkey, count(*) FROM

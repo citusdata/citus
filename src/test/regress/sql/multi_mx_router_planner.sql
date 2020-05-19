@@ -66,7 +66,6 @@ INSERT INTO articles_hash_mx VALUES (48,  8, 'alkylic', 18610);
 INSERT INTO articles_hash_mx VALUES (49,  9, 'anyone', 2681);
 INSERT INTO articles_hash_mx VALUES (50, 10, 'anjanette', 19519);
 
-RESET citus.task_executor_type;
 SET client_min_messages TO 'DEBUG2';
 
 -- insert a single row for the test
@@ -388,7 +387,6 @@ SELECT *
 	WHERE author_id >= 1 AND author_id <= 3
 ORDER BY 1,2,3,4;
 
-RESET citus.task_executor_type;
 
 -- Test various filtering options for router plannable check
 SET client_min_messages to 'DEBUG2';
@@ -647,8 +645,7 @@ CREATE MATERIALIZED VIEW mv_articles_hash_mx_error AS
 -- following query is router plannable, but router planner is disabled
 
 -- TODO: Uncomment once we fix task-tracker issue
---SET citus.task_executor_type to 'task-tracker';
---SELECT id
+----SELECT id
 --	FROM articles_hash_mx
 --	WHERE author_id = 1;
 

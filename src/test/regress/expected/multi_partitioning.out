@@ -1300,7 +1300,6 @@ SELECT relation::regclass, locktype, mode FROM pg_locks WHERE relation::regclass
 
 COMMIT;
 -- test locks on task-tracker SELECT
-SET citus.task_executor_type TO 'task-tracker';
 BEGIN;
 SELECT * FROM partitioning_locks AS pl1 JOIN partitioning_locks AS pl2 ON pl1.id = pl2.ref_id ORDER BY 1, 2;
  id | ref_id | time | id | ref_id | time
@@ -1316,7 +1315,6 @@ SELECT relation::regclass, locktype, mode FROM pg_locks WHERE relation::regclass
 (3 rows)
 
 COMMIT;
-RESET citus.task_executor_type;
 -- test locks on INSERT
 BEGIN;
 INSERT INTO partitioning_locks VALUES(1, 1, '2009-01-01');

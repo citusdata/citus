@@ -32,7 +32,6 @@ SELECT create_distributed_table('lineitem_hash', 'l_orderkey', 'hash');
 \copy lineitem_hash FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
 \copy lineitem_hash FROM '@abs_srcdir@/data/lineitem.2.data' with delimiter '|'
 ANALYZE lineitem_hash;
-SET citus.task_executor_type to "task-tracker";
 -- count(distinct) is supported on top level query if there
 -- is a grouping on the partition key
 SELECT
@@ -1083,7 +1082,6 @@ SELECT *
  10-30-1995 |             3 | 1995
 (10 rows)
 
-RESET citus.task_executor_type;
 -- count distinct pushdown is enabled
 SELECT *
    FROM (

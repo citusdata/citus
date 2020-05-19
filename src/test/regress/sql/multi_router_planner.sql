@@ -111,7 +111,6 @@ INSERT INTO articles_hash VALUES (50, 10, 'anjanette', 19519);
 
 
 
-RESET citus.task_executor_type;
 SET client_min_messages TO 'DEBUG2';
 
 -- insert a single row for the test
@@ -481,7 +480,6 @@ SELECT *
 	WHERE author_id >= 1 AND author_id <= 3
 ORDER BY 1,2,3,4;
 
-RESET citus.task_executor_type;
 
 -- Test various filtering options for router plannable check
 SET client_min_messages to 'DEBUG2';
@@ -810,7 +808,6 @@ RESET citus.log_remote_commands;
 
 -- This query was intended to test "multi-shard join is not router plannable"
 -- To run it using repartition join logic we change the join columns
-SET citus.task_executor_type to "task-tracker";
 SET citus.enable_repartition_joins to ON;
 SELECT * FROM articles_range ar join authors_range au on (ar.title = au.name)
 	WHERE ar.author_id = 35;
@@ -820,7 +817,6 @@ SELECT * FROM articles_range ar join authors_range au on (ar.title = au.name)
 -- change the join columns.
 SELECT * FROM articles_range ar join authors_range au on (ar.title = au.name)
 	WHERE ar.author_id = 1 or au.id = 5;
-RESET citus.task_executor_type;
 
 -- bogus query, join on non-partition column, but router plannable due to filters
 SELECT * FROM articles_range ar join authors_range au on (ar.id = au.id)
@@ -1089,7 +1085,6 @@ CREATE MATERIALIZED VIEW mv_articles_hash_data AS
 SELECT * FROM mv_articles_hash_data ORDER BY 1, 2, 3, 4;
 
 -- router planner/executor is now enabled for task-tracker executor
-SET citus.task_executor_type to 'task-tracker';
 SELECT id
 	FROM articles_hash
 	WHERE author_id = 1;

@@ -647,7 +647,6 @@ WHERE
     n1.n_nationkey = n2.n_nationkey;
 
 -- single repartition joins
-SET citus.task_executor_type TO "task-tracker";
 
 -- check when search_path is public,
 -- join of two tables which are in different schemas,
@@ -718,7 +717,6 @@ WHERE
     n1.n_regionkey = n2.n_regionkey;
 
 -- set task_executor back to adaptive
-SET citus.task_executor_type TO "adaptive";
 
 
 -- test ALTER TABLE SET SCHEMA
@@ -905,7 +903,6 @@ SELECT sum(result::int) FROM run_command_on_placements('run_test_schema.test_tab
 SELECT sum(result::int) FROM run_command_on_shards('run_test_schema.test_table','SELECT pg_table_size(''%s'')');
 
 -- test capital letters on both table and schema names
-SET citus.task_executor_type to "adaptive";
 -- create schema with weird names
 CREATE SCHEMA "CiTuS.TeeN";
 CREATE SCHEMA "CiTUS.TEEN2";

@@ -878,7 +878,6 @@ LOG:  join order: [ "colocated_table_test" ][ reference join "reference_table_te
        2
 (2 rows)
 
-SET citus.task_executor_type to "task-tracker";
 SET citus.enable_repartition_joins to ON;
 SELECT
 	colocated_table_test.value_2

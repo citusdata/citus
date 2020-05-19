@@ -36,7 +36,6 @@ SELECT create_distributed_table('stock','s_w_id');
 
 BEGIN;
 SET client_min_messages TO DEBUG;
-SET citus.task_executor_type TO 'task-tracker';
 
 -- Debug4 log messages display jobIds within them. We explicitly set the jobId
 -- sequence here so that the regression output becomes independent of the number

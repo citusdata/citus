@@ -536,7 +536,6 @@ WHERE
 	colocated_table_test.value_1 = colocated_table_test_2.value_1 AND colocated_table_test.value_2 = reference_table_test.value_2
 ORDER BY 1;
 
-SET citus.task_executor_type to "task-tracker";
 SET citus.enable_repartition_joins to ON;
 SELECT
 	colocated_table_test.value_2

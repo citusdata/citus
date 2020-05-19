@@ -9,7 +9,6 @@ ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1320000;
 
 \a\t
 
-RESET citus.task_executor_type;
 SET citus.explain_distributed_queries TO on;
 
 VACUUM ANALYZE lineitem_mx;
@@ -166,7 +165,6 @@ SELECT true AS valid FROM explain_json($$
 	SELECT avg(l_linenumber) FROM lineitem_mx WHERE l_orderkey > 9030$$);
 
 -- Test track tracker
-SET citus.task_executor_type TO 'task-tracker';
 SET citus.explain_all_tasks TO off;
 
 EXPLAIN (COSTS FALSE)

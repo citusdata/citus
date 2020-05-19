@@ -7,7 +7,6 @@
 SET citus.next_shard_id TO 860000;
 
 
-SET citus.task_executor_type TO 'task-tracker';
 
 select
     number_sum,

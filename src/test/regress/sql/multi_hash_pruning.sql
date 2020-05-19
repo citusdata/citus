@@ -294,7 +294,6 @@ SELECT count(*) FROM orders_hash_partitioned
 SELECT count(*) FROM orders_hash_partitioned
 	WHERE NOT (o_orderkey = 2 AND o_orderkey = 3);
 
-SET citus.task_executor_type TO 'adaptive';
 
 -- Check that subquery NOT is pruned when ANDed to a valid constraint
 SELECT count(*) FROM orders_hash_partitioned
