@@ -160,7 +160,7 @@ SELECT * FROM nation_hash  WHERE n_nationkey OPERATOR(===) 1;
 (1 row)
 
 SELECT * FROM citus_mx_test_schema.nation_hash_collation_search_path ORDER BY 1;
- n_nationkey |          n_name           | n_regionkey |                                                  n_comment
+ n_nationkey |          n_name           | n_regionkey |                                                 n_comment
 ---------------------------------------------------------------------
            0 | ALGERIA                   |           0 | haggle. carefully final deposits detect slyly agai
            1 | ARGENTINA                 |           1 | al foxes promise slyly according to the regular accounts. bold requests alon
@@ -171,7 +171,7 @@ SELECT * FROM citus_mx_test_schema.nation_hash_collation_search_path ORDER BY 1;
 (6 rows)
 
 SELECT n_comment FROM citus_mx_test_schema.nation_hash_collation_search_path ORDER BY n_comment COLLATE citus_mx_test_schema.english;
-                                                  n_comment
+                                                 n_comment
 ---------------------------------------------------------------------
  al foxes promise slyly according to the regular accounts. bold requests alon
  eas hang ironic, silent packages. slyly regular packages are furiously over the tithes. fluffily bold
@@ -183,7 +183,7 @@ SELECT n_comment FROM citus_mx_test_schema.nation_hash_collation_search_path ORD
 
 SET search_path  TO citus_mx_test_schema;
 SELECT * FROM nation_hash_collation_search_path ORDER BY 1 DESC;
- n_nationkey |          n_name           | n_regionkey |                                                  n_comment
+ n_nationkey |          n_name           | n_regionkey |                                                 n_comment
 ---------------------------------------------------------------------
            5 | ETHIOPIA                  |           0 | ven packages wake quickly. regu
            4 | EGYPT                     |           4 | y above the carefully unusual theodolites. final dugouts are quickly across the furiously regular d
@@ -194,7 +194,7 @@ SELECT * FROM nation_hash_collation_search_path ORDER BY 1 DESC;
 (6 rows)
 
 SELECT n_comment FROM nation_hash_collation_search_path ORDER BY n_comment COLLATE english;
-                                                  n_comment
+                                                 n_comment
 ---------------------------------------------------------------------
  al foxes promise slyly according to the regular accounts. bold requests alon
  eas hang ironic, silent packages. slyly regular packages are furiously over the tithes. fluffily bold
@@ -218,6 +218,7 @@ SELECT * FROM nation_hash_composite_types WHERE test_col = '(a,a)'::new_composit
            0 | ALGERIA                   |           0 | haggle. carefully final deposits detect slyly agai | (a,a)
 (1 row)
 
+SET citus.enable_repartition_joins to ON;
 -- check when search_path is public,
 -- join of two tables which are in different schemas,
 -- join on partition column

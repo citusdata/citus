@@ -5,6 +5,8 @@
 \c - - - :worker_2_port
 
 SET citus.task_executor_type TO "task-tracker";
+SET citus.max_adaptive_executor_pool_size TO 2;
+SET citus.enable_repartition_joins to ON;
 CREATE TEMP TABLE t1 AS
 SELECT
     l1.l_comment

@@ -101,7 +101,7 @@ SELECT * FROM citus_mx_test_schema.nation_hash_composite_types WHERE test_col = 
 SET search_path TO citus_mx_test_schema;
 SELECT * FROM nation_hash_composite_types WHERE test_col = '(a,a)'::new_composite_type ORDER BY 1::int DESC;
 
-
+SET citus.enable_repartition_joins to ON;
 -- check when search_path is public,
 -- join of two tables which are in different schemas,
 -- join on partition column

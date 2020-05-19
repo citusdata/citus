@@ -153,6 +153,7 @@ INSERT INTO repartition_udt_other values (11, '(2,2)'::test_udt, 'foo');
 INSERT INTO repartition_udt_other values (12, '(2,3)'::test_udt, 'foo');
 SET client_min_messages = LOG;
 SET citus.task_executor_type = 'task-tracker';
+SET citus.enable_repartition_joins to ON;
 -- Query that should result in a repartition
 -- join on int column, and be empty.
 SELECT * FROM repartition_udt JOIN repartition_udt_other
@@ -170,7 +171,7 @@ SELECT * FROM repartition_udt JOIN repartition_udt_other
 LOG:  join order: [ "repartition_udt" ][ dual partition join "repartition_udt_other" ]
                          QUERY PLAN
 ---------------------------------------------------------------------
- Custom Scan (Citus Task-Tracker)
+ Custom Scan (Citus Adaptive)
    Task Count: 4
    Tasks Shown: None, not supported for re-partition queries
    ->  MapMergeJob
