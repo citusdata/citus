@@ -1804,6 +1804,7 @@ RESET citus.log_remote_commands;
 -- This query was intended to test "multi-shard join is not router plannable"
 -- To run it using repartition join logic we change the join columns
 SET citus.task_executor_type to "task-tracker";
+SET citus.enable_repartition_joins to ON;
 SELECT * FROM articles_range ar join authors_range au on (ar.title = au.name)
 	WHERE ar.author_id = 35;
 DEBUG:  Router planner cannot handle multi-shard select queries
@@ -1929,8 +1930,8 @@ DEBUG:  pruning merge fetch taskId 13
 DETAIL:  Creating dependency on merge taskId 6
 DEBUG:  pruning merge fetch taskId 15
 DETAIL:  Creating dependency on merge taskId 8
-ERROR:  the query contains a join that requires repartitioning
-HINT:  Set citus.enable_repartition_joins to on to enable repartitioning
+ERROR:  relation "authors_range_840010" does not exist
+CONTEXT:  while executing command on localhost:xxxxx
 -- join between a range partitioned table and reference table is router plannable
 SELECT * FROM articles_range ar join authors_reference au on (ar.author_id = au.id)
 	WHERE ar.author_id = 1;
