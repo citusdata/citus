@@ -18,7 +18,6 @@ test: worker_range_partition worker_range_partition_complex
 test: worker_hash_partition worker_hash_partition_complex
 test: worker_merge_range_files worker_merge_hash_files
 test: worker_binary_data_partition worker_null_data_partition
-test: worker_check_invalid_arguments
 
 # ---------
 # test that no tests leaked intermediate results. This should always be last

@@ -261,91 +261,7 @@ worker_merge_files_into_table(PG_FUNCTION_ARGS)
 Datum
 worker_merge_files_and_run_query(PG_FUNCTION_ARGS)
 {
-	uint64 jobId = PG_GETARG_INT64(0);
-	uint32 taskId = PG_GETARG_UINT32(1);
-	text *createMergeTableQueryText = PG_GETARG_TEXT_P(2);
-	text *createIntermediateTableQueryText = PG_GETARG_TEXT_P(3);
-
-	const char *createMergeTableQuery = text_to_cstring(createMergeTableQueryText);
-	const char *createIntermediateTableQuery =
-		text_to_cstring(createIntermediateTableQueryText);
-
-	StringInfo taskDirectoryName = TaskDirectoryName(jobId, taskId);
-	StringInfo jobSchemaName = JobSchemaName(jobId);
-	StringInfo intermediateTableName = TaskTableName(taskId);
-	StringInfo mergeTableName = makeStringInfo();
-	StringInfo setSearchPathString = makeStringInfo();
-	Oid savedUserId = InvalidOid;
-	int savedSecurityContext = 0;
-	Oid userId = GetUserId();
-
-	CheckCitusVersion(ERROR);
-
-	/*
-	 * If the schema for the job isn't already created by the task tracker
-	 * protocol, we fall to using the default 'public' schema.
-	 */
-	bool schemaExists = JobSchemaExists(jobSchemaName);
-	if (!schemaExists)
-	{
-		resetStringInfo(jobSchemaName);
-		appendStringInfoString(jobSchemaName, "public");
-	}
-	else
-	{
-		Oid schemaId = get_namespace_oid(jobSchemaName->data, false);
-
-		EnsureSchemaOwner(schemaId);
-	}
-
-	appendStringInfo(setSearchPathString, SET_SEARCH_PATH_COMMAND, jobSchemaName->data);
-
-	/* Add "public" to search path to access UDFs in public schema */
-	appendStringInfo(setSearchPathString, ",public");
-
-	int connected = SPI_connect();
-	if (connected != SPI_OK_CONNECT)
-	{
-		ereport(ERROR, (errmsg("could not connect to SPI manager")));
-	}
-
-	int setSearchPathResult = SPI_exec(setSearchPathString->data, 0);
-	if (setSearchPathResult < 0)
-	{
-		ereport(ERROR, (errmsg("execution was not successful \"%s\"",
-							   setSearchPathString->data)));
-	}
-
-	int createMergeTableResult = SPI_exec(createMergeTableQuery, 0);
-	if (createMergeTableResult < 0)
-	{
-		ereport(ERROR, (errmsg("execution was not successful \"%s\"",
-							   createMergeTableQuery)));
-	}
-
-	/* need superuser to copy from files */
-	GetUserIdAndSecContext(&savedUserId, &savedSecurityContext);
-	SetUserIdAndSecContext(CitusExtensionOwner(), SECURITY_LOCAL_USERID_CHANGE);
-
-	appendStringInfo(mergeTableName, "%s%s", intermediateTableName->data,
-					 MERGE_TABLE_SUFFIX);
-	CopyTaskFilesFromDirectory(jobSchemaName, mergeTableName, taskDirectoryName,
-							   userId);
-
-	SetUserIdAndSecContext(savedUserId, savedSecurityContext);
-
-	int createIntermediateTableResult = SPI_exec(createIntermediateTableQuery, 0);
-	if (createIntermediateTableResult < 0)
-	{
-		ereport(ERROR, (errmsg("execution was not successful \"%s\"",
-							   createIntermediateTableQuery)));
-	}
-
-	int finished = SPI_finish();
-	if (finished != SPI_OK_FINISH)
-	{
-		ereport(ERROR, (errmsg("could not disconnect from SPI manager")));
-	}
+	ereport(ERROR, (errmsg("not supposed to get here, did you cheat?")));
 
 	PG_RETURN_VOID();
 }
@@ -362,45 +278,7 @@ worker_merge_files_and_run_query(PG_FUNCTION_ARGS)
 Datum
 worker_cleanup_job_schema_cache(PG_FUNCTION_ARGS)
 {
-	Relation pgNamespace = NULL;
-#if PG_VERSION_NUM >= PG_VERSION_12
-	TableScanDesc scanDescriptor = NULL;
-#else
-	HeapScanDesc scanDescriptor = NULL;
-#endif
-	ScanKey scanKey = NULL;
-	int scanKeyCount = 0;
-	HeapTuple heapTuple = NULL;
-
-	CheckCitusVersion(ERROR);
-
-	pgNamespace = heap_open(NamespaceRelationId, AccessExclusiveLock);
-#if PG_VERSION_NUM >= PG_VERSION_12
-	scanDescriptor = table_beginscan_catalog(pgNamespace, scanKeyCount, scanKey);
-#else
-	scanDescriptor = heap_beginscan_catalog(pgNamespace, scanKeyCount, scanKey);
-#endif
-
-	heapTuple = heap_getnext(scanDescriptor, ForwardScanDirection);
-	while (HeapTupleIsValid(heapTuple))
-	{
-		Form_pg_namespace schemaForm = (Form_pg_namespace) GETSTRUCT(heapTuple);
-		char *schemaName = NameStr(schemaForm->nspname);
-
-		char *jobSchemaFound = strstr(schemaName, JOB_SCHEMA_PREFIX);
-		if (jobSchemaFound != NULL)
-		{
-			StringInfo jobSchemaName = makeStringInfo();
-			appendStringInfoString(jobSchemaName, schemaName);
-
-			RemoveJobSchema(jobSchemaName);
-		}
-
-		heapTuple = heap_getnext(scanDescriptor, ForwardScanDirection);
-	}
-
-	heap_endscan(scanDescriptor);
-	heap_close(pgNamespace, AccessExclusiveLock);
+	ereport(ERROR, (errmsg("not supposed to get here, did you cheat?")));
 
 	PG_RETURN_VOID();
 }

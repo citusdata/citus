@@ -157,11 +157,6 @@ SELECT count(*) FROM test a JOIN test b ON (a.val = b.val) WHERE a.id = 1 AND b.
 -- should not be able to transmit directly
 COPY "postgresql.conf" TO STDOUT WITH (format transmit);
 
--- should not be able to access tasks or jobs belonging to a different user
---SELECT task_tracker_task_status(1, 1);
---SELECT task_tracker_assign_task(1, 2, 'SELECT 1');
---SELECT task_tracker_cleanup_job(1);
-
 -- should not be allowed to take aggressive locks on table
 BEGIN;
 SELECT lock_relation_if_exists('test', 'ACCESS SHARE');
@@ -229,8 +224,6 @@ CREATE TABLE my_table (id integer, val integer);
 RESET ROLE;
 SELECT create_distributed_table('my_table', 'id');
 SELECT result FROM run_command_on_workers($$SELECT tableowner FROM pg_tables WHERE tablename LIKE 'my_table_%' LIMIT 1$$);
-
---SELECT task_tracker_cleanup_job(1);
 
 -- table should be distributable by super user when it has data in there
 SET ROLE full_access;
@@ -396,114 +389,7 @@ SELECT result FROM run_command_on_workers($cmd$
   LIMIT 1;
 $cmd$);
 
--- super user should be the only one being able to call worker_cleanup_job_schema_cache
-SELECT worker_cleanup_job_schema_cache();
-SET ROLE full_access;
-SELECT worker_cleanup_job_schema_cache();
-SET ROLE usage_access;
-SELECT worker_cleanup_job_schema_cache();
-SET ROLE read_access;
-SELECT worker_cleanup_job_schema_cache();
-SET ROLE no_access;
-SELECT worker_cleanup_job_schema_cache();
-RESET ROLE;
-
--- to test access to files created during repartition we will create some on worker 1
-\c - - - :worker_1_port
-SET ROLE full_access;
-SELECT worker_hash_partition_table(42,1,'SELECT a FROM generate_series(1,100) AS a', 'a', 23, ARRAY[-2147483648, -1073741824, 0, 1073741824]::int4[]);
-RESET ROLE;
-
--- all attempts for transfer are initiated from other workers
-
-\c - - - :worker_2_port
--- super user should not be able to copy files created by a user
-SELECT worker_fetch_partition_file(42, 1, 1, 1, 'localhost', :worker_1_port);
-
--- different user should not be able to fetch partition file
-SET ROLE usage_access;
-SELECT worker_fetch_partition_file(42, 1, 1, 1, 'localhost', :worker_1_port);
-
--- only the user whom created the files should be able to fetch
-SET ROLE full_access;
-SELECT worker_fetch_partition_file(42, 1, 1, 1, 'localhost', :worker_1_port);
-RESET ROLE;
-
--- now we will test that only the user who owns the fetched file is able to merge it into
--- a table
--- test that no other user can merge the downloaded file before the task is being tracked
-SET ROLE usage_access;
-SELECT worker_merge_files_into_table(42, 1, ARRAY['a'], ARRAY['integer']);
-RESET ROLE;
-
-SET ROLE full_access;
--- use the side effect of this function to have a schema to use, otherwise only the super
--- user could call worker_merge_files_into_table and store the results in public, which is
--- not what we want
---SELECT task_tracker_assign_task(42, 1, 'SELECT 1');
-RESET ROLE;
-
--- test that no other user can merge the downloaded file after the task is being tracked
-SET ROLE usage_access;
-SELECT worker_merge_files_into_table(42, 1, ARRAY['a'], ARRAY['integer']);
-RESET ROLE;
-
--- test that the super user is unable to read the contents of the intermediate file,
--- although it does create the table
-SELECT worker_merge_files_into_table(42, 1, ARRAY['a'], ARRAY['integer']);
-SELECT count(*) FROM pg_merge_job_0042.task_000001;
-DROP TABLE pg_merge_job_0042.task_000001; -- drop table so we can reuse the same files for more tests
-
-SET ROLE full_access;
-SELECT worker_merge_files_into_table(42, 1, ARRAY['a'], ARRAY['integer']);
-SELECT count(*) FROM pg_merge_job_0042.task_000001;
-DROP TABLE pg_merge_job_0042.task_000001; -- drop table so we can reuse the same files for more tests
-RESET ROLE;
-
--- test that no other user can merge files and run query on the already fetched files
-SET ROLE usage_access;
-SELECT worker_merge_files_and_run_query(42, 1,
-    'CREATE TABLE task_000001_merge(merge_column_0 int)',
-    'CREATE TABLE task_000001 (a) AS SELECT sum(merge_column_0) FROM task_000001_merge'
-);
-RESET ROLE;
-
--- test that the super user is unable to read the contents of the partitioned files after
--- trying to merge with run query
-SELECT worker_merge_files_and_run_query(42, 1,
-    'CREATE TABLE task_000001_merge(merge_column_0 int)',
-    'CREATE TABLE task_000001 (a) AS SELECT sum(merge_column_0) FROM task_000001_merge'
-);
-SELECT count(*) FROM pg_merge_job_0042.task_000001_merge;
-SELECT count(*) FROM pg_merge_job_0042.task_000001;
-DROP TABLE pg_merge_job_0042.task_000001, pg_merge_job_0042.task_000001_merge; -- drop table so we can reuse the same files for more tests
-
--- test that the owner of the task can merge files and run query correctly
-SET ROLE full_access;
-SELECT worker_merge_files_and_run_query(42, 1,
-    'CREATE TABLE task_000001_merge(merge_column_0 int)',
-    'CREATE TABLE task_000001 (a) AS SELECT sum(merge_column_0) FROM task_000001_merge'
-);
-
--- test that owner of task cannot execute arbitrary sql
-SELECT worker_merge_files_and_run_query(42, 1,
-    'CREATE TABLE task_000002_merge(merge_column_0 int)',
-    'DROP USER usage_access'
-);
-
-SELECT worker_merge_files_and_run_query(42, 1,
-    'DROP USER usage_access',
-    'CREATE TABLE task_000002 (a) AS SELECT sum(merge_column_0) FROM task_000002_merge'
-);
-
-SELECT count(*) FROM pg_merge_job_0042.task_000001_merge;
-SELECT count(*) FROM pg_merge_job_0042.task_000001;
-DROP TABLE pg_merge_job_0042.task_000001, pg_merge_job_0042.task_000001_merge; -- drop table so we can reuse the same files for more tests
-RESET ROLE;
-
 \c - - - :master_port
-
---SELECT run_command_on_workers($$SELECT task_tracker_cleanup_job(42);$$);
 
 DROP SCHEMA full_access_user_schema CASCADE;
 DROP TABLE

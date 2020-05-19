@@ -2772,55 +2772,6 @@ ProcessCopyStmt(CopyStmt *copyStatement, char *completionTag, const char *queryS
 			}
 		}
 	}
-
-
-	if (copyStatement->filename != NULL && !copyStatement->is_program)
-	{
-		char *filename = copyStatement->filename;
-
-		/*
-		 * We execute COPY commands issued by the task-tracker executor here
-		 * because we're not normally allowed to write to a file as a regular
-		 * user and we don't want to execute the query as superuser.
-		 */
-		if (CacheDirectoryElement(filename) && copyStatement->query != NULL &&
-			!copyStatement->is_from && !is_absolute_path(filename))
-		{
-			bool binaryCopyFormat = CopyStatementHasFormat(copyStatement, "binary");
-			Query *query = NULL;
-			Node *queryNode = copyStatement->query;
-			StringInfo userFilePath = makeStringInfo();
-
-			RawStmt *rawStmt = makeNode(RawStmt);
-			rawStmt->stmt = queryNode;
-
-			List *queryTreeList = pg_analyze_and_rewrite(rawStmt, queryString, NULL, 0,
-														 NULL);
-
-			if (list_length(queryTreeList) != 1)
-			{
-				ereport(ERROR, (errmsg("can only execute a single query")));
-			}
-
-			query = (Query *) linitial(queryTreeList);
-
-			/*
-			 * Add a user ID suffix to prevent other users from reading/writing
-			 * the same file. We do this consistently in all functions that interact
-			 * with task files.
-			 */
-			appendStringInfo(userFilePath, "%s.%u", filename, GetUserId());
-
-			int64 tuplesSent = WorkerExecuteSqlTask(query, filename, binaryCopyFormat);
-
-			SafeSnprintf(completionTag, COMPLETION_TAG_BUFSIZE,
-						 "COPY " UINT64_FORMAT, tuplesSent);
-
-			return NULL;
-		}
-	}
-
-
 	return (Node *) copyStatement;
 }
 

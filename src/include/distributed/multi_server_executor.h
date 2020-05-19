@@ -18,12 +18,6 @@
 #include "distributed/task_tracker.h"
 #include "distributed/worker_manager.h"
 
-/* copy out query results */
-#define EXECUTE_SQL_TASK_TO_FILE_BINARY \
-	"SELECT worker_execute_sql_task("UINT64_FORMAT ", %u, %s, true)"
-#define EXECUTE_SQL_TASK_TO_FILE_TEXT \
-	"SELECT worker_execute_sql_task("UINT64_FORMAT ", %u, %s, false)"
-
 /* Adaptive executor repartioning related defines */
 #define WORKER_CREATE_SCHEMA_QUERY "SELECT worker_create_schema (" UINT64_FORMAT ", %s);"
 #define WORKER_REPARTITION_CLEANUP_QUERY "SELECT worker_repartition_cleanup (" \
