@@ -174,12 +174,7 @@ COPY "postgresql.conf" TO STDOUT WITH (format transmit);
 ERROR:  operation is not allowed
 HINT:  Run the command with a superuser.
 -- create a task that other users should not be able to inspect
-SELECT task_tracker_assign_task(1, 1, 'SELECT 1');
- task_tracker_assign_task
----------------------------------------------------------------------
-
-(1 row)
-
+--SELECT task_tracker_assign_task(1, 1, 'SELECT 1');
 -- check read permission
 SET ROLE read_access;
 -- should be allowed to run commands, as the current user
@@ -258,13 +253,9 @@ COPY "postgresql.conf" TO STDOUT WITH (format transmit);
 ERROR:  operation is not allowed
 HINT:  Run the command with a superuser.
 -- should not be able to access tasks or jobs belonging to a different user
-SELECT task_tracker_task_status(1, 1);
-ERROR:  could not find the worker task
-DETAIL:  Task jobId: 1 and taskId: 1
-SELECT task_tracker_assign_task(1, 2, 'SELECT 1');
-ERROR:  must be owner of schema pg_merge_job_0001
-SELECT task_tracker_cleanup_job(1);
-ERROR:  must be owner of schema pg_merge_job_0001
+--SELECT task_tracker_task_status(1, 1);
+--SELECT task_tracker_assign_task(1, 2, 'SELECT 1');
+--SELECT task_tracker_cleanup_job(1);
 -- should not be allowed to take aggressive locks on table
 BEGIN;
 SELECT lock_relation_if_exists('test', 'ACCESS SHARE');
@@ -368,12 +359,7 @@ SELECT result FROM run_command_on_workers($$SELECT tableowner FROM pg_tables WHE
  full_access
 (2 rows)
 
-SELECT task_tracker_cleanup_job(1);
- task_tracker_cleanup_job
----------------------------------------------------------------------
-
-(1 row)
-
+--SELECT task_tracker_cleanup_job(1);
 -- table should be distributable by super user when it has data in there
 SET ROLE full_access;
 CREATE TABLE my_table_with_data (id integer, val integer);
@@ -726,17 +712,13 @@ SET ROLE full_access;
 -- use the side effect of this function to have a schema to use, otherwise only the super
 -- user could call worker_merge_files_into_table and store the results in public, which is
 -- not what we want
-SELECT task_tracker_assign_task(42, 1, 'SELECT 1');
- task_tracker_assign_task
----------------------------------------------------------------------
-
-(1 row)
-
+--SELECT task_tracker_assign_task(42, 1, 'SELECT 1');
 RESET ROLE;
 -- test that no other user can merge the downloaded file after the task is being tracked
 SET ROLE usage_access;
 SELECT worker_merge_files_into_table(42, 1, ARRAY['a'], ARRAY['integer']);
-ERROR:  must be owner of schema pg_merge_job_0042
+ERROR:  job schema does not exist
+DETAIL:  must be superuser to use public schema
 RESET ROLE;
 -- test that the super user is unable to read the contents of the intermediate file,
 -- although it does create the table
@@ -748,26 +730,17 @@ WARNING:  Task file "task_000001.xxxx" does not have expected suffix ".10"
 (1 row)
 
 SELECT count(*) FROM pg_merge_job_0042.task_000001;
- count
----------------------------------------------------------------------
-     0
-(1 row)
-
+ERROR:  relation "pg_merge_job_0042.task_000001" does not exist
 DROP TABLE pg_merge_job_0042.task_000001; -- drop table so we can reuse the same files for more tests
+ERROR:  schema "pg_merge_job_0042" does not exist
 SET ROLE full_access;
 SELECT worker_merge_files_into_table(42, 1, ARRAY['a'], ARRAY['integer']);
- worker_merge_files_into_table
----------------------------------------------------------------------
-
-(1 row)
-
+ERROR:  job schema does not exist
+DETAIL:  must be superuser to use public schema
 SELECT count(*) FROM pg_merge_job_0042.task_000001;
- count
----------------------------------------------------------------------
-    25
-(1 row)
-
+ERROR:  relation "pg_merge_job_0042.task_000001" does not exist
 DROP TABLE pg_merge_job_0042.task_000001; -- drop table so we can reuse the same files for more tests
+ERROR:  schema "pg_merge_job_0042" does not exist
 RESET ROLE;
 -- test that no other user can merge files and run query on the already fetched files
 SET ROLE usage_access;
@@ -775,7 +748,9 @@ SELECT worker_merge_files_and_run_query(42, 1,
     'CREATE TABLE task_000001_merge(merge_column_0 int)',
     'CREATE TABLE task_000001 (a) AS SELECT sum(merge_column_0) FROM task_000001_merge'
 );
-ERROR:  must be owner of schema pg_merge_job_0042
+WARNING:  Task file "task_000001.xxxx" does not have expected suffix ".18139"
+ERROR:  relation "task_000001" already exists
+CONTEXT:  SQL statement "CREATE TABLE task_000001 (a) AS SELECT sum(merge_column_0) FROM task_000001_merge"
 RESET ROLE;
 -- test that the super user is unable to read the contents of the partitioned files after
 -- trying to merge with run query
@@ -784,42 +759,28 @@ SELECT worker_merge_files_and_run_query(42, 1,
     'CREATE TABLE task_000001 (a) AS SELECT sum(merge_column_0) FROM task_000001_merge'
 );
 WARNING:  Task file "task_000001.xxxx" does not have expected suffix ".10"
- worker_merge_files_and_run_query
----------------------------------------------------------------------
-
-(1 row)
-
+ERROR:  relation "task_000001" already exists
+CONTEXT:  SQL statement "CREATE TABLE task_000001 (a) AS SELECT sum(merge_column_0) FROM task_000001_merge"
 SELECT count(*) FROM pg_merge_job_0042.task_000001_merge;
- count
----------------------------------------------------------------------
-     0
-(1 row)
-
+ERROR:  relation "pg_merge_job_0042.task_000001_merge" does not exist
 SELECT count(*) FROM pg_merge_job_0042.task_000001;
- count
----------------------------------------------------------------------
-     1
-(1 row)
-
+ERROR:  relation "pg_merge_job_0042.task_000001" does not exist
 DROP TABLE pg_merge_job_0042.task_000001, pg_merge_job_0042.task_000001_merge; -- drop table so we can reuse the same files for more tests
+ERROR:  schema "pg_merge_job_0042" does not exist
 -- test that the owner of the task can merge files and run query correctly
 SET ROLE full_access;
 SELECT worker_merge_files_and_run_query(42, 1,
     'CREATE TABLE task_000001_merge(merge_column_0 int)',
     'CREATE TABLE task_000001 (a) AS SELECT sum(merge_column_0) FROM task_000001_merge'
 );
- worker_merge_files_and_run_query
----------------------------------------------------------------------
-
-(1 row)
-
+ERROR:  relation "task_000001" already exists
+CONTEXT:  SQL statement "CREATE TABLE task_000001 (a) AS SELECT sum(merge_column_0) FROM task_000001_merge"
 -- test that owner of task cannot execute arbitrary sql
 SELECT worker_merge_files_and_run_query(42, 1,
     'CREATE TABLE task_000002_merge(merge_column_0 int)',
     'DROP USER usage_access'
 );
-ERROR:  permission denied to drop role
-CONTEXT:  SQL statement "DROP USER usage_access"
+ERROR:  relation "public.task_000001_merge" does not exist
 SELECT worker_merge_files_and_run_query(42, 1,
     'DROP USER usage_access',
     'CREATE TABLE task_000002 (a) AS SELECT sum(merge_column_0) FROM task_000002_merge'
@@ -827,27 +788,14 @@ SELECT worker_merge_files_and_run_query(42, 1,
 ERROR:  permission denied to drop role
 CONTEXT:  SQL statement "DROP USER usage_access"
 SELECT count(*) FROM pg_merge_job_0042.task_000001_merge;
- count
----------------------------------------------------------------------
-    25
-(1 row)
-
+ERROR:  relation "pg_merge_job_0042.task_000001_merge" does not exist
 SELECT count(*) FROM pg_merge_job_0042.task_000001;
- count
----------------------------------------------------------------------
-     1
-(1 row)
-
+ERROR:  relation "pg_merge_job_0042.task_000001" does not exist
 DROP TABLE pg_merge_job_0042.task_000001, pg_merge_job_0042.task_000001_merge; -- drop table so we can reuse the same files for more tests
+ERROR:  schema "pg_merge_job_0042" does not exist
 RESET ROLE;
 \c - - - :master_port
-SELECT run_command_on_workers($$SELECT task_tracker_cleanup_job(42);$$);
- run_command_on_workers
----------------------------------------------------------------------
- (localhost,57637,t,"")
- (localhost,57638,t,"")
-(2 rows)
-
+--SELECT run_command_on_workers($$SELECT task_tracker_cleanup_job(42);$$);
 DROP SCHEMA full_access_user_schema CASCADE;
 NOTICE:  drop cascades to 4 other objects
 DETAIL:  drop cascades to table full_access_user_schema.t1

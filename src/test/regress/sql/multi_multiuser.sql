@@ -126,7 +126,7 @@ RESET citus.task_executor_type;
 COPY "postgresql.conf" TO STDOUT WITH (format transmit);
 
 -- create a task that other users should not be able to inspect
-SELECT task_tracker_assign_task(1, 1, 'SELECT 1');
+--SELECT task_tracker_assign_task(1, 1, 'SELECT 1');
 
 -- check read permission
 SET ROLE read_access;
@@ -158,9 +158,9 @@ SELECT count(*) FROM test a JOIN test b ON (a.val = b.val) WHERE a.id = 1 AND b.
 COPY "postgresql.conf" TO STDOUT WITH (format transmit);
 
 -- should not be able to access tasks or jobs belonging to a different user
-SELECT task_tracker_task_status(1, 1);
-SELECT task_tracker_assign_task(1, 2, 'SELECT 1');
-SELECT task_tracker_cleanup_job(1);
+--SELECT task_tracker_task_status(1, 1);
+--SELECT task_tracker_assign_task(1, 2, 'SELECT 1');
+--SELECT task_tracker_cleanup_job(1);
 
 -- should not be allowed to take aggressive locks on table
 BEGIN;
@@ -230,7 +230,7 @@ RESET ROLE;
 SELECT create_distributed_table('my_table', 'id');
 SELECT result FROM run_command_on_workers($$SELECT tableowner FROM pg_tables WHERE tablename LIKE 'my_table_%' LIMIT 1$$);
 
-SELECT task_tracker_cleanup_job(1);
+--SELECT task_tracker_cleanup_job(1);
 
 -- table should be distributable by super user when it has data in there
 SET ROLE full_access;
@@ -440,7 +440,7 @@ SET ROLE full_access;
 -- use the side effect of this function to have a schema to use, otherwise only the super
 -- user could call worker_merge_files_into_table and store the results in public, which is
 -- not what we want
-SELECT task_tracker_assign_task(42, 1, 'SELECT 1');
+--SELECT task_tracker_assign_task(42, 1, 'SELECT 1');
 RESET ROLE;
 
 -- test that no other user can merge the downloaded file after the task is being tracked
@@ -503,7 +503,7 @@ RESET ROLE;
 
 \c - - - :master_port
 
-SELECT run_command_on_workers($$SELECT task_tracker_cleanup_job(42);$$);
+--SELECT run_command_on_workers($$SELECT task_tracker_cleanup_job(42);$$);
 
 DROP SCHEMA full_access_user_schema CASCADE;
 DROP TABLE
