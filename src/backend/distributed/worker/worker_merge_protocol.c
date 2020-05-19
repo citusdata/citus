@@ -54,6 +54,8 @@ static void CreateTaskTable(StringInfo schemaName, StringInfo relationName,
 							List *columnNameList, List *columnTypeList);
 static void CopyTaskFilesFromDirectory(StringInfo schemaName, StringInfo relationName,
 									   StringInfo sourceDirectoryName, Oid userId);
+static void
+CreateJobSchema(StringInfo schemaName, char *schemaOwner);
 
 
 /* exports for SQL callable functions */
@@ -86,6 +88,58 @@ worker_create_schema(PG_FUNCTION_ARGS)
 
 	PG_RETURN_VOID();
 }
+
+/*
+ * CreateJobSchema creates a job schema with the given schema name. Note that
+ * this function ensures that our pg_ prefixed schema names can be created.
+ * Further note that the created schema does not become visible to other
+ * processes until the transaction commits.
+ *
+ * If schemaOwner is NULL, then current user is used.
+ */
+static void
+CreateJobSchema(StringInfo schemaName, char *schemaOwner)
+{
+	const char *queryString = NULL;
+
+	Oid savedUserId = InvalidOid;
+	int savedSecurityContext = 0;
+	RoleSpec currentUserRole = { 0 };
+
+	/* allow schema names that start with pg_ */
+	bool oldAllowSystemTableMods = allowSystemTableMods;
+	allowSystemTableMods = true;
+
+	/* ensure we're allowed to create this schema */
+	GetUserIdAndSecContext(&savedUserId, &savedSecurityContext);
+	SetUserIdAndSecContext(CitusExtensionOwner(), SECURITY_LOCAL_USERID_CHANGE);
+
+	if (schemaOwner == NULL)
+	{
+		schemaOwner = GetUserNameFromId(savedUserId, false);
+	}
+
+	/* build a CREATE SCHEMA statement */
+	currentUserRole.type = T_RoleSpec;
+	currentUserRole.roletype = ROLESPEC_CSTRING;
+	currentUserRole.rolename = schemaOwner;
+	currentUserRole.location = -1;
+
+	CreateSchemaStmt *createSchemaStmt = makeNode(CreateSchemaStmt);
+	createSchemaStmt->schemaname = schemaName->data;
+	createSchemaStmt->schemaElts = NIL;
+
+	/* actually create schema with the current user as owner */
+	createSchemaStmt->authrole = &currentUserRole;
+	CreateSchemaCommand(createSchemaStmt, queryString, -1, -1);
+
+	CommandCounterIncrement();
+
+	/* and reset environment */
+	SetUserIdAndSecContext(savedUserId, savedSecurityContext);
+	allowSystemTableMods = oldAllowSystemTableMods;
+}
+
 
 
 /*

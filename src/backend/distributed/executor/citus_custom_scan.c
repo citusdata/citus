@@ -94,15 +94,6 @@ static CustomExecMethods AdaptiveExecutorCustomExecMethods = {
 	.ExplainCustomScan = CitusExplainScan
 };
 
-static CustomExecMethods TaskTrackerCustomExecMethods = {
-	.CustomName = "TaskTrackerScan",
-	.BeginCustomScan = CitusBeginScan,
-	.ExecCustomScan = TaskTrackerExecScan,
-	.EndCustomScan = CitusEndScan,
-	.ReScanCustomScan = CitusReScan,
-	.ExplainCustomScan = CitusExplainScan
-};
-
 static CustomExecMethods CoordinatorInsertSelectCustomExecMethods = {
 	.CustomName = "CoordinatorInsertSelectScan",
 	.BeginCustomScan = CitusBeginScan,
@@ -126,7 +117,6 @@ IsCitusCustomState(PlanState *planState)
 
 	CustomScanState *css = castNode(CustomScanState, planState);
 	if (css->methods == &AdaptiveExecutorCustomExecMethods ||
-		css->methods == &TaskTrackerCustomExecMethods ||
 		css->methods == &CoordinatorInsertSelectCustomExecMethods)
 	{
 		return true;

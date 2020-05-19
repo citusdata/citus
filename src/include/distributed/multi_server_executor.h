@@ -187,7 +187,4 @@ extern bool TaskExecutionFailed(TaskExecution *taskExecution);
 extern void AdjustStateForFailure(TaskExecution *taskExecution);
 extern int MaxMasterConnectionCount(void);
 
-
-extern TupleTableSlot * TaskTrackerExecScan(CustomScanState *node);
-
 #endif /* MULTI_SERVER_EXECUTOR_H */
