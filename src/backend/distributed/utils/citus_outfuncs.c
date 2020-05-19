@@ -561,8 +561,6 @@ OutTaskExecution(OUTFUNC_ARGS)
 	WRITE_UINT_FIELD(taskId);
 	WRITE_UINT_FIELD(nodeCount);
 
-	WRITE_ENUM_ARRAY(taskStatusArray, node->nodeCount);
-	WRITE_ENUM_ARRAY(transmitStatusArray, node->nodeCount);
 	WRITE_INT_ARRAY(connectionIdArray, node->nodeCount);
 	WRITE_INT_ARRAY(fileDescriptorArray, node->nodeCount);
 

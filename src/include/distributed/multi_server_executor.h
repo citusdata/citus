@@ -18,23 +18,11 @@
 #include "distributed/task_tracker.h"
 #include "distributed/worker_manager.h"
 
-
-#define MAX_TASK_EXECUTION_FAILURES 3 /* allowed failure count for one task */
-#define MAX_TRACKER_FAILURE_COUNT 3   /* allowed failure count for one tracker */
-#define RESERVED_FD_COUNT 64           /* file descriptors unavailable to executor */
-
 /* copy out query results */
 #define EXECUTE_SQL_TASK_TO_FILE_BINARY \
 	"SELECT worker_execute_sql_task("UINT64_FORMAT ", %u, %s, true)"
 #define EXECUTE_SQL_TASK_TO_FILE_TEXT \
 	"SELECT worker_execute_sql_task("UINT64_FORMAT ", %u, %s, false)"
-
-/* Task tracker executor related defines */
-#define TASK_ASSIGNMENT_QUERY "SELECT task_tracker_assign_task \
- ("UINT64_FORMAT ", %u, %s);"
-#define TASK_STATUS_QUERY "SELECT task_tracker_task_status("UINT64_FORMAT ", %u);"
-#define JOB_CLEANUP_QUERY "SELECT task_tracker_cleanup_job("UINT64_FORMAT ")"
-#define JOB_CLEANUP_TASK_ID INT_MAX
 
 /* Adaptive executor repartioning related defines */
 #define WORKER_CREATE_SCHEMA_QUERY "SELECT worker_create_schema (" UINT64_FORMAT ", %s);"
@@ -42,44 +30,6 @@
 	UINT64_FORMAT \
 	");"
 
-
-/* Enumeration to track one task's execution status */
-typedef enum
-{
-	/* used for task tracker executor */
-	EXEC_TASK_INVALID_FIRST = 0,
-	EXEC_TASK_DONE = 1,
-	EXEC_TASK_UNASSIGNED = 2,
-	EXEC_TASK_QUEUED = 3,
-	EXEC_TASK_TRACKER_RETRY = 4,
-	EXEC_TASK_TRACKER_FAILED = 5,
-	EXEC_SOURCE_TASK_TRACKER_RETRY = 6,
-	EXEC_SOURCE_TASK_TRACKER_FAILED = 7,
-} TaskExecStatus;
-
-
-/* Enumeration to track file transmits to the master node */
-typedef enum
-{
-	EXEC_TRANSMIT_INVALID_FIRST = 0,
-	EXEC_TRANSMIT_UNASSIGNED = 1,
-	EXEC_TRANSMIT_QUEUED = 2,
-	EXEC_TRANSMIT_COPYING = 3,
-	EXEC_TRANSMIT_TRACKER_RETRY = 4,
-	EXEC_TRANSMIT_TRACKER_FAILED = 5,
-	EXEC_TRANSMIT_DONE = 6
-} TransmitExecStatus;
-
-
-/* Enumeration to track a task tracker's connection status */
-typedef enum
-{
-	TRACKER_STATUS_INVALID_FIRST = 0,
-	TRACKER_CONNECT_START = 1,
-	TRACKER_CONNECT_POLL = 2,
-	TRACKER_CONNECTED = 3,
-	TRACKER_CONNECTION_FAILED = 4
-} TrackerStatus;
 
 
 /* Enumeration that represents distributed executor types */
@@ -114,8 +64,6 @@ struct TaskExecution
 	uint64 jobId;
 	uint32 taskId;
 
-	TaskExecStatus *taskStatusArray;
-	TransmitExecStatus *transmitStatusArray;
 	int32 *connectionIdArray;
 	int32 *fileDescriptorArray;
 	uint32 nodeCount;
@@ -134,18 +82,10 @@ extern bool BinaryMasterCopyFormat;
 extern int MultiTaskQueryLogLevel;
 
 
-/* Function declarations for distributed execution */
-extern void MultiTaskTrackerExecute(Job *job);
-
 /* Function declarations common to more than one executor */
 extern MultiExecutorType JobExecutorType(DistributedPlan *distributedPlan);
 extern void RemoveJobDirectory(uint64 jobId);
-extern TaskExecution * InitTaskExecution(Task *task, TaskExecStatus initialStatus);
 extern bool CheckIfSizeLimitIsExceeded(DistributedExecutionStats *executionStats);
-extern void CleanupTaskExecution(TaskExecution *taskExecution);
 extern void ErrorSizeLimitIsExceeded(void);
-extern bool TaskExecutionFailed(TaskExecution *taskExecution);
-extern void AdjustStateForFailure(TaskExecution *taskExecution);
-extern int MaxMasterConnectionCount(void);
 
 #endif /* MULTI_SERVER_EXECUTOR_H */

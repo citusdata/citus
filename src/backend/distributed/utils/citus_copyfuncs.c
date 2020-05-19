@@ -350,8 +350,6 @@ CopyNodeTaskExecution(COPYFUNC_ARGS)
 	COPY_SCALAR_FIELD(taskId);
 	COPY_SCALAR_FIELD(nodeCount);
 
-	COPY_SCALAR_ARRAY(taskStatusArray, TaskExecStatus, from->nodeCount);
-	COPY_SCALAR_ARRAY(transmitStatusArray, TransmitExecStatus, from->nodeCount);
 	COPY_SCALAR_ARRAY(connectionIdArray, int32, from->nodeCount);
 	COPY_SCALAR_ARRAY(fileDescriptorArray, int32, from->nodeCount);
 
