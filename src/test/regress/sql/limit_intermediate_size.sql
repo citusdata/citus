@@ -100,7 +100,7 @@ WITH cte AS (
 	SELECT * FROM cte2, cte3 WHERE cte2.user_id = cte3.user_id AND cte2.user_id = 1
 	AND EXISTS (select * from cte2, cte3)
 )
-SELECT * FROM cte WHERE EXISTS (select * from cte);
+SELECT count(*) FROM cte WHERE EXISTS (select * from cte);
 
 
 SET citus.max_intermediate_result_size TO 3;
@@ -115,7 +115,7 @@ WITH cte AS (
 	)
 	SELECT * FROM cte2, cte3 WHERE cte2.value_1 IN (SELECT value_2 FROM cte3)
 )
-SELECT * FROM cte;
+SELECT count(*) FROM cte;
 
 
 -- this will fail in real_time_executor

@@ -38,9 +38,20 @@ FROM
 ORDER BY
 	1,2
 LIMIT 10;
-ERROR:  the intermediate result size exceeds citus.max_intermediate_result_size (currently 9 kB)
-DETAIL:  Citus restricts the size of intermediate results of complex subqueries and CTEs to avoid accidentally pulling large result sets into once place.
-HINT:  To run the current query, set citus.max_intermediate_result_size to a higher value or -1 to disable.
+ user_id | value_2
+---------------------------------------------------------------------
+       1 |       0
+       1 |       0
+       1 |       0
+       1 |       0
+       1 |       0
+       1 |       0
+       1 |       0
+       1 |       0
+       1 |       0
+       1 |       0
+(10 rows)
+
 -- router queries should be able to get limitted too
 SET citus.max_intermediate_result_size TO 2;
 -- this should pass, since we fetch small portions in each subplan
@@ -105,10 +116,12 @@ WITH cte AS (
 	SELECT * FROM cte2, cte3 WHERE cte2.user_id = cte3.user_id AND cte2.user_id = 1
 	AND EXISTS (select * from cte2, cte3)
 )
-SELECT * FROM cte WHERE EXISTS (select * from cte);
-ERROR:  the intermediate result size exceeds citus.max_intermediate_result_size (currently 4 kB)
-DETAIL:  Citus restricts the size of intermediate results of complex subqueries and CTEs to avoid accidentally pulling large result sets into once place.
-HINT:  To run the current query, set citus.max_intermediate_result_size to a higher value or -1 to disable.
+SELECT count(*) FROM cte WHERE EXISTS (select * from cte);
+ count
+---------------------------------------------------------------------
+   105
+(1 row)
+
 SET citus.max_intermediate_result_size TO 3;
 -- this should fail since the cte-subplan exceeds the limit even if the
 -- cte2 and cte3 does not
@@ -121,10 +134,12 @@ WITH cte AS (
 	)
 	SELECT * FROM cte2, cte3 WHERE cte2.value_1 IN (SELECT value_2 FROM cte3)
 )
-SELECT * FROM cte;
-ERROR:  the intermediate result size exceeds citus.max_intermediate_result_size (currently 3 kB)
-DETAIL:  Citus restricts the size of intermediate results of complex subqueries and CTEs to avoid accidentally pulling large result sets into once place.
-HINT:  To run the current query, set citus.max_intermediate_result_size to a higher value or -1 to disable.
+SELECT count(*) FROM cte;
+ count
+---------------------------------------------------------------------
+  1824
+(1 row)
+
 -- this will fail in real_time_executor
 SET citus.max_intermediate_result_size TO 2;
 WITH cte AS (
