@@ -17,7 +17,6 @@
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_server_executor.h"
-#include "distributed/multi_task_tracker_executor.h"
 #include "distributed/transaction_management.h"
 #include "distributed/transmit.h"
 #include "distributed/worker_manager.h"

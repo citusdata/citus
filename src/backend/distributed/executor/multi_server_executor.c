@@ -36,6 +36,8 @@ int TaskExecutorType = MULTI_EXECUTOR_ADAPTIVE; /* distributed executor type */
 bool BinaryMasterCopyFormat = false; /* copy data from workers in binary format */
 bool EnableRepartitionJoins = false;
 
+int MaxAssignTaskBatchSize = 64; /* maximum number of tasks to assign per round */
+
 
 static bool HasReplicatedDistributedTable(List *relationOids);
 
