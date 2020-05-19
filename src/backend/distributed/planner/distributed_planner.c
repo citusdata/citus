@@ -1298,12 +1298,6 @@ FinalizePlan(PlannedStmt *localPlan, DistributedPlan *distributedPlan)
 			break;
 		}
 
-		case MULTI_EXECUTOR_TASK_TRACKER:
-		{
-			customScan->methods = &TaskTrackerCustomScanMethods;
-			break;
-		}
-
 		case MULTI_EXECUTOR_COORDINATOR_INSERT_SELECT:
 		{
 			customScan->methods = &CoordinatorInsertSelectCustomScanMethods;

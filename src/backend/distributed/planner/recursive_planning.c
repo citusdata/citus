@@ -916,15 +916,6 @@ ShouldRecursivelyPlanSubquery(Query *subquery, RecursivePlanningContext *context
 		 */
 		return false;
 	}
-	else if (TaskExecutorType == MULTI_EXECUTOR_TASK_TRACKER &&
-			 SingleRelationRepartitionSubquery(subquery))
-	{
-		/*
-		 * Citus can plan this and execute via repartitioning. Thus,
-		 * no need to recursively plan.
-		 */
-		return false;
-	}
 
 	return true;
 }
