@@ -24,13 +24,13 @@ CREATE TABLE lineitem_hash (
 	l_comment varchar(44) not null,
 	PRIMARY KEY(l_orderkey, l_linenumber) );
 SELECT create_distributed_table('lineitem_hash', 'l_orderkey', 'hash');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
-\copy lineitem_hash FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
-\copy lineitem_hash FROM '@abs_srcdir@/data/lineitem.2.data' with delimiter '|'
+\copy lineitem_hash FROM '/home/talha/citus/src/test/regress/data/lineitem.1.data' with delimiter '|'
+\copy lineitem_hash FROM '/home/talha/citus/src/test/regress/data/lineitem.2.data' with delimiter '|'
 ANALYZE lineitem_hash;
 SET citus.task_executor_type to "task-tracker";
 -- count(distinct) is supported on top level query if there
@@ -41,8 +41,8 @@ SELECT
 	GROUP BY l_orderkey
 	ORDER BY 2 DESC, 1 DESC
 	LIMIT 10;
- l_orderkey | count 
-------------+-------
+ l_orderkey | count
+---------------------------------------------------------------------
       14885 |     7
       14884 |     7
       14821 |     7
@@ -62,19 +62,19 @@ SELECT
 	GROUP BY l_orderkey
 	ORDER BY 2 DESC, 1 DESC
 	LIMIT 10;
-                                                                                                                           QUERY PLAN                                                                                                                           
-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                                                                           QUERY PLAN
+---------------------------------------------------------------------
  Limit
    Output: remote_scan.l_orderkey, remote_scan.count
    ->  Sort
          Output: remote_scan.l_orderkey, remote_scan.count
          Sort Key: remote_scan.count DESC, remote_scan.l_orderkey DESC
-         ->  Custom Scan (Citus Task-Tracker)
+         ->  Custom Scan (Citus Adaptive)
                Output: remote_scan.l_orderkey, remote_scan.count
                Task Count: 8
                Tasks Shown: One of 8
                ->  Task
-                     Node: host=localhost port=57637 dbname=regression
+                     Node: host=localhost port=xxxxx dbname=regression
                      ->  Limit
                            Output: l_orderkey, (count(DISTINCT l_partkey))
                            ->  Sort
@@ -93,8 +93,8 @@ SELECT
 	FROM lineitem_hash
 	ORDER BY 1 DESC
 	LIMIT 10;
- count 
--------
+ count
+---------------------------------------------------------------------
  11661
 (1 row)
 
@@ -104,8 +104,8 @@ SELECT
 	FROM lineitem_hash
 	ORDER BY 1 DESC
 	LIMIT 10;
-                                                                                                                        QUERY PLAN                                                                                                                        
-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                                                                        QUERY PLAN
+---------------------------------------------------------------------
  Limit
    Output: (count(DISTINCT remote_scan.count))
    ->  Sort
@@ -113,12 +113,12 @@ SELECT
          Sort Key: (count(DISTINCT remote_scan.count)) DESC
          ->  Aggregate
                Output: count(DISTINCT remote_scan.count)
-               ->  Custom Scan (Citus Task-Tracker)
+               ->  Custom Scan (Citus Adaptive)
                      Output: remote_scan.count
                      Task Count: 8
                      Tasks Shown: One of 8
                      ->  Task
-                           Node: host=localhost port=57637 dbname=regression
+                           Node: host=localhost port=xxxxx dbname=regression
                            ->  HashAggregate
                                  Output: l_partkey
                                  Group Key: lineitem_hash.l_partkey
@@ -132,8 +132,8 @@ SELECT
 	GROUP BY l_shipmode
 	ORDER BY 2 DESC, 1 DESC
 	LIMIT 10;
- l_shipmode | count 
-------------+-------
+ l_shipmode | count
+---------------------------------------------------------------------
  TRUCK      |  1757
  MAIL       |  1730
  AIR        |  1702
@@ -150,8 +150,8 @@ SELECT
 	GROUP BY l_shipmode
 	ORDER BY 2 DESC, 1 DESC
 	LIMIT 10;
-                                                                                                                           QUERY PLAN                                                                                                                           
-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                                                                           QUERY PLAN
+---------------------------------------------------------------------
  Limit
    Output: remote_scan.l_shipmode, (count(DISTINCT remote_scan.count))
    ->  Sort
@@ -163,12 +163,12 @@ SELECT
                ->  Sort
                      Output: remote_scan.l_shipmode, remote_scan.count
                      Sort Key: remote_scan.l_shipmode DESC
-                     ->  Custom Scan (Citus Task-Tracker)
+                     ->  Custom Scan (Citus Adaptive)
                            Output: remote_scan.l_shipmode, remote_scan.count
                            Task Count: 8
                            Tasks Shown: One of 8
                            ->  Task
-                                 Node: host=localhost port=57637 dbname=regression
+                                 Node: host=localhost port=xxxxx dbname=regression
                                  ->  HashAggregate
                                        Output: l_shipmode, l_partkey
                                        Group Key: lineitem_hash.l_shipmode, lineitem_hash.l_partkey
@@ -183,8 +183,8 @@ SELECT
 	GROUP BY l_orderkey
 	ORDER BY 3 DESC, 2 DESC, 1
 	LIMIT 10;
- l_orderkey | count | count 
-------------+-------+-------
+ l_orderkey | count | count
+---------------------------------------------------------------------
         226 |     7 |     7
        1316 |     7 |     7
        1477 |     7 |     7
@@ -204,19 +204,19 @@ SELECT
 	GROUP BY l_orderkey
 	ORDER BY 3 DESC, 2 DESC, 1
 	LIMIT 10;
-                                                                                                                           QUERY PLAN                                                                                                                           
-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                                                                           QUERY PLAN
+---------------------------------------------------------------------
  Limit
    Output: remote_scan.l_orderkey, remote_scan.count, remote_scan.count_1
    ->  Sort
          Output: remote_scan.l_orderkey, remote_scan.count, remote_scan.count_1
          Sort Key: remote_scan.count_1 DESC, remote_scan.count DESC, remote_scan.l_orderkey
-         ->  Custom Scan (Citus Task-Tracker)
+         ->  Custom Scan (Citus Adaptive)
                Output: remote_scan.l_orderkey, remote_scan.count, remote_scan.count_1
                Task Count: 8
                Tasks Shown: One of 8
                ->  Task
-                     Node: host=localhost port=57637 dbname=regression
+                     Node: host=localhost port=xxxxx dbname=regression
                      ->  Limit
                            Output: l_orderkey, (count(DISTINCT l_partkey)), (count(DISTINCT l_shipmode))
                            ->  Sort
@@ -233,8 +233,8 @@ SELECT
 SELECT
 	count(distinct l_orderkey), count(distinct l_partkey), count(distinct l_shipmode)
 	FROM lineitem_hash;
- count | count | count 
--------+-------+-------
+ count | count | count
+---------------------------------------------------------------------
   2985 | 11661 |     7
 (1 row)
 
@@ -242,16 +242,16 @@ EXPLAIN (COSTS false, VERBOSE true)
 SELECT
 	count(distinct l_orderkey), count(distinct l_partkey), count(distinct l_shipmode)
 	FROM lineitem_hash;
-                                                                                                                  QUERY PLAN                                                                                                                  
-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                                                                  QUERY PLAN
+---------------------------------------------------------------------
  Aggregate
    Output: count(DISTINCT remote_scan.count), count(DISTINCT remote_scan.count_1), count(DISTINCT remote_scan.count_2)
-   ->  Custom Scan (Citus Task-Tracker)
+   ->  Custom Scan (Citus Adaptive)
          Output: remote_scan.count, remote_scan.count_1, remote_scan.count_2
          Task Count: 8
          Tasks Shown: One of 8
          ->  Task
-               Node: host=localhost port=57637 dbname=regression
+               Node: host=localhost port=xxxxx dbname=regression
                ->  HashAggregate
                      Output: l_orderkey, l_partkey, l_shipmode
                      Group Key: lineitem_hash.l_orderkey, lineitem_hash.l_partkey, lineitem_hash.l_shipmode
@@ -265,8 +265,8 @@ SELECT
 	count(distinct l_partkey), count(l_partkey),
 	count(distinct l_shipmode), count(l_shipmode)
 	FROM lineitem_hash;
- count | count | count | count | count | count 
--------+-------+-------+-------+-------+-------
+ count | count | count | count | count | count
+---------------------------------------------------------------------
   2985 | 12000 | 11661 | 12000 |     7 | 12000
 (1 row)
 
@@ -276,8 +276,8 @@ SELECT
 	FROM lineitem_hash
 	GROUP BY l_shipmode
 	ORDER BY 1, 2 DESC, 3 DESC;
- l_shipmode | count | count 
-------------+-------+-------
+ l_shipmode | count | count
+---------------------------------------------------------------------
  AIR        |  1702 |  1327
  FOB        |  1700 |  1276
  MAIL       |  1730 |  1299
@@ -295,8 +295,8 @@ SELECT
 	GROUP BY l_shipmode
 	HAVING count(distinct l_orderkey) > 1300
 	ORDER BY 1, 2 DESC;
- l_shipmode | count | count 
-------------+-------+-------
+ l_shipmode | count | count
+---------------------------------------------------------------------
  AIR        |  1702 |  1327
  TRUCK      |  1757 |  1333
 (2 rows)
@@ -308,8 +308,8 @@ SELECT
 	GROUP BY l_shipmode
 	HAVING count(distinct l_orderkey) > 1300
 	ORDER BY 1, 2 DESC;
- l_shipmode | count 
-------------+-------
+ l_shipmode | count
+---------------------------------------------------------------------
  AIR        |  1702
  TRUCK      |  1757
 (2 rows)
@@ -322,8 +322,8 @@ SELECT
 	GROUP BY l_shipmode
 	HAVING count(distinct l_suppkey) > 1550
 	ORDER BY 1, 2 DESC;
- l_shipmode | count | count 
-------------+-------+-------
+ l_shipmode | count | count
+---------------------------------------------------------------------
  AIR        |  1702 |  1564
  FOB        |  1700 |  1571
  MAIL       |  1730 |  1573
@@ -340,8 +340,8 @@ SELECT
 	GROUP BY l_shipmode
 	HAVING count(distinct l_suppkey) > 1550
 	ORDER BY 1, 2 DESC;
- l_shipmode | count 
-------------+-------
+ l_shipmode | count
+---------------------------------------------------------------------
  AIR        |  1702
  FOB        |  1700
  MAIL       |  1730
@@ -358,8 +358,8 @@ SELECT
 	GROUP BY l_shipmode
 	HAVING count(distinct l_suppkey) > 1550
 	ORDER BY 1, 2 DESC;
-                                                                                                                        QUERY PLAN                                                                                                                        
-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                                                                        QUERY PLAN
+---------------------------------------------------------------------
  Sort
    Output: remote_scan.l_shipmode, (count(DISTINCT remote_scan.count))
    Sort Key: remote_scan.l_shipmode, (count(DISTINCT remote_scan.count)) DESC
@@ -370,12 +370,12 @@ SELECT
          ->  Sort
                Output: remote_scan.l_shipmode, remote_scan.count, remote_scan.worker_column_3
                Sort Key: remote_scan.l_shipmode
-               ->  Custom Scan (Citus Task-Tracker)
+               ->  Custom Scan (Citus Adaptive)
                      Output: remote_scan.l_shipmode, remote_scan.count, remote_scan.worker_column_3
                      Task Count: 8
                      Tasks Shown: One of 8
                      ->  Task
-                           Node: host=localhost port=57637 dbname=regression
+                           Node: host=localhost port=xxxxx dbname=regression
                            ->  HashAggregate
                                  Output: l_shipmode, l_partkey, l_suppkey
                                  Group Key: lineitem_hash.l_shipmode, lineitem_hash.l_partkey, lineitem_hash.l_suppkey
@@ -392,8 +392,8 @@ SELECT *
 			GROUP BY l_orderkey) sub
 	ORDER BY 2 DESC, 1 DESC
 	LIMIT 10;
- l_orderkey | count 
-------------+-------
+ l_orderkey | count
+---------------------------------------------------------------------
       14885 |     7
       14884 |     7
       14821 |     7
@@ -414,8 +414,8 @@ SELECT *
 			GROUP BY l_partkey) sub
 	ORDER BY 2 DESC, 1 DESC
 	LIMIT 10;
- l_partkey | count 
------------+-------
+ l_partkey | count
+---------------------------------------------------------------------
     199146 |     3
     188804 |     3
     177771 |     3
@@ -437,21 +437,41 @@ SELECT *
 			GROUP BY l_partkey) sub
 	ORDER BY 2 DESC, 1 DESC
 	LIMIT 10;
-                               QUERY PLAN                                
--------------------------------------------------------------------------
- Limit
+                                                   QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive)
    Output: remote_scan.l_partkey, remote_scan.count
-   ->  Sort
-         Output: remote_scan.l_partkey, remote_scan.count
-         Sort Key: remote_scan.count DESC, remote_scan.l_partkey DESC
-         ->  Custom Scan (Citus Task-Tracker)
-               Output: remote_scan.l_partkey, remote_scan.count
-               Task Count: 4
-               Tasks Shown: None, not supported for re-partition queries
-               ->  MapMergeJob
-                     Map Task Count: 8
-                     Merge Task Count: 4
-(12 rows)
+   ->  Distributed Subplan XXX_1
+         ->  HashAggregate
+               Output: remote_scan.l_partkey, COALESCE((pg_catalog.sum(remote_scan.count))::bigint, '0'::bigint)
+               Group Key: remote_scan.l_partkey
+               ->  Custom Scan (Citus Adaptive)
+                     Output: remote_scan.l_partkey, remote_scan.count
+                     Task Count: 8
+                     Tasks Shown: One of 8
+                     ->  Task
+                           Node: host=localhost port=xxxxx dbname=regression
+                           ->  GroupAggregate
+                                 Output: l_partkey, count(DISTINCT l_orderkey)
+                                 Group Key: lineitem_hash.l_partkey
+                                 ->  Sort
+                                       Output: l_partkey, l_orderkey
+                                       Sort Key: lineitem_hash.l_partkey
+                                       ->  Seq Scan on public.lineitem_hash_240000 lineitem_hash
+                                             Output: l_partkey, l_orderkey
+   Task Count: 1
+   Tasks Shown: All
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  Limit
+               Output: intermediate_result.l_partkey, intermediate_result.count
+               ->  Sort
+                     Output: intermediate_result.l_partkey, intermediate_result.count
+                     Sort Key: intermediate_result.count DESC, intermediate_result.l_partkey DESC
+                     ->  Function Scan on pg_catalog.read_intermediate_result intermediate_result
+                           Output: intermediate_result.l_partkey, intermediate_result.count
+                           Function Call: read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format)
+(32 rows)
 
 -- count distinct with filters
 SELECT
@@ -462,8 +482,8 @@ SELECT
 	GROUP BY l_orderkey
 	ORDER BY 2 DESC, 3 DESC, 1
 	LIMIT 10;
- l_orderkey | count | count 
-------------+-------+-------
+ l_orderkey | count | count
+---------------------------------------------------------------------
        4964 |     4 |     7
       12005 |     4 |     7
        5409 |     4 |     6
@@ -485,19 +505,19 @@ SELECT
 	GROUP BY l_orderkey
 	ORDER BY 2 DESC, 3 DESC, 1
 	LIMIT 10;
-                                                                                                                           QUERY PLAN                                                                                                                           
-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                                                                           QUERY PLAN
+---------------------------------------------------------------------
  Limit
    Output: remote_scan.l_orderkey, remote_scan.count, remote_scan.count_1
    ->  Sort
          Output: remote_scan.l_orderkey, remote_scan.count, remote_scan.count_1
          Sort Key: remote_scan.count DESC, remote_scan.count_1 DESC, remote_scan.l_orderkey
-         ->  Custom Scan (Citus Task-Tracker)
+         ->  Custom Scan (Citus Adaptive)
                Output: remote_scan.l_orderkey, remote_scan.count, remote_scan.count_1
                Task Count: 8
                Tasks Shown: One of 8
                ->  Task
-                     Node: host=localhost port=57637 dbname=regression
+                     Node: host=localhost port=xxxxx dbname=regression
                      ->  Limit
                            Output: l_orderkey, (count(DISTINCT l_suppkey) FILTER (WHERE (l_shipmode = 'AIR'::bpchar))), (count(DISTINCT l_suppkey))
                            ->  Sort
@@ -517,8 +537,8 @@ SELECT
 	GROUP BY l_suppkey
 	ORDER BY 2 DESC, 1 DESC
 	LIMIT 10;
- l_suppkey | count 
------------+-------
+ l_suppkey | count
+---------------------------------------------------------------------
       7680 |     4
       7703 |     3
       7542 |     3
@@ -539,8 +559,8 @@ SELECT
 	GROUP BY l_suppkey
 	ORDER BY 2 DESC, 1 DESC
 	LIMIT 10;
-                                                                                                                           QUERY PLAN                                                                                                                           
-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                                                                           QUERY PLAN
+---------------------------------------------------------------------
  Limit
    Output: remote_scan.l_suppkey, (count(DISTINCT remote_scan.count) FILTER (WHERE (remote_scan.count_1 = 'AIR'::bpchar)))
    ->  Sort
@@ -552,12 +572,12 @@ SELECT
                ->  Sort
                      Output: remote_scan.l_suppkey, remote_scan.count, remote_scan.count_1
                      Sort Key: remote_scan.l_suppkey DESC
-                     ->  Custom Scan (Citus Task-Tracker)
+                     ->  Custom Scan (Citus Adaptive)
                            Output: remote_scan.l_suppkey, remote_scan.count, remote_scan.count_1
                            Task Count: 8
                            Tasks Shown: One of 8
                            ->  Task
-                                 Node: host=localhost port=57637 dbname=regression
+                                 Node: host=localhost port=xxxxx dbname=regression
                                  ->  HashAggregate
                                        Output: l_suppkey, l_partkey, l_shipmode
                                        Group Key: lineitem_hash.l_suppkey, lineitem_hash.l_partkey, lineitem_hash.l_shipmode
@@ -569,8 +589,8 @@ SELECT
 SELECT
 	count(DISTINCT l_orderkey) FILTER (WHERE l_shipmode = 'AIR')
 	FROM lineitem_hash;
- count 
--------
+ count
+---------------------------------------------------------------------
   1327
 (1 row)
 
@@ -578,8 +598,8 @@ SELECT
 SELECT
 	count(DISTINCT l_partkey) FILTER (WHERE l_shipmode = 'AIR')
 	FROM lineitem_hash;
- count 
--------
+ count
+---------------------------------------------------------------------
   1702
 (1 row)
 
@@ -588,8 +608,8 @@ SELECT
 	count(DISTINCT l_partkey),
 	count(DISTINCT l_shipdate)
 	FROM lineitem_hash;
- count | count | count 
--------+-------+-------
+ count | count | count
+---------------------------------------------------------------------
   1702 | 11661 |  2470
 (1 row)
 
@@ -602,8 +622,8 @@ SELECT *
 			GROUP BY l_orderkey) sub
 	ORDER BY 2 DESC, 1 DESC
 	LIMIT 10;
- l_orderkey | count 
-------------+-------
+ l_orderkey | count
+---------------------------------------------------------------------
       14885 |     7
       14884 |     7
       14821 |     7
@@ -625,8 +645,8 @@ SELECT *
 			GROUP BY l_orderkey) sub
 	ORDER BY 2 DESC, 1 DESC
 	LIMIT 10;
- l_orderkey | count 
-------------+-------
+ l_orderkey | count
+---------------------------------------------------------------------
       12005 |     4
        5409 |     4
        4964 |     4
@@ -650,8 +670,8 @@ SELECT *
 	WHERE count > 0
 	ORDER BY 2 DESC, 1 DESC
 	LIMIT 10;
- l_orderkey | count 
-------------+-------
+ l_orderkey | count
+---------------------------------------------------------------------
       12005 |     4
        5409 |     4
        4964 |     4
@@ -674,8 +694,8 @@ SELECT *
 	WHERE count > 0
 	ORDER BY 2 DESC, 1 DESC
 	LIMIT 10;
- l_orderkey | count 
-------------+-------
+ l_orderkey | count
+---------------------------------------------------------------------
       14275 |     7
       14181 |     7
       13605 |     7
@@ -721,8 +741,8 @@ SELECT *
 			GROUP BY l_orderkey) sub
 	ORDER BY 2 DESC, 1 DESC
 	LIMIT 0;
- l_orderkey | count 
-------------+-------
+ l_orderkey | count
+---------------------------------------------------------------------
 (0 rows)
 
 -- multiple nested subquery
@@ -755,8 +775,8 @@ SELECT
 		total
 	ORDER BY
 		total_avg_count DESC;
- total |  total_avg_count   
--------+--------------------
+ total |  total_avg_count
+---------------------------------------------------------------------
      1 | 3.6000000000000000
      6 | 2.8333333333333333
     10 | 2.6000000000000000
@@ -787,8 +807,8 @@ SELECT *
 	ORDER BY
 		1 DESC, 2 DESC
 	LIMIT 10;
- count | l_shipdate 
--------+------------
+ count | l_shipdate
+---------------------------------------------------------------------
     14 | 07-30-1997
     13 | 05-26-1998
     13 | 08-08-1997
@@ -815,8 +835,8 @@ SELECT *
 	ORDER BY
 		2 DESC, 1 DESC
 	LIMIT 10;
- l_quantity | count 
-------------+-------
+ l_quantity | count
+---------------------------------------------------------------------
       48.00 |    13
       47.00 |    13
       37.00 |    13
@@ -847,15 +867,15 @@ SELECT *
 	ORDER BY
 		1 DESC, 2 DESC
 	LIMIT 10;
-           avg           | l_shipmode 
--------------------------+------------
- 44.82904609027336300064 | MAIL      
- 44.80704536679536679537 | SHIP      
- 44.68891732736572890026 | AIR       
- 44.34106724470134874759 | REG AIR   
- 43.12739987269255251432 | FOB       
- 43.07299253636938646426 | RAIL      
- 40.50298377916903813318 | TRUCK     
+           avg           | l_shipmode
+---------------------------------------------------------------------
+ 44.82904609027336300064 | MAIL
+ 44.80704536679536679537 | SHIP
+ 44.68891732736572890026 | AIR
+ 44.34106724470134874759 | REG AIR
+ 43.12739987269255251432 | FOB
+ 43.07299253636938646426 | RAIL
+ 40.50298377916903813318 | TRUCK
 (7 rows)
 
 -- count DISTINCT CASE WHEN expression
@@ -873,8 +893,8 @@ SELECT *
 			GROUP BY  l_shipdate) sub
 	ORDER BY 1 DESC
 	LIMIT 10;
- avg 
------
+ avg
+---------------------------------------------------------------------
    7
    6
    6
@@ -900,8 +920,8 @@ SELECT *
 	ORDER BY
 		2 DESC,1 DESC
 	LIMIT 10;
- l_shipmode | count 
-------------+-------
+ l_shipmode | count
+---------------------------------------------------------------------
  TRUCK      |  1689
  MAIL       |  1683
  FOB        |  1655
@@ -922,8 +942,8 @@ SELECT
 	GROUP BY 1
 	ORDER BY 1 DESC
 	LIMIT 5;
- l_orderkey | count | count 
-------------+-------+-------
+ l_orderkey | count | count
+---------------------------------------------------------------------
       14947 |     2 |     1
       14946 |     2 |     1
       14945 |     6 |     1
@@ -944,8 +964,8 @@ FROM
 GROUP BY 1
 ORDER BY 1 DESC
 LIMIT 5;
- user_id | count | count | count 
----------+-------+-------+-------
+ user_id | count | count | count
+---------------------------------------------------------------------
        6 |    11 |     1 |     1
        5 |    27 |     1 |     1
        4 |    24 |     1 |     1
@@ -960,9 +980,9 @@ CREATE TYPE test_item AS
 );
 CREATE TABLE test_count_distinct_array (key int, value int ,  value_arr test_item[]);
 SELECT create_distributed_table('test_count_distinct_array', 'key');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 INSERT INTO test_count_distinct_array SELECT i, i, ARRAY[(i,i)::test_item] FROM generate_Series(0, 1000) i;
@@ -978,8 +998,8 @@ FROM
 GROUP BY 1
 ORDER BY 1 DESC
 LIMIT 5;
- key  | count | count | count 
-------+-------+-------+-------
+ key  | count | count | count
+---------------------------------------------------------------------
  1000 |     1 |     1 |     1
   999 |     1 |     1 |     1
   998 |     1 |     1 |     1
@@ -999,7 +1019,7 @@ SELECT *
 	ORDER BY 2 DESC, 1 DESC
 	LIMIT 10;
 ERROR:  cannot compute aggregate (distinct)
-DETAIL:  Only count(distinct) aggregate is supported in subqueries
+DETAIL:  table partitioning is unsuitable for aggregate (distinct)
 SELECT *
 	FROM (
 		SELECT
@@ -1009,7 +1029,7 @@ SELECT *
 	ORDER BY 2 DESC, 1 DESC
 	LIMIT 10;
 ERROR:  cannot compute aggregate (distinct)
-DETAIL:  Only count(distinct) aggregate is supported in subqueries
+DETAIL:  table partitioning is unsuitable for aggregate (distinct)
 -- whole row references, oid, and ctid are not supported in count distinct
 -- test table does not have oid or ctid enabled, so tests for them are skipped
 SELECT *
@@ -1049,8 +1069,8 @@ SELECT *
    WHERE year = 1995
    ORDER BY 2 DESC, 1
    LIMIT 10;
- l_shipdate | distinct_part | year 
-------------+---------------+------
+ l_shipdate | distinct_part | year
+---------------------------------------------------------------------
  11-29-1995 |             5 | 1995
  03-24-1995 |             4 | 1995
  09-18-1995 |             4 | 1995
@@ -1081,8 +1101,8 @@ SELECT *
    WHERE year = 1995
    ORDER BY 2 DESC, 1
    LIMIT 10;
- l_shipdate | distinct_part | year 
-------------+---------------+------
+ l_shipdate | distinct_part | year
+---------------------------------------------------------------------
  11-29-1995 |             5 | 1995
  03-24-1995 |             4 | 1995
  09-18-1995 |             4 | 1995
@@ -1111,8 +1131,8 @@ SELECT *
    WHERE year = 1995
    ORDER BY 2 DESC, 1
    LIMIT 10;
- l_shipdate | distinct_part | year 
-------------+---------------+------
+ l_shipdate | distinct_part | year
+---------------------------------------------------------------------
  11-29-1995 |             5 | 1995
  03-24-1995 |             4 | 1995
  09-18-1995 |             4 | 1995

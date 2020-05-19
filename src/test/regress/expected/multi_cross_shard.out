@@ -3,6 +3,7 @@
 --
 -- Tests to log cross shard queries according to error log level
 --
+SET citus.enable_repartition_joins to ON;
 -- Create a distributed table and add data to it
 CREATE TABLE multi_task_table
 (

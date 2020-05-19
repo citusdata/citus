@@ -8,6 +8,7 @@ SET citus.next_shard_id TO 570000;
 
 RESET citus.task_executor_type;
 SET citus.explain_distributed_queries TO on;
+SET citus.enable_repartition_joins to ON;
 
 -- Function that parses explain output as JSON
 CREATE FUNCTION explain_json(query text)

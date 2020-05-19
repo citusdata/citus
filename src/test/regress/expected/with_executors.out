@@ -380,6 +380,10 @@ FROM
 	users_table, cte_merge
 WHERE
 	users_table.user_id = cte_merge.u_id;
-ERROR:  Complex subqueries and CTEs are not supported when task_executor_type is set to 'task-tracker'
+  count
+---------------------------------------------------------------------
+ 4365606
+(1 row)
+
 DROP SCHEMA with_executors CASCADE;
 NOTICE:  drop cascades to table local_table

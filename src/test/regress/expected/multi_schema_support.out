@@ -828,6 +828,7 @@ SELECT create_distributed_table('test_schema_support_join_2.nation_hash', 'n_nat
 (1 row)
 
 \copy test_schema_support_join_2.nation_hash FROM STDIN with delimiter '|';
+SET citus.enable_repartition_joins to ON;
 -- check when search_path is public,
 -- join of two tables which are in different schemas,
 -- join on partition column

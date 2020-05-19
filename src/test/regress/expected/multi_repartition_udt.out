@@ -2,6 +2,7 @@
 -- MULTI_REPARTITION_UDT
 --
 SET citus.next_shard_id TO 535000;
+SET citus.enable_repartition_joins to ON;
 -- START type creation
 CREATE TYPE test_udt AS (i integer, i2 integer);
 -- ... as well as a function to use as its comparator...
@@ -125,6 +126,7 @@ FUNCTION 1 test_udt_hash(test_udt);
 -- Distribute and populate the two tables.
 SET citus.shard_count TO 3;
 SET citus.shard_replication_factor TO 1;
+SET citus.enable_repartition_joins to ON;
 SELECT create_distributed_table('repartition_udt', 'pk', 'hash');
  create_distributed_table
 ---------------------------------------------------------------------
@@ -171,7 +173,7 @@ SELECT * FROM repartition_udt JOIN repartition_udt_other
 LOG:  join order: [ "repartition_udt" ][ dual partition join "repartition_udt_other" ]
                          QUERY PLAN
 ---------------------------------------------------------------------
- Custom Scan (Citus Task-Tracker)
+ Custom Scan (Citus Adaptive)
    Task Count: 4
    Tasks Shown: None, not supported for re-partition queries
    ->  MapMergeJob

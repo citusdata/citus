@@ -6,6 +6,7 @@ SET citus.next_shard_id TO 660000;
 SET citus.explain_distributed_queries TO off;
 SET citus.log_multi_join_order TO TRUE;
 SET citus.task_executor_type = 'task-tracker'; -- can't explain all queries otherwise
+SET citus.enable_repartition_joins to ON;
 SET client_min_messages TO LOG;
 -- The following queries are basically the same as the ones in tpch_small
 -- except that more data has been loaded into customer and part tables. Therefore,
@@ -25,7 +26,7 @@ LOG:  join order: [ "lineitem" ]
                              QUERY PLAN
 ---------------------------------------------------------------------
  Aggregate
-   ->  Custom Scan (Citus Task-Tracker)
+   ->  Custom Scan (Citus Adaptive)
          explain statements for distributed queries are not enabled
 (3 rows)
 
@@ -60,7 +61,7 @@ LOG:  join order: [ "orders" ][ local partition join "lineitem" ][ single range 
    Sort Key: (sum(remote_scan.revenue)) DESC, remote_scan.o_orderdate
    ->  HashAggregate
          Group Key: remote_scan.l_orderkey, remote_scan.o_orderdate, remote_scan.o_shippriority
-         ->  Custom Scan (Citus Task-Tracker)
+         ->  Custom Scan (Citus Adaptive)
                explain statements for distributed queries are not enabled
 (6 rows)
 
@@ -104,7 +105,7 @@ LOG:  join order: [ "orders" ][ local partition join "lineitem" ][ single range 
    Sort Key: (sum(remote_scan.revenue)) DESC
    ->  HashAggregate
          Group Key: remote_scan.c_custkey, remote_scan.c_name, remote_scan.c_acctbal, remote_scan.c_phone, remote_scan.n_name, remote_scan.c_address, remote_scan.c_comment
-         ->  Custom Scan (Citus Task-Tracker)
+         ->  Custom Scan (Citus Adaptive)
                explain statements for distributed queries are not enabled
 (6 rows)
 
@@ -143,7 +144,7 @@ LOG:  join order: [ "lineitem" ][ single range partition join "part_append" ]
                              QUERY PLAN
 ---------------------------------------------------------------------
  Aggregate
-   ->  Custom Scan (Citus Task-Tracker)
+   ->  Custom Scan (Citus Adaptive)
          explain statements for distributed queries are not enabled
 (3 rows)
 
@@ -164,7 +165,7 @@ LOG:  join order: [ "lineitem" ][ local partition join "orders" ][ single range 
 ---------------------------------------------------------------------
  HashAggregate
    Group Key: remote_scan.l_partkey
-   ->  Custom Scan (Citus Task-Tracker)
+   ->  Custom Scan (Citus Adaptive)
          explain statements for distributed queries are not enabled
 (4 rows)
 

@@ -228,8 +228,12 @@ SET client_min_messages to ERROR;
 SELECT raise_failed_execution('
 SELECT u.* FROM wide_table u JOIN wide_table v ON (u.long_column_002 = v.long_column_003);
 ');
-ERROR:  Task failed to execute
-CONTEXT:  PL/pgSQL function raise_failed_execution(text) line 6 at RAISE
+ raise_failed_execution
+---------------------------------------------------------------------
+
+(1 row)
+
+SET citus.enable_repartition_joins to ON;
 -- following will succeed since it fetches few columns
 SELECT u.long_column_001, u.long_column_002, u.long_column_003 FROM wide_table u JOIN wide_table v ON (u.long_column_002 = v.long_column_003);
  long_column_001 | long_column_002 | long_column_003

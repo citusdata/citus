@@ -107,6 +107,7 @@ SELECT count(*) FROM test;
 SELECT count(*) FROM test WHERE id = 1;
 
 SET citus.task_executor_type TO 'task-tracker';
+SET citus.enable_repartition_joins to ON;
 SELECT count(*), min(current_user) FROM test;
 
 -- test re-partition query (needs to transmit intermediate results)
@@ -143,6 +144,7 @@ SELECT count(*) FROM test;
 SELECT count(*) FROM test WHERE id = 1;
 
 SET citus.task_executor_type TO 'task-tracker';
+SET citus.enable_repartition_joins to ON;
 SELECT count(*), min(current_user) FROM test;
 
 -- test re-partition query (needs to transmit intermediate results)
@@ -179,6 +181,7 @@ SELECT count(*) FROM test;
 SELECT count(*) FROM test WHERE id = 1;
 
 SET citus.task_executor_type TO 'task-tracker';
+SET citus.enable_repartition_joins to ON;
 SELECT count(*), min(current_user) FROM test;
 
 -- test re-partition query

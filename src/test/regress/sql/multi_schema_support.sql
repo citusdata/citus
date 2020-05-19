@@ -601,6 +601,7 @@ SELECT create_distributed_table('test_schema_support_join_2.nation_hash', 'n_nat
 5|ETHIOPIA|0|ven packages wake quickly. regu
 \.
 
+SET citus.enable_repartition_joins to ON;
 -- check when search_path is public,
 -- join of two tables which are in different schemas,
 -- join on partition column

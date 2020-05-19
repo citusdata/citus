@@ -204,8 +204,15 @@ SELECT l_suppkey, count(*) FROM
 	(SELECT l_suppkey, l_shipdate, count(*)
 		FROM air_shipped_lineitems GROUP BY l_suppkey, l_shipdate) supps
 	GROUP BY l_suppkey ORDER BY 2 DESC, 1 LIMIT 5;
-ERROR:  cannot perform distributed planning on this query
-DETAIL:  Subqueries without group by clause are not supported yet
+ l_suppkey | count
+---------------------------------------------------------------------
+      7680 |     4
+       160 |     3
+      1042 |     3
+      1318 |     3
+      5873 |     3
+(5 rows)
+
 -- logically same query without a view works fine
 SELECT l_suppkey, count(*) FROM
 	(SELECT l_suppkey, l_shipdate, count(*)
@@ -226,8 +233,15 @@ SELECT l_suppkey, count(*) FROM
 		FROM (SELECT * FROM lineitem_hash_part WHERE l_shipmode = 'AIR') asi
 		GROUP BY l_suppkey, l_shipdate) supps
 	GROUP BY l_suppkey ORDER BY 2 DESC, 1 LIMIT 5;
-ERROR:  cannot perform distributed planning on this query
-DETAIL:  Subqueries without group by clause are not supported yet
+ l_suppkey | count
+---------------------------------------------------------------------
+      7680 |     4
+       160 |     3
+      1042 |     3
+      1318 |     3
+      5873 |     3
+(5 rows)
+
 -- repartition query on view with single table subquery
 CREATE VIEW supp_count_view AS SELECT * FROM (SELECT l_suppkey, count(*) FROM lineitem_hash_part GROUP BY 1) s1;
 SELECT * FROM supp_count_view ORDER BY 2 DESC, 1 LIMIT 10;

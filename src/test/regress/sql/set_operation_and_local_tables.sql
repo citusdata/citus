@@ -1,6 +1,8 @@
 CREATE SCHEMA recursive_set_local;
 SET search_path TO recursive_set_local, public;
 
+SET citus.enable_repartition_joins to ON;
+
 CREATE TABLE recursive_set_local.test (x int, y int);
 SELECT create_distributed_table('test', 'x');
 

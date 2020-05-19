@@ -9,6 +9,7 @@
 
 SET citus.next_shard_id TO 690000;
 SET citus.enable_unique_job_ids TO off;
+SET citus.enable_repartition_joins to ON;
 
 create schema repartition_join;
 DROP TABLE IF EXISTS repartition_join.order_line;
@@ -34,7 +35,7 @@ SELECT create_distributed_table('order_line','ol_w_id');
 SELECT create_distributed_table('stock','s_w_id');
 
 BEGIN;
-SET client_min_messages TO DEBUG4;
+SET client_min_messages TO DEBUG;
 SET citus.task_executor_type TO 'task-tracker';
 
 -- Debug4 log messages display jobIds within them. We explicitly set the jobId

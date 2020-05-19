@@ -3,6 +3,7 @@
 --
 
 SET citus.next_shard_id TO 535000;
+SET citus.enable_repartition_joins to ON;
 
 -- START type creation
 
@@ -160,6 +161,7 @@ FUNCTION 1 test_udt_hash(test_udt);
 -- Distribute and populate the two tables.
 SET citus.shard_count TO 3;
 SET citus.shard_replication_factor TO 1;
+SET citus.enable_repartition_joins to ON;
 SELECT create_distributed_table('repartition_udt', 'pk', 'hash');
 SET citus.shard_count TO 5;
 SELECT create_distributed_table('repartition_udt_other', 'pk', 'hash');

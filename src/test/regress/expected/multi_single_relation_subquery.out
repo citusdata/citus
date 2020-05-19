@@ -198,8 +198,15 @@ group by
     l_suppkey
     ORDER BY 2 DESC, 1 DESC
 LIMIT 5;
-ERROR:  cannot perform distributed planning on this query
-DETAIL:  Subqueries with limit are not supported yet
+ l_suppkey | total_suppkey_count
+---------------------------------------------------------------------
+        35 |                   5
+       112 |                   4
+       102 |                   4
+        73 |                   4
+       123 |                   3
+(5 rows)
+
 -- Check that we don't support subqueries without aggregates.
 select
     DISTINCT rounded_tax
@@ -212,8 +219,11 @@ from
         l_tax) as distributed_table
     ORDER BY 1 DESC
     LIMIT 5;
-ERROR:  cannot perform distributed planning on this query
-DETAIL:  Subqueries without aggregates are not supported yet
+ rounded_tax
+---------------------------------------------------------------------
+           0
+(1 row)
+
 -- Check that we support subqueries with count(distinct).
 select
     avg(different_shipment_days)

@@ -142,6 +142,7 @@ SELECT count(*) FROM test WHERE id = 1;
 (1 row)
 
 SET citus.task_executor_type TO 'task-tracker';
+SET citus.enable_repartition_joins to ON;
 SELECT count(*), min(current_user) FROM test;
  count |     min
 ---------------------------------------------------------------------
@@ -230,6 +231,7 @@ SELECT count(*) FROM test WHERE id = 1;
 (1 row)
 
 SET citus.task_executor_type TO 'task-tracker';
+SET citus.enable_repartition_joins to ON;
 SELECT count(*), min(current_user) FROM test;
  count |     min
 ---------------------------------------------------------------------
@@ -288,6 +290,7 @@ ERROR:  permission denied for table test
 SELECT count(*) FROM test WHERE id = 1;
 ERROR:  permission denied for table test
 SET citus.task_executor_type TO 'task-tracker';
+SET citus.enable_repartition_joins to ON;
 SELECT count(*), min(current_user) FROM test;
 ERROR:  permission denied for table test
 -- test re-partition query

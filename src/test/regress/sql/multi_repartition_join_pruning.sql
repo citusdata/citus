@@ -11,6 +11,7 @@ SET citus.next_shard_id TO 700000;
 
 SET client_min_messages TO DEBUG2;
 SET citus.task_executor_type TO 'task-tracker';
+SET citus.enable_repartition_joins to ON;
 
 -- Single range-repartition join to test join-pruning behaviour.
 EXPLAIN (COSTS OFF)

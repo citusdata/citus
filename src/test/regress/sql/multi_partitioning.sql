@@ -5,6 +5,7 @@ SET citus.next_shard_id TO 1660000;
 
 SET citus.shard_count TO 4;
 SET citus.shard_replication_factor TO 1;
+SET citus.enable_repartition_joins to ON;
 
 --
 -- Distributed Partitioned Table Creation Tests

@@ -404,15 +404,16 @@ select * FROM (
 select * FROM (
     SELECT key k, avg(distinct floor(agg1.val/2)) m from aggdata agg1
     group by key
-) subq;
+) subq
+order by k,m;
  k |  m
 ---------------------------------------------------------------------
  1 |   1
- 5 |
- 3 |   2
- 7 |   4
- 6 |
  2 | 1.5
+ 3 |   2
+ 5 |
+ 6 |
+ 7 |   4
  9 |   0
 (7 rows)
 

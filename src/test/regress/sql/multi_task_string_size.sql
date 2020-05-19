@@ -225,6 +225,7 @@ SELECT raise_failed_execution('
 SELECT u.* FROM wide_table u JOIN wide_table v ON (u.long_column_002 = v.long_column_003);
 ');
 
+SET citus.enable_repartition_joins to ON;
 -- following will succeed since it fetches few columns
 SELECT u.long_column_001, u.long_column_002, u.long_column_003 FROM wide_table u JOIN wide_table v ON (u.long_column_002 = v.long_column_003);
 
