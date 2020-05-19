@@ -111,7 +111,8 @@ JobExecutorType(DistributedPlan *distributedPlan)
 			}
 			if (HasReplicatedDistributedTable(distributedPlan->relationIdList))
 			{
-				return MULTI_EXECUTOR_TASK_TRACKER;
+				ereport(ERROR, (errmsg(
+					"repartitioning with shard_replication_factor > 1 is not supported")));
 			}
 			return MULTI_EXECUTOR_ADAPTIVE;
 		}
