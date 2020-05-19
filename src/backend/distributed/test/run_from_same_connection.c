@@ -18,6 +18,7 @@
 #include "access/xact.h"
 #include "distributed/connection_management.h"
 #include "distributed/function_utils.h"
+#include "distributed/intermediate_result_pruning.h"
 #include "distributed/lock_graph.h"
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"

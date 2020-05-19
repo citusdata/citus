@@ -125,45 +125,6 @@ struct TaskExecution
 };
 
 
-/*
- * TrackerTaskState represents a task's execution status on a particular task
- * tracker. This state augments task execution state in that it is associated
- * with execution on a particular task tracker.
- */
-typedef struct TrackerTaskState
-{
-	uint64 jobId;
-	uint32 taskId;
-	TaskStatus status;
-	StringInfo taskAssignmentQuery;
-} TrackerTaskState;
-
-
-/*
- * TaskTracker keeps connection and task related state for a task tracker. The
- * task tracker executor then uses this state to open and manage a connection to
- * the task tracker; and assign and check status of tasks over this connection.
- */
-typedef struct TaskTracker
-{
-	uint32 workerPort;              /* node's port; part of hash table key */
-	char workerName[WORKER_LENGTH]; /* node's name; part of hash table key */
-	char *userName;                 /* which user to connect as */
-	TrackerStatus trackerStatus;
-	int32 connectionId;
-	uint32 connectPollCount;
-	uint32 connectionFailureCount;
-	uint32 trackerFailureCount;
-
-	HTAB *taskStateHash;
-	List *assignedTaskList;
-	int32 currentTaskIndex;
-	bool connectionBusy;
-	TrackerTaskState *connectionBusyOnTask;
-	List *connectionBusyOnTaskList;
-} TaskTracker;
-
-
 /* Config variable managed via guc.c */
 extern int RemoteTaskCheckInterval;
 extern int MaxAssignTaskBatchSize;

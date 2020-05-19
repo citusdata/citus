@@ -273,9 +273,6 @@ _PG_init(void)
 
 	InitializeMaintenanceDaemon();
 
-	/* organize that task tracker is started once server is up */
-	TaskTrackerRegister();
-
 	/* initialize coordinated transaction management */
 	InitializeTransactionManagement();
 	InitializeBackendManagement();
