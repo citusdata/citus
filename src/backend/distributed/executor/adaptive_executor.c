@@ -2490,9 +2490,9 @@ ManageWorkerPool(WorkerPool *workerPool)
 		 * management (a.k.a., throttle connections if citus.max_shared_pool_size
 		 * reached)
 		 */
-		int sharedConnectionFlag =
-			ConnectionFlagForSharedConnectionStats(list_length(workerPool->sessionList));
-		connectionFlags |= sharedConnectionFlag;
+		int adaptiveConnectionManagementFlag =
+			AdaptiveConnectionManagementFlag(list_length(workerPool->sessionList));
+		connectionFlags |= adaptiveConnectionManagementFlag;
 
 		/* open a new connection to the worker */
 		MultiConnection *connection = StartNodeUserDatabaseConnection(connectionFlags,

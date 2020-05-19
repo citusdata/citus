@@ -628,6 +628,12 @@ FetchRemoteExplainFromWorkers(Task *task, ExplainState *es)
 		MultiConnection *connection = GetPlacementConnection(connectionFlags,
 															 taskPlacement, NULL);
 
+		/*
+		 * This code-path doesn't support optional connections, so we don't expect
+		 * NULL connections.
+		 */
+		Assert(connection != NULL && (connectionFlags & OPTIONAL_CONNECTION) == 0);
+
 		/* try other placements if we fail to connect this one */
 		if (PQstatus(connection->pgConn) != CONNECTION_OK)
 		{

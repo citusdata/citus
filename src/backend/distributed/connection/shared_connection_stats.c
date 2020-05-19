@@ -590,10 +590,14 @@ SharedConnectionStatsShmemInit(void)
 
 
 /*
- * ConnectionFlagForSharedConnectionStats returns the connection flag that
+ * AdaptiveConnectionManagementFlag returns the appropriate connection flag
+ * for any given activeConnectionCount to remote nodes.
+ *
+ * This function should only be called if the code-path is capable of handling
+ * optional connections.
  */
 int
-ConnectionFlagForSharedConnectionStats(int currentSessionConnectionCount)
+AdaptiveConnectionManagementFlag(int activeConnectionCount)
 {
 	if (UseConnectionPerPlacement())
 	{
@@ -608,7 +612,7 @@ ConnectionFlagForSharedConnectionStats(int currentSessionConnectionCount)
 		 */
 		return 0;
 	}
-	else if (ShouldWaitForConnection(currentSessionConnectionCount))
+	else if (ShouldWaitForConnection(activeConnectionCount))
 	{
 		/*
 		 * We need this connection to finish the execution. If it is not
@@ -620,8 +624,8 @@ ConnectionFlagForSharedConnectionStats(int currentSessionConnectionCount)
 	else
 	{
 		/*
-		 * The executor can finish the execution with a single connection,
-		 * remaining are optional. If the executor can get more connections,
+		 * The exectuion can be finished the execution with a single connection,
+		 * remaining are optional. If the execution can get more connections,
 		 * it can increase the parallelism.
 		 */
 		return OPTIONAL_CONNECTION;

@@ -210,9 +210,11 @@ GetPlacementConnection(uint32 flags, ShardPlacement *placement, const char *user
 {
 	MultiConnection *connection = StartPlacementConnection(flags, placement, userName);
 
-
 	if (connection == NULL)
 	{
+		/* connection can only be NULL for optional connections */
+		Assert((flags & OPTIONAL_CONNECTION));
+
 		return NULL;
 	}
 
@@ -302,6 +304,9 @@ StartPlacementListConnection(uint32 flags, List *placementAccessList,
 														   userName, NULL);
 		if (chosenConnection == NULL)
 		{
+			/* connection can only be NULL for optional connections */
+			Assert((flags & OPTIONAL_CONNECTION));
+
 			return NULL;
 		}
 

@@ -816,6 +816,12 @@ OpenCopyConnectionsForNewShards(CopyStmt *copyStatement,
 		MultiConnection *connection = GetPlacementConnection(connectionFlags, placement,
 															 nodeUser);
 
+		/*
+		 * This code-path doesn't support optional connections, so we don't expect
+		 * NULL connections.
+		 */
+		Assert(connection != NULL && (connectionFlags & OPTIONAL_CONNECTION) == 0);
+
 		if (PQstatus(connection->pgConn) != CONNECTION_OK)
 		{
 			if (stopOnFailure)
@@ -2988,6 +2994,12 @@ CitusCopyTo(CopyStmt *copyStatement, char *completionTag)
 																 shardPlacement,
 																 userName);
 
+			/*
+			 * This code-path doesn't support optional connections, so we don't expect
+			 * NULL connections.
+			 */
+			Assert(connection != NULL && (connectionFlags & OPTIONAL_CONNECTION) == 0);
+
 			if (placementIndex == list_length(shardPlacementList) - 1)
 			{
 				/* last chance for this shard */
@@ -3594,9 +3606,9 @@ CopyGetPlacementConnection(HTAB *connectionStateHash, ShardPlacement *placement,
 	 * management (a.k.a., throttle connections if citus.max_shared_pool_size
 	 * reached)
 	 */
-	int sharedConnectionFlag =
-		ConnectionFlagForSharedConnectionStats(list_length(connectionStateList));
-	connectionFlags |= sharedConnectionFlag;
+	int adaptiveConnectionManagementFlag =
+		AdaptiveConnectionManagementFlag(list_length(connectionStateList));
+	connectionFlags |= adaptiveConnectionManagementFlag;
 
 	/*
 	 * For placements that haven't been assigned a connection by a previous command
@@ -3612,6 +3624,10 @@ CopyGetPlacementConnection(HTAB *connectionStateHash, ShardPlacement *placement,
 	connection = GetPlacementConnection(connectionFlags, placement, nodeUser);
 	if (connection == NULL)
 	{
+		/*
+		 * The connection manager throttled any new connections, so pick an existing
+		 * connection with least utilization.
+		 */
 		connection =
 			GetLeastUtilisedCopyConnection(connectionStateList, nodeName, nodePort);
 		Assert(connection != NULL);

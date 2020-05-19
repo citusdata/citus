@@ -292,8 +292,16 @@ master_append_table_to_shard(PG_FUNCTION_ARGS)
 	ShardPlacement *shardPlacement = NULL;
 	foreach_ptr(shardPlacement, shardPlacementList)
 	{
-		MultiConnection *connection = GetPlacementConnection(FOR_DML, shardPlacement,
-															 NULL);
+		int connectionFlags = FOR_DML;
+		MultiConnection *connection =
+			GetPlacementConnection(connectionFlags, shardPlacement, NULL);
+
+		/*
+		 * This code-path doesn't support optional connections, so we don't expect
+		 * NULL connections.
+		 */
+		Assert(connection != NULL && (connectionFlags & OPTIONAL_CONNECTION) == 0);
+
 		PGresult *queryResult = NULL;
 
 		StringInfo workerAppendQuery = makeStringInfo();
@@ -861,6 +869,12 @@ WorkerShardStats(ShardPlacement *placement, Oid relationId, const char *shardNam
 
 	MultiConnection *connection = GetPlacementConnection(connectionFlags, placement,
 														 NULL);
+
+	/*
+	 * This code-path doesn't support optional connections, so we don't expect
+	 * NULL connections.
+	 */
+	Assert(connection != NULL && (connectionFlags & OPTIONAL_CONNECTION) == 0);
 
 	*shardSize = 0;
 	*shardMinValue = NULL;
