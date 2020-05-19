@@ -53,7 +53,7 @@ typedef struct TaskMapEntry
 static HTAB * TaskHashCreate(uint32 taskHashSize);
 static Task * TaskHashEnter(HTAB *taskHash, Task *task);
 static Task * TaskHashLookup(HTAB *trackerHash, TaskType taskType, uint64 jobId,
-							 uint32 taskId);                             
+							 uint32 taskId);
 
 /*
  * TaskAndExecutionList visits all tasks in the job tree, starting with the given
@@ -128,6 +128,7 @@ TaskAndExecutionList(List *jobTaskList)
 
 	return taskAndExecutionList;
 }
+
 
 /*
  * TaskHashCreate allocates memory for a task hash, initializes an

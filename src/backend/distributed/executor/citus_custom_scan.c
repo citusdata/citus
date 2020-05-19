@@ -556,6 +556,7 @@ AdaptiveExecutorCreateScan(CustomScan *scan)
 	return (Node *) scanState;
 }
 
+
 /*
  * CoordinatorInsertSelectCrateScan creates the scan state for executing
  * INSERT..SELECT into a distributed table via the coordinator.

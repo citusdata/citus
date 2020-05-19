@@ -54,8 +54,7 @@ static void CreateTaskTable(StringInfo schemaName, StringInfo relationName,
 							List *columnNameList, List *columnTypeList);
 static void CopyTaskFilesFromDirectory(StringInfo schemaName, StringInfo relationName,
 									   StringInfo sourceDirectoryName, Oid userId);
-static void
-CreateJobSchema(StringInfo schemaName, char *schemaOwner);
+static void CreateJobSchema(StringInfo schemaName, char *schemaOwner);
 
 
 /* exports for SQL callable functions */
@@ -88,6 +87,7 @@ worker_create_schema(PG_FUNCTION_ARGS)
 
 	PG_RETURN_VOID();
 }
+
 
 /*
  * CreateJobSchema creates a job schema with the given schema name. Note that
@@ -139,7 +139,6 @@ CreateJobSchema(StringInfo schemaName, char *schemaOwner)
 	SetUserIdAndSecContext(savedUserId, savedSecurityContext);
 	allowSystemTableMods = oldAllowSystemTableMods;
 }
-
 
 
 /*

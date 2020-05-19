@@ -114,7 +114,7 @@ JobExecutorType(DistributedPlan *distributedPlan)
 			if (HasReplicatedDistributedTable(distributedPlan->relationIdList))
 			{
 				ereport(ERROR, (errmsg(
-					"repartitioning with shard_replication_factor > 1 is not supported")));
+									"repartitioning with shard_replication_factor > 1 is not supported")));
 			}
 			return MULTI_EXECUTOR_ADAPTIVE;
 		}
@@ -164,6 +164,7 @@ HasReplicatedDistributedTable(List *relationOids)
 	return false;
 }
 
+
 /*
  * RemoveJobDirectory gets automatically called at portal drop (end of query) or
  * at transaction abort. The function removes the job directory and releases the
@@ -177,6 +178,7 @@ RemoveJobDirectory(uint64 jobId)
 
 	ResourceOwnerForgetJobDirectory(CurrentResourceOwner, jobId);
 }
+
 
 /*
  * CheckIfSizeLimitIsExceeded checks if the limit is exceeded by intermediate

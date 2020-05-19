@@ -31,7 +31,6 @@
 	");"
 
 
-
 /* Enumeration that represents distributed executor types */
 typedef enum
 {
