@@ -437,7 +437,7 @@ ColumnAppearsInForeignKeyToReferenceTable(char *columnName, Oid relationId)
 
 	/* clean up scan and close system catalog */
 	systable_endscan(scanDescriptor);
-	heap_close(pgConstraint, AccessShareLock);
+	heap_close(pgConstraint, NoLock);
 
 	return foreignKeyToReferenceTableIncludesGivenColumn;
 }
@@ -763,7 +763,13 @@ GetForeignKeyOids(Oid relationId, int flags)
 	}
 
 	systable_endscan(scanDescriptor);
-	heap_close(pgConstraint, AccessShareLock);
+
+	/*
+	 * Do not release AccessShareLock yet to prevent modifications to be done
+	 * on pg_constraint to make sure that caller will process valid foreign key
+	 * constraints through the transaction.
+	 */
+	heap_close(pgConstraint, NoLock);
 
 	return foreignKeyOids;
 }
