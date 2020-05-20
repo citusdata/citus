@@ -37,6 +37,8 @@
 #define PortalDefineQuerySelectCompat(a,b,c,e,f) PortalDefineQuery(a,b,c,CMDTAG_SELECT,e,f)
 #define getOwnedSequencesCompat(a,b) getOwnedSequences(a)
 #define ExplainOnePlanCompat(a,b,c,d,e,f,g,h) ExplainOnePlan(a,b,c,d,e,f,g,h)
+#define varoattno varattnosyn
+#define varnoold varnosyn
 #else /* pre PG13 */
 #define lnext_compat(l, r) lnext(r)
 #define list_delete_cell_compat(l,c,p) list_delete_cell(l,c,p) 
