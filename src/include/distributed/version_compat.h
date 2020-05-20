@@ -36,6 +36,7 @@
 #define standard_planner_compat(a,b,c,d) standard_planner(a,b,c,d)
 #define PortalDefineQuerySelectCompat(a,b,c,e,f) PortalDefineQuery(a,b,c,CMDTAG_SELECT,e,f)
 #define getOwnedSequencesCompat(a,b) getOwnedSequences(a)
+#define ExplainOnePlanCompat(a,b,c,d,e,f,g,h) ExplainOnePlan(a,b,c,d,e,f,g,h)
 #else /* pre PG13 */
 #define lnext_compat(l, r) lnext(r)
 #define list_delete_cell_compat(l,c,p) list_delete_cell(l,c,p) 
@@ -44,6 +45,7 @@
 #define standard_planner_compat(a,b,c,d) standard_planner(a,c,d)
 #define PortalDefineQuerySelectCompat(a,b,c,e,f) PortalDefineQuery(a,b,c,"SELECT",e,f)
 #define getOwnedSequencesCompat(a,b) getOwnedSequences(a,b)
+#define ExplainOnePlanCompat(a,b,c,d,e,f,g,h) ExplainOnePlan(a,b,c,d,e,f,g)
 #endif
 #if PG_VERSION_NUM >= PG_VERSION_12
 

@@ -313,7 +313,7 @@ ExplainSubPlans(DistributedPlan *distributedPlan, ExplainState *es)
 
 		INSTR_TIME_SET_ZERO(planduration);
 
-		ExplainOnePlan(plan, into, es, queryString, params, NULL, &planduration);
+		ExplainOnePlanCompat(plan, into, es, queryString, params, NULL, &planduration, NULL);
 
 		if (es->format == EXPLAIN_FORMAT_TEXT)
 		{
@@ -1463,8 +1463,8 @@ ExplainOneQuery(Query *query, int cursorOptions,
 		INSTR_TIME_SUBTRACT(planduration, planstart);
 
 		/* run it (if needed) and produce output */
-		ExplainOnePlan(plan, into, es, queryString, params, queryEnv,
-					   &planduration);
+		ExplainOnePlanCompat(plan, into, es, queryString, params, queryEnv,
+					   &planduration, NULL);
 	}
 }
 
