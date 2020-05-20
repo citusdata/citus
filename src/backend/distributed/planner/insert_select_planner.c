@@ -297,13 +297,8 @@ CreateDistributedInsertSelectPlan(Query *originalQuery,
 	distributedPlan->workerJob = workerJob;
 	distributedPlan->masterQuery = NULL;
 	distributedPlan->routerExecutable = true;
-	distributedPlan->hasReturning = false;
+	distributedPlan->expectResults = originalQuery->returningList != NIL;
 	distributedPlan->targetRelationId = targetRelationId;
-
-	if (originalQuery->returningList != NIL)
-	{
-		distributedPlan->hasReturning = true;
-	}
 
 	return distributedPlan;
 }
@@ -1135,7 +1130,7 @@ CreateCoordinatorInsertSelectPlan(uint64 planId, Query *parse)
 	}
 
 	distributedPlan->insertSelectQuery = insertSelectQuery;
-	distributedPlan->hasReturning = insertSelectQuery->returningList != NIL;
+	distributedPlan->expectResults = insertSelectQuery->returningList != NIL;
 	distributedPlan->intermediateResultIdPrefix = InsertSelectResultIdPrefix(planId);
 	distributedPlan->targetRelationId = targetRelationId;
 

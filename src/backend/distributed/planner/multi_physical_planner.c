@@ -263,6 +263,7 @@ CreatePhysicalDistributedPlan(MultiTreeRoot *multiTree,
 	distributedPlan->masterQuery = masterQuery;
 	distributedPlan->routerExecutable = DistributedPlanRouterExecutable(distributedPlan);
 	distributedPlan->modLevel = ROW_MODIFY_READONLY;
+	distributedPlan->expectResults = true;
 
 	return distributedPlan;
 }
@@ -2216,7 +2217,7 @@ BuildJobTreeTaskList(Job *jobTree, PlannerRestrictionContext *plannerRestriction
 			sqlTaskList = QueryPushdownSqlTaskList(job->jobQuery, job->jobId,
 												   plannerRestrictionContext->
 												   relationRestrictionContext,
-												   prunedRelationShardList, SELECT_TASK,
+												   prunedRelationShardList, READ_TASK,
 												   false);
 		}
 		else
@@ -2249,7 +2250,7 @@ BuildJobTreeTaskList(Job *jobTree, PlannerRestrictionContext *plannerRestriction
 			Task *assignedSqlTask = (Task *) lfirst(assignedSqlTaskCell);
 
 			/* we don't support parameters in the physical planner */
-			if (assignedSqlTask->taskType == SELECT_TASK)
+			if (assignedSqlTask->taskType == READ_TASK)
 			{
 				assignedSqlTask->parametersInQueryStringResolved =
 					job->parametersInJobQueryResolved;
@@ -2679,7 +2680,7 @@ QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 	Task *subqueryTask = CreateBasicTask(jobId, taskId, taskType, NULL);
 
 	if ((taskType == MODIFY_TASK && !modifyRequiresMasterEvaluation) ||
-		taskType == SELECT_TASK)
+		taskType == READ_TASK)
 	{
 		pg_get_query_def(taskQuery, queryString);
 		ereport(DEBUG4, (errmsg("distributed statement: %s",
@@ -2973,7 +2974,7 @@ SqlTaskList(Job *job)
 		StringInfo sqlQueryString = makeStringInfo();
 		pg_get_query_def(taskQuery, sqlQueryString);
 
-		Task *sqlTask = CreateBasicTask(jobId, taskIdIndex, SELECT_TASK,
+		Task *sqlTask = CreateBasicTask(jobId, taskIdIndex, READ_TASK,
 										sqlQueryString->data);
 		sqlTask->dependentTaskList = dataFetchTaskList;
 		sqlTask->relationShardList = BuildRelationShardList(fragmentRangeTableList,
@@ -5794,7 +5795,7 @@ AssignDataFetchDependencies(List *taskList)
 		ListCell *dependentTaskCell = NULL;
 
 		Assert(task->taskPlacementList != NIL);
-		Assert(task->taskType == SELECT_TASK || task->taskType == MERGE_TASK);
+		Assert(task->taskType == READ_TASK || task->taskType == MERGE_TASK);
 
 		foreach(dependentTaskCell, dependentTaskList)
 		{

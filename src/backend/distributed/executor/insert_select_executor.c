@@ -133,7 +133,7 @@ CoordinatorInsertSelectExecScanInternal(CustomScanState *node)
 		RangeTblEntry *insertRte = ExtractResultRelationRTE(insertSelectQuery);
 		Oid targetRelationId = insertRte->relid;
 		char *intermediateResultIdPrefix = distributedPlan->intermediateResultIdPrefix;
-		bool hasReturning = distributedPlan->hasReturning;
+		bool hasReturning = distributedPlan->expectResults;
 		HTAB *shardStateHash = NULL;
 
 		/* select query to execute */

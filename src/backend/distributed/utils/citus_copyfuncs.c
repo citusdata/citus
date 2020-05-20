@@ -120,7 +120,7 @@ CopyNodeDistributedPlan(COPYFUNC_ARGS)
 
 	COPY_SCALAR_FIELD(planId);
 	COPY_SCALAR_FIELD(modLevel);
-	COPY_SCALAR_FIELD(hasReturning);
+	COPY_SCALAR_FIELD(expectResults);
 	COPY_SCALAR_FIELD(routerExecutable);
 
 	COPY_NODE_FIELD(workerJob);
