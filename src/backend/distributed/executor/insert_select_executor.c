@@ -346,9 +346,8 @@ WrapSubquery(Query *subquery)
 
 	/* create range table entries */
 	Alias *selectAlias = makeAlias("citus_insert_select_subquery", NIL);
-	RangeTblEntry *newRangeTableEntry = addRangeTableEntryForSubquery(pstate, subquery,
-																	  selectAlias, false,
-																	  true);
+	RangeTblEntry *newRangeTableEntry = RangeTableEntryFromNSItem(addRangeTableEntryForSubquery(
+		pstate, subquery, selectAlias, false, true));
 	outerQuery->rtable = list_make1(newRangeTableEntry);
 
 	/* set the FROM expression to the subquery */
