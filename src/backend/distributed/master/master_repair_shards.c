@@ -489,7 +489,7 @@ EnsureTableListSuitableForReplication(List *tableIdList)
 		}
 
 		List *foreignConstraintCommandList =
-			GetTableForeignConstraintCommands(tableId);
+			GetReferencingForeignConstaintCommands(tableId);
 
 		if (foreignConstraintCommandList != NIL &&
 			PartitionMethod(tableId) != DISTRIBUTE_BY_NONE)
@@ -812,7 +812,8 @@ CopyShardForeignConstraintCommandListGrouped(ShardInterval *shardInterval,
 	char *escapedSchemaName = quote_literal_cstr(schemaName);
 	int shardIndex = 0;
 
-	List *commandList = GetTableForeignConstraintCommands(shardInterval->relationId);
+	List *commandList = GetReferencingForeignConstaintCommands(
+		shardInterval->relationId);
 
 	/* we will only use shardIndex if there is a foreign constraint */
 	if (commandList != NIL)

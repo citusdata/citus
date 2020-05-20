@@ -378,7 +378,8 @@ CreateAppendDistributedShardPlacements(Oid relationId, int64 shardId,
 	int attemptCount = replicationFactor;
 	int workerNodeCount = list_length(workerNodeList);
 	int placementsCreated = 0;
-	List *foreignConstraintCommandList = GetTableForeignConstraintCommands(relationId);
+	List *foreignConstraintCommandList =
+		GetReferencingForeignConstaintCommands(relationId);
 	bool includeSequenceDefaults = false;
 	List *ddlCommandList = GetTableDDLEvents(relationId, includeSequenceDefaults);
 	uint32 connectionFlag = FOR_DDL;
@@ -487,7 +488,7 @@ CreateShardsOnWorkers(Oid distributedRelationId, List *shardPlacements,
 	List *ddlCommandList = GetTableDDLEvents(distributedRelationId,
 											 includeSequenceDefaults);
 	List *foreignConstraintCommandList =
-		GetTableForeignConstraintCommands(distributedRelationId);
+		GetReferencingForeignConstaintCommands(distributedRelationId);
 
 	int taskId = 1;
 	List *taskList = NIL;
