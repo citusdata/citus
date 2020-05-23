@@ -1486,6 +1486,8 @@ MasterExtendedOpNode(MultiExtendedOp *originalOpNode,
 	masterExtendedOpNode->sortClauseList = originalOpNode->sortClauseList;
 	masterExtendedOpNode->distinctClause = originalOpNode->distinctClause;
 	masterExtendedOpNode->hasDistinctOn = originalOpNode->hasDistinctOn;
+	masterExtendedOpNode->originalLimitCount = originalOpNode->originalLimitCount;
+	masterExtendedOpNode->originalLimitOffset = originalOpNode->originalLimitOffset;
 	masterExtendedOpNode->limitCount = originalOpNode->limitCount;
 	masterExtendedOpNode->limitOffset = originalOpNode->limitOffset;
 	masterExtendedOpNode->havingQual = newHavingQual;
@@ -2322,6 +2324,7 @@ WorkerExtendedOpNode(MultiExtendedOp *originalOpNode,
 	workerExtendedOpNode->hasWindowFuncs = queryWindowClause.hasWindowFunctions;
 	workerExtendedOpNode->windowClause = queryWindowClause.workerWindowClauseList;
 	workerExtendedOpNode->sortClauseList = queryOrderByLimit.workerSortClauseList;
+	workerExtendedOpNode->originalLimitCount = queryOrderByLimit.workerLimitCount;
 	workerExtendedOpNode->limitCount = queryOrderByLimit.workerLimitCount;
 
 	return workerExtendedOpNode;

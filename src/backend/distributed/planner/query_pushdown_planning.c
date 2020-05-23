@@ -551,7 +551,7 @@ SubqueryMultiNodeTree(Query *originalQuery, Query *queryTree,
 		}
 
 		/* all checks have passed, safe to create the multi plan */
-		multiQueryNode = MultiNodeTree(queryTree);
+		multiQueryNode = MultiNodeTree(originalQuery, queryTree);
 	}
 
 	Assert(multiQueryNode != NULL);
@@ -1623,7 +1623,7 @@ SubqueryPushdownMultiNodeTree(Query *originalQuery)
 	 * distinguish between aggregates and expressions; and we address this later
 	 * in the logical optimizer.
 	 */
-	MultiExtendedOp *extendedOpNode = MultiExtendedOpNode(queryTree, originalQuery);
+	MultiExtendedOp *extendedOpNode = MultiExtendedOpNode(originalQuery, queryTree);
 
 	/*
 	 * Postgres standard planner converts having qual node to a list of and

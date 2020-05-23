@@ -587,6 +587,7 @@ TaskTrackerCreateScan(CustomScan *scan)
 	scanState->distributedPlan = GetDistributedPlan(scan);
 
 	scanState->customScanState.methods = &TaskTrackerCustomExecMethods;
+	scanState->PreExecScan = &CitusPreExecScan;
 
 	return (Node *) scanState;
 }

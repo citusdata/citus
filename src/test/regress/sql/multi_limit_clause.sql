@@ -236,8 +236,25 @@ SELECT l_orderkey FROM lineitem_hash ORDER BY l_orderkey LIMIT 10 OFFSET my_limi
 
 DROP FUNCTION my_limit();
 
--- subqueries should error out
+SET citus.task_executor_type TO 'task-tracker';
+WITH cte AS (SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4) SELECT * FROM cte ORDER BY 1 LIMIT (SELECT min(l_linenumber) FROM lineitem);
+SELECT l_orderkey FROM lineitem_hash ORDER BY l_orderkey LIMIT (SELECT min(l_linenumber) FROM lineitem) OFFSET (SELECT (count(*)/2)::int FROM lineitem_hash);
+SELECT l_orderkey FROM lineitem_hash ORDER BY l_orderkey LIMIT (SELECT 10);
+SELECT l_orderkey FROM lineitem_hash ORDER BY l_orderkey LIMIT 10 OFFSET (SELECT 10);
+RESET citus.task_executor_type;
+WITH cte AS (SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4) SELECT * FROM cte ORDER BY 1 LIMIT (SELECT min(l_linenumber) FROM lineitem);
+SELECT l_orderkey FROM lineitem_hash ORDER BY l_orderkey LIMIT (SELECT min(l_linenumber) FROM lineitem) OFFSET (SELECT (count(*)/2)::int FROM lineitem_hash);
 SELECT l_orderkey FROM lineitem_hash ORDER BY l_orderkey LIMIT (SELECT 10);
 SELECT l_orderkey FROM lineitem_hash ORDER BY l_orderkey LIMIT 10 OFFSET (SELECT 10);
 
-DROP TABLE lineitem_hash;
+-- test insert/select executor with recursively planned subquery in LIMIT
+CREATE TABLE insertselect_test (id int, key int);
+SELECT create_distributed_table('insertselect_test', 'id');
+INSERT INTO insertselect_test
+SELECT l_orderkey, l_linenumber
+FROM lineitem_hash
+ORDER BY 1, 2
+LIMIT (SELECT min(l_linenumber) FROM lineitem) OFFSET (SELECT (count(*)/2)::int FROM lineitem_hash);
+SELECT * FROM insertselect_test;
+
+DROP TABLE lineitem_hash, insertselect_test;
