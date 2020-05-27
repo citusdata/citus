@@ -127,7 +127,12 @@ static PlannedStmt * PlanDistributedStmt(DistributedPlanningContext *planContext
 
 /* Distributed planner hook */
 PlannedStmt *
-distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
+distributed_planner(Query *parse,
+	#if PG_VERSION_NUM >= PG_VERSION_13
+	const char *query_string,
+	#endif
+ 	int cursorOptions,
+	ParamListInfo boundParams)
 {
 	bool needsDistributedPlanning = false;
 	bool fastPathRouterQuery = false;
