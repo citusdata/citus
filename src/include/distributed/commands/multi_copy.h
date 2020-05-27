@@ -15,6 +15,7 @@
 
 #include "distributed/metadata_utility.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/version_compat.h"
 #include "nodes/execnodes.h"
 #include "nodes/parsenodes.h"
 #include "parser/parse_coerce.h"
@@ -155,7 +156,7 @@ extern void AppendCopyBinaryHeaders(CopyOutState headerOutputState);
 extern void AppendCopyBinaryFooters(CopyOutState footerOutputState);
 extern void EndRemoteCopy(int64 shardId, List *connectionList);
 extern List * CreateRangeTable(Relation rel, AclMode requiredAccess);
-extern Node * ProcessCopyStmt(CopyStmt *copyStatement, char *completionTag,
+extern Node * ProcessCopyStmt(CopyStmt *copyStatement, QueryCompletionCompat *completionTag,
 							  const char *queryString);
 extern void CheckCopyPermissions(CopyStmt *copyStatement);
 extern bool IsCopyResultStmt(CopyStmt *copyStatement);

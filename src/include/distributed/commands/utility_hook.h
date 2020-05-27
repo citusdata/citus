@@ -10,6 +10,8 @@
 #ifndef MULTI_UTILITY_H
 #define MULTI_UTILITY_H
 
+#include "distributed/pg_version_constants.h"
+
 #include "postgres.h"
 
 #include "utils/relcache.h"
@@ -51,10 +53,13 @@ typedef struct DDLJob
 extern void multi_ProcessUtility(PlannedStmt *pstmt, const char *queryString,
 								 ProcessUtilityContext context, ParamListInfo params,
 								 struct QueryEnvironment *queryEnv, DestReceiver *dest,
-								 char *completionTag);
+								 QueryCompletionCompat *completionTag
+								);
 extern void CitusProcessUtility(Node *node, const char *queryString,
 								ProcessUtilityContext context, ParamListInfo params,
-								DestReceiver *dest, char *completionTag);
+								DestReceiver *dest,
+								QueryCompletionCompat * completionTag
+								);
 extern void MarkInvalidateForeignKeyGraph(void);
 extern void InvalidateForeignKeyGraphForDDL(void);
 extern List * DDLTaskList(Oid relationId, const char *commandString);
