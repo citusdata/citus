@@ -7485,6 +7485,16 @@ get_tablesample_def(TableSampleClause *tablesample, deparse_context *context)
 	}
 }
 
+char *
+pg_get_triggerdef_command(Oid triggerId)
+{
+	Assert(OidIsValid(triggerId));
+
+	/* no need to have pretty SQL command */
+	bool prettyOutput = false;
+	return pg_get_triggerdef_worker(triggerId, prettyOutput);
+}
+
 static char *
 pg_get_triggerdef_worker(Oid trigid, bool pretty)
 {
