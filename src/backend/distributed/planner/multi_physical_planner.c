@@ -130,6 +130,8 @@ static List * QuerySelectClauseList(MultiNode *multiNode);
 static List * QueryFromList(List *rangeTableList);
 static Node * QueryJoinTree(MultiNode *multiNode, List *dependentJobList,
 							List **rangeTableList);
+static void SetJoinRelatedColumnsCompat(RangeTblEntry *rangeTableEntry, int joinMergedCols,
+	List *leftColumnVars, List *rightColumnVars);						
 static RangeTblEntry * JoinRangeTableEntry(JoinExpr *joinExpr, List *dependentJobList,
 										   List *rangeTableList);
 static int ExtractRangeTableId(Node *node);
@@ -1260,9 +1262,33 @@ JoinRangeTableEntry(JoinExpr *joinExpr, List *dependentJobList, List *rangeTable
 	rangeTableEntry->eref->colnames = joinedColumnNames;
 	rangeTableEntry->joinaliasvars = joinedColumnVars;
 
+	SetJoinRelatedColumnsCompat(rangeTableEntry, list_length(joinExpr->usingClause),
+	 leftColumnVars, rightColumnVars);
+
 	return rangeTableEntry;
 }
 
+static void SetJoinRelatedColumnsCompat(RangeTblEntry *rangeTableEntry, int joinMergedCols,
+	List *leftColumnVars, List *rightColumnVars) {
+	#if PG_VERSION_NUM >= PG_VERSION_13
+
+	rangeTableEntry->joinmergedcols = joinMergedCols;
+
+	Var* var = NULL;
+	List* joinleftcols = NIL;
+	foreach_ptr(var, leftColumnVars) {
+		joinleftcols = lappend_int(joinleftcols, var->varno);
+	}
+
+	List* joinrightcols = NIL;
+	foreach_ptr(var, rightColumnVars) {
+		joinrightcols = lappend_int(joinrightcols, var->varno);
+	}
+
+	rangeTableEntry->joinleftcols = joinleftcols;
+	rangeTableEntry->joinrightcols = joinrightcols;
+	#endif
+}
 
 /*
  * ExtractRangeTableId gets the range table id from a node that could
