@@ -287,14 +287,14 @@ PartitionList(Oid parentRelationId)
 
 		ereport(ERROR, (errmsg("\"%s\" is not a parent table", relationName)));
 	}
+	PartitionDesc partDesc = RelationGetPartitionDesc(rel);
+	Assert(partDesc != NULL);
 
-	Assert(rel->rd_partdesc != NULL);
-
-	int partitionCount = rel->rd_partdesc->nparts;
+	int partitionCount = partDesc->nparts;
 	for (int partitionIndex = 0; partitionIndex < partitionCount; ++partitionIndex)
 	{
 		partitionList =
-			lappend_oid(partitionList, rel->rd_partdesc->oids[partitionIndex]);
+			lappend_oid(partitionList, partDesc->oids[partitionIndex]);
 	}
 
 	/* keep the lock */
