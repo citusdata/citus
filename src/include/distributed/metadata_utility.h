@@ -153,6 +153,7 @@ extern bool IsHashDistributedTable(Oid relationId);
 extern void EnsureSequenceOwner(Oid sequenceOid);
 extern void EnsureFunctionOwner(Oid functionId);
 extern void EnsureSuperUser(void);
+extern void EnsureTableNotDistributed(Oid relationId);
 extern void EnsureReplicationSettings(Oid relationId, char replicationModel);
 extern bool RegularTable(Oid relationId);
 extern char * ConstructQualifiedShardName(ShardInterval *shardInterval);
