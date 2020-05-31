@@ -44,6 +44,8 @@ typedef struct DistributeObjectOps
 	ObjectAddress (*address)(Node *, bool);
 } DistributeObjectOps;
 
+#define CITUS_TRUNCATE_TRIGGER_NAME "citus_truncate_trigger"
+
 const DistributeObjectOps * GetDistributeObjectOps(Node *node);
 
 /* cluster.c - forward declarations */
@@ -278,6 +280,7 @@ extern void PostprocessVacuumStmt(VacuumStmt *vacuumStmt, const char *vacuumComm
 extern List * GetExplicitTriggerCommandList(Oid relationId);
 extern List * GetExplicitTriggerIdList(Oid relationId);
 extern Oid get_relation_trigger_oid_compat(HeapTuple heapTuple);
+extern void ErrorIfUnsupportedCreateTriggerCommand(CreateTrigStmt *createTriggerStmt);
 
 extern bool ShouldPropagateSetCommand(VariableSetStmt *setStmt);
 extern void PostprocessVariableSetStmt(VariableSetStmt *setStmt, const char *setCommand);

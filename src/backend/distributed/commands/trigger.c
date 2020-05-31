@@ -139,3 +139,48 @@ get_relation_trigger_oid_compat(HeapTuple heapTuple)
 
 	return triggerOid;
 }
+
+
+/*
+ * ErrorIfUnsupportedCreateTriggerCommand errors out for the CREATE TRIGGER
+ * command that is run for a citus table if it is not citus_truncate_trigger.
+ *
+ * Note that internal triggers that are created implicitly by postgres for
+ * foreign key validation already wouldn't be executed via process utility,
+ * hence there is no need to check that case here.
+ */
+void
+ErrorIfUnsupportedCreateTriggerCommand(CreateTrigStmt *createTriggerStmt)
+{
+	RangeVar *triggerRelation = createTriggerStmt->relation;
+
+	bool missingOk = true;
+	Oid relationId = RangeVarGetRelid(triggerRelation, AccessShareLock, missingOk);
+
+	if (!OidIsValid(relationId))
+	{
+		/*
+		 * standard_ProcessUtility would already error out if the given table
+		 * does not exist
+		 */
+		return;
+	}
+
+	if (!IsCitusTable(relationId))
+	{
+		return;
+	}
+
+	char *functionName = makeRangeVarFromNameList(createTriggerStmt->funcname)->relname;
+	if (strncmp(functionName, CITUS_TRUNCATE_TRIGGER_NAME, NAMEDATALEN) == 0)
+	{
+		return;
+	}
+
+	char *relationName = triggerRelation->relname;
+
+	Assert(relationName != NULL);
+	ereport(ERROR, (errmsg("cannot create trigger on relation \"%s\" because it "
+						   "is either a distributed table or a reference table",
+						   relationName)));
+}

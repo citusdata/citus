@@ -208,6 +208,13 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		parsetree = ProcessCreateSubscriptionStmt(createSubStmt);
 	}
 
+	if (IsA(parsetree, CreateTrigStmt))
+	{
+		CreateTrigStmt *createTriggerStmt = (CreateTrigStmt *) parsetree;
+
+		ErrorIfUnsupportedCreateTriggerCommand(createTriggerStmt);
+	}
+
 	if (IsA(parsetree, CallStmt))
 	{
 		CallStmt *callStmt = (CallStmt *) parsetree;
