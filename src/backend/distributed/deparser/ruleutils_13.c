@@ -1561,7 +1561,7 @@ identify_join_columns(JoinExpr *j, RangeTblEntry *jrte,
 	colinfo->leftattnos = (int *) palloc0(numjoincols * sizeof(int));
 	colinfo->rightattnos = (int *) palloc0(numjoincols * sizeof(int));
 
-		/*
+	/*
 	 * Deconstruct RTE's joinleftcols/joinrightcols into desired format.
 	 * Recall that the column(s) merged due to USING are the first column(s)
 	 * of the join output.  We need not do anything special while scanning
@@ -3552,16 +3552,16 @@ get_variable(Var *var, int levelsup, bool istoplevel, deparse_context *context)
 	 * backwards compatibility than anything else.  But it does have the
 	 * advantage of making plans more explicit.)
 	 */
-	if (var->varnosyn > 0 && dpns->plan == NULL)
-	{
-		varno = var->varnosyn;
-		varattno = var->varattnosyn;
-	}
-	else
-	{
+	// if (var->varnosyn > 0 && dpns->plan == NULL)
+	// {
+		// varno = var->varnosyn;
+		// varattno = var->varattnosyn;
+	// }
+	// else
+	// {
 		varno = var->varno;
 		varattno = var->varattno;
-	}
+	// }
 
 	/*
 	 * Try to find the relevant RTE in this rtable.  In a plan tree, it's
@@ -3965,16 +3965,16 @@ get_name_for_var_field(Var *var, int fieldno,
 	 * parse tree, prefer to use the syntactic referent.  Otherwise, fall back
 	 * on the semantic referent.  (See comments in get_variable().)
 	 */
-	if (var->varnosyn > 0 && dpns->plan == NULL)
-	{
-		varno = var->varnosyn;
-		varattno = var->varattnosyn;
-	}
-	else
-	{
+	// if (var->varnosyn > 0 && dpns->plan == NULL)
+	// {
+		// varno = var->varnosyn;
+		// varattno = var->varattnosyn;
+	// }
+	// else
+	// {
 		varno = var->varno;
 		varattno = var->varattno;
-	}
+	// }
 	/*
 	 * Try to find the relevant RTE in this rtable.  In a plan tree, it's
 	 * likely that varno is OUTER_VAR or INNER_VAR, in which case we must dig

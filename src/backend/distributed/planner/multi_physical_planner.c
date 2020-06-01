@@ -130,8 +130,8 @@ static List * QuerySelectClauseList(MultiNode *multiNode);
 static List * QueryFromList(List *rangeTableList);
 static Node * QueryJoinTree(MultiNode *multiNode, List *dependentJobList,
 							List **rangeTableList);
-static void SetJoinRelatedColumnsCompat(RangeTblEntry *rangeTableEntry, int joinMergedCols,
-	List *leftColumnVars, List *rightColumnVars);						
+static void SetJoinRelatedColumnsCompat(RangeTblEntry *rangeTableEntry,
+	List *l_colnames, List *r_colnames, List* leftColVars, List* rightColVars);	
 static RangeTblEntry * JoinRangeTableEntry(JoinExpr *joinExpr, List *dependentJobList,
 										   List *rangeTableList);
 static int ExtractRangeTableId(Node *node);
@@ -1077,11 +1077,6 @@ QueryJoinTree(MultiNode *multiNode, List *dependentJobList, List **rangeTableLis
 				joinExpr->jointype = JOIN_LEFT;
 			}
 
-			RangeTblEntry *rangeTableEntry = JoinRangeTableEntry(joinExpr,
-																 dependentJobList,
-																 *rangeTableList);
-			*rangeTableList = lappend(*rangeTableList, rangeTableEntry);
-
 			/* fix the column attributes in ON (...) clauses */
 			List *columnList = pull_var_clause_default((Node *) joinNode->joinClauseList);
 			foreach(columnCell, columnList)
@@ -1096,6 +1091,11 @@ QueryJoinTree(MultiNode *multiNode, List *dependentJobList, List **rangeTableLis
 
 			/* make AND clauses explicit after fixing them */
 			joinExpr->quals = (Node *) make_ands_explicit(joinNode->joinClauseList);
+
+			RangeTblEntry *rangeTableEntry = JoinRangeTableEntry(joinExpr,
+																 dependentJobList,
+																 *rangeTableList);
+			*rangeTableList = lappend(*rangeTableList, rangeTableEntry);
 
 			return (Node *) joinExpr;
 		}
@@ -1230,10 +1230,10 @@ static RangeTblEntry *
 JoinRangeTableEntry(JoinExpr *joinExpr, List *dependentJobList, List *rangeTableList)
 {
 	RangeTblEntry *rangeTableEntry = makeNode(RangeTblEntry);
-	List *joinedColumnNames = NIL;
-	List *joinedColumnVars = NIL;
 	List *leftColumnNames = NIL;
 	List *leftColumnVars = NIL;
+	List *joinedColumnNames = NIL;
+	List *joinedColumnVars = NIL;
 	int leftRangeTableId = ExtractRangeTableId(joinExpr->larg);
 	RangeTblEntry *leftRTE = rt_fetch(leftRangeTableId, rangeTableList);
 	List *rightColumnNames = NIL;
@@ -1253,40 +1253,38 @@ JoinRangeTableEntry(JoinExpr *joinExpr, List *dependentJobList, List *rangeTable
 				   &leftColumnNames, &leftColumnVars);
 	ExtractColumns(rightRTE, rightRangeTableId, dependentJobList,
 				   &rightColumnNames, &rightColumnVars);
-
 	joinedColumnNames = list_concat(joinedColumnNames, leftColumnNames);
-	joinedColumnVars = list_concat(joinedColumnVars, leftColumnVars);
 	joinedColumnNames = list_concat(joinedColumnNames, rightColumnNames);
+	joinedColumnVars = list_concat(joinedColumnVars, leftColumnVars);
 	joinedColumnVars = list_concat(joinedColumnVars, rightColumnVars);
 
 	rangeTableEntry->eref->colnames = joinedColumnNames;
 	rangeTableEntry->joinaliasvars = joinedColumnVars;
 
-	SetJoinRelatedColumnsCompat(rangeTableEntry, list_length(joinExpr->usingClause),
-	 leftColumnVars, rightColumnVars);
+	SetJoinRelatedColumnsCompat(rangeTableEntry,
+	leftColumnNames, rightColumnNames, leftColumnVars, rightColumnVars);
 
 	return rangeTableEntry;
 }
 
-static void SetJoinRelatedColumnsCompat(RangeTblEntry *rangeTableEntry, int joinMergedCols,
-	List *leftColumnVars, List *rightColumnVars) {
+static void SetJoinRelatedColumnsCompat(RangeTblEntry *rangeTableEntry,
+		List *leftColumnNames, List *rightColumnNames, List* leftColumnVars, List* rightColumnVars) {
+
 	#if PG_VERSION_NUM >= PG_VERSION_13
 
-	rangeTableEntry->joinmergedcols = joinMergedCols;
-
+	/* We don't have any merged columns so set it to 0 */
+	rangeTableEntry->joinmergedcols = 0; 
 	Var* var = NULL;
-	List* joinleftcols = NIL;
+	int varId = 1;
 	foreach_ptr(var, leftColumnVars) {
-		joinleftcols = lappend_int(joinleftcols, var->varno);
-	}
-
-	List* joinrightcols = NIL;
+		rangeTableEntry->joinleftcols = lappend_int(rangeTableEntry->joinleftcols, varId);
+		varId++; 
+	} 
+	varId = 1;
 	foreach_ptr(var, rightColumnVars) {
-		joinrightcols = lappend_int(joinrightcols, var->varno);
+		rangeTableEntry->joinrightcols = lappend_int(rangeTableEntry->joinrightcols, varId);
+		varId++;
 	}
-
-	rangeTableEntry->joinleftcols = joinleftcols;
-	rangeTableEntry->joinrightcols = joinrightcols;
 	#endif
 }
 
