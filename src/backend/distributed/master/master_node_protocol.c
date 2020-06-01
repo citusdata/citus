@@ -522,7 +522,7 @@ ResolveRelationId(text *relationName, bool missingOk)
  * DEFAULT clauses for columns getting their default values from a sequence.
  * These DDL commands are all palloced; and include the table's schema
  * definition, optional column storage and statistics definitions, and index
- * and constraint definitions.
+ * constraint and trigger definitions.
  */
 List *
 GetTableDDLEvents(Oid relationId, bool includeSequenceDefaults)
@@ -541,6 +541,9 @@ GetTableDDLEvents(Oid relationId, bool includeSequenceDefaults)
 
 	List *policyCommands = CreatePolicyCommands(relationId);
 	tableDDLEventList = list_concat(tableDDLEventList, policyCommands);
+
+	List *triggerCommands = GetExplicitTriggerCommandList(relationId);
+	tableDDLEventList = list_concat(tableDDLEventList, triggerCommands);
 
 	return tableDDLEventList;
 }

@@ -45,7 +45,7 @@ test: multi_create_table_constraints multi_master_protocol multi_load_data multi
 test: multi_behavioral_analytics_basics multi_behavioral_analytics_single_shard_queries multi_insert_select_non_pushable_queries multi_insert_select multi_behavioral_analytics_create_table_superuser
 test: multi_shard_update_delete recursive_dml_with_different_planners_executors
 test: insert_select_repartition window_functions dml_recursive multi_insert_select_window
-test: multi_insert_select_conflict
+test: multi_insert_select_conflict create_table_triggers
 test: multi_row_insert
 
 # following should not run in parallel because it relies on connection counts to workers

@@ -99,6 +99,7 @@ static void EnsureTableCanBeColocatedWith(Oid relationId, char replicationModel,
 										  Oid sourceRelationId);
 static void EnsureLocalTableEmpty(Oid relationId);
 static void EnsureTableNotDistributed(Oid relationId);
+static void EnsureRelationHasNoTriggers(Oid relationId);
 static Oid SupportFunctionForColumn(Var *partitionColumn, Oid accessMethodId,
 									int16 supportFunctionNumber);
 static void EnsureLocalTableEmptyIfNecessary(Oid relationId, char distributionMethod,
@@ -650,6 +651,7 @@ EnsureRelationCanBeDistributed(Oid relationId, Var *distributionColumn,
 	EnsureTableNotDistributed(relationId);
 	EnsureLocalTableEmptyIfNecessary(relationId, distributionMethod, viaDeprecatedAPI);
 	EnsureReplicationSettings(InvalidOid, replicationModel);
+	EnsureRelationHasNoTriggers(relationId);
 
 	/* we assume callers took necessary locks */
 	Relation relation = relation_open(relationId, NoLock);
@@ -973,6 +975,31 @@ EnsureReplicationSettings(Oid relationId, char replicationModel)
 
 
 /*
+ * EnsureRelationHasNoTriggers errors out if the given table has triggers on
+ * it. See also GetExplicitTriggerIdList function's comment for the triggers this
+ * function errors out.
+ */
+static void
+EnsureRelationHasNoTriggers(Oid relationId)
+{
+	List *explicitTriggerIds = GetExplicitTriggerIdList(relationId);
+
+	if (list_length(explicitTriggerIds) > 0)
+	{
+		char *relationName = get_rel_name(relationId);
+
+		Assert(relationName != NULL);
+		ereport(ERROR, (errmsg("cannot distribute relation \"%s\" because it has "
+							   "triggers ", relationName),
+						errdetail("Citus does not support distributing tables with "
+								  "triggers."),
+						errhint("Drop all the triggers on \"%s\" and retry.",
+								relationName)));
+	}
+}
+
+
+/*
  * LookupDistributionMethod maps the oids of citus.distribution_type enum
  * values to pg_dist_partition.partmethod values.
  *
@@ -1176,7 +1203,7 @@ CreateTruncateTrigger(Oid relationId)
 	CreateTrigStmt *trigger = makeNode(CreateTrigStmt);
 	trigger->trigname = triggerName->data;
 	trigger->relation = NULL;
-	trigger->funcname = SystemFuncName("citus_truncate_trigger");
+	trigger->funcname = SystemFuncName(CITUS_TRUNCATE_TRIGGER_NAME);
 	trigger->args = NIL;
 	trigger->row = false;
 	trigger->timing = TRIGGER_TYPE_AFTER;
