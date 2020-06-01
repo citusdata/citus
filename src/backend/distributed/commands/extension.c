@@ -669,7 +669,7 @@ ShouldPropagateExtensionCommand(Node *parseTree)
 	{
 		return false;
 	}
-	else if (IsDropCitusStmt(parseTree))
+	else if (IsDropCitusExtensionStmt(parseTree))
 	{
 		return false;
 	}
@@ -718,21 +718,28 @@ IsCreateAlterExtensionUpdateCitusStmt(Node *parseTree)
 
 
 /*
- * IsDropCitusStmt iterates the objects to be dropped in a drop statement
- * and try to find citus there.
+ * IsDropCitusExtensionStmt iterates the objects to be dropped in a drop statement
+ * and try to find citus extension there.
  */
 bool
-IsDropCitusStmt(Node *parseTree)
+IsDropCitusExtensionStmt(Node *parseTree)
 {
 	/* if it is not a DropStmt, it is needless to search for citus */
 	if (!IsA(parseTree, DropStmt))
 	{
 		return false;
 	}
+	DropStmt *dropStmt = (DropStmt *) parseTree;
 
-	/* now that we have a DropStmt, check if citus is among the objects to dropped */
+	/* check if the drop command is a DROP EXTENSION command */
+	if (dropStmt->removeType != OBJECT_EXTENSION)
+	{
+		return false;
+	}
+
+	/* now that we have a DropStmt, check if citus extension is among the objects to dropped */
 	Value *objectName;
-	foreach_ptr(objectName, ((DropStmt *) parseTree)->objects)
+	foreach_ptr(objectName, dropStmt->objects)
 	{
 		const char *extensionName = strVal(objectName);
 

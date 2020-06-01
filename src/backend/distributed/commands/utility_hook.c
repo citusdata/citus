@@ -458,7 +458,7 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		}
 	}
 
-	if (IsDropCitusStmt(parsetree))
+	if (IsDropCitusExtensionStmt(parsetree))
 	{
 		StopMaintenanceDaemon(MyDatabaseId);
 	}
@@ -628,7 +628,7 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		PostprocessVacuumStmt(vacuumStmt, queryString);
 	}
 
-	if (!IsDropCitusStmt(parsetree) && !IsA(parsetree, DropdbStmt))
+	if (!IsDropCitusExtensionStmt(parsetree) && !IsA(parsetree, DropdbStmt))
 	{
 		/*
 		 * Ensure value is valid, we can't do some checks during CREATE
