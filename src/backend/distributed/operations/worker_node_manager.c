@@ -17,6 +17,7 @@
 #include "commands/dbcommands.h"
 #include "distributed/hash_helpers.h"
 #include "distributed/listutils.h"
+#include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_client_executor.h"
 #include "distributed/worker_manager.h"
@@ -402,6 +403,21 @@ NodeIsPrimaryWorker(WorkerNode *node)
 
 
 /*
+ * CoordinatorAddedAsWorkerNode returns true if coordinator is added to the
+ * pg_dist_node.
+ */
+bool
+CoordinatorAddedAsWorkerNode()
+{
+	bool groupContainsNodes = false;
+
+	PrimaryNodeForGroup(COORDINATOR_GROUP_ID, &groupContainsNodes);
+
+	return groupContainsNodes;
+}
+
+
+/*
  * ReferenceTablePlacementNodeList returns the set of nodes that should have
  * reference table placements. This includes all primaries, including the
  * coordinator if known.
@@ -411,6 +427,30 @@ ReferenceTablePlacementNodeList(LOCKMODE lockMode)
 {
 	EnsureModificationsCanRun();
 	return FilterActiveNodeListFunc(lockMode, NodeIsPrimary);
+}
+
+
+/*
+ * CoordinatorNode returns the WorkerNode object for coordinator node if it is
+ * added to pg_dist_node, otherwise errors out.
+ */
+WorkerNode *
+CoordinatorNode()
+{
+	if (!CoordinatorAddedAsWorkerNode())
+	{
+		ereport(ERROR, (errmsg("couldn't find coordinator node as it is not "
+							   "added to pg_dist_node.")));
+	}
+
+	EnsureModificationsCanRun();
+
+	WorkerNode *coordinatorNode = LookupNodeForGroup(COORDINATOR_GROUP_ID);
+
+	WorkerNode *coordinatorNodeCopy = palloc0(sizeof(WorkerNode));
+	*coordinatorNodeCopy = *coordinatorNode;
+
+	return coordinatorNodeCopy;
 }
 
 

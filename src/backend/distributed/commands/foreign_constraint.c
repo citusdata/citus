@@ -428,6 +428,29 @@ ColumnAppearsInForeignKeyToReferenceTable(char *columnName, Oid relationId)
 
 
 /*
+ * GetForeignConstraintCommandsTableInvolved takes in a relationId, and returns
+ * the list of foreign constraint commands needed to reconstruct foreign key
+ * constraints that the table is involved in either as the "referencing" one
+ * or as the "referenced" one.
+ */
+List *
+GetForeignConstraintCommandsTableInvolved(Oid relationId)
+{
+	int flags = INCLUDE_REFERENCING_CONSTRAINTS;
+	List *foreignKeyCommandsTableReferencing =
+		GetForeignConstraintCommandsInternal(relationId, flags);
+
+	/* exclude self-referencing foreign keys as we already included them above */
+	flags = (INCLUDE_REFERENCED_CONSTRAINTS | EXCLUDE_SELF_REFERENCES);
+	List *foreignKeyCommandsTableReferenced =
+		GetForeignConstraintCommandsInternal(relationId, flags);
+
+	return list_concat(foreignKeyCommandsTableReferencing,
+					   foreignKeyCommandsTableReferenced);
+}
+
+
+/*
  * GetReferencingForeignConstaintCommands takes in a relationId, and
  * returns the list of foreign constraint commands needed to reconstruct
  * foreign key constraints that the table is involved in as the "referencing"
