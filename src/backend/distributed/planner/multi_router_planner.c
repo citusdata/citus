@@ -778,32 +778,14 @@ ModifyQuerySupported(Query *queryTree, Query *originalQuery, bool multiShardQuer
 		}
 	}
 
-	/*
-	 * We have to allow modify queries with two range table entries, if it is pushdownable.
-	 */
-	if (commandType != CMD_INSERT)
+	if (commandType != CMD_INSERT && multiShardQuery)
 	{
-		/* We can not get restriction context via master_modify_multiple_shards path */
-		if (plannerRestrictionContext == NULL)
-		{
-			if (queryTableCount != 1)
-			{
-				return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-									 "cannot run multi shard modify query with master_modify_multiple_shards when the query involves subquery or join",
-									 "Execute the query without using master_modify_multiple_shards()",
-									 NULL);
-			}
-		}
-		/* If it is a multi-shard modify query with multiple tables */
-		else if (multiShardQuery)
-		{
-			DeferredErrorMessage *errorMessage = MultiShardModifyQuerySupported(
-				originalQuery, plannerRestrictionContext);
+		DeferredErrorMessage *errorMessage = MultiShardModifyQuerySupported(
+			originalQuery, plannerRestrictionContext);
 
-			if (errorMessage != NULL)
-			{
-				return errorMessage;
-			}
+		if (errorMessage != NULL)
+		{
+			return errorMessage;
 		}
 	}
 
