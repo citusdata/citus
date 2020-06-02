@@ -150,7 +150,6 @@ static List * GroupInsertValuesByShardId(List *insertValuesList);
 static List * ExtractInsertValuesList(Query *query, Var *partitionColumn);
 static DeferredErrorMessage * MultiRouterPlannableQuery(Query *query);
 static DeferredErrorMessage * ErrorIfQueryHasModifyingCTE(Query *queryTree);
-static RangeTblEntry * GetUpdateOrDeleteRTE(Query *query);
 static bool SelectsFromDistributedTable(List *rangeTableList, Query *query);
 static ShardPlacement * CreateDummyPlacement(void);
 static List * get_all_actual_clauses(List *restrictinfo_list);
@@ -1632,19 +1631,22 @@ RouterJob(Query *originalQuery, PlannerRestrictionContext *plannerRestrictionCon
 	Job *job = CreateJob(originalQuery);
 	job->partitionKeyValue = partitionKeyValue;
 
-	RangeTblEntry *updateOrDeleteRTE = GetUpdateOrDeleteRTE(originalQuery);
-
-	/*
-	 * If all of the shards are pruned, we replace the relation RTE into
-	 * subquery RTE that returns no results. However, this is not useful
-	 * for UPDATE and DELETE queries. Therefore, if we detect a UPDATE or
-	 * DELETE RTE with subquery type, we just set task list to empty and return
-	 * the job.
-	 */
-	if (updateOrDeleteRTE != NULL && updateOrDeleteRTE->rtekind == RTE_SUBQUERY)
+	if (originalQuery->resultRelation > 0)
 	{
-		job->taskList = NIL;
-		return job;
+		RangeTblEntry *updateOrDeleteRTE = ExtractResultRelationRTE(originalQuery);
+
+		/*
+		 * If all of the shards are pruned, we replace the relation RTE into
+		 * subquery RTE that returns no results. However, this is not useful
+		 * for UPDATE and DELETE queries. Therefore, if we detect a UPDATE or
+		 * DELETE RTE with subquery type, we just set task list to empty and return
+		 * the job.
+		 */
+		if (updateOrDeleteRTE->rtekind == RTE_SUBQUERY)
+		{
+			job->taskList = NIL;
+			return job;
+		}
 	}
 
 	if (isMultiShardModifyQuery)
@@ -1883,8 +1885,7 @@ SingleShardModifyTaskList(Query *query, uint64 jobId, List *relationShardList,
 	List *rangeTableList = NIL;
 
 	ExtractRangeTableEntryWalker((Node *) query, &rangeTableList);
-	RangeTblEntry *updateOrDeleteRTE = GetUpdateOrDeleteRTE(query);
-	Assert(updateOrDeleteRTE != NULL);
+	RangeTblEntry *updateOrDeleteRTE = ExtractResultRelationRTE(query);
 
 	CitusTableCacheEntry *modificationTableCacheEntry = GetCitusTableCacheEntry(
 		updateOrDeleteRTE->relid);
@@ -1907,22 +1908,6 @@ SingleShardModifyTaskList(Query *query, uint64 jobId, List *relationShardList,
 	task->parametersInQueryStringResolved = parametersInQueryResolved;
 
 	return list_make1(task);
-}
-
-
-/*
- * GetUpdateOrDeleteRTE checks query if it has an UPDATE or DELETE RTE.
- * Returns that RTE if found.
- */
-static RangeTblEntry *
-GetUpdateOrDeleteRTE(Query *query)
-{
-	if (query->resultRelation > 0)
-	{
-		return rt_fetch(query->resultRelation, query->rtable);
-	}
-
-	return NULL;
 }
 
 
