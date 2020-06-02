@@ -221,7 +221,8 @@ _PG_init(void)
 	 * duties. For simplicity insist that all hooks are previously unused.
 	 */
 	if (planner_hook != NULL || ProcessUtility_hook != NULL ||
-		ExecutorStart_hook != NULL || ExecutorRun_hook != NULL)
+		ExecutorStart_hook != NULL || ExecutorRun_hook != NULL ||
+		ExecutorEnd_hook != NULL)
 	{
 		ereport(ERROR, (errmsg("Citus has to be loaded first"),
 						errhint("Place citus at the beginning of "
@@ -267,6 +268,7 @@ _PG_init(void)
 	set_join_pathlist_hook = multi_join_restriction_hook;
 	ExecutorStart_hook = CitusExecutorStart;
 	ExecutorRun_hook = CitusExecutorRun;
+	ExecutorEnd_hook = CitusExecutorEnd;
 
 	/* register hook for error messages */
 	emit_log_hook = multi_log_hook;

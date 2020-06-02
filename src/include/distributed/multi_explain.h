@@ -16,4 +16,8 @@
 extern bool ExplainDistributedQueries;
 extern bool ExplainAllTasks;
 
+extern bool ShouldSaveWorkerQueryExplainAnalyze(QueryDesc *queryDesc);
+extern void SaveQueryExplainAnalyze(QueryDesc *queryDesc);
+
+
 #endif /* MULTI_EXPLAIN_H */

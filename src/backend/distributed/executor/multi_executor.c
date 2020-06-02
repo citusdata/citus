@@ -26,6 +26,7 @@
 #include "distributed/listutils.h"
 #include "distributed/master_protocol.h"
 #include "distributed/multi_executor.h"
+#include "distributed/multi_explain.h"
 #include "distributed/multi_master_planner.h"
 #include "distributed/distributed_planner.h"
 #include "distributed/multi_router_planner.h"
@@ -42,10 +43,12 @@
 #include "nodes/nodeFuncs.h"
 #include "parser/parsetree.h"
 #include "parser/parse_oper.h"
+#include "portability/instr_time.h"
 #include "storage/lmgr.h"
 #include "tcop/dest.h"
 #include "tcop/pquery.h"
 #include "tcop/utility.h"
+#include "utils/builtins.h"
 #include "utils/snapmgr.h"
 #include "utils/memutils.h"
 
@@ -76,6 +79,7 @@ static List * FindCitusCustomScanStates(PlanState *planState);
 static bool CitusCustomScanStateWalker(PlanState *planState,
 									   List **citusCustomScanStates);
 
+
 /*
  * CitusExecutorStart is the ExecutorStart_hook that gets called when
  * Postgres prepares for execution or EXPLAIN.
@@ -84,6 +88,12 @@ void
 CitusExecutorStart(QueryDesc *queryDesc, int eflags)
 {
 	PlannedStmt *plannedStmt = queryDesc->plannedstmt;
+
+	if (ShouldSaveWorkerQueryExplainAnalyze(queryDesc))
+	{
+		queryDesc->instrument_options |= INSTRUMENT_TIMER;
+		queryDesc->instrument_options |= INSTRUMENT_BUFFERS;
+	}
 
 	/*
 	 * We cannot modify XactReadOnly on Windows because it is not
@@ -115,6 +125,21 @@ CitusExecutorStart(QueryDesc *queryDesc, int eflags)
 #endif
 	{
 		standard_ExecutorStart(queryDesc, eflags);
+	}
+
+	if (ShouldSaveWorkerQueryExplainAnalyze(queryDesc))
+	{
+		/*
+		 * Set up to track total elapsed time in ExecutorRun.  Make sure the
+		 * space is allocated in the per-query context so it will go away at
+		 * ExecutorEnd.
+		 */
+		if (queryDesc->totaltime == NULL)
+		{
+			MemoryContext oldcxt = MemoryContextSwitchTo(queryDesc->estate->es_query_cxt);
+			queryDesc->totaltime = InstrAlloc(1, INSTRUMENT_ALL);
+			MemoryContextSwitchTo(oldcxt);
+		}
 	}
 }
 
@@ -223,6 +248,28 @@ CitusExecutorRun(QueryDesc *queryDesc,
 		PG_RE_THROW();
 	}
 	PG_END_TRY();
+}
+
+
+/*
+ * CitusExecutorEnd is the ExecutorEnd_hook that gets called when postgres
+ * ends executing a query.
+ */
+void
+CitusExecutorEnd(QueryDesc *queryDesc)
+{
+	/*
+	 * When executing worker_save_query_explain_analyze() to enable saving,
+	 * ShouldSaveWorkerQueryExplainAnalyze() returns false at ExecutorStart()
+	 * but true here. Which means that we haven't saved enough instrumentation.
+	 * So we also check queryDesc->totaltime.
+	 */
+	if (ShouldSaveWorkerQueryExplainAnalyze(queryDesc) && queryDesc->totaltime)
+	{
+		SaveQueryExplainAnalyze(queryDesc);
+	}
+
+	standard_ExecutorEnd(queryDesc);
 }
 
 

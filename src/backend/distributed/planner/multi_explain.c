@@ -61,6 +61,37 @@
 bool ExplainDistributedQueries = true;
 bool ExplainAllTasks = false;
 
+/* struct to save explain flags */
+typedef struct
+{
+	bool verbose;
+	bool costs;
+	bool buffers;
+	bool timing;
+	bool summary;
+	bool query;
+	ExplainFormat format;
+} ExplainOptions;
+
+
+/*
+ * When set by worker_save_query_explain_analyze(), EXPLAIN ANALYZE output of
+ * worker tasks are saved, and can be fetched by worker_last_saved_explain_analyze().
+ */
+static bool SaveTaskExplainPlans = false;
+
+/*
+ * If enabled, EXPLAIN ANALYZE output of last worker task are saved in
+ * SavedExplainPlan.
+ */
+static char *SavedExplainPlan = NULL;
+
+/*
+ * EXPLAIN ANALYZE flags to be used for saving worker query EXPLAIN ANALYZE
+ * when SaveTaskExplainPlans is set. These are set by a call to
+ * worker_save_query_explain_analyze.
+ */
+static ExplainOptions WorkerQueryExplainOptions = { 0, 0, 0, 0, 0, EXPLAIN_FORMAT_TEXT };
 
 /* Result for a single remote EXPLAIN command */
 typedef struct RemoteExplainPlan
@@ -80,13 +111,17 @@ static void ExplainTask(Task *task, int placementIndex, List *explainOutputList,
 						ExplainState *es);
 static void ExplainTaskPlacement(ShardPlacement *taskPlacement, List *explainOutputList,
 								 ExplainState *es);
-static StringInfo BuildRemoteExplainQuery(char *queryString, ExplainState *es);
+static StringInfo BuildRemoteExplainQuery(const char *queryString, ExplainState *es);
 
 /* Static Explain functions copied from explain.c */
 static void ExplainOneQuery(Query *query, int cursorOptions,
 							IntoClause *into, ExplainState *es,
 							const char *queryString, ParamListInfo params,
 							QueryEnvironment *queryEnv);
+
+/* exports for SQL callable functions */
+PG_FUNCTION_INFO_V1(worker_last_saved_explain_analyze);
+PG_FUNCTION_INFO_V1(worker_save_query_explain_analyze);
 
 
 /*
@@ -585,7 +620,7 @@ ExplainTaskPlacement(ShardPlacement *taskPlacement, List *explainOutputList,
  * the options in the explain state.
  */
 static StringInfo
-BuildRemoteExplainQuery(char *queryString, ExplainState *es)
+BuildRemoteExplainQuery(const char *queryString, ExplainState *es)
 {
 	StringInfo explainQuery = makeStringInfo();
 	char *formatStr = NULL;
@@ -631,6 +666,124 @@ BuildRemoteExplainQuery(char *queryString, ExplainState *es)
 					 queryString);
 
 	return explainQuery;
+}
+
+
+/*
+ * ShouldSaveWorkerQueryExplainAnalyze returns true if we should save the EXPLAIN
+ * ANALYZE output of given query while executing it.
+ */
+bool
+ShouldSaveWorkerQueryExplainAnalyze(QueryDesc *queryDesc)
+{
+	PlannedStmt *plannedStmt = queryDesc->plannedstmt;
+
+	return SaveTaskExplainPlans &&
+		   ExecutorLevel == 0 &&
+		   !IsParallelWorker() &&
+		   !IsCitusPlan(plannedStmt->planTree);
+}
+
+
+/*
+ * SaveQueryExplain saves the EXPLAIN ANALYZE output of an already executed
+ * and instrumented query. This can be retrieved later by calling
+ * worker_worker_last_saved_explain_analyze.
+ */
+void
+SaveQueryExplainAnalyze(QueryDesc *queryDesc)
+{
+	/*
+	 * Make sure stats accumulation is done.  (Note: it's okay if several
+	 * levels of hook all do this.)
+	 */
+	InstrEndLoop(queryDesc->totaltime);
+
+	ExplainState *es = NewExplainState();
+
+	es->analyze = true;
+	es->verbose = WorkerQueryExplainOptions.verbose;
+	es->buffers = WorkerQueryExplainOptions.buffers;
+	es->timing = WorkerQueryExplainOptions.timing;
+	es->summary = WorkerQueryExplainOptions.summary;
+	es->format = WorkerQueryExplainOptions.format;
+	es->costs = WorkerQueryExplainOptions.costs;
+
+	ExplainBeginOutput(es);
+
+	if (WorkerQueryExplainOptions.query)
+	{
+		ExplainQueryText(es, queryDesc);
+	}
+
+	ExplainPrintPlan(es, queryDesc);
+
+	if (es->costs)
+	{
+		ExplainPrintJITSummary(es, queryDesc);
+	}
+
+	ExplainEndOutput(es);
+
+	/*
+	 * We don't always send BEGIN/END to workers for all queries. Changing
+	 * transaction management for EXPLAIN ANALYZE can change their runtime
+	 * metrics, so we don't want to change it for more realistic EXPLAIN
+	 * ANALYZE.
+	 *
+	 * Therefore, SavedExplainPlan might be fetched in a different transaction
+	 * than it was created at. So we allocate it in TopMemoryContext so it
+	 * survives transaction boundaries.
+	 */
+	MemoryContext oldContext = MemoryContextSwitchTo(TopMemoryContext);
+
+	if (SavedExplainPlan != NULL)
+	{
+		pfree(SavedExplainPlan);
+	}
+
+	SavedExplainPlan = pstrdup(es->str->data);
+
+	MemoryContextSwitchTo(oldContext);
+
+	pfree(es->str->data);
+}
+
+
+/*
+ * worker_last_saved_explain_analyze returns the last saved EXPLAIN ANALYZE output of
+ * a worker task query. It returns NULL if nothing have been saved yet.
+ */
+Datum
+worker_last_saved_explain_analyze(PG_FUNCTION_ARGS)
+{
+	if (SavedExplainPlan == NULL)
+	{
+		PG_RETURN_NULL();
+	}
+	else
+	{
+		PG_RETURN_TEXT_P(cstring_to_text(SavedExplainPlan));
+	}
+}
+
+
+/*
+ * worker_save_query_explain_analyze enables/disables saving of EXPLAIN ANALYZE
+ * output for worker task queries, and also sets EXPLAIN flags.
+ */
+Datum
+worker_save_query_explain_analyze(PG_FUNCTION_ARGS)
+{
+	SaveTaskExplainPlans = PG_GETARG_BOOL(0);
+	WorkerQueryExplainOptions.verbose = PG_GETARG_BOOL(1);
+	WorkerQueryExplainOptions.costs = PG_GETARG_BOOL(2);
+	WorkerQueryExplainOptions.timing = PG_GETARG_BOOL(3);
+	WorkerQueryExplainOptions.summary = PG_GETARG_BOOL(4);
+	WorkerQueryExplainOptions.query = PG_GETARG_BOOL(5);
+	WorkerQueryExplainOptions.format = (ExplainFormat) PG_GETARG_INT32(6);
+
+	PG_RETURN_VOID();
 }
 
 
