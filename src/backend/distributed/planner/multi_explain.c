@@ -141,21 +141,23 @@ CoordinatorInsertSelectExplainScan(CustomScanState *node, List *ancestors,
 	char *queryString = NULL;
 	int cursorOptions = CURSOR_OPT_PARALLEL_OK;
 
-	if (es->analyze)
-	{
-		/* avoiding double execution here is tricky, error out for now */
-		ereport(ERROR, (errmsg("EXPLAIN ANALYZE is currently not supported for INSERT "
-							   "... SELECT commands via the coordinator")));
-	}
-
 	/*
 	 * Make a copy of the query, since pg_plan_query may scribble on it and later
 	 * stages of EXPLAIN require it.
 	 */
 	Query *queryCopy = copyObject(query);
 	PlannedStmt *selectPlan = pg_plan_query(queryCopy, cursorOptions, params);
-	if (IsRedistributablePlan(selectPlan->planTree) &&
-		IsSupportedRedistributionTarget(targetRelationId))
+	bool repartition = IsRedistributablePlan(selectPlan->planTree) &&
+					   IsSupportedRedistributionTarget(targetRelationId);
+
+	if (es->analyze)
+	{
+		ereport(ERROR, (errmsg("EXPLAIN ANALYZE is currently not supported for INSERT "
+							   "... SELECT commands %s",
+							   repartition ? "with repartitioning" : "via coordinator")));
+	}
+
+	if (repartition)
 	{
 		ExplainPropertyText("INSERT/SELECT method", "repartition", es);
 	}
