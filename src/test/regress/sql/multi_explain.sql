@@ -85,6 +85,17 @@ EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE)
 	SELECT l_quantity, count(*) count_quantity FROM lineitem
 	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
 
+-- EXPLAIN ANALYZE doesn't show worker tasks for repartition joins yet
+SET citus.shard_count TO 3;
+CREATE TABLE t1(a int, b int);
+CREATE TABLE t2(a int, b int);
+SELECT create_distributed_table('t1', 'a'), create_distributed_table('t2', 'a');
+BEGIN;
+SET LOCAL citus.enable_repartition_joins TO true;
+EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off) SELECT count(*) FROM t1, t2 WHERE t1.a=t2.b;
+END;
+DROP TABLE t1, t2;
+
 -- Test verbose
 EXPLAIN (COSTS FALSE, VERBOSE TRUE)
 	SELECT sum(l_quantity) / avg(l_quantity) FROM lineitem;

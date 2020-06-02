@@ -289,6 +289,27 @@ Sort (actual rows=50 loops=1)
                     ->  HashAggregate (actual rows=50 loops=1)
                           Group Key: l_quantity
                           ->  Seq Scan on lineitem_290000 lineitem (actual rows=6000 loops=1)
+-- EXPLAIN ANALYZE doesn't show worker tasks for repartition joins yet
+SET citus.shard_count TO 3;
+CREATE TABLE t1(a int, b int);
+CREATE TABLE t2(a int, b int);
+SELECT create_distributed_table('t1', 'a'), create_distributed_table('t2', 'a');
+|
+BEGIN;
+SET LOCAL citus.enable_repartition_joins TO true;
+EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off) SELECT count(*) FROM t1, t2 WHERE t1.a=t2.b;
+Aggregate (actual rows=1 loops=1)
+  ->  Custom Scan (Citus Adaptive) (actual rows=4 loops=1)
+        Task Count: 4
+        Tasks Shown: None, not supported for re-partition queries
+        ->  MapMergeJob
+              Map Task Count: 3
+              Merge Task Count: 4
+        ->  MapMergeJob
+              Map Task Count: 3
+              Merge Task Count: 4
+END;
+DROP TABLE t1, t2;
 -- Test verbose
 EXPLAIN (COSTS FALSE, VERBOSE TRUE)
 	SELECT sum(l_quantity) / avg(l_quantity) FROM lineitem;
