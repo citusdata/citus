@@ -57,13 +57,6 @@
 #include "utils/snapmgr.h"
 
 
-/* OR-able flags for ExplainXMLTag() (explain.c) */
-#define X_OPENING 0
-#define X_CLOSING 1
-#define X_CLOSE_IMMEDIATE 2
-#define X_NOWHITESPACE 4
-
-
 /* Config variables that enable printing distributed query plans */
 bool ExplainDistributedQueries = true;
 bool ExplainAllTasks = false;
