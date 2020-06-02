@@ -289,6 +289,47 @@ Sort (actual rows=50 loops=1)
                     ->  HashAggregate (actual rows=50 loops=1)
                           Group Key: l_quantity
                           ->  Seq Scan on lineitem_290000 lineitem (actual rows=6000 loops=1)
+-- Test query text output, with ANALYZE ON
+BEGIN;
+SET LOCAL citus.explain_worker_query TO true;
+EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE)
+	SELECT l_quantity, count(*) count_quantity FROM lineitem
+	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
+Sort (actual rows=50 loops=1)
+  Sort Key: (COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint)), remote_scan.l_quantity
+  Sort Method: quicksort  Memory: 27kB
+  ->  HashAggregate (actual rows=50 loops=1)
+        Group Key: remote_scan.l_quantity
+        ->  Custom Scan (Citus Adaptive) (actual rows=100 loops=1)
+              Task Count: 2
+              Tasks Shown: One of 2
+              ->  Task
+                    Node: host=localhost port=xxxxx dbname=regression
+                    ->  Query Text: SELECT l_quantity, count(*) AS count_quantity FROM lineitem_290000 lineitem WHERE true GROUP BY l_quantity
+                        HashAggregate (actual rows=50 loops=1)
+                          Group Key: l_quantity
+                          ->  Seq Scan on lineitem_290000 lineitem (actual rows=6000 loops=1)
+END;
+-- Test query text output, with ANALYZE OFF
+BEGIN;
+SET LOCAL citus.explain_worker_query TO true;
+EXPLAIN (COSTS FALSE, ANALYZE FALSE, TIMING FALSE, SUMMARY FALSE)
+	SELECT l_quantity, count(*) count_quantity FROM lineitem
+	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
+Sort
+  Sort Key: (COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint)), remote_scan.l_quantity
+  ->  HashAggregate
+        Group Key: remote_scan.l_quantity
+        ->  Custom Scan (Citus Adaptive)
+              Task Count: 2
+              Tasks Shown: One of 2
+              ->  Task
+                    Node: host=localhost port=xxxxx dbname=regression
+                    ->  Query Text: SELECT l_quantity, count(*) AS count_quantity FROM lineitem_290000 lineitem WHERE true GROUP BY l_quantity
+                        HashAggregate
+                          Group Key: l_quantity
+                          ->  Seq Scan on lineitem_290000 lineitem
+END;
 -- Test verbose
 EXPLAIN (COSTS FALSE, VERBOSE TRUE)
 	SELECT sum(l_quantity) / avg(l_quantity) FROM lineitem;

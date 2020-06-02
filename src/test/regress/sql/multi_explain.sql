@@ -85,6 +85,22 @@ EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE)
 	SELECT l_quantity, count(*) count_quantity FROM lineitem
 	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
 
+-- Test query text output, with ANALYZE ON
+BEGIN;
+SET LOCAL citus.explain_worker_query TO true;
+EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE)
+	SELECT l_quantity, count(*) count_quantity FROM lineitem
+	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
+END;
+
+-- Test query text output, with ANALYZE OFF
+BEGIN;
+SET LOCAL citus.explain_worker_query TO true;
+EXPLAIN (COSTS FALSE, ANALYZE FALSE, TIMING FALSE, SUMMARY FALSE)
+	SELECT l_quantity, count(*) count_quantity FROM lineitem
+	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
+END;
+
 -- Test verbose
 EXPLAIN (COSTS FALSE, VERBOSE TRUE)
 	SELECT sum(l_quantity) / avg(l_quantity) FROM lineitem;

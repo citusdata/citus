@@ -59,6 +59,7 @@
 /* Config variables that enable printing distributed query plans */
 bool ExplainDistributedQueries = true;
 bool ExplainAllTasks = false;
+bool ExplainWorkerQuery = false;
 
 /* struct to save explain flags */
 typedef struct
@@ -494,6 +495,16 @@ RemoteExplain(Task *task, ExplainState *es)
 		/* read explain query results */
 		remotePlan->explainOutputList = ReadFirstColumnAsText(queryResult);
 
+		/* if requested, add query text to explain output */
+		if (ExplainWorkerQuery)
+		{
+			StringInfo queryTextStr = makeStringInfo();
+			appendStringInfo(queryTextStr, "Query Text: %s", queryText);
+
+			remotePlan->explainOutputList = lcons(queryTextStr,
+												  remotePlan->explainOutputList);
+		}
+
 		PQclear(queryResult);
 		ForgetResults(connection);
 
@@ -719,6 +730,11 @@ SaveQueryExplainAnalyze(QueryDesc *queryDesc)
 
 	ExplainBeginOutput(es);
 
+	if (WorkerQueryExplainOptions.query)
+	{
+		ExplainQueryText(es, queryDesc);
+	}
+
 	ExplainPrintPlan(es, queryDesc);
 
 	if (es->costs)
@@ -896,7 +912,7 @@ CitusExplainOneQuery(Query *query, int cursorOptions, IntoClause *into,
 	CurrentDistributedQueryExplainOptions.summary = es->summary;
 	CurrentDistributedQueryExplainOptions.timing = es->timing;
 	CurrentDistributedQueryExplainOptions.format = es->format;
-	CurrentDistributedQueryExplainOptions.query = false;
+	CurrentDistributedQueryExplainOptions.query = ExplainWorkerQuery;
 
 	/* rest is copied from ExplainOneQuery() */
 	instr_time planstart,

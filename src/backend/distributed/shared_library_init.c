@@ -1455,6 +1455,16 @@ RegisterCitusConfigVariables(void)
 		GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
 
+	DefineCustomBoolVariable(
+		"citus.explain_worker_query",
+		NULL,
+		NULL,
+		&ExplainWorkerQuery,
+		false,
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
 	/* warn about config items in the citus namespace that are not registered above */
 	EmitWarningsOnPlaceholders("citus");
 }
