@@ -56,7 +56,6 @@
 #include "utils/lsyscache.h"
 #include "utils/snapmgr.h"
 
-
 /* Config variables that enable printing distributed query plans */
 bool ExplainDistributedQueries = true;
 bool ExplainAllTasks = false;
@@ -72,7 +71,6 @@ typedef struct
 	bool query;
 	ExplainFormat format;
 } ExplainOptions;
-
 
 /*
  * When set by worker_save_query_explain_analyze(), EXPLAIN ANALYZE output of
@@ -93,6 +91,11 @@ static char *SavedExplainPlan = NULL;
  */
 static ExplainOptions WorkerQueryExplainOptions = { 0, 0, 0, 0, 0, EXPLAIN_FORMAT_TEXT };
 
+/* EXPLAIN flags of current distributed explain */
+static ExplainOptions CurrentDistributedQueryExplainOptions = {
+	0, 0, 0, 0, 0, EXPLAIN_FORMAT_TEXT
+};
+
 /* Result for a single remote EXPLAIN command */
 typedef struct RemoteExplainPlan
 {
@@ -112,6 +115,11 @@ static void ExplainTask(Task *task, int placementIndex, List *explainOutputList,
 static void ExplainTaskPlacement(ShardPlacement *taskPlacement, List *explainOutputList,
 								 ExplainState *es);
 static StringInfo BuildRemoteExplainQuery(const char *queryString, ExplainState *es);
+static void ExplainAnalyzePreExecutionHook(Task *task, int placementIndex,
+										   MultiConnection *connection);
+static void ExplainAnalyzePostExecutionHook(Task *task, int placementIndex,
+											MultiConnection *connection);
+static List * SplitString(StringInfo str, char delimiter);
 
 /* Static Explain functions copied from explain.c */
 static void ExplainOneQuery(Query *query, int cursorOptions,
@@ -429,15 +437,31 @@ RemoteExplain(Task *task, ExplainState *es)
 
 	RemoteExplainPlan *remotePlan = (RemoteExplainPlan *) palloc0(
 		sizeof(RemoteExplainPlan));
-	StringInfo explainQuery = BuildRemoteExplainQuery(TaskQueryStringForAllPlacements(
-														  task),
-													  es);
 
-	/*
-	 * Use a coordinated transaction to ensure that we open a transaction block
-	 * such that we can set a savepoint.
-	 */
-	UseCoordinatedTransaction();
+	if (es->analyze)
+	{
+		Assert(task->savedPlan);
+
+		/*
+		 * Similar to postgres' ExplainQuery(), we split by newline only for
+		 * text format.
+		 */
+		if (es->format == EXPLAIN_FORMAT_TEXT)
+		{
+			remotePlan->explainOutputList = SplitString(task->savedPlan, '\n');
+		}
+		else
+		{
+			remotePlan->explainOutputList = list_make1(task->savedPlan);
+		}
+
+		remotePlan->placementIndex = task->savedPlanPlacementIndex;
+
+		return remotePlan;
+	}
+
+	const char *queryText = TaskQueryStringForAllPlacements(task);
+	StringInfo explainQuery = BuildRemoteExplainQuery(queryText, es);
 
 	for (int placementIndex = 0; placementIndex < placementCount; placementIndex++)
 	{
@@ -456,15 +480,6 @@ RemoteExplain(Task *task, ExplainState *es)
 			continue;
 		}
 
-		RemoteTransactionBeginIfNecessary(connection);
-
-		/*
-		 * Start a savepoint for the explain query. After running the explain
-		 * query, we will rollback to this savepoint. This saves us from side
-		 * effects of EXPLAIN ANALYZE on DML queries.
-		 */
-		ExecuteCriticalRemoteCommand(connection, "SAVEPOINT citus_explain_savepoint");
-
 		/* run explain query */
 		int executeResult = ExecuteOptionalRemoteCommand(connection, explainQuery->data,
 														 &queryResult);
@@ -482,14 +497,7 @@ RemoteExplain(Task *task, ExplainState *es)
 		PQclear(queryResult);
 		ForgetResults(connection);
 
-		/* rollback to the savepoint */
-		ExecuteCriticalRemoteCommand(connection,
-									 "ROLLBACK TO SAVEPOINT citus_explain_savepoint");
-
-		if (remotePlan->explainOutputList != NIL)
-		{
-			break;
-		}
+		break;
 	}
 
 	return remotePlan;
@@ -711,11 +719,6 @@ SaveQueryExplainAnalyze(QueryDesc *queryDesc)
 
 	ExplainBeginOutput(es);
 
-	if (WorkerQueryExplainOptions.query)
-	{
-		ExplainQueryText(es, queryDesc);
-	}
-
 	ExplainPrintPlan(es, queryDesc);
 
 	if (es->costs)
@@ -747,6 +750,96 @@ SaveQueryExplainAnalyze(QueryDesc *queryDesc)
 	MemoryContextSwitchTo(oldContext);
 
 	pfree(es->str->data);
+}
+
+
+/*
+ * RequestedForExplainAnalyze returns true if we should get the EXPLAIN ANALYZE
+ * output for the given custom scan node.
+ */
+bool
+RequestedForExplainAnalyze(CustomScanState *node)
+{
+	return (node->ss.ps.state->es_instrument != 0);
+}
+
+
+/*
+ * InstallExplainAnalyzeHooks installs hooks on given tasks so EXPLAIN ANALYZE
+ * output of them are saved & fetched from workers.
+ */
+void
+InstallExplainAnalyzeHooks(List *taskList)
+{
+	Task *task = NULL;
+	foreach_ptr(task, taskList)
+	{
+		task->preExecutionHook = ExplainAnalyzePreExecutionHook;
+		task->postExecutionHook = ExplainAnalyzePostExecutionHook;
+	}
+}
+
+
+/*
+ * ExplainAnalyzePreExecutionHook implements task->preExecutionHook and sends
+ * EXPLAIN ANALYZE params over the given connection.
+ */
+static void
+ExplainAnalyzePreExecutionHook(Task *task, int placementIndex,
+							   MultiConnection *connection)
+{
+	StringInfo query = makeStringInfo();
+	appendStringInfo(query,
+					 "SELECT worker_save_query_explain_analyze(true, %s, %s, %s, %s, %s, %d)",
+					 CurrentDistributedQueryExplainOptions.verbose ? "true" : "false",
+					 CurrentDistributedQueryExplainOptions.costs ? "true" : "false",
+					 CurrentDistributedQueryExplainOptions.timing ? "true" : "false",
+					 CurrentDistributedQueryExplainOptions.summary ? "true" : "false",
+					 CurrentDistributedQueryExplainOptions.query ? "true" : "false",
+					 (int) CurrentDistributedQueryExplainOptions.format);
+
+	ExecuteCriticalRemoteCommand(connection, query->data);
+}
+
+
+/*
+ * ExplainAnalyzePostExecutionHook implements task->postExecutionHook and fetches the task's
+ * EXPLAIN ANALYZE output from the worker.
+ */
+static void
+ExplainAnalyzePostExecutionHook(Task *task, int placementIndex,
+								MultiConnection *connection)
+{
+	PGresult *planResult = NULL;
+	const char *fetchQuery = "SELECT worker_last_saved_explain_analyze()";
+
+	int execResult = ExecuteOptionalRemoteCommand(connection, fetchQuery, &planResult);
+	if (execResult == RESPONSE_OKAY)
+	{
+		List *planList = ReadFirstColumnAsText(planResult);
+		StringInfo remotePlan = (StringInfo) linitial(planList);
+
+		task->savedPlan = makeStringInfo();
+		appendStringInfoString(task->savedPlan, remotePlan->data);
+
+		task->savedPlanPlacementIndex = placementIndex;
+
+		PQclear(planResult);
+	}
+	else
+	{
+		ereport(ERROR, (errmsg("failed to fetch remote task's EXPLAIN ANALYZE")));
+	}
+
+	ClearResults(connection, false);
+
+	/*
+	 * Disable worker EXPLAIN/ANALYZE, so we don't do save EXPLAIN ANALYZE output
+	 * in workers for subsequent queries if not asked to.
+	 */
+	const char *resetQuery = "SELECT worker_save_query_explain_analyze("
+							 "false, false, false, false, false, false, 0)";
+	ExecuteCriticalRemoteCommand(connection, resetQuery);
 }
 
 
@@ -784,6 +877,81 @@ worker_save_query_explain_analyze(PG_FUNCTION_ARGS)
 	WorkerQueryExplainOptions.format = (ExplainFormat) PG_GETARG_INT32(6);
 
 	PG_RETURN_VOID();
+}
+
+
+/*
+ * CitusExplainOneQuery is the executor hook that is called when
+ * postgres wants to explain a query.
+ */
+void
+CitusExplainOneQuery(Query *query, int cursorOptions, IntoClause *into,
+					 ExplainState *es, const char *queryString, ParamListInfo params,
+					 QueryEnvironment *queryEnv)
+{
+	/* save the flags of current EXPLAIN command */
+	CurrentDistributedQueryExplainOptions.costs = es->costs;
+	CurrentDistributedQueryExplainOptions.buffers = es->buffers;
+	CurrentDistributedQueryExplainOptions.verbose = es->verbose;
+	CurrentDistributedQueryExplainOptions.summary = es->summary;
+	CurrentDistributedQueryExplainOptions.timing = es->timing;
+	CurrentDistributedQueryExplainOptions.format = es->format;
+	CurrentDistributedQueryExplainOptions.query = false;
+
+	/* rest is copied from ExplainOneQuery() */
+	instr_time planstart,
+			   planduration;
+
+	INSTR_TIME_SET_CURRENT(planstart);
+
+	/* plan the query */
+	PlannedStmt *plan = pg_plan_query(query, cursorOptions, params);
+
+	INSTR_TIME_SET_CURRENT(planduration);
+	INSTR_TIME_SUBTRACT(planduration, planstart);
+
+	/* run it (if needed) and produce output */
+	ExplainOnePlan(plan, into, es, queryString, params, queryEnv,
+				   &planduration);
+}
+
+
+/*
+ * SplitString splits the given string by the given delimiter.
+ *
+ * Why not use strtok_s()? Its signature and semantics are difficult to understand.
+ *
+ * Why not use strchr() (similar to do_text_output_multiline)? Although not banned,
+ * it isn't safe if by any chance str is not null-terminated.
+ */
+static List *
+SplitString(StringInfo str, char delimiter)
+{
+	if (str->len == 0)
+	{
+		return NIL;
+	}
+
+	List *tokenList = NIL;
+	StringInfo token = makeStringInfo();
+
+	for (size_t index = 0; index < str->len; index++)
+	{
+		if (str->data[index] == delimiter)
+		{
+			tokenList = lappend(tokenList, token);
+			token = makeStringInfo();
+		}
+		else
+		{
+			appendStringInfoChar(token, str->data[index]);
+		}
+	}
+
+	/* append last token */
+	tokenList = lappend(tokenList, token);
+
+	return tokenList;
 }
 
 

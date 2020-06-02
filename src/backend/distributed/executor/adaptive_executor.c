@@ -3061,7 +3061,14 @@ TransactionStateMachine(WorkerSession *session)
 				if (session->currentTask != NULL)
 				{
 					TaskPlacementExecution *placementExecution = session->currentTask;
+					Task *task = placementExecution->shardCommandExecution->task;
 					bool succeeded = true;
+
+					if (task->postExecutionHook != NULL)
+					{
+						int placementIndex = placementExecution->placementExecutionIndex;
+						task->postExecutionHook(task, placementIndex, connection);
+					}
 
 					/*
 					 * Once we finished a task on a connection, we no longer
@@ -3333,6 +3340,12 @@ StartPlacementExecutionOnSession(TaskPlacementExecution *placementExecution,
 	ShardPlacement *taskPlacement = placementExecution->shardPlacement;
 	List *placementAccessList = PlacementAccessListForTask(task, taskPlacement);
 	int querySent = 0;
+
+	if (task->preExecutionHook != NULL)
+	{
+		task->preExecutionHook(task, placementExecution->placementExecutionIndex,
+							   connection);
+	}
 
 	char *queryString = TaskQueryStringForPlacement(task,
 													placementExecution->

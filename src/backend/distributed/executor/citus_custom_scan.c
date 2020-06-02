@@ -28,6 +28,7 @@
 #include "distributed/local_executor.h"
 #include "distributed/local_plan_cache.h"
 #include "distributed/multi_executor.h"
+#include "distributed/multi_explain.h"
 #include "distributed/multi_server_executor.h"
 #include "distributed/multi_router_planner.h"
 #include "distributed/query_stats.h"
@@ -235,6 +236,11 @@ TupleTableSlot *
 CitusExecScan(CustomScanState *node)
 {
 	CitusScanState *scanState = (CitusScanState *) node;
+
+	if (RequestedForExplainAnalyze(node))
+	{
+		InstallExplainAnalyzeHooks(scanState->distributedPlan->workerJob->taskList);
+	}
 
 	if (!scanState->finishedRemoteScan)
 	{

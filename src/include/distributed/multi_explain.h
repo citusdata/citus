@@ -15,7 +15,15 @@
 /* Config variables managed via guc.c to explain distributed query plans */
 extern bool ExplainDistributedQueries;
 extern bool ExplainAllTasks;
+extern bool ExplainWorkerQuery;
 
+
+extern void InstallExplainAnalyzeHooks(List *taskList);
+extern bool RequestedForExplainAnalyze(CustomScanState *node);
+extern void CitusExplainOneQuery(Query *query, int cursorOptions, IntoClause *into,
+								 ExplainState *es, const char *queryString, ParamListInfo
+								 params,
+								 QueryEnvironment *queryEnv);
 extern bool ShouldSaveWorkerQueryExplainAnalyze(QueryDesc *queryDesc);
 extern void SaveQueryExplainAnalyze(QueryDesc *queryDesc);
 

@@ -266,6 +266,7 @@ _PG_init(void)
 	/* register for planner hook */
 	set_rel_pathlist_hook = multi_relation_restriction_hook;
 	set_join_pathlist_hook = multi_join_restriction_hook;
+	ExplainOneQuery_hook = CitusExplainOneQuery;
 	ExecutorStart_hook = CitusExecutorStart;
 	ExecutorRun_hook = CitusExecutorRun;
 	ExecutorEnd_hook = CitusExecutorEnd;

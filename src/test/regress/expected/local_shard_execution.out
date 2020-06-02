@@ -327,7 +327,7 @@ EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF) DELETE FROM distributed_ta
    ->  Task
          Node: host=localhost port=xxxxx dbname=regression
          ->  Delete on distributed_table_1470001 distributed_table (actual rows=0 loops=1)
-               ->  Index Scan using distributed_table_pkey_1470001 on distributed_table_1470001 distributed_table (actual rows=0 loops=1)
+               ->  Index Scan using distributed_table_pkey_1470001 on distributed_table_1470001 distributed_table (actual rows=1 loops=1)
                      Index Cond: (key = 1)
                      Filter: (age = 20)
 (9 rows)
@@ -2110,6 +2110,26 @@ DEBUG:  Plan is router executable
        16 |     666 | maybe
        17 |     777 | no
 (2 rows)
+
+-- verify that EXPLAIN ANALYZE doesn't use local execution
+SET citus.enable_local_execution TO true;
+EXPLAIN (ANALYZE ON, COSTS OFF, TIMING OFF, SUMMARY OFF) SELECT count(*) FROM event_responses WHERE event_id = 16;
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+                                              QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
+   Task Count: 1
+   Tasks Shown: All
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  Aggregate (actual rows=1 loops=1)
+               ->  Bitmap Heap Scan on event_responses_1480001 event_responses (actual rows=2 loops=1)
+                     Recheck Cond: (event_id = 16)
+                     Heap Blocks: exact=1
+                     ->  Bitmap Index Scan on event_responses_pkey_1480001 (actual rows=2 loops=1)
+                           Index Cond: (event_id = 16)
+(11 rows)
 
 \c - - - :master_port
 SET client_min_messages TO ERROR;

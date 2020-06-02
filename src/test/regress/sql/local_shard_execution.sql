@@ -1046,6 +1046,10 @@ INSERT INTO event_responses VALUES (16, 666, 'maybe'), (17, 777, 'no')
 ON CONFLICT (event_id, user_id)
 DO UPDATE SET response = EXCLUDED.response RETURNING *;
 
+-- verify that EXPLAIN ANALYZE doesn't use local execution
+SET citus.enable_local_execution TO true;
+EXPLAIN (ANALYZE ON, COSTS OFF, TIMING OFF, SUMMARY OFF) SELECT count(*) FROM event_responses WHERE event_id = 16;
+
 \c - - - :master_port
 
 SET client_min_messages TO ERROR;

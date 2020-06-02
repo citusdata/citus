@@ -85,17 +85,6 @@ EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE)
 	SELECT l_quantity, count(*) count_quantity FROM lineitem
 	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
 
--- EXPLAIN ANALYZE doesn't show worker tasks for repartition joins yet
-SET citus.shard_count TO 3;
-CREATE TABLE t1(a int, b int);
-CREATE TABLE t2(a int, b int);
-SELECT create_distributed_table('t1', 'a'), create_distributed_table('t2', 'a');
-BEGIN;
-SET LOCAL citus.enable_repartition_joins TO true;
-EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off) SELECT count(*) FROM t1, t2 WHERE t1.a=t2.b;
-END;
-DROP TABLE t1, t2;
-
 -- Test verbose
 EXPLAIN (COSTS FALSE, VERBOSE TRUE)
 	SELECT sum(l_quantity) / avg(l_quantity) FROM lineitem;
@@ -598,3 +587,58 @@ SELECT true AS valid FROM explain_xml($$
   )
   SELECT * FROM result JOIN series ON (s = l_quantity) JOIN orders_hash_part ON (s = o_orderkey)
 $$);
+
+-- test EXPLAIN ANALYZE works fine with primary keys
+CREATE TABLE explain_pk(a int primary key, b int);
+SELECT create_distributed_table('explain_pk', 'a');
+
+BEGIN;
+EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off) INSERT INTO explain_pk VALUES (1, 2), (2, 3);
+SELECT * FROM explain_pk ORDER BY 1;
+ROLLBACK;
+
+-- test EXPLAIN ANALYZE with non-text output formats
+BEGIN;
+EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT JSON) INSERT INTO explain_pk VALUES (1, 2), (2, 3);
+ROLLBACK;
+
+BEGIN;
+EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT XML) INSERT INTO explain_pk VALUES (1, 2), (2, 3);
+ROLLBACK;
+
+DROP TABLE explain_pk;
+
+-- EXPLAIN ANALYZE doesn't show worker tasks for repartition joins yet
+SET citus.shard_count TO 3;
+CREATE TABLE t1(a int, b int);
+CREATE TABLE t2(a int, b int);
+SELECT create_distributed_table('t1', 'a'), create_distributed_table('t2', 'a');
+BEGIN;
+SET LOCAL citus.enable_repartition_joins TO true;
+EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off) SELECT count(*) FROM t1, t2 WHERE t1.a=t2.b;
+END;
+DROP TABLE t1, t2;
+
+-- test EXPLAIN ANALYZE with CTEs and subqueries
+CREATE TABLE dist_table(a int, b int);
+SELECT create_distributed_table('dist_table', 'a');
+CREATE TABLE ref_table(a int);
+SELECT create_reference_table('ref_table');
+
+INSERT INTO dist_table SELECT i, i*i FROM generate_series(1, 10) i;
+INSERT INTO ref_table SELECT i FROM generate_series(1, 10) i;
+
+EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off)
+WITH r AS (
+	SELECT random() r, a FROM dist_table
+)
+SELECT count(distinct a) from r NATURAL JOIN ref_table;
+
+EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off)
+SELECT count(distinct a) FROM (SELECT random() r, a FROM dist_table) t NATURAL JOIN ref_table;
+
+EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off)
+SELECT count(distinct a) FROM dist_table
+WHERE EXISTS(SELECT random() FROM dist_table NATURAL JOIN ref_table);
+
+DROP TABLE ref_table, dist_table;

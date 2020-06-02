@@ -3116,6 +3116,35 @@ DO UPDATE
    SET    user_id = 42
 RETURNING user_id, value_1_agg;
 ERROR:  modifying the partition value of rows is not allowed
+-- verify EXPLAIN ANALYZE of distributed INSERT/SELECT runs tasks once
+-- if it was executed twice, we'd get primary key violation
+-- see https://github.com/citusdata/citus/issues/2347
+DROP TABLE IF EXISTS source_table, target_table;
+NOTICE:  table "source_table" does not exist, skipping
+NOTICE:  table "target_table" does not exist, skipping
+CREATE TABLE source_table(a int, b int);
+CREATE TABLE target_table(a int primary key, b int);
+SELECT create_distributed_table('source_table', 'a'),
+       create_distributed_table('target_table', 'a');
+ create_distributed_table | create_distributed_table
+---------------------------------------------------------------------
+                          |
+(1 row)
+
+INSERT INTO source_table SELECT i, i+1 FROM generate_series(1, 10) i;
+EXPLAIN (analyze on, costs off, summary off, timing off) INSERT INTO target_table SELECT * FROM source_table;
+                                                       QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
+   Task Count: 4
+   Tasks Shown: One of 4
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  Insert on target_table_13300068 citus_table_alias (actual rows=0 loops=1)
+               ->  Seq Scan on source_table_13300064 source_table (actual rows=4 loops=1)
+                     Filter: ((worker_hash(a) >= '-2147483648'::integer) AND (worker_hash(a) <= '-1073741825'::integer))
+(8 rows)
+
 -- wrap in a transaction to improve performance
 BEGIN;
 DROP TABLE coerce_events;

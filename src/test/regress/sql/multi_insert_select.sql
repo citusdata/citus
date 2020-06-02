@@ -2249,6 +2249,17 @@ DO UPDATE
    SET    user_id = 42
 RETURNING user_id, value_1_agg;
 
+-- verify EXPLAIN ANALYZE of distributed INSERT/SELECT runs tasks once
+-- if it was executed twice, we'd get primary key violation
+-- see https://github.com/citusdata/citus/issues/2347
+DROP TABLE IF EXISTS source_table, target_table;
+CREATE TABLE source_table(a int, b int);
+CREATE TABLE target_table(a int primary key, b int);
+SELECT create_distributed_table('source_table', 'a'),
+       create_distributed_table('target_table', 'a');
+INSERT INTO source_table SELECT i, i+1 FROM generate_series(1, 10) i;
+EXPLAIN (analyze on, costs off, summary off, timing off) INSERT INTO target_table SELECT * FROM source_table;
+
 -- wrap in a transaction to improve performance
 BEGIN;
 DROP TABLE coerce_events;
