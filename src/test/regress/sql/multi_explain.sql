@@ -657,4 +657,15 @@ EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off)
 SELECT count(distinct a) FROM dist_table
 WHERE EXISTS(SELECT random() FROM dist_table NATURAL JOIN ref_table);
 
+-- test explain_network_stats
+BEGIN;
+SET LOCAL citus.explain_network_stats TO true;
+EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off)
+WITH r AS (
+	SELECT random() r, a FROM dist_table
+)
+SELECT count(distinct a) from r NATURAL JOIN ref_table;
+END;
+
+
 DROP TABLE ref_table, dist_table;

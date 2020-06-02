@@ -42,12 +42,14 @@
 #include "distributed/worker_protocol.h"
 #include "distributed/version_compat.h"
 #include "lib/stringinfo.h"
+#include "linux/tcp.h"
 #include "nodes/plannodes.h"
 #include "nodes/primnodes.h"
 #include "nodes/print.h"
 #include "optimizer/clauses.h"
 #include "optimizer/planner.h"
 #include "portability/instr_time.h"
+#include <sys/socket.h>
 #include "tcop/dest.h"
 #include "tcop/tcopprot.h"
 #include "tcop/utility.h"
@@ -60,6 +62,7 @@
 bool ExplainDistributedQueries = true;
 bool ExplainAllTasks = false;
 bool ExplainWorkerQuery = false;
+bool ExplainNetworkStats = false;
 
 /* struct to save explain flags */
 typedef struct
@@ -105,6 +108,19 @@ typedef struct RemoteExplainPlan
 } RemoteExplainPlan;
 
 
+/* container of connection statistics */
+typedef struct
+{
+	uint64 bytesSent;
+	uint64 bytesReceived;
+} ConnectionStats;
+
+typedef struct ExplainAnalyzePrivate
+{
+	ConnectionStats startStats;
+	ConnectionStats endStats;
+} ExplainAnalyzePrivate;
+
 /* Explain functions for distributed queries */
 static void ExplainSubPlans(DistributedPlan *distributedPlan, ExplainState *es);
 static void ExplainJob(Job *job, ExplainState *es);
@@ -121,6 +137,7 @@ static void ExplainAnalyzePreExecutionHook(Task *task, int placementIndex,
 static void ExplainAnalyzePostExecutionHook(Task *task, int placementIndex,
 											MultiConnection *connection);
 static List * SplitString(StringInfo str, char delimiter);
+static ConnectionStats GetConnectionStats(MultiConnection *connection);
 
 /* Static Explain functions copied from explain.c */
 static void ExplainOneQuery(Query *query, int cursorOptions,
@@ -532,6 +549,18 @@ ExplainTask(Task *task, int placementIndex, List *explainOutputList, ExplainStat
 		es->indent += 3;
 	}
 
+	if (es->analyze && ExplainNetworkStats)
+	{
+		ExplainAnalyzePrivate *private = task->explainAnalyzePrivate;
+
+		int64 bytesSent = private->endStats.bytesSent - private->startStats.bytesSent;
+		int64 bytesReceived = private->endStats.bytesReceived -
+							  private->startStats.bytesReceived;
+
+		ExplainPropertyInteger("Bytes Sent", NULL, bytesSent, es);
+		ExplainPropertyInteger("Bytes Received", NULL, bytesReceived, es);
+	}
+
 	if (explainOutputList != NIL)
 	{
 		List *taskPlacementList = task->taskPlacementList;
@@ -815,6 +844,9 @@ ExplainAnalyzePreExecutionHook(Task *task, int placementIndex,
 					 (int) CurrentDistributedQueryExplainOptions.format);
 
 	ExecuteCriticalRemoteCommand(connection, query->data);
+
+	task->explainAnalyzePrivate = palloc0(sizeof(ExplainAnalyzePrivate));
+	task->explainAnalyzePrivate->startStats = GetConnectionStats(connection);
 }
 
 
@@ -826,6 +858,10 @@ static void
 ExplainAnalyzePostExecutionHook(Task *task, int placementIndex,
 								MultiConnection *connection)
 {
+	/* record tcp statistics */
+	task->explainAnalyzePrivate->endStats = GetConnectionStats(connection);
+
+	/* fetch explain analyze output of worker query */
 	PGresult *planResult = NULL;
 	const char *fetchQuery = "SELECT worker_last_saved_explain_analyze()";
 
@@ -968,6 +1004,28 @@ SplitString(StringInfo str, char delimiter)
 	tokenList = lappend(tokenList, token);
 
 	return tokenList;
+}
+
+
+/*
+ * GetConnectionStats returns socket statistics for a given connection.
+ */
+static ConnectionStats
+GetConnectionStats(MultiConnection *connection)
+{
+	int socket = PQsocket(connection->pgConn);
+	struct tcp_info tcpInfo;
+	socklen_t tcpInfoLength = sizeof(tcpInfo);
+	ConnectionStats connectionStats = { 0, 0 };
+
+	int status = getsockopt(socket, 6, TCP_INFO, (void *) &tcpInfo, &tcpInfoLength);
+	if (status == 0)
+	{
+		connectionStats.bytesReceived = tcpInfo.tcpi_bytes_received;
+		connectionStats.bytesSent = tcpInfo.tcpi_bytes_sent;
+	}
+
+	return connectionStats;
 }
 
 

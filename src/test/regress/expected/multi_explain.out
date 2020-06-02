@@ -1586,4 +1586,36 @@ Aggregate (actual rows=1 loops=1)
                     ->  Result (actual rows=6 loops=1)
                           One-Time Filter: $0
                           ->  Seq Scan on dist_table_570014 dist_table (actual rows=6 loops=1)
+-- test explain_network_stats
+BEGIN;
+SET LOCAL citus.explain_network_stats TO true;
+EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off)
+WITH r AS (
+	SELECT random() r, a FROM dist_table
+)
+SELECT count(distinct a) from r NATURAL JOIN ref_table;
+Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
+  ->  Distributed Subplan XXX_1
+        ->  Custom Scan (Citus Adaptive) (actual rows=10 loops=1)
+              Task Count: 3
+              Tasks Shown: One of 3
+              ->  Task
+                    Bytes Sent: 96
+                    Bytes Received: 286
+                    Node: host=localhost port=xxxxx dbname=regression
+                    ->  Seq Scan on dist_table_570014 dist_table (actual rows=6 loops=1)
+  Task Count: 1
+  Tasks Shown: All
+  ->  Task
+        Bytes Sent: 302
+        Bytes Received: 86
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Aggregate (actual rows=1 loops=1)
+              ->  Hash Join (actual rows=10 loops=1)
+                    Hash Cond: (ref_table.a = intermediate_result.a)
+                    ->  Seq Scan on ref_table_570017 ref_table (actual rows=10 loops=1)
+                    ->  Hash (actual rows=10 loops=1)
+                          Buckets: 1024  Batches: 1  Memory Usage: 9kB
+                          ->  Function Scan on read_intermediate_result intermediate_result (actual rows=10 loops=1)
+END;
 DROP TABLE ref_table, dist_table;

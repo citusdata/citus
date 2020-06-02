@@ -16,6 +16,7 @@
 extern bool ExplainDistributedQueries;
 extern bool ExplainAllTasks;
 extern bool ExplainWorkerQuery;
+extern bool ExplainNetworkStats;
 
 
 extern void InstallExplainAnalyzeHooks(List *taskList);

@@ -264,6 +264,7 @@ typedef struct TaskQuery
 
 typedef struct MultiConnection MultiConnection;
 typedef struct Task Task;
+typedef struct ExplainAnalyzePrivate ExplainAnalyzePrivate;
 
 typedef struct Task
 {
@@ -278,8 +279,14 @@ typedef struct Task
 	 */
 	TaskQuery taskQuery;
 
+	ExplainAnalyzePrivate *explainAnalyzePrivate;
+
 	StringInfo savedPlan;
 	int savedPlanPlacementIndex;
+
+	/* execution statistics for EXPLAIN ANALYZE */
+	uint64 bytesSent;
+	uint64 bytesReceived;
 
 	Oid anchorDistributedTableId;     /* only applies to insert tasks */
 	uint64 anchorShardId;       /* only applies to compute tasks */
