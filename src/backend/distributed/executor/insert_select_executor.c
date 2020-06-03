@@ -210,37 +210,8 @@ CoordinatorInsertSelectExecScanInternal(CustomScanState *node)
 							 distSelectJob->jobId);
 			char *distResultPrefix = distResultPrefixString->data;
 
-			CitusTableCacheEntry *cachedTargetRelation =
+			CitusTableCacheEntry *targetRelation =
 				GetCitusTableCacheEntry(targetRelationId);
-			CitusTableCacheEntry *targetRelation = palloc(sizeof(CitusTableCacheEntry));
-			*targetRelation = *cachedTargetRelation;
-
-#if PG_USE_ASSERT_CHECKING
-
-			/*
-			 * These fields aren't used in the code which follows,
-			 * therefore in assert builds NULL these fields to
-			 * segfault if they were to be used.
-			 */
-			targetRelation->partitionKeySTring = NULL;
-			targetRelation->shardIntervalCompareFunction = NULL;
-			targetRelation->hashFunction = NULL;
-			targetRelation->arrayOfPlacementArrayLengths = NULL;
-			targetRelation->arrayOfPlacementArrays = NULL;
-			targetRelation->referencedRelationViaForeignKey = NULL;
-			targetRelation->referencingRelationsViaForeignKey = NULL;
-#endif
-			targetRelation->partitionColumn = copyObject(
-				cachedTargetRelation->partitionColumn);
-			targetRelation->sortedShardIntervalArray =
-				palloc(targetRelation->shardIntervalArrayLength * sizeof(ShardInterval));
-			for (int shardIndex = 0; shardIndex <
-				 targetRelation->shardIntervalArrayLength; shardIndex++)
-			{
-				targetRelation->sortedShardIntervalArray[shardIndex] =
-					CopyShardInterval(
-						cachedTargetRelation->sortedShardIntervalArray[shardIndex]);
-			}
 
 			int partitionColumnIndex =
 				PartitionColumnIndex(insertTargetList, targetRelation->partitionColumn);
