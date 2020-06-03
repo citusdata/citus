@@ -37,6 +37,7 @@ extern int ReadFromSecondaries;
  */
 #define GROUP_ID_UPGRADING -2
 
+
 /*
  * Representation of a table's metadata that is frequently used for
  * distributed execution. Cached.
@@ -52,7 +53,6 @@ typedef struct
 	 */
 	bool isValid;
 
-	bool isCitusTable;
 	bool hasUninitializedShardInterval;
 	bool hasUniformHashDistribution; /* valid for hash partitioned tables */
 	bool hasOverlappingShardInterval;
@@ -131,7 +131,8 @@ extern DistObjectCacheEntry * LookupDistObjectCacheEntry(Oid classid, Oid objid,
 extern int32 GetLocalGroupId(void);
 extern List * DistTableOidList(void);
 extern List * ReferenceTableOidList(void);
-extern Oid LookupShardRelation(int64 shardId, bool missing_ok);
+extern void CitusTableCacheFlushInvalidatedEntries(void);
+extern Oid LookupShardRelationFromCatalog(int64 shardId, bool missing_ok);
 extern List * ShardPlacementList(uint64 shardId);
 extern void CitusInvalidateRelcacheByRelid(Oid relationId);
 extern void CitusInvalidateRelcacheByShardId(int64 shardId);
