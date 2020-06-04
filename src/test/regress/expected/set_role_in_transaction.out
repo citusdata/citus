@@ -1,0 +1,121 @@
+-- Regression test for this issue:
+-- https://github.com/citusdata/citus/issues/3867
+SET citus.shard_count = 4;
+SET citus.next_shard_id TO 1959300;
+CREATE SCHEMA set_role_in_transaction;
+SET search_path TO set_role_in_transaction;
+CREATE TABLE t(a int);
+SELECT create_distributed_table('t', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE USER user1 SUPERUSER;
+NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
+HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
+CREATE USER user2 SUPERUSER;
+NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
+HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
+-- Not needed on Citus Enterprise
+SELECT run_command_on_workers('CREATE USER user1');
+      run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,"CREATE ROLE")
+ (localhost,57638,t,"CREATE ROLE")
+(2 rows)
+
+SELECT run_command_on_workers('CREATE USER user2');
+      run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,"CREATE ROLE")
+ (localhost,57638,t,"CREATE ROLE")
+(2 rows)
+
+GRANT ALL ON SCHEMA set_role_in_transaction TO user1;
+GRANT ALL ON SCHEMA set_role_in_transaction TO user2;
+GRANT ALL ON ALL TABLES IN SCHEMA set_role_in_transaction TO user1;
+GRANT ALL ON ALL TABLES IN SCHEMA set_role_in_transaction TO user2;
+-- Not needed on Citus Enterprise
+SELECT run_command_on_workers('GRANT ALL ON ALL TABLES IN SCHEMA set_role_in_transaction TO user1');
+  run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,GRANT)
+ (localhost,57638,t,GRANT)
+(2 rows)
+
+SELECT run_command_on_workers('GRANT ALL ON ALL TABLES IN SCHEMA set_role_in_transaction TO user2');
+  run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,GRANT)
+ (localhost,57638,t,GRANT)
+(2 rows)
+
+-- Visibility bugs
+SET ROLE user1;
+SET search_path TO set_role_in_transaction;
+BEGIN;
+INSERT INTO t values (1);
+SELECT * FROM t; -- 1 is visible as expected
+ a
+---------------------------------------------------------------------
+ 1
+(1 row)
+
+SET ROLE user2;
+SET search_path TO set_role_in_transaction;
+SELECT * FROM t; -- 1 is not visible
+ERROR:  cannot perform query on placements that were modified in this transaction by a different user
+INSERT INTO t values (1); -- assert failure
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+SELECT * from t;
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+ROLLBACK;
+-- Self deadlock
+SET ROLE user1;
+SET search_path TO set_role_in_transaction;
+BEGIN;
+TRUNCATE t;
+SET ROLE user2;
+SET search_path TO set_role_in_transaction;
+-- assert failure or self deadlock (it is detected by deadlock detector)
+INSERT INTO t values (2);
+ERROR:  cannot perform query on placements that were modified in this transaction by a different user
+ROLLBACK;
+RESET ROLE;
+REVOKE ALL ON SCHEMA set_role_in_transaction FROM user1;
+REVOKE ALL ON SCHEMA set_role_in_transaction FROM user2;
+REVOKE ALL ON ALL TABLES IN SCHEMA set_role_in_transaction FROM user1;
+REVOKE ALL ON ALL TABLES IN SCHEMA set_role_in_transaction FROM user2;
+SELECT run_command_on_workers('REVOKE ALL ON ALL TABLES IN SCHEMA set_role_in_transaction FROM user1');
+   run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,REVOKE)
+ (localhost,57638,t,REVOKE)
+(2 rows)
+
+SELECT run_command_on_workers('REVOKE ALL ON ALL TABLES IN SCHEMA set_role_in_transaction FROM user2');
+   run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,REVOKE)
+ (localhost,57638,t,REVOKE)
+(2 rows)
+
+DROP USER user1;
+DROP USER user2;
+SELECT run_command_on_workers('DROP USER user1');
+     run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,"DROP ROLE")
+ (localhost,57638,t,"DROP ROLE")
+(2 rows)
+
+SELECT run_command_on_workers('DROP USER user2');
+     run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,"DROP ROLE")
+ (localhost,57638,t,"DROP ROLE")
+(2 rows)
+
+DROP SCHEMA set_role_in_transaction CASCADE;
+NOTICE:  drop cascades to table t
