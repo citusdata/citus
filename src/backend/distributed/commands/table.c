@@ -348,18 +348,29 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand)
 	Oid rightRelationId = InvalidOid;
 	bool executeSequentially = false;
 
-	/*
-	 * We check if there is a ADD/DROP FOREIGN CONSTRAINT command in sub commands
-	 * list. If there is we assign referenced relation id to rightRelationId and
-	 * we also set skip_validation to true to prevent PostgreSQL to verify validity
-	 * of the foreign constraint in master. Validity will be checked in workers
-	 * anyway.
-	 */
 	List *commandList = alterTableStatement->cmds;
 
 	AlterTableCmd *command = NULL;
 	foreach_ptr(command, commandList)
 	{
+		/*
+		 * Foreign constraint validations will be done in workers. If we do not
+		 * set this flag, PostgreSQL tries to do additional checking when we drop
+		 * to standard_ProcessUtility. standard_ProcessUtility tries to open new
+		 * connections to workers to verify foreign constraints while original
+		 * transaction is in process, which causes deadlock.
+		 */
+		SkipValidationIfAddForeignKeyCommand(command);
+
+		/*
+		 * TODO: Below function call is nothing beneficial since we do not
+		 * support ALTER TABLE %s ADD COLUMN %s [constraint] for foreign keys.
+		 * However, the code is kept in case we fix the constraint creation
+		 * without a name and allow foreign key creation with the mentioned
+		 * command.
+		 */
+		SkipValidationIfAddColumnReferencesCommand(command);
+
 		AlterTableType alterTableType = command->subtype;
 
 		if (alterTableType == AT_AddConstraint)
@@ -376,47 +387,6 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand)
 
 				rightRelationId = RangeVarGetRelid(constraint->pktable, lockmode,
 												   alterTableStatement->missing_ok);
-
-				/*
-				 * Foreign constraint validations will be done in workers. If we do not
-				 * set this flag, PostgreSQL tries to do additional checking when we drop
-				 * to standard_ProcessUtility. standard_ProcessUtility tries to open new
-				 * connections to workers to verify foreign constraints while original
-				 * transaction is in process, which causes deadlock.
-				 */
-				constraint->skip_validation = true;
-			}
-		}
-		else if (alterTableType == AT_AddColumn)
-		{
-			/*
-			 * TODO: This code path is nothing beneficial since we do not
-			 * support ALTER TABLE %s ADD COLUMN %s [constraint] for foreign keys.
-			 * However, the code is kept in case we fix the constraint
-			 * creation without a name and allow foreign key creation with the mentioned
-			 * command.
-			 */
-			ColumnDef *columnDefinition = (ColumnDef *) command->def;
-			List *columnConstraints = columnDefinition->constraints;
-
-			Constraint *constraint = NULL;
-			foreach_ptr(constraint, columnConstraints)
-			{
-				if (constraint->contype == CONSTR_FOREIGN)
-				{
-					rightRelationId = RangeVarGetRelid(constraint->pktable, lockmode,
-													   alterTableStatement->missing_ok);
-
-					/*
-					 * Foreign constraint validations will be done in workers. If we do not
-					 * set this flag, PostgreSQL tries to do additional checking when we drop
-					 * to standard_ProcessUtility. standard_ProcessUtility tries to open new
-					 * connections to workers to verify foreign constraints while original
-					 * transaction is in process, which causes deadlock.
-					 */
-					constraint->skip_validation = true;
-					break;
-				}
 			}
 		}
 		else if (alterTableType == AT_AttachPartition)
@@ -581,27 +551,17 @@ WorkerProcessAlterTableStmt(AlterTableStmt *alterTableStatement,
 		return (Node *) alterTableStatement;
 	}
 
-	/*
-	 * We check if there is a ADD FOREIGN CONSTRAINT command in sub commands list.
-	 * If there is we assign referenced releation id to rightRelationId and we also
-	 * set skip_validation to true to prevent PostgreSQL to verify validity of the
-	 * foreign constraint in master. Validity will be checked in workers anyway.
-	 */
-	List *commandList = alterTableStatement->cmds;
+	List *alterTableCommandList = alterTableStatement->cmds;
 	AlterTableCmd *command = NULL;
-	foreach_ptr(command, commandList)
+	foreach_ptr(command, alterTableCommandList)
 	{
-		AlterTableType alterTableType = command->subtype;
-
-		if (alterTableType == AT_AddConstraint)
-		{
-			Constraint *constraint = (Constraint *) command->def;
-			if (constraint->contype == CONSTR_FOREIGN)
-			{
-				/* foreign constraint validations will be done in shards. */
-				constraint->skip_validation = true;
-			}
-		}
+		/*
+		 * We check if there is a ADD FOREIGN CONSTRAINT command in sub commands
+		 * list. If there is, we  set skip_validation to true to prevent PostgreSQL
+		 * to verify validity of the foreign constraint in master. Validity will
+		 * be checked in workers anyway.
+		 */
+		SkipValidationIfAddForeignKeyCommand(command);
 	}
 
 	return (Node *) alterTableStatement;

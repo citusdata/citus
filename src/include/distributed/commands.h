@@ -108,6 +108,8 @@ extern bool HasForeignKeyToReferenceTable(Oid relationOid);
 extern bool TableReferenced(Oid relationOid);
 extern bool TableReferencing(Oid relationOid);
 extern bool ConstraintIsAForeignKey(char *inputConstaintName, Oid relationOid);
+extern void SkipValidationIfAddForeignKeyCommand(AlterTableCmd *alterTableCommand);
+extern void SkipValidationIfAddColumnReferencesCommand(AlterTableCmd *alterTableCommand);
 
 
 /* function.c - forward declarations */

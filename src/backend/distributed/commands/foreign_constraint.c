@@ -766,3 +766,55 @@ GetForeignKeyOids(Oid relationId, int flags)
 
 	return foreignKeyOids;
 }
+
+
+/*
+ * SkipValidationIfAddForeignKeyCommand takes an alter table subcommand and
+ * if it defines a foreign key constraint, then sets skip_validation field
+ * to true.
+ */
+void
+SkipValidationIfAddForeignKeyCommand(AlterTableCmd *alterTableCommand)
+{
+	AlterTableType alterTableCommandType = alterTableCommand->subtype;
+
+	if (alterTableCommandType != AT_AddConstraint)
+	{
+		return;
+	}
+
+	Constraint *constraint = (Constraint *) alterTableCommand->def;
+	if (constraint->contype == CONSTR_FOREIGN)
+	{
+		constraint->skip_validation = true;
+	}
+}
+
+
+/*
+ * SkipValidationIfAddColumnReferencesCommand takes an alter table subcommand
+ * and if it defines column with a foreign key constraint, then sets skip_validation
+ * field to true.
+ */
+void
+SkipValidationIfAddColumnReferencesCommand(AlterTableCmd *alterTableCommand)
+{
+	AlterTableType alterTableCommandType = alterTableCommand->subtype;
+
+	if (alterTableCommandType != AT_AddColumn)
+	{
+		return;
+	}
+
+	ColumnDef *columnDefinition = (ColumnDef *) alterTableCommand->def;
+	List *columnConstraints = columnDefinition->constraints;
+
+	Constraint *constraint = NULL;
+	foreach_ptr(constraint, columnConstraints)
+	{
+		if (constraint->contype == CONSTR_FOREIGN)
+		{
+			constraint->skip_validation = true;
+		}
+	}
+}
