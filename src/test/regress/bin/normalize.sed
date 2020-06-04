@@ -93,7 +93,10 @@ s/varattnosyn/varoattno/g
 /DEBUG:  index ".*" can safely use deduplication.*$/d
 /DEBUG:  index ".*" cannot use deduplication.*$/d
 /DEBUG:  building index ".*" on table ".*" serially.*$/d
-
+s/partition ".*" would be violated by some row/partition would be violated by some row/g
+/.*Peak Memory Usage:.*$/d
+s/of relation ".*" contains null values/contains null values/g
+s/of relation "t1" is violated by some row/is violated by some row/g
 
 
 # intermediate_results

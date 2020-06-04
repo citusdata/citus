@@ -261,9 +261,9 @@ CREATE TABLE lineitem_mx (
     l_shipmode char(10) not null,
     l_comment varchar(44) not null,
     PRIMARY KEY(l_orderkey, l_linenumber) );
-
-SET citus.shard_count TO 16;
 SELECT create_distributed_table('lineitem_mx', 'l_orderkey');
+
+-- SET citus.shard_count TO 16;
 
 CREATE INDEX lineitem_mx_time_index ON lineitem_mx (l_shipdate);
 

@@ -935,13 +935,9 @@ DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
 
 -- test case for issue #3556
 CREATE TABLE accounts (id text PRIMARY KEY);
-DEBUG:  building index "pg_toast_xxxxx_index" on table "pg_toast_xxxxx" serially
 DEBUG:  CREATE TABLE / PRIMARY KEY will create implicit index "accounts_pkey" for table "accounts"
-DEBUG:  building index "accounts_pkey" on table "accounts" serially
 CREATE TABLE stats (account_id text PRIMARY KEY, spent int);
-DEBUG:  building index "pg_toast_xxxxx_index" on table "pg_toast_xxxxx" serially
 DEBUG:  CREATE TABLE / PRIMARY KEY will create implicit index "stats_pkey" for table "stats"
-DEBUG:  building index "stats_pkey" on table "stats" serially
 SELECT create_distributed_table('accounts', 'id', colocate_with => 'none');
  create_distributed_table
 ---------------------------------------------------------------------
