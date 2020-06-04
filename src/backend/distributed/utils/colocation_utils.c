@@ -19,7 +19,7 @@
 #include "catalog/indexing.h"
 #include "catalog/pg_type.h"
 #include "commands/sequence.h"
-#include "distributed/citus_local_table_utils.h"
+#include "distributed/create_citus_local_table.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata_utility.h"

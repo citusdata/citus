@@ -1,5 +1,3 @@
--- This tests file includes tests for citus local tables.
-
 \set VERBOSITY terse
 
 SET citus.next_shard_id TO 1504000;
@@ -29,7 +27,7 @@ SELECT 1 FROM master_remove_node('localhost', :master_port);
 
 DROP TABLE citus_local_table_1;
 
--- this should work
+-- this should work now as the citus local table is dropped
 SELECT 1 FROM master_remove_node('localhost', :master_port);
 
 CREATE TABLE citus_local_table_1 (a int primary key);
@@ -71,8 +69,8 @@ INSERT INTO citus_local_table_2 VALUES(1);
 CREATE INDEX citus_local_table_2_idx ON citus_local_table_2(a);
 SELECT create_citus_local_table('citus_local_table_2');
 
--- cannot create citus local table from an existing citus table
 CREATE TABLE distributed_table (a int);
+-- cannot create citus local table from an existing citus table
 SELECT create_distributed_table('distributed_table', 'a');
 
 -- this will error out

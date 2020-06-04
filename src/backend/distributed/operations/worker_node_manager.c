@@ -439,11 +439,9 @@ CoordinatorNode()
 {
 	if (!CoordinatorAddedAsWorkerNode())
 	{
-		ereport(ERROR, (errmsg("couldn't find coordinator node as it is not "
-							   "added to pg_dist_node.")));
+		ereport(ERROR, (errmsg("couldn't find the coordinator node in the metadata "
+							   "as it is not added as a worker")));
 	}
-
-	EnsureModificationsCanRun();
 
 	WorkerNode *coordinatorNode = LookupNodeForGroup(COORDINATOR_GROUP_ID);
 

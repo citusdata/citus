@@ -1,4 +1,3 @@
--- This tests file includes tests for citus local tables.
 \set VERBOSITY terse
 SET citus.next_shard_id TO 1504000;
 SET citus.shard_replication_factor TO 1;
@@ -31,7 +30,7 @@ SELECT 1 FROM master_remove_node('localhost', :master_port);
 ERROR:  you cannot remove the primary node of a node group which has shard placements
 DROP TABLE citus_local_table_1;
 NOTICE:  executing the command locally: DROP TABLE IF EXISTS citus_local_tables_test_schema.citus_local_table_1_xxxxx CASCADE
--- this should work
+-- this should work now as the citus local table is dropped
 SELECT 1 FROM master_remove_node('localhost', :master_port);
  ?column?
 ---------------------------------------------------------------------
@@ -41,7 +40,7 @@ SELECT 1 FROM master_remove_node('localhost', :master_port);
 CREATE TABLE citus_local_table_1 (a int primary key);
 -- this should fail as coordinator is removed from pg_dist_node
 SELECT create_citus_local_table('citus_local_table_1');
-ERROR:  cannot create citus local table "citus_local_table_1", citus local tables can only be created from coordinator node if it is added to pg_dist_node
+ERROR:  cannot create citus local table "citus_local_table_1", citus local tables can only be created from coordinator node if it is added as a worker node
 -- let coordinator have citus local tables again for next tests
 set client_min_messages to ERROR;
 SELECT 1 FROM master_add_node('localhost', :master_port, groupId => 0);
@@ -96,8 +95,8 @@ SELECT create_citus_local_table('citus_local_table_2');
 
 (1 row)
 
--- cannot create citus local table from an existing citus table
 CREATE TABLE distributed_table (a int);
+-- cannot create citus local table from an existing citus table
 SELECT create_distributed_table('distributed_table', 'a');
  create_distributed_table
 ---------------------------------------------------------------------
@@ -113,13 +112,13 @@ CREATE TABLE partitioned_table_1 PARTITION OF partitioned_table FOR VALUES FROM 
 CREATE TABLE partitioned_table_2 PARTITION OF partitioned_table FOR VALUES FROM (10) TO (20);
 -- cannot create partitioned citus local tables
 SELECT create_citus_local_table('partitioned_table');
-ERROR:  citus local tables can not be involved in a partition relationship
+ERROR:  cannot create citus local table "partitioned_table", only regular tables and foreign tables are supported for citus local table creation
 -- cannot create citus local table as a partition of a local table
 BEGIN;
   CREATE TABLE citus_local_table PARTITION OF partitioned_table FOR VALUES FROM (20) TO (30);
   -- this should fail
   SELECT create_citus_local_table('citus_local_table');
-ERROR:  citus local tables can not be involved in a partition relationship
+ERROR:  cannot create citus local table "citus_local_table", citus local tables cannot be partition of other tables
 ROLLBACK;
 -- cannot create citus local table as a partition of a local table
 -- via ALTER TABLE commands as well

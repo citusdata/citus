@@ -14,8 +14,7 @@
 #include "access/genam.h"
 #include "access/htup_details.h"
 #include "catalog/pg_constraint.h"
-#include "distributed/citus_local_table_utils.h"
-#include "distributed/citus_ruleutils.h"
+#include "distributed/create_citus_local_table.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/commands.h"
 #include "distributed/commands/utility_hook.h"
@@ -24,6 +23,7 @@
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/multi_partitioning_utils.h"
+#include "distributed/namespace_utils.h"
 #include "distributed/reference_table_utils.h"
 #include "distributed/worker_protocol.h"
 #include "utils/builtins.h"
@@ -31,30 +31,34 @@
 #include "utils/lsyscache.h"
 #include "utils/syscache.h"
 
+
 static void ErrorIfUnsupportedCreateCitusLocalTable(Oid relationId);
-static void CreateCitusLocalTableShard(Oid relationId, uint64 shardId);
+static void ErrorIfUnsupportedCitusLocalTableKind(Oid relationId);
+static uint64 ConvertLocalTableToShard(Oid relationId);
 static void RenameRelationToShardRelation(Oid shellRelationId, uint64 shardId);
 static void RenameShardRelationConstraints(Oid shardRelationId, uint64 shardId);
 static List * GetConstraintNameList(Oid relationId);
 static void RenameForeignConstraintsReferencingToShard(Oid shardRelationId,
 													   uint64 shardId);
+static char * GetRenameShardConstraintCommand(Oid relationId, char *constraintName, uint64
+											  shardId);
 static void RenameShardRelationIndexes(Oid shardRelationId, uint64 shardId);
+static char * GetRenameShardIndexCommand(char *indexName, uint64 shardId);
 static List * GetExplicitIndexNameList(Oid relationId);
-static void CreateCitusLocalTable(Oid shellRelationId);
+static void CreateCitusLocalTable(Oid relationId);
+static void FinalizeCitusLocalTableCreation(Oid relationId);
+static List * GetShellTableDDLEventsForCitusLocalTable(Oid relationId);
 static void CreateShellTableForCitusLocalTable(List *shellTableDDLEvents);
 static void InsertMetadataForCitusLocalTable(Oid citusLocalTableId, uint64 shardId);
 
+
 PG_FUNCTION_INFO_V1(create_citus_local_table);
+
 
 /*
  * create_citus_local_table creates a citus table from the table with relationId.
- * The created table would have the following properties:
- *  - it will have only one shard,
- *  - its distribution method will be DISTRIBUTE_BY_NONE,
- *  - its replication model will be ReplicationModel,
- *  - its replication factor will be set to 1.
- * Similar to reference tables, it has only 1 placement. In addition to that, that
- * single placement is only allowed to be on the coordinator.
+ * by executing the internal method CreateCitusLocalTable.
+ * (See CreateCitusLocalTable function's comment.)
  */
 Datum
 create_citus_local_table(PG_FUNCTION_ARGS)
@@ -63,18 +67,101 @@ create_citus_local_table(PG_FUNCTION_ARGS)
 
 	Oid relationId = PG_GETARG_OID(0);
 
+	CreateCitusLocalTable(relationId);
+
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * ErrorIfUnsupportedCreateCitusLocalTable errors out if we cannot create the
+ * citus local table from the relation with relationId.
+ */
+static void
+ErrorIfUnsupportedCreateCitusLocalTable(Oid relationId)
+{
+	ErrorIfUnsupportedCitusLocalTableKind(relationId);
+
+	EnsureTableNotDistributed(relationId);
+
+	if (!CoordinatorAddedAsWorkerNode())
+	{
+		const char *relationName = get_rel_name(relationId);
+
+		Assert(relationName != NULL);
+
+		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+						errmsg("cannot create citus local table \"%s\", citus local "
+							   "tables can only be created from coordinator node if "
+							   "it is added as a worker node", relationName),
+						errhint("First, add the coordinator with master_add_node "
+								"command")));
+	}
+}
+
+
+/*
+ * ErrorIfUnsupportedCitusLocalTableKind errors out if the relation kind of
+ * relation with relationId is not supported for citus local table creation.
+ */
+static void
+ErrorIfUnsupportedCitusLocalTableKind(Oid relationId)
+{
+	const char *relationName = get_rel_name(relationId);
+
+	Assert(relationName != NULL);
+
+	if (IsChildTable(relationId) || IsParentTable(relationId))
+	{
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("cannot create citus local table \"%s\", citus local "
+							   "tables cannot be involved in inheritance relationships",
+							   relationName)));
+	}
+
+	if (PartitionTable(relationId))
+	{
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("cannot create citus local table \"%s\", citus local "
+							   "tables cannot be partition of other tables",
+							   relationName)));
+	}
+
+	char relationKind = get_rel_relkind(relationId);
+	if (!(relationKind == RELKIND_RELATION || relationKind == RELKIND_FOREIGN_TABLE))
+	{
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("cannot create citus local table \"%s\", only regular "
+							   "tables and foreign tables are supported for citus local "
+							   "table creation", relationName)));
+	}
+}
+
+
+/*
+ * CreateCitusLocalTable is the internal method that creates a citus table
+ * from the table with relationId. The created table would have the following
+ * properties:
+ *  - it will have only one shard,
+ *  - its distribution method will be DISTRIBUTE_BY_NONE,
+ *  - its replication model will be ReplicationModel,
+ *  - its replication factor will be set to 1.
+ * Similar to reference tables, it has only 1 placement. In addition to that, that
+ * single placement is only allowed to be on the coordinator.
+ */
+static void
+CreateCitusLocalTable(Oid relationId)
+{
+	/* these checks should be done before acquiring the lock on the table */
+	EnsureCoordinator();
+	EnsureTableOwner(relationId);
+
 	/*
 	 * Lock target relation with an exclusive lock - there's no way to make
 	 * sense of this table until we've committed, and we don't want multiple
 	 * backends manipulating this relation.
 	 */
-	Relation relation = try_relation_open(relationId, ExclusiveLock);
-
-	if (relation == NULL)
-	{
-		ereport(ERROR, (errmsg("could not create citus local table: "
-							   "relation does not exist")));
-	}
+	Relation relation = relation_open(relationId, ExclusiveLock);
 
 	ErrorIfUnsupportedCreateCitusLocalTable(relationId);
 
@@ -87,62 +174,6 @@ create_citus_local_table(PG_FUNCTION_ARGS)
 	 */
 	EnsureDependenciesExistOnAllNodes(&tableAddress);
 
-	CreateCitusLocalTable(relationId);
-
-	relation_close(relation, NoLock);
-
-	PG_RETURN_VOID();
-}
-
-
-/*
- * ErrorIfUnsupportedCreateCitusLocalTable errors out if we cannot create the
- * citus local table from the relation relationId.
- */
-static void
-ErrorIfUnsupportedCreateCitusLocalTable(Oid relationId)
-{
-	/* citus local tables can only be created from coordinator for now */
-	EnsureCoordinator();
-
-	EnsureTableOwner(relationId);
-
-	/* we allow creating citus local tables only from relations with RELKIND_RELATION */
-	EnsureRelationKindSupported(relationId);
-
-	if (PartitionTable(relationId) || PartitionedTable(relationId))
-	{
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("citus local tables can not be involved in a "
-							   "partition relationship")));
-	}
-
-	EnsureTableNotDistributed(relationId);
-
-	if (!CoordinatorAddedAsWorkerNode())
-	{
-		const char *relationName = get_rel_name(relationId);
-
-		Assert(relationName != NULL);
-
-		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
-						errmsg(
-							"cannot create citus local table \"%s\", citus local "
-							"tables can only be created from coordinator node if "
-							"it is added to pg_dist_node", relationName)));
-	}
-}
-
-
-/*
- * CreateCitusLocalTable is the internal method to create citus local table's
- * shard and metadata.
- * Note that this function does not perform any validation on the table as it
- * is already done in create_citus_local_table.
- */
-static void
-CreateCitusLocalTable(Oid shellRelationId)
-{
 	/*
 	 * Make sure that existing reference tables have been replicated to all
 	 * the nodes such that we can create foreign keys and joins work
@@ -150,36 +181,13 @@ CreateCitusLocalTable(Oid shellRelationId)
 	 */
 	EnsureReferenceTablesExistOnAllNodes();
 
-	/*
-	 * Get an exclusive lock on relation with shellRelationId as the operations
-	 * done in this function should be automic.
-	 */
-	LockRelationOid(shellRelationId, ExclusiveLock);
+	List *shellTableDDLEvents = GetShellTableDDLEventsForCitusLocalTable(relationId);
 
-	/*
-	 * Get necessary commands to recreate the shell table before renaming the
-	 * given relation to the shard relation.
-	 */
-	List *foreignConstraintCommands =
-		GetForeignConstraintCommandsTableInvolved(shellRelationId);
+	char *relationName = get_rel_name(relationId);
+	Oid relationSchemaId = get_rel_namespace(relationId);
 
-	/*
-	 * Include DEFAULT clauses for columns getting their default values from
-	 * a sequence.
-	 */
-	bool includeSequenceDefaults = true;
-
-	List *shellTableDDLEvents = GetTableDDLEvents(shellRelationId,
-												  includeSequenceDefaults);
-	shellTableDDLEvents = list_concat(shellTableDDLEvents, foreignConstraintCommands);
-
-	uint64 shardId = GetNextShardId();
-
-	char *shellRelationName = get_rel_name(shellRelationId);
-	Oid shellRelationSchemaId = get_rel_namespace(shellRelationId);
-
-	/* below we convert relation with shellRelationId to the shard relation */
-	CreateCitusLocalTableShard(shellRelationId, shardId);
+	/* below we convert relation with relationId to the shard relation */
+	uint64 shardId = ConvertLocalTableToShard(relationId);
 
 	/*
 	 * As we retrieved the DDL commands necessary to create the shell table
@@ -188,30 +196,50 @@ CreateCitusLocalTable(Oid shellRelationId)
 	 */
 	CreateShellTableForCitusLocalTable(shellTableDDLEvents);
 
-	/* update shellRelationId so it points to the shell table that we just created */
-	shellRelationId = get_relname_relid(shellRelationName, shellRelationSchemaId);
+	/*
+	 * Get new relationId as the relation with relationId now points
+	 * to the shard relation.
+	 */
+	Oid shellRelationId = get_relname_relid(relationName, relationSchemaId);
 
 	/* assert that we created the shell table properly in the same schema */
 	Assert(OidIsValid(shellRelationId));
 
 	InsertMetadataForCitusLocalTable(shellRelationId, shardId);
 
-	/* foreign tables does not support TRUNCATE trigger */
-	if (RegularTable(shellRelationId))
+	FinalizeCitusLocalTableCreation(shellRelationId);
+
+	relation_close(relation, ExclusiveLock);
+}
+
+
+/*
+ * FinalizeCitusLocalTableCreation performs completes creation of the citus
+ * local table with relationId by performing operations that should be done
+ * after creating the shard and inserting the metadata.
+ */
+static void
+FinalizeCitusLocalTableCreation(Oid relationId)
+{
+	/*
+	 * If it is a foreign table, then skip creating citus truncate trigger
+	 * as foreign tables do not support truncate triggers.
+	 */
+	if (RegularTable(relationId))
 	{
-		CreateTruncateTrigger(shellRelationId);
+		CreateTruncateTrigger(relationId);
 	}
 
-	if (ShouldSyncTableMetadata(shellRelationId))
+	if (ShouldSyncTableMetadata(relationId))
 	{
-		CreateTableMetadataOnWorkers(shellRelationId);
+		CreateTableMetadataOnWorkers(relationId);
 	}
 
 	/*
 	 * We've a custom way of foreign key graph invalidation,
 	 * see InvalidateForeignKeyGraph().
 	 */
-	if (TableReferenced(shellRelationId) || TableReferencing(shellRelationId))
+	if (TableReferenced(relationId) || TableReferencing(relationId))
 	{
 		InvalidateForeignKeyGraph();
 	}
@@ -219,19 +247,49 @@ CreateCitusLocalTable(Oid shellRelationId)
 
 
 /*
- * CreateCitusLocalTableShard creates the one and only shard of the citus
- * local table lazily. That means, this function suffixes shardId to:
+ * GetShellTableDDLEventsForCitusLocalTable returns a list of DDL commands
+ * to create the shell table from scratch.
+ */
+static List *
+GetShellTableDDLEventsForCitusLocalTable(Oid relationId)
+{
+	List *foreignConstraintCommands =
+		GetForeignConstraintCommandsTableInvolved(relationId);
+
+	/*
+	 * Include DEFAULT clauses for columns getting their default values from
+	 * a sequence.
+	 */
+	bool includeSequenceDefaults = true;
+
+	List *shellTableDDLEvents = GetTableDDLEvents(relationId,
+												  includeSequenceDefaults);
+	shellTableDDLEvents = list_concat(shellTableDDLEvents, foreignConstraintCommands);
+
+	return shellTableDDLEvents;
+}
+
+
+/*
+ * ConvertLocalTableToShard first acquires a shardId and then converts the
+ * given relation with relationId to the shard relation with shardId. That
+ * means, this function suffixes shardId to:
  *  - relation name,
  *  - all the objects "defined on" the relation and
  *  - the foreign keys referencing to the relation.
+ * After converting the given relation, returns the acquired shardId.
  */
-static void
-CreateCitusLocalTableShard(Oid relationId, uint64 shardId)
+static uint64
+ConvertLocalTableToShard(Oid relationId)
 {
+	uint64 shardId = GetNextShardId();
+
 	RenameRelationToShardRelation(relationId, shardId);
 	RenameShardRelationConstraints(relationId, shardId);
 	RenameForeignConstraintsReferencingToShard(relationId, shardId);
 	RenameShardRelationIndexes(relationId, shardId);
+
+	return shardId;
 }
 
 
@@ -250,10 +308,11 @@ RenameRelationToShardRelation(Oid shellRelationId, uint64 shardId)
 
 	char *shardRelationName = pstrdup(shellRelationName);
 	AppendShardIdToName(&shardRelationName, shardId);
+	const char *quotedShardRelationName = quote_identifier(shardRelationName);
 
 	StringInfo renameCommand = makeStringInfo();
 	appendStringInfo(renameCommand, "ALTER TABLE %s RENAME TO %s;",
-					 qualifiedShellRelationName, shardRelationName);
+					 qualifiedShellRelationName, quotedShardRelationName);
 
 	const char *commandString = renameCommand->data;
 
@@ -273,28 +332,15 @@ RenameRelationToShardRelation(Oid shellRelationId, uint64 shardId)
 static void
 RenameShardRelationConstraints(Oid shardRelationId, uint64 shardId)
 {
-	Oid shardRelationSchemaId = get_rel_namespace(shardRelationId);
-	char *shardRelationSchemaName = get_namespace_name(shardRelationSchemaId);
-	char *shardRelationName = get_rel_name(shardRelationId);
-	char *qualifiedShardRelationName =
-		quote_qualified_identifier(shardRelationSchemaName, shardRelationName);
-
 	List *constraintNameList = GetConstraintNameList(shardRelationId);
 
 	char *constraintName = NULL;
 	foreach_ptr(constraintName, constraintNameList)
 	{
-		char *shardConstraintName = pstrdup(constraintName);
-		AppendShardIdToName(&shardConstraintName, shardId);
-
-		StringInfo renameCommand = makeStringInfo();
-		appendStringInfo(renameCommand, "ALTER TABLE %s RENAME CONSTRAINT %s TO %s;",
-						 qualifiedShardRelationName, constraintName, shardConstraintName);
-
-		const char *commandString = renameCommand->data;
+		const char *commandString =
+			GetRenameShardConstraintCommand(shardRelationId, constraintName, shardId);
 
 		Node *parseTree = ParseTreeNode(commandString);
-
 		CitusProcessUtility(parseTree, commandString, PROCESS_UTILITY_TOPLEVEL,
 							NULL, None_Receiver, NULL);
 	}
@@ -302,7 +348,7 @@ RenameShardRelationConstraints(Oid shardRelationId, uint64 shardId)
 
 
 /*
- * GetConstraintNameList returns a list constraint names "defined on" the
+ * GetConstraintNameList returns a list of constraint names "defined on" the
  * relation with relationId. Those constraints can be:
  *  - "check" constraints or,
  *  - "primary key" constraints or,
@@ -373,23 +419,10 @@ RenameForeignConstraintsReferencingToShard(Oid shardRelationId, uint64 shardId)
 			(Form_pg_constraint) GETSTRUCT(heapTuple);
 
 		Oid referencedTableId = foreignConstraintForm->conrelid;
-		Oid referencedTableSchemaId = get_rel_namespace(referencedTableId);
-		char *referencedTableSchemaName = get_namespace_name(referencedTableSchemaId);
-		char *referencedRelationName = get_rel_name(referencedTableId);
-		char *referencedRelationQualifiedName =
-			quote_qualified_identifier(referencedTableSchemaName, referencedRelationName);
-
 		char *constraintName = NameStr(foreignConstraintForm->conname);
 
-		char *shardConstraintName = pstrdup(constraintName);
-		AppendShardIdToName(&shardConstraintName, shardId);
-
-		StringInfo renameCommand = makeStringInfo();
-		appendStringInfo(renameCommand, "ALTER TABLE %s RENAME CONSTRAINT %s TO %s;",
-						 referencedRelationQualifiedName, constraintName,
-						 shardConstraintName);
-
-		const char *commandString = renameCommand->data;
+		const char *commandString =
+			GetRenameShardConstraintCommand(referencedTableId, constraintName, shardId);
 
 		Node *parseTree = ParseTreeNode(commandString);
 
@@ -398,6 +431,35 @@ RenameForeignConstraintsReferencingToShard(Oid shardRelationId, uint64 shardId)
 
 		ReleaseSysCache(heapTuple);
 	}
+}
+
+
+/*
+ * GetRenameShardConstraintCommand returns DDL command to append given
+ * shardId to the constrant with constraintName on the relation with
+ * relationId.
+ */
+static char *
+GetRenameShardConstraintCommand(Oid relationId, char *constraintName, uint64 shardId)
+{
+	Oid relationSchemaId = get_rel_namespace(relationId);
+	char *relationSchemaName = get_namespace_name(relationSchemaId);
+	char *relationName = get_rel_name(relationId);
+	char *qualifiedRelationName =
+		quote_qualified_identifier(relationSchemaName, relationName);
+
+	char *shardConstraintName = pstrdup(constraintName);
+	AppendShardIdToName(&shardConstraintName, shardId);
+	const char *quotedShardConstraintName = quote_identifier(shardConstraintName);
+
+	const char *quotedConstraintName = quote_identifier(constraintName);
+
+	StringInfo renameCommand = makeStringInfo();
+	appendStringInfo(renameCommand, "ALTER TABLE %s RENAME CONSTRAINT %s TO %s;",
+					 qualifiedRelationName, quotedConstraintName,
+					 quotedShardConstraintName);
+
+	return renameCommand->data;
 }
 
 
@@ -416,20 +478,34 @@ RenameShardRelationIndexes(Oid shardRelationId, uint64 shardId)
 	char *indexName = NULL;
 	foreach_ptr(indexName, indexNameList)
 	{
-		char *shardIndexName = pstrdup(indexName);
-		AppendShardIdToName(&shardIndexName, shardId);
-
-		StringInfo renameCommand = makeStringInfo();
-		appendStringInfo(renameCommand, "ALTER INDEX %s RENAME TO %s;",
-						 indexName, shardIndexName);
-
-		const char *commandString = renameCommand->data;
+		const char *commandString = GetRenameShardIndexCommand(indexName, shardId);
 
 		Node *parseTree = ParseTreeNode(commandString);
 
 		CitusProcessUtility(parseTree, commandString, PROCESS_UTILITY_TOPLEVEL,
 							NULL, None_Receiver, NULL);
 	}
+}
+
+
+/*
+ * GetRenameShardIndexCommand returns DDL command to append given shardId to
+ * the index with indexName.
+ */
+static char *
+GetRenameShardIndexCommand(char *indexName, uint64 shardId)
+{
+	char *shardIndexName = pstrdup(indexName);
+	AppendShardIdToName(&shardIndexName, shardId);
+	const char *quotedShardIndexName = quote_identifier(shardIndexName);
+
+	const char *quotedIndexName = quote_identifier(indexName);
+
+	StringInfo renameCommand = makeStringInfo();
+	appendStringInfo(renameCommand, "ALTER INDEX %s RENAME TO %s;",
+					 quotedIndexName, quotedShardIndexName);
+
+	return renameCommand->data;
 }
 
 
@@ -445,20 +521,10 @@ RenameShardRelationIndexes(Oid shardRelationId, uint64 shardId)
 static List *
 GetExplicitIndexNameList(Oid relationId)
 {
-	List *indexNameList = NIL;
-
 	int scanKeyCount = 1;
 	ScanKeyData scanKey[1];
 
-	/*
-	 * Set search_path to NIL so that all objects outside of pg_catalog will be
-	 * schema-prefixed. pg_catalog will be added automatically when we call
-	 * PushOverrideSearchPath(), since we set addCatalog to true;
-	 */
-	OverrideSearchPath *overridePath = GetOverrideSearchPath(CurrentMemoryContext);
-	overridePath->schemas = NIL;
-	overridePath->addCatalog = true;
-	PushOverrideSearchPath(overridePath);
+	PushOverrideEmptySearchPath(CurrentMemoryContext);
 
 	Relation pgIndex = heap_open(IndexRelationId, AccessShareLock);
 
@@ -470,33 +536,33 @@ GetExplicitIndexNameList(Oid relationId)
 													useIndex, NULL, scanKeyCount,
 													scanKey);
 
+	List *indexNameList = NIL;
+
 	HeapTuple heapTuple = systable_getnext(scanDescriptor);
 	while (HeapTupleIsValid(heapTuple))
 	{
 		Form_pg_index indexForm = (Form_pg_index) GETSTRUCT(heapTuple);
 
-		if (indexForm->indisprimary || indexForm->indisunique ||
-			indexForm->indisexclusion)
-		{
-			/*
-			 * Skip the indexes that are not implied by explicitly executing
-			 * a CREATE INDEX command.
-			 */
-			heapTuple = systable_getnext(scanDescriptor);
-			continue;
-		}
-
 		Oid indexId = indexForm->indexrelid;
 
-		char *indexName = get_rel_name(indexId);
+		bool indexImpliedByConstraint = IndexImpliedByAConstraint(indexForm);
 
-		indexNameList = lappend(indexNameList, pstrdup(indexName));
+		/*
+		 * Skip the indexes that are not implied by explicitly executing
+		 * a CREATE INDEX command.
+		 */
+		if (!indexImpliedByConstraint)
+		{
+			char *indexName = get_rel_name(indexId);
+
+			indexNameList = lappend(indexNameList, pstrdup(indexName));
+		}
 
 		heapTuple = systable_getnext(scanDescriptor);
 	}
 
 	systable_endscan(scanDescriptor);
-	heap_close(pgIndex, AccessShareLock);
+	heap_close(pgIndex, NoLock);
 
 	/* revert back to original search_path */
 	PopOverrideSearchPath();
@@ -518,12 +584,7 @@ CreateShellTableForCitusLocalTable(List *shellTableDDLEvents)
 	char *ddlCommand = NULL;
 	foreach_ptr(ddlCommand, shellTableDDLEvents)
 	{
-		StringInfo semicolonEndedCommand = makeStringInfo();
-		appendStringInfo(semicolonEndedCommand, "%s;", ddlCommand);
-
-		const char *commandString = semicolonEndedCommand->data;
-
-		Node *parseTree = ParseTreeNode(commandString);
+		Node *parseTree = ParseTreeNode(ddlCommand);
 
 		/*
 		 * If the command defines a constraint, initially do not validate it
@@ -531,23 +592,9 @@ CreateShellTableForCitusLocalTable(List *shellTableDDLEvents)
 		 * before inserting metadata for citus local table. This is because,
 		 * after that, we already won't process constraints on the shell table.
 		 */
-		if (IsA(parseTree, AlterTableStmt))
-		{
-			AlterTableStmt *alterTableStmt = castNode(AlterTableStmt, parseTree);
+		SkipValidationIfAddForeignKeyCommand(parseTree);
 
-			/* we create ALTER TABLE commands so they only have one subcommand */
-			Assert(list_length(alterTableStmt->cmds) == 1);
-			AlterTableCmd *alterTableCmd =
-				castNode(AlterTableCmd, linitial(alterTableStmt->cmds));
-
-			if (alterTableCmd->subtype == AT_AddConstraint)
-			{
-				Constraint *constraint = (Constraint *) alterTableCmd->def;
-				constraint->skip_validation = true;
-			}
-		}
-
-		CitusProcessUtility(parseTree, commandString, PROCESS_UTILITY_TOPLEVEL,
+		CitusProcessUtility(parseTree, ddlCommand, PROCESS_UTILITY_TOPLEVEL,
 							NULL, None_Receiver, NULL);
 	}
 }
@@ -593,7 +640,7 @@ InsertMetadataForCitusLocalTable(Oid citusLocalTableId, uint64 shardId)
 
 
 /*
- * IscitusLocalTable returns whether the given relationId identifies a citus
+ * IsCitusLocalTable returns whether the given relationId identifies a citus
  * local table.
  */
 bool

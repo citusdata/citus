@@ -369,7 +369,7 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 	InsertIntoPgDistPartition(relationId, distributionMethod, distributionColumn,
 							  colocationId, replicationModel);
 
-	/* foreign tables does not support TRUNCATE trigger */
+	/* foreign tables do not support TRUNCATE trigger */
 	if (RegularTable(relationId))
 	{
 		CreateTruncateTrigger(relationId);
@@ -394,7 +394,6 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 	{
 		CreateReferenceTableShard(relationId);
 	}
-
 
 	if (ShouldSyncTableMetadata(relationId))
 	{
