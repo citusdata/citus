@@ -155,6 +155,7 @@
 #include "distributed/resource_lock.h"
 #include "distributed/subplan_execution.h"
 #include "distributed/transaction_management.h"
+#include "distributed/tuple_destination.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_protocol.h"
 #include "lib/ilist.h"
@@ -193,13 +194,14 @@ typedef struct DistributedExecution
 	 */
 	bool expectResults;
 
+	/*
+	 * If a task specific destination is not provided for a task, then use
+	 * defaultTupleDest.
+	 */
+	TupleDestination *defaultTupleDest;
+
 	/* Parameters for parameterized plans. Can be NULL. */
 	ParamListInfo paramListInfo;
-
-	/* Tuple descriptor and destination for result. Can be NULL. */
-	TupleDesc tupleDescriptor;
-	Tuplestorestate *tupleStore;
-
 
 	/* list of workers involved in the execution */
 	List *workerList;
@@ -284,7 +286,7 @@ typedef struct DistributedExecution
 	 * contexts. The benefit of keeping it here is to avoid allocating the array
 	 * over and over again.
 	 */
-	AttInMetadata *attributeInputMetadata;
+	uint32 allocatedColumnCount;
 	char **columnArray;
 
 	/*
@@ -478,6 +480,9 @@ typedef struct ShardCommandExecution
 	/* description of the task */
 	Task *task;
 
+	/* cached AttInMetadata for task */
+	AttInMetadata **attributeInputMetadata;
+
 	/* order in which the command should be replicated on replicas */
 	PlacementExecutionOrder executionOrder;
 
@@ -525,6 +530,12 @@ typedef struct TaskPlacementExecution
 	/* state of the execution of the command on the placement */
 	TaskPlacementExecutionState executionState;
 
+	/*
+	 * Task query can contain multiple queries. queryIndex tracks results of
+	 * which query we are waiting for.
+	 */
+	uint32 queryIndex;
+
 	/* worker pool on which the placement needs to be executed */
 	WorkerPool *workerPool;
 
@@ -553,9 +564,9 @@ static DistributedExecution * CreateDistributedExecution(RowModifyLevel modLevel
 														 List *taskList,
 														 bool expectResults,
 														 ParamListInfo paramListInfo,
-														 TupleDesc tupleDescriptor,
-														 Tuplestorestate *tupleStore,
 														 int targetPoolSize,
+														 TupleDestination *
+														 defaultTupleDest,
 														 TransactionProperties *
 														 xactProperties,
 														 List *jobIdList);
@@ -665,7 +676,6 @@ AdaptiveExecutor(CitusScanState *scanState)
 	DistributedPlan *distributedPlan = scanState->distributedPlan;
 	EState *executorState = ScanStateGetExecutorState(scanState);
 	ParamListInfo paramListInfo = executorState->es_param_list_info;
-	TupleDesc tupleDescriptor = ScanStateGetTupleDescriptor(scanState);
 	bool randomAccess = true;
 	bool interTransactions = false;
 	int targetPoolSize = MaxAdaptiveExecutorPoolSize;
@@ -676,6 +686,13 @@ AdaptiveExecutor(CitusScanState *scanState)
 
 	/* we should only call this once before the scan finished */
 	Assert(!scanState->finishedRemoteScan);
+
+	scanState->tuplestorestate =
+		tuplestore_begin_heap(randomAccess, interTransactions, work_mem);
+
+	TupleDesc tupleDescriptor = ScanStateGetTupleDescriptor(scanState);
+	TupleDestination *defaultTupleDest =
+		CreateTupleStoreTupleDest(scanState->tuplestorestate, tupleDescriptor);
 
 	bool hasDependentJobs = HasDependentJobs(job);
 	if (hasDependentJobs)
@@ -689,9 +706,6 @@ AdaptiveExecutor(CitusScanState *scanState)
 		targetPoolSize = 1;
 	}
 
-	scanState->tuplestorestate =
-		tuplestore_begin_heap(randomAccess, interTransactions, work_mem);
-
 	TransactionProperties xactProperties = DecideTransactionPropertiesForTaskList(
 		distributedPlan->modLevel, taskList,
 		hasDependentJobs);
@@ -702,9 +716,8 @@ AdaptiveExecutor(CitusScanState *scanState)
 		taskList,
 		distributedPlan->expectResults,
 		paramListInfo,
-		tupleDescriptor,
-		scanState->tuplestorestate,
 		targetPoolSize,
+		defaultTupleDest,
 		&xactProperties,
 		jobIdList);
 
@@ -794,7 +807,7 @@ RunLocalExecution(CitusScanState *scanState, DistributedExecution *execution)
 	uint64 rowsProcessed = ExecuteLocalTaskListExtended(execution->localTaskList,
 														estate->es_param_list_info,
 														scanState->distributedPlan,
-														scanState->tuplestorestate,
+														execution->defaultTupleDest,
 														isUtilityCommand);
 
 	/*
@@ -921,6 +934,17 @@ ExecuteTaskListExtended(ExecutionParams *executionParams)
 	List *localTaskList = NIL;
 	List *remoteTaskList = NIL;
 
+	TupleDestination *defaultTupleDest = NULL;
+	if (executionParams->tupleDescriptor != NULL)
+	{
+		defaultTupleDest = CreateTupleStoreTupleDest(executionParams->tupleStore,
+													 executionParams->tupleDescriptor);
+	}
+	else
+	{
+		defaultTupleDest = CreateTupleDestNone();
+	}
+
 	if (executionParams->localExecutionSupported && ShouldExecuteTasksLocally(
 			executionParams->taskList))
 	{
@@ -952,8 +976,7 @@ ExecuteTaskListExtended(ExecutionParams *executionParams)
 	}
 	else
 	{
-		locallyProcessedRows += ExecuteLocalTaskList(localTaskList,
-													 executionParams->tupleStore);
+		locallyProcessedRows += ExecuteLocalTaskList(localTaskList, defaultTupleDest);
 	}
 
 	if (MultiShardConnectionType == SEQUENTIAL_CONNECTION)
@@ -965,8 +988,8 @@ ExecuteTaskListExtended(ExecutionParams *executionParams)
 		CreateDistributedExecution(
 			executionParams->modLevel, remoteTaskList,
 			executionParams->expectResults, paramListInfo,
-			executionParams->tupleDescriptor, executionParams->tupleStore,
-			executionParams->targetPoolSize, &executionParams->xactProperties,
+			executionParams->targetPoolSize, defaultTupleDest,
+			&executionParams->xactProperties,
 			executionParams->jobIdList);
 
 	StartDistributedExecution(execution);
@@ -1009,10 +1032,10 @@ CreateBasicExecutionParams(RowModifyLevel modLevel,
  */
 static DistributedExecution *
 CreateDistributedExecution(RowModifyLevel modLevel, List *taskList,
-						   bool expectResults,
-						   ParamListInfo paramListInfo, TupleDesc tupleDescriptor,
-						   Tuplestorestate *tupleStore, int targetPoolSize,
-						   TransactionProperties *xactProperties, List *jobIdList)
+						   bool expectResults, ParamListInfo paramListInfo,
+						   int targetPoolSize, TupleDestination *defaultTupleDest,
+						   TransactionProperties *xactProperties,
+						   List *jobIdList)
 {
 	DistributedExecution *execution =
 		(DistributedExecution *) palloc0(sizeof(DistributedExecution));
@@ -1028,12 +1051,10 @@ CreateDistributedExecution(RowModifyLevel modLevel, List *taskList,
 	execution->executionStats =
 		(DistributedExecutionStats *) palloc0(sizeof(DistributedExecutionStats));
 	execution->paramListInfo = paramListInfo;
-	execution->tupleDescriptor = tupleDescriptor;
-	execution->tupleStore = tupleStore;
-
 	execution->workerList = NIL;
 	execution->sessionList = NIL;
 	execution->targetPoolSize = targetPoolSize;
+	execution->defaultTupleDest = defaultTupleDest;
 
 	execution->totalTaskCount = list_length(taskList);
 	execution->unfinishedTaskCount = list_length(taskList);
@@ -1046,18 +1067,12 @@ CreateDistributedExecution(RowModifyLevel modLevel, List *taskList,
 
 	execution->jobIdList = jobIdList;
 
-	/* allocate execution specific data once, on the ExecutorState memory context */
-	if (tupleDescriptor != NULL)
-	{
-		execution->attributeInputMetadata = TupleDescGetAttInMetadata(tupleDescriptor);
-		execution->columnArray =
-			(char **) palloc0(tupleDescriptor->natts * sizeof(char *));
-	}
-	else
-	{
-		execution->attributeInputMetadata = NULL;
-		execution->columnArray = NULL;
-	}
+	/*
+	 * Since task can have multiple queries, we are not sure how many columns we should
+	 * allocate for. We start with 16, and reallocate when we need more.
+	 */
+	execution->allocatedColumnCount = 16;
+	execution->columnArray = palloc0(execution->allocatedColumnCount * sizeof(char *));
 
 	if (ShouldExecuteTasksLocally(taskList))
 	{
@@ -1709,6 +1724,23 @@ AssignTasksToConnectionsOrWorkerPool(DistributedExecution *execution)
 												sizeof(TaskPlacementExecution *));
 		shardCommandExecution->placementExecutionCount = placementExecutionCount;
 
+		TupleDestination *tupleDest = task->tupleDest ?
+									  task->tupleDest :
+									  execution->defaultTupleDest;
+		uint32 queryCount = task->queryCount;
+		shardCommandExecution->attributeInputMetadata = palloc0(queryCount *
+																sizeof(AttInMetadata *));
+
+		for (uint32 queryIndex = 0; queryIndex < queryCount; queryIndex++)
+		{
+			TupleDesc tupleDescriptor = tupleDest->tupleDescForQuery(tupleDest,
+																	 queryIndex);
+			shardCommandExecution->attributeInputMetadata[queryIndex] =
+				tupleDescriptor ?
+				TupleDescGetAttInMetadata(tupleDescriptor) :
+				NULL;
+		}
+
 		shardCommandExecution->expectResults =
 			expectResults && !task->partiallyLocalOrRemote;
 
@@ -1731,6 +1763,7 @@ AssignTasksToConnectionsOrWorkerPool(DistributedExecution *execution)
 			placementExecution->shardPlacement = taskPlacement;
 			placementExecution->workerPool = workerPool;
 			placementExecution->placementExecutionIndex = placementExecutionIndex;
+			placementExecution->queryIndex = 0;
 
 			if (placementExecutionReady)
 			{
@@ -3412,16 +3445,13 @@ ReceiveResults(WorkerSession *session, bool storeRows)
 	WorkerPool *workerPool = session->workerPool;
 	DistributedExecution *execution = workerPool->distributedExecution;
 	DistributedExecutionStats *executionStats = execution->executionStats;
-	TupleDesc tupleDescriptor = execution->tupleDescriptor;
-	AttInMetadata *attributeInputMetadata = execution->attributeInputMetadata;
-	uint32 expectedColumnCount = 0;
-	char **columnArray = execution->columnArray;
-	Tuplestorestate *tupleStore = execution->tupleStore;
-
-	if (tupleDescriptor != NULL)
-	{
-		expectedColumnCount = tupleDescriptor->natts;
-	}
+	TaskPlacementExecution *placementExecution = session->currentTask;
+	ShardCommandExecution *shardCommandExecution =
+		placementExecution->shardCommandExecution;
+	Task *task = placementExecution->shardCommandExecution->task;
+	TupleDestination *tupleDest = task->tupleDest ?
+								  task->tupleDest :
+								  execution->defaultTupleDest;
 
 	/*
 	 * We use this context while converting each row fetched from remote node
@@ -3452,8 +3482,6 @@ ReceiveResults(WorkerSession *session, bool storeRows)
 		{
 			char *currentAffectedTupleString = PQcmdTuples(result);
 			int64 currentAffectedTupleCount = 0;
-			ShardCommandExecution *shardCommandExecution =
-				session->currentTask->shardCommandExecution;
 
 			/* if there are multiple replicas, make sure to consider only one */
 			if (!shardCommandExecution->gotResults && *currentAffectedTupleString != '\0')
@@ -3466,9 +3494,9 @@ ReceiveResults(WorkerSession *session, bool storeRows)
 
 			PQclear(result);
 
-			/* no more results, break out of loop and free allocated memory */
-			fetchDone = true;
-			break;
+			/* task query might contain multiple queries, so fetch until we reach NULL */
+			placementExecution->queryIndex++;
+			continue;
 		}
 		else if (resultStatus == PGRES_TUPLES_OK)
 		{
@@ -3479,8 +3507,9 @@ ReceiveResults(WorkerSession *session, bool storeRows)
 			Assert(PQntuples(result) == 0);
 			PQclear(result);
 
-			fetchDone = true;
-			break;
+			/* task query might contain multiple queries, so fetch until we reach NULL */
+			placementExecution->queryIndex++;
+			continue;
 		}
 		else if (resultStatus != PGRES_SINGLE_TUPLE)
 		{
@@ -3497,8 +3526,16 @@ ReceiveResults(WorkerSession *session, bool storeRows)
 			continue;
 		}
 
+		uint32 queryIndex = placementExecution->queryIndex;
+		TupleDesc tupleDescriptor = tupleDest->tupleDescForQuery(tupleDest, queryIndex);
+		if (tupleDescriptor == NULL)
+		{
+			continue;
+		}
+
 		rowsProcessed = PQntuples(result);
 		uint32 columnCount = PQnfields(result);
+		uint32 expectedColumnCount = tupleDescriptor->natts;
 
 		if (columnCount != expectedColumnCount)
 		{
@@ -3506,6 +3543,16 @@ ReceiveResults(WorkerSession *session, bool storeRows)
 								   "expected %d",
 								   columnCount, expectedColumnCount)));
 		}
+
+		if (columnCount > execution->allocatedColumnCount)
+		{
+			pfree(execution->columnArray);
+			execution->allocatedColumnCount = columnCount;
+			execution->columnArray = palloc0(execution->allocatedColumnCount *
+											 sizeof(char *));
+		}
+
+		char **columnArray = execution->columnArray;
 
 		for (uint32 rowIndex = 0; rowIndex < rowsProcessed; rowIndex++)
 		{
@@ -3536,12 +3583,16 @@ ReceiveResults(WorkerSession *session, bool storeRows)
 			 */
 			MemoryContext oldContextPerRow = MemoryContextSwitchTo(ioContext);
 
-			HeapTuple heapTuple = BuildTupleFromCStrings(attributeInputMetadata,
-														 columnArray);
+			AttInMetadata *attInMetadata =
+				shardCommandExecution->attributeInputMetadata[queryIndex];
+			HeapTuple heapTuple = BuildTupleFromCStrings(attInMetadata, columnArray);
 
 			MemoryContextSwitchTo(oldContextPerRow);
 
-			tuplestore_puttuple(tupleStore, heapTuple);
+			tupleDest->putTuple(tupleDest, task,
+								placementExecution->placementExecutionIndex, queryIndex,
+								heapTuple);
+
 			MemoryContextReset(ioContext);
 
 			execution->rowsProcessed++;

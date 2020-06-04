@@ -327,6 +327,8 @@ CopyNodeTask(COPYFUNC_ARGS)
 	COPY_NODE_FIELD(rowValuesLists);
 	COPY_SCALAR_FIELD(partiallyLocalOrRemote);
 	COPY_SCALAR_FIELD(parametersInQueryStringResolved);
+	COPY_SCALAR_FIELD(tupleDest);
+	COPY_SCALAR_FIELD(queryCount);
 }
 
 
