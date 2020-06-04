@@ -453,7 +453,7 @@ AddShardIntervalRestrictionToSelect(Query *subqery, ShardInterval *shardInterval
 RangeTblEntry *
 ExtractSelectRangeTableEntry(Query *query)
 {
-	Assert(InsertSelectIntoCitusTable(query));
+	Assert(InsertSelectIntoCitusTable(query) || InsertSelectIntoLocalTable(query));
 
 	/*
 	 * Since we already asserted InsertSelectIntoCitusTable() it is safe to access

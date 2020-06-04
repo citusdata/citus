@@ -17,6 +17,7 @@
 
 #include "catalog/pg_type.h"
 #include "distributed/citus_ruleutils.h"
+#include "distributed/insert_select_planner.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_master_planner.h"
@@ -190,6 +191,11 @@ CitusCustomScanPathPlan(PlannerInfo *root,
 	 * as the target list on our scan the internal rows will be projected to this one.
 	 */
 	citusPath->remoteScan->scan.plan.targetlist = tlist;
+
+	if (tlist != NULL)
+	{
+		citusPath->remoteScan->custom_scan_tlist = tlist;
+	}
 
 	/* clauses might have been added by the planner, need to add them to our scan */
 	RestrictInfo *restrictInfo = NULL;

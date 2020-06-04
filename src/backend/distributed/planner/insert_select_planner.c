@@ -13,11 +13,14 @@
 #include "distributed/pg_version_constants.h"
 
 #include "catalog/pg_class.h"
+#include "catalog/pg_type.h"
 #include "distributed/citus_clauses.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/errormessage.h"
+#include "distributed/listutils.h"
 #include "distributed/log_utils.h"
+#include "distributed/insert_select_executor.h"
 #include "distributed/insert_select_planner.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_executor.h"
@@ -60,6 +63,8 @@ static Task * RouterModifyTaskForShardInterval(Query *originalQuery,
 											   uint32 taskIdIndex,
 											   bool allRelationsJoinedOnPartitionKey,
 											   DeferredErrorMessage **routerPlannerError);
+static Query * CreateMasterQueryForRouterPlan(DistributedPlan *distPlan);
+static List * CreateTargetListForMasterQuery(List *targetList);
 static DeferredErrorMessage * DistributedInsertSelectSupported(Query *queryTree,
 															   RangeTblEntry *insertRte,
 															   RangeTblEntry *subqueryRte,
@@ -301,6 +306,175 @@ CreateDistributedInsertSelectPlan(Query *originalQuery,
 	distributedPlan->targetRelationId = targetRelationId;
 
 	return distributedPlan;
+}
+
+
+/*
+ * CreateInsertSelectIntoLocalTablePlan creates the plan for INSERT .. SELECT queries
+ * where the selected table is distributed and the inserted table is not.
+ *
+ * To create the plan, this function first creates a distributed plan for the SELECT
+ * part. Then puts it as a subquery to the original (non-distributed) INSERT query as
+ * a subquery. Finally, it puts this INSERT query, which now has a distributed SELECT
+ * subquery, in the masterQuery.
+ *
+ * If the SELECT query is a router query, whose distributed plan does not have a
+ * masterQuery, this function also creates a dummy masterQuery for that.
+ */
+DistributedPlan *
+CreateInsertSelectIntoLocalTablePlan(uint64 planId, Query *originalQuery, ParamListInfo
+									 boundParams, bool hasUnresolvedParams,
+									 PlannerRestrictionContext *plannerRestrictionContext)
+{
+	RangeTblEntry *selectRte = ExtractSelectRangeTableEntry(originalQuery);
+
+	Query *selectQuery = BuildSelectForInsertSelect(originalQuery);
+	originalQuery->cteList = NIL;
+	DistributedPlan *distPlan = CreateDistributedPlan(planId, selectQuery,
+													  copyObject(selectQuery),
+													  boundParams, hasUnresolvedParams,
+													  plannerRestrictionContext);
+
+	/*
+	 * We don't expect planning error here because hasUnresolvedParams is already checked
+	 * and CreateDistributedPlan only returns error when there are unresolved params.
+	 */
+	Assert(distPlan->planningError == NULL);
+
+	if (distPlan->planningError)
+	{
+		return distPlan;
+	}
+
+	if (distPlan->masterQuery == NULL)
+	{
+		/*
+		 * For router queries, we construct a synthetic master query that simply passes
+		 * on the results of the remote tasks, which we can then use as the select in
+		 * the INSERT .. SELECT.
+		 */
+		distPlan->masterQuery = CreateMasterQueryForRouterPlan(
+			distPlan);
+	}
+
+	/*
+	 * masterQuery of a distributed select is for combining the results from
+	 * worker nodes on the coordinator node. Putting it as a subquery to the
+	 * INSERT query, causes the INSERT query to insert the combined select value
+	 * from the workers. And making the resulting insert query the masterQuery
+	 * let's us execute this insert command.
+	 *
+	 * So this operation makes the master query insert the result of the
+	 * distributed select instead of returning it.
+	 */
+	selectRte->subquery = distPlan->masterQuery;
+	distPlan->masterQuery = originalQuery;
+
+	return distPlan;
+}
+
+
+/*
+ * CreateMasterQueryForRouterPlan is used for creating a dummy masterQuery
+ * for a router plan, since router plans normally don't have one.
+ */
+static Query *
+CreateMasterQueryForRouterPlan(DistributedPlan *distPlan)
+{
+	const Index insertTableId = 1;
+	List *tableIdList = list_make1(makeInteger(insertTableId));
+	Job *dependentJob = distPlan->workerJob;
+	List *dependentTargetList = dependentJob->jobQuery->targetList;
+
+	/* compute column names for the derived table */
+	uint32 columnCount = (uint32) list_length(dependentTargetList);
+	List *columnNameList = DerivedColumnNameList(columnCount,
+												 dependentJob->jobId);
+
+	List *funcColumnNames = NIL;
+	List *funcColumnTypes = NIL;
+	List *funcColumnTypeMods = NIL;
+	List *funcCollations = NIL;
+
+	TargetEntry *targetEntry = NULL;
+	foreach_ptr(targetEntry, dependentTargetList)
+	{
+		Node *expr = (Node *) targetEntry->expr;
+
+		char *name = targetEntry->resname;
+		if (name == NULL)
+		{
+			name = pstrdup("unnamed");
+		}
+
+		funcColumnNames = lappend(funcColumnNames, makeString(name));
+
+		funcColumnTypes = lappend_oid(funcColumnTypes, exprType(expr));
+		funcColumnTypeMods = lappend_int(funcColumnTypeMods, exprTypmod(expr));
+		funcCollations = lappend_oid(funcCollations, exprCollation(expr));
+	}
+
+	RangeTblEntry *rangeTableEntry = DerivedRangeTableEntry(NULL,
+															columnNameList,
+															tableIdList,
+															funcColumnNames,
+															funcColumnTypes,
+															funcColumnTypeMods,
+															funcCollations);
+
+	List *targetList = CreateTargetListForMasterQuery(dependentTargetList);
+
+	RangeTblRef *rangeTableRef = makeNode(RangeTblRef);
+	rangeTableRef->rtindex = 1;
+
+	FromExpr *joinTree = makeNode(FromExpr);
+	joinTree->quals = NULL;
+	joinTree->fromlist = list_make1(rangeTableRef);
+
+	Query *masterQuery = makeNode(Query);
+	masterQuery->commandType = CMD_SELECT;
+	masterQuery->querySource = QSRC_ORIGINAL;
+	masterQuery->canSetTag = true;
+	masterQuery->rtable = list_make1(rangeTableEntry);
+	masterQuery->targetList = targetList;
+	masterQuery->jointree = joinTree;
+	return masterQuery;
+}
+
+
+/*
+ * CreateTargetListForMasterQuery is used for creating a target list for
+ * master query.
+ */
+static List *
+CreateTargetListForMasterQuery(List *targetList)
+{
+	List *newTargetEntryList = NIL;
+	const uint32 masterTableId = 1;
+	int columnId = 1;
+
+	/* iterate over original target entries */
+	TargetEntry *originalTargetEntry = NULL;
+	foreach_ptr(originalTargetEntry, targetList)
+	{
+		TargetEntry *newTargetEntry = flatCopyTargetEntry(originalTargetEntry);
+
+		Var *column = makeVarFromTargetEntry(masterTableId, originalTargetEntry);
+		column->varattno = columnId;
+		column->varoattno = columnId;
+		columnId++;
+
+		if (column->vartype == RECORDOID || column->vartype == RECORDARRAYOID)
+		{
+			column->vartypmod = BlessRecordExpression(originalTargetEntry->expr);
+		}
+
+		Expr *newExpression = (Expr *) column;
+
+		newTargetEntry->expr = newExpression;
+		newTargetEntryList = lappend(newTargetEntryList, newTargetEntry);
+	}
+	return newTargetEntryList;
 }
 
 

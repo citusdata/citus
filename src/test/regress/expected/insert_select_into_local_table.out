@@ -1,0 +1,359 @@
+CREATE SCHEMA insert_select_into_local_table;
+SET search_path TO insert_select_into_local_table;
+SET citus.shard_count = 4;
+SET citus.next_shard_id TO 11235800;
+CREATE TABLE dist_table (a INT, b INT, c TEXT);
+SELECT create_distributed_table('dist_table', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO dist_table VALUES (1, 6, 'txt1'), (2, 7, 'txt2'), (3, 8, 'txt3');
+CREATE TABLE non_dist_1 (a INT, b INT, c TEXT);
+CREATE TABLE non_dist_2 (a INT, c TEXT);
+CREATE TABLE non_dist_3 (a INT);
+-- test non-router queries
+INSERT INTO non_dist_1 SELECT * FROM dist_table;
+INSERT INTO non_dist_2 SELECT a, c FROM dist_table;
+INSERT INTO non_dist_3 SELECT a FROM dist_table;
+SELECT * FROM non_dist_1 ORDER BY 1, 2, 3;
+ a | b |  c
+---------------------------------------------------------------------
+ 1 | 6 | txt1
+ 2 | 7 | txt2
+ 3 | 8 | txt3
+(3 rows)
+
+SELECT * FROM non_dist_2 ORDER BY 1, 2;
+ a |  c
+---------------------------------------------------------------------
+ 1 | txt1
+ 2 | txt2
+ 3 | txt3
+(3 rows)
+
+SELECT * FROM non_dist_3 ORDER BY 1;
+ a
+---------------------------------------------------------------------
+ 1
+ 2
+ 3
+(3 rows)
+
+TRUNCATE non_dist_1, non_dist_2, non_dist_3;
+-- test router queries
+INSERT INTO non_dist_1 SELECT * FROM dist_table WHERE a = 1;
+INSERT INTO non_dist_2 SELECT a, c FROM dist_table WHERE a = 1;
+INSERT INTO non_dist_3 SELECT a FROM dist_table WHERE a = 1;
+SELECT * FROM non_dist_1 ORDER BY 1, 2, 3;
+ a | b |  c
+---------------------------------------------------------------------
+ 1 | 6 | txt1
+(1 row)
+
+SELECT * FROM non_dist_2 ORDER BY 1, 2;
+ a |  c
+---------------------------------------------------------------------
+ 1 | txt1
+(1 row)
+
+SELECT * FROM non_dist_3 ORDER BY 1;
+ a
+---------------------------------------------------------------------
+ 1
+(1 row)
+
+TRUNCATE non_dist_1, non_dist_2, non_dist_3;
+-- test columns in different order
+INSERT INTO non_dist_1(b, a, c) SELECT a, b, c FROM dist_table;
+SELECT * FROM non_dist_1 ORDER BY 1, 2, 3;
+ a | b |  c
+---------------------------------------------------------------------
+ 6 | 1 | txt1
+ 7 | 2 | txt2
+ 8 | 3 | txt3
+(3 rows)
+
+TRUNCATE non_dist_1;
+-- test EXPLAIN
+EXPLAIN (COSTS FALSE) INSERT INTO non_dist_1 SELECT * FROM dist_table;
+                           QUERY PLAN
+---------------------------------------------------------------------
+ Insert on non_dist_1
+   ->  Custom Scan (Citus Adaptive)
+         Task Count: 4
+         Tasks Shown: One of 4
+         ->  Task
+               Node: host=localhost port=xxxxx dbname=regression
+               ->  Seq Scan on dist_table_11235800 dist_table
+(7 rows)
+
+EXPLAIN (COSTS FALSE) INSERT INTO non_dist_1 SELECT * FROM dist_table WHERE a = 1;
+                           QUERY PLAN
+---------------------------------------------------------------------
+ Insert on non_dist_1
+   ->  Custom Scan (Citus Adaptive)
+         Task Count: 1
+         Tasks Shown: All
+         ->  Task
+               Node: host=localhost port=xxxxx dbname=regression
+               ->  Seq Scan on dist_table_11235800 dist_table
+                     Filter: (a = 1)
+(8 rows)
+
+-- test RETURNING
+INSERT INTO non_dist_1 SELECT * FROM dist_table ORDER BY 1, 2, 3 RETURNING *;
+ a | b |  c
+---------------------------------------------------------------------
+ 1 | 6 | txt1
+ 2 | 7 | txt2
+ 3 | 8 | txt3
+(3 rows)
+
+INSERT INTO non_dist_1 SELECT * FROM dist_table WHERE a = 1 ORDER BY 1, 2, 3 RETURNING *;
+ a | b |  c
+---------------------------------------------------------------------
+ 1 | 6 | txt1
+(1 row)
+
+-- test INSERT INTO a table with UNIQUE
+CREATE TABLE non_dist_unique (a INT UNIQUE, b INT);
+INSERT INTO non_dist_unique SELECT a, b FROM dist_table;
+SELECT * FROM non_dist_unique ORDER BY 1;
+ a | b
+---------------------------------------------------------------------
+ 1 | 6
+ 2 | 7
+ 3 | 8
+(3 rows)
+
+INSERT INTO non_dist_unique SELECT a+1, b FROM dist_table ON CONFLICT (a) DO NOTHING;
+SELECT * FROM non_dist_unique ORDER BY 1;
+ a | b
+---------------------------------------------------------------------
+ 1 | 6
+ 2 | 7
+ 3 | 8
+ 4 | 8
+(4 rows)
+
+INSERT INTO non_dist_unique SELECT a+2, b FROM dist_table ON CONFLICT (a) DO UPDATE SET b = EXCLUDED.b + non_dist_unique.b;
+SELECT * FROM non_dist_unique ORDER BY 1;
+ a | b
+---------------------------------------------------------------------
+ 1 |  6
+ 2 |  7
+ 3 | 14
+ 4 | 15
+ 5 |  8
+(5 rows)
+
+DROP TABLE non_dist_unique;
+-- test INSERT INTO a table with DEFAULT
+CREATE TABLE non_dist_default (a INT, c TEXT DEFAULT 'def');
+INSERT INTO non_dist_default SELECT a FROM dist_table WHERE a = 1;
+SELECT * FROM non_dist_default ORDER BY 1, 2;
+ a |  c
+---------------------------------------------------------------------
+ 1 | def
+(1 row)
+
+INSERT INTO non_dist_default SELECT a FROM dist_table WHERE a > 1;
+SELECT * FROM non_dist_default ORDER BY 1, 2;
+ a |  c
+---------------------------------------------------------------------
+ 1 | def
+ 2 | def
+ 3 | def
+(3 rows)
+
+INSERT INTO non_dist_default SELECT a, c FROM dist_table WHERE a = 1;
+SELECT * FROM non_dist_default ORDER BY 1, 2;
+ a |  c
+---------------------------------------------------------------------
+ 1 | def
+ 1 | txt1
+ 2 | def
+ 3 | def
+(4 rows)
+
+INSERT INTO non_dist_default SELECT a, c FROM dist_table WHERE a > 1;
+SELECT * FROM non_dist_default ORDER BY 1, 2;
+ a |  c
+---------------------------------------------------------------------
+ 1 | def
+ 1 | txt1
+ 2 | def
+ 2 | txt2
+ 3 | def
+ 3 | txt3
+(6 rows)
+
+DROP TABLE non_dist_default;
+-- test CTEs
+WITH with_table AS (SELECT a, c FROM dist_table ORDER BY a LIMIT 2) INSERT INTO non_dist_2 SELECT * FROM with_table;
+SELECT * FROM non_dist_2 ORDER BY 1, 2;
+ a |  c
+---------------------------------------------------------------------
+ 1 | txt1
+ 2 | txt2
+(2 rows)
+
+INSERT INTO non_dist_2 WITH with_table AS (SELECT a, c FROM dist_table ORDER BY a LIMIT 2) SELECT * FROM with_table;
+SELECT * FROM non_dist_2 ORDER BY 1, 2;
+ a |  c
+---------------------------------------------------------------------
+ 1 | txt1
+ 1 | txt1
+ 2 | txt2
+ 2 | txt2
+(4 rows)
+
+TRUNCATE non_dist_2;
+WITH deleted_rows AS (DELETE FROM dist_table WHERE a < 3 RETURNING a, c) INSERT INTO non_dist_2 SELECT * FROM deleted_rows;
+SELECT * FROM dist_table ORDER BY 1, 2, 3;
+ a | b |  c
+---------------------------------------------------------------------
+ 3 | 8 | txt3
+(1 row)
+
+SELECT * FROM non_dist_2 ORDER BY 1, 2;
+ a |  c
+---------------------------------------------------------------------
+ 1 | txt1
+ 2 | txt2
+(2 rows)
+
+TRUNCATE non_dist_2;
+INSERT INTO dist_table VALUES (1, 6, 'txt1'), (2, 7, 'txt2');
+WITH insert_table AS (INSERT INTO non_dist_2 SELECT a, c FROM dist_table RETURNING *) SELECT * FROM insert_table ORDER BY 1, 2;
+ a |  c
+---------------------------------------------------------------------
+ 1 | txt1
+ 2 | txt2
+ 3 | txt3
+(3 rows)
+
+SELECT * FROM non_dist_2 ORDER BY 1, 2;
+ a |  c
+---------------------------------------------------------------------
+ 1 | txt1
+ 2 | txt2
+ 3 | txt3
+(3 rows)
+
+TRUNCATE non_dist_2;
+-- test PREPARE
+PREPARE insert_select_into_local AS INSERT INTO non_dist_2 SELECT a, c FROM dist_table WHERE a = 1;
+EXECUTE insert_select_into_local;
+EXECUTE insert_select_into_local;
+EXECUTE insert_select_into_local;
+EXECUTE insert_select_into_local;
+EXECUTE insert_select_into_local;
+SELECT * FROM non_dist_2 ORDER BY 1, 2;
+ a |  c
+---------------------------------------------------------------------
+ 1 | txt1
+ 1 | txt1
+ 1 | txt1
+ 1 | txt1
+ 1 | txt1
+(5 rows)
+
+EXECUTE insert_select_into_local;
+SELECT * FROM non_dist_2 ORDER BY 1, 2;
+ a |  c
+---------------------------------------------------------------------
+ 1 | txt1
+ 1 | txt1
+ 1 | txt1
+ 1 | txt1
+ 1 | txt1
+ 1 | txt1
+(6 rows)
+
+TRUNCATE non_dist_2;
+DEALLOCATE insert_select_into_local;
+PREPARE insert_select_into_local(int) AS INSERT INTO non_dist_2 SELECT a, c FROM dist_table WHERE a = $1;
+EXECUTE insert_select_into_local(2);
+EXECUTE insert_select_into_local(2);
+EXECUTE insert_select_into_local(2);
+EXECUTE insert_select_into_local(2);
+EXECUTE insert_select_into_local(2);
+SELECT * FROM non_dist_2 ORDER BY 1, 2;
+ a |  c
+---------------------------------------------------------------------
+ 2 | txt2
+ 2 | txt2
+ 2 | txt2
+ 2 | txt2
+ 2 | txt2
+(5 rows)
+
+EXECUTE insert_select_into_local(2);
+SELECT * FROM non_dist_2 ORDER BY 1, 2;
+ a |  c
+---------------------------------------------------------------------
+ 2 | txt2
+ 2 | txt2
+ 2 | txt2
+ 2 | txt2
+ 2 | txt2
+ 2 | txt2
+(6 rows)
+
+TRUNCATE non_dist_2;
+DEALLOCATE insert_select_into_local;
+PREPARE insert_select_into_local(int) AS INSERT INTO non_dist_2 SELECT a, c FROM dist_table WHERE b = $1;
+EXECUTE insert_select_into_local(8);
+EXECUTE insert_select_into_local(8);
+EXECUTE insert_select_into_local(8);
+EXECUTE insert_select_into_local(8);
+EXECUTE insert_select_into_local(8);
+SELECT * FROM non_dist_2 ORDER BY 1, 2;
+ a |  c
+---------------------------------------------------------------------
+ 3 | txt3
+ 3 | txt3
+ 3 | txt3
+ 3 | txt3
+ 3 | txt3
+(5 rows)
+
+EXECUTE insert_select_into_local(8);
+SELECT * FROM non_dist_2 ORDER BY 1, 2;
+ a |  c
+---------------------------------------------------------------------
+ 3 | txt3
+ 3 | txt3
+ 3 | txt3
+ 3 | txt3
+ 3 | txt3
+ 3 | txt3
+(6 rows)
+
+TRUNCATE non_dist_2;
+DEALLOCATE insert_select_into_local;
+-- test reference table
+CREATE TABLE ref_table (a INT, b INT, c TEXT);
+SELECT create_reference_table('ref_table');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO ref_table VALUES (1, 6, 'txt1'), (2, 7, 'txt2'), (3, 8, 'txt3');
+INSERT INTO non_dist_2 SELECT a, c FROM ref_table;
+SELECT * FROM non_dist_2 ORDER BY 1, 2;
+ a |  c
+---------------------------------------------------------------------
+ 1 | txt1
+ 2 | txt2
+ 3 | txt3
+(3 rows)
+
+TRUNCATE non_dist_2;
+\set VERBOSITY terse
+DROP SCHEMA insert_select_into_local_table CASCADE;
+NOTICE:  drop cascades to 5 other objects

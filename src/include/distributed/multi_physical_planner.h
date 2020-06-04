@@ -579,4 +579,13 @@ extern List * QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 extern uint64 UniqueJobId(void);
 
 
+extern List * DerivedColumnNameList(uint32 columnCount, uint64 generatingJobId);
+extern RangeTblEntry * DerivedRangeTableEntry(MultiNode *multiNode, List *columnList,
+											  List *tableIdList,
+											  List *funcColumnNames,
+											  List *funcColumnTypes,
+											  List *funcColumnTypeMods,
+											  List *funcCollations);
+
+
 #endif   /* MULTI_PHYSICAL_PLANNER_H */

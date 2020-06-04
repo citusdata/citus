@@ -87,11 +87,6 @@ static PlannedStmt * TryCreateDistributedPlannedStmt(PlannedStmt *localPlan,
 													 boundParams,
 													 PlannerRestrictionContext *
 													 plannerRestrictionContext);
-static DistributedPlan * CreateDistributedPlan(uint64 planId, Query *originalQuery,
-											   Query *query, ParamListInfo boundParams,
-											   bool hasUnresolvedParams,
-											   PlannerRestrictionContext *
-											   plannerRestrictionContext);
 static DeferredErrorMessage * DeferErrorIfPartitionTableNotSingleReplicated(Oid
 																			relationId);
 
@@ -193,21 +188,6 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 	}
 	else if (needsDistributedPlanning)
 	{
-		/*
-		 * Inserting into a local table needs to go through the regular postgres
-		 * planner/executor, but the SELECT needs to go through Citus. We currently
-		 * don't have a way of doing both things and therefore error out, but do
-		 * have a handy tip for users.
-		 */
-		if (InsertSelectIntoLocalTable(parse))
-		{
-			ereport(ERROR, (errmsg("cannot INSERT rows from a distributed query into a "
-								   "local table"),
-							errhint("Consider using CREATE TEMPORARY TABLE tmp AS "
-									"SELECT ... and inserting from the temporary "
-									"table.")));
-		}
-
 		/*
 		 * standard_planner scribbles on it's input, but for deparsing we need the
 		 * unmodified form. Note that before copying we call
@@ -922,7 +902,7 @@ TryCreateDistributedPlannedStmt(PlannedStmt *localPlan,
  *    - If any, go back to step 1 by calling itself recursively
  * 3. Logical planner
  */
-static DistributedPlan *
+DistributedPlan *
 CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamListInfo
 					  boundParams, bool hasUnresolvedParams,
 					  PlannerRestrictionContext *plannerRestrictionContext)
@@ -951,6 +931,22 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
 
 			distributedPlan =
 				CreateInsertSelectPlan(planId, originalQuery, plannerRestrictionContext);
+		}
+		else if (InsertSelectIntoLocalTable(originalQuery))
+		{
+			if (hasUnresolvedParams)
+			{
+				/*
+				 * Unresolved parameters can cause performance regressions in
+				 * INSERT...SELECT when the partition column is a parameter
+				 * because we don't perform any additional pruning in the executor.
+				 */
+				return NULL;
+			}
+			distributedPlan =
+				CreateInsertSelectIntoLocalTablePlan(planId, originalQuery, boundParams,
+													 hasUnresolvedParams,
+													 plannerRestrictionContext);
 		}
 		else
 		{

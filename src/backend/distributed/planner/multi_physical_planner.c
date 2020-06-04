@@ -135,13 +135,6 @@ static RangeTblEntry * JoinRangeTableEntry(JoinExpr *joinExpr, List *dependentJo
 static int ExtractRangeTableId(Node *node);
 static void ExtractColumns(RangeTblEntry *rangeTableEntry, int rangeTableId,
 						   List *dependentJobList, List **columnNames, List **columnVars);
-static RangeTblEntry * DerivedRangeTableEntry(MultiNode *multiNode, List *columnNames,
-											  List *tableIdList, List *funcColumnNames,
-											  List *funcColumnTypes,
-											  List *funcColumnTypeMods,
-											  List *funcCollations);
-
-static List * DerivedColumnNameList(uint32 columnCount, uint64 generatingJobId);
 static Query * BuildSubqueryJobQuery(MultiNode *multiNode);
 static void UpdateAllColumnAttributes(Node *columnContainer, List *rangeTableList,
 									  List *dependentJobList);
@@ -900,7 +893,7 @@ BaseRangeTableList(MultiNode *multiNode)
  * derived table either represents the output of a repartition job; or the data
  * on worker nodes in case of the master node query.
  */
-static RangeTblEntry *
+RangeTblEntry *
 DerivedRangeTableEntry(MultiNode *multiNode, List *columnList, List *tableIdList,
 					   List *funcColumnNames, List *funcColumnTypes,
 					   List *funcColumnTypeMods, List *funcCollations)
@@ -923,7 +916,7 @@ DerivedRangeTableEntry(MultiNode *multiNode, List *columnList, List *tableIdList
  * tables. These column names are then used when building the create stament
  * query string for derived tables.
  */
-static List *
+List *
 DerivedColumnNameList(uint32 columnCount, uint64 generatingJobId)
 {
 	List *columnNameList = NIL;
