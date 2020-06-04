@@ -26,6 +26,7 @@
 #include "distributed/listutils.h"
 #include "distributed/master_protocol.h"
 #include "distributed/multi_join_order.h"
+#include "distributed/namespace_utils.h"
 #include "distributed/reference_table_utils.h"
 #include "distributed/version_compat.h"
 #include "utils/fmgroids.h"
@@ -469,15 +470,7 @@ GetForeignConstraintCommandsInternal(Oid relationId, int flags)
 
 	List *foreignKeyCommands = NIL;
 
-	/*
-	 * Set search_path to NIL so that all objects outside of pg_catalog will be
-	 * schema-prefixed. pg_catalog will be added automatically when we call
-	 * PushOverrideSearchPath(), since we set addCatalog to true;
-	 */
-	OverrideSearchPath *overridePath = GetOverrideSearchPath(CurrentMemoryContext);
-	overridePath->schemas = NIL;
-	overridePath->addCatalog = true;
-	PushOverrideSearchPath(overridePath);
+	PushOverrideEmptySearchPath(CurrentMemoryContext);
 
 	Oid foreignKeyOid = InvalidOid;
 	foreach_oid(foreignKeyOid, foreignKeyOids)
