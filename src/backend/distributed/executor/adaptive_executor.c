@@ -129,6 +129,7 @@
 
 #include "access/transam.h"
 #include "access/xact.h"
+#include "access/htup_details.h"
 #include "catalog/pg_type.h"
 #include "commands/dbcommands.h"
 #include "commands/schemacmds.h"
@@ -137,6 +138,7 @@
 #include "distributed/citus_custom_scan.h"
 #include "distributed/citus_safe_lib.h"
 #include "distributed/connection_management.h"
+#include "distributed/commands/multi_copy.h"
 #include "distributed/deparse_shard_query.h"
 #include "distributed/distributed_execution_locks.h"
 #include "distributed/listutils.h"
@@ -163,9 +165,11 @@
 #include "portability/instr_time.h"
 #include "storage/fd.h"
 #include "storage/latch.h"
+#include "utils/builtins.h"
 #include "utils/int8.h"
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
+#include "utils/syscache.h"
 #include "utils/timestamp.h"
 
 #define SLOW_START_DISABLED 0
@@ -277,12 +281,13 @@ typedef struct DistributedExecution
 	 * The following fields are used while receiving results from remote nodes.
 	 * We store this information here to avoid re-allocating it every time.
 	 *
-	 * columnArray field is reset/calculated per row, so might be useless for other
-	 * contexts. The benefit of keeping it here is to avoid allocating the array
-	 * over and over again.
+	 * columnArray field is reset/calculated per row, so might be useless for
+	 * other contexts. The benefit of keeping it here is to avoid allocating
+	 * the array over and over again.
 	 */
 	uint32 allocatedColumnCount;
-	char **columnArray;
+	void **columnArray;
+	StringInfoData *stringInfoDataArray;
 
 	/*
 	 * jobIdList contains all jobs in the job tree, this is used to
@@ -437,6 +442,7 @@ struct TaskPlacementExecution;
 /* GUC, determining whether Citus opens 1 connection per task */
 bool ForceMaxQueryParallelization = false;
 int MaxAdaptiveExecutorPoolSize = 16;
+bool EnableBinaryProtocol = true;
 
 /* GUC, number of ms to wait between opening connections to the same worker */
 int ExecutorSlowStartInterval = 10;
@@ -477,6 +483,10 @@ typedef struct ShardCommandExecution
 
 	/* cached AttInMetadata for task */
 	AttInMetadata **attributeInputMetadata;
+
+	/* indicates whether the attributeInputMetadata has binary or text
+	 * encoding/decoding functions */
+	bool binaryResults;
 
 	/* order in which the command should be replicated on replicas */
 	PlacementExecutionOrder executionOrder;
@@ -632,6 +642,10 @@ static int RebuildWaitEventSet(DistributedExecution *execution);
 static void ProcessWaitEvents(DistributedExecution *execution, WaitEvent *events, int
 							  eventCount, bool *cancellationReceived);
 static long MillisecondsBetweenTimestamps(instr_time startTime, instr_time endTime);
+static HeapTuple BuildTupleFromBytes(AttInMetadata *attinmeta, fmStringInfo *values);
+static AttInMetadata * TupleDescGetAttBinaryInMetadata(TupleDesc tupdesc);
+static void SetAttributeInputMetadata(DistributedExecution *execution,
+									  ShardCommandExecution *shardCommandExecution);
 
 /*
  * AdaptiveExecutorPreExecutorRun gets called right before postgres starts its executor
@@ -1089,7 +1103,28 @@ CreateDistributedExecution(RowModifyLevel modLevel, List *taskList,
 	 * allocate for. We start with 16, and reallocate when we need more.
 	 */
 	execution->allocatedColumnCount = 16;
-	execution->columnArray = palloc0(execution->allocatedColumnCount * sizeof(char *));
+	execution->columnArray = palloc0(execution->allocatedColumnCount * sizeof(void *));
+	if (EnableBinaryProtocol)
+	{
+		/*
+		 * Initialize enough StringInfos for each column. These StringInfos
+		 * (and thus the backing buffers) will be reused for each row.
+		 * We will reference these StringInfos in the columnArray if the value
+		 * is not NULL.
+		 *
+		 * NOTE: StringInfos are always grown in the memory context in which
+		 * they were initially created. So appending in any memory context will
+		 * result in bufferes that are still valid after removing that memory
+		 * context.
+		 */
+		execution->stringInfoDataArray = palloc0(
+			execution->allocatedColumnCount *
+			sizeof(StringInfoData));
+		for (int i = 0; i < execution->allocatedColumnCount; i++)
+		{
+			initStringInfo(&execution->stringInfoDataArray[i]);
+		}
+	}
 
 	if (ShouldExecuteTasksLocally(taskList))
 	{
@@ -1735,23 +1770,7 @@ AssignTasksToConnectionsOrWorkerPool(DistributedExecution *execution)
 												sizeof(TaskPlacementExecution *));
 		shardCommandExecution->placementExecutionCount = placementExecutionCount;
 
-		TupleDestination *tupleDest = task->tupleDest ?
-									  task->tupleDest :
-									  execution->defaultTupleDest;
-		uint32 queryCount = task->queryCount;
-		shardCommandExecution->attributeInputMetadata = palloc0(queryCount *
-																sizeof(AttInMetadata *));
-
-		for (uint32 queryIndex = 0; queryIndex < queryCount; queryIndex++)
-		{
-			TupleDesc tupleDescriptor = tupleDest->tupleDescForQuery(tupleDest,
-																	 queryIndex);
-			shardCommandExecution->attributeInputMetadata[queryIndex] =
-				tupleDescriptor ?
-				TupleDescGetAttInMetadata(tupleDescriptor) :
-				NULL;
-		}
-
+		SetAttributeInputMetadata(execution, shardCommandExecution);
 		ShardPlacement *taskPlacement = NULL;
 		foreach_ptr(taskPlacement, task->taskPlacementList)
 		{
@@ -1891,6 +1910,53 @@ AssignTasksToConnectionsOrWorkerPool(DistributedExecution *execution)
 		MultiConnection *connection = session->connection;
 
 		ClaimConnectionExclusively(connection);
+	}
+}
+
+
+/*
+ * SetAttributeInputMetadata sets attributeInputMetadata in
+ * shardCommandExecution for all the queries that are part of its task.
+ * This contains the deserialization functions for the tuples that will be
+ * received. It also sets binaryResults when applicable.
+ */
+static void
+SetAttributeInputMetadata(DistributedExecution *execution,
+						  ShardCommandExecution *shardCommandExecution)
+{
+	TupleDestination *tupleDest = shardCommandExecution->task->tupleDest ?
+								  shardCommandExecution->task->tupleDest :
+								  execution->defaultTupleDest;
+	uint32 queryCount = shardCommandExecution->task->queryCount;
+	shardCommandExecution->attributeInputMetadata = palloc0(queryCount *
+															sizeof(AttInMetadata *));
+
+	for (uint32 queryIndex = 0; queryIndex < queryCount; queryIndex++)
+	{
+		AttInMetadata *attInMetadata = NULL;
+		TupleDesc tupleDescriptor = tupleDest->tupleDescForQuery(tupleDest,
+																 queryIndex);
+		if (tupleDescriptor == NULL)
+		{
+			attInMetadata = NULL;
+		}
+		/*
+		 * We only allow binary results when queryCount is 1, because we
+		 * cannot use binary results with SendRemoteCommand. Which must be
+		 * used if queryCount is larger than 1.
+		 */
+		else if (EnableBinaryProtocol && queryCount == 1 &&
+				 CanUseBinaryCopyFormat(tupleDescriptor))
+		{
+			attInMetadata = TupleDescGetAttBinaryInMetadata(tupleDescriptor);
+			shardCommandExecution->binaryResults = true;
+		}
+		else
+		{
+			attInMetadata = TupleDescGetAttInMetadata(tupleDescriptor);
+		}
+
+		shardCommandExecution->attributeInputMetadata[queryIndex] = attInMetadata;
 	}
 }
 
@@ -3382,6 +3448,7 @@ StartPlacementExecutionOnSession(TaskPlacementExecution *placementExecution,
 	MultiConnection *connection = session->connection;
 	ShardCommandExecution *shardCommandExecution =
 		placementExecution->shardCommandExecution;
+	bool binaryResults = shardCommandExecution->binaryResults;
 	Task *task = shardCommandExecution->task;
 	ShardPlacement *taskPlacement = placementExecution->shardPlacement;
 	List *placementAccessList = PlacementAccessListForTask(task, taskPlacement);
@@ -3428,11 +3495,32 @@ StartPlacementExecutionOnSession(TaskPlacementExecution *placementExecution,
 		ExtractParametersForRemoteExecution(paramListInfo, &parameterTypes,
 											&parameterValues);
 		querySent = SendRemoteCommandParams(connection, queryString, parameterCount,
-											parameterTypes, parameterValues);
+											parameterTypes, parameterValues,
+											binaryResults);
 	}
 	else
 	{
-		querySent = SendRemoteCommand(connection, queryString);
+		/*
+		 * We only need to use SendRemoteCommandParams when we desire
+		 * binaryResults. One downside of SendRemoteCommandParams is that it
+		 * only supports one query in the query string. In some cases we have
+		 * more than one query. In those cases we already make sure before that
+		 * binaryResults is false.
+		 *
+		 * XXX: It also seems that SendRemoteCommandParams does something
+		 * strange/incorrectly with select statements. In
+		 * isolation_select_vs_all.spec, when doing an s1-router-select in one
+		 * session blocked an s2-ddl-create-index-concurrently in another.
+		 */
+		if (!binaryResults)
+		{
+			querySent = SendRemoteCommand(connection, queryString);
+		}
+		else
+		{
+			querySent = SendRemoteCommandParams(connection, queryString, 0, NULL, NULL,
+												binaryResults);
+		}
 	}
 
 	if (querySent == 0)
@@ -3478,11 +3566,11 @@ ReceiveResults(WorkerSession *session, bool storeRows)
 	 * into tuple. The context is reseted on every row, thus we create it at the
 	 * start of the loop and reset on every iteration.
 	 */
-	MemoryContext ioContext = AllocSetContextCreate(CurrentMemoryContext,
-													"IoContext",
-													ALLOCSET_DEFAULT_MINSIZE,
-													ALLOCSET_DEFAULT_INITSIZE,
-													ALLOCSET_DEFAULT_MAXSIZE);
+	MemoryContext rowContext = AllocSetContextCreate(CurrentMemoryContext,
+													 "RowContext",
+													 ALLOCSET_DEFAULT_MINSIZE,
+													 ALLOCSET_DEFAULT_INITSIZE,
+													 ALLOCSET_DEFAULT_MAXSIZE);
 
 	while (!PQisBusy(connection->pgConn))
 	{
@@ -3567,16 +3655,48 @@ ReceiveResults(WorkerSession *session, bool storeRows)
 		if (columnCount > execution->allocatedColumnCount)
 		{
 			pfree(execution->columnArray);
+			int oldColumnCount = execution->allocatedColumnCount;
 			execution->allocatedColumnCount = columnCount;
 			execution->columnArray = palloc0(execution->allocatedColumnCount *
-											 sizeof(char *));
+											 sizeof(void *));
+			if (EnableBinaryProtocol)
+			{
+				/*
+				 * Using repalloc here, to not throw away any previously
+				 * created StringInfos.
+				 */
+				execution->stringInfoDataArray = repalloc(
+					execution->stringInfoDataArray,
+					execution->allocatedColumnCount *
+					sizeof(StringInfoData));
+				for (int i = oldColumnCount; i < columnCount; i++)
+				{
+					initStringInfo(&execution->stringInfoDataArray[i]);
+				}
+			}
 		}
 
-		char **columnArray = execution->columnArray;
+		void **columnArray = execution->columnArray;
+		StringInfoData *stringInfoDataArray = execution->stringInfoDataArray;
+		bool binaryResults = shardCommandExecution->binaryResults;
+
+		/*
+		 * stringInfoDataArray is NULL when EnableBinaryProtocol is false. So
+		 * we make sure binaryResults is also false in that case. Otherwise we
+		 * cannot store them anywhere.
+		 */
+		Assert(EnableBinaryProtocol || !binaryResults);
 
 		for (uint32 rowIndex = 0; rowIndex < rowsProcessed; rowIndex++)
 		{
-			memset(columnArray, 0, columnCount * sizeof(char *));
+			/*
+			 * Switch to a temporary memory context that we reset after each
+			 * tuple. This protects us from any memory leaks that might be
+			 * present in anything we do to parse a tuple.
+			 */
+			MemoryContext oldContext = MemoryContextSwitchTo(rowContext);
+
+			memset(columnArray, 0, columnCount * sizeof(void *));
 
 			for (columnIndex = 0; columnIndex < columnCount; columnIndex++)
 			{
@@ -3586,34 +3706,55 @@ ReceiveResults(WorkerSession *session, bool storeRows)
 				}
 				else
 				{
-					columnArray[columnIndex] = PQgetvalue(result, rowIndex, columnIndex);
+					int valueLength = PQgetlength(result, rowIndex, columnIndex);
+					char *value = PQgetvalue(result, rowIndex, columnIndex);
+					if (binaryResults)
+					{
+						if (PQfformat(result, columnIndex) == 0)
+						{
+							ereport(ERROR, (errmsg("unexpected text result")));
+						}
+						resetStringInfo(&stringInfoDataArray[columnIndex]);
+						appendBinaryStringInfo(&stringInfoDataArray[columnIndex],
+											   value, valueLength);
+						columnArray[columnIndex] = &stringInfoDataArray[columnIndex];
+					}
+					else
+					{
+						if (PQfformat(result, columnIndex) == 1)
+						{
+							ereport(ERROR, (errmsg("unexpected binary result")));
+						}
+						columnArray[columnIndex] = value;
+					}
 					if (SubPlanLevel > 0 && executionStats != NULL)
 					{
-						executionStats->totalIntermediateResultSize += PQgetlength(result,
-																				   rowIndex,
-																				   columnIndex);
+						executionStats->totalIntermediateResultSize += valueLength;
 					}
 				}
 			}
 
-			/*
-			 * Switch to a temporary memory context that we reset after each tuple. This
-			 * protects us from any memory leaks that might be present in I/O functions
-			 * called by BuildTupleFromCStrings.
-			 */
-			MemoryContext oldContextPerRow = MemoryContextSwitchTo(ioContext);
-
 			AttInMetadata *attInMetadata =
 				shardCommandExecution->attributeInputMetadata[queryIndex];
-			HeapTuple heapTuple = BuildTupleFromCStrings(attInMetadata, columnArray);
+			HeapTuple heapTuple;
+			if (binaryResults)
+			{
+				heapTuple = BuildTupleFromBytes(attInMetadata,
+												(fmStringInfo *) columnArray);
+			}
+			else
+			{
+				heapTuple = BuildTupleFromCStrings(attInMetadata,
+												   (char **) columnArray);
+			}
 
-			MemoryContextSwitchTo(oldContextPerRow);
+			MemoryContextSwitchTo(oldContext);
 
 			tupleDest->putTuple(tupleDest, task,
 								placementExecution->placementExecutionIndex, queryIndex,
 								heapTuple);
 
-			MemoryContextReset(ioContext);
+			MemoryContextReset(rowContext);
 
 			execution->rowsProcessed++;
 		}
@@ -3627,9 +3768,123 @@ ReceiveResults(WorkerSession *session, bool storeRows)
 	}
 
 	/* the context is local to the function, so not needed anymore */
-	MemoryContextDelete(ioContext);
+	MemoryContextDelete(rowContext);
 
 	return fetchDone;
+}
+
+
+/*
+ * TupleDescGetAttBinaryInMetadata - Build an AttInMetadata structure based on
+ * the supplied TupleDesc. AttInMetadata can be used in conjunction with
+ * fmStringInfos containing binary encoded types to produce a properly formed
+ * tuple.
+ *
+ * NOTE: This function is a copy of the PG function TupleDescGetAttInMetadata,
+ * except that it uses getTypeBinaryInputInfo instead of getTypeInputInfo.
+ */
+static AttInMetadata *
+TupleDescGetAttBinaryInMetadata(TupleDesc tupdesc)
+{
+	int natts = tupdesc->natts;
+	int i;
+	Oid atttypeid;
+	Oid attinfuncid;
+
+	AttInMetadata *attinmeta = (AttInMetadata *) palloc(sizeof(AttInMetadata));
+
+	/* "Bless" the tupledesc so that we can make rowtype datums with it */
+	attinmeta->tupdesc = BlessTupleDesc(tupdesc);
+
+	/*
+	 * Gather info needed later to call the "in" function for each attribute
+	 */
+	FmgrInfo *attinfuncinfo = (FmgrInfo *) palloc0(natts * sizeof(FmgrInfo));
+	Oid *attioparams = (Oid *) palloc0(natts * sizeof(Oid));
+	int32 *atttypmods = (int32 *) palloc0(natts * sizeof(int32));
+
+	for (i = 0; i < natts; i++)
+	{
+		Form_pg_attribute att = TupleDescAttr(tupdesc, i);
+
+		/* Ignore dropped attributes */
+		if (!att->attisdropped)
+		{
+			atttypeid = att->atttypid;
+			getTypeBinaryInputInfo(atttypeid, &attinfuncid, &attioparams[i]);
+			fmgr_info(attinfuncid, &attinfuncinfo[i]);
+			atttypmods[i] = att->atttypmod;
+		}
+	}
+	attinmeta->attinfuncs = attinfuncinfo;
+	attinmeta->attioparams = attioparams;
+	attinmeta->atttypmods = atttypmods;
+
+	return attinmeta;
+}
+
+
+/*
+ * BuildTupleFromBytes - build a HeapTuple given user data in binary form.
+ * values is an array of StringInfos, one for each attribute of the return
+ * tuple. A NULL StringInfo pointer indicates we want to create a NULL field.
+ *
+ * NOTE: This function is a copy of the PG function BuildTupleFromCStrings,
+ * except that it uses ReceiveFunctionCall instead of InputFunctionCall.
+ */
+static HeapTuple
+BuildTupleFromBytes(AttInMetadata *attinmeta, fmStringInfo *values)
+{
+	TupleDesc tupdesc = attinmeta->tupdesc;
+	int natts = tupdesc->natts;
+	int i;
+
+	Datum *dvalues = (Datum *) palloc(natts * sizeof(Datum));
+	bool *nulls = (bool *) palloc(natts * sizeof(bool));
+
+	/*
+	 * Call the "in" function for each non-dropped attribute, even for nulls,
+	 * to support domains.
+	 */
+	for (i = 0; i < natts; i++)
+	{
+		if (!TupleDescAttr(tupdesc, i)->attisdropped)
+		{
+			/* Non-dropped attributes */
+			dvalues[i] = ReceiveFunctionCall(&attinmeta->attinfuncs[i],
+											 values[i],
+											 attinmeta->attioparams[i],
+											 attinmeta->atttypmods[i]);
+			if (values[i] != NULL)
+			{
+				nulls[i] = false;
+			}
+			else
+			{
+				nulls[i] = true;
+			}
+		}
+		else
+		{
+			/* Handle dropped attributes by setting to NULL */
+			dvalues[i] = (Datum) 0;
+			nulls[i] = true;
+		}
+	}
+
+	/*
+	 * Form a tuple
+	 */
+	HeapTuple tuple = heap_form_tuple(tupdesc, dvalues, nulls);
+
+	/*
+	 * Release locally palloc'd space.  XXX would probably be good to pfree
+	 * values of pass-by-reference datums, as well.
+	 */
+	pfree(dvalues);
+	pfree(nulls);
+
+	return tuple;
 }
 
 

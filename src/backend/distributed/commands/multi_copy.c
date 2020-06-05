@@ -217,6 +217,7 @@ static void OpenCopyConnectionsForNewShards(CopyStmt *copyStatement,
 											bool useBinaryCopyFormat);
 static List * RemoveOptionFromList(List *optionList, char *optionName);
 static bool BinaryOutputFunctionDefined(Oid typeId);
+static bool BinaryInputFunctionDefined(Oid typeId);
 static void SendCopyBinaryHeaders(CopyOutState copyOutState, int64 shardId,
 								  List *connectionList);
 static void SendCopyBinaryFooters(CopyOutState copyOutState, int64 shardId,
@@ -952,6 +953,11 @@ CanUseBinaryCopyFormatForType(Oid typeId)
 		return false;
 	}
 
+	if (!BinaryInputFunctionDefined(typeId))
+	{
+		return false;
+	}
+
 	if (typeId >= FirstNormalObjectId)
 	{
 		char typeCategory = '\0';
@@ -986,12 +992,28 @@ BinaryOutputFunctionDefined(Oid typeId)
 	get_type_io_data(typeId, IOFunc_send, &typeLength, &typeByVal,
 					 &typeAlign, &typeDelim, &typeIoParam, &typeFunctionId);
 
-	if (OidIsValid(typeFunctionId))
-	{
-		return true;
-	}
+	return OidIsValid(typeFunctionId);
+}
 
-	return false;
+
+/*
+ * BinaryInputFunctionDefined checks whether binary output function is defined
+ * for the given type.
+ */
+static bool
+BinaryInputFunctionDefined(Oid typeId)
+{
+	Oid typeFunctionId = InvalidOid;
+	Oid typeIoParam = InvalidOid;
+	int16 typeLength = 0;
+	bool typeByVal = false;
+	char typeAlign = 0;
+	char typeDelim = 0;
+
+	get_type_io_data(typeId, IOFunc_receive, &typeLength, &typeByVal,
+					 &typeAlign, &typeDelim, &typeIoParam, &typeFunctionId);
+
+	return OidIsValid(typeFunctionId);
 }
 
 

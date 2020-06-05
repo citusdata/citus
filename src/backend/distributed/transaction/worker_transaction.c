@@ -504,7 +504,7 @@ SendCommandToWorkersParamsInternal(TargetWorkerSet targetWorkerSet, const char *
 	foreach_ptr(connection, connectionList)
 	{
 		int querySent = SendRemoteCommandParams(connection, command, parameterCount,
-												parameterTypes, parameterValues);
+												parameterTypes, parameterValues, false);
 		if (querySent == 0)
 		{
 			ReportConnectionError(connection, ERROR);

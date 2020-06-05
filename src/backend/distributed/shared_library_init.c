@@ -544,6 +544,17 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
+		"citus.enable_binary_protocol",
+		gettext_noop(
+			"Enables communication between nodes using binary protocol when possible"),
+		NULL,
+		&EnableBinaryProtocol,
+		false,
+		PGC_USERSET,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
 		"citus.override_table_visibility",
 		gettext_noop("Enables replacing occurencens of pg_catalog.pg_table_visible() "
 					 "with pg_catalog.citus_table_visible()"),
