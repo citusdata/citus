@@ -105,6 +105,7 @@ extern Oid ResolveRelationId(text *relationName, bool missingOk);
 extern List * GetTableDDLEvents(Oid relationId, bool forShardCreation);
 extern List * GetTableCreationCommands(Oid relationId, bool forShardCreation);
 extern List * GetTableIndexAndConstraintCommands(Oid relationId);
+extern bool IndexImpliedByAConstraint(Form_pg_index indexForm);
 extern char ShardStorageType(Oid relationId);
 extern void CheckDistributedTable(Oid relationId);
 extern void CreateAppendDistributedShardPlacements(Oid relationId, int64 shardId,
