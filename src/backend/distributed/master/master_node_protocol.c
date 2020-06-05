@@ -46,6 +46,7 @@
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
+#include "distributed/namespace_utils.h"
 #include "distributed/pg_dist_shard.h"
 #include "distributed/worker_manager.h"
 #include "foreign/foreign.h"
@@ -590,15 +591,7 @@ GetTableCreationCommands(Oid relationId, bool includeSequenceDefaults)
 {
 	List *tableDDLEventList = NIL;
 
-	/*
-	 * Set search_path to NIL so that all objects outside of pg_catalog will be
-	 * schema-prefixed. pg_catalog will be added automatically when we call
-	 * PushOverrideSearchPath(), since we set addCatalog to true;
-	 */
-	OverrideSearchPath *overridePath = GetOverrideSearchPath(CurrentMemoryContext);
-	overridePath->schemas = NIL;
-	overridePath->addCatalog = true;
-	PushOverrideSearchPath(overridePath);
+	PushOverrideEmptySearchPath(CurrentMemoryContext);
 
 	/* if foreign table, fetch extension and server definitions */
 	char tableType = get_rel_relkind(relationId);
@@ -649,15 +642,7 @@ GetTableIndexAndConstraintCommands(Oid relationId)
 	ScanKeyData scanKey[1];
 	int scanKeyCount = 1;
 
-	/*
-	 * Set search_path to NIL so that all objects outside of pg_catalog will be
-	 * schema-prefixed. pg_catalog will be added automatically when we call
-	 * PushOverrideSearchPath(), since we set addCatalog to true;
-	 */
-	OverrideSearchPath *overridePath = GetOverrideSearchPath(CurrentMemoryContext);
-	overridePath->schemas = NIL;
-	overridePath->addCatalog = true;
-	PushOverrideSearchPath(overridePath);
+	PushOverrideEmptySearchPath(CurrentMemoryContext);
 
 	/* open system catalog and scan all indexes that belong to this table */
 	Relation pgIndex = heap_open(IndexRelationId, AccessShareLock);

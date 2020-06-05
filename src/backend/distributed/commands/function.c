@@ -45,6 +45,7 @@
 #include "distributed/metadata/pg_dist_object.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/multi_executor.h"
+#include "distributed/namespace_utils.h"
 #include "distributed/relation_access_tracking.h"
 #include "distributed/worker_create_or_replace.h"
 #include "distributed/worker_transaction.h"
@@ -561,7 +562,6 @@ UpdateFunctionDistributionInfo(const ObjectAddress *distAddress,
 char *
 GetFunctionDDLCommand(const RegProcedure funcOid, bool useCreateOrReplace)
 {
-	OverrideSearchPath *overridePath = NULL;
 	char *createFunctionSQL = NULL;
 
 	if (get_func_prokind(funcOid) == PROKIND_AGGREGATE)
@@ -572,16 +572,8 @@ GetFunctionDDLCommand(const RegProcedure funcOid, bool useCreateOrReplace)
 	{
 		Datum sqlTextDatum = (Datum) 0;
 
-		/*
-		 * Set search_path to NIL so that all objects outside of pg_catalog will be
-		 * schema-prefixed. pg_catalog will be added automatically when we call
-		 * PushOverrideSearchPath(), since we set addCatalog to true;
-		 */
-		overridePath = GetOverrideSearchPath(CurrentMemoryContext);
-		overridePath->schemas = NIL;
-		overridePath->addCatalog = true;
+		PushOverrideEmptySearchPath(CurrentMemoryContext);
 
-		PushOverrideSearchPath(overridePath);
 		sqlTextDatum = DirectFunctionCall1(pg_get_functiondef,
 										   ObjectIdGetDatum(funcOid));
 		createFunctionSQL = TextDatumGetCString(sqlTextDatum);
