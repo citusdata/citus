@@ -46,6 +46,7 @@
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
+#include "distributed/namespace_utils.h"
 #include "distributed/pg_dist_shard.h"
 #include "distributed/worker_manager.h"
 #include "foreign/foreign.h"
@@ -590,15 +591,7 @@ GetTableCreationCommands(Oid relationId, bool includeSequenceDefaults)
 {
 	List *tableDDLEventList = NIL;
 
-	/*
-	 * Set search_path to NIL so that all objects outside of pg_catalog will be
-	 * schema-prefixed. pg_catalog will be added automatically when we call
-	 * PushOverrideSearchPath(), since we set addCatalog to true;
-	 */
-	OverrideSearchPath *overridePath = GetOverrideSearchPath(CurrentMemoryContext);
-	overridePath->schemas = NIL;
-	overridePath->addCatalog = true;
-	PushOverrideSearchPath(overridePath);
+	PushOverrideEmptySearchPath(CurrentMemoryContext);
 
 	/* if foreign table, fetch extension and server definitions */
 	char tableType = get_rel_relkind(relationId);
@@ -649,15 +642,7 @@ GetTableIndexAndConstraintCommands(Oid relationId)
 	ScanKeyData scanKey[1];
 	int scanKeyCount = 1;
 
-	/*
-	 * Set search_path to NIL so that all objects outside of pg_catalog will be
-	 * schema-prefixed. pg_catalog will be added automatically when we call
-	 * PushOverrideSearchPath(), since we set addCatalog to true;
-	 */
-	OverrideSearchPath *overridePath = GetOverrideSearchPath(CurrentMemoryContext);
-	overridePath->schemas = NIL;
-	overridePath->addCatalog = true;
-	PushOverrideSearchPath(overridePath);
+	PushOverrideEmptySearchPath(CurrentMemoryContext);
 
 	/* open system catalog and scan all indexes that belong to this table */
 	Relation pgIndex = heap_open(IndexRelationId, AccessShareLock);
@@ -674,31 +659,12 @@ GetTableIndexAndConstraintCommands(Oid relationId)
 	{
 		Form_pg_index indexForm = (Form_pg_index) GETSTRUCT(heapTuple);
 		Oid indexId = indexForm->indexrelid;
-		bool isConstraint = false;
 		char *statementDef = NULL;
 
-		/*
-		 * A primary key index is always created by a constraint statement.
-		 * A unique key index or exclusion index is created by a constraint
-		 * if and only if the index has a corresponding constraint entry in pg_depend.
-		 * Any other index form is never associated with a constraint.
-		 */
-		if (indexForm->indisprimary)
-		{
-			isConstraint = true;
-		}
-		else if (indexForm->indisunique || indexForm->indisexclusion)
-		{
-			Oid constraintId = get_index_constraint(indexId);
-			isConstraint = OidIsValid(constraintId);
-		}
-		else
-		{
-			isConstraint = false;
-		}
+		bool indexImpliedByConstraint = IndexImpliedByAConstraint(indexForm);
 
 		/* get the corresponding constraint or index statement */
-		if (isConstraint)
+		if (indexImpliedByConstraint)
 		{
 			Oid constraintId = get_index_constraint(indexId);
 			Assert(constraintId != InvalidOid);
@@ -733,6 +699,40 @@ GetTableIndexAndConstraintCommands(Oid relationId)
 	PopOverrideSearchPath();
 
 	return indexDDLEventList;
+}
+
+
+/*
+ * IndexImpliedByAConstraint is an helper function to be used while scanning
+ * pg_index. It returns true if the index identified by the given indexForm is
+ * implied by a constraint. Note that caller is responsible for passing a valid
+ * indexFrom, which means an alive heap tuple which is of form Form_pg_index.
+ */
+bool
+IndexImpliedByAConstraint(Form_pg_index indexForm)
+{
+	Assert(indexForm != NULL);
+
+	bool indexImpliedByConstraint = false;
+
+	/*
+	 * A primary key index is always created by a constraint statement.
+	 * A unique key index or exclusion index is created by a constraint
+	 * if and only if the index has a corresponding constraint entry in
+	 * pg_depend. Any other index form is never associated with a constraint.
+	 */
+	if (indexForm->indisprimary)
+	{
+		indexImpliedByConstraint = true;
+	}
+	else if (indexForm->indisunique || indexForm->indisexclusion)
+	{
+		Oid constraintId = get_index_constraint(indexForm->indexrelid);
+
+		indexImpliedByConstraint = OidIsValid(constraintId);
+	}
+
+	return indexImpliedByConstraint;
 }
 
 

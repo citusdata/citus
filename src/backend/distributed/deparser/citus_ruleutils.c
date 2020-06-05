@@ -173,7 +173,8 @@ pg_get_serverdef_string(Oid tableRelationId)
 	StringInfoData buffer = { NULL, 0, 0, 0 };
 	initStringInfo(&buffer);
 
-	appendStringInfo(&buffer, "CREATE SERVER %s", quote_identifier(server->servername));
+	appendStringInfo(&buffer, "CREATE SERVER IF NOT EXISTS %s",
+					 quote_identifier(server->servername));
 	if (server->servertype != NULL)
 	{
 		appendStringInfo(&buffer, " TYPE %s",

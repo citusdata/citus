@@ -25,6 +25,7 @@
 #include "distributed/commands.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/namespace_utils.h"
 #include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
 
@@ -38,15 +39,7 @@ GetExplicitTriggerCommandList(Oid relationId)
 {
 	List *createTriggerCommandList = NIL;
 
-	/*
-	 * Set search_path to NIL so that all objects outside of pg_catalog will be
-	 * schema-prefixed. pg_catalog will be added automatically when we call
-	 * PushOverrideSearchPath(), since we set addCatalog to true;
-	 */
-	OverrideSearchPath *overridePath = GetOverrideSearchPath(CurrentMemoryContext);
-	overridePath->schemas = NIL;
-	overridePath->addCatalog = true;
-	PushOverrideSearchPath(overridePath);
+	PushOverrideEmptySearchPath(CurrentMemoryContext);
 
 	List *triggerIdList = GetExplicitTriggerIdList(relationId);
 
