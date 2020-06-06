@@ -226,17 +226,16 @@ $$);
 (1 row)
 
 CREATE EXTENSION dict_int FROM unpackaged;
-ERROR:  CREATE EXTENSION ... FROM is no longer supported
 SELECT run_command_on_workers($$SELECT count(extnamespace) FROM pg_extension WHERE extname = 'dict_int'$$);
  run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,0)
+ (localhost,57637,t,1)
 (1 row)
 
 SELECT run_command_on_workers($$SELECT extversion FROM pg_extension WHERE extname = 'dict_int'$$);
  run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"")
+ (localhost,57637,t,1.0)
 (1 row)
 
 -- and add the other node
@@ -265,15 +264,15 @@ SELECT run_command_on_workers($$SELECT extversion FROM pg_extension WHERE extnam
 SELECT run_command_on_workers($$SELECT count(extnamespace) FROM pg_extension WHERE extname = 'dict_int'$$);
  run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,0)
- (localhost,57638,t,0)
+ (localhost,57637,t,1)
+ (localhost,57638,t,1)
 (2 rows)
 
 SELECT run_command_on_workers($$SELECT extversion FROM pg_extension WHERE extname = 'dict_int'$$);
  run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"")
- (localhost,57638,t,"")
+ (localhost,57637,t,1.0)
+ (localhost,57638,t,1.0)
 (2 rows)
 
 -- and similarly check for the reference table
