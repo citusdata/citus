@@ -146,9 +146,61 @@ SELECT mark_tables_colocated('reference_table', ARRAY['citus_local_table_1']);
 SELECT mark_tables_colocated('citus_local_table_1', ARRAY['distributed_table']);
 SELECT mark_tables_colocated('distributed_table', ARRAY['citus_local_table_1']);
 
+------------------------------------------------------------------
+----- tests for object names that should be escaped properly -----
+------------------------------------------------------------------
+
+CREATE SCHEMA "CiTUS!LocalTables";
+
+-- create table with weird names
+CREATE TABLE "CiTUS!LocalTables"."LocalTabLE.1!?!"(id int, "TeNANt_Id" int);
+
+-- should work
+SELECT create_citus_local_table('"CiTUS!LocalTables"."LocalTabLE.1!?!"');
+
+-- drop the table before creating it when the search path is set
+SET search_path to "CiTUS!LocalTables" ;
+DROP TABLE "LocalTabLE.1!?!";
+
+-- have a custom type in the local table
+CREATE TYPE local_type AS (key int, value jsonb);
+
+-- create btree_gist for GiST index
+CREATE EXTENSION btree_gist;
+
+CREATE TABLE "LocalTabLE.1!?!"(
+  id int PRIMARY KEY,
+  "TeNANt_Id" int,
+  "local_Type" local_type,
+  "jsondata" jsonb NOT NULL,
+  name text,
+  price numeric CHECK (price > 0),
+  serial_data bigserial, UNIQUE (id, price),
+  EXCLUDE USING GIST (name WITH =));
+
+-- create some objects before create_citus_local_table
+CREATE INDEX "my!Index1" ON "LocalTabLE.1!?!"(id) WITH ( fillfactor = 80 ) WHERE  id > 10;
+CREATE UNIQUE INDEX uniqueIndex ON "LocalTabLE.1!?!" (id);
+
+-- ingest some data before create_citus_local_table
+INSERT INTO "LocalTabLE.1!?!" VALUES (1, 1, (1, row_to_json(row(1,1)))::local_type, row_to_json(row(1,1), true)),
+                                     (2, 1, (2, row_to_json(row(2,2)))::local_type, row_to_json(row(2,2), 'false'));
+
+-- create a replica identity before create_citus_local_table
+ALTER TABLE "LocalTabLE.1!?!" REPLICA IDENTITY USING INDEX uniqueIndex;
+
+-- this shouldn't give any syntax errors
+SELECT create_citus_local_table('"LocalTabLE.1!?!"');
+
+-- create some objects after create_citus_local_table
+CREATE INDEX "my!Index2" ON "LocalTabLE.1!?!"(id) WITH ( fillfactor = 90 ) WHERE id < 20;
+CREATE UNIQUE INDEX uniqueIndex2 ON "LocalTabLE.1!?!"(id);
+
 -----------------------------------
 ---- utility command execution ----
 -----------------------------------
+
+SET search_path TO citus_local_tables_test_schema;
 
 -- any foreign key between citus local tables and other tables cannot be set for now
 -- most should error out (for now with meaningless error messages)
@@ -169,4 +221,4 @@ ALTER TABLE citus_local_table_1 ADD CONSTRAINT fkey_c_to_local FOREIGN KEY(a) re
 ALTER TABLE local_table ADD CONSTRAINT fkey_local_to_c FOREIGN KEY(a) references citus_local_table_1(a);
 
 -- cleanup at exit
-DROP SCHEMA citus_local_tables_test_schema CASCADE;
+DROP SCHEMA citus_local_tables_test_schema, "CiTUS!LocalTables" CASCADE;
