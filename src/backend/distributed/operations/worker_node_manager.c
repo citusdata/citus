@@ -404,12 +404,16 @@ NodeIsPrimaryWorker(WorkerNode *node)
 
 /*
  * CoordinatorAddedAsWorkerNode returns true if coordinator is added to the
- * pg_dist_node.
+ * pg_dist_node. This function also acquires RowExclusiveLock on pg_dist_node
+ * and does not release it to ensure that existency of the coordinator in
+ * metadata won't be changed until the end of transaction.
  */
 bool
 CoordinatorAddedAsWorkerNode()
 {
 	bool groupContainsNodes = false;
+
+	LockRelationOid(DistNodeRelationId(), RowExclusiveLock);
 
 	PrimaryNodeForGroup(COORDINATOR_GROUP_ID, &groupContainsNodes);
 
@@ -433,6 +437,10 @@ ReferenceTablePlacementNodeList(LOCKMODE lockMode)
 /*
  * CoordinatorNode returns the WorkerNode object for coordinator node if it is
  * added to pg_dist_node, otherwise errors out.
+ * Also, as CoordinatorAddedAsWorkerNode acquires AccessShareLock on
+ * pg_dist_node and doesn't release it, callers can safely assume coordinator
+ * won't be removed from metadata until the end of transaction when this function
+ * returns coordinator node.
  */
 WorkerNode *
 CoordinatorNode()
