@@ -262,6 +262,8 @@ typedef struct TaskQuery
 	}data;
 }TaskQuery;
 
+typedef struct TupleDestination TupleDestination;
+
 typedef struct Task
 {
 	CitusNode type;
@@ -274,6 +276,12 @@ typedef struct Task
 	 * so this is abstracted with taskQuery.
 	 */
 	TaskQuery taskQuery;
+
+	/*
+	 * A task can have multiple queries, in which case queryCount will be > 1. If
+	 * a task has more one query, then taskQuery->queryType == TASK_QUERY_TEXT_LIST.
+	 */
+	int queryCount;
 
 	Oid anchorDistributedTableId;     /* only applies to insert tasks */
 	uint64 anchorShardId;       /* only applies to compute tasks */
@@ -323,6 +331,12 @@ typedef struct Task
 	 * query.
 	 */
 	bool parametersInQueryStringResolved;
+
+	/*
+	 * Destination of tuples generated as a result of executing this task. Can be
+	 * NULL, in which case executor might use a default destination.
+	 */
+	TupleDestination *tupleDest;
 } Task;
 
 
