@@ -677,6 +677,14 @@ SET client_min_messages TO WARNING;
    raw_events_first INNER JOIN raw_events_second ON raw_events_first.value_1 = raw_events_second.value_1;
 $Q$);
 
+-- EXPLAIN ANALYZE is not supported for INSERT ... SELECT via coordinator
+EXPLAIN (costs off, analyze on)
+ INSERT INTO agg_events (user_id)
+ SELECT
+   raw_events_first.user_id
+ FROM
+   raw_events_first INNER JOIN raw_events_second ON raw_events_first.value_1 = raw_events_second.value_1;
+
 -- even if there is a filter on the partition key, since the join is not on the partition key we reject
 -- this query
 INSERT INTO agg_events (user_id)

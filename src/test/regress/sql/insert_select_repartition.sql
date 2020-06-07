@@ -272,6 +272,12 @@ SELECT * FROM target_table ORDER BY a;
 EXPLAIN INSERT INTO target_table SELECT a, max(b) FROM source_table GROUP BY a;
 
 --
+-- EXPLAIN ANALYZE is currently not supported
+--
+
+EXPLAIN ANALYZE INSERT INTO target_table SELECT a, max(b) FROM source_table GROUP BY a;
+
+--
 -- Duplicate names in target list
 --
 
