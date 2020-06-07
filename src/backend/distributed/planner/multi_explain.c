@@ -277,6 +277,36 @@ ExplainSubPlans(DistributedPlan *distributedPlan, ExplainState *es)
 			es->indent += 3;
 		}
 
+		if (es->analyze)
+		{
+			if (es->timing)
+			{
+				ExplainPropertyFloat("Subplan Duration", "ms", subPlan->durationMillisecs,
+									 2, es);
+			}
+
+			ExplainPropertyInteger("Intermediate Data Size", "bytes",
+								   subPlan->bytesSentPerWorker, es);
+
+			StringInfo destination = makeStringInfo();
+			if (subPlan->remoteWorkerCount && subPlan->writeLocalFile)
+			{
+				appendStringInfo(destination, "Send to %d nodes, write locally",
+								 subPlan->remoteWorkerCount);
+			}
+			else if (subPlan->writeLocalFile)
+			{
+				appendStringInfoString(destination, "Write locally");
+			}
+			else
+			{
+				appendStringInfo(destination, "Send to %d nodes",
+								 subPlan->remoteWorkerCount);
+			}
+
+			ExplainPropertyText("Result destination", destination->data, es);
+		}
+
 		INSTR_TIME_SET_ZERO(planduration);
 
 		ExplainOnePlan(plan, into, es, queryString, params, NULL, &planduration);

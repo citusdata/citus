@@ -2019,6 +2019,8 @@ WITH r AS (
 SELECT count(distinct a) from r NATURAL JOIN ref_table;
 Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
   ->  Distributed Subplan XXX_1
+        Intermediate Data Size: 220 bytes
+        Result destination: Send to 2 nodes
         ->  Custom Scan (Citus Adaptive) (actual rows=10 loops=1)
               Task Count: 4
               Tasks Shown: One of 4
@@ -2063,6 +2065,8 @@ WHERE EXISTS(SELECT random() FROM dist_table NATURAL JOIN ref_table);
 Aggregate (actual rows=1 loops=1)
   ->  Custom Scan (Citus Adaptive) (actual rows=10 loops=1)
         ->  Distributed Subplan XXX_1
+              Intermediate Data Size: 140 bytes
+              Result destination: Send to 2 nodes
               ->  Custom Scan (Citus Adaptive) (actual rows=10 loops=1)
                     Task Count: 4
                     Tasks Shown: One of 4
@@ -2100,6 +2104,8 @@ WITH r AS (
 SELECT count(distinct a2) FROM s;
 Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
   ->  Distributed Subplan XXX_1
+        Intermediate Data Size: 100 bytes
+        Result destination: Write locally
         ->  Custom Scan (Citus Adaptive) (actual rows=20 loops=1)
               Task Count: 4
               Tasks Shown: One of 4
@@ -2109,6 +2115,8 @@ Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
                           ->  Seq Scan on dist_table_570017 dist_table (actual rows=8 loops=1)
                                 Filter: ((worker_hash(a) >= '-2147483648'::integer) AND (worker_hash(a) <= '-1073741825'::integer))
   ->  Distributed Subplan XXX_2
+        Intermediate Data Size: 220 bytes
+        Result destination: Write locally
         ->  Custom Scan (Citus Adaptive) (actual rows=10 loops=1)
               Task Count: 1
               Tasks Shown: All
