@@ -3154,11 +3154,12 @@ WorkerAggregateExpressionList(Aggref *originalAggregate,
 			 aggregateType == AGGREGATE_TDIGEST_PERCENTILE_ADD_DOUBLEARRAY)
 	{
 		/*
-		 * The original query has an aggregate in the form of
-		 * tdigest_percentile(column, compression, quantile)
+		 * The original query has an aggregate in the form of either
+		 *  - tdigest_percentile(column, compression, quantile)
+		 *  - tdigest_percentile(column, compression, quantile[])
 		 *
 		 * We are creating the worker part of this query by creating a
-		 * tdigest(column, compression)
+		 *  - tdigest(column, compression)
 		 *
 		 * One could see we are passing argument 0 and argument 1 from the original query
 		 * in here. This corresponds with the list_nth calls in the args and aggargstypes
