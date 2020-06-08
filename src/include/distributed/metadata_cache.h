@@ -221,5 +221,14 @@ extern char * CitusExtensionOwnerName(void);
 extern char * CurrentUserName(void);
 extern const char * CurrentDatabaseName(void);
 
+/* tdigest related functions */
+extern Oid TDigestExtensionSchema(void);
+extern Oid TDigestExtensionTypeOid(void);
+extern Oid TDigestExtensionAggTDigest1(void);
+extern Oid TDigestExtensionAggTDigest2(void);
+extern Oid TDigestExtensionAggTDigestPercentile2(void);
+extern Oid TDigestExtensionAggTDigestPercentile2a(void);
+extern Oid TDigestExtensionAggTDigestPercentile3(void);
+extern Oid TDigestExtensionAggTDigestPercentile3a(void);
 
 #endif /* METADATA_CACHE_H */

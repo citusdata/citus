@@ -61,6 +61,8 @@
 #include "utils/rel.h"
 #include "utils/syscache.h"
 
+#define StartsWith(msg, prefix) \
+	(strncmp(msg, prefix, strlen(prefix)) == 0)
 
 /* Config variable managed via guc.c */
 int LimitClauseRowFetchCount = -1; /* number of rows to fetch from each task */
@@ -333,53 +335,48 @@ static bool ShouldProcessDistinctOrderAndLimitForWorker(
 	bool pushingDownOriginalGrouping,
 	Node *havingQual);
 
+
+
 static Oid
 TDigestExtension_tdigest_Oid()
 {
-	/* TODO read cached, or catalog entry */
-	return 16832;
+	return TDigestExtensionTypeOid();
 }
 
 static Oid
 TDigestExtension_tdigest_DoubleInt_Oid()
 {
-	/* TODO read cached, or catalog entry */
-	return 16839;
+	return TDigestExtensionAggTDigest2();
 }
 
 static Oid
 TDigestExtension_tdigest_combine_Oid()
 {
-	/* TODO read cached, or catalog entry */
-	return 16849;
+	return TDigestExtensionAggTDigest1();
 }
 
 static Oid
 TDigestExtension_tdigest_percentile_tdigestDouble_Oid()
 {
-	/* TODO read cached, or catalog entry */
-	return 16845;
+	return TDigestExtensionAggTDigestPercentile2();
 }
 
 static Oid
 TDigestExtension_tdigest_percentile_tdigestDoubleArray_Oid()
 {
-	/* TODO read cached, or catalog entry */
-	return 16846;
+	return TDigestExtensionAggTDigestPercentile2a();
 }
 
 static Oid
 TDigestExtension_tdigest_percentile_DoubleIntDouble_Oid()
 {
-	/* TODO read cached, or catalog entry */
-	return 16828;
+	return TDigestExtensionAggTDigestPercentile3();
 }
 
 static Oid
 TDigestExtension_tdigest_percentile_DoubleIntDoubleArray_Oid()
 {
-	/* TODO read cached, or catalog entry */
-	return 16829;
+	return TDigestExtensionAggTDigestPercentile3a();
 }
 
 
@@ -3401,26 +3398,36 @@ GetAggregateType(Aggref *aggregateExpression)
 		}
 	}
 
-	/* TODO read from catalog */
-	if (aggFunctionId == TDigestExtension_tdigest_DoubleInt_Oid())
+	/*
+	 * All functions from github.com/tvondra/tdigest start with the "tdigest" prefix.
+	 * Since it requires lookups of function names in a schema we would like to only
+	 * perform these checks if there is some chance it will actually result in a positive
+	 * hit.
+	 */
+	if (StartsWith(aggregateProcName,"tdigest"))
 	{
-		return AGGREGATE_TDIGEST_ADD_DOUBLE;
+		/* TODO read from catalog */
+		if (aggFunctionId == TDigestExtension_tdigest_DoubleInt_Oid())
+		{
+			return AGGREGATE_TDIGEST_ADD_DOUBLE;
+		}
+
+		if (aggFunctionId == TDigestExtension_tdigest_combine_Oid())
+		{
+			return AGGREGATE_TDIGEST_COMBINE;
+		}
+
+		if (aggFunctionId == TDigestExtension_tdigest_percentile_DoubleIntDouble_Oid())
+		{
+			return AGGREGATE_TDIGEST_PERCENTILE_ADD_DOUBLE;
+		}
+
+		if (aggFunctionId == TDigestExtension_tdigest_percentile_DoubleIntDoubleArray_Oid())
+		{
+			return AGGREGATE_TDIGEST_PERCENTILE_ADD_DOUBLEARRAY;
+		}
 	}
 
-	if (aggFunctionId == TDigestExtension_tdigest_combine_Oid())
-	{
-		return AGGREGATE_TDIGEST_COMBINE;
-	}
-
-	if (aggFunctionId == TDigestExtension_tdigest_percentile_DoubleIntDouble_Oid())
-	{
-		return AGGREGATE_TDIGEST_PERCENTILE_ADD_DOUBLE;
-	}
-
-	if (aggFunctionId == TDigestExtension_tdigest_percentile_DoubleIntDoubleArray_Oid())
-	{
-		return AGGREGATE_TDIGEST_PERCENTILE_ADD_DOUBLEARRAY;
-	}
 
 	if (AggregateEnabledCustom(aggregateExpression))
 	{

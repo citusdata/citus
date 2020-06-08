@@ -157,6 +157,16 @@ typedef struct MetadataCacheData
 	Oid jsonbExtractPathFuncId;
 	bool databaseNameValid;
 	char databaseName[NAMEDATALEN];
+
+	/* cached lookups for the tdigest extension */
+	Oid tdigestExtensionSchema;
+	Oid tdigestTypeOid;
+	Oid tdigestAggTDigest1;
+	Oid tdigestAggTDigest2;
+	Oid tdigestAggTDigestPercentile2;
+	Oid tdigestAggTDigestPercentile2a;
+	Oid tdigestAggTDigestPercentile3;
+	Oid tdigestAggTDigestPercentile3a;
 } MetadataCacheData;
 
 
@@ -2442,13 +2452,13 @@ CurrentUserName(void)
 
 
 /*
- * LookupTypeOid returns the Oid of the "pg_catalog.{typeNameString}" type, or
+ * LookupTypeOid returns the Oid of the "{schemaNameSting}.{typeNameString}" type, or
  * InvalidOid if it does not exist.
  */
 static Oid
-LookupTypeOid(char *typeNameString)
+LookupTypeOid(char *schemaNameSting, char *typeNameString)
 {
-	Value *schemaName = makeString("pg_catalog");
+	Value *schemaName = makeString(schemaNameSting);
 	Value *typeName = makeString(typeNameString);
 	List *qualifiedName = list_make2(schemaName, typeName);
 	TypeName *enumTypeName = makeTypeNameFromNameList(qualifiedName);
@@ -2480,7 +2490,7 @@ LookupTypeOid(char *typeNameString)
 static Oid
 LookupStringEnumValueId(char *enumName, char *valueName)
 {
-	Oid enumTypeId = LookupTypeOid(enumName);
+	Oid enumTypeId = LookupTypeOid("pg_catalog", enumName);
 
 	if (enumTypeId == InvalidOid)
 	{
@@ -4221,4 +4231,239 @@ poolinfo_valid(PG_FUNCTION_ARGS)
 					errhint("To learn more about using advanced pooling schemes "
 							"with Citus, please contact us at "
 							"https://citusdata.com/about/contact_us")));
+}
+
+
+Oid
+TDigestExtensionSchema()
+{
+	if (MetadataCache.tdigestExtensionSchema != InvalidOid)
+	{
+		return MetadataCache.tdigestExtensionSchema;
+	}
+
+	ScanKeyData entry[1];
+	Form_pg_extension extensionForm = NULL;
+
+	Relation relation = heap_open(ExtensionRelationId, AccessShareLock);
+
+	ScanKeyInit(&entry[0],
+				Anum_pg_extension_extname,
+				BTEqualStrategyNumber, F_NAMEEQ,
+				CStringGetDatum("tdigest"));
+
+	SysScanDesc scandesc = systable_beginscan(relation, ExtensionNameIndexId, true,
+											  NULL, 1, entry);
+
+	HeapTuple extensionTuple = systable_getnext(scandesc);
+
+	/*
+	 * We assume that there can be at most one matching tuple, if no tuple found the
+	 * extension is not installed. The value of InvalidOid will not be changed.
+	 *
+	 * WARNING: this might cause excessive lookups for tdigest related lookups if the
+	 * extension is not installed.
+	 * TODO: Verify if we should cache the non-existance of the extension, which requires
+	 * cache invalidation once the extension is created.
+	 * TODO: needs invalidation when schema changes
+	 */
+	if (HeapTupleIsValid(extensionTuple))
+	{
+		extensionForm = (Form_pg_extension) GETSTRUCT(extensionTuple);
+		MetadataCache.tdigestExtensionSchema = extensionForm->extnamespace;
+		Assert(OidIsValid(MetadataCache.tdigestExtensionSchema));
+	}
+
+	systable_endscan(scandesc);
+
+	heap_close(relation, AccessShareLock);
+
+	return MetadataCache.tdigestExtensionSchema;
+}
+
+
+/*
+ * TDigestExtensionTypeOid preforms a lookup for the Oid of the type representing the
+ * tdigest as installed by the tdigest extension returns InvalidOid if the type cannot be
+ * found.
+ */
+Oid
+TDigestExtensionTypeOid()
+{
+	if (MetadataCache.tdigestTypeOid == InvalidOid)
+	{
+		Oid tdigestSchemaOid = TDigestExtensionSchema();
+		if (tdigestSchemaOid != InvalidOid)
+		{
+			/* extension schema is found, lookup type in the schema*/
+			char *namespaceName = get_namespace_name(tdigestSchemaOid);
+			MetadataCache.tdigestTypeOid = LookupTypeOid(namespaceName, "tdigest");
+		}
+	}
+	return MetadataCache.tdigestTypeOid;
+}
+
+
+/*
+ * TDigestExtensionAggTDigest1 performs a lookup for the Oid of the tdigest aggregate;
+ *   tdigest(tdigest)
+ *
+ * If the aggregate is not found InvalidOid is returned.
+ */
+Oid
+TDigestExtensionAggTDigest1()
+{
+	if (MetadataCache.tdigestAggTDigest1 == InvalidOid)
+	{
+		Oid tdigestSchemaOid = TDigestExtensionSchema();
+		if (tdigestSchemaOid != InvalidOid)
+		{
+			/* extension schema is found, lookup aggregate in schema */
+			char *namespaceName = get_namespace_name(tdigestSchemaOid);
+			MetadataCache.tdigestAggTDigest1 = LookupFuncName(
+				list_make2(makeString(namespaceName), makeString("tdigest")),
+				1, (Oid[]) {TDigestExtensionTypeOid()}, true);
+
+		}
+	}
+
+	return MetadataCache.tdigestAggTDigest1;
+}
+
+
+/*
+ * TDigestExtensionAggTDigest2 performs a lookup for the Oid of the tdigest aggregate;
+ *   tdigest(value double precision, compression int)
+ *
+ * If the aggregate is not found InvalidOid is returned.
+ */
+Oid
+TDigestExtensionAggTDigest2()
+{
+	if (MetadataCache.tdigestAggTDigest2 == InvalidOid)
+	{
+		Oid tdigestSchemaOid = TDigestExtensionSchema();
+		if (tdigestSchemaOid != InvalidOid)
+		{
+			/* extension schema is found, lookup aggregate in schema */
+			char *namespaceName = get_namespace_name(tdigestSchemaOid);
+			MetadataCache.tdigestAggTDigest2 = LookupFuncName(
+				list_make2(makeString(namespaceName), makeString("tdigest")),
+				2, (Oid[]) {FLOAT8OID, INT4OID}, true);
+
+		}
+	}
+
+	return MetadataCache.tdigestAggTDigest2;
+}
+
+/*
+ * TDigestExtensionAggTDigestPercentile2 performs a lookup for the Oid of the tdigest
+ * aggregate;
+ *   tdigest_percentile(tdigest, double precision)
+ *
+ * If the aggregate is not found InvalidOid is returned.
+ */
+Oid
+TDigestExtensionAggTDigestPercentile2()
+{
+	if (MetadataCache.tdigestAggTDigestPercentile2 == InvalidOid)
+	{
+		Oid tdigestSchemaOid = TDigestExtensionSchema();
+		if (tdigestSchemaOid != InvalidOid)
+		{
+			/* extension schema is found, lookup aggregate in schema */
+			char *namespaceName = get_namespace_name(tdigestSchemaOid);
+			MetadataCache.tdigestAggTDigestPercentile2 = LookupFuncName(
+				list_make2(makeString(namespaceName), makeString("tdigest_percentile")),
+				2, (Oid[]) {TDigestExtensionTypeOid(), FLOAT8OID}, true);
+
+		}
+	}
+
+	return MetadataCache.tdigestAggTDigestPercentile2;
+}
+
+
+/*
+ * TDigestExtensionAggTDigestPercentile2a performs a lookup for the Oid of the tdigest
+ * aggregate;
+ *   tdigest_percentile(tdigest, double precision[])
+ *
+ * If the aggregate is not found InvalidOid is returned.
+ */
+Oid
+TDigestExtensionAggTDigestPercentile2a(void)
+{
+	if (MetadataCache.tdigestAggTDigestPercentile2a == InvalidOid)
+	{
+		Oid tdigestSchemaOid = TDigestExtensionSchema();
+		if (tdigestSchemaOid != InvalidOid)
+		{
+			/* extension schema is found, lookup aggregate in schema */
+			char *namespaceName = get_namespace_name(tdigestSchemaOid);
+			MetadataCache.tdigestAggTDigestPercentile2a = LookupFuncName(
+				list_make2(makeString(namespaceName), makeString("tdigest_percentile")),
+				2, (Oid[]) {TDigestExtensionTypeOid(), FLOAT8ARRAYOID}, true);
+
+		}
+	}
+
+	return MetadataCache.tdigestAggTDigestPercentile2a;
+}
+
+
+/*
+ * TDigestExtensionAggTDigestPercentile3 performs a lookup for the Oid of the tdigest
+ * aggregate;
+ *   tdigest_percentile(double precision, int, double precision)
+ *
+ * If the aggregate is not found InvalidOid is returned.
+ */
+Oid
+TDigestExtensionAggTDigestPercentile3()
+{
+	if (MetadataCache.tdigestAggTDigestPercentile3 == InvalidOid)
+	{
+		Oid tdigestSchemaOid = TDigestExtensionSchema();
+		if (tdigestSchemaOid != InvalidOid)
+		{
+			/* extension schema is found, lookup aggregate in schema */
+			char *namespaceName = get_namespace_name(tdigestSchemaOid);
+			MetadataCache.tdigestAggTDigestPercentile3 = LookupFuncName(
+				list_make2(makeString(namespaceName), makeString("tdigest_percentile")),
+				3, (Oid[]) {FLOAT8OID, INT4OID, FLOAT8OID}, true);
+
+		}
+	}
+
+	return MetadataCache.tdigestAggTDigestPercentile3;
+}
+
+
+/*
+ * TDigestExtensionAggTDigestPercentile3a performs a lookup for the Oid of the tdigest
+ * aggregate;
+ *   tdigest_percentile(double precision, int, double precision[])
+ *
+ * If the aggregate is not found InvalidOid is returned.
+ */
+Oid
+TDigestExtensionAggTDigestPercentile3a(void)
+{
+	if (MetadataCache.tdigestAggTDigestPercentile3a == InvalidOid)
+	{
+		Oid tdigestSchemaOid = TDigestExtensionSchema();
+		if (tdigestSchemaOid != InvalidOid)
+		{
+			/* extension schema is found, lookup aggregate in schema */
+			char *namespaceName = get_namespace_name(tdigestSchemaOid);
+			MetadataCache.tdigestAggTDigestPercentile3a = LookupFuncName(
+				list_make2(makeString(namespaceName), makeString("tdigest_percentile")),
+				3, (Oid[]) {FLOAT8OID, INT4OID, FLOAT8ARRAYOID}, true);
+
+		}
+	}
+
+	return MetadataCache.tdigestAggTDigestPercentile3a;
 }
