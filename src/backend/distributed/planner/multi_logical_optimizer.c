@@ -1953,36 +1953,8 @@ MasterAggregateExpression(Aggref *originalAggregate,
 
 		newMasterExpression = (Expr *) unionAggregate;
 	}
-	else if (aggregateType == AGGREGATE_TDIGEST_ADD_DOUBLE)
-	{
-		/* tdigest of column */
-		Oid tdigestType = TDigestExtensionTypeOid(); /* tdigest type */
-		Oid unionFunctionId = TDigestExtensionAggTDigest1();
-
-		int32 tdigestReturnTypeMod = exprTypmod((Node *) originalAggregate);
-		Oid tdigestTypeCollationId = exprCollation((Node *) originalAggregate);
-
-		/* create first argument for tdigest_precentile(tdigest, double) */
-		Var *tdigestColumn = makeVar(masterTableId, walkerContext->columnId, tdigestType,
-									 tdigestReturnTypeMod, tdigestTypeCollationId, columnLevelsUp);
-		TargetEntry *tdigestTargetEntry = makeTargetEntry((Expr *) tdigestColumn, argumentId,
-														  NULL, false);
-		walkerContext->columnId++;
-
-		/* construct the master tdigest(tdigest) expression */
-		Aggref *unionAggregate = makeNode(Aggref);
-		unionAggregate->aggfnoid = unionFunctionId;
-		unionAggregate->aggtype = originalAggregate->aggtype;
-		unionAggregate->args = list_make1(tdigestTargetEntry);
-		unionAggregate->aggkind = AGGKIND_NORMAL;
-		unionAggregate->aggfilter = NULL;
-		unionAggregate->aggtranstype = InvalidOid;
-		unionAggregate->aggargtypes = list_make1_oid(tdigestType);
-		unionAggregate->aggsplit = AGGSPLIT_SIMPLE;
-
-		newMasterExpression = (Expr *) unionAggregate;
-	}
-	else if (aggregateType == AGGREGATE_TDIGEST_COMBINE)
+	else if (aggregateType == AGGREGATE_TDIGEST_COMBINE ||
+			 aggregateType == AGGREGATE_TDIGEST_ADD_DOUBLE)
 	{
 		/* tdigest of column */
 		Oid tdigestType = TDigestExtensionTypeOid(); /* tdigest type */
@@ -3362,15 +3334,14 @@ GetAggregateType(Aggref *aggregateExpression)
 	 */
 	if (StartsWith(aggregateProcName,"tdigest"))
 	{
-		/* TODO read from catalog */
-		if (aggFunctionId == TDigestExtensionAggTDigest2())
-		{
-			return AGGREGATE_TDIGEST_ADD_DOUBLE;
-		}
-
 		if (aggFunctionId == TDigestExtensionAggTDigest1())
 		{
 			return AGGREGATE_TDIGEST_COMBINE;
+		}
+
+		if (aggFunctionId == TDigestExtensionAggTDigest2())
+		{
+			return AGGREGATE_TDIGEST_ADD_DOUBLE;
 		}
 
 		if (aggFunctionId == TDigestExtensionAggTDigestPercentile3())
