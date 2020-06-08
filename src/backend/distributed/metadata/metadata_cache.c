@@ -4347,8 +4347,7 @@ TDigestExtensionAggTDigest1()
 			char *namespaceName = get_namespace_name(tdigestSchemaOid);
 			MetadataCache.tdigestAggTDigest1 = LookupFuncName(
 				list_make2(makeString(namespaceName), makeString("tdigest")),
-				1, (Oid[]) {TDigestExtensionTypeOid()}, true);
-
+				1, (Oid[]) { TDigestExtensionTypeOid() }, true);
 		}
 	}
 
@@ -4374,13 +4373,13 @@ TDigestExtensionAggTDigest2()
 			char *namespaceName = get_namespace_name(tdigestSchemaOid);
 			MetadataCache.tdigestAggTDigest2 = LookupFuncName(
 				list_make2(makeString(namespaceName), makeString("tdigest")),
-				2, (Oid[]) {FLOAT8OID, INT4OID}, true);
-
+				2, (Oid[]) { FLOAT8OID, INT4OID }, true);
 		}
 	}
 
 	return MetadataCache.tdigestAggTDigest2;
 }
+
 
 /*
  * TDigestExtensionAggTDigestPercentile2 performs a lookup for the Oid of the tdigest
@@ -4401,8 +4400,7 @@ TDigestExtensionAggTDigestPercentile2()
 			char *namespaceName = get_namespace_name(tdigestSchemaOid);
 			MetadataCache.tdigestAggTDigestPercentile2 = LookupFuncName(
 				list_make2(makeString(namespaceName), makeString("tdigest_percentile")),
-				2, (Oid[]) {TDigestExtensionTypeOid(), FLOAT8OID}, true);
-
+				2, (Oid[]) { TDigestExtensionTypeOid(), FLOAT8OID }, true);
 		}
 	}
 
@@ -4429,8 +4427,7 @@ TDigestExtensionAggTDigestPercentile2a(void)
 			char *namespaceName = get_namespace_name(tdigestSchemaOid);
 			MetadataCache.tdigestAggTDigestPercentile2a = LookupFuncName(
 				list_make2(makeString(namespaceName), makeString("tdigest_percentile")),
-				2, (Oid[]) {TDigestExtensionTypeOid(), FLOAT8ARRAYOID}, true);
-
+				2, (Oid[]) { TDigestExtensionTypeOid(), FLOAT8ARRAYOID }, true);
 		}
 	}
 
@@ -4457,8 +4454,7 @@ TDigestExtensionAggTDigestPercentile3()
 			char *namespaceName = get_namespace_name(tdigestSchemaOid);
 			MetadataCache.tdigestAggTDigestPercentile3 = LookupFuncName(
 				list_make2(makeString(namespaceName), makeString("tdigest_percentile")),
-				3, (Oid[]) {FLOAT8OID, INT4OID, FLOAT8OID}, true);
-
+				3, (Oid[]) { FLOAT8OID, INT4OID, FLOAT8OID }, true);
 		}
 	}
 
@@ -4485,8 +4481,7 @@ TDigestExtensionAggTDigestPercentile3a(void)
 			char *namespaceName = get_namespace_name(tdigestSchemaOid);
 			MetadataCache.tdigestAggTDigestPercentile3a = LookupFuncName(
 				list_make2(makeString(namespaceName), makeString("tdigest_percentile")),
-				3, (Oid[]) {FLOAT8OID, INT4OID, FLOAT8ARRAYOID}, true);
-
+				3, (Oid[]) { FLOAT8OID, INT4OID, FLOAT8ARRAYOID }, true);
 		}
 	}
 

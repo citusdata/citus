@@ -1965,8 +1965,10 @@ MasterAggregateExpression(Aggref *originalAggregate,
 
 		/* create first argument for tdigest_precentile(tdigest, double) */
 		Var *tdigestColumn = makeVar(masterTableId, walkerContext->columnId, tdigestType,
-									 tdigestReturnTypeMod, tdigestTypeCollationId, columnLevelsUp);
-		TargetEntry *tdigestTargetEntry = makeTargetEntry((Expr *) tdigestColumn, argumentId,
+									 tdigestReturnTypeMod, tdigestTypeCollationId,
+									 columnLevelsUp);
+		TargetEntry *tdigestTargetEntry = makeTargetEntry((Expr *) tdigestColumn,
+														  argumentId,
 														  NULL, false);
 		walkerContext->columnId++;
 
@@ -2008,11 +2010,14 @@ MasterAggregateExpression(Aggref *originalAggregate,
 		Aggref *unionAggregate = makeNode(Aggref);
 		unionAggregate->aggfnoid = unionFunctionId;
 		unionAggregate->aggtype = originalAggregate->aggtype;
-		unionAggregate->args = list_make2(tdigestTargetEntry, list_nth(originalAggregate->args, 2));
+		unionAggregate->args = list_make2(tdigestTargetEntry, list_nth(
+											  originalAggregate->args, 2));
 		unionAggregate->aggkind = AGGKIND_NORMAL;
 		unionAggregate->aggfilter = NULL;
 		unionAggregate->aggtranstype = InvalidOid;
-		unionAggregate->aggargtypes = list_make2_oid(tdigestType, list_nth_oid(originalAggregate->aggargtypes, 2));
+		unionAggregate->aggargtypes = list_make2_oid(tdigestType, list_nth_oid(
+														 originalAggregate->aggargtypes,
+														 2));
 		unionAggregate->aggsplit = AGGSPLIT_SIMPLE;
 
 		newMasterExpression = (Expr *) unionAggregate;
@@ -3167,8 +3172,8 @@ WorkerAggregateExpressionList(Aggref *originalAggregate,
 		newWorkerAggregate->aggkind = AGGKIND_NORMAL;
 		newWorkerAggregate->aggtranstype = InvalidOid;
 		newWorkerAggregate->aggargtypes = list_make2_oid(
-			list_nth_oid(newWorkerAggregate->aggargtypes,0),
-			list_nth_oid(newWorkerAggregate->aggargtypes,1));
+			list_nth_oid(newWorkerAggregate->aggargtypes, 0),
+			list_nth_oid(newWorkerAggregate->aggargtypes, 1));
 		newWorkerAggregate->aggsplit = AGGSPLIT_SIMPLE;
 
 		workerAggregateList = lappend(workerAggregateList, newWorkerAggregate);
@@ -3193,7 +3198,7 @@ WorkerAggregateExpressionList(Aggref *originalAggregate,
 		newWorkerAggregate->aggkind = AGGKIND_NORMAL;
 		newWorkerAggregate->aggtranstype = InvalidOid;
 		newWorkerAggregate->aggargtypes = list_make1_oid(
-			list_nth_oid(newWorkerAggregate->aggargtypes,0));
+			list_nth_oid(newWorkerAggregate->aggargtypes, 0));
 		newWorkerAggregate->aggsplit = AGGSPLIT_SIMPLE;
 
 		workerAggregateList = lappend(workerAggregateList, newWorkerAggregate);
@@ -3221,8 +3226,8 @@ WorkerAggregateExpressionList(Aggref *originalAggregate,
 		newWorkerAggregate->aggkind = AGGKIND_NORMAL;
 		newWorkerAggregate->aggtranstype = InvalidOid;
 		newWorkerAggregate->aggargtypes = list_make2_oid(
-			list_nth_oid(newWorkerAggregate->aggargtypes,0),
-			list_nth_oid(newWorkerAggregate->aggargtypes,1));
+			list_nth_oid(newWorkerAggregate->aggargtypes, 0),
+			list_nth_oid(newWorkerAggregate->aggargtypes, 1));
 		newWorkerAggregate->aggsplit = AGGSPLIT_SIMPLE;
 
 		workerAggregateList = lappend(workerAggregateList, newWorkerAggregate);
@@ -3332,7 +3337,7 @@ GetAggregateType(Aggref *aggregateExpression)
 	 * perform these checks if there is some chance it will actually result in a positive
 	 * hit.
 	 */
-	if (StartsWith(aggregateProcName,"tdigest"))
+	if (StartsWith(aggregateProcName, "tdigest"))
 	{
 		if (aggFunctionId == TDigestExtensionAggTDigest1())
 		{
