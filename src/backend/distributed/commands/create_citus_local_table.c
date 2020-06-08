@@ -300,12 +300,9 @@ ConvertLocalTableToShard(Oid relationId)
 static void
 RenameRelationToShardRelation(Oid shellRelationId, uint64 shardId)
 {
-	Oid shellRelationSchemaId = get_rel_namespace(shellRelationId);
-	char *shellRelationSchemaName = get_namespace_name(shellRelationSchemaId);
-	char *shellRelationName = get_rel_name(shellRelationId);
-	char *qualifiedShellRelationName = quote_qualified_identifier(shellRelationSchemaName,
-																  shellRelationName);
+	char *qualifiedShellRelationName = generate_qualified_relation_name(shellRelationId);
 
+	char *shellRelationName = get_rel_name(shellRelationId);
 	char *shardRelationName = pstrdup(shellRelationName);
 	AppendShardIdToName(&shardRelationName, shardId);
 	const char *quotedShardRelationName = quote_identifier(shardRelationName);
@@ -442,11 +439,7 @@ RenameForeignConstraintsReferencingToShard(Oid shardRelationId, uint64 shardId)
 static char *
 GetRenameShardConstraintCommand(Oid relationId, char *constraintName, uint64 shardId)
 {
-	Oid relationSchemaId = get_rel_namespace(relationId);
-	char *relationSchemaName = get_namespace_name(relationSchemaId);
-	char *relationName = get_rel_name(relationId);
-	char *qualifiedRelationName =
-		quote_qualified_identifier(relationSchemaName, relationName);
+	char *qualifiedRelationName = generate_qualified_relation_name(relationId);
 
 	char *shardConstraintName = pstrdup(constraintName);
 	AppendShardIdToName(&shardConstraintName, shardId);
