@@ -418,11 +418,11 @@ RenameForeignConstraintsReferencingToShard(Oid shardRelationId, uint64 shardId)
 		Form_pg_constraint foreignConstraintForm =
 			(Form_pg_constraint) GETSTRUCT(heapTuple);
 
-		Oid referencedTableId = foreignConstraintForm->conrelid;
+		Oid referencingTableId = foreignConstraintForm->conrelid;
 		char *constraintName = NameStr(foreignConstraintForm->conname);
 
 		const char *commandString =
-			GetRenameShardConstraintCommand(referencedTableId, constraintName, shardId);
+			GetRenameShardConstraintCommand(referencingTableId, constraintName, shardId);
 
 		Node *parseTree = ParseTreeNode(commandString);
 
