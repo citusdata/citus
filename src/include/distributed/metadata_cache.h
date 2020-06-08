@@ -232,4 +232,9 @@ extern Oid TDigestExtensionAggTDigestPercentile2a(void);
 extern Oid TDigestExtensionAggTDigestPercentile3(void);
 extern Oid TDigestExtensionAggTDigestPercentile3a(void);
 
+extern Oid TDigestExtensionAggTDigestPercentileOf2(void);
+extern Oid TDigestExtensionAggTDigestPercentileOf2a(void);
+extern Oid TDigestExtensionAggTDigestPercentileOf3(void);
+extern Oid TDigestExtensionAggTDigestPercentileOf3a(void);
+
 #endif /* METADATA_CACHE_H */

@@ -1986,14 +1986,30 @@ MasterAggregateExpression(Aggref *originalAggregate,
 		newMasterExpression = (Expr *) unionAggregate;
 	}
 	else if (aggregateType == AGGREGATE_TDIGEST_PERCENTILE_ADD_DOUBLE ||
-			 aggregateType == AGGREGATE_TDIGEST_PERCENTILE_ADD_DOUBLEARRAY)
+			 aggregateType == AGGREGATE_TDIGEST_PERCENTILE_ADD_DOUBLEARRAY ||
+			 aggregateType == AGGREGATE_TDIGEST_PERCENTILE_OF_ADD_DOUBLE ||
+			 aggregateType == AGGREGATE_TDIGEST_PERCENTILE_OF_ADD_DOUBLEARRAY)
 	{
 		/* tdigest of column */
 		Oid tdigestType = TDigestExtensionTypeOid();
-		Oid unionFunctionId =
-			(aggregateType == AGGREGATE_TDIGEST_PERCENTILE_ADD_DOUBLE)
-			? TDigestExtensionAggTDigestPercentile2()
-			: TDigestExtensionAggTDigestPercentile2a();
+		Oid unionFunctionId = InvalidOid;
+		if (aggregateType == AGGREGATE_TDIGEST_PERCENTILE_ADD_DOUBLE)
+		{
+			unionFunctionId = TDigestExtensionAggTDigestPercentile2();
+		}
+		else if (aggregateType == AGGREGATE_TDIGEST_PERCENTILE_ADD_DOUBLEARRAY)
+		{
+			unionFunctionId = TDigestExtensionAggTDigestPercentile2a();
+		}
+		else if (aggregateType == AGGREGATE_TDIGEST_PERCENTILE_OF_ADD_DOUBLE)
+		{
+			unionFunctionId = TDigestExtensionAggTDigestPercentileOf2();
+		}
+		else if (aggregateType == AGGREGATE_TDIGEST_PERCENTILE_OF_ADD_DOUBLEARRAY)
+		{
+			unionFunctionId = TDigestExtensionAggTDigestPercentileOf2a();
+		}
+		Assert(OidIsValid(unionFunctionId));
 
 		int32 tdigestReturnTypeMod = exprTypmod((Node *) originalAggregate);
 		Oid tdigestTypeCollationId = exprCollation((Node *) originalAggregate);
@@ -3151,12 +3167,16 @@ WorkerAggregateExpressionList(Aggref *originalAggregate,
 		workerAggregateList = lappend(workerAggregateList, countAggregate);
 	}
 	else if (aggregateType == AGGREGATE_TDIGEST_PERCENTILE_ADD_DOUBLE ||
-			 aggregateType == AGGREGATE_TDIGEST_PERCENTILE_ADD_DOUBLEARRAY)
+			 aggregateType == AGGREGATE_TDIGEST_PERCENTILE_ADD_DOUBLEARRAY ||
+			 aggregateType == AGGREGATE_TDIGEST_PERCENTILE_OF_ADD_DOUBLE ||
+			 aggregateType == AGGREGATE_TDIGEST_PERCENTILE_OF_ADD_DOUBLEARRAY)
 	{
 		/*
 		 * The original query has an aggregate in the form of either
 		 *  - tdigest_percentile(column, compression, quantile)
 		 *  - tdigest_percentile(column, compression, quantile[])
+		 *  - tdigest_percentile_of(column, compression, value)
+		 *  - tdigest_percentile_of(column, compression, value[])
 		 *
 		 * We are creating the worker part of this query by creating a
 		 *  - tdigest(column, compression)
@@ -3305,6 +3325,16 @@ GetAggregateType(Aggref *aggregateExpression)
 		if (aggFunctionId == TDigestExtensionAggTDigestPercentile3a())
 		{
 			return AGGREGATE_TDIGEST_PERCENTILE_ADD_DOUBLEARRAY;
+		}
+
+		if (aggFunctionId == TDigestExtensionAggTDigestPercentileOf3())
+		{
+			return AGGREGATE_TDIGEST_PERCENTILE_OF_ADD_DOUBLE;
+		}
+
+		if (aggFunctionId == TDigestExtensionAggTDigestPercentileOf3a())
+		{
+			return AGGREGATE_TDIGEST_PERCENTILE_OF_ADD_DOUBLEARRAY;
 		}
 	}
 

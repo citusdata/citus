@@ -167,6 +167,10 @@ typedef struct MetadataCacheData
 	Oid tdigestAggTDigestPercentile2a;
 	Oid tdigestAggTDigestPercentile3;
 	Oid tdigestAggTDigestPercentile3a;
+	Oid tdigestAggTDigestPercentileOf2;
+	Oid tdigestAggTDigestPercentileOf2a;
+	Oid tdigestAggTDigestPercentileOf3;
+	Oid tdigestAggTDigestPercentileOf3a;
 } MetadataCacheData;
 
 
@@ -4370,9 +4374,9 @@ TDigestExtensionAggTDigest2()
 		if (tdigestSchemaOid != InvalidOid)
 		{
 			/* extension schema is found, lookup aggregate in schema */
-			char *namespaceName = get_namespace_name(tdigestSchemaOid);
+			char *schemaName = get_namespace_name(tdigestSchemaOid);
 			MetadataCache.tdigestAggTDigest2 = LookupFuncName(
-				list_make2(makeString(namespaceName), makeString("tdigest")),
+				list_make2(makeString(schemaName), makeString("tdigest")),
 				2, (Oid[]) { FLOAT8OID, INT4OID }, true);
 		}
 	}
@@ -4397,9 +4401,9 @@ TDigestExtensionAggTDigestPercentile2()
 		if (tdigestSchemaOid != InvalidOid)
 		{
 			/* extension schema is found, lookup aggregate in schema */
-			char *namespaceName = get_namespace_name(tdigestSchemaOid);
+			char *schemaName = get_namespace_name(tdigestSchemaOid);
 			MetadataCache.tdigestAggTDigestPercentile2 = LookupFuncName(
-				list_make2(makeString(namespaceName), makeString("tdigest_percentile")),
+				list_make2(makeString(schemaName), makeString("tdigest_percentile")),
 				2, (Oid[]) { TDigestExtensionTypeOid(), FLOAT8OID }, true);
 		}
 	}
@@ -4424,9 +4428,9 @@ TDigestExtensionAggTDigestPercentile2a(void)
 		if (tdigestSchemaOid != InvalidOid)
 		{
 			/* extension schema is found, lookup aggregate in schema */
-			char *namespaceName = get_namespace_name(tdigestSchemaOid);
+			char *schemaName = get_namespace_name(tdigestSchemaOid);
 			MetadataCache.tdigestAggTDigestPercentile2a = LookupFuncName(
-				list_make2(makeString(namespaceName), makeString("tdigest_percentile")),
+				list_make2(makeString(schemaName), makeString("tdigest_percentile")),
 				2, (Oid[]) { TDigestExtensionTypeOid(), FLOAT8ARRAYOID }, true);
 		}
 	}
@@ -4451,9 +4455,9 @@ TDigestExtensionAggTDigestPercentile3()
 		if (tdigestSchemaOid != InvalidOid)
 		{
 			/* extension schema is found, lookup aggregate in schema */
-			char *namespaceName = get_namespace_name(tdigestSchemaOid);
+			char *schemaName = get_namespace_name(tdigestSchemaOid);
 			MetadataCache.tdigestAggTDigestPercentile3 = LookupFuncName(
-				list_make2(makeString(namespaceName), makeString("tdigest_percentile")),
+				list_make2(makeString(schemaName), makeString("tdigest_percentile")),
 				3, (Oid[]) { FLOAT8OID, INT4OID, FLOAT8OID }, true);
 		}
 	}
@@ -4478,12 +4482,120 @@ TDigestExtensionAggTDigestPercentile3a(void)
 		if (tdigestSchemaOid != InvalidOid)
 		{
 			/* extension schema is found, lookup aggregate in schema */
-			char *namespaceName = get_namespace_name(tdigestSchemaOid);
+			char *schemaName = get_namespace_name(tdigestSchemaOid);
 			MetadataCache.tdigestAggTDigestPercentile3a = LookupFuncName(
-				list_make2(makeString(namespaceName), makeString("tdigest_percentile")),
+				list_make2(makeString(schemaName), makeString("tdigest_percentile")),
 				3, (Oid[]) { FLOAT8OID, INT4OID, FLOAT8ARRAYOID }, true);
 		}
 	}
 
 	return MetadataCache.tdigestAggTDigestPercentile3a;
+}
+
+
+/*
+ * TDigestExtensionAggTDigestPercentileOf2 performs a lookup for the Oid of the tdigest
+ * aggregate;
+ *   tdigest_percentile_of(tdigest, double precision)
+ *
+ * If the aggregate is not found InvalidOid is returned.
+ */
+Oid
+TDigestExtensionAggTDigestPercentileOf2()
+{
+	if (MetadataCache.tdigestAggTDigestPercentileOf2 == InvalidOid)
+	{
+		Oid tdigestSchemaOid = TDigestExtensionSchema();
+		if (tdigestSchemaOid != InvalidOid)
+		{
+			/* extension schema is found, lookup aggregate in schema */
+			char *schemaName = get_namespace_name(tdigestSchemaOid);
+			MetadataCache.tdigestAggTDigestPercentileOf2 = LookupFuncName(
+				list_make2(makeString(schemaName), makeString("tdigest_percentile_of")),
+				2, (Oid[]) { TDigestExtensionTypeOid(), FLOAT8OID }, true);
+		}
+	}
+
+	return MetadataCache.tdigestAggTDigestPercentileOf2;
+}
+
+
+/*
+ * TDigestExtensionAggTDigestPercentileOf2a performs a lookup for the Oid of the tdigest
+ * aggregate;
+ *   tdigest_percentile_of(tdigest, double precision[])
+ *
+ * If the aggregate is not found InvalidOid is returned.
+ */
+Oid
+TDigestExtensionAggTDigestPercentileOf2a(void)
+{
+	if (MetadataCache.tdigestAggTDigestPercentileOf2a == InvalidOid)
+	{
+		Oid tdigestSchemaOid = TDigestExtensionSchema();
+		if (tdigestSchemaOid != InvalidOid)
+		{
+			/* extension schema is found, lookup aggregate in schema */
+			char *schemaName = get_namespace_name(tdigestSchemaOid);
+			MetadataCache.tdigestAggTDigestPercentileOf2a = LookupFuncName(
+				list_make2(makeString(schemaName), makeString("tdigest_percentile_of")),
+				2, (Oid[]) { TDigestExtensionTypeOid(), FLOAT8ARRAYOID }, true);
+		}
+	}
+
+	return MetadataCache.tdigestAggTDigestPercentileOf2a;
+}
+
+
+/*
+ * TDigestExtensionAggTDigestPercentileOf3 performs a lookup for the Oid of the tdigest
+ * aggregate;
+ *   tdigest_percentile_of(double precision, int, double precision)
+ *
+ * If the aggregate is not found InvalidOid is returned.
+ */
+Oid
+TDigestExtensionAggTDigestPercentileOf3()
+{
+	if (MetadataCache.tdigestAggTDigestPercentileOf3 == InvalidOid)
+	{
+		Oid tdigestSchemaOid = TDigestExtensionSchema();
+		if (tdigestSchemaOid != InvalidOid)
+		{
+			/* extension schema is found, lookup aggregate in schema */
+			char *schemaName = get_namespace_name(tdigestSchemaOid);
+			MetadataCache.tdigestAggTDigestPercentileOf3 = LookupFuncName(
+				list_make2(makeString(schemaName), makeString("tdigest_percentile_of")),
+				3, (Oid[]) { FLOAT8OID, INT4OID, FLOAT8OID }, true);
+		}
+	}
+
+	return MetadataCache.tdigestAggTDigestPercentileOf3;
+}
+
+
+/*
+ * TDigestExtensionAggTDigestPercentileOf3a performs a lookup for the Oid of the tdigest
+ * aggregate;
+ *   tdigest_percentile_of(double precision, int, double precision[])
+ *
+ * If the aggregate is not found InvalidOid is returned.
+ */
+Oid
+TDigestExtensionAggTDigestPercentileOf3a(void)
+{
+	if (MetadataCache.tdigestAggTDigestPercentileOf3a == InvalidOid)
+	{
+		Oid tdigestSchemaOid = TDigestExtensionSchema();
+		if (tdigestSchemaOid != InvalidOid)
+		{
+			/* extension schema is found, lookup aggregate in schema */
+			char *schemaName = get_namespace_name(tdigestSchemaOid);
+			MetadataCache.tdigestAggTDigestPercentileOf3a = LookupFuncName(
+				list_make2(makeString(schemaName), makeString("tdigest_percentile_of")),
+				3, (Oid[]) { FLOAT8OID, INT4OID, FLOAT8ARRAYOID }, true);
+		}
+	}
+
+	return MetadataCache.tdigestAggTDigestPercentileOf3a;
 }
