@@ -222,6 +222,7 @@ extern char * CurrentUserName(void);
 extern const char * CurrentDatabaseName(void);
 
 /* tdigest related functions */
+extern void TDigestExtensionClearCache(void);
 extern Oid TDigestExtensionSchema(void);
 extern Oid TDigestExtensionTypeOid(void);
 extern Oid TDigestExtensionAggTDigest1(void);

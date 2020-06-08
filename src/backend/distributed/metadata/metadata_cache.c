@@ -4234,6 +4234,31 @@ poolinfo_valid(PG_FUNCTION_ARGS)
 }
 
 
+/*
+ * TDigestExtensionClearCache clears the cached Oid's for all tdigest related entries. As
+ * the extension is relocatable AND can be installed on demand it could cause the cache
+ * entries to become out of sync.
+ *
+ * TODO: figure out how to invoke this across all backends when required
+ */
+void
+TDigestExtensionClearCache()
+{
+	MetadataCache.tdigestExtensionSchema = InvalidOid;
+	MetadataCache.tdigestTypeOid = InvalidOid;
+	MetadataCache.tdigestAggTDigest1 = InvalidOid;
+	MetadataCache.tdigestAggTDigest2 = InvalidOid;
+	MetadataCache.tdigestAggTDigestPercentile2 = InvalidOid;
+	MetadataCache.tdigestAggTDigestPercentile2a = InvalidOid;
+	MetadataCache.tdigestAggTDigestPercentile3 = InvalidOid;
+	MetadataCache.tdigestAggTDigestPercentile3a = InvalidOid;
+}
+
+
+/*
+ * TDigestExtensionSchema finds the schema the tdigest extension is installed in. The
+ * function will return InvalidOid if the extension is not installed.
+ */
 Oid
 TDigestExtensionSchema()
 {
