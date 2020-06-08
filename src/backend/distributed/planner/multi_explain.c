@@ -14,6 +14,8 @@
 #include "access/xact.h"
 #include "catalog/namespace.h"
 #include "catalog/pg_class.h"
+#include "catalog/pg_collation.h"
+#include "catalog/pg_type.h"
 #include "commands/copy.h"
 #include "commands/createas.h"
 #include "commands/dbcommands.h"
@@ -39,8 +41,12 @@
 #include "distributed/remote_commands.h"
 #include "distributed/recursive_planning.h"
 #include "distributed/placement_connection.h"
+#include "distributed/tuplestore.h"
+#include "distributed/listutils.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/version_compat.h"
+#include "executor/tstoreReceiver.h"
+#include "fmgr.h"
 #include "lib/stringinfo.h"
 #include "nodes/plannodes.h"
 #include "nodes/primnodes.h"
@@ -60,6 +66,12 @@
 /* Config variables that enable printing distributed query plans */
 bool ExplainDistributedQueries = true;
 bool ExplainAllTasks = false;
+
+/*
+ * If enabled, EXPLAIN ANALYZE output of last worker task are saved in
+ * SavedExplainPlan.
+ */
+static char *SavedExplainPlan = NULL;
 
 
 /* Result for a single remote EXPLAIN command */
@@ -81,12 +93,27 @@ static void ExplainTask(Task *task, int placementIndex, List *explainOutputList,
 static void ExplainTaskPlacement(ShardPlacement *taskPlacement, List *explainOutputList,
 								 ExplainState *es);
 static StringInfo BuildRemoteExplainQuery(char *queryString, ExplainState *es);
+static void ExplainWorkerPlan(PlannedStmt *plannedStmt, DestReceiver *dest,
+							  ExplainState *es,
+							  const char *queryString, ParamListInfo params,
+							  QueryEnvironment *queryEnv,
+							  const instr_time *planduration);
+static bool ExtractFieldBoolean(Datum jsonbDoc, const char *fieldName, bool defaultValue);
+static ExplainFormat ExtractFieldExplainFormat(Datum jsonbDoc, const char *fieldName,
+											   ExplainFormat defaultValue);
+static bool ExtractFieldJsonbDatum(Datum jsonbDoc, const char *fieldName, Datum *result);
 
 /* Static Explain functions copied from explain.c */
 static void ExplainOneQuery(Query *query, int cursorOptions,
 							IntoClause *into, ExplainState *es,
 							const char *queryString, ParamListInfo params,
 							QueryEnvironment *queryEnv);
+static double elapsed_time(instr_time *starttime);
+
+
+/* exports for SQL callable functions */
+PG_FUNCTION_INFO_V1(worker_last_saved_explain_analyze);
+PG_FUNCTION_INFO_V1(worker_save_query_explain_analyze);
 
 
 /*
@@ -634,6 +661,220 @@ BuildRemoteExplainQuery(char *queryString, ExplainState *es)
 }
 
 
+/*
+ * worker_last_saved_explain_analyze returns the last saved EXPLAIN ANALYZE output of
+ * a worker task query. It returns NULL if nothing has been saved yet.
+ */
+Datum
+worker_last_saved_explain_analyze(PG_FUNCTION_ARGS)
+{
+	CheckCitusVersion(ERROR);
+
+	if (SavedExplainPlan == NULL)
+	{
+		PG_RETURN_NULL();
+	}
+	else
+	{
+		PG_RETURN_TEXT_P(cstring_to_text(SavedExplainPlan));
+	}
+}
+
+
+/*
+ * worker_save_query_explain_analyze executes and returns results of query while
+ * saving its EXPLAIN ANALYZE to be fetched later.
+ */
+Datum
+worker_save_query_explain_analyze(PG_FUNCTION_ARGS)
+{
+	CheckCitusVersion(ERROR);
+
+	text *queryText = PG_GETARG_TEXT_P(0);
+	char *queryString = text_to_cstring(queryText);
+
+	Datum explainOptions = PG_GETARG_DATUM(1);
+	ExplainState *es = NewExplainState();
+	es->analyze = true;
+
+	/* use the same defaults as NewExplainState() for following options */
+	es->buffers = ExtractFieldBoolean(explainOptions, "buffers", es->buffers);
+	es->costs = ExtractFieldBoolean(explainOptions, "costs", es->costs);
+	es->summary = ExtractFieldBoolean(explainOptions, "summary", es->summary);
+	es->verbose = ExtractFieldBoolean(explainOptions, "verbose", es->verbose);
+	es->timing = ExtractFieldBoolean(explainOptions, "timing", es->timing);
+	es->format = ExtractFieldExplainFormat(explainOptions, "format", es->format);
+
+	TupleDesc tupleDescriptor = NULL;
+	Tuplestorestate *tupleStore = SetupTuplestore(fcinfo, &tupleDescriptor);
+	DestReceiver *tupleStoreDest = CreateTuplestoreDestReceiver();
+	SetTuplestoreDestReceiverParams(tupleStoreDest, tupleStore,
+									CurrentMemoryContext, false);
+
+	List *parseTreeList = pg_parse_query(queryString);
+	if (list_length(parseTreeList) != 1)
+	{
+		ereport(ERROR, (errmsg("cannot EXPLAIN ANALYZE multiple queries")));
+	}
+
+	RawStmt *parseTree = linitial(parseTreeList);
+
+	List *queryList = pg_analyze_and_rewrite(parseTree, queryString, NULL, 0, NULL);
+	if (list_length(queryList) != 1)
+	{
+		ereport(ERROR, (errmsg("cannot EXPLAIN ANALYZE a query rewritten "
+							   "into multiple queries")));
+	}
+
+	Query *query = linitial(queryList);
+
+	ExplainBeginOutput(es);
+
+	/* plan query and record planning stats */
+	instr_time planStart;
+	instr_time planDuration;
+
+	INSTR_TIME_SET_CURRENT(planStart);
+
+	PlannedStmt *plan = pg_plan_query(query, 0, NULL);
+
+	INSTR_TIME_SET_CURRENT(planDuration);
+	INSTR_TIME_SUBTRACT(planDuration, planStart);
+
+	/* do the actual EXPLAIN ANALYZE */
+	ExplainWorkerPlan(plan, tupleStoreDest, es, queryString, NULL, NULL, &planDuration);
+
+	ExplainEndOutput(es);
+
+	tuplestore_donestoring(tupleStore);
+
+	/* save EXPLAIN ANALYZE result to be fetched later */
+	MemoryContext oldContext = MemoryContextSwitchTo(TopTransactionContext);
+	FreeSavedExplainPlan();
+
+	SavedExplainPlan = pstrdup(es->str->data);
+
+	MemoryContextSwitchTo(oldContext);
+
+	PG_RETURN_DATUM(0);
+}
+
+
+/*
+ * FreeSavedExplainPlan frees allocated saved explain plan if any.
+ */
+void
+FreeSavedExplainPlan(void)
+{
+	if (SavedExplainPlan)
+	{
+		pfree(SavedExplainPlan);
+		SavedExplainPlan = NULL;
+	}
+}
+
+
+/*
+ * ExtractFieldBoolean gets value of fieldName from jsonbDoc, or returns
+ * defaultValue if it doesn't exist.
+ */
+static bool
+ExtractFieldBoolean(Datum jsonbDoc, const char *fieldName, bool defaultValue)
+{
+	Datum jsonbDatum = 0;
+	bool found = ExtractFieldJsonbDatum(jsonbDoc, fieldName, &jsonbDatum);
+	if (!found)
+	{
+		return defaultValue;
+	}
+
+	Datum boolDatum = DirectFunctionCall1(jsonb_bool, jsonbDatum);
+	return DatumGetBool(boolDatum);
+}
+
+
+/*
+ * ExtractFieldExplainFormat gets value of fieldName from jsonbDoc, or returns
+ * defaultValue if it doesn't exist.
+ */
+static ExplainFormat
+ExtractFieldExplainFormat(Datum jsonbDoc, const char *fieldName, ExplainFormat
+						  defaultValue)
+{
+	Datum jsonbDatum = 0;
+	bool found = ExtractFieldJsonbDatum(jsonbDoc, fieldName, &jsonbDatum);
+	if (!found)
+	{
+		return defaultValue;
+	}
+
+	const char *formatStr = DatumGetCString(DirectFunctionCall1(jsonb_out, jsonbDatum));
+	if (pg_strcasecmp(formatStr, "\"text\"") == 0)
+	{
+		return EXPLAIN_FORMAT_TEXT;
+	}
+	else if (pg_strcasecmp(formatStr, "\"xml\"") == 0)
+	{
+		return EXPLAIN_FORMAT_XML;
+	}
+	else if (pg_strcasecmp(formatStr, "\"yaml\"") == 0)
+	{
+		return EXPLAIN_FORMAT_YAML;
+	}
+	else if (pg_strcasecmp(formatStr, "\"json\"") == 0)
+	{
+		return EXPLAIN_FORMAT_JSON;
+	}
+
+	ereport(ERROR, (errmsg("Invalid explain analyze format: %s", formatStr)));
+	return 0;
+}
+
+
+/*
+ * ExtractFieldJsonbDatum gets value of fieldName from jsonbDoc and puts it
+ * into result. If not found, returns false. Otherwise, returns true.
+ */
+static bool
+ExtractFieldJsonbDatum(Datum jsonbDoc, const char *fieldName, Datum *result)
+{
+	Datum pathArray[1] = { CStringGetTextDatum(fieldName) };
+	bool pathNulls[1] = { false };
+	bool typeByValue = false;
+	char typeAlignment = 0;
+	int16 typeLength = 0;
+	int dimensions[1] = { 1 };
+	int lowerbounds[1] = { 1 };
+
+	get_typlenbyvalalign(TEXTOID, &typeLength, &typeByValue, &typeAlignment);
+
+	ArrayType *pathArrayObject = construct_md_array(pathArray, pathNulls, 1, dimensions,
+													lowerbounds, TEXTOID, typeLength,
+													typeByValue, typeAlignment);
+	Datum pathDatum = PointerGetDatum(pathArrayObject);
+
+	/*
+	 * We need to check whether the result of jsonb_extract_path is NULL or not, so use
+	 * FunctionCallInvoke() instead of other function call api.
+	 *
+	 * We cannot use jsonb_path_exists to ensure not-null since it is not available in
+	 * postgres 11.
+	 */
+	FmgrInfo fmgrInfo;
+	fmgr_info(JsonbExtractPathFuncId(), &fmgrInfo);
+
+	LOCAL_FCINFO(functionCallInfo, 2);
+	InitFunctionCallInfoData(*functionCallInfo, &fmgrInfo, 2, DEFAULT_COLLATION_OID, NULL,
+							 NULL);
+
+	fcSetArg(functionCallInfo, 0, jsonbDoc);
+	fcSetArg(functionCallInfo, 1, pathDatum);
+
+	*result = FunctionCallInvoke(functionCallInfo);
+	return !functionCallInfo->isnull;
+}
+
+
 /* below are private functions copied from explain.c */
 
 
@@ -673,4 +914,153 @@ ExplainOneQuery(Query *query, int cursorOptions,
 		ExplainOnePlan(plan, into, es, queryString, params, queryEnv,
 					   &planduration);
 	}
+}
+
+
+/*
+ * ExplainAnalyzeWorkerPlan produces explain output into es. If es->analyze, it also executes
+ * the given plannedStmt and sends the results to dest.
+ *
+ * This is based on postgres' ExplainOnePlan(). We couldn't use an IntoClause to store results
+ * into tupleStore, so we had to copy the same functionality with some minor changes.
+ *
+ * Keeping the formatting to make comparing with the ExplainOnePlan() easier.
+ *
+ * TODO: Send a PR to postgres to change ExplainOnePlan's API to use a more generic result
+ * destination.
+ */
+static void
+ExplainWorkerPlan(PlannedStmt *plannedstmt, DestReceiver *dest, ExplainState *es,
+				  const char *queryString, ParamListInfo params, QueryEnvironment *queryEnv,
+				  const instr_time *planduration)
+{
+	QueryDesc  *queryDesc;
+	instr_time	starttime;
+	double		totaltime = 0;
+	int			eflags;
+	int			instrument_option = 0;
+
+	Assert(plannedstmt->commandType != CMD_UTILITY);
+
+	if (es->analyze && es->timing)
+		instrument_option |= INSTRUMENT_TIMER;
+	else if (es->analyze)
+		instrument_option |= INSTRUMENT_ROWS;
+
+	if (es->buffers)
+		instrument_option |= INSTRUMENT_BUFFERS;
+
+	/*
+	 * We always collect timing for the entire statement, even when node-level
+	 * timing is off, so we don't look at es->timing here.  (We could skip
+	 * this if !es->summary, but it's hardly worth the complication.)
+	 */
+	INSTR_TIME_SET_CURRENT(starttime);
+
+	/*
+	 * Use a snapshot with an updated command ID to ensure this query sees
+	 * results of any previously executed queries.
+	 */
+	PushCopiedSnapshot(GetActiveSnapshot());
+	UpdateActiveSnapshotCommandId();
+
+	/* Create a QueryDesc for the query */
+	queryDesc = CreateQueryDesc(plannedstmt, queryString,
+								GetActiveSnapshot(), InvalidSnapshot,
+								dest, params, queryEnv, instrument_option);
+
+	/* Select execution options */
+	if (es->analyze)
+		eflags = 0;				/* default run-to-completion flags */
+	else
+		eflags = EXEC_FLAG_EXPLAIN_ONLY;
+
+	/* call ExecutorStart to prepare the plan for execution */
+	ExecutorStart(queryDesc, eflags);
+
+	/* Execute the plan for statistics if asked for */
+	if (es->analyze)
+	{
+		ScanDirection dir = ForwardScanDirection;
+
+		/* run the plan */
+		ExecutorRun(queryDesc, dir, 0L, true);
+
+		/* run cleanup too */
+		ExecutorFinish(queryDesc);
+
+		/* We can't run ExecutorEnd 'till we're done printing the stats... */
+		totaltime += elapsed_time(&starttime);
+	}
+
+	ExplainOpenGroup("Query", NULL, true, es);
+
+	/* Create textual dump of plan tree */
+	ExplainPrintPlan(es, queryDesc);
+
+	if (es->summary && planduration)
+	{
+		double		plantime = INSTR_TIME_GET_DOUBLE(*planduration);
+
+		ExplainPropertyFloat("Planning Time", "ms", 1000.0 * plantime, 3, es);
+	}
+
+	/* Print info about runtime of triggers */
+	if (es->analyze)
+		ExplainPrintTriggers(es, queryDesc);
+
+	/*
+	 * Print info about JITing. Tied to es->costs because we don't want to
+	 * display this in regression tests, as it'd cause output differences
+	 * depending on build options.  Might want to separate that out from COSTS
+	 * at a later stage.
+	 */
+	if (es->costs)
+		ExplainPrintJITSummary(es, queryDesc);
+
+	/*
+	 * Close down the query and free resources.  Include time for this in the
+	 * total execution time (although it should be pretty minimal).
+	 */
+	INSTR_TIME_SET_CURRENT(starttime);
+
+	ExecutorEnd(queryDesc);
+
+	FreeQueryDesc(queryDesc);
+
+	PopActiveSnapshot();
+
+	/* We need a CCI just in case query expanded to multiple plans */
+	if (es->analyze)
+		CommandCounterIncrement();
+
+	totaltime += elapsed_time(&starttime);
+
+	/*
+	 * We only report execution time if we actually ran the query (that is,
+	 * the user specified ANALYZE), and if summary reporting is enabled (the
+	 * user can set SUMMARY OFF to not have the timing information included in
+	 * the output).  By default, ANALYZE sets SUMMARY to true.
+	 */
+	if (es->summary && es->analyze)
+		ExplainPropertyFloat("Execution Time", "ms", 1000.0 * totaltime, 3,
+							 es);
+
+	ExplainCloseGroup("Query", NULL, true, es);
+}
+
+
+/*
+ * Compute elapsed time in seconds since given timestamp.
+ *
+ * Copied from explain.c.
+ */
+static double
+elapsed_time(instr_time *starttime)
+{
+	instr_time	endtime;
+
+	INSTR_TIME_SET_CURRENT(endtime);
+	INSTR_TIME_SUBTRACT(endtime, *starttime);
+	return INSTR_TIME_GET_DOUBLE(endtime);
 }

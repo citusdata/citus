@@ -16,4 +16,6 @@
 extern bool ExplainDistributedQueries;
 extern bool ExplainAllTasks;
 
+extern void FreeSavedExplainPlan(void);
+
 #endif /* MULTI_EXPLAIN_H */
