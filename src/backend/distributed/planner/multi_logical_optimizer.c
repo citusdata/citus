@@ -336,50 +336,6 @@ static bool ShouldProcessDistinctOrderAndLimitForWorker(
 	Node *havingQual);
 
 
-
-static Oid
-TDigestExtension_tdigest_Oid()
-{
-	return TDigestExtensionTypeOid();
-}
-
-static Oid
-TDigestExtension_tdigest_DoubleInt_Oid()
-{
-	return TDigestExtensionAggTDigest2();
-}
-
-static Oid
-TDigestExtension_tdigest_combine_Oid()
-{
-	return TDigestExtensionAggTDigest1();
-}
-
-static Oid
-TDigestExtension_tdigest_percentile_tdigestDouble_Oid()
-{
-	return TDigestExtensionAggTDigestPercentile2();
-}
-
-static Oid
-TDigestExtension_tdigest_percentile_tdigestDoubleArray_Oid()
-{
-	return TDigestExtensionAggTDigestPercentile2a();
-}
-
-static Oid
-TDigestExtension_tdigest_percentile_DoubleIntDouble_Oid()
-{
-	return TDigestExtensionAggTDigestPercentile3();
-}
-
-static Oid
-TDigestExtension_tdigest_percentile_DoubleIntDoubleArray_Oid()
-{
-	return TDigestExtensionAggTDigestPercentile3a();
-}
-
-
 /*
  * MultiLogicalPlanOptimize applies multi-relational algebra optimizations on
  * the given logical plan tree. Specifically, the function applies four set of
@@ -2000,8 +1956,8 @@ MasterAggregateExpression(Aggref *originalAggregate,
 	else if (aggregateType == AGGREGATE_TDIGEST_ADD_DOUBLE)
 	{
 		/* tdigest of column */
-		Oid tdigestType = TDigestExtension_tdigest_Oid(); /* tdigest type */
-		Oid unionFunctionId = TDigestExtension_tdigest_combine_Oid(); /* tdigest_percentile(tdigest, double) */
+		Oid tdigestType = TDigestExtensionTypeOid(); /* tdigest type */
+		Oid unionFunctionId = TDigestExtensionAggTDigest1();
 
 		int32 tdigestReturnTypeMod = exprTypmod((Node *) originalAggregate);
 		Oid tdigestTypeCollationId = exprCollation((Node *) originalAggregate);
@@ -2029,8 +1985,8 @@ MasterAggregateExpression(Aggref *originalAggregate,
 	else if (aggregateType == AGGREGATE_TDIGEST_COMBINE)
 	{
 		/* tdigest of column */
-		Oid tdigestType = TDigestExtension_tdigest_Oid(); /* tdigest type */
-		Oid unionFunctionId = TDigestExtension_tdigest_combine_Oid(); /* tdigest_percentile(tdigest, double) */
+		Oid tdigestType = TDigestExtensionTypeOid(); /* tdigest type */
+		Oid unionFunctionId = TDigestExtensionAggTDigest1();
 
 		int32 tdigestReturnTypeMod = exprTypmod((Node *) originalAggregate);
 		Oid tdigestTypeCollationId = exprCollation((Node *) originalAggregate);
@@ -2059,11 +2015,11 @@ MasterAggregateExpression(Aggref *originalAggregate,
 			 aggregateType == AGGREGATE_TDIGEST_PERCENTILE_ADD_DOUBLEARRAY)
 	{
 		/* tdigest of column */
-		Oid tdigestType = TDigestExtension_tdigest_Oid();
+		Oid tdigestType = TDigestExtensionTypeOid();
 		Oid unionFunctionId =
 			(aggregateType == AGGREGATE_TDIGEST_PERCENTILE_ADD_DOUBLE)
-			? TDigestExtension_tdigest_percentile_tdigestDouble_Oid()
-			: TDigestExtension_tdigest_percentile_tdigestDoubleArray_Oid();
+			? TDigestExtensionAggTDigestPercentile2()
+			: TDigestExtensionAggTDigestPercentile2a();
 
 		int32 tdigestReturnTypeMod = exprTypmod((Node *) originalAggregate);
 		Oid tdigestTypeCollationId = exprCollation((Node *) originalAggregate);
@@ -3231,8 +3187,8 @@ WorkerAggregateExpressionList(Aggref *originalAggregate,
 		 * list construction. The tdigest function and type are read from the catalog.
 		 */
 		Aggref *newWorkerAggregate = copyObject(originalAggregate);
-		newWorkerAggregate->aggfnoid = TDigestExtension_tdigest_DoubleInt_Oid();
-		newWorkerAggregate->aggtype = TDigestExtension_tdigest_Oid();
+		newWorkerAggregate->aggfnoid = TDigestExtensionAggTDigest2();
+		newWorkerAggregate->aggtype = TDigestExtensionTypeOid();
 		newWorkerAggregate->args = list_make2(
 			list_nth(newWorkerAggregate->args, 0),
 			list_nth(newWorkerAggregate->args, 1));
@@ -3259,8 +3215,8 @@ WorkerAggregateExpressionList(Aggref *originalAggregate,
 		 * list construction. The tdigest function and type are read from the catalog.
 		 */
 		Aggref *newWorkerAggregate = copyObject(originalAggregate);
-		newWorkerAggregate->aggfnoid = TDigestExtension_tdigest_combine_Oid();
-		newWorkerAggregate->aggtype = TDigestExtension_tdigest_Oid();
+		newWorkerAggregate->aggfnoid = TDigestExtensionAggTDigest1();
+		newWorkerAggregate->aggtype = TDigestExtensionTypeOid();
 		newWorkerAggregate->args = list_make1(list_nth(newWorkerAggregate->args, 0));
 		newWorkerAggregate->aggkind = AGGKIND_NORMAL;
 		newWorkerAggregate->aggtranstype = InvalidOid;
@@ -3285,8 +3241,8 @@ WorkerAggregateExpressionList(Aggref *originalAggregate,
 		 * list construction. The tdigest function and type are read from the catalog.
 		 */
 		Aggref *newWorkerAggregate = copyObject(originalAggregate);
-		newWorkerAggregate->aggfnoid = TDigestExtension_tdigest_DoubleInt_Oid();
-		newWorkerAggregate->aggtype = TDigestExtension_tdigest_Oid();
+		newWorkerAggregate->aggfnoid = TDigestExtensionAggTDigest2();
+		newWorkerAggregate->aggtype = TDigestExtensionTypeOid();
 		newWorkerAggregate->args = list_make2(
 			list_nth(newWorkerAggregate->args, 0),
 			list_nth(newWorkerAggregate->args, 1));
@@ -3407,22 +3363,22 @@ GetAggregateType(Aggref *aggregateExpression)
 	if (StartsWith(aggregateProcName,"tdigest"))
 	{
 		/* TODO read from catalog */
-		if (aggFunctionId == TDigestExtension_tdigest_DoubleInt_Oid())
+		if (aggFunctionId == TDigestExtensionAggTDigest2())
 		{
 			return AGGREGATE_TDIGEST_ADD_DOUBLE;
 		}
 
-		if (aggFunctionId == TDigestExtension_tdigest_combine_Oid())
+		if (aggFunctionId == TDigestExtensionAggTDigest1())
 		{
 			return AGGREGATE_TDIGEST_COMBINE;
 		}
 
-		if (aggFunctionId == TDigestExtension_tdigest_percentile_DoubleIntDouble_Oid())
+		if (aggFunctionId == TDigestExtensionAggTDigestPercentile3())
 		{
 			return AGGREGATE_TDIGEST_PERCENTILE_ADD_DOUBLE;
 		}
 
-		if (aggFunctionId == TDigestExtension_tdigest_percentile_DoubleIntDoubleArray_Oid())
+		if (aggFunctionId == TDigestExtensionAggTDigestPercentile3a())
 		{
 			return AGGREGATE_TDIGEST_PERCENTILE_ADD_DOUBLEARRAY;
 		}
