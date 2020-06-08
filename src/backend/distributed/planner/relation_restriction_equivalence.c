@@ -73,8 +73,8 @@ typedef struct AttributeEquivalenceClassMember
 
 
 static bool ContextContainsLocalRelation(RelationRestrictionContext *restrictionContext);
-static Var * FindTranslatedVar(List *appendRelList, Oid relationOid,
-							   Index relationRteIndex, Index *partitionKeyIndex);
+static Var * FindUnionAllVar(PlannerInfo *root, List *appendRelList, Oid relationOid,
+							 Index relationRteIndex, Index *partitionKeyIndex);
 static bool ContainsMultipleDistributedRelations(PlannerRestrictionContext *
 												 plannerRestrictionContext);
 static List * GenerateAttributeEquivalencesForRelationRestrictions(
@@ -149,6 +149,7 @@ static JoinRestrictionContext * FilterJoinRestrictionContext(
 static bool RangeTableArrayContainsAnyRTEIdentities(RangeTblEntry **rangeTableEntries, int
 													rangeTableArrayLength, Relids
 													queryRteIdentities);
+static int RangeTableOffsetCompat(PlannerInfo *root, AppendRelInfo *appendRelInfo);
 static Relids QueryRteIdentities(Query *queryTree);
 static bool JoinRestrictionListExistsInContext(JoinRestriction *joinRestrictionInput,
 											   JoinRestrictionContext *
@@ -275,10 +276,10 @@ SafeToPushdownUnionSubquery(PlannerRestrictionContext *plannerRestrictionContext
 		 */
 		if (appendRelList != NULL)
 		{
-			varToBeAdded = FindTranslatedVar(appendRelList,
-											 relationRestriction->relationId,
-											 relationRestriction->index,
-											 &partitionKeyIndex);
+			varToBeAdded = FindUnionAllVar(relationPlannerRoot, appendRelList,
+										   relationRestriction->relationId,
+										   relationRestriction->index,
+										   &partitionKeyIndex);
 
 			/* union does not have partition key in the target list */
 			if (partitionKeyIndex == 0)
@@ -370,22 +371,16 @@ SafeToPushdownUnionSubquery(PlannerRestrictionContext *plannerRestrictionContext
 
 
 /*
- * FindTranslatedVar iterates on the appendRelList and tries to find a translated
- * child var identified by the relation id and the relation rte index.
- *
- * Note that postgres translates UNION ALL target list elements into translated_vars
- * list on the corresponding AppendRelInfo struct. For details, see the related
- * structs.
- *
- * The function returns NULL if it cannot find a translated var.
+ * FindUnionAllVar finds the variable used in union all for the side that has
+ * relationRteIndex as its index and the same varattno as the partition key of
+ * the given relation with relationOid.
  */
 static Var *
-FindTranslatedVar(List *appendRelList, Oid relationOid, Index relationRteIndex,
-				  Index *partitionKeyIndex)
+FindUnionAllVar(PlannerInfo *root, List *appendRelList, Oid relationOid,
+				Index relationRteIndex, Index *partitionKeyIndex)
 {
 	ListCell *appendRelCell = NULL;
 	AppendRelInfo *targetAppendRelInfo = NULL;
-	ListCell *translatedVarCell = NULL;
 	AttrNumber childAttrNumber = 0;
 
 	*partitionKeyIndex = 0;
@@ -395,25 +390,41 @@ FindTranslatedVar(List *appendRelList, Oid relationOid, Index relationRteIndex,
 	{
 		AppendRelInfo *appendRelInfo = (AppendRelInfo *) lfirst(appendRelCell);
 
+
+		int rtoffset = RangeTableOffsetCompat(root, appendRelInfo);
+
 		/*
 		 * We're only interested in the child rel that is equal to the
 		 * relation we're investigating.
 		 */
-		if (appendRelInfo->child_relid == relationRteIndex)
+		if (appendRelInfo->child_relid - rtoffset == relationRteIndex)
 		{
 			targetAppendRelInfo = appendRelInfo;
 			break;
 		}
 	}
 
-	/* we couldn't find the necessary append rel info */
-	if (targetAppendRelInfo == NULL)
+	if (!targetAppendRelInfo)
 	{
 		return NULL;
 	}
 
 	Var *relationPartitionKey = ForceDistPartitionKey(relationOid);
 
+	#if PG_VERSION_NUM >= PG_VERSION_13
+	for (; childAttrNumber < targetAppendRelInfo->num_child_cols; childAttrNumber++)
+	{
+		int curAttNo = targetAppendRelInfo->parent_colnos[childAttrNumber];
+		if (curAttNo == relationPartitionKey->varattno)
+		{
+			*partitionKeyIndex = (childAttrNumber + 1);
+			int rtoffset = RangeTableOffsetCompat(root, targetAppendRelInfo);
+			relationPartitionKey->varno = targetAppendRelInfo->child_relid - rtoffset;
+			return relationPartitionKey;
+		}
+	}
+	#else
+	ListCell *translatedVarCell;
 	List *translaterVars = targetAppendRelInfo->translated_vars;
 	foreach(translatedVarCell, translaterVars)
 	{
@@ -435,7 +446,7 @@ FindTranslatedVar(List *appendRelList, Oid relationOid, Index relationRteIndex,
 			return targetVar;
 		}
 	}
-
+	#endif
 	return NULL;
 }
 
@@ -1346,13 +1357,33 @@ AddUnionAllSetOperationsToAttributeEquivalenceClass(AttributeEquivalenceClass **
 		{
 			continue;
 		}
-
+		int rtoffset = RangeTableOffsetCompat(root, appendRelInfo);
 		/* set the varno accordingly for this specific child */
-		varToBeAdded->varno = appendRelInfo->child_relid;
+		varToBeAdded->varno = appendRelInfo->child_relid - rtoffset;
 
 		AddToAttributeEquivalenceClass(attributeEquivalenceClass, root,
 									   varToBeAdded);
 	}
+}
+
+/*
+ * RangeTableOffsetCompat returns the range table offset(in glob->finalrtable) for the appendRelInfo.
+ * For PG < 13 this is a no op.
+ */
+static int RangeTableOffsetCompat(PlannerInfo *root, AppendRelInfo *appendRelInfo) {
+	#if PG_VERSION_NUM >= PG_VERSION_13
+	int i = 1;
+	for (i = 1 ; i < root->simple_rel_array_size; i++) {
+		RangeTblEntry* rte = root->simple_rte_array[i];
+		if (rte->inh) {
+			break;
+		}
+	}
+	int indexInRtable = (i - 1);
+	return appendRelInfo->parent_relid - 1 - (indexInRtable);
+	#else
+	return 0;
+	#endif
 }
 
 
