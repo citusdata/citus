@@ -100,11 +100,6 @@ step "s1-commit"
 
 session "s2"
 
-step "s2-begin"
-{
-	COMMIT;
-}
-
 step "s2-start-session-level-connection"
 {
 	SELECT start_session_level_connection_to_node('localhost', 57638);
@@ -123,16 +118,6 @@ step "s2-update-dist-table"
 step "s2-update-ref-table"
 {
 	SELECT run_commands_on_session_level_connection_to_node('UPDATE ref_table SET value_1 = 12 WHERE user_id = 1');
-}
-
-step "s2-select-from-ref-table"
-{
-	SELECT run_commands_on_session_level_connection_to_node('SELECT count(*) FROM ref_table');
-}
-
-step "s2-delete-from-ref-table"
-{
-	SELECT run_commands_on_session_level_connection_to_node('DELETE FROM ref_table WHERE user_id = 2');
 }
 
 step "s2-insert-into-ref-table"

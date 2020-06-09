@@ -102,11 +102,6 @@ step "s2-select-for-udpate"
         SELECT run_commands_on_session_level_connection_to_node('SELECT * FROM dist_table WHERE id=1 FOR UPDATE');
 }
 
-step "s2-coordinator-create-index-concurrently"
-{
-        CREATE INDEX CONCURRENTLY dist_table_index ON dist_table(id);
-}
-
 step "s2-commit-worker"
 {
 	SELECT run_commands_on_session_level_connection_to_node('COMMIT');

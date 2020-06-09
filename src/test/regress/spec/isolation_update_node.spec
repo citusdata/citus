@@ -27,14 +27,6 @@ step "s1-update-node-1"
         58637);
 }
 
-step "s1-update-node-2"
-{
-    SELECT 1 FROM master_update_node(
-        (select nodeid from pg_dist_node where nodeport = 57638),
-        'localhost',
-        58638);
-}
-
 step "s1-commit"
 {
 	COMMIT;
@@ -87,11 +79,6 @@ step "s2-start-metadata-sync-node-2"
 step "s2-abort"
 {
 	ABORT;
-}
-
-step "s2-commit"
-{
-	COMMIT;
 }
 
 // session 1 updates node 1, session 2 updates node 2, should be ok

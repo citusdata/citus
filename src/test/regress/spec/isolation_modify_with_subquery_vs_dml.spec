@@ -71,11 +71,6 @@ step "s2-modify_with_subquery_v1"
     UPDATE users_test_table SET value_2 = 5 FROM events_test_table WHERE users_test_table.user_id = events_test_table.user_id;
 }
 
-step "s2-modify_with_subquery_v2"
-{
-	UPDATE users_test_table SET value_1 = 3 WHERE user_id IN (SELECT user_id FROM events_test_table);
-}
-
 step "s2-commit"
 {
 	COMMIT;

@@ -50,9 +50,7 @@ step "s2-ddl-add-column" { ALTER TABLE drop_hash ADD new_column int DEFAULT 0; }
 step "s2-ddl-drop-column" { ALTER TABLE drop_hash DROP new_column; }
 step "s2-ddl-rename-column" { ALTER TABLE drop_hash RENAME data TO new_column; }
 step "s2-table-size" { SELECT citus_total_relation_size('drop_hash'); }
-step "s2-create-non-distributed-table" { CREATE TABLE drop_hash(id integer, data text); COPY drop_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV; }
 step "s2-distribute-table" { SELECT create_distributed_table('drop_hash', 'id'); }
-step "s2-select" { SELECT * FROM drop_hash ORDER BY 1, 2; }
 step "s2-commit" { COMMIT; }
 
 // permutations - DROP vs DROP
