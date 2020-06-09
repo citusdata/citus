@@ -192,9 +192,32 @@ CitusCustomScanPathPlan(PlannerInfo *root,
 	 */
 	citusPath->remoteScan->scan.plan.targetlist = tlist;
 
-	if (tlist != NULL)
+	/*
+	 * The custom_scan_tlist contains target entries for to the "output" of the call
+	 * to citus_extradata_container, which is actually replaced by a CustomScan.
+	 * The target entries are initialized with varno 1 (see MasterTargetList), since
+	 * it's currently the only relation in the join tree of the masterQuery.
+	 *
+	 * If the citus_extradata_container function call is not the first relation to
+	 * appear in the flattened rtable for the entire plan, then varno is now pointing
+	 * to the wrong relation and needs to be updated.
+	 *
+	 * An example is when the masterQuery is INSERT INTO local SELECT .. FROM
+	 * citus_extradata_container. In that case the varno of citusdata_extradata_container
+	 * should be 3, because it is preceded range table entries for "local" and the
+	 * subquery.
+	 */
+	if (rel->relid != 1)
 	{
-		citusPath->remoteScan->custom_scan_tlist = tlist;
+		TargetEntry *targetEntry = NULL;
+
+		foreach_ptr(targetEntry, citusPath->remoteScan->custom_scan_tlist)
+		{
+			/* we created this list, so we know it only contains Var */
+			Var *var = (Var *) targetEntry->expr;
+
+			var->varno = rel->relid;
+		}
 	}
 
 	/* clauses might have been added by the planner, need to add them to our scan */
