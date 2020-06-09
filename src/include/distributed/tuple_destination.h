@@ -27,7 +27,7 @@ typedef struct TupleDestination TupleDestination;
  * accept a queryNumber parameter which denotes the index of the query that
  * tuple belongs to.
  */
-typedef struct TupleDestination
+struct TupleDestination
 {
 	/* putTuple implements custom processing of a tuple */
 	void (*putTuple)(TupleDestination *self, Task *task,
@@ -36,7 +36,7 @@ typedef struct TupleDestination
 
 	/* tupleDescForQuery returns tuple descriptor for a query number. Can return NULL. */
 	TupleDesc (*tupleDescForQuery)(TupleDestination *self, int queryNumber);
-} TupleDestination;
+};
 
 extern TupleDestination * CreateTupleStoreTupleDest(Tuplestorestate *tupleStore, TupleDesc
 													tupleDescriptor);

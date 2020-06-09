@@ -262,7 +262,7 @@ typedef struct TaskQuery
 	}data;
 }TaskQuery;
 
-typedef struct TupleDestination TupleDestination;
+struct TupleDestination;
 
 typedef struct Task
 {
@@ -336,7 +336,7 @@ typedef struct Task
 	 * Destination of tuples generated as a result of executing this task. Can be
 	 * NULL, in which case executor might use a default destination.
 	 */
-	TupleDestination *tupleDest;
+	struct TupleDestination *tupleDest;
 } Task;
 
 
