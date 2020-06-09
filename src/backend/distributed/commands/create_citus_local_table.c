@@ -27,6 +27,7 @@
 #include "distributed/namespace_utils.h"
 #include "distributed/reference_table_utils.h"
 #include "distributed/worker_protocol.h"
+#include "distributed/worker_shard_visibility.h"
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
@@ -35,6 +36,9 @@
 
 static void ErrorIfUnsupportedCreateCitusLocalTable(Oid relationId);
 static void ErrorIfUnsupportedCitusLocalTableKind(Oid relationId);
+static void ErrorIfRelationIsAKnownShard(Oid relationId);
+static void ErrorIfTableHasExternalForeignKeys(Oid relationId);
+static void ErrorIfCoordinatorNotAddedAsWorkerNode(Oid relationId);
 static uint64 ConvertLocalTableToShard(Oid relationId);
 static void RenameRelationToShardRelation(Oid shellRelationId, uint64 shardId);
 static void RenameShardRelationConstraints(Oid shardRelationId, uint64 shardId);
@@ -50,7 +54,8 @@ static void CreateCitusLocalTable(Oid relationId);
 static void FinalizeCitusLocalTableCreation(Oid relationId);
 static List * GetShellTableDDLEventsForCitusLocalTable(Oid relationId);
 static void CreateShellTableForCitusLocalTable(List *shellTableDDLEvents);
-static void DropAndMoveDefaultSequenceOwnerships(Oid sourceRelationId, Oid targetRelationId);
+static void DropAndMoveDefaultSequenceOwnerships(Oid sourceRelationId,
+												 Oid targetRelationId);
 static void ExtractColumnsOwningSequences(Oid relationId, List **columnNameList,
 										  List **ownedSequenceIdList);
 static void DropDefaultColumnDefinition(Oid relationId, char *columnName);
@@ -87,23 +92,26 @@ create_citus_local_table(PG_FUNCTION_ARGS)
 static void
 ErrorIfUnsupportedCreateCitusLocalTable(Oid relationId)
 {
+	ErrorIfCoordinatorNotAddedAsWorkerNode(relationId);
 	ErrorIfUnsupportedCitusLocalTableKind(relationId);
-
 	EnsureTableNotDistributed(relationId);
 
-	if (!CoordinatorAddedAsWorkerNode())
-	{
-		const char *relationName = get_rel_name(relationId);
+	/*
+	 * When creating other citus table types, we don't need to check that case as
+	 * EnsureTableNotDistributed already errors out if the given relation implies
+	 * a citus table. However, as we don't mark the relation as citus table, i.e we
+	 * do not use the relation with relationId as the shell relation, parallel
+	 * create_citus_local_table executions would not error out for that relation.
+	 * Hence we need to error out for shard relations too.
+	 */
+	ErrorIfRelationIsAKnownShard(relationId);
 
-		Assert(relationName != NULL);
-
-		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
-						errmsg("cannot create citus local table \"%s\", citus local "
-							   "tables can only be created from coordinator node if "
-							   "it is added as a worker node", relationName),
-						errhint("First, add the coordinator with master_add_node "
-								"command")));
-	}
+	/*
+	 * We do not allow creating citus local table if the table is involved in a
+	 * foreign key relationship with "any other table". Note that we allow self
+	 * references.
+	 */
+	ErrorIfTableHasExternalForeignKeys(relationId);
 }
 
 
@@ -115,8 +123,6 @@ static void
 ErrorIfUnsupportedCitusLocalTableKind(Oid relationId)
 {
 	const char *relationName = get_rel_name(relationId);
-
-	Assert(relationName != NULL);
 
 	if (IsChildTable(relationId) || IsParentTable(relationId))
 	{
@@ -142,6 +148,82 @@ ErrorIfUnsupportedCitusLocalTableKind(Oid relationId)
 							   "tables and foreign tables are supported for citus local "
 							   "table creation", relationName)));
 	}
+}
+
+
+/*
+ * ErrorIfRelationIsAKnownShard errors out if the relation with relationId is
+ * a shard relation relation.
+ */
+static void
+ErrorIfRelationIsAKnownShard(Oid relationId)
+{
+	/* search the relation in all schemas */
+	bool onlySearchPath = false;
+	if (!RelationIsAKnownShard(relationId, onlySearchPath))
+	{
+		return;
+	}
+
+	const char *relationName = get_rel_name(relationId);
+
+	ereport(ERROR, (errmsg("cannot create citus local table as \"%s\" is a shard "
+						   "relation ", relationName)));
+}
+
+
+/*
+ * ErrorIfTableHasExternalForeignKeys errors out if the relation with relationId
+ * is involved in a foreign key relationship other than the self-referencing ones.
+ */
+static void
+ErrorIfTableHasExternalForeignKeys(Oid relationId)
+{
+	int flags = (INCLUDE_REFERENCING_CONSTRAINTS | EXCLUDE_SELF_REFERENCES);
+	List *foreignKeyIdsTableReferencing = GetForeignKeyOids(relationId, flags);
+
+	flags = (INCLUDE_REFERENCED_CONSTRAINTS | EXCLUDE_SELF_REFERENCES);
+	List *foreignKeyIdsTableReferenced = GetForeignKeyOids(relationId, flags);
+
+	List *foreignKeysWithOtherTables = list_concat(foreignKeyIdsTableReferencing,
+												   foreignKeyIdsTableReferenced);
+
+	if (list_length(foreignKeysWithOtherTables) == 0)
+	{
+		return;
+	}
+
+	const char *relationName = get_rel_name(relationId);
+
+	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					errmsg("cannot create citus local table \"%s\", citus local "
+						   "tables cannot be involved in foreign key relationships "
+						   "with other tables initially", relationName),
+					errhint("Drop foreign keys with other tables and re-define them "
+							"with ALTER TABLE commands after creating the table.")));
+}
+
+
+/*
+ * ErrorIfCoordinatorNotAddedAsWorkerNode error out if coordinator is not added
+ * to metadata.
+ */
+static void
+ErrorIfCoordinatorNotAddedAsWorkerNode(Oid relationId)
+{
+	if (CoordinatorAddedAsWorkerNode())
+	{
+		return;
+	}
+
+	const char *relationName = get_rel_name(relationId);
+
+	ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+					errmsg("cannot create citus local table \"%s\", citus local "
+						   "tables can only be created from coordinator node if "
+						   "it is added as a worker node", relationName),
+					errhint("First, add the coordinator with master_add_node "
+							"command")));
 }
 
 
@@ -172,7 +254,7 @@ CreateCitusLocalTable(Oid relationId)
 	 * does not allow us to do so when the table is still open.
 	 * (See the postgres function CheckTableNotInUse for more information.)
 	 */
-	LockRelationOid(relationId, ExclusiveLock);
+	LockRelationOid(relationId, AccessExclusiveLock);
 
 	ErrorIfUnsupportedCreateCitusLocalTable(relationId);
 
@@ -223,7 +305,7 @@ CreateCitusLocalTable(Oid relationId)
 
 	FinalizeCitusLocalTableCreation(shellRelationId);
 
-	UnlockRelationOid(relationId, ExclusiveLock);
+	UnlockRelationOid(relationId, AccessExclusiveLock);
 }
 
 
@@ -267,8 +349,12 @@ FinalizeCitusLocalTableCreation(Oid relationId)
 static List *
 GetShellTableDDLEventsForCitusLocalTable(Oid relationId)
 {
+	/*
+	 * As we don't allow foreign keys with other tables initially, below we
+	 * only pick self-referencing foreign keys.
+	 */
 	List *foreignConstraintCommands =
-		GetForeignConstraintCommandsTableInvolved(relationId);
+		GetReferencingForeignConstaintCommands(relationId);
 
 	/*
 	 * Include DEFAULT clauses for columns getting their default values from
@@ -590,14 +676,6 @@ CreateShellTableForCitusLocalTable(List *shellTableDDLEvents)
 	{
 		Node *parseTree = ParseTreeNode(ddlCommand);
 
-		/*
-		 * If the command defines a constraint, initially do not validate it
-		 * as shell table has no data in it. Note that this is only needed
-		 * before inserting metadata for citus local table. This is because,
-		 * after that, we already won't process constraints on the shell table.
-		 */
-		SkipValidationIfAddForeignKeyCommand(parseTree);
-
 		CitusProcessUtility(parseTree, ddlCommand, PROCESS_UTILITY_TOPLEVEL,
 							NULL, None_Receiver, NULL);
 	}
@@ -644,7 +722,7 @@ ExtractColumnsOwningSequences(Oid relationId, List **columnNameList,
 {
 	Assert(*columnNameList == NIL && *ownedSequenceIdList == NIL);
 
-	Relation relation = relation_open(relationId, ExclusiveLock);
+	Relation relation = relation_open(relationId, AccessExclusiveLock);
 	TupleDesc tupleDescriptor = RelationGetDescr(relation);
 
 	/* iterate on columns that are not dropped and have DEFAULT definitions */
