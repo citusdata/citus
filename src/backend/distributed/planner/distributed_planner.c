@@ -528,6 +528,28 @@ GetRTEIdentity(RangeTblEntry *rte)
 
 
 /*
+ * GetQueryLockMode returns the necessary lock mode to be acquired for the
+ * given query. (See comment written in RangeTblEntry->rellockmode)
+ */
+LOCKMODE
+GetQueryLockMode(Query *query)
+{
+	if (IsModifyCommand(query))
+	{
+		return RowExclusiveLock;
+	}
+	else if (query->hasForUpdate)
+	{
+		return RowShareLock;
+	}
+	else
+	{
+		return AccessShareLock;
+	}
+}
+
+
+/*
  * IsModifyCommand returns true if the query performs modifications, false
  * otherwise.
  */

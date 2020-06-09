@@ -61,9 +61,7 @@ CacheLocalPlanForShardQuery(Task *task, DistributedPlan *originalDistributedPlan
 
 	UpdateRelationsToLocalShardTables((Node *) shardQuery, task->relationShardList);
 
-	LOCKMODE lockMode =
-		IsModifyCommand(shardQuery) ? RowExclusiveLock : (shardQuery->hasForUpdate ?
-														  RowShareLock : AccessShareLock);
+	LOCKMODE lockMode = GetQueryLockMode(shardQuery);
 
 	/* fast path queries can only have a single RTE by definition */
 	RangeTblEntry *rangeTableEntry = (RangeTblEntry *) linitial(shardQuery->rtable);
