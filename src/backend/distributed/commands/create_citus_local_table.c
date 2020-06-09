@@ -246,15 +246,22 @@ CreateCitusLocalTable(Oid relationId)
 	EnsureTableOwner(relationId);
 
 	/*
-	 * Lock target relation with an exclusive lock as we don't want multiple
-	 * backends manipulating this relation.
-	 * We should also note that here we intentionally do not use relation_open
-	 * to lock the table. This is because, in this function, we may execute
-	 * ALTER TABLE commands modifying relation's column definitions and postgres
-	 * does not allow us to do so when the table is still open.
-	 * (See the postgres function CheckTableNotInUse for more information.)
+	 * Lock target relation with an AccessExclusiveLock as we don't want
+	 * multiple backends manipulating this relation. We could actually simply
+	 * lock the relation without opening it. However, we want postgres to
+	 * natively error out if the relation does not exist or dropped by another
+	 * backend.
 	 */
-	LockRelationOid(relationId, AccessExclusiveLock);
+	Relation relation = relation_open(relationId, AccessExclusiveLock);
+
+	/*
+	 * We immediately close relation with NoLock right after opening it. This is
+	 * because, in this function, we may execute ALTER TABLE commands modifying
+	 * relation's column definitions and postgres does not allow us to do so when
+	 * the table is still open. (See the postgres function CheckTableNotInUse for
+	 * more information)
+	 */
+	relation_close(relation, NoLock);
 
 	ErrorIfUnsupportedCreateCitusLocalTable(relationId);
 
