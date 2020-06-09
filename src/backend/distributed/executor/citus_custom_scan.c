@@ -541,8 +541,11 @@ RegenerateTaskForFasthPathQuery(Job *workerJob)
 
 	UpdateRelationToShardNames((Node *) workerJob->jobQuery, relationShardList);
 
+	/* fast path queries cannot have local tables */
+	bool hasLocalRelation = false;
+
 	List *placementList =
-		FindRouterWorkerList(shardIntervalList, shardsPresent, true);
+		FindRouterWorkerList(shardIntervalList, shardsPresent, true, hasLocalRelation);
 	uint64 shardId = INVALID_SHARD_ID;
 
 	if (shardsPresent)

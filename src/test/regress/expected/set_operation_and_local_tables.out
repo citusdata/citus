@@ -218,18 +218,20 @@ DEBUG:  Router planner cannot handle multi-shard select queries
 (2 rows)
 
 -- same query with subquery in where is wrapped in CTE
+SET citus.enable_cte_inlining TO off;
 SELECT * FROM test a WHERE x IN (WITH cte AS (SELECT x FROM test b UNION SELECT y FROM test c UNION SELECT y FROM local_test d) SELECT * FROM cte) ORDER BY 1,2;
-DEBUG:  CTE cte is going to be inlined via distributed planning
+DEBUG:  Local tables cannot be used in distributed queries.
+DEBUG:  generating subplan XXX_1 for CTE cte: SELECT b.x FROM recursive_set_local.test b UNION SELECT c.y FROM recursive_set_local.test c UNION SELECT d.y FROM recursive_set_local.local_test d
 DEBUG:  Local tables cannot be used in distributed queries.
 DEBUG:  generating subplan XXX_1 for subquery SELECT y FROM recursive_set_local.local_test d
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  generating subplan XXX_2 for subquery SELECT x FROM recursive_set_local.test b
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  generating subplan XXX_3 for subquery SELECT y FROM recursive_set_local.test c
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT intermediate_result.x FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(x integer) UNION SELECT intermediate_result.y FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(y integer) UNION SELECT intermediate_result.y FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(y integer)
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
-DEBUG:  generating subplan XXX_4 for subquery SELECT intermediate_result.x FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(x integer) UNION SELECT intermediate_result.y FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(y integer) UNION SELECT intermediate_result.y FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(y integer)
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT x, y FROM recursive_set_local.test a WHERE (x OPERATOR(pg_catalog.=) ANY (SELECT cte.x FROM (SELECT intermediate_result.x FROM read_intermediate_result('XXX_4'::text, 'binary'::citus_copy_format) intermediate_result(x integer)) cte)) ORDER BY x, y
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT x, y FROM recursive_set_local.test a WHERE (x OPERATOR(pg_catalog.=) ANY (SELECT cte.x FROM (SELECT intermediate_result.x FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer)) cte)) ORDER BY x, y
 DEBUG:  Router planner cannot handle multi-shard select queries
  x | y
 ---------------------------------------------------------------------
@@ -237,7 +239,8 @@ DEBUG:  Router planner cannot handle multi-shard select queries
  2 | 2
 (2 rows)
 
--- not supported since local table is joined with a set operation
+RESET citus.enable_cte_inlining;
+-- supported since final step only has local table and intermediate result
 SELECT * FROM ((SELECT * FROM test) EXCEPT (SELECT * FROM test ORDER BY x LIMIT 1)) u JOIN local_test USING (x) ORDER BY 1,2;
 DEBUG:  Local tables cannot be used in distributed queries.
 DEBUG:  Router planner cannot handle multi-shard select queries
@@ -249,8 +252,12 @@ DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
 DEBUG:  generating subplan XXX_3 for subquery SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer) EXCEPT SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT u.x, u.y, local_test.y FROM ((SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)) u JOIN recursive_set_local.local_test USING (x)) ORDER BY u.x, u.y
-DEBUG:  Local tables cannot be used in distributed queries.
-ERROR:  relation local_test is not distributed
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ x | y | y
+---------------------------------------------------------------------
+(0 rows)
+
 -- though we replace some queries including the local query, the intermediate result is on the outer part of an outer join
 SELECT * FROM ((SELECT * FROM local_test) INTERSECT (SELECT * FROM test ORDER BY x LIMIT 1)) u LEFT JOIN test USING (x) ORDER BY 1,2;
 DEBUG:  Local tables cannot be used in distributed queries.

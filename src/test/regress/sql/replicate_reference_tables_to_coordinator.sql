@@ -51,7 +51,7 @@ SELECT citus_table_is_visible('numbers_8000001'::regclass::oid);
 CREATE TABLE local_table(a int);
 INSERT INTO local_table VALUES (2), (4), (7), (20);
 
-EXPLAIN SELECT local_table.a, numbers.a FROM local_table NATURAL JOIN numbers;
+EXPLAIN (COSTS OFF) SELECT local_table.a, numbers.a FROM local_table NATURAL JOIN numbers;
 SELECT local_table.a, numbers.a FROM local_table NATURAL JOIN numbers ORDER BY 1;
 
 -- test non equijoin
@@ -135,7 +135,7 @@ $$ LANGUAGE sql;
 
 SELECT test_reference_local_join_func();
 
--- shouldn't plan locally if modifications happen in CTEs, ...
+-- CTEs are allowed
 WITH ins AS (INSERT INTO numbers VALUES (1) RETURNING *)
 SELECT * FROM numbers, local_table;
 
@@ -143,7 +143,6 @@ WITH t AS (SELECT *, my_volatile_fn() x FROM numbers FOR UPDATE)
 SELECT * FROM numbers, local_table
 WHERE EXISTS (SELECT * FROM t WHERE t.x = numbers.a);
 
--- but this should be fine
 WITH t AS (SELECT *, my_volatile_fn() x FROM numbers)
 SELECT * FROM numbers, local_table
 WHERE EXISTS (SELECT * FROM t WHERE t.x = numbers.a);
@@ -200,8 +199,8 @@ SELECT * FROM squares JOIN numbers_v ON squares.a = numbers_v.a;
 END;
 
 --
--- Joins between reference tables, local tables, and function calls shouldn't
--- be planned locally.
+-- Joins between reference tables, local tables, and function calls
+-- are allowed
 --
 SELECT count(*)
 FROM local_table a, numbers b, generate_series(1, 10) c

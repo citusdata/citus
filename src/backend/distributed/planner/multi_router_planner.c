@@ -45,6 +45,7 @@
 #include "distributed/citus_ruleutils.h"
 #include "distributed/query_pushdown_planning.h"
 #include "distributed/query_utils.h"
+#include "distributed/reference_table_utils.h"
 #include "distributed/relation_restriction_equivalence.h"
 #include "distributed/relay_utility.h"
 #include "distributed/resource_lock.h"
@@ -154,7 +155,7 @@ static List * ExtractInsertValuesList(Query *query, Var *partitionColumn);
 static DeferredErrorMessage * MultiRouterPlannableQuery(Query *query);
 static DeferredErrorMessage * ErrorIfQueryHasUnroutableModifyingCTE(Query *queryTree);
 static bool SelectsFromDistributedTable(List *rangeTableList, Query *query);
-static ShardPlacement * CreateDummyPlacement(void);
+static ShardPlacement * CreateDummyPlacement(bool hasLocalRelation);
 static List * get_all_actual_clauses(List *restrictinfo_list);
 static int CompareInsertValuesByShardId(const void *leftElement,
 										const void *rightElement);
@@ -2021,6 +2022,8 @@ PlanRouterQuery(Query *originalQuery,
 				bool replacePrunedQueryWithDummy, bool *multiShardModifyQuery,
 				Const **partitionValueConst)
 {
+	RelationRestrictionContext *relationRestrictionContext =
+		plannerRestrictionContext->relationRestrictionContext;
 	bool isMultiShardQuery = false;
 	DeferredErrorMessage *planningError = NULL;
 	bool shardsPresent = false;
@@ -2133,9 +2136,11 @@ PlanRouterQuery(Query *originalQuery,
 	/* we need anchor shard id for select queries with router planner */
 	uint64 shardId = GetAnchorShardId(*prunedShardIntervalListList);
 
+	bool hasLocalRelation = relationRestrictionContext->hasLocalRelation;
+
 	List *workerList =
 		FindRouterWorkerList(*prunedShardIntervalListList, shardsPresent,
-							 replacePrunedQueryWithDummy);
+							 replacePrunedQueryWithDummy, hasLocalRelation);
 
 	if (workerList == NIL)
 	{
@@ -2166,9 +2171,9 @@ PlanRouterQuery(Query *originalQuery,
 
 List *
 FindRouterWorkerList(List *shardIntervalList, bool shardsPresent,
-					 bool replacePrunedQueryWithDummy)
+					 bool replacePrunedQueryWithDummy, bool hasLocalRelation)
 {
-	List *workerList = NIL;
+	List *placementList = NIL;
 
 	/*
 	 * Determine the worker that has all shard placements if a shard placement found.
@@ -2178,18 +2183,38 @@ FindRouterWorkerList(List *shardIntervalList, bool shardsPresent,
 	 */
 	if (shardsPresent)
 	{
-		workerList = WorkersContainingAllShards(shardIntervalList);
+		List *workerList = WorkersContainingAllShards(shardIntervalList);
+
+		if (hasLocalRelation)
+		{
+			ShardPlacement *taskPlacement = NULL;
+
+			/*
+			 * If there is a local table, we only allow the local placement to
+			 * be used. If there is none, we disallow the query.
+			 */
+			foreach_ptr(taskPlacement, workerList)
+			{
+				/* include only the local placement */
+				if (taskPlacement->groupId == GetLocalGroupId())
+				{
+					placementList = lappend(placementList, taskPlacement);
+				}
+			}
+		}
+		else
+		{
+			placementList = workerList;
+		}
 	}
 	else if (replacePrunedQueryWithDummy)
 	{
-		ShardPlacement *dummyPlacement = CreateDummyPlacement();
-		if (dummyPlacement != NULL)
-		{
-			workerList = lappend(workerList, dummyPlacement);
-		}
+		ShardPlacement *dummyPlacement = CreateDummyPlacement(hasLocalRelation);
+
+		placementList = list_make1(dummyPlacement);
 	}
 
-	return workerList;
+	return placementList;
 }
 
 
@@ -2201,14 +2226,17 @@ FindRouterWorkerList(List *shardIntervalList, bool shardsPresent,
  *
  * If round robin policy is set, the placement could be on any node in pg_dist_node.
  * Else, the local node is set for the placement.
+ *
+ * Queries can also involve local tables. In that case we always use the local
+ * node.
  */
 static ShardPlacement *
-CreateDummyPlacement(void)
+CreateDummyPlacement(bool hasLocalRelation)
 {
 	static uint32 zeroShardQueryRoundRobin = 0;
 	ShardPlacement *dummyPlacement = CitusMakeNode(ShardPlacement);
 
-	if (TaskAssignmentPolicy == TASK_ASSIGNMENT_ROUND_ROBIN)
+	if (TaskAssignmentPolicy == TASK_ASSIGNMENT_ROUND_ROBIN && !hasLocalRelation)
 	{
 		List *workerNodeList = ActiveReadableWorkerNodeList();
 		if (workerNodeList == NIL)
@@ -2441,6 +2469,13 @@ TargetShardIntervalsForRestrictInfo(RelationRestrictionContext *restrictionConte
 		RelationRestriction *relationRestriction =
 			(RelationRestriction *) lfirst(restrictionCell);
 		Oid relationId = relationRestriction->relationId;
+
+		if (!IsCitusTable(relationId))
+		{
+			/* ignore local tables for shard pruning purposes */
+			continue;
+		}
+
 		Index tableId = relationRestriction->index;
 		CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
 		int shardCount = cacheEntry->shardIntervalArrayLength;
@@ -3197,22 +3232,22 @@ MultiRouterPlannableQuery(Query *query)
 							 NULL, NULL);
 	}
 
+	bool hasLocalTable = false;
+	bool hasDistributedTable = false;
+
 	ExtractRangeTableRelationWalker((Node *) query, &rangeTableRelationList);
 	foreach(rangeTableRelationCell, rangeTableRelationList)
 	{
 		RangeTblEntry *rte = (RangeTblEntry *) lfirst(rangeTableRelationCell);
 		if (rte->rtekind == RTE_RELATION)
 		{
-			/* only hash partitioned tables are supported */
 			Oid distributedTableId = rte->relid;
 
+			/* local tables are allowed if there are no distributed tables */
 			if (!IsCitusTable(distributedTableId))
 			{
-				/* local tables cannot be read from workers */
-				return DeferredError(
-					ERRCODE_FEATURE_NOT_SUPPORTED,
-					"Local tables cannot be used in distributed queries.",
-					NULL, NULL);
+				hasLocalTable = true;
+				continue;
 			}
 
 			char partitionMethod = PartitionMethod(distributedTableId);
@@ -3223,6 +3258,11 @@ MultiRouterPlannableQuery(Query *query)
 					ERRCODE_FEATURE_NOT_SUPPORTED,
 					"Router planner does not support append-partitioned tables.",
 					NULL, NULL);
+			}
+
+			if (partitionMethod != DISTRIBUTE_BY_NONE)
+			{
+				hasDistributedTable = true;
 			}
 
 			/*
@@ -3244,6 +3284,14 @@ MultiRouterPlannableQuery(Query *query)
 				}
 			}
 		}
+	}
+
+	/* local tables are allowed if there are no distributed tables */
+	if (hasLocalTable && hasDistributedTable)
+	{
+		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+							 "Local tables cannot be used in distributed queries.",
+							 NULL, NULL);
 	}
 
 	return ErrorIfQueryHasUnroutableModifyingCTE(query);

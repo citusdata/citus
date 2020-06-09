@@ -46,7 +46,8 @@ extern DeferredErrorMessage * PlanRouterQuery(Query *originalQuery,
 extern List * RelationShardListForShardIntervalList(List *shardIntervalList,
 													bool *shardsPresent);
 extern List * FindRouterWorkerList(List *shardIntervalList, bool shardsPresent,
-								   bool replacePrunedQueryWithDummy);
+								   bool replacePrunedQueryWithDummy,
+								   bool hasLocalRelation);
 extern List * RouterInsertTaskList(Query *query, bool parametersInQueryResolved,
 								   DeferredErrorMessage **planningError);
 extern Const * ExtractInsertPartitionKeyValue(Query *query);
