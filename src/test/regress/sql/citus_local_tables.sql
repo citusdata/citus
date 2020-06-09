@@ -146,6 +146,20 @@ SELECT mark_tables_colocated('reference_table', ARRAY['citus_local_table_1']);
 SELECT mark_tables_colocated('citus_local_table_1', ARRAY['distributed_table']);
 SELECT mark_tables_colocated('distributed_table', ARRAY['citus_local_table_1']);
 
+-- tests with citus local tables initially having foreign key relationships
+
+CREATE TABLE local_table_1 (a int primary key);
+CREATE TABLE local_table_2 (a int primary key references local_table_1(a));
+CREATE TABLE local_table_3 (a int primary key, b int references local_table_3(a));
+
+-- below two should fail as we do not allow foreign keys between
+-- postgres local tables and citus local tables
+SELECT create_citus_local_table('local_table_1');
+SELECT create_citus_local_table('local_table_2');
+
+-- below should work as we allow initial self references in citus local tables
+SELECT create_citus_local_table('local_table_3');
+
 ------------------------------------------------------------------
 ----- tests for object names that should be escaped properly -----
 ------------------------------------------------------------------
