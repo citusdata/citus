@@ -116,19 +116,18 @@ CallFuncExprRemotely(CallStmt *callStmt, DistObjectCacheEntry *procedure,
 		ereport(DEBUG1, (errmsg("distribution argument value must be a constant")));
 		return false;
 	}
-	Const *partitionValue = (Const *) partitionValueNode;
 
-	Datum partitionValueDatum = partitionValue->constvalue;
+	Const *partitionValue = (Const *) partitionValueNode;
 	if (partitionValue->consttype != partitionColumn->vartype)
 	{
-		CopyCoercionData coercionData;
+		bool missingOk = false;
 
-		ConversionPathForTypes(partitionValue->consttype, partitionColumn->vartype,
-							   &coercionData);
-
-		partitionValueDatum = CoerceColumnValue(partitionValueDatum, &coercionData);
+		partitionValue =
+			TransformPartitionRestrictionValue(partitionColumn, partitionValue,
+											   missingOk);
 	}
 
+	Datum partitionValueDatum = partitionValue->constvalue;
 	ShardInterval *shardInterval = FindShardInterval(partitionValueDatum, distTable);
 	if (shardInterval == NULL)
 	{

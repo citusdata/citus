@@ -314,12 +314,10 @@ TryToDelegateFunctionCall(DistributedPlanningContext *planContext)
 
 	if (partitionValue->consttype != partitionColumn->vartype)
 	{
-		CopyCoercionData coercionData;
-
-		ConversionPathForTypes(partitionValue->consttype, partitionColumn->vartype,
-							   &coercionData);
-
-		partitionValueDatum = CoerceColumnValue(partitionValueDatum, &coercionData);
+		bool missingOk = false;
+		partitionValue =
+			TransformPartitionRestrictionValue(partitionColumn, partitionValue,
+											   missingOk);
 	}
 
 	shardInterval = FindShardInterval(partitionValueDatum, distTable);
