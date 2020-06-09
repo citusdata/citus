@@ -550,7 +550,7 @@ CreateShardsOnWorkers(Oid distributedRelationId, List *shardPlacements,
 		poolSize = MaxAdaptiveExecutorPoolSize;
 	}
 	bool localExecutionSupported = true;
-	ExecuteTaskList(ROW_MODIFY_NONE, taskList, poolSize, localExecutionSupported);
+	ExecuteUtilityTaskListExtended(taskList, poolSize, localExecutionSupported);
 }
 
 
