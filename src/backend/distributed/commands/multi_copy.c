@@ -3607,7 +3607,7 @@ CopyGetPlacementConnection(HTAB *connectionStateHash, ShardPlacement *placement,
 	 * reached)
 	 */
 	int adaptiveConnectionManagementFlag =
-		AdaptiveConnectionManagementFlag(list_length(connectionStateList));
+		AdaptiveConnectionManagementFlag(list_length(copyConnectionStateList));
 	connectionFlags |= adaptiveConnectionManagementFlag;
 
 	/*
@@ -3629,7 +3629,7 @@ CopyGetPlacementConnection(HTAB *connectionStateHash, ShardPlacement *placement,
 		 * connection with least utilization.
 		 */
 		connection =
-			GetLeastUtilisedCopyConnection(connectionStateList, nodeName, nodePort);
+			GetLeastUtilisedCopyConnection(copyConnectionStateList, nodeName, nodePort);
 		Assert(connection != NULL);
 
 		return connection;
