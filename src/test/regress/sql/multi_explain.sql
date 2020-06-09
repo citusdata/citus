@@ -598,3 +598,125 @@ SELECT true AS valid FROM explain_xml($$
   )
   SELECT * FROM result JOIN series ON (s = l_quantity) JOIN orders_hash_part ON (s = o_orderkey)
 $$);
+
+
+--
+-- Test EXPLAIN ANALYZE udfs
+--
+
+\a\t
+
+\set default_opts '''{"costs": false, "timing": false, "summary": false}'''::jsonb
+
+CREATE TABLE explain_analyze_test(a int, b text);;
+INSERT INTO explain_analyze_test VALUES (1, 'value 1'), (2, 'value 2'), (3, 'value 3'), (4, 'value 4');
+
+-- simple select
+BEGIN;
+SELECT * FROM worker_save_query_explain_analyze('SELECT 1', :default_opts) as (a int);
+SELECT worker_last_saved_explain_analyze();
+END;
+
+-- insert into select
+BEGIN;
+SELECT * FROM worker_save_query_explain_analyze($Q$
+       INSERT INTO explain_analyze_test SELECT i, i::text FROM generate_series(1, 5) i $Q$,
+	   :default_opts) as (a int);
+SELECT worker_last_saved_explain_analyze();
+ROLLBACK;
+
+-- select from table
+BEGIN;
+SELECT * FROM worker_save_query_explain_analyze($Q$SELECT * FROM explain_analyze_test$Q$,
+	   											:default_opts) as (a int, b text);
+SELECT worker_last_saved_explain_analyze();
+ROLLBACK;
+
+-- insert into with returning
+BEGIN;
+SELECT * FROM worker_save_query_explain_analyze($Q$
+       INSERT INTO explain_analyze_test SELECT i, i::text FROM generate_series(1, 5) i
+	   RETURNING a, b$Q$,
+	   :default_opts) as (a int, b text);
+SELECT worker_last_saved_explain_analyze();
+ROLLBACK;
+
+-- delete with returning
+BEGIN;
+SELECT * FROM worker_save_query_explain_analyze($Q$
+       DELETE FROM explain_analyze_test WHERE a % 2 = 0
+	   RETURNING a, b$Q$,
+	   :default_opts) as (a int, b text);
+SELECT worker_last_saved_explain_analyze();
+ROLLBACK;
+
+-- delete without returning
+BEGIN;
+SELECT * FROM worker_save_query_explain_analyze($Q$
+       DELETE FROM explain_analyze_test WHERE a % 2 = 0$Q$,
+	   :default_opts) as (a int);
+SELECT worker_last_saved_explain_analyze();
+ROLLBACK;
+
+-- multiple queries (should ERROR)
+SELECT * FROM worker_save_query_explain_analyze('SELECT 1; SELECT 2', :default_opts) as (a int);
+
+-- error in query
+SELECT * FROM worker_save_query_explain_analyze('SELECT x', :default_opts) as (a int);
+
+-- error in format string
+SELECT * FROM worker_save_query_explain_analyze('SELECT 1', '{"format": "invlaid_format"}') as (a int);
+
+-- test formats
+BEGIN;
+SELECT * FROM worker_save_query_explain_analyze('SELECT 1', '{"format": "text", "costs": false}') as (a int);
+SELECT worker_last_saved_explain_analyze();
+SELECT * FROM worker_save_query_explain_analyze('SELECT 1', '{"format": "json", "costs": false}') as (a int);
+SELECT worker_last_saved_explain_analyze();
+SELECT * FROM worker_save_query_explain_analyze('SELECT 1', '{"format": "xml", "costs": false}') as (a int);
+SELECT worker_last_saved_explain_analyze();
+SELECT * FROM worker_save_query_explain_analyze('SELECT 1', '{"format": "yaml", "costs": false}') as (a int);
+SELECT worker_last_saved_explain_analyze();
+END;
+
+-- costs on, timing off
+BEGIN;
+SELECT * FROM worker_save_query_explain_analyze('SELECT * FROM explain_analyze_test', '{"timing": false, "costs": true}') as (a int);
+SELECT worker_last_saved_explain_analyze() ~ 'Seq Scan.*\(cost=0.00.*\) \(actual rows.*\)';
+END;
+
+-- costs off, timing on
+BEGIN;
+SELECT * FROM worker_save_query_explain_analyze('SELECT * FROM explain_analyze_test', '{"timing": true, "costs": false}') as (a int);
+SELECT worker_last_saved_explain_analyze() ~ 'Seq Scan on explain_analyze_test \(actual time=.* rows=.* loops=1\)';
+END;
+
+-- summary on
+BEGIN;
+SELECT * FROM worker_save_query_explain_analyze('SELECT 1', '{"timing": false, "costs": false, "summary": true}') as (a int);
+SELECT worker_last_saved_explain_analyze() ~ 'Planning Time:.*Execution Time:.*';
+END;
+
+-- buffers on
+BEGIN;
+SELECT * FROM worker_save_query_explain_analyze('SELECT * FROM explain_analyze_test', '{"timing": false, "costs": false, "buffers": true}') as (a int);
+SELECT worker_last_saved_explain_analyze() ~ 'Buffers:';
+END;
+
+-- verbose on
+BEGIN;
+SELECT * FROM worker_save_query_explain_analyze('SELECT * FROM explain_analyze_test', '{"timing": false, "costs": false, "verbose": true}') as (a int);
+SELECT worker_last_saved_explain_analyze() ~ 'Output: a, b';
+END;
+
+-- make sure deleted at transaction end
+SELECT * FROM worker_save_query_explain_analyze('SELECT 1', '{}') as (a int);
+SELECT worker_last_saved_explain_analyze() IS NULL;
+
+-- should be deleted at the end of prepare commit
+BEGIN;
+SELECT * FROM worker_save_query_explain_analyze('UPDATE explain_analyze_test SET a=1', '{}') as (a int);
+SELECT worker_last_saved_explain_analyze() IS NOT NULL;
+PREPARE TRANSACTION 'citus_0_1496350_7_0';
+SELECT worker_last_saved_explain_analyze() IS NULL;
+COMMIT PREPARED 'citus_0_1496350_7_0';

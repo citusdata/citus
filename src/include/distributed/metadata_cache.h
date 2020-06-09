@@ -205,6 +205,7 @@ extern Oid CitusAnyValueFunctionId(void);
 extern Oid CitusTextSendAsJsonbFunctionId(void);
 extern Oid PgTableVisibleFuncId(void);
 extern Oid CitusTableVisibleFuncId(void);
+extern Oid JsonbExtractPathFuncId(void);
 
 /* enum oids */
 extern Oid PrimaryNodeRoleId(void);
