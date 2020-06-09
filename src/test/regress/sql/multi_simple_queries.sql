@@ -7,6 +7,12 @@ SET citus.next_shard_id TO 850000;
 SET citus.enable_fast_path_router_planner TO false;
 SET citus.coordinator_aggregation_strategy TO 'disabled';
 
+-- Test that we can insert an integer literal into a numeric column
+CREATE TABLE numeric_test (id numeric(6, 0), val int);
+SELECT create_distributed_table('numeric_test', 'id');
+INSERT INTO numeric_test VALUES (21, 87) RETURNING *;
+DROP TABLE numeric_test;
+
 -- ===================================================================
 -- test end-to-end query functionality
 -- ===================================================================

@@ -70,6 +70,7 @@
 #endif
 #include "optimizer/restrictinfo.h"
 #include "parser/parsetree.h"
+#include "parser/parse_coerce.h"
 #include "parser/parse_oper.h"
 #include "postmaster/postmaster.h"
 #include "storage/lock.h"
@@ -2600,10 +2601,21 @@ BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError)
 								   "column")));
 		}
 
-		if (partitionMethod == DISTRIBUTE_BY_HASH || partitionMethod ==
-			DISTRIBUTE_BY_RANGE)
+		if (partitionMethod == DISTRIBUTE_BY_HASH ||
+			partitionMethod == DISTRIBUTE_BY_RANGE)
 		{
-			Datum partitionValue = partitionValueConst->constvalue;
+			/*
+			 * strip_implicit_coercion's Const may be wrong type;
+			 * evaluate original expression for correctly typed Const.
+			 */
+			Assert(exprType((Node *) insertValues->partitionValueExpr) ==
+				   partitionColumn->vartype);
+			Const *coercedPartitionValueConst =
+				(Const *) PartiallyEvaluateExpression(
+					(Node *) insertValues->partitionValueExpr, NULL);
+			Assert(coercedPartitionValueConst != NULL &&
+				   IsA(coercedPartitionValueConst, Const));
+			Datum partitionValue = coercedPartitionValueConst->constvalue;
 
 			cacheEntry = GetCitusTableCacheEntry(distributedTableId);
 			ShardInterval *shardInterval = FindShardInterval(partitionValue, cacheEntry);
