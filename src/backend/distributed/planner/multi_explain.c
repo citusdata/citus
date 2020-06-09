@@ -11,6 +11,7 @@
 #include "libpq-fe.h"
 #include "miscadmin.h"
 
+#include "access/htup_details.h"
 #include "access/xact.h"
 #include "catalog/namespace.h"
 #include "catalog/pg_class.h"
@@ -41,6 +42,7 @@
 #include "distributed/remote_commands.h"
 #include "distributed/recursive_planning.h"
 #include "distributed/placement_connection.h"
+#include "distributed/tuple_destination.h"
 #include "distributed/tuplestore.h"
 #include "distributed/listutils.h"
 #include "distributed/worker_protocol.h"
@@ -73,6 +75,22 @@ bool ExplainAllTasks = false;
  */
 static char *SavedExplainPlan = NULL;
 
+/* struct to save explain flags */
+typedef struct
+{
+	bool verbose;
+	bool costs;
+	bool buffers;
+	bool timing;
+	bool summary;
+	ExplainFormat format;
+} ExplainOptions;
+
+
+/* EXPLAIN flags of current distributed explain */
+static ExplainOptions CurrentDistributedQueryExplainOptions = {
+	0, 0, 0, 0, 0, EXPLAIN_FORMAT_TEXT
+};
 
 /* Result for a single remote EXPLAIN command */
 typedef struct RemoteExplainPlan
@@ -82,17 +100,33 @@ typedef struct RemoteExplainPlan
 } RemoteExplainPlan;
 
 
+/*
+ * ExplainAnalyzeDestination is internal representation of a TupleDestination
+ * which collects EXPLAIN ANALYZE output after the main query is run.
+ */
+typedef struct ExplainAnalyzeDestination
+{
+	TupleDestination pub;
+	Task *originalTask;
+	TupleDestination *originalTaskDestination;
+	TupleDesc lastSavedExplainAnalyzeTupDesc;
+} ExplainAnalyzeDestination;
+
+
 /* Explain functions for distributed queries */
 static void ExplainSubPlans(DistributedPlan *distributedPlan, ExplainState *es);
 static void ExplainJob(Job *job, ExplainState *es);
 static void ExplainMapMergeJob(MapMergeJob *mapMergeJob, ExplainState *es);
 static void ExplainTaskList(List *taskList, ExplainState *es);
 static RemoteExplainPlan * RemoteExplain(Task *task, ExplainState *es);
+static RemoteExplainPlan * GetSavedRemoteExplain(Task *task, ExplainState *es);
+static RemoteExplainPlan * FetchRemoteExplainFromWorkers(Task *task, ExplainState *es);
 static void ExplainTask(Task *task, int placementIndex, List *explainOutputList,
 						ExplainState *es);
 static void ExplainTaskPlacement(ShardPlacement *taskPlacement, List *explainOutputList,
 								 ExplainState *es);
 static StringInfo BuildRemoteExplainQuery(char *queryString, ExplainState *es);
+static const char * ExplainFormatStr(ExplainFormat format);
 static void ExplainWorkerPlan(PlannedStmt *plannedStmt, DestReceiver *dest,
 							  ExplainState *es,
 							  const char *queryString, ParamListInfo params,
@@ -102,6 +136,15 @@ static bool ExtractFieldBoolean(Datum jsonbDoc, const char *fieldName, bool defa
 static ExplainFormat ExtractFieldExplainFormat(Datum jsonbDoc, const char *fieldName,
 											   ExplainFormat defaultValue);
 static bool ExtractFieldJsonbDatum(Datum jsonbDoc, const char *fieldName, Datum *result);
+static TupleDestination * CreateExplainAnlyzeDestination(Task *task,
+														 TupleDestination *taskDest);
+static void ExplainAnalyzeDestPutTuple(TupleDestination *self, Task *task,
+									   int placementIndex, int queryNumber,
+									   HeapTuple heapTuple);
+static TupleDesc ExplainAnalyzeDestTupleDescForQuery(TupleDestination *self, int
+													 queryNumber);
+static char * WrapQueryForExplainAnalyze(const char *queryString, TupleDesc tupleDesc);
+static List * SplitString(const char *str, char delimiter);
 
 /* Static Explain functions copied from explain.c */
 static void ExplainOneQuery(Query *query, int cursorOptions,
@@ -409,18 +452,72 @@ ExplainTaskList(List *taskList, ExplainState *es)
 
 
 /*
- * RemoteExplain fetches the remote EXPLAIN output for a single
- * task. It tries each shard placement until one succeeds or all
- * failed.
+ * RemoteExplain fetches the remote EXPLAIN output for a single task.
  */
 static RemoteExplainPlan *
 RemoteExplain(Task *task, ExplainState *es)
+{
+	/*
+	 * For EXPLAIN EXECUTE we still use the old method, so task->fetchedExplainAnalyzePlan
+	 * can be NULL for some cases of es->analyze == true.
+	 */
+	if (es->analyze && task->fetchedExplainAnalyzePlan)
+	{
+		return GetSavedRemoteExplain(task, es);
+	}
+	else
+	{
+		return FetchRemoteExplainFromWorkers(task, es);
+	}
+}
+
+
+/*
+ * GetSavedRemoteExplain creates a remote EXPLAIN output from information saved
+ * in task.
+ */
+static RemoteExplainPlan *
+GetSavedRemoteExplain(Task *task, ExplainState *es)
+{
+	RemoteExplainPlan *remotePlan = (RemoteExplainPlan *) palloc0(
+		sizeof(RemoteExplainPlan));
+
+	/*
+	 * Similar to postgres' ExplainQuery(), we split by newline only for
+	 * text format.
+	 */
+	if (es->format == EXPLAIN_FORMAT_TEXT)
+	{
+		remotePlan->explainOutputList = SplitString(task->fetchedExplainAnalyzePlan,
+													'\n');
+	}
+	else
+	{
+		StringInfo explainAnalyzeString = makeStringInfo();
+		appendStringInfoString(explainAnalyzeString, task->fetchedExplainAnalyzePlan);
+		remotePlan->explainOutputList = list_make1(explainAnalyzeString);
+	}
+
+	remotePlan->placementIndex = task->fetchedExplainAnalyzePlacementIndex;
+
+	return remotePlan;
+}
+
+
+/*
+ * FetchRemoteExplainFromWorkers fetches the remote EXPLAIN output for a single
+ * task by querying it from worker nodes. It tries each shard placement until
+ * one succeeds or all failed.
+ */
+static RemoteExplainPlan *
+FetchRemoteExplainFromWorkers(Task *task, ExplainState *es)
 {
 	List *taskPlacementList = task->taskPlacementList;
 	int placementCount = list_length(taskPlacementList);
 
 	RemoteExplainPlan *remotePlan = (RemoteExplainPlan *) palloc0(
 		sizeof(RemoteExplainPlan));
+
 	StringInfo explainQuery = BuildRemoteExplainQuery(TaskQueryStringForAllPlacements(
 														  task),
 													  es);
@@ -615,34 +712,7 @@ static StringInfo
 BuildRemoteExplainQuery(char *queryString, ExplainState *es)
 {
 	StringInfo explainQuery = makeStringInfo();
-	char *formatStr = NULL;
-
-	switch (es->format)
-	{
-		case EXPLAIN_FORMAT_XML:
-		{
-			formatStr = "XML";
-			break;
-		}
-
-		case EXPLAIN_FORMAT_JSON:
-		{
-			formatStr = "JSON";
-			break;
-		}
-
-		case EXPLAIN_FORMAT_YAML:
-		{
-			formatStr = "YAML";
-			break;
-		}
-
-		default:
-		{
-			formatStr = "TEXT";
-			break;
-		}
-	}
+	const char *formatStr = ExplainFormatStr(es->format);
 
 	appendStringInfo(explainQuery,
 					 "EXPLAIN (ANALYZE %s, VERBOSE %s, "
@@ -658,6 +728,37 @@ BuildRemoteExplainQuery(char *queryString, ExplainState *es)
 					 queryString);
 
 	return explainQuery;
+}
+
+
+/*
+ * ExplainFormatStr converts the given explain format to string.
+ */
+static const char *
+ExplainFormatStr(ExplainFormat format)
+{
+	switch (format)
+	{
+		case EXPLAIN_FORMAT_XML:
+		{
+			return "XML";
+		}
+
+		case EXPLAIN_FORMAT_JSON:
+		{
+			return "JSON";
+		}
+
+		case EXPLAIN_FORMAT_YAML:
+		{
+			return "YAML";
+		}
+
+		default:
+		{
+			return "TEXT";
+		}
+	}
 }
 
 
@@ -872,6 +973,289 @@ ExtractFieldJsonbDatum(Datum jsonbDoc, const char *fieldName, Datum *result)
 
 	*result = FunctionCallInvoke(functionCallInfo);
 	return !functionCallInfo->isnull;
+}
+
+
+/*
+ * CitusExplainOneQuery is the executor hook that is called when
+ * postgres wants to explain a query.
+ */
+void
+CitusExplainOneQuery(Query *query, int cursorOptions, IntoClause *into,
+					 ExplainState *es, const char *queryString, ParamListInfo params,
+					 QueryEnvironment *queryEnv)
+{
+	/* save the flags of current EXPLAIN command */
+	CurrentDistributedQueryExplainOptions.costs = es->costs;
+	CurrentDistributedQueryExplainOptions.buffers = es->buffers;
+	CurrentDistributedQueryExplainOptions.verbose = es->verbose;
+	CurrentDistributedQueryExplainOptions.summary = es->summary;
+	CurrentDistributedQueryExplainOptions.timing = es->timing;
+	CurrentDistributedQueryExplainOptions.format = es->format;
+
+	/* rest is copied from ExplainOneQuery() */
+	instr_time planstart,
+			   planduration;
+
+	INSTR_TIME_SET_CURRENT(planstart);
+
+	/* plan the query */
+	PlannedStmt *plan = pg_plan_query(query, cursorOptions, params);
+
+	INSTR_TIME_SET_CURRENT(planduration);
+	INSTR_TIME_SUBTRACT(planduration, planstart);
+
+	/* run it (if needed) and produce output */
+	ExplainOnePlan(plan, into, es, queryString, params, queryEnv,
+				   &planduration);
+}
+
+
+/*
+ * CreateExplainAnlyzeDestination creates a destination suitable for collecting
+ * explain analyze output from workers.
+ */
+static TupleDestination *
+CreateExplainAnlyzeDestination(Task *task, TupleDestination *taskDest)
+{
+	ExplainAnalyzeDestination *tupleDestination = palloc0(
+		sizeof(ExplainAnalyzeDestination));
+	tupleDestination->originalTask = task;
+	tupleDestination->originalTaskDestination = taskDest;
+
+#if PG_VERSION_NUM >= PG_VERSION_12
+	TupleDesc lastSavedExplainAnalyzeTupDesc = CreateTemplateTupleDesc(1);
+#else
+	TupleDesc lastSavedExplainAnalyzeTupDesc = CreateTemplateTupleDesc(1, false);
+#endif
+
+	TupleDescInitEntry(lastSavedExplainAnalyzeTupDesc, 1, "explain analyze", TEXTOID, 0,
+					   0);
+	tupleDestination->lastSavedExplainAnalyzeTupDesc = lastSavedExplainAnalyzeTupDesc;
+
+	tupleDestination->pub.putTuple = ExplainAnalyzeDestPutTuple;
+	tupleDestination->pub.tupleDescForQuery = ExplainAnalyzeDestTupleDescForQuery;
+
+	return (TupleDestination *) tupleDestination;
+}
+
+
+/*
+ * ExplainAnalyzeDestPutTuple implements TupleDestination->putTuple
+ * for ExplainAnalyzeDestination.
+ */
+static void
+ExplainAnalyzeDestPutTuple(TupleDestination *self, Task *task,
+						   int placementIndex, int queryNumber,
+						   HeapTuple heapTuple)
+{
+	ExplainAnalyzeDestination *tupleDestination = (ExplainAnalyzeDestination *) self;
+	if (queryNumber == 0)
+	{
+		TupleDestination *originalTupDest = tupleDestination->originalTaskDestination;
+		originalTupDest->putTuple(originalTupDest, task, placementIndex, 0, heapTuple);
+	}
+	else if (queryNumber == 1)
+	{
+		bool isNull = false;
+		TupleDesc tupDesc = tupleDestination->lastSavedExplainAnalyzeTupDesc;
+		Datum explainAnalyze = heap_getattr(heapTuple, 1, tupDesc, &isNull);
+
+		if (isNull)
+		{
+			ereport(WARNING, (errmsg(
+								  "received null explain analyze output from worker")));
+			return;
+		}
+
+		char *fetchedExplainAnalyzePlan = TextDatumGetCString(explainAnalyze);
+
+		tupleDestination->originalTask->fetchedExplainAnalyzePlan =
+			pstrdup(fetchedExplainAnalyzePlan);
+		tupleDestination->originalTask->fetchedExplainAnalyzePlacementIndex =
+			placementIndex;
+	}
+	else
+	{
+		ereport(ERROR, (errmsg("cannot get EXPLAIN ANALYZE of multiple queries"),
+						errdetail("while receiving tuples for query %d", queryNumber)));
+	}
+}
+
+
+/*
+ * ExplainAnalyzeDestTupleDescForQuery implements TupleDestination->tupleDescForQuery
+ * for ExplainAnalyzeDestination.
+ */
+static TupleDesc
+ExplainAnalyzeDestTupleDescForQuery(TupleDestination *self, int queryNumber)
+{
+	ExplainAnalyzeDestination *tupleDestination = (ExplainAnalyzeDestination *) self;
+	if (queryNumber == 0)
+	{
+		TupleDestination *originalTupDest = tupleDestination->originalTaskDestination;
+		return originalTupDest->tupleDescForQuery(originalTupDest, 0);
+	}
+	else if (queryNumber == 1)
+	{
+		return tupleDestination->lastSavedExplainAnalyzeTupDesc;
+	}
+
+	ereport(ERROR, (errmsg("cannot get EXPLAIN ANALYZE of multiple queries"),
+					errdetail("while requesting for tuple descriptor of query %d",
+							  queryNumber)));
+	return NULL;
+}
+
+
+/*
+ * RequestedForExplainAnalyze returns true if we should get the EXPLAIN ANALYZE
+ * output for the given custom scan node.
+ */
+bool
+RequestedForExplainAnalyze(CitusScanState *node)
+{
+	return (node->customScanState.ss.ps.state->es_instrument != 0);
+}
+
+
+/*
+ * ExplainAnalyzeTaskList returns a task list suitable for explain analyze. After executing
+ * these tasks, fetchedExplainAnalyzePlan of originalTaskList should be populated.
+ */
+List *
+ExplainAnalyzeTaskList(List *originalTaskList,
+					   TupleDestination *defaultTupleDest,
+					   TupleDesc tupleDesc,
+					   ParamListInfo params)
+{
+	List *explainAnalyzeTaskList = NIL;
+	Task *originalTask = NULL;
+
+	/*
+	 * We cannot use multiple commands in a prepared statement, so use the old
+	 * EXPLAIN ANALYZE method for this case.
+	 */
+	if (params != NULL)
+	{
+		return originalTaskList;
+	}
+
+	foreach_ptr(originalTask, originalTaskList)
+	{
+		if (originalTask->queryCount != 1)
+		{
+			ereport(ERROR, (errmsg("cannot get EXPLAIN ANALYZE of multiple queries")));
+		}
+
+		Task *explainAnalyzeTask = copyObject(originalTask);
+		const char *queryString = TaskQueryStringForAllPlacements(explainAnalyzeTask);
+		char *wrappedQuery = WrapQueryForExplainAnalyze(queryString, tupleDesc);
+		char *fetchQuery = "SELECT worker_last_saved_explain_analyze()";
+		SetTaskQueryStringList(explainAnalyzeTask, list_make2(wrappedQuery, fetchQuery));
+
+		TupleDestination *originalTaskDest = originalTask->tupleDest ?
+											 originalTask->tupleDest :
+											 defaultTupleDest;
+
+		explainAnalyzeTask->tupleDest =
+			CreateExplainAnlyzeDestination(originalTask, originalTaskDest);
+
+		explainAnalyzeTaskList = lappend(explainAnalyzeTaskList, explainAnalyzeTask);
+	}
+
+	return explainAnalyzeTaskList;
+}
+
+
+/*
+ * WrapQueryForExplainAnalyze wraps a query into a worker_save_query_explain_analyze()
+ * call so we can fetch its explain analyze after its execution.
+ */
+static char *
+WrapQueryForExplainAnalyze(const char *queryString, TupleDesc tupleDesc)
+{
+	StringInfo columnDef = makeStringInfo();
+	for (int columnIndex = 0; columnIndex < tupleDesc->natts; columnIndex++)
+	{
+		if (columnIndex != 0)
+		{
+			appendStringInfoString(columnDef, ", ");
+		}
+
+		Form_pg_attribute attr = &tupleDesc->attrs[columnIndex];
+		char *attrType = format_type_with_typemod(attr->atttypid, attr->atttypmod);
+
+		appendStringInfo(columnDef, "field_%d %s", columnIndex, attrType);
+	}
+
+	/*
+	 * column definition cannot be empty, so create a dummy column definition for
+	 * queries with no results.
+	 */
+	if (tupleDesc->natts == 0)
+	{
+		appendStringInfo(columnDef, "dummy_field int");
+	}
+
+	StringInfo explainOptions = makeStringInfo();
+	appendStringInfo(explainOptions, "{\"verbose\": %s, \"costs\": %s, \"buffers\": %s, "
+									 "\"timing\": %s, \"summary\": %s, \"format\": \"%s\"}",
+					 CurrentDistributedQueryExplainOptions.verbose ? "true" : "false",
+					 CurrentDistributedQueryExplainOptions.costs ? "true" : "false",
+					 CurrentDistributedQueryExplainOptions.buffers ? "true" : "false",
+					 CurrentDistributedQueryExplainOptions.timing ? "true" : "false",
+					 CurrentDistributedQueryExplainOptions.summary ? "true" : "false",
+					 ExplainFormatStr(CurrentDistributedQueryExplainOptions.format));
+
+	StringInfo wrappedQuery = makeStringInfo();
+	appendStringInfo(wrappedQuery,
+					 "SELECT * FROM worker_save_query_explain_analyze(%s, %s) AS (%s)",
+					 quote_literal_cstr(queryString),
+					 quote_literal_cstr(explainOptions->data),
+					 columnDef->data);
+
+	return wrappedQuery->data;
+}
+
+
+/*
+ * SplitString splits the given string by the given delimiter.
+ *
+ * Why not use strtok_s()? Its signature and semantics are difficult to understand.
+ *
+ * Why not use strchr() (similar to do_text_output_multiline)? Although not banned,
+ * it isn't safe if by any chance str is not null-terminated.
+ */
+static List *
+SplitString(const char *str, char delimiter)
+{
+	size_t len = strnlen_s(str, RSIZE_MAX_STR);
+	if (len == 0)
+	{
+		return NIL;
+	}
+
+	List *tokenList = NIL;
+	StringInfo token = makeStringInfo();
+
+	for (size_t index = 0; index < len; index++)
+	{
+		if (str[index] == delimiter)
+		{
+			tokenList = lappend(tokenList, token);
+			token = makeStringInfo();
+		}
+		else
+		{
+			appendStringInfoChar(token, str[index]);
+		}
+	}
+
+	/* append last token */
+	tokenList = lappend(tokenList, token);
+
+	return tokenList;
 }
 
 

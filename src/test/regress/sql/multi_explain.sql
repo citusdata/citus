@@ -620,7 +620,7 @@ $$);
 
 \set default_opts '''{"costs": false, "timing": false, "summary": false}'''::jsonb
 
-CREATE TABLE explain_analyze_test(a int, b text);;
+CREATE TABLE explain_analyze_test(a int, b text);
 INSERT INTO explain_analyze_test VALUES (1, 'value 1'), (2, 'value 2'), (3, 'value 3'), (4, 'value 4');
 
 -- simple select
@@ -727,8 +727,114 @@ SELECT worker_last_saved_explain_analyze() IS NULL;
 
 -- should be deleted at the end of prepare commit
 BEGIN;
-SELECT * FROM worker_save_query_explain_analyze('UPDATE explain_analyze_test SET a=1', '{}') as (a int);
+SELECT * FROM worker_save_query_explain_analyze('UPDATE explain_analyze_test SET a=6 WHERE a=4', '{}') as (a int);
 SELECT worker_last_saved_explain_analyze() IS NOT NULL;
 PREPARE TRANSACTION 'citus_0_1496350_7_0';
 SELECT worker_last_saved_explain_analyze() IS NULL;
 COMMIT PREPARED 'citus_0_1496350_7_0';
+
+SELECT * FROM explain_analyze_test ORDER BY a;
+
+\a\t
+
+--
+-- Test different cases of EXPLAIN ANALYZE
+--
+
+SET citus.shard_count TO 4;
+SET client_min_messages TO WARNING;
+SELECT create_distributed_table('explain_analyze_test', 'a');
+
+\set default_analyze_flags '(ANALYZE on, COSTS off, TIMING off, SUMMARY off)'
+
+-- router SELECT
+EXPLAIN :default_analyze_flags SELECT * FROM explain_analyze_test WHERE a = 1;
+
+-- multi-shard SELECT
+EXPLAIN :default_analyze_flags SELECT count(*) FROM explain_analyze_test;
+
+-- router DML
+BEGIN;
+EXPLAIN :default_analyze_flags DELETE FROM explain_analyze_test WHERE a = 1;
+EXPLAIN :default_analyze_flags UPDATE explain_analyze_test SET b = 'b' WHERE a = 2;
+SELECT * FROM explain_analyze_test ORDER BY a;
+ROLLBACK;
+
+-- multi-shard DML
+BEGIN;
+EXPLAIN :default_analyze_flags UPDATE explain_analyze_test SET b = 'b' WHERE a IN (1, 2);
+EXPLAIN :default_analyze_flags DELETE FROM explain_analyze_test;
+SELECT * FROM explain_analyze_test ORDER BY a;
+ROLLBACK;
+
+-- single-row insert
+BEGIN;
+EXPLAIN :default_analyze_flags INSERT INTO explain_analyze_test VALUES (5, 'value 5');
+ROLLBACK;
+
+-- multi-row insert
+BEGIN;
+EXPLAIN :default_analyze_flags INSERT INTO explain_analyze_test VALUES (5, 'value 5'), (6, 'value 6');
+ROLLBACK;
+
+-- distributed insert/select
+BEGIN;
+EXPLAIN :default_analyze_flags INSERT INTO explain_analyze_test SELECT * FROM explain_analyze_test;
+ROLLBACK;
+
+DROP TABLE explain_analyze_test;
+
+-- test EXPLAIN ANALYZE works fine with primary keys
+CREATE TABLE explain_pk(a int primary key, b int);
+SELECT create_distributed_table('explain_pk', 'a');
+
+BEGIN;
+EXPLAIN :default_analyze_flags INSERT INTO explain_pk VALUES (1, 2), (2, 3);
+SELECT * FROM explain_pk ORDER BY 1;
+ROLLBACK;
+
+-- test EXPLAIN ANALYZE with non-text output formats
+BEGIN;
+EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT JSON) INSERT INTO explain_pk VALUES (1, 2), (2, 3);
+ROLLBACK;
+
+BEGIN;
+EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT XML) INSERT INTO explain_pk VALUES (1, 2), (2, 3);
+ROLLBACK;
+
+DROP TABLE explain_pk;
+
+-- test EXPLAIN ANALYZE with CTEs and subqueries
+CREATE TABLE dist_table(a int, b int);
+SELECT create_distributed_table('dist_table', 'a');
+CREATE TABLE ref_table(a int);
+SELECT create_reference_table('ref_table');
+
+INSERT INTO dist_table SELECT i, i*i FROM generate_series(1, 10) i;
+INSERT INTO ref_table SELECT i FROM generate_series(1, 10) i;
+
+EXPLAIN :default_analyze_flags
+WITH r AS (
+	SELECT random() r, a FROM dist_table
+)
+SELECT count(distinct a) from r NATURAL JOIN ref_table;
+
+EXPLAIN :default_analyze_flags
+SELECT count(distinct a) FROM (SELECT random() r, a FROM dist_table) t NATURAL JOIN ref_table;
+
+EXPLAIN :default_analyze_flags
+SELECT count(distinct a) FROM dist_table
+WHERE EXISTS(SELECT random() FROM dist_table NATURAL JOIN ref_table);
+
+BEGIN;
+EXPLAIN :default_analyze_flags
+WITH r AS (
+	INSERT INTO dist_table SELECT a, a * a FROM dist_table
+	RETURNING a
+), s AS (
+	SELECT random(), a * a a2 FROM r
+)
+SELECT count(distinct a2) FROM s;
+ROLLBACK;
+
+DROP TABLE ref_table, dist_table;
