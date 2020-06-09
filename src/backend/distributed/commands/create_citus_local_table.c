@@ -304,8 +304,6 @@ CreateCitusLocalTable(Oid relationId)
 	InsertMetadataForCitusLocalTable(shellRelationId, shardId);
 
 	FinalizeCitusLocalTableCreation(shellRelationId);
-
-	UnlockRelationOid(relationId, AccessExclusiveLock);
 }
 
 
