@@ -310,6 +310,51 @@ Aggregate (actual rows=1 loops=1)
               Merge Task Count: 4
 END;
 DROP TABLE t1, t2;
+-- Test query text output, with ANALYZE ON
+EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE, VERBOSE TRUE)
+	SELECT l_quantity, count(*) count_quantity FROM lineitem
+	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
+Sort (actual rows=50 loops=1)
+  Output: remote_scan.l_quantity, (COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint))
+  Sort Key: (COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint)), remote_scan.l_quantity
+  Sort Method: quicksort  Memory: 27kB
+  ->  HashAggregate (actual rows=50 loops=1)
+        Output: remote_scan.l_quantity, COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint)
+        Group Key: remote_scan.l_quantity
+        ->  Custom Scan (Citus Adaptive) (actual rows=100 loops=1)
+              Output: remote_scan.l_quantity, remote_scan.count_quantity
+              Task Count: 2
+              Tasks Shown: One of 2
+              ->  Task
+                    Query: SELECT l_quantity, count(*) AS count_quantity FROM lineitem_290000 lineitem WHERE true GROUP BY l_quantity
+                    Node: host=localhost port=xxxxx dbname=regression
+                    ->  HashAggregate (actual rows=50 loops=1)
+                          Output: l_quantity, count(*)
+                          Group Key: lineitem.l_quantity
+                          ->  Seq Scan on public.lineitem_290000 lineitem (actual rows=6000 loops=1)
+                                Output: l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment
+-- Test query text output, with ANALYZE OFF
+EXPLAIN (COSTS FALSE, ANALYZE FALSE, TIMING FALSE, SUMMARY FALSE, VERBOSE TRUE)
+	SELECT l_quantity, count(*) count_quantity FROM lineitem
+	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
+Sort
+  Output: remote_scan.l_quantity, (COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint))
+  Sort Key: (COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint)), remote_scan.l_quantity
+  ->  HashAggregate
+        Output: remote_scan.l_quantity, COALESCE((pg_catalog.sum(remote_scan.count_quantity))::bigint, '0'::bigint)
+        Group Key: remote_scan.l_quantity
+        ->  Custom Scan (Citus Adaptive)
+              Output: remote_scan.l_quantity, remote_scan.count_quantity
+              Task Count: 2
+              Tasks Shown: One of 2
+              ->  Task
+                    Query: SELECT l_quantity, count(*) AS count_quantity FROM lineitem_290000 lineitem WHERE true GROUP BY l_quantity
+                    Node: host=localhost port=xxxxx dbname=regression
+                    ->  HashAggregate
+                          Output: l_quantity, count(*)
+                          Group Key: lineitem.l_quantity
+                          ->  Seq Scan on public.lineitem_290000 lineitem
+                                Output: l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment
 -- Test verbose
 EXPLAIN (COSTS FALSE, VERBOSE TRUE)
 	SELECT sum(l_quantity) / avg(l_quantity) FROM lineitem;
@@ -320,6 +365,7 @@ Aggregate
         Task Count: 2
         Tasks Shown: One of 2
         ->  Task
+              Query: SELECT sum(l_quantity), sum(l_quantity), count(l_quantity) FROM lineitem_290000 lineitem WHERE true
               Node: host=localhost port=xxxxx dbname=regression
               ->  Aggregate
                     Output: sum(l_quantity), sum(l_quantity), count(l_quantity)
@@ -454,6 +500,7 @@ Aggregate
         Task Count: 2
         Tasks Shown: One of 2
         ->  Task
+              Query: SELECT sum(l_quantity), sum(l_quantity), count(l_quantity), sum(l_quantity) AS worker_column_4 FROM lineitem_290000 lineitem WHERE true
               Node: host=localhost port=xxxxx dbname=regression
               ->  Aggregate
                     Output: sum(l_quantity), sum(l_quantity), count(l_quantity), sum(l_quantity)
@@ -473,6 +520,7 @@ HashAggregate
         Task Count: 2
         Tasks Shown: One of 2
         ->  Task
+              Query: SELECT l_quantity, l_quantity AS worker_column_2 FROM lineitem_290000 lineitem WHERE true GROUP BY l_quantity
               Node: host=localhost port=xxxxx dbname=regression
               ->  HashAggregate
                     Output: l_quantity, l_quantity
@@ -1320,6 +1368,7 @@ Custom Scan (Citus Adaptive)
                     Task Count: 4
                     Tasks Shown: One of 4
                     ->  Task
+                          Query: SELECT DISTINCT l_orderkey FROM lineitem_hash_part_360041 lineitem_hash_part WHERE true
                           Node: host=localhost port=xxxxx dbname=regression
                           ->  HashAggregate
                                 Output: l_orderkey
@@ -1333,6 +1382,7 @@ Custom Scan (Citus Adaptive)
   Task Count: 1
   Tasks Shown: All
   ->  Task
+        Query: SELECT keys.l_orderkey FROM ((SELECT intermediate_result.s FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(s integer)) series JOIN (SELECT intermediate_result.l_orderkey FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(l_orderkey bigint)) keys ON ((series.s OPERATOR(pg_catalog.=) keys.l_orderkey))) ORDER BY series.s
         Node: host=localhost port=xxxxx dbname=regression
         ->  Merge Join
               Output: intermediate_result_1.l_orderkey, intermediate_result.s

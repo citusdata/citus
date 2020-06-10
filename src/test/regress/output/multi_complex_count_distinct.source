@@ -74,6 +74,7 @@ SELECT
                Task Count: 8
                Tasks Shown: One of 8
                ->  Task
+                     Query: SELECT l_orderkey, count(DISTINCT l_partkey) AS count FROM lineitem_hash_240000 lineitem_hash WHERE true GROUP BY l_orderkey ORDER BY (count(DISTINCT l_partkey)) DESC, l_orderkey DESC LIMIT '10'::bigint
                      Node: host=localhost port=57637 dbname=regression
                      ->  Limit
                            Output: l_orderkey, (count(DISTINCT l_partkey))
@@ -85,7 +86,7 @@ SELECT
                                        Group Key: lineitem_hash.l_orderkey
                                        ->  Index Scan Backward using lineitem_hash_pkey_240000 on public.lineitem_hash_240000 lineitem_hash
                                              Output: l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment
-(21 rows)
+(22 rows)
 
 -- it is also supported if there is no grouping or grouping is on non-partition field
 SELECT
@@ -118,13 +119,14 @@ SELECT
                      Task Count: 8
                      Tasks Shown: One of 8
                      ->  Task
+                           Query: SELECT l_partkey AS count FROM lineitem_hash_240000 lineitem_hash WHERE true GROUP BY l_partkey
                            Node: host=localhost port=57637 dbname=regression
                            ->  HashAggregate
                                  Output: l_partkey
                                  Group Key: lineitem_hash.l_partkey
                                  ->  Seq Scan on public.lineitem_hash_240000 lineitem_hash
                                        Output: l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment
-(18 rows)
+(19 rows)
 
 SELECT
 	l_shipmode, count(DISTINCT l_partkey)
@@ -168,13 +170,14 @@ SELECT
                            Task Count: 8
                            Tasks Shown: One of 8
                            ->  Task
+                                 Query: SELECT l_shipmode, l_partkey AS count FROM lineitem_hash_240000 lineitem_hash WHERE true GROUP BY l_shipmode, l_partkey
                                  Node: host=localhost port=57637 dbname=regression
                                  ->  HashAggregate
                                        Output: l_shipmode, l_partkey
                                        Group Key: lineitem_hash.l_shipmode, lineitem_hash.l_partkey
                                        ->  Seq Scan on public.lineitem_hash_240000 lineitem_hash
                                              Output: l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment
-(22 rows)
+(23 rows)
 
 -- mixed mode count distinct, grouped by partition column
 SELECT
@@ -216,6 +219,7 @@ SELECT
                Task Count: 8
                Tasks Shown: One of 8
                ->  Task
+                     Query: SELECT l_orderkey, count(DISTINCT l_partkey) AS count, count(DISTINCT l_shipmode) AS count FROM lineitem_hash_240000 lineitem_hash WHERE true GROUP BY l_orderkey ORDER BY (count(DISTINCT l_shipmode)) DESC, (count(DISTINCT l_partkey)) DESC, l_orderkey LIMIT '10'::bigint
                      Node: host=localhost port=57637 dbname=regression
                      ->  Limit
                            Output: l_orderkey, (count(DISTINCT l_partkey)), (count(DISTINCT l_shipmode))
@@ -227,7 +231,7 @@ SELECT
                                        Group Key: lineitem_hash.l_orderkey
                                        ->  Index Scan using lineitem_hash_pkey_240000 on public.lineitem_hash_240000 lineitem_hash
                                              Output: l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment
-(21 rows)
+(22 rows)
 
 -- partition/non-partition column count distinct no grouping
 SELECT
@@ -251,13 +255,14 @@ SELECT
          Task Count: 8
          Tasks Shown: One of 8
          ->  Task
+               Query: SELECT l_orderkey AS count, l_partkey AS count, l_shipmode AS count FROM lineitem_hash_240000 lineitem_hash WHERE true GROUP BY l_orderkey, l_partkey, l_shipmode
                Node: host=localhost port=57637 dbname=regression
                ->  HashAggregate
                      Output: l_orderkey, l_partkey, l_shipmode
                      Group Key: lineitem_hash.l_orderkey, lineitem_hash.l_partkey, lineitem_hash.l_shipmode
                      ->  Seq Scan on public.lineitem_hash_240000 lineitem_hash
                            Output: l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment
-(13 rows)
+(14 rows)
 
 -- distinct/non-distinct on partition and non-partition columns
 SELECT
@@ -375,13 +380,14 @@ SELECT
                      Task Count: 8
                      Tasks Shown: One of 8
                      ->  Task
+                           Query: SELECT l_shipmode, l_partkey AS count, l_suppkey AS worker_column_3 FROM lineitem_hash_240000 lineitem_hash WHERE true GROUP BY l_shipmode, l_partkey, l_suppkey
                            Node: host=localhost port=57637 dbname=regression
                            ->  HashAggregate
                                  Output: l_shipmode, l_partkey, l_suppkey
                                  Group Key: lineitem_hash.l_shipmode, lineitem_hash.l_partkey, lineitem_hash.l_suppkey
                                  ->  Seq Scan on public.lineitem_hash_240000 lineitem_hash
                                        Output: l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment
-(21 rows)
+(22 rows)
 
 -- count distinct is supported on single table subqueries
 SELECT *
@@ -497,6 +503,7 @@ SELECT
                Task Count: 8
                Tasks Shown: One of 8
                ->  Task
+                     Query: SELECT l_orderkey, count(DISTINCT l_suppkey) FILTER (WHERE (l_shipmode OPERATOR(pg_catalog.=) 'AIR'::bpchar)) AS count, count(DISTINCT l_suppkey) AS count FROM lineitem_hash_240000 lineitem_hash WHERE true GROUP BY l_orderkey ORDER BY (count(DISTINCT l_suppkey) FILTER (WHERE (l_shipmode OPERATOR(pg_catalog.=) 'AIR'::bpchar))) DESC, (count(DISTINCT l_suppkey)) DESC, l_orderkey LIMIT '10'::bigint
                      Node: host=localhost port=57637 dbname=regression
                      ->  Limit
                            Output: l_orderkey, (count(DISTINCT l_suppkey) FILTER (WHERE (l_shipmode = 'AIR'::bpchar))), (count(DISTINCT l_suppkey))
@@ -508,7 +515,7 @@ SELECT
                                        Group Key: lineitem_hash.l_orderkey
                                        ->  Index Scan using lineitem_hash_pkey_240000 on public.lineitem_hash_240000 lineitem_hash
                                              Output: l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment
-(21 rows)
+(22 rows)
 
 -- group by on non-partition column
 SELECT
@@ -557,13 +564,14 @@ SELECT
                            Task Count: 8
                            Tasks Shown: One of 8
                            ->  Task
+                                 Query: SELECT l_suppkey, l_partkey AS count, l_shipmode AS count FROM lineitem_hash_240000 lineitem_hash WHERE true GROUP BY l_suppkey, l_partkey, l_shipmode
                                  Node: host=localhost port=57637 dbname=regression
                                  ->  HashAggregate
                                        Output: l_suppkey, l_partkey, l_shipmode
                                        Group Key: lineitem_hash.l_suppkey, lineitem_hash.l_partkey, lineitem_hash.l_shipmode
                                        ->  Seq Scan on public.lineitem_hash_240000 lineitem_hash
                                              Output: l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment
-(22 rows)
+(23 rows)
 
 -- without group by, on partition column
 SELECT

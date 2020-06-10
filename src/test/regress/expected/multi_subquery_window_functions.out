@@ -709,7 +709,7 @@ EXPLAIN (COSTS FALSE, VERBOSE TRUE)
                 user_id)) AS ftop
     ORDER BY 2 DESC, 1 DESC
     LIMIT 5;
-                                                                QUERY PLAN
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      QUERY PLAN
 ---------------------------------------------------------------------
  Limit
    Output: remote_scan.user_id, remote_scan.sum
@@ -721,6 +721,7 @@ EXPLAIN (COSTS FALSE, VERBOSE TRUE)
                Task Count: 4
                Tasks Shown: One of 4
                ->  Task
+                     Query: SELECT worker_column_1 AS user_id, worker_column_2 AS sum FROM (SELECT ftop.user_id AS worker_column_1, ftop.sum AS worker_column_2 FROM (SELECT user_id_1.user_id, sum(user_id_1.counter) AS sum FROM (SELECT users_table.user_id, sum(users_table.value_2) OVER (PARTITION BY users_table.user_id) AS counter FROM public.users_table_1400256 users_table UNION SELECT events_table.user_id, sum(events_table.value_2) OVER (PARTITION BY events_table.user_id) AS counter FROM public.events_table_1400260 events_table) user_id_1 GROUP BY user_id_1.user_id UNION SELECT user_id_2.user_id, sum(user_id_2.counter) AS sum FROM (SELECT users_table.user_id, sum(users_table.value_2) OVER (PARTITION BY users_table.user_id) AS counter FROM public.users_table_1400256 users_table UNION SELECT events_table.user_id, sum(events_table.value_2) OVER (PARTITION BY events_table.user_id) AS counter FROM public.events_table_1400260 events_table) user_id_2 GROUP BY user_id_2.user_id) ftop) worker_subquery ORDER BY worker_column_2 DESC, worker_column_1 DESC LIMIT '5'::bigint
                      Node: host=localhost port=xxxxx dbname=regression
                      ->  Limit
                            Output: users_table.user_id, (sum((sum(users_table.value_2) OVER (?))))
@@ -773,7 +774,7 @@ EXPLAIN (COSTS FALSE, VERBOSE TRUE)
                                                                            Sort Key: events_table_1.user_id
                                                                            ->  Seq Scan on public.events_table_1400260 events_table_1
                                                                                  Output: events_table_1.user_id, events_table_1.value_2
-(62 rows)
+(63 rows)
 
 -- test with window functions which aren't pushed down
 SELECT

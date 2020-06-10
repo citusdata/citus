@@ -292,6 +292,7 @@ Aggregate
         Task Count: 16
         Tasks Shown: One of 16
         ->  Task
+              Query: SELECT sum(l_quantity), sum(l_quantity), count(l_quantity) FROM lineitem_mx_1220052 lineitem_mx WHERE true
               Node: host=localhost port=xxxxx dbname=regression
               ->  Aggregate
                     Output: sum(l_quantity), sum(l_quantity), count(l_quantity)
