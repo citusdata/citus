@@ -2026,14 +2026,54 @@ MasterAggregateExpression(Aggref *originalAggregate,
 		Aggref *unionAggregate = makeNode(Aggref);
 		unionAggregate->aggfnoid = unionFunctionId;
 		unionAggregate->aggtype = originalAggregate->aggtype;
-		unionAggregate->args = list_make2(tdigestTargetEntry, list_nth(
-											  originalAggregate->args, 2));
+		unionAggregate->args = list_make2(
+			tdigestTargetEntry,
+			list_nth(originalAggregate->args, 2));
 		unionAggregate->aggkind = AGGKIND_NORMAL;
 		unionAggregate->aggfilter = NULL;
 		unionAggregate->aggtranstype = InvalidOid;
-		unionAggregate->aggargtypes = list_make2_oid(tdigestType, list_nth_oid(
-														 originalAggregate->aggargtypes,
-														 2));
+		unionAggregate->aggargtypes = list_make2_oid(
+			tdigestType,
+			list_nth_oid(originalAggregate->aggargtypes, 2));
+		unionAggregate->aggsplit = AGGSPLIT_SIMPLE;
+
+		newMasterExpression = (Expr *) unionAggregate;
+	}
+	else if (aggregateType == AGGREGATE_TDIGEST_PERCENTILE_TDIGEST_DOUBLE ||
+			 aggregateType == AGGREGATE_TDIGEST_PERCENTILE_TDIGEST_DOUBLEARRAY ||
+			 aggregateType == AGGREGATE_TDIGEST_PERCENTILE_OF_TDIGEST_DOUBLE ||
+			 aggregateType == AGGREGATE_TDIGEST_PERCENTILE_OF_TDIGEST_DOUBLEARRAY)
+	{
+		/* tdigest of column */
+		Oid tdigestType = TDigestExtensionTypeOid();
+
+		/* These functions already will combine the tdigest arguments returned */
+		Oid unionFunctionId = originalAggregate->aggfnoid;
+
+		int32 tdigestReturnTypeMod = exprTypmod((Node *) originalAggregate);
+		Oid tdigestTypeCollationId = exprCollation((Node *) originalAggregate);
+
+		/* create first argument for tdigest_precentile(tdigest, double) */
+		Var *tdigestColumn = makeVar(masterTableId, walkerContext->columnId, tdigestType,
+									 tdigestReturnTypeMod, tdigestTypeCollationId,
+									 columnLevelsUp);
+		TargetEntry *tdigestTargetEntry = makeTargetEntry((Expr *) tdigestColumn,
+														  argumentId, NULL, false);
+		walkerContext->columnId++;
+
+		/* construct the master tdigest_precentile(tdigest, double) expression */
+		Aggref *unionAggregate = makeNode(Aggref);
+		unionAggregate->aggfnoid = unionFunctionId;
+		unionAggregate->aggtype = originalAggregate->aggtype;
+		unionAggregate->args = list_make2(
+			tdigestTargetEntry,
+			list_nth(originalAggregate->args, 1));
+		unionAggregate->aggkind = AGGKIND_NORMAL;
+		unionAggregate->aggfilter = NULL;
+		unionAggregate->aggtranstype = InvalidOid;
+		unionAggregate->aggargtypes = list_make2_oid(
+			tdigestType,
+			list_nth_oid(originalAggregate->aggargtypes, 1));
 		unionAggregate->aggsplit = AGGSPLIT_SIMPLE;
 
 		newMasterExpression = (Expr *) unionAggregate;
@@ -3200,6 +3240,37 @@ WorkerAggregateExpressionList(Aggref *originalAggregate,
 
 		workerAggregateList = lappend(workerAggregateList, newWorkerAggregate);
 	}
+	else if (aggregateType == AGGREGATE_TDIGEST_PERCENTILE_TDIGEST_DOUBLE ||
+			 aggregateType == AGGREGATE_TDIGEST_PERCENTILE_TDIGEST_DOUBLEARRAY ||
+			 aggregateType == AGGREGATE_TDIGEST_PERCENTILE_OF_TDIGEST_DOUBLE ||
+			 aggregateType == AGGREGATE_TDIGEST_PERCENTILE_OF_TDIGEST_DOUBLEARRAY)
+	{
+		/*
+		 * The original query has an aggregate in the form of either
+		 *  - tdigest_percentile(tdigest, quantile)
+		 *  - tdigest_percentile(tdigest, quantile[])
+		 *  - tdigest_percentile_of(tdigest, value)
+		 *  - tdigest_percentile_of(tdigest, value[])
+		 *
+		 * We are creating the worker part of this query by creating a
+		 *  - tdigest(tdigest)
+		 *
+		 * One could see we are passing argument 0 and argument 1 from the original query
+		 * in here. This corresponds with the list_nth calls in the args and aggargstypes
+		 * list construction. The tdigest function and type are read from the catalog.
+		 */
+		Aggref *newWorkerAggregate = copyObject(originalAggregate);
+		newWorkerAggregate->aggfnoid = TDigestExtensionAggTDigest1();
+		newWorkerAggregate->aggtype = TDigestExtensionTypeOid();
+		newWorkerAggregate->args = list_make1(list_nth(newWorkerAggregate->args, 0));
+		newWorkerAggregate->aggkind = AGGKIND_NORMAL;
+		newWorkerAggregate->aggtranstype = InvalidOid;
+		newWorkerAggregate->aggargtypes = list_make1_oid(
+			list_nth_oid(newWorkerAggregate->aggargtypes, 0));
+		newWorkerAggregate->aggsplit = AGGSPLIT_SIMPLE;
+
+		workerAggregateList = lappend(workerAggregateList, newWorkerAggregate);
+	}
 	else if (aggregateType == AGGREGATE_CUSTOM_COMBINE)
 	{
 		HeapTuple aggTuple =
@@ -3327,6 +3398,16 @@ GetAggregateType(Aggref *aggregateExpression)
 			return AGGREGATE_TDIGEST_PERCENTILE_ADD_DOUBLEARRAY;
 		}
 
+		if (aggFunctionId == TDigestExtensionAggTDigestPercentile2())
+		{
+			return AGGREGATE_TDIGEST_PERCENTILE_TDIGEST_DOUBLE;
+		}
+
+		if (aggFunctionId == TDigestExtensionAggTDigestPercentile2a())
+		{
+			return AGGREGATE_TDIGEST_PERCENTILE_TDIGEST_DOUBLEARRAY;
+		}
+
 		if (aggFunctionId == TDigestExtensionAggTDigestPercentileOf3())
 		{
 			return AGGREGATE_TDIGEST_PERCENTILE_OF_ADD_DOUBLE;
@@ -3335,6 +3416,16 @@ GetAggregateType(Aggref *aggregateExpression)
 		if (aggFunctionId == TDigestExtensionAggTDigestPercentileOf3a())
 		{
 			return AGGREGATE_TDIGEST_PERCENTILE_OF_ADD_DOUBLEARRAY;
+		}
+
+		if (aggFunctionId == TDigestExtensionAggTDigestPercentileOf2())
+		{
+			return AGGREGATE_TDIGEST_PERCENTILE_OF_TDIGEST_DOUBLE;
+		}
+
+		if (aggFunctionId == TDigestExtensionAggTDigestPercentileOf2a())
+		{
+			return AGGREGATE_TDIGEST_PERCENTILE_OF_TDIGEST_DOUBLEARRAY;
 		}
 	}
 

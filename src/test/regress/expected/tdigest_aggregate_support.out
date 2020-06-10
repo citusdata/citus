@@ -423,7 +423,22 @@ GROUP BY a;
 EXPLAIN (COSTS OFF, VERBOSE)
 SELECT tdigest_percentile(tdigest, 0.99)
 FROM latencies_rollup;
-ERROR:  unsupported aggregate function tdigest_percentile
+                                                QUERY PLAN
+---------------------------------------------------------------------
+ Aggregate
+   Output: tdigest_percentile(remote_scan.tdigest_percentile, '0.99'::double precision)
+   ->  Custom Scan (Citus Adaptive)
+         Output: remote_scan.tdigest_percentile
+         Task Count: 4
+         Tasks Shown: One of 4
+         ->  Task
+               Node: host=localhost port=xxxxx dbname=regression
+               ->  Aggregate
+                     Output: tdigest(tdigest)
+                     ->  Seq Scan on tdigest_aggregate_support.latencies_rollup_20070004 latencies_rollup
+                           Output: a, tdigest
+(12 rows)
+
 -- explain grouping by distribution column is completely pushed down for tdigest_precentile(tdigest, quantile)
 EXPLAIN (COSTS OFF, VERBOSE)
 SELECT a, tdigest_percentile(tdigest, 0.99)
@@ -448,7 +463,22 @@ GROUP BY a;
 EXPLAIN (COSTS OFF, VERBOSE)
 SELECT tdigest_percentile(tdigest, ARRAY[0.99, 0.95])
 FROM latencies_rollup;
-ERROR:  unsupported aggregate function tdigest_percentile
+                                                QUERY PLAN
+---------------------------------------------------------------------
+ Aggregate
+   Output: tdigest_percentile(remote_scan.tdigest_percentile, '{0.99,0.95}'::double precision[])
+   ->  Custom Scan (Citus Adaptive)
+         Output: remote_scan.tdigest_percentile
+         Task Count: 4
+         Tasks Shown: One of 4
+         ->  Task
+               Node: host=localhost port=xxxxx dbname=regression
+               ->  Aggregate
+                     Output: tdigest(tdigest)
+                     ->  Seq Scan on tdigest_aggregate_support.latencies_rollup_20070004 latencies_rollup
+                           Output: a, tdigest
+(12 rows)
+
 -- explain grouping by distribution column is completely pushed down for tdigest_precentile(value, compression, quantiles[])
 EXPLAIN (COSTS OFF, VERBOSE)
 SELECT a, tdigest_percentile(tdigest, ARRAY[0.99, 0.95])
@@ -473,7 +503,22 @@ GROUP BY a;
 EXPLAIN (COSTS OFF, VERBOSE)
 SELECT tdigest_percentile_of(tdigest, 9000)
 FROM latencies_rollup;
-ERROR:  unsupported aggregate function tdigest_percentile_of
+                                                QUERY PLAN
+---------------------------------------------------------------------
+ Aggregate
+   Output: tdigest_percentile_of(remote_scan.tdigest_percentile_of, '9000'::double precision)
+   ->  Custom Scan (Citus Adaptive)
+         Output: remote_scan.tdigest_percentile_of
+         Task Count: 4
+         Tasks Shown: One of 4
+         ->  Task
+               Node: host=localhost port=xxxxx dbname=regression
+               ->  Aggregate
+                     Output: tdigest(tdigest)
+                     ->  Seq Scan on tdigest_aggregate_support.latencies_rollup_20070004 latencies_rollup
+                           Output: a, tdigest
+(12 rows)
+
 -- explain grouping by distribution column is completely pushed down for tdigest_precentile_of(value, compression, hypotetical_value)
 EXPLAIN (COSTS OFF, VERBOSE)
 SELECT a, tdigest_percentile_of(tdigest, 9000)
@@ -498,7 +543,22 @@ GROUP BY a;
 EXPLAIN (COSTS OFF, VERBOSE)
 SELECT tdigest_percentile_of(tdigest, ARRAY[9000, 9500])
 FROM latencies_rollup;
-ERROR:  unsupported aggregate function tdigest_percentile_of
+                                                QUERY PLAN
+---------------------------------------------------------------------
+ Aggregate
+   Output: tdigest_percentile_of(remote_scan.tdigest_percentile_of, '{9000,9500}'::double precision[])
+   ->  Custom Scan (Citus Adaptive)
+         Output: remote_scan.tdigest_percentile_of
+         Task Count: 4
+         Tasks Shown: One of 4
+         ->  Task
+               Node: host=localhost port=xxxxx dbname=regression
+               ->  Aggregate
+                     Output: tdigest(tdigest)
+                     ->  Seq Scan on tdigest_aggregate_support.latencies_rollup_20070004 latencies_rollup
+                           Output: a, tdigest
+(12 rows)
+
 -- explain grouping by distribution column is completely pushed down for tdigest_precentile_of(value, compression, hypotetical_values[])
 EXPLAIN (COSTS OFF, VERBOSE)
 SELECT a, tdigest_percentile_of(tdigest, ARRAY[9000, 9500])
