@@ -70,10 +70,11 @@ bool ExplainDistributedQueries = true;
 bool ExplainAllTasks = false;
 
 /*
- * If enabled, EXPLAIN ANALYZE output of last worker task are saved in
- * SavedExplainPlan.
+ * If enabled, EXPLAIN ANALYZE output & other statistics of last worker task
+ * are saved in following variables.
  */
 static char *SavedExplainPlan = NULL;
+static double SavedExecutionDurationMillisec = 0.0;
 
 /* struct to save explain flags */
 typedef struct
@@ -131,7 +132,8 @@ static void ExplainWorkerPlan(PlannedStmt *plannedStmt, DestReceiver *dest,
 							  ExplainState *es,
 							  const char *queryString, ParamListInfo params,
 							  QueryEnvironment *queryEnv,
-							  const instr_time *planduration);
+							  const instr_time *planduration,
+							  double *executionDurationMillisec);
 static bool ExtractFieldBoolean(Datum jsonbDoc, const char *fieldName, bool defaultValue);
 static ExplainFormat ExtractFieldExplainFormat(Datum jsonbDoc, const char *fieldName,
 											   ExplainFormat defaultValue);
@@ -807,14 +809,30 @@ worker_last_saved_explain_analyze(PG_FUNCTION_ARGS)
 {
 	CheckCitusVersion(ERROR);
 
-	if (SavedExplainPlan == NULL)
+	TupleDesc tupleDescriptor = NULL;
+	Tuplestorestate *tupleStore = SetupTuplestore(fcinfo, &tupleDescriptor);
+
+	if (SavedExplainPlan != NULL)
 	{
-		PG_RETURN_NULL();
+		int columnCount = tupleDescriptor->natts;
+		if (columnCount != 2)
+		{
+			ereport(ERROR, (errmsg("expected 3 output columns in definition of "
+								   "worker_last_saved_explain_analyze, but got %d",
+								   columnCount)));
+		}
+
+		bool columnNulls[2] = { false };
+		Datum columnValues[2] = {
+			CStringGetTextDatum(SavedExplainPlan),
+			Float8GetDatum(SavedExecutionDurationMillisec)
+		};
+
+		tuplestore_putvalues(tupleStore, tupleDescriptor, columnValues, columnNulls);
 	}
-	else
-	{
-		PG_RETURN_TEXT_P(cstring_to_text(SavedExplainPlan));
-	}
+
+	tuplestore_donestoring(tupleStore);
+	PG_RETURN_DATUM(0);
 }
 
 
@@ -829,6 +847,7 @@ worker_save_query_explain_analyze(PG_FUNCTION_ARGS)
 
 	text *queryText = PG_GETARG_TEXT_P(0);
 	char *queryString = text_to_cstring(queryText);
+	double executionDurationMillisec = 0.0;
 
 	Datum explainOptions = PG_GETARG_DATUM(1);
 	ExplainState *es = NewExplainState();
@@ -879,7 +898,8 @@ worker_save_query_explain_analyze(PG_FUNCTION_ARGS)
 	INSTR_TIME_SUBTRACT(planDuration, planStart);
 
 	/* do the actual EXPLAIN ANALYZE */
-	ExplainWorkerPlan(plan, tupleStoreDest, es, queryString, NULL, NULL, &planDuration);
+	ExplainWorkerPlan(plan, tupleStoreDest, es, queryString, NULL, NULL,
+					  &planDuration, &executionDurationMillisec);
 
 	ExplainEndOutput(es);
 
@@ -890,6 +910,7 @@ worker_save_query_explain_analyze(PG_FUNCTION_ARGS)
 	FreeSavedExplainPlan();
 
 	SavedExplainPlan = pstrdup(es->str->data);
+	SavedExecutionDurationMillisec = executionDurationMillisec;
 
 	MemoryContextSwitchTo(oldContext);
 
@@ -1187,7 +1208,8 @@ ExplainAnalyzeTaskList(List *originalTaskList,
 		Task *explainAnalyzeTask = copyObject(originalTask);
 		const char *queryString = TaskQueryStringForAllPlacements(explainAnalyzeTask);
 		char *wrappedQuery = WrapQueryForExplainAnalyze(queryString, tupleDesc);
-		char *fetchQuery = "SELECT worker_last_saved_explain_analyze()";
+		char *fetchQuery =
+			"SELECT explain_analyze_output FROM worker_last_saved_explain_analyze()";
 		SetTaskQueryStringList(explainAnalyzeTask, list_make2(wrappedQuery, fetchQuery));
 
 		TupleDestination *originalTaskDest = originalTask->tupleDest ?
@@ -1339,7 +1361,8 @@ ExplainOneQuery(Query *query, int cursorOptions,
 
 /*
  * ExplainAnalyzeWorkerPlan produces explain output into es. If es->analyze, it also executes
- * the given plannedStmt and sends the results to dest.
+ * the given plannedStmt and sends the results to dest. It puts total time to execute in
+ * executionDurationMillisec.
  *
  * This is based on postgres' ExplainOnePlan(). We couldn't use an IntoClause to store results
  * into tupleStore, so we had to copy the same functionality with some minor changes.
@@ -1352,7 +1375,7 @@ ExplainOneQuery(Query *query, int cursorOptions,
 static void
 ExplainWorkerPlan(PlannedStmt *plannedstmt, DestReceiver *dest, ExplainState *es,
 				  const char *queryString, ParamListInfo params, QueryEnvironment *queryEnv,
-				  const instr_time *planduration)
+				  const instr_time *planduration, double *executionDurationMillisec)
 {
 	QueryDesc  *queryDesc;
 	instr_time	starttime;
@@ -1465,6 +1488,8 @@ ExplainWorkerPlan(PlannedStmt *plannedstmt, DestReceiver *dest, ExplainState *es
 	if (es->summary && es->analyze)
 		ExplainPropertyFloat("Execution Time", "ms", 1000.0 * totaltime, 3,
 							 es);
+
+	*executionDurationMillisec = totaltime * 1000;
 
 	ExplainCloseGroup("Query", NULL, true, es);
 }
