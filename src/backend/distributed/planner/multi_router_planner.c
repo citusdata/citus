@@ -2282,6 +2282,20 @@ TargetShardIntervalForFastPathQuery(Query *query, bool *isMultiShardQuery,
 	if (inputDistributionKeyValue && !inputDistributionKeyValue->constisnull)
 	{
 		CitusTableCacheEntry *cache = GetCitusTableCacheEntry(relationId);
+		Var *distributionKey = cache->partitionColumn;
+
+		/*
+		 * We currently don't allow implicitly coerced values to be handled by fast-
+		 * path planner. Still, let's be defensive for any  future changes..
+		 */
+		if (inputDistributionKeyValue->consttype != distributionKey->vartype)
+		{
+			bool missingOk = false;
+			inputDistributionKeyValue =
+				TransformPartitionRestrictionValue(distributionKey,
+												   inputDistributionKeyValue, missingOk);
+		}
+
 		ShardInterval *cachedShardInterval =
 			FindShardInterval(inputDistributionKeyValue->constvalue, cache);
 		if (cachedShardInterval == NULL)
@@ -2603,9 +2617,20 @@ BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError)
 		if (partitionMethod == DISTRIBUTE_BY_HASH || partitionMethod ==
 			DISTRIBUTE_BY_RANGE)
 		{
+			Var *distributionKey = cacheEntry->partitionColumn;
+
+			/* handle coercions, if fails throw an error */
+			if (partitionValueConst->consttype != distributionKey->vartype)
+			{
+				bool missingOk = false;
+				partitionValueConst =
+					TransformPartitionRestrictionValue(distributionKey,
+													   partitionValueConst,
+													   missingOk);
+			}
+
 			Datum partitionValue = partitionValueConst->constvalue;
 
-			cacheEntry = GetCitusTableCacheEntry(distributedTableId);
 			ShardInterval *shardInterval = FindShardInterval(partitionValue, cacheEntry);
 			if (shardInterval != NULL)
 			{
