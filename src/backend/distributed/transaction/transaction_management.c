@@ -28,6 +28,7 @@
 #include "distributed/listutils.h"
 #include "distributed/local_executor.h"
 #include "distributed/multi_executor.h"
+#include "distributed/multi_explain.h"
 #include "distributed/repartition_join_execution.h"
 #include "distributed/transaction_management.h"
 #include "distributed/placement_connection.h"
@@ -351,6 +352,9 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 
 		case XACT_EVENT_PREPARE:
 		{
+			/* we need to reset SavedExplainPlan before TopTransactionContext is deleted */
+			FreeSavedExplainPlan();
+
 			/*
 			 * This callback is only relevant for worker queries since
 			 * distributed queries cannot be executed with 2PC, see
@@ -458,6 +462,7 @@ ResetGlobalVariables()
 	CurrentCoordinatedTransactionState = COORD_TRANS_NONE;
 	XactModificationLevel = XACT_MODIFICATION_NONE;
 	SetLocalExecutionStatus(LOCAL_EXECUTION_OPTIONAL);
+	FreeSavedExplainPlan();
 	dlist_init(&InProgressTransactions);
 	activeSetStmts = NULL;
 	CoordinatedTransactionUses2PC = false;

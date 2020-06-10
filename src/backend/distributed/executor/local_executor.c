@@ -366,35 +366,39 @@ ExtractParametersForLocalExecution(ParamListInfo paramListInfo, Oid **parameterT
 static void
 LocallyExecuteUtilityTask(const char *localTaskQueryCommand)
 {
-	RawStmt *localTaskRawStmt = (RawStmt *) ParseTreeRawStmt(localTaskQueryCommand);
+	List *parseTreeList = pg_parse_query(localTaskQueryCommand);
+	RawStmt *localTaskRawStmt = NULL;
 
-	Node *localTaskRawParseTree = localTaskRawStmt->stmt;
-
-	/*
-	 * Actually, the query passed to this function would mostly be a
-	 * utility command to be executed locally. However, some utility
-	 * commands do trigger udf calls (e.g worker_apply_shard_ddl_command)
-	 * to execute commands in a generic way. But as we support local
-	 * execution of utility commands, we should also process those udf
-	 * calls locally as well. In that case, we simply execute the query
-	 * implying the udf call in below conditional block.
-	 */
-	if (IsA(localTaskRawParseTree, SelectStmt))
+	foreach_ptr(localTaskRawStmt, parseTreeList)
 	{
-		/* we have no external parameters to rewrite the UDF call RawStmt */
-		Query *localUdfTaskQuery =
-			RewriteRawQueryStmt(localTaskRawStmt, localTaskQueryCommand, NULL, 0);
+		Node *localTaskRawParseTree = localTaskRawStmt->stmt;
 
-		LocallyExecuteUdfTaskQuery(localUdfTaskQuery);
-	}
-	else
-	{
 		/*
-		 * It is a regular utility command we should execute it locally via
-		 * process utility.
+		 * Actually, the query passed to this function would mostly be a
+		 * utility command to be executed locally. However, some utility
+		 * commands do trigger udf calls (e.g worker_apply_shard_ddl_command)
+		 * to execute commands in a generic way. But as we support local
+		 * execution of utility commands, we should also process those udf
+		 * calls locally as well. In that case, we simply execute the query
+		 * implying the udf call in below conditional block.
 		 */
-		CitusProcessUtility(localTaskRawParseTree, localTaskQueryCommand,
-							PROCESS_UTILITY_TOPLEVEL, NULL, None_Receiver, NULL);
+		if (IsA(localTaskRawParseTree, SelectStmt))
+		{
+			/* we have no external parameters to rewrite the UDF call RawStmt */
+			Query *localUdfTaskQuery =
+				RewriteRawQueryStmt(localTaskRawStmt, localTaskQueryCommand, NULL, 0);
+
+			LocallyExecuteUdfTaskQuery(localUdfTaskQuery);
+		}
+		else
+		{
+			/*
+			 * It is a regular utility command we should execute it locally via
+			 * process utility.
+			 */
+			CitusProcessUtility(localTaskRawParseTree, localTaskQueryCommand,
+								PROCESS_UTILITY_TOPLEVEL, NULL, None_Receiver, NULL);
+		}
 	}
 }
 

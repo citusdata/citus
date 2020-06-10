@@ -93,6 +93,7 @@
 #include "parser/parse_coerce.h"
 #include "utils/arrayaccess.h"
 #include "utils/catcache.h"
+#include "utils/fmgrprotos.h"
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
 #include "utils/ruleutils.h"
@@ -255,14 +256,14 @@ static void AddPartitionKeyRestrictionToInstance(ClauseWalkerContext *context,
 												 Const *constantClause);
 static bool VarConstOpExprClause(OpExpr *opClause, Var *partitionColumn,
 								 Var **varClause, Const **constantClause);
-static Const * TransformPartitionRestrictionValue(Var *partitionColumn,
-												  Const *restrictionValue);
 static void AddSAOPartitionKeyRestrictionToInstance(ClauseWalkerContext *context,
 													ScalarArrayOpExpr *
 													arrayOperatorExpression);
 static bool SAORestrictions(ScalarArrayOpExpr *arrayOperatorExpression,
 							Var *partitionColumn,
 							List **requestedRestrictions);
+static void ErrorTypesDontMatch(Oid firstType, Oid firstCollId, Oid secondType,
+								Oid secondCollId);
 static bool IsValidHashRestriction(OpExpr *opClause);
 static void AddHashRestrictionToInstance(ClauseWalkerContext *context, OpExpr *opClause,
 										 Var *varClause, Const *constantClause);
@@ -1111,7 +1112,7 @@ AddPartitionKeyRestrictionToInstance(ClauseWalkerContext *context, OpExpr *opCla
 	{
 		/* we want our restriction value in terms of the type of the partition column */
 		constantClause = TransformPartitionRestrictionValue(partitionColumn,
-															constantClause);
+															constantClause, true);
 		if (constantClause == NULL)
 		{
 			/* couldn't coerce value, its invalid restriction */
@@ -1223,8 +1224,9 @@ AddPartitionKeyRestrictionToInstance(ClauseWalkerContext *context, OpExpr *opCla
  * It is conceivable that in some instances this may not be possible,
  * in those cases we will simply fail to prune partitions based on this clause.
  */
-static Const *
-TransformPartitionRestrictionValue(Var *partitionColumn, Const *restrictionValue)
+Const *
+TransformPartitionRestrictionValue(Var *partitionColumn, Const *restrictionValue,
+								   bool missingOk)
 {
 	Node *transformedValue = coerce_to_target_type(NULL, (Node *) restrictionValue,
 												   restrictionValue->consttype,
@@ -1236,6 +1238,13 @@ TransformPartitionRestrictionValue(Var *partitionColumn, Const *restrictionValue
 	/* if NULL, no implicit coercion is possible between the types */
 	if (transformedValue == NULL)
 	{
+		if (!missingOk)
+		{
+			ErrorTypesDontMatch(partitionColumn->vartype, partitionColumn->varcollid,
+								restrictionValue->consttype,
+								restrictionValue->constcollid);
+		}
+
 		return NULL;
 	}
 
@@ -1248,10 +1257,35 @@ TransformPartitionRestrictionValue(Var *partitionColumn, Const *restrictionValue
 	/* if still not a constant, no immutable coercion matched */
 	if (!IsA(transformedValue, Const))
 	{
+		if (!missingOk)
+		{
+			ErrorTypesDontMatch(partitionColumn->vartype, partitionColumn->varcollid,
+								restrictionValue->consttype,
+								restrictionValue->constcollid);
+		}
+
 		return NULL;
 	}
 
 	return (Const *) transformedValue;
+}
+
+
+/*
+ * ErrorTypesDontMatch throws an error explicitly printing the type names.
+ */
+static void
+ErrorTypesDontMatch(Oid firstType, Oid firstCollId, Oid secondType, Oid secondCollId)
+{
+	Datum firstTypename =
+		DirectFunctionCall1Coll(regtypeout, firstCollId, ObjectIdGetDatum(firstType));
+
+	Datum secondTypename =
+		DirectFunctionCall1Coll(regtypeout, secondCollId, ObjectIdGetDatum(secondType));
+
+	ereport(ERROR, (errmsg("Cannot coerce %s to %s",
+						   DatumGetCString(secondTypename),
+						   DatumGetCString(firstTypename))));
 }
 
 

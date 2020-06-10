@@ -154,6 +154,7 @@ typedef struct MetadataCacheData
 	Oid unavailableNodeRoleId;
 	Oid pgTableIsVisibleFuncId;
 	Oid citusTableIsVisibleFuncId;
+	Oid jsonbExtractPathFuncId;
 	bool databaseNameValid;
 	char databaseName[NAMEDATALEN];
 } MetadataCacheData;
@@ -2308,6 +2309,24 @@ CitusTableVisibleFuncId(void)
 	}
 
 	return MetadataCache.citusTableIsVisibleFuncId;
+}
+
+
+/*
+ * JsonbExtractPathFuncId returns oid of the jsonb_extract_path function.
+ */
+Oid
+JsonbExtractPathFuncId(void)
+{
+	if (MetadataCache.jsonbExtractPathFuncId == InvalidOid)
+	{
+		const int argCount = 2;
+
+		MetadataCache.jsonbExtractPathFuncId =
+			FunctionOid("pg_catalog", "jsonb_extract_path", argCount);
+	}
+
+	return MetadataCache.jsonbExtractPathFuncId;
 }
 
 

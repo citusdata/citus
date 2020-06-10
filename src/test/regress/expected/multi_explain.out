@@ -1341,3 +1341,340 @@ SELECT true AS valid FROM explain_xml($$
   SELECT * FROM result JOIN series ON (s = l_quantity) JOIN orders_hash_part ON (s = o_orderkey)
 $$);
 t
+--
+-- Test EXPLAIN ANALYZE udfs
+--
+\a\t
+\set default_opts '''{"costs": false, "timing": false, "summary": false}'''::jsonb
+CREATE TABLE explain_analyze_test(a int, b text);;
+INSERT INTO explain_analyze_test VALUES (1, 'value 1'), (2, 'value 2'), (3, 'value 3'), (4, 'value 4');
+-- simple select
+BEGIN;
+SELECT * FROM worker_save_query_explain_analyze('SELECT 1', :default_opts) as (a int);
+ a
+---------------------------------------------------------------------
+ 1
+(1 row)
+
+SELECT worker_last_saved_explain_analyze();
+ worker_last_saved_explain_analyze
+---------------------------------------------------------------------
+ Result (actual rows=1 loops=1)   +
+
+(1 row)
+
+END;
+-- insert into select
+BEGIN;
+SELECT * FROM worker_save_query_explain_analyze($Q$
+       INSERT INTO explain_analyze_test SELECT i, i::text FROM generate_series(1, 5) i $Q$,
+	   :default_opts) as (a int);
+ a
+---------------------------------------------------------------------
+(0 rows)
+
+SELECT worker_last_saved_explain_analyze();
+                worker_last_saved_explain_analyze
+---------------------------------------------------------------------
+ Insert on explain_analyze_test (actual rows=0 loops=1)          +
+   ->  Function Scan on generate_series i (actual rows=5 loops=1)+
+
+(1 row)
+
+ROLLBACK;
+-- select from table
+BEGIN;
+SELECT * FROM worker_save_query_explain_analyze($Q$SELECT * FROM explain_analyze_test$Q$,
+	   											:default_opts) as (a int, b text);
+ a |    b
+---------------------------------------------------------------------
+ 1 | value 1
+ 2 | value 2
+ 3 | value 3
+ 4 | value 4
+(4 rows)
+
+SELECT worker_last_saved_explain_analyze();
+            worker_last_saved_explain_analyze
+---------------------------------------------------------------------
+ Seq Scan on explain_analyze_test (actual rows=4 loops=1)+
+
+(1 row)
+
+ROLLBACK;
+-- insert into with returning
+BEGIN;
+SELECT * FROM worker_save_query_explain_analyze($Q$
+       INSERT INTO explain_analyze_test SELECT i, i::text FROM generate_series(1, 5) i
+	   RETURNING a, b$Q$,
+	   :default_opts) as (a int, b text);
+ a | b
+---------------------------------------------------------------------
+ 1 | 1
+ 2 | 2
+ 3 | 3
+ 4 | 4
+ 5 | 5
+(5 rows)
+
+SELECT worker_last_saved_explain_analyze();
+                worker_last_saved_explain_analyze
+---------------------------------------------------------------------
+ Insert on explain_analyze_test (actual rows=5 loops=1)          +
+   ->  Function Scan on generate_series i (actual rows=5 loops=1)+
+
+(1 row)
+
+ROLLBACK;
+-- delete with returning
+BEGIN;
+SELECT * FROM worker_save_query_explain_analyze($Q$
+       DELETE FROM explain_analyze_test WHERE a % 2 = 0
+	   RETURNING a, b$Q$,
+	   :default_opts) as (a int, b text);
+ a |    b
+---------------------------------------------------------------------
+ 2 | value 2
+ 4 | value 4
+(2 rows)
+
+SELECT worker_last_saved_explain_analyze();
+               worker_last_saved_explain_analyze
+---------------------------------------------------------------------
+ Delete on explain_analyze_test (actual rows=2 loops=1)        +
+   ->  Seq Scan on explain_analyze_test (actual rows=2 loops=1)+
+         Filter: ((a % 2) = 0)                                 +
+         Rows Removed by Filter: 2                             +
+
+(1 row)
+
+ROLLBACK;
+-- delete without returning
+BEGIN;
+SELECT * FROM worker_save_query_explain_analyze($Q$
+       DELETE FROM explain_analyze_test WHERE a % 2 = 0$Q$,
+	   :default_opts) as (a int);
+ a
+---------------------------------------------------------------------
+(0 rows)
+
+SELECT worker_last_saved_explain_analyze();
+               worker_last_saved_explain_analyze
+---------------------------------------------------------------------
+ Delete on explain_analyze_test (actual rows=0 loops=1)        +
+   ->  Seq Scan on explain_analyze_test (actual rows=2 loops=1)+
+         Filter: ((a % 2) = 0)                                 +
+         Rows Removed by Filter: 2                             +
+
+(1 row)
+
+ROLLBACK;
+-- multiple queries (should ERROR)
+SELECT * FROM worker_save_query_explain_analyze('SELECT 1; SELECT 2', :default_opts) as (a int);
+ERROR:  cannot EXPLAIN ANALYZE multiple queries
+-- error in query
+SELECT * FROM worker_save_query_explain_analyze('SELECT x', :default_opts) as (a int);
+ERROR:  column "x" does not exist
+-- error in format string
+SELECT * FROM worker_save_query_explain_analyze('SELECT 1', '{"format": "invlaid_format"}') as (a int);
+ERROR:  Invalid explain analyze format: "invlaid_format"
+-- test formats
+BEGIN;
+SELECT * FROM worker_save_query_explain_analyze('SELECT 1', '{"format": "text", "costs": false}') as (a int);
+ a
+---------------------------------------------------------------------
+ 1
+(1 row)
+
+SELECT worker_last_saved_explain_analyze();
+ worker_last_saved_explain_analyze
+---------------------------------------------------------------------
+ Result (actual rows=1 loops=1)   +
+
+(1 row)
+
+SELECT * FROM worker_save_query_explain_analyze('SELECT 1', '{"format": "json", "costs": false}') as (a int);
+ a
+---------------------------------------------------------------------
+ 1
+(1 row)
+
+SELECT worker_last_saved_explain_analyze();
+ worker_last_saved_explain_analyze
+---------------------------------------------------------------------
+ [                                +
+   {                              +
+     "Plan": {                    +
+       "Node Type": "Result",     +
+       "Parallel Aware": false,   +
+       "Actual Rows": 1,          +
+       "Actual Loops": 1          +
+     },                           +
+     "Triggers": [                +
+     ]                            +
+   }                              +
+ ]
+(1 row)
+
+SELECT * FROM worker_save_query_explain_analyze('SELECT 1', '{"format": "xml", "costs": false}') as (a int);
+ a
+---------------------------------------------------------------------
+ 1
+(1 row)
+
+SELECT worker_last_saved_explain_analyze();
+            worker_last_saved_explain_analyze
+---------------------------------------------------------------------
+ <explain xmlns="http://www.postgresql.org/2009/explain">+
+   <Query>                                               +
+     <Plan>                                              +
+       <Node-Type>Result</Node-Type>                     +
+       <Parallel-Aware>false</Parallel-Aware>            +
+       <Actual-Rows>1</Actual-Rows>                      +
+       <Actual-Loops>1</Actual-Loops>                    +
+     </Plan>                                             +
+     <Triggers>                                          +
+     </Triggers>                                         +
+   </Query>                                              +
+ </explain>
+(1 row)
+
+SELECT * FROM worker_save_query_explain_analyze('SELECT 1', '{"format": "yaml", "costs": false}') as (a int);
+ a
+---------------------------------------------------------------------
+ 1
+(1 row)
+
+SELECT worker_last_saved_explain_analyze();
+ worker_last_saved_explain_analyze
+---------------------------------------------------------------------
+ - Plan:                          +
+     Node Type: "Result"          +
+     Parallel Aware: false        +
+     Actual Rows: 1               +
+     Actual Loops: 1              +
+   Triggers:
+(1 row)
+
+END;
+-- costs on, timing off
+BEGIN;
+SELECT * FROM worker_save_query_explain_analyze('SELECT * FROM explain_analyze_test', '{"timing": false, "costs": true}') as (a int);
+ a
+---------------------------------------------------------------------
+ 1
+ 2
+ 3
+ 4
+(4 rows)
+
+SELECT worker_last_saved_explain_analyze() ~ 'Seq Scan.*\(cost=0.00.*\) \(actual rows.*\)';
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+END;
+-- costs off, timing on
+BEGIN;
+SELECT * FROM worker_save_query_explain_analyze('SELECT * FROM explain_analyze_test', '{"timing": true, "costs": false}') as (a int);
+ a
+---------------------------------------------------------------------
+ 1
+ 2
+ 3
+ 4
+(4 rows)
+
+SELECT worker_last_saved_explain_analyze() ~ 'Seq Scan on explain_analyze_test \(actual time=.* rows=.* loops=1\)';
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+END;
+-- summary on
+BEGIN;
+SELECT * FROM worker_save_query_explain_analyze('SELECT 1', '{"timing": false, "costs": false, "summary": true}') as (a int);
+ a
+---------------------------------------------------------------------
+ 1
+(1 row)
+
+SELECT worker_last_saved_explain_analyze() ~ 'Planning Time:.*Execution Time:.*';
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+END;
+-- buffers on
+BEGIN;
+SELECT * FROM worker_save_query_explain_analyze('SELECT * FROM explain_analyze_test', '{"timing": false, "costs": false, "buffers": true}') as (a int);
+ a
+---------------------------------------------------------------------
+ 1
+ 2
+ 3
+ 4
+(4 rows)
+
+SELECT worker_last_saved_explain_analyze() ~ 'Buffers:';
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+END;
+-- verbose on
+BEGIN;
+SELECT * FROM worker_save_query_explain_analyze('SELECT * FROM explain_analyze_test', '{"timing": false, "costs": false, "verbose": true}') as (a int);
+ a
+---------------------------------------------------------------------
+ 1
+ 2
+ 3
+ 4
+(4 rows)
+
+SELECT worker_last_saved_explain_analyze() ~ 'Output: a, b';
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+END;
+-- make sure deleted at transaction end
+SELECT * FROM worker_save_query_explain_analyze('SELECT 1', '{}') as (a int);
+ a
+---------------------------------------------------------------------
+ 1
+(1 row)
+
+SELECT worker_last_saved_explain_analyze() IS NULL;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- should be deleted at the end of prepare commit
+BEGIN;
+SELECT * FROM worker_save_query_explain_analyze('UPDATE explain_analyze_test SET a=1', '{}') as (a int);
+ a
+---------------------------------------------------------------------
+(0 rows)
+
+SELECT worker_last_saved_explain_analyze() IS NOT NULL;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+PREPARE TRANSACTION 'citus_0_1496350_7_0';
+SELECT worker_last_saved_explain_analyze() IS NULL;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+COMMIT PREPARED 'citus_0_1496350_7_0';
