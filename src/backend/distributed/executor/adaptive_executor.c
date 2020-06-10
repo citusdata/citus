@@ -856,6 +856,29 @@ ExecuteUtilityTaskList(List *utilityTaskList, bool localExecutionSupported)
 
 
 /*
+ * ExecuteUtilityTaskListExtended is a wrapper around executing task
+ * list for utility commands.
+ */
+uint64
+ExecuteUtilityTaskListExtended(List *utilityTaskList, int poolSize,
+							   bool localExecutionSupported)
+{
+	RowModifyLevel modLevel = ROW_MODIFY_NONE;
+	ExecutionParams *executionParams = CreateBasicExecutionParams(
+		modLevel, utilityTaskList, poolSize, localExecutionSupported
+		);
+
+	bool excludeFromXact = false;
+	executionParams->xactProperties =
+		DecideTransactionPropertiesForTaskList(modLevel, utilityTaskList,
+											   excludeFromXact);
+	executionParams->isUtilityCommand = true;
+
+	return ExecuteTaskListExtended(executionParams);
+}
+
+
+/*
  * ExecuteTaskListOutsideTransaction is a proxy to ExecuteTaskListExtended
  * with defaults for some of the arguments.
  */
