@@ -153,6 +153,40 @@ BEGIN;
   ALTER TABLE partitioned_table ATTACH PARTITION citus_local_table FOR VALUES FROM (20) TO (30);
 ERROR:  distributed tables cannot have non-colocated distributed tables as a partition
 ROLLBACK;
+-- show that we allow triggers citus tables --
+-- create a simple function to be invoked by trigger
+CREATE FUNCTION update_value() RETURNS trigger AS $update_value$
+BEGIN
+    NEW.value := value+1 ;
+    RETURN NEW;
+END;
+$update_value$ LANGUAGE plpgsql;
+CREATE TABLE citus_local_table_3 (value int);
+CREATE TRIGGER update_value_ref
+AFTER INSERT ON citus_local_table_3
+FOR EACH ROW EXECUTE PROCEDURE update_value();
+SELECT create_citus_local_table('citus_local_table_3');
+ create_citus_local_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- test foreign tables using fake FDW --
+CREATE FOREIGN TABLE foreign_table (
+  id bigint not null,
+  full_name text not null default ''
+) SERVER fake_fdw_server OPTIONS (encoding 'utf-8', compression 'true');
+-- observe that we do not create fdw server for shell table, both shard relation
+-- & shell relation points to the same same server object
+SELECT create_citus_local_table('foreign_table');
+NOTICE:  foreign-data wrapper "fake_fdw" does not have an extension defined
+NOTICE:  server "fake_fdw_server" already exists, skipping
+NOTICE:  foreign-data wrapper "fake_fdw" does not have an extension defined
+ create_citus_local_table
+---------------------------------------------------------------------
+
+(1 row)
+
 -- drop them for next tests
 DROP TABLE citus_local_table_1, citus_local_table_2, distributed_table;
 NOTICE:  executing the command locally: DROP TABLE IF EXISTS citus_local_tables_test_schema.citus_local_table_2_xxxxx CASCADE
@@ -234,7 +268,7 @@ SELECT create_citus_local_table('"CiTUS!LocalTables"."LocalTabLE.1!?!"');
 -- drop the table before creating it when the search path is set
 SET search_path to "CiTUS!LocalTables" ;
 DROP TABLE "LocalTabLE.1!?!";
-NOTICE:  executing the command locally: DROP TABLE IF EXISTS "CiTUS!LocalTables"."LocalTabLE.1!?!_1504031" CASCADE
+NOTICE:  executing the command locally: DROP TABLE IF EXISTS "CiTUS!LocalTables"."LocalTabLE.1!?!_1504033" CASCADE
 -- have a custom type in the local table
 CREATE TYPE local_type AS (key int, value jsonb);
 -- create btree_gist for GiST index
@@ -265,9 +299,9 @@ SELECT create_citus_local_table('"LocalTabLE.1!?!"');
 
 -- create some objects after create_citus_local_table
 CREATE INDEX "my!Index2" ON "LocalTabLE.1!?!"(id) WITH ( fillfactor = 90 ) WHERE id < 20;
-NOTICE:  executing the command locally: CREATE  INDEX   "my!Index2_1504032" ON "CiTUS!LocalTables"."LocalTabLE.1!?!_1504032" USING btree (id )  WITH (fillfactor = '90' )WHERE (id < 20)
+NOTICE:  executing the command locally: CREATE  INDEX   "my!Index2_1504034" ON "CiTUS!LocalTables"."LocalTabLE.1!?!_1504034" USING btree (id )  WITH (fillfactor = '90' )WHERE (id < 20)
 CREATE UNIQUE INDEX uniqueIndex2 ON "LocalTabLE.1!?!"(id);
-NOTICE:  executing the command locally: CREATE UNIQUE INDEX   uniqueindex2_1504032 ON "CiTUS!LocalTables"."LocalTabLE.1!?!_1504032" USING btree (id )
+NOTICE:  executing the command locally: CREATE UNIQUE INDEX   uniqueindex2_1504034 ON "CiTUS!LocalTables"."LocalTabLE.1!?!_1504034" USING btree (id )
 ---------------------------------------------------------------------
 ---- utility command execution ----
 ---------------------------------------------------------------------
@@ -276,22 +310,22 @@ SET search_path TO citus_local_tables_test_schema;
 -- most should error out (for now with meaningless error messages)
 -- between citus local tables
 ALTER TABLE citus_local_table_1 ADD CONSTRAINT fkey_c_to_c FOREIGN KEY(a) references citus_local_table_2(a);
-NOTICE:  executing the command locally: SELECT worker_apply_inter_shard_ddl_command (1504023, 'citus_local_tables_test_schema', 1504024, 'citus_local_tables_test_schema', 'ALTER TABLE citus_local_table_1 ADD CONSTRAINT fkey_c_to_c FOREIGN KEY(a) references citus_local_table_2(a);')
+NOTICE:  executing the command locally: SELECT worker_apply_inter_shard_ddl_command (1504025, 'citus_local_tables_test_schema', 1504026, 'citus_local_tables_test_schema', 'ALTER TABLE citus_local_table_1 ADD CONSTRAINT fkey_c_to_c FOREIGN KEY(a) references citus_local_table_2(a);')
 -- between citus local tables and reference tables
 ALTER TABLE citus_local_table_1 ADD CONSTRAINT fkey_c_to_ref FOREIGN KEY(a) references reference_table(a);
-NOTICE:  executing the command locally: SELECT worker_apply_inter_shard_ddl_command (1504023, 'citus_local_tables_test_schema', 1504029, 'citus_local_tables_test_schema', 'ALTER TABLE citus_local_table_1 ADD CONSTRAINT fkey_c_to_ref FOREIGN KEY(a) references reference_table(a);')
+NOTICE:  executing the command locally: SELECT worker_apply_inter_shard_ddl_command (1504025, 'citus_local_tables_test_schema', 1504031, 'citus_local_tables_test_schema', 'ALTER TABLE citus_local_table_1 ADD CONSTRAINT fkey_c_to_ref FOREIGN KEY(a) references reference_table(a);')
 ALTER TABLE reference_table ADD CONSTRAINT fkey_ref_to_c FOREIGN KEY(a) references citus_local_table_1(a);
-NOTICE:  executing the command locally: SELECT worker_apply_inter_shard_ddl_command (1504029, 'citus_local_tables_test_schema', 1504023, 'citus_local_tables_test_schema', 'ALTER TABLE reference_table ADD CONSTRAINT fkey_ref_to_c FOREIGN KEY(a) references citus_local_table_1(a);')
-ERROR:  relation "citus_local_tables_test_schema.citus_local_table_1_1504023" does not exist
+NOTICE:  executing the command locally: SELECT worker_apply_inter_shard_ddl_command (1504031, 'citus_local_tables_test_schema', 1504025, 'citus_local_tables_test_schema', 'ALTER TABLE reference_table ADD CONSTRAINT fkey_ref_to_c FOREIGN KEY(a) references citus_local_table_1(a);')
+ERROR:  relation "citus_local_tables_test_schema.citus_local_table_1_1504025" does not exist
 -- between citus local tables and distributed tables
 ALTER TABLE citus_local_table_1 ADD CONSTRAINT fkey_c_to_dist FOREIGN KEY(a) references distributed_table(a);
 ERROR:  cannot create foreign key constraint since foreign keys from reference tables to distributed tables are not supported
 ALTER TABLE distributed_table ADD CONSTRAINT fkey_dist_to_c FOREIGN KEY(a) references citus_local_table_1(a);
-ERROR:  relation "citus_local_tables_test_schema.citus_local_table_1_1504023" does not exist
+ERROR:  relation "citus_local_tables_test_schema.citus_local_table_1_1504025" does not exist
 -- between citus local tables and local tables
 ALTER TABLE citus_local_table_1 ADD CONSTRAINT fkey_c_to_local FOREIGN KEY(a) references local_table(a);
 ERROR:  cannot create foreign key constraint
 ALTER TABLE local_table ADD CONSTRAINT fkey_local_to_c FOREIGN KEY(a) references citus_local_table_1(a);
 -- cleanup at exit
 DROP SCHEMA citus_local_tables_test_schema, "CiTUS!LocalTables" CASCADE;
-NOTICE:  drop cascades to 17 other objects
+NOTICE:  drop cascades to 22 other objects

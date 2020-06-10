@@ -115,6 +115,35 @@ BEGIN;
   ALTER TABLE partitioned_table ATTACH PARTITION citus_local_table FOR VALUES FROM (20) TO (30);
 ROLLBACK;
 
+-- show that we allow triggers citus tables --
+
+-- create a simple function to be invoked by trigger
+CREATE FUNCTION update_value() RETURNS trigger AS $update_value$
+BEGIN
+    NEW.value := value+1 ;
+    RETURN NEW;
+END;
+$update_value$ LANGUAGE plpgsql;
+
+CREATE TABLE citus_local_table_3 (value int);
+
+CREATE TRIGGER update_value_ref
+AFTER INSERT ON citus_local_table_3
+FOR EACH ROW EXECUTE PROCEDURE update_value();
+
+SELECT create_citus_local_table('citus_local_table_3');
+
+-- test foreign tables using fake FDW --
+
+CREATE FOREIGN TABLE foreign_table (
+  id bigint not null,
+  full_name text not null default ''
+) SERVER fake_fdw_server OPTIONS (encoding 'utf-8', compression 'true');
+
+-- observe that we do not create fdw server for shell table, both shard relation
+-- & shell relation points to the same same server object
+SELECT create_citus_local_table('foreign_table');
+
 -- drop them for next tests
 DROP TABLE citus_local_table_1, citus_local_table_2, distributed_table;
 
