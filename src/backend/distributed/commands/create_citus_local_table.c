@@ -34,7 +34,7 @@
 #include "utils/syscache.h"
 
 
-static void ErrorIfUnsupportedCreateCitusLocalTable(Oid relationId);
+static void ErrorIfUnsupportedCreateCitusLocalTable(Relation relation);
 static void ErrorIfUnsupportedCitusLocalTableKind(Oid relationId);
 static void ErrorIfRelationIsAKnownShard(Oid relationId);
 static void ErrorIfTableHasExternalForeignKeys(Oid relationId);
@@ -90,8 +90,16 @@ create_citus_local_table(PG_FUNCTION_ARGS)
  * citus local table from the relation with relationId.
  */
 static void
-ErrorIfUnsupportedCreateCitusLocalTable(Oid relationId)
+ErrorIfUnsupportedCreateCitusLocalTable(Relation relation)
 {
+	if (!RelationIsValid(relation))
+	{
+		ereport(ERROR, (errmsg("cannot create citus local table, relation does "
+							   "not exist")));
+	}
+
+	Oid relationId = relation->rd_id;
+
 	ErrorIfCoordinatorNotAddedAsWorkerNode(relationId);
 	ErrorIfUnsupportedCitusLocalTableKind(relationId);
 	EnsureTableNotDistributed(relationId);
@@ -248,11 +256,14 @@ CreateCitusLocalTable(Oid relationId)
 	/*
 	 * Lock target relation with an AccessExclusiveLock as we don't want
 	 * multiple backends manipulating this relation. We could actually simply
-	 * lock the relation without opening it. However, we want postgres to
-	 * natively error out if the relation does not exist or dropped by another
-	 * backend.
+	 * lock the relation without opening it. However, we also want to check
+	 * if the relation does not exist or dropped by another backend. Also,
+	 * we open the relation with try_relation_open instead of relation_open
+	 * to give a nice error in case the table is dropped by another backend.
 	 */
-	Relation relation = relation_open(relationId, AccessExclusiveLock);
+	Relation relation = try_relation_open(relationId, AccessExclusiveLock);
+
+	ErrorIfUnsupportedCreateCitusLocalTable(relation);
 
 	/*
 	 * We immediately close relation with NoLock right after opening it. This is
@@ -263,7 +274,6 @@ CreateCitusLocalTable(Oid relationId)
 	 */
 	relation_close(relation, NoLock);
 
-	ErrorIfUnsupportedCreateCitusLocalTable(relationId);
 
 	ObjectAddress tableAddress = { 0 };
 	ObjectAddressSet(tableAddress, RelationRelationId, relationId);
