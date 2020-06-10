@@ -363,10 +363,22 @@ SELECT tdigest_percentile(latency, 100, 0.99) FROM latencies;
    9870.41882540529
 (1 row)
 
+SELECT tdigest_percentile(latency, 100, ARRAY[0.99, 0.95]) FROM latencies;
+         tdigest_percentile
+---------------------------------------------------------------------
+ {9870.41882540529,9446.22312263653}
+(1 row)
+
 SELECT tdigest_percentile_of(latency, 100, 9000) FROM latencies;
  tdigest_percentile_of
 ---------------------------------------------------------------------
       0.90381982378332
+(1 row)
+
+SELECT tdigest_percentile_of(latency, 100, ARRAY[9000, 9500]) FROM latencies;
+        tdigest_percentile_of
+---------------------------------------------------------------------
+ {0.90381982378332,0.955360984558234}
 (1 row)
 
 CREATE TABLE latencies_rollup (a int, tdigest tdigest);
@@ -578,6 +590,37 @@ GROUP BY a;
                ->  Seq Scan on tdigest_aggregate_support.latencies_rollup_20070004 latencies_rollup
                      Output: a, tdigest
 (11 rows)
+
+-- verifying results - should be stable due to seed while inserting the data, if failure due to data these queries could be removed or check for certain ranges
+SELECT tdigest(tdigest) FROM latencies_rollup;
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  tdigest
+---------------------------------------------------------------------
+ flags 0 count 10000 compression 100 centroids 47 (0.397027, 1) (4.993398, 1) (5.909367, 1) (6.324342, 1) (16.598357, 2) (27.860817, 2) (68.645138, 4) (118.100252, 6) (235.297521, 9) (491.835600, 14) (804.324113, 16) (1439.756100, 20) (4238.485418, 40) (8489.075894, 55) (18132.477668, 80) (38146.322296, 113) (76657.409439, 157) (148953.599120, 222) (314425.310846, 335) (576738.387295, 429) (1194020.195789, 637) (1676519.509559, 665) (3103165.153586, 951) (4631711.892518, 1083) (6137467.072964, 1139) (6330369.567568, 982) (6528388.542250, 884) (5226311.011971, 638) (4509363.082363, 516) (2883279.347420, 316) (1996426.238021, 213) (1374893.392698, 144) (1046728.457222, 108) (704540.815176, 72) (492439.595117, 50) (336578.081842, 34) (178789.925789, 18) (149287.748752, 15) (89723.811727, 9) (59858.117774, 6) (29948.844355, 3) (29951.824085, 3) (19974.743724, 2) (9989.097258, 1) (9995.834827, 1) (9996.046554, 1) (9998.566615, 1)
+(1 row)
+
+SELECT tdigest_percentile(tdigest, 0.99) FROM latencies_rollup;
+ tdigest_percentile
+---------------------------------------------------------------------
+   9871.66584217639
+(1 row)
+
+SELECT tdigest_percentile(tdigest, ARRAY[0.99, 0.95]) FROM latencies_rollup;
+         tdigest_percentile
+---------------------------------------------------------------------
+ {9871.66584217639,9446.41315573461}
+(1 row)
+
+SELECT tdigest_percentile_of(tdigest, 9000) FROM latencies_rollup;
+ tdigest_percentile_of
+---------------------------------------------------------------------
+     0.902676834944109
+(1 row)
+
+SELECT tdigest_percentile_of(tdigest, ARRAY[9000, 9500]) FROM latencies_rollup;
+         tdigest_percentile_of
+---------------------------------------------------------------------
+ {0.902676834944109,0.955566556385613}
+(1 row)
 
 SET client_min_messages TO WARNING; -- suppress cascade messages
 DROP SCHEMA tdigest_aggregate_support CASCADE;

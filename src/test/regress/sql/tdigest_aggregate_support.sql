@@ -118,7 +118,9 @@ GROUP BY b;
 -- verifying results - should be stable due to seed while inserting the data, if failure due to data these queries could be removed or check for certain ranges
 SELECT tdigest(latency, 100) FROM latencies;
 SELECT tdigest_percentile(latency, 100, 0.99) FROM latencies;
+SELECT tdigest_percentile(latency, 100, ARRAY[0.99, 0.95]) FROM latencies;
 SELECT tdigest_percentile_of(latency, 100, 9000) FROM latencies;
+SELECT tdigest_percentile_of(latency, 100, ARRAY[9000, 9500]) FROM latencies;
 
 CREATE TABLE latencies_rollup (a int, tdigest tdigest);
 SELECT create_distributed_table('latencies_rollup', 'a', colocate_with => 'latencies');
@@ -182,6 +184,12 @@ SELECT a, tdigest_percentile_of(tdigest, ARRAY[9000, 9500])
 FROM latencies_rollup
 GROUP BY a;
 
+-- verifying results - should be stable due to seed while inserting the data, if failure due to data these queries could be removed or check for certain ranges
+SELECT tdigest(tdigest) FROM latencies_rollup;
+SELECT tdigest_percentile(tdigest, 0.99) FROM latencies_rollup;
+SELECT tdigest_percentile(tdigest, ARRAY[0.99, 0.95]) FROM latencies_rollup;
+SELECT tdigest_percentile_of(tdigest, 9000) FROM latencies_rollup;
+SELECT tdigest_percentile_of(tdigest, ARRAY[9000, 9500]) FROM latencies_rollup;
 
 SET client_min_messages TO WARNING; -- suppress cascade messages
 DROP SCHEMA tdigest_aggregate_support CASCADE;
