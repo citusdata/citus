@@ -16,6 +16,8 @@
  */
 #include "distributed/pg_version_constants.h"
 
+#pragma GCC optimize ("O0")
+
 #include "pg_config.h"
 
 #if (PG_VERSION_NUM >= PG_VERSION_13) && (PG_VERSION_NUM < PG_VERSION_14)
@@ -3544,24 +3546,22 @@ get_variable(Var *var, int levelsup, bool istoplevel, deparse_context *context)
 			 var->varlevelsup, levelsup);
 	dpns = (deparse_namespace *) list_nth(context->namespaces,
 										  netlevelsup);
-	/*
-	 * If we have a syntactic referent for the Var, and we're working from a
-	 * parse tree, prefer to use the syntactic referent.  Otherwise, fall back
-	 * on the semantic referent.  (Forcing use of the semantic referent when
-	 * printing plan trees is a design choice that's perhaps more motivated by
-	 * backwards compatibility than anything else.  But it does have the
-	 * advantage of making plans more explicit.)
-	 */
-	// if (var->varnosyn > 0 && dpns->plan == NULL)
-	// {
-		// varno = var->varnosyn;
-		// varattno = var->varattnosyn;
-	// }
-	// else
-	// {
-		varno = var->varno;
-		varattno = var->varattno;
-	// }
+
+	varno = var->varno;
+	varattno = var->varattno;
+
+
+	if (var->varnosyn > 0 && var->varnosyn <= list_length(dpns->rtable) && dpns->plan == NULL) {
+		rte = rt_fetch(var->varnosyn, dpns->rtable);
+
+		// if the rte var->varnosync points to is not a regular table and it is a join 
+		// then the correct relname will be found with var->varnosync and var->varattnosync
+		// TODO:: this is a workaround and it can be simplified.
+		if (rte->rtekind == RTE_JOIN && rte->relid == 0 && var->varnosyn != var->varno) {
+			varno = var->varnosyn;
+			varattno = var->varattnosyn;
+		}
+	}
 
 	/*
 	 * Try to find the relevant RTE in this rtable.  In a plan tree, it's
