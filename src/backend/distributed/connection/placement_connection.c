@@ -627,6 +627,24 @@ FindPlacementListConnection(int flags, List *placementAccessList, const char *us
 				foundModifyingConnection = true;
 			}
 		}
+		else if (placementConnection->hadDDL || placementConnection->hadDML)
+		{
+			if (strcmp(placementConnection->userName, userName) != 0)
+			{
+				ereport(ERROR,
+						(errcode(ERRCODE_ACTIVE_SQL_TRANSACTION),
+						 errmsg("cannot perform query on placements that were "
+								"modified in this transaction by a different "
+								"user")));
+			}
+			ereport(ERROR,
+					(errcode(ERRCODE_ACTIVE_SQL_TRANSACTION),
+					 errmsg("cannot perform query, because modifications were "
+							"made over a connection that cannot be used at "
+							"this time. This is most likely a Citus bug so "
+							"please report it"
+							)));
+		}
 	}
 
 	return chosenConnection;
