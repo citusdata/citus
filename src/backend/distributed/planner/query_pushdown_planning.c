@@ -88,12 +88,9 @@ static bool ContainsRecurringRTE(RangeTblEntry *rangeTableEntry,
 static bool ContainsRecurringRangeTable(List *rangeTable, RecurringTuplesType *recurType);
 static bool HasRecurringTuples(Node *node, RecurringTuplesType *recurType);
 static MultiNode * SubqueryPushdownMultiNodeTree(Query *queryTree);
-static List * FlattenJoinVars(List *columnList, Query *queryTree);
-static Node * FlattenJoinVarsMutator(Node *node, Query *queryTree);
 static void UpdateVarMappingsForExtendedOpNode(List *columnList,
-											   List *flattenedColumnList,
 											   List *subqueryTargetEntryList);
-static void UpdateColumnToMatchingTargetEntry(Var *column, Node *flattenedExpr,
+static void UpdateColumnToMatchingTargetEntry(Var *column,
 											  List *targetEntryList);
 static MultiTable * MultiSubqueryPushdownTable(Query *subquery);
 static List * CreateSubqueryTargetEntryList(List *columnList);
@@ -1585,17 +1582,14 @@ SubqueryPushdownMultiNodeTree(Query *originalQuery)
 	List *havingClauseColumnList = pull_var_clause_default(queryTree->havingQual);
 	List *columnList = list_concat(targetColumnList, havingClauseColumnList);
 
-	List *flattenedExprList = FlattenJoinVars(columnList, queryTree);
-
 	/* create a target entry for each unique column */
-	List *subqueryTargetEntryList = CreateSubqueryTargetEntryList(flattenedExprList);
+	List *subqueryTargetEntryList = CreateSubqueryTargetEntryList(columnList);
 
 	/*
 	 * Update varno/varattno fields of columns in columnList to
 	 * point to corresponding target entry in subquery target entry list.
 	 */
-	UpdateVarMappingsForExtendedOpNode(columnList, flattenedExprList,
-									   subqueryTargetEntryList);
+	UpdateVarMappingsForExtendedOpNode(columnList, subqueryTargetEntryList);
 
 	/* new query only has target entries, join tree, and rtable*/
 	Query *pushedDownQuery = makeNode(Query);
@@ -1678,121 +1672,27 @@ SubqueryPushdownMultiNodeTree(Query *originalQuery)
 
 
 /*
- * FlattenJoinVars iterates over provided columnList to identify
- * Var's that are referenced from join RTE, and reverts back to their
- * original RTEs. Then, returns a new list with reverted types. Note that,
- * length of the original list and created list must be equal.
- *
- * This is required because Postgres allows columns to be referenced using
- * a join alias. Therefore the same column from a table could be referenced
- * twice using its absolute table name (t1.a), and without table name (a).
- * This is a problem when one of them is inside the group by clause and the
- * other is not. Postgres is smart about it to detect that both target columns
- * resolve to the same thing, and allows a single group by clause to cover
- * both target entries when standard planner is called. Since we operate on
- * the original query, we want to make sure we provide correct varno/varattno
- * values to Postgres so that it could produce valid query.
- *
- * Only exception is that, if a join is given an alias name, we do not want to
- * flatten those var's. If we do, deparsing fails since it expects to see a join
- * alias, and cannot access the RTE in the join tree by their names.
- *
- * Also note that in case of full outer joins, a column could be flattened to a
- * coalesce expression if the column appears in the USING clause.
- */
-static List *
-FlattenJoinVars(List *columnList, Query *queryTree)
-{
-	List *flattenedExprList = NIL;
-
-	ListCell *columnCell = NULL;
-	foreach(columnCell, columnList)
-	{
-		Node *column = strip_implicit_coercions(
-			FlattenJoinVarsMutator((Node *) lfirst(columnCell), queryTree));
-		flattenedExprList = lappend(flattenedExprList, copyObject(column));
-	}
-
-	return flattenedExprList;
-}
-
-
-/*
- * FlattenJoinVarsMutator flattens a single column var as outlined in the caller
- * function (FlattenJoinVars). It iterates the join tree to find the
- * lowest Var it can go. This is usually the relation range table var. However
- * if a join operation is given an alias, iteration stops at that level since the
- * query can not reference the inner RTE by name if the join is given an alias.
- */
-static Node *
-FlattenJoinVarsMutator(Node *node, Query *queryTree)
-{
-	if (node == NULL)
-	{
-		return NULL;
-	}
-
-	if (IsA(node, Var))
-	{
-		Var *column = (Var *) node;
-		RangeTblEntry *rte = rt_fetch(column->varno, queryTree->rtable);
-		if (rte->rtekind == RTE_JOIN)
-		{
-			/*
-			 * if join has an alias, it is copied over join RTE. We should
-			 * reference this RTE.
-			 */
-			if (rte->alias != NULL)
-			{
-				return (Node *) column;
-			}
-
-			/* join RTE does not have an alias defined at this level, deeper look is needed */
-			Assert(column->varattno > 0);
-			Node *newColumn = (Node *) list_nth(rte->joinaliasvars, column->varattno - 1);
-			Assert(newColumn != NULL);
-
-			/*
-			 * Ideally we should use expression_tree_mutator here. But it does not call
-			 * mutate function for Vars, thus we make a recursive call to make sure
-			 * not to miss Vars in nested joins.
-			 */
-			return FlattenJoinVarsMutator(newColumn, queryTree);
-		}
-		else
-		{
-			return node;
-		}
-	}
-
-	return expression_tree_mutator(node, FlattenJoinVarsMutator, (void *) queryTree);
-}
-
-
-/*
  * CreateSubqueryTargetEntryList creates a target entry for each unique column
  * in the column list and returns the target entry list.
  */
 static List *
-CreateSubqueryTargetEntryList(List *exprList)
+CreateSubqueryTargetEntryList(List *columnList)
 {
 	AttrNumber resNo = 1;
-	ListCell *exprCell = NULL;
-	List *uniqueExprList = NIL;
+	List *uniqueColumnList = NIL;
 	List *subqueryTargetEntryList = NIL;
 
-	foreach(exprCell, exprList)
+	Node *column = NULL;
+	foreach_ptr(column, columnList)
 	{
-		Node *expr = (Node *) lfirst(exprCell);
-		uniqueExprList = list_append_unique(uniqueExprList, expr);
+		uniqueColumnList = list_append_unique(uniqueColumnList, column);
 	}
 
-	foreach(exprCell, uniqueExprList)
+	foreach_ptr(column, uniqueColumnList)
 	{
-		Node *expr = (Node *) lfirst(exprCell);
 		TargetEntry *newTargetEntry = makeNode(TargetEntry);
 
-		newTargetEntry->expr = (Expr *) copyObject(expr);
+		newTargetEntry->expr = (Expr *) copyObject(column);
 		newTargetEntry->resname = WorkerColumnName(resNo);
 		newTargetEntry->resjunk = false;
 		newTargetEntry->resno = resNo;
@@ -1811,19 +1711,11 @@ CreateSubqueryTargetEntryList(List *exprList)
  * list.
  */
 static void
-UpdateVarMappingsForExtendedOpNode(List *columnList, List *flattenedExprList,
-								   List *subqueryTargetEntryList)
+UpdateVarMappingsForExtendedOpNode(List *columnList, List *subqueryTargetEntryList)
 {
-	ListCell *columnCell = NULL;
-	ListCell *flattenedExprCell = NULL;
-
-	Assert(list_length(columnList) == list_length(flattenedExprList));
-
-	forboth(columnCell, columnList, flattenedExprCell, flattenedExprList)
+	Var *column = NULL;
+	foreach_ptr(column, columnList)
 	{
-		Var *columnOnTheExtendedNode = (Var *) lfirst(columnCell);
-		Node *flattenedExpr = (Node *) lfirst(flattenedExprCell);
-
 		/*
 		 * As an optimization, subqueryTargetEntryList only consists of
 		 * distinct elements. In other words, any duplicate entries in the
@@ -1835,8 +1727,7 @@ UpdateVarMappingsForExtendedOpNode(List *columnList, List *flattenedExprList,
 		 * and ensure that the column on the extended op node points to the
 		 * correct target entry.
 		 */
-		UpdateColumnToMatchingTargetEntry(columnOnTheExtendedNode, flattenedExpr,
-										  subqueryTargetEntryList);
+		UpdateColumnToMatchingTargetEntry(column, subqueryTargetEntryList);
 	}
 }
 
@@ -1847,7 +1738,7 @@ UpdateVarMappingsForExtendedOpNode(List *columnList, List *flattenedExprList,
  * be different from the types of the elements of targetEntryList, we use flattenedExpr.
  */
 static void
-UpdateColumnToMatchingTargetEntry(Var *column, Node *flattenedExpr, List *targetEntryList)
+UpdateColumnToMatchingTargetEntry(Var *column, List *targetEntryList)
 {
 	ListCell *targetEntryCell = NULL;
 
@@ -1859,32 +1750,10 @@ UpdateColumnToMatchingTargetEntry(Var *column, Node *flattenedExpr, List *target
 		{
 			Var *targetEntryVar = (Var *) targetEntry->expr;
 
-			if (IsA(flattenedExpr, Var) && equal(flattenedExpr, targetEntryVar))
+			if (IsA(column, Var) && equal(column, targetEntryVar))
 			{
 				column->varno = 1;
 				column->varattno = targetEntry->resno;
-				break;
-			}
-		}
-		else if (IsA(targetEntry->expr, CoalesceExpr))
-		{
-			/*
-			 * FlattenJoinVars() flattens full outer joins' columns that is
-			 * in the USING part into COALESCE(left_col, right_col)
-			 */
-
-			if (IsA(flattenedExpr, CoalesceExpr) && equal(flattenedExpr,
-														  targetEntry->expr))
-			{
-				Oid expressionType = exprType(flattenedExpr);
-				int32 expressionTypmod = exprTypmod(flattenedExpr);
-				Oid expressionCollation = exprCollation(flattenedExpr);
-
-				column->varno = 1;
-				column->varattno = targetEntry->resno;
-				column->vartype = expressionType;
-				column->vartypmod = expressionTypmod;
-				column->varcollid = expressionCollation;
 				break;
 			}
 		}
