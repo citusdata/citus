@@ -29,6 +29,7 @@
 #include "distributed/multi_logical_optimizer.h"
 #include "distributed/multi_logical_planner.h"
 #include "distributed/multi_physical_planner.h"
+#include "distributed/reference_table_utils.h"
 #include "distributed/relation_restriction_equivalence.h"
 #include "distributed/query_pushdown_planning.h"
 #include "distributed/query_utils.h"
@@ -466,7 +467,7 @@ IsReferenceTableRTE(Node *node)
 {
 	Oid relationId = NodeTryGetRteRelid(node);
 	return relationId != InvalidOid && IsCitusTable(relationId) &&
-		   PartitionMethod(relationId) == DISTRIBUTE_BY_NONE;
+		   IsReferenceTable(relationId);
 }
 
 
