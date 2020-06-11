@@ -63,7 +63,7 @@ TDigestExtensionSchema()
 
 
 /*
- * TDigestExtensionTypeOid preforms a lookup for the Oid of the type representing the
+ * TDigestExtensionTypeOid performs a lookup for the Oid of the type representing the
  * tdigest as installed by the tdigest extension returns InvalidOid if the type cannot be
  * found.
  */
