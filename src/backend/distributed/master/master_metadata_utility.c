@@ -489,21 +489,14 @@ LoadShardIntervalList(Oid relationId)
 
 /*
  * ShardIntervalCount returns number of shard intervals for a given distributed table.
- * The function returns 0 if table is not distributed, or no shards can be found for
- * the given relation id.
+ * The function returns 0 if no shards can be found for the given relation id.
  */
 int
 ShardIntervalCount(Oid relationId)
 {
 	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
-	int shardIntervalCount = 0;
 
-	if (cacheEntry->isCitusTable)
-	{
-		shardIntervalCount = cacheEntry->shardIntervalArrayLength;
-	}
-
-	return shardIntervalCount;
+	return cacheEntry->shardIntervalArrayLength;
 }
 
 
