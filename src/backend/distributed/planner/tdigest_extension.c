@@ -9,12 +9,13 @@
 #include "postgres.h"
 
 #include "access/genam.h"
-#include "catalog/pg_type.h"
-#include "utils/fmgroids.h"
+#include "access/htup_details.h"
 #include "catalog/pg_extension.h"
+#include "catalog/pg_type.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/tdigest_extension.h"
 #include "parser/parse_func.h"
+#include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
 
 
