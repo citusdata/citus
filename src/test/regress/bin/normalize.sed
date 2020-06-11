@@ -116,3 +116,7 @@ s/pg_catalog.citus_extradata_container\([0-9]+/pg_catalog.citus_extradata_contai
 /replicating reference table.*$/d
 
 s/Citus.*currently supports/Citus currently supports/g
+
+# Warnings in multi_explain
+s/prepared transaction with identifier .* does not exist/prepared transaction with identifier "citus_x_yyyyyy_zzz_w" does not exist/g
+s/failed to roll back prepared transaction '.*'/failed to roll back prepared transaction 'citus_x_yyyyyy_zzz_w'/g

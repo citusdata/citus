@@ -517,10 +517,22 @@ PREPARE real_time_executor_query AS
 	SELECT avg(l_linenumber) FROM lineitem WHERE l_orderkey > 9030;
 EXPLAIN (COSTS FALSE) EXECUTE real_time_executor_query;
 
+
 -- EXPLAIN EXECUTE of parametrized prepared statements is broken, but
 -- at least make sure to fail without crashing
 PREPARE router_executor_query_param(int) AS SELECT l_quantity FROM lineitem WHERE l_orderkey = $1;
 EXPLAIN EXECUTE router_executor_query_param(5);
+EXPLAIN (ANALYZE ON, COSTS OFF, TIMING OFF, SUMMARY OFF) EXECUTE router_executor_query_param(5);
+
+\set VERBOSITY TERSE
+PREPARE multi_shard_query_param(int) AS UPDATE lineitem SET l_quantity = $1;
+BEGIN;
+EXPLAIN EXECUTE multi_shard_query_param(5);
+ROLLBACK;
+BEGIN;
+EXPLAIN (ANALYZE ON, COSTS OFF, TIMING OFF, SUMMARY OFF) EXECUTE multi_shard_query_param(5);
+ROLLBACK;
+\set VERBOSITY DEFAULT
 
 -- test explain in a transaction with alter table to test we use right connections
 BEGIN;

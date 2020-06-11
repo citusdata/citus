@@ -1188,6 +1188,37 @@ Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=100000 width=18)
         Node: host=localhost port=xxxxx dbname=regression
         ->  Index Scan using lineitem_pkey_290000 on lineitem_290000 lineitem  (cost=0.28..13.60 rows=4 width=5)
               Index Cond: (l_orderkey = 5)
+EXPLAIN (ANALYZE ON, COSTS OFF, TIMING OFF, SUMMARY OFF) EXECUTE router_executor_query_param(5);
+Custom Scan (Citus Adaptive) (actual rows=3 loops=1)
+  Task Count: 1
+  Tasks Shown: All
+  ->  Task
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Index Scan using lineitem_pkey_290000 on lineitem_290000 lineitem (actual rows=3 loops=1)
+              Index Cond: (l_orderkey = 5)
+\set VERBOSITY TERSE
+PREPARE multi_shard_query_param(int) AS UPDATE lineitem SET l_quantity = $1;
+BEGIN;
+EXPLAIN EXECUTE multi_shard_query_param(5);
+WARNING:  there is no parameter $1
+WARNING:  there is no parameter $1
+Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
+  Task Count: 2
+  Tasks Shown: One of 2
+  ->  Task
+        Error: Could not get remote plan.
+ROLLBACK;
+BEGIN;
+EXPLAIN (ANALYZE ON, COSTS OFF, TIMING OFF, SUMMARY OFF) EXECUTE multi_shard_query_param(5);
+WARNING:  there is no parameter $1
+WARNING:  there is no parameter $1
+Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
+  Task Count: 2
+  Tasks Shown: One of 2
+  ->  Task
+        Error: Could not get remote plan.
+ROLLBACK;
+\set VERBOSITY DEFAULT
 -- test explain in a transaction with alter table to test we use right connections
 BEGIN;
 CREATE TABLE explain_table(id int);
