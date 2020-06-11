@@ -143,6 +143,7 @@
 #include "distributed/local_executor.h"
 #include "distributed/multi_client_executor.h"
 #include "distributed/multi_executor.h"
+#include "distributed/multi_explain.h"
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_resowner.h"
@@ -187,12 +188,6 @@ typedef struct DistributedExecution
 	List *tasksToExecute;
 	List *remoteTaskList;
 	List *localTaskList;
-
-	/*
-	 * Corresponding distributed plan returns results,
-	 * either because it is a SELECT or has RETURNING.
-	 */
-	bool expectResults;
 
 	/*
 	 * If a task specific destination is not provided for a task, then use
@@ -490,9 +485,6 @@ typedef struct ShardCommandExecution
 	struct TaskPlacementExecution **placementExecutions;
 	int placementExecutionCount;
 
-	/* whether we expect results to come back */
-	bool expectResults;
-
 	/*
 	 * RETURNING results from other shard placements can be ignored
 	 * after we got results from the first placements.
@@ -562,7 +554,6 @@ typedef struct TaskPlacementExecution
 /* local functions */
 static DistributedExecution * CreateDistributedExecution(RowModifyLevel modLevel,
 														 List *taskList,
-														 bool expectResults,
 														 ParamListInfo paramListInfo,
 														 int targetPoolSize,
 														 TupleDestination *
@@ -694,6 +685,12 @@ AdaptiveExecutor(CitusScanState *scanState)
 	TupleDestination *defaultTupleDest =
 		CreateTupleStoreTupleDest(scanState->tuplestorestate, tupleDescriptor);
 
+	if (RequestedForExplainAnalyze(scanState))
+	{
+		taskList = ExplainAnalyzeTaskList(taskList, defaultTupleDest, tupleDescriptor,
+										  paramListInfo);
+	}
+
 	bool hasDependentJobs = HasDependentJobs(job);
 	if (hasDependentJobs)
 	{
@@ -714,7 +711,6 @@ AdaptiveExecutor(CitusScanState *scanState)
 	DistributedExecution *execution = CreateDistributedExecution(
 		distributedPlan->modLevel,
 		taskList,
-		distributedPlan->expectResults,
 		paramListInfo,
 		targetPoolSize,
 		defaultTupleDest,
@@ -1010,9 +1006,8 @@ ExecuteTaskListExtended(ExecutionParams *executionParams)
 	DistributedExecution *execution =
 		CreateDistributedExecution(
 			executionParams->modLevel, remoteTaskList,
-			executionParams->expectResults, paramListInfo,
-			executionParams->targetPoolSize, defaultTupleDest,
-			&executionParams->xactProperties,
+			paramListInfo, executionParams->targetPoolSize,
+			defaultTupleDest, &executionParams->xactProperties,
 			executionParams->jobIdList);
 
 	StartDistributedExecution(execution);
@@ -1055,7 +1050,7 @@ CreateBasicExecutionParams(RowModifyLevel modLevel,
  */
 static DistributedExecution *
 CreateDistributedExecution(RowModifyLevel modLevel, List *taskList,
-						   bool expectResults, ParamListInfo paramListInfo,
+						   ParamListInfo paramListInfo,
 						   int targetPoolSize, TupleDestination *defaultTupleDest,
 						   TransactionProperties *xactProperties,
 						   List *jobIdList)
@@ -1065,7 +1060,6 @@ CreateDistributedExecution(RowModifyLevel modLevel, List *taskList,
 
 	execution->modLevel = modLevel;
 	execution->tasksToExecute = taskList;
-	execution->expectResults = expectResults;
 	execution->transactionProperties = xactProperties;
 
 	execution->localTaskList = NIL;
@@ -1723,7 +1717,6 @@ AssignTasksToConnectionsOrWorkerPool(DistributedExecution *execution)
 {
 	RowModifyLevel modLevel = execution->modLevel;
 	List *taskList = execution->tasksToExecute;
-	bool expectResults = execution->expectResults;
 
 	int32 localGroupId = GetLocalGroupId();
 
@@ -1763,9 +1756,6 @@ AssignTasksToConnectionsOrWorkerPool(DistributedExecution *execution)
 				TupleDescGetAttInMetadata(tupleDescriptor) :
 				NULL;
 		}
-
-		shardCommandExecution->expectResults =
-			expectResults && !task->partiallyLocalOrRemote;
 
 		ShardPlacement *taskPlacement = NULL;
 		foreach_ptr(taskPlacement, task->taskPlacementList)
@@ -3178,11 +3168,23 @@ TransactionStateMachine(WorkerSession *session)
 				TaskPlacementExecution *placementExecution = session->currentTask;
 				ShardCommandExecution *shardCommandExecution =
 					placementExecution->shardCommandExecution;
-				bool storeRows = shardCommandExecution->expectResults;
+				Task *task = shardCommandExecution->task;
+
+				/*
+				 * In EXPLAIN ANALYZE we need to store results except for multiple placements,
+				 * regardless of query type. In other cases, doing the same doesn't seem to have
+				 * a drawback.
+				 */
+				bool storeRows = true;
 
 				if (shardCommandExecution->gotResults)
 				{
 					/* already received results from another replica */
+					storeRows = false;
+				}
+				else if (task->partiallyLocalOrRemote)
+				{
+					/* already received results from local execution */
 					storeRows = false;
 				}
 

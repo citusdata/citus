@@ -337,6 +337,13 @@ typedef struct Task
 	 * NULL, in which case executor might use a default destination.
 	 */
 	struct TupleDestination *tupleDest;
+
+	/*
+	 * EXPLAIN ANALYZE output fetched from worker. This is saved to be used later
+	 * by RemoteExplain().
+	 */
+	char *fetchedExplainAnalyzePlan;
+	int fetchedExplainAnalyzePlacementIndex;
 } Task;
 
 
