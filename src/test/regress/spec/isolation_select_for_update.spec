@@ -76,19 +76,21 @@ step "s1-select-from-t1-rt-with-lc-for-update"
 
 step "s1-select-from-t1-within-cte"
 {
-	WITH first_value AS ( SELECT val_1 FROM test_table_1_rf1 WHERE id = 1 FOR UPDATE)
-	SELECT * FROM first_value;
+	WITH first_value AS (SELECT val_1 FROM test_table_1_rf1 WHERE id = 1 FOR UPDATE)
+	SELECT * FROM first_value WHERE EXISTS (SELECT * FROM first_value);
 }
 
 step "s1-update-rt-with-cte-select-from-rt"
 {
 	WITH foo AS (SELECT * FROM ref_table FOR UPDATE)
-	UPDATE ref_table SET val_1 = 4 FROM foo WHERE ref_table.id = foo.id;
+	UPDATE ref_table SET val_1 = 4 FROM foo WHERE ref_table.id = foo.id AND EXISTS (SELECT * FROM foo);
 }
 
 step "s1-select-from-t1-with-subquery"
 {
+	SET client_min_messages TO DEBUG2;
 	SELECT * FROM (SELECT * FROM test_table_1_rf1 FOR UPDATE) foo WHERE id = 1;
+	RESET client_min_messages;
 }
 
 step "s1-select-from-rt-with-subquery"

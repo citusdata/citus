@@ -458,6 +458,19 @@ IsDistributedTableRTE(Node *node)
 
 
 /*
+ * IsReferenceTableRTE gets a node and returns true if the node
+ * is a range table relation entry that points to a reference table.
+ */
+bool
+IsReferenceTableRTE(Node *node)
+{
+	Oid relationId = NodeTryGetRteRelid(node);
+	return relationId != InvalidOid && IsCitusTable(relationId) &&
+		   PartitionMethod(relationId) == DISTRIBUTE_BY_NONE;
+}
+
+
+/*
  * FullCompositeFieldList gets a composite field list, and checks if all fields
  * of composite type are used in the list.
  */

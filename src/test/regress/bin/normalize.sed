@@ -60,6 +60,9 @@ s/(job_[0-9]+\/task_[0-9]+\/p_[0-9]+\.)[0-9]+/\1xxxx/g
 # isolation_ref2ref_foreign_keys
 s/"(ref_table_[0-9]_|ref_table_[0-9]_value_fkey_)[0-9]+"/"\1xxxxxxx"/g
 
+# pg11/pg12 varies in isolation debug output
+s/s1: DEBUG:/DEBUG:/g
+
 # commands cascading to shard relations
 s/(NOTICE:  .*_)[0-9]{5,}( CASCADE)/\1xxxxx\2/g
 s/(NOTICE:  [a-z]+ cascades to table ".*)_[0-9]{5,}"/\1_xxxxx"/g

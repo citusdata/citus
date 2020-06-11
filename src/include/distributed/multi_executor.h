@@ -123,7 +123,7 @@ extern uint64 ExecuteTaskListExtended(ExecutionParams *executionParams);
 extern uint64 ExecuteTaskListIntoTupleStore(RowModifyLevel modLevel, List *taskList,
 											TupleDesc tupleDescriptor,
 											Tuplestorestate *tupleStore,
-											bool hasReturning);
+											bool expectResults);
 extern bool IsCitusCustomState(PlanState *planState);
 extern TupleTableSlot * CitusExecScan(CustomScanState *node);
 extern TupleTableSlot * ReturnTupleFromTuplestore(CitusScanState *scanState);

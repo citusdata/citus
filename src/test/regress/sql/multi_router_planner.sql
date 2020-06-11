@@ -171,6 +171,32 @@ SELECT * FROM articles_hash WHERE author_id IN (1, NULL) ORDER BY id;
 WITH first_author AS ( SELECT id FROM articles_hash WHERE author_id = 1)
 SELECT * FROM first_author;
 
+-- SELECT FOR UPDATE is supported if not involving reference table
+BEGIN;
+WITH first_author AS (
+    SELECT articles_hash.id, auref.name FROM articles_hash, authors_reference auref
+    WHERE author_id = 2 AND auref.id = author_id
+    FOR UPDATE
+)
+UPDATE articles_hash SET title = first_author.name
+FROM first_author WHERE articles_hash.author_id = 2 AND articles_hash.id = first_author.id;
+
+WITH first_author AS (
+    SELECT id, word_count FROM articles_hash WHERE author_id = 2
+    FOR UPDATE
+)
+UPDATE articles_hash SET title = first_author.word_count::text
+FROM first_author WHERE articles_hash.author_id = 2 AND articles_hash.id = first_author.id;
+
+-- Without FOR UPDATE this is router plannable
+WITH first_author AS (
+    SELECT articles_hash.id, auref.name FROM articles_hash, authors_reference auref
+    WHERE author_id = 2 AND auref.id = author_id
+)
+UPDATE articles_hash SET title = first_author.name
+FROM first_author WHERE articles_hash.author_id = 2 AND articles_hash.id = first_author.id;
+ROLLBACK;
+
 -- queries with CTEs are supported even if CTE is not referenced inside query
 WITH first_author AS ( SELECT id FROM articles_hash WHERE author_id = 1)
 SELECT title FROM articles_hash WHERE author_id = 1;
@@ -1038,7 +1064,8 @@ SELECT count(*), count(*) FILTER (WHERE id < 3)
 PREPARE author_1_articles as
 	SELECT *
 	FROM articles_hash
-	WHERE author_id = 1;
+	WHERE author_id = 1
+	ORDER BY 1;
 
 EXECUTE author_1_articles;
 
@@ -1046,7 +1073,8 @@ EXECUTE author_1_articles;
 PREPARE author_articles(int) as
 	SELECT *
 	FROM articles_hash
-	WHERE author_id = $1;
+	WHERE author_id = $1
+	ORDER BY 1;
 
 EXECUTE author_articles(1);
 
@@ -1076,7 +1104,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-SELECT * FROM author_articles_id_word_count();
+SELECT * FROM author_articles_id_word_count() ORDER BY 1;
 
 -- materialized views can be created for router plannable queries
 CREATE MATERIALIZED VIEW mv_articles_hash_empty AS
@@ -1091,7 +1119,8 @@ SELECT * FROM mv_articles_hash_data ORDER BY 1, 2, 3, 4;
 SET citus.task_executor_type to 'task-tracker';
 SELECT id
 	FROM articles_hash
-	WHERE author_id = 1;
+	WHERE author_id = 1
+	ORDER BY 1;
 
 -- insert query is router plannable even under task-tracker
 INSERT INTO articles_hash VALUES (51, 1, 'amateus', 1814), (52, 1, 'second amateus', 2824);
@@ -1099,7 +1128,8 @@ INSERT INTO articles_hash VALUES (51, 1, 'amateus', 1814), (52, 1, 'second amate
 -- verify insert is successful (not router plannable and executable)
 SELECT id
 	FROM articles_hash
-	WHERE author_id = 1;
+	WHERE author_id = 1
+	ORDER BY 1;
 
 -- https://github.com/citusdata/citus/issues/3624
 UPDATE articles_hash SET id = id
