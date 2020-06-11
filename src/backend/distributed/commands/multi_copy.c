@@ -820,7 +820,7 @@ OpenCopyConnectionsForNewShards(CopyStmt *copyStatement,
 		 * This code-path doesn't support optional connections, so we don't expect
 		 * NULL connections.
 		 */
-		Assert(connection != NULL && (connectionFlags & OPTIONAL_CONNECTION) == 0);
+		Assert(connection != NULL);
 
 		if (PQstatus(connection->pgConn) != CONNECTION_OK)
 		{
@@ -2998,7 +2998,7 @@ CitusCopyTo(CopyStmt *copyStatement, char *completionTag)
 			 * This code-path doesn't support optional connections, so we don't expect
 			 * NULL connections.
 			 */
-			Assert(connection != NULL && (connectionFlags & OPTIONAL_CONNECTION) == 0);
+			Assert(connection != NULL);
 
 			if (placementIndex == list_length(shardPlacementList) - 1)
 			{

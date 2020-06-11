@@ -300,7 +300,7 @@ master_append_table_to_shard(PG_FUNCTION_ARGS)
 		 * This code-path doesn't support optional connections, so we don't expect
 		 * NULL connections.
 		 */
-		Assert(connection != NULL && (connectionFlags & OPTIONAL_CONNECTION) == 0);
+		Assert(connection != NULL);
 
 		PGresult *queryResult = NULL;
 
@@ -874,7 +874,7 @@ WorkerShardStats(ShardPlacement *placement, Oid relationId, const char *shardNam
 	 * This code-path doesn't support optional connections, so we don't expect
 	 * NULL connections.
 	 */
-	Assert(connection != NULL && (connectionFlags & OPTIONAL_CONNECTION) == 0);
+	Assert(connection != NULL);
 
 	*shardSize = 0;
 	*shardMinValue = NULL;

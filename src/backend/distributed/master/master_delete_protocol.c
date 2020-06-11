@@ -550,7 +550,7 @@ ExecuteDropShardPlacementCommandRemotely(ShardPlacement *shardPlacement,
 	 * This code-path doesn't support optional connections, so we don't expect
 	 * NULL connections.
 	 */
-	Assert(connection != NULL && (connectionFlags & OPTIONAL_CONNECTION) == 0);
+	Assert(connection != NULL);
 
 	RemoteTransactionBeginIfNecessary(connection);
 
