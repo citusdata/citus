@@ -1,6 +1,6 @@
 
 CREATE OR REPLACE FUNCTION pg_catalog.worker_last_saved_explain_analyze()
-    RETURNS TEXT
+    RETURNS TABLE(explain_analyze_output TEXT, execution_duration DOUBLE PRECISION)
     LANGUAGE C STRICT
     AS 'citus';
 COMMENT ON FUNCTION pg_catalog.worker_last_saved_explain_analyze() IS

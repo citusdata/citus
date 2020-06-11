@@ -636,7 +636,7 @@ INSERT INTO explain_analyze_test VALUES (1, 'value 1'), (2, 'value 2'), (3, 'val
 -- simple select
 BEGIN;
 SELECT * FROM worker_save_query_explain_analyze('SELECT 1', :default_opts) as (a int);
-SELECT worker_last_saved_explain_analyze();
+SELECT explain_analyze_output FROM worker_last_saved_explain_analyze();
 END;
 
 -- insert into select
@@ -644,14 +644,14 @@ BEGIN;
 SELECT * FROM worker_save_query_explain_analyze($Q$
        INSERT INTO explain_analyze_test SELECT i, i::text FROM generate_series(1, 5) i $Q$,
 	   :default_opts) as (a int);
-SELECT worker_last_saved_explain_analyze();
+SELECT explain_analyze_output FROM worker_last_saved_explain_analyze();
 ROLLBACK;
 
 -- select from table
 BEGIN;
 SELECT * FROM worker_save_query_explain_analyze($Q$SELECT * FROM explain_analyze_test$Q$,
 	   											:default_opts) as (a int, b text);
-SELECT worker_last_saved_explain_analyze();
+SELECT explain_analyze_output FROM worker_last_saved_explain_analyze();
 ROLLBACK;
 
 -- insert into with returning
@@ -660,7 +660,7 @@ SELECT * FROM worker_save_query_explain_analyze($Q$
        INSERT INTO explain_analyze_test SELECT i, i::text FROM generate_series(1, 5) i
 	   RETURNING a, b$Q$,
 	   :default_opts) as (a int, b text);
-SELECT worker_last_saved_explain_analyze();
+SELECT explain_analyze_output FROM worker_last_saved_explain_analyze();
 ROLLBACK;
 
 -- delete with returning
@@ -669,7 +669,7 @@ SELECT * FROM worker_save_query_explain_analyze($Q$
        DELETE FROM explain_analyze_test WHERE a % 2 = 0
 	   RETURNING a, b$Q$,
 	   :default_opts) as (a int, b text);
-SELECT worker_last_saved_explain_analyze();
+SELECT explain_analyze_output FROM worker_last_saved_explain_analyze();
 ROLLBACK;
 
 -- delete without returning
@@ -677,7 +677,7 @@ BEGIN;
 SELECT * FROM worker_save_query_explain_analyze($Q$
        DELETE FROM explain_analyze_test WHERE a % 2 = 0$Q$,
 	   :default_opts) as (a int);
-SELECT worker_last_saved_explain_analyze();
+SELECT explain_analyze_output FROM worker_last_saved_explain_analyze();
 ROLLBACK;
 
 -- multiple queries (should ERROR)
@@ -692,56 +692,62 @@ SELECT * FROM worker_save_query_explain_analyze('SELECT 1', '{"format": "invlaid
 -- test formats
 BEGIN;
 SELECT * FROM worker_save_query_explain_analyze('SELECT 1', '{"format": "text", "costs": false}') as (a int);
-SELECT worker_last_saved_explain_analyze();
+SELECT explain_analyze_output FROM worker_last_saved_explain_analyze();
 SELECT * FROM worker_save_query_explain_analyze('SELECT 1', '{"format": "json", "costs": false}') as (a int);
-SELECT worker_last_saved_explain_analyze();
+SELECT explain_analyze_output FROM worker_last_saved_explain_analyze();
 SELECT * FROM worker_save_query_explain_analyze('SELECT 1', '{"format": "xml", "costs": false}') as (a int);
-SELECT worker_last_saved_explain_analyze();
+SELECT explain_analyze_output FROM worker_last_saved_explain_analyze();
 SELECT * FROM worker_save_query_explain_analyze('SELECT 1', '{"format": "yaml", "costs": false}') as (a int);
-SELECT worker_last_saved_explain_analyze();
+SELECT explain_analyze_output FROM worker_last_saved_explain_analyze();
 END;
 
 -- costs on, timing off
 BEGIN;
 SELECT * FROM worker_save_query_explain_analyze('SELECT * FROM explain_analyze_test', '{"timing": false, "costs": true}') as (a int);
-SELECT worker_last_saved_explain_analyze() ~ 'Seq Scan.*\(cost=0.00.*\) \(actual rows.*\)';
+SELECT explain_analyze_output ~ 'Seq Scan.*\(cost=0.00.*\) \(actual rows.*\)' FROM worker_last_saved_explain_analyze();
 END;
 
 -- costs off, timing on
 BEGIN;
 SELECT * FROM worker_save_query_explain_analyze('SELECT * FROM explain_analyze_test', '{"timing": true, "costs": false}') as (a int);
-SELECT worker_last_saved_explain_analyze() ~ 'Seq Scan on explain_analyze_test \(actual time=.* rows=.* loops=1\)';
+SELECT explain_analyze_output ~ 'Seq Scan on explain_analyze_test \(actual time=.* rows=.* loops=1\)' FROM worker_last_saved_explain_analyze();
 END;
 
 -- summary on
 BEGIN;
 SELECT * FROM worker_save_query_explain_analyze('SELECT 1', '{"timing": false, "costs": false, "summary": true}') as (a int);
-SELECT worker_last_saved_explain_analyze() ~ 'Planning Time:.*Execution Time:.*';
+SELECT explain_analyze_output ~ 'Planning Time:.*Execution Time:.*' FROM worker_last_saved_explain_analyze();
 END;
 
 -- buffers on
 BEGIN;
 SELECT * FROM worker_save_query_explain_analyze('SELECT * FROM explain_analyze_test', '{"timing": false, "costs": false, "buffers": true}') as (a int);
-SELECT worker_last_saved_explain_analyze() ~ 'Buffers:';
+SELECT explain_analyze_output ~ 'Buffers:' FROM worker_last_saved_explain_analyze();
 END;
 
 -- verbose on
 BEGIN;
 SELECT * FROM worker_save_query_explain_analyze('SELECT * FROM explain_analyze_test', '{"timing": false, "costs": false, "verbose": true}') as (a int);
-SELECT worker_last_saved_explain_analyze() ~ 'Output: a, b';
+SELECT explain_analyze_output ~ 'Output: a, b' FROM worker_last_saved_explain_analyze();
 END;
 
 -- make sure deleted at transaction end
 SELECT * FROM worker_save_query_explain_analyze('SELECT 1', '{}') as (a int);
-SELECT worker_last_saved_explain_analyze() IS NULL;
+SELECT count(*) FROM worker_last_saved_explain_analyze();
 
 -- should be deleted at the end of prepare commit
 BEGIN;
 SELECT * FROM worker_save_query_explain_analyze('UPDATE explain_analyze_test SET a=6 WHERE a=4', '{}') as (a int);
-SELECT worker_last_saved_explain_analyze() IS NOT NULL;
+SELECT count(*) FROM worker_last_saved_explain_analyze();
 PREPARE TRANSACTION 'citus_0_1496350_7_0';
-SELECT worker_last_saved_explain_analyze() IS NULL;
+SELECT count(*) FROM worker_last_saved_explain_analyze();
 COMMIT PREPARED 'citus_0_1496350_7_0';
+
+-- verify execution time makes sense
+BEGIN;
+SELECT count(*) FROM worker_save_query_explain_analyze('SELECT pg_sleep(0.05)', :default_opts) as (a int);
+SELECT execution_duration BETWEEN 30 AND 200 FROM worker_last_saved_explain_analyze();
+END;
 
 SELECT * FROM explain_analyze_test ORDER BY a;
 

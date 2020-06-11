@@ -1437,10 +1437,10 @@ SELECT * FROM worker_save_query_explain_analyze('SELECT 1', :default_opts) as (a
  1
 (1 row)
 
-SELECT worker_last_saved_explain_analyze();
- worker_last_saved_explain_analyze
+SELECT explain_analyze_output FROM worker_last_saved_explain_analyze();
+     explain_analyze_output
 ---------------------------------------------------------------------
- Result (actual rows=1 loops=1)   +
+ Result (actual rows=1 loops=1)+
 
 (1 row)
 
@@ -1454,8 +1454,8 @@ SELECT * FROM worker_save_query_explain_analyze($Q$
 ---------------------------------------------------------------------
 (0 rows)
 
-SELECT worker_last_saved_explain_analyze();
-                worker_last_saved_explain_analyze
+SELECT explain_analyze_output FROM worker_last_saved_explain_analyze();
+                      explain_analyze_output
 ---------------------------------------------------------------------
  Insert on explain_analyze_test (actual rows=0 loops=1)          +
    ->  Function Scan on generate_series i (actual rows=5 loops=1)+
@@ -1475,8 +1475,8 @@ SELECT * FROM worker_save_query_explain_analyze($Q$SELECT * FROM explain_analyze
  4 | value 4
 (4 rows)
 
-SELECT worker_last_saved_explain_analyze();
-            worker_last_saved_explain_analyze
+SELECT explain_analyze_output FROM worker_last_saved_explain_analyze();
+                  explain_analyze_output
 ---------------------------------------------------------------------
  Seq Scan on explain_analyze_test (actual rows=4 loops=1)+
 
@@ -1498,8 +1498,8 @@ SELECT * FROM worker_save_query_explain_analyze($Q$
  5 | 5
 (5 rows)
 
-SELECT worker_last_saved_explain_analyze();
-                worker_last_saved_explain_analyze
+SELECT explain_analyze_output FROM worker_last_saved_explain_analyze();
+                      explain_analyze_output
 ---------------------------------------------------------------------
  Insert on explain_analyze_test (actual rows=5 loops=1)          +
    ->  Function Scan on generate_series i (actual rows=5 loops=1)+
@@ -1519,8 +1519,8 @@ SELECT * FROM worker_save_query_explain_analyze($Q$
  4 | value 4
 (2 rows)
 
-SELECT worker_last_saved_explain_analyze();
-               worker_last_saved_explain_analyze
+SELECT explain_analyze_output FROM worker_last_saved_explain_analyze();
+                     explain_analyze_output
 ---------------------------------------------------------------------
  Delete on explain_analyze_test (actual rows=2 loops=1)        +
    ->  Seq Scan on explain_analyze_test (actual rows=2 loops=1)+
@@ -1539,8 +1539,8 @@ SELECT * FROM worker_save_query_explain_analyze($Q$
 ---------------------------------------------------------------------
 (0 rows)
 
-SELECT worker_last_saved_explain_analyze();
-               worker_last_saved_explain_analyze
+SELECT explain_analyze_output FROM worker_last_saved_explain_analyze();
+                     explain_analyze_output
 ---------------------------------------------------------------------
  Delete on explain_analyze_test (actual rows=0 loops=1)        +
    ->  Seq Scan on explain_analyze_test (actual rows=2 loops=1)+
@@ -1567,10 +1567,10 @@ SELECT * FROM worker_save_query_explain_analyze('SELECT 1', '{"format": "text", 
  1
 (1 row)
 
-SELECT worker_last_saved_explain_analyze();
- worker_last_saved_explain_analyze
+SELECT explain_analyze_output FROM worker_last_saved_explain_analyze();
+     explain_analyze_output
 ---------------------------------------------------------------------
- Result (actual rows=1 loops=1)   +
+ Result (actual rows=1 loops=1)+
 
 (1 row)
 
@@ -1580,20 +1580,20 @@ SELECT * FROM worker_save_query_explain_analyze('SELECT 1', '{"format": "json", 
  1
 (1 row)
 
-SELECT worker_last_saved_explain_analyze();
- worker_last_saved_explain_analyze
+SELECT explain_analyze_output FROM worker_last_saved_explain_analyze();
+     explain_analyze_output
 ---------------------------------------------------------------------
- [                                +
-   {                              +
-     "Plan": {                    +
-       "Node Type": "Result",     +
-       "Parallel Aware": false,   +
-       "Actual Rows": 1,          +
-       "Actual Loops": 1          +
-     },                           +
-     "Triggers": [                +
-     ]                            +
-   }                              +
+ [                             +
+   {                           +
+     "Plan": {                 +
+       "Node Type": "Result",  +
+       "Parallel Aware": false,+
+       "Actual Rows": 1,       +
+       "Actual Loops": 1       +
+     },                        +
+     "Triggers": [             +
+     ]                         +
+   }                           +
  ]
 (1 row)
 
@@ -1603,8 +1603,8 @@ SELECT * FROM worker_save_query_explain_analyze('SELECT 1', '{"format": "xml", "
  1
 (1 row)
 
-SELECT worker_last_saved_explain_analyze();
-            worker_last_saved_explain_analyze
+SELECT explain_analyze_output FROM worker_last_saved_explain_analyze();
+                  explain_analyze_output
 ---------------------------------------------------------------------
  <explain xmlns="http://www.postgresql.org/2009/explain">+
    <Query>                                               +
@@ -1626,14 +1626,14 @@ SELECT * FROM worker_save_query_explain_analyze('SELECT 1', '{"format": "yaml", 
  1
 (1 row)
 
-SELECT worker_last_saved_explain_analyze();
- worker_last_saved_explain_analyze
+SELECT explain_analyze_output FROM worker_last_saved_explain_analyze();
+  explain_analyze_output
 ---------------------------------------------------------------------
- - Plan:                          +
-     Node Type: "Result"          +
-     Parallel Aware: false        +
-     Actual Rows: 1               +
-     Actual Loops: 1              +
+ - Plan:                  +
+     Node Type: "Result"  +
+     Parallel Aware: false+
+     Actual Rows: 1       +
+     Actual Loops: 1      +
    Triggers:
 (1 row)
 
@@ -1649,7 +1649,7 @@ SELECT * FROM worker_save_query_explain_analyze('SELECT * FROM explain_analyze_t
  4
 (4 rows)
 
-SELECT worker_last_saved_explain_analyze() ~ 'Seq Scan.*\(cost=0.00.*\) \(actual rows.*\)';
+SELECT explain_analyze_output ~ 'Seq Scan.*\(cost=0.00.*\) \(actual rows.*\)' FROM worker_last_saved_explain_analyze();
  ?column?
 ---------------------------------------------------------------------
  t
@@ -1667,7 +1667,7 @@ SELECT * FROM worker_save_query_explain_analyze('SELECT * FROM explain_analyze_t
  4
 (4 rows)
 
-SELECT worker_last_saved_explain_analyze() ~ 'Seq Scan on explain_analyze_test \(actual time=.* rows=.* loops=1\)';
+SELECT explain_analyze_output ~ 'Seq Scan on explain_analyze_test \(actual time=.* rows=.* loops=1\)' FROM worker_last_saved_explain_analyze();
  ?column?
 ---------------------------------------------------------------------
  t
@@ -1682,7 +1682,7 @@ SELECT * FROM worker_save_query_explain_analyze('SELECT 1', '{"timing": false, "
  1
 (1 row)
 
-SELECT worker_last_saved_explain_analyze() ~ 'Planning Time:.*Execution Time:.*';
+SELECT explain_analyze_output ~ 'Planning Time:.*Execution Time:.*' FROM worker_last_saved_explain_analyze();
  ?column?
 ---------------------------------------------------------------------
  t
@@ -1700,7 +1700,7 @@ SELECT * FROM worker_save_query_explain_analyze('SELECT * FROM explain_analyze_t
  4
 (4 rows)
 
-SELECT worker_last_saved_explain_analyze() ~ 'Buffers:';
+SELECT explain_analyze_output ~ 'Buffers:' FROM worker_last_saved_explain_analyze();
  ?column?
 ---------------------------------------------------------------------
  t
@@ -1718,7 +1718,7 @@ SELECT * FROM worker_save_query_explain_analyze('SELECT * FROM explain_analyze_t
  4
 (4 rows)
 
-SELECT worker_last_saved_explain_analyze() ~ 'Output: a, b';
+SELECT explain_analyze_output ~ 'Output: a, b' FROM worker_last_saved_explain_analyze();
  ?column?
 ---------------------------------------------------------------------
  t
@@ -1732,10 +1732,10 @@ SELECT * FROM worker_save_query_explain_analyze('SELECT 1', '{}') as (a int);
  1
 (1 row)
 
-SELECT worker_last_saved_explain_analyze() IS NULL;
- ?column?
+SELECT count(*) FROM worker_last_saved_explain_analyze();
+ count
 ---------------------------------------------------------------------
- t
+     0
 (1 row)
 
 -- should be deleted at the end of prepare commit
@@ -1745,20 +1745,35 @@ SELECT * FROM worker_save_query_explain_analyze('UPDATE explain_analyze_test SET
 ---------------------------------------------------------------------
 (0 rows)
 
-SELECT worker_last_saved_explain_analyze() IS NOT NULL;
- ?column?
+SELECT count(*) FROM worker_last_saved_explain_analyze();
+ count
 ---------------------------------------------------------------------
- t
+     1
 (1 row)
 
 PREPARE TRANSACTION 'citus_0_1496350_7_0';
-SELECT worker_last_saved_explain_analyze() IS NULL;
+SELECT count(*) FROM worker_last_saved_explain_analyze();
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+COMMIT PREPARED 'citus_0_1496350_7_0';
+-- verify execution time makes sense
+BEGIN;
+SELECT count(*) FROM worker_save_query_explain_analyze('SELECT pg_sleep(0.05)', :default_opts) as (a int);
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+SELECT execution_duration BETWEEN 30 AND 200 FROM worker_last_saved_explain_analyze();
  ?column?
 ---------------------------------------------------------------------
  t
 (1 row)
 
-COMMIT PREPARED 'citus_0_1496350_7_0';
+END;
 SELECT * FROM explain_analyze_test ORDER BY a;
  a |    b
 ---------------------------------------------------------------------
