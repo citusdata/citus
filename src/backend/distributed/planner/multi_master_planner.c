@@ -202,10 +202,11 @@ CitusCustomScanPathPlan(PlannerInfo *root,
 	 * appear in the flattened rtable for the entire plan, then varno is now pointing
 	 * to the wrong relation and needs to be updated.
 	 *
-	 * An example is when the masterQuery is INSERT INTO local SELECT .. FROM
-	 * citus_extradata_container. In that case the varno of citusdata_extradata_container
-	 * should be 3, because it is preceded range table entries for "local" and the
-	 * subquery.
+	 * Example:
+	 * When the masterQuery field of the DistributedPlan is
+	 * INSERT INTO local SELECT .. FROM citus_extradata_container.
+	 * In that case the varno of citusdata_extradata_container should be 3, because
+	 * it is preceded range table entries for "local" and the subquery.
 	 */
 	if (rel->relid != 1)
 	{
@@ -214,6 +215,8 @@ CitusCustomScanPathPlan(PlannerInfo *root,
 		foreach_ptr(targetEntry, citusPath->remoteScan->custom_scan_tlist)
 		{
 			/* we created this list, so we know it only contains Var */
+			Assert(IsA(targetEntry->expr, Var));
+
 			Var *var = (Var *) targetEntry->expr;
 
 			var->varno = rel->relid;
