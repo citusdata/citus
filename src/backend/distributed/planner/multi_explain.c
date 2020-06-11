@@ -154,6 +154,7 @@ static void ExplainOneQuery(Query *query, int cursorOptions,
 							const char *queryString, ParamListInfo params,
 							QueryEnvironment *queryEnv);
 static double elapsed_time(instr_time *starttime);
+static void ExplainPropertyBytes(const char *qlabel, int64 bytes, ExplainState *es);
 
 
 /* exports for SQL callable functions */
@@ -287,8 +288,8 @@ ExplainSubPlans(DistributedPlan *distributedPlan, ExplainState *es)
 									 2, es);
 			}
 
-			ExplainPropertyInteger("Intermediate Data Size", "bytes",
-								   subPlan->bytesSentPerWorker, es);
+			ExplainPropertyBytes("Intermediate Data Size",
+								 subPlan->bytesSentPerWorker, es);
 
 			StringInfo destination = makeStringInfo();
 			if (subPlan->remoteWorkerCount && subPlan->writeLocalFile)
@@ -323,6 +324,14 @@ ExplainSubPlans(DistributedPlan *distributedPlan, ExplainState *es)
 }
 
 
+static void
+ExplainPropertyBytes(const char *qlabel, int64 bytes, ExplainState *es)
+{
+	Datum textDatum = DirectFunctionCall1(pg_size_pretty, Int64GetDatum(bytes));
+	ExplainPropertyText(qlabel, text_to_cstring(DatumGetTextP(textDatum)), es);
+}
+
+
 /*
  * ExplainJob shows the EXPLAIN output for a Job in the physical plan of
  * a distributed query by showing the remote EXPLAIN for the first task,
@@ -348,9 +357,9 @@ ExplainJob(Job *job, ExplainState *es)
 		{
 			totalReceivedDataForAllTasks += task->totalReceivedData;
 		}
-		ExplainPropertyInteger("Data received from workers", "bytes",
-							   totalReceivedDataForAllTasks,
-							   es);
+		ExplainPropertyBytes("Data received from workers",
+							 totalReceivedDataForAllTasks,
+							 es);
 	}
 
 	if (dependentJobCount > 0)
@@ -654,8 +663,8 @@ ExplainTask(Task *task, int placementIndex, List *explainOutputList, ExplainStat
 
 	if (es->analyze)
 	{
-		ExplainPropertyInteger("Data received from worker", "bytes",
-							   task->totalReceivedData, es);
+		ExplainPropertyBytes("Data received from worker",
+							 task->totalReceivedData, es);
 	}
 
 	if (explainOutputList != NIL)
