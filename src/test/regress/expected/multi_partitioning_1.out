@@ -4,7 +4,6 @@
 SET citus.next_shard_id TO 1660000;
 SET citus.shard_count TO 4;
 SET citus.shard_replication_factor TO 1;
-SET citus.enable_repartition_joins to ON;
 --
 -- Distributed Partitioned Table Creation Tests
 --
@@ -1299,6 +1298,8 @@ SELECT relation::regclass, locktype, mode FROM pg_locks WHERE relation::regclass
 (3 rows)
 
 COMMIT;
+-- test locks on task-tracker SELECT
+SET citus.task_executor_type TO 'task-tracker';
 BEGIN;
 SELECT * FROM partitioning_locks AS pl1 JOIN partitioning_locks AS pl2 ON pl1.id = pl2.ref_id ORDER BY 1, 2;
  id | ref_id | time | id | ref_id | time
@@ -1314,6 +1315,7 @@ SELECT relation::regclass, locktype, mode FROM pg_locks WHERE relation::regclass
 (3 rows)
 
 COMMIT;
+RESET citus.task_executor_type;
 -- test locks on INSERT
 BEGIN;
 INSERT INTO partitioning_locks VALUES(1, 1, '2009-01-01');
@@ -1613,14 +1615,14 @@ SELECT * FROM partitioning_hash_test JOIN partitioning_hash_join_test USING (id,
          ->  Hash Join
                Hash Cond: ((partitioning_hash_join_test.id = partitioning_hash_test.id) AND (partitioning_hash_join_test.subid = partitioning_hash_test.subid))
                ->  Append
-                     ->  Seq Scan on partitioning_hash_join_test_0_1660133 partitioning_hash_join_test_1
-                     ->  Seq Scan on partitioning_hash_join_test_1_1660137 partitioning_hash_join_test_2
-                     ->  Seq Scan on partitioning_hash_join_test_2_1660141 partitioning_hash_join_test_3
+                     ->  Seq Scan on partitioning_hash_join_test_0_1660133 partitioning_hash_join_test
+                     ->  Seq Scan on partitioning_hash_join_test_1_1660137 partitioning_hash_join_test_1
+                     ->  Seq Scan on partitioning_hash_join_test_2_1660141 partitioning_hash_join_test_2
                ->  Hash
                      ->  Append
-                           ->  Seq Scan on partitioning_hash_test_0_1660016 partitioning_hash_test_1
-                           ->  Seq Scan on partitioning_hash_test_1_1660020 partitioning_hash_test_2
-                           ->  Seq Scan on partitioning_hash_test_2_1660032 partitioning_hash_test_3
+                           ->  Seq Scan on partitioning_hash_test_0_1660016 partitioning_hash_test
+                           ->  Seq Scan on partitioning_hash_test_1_1660020 partitioning_hash_test_1
+                           ->  Seq Scan on partitioning_hash_test_2_1660032 partitioning_hash_test_2
 (16 rows)
 
 -- set partition-wise join on and parallel to off
@@ -1651,20 +1653,20 @@ SELECT * FROM partitioning_hash_test JOIN partitioning_hash_join_test USING (id,
          Node: host=localhost port=xxxxx dbname=regression
          ->  Append
                ->  Hash Join
-                     Hash Cond: ((partitioning_hash_join_test_1.id = partitioning_hash_test_1.id) AND (partitioning_hash_join_test_1.subid = partitioning_hash_test_1.subid))
-                     ->  Seq Scan on partitioning_hash_join_test_0_1660133 partitioning_hash_join_test_1
+                     Hash Cond: ((partitioning_hash_join_test.id = partitioning_hash_test.id) AND (partitioning_hash_join_test.subid = partitioning_hash_test.subid))
+                     ->  Seq Scan on partitioning_hash_join_test_0_1660133 partitioning_hash_join_test
                      ->  Hash
-                           ->  Seq Scan on partitioning_hash_test_0_1660016 partitioning_hash_test_1
+                           ->  Seq Scan on partitioning_hash_test_0_1660016 partitioning_hash_test
                ->  Hash Join
-                     Hash Cond: ((partitioning_hash_test_2.id = partitioning_hash_join_test_2.id) AND (partitioning_hash_test_2.subid = partitioning_hash_join_test_2.subid))
-                     ->  Seq Scan on partitioning_hash_test_1_1660020 partitioning_hash_test_2
+                     Hash Cond: ((partitioning_hash_test_1.id = partitioning_hash_join_test_1.id) AND (partitioning_hash_test_1.subid = partitioning_hash_join_test_1.subid))
+                     ->  Seq Scan on partitioning_hash_test_1_1660020 partitioning_hash_test_1
                      ->  Hash
-                           ->  Seq Scan on partitioning_hash_join_test_1_1660137 partitioning_hash_join_test_2
+                           ->  Seq Scan on partitioning_hash_join_test_1_1660137 partitioning_hash_join_test_1
                ->  Hash Join
-                     Hash Cond: ((partitioning_hash_join_test_3.id = partitioning_hash_test_3.id) AND (partitioning_hash_join_test_3.subid = partitioning_hash_test_3.subid))
-                     ->  Seq Scan on partitioning_hash_join_test_2_1660141 partitioning_hash_join_test_3
+                     Hash Cond: ((partitioning_hash_join_test_2.id = partitioning_hash_test_2.id) AND (partitioning_hash_join_test_2.subid = partitioning_hash_test_2.subid))
+                     ->  Seq Scan on partitioning_hash_join_test_2_1660141 partitioning_hash_join_test_2
                      ->  Hash
-                           ->  Seq Scan on partitioning_hash_test_2_1660032 partitioning_hash_test_3
+                           ->  Seq Scan on partitioning_hash_test_2_1660032 partitioning_hash_test_2
 (21 rows)
 
 -- note that partition-wise joins only work when partition key is in the join
@@ -1682,14 +1684,14 @@ SELECT * FROM partitioning_hash_test JOIN partitioning_hash_join_test USING (id)
          ->  Hash Join
                Hash Cond: (partitioning_hash_join_test.id = partitioning_hash_test.id)
                ->  Append
-                     ->  Seq Scan on partitioning_hash_join_test_0_1660133 partitioning_hash_join_test_1
-                     ->  Seq Scan on partitioning_hash_join_test_1_1660137 partitioning_hash_join_test_2
-                     ->  Seq Scan on partitioning_hash_join_test_2_1660141 partitioning_hash_join_test_3
+                     ->  Seq Scan on partitioning_hash_join_test_0_1660133 partitioning_hash_join_test
+                     ->  Seq Scan on partitioning_hash_join_test_1_1660137 partitioning_hash_join_test_1
+                     ->  Seq Scan on partitioning_hash_join_test_2_1660141 partitioning_hash_join_test_2
                ->  Hash
                      ->  Append
-                           ->  Seq Scan on partitioning_hash_test_0_1660016 partitioning_hash_test_1
-                           ->  Seq Scan on partitioning_hash_test_1_1660020 partitioning_hash_test_2
-                           ->  Seq Scan on partitioning_hash_test_2_1660032 partitioning_hash_test_3
+                           ->  Seq Scan on partitioning_hash_test_0_1660016 partitioning_hash_test
+                           ->  Seq Scan on partitioning_hash_test_1_1660020 partitioning_hash_test_1
+                           ->  Seq Scan on partitioning_hash_test_2_1660032 partitioning_hash_test_2
 (16 rows)
 
 -- reset partition-wise join
