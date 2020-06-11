@@ -260,7 +260,7 @@ static MultiConnection * GetLeastUtilisedCopyConnection(List *connectionStateLis
 														char *nodeName, int nodePort);
 static List * ConnectionStateList(HTAB *connectionStateHash);
 static List * ConnectionStateListToNode(HTAB *connectionStateHash,
-										char *hostname, int port);
+										const char *hostname, int32 port);
 static void InitializeCopyShardState(CopyShardState *shardState,
 									 HTAB *connectionStateHash,
 									 uint64 shardId, bool stopOnFailure, bool
@@ -3348,10 +3348,10 @@ ConnectionStateList(HTAB *connectionStateHash)
 
 /*
  * ConnectionStateListToNode returns all CopyConnectionState structures in
- * the given hash.
+ * the given hash for a given hostname and port values.
  */
 static List *
-ConnectionStateListToNode(HTAB *connectionStateHash, char *hostname, int port)
+ConnectionStateListToNode(HTAB *connectionStateHash, const char *hostname, int32 port)
 {
 	List *connectionStateList = NIL;
 	HASH_SEQ_STATUS status;
