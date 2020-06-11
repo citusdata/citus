@@ -115,7 +115,21 @@ BEGIN;
   ALTER TABLE partitioned_table ATTACH PARTITION citus_local_table FOR VALUES FROM (20) TO (30);
 ROLLBACK;
 
--- show that we allow triggers citus tables --
+-- show that we do not support inheritance relationships --
+
+CREATE TABLE parent_table (a int, b text);
+CREATE TABLE child_table () INHERITS (parent_table);
+
+-- both of below should error out
+SELECT create_citus_local_table('parent_table');
+SELECT create_citus_local_table('child_table');
+
+-- show that we support UNLOGGED tables --
+
+CREATE UNLOGGED TABLE unlogged_table (a int primary key);
+SELECT create_citus_local_table('unlogged_table');
+
+-- show that we allow triggers --
 
 BEGIN;
 
