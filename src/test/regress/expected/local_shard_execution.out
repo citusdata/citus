@@ -296,13 +296,15 @@ EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF)   SELECT * FROM distribute
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
    Task Count: 1
+   Data received: 5 bytes
    Tasks Shown: All
    ->  Task
+         Data received: 5 bytes
          Node: host=localhost port=xxxxx dbname=regression
          ->  Index Scan using distributed_table_pkey_1470001 on distributed_table_1470001 distributed_table (actual rows=1 loops=1)
                Index Cond: (key = 1)
                Filter: (age = 20)
-(8 rows)
+(10 rows)
 
 EXPLAIN (ANALYZE ON, COSTS OFF, SUMMARY OFF, TIMING OFF)
 WITH r AS ( SELECT random() z,* FROM distributed_table)
@@ -315,17 +317,21 @@ SELECT * FROM r WHERE z < 2;
          Result destination: Write locally
          ->  Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
                Task Count: 4
+               Data received: 21 bytes
                Tasks Shown: One of 4
                ->  Task
+                     Data received: 21 bytes
                      Node: host=localhost port=xxxxx dbname=regression
                      ->  Seq Scan on distributed_table_1470001 distributed_table (actual rows=1 loops=1)
    Task Count: 1
+   Data received: 22 bytes
    Tasks Shown: All
    ->  Task
+         Data received: 22 bytes
          Node: host=localhost port=xxxxx dbname=regression
          ->  Function Scan on read_intermediate_result intermediate_result (actual rows=1 loops=1)
                Filter: (z < '2'::double precision)
-(16 rows)
+(20 rows)
 
 EXPLAIN (COSTS OFF) DELETE FROM distributed_table WHERE key = 1 AND age = 20;
                                                     QUERY PLAN
@@ -346,15 +352,17 @@ EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF) DELETE FROM distributed_ta
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
    Task Count: 1
+   Data received: 0 bytes
    Tasks Shown: All
    ->  Task
+         Data received: 0 bytes
          Node: host=localhost port=xxxxx dbname=regression
          ->  Delete on distributed_table_1470001 distributed_table (actual rows=0 loops=1)
                ->  Index Scan using distributed_table_pkey_1470001 on distributed_table_1470001 distributed_table (actual rows=1 loops=1)
                      Index Cond: (key = 1)
                      Filter: (age = 20)
              Trigger for constraint second_distributed_table_key_fkey_1470005: calls=1
-(10 rows)
+(12 rows)
 
 -- show that EXPLAIN ANALYZE deleted the row and cascades deletes
 SELECT * FROM distributed_table WHERE key = 1 AND age = 20 ORDER BY 1,2,3;
