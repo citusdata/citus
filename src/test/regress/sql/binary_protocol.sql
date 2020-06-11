@@ -1,4 +1,4 @@
-SET citus.shard_count = 4;
+SET citus.shard_count = 2;
 SET citus.next_shard_id TO 4754000;
 CREATE SCHEMA binary_protocol;
 SET search_path TO binary_protocol;
@@ -18,6 +18,9 @@ SELECT id, id, id, id, id,
        id, id, id, id, id,
        id, id, id, id, id
     FROM t ORDER BY id;
+
+SET citus.explain_all_tasks TO ON;
+EXPLAIN (ANALYZE TRUE, TIMING FALSE, COSTS FALSE, SUMMARY FALSE) SELECT id FROM t ORDER BY 1;
 
 INSERT INTO t SELECT count(*) from t;
 

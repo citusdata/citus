@@ -640,6 +640,11 @@ ExplainTask(Task *task, int placementIndex, List *explainOutputList, ExplainStat
 		ExplainPropertyText("Query", queryText, es);
 	}
 
+	if (es->analyze)
+	{
+		ExplainPropertyInteger("Data received", "bytes", task->totalReceivedData, es);
+	}
+
 	if (explainOutputList != NIL)
 	{
 		List *taskPlacementList = task->taskPlacementList;
@@ -1092,6 +1097,7 @@ CreateExplainAnlyzeDestination(Task *task, TupleDestination *taskDest)
 
 	tupleDestination->pub.putTuple = ExplainAnalyzeDestPutTuple;
 	tupleDestination->pub.tupleDescForQuery = ExplainAnalyzeDestTupleDescForQuery;
+	tupleDestination->pub.originalTask = task;
 
 	return (TupleDestination *) tupleDestination;
 }

@@ -342,6 +342,7 @@ typedef struct Task
 	 * EXPLAIN ANALYZE output fetched from worker. This is saved to be used later
 	 * by RemoteExplain().
 	 */
+	uint64 totalReceivedData;
 	char *fetchedExplainAnalyzePlan;
 	int fetchedExplainAnalyzePlacementIndex;
 } Task;
