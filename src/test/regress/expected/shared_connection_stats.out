@@ -323,7 +323,7 @@ COMMIT;
 BEGIN;
 	-- now allow at most 2 connections for COPY
 	SET LOCAL citus.max_adaptive_executor_pool_size TO 2;
-COPY test FROM STDIN;
+    COPY test FROM PROGRAM 'seq 32';
 	SELECT
 		connection_count_to_node
 	FROM
@@ -356,7 +356,7 @@ SELECT pg_sleep(0.1);
 (1 row)
 
 BEGIN;
-COPY test FROM STDIN;
+COPY test FROM PROGRAM 'seq 32';
 	SELECT
 		connection_count_to_node
 	FROM
