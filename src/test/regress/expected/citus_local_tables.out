@@ -154,23 +154,40 @@ BEGIN;
 ERROR:  distributed tables cannot have non-colocated distributed tables as a partition
 ROLLBACK;
 -- show that we allow triggers citus tables --
--- create a simple function to be invoked by trigger
-CREATE FUNCTION update_value() RETURNS trigger AS $update_value$
-BEGIN
-    NEW.value := value+1 ;
-    RETURN NEW;
-END;
-$update_value$ LANGUAGE plpgsql;
-CREATE TABLE citus_local_table_3 (value int);
-CREATE TRIGGER update_value_ref
-AFTER INSERT ON citus_local_table_3
-FOR EACH ROW EXECUTE PROCEDURE update_value();
-SELECT create_citus_local_table('citus_local_table_3');
+BEGIN;
+
+  -- create a simple function to be invoked by trigger
+  CREATE FUNCTION update_value() RETURNS trigger AS $update_value$
+  BEGIN
+      NEW.value := value+1 ;
+      RETURN NEW;
+  END;
+  $update_value$ LANGUAGE plpgsql;
+  CREATE TABLE citus_local_table_3 (value int);
+  CREATE TRIGGER update_value_ref
+  AFTER INSERT ON citus_local_table_3
+  FOR EACH ROW EXECUTE PROCEDURE update_value();
+  SELECT create_citus_local_table('citus_local_table_3');
  create_citus_local_table
 ---------------------------------------------------------------------
 
 (1 row)
 
+ROLLBACK;
+-- show that we do not support policies in citus community --
+BEGIN;
+  CREATE TABLE citus_local_table_3 (table_user text);
+
+  ALTER TABLE citus_local_table_3 ENABLE ROW LEVEL SECURITY;
+
+  CREATE ROLE table_users;
+NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
+  CREATE POLICY table_policy ON citus_local_table_3 TO table_users
+      USING (table_user = current_user);
+  -- this should error out
+  SELECT create_citus_local_table('citus_local_table_3');
+ERROR:  policies on distributed tables are only supported in Citus Enterprise
+ROLLBACK;
 -- test foreign tables using fake FDW --
 CREATE FOREIGN TABLE foreign_table (
   id bigint not null,
@@ -328,4 +345,4 @@ ERROR:  cannot create foreign key constraint
 ALTER TABLE local_table ADD CONSTRAINT fkey_local_to_c FOREIGN KEY(a) references citus_local_table_1(a);
 -- cleanup at exit
 DROP SCHEMA citus_local_tables_test_schema, "CiTUS!LocalTables" CASCADE;
-NOTICE:  drop cascades to 22 other objects
+NOTICE:  drop cascades to 19 other objects

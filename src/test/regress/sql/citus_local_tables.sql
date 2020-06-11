@@ -117,21 +117,39 @@ ROLLBACK;
 
 -- show that we allow triggers citus tables --
 
--- create a simple function to be invoked by trigger
-CREATE FUNCTION update_value() RETURNS trigger AS $update_value$
-BEGIN
-    NEW.value := value+1 ;
-    RETURN NEW;
-END;
-$update_value$ LANGUAGE plpgsql;
+BEGIN;
 
-CREATE TABLE citus_local_table_3 (value int);
+  -- create a simple function to be invoked by trigger
+  CREATE FUNCTION update_value() RETURNS trigger AS $update_value$
+  BEGIN
+      NEW.value := value+1 ;
+      RETURN NEW;
+  END;
+  $update_value$ LANGUAGE plpgsql;
 
-CREATE TRIGGER update_value_ref
-AFTER INSERT ON citus_local_table_3
-FOR EACH ROW EXECUTE PROCEDURE update_value();
+  CREATE TABLE citus_local_table_3 (value int);
 
-SELECT create_citus_local_table('citus_local_table_3');
+  CREATE TRIGGER update_value_ref
+  AFTER INSERT ON citus_local_table_3
+  FOR EACH ROW EXECUTE PROCEDURE update_value();
+
+  SELECT create_citus_local_table('citus_local_table_3');
+ROLLBACK;
+
+-- show that we do not support policies in citus community --
+
+BEGIN;
+  CREATE TABLE citus_local_table_3 (table_user text);
+
+  ALTER TABLE citus_local_table_3 ENABLE ROW LEVEL SECURITY;
+
+  CREATE ROLE table_users;
+  CREATE POLICY table_policy ON citus_local_table_3 TO table_users
+      USING (table_user = current_user);
+
+  -- this should error out
+  SELECT create_citus_local_table('citus_local_table_3');
+ROLLBACK;
 
 -- test foreign tables using fake FDW --
 

@@ -120,6 +120,9 @@ ErrorIfUnsupportedCreateCitusLocalTable(Relation relation)
 	 * references.
 	 */
 	ErrorIfTableHasExternalForeignKeys(relationId);
+
+	/* we do not support policies in citus community */
+	ErrorIfUnsupportedPolicy(relation);
 }
 
 
