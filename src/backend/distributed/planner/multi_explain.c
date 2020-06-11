@@ -602,6 +602,12 @@ ExplainTask(Task *task, int placementIndex, List *explainOutputList, ExplainStat
 		es->indent += 3;
 	}
 
+	if (es->verbose)
+	{
+		const char *queryText = TaskQueryStringForAllPlacements(task);
+		ExplainPropertyText("Query", queryText, es);
+	}
+
 	if (explainOutputList != NIL)
 	{
 		List *taskPlacementList = task->taskPlacementList;
