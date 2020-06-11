@@ -56,10 +56,10 @@ EXPLAIN (ANALYZE TRUE, TIMING FALSE, COSTS FALSE, SUMMARY FALSE) SELECT id FROM 
    Sort Method: quicksort  Memory: 25kB
    ->  Custom Scan (Citus Adaptive) (actual rows=10 loops=1)
          Task Count: 2
-         Data received: 11 bytes
+         Data received from workers: 11 bytes
          Tasks Shown: One of 2
          ->  Task
-               Data received: 8 bytes
+               Data received from worker: 8 bytes
                Node: host=localhost port=xxxxx dbname=regression
                ->  Seq Scan on t_4754000 t (actual rows=7 loops=1)
 (11 rows)
@@ -73,14 +73,14 @@ EXPLAIN (ANALYZE TRUE, TIMING FALSE, COSTS FALSE, SUMMARY FALSE) SELECT id FROM 
    Sort Method: quicksort  Memory: 25kB
    ->  Custom Scan (Citus Adaptive) (actual rows=10 loops=1)
          Task Count: 2
-         Data received: 11 bytes
+         Data received from workers: 11 bytes
          Tasks Shown: All
          ->  Task
-               Data received: 8 bytes
+               Data received from worker: 8 bytes
                Node: host=localhost port=xxxxx dbname=regression
                ->  Seq Scan on t_4754000 t (actual rows=7 loops=1)
          ->  Task
-               Data received: 3 bytes
+               Data received from worker: 3 bytes
                Node: host=localhost port=xxxxx dbname=regression
                ->  Seq Scan on t_4754001 t (actual rows=3 loops=1)
 (15 rows)

@@ -348,7 +348,7 @@ ExplainJob(Job *job, ExplainState *es)
 		{
 			totalReceivedDataForAllTasks += task->totalReceivedData;
 		}
-		ExplainPropertyInteger("Data received", "bytes",
+		ExplainPropertyInteger("Data received from workers", "bytes",
 							   totalReceivedDataForAllTasks,
 							   es);
 	}
@@ -654,7 +654,8 @@ ExplainTask(Task *task, int placementIndex, List *explainOutputList, ExplainStat
 
 	if (es->analyze)
 	{
-		ExplainPropertyInteger("Data received", "bytes", task->totalReceivedData, es);
+		ExplainPropertyInteger("Data received from worker", "bytes",
+							   task->totalReceivedData, es);
 	}
 
 	if (explainOutputList != NIL)
