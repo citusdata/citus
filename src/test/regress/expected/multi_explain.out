@@ -283,8 +283,10 @@ Sort (actual rows=50 loops=1)
         Group Key: remote_scan.l_quantity
         ->  Custom Scan (Citus Adaptive) (actual rows=100 loops=1)
               Task Count: 2
+              Data received: 780 bytes
               Tasks Shown: One of 2
               ->  Task
+                    Data received: 390 bytes
                     Node: host=localhost port=xxxxx dbname=regression
                     ->  HashAggregate (actual rows=50 loops=1)
                           Group Key: l_quantity
@@ -301,6 +303,7 @@ EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off) SELECT count(*) FROM t1
 Aggregate (actual rows=1 loops=1)
   ->  Custom Scan (Citus Adaptive) (actual rows=4 loops=1)
         Task Count: 4
+        Data received: 4 bytes
         Tasks Shown: None, not supported for re-partition queries
         ->  MapMergeJob
               Map Task Count: 3
@@ -324,9 +327,11 @@ Sort (actual rows=50 loops=1)
         ->  Custom Scan (Citus Adaptive) (actual rows=100 loops=1)
               Output: remote_scan.l_quantity, remote_scan.count_quantity
               Task Count: 2
+              Data received: 780 bytes
               Tasks Shown: One of 2
               ->  Task
                     Query: SELECT l_quantity, count(*) AS count_quantity FROM lineitem_290000 lineitem WHERE true GROUP BY l_quantity
+                    Data received: 390 bytes
                     Node: host=localhost port=xxxxx dbname=regression
                     ->  HashAggregate (actual rows=50 loops=1)
                           Output: l_quantity, count(*)
@@ -425,8 +430,10 @@ EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE)
 	WHERE l_orderkey = 1 AND l_partkey = 0;
 Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
   Task Count: 1
+  Data received: 0 bytes
   Tasks Shown: All
   ->  Task
+        Data received: 0 bytes
         Node: host=localhost port=xxxxx dbname=regression
         ->  Update on lineitem_290000 lineitem (actual rows=0 loops=1)
               ->  Index Scan using lineitem_pkey_290000 on lineitem_290000 lineitem (actual rows=0 loops=1)
@@ -966,13 +973,16 @@ Sort (actual rows=50 loops=1)
         Group Key: remote_scan.l_quantity
         ->  Custom Scan (Citus Adaptive) (actual rows=100 loops=1)
               Task Count: 2
+              Data received: 780 bytes
               Tasks Shown: All
               ->  Task
+                    Data received: 390 bytes
                     Node: host=localhost port=xxxxx dbname=regression
                     ->  HashAggregate (actual rows=50 loops=1)
                           Group Key: l_quantity
                           ->  Seq Scan on lineitem_290000 lineitem (actual rows=6000 loops=1)
               ->  Task
+                    Data received: 390 bytes
                     Node: host=localhost port=xxxxx dbname=regression
                     ->  HashAggregate (actual rows=50 loops=1)
                           Group Key: l_quantity
@@ -1239,8 +1249,10 @@ Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=100000 width=18)
 EXPLAIN (ANALYZE ON, COSTS OFF, TIMING OFF, SUMMARY OFF) EXECUTE router_executor_query_param(5);
 Custom Scan (Citus Adaptive) (actual rows=3 loops=1)
   Task Count: 1
+  Data received: 0 bytes
   Tasks Shown: All
   ->  Task
+        Data received: 0 bytes
         Node: host=localhost port=xxxxx dbname=regression
         ->  Index Scan using lineitem_pkey_290000 on lineitem_290000 lineitem (actual rows=3 loops=1)
               Index Cond: (l_orderkey = 5)
@@ -1262,8 +1274,10 @@ WARNING:  there is no parameter $1
 WARNING:  there is no parameter $1
 Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
   Task Count: 2
+  Data received: 0 bytes
   Tasks Shown: One of 2
   ->  Task
+        Data received: 0 bytes
         Error: Could not get remote plan.
 ROLLBACK;
 \set VERBOSITY DEFAULT
@@ -1796,8 +1810,10 @@ SELECT create_distributed_table('explain_analyze_test', 'a');
 EXPLAIN :default_analyze_flags SELECT * FROM explain_analyze_test WHERE a = 1;
 Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
   Task Count: 1
+  Data received: 8 bytes
   Tasks Shown: All
   ->  Task
+        Data received: 8 bytes
         Node: host=localhost port=xxxxx dbname=regression
         ->  Seq Scan on explain_analyze_test_570009 explain_analyze_test (actual rows=1 loops=1)
               Filter: (a = 1)
@@ -1806,8 +1822,10 @@ EXPLAIN :default_analyze_flags SELECT count(*) FROM explain_analyze_test;
 Aggregate (actual rows=1 loops=1)
   ->  Custom Scan (Citus Adaptive) (actual rows=4 loops=1)
         Task Count: 4
+        Data received: 4 bytes
         Tasks Shown: One of 4
         ->  Task
+              Data received: 1 bytes
               Node: host=localhost port=xxxxx dbname=regression
               ->  Aggregate (actual rows=1 loops=1)
                     ->  Seq Scan on explain_analyze_test_570009 explain_analyze_test (actual rows=1 loops=1)
@@ -1816,8 +1834,10 @@ BEGIN;
 EXPLAIN :default_analyze_flags DELETE FROM explain_analyze_test WHERE a = 1;
 Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
   Task Count: 1
+  Data received: 0 bytes
   Tasks Shown: All
   ->  Task
+        Data received: 0 bytes
         Node: host=localhost port=xxxxx dbname=regression
         ->  Delete on explain_analyze_test_570009 explain_analyze_test (actual rows=0 loops=1)
               ->  Seq Scan on explain_analyze_test_570009 explain_analyze_test (actual rows=1 loops=1)
@@ -1825,8 +1845,10 @@ Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
 EXPLAIN :default_analyze_flags UPDATE explain_analyze_test SET b = 'b' WHERE a = 2;
 Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
   Task Count: 1
+  Data received: 0 bytes
   Tasks Shown: All
   ->  Task
+        Data received: 0 bytes
         Node: host=localhost port=xxxxx dbname=regression
         ->  Update on explain_analyze_test_570012 explain_analyze_test (actual rows=0 loops=1)
               ->  Seq Scan on explain_analyze_test_570012 explain_analyze_test (actual rows=1 loops=1)
@@ -1841,8 +1863,10 @@ BEGIN;
 EXPLAIN :default_analyze_flags UPDATE explain_analyze_test SET b = 'b' WHERE a IN (1, 2);
 Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
   Task Count: 2
+  Data received: 0 bytes
   Tasks Shown: One of 2
   ->  Task
+        Data received: 0 bytes
         Node: host=localhost port=xxxxx dbname=regression
         ->  Update on explain_analyze_test_570009 explain_analyze_test (actual rows=0 loops=1)
               ->  Seq Scan on explain_analyze_test_570009 explain_analyze_test (actual rows=1 loops=1)
@@ -1850,8 +1874,10 @@ Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
 EXPLAIN :default_analyze_flags DELETE FROM explain_analyze_test;
 Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
   Task Count: 4
+  Data received: 0 bytes
   Tasks Shown: One of 4
   ->  Task
+        Data received: 0 bytes
         Node: host=localhost port=xxxxx dbname=regression
         ->  Delete on explain_analyze_test_570009 explain_analyze_test (actual rows=0 loops=1)
               ->  Seq Scan on explain_analyze_test_570009 explain_analyze_test (actual rows=1 loops=1)
@@ -1862,8 +1888,10 @@ BEGIN;
 EXPLAIN :default_analyze_flags INSERT INTO explain_analyze_test VALUES (5, 'value 5');
 Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
   Task Count: 1
+  Data received: 0 bytes
   Tasks Shown: All
   ->  Task
+        Data received: 0 bytes
         Node: host=localhost port=xxxxx dbname=regression
         ->  Insert on explain_analyze_test_570009 (actual rows=0 loops=1)
               ->  Result (actual rows=1 loops=1)
@@ -1873,8 +1901,10 @@ BEGIN;
 EXPLAIN :default_analyze_flags INSERT INTO explain_analyze_test VALUES (5, 'value 5'), (6, 'value 6');
 Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
   Task Count: 2
+  Data received: 0 bytes
   Tasks Shown: One of 2
   ->  Task
+        Data received: 0 bytes
         Node: host=localhost port=xxxxx dbname=regression
         ->  Insert on explain_analyze_test_570009 citus_table_alias (actual rows=0 loops=1)
               ->  Result (actual rows=1 loops=1)
@@ -1884,8 +1914,10 @@ BEGIN;
 EXPLAIN :default_analyze_flags INSERT INTO explain_analyze_test SELECT * FROM explain_analyze_test;
 Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
   Task Count: 4
+  Data received: 0 bytes
   Tasks Shown: One of 4
   ->  Task
+        Data received: 0 bytes
         Node: host=localhost port=xxxxx dbname=regression
         ->  Insert on explain_analyze_test_570009 citus_table_alias (actual rows=0 loops=1)
               ->  Seq Scan on explain_analyze_test_570009 explain_analyze_test (actual rows=1 loops=1)
@@ -1900,8 +1932,10 @@ BEGIN;
 EXPLAIN :default_analyze_flags INSERT INTO explain_pk VALUES (1, 2), (2, 3);
 Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
   Task Count: 2
+  Data received: 0 bytes
   Tasks Shown: One of 2
   ->  Task
+        Data received: 0 bytes
         Node: host=localhost port=xxxxx dbname=regression
         ->  Insert on explain_pk_570013 citus_table_alias (actual rows=0 loops=1)
               ->  Result (actual rows=1 loops=1)
@@ -1923,9 +1957,11 @@ EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT JSON) INSERT INT
       "Distributed Query": {
         "Job": {
           "Task Count": 2,
+          "Data received": 0,
           "Tasks Shown": "One of 2",
           "Tasks": [
             {
+              "Data received": 0,
               "Node": "host=localhost port=xxxxx dbname=regression",
               "Remote Plan": [
                 [
@@ -1977,9 +2013,11 @@ EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT XML) INSERT INTO
       <Distributed-Query>
         <Job>
           <Task-Count>2</Task-Count>
+          <Data-received>0</Data-received>
           <Tasks-Shown>One of 2</Tasks-Shown>
           <Tasks>
             <Task>
+              <Data-received>0</Data-received>
               <Node>host=localhost port=xxxxx dbname=regression</Node>
               <Remote-Plan>
                 <explain xmlns="http://www.postgresql.org/2009/explain">
@@ -2038,13 +2076,17 @@ Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
         Result destination: Send to 2 nodes
         ->  Custom Scan (Citus Adaptive) (actual rows=10 loops=1)
               Task Count: 4
+              Data received: 181 bytes
               Tasks Shown: One of 4
               ->  Task
+                    Data received: 73 bytes
                     Node: host=localhost port=xxxxx dbname=regression
                     ->  Seq Scan on dist_table_570017 dist_table (actual rows=4 loops=1)
   Task Count: 1
+  Data received: 2 bytes
   Tasks Shown: All
   ->  Task
+        Data received: 2 bytes
         Node: host=localhost port=xxxxx dbname=regression
         ->  Aggregate (actual rows=1 loops=1)
               ->  Hash Join (actual rows=10 loops=1)
@@ -2058,8 +2100,10 @@ SELECT count(distinct a) FROM (SELECT random() r, a FROM dist_table) t NATURAL J
 Aggregate (actual rows=1 loops=1)
   ->  Custom Scan (Citus Adaptive) (actual rows=10 loops=1)
         Task Count: 4
+        Data received: 11 bytes
         Tasks Shown: One of 4
         ->  Task
+              Data received: 5 bytes
               Node: host=localhost port=xxxxx dbname=regression
               ->  Group (actual rows=4 loops=1)
                     Group Key: t.a
@@ -2084,8 +2128,10 @@ Aggregate (actual rows=1 loops=1)
               Result destination: Send to 2 nodes
               ->  Custom Scan (Citus Adaptive) (actual rows=10 loops=1)
                     Task Count: 4
+                    Data received: 175 bytes
                     Tasks Shown: One of 4
                     ->  Task
+                          Data received: 71 bytes
                           Node: host=localhost port=xxxxx dbname=regression
                           ->  Merge Join (actual rows=4 loops=1)
                                 Merge Cond: (dist_table.a = ref_table.a)
@@ -2098,8 +2144,10 @@ Aggregate (actual rows=1 loops=1)
                                       Sort Method: quicksort  Memory: 25kB
                                       ->  Seq Scan on ref_table_570021 ref_table (actual rows=10 loops=1)
         Task Count: 4
+        Data received: 11 bytes
         Tasks Shown: One of 4
         ->  Task
+              Data received: 5 bytes
               Node: host=localhost port=xxxxx dbname=regression
               ->  HashAggregate (actual rows=4 loops=1)
                     Group Key: dist_table.a
@@ -2123,8 +2171,10 @@ Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
         Result destination: Write locally
         ->  Custom Scan (Citus Adaptive) (actual rows=20 loops=1)
               Task Count: 4
+              Data received: 22 bytes
               Tasks Shown: One of 4
               ->  Task
+                    Data received: 10 bytes
                     Node: host=localhost port=xxxxx dbname=regression
                     ->  Insert on dist_table_570017 citus_table_alias (actual rows=8 loops=1)
                           ->  Seq Scan on dist_table_570017 dist_table (actual rows=8 loops=1)
@@ -2134,13 +2184,17 @@ Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
         Result destination: Write locally
         ->  Custom Scan (Citus Adaptive) (actual rows=10 loops=1)
               Task Count: 1
+              Data received: 188 bytes
               Tasks Shown: All
               ->  Task
+                    Data received: 188 bytes
                     Node: host=localhost port=xxxxx dbname=regression
                     ->  Function Scan on read_intermediate_result intermediate_result (actual rows=10 loops=1)
   Task Count: 1
+  Data received: 2 bytes
   Tasks Shown: All
   ->  Task
+        Data received: 2 bytes
         Node: host=localhost port=xxxxx dbname=regression
         ->  Aggregate (actual rows=1 loops=1)
               ->  Function Scan on read_intermediate_result intermediate_result (actual rows=10 loops=1)

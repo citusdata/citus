@@ -340,6 +340,18 @@ ExplainJob(Job *job, ExplainState *es)
 	ExplainOpenGroup("Job", "Job", true, es);
 
 	ExplainPropertyInteger("Task Count", NULL, taskCount, es);
+	if (es->analyze)
+	{
+		Task *task = NULL;
+		uint64 totalReceivedDataForAllTasks = 0;
+		foreach_ptr(task, taskList)
+		{
+			totalReceivedDataForAllTasks += task->totalReceivedData;
+		}
+		ExplainPropertyInteger("Data received", "bytes",
+							   totalReceivedDataForAllTasks,
+							   es);
+	}
 
 	if (dependentJobCount > 0)
 	{
