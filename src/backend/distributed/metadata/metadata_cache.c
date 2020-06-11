@@ -157,20 +157,6 @@ typedef struct MetadataCacheData
 	Oid jsonbExtractPathFuncId;
 	bool databaseNameValid;
 	char databaseName[NAMEDATALEN];
-
-	/* cached lookups for the tdigest extension */
-	Oid tdigestExtensionSchema;
-	Oid tdigestTypeOid;
-	Oid tdigestAggTDigest1;
-	Oid tdigestAggTDigest2;
-	Oid tdigestAggTDigestPercentile2;
-	Oid tdigestAggTDigestPercentile2a;
-	Oid tdigestAggTDigestPercentile3;
-	Oid tdigestAggTDigestPercentile3a;
-	Oid tdigestAggTDigestPercentileOf2;
-	Oid tdigestAggTDigestPercentileOf2a;
-	Oid tdigestAggTDigestPercentileOf3;
-	Oid tdigestAggTDigestPercentileOf3a;
 } MetadataCacheData;
 
 
