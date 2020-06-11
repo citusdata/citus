@@ -3256,9 +3256,9 @@ WorkerAggregateExpressionList(Aggref *originalAggregate,
 		 * We are creating the worker part of this query by creating a
 		 *  - tdigest(tdigest)
 		 *
-		 * One could see we are passing argument 0 and argument 1 from the original query
-		 * in here. This corresponds with the list_nth calls in the args and aggargstypes
-		 * list construction. The tdigest function and type are read from the catalog.
+		 * One could see we are passing argument 0 from the original query in here. This
+		 * corresponds with the list_nth calls in the args and aggargstypes list
+		 * construction. The tdigest function and type are read from the catalog.
 		 */
 		Aggref *newWorkerAggregate = copyObject(originalAggregate);
 		newWorkerAggregate->aggfnoid = TDigestExtensionAggTDigest1();
