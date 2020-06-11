@@ -194,6 +194,7 @@ extern Oid DistPlacementGroupidIndexId(void);
 extern Oid DistObjectPrimaryKeyIndexId(void);
 
 /* type oids */
+extern Oid LookupTypeOid(char *schemaNameSting, char *typeNameString);
 extern Oid CitusCopyFormatTypeId(void);
 
 /* function oids */
@@ -220,21 +221,5 @@ extern Oid CitusExtensionOwner(void);
 extern char * CitusExtensionOwnerName(void);
 extern char * CurrentUserName(void);
 extern const char * CurrentDatabaseName(void);
-
-/* tdigest related functions */
-extern void TDigestExtensionClearCache(void);
-extern Oid TDigestExtensionSchema(void);
-extern Oid TDigestExtensionTypeOid(void);
-extern Oid TDigestExtensionAggTDigest1(void);
-extern Oid TDigestExtensionAggTDigest2(void);
-extern Oid TDigestExtensionAggTDigestPercentile2(void);
-extern Oid TDigestExtensionAggTDigestPercentile2a(void);
-extern Oid TDigestExtensionAggTDigestPercentile3(void);
-extern Oid TDigestExtensionAggTDigestPercentile3a(void);
-
-extern Oid TDigestExtensionAggTDigestPercentileOf2(void);
-extern Oid TDigestExtensionAggTDigestPercentileOf2a(void);
-extern Oid TDigestExtensionAggTDigestPercentileOf3(void);
-extern Oid TDigestExtensionAggTDigestPercentileOf3a(void);
 
 #endif /* METADATA_CACHE_H */

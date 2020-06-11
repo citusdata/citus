@@ -39,6 +39,7 @@
 #include "distributed/multi_logical_planner.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/pg_dist_partition.h"
+#include "distributed/tdigest_extension.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/version_compat.h"
 #include "nodes/makefuncs.h"
