@@ -76,8 +76,9 @@ typedef struct RemoteFileDestReceiver
 	CopyOutState copyOutState;
 	FmgrInfo *columnOutputFunctions;
 
-	/* number of tuples sent */
+	/* statistics */
 	uint64 tuplesSent;
+	uint64 bytesSent;
 } RemoteFileDestReceiver;
 
 
@@ -221,6 +222,17 @@ CreateRemoteFileDestReceiver(const char *resultId, EState *executorState,
 	resultDest->writeLocalFile = writeLocalFile;
 
 	return (DestReceiver *) resultDest;
+}
+
+
+/*
+ * RemoteFileDestReceiverBytesSent returns number of bytes sent per remote worker.
+ */
+uint64
+RemoteFileDestReceiverBytesSent(DestReceiver *destReceiver)
+{
+	RemoteFileDestReceiver *remoteDestReceiver = (RemoteFileDestReceiver *) destReceiver;
+	return remoteDestReceiver->bytesSent;
 }
 
 
@@ -415,6 +427,7 @@ RemoteFileDestReceiverReceive(TupleTableSlot *slot, DestReceiver *dest)
 	MemoryContextSwitchTo(oldContext);
 
 	resultDest->tuplesSent++;
+	resultDest->bytesSent += copyData->len;
 
 	ResetPerTupleExprContext(executorState);
 
