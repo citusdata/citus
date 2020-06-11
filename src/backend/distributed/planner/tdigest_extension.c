@@ -18,6 +18,8 @@
 #include "utils/lsyscache.h"
 
 
+static Oid LookupTDigestFunction(const char *functionName, int argcount, Oid *argtypes);
+
 /*
  * TDigestExtensionSchema finds the schema the tdigest extension is installed in. The
  * function will return InvalidOid if the extension is not installed.
@@ -79,13 +81,12 @@ TDigestExtensionTypeOid()
 
 
 /*
- * TDigestExtensionAggTDigest1 performs a lookup for the Oid of the tdigest aggregate;
- *   tdigest(tdigest)
- *
- * If the aggregate is not found InvalidOid is returned.
+ * LookupTDigestFunction is a helper function specifically to lookup functions in the
+ * namespace/schema where the tdigest extension is installed. This makes the lookup of
+ * following aggregate functions easier and less repetitive.
  */
-Oid
-TDigestExtensionAggTDigest1()
+static Oid
+LookupTDigestFunction(const char *functionName, int argcount, Oid *argtypes)
 {
 	Oid tdigestSchemaOid = TDigestExtensionSchema();
 	if (!OidIsValid(tdigestSchemaOid))
@@ -94,8 +95,22 @@ TDigestExtensionAggTDigest1()
 	}
 
 	char *namespaceName = get_namespace_name(tdigestSchemaOid);
-	return LookupFuncName(list_make2(makeString(namespaceName), makeString("tdigest")),
-						  1, (Oid[]) { TDigestExtensionTypeOid() }, true);
+	return LookupFuncName(
+		list_make2(makeString(namespaceName), makeString(pstrdup(functionName))),
+		argcount, argtypes, true);
+}
+
+
+/*
+ * TDigestExtensionAggTDigest1 performs a lookup for the Oid of the tdigest aggregate;
+ *   tdigest(tdigest)
+ *
+ * If the aggregate is not found InvalidOid is returned.
+ */
+Oid
+TDigestExtensionAggTDigest1()
+{
+	return LookupTDigestFunction("tdigest", 1, (Oid[]) { TDigestExtensionTypeOid() });
 }
 
 
@@ -108,15 +123,7 @@ TDigestExtensionAggTDigest1()
 Oid
 TDigestExtensionAggTDigest2()
 {
-	Oid tdigestSchemaOid = TDigestExtensionSchema();
-	if (!OidIsValid(tdigestSchemaOid))
-	{
-		return InvalidOid;
-	}
-
-	char *schemaName = get_namespace_name(tdigestSchemaOid);
-	return LookupFuncName(list_make2(makeString(schemaName), makeString("tdigest")),
-						  2, (Oid[]) { FLOAT8OID, INT4OID }, true);
+	return LookupTDigestFunction("tdigest", 2, (Oid[]) { FLOAT8OID, INT4OID });
 }
 
 
@@ -130,15 +137,8 @@ TDigestExtensionAggTDigest2()
 Oid
 TDigestExtensionAggTDigestPercentile2()
 {
-	Oid tdigestSchemaOid = TDigestExtensionSchema();
-	if (!OidIsValid(tdigestSchemaOid))
-	{
-		return InvalidOid;
-	}
-	char *schemaName = get_namespace_name(tdigestSchemaOid);
-	return LookupFuncName(
-		list_make2(makeString(schemaName), makeString("tdigest_percentile")),
-		2, (Oid[]) { TDigestExtensionTypeOid(), FLOAT8OID }, true);
+	return LookupTDigestFunction("tdigest_percentile", 2,
+								 (Oid[]) { TDigestExtensionTypeOid(), FLOAT8OID });
 }
 
 
@@ -152,16 +152,8 @@ TDigestExtensionAggTDigestPercentile2()
 Oid
 TDigestExtensionAggTDigestPercentile2a(void)
 {
-	Oid tdigestSchemaOid = TDigestExtensionSchema();
-	if (!OidIsValid(tdigestSchemaOid))
-	{
-		return InvalidOid;
-	}
-
-	char *schemaName = get_namespace_name(tdigestSchemaOid);
-	return LookupFuncName(
-		list_make2(makeString(schemaName), makeString("tdigest_percentile")),
-		2, (Oid[]) { TDigestExtensionTypeOid(), FLOAT8ARRAYOID }, true);
+	return LookupTDigestFunction("tdigest_percentile", 2,
+								 (Oid[]) { TDigestExtensionTypeOid(), FLOAT8ARRAYOID });
 }
 
 
@@ -175,16 +167,8 @@ TDigestExtensionAggTDigestPercentile2a(void)
 Oid
 TDigestExtensionAggTDigestPercentile3()
 {
-	Oid tdigestSchemaOid = TDigestExtensionSchema();
-	if (!OidIsValid(tdigestSchemaOid))
-	{
-		return InvalidOid;
-	}
-
-	char *schemaName = get_namespace_name(tdigestSchemaOid);
-	return LookupFuncName(
-		list_make2(makeString(schemaName), makeString("tdigest_percentile")),
-		3, (Oid[]) { FLOAT8OID, INT4OID, FLOAT8OID }, true);
+	return LookupTDigestFunction("tdigest_percentile", 3,
+								 (Oid[]) { FLOAT8OID, INT4OID, FLOAT8OID });
 }
 
 
@@ -198,16 +182,8 @@ TDigestExtensionAggTDigestPercentile3()
 Oid
 TDigestExtensionAggTDigestPercentile3a(void)
 {
-	Oid tdigestSchemaOid = TDigestExtensionSchema();
-	if (!OidIsValid(tdigestSchemaOid))
-	{
-		return InvalidOid;
-	}
-
-	char *schemaName = get_namespace_name(tdigestSchemaOid);
-	return LookupFuncName(
-		list_make2(makeString(schemaName), makeString("tdigest_percentile")),
-		3, (Oid[]) { FLOAT8OID, INT4OID, FLOAT8ARRAYOID }, true);
+	return LookupTDigestFunction("tdigest_percentile", 3,
+								 (Oid[]) { FLOAT8OID, INT4OID, FLOAT8ARRAYOID });
 }
 
 
@@ -221,16 +197,8 @@ TDigestExtensionAggTDigestPercentile3a(void)
 Oid
 TDigestExtensionAggTDigestPercentileOf2()
 {
-	Oid tdigestSchemaOid = TDigestExtensionSchema();
-	if (!OidIsValid(tdigestSchemaOid))
-	{
-		return InvalidOid;
-	}
-
-	char *schemaName = get_namespace_name(tdigestSchemaOid);
-	return LookupFuncName(
-		list_make2(makeString(schemaName), makeString("tdigest_percentile_of")),
-		2, (Oid[]) { TDigestExtensionTypeOid(), FLOAT8OID }, true);
+	return LookupTDigestFunction("tdigest_percentile_of", 2,
+								 (Oid[]) { TDigestExtensionTypeOid(), FLOAT8OID });
 }
 
 
@@ -244,16 +212,8 @@ TDigestExtensionAggTDigestPercentileOf2()
 Oid
 TDigestExtensionAggTDigestPercentileOf2a(void)
 {
-	Oid tdigestSchemaOid = TDigestExtensionSchema();
-	if (!OidIsValid(tdigestSchemaOid))
-	{
-		return InvalidOid;
-	}
-
-	char *schemaName = get_namespace_name(tdigestSchemaOid);
-	return LookupFuncName(
-		list_make2(makeString(schemaName), makeString("tdigest_percentile_of")),
-		2, (Oid[]) { TDigestExtensionTypeOid(), FLOAT8ARRAYOID }, true);
+	return LookupTDigestFunction("tdigest_percentile_of", 2,
+								 (Oid[]) { TDigestExtensionTypeOid(), FLOAT8ARRAYOID });
 }
 
 
@@ -267,16 +227,8 @@ TDigestExtensionAggTDigestPercentileOf2a(void)
 Oid
 TDigestExtensionAggTDigestPercentileOf3()
 {
-	Oid tdigestSchemaOid = TDigestExtensionSchema();
-	if (!OidIsValid(tdigestSchemaOid))
-	{
-		return InvalidOid;
-	}
-
-	char *schemaName = get_namespace_name(tdigestSchemaOid);
-	return LookupFuncName(
-		list_make2(makeString(schemaName), makeString("tdigest_percentile_of")),
-		3, (Oid[]) { FLOAT8OID, INT4OID, FLOAT8OID }, true);
+	return LookupTDigestFunction("tdigest_percentile_of", 3,
+								 (Oid[]) { FLOAT8OID, INT4OID, FLOAT8OID });
 }
 
 
@@ -290,14 +242,6 @@ TDigestExtensionAggTDigestPercentileOf3()
 Oid
 TDigestExtensionAggTDigestPercentileOf3a(void)
 {
-	Oid tdigestSchemaOid = TDigestExtensionSchema();
-	if (!OidIsValid(tdigestSchemaOid))
-	{
-		return InvalidOid;
-	}
-
-	char *schemaName = get_namespace_name(tdigestSchemaOid);
-	return LookupFuncName(
-		list_make2(makeString(schemaName), makeString("tdigest_percentile_of")),
-		3, (Oid[]) { FLOAT8OID, INT4OID, FLOAT8ARRAYOID }, true);
+	return LookupTDigestFunction("tdigest_percentile_of", 3,
+								 (Oid[]) { FLOAT8OID, INT4OID, FLOAT8ARRAYOID });
 }
