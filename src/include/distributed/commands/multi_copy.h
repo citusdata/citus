@@ -156,7 +156,8 @@ extern void AppendCopyBinaryHeaders(CopyOutState headerOutputState);
 extern void AppendCopyBinaryFooters(CopyOutState footerOutputState);
 extern void EndRemoteCopy(int64 shardId, List *connectionList);
 extern List * CreateRangeTable(Relation rel, AclMode requiredAccess);
-extern Node * ProcessCopyStmt(CopyStmt *copyStatement, QueryCompletionCompat *completionTag,
+extern Node * ProcessCopyStmt(CopyStmt *copyStatement,
+							  QueryCompletionCompat *completionTag,
 							  const char *queryString);
 extern void CheckCopyPermissions(CopyStmt *copyStatement);
 extern bool IsCopyResultStmt(CopyStmt *copyStatement);

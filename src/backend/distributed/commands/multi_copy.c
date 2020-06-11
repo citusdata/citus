@@ -214,8 +214,10 @@ typedef struct ShardConnections
 
 
 /* Local functions forward declarations */
-static void CopyToExistingShards(CopyStmt *copyStatement, QueryCompletionCompat *completionTag);
-static void CopyToNewShards(CopyStmt *copyStatement, QueryCompletionCompat *completionTag, Oid relationId);
+static void CopyToExistingShards(CopyStmt *copyStatement,
+								 QueryCompletionCompat *completionTag);
+static void CopyToNewShards(CopyStmt *copyStatement, QueryCompletionCompat *completionTag,
+							Oid relationId);
 static void OpenCopyConnectionsForNewShards(CopyStmt *copyStatement,
 											ShardConnections *shardConnections, bool
 											stopOnFailure,
@@ -316,7 +318,8 @@ static bool CitusCopyDestReceiverReceive(TupleTableSlot *slot,
 static void CitusCopyDestReceiverShutdown(DestReceiver *destReceiver);
 static void CitusCopyDestReceiverDestroy(DestReceiver *destReceiver);
 static bool ContainsLocalPlacement(int64 shardId);
-static void CompleteCopyQueryTagCompat(QueryCompletionCompat* completionTag, uint64 processedRowCount);
+static void CompleteCopyQueryTagCompat(QueryCompletionCompat *completionTag, uint64
+									   processedRowCount);
 static void FinishLocalCopy(CitusCopyDestReceiver *copyDest);
 static void CloneCopyOutStateForLocalCopy(CopyOutState from, CopyOutState to);
 static bool ShouldExecuteCopyLocally(bool isIntermediateResult);
@@ -568,7 +571,8 @@ CopyToExistingShards(CopyStmt *copyStatement, QueryCompletionCompat *completionT
  * tables where we create new shards into which to copy rows.
  */
 static void
-CopyToNewShards(CopyStmt *copyStatement, QueryCompletionCompat *completionTag, Oid relationId)
+CopyToNewShards(CopyStmt *copyStatement, QueryCompletionCompat *completionTag, Oid
+				relationId)
 {
 	/* allocate column values and nulls arrays */
 	Relation distributedRelation = table_open(relationId, RowExclusiveLock);
@@ -746,12 +750,15 @@ CopyToNewShards(CopyStmt *copyStatement, QueryCompletionCompat *completionTag, O
 	}
 }
 
-static void CompleteCopyQueryTagCompat(QueryCompletionCompat* completionTag, uint64 processedRowCount) {
+
+static void
+CompleteCopyQueryTagCompat(QueryCompletionCompat *completionTag, uint64 processedRowCount)
+{
 	#if PG_VERSION_NUM >= PG_VERSION_13
-		SetQueryCompletion(completionTag, CMDTAG_COPY, processedRowCount);
+	SetQueryCompletion(completionTag, CMDTAG_COPY, processedRowCount);
 	#else
-		SafeSnprintf(completionTag, COMPLETION_TAG_BUFSIZE,
-				"COPY " UINT64_FORMAT, processedRowCount);
+	SafeSnprintf(completionTag, COMPLETION_TAG_BUFSIZE,
+				 "COPY " UINT64_FORMAT, processedRowCount);
 	#endif
 }
 
@@ -2780,7 +2787,8 @@ CopyStatementHasFormat(CopyStmt *copyStatement, char *formatName)
  * further processing is needed.
  */
 Node *
-ProcessCopyStmt(CopyStmt *copyStatement, QueryCompletionCompat *completionTag, const char *queryString)
+ProcessCopyStmt(CopyStmt *copyStatement, QueryCompletionCompat *completionTag, const
+				char *queryString)
 {
 	/*
 	 * Handle special COPY "resultid" FROM STDIN WITH (format result) commands

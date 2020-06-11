@@ -629,10 +629,10 @@ ExecutePlanIntoDestReceiver(PlannedStmt *queryPlan, ParamListInfo params,
 	portal->visible = false;
 
 	PortalDefineQuerySelectCompat(portal,
-					  NULL,
-					  "",
-					  list_make1(queryPlan),
-					  NULL);
+								  NULL,
+								  "",
+								  list_make1(queryPlan),
+								  NULL);
 
 	PortalStart(portal, params, eflags, GetActiveSnapshot());
 	PortalRun(portal, count, false, true, dest, dest, NULL);

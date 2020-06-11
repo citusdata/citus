@@ -131,7 +131,8 @@ static List * QueryFromList(List *rangeTableList);
 static Node * QueryJoinTree(MultiNode *multiNode, List *dependentJobList,
 							List **rangeTableList);
 static void SetJoinRelatedColumnsCompat(RangeTblEntry *rangeTableEntry,
-	List *l_colnames, List *r_colnames, List* leftColVars, List* rightColVars);	
+										List *l_colnames, List *r_colnames,
+										List *leftColVars, List *rightColVars);
 static RangeTblEntry * JoinRangeTableEntry(JoinExpr *joinExpr, List *dependentJobList,
 										   List *rangeTableList);
 static int ExtractRangeTableId(Node *node);
@@ -1262,31 +1263,39 @@ JoinRangeTableEntry(JoinExpr *joinExpr, List *dependentJobList, List *rangeTable
 	rangeTableEntry->joinaliasvars = joinedColumnVars;
 
 	SetJoinRelatedColumnsCompat(rangeTableEntry,
-	leftColumnNames, rightColumnNames, leftColumnVars, rightColumnVars);
+								leftColumnNames, rightColumnNames, leftColumnVars,
+								rightColumnVars);
 
 	return rangeTableEntry;
 }
 
-static void SetJoinRelatedColumnsCompat(RangeTblEntry *rangeTableEntry,
-		List *leftColumnNames, List *rightColumnNames, List* leftColumnVars, List* rightColumnVars) {
 
+static void
+SetJoinRelatedColumnsCompat(RangeTblEntry *rangeTableEntry,
+							List *leftColumnNames, List *rightColumnNames,
+							List *leftColumnVars, List *rightColumnVars)
+{
 	#if PG_VERSION_NUM >= PG_VERSION_13
 
 	/* We don't have any merged columns so set it to 0 */
-	rangeTableEntry->joinmergedcols = 0; 
-	Var* var = NULL;
+	rangeTableEntry->joinmergedcols = 0;
+	Var *var = NULL;
 	int varId = 1;
-	foreach_ptr(var, leftColumnVars) {
+	foreach_ptr(var, leftColumnVars)
+	{
 		rangeTableEntry->joinleftcols = lappend_int(rangeTableEntry->joinleftcols, varId);
-		varId++; 
-	} 
+		varId++;
+	}
 	varId = 1;
-	foreach_ptr(var, rightColumnVars) {
-		rangeTableEntry->joinrightcols = lappend_int(rangeTableEntry->joinrightcols, varId);
+	foreach_ptr(var, rightColumnVars)
+	{
+		rangeTableEntry->joinrightcols = lappend_int(rangeTableEntry->joinrightcols,
+													 varId);
 		varId++;
 	}
 	#endif
 }
+
 
 /*
  * ExtractRangeTableId gets the range table id from a node that could

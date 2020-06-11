@@ -334,7 +334,8 @@ LocallyPlanAndExecuteMultipleQueries(List *queryStrings, TupleDestination *tuple
 											 0);
 		int cursorOptions = 0;
 		ParamListInfo paramListInfo = NULL;
-		PlannedStmt *localPlan = planner_compat(shardQuery, NULL, cursorOptions, paramListInfo);
+		PlannedStmt *localPlan = planner_compat(shardQuery, NULL, cursorOptions,
+												paramListInfo);
 		totalProcessedRows += ExecuteLocalTaskPlan(localPlan, queryString,
 												   tupleDest, task,
 												   paramListInfo);

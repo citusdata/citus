@@ -27,7 +27,8 @@
  * in separate function calls, we need both the list and the current cell.
  * Therefore this wrapper stores both of them.
  */
-typedef struct ListCellAndListWrapper {
+typedef struct ListCellAndListWrapper
+{
 	List *list;
 	ListCell *listCell;
 } ListCellAndListWrapper;

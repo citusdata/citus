@@ -223,7 +223,7 @@ master_get_table_ddl_events(PG_FUNCTION_ARGS)
 		/* allocate DDL statements, and then save position in DDL statements */
 		List *tableDDLEventList = GetTableDDLEvents(relationId, includeSequenceDefaults);
 		tableDDLEventCell = list_head(tableDDLEventList);
-		ListCellAndListWrapper* wrapper = palloc0(sizeof(ListCellAndListWrapper));
+		ListCellAndListWrapper *wrapper = palloc0(sizeof(ListCellAndListWrapper));
 		wrapper->list = tableDDLEventList;
 		wrapper->listCell = tableDDLEventCell;
 		functionContext->user_fctx = wrapper;
@@ -239,7 +239,8 @@ master_get_table_ddl_events(PG_FUNCTION_ARGS)
 	 */
 	functionContext = SRF_PERCALL_SETUP();
 
-	ListCellAndListWrapper* wrapper = (ListCellAndListWrapper *) functionContext->user_fctx;
+	ListCellAndListWrapper *wrapper =
+		(ListCellAndListWrapper *) functionContext->user_fctx;
 	if (wrapper->listCell != NULL)
 	{
 		char *ddlStatement = (char *) lfirst(wrapper->listCell);

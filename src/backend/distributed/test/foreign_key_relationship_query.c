@@ -48,11 +48,11 @@ get_referencing_relation_id_list(PG_FUNCTION_ARGS)
 			MemoryContextSwitchTo(functionContext->multi_call_memory_ctx);
 		List *refList = list_copy(
 			cacheEntry->referencingRelationsViaForeignKey);
-		ListCellAndListWrapper* wrapper = palloc0(sizeof(ListCellAndListWrapper));
+		ListCellAndListWrapper *wrapper = palloc0(sizeof(ListCellAndListWrapper));
 		foreignRelationCell = list_head(refList);
 		wrapper->list = refList;
 		wrapper->listCell = foreignRelationCell;
-		functionContext->user_fctx = wrapper;	
+		functionContext->user_fctx = wrapper;
 		MemoryContextSwitchTo(oldContext);
 	}
 
@@ -64,7 +64,8 @@ get_referencing_relation_id_list(PG_FUNCTION_ARGS)
 	 */
 	functionContext = SRF_PERCALL_SETUP();
 
-	ListCellAndListWrapper* wrapper = (ListCellAndListWrapper *) functionContext->user_fctx;
+	ListCellAndListWrapper *wrapper =
+		(ListCellAndListWrapper *) functionContext->user_fctx;
 	if (wrapper->listCell != NULL)
 	{
 		Oid refId = lfirst_oid(wrapper->listCell);
@@ -106,7 +107,7 @@ get_referenced_relation_id_list(PG_FUNCTION_ARGS)
 			MemoryContextSwitchTo(functionContext->multi_call_memory_ctx);
 		List *refList = list_copy(cacheEntry->referencedRelationsViaForeignKey);
 		foreignRelationCell = list_head(refList);
-		ListCellAndListWrapper* wrapper = palloc0(sizeof(ListCellAndListWrapper));
+		ListCellAndListWrapper *wrapper = palloc0(sizeof(ListCellAndListWrapper));
 		wrapper->list = refList;
 		wrapper->listCell = foreignRelationCell;
 		functionContext->user_fctx = wrapper;
@@ -121,7 +122,8 @@ get_referenced_relation_id_list(PG_FUNCTION_ARGS)
 	 */
 	functionContext = SRF_PERCALL_SETUP();
 
-	ListCellAndListWrapper* wrapper = (ListCellAndListWrapper *) functionContext->user_fctx;
+	ListCellAndListWrapper *wrapper =
+		(ListCellAndListWrapper *) functionContext->user_fctx;
 
 	if (wrapper->listCell != NULL)
 	{

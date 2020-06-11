@@ -54,11 +54,11 @@ extern void multi_ProcessUtility(PlannedStmt *pstmt, const char *queryString,
 								 ProcessUtilityContext context, ParamListInfo params,
 								 struct QueryEnvironment *queryEnv, DestReceiver *dest,
 								 QueryCompletionCompat *completionTag
-								);
+								 );
 extern void CitusProcessUtility(Node *node, const char *queryString,
 								ProcessUtilityContext context, ParamListInfo params,
 								DestReceiver *dest,
-								QueryCompletionCompat * completionTag
+								QueryCompletionCompat *completionTag
 								);
 extern void MarkInvalidateForeignKeyGraph(void);
 extern void InvalidateForeignKeyGraphForDDL(void);

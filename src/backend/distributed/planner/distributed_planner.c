@@ -129,10 +129,10 @@ static PlannedStmt * PlanDistributedStmt(DistributedPlanningContext *planContext
 PlannedStmt *
 distributed_planner(Query *parse,
 	#if PG_VERSION_NUM >= PG_VERSION_13
-	const char *query_string,
+					const char *query_string,
 	#endif
- 	int cursorOptions,
-	ParamListInfo boundParams)
+					int cursorOptions,
+					ParamListInfo boundParams)
 {
 	bool needsDistributedPlanning = false;
 	bool fastPathRouterQuery = false;
@@ -223,9 +223,9 @@ distributed_planner(Query *parse,
 			 * postgres' planner.
 			 */
 			planContext.plan = standard_planner_compat(planContext.query,
-												NULL,
-												planContext.cursorOptions,
-												planContext.boundParams);
+													   NULL,
+													   planContext.cursorOptions,
+													   planContext.boundParams);
 			if (needsDistributedPlanning)
 			{
 				result = PlanDistributedStmt(&planContext, rteIdCounter);

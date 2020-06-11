@@ -14,6 +14,7 @@
 #include "catalog/pg_type.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/tdigest_extension.h"
+#include "distributed/version_compat.h"
 #include "parser/parse_func.h"
 #include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
