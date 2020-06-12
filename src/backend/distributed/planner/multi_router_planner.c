@@ -2145,8 +2145,6 @@ PlanRouterQuery(Query *originalQuery,
 												 hasLocalRelation);
 	if (taskPlacementList == NIL)
 	{
-		ereport(DEBUG2, (errmsg("Found no worker with all shard placements")));
-
 		planningError = DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 									  "found no worker with all shard placements",
 									  NULL, NULL);
