@@ -2442,13 +2442,13 @@ CurrentUserName(void)
 
 
 /*
- * LookupTypeOid returns the Oid of the "pg_catalog.{typeNameString}" type, or
+ * LookupTypeOid returns the Oid of the "{schemaNameSting}.{typeNameString}" type, or
  * InvalidOid if it does not exist.
  */
-static Oid
-LookupTypeOid(char *typeNameString)
+Oid
+LookupTypeOid(char *schemaNameSting, char *typeNameString)
 {
-	Value *schemaName = makeString("pg_catalog");
+	Value *schemaName = makeString(schemaNameSting);
 	Value *typeName = makeString(typeNameString);
 	List *qualifiedName = list_make2(schemaName, typeName);
 	TypeName *enumTypeName = makeTypeNameFromNameList(qualifiedName);
@@ -2480,7 +2480,7 @@ LookupTypeOid(char *typeNameString)
 static Oid
 LookupStringEnumValueId(char *enumName, char *valueName)
 {
-	Oid enumTypeId = LookupTypeOid(enumName);
+	Oid enumTypeId = LookupTypeOid("pg_catalog", enumName);
 
 	if (enumTypeId == InvalidOid)
 	{
