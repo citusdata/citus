@@ -209,4 +209,12 @@ extern void DissuadePlannerFromUsingPlan(PlannedStmt *plan);
 extern PlannedStmt * FinalizePlan(PlannedStmt *localPlan,
 								  struct DistributedPlan *distributedPlan);
 
+
+extern struct DistributedPlan * CreateDistributedPlan(uint64 planId, Query *originalQuery,
+													  Query *query, ParamListInfo
+													  boundParams, bool
+													  hasUnresolvedParams,
+													  PlannerRestrictionContext *
+													  plannerRestrictionContext);
+
 #endif /* DISTRIBUTED_PLANNER_H */
