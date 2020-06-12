@@ -122,18 +122,18 @@ AddConnParam(const char *keyword, const char *value)
  *
  *   - Not use a uri-prefix such as postgres:// (it must be only keys and values)
  *   - Parse using PQconninfoParse
- *   - Only set keywords contained in the provided whitelist
+ *   - Only set keywords contained in the provided allowedConninfoKeywords
  *
  * This function returns true if all of the above are satisfied, otherwise it
  * returns false. If the provided errmsg pointer is not NULL, it will be set
  * to an appropriate message if the check fails.
  *
- * The provided whitelist must be sorted in a manner usable by bsearch, though
- * this is only validated during assert-enabled builds.
+ * The provided allowedConninfoKeywords must be sorted in a manner usable by bsearch,
+ * though this is only validated during assert-enabled builds.
  */
 bool
-CheckConninfo(const char *conninfo, const char **whitelist,
-			  Size whitelistLength, char **errorMsg)
+CheckConninfo(const char *conninfo, const char **allowedConninfoKeywords,
+			  Size allowedConninfoKeywordsLength, char **errorMsg)
 {
 	PQconninfoOption *option = NULL;
 	char *errorMsgString = NULL;
@@ -173,11 +173,11 @@ CheckConninfo(const char *conninfo, const char **whitelist,
 
 #ifdef USE_ASSERT_CHECKING
 
-	/* verify that the whitelist is in ascending order */
-	for (Size whitelistIdx = 1; whitelistIdx < whitelistLength; whitelistIdx++)
+	/* verify that the allowedConninfoKeywords is in ascending order */
+	for (Size keywordIdx = 1; keywordIdx < allowedConninfoKeywordsLength; keywordIdx++)
 	{
-		const char *prev = whitelist[whitelistIdx - 1];
-		const char *curr = whitelist[whitelistIdx];
+		const char *prev = allowedConninfoKeywords[keywordIdx - 1];
+		const char *curr = allowedConninfoKeywords[keywordIdx];
 
 		AssertArg(strcmp(prev, curr) < 0);
 	}
@@ -190,11 +190,12 @@ CheckConninfo(const char *conninfo, const char **whitelist,
 			continue;
 		}
 
-		void *matchingKeyword = SafeBsearch(&option->keyword, whitelist, whitelistLength,
-											sizeof(char *), pg_qsort_strcmp);
+		void *matchingKeyword = SafeBsearch(&option->keyword, allowedConninfoKeywords,
+											allowedConninfoKeywordsLength, sizeof(char *),
+											pg_qsort_strcmp);
 		if (matchingKeyword == NULL)
 		{
-			/* the whitelist lacks this keyword; error out! */
+			/* the allowedConninfoKeywords lacks this keyword; error out! */
 			StringInfoData msgString;
 			initStringInfo(&msgString);
 
