@@ -831,16 +831,16 @@ INSERT INTO ref_table SELECT i FROM generate_series(1, 10) i;
 
 EXPLAIN :default_analyze_flags
 WITH r AS (
-	SELECT random() r, a FROM dist_table
+	SELECT GREATEST(random(), 2) r, a FROM dist_table
 )
 SELECT count(distinct a) from r NATURAL JOIN ref_table;
 
 EXPLAIN :default_analyze_flags
-SELECT count(distinct a) FROM (SELECT random() r, a FROM dist_table) t NATURAL JOIN ref_table;
+SELECT count(distinct a) FROM (SELECT GREATEST(random(), 2) r, a FROM dist_table) t NATURAL JOIN ref_table;
 
 EXPLAIN :default_analyze_flags
 SELECT count(distinct a) FROM dist_table
-WHERE EXISTS(SELECT random() FROM dist_table NATURAL JOIN ref_table);
+WHERE EXISTS(SELECT random() < 2 FROM dist_table NATURAL JOIN ref_table);
 
 BEGIN;
 EXPLAIN :default_analyze_flags
@@ -848,7 +848,7 @@ WITH r AS (
 	INSERT INTO dist_table SELECT a, a * a FROM dist_table
 	RETURNING a
 ), s AS (
-	SELECT random(), a * a a2 FROM r
+	SELECT random() < 2, a * a a2 FROM r
 )
 SELECT count(distinct a2) FROM s;
 ROLLBACK;

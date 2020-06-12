@@ -1957,11 +1957,11 @@ EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT JSON) INSERT INT
       "Distributed Query": {
         "Job": {
           "Task Count": 2,
-          "Data received from workers": 0,
+          "Data received from workers": "0 bytes",
           "Tasks Shown": "One of 2",
           "Tasks": [
             {
-              "Data received from worker": 0,
+              "Data received from worker": "0 bytes",
               "Node": "host=localhost port=xxxxx dbname=regression",
               "Remote Plan": [
                 [
@@ -2013,11 +2013,11 @@ EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT XML) INSERT INTO
       <Distributed-Query>
         <Job>
           <Task-Count>2</Task-Count>
-          <Data-received-from-workers>0</Data-received-from-workers>
+          <Data-received-from-workers>0 bytes</Data-received-from-workers>
           <Tasks-Shown>One of 2</Tasks-Shown>
           <Tasks>
             <Task>
-              <Data-received-from-worker>0</Data-received-from-worker>
+              <Data-received-from-worker>0 bytes</Data-received-from-worker>
               <Node>host=localhost port=xxxxx dbname=regression</Node>
               <Remote-Plan>
                 <explain xmlns="http://www.postgresql.org/2009/explain">
@@ -2067,7 +2067,7 @@ INSERT INTO dist_table SELECT i, i*i FROM generate_series(1, 10) i;
 INSERT INTO ref_table SELECT i FROM generate_series(1, 10) i;
 EXPLAIN :default_analyze_flags
 WITH r AS (
-	SELECT random() r, a FROM dist_table
+	SELECT GREATEST(random(), 2) r, a FROM dist_table
 )
 SELECT count(distinct a) from r NATURAL JOIN ref_table;
 Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
@@ -2076,10 +2076,10 @@ Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
         Result destination: Send to 2 nodes
         ->  Custom Scan (Citus Adaptive) (actual rows=10 loops=1)
               Task Count: 4
-              Data received from workers: 182 bytes
+              Data received from workers: 21 bytes
               Tasks Shown: One of 4
               ->  Task
-                    Data received from worker: 72 bytes
+                    Data received from worker: 9 bytes
                     Node: host=localhost port=xxxxx dbname=regression
                     ->  Seq Scan on dist_table_570017 dist_table (actual rows=4 loops=1)
   Task Count: 1
@@ -2096,7 +2096,7 @@ Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
                           Buckets: 1024  Batches: 1  Memory Usage: 9kB
                           ->  Function Scan on read_intermediate_result intermediate_result (actual rows=10 loops=1)
 EXPLAIN :default_analyze_flags
-SELECT count(distinct a) FROM (SELECT random() r, a FROM dist_table) t NATURAL JOIN ref_table;
+SELECT count(distinct a) FROM (SELECT GREATEST(random(), 2) r, a FROM dist_table) t NATURAL JOIN ref_table;
 Aggregate (actual rows=1 loops=1)
   ->  Custom Scan (Citus Adaptive) (actual rows=10 loops=1)
         Task Count: 4
@@ -2120,18 +2120,18 @@ Aggregate (actual rows=1 loops=1)
                                 ->  Seq Scan on ref_table_570021 ref_table (actual rows=10 loops=1)
 EXPLAIN :default_analyze_flags
 SELECT count(distinct a) FROM dist_table
-WHERE EXISTS(SELECT random() FROM dist_table NATURAL JOIN ref_table);
+WHERE EXISTS(SELECT random() < 2 FROM dist_table NATURAL JOIN ref_table);
 Aggregate (actual rows=1 loops=1)
   ->  Custom Scan (Citus Adaptive) (actual rows=10 loops=1)
         ->  Distributed Subplan XXX_1
-              Intermediate Data Size: 140 bytes
+              Intermediate Data Size: 70 bytes
               Result destination: Send to 2 nodes
               ->  Custom Scan (Citus Adaptive) (actual rows=10 loops=1)
                     Task Count: 4
-                    Data received from workers: 171 bytes
+                    Data received from workers: 10 bytes
                     Tasks Shown: One of 4
                     ->  Task
-                          Data received from worker: 66 bytes
+                          Data received from worker: 4 bytes
                           Node: host=localhost port=xxxxx dbname=regression
                           ->  Merge Join (actual rows=4 loops=1)
                                 Merge Cond: (dist_table.a = ref_table.a)
@@ -2162,7 +2162,7 @@ WITH r AS (
 	INSERT INTO dist_table SELECT a, a * a FROM dist_table
 	RETURNING a
 ), s AS (
-	SELECT random(), a * a a2 FROM r
+	SELECT random() < 2, a * a a2 FROM r
 )
 SELECT count(distinct a2) FROM s;
 Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
@@ -2180,14 +2180,14 @@ Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
                           ->  Seq Scan on dist_table_570017 dist_table (actual rows=8 loops=1)
                                 Filter: ((worker_hash(a) >= '-2147483648'::integer) AND (worker_hash(a) <= '-1073741825'::integer))
   ->  Distributed Subplan XXX_2
-        Intermediate Data Size: 220 bytes
+        Intermediate Data Size: 150 bytes
         Result destination: Write locally
         ->  Custom Scan (Citus Adaptive) (actual rows=10 loops=1)
               Task Count: 1
-              Data received from workers: 188 bytes
+              Data received from workers: 28 bytes
               Tasks Shown: All
               ->  Task
-                    Data received from worker: 188 bytes
+                    Data received from worker: 28 bytes
                     Node: host=localhost port=xxxxx dbname=regression
                     ->  Function Scan on read_intermediate_result intermediate_result (actual rows=10 loops=1)
   Task Count: 1
