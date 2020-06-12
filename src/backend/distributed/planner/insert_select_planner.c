@@ -336,10 +336,11 @@ CreateInsertSelectIntoLocalTablePlan(uint64 planId, Query *originalQuery, ParamL
 													  plannerRestrictionContext);
 
 	/*
-	 * We don't expect planning error here because hasUnresolvedParams is already checked
-	 * and CreateDistributedPlan only returns error when there are unresolved params.
+	 * We don't expect distPlan to be NULL here because hasUnresolvedParams is
+	 * already checked before this function and CreateDistributedPlan only returns
+	 * NULL when there are unresolved parameters.
 	 */
-	Assert(distPlan->planningError == NULL);
+	Assert(distPlan != NULL);
 
 	if (distPlan->planningError)
 	{
