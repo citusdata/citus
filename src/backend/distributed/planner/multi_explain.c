@@ -324,6 +324,10 @@ ExplainSubPlans(DistributedPlan *distributedPlan, ExplainState *es)
 }
 
 
+/*
+ * ExplainPropertyBytes formats bytes in a human readable way by using
+ * pg_size_pretty.
+ */
 static void
 ExplainPropertyBytes(const char *qlabel, int64 bytes, ExplainState *es)
 {
