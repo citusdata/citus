@@ -48,6 +48,8 @@ SELECT id, id, id, id, id,
  10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10
 (10 rows)
 
+-- EXPLAIN ANALYZE is currently forced to use text protocol. Once that is
+-- changed the numbers reported should change.
 EXPLAIN (ANALYZE TRUE, TIMING FALSE, COSTS FALSE, SUMMARY FALSE) SELECT id FROM t ORDER BY 1;
                             QUERY PLAN
 ---------------------------------------------------------------------

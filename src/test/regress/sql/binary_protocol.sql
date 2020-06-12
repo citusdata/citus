@@ -19,6 +19,8 @@ SELECT id, id, id, id, id,
        id, id, id, id, id
     FROM t ORDER BY id;
 
+-- EXPLAIN ANALYZE is currently forced to use text protocol. Once that is
+-- changed the numbers reported should change.
 EXPLAIN (ANALYZE TRUE, TIMING FALSE, COSTS FALSE, SUMMARY FALSE) SELECT id FROM t ORDER BY 1;
 SET citus.explain_all_tasks TO ON;
 EXPLAIN (ANALYZE TRUE, TIMING FALSE, COSTS FALSE, SUMMARY FALSE) SELECT id FROM t ORDER BY 1;

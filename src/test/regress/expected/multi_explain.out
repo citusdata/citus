@@ -2171,10 +2171,10 @@ Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
         Result destination: Write locally
         ->  Custom Scan (Citus Adaptive) (actual rows=20 loops=1)
               Task Count: 4
-              Data received from workers: 22 bytes
+              Data received from workers: 44 bytes
               Tasks Shown: One of 4
               ->  Task
-                    Data received from worker: 10 bytes
+                    Data received from worker: 20 bytes
                     Node: host=localhost port=xxxxx dbname=regression
                     ->  Insert on dist_table_570017 citus_table_alias (actual rows=8 loops=1)
                           ->  Seq Scan on dist_table_570017 dist_table (actual rows=8 loops=1)
@@ -2200,3 +2200,52 @@ Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
               ->  Function Scan on read_intermediate_result intermediate_result (actual rows=10 loops=1)
 ROLLBACK;
 DROP TABLE ref_table, dist_table;
+-- test EXPLAIN ANALYZE with different replication factors
+SET citus.shard_count = 2;
+SET citus.shard_replication_factor = 1;
+CREATE TABLE dist_table_rep1(a int);
+SELECT create_distributed_table('dist_table_rep1', 'a');
+
+SET citus.shard_replication_factor = 2;
+CREATE TABLE dist_table_rep2(a int);
+SELECT create_distributed_table('dist_table_rep2', 'a');
+
+EXPLAIN :default_analyze_flags INSERT INTO dist_table_rep1 VALUES(1), (2), (3), (4) RETURNING *;
+Custom Scan (Citus Adaptive) (actual rows=4 loops=1)
+  Task Count: 2
+  Data received from workers: 4 bytes
+  Tasks Shown: One of 2
+  ->  Task
+        Data received from worker: 3 bytes
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Insert on dist_table_rep1_570022 citus_table_alias (actual rows=3 loops=1)
+              ->  Values Scan on "*VALUES*" (actual rows=3 loops=1)
+EXPLAIN :default_analyze_flags SELECT * from dist_table_rep1;
+Custom Scan (Citus Adaptive) (actual rows=4 loops=1)
+  Task Count: 2
+  Data received from workers: 4 bytes
+  Tasks Shown: One of 2
+  ->  Task
+        Data received from worker: 3 bytes
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Seq Scan on dist_table_rep1_570022 dist_table_rep1 (actual rows=3 loops=1)
+EXPLAIN :default_analyze_flags INSERT INTO dist_table_rep2 VALUES(1), (2), (3), (4) RETURNING *;
+Custom Scan (Citus Adaptive) (actual rows=4 loops=1)
+  Task Count: 2
+  Data received from workers: 8 bytes
+  Tasks Shown: One of 2
+  ->  Task
+        Data received from worker: 6 bytes
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Insert on dist_table_rep2_570024 citus_table_alias (actual rows=3 loops=1)
+              ->  Values Scan on "*VALUES*" (actual rows=3 loops=1)
+EXPLAIN :default_analyze_flags SELECT * from dist_table_rep2;
+Custom Scan (Citus Adaptive) (actual rows=4 loops=1)
+  Task Count: 2
+  Data received from workers: 4 bytes
+  Tasks Shown: One of 2
+  ->  Task
+        Data received from worker: 3 bytes
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Seq Scan on dist_table_rep2_570024 dist_table_rep2 (actual rows=3 loops=1)
+DROP TABLE dist_table_rep1, dist_table_rep2;

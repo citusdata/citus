@@ -155,6 +155,7 @@ static void ExplainOneQuery(Query *query, int cursorOptions,
 							QueryEnvironment *queryEnv);
 static double elapsed_time(instr_time *starttime);
 static void ExplainPropertyBytes(const char *qlabel, int64 bytes, ExplainState *es);
+static uint64 TaskReceivedData(Task *task);
 
 
 /* exports for SQL callable functions */
@@ -359,7 +360,7 @@ ExplainJob(Job *job, ExplainState *es)
 		uint64 totalReceivedDataForAllTasks = 0;
 		foreach_ptr(task, taskList)
 		{
-			totalReceivedDataForAllTasks += task->totalReceivedData;
+			totalReceivedDataForAllTasks += TaskReceivedData(task);
 		}
 		ExplainPropertyBytes("Data received from workers",
 							 totalReceivedDataForAllTasks,
@@ -414,6 +415,23 @@ ExplainJob(Job *job, ExplainState *es)
 	}
 
 	ExplainCloseGroup("Job", "Job", true, es);
+}
+
+
+/*
+ * TaskReceivedData returns the amount of data that was received by the
+ * coordinator for the task. If it's a RETURNING DML task the value stored in
+ * totalReceivedData is not correct yet because it only counts the bytes for
+ * one placement.
+ */
+static uint64
+TaskReceivedData(Task *task)
+{
+	if (task->taskType == MODIFY_TASK)
+	{
+		return task->totalReceivedData * list_length(task->taskPlacementList);
+	}
+	return task->totalReceivedData;
 }
 
 
@@ -668,7 +686,8 @@ ExplainTask(Task *task, int placementIndex, List *explainOutputList, ExplainStat
 	if (es->analyze)
 	{
 		ExplainPropertyBytes("Data received from worker",
-							 task->totalReceivedData, es);
+							 TaskReceivedData(task),
+							 es);
 	}
 
 	if (explainOutputList != NIL)

@@ -341,6 +341,9 @@ typedef struct Task
 	/*
 	 * EXPLAIN ANALYZE output fetched from worker. This is saved to be used later
 	 * by RemoteExplain().
+	 *
+	 * totalReceivedData only counts the data for a single placement. So for
+	 * RETURNING DML this is not really correct.
 	 */
 	uint64 totalReceivedData;
 	char *fetchedExplainAnalyzePlan;

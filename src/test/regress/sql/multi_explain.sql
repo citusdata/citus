@@ -854,3 +854,21 @@ SELECT count(distinct a2) FROM s;
 ROLLBACK;
 
 DROP TABLE ref_table, dist_table;
+
+-- test EXPLAIN ANALYZE with different replication factors
+SET citus.shard_count = 2;
+SET citus.shard_replication_factor = 1;
+CREATE TABLE dist_table_rep1(a int);
+SELECT create_distributed_table('dist_table_rep1', 'a');
+
+SET citus.shard_replication_factor = 2;
+CREATE TABLE dist_table_rep2(a int);
+SELECT create_distributed_table('dist_table_rep2', 'a');
+
+EXPLAIN :default_analyze_flags INSERT INTO dist_table_rep1 VALUES(1), (2), (3), (4) RETURNING *;
+EXPLAIN :default_analyze_flags SELECT * from dist_table_rep1;
+
+EXPLAIN :default_analyze_flags INSERT INTO dist_table_rep2 VALUES(1), (2), (3), (4) RETURNING *;
+EXPLAIN :default_analyze_flags SELECT * from dist_table_rep2;
+
+DROP TABLE dist_table_rep1, dist_table_rep2;
