@@ -19,7 +19,7 @@
 #include "distributed/connection_management.h"
 #include "distributed/function_utils.h"
 #include "distributed/lock_graph.h"
-#include "distributed/master_protocol.h"
+#include "distributed/coordinator_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/remote_commands.h"
 #include "distributed/run_from_same_connection.h"

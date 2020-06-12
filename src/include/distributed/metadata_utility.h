@@ -1,6 +1,6 @@
 /*-------------------------------------------------------------------------
  *
- * master_metadata_utility.h
+ * metadata_utility.h
  *	  Type and function declarations used for reading and modifying master
  *    node's metadata.
  *
@@ -11,8 +11,8 @@
  *-------------------------------------------------------------------------
  */
 
-#ifndef MASTER_METADATA_UTILITY_H
-#define MASTER_METADATA_UTILITY_H
+#ifndef METADATA_UTILITY_H
+#define METADATA_UTILITY_H
 
 #include "postgres.h"
 
@@ -168,4 +168,4 @@ extern ShardInterval * DeformedDistShardTupleToShardInterval(Datum *datumArray,
 extern void GetIntervalTypeInfo(char partitionMethod, Var *partitionColumn,
 								Oid *intervalTypeId, int32 *intervalTypeMod);
 
-#endif   /* MASTER_METADATA_UTILITY_H */
+#endif   /* METADATA_UTILITY_H */

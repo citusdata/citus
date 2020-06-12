@@ -15,7 +15,7 @@
 #include "fmgr.h"
 
 #include "distributed/citus_ruleutils.h"
-#include "distributed/master_metadata_utility.h"
+#include "distributed/metadata_utility.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
 #include "utils/elog.h"

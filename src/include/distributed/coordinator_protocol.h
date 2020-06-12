@@ -1,18 +1,16 @@
 /*-------------------------------------------------------------------------
  *
- * master_protocol.h
- *	  Header for shared declarations for access to master node data. These data
- *	  are used to create new shards or update existing ones.
+ * coordinator_protocol.h
+ *	  Header for shared declarations for access to coordinator node data.
+ *    These data are used to create new shards or update existing ones.
  *
  * Copyright (c) Citus Data, Inc.
- *
- * $Id$
  *
  *-------------------------------------------------------------------------
  */
 
-#ifndef MASTER_PROTOCOL_H
-#define MASTER_PROTOCOL_H
+#ifndef COORDINATOR_PROTOCOL_H
+#define COORDINATOR_PROTOCOL_H
 
 #include "postgres.h"
 #include "c.h"
@@ -21,7 +19,7 @@
 #include "distributed/connection_management.h"
 #include "distributed/shardinterval_utils.h"
 #include "nodes/pg_list.h"
-#include "distributed/master_metadata_utility.h"
+#include "distributed/metadata_utility.h"
 
 
 /*
@@ -176,4 +174,4 @@ extern ShardPlacement * ForceSearchShardPlacementInList(List *shardPlacementList
 														const char *nodeName,
 														uint32 nodePort);
 
-#endif   /* MASTER_PROTOCOL_H */
+#endif   /* COORDINATOR_PROTOCOL_H */

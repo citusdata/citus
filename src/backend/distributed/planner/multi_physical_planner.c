@@ -39,7 +39,7 @@
 #include "distributed/citus_ruleutils.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/deparse_shard_query.h"
-#include "distributed/master_protocol.h"
+#include "distributed/coordinator_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_router_planner.h"
 #include "distributed/multi_join_order.h"

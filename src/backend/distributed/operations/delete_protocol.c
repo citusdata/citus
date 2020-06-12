@@ -1,6 +1,6 @@
 /*-------------------------------------------------------------------------
  *
- * master_delete_protocol.c
+ * delete_protocol.c
  *
  * Routine for deleting shards in the distributed cluster. This function takes
  * in a delete command and deletes a shard if and only if all rows in the shard
@@ -33,7 +33,7 @@
 #include "distributed/deparse_shard_query.h"
 #include "distributed/listutils.h"
 #include "distributed/local_executor.h"
-#include "distributed/master_protocol.h"
+#include "distributed/coordinator_protocol.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/multi_client_executor.h"
 #include "distributed/multi_join_order.h"

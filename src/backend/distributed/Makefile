@@ -16,7 +16,7 @@ generated_sql_files = $(patsubst %,$(citus_abs_srcdir)/build/%,$(template_sql_fi
 DATA_built = $(generated_sql_files)
 
 # directories with source files
-SUBDIRS = . commands connection ddl deparser executor master metadata planner progress relay safeclib test transaction utils worker
+SUBDIRS = . commands connection ddl deparser executor metadata operations planner progress relay safeclib test transaction utils worker
 
 # Symlinks are not copied over to the build directory if a separete build
 # directory is used during configure (such as on CI)

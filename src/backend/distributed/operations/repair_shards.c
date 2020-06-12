@@ -1,6 +1,6 @@
 /*-------------------------------------------------------------------------
  *
- * master_repair_shards.c
+ * repair_shards.c
  *
  * This file contains functions to repair unhealthy shard placements using data
  * from healthy ones.
@@ -23,7 +23,7 @@
 #include "distributed/connection_management.h"
 #include "distributed/distributed_planner.h"
 #include "distributed/listutils.h"
-#include "distributed/master_protocol.h"
+#include "distributed/coordinator_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/multi_join_order.h"
