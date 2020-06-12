@@ -3589,14 +3589,20 @@ CopyGetPlacementConnection(HTAB *connectionStateHash, ShardPlacement *placement,
 		ConnectionStateListToNode(connectionStateHash, nodeName, nodePort);
 	if (HasReachedAdaptiveExecutorPoolSize(copyConnectionStateList))
 	{
-		connection =
-			GetLeastUtilisedCopyConnection(copyConnectionStateList, nodeName, nodePort);
-
 		/*
 		 * If we've already reached the executor pool size, there should be at
 		 * least one connection to any given node.
 		 */
-		Assert(connection != NULL);
+		connection = GetLeastUtilisedCopyConnection(copyConnectionStateList,
+													nodeName,
+													nodePort);
+
+		/*
+		 * Errors are supposed to cause immediate aborts (i.e. we don't
+		 * want to/can't invalidate placements), mark the connection as
+		 * critical so later errors cause failures.
+		 */
+		MarkRemoteTransactionCritical(connection);
 
 		return connection;
 	}
@@ -3628,9 +3634,16 @@ CopyGetPlacementConnection(HTAB *connectionStateHash, ShardPlacement *placement,
 		 * The connection manager throttled any new connections, so pick an existing
 		 * connection with least utilization.
 		 */
-		connection =
-			GetLeastUtilisedCopyConnection(copyConnectionStateList, nodeName, nodePort);
-		Assert(connection != NULL);
+		connection = GetLeastUtilisedCopyConnection(copyConnectionStateList,
+													nodeName,
+													nodePort);
+
+		/*
+		 * Errors are supposed to cause immediate aborts (i.e. we don't
+		 * want to/can't invalidate placements), mark the connection as
+		 * critical so later errors cause failures.
+		 */
+		MarkRemoteTransactionCritical(connection);
 
 		return connection;
 	}
@@ -3691,6 +3704,8 @@ HasReachedAdaptiveExecutorPoolSize(List *connectionStateList)
 /*
  * GetLeastUtilisedCopyConnection returns a MultiConnection to the given node
  * with the least number of placements assigned to it.
+ *
+ * It is assumed that there exists at least one connection to the node.
  */
 static MultiConnection *
 GetLeastUtilisedCopyConnection(List *connectionStateList, char *nodeName,
@@ -3699,6 +3714,14 @@ GetLeastUtilisedCopyConnection(List *connectionStateList, char *nodeName,
 	MultiConnection *connection = NULL;
 	int minPlacementCount = INT32_MAX;
 	ListCell *connectionStateCell = NULL;
+
+	/*
+	 * We only pick the least utilised connection when some connection limits are
+	 * reached such as max_shared_pool_size or max_adaptive_executor_pool_size.
+	 *
+	 * Therefore there should be some connections to choose from.
+	 */
+	Assert(list_length(connectionStateList) > 0);
 
 	foreach(connectionStateCell, connectionStateList)
 	{
