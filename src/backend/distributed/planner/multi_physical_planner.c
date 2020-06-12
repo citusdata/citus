@@ -2646,7 +2646,7 @@ QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 
 	Assert(anchorShardId != INVALID_SHARD_ID);
 
-	List *selectPlacementList = WorkersContainingAllShards(taskShardList);
+	List *selectPlacementList = PlacementsForWorkersContainingAllShards(taskShardList);
 	if (list_length(selectPlacementList) == 0)
 	{
 		ereport(ERROR, (errmsg("cannot find a worker that has active placements for all "

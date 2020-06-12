@@ -56,7 +56,7 @@ extern List * TargetShardIntervalsForRestrictInfo(RelationRestrictionContext *
 												  restrictionContext,
 												  bool *multiShardQuery,
 												  Const **partitionValueConst);
-extern List * WorkersContainingAllShards(List *prunedShardIntervalsList);
+extern List * PlacementsForWorkersContainingAllShards(List *shardIntervalListList);
 extern List * IntersectPlacementList(List *lhsPlacementList, List *rhsPlacementList);
 extern DeferredErrorMessage * ModifyQuerySupported(Query *queryTree, Query *originalQuery,
 												   bool multiShardQuery,

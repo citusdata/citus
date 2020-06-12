@@ -2197,7 +2197,8 @@ CreateTaskPlacementListForShardIntervals(List *shardIntervalListList, bool shard
 		/*
 		 * Determine the workers that have all shard placements, if any.
 		 */
-		List *workerList = WorkersContainingAllShards(shardIntervalListList);
+		List *shardPlacementList =
+			PlacementsForWorkersContainingAllShards(shardIntervalListList);
 
 		if (hasLocalRelation)
 		{
@@ -2207,9 +2208,8 @@ CreateTaskPlacementListForShardIntervals(List *shardIntervalListList, bool shard
 			 * If there is a local table, we only allow the local placement to
 			 * be used. If there is none, we disallow the query.
 			 */
-			foreach_ptr(taskPlacement, workerList)
+			foreach_ptr(taskPlacement, shardPlacementList)
 			{
-				/* include only the local placement */
 				if (taskPlacement->groupId == GetLocalGroupId())
 				{
 					placementList = lappend(placementList, taskPlacement);
@@ -2218,7 +2218,7 @@ CreateTaskPlacementListForShardIntervals(List *shardIntervalListList, bool shard
 		}
 		else
 		{
-			placementList = workerList;
+			placementList = shardPlacementList;
 		}
 	}
 	else if (generateDummyPlacement)
@@ -2586,22 +2586,18 @@ RelationPrunesToMultipleShards(List *relationShardList)
 
 
 /*
- * WorkersContainingSelectShards returns list of shard placements that contain all
- * shard intervals provided to the select query. It returns NIL if no placement
- * exists. The caller should check if there are any shard intervals exist for
- * placement check prior to calling this function.
+ * PlacementsForWorkersContainingAllShards returns list of shard placements for workers
+ * that contain all shard intervals in the given list of shard interval lists.
  */
 List *
-WorkersContainingAllShards(List *prunedShardIntervalsList)
+PlacementsForWorkersContainingAllShards(List *shardIntervalListList)
 {
-	ListCell *prunedShardIntervalCell = NULL;
 	bool firstShard = true;
 	List *currentPlacementList = NIL;
+	List *shardIntervalList = NIL;
 
-	foreach(prunedShardIntervalCell, prunedShardIntervalsList)
+	foreach_ptr(shardIntervalList, shardIntervalListList)
 	{
-		List *shardIntervalList = (List *) lfirst(prunedShardIntervalCell);
-
 		if (shardIntervalList == NIL)
 		{
 			continue;
