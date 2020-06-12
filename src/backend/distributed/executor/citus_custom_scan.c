@@ -545,7 +545,8 @@ RegenerateTaskForFasthPathQuery(Job *workerJob)
 	bool hasLocalRelation = false;
 
 	List *placementList =
-		FindRouterWorkerList(shardIntervalList, shardsPresent, true, hasLocalRelation);
+		CreateTaskPlacementListForShardIntervals(shardIntervalList, shardsPresent, true,
+												 hasLocalRelation);
 	uint64 shardId = INVALID_SHARD_ID;
 
 	if (shardsPresent)

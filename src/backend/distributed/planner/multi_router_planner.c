@@ -2138,11 +2138,12 @@ PlanRouterQuery(Query *originalQuery,
 
 	bool hasLocalRelation = relationRestrictionContext->hasLocalRelation;
 
-	List *workerList =
-		FindRouterWorkerList(*prunedShardIntervalListList, shardsPresent,
-							 replacePrunedQueryWithDummy, hasLocalRelation);
-
-	if (workerList == NIL)
+	List *taskPlacementList =
+		CreateTaskPlacementListForShardIntervals(*prunedShardIntervalListList,
+												 shardsPresent,
+												 replacePrunedQueryWithDummy,
+												 hasLocalRelation);
+	if (taskPlacementList == NIL)
 	{
 		ereport(DEBUG2, (errmsg("Found no worker with all shard placements")));
 
@@ -2162,28 +2163,43 @@ PlanRouterQuery(Query *originalQuery,
 	}
 
 	*multiShardModifyQuery = false;
-	*placementList = workerList;
+	*placementList = taskPlacementList;
 	*anchorShardId = shardId;
 
 	return planningError;
 }
 
 
+/*
+ * CreateTaskPlacementListForShardIntervals returns a list of shard placements
+ * on which it can access all shards in shardIntervalListList, which contains
+ * a list of shards for each relation in the query.
+ *
+ * If the query contains a local table then hasLocalRelation should be set to
+ * true. In that case, CreateTaskPlacementListForShardIntervals only returns
+ * a placement for the local node or an empty list if the shards cannot be
+ * accessed locally.
+ *
+ * If generateDummyPlacement is true and there are no shards that need to be
+ * accessed to answer the query (shardsPresent is false), then as single
+ * placement is returned that is either local or follows a round-robin policy.
+ * A typical example is a router query that only reads an intermediate result.
+ * This will happen on the coordinator, unless the user wants to balance the
+ * load by setting the citus.task_assignment_policy.
+ */
 List *
-FindRouterWorkerList(List *shardIntervalList, bool shardsPresent,
-					 bool replacePrunedQueryWithDummy, bool hasLocalRelation)
+CreateTaskPlacementListForShardIntervals(List *shardIntervalListList, bool shardsPresent,
+										 bool generateDummyPlacement,
+										 bool hasLocalRelation)
 {
 	List *placementList = NIL;
 
-	/*
-	 * Determine the worker that has all shard placements if a shard placement found.
-	 * If no shard placement exists and replacePrunedQueryWithDummy flag is set, we will
-	 * still run the query but the result will be empty. We create a dummy shard
-	 * placement for the first active worker.
-	 */
 	if (shardsPresent)
 	{
-		List *workerList = WorkersContainingAllShards(shardIntervalList);
+		/*
+		 * Determine the workers that have all shard placements, if any.
+		 */
+		List *workerList = WorkersContainingAllShards(shardIntervalListList);
 
 		if (hasLocalRelation)
 		{
@@ -2207,7 +2223,7 @@ FindRouterWorkerList(List *shardIntervalList, bool shardsPresent,
 			placementList = workerList;
 		}
 	}
-	else if (replacePrunedQueryWithDummy)
+	else if (generateDummyPlacement)
 	{
 		ShardPlacement *dummyPlacement = CreateDummyPlacement(hasLocalRelation);
 

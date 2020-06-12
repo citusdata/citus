@@ -45,9 +45,10 @@ extern DeferredErrorMessage * PlanRouterQuery(Query *originalQuery,
 											  Const **partitionValueConst);
 extern List * RelationShardListForShardIntervalList(List *shardIntervalList,
 													bool *shardsPresent);
-extern List * FindRouterWorkerList(List *shardIntervalList, bool shardsPresent,
-								   bool replacePrunedQueryWithDummy,
-								   bool hasLocalRelation);
+extern List * CreateTaskPlacementListForShardIntervals(List *shardIntervalList,
+													   bool shardsPresent,
+													   bool generateDummyPlacement,
+													   bool hasLocalRelation);
 extern List * RouterInsertTaskList(Query *query, bool parametersInQueryResolved,
 								   DeferredErrorMessage **planningError);
 extern Const * ExtractInsertPartitionKeyValue(Query *query);
@@ -75,7 +76,6 @@ extern bool IsMultiRowInsert(Query *query);
 extern void AddShardIntervalRestrictionToSelect(Query *subqery,
 												ShardInterval *shardInterval);
 extern bool UpdateOrDeleteQuery(Query *query);
-extern List * WorkersContainingAllShards(List *prunedShardIntervalsList);
 
 extern uint64 GetAnchorShardId(List *relationShardList);
 extern List * TargetShardIntervalForFastPathQuery(Query *query,
