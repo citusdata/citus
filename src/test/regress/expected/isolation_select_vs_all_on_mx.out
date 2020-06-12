@@ -387,7 +387,7 @@ restore_isolation_tester_func
 
 
 
-starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-select s2-coordinator-create-index-concurrently s1-commit-worker s1-stop-connection
+starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-disable-binary-protocol-on-worker s1-select s2-coordinator-create-index-concurrently s1-commit-worker s1-stop-connection
 step s1-start-session-level-connection:
         SELECT start_session_level_connection_to_node('localhost', 57637);
 
@@ -396,6 +396,13 @@ start_session_level_connection_to_node
 
 step s1-begin-on-worker:
         SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+
+run_commands_on_session_level_connection_to_node
+
+
+step s1-disable-binary-protocol-on-worker:
+ -- Workaround router-select blocking blocking create-index-concurrently
+ SELECT run_commands_on_session_level_connection_to_node('SET citus.enable_binary_protocol TO false');
 
 run_commands_on_session_level_connection_to_node
 

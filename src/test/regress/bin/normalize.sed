@@ -123,3 +123,6 @@ s/Citus.*currently supports/Citus currently supports/g
 # Warnings in multi_explain
 s/prepared transaction with identifier .* does not exist/prepared transaction with identifier "citus_x_yyyyyy_zzz_w" does not exist/g
 s/failed to roll back prepared transaction '.*'/failed to roll back prepared transaction 'citus_x_yyyyyy_zzz_w'/g
+
+# Errors with binary decoding where OIDs should be normalized
+s/wrong data type: [0-9]+, expected [0-9]+/wrong data type: XXXX, expected XXXX/g

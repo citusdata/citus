@@ -6,6 +6,7 @@
 /* GUC, determining whether Citus opens 1 connection per task */
 extern bool ForceMaxQueryParallelization;
 extern int MaxAdaptiveExecutorPoolSize;
+extern bool EnableBinaryProtocol;
 
 /* GUC, number of ms to wait between opening connections to the same worker */
 extern int ExecutorSlowStartInterval;

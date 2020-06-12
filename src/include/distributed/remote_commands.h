@@ -48,7 +48,8 @@ extern int ExecuteOptionalRemoteCommand(MultiConnection *connection,
 extern int SendRemoteCommand(MultiConnection *connection, const char *command);
 extern int SendRemoteCommandParams(MultiConnection *connection, const char *command,
 								   int parameterCount, const Oid *parameterTypes,
-								   const char *const *parameterValues);
+								   const char *const *parameterValues,
+								   bool binaryResults);
 extern List * ReadFirstColumnAsText(PGresult *queryResult);
 extern PGresult * GetRemoteCommandResult(MultiConnection *connection,
 										 bool raiseInterrupts);

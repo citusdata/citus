@@ -217,7 +217,7 @@ WrapTasksForPartitioning(const char *resultIdPrefix, List *selectTaskList,
 		{
 			StringInfo wrappedQuery = makeStringInfo();
 			appendStringInfo(wrappedQuery,
-							 "SELECT %u, partition_index"
+							 "SELECT %u::int, partition_index"
 							 ", %s || '_' || partition_index::text "
 							 ", rows_written "
 							 "FROM worker_partition_query_result"
@@ -334,7 +334,7 @@ ExecutePartitionTaskList(List *taskList, CitusTableCacheEntry *targetRelation)
 #endif
 
 	TupleDescInitEntry(resultDescriptor, (AttrNumber) 1, "node_id",
-					   INT8OID, -1, 0);
+					   INT4OID, -1, 0);
 	TupleDescInitEntry(resultDescriptor, (AttrNumber) 2, "partition_index",
 					   INT4OID, -1, 0);
 	TupleDescInitEntry(resultDescriptor, (AttrNumber) 3, "result_id",

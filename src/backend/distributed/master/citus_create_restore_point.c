@@ -166,7 +166,7 @@ CreateRemoteRestorePoints(char *restoreName, List *connectionList)
 	{
 		int querySent = SendRemoteCommandParams(connection, CREATE_RESTORE_POINT_COMMAND,
 												parameterCount, parameterTypes,
-												parameterValues);
+												parameterValues, false);
 		if (querySent == 0)
 		{
 			ReportConnectionError(connection, ERROR);
