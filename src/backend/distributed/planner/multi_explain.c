@@ -358,13 +358,18 @@ ExplainJob(Job *job, ExplainState *es)
 	{
 		Task *task = NULL;
 		uint64 totalReceivedDataForAllTasks = 0;
+		bool expectedResults = false;
 		foreach_ptr(task, taskList)
 		{
 			totalReceivedDataForAllTasks += TaskReceivedData(task);
+			expectedResults |= task->expectResults;
 		}
-		ExplainPropertyBytes("Data received from workers",
-							 totalReceivedDataForAllTasks,
-							 es);
+		if (expectedResults)
+		{
+			ExplainPropertyBytes("Data received from workers",
+								 totalReceivedDataForAllTasks,
+								 es);
+		}
 	}
 
 	if (dependentJobCount > 0)
@@ -666,7 +671,8 @@ FetchRemoteExplainFromWorkers(Task *task, ExplainState *es)
  * then the EXPLAIN output could not be fetched from any placement.
  */
 static void
-ExplainTask(Task *task, int placementIndex, List *explainOutputList, ExplainState *es)
+ExplainTask(Task *task, int placementIndex, List *explainOutputList,
+			ExplainState *es)
 {
 	ExplainOpenGroup("Task", NULL, true, es);
 
@@ -683,7 +689,7 @@ ExplainTask(Task *task, int placementIndex, List *explainOutputList, ExplainStat
 		ExplainPropertyText("Query", queryText, es);
 	}
 
-	if (es->analyze)
+	if (task->expectResults)
 	{
 		ExplainPropertyBytes("Data received from worker",
 							 TaskReceivedData(task),

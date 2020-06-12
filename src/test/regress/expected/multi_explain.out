@@ -430,10 +430,8 @@ EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE)
 	WHERE l_orderkey = 1 AND l_partkey = 0;
 Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
   Task Count: 1
-  Data received from workers: 0 bytes
   Tasks Shown: All
   ->  Task
-        Data received from worker: 0 bytes
         Node: host=localhost port=xxxxx dbname=regression
         ->  Update on lineitem_290000 lineitem (actual rows=0 loops=1)
               ->  Index Scan using lineitem_pkey_290000 on lineitem_290000 lineitem (actual rows=0 loops=1)
@@ -1249,10 +1247,8 @@ Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=100000 width=18)
 EXPLAIN (ANALYZE ON, COSTS OFF, TIMING OFF, SUMMARY OFF) EXECUTE router_executor_query_param(5);
 Custom Scan (Citus Adaptive) (actual rows=3 loops=1)
   Task Count: 1
-  Data received from workers: 0 bytes
   Tasks Shown: All
   ->  Task
-        Data received from worker: 0 bytes
         Node: host=localhost port=xxxxx dbname=regression
         ->  Index Scan using lineitem_pkey_290000 on lineitem_290000 lineitem (actual rows=3 loops=1)
               Index Cond: (l_orderkey = 5)
@@ -1274,10 +1270,8 @@ WARNING:  there is no parameter $1
 WARNING:  there is no parameter $1
 Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
   Task Count: 2
-  Data received from workers: 0 bytes
   Tasks Shown: One of 2
   ->  Task
-        Data received from worker: 0 bytes
         Error: Could not get remote plan.
 ROLLBACK;
 \set VERBOSITY DEFAULT
@@ -1829,9 +1823,8 @@ Aggregate (actual rows=1 loops=1)
               Node: host=localhost port=xxxxx dbname=regression
               ->  Aggregate (actual rows=1 loops=1)
                     ->  Seq Scan on explain_analyze_test_570009 explain_analyze_test (actual rows=1 loops=1)
--- router DML
-BEGIN;
-EXPLAIN :default_analyze_flags DELETE FROM explain_analyze_test WHERE a = 1;
+-- empty router SELECT
+EXPLAIN :default_analyze_flags SELECT * FROM explain_analyze_test WHERE a = 10000;
 Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
   Task Count: 1
   Data received from workers: 0 bytes
@@ -1839,16 +1832,37 @@ Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
   ->  Task
         Data received from worker: 0 bytes
         Node: host=localhost port=xxxxx dbname=regression
+        ->  Seq Scan on explain_analyze_test_570012 explain_analyze_test (actual rows=0 loops=1)
+              Filter: (a = 10000)
+              Rows Removed by Filter: 1
+-- empty multi-shard SELECT
+EXPLAIN :default_analyze_flags SELECT * FROM explain_analyze_test WHERE b = 'does not exist';
+Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
+  Task Count: 4
+  Data received from workers: 0 bytes
+  Tasks Shown: One of 4
+  ->  Task
+        Data received from worker: 0 bytes
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Seq Scan on explain_analyze_test_570009 explain_analyze_test (actual rows=0 loops=1)
+              Filter: (b = 'does not exist'::text)
+              Rows Removed by Filter: 1
+-- router DML
+BEGIN;
+EXPLAIN :default_analyze_flags DELETE FROM explain_analyze_test WHERE a = 1;
+Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
+  Task Count: 1
+  Tasks Shown: All
+  ->  Task
+        Node: host=localhost port=xxxxx dbname=regression
         ->  Delete on explain_analyze_test_570009 explain_analyze_test (actual rows=0 loops=1)
               ->  Seq Scan on explain_analyze_test_570009 explain_analyze_test (actual rows=1 loops=1)
                     Filter: (a = 1)
 EXPLAIN :default_analyze_flags UPDATE explain_analyze_test SET b = 'b' WHERE a = 2;
 Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
   Task Count: 1
-  Data received from workers: 0 bytes
   Tasks Shown: All
   ->  Task
-        Data received from worker: 0 bytes
         Node: host=localhost port=xxxxx dbname=regression
         ->  Update on explain_analyze_test_570012 explain_analyze_test (actual rows=0 loops=1)
               ->  Seq Scan on explain_analyze_test_570012 explain_analyze_test (actual rows=1 loops=1)
@@ -1863,10 +1877,8 @@ BEGIN;
 EXPLAIN :default_analyze_flags UPDATE explain_analyze_test SET b = 'b' WHERE a IN (1, 2);
 Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
   Task Count: 2
-  Data received from workers: 0 bytes
   Tasks Shown: One of 2
   ->  Task
-        Data received from worker: 0 bytes
         Node: host=localhost port=xxxxx dbname=regression
         ->  Update on explain_analyze_test_570009 explain_analyze_test (actual rows=0 loops=1)
               ->  Seq Scan on explain_analyze_test_570009 explain_analyze_test (actual rows=1 loops=1)
@@ -1874,24 +1886,46 @@ Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
 EXPLAIN :default_analyze_flags DELETE FROM explain_analyze_test;
 Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
   Task Count: 4
-  Data received from workers: 0 bytes
   Tasks Shown: One of 4
   ->  Task
-        Data received from worker: 0 bytes
         Node: host=localhost port=xxxxx dbname=regression
         ->  Delete on explain_analyze_test_570009 explain_analyze_test (actual rows=0 loops=1)
               ->  Seq Scan on explain_analyze_test_570009 explain_analyze_test (actual rows=1 loops=1)
 SELECT * FROM explain_analyze_test ORDER BY a;
 ROLLBACK;
--- single-row insert
-BEGIN;
-EXPLAIN :default_analyze_flags INSERT INTO explain_analyze_test VALUES (5, 'value 5');
+-- router DML with RETURNING with empty result
+EXPLAIN :default_analyze_flags UPDATE explain_analyze_test SET b = 'something' WHERE a = 10000 RETURNING *;
 Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
   Task Count: 1
   Data received from workers: 0 bytes
   Tasks Shown: All
   ->  Task
         Data received from worker: 0 bytes
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Update on explain_analyze_test_570012 explain_analyze_test (actual rows=0 loops=1)
+              ->  Seq Scan on explain_analyze_test_570012 explain_analyze_test (actual rows=0 loops=1)
+                    Filter: (a = 10000)
+                    Rows Removed by Filter: 1
+-- multi-shard DML with RETURNING with empty result
+EXPLAIN :default_analyze_flags UPDATE explain_analyze_test SET b = 'something' WHERE b = 'does not exist' RETURNING *;
+Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
+  Task Count: 4
+  Data received from workers: 0 bytes
+  Tasks Shown: One of 4
+  ->  Task
+        Data received from worker: 0 bytes
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Update on explain_analyze_test_570009 explain_analyze_test (actual rows=0 loops=1)
+              ->  Seq Scan on explain_analyze_test_570009 explain_analyze_test (actual rows=0 loops=1)
+                    Filter: (b = 'does not exist'::text)
+                    Rows Removed by Filter: 1
+-- single-row insert
+BEGIN;
+EXPLAIN :default_analyze_flags INSERT INTO explain_analyze_test VALUES (5, 'value 5');
+Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
+  Task Count: 1
+  Tasks Shown: All
+  ->  Task
         Node: host=localhost port=xxxxx dbname=regression
         ->  Insert on explain_analyze_test_570009 (actual rows=0 loops=1)
               ->  Result (actual rows=1 loops=1)
@@ -1901,10 +1935,8 @@ BEGIN;
 EXPLAIN :default_analyze_flags INSERT INTO explain_analyze_test VALUES (5, 'value 5'), (6, 'value 6');
 Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
   Task Count: 2
-  Data received from workers: 0 bytes
   Tasks Shown: One of 2
   ->  Task
-        Data received from worker: 0 bytes
         Node: host=localhost port=xxxxx dbname=regression
         ->  Insert on explain_analyze_test_570009 citus_table_alias (actual rows=0 loops=1)
               ->  Result (actual rows=1 loops=1)
@@ -1914,10 +1946,8 @@ BEGIN;
 EXPLAIN :default_analyze_flags INSERT INTO explain_analyze_test SELECT * FROM explain_analyze_test;
 Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
   Task Count: 4
-  Data received from workers: 0 bytes
   Tasks Shown: One of 4
   ->  Task
-        Data received from worker: 0 bytes
         Node: host=localhost port=xxxxx dbname=regression
         ->  Insert on explain_analyze_test_570009 citus_table_alias (actual rows=0 loops=1)
               ->  Seq Scan on explain_analyze_test_570009 explain_analyze_test (actual rows=1 loops=1)
@@ -1932,10 +1962,8 @@ BEGIN;
 EXPLAIN :default_analyze_flags INSERT INTO explain_pk VALUES (1, 2), (2, 3);
 Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
   Task Count: 2
-  Data received from workers: 0 bytes
   Tasks Shown: One of 2
   ->  Task
-        Data received from worker: 0 bytes
         Node: host=localhost port=xxxxx dbname=regression
         ->  Insert on explain_pk_570013 citus_table_alias (actual rows=0 loops=1)
               ->  Result (actual rows=1 loops=1)
@@ -1957,11 +1985,9 @@ EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT JSON) INSERT INT
       "Distributed Query": {
         "Job": {
           "Task Count": 2,
-          "Data received from workers": "0 bytes",
           "Tasks Shown": "One of 2",
           "Tasks": [
             {
-              "Data received from worker": "0 bytes",
               "Node": "host=localhost port=xxxxx dbname=regression",
               "Remote Plan": [
                 [
@@ -2000,6 +2026,50 @@ EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT JSON) INSERT INT
   }
 ]
 ROLLBACK;
+EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT JSON) SELECT * FROM explain_pk;
+[
+  {
+    "Plan": {
+      "Node Type": "Custom Scan",
+      "Custom Plan Provider": "Citus Adaptive",
+      "Parallel Aware": false,
+      "Actual Rows": 0,
+      "Actual Loops": 1,
+      "Distributed Query": {
+        "Job": {
+          "Task Count": 4,
+          "Data received from workers": "0 bytes",
+          "Tasks Shown": "One of 4",
+          "Tasks": [
+            {
+              "Data received from worker": "0 bytes",
+              "Node": "host=localhost port=xxxxx dbname=regression",
+              "Remote Plan": [
+                [
+                  {
+                    "Plan": {
+                      "Node Type": "Seq Scan",
+                      "Parallel Aware": false,
+                      "Relation Name": "explain_pk_570013",
+                      "Alias": "explain_pk",
+                      "Actual Rows": 0,
+                      "Actual Loops": 1
+                    },
+                    "Triggers": [
+                    ]
+                  }
+                ]
+
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "Triggers": [
+    ]
+  }
+]
 BEGIN;
 EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT XML) INSERT INTO explain_pk VALUES (1, 2), (2, 3);
 <explain xmlns="http://www.postgresql.org/2009/explain">
@@ -2013,11 +2083,9 @@ EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT XML) INSERT INTO
       <Distributed-Query>
         <Job>
           <Task-Count>2</Task-Count>
-          <Data-received-from-workers>0 bytes</Data-received-from-workers>
           <Tasks-Shown>One of 2</Tasks-Shown>
           <Tasks>
             <Task>
-              <Data-received-from-worker>0 bytes</Data-received-from-worker>
               <Node>host=localhost port=xxxxx dbname=regression</Node>
               <Remote-Plan>
                 <explain xmlns="http://www.postgresql.org/2009/explain">
@@ -2055,6 +2123,49 @@ EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT XML) INSERT INTO
   </Query>
 </explain>
 ROLLBACK;
+EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT XML) SELECT * FROM explain_pk;
+<explain xmlns="http://www.postgresql.org/2009/explain">
+  <Query>
+    <Plan>
+      <Node-Type>Custom Scan</Node-Type>
+      <Custom-Plan-Provider>Citus Adaptive</Custom-Plan-Provider>
+      <Parallel-Aware>false</Parallel-Aware>
+      <Actual-Rows>0</Actual-Rows>
+      <Actual-Loops>1</Actual-Loops>
+      <Distributed-Query>
+        <Job>
+          <Task-Count>4</Task-Count>
+          <Data-received-from-workers>0 bytes</Data-received-from-workers>
+          <Tasks-Shown>One of 4</Tasks-Shown>
+          <Tasks>
+            <Task>
+              <Data-received-from-worker>0 bytes</Data-received-from-worker>
+              <Node>host=localhost port=xxxxx dbname=regression</Node>
+              <Remote-Plan>
+                <explain xmlns="http://www.postgresql.org/2009/explain">
+                  <Query>
+                    <Plan>
+                      <Node-Type>Seq Scan</Node-Type>
+                      <Parallel-Aware>false</Parallel-Aware>
+                      <Relation-Name>explain_pk_570013</Relation-Name>
+                      <Alias>explain_pk</Alias>
+                      <Actual-Rows>0</Actual-Rows>
+                      <Actual-Loops>1</Actual-Loops>
+                    </Plan>
+                    <Triggers>
+                    </Triggers>
+                  </Query>
+                </explain>
+              </Remote-Plan>
+            </Task>
+          </Tasks>
+        </Job>
+      </Distributed-Query>
+    </Plan>
+    <Triggers>
+    </Triggers>
+  </Query>
+</explain>
 DROP TABLE explain_pk;
 -- test EXPLAIN ANALYZE with CTEs and subqueries
 CREATE TABLE dist_table(a int, b int);

@@ -769,6 +769,12 @@ EXPLAIN :default_analyze_flags SELECT * FROM explain_analyze_test WHERE a = 1;
 -- multi-shard SELECT
 EXPLAIN :default_analyze_flags SELECT count(*) FROM explain_analyze_test;
 
+-- empty router SELECT
+EXPLAIN :default_analyze_flags SELECT * FROM explain_analyze_test WHERE a = 10000;
+
+-- empty multi-shard SELECT
+EXPLAIN :default_analyze_flags SELECT * FROM explain_analyze_test WHERE b = 'does not exist';
+
 -- router DML
 BEGIN;
 EXPLAIN :default_analyze_flags DELETE FROM explain_analyze_test WHERE a = 1;
@@ -782,6 +788,12 @@ EXPLAIN :default_analyze_flags UPDATE explain_analyze_test SET b = 'b' WHERE a I
 EXPLAIN :default_analyze_flags DELETE FROM explain_analyze_test;
 SELECT * FROM explain_analyze_test ORDER BY a;
 ROLLBACK;
+
+-- router DML with RETURNING with empty result
+EXPLAIN :default_analyze_flags UPDATE explain_analyze_test SET b = 'something' WHERE a = 10000 RETURNING *;
+-- multi-shard DML with RETURNING with empty result
+EXPLAIN :default_analyze_flags UPDATE explain_analyze_test SET b = 'something' WHERE b = 'does not exist' RETURNING *;
+
 
 -- single-row insert
 BEGIN;
@@ -814,9 +826,13 @@ BEGIN;
 EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT JSON) INSERT INTO explain_pk VALUES (1, 2), (2, 3);
 ROLLBACK;
 
+EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT JSON) SELECT * FROM explain_pk;
+
 BEGIN;
 EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT XML) INSERT INTO explain_pk VALUES (1, 2), (2, 3);
 ROLLBACK;
+
+EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT XML) SELECT * FROM explain_pk;
 
 DROP TABLE explain_pk;
 

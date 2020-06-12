@@ -352,17 +352,15 @@ EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF) DELETE FROM distributed_ta
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
    Task Count: 1
-   Data received from workers: 0 bytes
    Tasks Shown: All
    ->  Task
-         Data received from worker: 0 bytes
          Node: host=localhost port=xxxxx dbname=regression
          ->  Delete on distributed_table_1470001 distributed_table (actual rows=0 loops=1)
                ->  Index Scan using distributed_table_pkey_1470001 on distributed_table_1470001 distributed_table (actual rows=1 loops=1)
                      Index Cond: (key = 1)
                      Filter: (age = 20)
              Trigger for constraint second_distributed_table_key_fkey_1470005: calls=1
-(12 rows)
+(10 rows)
 
 -- show that EXPLAIN ANALYZE deleted the row and cascades deletes
 SELECT * FROM distributed_table WHERE key = 1 AND age = 20 ORDER BY 1,2,3;
