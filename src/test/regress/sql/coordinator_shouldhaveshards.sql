@@ -155,6 +155,24 @@ SELECT * FROM ref JOIN local ON (a = x);
 -- in postgres we wouldn't see this modifying cte, so it is consistent with postgres.
 WITH a AS (SELECT count(*) FROM test), b AS (INSERT INTO local VALUES (3,2) RETURNING *), c AS (INSERT INTO ref VALUES (3,2) RETURNING *), d AS (SELECT count(*) FROM ref JOIN local ON (a = x)) SELECT * FROM a, b, c, d ORDER BY x,y,a,b;
 
+-- joins between local tables and distributed tables are disallowed
+CREATE TABLE dist_table(a int);
+SELECT create_distributed_table('dist_table', 'a');
+INSERT INTO dist_table VALUES(1);
+
+SELECT * FROM local JOIN dist_table ON (a = x);
+SELECT * FROM local JOIN dist_table ON (a = x) WHERE a = 1;;
+
+-- intermediate results are allowed
+WITH cte_1 AS (SELECT * FROM dist_table LIMIT 1)
+SELECT * FROM ref JOIN local ON (a = x) JOIN cte_1 ON (local.x = cte_1.a);
+
+-- full router query with CTE and local
+WITH cte_1 AS (SELECT * FROM ref LIMIT 1)
+SELECT * FROM ref JOIN local ON (a = x) JOIN cte_1 ON (local.x = cte_1.a);
+
+DROP TABLE dist_table;
+
 -- issue #3801
 SET citus.shard_replication_factor TO 2;
 CREATE TABLE dist_table(a int);

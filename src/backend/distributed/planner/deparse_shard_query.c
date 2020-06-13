@@ -236,6 +236,12 @@ UpdateRelationToShardNames(Node *node, List *relationShardList)
 		return false;
 	}
 
+	if (!IsCitusTable(newRte->relid))
+	{
+		/* leave local tables as is */
+		return false;
+	}
+
 	/*
 	 * Search for the restrictions associated with the RTE. There better be
 	 * some, otherwise this query wouldn't be eligible as a router query.

@@ -2646,8 +2646,8 @@ QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 
 	Assert(anchorShardId != INVALID_SHARD_ID);
 
-	List *selectPlacementList = WorkersContainingAllShards(taskShardList);
-	if (list_length(selectPlacementList) == 0)
+	List *taskPlacementList = PlacementsForWorkersContainingAllShards(taskShardList);
+	if (list_length(taskPlacementList) == 0)
 	{
 		ereport(ERROR, (errmsg("cannot find a worker that has active placements for all "
 							   "shards in the query")));
@@ -2683,7 +2683,7 @@ QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 
 	subqueryTask->dependentTaskList = NULL;
 	subqueryTask->anchorShardId = anchorShardId;
-	subqueryTask->taskPlacementList = selectPlacementList;
+	subqueryTask->taskPlacementList = taskPlacementList;
 	subqueryTask->relationShardList = relationShardList;
 
 	return subqueryTask;

@@ -2,13 +2,11 @@ CREATE SCHEMA locally_execute_intermediate_results;
 SET search_path TO locally_execute_intermediate_results;
 SET citus.log_intermediate_results TO TRUE;
 SET citus.log_local_commands TO TRUE;
-SET client_min_messages TO DEBUG1;
 SET citus.shard_count TO 4;
 SET citus.next_shard_id TO 1580000;
 SET citus.shard_replication_factor TO 1;
 SET citus.replication_model TO 'streaming';
 CREATE TABLE table_1 (key int, value text);
-DEBUG:  building index "pg_toast_xxxxx_index" on table "pg_toast_xxxxx" serially
 SELECT create_distributed_table('table_1', 'key');
  create_distributed_table
 ---------------------------------------------------------------------
@@ -16,7 +14,6 @@ SELECT create_distributed_table('table_1', 'key');
 (1 row)
 
 CREATE TABLE table_2 (key int, value text);
-DEBUG:  building index "pg_toast_xxxxx_index" on table "pg_toast_xxxxx" serially
 SELECT create_distributed_table('table_2', 'key');
  create_distributed_table
 ---------------------------------------------------------------------
@@ -24,22 +21,24 @@ SELECT create_distributed_table('table_2', 'key');
 (1 row)
 
 CREATE TABLE ref_table (key int, value text);
-DEBUG:  building index "pg_toast_xxxxx_index" on table "pg_toast_xxxxx" serially
 SELECT create_reference_table('ref_table');
  create_reference_table
 ---------------------------------------------------------------------
 
 (1 row)
 
+CREATE TABLE local_table (key int, value text);
 -- load some data
 INSERT INTO table_1    VALUES (1, '1'), (2, '2'), (3, '3'), (4, '4');
 INSERT INTO table_2    VALUES                     (3, '3'), (4, '4'), (5, '5'), (6, '6');
 INSERT INTO ref_table  VALUES (1, '1'), (2, '2'), (3, '3'), (4, '4'), (5, '5'), (6, '6');
 NOTICE:  executing the command locally: INSERT INTO locally_execute_intermediate_results.ref_table_1580008 AS citus_table_alias (key, value) VALUES (1,'1'::text), (2,'2'::text), (3,'3'::text), (4,'4'::text), (5,'5'::text), (6,'6'::text)
+INSERT INTO local_table VALUES                    (3, '3'), (4, '4'), (5, '5'), (6, '6');
 -- prevent PG 11 - PG 12 outputs to diverge
 -- and have a lot more CTEs recursively planned for the
 -- sake of increasing the test coverage
 SET citus.enable_cte_inlining TO false;
+SET client_min_messages TO DEBUG1;
 -- the query cannot be executed locally, but still because of
 -- HAVING the intermediate result is written to local file as well
 WITH cte_1 AS (SELECT max(value) FROM table_1)
@@ -461,6 +460,49 @@ NOTICE:  executing the command locally: SELECT foo.key, bar.key FROM (SELECT int
  key | key
 ---------------------------------------------------------------------
 (0 rows)
+
+-- queries in which the last step has only CTEs can use local tables
+WITH cte_1 AS (SELECT max(value) FROM table_1)
+SELECT
+count(*)
+FROM
+local_table
+GROUP BY key
+HAVING max(value) > (SELECT max FROM cte_1);
+DEBUG:  generating subplan XXX_1 for CTE cte_1: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM locally_execute_intermediate_results.local_table GROUP BY key HAVING (max(value) OPERATOR(pg_catalog.>) (SELECT cte_1.max FROM (SELECT intermediate_result.max FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_1))
+DEBUG:  Subplan XXX_1 will be written to local file
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM locally_execute_intermediate_results.local_table GROUP BY key HAVING (max(value) OPERATOR(pg_catalog.>) (SELECT cte_1.max FROM (SELECT intermediate_result.max FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_1))
+ count
+---------------------------------------------------------------------
+     1
+     1
+(2 rows)
+
+WITH cte_1 AS (SELECT max(value) FROM table_1),
+cte_2 AS (SELECT * FROM table_2)
+SELECT
+count(*)
+FROM
+local_table
+WHERE
+key > (SELECT key FROM cte_2 ORDER BY 1 LIMIT 1)
+GROUP BY key
+HAVING max(value) > (SELECT max FROM cte_1);
+DEBUG:  generating subplan XXX_1 for CTE cte_1: SELECT max(value) AS max FROM locally_execute_intermediate_results.table_1
+DEBUG:  generating subplan XXX_2 for CTE cte_2: SELECT key, value FROM locally_execute_intermediate_results.table_2
+DEBUG:  generating subplan XXX_3 for subquery SELECT key FROM (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) cte_2 ORDER BY key LIMIT 1
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM locally_execute_intermediate_results.local_table WHERE (key OPERATOR(pg_catalog.>) (SELECT intermediate_result.key FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(key integer))) GROUP BY key HAVING (max(value) OPERATOR(pg_catalog.>) (SELECT cte_1.max FROM (SELECT intermediate_result.max FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_1))
+DEBUG:  Subplan XXX_1 will be written to local file
+DEBUG:  Subplan XXX_2 will be written to local file
+DEBUG:  Subplan XXX_3 will be written to local file
+NOTICE:  executing the command locally: SELECT key FROM (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) cte_2 ORDER BY key LIMIT 1
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM locally_execute_intermediate_results.local_table WHERE (key OPERATOR(pg_catalog.>) (SELECT intermediate_result.key FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(key integer))) GROUP BY key HAVING (max(value) OPERATOR(pg_catalog.>) (SELECT cte_1.max FROM (SELECT intermediate_result.max FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(max text)) cte_1))
+ count
+---------------------------------------------------------------------
+     1
+     1
+(2 rows)
 
 \c - - - :worker_1_port
 -- now use the same queries on a worker

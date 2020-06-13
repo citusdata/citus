@@ -63,7 +63,7 @@ INSERT INTO ref VALUES (1), (2), (3);
 UPDATE ref SET a = a + 1;
 DELETE FROM ref WHERE a > 3;
 
--- Test we don't allow reference/local joins on mx workers
+-- Test we allow reference/local joins on mx workers
 CREATE TABLE local_table (a int);
 INSERT INTO local_table VALUES (2), (4);
 

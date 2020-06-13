@@ -2,7 +2,6 @@ CREATE SCHEMA locally_execute_intermediate_results;
 SET search_path TO locally_execute_intermediate_results;
 SET citus.log_intermediate_results TO TRUE;
 SET citus.log_local_commands TO TRUE;
-SET client_min_messages TO DEBUG1;
 
 SET citus.shard_count TO 4;
 SET citus.next_shard_id TO 1580000;
@@ -18,15 +17,20 @@ SELECT create_distributed_table('table_2', 'key');
 CREATE TABLE ref_table (key int, value text);
 SELECT create_reference_table('ref_table');
 
+CREATE TABLE local_table (key int, value text);
+
 -- load some data
 INSERT INTO table_1    VALUES (1, '1'), (2, '2'), (3, '3'), (4, '4');
 INSERT INTO table_2    VALUES                     (3, '3'), (4, '4'), (5, '5'), (6, '6');
 INSERT INTO ref_table  VALUES (1, '1'), (2, '2'), (3, '3'), (4, '4'), (5, '5'), (6, '6');
+INSERT INTO local_table VALUES                    (3, '3'), (4, '4'), (5, '5'), (6, '6');
 
 -- prevent PG 11 - PG 12 outputs to diverge
 -- and have a lot more CTEs recursively planned for the
 -- sake of increasing the test coverage
 SET citus.enable_cte_inlining TO false;
+
+SET client_min_messages TO DEBUG1;
 
 -- the query cannot be executed locally, but still because of
 -- HAVING the intermediate result is written to local file as well
@@ -232,6 +236,26 @@ SELECT * FROM
   (SELECT key FROM table_1 GROUP BY key HAVING max(value) > (SELECT * FROM cte_1) LIMIT 1) as foo,
   (SELECT key FROM table_2 GROUP BY key HAVING max(value) > (SELECT * FROM cte_2) LIMIT 1) as bar
   WHERE foo.key != bar.key;
+
+-- queries in which the last step has only CTEs can use local tables
+WITH cte_1 AS (SELECT max(value) FROM table_1)
+SELECT
+count(*)
+FROM
+local_table
+GROUP BY key
+HAVING max(value) > (SELECT max FROM cte_1);
+
+WITH cte_1 AS (SELECT max(value) FROM table_1),
+cte_2 AS (SELECT * FROM table_2)
+SELECT
+count(*)
+FROM
+local_table
+WHERE
+key > (SELECT key FROM cte_2 ORDER BY 1 LIMIT 1)
+GROUP BY key
+HAVING max(value) > (SELECT max FROM cte_1);
 
 \c - - - :worker_1_port
 
