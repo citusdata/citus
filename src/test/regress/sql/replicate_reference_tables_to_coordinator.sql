@@ -185,18 +185,12 @@ DROP VIEW numbers_v, local_table_v;
 
 --
 -- Joins between reference tables and materialized views are allowed to
--- be planned locally.
+-- be planned to be executed locally.
 --
 CREATE MATERIALIZED VIEW numbers_v AS SELECT * FROM numbers WHERE a BETWEEN 1 AND 10;
 REFRESH MATERIALIZED VIEW numbers_v;
-SELECT public.plan_is_distributed($Q$
-EXPLAIN (COSTS FALSE)
-	SELECT * FROM squares JOIN numbers_v ON squares.a = numbers_v.a;
-$Q$);
 
-BEGIN;
 SELECT * FROM squares JOIN numbers_v ON squares.a = numbers_v.a;
-END;
 
 --
 -- Joins between reference tables, local tables, and function calls
@@ -206,16 +200,10 @@ SELECT count(*)
 FROM local_table a, numbers b, generate_series(1, 10) c
 WHERE a.a = b.a AND a.a = c;
 
--- but it should be okay if the function call is not a data source
-SELECT public.plan_is_distributed($Q$
-EXPLAIN (COSTS FALSE)
+-- and it should be okay if the function call is not a data source
 SELECT abs(a.a) FROM local_table a, numbers b WHERE a.a = b.a;
-$Q$);
 
-SELECT public.plan_is_distributed($Q$
-EXPLAIN (COSTS FALSE)
 SELECT a.a FROM local_table a, numbers b WHERE a.a = b.a ORDER BY abs(a.a);
-$Q$);
 
 TRUNCATE local_table;
 TRUNCATE numbers;

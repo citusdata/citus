@@ -2179,7 +2179,7 @@ PlanRouterQuery(Query *originalQuery,
  * accessed locally.
  *
  * If generateDummyPlacement is true and there are no shards that need to be
- * accessed to answer the query (shardsPresent is false), then as single
+ * accessed to answer the query (shardsPresent is false), then a single
  * placement is returned that is either local or follows a round-robin policy.
  * A typical example is a router query that only reads an intermediate result.
  * This will happen on the coordinator, unless the user wants to balance the
@@ -3296,7 +3296,7 @@ MultiRouterPlannableQuery(Query *query)
 		}
 	}
 
-	/* local tables are allowed if there are no distributed tables */
+	/* local tables are not allowed if there are distributed tables */
 	if (hasLocalTable && hasDistributedTable)
 	{
 		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,

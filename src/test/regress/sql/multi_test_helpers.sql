@@ -33,21 +33,6 @@ BEGIN
   RETURN;
 END; $$ language plpgsql;
 
--- Is a distributed plan?
-CREATE OR REPLACE FUNCTION plan_is_distributed(explain_commmand text)
-RETURNS BOOLEAN AS $$
-DECLARE
-    query_plan TEXT;
-BEGIN
-  FOR query_plan IN execute explain_commmand LOOP
-    IF query_plan LIKE '%Task Count:%'
-    THEN
-        RETURN TRUE;
-    END IF;
-  END LOOP;
-  RETURN FALSE;
-END; $$ language plpgsql;
-
 -- helper function to quickly run SQL on the whole cluster
 CREATE OR REPLACE FUNCTION run_command_on_coordinator_and_workers(p_sql text)
 RETURNS void LANGUAGE plpgsql AS $$

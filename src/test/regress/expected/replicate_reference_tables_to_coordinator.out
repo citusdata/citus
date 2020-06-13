@@ -386,22 +386,12 @@ $Q$);
 DROP VIEW numbers_v, local_table_v;
 --
 -- Joins between reference tables and materialized views are allowed to
--- be planned locally.
+-- be planned to be executed locally.
 --
 CREATE MATERIALIZED VIEW numbers_v AS SELECT * FROM numbers WHERE a BETWEEN 1 AND 10;
 NOTICE:  executing the command locally: SELECT a FROM replicate_ref_to_coordinator.numbers_8000001 numbers WHERE ((a OPERATOR(pg_catalog.>=) 1) AND (a OPERATOR(pg_catalog.<=) 10))
 REFRESH MATERIALIZED VIEW numbers_v;
 NOTICE:  executing the command locally: SELECT numbers.a FROM replicate_ref_to_coordinator.numbers_8000001 numbers WHERE ((numbers.a OPERATOR(pg_catalog.>=) 1) AND (numbers.a OPERATOR(pg_catalog.<=) 10))
-SELECT public.plan_is_distributed($Q$
-EXPLAIN (COSTS FALSE)
-	SELECT * FROM squares JOIN numbers_v ON squares.a = numbers_v.a;
-$Q$);
- plan_is_distributed
----------------------------------------------------------------------
- t
-(1 row)
-
-BEGIN;
 SELECT * FROM squares JOIN numbers_v ON squares.a = numbers_v.a;
 NOTICE:  executing the command locally: SELECT squares.a, squares.b, numbers_v.a FROM (replicate_ref_to_coordinator.squares_8000000 squares JOIN replicate_ref_to_coordinator.numbers_v ON ((squares.a OPERATOR(pg_catalog.=) numbers_v.a)))
  a | b | a
@@ -410,7 +400,6 @@ NOTICE:  executing the command locally: SELECT squares.a, squares.b, numbers_v.a
  2 | 4 | 2
 (2 rows)
 
-END;
 --
 -- Joins between reference tables, local tables, and function calls
 -- are allowed
@@ -424,24 +413,22 @@ NOTICE:  executing the command locally: SELECT count(*) AS count FROM replicate_
      1
 (1 row)
 
--- but it should be okay if the function call is not a data source
-SELECT public.plan_is_distributed($Q$
-EXPLAIN (COSTS FALSE)
+-- and it should be okay if the function call is not a data source
 SELECT abs(a.a) FROM local_table a, numbers b WHERE a.a = b.a;
-$Q$);
- plan_is_distributed
+NOTICE:  executing the command locally: SELECT abs(a.a) AS abs FROM replicate_ref_to_coordinator.local_table a, replicate_ref_to_coordinator.numbers_8000001 b WHERE (a.a OPERATOR(pg_catalog.=) b.a)
+ abs
 ---------------------------------------------------------------------
- t
-(1 row)
+   2
+  20
+(2 rows)
 
-SELECT public.plan_is_distributed($Q$
-EXPLAIN (COSTS FALSE)
 SELECT a.a FROM local_table a, numbers b WHERE a.a = b.a ORDER BY abs(a.a);
-$Q$);
- plan_is_distributed
+NOTICE:  executing the command locally: SELECT a.a FROM replicate_ref_to_coordinator.local_table a, replicate_ref_to_coordinator.numbers_8000001 b WHERE (a.a OPERATOR(pg_catalog.=) b.a) ORDER BY (abs(a.a))
+ a
 ---------------------------------------------------------------------
- t
-(1 row)
+  2
+ 20
+(2 rows)
 
 TRUNCATE local_table;
 TRUNCATE numbers;
