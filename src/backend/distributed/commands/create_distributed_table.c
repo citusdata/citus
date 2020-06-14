@@ -106,6 +106,7 @@ static void EnsureLocalTableEmptyIfNecessary(Oid relationId, char distributionMe
 											 bool viaDeprecatedAPI);
 static bool ShouldLocalTableBeEmpty(Oid relationId, char distributionMethod, bool
 									viaDeprecatedAPI);
+static void EnsureCitusTableCanBeCreated(Oid relationOid);
 static bool LocalTableEmpty(Oid tableId);
 static void CopyLocalDataIntoShards(Oid relationId);
 static List * TupleDescColumnNameList(TupleDesc tupleDescriptor);
@@ -139,14 +140,14 @@ master_create_distributed_table(PG_FUNCTION_ARGS)
 	text *distributionColumnText = PG_GETARG_TEXT_P(1);
 	Oid distributionMethodOid = PG_GETARG_OID(2);
 
+	CheckCitusVersion(ERROR);
+
+	EnsureCitusTableCanBeCreated(relationId);
+
 	char *colocateWithTableName = NULL;
 	bool viaDeprecatedAPI = true;
 	ObjectAddress tableAddress = { 0 };
 
-
-	CheckCitusVersion(ERROR);
-	EnsureCoordinator();
-	EnsureTableOwner(relationId);
 
 	/*
 	 * distributed tables might have dependencies on different objects, since we create
@@ -169,13 +170,6 @@ master_create_distributed_table(PG_FUNCTION_ARGS)
 		ereport(ERROR, (errmsg("could not create distributed table: "
 							   "relation does not exist")));
 	}
-
-	/*
-	 * We should do this check here since the codes in the following lines rely
-	 * on this relation to have a supported relation kind. More extensive checks
-	 * will be performed in CreateDistributedTable.
-	 */
-	EnsureRelationKindSupported(relationId);
 
 	char *distributionColumnName = text_to_cstring(distributionColumnText);
 	Var *distributionColumn = BuildDistributionKeyFromColumnName(relation,
@@ -202,18 +196,16 @@ create_distributed_table(PG_FUNCTION_ARGS)
 {
 	ObjectAddress tableAddress = { 0 };
 
-
 	bool viaDeprecatedAPI = false;
-
-	CheckCitusVersion(ERROR);
-	EnsureCoordinator();
 
 	Oid relationId = PG_GETARG_OID(0);
 	text *distributionColumnText = PG_GETARG_TEXT_P(1);
 	Oid distributionMethodOid = PG_GETARG_OID(2);
 	text *colocateWithTableNameText = PG_GETARG_TEXT_P(3);
 
-	EnsureTableOwner(relationId);
+	CheckCitusVersion(ERROR);
+
+	EnsureCitusTableCanBeCreated(relationId);
 
 	/*
 	 * distributed tables might have dependencies on different objects, since we create
@@ -236,13 +228,6 @@ create_distributed_table(PG_FUNCTION_ARGS)
 		ereport(ERROR, (errmsg("could not create distributed table: "
 							   "relation does not exist")));
 	}
-
-	/*
-	 * We should do this check here since the codes in the following lines rely
-	 * on this relation to have a supported relation kind. More extensive checks
-	 * will be performed in CreateDistributedTable.
-	 */
-	EnsureRelationKindSupported(relationId);
 
 	char *distributionColumnName = text_to_cstring(distributionColumnText);
 	Var *distributionColumn = BuildDistributionKeyFromColumnName(relation,
@@ -277,9 +262,9 @@ create_reference_table(PG_FUNCTION_ARGS)
 
 	bool viaDeprecatedAPI = false;
 
-	EnsureCoordinator();
 	CheckCitusVersion(ERROR);
-	EnsureTableOwner(relationId);
+
+	EnsureCitusTableCanBeCreated(relationId);
 
 	/*
 	 * distributed tables might have dependencies on different objects, since we create
@@ -296,13 +281,6 @@ create_reference_table(PG_FUNCTION_ARGS)
 	 * backends manipulating this relation.
 	 */
 	Relation relation = relation_open(relationId, ExclusiveLock);
-
-	/*
-	 * We should do this check here since the codes in the following lines rely
-	 * on this relation to have a supported relation kind. More extensive checks
-	 * will be performed in CreateDistributedTable.
-	 */
-	EnsureRelationKindSupported(relationId);
 
 	List *workerNodeList = ActivePrimaryNodeList(ShareLock);
 	int workerCount = list_length(workerNodeList);
@@ -323,6 +301,27 @@ create_reference_table(PG_FUNCTION_ARGS)
 	relation_close(relation, NoLock);
 
 	PG_RETURN_VOID();
+}
+
+
+/*
+ * EnsureCitusTableCanBeCreated checks if
+ * - we are on the coordinator
+ * - the current user is the owner of the table
+ * - relation kind is supported
+ */
+static void
+EnsureCitusTableCanBeCreated(Oid relationOid)
+{
+	EnsureCoordinator();
+	EnsureTableOwner(relationOid);
+
+	/*
+	 * We should do this check here since the codes in the following lines rely
+	 * on this relation to have a supported relation kind. More extensive checks
+	 * will be performed in CreateDistributedTable.
+	 */
+	EnsureRelationKindSupported(relationOid);
 }
 
 
