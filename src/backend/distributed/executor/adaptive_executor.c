@@ -1961,19 +1961,6 @@ SetAttributeInputMetadata(DistributedExecution *execution,
 
 
 /*
- * UseConnectionPerPlacement returns whether we should use a separate connection
- * per placement even if another connection is idle. We mostly use this in testing
- * scenarios.
- */
-static bool
-UseConnectionPerPlacement(void)
-{
-	return ForceMaxQueryParallelization &&
-		   MultiShardConnectionType != SEQUENTIAL_CONNECTION;
-}
-
-
-/*
  * ExecutionOrderForTask gives the appropriate execution order for a task.
  */
 static PlacementExecutionOrder
