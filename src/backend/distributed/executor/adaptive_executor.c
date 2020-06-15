@@ -3731,6 +3731,21 @@ ReceiveResults(WorkerSession *session, bool storeRows)
 					{
 						executionStats->totalIntermediateResultSize += valueLength;
 					}
+
+					/*
+					 * We use this to count the amount of data that has been
+					 * received for EXPLAIN ANALYZE.
+					 * Only EXPLAIN ANALYZE TupleDestination has originalTask
+					 * defined. So that's why we check for it, otherwise we
+					 * don't have to keep track of this data.
+					 * The worker plan itself is also sent as a result in the
+					 * same task. We filter this out by only counting the data
+					 * from the first query.
+					 */
+					if (tupleDest->originalTask && queryIndex == 0)
+					{
+						tupleDest->originalTask->totalReceivedData += valueLength;
+					}
 				}
 			}
 

@@ -36,6 +36,7 @@ struct TupleDestination
 
 	/* tupleDescForQuery returns tuple descriptor for a query number. Can return NULL. */
 	TupleDesc (*tupleDescForQuery)(TupleDestination *self, int queryNumber);
+	Task *originalTask;
 };
 
 extern TupleDestination * CreateTupleStoreTupleDest(Tuplestorestate *tupleStore, TupleDesc

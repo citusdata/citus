@@ -116,13 +116,14 @@ typedef struct ExplainAnalyzeDestination
 
 /* Explain functions for distributed queries */
 static void ExplainSubPlans(DistributedPlan *distributedPlan, ExplainState *es);
-static void ExplainJob(Job *job, ExplainState *es);
+static void ExplainJob(CitusScanState *scanState, Job *job, ExplainState *es);
 static void ExplainMapMergeJob(MapMergeJob *mapMergeJob, ExplainState *es);
-static void ExplainTaskList(List *taskList, ExplainState *es);
+static void ExplainTaskList(CitusScanState *scanState, List *taskList, ExplainState *es);
 static RemoteExplainPlan * RemoteExplain(Task *task, ExplainState *es);
 static RemoteExplainPlan * GetSavedRemoteExplain(Task *task, ExplainState *es);
 static RemoteExplainPlan * FetchRemoteExplainFromWorkers(Task *task, ExplainState *es);
-static void ExplainTask(Task *task, int placementIndex, List *explainOutputList,
+static void ExplainTask(CitusScanState *scanState, Task *task, int placementIndex,
+						List *explainOutputList,
 						ExplainState *es);
 static void ExplainTaskPlacement(ShardPlacement *taskPlacement, List *explainOutputList,
 								 ExplainState *es);
@@ -154,6 +155,9 @@ static void ExplainOneQuery(Query *query, int cursorOptions,
 							const char *queryString, ParamListInfo params,
 							QueryEnvironment *queryEnv);
 static double elapsed_time(instr_time *starttime);
+static void ExplainPropertyBytes(const char *qlabel, int64 bytes, ExplainState *es);
+static uint64 TaskReceivedData(Task *task);
+static bool ShowReceivedData(CitusScanState *scanState, ExplainState *es);
 
 
 /* exports for SQL callable functions */
@@ -187,7 +191,7 @@ CitusExplainScan(CustomScanState *node, List *ancestors, struct ExplainState *es
 		ExplainSubPlans(distributedPlan, es);
 	}
 
-	ExplainJob(distributedPlan->workerJob, es);
+	ExplainJob(scanState, distributedPlan->workerJob, es);
 
 	ExplainCloseGroup("Distributed Query", "Distributed Query", true, es);
 }
@@ -287,8 +291,8 @@ ExplainSubPlans(DistributedPlan *distributedPlan, ExplainState *es)
 									 2, es);
 			}
 
-			ExplainPropertyInteger("Intermediate Data Size", "bytes",
-								   subPlan->bytesSentPerWorker, es);
+			ExplainPropertyBytes("Intermediate Data Size",
+								 subPlan->bytesSentPerWorker, es);
 
 			StringInfo destination = makeStringInfo();
 			if (subPlan->remoteWorkerCount && subPlan->writeLocalFile)
@@ -324,12 +328,36 @@ ExplainSubPlans(DistributedPlan *distributedPlan, ExplainState *es)
 
 
 /*
+ * ExplainPropertyBytes formats bytes in a human readable way by using
+ * pg_size_pretty.
+ */
+static void
+ExplainPropertyBytes(const char *qlabel, int64 bytes, ExplainState *es)
+{
+	Datum textDatum = DirectFunctionCall1(pg_size_pretty, Int64GetDatum(bytes));
+	ExplainPropertyText(qlabel, text_to_cstring(DatumGetTextP(textDatum)), es);
+}
+
+
+/*
+ * ShowReceivedData returns true if explain should show received data. This is
+ * only the case when using EXPLAIN ANALYZE on queries that return rows.
+ */
+static bool
+ShowReceivedData(CitusScanState *scanState, ExplainState *es)
+{
+	TupleDesc tupDesc = ScanStateGetTupleDescriptor(scanState);
+	return es->analyze && tupDesc != NULL && tupDesc->natts > 0;
+}
+
+
+/*
  * ExplainJob shows the EXPLAIN output for a Job in the physical plan of
  * a distributed query by showing the remote EXPLAIN for the first task,
  * or all tasks if citus.explain_all_tasks is on.
  */
 static void
-ExplainJob(Job *job, ExplainState *es)
+ExplainJob(CitusScanState *scanState, Job *job, ExplainState *es)
 {
 	List *dependentJobList = job->dependentJobList;
 	int dependentJobCount = list_length(dependentJobList);
@@ -340,6 +368,18 @@ ExplainJob(Job *job, ExplainState *es)
 	ExplainOpenGroup("Job", "Job", true, es);
 
 	ExplainPropertyInteger("Task Count", NULL, taskCount, es);
+	if (ShowReceivedData(scanState, es))
+	{
+		Task *task = NULL;
+		uint64 totalReceivedDataForAllTasks = 0;
+		foreach_ptr(task, taskList)
+		{
+			totalReceivedDataForAllTasks += TaskReceivedData(task);
+		}
+		ExplainPropertyBytes("Data received from workers",
+							 totalReceivedDataForAllTasks,
+							 es);
+	}
 
 	if (dependentJobCount > 0)
 	{
@@ -366,7 +406,7 @@ ExplainJob(Job *job, ExplainState *es)
 	{
 		ExplainOpenGroup("Tasks", "Tasks", false, es);
 
-		ExplainTaskList(taskList, es);
+		ExplainTaskList(scanState, taskList, es);
 
 		ExplainCloseGroup("Tasks", "Tasks", false, es);
 	}
@@ -389,6 +429,23 @@ ExplainJob(Job *job, ExplainState *es)
 	}
 
 	ExplainCloseGroup("Job", "Job", true, es);
+}
+
+
+/*
+ * TaskReceivedData returns the amount of data that was received by the
+ * coordinator for the task. If it's a RETURNING DML task the value stored in
+ * totalReceivedData is not correct yet because it only counts the bytes for
+ * one placement.
+ */
+static uint64
+TaskReceivedData(Task *task)
+{
+	if (task->taskType == MODIFY_TASK)
+	{
+		return task->totalReceivedData * list_length(task->taskPlacementList);
+	}
+	return task->totalReceivedData;
 }
 
 
@@ -449,7 +506,7 @@ ExplainMapMergeJob(MapMergeJob *mapMergeJob, ExplainState *es)
  * or all tasks if citus.explain_all_tasks is on.
  */
 static void
-ExplainTaskList(List *taskList, ExplainState *es)
+ExplainTaskList(CitusScanState *scanState, List *taskList, ExplainState *es)
 {
 	ListCell *taskCell = NULL;
 	ListCell *remoteExplainCell = NULL;
@@ -477,7 +534,7 @@ ExplainTaskList(List *taskList, ExplainState *es)
 		RemoteExplainPlan *remoteExplain =
 			(RemoteExplainPlan *) lfirst(remoteExplainCell);
 
-		ExplainTask(task, remoteExplain->placementIndex,
+		ExplainTask(scanState, task, remoteExplain->placementIndex,
 					remoteExplain->explainOutputList, es);
 	}
 }
@@ -623,7 +680,9 @@ FetchRemoteExplainFromWorkers(Task *task, ExplainState *es)
  * then the EXPLAIN output could not be fetched from any placement.
  */
 static void
-ExplainTask(Task *task, int placementIndex, List *explainOutputList, ExplainState *es)
+ExplainTask(CitusScanState *scanState, Task *task, int placementIndex,
+			List *explainOutputList,
+			ExplainState *es)
 {
 	ExplainOpenGroup("Task", NULL, true, es);
 
@@ -638,6 +697,13 @@ ExplainTask(Task *task, int placementIndex, List *explainOutputList, ExplainStat
 	{
 		const char *queryText = TaskQueryStringForAllPlacements(task);
 		ExplainPropertyText("Query", queryText, es);
+	}
+
+	if (ShowReceivedData(scanState, es))
+	{
+		ExplainPropertyBytes("Data received from worker",
+							 TaskReceivedData(task),
+							 es);
 	}
 
 	if (explainOutputList != NIL)
@@ -1092,6 +1158,7 @@ CreateExplainAnlyzeDestination(Task *task, TupleDestination *taskDest)
 
 	tupleDestination->pub.putTuple = ExplainAnalyzeDestPutTuple;
 	tupleDestination->pub.tupleDescForQuery = ExplainAnalyzeDestTupleDescForQuery;
+	tupleDestination->pub.originalTask = task;
 
 	return (TupleDestination *) tupleDestination;
 }
