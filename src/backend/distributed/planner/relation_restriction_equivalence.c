@@ -1377,7 +1377,7 @@ RangeTableOffsetCompat(PlannerInfo *root, AppendRelInfo *appendRelInfo)
 {
 	#if PG_VERSION_NUM >= PG_VERSION_13
 	int i = 1;
-	for (i = 1; i < root->simple_rel_array_size; i++)
+	for (; i < root->simple_rel_array_size; i++)
 	{
 		RangeTblEntry *rte = root->simple_rte_array[i];
 		if (rte->inh)

@@ -42,8 +42,8 @@
 																	h)
 #define varoattno varattnosyn
 #define varnoold varnosyn
-#define Set_ptr_value(a, b) a->ptr_value = b
-#define RangeTableEntryFromNSItem(a) a->p_rte
+#define Set_ptr_value(a, b) ((a)->ptr_value = (b))
+#define RangeTableEntryFromNSItem(a) ((a)->p_rte)
 #define QueryCompletionCompat QueryCompletion
 #else /* pre PG13 */
 #define lnext_compat(l, r) lnext(r)
@@ -55,8 +55,8 @@
 																	   e, f)
 #define getOwnedSequencesCompat(a, b) getOwnedSequences(a, b)
 #define ExplainOnePlanCompat(a, b, c, d, e, f, g, h) ExplainOnePlan(a, b, c, d, e, f, g)
-#define Set_ptr_value(a, b) a->data.ptr_value = b
-#define RangeTableEntryFromNSItem(a) a
+#define Set_ptr_value(a, b) ((a)->data.ptr_value = (b))
+#define RangeTableEntryFromNSItem(a) (a)
 #define QueryCompletionCompat char
 #endif
 #if PG_VERSION_NUM >= PG_VERSION_12

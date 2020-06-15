@@ -16,8 +16,6 @@
  */
 #include "distributed/pg_version_constants.h"
 
-#pragma GCC optimize ("O0")
-
 #include "pg_config.h"
 
 #if (PG_VERSION_NUM >= PG_VERSION_13) && (PG_VERSION_NUM < PG_VERSION_14)
@@ -3964,21 +3962,22 @@ get_name_for_var_field(Var *var, int fieldno,
 			 var->varlevelsup, levelsup);
 	dpns = (deparse_namespace *) list_nth(context->namespaces,
 										  netlevelsup);
-		/*
-	 * If we have a syntactic referent for the Var, and we're working from a
-	 * parse tree, prefer to use the syntactic referent.  Otherwise, fall back
-	 * on the semantic referent.  (See comments in get_variable().)
-	 */
-	// if (var->varnosyn > 0 && dpns->plan == NULL)
-	// {
-		// varno = var->varnosyn;
-		// varattno = var->varattnosyn;
-	// }
-	// else
-	// {
-		varno = var->varno;
-		varattno = var->varattno;
-	// }
+
+	varno = var->varno;
+	varattno = var->varattno;
+
+	if (var->varnosyn > 0 && var->varnosyn <= list_length(dpns->rtable) && dpns->plan == NULL) {
+		rte = rt_fetch(var->varnosyn, dpns->rtable);
+
+		// if the rte var->varnosync points to is not a regular table and it is a join
+		// then the correct relname will be found with var->varnosync and var->varattnosync
+		// TODO:: this is a workaround and it can be simplified.
+		if (rte->rtekind == RTE_JOIN && rte->relid == 0 && var->varnosyn != var->varno) {
+			varno = var->varnosyn;
+			varattno = var->varattnosyn;
+		}
+	}
+
 	/*
 	 * Try to find the relevant RTE in this rtable.  In a plan tree, it's
 	 * likely that varno is OUTER_VAR or INNER_VAR, in which case we must dig
