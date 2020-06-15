@@ -74,9 +74,11 @@ FROM
 SELECT * FROM test a WHERE x IN (SELECT x FROM test b UNION SELECT y FROM test c UNION SELECT y FROM local_test d) ORDER BY 1,2;
 
 -- same query with subquery in where is wrapped in CTE
+SET citus.enable_cte_inlining TO off;
 SELECT * FROM test a WHERE x IN (WITH cte AS (SELECT x FROM test b UNION SELECT y FROM test c UNION SELECT y FROM local_test d) SELECT * FROM cte) ORDER BY 1,2;
+RESET citus.enable_cte_inlining;
 
--- not supported since local table is joined with a set operation
+-- supported since final step only has local table and intermediate result
 SELECT * FROM ((SELECT * FROM test) EXCEPT (SELECT * FROM test ORDER BY x LIMIT 1)) u JOIN local_test USING (x) ORDER BY 1,2;
 
 -- though we replace some queries including the local query, the intermediate result is on the outer part of an outer join

@@ -825,7 +825,6 @@ SELECT a.author_id as first_author, b.word_count as second_word_count
 	FROM articles_hash a, single_shard b
 	WHERE a.author_id = 2 and a.author_id = b.author_id
 	LIMIT 3;
-DEBUG:  Found no worker with all shard placements
 DEBUG:  found no worker with all shard placements
 DEBUG:  generating subplan XXX_1 for CTE single_shard: SELECT id, author_id, title, word_count FROM public.articles_single_shard_hash
 DEBUG:  Creating router plan
@@ -1941,7 +1940,6 @@ DETAIL:  distribution column value: 2
 -- not router plannable
 SELECT * FROM articles_hash ar join authors_range au on (ar.author_id = au.id)
 	WHERE ar.author_id = 3;
-DEBUG:  Found no worker with all shard placements
 DEBUG:  found no worker with all shard placements
 DEBUG:  join prunable for intervals [1,10] and [11,30]
 DEBUG:  join prunable for intervals [1,10] and [21,40]
