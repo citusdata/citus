@@ -57,3 +57,5 @@ CREATE TRIGGER dist_authinfo_task_tracker_cache_invalidate
     FOR EACH STATEMENT EXECUTE PROCEDURE task_tracker_conninfo_cache_invalidate();
 
 RESET search_path;
+
+DROP FUNCTION pg_catalog.undistribute_table(table_name regclass);

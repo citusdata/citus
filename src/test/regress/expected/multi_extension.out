@@ -418,7 +418,7 @@ SELECT * FROM print_extension_changes();
 -- Snapshot of state at 9.5-1
 ALTER EXTENSION citus UPDATE TO '9.5-1';
 SELECT * FROM print_extension_changes();
-                           previous_object                           | current_object
+                           previous_object                           |            current_object
 ---------------------------------------------------------------------
  function task_tracker_assign_task(bigint,integer,text)              |
  function task_tracker_cleanup_job(bigint)                           |
@@ -426,7 +426,8 @@ SELECT * FROM print_extension_changes();
  function task_tracker_task_status(bigint,integer)                   |
  function worker_execute_sql_task(bigint,integer,text,boolean)       |
  function worker_merge_files_and_run_query(bigint,integer,text,text) |
-(6 rows)
+                                                                     | function undistribute_table(regclass)
+(7 rows)
 
 DROP TABLE prev_objects, extension_diff;
 -- show running version

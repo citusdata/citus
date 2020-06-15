@@ -101,7 +101,9 @@ extern uint64 GetNextShardId(void);
 extern uint64 GetNextPlacementId(void);
 extern Oid ResolveRelationId(text *relationName, bool missingOk);
 extern List * GetTableDDLEvents(Oid relationId, bool forShardCreation);
+extern List * GetTableConstructionCommands(Oid relationId);
 extern List * GetTableCreationCommands(Oid relationId, bool forShardCreation);
+extern List * GetTableBuildingCommands(Oid relationId, bool includeSequenceDefaults);
 extern List * GetTableIndexAndConstraintCommands(Oid relationId);
 extern bool IndexImpliedByAConstraint(Form_pg_index indexForm);
 extern char ShardStorageType(Oid relationId);
@@ -150,6 +152,7 @@ extern Datum master_drop_sequences(PG_FUNCTION_ARGS);
 extern Datum master_modify_multiple_shards(PG_FUNCTION_ARGS);
 extern Datum lock_relation_if_exists(PG_FUNCTION_ARGS);
 extern Datum master_drop_all_shards(PG_FUNCTION_ARGS);
+extern int MasterDropAllShards(Oid relationId, char *schemaName, char *relationName);
 
 /* function declarations for shard creation functionality */
 extern Datum master_create_worker_shards(PG_FUNCTION_ARGS);

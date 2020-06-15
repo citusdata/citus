@@ -2019,6 +2019,8 @@ SELECT user_id FROM dist_table_with_sequence WHERE user_id = 1;
 
 SELECT * FROM dist_table_with_sequence ORDER BY user_id, value_1;
 
+DROP TABLE dist_table_with_sequence;
+
 -- Select from distributed table into reference table
 CREATE TABLE ref_table (user_id serial, value_1 int);
 SELECT create_reference_table('ref_table');
