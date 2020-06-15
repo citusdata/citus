@@ -769,6 +769,12 @@ EXPLAIN :default_analyze_flags SELECT * FROM explain_analyze_test WHERE a = 1;
 -- multi-shard SELECT
 EXPLAIN :default_analyze_flags SELECT count(*) FROM explain_analyze_test;
 
+-- empty router SELECT
+EXPLAIN :default_analyze_flags SELECT * FROM explain_analyze_test WHERE a = 10000;
+
+-- empty multi-shard SELECT
+EXPLAIN :default_analyze_flags SELECT * FROM explain_analyze_test WHERE b = 'does not exist';
+
 -- router DML
 BEGIN;
 EXPLAIN :default_analyze_flags DELETE FROM explain_analyze_test WHERE a = 1;
@@ -782,6 +788,12 @@ EXPLAIN :default_analyze_flags UPDATE explain_analyze_test SET b = 'b' WHERE a I
 EXPLAIN :default_analyze_flags DELETE FROM explain_analyze_test;
 SELECT * FROM explain_analyze_test ORDER BY a;
 ROLLBACK;
+
+-- router DML with RETURNING with empty result
+EXPLAIN :default_analyze_flags UPDATE explain_analyze_test SET b = 'something' WHERE a = 10000 RETURNING *;
+-- multi-shard DML with RETURNING with empty result
+EXPLAIN :default_analyze_flags UPDATE explain_analyze_test SET b = 'something' WHERE b = 'does not exist' RETURNING *;
+
 
 -- single-row insert
 BEGIN;
@@ -814,9 +826,13 @@ BEGIN;
 EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT JSON) INSERT INTO explain_pk VALUES (1, 2), (2, 3);
 ROLLBACK;
 
+EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT JSON) SELECT * FROM explain_pk;
+
 BEGIN;
 EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT XML) INSERT INTO explain_pk VALUES (1, 2), (2, 3);
 ROLLBACK;
+
+EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT XML) SELECT * FROM explain_pk;
 
 DROP TABLE explain_pk;
 
@@ -831,16 +847,16 @@ INSERT INTO ref_table SELECT i FROM generate_series(1, 10) i;
 
 EXPLAIN :default_analyze_flags
 WITH r AS (
-	SELECT random() r, a FROM dist_table
+	SELECT GREATEST(random(), 2) r, a FROM dist_table
 )
 SELECT count(distinct a) from r NATURAL JOIN ref_table;
 
 EXPLAIN :default_analyze_flags
-SELECT count(distinct a) FROM (SELECT random() r, a FROM dist_table) t NATURAL JOIN ref_table;
+SELECT count(distinct a) FROM (SELECT GREATEST(random(), 2) r, a FROM dist_table) t NATURAL JOIN ref_table;
 
 EXPLAIN :default_analyze_flags
 SELECT count(distinct a) FROM dist_table
-WHERE EXISTS(SELECT random() FROM dist_table NATURAL JOIN ref_table);
+WHERE EXISTS(SELECT random() < 2 FROM dist_table NATURAL JOIN ref_table);
 
 BEGIN;
 EXPLAIN :default_analyze_flags
@@ -848,9 +864,27 @@ WITH r AS (
 	INSERT INTO dist_table SELECT a, a * a FROM dist_table
 	RETURNING a
 ), s AS (
-	SELECT random(), a * a a2 FROM r
+	SELECT random() < 2, a * a a2 FROM r
 )
 SELECT count(distinct a2) FROM s;
 ROLLBACK;
 
 DROP TABLE ref_table, dist_table;
+
+-- test EXPLAIN ANALYZE with different replication factors
+SET citus.shard_count = 2;
+SET citus.shard_replication_factor = 1;
+CREATE TABLE dist_table_rep1(a int);
+SELECT create_distributed_table('dist_table_rep1', 'a');
+
+SET citus.shard_replication_factor = 2;
+CREATE TABLE dist_table_rep2(a int);
+SELECT create_distributed_table('dist_table_rep2', 'a');
+
+EXPLAIN :default_analyze_flags INSERT INTO dist_table_rep1 VALUES(1), (2), (3), (4) RETURNING *;
+EXPLAIN :default_analyze_flags SELECT * from dist_table_rep1;
+
+EXPLAIN :default_analyze_flags INSERT INTO dist_table_rep2 VALUES(1), (2), (3), (4) RETURNING *;
+EXPLAIN :default_analyze_flags SELECT * from dist_table_rep2;
+
+DROP TABLE dist_table_rep1, dist_table_rep2;
