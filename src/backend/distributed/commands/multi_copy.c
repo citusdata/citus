@@ -3575,6 +3575,13 @@ CopyGetPlacementConnection(HTAB *connectionStateHash, ShardPlacement *placement,
 																		 NULL);
 	if (connection != NULL)
 	{
+		/*
+		 * Errors are supposed to cause immediate aborts (i.e. we don't
+		 * want to/can't invalidate placements), mark the connection as
+		 * critical so later errors cause failures.
+		 */
+		MarkRemoteTransactionCritical(connection);
+
 		return connection;
 	}
 
@@ -3596,13 +3603,6 @@ CopyGetPlacementConnection(HTAB *connectionStateHash, ShardPlacement *placement,
 		connection = GetLeastUtilisedCopyConnection(copyConnectionStateList,
 													nodeName,
 													nodePort);
-
-		/*
-		 * Errors are supposed to cause immediate aborts (i.e. we don't
-		 * want to/can't invalidate placements), mark the connection as
-		 * critical so later errors cause failures.
-		 */
-		MarkRemoteTransactionCritical(connection);
 
 		return connection;
 	}
@@ -3637,13 +3637,6 @@ CopyGetPlacementConnection(HTAB *connectionStateHash, ShardPlacement *placement,
 		connection = GetLeastUtilisedCopyConnection(copyConnectionStateList,
 													nodeName,
 													nodePort);
-
-		/*
-		 * Errors are supposed to cause immediate aborts (i.e. we don't
-		 * want to/can't invalidate placements), mark the connection as
-		 * critical so later errors cause failures.
-		 */
-		MarkRemoteTransactionCritical(connection);
 
 		return connection;
 	}
