@@ -1247,8 +1247,10 @@ Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=100000 width=18)
 EXPLAIN (ANALYZE ON, COSTS OFF, TIMING OFF, SUMMARY OFF) EXECUTE router_executor_query_param(5);
 Custom Scan (Citus Adaptive) (actual rows=3 loops=1)
   Task Count: 1
+  Data received from workers: 0 bytes
   Tasks Shown: All
   ->  Task
+        Data received from worker: 0 bytes
         Node: host=localhost port=xxxxx dbname=regression
         ->  Index Scan using lineitem_pkey_290000 on lineitem_290000 lineitem (actual rows=3 loops=1)
               Index Cond: (l_orderkey = 5)

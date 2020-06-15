@@ -339,12 +339,6 @@ typedef struct Task
 	struct TupleDestination *tupleDest;
 
 	/*
-	 * If the task was supposed to return results, so either SELECT or DML with
-	 * RETURNING. This is only set when using EXPLAIN ANALYZE.
-	 */
-	bool expectResults;
-
-	/*
 	 * EXPLAIN ANALYZE output fetched from worker. This is saved to be used later
 	 * by RemoteExplain().
 	 *

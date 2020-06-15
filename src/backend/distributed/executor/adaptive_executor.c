@@ -1940,38 +1940,20 @@ SetAttributeInputMetadata(DistributedExecution *execution,
 		{
 			attInMetadata = NULL;
 		}
+		/*
+		 * We only allow binary results when queryCount is 1, because we
+		 * cannot use binary results with SendRemoteCommand. Which must be
+		 * used if queryCount is larger than 1.
+		 */
+		else if (EnableBinaryProtocol && queryCount == 1 &&
+				 CanUseBinaryCopyFormat(tupleDescriptor))
+		{
+			attInMetadata = TupleDescGetAttBinaryInMetadata(tupleDescriptor);
+			shardCommandExecution->binaryResults = true;
+		}
 		else
 		{
-			/*
-			 * Store that the task expected results. This is only used for
-			 * EXPLAIN ANALYZE. Because EXPLAIN ANALYZE returns the plan in the
-			 * second query we only check this for the first query, otherwise
-			 * it would always be marked as expectResults. That's also why we
-			 * check for originalTask, because that's only set by
-			 * EXPLAIN ANALYZE.
-			 */
-			if (tupleDest->originalTask &&
-				queryIndex == 0 &&
-				tupleDescriptor->natts > 0)
-			{
-				tupleDest->originalTask->expectResults = true;
-			}
-
-			/*
-			 * We only allow binary results when queryCount is 1, because we
-			 * cannot use binary results with SendRemoteCommand. Which must be
-			 * used if queryCount is larger than 1.
-			 */
-			if (EnableBinaryProtocol && queryCount == 1 &&
-				CanUseBinaryCopyFormat(tupleDescriptor))
-			{
-				attInMetadata = TupleDescGetAttBinaryInMetadata(tupleDescriptor);
-				shardCommandExecution->binaryResults = true;
-			}
-			else
-			{
-				attInMetadata = TupleDescGetAttInMetadata(tupleDescriptor);
-			}
+			attInMetadata = TupleDescGetAttInMetadata(tupleDescriptor);
 		}
 
 		shardCommandExecution->attributeInputMetadata[queryIndex] = attInMetadata;
