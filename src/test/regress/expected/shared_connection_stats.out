@@ -373,6 +373,117 @@ COPY test FROM PROGRAM 'seq 32';
 (2 rows)
 
 ROLLBACK;
+-- INSERT SELECT with RETURNING/ON CONFLICT clauses should honor shared_pool_size
+-- in underlying COPY commands
+BEGIN;
+	SELECT pg_sleep(0.1);
+ pg_sleep
+---------------------------------------------------------------------
+
+(1 row)
+
+	INSERT INTO test SELECT i FROM generate_series(0,10) i RETURNING *;
+ a
+---------------------------------------------------------------------
+  0
+  1
+  2
+  3
+  4
+  5
+  6
+  7
+  8
+  9
+ 10
+(11 rows)
+
+	SELECT
+		connection_count_to_node
+	FROM
+		citus_remote_connection_stats()
+	WHERE
+		port IN (SELECT node_port FROM master_get_active_worker_nodes()) AND
+		database_name = 'regression'
+	ORDER BY
+		hostname, port;
+ connection_count_to_node
+---------------------------------------------------------------------
+                        3
+                        3
+(2 rows)
+
+ROLLBACK;
+-- COPY operations to range partitioned tables will honor max_shared_pool_size
+-- as we use a single connection to each worker
+CREATE TABLE range_table(a int);
+SELECT create_distributed_table('range_table', 'a', 'range');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CALL public.create_range_partitioned_shards('range_table',
+                                            '{0,25,50,76}',
+                                            '{24,49,75,200}');
+BEGIN;
+	SELECT pg_sleep(0.1);
+ pg_sleep
+---------------------------------------------------------------------
+
+(1 row)
+
+	COPY range_table FROM PROGRAM 'seq 32';
+	SELECT
+		connection_count_to_node
+	FROM
+		citus_remote_connection_stats()
+	WHERE
+		port IN (SELECT node_port FROM master_get_active_worker_nodes()) AND
+		database_name = 'regression'
+	ORDER BY
+		hostname, port;
+ connection_count_to_node
+---------------------------------------------------------------------
+                        1
+                        1
+(2 rows)
+
+ROLLBACK;
+-- COPY operations to reference tables will use one connection per worker
+-- so we will always honor max_shared_pool_size.
+CREATE TABLE ref_table(a int);
+SELECT create_reference_table('ref_table');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+BEGIN;
+	SELECT pg_sleep(0.1);
+ pg_sleep
+---------------------------------------------------------------------
+
+(1 row)
+
+	COPY ref_table FROM PROGRAM 'seq 32';
+	SELECT
+		connection_count_to_node
+	FROM
+		citus_remote_connection_stats()
+	WHERE
+		port IN (SELECT node_port FROM master_get_active_worker_nodes()) AND
+		database_name = 'regression'
+	ORDER BY
+		hostname, port;
+ connection_count_to_node
+---------------------------------------------------------------------
+                        1
+                        1
+(2 rows)
+
+ROLLBACK;
+-- reset max_shared_pool_size to default
 ALTER SYSTEM RESET citus.max_shared_pool_size;
 SELECT pg_reload_conf();
  pg_reload_conf
@@ -445,5 +556,7 @@ SELECT pg_reload_conf();
  t
 (1 row)
 
+BEGIN;
+SET LOCAL client_min_messages TO WARNING;
 DROP SCHEMA shared_connection_stats CASCADE;
-NOTICE:  drop cascades to table test
+COMMIT;

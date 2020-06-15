@@ -228,6 +228,67 @@ COPY test FROM PROGRAM 'seq 32';
 		hostname, port;
 ROLLBACK;
 
+-- INSERT SELECT with RETURNING/ON CONFLICT clauses should honor shared_pool_size
+-- in underlying COPY commands
+BEGIN;
+	SELECT pg_sleep(0.1);
+	INSERT INTO test SELECT i FROM generate_series(0,10) i RETURNING *;
+
+	SELECT
+		connection_count_to_node
+	FROM
+		citus_remote_connection_stats()
+	WHERE
+		port IN (SELECT node_port FROM master_get_active_worker_nodes()) AND
+		database_name = 'regression'
+	ORDER BY
+		hostname, port;
+ROLLBACK;
+
+-- COPY operations to range partitioned tables will honor max_shared_pool_size
+-- as we use a single connection to each worker
+CREATE TABLE range_table(a int);
+SELECT create_distributed_table('range_table', 'a', 'range');
+CALL public.create_range_partitioned_shards('range_table',
+                                            '{0,25,50,76}',
+                                            '{24,49,75,200}');
+BEGIN;
+	SELECT pg_sleep(0.1);
+	COPY range_table FROM PROGRAM 'seq 32';
+
+	SELECT
+		connection_count_to_node
+	FROM
+		citus_remote_connection_stats()
+	WHERE
+		port IN (SELECT node_port FROM master_get_active_worker_nodes()) AND
+		database_name = 'regression'
+	ORDER BY
+		hostname, port;
+ROLLBACK;
+
+
+-- COPY operations to reference tables will use one connection per worker
+-- so we will always honor max_shared_pool_size.
+CREATE TABLE ref_table(a int);
+SELECT create_reference_table('ref_table');
+
+BEGIN;
+	SELECT pg_sleep(0.1);
+	COPY ref_table FROM PROGRAM 'seq 32';
+
+	SELECT
+		connection_count_to_node
+	FROM
+		citus_remote_connection_stats()
+	WHERE
+		port IN (SELECT node_port FROM master_get_active_worker_nodes()) AND
+		database_name = 'regression'
+	ORDER BY
+		hostname, port;
+ROLLBACK;
+
+-- reset max_shared_pool_size to default
 ALTER SYSTEM RESET citus.max_shared_pool_size;
 SELECT pg_reload_conf();
 SELECT pg_sleep(0.1);
@@ -266,4 +327,7 @@ ALTER SYSTEM RESET citus.recover_2pc_interval;
 ALTER SYSTEM RESET citus.max_cached_conns_per_worker;
 SELECT pg_reload_conf();
 
+BEGIN;
+SET LOCAL client_min_messages TO WARNING;
 DROP SCHEMA shared_connection_stats CASCADE;
+COMMIT;
