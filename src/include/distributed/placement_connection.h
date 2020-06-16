@@ -43,6 +43,6 @@ extern void InitPlacementConnectionManagement(void);
 extern bool ConnectionModifiedPlacement(MultiConnection *connection);
 extern bool ConnectionUsedForAnyPlacements(MultiConnection *connection);
 
-extern bool ShouldUseCleanConnection(void);
+extern bool UseConnectionPerPlacement(void);
 
 #endif /* PLACEMENT_CONNECTION_H */

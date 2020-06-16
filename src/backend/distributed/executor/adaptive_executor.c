@@ -2402,7 +2402,7 @@ ManageWorkerPool(WorkerPool *workerPool)
 		return;
 	}
 
-	if (ShouldUseCleanConnection())
+	if (UseConnectionPerPlacement())
 	{
 		int unusedConnectionCount = workerPool->unusedConnectionCount;
 
@@ -2567,7 +2567,7 @@ CheckConnectionTimeout(WorkerPool *workerPool)
 	 * restrictions. In this case, make sure that we get all the connections
 	 * established.
 	 */
-	if (ShouldUseCleanConnection())
+	if (UseConnectionPerPlacement())
 	{
 		requiredActiveConnectionCount = initiatedConnectionCount;
 	}
@@ -3292,7 +3292,7 @@ PopPlacementExecution(WorkerSession *session)
 	TaskPlacementExecution *placementExecution = PopAssignedPlacementExecution(session);
 	if (placementExecution == NULL)
 	{
-		if (session->commandsSent > 0 && ShouldUseCleanConnection())
+		if (session->commandsSent > 0 && UseConnectionPerPlacement())
 		{
 			/*
 			 * Only send one command per connection if force_max_query_parallelisation
@@ -3877,7 +3877,7 @@ WorkerPoolFailed(WorkerPool *workerPool)
 	 * to establish multiple new connection to other workers and the query
 	 * can only succeed if all those connections are established.
 	 */
-	if (ShouldUseCleanConnection())
+	if (UseConnectionPerPlacement())
 	{
 		List *workerList = workerPool->distributedExecution->workerList;
 

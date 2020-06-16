@@ -599,7 +599,7 @@ SharedConnectionStatsShmemInit(void)
 int
 AdaptiveConnectionManagementFlag(int activeConnectionCount)
 {
-	if (ShouldUseCleanConnection())
+	if (UseConnectionPerPlacement())
 	{
 		/*
 		 * User wants one connection per placement, so no throttling is desired
