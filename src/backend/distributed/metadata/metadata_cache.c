@@ -37,7 +37,7 @@
 #include "distributed/function_utils.h"
 #include "distributed/foreign_key_relationship.h"
 #include "distributed/listutils.h"
-#include "distributed/master_metadata_utility.h"
+#include "distributed/metadata_utility.h"
 #include "distributed/metadata/pg_dist_object.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_executor.h"

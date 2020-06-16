@@ -30,7 +30,7 @@
 #include "distributed/multi_physical_planner.h"
 #include "distributed/distributed_planner.h"
 #include "distributed/multi_server_executor.h"
-#include "distributed/master_metadata_utility.h"
+#include "distributed/metadata_utility.h"
 #include "lib/stringinfo.h"
 #include "nodes/plannodes.h"
 #if PG_VERSION_NUM >= PG_VERSION_12

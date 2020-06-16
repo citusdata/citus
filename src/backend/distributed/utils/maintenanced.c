@@ -33,7 +33,7 @@
 #include "distributed/citus_safe_lib.h"
 #include "distributed/distributed_deadlock_detection.h"
 #include "distributed/maintenanced.h"
-#include "distributed/master_protocol.h"
+#include "distributed/coordinator_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/statistics_collection.h"

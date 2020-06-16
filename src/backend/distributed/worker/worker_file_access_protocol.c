@@ -16,7 +16,7 @@
 
 #include "commands/defrem.h"
 #include "distributed/listutils.h"
-#include "distributed/master_protocol.h"
+#include "distributed/coordinator_protocol.h"
 #include "distributed/worker_protocol.h"
 #include "foreign/foreign.h"
 #include "utils/builtins.h"

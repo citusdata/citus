@@ -39,7 +39,7 @@
 #include "distributed/citus_ruleutils.h"
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/relay_utility.h"
-#include "distributed/master_metadata_utility.h"
+#include "distributed/metadata_utility.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/version_compat.h"
 #include "foreign/foreign.h"

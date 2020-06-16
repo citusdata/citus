@@ -1,6 +1,6 @@
 /*-------------------------------------------------------------------------
  *
- * master_citus_tools.c
+ * citus_tools.c
  *	  UDF to run multi shard/worker queries
  *
  * This file contains functions to run commands on other worker/shards.

@@ -1,6 +1,6 @@
 /*-------------------------------------------------------------------------
  *
- * multi_master_planner.c
+ * merge_planner.c
  *	  Routines for building create table and select into table statements on the
  *	  master node.
  *
@@ -20,7 +20,7 @@
 #include "distributed/insert_select_planner.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
-#include "distributed/multi_master_planner.h"
+#include "distributed/merge_planner.h"
 #include "distributed/multi_physical_planner.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"

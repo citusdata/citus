@@ -13,7 +13,7 @@
 #define MULTI_COPY_H
 
 
-#include "distributed/master_metadata_utility.h"
+#include "distributed/metadata_utility.h"
 #include "distributed/metadata_cache.h"
 #include "nodes/execnodes.h"
 #include "nodes/parsenodes.h"
