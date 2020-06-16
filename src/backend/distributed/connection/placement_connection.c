@@ -1178,12 +1178,11 @@ InitPlacementConnectionManagement(void)
 
 
 /*
- * UseConnectionPerPlacement returns whether we should use as separate connection
- * per placement even if another connection is idle. We mostly use this in testing
- * scenarios.
+ * ShouldUseCleanConnection returns whether we should force a new connection if
+ * existing connections accessed non-co-located placements on the workers.
  */
 bool
-UseConnectionPerPlacement(void)
+ShouldUseCleanConnection(void)
 {
 	return ForceMaxQueryParallelization &&
 		   MultiShardConnectionType != SEQUENTIAL_CONNECTION;
