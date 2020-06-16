@@ -204,8 +204,8 @@ EXPLAIN (COSTS OFF) SELECT * FROM distributed_table WHERE key = 1 AND age = 20;
 EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF)   SELECT * FROM distributed_table WHERE key = 1 AND age = 20;
 
 EXPLAIN (ANALYZE ON, COSTS OFF, SUMMARY OFF, TIMING OFF)
-WITH r AS ( SELECT random() z,* FROM distributed_table)
-SELECT 1 FROM r WHERE z < 2;
+WITH r AS ( SELECT GREATEST(random(), 2) z,* FROM distributed_table)
+SELECT 1 FROM r WHERE z < 3;
 
 EXPLAIN (COSTS OFF) DELETE FROM distributed_table WHERE key = 1 AND age = 20;
 

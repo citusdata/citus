@@ -307,8 +307,8 @@ EXPLAIN (ANALYZE, COSTS OFF, SUMMARY OFF, TIMING OFF)   SELECT * FROM distribute
 (10 rows)
 
 EXPLAIN (ANALYZE ON, COSTS OFF, SUMMARY OFF, TIMING OFF)
-WITH r AS ( SELECT random() z,* FROM distributed_table)
-SELECT 1 FROM r WHERE z < 2;
+WITH r AS ( SELECT GREATEST(random(), 2) z,* FROM distributed_table)
+SELECT 1 FROM r WHERE z < 3;
                                                QUERY PLAN
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
@@ -317,10 +317,10 @@ SELECT 1 FROM r WHERE z < 2;
          Result destination: Write locally
          ->  Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
                Task Count: 4
-               Tuple data received from nodes: 22 bytes
+               Tuple data received from nodes: 6 bytes
                Tasks Shown: One of 4
                ->  Task
-                     Tuple data received from node: 22 bytes
+                     Tuple data received from node: 6 bytes
                      Node: host=localhost port=xxxxx dbname=regression
                      ->  Seq Scan on distributed_table_1470001 distributed_table (actual rows=1 loops=1)
    Task Count: 1
@@ -330,7 +330,7 @@ SELECT 1 FROM r WHERE z < 2;
          Tuple data received from node: 1 bytes
          Node: host=localhost port=xxxxx dbname=regression
          ->  Function Scan on read_intermediate_result intermediate_result (actual rows=1 loops=1)
-               Filter: (z < '2'::double precision)
+               Filter: (z < '3'::double precision)
 (20 rows)
 
 EXPLAIN (COSTS OFF) DELETE FROM distributed_table WHERE key = 1 AND age = 20;
