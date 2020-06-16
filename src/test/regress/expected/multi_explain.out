@@ -2374,46 +2374,46 @@ Custom Scan (Citus Adaptive) (actual rows=4 loops=1)
 EXPLAIN :default_analyze_flags EXECUTE p1;
 Custom Scan (Citus Adaptive) (actual rows=4 loops=1)
   Task Count: 2
-  Data received from workers: 8 bytes
+  Data received from workers: 4 bytes
   Tasks Shown: One of 2
   ->  Task
-        Data received from worker: 6 bytes
+        Data received from worker: 3 bytes
         Node: host=localhost port=xxxxx dbname=regression
         ->  Seq Scan on dist_table_rep1_570022 dist_table_rep1 (actual rows=3 loops=1)
 EXPLAIN :default_analyze_flags EXECUTE p1;
 Custom Scan (Citus Adaptive) (actual rows=4 loops=1)
   Task Count: 2
-  Data received from workers: 12 bytes
+  Data received from workers: 4 bytes
   Tasks Shown: One of 2
   ->  Task
-        Data received from worker: 9 bytes
+        Data received from worker: 3 bytes
         Node: host=localhost port=xxxxx dbname=regression
         ->  Seq Scan on dist_table_rep1_570022 dist_table_rep1 (actual rows=3 loops=1)
 EXPLAIN :default_analyze_flags EXECUTE p1;
 Custom Scan (Citus Adaptive) (actual rows=4 loops=1)
   Task Count: 2
-  Data received from workers: 16 bytes
+  Data received from workers: 4 bytes
   Tasks Shown: One of 2
   ->  Task
-        Data received from worker: 12 bytes
+        Data received from worker: 3 bytes
         Node: host=localhost port=xxxxx dbname=regression
         ->  Seq Scan on dist_table_rep1_570022 dist_table_rep1 (actual rows=3 loops=1)
 EXPLAIN :default_analyze_flags EXECUTE p1;
 Custom Scan (Citus Adaptive) (actual rows=4 loops=1)
   Task Count: 2
-  Data received from workers: 20 bytes
+  Data received from workers: 4 bytes
   Tasks Shown: One of 2
   ->  Task
-        Data received from worker: 15 bytes
+        Data received from worker: 3 bytes
         Node: host=localhost port=xxxxx dbname=regression
         ->  Seq Scan on dist_table_rep1_570022 dist_table_rep1 (actual rows=3 loops=1)
 EXPLAIN :default_analyze_flags EXECUTE p1;
 Custom Scan (Citus Adaptive) (actual rows=4 loops=1)
   Task Count: 2
-  Data received from workers: 24 bytes
+  Data received from workers: 4 bytes
   Tasks Shown: One of 2
   ->  Task
-        Data received from worker: 18 bytes
+        Data received from worker: 3 bytes
         Node: host=localhost port=xxxxx dbname=regression
         ->  Seq Scan on dist_table_rep1_570022 dist_table_rep1 (actual rows=3 loops=1)
 prepare p2 AS SELECT * FROM dist_table_rep1 WHERE a = $1;
@@ -2498,10 +2498,10 @@ Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
 EXPLAIN :default_analyze_flags EXECUTE p3;
 Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
   Task Count: 1
-  Data received from workers: 2 bytes
+  Data received from workers: 1 bytes
   Tasks Shown: All
   ->  Task
-        Data received from worker: 2 bytes
+        Data received from worker: 1 bytes
         Node: host=localhost port=xxxxx dbname=regression
         ->  Seq Scan on dist_table_rep1_570022 dist_table_rep1 (actual rows=1 loops=1)
               Filter: (a = 1)
@@ -2509,10 +2509,10 @@ Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
 EXPLAIN :default_analyze_flags EXECUTE p3;
 Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
   Task Count: 1
-  Data received from workers: 3 bytes
+  Data received from workers: 1 bytes
   Tasks Shown: All
   ->  Task
-        Data received from worker: 3 bytes
+        Data received from worker: 1 bytes
         Node: host=localhost port=xxxxx dbname=regression
         ->  Seq Scan on dist_table_rep1_570022 dist_table_rep1 (actual rows=1 loops=1)
               Filter: (a = 1)
@@ -2520,10 +2520,10 @@ Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
 EXPLAIN :default_analyze_flags EXECUTE p3;
 Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
   Task Count: 1
-  Data received from workers: 4 bytes
+  Data received from workers: 1 bytes
   Tasks Shown: All
   ->  Task
-        Data received from worker: 4 bytes
+        Data received from worker: 1 bytes
         Node: host=localhost port=xxxxx dbname=regression
         ->  Seq Scan on dist_table_rep1_570022 dist_table_rep1 (actual rows=1 loops=1)
               Filter: (a = 1)
@@ -2531,10 +2531,10 @@ Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
 EXPLAIN :default_analyze_flags EXECUTE p3;
 Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
   Task Count: 1
-  Data received from workers: 5 bytes
+  Data received from workers: 1 bytes
   Tasks Shown: All
   ->  Task
-        Data received from worker: 5 bytes
+        Data received from worker: 1 bytes
         Node: host=localhost port=xxxxx dbname=regression
         ->  Seq Scan on dist_table_rep1_570022 dist_table_rep1 (actual rows=1 loops=1)
               Filter: (a = 1)
@@ -2542,10 +2542,10 @@ Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
 EXPLAIN :default_analyze_flags EXECUTE p3;
 Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
   Task Count: 1
-  Data received from workers: 6 bytes
+  Data received from workers: 1 bytes
   Tasks Shown: All
   ->  Task
-        Data received from worker: 6 bytes
+        Data received from worker: 1 bytes
         Node: host=localhost port=xxxxx dbname=regression
         ->  Seq Scan on dist_table_rep1_570022 dist_table_rep1 (actual rows=1 loops=1)
               Filter: (a = 1)

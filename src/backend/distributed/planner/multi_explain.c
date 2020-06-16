@@ -1273,6 +1273,10 @@ ExplainAnalyzeTaskList(List *originalTaskList,
 			ereport(ERROR, (errmsg("cannot get EXPLAIN ANALYZE of multiple queries")));
 		}
 
+		originalTask->totalReceivedData = 0;
+		originalTask->fetchedExplainAnalyzePlacementIndex = 0;
+		originalTask->fetchedExplainAnalyzePlan = NULL;
+
 		Task *explainAnalyzeTask = copyObject(originalTask);
 		const char *queryString = TaskQueryStringForAllPlacements(explainAnalyzeTask);
 		char *wrappedQuery = WrapQueryForExplainAnalyze(queryString, tupleDesc);
