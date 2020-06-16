@@ -1247,10 +1247,10 @@ Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=100000 width=18)
 EXPLAIN (ANALYZE ON, COSTS OFF, TIMING OFF, SUMMARY OFF) EXECUTE router_executor_query_param(5);
 Custom Scan (Citus Adaptive) (actual rows=3 loops=1)
   Task Count: 1
-  Data received from workers: 0 bytes
+  Data received from workers: 15 bytes
   Tasks Shown: All
   ->  Task
-        Data received from worker: 0 bytes
+        Data received from worker: 15 bytes
         Node: host=localhost port=xxxxx dbname=regression
         ->  Index Scan using lineitem_pkey_290000 on lineitem_290000 lineitem (actual rows=3 loops=1)
               Index Cond: (l_orderkey = 5)
@@ -2420,10 +2420,10 @@ prepare p2 AS SELECT * FROM dist_table_rep1 WHERE a = $1;
 EXPLAIN :default_analyze_flags EXECUTE p2(1);
 Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
   Task Count: 1
-  Data received from workers: 0 bytes
+  Data received from workers: 1 bytes
   Tasks Shown: All
   ->  Task
-        Data received from worker: 0 bytes
+        Data received from worker: 1 bytes
         Node: host=localhost port=xxxxx dbname=regression
         ->  Seq Scan on dist_table_rep1_570022 dist_table_rep1 (actual rows=1 loops=1)
               Filter: (a = 1)
@@ -2431,10 +2431,10 @@ Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
 EXPLAIN :default_analyze_flags EXECUTE p2(1);
 Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
   Task Count: 1
-  Data received from workers: 0 bytes
+  Data received from workers: 1 bytes
   Tasks Shown: All
   ->  Task
-        Data received from worker: 0 bytes
+        Data received from worker: 1 bytes
         Node: host=localhost port=xxxxx dbname=regression
         ->  Seq Scan on dist_table_rep1_570022 dist_table_rep1 (actual rows=1 loops=1)
               Filter: (a = 1)
@@ -2442,10 +2442,10 @@ Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
 EXPLAIN :default_analyze_flags EXECUTE p2(1);
 Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
   Task Count: 1
-  Data received from workers: 0 bytes
+  Data received from workers: 1 bytes
   Tasks Shown: All
   ->  Task
-        Data received from worker: 0 bytes
+        Data received from worker: 1 bytes
         Node: host=localhost port=xxxxx dbname=regression
         ->  Seq Scan on dist_table_rep1_570022 dist_table_rep1 (actual rows=1 loops=1)
               Filter: (a = 1)
@@ -2453,10 +2453,10 @@ Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
 EXPLAIN :default_analyze_flags EXECUTE p2(1);
 Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
   Task Count: 1
-  Data received from workers: 0 bytes
+  Data received from workers: 1 bytes
   Tasks Shown: All
   ->  Task
-        Data received from worker: 0 bytes
+        Data received from worker: 1 bytes
         Node: host=localhost port=xxxxx dbname=regression
         ->  Seq Scan on dist_table_rep1_570022 dist_table_rep1 (actual rows=1 loops=1)
               Filter: (a = 1)
@@ -2464,10 +2464,10 @@ Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
 EXPLAIN :default_analyze_flags EXECUTE p2(1);
 Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
   Task Count: 1
-  Data received from workers: 0 bytes
+  Data received from workers: 1 bytes
   Tasks Shown: All
   ->  Task
-        Data received from worker: 0 bytes
+        Data received from worker: 1 bytes
         Node: host=localhost port=xxxxx dbname=regression
         ->  Seq Scan on dist_table_rep1_570022 dist_table_rep1 (actual rows=1 loops=1)
               Filter: (a = 1)
@@ -2475,10 +2475,10 @@ Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
 EXPLAIN :default_analyze_flags EXECUTE p2(1);
 Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
   Task Count: 1
-  Data received from workers: 0 bytes
+  Data received from workers: 1 bytes
   Tasks Shown: All
   ->  Task
-        Data received from worker: 0 bytes
+        Data received from worker: 1 bytes
         Node: host=localhost port=xxxxx dbname=regression
         ->  Seq Scan on dist_table_rep1_570022 dist_table_rep1 (actual rows=1 loops=1)
               Filter: (a = 1)
