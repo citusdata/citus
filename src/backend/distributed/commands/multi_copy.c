@@ -3599,6 +3599,9 @@ CopyGetPlacementConnection(HTAB *connectionStateHash, ShardPlacement *placement,
 		/*
 		 * If we've already reached the executor pool size, there should be at
 		 * least one connection to any given node.
+		 *
+		 * Note that we don't need to mark the connection as critical, since the
+		 * connection was already returned by this function before.
 		 */
 		connection = GetLeastUtilisedCopyConnection(copyConnectionStateList,
 													nodeName,
@@ -3624,6 +3627,20 @@ CopyGetPlacementConnection(HTAB *connectionStateHash, ShardPlacement *placement,
 	if (placement->partitionMethod == DISTRIBUTE_BY_HASH &&
 		MultiShardConnectionType != SEQUENTIAL_CONNECTION)
 	{
+		/*
+		 * Claiming the connection exclusively (done below) would also have the
+		 * effect of opening multiple connections, but claiming the connection
+		 * exclusively prevents GetConnectionIfPlacementAccessedInXact from returning
+		 * the connection if it is needed for a different shard placement.
+		 *
+		 * By setting the REQUIRE_CLEAN_CONNECTION flag we are guaranteed to get
+		 * connection that will not be returned by GetConnectionIfPlacementAccessedInXact
+		 * for the remainder of the COPY, hence it safe to claim the connection
+		 * exclusively. Claiming a connection exclusively prevents it from being
+		 * used in other distributed queries that happen during the COPY (e.g. if
+		 * the copy logic calls a function to calculate a default value, and the
+		 * function does a distributed query).
+		 */
 		connectionFlags |= REQUIRE_CLEAN_CONNECTION;
 	}
 
@@ -3633,6 +3650,9 @@ CopyGetPlacementConnection(HTAB *connectionStateHash, ShardPlacement *placement,
 		/*
 		 * The connection manager throttled any new connections, so pick an existing
 		 * connection with least utilization.
+		 *
+		 * Note that we don't need to mark the connection as critical, since the
+		 * connection was already returned by this function before.
 		 */
 		connection = GetLeastUtilisedCopyConnection(copyConnectionStateList,
 													nodeName,
