@@ -15,6 +15,10 @@ endif
 MAKEFILE_DIR := $(dir $(realpath $(firstword $(MAKEFILE_LIST))))
 export PATH := $(MAKEFILE_DIR)/bin:$(PATH)
 export PG_REGRESS_DIFF_OPTS = -dU10 -w
+# Use lower isolation test timeout, the 5 minute default is waaay too long for
+# us so we use 5 seconds instead. We should detect blockages very quickly and
+# the queries we run are also very fast.
+export PGISOLATIONTIMEOUT = 5
 
 ##
 ## Citus regression support
