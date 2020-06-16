@@ -1,6 +1,6 @@
 /*-------------------------------------------------------------------------
  *
- * master_create_shards.c
+ * create_shards.c
  *
  * This file contains functions to distribute a table by creating shards for it
  * across a set of worker nodes.
@@ -26,8 +26,8 @@
 #include "catalog/namespace.h"
 #include "catalog/pg_class.h"
 #include "distributed/listutils.h"
-#include "distributed/master_metadata_utility.h"
-#include "distributed/master_protocol.h"
+#include "distributed/metadata_utility.h"
+#include "distributed/coordinator_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_join_order.h"
 #include "distributed/multi_executor.h"

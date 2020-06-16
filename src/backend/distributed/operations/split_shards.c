@@ -1,6 +1,6 @@
 /*-------------------------------------------------------------------------
  *
- * master_split_shards.c
+ * split_shards.c
  *
  * This file contains functions to split a shard according to a given
  * distribution column value.
@@ -16,7 +16,7 @@
 
 #include "catalog/pg_class.h"
 #include "distributed/colocation_utils.h"
-#include "distributed/master_protocol.h"
+#include "distributed/coordinator_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/multi_join_order.h"

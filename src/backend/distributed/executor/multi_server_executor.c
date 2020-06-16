@@ -26,7 +26,7 @@
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_resowner.h"
 #include "distributed/multi_server_executor.h"
-#include "distributed/master_protocol.h"
+#include "distributed/coordinator_protocol.h"
 #include "distributed/subplan_execution.h"
 #include "distributed/worker_protocol.h"
 #include "utils/lsyscache.h"

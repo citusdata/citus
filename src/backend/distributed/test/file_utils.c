@@ -2,7 +2,7 @@
 
 #include "distributed/worker_protocol.h"
 #include "distributed/transmit.h"
-#include "distributed/master_metadata_utility.h"
+#include "distributed/metadata_utility.h"
 #include "fmgr.h"
 #include "lib/stringinfo.h"
 

@@ -1,6 +1,6 @@
 /*-------------------------------------------------------------------------
  *
- * master_modify_multiple_shards.c
+ * modify_multiple_shards.c
  *	  UDF to run multi shard update/delete queries
  *
  * This file contains master_modify_multiple_shards function, which takes a update
@@ -30,8 +30,8 @@
 #include "distributed/citus_ruleutils.h"
 #include "distributed/commands.h"
 #include "distributed/listutils.h"
-#include "distributed/master_metadata_utility.h"
-#include "distributed/master_protocol.h"
+#include "distributed/metadata_utility.h"
+#include "distributed/coordinator_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/multi_client_executor.h"
