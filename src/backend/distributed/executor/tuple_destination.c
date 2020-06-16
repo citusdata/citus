@@ -42,12 +42,12 @@ typedef struct TupleDestDestReceiver
 /* forward declarations for local functions */
 static void TupleStoreTupleDestPutTuple(TupleDestination *self, Task *task,
 										int placementIndex, int queryNumber,
-										HeapTuple heapTuple);
+										HeapTuple heapTuple, uint64 tupleLibpqSize);
 static TupleDesc TupleStoreTupleDestTupleDescForQuery(TupleDestination *self, int
 													  queryNumber);
 static void TupleDestNonePutTuple(TupleDestination *self, Task *task,
 								  int placementIndex, int queryNumber,
-								  HeapTuple heapTuple);
+								  HeapTuple heapTuple, uint64 tupleLibpqSize);
 static TupleDesc TupleDestNoneTupleDescForQuery(TupleDestination *self, int queryNumber);
 static void TupleDestDestReceiverStartup(DestReceiver *copyDest, int operation,
 										 TupleDesc inputTupleDesc);
@@ -83,7 +83,7 @@ CreateTupleStoreTupleDest(Tuplestorestate *tupleStore, TupleDesc tupleDescriptor
 static void
 TupleStoreTupleDestPutTuple(TupleDestination *self, Task *task,
 							int placementIndex, int queryNumber,
-							HeapTuple heapTuple)
+							HeapTuple heapTuple, uint64 tupleLibpqSize)
 {
 	TupleStoreTupleDestination *tupleDest = (TupleStoreTupleDestination *) self;
 	tuplestore_puttuple(tupleDest->tupleStore, heapTuple);
@@ -127,7 +127,7 @@ CreateTupleDestNone(void)
 static void
 TupleDestNonePutTuple(TupleDestination *self, Task *task,
 					  int placementIndex, int queryNumber,
-					  HeapTuple heapTuple)
+					  HeapTuple heapTuple, uint64 tupleLibpqSize)
 {
 	/* nothing to do */
 }
@@ -202,7 +202,7 @@ TupleDestDestReceiverReceive(TupleTableSlot *slot,
 	HeapTuple heapTuple = ExecFetchSlotTuple(slot);
 #endif
 
-	tupleDest->putTuple(tupleDest, task, placementIndex, queryNumber, heapTuple);
+	tupleDest->putTuple(tupleDest, task, placementIndex, queryNumber, heapTuple, 0);
 
 	return true;
 }

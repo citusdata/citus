@@ -143,7 +143,7 @@ static TupleDestination * CreateExplainAnlyzeDestination(Task *task,
 														 TupleDestination *taskDest);
 static void ExplainAnalyzeDestPutTuple(TupleDestination *self, Task *task,
 									   int placementIndex, int queryNumber,
-									   HeapTuple heapTuple);
+									   HeapTuple heapTuple, uint64 tupleLibpqSize);
 static TupleDesc ExplainAnalyzeDestTupleDescForQuery(TupleDestination *self, int
 													 queryNumber);
 static char * WrapQueryForExplainAnalyze(const char *queryString, TupleDesc tupleDesc);
@@ -1158,7 +1158,6 @@ CreateExplainAnlyzeDestination(Task *task, TupleDestination *taskDest)
 
 	tupleDestination->pub.putTuple = ExplainAnalyzeDestPutTuple;
 	tupleDestination->pub.tupleDescForQuery = ExplainAnalyzeDestTupleDescForQuery;
-	tupleDestination->pub.originalTask = task;
 
 	return (TupleDestination *) tupleDestination;
 }
@@ -1171,13 +1170,15 @@ CreateExplainAnlyzeDestination(Task *task, TupleDestination *taskDest)
 static void
 ExplainAnalyzeDestPutTuple(TupleDestination *self, Task *task,
 						   int placementIndex, int queryNumber,
-						   HeapTuple heapTuple)
+						   HeapTuple heapTuple, uint64 tupleLibpqSize)
 {
 	ExplainAnalyzeDestination *tupleDestination = (ExplainAnalyzeDestination *) self;
 	if (queryNumber == 0)
 	{
 		TupleDestination *originalTupDest = tupleDestination->originalTaskDestination;
-		originalTupDest->putTuple(originalTupDest, task, placementIndex, 0, heapTuple);
+		originalTupDest->putTuple(originalTupDest, task, placementIndex, 0, heapTuple,
+								  tupleLibpqSize);
+		tupleDestination->originalTask->totalReceivedData += tupleLibpqSize;
 	}
 	else if (queryNumber == 1)
 	{
