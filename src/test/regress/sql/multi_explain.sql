@@ -887,4 +887,28 @@ EXPLAIN :default_analyze_flags SELECT * from dist_table_rep1;
 EXPLAIN :default_analyze_flags INSERT INTO dist_table_rep2 VALUES(1), (2), (3), (4) RETURNING *;
 EXPLAIN :default_analyze_flags SELECT * from dist_table_rep2;
 
+prepare p1 as SELECT * FROM dist_table_rep1;
+EXPLAIN :default_analyze_flags EXECUTE p1;
+EXPLAIN :default_analyze_flags EXECUTE p1;
+EXPLAIN :default_analyze_flags EXECUTE p1;
+EXPLAIN :default_analyze_flags EXECUTE p1;
+EXPLAIN :default_analyze_flags EXECUTE p1;
+EXPLAIN :default_analyze_flags EXECUTE p1;
+
+prepare p2 AS SELECT * FROM dist_table_rep1 WHERE a = $1;
+EXPLAIN :default_analyze_flags EXECUTE p2(1);
+EXPLAIN :default_analyze_flags EXECUTE p2(1);
+EXPLAIN :default_analyze_flags EXECUTE p2(1);
+EXPLAIN :default_analyze_flags EXECUTE p2(1);
+EXPLAIN :default_analyze_flags EXECUTE p2(1);
+EXPLAIN :default_analyze_flags EXECUTE p2(1);
+
+prepare p3 AS SELECT * FROM dist_table_rep1 WHERE a = 1;
+EXPLAIN :default_analyze_flags EXECUTE p3;
+EXPLAIN :default_analyze_flags EXECUTE p3;
+EXPLAIN :default_analyze_flags EXECUTE p3;
+EXPLAIN :default_analyze_flags EXECUTE p3;
+EXPLAIN :default_analyze_flags EXECUTE p3;
+EXPLAIN :default_analyze_flags EXECUTE p3;
+
 DROP TABLE dist_table_rep1, dist_table_rep2;
