@@ -329,7 +329,7 @@ CopyNodeTask(COPYFUNC_ARGS)
 	COPY_SCALAR_FIELD(parametersInQueryStringResolved);
 	COPY_SCALAR_FIELD(tupleDest);
 	COPY_SCALAR_FIELD(queryCount);
-	COPY_SCALAR_FIELD(totalReceivedData);
+	COPY_SCALAR_FIELD(totalReceivedTupleData);
 	COPY_SCALAR_FIELD(fetchedExplainAnalyzePlacementIndex);
 	COPY_STRING_FIELD(fetchedExplainAnalyzePlan);
 }

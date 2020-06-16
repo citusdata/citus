@@ -156,8 +156,8 @@ static void ExplainOneQuery(Query *query, int cursorOptions,
 							QueryEnvironment *queryEnv);
 static double elapsed_time(instr_time *starttime);
 static void ExplainPropertyBytes(const char *qlabel, int64 bytes, ExplainState *es);
-static uint64 TaskReceivedData(Task *task);
-static bool ShowReceivedData(CitusScanState *scanState, ExplainState *es);
+static uint64 TaskReceivedTupleData(Task *task);
+static bool ShowReceivedTupleData(CitusScanState *scanState, ExplainState *es);
 
 
 /* exports for SQL callable functions */
@@ -340,11 +340,12 @@ ExplainPropertyBytes(const char *qlabel, int64 bytes, ExplainState *es)
 
 
 /*
- * ShowReceivedData returns true if explain should show received data. This is
- * only the case when using EXPLAIN ANALYZE on queries that return rows.
+ * ShowReceivedTupleData returns true if explain should show received data.
+ * This is only the case when using EXPLAIN ANALYZE on queries that return
+ * rows.
  */
 static bool
-ShowReceivedData(CitusScanState *scanState, ExplainState *es)
+ShowReceivedTupleData(CitusScanState *scanState, ExplainState *es)
 {
 	TupleDesc tupDesc = ScanStateGetTupleDescriptor(scanState);
 	return es->analyze && tupDesc != NULL && tupDesc->natts > 0;
@@ -368,16 +369,16 @@ ExplainJob(CitusScanState *scanState, Job *job, ExplainState *es)
 	ExplainOpenGroup("Job", "Job", true, es);
 
 	ExplainPropertyInteger("Task Count", NULL, taskCount, es);
-	if (ShowReceivedData(scanState, es))
+	if (ShowReceivedTupleData(scanState, es))
 	{
 		Task *task = NULL;
-		uint64 totalReceivedDataForAllTasks = 0;
+		uint64 totalReceivedTupleDataForAllTasks = 0;
 		foreach_ptr(task, taskList)
 		{
-			totalReceivedDataForAllTasks += TaskReceivedData(task);
+			totalReceivedTupleDataForAllTasks += TaskReceivedTupleData(task);
 		}
-		ExplainPropertyBytes("Data received from workers",
-							 totalReceivedDataForAllTasks,
+		ExplainPropertyBytes("Tuple data received from nodes",
+							 totalReceivedTupleDataForAllTasks,
 							 es);
 	}
 
@@ -433,19 +434,19 @@ ExplainJob(CitusScanState *scanState, Job *job, ExplainState *es)
 
 
 /*
- * TaskReceivedData returns the amount of data that was received by the
+ * TaskReceivedTupleData returns the amount of data that was received by the
  * coordinator for the task. If it's a RETURNING DML task the value stored in
- * totalReceivedData is not correct yet because it only counts the bytes for
+ * totalReceivedTupleData is not correct yet because it only counts the bytes for
  * one placement.
  */
 static uint64
-TaskReceivedData(Task *task)
+TaskReceivedTupleData(Task *task)
 {
 	if (task->taskType == MODIFY_TASK)
 	{
-		return task->totalReceivedData * list_length(task->taskPlacementList);
+		return task->totalReceivedTupleData * list_length(task->taskPlacementList);
 	}
-	return task->totalReceivedData;
+	return task->totalReceivedTupleData;
 }
 
 
@@ -699,10 +700,10 @@ ExplainTask(CitusScanState *scanState, Task *task, int placementIndex,
 		ExplainPropertyText("Query", queryText, es);
 	}
 
-	if (ShowReceivedData(scanState, es))
+	if (ShowReceivedTupleData(scanState, es))
 	{
-		ExplainPropertyBytes("Data received from worker",
-							 TaskReceivedData(task),
+		ExplainPropertyBytes("Tuple data received from node",
+							 TaskReceivedTupleData(task),
 							 es);
 	}
 
@@ -1178,7 +1179,7 @@ ExplainAnalyzeDestPutTuple(TupleDestination *self, Task *task,
 		TupleDestination *originalTupDest = tupleDestination->originalTaskDestination;
 		originalTupDest->putTuple(originalTupDest, task, placementIndex, 0, heapTuple,
 								  tupleLibpqSize);
-		tupleDestination->originalTask->totalReceivedData += tupleLibpqSize;
+		tupleDestination->originalTask->totalReceivedTupleData += tupleLibpqSize;
 	}
 	else if (queryNumber == 1)
 	{

@@ -696,7 +696,7 @@ AdaptiveExecutor(CitusScanState *scanState)
 	Task *task = NULL;
 	foreach_ptr(task, taskList)
 	{
-		task->totalReceivedData = 0;
+		task->totalReceivedTupleData = 0;
 		task->fetchedExplainAnalyzePlacementIndex = 0;
 		task->fetchedExplainAnalyzePlan = NULL;
 	}
