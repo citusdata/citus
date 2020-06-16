@@ -3738,6 +3738,10 @@ ReceiveResults(WorkerSession *session, bool storeRows)
 						}
 						columnArray[columnIndex] = value;
 					}
+					if (SubPlanLevel > 0 && executionStats != NULL)
+					{
+						executionStats->totalIntermediateResultSize += valueLength;
+					}
 					tupleLibpqSize += valueLength;
 				}
 			}
