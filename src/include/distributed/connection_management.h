@@ -46,8 +46,12 @@ enum MultiConnectionMode
 
 	FOR_DML = 1 << 2,
 
-	/* open a connection per (co-located set of) placement(s) */
-	CONNECTION_PER_PLACEMENT = 1 << 3,
+	/*
+	 * During COPY we do not want to use a connection that accessed non-co-located
+	 * placements. If there is a connection that did not access another placement,
+	 * then use it. Otherwise open a new clean connection.
+	 */
+	REQUIRE_CLEAN_CONNECTION = 1 << 3,
 
 	OUTSIDE_TRANSACTION = 1 << 4,
 

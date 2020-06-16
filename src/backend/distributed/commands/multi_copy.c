@@ -3624,7 +3624,7 @@ CopyGetPlacementConnection(HTAB *connectionStateHash, ShardPlacement *placement,
 	if (placement->partitionMethod == DISTRIBUTE_BY_HASH &&
 		MultiShardConnectionType != SEQUENTIAL_CONNECTION)
 	{
-		connectionFlags |= CONNECTION_PER_PLACEMENT;
+		connectionFlags |= REQUIRE_CLEAN_CONNECTION;
 	}
 
 	connection = GetPlacementConnection(connectionFlags, placement, nodeUser);

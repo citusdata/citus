@@ -310,17 +310,17 @@ StartPlacementListConnection(uint32 flags, List *placementAccessList,
 			return NULL;
 		}
 
-		if ((flags & CONNECTION_PER_PLACEMENT) &&
+		if ((flags & REQUIRE_CLEAN_CONNECTION) &&
 			ConnectionAccessedDifferentPlacement(chosenConnection, placement))
 		{
 			/*
 			 * Cached connection accessed a non-co-located placement in the same
-			 * table or co-location group, while the caller asked for a connection
-			 * per placement. Open a new connection instead.
+			 * table or co-location group, while the caller asked for a clean
+			 * connection. Open a new connection instead.
 			 *
 			 * We use this for situations in which we want to use a different
 			 * connection for every placement, such as COPY. If we blindly returned
-			 * a cached conection that already modified a different, non-co-located
+			 * a cached connection that already modified a different, non-co-located
 			 * placement B in the same table or in a table with the same co-location
 			 * ID as the current placement, then we'd no longer able to write to
 			 * placement B later in the COPY.
