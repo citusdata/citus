@@ -210,6 +210,11 @@ CitusExecutorRun(QueryDesc *queryDesc,
 		}
 
 		ExecutorLevel--;
+
+		if (ExecutorLevel == 0 && PlannerLevel == 0)
+		{
+			CitusTableCacheFlushInvalidatedEntries();
+		}
 	}
 	PG_CATCH();
 	{
@@ -219,6 +224,11 @@ CitusExecutorRun(QueryDesc *queryDesc,
 		}
 
 		ExecutorLevel--;
+
+		if (ExecutorLevel == 0 && PlannerLevel == 0)
+		{
+			CitusTableCacheFlushInvalidatedEntries();
+		}
 
 		PG_RE_THROW();
 	}
