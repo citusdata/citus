@@ -1,4 +1,4 @@
-SET citus.shard_count = 4;
+SET citus.shard_count = 2;
 SET citus.next_shard_id TO 4754000;
 CREATE SCHEMA binary_protocol;
 SET search_path TO binary_protocol;
@@ -47,6 +47,45 @@ SELECT id, id, id, id, id,
   9 |  9 |  9 |  9 |  9 |  9 |  9 |  9 |  9 |  9 |  9 |  9 |  9 |  9 |  9 |  9 |  9 |  9 |  9 |  9 |  9 |  9 |  9 |  9 |  9 |  9 |  9 |  9 |  9 |  9
  10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10
 (10 rows)
+
+-- EXPLAIN ANALYZE is currently forced to use text protocol. Once that is
+-- changed the numbers reported should change.
+EXPLAIN (ANALYZE TRUE, TIMING FALSE, COSTS FALSE, SUMMARY FALSE) SELECT id FROM t ORDER BY 1;
+                            QUERY PLAN
+---------------------------------------------------------------------
+ Sort (actual rows=10 loops=1)
+   Sort Key: remote_scan.id
+   Sort Method: quicksort  Memory: 25kB
+   ->  Custom Scan (Citus Adaptive) (actual rows=10 loops=1)
+         Task Count: 2
+         Tuple data received from nodes: 11 bytes
+         Tasks Shown: One of 2
+         ->  Task
+               Tuple data received from node: 8 bytes
+               Node: host=localhost port=xxxxx dbname=regression
+               ->  Seq Scan on t_4754000 t (actual rows=7 loops=1)
+(11 rows)
+
+SET citus.explain_all_tasks TO ON;
+EXPLAIN (ANALYZE TRUE, TIMING FALSE, COSTS FALSE, SUMMARY FALSE) SELECT id FROM t ORDER BY 1;
+                            QUERY PLAN
+---------------------------------------------------------------------
+ Sort (actual rows=10 loops=1)
+   Sort Key: remote_scan.id
+   Sort Method: quicksort  Memory: 25kB
+   ->  Custom Scan (Citus Adaptive) (actual rows=10 loops=1)
+         Task Count: 2
+         Tuple data received from nodes: 11 bytes
+         Tasks Shown: All
+         ->  Task
+               Tuple data received from node: 8 bytes
+               Node: host=localhost port=xxxxx dbname=regression
+               ->  Seq Scan on t_4754000 t (actual rows=7 loops=1)
+         ->  Task
+               Tuple data received from node: 3 bytes
+               Node: host=localhost port=xxxxx dbname=regression
+               ->  Seq Scan on t_4754001 t (actual rows=3 loops=1)
+(15 rows)
 
 INSERT INTO t SELECT count(*) from t;
 INSERT INTO t (SELECT id+1 from t);
