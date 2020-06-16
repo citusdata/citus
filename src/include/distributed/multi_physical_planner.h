@@ -405,7 +405,7 @@ typedef struct DistributedPlan
 	Job *workerJob;
 
 	/* local query that merges results from the workers */
-	Query *masterQuery;
+	Query *combineQuery;
 
 	/* query identifier (copied from the top-level PlannedStmt) */
 	uint64 queryId;

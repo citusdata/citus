@@ -38,7 +38,7 @@
 #include "distributed/multi_logical_planner.h"
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/multi_physical_planner.h"
-#include "distributed/merge_planner.h"
+#include "distributed/combine_query_planner.h"
 #include "distributed/multi_router_planner.h"
 #include "distributed/query_utils.h"
 #include "distributed/recursive_planning.h"
@@ -1339,13 +1339,13 @@ FinalizePlan(PlannedStmt *localPlan, DistributedPlan *distributedPlan)
 		 * Record subplans used by distributed plan to make intermediate result
 		 * pruning easier.
 		 *
-		 * We do this before finalizing the plan, because the masterQuery is
+		 * We do this before finalizing the plan, because the combineQuery is
 		 * rewritten by standard_planner in FinalizeNonRouterPlan.
 		 */
 		distributedPlan->usedSubPlanNodeList = FindSubPlanUsages(distributedPlan);
 	}
 
-	if (distributedPlan->masterQuery)
+	if (distributedPlan->combineQuery)
 	{
 		finalPlan = FinalizeNonRouterPlan(localPlan, distributedPlan, customScan);
 	}

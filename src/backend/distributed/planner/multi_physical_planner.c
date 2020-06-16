@@ -249,11 +249,11 @@ CreatePhysicalDistributedPlan(MultiTreeRoot *multiTree,
 
 	/* build the final merge query to execute on the master */
 	List *masterDependentJobList = list_make1(workerJob);
-	Query *masterQuery = BuildJobQuery((MultiNode *) multiTree, masterDependentJobList);
+	Query *combineQuery = BuildJobQuery((MultiNode *) multiTree, masterDependentJobList);
 
 	DistributedPlan *distributedPlan = CitusMakeNode(DistributedPlan);
 	distributedPlan->workerJob = workerJob;
-	distributedPlan->masterQuery = masterQuery;
+	distributedPlan->combineQuery = combineQuery;
 	distributedPlan->routerExecutable = DistributedPlanRouterExecutable(distributedPlan);
 	distributedPlan->modLevel = ROW_MODIFY_READONLY;
 	distributedPlan->expectResults = true;
@@ -273,7 +273,7 @@ CreatePhysicalDistributedPlan(MultiTreeRoot *multiTree,
 static bool
 DistributedPlanRouterExecutable(DistributedPlan *distributedPlan)
 {
-	Query *masterQuery = distributedPlan->masterQuery;
+	Query *combineQuery = distributedPlan->combineQuery;
 	Job *job = distributedPlan->workerJob;
 	List *workerTaskList = job->taskList;
 	int taskCount = list_length(workerTaskList);
@@ -301,7 +301,7 @@ DistributedPlanRouterExecutable(DistributedPlan *distributedPlan)
 	 * sorting on the master query wouldn't be executed. Thus, such plans shouldn't be
 	 * qualified as router executable.
 	 */
-	if (masterQuery != NULL && list_length(masterQuery->sortClause) > 0)
+	if (combineQuery != NULL && list_length(combineQuery->sortClause) > 0)
 	{
 		return false;
 	}
@@ -311,8 +311,8 @@ DistributedPlanRouterExecutable(DistributedPlan *distributedPlan)
 	 * have either an aggregate or a function expression which has to be executed for
 	 * the correct results.
 	 */
-	bool masterQueryHasAggregates = job->jobQuery->hasAggs;
-	if (masterQueryHasAggregates)
+	bool combineQueryHasAggregates = job->jobQuery->hasAggs;
+	if (combineQueryHasAggregates)
 	{
 		return false;
 	}

@@ -26,7 +26,7 @@
 #include "distributed/listutils.h"
 #include "distributed/coordinator_protocol.h"
 #include "distributed/multi_executor.h"
-#include "distributed/merge_planner.h"
+#include "distributed/combine_query_planner.h"
 #include "distributed/distributed_planner.h"
 #include "distributed/multi_router_planner.h"
 #include "distributed/multi_resowner.h"

@@ -63,8 +63,8 @@ static Task * RouterModifyTaskForShardInterval(Query *originalQuery,
 											   uint32 taskIdIndex,
 											   bool allRelationsJoinedOnPartitionKey,
 											   DeferredErrorMessage **routerPlannerError);
-static Query * CreateMasterQueryForRouterPlan(DistributedPlan *distPlan);
-static List * CreateTargetListForMasterQuery(List *targetList);
+static Query * CreateCombineQueryForRouterPlan(DistributedPlan *distPlan);
+static List * CreateTargetListForCombineQuery(List *targetList);
 static DeferredErrorMessage * DistributedInsertSelectSupported(Query *queryTree,
 															   RangeTblEntry *insertRte,
 															   RangeTblEntry *subqueryRte,
@@ -300,7 +300,7 @@ CreateDistributedInsertSelectPlan(Query *originalQuery,
 
 	/* and finally the multi plan */
 	distributedPlan->workerJob = workerJob;
-	distributedPlan->masterQuery = NULL;
+	distributedPlan->combineQuery = NULL;
 	distributedPlan->routerExecutable = true;
 	distributedPlan->expectResults = originalQuery->returningList != NIL;
 	distributedPlan->targetRelationId = targetRelationId;
@@ -316,10 +316,10 @@ CreateDistributedInsertSelectPlan(Query *originalQuery,
  * To create the plan, this function first creates a distributed plan for the SELECT
  * part. Then puts it as a subquery to the original (non-distributed) INSERT query as
  * a subquery. Finally, it puts this INSERT query, which now has a distributed SELECT
- * subquery, in the masterQuery.
+ * subquery, in the combineQuery.
  *
  * If the SELECT query is a router query, whose distributed plan does not have a
- * masterQuery, this function also creates a dummy masterQuery for that.
+ * combineQuery, this function also creates a dummy combineQuery for that.
  */
 DistributedPlan *
 CreateInsertSelectIntoLocalTablePlan(uint64 planId, Query *originalQuery, ParamListInfo
@@ -347,40 +347,40 @@ CreateInsertSelectIntoLocalTablePlan(uint64 planId, Query *originalQuery, ParamL
 		return distPlan;
 	}
 
-	if (distPlan->masterQuery == NULL)
+	if (distPlan->combineQuery == NULL)
 	{
 		/*
 		 * For router queries, we construct a synthetic master query that simply passes
 		 * on the results of the remote tasks, which we can then use as the select in
 		 * the INSERT .. SELECT.
 		 */
-		distPlan->masterQuery = CreateMasterQueryForRouterPlan(
+		distPlan->combineQuery = CreateCombineQueryForRouterPlan(
 			distPlan);
 	}
 
 	/*
-	 * masterQuery of a distributed select is for combining the results from
+	 * combineQuery of a distributed select is for combining the results from
 	 * worker nodes on the coordinator node. Putting it as a subquery to the
 	 * INSERT query, causes the INSERT query to insert the combined select value
-	 * from the workers. And making the resulting insert query the masterQuery
+	 * from the workers. And making the resulting insert query the combineQuery
 	 * let's us execute this insert command.
 	 *
 	 * So this operation makes the master query insert the result of the
 	 * distributed select instead of returning it.
 	 */
-	selectRte->subquery = distPlan->masterQuery;
-	distPlan->masterQuery = originalQuery;
+	selectRte->subquery = distPlan->combineQuery;
+	distPlan->combineQuery = originalQuery;
 
 	return distPlan;
 }
 
 
 /*
- * CreateMasterQueryForRouterPlan is used for creating a dummy masterQuery
+ * CreateCombineQueryForRouterPlan is used for creating a dummy combineQuery
  * for a router plan, since router plans normally don't have one.
  */
 static Query *
-CreateMasterQueryForRouterPlan(DistributedPlan *distPlan)
+CreateCombineQueryForRouterPlan(DistributedPlan *distPlan)
 {
 	const Index insertTableId = 1;
 	List *tableIdList = list_make1(makeInteger(insertTableId));
@@ -423,7 +423,7 @@ CreateMasterQueryForRouterPlan(DistributedPlan *distPlan)
 															funcColumnTypeMods,
 															funcCollations);
 
-	List *targetList = CreateTargetListForMasterQuery(dependentTargetList);
+	List *targetList = CreateTargetListForCombineQuery(dependentTargetList);
 
 	RangeTblRef *rangeTableRef = makeNode(RangeTblRef);
 	rangeTableRef->rtindex = 1;
@@ -432,23 +432,23 @@ CreateMasterQueryForRouterPlan(DistributedPlan *distPlan)
 	joinTree->quals = NULL;
 	joinTree->fromlist = list_make1(rangeTableRef);
 
-	Query *masterQuery = makeNode(Query);
-	masterQuery->commandType = CMD_SELECT;
-	masterQuery->querySource = QSRC_ORIGINAL;
-	masterQuery->canSetTag = true;
-	masterQuery->rtable = list_make1(rangeTableEntry);
-	masterQuery->targetList = targetList;
-	masterQuery->jointree = joinTree;
-	return masterQuery;
+	Query *combineQuery = makeNode(Query);
+	combineQuery->commandType = CMD_SELECT;
+	combineQuery->querySource = QSRC_ORIGINAL;
+	combineQuery->canSetTag = true;
+	combineQuery->rtable = list_make1(rangeTableEntry);
+	combineQuery->targetList = targetList;
+	combineQuery->jointree = joinTree;
+	return combineQuery;
 }
 
 
 /*
- * CreateTargetListForMasterQuery is used for creating a target list for
+ * CreateTargetListForCombineQuery is used for creating a target list for
  * master query.
  */
 static List *
-CreateTargetListForMasterQuery(List *targetList)
+CreateTargetListForCombineQuery(List *targetList)
 {
 	List *newTargetEntryList = NIL;
 	const uint32 masterTableId = 1;

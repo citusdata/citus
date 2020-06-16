@@ -1,12 +1,10 @@
 /*-------------------------------------------------------------------------
  *
- * merge_planner.c
- *	  Routines for building create table and select into table statements on the
- *	  master node.
+ * combine_query_planner.c
+ *	  Routines for planning the combine query that runs on the coordinator
+ *    to combine results from the workers.
  *
  * Copyright (c) Citus Data, Inc.
- *
- * $Id$
  *
  *-------------------------------------------------------------------------
  */
@@ -20,7 +18,7 @@
 #include "distributed/insert_select_planner.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
-#include "distributed/merge_planner.h"
+#include "distributed/combine_query_planner.h"
 #include "distributed/multi_physical_planner.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
@@ -28,9 +26,9 @@
 #include "optimizer/planner.h"
 #include "rewrite/rewriteManip.h"
 
-static List * MasterTargetList(List *workerTargetList);
-static PlannedStmt * BuildSelectStatementViaStdPlanner(Query *masterQuery,
-													   List *masterTargetList,
+static List * RemoteScanTargetList(List *workerTargetList);
+static PlannedStmt * BuildSelectStatementViaStdPlanner(Query *combineQuery,
+													   List *remoteScanTargetList,
 													   CustomScan *remoteScan);
 static bool FindCitusExtradataContainerRTE(Node *node, RangeTblEntry **result);
 
@@ -53,33 +51,33 @@ static CustomPathMethods CitusCustomScanPathMethods = {
 
 /*
  * MasterNodeSelectPlan takes in a distributed plan and a custom scan node which
- * wraps remote part of the plan. This function finds the master node query
- * structure in the multi plan, and builds the final select plan to execute on
- * the tuples returned by remote scan on the master node. Note that this select
+ * wraps remote part of the plan. This function finds the combine query structure
+ * in the multi plan, and builds the final select plan to execute on the tuples
+ * returned by remote scan on the coordinator node. Note that this select
  * plan is executed after result files are retrieved from worker nodes and
  * filled into the tuple store inside provided custom scan.
  */
 PlannedStmt *
 MasterNodeSelectPlan(DistributedPlan *distributedPlan, CustomScan *remoteScan)
 {
-	Query *masterQuery = distributedPlan->masterQuery;
+	Query *combineQuery = distributedPlan->combineQuery;
 
 	Job *workerJob = distributedPlan->workerJob;
 	List *workerTargetList = workerJob->jobQuery->targetList;
-	List *masterTargetList = MasterTargetList(workerTargetList);
-	return BuildSelectStatementViaStdPlanner(masterQuery, masterTargetList, remoteScan);
+	List *remoteScanTargetList = RemoteScanTargetList(workerTargetList);
+	return BuildSelectStatementViaStdPlanner(combineQuery, remoteScanTargetList,
+											 remoteScan);
 }
 
 
 /*
- * MasterTargetList uses the given worker target list's expressions, and creates
- * a target list for the master node. This master target list keeps the
- * temporary table's columns on the master node.
+ * RemoteScanTargetList uses the given worker target list's expressions, and creates
+ * a target list for the remote scan on the coordinator node.
  */
 static List *
-MasterTargetList(List *workerTargetList)
+RemoteScanTargetList(List *workerTargetList)
 {
-	List *masterTargetList = NIL;
+	List *remoteScanTargetList = NIL;
 	const Index tableId = 1;
 	AttrNumber columnId = 1;
 
@@ -93,29 +91,30 @@ MasterTargetList(List *workerTargetList)
 			continue;
 		}
 
-		Var *masterColumn = makeVarFromTargetEntry(tableId, workerTargetEntry);
-		masterColumn->varattno = columnId;
-		masterColumn->varoattno = columnId;
+		Var *remoteScanColumn = makeVarFromTargetEntry(tableId, workerTargetEntry);
+		remoteScanColumn->varattno = columnId;
+		remoteScanColumn->varoattno = columnId;
 		columnId++;
 
-		if (masterColumn->vartype == RECORDOID || masterColumn->vartype == RECORDARRAYOID)
+		if (remoteScanColumn->vartype == RECORDOID || remoteScanColumn->vartype ==
+			RECORDARRAYOID)
 		{
-			masterColumn->vartypmod = BlessRecordExpression(workerTargetEntry->expr);
+			remoteScanColumn->vartypmod = BlessRecordExpression(workerTargetEntry->expr);
 		}
 
 		/*
-		 * The master target entry has two pieces to it. The first piece is the
+		 * The remote scan target entry has two pieces to it. The first piece is the
 		 * target entry's expression, which we set to the newly created column.
 		 * The second piece is sort and group clauses that we implicitly copy
 		 * from the worker target entry. Note that any changes to worker target
 		 * entry's sort and group clauses will *break* us here.
 		 */
-		TargetEntry *masterTargetEntry = flatCopyTargetEntry(workerTargetEntry);
-		masterTargetEntry->expr = (Expr *) masterColumn;
-		masterTargetList = lappend(masterTargetList, masterTargetEntry);
+		TargetEntry *remoteScanTargetEntry = flatCopyTargetEntry(workerTargetEntry);
+		remoteScanTargetEntry->expr = (Expr *) remoteScanColumn;
+		remoteScanTargetList = lappend(remoteScanTargetList, remoteScanTargetEntry);
 	}
 
-	return masterTargetList;
+	return remoteScanTargetList;
 }
 
 
@@ -147,7 +146,7 @@ CreateCitusCustomScanPath(PlannerInfo *root, RelOptInfo *relOptInfo,
 	 * set that would disallow hash aggregates to be used.
 	 *
 	 * Ideally we would be able to provide estimates close to postgres' estimates on the
-	 * workers to let the standard planner choose an optimal solution for the masterQuery.
+	 * workers to let the standard planner choose an optimal solution for the combineQuery.
 	 */
 	path->custom_path.path.rows = 100000;
 	path->remoteScan = remoteScan;
@@ -195,15 +194,15 @@ CitusCustomScanPathPlan(PlannerInfo *root,
 	/*
 	 * The custom_scan_tlist contains target entries for to the "output" of the call
 	 * to citus_extradata_container, which is actually replaced by a CustomScan.
-	 * The target entries are initialized with varno 1 (see MasterTargetList), since
-	 * it's currently the only relation in the join tree of the masterQuery.
+	 * The target entries are initialized with varno 1 (see RemoteScanTargetList), since
+	 * it's currently the only relation in the join tree of the combineQuery.
 	 *
 	 * If the citus_extradata_container function call is not the first relation to
 	 * appear in the flattened rtable for the entire plan, then varno is now pointing
 	 * to the wrong relation and needs to be updated.
 	 *
 	 * Example:
-	 * When the masterQuery field of the DistributedPlan is
+	 * When the combineQuery field of the DistributedPlan is
 	 * INSERT INTO local SELECT .. FROM citus_extradata_container.
 	 * In that case the varno of citusdata_extradata_container should be 3, because
 	 * it is preceded range table entries for "local" and the subquery.
@@ -236,39 +235,39 @@ CitusCustomScanPathPlan(PlannerInfo *root,
 
 /*
  * BuildSelectStatementViaStdPlanner creates a PlannedStmt where it combines the
- * masterQuery and the remoteScan. It utilizes the standard_planner from postgres to
- * create a plan based on the masterQuery.
+ * combineQuery and the remoteScan. It utilizes the standard_planner from postgres to
+ * create a plan based on the combineQuery.
  */
 static PlannedStmt *
-BuildSelectStatementViaStdPlanner(Query *masterQuery, List *masterTargetList,
+BuildSelectStatementViaStdPlanner(Query *combineQuery, List *remoteScanTargetList,
 								  CustomScan *remoteScan)
 {
 	/*
 	 * the standard planner will scribble on the target list. Since it is essential to not
 	 * change the custom_scan_tlist we copy the target list before adding them to any.
-	 * The masterTargetList is used in the end to extract the column names to be added to
+	 * The remoteScanTargetList is used in the end to extract the column names to be added to
 	 * the alias we will create for the CustomScan, (expressed as the
-	 * citus_extradata_container function call in the masterQuery).
+	 * citus_extradata_container function call in the combineQuery).
 	 */
-	remoteScan->custom_scan_tlist = copyObject(masterTargetList);
-	remoteScan->scan.plan.targetlist = copyObject(masterTargetList);
+	remoteScan->custom_scan_tlist = copyObject(remoteScanTargetList);
+	remoteScan->scan.plan.targetlist = copyObject(remoteScanTargetList);
 
 	/*
 	 * We will overwrite the alias of the rangetable which describes the custom scan.
 	 * Ideally we would have set the correct column names and alias on the range table in
-	 * the master query already when we inserted the extra data container. This could be
+	 * the combine query already when we inserted the extra data container. This could be
 	 * improved in the future.
 	 */
 
 	/* find the rangetable entry for the extradata container and overwrite its alias */
 	RangeTblEntry *extradataContainerRTE = NULL;
-	FindCitusExtradataContainerRTE((Node *) masterQuery, &extradataContainerRTE);
+	FindCitusExtradataContainerRTE((Node *) combineQuery, &extradataContainerRTE);
 	if (extradataContainerRTE != NULL)
 	{
-		/* extract column names from the masterTargetList */
+		/* extract column names from the remoteScanTargetList */
 		List *columnNameList = NIL;
 		TargetEntry *targetEntry = NULL;
-		foreach_ptr(targetEntry, masterTargetList)
+		foreach_ptr(targetEntry, remoteScanTargetList)
 		{
 			columnNameList = lappend(columnNameList, makeString(targetEntry->resname));
 		}
@@ -276,15 +275,15 @@ BuildSelectStatementViaStdPlanner(Query *masterQuery, List *masterTargetList,
 	}
 
 	/*
-	 * Print the master query at debug level 4. Since serializing the query is relatively
+	 * Print the combine query at debug level 4. Since serializing the query is relatively
 	 * cpu intensive we only perform that if we are actually logging DEBUG4.
 	 */
-	const int logMasterQueryLevel = DEBUG4;
-	if (IsLoggableLevel(logMasterQueryLevel))
+	const int logCombineQueryLevel = DEBUG4;
+	if (IsLoggableLevel(logCombineQueryLevel))
 	{
 		StringInfo queryString = makeStringInfo();
-		pg_get_query_def(masterQuery, queryString);
-		elog(logMasterQueryLevel, "master query: %s", queryString->data);
+		pg_get_query_def(combineQuery, queryString);
+		elog(logCombineQueryLevel, "combine query: %s", queryString->data);
 	}
 
 	PlannedStmt *standardStmt = NULL;
@@ -296,7 +295,7 @@ BuildSelectStatementViaStdPlanner(Query *masterQuery, List *masterTargetList,
 		ReplaceCitusExtraDataContainer = true;
 		ReplaceCitusExtraDataContainerWithCustomScan = remoteScan;
 
-		standardStmt = standard_planner(masterQuery, 0, NULL);
+		standardStmt = standard_planner(combineQuery, 0, NULL);
 
 		ReplaceCitusExtraDataContainer = false;
 		ReplaceCitusExtraDataContainerWithCustomScan = NULL;
