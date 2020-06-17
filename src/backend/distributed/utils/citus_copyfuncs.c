@@ -96,7 +96,7 @@ copyJobInfo(Job *newnode, Job *from)
 	COPY_NODE_FIELD(taskList);
 	COPY_NODE_FIELD(dependentJobList);
 	COPY_SCALAR_FIELD(subqueryPushdown);
-	COPY_SCALAR_FIELD(requiresMasterEvaluation);
+	COPY_SCALAR_FIELD(requiresCoordinatorEvaluation);
 	COPY_SCALAR_FIELD(deferredPruning);
 	COPY_NODE_FIELD(partitionKeyValue);
 	COPY_NODE_FIELD(localPlannedStatements);
