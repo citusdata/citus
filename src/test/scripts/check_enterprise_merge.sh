@@ -42,6 +42,10 @@ TMP_GIT_DIR="$(mktemp -d -t citus-merge-check.XXXXXXXXX)"
 git clone "$GIT_DIR_ROOT" "$TMP_GIT_DIR"
 cd "$TMP_GIT_DIR"
 
+# Fails in CI without this
+git config user.email "citus-bot@microsoft.com"
+git config user.name "citus bot"
+
 # Disable "set -x" again, because $ENTERPRISE_REMOTE contains passwords
 { set +x ; } 2> /dev/null
 git remote add enterprise "$ENTERPRISE_REMOTE"
