@@ -1,3 +1,9 @@
+### citus v9.2.5 (Jun 17, 2020) ###
+
+* Adds support to partially push down tdigest aggregates
+
+* Fixes an issue with distributing tables having generated cols not at the end
+
 ### citus v9.2.4 (March 30, 2020) ###
 
 * Fixes a release problem in 9.2.3
