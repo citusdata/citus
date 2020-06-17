@@ -31,19 +31,6 @@ echo_and_restore() {
         esac
 }
 
-# try_merge sees if we can merge "src" branch to "dst" branch
-# it will exit with nonzero code if the merge fails because of conflicts.
-try_merge() {
-    src=$1
-    dst=$2
-    git checkout "${dst}"
-    # this will exit since -e option is set and it will return non-zero code on conflicts.
-    git merge --no-ff --no-commit "${src}"
-    # undo whatever we happened
-    git merge --abort
-    git checkout -
-}
-
 # List executed commands. This is done so debugging this script is easier when
 # it fails. It's explicitely done after git remote add so username and password
 # are not shown in CI output (even though it's also filtered out by CircleCI)
@@ -70,10 +57,15 @@ git remote set-url --push enterprise no-pushing
 git fetch enterprise enterprise-master
 
 
-if try_merge "origin/$PR_BRANCH" "enterprise/enterprise-master"; then
+git checkout "enterprise/enterprise-master"
+
+if git merge "origin/$PR_BRANCH"; then
     echo "INFO: community PR branch could be merged into enterprise-master, so everything is good"
     exit 0
 fi
+
+# undo partial merge
+git merge --abort
 
 if ! git fetch enterprise "$PR_BRANCH" ; then
     echo "ERROR: enterprise/$PR_BRANCH was not found and community PR branch could not be merged into enterprise-master"
@@ -103,4 +95,4 @@ fi
 # enterprise-master and the last community PR commit. The only way that's
 # possible is if they were merged. So we are happy now. Just to be sure, we
 # still try doing the merge.
-try_merge "enterprise/$PR_BRANCH" "enterprise/enterprise-master"
+git merge "enterprise/$PR_BRANCH"
