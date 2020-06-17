@@ -1,3 +1,9 @@
+### citus v9.2.5 (Jun 17, 2020) ###
+
+* Adds support to partially push down tdigest aggregates
+
+* Fixes an issue with distributing tables having generated cols not at the end
+
 ### citus v9.3.0 (May 6, 2020) ###
 
 * Adds `max_shared_pool_size` to control number of connections across sessions
