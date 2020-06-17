@@ -17,9 +17,16 @@ set -x
 # part of the echo command shown by "set -x" and once because of the output of
 # the echo command. We do not want "set -x" to show the echo command. We only
 # want to see the actual message in the output of echo itself. This function is
-# a trick to do so.
-better_echo() {
-    { echo "$@" ; } 2> /dev/null
+# a trick to do so. Read the StackOverflow post below to understand why this
+# works and what this works around.
+# Source: https://superuser.com/a/1141026/242593
+alias echo='{ save_flags="$-"; set +x;} 2> /dev/null; echo_and_restore'
+echo_and_restore() {
+        builtin echo "$*"
+        #shellcheck disable=SC2154
+        case "$save_flags" in
+         (*x*)  set -x
+        esac
 }
 
 # Prevent any pushes
@@ -38,7 +45,7 @@ git fetch enterprise enterprise-master
 # (e.g. network) we still continue as if the enterprise version of the branch
 # does not exist.
 if ! git fetch enterprise "$PR_BRANCH" > /dev/null 2>&1 ; then
-    better_echo "INFO: enterprise/$PR_BRANCH was not found"
+    echo "INFO: enterprise/$PR_BRANCH was not found"
     # If the current branch does not exist on the enterprise repo, then all we
     # have to check is if it can be merged into enterprise master without
     # problems.
@@ -56,7 +63,7 @@ git log -n 1 "enterprise/$PR_BRANCH"
 # branch. If it does not it means it might not be able to be merged into it
 # automatically. So we fail in that case.
 if ! git merge-base --is-ancestor enterprise/enterprise-master "enterprise/$PR_BRANCH" ; then
-    better_echo "ERROR: enterprise/$PR_BRANCH is not up to date with enterprise-master"
+    echo "ERROR: enterprise/$PR_BRANCH is not up to date with enterprise-master"
     exit 1
 fi
 
@@ -64,7 +71,7 @@ fi
 # branch. If it does not it means it's not up to date with the current PR, so
 # the enterprise branch should be updated.
 if ! git merge-base --is-ancestor "origin/$PR_BRANCH" "enterprise/$PR_BRANCH" ; then
-    better_echo "ERROR: enterprise/$PR_BRANCH is not up to date with community PR branch"
+    echo "ERROR: enterprise/$PR_BRANCH is not up to date with community PR branch"
     exit 1
 fi
 
