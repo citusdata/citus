@@ -165,7 +165,7 @@ static Task * QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 									  RelationRestrictionContext *restrictionContext,
 									  uint32 taskId,
 									  TaskType taskType,
-									  bool modifyRequiresMasterEvaluation);
+									  bool modifyRequiresCoordinatorEvaluation);
 static bool ShardIntervalsEqual(FmgrInfo *comparisonFunction,
 								Oid collation,
 								ShardInterval *firstInterval,
@@ -2015,7 +2015,7 @@ BuildJob(Query *jobQuery, List *dependentJobList)
 	job->jobId = UniqueJobId();
 	job->jobQuery = jobQuery;
 	job->dependentJobList = dependentJobList;
-	job->requiresMasterEvaluation = false;
+	job->requiresCoordinatorEvaluation = false;
 
 	return job;
 }
@@ -2289,7 +2289,7 @@ List *
 QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 						 RelationRestrictionContext *relationRestrictionContext,
 						 List *prunedRelationShardList, TaskType taskType, bool
-						 modifyRequiresMasterEvaluation)
+						 modifyRequiresCoordinatorEvaluation)
 {
 	List *sqlTaskList = NIL;
 	ListCell *restrictionCell = NULL;
@@ -2393,7 +2393,7 @@ QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 													 relationRestrictionContext,
 													 taskIdIndex,
 													 taskType,
-													 modifyRequiresMasterEvaluation);
+													 modifyRequiresCoordinatorEvaluation);
 		subqueryTask->jobId = jobId;
 		sqlTaskList = lappend(sqlTaskList, subqueryTask);
 
@@ -2570,7 +2570,7 @@ ErrorIfUnsupportedShardDistribution(Query *query)
 static Task *
 QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 						RelationRestrictionContext *restrictionContext, uint32 taskId,
-						TaskType taskType, bool modifyRequiresMasterEvaluation)
+						TaskType taskType, bool modifyRequiresCoordinatorEvaluation)
 {
 	Query *taskQuery = copyObject(originalQuery);
 
@@ -2672,7 +2672,7 @@ QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 
 	Task *subqueryTask = CreateBasicTask(jobId, taskId, taskType, NULL);
 
-	if ((taskType == MODIFY_TASK && !modifyRequiresMasterEvaluation) ||
+	if ((taskType == MODIFY_TASK && !modifyRequiresCoordinatorEvaluation) ||
 		taskType == READ_TASK)
 	{
 		pg_get_query_def(taskQuery, queryString);

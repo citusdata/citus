@@ -50,7 +50,7 @@ static CustomPathMethods CitusCustomScanPathMethods = {
 };
 
 /*
- * MasterNodeSelectPlan takes in a distributed plan and a custom scan node which
+ * PlanCombineQuery takes in a distributed plan and a custom scan node which
  * wraps remote part of the plan. This function finds the combine query structure
  * in the multi plan, and builds the final select plan to execute on the tuples
  * returned by remote scan on the coordinator node. Note that this select
@@ -58,7 +58,7 @@ static CustomPathMethods CitusCustomScanPathMethods = {
  * filled into the tuple store inside provided custom scan.
  */
 PlannedStmt *
-MasterNodeSelectPlan(DistributedPlan *distributedPlan, CustomScan *remoteScan)
+PlanCombineQuery(DistributedPlan *distributedPlan, CustomScan *remoteScan)
 {
 	Query *combineQuery = distributedPlan->combineQuery;
 

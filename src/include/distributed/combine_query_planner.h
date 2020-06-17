@@ -1,6 +1,6 @@
 /*-------------------------------------------------------------------------
  *
- * merge_planner.h
+ * combine_query_planner.h
  *	  Function declarations for building planned statements; these statements
  *	  are then executed on the coordinator node.
  *
@@ -9,8 +9,8 @@
  *-------------------------------------------------------------------------
  */
 
-#ifndef MERGE_PLANNER_H
-#define MERGE_PLANNER_H
+#ifndef COMBINE_QUERY_PLANNER_H
+#define COMBINE_QUERY_PLANNER_H
 
 #include "lib/stringinfo.h"
 #include "nodes/parsenodes.h"
@@ -29,10 +29,10 @@ struct CustomScan;
 extern Path * CreateCitusCustomScanPath(PlannerInfo *root, RelOptInfo *relOptInfo,
 										Index restrictionIndex, RangeTblEntry *rte,
 										CustomScan *remoteScan);
-extern PlannedStmt * MasterNodeSelectPlan(struct DistributedPlan *distributedPlan,
-										  struct CustomScan *dataScan);
+extern PlannedStmt * PlanCombineQuery(struct DistributedPlan *distributedPlan,
+									  struct CustomScan *dataScan);
 extern Unique * make_unique_from_sortclauses(Plan *lefttree, List *distinctList);
 extern bool ReplaceCitusExtraDataContainer;
 extern CustomScan *ReplaceCitusExtraDataContainerWithCustomScan;
 
-#endif   /* MERGE_PLANNER_H */
+#endif   /* COMBINE_QUERY_PLANNER_H */

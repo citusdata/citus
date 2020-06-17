@@ -1327,9 +1327,9 @@ MasterIrreducibleExpressionWalker(Node *expression, WalkerState *state)
 
 	/*
 	 * In order for statement replication to give us consistent results it's important
-	 * that we either disallow or evaluate on the master anything which has a volatility
-	 * category above IMMUTABLE. Newer versions of postgres might add node types which
-	 * should be checked in this function.
+	 * that we either disallow or evaluate on the coordinator anything which has a
+	 * volatility category above IMMUTABLE. Newer versions of postgres might add node
+	 * types which should be checked in this function.
 	 *
 	 * Look through contain_mutable_functions_walker or future PG's equivalent for new
 	 * node types before bumping this version number to fix compilation; e.g. for any
@@ -1476,7 +1476,7 @@ RouterInsertJob(Query *originalQuery)
 	}
 
 	Job *job = CreateJob(originalQuery);
-	job->requiresMasterEvaluation = RequiresMasterEvaluation(originalQuery);
+	job->requiresCoordinatorEvaluation = RequiresCoordinatorEvaluation(originalQuery);
 	job->deferredPruning = true;
 	job->partitionKeyValue = ExtractInsertPartitionKeyValue(originalQuery);
 
@@ -1496,7 +1496,7 @@ CreateJob(Query *query)
 	job->taskList = NIL;
 	job->dependentJobList = NIL;
 	job->subqueryPushdown = false;
-	job->requiresMasterEvaluation = false;
+	job->requiresCoordinatorEvaluation = false;
 	job->deferredPruning = false;
 
 	return job;
@@ -1650,8 +1650,8 @@ RouterJob(Query *originalQuery, PlannerRestrictionContext *plannerRestrictionCon
 	/* router planner should create task even if it doesn't hit a shard at all */
 	bool replacePrunedQueryWithDummy = true;
 
-	/* check if this query requires master evaluation */
-	bool requiresMasterEvaluation = RequiresMasterEvaluation(originalQuery);
+	/* check if this query requires coordinator evaluation */
+	bool requiresCoordinatorEvaluation = RequiresCoordinatorEvaluation(originalQuery);
 	FastPathRestrictionContext *fastPathRestrictionContext =
 		plannerRestrictionContext->fastPathRestrictionContext;
 
@@ -1713,7 +1713,7 @@ RouterJob(Query *originalQuery, PlannerRestrictionContext *plannerRestrictionCon
 												 relationRestrictionContext,
 												 prunedShardIntervalListList,
 												 MODIFY_TASK,
-												 requiresMasterEvaluation);
+												 requiresCoordinatorEvaluation);
 	}
 	else
 	{
@@ -1721,7 +1721,7 @@ RouterJob(Query *originalQuery, PlannerRestrictionContext *plannerRestrictionCon
 										  placementList, shardId);
 	}
 
-	job->requiresMasterEvaluation = requiresMasterEvaluation;
+	job->requiresCoordinatorEvaluation = requiresCoordinatorEvaluation;
 	return job;
 }
 
@@ -2177,10 +2177,11 @@ PlanRouterQuery(Query *originalQuery,
 	}
 
 	/*
-	 * If this is an UPDATE or DELETE query which requires master evaluation,
+	 * If this is an UPDATE or DELETE query which requires coordinator evaluation,
 	 * don't try update shard names, and postpone that to execution phase.
 	 */
-	if (!(UpdateOrDeleteQuery(originalQuery) && RequiresMasterEvaluation(originalQuery)))
+	bool isUpdateOrDelete = UpdateOrDeleteQuery(originalQuery);
+	if (!(isUpdateOrDelete && RequiresCoordinatorEvaluation(originalQuery)))
 	{
 		UpdateRelationToShardNames((Node *) originalQuery, *relationShardList);
 	}
