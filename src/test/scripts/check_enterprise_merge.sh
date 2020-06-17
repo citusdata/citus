@@ -31,6 +31,19 @@ echo_and_restore() {
         esac
 }
 
+# try_merge sees if we can merge "src" branch to "dst" branch
+# it will exit with nonzero code if the merge fails because of conflicts.
+try_merge() {
+    src=$1
+    dst=$2
+    git checkout "${dst}"
+    # this will exit since -e option is set and it will return non-zero code on conflicts.
+    git merge --no-ff --no-commit "${src}"
+    # undo whatever we happened
+    git merge --abort
+    git checkout -
+}
+
 # List executed commands. This is done so debugging this script is easier when
 # it fails. It's explicitely done after git remote add so username and password
 # are not shown in CI output (even though it's also filtered out by CircleCI)
@@ -57,23 +70,17 @@ git remote set-url --push enterprise no-pushing
 git fetch enterprise enterprise-master
 
 
-# Try to fetch the enterprise version of the branch. If it fails we assume it
-# does not exist. This seems reasonble, because even in case of other failures
-# (e.g. network) we still continue as if the enterprise version of the branch
-# does not exist.
-if ! git fetch enterprise "$PR_BRANCH" > /dev/null 2>&1 ; then
-    echo "INFO: enterprise/$PR_BRANCH was not found"
-    # If the current branch does not exist on the enterprise repo, then all we
-    # have to check is if it can be merged into enterprise master without
-    # problems.
-    # this will exit since -e option is set and it will return non-zero code on conflicts.
-    git checkout enterprise/enterprise-master
-    # Check if we can merge the PR branch into enterprise-master
-    git merge --no-ff --no-commit "origin/$PR_BRANCH"
+if try_merge "origin/$PR_BRANCH" "enterprise/enterprise-master"; then
+    echo "INFO: community PR branch could be merged into enterprise-master, so everything is good"
     exit 0
 fi
 
-# Show the top commit of the enterprise branch to make debugging easier
+if ! git fetch enterprise "$PR_BRANCH" ; then
+    echo "ERROR: enterprise/$PR_BRANCH was not found and community PR branch could not be merged into enterprise-master"
+    exit 1
+fi
+
+# Show the top commit of the enterprise PR branch to make debugging easier
 git log -n 1 "enterprise/$PR_BRANCH"
 
 # Check that this branch contains the top commit of the enterprise-master
@@ -94,4 +101,6 @@ fi
 
 # Because of the two checks above we now know that it contains both the last
 # enterprise-master and the last community PR commit. The only way that's
-# possible is if they were merged. So we are happy now.
+# possible is if they were merged. So we are happy now. Just to be sure, we
+# still try doing the merge.
+try_merge "enterprise/$PR_BRANCH" "enterprise/enterprise-master"
