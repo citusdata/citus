@@ -1,18 +1,17 @@
 #!/bin/bash
 
+# Testing this script locally requires you to set the following environment
+# variables:
+# CIRCLE_BRANCH, GIT_USERNAME and GIT_TOKEN
+
 # fail if trying to reference a variable that is not set.
 set -u
 # exit immediately if a command fails
 set -e
 
 PR_BRANCH="${CIRCLE_BRANCH}"
+ENTERPRISE_REMOTE="https://${GIT_USERNAME}:${GIT_TOKEN}@github.com/citusdata/citus-enterprise"
 
-git remote add enterprise "https://${GIT_USERNAME}:${GIT_TOKEN}@github.com/citusdata/citus-enterprise"
-
-# List executed commands. This is done so debugging this script is easier when
-# it fails. It's explicitely done after git remote add so username and password
-# are not shown in CI output (even though it's also filtered out by CircleCI)
-set -x
 # For echo commands "set -x" would show the message effectively twice. Once as
 # part of the echo command shown by "set -x" and once because of the output of
 # the echo command. We do not want "set -x" to show the echo command. We only
@@ -29,12 +28,20 @@ echo_and_restore() {
         esac
 }
 
-# Prevent any pushes
-git remote set-url --push origin no-pushing
+cleanup() {
+    git remote rm enterprise 2> /dev/null || true
+}
+
+trap cleanup EXIT
+
+cleanup
+git remote add enterprise "$ENTERPRISE_REMOTE"
 git remote set-url --push enterprise no-pushing
 
-git config user.email "citus-bot@microsoft.com"
-git config user.name "citus bot"
+# List executed commands. This is done so debugging this script is easier when
+# it fails. It's explicitely done after git remote add so username and password
+# are not shown in CI output (even though it's also filtered out by CircleCI)
+set -x
 
 # Fetch enterprise-master
 git fetch enterprise enterprise-master
@@ -50,7 +57,7 @@ if ! git fetch enterprise "$PR_BRANCH" > /dev/null 2>&1 ; then
     # have to check is if it can be merged into enterprise master without
     # problems.
     # this will exit since -e option is set and it will return non-zero code on conflicts.
-    git checkout enterprise-master
+    git checkout enterprise/enterprise-master
     # Check if we can merge the PR branch into enterprise-master
     git merge --no-ff --no-commit "origin/$PR_BRANCH"
     exit 0
