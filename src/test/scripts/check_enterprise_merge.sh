@@ -8,6 +8,8 @@
 set -u
 # exit immediately if a command fails
 set -e
+# Fail on pipe failures
+set -o pipefail
 
 PR_BRANCH="${CIRCLE_BRANCH}"
 ENTERPRISE_REMOTE="https://${GIT_USERNAME}:${GIT_TOKEN}@github.com/citusdata/citus-enterprise"
@@ -19,6 +21,7 @@ ENTERPRISE_REMOTE="https://${GIT_USERNAME}:${GIT_TOKEN}@github.com/citusdata/cit
 # a trick to do so. Read the StackOverflow post below to understand why this
 # works and what this works around.
 # Source: https://superuser.com/a/1141026/242593
+shopt -s expand_aliases
 alias echo='{ save_flags="$-"; set +x;} 2> /dev/null; echo_and_restore'
 echo_and_restore() {
         builtin echo "$*"
