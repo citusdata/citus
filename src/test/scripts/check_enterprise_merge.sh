@@ -60,7 +60,7 @@ git fetch enterprise enterprise-master
 
 git checkout "enterprise/enterprise-master"
 
-if git merge "origin/$PR_BRANCH"; then
+if git merge --no-commit "origin/$PR_BRANCH"; then
     echo "INFO: community PR branch could be merged into enterprise-master, so everything is good"
     exit 0
 fi
@@ -86,4 +86,4 @@ fi
 
 # Now check if we can merge the enterprise PR into enterprise-master without
 # issues.
-git merge "enterprise/$PR_BRANCH"
+git merge --no-commit "enterprise/$PR_BRANCH"
