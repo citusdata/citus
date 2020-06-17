@@ -15,7 +15,7 @@
 
 #include "distributed/pg_version_constants.h"
 
-#include "distributed/merge_planner.h"
+#include "distributed/combine_query_planner.h"
 #include "nodes/plannodes.h"
 #if PG_VERSION_NUM >= PG_VERSION_12
 #include "nodes/nodeFuncs.h"

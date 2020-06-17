@@ -48,7 +48,7 @@
 #include "distributed/multi_join_order.h"
 #include "distributed/multi_logical_optimizer.h"
 #include "distributed/distributed_planner.h"
-#include "distributed/merge_planner.h"
+#include "distributed/combine_query_planner.h"
 #include "distributed/multi_router_planner.h"
 #include "distributed/multi_server_executor.h"
 #include "distributed/pg_dist_partition.h"

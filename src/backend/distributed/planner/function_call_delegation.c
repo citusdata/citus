@@ -378,7 +378,7 @@ TryToDelegateFunctionCall(DistributedPlanningContext *planContext)
 
 	distributedPlan = CitusMakeNode(DistributedPlan);
 	distributedPlan->workerJob = job;
-	distributedPlan->masterQuery = NULL;
+	distributedPlan->combineQuery = NULL;
 	distributedPlan->routerExecutable = true;
 	distributedPlan->expectResults = true;
 

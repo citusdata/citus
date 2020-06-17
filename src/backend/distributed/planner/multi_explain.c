@@ -34,7 +34,7 @@
 #include "distributed/multi_explain.h"
 #include "distributed/multi_logical_optimizer.h"
 #include "distributed/multi_logical_planner.h"
-#include "distributed/merge_planner.h"
+#include "distributed/combine_query_planner.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_router_planner.h"
 #include "distributed/distributed_planner.h"
