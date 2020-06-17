@@ -1,3 +1,9 @@
+### citus v9.3.1 (Jun 17, 2020) ###
+
+* Adds support to partially push down tdigest aggregates
+
+* Fixes a crash that occurs when inserting implicitly coerced constants
+
 ### citus v9.2.5 (Jun 17, 2020) ###
 
 * Adds support to partially push down tdigest aggregates
