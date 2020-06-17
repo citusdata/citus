@@ -4,12 +4,16 @@
 set -u
 # exit immediately if a command fails
 set -e
-# list executed commands
-set -x
 
 PR_BRANCH="${CIRCLE_BRANCH}"
 
 git remote add enterprise "https://${GIT_USERNAME}:${GIT_TOKEN}@github.com/citusdata/citus-enterprise"
+
+# List executed commands. This is done so debugging this script is easier when
+# it fails. It's explicitely done after git remote add so username and password
+# are not shown in CI output (even though it's also filtered out by CircleCI)
+set -x
+
 # Prevent any pushes
 git remote set-url --push origin no-pushing
 git remote set-url --push enterprise no-pushing
