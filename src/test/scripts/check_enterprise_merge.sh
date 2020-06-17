@@ -75,14 +75,6 @@ fi
 # Show the top commit of the enterprise PR branch to make debugging easier
 git log -n 1 "enterprise/$PR_BRANCH"
 
-# Check that this branch contains the top commit of the enterprise-master
-# branch. If it does not it means it might not be able to be merged into it
-# automatically. So we fail in that case.
-if ! git merge-base --is-ancestor enterprise/enterprise-master "enterprise/$PR_BRANCH" ; then
-    echo "ERROR: enterprise/$PR_BRANCH is not up to date with enterprise-master"
-    exit 1
-fi
-
 # Check that this branch contains the top commit of the current community PR
 # branch. If it does not it means it's not up to date with the current PR, so
 # the enterprise branch should be updated.
@@ -91,8 +83,6 @@ if ! git merge-base --is-ancestor "origin/$PR_BRANCH" "enterprise/$PR_BRANCH" ; 
     exit 1
 fi
 
-# Because of the two checks above we now know that it contains both the last
-# enterprise-master and the last community PR commit. The only way that's
-# possible is if they were merged. So we are happy now. Just to be sure, we
-# still try doing the merge.
+# Now check if we can merge the enterprise PR into enterprise-master without
+# issues.
 git merge "enterprise/$PR_BRANCH"
