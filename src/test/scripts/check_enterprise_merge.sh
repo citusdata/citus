@@ -32,13 +32,14 @@ echo_and_restore() {
 }
 
 # List executed commands. This is done so debugging this script is easier when
-# it fails. It's explicitely done after git remote add so username and password
+# it fails. It's explicitly done after git remote add so username and password
 # are not shown in CI output (even though it's also filtered out by CircleCI)
 set -x
 
-# Clone current git repo to a temporary working directory and go there
+# Clone current git repo (which should be community) to a temporary working
+# directory and go there
 GIT_DIR_ROOT="$(git rev-parse --show-toplevel)"
-TMP_GIT_DIR="$(mktemp -d -t citus-merge-check.XXXXXXXXX)"
+TMP_GIT_DIR="$(mktemp --directory -t citus-merge-check.XXXXXXXXX)"
 git clone "$GIT_DIR_ROOT" "$TMP_GIT_DIR"
 cd "$TMP_GIT_DIR"
 
@@ -46,7 +47,7 @@ cd "$TMP_GIT_DIR"
 git config user.email "citus-bot@microsoft.com"
 git config user.name "citus bot"
 
-# Disable "set -x" again, because $ENTERPRISE_REMOTE contains passwords
+# Disable "set -x" temporarily, because $ENTERPRISE_REMOTE contains passwords
 { set +x ; } 2> /dev/null
 git remote add enterprise "$ENTERPRISE_REMOTE"
 set -x
