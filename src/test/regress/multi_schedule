@@ -106,7 +106,7 @@ test: multi_query_directory_cleanup
 test: multi_task_assignment_policy multi_cross_shard
 test: multi_utility_statements
 test: multi_dropped_column_aliases foreign_key_restriction_enforcement
-test: multi_binary_master_copy_format
+test: multi_binary_master_copy_format binary_protocol
 
 # ----------
 # Parallel TPC-H tests to check our distributed execution behavior

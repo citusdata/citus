@@ -881,10 +881,36 @@ SET citus.shard_replication_factor = 2;
 CREATE TABLE dist_table_rep2(a int);
 SELECT create_distributed_table('dist_table_rep2', 'a');
 
-EXPLAIN :default_analyze_flags INSERT INTO dist_table_rep1 VALUES(1), (2), (3), (4) RETURNING *;
+EXPLAIN :default_analyze_flags INSERT INTO dist_table_rep1 VALUES(1), (2), (3), (4), (10), (100) RETURNING *;
 EXPLAIN :default_analyze_flags SELECT * from dist_table_rep1;
 
-EXPLAIN :default_analyze_flags INSERT INTO dist_table_rep2 VALUES(1), (2), (3), (4) RETURNING *;
+EXPLAIN :default_analyze_flags INSERT INTO dist_table_rep2 VALUES(1), (2), (3), (4), (10), (100) RETURNING *;
 EXPLAIN :default_analyze_flags SELECT * from dist_table_rep2;
+
+prepare p1 as SELECT * FROM dist_table_rep1;
+EXPLAIN :default_analyze_flags EXECUTE p1;
+EXPLAIN :default_analyze_flags EXECUTE p1;
+EXPLAIN :default_analyze_flags EXECUTE p1;
+EXPLAIN :default_analyze_flags EXECUTE p1;
+EXPLAIN :default_analyze_flags EXECUTE p1;
+EXPLAIN :default_analyze_flags EXECUTE p1;
+
+prepare p2 AS SELECT * FROM dist_table_rep1 WHERE a = $1;
+EXPLAIN :default_analyze_flags EXECUTE p2(1);
+EXPLAIN :default_analyze_flags EXECUTE p2(1);
+EXPLAIN :default_analyze_flags EXECUTE p2(1);
+EXPLAIN :default_analyze_flags EXECUTE p2(1);
+EXPLAIN :default_analyze_flags EXECUTE p2(1);
+EXPLAIN :default_analyze_flags EXECUTE p2(1);
+EXPLAIN :default_analyze_flags EXECUTE p2(10);
+EXPLAIN :default_analyze_flags EXECUTE p2(100);
+
+prepare p3 AS SELECT * FROM dist_table_rep1 WHERE a = 1;
+EXPLAIN :default_analyze_flags EXECUTE p3;
+EXPLAIN :default_analyze_flags EXECUTE p3;
+EXPLAIN :default_analyze_flags EXECUTE p3;
+EXPLAIN :default_analyze_flags EXECUTE p3;
+EXPLAIN :default_analyze_flags EXECUTE p3;
+EXPLAIN :default_analyze_flags EXECUTE p3;
 
 DROP TABLE dist_table_rep1, dist_table_rep2;

@@ -32,11 +32,10 @@ struct TupleDestination
 	/* putTuple implements custom processing of a tuple */
 	void (*putTuple)(TupleDestination *self, Task *task,
 					 int placementIndex, int queryNumber,
-					 HeapTuple tuple);
+					 HeapTuple tuple, uint64 tupleLibpqSize);
 
 	/* tupleDescForQuery returns tuple descriptor for a query number. Can return NULL. */
 	TupleDesc (*tupleDescForQuery)(TupleDestination *self, int queryNumber);
-	Task *originalTask;
 };
 
 extern TupleDestination * CreateTupleStoreTupleDest(Tuplestorestate *tupleStore, TupleDesc

@@ -339,13 +339,16 @@ typedef struct Task
 	struct TupleDestination *tupleDest;
 
 	/*
+	 * totalReceivedTupleData only counts the data for a single placement. So
+	 * for RETURNING DML this is not really correct. This is used by
+	 * EXPLAIN ANALYZE, to display the amount of received bytes.
+	 */
+	uint64 totalReceivedTupleData;
+
+	/*
 	 * EXPLAIN ANALYZE output fetched from worker. This is saved to be used later
 	 * by RemoteExplain().
-	 *
-	 * totalReceivedData only counts the data for a single placement. So for
-	 * RETURNING DML this is not really correct.
 	 */
-	uint64 totalReceivedData;
 	char *fetchedExplainAnalyzePlan;
 	int fetchedExplainAnalyzePlacementIndex;
 } Task;
