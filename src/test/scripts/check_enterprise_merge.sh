@@ -31,6 +31,17 @@ echo_and_restore() {
         esac
 }
 
+# Make sure that on a failing exit we show a useful message
+hint_on_fail() {
+    exit_code=$?
+    if [ $exit_code != 0 ]; then
+        echo HINT: To solve this failure look here: https://github.com/citusdata/citus/blob/master/src/test/scripts/README.md#check-merge-to-enterprise-job
+    fi
+    exit $exit_code
+}
+trap hint_on_fail EXIT
+
+
 # List executed commands. This is done so debugging this script is easier when
 # it fails. It's explicitly done after git remote add so username and password
 # are not shown in CI output (even though it's also filtered out by CircleCI)

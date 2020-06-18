@@ -9,8 +9,9 @@ below steps. First make sure these two things are the case:
 
 1. Get approval from your reviewer for `community/$PR_BRANCH`. Only follow the
    next steps after you are about to merge the branch to community master.
-2. Make sure your commits are in a nice state, since you will not be able to do
-   "squash and merge" on Github.
+2. Make sure your commits are in a nice state, since you should not do
+   "squash and merge" on Github later. Otherwise you will certainly get
+   duplicate commits and possibly get merge conflicts with enterprise again.
 
 Once that's done, you need to create a merged version of your PR branch on the
 enterprise repo. For example if `community` is added as a remote in
