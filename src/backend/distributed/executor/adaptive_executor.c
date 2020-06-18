@@ -644,6 +644,7 @@ static void ProcessWaitEvents(DistributedExecution *execution, WaitEvent *events
 static long MillisecondsBetweenTimestamps(instr_time startTime, instr_time endTime);
 static HeapTuple BuildTupleFromBytes(AttInMetadata *attinmeta, fmStringInfo *values);
 static AttInMetadata * TupleDescGetAttBinaryInMetadata(TupleDesc tupdesc);
+static int WorkerPoolCompare(const void *lhsKey, const void *rhsKey);
 static void SetAttributeInputMetadata(DistributedExecution *execution,
 									  ShardCommandExecution *shardCommandExecution);
 
@@ -1907,6 +1908,19 @@ AssignTasksToConnectionsOrWorkerPool(DistributedExecution *execution)
 	}
 
 	/*
+	 * We sort the workerList because adaptive connection management
+	 * (e.g., OPTIONAL_CONNECTION) requires any concurrent executions
+	 * to wait for the connections in the same order to prevent any
+	 * starvation. If we don't sort, we might end up with:
+	 *      Execution 1: Get connection for worker 1, wait for worker 2
+	 *      Execution 2: Get connection for worker 2, wait for worker 1
+	 *
+	 *  and, none could proceed. Instead, we enforce every execution establish
+	 *  the required connections to workers in the same order.
+	 */
+	execution->workerList = SortList(execution->workerList, WorkerPoolCompare);
+
+	/*
 	 * The executor claims connections exclusively to make sure that calls to
 	 * StartNodeUserDatabaseConnection do not return the same connections.
 	 *
@@ -1920,6 +1934,31 @@ AssignTasksToConnectionsOrWorkerPool(DistributedExecution *execution)
 
 		ClaimConnectionExclusively(connection);
 	}
+}
+
+
+/*
+ * WorkerPoolCompare is based on WorkerNodeCompare function.
+ *
+ * The function compares two worker nodes by their host name and port
+ * number.
+ */
+static int
+WorkerPoolCompare(const void *lhsKey, const void *rhsKey)
+{
+	const WorkerPool *workerLhs = *(const WorkerPool **) lhsKey;
+	const WorkerPool *workerRhs = *(const WorkerPool **) rhsKey;
+
+	int nameCompare = strncmp(workerLhs->nodeName, workerRhs->nodeName,
+							  WORKER_LENGTH);
+
+	if (nameCompare != 0)
+	{
+		return nameCompare;
+	}
+
+	int portCompare = workerLhs->nodePort - workerRhs->nodePort;
+	return portCompare;
 }
 
 
