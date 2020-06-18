@@ -1,0 +1,36 @@
+create schema test_pg13;
+set search_path to test_pg13;
+SET citus.shard_replication_factor to 1;
+SET citus.shard_count to 2;
+SET citus.next_shard_id TO 65000;
+CREATE TABLE dist_table (name char, age int);
+CREATE INDEX name_index on dist_table(name);
+SELECT create_distributed_table('dist_table', 'name');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SET client_min_messages to DEBUG1;
+SET citus.log_remote_commands to ON;
+-- make sure vacuum parallel doesn't error out
+VACUUM (PARALLEL 2) dist_table;
+NOTICE:  issuing VACUUM (PARALLEL 2) test_pg13.dist_table_65000
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing VACUUM (PARALLEL 2) test_pg13.dist_table_65001
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+VACUUM (PARALLEL 0) dist_table;
+NOTICE:  issuing VACUUM (PARALLEL 0) test_pg13.dist_table_65000
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing VACUUM (PARALLEL 0) test_pg13.dist_table_65001
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+-- This should error out since -5 is not valid.
+VACUUM (PARALLEL -5) dist_table;
+ERROR:  parallel vacuum degree must be between 0 and 1024
+-- This should error out since no number is given
+VACUUM (PARALLEL) dist_table;
+ERROR:  parallel option requires a value between 0 and 1024
+RESET client_min_messages;
+RESET citus.log_remote_commands;
+drop schema test_pg13 cascade;
+NOTICE:  drop cascades to table dist_table

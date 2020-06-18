@@ -29,7 +29,10 @@
 #include "storage/lmgr.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
+#include "postmaster/bgworker_internals.h"
 
+
+#define VACUUM_PARALLEL_NOTSET -2
 /*
  * Subset of VacuumParams we care about
  */
@@ -40,8 +43,11 @@ typedef struct CitusVacuumParams
 	VacOptTernaryValue truncate;
 	VacOptTernaryValue index_cleanup;
 #endif
-} CitusVacuumParams;
 
+#if PG_VERSION_NUM >= PG_VERSION_13
+	int nworkers;
+#endif
+} CitusVacuumParams;
 
 /* Local functions forward declarations for processing distributed table commands */
 static bool IsDistributedVacuumStmt(int vacuumOptions, List *vacuumRelationIdList);
@@ -285,6 +291,9 @@ DeparseVacuumStmtPrefix(CitusVacuumParams vacuumParams)
 		&& vacuumParams.truncate == VACOPT_TERNARY_DEFAULT &&
 		vacuumParams.index_cleanup == VACOPT_TERNARY_DEFAULT
 #endif
+#if PG_VERSION_NUM >= PG_VERSION_13
+		&& vacuumParams.nworkers == VACUUM_PARALLEL_NOTSET
+#endif		
 		)
 	{
 		return vacuumPrefix->data;
@@ -338,6 +347,12 @@ DeparseVacuumStmtPrefix(CitusVacuumParams vacuumParams)
 							   vacuumParams.index_cleanup == VACOPT_TERNARY_ENABLED ?
 							   "INDEX_CLEANUP," : "INDEX_CLEANUP false,"
 							   );
+	}
+#endif
+
+#if PG_VERSION_NUM >= PG_VERSION_13
+	if (vacuumParams.nworkers != VACUUM_PARALLEL_NOTSET) {
+		appendStringInfo(vacuumPrefix, "PARALLEL %d,", vacuumParams.nworkers);
 	}
 #endif
 
@@ -421,6 +436,8 @@ ExtractVacuumTargetRels(VacuumStmt *vacuumStmt)
 
 /*
  * This is mostly ExecVacuum from Postgres's commands/vacuum.c
+ * Note that ExecVacuum does an actual vacuum as well and we don't want
+ * that to happen in the coordinator hence we copied the rest here.
  */
 static CitusVacuumParams
 VacuumStmtParams(VacuumStmt *vacstmt)
@@ -436,6 +453,9 @@ VacuumStmtParams(VacuumStmt *vacstmt)
 	/* Set default value */
 	params.index_cleanup = VACOPT_TERNARY_DEFAULT;
 	params.truncate = VACOPT_TERNARY_DEFAULT;
+	#if PG_VERSION_NUM >= PG_VERSION_13
+		params.nworkers = VACUUM_PARALLEL_NOTSET;
+	#endif
 
 	/* Parse options list */
 	DefElem *opt = NULL;
@@ -484,6 +504,30 @@ VacuumStmtParams(VacuumStmt *vacstmt)
 			params.truncate = defGetBoolean(opt) ? VACOPT_TERNARY_ENABLED :
 							  VACOPT_TERNARY_DISABLED;
 		}
+		#if PG_VERSION_NUM >= PG_VERSION_13
+		else if (strcmp(opt->defname, "parallel") == 0) {
+			
+			if (opt->arg == NULL)
+			{
+				ereport(ERROR,
+						(errcode(ERRCODE_SYNTAX_ERROR),
+						 errmsg("parallel option requires a value between 0 and %d",
+								MAX_PARALLEL_WORKER_LIMIT)));
+			}
+			else
+			{
+				int			nworkers;
+				nworkers = defGetInt32(opt);
+				if (nworkers < 0 || nworkers > MAX_PARALLEL_WORKER_LIMIT)
+					ereport(ERROR,
+							(errcode(ERRCODE_SYNTAX_ERROR),
+							 errmsg("parallel vacuum degree must be between 0 and %d",
+									MAX_PARALLEL_WORKER_LIMIT)));
+
+				params.nworkers = nworkers;
+			}
+		}
+		#endif
 		else
 		{
 			ereport(ERROR,
