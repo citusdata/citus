@@ -42,6 +42,12 @@ jobs:
           name: 'Check if changed'
           command: git diff --exit-code
       - run:
+          name: 'Check for C-style comments in migration files'
+          command: ci/disallow_c_comments_in_migrations.sh
+      - run:
+          name: 'Check if changed'
+          command: git diff --exit-code
+      - run:
           name: 'Check for banned C API usage'
           command: ci/banned.h.sh
   check-sql-snapshots:
