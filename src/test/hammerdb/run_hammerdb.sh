@@ -32,7 +32,7 @@ ssh-add
 ssh-keygen -y -f ~/.ssh/id_rsa > ~/.ssh/id_rsa.pub
 
 now=$(date +"%m_%d_%Y_%s")
-new_branch_name=delete_me/"${rg}"/"${now}"
+new_branch_name=citus_github_push/"${rg}"/"${now}"
 git checkout -b "${new_branch_name}"
 
 cd ./fabfile/hammerdb_confs
