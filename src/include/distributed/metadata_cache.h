@@ -73,9 +73,6 @@ typedef struct
 	int shardIntervalArrayLength;
 	ShardInterval **sortedShardIntervalArray;
 
-	/* map of shardId to index in sortedShardIntervalArray */
-	struct ShardIdIndexSlot *shardIdIndexHash;
-
 	/* comparator for partition column's type, NULL if DISTRIBUTE_BY_NONE */
 	FmgrInfo *shardColumnCompareFunction;
 
@@ -140,7 +137,7 @@ extern int32 GetLocalGroupId(void);
 extern List * DistTableOidList(void);
 extern List * ReferenceTableOidList(void);
 extern void CitusTableCacheFlushInvalidatedEntries(void);
-extern Oid LookupShardRelation(int64 shardId, bool missing_ok);
+extern Oid LookupShardRelationFromCatalog(int64 shardId, bool missing_ok);
 extern List * ShardPlacementList(uint64 shardId);
 extern void CitusInvalidateRelcacheByRelid(Oid relationId);
 extern void CitusInvalidateRelcacheByShardId(int64 shardId);

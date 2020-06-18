@@ -213,6 +213,11 @@ CitusExecutorRun(QueryDesc *queryDesc,
 
 		if (ExecutorLevel == 0 && PlannerLevel == 0)
 		{
+			/*
+			 * We are leaving Citus code so no one should have any references to
+			 * cache entries. Release them now to not hold onto memory in long
+			 * transactions.
+			 */
 			CitusTableCacheFlushInvalidatedEntries();
 		}
 	}
@@ -224,11 +229,6 @@ CitusExecutorRun(QueryDesc *queryDesc,
 		}
 
 		ExecutorLevel--;
-
-		if (ExecutorLevel == 0 && PlannerLevel == 0)
-		{
-			CitusTableCacheFlushInvalidatedEntries();
-		}
 
 		PG_RE_THROW();
 	}
