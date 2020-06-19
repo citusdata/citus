@@ -90,7 +90,15 @@ typedef struct CitusTableCacheEntrySlot
 {
 	/* lookup key - must be first. A pg_class.oid oid. */
 	Oid relationId;
-	CitusTableCacheEntry *data;
+
+	/* Citus table metadata (NULL for local tables) */
+	CitusTableCacheEntry *citusTableMetadata;
+
+	/*
+	 * If isValid is false, we need to recheck whether the relation ID
+	 * belongs to a Citus or not.
+	 */
+	bool isValid;
 } CitusTableCacheEntrySlot;
 
 
@@ -200,7 +208,7 @@ static bool IsCitusTableViaCatalog(Oid relationId);
 static ShardIdCacheEntry * LookupShardIdCacheEntry(int64 shardId);
 static CitusTableCacheEntry * LookupCitusTableCacheEntry(Oid relationId);
 static CitusTableCacheEntry * LookupCitusTableCacheEntry(Oid relationId);
-static void BuildCitusTableCacheEntry(CitusTableCacheEntry *cacheEntry);
+static CitusTableCacheEntry * BuildCitusTableCacheEntry(Oid relationId);
 static void BuildCachedShardList(CitusTableCacheEntry *cacheEntry);
 static void PrepareWorkerNodeCache(void);
 static bool CheckInstalledVersion(int elevel);
@@ -243,6 +251,7 @@ static ShardPlacement * ResolveGroupShardPlacement(
 	GroupShardPlacement *groupShardPlacement, CitusTableCacheEntry *tableEntry,
 	int shardIndex);
 static Oid LookupEnumValueId(Oid typeId, char *valueName);
+static void InvalidateCitusTableCacheEntrySlot(CitusTableCacheEntrySlot *cacheSlot);
 static void InvalidateDistTableCache(void);
 static void InvalidateDistObjectCache(void);
 
@@ -290,16 +299,12 @@ IsCitusTable(Oid relationId)
 {
 	CitusTableCacheEntry *cacheEntry = LookupCitusTableCacheEntry(relationId);
 
-	/*
-	 * If extension hasn't been created, or has the wrong version and the
-	 * table isn't a distributed one, LookupCitusTableCacheEntry() will return NULL.
-	 */
 	if (!cacheEntry)
 	{
 		return false;
 	}
 
-	return cacheEntry->isCitusTable;
+	return true;
 }
 
 
@@ -357,7 +362,6 @@ CitusTableList(void)
 	foreach_oid(relationId, distTableOidList)
 	{
 		CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
-		Assert(cacheEntry->isCitusTable);
 
 		distributedTableList = lappend(distributedTableList, cacheEntry);
 	}
@@ -378,8 +382,6 @@ LoadShardInterval(uint64 shardId)
 	ShardIdCacheEntry *shardIdEntry = LookupShardIdCacheEntry(shardId);
 	CitusTableCacheEntry *tableEntry = shardIdEntry->tableEntry;
 	int shardIndex = shardIdEntry->shardIndex;
-
-	Assert(tableEntry->isCitusTable);
 
 	/* the offset better be in a valid range */
 	Assert(shardIndex < tableEntry->shardIntervalArrayLength);
@@ -796,7 +798,7 @@ GetCitusTableCacheEntry(Oid distributedRelationId)
 	CitusTableCacheEntry *cacheEntry =
 		LookupCitusTableCacheEntry(distributedRelationId);
 
-	if (cacheEntry && cacheEntry->isCitusTable)
+	if (cacheEntry)
 	{
 		return cacheEntry;
 	}
@@ -877,27 +879,37 @@ LookupCitusTableCacheEntry(Oid relationId)
 	/* return valid matches */
 	if (foundInCache)
 	{
-		if (cacheSlot->data->isValid)
+		if (cacheSlot->isValid)
 		{
-			return cacheSlot->data;
+			return cacheSlot->citusTableMetadata;
 		}
 		else
 		{
 			/*
-			 * This happens there was an out of memory error while building
-			 * the entry. Fortunately, ResetCitusTableCacheEntry knows how
-			 * to deal with partial entries.
+			 * An invalidation was received or we encountered an OOM while building
+			 * the cache entry. We need to rebuild it.
 			 */
-			ResetCitusTableCacheEntry(cacheSlot->data);
+
+			if (cacheSlot->citusTableMetadata)
+			{
+				/*
+				 * The CitusTableCacheEntry might still be in use. We therefore do
+				 * not reset it until the end of the transaction.
+				 */
+				MemoryContext oldContext =
+					MemoryContextSwitchTo(MetadataCacheMemoryContext);
+
+				DistTableCacheExpired = lappend(DistTableCacheExpired,
+												cacheSlot->citusTableMetadata);
+
+				MemoryContextSwitchTo(oldContext);
+			}
 		}
 	}
 
 	/* zero out entry, but not the key part */
 	memset(((char *) cacheSlot) + sizeof(Oid), 0,
 		   sizeof(CitusTableCacheEntrySlot) - sizeof(Oid));
-	cacheSlot->data =
-		MemoryContextAllocZero(MetadataCacheMemoryContext, sizeof(CitusTableCacheEntry));
-	cacheSlot->data->relationId = relationId;
 
 	/*
 	 * We disable interrupts while creating the cache entry because loading
@@ -907,15 +919,17 @@ LookupCitusTableCacheEntry(Oid relationId)
 	 */
 	HOLD_INTERRUPTS();
 
-	/* actually fill out entry */
-	BuildCitusTableCacheEntry(cacheSlot->data);
+	cacheSlot->citusTableMetadata = BuildCitusTableCacheEntry(relationId);
 
-	/* and finally mark as valid */
-	cacheSlot->data->isValid = true;
+	/*
+	 * Mark it as valid only after building the full entry, such that any
+	 * error that happened during the build would trigger a rebuild.
+	 */
+	cacheSlot->isValid = true;
 
 	RESUME_INTERRUPTS();
 
-	return cacheSlot->data;
+	return cacheSlot->citusTableMetadata;
 }
 
 
@@ -1025,29 +1039,31 @@ LookupDistObjectCacheEntry(Oid classid, Oid objid, int32 objsubid)
  * BuildCitusTableCacheEntry is a helper routine for
  * LookupCitusTableCacheEntry() for building the cache contents.
  */
-static void
-BuildCitusTableCacheEntry(CitusTableCacheEntry *cacheEntry)
+static CitusTableCacheEntry *
+BuildCitusTableCacheEntry(Oid relationId)
 {
+	Relation pgDistPartition = heap_open(DistPartitionRelationId(), AccessShareLock);
+	HeapTuple distPartitionTuple =
+		LookupDistPartitionTuple(pgDistPartition, relationId);
+
+	if (distPartitionTuple == NULL)
+	{
+		/* not a distributed table, done */
+		heap_close(pgDistPartition, NoLock);
+		return NULL;
+	}
+
 	MemoryContext oldContext = NULL;
 	Datum datumArray[Natts_pg_dist_partition];
 	bool isNullArray[Natts_pg_dist_partition];
 
-	Relation pgDistPartition = heap_open(DistPartitionRelationId(), AccessShareLock);
-	HeapTuple distPartitionTuple =
-		LookupDistPartitionTuple(pgDistPartition, cacheEntry->relationId);
-
-	/* not a distributed table, done */
-	if (distPartitionTuple == NULL)
-	{
-		cacheEntry->isCitusTable = false;
-		heap_close(pgDistPartition, NoLock);
-		return;
-	}
-
-	cacheEntry->isCitusTable = true;
-
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistPartition);
 	heap_deform_tuple(distPartitionTuple, tupleDescriptor, datumArray, isNullArray);
+
+	CitusTableCacheEntry *cacheEntry =
+		MemoryContextAllocZero(MetadataCacheMemoryContext, sizeof(CitusTableCacheEntry));
+
+	cacheEntry->relationId = relationId;
 
 	cacheEntry->partitionMethod = datumArray[Anum_pg_dist_partition_partmethod - 1];
 	Datum partitionKeyDatum = datumArray[Anum_pg_dist_partition_partkey - 1];
@@ -1134,6 +1150,10 @@ BuildCitusTableCacheEntry(CitusTableCacheEntry *cacheEntry)
 	MemoryContextSwitchTo(oldContext);
 
 	heap_close(pgDistPartition, NoLock);
+
+	cacheEntry->isValid = true;
+
+	return cacheEntry;
 }
 
 
@@ -3457,16 +3477,11 @@ InvalidateDistRelationCacheCallback(Datum argument, Oid relationId)
 		void *hashKey = (void *) &relationId;
 		bool foundInCache = false;
 
-
 		CitusTableCacheEntrySlot *cacheSlot =
-			hash_search(DistTableCacheHash, hashKey, HASH_REMOVE, &foundInCache);
+			hash_search(DistTableCacheHash, hashKey, HASH_FIND, &foundInCache);
 		if (foundInCache)
 		{
-			cacheSlot->data->isValid = false;
-
-			MemoryContext oldContext = MemoryContextSwitchTo(MetadataCacheMemoryContext);
-			DistTableCacheExpired = lappend(DistTableCacheExpired, cacheSlot->data);
-			MemoryContextSwitchTo(oldContext);
+			InvalidateCitusTableCacheEntrySlot(cacheSlot);
 		}
 
 		/*
@@ -3488,6 +3503,25 @@ InvalidateDistRelationCacheCallback(Datum argument, Oid relationId)
 
 
 /*
+ * InvalidateCitusTableCacheEntrySlot marks a CitusTableCacheEntrySlot as invalid,
+ * meaning it needs to be rebuilt and the citusTableMetadata (if any) should be
+ * released.
+ */
+static void
+InvalidateCitusTableCacheEntrySlot(CitusTableCacheEntrySlot *cacheSlot)
+{
+	/* recheck whether this is a distributed table */
+	cacheSlot->isValid = false;
+
+	if (cacheSlot->citusTableMetadata != NULL)
+	{
+		/* reload the metadata */
+		cacheSlot->citusTableMetadata->isValid = false;
+	}
+}
+
+
+/*
  * InvalidateDistTableCache marks all DistTableCacheHash entries invalid.
  */
 static void
@@ -3500,15 +3534,7 @@ InvalidateDistTableCache(void)
 
 	while ((cacheSlot = (CitusTableCacheEntrySlot *) hash_seq_search(&status)) != NULL)
 	{
-		bool foundInCache = false;
-		CitusTableCacheEntrySlot *removedSlot PG_USED_FOR_ASSERTS_ONLY =
-			hash_search(DistTableCacheHash, cacheSlot, HASH_REMOVE, &foundInCache);
-		Assert(removedSlot == cacheSlot);
-
-		cacheSlot->data->isValid = false;
-		MemoryContext oldContext = MemoryContextSwitchTo(MetadataCacheMemoryContext);
-		DistTableCacheExpired = lappend(DistTableCacheExpired, cacheSlot->data);
-		MemoryContextSwitchTo(oldContext);
+		InvalidateCitusTableCacheEntrySlot(cacheSlot);
 	}
 }
 
@@ -3545,7 +3571,7 @@ FlushDistTableCache(void)
 
 	while ((cacheSlot = (CitusTableCacheEntrySlot *) hash_seq_search(&status)) != NULL)
 	{
-		ResetCitusTableCacheEntry(cacheSlot->data);
+		ResetCitusTableCacheEntry(cacheSlot->citusTableMetadata);
 	}
 
 	hash_destroy(DistTableCacheHash);

@@ -38,10 +38,6 @@ extern int ReadFromSecondaries;
 #define GROUP_ID_UPGRADING -2
 
 
-/* internal type used by metadata_cache.c to cache shard indexes */
-struct ShardIdIndexSlot;
-
-
 /*
  * Representation of a table's metadata that is frequently used for
  * distributed execution. Cached.
@@ -57,7 +53,6 @@ typedef struct
 	 */
 	bool isValid;
 
-	bool isCitusTable;
 	bool hasUninitializedShardInterval;
 	bool hasUniformHashDistribution; /* valid for hash partitioned tables */
 	bool hasOverlappingShardInterval;
