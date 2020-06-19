@@ -30,6 +30,11 @@ INSERT INTO generated_col_table VALUES (1);
 -- Make sure that we currently error out
 ALTER TABLE generated_col_table ALTER COLUMN b DROP EXPRESSION;
 
+-- alter view rename column works fine
+CREATE VIEW v AS SELECT * FROM dist_table;
+ALTER VIEW v RENAME age to new_age;
+SELECT * FROM v;
+
 RESET citus.log_remote_commands;
 
 drop schema test_pg13 cascade;
