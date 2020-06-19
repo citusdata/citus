@@ -22,6 +22,14 @@ VACUUM (PARALLEL -5) dist_table;
 VACUUM (PARALLEL) dist_table;
 
 RESET client_min_messages;
+
+-- test alter table alter column drop expression
+CREATE TABLE generated_col_table(a int, b int GENERATED ALWAYS AS (a * 10) STORED);
+SELECT create_distributed_table('generated_col_table', 'a');
+INSERT INTO generated_col_table VALUES (1);
+-- Make sure that we currently error out
+ALTER TABLE generated_col_table ALTER COLUMN b DROP EXPRESSION;
+
 RESET citus.log_remote_commands;
 
 drop schema test_pg13 cascade;
