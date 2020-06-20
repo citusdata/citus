@@ -81,4 +81,9 @@ CREATE TABLE my_table (a int, b myvarchar);
 -- like TOAST and I/O functions control (Tomas Vondra, Tom Lane)"""
 SELECT create_distributed_table('my_table', 'a');
 
+CREATE TABLE test_table(a int, b tsvector);
+SELECT create_distributed_table('test_table', 'a');
+-- we currently don't support this
+CREATE INDEX test_table_index ON test_table USING gist (b tsvector_ops(siglen = 100));
+
 drop schema test_pg13 cascade;

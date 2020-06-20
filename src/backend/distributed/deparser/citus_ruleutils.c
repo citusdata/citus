@@ -37,6 +37,7 @@
 #include "commands/defrem.h"
 #include "commands/extension.h"
 #include "distributed/citus_ruleutils.h"
+#include "distributed/listutils.h"
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/relay_utility.h"
 #include "distributed/metadata_utility.h"
@@ -813,6 +814,11 @@ deparse_index_columns(StringInfo buffer, List *indexParameterList, List *deparse
 			appendStringInfo(buffer, "%s ",
 							 NameListToQuotedString(indexElement->opclass));
 		}
+#if PG_VERSION_NUM >= PG_VERSION_13
+		if (indexElement->opclassopts != NIL) {
+			ereport(ERROR, errmsg("citus currently doesn't support this index arguments"));
+		} 
+#endif
 
 		if (indexElement->ordering != SORTBY_DEFAULT)
 		{

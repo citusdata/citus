@@ -153,8 +153,18 @@ CREATE TABLE my_table (a int, b myvarchar);
 SELECT create_distributed_table('my_table', 'a');
 ERROR:  type "test_pg13.myvarchar" does not exist
 CONTEXT:  while executing command on localhost:xxxxx
+CREATE TABLE test_table(a int, b tsvector);
+SELECT create_distributed_table('test_table', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- we currently don't support this
+CREATE INDEX test_table_index ON test_table USING gist (b tsvector_ops(siglen = 100));
+ERROR:  citus currently doesn't support this index arguments
 drop schema test_pg13 cascade;
-NOTICE:  drop cascades to 9 other objects
+NOTICE:  drop cascades to 10 other objects
 DETAIL:  drop cascades to table dist_table
 drop cascades to table generated_col_table
 drop cascades to view v
@@ -164,3 +174,4 @@ drop cascades to function myvarcharout(myvarchar)
 drop cascades to type myvarchar
 drop cascades to function myvarcharin(cstring,oid,integer)
 drop cascades to table my_table
+drop cascades to table test_table
