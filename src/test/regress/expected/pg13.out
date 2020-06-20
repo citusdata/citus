@@ -31,33 +31,16 @@ ERROR:  parallel vacuum degree must be between 0 and 1024
 VACUUM (PARALLEL) dist_table;
 ERROR:  parallel option requires a value between 0 and 1024
 RESET client_min_messages;
+RESET citus.log_remote_commands;
 -- test alter table alter column drop expression
 CREATE TABLE generated_col_table(a int, b int GENERATED ALWAYS AS (a * 10) STORED);
 SELECT create_distributed_table('generated_col_table', 'a');
-NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT worker_apply_shard_ddl_command (65002, 'test_pg13', 'CREATE TABLE test_pg13.generated_col_table (a integer, b integer GENERATED ALWAYS AS ((a * 10)) STORED)');SELECT worker_apply_shard_ddl_command (65002, 'test_pg13', 'ALTER TABLE test_pg13.generated_col_table OWNER TO postgres')
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT worker_apply_shard_ddl_command (65003, 'test_pg13', 'CREATE TABLE test_pg13.generated_col_table (a integer, b integer GENERATED ALWAYS AS ((a * 10)) STORED)');SELECT worker_apply_shard_ddl_command (65003, 'test_pg13', 'ALTER TABLE test_pg13.generated_col_table OWNER TO postgres')
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing PREPARE TRANSACTION 'citus_0_18072_182_2'
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing PREPARE TRANSACTION 'citus_0_18072_182_3'
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing COMMIT PREPARED 'citus_0_18072_182_2'
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing COMMIT PREPARED 'citus_0_18072_182_3'
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
  create_distributed_table
 ---------------------------------------------------------------------
 
 (1 row)
 
 INSERT INTO generated_col_table VALUES (1);
-NOTICE:  issuing INSERT INTO test_pg13.generated_col_table_65002 (a) VALUES (1)
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 -- Make sure that we currently error out
 ALTER TABLE generated_col_table ALTER COLUMN b DROP EXPRESSION;
 ERROR:  alter table command is currently unsupported
@@ -66,17 +49,43 @@ DETAIL:  Only ADD|DROP COLUMN, SET|DROP NOT NULL, SET|DROP DEFAULT, ADD|DROP|VAL
 CREATE VIEW v AS SELECT * FROM dist_table;
 ALTER VIEW v RENAME age to new_age;
 SELECT * FROM v;
-NOTICE:  issuing SELECT name, age AS new_age FROM test_pg13.dist_table_65000 dist_table WHERE true
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT name, age AS new_age FROM test_pg13.dist_table_65001 dist_table WHERE true
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
  name | new_age
 ---------------------------------------------------------------------
 (0 rows)
 
-RESET citus.log_remote_commands;
+-- row suffix notation works fine
+CREATE TABLE ab (a int, b int);
+SELECT create_distributed_table('ab','a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO ab SELECT i, 2 * i FROM generate_series(1,20)i;
+SELECT * FROM ab WHERE (ROW(a,b)).f1 > (ROW(10,30)).f1 ORDER BY 1,2;
+ a  | b
+---------------------------------------------------------------------
+ 11 | 22
+ 12 | 24
+ 13 | 26
+ 14 | 28
+ 15 | 30
+ 16 | 32
+ 17 | 34
+ 18 | 36
+ 19 | 38
+ 20 | 40
+(10 rows)
+
+SELECT * FROM ab WHERE (ROW(a,b)).f2 > (ROW(0,38)).f2 ORDER BY 1,2;
+ a  | b
+---------------------------------------------------------------------
+ 20 | 40
+(1 row)
+
 drop schema test_pg13 cascade;
-NOTICE:  drop cascades to 3 other objects
+NOTICE:  drop cascades to 4 other objects
 DETAIL:  drop cascades to table dist_table
 drop cascades to table generated_col_table
 drop cascades to view v
+drop cascades to table ab

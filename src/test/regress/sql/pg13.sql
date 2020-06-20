@@ -22,6 +22,7 @@ VACUUM (PARALLEL -5) dist_table;
 VACUUM (PARALLEL) dist_table;
 
 RESET client_min_messages;
+RESET citus.log_remote_commands;
 
 -- test alter table alter column drop expression
 CREATE TABLE generated_col_table(a int, b int GENERATED ALWAYS AS (a * 10) STORED);
@@ -35,6 +36,11 @@ CREATE VIEW v AS SELECT * FROM dist_table;
 ALTER VIEW v RENAME age to new_age;
 SELECT * FROM v;
 
-RESET citus.log_remote_commands;
+-- row suffix notation works fine
+CREATE TABLE ab (a int, b int);
+SELECT create_distributed_table('ab','a');
+INSERT INTO ab SELECT i, 2 * i FROM generate_series(1,20)i;
+SELECT * FROM ab WHERE (ROW(a,b)).f1 > (ROW(10,30)).f1 ORDER BY 1,2;
+SELECT * FROM ab WHERE (ROW(a,b)).f2 > (ROW(0,38)).f2 ORDER BY 1,2;
 
 drop schema test_pg13 cascade;
