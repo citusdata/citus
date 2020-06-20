@@ -83,9 +83,89 @@ SELECT * FROM ab WHERE (ROW(a,b)).f2 > (ROW(0,38)).f2 ORDER BY 1,2;
  20 | 40
 (1 row)
 
+CREATE TABLE text_table (name text);
+SELECT create_distributed_table('text_table', 'name');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO text_table VALUES ('abc');
+-- not normalized
+INSERT INTO text_table VALUES (U&'\0061\0308bc');
+SELECT name IS NORMALIZED FROM text_table ORDER BY 1;
+ is_normalized
+---------------------------------------------------------------------
+ f
+ t
+(2 rows)
+
+SELECT is_normalized(name) FROM text_table ORDER BY 1;
+ is_normalized
+---------------------------------------------------------------------
+ f
+ t
+(2 rows)
+
+SELECT normalize(name) FROM text_table ORDER BY 1;
+ normalize
+---------------------------------------------------------------------
+ abc
+ äbc
+(2 rows)
+
+INSERT INTO text_table VALUES (normalize(U&'\0061\0308bc', NFC));
+-- test unicode escape
+-- insert the word 'data' with unicode escapes
+INSERT INTO text_table VALUES(U&'d\0061t\+000061');
+-- insert the word слон
+INSERT INTO text_table VALUES(U&'\0441\043B\043E\043D');
+SELECT * FROM text_table ORDER BY 1;
+ name
+---------------------------------------------------------------------
+ abc
+ äbc
+ data
+ äbc
+ слон
+(5 rows)
+
+-- Test that we don't propagate base types
+CREATE TYPE myvarchar;
+CREATE FUNCTION myvarcharin(cstring, oid, integer) RETURNS myvarchar
+LANGUAGE internal IMMUTABLE PARALLEL SAFE STRICT AS 'varcharin';
+NOTICE:  return type myvarchar is only a shell
+CREATE FUNCTION myvarcharout(myvarchar) RETURNS cstring
+LANGUAGE internal IMMUTABLE PARALLEL SAFE STRICT AS 'varcharout';
+NOTICE:  argument type myvarchar is only a shell
+CREATE TYPE myvarchar (
+    input = myvarcharin,
+    output = myvarcharout,
+    alignment = integer,
+    storage = main
+);
+CREATE TABLE my_table (a int, b myvarchar);
+-- this will error because it seems that we don't propagate the "BASE TYPES"
+-- Alter table also errors out so this doesn't seem to apply to use:
+-- """Add ALTER TYPE options useful for extensions,
+-- like TOAST and I/O functions control (Tomas Vondra, Tom Lane)"""
+SELECT create_distributed_table('my_table', 'a');
+ERROR:  type "test_pg13.myvarchar" does not exist
+CONTEXT:  while executing command on localhost:xxxxx
+CREATE TABLE test_table(a int, b tsvector);
+SELECT create_distributed_table('test_table', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- we currently don't support this
+CREATE INDEX test_table_index ON test_table USING gist (b tsvector_ops(siglen = 100));
+ERROR:  citus currently doesn't support this index arguments
 drop schema test_pg13 cascade;
-NOTICE:  drop cascades to 4 other objects
+NOTICE:  drop cascades to 5 other objects
 DETAIL:  drop cascades to table dist_table
 drop cascades to table generated_col_table
 drop cascades to view v
 drop cascades to table ab
+drop cascades to table text_table

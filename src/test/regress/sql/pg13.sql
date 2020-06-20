@@ -43,4 +43,14 @@ INSERT INTO ab SELECT i, 2 * i FROM generate_series(1,20)i;
 SELECT * FROM ab WHERE (ROW(a,b)).f1 > (ROW(10,30)).f1 ORDER BY 1,2;
 SELECT * FROM ab WHERE (ROW(a,b)).f2 > (ROW(0,38)).f2 ORDER BY 1,2;
 
+CREATE TABLE text_table (name text);
+SELECT create_distributed_table('text_table', 'name');
+INSERT INTO text_table VALUES ('abc');
+-- not normalized
+INSERT INTO text_table VALUES (U&'\0061\0308bc');
+SELECT name IS NORMALIZED FROM text_table ORDER BY 1;
+SELECT is_normalized(name) FROM text_table ORDER BY 1;
+SELECT normalize(name) FROM text_table ORDER BY 1;
+INSERT INTO text_table VALUES (normalize(U&'\0061\0308bc', NFC));
+
 drop schema test_pg13 cascade;
