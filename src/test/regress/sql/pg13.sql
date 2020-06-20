@@ -61,4 +61,24 @@ INSERT INTO text_table VALUES(U&'d\0061t\+000061');
 INSERT INTO text_table VALUES(U&'\0441\043B\043E\043D');
 SELECT * FROM text_table ORDER BY 1;
 
+-- Test that we don't propagate base types
+CREATE TYPE myvarchar;
+CREATE FUNCTION myvarcharin(cstring, oid, integer) RETURNS myvarchar
+LANGUAGE internal IMMUTABLE PARALLEL SAFE STRICT AS 'varcharin';
+CREATE FUNCTION myvarcharout(myvarchar) RETURNS cstring
+LANGUAGE internal IMMUTABLE PARALLEL SAFE STRICT AS 'varcharout';
+CREATE TYPE myvarchar (
+    input = myvarcharin,
+    output = myvarcharout,
+    alignment = integer,
+    storage = main
+);
+
+CREATE TABLE my_table (a int, b myvarchar);
+-- this will error because it seems that we don't propagate the "BASE TYPES"
+-- Alter table also errors out so this doesn't seem to apply to use:
+-- """Add ALTER TYPE options useful for extensions,
+-- like TOAST and I/O functions control (Tomas Vondra, Tom Lane)"""
+SELECT create_distributed_table('my_table', 'a');
+
 drop schema test_pg13 cascade;

@@ -131,10 +131,36 @@ SELECT * FROM text_table ORDER BY 1;
  слон
 (5 rows)
 
+-- Test that we don't propagate base types
+CREATE TYPE myvarchar;
+CREATE FUNCTION myvarcharin(cstring, oid, integer) RETURNS myvarchar
+LANGUAGE internal IMMUTABLE PARALLEL SAFE STRICT AS 'varcharin';
+NOTICE:  return type myvarchar is only a shell
+CREATE FUNCTION myvarcharout(myvarchar) RETURNS cstring
+LANGUAGE internal IMMUTABLE PARALLEL SAFE STRICT AS 'varcharout';
+NOTICE:  argument type myvarchar is only a shell
+CREATE TYPE myvarchar (
+    input = myvarcharin,
+    output = myvarcharout,
+    alignment = integer,
+    storage = main
+);
+CREATE TABLE my_table (a int, b myvarchar);
+-- this will error because it seems that we don't propagate the "BASE TYPES"
+-- Alter table also errors out so this doesn't seem to apply to use:
+-- """Add ALTER TYPE options useful for extensions,
+-- like TOAST and I/O functions control (Tomas Vondra, Tom Lane)"""
+SELECT create_distributed_table('my_table', 'a');
+ERROR:  type "test_pg13.myvarchar" does not exist
+CONTEXT:  while executing command on localhost:xxxxx
 drop schema test_pg13 cascade;
-NOTICE:  drop cascades to 5 other objects
+NOTICE:  drop cascades to 9 other objects
 DETAIL:  drop cascades to table dist_table
 drop cascades to table generated_col_table
 drop cascades to view v
 drop cascades to table ab
 drop cascades to table text_table
+drop cascades to function myvarcharout(myvarchar)
+drop cascades to type myvarchar
+drop cascades to function myvarcharin(cstring,oid,integer)
+drop cascades to table my_table
