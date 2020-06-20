@@ -1279,19 +1279,16 @@ SetJoinRelatedColumnsCompat(RangeTblEntry *rangeTableEntry,
 
 	/* We don't have any merged columns so set it to 0 */
 	rangeTableEntry->joinmergedcols = 0;
-	Var *var = NULL;
-	int varId = 1;
-	foreach_ptr(var, leftColumnVars)
+	int numvars = list_length(leftColumnVars);
+	for (int varId = 1; varId <= numvars; varId++)
 	{
 		rangeTableEntry->joinleftcols = lappend_int(rangeTableEntry->joinleftcols, varId);
-		varId++;
 	}
-	varId = 1;
-	foreach_ptr(var, rightColumnVars)
+	numvars = list_length(rightColumnVars);
+	for (int varId = 1; varId <= numvars; varId++)
 	{
 		rangeTableEntry->joinrightcols = lappend_int(rangeTableEntry->joinrightcols,
 													 varId);
-		varId++;
 	}
 	#endif
 }

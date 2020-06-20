@@ -33,6 +33,7 @@
 
 
 #define VACUUM_PARALLEL_NOTSET -2
+
 /*
  * Subset of VacuumParams we care about
  */
@@ -293,7 +294,7 @@ DeparseVacuumStmtPrefix(CitusVacuumParams vacuumParams)
 #endif
 #if PG_VERSION_NUM >= PG_VERSION_13
 		&& vacuumParams.nworkers == VACUUM_PARALLEL_NOTSET
-#endif		
+#endif
 		)
 	{
 		return vacuumPrefix->data;
@@ -351,7 +352,8 @@ DeparseVacuumStmtPrefix(CitusVacuumParams vacuumParams)
 #endif
 
 #if PG_VERSION_NUM >= PG_VERSION_13
-	if (vacuumParams.nworkers != VACUUM_PARALLEL_NOTSET) {
+	if (vacuumParams.nworkers != VACUUM_PARALLEL_NOTSET)
+	{
 		appendStringInfo(vacuumPrefix, "PARALLEL %d,", vacuumParams.nworkers);
 	}
 #endif
@@ -454,7 +456,7 @@ VacuumStmtParams(VacuumStmt *vacstmt)
 	params.index_cleanup = VACOPT_TERNARY_DEFAULT;
 	params.truncate = VACOPT_TERNARY_DEFAULT;
 	#if PG_VERSION_NUM >= PG_VERSION_13
-		params.nworkers = VACUUM_PARALLEL_NOTSET;
+	params.nworkers = VACUUM_PARALLEL_NOTSET;
 	#endif
 
 	/* Parse options list */
@@ -505,8 +507,8 @@ VacuumStmtParams(VacuumStmt *vacstmt)
 							  VACOPT_TERNARY_DISABLED;
 		}
 		#if PG_VERSION_NUM >= PG_VERSION_13
-		else if (strcmp(opt->defname, "parallel") == 0) {
-			
+		else if (strcmp(opt->defname, "parallel") == 0)
+		{
 			if (opt->arg == NULL)
 			{
 				ereport(ERROR,
@@ -516,13 +518,14 @@ VacuumStmtParams(VacuumStmt *vacstmt)
 			}
 			else
 			{
-				int			nworkers;
-				nworkers = defGetInt32(opt);
+				int nworkers = defGetInt32(opt);
 				if (nworkers < 0 || nworkers > MAX_PARALLEL_WORKER_LIMIT)
+				{
 					ereport(ERROR,
 							(errcode(ERRCODE_SYNTAX_ERROR),
 							 errmsg("parallel vacuum degree must be between 0 and %d",
 									MAX_PARALLEL_WORKER_LIMIT)));
+				}
 
 				params.nworkers = nworkers;
 			}

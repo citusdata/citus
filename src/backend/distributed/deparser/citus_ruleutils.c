@@ -815,9 +815,13 @@ deparse_index_columns(StringInfo buffer, List *indexParameterList, List *deparse
 							 NameListToQuotedString(indexElement->opclass));
 		}
 #if PG_VERSION_NUM >= PG_VERSION_13
-		if (indexElement->opclassopts != NIL) {
-			ereport(ERROR, errmsg("citus currently doesn't support this index arguments"));
-		} 
+
+		/* Commit on postgres: 911e70207703799605f5a0e8aad9f06cff067c63*/
+		if (indexElement->opclassopts != NIL)
+		{
+			ereport(ERROR, errmsg(
+						"citus currently doesn't support operator class parameters in indexes"));
+		}
 #endif
 
 		if (indexElement->ordering != SORTBY_DEFAULT)

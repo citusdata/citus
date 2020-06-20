@@ -169,7 +169,7 @@ SELECT create_distributed_table('test_table', 'a');
 
 -- we currently don't support this
 CREATE INDEX test_table_index ON test_table USING gist (b tsvector_ops(siglen = 100));
-ERROR:  citus currently doesn't support this index arguments
+ERROR:  citus currently doesn't support operator class parameters in indexes
 drop schema test_pg13 cascade;
 NOTICE:  drop cascades to 10 other objects
 DETAIL:  drop cascades to table dist_table

@@ -32,14 +32,14 @@
 #define lnext_compat(l, r) lnext(l, r)
 #define list_delete_cell_compat(l, c, p) list_delete_cell(l, c)
 #define pg_plan_query_compat(p, q, c, b) pg_plan_query(p, q, c, b)
-#define planner_compat(p, q, c, b) planner(p, q, c, b)
-#define standard_planner_compat(a, b, c, d) standard_planner(a, b, c, d)
-#define PortalDefineQuerySelectCompat(a, b, c, e, f) PortalDefineQuery(a, b, c, \
-																	   CMDTAG_SELECT, e, \
-																	   f)
+#define planner_compat(p, c, b) planner(p, NULL, c, b)
+#define standard_planner_compat(a, c, d) standard_planner(a, NULL, c, d)
+#define PortalDefineQuerySelectCompat(a, b, c, d, e) PortalDefineQuery(a, b, c, \
+																	   CMDTAG_SELECT, d, \
+																	   e)
 #define getOwnedSequencesCompat(a, b) getOwnedSequences(a)
-#define ExplainOnePlanCompat(a, b, c, d, e, f, g, h) ExplainOnePlan(a, b, c, d, e, f, g, \
-																	h)
+#define ExplainOnePlanCompat(a, b, c, d, e, f, g) ExplainOnePlan(a, b, c, d, e, f, g, \
+																 NULL)
 #define varoattno varattnosyn
 #define varnoold varnosyn
 #define Set_ptr_value(a, b) ((a)->ptr_value = (b))
@@ -49,12 +49,12 @@
 #define lnext_compat(l, r) lnext(r)
 #define list_delete_cell_compat(l, c, p) list_delete_cell(l, c, p)
 #define pg_plan_query_compat(p, q, c, b) pg_plan_query(p, c, b)
-#define planner_compat(p, q, c, b) planner(p, c, b)
-#define standard_planner_compat(a, b, c, d) standard_planner(a, c, d)
-#define PortalDefineQuerySelectCompat(a, b, c, e, f) PortalDefineQuery(a, b, c, "SELECT", \
-																	   e, f)
+#define planner_compat(p, c, b) planner(p, c, b)
+#define standard_planner_compat(a, c, d) standard_planner(a, c, d)
+#define PortalDefineQuerySelectCompat(a, b, c, d, e) PortalDefineQuery(a, b, c, "SELECT", \
+																	   d, e)
 #define getOwnedSequencesCompat(a, b) getOwnedSequences(a, b)
-#define ExplainOnePlanCompat(a, b, c, d, e, f, g, h) ExplainOnePlan(a, b, c, d, e, f, g)
+#define ExplainOnePlanCompat(a, b, c, d, e, f, g) ExplainOnePlan(a, b, c, d, e, f, g)
 #define Set_ptr_value(a, b) ((a)->data.ptr_value = (b))
 #define RangeTableEntryFromNSItem(a) (a)
 #define QueryCompletionCompat char

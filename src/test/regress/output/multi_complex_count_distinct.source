@@ -355,39 +355,6 @@ SELECT
  TRUCK      |  1757
 (7 rows)
 
-EXPLAIN (COSTS false, VERBOSE true)
-SELECT
-	l_shipmode, count(distinct l_partkey)
-	FROM lineitem_hash
-	GROUP BY l_shipmode
-	HAVING count(distinct l_suppkey) > 1550
-	ORDER BY 1, 2 DESC;
-                                                                                                                        QUERY PLAN
----------------------------------------------------------------------
- Sort
-   Output: remote_scan.l_shipmode, (count(DISTINCT remote_scan.count))
-   Sort Key: remote_scan.l_shipmode, (count(DISTINCT remote_scan.count)) DESC
-   ->  GroupAggregate
-         Output: remote_scan.l_shipmode, count(DISTINCT remote_scan.count)
-         Group Key: remote_scan.l_shipmode
-         Filter: (count(DISTINCT remote_scan.worker_column_3) > 1550)
-         ->  Sort
-               Output: remote_scan.l_shipmode, remote_scan.count, remote_scan.worker_column_3
-               Sort Key: remote_scan.l_shipmode
-               ->  Custom Scan (Citus Adaptive)
-                     Output: remote_scan.l_shipmode, remote_scan.count, remote_scan.worker_column_3
-                     Task Count: 8
-                     Tasks Shown: One of 8
-                     ->  Task
-                           Query: SELECT l_shipmode, l_partkey AS count, l_suppkey AS worker_column_3 FROM lineitem_hash_240000 lineitem_hash WHERE true GROUP BY l_shipmode, l_partkey, l_suppkey
-                           Node: host=localhost port=xxxxx dbname=regression
-                           ->  HashAggregate
-                                 Output: l_shipmode, l_partkey, l_suppkey
-                                 Group Key: lineitem_hash.l_shipmode, lineitem_hash.l_partkey, lineitem_hash.l_suppkey
-                                 ->  Seq Scan on public.lineitem_hash_240000 lineitem_hash
-                                       Output: l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment
-(22 rows)
-
 -- count distinct is supported on single table subqueries
 SELECT *
 	FROM (

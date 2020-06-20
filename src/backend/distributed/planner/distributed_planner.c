@@ -223,7 +223,6 @@ distributed_planner(Query *parse,
 			 * postgres' planner.
 			 */
 			planContext.plan = standard_planner_compat(planContext.query,
-													   NULL,
 													   planContext.cursorOptions,
 													   planContext.boundParams);
 			if (needsDistributedPlanning)
@@ -1053,7 +1052,7 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
 		 * being contiguous.
 		 */
 
-		standard_planner_compat(newQuery, NULL, 0, boundParams);
+		standard_planner_compat(newQuery, 0, boundParams);
 
 		/* overwrite the old transformed query with the new transformed query */
 		*query = *newQuery;
