@@ -659,10 +659,10 @@ CreateShellTableForCitusLocalTable(List *shellTableDDLEvents)
 
 
 /*
- * DropAndMoveDefaultSequenceOwnerships finds each column of relation with
- * sourceRelationId defaulting to an owned sequence. Then, drops default
- * definitions for those columns and grants ownership of each of the owned
- * sequences to the same named column of the relation with targetRelationId.
+ * DropAndMoveDefaultSequenceOwnerships drops default column definitions for
+ * relation with sourceRelationId. Also, for each column that defaults to an
+ * owned sequence, it grants ownership to the same named column of the relation
+ * with targetRelationId.
  */
 static void
 DropAndMoveDefaultSequenceOwnerships(Oid sourceRelationId, Oid targetRelationId)
@@ -672,8 +672,6 @@ DropAndMoveDefaultSequenceOwnerships(Oid sourceRelationId, Oid targetRelationId)
 	ExtractColumnsOwningSequences(sourceRelationId, &columnNameList,
 								  &ownedSequenceIdList);
 
-	Assert(list_length(columnNameList) == list_length(ownedSequenceIdList));
-
 	ListCell *columnNameCell = NULL;
 	ListCell *ownedSequenceIdCell = NULL;
 	forboth(columnNameCell, columnNameList, ownedSequenceIdCell, ownedSequenceIdList)
@@ -682,7 +680,12 @@ DropAndMoveDefaultSequenceOwnerships(Oid sourceRelationId, Oid targetRelationId)
 		Oid ownedSequenceId = lfirst_oid(ownedSequenceIdCell);
 
 		DropDefaultColumnDefinition(sourceRelationId, columnName);
-		TransferSequenceOwnership(ownedSequenceId, targetRelationId, columnName);
+
+		/* column might not own a sequence */
+		if (OidIsValid(ownedSequenceId))
+		{
+			TransferSequenceOwnership(ownedSequenceId, targetRelationId, columnName);
+		}
 	}
 }
 
@@ -698,11 +701,8 @@ ExtractColumnsOwningSequences(Oid relationId, List **columnNameList,
 {
 	Assert(*columnNameList == NIL && *ownedSequenceIdList == NIL);
 
-	Relation relation = relation_open(relationId, AccessExclusiveLock);
+	Relation relation = relation_open(relationId, AccessShareLock);
 	TupleDesc tupleDescriptor = RelationGetDescr(relation);
-
-	/* iterate on columns that are not dropped and have DEFAULT definitions */
-	AttrNumber defaultValueIndex = 0;
 
 	for (int attributeIndex = 0; attributeIndex < tupleDescriptor->natts;
 		 attributeIndex++)
@@ -717,8 +717,13 @@ ExtractColumnsOwningSequences(Oid relationId, List **columnNameList,
 			continue;
 		}
 
-		List *columnOwnedSequences = getOwnedSequences(relationId, defaultValueIndex++);
-		if (list_length(columnOwnedSequences) == 0)
+		char *columnName = NameStr(attributeForm->attname);
+		*columnNameList = lappend(*columnNameList, columnName);
+
+		List *columnOwnedSequences = getOwnedSequences(relationId, attributeIndex + 1);
+
+		Oid ownedSequenceId = InvalidOid;
+		if (list_length(columnOwnedSequences) != 0)
 		{
 			/*
 			 * Skip if the column does not own any sequences. In that case, column
@@ -726,17 +731,11 @@ ExtractColumnsOwningSequences(Oid relationId, List **columnNameList,
 			 * not own the sequence, i.e, sequence is created and attached to the
 			 * column explicitly by the user.
 			 */
-			continue;
+			Assert(list_length(columnOwnedSequences) == 1);
+			ownedSequenceId = linitial_oid(columnOwnedSequences);
 		}
 
-		/* TODO: this assumption should be validated */
-		Assert(list_length(columnOwnedSequences) == 1);
-
-		Oid ownedSequenceId = linitial_oid(columnOwnedSequences);
 		*ownedSequenceIdList = lappend_oid(*ownedSequenceIdList, ownedSequenceId);
-
-		char *columnName = NameStr(attributeForm->attname);
-		*columnNameList = lappend(*columnNameList, columnName);
 	}
 
 	relation_close(relation, NoLock);
