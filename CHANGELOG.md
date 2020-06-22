@@ -1,3 +1,11 @@
+### citus v9.3.2 (Jun 22, 2020) ###
+
+* Fixes a version bump issue in 9.3.1
+
+### citus v9.2.6 (Jun 22, 2020) ###
+
+* Fixes a version bump issue in 9.2.5
+
 ### citus v9.3.1 (Jun 17, 2020) ###
 
 * Adds support to partially push down tdigest aggregates
