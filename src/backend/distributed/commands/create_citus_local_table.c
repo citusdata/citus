@@ -4,6 +4,9 @@
  *
  * This file contains functions to create citus local tables.
  *
+ * A citus local table is composed of a shell relation to wrap the
+ * the regular postgres relation as its coordinator local shard.
+ *
  * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
@@ -14,14 +17,13 @@
 #include "access/genam.h"
 #include "access/htup_details.h"
 #include "catalog/pg_constraint.h"
+#include "distributed/coordinator_protocol.h"
 #include "distributed/create_citus_local_table.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/commands.h"
 #include "distributed/commands/utility_hook.h"
 #include "distributed/listutils.h"
-#include "distributed/master_metadata_utility.h"
-#include "distributed/master_protocol.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/namespace_utils.h"
@@ -315,12 +317,12 @@ CreateCitusLocalTable(Oid relationId)
 	 * Set shellRelationId as the relation with relationId now points
 	 * to the shard relation.
 	 */
+	Oid shardRelationId = relationId;
 	Oid shellRelationId = get_relname_relid(relationName, relationSchemaId);
 
 	/* assert that we created the shell table properly in the same schema */
 	Assert(OidIsValid(shellRelationId));
 
-	Oid shardRelationId = relationId;
 	DropAndMoveDefaultSequenceOwnerships(shardRelationId, shellRelationId);
 
 	InsertMetadataForCitusLocalTable(shellRelationId, shardId);

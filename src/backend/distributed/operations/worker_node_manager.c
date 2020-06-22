@@ -15,9 +15,9 @@
 #include "miscadmin.h"
 
 #include "commands/dbcommands.h"
+#include "distributed/coordinator_protocol.h"
 #include "distributed/hash_helpers.h"
 #include "distributed/listutils.h"
-#include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_client_executor.h"
 #include "distributed/worker_manager.h"
