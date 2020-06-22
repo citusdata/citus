@@ -132,22 +132,26 @@ SELECT create_citus_local_table('unlogged_table');
 -- show that we allow triggers --
 
 BEGIN;
+  CREATE TABLE citus_local_table_3 (value int);
 
   -- create a simple function to be invoked by trigger
   CREATE FUNCTION update_value() RETURNS trigger AS $update_value$
   BEGIN
-      NEW.value := value+1 ;
+      UPDATE citus_local_table_3 SET value=value+1;
       RETURN NEW;
   END;
   $update_value$ LANGUAGE plpgsql;
 
-  CREATE TABLE citus_local_table_3 (value int);
-
-  CREATE TRIGGER update_value_ref
+  CREATE TRIGGER insert_trigger
   AFTER INSERT ON citus_local_table_3
-  FOR EACH ROW EXECUTE PROCEDURE update_value();
+  FOR EACH STATEMENT EXECUTE PROCEDURE update_value();
 
   SELECT create_citus_local_table('citus_local_table_3');
+
+  INSERT INTO citus_local_table_3 VALUES (1);
+
+  -- show that trigger is executed only once, we should see "2" (not "3")
+  SELECT * FROM citus_local_table_3;
 ROLLBACK;
 
 -- show that we do not support policies in citus community --
