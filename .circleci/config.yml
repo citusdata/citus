@@ -48,6 +48,9 @@ jobs:
           name: 'Check if changed'
           command: git diff --exit-code
       - run:
+          name: 'Check for lengths of changelog entries'
+          command: ci/disallow_long_changelog_entries.sh
+      - run:
           name: 'Check for banned C API usage'
           command: ci/banned.h.sh
   check-sql-snapshots:
