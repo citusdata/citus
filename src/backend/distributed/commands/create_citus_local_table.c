@@ -51,7 +51,7 @@ static List * GetExplicitIndexNameList(Oid relationId);
 static void CreateCitusLocalTable(Oid relationId);
 static void FinalizeCitusLocalTableCreation(Oid relationId);
 static List * GetShellTableDDLEventsForCitusLocalTable(Oid relationId);
-static void CreateShellTableForCitusLocalTable(List *shellTableDDLEvents);
+static void ExecuteAndLogDDLCommandList(List *ddlCommandList);
 static void DropAndMoveDefaultSequenceOwnerships(Oid sourceRelationId,
 												 Oid targetRelationId);
 static void ExtractColumnsOwningSequences(Oid relationId, List **columnNameList,
@@ -59,6 +59,7 @@ static void ExtractColumnsOwningSequences(Oid relationId, List **columnNameList,
 static void DropDefaultColumnDefinition(Oid relationId, char *columnName);
 static void TransferSequenceOwnership(Oid ownedSequenceId, Oid targetRelationId,
 									  char *columnName);
+static void ExecuteAndLogDDLCommand(const char *commandString);
 static void InsertMetadataForCitusLocalTable(Oid citusLocalTableId, uint64 shardId);
 
 
@@ -305,7 +306,7 @@ CreateCitusLocalTable(Oid relationId)
 	 * from scratch, below we simply recreate the shell table executing them
 	 * via process utility.
 	 */
-	CreateShellTableForCitusLocalTable(shellTableDDLEvents);
+	ExecuteAndLogDDLCommandList(shellTableDDLEvents);
 
 	/*
 	 * Set shellRelationId as the relation with relationId now points
@@ -425,11 +426,7 @@ RenameRelationToShardRelation(Oid shellRelationId, uint64 shardId)
 	appendStringInfo(renameCommand, "ALTER TABLE %s RENAME TO %s;",
 					 qualifiedShellRelationName, quotedShardRelationName);
 
-	const char *commandString = renameCommand->data;
-
-	Node *parseTree = ParseTreeNode(commandString);
-	CitusProcessUtility(parseTree, commandString, PROCESS_UTILITY_TOPLEVEL,
-						NULL, None_Receiver, NULL);
+	ExecuteAndLogDDLCommand(renameCommand->data);
 }
 
 
@@ -449,10 +446,7 @@ RenameShardRelationConstraints(Oid shardRelationId, uint64 shardId)
 	{
 		const char *commandString =
 			GetRenameShardConstraintCommand(shardRelationId, constraintName, shardId);
-
-		Node *parseTree = ParseTreeNode(commandString);
-		CitusProcessUtility(parseTree, commandString, PROCESS_UTILITY_TOPLEVEL,
-							NULL, None_Receiver, NULL);
+		ExecuteAndLogDDLCommand(commandString);
 	}
 }
 
@@ -546,10 +540,7 @@ RenameShardRelationIndexes(Oid shardRelationId, uint64 shardId)
 	foreach_ptr(indexName, indexNameList)
 	{
 		const char *commandString = GetRenameShardIndexCommand(indexName, shardId);
-
-		Node *parseTree = ParseTreeNode(commandString);
-		CitusProcessUtility(parseTree, commandString, PROCESS_UTILITY_TOPLEVEL,
-							NULL, None_Receiver, NULL);
+		ExecuteAndLogDDLCommand(commandString);
 	}
 }
 
@@ -638,22 +629,16 @@ GetExplicitIndexNameList(Oid relationId)
 
 
 /*
- * CreateShellTableForCitusLocalTable creates the shell table for the citus
- * local tables by executing the given commands necessary to recreate the
- * table.
+ * ExecuteAndLogDDLCommandList takes a list of ddl commands and calls
+ * ExecuteAndLogDDLCommand function for each of them.
  */
 static void
-CreateShellTableForCitusLocalTable(List *shellTableDDLEvents)
+ExecuteAndLogDDLCommandList(List *ddlCommandList)
 {
-	Assert(list_length(shellTableDDLEvents) > 0);
-
 	char *ddlCommand = NULL;
-	foreach_ptr(ddlCommand, shellTableDDLEvents)
+	foreach_ptr(ddlCommand, ddlCommandList)
 	{
-		Node *parseTree = ParseTreeNode(ddlCommand);
-
-		CitusProcessUtility(parseTree, ddlCommand, PROCESS_UTILITY_TOPLEVEL,
-							NULL, None_Receiver, NULL);
+		ExecuteAndLogDDLCommand(ddlCommand);
 	}
 }
 
@@ -757,11 +742,7 @@ DropDefaultColumnDefinition(Oid relationId, char *columnName)
 					 "ALTER TABLE %s ALTER COLUMN %s DROP DEFAULT",
 					 qualifiedRelationName, quotedColumnName);
 
-	const char *commandString = sequenceDropCommand->data;
-
-	Node *parseTree = ParseTreeNode(commandString);
-	CitusProcessUtility(parseTree, commandString, PROCESS_UTILITY_TOPLEVEL,
-						NULL, None_Receiver, NULL);
+	ExecuteAndLogDDLCommand(sequenceDropCommand->data);
 }
 
 
@@ -784,7 +765,18 @@ TransferSequenceOwnership(Oid sequenceId, Oid targetRelationId, char *targetColu
 					 qualifiedSequenceName, qualifiedTargetRelationName,
 					 quotedTargetColumnName);
 
-	const char *commandString = sequenceOwnershipCommand->data;
+	ExecuteAndLogDDLCommand(sequenceOwnershipCommand->data);
+}
+
+
+/*
+ * ExecuteAndLogDDLCommand takes a ddl command and logs it in DEBUG4 log level.
+ * Then, parses and executes it via CitusProcessUtility.
+ */
+static void
+ExecuteAndLogDDLCommand(const char *commandString)
+{
+	ereport(DEBUG4, (errmsg("executing \"%s\"", commandString)));
 
 	Node *parseTree = ParseTreeNode(commandString);
 	CitusProcessUtility(parseTree, commandString, PROCESS_UTILITY_TOPLEVEL,
