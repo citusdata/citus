@@ -1072,7 +1072,7 @@
 
 * Adds user-facing UDFs for locking shard resources and metadata
 
-* Refactors connection and transaction management; giving a consistent experience
+* Refactors connection and transaction management; giving consistent experience
 
 * Enhances `COPY` with fully transactional semantics
 
@@ -1088,7 +1088,7 @@
 
 * Enhances `SERIAL` compatibility with MX tables
 
-* Adds an `node_connection_timeout` parameter to control node connection timeouts
+* Adds `node_connection_timeout` parameter to control node connection timeouts
 
 * Adds `enable_deadlock_prevention` setting to permit multi-node transactions
 
