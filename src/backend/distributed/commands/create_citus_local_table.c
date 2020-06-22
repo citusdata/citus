@@ -47,6 +47,9 @@ static char * GetRenameShardConstraintCommand(Oid relationId, char *constraintNa
 											  uint64 shardId);
 static void RenameShardRelationIndexes(Oid shardRelationId, uint64 shardId);
 static char * GetRenameShardIndexCommand(char *indexName, uint64 shardId);
+static void RenameShardRelationTriggers(Oid shardRelationId, uint64 shardId);
+static char * GetRenameShardTriggerCommand(Oid shardRelationId, char *triggerName,
+										   uint64 shardId);
 static List * GetExplicitIndexNameList(Oid relationId);
 static void CreateCitusLocalTable(Oid relationId);
 static void FinalizeCitusLocalTableCreation(Oid relationId);
@@ -403,6 +406,7 @@ ConvertLocalTableToShard(Oid relationId)
 	RenameRelationToShardRelation(relationId, shardId);
 	RenameShardRelationConstraints(relationId, shardId);
 	RenameShardRelationIndexes(relationId, shardId);
+	RenameShardRelationTriggers(relationId, shardId);
 
 	return shardId;
 }
@@ -561,6 +565,51 @@ GetRenameShardIndexCommand(char *indexName, uint64 shardId)
 	StringInfo renameCommand = makeStringInfo();
 	appendStringInfo(renameCommand, "ALTER INDEX %s RENAME TO %s;",
 					 quotedIndexName, quotedShardIndexName);
+
+	return renameCommand->data;
+}
+
+
+/*
+ * RenameShardRelationTriggers appends given shardId to the end of the names
+ * of shard relation triggers that are explicitly created. This function
+ * utilizes GetExplicitTriggerNameList to pick the triggers to be renamed, see
+ * more details in function's comment.
+ */
+static void
+RenameShardRelationTriggers(Oid shardRelationId, uint64 shardId)
+{
+	List *triggerNameList = GetExplicitTriggerNameList(shardRelationId);
+
+	char *triggerName = NULL;
+	foreach_ptr(triggerName, triggerNameList)
+	{
+		const char *commandString =
+			GetRenameShardTriggerCommand(shardRelationId, triggerName, shardId);
+		ExecuteAndLogDDLCommand(commandString);
+	}
+}
+
+
+/*
+ * GetRenameShardTriggerCommand returns DDL command to append given shardId to
+ * the trigger with triggerName.
+ */
+static char *
+GetRenameShardTriggerCommand(Oid shardRelationId, char *triggerName, uint64 shardId)
+{
+	char *qualifiedShardRelationName = generate_qualified_relation_name(shardRelationId);
+
+	char *shardTriggerName = pstrdup(triggerName);
+	AppendShardIdToName(&shardTriggerName, shardId);
+	const char *quotedShardTriggerName = quote_identifier(shardTriggerName);
+
+	const char *quotedTriggerName = quote_identifier(triggerName);
+
+	StringInfo renameCommand = makeStringInfo();
+	appendStringInfo(renameCommand, "ALTER TRIGGER %s ON %s RENAME TO %s;",
+					 quotedTriggerName, qualifiedShardRelationName,
+					 quotedShardTriggerName);
 
 	return renameCommand->data;
 }

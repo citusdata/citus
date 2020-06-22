@@ -295,6 +295,8 @@ extern void PostprocessVacuumStmt(VacuumStmt *vacuumStmt, const char *vacuumComm
 
 /* trigger.c - forward declarations */
 extern List * GetExplicitTriggerCommandList(Oid relationId);
+extern List * GetExplicitTriggerNameList(Oid relationId);
+extern char * GetTriggerNameById(Oid triggerId);
 extern List * GetExplicitTriggerIdList(Oid relationId);
 extern Oid get_relation_trigger_oid_compat(HeapTuple heapTuple);
 extern void ErrorIfUnsupportedCreateTriggerCommand(CreateTrigStmt *createTriggerStmt);
