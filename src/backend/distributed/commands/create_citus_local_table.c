@@ -43,8 +43,6 @@ static uint64 ConvertLocalTableToShard(Oid relationId);
 static void RenameRelationToShardRelation(Oid shellRelationId, uint64 shardId);
 static void RenameShardRelationConstraints(Oid shardRelationId, uint64 shardId);
 static List * GetConstraintNameList(Oid relationId);
-static void RenameForeignConstraintsReferencingToShard(Oid shardRelationId,
-													   uint64 shardId);
 static char * GetRenameShardConstraintCommand(Oid relationId, char *constraintName,
 											  uint64 shardId);
 static void RenameShardRelationIndexes(Oid shardRelationId, uint64 shardId);
@@ -393,8 +391,7 @@ GetShellTableDDLEventsForCitusLocalTable(Oid relationId)
  * given relation with relationId to the shard relation with shardId. That
  * means, this function suffixes shardId to:
  *  - relation name,
- *  - all the objects "defined on" the relation and
- *  - the foreign keys referencing to the relation.
+ *  - all the objects "defined on" the relation.
  * After converting the given relation, returns the acquired shardId.
  */
 static uint64
@@ -404,7 +401,6 @@ ConvertLocalTableToShard(Oid relationId)
 
 	RenameRelationToShardRelation(relationId, shardId);
 	RenameShardRelationConstraints(relationId, shardId);
-	RenameForeignConstraintsReferencingToShard(relationId, shardId);
 	RenameShardRelationIndexes(relationId, shardId);
 
 	return shardId;
@@ -506,44 +502,6 @@ GetConstraintNameList(Oid relationId)
 	heap_close(pgConstraint, NoLock);
 
 	return constraintNameList;
-}
-
-
-/*
- * RenameForeignConstraintsReferencingToShard appends given shardId to the end
- * of the name of foreign key constraints in which the relation with
- * shardRelationId is the "referenced one" except the self-referencing foreign
- * keys. This is because, we already renamed self-referencing foreign keys via
- * RenameShardRelationConstraints function.
- */
-static void
-RenameForeignConstraintsReferencingToShard(Oid shardRelationId, uint64 shardId)
-{
-	int flags = (INCLUDE_REFERENCED_CONSTRAINTS | EXCLUDE_SELF_REFERENCES);
-	List *foreignKeyIdsTableReferenced = GetForeignKeyOids(shardRelationId, flags);
-
-	Oid foreignKeyId = InvalidOid;
-	foreach_oid(foreignKeyId, foreignKeyIdsTableReferenced)
-	{
-		HeapTuple heapTuple = SearchSysCache1(CONSTROID, ObjectIdGetDatum(foreignKeyId));
-
-		Assert(HeapTupleIsValid(heapTuple));
-
-		Form_pg_constraint foreignConstraintForm =
-			(Form_pg_constraint) GETSTRUCT(heapTuple);
-
-		Oid referencingTableId = foreignConstraintForm->conrelid;
-		char *constraintName = NameStr(foreignConstraintForm->conname);
-
-		const char *commandString =
-			GetRenameShardConstraintCommand(referencingTableId, constraintName, shardId);
-
-		Node *parseTree = ParseTreeNode(commandString);
-		CitusProcessUtility(parseTree, commandString, PROCESS_UTILITY_TOPLEVEL,
-							NULL, None_Receiver, NULL);
-
-		ReleaseSysCache(heapTuple);
-	}
 }
 
 
