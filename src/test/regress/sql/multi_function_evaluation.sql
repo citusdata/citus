@@ -165,4 +165,18 @@ FROM (SELECT key, stable_squared((count(*) OVER ())::int) y FROM example GROUP B
 UPDATE example SET value = timestamp '10-10-2000 00:00'
 FROM (SELECT key, stable_squared(grouping(key)) y FROM example GROUP BY key) a WHERE example.key = a.key;
 
+-- https://github.com/citusdata/citus/issues/3939
+CREATE TABLE test_table(id int);
+SELECT create_distributed_table('test_table', 'id');
+
+CREATE OR REPLACE FUNCTION f(val text DEFAULT 'default')
+RETURNS int AS $$ BEGIN RETURN length(val); END; $$ LANGUAGE 'plpgsql' IMMUTABLE;
+
+INSERT INTO test_table VALUES (f('test'));
+INSERT INTO test_table VALUES (f());
+INSERT INTO test_table VALUES (f(f()::text));
+
+SELECT * FROM test_table ORDER BY 1;
+
+\set VERBOSITY terse
 DROP SCHEMA multi_function_evaluation CASCADE;

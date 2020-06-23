@@ -21,9 +21,13 @@
 #include "nodes/nodes.h"
 #include "nodes/primnodes.h"
 #include "optimizer/clauses.h"
+#if PG_VERSION_NUM >= PG_VERSION_12
+#include "optimizer/optimizer.h"
+#endif
 #include "optimizer/planmain.h"
 #include "utils/datum.h"
 #include "utils/lsyscache.h"
+#include "utils/syscache.h"
 
 
 /* private function declarations */
@@ -36,6 +40,8 @@ static bool CitusIsMutableFunctionIdChecker(Oid func_id, void *context);
 static bool ShouldEvaluateExpression(Expr *expression);
 static bool ShouldEvaluateFunctionWithMasterContext(MasterEvaluationContext *
 													evaluationContext);
+static void FixFunctionArguments(Node *expr);
+static bool FixFunctionArgumentsWalker(Node *expr, void *context);
 
 /*
  * RequiresMasterEvaluation returns the executor needs to reparse and
@@ -304,6 +310,9 @@ citus_evaluate_expr(Expr *expr, Oid result_type, int32 result_typmod,
 	/* We can use the estate's working context to avoid memory leaks. */
 	MemoryContext oldcontext = MemoryContextSwitchTo(estate->es_query_cxt);
 
+	/* handles default values */
+	FixFunctionArguments((Node *) expr);
+
 	/* Make sure any opfuncids are filled in. */
 	fix_opfuncids((Node *) expr);
 
@@ -451,4 +460,41 @@ CitusIsMutableFunction(Node *node)
 	}
 
 	return false;
+}
+
+
+/* FixFunctionArguments applies expand_function_arguments to all function calls. */
+static void
+FixFunctionArguments(Node *expr)
+{
+	FixFunctionArgumentsWalker(expr, NULL);
+}
+
+
+/* FixFunctionArgumentsWalker is the helper function for fix_funcargs. */
+static bool
+FixFunctionArgumentsWalker(Node *expr, void *context)
+{
+	if (expr == NULL)
+	{
+		return false;
+	}
+
+	if (IsA(expr, FuncExpr))
+	{
+		FuncExpr *funcExpr = castNode(FuncExpr, expr);
+		HeapTuple func_tuple =
+			SearchSysCache1(PROCOID, ObjectIdGetDatum(funcExpr->funcid));
+		if (!HeapTupleIsValid(func_tuple))
+		{
+			elog(ERROR, "cache lookup failed for function %u", funcExpr->funcid);
+		}
+
+		funcExpr->args = expand_function_arguments(funcExpr->args,
+												   funcExpr->funcresulttype, func_tuple);
+
+		ReleaseSysCache(func_tuple);
+	}
+
+	return expression_tree_walker(expr, FixFunctionArgumentsWalker, NULL);
 }
