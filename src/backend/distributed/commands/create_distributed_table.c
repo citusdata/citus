@@ -790,8 +790,8 @@ EnsureRelationCanBeDistributed(Oid relationId, Var *distributionColumn,
 		}
 	}
 
-	ErrorIfUnsupportedConstraint(relation, distributionMethod, distributionColumn,
-								 colocationId);
+	ErrorIfUnsupportedConstraint(relation, distributionMethod, replicationModel,
+								 distributionColumn, colocationId);
 
 
 	ErrorIfUnsupportedPolicy(relation);
@@ -960,7 +960,8 @@ EnsureReplicationSettings(Oid relationId, char replicationModel)
 		extraHint = "";
 	}
 
-	if (replicationModel == REPLICATION_MODEL_STREAMING && ShardReplicationFactor != 1)
+	if (replicationModel == REPLICATION_MODEL_STREAMING &&
+		DistributedTableReplicationIsEnabled())
 	{
 		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 						errmsg("replication factors above one are incompatible with %s",

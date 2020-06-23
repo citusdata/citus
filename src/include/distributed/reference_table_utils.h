@@ -16,7 +16,6 @@
 
 #include "listutils.h"
 
-extern bool IsReferenceTable(Oid relationId);
 extern void EnsureReferenceTablesExistOnAllNodes(void);
 extern uint32 CreateReferenceTableColocationId(void);
 extern void DeleteAllReferenceTablePlacementsFromNodeGroup(int32 groupId);

@@ -147,7 +147,7 @@ BEGIN;
 
   -- cannot attach citus local table to a partitioned distributed table
   ALTER TABLE partitioned_table ATTACH PARTITION citus_local_table FOR VALUES FROM (20) TO (30);
-ERROR:  distributed tables cannot have non-colocated distributed tables as a partition
+ERROR:  cannot execute ATTACH/DETACH PARTITION command as citus local tables cannot be involved in partition relationships with other tables
 ROLLBACK;
 -- show that we do not support inheritance relationships --
 CREATE TABLE parent_table (a int, b text);
@@ -177,7 +177,7 @@ BEGIN;
   $update_value$ LANGUAGE plpgsql;
   CREATE TRIGGER insert_trigger
   AFTER INSERT ON citus_local_table_3
-  FOR EACH STATEMENT EXECUTE PROCEDURE update_value();
+  FOR EACH STATEMENT EXECUTE FUNCTION update_value();
   SELECT create_citus_local_table('citus_local_table_3');
  create_citus_local_table
 ---------------------------------------------------------------------
@@ -378,26 +378,76 @@ NOTICE:  executing the command locally: CREATE UNIQUE INDEX   uniqueindex2_15040
 ---- utility command execution ----
 ---------------------------------------------------------------------
 SET search_path TO citus_local_tables_test_schema;
--- any foreign key between citus local tables and other tables cannot be set for now
--- most should error out (for now with meaningless error messages)
--- between citus local tables
-ALTER TABLE citus_local_table_1 ADD CONSTRAINT fkey_c_to_c FOREIGN KEY(a) references citus_local_table_2(a);
-NOTICE:  executing the command locally: SELECT worker_apply_inter_shard_ddl_command (1504027, 'citus_local_tables_test_schema', 1504028, 'citus_local_tables_test_schema', 'ALTER TABLE citus_local_table_1 ADD CONSTRAINT fkey_c_to_c FOREIGN KEY(a) references citus_local_table_2(a);')
--- between citus local tables and reference tables
-ALTER TABLE citus_local_table_1 ADD CONSTRAINT fkey_c_to_ref FOREIGN KEY(a) references reference_table(a);
-NOTICE:  executing the command locally: SELECT worker_apply_inter_shard_ddl_command (1504027, 'citus_local_tables_test_schema', 1504033, 'citus_local_tables_test_schema', 'ALTER TABLE citus_local_table_1 ADD CONSTRAINT fkey_c_to_ref FOREIGN KEY(a) references reference_table(a);')
-ALTER TABLE reference_table ADD CONSTRAINT fkey_ref_to_c FOREIGN KEY(a) references citus_local_table_1(a);
-NOTICE:  executing the command locally: SELECT worker_apply_inter_shard_ddl_command (1504033, 'citus_local_tables_test_schema', 1504027, 'citus_local_tables_test_schema', 'ALTER TABLE reference_table ADD CONSTRAINT fkey_ref_to_c FOREIGN KEY(a) references citus_local_table_1(a);')
-ERROR:  relation "citus_local_tables_test_schema.citus_local_table_1_1504027" does not exist
+-- any foreign key between citus local tables and other tables except reference tables cannot be set
+-- more tests at ref_citus_local_fkeys.sql
 -- between citus local tables and distributed tables
 ALTER TABLE citus_local_table_1 ADD CONSTRAINT fkey_c_to_dist FOREIGN KEY(a) references distributed_table(a);
 ERROR:  cannot create foreign key constraint since foreign keys from reference tables to distributed tables are not supported
 ALTER TABLE distributed_table ADD CONSTRAINT fkey_dist_to_c FOREIGN KEY(a) references citus_local_table_1(a);
-ERROR:  relation "citus_local_tables_test_schema.citus_local_table_1_1504027" does not exist
+ERROR:  cannot create foreign key constraint since relations are not colocated or not referencing a reference table
 -- between citus local tables and local tables
 ALTER TABLE citus_local_table_1 ADD CONSTRAINT fkey_c_to_local FOREIGN KEY(a) references local_table(a);
-ERROR:  referenced table "local_table" must be a distributed table or a reference table
-ALTER TABLE local_table ADD CONSTRAINT fkey_local_to_c FOREIGN KEY(a) references citus_local_table_1(a);
+ERROR:  cannot create foreign key constraint as "local_table" is a postgres local table
+ALTER TABLE local_table
+  ADD CONSTRAINT fkey_local_to_c FOREIGN KEY(a) references citus_local_table_1(a),
+  ADD CONSTRAINT fkey_self FOREIGN KEY(a) references local_table(a);
+ERROR:  cannot create foreign key constraint as "local_table" is a postgres local table
+ALTER TABLE local_table
+  ADD COLUMN b int references citus_local_table_1(a),
+  ADD COLUMN c int references local_table(a);
+ERROR:  cannot create foreign key constraint as "local_table" is a postgres local table
+CREATE TABLE local_table_4 (
+  a int unique references citus_local_table_1(a),
+  b int references local_table_4(a));
+ERROR:  cannot create table "local_table_4" as it has a foreign key to a citus local table
+ALTER TABLE citus_local_table_1 ADD COLUMN b int NOT NULL;
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1504027, 'citus_local_tables_test_schema', 'ALTER TABLE citus_local_table_1 ADD COLUMN b int NOT NULL;')
+-- show that we added column with NOT NULL
+SELECT table_name, column_name, is_nullable
+FROM INFORMATION_SCHEMA.COLUMNS
+WHERE table_name LIKE 'citus_local_table_1%' AND column_name = 'b'
+ORDER BY 1;
+         table_name          | column_name | is_nullable
+---------------------------------------------------------------------
+ citus_local_table_1         | b           | NO
+ citus_local_table_1_1504027 | b           | NO
+(2 rows)
+
+ALTER TABLE citus_local_table_1 ADD CONSTRAINT unique_a_b UNIQUE (a, b);
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1504027, 'citus_local_tables_test_schema', 'ALTER TABLE citus_local_table_1 ADD CONSTRAINT unique_a_b UNIQUE (a, b);')
+-- show that we defined unique constraints
+SELECT conrelid::regclass, conname, conkey
+FROM pg_constraint
+WHERE conrelid::regclass::text LIKE 'citus_local_table_1%' AND contype = 'u'
+ORDER BY 1;
+          conrelid           |      conname       | conkey
+---------------------------------------------------------------------
+ citus_local_table_1_1504027 | unique_a_b_1504027 | {1,2}
+ citus_local_table_1         | unique_a_b         | {1,2}
+(2 rows)
+
+CREATE UNIQUE INDEX citus_local_table_1_idx ON citus_local_table_1(b);
+NOTICE:  executing the command locally: CREATE UNIQUE INDEX   citus_local_table_1_idx_1504027 ON citus_local_tables_test_schema.citus_local_table_1_1504027 USING btree (b )
+-- show that we successfully defined the unique index
+SELECT indexrelid::regclass, indrelid::regclass, indkey
+FROM pg_index
+WHERE indrelid::regclass::text LIKE 'citus_local_table_1%' AND indexrelid::regclass::text LIKE 'unique_a_b%'
+ORDER BY 1;
+     indexrelid     |          indrelid           | indkey
+---------------------------------------------------------------------
+ unique_a_b         | citus_local_table_1         | 1 2
+ unique_a_b_1504027 | citus_local_table_1_1504027 | 1 2
+(2 rows)
+
+-- execute truncate & drop commands for multiple relations to see that we don't break local execution
+TRUNCATE citus_local_table_1, citus_local_table_2, distributed_table, local_table, reference_table;
+NOTICE:  executing the command locally: TRUNCATE TABLE citus_local_tables_test_schema.citus_local_table_1_xxxxx CASCADE
+NOTICE:  executing the command locally: TRUNCATE TABLE citus_local_tables_test_schema.citus_local_table_2_xxxxx CASCADE
+NOTICE:  executing the command locally: TRUNCATE TABLE citus_local_tables_test_schema.reference_table_xxxxx CASCADE
+DROP TABLE citus_local_table_1, citus_local_table_2, distributed_table, local_table, reference_table;
+NOTICE:  executing the command locally: DROP TABLE IF EXISTS citus_local_tables_test_schema.reference_table_xxxxx CASCADE
+NOTICE:  executing the command locally: DROP TABLE IF EXISTS citus_local_tables_test_schema.citus_local_table_2_xxxxx CASCADE
+NOTICE:  executing the command locally: DROP TABLE IF EXISTS citus_local_tables_test_schema.citus_local_table_1_xxxxx CASCADE
 -- cleanup at exit
 DROP SCHEMA citus_local_tables_test_schema, "CiTUS!LocalTables" CASCADE;
-NOTICE:  drop cascades to 23 other objects
+NOTICE:  drop cascades to 15 other objects

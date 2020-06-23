@@ -81,6 +81,9 @@ citus_truncate_trigger(PG_FUNCTION_ARGS)
 		PG_RETURN_DATUM(PointerGetDatum(NULL));
 	}
 
+	/* we might be truncating multiple relations */
+	UseCoordinatedTransaction();
+
 	if (partitionMethod == DISTRIBUTE_BY_APPEND)
 	{
 		Oid schemaId = get_rel_namespace(relationId);
@@ -237,12 +240,12 @@ EnsureLocalTableCanBeTruncated(Oid relationId)
 
 
 /*
- * PostprocessTruncateStatement handles few things that should be
+ * PreprocessTruncateStatement handles few things that should be
  * done before standard process utility is called for truncate
  * command.
  */
 void
-PostprocessTruncateStatement(TruncateStmt *truncateStatement)
+PreprocessTruncateStatement(TruncateStmt *truncateStatement)
 {
 	ErrorIfUnsupportedTruncateStmt(truncateStatement);
 	EnsurePartitionTableNotReplicatedForTruncate(truncateStatement);

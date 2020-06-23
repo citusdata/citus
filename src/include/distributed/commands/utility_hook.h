@@ -28,6 +28,7 @@ typedef enum
 } PropSetCmdBehavior;
 extern PropSetCmdBehavior PropagateSetCommands;
 extern bool EnableDDLPropagation;
+extern bool AllCitusLocalTable;
 extern bool EnableDependencyCreation;
 extern bool EnableCreateTypePropagation;
 extern bool EnableAlterRolePropagation;

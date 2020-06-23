@@ -805,3 +805,14 @@ WorkerNodeGetDatum(WorkerNode *workerNode, TupleDesc tupleDescriptor)
 
 	return workerNodeDatum;
 }
+
+
+/*
+ * DistributedTableReplicationIsEnabled returns true if distributed table shards
+ * are replicated according to ShardReplicationFactor.
+ */
+bool
+DistributedTableReplicationIsEnabled()
+{
+	return (ShardReplicationFactor > 1);
+}

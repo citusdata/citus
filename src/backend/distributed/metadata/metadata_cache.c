@@ -294,6 +294,70 @@ EnsureModificationsCanRun(void)
 
 
 /*
+ * IsCitusLocalTableByDistParams returns true if given partitionMethod and
+ * replicationModel would identify a citus local table.
+ */
+bool
+IsCitusLocalTableByDistParams(char partitionMethod, char replicationModel)
+{
+	return partitionMethod == DISTRIBUTE_BY_NONE &&
+		   replicationModel != REPLICATION_MODEL_2PC;
+}
+
+
+/*
+ * IsCitusLocalTable returns whether the given relationId identifies a citus
+ * local table.
+ */
+bool
+IsCitusLocalTable(Oid relationId)
+{
+	if (!IsCitusTable(relationId))
+	{
+		return false;
+	}
+
+	CitusTableCacheEntry *tableEntry = GetCitusTableCacheEntry(relationId);
+
+	char partitionMethod = tableEntry->partitionMethod;
+	char replicationModel = tableEntry->replicationModel;
+	return IsCitusLocalTableByDistParams(partitionMethod, replicationModel);
+}
+
+
+/*
+ * IsReferenceTableByDistParams returns true if given partitionMethod and
+ * replicationModel would identify a reference table.
+ */
+bool
+IsReferenceTableByDistParams(char partitionMethod, char replicationModel)
+{
+	return partitionMethod == DISTRIBUTE_BY_NONE &&
+		   replicationModel == REPLICATION_MODEL_2PC;
+}
+
+
+/*
+ * IsReferenceTable returns whether the given relation ID identifies a reference
+ * table.
+ */
+bool
+IsReferenceTable(Oid relationId)
+{
+	if (!IsCitusTable(relationId))
+	{
+		return false;
+	}
+
+	CitusTableCacheEntry *tableEntry = GetCitusTableCacheEntry(relationId);
+
+	char partitionMethod = tableEntry->partitionMethod;
+	char replicationModel = tableEntry->replicationModel;
+	return IsReferenceTableByDistParams(partitionMethod, replicationModel);
+}
+
+
+/*
  * IsCitusTable returns whether relationId is a distributed relation or
  * not.
  */

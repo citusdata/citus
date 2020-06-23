@@ -117,6 +117,10 @@ typedef struct DistObjectCacheEntry
 } DistObjectCacheEntry;
 
 
+extern bool IsCitusLocalTableByDistParams(char partitionMethod, char replicationModel);
+extern bool IsCitusLocalTable(Oid relationId);
+extern bool IsReferenceTableByDistParams(char partitionMethod, char replicationModel);
+extern bool IsReferenceTable(Oid relationId);
 extern bool IsCitusTable(Oid relationId);
 extern List * CitusTableList(void);
 extern ShardInterval * LoadShardInterval(uint64 shardId);

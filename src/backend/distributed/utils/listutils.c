@@ -204,3 +204,40 @@ ListTake(List *pointerList, int size)
 
 	return result;
 }
+
+
+/*
+ * safe_list_nth first checks if given index is valid and errors out if it is
+ * not. Otherwise, it directly calls list_nth.
+ */
+void *
+safe_list_nth(const List *list, int index)
+{
+	int listLength = list_length(list);
+	if (index < 0 || index >= listLength)
+	{
+		ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
+						errmsg("invalid list access: list length was %d but "
+							   "element at index %d was requested ",
+							   listLength, index)));
+	}
+
+	return list_nth(list, index);
+}
+
+
+/*
+ * GenerateListFromElement returns a new list with length of listLength
+ * such that all the elements are identical with input listElement pointer.
+ */
+List *
+GenerateListFromElement(void *listElement, int listLength)
+{
+	List *list = NIL;
+	for (int i = 0; i < listLength; i++)
+	{
+		list = lappend(list, listElement);
+	}
+
+	return list;
+}

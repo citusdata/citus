@@ -10,8 +10,8 @@
  */
 
 #include "postgres.h"
+
 #include "utils/lsyscache.h"
-#include "distributed/metadata_cache.h"
 #include "distributed/relay_utility.h"
 #include "distributed/shard_utils.h"
 
@@ -35,24 +35,4 @@ GetTableLocalShardOid(Oid citusTableOid, uint64 shardId)
 	Oid shardRelationOid = get_relname_relid(shardRelationName, citusTableSchemaOid);
 
 	return shardRelationOid;
-}
-
-
-/*
- * GetReferenceTableLocalShardOid returns OID of the local shard of given
- * reference table. Caller of this function must ensure that referenceTableOid
- * is owned by a reference table.
- */
-Oid
-GetReferenceTableLocalShardOid(Oid referenceTableOid)
-{
-	const CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(referenceTableOid);
-
-	/* given OID should belong to a valid reference table */
-	Assert(cacheEntry != NULL && cacheEntry->partitionMethod == DISTRIBUTE_BY_NONE);
-
-	const ShardInterval *shardInterval = cacheEntry->sortedShardIntervalArray[0];
-	uint64 referenceTableShardId = shardInterval->shardId;
-
-	return GetTableLocalShardOid(referenceTableOid, referenceTableShardId);
 }

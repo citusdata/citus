@@ -239,7 +239,7 @@ $rb$ LANGUAGE plpgsql;
 CREATE CONSTRAINT TRIGGER reject_bad_mx
 AFTER INSERT ON objects_mx_1220103
 DEFERRABLE INITIALLY IMMEDIATE
-FOR EACH ROW EXECUTE PROCEDURE reject_bad_mx();
+FOR EACH ROW EXECUTE FUNCTION reject_bad_mx();
 -- test partial failure; statement 1 successed, statement 2 fails
 \set VERBOSITY terse
 BEGIN;
@@ -283,7 +283,7 @@ SELECT * FROM labs_mx WHERE id = 7;
 CREATE CONSTRAINT TRIGGER reject_bad_mx
 AFTER INSERT ON labs_mx_1220102
 DEFERRABLE INITIALLY IMMEDIATE
-FOR EACH ROW EXECUTE PROCEDURE reject_bad_mx();
+FOR EACH ROW EXECUTE FUNCTION reject_bad_mx();
 BEGIN;
 SET LOCAL citus.enable_local_execution TO off;
 INSERT INTO objects_mx VALUES (1, 'apple');
@@ -333,7 +333,7 @@ DROP TRIGGER reject_bad_mx ON objects_mx_1220103;
 CREATE CONSTRAINT TRIGGER reject_bad_mx
 AFTER INSERT ON objects_mx_1220103
 DEFERRABLE INITIALLY DEFERRED
-FOR EACH ROW EXECUTE PROCEDURE reject_bad_mx();
+FOR EACH ROW EXECUTE FUNCTION reject_bad_mx();
 -- should be the same story as before, just at COMMIT time
 BEGIN;
 SET LOCAL citus.enable_local_execution TO off;
@@ -361,7 +361,7 @@ DROP TRIGGER reject_bad_mx ON labs_mx_1220102;
 CREATE CONSTRAINT TRIGGER reject_bad_mx
 AFTER INSERT ON labs_mx_1220102
 DEFERRABLE INITIALLY DEFERRED
-FOR EACH ROW EXECUTE PROCEDURE reject_bad_mx();
+FOR EACH ROW EXECUTE FUNCTION reject_bad_mx();
 BEGIN;
 SET LOCAL citus.enable_local_execution TO off;
 INSERT INTO objects_mx VALUES (1, 'apple');

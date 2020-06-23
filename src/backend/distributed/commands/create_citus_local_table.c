@@ -17,8 +17,8 @@
 #include "access/genam.h"
 #include "access/htup_details.h"
 #include "catalog/pg_constraint.h"
+#include "catalog/pg_trigger.h"
 #include "distributed/coordinator_protocol.h"
-#include "distributed/create_citus_local_table.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/commands.h"
@@ -45,10 +45,13 @@ static List * GetConstraintNameList(Oid relationId);
 static char * GetRenameShardConstraintCommand(Oid relationId, char *constraintName,
 											  uint64 shardId);
 static void RenameShardRelationIndexes(Oid shardRelationId, uint64 shardId);
+static char * GetDropTriggerCommand(Oid relationId, char *triggerName);
 static char * GetRenameShardIndexCommand(char *indexName, uint64 shardId);
-static void RenameShardRelationTriggers(Oid shardRelationId, uint64 shardId);
+static void RenameShardRelationNonTruncateTriggers(Oid shardRelationId, uint64 shardId);
 static char * GetRenameShardTriggerCommand(Oid shardRelationId, char *triggerName,
 										   uint64 shardId);
+static void DropRelationTruncateTriggers(Oid relationId);
+static char * GetDropTriggerCommand(Oid relationId, char *triggerName);
 static List * GetExplicitIndexNameList(Oid relationId);
 static void CreateCitusLocalTable(Oid relationId);
 static void FinalizeCitusLocalTableCreation(Oid relationId);
@@ -329,7 +332,22 @@ ConvertLocalTableToShard(Oid relationId)
 	RenameRelationToShardRelation(relationId, shardId);
 	RenameShardRelationConstraints(relationId, shardId);
 	RenameShardRelationIndexes(relationId, shardId);
-	RenameShardRelationTriggers(relationId, shardId);
+
+	/*
+	 * We do not create truncate triggers on shard relation. This is
+	 * because truncate triggers are fired by utility hook and we would
+	 * need to disable them to prevent executing them twice if we don't
+	 * drop the trigger on shard relation.
+	 */
+	DropRelationTruncateTriggers(relationId);
+
+	/*
+	 * We create INSERT|DELETE|UPDATE triggers on shard relation too.
+	 * This is because citus prevents postgres executor to fire those
+	 * triggers. So, here we suffix such triggers on shard relation
+	 * with shardId.
+	 */
+	RenameShardRelationNonTruncateTriggers(relationId, shardId);
 
 	return shardId;
 }
@@ -494,22 +512,31 @@ GetRenameShardIndexCommand(char *indexName, uint64 shardId)
 
 
 /*
- * RenameShardRelationTriggers appends given shardId to the end of the names
- * of shard relation triggers that are explicitly created. This function
- * utilizes GetExplicitTriggerNameList to pick the triggers to be renamed, see
- * more details in function's comment.
+ * RenameShardRelationNonTruncateTriggers appends given shardId to the end of
+ * the names of shard relation INSERT/DELETE/UPDATE triggers that are explicitly
+ * created.
  */
 static void
-RenameShardRelationTriggers(Oid shardRelationId, uint64 shardId)
+RenameShardRelationNonTruncateTriggers(Oid shardRelationId, uint64 shardId)
 {
-	List *triggerNameList = GetExplicitTriggerNameList(shardRelationId);
+	List *triggerIdList = GetExplicitTriggerIdList(shardRelationId);
 
-	char *triggerName = NULL;
-	foreach_ptr(triggerName, triggerNameList)
+	Oid triggerId = InvalidOid;
+	foreach_oid(triggerId, triggerIdList)
 	{
-		const char *commandString =
-			GetRenameShardTriggerCommand(shardRelationId, triggerName, shardId);
-		ExecuteAndLogDDLCommand(commandString);
+		bool missingOk = false;
+		HeapTuple triggerTuple = GetTriggerTupleById(triggerId, missingOk);
+		Form_pg_trigger triggerForm = (Form_pg_trigger) GETSTRUCT(triggerTuple);
+
+		if (!TRIGGER_FOR_TRUNCATE(triggerForm->tgtype))
+		{
+			char *triggerName = NameStr(triggerForm->tgname);
+			char *commandString =
+				GetRenameShardTriggerCommand(shardRelationId, triggerName, shardId);
+			ExecuteAndLogDDLCommand(commandString);
+		}
+
+		heap_freetuple(triggerTuple);
 	}
 }
 
@@ -535,6 +562,61 @@ GetRenameShardTriggerCommand(Oid shardRelationId, char *triggerName, uint64 shar
 					 quotedShardTriggerName);
 
 	return renameCommand->data;
+}
+
+
+/*
+ * DropRelationTruncateTriggers drops TRUNCATE triggers that are explicitly
+ * created on relation with relationId.
+ */
+static void
+DropRelationTruncateTriggers(Oid relationId)
+{
+	List *triggerIdList = GetExplicitTriggerIdList(relationId);
+
+	Oid triggerId = InvalidOid;
+	foreach_oid(triggerId, triggerIdList)
+	{
+		bool missingOk = false;
+		HeapTuple triggerTuple = GetTriggerTupleById(triggerId, missingOk);
+		Form_pg_trigger triggerForm = (Form_pg_trigger) GETSTRUCT(triggerTuple);
+
+		if (TRIGGER_FOR_TRUNCATE(triggerForm->tgtype))
+		{
+			char *triggerName = NameStr(triggerForm->tgname);
+			char *commandString = GetDropTriggerCommand(relationId, triggerName);
+			ExecuteAndLogDDLCommand(commandString);
+		}
+
+		heap_freetuple(triggerTuple);
+	}
+}
+
+
+/*
+ * GetDropTriggerCommand returns DDL command to drop the trigger with triggerName
+ * on relationId.
+ */
+static char *
+GetDropTriggerCommand(Oid relationId, char *triggerName)
+{
+	char *qualifiedRelationName = generate_qualified_relation_name(relationId);
+	const char *quotedTriggerName = quote_identifier(triggerName);
+
+	/*
+	 * In postgres, the only possible object type that may depend on a trigger
+	 * is the "constraint" object implied by the trigger itself if it is a
+	 * constraint trigger, and it would be an internal dependency so it could
+	 * be dropped without using CASCADE. Other than this, it is also possible
+	 * to define dependencies on trigger via recordDependencyOn api by other
+	 * extensions. We don't handle those kind of dependencies, we just drop
+	 * them with CASCADE.
+	 */
+	StringInfo dropCommand = makeStringInfo();
+	appendStringInfo(dropCommand, "DROP TRIGGER %s ON %s CASCADE;",
+					 quotedTriggerName, qualifiedRelationName);
+
+	return dropCommand->data;
 }
 
 
@@ -792,27 +874,4 @@ InsertMetadataForCitusLocalTable(Oid citusLocalTableId, uint64 shardId)
 	int workerStartIndex = 0;
 	InsertShardPlacementRows(citusLocalTableId, shardId, nodeList,
 							 workerStartIndex, replicationFactor);
-}
-
-
-/*
- * IsCitusLocalTable returns whether the given relationId identifies a citus
- * local table.
- */
-bool
-IsCitusLocalTable(Oid relationId)
-{
-	CitusTableCacheEntry *tableEntry = GetCitusTableCacheEntry(relationId);
-
-	if (tableEntry->partitionMethod != DISTRIBUTE_BY_NONE)
-	{
-		return false;
-	}
-
-	if (tableEntry->replicationModel == REPLICATION_MODEL_2PC)
-	{
-		return false;
-	}
-
-	return true;
 }

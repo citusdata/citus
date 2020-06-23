@@ -105,6 +105,7 @@ extern List * GetTableCreationCommands(Oid relationId, bool forShardCreation);
 extern List * GetTableIndexAndConstraintCommands(Oid relationId);
 extern bool IndexImpliedByAConstraint(Form_pg_index indexForm);
 extern char ShardStorageType(Oid relationId);
+extern bool DistributedTableReplicationIsEnabled(void);
 extern void CheckDistributedTable(Oid relationId);
 extern void CreateAppendDistributedShardPlacements(Oid relationId, int64 shardId,
 												   List *workerNodeList, int

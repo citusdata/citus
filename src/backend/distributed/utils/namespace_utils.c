@@ -12,7 +12,9 @@
 #include "postgres.h"
 
 #include "catalog/namespace.h"
+#include "distributed/citus_ruleutils.h"
 #include "distributed/namespace_utils.h"
+#include "utils/regproc.h"
 
 /*
  * PushOverrideEmptySearchPath pushes search_path to be NIL and sets addCatalog to
