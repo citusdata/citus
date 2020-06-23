@@ -63,7 +63,8 @@ ExecuteDependentTasks(List *topLevelTasks, Job *topLevelJob)
 {
 	EnsureNoModificationsHaveBeenDone();
 
-	List *allTasks = TaskAndExecutionList(topLevelTasks);
+	bool createTaskExecution = false;
+	List *allTasks = CreateTaskListForJobTree(topLevelTasks, createTaskExecution);
 
 	EnsureCompatibleLocalExecutionState(allTasks);
 
