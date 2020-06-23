@@ -16,7 +16,7 @@
 #include "distributed/connection_management.h"
 #include "distributed/hash_helpers.h"
 #include "distributed/listutils.h"
-#include "distributed/master_protocol.h"
+#include "distributed/coordinator_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/distributed_planner.h"
 #include "distributed/multi_partitioning_utils.h"

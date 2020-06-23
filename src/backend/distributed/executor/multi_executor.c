@@ -24,9 +24,9 @@
 #include "distributed/insert_select_executor.h"
 #include "distributed/insert_select_planner.h"
 #include "distributed/listutils.h"
-#include "distributed/master_protocol.h"
+#include "distributed/coordinator_protocol.h"
 #include "distributed/multi_executor.h"
-#include "distributed/multi_master_planner.h"
+#include "distributed/combine_query_planner.h"
 #include "distributed/distributed_planner.h"
 #include "distributed/multi_router_planner.h"
 #include "distributed/multi_resowner.h"
@@ -210,6 +210,11 @@ CitusExecutorRun(QueryDesc *queryDesc,
 		}
 
 		ExecutorLevel--;
+
+		if (ExecutorLevel == 0 && PlannerLevel == 0)
+		{
+			CitusTableCacheFlushInvalidatedEntries();
+		}
 	}
 	PG_CATCH();
 	{
@@ -219,6 +224,11 @@ CitusExecutorRun(QueryDesc *queryDesc,
 		}
 
 		ExecutorLevel--;
+
+		if (ExecutorLevel == 0 && PlannerLevel == 0)
+		{
+			CitusTableCacheFlushInvalidatedEntries();
+		}
 
 		PG_RE_THROW();
 	}

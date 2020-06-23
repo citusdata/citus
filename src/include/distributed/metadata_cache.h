@@ -14,7 +14,7 @@
 #include "postgres.h"
 
 #include "fmgr.h"
-#include "distributed/master_metadata_utility.h"
+#include "distributed/metadata_utility.h"
 #include "distributed/pg_dist_partition.h"
 #include "distributed/worker_manager.h"
 #include "utils/hsearch.h"
@@ -36,6 +36,11 @@ extern int ReadFromSecondaries;
  * this to other functions.
  */
 #define GROUP_ID_UPGRADING -2
+
+
+/* internal type used by metadata_cache.c to cache shard indexes */
+struct ShardIdIndexSlot;
+
 
 /*
  * Representation of a table's metadata that is frequently used for
@@ -67,6 +72,9 @@ typedef struct
 	/* pg_dist_shard metadata (variable-length ShardInterval array) for this table */
 	int shardIntervalArrayLength;
 	ShardInterval **sortedShardIntervalArray;
+
+	/* map of shardId to index in sortedShardIntervalArray */
+	struct ShardIdIndexSlot *shardIdIndexHash;
 
 	/* comparator for partition column's type, NULL if DISTRIBUTE_BY_NONE */
 	FmgrInfo *shardColumnCompareFunction;
@@ -131,6 +139,7 @@ extern DistObjectCacheEntry * LookupDistObjectCacheEntry(Oid classid, Oid objid,
 extern int32 GetLocalGroupId(void);
 extern List * DistTableOidList(void);
 extern List * ReferenceTableOidList(void);
+extern void CitusTableCacheFlushInvalidatedEntries(void);
 extern Oid LookupShardRelation(int64 shardId, bool missing_ok);
 extern List * ShardPlacementList(uint64 shardId);
 extern void CitusInvalidateRelcacheByRelid(Oid relationId);

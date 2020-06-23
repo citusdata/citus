@@ -24,7 +24,7 @@
 #include "distributed/colocation_utils.h"
 #include "distributed/commands.h"
 #include "distributed/listutils.h"
-#include "distributed/master_protocol.h"
+#include "distributed/coordinator_protocol.h"
 #include "distributed/multi_join_order.h"
 #include "distributed/namespace_utils.h"
 #include "distributed/reference_table_utils.h"

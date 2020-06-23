@@ -20,7 +20,7 @@
 #include "catalog/pg_am.h"
 #include "catalog/pg_type.h"
 #include "distributed/intermediate_results.h"
-#include "distributed/master_metadata_utility.h"
+#include "distributed/metadata_utility.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_executor.h"
 #include "distributed/pg_dist_shard.h"

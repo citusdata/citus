@@ -18,7 +18,7 @@
 #include "distributed/commands.h"
 #include "distributed/deparser.h"
 #include "distributed/listutils.h"
-#include "distributed/master_metadata_utility.h"
+#include "distributed/metadata_utility.h"
 #include "distributed/metadata/distobject.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/multi_executor.h"

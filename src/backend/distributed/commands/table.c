@@ -25,7 +25,7 @@
 #include "distributed/deparser.h"
 #include "distributed/deparse_shard_query.h"
 #include "distributed/listutils.h"
-#include "distributed/master_protocol.h"
+#include "distributed/coordinator_protocol.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/multi_executor.h"
 #include "distributed/multi_partitioning_utils.h"

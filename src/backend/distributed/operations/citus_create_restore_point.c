@@ -17,7 +17,7 @@
 #include "catalog/pg_type.h"
 #include "distributed/connection_management.h"
 #include "distributed/listutils.h"
-#include "distributed/master_metadata_utility.h"
+#include "distributed/metadata_utility.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/remote_commands.h"
 #include "nodes/pg_list.h"

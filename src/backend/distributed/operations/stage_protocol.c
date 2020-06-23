@@ -1,6 +1,6 @@
 /*-------------------------------------------------------------------------
  *
- * master_stage_protocol.c
+ * stage_protocol.c
  *
  * Routines for staging PostgreSQL table data as shards into the distributed
  * cluster. These user-defined functions are similar to the psql-side \stage
@@ -35,8 +35,8 @@
 #include "distributed/listutils.h"
 #include "distributed/multi_client_executor.h"
 #include "distributed/multi_executor.h"
-#include "distributed/master_metadata_utility.h"
-#include "distributed/master_protocol.h"
+#include "distributed/metadata_utility.h"
+#include "distributed/coordinator_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_join_order.h"
 #include "distributed/multi_partitioning_utils.h"

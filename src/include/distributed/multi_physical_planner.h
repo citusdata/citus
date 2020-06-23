@@ -24,7 +24,7 @@
 #include "distributed/citus_nodes.h"
 #include "distributed/errormessage.h"
 #include "distributed/log_utils.h"
-#include "distributed/master_metadata_utility.h"
+#include "distributed/metadata_utility.h"
 #include "distributed/worker_manager.h"
 #include "distributed/multi_logical_planner.h"
 #include "distributed/distributed_planner.h"
@@ -339,6 +339,13 @@ typedef struct Task
 	struct TupleDestination *tupleDest;
 
 	/*
+	 * totalReceivedTupleData only counts the data for a single placement. So
+	 * for RETURNING DML this is not really correct. This is used by
+	 * EXPLAIN ANALYZE, to display the amount of received bytes.
+	 */
+	uint64 totalReceivedTupleData;
+
+	/*
 	 * EXPLAIN ANALYZE output fetched from worker. This is saved to be used later
 	 * by RemoteExplain().
 	 */
@@ -398,7 +405,7 @@ typedef struct DistributedPlan
 	Job *workerJob;
 
 	/* local query that merges results from the workers */
-	Query *masterQuery;
+	Query *combineQuery;
 
 	/* query identifier (copied from the top-level PlannedStmt) */
 	uint64 queryId;

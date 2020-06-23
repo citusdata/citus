@@ -1,6 +1,6 @@
 /*-------------------------------------------------------------------------
  *
- * master_metadata_utility.c
+ * metadata_utility.c
  *    Routines for reading and modifying master node's metadata.
  *
  * Copyright (c) Citus Data, Inc.
@@ -35,8 +35,8 @@
 #include "distributed/citus_nodes.h"
 #include "distributed/citus_safe_lib.h"
 #include "distributed/listutils.h"
-#include "distributed/master_metadata_utility.h"
-#include "distributed/master_protocol.h"
+#include "distributed/metadata_utility.h"
+#include "distributed/coordinator_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_join_order.h"
 #include "distributed/multi_logical_optimizer.h"
@@ -317,7 +317,7 @@ ShardIntervalsOnWorkerGroup(WorkerNode *workerNode, Oid relationId)
  * size of multiple tables. Note that, different size functions supported by PG
  * are also supported by this function changing the size query given as the
  * last parameter to function.  Format of sizeQuery is pg_*_size(%s). Examples
- * of it can be found in the master_protocol.h
+ * of it can be found in the coordinator_protocol.h
  */
 StringInfo
 GenerateSizeQueryOnMultiplePlacements(List *shardIntervalList, char *sizeQuery)

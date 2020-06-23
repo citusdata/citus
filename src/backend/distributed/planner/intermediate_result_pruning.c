@@ -51,9 +51,9 @@ FindSubPlanUsages(DistributedPlan *plan)
 	List *localSubPlans = NIL;
 	List *remoteSubPlans = NIL;
 
-	if (plan->masterQuery != NULL)
+	if (plan->combineQuery != NULL)
 	{
-		localSubPlans = FindSubPlansUsedInNode((Node *) plan->masterQuery,
+		localSubPlans = FindSubPlansUsedInNode((Node *) plan->combineQuery,
 											   SUBPLAN_ACCESS_LOCAL);
 	}
 

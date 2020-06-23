@@ -13,7 +13,7 @@
 #include "catalog/namespace.h"
 #include "catalog/pg_class.h"
 #include "distributed/metadata_cache.h"
-#include "distributed/master_protocol.h"
+#include "distributed/coordinator_protocol.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/worker_shard_visibility.h"
 #include "nodes/nodeFuncs.h"

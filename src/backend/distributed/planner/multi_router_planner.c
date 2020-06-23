@@ -30,8 +30,8 @@
 #include "distributed/log_utils.h"
 #include "distributed/insert_select_planner.h"
 #include "distributed/intermediate_result_pruning.h"
-#include "distributed/master_metadata_utility.h"
-#include "distributed/master_protocol.h"
+#include "distributed/metadata_utility.h"
+#include "distributed/coordinator_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_executor.h"
 #include "distributed/multi_join_order.h"
@@ -238,7 +238,7 @@ CreateModifyPlan(Query *originalQuery, Query *query,
 	ereport(DEBUG2, (errmsg("Creating router plan")));
 
 	distributedPlan->workerJob = job;
-	distributedPlan->masterQuery = NULL;
+	distributedPlan->combineQuery = NULL;
 	distributedPlan->routerExecutable = true;
 	distributedPlan->expectResults = originalQuery->returningList != NIL;
 	distributedPlan->targetRelationId = ResultRelationOidForQuery(query);
@@ -277,7 +277,7 @@ CreateSingleTaskRouterSelectPlan(DistributedPlan *distributedPlan, Query *origin
 	ereport(DEBUG2, (errmsg("Creating router plan")));
 
 	distributedPlan->workerJob = job;
-	distributedPlan->masterQuery = NULL;
+	distributedPlan->combineQuery = NULL;
 	distributedPlan->routerExecutable = true;
 	distributedPlan->expectResults = true;
 }

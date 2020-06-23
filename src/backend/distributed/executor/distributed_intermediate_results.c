@@ -23,7 +23,7 @@
 #include "distributed/deparse_shard_query.h"
 #include "distributed/intermediate_results.h"
 #include "distributed/listutils.h"
-#include "distributed/master_metadata_utility.h"
+#include "distributed/metadata_utility.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_executor.h"
 #include "distributed/multi_physical_planner.h"

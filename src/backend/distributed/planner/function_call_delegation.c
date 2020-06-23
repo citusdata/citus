@@ -27,8 +27,8 @@
 #include "distributed/function_call_delegation.h"
 #include "distributed/insert_select_planner.h"
 #include "distributed/insert_select_executor.h"
-#include "distributed/master_metadata_utility.h"
-#include "distributed/master_protocol.h"
+#include "distributed/metadata_utility.h"
+#include "distributed/coordinator_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_executor.h"
 #include "distributed/multi_physical_planner.h"
@@ -378,7 +378,7 @@ TryToDelegateFunctionCall(DistributedPlanningContext *planContext)
 
 	distributedPlan = CitusMakeNode(DistributedPlan);
 	distributedPlan->workerJob = job;
-	distributedPlan->masterQuery = NULL;
+	distributedPlan->combineQuery = NULL;
 	distributedPlan->routerExecutable = true;
 	distributedPlan->expectResults = true;
 

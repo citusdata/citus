@@ -30,7 +30,7 @@
 #include "distributed/multi_physical_planner.h"
 #include "distributed/distributed_planner.h"
 #include "distributed/multi_server_executor.h"
-#include "distributed/master_metadata_utility.h"
+#include "distributed/metadata_utility.h"
 #include "lib/stringinfo.h"
 #include "nodes/plannodes.h"
 #if PG_VERSION_NUM >= PG_VERSION_12
@@ -188,7 +188,7 @@ OutDistributedPlan(OUTFUNC_ARGS)
 	WRITE_BOOL_FIELD(routerExecutable);
 
 	WRITE_NODE_FIELD(workerJob);
-	WRITE_NODE_FIELD(masterQuery);
+	WRITE_NODE_FIELD(combineQuery);
 	WRITE_UINT64_FIELD(queryId);
 	WRITE_NODE_FIELD(relationIdList);
 	WRITE_OID_FIELD(targetRelationId);

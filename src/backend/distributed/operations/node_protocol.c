@@ -1,6 +1,6 @@
 /*-------------------------------------------------------------------------
  *
- * master_node_protocol.c
+ * node_protocol.c
  *	  Routines for requesting information from the master node for creating or
  *	  updating shards.
  *
@@ -43,7 +43,7 @@
 #include "distributed/citus_ruleutils.h"
 #include "distributed/commands.h"
 #include "distributed/listutils.h"
-#include "distributed/master_protocol.h"
+#include "distributed/coordinator_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/namespace_utils.h"

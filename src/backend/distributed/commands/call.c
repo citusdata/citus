@@ -21,7 +21,7 @@
 #include "distributed/commands/utility_hook.h"
 #include "distributed/connection_management.h"
 #include "distributed/deparse_shard_query.h"
-#include "distributed/master_metadata_utility.h"
+#include "distributed/metadata_utility.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_executor.h"
 #include "distributed/multi_physical_planner.h"

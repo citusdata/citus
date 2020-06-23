@@ -12,8 +12,8 @@
 #include "miscadmin.h"
 
 #include "distributed/commands/utility_hook.h"
-#include "distributed/master_metadata_utility.h"
-#include "distributed/master_protocol.h"
+#include "distributed/metadata_utility.h"
+#include "distributed/coordinator_protocol.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/worker_transaction.h"
 #include "utils/builtins.h"

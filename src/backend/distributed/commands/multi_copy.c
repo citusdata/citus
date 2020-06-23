@@ -73,7 +73,7 @@
 #include "distributed/intermediate_results.h"
 #include "distributed/local_executor.h"
 #include "distributed/log_utils.h"
-#include "distributed/master_protocol.h"
+#include "distributed/coordinator_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/multi_physical_planner.h"
