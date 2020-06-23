@@ -17,6 +17,7 @@
 #else
 #include "access/heapam.h"
 #include "access/htup_details.h"
+#include "access/sysattr.h"
 #endif
 #include "catalog/indexing.h"
 #include "catalog/namespace.h"
@@ -91,12 +92,18 @@ GetExplicitTriggerNameList(Oid relationId)
 char *
 GetTriggerNameById(Oid triggerId)
 {
-	Relation pgTrigger = table_open(TriggerRelationId, AccessShareLock);
+	Relation pgTrigger = heap_open(TriggerRelationId, AccessShareLock);
 
 	int scanKeyCount = 1;
 	ScanKeyData scanKey[1];
 
-	ScanKeyInit(&scanKey[0], Anum_pg_trigger_oid, BTEqualStrategyNumber,
+#if PG_VERSION_NUM >= PG_VERSION_12
+	AttrNumber attrNumber = Anum_pg_trigger_oid;
+#else
+	AttrNumber attrNumber = ObjectIdAttributeNumber;
+#endif
+
+	ScanKeyInit(&scanKey[0], attrNumber, BTEqualStrategyNumber,
 				F_OIDEQ, ObjectIdGetDatum(triggerId));
 
 	bool useIndex = true;
