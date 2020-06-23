@@ -762,10 +762,10 @@ ExtractColumnsOwningSequences(Oid relationId, List **columnNameList,
 		if (list_length(columnOwnedSequences) != 0)
 		{
 			/*
-			 * Skip if the column does not own any sequences. In that case, column
-			 * either does not take the default value from a sequence or it does
-			 * not own the sequence, i.e, sequence is created and attached to the
-			 * column explicitly by the user.
+			 * A column might only own one sequence. We intentionally use
+			 * getOwnedSequences and pick initial oid from the list instead
+			 * of using getOwnedSequence as it errors out if column does not
+			 * have any sequences.
 			 */
 			Assert(list_length(columnOwnedSequences) == 1);
 			ownedSequenceId = linitial_oid(columnOwnedSequences);
