@@ -169,6 +169,30 @@ BEGIN;
   SELECT create_citus_local_table('citus_local_table_3');
 ROLLBACK;
 
+-- show that we properly handle sequences on citus local tables --
+
+BEGIN;
+  CREATE SEQUENCE col3_seq;
+  CREATE TABLE citus_local_table_3 (col1 serial, col2 int, col3 int DEFAULT nextval('col3_seq'));
+
+  SELECT create_citus_local_table('citus_local_table_3');
+
+  -- print column default expressions
+  -- we should only see shell relation below
+  SELECT table_name, column_name, column_default
+  FROM information_schema.COLUMNS
+  WHERE table_name like 'citus_local_table_3%' and column_default != '' ORDER BY 1,2;
+
+  -- print sequence ownerships
+  -- show that the only internal sequence is on col1 and it is owned by shell relation
+  SELECT s.relname as sequence_name, t.relname, a.attname
+  FROM pg_class s
+    JOIN pg_depend d on d.objid=s.oid and d.classid='pg_class'::regclass and d.refclassid='pg_class'::regclass
+    JOIN pg_class t on t.oid=d.refobjid
+    JOIN pg_attribute a on a.attrelid=t.oid and a.attnum=d.refobjsubid
+  WHERE s.relkind='S' and s.relname like 'citus_local_table_3%' ORDER BY 1,2;
+ROLLBACK;
+
 -- test foreign tables using fake FDW --
 
 CREATE FOREIGN TABLE foreign_table (
