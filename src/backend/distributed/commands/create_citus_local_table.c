@@ -883,11 +883,6 @@ IsCitusLocalTable(Oid relationId)
 {
 	CitusTableCacheEntry *tableEntry = GetCitusTableCacheEntry(relationId);
 
-	if (!tableEntry->isCitusTable)
-	{
-		return false;
-	}
-
 	if (tableEntry->partitionMethod != DISTRIBUTE_BY_NONE)
 	{
 		return false;
