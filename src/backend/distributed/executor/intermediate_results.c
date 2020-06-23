@@ -701,7 +701,33 @@ RemoveIntermediateResultsDirectory(void)
 {
 	if (CreatedResultsDirectory)
 	{
-		PathNameDeleteTemporaryDir(IntermediateResultsDirectory());
+		/*
+		 * The shared directory is renamed before deleting it. Otherwise it
+		 * would be possible for another backend to write a file, while we are
+		 * deleting the directory. Since rename is atomic by POSIX standards
+		 * that's not possible. The current PID is included in the new
+		 * filename, so there can be no collisions with other backends.
+		 */
+		char *sharedName = IntermediateResultsDirectory();
+		StringInfo privateName = makeStringInfo();
+		appendStringInfo(privateName, "%s.removed-by-%d", sharedName, MyProcPid);
+		if (rename(sharedName, privateName->data))
+		{
+			ereport(LOG,
+					(errcode_for_file_access(),
+					 errmsg(
+						 "could not rename intermediate results directory \"%s\" to \"%s\": %m",
+						 sharedName, privateName->data)));
+
+			/* rename failed for some reason, we do a best effort removal of
+			 * the shared directory */
+
+			PathNameDeleteTemporaryDir(sharedName);
+		}
+		else
+		{
+			PathNameDeleteTemporaryDir(privateName->data);
+		}
 
 		CreatedResultsDirectory = false;
 	}

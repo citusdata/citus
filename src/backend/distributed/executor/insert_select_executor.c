@@ -1059,11 +1059,11 @@ IsRedistributablePlan(Plan *selectPlan)
 		return false;
 	}
 
-	if (distSelectPlan->masterQuery != NULL)
+	if (distSelectPlan->combineQuery != NULL)
 	{
-		Query *masterQuery = (Query *) distSelectPlan->masterQuery;
+		Query *combineQuery = (Query *) distSelectPlan->combineQuery;
 
-		if (contain_nextval_expression_walker((Node *) masterQuery->targetList, NULL))
+		if (contain_nextval_expression_walker((Node *) combineQuery->targetList, NULL))
 		{
 			/* nextval needs to be evaluated on the coordinator */
 			return false;

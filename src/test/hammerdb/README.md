@@ -19,7 +19,7 @@ git push origin tpcc_benchmark/improve/adaptive_executor # the tpcc benchmark jo
 
 You will see the results in a branch in [https://github.com/citusdata/release-test-results](https://github.com/citusdata/release-test-results).
 
-The branch name will be something like: `delete_me/citusbot_tpcc_benchmark_rg/<date>/<date>`.
+The branch name will be something like: `citus_github_push/citusbot_tpcc_benchmark_rg/<date>/<date>`.
 
 On success, which is the vast majority of the cases, the resource groups on Azure which are automatically created for this purpose are deleted automatically. On failure, you need to manually drop the resource groups named: `citusbot_ch_benchmark_rg` and `citusbot_tpcc_benchmark_rg`. To check whether the job failed, go to Azure portal and search for these resource group names. If the resource group doesn't have any virtual machines or the virtual machines don't have any CPU/Memory load at all, it is highly possible that the job failed. Delete the resource groups and re-try with another branch.
 

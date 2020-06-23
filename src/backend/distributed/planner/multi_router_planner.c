@@ -238,7 +238,7 @@ CreateModifyPlan(Query *originalQuery, Query *query,
 	ereport(DEBUG2, (errmsg("Creating router plan")));
 
 	distributedPlan->workerJob = job;
-	distributedPlan->masterQuery = NULL;
+	distributedPlan->combineQuery = NULL;
 	distributedPlan->routerExecutable = true;
 	distributedPlan->expectResults = originalQuery->returningList != NIL;
 	distributedPlan->targetRelationId = ResultRelationOidForQuery(query);
@@ -277,7 +277,7 @@ CreateSingleTaskRouterSelectPlan(DistributedPlan *distributedPlan, Query *origin
 	ereport(DEBUG2, (errmsg("Creating router plan")));
 
 	distributedPlan->workerJob = job;
-	distributedPlan->masterQuery = NULL;
+	distributedPlan->combineQuery = NULL;
 	distributedPlan->routerExecutable = true;
 	distributedPlan->expectResults = true;
 }

@@ -1,3 +1,23 @@
+### citus v9.3.2 (Jun 22, 2020) ###
+
+* Fixes a version bump issue in 9.3.1
+
+### citus v9.2.6 (Jun 22, 2020) ###
+
+* Fixes a version bump issue in 9.2.5
+
+### citus v9.3.1 (Jun 17, 2020) ###
+
+* Adds support to partially push down tdigest aggregates
+
+* Fixes a crash that occurs when inserting implicitly coerced constants
+
+### citus v9.2.5 (Jun 17, 2020) ###
+
+* Adds support to partially push down tdigest aggregates
+
+* Fixes an issue with distributing tables having generated cols not at the end
+
 ### citus v9.3.0 (May 6, 2020) ###
 
 * Adds `max_shared_pool_size` to control number of connections across sessions
@@ -1052,7 +1072,7 @@
 
 * Adds user-facing UDFs for locking shard resources and metadata
 
-* Refactors connection and transaction management; giving a consistent experience
+* Refactors connection and transaction management; giving consistent experience
 
 * Enhances `COPY` with fully transactional semantics
 
@@ -1068,7 +1088,7 @@
 
 * Enhances `SERIAL` compatibility with MX tables
 
-* Adds an `node_connection_timeout` parameter to control node connection timeouts
+* Adds `node_connection_timeout` parameter to control node connection timeouts
 
 * Adds `enable_deadlock_prevention` setting to permit multi-node transactions
 

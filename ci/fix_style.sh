@@ -10,5 +10,7 @@ cd ${cidir}/..
 
 ci/editorconfig.sh
 ci/remove_useless_declarations.sh
+ci/disallow_c_comments_in_migrations.sh
+ci/disallow_long_changelog_entries.sh
 
 citus_indent . --quiet
