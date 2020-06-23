@@ -21,6 +21,7 @@
 #include "catalog/indexing.h"
 #include "catalog/pg_class.h"
 #include "catalog/pg_depend.h"
+#include "catalog/pg_proc_d.h"
 #include "catalog/pg_rewrite.h"
 #include "catalog/pg_rewrite_d.h"
 #include "catalog/pg_shdepend.h"
@@ -28,8 +29,6 @@
 #if PG_VERSION_NUM >= PG_VERSION_13
 #include "common/hashfn.h"
 #endif
-#include "distributed/commands/utility_hook.h"
-#include "distributed/listutils.h"
 #include "distributed/metadata/dependency.h"
 #include "distributed/metadata/distobject.h"
 #include "distributed/metadata_cache.h"
@@ -116,6 +115,8 @@ typedef struct ViewDependencyNode
 }ViewDependencyNode;
 
 
+static List * GetRelationTriggerFunctionDepencyList(Oid relationId);
+static DependencyDefinition * CreateObjectAddressDependencyDef(Oid classId, Oid objectId);
 static ObjectAddress DependencyDefinitionObjectAddress(DependencyDefinition *definition);
 
 /* forward declarations for functions to interact with the ObjectAddressCollector */
@@ -857,12 +858,9 @@ ExpandCitusSupportedTypes(ObjectAddressCollector *collector, ObjectAddress targe
 			 */
 			if (get_typtype(target.objectId) == TYPTYPE_COMPOSITE)
 			{
-				DependencyDefinition *dependency = palloc0(sizeof(DependencyDefinition));
-				dependency->mode = DependencyObjectAddress;
-				ObjectAddressSet(dependency->data.address,
-								 RelationRelationId,
-								 get_typ_typrelid(target.objectId));
-
+				Oid typeRelationId = get_typ_typrelid(target.objectId);
+				DependencyDefinition *dependency =
+					CreateObjectAddressDependencyDef(RelationRelationId, typeRelationId);
 				result = lappend(result, dependency);
 			}
 
@@ -874,16 +872,30 @@ ExpandCitusSupportedTypes(ObjectAddressCollector *collector, ObjectAddress targe
 			 */
 			if (type_is_array(target.objectId))
 			{
-				DependencyDefinition *dependency = palloc0(sizeof(DependencyDefinition));
-				dependency->mode = DependencyObjectAddress;
-				ObjectAddressSet(dependency->data.address,
-								 TypeRelationId,
-								 get_element_type(target.objectId));
-
+				Oid typeId = get_element_type(target.objectId);
+				DependencyDefinition *dependency =
+					CreateObjectAddressDependencyDef(TypeRelationId, typeId);
 				result = lappend(result, dependency);
 			}
 
 			break;
+		}
+
+		case RelationRelationId:
+		{
+			/*
+			 * Triggers both depend to the relations and to the functions they
+			 * execute. Also, pg_depend records dependencies from triggers to the
+			 * functions but not from relations to their triggers. Given above two,
+			 * we directly expand depencies for the relations to trigger functions.
+			 * That way, we won't attempt to create the trigger as a dependency of
+			 * the relation, which would fail as the relation itself is not created
+			 * yet when ensuring dependencies.
+			 */
+			Oid relationId = target.objectId;
+			List *triggerFunctionDepencyList =
+				GetRelationTriggerFunctionDepencyList(relationId);
+			result = list_concat(result, triggerFunctionDepencyList);
 		}
 
 		default:
@@ -893,6 +905,44 @@ ExpandCitusSupportedTypes(ObjectAddressCollector *collector, ObjectAddress targe
 		}
 	}
 	return result;
+}
+
+
+/*
+ * GetRelationTriggerFunctionDepencyList returns a list of DependencyDefinition
+ * objects for the functions that triggers of the relation with relationId depends.
+ */
+static List *
+GetRelationTriggerFunctionDepencyList(Oid relationId)
+{
+	List *dependencyList = NIL;
+
+	List *triggerIdList = GetExplicitTriggerIdList(relationId);
+	Oid triggerId = InvalidOid;
+	foreach_oid(triggerId, triggerIdList)
+	{
+		Oid functionId = GetTriggerFunctionId(triggerId);
+		DependencyDefinition *dependency =
+			CreateObjectAddressDependencyDef(ProcedureRelationId, functionId);
+		dependencyList = lappend(dependencyList, dependency);
+	}
+
+	return dependencyList;
+}
+
+
+/*
+ * CreateObjectAddressDependencyDef returns DependencyDefinition object that
+ * stores the ObjectAddress for the database object identified by classId and
+ * objectId.
+ */
+static DependencyDefinition *
+CreateObjectAddressDependencyDef(Oid classId, Oid objectId)
+{
+	DependencyDefinition *dependency = palloc0(sizeof(DependencyDefinition));
+	dependency->mode = DependencyObjectAddress;
+	ObjectAddressSet(dependency->data.address, classId, objectId);
+	return dependency;
 }
 
 

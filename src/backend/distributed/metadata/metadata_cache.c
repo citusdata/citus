@@ -427,6 +427,30 @@ IsCitusTableViaCatalog(Oid relationId)
 
 
 /*
+ * IsCitusLocalTableByDistParams returns true if given partitionMethod and
+ * replicationModel would identify a citus local table.
+ */
+bool
+IsCitusLocalTableByDistParams(char partitionMethod, char replicationModel)
+{
+	return partitionMethod == DISTRIBUTE_BY_NONE &&
+		   replicationModel != REPLICATION_MODEL_2PC;
+}
+
+
+/*
+ * IsReferenceTableByDistParams returns true if given partitionMethod and
+ * replicationModel would identify a reference table.
+ */
+bool
+IsReferenceTableByDistParams(char partitionMethod, char replicationModel)
+{
+	return partitionMethod == DISTRIBUTE_BY_NONE &&
+		   replicationModel == REPLICATION_MODEL_2PC;
+}
+
+
+/*
  * CitusTableList returns a list that includes all the valid distributed table
  * cache entries.
  */

@@ -214,13 +214,6 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		parsetree = ProcessCreateSubscriptionStmt(createSubStmt);
 	}
 
-	if (IsA(parsetree, CreateTrigStmt))
-	{
-		CreateTrigStmt *createTriggerStmt = (CreateTrigStmt *) parsetree;
-
-		ErrorIfUnsupportedCreateTriggerCommand(createTriggerStmt);
-	}
-
 	if (IsA(parsetree, CallStmt))
 	{
 		CallStmt *callStmt = (CallStmt *) parsetree;
@@ -378,7 +371,7 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 
 	if (IsA(parsetree, TruncateStmt))
 	{
-		PostprocessTruncateStatement((TruncateStmt *) parsetree);
+		PreprocessTruncateStatement((TruncateStmt *) parsetree);
 	}
 
 	/* only generate worker DDLJobs if propagation is enabled */
@@ -555,15 +548,11 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		}
 	}
 
-	/*
-	 * We only process CREATE TABLE ... PARTITION OF commands in the function below
-	 * to handle the case when user creates a table as a partition of distributed table.
-	 */
 	if (IsA(parsetree, CreateStmt))
 	{
 		CreateStmt *createStatement = (CreateStmt *) parsetree;
 
-		PostprocessCreateTableStmtPartitionOf(createStatement, queryString);
+		PostprocessCreateTableStmt(createStatement, queryString);
 	}
 
 	/*

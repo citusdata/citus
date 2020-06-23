@@ -140,7 +140,7 @@ BEGIN;
 
   CREATE TRIGGER insert_trigger
   AFTER INSERT ON citus_local_table_3
-  FOR EACH STATEMENT EXECUTE PROCEDURE update_value();
+  FOR EACH STATEMENT EXECUTE FUNCTION update_value();
 
   SELECT create_citus_local_table('citus_local_table_3');
 
@@ -301,15 +301,8 @@ CREATE UNIQUE INDEX uniqueIndex2 ON "LocalTabLE.1!?!"(id);
 
 SET search_path TO citus_local_tables_test_schema;
 
--- any foreign key between citus local tables and other tables cannot be set for now
--- most should error out (for now with meaningless error messages)
-
--- between citus local tables
-ALTER TABLE citus_local_table_1 ADD CONSTRAINT fkey_c_to_c FOREIGN KEY(a) references citus_local_table_2(a);
-
--- between citus local tables and reference tables
-ALTER TABLE citus_local_table_1 ADD CONSTRAINT fkey_c_to_ref FOREIGN KEY(a) references reference_table(a);
-ALTER TABLE reference_table ADD CONSTRAINT fkey_ref_to_c FOREIGN KEY(a) references citus_local_table_1(a);
+-- any foreign key between citus local tables and other tables except reference tables cannot be set
+-- more tests at ref_citus_local_fkeys.sql
 
 -- between citus local tables and distributed tables
 ALTER TABLE citus_local_table_1 ADD CONSTRAINT fkey_c_to_dist FOREIGN KEY(a) references distributed_table(a);
@@ -317,7 +310,40 @@ ALTER TABLE distributed_table ADD CONSTRAINT fkey_dist_to_c FOREIGN KEY(a) refer
 
 -- between citus local tables and local tables
 ALTER TABLE citus_local_table_1 ADD CONSTRAINT fkey_c_to_local FOREIGN KEY(a) references local_table(a);
-ALTER TABLE local_table ADD CONSTRAINT fkey_local_to_c FOREIGN KEY(a) references citus_local_table_1(a);
+ALTER TABLE local_table
+  ADD CONSTRAINT fkey_local_to_c FOREIGN KEY(a) references citus_local_table_1(a),
+  ADD CONSTRAINT fkey_self FOREIGN KEY(a) references local_table(a);
+ALTER TABLE local_table
+  ADD COLUMN b int references citus_local_table_1(a),
+  ADD COLUMN c int references local_table(a);
+CREATE TABLE local_table_4 (
+  a int unique references citus_local_table_1(a),
+  b int references local_table_4(a));
+
+ALTER TABLE citus_local_table_1 ADD COLUMN b int NOT NULL;
+-- show that we added column with NOT NULL
+SELECT table_name, column_name, is_nullable
+FROM INFORMATION_SCHEMA.COLUMNS
+WHERE table_name LIKE 'citus_local_table_1%' AND column_name = 'b'
+ORDER BY 1;
+
+ALTER TABLE citus_local_table_1 ADD CONSTRAINT unique_a_b UNIQUE (a, b);
+-- show that we defined unique constraints
+SELECT conrelid::regclass, conname, conkey
+FROM pg_constraint
+WHERE conrelid::regclass::text LIKE 'citus_local_table_1%' AND contype = 'u'
+ORDER BY 1;
+
+CREATE UNIQUE INDEX citus_local_table_1_idx ON citus_local_table_1(b);
+-- show that we successfully defined the unique index
+SELECT indexrelid::regclass, indrelid::regclass, indkey
+FROM pg_index
+WHERE indrelid::regclass::text LIKE 'citus_local_table_1%' AND indexrelid::regclass::text LIKE 'unique_a_b%'
+ORDER BY 1;
+
+-- execute truncate & drop commands for multiple relations to see that we don't break local execution
+TRUNCATE citus_local_table_1, citus_local_table_2, distributed_table, local_table, reference_table;
+DROP TABLE citus_local_table_1, citus_local_table_2, distributed_table, local_table, reference_table;
 
 -- cleanup at exit
 DROP SCHEMA citus_local_tables_test_schema, "CiTUS!LocalTables" CASCADE;
