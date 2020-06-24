@@ -53,6 +53,9 @@ jobs:
       - run:
           name: 'Check for banned C API usage'
           command: ci/banned.h.sh
+      - run:
+          name: 'Check for missing downgrade scripts'
+          command: ci/check_migration_files.sh
   check-sql-snapshots:
     docker:
       - image: 'citus/extbuilder:latest'
