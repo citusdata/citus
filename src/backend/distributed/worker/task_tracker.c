@@ -29,6 +29,10 @@
 #include "miscadmin.h"
 #include <unistd.h>
 
+#include "access/heapam.h"
+#include "access/xact.h"
+#include "access/htup_details.h"
+#include "catalog/pg_database.h"
 #include "commands/dbcommands.h"
 #include "distributed/citus_safe_lib.h"
 #include "distributed/listutils.h"
@@ -116,7 +120,7 @@ TaskTrackerRegister(void)
 
 	/* and that the task tracker is started as background worker */
 	memset(&worker, 0, sizeof(worker));
-	worker.bgw_flags = BGWORKER_SHMEM_ACCESS;
+	worker.bgw_flags = BGWORKER_SHMEM_ACCESS | BGWORKER_BACKEND_DATABASE_CONNECTION;
 	worker.bgw_start_time = BgWorkerStart_ConsistentState;
 	worker.bgw_restart_time = 1;
 	strcpy_s(worker.bgw_library_name, sizeof(worker.bgw_library_name), "citus");
@@ -142,6 +146,9 @@ TaskTrackerMain(Datum main_arg)
 
 	/* We're now ready to receive signals */
 	BackgroundWorkerUnblockSignals();
+
+	/* Initialize connection for accessing catalogs */
+	BackgroundWorkerInitializeConnection(NULL, NULL, 0);
 
 	/*
 	 * Create a memory context that we will do all our work in.  We do this so
@@ -354,6 +361,41 @@ TrackerCleanupJobDirectories(void)
 }
 
 
+static List *
+DatabaseNameList(void)
+{
+	List *databaseNameList = NIL;
+
+	StartTransactionCommand();
+
+	Relation pgDatabase = heap_open(DatabaseRelationId, AccessShareLock);
+#if PG_VERSION_NUM >= PG_VERSION_12
+	TableScanDesc scanDesc = table_beginscan_catalog(pgDatabase, 0, NULL);
+#else
+	HeapScanDesc scanDesc = heap_beginscan_catalog(pgDatabase, 0, NULL);
+#endif
+
+	HeapTuple tuple;
+	while (HeapTupleIsValid(tuple = heap_getnext(scanDesc, ForwardScanDirection)))
+	{
+		Form_pg_database databaseForm = (Form_pg_database) GETSTRUCT(tuple);
+		char *databaseName = pstrdup(NameStr(databaseForm->datname));
+		databaseNameList = lappend(databaseNameList, databaseName);
+	}
+
+#if PG_VERSION_NUM >= PG_VERSION_12
+	table_endscan(scanDesc);
+#else
+	heap_endscan(scanDesc);
+#endif
+	heap_close(pgDatabase, NoLock);
+
+	CommitTransactionCommand();
+
+	return databaseNameList;
+}
+
+
 /*
  * TrackerCleanupJobSchemas creates and assigns tasks to remove job schemas and
  * all tables within these schemas. These job schemas are currently created by
@@ -364,13 +406,7 @@ TrackerCleanupJobDirectories(void)
 static void
 TrackerCleanupJobSchemas(void)
 {
-	/*
-	 * XXX: We previously called DatabaseNameList() to read the list of database
-	 * names here. This function read the database names from the flat database
-	 * file; this file was deprecated on Aug 31, 2009. We hence need to rewrite
-	 * this function to read from pg_database directly.
-	 */
-	List *databaseNameList = NIL;
+	List *databaseNameList = DatabaseNameList();
 	const uint64 jobId = RESERVED_JOB_ID;
 	uint32 taskIndex = 1;
 
@@ -407,10 +443,7 @@ TrackerCleanupJobSchemas(void)
 
 	LWLockRelease(&WorkerTasksSharedState->taskHashLock);
 
-	if (databaseNameList != NIL)
-	{
-		list_free_deep(databaseNameList);
-	}
+	list_free_deep(databaseNameList);
 }
 
 
