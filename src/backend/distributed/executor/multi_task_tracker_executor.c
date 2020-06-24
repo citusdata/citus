@@ -475,8 +475,11 @@ CreateTaskListForJobTree(List *jobTaskList, bool createTaskExecution)
 
 		if (createTaskExecution)
 		{
+			MemoryContext oldContext = MemoryContextSwitchTo(GetMemoryChunkContext(task));
+
 			/* create task execution and associate it with task */
 			TaskExecution *taskExecution = InitTaskExecution(task, EXEC_TASK_UNASSIGNED);
+			MemoryContextSwitchTo(oldContext);
 			task->taskExecution = taskExecution;
 		}
 
