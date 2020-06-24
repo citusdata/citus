@@ -185,7 +185,9 @@ MultiTaskTrackerExecute(Job *job)
 	 * We walk over the task tree, and create a task execution struct for each
 	 * task. We then associate the task with its execution and get back a list.
 	 */
-	List *taskAndExecutionList = TaskAndExecutionList(jobTaskList);
+	bool createTaskExecution = true;
+	List *taskAndExecutionList = CreateTaskListForJobTree(jobTaskList,
+														  createTaskExecution);
 
 	/*
 	 * We now count the number of "top level" tasks in the query tree. Once they
@@ -446,13 +448,14 @@ MultiTaskTrackerExecute(Job *job)
 
 
 /*
- * TaskAndExecutionList visits all tasks in the job tree, starting with the given
- * job's task list. For each visited task, the function creates a task execution
- * struct, associates the task execution with the task, and adds the task and its
- * execution to a list. The function then returns the list.
+ * CreateTaskListForJobTree visits all tasks in the job tree (by following dependentTaskList),
+ * starting with the given job's task list.
+ * If createTaskExecution is set to true, for each visited task,
+ * the function creates a task execution struct associates the task execution with the task,
+ * and adds the task and its execution to a list. The function then returns the list.
  */
 List *
-TaskAndExecutionList(List *jobTaskList)
+CreateTaskListForJobTree(List *jobTaskList, bool createTaskExecution)
 {
 	List *taskAndExecutionList = NIL;
 	const int topLevelTaskHashSize = 32;
@@ -470,9 +473,15 @@ TaskAndExecutionList(List *jobTaskList)
 		Task *task = (Task *) linitial(taskQueue);
 		taskQueue = list_delete_first(taskQueue);
 
-		/* create task execution and associate it with task */
-		TaskExecution *taskExecution = InitTaskExecution(task, EXEC_TASK_UNASSIGNED);
-		task->taskExecution = taskExecution;
+		if (createTaskExecution)
+		{
+			MemoryContext oldContext = MemoryContextSwitchTo(GetMemoryChunkContext(task));
+
+			/* create task execution and associate it with task */
+			TaskExecution *taskExecution = InitTaskExecution(task, EXEC_TASK_UNASSIGNED);
+			MemoryContextSwitchTo(oldContext);
+			task->taskExecution = taskExecution;
+		}
 
 		taskAndExecutionList = lappend(taskAndExecutionList, task);
 
