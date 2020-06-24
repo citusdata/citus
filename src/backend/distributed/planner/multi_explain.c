@@ -210,7 +210,13 @@ CoordinatorInsertSelectExplainScan(CustomScanState *node, List *ancestors,
 	DistributedPlan *distributedPlan = scanState->distributedPlan;
 	Query *insertSelectQuery = distributedPlan->insertSelectQuery;
 	RangeTblEntry *selectRte = ExtractSelectRangeTableEntry(insertSelectQuery);
-	Query *query = selectRte->subquery;
+
+	/*
+	 * Create a copy because ExplainOneQuery can modify the query, and later
+	 * executions of prepared statements might require it. See
+	 * https://github.com/citusdata/citus/issues/3947 for what can happen.
+	 */
+	Query *queryCopy = copyObject(selectRte->subquery);
 
 	bool repartition = distributedPlan->insertSelectMethod == INSERT_SELECT_REPARTITION;
 
@@ -236,7 +242,7 @@ CoordinatorInsertSelectExplainScan(CustomScanState *node, List *ancestors,
 	IntoClause *into = NULL;
 	ParamListInfo params = NULL;
 	char *queryString = NULL;
-	ExplainOneQuery(query, 0, into, es, queryString, params, NULL);
+	ExplainOneQuery(queryCopy, 0, into, es, queryString, params, NULL);
 
 	ExplainCloseGroup("Select Query", "Select Query", false, es);
 }

@@ -660,6 +660,96 @@ SELECT a, count(*), count(distinct b) distinct_values FROM target_table GROUP BY
  4 |     6 |               1
 (5 rows)
 
+DEALLOCATE insert_plan;
+--
+-- Prepared router INSERT/SELECT. We currently use pull to coordinator when the
+-- distributed query has a single task.
+--
+TRUNCATE target_table;
+PREPARE insert_plan(int) AS
+INSERT INTO target_table
+  SELECT a, max(b) FROM source_table
+  WHERE a=$1 GROUP BY a;
+SET client_min_messages TO DEBUG1;
+EXECUTE insert_plan(0);
+DEBUG:  INSERT target table and the source relation of the SELECT partition column value must be colocated in distributed INSERT ... SELECT
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
+EXECUTE insert_plan(0);
+DEBUG:  INSERT target table and the source relation of the SELECT partition column value must be colocated in distributed INSERT ... SELECT
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
+EXECUTE insert_plan(0);
+DEBUG:  INSERT target table and the source relation of the SELECT partition column value must be colocated in distributed INSERT ... SELECT
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
+EXECUTE insert_plan(0);
+DEBUG:  INSERT target table and the source relation of the SELECT partition column value must be colocated in distributed INSERT ... SELECT
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
+EXECUTE insert_plan(0);
+DEBUG:  INSERT target table and the source relation of the SELECT partition column value must be colocated in distributed INSERT ... SELECT
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
+EXECUTE insert_plan(0);
+DEBUG:  INSERT target table and the source relation of the SELECT partition column value must be colocated in distributed INSERT ... SELECT
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
+EXECUTE insert_plan(0);
+DEBUG:  INSERT target table and the source relation of the SELECT partition column value must be colocated in distributed INSERT ... SELECT
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
+RESET client_min_messages;
+SELECT a, count(*), count(distinct b) distinct_values FROM target_table GROUP BY a ORDER BY a;
+ a | count | distinct_values
+---------------------------------------------------------------------
+ 0 |     7 |               1
+(1 row)
+
+DEALLOCATE insert_plan;
+--
+-- Prepared INSERT/SELECT with no parameters.
+--
+TRUNCATE target_table;
+PREPARE insert_plan AS
+INSERT INTO target_table
+  SELECT a, max(b) FROM source_table
+  WHERE a BETWEEN 1 AND 2 GROUP BY a;
+EXPLAIN EXECUTE insert_plan;
+                                                   QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (Citus INSERT ... SELECT)  (cost=0.00..0.00 rows=0 width=0)
+   INSERT/SELECT method: repartition
+   ->  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=100000 width=8)
+         Task Count: 4
+         Tasks Shown: One of 4
+         ->  Task
+               Node: host=localhost port=xxxxx dbname=regression
+               ->  GroupAggregate  (cost=44.09..44.28 rows=11 width=8)
+                     Group Key: a
+                     ->  Sort  (cost=44.09..44.12 rows=11 width=8)
+                           Sort Key: a
+                           ->  Seq Scan on source_table_4213606 source_table  (cost=0.00..43.90 rows=11 width=8)
+                                 Filter: ((a >= 1) AND (a <= 2))
+(13 rows)
+
+SET client_min_messages TO DEBUG1;
+EXECUTE insert_plan;
+DEBUG:  performing repartitioned INSERT ... SELECT
+EXECUTE insert_plan;
+DEBUG:  performing repartitioned INSERT ... SELECT
+EXECUTE insert_plan;
+DEBUG:  performing repartitioned INSERT ... SELECT
+EXECUTE insert_plan;
+DEBUG:  performing repartitioned INSERT ... SELECT
+EXECUTE insert_plan;
+DEBUG:  performing repartitioned INSERT ... SELECT
+EXECUTE insert_plan;
+DEBUG:  performing repartitioned INSERT ... SELECT
+EXECUTE insert_plan;
+DEBUG:  performing repartitioned INSERT ... SELECT
+RESET client_min_messages;
+SELECT a, count(*), count(distinct b) distinct_values FROM target_table GROUP BY a ORDER BY a;
+ a | count | distinct_values
+---------------------------------------------------------------------
+ 1 |     7 |               1
+ 2 |     7 |               1
+(2 rows)
+
+DEALLOCATE insert_plan;
 --
 -- INSERT/SELECT in CTE
 --

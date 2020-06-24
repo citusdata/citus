@@ -317,6 +317,60 @@ RESET client_min_messages;
 
 SELECT a, count(*), count(distinct b) distinct_values FROM target_table GROUP BY a ORDER BY a;
 
+DEALLOCATE insert_plan;
+
+--
+-- Prepared router INSERT/SELECT. We currently use pull to coordinator when the
+-- distributed query has a single task.
+--
+TRUNCATE target_table;
+
+PREPARE insert_plan(int) AS
+INSERT INTO target_table
+  SELECT a, max(b) FROM source_table
+  WHERE a=$1 GROUP BY a;
+
+SET client_min_messages TO DEBUG1;
+EXECUTE insert_plan(0);
+EXECUTE insert_plan(0);
+EXECUTE insert_plan(0);
+EXECUTE insert_plan(0);
+EXECUTE insert_plan(0);
+EXECUTE insert_plan(0);
+EXECUTE insert_plan(0);
+RESET client_min_messages;
+
+SELECT a, count(*), count(distinct b) distinct_values FROM target_table GROUP BY a ORDER BY a;
+
+DEALLOCATE insert_plan;
+
+--
+-- Prepared INSERT/SELECT with no parameters.
+--
+
+TRUNCATE target_table;
+
+PREPARE insert_plan AS
+INSERT INTO target_table
+  SELECT a, max(b) FROM source_table
+  WHERE a BETWEEN 1 AND 2 GROUP BY a;
+
+EXPLAIN EXECUTE insert_plan;
+
+SET client_min_messages TO DEBUG1;
+EXECUTE insert_plan;
+EXECUTE insert_plan;
+EXECUTE insert_plan;
+EXECUTE insert_plan;
+EXECUTE insert_plan;
+EXECUTE insert_plan;
+EXECUTE insert_plan;
+RESET client_min_messages;
+
+SELECT a, count(*), count(distinct b) distinct_values FROM target_table GROUP BY a ORDER BY a;
+
+DEALLOCATE insert_plan;
+
 --
 -- INSERT/SELECT in CTE
 --
