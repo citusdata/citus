@@ -710,7 +710,6 @@ INSERT INTO agg_events
     raw_events_first;
 DEBUG:  CTE sub_cte is going to be inlined via distributed planning
 DEBUG:  Subqueries without relations are not allowed in distributed INSERT ... SELECT queries
-DEBUG:  Router planner cannot handle multi-shard select queries
 ERROR:  could not run distributed query with subquery outside the FROM, WHERE and HAVING clauses
 HINT:  Consider using an equality filter on the distributed table's partition column.
 -- We support set operations via the coordinator

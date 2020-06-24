@@ -48,6 +48,7 @@
 #include "parser/parsetree.h"
 #include "parser/parse_coerce.h"
 #include "parser/parse_relation.h"
+#include "tcop/tcopprot.h"
 #include "utils/lsyscache.h"
 #include "utils/rel.h"
 
@@ -77,8 +78,11 @@ static DeferredErrorMessage * InsertPartitionColumnMatchesSelect(Query *query,
 																 subqueryRte,
 																 Oid *
 																 selectPartitionColumnTableId);
-static DistributedPlan * CreateCoordinatorInsertSelectPlan(uint64 planId, Query *parse);
-static DeferredErrorMessage * CoordinatorInsertSelectSupported(Query *insertSelectQuery);
+static DistributedPlan * CreateNonPushableInsertSelectPlan(uint64 planId, Query *parse,
+														   ParamListInfo boundParams);
+static DeferredErrorMessage * NonPushableInsertSelectSupported(Query *insertSelectQuery);
+static InsertSelectMethod GetInsertSelectMethod(Query *selectQuery, Oid targetRelationId,
+												ParamListInfo boundParams);
 
 
 /*
@@ -185,7 +189,8 @@ CheckInsertSelectQuery(Query *query)
  */
 DistributedPlan *
 CreateInsertSelectPlan(uint64 planId, Query *originalQuery,
-					   PlannerRestrictionContext *plannerRestrictionContext)
+					   PlannerRestrictionContext *plannerRestrictionContext,
+					   ParamListInfo boundParams)
 {
 	DeferredErrorMessage *deferredError = ErrorIfOnConflictNotSupported(originalQuery);
 	if (deferredError != NULL)
@@ -201,8 +206,12 @@ CreateInsertSelectPlan(uint64 planId, Query *originalQuery,
 	{
 		RaiseDeferredError(distributedPlan->planningError, DEBUG1);
 
-		/* if INSERT..SELECT cannot be distributed, pull to coordinator */
-		distributedPlan = CreateCoordinatorInsertSelectPlan(planId, originalQuery);
+		/*
+		 * If INSERT..SELECT cannot be distributed, pull to coordinator or use
+		 * repartitioning.
+		 */
+		distributedPlan = CreateNonPushableInsertSelectPlan(planId, originalQuery,
+															boundParams);
 	}
 
 	return distributedPlan;
@@ -1282,14 +1291,15 @@ InsertPartitionColumnMatchesSelect(Query *query, RangeTblEntry *insertRte,
 
 
 /*
- * CreateCoordinatorInsertSelectPlan creates a query plan for a SELECT into a
+ * CreateNonPushableInsertSelectPlan creates a query plan for a SELECT into a
  * distributed table. The query plan can also be executed on a worker in MX.
  */
 static DistributedPlan *
-CreateCoordinatorInsertSelectPlan(uint64 planId, Query *parse)
+CreateNonPushableInsertSelectPlan(uint64 planId, Query *parse, ParamListInfo boundParams)
 {
 	Query *insertSelectQuery = copyObject(parse);
 
+	RangeTblEntry *selectRte = ExtractSelectRangeTableEntry(insertSelectQuery);
 	RangeTblEntry *insertRte = ExtractResultRelationRTE(insertSelectQuery);
 	Oid targetRelationId = insertRte->relid;
 
@@ -1297,14 +1307,22 @@ CreateCoordinatorInsertSelectPlan(uint64 planId, Query *parse)
 	distributedPlan->modLevel = RowModifyLevelForQuery(insertSelectQuery);
 
 	distributedPlan->planningError =
-		CoordinatorInsertSelectSupported(insertSelectQuery);
+		NonPushableInsertSelectSupported(insertSelectQuery);
 
 	if (distributedPlan->planningError != NULL)
 	{
 		return distributedPlan;
 	}
 
+	Query *selectQuery = BuildSelectForInsertSelect(insertSelectQuery);
+
+	selectRte->subquery = selectQuery;
+	ReorderInsertSelectTargetLists(insertSelectQuery, insertRte, selectRte);
+
 	distributedPlan->insertSelectQuery = insertSelectQuery;
+	distributedPlan->insertSelectMethod = GetInsertSelectMethod(selectQuery,
+																targetRelationId,
+																boundParams);
 	distributedPlan->expectResults = insertSelectQuery->returningList != NIL;
 	distributedPlan->intermediateResultIdPrefix = InsertSelectResultIdPrefix(planId);
 	distributedPlan->targetRelationId = targetRelationId;
@@ -1314,13 +1332,13 @@ CreateCoordinatorInsertSelectPlan(uint64 planId, Query *parse)
 
 
 /*
- * CoordinatorInsertSelectSupported returns an error if executing an
+ * NonPushableInsertSelectSupported returns an error if executing an
  * INSERT ... SELECT command by pulling results of the SELECT to the coordinator
- * is unsupported because it needs to generate sequence values or insert into an
- * append-distributed table.
+ * or with repartitioning is unsupported because it needs to generate sequence
+ * values or insert into an append-distributed table.
  */
 static DeferredErrorMessage *
-CoordinatorInsertSelectSupported(Query *insertSelectQuery)
+NonPushableInsertSelectSupported(Query *insertSelectQuery)
 {
 	DeferredErrorMessage *deferredError = ErrorIfOnConflictNotSupported(
 		insertSelectQuery);
@@ -1354,4 +1372,37 @@ InsertSelectResultIdPrefix(uint64 planId)
 	appendStringInfo(resultIdPrefix, "insert_select_" UINT64_FORMAT, planId);
 
 	return resultIdPrefix->data;
+}
+
+
+/*
+ * GetInsertSelectMethod returns the preferred INSERT INTO ... SELECT method
+ * based on its select query.
+ */
+static InsertSelectMethod
+GetInsertSelectMethod(Query *selectQuery, Oid targetRelationId, ParamListInfo boundParams)
+{
+	Query *selectQueryCopy = copyObject(selectQuery);
+
+	/*
+	 * Query will be replanned in insert_select_executor to plan correctly
+	 * for prepared statements. So turn off logging here to avoid repeated
+	 * log messages. We use SET LOCAL here so the change is reverted on ERROR.
+	 */
+	int savedClientMinMessages = client_min_messages;
+	set_config_option("client_min_messages", "ERROR",
+					  PGC_USERSET, PGC_S_SESSION,
+					  GUC_ACTION_LOCAL, true, 0, false);
+
+	int cursorOptions = CURSOR_OPT_PARALLEL_OK;
+	PlannedStmt *selectPlan = pg_plan_query(selectQueryCopy, cursorOptions,
+											boundParams);
+
+	client_min_messages = savedClientMinMessages;
+
+	bool repartitioned = IsRedistributablePlan(selectPlan->planTree) &&
+						 IsSupportedRedistributionTarget(targetRelationId);
+	return repartitioned ?
+		   INSERT_SELECT_REPARTITION :
+		   INSERT_SELECT_VIA_COORDINATOR;
 }

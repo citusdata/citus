@@ -136,11 +136,7 @@ CoordinatorInsertSelectExecScanInternal(CustomScanState *node)
 		bool hasReturning = distributedPlan->expectResults;
 		HTAB *shardStateHash = NULL;
 
-		/* select query to execute */
-		Query *selectQuery = BuildSelectForInsertSelect(insertSelectQuery);
-
-		selectRte->subquery = selectQuery;
-		ReorderInsertSelectTargetLists(insertSelectQuery, insertRte, selectRte);
+		Query *selectQuery = selectRte->subquery;
 
 		/*
 		 * Cast types of insert target list and select projection list to
@@ -181,8 +177,7 @@ CoordinatorInsertSelectExecScanInternal(CustomScanState *node)
 			LockPartitionRelations(targetRelationId, RowExclusiveLock);
 		}
 
-		if (IsRedistributablePlan(selectPlan->planTree) &&
-			IsSupportedRedistributionTarget(targetRelationId))
+		if (distributedPlan->insertSelectMethod == INSERT_SELECT_REPARTITION)
 		{
 			ereport(DEBUG1, (errmsg("performing repartitioned INSERT ... SELECT")));
 

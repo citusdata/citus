@@ -33,7 +33,8 @@ extern void CoordinatorInsertSelectExplainScan(CustomScanState *node, List *ance
 											   struct ExplainState *es);
 extern DistributedPlan * CreateInsertSelectPlan(uint64 planId, Query *originalQuery,
 												PlannerRestrictionContext *
-												plannerRestrictionContext);
+												plannerRestrictionContext,
+												ParamListInfo boundParams);
 extern DistributedPlan * CreateInsertSelectIntoLocalTablePlan(uint64 planId,
 															  Query *originalQuery,
 															  ParamListInfo

@@ -379,6 +379,22 @@ typedef struct JoinSequenceNode
 
 
 /*
+ * InsertSelectMethod represents the method to use for INSERT INTO ... SELECT
+ * queries.
+ *
+ * Note that there is a third method which is not represented here, which is
+ * pushing down the INSERT INTO ... SELECT to workers. This method is executed
+ * similar to other distributed queries and doesn't need a special execution
+ * code, so we don't need to represent it here.
+ */
+typedef enum InsertSelectMethod
+{
+	INSERT_SELECT_VIA_COORDINATOR,
+	INSERT_SELECT_REPARTITION
+} InsertSelectMethod;
+
+
+/*
  * DistributedPlan contains all information necessary to execute a
  * distribute query.
  */
@@ -416,8 +432,9 @@ typedef struct DistributedPlan
 	/* target relation of a modification */
 	Oid targetRelationId;
 
-	/* INSERT .. SELECT via the coordinator */
+	/* INSERT .. SELECT via the coordinator or repartition */
 	Query *insertSelectQuery;
+	InsertSelectMethod insertSelectMethod;
 
 	/*
 	 * If intermediateResultIdPrefix is non-null, an INSERT ... SELECT

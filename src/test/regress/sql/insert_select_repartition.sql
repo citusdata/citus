@@ -565,6 +565,14 @@ DO UPDATE SET
  cardinality = enriched.cardinality + excluded.cardinality,
  sum = enriched.sum + excluded.sum;
 
+
+-- verify that we don't report repartitioned insert/select for tables
+-- with sequences. See https://github.com/citusdata/citus/issues/3936
+create table table_with_sequences (x int, y int, z bigserial);
+insert into table_with_sequences values (1,1);
+select create_distributed_table('table_with_sequences','x');
+explain insert into table_with_sequences select y, x from table_with_sequences;
+
 -- clean-up
 SET client_min_messages TO WARNING;
 DROP SCHEMA insert_select_repartition CASCADE;
