@@ -43,6 +43,7 @@ extern DistributedPlan * CreateInsertSelectIntoLocalTablePlan(uint64 planId,
 															  PlannerRestrictionContext *
 															  plannerRestrictionContext);
 extern char * InsertSelectResultIdPrefix(uint64 planId);
+extern bool PlanningInsertSelect(void);
 
 
 #endif /* INSERT_SELECT_PLANNER_H */

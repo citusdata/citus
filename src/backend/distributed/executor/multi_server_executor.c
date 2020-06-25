@@ -84,7 +84,7 @@ JobExecutorType(DistributedPlan *distributedPlan)
 	{
 		/*
 		 * Even if adaptiveExecutorEnabled, we go through
-		 * MULTI_EXECUTOR_COORDINATOR_INSERT_SELECT because
+		 * MULTI_EXECUTOR_NON_PUSHABLE_INSERT_SELECT because
 		 * the executor already knows how to handle adaptive
 		 * executor when necessary.
 		 */

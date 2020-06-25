@@ -49,10 +49,16 @@
 #include "parser/parse_coerce.h"
 #include "parser/parse_relation.h"
 #include "tcop/tcopprot.h"
+#include "utils/builtins.h"
 #include "utils/lsyscache.h"
 #include "utils/rel.h"
 
 
+static DistributedPlan * CreateInsertSelectPlanInternal(uint64 planId,
+														Query *originalQuery,
+														PlannerRestrictionContext *
+														plannerRestrictionContext,
+														ParamListInfo boundParams);
 static DistributedPlan * CreateDistributedInsertSelectPlan(Query *originalQuery,
 														   PlannerRestrictionContext *
 														   plannerRestrictionContext);
@@ -81,8 +87,15 @@ static DeferredErrorMessage * InsertPartitionColumnMatchesSelect(Query *query,
 static DistributedPlan * CreateNonPushableInsertSelectPlan(uint64 planId, Query *parse,
 														   ParamListInfo boundParams);
 static DeferredErrorMessage * NonPushableInsertSelectSupported(Query *insertSelectQuery);
-static InsertSelectMethod GetInsertSelectMethod(Query *selectQuery, Oid targetRelationId,
-												ParamListInfo boundParams);
+static void RelabelTargetEntryList(List *selectTargetList, List *insertTargetList);
+static List * AddInsertSelectCasts(List *insertTargetList, List *selectTargetList,
+								   Oid targetRelationId);
+static Expr * CastExpr(Expr *expr, Oid sourceType, Oid targetType, Oid targetCollation,
+					   int targetTypeMod);
+
+
+/* depth of current insert/select planner. */
+static int insertSelectPlannerLevel = 0;
 
 
 /*
@@ -182,15 +195,45 @@ CheckInsertSelectQuery(Query *query)
 
 
 /*
- * CreateInsertSelectPlan tries to create a distributed plan for an
- * INSERT INTO distributed_table SELECT ... query by push down the
- * command to the workers and if that is not possible it creates a
- * plan for evaluating the SELECT on the coordinator.
+ * CoordinatorInsertSelectExecScan is a wrapper around
+ * CoordinatorInsertSelectExecScanInternal which also properly increments
+ * or decrements insertSelectExecutorLevel.
  */
 DistributedPlan *
 CreateInsertSelectPlan(uint64 planId, Query *originalQuery,
 					   PlannerRestrictionContext *plannerRestrictionContext,
 					   ParamListInfo boundParams)
+{
+	DistributedPlan *result = NULL;
+	insertSelectPlannerLevel++;
+
+	PG_TRY();
+	{
+		result = CreateInsertSelectPlanInternal(planId, originalQuery,
+												plannerRestrictionContext, boundParams);
+	}
+	PG_CATCH();
+	{
+		insertSelectPlannerLevel--;
+		PG_RE_THROW();
+	}
+	PG_END_TRY();
+
+	insertSelectPlannerLevel--;
+	return result;
+}
+
+
+/*
+ * CreateInsertSelectPlan tries to create a distributed plan for an
+ * INSERT INTO distributed_table SELECT ... query by push down the
+ * command to the workers and if that is not possible it creates a
+ * plan for evaluating the SELECT on the coordinator.
+ */
+static DistributedPlan *
+CreateInsertSelectPlanInternal(uint64 planId, Query *originalQuery,
+							   PlannerRestrictionContext *plannerRestrictionContext,
+							   ParamListInfo boundParams)
 {
 	DeferredErrorMessage *deferredError = ErrorIfOnConflictNotSupported(originalQuery);
 	if (deferredError != NULL)
@@ -1319,10 +1362,43 @@ CreateNonPushableInsertSelectPlan(uint64 planId, Query *parse, ParamListInfo bou
 	selectRte->subquery = selectQuery;
 	ReorderInsertSelectTargetLists(insertSelectQuery, insertRte, selectRte);
 
+	/*
+	 * Cast types of insert target list and select projection list to
+	 * match the column types of the target relation.
+	 */
+	selectQuery->targetList =
+		AddInsertSelectCasts(insertSelectQuery->targetList,
+							 selectQuery->targetList,
+							 targetRelationId);
+
+	/*
+	 * Later we might need to call WrapTaskListForProjection(), which requires
+	 * that select target list has unique names, otherwise the outer query
+	 * cannot select columns unambiguously. So we relabel select columns to
+	 * match target columns.
+	 */
+	List *insertTargetList = insertSelectQuery->targetList;
+	RelabelTargetEntryList(selectQuery->targetList, insertTargetList);
+
+	/*
+	 * Make a copy of the select query, since following code scribbles it
+	 * but we need to keep the original for EXPLAIN.
+	 */
+	Query *selectQueryCopy = copyObject(selectQuery);
+
+	/* plan the subquery, this may be another distributed query */
+	int cursorOptions = CURSOR_OPT_PARALLEL_OK;
+	PlannedStmt *selectPlan = pg_plan_query(selectQueryCopy, cursorOptions,
+											boundParams);
+
+	bool repartitioned = IsRedistributablePlan(selectPlan->planTree) &&
+						 IsSupportedRedistributionTarget(targetRelationId);
+
 	distributedPlan->insertSelectQuery = insertSelectQuery;
-	distributedPlan->insertSelectMethod = GetInsertSelectMethod(selectQuery,
-																targetRelationId,
-																boundParams);
+	distributedPlan->selectPlanForInsertSelect = selectPlan;
+	distributedPlan->insertSelectMethod = repartitioned ?
+										  INSERT_SELECT_REPARTITION :
+										  INSERT_SELECT_VIA_COORDINATOR;
 	distributedPlan->expectResults = insertSelectQuery->returningList != NIL;
 	distributedPlan->intermediateResultIdPrefix = InsertSelectResultIdPrefix(planId);
 	distributedPlan->targetRelationId = targetRelationId;
@@ -1376,33 +1452,221 @@ InsertSelectResultIdPrefix(uint64 planId)
 
 
 /*
- * GetInsertSelectMethod returns the preferred INSERT INTO ... SELECT method
- * based on its select query.
+ * RelabelTargetEntryList relabels select target list to have matching names with
+ * insert target list.
  */
-static InsertSelectMethod
-GetInsertSelectMethod(Query *selectQuery, Oid targetRelationId, ParamListInfo boundParams)
+static void
+RelabelTargetEntryList(List *selectTargetList, List *insertTargetList)
 {
-	Query *selectQueryCopy = copyObject(selectQuery);
+	ListCell *selectTargetCell = NULL;
+	ListCell *insertTargetCell = NULL;
+
+	forboth(selectTargetCell, selectTargetList, insertTargetCell, insertTargetList)
+	{
+		TargetEntry *selectTargetEntry = lfirst(selectTargetCell);
+		TargetEntry *insertTargetEntry = lfirst(insertTargetCell);
+
+		selectTargetEntry->resname = insertTargetEntry->resname;
+	}
+}
+
+
+/*
+ * AddInsertSelectCasts makes sure that the types in columns in the given
+ * target lists have the same type as the columns of the given relation.
+ * It might add casts to ensure that.
+ *
+ * It returns the updated selectTargetList.
+ */
+static List *
+AddInsertSelectCasts(List *insertTargetList, List *selectTargetList,
+					 Oid targetRelationId)
+{
+	ListCell *insertEntryCell = NULL;
+	ListCell *selectEntryCell = NULL;
+	List *projectedEntries = NIL;
+	List *nonProjectedEntries = NIL;
 
 	/*
-	 * Query will be replanned in insert_select_executor to plan correctly
-	 * for prepared statements. So turn off logging here to avoid repeated
-	 * log messages. We use SET LOCAL here so the change is reverted on ERROR.
+	 * ReorderInsertSelectTargetLists() makes sure that first few columns of
+	 * the SELECT query match the insert targets. It might contain additional
+	 * items for GROUP BY, etc.
 	 */
-	int savedClientMinMessages = client_min_messages;
-	set_config_option("client_min_messages", "ERROR",
-					  PGC_USERSET, PGC_S_SESSION,
-					  GUC_ACTION_LOCAL, true, 0, false);
+	Assert(list_length(insertTargetList) <= list_length(selectTargetList));
 
-	int cursorOptions = CURSOR_OPT_PARALLEL_OK;
-	PlannedStmt *selectPlan = pg_plan_query(selectQueryCopy, cursorOptions,
-											boundParams);
+	Relation distributedRelation = heap_open(targetRelationId, RowExclusiveLock);
+	TupleDesc destTupleDescriptor = RelationGetDescr(distributedRelation);
 
-	client_min_messages = savedClientMinMessages;
+	int targetEntryIndex = 0;
+	forboth(insertEntryCell, insertTargetList, selectEntryCell, selectTargetList)
+	{
+		TargetEntry *insertEntry = (TargetEntry *) lfirst(insertEntryCell);
+		TargetEntry *selectEntry = (TargetEntry *) lfirst(selectEntryCell);
+		Var *insertColumn = (Var *) insertEntry->expr;
+		Form_pg_attribute attr = TupleDescAttr(destTupleDescriptor,
+											   insertEntry->resno - 1);
 
-	bool repartitioned = IsRedistributablePlan(selectPlan->planTree) &&
-						 IsSupportedRedistributionTarget(targetRelationId);
-	return repartitioned ?
-		   INSERT_SELECT_REPARTITION :
-		   INSERT_SELECT_VIA_COORDINATOR;
+		Oid sourceType = insertColumn->vartype;
+		Oid targetType = attr->atttypid;
+		if (sourceType != targetType)
+		{
+			insertEntry->expr = CastExpr((Expr *) insertColumn, sourceType, targetType,
+										 attr->attcollation, attr->atttypmod);
+
+			/*
+			 * We cannot modify the selectEntry in-place, because ORDER BY or
+			 * GROUP BY clauses might be pointing to it with comparison types
+			 * of the source type. So instead we keep the original one as a
+			 * non-projected entry, so GROUP BY and ORDER BY are happy, and
+			 * create a duplicated projected entry with the coerced expression.
+			 */
+			TargetEntry *coercedEntry = copyObject(selectEntry);
+			coercedEntry->expr = CastExpr((Expr *) selectEntry->expr, sourceType,
+										  targetType, attr->attcollation,
+										  attr->atttypmod);
+			coercedEntry->ressortgroupref = 0;
+
+			/*
+			 * The only requirement is that users don't use this name in ORDER BY
+			 * or GROUP BY, and it should be unique across the same query.
+			 */
+			StringInfo resnameString = makeStringInfo();
+			appendStringInfo(resnameString, "auto_coerced_by_citus_%d", targetEntryIndex);
+			coercedEntry->resname = resnameString->data;
+
+			projectedEntries = lappend(projectedEntries, coercedEntry);
+
+			if (selectEntry->ressortgroupref != 0)
+			{
+				selectEntry->resjunk = true;
+
+				/*
+				 * This entry might still end up in the SELECT output list, so
+				 * rename it to avoid ambiguity.
+				 *
+				 * See https://github.com/citusdata/citus/pull/3470.
+				 */
+				resnameString = makeStringInfo();
+				appendStringInfo(resnameString, "discarded_target_item_%d",
+								 targetEntryIndex);
+				selectEntry->resname = resnameString->data;
+
+				nonProjectedEntries = lappend(nonProjectedEntries, selectEntry);
+			}
+		}
+		else
+		{
+			projectedEntries = lappend(projectedEntries, selectEntry);
+		}
+
+		targetEntryIndex++;
+	}
+
+	for (int entryIndex = list_length(insertTargetList);
+		 entryIndex < list_length(selectTargetList);
+		 entryIndex++)
+	{
+		nonProjectedEntries = lappend(nonProjectedEntries, list_nth(selectTargetList,
+																	entryIndex));
+	}
+
+	/* selectEntry->resno must be the ordinal number of the entry */
+	selectTargetList = list_concat(projectedEntries, nonProjectedEntries);
+	int entryResNo = 1;
+	TargetEntry *selectTargetEntry = NULL;
+	foreach_ptr(selectTargetEntry, selectTargetList)
+	{
+		selectTargetEntry->resno = entryResNo++;
+	}
+
+	heap_close(distributedRelation, NoLock);
+
+	return selectTargetList;
+}
+
+
+/*
+ * CastExpr returns an expression which casts the given expr from sourceType to
+ * the given targetType.
+ */
+static Expr *
+CastExpr(Expr *expr, Oid sourceType, Oid targetType, Oid targetCollation,
+		 int targetTypeMod)
+{
+	Oid coercionFuncId = InvalidOid;
+	CoercionPathType coercionType = find_coercion_pathway(targetType, sourceType,
+														  COERCION_EXPLICIT,
+														  &coercionFuncId);
+
+	if (coercionType == COERCION_PATH_FUNC)
+	{
+		FuncExpr *coerceExpr = makeNode(FuncExpr);
+		coerceExpr->funcid = coercionFuncId;
+		coerceExpr->args = list_make1(copyObject(expr));
+		coerceExpr->funccollid = targetCollation;
+		coerceExpr->funcresulttype = targetType;
+
+		return (Expr *) coerceExpr;
+	}
+	else if (coercionType == COERCION_PATH_RELABELTYPE)
+	{
+		RelabelType *coerceExpr = makeNode(RelabelType);
+		coerceExpr->arg = copyObject(expr);
+		coerceExpr->resulttype = targetType;
+		coerceExpr->resulttypmod = targetTypeMod;
+		coerceExpr->resultcollid = targetCollation;
+		coerceExpr->relabelformat = COERCE_IMPLICIT_CAST;
+		coerceExpr->location = -1;
+
+		return (Expr *) coerceExpr;
+	}
+	else if (coercionType == COERCION_PATH_ARRAYCOERCE)
+	{
+		Oid sourceBaseType = get_base_element_type(sourceType);
+		Oid targetBaseType = get_base_element_type(targetType);
+
+		CaseTestExpr *elemExpr = makeNode(CaseTestExpr);
+		elemExpr->collation = targetCollation;
+		elemExpr->typeId = sourceBaseType;
+		elemExpr->typeMod = -1;
+
+		Expr *elemCastExpr = CastExpr((Expr *) elemExpr, sourceBaseType,
+									  targetBaseType, targetCollation,
+									  targetTypeMod);
+
+		ArrayCoerceExpr *coerceExpr = makeNode(ArrayCoerceExpr);
+		coerceExpr->arg = copyObject(expr);
+		coerceExpr->elemexpr = elemCastExpr;
+		coerceExpr->resultcollid = targetCollation;
+		coerceExpr->resulttype = targetType;
+		coerceExpr->resulttypmod = targetTypeMod;
+		coerceExpr->location = -1;
+		coerceExpr->coerceformat = COERCE_IMPLICIT_CAST;
+
+		return (Expr *) coerceExpr;
+	}
+	else if (coercionType == COERCION_PATH_COERCEVIAIO)
+	{
+		CoerceViaIO *coerceExpr = makeNode(CoerceViaIO);
+		coerceExpr->arg = (Expr *) copyObject(expr);
+		coerceExpr->resulttype = targetType;
+		coerceExpr->resultcollid = targetCollation;
+		coerceExpr->coerceformat = COERCE_IMPLICIT_CAST;
+		coerceExpr->location = -1;
+
+		return (Expr *) coerceExpr;
+	}
+	else
+	{
+		ereport(ERROR, (errmsg("could not find a conversion path from type %d to %d",
+							   sourceType, targetType)));
+	}
+}
+
+
+/* PlanningInsertSelect returns true if we are planning an INSERT ...SELECT query */
+bool
+PlanningInsertSelect(void)
+{
+	return insertSelectPlannerLevel > 0;
 }

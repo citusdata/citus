@@ -432,8 +432,10 @@ typedef struct DistributedPlan
 	/* target relation of a modification */
 	Oid targetRelationId;
 
-	/* INSERT .. SELECT via the coordinator or repartition */
+	/*
+	 * INSERT .. SELECT via the coordinator or repartition */
 	Query *insertSelectQuery;
+	PlannedStmt *selectPlanForInsertSelect;
 	InsertSelectMethod insertSelectMethod;
 
 	/*
