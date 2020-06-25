@@ -46,7 +46,7 @@ step "s2-rollback" { ROLLBACK; }
 
 // create_citus_local_table vs command/query //
 
-// Second session should error out as the table become a citus local table after the first session commits ..
+// Second session should error out as the table becomes a citus local table after the first session commits ..
 permutation "s1-begin" "s2-begin" "s1-create-citus-local-table-1" "s2-create-citus-local-table-1" "s1-commit" "s2-commit"
 // .. and it should error out even if we are in a different schema than the table
 permutation "s1-begin" "s2-begin" "s1-create-citus-local-table-3" "s2-create-citus-local-table-3" "s1-commit" "s2-commit"

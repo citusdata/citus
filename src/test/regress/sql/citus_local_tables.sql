@@ -70,13 +70,12 @@ CREATE INDEX citus_local_table_2_idx ON citus_local_table_2(a);
 SELECT create_citus_local_table('citus_local_table_2');
 
 CREATE TABLE distributed_table (a int);
--- cannot create citus local table from an existing citus table
 SELECT create_distributed_table('distributed_table', 'a');
 
--- this will error out
+-- cannot create citus local table from an existing citus table
 SELECT create_citus_local_table('distributed_table');
 
--- partitiond table tests --
+-- partitioned table tests --
 
 CREATE TABLE partitioned_table(a int, b int) PARTITION BY RANGE (a);
 CREATE TABLE partitioned_table_1 PARTITION OF partitioned_table FOR VALUES FROM (0) TO (10);
@@ -85,33 +84,30 @@ CREATE TABLE partitioned_table_2 PARTITION OF partitioned_table FOR VALUES FROM 
 -- cannot create partitioned citus local tables
 SELECT create_citus_local_table('partitioned_table');
 
--- cannot create citus local table as a partition of a local table
 BEGIN;
   CREATE TABLE citus_local_table PARTITION OF partitioned_table FOR VALUES FROM (20) TO (30);
 
-  -- this should fail
+  -- cannot create citus local table as a partition of a local table
   SELECT create_citus_local_table('citus_local_table');
 ROLLBACK;
 
--- cannot create citus local table as a partition of a local table
--- via ALTER TABLE commands as well
 BEGIN;
   CREATE TABLE citus_local_table (a int, b int);
 
   SELECT create_citus_local_table('citus_local_table');
 
-  -- this should fail
+  -- cannot create citus local table as a partition of a local table
+  -- via ALTER TABLE commands as well
   ALTER TABLE partitioned_table ATTACH PARTITION citus_local_table FOR VALUES FROM (20) TO (30);
 ROLLBACK;
 
--- cannot attach citus local table to a partitioned distributed table
 BEGIN;
   SELECT create_distributed_table('partitioned_table', 'a');
 
   CREATE TABLE citus_local_table (a int, b int);
   SELECT create_citus_local_table('citus_local_table');
 
-  -- this should fail
+  -- cannot attach citus local table to a partitioned distributed table
   ALTER TABLE partitioned_table ATTACH PARTITION citus_local_table FOR VALUES FROM (20) TO (30);
 ROLLBACK;
 

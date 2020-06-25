@@ -40,7 +40,7 @@ SELECT 1 FROM master_remove_node('localhost', :master_port);
 CREATE TABLE citus_local_table_1 (a int primary key);
 -- this should fail as coordinator is removed from pg_dist_node
 SELECT create_citus_local_table('citus_local_table_1');
-ERROR:  cannot create citus local table "citus_local_table_1", citus local tables can only be created from coordinator node if it is added as a worker node
+ERROR:  could not find the coordinator node in metadata as it is not added as a worker
 -- let coordinator have citus local tables again for next tests
 set client_min_messages to ERROR;
 SELECT 1 FROM master_add_node('localhost', :master_port, groupId => 0);
@@ -96,32 +96,28 @@ SELECT create_citus_local_table('citus_local_table_2');
 (1 row)
 
 CREATE TABLE distributed_table (a int);
--- cannot create citus local table from an existing citus table
 SELECT create_distributed_table('distributed_table', 'a');
  create_distributed_table
 ---------------------------------------------------------------------
 
 (1 row)
 
--- this will error out
+-- cannot create citus local table from an existing citus table
 SELECT create_citus_local_table('distributed_table');
 ERROR:  table "distributed_table" is already distributed
--- partitiond table tests --
+-- partitioned table tests --
 CREATE TABLE partitioned_table(a int, b int) PARTITION BY RANGE (a);
 CREATE TABLE partitioned_table_1 PARTITION OF partitioned_table FOR VALUES FROM (0) TO (10);
 CREATE TABLE partitioned_table_2 PARTITION OF partitioned_table FOR VALUES FROM (10) TO (20);
 -- cannot create partitioned citus local tables
 SELECT create_citus_local_table('partitioned_table');
 ERROR:  cannot create citus local table "partitioned_table", only regular tables and foreign tables are supported for citus local table creation
--- cannot create citus local table as a partition of a local table
 BEGIN;
   CREATE TABLE citus_local_table PARTITION OF partitioned_table FOR VALUES FROM (20) TO (30);
-  -- this should fail
+  -- cannot create citus local table as a partition of a local table
   SELECT create_citus_local_table('citus_local_table');
 ERROR:  cannot create citus local table "citus_local_table", citus local tables cannot be partition of other tables
 ROLLBACK;
--- cannot create citus local table as a partition of a local table
--- via ALTER TABLE commands as well
 BEGIN;
   CREATE TABLE citus_local_table (a int, b int);
   SELECT create_citus_local_table('citus_local_table');
@@ -130,11 +126,11 @@ BEGIN;
 
 (1 row)
 
-  -- this should fail
+  -- cannot create citus local table as a partition of a local table
+  -- via ALTER TABLE commands as well
   ALTER TABLE partitioned_table ATTACH PARTITION citus_local_table FOR VALUES FROM (20) TO (30);
 ERROR:  non-distributed tables cannot have distributed partitions
 ROLLBACK;
--- cannot attach citus local table to a partitioned distributed table
 BEGIN;
   SELECT create_distributed_table('partitioned_table', 'a');
  create_distributed_table
@@ -149,7 +145,7 @@ BEGIN;
 
 (1 row)
 
-  -- this should fail
+  -- cannot attach citus local table to a partitioned distributed table
   ALTER TABLE partitioned_table ATTACH PARTITION citus_local_table FOR VALUES FROM (20) TO (30);
 ERROR:  distributed tables cannot have non-colocated distributed tables as a partition
 ROLLBACK;
@@ -318,9 +314,9 @@ CREATE TABLE local_table_3 (a int primary key, b int references local_table_3(a)
 -- below two should fail as we do not allow foreign keys between
 -- postgres local tables and citus local tables
 SELECT create_citus_local_table('local_table_1');
-ERROR:  cannot create citus local table "local_table_1", citus local tables cannot be involved in foreign key relationships with other tables initially
+ERROR:  relation "local_table_1" is involved in a foreign key relationship with another table
 SELECT create_citus_local_table('local_table_2');
-ERROR:  cannot create citus local table "local_table_2", citus local tables cannot be involved in foreign key relationships with other tables initially
+ERROR:  relation "local_table_2" is involved in a foreign key relationship with another table
 -- below should work as we allow initial self references in citus local tables
 SELECT create_citus_local_table('local_table_3');
  create_citus_local_table

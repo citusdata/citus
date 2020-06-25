@@ -124,6 +124,7 @@ extern bool HasForeignKeyToReferenceTable(Oid relationOid);
 extern bool TableReferenced(Oid relationOid);
 extern bool TableReferencing(Oid relationOid);
 extern bool ConstraintIsAForeignKey(char *inputConstaintName, Oid relationOid);
+extern void ErrorIfTableHasExternalForeignKeys(Oid relationId);
 extern List * GetForeignKeyOids(Oid relationId, int flags);
 
 

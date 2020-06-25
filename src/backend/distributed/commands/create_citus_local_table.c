@@ -38,9 +38,6 @@
 
 static void ErrorIfUnsupportedCreateCitusLocalTable(Relation relation);
 static void ErrorIfUnsupportedCitusLocalTableKind(Oid relationId);
-static void ErrorIfRelationIsAKnownShard(Oid relationId);
-static void ErrorIfTableHasExternalForeignKeys(Oid relationId);
-static void ErrorIfCoordinatorNotAddedAsWorkerNode(Oid relationId);
 static uint64 ConvertLocalTableToShard(Oid relationId);
 static void RenameRelationToShardRelation(Oid shellRelationId, uint64 shardId);
 static void RenameShardRelationConstraints(Oid shardRelationId, uint64 shardId);
@@ -104,7 +101,7 @@ ErrorIfUnsupportedCreateCitusLocalTable(Relation relation)
 
 	Oid relationId = relation->rd_id;
 
-	ErrorIfCoordinatorNotAddedAsWorkerNode(relationId);
+	ErrorIfCoordinatorNotAddedAsWorkerNode();
 	ErrorIfUnsupportedCitusLocalTableKind(relationId);
 	EnsureTableNotDistributed(relationId);
 
@@ -163,82 +160,6 @@ ErrorIfUnsupportedCitusLocalTableKind(Oid relationId)
 							   "tables and foreign tables are supported for citus local "
 							   "table creation", relationName)));
 	}
-}
-
-
-/*
- * ErrorIfRelationIsAKnownShard errors out if the relation with relationId is
- * a shard relation relation.
- */
-static void
-ErrorIfRelationIsAKnownShard(Oid relationId)
-{
-	/* search the relation in all schemas */
-	bool onlySearchPath = false;
-	if (!RelationIsAKnownShard(relationId, onlySearchPath))
-	{
-		return;
-	}
-
-	const char *relationName = get_rel_name(relationId);
-
-	ereport(ERROR, (errmsg("cannot create citus local table as \"%s\" is a shard "
-						   "relation ", relationName)));
-}
-
-
-/*
- * ErrorIfTableHasExternalForeignKeys errors out if the relation with relationId
- * is involved in a foreign key relationship other than the self-referencing ones.
- */
-static void
-ErrorIfTableHasExternalForeignKeys(Oid relationId)
-{
-	int flags = (INCLUDE_REFERENCING_CONSTRAINTS | EXCLUDE_SELF_REFERENCES);
-	List *foreignKeyIdsTableReferencing = GetForeignKeyOids(relationId, flags);
-
-	flags = (INCLUDE_REFERENCED_CONSTRAINTS | EXCLUDE_SELF_REFERENCES);
-	List *foreignKeyIdsTableReferenced = GetForeignKeyOids(relationId, flags);
-
-	List *foreignKeysWithOtherTables = list_concat(foreignKeyIdsTableReferencing,
-												   foreignKeyIdsTableReferenced);
-
-	if (list_length(foreignKeysWithOtherTables) == 0)
-	{
-		return;
-	}
-
-	const char *relationName = get_rel_name(relationId);
-
-	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-					errmsg("cannot create citus local table \"%s\", citus local "
-						   "tables cannot be involved in foreign key relationships "
-						   "with other tables initially", relationName),
-					errhint("Drop foreign keys with other tables and re-define them "
-							"with ALTER TABLE commands after creating the table.")));
-}
-
-
-/*
- * ErrorIfCoordinatorNotAddedAsWorkerNode error out if coordinator is not added
- * to metadata.
- */
-static void
-ErrorIfCoordinatorNotAddedAsWorkerNode(Oid relationId)
-{
-	if (CoordinatorAddedAsWorkerNode())
-	{
-		return;
-	}
-
-	const char *relationName = get_rel_name(relationId);
-
-	ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
-					errmsg("cannot create citus local table \"%s\", citus local "
-						   "tables can only be created from coordinator node if "
-						   "it is added as a worker node", relationName),
-					errhint("First, add the coordinator with master_add_node "
-							"command")));
 }
 
 

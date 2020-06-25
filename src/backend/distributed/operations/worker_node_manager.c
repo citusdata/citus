@@ -445,11 +445,7 @@ ReferenceTablePlacementNodeList(LOCKMODE lockMode)
 WorkerNode *
 CoordinatorNode()
 {
-	if (!CoordinatorAddedAsWorkerNode())
-	{
-		ereport(ERROR, (errmsg("couldn't find the coordinator node in the metadata "
-							   "as it is not added as a worker")));
-	}
+	ErrorIfCoordinatorNotAddedAsWorkerNode();
 
 	WorkerNode *coordinatorNode = LookupNodeForGroup(COORDINATOR_GROUP_ID);
 
@@ -457,6 +453,23 @@ CoordinatorNode()
 	*coordinatorNodeCopy = *coordinatorNode;
 
 	return coordinatorNodeCopy;
+}
+
+
+/*
+ * ErrorIfCoordinatorNotAddedAsWorkerNode errors out if coordinator is not added
+ * to metadata.
+ */
+void
+ErrorIfCoordinatorNotAddedAsWorkerNode()
+{
+	if (CoordinatorAddedAsWorkerNode())
+	{
+		return;
+	}
+
+	ereport(ERROR, (errmsg("could not find the coordinator node in "
+						   "metadata as it is not added as a worker")));
 }
 
 

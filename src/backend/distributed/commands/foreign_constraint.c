@@ -650,6 +650,37 @@ FindForeignKeyOidWithName(List *foreignKeyOids, const char *inputConstraintName)
 
 
 /*
+ * ErrorIfTableHasExternalForeignKeys errors out if the relation with relationId
+ * is involved in a foreign key relationship other than the self-referencing ones.
+ */
+void
+ErrorIfTableHasExternalForeignKeys(Oid relationId)
+{
+	int flags = (INCLUDE_REFERENCING_CONSTRAINTS | EXCLUDE_SELF_REFERENCES);
+	List *foreignKeyIdsTableReferencing = GetForeignKeyOids(relationId, flags);
+
+	flags = (INCLUDE_REFERENCED_CONSTRAINTS | EXCLUDE_SELF_REFERENCES);
+	List *foreignKeyIdsTableReferenced = GetForeignKeyOids(relationId, flags);
+
+	List *foreignKeysWithOtherTables = list_concat(foreignKeyIdsTableReferencing,
+												   foreignKeyIdsTableReferenced);
+
+	if (list_length(foreignKeysWithOtherTables) == 0)
+	{
+		return;
+	}
+
+	const char *relationName = get_rel_name(relationId);
+	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					errmsg("relation \"%s\" is involved in a foreign key relationship "
+						   "with another table", relationName),
+					errhint("Drop foreign keys with other tables and re-define them "
+							"with ALTER TABLE commands after the current operation "
+							"is done.")));
+}
+
+
+/*
  * GetForeignKeyOids takes in a relationId, and returns a list of OIDs for
  * foreign constraints that the relation with relationId is involved according
  * to "flags" argument. See ExtractForeignKeyConstrainstMode enum definition

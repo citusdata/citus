@@ -76,6 +76,7 @@ extern List * ActivePrimaryNodeList(LOCKMODE lockMode);
 extern bool CoordinatorAddedAsWorkerNode(void);
 extern List * ReferenceTablePlacementNodeList(LOCKMODE lockMode);
 extern WorkerNode * CoordinatorNode(void);
+extern void ErrorIfCoordinatorNotAddedAsWorkerNode(void);
 extern List * DistributedTablePlacementNodeList(LOCKMODE lockMode);
 extern bool NodeCanHaveDistTablePlacements(WorkerNode *node);
 extern uint32 ActiveReadableWorkerNodeCount(void);
