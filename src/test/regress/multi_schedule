@@ -303,6 +303,7 @@ test: foreign_key_to_reference_table
 test: replicate_reference_tables_to_coordinator
 test: coordinator_shouldhaveshards
 test: local_shard_utility_command_execution
+test: citus_local_tables
 
 test: remove_coordinator
 

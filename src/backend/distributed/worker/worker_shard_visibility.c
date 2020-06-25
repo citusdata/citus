@@ -98,6 +98,25 @@ citus_table_is_visible(PG_FUNCTION_ARGS)
 
 
 /*
+ * ErrorIfRelationIsAKnownShard errors out if the relation with relationId is
+ * a shard relation.
+ */
+void
+ErrorIfRelationIsAKnownShard(Oid relationId)
+{
+	/* search the relation in all schemas */
+	bool onlySearchPath = false;
+	if (!RelationIsAKnownShard(relationId, onlySearchPath))
+	{
+		return;
+	}
+
+	const char *relationName = get_rel_name(relationId);
+	ereport(ERROR, (errmsg("relation \"%s\" is a shard relation ", relationName)));
+}
+
+
+/*
  * RelationIsAKnownShard gets a relationId, check whether it's a shard of
  * any distributed table. If onlySearchPath is true, then it searches
  * the current search path.
