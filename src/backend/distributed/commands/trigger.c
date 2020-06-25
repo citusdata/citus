@@ -17,6 +17,7 @@
 #else
 #include "access/heapam.h"
 #include "access/htup_details.h"
+#include "access/sysattr.h"
 #endif
 #include "catalog/indexing.h"
 #include "catalog/namespace.h"
@@ -28,6 +29,8 @@
 #include "distributed/namespace_utils.h"
 #include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
+#include "utils/syscache.h"
+
 
 /*
  * GetExplicitTriggerCommandList returns the list of DDL commands to create
@@ -56,6 +59,71 @@ GetExplicitTriggerCommandList(Oid relationId)
 	PopOverrideSearchPath();
 
 	return createTriggerCommandList;
+}
+
+
+/*
+ * GetExplicitTriggerNameList returns a list of trigger names that are explicitly
+ * created for the table with relationId. See comment of GetExplicitTriggerIdList
+ * function.
+ */
+List *
+GetExplicitTriggerNameList(Oid relationId)
+{
+	List *triggerNameList = NIL;
+
+	List *triggerIdList = GetExplicitTriggerIdList(relationId);
+
+	Oid triggerId = InvalidOid;
+	foreach_oid(triggerId, triggerIdList)
+	{
+		char *triggerHame = GetTriggerNameById(triggerId);
+		triggerNameList = lappend(triggerNameList, triggerHame);
+	}
+
+	return triggerNameList;
+}
+
+
+/*
+ * GetTriggerNameById returns name of the trigger identified by triggerId if it
+ * exists. Otherwise, returns NULL.
+ */
+char *
+GetTriggerNameById(Oid triggerId)
+{
+	Relation pgTrigger = heap_open(TriggerRelationId, AccessShareLock);
+
+	int scanKeyCount = 1;
+	ScanKeyData scanKey[1];
+
+#if PG_VERSION_NUM >= PG_VERSION_12
+	AttrNumber attrNumber = Anum_pg_trigger_oid;
+#else
+	AttrNumber attrNumber = ObjectIdAttributeNumber;
+#endif
+
+	ScanKeyInit(&scanKey[0], attrNumber, BTEqualStrategyNumber,
+				F_OIDEQ, ObjectIdGetDatum(triggerId));
+
+	bool useIndex = true;
+	SysScanDesc scanDescriptor = systable_beginscan(pgTrigger, TriggerOidIndexId,
+													useIndex, NULL, scanKeyCount,
+													scanKey);
+
+	char *triggerName = NULL;
+
+	HeapTuple heapTuple = systable_getnext(scanDescriptor);
+	if (HeapTupleIsValid(heapTuple))
+	{
+		Form_pg_trigger triggerForm = (Form_pg_trigger) GETSTRUCT(heapTuple);
+		triggerName = pstrdup(NameStr(triggerForm->tgname));
+	}
+
+	systable_endscan(scanDescriptor);
+	heap_close(pgTrigger, NoLock);
+
+	return triggerName;
 }
 
 

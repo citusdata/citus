@@ -19,6 +19,7 @@
 #include "catalog/indexing.h"
 #include "catalog/pg_type.h"
 #include "commands/sequence.h"
+#include "distributed/create_citus_local_table.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata_utility.h"
@@ -241,6 +242,12 @@ CreateColocationGroupForRelation(Oid sourceRelationId)
 static void
 MarkTablesColocated(Oid sourceRelationId, Oid targetRelationId)
 {
+	if (IsCitusLocalTable(sourceRelationId) || IsCitusLocalTable(targetRelationId))
+	{
+		ereport(ERROR, (errmsg(
+							"citus local tables cannot be colocated with other tables")));
+	}
+
 	CheckReplicationModel(sourceRelationId, targetRelationId);
 	CheckDistributionColumnType(sourceRelationId, targetRelationId);
 

@@ -15,6 +15,7 @@
 #include "miscadmin.h"
 
 #include "commands/dbcommands.h"
+#include "distributed/coordinator_protocol.h"
 #include "distributed/hash_helpers.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
@@ -405,6 +406,25 @@ NodeIsPrimaryWorker(WorkerNode *node)
 
 
 /*
+ * CoordinatorAddedAsWorkerNode returns true if coordinator is added to the
+ * pg_dist_node. This function also acquires RowExclusiveLock on pg_dist_node
+ * and does not release it to ensure that existency of the coordinator in
+ * metadata won't be changed until the end of transaction.
+ */
+bool
+CoordinatorAddedAsWorkerNode()
+{
+	bool groupContainsNodes = false;
+
+	LockRelationOid(DistNodeRelationId(), RowExclusiveLock);
+
+	PrimaryNodeForGroup(COORDINATOR_GROUP_ID, &groupContainsNodes);
+
+	return groupContainsNodes;
+}
+
+
+/*
  * ReferenceTablePlacementNodeList returns the set of nodes that should have
  * reference table placements. This includes all primaries, including the
  * coordinator if known.
@@ -414,6 +434,45 @@ ReferenceTablePlacementNodeList(LOCKMODE lockMode)
 {
 	EnsureModificationsCanRun();
 	return FilterActiveNodeListFunc(lockMode, NodeIsPrimary);
+}
+
+
+/*
+ * CoordinatorNode returns the WorkerNode object for coordinator node if it is
+ * added to pg_dist_node, otherwise errors out.
+ * Also, as CoordinatorAddedAsWorkerNode acquires AccessShareLock on
+ * pg_dist_node and doesn't release it, callers can safely assume coordinator
+ * won't be removed from metadata until the end of transaction when this function
+ * returns coordinator node.
+ */
+WorkerNode *
+CoordinatorNode()
+{
+	ErrorIfCoordinatorNotAddedAsWorkerNode();
+
+	WorkerNode *coordinatorNode = LookupNodeForGroup(COORDINATOR_GROUP_ID);
+
+	WorkerNode *coordinatorNodeCopy = palloc0(sizeof(WorkerNode));
+	*coordinatorNodeCopy = *coordinatorNode;
+
+	return coordinatorNodeCopy;
+}
+
+
+/*
+ * ErrorIfCoordinatorNotAddedAsWorkerNode errors out if coordinator is not added
+ * to metadata.
+ */
+void
+ErrorIfCoordinatorNotAddedAsWorkerNode()
+{
+	if (CoordinatorAddedAsWorkerNode())
+	{
+		return;
+	}
+
+	ereport(ERROR, (errmsg("could not find the coordinator node in "
+						   "metadata as it is not added as a worker")));
 }
 
 
