@@ -98,7 +98,6 @@ static void EnsureTableCanBeColocatedWith(Oid relationId, char replicationModel,
 										  Oid distributionColumnType,
 										  Oid sourceRelationId);
 static void EnsureLocalTableEmpty(Oid relationId);
-static void EnsureTableNotDistributed(Oid relationId);
 static void EnsureRelationHasNoTriggers(Oid relationId);
 static Oid SupportFunctionForColumn(Var *partitionColumn, Oid accessMethodId,
 									int16 supportFunctionNumber);
@@ -370,7 +369,7 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 	InsertIntoPgDistPartition(relationId, distributionMethod, distributionColumn,
 							  colocationId, replicationModel);
 
-	/* foreign tables does not support TRUNCATE trigger */
+	/* foreign tables do not support TRUNCATE trigger */
 	if (RegularTable(relationId))
 	{
 		CreateTruncateTrigger(relationId);
@@ -395,7 +394,6 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 	{
 		CreateReferenceTableShard(relationId);
 	}
-
 
 	if (ShouldSyncTableMetadata(relationId))
 	{
@@ -928,7 +926,7 @@ EnsureLocalTableEmpty(Oid relationId)
 /*
  * EnsureTableNotDistributed errors out if the table is distributed.
  */
-static void
+void
 EnsureTableNotDistributed(Oid relationId)
 {
 	char *relationName = get_rel_name(relationId);

@@ -1,0 +1,403 @@
+\set VERBOSITY terse
+SET citus.next_shard_id TO 1504000;
+SET citus.shard_replication_factor TO 1;
+SET citus.enable_local_execution TO ON;
+SET citus.log_local_commands TO ON;
+CREATE SCHEMA citus_local_tables_test_schema;
+SET search_path TO citus_local_tables_test_schema;
+---------------------------------------------------------------------
+------- citus local table creation -------
+---------------------------------------------------------------------
+-- ensure that coordinator is added to pg_dist_node
+SET client_min_messages to ERROR;
+SELECT 1 FROM master_add_node('localhost', :master_port, groupId => 0);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+RESET client_min_messages;
+CREATE TABLE citus_local_table_1 (a int);
+-- this should work as coordinator is added to pg_dist_node
+SELECT create_citus_local_table('citus_local_table_1');
+ create_citus_local_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- try to remove coordinator and observe failure as there exist a citus local table
+SELECT 1 FROM master_remove_node('localhost', :master_port);
+ERROR:  you cannot remove the primary node of a node group which has shard placements
+DROP TABLE citus_local_table_1;
+NOTICE:  executing the command locally: DROP TABLE IF EXISTS citus_local_tables_test_schema.citus_local_table_1_xxxxx CASCADE
+-- this should work now as the citus local table is dropped
+SELECT 1 FROM master_remove_node('localhost', :master_port);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+CREATE TABLE citus_local_table_1 (a int primary key);
+-- this should fail as coordinator is removed from pg_dist_node
+SELECT create_citus_local_table('citus_local_table_1');
+ERROR:  could not find the coordinator node in metadata as it is not added as a worker
+-- let coordinator have citus local tables again for next tests
+set client_min_messages to ERROR;
+SELECT 1 FROM master_add_node('localhost', :master_port, groupId => 0);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+RESET client_min_messages;
+-- creating citus local table having no data initially would work
+SELECT create_citus_local_table('citus_local_table_1');
+ create_citus_local_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- creating citus local table having data in it would also work
+CREATE TABLE citus_local_table_2(a int primary key);
+INSERT INTO citus_local_table_2 VALUES(1);
+SELECT create_citus_local_table('citus_local_table_2');
+ create_citus_local_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- also create indexes on them
+CREATE INDEX citus_local_table_1_idx ON citus_local_table_1(a);
+NOTICE:  executing the command locally: CREATE  INDEX   citus_local_table_1_idx_1504001 ON citus_local_tables_test_schema.citus_local_table_1_1504001 USING btree (a )
+CREATE INDEX citus_local_table_2_idx ON citus_local_table_2(a);
+NOTICE:  executing the command locally: CREATE  INDEX   citus_local_table_2_idx_1504002 ON citus_local_tables_test_schema.citus_local_table_2_1504002 USING btree (a )
+-- drop them for next tests
+DROP TABLE citus_local_table_1, citus_local_table_2;
+NOTICE:  executing the command locally: DROP TABLE IF EXISTS citus_local_tables_test_schema.citus_local_table_2_xxxxx CASCADE
+NOTICE:  executing the command locally: DROP TABLE IF EXISTS citus_local_tables_test_schema.citus_local_table_1_xxxxx CASCADE
+-- create indexes before creating the citus local tables
+-- .. for an initially empty table
+CREATE TABLE citus_local_table_1(a int);
+CREATE INDEX citus_local_table_1_idx ON citus_local_table_1(a);
+SELECT create_citus_local_table('citus_local_table_1');
+ create_citus_local_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- .. and for another table having data in it before creating citus local table
+CREATE TABLE citus_local_table_2(a int);
+INSERT INTO citus_local_table_2 VALUES(1);
+CREATE INDEX citus_local_table_2_idx ON citus_local_table_2(a);
+SELECT create_citus_local_table('citus_local_table_2');
+ create_citus_local_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE distributed_table (a int);
+SELECT create_distributed_table('distributed_table', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- cannot create citus local table from an existing citus table
+SELECT create_citus_local_table('distributed_table');
+ERROR:  table "distributed_table" is already distributed
+-- partitioned table tests --
+CREATE TABLE partitioned_table(a int, b int) PARTITION BY RANGE (a);
+CREATE TABLE partitioned_table_1 PARTITION OF partitioned_table FOR VALUES FROM (0) TO (10);
+CREATE TABLE partitioned_table_2 PARTITION OF partitioned_table FOR VALUES FROM (10) TO (20);
+-- cannot create partitioned citus local tables
+SELECT create_citus_local_table('partitioned_table');
+ERROR:  cannot create citus local table "partitioned_table", only regular tables and foreign tables are supported for citus local table creation
+BEGIN;
+  CREATE TABLE citus_local_table PARTITION OF partitioned_table FOR VALUES FROM (20) TO (30);
+  -- cannot create citus local table as a partition of a local table
+  SELECT create_citus_local_table('citus_local_table');
+ERROR:  cannot create citus local table "citus_local_table", citus local tables cannot be partition of other tables
+ROLLBACK;
+BEGIN;
+  CREATE TABLE citus_local_table (a int, b int);
+  SELECT create_citus_local_table('citus_local_table');
+ create_citus_local_table
+---------------------------------------------------------------------
+
+(1 row)
+
+  -- cannot create citus local table as a partition of a local table
+  -- via ALTER TABLE commands as well
+  ALTER TABLE partitioned_table ATTACH PARTITION citus_local_table FOR VALUES FROM (20) TO (30);
+ERROR:  non-distributed tables cannot have distributed partitions
+ROLLBACK;
+BEGIN;
+  SELECT create_distributed_table('partitioned_table', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+  CREATE TABLE citus_local_table (a int, b int);
+  SELECT create_citus_local_table('citus_local_table');
+ create_citus_local_table
+---------------------------------------------------------------------
+
+(1 row)
+
+  -- cannot attach citus local table to a partitioned distributed table
+  ALTER TABLE partitioned_table ATTACH PARTITION citus_local_table FOR VALUES FROM (20) TO (30);
+ERROR:  distributed tables cannot have non-colocated distributed tables as a partition
+ROLLBACK;
+-- show that we do not support inheritance relationships --
+CREATE TABLE parent_table (a int, b text);
+CREATE TABLE child_table () INHERITS (parent_table);
+-- both of below should error out
+SELECT create_citus_local_table('parent_table');
+ERROR:  cannot create citus local table "parent_table", citus local tables cannot be involved in inheritance relationships
+SELECT create_citus_local_table('child_table');
+ERROR:  cannot create citus local table "child_table", citus local tables cannot be involved in inheritance relationships
+-- show that we support UNLOGGED tables --
+CREATE UNLOGGED TABLE unlogged_table (a int primary key);
+SELECT create_citus_local_table('unlogged_table');
+ create_citus_local_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- show that we allow triggers --
+BEGIN;
+  CREATE TABLE citus_local_table_3 (value int);
+  -- create a simple function to be invoked by trigger
+  CREATE FUNCTION update_value() RETURNS trigger AS $update_value$
+  BEGIN
+      UPDATE citus_local_table_3 SET value=value+1;
+      RETURN NEW;
+  END;
+  $update_value$ LANGUAGE plpgsql;
+  CREATE TRIGGER insert_trigger
+  AFTER INSERT ON citus_local_table_3
+  FOR EACH STATEMENT EXECUTE PROCEDURE update_value();
+  SELECT create_citus_local_table('citus_local_table_3');
+ create_citus_local_table
+---------------------------------------------------------------------
+
+(1 row)
+
+  INSERT INTO citus_local_table_3 VALUES (1);
+NOTICE:  executing the command locally: INSERT INTO citus_local_tables_test_schema.citus_local_table_3_1504024 (value) VALUES (1)
+NOTICE:  executing the command locally: UPDATE citus_local_tables_test_schema.citus_local_table_3_1504024 citus_local_table_3 SET value = (value OPERATOR(pg_catalog.+) 1)
+  -- show that trigger is executed only once, we should see "2" (not "3")
+  SELECT * FROM citus_local_table_3;
+NOTICE:  executing the command locally: SELECT value FROM citus_local_tables_test_schema.citus_local_table_3_1504024 citus_local_table_3
+ value
+---------------------------------------------------------------------
+     2
+(1 row)
+
+ROLLBACK;
+-- show that we do not support policies in citus community --
+BEGIN;
+  CREATE TABLE citus_local_table_3 (table_user text);
+  ALTER TABLE citus_local_table_3 ENABLE ROW LEVEL SECURITY;
+  CREATE ROLE table_users;
+NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
+  CREATE POLICY table_policy ON citus_local_table_3 TO table_users
+      USING (table_user = current_user);
+  -- this should error out
+  SELECT create_citus_local_table('citus_local_table_3');
+ERROR:  policies on distributed tables are only supported in Citus Enterprise
+ROLLBACK;
+-- show that we properly handle sequences on citus local tables --
+BEGIN;
+  CREATE SEQUENCE col3_seq;
+  CREATE TABLE citus_local_table_3 (col1 serial, col2 int, col3 int DEFAULT nextval('col3_seq'));
+  SELECT create_citus_local_table('citus_local_table_3');
+ create_citus_local_table
+---------------------------------------------------------------------
+
+(1 row)
+
+  -- print column default expressions
+  -- we should only see shell relation below
+  SELECT table_name, column_name, column_default
+  FROM information_schema.COLUMNS
+  WHERE table_name like 'citus_local_table_3%' and column_default != '' ORDER BY 1,2;
+     table_name      | column_name |                  column_default
+---------------------------------------------------------------------
+ citus_local_table_3 | col1        | nextval('citus_local_table_3_col1_seq'::regclass)
+ citus_local_table_3 | col3        | nextval('col3_seq'::regclass)
+(2 rows)
+
+  -- print sequence ownerships
+  -- show that the only internal sequence is on col1 and it is owned by shell relation
+  SELECT s.relname as sequence_name, t.relname, a.attname
+  FROM pg_class s
+    JOIN pg_depend d on d.objid=s.oid and d.classid='pg_class'::regclass and d.refclassid='pg_class'::regclass
+    JOIN pg_class t on t.oid=d.refobjid
+    JOIN pg_attribute a on a.attrelid=t.oid and a.attnum=d.refobjsubid
+  WHERE s.relkind='S' and s.relname like 'citus_local_table_3%' ORDER BY 1,2;
+        sequence_name         |       relname       | attname
+---------------------------------------------------------------------
+ citus_local_table_3_col1_seq | citus_local_table_3 | col1
+(1 row)
+
+ROLLBACK;
+-- test foreign tables using fake FDW --
+CREATE FOREIGN TABLE foreign_table (
+  id bigint not null,
+  full_name text not null default ''
+) SERVER fake_fdw_server OPTIONS (encoding 'utf-8', compression 'true');
+-- observe that we do not create fdw server for shell table, both shard relation
+-- & shell relation points to the same same server object
+SELECT create_citus_local_table('foreign_table');
+NOTICE:  foreign-data wrapper "fake_fdw" does not have an extension defined
+NOTICE:  server "fake_fdw_server" already exists, skipping
+NOTICE:  foreign-data wrapper "fake_fdw" does not have an extension defined
+ create_citus_local_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- drop them for next tests
+DROP TABLE citus_local_table_1, citus_local_table_2, distributed_table;
+NOTICE:  executing the command locally: DROP TABLE IF EXISTS citus_local_tables_test_schema.citus_local_table_2_xxxxx CASCADE
+NOTICE:  executing the command locally: DROP TABLE IF EXISTS citus_local_tables_test_schema.citus_local_table_1_xxxxx CASCADE
+-- create test tables
+CREATE TABLE citus_local_table_1 (a int primary key);
+SELECT create_citus_local_table('citus_local_table_1');
+ create_citus_local_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE citus_local_table_2 (a int primary key);
+SELECT create_citus_local_table('citus_local_table_2');
+ create_citus_local_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE local_table (a int primary key);
+CREATE TABLE distributed_table (a int primary key);
+SELECT create_distributed_table('distributed_table', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE reference_table (a int primary key);
+SELECT create_reference_table('reference_table');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- show that colociation of citus local tables are not supported for now
+-- between citus local tables
+SELECT mark_tables_colocated('citus_local_table_1', ARRAY['citus_local_table_2']);
+ERROR:  citus local tables cannot be colocated with other tables
+-- between citus local tables and reference tables
+SELECT mark_tables_colocated('citus_local_table_1', ARRAY['reference_table']);
+ERROR:  citus local tables cannot be colocated with other tables
+SELECT mark_tables_colocated('reference_table', ARRAY['citus_local_table_1']);
+ERROR:  citus local tables cannot be colocated with other tables
+-- between citus local tables and distributed tables
+SELECT mark_tables_colocated('citus_local_table_1', ARRAY['distributed_table']);
+ERROR:  citus local tables cannot be colocated with other tables
+SELECT mark_tables_colocated('distributed_table', ARRAY['citus_local_table_1']);
+ERROR:  citus local tables cannot be colocated with other tables
+-- tests with citus local tables initially having foreign key relationships
+CREATE TABLE local_table_1 (a int primary key);
+CREATE TABLE local_table_2 (a int primary key references local_table_1(a));
+CREATE TABLE local_table_3 (a int primary key, b int references local_table_3(a));
+-- below two should fail as we do not allow foreign keys between
+-- postgres local tables and citus local tables
+SELECT create_citus_local_table('local_table_1');
+ERROR:  relation "local_table_1" is involved in a foreign key relationship with another table
+SELECT create_citus_local_table('local_table_2');
+ERROR:  relation "local_table_2" is involved in a foreign key relationship with another table
+-- below should work as we allow initial self references in citus local tables
+SELECT create_citus_local_table('local_table_3');
+ create_citus_local_table
+---------------------------------------------------------------------
+
+(1 row)
+
+---------------------------------------------------------------------
+----- tests for object names that should be escaped properly -----
+---------------------------------------------------------------------
+CREATE SCHEMA "CiTUS!LocalTables";
+-- create table with weird names
+CREATE TABLE "CiTUS!LocalTables"."LocalTabLE.1!?!"(id int, "TeNANt_Id" int);
+-- should work
+SELECT create_citus_local_table('"CiTUS!LocalTables"."LocalTabLE.1!?!"');
+ create_citus_local_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- drop the table before creating it when the search path is set
+SET search_path to "CiTUS!LocalTables" ;
+DROP TABLE "LocalTabLE.1!?!";
+NOTICE:  executing the command locally: DROP TABLE IF EXISTS "CiTUS!LocalTables"."LocalTabLE.1!?!_1504035" CASCADE
+-- have a custom type in the local table
+CREATE TYPE local_type AS (key int, value jsonb);
+-- create btree_gist for GiST index
+CREATE EXTENSION btree_gist;
+CREATE TABLE "LocalTabLE.1!?!"(
+  id int PRIMARY KEY,
+  "TeNANt_Id" int,
+  "local_Type" local_type,
+  "jsondata" jsonb NOT NULL,
+  name text,
+  price numeric CHECK (price > 0),
+  serial_data bigserial, UNIQUE (id, price),
+  EXCLUDE USING GIST (name WITH =));
+-- create some objects before create_citus_local_table
+CREATE INDEX "my!Index1" ON "LocalTabLE.1!?!"(id) WITH ( fillfactor = 80 ) WHERE  id > 10;
+CREATE UNIQUE INDEX uniqueIndex ON "LocalTabLE.1!?!" (id);
+-- ingest some data before create_citus_local_table
+INSERT INTO "LocalTabLE.1!?!" VALUES (1, 1, (1, row_to_json(row(1,1)))::local_type, row_to_json(row(1,1), true)),
+                                     (2, 1, (2, row_to_json(row(2,2)))::local_type, row_to_json(row(2,2), 'false'));
+-- create a replica identity before create_citus_local_table
+ALTER TABLE "LocalTabLE.1!?!" REPLICA IDENTITY USING INDEX uniqueIndex;
+-- this shouldn't give any syntax errors
+SELECT create_citus_local_table('"LocalTabLE.1!?!"');
+ create_citus_local_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- create some objects after create_citus_local_table
+CREATE INDEX "my!Index2" ON "LocalTabLE.1!?!"(id) WITH ( fillfactor = 90 ) WHERE id < 20;
+NOTICE:  executing the command locally: CREATE  INDEX   "my!Index2_1504036" ON "CiTUS!LocalTables"."LocalTabLE.1!?!_1504036" USING btree (id )  WITH (fillfactor = '90' )WHERE (id < 20)
+CREATE UNIQUE INDEX uniqueIndex2 ON "LocalTabLE.1!?!"(id);
+NOTICE:  executing the command locally: CREATE UNIQUE INDEX   uniqueindex2_1504036 ON "CiTUS!LocalTables"."LocalTabLE.1!?!_1504036" USING btree (id )
+---------------------------------------------------------------------
+---- utility command execution ----
+---------------------------------------------------------------------
+SET search_path TO citus_local_tables_test_schema;
+-- any foreign key between citus local tables and other tables cannot be set for now
+-- most should error out (for now with meaningless error messages)
+-- between citus local tables
+ALTER TABLE citus_local_table_1 ADD CONSTRAINT fkey_c_to_c FOREIGN KEY(a) references citus_local_table_2(a);
+NOTICE:  executing the command locally: SELECT worker_apply_inter_shard_ddl_command (1504027, 'citus_local_tables_test_schema', 1504028, 'citus_local_tables_test_schema', 'ALTER TABLE citus_local_table_1 ADD CONSTRAINT fkey_c_to_c FOREIGN KEY(a) references citus_local_table_2(a);')
+-- between citus local tables and reference tables
+ALTER TABLE citus_local_table_1 ADD CONSTRAINT fkey_c_to_ref FOREIGN KEY(a) references reference_table(a);
+NOTICE:  executing the command locally: SELECT worker_apply_inter_shard_ddl_command (1504027, 'citus_local_tables_test_schema', 1504033, 'citus_local_tables_test_schema', 'ALTER TABLE citus_local_table_1 ADD CONSTRAINT fkey_c_to_ref FOREIGN KEY(a) references reference_table(a);')
+ALTER TABLE reference_table ADD CONSTRAINT fkey_ref_to_c FOREIGN KEY(a) references citus_local_table_1(a);
+NOTICE:  executing the command locally: SELECT worker_apply_inter_shard_ddl_command (1504033, 'citus_local_tables_test_schema', 1504027, 'citus_local_tables_test_schema', 'ALTER TABLE reference_table ADD CONSTRAINT fkey_ref_to_c FOREIGN KEY(a) references citus_local_table_1(a);')
+ERROR:  relation "citus_local_tables_test_schema.citus_local_table_1_1504027" does not exist
+-- between citus local tables and distributed tables
+ALTER TABLE citus_local_table_1 ADD CONSTRAINT fkey_c_to_dist FOREIGN KEY(a) references distributed_table(a);
+ERROR:  cannot create foreign key constraint since foreign keys from reference tables to distributed tables are not supported
+ALTER TABLE distributed_table ADD CONSTRAINT fkey_dist_to_c FOREIGN KEY(a) references citus_local_table_1(a);
+ERROR:  relation "citus_local_tables_test_schema.citus_local_table_1_1504027" does not exist
+-- between citus local tables and local tables
+ALTER TABLE citus_local_table_1 ADD CONSTRAINT fkey_c_to_local FOREIGN KEY(a) references local_table(a);
+ERROR:  cannot create foreign key constraint
+ALTER TABLE local_table ADD CONSTRAINT fkey_local_to_c FOREIGN KEY(a) references citus_local_table_1(a);
+-- cleanup at exit
+DROP SCHEMA citus_local_tables_test_schema, "CiTUS!LocalTables" CASCADE;
+NOTICE:  drop cascades to 23 other objects

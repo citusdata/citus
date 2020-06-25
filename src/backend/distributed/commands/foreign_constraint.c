@@ -36,22 +36,6 @@
 #include "utils/ruleutils.h"
 #include "utils/syscache.h"
 
-/*
- * Flags that can be passed to GetForeignKeyOids to indicate
- * which foreign key constraint OIDs are to be extracted
- */
-typedef enum ExtractForeignKeyConstrainstMode
-{
-	/* extract the foreign key OIDs where the table is the referencing one */
-	INCLUDE_REFERENCING_CONSTRAINTS = 1 << 0,
-
-	/* extract the foreign key OIDs the table is the referenced one */
-	INCLUDE_REFERENCED_CONSTRAINTS = 1 << 1,
-
-	/* exclude the self-referencing foreign keys */
-	EXCLUDE_SELF_REFERENCES = 1 << 2
-} ExtractForeignKeyConstraintMode;
-
 /* Local functions forward declarations */
 static bool HeapTupleOfForeignConstraintIncludesColumn(HeapTuple heapTuple,
 													   Oid relationId,
@@ -67,7 +51,6 @@ static void ForeignConstraintFindDistKeys(HeapTuple pgConstraintTuple,
 static List * GetForeignConstraintCommandsInternal(Oid relationId, int flags);
 static Oid get_relation_constraint_oid_compat(HeapTuple heapTuple);
 static List * GetForeignKeyOidsToReferenceTables(Oid relationId);
-static List * GetForeignKeyOids(Oid relationId, int flags);
 
 /*
  * ConstraintIsAForeignKeyToReferenceTable checks if the given constraint is a
@@ -675,12 +658,43 @@ FindForeignKeyOidWithName(List *foreignKeyOids, const char *inputConstraintName)
 
 
 /*
+ * ErrorIfTableHasExternalForeignKeys errors out if the relation with relationId
+ * is involved in a foreign key relationship other than the self-referencing ones.
+ */
+void
+ErrorIfTableHasExternalForeignKeys(Oid relationId)
+{
+	int flags = (INCLUDE_REFERENCING_CONSTRAINTS | EXCLUDE_SELF_REFERENCES);
+	List *foreignKeyIdsTableReferencing = GetForeignKeyOids(relationId, flags);
+
+	flags = (INCLUDE_REFERENCED_CONSTRAINTS | EXCLUDE_SELF_REFERENCES);
+	List *foreignKeyIdsTableReferenced = GetForeignKeyOids(relationId, flags);
+
+	List *foreignKeysWithOtherTables = list_concat(foreignKeyIdsTableReferencing,
+												   foreignKeyIdsTableReferenced);
+
+	if (list_length(foreignKeysWithOtherTables) == 0)
+	{
+		return;
+	}
+
+	const char *relationName = get_rel_name(relationId);
+	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					errmsg("relation \"%s\" is involved in a foreign key relationship "
+						   "with another table", relationName),
+					errhint("Drop foreign keys with other tables and re-define them "
+							"with ALTER TABLE commands after the current operation "
+							"is done.")));
+}
+
+
+/*
  * GetForeignKeyOids takes in a relationId, and returns a list of OIDs for
  * foreign constraints that the relation with relationId is involved according
  * to "flags" argument. See ExtractForeignKeyConstrainstMode enum definition
  * for usage of the flags.
  */
-static List *
+List *
 GetForeignKeyOids(Oid relationId, int flags)
 {
 	AttrNumber pgConstraintTargetAttrNumber = InvalidAttrNumber;
