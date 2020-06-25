@@ -1119,6 +1119,21 @@ CoordinatedRemoteTransactionsSavepointRollback(SubTransactionId subId)
 		}
 
 		FinishRemoteTransactionSavepointRollback(connection, subId);
+
+		/*
+		 * We unclaim the connection now so it can be used again when
+		 * continuing after the ROLLBACK TO SAVEPOINT.
+		 * XXX: We do not undo our hadDML/hadDDL flags. This could result in
+		 * some queries not being allowed on Citus that would actually be fine
+		 * to execute.  Changing this would require us to keep track for each
+		 * savepoint which placement connections had DDL/DML executed at that
+		 * point and if they were already. We also do not call
+		 * ResetShardPlacementAssociation. This might result in suboptimal
+		 * parallelism, because of placement associations that are not really
+		 * necessary anymore because of ROLLBACK TO SAVEPOINT. To change this
+		 * we would need to keep track of when a connection becomes associated
+		 * to a placement.
+		 */
 		UnclaimConnection(connection);
 	}
 }
