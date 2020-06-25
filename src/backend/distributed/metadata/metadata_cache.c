@@ -776,7 +776,7 @@ LookupShardIdCacheEntry(int64 shardId)
 	InitializeCaches();
 
 	ShardIdCacheEntry *shardEntry =
-		hash_search(DistTableCacheHash, &shardId, HASH_FIND, &foundInCache);
+		hash_search(ShardIdCacheHash, &shardId, HASH_FIND, &foundInCache);
 
 	if (!foundInCache)
 	{
