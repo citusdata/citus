@@ -426,8 +426,9 @@ SELECT * FROM print_extension_changes();
  function task_tracker_task_status(bigint,integer)                   |
  function worker_execute_sql_task(bigint,integer,text,boolean)       |
  function worker_merge_files_and_run_query(bigint,integer,text,text) |
+                                                                     | function create_citus_local_table(regclass)
                                                                      | function undistribute_table(regclass)
-(7 rows)
+(8 rows)
 
 DROP TABLE prev_objects, extension_diff;
 -- show running version

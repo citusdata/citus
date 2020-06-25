@@ -1,0 +1,215 @@
+Parsed test spec with 2 sessions
+
+starting permutation: s1-begin s2-begin s1-create-citus-local-table-1 s2-create-citus-local-table-1 s1-commit s2-commit
+step s1-begin: BEGIN;
+step s2-begin: BEGIN;
+step s1-create-citus-local-table-1: SELECT create_citus_local_table('citus_local_table_1');
+create_citus_local_table
+
+
+step s2-create-citus-local-table-1: SELECT create_citus_local_table('citus_local_table_1'); <waiting ...>
+step s1-commit: COMMIT;
+step s2-create-citus-local-table-1: <... completed>
+error in steps s1-commit s2-create-citus-local-table-1: ERROR:  relation "citus_local_table_1_xxxxxxx" is a shard relation
+step s2-commit: COMMIT;
+master_remove_node
+
+
+
+starting permutation: s1-begin s2-begin s1-create-citus-local-table-3 s2-create-citus-local-table-3 s1-commit s2-commit
+step s1-begin: BEGIN;
+step s2-begin: BEGIN;
+step s1-create-citus-local-table-3: SELECT create_citus_local_table('another_schema.citus_local_table_3');
+create_citus_local_table
+
+
+step s2-create-citus-local-table-3: SELECT create_citus_local_table('another_schema.citus_local_table_3'); <waiting ...>
+step s1-commit: COMMIT;
+step s2-create-citus-local-table-3: <... completed>
+error in steps s1-commit s2-create-citus-local-table-3: ERROR:  relation "citus_local_table_3_xxxxxxx" is a shard relation
+step s2-commit: COMMIT;
+master_remove_node
+
+
+
+starting permutation: s1-begin s2-begin s1-create-citus-local-table-1 s2-create-citus-local-table-1 s1-rollback s2-commit
+step s1-begin: BEGIN;
+step s2-begin: BEGIN;
+step s1-create-citus-local-table-1: SELECT create_citus_local_table('citus_local_table_1');
+create_citus_local_table
+
+
+step s2-create-citus-local-table-1: SELECT create_citus_local_table('citus_local_table_1'); <waiting ...>
+step s1-rollback: ROLLBACK;
+step s2-create-citus-local-table-1: <... completed>
+create_citus_local_table
+
+
+step s2-commit: COMMIT;
+master_remove_node
+
+
+
+starting permutation: s1-begin s2-begin s1-create-citus-local-table-1 s2-select s1-commit s2-commit
+step s1-begin: BEGIN;
+step s2-begin: BEGIN;
+step s1-create-citus-local-table-1: SELECT create_citus_local_table('citus_local_table_1');
+create_citus_local_table
+
+
+step s2-select: SELECT * FROM citus_local_table_1; <waiting ...>
+step s1-commit: COMMIT;
+step s2-select: <... completed>
+a
+
+step s2-commit: COMMIT;
+master_remove_node
+
+
+
+starting permutation: s1-begin s2-begin s1-create-citus-local-table-1 s2-update s1-commit s2-commit
+step s1-begin: BEGIN;
+step s2-begin: BEGIN;
+step s1-create-citus-local-table-1: SELECT create_citus_local_table('citus_local_table_1');
+create_citus_local_table
+
+
+step s2-update: UPDATE citus_local_table_1 SET a=1 WHERE a=2; <waiting ...>
+step s1-commit: COMMIT;
+step s2-update: <... completed>
+step s2-commit: COMMIT;
+master_remove_node
+
+
+
+starting permutation: s1-begin s2-begin s1-create-citus-local-table-1 s2-truncate s1-commit s2-commit
+step s1-begin: BEGIN;
+step s2-begin: BEGIN;
+step s1-create-citus-local-table-1: SELECT create_citus_local_table('citus_local_table_1');
+create_citus_local_table
+
+
+step s2-truncate: TRUNCATE citus_local_table_1; <waiting ...>
+step s1-commit: COMMIT;
+step s2-truncate: <... completed>
+step s2-commit: COMMIT;
+master_remove_node
+
+
+
+starting permutation: s2-create-citus-local-table-2 s1-begin s2-begin s1-create-citus-local-table-1 s2-fkey-to-another s1-commit s2-commit
+step s2-create-citus-local-table-2: SELECT create_citus_local_table('citus_local_table_2');
+create_citus_local_table
+
+
+step s1-begin: BEGIN;
+step s2-begin: BEGIN;
+step s1-create-citus-local-table-1: SELECT create_citus_local_table('citus_local_table_1');
+create_citus_local_table
+
+
+step s2-fkey-to-another: ALTER TABLE citus_local_table_1 ADD CONSTRAINT fkey_c_to_c FOREIGN KEY(a) REFERENCES citus_local_table_2(a); <waiting ...>
+step s1-commit: COMMIT;
+step s2-fkey-to-another: <... completed>
+step s2-commit: COMMIT;
+master_remove_node
+
+
+
+starting permutation: s1-begin s2-begin s1-create-citus-local-table-1 s2-remove-coordinator s1-commit s2-commit
+step s1-begin: BEGIN;
+step s2-begin: BEGIN;
+step s1-create-citus-local-table-1: SELECT create_citus_local_table('citus_local_table_1');
+create_citus_local_table
+
+
+step s2-remove-coordinator: SELECT master_remove_node('localhost', 57636); <waiting ...>
+step s1-commit: COMMIT;
+step s2-remove-coordinator: <... completed>
+error in steps s1-commit s2-remove-coordinator: ERROR:  you cannot remove the primary node of a node group which has shard placements
+step s2-commit: COMMIT;
+master_remove_node
+
+
+
+starting permutation: s1-begin s2-begin s1-drop-table s2-create-citus-local-table-1 s1-commit s2-commit
+step s1-begin: BEGIN;
+step s2-begin: BEGIN;
+step s1-drop-table: DROP TABLE citus_local_table_1;
+step s2-create-citus-local-table-1: SELECT create_citus_local_table('citus_local_table_1'); <waiting ...>
+step s1-commit: COMMIT;
+step s2-create-citus-local-table-1: <... completed>
+error in steps s1-commit s2-create-citus-local-table-1: ERROR:  cannot create citus local table, relation does not exist
+step s2-commit: COMMIT;
+master_remove_node
+
+
+
+starting permutation: s1-begin s2-begin s1-delete s2-create-citus-local-table-1 s1-commit s2-commit
+step s1-begin: BEGIN;
+step s2-begin: BEGIN;
+step s1-delete: DELETE FROM citus_local_table_1 WHERE a=2;
+step s2-create-citus-local-table-1: SELECT create_citus_local_table('citus_local_table_1'); <waiting ...>
+step s1-commit: COMMIT;
+step s2-create-citus-local-table-1: <... completed>
+create_citus_local_table
+
+
+step s2-commit: COMMIT;
+master_remove_node
+
+
+
+starting permutation: s1-begin s2-begin s1-select s2-create-citus-local-table-1 s1-commit s2-commit
+step s1-begin: BEGIN;
+step s2-begin: BEGIN;
+step s1-select: SELECT * FROM citus_local_table_1;
+a
+
+step s2-create-citus-local-table-1: SELECT create_citus_local_table('citus_local_table_1'); <waiting ...>
+step s1-commit: COMMIT;
+step s2-create-citus-local-table-1: <... completed>
+create_citus_local_table
+
+
+step s2-commit: COMMIT;
+master_remove_node
+
+
+
+starting permutation: s1-begin s2-begin s1-remove-coordinator s2-create-citus-local-table-1 s1-commit s2-commit
+step s1-begin: BEGIN;
+step s2-begin: BEGIN;
+step s1-remove-coordinator: SELECT master_remove_node('localhost', 57636);
+master_remove_node
+
+
+step s2-create-citus-local-table-1: SELECT create_citus_local_table('citus_local_table_1'); <waiting ...>
+step s1-commit: COMMIT;
+step s2-create-citus-local-table-1: <... completed>
+error in steps s1-commit s2-create-citus-local-table-1: ERROR:  could not find the coordinator node in metadata as it is not added as a worker
+step s2-commit: COMMIT;
+master_remove_node
+
+
+starting permutation: s1-remove-coordinator s1-begin s2-begin s1-add-coordinator s2-create-citus-local-table-1 s1-commit s2-commit
+step s1-remove-coordinator: SELECT master_remove_node('localhost', 57636);
+master_remove_node
+
+
+step s1-begin: BEGIN;
+step s2-begin: BEGIN;
+step s1-add-coordinator: SELECT 1 FROM master_add_node('localhost', 57636, 0);
+?column?
+
+1
+step s2-create-citus-local-table-1: SELECT create_citus_local_table('citus_local_table_1'); <waiting ...>
+step s1-commit: COMMIT;
+step s2-create-citus-local-table-1: <... completed>
+create_citus_local_table
+
+
+step s2-commit: COMMIT;
+master_remove_node
+
+

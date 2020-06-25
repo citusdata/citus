@@ -1036,7 +1036,7 @@ List *
 SequenceDDLCommandsForTable(Oid relationId)
 {
 	List *sequenceDDLList = NIL;
-	List *ownedSequences = getOwnedSequencesCompat(relationId, InvalidAttrNumber);
+	List *ownedSequences = GetSequencesOwnedByRelation(relationId);
 	char *ownerName = TableOwner(relationId);
 
 	Oid sequenceOid = InvalidOid;

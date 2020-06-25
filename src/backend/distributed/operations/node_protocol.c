@@ -749,7 +749,7 @@ GetTableIndexAndConstraintCommands(Oid relationId)
 
 
 /*
- * IndexImpliedByAConstraint is an helper function to be used while scanning
+ * IndexImpliedByAConstraint is a helper function to be used while scanning
  * pg_index. It returns true if the index identified by the given indexForm is
  * implied by a constraint. Note that caller is responsible for passing a valid
  * indexFrom, which means an alive heap tuple which is of form Form_pg_index.

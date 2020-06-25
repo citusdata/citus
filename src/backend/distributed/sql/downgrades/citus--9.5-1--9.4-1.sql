@@ -2,6 +2,8 @@
 
 SET search_path = 'pg_catalog';
 
+DROP FUNCTION create_citus_local_table(table_name regclass);
+
 --  task_tracker_* functions
 
 CREATE FUNCTION task_tracker_assign_task(bigint, integer, text)
