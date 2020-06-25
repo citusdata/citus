@@ -10,7 +10,7 @@ create_citus_local_table
 step s2-create-citus-local-table-1: SELECT create_citus_local_table('citus_local_table_1'); <waiting ...>
 step s1-commit: COMMIT;
 step s2-create-citus-local-table-1: <... completed>
-error in steps s1-commit s2-create-citus-local-table-1: ERROR:  relation "citus_local_table_[0-9]+_xxxxxxx" is a shard relation
+error in steps s1-commit s2-create-citus-local-table-1: ERROR:  relation "citus_local_table_1_xxxxxxx" is a shard relation
 step s2-commit: COMMIT;
 master_remove_node
 
@@ -26,7 +26,7 @@ create_citus_local_table
 step s2-create-citus-local-table-3: SELECT create_citus_local_table('another_schema.citus_local_table_3'); <waiting ...>
 step s1-commit: COMMIT;
 step s2-create-citus-local-table-3: <... completed>
-error in steps s1-commit s2-create-citus-local-table-3: ERROR:  relation "citus_local_table_[0-9]+_xxxxxxx" is a shard relation
+error in steps s1-commit s2-create-citus-local-table-3: ERROR:  relation "citus_local_table_3_xxxxxxx" is a shard relation
 step s2-commit: COMMIT;
 master_remove_node
 
