@@ -673,31 +673,6 @@ WHERE su_suppkey in
   AND n_name = 'Germany'
 ORDER BY su_name;
 
-\set default_analyze_flags '(ANALYZE on, COSTS off, TIMING off, SUMMARY off)'
-EXPLAIN :default_analyze_flags SELECT
-    su_name,
-    su_address
-FROM
-    supplier,
-    nation
-WHERE su_suppkey in
-      (SELECT
-           mod(s_i_id * s_w_id, 10000)
-       FROM
-           stock,
-           order_line
-       WHERE s_i_id IN
-             (SELECT i_id
-              FROM item
-              WHERE i_data LIKE 'co%')
-       AND ol_i_id = s_i_id
-       AND ol_delivery_d > '2008-05-23 12:00:00' -- was 2010, but our order is in 2008
-       GROUP BY s_i_id, s_w_id, s_quantity
-       HAVING   2*s_quantity > sum(ol_quantity))
-  AND su_nationkey = n_nationkey
-  AND n_name = 'Germany'
-ORDER BY su_name;
-
 
 -- Query 21
 -- DATA SET DOES NOT COVER THIS QUERY
