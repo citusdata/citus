@@ -18,7 +18,7 @@
 
 extern bool EnableRepartitionedInsertSelect;
 
-extern TupleTableSlot * CoordinatorInsertSelectExecScan(CustomScanState *node);
+extern TupleTableSlot * NonPushableInsertSelectExecScan(CustomScanState *node);
 extern bool ExecutingInsertSelect(void);
 extern Query * BuildSelectForInsertSelect(Query *insertSelectQuery);
 extern bool IsSupportedRedistributionTarget(Oid targetRelationId);

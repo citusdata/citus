@@ -29,7 +29,7 @@ extern bool InsertSelectIntoLocalTable(Query *query);
 extern Query * ReorderInsertSelectTargetLists(Query *originalQuery,
 											  RangeTblEntry *insertRte,
 											  RangeTblEntry *subqueryRte);
-extern void CoordinatorInsertSelectExplainScan(CustomScanState *node, List *ancestors,
+extern void NonPushableInsertSelectExplainScan(CustomScanState *node, List *ancestors,
 											   struct ExplainState *es);
 extern DistributedPlan * CreateInsertSelectPlan(uint64 planId, Query *originalQuery,
 												PlannerRestrictionContext *

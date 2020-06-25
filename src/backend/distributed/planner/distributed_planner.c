@@ -1295,9 +1295,9 @@ FinalizePlan(PlannedStmt *localPlan, DistributedPlan *distributedPlan)
 			break;
 		}
 
-		case MULTI_EXECUTOR_COORDINATOR_INSERT_SELECT:
+		case MULTI_EXECUTOR_NON_PUSHABLE_INSERT_SELECT:
 		{
-			customScan->methods = &CoordinatorInsertSelectCustomScanMethods;
+			customScan->methods = &NonPushableInsertSelectCustomScanMethods;
 			break;
 		}
 

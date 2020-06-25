@@ -198,12 +198,13 @@ CitusExplainScan(CustomScanState *node, List *ancestors, struct ExplainState *es
 
 
 /*
- * CoordinatorInsertSelectExplainScan is a custom scan explain callback function
+ * NonPushableInsertSelectExplainScan is a custom scan explain callback function
  * which is used to print explain information of a Citus plan for an INSERT INTO
- * distributed_table SELECT ... query that is evaluated on the coordinator.
+ * distributed_table SELECT ... query that is evaluated on the coordinator or
+ * uses repartitioning.
  */
 void
-CoordinatorInsertSelectExplainScan(CustomScanState *node, List *ancestors,
+NonPushableInsertSelectExplainScan(CustomScanState *node, List *ancestors,
 								   struct ExplainState *es)
 {
 	CitusScanState *scanState = (CitusScanState *) node;

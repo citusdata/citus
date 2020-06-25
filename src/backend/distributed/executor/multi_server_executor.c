@@ -88,7 +88,7 @@ JobExecutorType(DistributedPlan *distributedPlan)
 		 * the executor already knows how to handle adaptive
 		 * executor when necessary.
 		 */
-		return MULTI_EXECUTOR_COORDINATOR_INSERT_SELECT;
+		return MULTI_EXECUTOR_NON_PUSHABLE_INSERT_SELECT;
 	}
 
 	Assert(distributedPlan->modLevel == ROW_MODIFY_READONLY);

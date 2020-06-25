@@ -57,7 +57,7 @@ bool EnableRepartitionedInsertSelect = true;
 static int insertSelectExecutorLevel = 0;
 
 
-static TupleTableSlot * CoordinatorInsertSelectExecScanInternal(CustomScanState *node);
+static TupleTableSlot * NonPushableInsertSelectExecScanInternal(CustomScanState *node);
 static Query * WrapSubquery(Query *subquery);
 static List * TwoPhaseInsertSelectTaskList(Oid targetRelationId, Query *insertSelectQuery,
 										   char *resultIdPrefix);
@@ -85,19 +85,19 @@ static void RelableTargetEntryList(List *selectTargetList, List *insertTargetLis
 
 
 /*
- * CoordinatorInsertSelectExecScan is a wrapper around
- * CoordinatorInsertSelectExecScanInternal which also properly increments
+ * NonPushableInsertSelectExecScan is a wrapper around
+ * NonPushableInsertSelectExecScanInternal which also properly increments
  * or decrements insertSelectExecutorLevel.
  */
 TupleTableSlot *
-CoordinatorInsertSelectExecScan(CustomScanState *node)
+NonPushableInsertSelectExecScan(CustomScanState *node)
 {
 	TupleTableSlot *result = NULL;
 	insertSelectExecutorLevel++;
 
 	PG_TRY();
 	{
-		result = CoordinatorInsertSelectExecScanInternal(node);
+		result = NonPushableInsertSelectExecScanInternal(node);
 	}
 	PG_CATCH();
 	{
@@ -112,13 +112,12 @@ CoordinatorInsertSelectExecScan(CustomScanState *node)
 
 
 /*
- * CoordinatorInsertSelectExecScan executes an INSERT INTO distributed_table
- * SELECT .. query by setting up a DestReceiver that copies tuples into the
- * distributed table and then executing the SELECT query using that DestReceiver
- * as the tuple destination.
+ * NonPushableInsertSelectExecScan executes an INSERT INTO distributed_table
+ * SELECT .. query either by routing via coordinator or by repartitioning
+ * task results and moving data directly between nodes.
  */
 static TupleTableSlot *
-CoordinatorInsertSelectExecScanInternal(CustomScanState *node)
+NonPushableInsertSelectExecScanInternal(CustomScanState *node)
 {
 	CitusScanState *scanState = (CitusScanState *) node;
 
