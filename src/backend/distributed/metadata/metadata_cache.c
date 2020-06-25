@@ -254,6 +254,8 @@ static Oid LookupEnumValueId(Oid typeId, char *valueName);
 static void InvalidateCitusTableCacheEntrySlot(CitusTableCacheEntrySlot *cacheSlot);
 static void InvalidateDistTableCache(void);
 static void InvalidateDistObjectCache(void);
+static void InitializeTableCacheEntry(int64 shardId);
+static bool RefreshTableCacheEntryIfInvalid(ShardIdCacheEntry *shardEntry);
 
 
 /* exports for SQL callable functions */
@@ -708,6 +710,58 @@ ShardPlacementList(uint64 shardId)
 
 
 /*
+ * InitializeTableCacheEntry initializes a shard in cache.  A possible reason
+ * for not finding an entry in the cache is that the distributed table's cache
+ * entry hasn't been accessed yet. Thus look up the distributed table, and
+ * build the cache entry. Afterwards we know that the shard has to be in the
+ * cache if it exists. If the shard does *not* exist, this function errors
+ * (because LookupShardRelationFromCatalog errors out).
+ */
+static void
+InitializeTableCacheEntry(int64 shardId)
+{
+	/*
+	 */
+	Oid relationId = LookupShardRelationFromCatalog(shardId, false);
+
+	/* trigger building the cache for the shard id */
+	GetCitusTableCacheEntry(relationId);
+}
+
+
+/*
+ * RefreshInvalidTableCacheEntry checks if the cache entry is still valid and
+ * refreshes it in cache when it's not. It returns true if it refreshed the
+ * entry in the cache and false if it didn't.
+ */
+static bool
+RefreshTableCacheEntryIfInvalid(ShardIdCacheEntry *shardEntry)
+{
+	/*
+	 * We might have some concurrent metadata changes. In order to get the changes,
+	 * we first need to accept the cache invalidation messages.
+	 */
+	AcceptInvalidationMessages();
+	if (shardEntry->tableEntry->isValid)
+	{
+		return false;
+	}
+	Oid oldRelationId = shardEntry->tableEntry->relationId;
+	Oid currentRelationId = LookupShardRelationFromCatalog(shardEntry->shardId, false);
+
+	/*
+	 * The relation OID to which the shard belongs could have changed,
+	 * most notably when the extension is dropped and a shard ID is
+	 * reused. Reload the cache entries for both old and new relation
+	 * ID and then look up the shard entry again.
+	 */
+	LookupCitusTableCacheEntry(oldRelationId);
+	LookupCitusTableCacheEntry(currentRelationId);
+	return true;
+}
+
+
+/*
  * LookupShardCacheEntry returns the cache entry belonging to a shard, or
  * errors out if that shard is unknown.
  */
@@ -726,44 +780,12 @@ LookupShardIdCacheEntry(int64 shardId)
 
 	if (!foundInCache)
 	{
-		/*
-		 * A possible reason for not finding an entry in the cache is that the
-		 * distributed table's cache entry hasn't been accessed. Thus look up
-		 * the distributed table, and build the cache entry.  Afterwards we
-		 * know that the shard has to be in the cache if it exists.  If the
-		 * shard does *not* exist LookupShardRelation() will error out.
-		 */
-		Oid relationId = LookupShardRelationFromCatalog(shardId, false);
-
-		/* trigger building the cache for the shard id */
-		GetCitusTableCacheEntry(relationId);
-
+		InitializeTableCacheEntry(shardId);
 		recheck = true;
 	}
 	else
 	{
-		/*
-		 * We might have some concurrent metadata changes. In order to get the changes,
-		 * we first need to accept the cache invalidation messages.
-		 */
-		AcceptInvalidationMessages();
-
-		if (!shardEntry->tableEntry->isValid)
-		{
-			Oid oldRelationId = shardEntry->tableEntry->relationId;
-			Oid currentRelationId = LookupShardRelationFromCatalog(shardId, false);
-
-			/*
-			 * The relation OID to which the shard belongs could have changed,
-			 * most notably when the extension is dropped and a shard ID is
-			 * reused. Reload the cache entries for both old and new relation
-			 * ID and then look up the shard entry again.
-			 */
-			LookupCitusTableCacheEntry(oldRelationId);
-			LookupCitusTableCacheEntry(currentRelationId);
-
-			recheck = true;
-		}
+		recheck = RefreshTableCacheEntryIfInvalid(shardEntry);
 	}
 
 	/*
