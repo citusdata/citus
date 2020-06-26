@@ -317,6 +317,60 @@ RESET client_min_messages;
 
 SELECT a, count(*), count(distinct b) distinct_values FROM target_table GROUP BY a ORDER BY a;
 
+DEALLOCATE insert_plan;
+
+--
+-- Prepared router INSERT/SELECT. We currently use pull to coordinator when the
+-- distributed query has a single task.
+--
+TRUNCATE target_table;
+
+PREPARE insert_plan(int) AS
+INSERT INTO target_table
+  SELECT a, max(b) FROM source_table
+  WHERE a=$1 GROUP BY a;
+
+SET client_min_messages TO DEBUG1;
+EXECUTE insert_plan(0);
+EXECUTE insert_plan(0);
+EXECUTE insert_plan(0);
+EXECUTE insert_plan(0);
+EXECUTE insert_plan(0);
+EXECUTE insert_plan(0);
+EXECUTE insert_plan(0);
+RESET client_min_messages;
+
+SELECT a, count(*), count(distinct b) distinct_values FROM target_table GROUP BY a ORDER BY a;
+
+DEALLOCATE insert_plan;
+
+--
+-- Prepared INSERT/SELECT with no parameters.
+--
+
+TRUNCATE target_table;
+
+PREPARE insert_plan AS
+INSERT INTO target_table
+  SELECT a, max(b) FROM source_table
+  WHERE a BETWEEN 1 AND 2 GROUP BY a;
+
+EXPLAIN EXECUTE insert_plan;
+
+SET client_min_messages TO DEBUG1;
+EXECUTE insert_plan;
+EXECUTE insert_plan;
+EXECUTE insert_plan;
+EXECUTE insert_plan;
+EXECUTE insert_plan;
+EXECUTE insert_plan;
+EXECUTE insert_plan;
+RESET client_min_messages;
+
+SELECT a, count(*), count(distinct b) distinct_values FROM target_table GROUP BY a ORDER BY a;
+
+DEALLOCATE insert_plan;
+
 --
 -- INSERT/SELECT in CTE
 --
@@ -564,6 +618,14 @@ ON CONFLICT(c1, c2, c3, c4, c5, c6)
 DO UPDATE SET
  cardinality = enriched.cardinality + excluded.cardinality,
  sum = enriched.sum + excluded.sum;
+
+
+-- verify that we don't report repartitioned insert/select for tables
+-- with sequences. See https://github.com/citusdata/citus/issues/3936
+create table table_with_sequences (x int, y int, z bigserial);
+insert into table_with_sequences values (1,1);
+select create_distributed_table('table_with_sequences','x');
+explain insert into table_with_sequences select y, x from table_with_sequences;
 
 -- clean-up
 SET client_min_messages TO WARNING;

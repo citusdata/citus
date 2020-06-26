@@ -684,7 +684,7 @@ $Q$);
  Custom Scan (Citus INSERT ... SELECT)
    INSERT/SELECT method: pull to coordinator
    ->  HashAggregate
-         Group Key: remote_scan.user_id, remote_scan.event_type
+         Group Key: remote_scan.user_id, remote_scan.value_1_agg
          ->  Custom Scan (Citus Adaptive)
                ->  Distributed Subplan XXX_1
                      ->  Custom Scan (Citus Adaptive)
@@ -704,7 +704,7 @@ $Q$);
  Custom Scan (Citus INSERT ... SELECT)
    INSERT/SELECT method: pull to coordinator
    ->  HashAggregate
-         Group Key: remote_scan.user_id, remote_scan.event_type
+         Group Key: remote_scan.user_id, remote_scan.value_1_agg
          ->  Custom Scan (Citus Adaptive)
                ->  Distributed Subplan XXX_1
                      ->  Custom Scan (Citus Adaptive)
@@ -725,7 +725,7 @@ $Q$);
  Custom Scan (Citus INSERT ... SELECT)
    INSERT/SELECT method: pull to coordinator
    ->  HashAggregate
-         Group Key: remote_scan.user_id, remote_scan.event_type
+         Group Key: remote_scan.user_id, remote_scan.value_1_agg
          ->  Custom Scan (Citus Adaptive)
                ->  Distributed Subplan XXX_1
                      ->  Custom Scan (Citus Adaptive)

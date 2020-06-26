@@ -913,7 +913,8 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
 			}
 
 			distributedPlan =
-				CreateInsertSelectPlan(planId, originalQuery, plannerRestrictionContext);
+				CreateInsertSelectPlan(planId, originalQuery, plannerRestrictionContext,
+									   boundParams);
 		}
 		else if (InsertSelectIntoLocalTable(originalQuery))
 		{
@@ -1294,9 +1295,9 @@ FinalizePlan(PlannedStmt *localPlan, DistributedPlan *distributedPlan)
 			break;
 		}
 
-		case MULTI_EXECUTOR_COORDINATOR_INSERT_SELECT:
+		case MULTI_EXECUTOR_NON_PUSHABLE_INSERT_SELECT:
 		{
-			customScan->methods = &CoordinatorInsertSelectCustomScanMethods;
+			customScan->methods = &NonPushableInsertSelectCustomScanMethods;
 			break;
 		}
 

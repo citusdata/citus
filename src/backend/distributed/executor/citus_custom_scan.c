@@ -49,7 +49,7 @@
 /* functions for creating custom scan nodes */
 static Node * AdaptiveExecutorCreateScan(CustomScan *scan);
 static Node * TaskTrackerCreateScan(CustomScan *scan);
-static Node * CoordinatorInsertSelectCreateScan(CustomScan *scan);
+static Node * NonPushableInsertSelectCreateScan(CustomScan *scan);
 static Node * DelayedErrorCreateScan(CustomScan *scan);
 
 /* functions that are common to different scans */
@@ -77,9 +77,9 @@ CustomScanMethods TaskTrackerCustomScanMethods = {
 	TaskTrackerCreateScan
 };
 
-CustomScanMethods CoordinatorInsertSelectCustomScanMethods = {
+CustomScanMethods NonPushableInsertSelectCustomScanMethods = {
 	"Citus INSERT ... SELECT",
-	CoordinatorInsertSelectCreateScan
+	NonPushableInsertSelectCreateScan
 };
 
 CustomScanMethods DelayedErrorCustomScanMethods = {
@@ -109,13 +109,13 @@ static CustomExecMethods TaskTrackerCustomExecMethods = {
 	.ExplainCustomScan = CitusExplainScan
 };
 
-static CustomExecMethods CoordinatorInsertSelectCustomExecMethods = {
-	.CustomName = "CoordinatorInsertSelectScan",
+static CustomExecMethods NonPushableInsertSelectCustomExecMethods = {
+	.CustomName = "NonPushableInsertSelectScan",
 	.BeginCustomScan = CitusBeginScan,
-	.ExecCustomScan = CoordinatorInsertSelectExecScan,
+	.ExecCustomScan = NonPushableInsertSelectExecScan,
 	.EndCustomScan = CitusEndScan,
 	.ReScanCustomScan = CitusReScan,
-	.ExplainCustomScan = CoordinatorInsertSelectExplainScan
+	.ExplainCustomScan = NonPushableInsertSelectExplainScan
 };
 
 
@@ -133,7 +133,7 @@ IsCitusCustomState(PlanState *planState)
 	CustomScanState *css = castNode(CustomScanState, planState);
 	if (css->methods == &AdaptiveExecutorCustomExecMethods ||
 		css->methods == &TaskTrackerCustomExecMethods ||
-		css->methods == &CoordinatorInsertSelectCustomExecMethods)
+		css->methods == &NonPushableInsertSelectCustomExecMethods)
 	{
 		return true;
 	}
@@ -150,7 +150,7 @@ RegisterCitusCustomScanMethods(void)
 {
 	RegisterCustomScanMethods(&AdaptiveExecutorCustomScanMethods);
 	RegisterCustomScanMethods(&TaskTrackerCustomScanMethods);
-	RegisterCustomScanMethods(&CoordinatorInsertSelectCustomScanMethods);
+	RegisterCustomScanMethods(&NonPushableInsertSelectCustomScanMethods);
 	RegisterCustomScanMethods(&DelayedErrorCustomScanMethods);
 }
 
@@ -598,20 +598,20 @@ TaskTrackerCreateScan(CustomScan *scan)
 
 
 /*
- * CoordinatorInsertSelectCrateScan creates the scan state for executing
+ * NonPushableInsertSelectCrateScan creates the scan state for executing
  * INSERT..SELECT into a distributed table via the coordinator.
  */
 static Node *
-CoordinatorInsertSelectCreateScan(CustomScan *scan)
+NonPushableInsertSelectCreateScan(CustomScan *scan)
 {
 	CitusScanState *scanState = palloc0(sizeof(CitusScanState));
 
-	scanState->executorType = MULTI_EXECUTOR_COORDINATOR_INSERT_SELECT;
+	scanState->executorType = MULTI_EXECUTOR_NON_PUSHABLE_INSERT_SELECT;
 	scanState->customScanState.ss.ps.type = T_CustomScanState;
 	scanState->distributedPlan = GetDistributedPlan(scan);
 
 	scanState->customScanState.methods =
-		&CoordinatorInsertSelectCustomExecMethods;
+		&NonPushableInsertSelectCustomExecMethods;
 
 	return (Node *) scanState;
 }

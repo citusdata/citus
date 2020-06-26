@@ -26,7 +26,6 @@
 #include "distributed/deparse_shard_query.h"
 #include "distributed/function_call_delegation.h"
 #include "distributed/insert_select_planner.h"
-#include "distributed/insert_select_executor.h"
 #include "distributed/metadata_utility.h"
 #include "distributed/coordinator_protocol.h"
 #include "distributed/metadata_cache.h"
@@ -230,11 +229,10 @@ TryToDelegateFunctionCall(DistributedPlanningContext *planContext)
 	}
 
 	/*
-	 * This can be called while executing INSERT ... SELECT func(). insert_select_executor
-	 * doesn't get the planned subquery and gets the actual struct Query, so the planning
-	 * for these kinds of queries happens at the execution time.
+	 * Cannot delegate functions for INSERT ... SELECT func(), since they require
+	 * coordinated transactions.
 	 */
-	if (ExecutingInsertSelect())
+	if (PlanningInsertSelect())
 	{
 		ereport(DEBUG1, (errmsg("not pushing down function calls in INSERT ... SELECT")));
 		return NULL;
