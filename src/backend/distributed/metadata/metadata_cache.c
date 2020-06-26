@@ -109,6 +109,7 @@ typedef struct CitusTableCacheEntrySlot
  */
 typedef struct ShardIdCacheEntry
 {
+	/* hash key, needs to be first */
 	uint64 shardId;
 
 	/* pointer to the table entry to which this shard currently belongs */
@@ -298,14 +299,7 @@ EnsureModificationsCanRun(void)
 bool
 IsCitusTable(Oid relationId)
 {
-	CitusTableCacheEntry *cacheEntry = LookupCitusTableCacheEntry(relationId);
-
-	if (!cacheEntry)
-	{
-		return false;
-	}
-
-	return true;
+	return LookupCitusTableCacheEntry(relationId) != NULL;
 }
 
 
@@ -841,7 +835,8 @@ GetCitusTableCacheEntry(Oid distributedRelationId)
 
 /*
  * GetCitusTableCacheEntry returns the distributed table metadata for the
- * passed relationId. For efficiency it caches lookups.
+ * passed relationId. For efficiency it caches lookups. This function returns
+ * NULL if the relation isn't a distributed table.
  */
 static CitusTableCacheEntry *
 LookupCitusTableCacheEntry(Oid relationId)
@@ -1058,6 +1053,7 @@ LookupDistObjectCacheEntry(Oid classid, Oid objid, int32 objsubid)
 /*
  * BuildCitusTableCacheEntry is a helper routine for
  * LookupCitusTableCacheEntry() for building the cache contents.
+ * This function returns NULL if the relation isn't a distributed table.
  */
 static CitusTableCacheEntry *
 BuildCitusTableCacheEntry(Oid relationId)
