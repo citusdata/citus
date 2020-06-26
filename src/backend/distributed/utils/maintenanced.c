@@ -336,8 +336,6 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 
 		Assert(myDbData->workerPid == MyProcPid);
 
-		CitusTableCacheFlushInvalidatedEntries();
-
 		/*
 		 * XXX: Each task should clear the metadata cache before every iteration
 		 * by calling InvalidateMetadataSystemCache(), because otherwise it
