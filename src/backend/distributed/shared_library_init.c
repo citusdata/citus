@@ -91,6 +91,7 @@ static char *CitusVersion = CITUS_VERSION;
 
 void _PG_init(void);
 
+static void DoInitialCleanup(void);
 static void ResizeStackToMaximumDepth(void);
 static void multi_log_hook(ErrorData *edata);
 static void RegisterConnectionCleanup(void);
@@ -287,6 +288,20 @@ _PG_init(void)
 		SetConfigOption("allow_system_table_mods", "true", PGC_POSTMASTER,
 						PGC_S_OVERRIDE);
 	}
+
+	DoInitialCleanup();
+}
+
+
+/*
+ * DoInitialCleanup does cleanup at start time.
+ * Currently it:
+ * - Removes repartition directories ( in case there are any leftovers)
+ */
+static void
+DoInitialCleanup(void)
+{
+	RepartitionCleanupJobDirectories();
 }
 
 

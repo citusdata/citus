@@ -356,6 +356,7 @@ ReturnTupleFromTuplestore(CitusScanState *scanState)
 	}
 }
 
+
 /*
  * ReadFileIntoTupleStore parses the records in a COPY-formatted file according
  * according to the given tuple descriptor and stores the records in a tuple

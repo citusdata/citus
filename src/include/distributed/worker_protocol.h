@@ -126,6 +126,7 @@ extern FmgrInfo * GetFunctionInfo(Oid typeId, Oid accessMethodId, int16 procedur
 extern uint64 ExtractShardIdFromTableName(const char *tableName, bool missingOk);
 extern List * TableDDLCommandList(const char *nodeName, uint32 nodePort,
 								  const char *tableName);
+extern void RepartitionCleanupJobDirectories(void);
 
 
 /* Function declarations shared with the master planner */

@@ -803,6 +803,25 @@ CitusRemoveDirectory(const char *filename)
 }
 
 
+/*
+ * RepartitionCleanupJobDirectories cleans up all files in the job cache directory
+ * as part of this process's start-up logic. The files could be leaked from
+ * repartition joins.
+ */
+void
+RepartitionCleanupJobDirectories(void)
+{
+	/* use the default tablespace in {datadir}/base */
+	StringInfo jobCacheDirectory = makeStringInfo();
+	appendStringInfo(jobCacheDirectory, "base/%s", PG_JOB_CACHE_DIR);
+
+	CitusRemoveDirectory(jobCacheDirectory->data);
+	CitusCreateDirectory(jobCacheDirectory);
+
+	FreeStringInfo(jobCacheDirectory);
+}
+
+
 /* Moves directory from old path to the new one. */
 static void
 RenameDirectory(StringInfo oldDirectoryName, StringInfo newDirectoryName)
