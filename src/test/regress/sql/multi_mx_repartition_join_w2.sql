@@ -4,8 +4,7 @@
 -- tests use the same sequence ids but the queries should not fail.
 \c - - - :worker_2_port
 
-SET citus.task_executor_type TO "task-tracker";
-SET citus.max_adaptive_executor_pool_size TO 2;
+SET citus.max_adaptive_executor_pool_size TO 1;
 SET citus.enable_repartition_joins to ON;
 CREATE TEMP TABLE t1 AS
 SELECT
