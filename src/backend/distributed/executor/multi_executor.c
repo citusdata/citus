@@ -356,48 +356,6 @@ ReturnTupleFromTuplestore(CitusScanState *scanState)
 	}
 }
 
-
-/*
- * Load data collected by task-tracker executor into the tuplestore
- * of CitusScanState. For that, we first create a tuple store, and then copy the
- * files one-by-one into the tuple store.
- *
- * Note that in the long term it'd be a lot better if Multi*Execute() directly
- * filled the tuplestores, but that's a fair bit of work.
- */
-void
-LoadTuplesIntoTupleStore(CitusScanState *citusScanState, Job *workerJob)
-{
-	List *workerTaskList = workerJob->taskList;
-	bool randomAccess = true;
-	bool interTransactions = false;
-	char *copyFormat = "text";
-
-	TupleDesc tupleDescriptor = ScanStateGetTupleDescriptor(citusScanState);
-
-	Assert(citusScanState->tuplestorestate == NULL);
-	citusScanState->tuplestorestate =
-		tuplestore_begin_heap(randomAccess, interTransactions, work_mem);
-
-	if (BinaryMasterCopyFormat)
-	{
-		copyFormat = "binary";
-	}
-
-	Task *workerTask = NULL;
-	foreach_ptr(workerTask, workerTaskList)
-	{
-		StringInfo jobDirectoryName = MasterJobDirectoryName(workerTask->jobId);
-		StringInfo taskFilename = TaskFilename(jobDirectoryName, workerTask->taskId);
-
-		ReadFileIntoTupleStore(taskFilename->data, copyFormat, tupleDescriptor,
-							   citusScanState->tuplestorestate);
-	}
-
-	tuplestore_donestoring(citusScanState->tuplestorestate);
-}
-
-
 /*
  * ReadFileIntoTupleStore parses the records in a COPY-formatted file according
  * according to the given tuple descriptor and stores the records in a tuple
