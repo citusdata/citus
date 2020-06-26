@@ -111,7 +111,7 @@ typedef struct ShardIdCacheEntry
 {
 	uint64 shardId;
 
-	/* pointer to the table entry which this shard currently belongs */
+	/* pointer to the table entry to which this shard currently belongs */
 	CitusTableCacheEntry *tableEntry;
 
 	/* index of the shard interval in the sortedShardIntervalArray of the table entry */
@@ -206,7 +206,6 @@ static ScanKeyData DistObjectScanKey[3];
 /* local function forward declarations */
 static bool IsCitusTableViaCatalog(Oid relationId);
 static ShardIdCacheEntry * LookupShardIdCacheEntry(int64 shardId);
-static CitusTableCacheEntry * LookupCitusTableCacheEntry(Oid relationId);
 static CitusTableCacheEntry * LookupCitusTableCacheEntry(Oid relationId);
 static CitusTableCacheEntry * BuildCitusTableCacheEntry(Oid relationId);
 static void BuildCachedShardList(CitusTableCacheEntry *cacheEntry);
@@ -720,9 +719,8 @@ ShardPlacementList(uint64 shardId)
 static void
 InitializeTableCacheEntry(int64 shardId)
 {
-	/*
-	 */
-	Oid relationId = LookupShardRelationFromCatalog(shardId, false);
+	bool missingOk = false;
+	Oid relationId = LookupShardRelationFromCatalog(shardId, missingOk);
 
 	/* trigger building the cache for the shard id */
 	GetCitusTableCacheEntry(relationId);
