@@ -229,5 +229,15 @@ select pg_catalog.worker_partial_agg('sum(int)'::regprocedure, id) from nulltabl
 select pg_catalog.coord_combine_agg('sum(float8)'::regprocedure, id::text::cstring, null::float8) from nulltable;
 select pg_catalog.coord_combine_agg('avg(float8)'::regprocedure, ARRAY[id,id,id]::text::cstring, null::float8) from nulltable;
 
+-- Test that we don't crash with empty resultset
+-- See https://github.com/citusdata/citus/issues/3953
+CREATE TABLE t1 (a int PRIMARY KEY, b int);
+CREATE TABLE t2 (a int PRIMARY KEY, b int);
+SELECT create_distributed_table('t1','a');
+SELECT 'foo' as foo, count(distinct b) FROM t1;
+SELECT 'foo' as foo, count(distinct b) FROM t2;
+SELECT 'foo' as foo, string_agg(distinct a::character varying, ',') FROM t1;
+SELECT 'foo' as foo, string_agg(distinct a::character varying, ',') FROM t2;
+
 set client_min_messages to error;
 drop schema aggregate_support cascade;

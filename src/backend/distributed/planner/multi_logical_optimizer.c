@@ -1431,7 +1431,15 @@ MasterExtendedOpNode(MultiExtendedOp *originalOpNode,
 		Expr *originalExpression = originalTargetEntry->expr;
 		Expr *newExpression = NULL;
 
-		if (CanPushDownExpression((Node *) originalExpression, extendedOpNodeProperties))
+		/*
+		 * Worker queries can return 0 rows, and we need value of the
+		 * const when doing an aggregation without GROUP BY. So we shouldn't
+		 * push-down constants in target list.
+		 *
+		 * See https://github.com/citusdata/citus/pull/3955 for more details.
+		 */
+		if (CanPushDownExpression((Node *) originalExpression, extendedOpNodeProperties) &&
+			!IsA(originalExpression, Const))
 		{
 			/*
 			 * The expression was entirely pushed down to worker.

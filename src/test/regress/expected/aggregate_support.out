@@ -486,5 +486,39 @@ select pg_catalog.coord_combine_agg('avg(float8)'::regprocedure, ARRAY[id,id,id]
 
 (1 row)
 
+-- Test that we don't crash with empty resultset
+-- See https://github.com/citusdata/citus/issues/3953
+CREATE TABLE t1 (a int PRIMARY KEY, b int);
+CREATE TABLE t2 (a int PRIMARY KEY, b int);
+SELECT create_distributed_table('t1','a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT 'foo' as foo, count(distinct b) FROM t1;
+ foo | count
+---------------------------------------------------------------------
+ foo |     0
+(1 row)
+
+SELECT 'foo' as foo, count(distinct b) FROM t2;
+ foo | count
+---------------------------------------------------------------------
+ foo |     0
+(1 row)
+
+SELECT 'foo' as foo, string_agg(distinct a::character varying, ',') FROM t1;
+ foo | string_agg
+---------------------------------------------------------------------
+ foo |
+(1 row)
+
+SELECT 'foo' as foo, string_agg(distinct a::character varying, ',') FROM t2;
+ foo | string_agg
+---------------------------------------------------------------------
+ foo |
+(1 row)
+
 set client_min_messages to error;
 drop schema aggregate_support cascade;
