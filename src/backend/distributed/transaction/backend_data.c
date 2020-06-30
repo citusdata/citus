@@ -645,6 +645,7 @@ UnSetDistributedTransactionId(void)
 
 		MyBackendData->databaseId = 0;
 		MyBackendData->userId = 0;
+		MyBackendData->cancelledDueToDeadlock = false;
 		MyBackendData->transactionId.initiatorNodeIdentifier = 0;
 		MyBackendData->transactionId.transactionOriginator = false;
 		MyBackendData->transactionId.transactionNumber = 0;
@@ -876,10 +877,10 @@ MyBackendGotCancelledDueToDeadlock(bool clearState)
 	if (IsInDistributedTransaction(MyBackendData))
 	{
 		cancelledDueToDeadlock = MyBackendData->cancelledDueToDeadlock;
-		if (clearState)
-		{
-			MyBackendData->cancelledDueToDeadlock = false;
-		}
+	}
+	if (clearState)
+	{
+		MyBackendData->cancelledDueToDeadlock = false;
 	}
 
 	SpinLockRelease(&MyBackendData->mutex);
