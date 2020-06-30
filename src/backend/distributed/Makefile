@@ -61,15 +61,7 @@ ifneq (,$(SQL_Po_files))
 include $(SQL_Po_files)
 endif
 
-.PHONY: check-sql-snapshots clean-full
-
-check-sql-snapshots:
-	bash -c '\
-	set -eu -o pipefail; \
-	for f in sql/udfs/*; do \
-		latest_snapshot=$$(ls $$f | { grep -v latest.sql || true; } | sort -V | tail -n 1); \
-		diff -u $$f/latest.sql $$f/$$latest_snapshot; \
-	done'
+.PHONY: clean-full
 
 cleanup-before-install:
 	rm -f $(DESTDIR)$(datadir)/$(datamoduledir)/citus*

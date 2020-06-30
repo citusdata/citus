@@ -14,33 +14,8 @@ set -o pipefail
 PR_BRANCH="${CIRCLE_BRANCH}"
 ENTERPRISE_REMOTE="https://${GIT_USERNAME}:${GIT_TOKEN}@github.com/citusdata/citus-enterprise"
 
-# For echo commands "set -x" would show the message effectively twice. Once as
-# part of the echo command shown by "set -x" and once because of the output of
-# the echo command. We do not want "set -x" to show the echo command. We only
-# want to see the actual message in the output of echo itself. This function is
-# a trick to do so. Read the StackOverflow post below to understand why this
-# works and what this works around.
-# Source: https://superuser.com/a/1141026/242593
-shopt -s expand_aliases
-alias echo='{ save_flags="$-"; set +x;} 2> /dev/null; echo_and_restore'
-echo_and_restore() {
-        builtin echo "$*"
-        #shellcheck disable=SC2154
-        case "$save_flags" in
-         (*x*)  set -x
-        esac
-}
-
-# Make sure that on a failing exit we show a useful message
-hint_on_fail() {
-    exit_code=$?
-    if [ $exit_code != 0 ]; then
-        echo HINT: To solve this failure look here: https://github.com/citusdata/citus/blob/master/src/test/scripts/README.md#check-merge-to-enterprise-job
-    fi
-    exit $exit_code
-}
-trap hint_on_fail EXIT
-
+# shellcheck disable=SC1091
+source ci/ci_helpers.sh
 
 # List executed commands. This is done so debugging this script is easier when
 # it fails. It's explicitly done after git remote add so username and password

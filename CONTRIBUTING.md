@@ -110,31 +110,43 @@ why we ask this as well as instructions for how to proceed, see the
 
 ### Following our coding conventions
 
-CircleCI will automatically reject any PRs which do not follow our coding conventions, it
-won't even run tests! The easiest way to ensure your PR adheres to those conventions is
+CircleCI will automatically reject any PRs which do not follow our coding
+conventions. The easiest way to ensure your PR adheres to those conventions is
 to use the [citus_indent](https://github.com/citusdata/tools/tree/develop/uncrustify)
-tool.
+tool. This tool uses `uncrustify` under the hood.
 
-  ```bash
-  # Ubuntu does have uncrustify in the package manager however it's an older
-  # version which doesn't work with our citus-style.cfg file. We require version
-  # 0.60 or greater. If your package manager has a more recent version of uncrustify
-  # feel free to use that instead of installing from source
-  git clone --branch uncrustify-0.60 https://github.com/uncrustify/uncrustify.git
-  pushd uncrustify
-  ./configure
-  sudo make install
-  popd
+```bash
+# Uncrustify changes the way it formats code every release a bit. To make sure
+# everyone formats consistently we use version 0.68.1:
+curl -L https://github.com/uncrustify/uncrustify/archive/uncrustify-0.68.1.tar.gz | tar xz
+cd uncrustify-uncrustify-0.68.1/
+mkdir build
+cd build
+cmake ..
+make -j5
+sudo make install
+cd ../..
 
-  git clone https://github.com/citusdata/tools.git
-  pushd tools/uncrustify
-  make install
-  popd
-  ```
+git clone https://github.com/citusdata/tools.git
+cd tools
+make uncrustify/.install
+```
 
-Once you've done that, you can run the `make reindent` command from the top directory to recursively check and
-correct the style of any source files in the current directory. Under the hood, `make reindent` will run `citus_indent` and some
-other style corrections for you.
+Once you've done that, you can run the `make reindent` command from the top
+directory to recursively check and correct the style of any source files in the
+current directory. Under the hood, `make reindent` will run `citus_indent` and
+some other style corrections for you.
+
+You can also run the following in the directory of this repository to
+automatically format all the files that you have changed before committing:
+
+```bash
+cat > .git/hooks/pre-commit << __EOF__
+#!/bin/bash
+citus_indent --check --diff || { citus_indent --diff; exit 1; }
+__EOF__
+chmod +x .git/hooks/pre-commit
+```
 
 ### Making SQL changes
 

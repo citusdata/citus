@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 # Checks for the APIs that are banned by microsoft. Since we compile for Linux
 # we use the replacements from https://github.com/intel/safestringlib
@@ -11,6 +11,8 @@
 # https://liquid.microsoft.com/Web/Object/Read/ms.security/Requirements/Microsoft.Security.SystemsADM.10082#guide
 
 set -eu
+# shellcheck disable=SC1091
+source ci/ci_helpers.sh
 
 files=$(find src -iname '*.[ch]' | git check-attr --stdin citus-style | grep -v ': unset$' | sed 's/: citus-style: set$//')
 
