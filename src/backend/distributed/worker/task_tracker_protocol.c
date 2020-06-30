@@ -72,7 +72,5 @@ task_tracker_cleanup_job(PG_FUNCTION_ARGS)
 Datum
 task_tracker_conninfo_cache_invalidate(PG_FUNCTION_ARGS)
 {
-	ereport(ERROR, (errmsg("not supposed to get here, did you cheat?")));
-
 	PG_RETURN_DATUM(PointerGetDatum(NULL));
 }
