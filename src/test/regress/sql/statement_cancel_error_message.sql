@@ -19,12 +19,12 @@ ROLLBACK;
 CREATE TABLE t_unrelated(a int);
 SELECT create_distributed_table('t_unrelated', 'a');
 
-SET statement_timeout = '2s';
+BEGIN;
+SET LOCAL statement_timeout = '1ms';
 -- Ignore WARNING about non closed temporary file
-SET client_min_messages to ERROR;
-INSERT INTO t_unrelated SELECT i FROM generate_series(1, 10000000) i;
--- This would also show:
--- ERROR:  canceling the transaction since it was involved in a distributed deadlock
--- This one is not expected, it should fail with a statement timeout error instead
+SET LOCAL client_min_messages to ERROR;
+INSERT INTO t_unrelated SELECT i FROM generate_series(1, 10) i;
+ROLLBACK;
 
+\set VERBOSITY terse
 DROP SCHEMA wrong_cancel_message CASCADE;

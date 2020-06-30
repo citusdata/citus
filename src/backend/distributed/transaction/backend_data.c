@@ -855,13 +855,13 @@ CancelTransactionDueToDeadlock(PGPROC *proc)
  * MyBackendGotCancelledDueToDeadlock returns whether the current distributed
  * transaction was cancelled due to a deadlock. If the backend is not in a
  * distributed transaction, the function returns false.
- * IMPORTANT: We keep some session level state to keep track of if we were
- * cancelled because of a distributed deadlock. Calling this function also
- * resets that state. So calling this function a second time right away will
- * always return false.
+ * We keep some session level state to keep track of if we were cancelled
+ * because of a distributed deadlock. When clearState is true, this function
+ * also resets that state. So after calling this function with clearState true,
+ * a second would always return false.
  */
 bool
-MyBackendGotCancelledDueToDeadlock(void)
+MyBackendGotCancelledDueToDeadlock(bool clearState)
 {
 	bool cancelledDueToDeadlock = false;
 
@@ -876,7 +876,10 @@ MyBackendGotCancelledDueToDeadlock(void)
 	if (IsInDistributedTransaction(MyBackendData))
 	{
 		cancelledDueToDeadlock = MyBackendData->cancelledDueToDeadlock;
-		MyBackendData->cancelledDueToDeadlock = false;
+		if (clearState)
+		{
+			MyBackendData->cancelledDueToDeadlock = false;
+		}
 	}
 
 	SpinLockRelease(&MyBackendData->mutex);
