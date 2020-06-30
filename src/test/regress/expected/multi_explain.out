@@ -311,6 +311,33 @@ Aggregate (actual rows=1 loops=1)
         ->  MapMergeJob
               Map Task Count: 3
               Merge Task Count: 4
+-- Confirm repartiton join in distributed subplan works
+EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off)
+WITH repartion AS (SELECT count(*) FROM t1, t2 WHERE t1.a=t2.b)
+SELECT count(*) from repartion;
+Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
+  ->  Distributed Subplan XXX_1
+        Intermediate Data Size: 14 bytes
+        Result destination: Write locally
+        ->  Aggregate (actual rows=1 loops=1)
+              ->  Custom Scan (Citus Adaptive) (actual rows=4 loops=1)
+                    Task Count: 4
+                    Tuple data received from nodes: 4 bytes
+                    Tasks Shown: None, not supported for re-partition queries
+                    ->  MapMergeJob
+                          Map Task Count: 3
+                          Merge Task Count: 4
+                    ->  MapMergeJob
+                          Map Task Count: 3
+                          Merge Task Count: 4
+  Task Count: 1
+  Tuple data received from nodes: 1 bytes
+  Tasks Shown: All
+  ->  Task
+        Tuple data received from node: 1 bytes
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Aggregate (actual rows=1 loops=1)
+              ->  Function Scan on read_intermediate_result intermediate_result (actual rows=1 loops=1)
 END;
 DROP TABLE t1, t2;
 -- Test query text output, with ANALYZE ON
@@ -1330,31 +1357,33 @@ WITH cte1 AS (SELECT * FROM cte1 WHERE EXISTS (SELECT * FROM cte1) LIMIT 5)
 SELECT s FROM cte1 WHERE EXISTS (SELECT * FROM cte1);
 Custom Scan (Citus INSERT ... SELECT)
   INSERT/SELECT method: pull to coordinator
-  ->  Result
-        One-Time Filter: $3
+  ->  Subquery Scan on citus_insert_select_subquery
         CTE cte1
           ->  Function Scan on generate_series s
-        CTE cte1
-          ->  Limit
-                InitPlan 2 (returns $1)
-                  ->  CTE Scan on cte1 cte1_1
-                ->  Result
-                      One-Time Filter: $1
-                      ->  CTE Scan on cte1 cte1_2
-        InitPlan 4 (returns $3)
-          ->  CTE Scan on cte1 cte1_3
-        ->  CTE Scan on cte1
+        ->  Result
+              One-Time Filter: $3
+              CTE cte1
+                ->  Limit
+                      InitPlan 2 (returns $1)
+                        ->  CTE Scan on cte1 cte1_1
+                      ->  Result
+                            One-Time Filter: $1
+                            ->  CTE Scan on cte1 cte1_2
+              InitPlan 4 (returns $3)
+                ->  CTE Scan on cte1 cte1_3
+              ->  CTE Scan on cte1
 EXPLAIN (COSTS OFF)
 INSERT INTO lineitem_hash_part
 ( SELECT s FROM generate_series(1,5) s) UNION
 ( SELECT s FROM generate_series(5,10) s);
 Custom Scan (Citus INSERT ... SELECT)
   INSERT/SELECT method: pull to coordinator
-  ->  HashAggregate
-        Group Key: s.s
-        ->  Append
-              ->  Function Scan on generate_series s
-              ->  Function Scan on generate_series s_1
+  ->  Subquery Scan on citus_insert_select_subquery
+        ->  HashAggregate
+              Group Key: s.s
+              ->  Append
+                    ->  Function Scan on generate_series s
+                    ->  Function Scan on generate_series s_1
 -- explain with recursive planning
 -- prevent PG 11 - PG 12 outputs to diverge
 SET citus.enable_cte_inlining TO false;
