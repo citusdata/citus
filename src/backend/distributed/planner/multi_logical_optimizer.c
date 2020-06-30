@@ -228,7 +228,6 @@ static Expr * AddTypeConversion(Node *originalAggregate, Node *newExpression);
 static MultiExtendedOp * WorkerExtendedOpNode(MultiExtendedOp *originalOpNode,
 											  ExtendedOpNodeProperties *
 											  extendedOpNodeProperties);
-static bool TargetListHasAggregates(List *targetEntryList);
 static void ProcessTargetListForWorkerQuery(List *targetEntryList,
 											ExtendedOpNodeProperties *
 											extendedOpNodeProperties,
@@ -2830,7 +2829,7 @@ BuildOrderByLimitReference(bool hasDistinctOn, bool groupedByDisjointPartitionCo
  * target list contain aggregates that are not inside the window functions.
  * This function should not be called if window functions are being pulled up.
  */
-static bool
+bool
 TargetListHasAggregates(List *targetEntryList)
 {
 	TargetEntry *targetEntry = NULL;
@@ -3840,7 +3839,24 @@ CanPushDownExpression(Node *expression,
 	bool hasWindowFunction = contain_window_function(expression);
 	if (!hasAggregate && !hasWindowFunction)
 	{
-		return true;
+		/*
+		 * If the query has the form SELECT expression, agg(..) FROM table;
+		 * then expression should be evaluated on the coordinator.
+		 *
+		 * Other than the efficiency part of this, we could also crash if
+		 * we pushed down the expression to the workers. When pushing down
+		 * expressions to workers we create a Var reference to the worker
+		 * tuples. If the result from worker is empty, but we need to have
+		 * at least a row in coordinator result, postgres will crash when
+		 * trying to evaluate the Var.
+		 *
+		 * For details, see https://github.com/citusdata/citus/pull/3961
+		 */
+		if (!extendedOpNodeProperties->hasAggregate ||
+			extendedOpNodeProperties->hasGroupBy)
+		{
+			return true;
+		}
 	}
 
 	/* aggregates inside pushed down window functions can be pushed down */

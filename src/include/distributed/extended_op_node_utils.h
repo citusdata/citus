@@ -31,6 +31,12 @@ typedef struct ExtendedOpNodeProperties
 	bool onlyPushableWindowFunctions;
 	bool pullUpIntermediateRows;
 	bool pushDownGroupingAndHaving;
+
+	/* indicates whether the MultiExtendedOp has a GROUP BY */
+	bool hasGroupBy;
+
+	/* indicates whether the MultiExtendedOp has an aggregate on the target list */
+	bool hasAggregate;
 } ExtendedOpNodeProperties;
 
 

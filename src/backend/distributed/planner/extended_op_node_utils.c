@@ -79,6 +79,9 @@ BuildExtendedOpNodeProperties(MultiExtendedOp *extendedOpNode,
 								 hasNonPartitionColumnDistinctAgg,
 								 extendedOpNode->onlyPushableWindowFunctions);
 
+	extendedOpNodeProperties.hasGroupBy = extendedOpNode->groupClauseList != NIL;
+	extendedOpNodeProperties.hasAggregate = TargetListHasAggregates(targetList);
+
 	extendedOpNodeProperties.groupedByDisjointPartitionColumn =
 		groupedByDisjointPartitionColumn;
 	extendedOpNodeProperties.repartitionSubquery = repartitionSubquery;
