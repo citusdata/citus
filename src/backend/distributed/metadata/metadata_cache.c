@@ -181,9 +181,10 @@ static bool citusVersionKnownCompatible = false;
 /* Hash table for informations about each partition */
 static HTAB *DistTableCacheHash = NULL;
 static List *DistTableCacheExpired = NIL;
-static HTAB *ShardIdCacheHash = NULL;
 
 /* Hash table for informations about each shard */
+static HTAB *ShardIdCacheHash = NULL;
+
 static MemoryContext MetadataCacheMemoryContext = NULL;
 
 /* Hash table for information about each object */
@@ -1329,14 +1330,13 @@ BuildCachedShardList(CitusTableCacheEntry *cacheEntry)
 		ShardInterval *shardInterval = sortedShardIntervalArray[shardIndex];
 		int64 shardId = shardInterval->shardId;
 		int placementOffset = 0;
-		bool foundShardIdInCache = false;
 
 		/*
 		 * Enable quick lookups of this shard ID by adding it to ShardIdCacheHash
 		 * or overwriting the previous values.
 		 */
 		ShardIdCacheEntry *shardIdCacheEntry =
-			hash_search(ShardIdCacheHash, &shardId, HASH_ENTER, &foundShardIdInCache);
+			hash_search(ShardIdCacheHash, &shardId, HASH_ENTER, NULL);
 
 		shardIdCacheEntry->tableEntry = cacheEntry;
 		shardIdCacheEntry->shardIndex = shardIndex;
