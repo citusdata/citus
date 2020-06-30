@@ -177,3 +177,12 @@ foo = 2
 #endif
 ```
 This was deemed to be error prone and not worth the effort.
+
+## `tests_all_in_schedule.sh`
+
+A test should always be included in a schedule file, otherwise it will not be
+run in CI. This is most commonly forgotten with new tests that the dev tried
+locally with something like:
+```bash
+make -C src/test/regress/ check-minimal EXTRA_TESTS='multi_create_table_new_features'
+```
