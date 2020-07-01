@@ -1,3 +1,46 @@
+### citus v9.5.0 (July 1, 2020) ###
+
+* Introduces downgrade paths in migration scripts
+
+* Fix a crash when aggregating empty tables.
+
+* Fix wrong cancellation message about distributed deadlock
+
+* Fixes crash when using rollback to savepoint after cancelation of DML
+
+* Report correct INSERT/SELECT method in EXPLAIN
+
+* Fix explain analyze on adaptive executor repartitions
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Fix segfault when evaluating function calls with default parameters on coordinator
+
+* Show amount of data received in EXPLAIN ANALYZ
+
+* Enables joins between local tables and CTEs
+
+* Adds support for insert into local table select from distributed table.
+
+* Adds support to partially push down tdigest aggregates
+
+* Show CTE statistics in EXPLAIN ANALYZE.
+
+* Shows query text in EXPLAIN output when explain verbose is true
+
+* Fix several EXPLAIN ANALYZE issues.
+
+* Fix possible error throwing in abort handle
+
+* Improves COPY by honoring max_adaptive_executor_pool_size config
+
+* Do not return incorrect results when changing roles in a transactio
+
+* Avoid segfaulting when inserting implicitly coerced constants
+
+* Disallow triggers on citus tables
+
+* Fix distribution of composite types failing to include typemods
+
 ### citus v9.3.2 (Jun 22, 2020) ###
 
 * Fixes a version bump issue in 9.3.1
