@@ -55,7 +55,10 @@ jobs:
           command: ci/banned.h.sh
       - run:
           name: 'Check for tests missing in schedules'
-          command: ci/tests_all_in_schedule.sh
+          command: ci/check_all_tests_are_run.sh
+      - run:
+          name: 'Check if all CI scripts are actually run'
+          command: ci/check_all_ci_scripts_are_run.sh
   check-sql-snapshots:
     docker:
       - image: 'citus/extbuilder:latest'

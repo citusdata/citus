@@ -123,6 +123,13 @@ the dev ran it locally without running a full schedule with something like:
 make -C src/test/regress/ check-minimal EXTRA_TESTS='multi_create_table_new_features'
 ```
 
+## `check_all_ci_scripts_are_run.sh`
+
+This is the meta CI script. This checks that all existing CI scripts are
+actually run in CI. This is most commonly forgotten for newly added CI tests
+that the developer only ran locally. It also checks that all CI scripts have a
+section in this `README.md` file and that they include `ci/ci_helpers.sh`.
+
 ## `disallow_c_comments_in_migrations.sh`
 
 We do not use C-style comments in migration files as the stripped
