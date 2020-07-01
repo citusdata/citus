@@ -15,7 +15,7 @@ cd src/test/regress
 test_names=$(
     find sql spec input -iname "*.sql" -o -iname "*.spec" -o -iname "*.source" |
     sed -E 's#^\w+/([^/]+)\.[^.]+$#\1#g' |
-    grep --invert-match '.include$'
+    grep -v '.include$'
 )
 for name in $test_names; do
     if ! grep "\\b$name\\b" ./*_schedule > /dev/null; then
