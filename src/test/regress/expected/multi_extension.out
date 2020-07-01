@@ -406,12 +406,28 @@ SELECT * FROM print_extension_changes();
                  | function worker_save_query_explain_analyze(text,jsonb)
 (2 rows)
 
+-- Test downgrade to 9.4-1 from 9.5-1
+ALTER EXTENSION citus UPDATE TO '9.5-1';
+ALTER EXTENSION citus UPDATE TO '9.4-1';
+-- Should be empty result since upgrade+downgrade should be a no-op
+SELECT * FROM print_extension_changes();
+ previous_object | current_object
+---------------------------------------------------------------------
+(0 rows)
+
+-- Snapshot of state at 9.5-1
+ALTER EXTENSION citus UPDATE TO '9.5-1';
+SELECT * FROM print_extension_changes();
+ previous_object | current_object
+---------------------------------------------------------------------
+(0 rows)
+
 DROP TABLE prev_objects, extension_diff;
 -- show running version
 SHOW citus.version;
  citus.version
 ---------------------------------------------------------------------
- 9.4devel
+ 9.5devel
 (1 row)
 
 -- ensure no objects were created outside pg_catalog
@@ -433,7 +449,7 @@ RESET citus.enable_version_checks;
 DROP EXTENSION citus;
 CREATE EXTENSION citus VERSION '7.0-1';
 ERROR:  specified version incompatible with loaded Citus library
-DETAIL:  Loaded library requires 9.4, but 7.0-1 was specified.
+DETAIL:  Loaded library requires 9.5, but 7.0-1 was specified.
 HINT:  If a newer library is present, restart the database and try the command again.
 -- Test non-distributed queries work even in version mismatch
 SET citus.enable_version_checks TO 'false';
@@ -476,7 +492,7 @@ ORDER BY 1;
 -- We should not distribute table in version mistmatch
 SELECT create_distributed_table('version_mismatch_table', 'column1');
 ERROR:  loaded Citus library version differs from installed extension version
-DETAIL:  Loaded library requires 9.4, but the installed extension version is 7.1-1.
+DETAIL:  Loaded library requires 9.5, but the installed extension version is 7.1-1.
 HINT:  Run ALTER EXTENSION citus UPDATE and try again.
 -- This function will cause fail in next ALTER EXTENSION
 CREATE OR REPLACE FUNCTION pg_catalog.master_dist_authinfo_cache_invalidate()
