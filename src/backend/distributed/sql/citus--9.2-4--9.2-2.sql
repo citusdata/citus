@@ -1,0 +1,2 @@
+-- citus--9.2-4--9.2-2
+-- this is an empty downgrade path since citus--9.2-2--9.2-4.sql is empty
