@@ -185,12 +185,14 @@ SELECT * FROM print_extension_changes();
 
 -- Test downgrade to 9.3-2 from 9.4-1
 ALTER EXTENSION citus UPDATE TO '9.4-1';
+ALTER EXTENSION citus UPDATE TO '9.5-1';
 ALTER EXTENSION citus UPDATE TO '9.3-2';
 -- Should be empty result since upgrade+downgrade should be a no-op
 SELECT * FROM print_extension_changes();
 
 -- Snapshot of state at 9.4-1
 ALTER EXTENSION citus UPDATE TO '9.4-1';
+ALTER EXTENSION citus UPDATE TO '9.5-1';
 SELECT * FROM print_extension_changes();
 
 DROP TABLE prev_objects, extension_diff;
