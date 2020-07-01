@@ -18,7 +18,7 @@ test_names=$(
     grep --invert-match '.include$'
 )
 for name in $test_names; do
-    if ! grep "\\b$name\\b" ./*_schedule --quiet; then
+    if ! grep "\\b$name\\b" ./*_schedule > /dev/null; then
         echo "ERROR: Test with name \"$name\" is not used in any of the schedule files"
         exit 1
     fi

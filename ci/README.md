@@ -114,6 +114,15 @@ means that `latest.sql` is not up to date with the SQL file of the highest
 version number in the directory. The output of the script shows you what is
 different.
 
+## `check_all_tests_are_run.sh`
+
+A test should always be included in a schedule file, otherwise it will not be
+run in CI. This is most commonly forgotten for newly added tests. In that case
+the dev ran it locally without running a full schedule with something like:
+```bash
+make -C src/test/regress/ check-minimal EXTRA_TESTS='multi_create_table_new_features'
+```
+
 ## `disallow_c_comments_in_migrations.sh`
 
 We do not use C-style comments in migration files as the stripped
@@ -177,12 +186,3 @@ foo = 2
 #endif
 ```
 This was deemed to be error prone and not worth the effort.
-
-## `tests_all_in_schedule.sh`
-
-A test should always be included in a schedule file, otherwise it will not be
-run in CI. This is most commonly forgotten with new tests that the dev tried
-locally with something like:
-```bash
-make -C src/test/regress/ check-minimal EXTRA_TESTS='multi_create_table_new_features'
-```
