@@ -442,7 +442,7 @@ struct TaskPlacementExecution;
 /* GUC, determining whether Citus opens 1 connection per task */
 bool ForceMaxQueryParallelization = false;
 int MaxAdaptiveExecutorPoolSize = 16;
-bool EnableBinaryProtocol = true;
+bool EnableBinaryProtocol = false;
 
 /* GUC, number of ms to wait between opening connections to the same worker */
 int ExecutorSlowStartInterval = 10;
