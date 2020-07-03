@@ -2702,11 +2702,17 @@ BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError)
 	{
 		InsertValues *insertValues = (InsertValues *) lfirst(insertValuesCell);
 		List *prunedShardIntervalList = NIL;
-		Expr *partitionValueExpr = (Expr *) eval_const_expressions(NULL,
-																   strip_implicit_coercions(
-																	   (Node *)
-																	   insertValues->
-																	   partitionValueExpr));
+		Node *partitionValueExpr = (Node *) insertValues->partitionValueExpr;
+		partitionValueExpr = strip_implicit_coercions(partitionValueExpr);
+
+		/*
+		 * By evaluating constant expressions an expression such as 2 + 4
+		 * will become const 6. That way we can use them as a partition column
+		 * value. Normally the planner evaluates constant expressions, but we
+		 * may be working on the original query tree here. So we do it here
+		 * explicitely before checking that the partition value is a const.
+		 */
+		partitionValueExpr = eval_const_expressions(NULL, partitionValueExpr);
 
 		if (!IsA(partitionValueExpr, Const))
 		{

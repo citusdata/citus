@@ -47,6 +47,74 @@ SELECT create_distributed_table('t4', 'c1');
 (1 row)
 
 INSERT INTO t4 VALUES (1.0, 2 BETWEEN 1 AND 3);
-\set VERBOSITY terse
+EXPLAIN SELECT FROM t4 WHERE c1 = 2 BETWEEN 1 AND 3;
+                                  QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=100000 width=0)
+   Task Count: 4
+   Tasks Shown: One of 4
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  Seq Scan on t4_92862416 t4  (cost=0.00..34.70 rows=1235 width=0)
+               Filter: c1
+(7 rows)
+
+EXPLAIN SELECT FROM t4 WHERE c1 = true;
+                                  QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
+   Task Count: 1
+   Tasks Shown: All
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  Seq Scan on t4_92862416 t4  (cost=0.00..34.70 rows=1235 width=0)
+               Filter: c1
+(7 rows)
+
+CREATE TABLE t5(c0 int);
+SELECT create_distributed_table('t5', 'c0');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO t5 VALUES (GREATEST(1, 2));
+INSERT INTO t5 VALUES (CASE WHEN 2 BETWEEN 1 AND 3 THEN 2 ELSE 1 END);
+EXPLAIN SELECT FROM t5 WHERE c0 = 2;
+                                 QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
+   Task Count: 1
+   Tasks Shown: All
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  Seq Scan on t5_92862423 t5  (cost=0.00..41.88 rows=13 width=0)
+               Filter: (c0 = 2)
+(7 rows)
+
+EXPLAIN SELECT FROM t5 WHERE c0 = GREATEST(1, 2);
+                                 QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
+   Task Count: 1
+   Tasks Shown: All
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  Seq Scan on t5_92862423 t5  (cost=0.00..41.88 rows=13 width=0)
+               Filter: (c0 = 2)
+(7 rows)
+
+EXPLAIN SELECT FROM t5 WHERE c0 = CASE WHEN 2 BETWEEN 1 AND 3 THEN 2 ELSE 1 END;
+                                 QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
+   Task Count: 1
+   Tasks Shown: All
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  Seq Scan on t5_92862423 t5  (cost=0.00..41.88 rows=13 width=0)
+               Filter: (c0 = 2)
+(7 rows)
+
+set client_min_messages TO WARNING;
 DROP SCHEMA sqlancer_failures CASCADE;
-NOTICE:  drop cascades to 5 other objects
