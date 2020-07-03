@@ -406,8 +406,6 @@ push(@pgOptions, '-c', "max_parallel_workers_per_gather=0");
 # Allow CREATE SUBSCRIPTION to work
 push(@pgOptions, '-c', "wal_level=logical");
 
-push(@pgOptions, '-c', "max_connections=1000");
-
 # Citus options set for the tests
 push(@pgOptions, '-c', "citus.shard_count=4");
 push(@pgOptions, '-c', "citus.shard_max_size=1500kB");
