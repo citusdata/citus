@@ -186,7 +186,6 @@ extern void CleanupTaskExecution(TaskExecution *taskExecution);
 extern void ErrorSizeLimitIsExceeded(void);
 extern bool TaskExecutionFailed(TaskExecution *taskExecution);
 extern void AdjustStateForFailure(TaskExecution *taskExecution);
-extern int MaxMasterConnectionCount(void);
 
 
 extern TupleTableSlot * TaskTrackerExecScan(CustomScanState *node);
