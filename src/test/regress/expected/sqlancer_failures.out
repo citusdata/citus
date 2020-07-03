@@ -47,6 +47,11 @@ SELECT create_distributed_table('t4', 'c1');
 (1 row)
 
 INSERT INTO t4 VALUES (1.0, 2 BETWEEN 1 AND 3);
+-- NOTE: For some reason shard pruning doesn't happen correctly here. It does
+-- work for non boolean const expressions. See explain plans for t5 below that
+-- show that. The query still works though. So doesn't seem important enough to
+-- fix, since boolean partition columns should not happen much/at all for
+-- actual users.
 EXPLAIN SELECT FROM t4 WHERE c1 = 2 BETWEEN 1 AND 3;
                                   QUERY PLAN
 ---------------------------------------------------------------------

@@ -25,6 +25,11 @@ INSERT INTO t3 VALUES ('key', '' COLLATE "C");
 CREATE TABLE t4(c0 real, c1 boolean);
 SELECT create_distributed_table('t4', 'c1');
 INSERT INTO t4 VALUES (1.0, 2 BETWEEN 1 AND 3);
+-- NOTE: For some reason shard pruning doesn't happen correctly here. It does
+-- work for non boolean const expressions. See explain plans for t5 below that
+-- show that. The query still works though. So doesn't seem important enough to
+-- fix, since boolean partition columns should not happen much/at all for
+-- actual users.
 EXPLAIN SELECT FROM t4 WHERE c1 = 2 BETWEEN 1 AND 3;
 EXPLAIN SELECT FROM t4 WHERE c1 = true;
 
@@ -35,5 +40,5 @@ INSERT INTO t5 VALUES (CASE WHEN 2 BETWEEN 1 AND 3 THEN 2 ELSE 1 END);
 EXPLAIN SELECT FROM t5 WHERE c0 = 2;
 EXPLAIN SELECT FROM t5 WHERE c0 = GREATEST(1, 2);
 EXPLAIN SELECT FROM t5 WHERE c0 = CASE WHEN 2 BETWEEN 1 AND 3 THEN 2 ELSE 1 END;
-set client_min_messages TO WARNING;
+SET client_min_messages TO WARNING;
 DROP SCHEMA sqlancer_failures CASCADE;
