@@ -30,13 +30,13 @@ INSERT INTO t4 VALUES (1.0, 2 BETWEEN 1 AND 3);
 -- show that. The query still works though. So doesn't seem important enough to
 -- fix, since boolean partition columns should not happen much/at all for
 -- actual users.
-EXPLAIN SELECT FROM t4 WHERE c1 = 2 BETWEEN 1 AND 3;
-EXPLAIN SELECT FROM t4 WHERE c1 = true;
+EXPLAIN (COSTS FALSE) SELECT FROM t4 WHERE c1 = 2 BETWEEN 1 AND 3;
+EXPLAIN (COSTS FALSE) SELECT FROM t4 WHERE c1 = true;
 
 CREATE TABLE t5(c0 int);
 SELECT create_distributed_table('t5', 'c0');
 INSERT INTO t5 VALUES (CASE WHEN 2 BETWEEN 1 AND 3 THEN 2 ELSE 1 END);
-EXPLAIN SELECT FROM t5 WHERE c0 = 2;
-EXPLAIN SELECT FROM t5 WHERE c0 = CASE WHEN 2 BETWEEN 1 AND 3 THEN 2 ELSE 1 END;
+EXPLAIN (COSTS FALSE) SELECT FROM t5 WHERE c0 = 2;
+EXPLAIN (COSTS FALSE) SELECT FROM t5 WHERE c0 = CASE WHEN 2 BETWEEN 1 AND 3 THEN 2 ELSE 1 END;
 SET client_min_messages TO WARNING;
 DROP SCHEMA sqlancer_failures CASCADE;
