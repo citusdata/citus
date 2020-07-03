@@ -2702,8 +2702,11 @@ BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError)
 	{
 		InsertValues *insertValues = (InsertValues *) lfirst(insertValuesCell);
 		List *prunedShardIntervalList = NIL;
-		Expr *partitionValueExpr = (Expr *) strip_implicit_coercions(
-			(Node *) insertValues->partitionValueExpr);
+		Expr *partitionValueExpr = (Expr *) eval_const_expressions(NULL,
+																   strip_implicit_coercions(
+																	   (Node *)
+																	   insertValues->
+																	   partitionValueExpr));
 
 		if (!IsA(partitionValueExpr, Const))
 		{

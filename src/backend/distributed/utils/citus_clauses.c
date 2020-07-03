@@ -135,6 +135,7 @@ PartiallyEvaluateExpression(Node *expression,
 													PartiallyEvaluateExpression,
 													coordinatorEvaluationContext);
 		}
+		expression = eval_const_expressions(NULL, expression);
 
 		return (Node *) citus_evaluate_expr((Expr *) expression,
 											exprType(expression),
