@@ -7,7 +7,7 @@ source ci/ci_helpers.sh
 
 # 1. Find all *.sh files in the ci directory
 # 2. Strip the directory
-# 3. Exclude some scripts that we should not be run in CI directly
+# 3. Exclude some scripts that we should not run in CI directly
 ci_scripts=$(
     find ci/ -iname "*.sh" |
     sed -E 's#^ci/##g' |
