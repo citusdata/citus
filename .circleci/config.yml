@@ -60,7 +60,7 @@ jobs:
       - checkout
       - run:
           name: 'Check Snapshots'
-          command: "./configure && make check-sql-snapshots -C src/backend/distributed"
+          command: ci/check_sql_snapshots.sh
   test-11_check-multi:
     docker:
       - image: 'citus/exttester-11:latest'
@@ -252,7 +252,7 @@ jobs:
       - checkout
       - run:
           command: |
-            ./src/test/scripts/check_enterprise_merge.sh
+            ci/check_enterprise_merge.sh
   ch_benchmark:
     docker:
       - image: buildpack-deps:stretch

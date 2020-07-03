@@ -1,6 +1,8 @@
 #! /bin/bash
 
 set -eu
+# shellcheck disable=SC1091
+source ci/ci_helpers.sh
 
 # Having changelog items with entries that are longer than 80 characters are forbidden.
 # Find all lines with disallowed length, and for all such lines store
