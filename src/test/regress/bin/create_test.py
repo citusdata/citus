@@ -2,11 +2,17 @@
 
 import sys
 import random
+import os
 
 if len(sys.argv) != 2:
-    raise Exception("Expected a single argument, not more not less")
+    raise Exception("Expected the name of the new test as an argument")
 
 test_name = sys.argv[1]
+
+filename = f"src/test/regress/sql/{test_name}.sql"
+
+if os.path.isfile(filename):
+    raise Exception(f"test file '{filename}' already exists")
 
 shard_id = random.randint(1, 999999) * 100
 
@@ -23,8 +29,8 @@ DROP SCHEMA {test_name} CASCADE;
 """
 
 
-with open(f"src/test/regress/sql/{test_name}.sql", "w") as f:
+with open(filename, "w") as f:
     f.write(contents)
 
 
-print(f"Don't forget to add \"{test_name}\" in multi_schedule somewhere")
+print(f"Don't forget to add '{test_name}' in multi_schedule somewhere")
