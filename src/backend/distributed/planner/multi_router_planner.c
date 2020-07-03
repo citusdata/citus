@@ -2703,7 +2703,6 @@ BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError)
 		InsertValues *insertValues = (InsertValues *) lfirst(insertValuesCell);
 		List *prunedShardIntervalList = NIL;
 		Node *partitionValueExpr = (Node *) insertValues->partitionValueExpr;
-		partitionValueExpr = strip_implicit_coercions(partitionValueExpr);
 
 		/*
 		 * By evaluating constant expressions an expression such as 2 + 4
