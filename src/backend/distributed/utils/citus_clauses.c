@@ -126,6 +126,12 @@ PartiallyEvaluateExpression(Node *expression,
 		 * the planner normally replaces them (in particular, CollateExpr).
 		 * Hence, we first evaluate constant expressions using
 		 * eval_const_expressions before continuing.
+		 *
+		 * NOTE: We do not use expression_planner here, since all it does
+		 * apart from calling eval_const_expressions is call fix_opfuncids.
+		 * We do not need this, since that is already called in
+		 * citus_evaluate_expr. So we won't needlessly traverse the expression
+		 * tree by calling it another time.
 		 */
 		expression = eval_const_expressions(NULL, expression);
 		if (!ShouldEvaluateExpression((Expr *) expression))

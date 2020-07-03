@@ -2711,6 +2711,11 @@ BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError)
 		 * value. Normally the planner evaluates constant expressions, but we
 		 * may be working on the original query tree here. So we do it here
 		 * explicitely before checking that the partition value is a const.
+		 *
+		 * NOTE: We do not use expression_planner here, since all it does
+		 * apart from calling eval_const_expressions is call fix_opfuncids.
+		 * This is not needed here, since it's a no-op for T_Const nodes and we
+		 * error out below in all other cases.
 		 */
 		partitionValueExpr = eval_const_expressions(NULL, partitionValueExpr);
 
