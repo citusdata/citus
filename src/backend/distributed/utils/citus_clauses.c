@@ -118,6 +118,32 @@ PartiallyEvaluateExpression(Node *expression,
 	else if (ShouldEvaluateExpression((Expr *) expression) &&
 			 ShouldEvaluateFunctions(coordinatorEvaluationContext))
 	{
+		/*
+		 * The planner normally evaluates constant expressions, but we may be
+		 * working on the original query tree. We could rely on
+		 * citus_evaluate_expr to evaluate constant expressions, but there are
+		 * certain node types that citus_evaluate_expr does not expect because
+		 * the planner normally replaces them (in particular, CollateExpr).
+		 * Hence, we first evaluate constant expressions using
+		 * eval_const_expressions before continuing.
+		 */
+		expression = eval_const_expressions(NULL, expression);
+		if (!ShouldEvaluateExpression((Expr *) expression))
+		{
+			/*
+			 * It's possible that after evaluating const expressions we
+			 * actually don't need to evaluate this expression anymore e.g:
+			 *
+			 * 1 = 0 AND now() > timestamp '10-10-2000 00:00'
+			 *
+			 * This statement would simply resolve to false, because 1 = 0 is
+			 * false.
+			 */
+			return (Node *) expression_tree_mutator(expression,
+													PartiallyEvaluateExpression,
+													masterEvaluationContext);
+		}
+
 		if (FindNodeCheck(expression, IsVariableExpression))
 		{
 			/*
@@ -135,7 +161,6 @@ PartiallyEvaluateExpression(Node *expression,
 													PartiallyEvaluateExpression,
 													coordinatorEvaluationContext);
 		}
-		expression = eval_const_expressions(NULL, expression);
 
 		return (Node *) citus_evaluate_expr((Expr *) expression,
 											exprType(expression),
