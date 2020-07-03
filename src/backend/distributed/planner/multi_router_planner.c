@@ -2716,6 +2716,7 @@ BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError)
 		 * This is not needed here, since it's a no-op for T_Const nodes and we
 		 * error out below in all other cases.
 		 */
+		partitionValueExpr = eval_const_expressions(NULL, partitionValueExpr);
 
 		if (!IsA(partitionValueExpr, Const))
 		{

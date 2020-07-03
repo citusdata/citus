@@ -134,17 +134,19 @@ PartiallyEvaluateExpression(Node *expression,
 		 * tree by calling it another time.
 		 */
 		expression = eval_const_expressions(NULL, expression);
+
+		/*
+		 * It's possible that after evaluating const expressions we
+		 * actually don't need to evaluate this expression anymore e.g:
+		 *
+		 * 1 = 0 AND now() > timestamp '10-10-2000 00:00'
+		 *
+		 * This statement would simply resolve to false, because 1 = 0 is
+		 * false. That's whe we now check again if we should evaluate the
+		 * expression and only continue if we still do.
+		 */
 		if (!ShouldEvaluateExpression((Expr *) expression))
 		{
-			/*
-			 * It's possible that after evaluating const expressions we
-			 * actually don't need to evaluate this expression anymore e.g:
-			 *
-			 * 1 = 0 AND now() > timestamp '10-10-2000 00:00'
-			 *
-			 * This statement would simply resolve to false, because 1 = 0 is
-			 * false.
-			 */
 			return (Node *) expression_tree_mutator(expression,
 													PartiallyEvaluateExpression,
 													masterEvaluationContext);
