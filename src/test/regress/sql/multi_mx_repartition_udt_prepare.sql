@@ -184,6 +184,8 @@ INSERT INTO repartition_udt_other values (12, '(2,3)'::test_udt, 'foo');
 SET client_min_messages = LOG;
 SET citus.task_executor_type = 'task-tracker';
 
+SELECT run_command_on_workers($$SELECT sum(numbackends) FROM pg_stat_database;$$);
+
 -- -- Query that should result in a repartition
 -- -- join on int column, and be empty.
 -- SELECT * FROM repartition_udt JOIN repartition_udt_other
