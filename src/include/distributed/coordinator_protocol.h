@@ -24,7 +24,7 @@
 
 /*
  * In our distributed database, we need a mechanism to make remote procedure
- * calls between clients, the master node, and worker nodes. These remote calls
+ * calls between clients, the coordinator node, and worker nodes. These remote calls
  * require serializing and deserializing values and function signatures between
  * nodes; and for these, we currently use PostgreSQL's built-in type and
  * function definition system. This approach is by no means ideal however; and
@@ -41,7 +41,7 @@
  */
 
 
-/* Number of tuple fields that master node functions return */
+/* Number of tuple fields that coordinator node functions return */
 #define TABLE_METADATA_FIELDS 7
 #define CANDIDATE_NODE_FIELDS 2
 #define WORKER_NODE_FIELDS 2

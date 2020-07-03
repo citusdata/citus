@@ -23,7 +23,7 @@
 #endif
 
 
-/* Function declarations for building local plans on the master node */
+/* Function declarations for building local plans on the coordinator node */
 struct DistributedPlan;
 struct CustomScan;
 extern Path * CreateCitusCustomScanPath(PlannerInfo *root, RelOptInfo *relOptInfo,

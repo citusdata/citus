@@ -15,7 +15,7 @@
 
 /*
  * ExtendedOpNodeProperties is a helper structure that is used to
- * share the common information among the worker and master extended
+ * share the common information among the worker and coordinator extended
  * op nodes.
  *
  * It is designed to be a read-only singleton object per extended op node

@@ -156,7 +156,7 @@ typedef struct MultiCartesianProduct
 /*
  * MultiExtendedOp defines a set of extended operators that operate on columns
  * in relational algebra. This node allows us to distinguish between operations
- * in the master and worker nodes, and also captures the following:
+ * in the coordinator and worker nodes, and also captures the following:
  *
  * (1) Aggregate functions such as sums or averages;
  * (2) Grouping of attributes; these groupings may also be tied to aggregates;

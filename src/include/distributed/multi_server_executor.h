@@ -58,7 +58,7 @@ typedef enum
 } TaskExecStatus;
 
 
-/* Enumeration to track file transmits to the master node */
+/* Enumeration to track file transmits to the coordinator node */
 typedef enum
 {
 	EXEC_TRANSMIT_INVALID_FIRST = 0,
