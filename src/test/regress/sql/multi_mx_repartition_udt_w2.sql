@@ -1,6 +1,7 @@
 --
 -- MULTI_MX_REPARTITION_W2_UDT
 --
+SELECT run_command_on_workers($$SELECT sum(numbackends) FROM pg_stat_database;$$);
 
 \c - - - :worker_2_port
 SET client_min_messages = LOG;
