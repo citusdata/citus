@@ -18,7 +18,7 @@ SET citus.next_shard_id TO {shard_id};
 
 -- add tests here
 
-\\set VERBOSITY terse
+SET client_min_messages TO WARNING;
 DROP SCHEMA {test_name} CASCADE;
 """
 
