@@ -22,6 +22,8 @@
 #include "executor/executor.h"
 #include "utils/datetime.h"
 
+#define SECOND_TO_MILLI_SECOND 1000
+#define MICRO_TO_MILLI_SECOND 0.001
 
 int MaxIntermediateResult = 1048576; /* maximum size in KB the intermediate result can grow to */
 /* when this is true, we enforce intermediate result size limit in all executors */
@@ -86,7 +88,9 @@ ExecuteSubPlans(DistributedPlan *distributedPlan)
 		int durationMicrosecs = 0;
 		TimestampDifference(startTimestamp, GetCurrentTimestamp(), &durationSeconds,
 							&durationMicrosecs);
-		subPlan->durationMillisecs = durationSeconds * 1000 * +durationMicrosecs * 10e-3;
+
+		subPlan->durationMillisecs = durationSeconds * SECOND_TO_MILLI_SECOND;
+		subPlan->durationMillisecs += durationMicrosecs * MICRO_TO_MILLI_SECOND;
 
 		subPlan->bytesSentPerWorker = RemoteFileDestReceiverBytesSent(copyDest);
 		subPlan->remoteWorkerCount = list_length(remoteWorkerNodeList);
