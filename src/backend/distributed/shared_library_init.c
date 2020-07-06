@@ -21,6 +21,7 @@
 #include "fmgr.h"
 #include "miscadmin.h"
 
+#include "execinfo.h"
 #include "safe_lib.h"
 
 #include "citus_version.h"
@@ -367,12 +368,20 @@ multi_log_hook(ErrorData *edata)
 						 "involved in a distributed deadlock";
 	}
 
-	
-	void	   *buf[100];
-	int			nframes;
+	StringInfo * newStr = makeStringInfo();
+	appendStringInfoString(newStr, edata->message);
 
 	nframes = backtrace(buf, lengthof(buf));
-	backtrace_symbols_fd(buf, nframes, fileno(stderr));
+	// backtrace_symbols_fd(buf, nframes, fileno(stderr));
+	char** strings = backtrace_symbols(buf, nframes);
+
+	if (strings) {
+		for (int i = 0; i < nframes; i++) {
+			appendStringInfoChar(newStr, '\n');
+			appendStringInfoString(newStr, strings[i]);
+		}
+	}
+	edata->message = newStr->data;
 	
 }
 
