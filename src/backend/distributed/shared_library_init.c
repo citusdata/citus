@@ -377,13 +377,15 @@ multi_log_hook(ErrorData *edata)
 	nframes = backtrace(buf, lengthof(buf));
 	// backtrace_symbols_fd(buf, nframes, fileno(stderr));
 	char** strings = backtrace_symbols(buf, nframes);
-
+	appendStringInfoString(newStr, "\nBACKTRACE INFO: \n");
 	if (strings) {
 		for (int i = 0; i < nframes; i++) {
 			appendStringInfoChar(newStr, '\n');
 			appendStringInfoString(newStr, strings[i]);
 		}
 	}
+	appendStringInfoString(newStr, "\n\n");
+
 	edata->message = newStr->data;
 	
 }
