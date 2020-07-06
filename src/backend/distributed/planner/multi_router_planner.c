@@ -2705,6 +2705,20 @@ BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError)
 		Node *partitionValueExpr = (Node *) insertValues->partitionValueExpr;
 
 		/*
+		 * We only support constant partition values at this point. Sometimes
+		 * they are wrappend in an implicit coercion though. We are fine with
+		 * this. To support this first we strip them here. Then we do the
+		 * coercion manually below using TransformPartitionRestrictionValue, if
+		 * the types are not the same.
+		 *
+		 * NOTE: eval_const_expressions below would do some of these removals
+		 * too, but it's unclear if it would do all of them. So we keep
+		 * strip_implicit_coercions too, to be sure we support as much as
+		 * possible.
+		 */
+		partitionValueExpr = strip_implicit_coercions(partitionValueExpr);
+
+		/*
 		 * By evaluating constant expressions an expression such as 2 + 4
 		 * will become const 6. That way we can use them as a partition column
 		 * value. Normally the planner evaluates constant expressions, but we
