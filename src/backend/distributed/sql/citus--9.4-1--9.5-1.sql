@@ -2,6 +2,7 @@
 
 -- bump version to 9.5-1
 #include "udfs/undistribute_table/9.5-1.sql"
+#include "udfs/create_citus_local_table/9.5-1.sql"
 
 SET search_path = 'pg_catalog';
 
