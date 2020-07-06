@@ -2655,7 +2655,6 @@ BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError)
 	Oid distributedTableId = ExtractFirstCitusTableId(query);
 	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(distributedTableId);
 	char partitionMethod = cacheEntry->partitionMethod;
-	uint32 rangeTableId = 1;
 	List *modifyRouteList = NIL;
 	ListCell *insertValuesCell = NULL;
 
@@ -2706,15 +2705,18 @@ BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError)
 
 		/*
 		 * We only support constant partition values at this point. Sometimes
-		 * they are wrappend in an implicit coercion though. We are fine with
-		 * this. To support this first we strip them here. Then we do the
-		 * coercion manually below using TransformPartitionRestrictionValue, if
-		 * the types are not the same.
+		 * they are wrappend in an implicit coercion though. Most notably
+		 * FuncExpr coercions for casts created with CREATE CAST ... WITH
+		 * FUNCTION .. AS IMPLICIT. To support this first we strip them here.
+		 * Then we do the coercion manually below using
+		 * TransformPartitionRestrictionValue, if the types are not the same.
 		 *
 		 * NOTE: eval_const_expressions below would do some of these removals
-		 * too, but it's unclear if it would do all of them. So we keep
-		 * strip_implicit_coercions too, to be sure we support as much as
-		 * possible.
+		 * too, but it's unclear if it would do all of them. It is possible
+		 * that there are no cases where this strip_implicit_coercions call is
+		 * really necessary at all, but currently that's hard to rule out.
+		 * So to be on the safe side we call strip_implicit_coercions too, to
+		 * be sure we support as much as possible.
 		 */
 		partitionValueExpr = strip_implicit_coercions(partitionValueExpr);
 
