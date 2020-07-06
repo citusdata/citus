@@ -2747,21 +2747,20 @@ BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError)
 								   "column")));
 		}
 
+		/* actually do the coercions that we skipped before, if fails throw an
+		 * error */
+		if (partitionValueConst->consttype != partitionColumn->vartype)
+		{
+			bool missingOk = false;
+			partitionValueConst =
+				TransformPartitionRestrictionValue(partitionColumn,
+												   partitionValueConst,
+												   missingOk);
+		}
+
 		if (partitionMethod == DISTRIBUTE_BY_HASH || partitionMethod ==
 			DISTRIBUTE_BY_RANGE)
 		{
-			Var *distributionKey = cacheEntry->partitionColumn;
-
-			/* handle coercions, if fails throw an error */
-			if (partitionValueConst->consttype != distributionKey->vartype)
-			{
-				bool missingOk = false;
-				partitionValueConst =
-					TransformPartitionRestrictionValue(distributionKey,
-													   partitionValueConst,
-													   missingOk);
-			}
-
 			Datum partitionValue = partitionValueConst->constvalue;
 
 			ShardInterval *shardInterval = FindShardInterval(partitionValue, cacheEntry);
