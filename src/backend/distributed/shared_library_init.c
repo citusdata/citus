@@ -21,7 +21,7 @@
 #include "fmgr.h"
 #include "miscadmin.h"
 
-#include "execinfo.h"
+#include <execinfo.h>
 #include "safe_lib.h"
 
 #include "citus_version.h"
