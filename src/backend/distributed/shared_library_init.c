@@ -366,6 +366,14 @@ multi_log_hook(ErrorData *edata)
 		edata->message = "canceling the transaction since it was "
 						 "involved in a distributed deadlock";
 	}
+
+	
+	void	   *buf[100];
+	int			nframes;
+
+	nframes = backtrace(buf, lengthof(buf));
+	backtrace_symbols_fd(buf, nframes, fileno(stderr));
+	
 }
 
 
