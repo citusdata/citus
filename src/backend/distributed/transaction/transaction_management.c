@@ -488,8 +488,8 @@ ResetShardPlacementTransactionState(void)
 
 
 /*
- * Subtransaction callback - currently only used to remember whether a
- * savepoint has been rolled back, as we don't support that.
+ * CoordinatedSubTransactionCallback is the callback used to implement
+ * distributed ROLLBACK TO SAVEPOINT.
  */
 static void
 CoordinatedSubTransactionCallback(SubXactEvent event, SubTransactionId subId,

@@ -190,7 +190,7 @@ RelationIsAKnownShard(Oid shardRelationId, bool onlySearchPath)
 	}
 
 	/* try to get the relation id */
-	Oid relationId = LookupShardRelation(shardId, true);
+	Oid relationId = LookupShardRelationFromCatalog(shardId, true);
 	if (!OidIsValid(relationId))
 	{
 		/* there is no such relation */

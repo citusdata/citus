@@ -1,6 +1,6 @@
 version: 2.1
 orbs:
-  codecov: codecov/codecov@1.0.5
+  codecov: codecov/codecov@1.1.0
   azure-cli: circleci/azure-cli@1.0.0
 
 jobs:
@@ -53,6 +53,12 @@ jobs:
       - run:
           name: 'Check for banned C API usage'
           command: ci/banned.h.sh
+      - run:
+          name: 'Check for tests missing in schedules'
+          command: ci/check_all_tests_are_run.sh
+      - run:
+          name: 'Check if all CI scripts are actually run'
+          command: ci/check_all_ci_scripts_are_run.sh
   check-sql-snapshots:
     docker:
       - image: 'citus/extbuilder:latest'
@@ -60,7 +66,7 @@ jobs:
       - checkout
       - run:
           name: 'Check Snapshots'
-          command: "./configure && make check-sql-snapshots -C src/backend/distributed"
+          command: ci/check_sql_snapshots.sh
   test-11_check-multi:
     docker:
       - image: 'citus/exttester-11:latest'
@@ -252,7 +258,7 @@ jobs:
       - checkout
       - run:
           command: |
-            ./src/test/scripts/check_enterprise_merge.sh
+            ci/check_enterprise_merge.sh
   ch_benchmark:
     docker:
       - image: buildpack-deps:stretch

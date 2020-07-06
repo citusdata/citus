@@ -1,6 +1,8 @@
 #! /bin/bash
 
 set -euo pipefail
+# shellcheck disable=SC1091
+source ci/ci_helpers.sh
 
 # We do not use c-style comments in migration files as the stripped
 # zero-length migration files cause warning during packaging

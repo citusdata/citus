@@ -198,33 +198,28 @@ CitusExplainScan(CustomScanState *node, List *ancestors, struct ExplainState *es
 
 
 /*
- * CoordinatorInsertSelectExplainScan is a custom scan explain callback function
+ * NonPushableInsertSelectExplainScan is a custom scan explain callback function
  * which is used to print explain information of a Citus plan for an INSERT INTO
- * distributed_table SELECT ... query that is evaluated on the coordinator.
+ * distributed_table SELECT ... query that is evaluated on the coordinator or
+ * uses repartitioning.
  */
 void
-CoordinatorInsertSelectExplainScan(CustomScanState *node, List *ancestors,
+NonPushableInsertSelectExplainScan(CustomScanState *node, List *ancestors,
 								   struct ExplainState *es)
 {
 	CitusScanState *scanState = (CitusScanState *) node;
 	DistributedPlan *distributedPlan = scanState->distributedPlan;
 	Query *insertSelectQuery = distributedPlan->insertSelectQuery;
-	Query *query = BuildSelectForInsertSelect(insertSelectQuery);
-	RangeTblEntry *insertRte = ExtractResultRelationRTE(insertSelectQuery);
-	Oid targetRelationId = insertRte->relid;
-	IntoClause *into = NULL;
-	ParamListInfo params = NULL;
-	char *queryString = NULL;
-	int cursorOptions = CURSOR_OPT_PARALLEL_OK;
+	RangeTblEntry *selectRte = ExtractSelectRangeTableEntry(insertSelectQuery);
 
 	/*
-	 * Make a copy of the query, since pg_plan_query may scribble on it and later
-	 * stages of EXPLAIN require it.
+	 * Create a copy because ExplainOneQuery can modify the query, and later
+	 * executions of prepared statements might require it. See
+	 * https://github.com/citusdata/citus/issues/3947 for what can happen.
 	 */
-	Query *queryCopy = copyObject(query);
-	PlannedStmt *selectPlan = pg_plan_query(queryCopy, cursorOptions, params);
-	bool repartition = IsRedistributablePlan(selectPlan->planTree) &&
-					   IsSupportedRedistributionTarget(targetRelationId);
+	Query *queryCopy = copyObject(selectRte->subquery);
+
+	bool repartition = distributedPlan->insertSelectMethod == INSERT_SELECT_REPARTITION;
 
 	if (es->analyze)
 	{
@@ -245,7 +240,10 @@ CoordinatorInsertSelectExplainScan(CustomScanState *node, List *ancestors,
 	ExplainOpenGroup("Select Query", "Select Query", false, es);
 
 	/* explain the inner SELECT query */
-	ExplainOneQuery(query, 0, into, es, queryString, params, NULL);
+	IntoClause *into = NULL;
+	ParamListInfo params = NULL;
+	char *queryString = NULL;
+	ExplainOneQuery(queryCopy, 0, into, es, queryString, params, NULL);
 
 	ExplainCloseGroup("Select Query", "Select Query", false, es);
 }

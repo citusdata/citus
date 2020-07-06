@@ -12,6 +12,6 @@ CREATE TABLE table_identity_col (
 SELECT create_distributed_table('table_identity_col', 'id', 'append');
 
 SELECT create_distributed_table('table_identity_col', 'id');
-SELECT create_distributed_table('table_identity_col', 'text');
+SELECT create_distributed_table('table_identity_col', 'payload');
 
 SELECT create_reference_table('table_identity_col');
