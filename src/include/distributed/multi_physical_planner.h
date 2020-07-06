@@ -24,7 +24,7 @@
 #include "distributed/citus_nodes.h"
 #include "distributed/errormessage.h"
 #include "distributed/log_utils.h"
-#include "distributed/master_metadata_utility.h"
+#include "distributed/metadata_utility.h"
 #include "distributed/worker_manager.h"
 #include "distributed/multi_logical_planner.h"
 #include "distributed/distributed_planner.h"
@@ -79,7 +79,7 @@ typedef enum
 typedef enum
 {
 	TASK_TYPE_INVALID_FIRST,
-	SELECT_TASK,
+	READ_TASK,
 	MAP_TASK,
 	MERGE_TASK,
 	MAP_OUTPUT_FETCH_TASK,
@@ -260,6 +260,8 @@ typedef struct TaskQuery
 	}data;
 }TaskQuery;
 
+struct TupleDestination;
+
 typedef struct Task
 {
 	CitusNode type;
@@ -272,6 +274,12 @@ typedef struct Task
 	 * so this is abstracted with taskQuery.
 	 */
 	TaskQuery taskQuery;
+
+	/*
+	 * A task can have multiple queries, in which case queryCount will be > 1. If
+	 * a task has more one query, then taskQuery->queryType == TASK_QUERY_TEXT_LIST.
+	 */
+	int queryCount;
 
 	Oid anchorDistributedTableId;     /* only applies to insert tasks */
 	uint64 anchorShardId;       /* only applies to compute tasks */
@@ -321,6 +329,26 @@ typedef struct Task
 	 * query.
 	 */
 	bool parametersInQueryStringResolved;
+
+	/*
+	 * Destination of tuples generated as a result of executing this task. Can be
+	 * NULL, in which case executor might use a default destination.
+	 */
+	struct TupleDestination *tupleDest;
+
+	/*
+	 * totalReceivedTupleData only counts the data for a single placement. So
+	 * for RETURNING DML this is not really correct. This is used by
+	 * EXPLAIN ANALYZE, to display the amount of received bytes.
+	 */
+	uint64 totalReceivedTupleData;
+
+	/*
+	 * EXPLAIN ANALYZE output fetched from worker. This is saved to be used later
+	 * by RemoteExplain().
+	 */
+	char *fetchedExplainAnalyzePlan;
+	int fetchedExplainAnalyzePlacementIndex;
 } Task;
 
 
@@ -349,6 +377,22 @@ typedef struct JoinSequenceNode
 
 
 /*
+ * InsertSelectMethod represents the method to use for INSERT INTO ... SELECT
+ * queries.
+ *
+ * Note that there is a third method which is not represented here, which is
+ * pushing down the INSERT INTO ... SELECT to workers. This method is executed
+ * similar to other distributed queries and doesn't need a special execution
+ * code, so we don't need to represent it here.
+ */
+typedef enum InsertSelectMethod
+{
+	INSERT_SELECT_VIA_COORDINATOR,
+	INSERT_SELECT_REPARTITION
+} InsertSelectMethod;
+
+
+/*
  * DistributedPlan contains all information necessary to execute a
  * distribute query.
  */
@@ -362,8 +406,11 @@ typedef struct DistributedPlan
 	/* specifies nature of modifications in query */
 	RowModifyLevel modLevel;
 
-	/* specifies whether a DML command has a RETURNING */
-	bool hasReturning;
+	/*
+	 * specifies whether plan returns results,
+	 * either as a SELECT or a DML which has RETURNING.
+	 */
+	bool expectResults;
 
 	/* a router executable query is executed entirely on a worker */
 	bool routerExecutable;
@@ -372,7 +419,7 @@ typedef struct DistributedPlan
 	Job *workerJob;
 
 	/* local query that merges results from the workers */
-	Query *masterQuery;
+	Query *combineQuery;
 
 	/* query identifier (copied from the top-level PlannedStmt) */
 	uint64 queryId;
@@ -383,8 +430,11 @@ typedef struct DistributedPlan
 	/* target relation of a modification */
 	Oid targetRelationId;
 
-	/* INSERT .. SELECT via the coordinator */
+	/*
+	 * INSERT .. SELECT via the coordinator or repartition */
 	Query *insertSelectQuery;
+	PlannedStmt *selectPlanForInsertSelect;
+	InsertSelectMethod insertSelectMethod;
 
 	/*
 	 * If intermediateResultIdPrefix is non-null, an INSERT ... SELECT
@@ -440,6 +490,12 @@ typedef struct DistributedSubPlan
 
 	uint32 subPlanId;
 	PlannedStmt *plan;
+
+	/* EXPLAIN ANALYZE instrumentations */
+	uint64 bytesSentPerWorker;
+	uint32 remoteWorkerCount;
+	double durationMillisecs;
+	bool writeLocalFile;
 } DistributedSubPlan;
 
 
@@ -545,6 +601,15 @@ extern List * QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 
 /* function declarations for managing jobs */
 extern uint64 UniqueJobId(void);
+
+
+extern List * DerivedColumnNameList(uint32 columnCount, uint64 generatingJobId);
+extern RangeTblEntry * DerivedRangeTableEntry(MultiNode *multiNode, List *columnList,
+											  List *tableIdList,
+											  List *funcColumnNames,
+											  List *funcColumnTypes,
+											  List *funcColumnTypeMods,
+											  List *funcCollations);
 
 
 #endif   /* MULTI_PHYSICAL_PLANNER_H */

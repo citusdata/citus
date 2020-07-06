@@ -16,7 +16,7 @@
 #include "distributed/connection_management.h"
 #include "distributed/hash_helpers.h"
 #include "distributed/listutils.h"
-#include "distributed/master_protocol.h"
+#include "distributed/coordinator_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/distributed_planner.h"
 #include "distributed/multi_partitioning_utils.h"
@@ -626,6 +626,24 @@ FindPlacementListConnection(int flags, List *placementAccessList, const char *us
 				/* this connection performed writes, we must use it */
 				foundModifyingConnection = true;
 			}
+		}
+		else if (placementConnection->hadDDL || placementConnection->hadDML)
+		{
+			if (strcmp(placementConnection->userName, userName) != 0)
+			{
+				ereport(ERROR,
+						(errcode(ERRCODE_ACTIVE_SQL_TRANSACTION),
+						 errmsg("cannot perform query on placements that were "
+								"modified in this transaction by a different "
+								"user")));
+			}
+			ereport(ERROR,
+					(errcode(ERRCODE_ACTIVE_SQL_TRANSACTION),
+					 errmsg("cannot perform query, because modifications were "
+							"made over a connection that cannot be used at "
+							"this time. This is most likely a Citus bug so "
+							"please report it"
+							)));
 		}
 	}
 

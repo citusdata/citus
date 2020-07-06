@@ -20,7 +20,10 @@
 #include "distributed/transaction_management.h"
 #include "distributed/worker_manager.h"
 #include "executor/executor.h"
+#include "utils/datetime.h"
 
+#define SECOND_TO_MILLI_SECOND 1000
+#define MICRO_TO_MILLI_SECOND 0.001
 
 int MaxIntermediateResult = 1048576; /* maximum size in KB the intermediate result can grow to */
 /* when this is true, we enforce intermediate result size limit in all executors */
@@ -73,7 +76,25 @@ ExecuteSubPlans(DistributedPlan *distributedPlan)
 			CreateRemoteFileDestReceiver(resultId, estate, remoteWorkerNodeList,
 										 entry->writeLocalFile);
 
+		TimestampTz startTimestamp = GetCurrentTimestamp();
+
 		ExecutePlanIntoDestReceiver(plannedStmt, params, copyDest);
+
+		/*
+		 * EXPLAIN ANALYZE instrumentations. Calculating these are very light-weight,
+		 * so always populate them regardless of EXPLAIN ANALYZE or not.
+		 */
+		long durationSeconds = 0.0;
+		int durationMicrosecs = 0;
+		TimestampDifference(startTimestamp, GetCurrentTimestamp(), &durationSeconds,
+							&durationMicrosecs);
+
+		subPlan->durationMillisecs = durationSeconds * SECOND_TO_MILLI_SECOND;
+		subPlan->durationMillisecs += durationMicrosecs * MICRO_TO_MILLI_SECOND;
+
+		subPlan->bytesSentPerWorker = RemoteFileDestReceiverBytesSent(copyDest);
+		subPlan->remoteWorkerCount = list_length(remoteWorkerNodeList);
+		subPlan->writeLocalFile = entry->writeLocalFile;
 
 		SubPlanLevel--;
 		FreeExecutorState(estate);

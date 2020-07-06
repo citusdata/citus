@@ -137,11 +137,15 @@ SET search_path TO mx_add_coordinator,public;
 INSERT INTO ref VALUES (1), (2), (3);
 UPDATE ref SET a = a + 1;
 DELETE FROM ref WHERE a > 3;
--- Test we don't allow reference/local joins on mx workers
+-- Test we allow reference/local joins on mx workers
 CREATE TABLE local_table (a int);
 INSERT INTO local_table VALUES (2), (4);
 SELECT r.a FROM ref r JOIN local_table lt on r.a = lt.a;
-ERROR:  relation local_table is not distributed
+ a
+---------------------------------------------------------------------
+ 2
+(1 row)
+
 \c - - - :master_port
 SET search_path TO mx_add_coordinator,public;
 SELECT * FROM ref ORDER BY a;

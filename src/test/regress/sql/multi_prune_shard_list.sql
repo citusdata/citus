@@ -177,5 +177,46 @@ EXECUTE coerce_numeric_2(1);
 EXECUTE coerce_numeric_2(1);
 
 
+-- Test that we can insert an integer literal into a numeric column as well
+CREATE TABLE numeric_test (id numeric(6, 1), val int);
+SELECT create_distributed_table('numeric_test', 'id');
+
+INSERT INTO numeric_test VALUES (21, 87) RETURNING *;
+SELECT * FROM numeric_test WHERE id = 21;
+SELECT * FROM numeric_test WHERE id = 21::int;
+SELECT * FROM numeric_test WHERE id = 21::bigint;
+SELECT * FROM numeric_test WHERE id = 21.0;
+SELECT * FROM numeric_test WHERE id = 21.0::numeric;
+
+PREPARE insert_p(int) AS INSERT INTO numeric_test VALUES ($1, 87) RETURNING *;
+EXECUTE insert_p(1);
+EXECUTE insert_p(2);
+EXECUTE insert_p(3);
+EXECUTE insert_p(4);
+EXECUTE insert_p(5);
+EXECUTE insert_p(6);
+
+PREPARE select_p(int) AS SELECT * FROM numeric_test WHERE id=$1;
+EXECUTE select_p(1);
+EXECUTE select_p(2);
+EXECUTE select_p(3);
+EXECUTE select_p(4);
+EXECUTE select_p(5);
+EXECUTE select_p(6);
+
+SET citus.enable_fast_path_router_planner TO false;
+EXECUTE select_p(1);
+EXECUTE select_p(2);
+EXECUTE select_p(3);
+EXECUTE select_p(4);
+EXECUTE select_p(5);
+EXECUTE select_p(6);
+
+-- make sure that we don't return wrong resuls
+INSERT INTO numeric_test VALUES (21.1, 87) RETURNING *;
+SELECT * FROM numeric_test WHERE id = 21;
+SELECT * FROM numeric_test WHERE id = 21::numeric;
+SELECT * FROM numeric_test WHERE id = 21.1::numeric;
+
 SET search_path TO public;
 DROP SCHEMA prune_shard_list CASCADE;

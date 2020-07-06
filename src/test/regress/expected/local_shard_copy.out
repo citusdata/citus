@@ -456,6 +456,7 @@ TRUNCATE TABLE reference_table;
 NOTICE:  executing the command locally: TRUNCATE TABLE local_shard_copy.reference_table_xxxxx CASCADE
 TRUNCATE TABLE local_table;
 SELECT count(*) FROM reference_table, local_table WHERE reference_table.key = local_table.key;
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shard_copy.reference_table_1570000 reference_table, local_shard_copy.local_table WHERE (reference_table.key OPERATOR(pg_catalog.=) local_table.key)
  count
 ---------------------------------------------------------------------
      0

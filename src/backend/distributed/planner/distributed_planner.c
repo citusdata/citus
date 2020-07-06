@@ -29,7 +29,7 @@
 #include "distributed/intermediate_result_pruning.h"
 #include "distributed/intermediate_results.h"
 #include "distributed/listutils.h"
-#include "distributed/master_protocol.h"
+#include "distributed/coordinator_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_executor.h"
 #include "distributed/distributed_planner.h"
@@ -38,7 +38,7 @@
 #include "distributed/multi_logical_planner.h"
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/multi_physical_planner.h"
-#include "distributed/multi_master_planner.h"
+#include "distributed/combine_query_planner.h"
 #include "distributed/multi_router_planner.h"
 #include "distributed/query_utils.h"
 #include "distributed/recursive_planning.h"
@@ -87,11 +87,6 @@ static PlannedStmt * TryCreateDistributedPlannedStmt(PlannedStmt *localPlan,
 													 boundParams,
 													 PlannerRestrictionContext *
 													 plannerRestrictionContext);
-static DistributedPlan * CreateDistributedPlan(uint64 planId, Query *originalQuery,
-											   Query *query, ParamListInfo boundParams,
-											   bool hasUnresolvedParams,
-											   PlannerRestrictionContext *
-											   plannerRestrictionContext);
 static DeferredErrorMessage * DeferErrorIfPartitionTableNotSingleReplicated(Oid
 																			relationId);
 
@@ -124,9 +119,6 @@ static PlannerRestrictionContext * CurrentPlannerRestrictionContext(void);
 static void PopPlannerRestrictionContext(void);
 static void ResetPlannerRestrictionContext(
 	PlannerRestrictionContext *plannerRestrictionContext);
-static bool IsLocalReferenceTableJoin(Query *parse, List *rangeTableList);
-static bool QueryIsNotSimpleSelect(Node *node);
-static void UpdateReferenceTablesWithShard(List *rangeTableList);
 static PlannedStmt * PlanFastPathDistributedStmt(DistributedPlanningContext *planContext,
 												 Node *distributionKeyValue);
 static PlannedStmt * PlanDistributedStmt(DistributedPlanningContext *planContext,
@@ -152,24 +144,10 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 	}
 	else if (CitusHasBeenLoaded())
 	{
-		if (IsLocalReferenceTableJoin(parse, rangeTableList))
+		needsDistributedPlanning = ListContainsDistributedTableRTE(rangeTableList);
+		if (needsDistributedPlanning)
 		{
-			/*
-			 * For joins between reference tables and local tables, we replace
-			 * reference table names with shard tables names in the query, so
-			 * we can use the standard_planner for planning it locally.
-			 */
-			UpdateReferenceTablesWithShard(rangeTableList);
-
-			needsDistributedPlanning = false;
-		}
-		else
-		{
-			needsDistributedPlanning = ListContainsDistributedTableRTE(rangeTableList);
-			if (needsDistributedPlanning)
-			{
-				fastPathRouterQuery = FastPathRouterQuery(parse, &distributionKeyValue);
-			}
+			fastPathRouterQuery = FastPathRouterQuery(parse, &distributionKeyValue);
 		}
 	}
 
@@ -193,21 +171,6 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 	}
 	else if (needsDistributedPlanning)
 	{
-		/*
-		 * Inserting into a local table needs to go through the regular postgres
-		 * planner/executor, but the SELECT needs to go through Citus. We currently
-		 * don't have a way of doing both things and therefore error out, but do
-		 * have a handy tip for users.
-		 */
-		if (InsertSelectIntoLocalTable(parse))
-		{
-			ereport(ERROR, (errmsg("cannot INSERT rows from a distributed query into a "
-								   "local table"),
-							errhint("Consider using CREATE TEMPORARY TABLE tmp AS "
-									"SELECT ... and inserting from the temporary "
-									"table.")));
-		}
-
 		/*
 		 * standard_planner scribbles on it's input, but for deparsing we need the
 		 * unmodified form. Note that before copying we call
@@ -528,6 +491,28 @@ GetRTEIdentity(RangeTblEntry *rte)
 
 
 /*
+ * GetQueryLockMode returns the necessary lock mode to be acquired for the
+ * given query. (See comment written in RangeTblEntry->rellockmode)
+ */
+LOCKMODE
+GetQueryLockMode(Query *query)
+{
+	if (IsModifyCommand(query))
+	{
+		return RowExclusiveLock;
+	}
+	else if (query->hasForUpdate)
+	{
+		return RowShareLock;
+	}
+	else
+	{
+		return AccessShareLock;
+	}
+}
+
+
+/*
  * IsModifyCommand returns true if the query performs modifications, false
  * otherwise.
  */
@@ -571,17 +556,6 @@ IsUpdateOrDelete(Query *query)
 {
 	return query->commandType == CMD_UPDATE ||
 		   query->commandType == CMD_DELETE;
-}
-
-
-/*
- * IsModifyDistributedPlan returns true if the multi plan performs modifications,
- * false otherwise.
- */
-bool
-IsModifyDistributedPlan(DistributedPlan *distributedPlan)
-{
-	return distributedPlan->modLevel > ROW_MODIFY_READONLY;
 }
 
 
@@ -805,7 +779,7 @@ InlineCtesAndCreateDistributedPlannedStmt(uint64 planId,
 	/* after inlining, we shouldn't have any inlinable CTEs */
 	Assert(!QueryTreeContainsInlinableCTE(copyOfOriginalQuery));
 
-	#if PG_VERSION_NUM < PG_VERSION_12
+#if PG_VERSION_NUM < PG_VERSION_12
 	Query *query = planContext->query;
 
 	/*
@@ -911,7 +885,7 @@ TryCreateDistributedPlannedStmt(PlannedStmt *localPlan,
  *    - If any, go back to step 1 by calling itself recursively
  * 3. Logical planner
  */
-static DistributedPlan *
+DistributedPlan *
 CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamListInfo
 					  boundParams, bool hasUnresolvedParams,
 					  PlannerRestrictionContext *plannerRestrictionContext)
@@ -939,7 +913,24 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
 			}
 
 			distributedPlan =
-				CreateInsertSelectPlan(planId, originalQuery, plannerRestrictionContext);
+				CreateInsertSelectPlan(planId, originalQuery, plannerRestrictionContext,
+									   boundParams);
+		}
+		else if (InsertSelectIntoLocalTable(originalQuery))
+		{
+			if (hasUnresolvedParams)
+			{
+				/*
+				 * Unresolved parameters can cause performance regressions in
+				 * INSERT...SELECT when the partition column is a parameter
+				 * because we don't perform any additional pruning in the executor.
+				 */
+				return NULL;
+			}
+			distributedPlan =
+				CreateInsertSelectIntoLocalTablePlan(planId, originalQuery, boundParams,
+													 hasUnresolvedParams,
+													 plannerRestrictionContext);
 		}
 		else
 		{
@@ -1298,9 +1289,9 @@ FinalizePlan(PlannedStmt *localPlan, DistributedPlan *distributedPlan)
 			break;
 		}
 
-		case MULTI_EXECUTOR_COORDINATOR_INSERT_SELECT:
+		case MULTI_EXECUTOR_NON_PUSHABLE_INSERT_SELECT:
 		{
-			customScan->methods = &CoordinatorInsertSelectCustomScanMethods;
+			customScan->methods = &NonPushableInsertSelectCustomScanMethods;
 			break;
 		}
 
@@ -1343,13 +1334,13 @@ FinalizePlan(PlannedStmt *localPlan, DistributedPlan *distributedPlan)
 		 * Record subplans used by distributed plan to make intermediate result
 		 * pruning easier.
 		 *
-		 * We do this before finalizing the plan, because the masterQuery is
+		 * We do this before finalizing the plan, because the combineQuery is
 		 * rewritten by standard_planner in FinalizeNonRouterPlan.
 		 */
 		distributedPlan->usedSubPlanNodeList = FindSubPlanUsages(distributedPlan);
 	}
 
-	if (distributedPlan->masterQuery)
+	if (distributedPlan->combineQuery)
 	{
 		finalPlan = FinalizeNonRouterPlan(localPlan, distributedPlan, customScan);
 	}
@@ -2294,150 +2285,5 @@ HasUnresolvedExternParamsWalker(Node *expression, ParamListInfo boundParams)
 		return expression_tree_walker(expression,
 									  HasUnresolvedExternParamsWalker,
 									  boundParams);
-	}
-}
-
-
-/*
- * IsLocalReferenceTableJoin returns if the given query is a join between
- * reference tables and local tables.
- */
-static bool
-IsLocalReferenceTableJoin(Query *parse, List *rangeTableList)
-{
-	bool hasReferenceTable = false;
-	bool hasLocalTable = false;
-	ListCell *rangeTableCell = false;
-
-	bool hasReferenceTableReplica = false;
-
-	/*
-	 * We only allow join between reference tables and local tables in the
-	 * coordinator.
-	 */
-	if (!IsCoordinator())
-	{
-		return false;
-	}
-
-	/*
-	 * All groups that have pg_dist_node entries, also have reference
-	 * table replicas.
-	 */
-	PrimaryNodeForGroup(COORDINATOR_GROUP_ID, &hasReferenceTableReplica);
-
-	/*
-	 * If reference table doesn't have replicas on the coordinator, we don't
-	 * allow joins with local tables.
-	 */
-	if (!hasReferenceTableReplica)
-	{
-		return false;
-	}
-
-	if (FindNodeCheck((Node *) parse, QueryIsNotSimpleSelect))
-	{
-		return false;
-	}
-
-	foreach(rangeTableCell, rangeTableList)
-	{
-		RangeTblEntry *rangeTableEntry = (RangeTblEntry *) lfirst(rangeTableCell);
-
-		/*
-		 * Don't plan joins involving functions locally since we are not sure if
-		 * they do distributed accesses or not, and defaulting to local planning
-		 * might break transactional semantics.
-		 *
-		 * For example, access to the reference table in the function might go
-		 * over a connection, but access to the same reference table outside
-		 * the function will go over the current backend. The snapshot for the
-		 * connection in the function is taken after the statement snapshot,
-		 * so they can see two different views of data.
-		 *
-		 * Looking at gram.y, RTE_TABLEFUNC is used only for XMLTABLE() which
-		 * is okay to be planned locally, so allowing that.
-		 */
-		if (rangeTableEntry->rtekind == RTE_FUNCTION)
-		{
-			return false;
-		}
-
-		if (rangeTableEntry->rtekind != RTE_RELATION)
-		{
-			continue;
-		}
-
-		/*
-		 * We only allow local join for the relation kinds for which we can
-		 * determine deterministically that access to them are local or distributed.
-		 * For this reason, we don't allow non-materialized views.
-		 */
-		if (rangeTableEntry->relkind == RELKIND_VIEW)
-		{
-			return false;
-		}
-
-		if (!IsCitusTable(rangeTableEntry->relid))
-		{
-			hasLocalTable = true;
-			continue;
-		}
-
-		CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(
-			rangeTableEntry->relid);
-		if (cacheEntry->partitionMethod == DISTRIBUTE_BY_NONE)
-		{
-			hasReferenceTable = true;
-		}
-		else
-		{
-			return false;
-		}
-	}
-
-	return hasLocalTable && hasReferenceTable;
-}
-
-
-/*
- * QueryIsNotSimpleSelect returns true if node is a query which modifies or
- * marks for modifications.
- */
-static bool
-QueryIsNotSimpleSelect(Node *node)
-{
-	if (!IsA(node, Query))
-	{
-		return false;
-	}
-
-	Query *query = (Query *) node;
-	return (query->commandType != CMD_SELECT) || (query->rowMarks != NIL);
-}
-
-
-/*
- * UpdateReferenceTablesWithShard recursively replaces the reference table names
- * in the given range table list with the local shard table names.
- */
-static void
-UpdateReferenceTablesWithShard(List *rangeTableList)
-{
-	List *referenceTableRTEList = ExtractReferenceTableRTEList(rangeTableList);
-
-	RangeTblEntry *rangeTableEntry = NULL;
-	foreach_ptr(rangeTableEntry, referenceTableRTEList)
-	{
-		Oid referenceTableLocalShardOid = GetReferenceTableLocalShardOid(
-			rangeTableEntry->relid);
-
-		rangeTableEntry->relid = referenceTableLocalShardOid;
-
-		/*
-		 * Parser locks relations in addRangeTableEntry(). So we should lock the
-		 * modified ones too.
-		 */
-		LockRelationOid(referenceTableLocalShardOid, AccessShareLock);
 	}
 }

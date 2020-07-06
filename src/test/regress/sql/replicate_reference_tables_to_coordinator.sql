@@ -51,7 +51,7 @@ SELECT citus_table_is_visible('numbers_8000001'::regclass::oid);
 CREATE TABLE local_table(a int);
 INSERT INTO local_table VALUES (2), (4), (7), (20);
 
-EXPLAIN SELECT local_table.a, numbers.a FROM local_table NATURAL JOIN numbers;
+EXPLAIN (COSTS OFF) SELECT local_table.a, numbers.a FROM local_table NATURAL JOIN numbers;
 SELECT local_table.a, numbers.a FROM local_table NATURAL JOIN numbers ORDER BY 1;
 
 -- test non equijoin
@@ -135,7 +135,7 @@ $$ LANGUAGE sql;
 
 SELECT test_reference_local_join_func();
 
--- shouldn't plan locally if modifications happen in CTEs, ...
+-- CTEs are allowed
 WITH ins AS (INSERT INTO numbers VALUES (1) RETURNING *)
 SELECT * FROM numbers, local_table;
 
@@ -143,7 +143,6 @@ WITH t AS (SELECT *, my_volatile_fn() x FROM numbers FOR UPDATE)
 SELECT * FROM numbers, local_table
 WHERE EXISTS (SELECT * FROM t WHERE t.x = numbers.a);
 
--- but this should be fine
 WITH t AS (SELECT *, my_volatile_fn() x FROM numbers)
 SELECT * FROM numbers, local_table
 WHERE EXISTS (SELECT * FROM t WHERE t.x = numbers.a);
@@ -186,37 +185,25 @@ DROP VIEW numbers_v, local_table_v;
 
 --
 -- Joins between reference tables and materialized views are allowed to
--- be planned locally.
+-- be planned to be executed locally.
 --
 CREATE MATERIALIZED VIEW numbers_v AS SELECT * FROM numbers WHERE a BETWEEN 1 AND 10;
 REFRESH MATERIALIZED VIEW numbers_v;
-SELECT public.plan_is_distributed($Q$
-EXPLAIN (COSTS FALSE)
-	SELECT * FROM squares JOIN numbers_v ON squares.a = numbers_v.a;
-$Q$);
 
-BEGIN;
 SELECT * FROM squares JOIN numbers_v ON squares.a = numbers_v.a;
-END;
 
 --
--- Joins between reference tables, local tables, and function calls shouldn't
--- be planned locally.
+-- Joins between reference tables, local tables, and function calls
+-- are allowed
 --
 SELECT count(*)
 FROM local_table a, numbers b, generate_series(1, 10) c
 WHERE a.a = b.a AND a.a = c;
 
--- but it should be okay if the function call is not a data source
-SELECT public.plan_is_distributed($Q$
-EXPLAIN (COSTS FALSE)
+-- and it should be okay if the function call is not a data source
 SELECT abs(a.a) FROM local_table a, numbers b WHERE a.a = b.a;
-$Q$);
 
-SELECT public.plan_is_distributed($Q$
-EXPLAIN (COSTS FALSE)
 SELECT a.a FROM local_table a, numbers b WHERE a.a = b.a ORDER BY abs(a.a);
-$Q$);
 
 TRUNCATE local_table;
 TRUNCATE numbers;

@@ -48,6 +48,7 @@ extern void pg_get_query_def(Query *query, StringInfo buffer);
 char * pg_get_rule_expr(Node *expression);
 extern void deparse_shard_query(Query *query, Oid distrelid, int64 shardid,
 								StringInfo buffer);
+extern char * pg_get_triggerdef_command(Oid triggerId);
 extern char * generate_relation_name(Oid relid, List *namespaces);
 extern char * generate_qualified_relation_name(Oid relid);
 extern char * generate_operator_name(Oid operid, Oid arg1, Oid arg2);

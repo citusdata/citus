@@ -9,7 +9,7 @@
 #ifndef RELATION_ACCESS_TRACKING_H_
 #define RELATION_ACCESS_TRACKING_H_
 
-#include "distributed/master_metadata_utility.h"
+#include "distributed/metadata_utility.h"
 #include "distributed/multi_physical_planner.h" /* access Task struct */
 #include "distributed/placement_connection.h"
 

@@ -61,9 +61,7 @@ CacheLocalPlanForShardQuery(Task *task, DistributedPlan *originalDistributedPlan
 
 	UpdateRelationsToLocalShardTables((Node *) shardQuery, task->relationShardList);
 
-	LOCKMODE lockMode =
-		IsModifyCommand(shardQuery) ? RowExclusiveLock : (shardQuery->hasForUpdate ?
-														  RowShareLock : AccessShareLock);
+	LOCKMODE lockMode = GetQueryLockMode(shardQuery);
 
 	/* fast path queries can only have a single RTE by definition */
 	RangeTblEntry *rangeTableEntry = (RangeTblEntry *) linitial(shardQuery->rtable);
@@ -192,7 +190,7 @@ IsLocalPlanCachingSupported(Job *currentJob, DistributedPlan *originalDistribute
 		 * We do not cache plans with volatile functions in the query.
 		 *
 		 * The reason we care about volatile functions is primarily that we
-		 * already executed them in ExecuteMasterEvaluableFunctionsAndParameters
+		 * already executed them in ExecuteMasterEvaluableExpressions
 		 * and since we're falling back to the original query tree here we would
 		 * execute them again if we execute the plan.
 		 */

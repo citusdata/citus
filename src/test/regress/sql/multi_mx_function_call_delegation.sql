@@ -104,6 +104,16 @@ select squares(4);
 select multi_mx_function_call_delegation.mx_call_func(2, 0);
 select multi_mx_function_call_delegation.mx_call_func_custom_types('S', 'A');
 
+
+-- This is currently an undetected failure when using the binary protocol
+-- It should not be enabled by default until this is resolved. The tests above
+-- will fail too, when changing the default to TRUE;
+SET citus.enable_binary_protocol = TRUE;
+select mx_call_func_custom_types('S', 'A');
+select multi_mx_function_call_delegation.mx_call_func_custom_types('S', 'A');
+RESET citus.enable_binary_protocol;
+
+
 -- We don't allow distributing calls inside transactions
 begin;
 select mx_call_func(2, 0);

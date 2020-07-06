@@ -17,8 +17,8 @@
 #include "catalog/pg_inherits.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/colocation_utils.h"
-#include "distributed/master_metadata_utility.h"
-#include "distributed/master_protocol.h"
+#include "distributed/metadata_utility.h"
+#include "distributed/coordinator_protocol.h"
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/shardinterval_utils.h"
 #include "lib/stringinfo.h"
@@ -287,14 +287,14 @@ PartitionList(Oid parentRelationId)
 
 		ereport(ERROR, (errmsg("\"%s\" is not a parent table", relationName)));
 	}
+	PartitionDesc partDesc = RelationGetPartitionDesc(rel);
+	Assert(partDesc != NULL);
 
-	Assert(rel->rd_partdesc != NULL);
-
-	int partitionCount = rel->rd_partdesc->nparts;
+	int partitionCount = partDesc->nparts;
 	for (int partitionIndex = 0; partitionIndex < partitionCount; ++partitionIndex)
 	{
 		partitionList =
-			lappend_oid(partitionList, rel->rd_partdesc->oids[partitionIndex]);
+			lappend_oid(partitionList, partDesc->oids[partitionIndex]);
 	}
 
 	/* keep the lock */

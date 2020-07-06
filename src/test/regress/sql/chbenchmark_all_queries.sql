@@ -673,6 +673,7 @@ WHERE su_suppkey in
   AND n_name = 'Germany'
 ORDER BY su_name;
 
+
 -- Query 21
 -- DATA SET DOES NOT COVER THIS QUERY
 SELECT

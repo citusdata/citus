@@ -163,7 +163,7 @@ SELECT master_get_table_ddl_events('renamed_foreign_table');
 NOTICE:  foreign-data wrapper "fake_fdw" does not have an extension defined
                                                                                    master_get_table_ddl_events
 ---------------------------------------------------------------------
- CREATE SERVER fake_fdw_server FOREIGN DATA WRAPPER fake_fdw
+ CREATE SERVER IF NOT EXISTS fake_fdw_server FOREIGN DATA WRAPPER fake_fdw
  CREATE FOREIGN TABLE public.renamed_foreign_table (id bigint NOT NULL, rename_name character(8) DEFAULT ''::text NOT NULL) SERVER fake_fdw_server OPTIONS (encoding 'utf-8', compression 'true')
  ALTER TABLE public.renamed_foreign_table OWNER TO postgres
 (3 rows)

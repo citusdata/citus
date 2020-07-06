@@ -129,6 +129,7 @@
 
 #include "access/transam.h"
 #include "access/xact.h"
+#include "access/htup_details.h"
 #include "catalog/pg_type.h"
 #include "commands/dbcommands.h"
 #include "commands/schemacmds.h"
@@ -137,12 +138,14 @@
 #include "distributed/citus_custom_scan.h"
 #include "distributed/citus_safe_lib.h"
 #include "distributed/connection_management.h"
+#include "distributed/commands/multi_copy.h"
 #include "distributed/deparse_shard_query.h"
 #include "distributed/distributed_execution_locks.h"
 #include "distributed/listutils.h"
 #include "distributed/local_executor.h"
 #include "distributed/multi_client_executor.h"
 #include "distributed/multi_executor.h"
+#include "distributed/multi_explain.h"
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_resowner.h"
@@ -155,15 +158,18 @@
 #include "distributed/resource_lock.h"
 #include "distributed/subplan_execution.h"
 #include "distributed/transaction_management.h"
+#include "distributed/tuple_destination.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_protocol.h"
 #include "lib/ilist.h"
 #include "portability/instr_time.h"
 #include "storage/fd.h"
 #include "storage/latch.h"
+#include "utils/builtins.h"
 #include "utils/int8.h"
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
+#include "utils/syscache.h"
 #include "utils/timestamp.h"
 
 #define SLOW_START_DISABLED 0
@@ -187,16 +193,14 @@ typedef struct DistributedExecution
 	List *remoteTaskList;
 	List *localTaskList;
 
-	/* the corresponding distributed plan has RETURNING */
-	bool hasReturning;
+	/*
+	 * If a task specific destination is not provided for a task, then use
+	 * defaultTupleDest.
+	 */
+	TupleDestination *defaultTupleDest;
 
 	/* Parameters for parameterized plans. Can be NULL. */
 	ParamListInfo paramListInfo;
-
-	/* Tuple descriptor and destination for result. Can be NULL. */
-	TupleDesc tupleDescriptor;
-	Tuplestorestate *tupleStore;
-
 
 	/* list of workers involved in the execution */
 	List *workerList;
@@ -277,12 +281,13 @@ typedef struct DistributedExecution
 	 * The following fields are used while receiving results from remote nodes.
 	 * We store this information here to avoid re-allocating it every time.
 	 *
-	 * columnArray field is reset/calculated per row, so might be useless for other
-	 * contexts. The benefit of keeping it here is to avoid allocating the array
-	 * over and over again.
+	 * columnArray field is reset/calculated per row, so might be useless for
+	 * other contexts. The benefit of keeping it here is to avoid allocating
+	 * the array over and over again.
 	 */
-	AttInMetadata *attributeInputMetadata;
-	char **columnArray;
+	uint32 allocatedColumnCount;
+	void **columnArray;
+	StringInfoData *stringInfoDataArray;
 
 	/*
 	 * jobIdList contains all jobs in the job tree, this is used to
@@ -437,6 +442,7 @@ struct TaskPlacementExecution;
 /* GUC, determining whether Citus opens 1 connection per task */
 bool ForceMaxQueryParallelization = false;
 int MaxAdaptiveExecutorPoolSize = 16;
+bool EnableBinaryProtocol = false;
 
 /* GUC, number of ms to wait between opening connections to the same worker */
 int ExecutorSlowStartInterval = 10;
@@ -475,15 +481,19 @@ typedef struct ShardCommandExecution
 	/* description of the task */
 	Task *task;
 
+	/* cached AttInMetadata for task */
+	AttInMetadata **attributeInputMetadata;
+
+	/* indicates whether the attributeInputMetadata has binary or text
+	 * encoding/decoding functions */
+	bool binaryResults;
+
 	/* order in which the command should be replicated on replicas */
 	PlacementExecutionOrder executionOrder;
 
 	/* executions of the command on the placements of the shard */
 	struct TaskPlacementExecution **placementExecutions;
 	int placementExecutionCount;
-
-	/* whether we expect results to come back */
-	bool expectResults;
 
 	/*
 	 * RETURNING results from other shard placements can be ignored
@@ -522,6 +532,12 @@ typedef struct TaskPlacementExecution
 	/* state of the execution of the command on the placement */
 	TaskPlacementExecutionState executionState;
 
+	/*
+	 * Task query can contain multiple queries. queryIndex tracks results of
+	 * which query we are waiting for.
+	 */
+	uint32 queryIndex;
+
 	/* worker pool on which the placement needs to be executed */
 	WorkerPool *workerPool;
 
@@ -548,11 +564,10 @@ typedef struct TaskPlacementExecution
 /* local functions */
 static DistributedExecution * CreateDistributedExecution(RowModifyLevel modLevel,
 														 List *taskList,
-														 bool hasReturning,
 														 ParamListInfo paramListInfo,
-														 TupleDesc tupleDescriptor,
-														 Tuplestorestate *tupleStore,
 														 int targetPoolSize,
+														 TupleDestination *
+														 defaultTupleDest,
 														 TransactionProperties *
 														 xactProperties,
 														 List *jobIdList);
@@ -579,7 +594,7 @@ static bool IsMultiShardModification(RowModifyLevel modLevel, List *taskList);
 static bool TaskListModifiesDatabase(RowModifyLevel modLevel, List *taskList);
 static bool DistributedExecutionRequiresRollback(List *taskList);
 static bool TaskListRequires2PC(List *taskList);
-static bool SelectForUpdateOnReferenceTable(RowModifyLevel modLevel, List *taskList);
+static bool SelectForUpdateOnReferenceTable(List *taskList);
 static void AssignTasksToConnectionsOrWorkerPool(DistributedExecution *execution);
 static void UnclaimAllSessionConnections(List *sessionList);
 static bool UseConnectionPerPlacement(void);
@@ -627,6 +642,11 @@ static int RebuildWaitEventSet(DistributedExecution *execution);
 static void ProcessWaitEvents(DistributedExecution *execution, WaitEvent *events, int
 							  eventCount, bool *cancellationReceived);
 static long MillisecondsBetweenTimestamps(instr_time startTime, instr_time endTime);
+static HeapTuple BuildTupleFromBytes(AttInMetadata *attinmeta, fmStringInfo *values);
+static AttInMetadata * TupleDescGetAttBinaryInMetadata(TupleDesc tupdesc);
+static int WorkerPoolCompare(const void *lhsKey, const void *rhsKey);
+static void SetAttributeInputMetadata(DistributedExecution *execution,
+									  ShardCommandExecution *shardCommandExecution);
 
 /*
  * AdaptiveExecutorPreExecutorRun gets called right before postgres starts its executor
@@ -662,7 +682,6 @@ AdaptiveExecutor(CitusScanState *scanState)
 	DistributedPlan *distributedPlan = scanState->distributedPlan;
 	EState *executorState = ScanStateGetExecutorState(scanState);
 	ParamListInfo paramListInfo = executorState->es_param_list_info;
-	TupleDesc tupleDescriptor = ScanStateGetTupleDescriptor(scanState);
 	bool randomAccess = true;
 	bool interTransactions = false;
 	int targetPoolSize = MaxAdaptiveExecutorPoolSize;
@@ -673,6 +692,28 @@ AdaptiveExecutor(CitusScanState *scanState)
 
 	/* we should only call this once before the scan finished */
 	Assert(!scanState->finishedRemoteScan);
+
+	/* Reset Task fields that are only valid for a single execution */
+	Task *task = NULL;
+	foreach_ptr(task, taskList)
+	{
+		task->totalReceivedTupleData = 0;
+		task->fetchedExplainAnalyzePlacementIndex = 0;
+		task->fetchedExplainAnalyzePlan = NULL;
+	}
+
+	scanState->tuplestorestate =
+		tuplestore_begin_heap(randomAccess, interTransactions, work_mem);
+
+	TupleDesc tupleDescriptor = ScanStateGetTupleDescriptor(scanState);
+	TupleDestination *defaultTupleDest =
+		CreateTupleStoreTupleDest(scanState->tuplestorestate, tupleDescriptor);
+
+	if (RequestedForExplainAnalyze(scanState))
+	{
+		taskList = ExplainAnalyzeTaskList(taskList, defaultTupleDest, tupleDescriptor,
+										  paramListInfo);
+	}
 
 	bool hasDependentJobs = HasDependentJobs(job);
 	if (hasDependentJobs)
@@ -686,9 +727,6 @@ AdaptiveExecutor(CitusScanState *scanState)
 		targetPoolSize = 1;
 	}
 
-	scanState->tuplestorestate =
-		tuplestore_begin_heap(randomAccess, interTransactions, work_mem);
-
 	TransactionProperties xactProperties = DecideTransactionPropertiesForTaskList(
 		distributedPlan->modLevel, taskList,
 		hasDependentJobs);
@@ -697,11 +735,9 @@ AdaptiveExecutor(CitusScanState *scanState)
 	DistributedExecution *execution = CreateDistributedExecution(
 		distributedPlan->modLevel,
 		taskList,
-		distributedPlan->hasReturning,
 		paramListInfo,
-		tupleDescriptor,
-		scanState->tuplestorestate,
 		targetPoolSize,
+		defaultTupleDest,
 		&xactProperties,
 		jobIdList);
 
@@ -729,7 +765,7 @@ AdaptiveExecutor(CitusScanState *scanState)
 		RunDistributedExecution(execution);
 	}
 
-	if (distributedPlan->modLevel != ROW_MODIFY_READONLY)
+	if (job->jobQuery->commandType != CMD_SELECT)
 	{
 		if (list_length(execution->localTaskList) == 0)
 		{
@@ -756,7 +792,8 @@ AdaptiveExecutor(CitusScanState *scanState)
 		DoRepartitionCleanup(jobIdList);
 	}
 
-	if (SortReturning && distributedPlan->hasReturning)
+	if (SortReturning && distributedPlan->expectResults &&
+		job->jobQuery->commandType != CMD_SELECT)
 	{
 		SortTupleStore(scanState);
 	}
@@ -790,7 +827,7 @@ RunLocalExecution(CitusScanState *scanState, DistributedExecution *execution)
 	uint64 rowsProcessed = ExecuteLocalTaskListExtended(execution->localTaskList,
 														estate->es_param_list_info,
 														scanState->distributedPlan,
-														scanState->tuplestorestate,
+														execution->defaultTupleDest,
 														isUtilityCommand);
 
 	/*
@@ -832,6 +869,29 @@ ExecuteUtilityTaskList(List *utilityTaskList, bool localExecutionSupported)
 		);
 	executionParams->xactProperties =
 		DecideTransactionPropertiesForTaskList(modLevel, utilityTaskList, false);
+	executionParams->isUtilityCommand = true;
+
+	return ExecuteTaskListExtended(executionParams);
+}
+
+
+/*
+ * ExecuteUtilityTaskListExtended is a wrapper around executing task
+ * list for utility commands.
+ */
+uint64
+ExecuteUtilityTaskListExtended(List *utilityTaskList, int poolSize,
+							   bool localExecutionSupported)
+{
+	RowModifyLevel modLevel = ROW_MODIFY_NONE;
+	ExecutionParams *executionParams = CreateBasicExecutionParams(
+		modLevel, utilityTaskList, poolSize, localExecutionSupported
+		);
+
+	bool excludeFromXact = false;
+	executionParams->xactProperties =
+		DecideTransactionPropertiesForTaskList(modLevel, utilityTaskList,
+											   excludeFromXact);
 	executionParams->isUtilityCommand = true;
 
 	return ExecuteTaskListExtended(executionParams);
@@ -887,7 +947,7 @@ ExecuteTaskList(RowModifyLevel modLevel, List *taskList,
 uint64
 ExecuteTaskListIntoTupleStore(RowModifyLevel modLevel, List *taskList,
 							  TupleDesc tupleDescriptor, Tuplestorestate *tupleStore,
-							  bool hasReturning)
+							  bool expectResults)
 {
 	int targetPoolSize = MaxAdaptiveExecutorPoolSize;
 	bool localExecutionSupported = true;
@@ -897,7 +957,7 @@ ExecuteTaskListIntoTupleStore(RowModifyLevel modLevel, List *taskList,
 
 	executionParams->xactProperties = DecideTransactionPropertiesForTaskList(
 		modLevel, taskList, false);
-	executionParams->hasReturning = hasReturning;
+	executionParams->expectResults = expectResults;
 	executionParams->tupleStore = tupleStore;
 	executionParams->tupleDescriptor = tupleDescriptor;
 
@@ -916,6 +976,17 @@ ExecuteTaskListExtended(ExecutionParams *executionParams)
 	uint64 locallyProcessedRows = 0;
 	List *localTaskList = NIL;
 	List *remoteTaskList = NIL;
+
+	TupleDestination *defaultTupleDest = NULL;
+	if (executionParams->tupleDescriptor != NULL)
+	{
+		defaultTupleDest = CreateTupleStoreTupleDest(executionParams->tupleStore,
+													 executionParams->tupleDescriptor);
+	}
+	else
+	{
+		defaultTupleDest = CreateTupleDestNone();
+	}
 
 	if (executionParams->localExecutionSupported && ShouldExecuteTasksLocally(
 			executionParams->taskList))
@@ -948,8 +1019,7 @@ ExecuteTaskListExtended(ExecutionParams *executionParams)
 	}
 	else
 	{
-		locallyProcessedRows += ExecuteLocalTaskList(localTaskList,
-													 executionParams->tupleStore);
+		locallyProcessedRows += ExecuteLocalTaskList(localTaskList, defaultTupleDest);
 	}
 
 	if (MultiShardConnectionType == SEQUENTIAL_CONNECTION)
@@ -960,9 +1030,8 @@ ExecuteTaskListExtended(ExecutionParams *executionParams)
 	DistributedExecution *execution =
 		CreateDistributedExecution(
 			executionParams->modLevel, remoteTaskList,
-			executionParams->hasReturning, paramListInfo,
-			executionParams->tupleDescriptor, executionParams->tupleStore,
-			executionParams->targetPoolSize, &executionParams->xactProperties,
+			paramListInfo, executionParams->targetPoolSize,
+			defaultTupleDest, &executionParams->xactProperties,
 			executionParams->jobIdList);
 
 	StartDistributedExecution(execution);
@@ -991,7 +1060,7 @@ CreateBasicExecutionParams(RowModifyLevel modLevel,
 
 	executionParams->tupleStore = NULL;
 	executionParams->tupleDescriptor = NULL;
-	executionParams->hasReturning = false;
+	executionParams->expectResults = false;
 	executionParams->isUtilityCommand = false;
 	executionParams->jobIdList = NIL;
 
@@ -1005,17 +1074,16 @@ CreateBasicExecutionParams(RowModifyLevel modLevel,
  */
 static DistributedExecution *
 CreateDistributedExecution(RowModifyLevel modLevel, List *taskList,
-						   bool hasReturning,
-						   ParamListInfo paramListInfo, TupleDesc tupleDescriptor,
-						   Tuplestorestate *tupleStore, int targetPoolSize,
-						   TransactionProperties *xactProperties, List *jobIdList)
+						   ParamListInfo paramListInfo,
+						   int targetPoolSize, TupleDestination *defaultTupleDest,
+						   TransactionProperties *xactProperties,
+						   List *jobIdList)
 {
 	DistributedExecution *execution =
 		(DistributedExecution *) palloc0(sizeof(DistributedExecution));
 
 	execution->modLevel = modLevel;
 	execution->tasksToExecute = taskList;
-	execution->hasReturning = hasReturning;
 	execution->transactionProperties = xactProperties;
 
 	execution->localTaskList = NIL;
@@ -1024,12 +1092,10 @@ CreateDistributedExecution(RowModifyLevel modLevel, List *taskList,
 	execution->executionStats =
 		(DistributedExecutionStats *) palloc0(sizeof(DistributedExecutionStats));
 	execution->paramListInfo = paramListInfo;
-	execution->tupleDescriptor = tupleDescriptor;
-	execution->tupleStore = tupleStore;
-
 	execution->workerList = NIL;
 	execution->sessionList = NIL;
 	execution->targetPoolSize = targetPoolSize;
+	execution->defaultTupleDest = defaultTupleDest;
 
 	execution->totalTaskCount = list_length(taskList);
 	execution->unfinishedTaskCount = list_length(taskList);
@@ -1042,17 +1108,32 @@ CreateDistributedExecution(RowModifyLevel modLevel, List *taskList,
 
 	execution->jobIdList = jobIdList;
 
-	/* allocate execution specific data once, on the ExecutorState memory context */
-	if (tupleDescriptor != NULL)
+	/*
+	 * Since task can have multiple queries, we are not sure how many columns we should
+	 * allocate for. We start with 16, and reallocate when we need more.
+	 */
+	execution->allocatedColumnCount = 16;
+	execution->columnArray = palloc0(execution->allocatedColumnCount * sizeof(void *));
+	if (EnableBinaryProtocol)
 	{
-		execution->attributeInputMetadata = TupleDescGetAttInMetadata(tupleDescriptor);
-		execution->columnArray =
-			(char **) palloc0(tupleDescriptor->natts * sizeof(char *));
-	}
-	else
-	{
-		execution->attributeInputMetadata = NULL;
-		execution->columnArray = NULL;
+		/*
+		 * Initialize enough StringInfos for each column. These StringInfos
+		 * (and thus the backing buffers) will be reused for each row.
+		 * We will reference these StringInfos in the columnArray if the value
+		 * is not NULL.
+		 *
+		 * NOTE: StringInfos are always grown in the memory context in which
+		 * they were initially created. So appending in any memory context will
+		 * result in bufferes that are still valid after removing that memory
+		 * context.
+		 */
+		execution->stringInfoDataArray = palloc0(
+			execution->allocatedColumnCount *
+			sizeof(StringInfoData));
+		for (int i = 0; i < execution->allocatedColumnCount; i++)
+		{
+			initStringInfo(&execution->stringInfoDataArray[i]);
+		}
 	}
 
 	if (ShouldExecuteTasksLocally(taskList))
@@ -1426,16 +1507,11 @@ ReadOnlyTask(TaskType taskType)
 {
 	switch (taskType)
 	{
-		case SELECT_TASK:
+		case READ_TASK:
 		case MAP_OUTPUT_FETCH_TASK:
 		case MAP_TASK:
 		case MERGE_TASK:
 		{
-			/*
-			 * TODO: We currently do not execute modifying CTEs via ROUTER_TASK/SQL_TASK.
-			 * When we implement it, we should either not use the mentioned task types for
-			 * modifying CTEs detect them here.
-			 */
 			return true;
 		}
 
@@ -1449,16 +1525,11 @@ ReadOnlyTask(TaskType taskType)
 
 /*
  * SelectForUpdateOnReferenceTable returns true if the input task
- * that contains FOR UPDATE clause that locks any reference tables.
+ * contains a FOR UPDATE clause that locks any reference tables.
  */
 static bool
-SelectForUpdateOnReferenceTable(RowModifyLevel modLevel, List *taskList)
+SelectForUpdateOnReferenceTable(List *taskList)
 {
-	if (modLevel != ROW_MODIFY_READONLY)
-	{
-		return false;
-	}
-
 	if (list_length(taskList) != 1)
 	{
 		/* we currently do not support SELECT FOR UPDATE on multi task queries */
@@ -1529,7 +1600,7 @@ AcquireExecutorShardLocksForExecution(DistributedExecution *execution)
 	List *taskList = execution->tasksToExecute;
 
 	if (modLevel <= ROW_MODIFY_READONLY &&
-		!SelectForUpdateOnReferenceTable(modLevel, taskList))
+		!SelectForUpdateOnReferenceTable(taskList))
 	{
 		/*
 		 * Executor locks only apply to DML commands and SELECT FOR UPDATE queries
@@ -1676,7 +1747,7 @@ UnclaimAllSessionConnections(List *sessionList)
 
 
 /*
- * AssignTasksToConnectionsOrWorkerPool  goes through the list of tasks to determine whether any
+ * AssignTasksToConnectionsOrWorkerPool goes through the list of tasks to determine whether any
  * task placements need to be assigned to particular connections because of preceding
  * operations in the transaction. It then adds those connections to the pool and adds
  * the task placement executions to the assigned task queue of the connection.
@@ -1686,7 +1757,6 @@ AssignTasksToConnectionsOrWorkerPool(DistributedExecution *execution)
 {
 	RowModifyLevel modLevel = execution->modLevel;
 	List *taskList = execution->tasksToExecute;
-	bool hasReturning = execution->hasReturning;
 
 	int32 localGroupId = GetLocalGroupId();
 
@@ -1710,10 +1780,7 @@ AssignTasksToConnectionsOrWorkerPool(DistributedExecution *execution)
 												sizeof(TaskPlacementExecution *));
 		shardCommandExecution->placementExecutionCount = placementExecutionCount;
 
-		shardCommandExecution->expectResults =
-			(hasReturning && !task->partiallyLocalOrRemote) ||
-			modLevel == ROW_MODIFY_READONLY;
-
+		SetAttributeInputMetadata(execution, shardCommandExecution);
 		ShardPlacement *taskPlacement = NULL;
 		foreach_ptr(taskPlacement, task->taskPlacementList)
 		{
@@ -1733,6 +1800,7 @@ AssignTasksToConnectionsOrWorkerPool(DistributedExecution *execution)
 			placementExecution->shardPlacement = taskPlacement;
 			placementExecution->workerPool = workerPool;
 			placementExecution->placementExecutionIndex = placementExecutionIndex;
+			placementExecution->queryIndex = 0;
 
 			if (placementExecutionReady)
 			{
@@ -1840,6 +1908,19 @@ AssignTasksToConnectionsOrWorkerPool(DistributedExecution *execution)
 	}
 
 	/*
+	 * We sort the workerList because adaptive connection management
+	 * (e.g., OPTIONAL_CONNECTION) requires any concurrent executions
+	 * to wait for the connections in the same order to prevent any
+	 * starvation. If we don't sort, we might end up with:
+	 *      Execution 1: Get connection for worker 1, wait for worker 2
+	 *      Execution 2: Get connection for worker 2, wait for worker 1
+	 *
+	 *  and, none could proceed. Instead, we enforce every execution establish
+	 *  the required connections to workers in the same order.
+	 */
+	execution->workerList = SortList(execution->workerList, WorkerPoolCompare);
+
+	/*
 	 * The executor claims connections exclusively to make sure that calls to
 	 * StartNodeUserDatabaseConnection do not return the same connections.
 	 *
@@ -1852,6 +1933,78 @@ AssignTasksToConnectionsOrWorkerPool(DistributedExecution *execution)
 		MultiConnection *connection = session->connection;
 
 		ClaimConnectionExclusively(connection);
+	}
+}
+
+
+/*
+ * WorkerPoolCompare is based on WorkerNodeCompare function.
+ *
+ * The function compares two worker nodes by their host name and port
+ * number.
+ */
+static int
+WorkerPoolCompare(const void *lhsKey, const void *rhsKey)
+{
+	const WorkerPool *workerLhs = *(const WorkerPool **) lhsKey;
+	const WorkerPool *workerRhs = *(const WorkerPool **) rhsKey;
+
+	int nameCompare = strncmp(workerLhs->nodeName, workerRhs->nodeName,
+							  WORKER_LENGTH);
+
+	if (nameCompare != 0)
+	{
+		return nameCompare;
+	}
+
+	int portCompare = workerLhs->nodePort - workerRhs->nodePort;
+	return portCompare;
+}
+
+
+/*
+ * SetAttributeInputMetadata sets attributeInputMetadata in
+ * shardCommandExecution for all the queries that are part of its task.
+ * This contains the deserialization functions for the tuples that will be
+ * received. It also sets binaryResults when applicable.
+ */
+static void
+SetAttributeInputMetadata(DistributedExecution *execution,
+						  ShardCommandExecution *shardCommandExecution)
+{
+	TupleDestination *tupleDest = shardCommandExecution->task->tupleDest ?
+								  shardCommandExecution->task->tupleDest :
+								  execution->defaultTupleDest;
+	uint32 queryCount = shardCommandExecution->task->queryCount;
+	shardCommandExecution->attributeInputMetadata = palloc0(queryCount *
+															sizeof(AttInMetadata *));
+
+	for (uint32 queryIndex = 0; queryIndex < queryCount; queryIndex++)
+	{
+		AttInMetadata *attInMetadata = NULL;
+		TupleDesc tupleDescriptor = tupleDest->tupleDescForQuery(tupleDest,
+																 queryIndex);
+		if (tupleDescriptor == NULL)
+		{
+			attInMetadata = NULL;
+		}
+		/*
+		 * We only allow binary results when queryCount is 1, because we
+		 * cannot use binary results with SendRemoteCommand. Which must be
+		 * used if queryCount is larger than 1.
+		 */
+		else if (EnableBinaryProtocol && queryCount == 1 &&
+				 CanUseBinaryCopyFormat(tupleDescriptor))
+		{
+			attInMetadata = TupleDescGetAttBinaryInMetadata(tupleDescriptor);
+			shardCommandExecution->binaryResults = true;
+		}
+		else
+		{
+			attInMetadata = TupleDescGetAttInMetadata(tupleDescriptor);
+		}
+
+		shardCommandExecution->attributeInputMetadata[queryIndex] = attInMetadata;
 	}
 }
 
@@ -1877,7 +2030,7 @@ ExecutionOrderForTask(RowModifyLevel modLevel, Task *task)
 {
 	switch (task->taskType)
 	{
-		case SELECT_TASK:
+		case READ_TASK:
 		{
 			return EXECUTION_ORDER_ANY;
 		}
@@ -3124,11 +3277,23 @@ TransactionStateMachine(WorkerSession *session)
 				TaskPlacementExecution *placementExecution = session->currentTask;
 				ShardCommandExecution *shardCommandExecution =
 					placementExecution->shardCommandExecution;
-				bool storeRows = shardCommandExecution->expectResults;
+				Task *task = shardCommandExecution->task;
+
+				/*
+				 * In EXPLAIN ANALYZE we need to store results except for multiple placements,
+				 * regardless of query type. In other cases, doing the same doesn't seem to have
+				 * a drawback.
+				 */
+				bool storeRows = true;
 
 				if (shardCommandExecution->gotResults)
 				{
 					/* already received results from another replica */
+					storeRows = false;
+				}
+				else if (task->partiallyLocalOrRemote)
+				{
+					/* already received results from local execution */
 					storeRows = false;
 				}
 
@@ -3331,6 +3496,7 @@ StartPlacementExecutionOnSession(TaskPlacementExecution *placementExecution,
 	MultiConnection *connection = session->connection;
 	ShardCommandExecution *shardCommandExecution =
 		placementExecution->shardCommandExecution;
+	bool binaryResults = shardCommandExecution->binaryResults;
 	Task *task = shardCommandExecution->task;
 	ShardPlacement *taskPlacement = placementExecution->shardPlacement;
 	List *placementAccessList = PlacementAccessListForTask(task, taskPlacement);
@@ -3377,11 +3543,32 @@ StartPlacementExecutionOnSession(TaskPlacementExecution *placementExecution,
 		ExtractParametersForRemoteExecution(paramListInfo, &parameterTypes,
 											&parameterValues);
 		querySent = SendRemoteCommandParams(connection, queryString, parameterCount,
-											parameterTypes, parameterValues);
+											parameterTypes, parameterValues,
+											binaryResults);
 	}
 	else
 	{
-		querySent = SendRemoteCommand(connection, queryString);
+		/*
+		 * We only need to use SendRemoteCommandParams when we desire
+		 * binaryResults. One downside of SendRemoteCommandParams is that it
+		 * only supports one query in the query string. In some cases we have
+		 * more than one query. In those cases we already make sure before that
+		 * binaryResults is false.
+		 *
+		 * XXX: It also seems that SendRemoteCommandParams does something
+		 * strange/incorrectly with select statements. In
+		 * isolation_select_vs_all.spec, when doing an s1-router-select in one
+		 * session blocked an s2-ddl-create-index-concurrently in another.
+		 */
+		if (!binaryResults)
+		{
+			querySent = SendRemoteCommand(connection, queryString);
+		}
+		else
+		{
+			querySent = SendRemoteCommandParams(connection, queryString, 0, NULL, NULL,
+												binaryResults);
+		}
 	}
 
 	if (querySent == 0)
@@ -3414,27 +3601,24 @@ ReceiveResults(WorkerSession *session, bool storeRows)
 	WorkerPool *workerPool = session->workerPool;
 	DistributedExecution *execution = workerPool->distributedExecution;
 	DistributedExecutionStats *executionStats = execution->executionStats;
-	TupleDesc tupleDescriptor = execution->tupleDescriptor;
-	AttInMetadata *attributeInputMetadata = execution->attributeInputMetadata;
-	uint32 expectedColumnCount = 0;
-	char **columnArray = execution->columnArray;
-	Tuplestorestate *tupleStore = execution->tupleStore;
-
-	if (tupleDescriptor != NULL)
-	{
-		expectedColumnCount = tupleDescriptor->natts;
-	}
+	TaskPlacementExecution *placementExecution = session->currentTask;
+	ShardCommandExecution *shardCommandExecution =
+		placementExecution->shardCommandExecution;
+	Task *task = placementExecution->shardCommandExecution->task;
+	TupleDestination *tupleDest = task->tupleDest ?
+								  task->tupleDest :
+								  execution->defaultTupleDest;
 
 	/*
 	 * We use this context while converting each row fetched from remote node
 	 * into tuple. The context is reseted on every row, thus we create it at the
 	 * start of the loop and reset on every iteration.
 	 */
-	MemoryContext ioContext = AllocSetContextCreate(CurrentMemoryContext,
-													"IoContext",
-													ALLOCSET_DEFAULT_MINSIZE,
-													ALLOCSET_DEFAULT_INITSIZE,
-													ALLOCSET_DEFAULT_MAXSIZE);
+	MemoryContext rowContext = AllocSetContextCreate(CurrentMemoryContext,
+													 "RowContext",
+													 ALLOCSET_DEFAULT_MINSIZE,
+													 ALLOCSET_DEFAULT_INITSIZE,
+													 ALLOCSET_DEFAULT_MAXSIZE);
 
 	while (!PQisBusy(connection->pgConn))
 	{
@@ -3454,8 +3638,6 @@ ReceiveResults(WorkerSession *session, bool storeRows)
 		{
 			char *currentAffectedTupleString = PQcmdTuples(result);
 			int64 currentAffectedTupleCount = 0;
-			ShardCommandExecution *shardCommandExecution =
-				session->currentTask->shardCommandExecution;
 
 			/* if there are multiple replicas, make sure to consider only one */
 			if (!shardCommandExecution->gotResults && *currentAffectedTupleString != '\0')
@@ -3468,9 +3650,9 @@ ReceiveResults(WorkerSession *session, bool storeRows)
 
 			PQclear(result);
 
-			/* no more results, break out of loop and free allocated memory */
-			fetchDone = true;
-			break;
+			/* task query might contain multiple queries, so fetch until we reach NULL */
+			placementExecution->queryIndex++;
+			continue;
 		}
 		else if (resultStatus == PGRES_TUPLES_OK)
 		{
@@ -3481,8 +3663,9 @@ ReceiveResults(WorkerSession *session, bool storeRows)
 			Assert(PQntuples(result) == 0);
 			PQclear(result);
 
-			fetchDone = true;
-			break;
+			/* task query might contain multiple queries, so fetch until we reach NULL */
+			placementExecution->queryIndex++;
+			continue;
 		}
 		else if (resultStatus != PGRES_SINGLE_TUPLE)
 		{
@@ -3499,8 +3682,16 @@ ReceiveResults(WorkerSession *session, bool storeRows)
 			continue;
 		}
 
+		uint32 queryIndex = placementExecution->queryIndex;
+		TupleDesc tupleDescriptor = tupleDest->tupleDescForQuery(tupleDest, queryIndex);
+		if (tupleDescriptor == NULL)
+		{
+			continue;
+		}
+
 		rowsProcessed = PQntuples(result);
 		uint32 columnCount = PQnfields(result);
+		uint32 expectedColumnCount = tupleDescriptor->natts;
 
 		if (columnCount != expectedColumnCount)
 		{
@@ -3509,9 +3700,53 @@ ReceiveResults(WorkerSession *session, bool storeRows)
 								   columnCount, expectedColumnCount)));
 		}
 
+		if (columnCount > execution->allocatedColumnCount)
+		{
+			pfree(execution->columnArray);
+			int oldColumnCount = execution->allocatedColumnCount;
+			execution->allocatedColumnCount = columnCount;
+			execution->columnArray = palloc0(execution->allocatedColumnCount *
+											 sizeof(void *));
+			if (EnableBinaryProtocol)
+			{
+				/*
+				 * Using repalloc here, to not throw away any previously
+				 * created StringInfos.
+				 */
+				execution->stringInfoDataArray = repalloc(
+					execution->stringInfoDataArray,
+					execution->allocatedColumnCount *
+					sizeof(StringInfoData));
+				for (int i = oldColumnCount; i < columnCount; i++)
+				{
+					initStringInfo(&execution->stringInfoDataArray[i]);
+				}
+			}
+		}
+
+		void **columnArray = execution->columnArray;
+		StringInfoData *stringInfoDataArray = execution->stringInfoDataArray;
+		bool binaryResults = shardCommandExecution->binaryResults;
+
+		/*
+		 * stringInfoDataArray is NULL when EnableBinaryProtocol is false. So
+		 * we make sure binaryResults is also false in that case. Otherwise we
+		 * cannot store them anywhere.
+		 */
+		Assert(EnableBinaryProtocol || !binaryResults);
+
+		uint64 tupleLibpqSize = 0;
+
 		for (uint32 rowIndex = 0; rowIndex < rowsProcessed; rowIndex++)
 		{
-			memset(columnArray, 0, columnCount * sizeof(char *));
+			/*
+			 * Switch to a temporary memory context that we reset after each
+			 * tuple. This protects us from any memory leaks that might be
+			 * present in anything we do to parse a tuple.
+			 */
+			MemoryContext oldContext = MemoryContextSwitchTo(rowContext);
+
+			memset(columnArray, 0, columnCount * sizeof(void *));
 
 			for (columnIndex = 0; columnIndex < columnCount; columnIndex++)
 			{
@@ -3521,30 +3756,56 @@ ReceiveResults(WorkerSession *session, bool storeRows)
 				}
 				else
 				{
-					columnArray[columnIndex] = PQgetvalue(result, rowIndex, columnIndex);
+					int valueLength = PQgetlength(result, rowIndex, columnIndex);
+					char *value = PQgetvalue(result, rowIndex, columnIndex);
+					if (binaryResults)
+					{
+						if (PQfformat(result, columnIndex) == 0)
+						{
+							ereport(ERROR, (errmsg("unexpected text result")));
+						}
+						resetStringInfo(&stringInfoDataArray[columnIndex]);
+						appendBinaryStringInfo(&stringInfoDataArray[columnIndex],
+											   value, valueLength);
+						columnArray[columnIndex] = &stringInfoDataArray[columnIndex];
+					}
+					else
+					{
+						if (PQfformat(result, columnIndex) == 1)
+						{
+							ereport(ERROR, (errmsg("unexpected binary result")));
+						}
+						columnArray[columnIndex] = value;
+					}
 					if (SubPlanLevel > 0 && executionStats != NULL)
 					{
-						executionStats->totalIntermediateResultSize += PQgetlength(result,
-																				   rowIndex,
-																				   columnIndex);
+						executionStats->totalIntermediateResultSize += valueLength;
 					}
+					tupleLibpqSize += valueLength;
 				}
 			}
 
-			/*
-			 * Switch to a temporary memory context that we reset after each tuple. This
-			 * protects us from any memory leaks that might be present in I/O functions
-			 * called by BuildTupleFromCStrings.
-			 */
-			MemoryContext oldContextPerRow = MemoryContextSwitchTo(ioContext);
+			AttInMetadata *attInMetadata =
+				shardCommandExecution->attributeInputMetadata[queryIndex];
+			HeapTuple heapTuple;
+			if (binaryResults)
+			{
+				heapTuple = BuildTupleFromBytes(attInMetadata,
+												(fmStringInfo *) columnArray);
+			}
+			else
+			{
+				heapTuple = BuildTupleFromCStrings(attInMetadata,
+												   (char **) columnArray);
+			}
 
-			HeapTuple heapTuple = BuildTupleFromCStrings(attributeInputMetadata,
-														 columnArray);
+			MemoryContextSwitchTo(oldContext);
 
-			MemoryContextSwitchTo(oldContextPerRow);
+			tupleDest->putTuple(tupleDest, task,
+								placementExecution->placementExecutionIndex, queryIndex,
+								heapTuple, tupleLibpqSize);
 
-			tuplestore_puttuple(tupleStore, heapTuple);
-			MemoryContextReset(ioContext);
+			MemoryContextReset(rowContext);
 
 			execution->rowsProcessed++;
 		}
@@ -3558,9 +3819,123 @@ ReceiveResults(WorkerSession *session, bool storeRows)
 	}
 
 	/* the context is local to the function, so not needed anymore */
-	MemoryContextDelete(ioContext);
+	MemoryContextDelete(rowContext);
 
 	return fetchDone;
+}
+
+
+/*
+ * TupleDescGetAttBinaryInMetadata - Build an AttInMetadata structure based on
+ * the supplied TupleDesc. AttInMetadata can be used in conjunction with
+ * fmStringInfos containing binary encoded types to produce a properly formed
+ * tuple.
+ *
+ * NOTE: This function is a copy of the PG function TupleDescGetAttInMetadata,
+ * except that it uses getTypeBinaryInputInfo instead of getTypeInputInfo.
+ */
+static AttInMetadata *
+TupleDescGetAttBinaryInMetadata(TupleDesc tupdesc)
+{
+	int natts = tupdesc->natts;
+	int i;
+	Oid atttypeid;
+	Oid attinfuncid;
+
+	AttInMetadata *attinmeta = (AttInMetadata *) palloc(sizeof(AttInMetadata));
+
+	/* "Bless" the tupledesc so that we can make rowtype datums with it */
+	attinmeta->tupdesc = BlessTupleDesc(tupdesc);
+
+	/*
+	 * Gather info needed later to call the "in" function for each attribute
+	 */
+	FmgrInfo *attinfuncinfo = (FmgrInfo *) palloc0(natts * sizeof(FmgrInfo));
+	Oid *attioparams = (Oid *) palloc0(natts * sizeof(Oid));
+	int32 *atttypmods = (int32 *) palloc0(natts * sizeof(int32));
+
+	for (i = 0; i < natts; i++)
+	{
+		Form_pg_attribute att = TupleDescAttr(tupdesc, i);
+
+		/* Ignore dropped attributes */
+		if (!att->attisdropped)
+		{
+			atttypeid = att->atttypid;
+			getTypeBinaryInputInfo(atttypeid, &attinfuncid, &attioparams[i]);
+			fmgr_info(attinfuncid, &attinfuncinfo[i]);
+			atttypmods[i] = att->atttypmod;
+		}
+	}
+	attinmeta->attinfuncs = attinfuncinfo;
+	attinmeta->attioparams = attioparams;
+	attinmeta->atttypmods = atttypmods;
+
+	return attinmeta;
+}
+
+
+/*
+ * BuildTupleFromBytes - build a HeapTuple given user data in binary form.
+ * values is an array of StringInfos, one for each attribute of the return
+ * tuple. A NULL StringInfo pointer indicates we want to create a NULL field.
+ *
+ * NOTE: This function is a copy of the PG function BuildTupleFromCStrings,
+ * except that it uses ReceiveFunctionCall instead of InputFunctionCall.
+ */
+static HeapTuple
+BuildTupleFromBytes(AttInMetadata *attinmeta, fmStringInfo *values)
+{
+	TupleDesc tupdesc = attinmeta->tupdesc;
+	int natts = tupdesc->natts;
+	int i;
+
+	Datum *dvalues = (Datum *) palloc(natts * sizeof(Datum));
+	bool *nulls = (bool *) palloc(natts * sizeof(bool));
+
+	/*
+	 * Call the "in" function for each non-dropped attribute, even for nulls,
+	 * to support domains.
+	 */
+	for (i = 0; i < natts; i++)
+	{
+		if (!TupleDescAttr(tupdesc, i)->attisdropped)
+		{
+			/* Non-dropped attributes */
+			dvalues[i] = ReceiveFunctionCall(&attinmeta->attinfuncs[i],
+											 values[i],
+											 attinmeta->attioparams[i],
+											 attinmeta->atttypmods[i]);
+			if (values[i] != NULL)
+			{
+				nulls[i] = false;
+			}
+			else
+			{
+				nulls[i] = true;
+			}
+		}
+		else
+		{
+			/* Handle dropped attributes by setting to NULL */
+			dvalues[i] = (Datum) 0;
+			nulls[i] = true;
+		}
+	}
+
+	/*
+	 * Form a tuple
+	 */
+	HeapTuple tuple = heap_form_tuple(tupdesc, dvalues, nulls);
+
+	/*
+	 * Release locally palloc'd space.  XXX would probably be good to pfree
+	 * values of pass-by-reference datums, as well.
+	 */
+	pfree(dvalues);
+	pfree(nulls);
+
+	return tuple;
 }
 
 

@@ -18,7 +18,7 @@
 
 #include "catalog/pg_type.h"
 #include "distributed/listutils.h"
-#include "distributed/master_protocol.h"
+#include "distributed/coordinator_protocol.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/insert_select_planner.h"
 #include "distributed/multi_router_planner.h"

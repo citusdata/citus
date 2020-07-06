@@ -39,7 +39,7 @@
 #include "distributed/citus_ruleutils.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/deparse_shard_query.h"
-#include "distributed/master_protocol.h"
+#include "distributed/coordinator_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_router_planner.h"
 #include "distributed/multi_join_order.h"
@@ -135,13 +135,6 @@ static RangeTblEntry * JoinRangeTableEntry(JoinExpr *joinExpr, List *dependentJo
 static int ExtractRangeTableId(Node *node);
 static void ExtractColumns(RangeTblEntry *rangeTableEntry, int rangeTableId,
 						   List *dependentJobList, List **columnNames, List **columnVars);
-static RangeTblEntry * DerivedRangeTableEntry(MultiNode *multiNode, List *columnNames,
-											  List *tableIdList, List *funcColumnNames,
-											  List *funcColumnTypes,
-											  List *funcColumnTypeMods,
-											  List *funcCollations);
-
-static List * DerivedColumnNameList(uint32 columnCount, uint64 generatingJobId);
 static Query * BuildSubqueryJobQuery(MultiNode *multiNode);
 static void UpdateAllColumnAttributes(Node *columnContainer, List *rangeTableList,
 									  List *dependentJobList);
@@ -252,13 +245,14 @@ CreatePhysicalDistributedPlan(MultiTreeRoot *multiTree,
 
 	/* build the final merge query to execute on the master */
 	List *masterDependentJobList = list_make1(workerJob);
-	Query *masterQuery = BuildJobQuery((MultiNode *) multiTree, masterDependentJobList);
+	Query *combineQuery = BuildJobQuery((MultiNode *) multiTree, masterDependentJobList);
 
 	DistributedPlan *distributedPlan = CitusMakeNode(DistributedPlan);
 	distributedPlan->workerJob = workerJob;
-	distributedPlan->masterQuery = masterQuery;
+	distributedPlan->combineQuery = combineQuery;
 	distributedPlan->routerExecutable = DistributedPlanRouterExecutable(distributedPlan);
 	distributedPlan->modLevel = ROW_MODIFY_READONLY;
+	distributedPlan->expectResults = true;
 
 	return distributedPlan;
 }
@@ -275,7 +269,7 @@ CreatePhysicalDistributedPlan(MultiTreeRoot *multiTree,
 static bool
 DistributedPlanRouterExecutable(DistributedPlan *distributedPlan)
 {
-	Query *masterQuery = distributedPlan->masterQuery;
+	Query *combineQuery = distributedPlan->combineQuery;
 	Job *job = distributedPlan->workerJob;
 	List *workerTaskList = job->taskList;
 	int taskCount = list_length(workerTaskList);
@@ -303,7 +297,7 @@ DistributedPlanRouterExecutable(DistributedPlan *distributedPlan)
 	 * sorting on the master query wouldn't be executed. Thus, such plans shouldn't be
 	 * qualified as router executable.
 	 */
-	if (masterQuery != NULL && list_length(masterQuery->sortClause) > 0)
+	if (combineQuery != NULL && list_length(combineQuery->sortClause) > 0)
 	{
 		return false;
 	}
@@ -313,8 +307,8 @@ DistributedPlanRouterExecutable(DistributedPlan *distributedPlan)
 	 * have either an aggregate or a function expression which has to be executed for
 	 * the correct results.
 	 */
-	bool masterQueryHasAggregates = job->jobQuery->hasAggs;
-	if (masterQueryHasAggregates)
+	bool combineQueryHasAggregates = job->jobQuery->hasAggs;
+	if (combineQueryHasAggregates)
 	{
 		return false;
 	}
@@ -895,7 +889,7 @@ BaseRangeTableList(MultiNode *multiNode)
  * derived table either represents the output of a repartition job; or the data
  * on worker nodes in case of the master node query.
  */
-static RangeTblEntry *
+RangeTblEntry *
 DerivedRangeTableEntry(MultiNode *multiNode, List *columnList, List *tableIdList,
 					   List *funcColumnNames, List *funcColumnTypes,
 					   List *funcColumnTypeMods, List *funcCollations)
@@ -918,7 +912,7 @@ DerivedRangeTableEntry(MultiNode *multiNode, List *columnList, List *tableIdList
  * tables. These column names are then used when building the create stament
  * query string for derived tables.
  */
-static List *
+List *
 DerivedColumnNameList(uint32 columnCount, uint64 generatingJobId)
 {
 	List *columnNameList = NIL;
@@ -2212,7 +2206,7 @@ BuildJobTreeTaskList(Job *jobTree, PlannerRestrictionContext *plannerRestriction
 			sqlTaskList = QueryPushdownSqlTaskList(job->jobQuery, job->jobId,
 												   plannerRestrictionContext->
 												   relationRestrictionContext,
-												   prunedRelationShardList, SELECT_TASK,
+												   prunedRelationShardList, READ_TASK,
 												   false);
 		}
 		else
@@ -2245,7 +2239,7 @@ BuildJobTreeTaskList(Job *jobTree, PlannerRestrictionContext *plannerRestriction
 			Task *assignedSqlTask = (Task *) lfirst(assignedSqlTaskCell);
 
 			/* we don't support parameters in the physical planner */
-			if (assignedSqlTask->taskType == SELECT_TASK)
+			if (assignedSqlTask->taskType == READ_TASK)
 			{
 				assignedSqlTask->parametersInQueryStringResolved =
 					job->parametersInJobQueryResolved;
@@ -2648,8 +2642,8 @@ QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 
 	Assert(anchorShardId != INVALID_SHARD_ID);
 
-	List *selectPlacementList = WorkersContainingAllShards(taskShardList);
-	if (list_length(selectPlacementList) == 0)
+	List *taskPlacementList = PlacementsForWorkersContainingAllShards(taskShardList);
+	if (list_length(taskPlacementList) == 0)
 	{
 		ereport(ERROR, (errmsg("cannot find a worker that has active placements for all "
 							   "shards in the query")));
@@ -2675,7 +2669,7 @@ QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 	Task *subqueryTask = CreateBasicTask(jobId, taskId, taskType, NULL);
 
 	if ((taskType == MODIFY_TASK && !modifyRequiresMasterEvaluation) ||
-		taskType == SELECT_TASK)
+		taskType == READ_TASK)
 	{
 		pg_get_query_def(taskQuery, queryString);
 		ereport(DEBUG4, (errmsg("distributed statement: %s",
@@ -2685,7 +2679,7 @@ QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 
 	subqueryTask->dependentTaskList = NULL;
 	subqueryTask->anchorShardId = anchorShardId;
-	subqueryTask->taskPlacementList = selectPlacementList;
+	subqueryTask->taskPlacementList = taskPlacementList;
 	subqueryTask->relationShardList = relationShardList;
 
 	return subqueryTask;
@@ -2969,7 +2963,7 @@ SqlTaskList(Job *job)
 		StringInfo sqlQueryString = makeStringInfo();
 		pg_get_query_def(taskQuery, sqlQueryString);
 
-		Task *sqlTask = CreateBasicTask(jobId, taskIdIndex, SELECT_TASK,
+		Task *sqlTask = CreateBasicTask(jobId, taskIdIndex, READ_TASK,
 										sqlQueryString->data);
 		sqlTask->dependentTaskList = dataFetchTaskList;
 		sqlTask->relationShardList = BuildRelationShardList(fragmentRangeTableList,
@@ -4631,6 +4625,22 @@ RowModifyLevelForQuery(Query *query)
 
 	if (commandType == CMD_SELECT)
 	{
+		if (query->hasModifyingCTE)
+		{
+			/* skip checking for INSERT as those CTEs are recursively planned */
+			CommonTableExpr *cte = NULL;
+			foreach_ptr(cte, query->cteList)
+			{
+				Query *cteQuery = (Query *) cte->ctequery;
+
+				if (cteQuery->commandType == CMD_UPDATE ||
+					cteQuery->commandType == CMD_DELETE)
+				{
+					return ROW_MODIFY_NONCOMMUTATIVE;
+				}
+			}
+		}
+
 		return ROW_MODIFY_READONLY;
 	}
 
@@ -5771,7 +5781,7 @@ AssignDataFetchDependencies(List *taskList)
 		ListCell *dependentTaskCell = NULL;
 
 		Assert(task->taskPlacementList != NIL);
-		Assert(task->taskType == SELECT_TASK || task->taskType == MERGE_TASK);
+		Assert(task->taskType == READ_TASK || task->taskType == MERGE_TASK);
 
 		foreach(dependentTaskCell, dependentTaskList)
 		{

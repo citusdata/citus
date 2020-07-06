@@ -47,7 +47,7 @@
 #include "distributed/listutils.h"
 #include "distributed/local_executor.h"
 #include "distributed/maintenanced.h"
-#include "distributed/master_protocol.h"
+#include "distributed/coordinator_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/multi_executor.h"
@@ -206,6 +206,13 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		CreateSubscriptionStmt *createSubStmt = (CreateSubscriptionStmt *) parsetree;
 
 		parsetree = ProcessCreateSubscriptionStmt(createSubStmt);
+	}
+
+	if (IsA(parsetree, CreateTrigStmt))
+	{
+		CreateTrigStmt *createTriggerStmt = (CreateTrigStmt *) parsetree;
+
+		ErrorIfUnsupportedCreateTriggerCommand(createTriggerStmt);
 	}
 
 	if (IsA(parsetree, CallStmt))
@@ -451,7 +458,7 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		}
 	}
 
-	if (IsDropCitusStmt(parsetree))
+	if (IsDropCitusExtensionStmt(parsetree))
 	{
 		StopMaintenanceDaemon(MyDatabaseId);
 	}
@@ -621,7 +628,7 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		PostprocessVacuumStmt(vacuumStmt, queryString);
 	}
 
-	if (!IsDropCitusStmt(parsetree) && !IsA(parsetree, DropdbStmt))
+	if (!IsDropCitusExtensionStmt(parsetree) && !IsA(parsetree, DropdbStmt))
 	{
 		/*
 		 * Ensure value is valid, we can't do some checks during CREATE

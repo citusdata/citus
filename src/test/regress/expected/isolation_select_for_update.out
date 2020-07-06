@@ -2,30 +2,30 @@ Parsed test spec with 2 sessions
 
 starting permutation: s1-begin s1-select-from-t1-t2-for-update s2-begin s2-update-t1 s1-commit s2-commit
 step s1-begin:
-	BEGIN;
+ BEGIN;
 
 step s1-select-from-t1-t2-for-update:
- 	SELECT * FROM
-		test_table_1_rf1 as tt1 INNER JOIN test_table_2_rf1 as tt2 on tt1.id = tt2.id
-		WHERE tt1.id = 1
-		ORDER BY 1
-		FOR UPDATE;
+  SELECT * FROM
+  test_table_1_rf1 as tt1 INNER JOIN test_table_2_rf1 as tt2 on tt1.id = tt2.id
+  WHERE tt1.id = 1
+  ORDER BY 1
+  FOR UPDATE;
 
 id             val_1          id             val_1
 
 1              2              1              2
 step s2-begin:
-	BEGIN;
+ BEGIN;
 
 step s2-update-t1:
-	UPDATE test_table_1_rf1 SET val_1 = 5 WHERE id = 1;
+ UPDATE test_table_1_rf1 SET val_1 = 5 WHERE id = 1;
  <waiting ...>
 step s1-commit:
-	COMMIT;
+ COMMIT;
 
 step s2-update-t1: <... completed>
 step s2-commit:
-	COMMIT;
+ COMMIT;
 
 restore_isolation_tester_func
 
@@ -33,30 +33,30 @@ restore_isolation_tester_func
 
 starting permutation: s1-begin s1-select-from-t1-t2-for-share s2-begin s2-delete-t1 s1-commit s2-commit
 step s1-begin:
-	BEGIN;
+ BEGIN;
 
 step s1-select-from-t1-t2-for-share:
-	SELECT * FROM
-		test_table_1_rf1 as tt1 INNER JOIN test_table_2_rf1 as tt2 on tt1.id = tt2.id
-		WHERE tt1.id = 1
-		ORDER BY 1
-		FOR SHARE;
+ SELECT * FROM
+  test_table_1_rf1 as tt1 INNER JOIN test_table_2_rf1 as tt2 on tt1.id = tt2.id
+  WHERE tt1.id = 1
+  ORDER BY 1
+  FOR SHARE;
 
 id             val_1          id             val_1
 
 1              2              1              2
 step s2-begin:
-	BEGIN;
+ BEGIN;
 
 step s2-delete-t1:
-	DELETE FROM test_table_1_rf1 WHERE id = 1;
+ DELETE FROM test_table_1_rf1 WHERE id = 1;
  <waiting ...>
 step s1-commit:
-	COMMIT;
+ COMMIT;
 
 step s2-delete-t1: <... completed>
 step s2-commit:
-	COMMIT;
+ COMMIT;
 
 restore_isolation_tester_func
 
@@ -64,30 +64,30 @@ restore_isolation_tester_func
 
 starting permutation: s1-begin s1-select-from-t1-rt-for-update s2-begin s2-update-t1 s1-commit s2-commit
 step s1-begin:
-	BEGIN;
+ BEGIN;
 
 step s1-select-from-t1-rt-for-update:
-	SELECT * FROM
-		test_table_1_rf1 as tt1 INNER JOIN ref_table as rt1 on tt1.id = rt1.id
-		WHERE tt1.id = 1
-		ORDER BY 1
-		FOR UPDATE;
+ SELECT * FROM
+  test_table_1_rf1 as tt1 INNER JOIN ref_table as rt1 on tt1.id = rt1.id
+  WHERE tt1.id = 1
+  ORDER BY 1
+  FOR UPDATE;
 
 id             val_1          id             val_1
 
 1              2              1              2
 step s2-begin:
-	BEGIN;
+ BEGIN;
 
 step s2-update-t1:
-	UPDATE test_table_1_rf1 SET val_1 = 5 WHERE id = 1;
+ UPDATE test_table_1_rf1 SET val_1 = 5 WHERE id = 1;
  <waiting ...>
 step s1-commit:
-	COMMIT;
+ COMMIT;
 
 step s2-update-t1: <... completed>
 step s2-commit:
-	COMMIT;
+ COMMIT;
 
 restore_isolation_tester_func
 
@@ -95,31 +95,31 @@ restore_isolation_tester_func
 
 starting permutation: s1-begin s1-select-from-t1-rt-with-lc-for-update s2-begin s2-update-rt s1-commit s2-commit
 step s1-begin:
-	BEGIN;
+ BEGIN;
 
 step s1-select-from-t1-rt-with-lc-for-update:
-	SELECT * FROM
-		test_table_1_rf1 as tt1 INNER JOIN ref_table as rt1 on tt1.id = rt1.id
-		WHERE tt1.id = 1
-		ORDER BY 1
-		FOR UPDATE
-		OF rt1;
+ SELECT * FROM
+  test_table_1_rf1 as tt1 INNER JOIN ref_table as rt1 on tt1.id = rt1.id
+  WHERE tt1.id = 1
+  ORDER BY 1
+  FOR UPDATE
+  OF rt1;
 
 id             val_1          id             val_1
 
 1              2              1              2
 step s2-begin:
-	BEGIN;
+ BEGIN;
 
 step s2-update-rt:
-	UPDATE ref_table SET val_1 = 5 WHERE id = 1;
+ UPDATE ref_table SET val_1 = 5 WHERE id = 1;
  <waiting ...>
 step s1-commit:
-	COMMIT;
+ COMMIT;
 
 step s2-update-rt: <... completed>
 step s2-commit:
-	COMMIT;
+ COMMIT;
 
 restore_isolation_tester_func
 
@@ -127,30 +127,30 @@ restore_isolation_tester_func
 
 starting permutation: s1-begin s1-select-from-t1-rt-with-lc-for-update s2-begin s2-update-t1 s1-commit s2-commit
 step s1-begin:
-	BEGIN;
+ BEGIN;
 
 step s1-select-from-t1-rt-with-lc-for-update:
-	SELECT * FROM
-		test_table_1_rf1 as tt1 INNER JOIN ref_table as rt1 on tt1.id = rt1.id
-		WHERE tt1.id = 1
-		ORDER BY 1
-		FOR UPDATE
-		OF rt1;
+ SELECT * FROM
+  test_table_1_rf1 as tt1 INNER JOIN ref_table as rt1 on tt1.id = rt1.id
+  WHERE tt1.id = 1
+  ORDER BY 1
+  FOR UPDATE
+  OF rt1;
 
 id             val_1          id             val_1
 
 1              2              1              2
 step s2-begin:
-	BEGIN;
+ BEGIN;
 
 step s2-update-t1:
-	UPDATE test_table_1_rf1 SET val_1 = 5 WHERE id = 1;
+ UPDATE test_table_1_rf1 SET val_1 = 5 WHERE id = 1;
 
 step s1-commit:
-	COMMIT;
+ COMMIT;
 
 step s2-commit:
-	COMMIT;
+ COMMIT;
 
 restore_isolation_tester_func
 
@@ -158,36 +158,36 @@ restore_isolation_tester_func
 
 starting permutation: s1-begin s1-select-from-t1-t2-for-share s2-begin s2-select-from-t1-t2-for-share s1-commit s2-commit
 step s1-begin:
-	BEGIN;
+ BEGIN;
 
 step s1-select-from-t1-t2-for-share:
-	SELECT * FROM
-		test_table_1_rf1 as tt1 INNER JOIN test_table_2_rf1 as tt2 on tt1.id = tt2.id
-		WHERE tt1.id = 1
-		ORDER BY 1
-		FOR SHARE;
+ SELECT * FROM
+  test_table_1_rf1 as tt1 INNER JOIN test_table_2_rf1 as tt2 on tt1.id = tt2.id
+  WHERE tt1.id = 1
+  ORDER BY 1
+  FOR SHARE;
 
 id             val_1          id             val_1
 
 1              2              1              2
 step s2-begin:
-	BEGIN;
+ BEGIN;
 
 step s2-select-from-t1-t2-for-share:
-	SELECT * FROM
-		test_table_1_rf1 as tt1 INNER JOIN test_table_1_rf1 as tt2 on tt1.id = tt2.id
-		WHERE tt1.id = 1
-		ORDER BY 1
-		FOR SHARE;
+ SELECT * FROM
+  test_table_1_rf1 as tt1 INNER JOIN test_table_1_rf1 as tt2 on tt1.id = tt2.id
+  WHERE tt1.id = 1
+  ORDER BY 1
+  FOR SHARE;
 
 id             val_1          id             val_1
 
 1              2              1              2
 step s1-commit:
-	COMMIT;
+ COMMIT;
 
 step s2-commit:
-	COMMIT;
+ COMMIT;
 
 restore_isolation_tester_func
 
@@ -195,37 +195,37 @@ restore_isolation_tester_func
 
 starting permutation: s1-begin s1-select-from-t1-rt-for-update s2-begin s2-select-from-t1-t2-for-update s1-commit s2-commit
 step s1-begin:
-	BEGIN;
+ BEGIN;
 
 step s1-select-from-t1-rt-for-update:
-	SELECT * FROM
-		test_table_1_rf1 as tt1 INNER JOIN ref_table as rt1 on tt1.id = rt1.id
-		WHERE tt1.id = 1
-		ORDER BY 1
-		FOR UPDATE;
+ SELECT * FROM
+  test_table_1_rf1 as tt1 INNER JOIN ref_table as rt1 on tt1.id = rt1.id
+  WHERE tt1.id = 1
+  ORDER BY 1
+  FOR UPDATE;
 
 id             val_1          id             val_1
 
 1              2              1              2
 step s2-begin:
-	BEGIN;
+ BEGIN;
 
 step s2-select-from-t1-t2-for-update:
- 	SELECT * FROM
-		test_table_1_rf1 as tt1 INNER JOIN test_table_1_rf1 as tt2 on tt1.id = tt2.id
-		WHERE tt1.id = 1
-		ORDER BY 1
-		FOR UPDATE;
+  SELECT * FROM
+  test_table_1_rf1 as tt1 INNER JOIN test_table_1_rf1 as tt2 on tt1.id = tt2.id
+  WHERE tt1.id = 1
+  ORDER BY 1
+  FOR UPDATE;
  <waiting ...>
 step s1-commit:
-	COMMIT;
+ COMMIT;
 
 step s2-select-from-t1-t2-for-update: <... completed>
 id             val_1          id             val_1
 
 1              2              1              2
 step s2-commit:
-	COMMIT;
+ COMMIT;
 
 restore_isolation_tester_func
 
@@ -233,34 +233,34 @@ restore_isolation_tester_func
 
 starting permutation: s1-begin s1-select-from-t1-within-cte s2-begin s2-select-from-t1-t2-for-update s1-commit s2-commit
 step s1-begin:
-	BEGIN;
+ BEGIN;
 
 step s1-select-from-t1-within-cte:
-	WITH first_value AS ( SELECT val_1 FROM test_table_1_rf1 WHERE id = 1 FOR UPDATE)
-	SELECT * FROM first_value;
+ WITH first_value AS (SELECT val_1 FROM test_table_1_rf1 WHERE id = 1 FOR UPDATE)
+ SELECT * FROM first_value WHERE EXISTS (SELECT * FROM first_value);
 
 val_1
 
 2
 step s2-begin:
-	BEGIN;
+ BEGIN;
 
 step s2-select-from-t1-t2-for-update:
- 	SELECT * FROM
-		test_table_1_rf1 as tt1 INNER JOIN test_table_1_rf1 as tt2 on tt1.id = tt2.id
-		WHERE tt1.id = 1
-		ORDER BY 1
-		FOR UPDATE;
+  SELECT * FROM
+  test_table_1_rf1 as tt1 INNER JOIN test_table_1_rf1 as tt2 on tt1.id = tt2.id
+  WHERE tt1.id = 1
+  ORDER BY 1
+  FOR UPDATE;
  <waiting ...>
 step s1-commit:
-	COMMIT;
+ COMMIT;
 
 step s2-select-from-t1-t2-for-update: <... completed>
 id             val_1          id             val_1
 
 1              2              1              2
 step s2-commit:
-	COMMIT;
+ COMMIT;
 
 restore_isolation_tester_func
 
@@ -268,27 +268,27 @@ restore_isolation_tester_func
 
 starting permutation: s1-begin s1-select-from-t1-within-cte s2-begin s2-update-t1 s1-commit s2-commit
 step s1-begin:
-	BEGIN;
+ BEGIN;
 
 step s1-select-from-t1-within-cte:
-	WITH first_value AS ( SELECT val_1 FROM test_table_1_rf1 WHERE id = 1 FOR UPDATE)
-	SELECT * FROM first_value;
+ WITH first_value AS (SELECT val_1 FROM test_table_1_rf1 WHERE id = 1 FOR UPDATE)
+ SELECT * FROM first_value WHERE EXISTS (SELECT * FROM first_value);
 
 val_1
 
 2
 step s2-begin:
-	BEGIN;
+ BEGIN;
 
 step s2-update-t1:
-	UPDATE test_table_1_rf1 SET val_1 = 5 WHERE id = 1;
+ UPDATE test_table_1_rf1 SET val_1 = 5 WHERE id = 1;
  <waiting ...>
 step s1-commit:
-	COMMIT;
+ COMMIT;
 
 step s2-update-t1: <... completed>
 step s2-commit:
-	COMMIT;
+ COMMIT;
 
 restore_isolation_tester_func
 
@@ -296,26 +296,31 @@ restore_isolation_tester_func
 
 starting permutation: s1-begin s1-select-from-t1-with-subquery s2-begin s2-update-t1 s1-commit s2-commit
 step s1-begin:
-	BEGIN;
+ BEGIN;
 
+DEBUG:  Creating router plan
 step s1-select-from-t1-with-subquery:
-	SELECT * FROM (SELECT * FROM test_table_1_rf1 FOR UPDATE) foo WHERE id = 1;
+ SET client_min_messages TO DEBUG2;
+ SELECT * FROM (SELECT * FROM test_table_1_rf1 FOR UPDATE) foo WHERE id = 1;
+ RESET client_min_messages;
 
+DEBUG:  Plan is router executable
+DETAIL:  distribution column value: 1
 id             val_1
 
 1              2
 step s2-begin:
-	BEGIN;
+ BEGIN;
 
 step s2-update-t1:
-	UPDATE test_table_1_rf1 SET val_1 = 5 WHERE id = 1;
+ UPDATE test_table_1_rf1 SET val_1 = 5 WHERE id = 1;
  <waiting ...>
 step s1-commit:
-	COMMIT;
+ COMMIT;
 
 step s2-update-t1: <... completed>
 step s2-commit:
-	COMMIT;
+ COMMIT;
 
 restore_isolation_tester_func
 
@@ -323,26 +328,26 @@ restore_isolation_tester_func
 
 starting permutation: s1-begin s1-select-from-rt-with-subquery s2-begin s2-update-rt s1-commit s2-commit
 step s1-begin:
-	BEGIN;
+ BEGIN;
 
 step s1-select-from-rt-with-subquery:
-	SELECT * FROM (SELECT * FROM ref_table FOR UPDATE) foo WHERE id = 1;
+ SELECT * FROM (SELECT * FROM ref_table FOR UPDATE) foo WHERE id = 1;
 
 id             val_1
 
 1              2
 step s2-begin:
-	BEGIN;
+ BEGIN;
 
 step s2-update-rt:
-	UPDATE ref_table SET val_1 = 5 WHERE id = 1;
+ UPDATE ref_table SET val_1 = 5 WHERE id = 1;
  <waiting ...>
 step s1-commit:
-	COMMIT;
+ COMMIT;
 
 step s2-update-rt: <... completed>
 step s2-commit:
-	COMMIT;
+ COMMIT;
 
 restore_isolation_tester_func
 
@@ -350,26 +355,26 @@ restore_isolation_tester_func
 
 starting permutation: s1-begin s1-select-from-t1-with-view s2-begin s2-update-t1 s1-commit s2-commit
 step s1-begin:
-	BEGIN;
+ BEGIN;
 
 step s1-select-from-t1-with-view:
-	SELECT * FROM test_1 WHERE id = 1 FOR UPDATE;
+ SELECT * FROM test_1 WHERE id = 1 FOR UPDATE;
 
 id             val_1
 
 1              2
 step s2-begin:
-	BEGIN;
+ BEGIN;
 
 step s2-update-t1:
-	UPDATE test_table_1_rf1 SET val_1 = 5 WHERE id = 1;
+ UPDATE test_table_1_rf1 SET val_1 = 5 WHERE id = 1;
  <waiting ...>
 step s1-commit:
-	COMMIT;
+ COMMIT;
 
 step s2-update-t1: <... completed>
 step s2-commit:
-	COMMIT;
+ COMMIT;
 
 restore_isolation_tester_func
 
@@ -377,24 +382,24 @@ restore_isolation_tester_func
 
 starting permutation: s1-begin s1-update-rt-with-cte-select-from-rt s2-begin s2-update-rt s1-commit s2-commit
 step s1-begin:
-	BEGIN;
+ BEGIN;
 
 step s1-update-rt-with-cte-select-from-rt:
-	WITH foo AS (SELECT * FROM ref_table FOR UPDATE)
-	UPDATE ref_table SET val_1 = 4 FROM foo WHERE ref_table.id = foo.id;
+ WITH foo AS (SELECT * FROM ref_table FOR UPDATE)
+ UPDATE ref_table SET val_1 = 4 FROM foo WHERE ref_table.id = foo.id AND EXISTS (SELECT * FROM foo);
 
 step s2-begin:
-	BEGIN;
+ BEGIN;
 
 step s2-update-rt:
-	UPDATE ref_table SET val_1 = 5 WHERE id = 1;
+ UPDATE ref_table SET val_1 = 5 WHERE id = 1;
  <waiting ...>
 step s1-commit:
-	COMMIT;
+ COMMIT;
 
 step s2-update-rt: <... completed>
 step s2-commit:
-	COMMIT;
+ COMMIT;
 
 restore_isolation_tester_func
 

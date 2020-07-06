@@ -874,7 +874,7 @@ DELETE FROM summary_table WHERE (
     SELECT 1 FROM pg_catalog.pg_statio_sys_sequences
 ) = null;
 DELETE FROM summary_table WHERE (
-    SELECT (select action_statement from information_schema.triggers)
+    SELECT (select min(action_statement) from information_schema.triggers)
     FROM pg_catalog.pg_statio_sys_sequences
 ) = null;
 

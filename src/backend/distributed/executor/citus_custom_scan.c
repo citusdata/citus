@@ -48,12 +48,13 @@
 
 /* functions for creating custom scan nodes */
 static Node * AdaptiveExecutorCreateScan(CustomScan *scan);
-static Node * CoordinatorInsertSelectCreateScan(CustomScan *scan);
+static Node * TaskTrackerCreateScan(CustomScan *scan);
+static Node * NonPushableInsertSelectCreateScan(CustomScan *scan);
 static Node * DelayedErrorCreateScan(CustomScan *scan);
 
 /* functions that are common to different scans */
 static void CitusBeginScan(CustomScanState *node, EState *estate, int eflags);
-static void CitusBeginSelectScan(CustomScanState *node, EState *estate, int eflags);
+static void CitusBeginReadOnlyScan(CustomScanState *node, EState *estate, int eflags);
 static void CitusBeginModifyScan(CustomScanState *node, EState *estate, int eflags);
 static void CitusPreExecScan(CitusScanState *scanState);
 static bool ModifyJobNeedsEvaluation(Job *workerJob);
@@ -71,9 +72,9 @@ CustomScanMethods AdaptiveExecutorCustomScanMethods = {
 	AdaptiveExecutorCreateScan
 };
 
-CustomScanMethods CoordinatorInsertSelectCustomScanMethods = {
+CustomScanMethods NonPushableInsertSelectCustomScanMethods = {
 	"Citus INSERT ... SELECT",
-	CoordinatorInsertSelectCreateScan
+	NonPushableInsertSelectCreateScan
 };
 
 CustomScanMethods DelayedErrorCustomScanMethods = {
@@ -94,13 +95,13 @@ static CustomExecMethods AdaptiveExecutorCustomExecMethods = {
 	.ExplainCustomScan = CitusExplainScan
 };
 
-static CustomExecMethods CoordinatorInsertSelectCustomExecMethods = {
-	.CustomName = "CoordinatorInsertSelectScan",
+static CustomExecMethods NonPushableInsertSelectCustomExecMethods = {
+	.CustomName = "NonPushableInsertSelectScan",
 	.BeginCustomScan = CitusBeginScan,
-	.ExecCustomScan = CoordinatorInsertSelectExecScan,
+	.ExecCustomScan = NonPushableInsertSelectExecScan,
 	.EndCustomScan = CitusEndScan,
 	.ReScanCustomScan = CitusReScan,
-	.ExplainCustomScan = CoordinatorInsertSelectExplainScan
+	.ExplainCustomScan = NonPushableInsertSelectExplainScan
 };
 
 
@@ -117,7 +118,7 @@ IsCitusCustomState(PlanState *planState)
 
 	CustomScanState *css = castNode(CustomScanState, planState);
 	if (css->methods == &AdaptiveExecutorCustomExecMethods ||
-		css->methods == &CoordinatorInsertSelectCustomExecMethods)
+		css->methods == &NonPushableInsertSelectCustomExecMethods)
 	{
 		return true;
 	}
@@ -133,7 +134,7 @@ void
 RegisterCitusCustomScanMethods(void)
 {
 	RegisterCustomScanMethods(&AdaptiveExecutorCustomScanMethods);
-	RegisterCustomScanMethods(&CoordinatorInsertSelectCustomScanMethods);
+	RegisterCustomScanMethods(&NonPushableInsertSelectCustomScanMethods);
 	RegisterCustomScanMethods(&DelayedErrorCustomScanMethods);
 }
 
@@ -189,7 +190,7 @@ CitusBeginScan(CustomScanState *node, EState *estate, int eflags)
 	}
 	else if (distributedPlan->modLevel == ROW_MODIFY_READONLY)
 	{
-		CitusBeginSelectScan(node, estate, eflags);
+		CitusBeginReadOnlyScan(node, estate, eflags);
 	}
 	else
 	{
@@ -231,13 +232,15 @@ CitusExecScan(CustomScanState *node)
 
 
 /*
- * CitusBeginSelectScan handles deferred pruning and plan caching for SELECTs.
+ * CitusBeginReadOnlyScan handles deferred pruning and plan caching for SELECTs.
  */
 static void
-CitusBeginSelectScan(CustomScanState *node, EState *estate, int eflags)
+CitusBeginReadOnlyScan(CustomScanState *node, EState *estate, int eflags)
 {
 	CitusScanState *scanState = (CitusScanState *) node;
 	DistributedPlan *originalDistributedPlan = scanState->distributedPlan;
+
+	Assert(originalDistributedPlan->workerJob->jobQuery->commandType == CMD_SELECT);
 
 	if (!originalDistributedPlan->workerJob->deferredPruning)
 	{
@@ -278,7 +281,7 @@ CitusBeginSelectScan(CustomScanState *node, EState *estate, int eflags)
 	 *
 	 * TODO: evaluate stable functions
 	 */
-	ExecuteMasterEvaluableParameters(jobQuery, planState);
+	ExecuteMasterEvaluableExpressions(jobQuery, planState);
 
 	/* job query no longer has parameters, so we should not send any */
 	workerJob->parametersInJobQueryResolved = true;
@@ -328,8 +331,7 @@ CitusBeginModifyScan(CustomScanState *node, EState *estate, int eflags)
 
 	if (ModifyJobNeedsEvaluation(workerJob))
 	{
-		/* evaluate both functions and parameters */
-		ExecuteMasterEvaluableFunctionsAndParameters(jobQuery, planState);
+		ExecuteMasterEvaluableExpressions(jobQuery, planState);
 
 		/* job query no longer has parameters, so we should not send any */
 		workerJob->parametersInJobQueryResolved = true;
@@ -523,8 +525,12 @@ RegenerateTaskForFasthPathQuery(Job *workerJob)
 
 	UpdateRelationToShardNames((Node *) workerJob->jobQuery, relationShardList);
 
+	/* fast path queries cannot have local tables */
+	bool hasLocalRelation = false;
+
 	List *placementList =
-		FindRouterWorkerList(shardIntervalList, shardsPresent, true);
+		CreateTaskPlacementListForShardIntervals(shardIntervalList, shardsPresent, true,
+												 hasLocalRelation);
 	uint64 shardId = INVALID_SHARD_ID;
 
 	if (shardsPresent)
@@ -558,20 +564,20 @@ AdaptiveExecutorCreateScan(CustomScan *scan)
 
 
 /*
- * CoordinatorInsertSelectCrateScan creates the scan state for executing
+ * NonPushableInsertSelectCrateScan creates the scan state for executing
  * INSERT..SELECT into a distributed table via the coordinator.
  */
 static Node *
-CoordinatorInsertSelectCreateScan(CustomScan *scan)
+NonPushableInsertSelectCreateScan(CustomScan *scan)
 {
 	CitusScanState *scanState = palloc0(sizeof(CitusScanState));
 
-	scanState->executorType = MULTI_EXECUTOR_COORDINATOR_INSERT_SELECT;
+	scanState->executorType = MULTI_EXECUTOR_NON_PUSHABLE_INSERT_SELECT;
 	scanState->customScanState.ss.ps.type = T_CustomScanState;
 	scanState->distributedPlan = GetDistributedPlan(scan);
 
 	scanState->customScanState.methods =
-		&CoordinatorInsertSelectCustomExecMethods;
+		&NonPushableInsertSelectCustomExecMethods;
 
 	return (Node *) scanState;
 }

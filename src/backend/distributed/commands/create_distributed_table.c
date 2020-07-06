@@ -40,8 +40,8 @@
 #include "distributed/commands.h"
 #include "distributed/distribution_column.h"
 #include "distributed/listutils.h"
-#include "distributed/master_metadata_utility.h"
-#include "distributed/master_protocol.h"
+#include "distributed/metadata_utility.h"
+#include "distributed/coordinator_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/multi_executor.h"
@@ -99,12 +99,14 @@ static void EnsureTableCanBeColocatedWith(Oid relationId, char replicationModel,
 										  Oid sourceRelationId);
 static void EnsureLocalTableEmpty(Oid relationId);
 static void EnsureTableNotDistributed(Oid relationId);
+static void EnsureRelationHasNoTriggers(Oid relationId);
 static Oid SupportFunctionForColumn(Var *partitionColumn, Oid accessMethodId,
 									int16 supportFunctionNumber);
 static void EnsureLocalTableEmptyIfNecessary(Oid relationId, char distributionMethod,
 											 bool viaDeprecatedAPI);
 static bool ShouldLocalTableBeEmpty(Oid relationId, char distributionMethod, bool
 									viaDeprecatedAPI);
+static void EnsureCitusTableCanBeCreated(Oid relationOid);
 static bool LocalTableEmpty(Oid tableId);
 static void CopyLocalDataIntoShards(Oid relationId);
 static List * TupleDescColumnNameList(TupleDesc tupleDescriptor);
@@ -138,14 +140,14 @@ master_create_distributed_table(PG_FUNCTION_ARGS)
 	text *distributionColumnText = PG_GETARG_TEXT_P(1);
 	Oid distributionMethodOid = PG_GETARG_OID(2);
 
+	CheckCitusVersion(ERROR);
+
+	EnsureCitusTableCanBeCreated(relationId);
+
 	char *colocateWithTableName = NULL;
 	bool viaDeprecatedAPI = true;
 	ObjectAddress tableAddress = { 0 };
 
-
-	CheckCitusVersion(ERROR);
-	EnsureCoordinator();
-	EnsureTableOwner(relationId);
 
 	/*
 	 * distributed tables might have dependencies on different objects, since we create
@@ -168,13 +170,6 @@ master_create_distributed_table(PG_FUNCTION_ARGS)
 		ereport(ERROR, (errmsg("could not create distributed table: "
 							   "relation does not exist")));
 	}
-
-	/*
-	 * We should do this check here since the codes in the following lines rely
-	 * on this relation to have a supported relation kind. More extensive checks
-	 * will be performed in CreateDistributedTable.
-	 */
-	EnsureRelationKindSupported(relationId);
 
 	char *distributionColumnName = text_to_cstring(distributionColumnText);
 	Var *distributionColumn = BuildDistributionKeyFromColumnName(relation,
@@ -201,18 +196,16 @@ create_distributed_table(PG_FUNCTION_ARGS)
 {
 	ObjectAddress tableAddress = { 0 };
 
-
 	bool viaDeprecatedAPI = false;
-
-	CheckCitusVersion(ERROR);
-	EnsureCoordinator();
 
 	Oid relationId = PG_GETARG_OID(0);
 	text *distributionColumnText = PG_GETARG_TEXT_P(1);
 	Oid distributionMethodOid = PG_GETARG_OID(2);
 	text *colocateWithTableNameText = PG_GETARG_TEXT_P(3);
 
-	EnsureTableOwner(relationId);
+	CheckCitusVersion(ERROR);
+
+	EnsureCitusTableCanBeCreated(relationId);
 
 	/*
 	 * distributed tables might have dependencies on different objects, since we create
@@ -235,13 +228,6 @@ create_distributed_table(PG_FUNCTION_ARGS)
 		ereport(ERROR, (errmsg("could not create distributed table: "
 							   "relation does not exist")));
 	}
-
-	/*
-	 * We should do this check here since the codes in the following lines rely
-	 * on this relation to have a supported relation kind. More extensive checks
-	 * will be performed in CreateDistributedTable.
-	 */
-	EnsureRelationKindSupported(relationId);
 
 	char *distributionColumnName = text_to_cstring(distributionColumnText);
 	Var *distributionColumn = BuildDistributionKeyFromColumnName(relation,
@@ -276,9 +262,9 @@ create_reference_table(PG_FUNCTION_ARGS)
 
 	bool viaDeprecatedAPI = false;
 
-	EnsureCoordinator();
 	CheckCitusVersion(ERROR);
-	EnsureTableOwner(relationId);
+
+	EnsureCitusTableCanBeCreated(relationId);
 
 	/*
 	 * distributed tables might have dependencies on different objects, since we create
@@ -295,13 +281,6 @@ create_reference_table(PG_FUNCTION_ARGS)
 	 * backends manipulating this relation.
 	 */
 	Relation relation = relation_open(relationId, ExclusiveLock);
-
-	/*
-	 * We should do this check here since the codes in the following lines rely
-	 * on this relation to have a supported relation kind. More extensive checks
-	 * will be performed in CreateDistributedTable.
-	 */
-	EnsureRelationKindSupported(relationId);
 
 	List *workerNodeList = ActivePrimaryNodeList(ShareLock);
 	int workerCount = list_length(workerNodeList);
@@ -322,6 +301,27 @@ create_reference_table(PG_FUNCTION_ARGS)
 	relation_close(relation, NoLock);
 
 	PG_RETURN_VOID();
+}
+
+
+/*
+ * EnsureCitusTableCanBeCreated checks if
+ * - we are on the coordinator
+ * - the current user is the owner of the table
+ * - relation kind is supported
+ */
+static void
+EnsureCitusTableCanBeCreated(Oid relationOid)
+{
+	EnsureCoordinator();
+	EnsureTableOwner(relationOid);
+
+	/*
+	 * We should do this check here since the codes in the following lines rely
+	 * on this relation to have a supported relation kind. More extensive checks
+	 * will be performed in CreateDistributedTable.
+	 */
+	EnsureRelationKindSupported(relationOid);
 }
 
 
@@ -650,6 +650,7 @@ EnsureRelationCanBeDistributed(Oid relationId, Var *distributionColumn,
 	EnsureTableNotDistributed(relationId);
 	EnsureLocalTableEmptyIfNecessary(relationId, distributionMethod, viaDeprecatedAPI);
 	EnsureReplicationSettings(InvalidOid, replicationModel);
+	EnsureRelationHasNoTriggers(relationId);
 
 	/* we assume callers took necessary locks */
 	Relation relation = relation_open(relationId, NoLock);
@@ -973,6 +974,31 @@ EnsureReplicationSettings(Oid relationId, char replicationModel)
 
 
 /*
+ * EnsureRelationHasNoTriggers errors out if the given table has triggers on
+ * it. See also GetExplicitTriggerIdList function's comment for the triggers this
+ * function errors out.
+ */
+static void
+EnsureRelationHasNoTriggers(Oid relationId)
+{
+	List *explicitTriggerIds = GetExplicitTriggerIdList(relationId);
+
+	if (list_length(explicitTriggerIds) > 0)
+	{
+		char *relationName = get_rel_name(relationId);
+
+		Assert(relationName != NULL);
+		ereport(ERROR, (errmsg("cannot distribute relation \"%s\" because it has "
+							   "triggers ", relationName),
+						errdetail("Citus does not support distributing tables with "
+								  "triggers."),
+						errhint("Drop all the triggers on \"%s\" and retry.",
+								relationName)));
+	}
+}
+
+
+/*
  * LookupDistributionMethod maps the oids of citus.distribution_type enum
  * values to pg_dist_partition.partmethod values.
  *
@@ -1176,7 +1202,7 @@ CreateTruncateTrigger(Oid relationId)
 	CreateTrigStmt *trigger = makeNode(CreateTrigStmt);
 	trigger->trigname = triggerName->data;
 	trigger->relation = NULL;
-	trigger->funcname = SystemFuncName("citus_truncate_trigger");
+	trigger->funcname = SystemFuncName(CITUS_TRUNCATE_TRIGGER_NAME);
 	trigger->args = NIL;
 	trigger->row = false;
 	trigger->timing = TRIGGER_TYPE_AFTER;

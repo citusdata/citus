@@ -26,9 +26,8 @@
 #include "distributed/deparse_shard_query.h"
 #include "distributed/function_call_delegation.h"
 #include "distributed/insert_select_planner.h"
-#include "distributed/insert_select_executor.h"
-#include "distributed/master_metadata_utility.h"
-#include "distributed/master_protocol.h"
+#include "distributed/metadata_utility.h"
+#include "distributed/coordinator_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_executor.h"
 #include "distributed/multi_physical_planner.h"
@@ -230,11 +229,10 @@ TryToDelegateFunctionCall(DistributedPlanningContext *planContext)
 	}
 
 	/*
-	 * This can be called while executing INSERT ... SELECT func(). insert_select_executor
-	 * doesn't get the planned subquery and gets the actual struct Query, so the planning
-	 * for these kinds of queries happens at the execution time.
+	 * Cannot delegate functions for INSERT ... SELECT func(), since they require
+	 * coordinated transactions.
 	 */
-	if (ExecutingInsertSelect())
+	if (PlanningInsertSelect())
 	{
 		ereport(DEBUG1, (errmsg("not pushing down function calls in INSERT ... SELECT")));
 		return NULL;
@@ -314,12 +312,10 @@ TryToDelegateFunctionCall(DistributedPlanningContext *planContext)
 
 	if (partitionValue->consttype != partitionColumn->vartype)
 	{
-		CopyCoercionData coercionData;
-
-		ConversionPathForTypes(partitionValue->consttype, partitionColumn->vartype,
-							   &coercionData);
-
-		partitionValueDatum = CoerceColumnValue(partitionValueDatum, &coercionData);
+		bool missingOk = false;
+		partitionValue =
+			TransformPartitionRestrictionValue(partitionColumn, partitionValue,
+											   missingOk);
 	}
 
 	shardInterval = FindShardInterval(partitionValueDatum, distTable);
@@ -367,7 +363,7 @@ TryToDelegateFunctionCall(DistributedPlanningContext *planContext)
 	ereport(DEBUG1, (errmsg("pushing down the function call")));
 
 	task = CitusMakeNode(Task);
-	task->taskType = SELECT_TASK;
+	task->taskType = READ_TASK;
 	task->taskPlacementList = placementList;
 	SetTaskQueryIfShouldLazyDeparse(task, planContext->query);
 	task->anchorShardId = shardInterval->shardId;
@@ -380,9 +376,9 @@ TryToDelegateFunctionCall(DistributedPlanningContext *planContext)
 
 	distributedPlan = CitusMakeNode(DistributedPlan);
 	distributedPlan->workerJob = job;
-	distributedPlan->masterQuery = NULL;
+	distributedPlan->combineQuery = NULL;
 	distributedPlan->routerExecutable = true;
-	distributedPlan->hasReturning = false;
+	distributedPlan->expectResults = true;
 
 	/* worker will take care of any necessary locking, treat query as read-only */
 	distributedPlan->modLevel = ROW_MODIFY_READONLY;

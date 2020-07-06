@@ -474,7 +474,7 @@ ExecuteOptionalRemoteCommand(MultiConnection *connection, const char *command,
 int
 SendRemoteCommandParams(MultiConnection *connection, const char *command,
 						int parameterCount, const Oid *parameterTypes,
-						const char *const *parameterValues)
+						const char *const *parameterValues, bool binaryResults)
 {
 	PGconn *pgConn = connection->pgConn;
 
@@ -492,7 +492,7 @@ SendRemoteCommandParams(MultiConnection *connection, const char *command,
 	Assert(PQisnonblocking(pgConn));
 
 	int rc = PQsendQueryParams(pgConn, command, parameterCount, parameterTypes,
-							   parameterValues, NULL, NULL, 0);
+							   parameterValues, NULL, NULL, binaryResults ? 1 : 0);
 
 	return rc;
 }

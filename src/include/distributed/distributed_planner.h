@@ -198,15 +198,23 @@ extern void multi_join_restriction_hook(PlannerInfo *root,
 										JoinPathExtraData *extra);
 extern bool HasUnresolvedExternParamsWalker(Node *expression, ParamListInfo boundParams);
 extern bool IsModifyCommand(Query *query);
-extern bool IsModifyDistributedPlan(struct DistributedPlan *distributedPlan);
 extern void EnsurePartitionTableNotReplicated(Oid relationId);
 extern Node * ResolveExternalParams(Node *inputNode, ParamListInfo boundParams);
 extern bool IsMultiTaskPlan(struct DistributedPlan *distributedPlan);
 extern RangeTblEntry * RemoteScanRangeTableEntry(List *columnNameList);
 extern int GetRTEIdentity(RangeTblEntry *rte);
+extern LOCKMODE GetQueryLockMode(Query *query);
 extern int32 BlessRecordExpression(Expr *expr);
 extern void DissuadePlannerFromUsingPlan(PlannedStmt *plan);
 extern PlannedStmt * FinalizePlan(PlannedStmt *localPlan,
 								  struct DistributedPlan *distributedPlan);
+
+
+extern struct DistributedPlan * CreateDistributedPlan(uint64 planId, Query *originalQuery,
+													  Query *query, ParamListInfo
+													  boundParams, bool
+													  hasUnresolvedParams,
+													  PlannerRestrictionContext *
+													  plannerRestrictionContext);
 
 #endif /* DISTRIBUTED_PLANNER_H */

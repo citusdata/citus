@@ -920,6 +920,48 @@ BEGIN;
 ERROR:  cannot execute DML on reference table "transitive_reference_table" because there was a parallel DML access to distributed table "on_update_fkey_table" in the same transaction
 HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
 ROLLBACK;
+BEGIN;
+	WITH cte AS (UPDATE on_update_fkey_table SET value_1 = 16 WHERE value_1 = 15 RETURNING *)
+    SELECT * FROM cte;
+ id  | value_1
+---------------------------------------------------------------------
+  15 |      16
+ 115 |      16
+ 215 |      16
+ 315 |      16
+ 415 |      16
+ 515 |      16
+ 615 |      16
+ 715 |      16
+ 815 |      16
+ 915 |      16
+(10 rows)
+
+	UPDATE reference_table SET id = 160 WHERE id = 15;
+ERROR:  cannot execute DML on reference table "reference_table" because there was a parallel DML access to distributed table "on_update_fkey_table" in the same transaction
+HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
+ROLLBACK;
+BEGIN;
+	WITH cte AS (UPDATE on_update_fkey_table SET value_1 = 16 WHERE value_1 = 15 RETURNING *)
+    SELECT * FROM cte;
+ id  | value_1
+---------------------------------------------------------------------
+  15 |      16
+ 115 |      16
+ 215 |      16
+ 315 |      16
+ 415 |      16
+ 515 |      16
+ 615 |      16
+ 715 |      16
+ 815 |      16
+ 915 |      16
+(10 rows)
+
+	UPDATE transitive_reference_table SET id = 160 WHERE id = 15;
+ERROR:  cannot execute DML on reference table "transitive_reference_table" because there was a parallel DML access to distributed table "on_update_fkey_table" in the same transaction
+HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
+ROLLBACK;
 -- case 5.3: Parallel UPDATE on distributed table follow by an unrelated DDL on reference table
 BEGIN;
 	UPDATE on_update_fkey_table SET value_1 = 16 WHERE value_1 = 15;

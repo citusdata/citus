@@ -358,7 +358,7 @@ AcquireExecutorShardLocksForRelationRowLockList(List *relationRowLockList)
 	}
 
 	/*
-	 * If lock clause exists and it effects any reference table, we need to get
+	 * If lock clause exists and it affects any reference table, we need to get
 	 * lock on shard resource. Type of lock is determined by the type of row lock
 	 * given in the query. If the type of row lock is either FOR NO KEY UPDATE or
 	 * FOR UPDATE we get ExclusiveLock on shard resource. We get ShareLock if it

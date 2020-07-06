@@ -236,6 +236,12 @@ UpdateRelationToShardNames(Node *node, List *relationShardList)
 		return false;
 	}
 
+	if (!IsCitusTable(newRte->relid))
+	{
+		/* leave local tables as is */
+		return false;
+	}
+
 	/*
 	 * Search for the restrictions associated with the RTE. There better be
 	 * some, otherwise this query wouldn't be eligible as a router query.
@@ -428,6 +434,7 @@ SetTaskQueryIfShouldLazyDeparse(Task *task, Query *query)
 	{
 		task->taskQuery.queryType = TASK_QUERY_OBJECT;
 		task->taskQuery.data.jobQueryReferenceForLazyDeparsing = query;
+		task->queryCount = 1;
 		return;
 	}
 
@@ -446,11 +453,13 @@ SetTaskQueryString(Task *task, char *queryString)
 	if (queryString == NULL)
 	{
 		task->taskQuery.queryType = TASK_QUERY_NULL;
+		task->queryCount = 0;
 	}
 	else
 	{
 		task->taskQuery.queryType = TASK_QUERY_TEXT;
 		task->taskQuery.data.queryStringLazy = queryString;
+		task->queryCount = 1;
 	}
 }
 
@@ -464,6 +473,7 @@ SetTaskPerPlacementQueryStrings(Task *task, List *perPlacementQueryStringList)
 	Assert(perPlacementQueryStringList != NIL);
 	task->taskQuery.queryType = TASK_QUERY_TEXT_PER_PLACEMENT;
 	task->taskQuery.data.perPlacementQueryStrings = perPlacementQueryStringList;
+	task->queryCount = 1;
 }
 
 
@@ -476,6 +486,7 @@ SetTaskQueryStringList(Task *task, List *queryStringList)
 	Assert(queryStringList != NIL);
 	task->taskQuery.queryType = TASK_QUERY_TEXT_LIST;
 	task->taskQuery.data.queryStringList = queryStringList;
+	task->queryCount = list_length(queryStringList);
 }
 
 

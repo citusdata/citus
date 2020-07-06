@@ -39,8 +39,8 @@
 #include "distributed/intermediate_result_pruning.h"
 #include "distributed/local_executor.h"
 #include "distributed/maintenanced.h"
-#include "distributed/master_metadata_utility.h"
-#include "distributed/master_protocol.h"
+#include "distributed/metadata_utility.h"
+#include "distributed/coordinator_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/multi_executor.h"
@@ -48,7 +48,7 @@
 #include "distributed/multi_join_order.h"
 #include "distributed/multi_logical_optimizer.h"
 #include "distributed/distributed_planner.h"
-#include "distributed/multi_master_planner.h"
+#include "distributed/combine_query_planner.h"
 #include "distributed/multi_router_planner.h"
 #include "distributed/multi_server_executor.h"
 #include "distributed/pg_dist_partition.h"
@@ -222,7 +222,8 @@ _PG_init(void)
 	 * duties. For simplicity insist that all hooks are previously unused.
 	 */
 	if (planner_hook != NULL || ProcessUtility_hook != NULL ||
-		ExecutorStart_hook != NULL || ExecutorRun_hook != NULL)
+		ExecutorStart_hook != NULL || ExecutorRun_hook != NULL ||
+		ExplainOneQuery_hook != NULL)
 	{
 		ereport(ERROR, (errmsg("Citus has to be loaded first"),
 						errhint("Place citus at the beginning of "
@@ -268,6 +269,7 @@ _PG_init(void)
 	set_join_pathlist_hook = multi_join_restriction_hook;
 	ExecutorStart_hook = CitusExecutorStart;
 	ExecutorRun_hook = CitusExecutorRun;
+	ExplainOneQuery_hook = CitusExplainOneQuery;
 
 	/* register hook for error messages */
 	emit_log_hook = multi_log_hook;
@@ -365,10 +367,12 @@ multi_log_hook(ErrorData *edata)
 {
 	/*
 	 * Show the user a meaningful error message when a backend is cancelled
-	 * by the distributed deadlock detection.
+	 * by the distributed deadlock detection. Also reset the state for this,
+	 * since the next cancelation of the backend might have another reason.
 	 */
+	bool clearState = true;
 	if (edata->elevel == ERROR && edata->sqlerrcode == ERRCODE_QUERY_CANCELED &&
-		MyBackendGotCancelledDueToDeadlock())
+		MyBackendGotCancelledDueToDeadlock(clearState))
 	{
 		edata->sqlerrcode = ERRCODE_T_R_DEADLOCK_DETECTED;
 		edata->message = "canceling the transaction since it was "
@@ -551,6 +555,17 @@ RegisterCitusConfigVariables(void)
 		true,
 		PGC_USERSET,
 		GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		"citus.enable_binary_protocol",
+		gettext_noop(
+			"Enables communication between nodes using binary protocol when possible"),
+		NULL,
+		&EnableBinaryProtocol,
+		false,
+		PGC_USERSET,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(

@@ -26,7 +26,7 @@
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_resowner.h"
 #include "distributed/multi_server_executor.h"
-#include "distributed/master_protocol.h"
+#include "distributed/coordinator_protocol.h"
 #include "distributed/subplan_execution.h"
 #include "distributed/worker_protocol.h"
 #include "utils/lsyscache.h"
@@ -86,11 +86,11 @@ JobExecutorType(DistributedPlan *distributedPlan)
 	{
 		/*
 		 * Even if adaptiveExecutorEnabled, we go through
-		 * MULTI_EXECUTOR_COORDINATOR_INSERT_SELECT because
+		 * MULTI_EXECUTOR_NON_PUSHABLE_INSERT_SELECT because
 		 * the executor already knows how to handle adaptive
 		 * executor when necessary.
 		 */
-		return MULTI_EXECUTOR_COORDINATOR_INSERT_SELECT;
+		return MULTI_EXECUTOR_NON_PUSHABLE_INSERT_SELECT;
 	}
 
 	Assert(distributedPlan->modLevel == ROW_MODIFY_READONLY);

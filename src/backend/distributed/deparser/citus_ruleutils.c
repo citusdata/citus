@@ -39,7 +39,7 @@
 #include "distributed/citus_ruleutils.h"
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/relay_utility.h"
-#include "distributed/master_metadata_utility.h"
+#include "distributed/metadata_utility.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/version_compat.h"
 #include "foreign/foreign.h"
@@ -173,7 +173,8 @@ pg_get_serverdef_string(Oid tableRelationId)
 	StringInfoData buffer = { NULL, 0, 0, 0 };
 	initStringInfo(&buffer);
 
-	appendStringInfo(&buffer, "CREATE SERVER %s", quote_identifier(server->servername));
+	appendStringInfo(&buffer, "CREATE SERVER IF NOT EXISTS %s",
+					 quote_identifier(server->servername));
 	if (server->servertype != NULL)
 	{
 		appendStringInfo(&buffer, " TYPE %s",

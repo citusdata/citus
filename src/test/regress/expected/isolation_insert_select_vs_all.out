@@ -332,12 +332,12 @@ step s1-initialize:
 
 step s1-begin: BEGIN;
 step s1-insert-select: INSERT INTO insert_of_insert_select_hash SELECT * FROM select_of_insert_select_hash ORDER BY 1, 2 LIMIT 5;;
-ERROR:  cannot INSERT rows from a distributed query into a local table
-step s2-distribute-table-on-inserted: SELECT create_distributed_table('insert_of_insert_select_hash', 'id');
+step s2-distribute-table-on-inserted: SELECT create_distributed_table('insert_of_insert_select_hash', 'id'); <waiting ...>
+step s1-commit: COMMIT;
+step s2-distribute-table-on-inserted: <... completed>
 create_distributed_table
 
 
-step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_of_insert_select_hash;
 count
 

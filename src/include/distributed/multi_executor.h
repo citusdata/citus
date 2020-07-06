@@ -93,8 +93,8 @@ typedef struct ExecutionParams
 	/* tupleStore is where the results will be stored for this execution */
 	Tuplestorestate *tupleStore;
 
-	/* hasReturning is true if this execution will return some result. */
-	bool hasReturning;
+	/* expectResults is true if this execution will return some result. */
+	bool expectResults;
 
 	/* targetPoolSize is the maximum amount of connections per worker */
 	int targetPoolSize;
@@ -123,7 +123,7 @@ extern uint64 ExecuteTaskListExtended(ExecutionParams *executionParams);
 extern uint64 ExecuteTaskListIntoTupleStore(RowModifyLevel modLevel, List *taskList,
 											TupleDesc tupleDescriptor,
 											Tuplestorestate *tupleStore,
-											bool hasReturning);
+											bool expectResults);
 extern bool IsCitusCustomState(PlanState *planState);
 extern TupleTableSlot * CitusExecScan(CustomScanState *node);
 extern TupleTableSlot * ReturnTupleFromTuplestore(CitusScanState *scanState);

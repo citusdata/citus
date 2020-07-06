@@ -31,7 +31,7 @@ typedef struct CitusScanState
 
 /* custom scan methods for all executors */
 extern CustomScanMethods AdaptiveExecutorCustomScanMethods;
-extern CustomScanMethods CoordinatorInsertSelectCustomScanMethods;
+extern CustomScanMethods NonPushableInsertSelectCustomScanMethods;
 extern CustomScanMethods DelayedErrorCustomScanMethods;
 
 

@@ -99,20 +99,26 @@ SELECT citus_table_is_visible('numbers_8000001'::regclass::oid);
 -- Join between reference tables and local tables
 CREATE TABLE local_table(a int);
 INSERT INTO local_table VALUES (2), (4), (7), (20);
-EXPLAIN SELECT local_table.a, numbers.a FROM local_table NATURAL JOIN numbers;
-                                  QUERY PLAN
+EXPLAIN (COSTS OFF) SELECT local_table.a, numbers.a FROM local_table NATURAL JOIN numbers;
+                         QUERY PLAN
 ---------------------------------------------------------------------
- Merge Join  (cost=359.57..860.00 rows=32512 width=8)
-   Merge Cond: (local_table.a = numbers_8000001.a)
-   ->  Sort  (cost=179.78..186.16 rows=2550 width=4)
-         Sort Key: local_table.a
-         ->  Seq Scan on local_table  (cost=0.00..35.50 rows=2550 width=4)
-   ->  Sort  (cost=179.78..186.16 rows=2550 width=4)
-         Sort Key: numbers_8000001.a
-         ->  Seq Scan on numbers_8000001  (cost=0.00..35.50 rows=2550 width=4)
-(8 rows)
+ Custom Scan (Citus Adaptive)
+   Task Count: 1
+   Tasks Shown: All
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  Merge Join
+               Merge Cond: (local_table.a = numbers.a)
+               ->  Sort
+                     Sort Key: local_table.a
+                     ->  Seq Scan on local_table
+               ->  Sort
+                     Sort Key: numbers.a
+                     ->  Seq Scan on numbers_8000001 numbers
+(13 rows)
 
 SELECT local_table.a, numbers.a FROM local_table NATURAL JOIN numbers ORDER BY 1;
+NOTICE:  executing the command locally: SELECT local_table.a, numbers.a FROM (replicate_ref_to_coordinator.local_table JOIN replicate_ref_to_coordinator.numbers_8000001 numbers(a) USING (a)) ORDER BY local_table.a
  a  | a
 ---------------------------------------------------------------------
  20 | 20
@@ -123,6 +129,7 @@ SELECT lt.a, sq.a, sq.b
 FROM local_table lt
 JOIN squares sq ON sq.a > lt.a and sq.b > 90
 ORDER BY 1,2,3;
+NOTICE:  executing the command locally: SELECT lt.a, sq.a, sq.b FROM (replicate_ref_to_coordinator.local_table lt JOIN replicate_ref_to_coordinator.squares_8000000 sq ON (((sq.a OPERATOR(pg_catalog.>) lt.a) AND (sq.b OPERATOR(pg_catalog.>) 90)))) ORDER BY lt.a, sq.a, sq.b
  a | a  |  b
 ---------------------------------------------------------------------
  2 | 10 | 100
@@ -133,6 +140,7 @@ ORDER BY 1,2,3;
 -- should work if in transaction block
 BEGIN;
 SELECT local_table.a, numbers.a FROM local_table NATURAL JOIN numbers ORDER BY 1;
+NOTICE:  executing the command locally: SELECT local_table.a, numbers.a FROM (replicate_ref_to_coordinator.local_table JOIN replicate_ref_to_coordinator.numbers_8000001 numbers(a) USING (a)) ORDER BY local_table.a
  a  | a
 ---------------------------------------------------------------------
  20 | 20
@@ -145,6 +153,9 @@ BEGIN
 	PERFORM local_table.a, numbers.a FROM local_table NATURAL JOIN numbers;
 END;
 $$;
+NOTICE:  executing the command locally: SELECT local_table.a, numbers.a FROM (replicate_ref_to_coordinator.local_table JOIN replicate_ref_to_coordinator.numbers_8000001 numbers(a) USING (a))
+CONTEXT:  SQL statement "SELECT local_table.a, numbers.a FROM local_table NATURAL JOIN numbers"
+PL/pgSQL function inline_code_block line 3 at PERFORM
 -- test plpgsql function
 CREATE FUNCTION test_reference_local_join_plpgsql_func()
 RETURNS void AS $$
@@ -160,6 +171,9 @@ SELECT test_reference_local_join_plpgsql_func();
 NOTICE:  executing the command locally: INSERT INTO replicate_ref_to_coordinator.numbers_8000001 (a) VALUES (4)
 CONTEXT:  SQL statement "INSERT INTO numbers VALUES (4)"
 PL/pgSQL function test_reference_local_join_plpgsql_func() line 4 at SQL statement
+NOTICE:  executing the command locally: SELECT local_table.a, numbers.a FROM (replicate_ref_to_coordinator.local_table JOIN replicate_ref_to_coordinator.numbers_8000001 numbers(a) USING (a)) ORDER BY local_table.a
+CONTEXT:  SQL statement "SELECT local_table.a, numbers.a FROM local_table NATURAL JOIN numbers ORDER BY 1"
+PL/pgSQL function test_reference_local_join_plpgsql_func() line 5 at PERFORM
 ERROR:
 CONTEXT:  PL/pgSQL function test_reference_local_join_plpgsql_func() line 6 at RAISE
 SELECT sum(a) FROM local_table;
@@ -180,6 +194,8 @@ CREATE PROCEDURE test_reference_local_join_proc() AS $$
 SELECT local_table.a, numbers.a FROM local_table NATURAL JOIN numbers ORDER BY 1;
 $$ LANGUAGE sql;
 CALL test_reference_local_join_proc();
+NOTICE:  executing the command locally: SELECT local_table.a, numbers.a FROM (replicate_ref_to_coordinator.local_table JOIN replicate_ref_to_coordinator.numbers_8000001 numbers(a) USING (a)) ORDER BY local_table.a
+CONTEXT:  SQL function "test_reference_local_join_proc" statement 1
 CREATE SCHEMA s1;
 CREATE TABLE s1.ref(a int);
 SELECT create_reference_table('s1.ref');
@@ -190,6 +206,7 @@ SELECT create_reference_table('s1.ref');
 
 BEGIN;
 SELECT local_table.a, r.a FROM local_table NATURAL JOIN s1.ref r ORDER BY 1;
+NOTICE:  executing the command locally: SELECT local_table.a, r.a FROM (replicate_ref_to_coordinator.local_table JOIN s1.ref_8000002 r(a) USING (a)) ORDER BY local_table.a
  a | a
 ---------------------------------------------------------------------
 (0 rows)
@@ -199,6 +216,7 @@ BEGIN;
 WITH t1 AS (
 	SELECT my_volatile_fn() r, a FROM local_table
 ) SELECT count(*) FROM t1, numbers WHERE t1.a = numbers.a AND r < 0.5;
+NOTICE:  executing the command locally: WITH t1 AS (SELECT replicate_ref_to_coordinator.my_volatile_fn() AS r, local_table.a FROM replicate_ref_to_coordinator.local_table) SELECT count(*) AS count FROM t1, replicate_ref_to_coordinator.numbers_8000001 numbers WHERE ((t1.a OPERATOR(pg_catalog.=) numbers.a) AND ((t1.r)::numeric OPERATOR(pg_catalog.<) 0.5))
  count
 ---------------------------------------------------------------------
      0
@@ -209,6 +227,7 @@ BEGIN;
 WITH t1 AS (
 	SELECT my_volatile_fn() r, a FROM numbers
 ) SELECT count(*) FROM t1, local_table WHERE t1.a = local_table.a AND r < 0.5;
+NOTICE:  executing the command locally: WITH t1 AS (SELECT replicate_ref_to_coordinator.my_volatile_fn() AS r, numbers.a FROM replicate_ref_to_coordinator.numbers_8000001 numbers) SELECT count(*) AS count FROM t1, replicate_ref_to_coordinator.local_table WHERE ((t1.a OPERATOR(pg_catalog.=) local_table.a) AND ((t1.r)::numeric OPERATOR(pg_catalog.<) 0.5))
  count
 ---------------------------------------------------------------------
      0
@@ -218,6 +237,7 @@ END;
 BEGIN;
 SELECT count(*) FROM local_table
 WHERE EXISTS(SELECT my_volatile_fn() FROM numbers WHERE local_table.a = numbers.a);
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM replicate_ref_to_coordinator.local_table WHERE (EXISTS (SELECT replicate_ref_to_coordinator.my_volatile_fn() AS my_volatile_fn FROM replicate_ref_to_coordinator.numbers_8000001 numbers WHERE (local_table.a OPERATOR(pg_catalog.=) numbers.a)))
  count
 ---------------------------------------------------------------------
      1
@@ -227,6 +247,7 @@ END;
 BEGIN;
 SELECT count(*) FROM numbers
 WHERE EXISTS(SELECT my_volatile_fn() FROM local_table WHERE local_table.a = numbers.a);
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM replicate_ref_to_coordinator.numbers_8000001 numbers WHERE (EXISTS (SELECT replicate_ref_to_coordinator.my_volatile_fn() AS my_volatile_fn FROM replicate_ref_to_coordinator.local_table WHERE (local_table.a OPERATOR(pg_catalog.=) numbers.a)))
  count
 ---------------------------------------------------------------------
      1
@@ -247,24 +268,54 @@ $$ LANGUAGE sql;
 SELECT test_reference_local_join_func();
  test_reference_local_join_func
 ---------------------------------------------------------------------
+ (2,2)
  (20,20)
-(1 row)
+(2 rows)
 
--- shouldn't plan locally if modifications happen in CTEs, ...
+-- CTEs are allowed
 WITH ins AS (INSERT INTO numbers VALUES (1) RETURNING *)
 SELECT * FROM numbers, local_table;
-ERROR:  relation local_table is not distributed
+NOTICE:  executing the command locally: INSERT INTO replicate_ref_to_coordinator.numbers_8000001 (a) VALUES (1) RETURNING a
+NOTICE:  executing the command locally: SELECT numbers.a, local_table.a FROM replicate_ref_to_coordinator.numbers_8000001 numbers, replicate_ref_to_coordinator.local_table
+ a  | a
+---------------------------------------------------------------------
+ 20 |  2
+ 20 |  4
+ 20 |  7
+ 20 | 20
+ 21 |  2
+ 21 |  4
+ 21 |  7
+ 21 | 20
+  2 |  2
+  2 |  4
+  2 |  7
+  2 | 20
+(12 rows)
+
 WITH t AS (SELECT *, my_volatile_fn() x FROM numbers FOR UPDATE)
 SELECT * FROM numbers, local_table
 WHERE EXISTS (SELECT * FROM t WHERE t.x = numbers.a);
-ERROR:  relation local_table is not distributed
--- but this should be fine
+NOTICE:  executing the command locally: WITH t AS (SELECT numbers_1.a, replicate_ref_to_coordinator.my_volatile_fn() AS x FROM replicate_ref_to_coordinator.numbers_8000001 numbers_1 FOR UPDATE OF numbers_1) SELECT numbers.a, local_table.a FROM replicate_ref_to_coordinator.numbers_8000001 numbers, replicate_ref_to_coordinator.local_table WHERE (EXISTS (SELECT t.a, t.x FROM t WHERE (t.x OPERATOR(pg_catalog.=) numbers.a)))
+ a | a
+---------------------------------------------------------------------
+ 1 |  2
+ 1 |  4
+ 1 |  7
+ 1 | 20
+(4 rows)
+
 WITH t AS (SELECT *, my_volatile_fn() x FROM numbers)
 SELECT * FROM numbers, local_table
 WHERE EXISTS (SELECT * FROM t WHERE t.x = numbers.a);
+NOTICE:  executing the command locally: WITH t AS (SELECT numbers_1.a, replicate_ref_to_coordinator.my_volatile_fn() AS x FROM replicate_ref_to_coordinator.numbers_8000001 numbers_1) SELECT numbers.a, local_table.a FROM replicate_ref_to_coordinator.numbers_8000001 numbers, replicate_ref_to_coordinator.local_table WHERE (EXISTS (SELECT t.a, t.x FROM t WHERE (t.x OPERATOR(pg_catalog.=) numbers.a)))
  a | a
 ---------------------------------------------------------------------
-(0 rows)
+ 1 |  2
+ 1 |  4
+ 1 |  7
+ 1 | 20
+(4 rows)
 
 -- shouldn't plan locally even if distributed table is in CTE or subquery
 CREATE TABLE dist(a int);
@@ -278,10 +329,13 @@ INSERT INTO dist VALUES (20),(30);
 WITH t AS (SELECT *, my_volatile_fn() x FROM dist)
 SELECT * FROM numbers, local_table
 WHERE EXISTS (SELECT * FROM t WHERE t.x = numbers.a);
-ERROR:  relation local_table is not distributed
+ERROR:  function replicate_ref_to_coordinator.my_volatile_fn() does not exist
+HINT:  No function matches the given name and argument types. You might need to add explicit type casts.
+CONTEXT:  while executing command on localhost:xxxxx
 -- test CTE being reference/local join for distributed query
 WITH t as (SELECT n.a, my_volatile_fn() x FROM numbers n NATURAL JOIN local_table l)
 SELECT a FROM t NATURAL JOIN dist;
+NOTICE:  executing the command locally: SELECT n.a, replicate_ref_to_coordinator.my_volatile_fn() AS x FROM (replicate_ref_to_coordinator.numbers_8000001 n(a) JOIN replicate_ref_to_coordinator.local_table l USING (a))
  a
 ---------------------------------------------------------------------
  20
@@ -289,11 +343,21 @@ SELECT a FROM t NATURAL JOIN dist;
 
  -- shouldn't error if FOR UPDATE/FOR SHARE
 SELECT local_table.a, numbers.a FROM local_table NATURAL JOIN numbers FOR SHARE;
-ERROR:  could not run distributed query with FOR UPDATE/SHARE commands
-HINT:  Consider using an equality filter on the distributed table's partition column.
+NOTICE:  executing the command locally: SELECT local_table.a, numbers.a FROM (replicate_ref_to_coordinator.local_table JOIN replicate_ref_to_coordinator.numbers_8000001 numbers(a) USING (a)) FOR SHARE OF local_table FOR SHARE OF numbers
+ a  | a
+---------------------------------------------------------------------
+  2 |  2
+ 20 | 20
+(2 rows)
+
 SELECT local_table.a, numbers.a FROM local_table NATURAL JOIN numbers FOR UPDATE;
-ERROR:  could not run distributed query with FOR UPDATE/SHARE commands
-HINT:  Consider using an equality filter on the distributed table's partition column.
+NOTICE:  executing the command locally: SELECT local_table.a, numbers.a FROM (replicate_ref_to_coordinator.local_table JOIN replicate_ref_to_coordinator.numbers_8000001 numbers(a) USING (a)) FOR UPDATE OF local_table FOR UPDATE OF numbers
+ a  | a
+---------------------------------------------------------------------
+  2 |  2
+ 20 | 20
+(2 rows)
+
 --
 -- Joins between reference tables and views shouldn't be planned locally.
 --
@@ -313,66 +377,58 @@ SELECT public.coordinator_plan($Q$
 EXPLAIN (COSTS FALSE)
 	SELECT * FROM squares JOIN local_table_v ON squares.a = local_table_v.a;
 $Q$);
-                coordinator_plan
+       coordinator_plan
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
-   ->  Distributed Subplan XXX_1
-         ->  Seq Scan on local_table
-               Filter: ((a >= 1) AND (a <= 10))
    Task Count: 1
-(5 rows)
+(2 rows)
 
 DROP VIEW numbers_v, local_table_v;
 --
 -- Joins between reference tables and materialized views are allowed to
--- be planned locally.
+-- be planned to be executed locally.
 --
 CREATE MATERIALIZED VIEW numbers_v AS SELECT * FROM numbers WHERE a BETWEEN 1 AND 10;
 NOTICE:  executing the command locally: SELECT a FROM replicate_ref_to_coordinator.numbers_8000001 numbers WHERE ((a OPERATOR(pg_catalog.>=) 1) AND (a OPERATOR(pg_catalog.<=) 10))
 REFRESH MATERIALIZED VIEW numbers_v;
-SELECT public.plan_is_distributed($Q$
-EXPLAIN (COSTS FALSE)
-	SELECT * FROM squares JOIN numbers_v ON squares.a = numbers_v.a;
-$Q$);
- plan_is_distributed
----------------------------------------------------------------------
- f
-(1 row)
-
-BEGIN;
+NOTICE:  executing the command locally: SELECT numbers.a FROM replicate_ref_to_coordinator.numbers_8000001 numbers WHERE ((numbers.a OPERATOR(pg_catalog.>=) 1) AND (numbers.a OPERATOR(pg_catalog.<=) 10))
 SELECT * FROM squares JOIN numbers_v ON squares.a = numbers_v.a;
+NOTICE:  executing the command locally: SELECT squares.a, squares.b, numbers_v.a FROM (replicate_ref_to_coordinator.squares_8000000 squares JOIN replicate_ref_to_coordinator.numbers_v ON ((squares.a OPERATOR(pg_catalog.=) numbers_v.a)))
  a | b | a
 ---------------------------------------------------------------------
+ 1 | 1 | 1
  2 | 4 | 2
-(1 row)
+(2 rows)
 
-END;
 --
--- Joins between reference tables, local tables, and function calls shouldn't
--- be planned locally.
+-- Joins between reference tables, local tables, and function calls
+-- are allowed
 --
 SELECT count(*)
 FROM local_table a, numbers b, generate_series(1, 10) c
 WHERE a.a = b.a AND a.a = c;
-ERROR:  relation local_table is not distributed
--- but it should be okay if the function call is not a data source
-SELECT public.plan_is_distributed($Q$
-EXPLAIN (COSTS FALSE)
-SELECT abs(a.a) FROM local_table a, numbers b WHERE a.a = b.a;
-$Q$);
- plan_is_distributed
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM replicate_ref_to_coordinator.local_table a, replicate_ref_to_coordinator.numbers_8000001 b, generate_series(1, 10) c(c) WHERE ((a.a OPERATOR(pg_catalog.=) b.a) AND (a.a OPERATOR(pg_catalog.=) c.c))
+ count
 ---------------------------------------------------------------------
- f
+     1
 (1 row)
 
-SELECT public.plan_is_distributed($Q$
-EXPLAIN (COSTS FALSE)
-SELECT a.a FROM local_table a, numbers b WHERE a.a = b.a ORDER BY abs(a.a);
-$Q$);
- plan_is_distributed
+-- and it should be okay if the function call is not a data source
+SELECT abs(a.a) FROM local_table a, numbers b WHERE a.a = b.a;
+NOTICE:  executing the command locally: SELECT abs(a.a) AS abs FROM replicate_ref_to_coordinator.local_table a, replicate_ref_to_coordinator.numbers_8000001 b WHERE (a.a OPERATOR(pg_catalog.=) b.a)
+ abs
 ---------------------------------------------------------------------
- f
-(1 row)
+   2
+  20
+(2 rows)
+
+SELECT a.a FROM local_table a, numbers b WHERE a.a = b.a ORDER BY abs(a.a);
+NOTICE:  executing the command locally: SELECT a.a FROM replicate_ref_to_coordinator.local_table a, replicate_ref_to_coordinator.numbers_8000001 b WHERE (a.a OPERATOR(pg_catalog.=) b.a) ORDER BY (abs(a.a))
+ a
+---------------------------------------------------------------------
+  2
+ 20
+(2 rows)
 
 TRUNCATE local_table;
 TRUNCATE numbers;
@@ -384,6 +440,7 @@ NOTICE:  executing the command locally: INSERT INTO replicate_ref_to_coordinator
 ALTER TABLE numbers ADD COLUMN d int;
 NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (8000001, 'replicate_ref_to_coordinator', 'ALTER TABLE numbers ADD COLUMN d int;')
 SELECT * FROM local_table JOIN numbers USING(a) ORDER BY a;
+NOTICE:  executing the command locally: SELECT local_table.a, numbers.d FROM (replicate_ref_to_coordinator.local_table JOIN replicate_ref_to_coordinator.numbers_8000001 numbers(a, d) USING (a)) ORDER BY local_table.a
  a | d
 ---------------------------------------------------------------------
  1 |
@@ -397,6 +454,7 @@ BEGIN;
 INSERT INTO local_table VALUES (1), (2), (3);
 WITH t as (SELECT n.a, my_volatile_fn() x FROM numbers n NATURAL JOIN local_table l ORDER BY n.a, x)
 SELECT a FROM t NATURAL JOIN dist ORDER BY a;
+NOTICE:  executing the command locally: SELECT n.a, replicate_ref_to_coordinator.my_volatile_fn() AS x FROM (replicate_ref_to_coordinator.numbers_8000001 n(a) JOIN replicate_ref_to_coordinator.local_table l USING (a)) ORDER BY n.a, (replicate_ref_to_coordinator.my_volatile_fn())
  a
 ---------------------------------------------------------------------
 (0 rows)
@@ -409,6 +467,7 @@ NOTICE:  executing the copy locally for shard xxxxx
 INSERT INTO numbers SELECT * FROM numbers;
 NOTICE:  executing the command locally: INSERT INTO replicate_ref_to_coordinator.numbers_8000001 AS citus_table_alias (a) SELECT a FROM replicate_ref_to_coordinator.numbers_8000001 numbers
 SELECT COUNT(*) FROM local_table JOIN numbers using (a);
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM (replicate_ref_to_coordinator.local_table JOIN replicate_ref_to_coordinator.numbers_8000001 numbers(a) USING (a))
  count
 ---------------------------------------------------------------------
      6
@@ -417,6 +476,7 @@ SELECT COUNT(*) FROM local_table JOIN numbers using (a);
 UPDATE numbers SET a = a + 1;
 NOTICE:  executing the command locally: UPDATE replicate_ref_to_coordinator.numbers_8000001 numbers SET a = (a OPERATOR(pg_catalog.+) 1)
 SELECT COUNT(*) FROM local_table JOIN numbers using (a);
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM (replicate_ref_to_coordinator.local_table JOIN replicate_ref_to_coordinator.numbers_8000001 numbers(a) USING (a))
  count
 ---------------------------------------------------------------------
      4

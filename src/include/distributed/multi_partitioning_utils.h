@@ -8,7 +8,7 @@
 #define MULTI_PARTITIONING_UTILS_H_
 
 
-#include "distributed/master_metadata_utility.h"
+#include "distributed/metadata_utility.h"
 #include "nodes/pg_list.h"
 
 

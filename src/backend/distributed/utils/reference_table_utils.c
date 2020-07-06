@@ -18,8 +18,8 @@
 #include "distributed/colocation_utils.h"
 #include "distributed/commands.h"
 #include "distributed/listutils.h"
-#include "distributed/master_protocol.h"
-#include "distributed/master_metadata_utility.h"
+#include "distributed/coordinator_protocol.h"
+#include "distributed/metadata_utility.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/multi_executor.h"
@@ -65,11 +65,6 @@ bool
 IsReferenceTable(Oid relationId)
 {
 	CitusTableCacheEntry *tableEntry = GetCitusTableCacheEntry(relationId);
-
-	if (!tableEntry->isCitusTable)
-	{
-		return false;
-	}
 
 	if (tableEntry->partitionMethod != DISTRIBUTE_BY_NONE)
 	{

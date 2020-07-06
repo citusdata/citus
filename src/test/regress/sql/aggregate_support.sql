@@ -228,5 +228,60 @@ select pg_catalog.worker_partial_agg('sum(int)'::regprocedure, id) from nulltabl
 select pg_catalog.coord_combine_agg('sum(float8)'::regprocedure, id::text::cstring, null::float8) from nulltable;
 select pg_catalog.coord_combine_agg('avg(float8)'::regprocedure, ARRAY[id,id,id]::text::cstring, null::float8) from nulltable;
 
+
+-- Test that we don't crash with empty resultset
+-- See https://github.com/citusdata/citus/issues/3953
+CREATE TABLE t1 (a int PRIMARY KEY, b int);
+CREATE TABLE t2 (a int PRIMARY KEY, b int);
+SELECT create_distributed_table('t1','a');
+SELECT 'foo' as foo, count(distinct b) FROM t1;
+SELECT 'foo' as foo, count(distinct b) FROM t2;
+SELECT 'foo' as foo, string_agg(distinct a::character varying, ',') FROM t1;
+SELECT 'foo' as foo, string_agg(distinct a::character varying, ',') FROM t2;
+
+
+CREATE OR REPLACE FUNCTION const_function(int)
+RETURNS int STABLE
+LANGUAGE plpgsql
+AS $function$
+BEGIN
+RAISE NOTICE 'stable_fn called';
+RETURN 1;
+END;
+$function$;
+
+CREATE OR REPLACE FUNCTION square_func_stable(int)
+RETURNS int STABLE
+LANGUAGE plpgsql
+AS $function$
+BEGIN
+RETURN $1 * $1;
+END;
+$function$;
+
+CREATE OR REPLACE FUNCTION square_func(int)
+RETURNS int
+LANGUAGE plpgsql
+AS $function$
+BEGIN
+RETURN $1 * $1;
+END;
+$function$;
+
+SELECT const_function(1), string_agg(a::character, ',') FROM t1;
+SELECT const_function(1), count(b) FROM t1;
+SELECT const_function(1), count(b), 10 FROM t1;
+SELECT const_function(1), count(b), const_function(10) FROM t1;
+SELECT square_func(5), string_agg(a::character, ','),const_function(1) FROM t1;
+SELECT square_func_stable(5), string_agg(a::character, ','),const_function(1) FROM t1;
+
+-- this will error since the expression will be
+-- pushed down (group by) and the function doesn't exist on workers
+SELECT square_func(5), a FROM t1 GROUP BY a;
+-- this will error since it has group by even though there is an aggregation
+-- the expression will be pushed down.
+SELECT square_func(5), a, count(a) FROM t1 GROUP BY a;
+
+
 set client_min_messages to error;
 drop schema aggregate_support cascade;

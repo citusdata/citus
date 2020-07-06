@@ -1,16 +1,5 @@
 ---------------------------------------------------------------------
 ---------------------------------------------------------------------
--- Insert into local table
----------------------------------------------------------------------
----------------------------------------------------------------------
-CREATE TABLE test_table_1(id int);
-INSERT INTO test_table_1
-SELECT user_id FROM users_table;
-ERROR:  cannot INSERT rows from a distributed query into a local table
-HINT:  Consider using CREATE TEMPORARY TABLE tmp AS SELECT ... and inserting from the temporary table.
-DROP TABLE test_table_1;
----------------------------------------------------------------------
----------------------------------------------------------------------
 -- Vanilla funnel query
 ---------------------------------------------------------------------
 ---------------------------------------------------------------------
@@ -695,7 +684,7 @@ $Q$);
  Custom Scan (Citus INSERT ... SELECT)
    INSERT/SELECT method: pull to coordinator
    ->  HashAggregate
-         Group Key: remote_scan.user_id, remote_scan.event_type
+         Group Key: remote_scan.user_id, remote_scan.value_1_agg
          ->  Custom Scan (Citus Adaptive)
                ->  Distributed Subplan XXX_1
                      ->  Custom Scan (Citus Adaptive)
@@ -715,7 +704,7 @@ $Q$);
  Custom Scan (Citus INSERT ... SELECT)
    INSERT/SELECT method: pull to coordinator
    ->  HashAggregate
-         Group Key: remote_scan.user_id, remote_scan.event_type
+         Group Key: remote_scan.user_id, remote_scan.value_1_agg
          ->  Custom Scan (Citus Adaptive)
                ->  Distributed Subplan XXX_1
                      ->  Custom Scan (Citus Adaptive)
@@ -736,7 +725,7 @@ $Q$);
  Custom Scan (Citus INSERT ... SELECT)
    INSERT/SELECT method: pull to coordinator
    ->  HashAggregate
-         Group Key: remote_scan.user_id, remote_scan.event_type
+         Group Key: remote_scan.user_id, remote_scan.value_1_agg
          ->  Custom Scan (Citus Adaptive)
                ->  Distributed Subplan XXX_1
                      ->  Custom Scan (Citus Adaptive)

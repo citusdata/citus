@@ -60,6 +60,9 @@ s/(job_[0-9]+\/task_[0-9]+\/p_[0-9]+\.)[0-9]+/\1xxxx/g
 # isolation_ref2ref_foreign_keys
 s/"(ref_table_[0-9]_|ref_table_[0-9]_value_fkey_)[0-9]+"/"\1xxxxxxx"/g
 
+# pg11/pg12 varies in isolation debug output
+s/s1: DEBUG:/DEBUG:/g
+
 # commands cascading to shard relations
 s/(NOTICE:  .*_)[0-9]{5,}( CASCADE)/\1xxxxx\2/g
 s/(NOTICE:  [a-z]+ cascades to table ".*)_[0-9]{5,}"/\1_xxxxx"/g
@@ -116,3 +119,10 @@ s/pg_catalog.citus_extradata_container\([0-9]+/pg_catalog.citus_extradata_contai
 /replicating reference table.*$/d
 
 s/Citus.*currently supports/Citus currently supports/g
+
+# Warnings in multi_explain
+s/prepared transaction with identifier .* does not exist/prepared transaction with identifier "citus_x_yyyyyy_zzz_w" does not exist/g
+s/failed to roll back prepared transaction '.*'/failed to roll back prepared transaction 'citus_x_yyyyyy_zzz_w'/g
+
+# Errors with binary decoding where OIDs should be normalized
+s/wrong data type: [0-9]+, expected [0-9]+/wrong data type: XXXX, expected XXXX/g

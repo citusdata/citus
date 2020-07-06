@@ -23,7 +23,7 @@
 #include "distributed/error_codes.h"
 #include "distributed/intermediate_results.h"
 #include "distributed/listutils.h"
-#include "distributed/master_metadata_utility.h"
+#include "distributed/metadata_utility.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_client_executor.h"
 #include "distributed/multi_executor.h"
@@ -76,8 +76,9 @@ typedef struct RemoteFileDestReceiver
 	CopyOutState copyOutState;
 	FmgrInfo *columnOutputFunctions;
 
-	/* number of tuples sent */
+	/* statistics */
 	uint64 tuplesSent;
+	uint64 bytesSent;
 } RemoteFileDestReceiver;
 
 
@@ -221,6 +222,17 @@ CreateRemoteFileDestReceiver(const char *resultId, EState *executorState,
 	resultDest->writeLocalFile = writeLocalFile;
 
 	return (DestReceiver *) resultDest;
+}
+
+
+/*
+ * RemoteFileDestReceiverBytesSent returns number of bytes sent per remote worker.
+ */
+uint64
+RemoteFileDestReceiverBytesSent(DestReceiver *destReceiver)
+{
+	RemoteFileDestReceiver *remoteDestReceiver = (RemoteFileDestReceiver *) destReceiver;
+	return remoteDestReceiver->bytesSent;
 }
 
 
@@ -415,6 +427,7 @@ RemoteFileDestReceiverReceive(TupleTableSlot *slot, DestReceiver *dest)
 	MemoryContextSwitchTo(oldContext);
 
 	resultDest->tuplesSent++;
+	resultDest->bytesSent += copyData->len;
 
 	ResetPerTupleExprContext(executorState);
 
@@ -688,7 +701,33 @@ RemoveIntermediateResultsDirectory(void)
 {
 	if (CreatedResultsDirectory)
 	{
-		CitusRemoveDirectory(IntermediateResultsDirectory());
+		/*
+		 * The shared directory is renamed before deleting it. Otherwise it
+		 * would be possible for another backend to write a file, while we are
+		 * deleting the directory. Since rename is atomic by POSIX standards
+		 * that's not possible. The current PID is included in the new
+		 * filename, so there can be no collisions with other backends.
+		 */
+		char *sharedName = IntermediateResultsDirectory();
+		StringInfo privateName = makeStringInfo();
+		appendStringInfo(privateName, "%s.removed-by-%d", sharedName, MyProcPid);
+		if (rename(sharedName, privateName->data))
+		{
+			ereport(LOG,
+					(errcode_for_file_access(),
+					 errmsg(
+						 "could not rename intermediate results directory \"%s\" to \"%s\": %m",
+						 sharedName, privateName->data)));
+
+			/* rename failed for some reason, we do a best effort removal of
+			 * the shared directory */
+
+			PathNameDeleteTemporaryDir(sharedName);
+		}
+		else
+		{
+			PathNameDeleteTemporaryDir(privateName->data);
+		}
 
 		CreatedResultsDirectory = false;
 	}

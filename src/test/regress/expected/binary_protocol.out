@@ -1,0 +1,208 @@
+SET citus.shard_count = 2;
+SET citus.next_shard_id TO 4754000;
+CREATE SCHEMA binary_protocol;
+SET search_path TO binary_protocol;
+SET citus.enable_binary_protocol = TRUE;
+CREATE TABLE t(id int);
+SELECT create_distributed_table('t', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO t (SELECT i FROM generate_series(1, 10) i);
+SELECT * FROM t ORDER BY id;
+ id
+---------------------------------------------------------------------
+  1
+  2
+  3
+  4
+  5
+  6
+  7
+  8
+  9
+ 10
+(10 rows)
+
+-- Select more than 16 columns to trigger growing of columns
+SELECT id, id, id, id, id,
+       id, id, id, id, id,
+       id, id, id, id, id,
+       id, id, id, id, id,
+       id, id, id, id, id,
+       id, id, id, id, id
+    FROM t ORDER BY id;
+ id | id | id | id | id | id | id | id | id | id | id | id | id | id | id | id | id | id | id | id | id | id | id | id | id | id | id | id | id | id
+---------------------------------------------------------------------
+  1 |  1 |  1 |  1 |  1 |  1 |  1 |  1 |  1 |  1 |  1 |  1 |  1 |  1 |  1 |  1 |  1 |  1 |  1 |  1 |  1 |  1 |  1 |  1 |  1 |  1 |  1 |  1 |  1 |  1
+  2 |  2 |  2 |  2 |  2 |  2 |  2 |  2 |  2 |  2 |  2 |  2 |  2 |  2 |  2 |  2 |  2 |  2 |  2 |  2 |  2 |  2 |  2 |  2 |  2 |  2 |  2 |  2 |  2 |  2
+  3 |  3 |  3 |  3 |  3 |  3 |  3 |  3 |  3 |  3 |  3 |  3 |  3 |  3 |  3 |  3 |  3 |  3 |  3 |  3 |  3 |  3 |  3 |  3 |  3 |  3 |  3 |  3 |  3 |  3
+  4 |  4 |  4 |  4 |  4 |  4 |  4 |  4 |  4 |  4 |  4 |  4 |  4 |  4 |  4 |  4 |  4 |  4 |  4 |  4 |  4 |  4 |  4 |  4 |  4 |  4 |  4 |  4 |  4 |  4
+  5 |  5 |  5 |  5 |  5 |  5 |  5 |  5 |  5 |  5 |  5 |  5 |  5 |  5 |  5 |  5 |  5 |  5 |  5 |  5 |  5 |  5 |  5 |  5 |  5 |  5 |  5 |  5 |  5 |  5
+  6 |  6 |  6 |  6 |  6 |  6 |  6 |  6 |  6 |  6 |  6 |  6 |  6 |  6 |  6 |  6 |  6 |  6 |  6 |  6 |  6 |  6 |  6 |  6 |  6 |  6 |  6 |  6 |  6 |  6
+  7 |  7 |  7 |  7 |  7 |  7 |  7 |  7 |  7 |  7 |  7 |  7 |  7 |  7 |  7 |  7 |  7 |  7 |  7 |  7 |  7 |  7 |  7 |  7 |  7 |  7 |  7 |  7 |  7 |  7
+  8 |  8 |  8 |  8 |  8 |  8 |  8 |  8 |  8 |  8 |  8 |  8 |  8 |  8 |  8 |  8 |  8 |  8 |  8 |  8 |  8 |  8 |  8 |  8 |  8 |  8 |  8 |  8 |  8 |  8
+  9 |  9 |  9 |  9 |  9 |  9 |  9 |  9 |  9 |  9 |  9 |  9 |  9 |  9 |  9 |  9 |  9 |  9 |  9 |  9 |  9 |  9 |  9 |  9 |  9 |  9 |  9 |  9 |  9 |  9
+ 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10
+(10 rows)
+
+-- EXPLAIN ANALYZE is currently forced to use text protocol. Once that is
+-- changed the numbers reported should change.
+EXPLAIN (ANALYZE TRUE, TIMING FALSE, COSTS FALSE, SUMMARY FALSE) SELECT id FROM t ORDER BY 1;
+                            QUERY PLAN
+---------------------------------------------------------------------
+ Sort (actual rows=10 loops=1)
+   Sort Key: remote_scan.id
+   Sort Method: quicksort  Memory: 25kB
+   ->  Custom Scan (Citus Adaptive) (actual rows=10 loops=1)
+         Task Count: 2
+         Tuple data received from nodes: 11 bytes
+         Tasks Shown: One of 2
+         ->  Task
+               Tuple data received from node: 8 bytes
+               Node: host=localhost port=xxxxx dbname=regression
+               ->  Seq Scan on t_4754000 t (actual rows=7 loops=1)
+(11 rows)
+
+SET citus.explain_all_tasks TO ON;
+EXPLAIN (ANALYZE TRUE, TIMING FALSE, COSTS FALSE, SUMMARY FALSE) SELECT id FROM t ORDER BY 1;
+                            QUERY PLAN
+---------------------------------------------------------------------
+ Sort (actual rows=10 loops=1)
+   Sort Key: remote_scan.id
+   Sort Method: quicksort  Memory: 25kB
+   ->  Custom Scan (Citus Adaptive) (actual rows=10 loops=1)
+         Task Count: 2
+         Tuple data received from nodes: 11 bytes
+         Tasks Shown: All
+         ->  Task
+               Tuple data received from node: 8 bytes
+               Node: host=localhost port=xxxxx dbname=regression
+               ->  Seq Scan on t_4754000 t (actual rows=7 loops=1)
+         ->  Task
+               Tuple data received from node: 3 bytes
+               Node: host=localhost port=xxxxx dbname=regression
+               ->  Seq Scan on t_4754001 t (actual rows=3 loops=1)
+(15 rows)
+
+INSERT INTO t SELECT count(*) from t;
+INSERT INTO t (SELECT id+1 from t);
+SELECT * FROM t ORDER BY id;
+ id
+---------------------------------------------------------------------
+  1
+  2
+  2
+  3
+  3
+  4
+  4
+  5
+  5
+  6
+  6
+  7
+  7
+  8
+  8
+  9
+  9
+ 10
+ 10
+ 10
+ 11
+ 11
+(22 rows)
+
+CREATE TYPE composite_type AS (
+    i integer,
+    i2 integer
+);
+CREATE TABLE composite_type_table
+(
+    id bigserial,
+    col composite_type[]
+);
+SELECT create_distributed_table('composite_type_table', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO composite_type_table(col) VALUES  (ARRAY[(1, 2)::composite_type]);
+SELECT * FROM composite_type_table;
+ id |    col
+---------------------------------------------------------------------
+  1 | {"(1,2)"}
+(1 row)
+
+CREATE TYPE nested_composite_type AS (
+    a composite_type,
+    b composite_type
+);
+CREATE TABLE nested_composite_type_table
+(
+    id bigserial,
+    col nested_composite_type
+);
+SELECT create_distributed_table('nested_composite_type_table', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO nested_composite_type_table(col) VALUES  (((1, 2), (3,4))::nested_composite_type);
+SELECT * FROM nested_composite_type_table;
+ id |        col
+---------------------------------------------------------------------
+  1 | ("(1,2)","(3,4)")
+(1 row)
+
+CREATE TABLE binaryless_builtin (
+col1 aclitem NOT NULL,
+col2 character varying(255) NOT NULL
+);
+SELECT create_reference_table('binaryless_builtin');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO binaryless_builtin VALUES ('user postgres=r/postgres', 'test');
+SELECT * FROM binaryless_builtin;
+        col1         | col2
+---------------------------------------------------------------------
+ postgres=r/postgres | test
+(1 row)
+
+CREATE TABLE test_table_1(id int, val1 int);
+CREATE TABLE test_table_2(id int, val1 bigint);
+SELECT create_distributed_table('test_table_1', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_table('test_table_2', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO test_table_1 VALUES(1,1),(2,4),(3,3);
+INSERT INTO test_table_2 VALUES(1,1),(3,3),(4,5);
+SELECT id, val1
+FROM test_table_1 LEFT JOIN test_table_2 USING(id, val1)
+ORDER BY 1, 2;
+ id | val1
+---------------------------------------------------------------------
+  1 |    1
+  2 |    4
+  3 |    3
+(3 rows)
+
+\set VERBOSITY terse
+DROP SCHEMA binary_protocol CASCADE;
+NOTICE:  drop cascades to 8 other objects

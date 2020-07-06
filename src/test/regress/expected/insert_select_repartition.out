@@ -574,6 +574,11 @@ EXPLAIN INSERT INTO target_table SELECT a, max(b) FROM source_table GROUP BY a;
 (10 rows)
 
 --
+-- EXPLAIN ANALYZE is currently not supported
+--
+EXPLAIN ANALYZE INSERT INTO target_table SELECT a, max(b) FROM source_table GROUP BY a;
+ERROR:  EXPLAIN ANALYZE is currently not supported for INSERT ... SELECT commands with repartitioning
+--
 -- Duplicate names in target list
 --
 TRUNCATE target_table;
@@ -655,6 +660,96 @@ SELECT a, count(*), count(distinct b) distinct_values FROM target_table GROUP BY
  4 |     6 |               1
 (5 rows)
 
+DEALLOCATE insert_plan;
+--
+-- Prepared router INSERT/SELECT. We currently use pull to coordinator when the
+-- distributed query has a single task.
+--
+TRUNCATE target_table;
+PREPARE insert_plan(int) AS
+INSERT INTO target_table
+  SELECT a, max(b) FROM source_table
+  WHERE a=$1 GROUP BY a;
+SET client_min_messages TO DEBUG1;
+EXECUTE insert_plan(0);
+DEBUG:  INSERT target table and the source relation of the SELECT partition column value must be colocated in distributed INSERT ... SELECT
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
+EXECUTE insert_plan(0);
+DEBUG:  INSERT target table and the source relation of the SELECT partition column value must be colocated in distributed INSERT ... SELECT
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
+EXECUTE insert_plan(0);
+DEBUG:  INSERT target table and the source relation of the SELECT partition column value must be colocated in distributed INSERT ... SELECT
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
+EXECUTE insert_plan(0);
+DEBUG:  INSERT target table and the source relation of the SELECT partition column value must be colocated in distributed INSERT ... SELECT
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
+EXECUTE insert_plan(0);
+DEBUG:  INSERT target table and the source relation of the SELECT partition column value must be colocated in distributed INSERT ... SELECT
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
+EXECUTE insert_plan(0);
+DEBUG:  INSERT target table and the source relation of the SELECT partition column value must be colocated in distributed INSERT ... SELECT
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
+EXECUTE insert_plan(0);
+DEBUG:  INSERT target table and the source relation of the SELECT partition column value must be colocated in distributed INSERT ... SELECT
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
+RESET client_min_messages;
+SELECT a, count(*), count(distinct b) distinct_values FROM target_table GROUP BY a ORDER BY a;
+ a | count | distinct_values
+---------------------------------------------------------------------
+ 0 |     7 |               1
+(1 row)
+
+DEALLOCATE insert_plan;
+--
+-- Prepared INSERT/SELECT with no parameters.
+--
+TRUNCATE target_table;
+PREPARE insert_plan AS
+INSERT INTO target_table
+  SELECT a, max(b) FROM source_table
+  WHERE a BETWEEN 1 AND 2 GROUP BY a;
+EXPLAIN EXECUTE insert_plan;
+                                                   QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (Citus INSERT ... SELECT)  (cost=0.00..0.00 rows=0 width=0)
+   INSERT/SELECT method: repartition
+   ->  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=100000 width=8)
+         Task Count: 4
+         Tasks Shown: One of 4
+         ->  Task
+               Node: host=localhost port=xxxxx dbname=regression
+               ->  GroupAggregate  (cost=44.09..44.28 rows=11 width=8)
+                     Group Key: a
+                     ->  Sort  (cost=44.09..44.12 rows=11 width=8)
+                           Sort Key: a
+                           ->  Seq Scan on source_table_4213606 source_table  (cost=0.00..43.90 rows=11 width=8)
+                                 Filter: ((a >= 1) AND (a <= 2))
+(13 rows)
+
+SET client_min_messages TO DEBUG1;
+EXECUTE insert_plan;
+DEBUG:  performing repartitioned INSERT ... SELECT
+EXECUTE insert_plan;
+DEBUG:  performing repartitioned INSERT ... SELECT
+EXECUTE insert_plan;
+DEBUG:  performing repartitioned INSERT ... SELECT
+EXECUTE insert_plan;
+DEBUG:  performing repartitioned INSERT ... SELECT
+EXECUTE insert_plan;
+DEBUG:  performing repartitioned INSERT ... SELECT
+EXECUTE insert_plan;
+DEBUG:  performing repartitioned INSERT ... SELECT
+EXECUTE insert_plan;
+DEBUG:  performing repartitioned INSERT ... SELECT
+RESET client_min_messages;
+SELECT a, count(*), count(distinct b) distinct_values FROM target_table GROUP BY a ORDER BY a;
+ a | count | distinct_values
+---------------------------------------------------------------------
+ 1 |     7 |               1
+ 2 |     7 |               1
+(2 rows)
+
+DEALLOCATE insert_plan;
 --
 -- INSERT/SELECT in CTE
 --
@@ -665,13 +760,13 @@ WITH r AS (
 )
 INSERT INTO target_table SELECT source_table.a, max(source_table.b) FROM source_table NATURAL JOIN r GROUP BY source_table.a;
 DEBUG:  INSERT target table and the source relation of the SELECT partition column value must be colocated in distributed INSERT ... SELECT
-DEBUG:  data-modifying statements are not supported in the WITH clauses of distributed queries
+DEBUG:  only SELECT, UPDATE, or DELETE common table expressions may be router planned
 DEBUG:  generating subplan XXX_1 for CTE r: INSERT INTO insert_select_repartition.target_table (a, b) SELECT a, b FROM insert_select_repartition.source_table RETURNING target_table.a, target_table.b
 DEBUG:  INSERT target table and the source relation of the SELECT partition column value must be colocated in distributed INSERT ... SELECT
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT a, max AS b FROM (SELECT source_table.a, max(source_table.b) AS max FROM (insert_select_repartition.source_table JOIN (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) r USING (a, b)) GROUP BY source_table.a) citus_insert_select_subquery
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  performing repartitioned INSERT ... SELECT
-DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  performing repartitioned INSERT ... SELECT
 DEBUG:  partitioning SELECT query by column index 0 with name 'a'
 DEBUG:  distributed statement: INSERT INTO insert_select_repartition.target_table_4213610 AS citus_table_alias (a, b) SELECT a, b FROM read_intermediate_results('{repartitioned_results_xxxxx_from_4213606_to_0,repartitioned_results_xxxxx_from_4213607_to_0}'::text[], 'binary'::citus_copy_format) intermediate_result(a integer, b integer) RETURNING citus_table_alias.a, citus_table_alias.b
@@ -1154,6 +1249,31 @@ DO UPDATE SET
                      Group Key: c1, c2, c3, c4, '-1'::double precision, insert_select_repartition.dist_func(c1, 4)
                      ->  Seq Scan on source_table_4213644 source_table
 (10 rows)
+
+-- verify that we don't report repartitioned insert/select for tables
+-- with sequences. See https://github.com/citusdata/citus/issues/3936
+create table table_with_sequences (x int, y int, z bigserial);
+insert into table_with_sequences values (1,1);
+select create_distributed_table('table_with_sequences','x');
+NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+explain insert into table_with_sequences select y, x from table_with_sequences;
+                                                      QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (Citus INSERT ... SELECT)  (cost=0.00..0.00 rows=0 width=0)
+   INSERT/SELECT method: pull to coordinator
+   ->  Custom Scan (Citus Adaptive)  (cost=0.00..250.00 rows=100000 width=16)
+         Task Count: 4
+         Tasks Shown: One of 4
+         ->  Task
+               Node: host=localhost port=xxxxx dbname=regression
+               ->  Seq Scan on table_with_sequences_4213648 table_with_sequences  (cost=0.00..28.50 rows=1850 width=8)
+(8 rows)
 
 -- clean-up
 SET client_min_messages TO WARNING;

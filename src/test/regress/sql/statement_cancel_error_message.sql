@@ -1,0 +1,30 @@
+--- Regression test for this issue:
+--- https://github.com/citusdata/citus/issues/3954
+SET citus.shard_count = 4;
+SET citus.shard_replication_factor = 1;
+SET citus.next_shard_id TO 4954000;
+CREATE SCHEMA wrong_cancel_message;
+SET search_path TO wrong_cancel_message;
+
+SET citus.force_max_query_parallelization TO ON;
+CREATE TABLE t_lock(id int);
+SELECT create_distributed_table('t_lock','id');
+INSERT INTO t_lock VALUES (1), (2), (3), (4);
+BEGIN;
+SELECT id, pg_advisory_lock(15) FROM t_lock;
+-- ERROR:  canceling the transaction since it was involved in a distributed deadlock
+-- This one is expected, with force_max_query_parallelization the connections will deadlock themselves
+ROLLBACK;
+
+CREATE TABLE t_unrelated(a int);
+SELECT create_distributed_table('t_unrelated', 'a');
+
+BEGIN;
+SET LOCAL statement_timeout = '1ms';
+-- Ignore WARNING about non closed temporary file
+SET LOCAL client_min_messages to ERROR;
+INSERT INTO t_unrelated SELECT i FROM generate_series(1, 10) i;
+ROLLBACK;
+
+\set VERBOSITY terse
+DROP SCHEMA wrong_cancel_message CASCADE;

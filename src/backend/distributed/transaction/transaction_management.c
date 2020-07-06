@@ -28,6 +28,7 @@
 #include "distributed/listutils.h"
 #include "distributed/local_executor.h"
 #include "distributed/multi_executor.h"
+#include "distributed/multi_explain.h"
 #include "distributed/repartition_join_execution.h"
 #include "distributed/transaction_management.h"
 #include "distributed/placement_connection.h"
@@ -111,7 +112,6 @@ static void ResetShardPlacementTransactionState(void);
 static void AdjustMaxPreparedTransactions(void);
 static void PushSubXact(SubTransactionId subId);
 static void PopSubXact(SubTransactionId subId);
-static void SwallowErrors(void (*func)());
 static bool MaybeExecutingUDF(void);
 static void ResetGlobalVariables(void);
 
@@ -296,7 +296,7 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 				 * RemoveIntermediateResultsDirectory.
 				 */
 				AtEOXact_Files(false);
-				SwallowErrors(RemoveIntermediateResultsDirectory);
+				RemoveIntermediateResultsDirectory();
 			}
 			ResetShardPlacementTransactionState();
 
@@ -352,6 +352,9 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 
 		case XACT_EVENT_PREPARE:
 		{
+			/* we need to reset SavedExplainPlan before TopTransactionContext is deleted */
+			FreeSavedExplainPlan();
+
 			/*
 			 * This callback is only relevant for worker queries since
 			 * distributed queries cannot be executed with 2PC, see
@@ -459,6 +462,7 @@ ResetGlobalVariables()
 	CurrentCoordinatedTransactionState = COORD_TRANS_NONE;
 	XactModificationLevel = XACT_MODIFICATION_NONE;
 	SetLocalExecutionStatus(LOCAL_EXECUTION_OPTIONAL);
+	FreeSavedExplainPlan();
 	dlist_init(&InProgressTransactions);
 	activeSetStmts = NULL;
 	CoordinatedTransactionUses2PC = false;
@@ -484,8 +488,8 @@ ResetShardPlacementTransactionState(void)
 
 
 /*
- * Subtransaction callback - currently only used to remember whether a
- * savepoint has been rolled back, as we don't support that.
+ * CoordinatedSubTransactionCallback is the callback used to implement
+ * distributed ROLLBACK TO SAVEPOINT.
  */
 static void
 CoordinatedSubTransactionCallback(SubXactEvent event, SubTransactionId subId,
@@ -661,51 +665,6 @@ ActiveSubXactContexts(void)
 	}
 
 	return reversedSubXactStates;
-}
-
-
-/*
- * If an ERROR is thrown while processing a transaction the ABORT handler is called.
- * ERRORS thrown during ABORT are not treated any differently, the ABORT handler is also
- * called during processing of those. If an ERROR was raised the first time through it's
- * unlikely that the second try will succeed; more likely that an ERROR will be thrown
- * again. This loop continues until Postgres notices and PANICs, complaining about a stack
- * overflow.
- *
- * Instead of looping and crashing, SwallowErrors lets us attempt to continue running the
- * ABORT logic. This wouldn't be safe in most other parts of the codebase, in
- * approximately none of the places where we emit ERROR do we first clean up after
- * ourselves! It's fine inside the ABORT handler though; Postgres is going to clean
- * everything up before control passes back to us.
- */
-static void
-SwallowErrors(void (*func)())
-{
-	MemoryContext savedContext = CurrentMemoryContext;
-
-	PG_TRY();
-	{
-		func();
-	}
-	PG_CATCH();
-	{
-		ErrorData *edata = CopyErrorData();
-
-		/* don't try to intercept PANIC or FATAL, let those breeze past us */
-		if (edata->elevel != ERROR)
-		{
-			PG_RE_THROW();
-		}
-
-		/* turn the ERROR into a WARNING and emit it */
-		edata->elevel = WARNING;
-		ThrowErrorData(edata);
-
-		/* leave the error handling system */
-		FlushErrorState();
-		MemoryContextSwitchTo(savedContext);
-	}
-	PG_END_TRY();
 }
 
 

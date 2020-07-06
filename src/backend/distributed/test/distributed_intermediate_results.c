@@ -70,8 +70,13 @@ partition_task_list_results(PG_FUNCTION_ARGS)
 	 * Here SELECT query's target list should match column list of target relation,
 	 * so their partition column indexes are equal.
 	 */
-	int partitionColumnIndex = targetRelation->partitionMethod != DISTRIBUTE_BY_NONE ?
-							   targetRelation->partitionColumn->varattno - 1 : 0;
+	int partitionColumnIndex = 0;
+
+	if (targetRelation->partitionMethod != DISTRIBUTE_BY_NONE && IsA(
+			targetRelation->partitionColumn, Var))
+	{
+		partitionColumnIndex = targetRelation->partitionColumn->varattno - 1;
+	}
 
 	List *fragmentList = PartitionTasklistResults(resultIdPrefix, taskList,
 												  partitionColumnIndex,

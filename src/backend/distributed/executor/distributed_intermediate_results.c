@@ -23,7 +23,7 @@
 #include "distributed/deparse_shard_query.h"
 #include "distributed/intermediate_results.h"
 #include "distributed/listutils.h"
-#include "distributed/master_metadata_utility.h"
+#include "distributed/metadata_utility.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_executor.h"
 #include "distributed/multi_physical_planner.h"
@@ -217,7 +217,7 @@ WrapTasksForPartitioning(const char *resultIdPrefix, List *selectTaskList,
 		{
 			StringInfo wrappedQuery = makeStringInfo();
 			appendStringInfo(wrappedQuery,
-							 "SELECT %u, partition_index"
+							 "SELECT %u::int, partition_index"
 							 ", %s || '_' || partition_index::text "
 							 ", rows_written "
 							 "FROM worker_partition_query_result"
@@ -334,7 +334,7 @@ ExecutePartitionTaskList(List *taskList, CitusTableCacheEntry *targetRelation)
 #endif
 
 	TupleDescInitEntry(resultDescriptor, (AttrNumber) 1, "node_id",
-					   INT8OID, -1, 0);
+					   INT4OID, -1, 0);
 	TupleDescInitEntry(resultDescriptor, (AttrNumber) 2, "partition_index",
 					   INT4OID, -1, 0);
 	TupleDescInitEntry(resultDescriptor, (AttrNumber) 3, "result_id",
@@ -402,7 +402,7 @@ static Tuplestorestate *
 ExecuteSelectTasksIntoTupleStore(List *taskList, TupleDesc resultDescriptor,
 								 bool errorOnAnyFailure)
 {
-	bool hasReturning = true;
+	bool expectResults = true;
 	int targetPoolSize = MaxAdaptiveExecutorPoolSize;
 	bool randomAccess = true;
 	bool interTransactions = false;
@@ -428,7 +428,7 @@ ExecuteSelectTasksIntoTupleStore(List *taskList, TupleDesc resultDescriptor,
 	executionParams->tupleDescriptor = resultDescriptor;
 	executionParams->tupleStore = resultStore;
 	executionParams->xactProperties = xactProperties;
-	executionParams->hasReturning = hasReturning;
+	executionParams->expectResults = expectResults;
 
 	ExecuteTaskListExtended(executionParams);
 
@@ -556,7 +556,7 @@ FragmentTransferTaskList(List *fragmentListTransfers)
 		SetPlacementNodeMetadata(targetPlacement, workerNode);
 
 		Task *task = CitusMakeNode(Task);
-		task->taskType = SELECT_TASK;
+		task->taskType = READ_TASK;
 		SetTaskQueryString(task, QueryStringForFragmentsTransfer(fragmentsTransfer));
 		task->taskPlacementList = list_make1(targetPlacement);
 

@@ -532,6 +532,18 @@ BEGIN;
 	UPDATE transitive_reference_table SET id = 160 WHERE id = 15;
 ROLLBACK;
 
+BEGIN;
+	WITH cte AS (UPDATE on_update_fkey_table SET value_1 = 16 WHERE value_1 = 15 RETURNING *)
+    SELECT * FROM cte;
+	UPDATE reference_table SET id = 160 WHERE id = 15;
+ROLLBACK;
+
+BEGIN;
+	WITH cte AS (UPDATE on_update_fkey_table SET value_1 = 16 WHERE value_1 = 15 RETURNING *)
+    SELECT * FROM cte;
+	UPDATE transitive_reference_table SET id = 160 WHERE id = 15;
+ROLLBACK;
+
 -- case 5.3: Parallel UPDATE on distributed table follow by an unrelated DDL on reference table
 BEGIN;
 	UPDATE on_update_fkey_table SET value_1 = 16 WHERE value_1 = 15;

@@ -56,15 +56,13 @@ static Task * TaskHashLookup(HTAB *trackerHash, TaskType taskType, uint64 jobId,
 							 uint32 taskId);
 
 /*
- * TaskAndExecutionList visits all tasks in the job tree, starting with the given
- * job's task list. For each visited task, the function creates a task execution
- * struct, associates the task execution with the task, and adds the task and its
- * execution to a list. The function then returns the list.
+ * CreateTaskListForJobTree visits all tasks in the job tree (by following dependentTaskList),
+ * starting with the given job's task list. The function then returns the list.
  */
 List *
-TaskAndExecutionList(List *jobTaskList)
+CreateTaskListForJobTree(List *jobTaskList)
 {
-	List *taskAndExecutionList = NIL;
+	List *taskList = NIL;
 	const int topLevelTaskHashSize = 32;
 	int taskHashSize = list_length(jobTaskList) * topLevelTaskHashSize;
 	HTAB *taskHash = TaskHashCreate(taskHashSize);
@@ -80,7 +78,7 @@ TaskAndExecutionList(List *jobTaskList)
 		Task *task = (Task *) linitial(taskQueue);
 		taskQueue = list_delete_first(taskQueue);
 
-		taskAndExecutionList = lappend(taskAndExecutionList, task);
+		taskList = lappend(taskList, task);
 
 		List *dependendTaskList = task->dependentTaskList;
 
@@ -126,7 +124,7 @@ TaskAndExecutionList(List *jobTaskList)
 		}
 	}
 
-	return taskAndExecutionList;
+	return taskList;
 }
 
 

@@ -924,7 +924,7 @@ DEBUG:  Plan is router executable
 -- we don't inline CTEs if they are modifying CTEs
 WITH cte_1 AS (DELETE FROM test_table WHERE key % 3  = 1 RETURNING key)
 SELECT * FROM cte_1 ORDER BY 1 DESC LIMIT 3;
-DEBUG:  data-modifying statements are not supported in the WITH clauses of distributed queries
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  generating subplan XXX_1 for CTE cte_1: DELETE FROM cte_inline.test_table WHERE ((key OPERATOR(pg_catalog.%) 3) OPERATOR(pg_catalog.=) 1) RETURNING key
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
@@ -941,7 +941,7 @@ DEBUG:  Plan is router executable
 -- NOT MATERIALIZED should not affect modifying CTEs
 WITH cte_1 AS NOT MATERIALIZED (DELETE FROM test_table WHERE key % 3 = 0 RETURNING key)
 SELECT count(*) FROM cte_1;
-DEBUG:  data-modifying statements are not supported in the WITH clauses of distributed queries
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  generating subplan XXX_1 for CTE cte_1: DELETE FROM cte_inline.test_table WHERE ((key OPERATOR(pg_catalog.%) 3) OPERATOR(pg_catalog.=) 0) RETURNING key
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable

@@ -5,6 +5,9 @@
 // create range distributed table to test behavior of SELECT in concurrent operations
 setup
 {
+	SELECT citus_internal.replace_isolation_tester_func();
+	SELECT citus_internal.refresh_isolation_tester_prepared_statement();
+
 	SET citus.shard_replication_factor TO 1;
 	CREATE TABLE select_append(id integer, data text, int_data int);
 	SELECT create_distributed_table('select_append', 'id', 'append');
@@ -14,12 +17,18 @@ setup
 teardown
 {
 	DROP TABLE IF EXISTS select_append CASCADE;
+	SELECT citus_internal.restore_isolation_tester_func();
 }
 
 // session 1
 session "s1"
 step "s1-initialize" { COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV; }
 step "s1-begin" { BEGIN; }
+
+step "s1-disable-binary-protocol" {
+	-- Workaround router-select blocking blocking create-index-concurrently
+	SET citus.enable_binary_protocol TO false;
+}
 step "s1-router-select" { SELECT * FROM select_append WHERE id = 1; }
 step "s1-real-time-select" { SELECT * FROM select_append ORDER BY 1, 2; }
 step "s1-task-tracker-select"
@@ -96,7 +105,7 @@ permutation "s1-initialize" "s1-begin" "s1-router-select" "s2-truncate" "s1-comm
 permutation "s1-initialize" "s1-begin" "s1-router-select" "s2-drop" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-router-select" "s2-ddl-create-index" "s1-commit" "s1-select-count" "s1-show-indexes"
 permutation "s1-initialize" "s1-ddl-create-index" "s1-begin" "s1-router-select" "s2-ddl-drop-index" "s1-commit" "s1-select-count" "s1-show-indexes"
-permutation "s1-initialize" "s1-begin" "s1-router-select" "s2-ddl-create-index-concurrently" "s1-commit" "s1-select-count" "s1-show-indexes"
+permutation "s1-initialize" "s1-begin" "s1-disable-binary-protocol" "s1-router-select" "s2-ddl-create-index-concurrently" "s1-commit" "s1-select-count" "s1-show-indexes"
 permutation "s1-initialize" "s1-begin" "s1-router-select" "s2-ddl-add-column" "s1-commit" "s1-select-count" "s1-show-columns"
 permutation "s1-initialize" "s1-ddl-add-column" "s1-begin" "s1-router-select" "s2-ddl-drop-column" "s1-commit" "s1-select-count" "s1-show-columns"
 permutation "s1-initialize" "s1-begin" "s1-router-select" "s2-ddl-rename-column" "s1-commit" "s1-select-count" "s1-show-columns"

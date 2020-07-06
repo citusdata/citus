@@ -14,7 +14,7 @@
 #include "postgres.h"
 
 #include "fmgr.h"
-#include "distributed/master_metadata_utility.h"
+#include "distributed/metadata_utility.h"
 #include "distributed/pg_dist_partition.h"
 #include "distributed/worker_manager.h"
 #include "utils/hsearch.h"
@@ -37,6 +37,7 @@ extern int ReadFromSecondaries;
  */
 #define GROUP_ID_UPGRADING -2
 
+
 /*
  * Representation of a table's metadata that is frequently used for
  * distributed execution. Cached.
@@ -52,7 +53,6 @@ typedef struct
 	 */
 	bool isValid;
 
-	bool isCitusTable;
 	bool hasUninitializedShardInterval;
 	bool hasUniformHashDistribution; /* valid for hash partitioned tables */
 	bool hasOverlappingShardInterval;
@@ -131,7 +131,8 @@ extern DistObjectCacheEntry * LookupDistObjectCacheEntry(Oid classid, Oid objid,
 extern int32 GetLocalGroupId(void);
 extern List * DistTableOidList(void);
 extern List * ReferenceTableOidList(void);
-extern Oid LookupShardRelation(int64 shardId, bool missing_ok);
+extern void CitusTableCacheFlushInvalidatedEntries(void);
+extern Oid LookupShardRelationFromCatalog(int64 shardId, bool missing_ok);
 extern List * ShardPlacementList(uint64 shardId);
 extern void CitusInvalidateRelcacheByRelid(Oid relationId);
 extern void CitusInvalidateRelcacheByShardId(int64 shardId);
@@ -194,6 +195,7 @@ extern Oid DistPlacementGroupidIndexId(void);
 extern Oid DistObjectPrimaryKeyIndexId(void);
 
 /* type oids */
+extern Oid LookupTypeOid(char *schemaNameSting, char *typeNameString);
 extern Oid CitusCopyFormatTypeId(void);
 
 /* function oids */
@@ -205,6 +207,7 @@ extern Oid CitusAnyValueFunctionId(void);
 extern Oid CitusTextSendAsJsonbFunctionId(void);
 extern Oid PgTableVisibleFuncId(void);
 extern Oid CitusTableVisibleFuncId(void);
+extern Oid JsonbExtractPathFuncId(void);
 
 /* enum oids */
 extern Oid PrimaryNodeRoleId(void);
@@ -219,6 +222,5 @@ extern Oid CitusExtensionOwner(void);
 extern char * CitusExtensionOwnerName(void);
 extern char * CurrentUserName(void);
 extern const char * CurrentDatabaseName(void);
-
 
 #endif /* METADATA_CACHE_H */

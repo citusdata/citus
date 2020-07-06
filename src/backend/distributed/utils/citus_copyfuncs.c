@@ -120,15 +120,17 @@ CopyNodeDistributedPlan(COPYFUNC_ARGS)
 
 	COPY_SCALAR_FIELD(planId);
 	COPY_SCALAR_FIELD(modLevel);
-	COPY_SCALAR_FIELD(hasReturning);
+	COPY_SCALAR_FIELD(expectResults);
 	COPY_SCALAR_FIELD(routerExecutable);
 
 	COPY_NODE_FIELD(workerJob);
-	COPY_NODE_FIELD(masterQuery);
+	COPY_NODE_FIELD(combineQuery);
 	COPY_SCALAR_FIELD(queryId);
 	COPY_NODE_FIELD(relationIdList);
 	COPY_SCALAR_FIELD(targetRelationId);
 	COPY_NODE_FIELD(insertSelectQuery);
+	COPY_NODE_FIELD(selectPlanForInsertSelect);
+	COPY_SCALAR_FIELD(insertSelectMethod);
 	COPY_STRING_FIELD(intermediateResultIdPrefix);
 
 	COPY_NODE_FIELD(subPlanList);
@@ -327,6 +329,11 @@ CopyNodeTask(COPYFUNC_ARGS)
 	COPY_NODE_FIELD(rowValuesLists);
 	COPY_SCALAR_FIELD(partiallyLocalOrRemote);
 	COPY_SCALAR_FIELD(parametersInQueryStringResolved);
+	COPY_SCALAR_FIELD(tupleDest);
+	COPY_SCALAR_FIELD(queryCount);
+	COPY_SCALAR_FIELD(totalReceivedTupleData);
+	COPY_SCALAR_FIELD(fetchedExplainAnalyzePlacementIndex);
+	COPY_STRING_FIELD(fetchedExplainAnalyzePlan);
 }
 
 

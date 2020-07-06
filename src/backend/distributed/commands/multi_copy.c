@@ -73,7 +73,7 @@
 #include "distributed/intermediate_results.h"
 #include "distributed/local_executor.h"
 #include "distributed/log_utils.h"
-#include "distributed/master_protocol.h"
+#include "distributed/coordinator_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/multi_physical_planner.h"
@@ -155,6 +155,9 @@ typedef struct CopyConnectionState
 	 * In this case, old activePlacementState isn't NULL, is added to this list.
 	 */
 	dlist_head bufferedPlacementList;
+
+	/* length of bufferedPlacementList, to avoid iterations over the list when needed */
+	int bufferedPlacementCount;
 } CopyConnectionState;
 
 
@@ -214,6 +217,7 @@ static void OpenCopyConnectionsForNewShards(CopyStmt *copyStatement,
 											bool useBinaryCopyFormat);
 static List * RemoveOptionFromList(List *optionList, char *optionName);
 static bool BinaryOutputFunctionDefined(Oid typeId);
+static bool BinaryInputFunctionDefined(Oid typeId);
 static void SendCopyBinaryHeaders(CopyOutState copyOutState, int64 shardId,
 								  List *connectionList);
 static void SendCopyBinaryFooters(CopyOutState copyOutState, int64 shardId,
@@ -247,9 +251,15 @@ static CopyShardState * GetShardState(uint64 shardId, HTAB *shardStateHash,
 									  HTAB *connectionStateHash, bool stopOnFailure,
 									  bool *found, bool shouldUseLocalCopy, CopyOutState
 									  copyOutState, bool isCopyToIntermediateFile);
-static MultiConnection * CopyGetPlacementConnection(ShardPlacement *placement,
+static MultiConnection * CopyGetPlacementConnection(HTAB *connectionStateHash,
+													ShardPlacement *placement,
 													bool stopOnFailure);
+static bool HasReachedAdaptiveExecutorPoolSize(List *connectionStateHash);
+static MultiConnection * GetLeastUtilisedCopyConnection(List *connectionStateList,
+														char *nodeName, int nodePort);
 static List * ConnectionStateList(HTAB *connectionStateHash);
+static List * ConnectionStateListToNode(HTAB *connectionStateHash,
+										char *hostname, int port);
 static void InitializeCopyShardState(CopyShardState *shardState,
 									 HTAB *connectionStateHash,
 									 uint64 shardId, bool stopOnFailure, bool
@@ -282,6 +292,14 @@ static void CopyAttributeOutText(CopyOutState outputState, char *string);
 static inline void CopyFlushOutput(CopyOutState outputState, char *start, char *pointer);
 static bool CitusSendTupleToPlacements(TupleTableSlot *slot,
 									   CitusCopyDestReceiver *copyDest);
+static void AddPlacementStateToCopyConnectionStateBuffer(CopyConnectionState *
+														 connectionState,
+														 CopyPlacementState *
+														 placementState);
+static void RemovePlacementStateFromCopyConnectionStateBuffer(CopyConnectionState *
+															  connectionState,
+															  CopyPlacementState *
+															  placementState);
 static uint64 ShardIdForTuple(CitusCopyDestReceiver *copyDest, Datum *columnValues,
 							  bool *columnNulls);
 
@@ -935,6 +953,11 @@ CanUseBinaryCopyFormatForType(Oid typeId)
 		return false;
 	}
 
+	if (!BinaryInputFunctionDefined(typeId))
+	{
+		return false;
+	}
+
 	if (typeId >= FirstNormalObjectId)
 	{
 		char typeCategory = '\0';
@@ -969,12 +992,28 @@ BinaryOutputFunctionDefined(Oid typeId)
 	get_type_io_data(typeId, IOFunc_send, &typeLength, &typeByVal,
 					 &typeAlign, &typeDelim, &typeIoParam, &typeFunctionId);
 
-	if (OidIsValid(typeFunctionId))
-	{
-		return true;
-	}
+	return OidIsValid(typeFunctionId);
+}
 
-	return false;
+
+/*
+ * BinaryInputFunctionDefined checks whether binary output function is defined
+ * for the given type.
+ */
+static bool
+BinaryInputFunctionDefined(Oid typeId)
+{
+	Oid typeFunctionId = InvalidOid;
+	Oid typeIoParam = InvalidOid;
+	int16 typeLength = 0;
+	bool typeByVal = false;
+	char typeAlign = 0;
+	char typeDelim = 0;
+
+	get_type_io_data(typeId, IOFunc_receive, &typeLength, &typeByVal,
+					 &typeAlign, &typeDelim, &typeIoParam, &typeFunctionId);
+
+	return OidIsValid(typeFunctionId);
 }
 
 
@@ -2348,8 +2387,8 @@ CitusSendTupleToPlacements(TupleTableSlot *slot, CitusCopyDestReceiver *copyDest
 
 			/* before switching, make sure to finish the copy */
 			EndPlacementStateCopyCommand(activePlacementState, copyOutState);
-			dlist_push_head(&connectionState->bufferedPlacementList,
-							&activePlacementState->bufferedPlacementNode);
+			AddPlacementStateToCopyConnectionStateBuffer(connectionState,
+														 activePlacementState);
 		}
 
 		if (switchToCurrentPlacement)
@@ -2357,7 +2396,9 @@ CitusSendTupleToPlacements(TupleTableSlot *slot, CitusCopyDestReceiver *copyDest
 			StartPlacementStateCopyCommand(currentPlacementState, copyStatement,
 										   copyOutState);
 
-			dlist_delete(&currentPlacementState->bufferedPlacementNode);
+			RemovePlacementStateFromCopyConnectionStateBuffer(connectionState,
+															  currentPlacementState);
+
 			connectionState->activePlacementState = currentPlacementState;
 
 			/* send previously buffered tuples */
@@ -2408,6 +2449,35 @@ CitusSendTupleToPlacements(TupleTableSlot *slot, CitusCopyDestReceiver *copyDest
 	ResetPerTupleExprContext(executorState);
 
 	return true;
+}
+
+
+/*
+ * AddPlacementStateToCopyConnectionStateBuffer is a helper function to add a placement
+ * state to connection state's placement buffer. In addition to that, keep the counter
+ * up to date.
+ */
+static void
+AddPlacementStateToCopyConnectionStateBuffer(CopyConnectionState *connectionState,
+											 CopyPlacementState *placementState)
+{
+	dlist_push_head(&connectionState->bufferedPlacementList,
+					&placementState->bufferedPlacementNode);
+	connectionState->bufferedPlacementCount++;
+}
+
+
+/*
+ * RemovePlacementStateFromCopyConnectionStateBuffer is a helper function to removes a placement
+ * state from connection state's placement buffer. In addition to that, keep the counter
+ * up to date.
+ */
+static void
+RemovePlacementStateFromCopyConnectionStateBuffer(CopyConnectionState *connectionState,
+												  CopyPlacementState *placementState)
+{
+	dlist_delete(&placementState->bufferedPlacementNode);
+	connectionState->bufferedPlacementCount--;
 }
 
 
@@ -3181,6 +3251,7 @@ GetConnectionState(HTAB *connectionStateHash, MultiConnection *connection)
 		connectionState->socket = sock;
 		connectionState->connection = connection;
 		connectionState->activePlacementState = NULL;
+		connectionState->bufferedPlacementCount = 0;
 		dlist_init(&connectionState->bufferedPlacementList);
 	}
 
@@ -3205,6 +3276,36 @@ ConnectionStateList(HTAB *connectionStateHash)
 	while (connectionState != NULL)
 	{
 		connectionStateList = lappend(connectionStateList, connectionState);
+
+		connectionState = (CopyConnectionState *) hash_seq_search(&status);
+	}
+
+	return connectionStateList;
+}
+
+
+/*
+ * ConnectionStateListToNode returns all CopyConnectionState structures in
+ * the given hash.
+ */
+static List *
+ConnectionStateListToNode(HTAB *connectionStateHash, char *hostname, int port)
+{
+	List *connectionStateList = NIL;
+	HASH_SEQ_STATUS status;
+
+	hash_seq_init(&status, connectionStateHash);
+
+	CopyConnectionState *connectionState =
+		(CopyConnectionState *) hash_seq_search(&status);
+	while (connectionState != NULL)
+	{
+		char *connectionHostname = connectionState->connection->hostname;
+		if (strncmp(connectionHostname, hostname, MAX_NODE_LENGTH) == 0 &&
+			connectionState->connection->port == port)
+		{
+			connectionStateList = lappend(connectionStateList, connectionState);
+		}
 
 		connectionState = (CopyConnectionState *) hash_seq_search(&status);
 	}
@@ -3298,7 +3399,7 @@ InitializeCopyShardState(CopyShardState *shardState,
 		}
 
 		MultiConnection *connection =
-			CopyGetPlacementConnection(placement, stopOnFailure);
+			CopyGetPlacementConnection(connectionStateHash, placement, stopOnFailure);
 		if (connection == NULL)
 		{
 			failedPlacementCount++;
@@ -3330,8 +3431,7 @@ InitializeCopyShardState(CopyShardState *shardState,
 		 * same time as calling StartPlacementStateCopyCommand() so we actually
 		 * know the COPY operation for the placement is ongoing.
 		 */
-		dlist_push_head(&connectionState->bufferedPlacementList,
-						&placementState->bufferedPlacementNode);
+		AddPlacementStateToCopyConnectionStateBuffer(connectionState, placementState);
 		shardState->placementStateList = lappend(shardState->placementStateList,
 												 placementState);
 	}
@@ -3395,7 +3495,8 @@ LogLocalCopyExecution(uint64 shardId)
  * then it reuses the connection. Otherwise, it requests a connection for placement.
  */
 static MultiConnection *
-CopyGetPlacementConnection(ShardPlacement *placement, bool stopOnFailure)
+CopyGetPlacementConnection(HTAB *connectionStateHash, ShardPlacement *placement, bool
+						   stopOnFailure)
 {
 	uint32 connectionFlags = FOR_DML;
 	char *nodeUser = CurrentUserName();
@@ -3412,6 +3513,29 @@ CopyGetPlacementConnection(ShardPlacement *placement, bool stopOnFailure)
 																		 NULL);
 	if (connection != NULL)
 	{
+		return connection;
+	}
+
+	/*
+	 * If we exceeded citus.max_adaptive_executor_pool_size, we should re-use the
+	 * existing connections to multiplex multiple COPY commands on shards over a
+	 * single connection.
+	 */
+	char *nodeName = placement->nodeName;
+	int nodePort = placement->nodePort;
+	List *copyConnectionStateList =
+		ConnectionStateListToNode(connectionStateHash, nodeName, nodePort);
+	if (HasReachedAdaptiveExecutorPoolSize(copyConnectionStateList))
+	{
+		connection =
+			GetLeastUtilisedCopyConnection(copyConnectionStateList, nodeName, nodePort);
+
+		/*
+		 * If we've already reached the executor pool size, there should be at
+		 * least one connection to any given node.
+		 */
+		Assert(connection != NULL);
+
 		return connection;
 	}
 
@@ -3454,6 +3578,62 @@ CopyGetPlacementConnection(ShardPlacement *placement, bool stopOnFailure)
 	if (MultiShardConnectionType != SEQUENTIAL_CONNECTION)
 	{
 		ClaimConnectionExclusively(connection);
+	}
+
+	return connection;
+}
+
+
+/*
+ * HasReachedAdaptiveExecutorPoolSize returns true if the number of entries in input
+ * connection list has greater than or equal to citus.max_adaptive_executor_pool_size.
+ */
+static bool
+HasReachedAdaptiveExecutorPoolSize(List *connectionStateList)
+{
+	if (list_length(connectionStateList) >= MaxAdaptiveExecutorPoolSize)
+	{
+		/*
+		 * We've not reached MaxAdaptiveExecutorPoolSize number of
+		 * connections, so we're allowed to establish a new
+		 * connection to the given node.
+		 */
+		return true;
+	}
+
+	return false;
+}
+
+
+/*
+ * GetLeastUtilisedCopyConnection returns a MultiConnection to the given node
+ * with the least number of placements assigned to it.
+ */
+static MultiConnection *
+GetLeastUtilisedCopyConnection(List *connectionStateList, char *nodeName,
+							   int nodePort)
+{
+	MultiConnection *connection = NULL;
+	int minPlacementCount = INT32_MAX;
+	ListCell *connectionStateCell = NULL;
+
+	foreach(connectionStateCell, connectionStateList)
+	{
+		CopyConnectionState *connectionState = lfirst(connectionStateCell);
+		int currentConnectionPlacementCount = connectionState->bufferedPlacementCount;
+
+		if (connectionState->activePlacementState != NULL)
+		{
+			currentConnectionPlacementCount++;
+		}
+
+		Assert(currentConnectionPlacementCount > 0);
+
+		if (currentConnectionPlacementCount < minPlacementCount)
+		{
+			minPlacementCount = currentConnectionPlacementCount;
+			connection = connectionState->connection;
+		}
 	}
 
 	return connection;

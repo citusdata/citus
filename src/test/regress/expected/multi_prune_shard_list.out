@@ -363,9 +363,189 @@ EXECUTE coerce_numeric_2(1);
   1 | test value
 (1 row)
 
+-- Test that we can insert an integer literal into a numeric column as well
+CREATE TABLE numeric_test (id numeric(6, 1), val int);
+SELECT create_distributed_table('numeric_test', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO numeric_test VALUES (21, 87) RETURNING *;
+  id  | val
+---------------------------------------------------------------------
+ 21.0 |  87
+(1 row)
+
+SELECT * FROM numeric_test WHERE id = 21;
+  id  | val
+---------------------------------------------------------------------
+ 21.0 |  87
+(1 row)
+
+SELECT * FROM numeric_test WHERE id = 21::int;
+  id  | val
+---------------------------------------------------------------------
+ 21.0 |  87
+(1 row)
+
+SELECT * FROM numeric_test WHERE id = 21::bigint;
+  id  | val
+---------------------------------------------------------------------
+ 21.0 |  87
+(1 row)
+
+SELECT * FROM numeric_test WHERE id = 21.0;
+  id  | val
+---------------------------------------------------------------------
+ 21.0 |  87
+(1 row)
+
+SELECT * FROM numeric_test WHERE id = 21.0::numeric;
+  id  | val
+---------------------------------------------------------------------
+ 21.0 |  87
+(1 row)
+
+PREPARE insert_p(int) AS INSERT INTO numeric_test VALUES ($1, 87) RETURNING *;
+EXECUTE insert_p(1);
+ id  | val
+---------------------------------------------------------------------
+ 1.0 |  87
+(1 row)
+
+EXECUTE insert_p(2);
+ id  | val
+---------------------------------------------------------------------
+ 2.0 |  87
+(1 row)
+
+EXECUTE insert_p(3);
+ id  | val
+---------------------------------------------------------------------
+ 3.0 |  87
+(1 row)
+
+EXECUTE insert_p(4);
+ id  | val
+---------------------------------------------------------------------
+ 4.0 |  87
+(1 row)
+
+EXECUTE insert_p(5);
+ id  | val
+---------------------------------------------------------------------
+ 5.0 |  87
+(1 row)
+
+EXECUTE insert_p(6);
+ id  | val
+---------------------------------------------------------------------
+ 6.0 |  87
+(1 row)
+
+PREPARE select_p(int) AS SELECT * FROM numeric_test WHERE id=$1;
+EXECUTE select_p(1);
+ id  | val
+---------------------------------------------------------------------
+ 1.0 |  87
+(1 row)
+
+EXECUTE select_p(2);
+ id  | val
+---------------------------------------------------------------------
+ 2.0 |  87
+(1 row)
+
+EXECUTE select_p(3);
+ id  | val
+---------------------------------------------------------------------
+ 3.0 |  87
+(1 row)
+
+EXECUTE select_p(4);
+ id  | val
+---------------------------------------------------------------------
+ 4.0 |  87
+(1 row)
+
+EXECUTE select_p(5);
+ id  | val
+---------------------------------------------------------------------
+ 5.0 |  87
+(1 row)
+
+EXECUTE select_p(6);
+ id  | val
+---------------------------------------------------------------------
+ 6.0 |  87
+(1 row)
+
+SET citus.enable_fast_path_router_planner TO false;
+EXECUTE select_p(1);
+ id  | val
+---------------------------------------------------------------------
+ 1.0 |  87
+(1 row)
+
+EXECUTE select_p(2);
+ id  | val
+---------------------------------------------------------------------
+ 2.0 |  87
+(1 row)
+
+EXECUTE select_p(3);
+ id  | val
+---------------------------------------------------------------------
+ 3.0 |  87
+(1 row)
+
+EXECUTE select_p(4);
+ id  | val
+---------------------------------------------------------------------
+ 4.0 |  87
+(1 row)
+
+EXECUTE select_p(5);
+ id  | val
+---------------------------------------------------------------------
+ 5.0 |  87
+(1 row)
+
+EXECUTE select_p(6);
+ id  | val
+---------------------------------------------------------------------
+ 6.0 |  87
+(1 row)
+
+-- make sure that we don't return wrong resuls
+INSERT INTO numeric_test VALUES (21.1, 87) RETURNING *;
+  id  | val
+---------------------------------------------------------------------
+ 21.1 |  87
+(1 row)
+
+SELECT * FROM numeric_test WHERE id = 21;
+  id  | val
+---------------------------------------------------------------------
+ 21.0 |  87
+(1 row)
+
+SELECT * FROM numeric_test WHERE id = 21::numeric;
+  id  | val
+---------------------------------------------------------------------
+ 21.0 |  87
+(1 row)
+
+SELECT * FROM numeric_test WHERE id = 21.1::numeric;
+  id  | val
+---------------------------------------------------------------------
+ 21.1 |  87
+(1 row)
+
 SET search_path TO public;
 DROP SCHEMA prune_shard_list CASCADE;
-NOTICE:  drop cascades to 9 other objects
+NOTICE:  drop cascades to 10 other objects
 DETAIL:  drop cascades to function prune_shard_list.prune_using_no_values(regclass)
 drop cascades to function prune_shard_list.prune_using_single_value(regclass,text)
 drop cascades to function prune_shard_list.prune_using_either_value(regclass,text,text)
@@ -375,3 +555,4 @@ drop cascades to function prune_shard_list.print_sorted_shard_intervals(regclass
 drop cascades to table prune_shard_list.pruning
 drop cascades to table prune_shard_list.pruning_range
 drop cascades to table prune_shard_list.coerce_hash
+drop cascades to table prune_shard_list.numeric_test

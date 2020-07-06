@@ -91,7 +91,7 @@
 #include "distributed/local_executor.h"
 #include "distributed/local_plan_cache.h"
 #include "distributed/multi_executor.h"
-#include "distributed/master_protocol.h"
+#include "distributed/coordinator_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/relation_access_tracking.h"
 #include "distributed/remote_commands.h" /* to access LogRemoteCommands */
@@ -117,11 +117,12 @@ static void SplitLocalAndRemotePlacements(List *taskPlacementList,
 										  List **localTaskPlacementList,
 										  List **remoteTaskPlacementList);
 static uint64 ExecuteLocalTaskPlan(PlannedStmt *taskPlan, char *queryString,
-								   Tuplestorestate *tupleStoreState, ParamListInfo
-								   paramListInfo);
+								   TupleDestination *tupleDest, Task *task,
+								   ParamListInfo paramListInfo);
 static void LogLocalCommand(Task *task);
 static uint64 LocallyPlanAndExecuteMultipleQueries(List *queryStrings,
-												   Tuplestorestate *tupleStoreState);
+												   TupleDestination *tupleDest,
+												   Task *task);
 static void ExtractParametersForLocalExecution(ParamListInfo paramListInfo,
 											   Oid **parameterTypes,
 											   const char ***parameterValues);
@@ -139,7 +140,7 @@ static void EnsureTransitionPossible(LocalExecutionStatus from,
  * The function returns totalRowsProcessed.
  */
 uint64
-ExecuteLocalTaskList(List *taskList, Tuplestorestate *tupleStoreState)
+ExecuteLocalTaskList(List *taskList, TupleDestination *defaultTupleDest)
 {
 	if (list_length(taskList) == 0)
 	{
@@ -149,7 +150,7 @@ ExecuteLocalTaskList(List *taskList, Tuplestorestate *tupleStoreState)
 	ParamListInfo paramListInfo = NULL;
 	bool isUtilityCommand = false;
 	return ExecuteLocalTaskListExtended(taskList, paramListInfo, distributedPlan,
-										tupleStoreState, isUtilityCommand);
+										defaultTupleDest, isUtilityCommand);
 }
 
 
@@ -167,10 +168,10 @@ ExecuteLocalUtilityTaskList(List *utilityTaskList)
 	}
 	DistributedPlan *distributedPlan = NULL;
 	ParamListInfo paramListInfo = NULL;
-	Tuplestorestate *tupleStoreState = NULL;
+	TupleDestination *defaultTupleDest = CreateTupleDestNone();
 	bool isUtilityCommand = true;
 	return ExecuteLocalTaskListExtended(utilityTaskList, paramListInfo, distributedPlan,
-										tupleStoreState, isUtilityCommand);
+										defaultTupleDest, isUtilityCommand);
 }
 
 
@@ -188,7 +189,7 @@ uint64
 ExecuteLocalTaskListExtended(List *taskList,
 							 ParamListInfo orig_paramListInfo,
 							 DistributedPlan *distributedPlan,
-							 Tuplestorestate *tupleStoreState,
+							 TupleDestination *defaultTupleDest,
 							 bool isUtilityCommand)
 {
 	ParamListInfo paramListInfo = copyParamList(orig_paramListInfo);
@@ -207,14 +208,13 @@ ExecuteLocalTaskListExtended(List *taskList,
 		numParams = paramListInfo->numParams;
 	}
 
-	if (tupleStoreState == NULL)
-	{
-		tupleStoreState = tuplestore_begin_heap(true, false, work_mem);
-	}
-
 	Task *task = NULL;
 	foreach_ptr(task, taskList)
 	{
+		TupleDestination *tupleDest = task->tupleDest ?
+									  task->tupleDest :
+									  defaultTupleDest;
+
 		/*
 		 * If we have a valid shard id, a distributed table will be accessed
 		 * during execution. Record it to apply the restrictions related to
@@ -241,10 +241,7 @@ ExecuteLocalTaskListExtended(List *taskList,
 		if (localPlan != NULL)
 		{
 			Query *jobQuery = distributedPlan->workerJob->jobQuery;
-			LOCKMODE lockMode =
-				IsModifyCommand(jobQuery) ? RowExclusiveLock : (jobQuery->hasForUpdate ?
-																RowShareLock :
-																AccessShareLock);
+			LOCKMODE lockMode = GetQueryLockMode(jobQuery);
 
 			Oid relationId = InvalidOid;
 			foreach_oid(relationId, localPlan->relationOids)
@@ -278,7 +275,8 @@ ExecuteLocalTaskListExtended(List *taskList,
 				List *queryStringList = task->taskQuery.data.queryStringList;
 				totalRowsProcessed += LocallyPlanAndExecuteMultipleQueries(
 					queryStringList,
-					tupleStoreState);
+					tupleDest,
+					task);
 				continue;
 			}
 
@@ -312,8 +310,8 @@ ExecuteLocalTaskListExtended(List *taskList,
 		}
 
 		totalRowsProcessed +=
-			ExecuteLocalTaskPlan(localPlan, shardQueryString, tupleStoreState,
-								 paramListInfo);
+			ExecuteLocalTaskPlan(localPlan, shardQueryString,
+								 tupleDest, task, paramListInfo);
 	}
 
 	return totalRowsProcessed;
@@ -325,7 +323,8 @@ ExecuteLocalTaskListExtended(List *taskList,
  * one by one.
  */
 static uint64
-LocallyPlanAndExecuteMultipleQueries(List *queryStrings, Tuplestorestate *tupleStoreState)
+LocallyPlanAndExecuteMultipleQueries(List *queryStrings, TupleDestination *tupleDest,
+									 Task *task)
 {
 	char *queryString = NULL;
 	uint64 totalProcessedRows = 0;
@@ -338,7 +337,7 @@ LocallyPlanAndExecuteMultipleQueries(List *queryStrings, Tuplestorestate *tupleS
 		ParamListInfo paramListInfo = NULL;
 		PlannedStmt *localPlan = planner(shardQuery, cursorOptions, paramListInfo);
 		totalProcessedRows += ExecuteLocalTaskPlan(localPlan, queryString,
-												   tupleStoreState,
+												   tupleDest, task,
 												   paramListInfo);
 	}
 	return totalProcessedRows;
@@ -367,35 +366,39 @@ ExtractParametersForLocalExecution(ParamListInfo paramListInfo, Oid **parameterT
 static void
 LocallyExecuteUtilityTask(const char *localTaskQueryCommand)
 {
-	RawStmt *localTaskRawStmt = (RawStmt *) ParseTreeRawStmt(localTaskQueryCommand);
+	List *parseTreeList = pg_parse_query(localTaskQueryCommand);
+	RawStmt *localTaskRawStmt = NULL;
 
-	Node *localTaskRawParseTree = localTaskRawStmt->stmt;
-
-	/*
-	 * Actually, the query passed to this function would mostly be a
-	 * utility command to be executed locally. However, some utility
-	 * commands do trigger udf calls (e.g worker_apply_shard_ddl_command)
-	 * to execute commands in a generic way. But as we support local
-	 * execution of utility commands, we should also process those udf
-	 * calls locally as well. In that case, we simply execute the query
-	 * implying the udf call in below conditional block.
-	 */
-	if (IsA(localTaskRawParseTree, SelectStmt))
+	foreach_ptr(localTaskRawStmt, parseTreeList)
 	{
-		/* we have no external parameters to rewrite the UDF call RawStmt */
-		Query *localUdfTaskQuery =
-			RewriteRawQueryStmt(localTaskRawStmt, localTaskQueryCommand, NULL, 0);
+		Node *localTaskRawParseTree = localTaskRawStmt->stmt;
 
-		LocallyExecuteUdfTaskQuery(localUdfTaskQuery);
-	}
-	else
-	{
 		/*
-		 * It is a regular utility command we should execute it locally via
-		 * process utility.
+		 * Actually, the query passed to this function would mostly be a
+		 * utility command to be executed locally. However, some utility
+		 * commands do trigger udf calls (e.g worker_apply_shard_ddl_command)
+		 * to execute commands in a generic way. But as we support local
+		 * execution of utility commands, we should also process those udf
+		 * calls locally as well. In that case, we simply execute the query
+		 * implying the udf call in below conditional block.
 		 */
-		CitusProcessUtility(localTaskRawParseTree, localTaskQueryCommand,
-							PROCESS_UTILITY_TOPLEVEL, NULL, None_Receiver, NULL);
+		if (IsA(localTaskRawParseTree, SelectStmt))
+		{
+			/* we have no external parameters to rewrite the UDF call RawStmt */
+			Query *localUdfTaskQuery =
+				RewriteRawQueryStmt(localTaskRawStmt, localTaskQueryCommand, NULL, 0);
+
+			LocallyExecuteUdfTaskQuery(localUdfTaskQuery);
+		}
+		else
+		{
+			/*
+			 * It is a regular utility command we should execute it locally via
+			 * process utility.
+			 */
+			CitusProcessUtility(localTaskRawParseTree, localTaskQueryCommand,
+								PROCESS_UTILITY_TOPLEVEL, NULL, None_Receiver, NULL);
+		}
 	}
 }
 
@@ -538,9 +541,9 @@ SplitLocalAndRemotePlacements(List *taskPlacementList, List **localTaskPlacement
  */
 static uint64
 ExecuteLocalTaskPlan(PlannedStmt *taskPlan, char *queryString,
-					 Tuplestorestate *tupleStoreState, ParamListInfo paramListInfo)
+					 TupleDestination *tupleDest, Task *task,
+					 ParamListInfo paramListInfo)
 {
-	DestReceiver *tupleStoreDestReceiver = CreateDestReceiver(DestTuplestore);
 	ScanDirection scanDirection = ForwardScanDirection;
 	QueryEnvironment *queryEnv = create_queryEnv();
 	int eflags = 0;
@@ -550,14 +553,15 @@ ExecuteLocalTaskPlan(PlannedStmt *taskPlan, char *queryString,
 	 * Use the tupleStore provided by the scanState because it is shared accross
 	 * the other task executions and the adaptive executor.
 	 */
-	SetTuplestoreDestReceiverParams(tupleStoreDestReceiver,
-									tupleStoreState,
-									CurrentMemoryContext, false);
+	DestReceiver *destReceiver = tupleDest ?
+								 CreateTupleDestDestReceiver(tupleDest, task,
+															 LOCAL_PLACEMENT_INDEX) :
+								 CreateDestReceiver(DestNone);
 
 	/* Create a QueryDesc for the query */
 	QueryDesc *queryDesc = CreateQueryDesc(taskPlan, queryString,
 										   GetActiveSnapshot(), InvalidSnapshot,
-										   tupleStoreDestReceiver, paramListInfo,
+										   destReceiver, paramListInfo,
 										   queryEnv, 0);
 
 	ExecutorStart(queryDesc, eflags);

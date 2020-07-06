@@ -14,7 +14,7 @@
 #ifndef MULTI_LOGICAL_OPTIMIZER_H
 #define MULTI_LOGICAL_OPTIMIZER_H
 
-#include "distributed/master_metadata_utility.h"
+#include "distributed/metadata_utility.h"
 #include "distributed/multi_logical_planner.h"
 #include "distributed/relation_restriction_equivalence.h"
 
@@ -80,9 +80,21 @@ typedef enum
 	AGGREGATE_TOPN_UNION_AGG = 19,
 	AGGREGATE_ANY_VALUE = 20,
 
+	/* support for github.com/tvondra/tdigest */
+	AGGREGATE_TDIGEST_COMBINE = 21,
+	AGGREGATE_TDIGEST_ADD_DOUBLE = 22,
+	AGGREGATE_TDIGEST_PERCENTILE_ADD_DOUBLE = 23,
+	AGGREGATE_TDIGEST_PERCENTILE_ADD_DOUBLEARRAY = 24,
+	AGGREGATE_TDIGEST_PERCENTILE_TDIGEST_DOUBLE = 25,
+	AGGREGATE_TDIGEST_PERCENTILE_TDIGEST_DOUBLEARRAY = 26,
+	AGGREGATE_TDIGEST_PERCENTILE_OF_ADD_DOUBLE = 27,
+	AGGREGATE_TDIGEST_PERCENTILE_OF_ADD_DOUBLEARRAY = 28,
+	AGGREGATE_TDIGEST_PERCENTILE_OF_TDIGEST_DOUBLE = 29,
+	AGGREGATE_TDIGEST_PERCENTILE_OF_TDIGEST_DOUBLEARRAY = 30,
+
 	/* AGGREGATE_CUSTOM must come last */
-	AGGREGATE_CUSTOM_COMBINE = 21,
-	AGGREGATE_CUSTOM_ROW_GATHER = 22,
+	AGGREGATE_CUSTOM_COMBINE = 31,
+	AGGREGATE_CUSTOM_ROW_GATHER = 32,
 } AggregateType;
 
 
@@ -164,5 +176,6 @@ extern void FindReferencedTableColumn(Expr *columnExpression, List *parentQueryL
 									  Query *query, Oid *relationId, Var **column);
 extern char * WorkerColumnName(AttrNumber resno);
 extern bool IsGroupBySubsetOfDistinct(List *groupClauses, List *distinctClauses);
+extern bool TargetListHasAggregates(List *targetEntryList);
 
 #endif   /* MULTI_LOGICAL_OPTIMIZER_H */

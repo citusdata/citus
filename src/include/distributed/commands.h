@@ -44,6 +44,8 @@ typedef struct DistributeObjectOps
 	ObjectAddress (*address)(Node *, bool);
 } DistributeObjectOps;
 
+#define CITUS_TRUNCATE_TRIGGER_NAME "citus_truncate_trigger"
+
 const DistributeObjectOps * GetDistributeObjectOps(Node *node);
 
 /* cluster.c - forward declarations */
@@ -71,7 +73,7 @@ extern ObjectAddress DefineCollationStmtObjectAddress(Node *stmt, bool missing_o
 extern List * PostprocessDefineCollationStmt(Node *stmt, const char *queryString);
 
 /* extension.c - forward declarations */
-extern bool IsDropCitusStmt(Node *parsetree);
+extern bool IsDropCitusExtensionStmt(Node *parsetree);
 extern bool IsCreateAlterExtensionUpdateCitusStmt(Node *parsetree);
 extern void ErrorIfUnstableCreateOrAlterExtensionStmt(Node *parsetree);
 extern List * PostprocessCreateExtensionStmt(Node *stmt, const char *queryString);
@@ -101,11 +103,11 @@ extern void ErrorIfUnsupportedForeignConstraintExists(Relation relation,
 													  uint32 colocationId);
 extern bool ColumnAppearsInForeignKeyToReferenceTable(char *columnName, Oid
 													  relationId);
-extern List * GetTableForeignConstraintCommands(Oid relationId);
-extern bool HasForeignKeyToReferenceTable(Oid relationId);
-extern bool TableReferenced(Oid relationId);
-extern bool TableReferencing(Oid relationId);
-extern bool ConstraintIsAForeignKey(char *constraintName, Oid relationId);
+extern List * GetReferencingForeignConstaintCommands(Oid relationOid);
+extern bool HasForeignKeyToReferenceTable(Oid relationOid);
+extern bool TableReferenced(Oid relationOid);
+extern bool TableReferencing(Oid relationOid);
+extern bool ConstraintIsAForeignKey(char *inputConstaintName, Oid relationOid);
 
 
 /* function.c - forward declarations */
@@ -273,6 +275,12 @@ extern ObjectWithArgs * ObjectWithArgsFromOid(Oid funcOid);
 
 /* vacuum.c - forward declarations */
 extern void PostprocessVacuumStmt(VacuumStmt *vacuumStmt, const char *vacuumCommand);
+
+/* trigger.c - forward declarations */
+extern List * GetExplicitTriggerCommandList(Oid relationId);
+extern List * GetExplicitTriggerIdList(Oid relationId);
+extern Oid get_relation_trigger_oid_compat(HeapTuple heapTuple);
+extern void ErrorIfUnsupportedCreateTriggerCommand(CreateTrigStmt *createTriggerStmt);
 
 extern bool ShouldPropagateSetCommand(VariableSetStmt *setStmt);
 extern void PostprocessVariableSetStmt(VariableSetStmt *setStmt, const char *setCommand);
