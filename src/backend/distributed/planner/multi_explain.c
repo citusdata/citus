@@ -1194,8 +1194,26 @@ ExplainAnalyzeDestPutTuple(TupleDestination *self, Task *task,
 
 		char *fetchedExplainAnalyzePlan = TextDatumGetCString(explainAnalyze);
 
+		/*
+		 * Allocate fetchedExplainAnalyzePlan in the same context as the Task, since we are
+		 * currently in execution context and a Task can span multiple executions.
+		 *
+		 * Although we won't reuse the same value in a future execution, but we have
+		 * calls to CheckNodeCopyAndSerialization() which asserts copy functions of the task
+		 * work as expected, which will try to copy this value in a future execution.
+		 *
+		 * Why we don't we just allocate this field in executor context and reset it before
+		 * the next execution? Because when an error is raised we can skip pretty much most
+		 * of the meaningful places that we can insert the reset.
+		 *
+		 * TODO: Take all EXPLAIN ANALYZE related fields out of Task and store them in a
+		 * Task to ExplainAnalyzePrivate mapping in multi_explain.c, so we don't need to
+		 * do these hacky memory context management tricks.
+		 */
+		MemoryContext taskContext = GetMemoryChunkContext(tupleDestination->originalTask);
+
 		tupleDestination->originalTask->fetchedExplainAnalyzePlan =
-			pstrdup(fetchedExplainAnalyzePlan);
+			MemoryContextStrdup(taskContext, fetchedExplainAnalyzePlan);
 		tupleDestination->originalTask->fetchedExplainAnalyzePlacementIndex =
 			placementIndex;
 	}
@@ -1203,6 +1221,27 @@ ExplainAnalyzeDestPutTuple(TupleDestination *self, Task *task,
 	{
 		ereport(ERROR, (errmsg("cannot get EXPLAIN ANALYZE of multiple queries"),
 						errdetail("while receiving tuples for query %d", queryNumber)));
+	}
+}
+
+
+/*
+ * ResetExplainAnalyzeData reset fields in Task that are used by multi_explain.c
+ */
+void
+ResetExplainAnalyzeData(List *taskList)
+{
+	Task *task = NULL;
+	foreach_ptr(task, taskList)
+	{
+		if (task->fetchedExplainAnalyzePlan != NULL)
+		{
+			pfree(task->fetchedExplainAnalyzePlan);
+		}
+
+		task->totalReceivedTupleData = 0;
+		task->fetchedExplainAnalyzePlacementIndex = 0;
+		task->fetchedExplainAnalyzePlan = NULL;
 	}
 }
 
