@@ -26,5 +26,6 @@ extern List * ExplainAnalyzeTaskList(List *originalTaskList,
 									 TupleDestination *defaultTupleDest, TupleDesc
 									 tupleDesc, ParamListInfo params);
 extern bool RequestedForExplainAnalyze(CitusScanState *node);
+extern void ResetExplainAnalyzeData(List *taskList);
 
 #endif /* MULTI_EXPLAIN_H */
