@@ -38,9 +38,6 @@ bool EnableRepartitionJoins = false;
 
 int MaxAssignTaskBatchSize = 64; /* maximum number of tasks to assign per round */
 
-
-static bool HasReplicatedDistributedTable(List *relationOids);
-
 /*
  * JobExecutorType selects the executor type for the given distributedPlan using the task
  * executor type config value. The function then checks if the given distributedPlan needs
@@ -111,11 +108,6 @@ JobExecutorType(DistributedPlan *distributedPlan)
 								errhint("Set citus.enable_repartition_joins to on "
 										"to enable repartitioning")));
 			}
-			if (HasReplicatedDistributedTable(distributedPlan->relationIdList))
-			{
-				ereport(ERROR, (errmsg(
-									"repartitioning with shard_replication_factor > 1 is not supported")));
-			}
 			return MULTI_EXECUTOR_ADAPTIVE;
 		}
 	}
@@ -135,33 +127,6 @@ JobExecutorType(DistributedPlan *distributedPlan)
 	}
 
 	return executorType;
-}
-
-
-/*
- * HasReplicatedDistributedTable returns true if there is any
- * table in the given list that is:
- * - not a reference table
- * - has replication factor > 1
- */
-static bool
-HasReplicatedDistributedTable(List *relationOids)
-{
-	Oid oid;
-	foreach_oid(oid, relationOids)
-	{
-		char partitionMethod = PartitionMethod(oid);
-		if (partitionMethod == DISTRIBUTE_BY_NONE)
-		{
-			continue;
-		}
-		uint32 tableReplicationFactor = TableShardReplicationFactor(oid);
-		if (tableReplicationFactor > 1)
-		{
-			return true;
-		}
-	}
-	return false;
 }
 
 
