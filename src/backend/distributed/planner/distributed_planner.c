@@ -1276,6 +1276,9 @@ FinalizePlan(PlannedStmt *localPlan, DistributedPlan *distributedPlan)
 	CustomScan *customScan = makeNode(CustomScan);
 	MultiExecutorType executorType = MULTI_EXECUTOR_INVALID_FIRST;
 
+	/* this field is used in JobExecutorType */
+	distributedPlan->relationIdList = localPlan->relationOids;
+
 	if (!distributedPlan->planningError)
 	{
 		executorType = JobExecutorType(distributedPlan);
@@ -1316,7 +1319,6 @@ FinalizePlan(PlannedStmt *localPlan, DistributedPlan *distributedPlan)
 		}
 	}
 
-	distributedPlan->relationIdList = localPlan->relationOids;
 	distributedPlan->queryId = localPlan->queryId;
 
 	Node *distributedPlanData = (Node *) distributedPlan;
