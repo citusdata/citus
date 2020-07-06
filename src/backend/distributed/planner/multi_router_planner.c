@@ -2693,7 +2693,7 @@ BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError)
 		return modifyRouteList;
 	}
 
-	Var *partitionColumn = PartitionColumn(distributedTableId, rangeTableId);
+	Var *partitionColumn = cacheEntry->partitionColumn;
 
 	/* get full list of insert values and iterate over them to prune */
 	List *insertValuesList = ExtractInsertValuesList(query, partitionColumn);
