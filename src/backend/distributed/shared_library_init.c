@@ -368,7 +368,10 @@ multi_log_hook(ErrorData *edata)
 						 "involved in a distributed deadlock";
 	}
 
-	StringInfo * newStr = makeStringInfo();
+	void	   *buf[100];
+	int			nframes;
+
+	StringInfo newStr = makeStringInfo();
 	appendStringInfoString(newStr, edata->message);
 
 	nframes = backtrace(buf, lengthof(buf));
