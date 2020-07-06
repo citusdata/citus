@@ -418,9 +418,10 @@ SELECT * FROM print_extension_changes();
 -- Snapshot of state at 9.5-1
 ALTER EXTENSION citus UPDATE TO '9.5-1';
 SELECT * FROM print_extension_changes();
- previous_object | current_object
+ previous_object |               current_object
 ---------------------------------------------------------------------
-(0 rows)
+                 | function create_citus_local_table(regclass)
+(1 row)
 
 DROP TABLE prev_objects, extension_diff;
 -- show running version
