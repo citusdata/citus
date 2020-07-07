@@ -21,6 +21,8 @@
 #include "fmgr.h"
 #include "miscadmin.h"
 
+#include "backtrace-supported.h"
+#include "backtrace.h"
 #include "safe_lib.h"
 
 #include "citus_version.h"
@@ -366,6 +368,9 @@ multi_log_hook(ErrorData *edata)
 		edata->message = "canceling the transaction since it was "
 						 "involved in a distributed deadlock";
 	}
+
+	struct backtrace_state* m = backtrace_create_state(NULL, 0 , NULL, NULL);
+	backtrace_full(m, 0, NULL, NULL, NULL);
 }
 
 
