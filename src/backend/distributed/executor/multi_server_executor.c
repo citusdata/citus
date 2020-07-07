@@ -163,21 +163,6 @@ HasReplicatedDistributedTable(List *relationOids)
 
 
 /*
- * MaxMasterConnectionCount returns the number of connections a master can open.
- * A master cannot create more than a certain number of file descriptors (FDs).
- * Every task requires 2 FDs, one file and one connection. Some FDs are taken by
- * the VFD pool and there is currently no way to reclaim these before opening a
- * connection. We therefore assume some FDs to be reserved for VFDs, based on
- * observing a typical size of the pool on a Citus master.
- */
-int
-MaxMasterConnectionCount(void)
-{
-	return Max((max_files_per_process - RESERVED_FD_COUNT) / 2, 1);
-}
-
-
-/*
  * RemoveJobDirectory gets automatically called at portal drop (end of query) or
  * at transaction abort. The function removes the job directory and releases the
  * associated job resource from the resource manager.

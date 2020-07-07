@@ -694,13 +694,7 @@ AdaptiveExecutor(CitusScanState *scanState)
 	Assert(!scanState->finishedRemoteScan);
 
 	/* Reset Task fields that are only valid for a single execution */
-	Task *task = NULL;
-	foreach_ptr(task, taskList)
-	{
-		task->totalReceivedTupleData = 0;
-		task->fetchedExplainAnalyzePlacementIndex = 0;
-		task->fetchedExplainAnalyzePlan = NULL;
-	}
+	ResetExplainAnalyzeData(taskList);
 
 	scanState->tuplestorestate =
 		tuplestore_begin_heap(randomAccess, interTransactions, work_mem);
@@ -4498,7 +4492,7 @@ ExtractParametersFromParamList(ParamListInfo paramListInfo,
 
 		/*
 		 * Use 0 for data types where the oid values can be different on
-		 * the master and worker nodes. Therefore, the worker nodes can
+		 * the coordinator and worker nodes. Therefore, the worker nodes can
 		 * infer the correct oid.
 		 */
 		if (parameterData->ptype >= FirstNormalObjectId && !useOriginalCustomTypeOids)

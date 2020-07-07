@@ -1,8 +1,8 @@
 
 -- This test relies on metadata being synced
 -- that's why is should be executed on MX schedule
-CREATE SCHEMA master_evaluation_combinations_modify;
-SET search_path TO master_evaluation_combinations_modify;
+CREATE SCHEMA coordinator_evaluation_combinations_modify;
+SET search_path TO coordinator_evaluation_combinations_modify;
 
 -- in this test, we are considering combinations of
 -- several Citus features, and there is one prepared
@@ -11,8 +11,8 @@ SET search_path TO master_evaluation_combinations_modify;
 --     (b) Local Execution vs Remote Execution
 --     (c) Parameters on distribution key vs Parameters on non-dist key
 --         vs Non-parametrized queries
---     (d) Master Function Evaluation Required vs
---         Master Function Evaluation Not Required
+--     (d) Coordinator Function Evaluation Required vs
+--         Coordinator Function Evaluation Not Required
 
 SET citus.next_shard_id TO 1180000;
 
@@ -270,7 +270,7 @@ EXECUTE router_with_only_function;
 \c - - - :worker_2_port
 
 SET citus.log_local_commands TO ON;
-SET search_path TO master_evaluation_combinations_modify;
+SET search_path TO coordinator_evaluation_combinations_modify;
 
 -- returns 2 on the worker
 CREATE OR REPLACE FUNCTION get_constant_stable()
@@ -538,4 +538,4 @@ EXECUTE router_with_only_function;
 -- suppress notices
 \c - - - :master_port
 SET client_min_messages TO ERROR;
-DROP SCHEMA master_evaluation_combinations_modify CASCADE;
+DROP SCHEMA coordinator_evaluation_combinations_modify CASCADE;

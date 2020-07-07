@@ -46,7 +46,7 @@ The join order planner is applied to the join tree in the original query and gen
 
 The logical optimizer uses commutativity rules to push project and select operators down below the `MultiCollect` nodes. Everything above the `MultiCollect` operator will be is executed on the coordinator and everything below on the workers. Additionally, the optimizer uses distributivity rules to push down operators below the `MultiJoin` nodes, such that filters and projections are applied prior to joins. This is primarily relevant for re-partition joins which first try to reduce the data by applying selections and projections, and then re-partitioning the result.
 
-A number of SQL clauses like aggregates, GROUP BY, ORDER BY, LIMIT can only be pushed down below the `MultiCollect` under certain conditions. All these clauses are bundled together in a `MultiExtendedOpNode`. After the basic transformation, the `MultiExtendedOpNode`s are directly above the `MultiCollect` nodes. They are then split into a master and a worker part and the worker part is pushed down below the `MultiCollect`.
+A number of SQL clauses like aggregates, GROUP BY, ORDER BY, LIMIT can only be pushed down below the `MultiCollect` under certain conditions. All these clauses are bundled together in a `MultiExtendedOpNode`. After the basic transformation, the `MultiExtendedOpNode`s are directly above the `MultiCollect` nodes. They are then split into a coordinator and a worker part and the worker part is pushed down below the `MultiCollect`.
 
 ### Physical planner
 

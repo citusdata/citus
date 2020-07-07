@@ -3048,7 +3048,7 @@ get_insert_query_def(Query *query, deparse_context *context)
 	/* INSERT requires AS keyword for target alias */
 	if (rte->alias != NULL)
 		appendStringInfo(buf, "AS %s ",
-						 quote_identifier(rte->alias->aliasname));
+						 quote_identifier(get_rtable_name(query->resultRelation, context)));
 
 	/*
 	 * Add the insert-column-names list.  Any indirection decoration needed on
@@ -3247,7 +3247,7 @@ get_update_query_def(Query *query, deparse_context *context)
 
 		if(rte->eref != NULL)
 			appendStringInfo(buf, " %s",
-					quote_identifier(rte->eref->aliasname));
+					quote_identifier(get_rtable_name(query->resultRelation, context)));
 	}
 	else
 	{
@@ -3259,7 +3259,7 @@ get_update_query_def(Query *query, deparse_context *context)
 
 		if (rte->alias != NULL)
 			appendStringInfo(buf, " %s",
-							 quote_identifier(rte->alias->aliasname));
+							 quote_identifier(get_rtable_name(query->resultRelation, context)));
 	}
 
 	appendStringInfoString(buf, " SET ");
@@ -3479,7 +3479,7 @@ get_delete_query_def(Query *query, deparse_context *context)
 
 		if(rte->eref != NULL)
 			appendStringInfo(buf, " %s",
-					quote_identifier(rte->eref->aliasname));
+					quote_identifier(get_rtable_name(query->resultRelation, context)));
 	}
 	else
 	{
@@ -3491,7 +3491,7 @@ get_delete_query_def(Query *query, deparse_context *context)
 
 		if (rte->alias != NULL)
 			appendStringInfo(buf, " %s",
-							 quote_identifier(rte->alias->aliasname));
+							 quote_identifier(get_rtable_name(query->resultRelation, context)));
 	}
 
 	/* Add the USING clause if given */
