@@ -44,11 +44,3 @@ TODO: to be written by someone with enough knowledge to write how, when and why 
 Implemented in `multi_copy.c`
 
 TODO: to be written by someone with enough knowledge to write how, when and why it is used.
-
-## MASTER_HOST host
-
-Implemented in `multi_copy.c`
-
-Triggered by the `MASTER_HOST` option being set on the copy command. Also accepts `MASTER_PORT`
-
-TODO: to be written by someone with enough knowledge to write how, when and why it is used.

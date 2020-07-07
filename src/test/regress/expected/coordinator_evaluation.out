@@ -1,7 +1,7 @@
 -- This test relies on metadata being synced
 -- that's why is should be executed on MX schedule
-CREATE SCHEMA master_evaluation;
-SET search_path TO master_evaluation;
+CREATE SCHEMA coordinator_evaluation;
+SET search_path TO coordinator_evaluation;
 -- create a volatile function that returns the local node id
 CREATE OR REPLACE FUNCTION get_local_node_id_volatile()
 RETURNS INT AS $$
@@ -29,8 +29,8 @@ SELECT create_distributed_function('get_local_node_id_volatile_sum_with_param(in
 
 (1 row)
 
-CREATE TABLE master_evaluation_table (key int, value int);
-SELECT create_distributed_table('master_evaluation_table', 'key');
+CREATE TABLE coordinator_evaluation_table (key int, value int);
+SELECT create_distributed_table('coordinator_evaluation_table', 'key');
  create_distributed_table
 ---------------------------------------------------------------------
 
@@ -44,16 +44,16 @@ SELECT get_local_node_id_volatile();
 (1 row)
 
 -- load data
-INSERT INTO master_evaluation_table SELECT i, i FROM generate_series(0,100)i;
+INSERT INTO coordinator_evaluation_table SELECT i, i FROM generate_series(0,100)i;
 -- we expect that the function is evaluated on the worker node, so we should get a row
-SELECT get_local_node_id_volatile() > 0 FROM master_evaluation_table WHERE key = 1;
+SELECT get_local_node_id_volatile() > 0 FROM coordinator_evaluation_table WHERE key = 1;
  ?column?
 ---------------------------------------------------------------------
  t
 (1 row)
 
 -- make sure that it is also true for  fast-path router queries with paramaters
-PREPARE fast_path_router_with_param(int) AS SELECT get_local_node_id_volatile() > 0 FROM master_evaluation_table WHERE key  = $1;
+PREPARE fast_path_router_with_param(int) AS SELECT get_local_node_id_volatile() > 0 FROM coordinator_evaluation_table WHERE key  = $1;
 execute fast_path_router_with_param(1);
  ?column?
 ---------------------------------------------------------------------
@@ -103,13 +103,13 @@ execute fast_path_router_with_param(8);
 (1 row)
 
 -- same query as fast_path_router_with_param, but with consts
-SELECT get_local_node_id_volatile() > 0 FROM master_evaluation_table WHERE key = 1;
+SELECT get_local_node_id_volatile() > 0 FROM coordinator_evaluation_table WHERE key = 1;
  ?column?
 ---------------------------------------------------------------------
  t
 (1 row)
 
-PREPARE router_with_param(int) AS SELECT get_local_node_id_volatile() > 0 FROM master_evaluation_table m1 JOIN master_evaluation_table m2 USING(key) WHERE key  = $1;
+PREPARE router_with_param(int) AS SELECT get_local_node_id_volatile() > 0 FROM coordinator_evaluation_table m1 JOIN coordinator_evaluation_table m2 USING(key) WHERE key  = $1;
 execute router_with_param(1);
  ?column?
 ---------------------------------------------------------------------
@@ -159,21 +159,21 @@ execute router_with_param(8);
 (1 row)
 
 -- same query as router_with_param, but with consts
-SELECT get_local_node_id_volatile() > 0 FROM master_evaluation_table m1 JOIN master_evaluation_table m2 USING(key) WHERE key  = 1;
+SELECT get_local_node_id_volatile() > 0 FROM coordinator_evaluation_table m1 JOIN coordinator_evaluation_table m2 USING(key) WHERE key  = 1;
  ?column?
 ---------------------------------------------------------------------
  t
 (1 row)
 
 -- for multi-shard queries, we  still expect the evaluation to happen on the workers
-SELECT count(*), max(get_local_node_id_volatile()) != 0,  min(get_local_node_id_volatile()) != 0 FROM master_evaluation_table;
+SELECT count(*), max(get_local_node_id_volatile()) != 0,  min(get_local_node_id_volatile()) != 0 FROM coordinator_evaluation_table;
  count | ?column? | ?column?
 ---------------------------------------------------------------------
    101 | t        | t
 (1 row)
 
 -- when executed locally, we expect to get the result from the coordinator
-SELECT (SELECT count(*) FROM master_evaluation_table), get_local_node_id_volatile() = 0;
+SELECT (SELECT count(*) FROM coordinator_evaluation_table), get_local_node_id_volatile() = 0;
  count | ?column?
 ---------------------------------------------------------------------
    101 | t
@@ -181,7 +181,7 @@ SELECT (SELECT count(*) FROM master_evaluation_table), get_local_node_id_volatil
 
 -- make sure that we get the results from the workers when the query is sent to workers
 SET citus.task_assignment_policy TO "round-robin";
-SELECT (SELECT count(*) FROM master_evaluation_table), get_local_node_id_volatile() = 0;
+SELECT (SELECT count(*) FROM coordinator_evaluation_table), get_local_node_id_volatile() = 0;
  count | ?column?
 ---------------------------------------------------------------------
    101 | f
@@ -189,13 +189,13 @@ SELECT (SELECT count(*) FROM master_evaluation_table), get_local_node_id_volatil
 
 RESET citus.task_assignment_policy;
 -- for multi-shard SELECTs, we don't try to evaluate on the coordinator
-SELECT min(get_local_node_id_volatile())  > 0 FROM master_evaluation_table;
+SELECT min(get_local_node_id_volatile())  > 0 FROM coordinator_evaluation_table;
  ?column?
 ---------------------------------------------------------------------
  t
 (1 row)
 
-SELECT count(*) > 0 FROM master_evaluation_table WHERE value >= get_local_node_id_volatile();
+SELECT count(*) > 0 FROM coordinator_evaluation_table WHERE value >= get_local_node_id_volatile();
  ?column?
 ---------------------------------------------------------------------
  t
@@ -204,7 +204,7 @@ SELECT count(*) > 0 FROM master_evaluation_table WHERE value >= get_local_node_i
 -- let's have some tests around expressions
 -- for modifications, we expect the evaluation to happen on the coordinator
 -- thus the results should be 0
-PREPARE insert_with_param_expression(int) AS INSERT INTO master_evaluation_table (key, value) VALUES ($1 + get_local_node_id_volatile(), $1 + get_local_node_id_volatile()) RETURNING key, value;
+PREPARE insert_with_param_expression(int) AS INSERT INTO coordinator_evaluation_table (key, value) VALUES ($1 + get_local_node_id_volatile(), $1 + get_local_node_id_volatile()) RETURNING key, value;
 EXECUTE insert_with_param_expression(0);
  key | value
 ---------------------------------------------------------------------
@@ -249,7 +249,7 @@ EXECUTE insert_with_param_expression(0);
 
 -- for modifications, we expect the evaluation to happen on the coordinator
 -- thus the results should be 0
-PREPARE insert_with_param(int) AS INSERT INTO master_evaluation_table (key, value) VALUES ($1, $1) RETURNING key, value;
+PREPARE insert_with_param(int) AS INSERT INTO coordinator_evaluation_table (key, value) VALUES ($1, $1) RETURNING key, value;
 EXECUTE insert_with_param(0 + get_local_node_id_volatile());
  key | value
 ---------------------------------------------------------------------
@@ -292,7 +292,7 @@ EXECUTE insert_with_param(0 + get_local_node_id_volatile());
    0 |     0
 (1 row)
 
-PREPARE router_select_with_param_expression(int) AS SELECT value > 0 FROM master_evaluation_table WHERE key = $1 + get_local_node_id_volatile();
+PREPARE router_select_with_param_expression(int) AS SELECT value > 0 FROM coordinator_evaluation_table WHERE key = $1 + get_local_node_id_volatile();
 -- for selects, we expect the evaluation to happen on the workers
 -- this means that the query should be hitting multiple workers
 SET client_min_messages TO DEBUG2;
@@ -353,7 +353,7 @@ DEBUG:  Router planner cannot handle multi-shard select queries
  t
 (1 row)
 
-PREPARE router_select_with_param(int) AS SELECT DISTINCT value FROM master_evaluation_table WHERE key = $1;
+PREPARE router_select_with_param(int) AS SELECT DISTINCT value FROM coordinator_evaluation_table WHERE key = $1;
 -- this time the parameter itself is a function, so should be evaluated
 -- on the coordinator
 EXECUTE router_select_with_param(0 + get_local_node_id_volatile());
@@ -460,7 +460,7 @@ EXECUTE router_select_with_param(get_local_node_id_volatile());
 (1 row)
 
 -- this time use the parameter inside the function
-PREPARE router_select_with_parameter_in_function(int) AS SELECT bool_and(get_local_node_id_volatile_sum_with_param($1) > 1) FROM master_evaluation_table WHERE key = get_local_node_id_volatile_sum_with_param($1);
+PREPARE router_select_with_parameter_in_function(int) AS SELECT bool_and(get_local_node_id_volatile_sum_with_param($1) > 1) FROM coordinator_evaluation_table WHERE key = get_local_node_id_volatile_sum_with_param($1);
 EXECUTE router_select_with_parameter_in_function(0);
 DEBUG:  Router planner cannot handle multi-shard select queries
  bool_and
@@ -514,8 +514,8 @@ DEBUG:  Router planner cannot handle multi-shard select queries
 RESET client_min_messages;
 RESET citus.log_remote_commands;
 -- numeric has different casting affects, so some tests on that
-CREATE TABLE master_evaluation_table_2 (key numeric, value numeric);
-SELECT create_distributed_table('master_evaluation_table_2', 'key');
+CREATE TABLE coordinator_evaluation_table_2 (key numeric, value numeric);
+SELECT create_distributed_table('coordinator_evaluation_table_2', 'key');
  create_distributed_table
 ---------------------------------------------------------------------
 
@@ -529,13 +529,13 @@ BEGIN
     RETURN trunc(random() * (end_int-start_int) + start_int);
 END;
 $$ LANGUAGE 'plpgsql' STRICT;
-CREATE OR REPLACE PROCEDURE master_evaluation.test_procedure(int)
+CREATE OR REPLACE PROCEDURE coordinator_evaluation.test_procedure(int)
  LANGUAGE plpgsql
 AS $procedure$
 DECLARE filterKey INTEGER;
 BEGIN
-  filterKey := round(master_evaluation.TEST_RANDOM(1,1)) + $1;
-  PERFORM DISTINCT value FROM master_evaluation_table_2 WHERE key = filterKey;
+  filterKey := round(coordinator_evaluation.TEST_RANDOM(1,1)) + $1;
+  PERFORM DISTINCT value FROM coordinator_evaluation_table_2 WHERE key = filterKey;
 END;
 $procedure$;
 -- we couldn't find a meaningful query to write for this
@@ -567,13 +567,13 @@ DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
 CALL test_procedure(100);
-CREATE OR REPLACE PROCEDURE master_evaluation.test_procedure_2(int)
+CREATE OR REPLACE PROCEDURE coordinator_evaluation.test_procedure_2(int)
  LANGUAGE plpgsql
 AS $procedure$
 DECLARE filterKey INTEGER;
 BEGIN
-  filterKey := round(master_evaluation.TEST_RANDOM(1,1)) + $1;
-  INSERT INTO master_evaluation_table_2 VALUES (filterKey, filterKey);
+  filterKey := round(coordinator_evaluation.TEST_RANDOM(1,1)) + $1;
+  INSERT INTO coordinator_evaluation_table_2 VALUES (filterKey, filterKey);
 END;
 $procedure$;
 RESET citus.log_remote_commands ;
@@ -586,11 +586,11 @@ CALL test_procedure_2(100);
 CALL test_procedure_2(100);
 CALL test_procedure_2(100);
 CALL test_procedure_2(100);
-SELECT count(*) FROM master_evaluation_table_2 WHERE key = 101;
+SELECT count(*) FROM coordinator_evaluation_table_2 WHERE key = 101;
  count
 ---------------------------------------------------------------------
      7
 (1 row)
 
 SET client_min_messages TO ERROR;
-DROP SCHEMA master_evaluation CASCADE;
+DROP SCHEMA coordinator_evaluation CASCADE;

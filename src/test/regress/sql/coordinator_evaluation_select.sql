@@ -9,11 +9,11 @@
 --     (b) Local Execution vs Remote Execution
 --     (c) Parameters on distribution key vs Parameters on non-dist key
 --	   vs Non-parametrized queries
---     (d) Master Function Evaluation Required vs
---	   Master Function Evaluation Not Required
+--     (d) Coordinator Function Evaluation Required vs
+--	   Coordinator Function Evaluation Not Required
 
-CREATE SCHEMA master_evaluation_combinations;
-SET search_path TO master_evaluation_combinations;
+CREATE SCHEMA coordinator_evaluation_combinations;
+SET search_path TO coordinator_evaluation_combinations;
 
 SET citus.next_shard_id TO 1170000;
 
@@ -232,7 +232,7 @@ EXECUTE router_with_only_function;
 \c - - - :worker_2_port
 
 SET citus.log_local_commands TO ON;
-SET search_path TO master_evaluation_combinations;
+SET search_path TO coordinator_evaluation_combinations;
 
 -- show that the data with user_id = 3 is local
 SELECT count(*) FROM user_info_data WHERE user_id = 3;
@@ -416,4 +416,4 @@ EXECUTE router_with_only_function;
 -- suppress notices
 \c - - - :master_port
 SET client_min_messages TO ERROR;
-DROP SCHEMA master_evaluation_combinations CASCADE;
+DROP SCHEMA coordinator_evaluation_combinations CASCADE;

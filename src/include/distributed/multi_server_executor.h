@@ -58,7 +58,7 @@ typedef enum
 } TaskExecStatus;
 
 
-/* Enumeration to track file transmits to the master node */
+/* Enumeration to track file transmits to the coordinator node */
 typedef enum
 {
 	EXEC_TRANSMIT_INVALID_FIRST = 0,
@@ -186,7 +186,6 @@ extern void CleanupTaskExecution(TaskExecution *taskExecution);
 extern void ErrorSizeLimitIsExceeded(void);
 extern bool TaskExecutionFailed(TaskExecution *taskExecution);
 extern void AdjustStateForFailure(TaskExecution *taskExecution);
-extern int MaxMasterConnectionCount(void);
 
 
 extern TupleTableSlot * TaskTrackerExecScan(CustomScanState *node);

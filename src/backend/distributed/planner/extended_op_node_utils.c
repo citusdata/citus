@@ -311,8 +311,8 @@ PartitionColumnInTableList(Var *column, List *tableNodeList)
 
 /*
  * ShouldPullDistinctColumn returns true if distinct aggregate should pull
- * individual columns from worker to master and evaluate aggregate operation
- * at master.
+ * individual columns from worker to coordinator and evaluate aggregate operation
+ * on the coordinator.
  *
  * Pull cases are:
  * - repartition subqueries

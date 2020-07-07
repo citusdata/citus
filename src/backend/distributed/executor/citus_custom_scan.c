@@ -297,7 +297,7 @@ CitusBeginReadOnlyScan(CustomScanState *node, EState *estate, int eflags)
 	 *
 	 * TODO: evaluate stable functions
 	 */
-	ExecuteMasterEvaluableExpressions(jobQuery, planState);
+	ExecuteCoordinatorEvaluableExpressions(jobQuery, planState);
 
 	/* job query no longer has parameters, so we should not send any */
 	workerJob->parametersInJobQueryResolved = true;
@@ -347,7 +347,7 @@ CitusBeginModifyScan(CustomScanState *node, EState *estate, int eflags)
 
 	if (ModifyJobNeedsEvaluation(workerJob))
 	{
-		ExecuteMasterEvaluableExpressions(jobQuery, planState);
+		ExecuteCoordinatorEvaluableExpressions(jobQuery, planState);
 
 		/* job query no longer has parameters, so we should not send any */
 		workerJob->parametersInJobQueryResolved = true;
@@ -375,7 +375,7 @@ CitusBeginModifyScan(CustomScanState *node, EState *estate, int eflags)
 			RegenerateTaskForFasthPathQuery(workerJob);
 		}
 	}
-	else if (workerJob->requiresMasterEvaluation)
+	else if (workerJob->requiresCoordinatorEvaluation)
 	{
 		/*
 		 * When there is no deferred pruning, but we did evaluate functions, then
@@ -428,7 +428,7 @@ CitusBeginModifyScan(CustomScanState *node, EState *estate, int eflags)
 static bool
 ModifyJobNeedsEvaluation(Job *workerJob)
 {
-	if (workerJob->requiresMasterEvaluation)
+	if (workerJob->requiresCoordinatorEvaluation)
 	{
 		/* query contains functions that need to be evaluated on the coordinator */
 		return true;

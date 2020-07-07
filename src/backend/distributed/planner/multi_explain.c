@@ -167,7 +167,7 @@ PG_FUNCTION_INFO_V1(worker_save_query_explain_analyze);
 
 /*
  * CitusExplainScan is a custom scan explain callback function which is used to
- * print explain information of a Citus plan which includes both master and
+ * print explain information of a Citus plan which includes both combine query and
  * distributed plan.
  */
 void
