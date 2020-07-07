@@ -89,6 +89,11 @@ ROLLBACK;
 
 BEGIN;
 SET citus.enable_repartition_joins TO ON;
+SELECT count(*) FROM test t1, test t2 WHERE t1.x = t2.y;
+ROLLBACK;
+
+BEGIN;
+SET citus.enable_repartition_joins TO ON;
 -- trigger local execution
 SELECT y FROM test WHERE x = 1;
 SELECT count(*) FROM test t1, test t2 WHERE t1.x = t2.y;
