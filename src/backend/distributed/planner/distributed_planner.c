@@ -1364,7 +1364,7 @@ static PlannedStmt *
 FinalizeNonRouterPlan(PlannedStmt *localPlan, DistributedPlan *distributedPlan,
 					  CustomScan *customScan)
 {
-	PlannedStmt *finalPlan = MasterNodeSelectPlan(distributedPlan, customScan);
+	PlannedStmt *finalPlan = PlanCombineQuery(distributedPlan, customScan);
 	finalPlan->queryId = localPlan->queryId;
 	finalPlan->utilityStmt = localPlan->utilityStmt;
 

@@ -1,8 +1,8 @@
 /*-------------------------------------------------------------------------
  *
  * metadata_utility.h
- *	  Type and function declarations used for reading and modifying master
- *    node's metadata.
+ *	  Type and function declarations used for reading and modifying
+ *    coordinator node's metadata.
  *
  * Copyright (c) Citus Data, Inc.
  *

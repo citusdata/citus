@@ -4497,7 +4497,7 @@ ExtractParametersFromParamList(ParamListInfo paramListInfo,
 
 		/*
 		 * Use 0 for data types where the oid values can be different on
-		 * the master and worker nodes. Therefore, the worker nodes can
+		 * the coordinator and worker nodes. Therefore, the worker nodes can
 		 * infer the correct oid.
 		 */
 		if (parameterData->ptype >= FirstNormalObjectId && !useOriginalCustomTypeOids)

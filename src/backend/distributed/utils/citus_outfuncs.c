@@ -340,7 +340,7 @@ OutJobFields(StringInfo str, const Job *node)
 	WRITE_NODE_FIELD(taskList);
 	WRITE_NODE_FIELD(dependentJobList);
 	WRITE_BOOL_FIELD(subqueryPushdown);
-	WRITE_BOOL_FIELD(requiresMasterEvaluation);
+	WRITE_BOOL_FIELD(requiresCoordinatorEvaluation);
 	WRITE_BOOL_FIELD(deferredPruning);
 	WRITE_NODE_FIELD(partitionKeyValue);
 	WRITE_NODE_FIELD(localPlannedStatements);

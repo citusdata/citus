@@ -102,7 +102,7 @@ IsIndexRenameStmt(RenameStmt *renameStmt)
  * PreprocessIndexStmt determines whether a given CREATE INDEX statement involves
  * a distributed table. If so (and if the statement does not use unsupported
  * options), it modifies the input statement to ensure proper execution against
- * the master node table and creates a DDLJob to encapsulate information needed
+ * the coordinator node table and creates a DDLJob to encapsulate information needed
  * during the worker node portion of DDL execution before returning that DDLJob
  * in a List. If no distributed table is involved, this function returns NIL.
  */
@@ -194,7 +194,7 @@ PreprocessIndexStmt(Node *node, const char *createIndexCommand)
  * PreprocessReindexStmt determines whether a given REINDEX statement involves
  * a distributed table. If so (and if the statement does not use unsupported
  * options), it modifies the input statement to ensure proper execution against
- * the master node table and creates a DDLJob to encapsulate information needed
+ * the coordinator node table and creates a DDLJob to encapsulate information needed
  * during the worker node portion of DDL execution before returning that DDLJob
  * in a List. If no distributed table is involved, this function returns NIL.
  */
@@ -302,7 +302,7 @@ PreprocessReindexStmt(Node *node, const char *reindexCommand)
  * PreprocessDropIndexStmt determines whether a given DROP INDEX statement involves
  * a distributed table. If so (and if the statement does not use unsupported
  * options), it modifies the input statement to ensure proper execution against
- * the master node table and creates a DDLJob to encapsulate information needed
+ * the coordinator node table and creates a DDLJob to encapsulate information needed
  * during the worker node portion of DDL execution before returning that DDLJob
  * in a List. If no distributed table is involved, this function returns NIL.
  */

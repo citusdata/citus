@@ -149,7 +149,7 @@ typedef struct Job
 	List *taskList;
 	List *dependentJobList;
 	bool subqueryPushdown;
-	bool requiresMasterEvaluation; /* only applies to modify jobs */
+	bool requiresCoordinatorEvaluation; /* only applies to modify jobs */
 	bool deferredPruning;
 	Const *partitionKeyValue;
 
@@ -597,7 +597,7 @@ extern List * QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 									   RelationRestrictionContext *
 									   relationRestrictionContext,
 									   List *prunedRelationShardList, TaskType taskType,
-									   bool modifyRequiresMasterEvaluation);
+									   bool modifyRequiresCoordinatorEvaluation);
 
 /* function declarations for managing jobs */
 extern uint64 UniqueJobId(void);

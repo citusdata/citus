@@ -4,9 +4,9 @@
  *	  definition of the "server" relation (pg_dist_placement).
  *
  * This table keeps information on remote shards and their whereabouts on the
- * master node. The table's contents are updated and used as follows: (i) the
+ * coordinator node. The table's contents are updated and used as follows: (i) the
  * worker nodes send periodic reports about the shards they contain, and (ii)
- * the master reconciles these shard reports, and determines outdated, under-
+ * the coordinator reconciles these shard reports, and determines outdated, under-
  * and over-replicated shards.
  *
  * Copyright (c) Citus Data, Inc.
