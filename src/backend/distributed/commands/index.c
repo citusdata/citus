@@ -51,6 +51,8 @@ static char * ChooseIndexName(const char *tabname, Oid namespaceId,
 static char * ChooseIndexNameAddition(List *colnames);
 
 /* Local functions forward declarations for helper functions */
+static char * GenerateDefaultIndexName(Relation relation,
+									   IndexStmt *createIndexStatement);
 static List * CreateIndexTaskList(Oid relationId, IndexStmt *indexStmt);
 static List * CreateReindexTaskList(Oid relationId, ReindexStmt *reindexStmt);
 static void RangeVarCallbackForDropIndex(const RangeVar *rel, Oid relOid, Oid oldRelOid,
@@ -173,29 +175,64 @@ PreprocessIndexStmt(Node *node, const char *createIndexCommand)
 
 		if (isCitusRelation)
 		{
-			char *indexName = createIndexStatement->idxname;
-			char *namespaceName = createIndexStatement->relation->schemaname;
+			if (createIndexStatement->idxname == NULL)
+			{
+				char *generatedIndexName =
+					GenerateDefaultIndexName(relation, createIndexStatement);
+				if (generatedIndexName == NULL)
+				{
+					/* standard process utility would error out */
+					return NIL;
+				}
+
+				createIndexStatement->idxname = generatedIndexName;
+			}
 
 			ErrorIfUnsupportedIndexStmt(createIndexStatement);
 
-			Oid namespaceId = get_namespace_oid(namespaceName, false);
-			Oid indexRelationId = get_relname_relid(indexName, namespaceId);
+			DDLJob *ddlJob = palloc0(sizeof(DDLJob));
+			ddlJob->targetRelationId = relationId;
+			ddlJob->concurrentIndexCmd = createIndexStatement->concurrent;
+			ddlJob->commandString = createIndexCommand;
+			ddlJob->taskList = CreateIndexTaskList(relationId, createIndexStatement);
 
-			/* if index does not exist, send the command to workers */
-			if (!OidIsValid(indexRelationId))
-			{
-				DDLJob *ddlJob = palloc0(sizeof(DDLJob));
-				ddlJob->targetRelationId = relationId;
-				ddlJob->concurrentIndexCmd = createIndexStatement->concurrent;
-				ddlJob->commandString = createIndexCommand;
-				ddlJob->taskList = CreateIndexTaskList(relationId, createIndexStatement);
-
-				ddlJobs = list_make1(ddlJob);
-			}
+			ddlJobs = list_make1(ddlJob);
 		}
 	}
 
 	return ddlJobs;
+}
+
+
+/*
+ * GenerateDefaultIndexName generates default index name for the index to be
+ * created on relation as postgres would do.
+ */
+static char *
+GenerateDefaultIndexName(Relation relation, IndexStmt *createIndexStatement)
+{
+	List *indexParams = createIndexStatement->indexParams;
+	List *indexIncludingParams = createIndexStatement->indexIncludingParams;
+	List *allIndexParams = list_concat(list_copy(indexParams),
+									   list_copy(indexIncludingParams));
+
+	int numberOfAttributes = list_length(allIndexParams);
+	if (numberOfAttributes == 0 || numberOfAttributes > INDEX_MAX_KEYS)
+	{
+		/* cannot generate a default name for the index */
+		return NULL;
+	}
+
+	List *indexColNames = ChooseIndexColumnNames(allIndexParams);
+	Oid namespaceId = RelationGetNamespace(relation);
+	char *indexName = ChooseIndexName(RelationGetRelationName(relation),
+									  namespaceId,
+									  indexColNames,
+									  createIndexStatement->excludeOpNames,
+									  createIndexStatement->primary,
+									  createIndexStatement->isconstraint);
+
+	return indexName;
 }
 
 
