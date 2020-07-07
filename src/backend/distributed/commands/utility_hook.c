@@ -76,6 +76,7 @@ static int activeDropSchemaOrDBs = 0;
 static void ExecuteDistributedDDLJob(DDLJob *ddlJob);
 static char * SetSearchPathToCurrentSearchPathCommand(void);
 static char * CurrentSearchPath(void);
+static void PostStandardProcessUtilityChangeGlobalState(Node *parsetree);
 static bool IsDropSchemaOrDB(Node *parsetree);
 
 
@@ -521,27 +522,11 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		 */
 		CommandCounterIncrement();
 
-		if (IsA(parsetree, AlterTableStmt))
-		{
-			activeAlterTables--;
-		}
-
-		if (IsDropSchemaOrDB(parsetree))
-		{
-			activeDropSchemaOrDBs--;
-		}
+		PostStandardProcessUtilityChangeGlobalState(parsetree);
 	}
 	PG_CATCH();
 	{
-		if (IsA(parsetree, AlterTableStmt))
-		{
-			activeAlterTables--;
-		}
-
-		if (IsDropSchemaOrDB(parsetree))
-		{
-			activeDropSchemaOrDBs--;
-		}
+		PostStandardProcessUtilityChangeGlobalState(parsetree);
 
 		PG_RE_THROW();
 	}
@@ -823,6 +808,26 @@ CurrentSearchPath(void)
 	list_free(searchPathList);
 
 	return (currentSearchPath->len > 0 ? currentSearchPath->data : NULL);
+}
+
+
+/*
+ * PostStandardProcessUtilityChangeGlobalState performs operations to alter
+ * global state of the citus utility hook. Those operations should be done
+ * after standard process utility executes even if it errors out.
+ */
+static void
+PostStandardProcessUtilityChangeGlobalState(Node *parsetree)
+{
+	if (IsA(parsetree, AlterTableStmt))
+	{
+		activeAlterTables--;
+	}
+
+	if (IsDropSchemaOrDB(parsetree))
+	{
+		activeDropSchemaOrDBs--;
+	}
 }
 
 
