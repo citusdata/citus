@@ -316,19 +316,11 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			ResetGlobalVariables();
 
 			/*
-			 * Getting here without ExecutorLevel 0 is a bug, however it is such a big
-			 * problem that will persist between reuse of the backend we still assign 0 in
-			 * production deploys, but during development and tests we want to crash.
+			 * We reset these mainly for posterity. The only way we would normally
+			 * get here with ExecutorLevel or PlannerLevel > 0 is during a fatal
+			 * error when the process is about to end.
 			 */
-			Assert(ExecutorLevel == 0);
 			ExecutorLevel = 0;
-
-			/*
-			 * Getting here without PlannerLevel 0 is a bug, however it is such a big
-			 * problem that will persist between reuse of the backend we still assign 0 in
-			 * production deploys, but during development and tests we want to crash.
-			 */
-			Assert(PlannerLevel == 0);
 			PlannerLevel = 0;
 
 			/*
