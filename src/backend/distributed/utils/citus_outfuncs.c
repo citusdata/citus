@@ -527,7 +527,6 @@ OutTask(OUTFUNC_ARGS)
 	WRITE_UINT_FIELD(upstreamTaskId);
 	WRITE_NODE_FIELD(shardInterval);
 	WRITE_BOOL_FIELD(assignmentConstrained);
-	WRITE_NODE_FIELD(taskExecution);
 	WRITE_CHAR_FIELD(replicationModel);
 	WRITE_BOOL_FIELD(modifyWithSubquery);
 	WRITE_NODE_FIELD(relationShardList);
@@ -549,26 +548,6 @@ OutLocalPlannedStatement(OUTFUNC_ARGS)
 	WRITE_UINT_FIELD(localGroupId);
 	WRITE_NODE_FIELD(localPlan);
 }
-
-
-void
-OutTaskExecution(OUTFUNC_ARGS)
-{
-	WRITE_LOCALS(TaskExecution);
-	WRITE_NODE_TYPE("TASKEXECUTION");
-
-	WRITE_UINT64_FIELD(jobId);
-	WRITE_UINT_FIELD(taskId);
-	WRITE_UINT_FIELD(nodeCount);
-
-	WRITE_INT_ARRAY(connectionIdArray, node->nodeCount);
-	WRITE_INT_ARRAY(fileDescriptorArray, node->nodeCount);
-
-	WRITE_UINT_FIELD(currentNodeIndex);
-	WRITE_UINT_FIELD(querySourceNodeIndex);
-	WRITE_UINT_FIELD(failureCount);
-}
-
 
 void
 OutDeferredErrorMessage(OUTFUNC_ARGS)

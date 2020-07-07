@@ -46,26 +46,6 @@ typedef struct DistributedExecutionStats
 	uint64 totalIntermediateResultSize;
 } DistributedExecutionStats;
 
-
-/*
- * TaskExecution holds state that relates to a task's execution for task-tracker
- * executor.
- */
-struct TaskExecution
-{
-	CitusNode type;
-	uint64 jobId;
-	uint32 taskId;
-
-	int32 *connectionIdArray;
-	int32 *fileDescriptorArray;
-	uint32 nodeCount;
-	uint32 currentNodeIndex;
-	uint32 querySourceNodeIndex; /* only applies to map fetch tasks */
-	uint32 failureCount;
-};
-
-
 /* Config variable managed via guc.c */
 extern int RemoteTaskCheckInterval;
 extern int MaxAssignTaskBatchSize;
