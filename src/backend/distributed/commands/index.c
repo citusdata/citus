@@ -49,6 +49,7 @@ static char * ChooseIndexName(const char *tabname, Oid namespaceId,
 							  List *colnames, List *exclusionOpNames,
 							  bool primary, bool isconstraint);
 static char * ChooseIndexNameAddition(List *colnames);
+
 /* Local functions forward declarations for helper functions */
 static List * CreateIndexTaskList(Oid relationId, IndexStmt *indexStmt);
 static List * CreateReindexTaskList(Oid relationId, ReindexStmt *reindexStmt);
@@ -204,52 +205,59 @@ PreprocessIndexStmt(Node *node, const char *createIndexCommand)
  * names are unique so we don't get a conflicting-attribute-names error.
  *
  * Returns a List of plain strings (char *, not String nodes).
- * 
+ *
  * (Directly copied from postgres/commands/indexcmds.c)
  */
 static List *
 ChooseIndexColumnNames(List *indexElems)
 {
-	List	   *result = NIL;
-	ListCell   *lc;
+	List *result = NIL;
+	ListCell *lc;
 
 	foreach(lc, indexElems)
 	{
-		IndexElem  *ielem = (IndexElem *) lfirst(lc);
+		IndexElem *ielem = (IndexElem *) lfirst(lc);
 		const char *origname;
-		const char *curname;
-		int			i;
-		char		buf[NAMEDATALEN];
+		int i;
+		char buf[NAMEDATALEN];
 
 		/* Get the preliminary name from the IndexElem */
 		if (ielem->indexcolname)
+		{
 			origname = ielem->indexcolname; /* caller-specified name */
+		}
 		else if (ielem->name)
+		{
 			origname = ielem->name; /* simple column reference */
+		}
 		else
-			origname = "expr";	/* default name for expression */
+		{
+			origname = "expr";  /* default name for expression */
+		}
 
 		/* If it conflicts with any previous column, tweak it */
-		curname = origname;
+		const char *curname = origname;
 		for (i = 1;; i++)
 		{
-			ListCell   *lc2;
-			char		nbuf[32];
-			int			nlen;
+			ListCell *lc2;
+			char nbuf[32];
 
 			foreach(lc2, result)
 			{
 				if (strcmp(curname, (char *) lfirst(lc2)) == 0)
+				{
 					break;
+				}
 			}
 			if (lc2 == NULL)
-				break;			/* found nonconflicting name */
-
+			{
+				break;          /* found nonconflicting name */
+			}
 			sprintf(nbuf, "%d", i);
 
 			/* Ensure generated names are shorter than NAMEDATALEN */
-			nlen = pg_mbcliplen(origname, strlen(origname),
-								NAMEDATALEN - 1 - strlen(nbuf));
+			int nlen = pg_mbcliplen(origname, strlen(origname),
+									NAMEDATALEN - 1 - strlen(nbuf));
 			memcpy(buf, origname, nlen);
 			strcpy(buf + nlen, nbuf);
 			curname = buf;
@@ -272,7 +280,7 @@ ChooseIndexName(const char *tabname, Oid namespaceId,
 				List *colnames, List *exclusionOpNames,
 				bool primary, bool isconstraint)
 {
-	char	   *indexname;
+	char *indexname;
 
 	if (primary)
 	{
@@ -322,15 +330,15 @@ ChooseIndexName(const char *tabname, Oid namespaceId,
  *
  * XXX See also ChooseForeignKeyConstraintNameAddition and
  * ChooseExtendedStatisticNameAddition.
- * 
+ *
  * (Directly copied from postgres/commands/indexcmds.c)
  */
 static char *
 ChooseIndexNameAddition(List *colnames)
 {
-	char		buf[NAMEDATALEN * 2];
-	int			buflen = 0;
-	ListCell   *lc;
+	char buf[NAMEDATALEN * 2];
+	int buflen = 0;
+	ListCell *lc;
 
 	buf[0] = '\0';
 	foreach(lc, colnames)
@@ -338,7 +346,9 @@ ChooseIndexNameAddition(List *colnames)
 		const char *name = (const char *) lfirst(lc);
 
 		if (buflen > 0)
-			buf[buflen++] = '_';	/* insert _ between names */
+		{
+			buf[buflen++] = '_';    /* insert _ between names */
+		}
 
 		/*
 		 * At this point we have buflen <= NAMEDATALEN.  name should be less
@@ -347,7 +357,9 @@ ChooseIndexNameAddition(List *colnames)
 		strlcpy(buf + buflen, name, NAMEDATALEN);
 		buflen += strlen(buf + buflen);
 		if (buflen >= NAMEDATALEN)
+		{
 			break;
+		}
 	}
 	return pstrdup(buf);
 }
