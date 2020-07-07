@@ -484,9 +484,8 @@ RegisterCitusConfigVariables(void)
 
 	DefineCustomBoolVariable(
 		"citus.binary_master_copy_format",
-		gettext_noop("Use the binary master copy format."),
-		gettext_noop("When enabled, data is copied from workers to the master "
-					 "in PostgreSQL's binary serialization format."),
+		gettext_noop("This GUC variable has been deprecated."),
+		NULL,
 		&BinaryMasterCopyFormat,
 		false,
 		PGC_USERSET,
@@ -1083,12 +1082,8 @@ RegisterCitusConfigVariables(void)
 
 	DefineCustomIntVariable(
 		"citus.max_assign_task_batch_size",
-		gettext_noop("Sets the maximum number of tasks to assign per round."),
-		gettext_noop("The master node synchronously assigns tasks to workers in "
-					 "batches. Bigger batches allow for faster task assignment, "
-					 "but it may take longer for all workers to get tasks "
-					 "if the number of workers is large. This configuration "
-					 "value controls the maximum batch size."),
+		gettext_noop("This GUC variable has been deprecated."),
+		NULL,
 		&MaxAssignTaskBatchSize,
 		64, 1, INT_MAX,
 		PGC_USERSET,

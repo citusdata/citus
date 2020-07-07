@@ -24,7 +24,6 @@
 #include "distributed/multi_client_executor.h"
 #include "distributed/multi_executor.h"
 #include "distributed/multi_physical_planner.h"
-#include "distributed/multi_resowner.h"
 #include "distributed/multi_server_executor.h"
 #include "distributed/coordinator_protocol.h"
 #include "distributed/subplan_execution.h"
@@ -33,10 +32,13 @@
 
 int RemoteTaskCheckInterval = 100; /* per cycle sleep interval in millisecs */
 int TaskExecutorType = MULTI_EXECUTOR_ADAPTIVE; /* distributed executor type */
-bool BinaryMasterCopyFormat = false; /* copy data from workers in binary format */
 bool EnableRepartitionJoins = false;
 
-int MaxAssignTaskBatchSize = 64; /* maximum number of tasks to assign per round */
+/* deprecated GUC*/
+bool BinaryMasterCopyFormat = false;
+
+/* deprecated GUC*/
+int MaxAssignTaskBatchSize = 0;
 
 /*
  * JobExecutorType selects the executor type for the given distributedPlan using the task
@@ -127,21 +129,6 @@ JobExecutorType(DistributedPlan *distributedPlan)
 	}
 
 	return executorType;
-}
-
-
-/*
- * RemoveJobDirectory gets automatically called at portal drop (end of query) or
- * at transaction abort. The function removes the job directory and releases the
- * associated job resource from the resource manager.
- */
-void
-RemoveJobDirectory(uint64 jobId)
-{
-	StringInfo jobDirectoryName = MasterJobDirectoryName(jobId);
-	CitusRemoveDirectory(jobDirectoryName->data);
-
-	ResourceOwnerForgetJobDirectory(CurrentResourceOwner, jobId);
 }
 
 

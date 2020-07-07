@@ -110,7 +110,6 @@ extern StringInfo JobSchemaName(uint64 jobId);
 extern StringInfo TaskTableName(uint32 taskId);
 extern bool JobSchemaExists(StringInfo schemaName);
 extern StringInfo JobDirectoryName(uint64 jobId);
-extern StringInfo MasterJobDirectoryName(uint64 jobId);
 extern StringInfo TaskDirectoryName(uint64 jobId, uint32 taskId);
 extern StringInfo PartitionFilename(StringInfo directoryName, uint32 partitionId);
 extern bool CacheDirectoryElement(const char *filename);

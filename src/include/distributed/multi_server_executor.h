@@ -77,7 +77,6 @@ extern int MultiTaskQueryLogLevel;
 
 /* Function declarations common to more than one executor */
 extern MultiExecutorType JobExecutorType(DistributedPlan *distributedPlan);
-extern void RemoveJobDirectory(uint64 jobId);
 extern bool CheckIfSizeLimitIsExceeded(DistributedExecutionStats *executionStats);
 extern void ErrorSizeLimitIsExceeded(void);
 
