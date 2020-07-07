@@ -813,7 +813,7 @@ CurrentSearchPath(void)
 
 /*
  * PostStandardProcessUtilityChangeGlobalState performs operations to alter
- * global state of the citus utility hook. Those operations should be done
+ * global state of citus utility hook. Those operations should be done
  * after standard process utility executes even if it errors out.
  */
 static void
