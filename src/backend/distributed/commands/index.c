@@ -253,13 +253,13 @@ ChooseIndexColumnNames(List *indexElems)
 			{
 				break;          /* found nonconflicting name */
 			}
-			sprintf(nbuf, "%d", i);
+			SafeSnprintf(nbuf, 32, "%d", i);
 
 			/* Ensure generated names are shorter than NAMEDATALEN */
 			int nlen = pg_mbcliplen(origname, strlen(origname),
 									NAMEDATALEN - 1 - strlen(nbuf));
-			memcpy(buf, origname, nlen);
-			strcpy(buf + nlen, nbuf);
+			memcpy_s(buf, NAMEDATALEN, origname, nlen);
+			strcpy_s(buf + nlen, NAMEDATALEN - nlen, nbuf);
 			curname = buf;
 		}
 
