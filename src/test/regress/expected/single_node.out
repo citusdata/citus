@@ -101,14 +101,19 @@ SELECT * FROM ref, local WHERE a = c ORDER BY a;
  7 | 8 | 7 | 8
 (2 rows)
 
--- Check repartion joins are support
+-- Check repartion joins are supported
 SELECT * FROM test t1, test t2 WHERE t1.x = t2.y ORDER BY t1.x;
-ERROR:  floating-point exception
-DETAIL:  An invalid floating-point operation was signaled. This probably means an out-of-range result or an invalid operation, such as division by zero.
+ERROR:  the query contains a join that requires repartitioning
+HINT:  Set citus.enable_repartition_joins to on to enable repartitioning
 SET citus.enable_repartition_joins TO ON;
 SELECT * FROM test t1, test t2 WHERE t1.x = t2.y ORDER BY t1.x;
-ERROR:  floating-point exception
-DETAIL:  An invalid floating-point operation was signaled. This probably means an out-of-range result or an invalid operation, such as division by zero.
+ x | y | x | y
+---------------------------------------------------------------------
+ 2 | 7 | 1 | 2
+ 4 | 5 | 3 | 4
+ 5 | 6 | 4 | 5
+(3 rows)
+
 RESET citus.enable_repartition_joins;
 -- INSERT SELECT router
 BEGIN;

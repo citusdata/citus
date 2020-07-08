@@ -18,6 +18,11 @@ INSERT INTO test VALUES (1, 2), (3, 4), (5, 6), (2, 7), (4, 5);
 INSERT INTO ref VALUES (1, 2), (5, 6), (7, 8);
 INSERT INTO local VALUES (1, 2), (3, 4), (7, 8);
 
+-- Check repartion joins are supported
+SET citus.enable_repartition_joins TO ON;
+SELECT * FROM test t1, test t2 WHERE t1.x = t2.y ORDER BY t1.x;
+RESET citus.enable_repartition_joins;
+
 -- connect to the follower and check that a simple select query works, the follower
 -- is still in the default cluster and will send queries to the primary nodes
 \c - - - :follower_master_port
@@ -34,11 +39,8 @@ SELECT count(*) FROM local;
 SELECT * FROM local ORDER BY c;
 SELECT * FROM ref, local WHERE a = c ORDER BY a;
 
--- Check repartion joins are support
+SET citus.enable_repartition_joins TO ON;	
 SELECT * FROM test t1, test t2 WHERE t1.x = t2.y ORDER BY t1.x;
-SET citus.enable_repartition_joins TO ON;
-SELECT * FROM test t1, test t2 WHERE t1.x = t2.y ORDER BY t1.x;
-RESET citus.enable_repartition_joins;
 
 -- Confirm that dummy placements work
 SELECT count(*) FROM test WHERE false;
@@ -82,11 +84,8 @@ SELECT count(*) FROM local;
 SELECT * FROM local ORDER BY c;
 SELECT * FROM ref, local WHERE a = c ORDER BY a;
 
--- Check repartion joins are support
+SET citus.enable_repartition_joins TO ON;	
 SELECT * FROM test t1, test t2 WHERE t1.x = t2.y ORDER BY t1.x;
-SET citus.enable_repartition_joins TO ON;
-SELECT * FROM test t1, test t2 WHERE t1.x = t2.y ORDER BY t1.x;
-RESET citus.enable_repartition_joins;
 
 -- Confirm that dummy placements work
 SELECT count(*) FROM test WHERE false;
