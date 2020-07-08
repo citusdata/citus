@@ -36,6 +36,37 @@ $$;
 $definition$ create_function_test_maintenance_worker
 \gset
 
+CREATE TABLE prev_objects(description text);
+CREATE TABLE extension_diff(previous_object text COLLATE "C",
+                            current_object text COLLATE "C");
+
+CREATE FUNCTION print_extension_changes()
+RETURNS TABLE(previous_object text, current_object text)
+AS $func$
+BEGIN
+	TRUNCATE TABLE extension_diff;
+
+	CREATE TABLE current_objects AS
+	SELECT pg_catalog.pg_describe_object(classid, objid, 0) AS description
+	FROM pg_catalog.pg_depend, pg_catalog.pg_extension e
+	WHERE refclassid = 'pg_catalog.pg_extension'::pg_catalog.regclass
+		AND refobjid = e.oid
+		AND deptype = 'e'
+		AND e.extname='citus';
+
+	INSERT INTO extension_diff
+	SELECT p.description previous_object, c.description current_object
+	FROM current_objects c FULL JOIN prev_objects p
+	ON p.description = c.description
+	WHERE p.description is null OR c.description is null;
+
+	DROP TABLE prev_objects;
+	ALTER TABLE current_objects RENAME TO prev_objects;
+
+	RETURN QUERY SELECT * FROM extension_diff ORDER BY 1, 2;
+END
+$func$ LANGUAGE plpgsql;
+
 CREATE SCHEMA test;
 :create_function_test_maintenance_worker
 
@@ -121,15 +152,38 @@ ALTER EXTENSION citus UPDATE TO '9.0-2';
 ALTER EXTENSION citus UPDATE TO '9.1-1';
 ALTER EXTENSION citus UPDATE TO '9.2-1';
 ALTER EXTENSION citus UPDATE TO '9.2-2';
+-- Snapshot of state at 9.2-2
+SELECT * FROM print_extension_changes();
+
+-- Test downgrade to 9.2-2 from 9.2-4
 ALTER EXTENSION citus UPDATE TO '9.2-4';
+ALTER EXTENSION citus UPDATE TO '9.2-2';
+-- Should be empty result since upgrade+downgrade should be a no-op
+SELECT * FROM print_extension_changes();
+
 /*
- * As we mistakenly bumped schema version to 9.3-1 (in previous
- * release), we support updating citus schema from 9.3-1 to 9.2-4,
- * but we do not support explicitly updating it to to 9.3-1.
- * Hence below update (to 9.3-1) command should fail.
+ * As we mistakenly bumped schema version to 9.3-1 in a bad release, we support
+ * updating citus schema from 9.3-1 to 9.2-4, but we do not support updates to 9.3-1.
+ *
+ * Hence the query below should fail.
  */
 ALTER EXTENSION citus UPDATE TO '9.3-1';
+
+ALTER EXTENSION citus UPDATE TO '9.2-4';
+-- Snapshot of state at 9.2-4
+SELECT * FROM print_extension_changes();
+
+-- Test downgrade to 9.2-4 from 9.3-2
 ALTER EXTENSION citus UPDATE TO '9.3-2';
+ALTER EXTENSION citus UPDATE TO '9.2-4';
+-- Should be empty result since upgrade+downgrade should be a no-op
+SELECT * FROM print_extension_changes();
+
+-- Snapshot of state at 9.3-2
+ALTER EXTENSION citus UPDATE TO '9.3-2';
+SELECT * FROM print_extension_changes();
+
+DROP TABLE prev_objects, extension_diff;
 
 -- show running version
 SHOW citus.version;
