@@ -24,6 +24,7 @@ install-headers: extension
 	$(INSTALL_DATA) $(citus_top_builddir)/src/include/citus_version.h '$(DESTDIR)$(includedir_server)/'
 # the rest in the source tree
 	$(INSTALL_DATA) $(citus_abs_srcdir)/src/include/distributed/*.h '$(DESTDIR)$(includedir_server)/distributed/'
+
 clean-extension:
 	$(MAKE) -C src/backend/distributed/ clean
 clean-full:
@@ -31,6 +32,11 @@ clean-full:
 .PHONY: extension install-extension clean-extension clean-full
 # Add to generic targets
 install: install-extension install-headers
+install-downgrades:
+	$(MAKE) -C src/backend/distributed/ install-downgrades
+install-all: install-headers
+	$(MAKE) -C src/backend/distributed/ install-all
+
 clean: clean-extension
 
 # apply or check style
@@ -44,4 +50,4 @@ check-style:
 check: all install
 	$(MAKE) -C src/test/regress check-full
 
-.PHONY: all check install clean
+.PHONY: all check clean install install-downgrades install-all
