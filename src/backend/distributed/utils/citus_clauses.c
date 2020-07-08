@@ -149,7 +149,7 @@ PartiallyEvaluateExpression(Node *expression,
 		{
 			return (Node *) expression_tree_mutator(expression,
 													PartiallyEvaluateExpression,
-													masterEvaluationContext);
+													coordinatorEvaluationContext);
 		}
 
 		if (FindNodeCheck(expression, IsVariableExpression))
