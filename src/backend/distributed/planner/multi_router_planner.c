@@ -2675,7 +2675,6 @@ BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError)
 	Oid distributedTableId = ExtractFirstCitusTableId(query);
 	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(distributedTableId);
 	char partitionMethod = cacheEntry->partitionMethod;
-	uint32 rangeTableId = 1;
 	List *modifyRouteList = NIL;
 	ListCell *insertValuesCell = NULL;
 
@@ -2713,7 +2712,7 @@ BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError)
 		return modifyRouteList;
 	}
 
-	Var *partitionColumn = PartitionColumn(distributedTableId, rangeTableId);
+	Var *partitionColumn = cacheEntry->partitionColumn;
 
 	/* get full list of insert values and iterate over them to prune */
 	List *insertValuesList = ExtractInsertValuesList(query, partitionColumn);
@@ -2722,8 +2721,38 @@ BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError)
 	{
 		InsertValues *insertValues = (InsertValues *) lfirst(insertValuesCell);
 		List *prunedShardIntervalList = NIL;
-		Expr *partitionValueExpr = (Expr *) strip_implicit_coercions(
-			(Node *) insertValues->partitionValueExpr);
+		Node *partitionValueExpr = (Node *) insertValues->partitionValueExpr;
+
+		/*
+		 * We only support constant partition values at this point. Sometimes
+		 * they are wrappend in an implicit coercion though. Most notably
+		 * FuncExpr coercions for casts created with CREATE CAST ... WITH
+		 * FUNCTION .. AS IMPLICIT. To support this first we strip them here.
+		 * Then we do the coercion manually below using
+		 * TransformPartitionRestrictionValue, if the types are not the same.
+		 *
+		 * NOTE: eval_const_expressions below would do some of these removals
+		 * too, but it's unclear if it would do all of them. It is possible
+		 * that there are no cases where this strip_implicit_coercions call is
+		 * really necessary at all, but currently that's hard to rule out.
+		 * So to be on the safe side we call strip_implicit_coercions too, to
+		 * be sure we support as much as possible.
+		 */
+		partitionValueExpr = strip_implicit_coercions(partitionValueExpr);
+
+		/*
+		 * By evaluating constant expressions an expression such as 2 + 4
+		 * will become const 6. That way we can use them as a partition column
+		 * value. Normally the planner evaluates constant expressions, but we
+		 * may be working on the original query tree here. So we do it here
+		 * explicitely before checking that the partition value is a const.
+		 *
+		 * NOTE: We do not use expression_planner here, since all it does
+		 * apart from calling eval_const_expressions is call fix_opfuncids.
+		 * This is not needed here, since it's a no-op for T_Const nodes and we
+		 * error out below in all other cases.
+		 */
+		partitionValueExpr = eval_const_expressions(NULL, partitionValueExpr);
 
 		if (!IsA(partitionValueExpr, Const))
 		{
@@ -2740,21 +2769,20 @@ BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError)
 								   "column")));
 		}
 
+		/* actually do the coercions that we skipped before, if fails throw an
+		 * error */
+		if (partitionValueConst->consttype != partitionColumn->vartype)
+		{
+			bool missingOk = false;
+			partitionValueConst =
+				TransformPartitionRestrictionValue(partitionColumn,
+												   partitionValueConst,
+												   missingOk);
+		}
+
 		if (partitionMethod == DISTRIBUTE_BY_HASH || partitionMethod ==
 			DISTRIBUTE_BY_RANGE)
 		{
-			Var *distributionKey = cacheEntry->partitionColumn;
-
-			/* handle coercions, if fails throw an error */
-			if (partitionValueConst->consttype != distributionKey->vartype)
-			{
-				bool missingOk = false;
-				partitionValueConst =
-					TransformPartitionRestrictionValue(distributionKey,
-													   partitionValueConst,
-													   missingOk);
-			}
-
 			Datum partitionValue = partitionValueConst->constvalue;
 
 			ShardInterval *shardInterval = FindShardInterval(partitionValue, cacheEntry);
