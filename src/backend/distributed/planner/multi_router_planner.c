@@ -156,6 +156,7 @@ static DeferredErrorMessage * MultiRouterPlannableQuery(Query *query);
 static DeferredErrorMessage * ErrorIfQueryHasUnroutableModifyingCTE(Query *queryTree);
 static bool SelectsFromDistributedTable(List *rangeTableList, Query *query);
 static ShardPlacement * CreateDummyPlacement(bool hasLocalRelation);
+static ShardPlacement * CreateLocalDummyPlacement();
 static List * get_all_actual_clauses(List *restrictinfo_list);
 static int CompareInsertValuesByShardId(const void *leftElement,
 										const void *rightElement);
@@ -2233,6 +2234,25 @@ CreateTaskPlacementListForShardIntervals(List *shardIntervalListList, bool shard
 
 
 /*
+ * CreateLocalDummyPlacement creates a dummy placement for the local node that
+ * can be used for queries that don't involve any shards. The typical examples
+ * are:
+ *       (a) queries that consist of only intermediate results
+ *       (b) queries that hit zero shards (... WHERE false;)
+ */
+static ShardPlacement *
+CreateLocalDummyPlacement()
+{
+	ShardPlacement *dummyPlacement = CitusMakeNode(ShardPlacement);
+	dummyPlacement->nodeId = LOCAL_NODE_ID;
+	dummyPlacement->nodeName = LOCAL_HOST_NAME;
+	dummyPlacement->nodePort = PostPortNumber;
+	dummyPlacement->groupId = GetLocalGroupId();
+	return dummyPlacement;
+}
+
+
+/*
  * CreateDummyPlacement creates a dummy placement that can be used for queries
  * that don't involve any shards. The typical examples are:
  *       (a) queries that consist of only intermediate results
@@ -2248,31 +2268,32 @@ static ShardPlacement *
 CreateDummyPlacement(bool hasLocalRelation)
 {
 	static uint32 zeroShardQueryRoundRobin = 0;
+
+	if (TaskAssignmentPolicy != TASK_ASSIGNMENT_ROUND_ROBIN || hasLocalRelation)
+	{
+		return CreateLocalDummyPlacement();
+	}
+
+	List *workerNodeList = ActiveReadableWorkerNodeList();
+	if (workerNodeList == NIL)
+	{
+		/*
+		 * We want to round-robin over the workers, but there are no workers.
+		 * To make sure the query can still succeed we fall back to returning
+		 * a local dummy placement.
+		 */
+		return CreateLocalDummyPlacement();
+	}
+
+	int workerNodeCount = list_length(workerNodeList);
+	int workerNodeIndex = zeroShardQueryRoundRobin % workerNodeCount;
+	WorkerNode *workerNode = (WorkerNode *) list_nth(workerNodeList,
+													 workerNodeIndex);
+
 	ShardPlacement *dummyPlacement = CitusMakeNode(ShardPlacement);
+	SetPlacementNodeMetadata(dummyPlacement, workerNode);
 
-	if (TaskAssignmentPolicy == TASK_ASSIGNMENT_ROUND_ROBIN && !hasLocalRelation)
-	{
-		List *workerNodeList = ActiveReadableWorkerNodeList();
-		if (workerNodeList == NIL)
-		{
-			return NULL;
-		}
-
-		int workerNodeCount = list_length(workerNodeList);
-		int workerNodeIndex = zeroShardQueryRoundRobin % workerNodeCount;
-		WorkerNode *workerNode = (WorkerNode *) list_nth(workerNodeList,
-														 workerNodeIndex);
-		SetPlacementNodeMetadata(dummyPlacement, workerNode);
-
-		zeroShardQueryRoundRobin++;
-	}
-	else
-	{
-		dummyPlacement->nodeId = LOCAL_NODE_ID;
-		dummyPlacement->nodeName = LOCAL_HOST_NAME;
-		dummyPlacement->nodePort = PostPortNumber;
-		dummyPlacement->groupId = GetLocalGroupId();
-	}
+	zeroShardQueryRoundRobin++;
 
 	return dummyPlacement;
 }

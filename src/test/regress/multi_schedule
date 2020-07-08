@@ -21,6 +21,7 @@
 # ---
 test: multi_extension
 test: multi_703_upgrade
+test: single_node
 test: multi_cluster_management
 test: alter_role_propagation
 test: propagate_extension_commands
