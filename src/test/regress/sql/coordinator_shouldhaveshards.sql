@@ -87,10 +87,13 @@ SELECT create_distributed_table('dist_table', 'a', colocate_with := 'none');
 SELECT count(*) FROM dist_table;
 ROLLBACK;
 
-BEGIN;
-SET citus.enable_repartition_joins TO ON;
-SELECT count(*) FROM test t1, test t2 WHERE t1.x = t2.y;
-ROLLBACK;
+-- Commented out since it currently does not clean up task files on the
+-- coordinator
+-- See this issue for details: https://github.com/citusdata/citus/issues/3996
+-- BEGIN;
+-- SET citus.enable_repartition_joins TO ON;
+-- SELECT count(*) FROM test t1, test t2 WHERE t1.x = t2.y;
+-- ROLLBACK;
 
 BEGIN;
 SET citus.enable_repartition_joins TO ON;
