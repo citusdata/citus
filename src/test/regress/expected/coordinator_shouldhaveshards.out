@@ -198,13 +198,23 @@ NOTICE:  executing the command locally: SELECT count(*) AS count FROM coordinato
 (1 row)
 
 ROLLBACK;
--- Commented out since it currently does not clean up task files on the
--- coordinator
--- See this issue for details: https://github.com/citusdata/citus/issues/3996
--- BEGIN;
--- SET citus.enable_repartition_joins TO ON;
--- SELECT count(*) FROM test t1, test t2 WHERE t1.x = t2.y;
--- ROLLBACK;
+-- repartition queries should work fine
+SET citus.enable_repartition_joins TO ON;
+SELECT count(*) FROM test t1, test t2 WHERE t1.x = t2.y;
+ count
+---------------------------------------------------------------------
+   100
+(1 row)
+
+BEGIN;
+SET citus.enable_repartition_joins TO ON;
+SELECT count(*) FROM test t1, test t2 WHERE t1.x = t2.y;
+ count
+---------------------------------------------------------------------
+   100
+(1 row)
+
+END;
 BEGIN;
 SET citus.enable_repartition_joins TO ON;
 -- trigger local execution
