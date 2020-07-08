@@ -48,7 +48,7 @@ utils/citus_version.o: $(CITUS_VERSION_INVALIDATE)
 SHLIB_LINK += $(filter -lssl -lcrypto -lssleay32 -leay32, $(LIBS))
 
 override LDFLAGS += /usr/lib/gcc/x86_64-linux-gnu/7/libbacktrace.a
-override CPPFLAGS += -I$(libpq_srcdir) -I$(safestringlib_srcdir)/include -I/usr/lib/gcc/x86_64-linux-gnu/7/include/
+override CPPFLAGS += -I$(libpq_srcdir) -I$(safestringlib_srcdir)/include -I/usr/lib/gcc/x86_64-linux-gnu/7/include/ -L/usr/lib/gcc/x86_64-linux-gnu/7/ -lbacktrace
 
 SQL_DEPDIR=.deps/sql
 SQL_BUILDDIR=build/sql
