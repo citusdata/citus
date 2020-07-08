@@ -15,6 +15,9 @@ ci_scripts=$(
 )
 for script in $ci_scripts; do
     if ! grep "\\bci/$script\\b" .circleci/config.yml > /dev/null; then
+        if [ "$script" = "check_enterprise_merge.sh" ]; then
+          continue;
+        fi
         echo "ERROR: CI script with name \"$script\" is not actually used in .circleci/config.yml"
         exit 1
     fi

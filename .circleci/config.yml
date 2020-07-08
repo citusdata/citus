@@ -485,16 +485,6 @@ jobs:
           name: 'Install and Test (check-failure)'
           command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext check-failure'
           no_output_timeout: 2m
-
-  check-merge-to-enterprise:
-    docker:
-      - image: citus/extbuilder:13beta3
-    working_directory: /home/circleci/project
-    steps:
-      - checkout
-      - run:
-          command: |
-            ci/check_enterprise_merge.sh
   ch_benchmark:
     docker:
       - image: buildpack-deps:stretch
@@ -529,13 +519,6 @@ workflows:
   version: 2
   build_and_test:
     jobs:
-
-      - check-merge-to-enterprise:
-          filters:
-            branches:
-              ignore:
-                - /release-[0-9]+\.[0-9]+.*/ # match with releaseX.Y.*
-
 
       - build-11
       - build-12
