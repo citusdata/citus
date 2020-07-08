@@ -76,6 +76,9 @@ static int activeDropSchemaOrDBs = 0;
 static void ExecuteDistributedDDLJob(DDLJob *ddlJob);
 static char * SetSearchPathToCurrentSearchPathCommand(void);
 static char * CurrentSearchPath(void);
+static void IncrementUtilityHookCountersIfNecessary(Node *parsetree);
+static void PostStandardProcessUtility(Node *parsetree);
+static void DecrementUtilityHookCountersIfNecessary(Node *parsetree);
 static bool IsDropSchemaOrDB(Node *parsetree);
 
 
@@ -467,15 +470,7 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 
 	PG_TRY();
 	{
-		if (IsA(parsetree, AlterTableStmt))
-		{
-			activeAlterTables++;
-		}
-
-		if (IsDropSchemaOrDB(parsetree))
-		{
-			activeDropSchemaOrDBs++;
-		}
+		IncrementUtilityHookCountersIfNecessary(parsetree);
 
 		/*
 		 * Check if we are running ALTER EXTENSION citus UPDATE (TO "<version>") command and
@@ -521,27 +516,11 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		 */
 		CommandCounterIncrement();
 
-		if (IsA(parsetree, AlterTableStmt))
-		{
-			activeAlterTables--;
-		}
-
-		if (IsDropSchemaOrDB(parsetree))
-		{
-			activeDropSchemaOrDBs--;
-		}
+		PostStandardProcessUtility(parsetree);
 	}
 	PG_CATCH();
 	{
-		if (IsA(parsetree, AlterTableStmt))
-		{
-			activeAlterTables--;
-		}
-
-		if (IsDropSchemaOrDB(parsetree))
-		{
-			activeDropSchemaOrDBs--;
-		}
+		PostStandardProcessUtility(parsetree);
 
 		PG_RE_THROW();
 	}
@@ -594,16 +573,6 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 
 		PostprocessAlterTableStmtAttachPartition(alterTableStatement, queryString);
 	}
-
-	/*
-	 * Re-forming the foreign key graph relies on the command being executed
-	 * on the local table first. However, in order to decide whether the
-	 * command leads to an invalidation, we need to check before the command
-	 * is being executed since we read pg_constraint table. Thus, we maintain a
-	 * local flag and do the invalidation after multi_ProcessUtility,
-	 * before ExecuteDistributedDDLJob().
-	 */
-	InvalidateForeignKeyGraphForDDL();
 
 	/* after local command has completed, finish by executing worker DDLJobs, if any */
 	if (ddlJobs != NIL)
@@ -823,6 +792,68 @@ CurrentSearchPath(void)
 	list_free(searchPathList);
 
 	return (currentSearchPath->len > 0 ? currentSearchPath->data : NULL);
+}
+
+
+/*
+ * IncrementUtilityHookCountersIfNecessary increments activeAlterTables and
+ * activeDropSchemaOrDBs counters if utility command being processed implies
+ * to do so.
+ */
+static void
+IncrementUtilityHookCountersIfNecessary(Node *parsetree)
+{
+	if (IsA(parsetree, AlterTableStmt))
+	{
+		activeAlterTables++;
+	}
+
+	if (IsDropSchemaOrDB(parsetree))
+	{
+		activeDropSchemaOrDBs++;
+	}
+}
+
+
+/*
+ * PostStandardProcessUtility performs operations to alter (backend) global
+ * state of citus utility hook. Those operations should be done after standard
+ * process utility executes even if it errors out.
+ */
+static void
+PostStandardProcessUtility(Node *parsetree)
+{
+	DecrementUtilityHookCountersIfNecessary(parsetree);
+
+	/*
+	 * Re-forming the foreign key graph relies on the command being executed
+	 * on the local table first. However, in order to decide whether the
+	 * command leads to an invalidation, we need to check before the command
+	 * is being executed since we read pg_constraint table. Thus, we maintain a
+	 * local flag and do the invalidation after multi_ProcessUtility,
+	 * before ExecuteDistributedDDLJob().
+	 */
+	InvalidateForeignKeyGraphForDDL();
+}
+
+
+/*
+ * DecrementUtilityHookCountersIfNecessary decrements activeAlterTables and
+ * activeDropSchemaOrDBs counters if utility command being processed implies
+ * to do so.
+ */
+static void
+DecrementUtilityHookCountersIfNecessary(Node *parsetree)
+{
+	if (IsA(parsetree, AlterTableStmt))
+	{
+		activeAlterTables--;
+	}
+
+	if (IsDropSchemaOrDB(parsetree))
+	{
+		activeDropSchemaOrDBs--;
+	}
 }
 
 

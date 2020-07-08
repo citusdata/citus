@@ -964,6 +964,64 @@ DETAIL:  distribution column value: 1
 (1 row)
 
 RESET client_min_messages;
+-- https://github.com/citusdata/citus/issues/3975
+WITH mb AS (INSERT INTO modify_table VALUES (3, 3) RETURNING NULL, NULL) SELECT * FROM modify_table WHERE id = 3;
+ id | val
+---------------------------------------------------------------------
+  3 |   3
+(1 row)
+
+WITH mb AS (UPDATE modify_table SET val = 3 WHERE id = 3 RETURNING NULL) SELECT * FROM modify_table WHERE id = 3;
+ id | val
+---------------------------------------------------------------------
+  3 |   3
+(1 row)
+
+WITH mb AS (UPDATE modify_table SET val = 3 WHERE id = 3 RETURNING NULL) SELECT * FROM modify_table, mb WHERE id = 3;
+ERROR:  column mb.?column? does not exist
+CONTEXT:  while executing command on localhost:xxxxx
+WITH mb AS (UPDATE modify_table SET val = 3 WHERE id = 3 RETURNING NULL, NULL) SELECT * FROM modify_table WHERE id = 3;
+ id | val
+---------------------------------------------------------------------
+  3 |   3
+(1 row)
+
+WITH mb AS (UPDATE modify_table SET val = 3 WHERE id = 3 RETURNING NULL, NULL) SELECT * FROM modify_table, mb WHERE id = 3;
+ id | val | ?column? | ?column?
+---------------------------------------------------------------------
+  3 |   3 |          |
+(1 row)
+
+WITH mb AS (UPDATE modify_table SET val = 3 WHERE id = 3 RETURNING NULL alias) SELECT * FROM modify_table WHERE id = 3;
+ id | val
+---------------------------------------------------------------------
+  3 |   3
+(1 row)
+
+WITH mb AS (UPDATE modify_table SET val = 3 WHERE id = 3 RETURNING NULL alias) SELECT * FROM modify_table, mb WHERE id = 3;
+ id | val | alias
+---------------------------------------------------------------------
+  3 |   3 |
+(1 row)
+
+WITH mb AS (UPDATE modify_table SET val = 3 WHERE id = 3 RETURNING val) SELECT * FROM modify_table WHERE id = 3;
+ id | val
+---------------------------------------------------------------------
+  3 |   3
+(1 row)
+
+WITH mb AS (UPDATE modify_table SET val = 3 WHERE id = 3 RETURNING val) SELECT * FROM modify_table, mb WHERE id = 3;
+ id | val | val
+---------------------------------------------------------------------
+  3 |   3 |   3
+(1 row)
+
+WITH mb AS (DELETE FROM modify_table WHERE id = 3 RETURNING NULL, NULL) SELECT * FROM modify_table WHERE id = 3;
+ id | val
+---------------------------------------------------------------------
+  3 |   3
+(1 row)
+
 \set VERBOSITY terse
 DROP SCHEMA with_modifying CASCADE;
 NOTICE:  drop cascades to 9 other objects

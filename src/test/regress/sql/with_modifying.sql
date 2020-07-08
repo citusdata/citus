@@ -539,5 +539,17 @@ WITH mu AS (WITH allref AS (SELECT id a FROM anchor_table) UPDATE modify_table S
 WITH mu AS (WITH allref AS (SELECT now() a FROM anchor_table) UPDATE modify_table SET val = 3 WHERE id = 1 AND now() IN (SELECT a FROM allref) RETURNING id+1) SELECT count(*) FROM mu;
 RESET client_min_messages;
 
+-- https://github.com/citusdata/citus/issues/3975
+WITH mb AS (INSERT INTO modify_table VALUES (3, 3) RETURNING NULL, NULL) SELECT * FROM modify_table WHERE id = 3;
+WITH mb AS (UPDATE modify_table SET val = 3 WHERE id = 3 RETURNING NULL) SELECT * FROM modify_table WHERE id = 3;
+WITH mb AS (UPDATE modify_table SET val = 3 WHERE id = 3 RETURNING NULL) SELECT * FROM modify_table, mb WHERE id = 3;
+WITH mb AS (UPDATE modify_table SET val = 3 WHERE id = 3 RETURNING NULL, NULL) SELECT * FROM modify_table WHERE id = 3;
+WITH mb AS (UPDATE modify_table SET val = 3 WHERE id = 3 RETURNING NULL, NULL) SELECT * FROM modify_table, mb WHERE id = 3;
+WITH mb AS (UPDATE modify_table SET val = 3 WHERE id = 3 RETURNING NULL alias) SELECT * FROM modify_table WHERE id = 3;
+WITH mb AS (UPDATE modify_table SET val = 3 WHERE id = 3 RETURNING NULL alias) SELECT * FROM modify_table, mb WHERE id = 3;
+WITH mb AS (UPDATE modify_table SET val = 3 WHERE id = 3 RETURNING val) SELECT * FROM modify_table WHERE id = 3;
+WITH mb AS (UPDATE modify_table SET val = 3 WHERE id = 3 RETURNING val) SELECT * FROM modify_table, mb WHERE id = 3;
+WITH mb AS (DELETE FROM modify_table WHERE id = 3 RETURNING NULL, NULL) SELECT * FROM modify_table WHERE id = 3;
+
 \set VERBOSITY terse
 DROP SCHEMA with_modifying CASCADE;
