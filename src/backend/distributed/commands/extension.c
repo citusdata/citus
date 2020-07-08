@@ -190,7 +190,7 @@ PostprocessCreateExtensionStmt(Node *node, const char *queryString)
 
 	MarkObjectDistributed(&extensionAddress);
 
-	return NodeDDLTaskList(ALL_WORKERS, commands);
+	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
 }
 
 
@@ -306,7 +306,7 @@ PreprocessDropExtensionStmt(Node *node, const char *queryString)
 								(void *) deparsedStmt,
 								ENABLE_DDL_PROPAGATION);
 
-	return NodeDDLTaskList(ALL_WORKERS, commands);
+	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
 }
 
 
@@ -421,7 +421,7 @@ PreprocessAlterExtensionSchemaStmt(Node *node, const char *queryString)
 								(void *) alterExtensionStmtSql,
 								ENABLE_DDL_PROPAGATION);
 
-	return NodeDDLTaskList(ALL_WORKERS, commands);
+	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
 }
 
 
@@ -489,7 +489,7 @@ PreprocessAlterExtensionUpdateStmt(Node *node, const char *queryString)
 								(void *) alterExtensionStmtSql,
 								ENABLE_DDL_PROPAGATION);
 
-	return NodeDDLTaskList(ALL_WORKERS, commands);
+	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
 }
 
 

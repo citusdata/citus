@@ -201,16 +201,10 @@ TargetWorkerSetNodeList(TargetWorkerSet targetWorkerSet, LOCKMODE lockMode)
 	List *workerNodeList = ActivePrimaryNonCoordinatorNodeList(lockMode);
 	List *result = NIL;
 
-	int32 localGroupId = GetLocalGroupId();
-
 	WorkerNode *workerNode = NULL;
 	foreach_ptr(workerNode, workerNodeList)
 	{
-		if (targetWorkerSet == WORKERS_WITH_METADATA && !workerNode->hasMetadata)
-		{
-			continue;
-		}
-		if (targetWorkerSet == OTHER_WORKERS && workerNode->groupId == localGroupId)
+		if (targetWorkerSet == NON_COORDINATOR_METADATA_NODES && !workerNode->hasMetadata)
 		{
 			continue;
 		}
@@ -232,7 +226,7 @@ TargetWorkerSetNodeList(TargetWorkerSet targetWorkerSet, LOCKMODE lockMode)
 void
 SendBareCommandListToMetadataWorkers(List *commandList)
 {
-	TargetWorkerSet targetWorkerSet = WORKERS_WITH_METADATA;
+	TargetWorkerSet targetWorkerSet = NON_COORDINATOR_METADATA_NODES;
 	List *workerNodeList = TargetWorkerSetNodeList(targetWorkerSet, ShareLock);
 	char *nodeUser = CitusExtensionOwnerName();
 
@@ -271,7 +265,7 @@ SendBareCommandListToMetadataWorkers(List *commandList)
 int
 SendBareOptionalCommandListToAllWorkersAsUser(List *commandList, const char *user)
 {
-	TargetWorkerSet targetWorkerSet = ALL_WORKERS;
+	TargetWorkerSet targetWorkerSet = NON_COORDINATOR_NODES;
 	List *workerNodeList = TargetWorkerSetNodeList(targetWorkerSet, ShareLock);
 	int maxError = RESPONSE_OKAY;
 
@@ -318,11 +312,12 @@ SendCommandToMetadataWorkersParams(const char *command,
 								   const Oid *parameterTypes,
 								   const char *const *parameterValues)
 {
-	List *workerNodeList = TargetWorkerSetNodeList(WORKERS_WITH_METADATA, ShareLock);
+	List *workerNodeList = TargetWorkerSetNodeList(NON_COORDINATOR_METADATA_NODES,
+												   ShareLock);
 
 	ErrorIfAnyMetadataNodeOutOfSync(workerNodeList);
 
-	SendCommandToWorkersParamsInternal(WORKERS_WITH_METADATA, command, user,
+	SendCommandToWorkersParamsInternal(NON_COORDINATOR_METADATA_NODES, command, user,
 									   parameterCount, parameterTypes,
 									   parameterValues);
 }

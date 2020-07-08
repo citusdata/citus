@@ -148,7 +148,7 @@ PreprocessGrantOnSchemaStmt(Node *node, const char *queryString)
 
 	stmt->objects = originalObjects;
 
-	return NodeDDLTaskList(ALL_WORKERS, list_make1(sql));
+	return NodeDDLTaskList(NON_COORDINATOR_NODES, list_make1(sql));
 }
 
 

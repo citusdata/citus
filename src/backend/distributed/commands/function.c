@@ -169,7 +169,7 @@ create_distributed_function(PG_FUNCTION_ARGS)
 	const char *alterFunctionOwnerSQL = GetFunctionAlterOwnerCommand(funcOid);
 	initStringInfo(&ddlCommand);
 	appendStringInfo(&ddlCommand, "%s;%s", createFunctionSQL, alterFunctionOwnerSQL);
-	SendCommandToWorkersAsUser(ALL_WORKERS, CurrentUserName(), ddlCommand.data);
+	SendCommandToWorkersAsUser(NON_COORDINATOR_NODES, CurrentUserName(), ddlCommand.data);
 
 	MarkObjectDistributed(&functionAddress);
 
@@ -1192,7 +1192,7 @@ PostprocessCreateFunctionStmt(Node *node, const char *queryString)
 								GetFunctionAlterOwnerCommand(address.objectId),
 								ENABLE_DDL_PROPAGATION);
 
-	return NodeDDLTaskList(ALL_WORKERS, commands);
+	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
 }
 
 
@@ -1279,7 +1279,7 @@ PreprocessAlterFunctionStmt(Node *node, const char *queryString)
 								(void *) sql,
 								ENABLE_DDL_PROPAGATION);
 
-	return NodeDDLTaskList(ALL_WORKERS, commands);
+	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
 }
 
 
@@ -1312,7 +1312,7 @@ PreprocessRenameFunctionStmt(Node *node, const char *queryString)
 								(void *) sql,
 								ENABLE_DDL_PROPAGATION);
 
-	return NodeDDLTaskList(ALL_WORKERS, commands);
+	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
 }
 
 
@@ -1343,7 +1343,7 @@ PreprocessAlterFunctionSchemaStmt(Node *node, const char *queryString)
 								(void *) sql,
 								ENABLE_DDL_PROPAGATION);
 
-	return NodeDDLTaskList(ALL_WORKERS, commands);
+	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
 }
 
 
@@ -1375,7 +1375,7 @@ PreprocessAlterFunctionOwnerStmt(Node *node, const char *queryString)
 								(void *) sql,
 								ENABLE_DDL_PROPAGATION);
 
-	return NodeDDLTaskList(ALL_WORKERS, commands);
+	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
 }
 
 
@@ -1477,7 +1477,7 @@ PreprocessDropFunctionStmt(Node *node, const char *queryString)
 								(void *) dropStmtSql,
 								ENABLE_DDL_PROPAGATION);
 
-	return NodeDDLTaskList(ALL_WORKERS, commands);
+	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
 }
 
 
