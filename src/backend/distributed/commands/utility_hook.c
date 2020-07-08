@@ -946,7 +946,7 @@ NodeDDLTaskList(TargetWorkerSet targets, List *commands)
 	{
 		/*
 		 * if there are no nodes we don't have to plan any ddl tasks. Planning them would
-		 * cause a hang in the executor.
+		 * cause the executor to stop responding.
 		 */
 		return NIL;
 	}
