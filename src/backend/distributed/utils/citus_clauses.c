@@ -142,7 +142,7 @@ PartiallyEvaluateExpression(Node *expression,
 		 * 1 = 0 AND now() > timestamp '10-10-2000 00:00'
 		 *
 		 * This statement would simply resolve to false, because 1 = 0 is
-		 * false. That's whe we now check again if we should evaluate the
+		 * false. That's why we now check again if we should evaluate the
 		 * expression and only continue if we still do.
 		 */
 		if (!ShouldEvaluateExpression((Expr *) expression))
