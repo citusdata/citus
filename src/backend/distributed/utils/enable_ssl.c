@@ -367,8 +367,8 @@ CreateCertificate(EVP_PKEY *privateKey)
 	 * Postgres does not check the validity on the certificates, but we can't omit the
 	 * dates either to create a certificate that can be parsed. We settled on a validity
 	 * of 0 seconds. When postgres would fix the validity check in a future version it
-	 * would fail right after an upgrade instead of setting a time bomb till certificate
-	 * expiration date.
+	 * would fail right after an upgrade. Instead of working until the certificate
+	 * expiration date and then suddenly erroring out.
 	 */
 	X509_gmtime_adj(X509_get_notBefore(certificate), 0);
 	X509_gmtime_adj(X509_get_notAfter(certificate), 0);

@@ -96,7 +96,7 @@ typedef enum MultiConnectionStructInitializationState
 } MultiConnectionStructInitializationState;
 
 
-/* declaring this directly above makes uncrustify go crazy */
+/* declaring this directly above causes uncrustify to format it badly */
 typedef enum MultiConnectionMode MultiConnectionMode;
 
 typedef struct MultiConnection
