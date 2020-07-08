@@ -76,7 +76,9 @@ static int activeDropSchemaOrDBs = 0;
 static void ExecuteDistributedDDLJob(DDLJob *ddlJob);
 static char * SetSearchPathToCurrentSearchPathCommand(void);
 static char * CurrentSearchPath(void);
-static void PostStandardProcessUtilityChangeGlobalState(Node *parsetree);
+static void IncrementUtilityHookCountersIfNecessary(Node *parsetree);
+static void PostStandardProcessUtility(Node *parsetree);
+static void DecrementUtilityHookCountersIfNecessary(Node *parsetree);
 static bool IsDropSchemaOrDB(Node *parsetree);
 
 
@@ -468,15 +470,7 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 
 	PG_TRY();
 	{
-		if (IsA(parsetree, AlterTableStmt))
-		{
-			activeAlterTables++;
-		}
-
-		if (IsDropSchemaOrDB(parsetree))
-		{
-			activeDropSchemaOrDBs++;
-		}
+		IncrementUtilityHookCountersIfNecessary(parsetree);
 
 		/*
 		 * Check if we are running ALTER EXTENSION citus UPDATE (TO "<version>") command and
@@ -522,11 +516,11 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		 */
 		CommandCounterIncrement();
 
-		PostStandardProcessUtilityChangeGlobalState(parsetree);
+		PostStandardProcessUtility(parsetree);
 	}
 	PG_CATCH();
 	{
-		PostStandardProcessUtilityChangeGlobalState(parsetree);
+		PostStandardProcessUtility(parsetree);
 
 		PG_RE_THROW();
 	}
@@ -802,22 +796,34 @@ CurrentSearchPath(void)
 
 
 /*
- * PostStandardProcessUtilityChangeGlobalState performs operations to alter
- * global state of citus utility hook. Those operations should be done
- * after standard process utility executes even if it errors out.
+ * IncrementUtilityHookCountersIfNecessary increments activeAlterTables and
+ * activeDropSchemaOrDBs counters if utility command being processed implies
+ * to do so.
  */
 static void
-PostStandardProcessUtilityChangeGlobalState(Node *parsetree)
+IncrementUtilityHookCountersIfNecessary(Node *parsetree)
 {
 	if (IsA(parsetree, AlterTableStmt))
 	{
-		activeAlterTables--;
+		activeAlterTables++;
 	}
 
 	if (IsDropSchemaOrDB(parsetree))
 	{
-		activeDropSchemaOrDBs--;
+		activeDropSchemaOrDBs++;
 	}
+}
+
+
+/*
+ * PostStandardProcessUtility performs operations to alter (backend) global
+ * state of citus utility hook. Those operations should be done after standard
+ * process utility executes even if it errors out.
+ */
+static void
+PostStandardProcessUtility(Node *parsetree)
+{
+	DecrementUtilityHookCountersIfNecessary(parsetree);
 
 	/*
 	 * Re-forming the foreign key graph relies on the command being executed
@@ -828,6 +834,26 @@ PostStandardProcessUtilityChangeGlobalState(Node *parsetree)
 	 * before ExecuteDistributedDDLJob().
 	 */
 	InvalidateForeignKeyGraphForDDL();
+}
+
+
+/*
+ * DecrementUtilityHookCountersIfNecessary decrements activeAlterTables and
+ * activeDropSchemaOrDBs counters if utility command being processed implies
+ * to do so.
+ */
+static void
+DecrementUtilityHookCountersIfNecessary(Node *parsetree)
+{
+	if (IsA(parsetree, AlterTableStmt))
+	{
+		activeAlterTables--;
+	}
+
+	if (IsDropSchemaOrDB(parsetree))
+	{
+		activeDropSchemaOrDBs--;
+	}
 }
 
 
