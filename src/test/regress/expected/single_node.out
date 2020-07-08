@@ -1,0 +1,241 @@
+CREATE SCHEMA single_node;
+SET search_path TO single_node;
+SET citus.shard_count TO 4;
+SET citus.shard_replication_factor TO 1;
+SET citus.next_shard_id TO 90630500;
+-- idempotently add node to allow this test to run without add_coordinator
+SET client_min_messages TO WARNING;
+SELECT 1 FROM master_add_node('localhost', :master_port, groupid => 0);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+RESET client_min_messages;
+SELECT 1 FROM master_set_node_property('localhost', :master_port, 'shouldhaveshards', true);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+CREATE TABLE test(x int, y int);
+SELECT create_distributed_table('test','x');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE ref(a int, b int);
+SELECT create_reference_table('ref');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE local(c int, d int);
+-- Confirm the basics work
+INSERT INTO test VALUES (1, 2), (3, 4), (5, 6), (2, 7), (4, 5);
+SELECT * FROM test WHERE x = 1;
+ x | y
+---------------------------------------------------------------------
+ 1 | 2
+(1 row)
+
+SELECT count(*) FROM test;
+ count
+---------------------------------------------------------------------
+     5
+(1 row)
+
+SELECT * FROM test ORDER BY x;
+ x | y
+---------------------------------------------------------------------
+ 1 | 2
+ 2 | 7
+ 3 | 4
+ 4 | 5
+ 5 | 6
+(5 rows)
+
+INSERT INTO ref VALUES (1, 2), (5, 6), (7, 8);
+SELECT count(*) FROM ref;
+ count
+---------------------------------------------------------------------
+     3
+(1 row)
+
+SELECT * FROM ref ORDER BY a;
+ a | b
+---------------------------------------------------------------------
+ 1 | 2
+ 5 | 6
+ 7 | 8
+(3 rows)
+
+SELECT * FROM test, ref WHERE x = a ORDER BY x;
+ x | y | a | b
+---------------------------------------------------------------------
+ 1 | 2 | 1 | 2
+ 5 | 6 | 5 | 6
+(2 rows)
+
+INSERT INTO local VALUES (1, 2), (3, 4), (7, 8);
+SELECT count(*) FROM local;
+ count
+---------------------------------------------------------------------
+     3
+(1 row)
+
+SELECT * FROM local ORDER BY c;
+ c | d
+---------------------------------------------------------------------
+ 1 | 2
+ 3 | 4
+ 7 | 8
+(3 rows)
+
+SELECT * FROM ref, local WHERE a = c ORDER BY a;
+ a | b | c | d
+---------------------------------------------------------------------
+ 1 | 2 | 1 | 2
+ 7 | 8 | 7 | 8
+(2 rows)
+
+-- Check repartion joins are support
+SELECT * FROM test t1, test t2 WHERE t1.x = t2.y ORDER BY t1.x;
+ERROR:  floating-point exception
+DETAIL:  An invalid floating-point operation was signaled. This probably means an out-of-range result or an invalid operation, such as division by zero.
+SET citus.enable_repartition_joins TO ON;
+SELECT * FROM test t1, test t2 WHERE t1.x = t2.y ORDER BY t1.x;
+ERROR:  floating-point exception
+DETAIL:  An invalid floating-point operation was signaled. This probably means an out-of-range result or an invalid operation, such as division by zero.
+RESET citus.enable_repartition_joins;
+-- INSERT SELECT router
+BEGIN;
+INSERT INTO test(x, y) SELECT x, y FROM test WHERE x = 1;
+SELECT count(*) from test;
+ count
+---------------------------------------------------------------------
+     6
+(1 row)
+
+ROLLBACK;
+-- INSERT SELECT analytical query
+BEGIN;
+INSERT INTO test(x, y) SELECT count(x), max(y) FROM test;
+SELECT count(*) from test;
+ count
+---------------------------------------------------------------------
+     6
+(1 row)
+
+ROLLBACK;
+-- INSERT SELECT repartition
+BEGIN;
+INSERT INTO test(x, y) SELECT y, x FROM test;
+SELECT count(*) from test;
+ count
+---------------------------------------------------------------------
+    10
+(1 row)
+
+ROLLBACK;
+-- INSERT SELECT from reference table into distributed
+BEGIN;
+INSERT INTO test(x, y) SELECT a, b FROM ref;
+SELECT count(*) from test;
+ count
+---------------------------------------------------------------------
+     8
+(1 row)
+
+ROLLBACK;
+-- INSERT SELECT from local table into distributed
+BEGIN;
+INSERT INTO test(x, y) SELECT c, d FROM local;
+SELECT count(*) from test;
+ count
+---------------------------------------------------------------------
+     8
+(1 row)
+
+ROLLBACK;
+-- INSERT SELECT from distributed table to local table
+BEGIN;
+INSERT INTO ref(a, b) SELECT x, y FROM test;
+SELECT count(*) from ref;
+ count
+---------------------------------------------------------------------
+     8
+(1 row)
+
+ROLLBACK;
+-- INSERT SELECT from distributed table to local table
+BEGIN;
+INSERT INTO ref(a, b) SELECT c, d FROM local;
+SELECT count(*) from ref;
+ count
+---------------------------------------------------------------------
+     6
+(1 row)
+
+ROLLBACK;
+-- INSERT SELECT from distributed table to local table
+BEGIN;
+INSERT INTO local(c, d) SELECT x, y FROM test;
+SELECT count(*) from local;
+ count
+---------------------------------------------------------------------
+     8
+(1 row)
+
+ROLLBACK;
+-- INSERT SELECT from distributed table to local table
+BEGIN;
+INSERT INTO local(c, d) SELECT a, b FROM ref;
+SELECT count(*) from local;
+ count
+---------------------------------------------------------------------
+     6
+(1 row)
+
+ROLLBACK;
+-- Confirm that dummy placements work
+SELECT count(*) FROM test WHERE false;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+SELECT count(*) FROM test WHERE false GROUP BY GROUPING SETS (x,y);
+ count
+---------------------------------------------------------------------
+(0 rows)
+
+-- Confirm that they work with round-robin task assignment policy
+SET citus.task_assignment_policy TO 'round-robin';
+SELECT count(*) FROM test WHERE false;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+SELECT count(*) FROM test WHERE false GROUP BY GROUPING SETS (x,y);
+ count
+---------------------------------------------------------------------
+(0 rows)
+
+RESET citus.task_assignment_policy;
+-- Cleanup
+SET client_min_messages TO WARNING;
+DROP SCHEMA single_node CASCADE;
+-- Remove the coordinator again
+SELECT 1 FROM master_remove_node('localhost', :master_port);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+-- restart nodeid sequence so that multi_cluster_management still has the same
+-- nodeids
+ALTER SEQUENCE pg_dist_node_nodeid_seq RESTART 1;
