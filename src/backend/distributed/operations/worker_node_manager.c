@@ -319,7 +319,6 @@ ActiveReadableNonCoordinatorNodeCount(void)
 	return liveWorkerCount;
 }
 
-
 /*
  * NodeIsCoordinator returns true if the given node represents the coordinator.
  */
