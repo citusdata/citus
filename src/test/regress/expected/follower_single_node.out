@@ -1,4 +1,6 @@
 \c - - - :master_port
+CREATE SCHEMA single_node;
+SET search_path TO single_node;
 SET citus.shard_count TO 4;
 SET citus.shard_replication_factor TO 1;
 SET citus.next_shard_id TO 93630500;
@@ -35,6 +37,7 @@ INSERT INTO local VALUES (1, 2), (3, 4), (7, 8);
 -- connect to the follower and check that a simple select query works, the follower
 -- is still in the default cluster and will send queries to the primary nodes
 \c - - - :follower_master_port
+SET search_path TO single_node;
 SELECT * FROM test WHERE x = 1;
  x | y
 ---------------------------------------------------------------------
@@ -145,11 +148,13 @@ EXPLAIN SELECT sum(x) FROM test WHERE false GROUP BY GROUPING SETS (x,y);
 -- secondary nodes so this should fail.
 -- (this is :follower_master_port but substitution doesn't work here)
 \c "port=9070 dbname=regression options='-c\ citus.use_secondary_nodes=always'"
+SET search_path TO single_node;
 SELECT * FROM test WHERE x = 1;
 ERROR:  node group 0 does not have a secondary node
 -- add the the follower as secondary nodes and try again, the SELECT statement
 -- should work this time
 \c - - - :master_port
+SET search_path TO single_node;
 SELECT 1 FROM master_add_node('localhost', :follower_master_port, groupid => 0, noderole => 'secondary');
  ?column?
 ---------------------------------------------------------------------
@@ -163,6 +168,7 @@ SELECT 1 FROM master_set_node_property('localhost', :master_port, 'shouldhavesha
 (1 row)
 
 \c "port=9070 dbname=regression options='-c\ citus.use_secondary_nodes=always'"
+SET search_path TO single_node;
 SELECT * FROM test WHERE x = 1;
  x | y
 ---------------------------------------------------------------------
@@ -271,7 +277,9 @@ EXPLAIN SELECT sum(x) FROM test WHERE false GROUP BY GROUPING SETS (x,y);
 
 -- Cleanup
 \c - - - :master_port
-DROP TABLE test, ref, local;
+SET search_path TO single_node;
+SET client_min_messages TO WARNING;
+DROP SCHEMA single_node CASCADE;
 -- Remove the coordinator again
 SELECT 1 FROM master_remove_node('localhost', :master_port);
  ?column?
