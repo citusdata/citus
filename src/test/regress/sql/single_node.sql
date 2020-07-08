@@ -94,10 +94,13 @@ SELECT count(*) from local;
 ROLLBACK;
 
 -- Confirm that dummy placements work
-EXPLAIN (COSTS off) SELECT sum(x) FROM test WHERE false GROUP BY GROUPING SETS (x,y);
+SELECT count(*) FROM test WHERE false;
+SELECT count(*) FROM test WHERE false GROUP BY GROUPING SETS (x,y);
 -- Confirm that they work with round-robin task assignment policy
 SET citus.task_assignment_policy TO 'round-robin';
-EXPLAIN (COSTS off) SELECT sum(x) FROM test WHERE false GROUP BY GROUPING SETS (x,y);
+SELECT count(*) FROM test WHERE false;
+SELECT count(*) FROM test WHERE false GROUP BY GROUPING SETS (x,y);
+RESET citus.task_assignment_policy;
 
 
 -- Cleanup

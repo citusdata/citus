@@ -112,38 +112,31 @@ ERROR:  floating-point exception
 DETAIL:  An invalid floating-point operation was signaled. This probably means an out-of-range result or an invalid operation, such as division by zero.
 RESET citus.enable_repartition_joins;
 -- Confirm that dummy placements work
-EXPLAIN SELECT sum(x) FROM test WHERE false GROUP BY GROUPING SETS (x,y);
-                           QUERY PLAN
+SELECT count(*) FROM test WHERE false;
+ count
 ---------------------------------------------------------------------
- Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
-   Task Count: 1
-   Tasks Shown: All
-   ->  Task
-         Node: host=localhost port=xxxxx dbname=regression
-         ->  HashAggregate  (cost=0.02..0.04 rows=2 width=16)
-               Hash Key: NULL::integer
-               Hash Key: NULL::integer
-               ->  Result  (cost=0.00..0.01 rows=1 width=8)
-                     One-Time Filter: (false AND false)
-(10 rows)
+     0
+(1 row)
+
+SELECT count(*) FROM test WHERE false GROUP BY GROUPING SETS (x,y);
+ count
+---------------------------------------------------------------------
+(0 rows)
 
 -- Confirm that they work with round-robin task assignment policy
 SET citus.task_assignment_policy TO 'round-robin';
-EXPLAIN SELECT sum(x) FROM test WHERE false GROUP BY GROUPING SETS (x,y);
-                           QUERY PLAN
+SELECT count(*) FROM test WHERE false;
+ count
 ---------------------------------------------------------------------
- Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
-   Task Count: 1
-   Tasks Shown: All
-   ->  Task
-         Node: host=localhost port=xxxxx dbname=regression
-         ->  HashAggregate  (cost=0.02..0.04 rows=2 width=16)
-               Hash Key: NULL::integer
-               Hash Key: NULL::integer
-               ->  Result  (cost=0.00..0.01 rows=1 width=8)
-                     One-Time Filter: (false AND false)
-(10 rows)
+     0
+(1 row)
 
+SELECT count(*) FROM test WHERE false GROUP BY GROUPING SETS (x,y);
+ count
+---------------------------------------------------------------------
+(0 rows)
+
+RESET citus.task_assignment_policy;
 -- now, connect to the follower but tell it to use secondary nodes. There are no
 -- secondary nodes so this should fail.
 -- (this is :follower_master_port but substitution doesn't work here)
@@ -243,38 +236,31 @@ ERROR:  floating-point exception
 DETAIL:  An invalid floating-point operation was signaled. This probably means an out-of-range result or an invalid operation, such as division by zero.
 RESET citus.enable_repartition_joins;
 -- Confirm that dummy placements work
-EXPLAIN SELECT sum(x) FROM test WHERE false GROUP BY GROUPING SETS (x,y);
-                           QUERY PLAN
+SELECT count(*) FROM test WHERE false;
+ count
 ---------------------------------------------------------------------
- Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
-   Task Count: 1
-   Tasks Shown: All
-   ->  Task
-         Node: host=localhost port=xxxxx dbname=regression
-         ->  HashAggregate  (cost=0.02..0.04 rows=2 width=16)
-               Hash Key: NULL::integer
-               Hash Key: NULL::integer
-               ->  Result  (cost=0.00..0.01 rows=1 width=8)
-                     One-Time Filter: (false AND false)
-(10 rows)
+     0
+(1 row)
+
+SELECT count(*) FROM test WHERE false GROUP BY GROUPING SETS (x,y);
+ count
+---------------------------------------------------------------------
+(0 rows)
 
 -- Confirm that they work with round-robin task assignment policy
 SET citus.task_assignment_policy TO 'round-robin';
-EXPLAIN SELECT sum(x) FROM test WHERE false GROUP BY GROUPING SETS (x,y);
-                           QUERY PLAN
+SELECT count(*) FROM test WHERE false;
+ count
 ---------------------------------------------------------------------
- Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
-   Task Count: 1
-   Tasks Shown: All
-   ->  Task
-         Node: host=localhost port=xxxxx dbname=regression
-         ->  HashAggregate  (cost=0.02..0.04 rows=2 width=16)
-               Hash Key: NULL::integer
-               Hash Key: NULL::integer
-               ->  Result  (cost=0.00..0.01 rows=1 width=8)
-                     One-Time Filter: (false AND false)
-(10 rows)
+     0
+(1 row)
 
+SELECT count(*) FROM test WHERE false GROUP BY GROUPING SETS (x,y);
+ count
+---------------------------------------------------------------------
+(0 rows)
+
+RESET citus.task_assignment_policy;
 -- Cleanup
 \c - - - :master_port
 SET search_path TO single_node;

@@ -41,10 +41,14 @@ SELECT * FROM test t1, test t2 WHERE t1.x = t2.y ORDER BY t1.x;
 RESET citus.enable_repartition_joins;
 
 -- Confirm that dummy placements work
-EXPLAIN SELECT sum(x) FROM test WHERE false GROUP BY GROUPING SETS (x,y);
+SELECT count(*) FROM test WHERE false;
+SELECT count(*) FROM test WHERE false GROUP BY GROUPING SETS (x,y);
 -- Confirm that they work with round-robin task assignment policy
 SET citus.task_assignment_policy TO 'round-robin';
-EXPLAIN SELECT sum(x) FROM test WHERE false GROUP BY GROUPING SETS (x,y);
+SELECT count(*) FROM test WHERE false;
+SELECT count(*) FROM test WHERE false GROUP BY GROUPING SETS (x,y);
+RESET citus.task_assignment_policy;
+
 
 -- now, connect to the follower but tell it to use secondary nodes. There are no
 -- secondary nodes so this should fail.
@@ -85,10 +89,13 @@ SELECT * FROM test t1, test t2 WHERE t1.x = t2.y ORDER BY t1.x;
 RESET citus.enable_repartition_joins;
 
 -- Confirm that dummy placements work
-EXPLAIN SELECT sum(x) FROM test WHERE false GROUP BY GROUPING SETS (x,y);
+SELECT count(*) FROM test WHERE false;
+SELECT count(*) FROM test WHERE false GROUP BY GROUPING SETS (x,y);
 -- Confirm that they work with round-robin task assignment policy
 SET citus.task_assignment_policy TO 'round-robin';
-EXPLAIN SELECT sum(x) FROM test WHERE false GROUP BY GROUPING SETS (x,y);
+SELECT count(*) FROM test WHERE false;
+SELECT count(*) FROM test WHERE false GROUP BY GROUPING SETS (x,y);
+RESET citus.task_assignment_policy;
 
 -- Cleanup
 \c - - - :master_port

@@ -201,38 +201,31 @@ SELECT count(*) from local;
 
 ROLLBACK;
 -- Confirm that dummy placements work
-EXPLAIN (COSTS off) SELECT sum(x) FROM test WHERE false GROUP BY GROUPING SETS (x,y);
-                        QUERY PLAN
+SELECT count(*) FROM test WHERE false;
+ count
 ---------------------------------------------------------------------
- Custom Scan (Citus Adaptive)
-   Task Count: 1
-   Tasks Shown: All
-   ->  Task
-         Node: host=localhost port=xxxxx dbname=regression
-         ->  HashAggregate
-               Hash Key: NULL::integer
-               Hash Key: NULL::integer
-               ->  Result
-                     One-Time Filter: (false AND false)
-(10 rows)
+     0
+(1 row)
+
+SELECT count(*) FROM test WHERE false GROUP BY GROUPING SETS (x,y);
+ count
+---------------------------------------------------------------------
+(0 rows)
 
 -- Confirm that they work with round-robin task assignment policy
 SET citus.task_assignment_policy TO 'round-robin';
-EXPLAIN (COSTS off) SELECT sum(x) FROM test WHERE false GROUP BY GROUPING SETS (x,y);
-                        QUERY PLAN
+SELECT count(*) FROM test WHERE false;
+ count
 ---------------------------------------------------------------------
- Custom Scan (Citus Adaptive)
-   Task Count: 1
-   Tasks Shown: All
-   ->  Task
-         Node: host=localhost port=xxxxx dbname=regression
-         ->  HashAggregate
-               Hash Key: NULL::integer
-               Hash Key: NULL::integer
-               ->  Result
-                     One-Time Filter: (false AND false)
-(10 rows)
+     0
+(1 row)
 
+SELECT count(*) FROM test WHERE false GROUP BY GROUPING SETS (x,y);
+ count
+---------------------------------------------------------------------
+(0 rows)
+
+RESET citus.task_assignment_policy;
 -- Cleanup
 SET client_min_messages TO WARNING;
 DROP SCHEMA single_node CASCADE;
