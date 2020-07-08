@@ -198,7 +198,15 @@ SendOptionalCommandListToAllWorkers(List *commandList, const char *superuser)
 List *
 TargetWorkerSetNodeList(TargetWorkerSet targetWorkerSet, LOCKMODE lockMode)
 {
-	List *workerNodeList = ActivePrimaryNonCoordinatorNodeList(lockMode);
+	List *workerNodeList = NIL;
+	if (targetWorkerSet == ALL_DATA_NODES)
+	{
+		workerNodeList = ActivePrimaryNodeList(lockMode);
+	}
+	else
+	{
+		workerNodeList = ActivePrimaryNonCoordinatorNodeList(lockMode);
+	}
 	List *result = NIL;
 
 	WorkerNode *workerNode = NULL;
