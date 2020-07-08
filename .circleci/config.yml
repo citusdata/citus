@@ -250,15 +250,6 @@ jobs:
            install-and-test-ext --target check-citus-upgrade-mixed --citus-pre-tar /install-pg11-citusv8.3.0.tar
           no_output_timeout: 2m
 
-  check-merge-to-enterprise:
-    docker:
-      - image: buildpack-deps:stretch
-    working_directory: /home/circleci/project
-    steps:
-      - checkout
-      - run:
-          command: |
-            ci/check_enterprise_merge.sh
   ch_benchmark:
     docker:
       - image: buildpack-deps:stretch
@@ -293,12 +284,6 @@ workflows:
   version: 2
   build_and_test:
     jobs:
-      - check-merge-to-enterprise:
-          filters:
-            branches:
-              ignore:
-                - /release-[0-9]+\.[0-9]+.*/ # match with releaseX.Y.*
-
       - build
       - check-style
       - check-sql-snapshots
