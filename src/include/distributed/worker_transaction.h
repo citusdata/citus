@@ -18,13 +18,13 @@
 
 /*
  * TargetWorkerSet is used for determining the type of workers that a command
- * is targeted to.
+ * is targeted to. Currently it doesn't include coordinator even if it is added
+ * as a worker.
  */
 typedef enum TargetWorkerSet
 {
-	WORKERS_WITH_METADATA,
-	OTHER_WORKERS,
-	ALL_WORKERS
+	NON_COORDINATOR_METADATA_NODES,
+	NON_COORDINATOR_NODES
 } TargetWorkerSet;
 
 

@@ -104,7 +104,7 @@ CreateTemporarySchemasForMergeTasks(Job *topLeveLJob)
 {
 	List *jobIds = ExtractJobsInJobTree(topLeveLJob);
 	char *createSchemasCommand = GenerateCreateSchemasCommand(jobIds, CurrentUserName());
-	SendCommandToWorkersInParallel(ALL_WORKERS, createSchemasCommand,
+	SendCommandToWorkersInParallel(NON_COORDINATOR_NODES, createSchemasCommand,
 								   CitusExtensionOwnerName());
 	return jobIds;
 }
@@ -191,7 +191,8 @@ GenerateJobCommands(List *jobIds, char *templateCommand)
 void
 DoRepartitionCleanup(List *jobIds)
 {
-	SendCommandToWorkersOptionalInParallel(ALL_WORKERS, GenerateDeleteJobsCommand(jobIds),
+	SendCommandToWorkersOptionalInParallel(NON_COORDINATOR_NODES,
+										   GenerateDeleteJobsCommand(jobIds),
 										   CitusExtensionOwnerName());
 }
 

@@ -171,7 +171,7 @@ PostprocessAlterRoleStmt(Node *node, const char *queryString)
 	}
 	List *commands = list_make1((void *) CreateAlterRoleIfExistsCommand(stmt));
 
-	return NodeDDLTaskList(ALL_WORKERS, commands);
+	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
 }
 
 
@@ -212,7 +212,7 @@ PreprocessAlterRoleSetStmt(Node *node, const char *queryString)
 								   (void *) sql,
 								   ENABLE_DDL_PROPAGATION);
 
-	return NodeDDLTaskList(ALL_WORKERS, commandList);
+	return NodeDDLTaskList(NON_COORDINATOR_NODES, commandList);
 }
 
 

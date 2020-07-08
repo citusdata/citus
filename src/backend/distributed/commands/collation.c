@@ -278,7 +278,7 @@ PreprocessDropCollationStmt(Node *node, const char *queryString)
 								(void *) dropStmtSql,
 								ENABLE_DDL_PROPAGATION);
 
-	return NodeDDLTaskList(ALL_WORKERS, commands);
+	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
 }
 
 
@@ -311,7 +311,7 @@ PreprocessAlterCollationOwnerStmt(Node *node, const char *queryString)
 								(void *) sql,
 								ENABLE_DDL_PROPAGATION);
 
-	return NodeDDLTaskList(ALL_WORKERS, commands);
+	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
 }
 
 
@@ -346,7 +346,7 @@ PreprocessRenameCollationStmt(Node *node, const char *queryString)
 								(void *) renameStmtSql,
 								ENABLE_DDL_PROPAGATION);
 
-	return NodeDDLTaskList(ALL_WORKERS, commands);
+	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
 }
 
 
@@ -379,7 +379,7 @@ PreprocessAlterCollationSchemaStmt(Node *node, const char *queryString)
 								(void *) sql,
 								ENABLE_DDL_PROPAGATION);
 
-	return NodeDDLTaskList(ALL_WORKERS, commands);
+	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
 }
 
 
@@ -604,6 +604,6 @@ PostprocessDefineCollationStmt(Node *node, const char *queryString)
 
 	MarkObjectDistributed(&collationAddress);
 
-	return NodeDDLTaskList(ALL_WORKERS, CreateCollationDDLsIdempotent(
+	return NodeDDLTaskList(NON_COORDINATOR_NODES, CreateCollationDDLsIdempotent(
 							   collationAddress.objectId));
 }
