@@ -177,5 +177,6 @@ extern void FindReferencedTableColumn(Expr *columnExpression, List *parentQueryL
 extern char * WorkerColumnName(AttrNumber resno);
 extern bool IsGroupBySubsetOfDistinct(List *groupClauses, List *distinctClauses);
 extern bool TargetListHasAggregates(List *targetEntryList);
+extern Const * MakeIntegerConst(int32 integerValue);
 
 #endif   /* MULTI_LOGICAL_OPTIMIZER_H */

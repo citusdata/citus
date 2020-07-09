@@ -22,6 +22,18 @@
 #include "nodes/relation.h"
 #endif
 
+/* managed via guc.c */
+typedef enum
+{
+	LOCAL_JOIN_POLICY_NEVER = 0,
+	LOCAL_JOIN_POLICY_PULL_LOCAL = 1,
+	LOCAL_JOIN_POLICY_PULL_DISTRIBUTED = 2,
+	LOCAL_JOIN_POLICY_AUTO = 3,
+} LocalJoinPolicy;
+
+extern int LocalTableJoinPolicy;
+
+
 extern List * GenerateSubplansForSubqueriesAndCTEs(uint64 planId, Query *originalQuery,
 												   PlannerRestrictionContext *
 												   plannerRestrictionContext);

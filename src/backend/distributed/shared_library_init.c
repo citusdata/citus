@@ -55,6 +55,7 @@
 #include "distributed/multi_server_executor.h"
 #include "distributed/pg_dist_partition.h"
 #include "distributed/placement_connection.h"
+#include "distributed/recursive_planning.h"
 #include "distributed/reference_table_utils.h"
 #include "distributed/relation_access_tracking.h"
 #include "distributed/run_from_same_connection.h"
@@ -195,6 +196,16 @@ static const struct config_enum_entry log_level_options[] = {
 	{ "error", ERROR, false},
 	{ NULL, 0, false}
 };
+
+
+static const struct config_enum_entry local_table_join_policies[] = {
+	{ "never", LOCAL_JOIN_POLICY_NEVER, false},
+	{ "pull-local", LOCAL_JOIN_POLICY_PULL_LOCAL, false},
+	{ "pull-distributed", LOCAL_JOIN_POLICY_PULL_DISTRIBUTED, false},
+	{ "auto", LOCAL_JOIN_POLICY_AUTO, false},
+	{ NULL, 0, false}
+};
+
 
 static const struct config_enum_entry multi_shard_modify_connection_options[] = {
 	{ "parallel", PARALLEL_CONNECTION, false },
@@ -708,6 +719,18 @@ RegisterCitusConfigVariables(void)
 		PGC_SIGHUP,
 		GUC_SUPERUSER_ONLY,
 		NULL, NULL, LocalPoolSizeGucShowHook);
+		
+	DefineCustomEnumVariable(
+		"citus.local_table_join_policy",
+		gettext_noop("defines the behaviour when a distributed table "
+					 "is joined with a local table"),
+		gettext_noop("TODO: fill"),
+		&LocalTableJoinPolicy,
+		LOCAL_JOIN_POLICY_AUTO,
+		local_table_join_policies,
+		PGC_USERSET,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
 		"citus.log_multi_join_order",

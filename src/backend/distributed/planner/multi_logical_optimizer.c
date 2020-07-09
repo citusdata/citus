@@ -291,7 +291,6 @@ static SortGroupClause * CreateSortGroupClause(Var *column);
 /* Local functions forward declarations for count(distinct) approximations */
 static const char * CountDistinctHashFunctionName(Oid argumentType);
 static int CountDistinctStorageSize(double approximationErrorRate);
-static Const * MakeIntegerConst(int32 integerValue);
 static Const * MakeIntegerConstInt64(int64 integerValue);
 
 /* Local functions forward declarations for aggregate expression checks */
@@ -3790,7 +3789,7 @@ CountDistinctStorageSize(double approximationErrorRate)
 
 
 /* Makes an integer constant node from the given value, and returns that node. */
-static Const *
+Const *
 MakeIntegerConst(int32 integerValue)
 {
 	const int typeCollationId = get_typcollation(INT4OID);
