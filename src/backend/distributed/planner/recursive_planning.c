@@ -1440,7 +1440,8 @@ TransformFunctionRTE(RangeTblEntry *rangeTblEntry)
 		{
 			ereport(ERROR, (errmsg("bad number of tuple descriptor attributes")));
 		}
-		for (targetColumnIndex = 0; targetColumnIndex < (AttrNumber) tupleDesc->natts;
+		AttrNumber natts = tupleDesc->natts;
+		for (targetColumnIndex = 0; targetColumnIndex < natts;
 			 targetColumnIndex++)
 		{
 			FormData_pg_attribute *attribute = TupleDescAttr(tupleDesc,
