@@ -275,7 +275,7 @@ CreateDistributedInsertSelectPlan(Query *originalQuery,
 	uint32 taskIdIndex = 1;     /* 0 is reserved for invalid taskId */
 	uint64 jobId = INVALID_JOB_ID;
 	DistributedPlan *distributedPlan = CitusMakeNode(DistributedPlan);
-	RangeTblEntry *insertRte = ExtractResultRelationRTE(originalQuery);
+	RangeTblEntry *insertRte = ExtractResultRelationRTEOrError(originalQuery);
 	RangeTblEntry *subqueryRte = ExtractSelectRangeTableEntry(originalQuery);
 	Oid targetRelationId = insertRte->relid;
 	CitusTableCacheEntry *targetCacheEntry = GetCitusTableCacheEntry(targetRelationId);
@@ -649,7 +649,7 @@ RouterModifyTaskForShardInterval(Query *originalQuery,
 								 DeferredErrorMessage **routerPlannerError)
 {
 	Query *copiedQuery = copyObject(originalQuery);
-	RangeTblEntry *copiedInsertRte = ExtractResultRelationRTE(copiedQuery);
+	RangeTblEntry *copiedInsertRte = ExtractResultRelationRTEOrError(copiedQuery);
 	RangeTblEntry *copiedSubqueryRte = ExtractSelectRangeTableEntry(copiedQuery);
 	Query *copiedSubquery = (Query *) copiedSubqueryRte->subquery;
 
@@ -1344,7 +1344,7 @@ CreateNonPushableInsertSelectPlan(uint64 planId, Query *parse, ParamListInfo bou
 	Query *insertSelectQuery = copyObject(parse);
 
 	RangeTblEntry *selectRte = ExtractSelectRangeTableEntry(insertSelectQuery);
-	RangeTblEntry *insertRte = ExtractResultRelationRTE(insertSelectQuery);
+	RangeTblEntry *insertRte = ExtractResultRelationRTEOrError(insertSelectQuery);
 	Oid targetRelationId = insertRte->relid;
 
 	DistributedPlan *distributedPlan = CitusMakeNode(DistributedPlan);
