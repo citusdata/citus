@@ -127,7 +127,8 @@ PostprocessVariableSetStmt(VariableSetStmt *setStmt, const char *setStmtString)
 	/* haven't seen any SET stmts so far in this (sub-)xact: initialize StringInfo */
 	if (activeSetStmts == NULL)
 	{
-		MemoryContext old_context = MemoryContextSwitchTo(CurTransactionContext);
+		/* see comments in PushSubXact on why we allocate this in TopTransactionContext */
+		MemoryContext old_context = MemoryContextSwitchTo(TopTransactionContext);
 		activeSetStmts = makeStringInfo();
 		MemoryContextSwitchTo(old_context);
 	}

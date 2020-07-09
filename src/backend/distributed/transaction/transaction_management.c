@@ -593,7 +593,17 @@ AdjustMaxPreparedTransactions(void)
 static void
 PushSubXact(SubTransactionId subId)
 {
-	MemoryContext old_context = MemoryContextSwitchTo(CurTransactionContext);
+	/*
+	 * We need to allocate these in TopTransactionContext instead of current
+	 * subxact's memory context. This is because AtSubCommit_Memory won't
+	 * delete the subxact's memory context unless it is empty, and this
+	 * can cause in memory leaks. For emptiness it just checks if the memory
+	 * has been reset, and we cannot reset the subxact context since other
+	 * data can be in the context that are needed by upper commits.
+	 *
+	 * See https://github.com/citusdata/citus/issues/3999
+	 */
+	MemoryContext old_context = MemoryContextSwitchTo(TopTransactionContext);
 
 	/* save provided subId as well as propagated SET LOCAL stmts */
 	SubXactContext *state = palloc(sizeof(SubXactContext));
@@ -612,19 +622,34 @@ PushSubXact(SubTransactionId subId)
 static void
 PopSubXact(SubTransactionId subId)
 {
-	MemoryContext old_context = MemoryContextSwitchTo(CurTransactionContext);
 	SubXactContext *state = linitial(activeSubXactContexts);
 
-	/*
-	 * the previous activeSetStmts is already invalid because it's in the now-
-	 * aborted subxact (what we're popping), so no need to free before assign-
-	 * ing with the setLocalCmds of the popped context
-	 */
 	Assert(state->subId == subId);
-	activeSetStmts = state->setLocalCmds;
-	activeSubXactContexts = list_delete_first(activeSubXactContexts);
 
-	MemoryContextSwitchTo(old_context);
+	/*
+	 * Free activeSetStmts to avoid memory leaks when we create subxacts
+	 * for each row, e.g. in exception handling of UDFs.
+	 */
+	if (activeSetStmts != NULL)
+	{
+		pfree(activeSetStmts->data);
+		pfree(activeSetStmts);
+	}
+
+	/*
+	 * SET LOCAL commands are local to subxact blocks. When a subxact commits
+	 * or rolls back, we should roll back our set of SET LOCAL commands to the
+	 * ones we had in the upper commit.
+	 */
+	activeSetStmts = state->setLocalCmds;
+
+	/*
+	 * Free state to avoid memory leaks when we create subxacts for each row,
+	 * e.g. in exception handling of UDFs.
+	 */
+	pfree(state);
+
+	activeSubXactContexts = list_delete_first(activeSubXactContexts);
 }
 
 
