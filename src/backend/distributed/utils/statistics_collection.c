@@ -96,7 +96,7 @@ CollectBasicUsageStatistics(void)
 		distTableOids = DistTableOidList();
 		roundedDistTableCount = NextPow2(list_length(distTableOids));
 		roundedClusterSize = NextPow2(DistributedTablesSize(distTableOids));
-		workerNodeCount = ActivePrimaryWorkerNodeCount();
+		workerNodeCount = ActivePrimaryNonCoordinatorNodeCount();
 		metadataJsonbDatum = DistNodeMetadata();
 		metadataJsonbStr = DatumGetCString(DirectFunctionCall1(jsonb_out,
 															   metadataJsonbDatum));
