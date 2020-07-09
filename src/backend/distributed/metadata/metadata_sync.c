@@ -1254,7 +1254,7 @@ SchemaOwnerName(Oid objectId)
 static bool
 HasMetadataWorkers(void)
 {
-	List *workerNodeList = ActivePrimaryWorkerNodeList(NoLock);
+	List *workerNodeList = ActivePrimaryNonCoordinatorNodeList(NoLock);
 
 	WorkerNode *workerNode = NULL;
 	foreach_ptr(workerNode, workerNodeList)
@@ -1373,7 +1373,7 @@ SyncMetadataToNodes(void)
 		return METADATA_SYNC_FAILED_LOCK;
 	}
 
-	List *workerList = ActivePrimaryWorkerNodeList(NoLock);
+	List *workerList = ActivePrimaryNonCoordinatorNodeList(NoLock);
 	WorkerNode *workerNode = NULL;
 	foreach_ptr(workerNode, workerList)
 	{

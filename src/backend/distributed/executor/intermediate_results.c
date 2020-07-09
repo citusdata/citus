@@ -136,7 +136,7 @@ broadcast_intermediate_result(PG_FUNCTION_ARGS)
 	 */
 	UseCoordinatedTransaction();
 
-	List *nodeList = ActivePrimaryWorkerNodeList(NoLock);
+	List *nodeList = ActivePrimaryNonCoordinatorNodeList(NoLock);
 	EState *estate = CreateExecutorState();
 	RemoteFileDestReceiver *resultDest =
 		(RemoteFileDestReceiver *) CreateRemoteFileDestReceiver(resultIdString,

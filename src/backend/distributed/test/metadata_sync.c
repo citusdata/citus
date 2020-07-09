@@ -75,7 +75,7 @@ wait_until_metadata_sync(PG_FUNCTION_ARGS)
 {
 	uint32 timeout = PG_GETARG_UINT32(0);
 
-	List *workerList = ActivePrimaryWorkerNodeList(NoLock);
+	List *workerList = ActivePrimaryNonCoordinatorNodeList(NoLock);
 	bool waitNotifications = false;
 
 	WorkerNode *workerNode = NULL;

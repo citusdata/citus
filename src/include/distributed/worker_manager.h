@@ -70,14 +70,14 @@ extern WorkerNode * WorkerGetRoundRobinCandidateNode(List *workerNodeList,
 													 uint64 shardId,
 													 uint32 placementIndex);
 extern WorkerNode * WorkerGetLocalFirstCandidateNode(List *currentNodeList);
-extern uint32 ActivePrimaryWorkerNodeCount(void);
-extern List * ActivePrimaryWorkerNodeList(LOCKMODE lockMode);
+extern uint32 ActivePrimaryNonCoordinatorNodeCount(void);
+extern List * ActivePrimaryNonCoordinatorNodeList(LOCKMODE lockMode);
 extern List * ActivePrimaryNodeList(LOCKMODE lockMode);
 extern List * ReferenceTablePlacementNodeList(LOCKMODE lockMode);
 extern List * DistributedTablePlacementNodeList(LOCKMODE lockMode);
 extern bool NodeCanHaveDistTablePlacements(WorkerNode *node);
-extern uint32 ActiveReadableWorkerNodeCount(void);
-extern List * ActiveReadableWorkerNodeList(void);
+extern uint32 ActiveReadableNonCoordinatorNodeCount(void);
+extern List * ActiveReadableNonCoordinatorNodeList(void);
 extern List * ActiveReadableNodeList(void);
 extern WorkerNode * FindWorkerNode(const char *nodeName, int32 nodePort);
 extern WorkerNode * ForceFindWorkerNode(const char *nodeName, int32 nodePort);

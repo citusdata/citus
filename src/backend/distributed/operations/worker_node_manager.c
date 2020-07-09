@@ -293,12 +293,13 @@ WorkerGetNodeWithName(const char *hostname)
 
 
 /*
- * ActivePrimaryWorkerNodeCount returns the number of groups with a primary in the cluster.
+ * ActivePrimaryNonCoordinatorNodeCount returns the number of groups with a primary in the cluster.
+ * This method excludes coordinator even if it is added as a worker to cluster.
  */
 uint32
-ActivePrimaryWorkerNodeCount(void)
+ActivePrimaryNonCoordinatorNodeCount(void)
 {
-	List *workerNodeList = ActivePrimaryWorkerNodeList(NoLock);
+	List *workerNodeList = ActivePrimaryNonCoordinatorNodeList(NoLock);
 	uint32 liveWorkerCount = list_length(workerNodeList);
 
 	return liveWorkerCount;
@@ -306,12 +307,13 @@ ActivePrimaryWorkerNodeCount(void)
 
 
 /*
- * ActiveReadableWorkerNodeCount returns the number of groups with a node we can read from.
+ * ActiveReadableNonCoordinatorNodeCount returns the number of groups with a node we can read from.
+ * This method excludes coordinator even if it is added as a worker.
  */
 uint32
-ActiveReadableWorkerNodeCount(void)
+ActiveReadableNonCoordinatorNodeCount(void)
 {
-	List *workerNodeList = ActiveReadableWorkerNodeList();
+	List *workerNodeList = ActiveReadableNonCoordinatorNodeList();
 	uint32 liveWorkerCount = list_length(workerNodeList);
 
 	return liveWorkerCount;
@@ -366,13 +368,14 @@ FilterActiveNodeListFunc(LOCKMODE lockMode, bool (*checkFunction)(WorkerNode *))
 
 
 /*
- * ActivePrimaryWorkerNodeList returns a list of all active primary worker nodes
+ * ActivePrimaryNonCoordinatorNodeList returns a list of all active primary worker nodes
  * in workerNodeHash. lockMode specifies which lock to use on pg_dist_node,
  * this is necessary when the caller wouldn't want nodes to be added concurrent
  * to their use of this list.
+ * This method excludes coordinator even if it is added as a worker to cluster.
  */
 List *
-ActivePrimaryWorkerNodeList(LOCKMODE lockMode)
+ActivePrimaryNonCoordinatorNodeList(LOCKMODE lockMode)
 {
 	EnsureModificationsCanRun();
 	return FilterActiveNodeListFunc(lockMode, NodeIsPrimaryWorker);
@@ -443,11 +446,11 @@ NodeCanHaveDistTablePlacements(WorkerNode *node)
 
 
 /*
- * ActiveReadableWorkerNodeList returns a list of all nodes in workerNodeHash
- * that are readable workers.
+ * ActiveReadableNonCoordinatorNodeList returns a list of all nodes in workerNodeHash
+ * that are readable nodes This method excludes coordinator.
  */
 List *
-ActiveReadableWorkerNodeList(void)
+ActiveReadableNonCoordinatorNodeList(void)
 {
 	return FilterActiveNodeListFunc(NoLock, NodeIsReadableWorker);
 }
@@ -456,6 +459,7 @@ ActiveReadableWorkerNodeList(void)
 /*
  * ActiveReadableNodeList returns a list of all nodes in workerNodeHash
  * that are readable workers.
+ * This method includes coordinator if it is added as a worker to the cluster.
  */
 List *
 ActiveReadableNodeList(void)
@@ -602,7 +606,7 @@ WorkerNodeCompare(const void *lhsKey, const void *rhsKey, Size keySize)
 WorkerNode *
 GetFirstPrimaryWorkerNode(void)
 {
-	List *workerNodeList = ActivePrimaryWorkerNodeList(NoLock);
+	List *workerNodeList = ActivePrimaryNonCoordinatorNodeList(NoLock);
 	WorkerNode *firstWorkerNode = NULL;
 	WorkerNode *workerNode = NULL;
 	foreach_ptr(workerNode, workerNodeList)

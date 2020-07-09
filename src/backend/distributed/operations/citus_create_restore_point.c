@@ -117,7 +117,7 @@ OpenConnectionsToAllWorkerNodes(LOCKMODE lockMode)
 	List *connectionList = NIL;
 	int connectionFlags = FORCE_NEW_CONNECTION;
 
-	List *workerNodeList = ActivePrimaryWorkerNodeList(lockMode);
+	List *workerNodeList = ActivePrimaryNonCoordinatorNodeList(lockMode);
 
 	WorkerNode *workerNode = NULL;
 	foreach_ptr(workerNode, workerNodeList)
