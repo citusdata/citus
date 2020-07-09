@@ -102,6 +102,35 @@ SELECT count(*) FROM test WHERE false;
 SELECT count(*) FROM test WHERE false GROUP BY GROUPING SETS (x,y);
 RESET citus.task_assignment_policy;
 
+-- single node task tracker tests:
+SET citus.task_executor_type to 'task-tracker';
+SELECT count(*) FROM test;
+
+-- INSERT SELECT from distributed table to local table
+BEGIN;
+INSERT INTO ref(a, b) SELECT x, y FROM test;
+SELECT count(*) from ref;
+ROLLBACK;
+
+-- INSERT SELECT from distributed table to local table
+BEGIN;
+INSERT INTO ref(a, b) SELECT c, d FROM local;
+SELECT count(*) from ref;
+ROLLBACK;
+
+-- INSERT SELECT from distributed table to local table
+BEGIN;
+INSERT INTO local(c, d) SELECT x, y FROM test;
+SELECT count(*) from local;
+ROLLBACK;
+
+-- INSERT SELECT from distributed table to local table
+BEGIN;
+INSERT INTO local(c, d) SELECT a, b FROM ref;
+SELECT count(*) from local;
+ROLLBACK;
+
+RESET citus.task_executor_type;
 
 -- Cleanup
 SET client_min_messages TO WARNING;
