@@ -23,10 +23,10 @@ hint_on_fail() {
     # Get filename of the currently running script
     # Source: https://stackoverflow.com/a/192337/2570866
     filename=$(basename "$0")
+    directory=$(dirname "$0")
     if [ $exit_code != 0 ]; then
-        echo "HINT: To solve this failure look here: https://github.com/citusdata/citus/blob/master/ci/README.md#$filename"
+        echo "HINT: To solve this failure look here: https://github.com/citusdata/citus/blob/master/$directory/README.md#$filename"
     fi
     exit $exit_code
 }
 trap hint_on_fail EXIT
-

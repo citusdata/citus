@@ -9,7 +9,7 @@ source ci/ci_helpers.sh
 # 2. Strip the directory
 # 3. Exclude some scripts that we should not run in CI directly
 ci_scripts=$(
-    find ci/ -iname "*.sh" |
+    find ci/ -maxdepth 1 -iname "*.sh"  |
     sed -E 's#^ci/##g' |
     grep -v -E '^(ci_helpers.sh|fix_style.sh)$'
 )
