@@ -525,7 +525,7 @@ ExtractResultRelationRTE(Query *query)
 
 
 /*
- * ForceExtractResultRelationRTE returns the table's resultRelation range table
+ * ExtractResultRelationRTEOrError returns the table's resultRelation range table
  * entry and errors out if there's no result relation at all, e.g. like in a
  * SELECT query.
  *
@@ -533,7 +533,7 @@ ExtractResultRelationRTE(Query *query)
  * reasons about NULL returns correctly.
  */
 RangeTblEntry *
-ForceExtractResultRelationRTE(Query *query)
+ExtractResultRelationRTEOrError(Query *query)
 {
 	RangeTblEntry *relation = ExtractResultRelationRTE(query);
 	if (relation == NULL)

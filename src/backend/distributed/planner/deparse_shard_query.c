@@ -74,7 +74,7 @@ RebuildQueryStrings(Job *workerJob)
 
 			query = copyObject(originalQuery);
 
-			RangeTblEntry *copiedInsertRte = ForceExtractResultRelationRTE(query);
+			RangeTblEntry *copiedInsertRte = ExtractResultRelationRTEOrError(query);
 			RangeTblEntry *copiedSubqueryRte = ExtractSelectRangeTableEntry(query);
 			Query *copiedSubquery = copiedSubqueryRte->subquery;
 
