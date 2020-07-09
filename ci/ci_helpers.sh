@@ -20,13 +20,18 @@ echo_and_restore() {
 # Make sure that on a failing exit we show a useful message
 hint_on_fail() {
     exit_code=$?
+    if [ $exit_code == 0 ]; then
+        exit 0
+    fi
+
     # Get filename of the currently running script
     # Source: https://stackoverflow.com/a/192337/2570866
-    filename=$(basename "$0" | sed 's/\.sh$/sh/g')
+    filename=$(basename "$0")
     directory=$(dirname "$0")
-    if [ $exit_code != 0 ]; then
-        echo "HINT: To solve this failure look here: https://github.com/citusdata/citus/blob/master/$directory/README.md#$filename"
-    fi
+    # Replace .sh at the end of the filename with "sh", because github strips
+    # dots from the title when it generates the anchors.
+    anchor="${filename//.sh/sh}"
+    echo "HINT: To solve this failure look here: https://github.com/citusdata/citus/blob/master/$directory/README.md#$anchor"
     exit $exit_code
 }
 trap hint_on_fail EXIT
