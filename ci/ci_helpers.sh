@@ -22,7 +22,7 @@ hint_on_fail() {
     exit_code=$?
     # Get filename of the currently running script
     # Source: https://stackoverflow.com/a/192337/2570866
-    filename=$(basename "$0")
+    filename=$(basename "$0" | sed 's/\.sh$/sh/g')
     directory=$(dirname "$0")
     if [ $exit_code != 0 ]; then
         echo "HINT: To solve this failure look here: https://github.com/citusdata/citus/blob/master/$directory/README.md#$filename"
