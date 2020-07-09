@@ -1,3 +1,6 @@
+CREATE SCHEMA multi_subtransactions;
+SET search_path TO 'multi_subtransactions';
+
 CREATE TABLE artists (
     id bigint NOT NULL,
     name text NOT NULL
@@ -305,7 +308,27 @@ COMMIT;
 
 SELECT * FROM researchers WHERE lab_id=10;
 
--- Clean-up
-DROP TABLE artists;
-DROP TABLE researchers;
+-- Verify that we don't have a memory leak in subtransactions
+-- See https://github.com/citusdata/citus/pull/4000
 
+CREATE FUNCTION text2number(v_value text) RETURNS numeric
+    LANGUAGE plpgsql VOLATILE
+    AS $$
+BEGIN
+ RETURN v_value::numeric;
+exception
+    when others then
+        return null;
+END;
+$$;
+
+-- if we leak at least an integer in each subxact, then size of TopTransactionSize
+-- will be way beyond the 50k limit. If issue #3999 happens, then this will also take
+-- a long time, since for each row we will create a memory context that is not destroyed
+-- until the end of command.
+SELECT max(text2number('1234')), max(public.top_transaction_context_size()) > 50000 AS leaked
+FROM generate_series(1, 20000);
+
+-- Clean-up
+SET client_min_messages TO ERROR;
+DROP SCHEMA multi_subtransactions CASCADE;
