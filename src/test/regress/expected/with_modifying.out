@@ -978,8 +978,11 @@ WITH mb AS (UPDATE modify_table SET val = 3 WHERE id = 3 RETURNING NULL) SELECT 
 (1 row)
 
 WITH mb AS (UPDATE modify_table SET val = 3 WHERE id = 3 RETURNING NULL) SELECT * FROM modify_table, mb WHERE id = 3;
-ERROR:  column mb.?column? does not exist
-CONTEXT:  while executing command on localhost:xxxxx
+ id | val | ?column?
+---------------------------------------------------------------------
+  3 |   3 |
+(1 row)
+
 WITH mb AS (UPDATE modify_table SET val = 3 WHERE id = 3 RETURNING NULL, NULL) SELECT * FROM modify_table WHERE id = 3;
  id | val
 ---------------------------------------------------------------------

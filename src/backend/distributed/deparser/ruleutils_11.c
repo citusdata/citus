@@ -966,6 +966,7 @@ set_relation_column_names(deparse_namespace *dpns, RangeTblEntry *rte,
 	int			ncolumns;
 	char	  **real_colnames;
 	bool		changed_any;
+	bool        has_anonymous;
 	int			noldcolumns;
 	int			i;
 	int			j;
@@ -1053,6 +1054,7 @@ set_relation_column_names(deparse_namespace *dpns, RangeTblEntry *rte,
 	 */
 	noldcolumns = list_length(rte->eref->colnames);
 	changed_any = false;
+	has_anonymous = false;
 	j = 0;
 	for (i = 0; i < ncolumns; i++)
 	{
@@ -1090,6 +1092,10 @@ set_relation_column_names(deparse_namespace *dpns, RangeTblEntry *rte,
 		/* Remember if any assigned aliases differ from "real" name */
 		if (!changed_any && strcmp(colname, real_colname) != 0)
 			changed_any = true;
+
+		/* Remember if there is a reference to an anonymous column */
+		if (!has_anonymous && strcmp(real_colname, "?column?") == 0)
+			has_anonymous = true;
 	}
 
 	/*
@@ -1119,7 +1125,7 @@ set_relation_column_names(deparse_namespace *dpns, RangeTblEntry *rte,
 	else if (rte->alias && rte->alias->colnames != NIL)
 		colinfo->printaliases = true;
 	else
-		colinfo->printaliases = changed_any;
+		colinfo->printaliases = changed_any || has_anonymous;
 }
 
 /*
