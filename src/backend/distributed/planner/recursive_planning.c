@@ -63,6 +63,7 @@
 #include "distributed/log_utils.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_logical_planner.h"
+#include "distributed/multi_logical_optimizer.h"
 #include "distributed/multi_router_planner.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_server_executor.h"
@@ -73,12 +74,14 @@
 #include "distributed/log_utils.h"
 #include "distributed/version_compat.h"
 #include "lib/stringinfo.h"
+#include "optimizer/clauses.h"
 #include "optimizer/planner.h"
 #include "optimizer/prep.h"
 #include "parser/parsetree.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
 #include "nodes/nodes.h"
+#include "nodes/nodeFuncs.h"
 #include "nodes/pg_list.h"
 #include "nodes/primnodes.h"
 #if PG_VERSION_NUM >= PG_VERSION_12
@@ -88,6 +91,13 @@
 #endif
 #include "utils/builtins.h"
 #include "utils/guc.h"
+#include "utils/lsyscache.h"
+
+
+/*
+ * Managed via a GUC
+ */
+int LocalTableJoinPolicy = LOCAL_JOIN_POLICY_AUTO;
 
 
 /* track depth of current recursive planner query */
@@ -175,6 +185,16 @@ static bool ContainsReferencesToOuterQuery(Query *query);
 static bool ContainsReferencesToOuterQueryWalker(Node *node,
 												 VarLevelsUpWalkerContext *context);
 static bool NodeContainsSubqueryReferencingOuterQuery(Node *node);
+static void ConvertLocalTableJoinsToSubqueries(Query *query,
+											   PlannerRestrictionContext *
+											   plannerRestrictionContext);
+static RangeTblEntry * MostFilteredRte(PlannerRestrictionContext *
+									   plannerRestrictionContext,
+									   List *rangeTableList, List **restrictionList,
+									   bool localTable);
+static void ReplaceRTERelationWithRteSubquery(RangeTblEntry *rangeTableEntry,
+											  List *restrictionList);
+static bool ContainsLocalTableDistributedTableJoin(List *rangeTableList);
 static void WrapFunctionsInSubqueries(Query *query);
 static void TransformFunctionRTE(RangeTblEntry *rangeTblEntry);
 static bool ShouldTransformRTE(RangeTblEntry *rangeTableEntry);
@@ -286,6 +306,12 @@ RecursivelyPlanSubqueriesAndCTEs(Query *query, RecursivePlanningContext *context
 
 	/* make sure function calls in joins are executed in the coordinator */
 	WrapFunctionsInSubqueries(query);
+
+	/*
+	 * Logical planner cannot handle "local_table" [OUTER] JOIN "dist_table", so we
+	 * recursively plan one side of the join so that the logical planner can plan.
+	 */
+	ConvertLocalTableJoinsToSubqueries(query, context->plannerRestrictionContext);
 
 	/* descend into subqueries */
 	query_tree_walker(query, RecursivelyPlanSubqueryWalker, context, 0);
@@ -1118,6 +1144,7 @@ RecursivelyPlanSubquery(Query *subquery, RecursivePlanningContext *planningConte
 		debugQuery = copyObject(subquery);
 	}
 
+
 	/*
 	 * Create the subplan and append it to the list in the planning context.
 	 */
@@ -1321,6 +1348,233 @@ NodeContainsSubqueryReferencingOuterQuery(Node *node)
 	foreach_ptr(sublink, sublinks)
 	{
 		if (ContainsReferencesToOuterQuery(castNode(Query, sublink->subselect)))
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
+
+/*
+ * ConvertLocalTableJoinsToSubqueries gets a query and the planner
+ * restrictions. As long as there is a join between a local table
+ * and distributed table, the function wraps one table in a
+ * subquery (by also pushing the filters on the table down
+ * to the subquery).
+ *
+ * Once this function returns, there are no direct joins between
+ * local and distributed tables.
+ */
+static void
+ConvertLocalTableJoinsToSubqueries(Query *query,
+								   PlannerRestrictionContext *plannerRestrictionContext)
+{
+	List *rangeTableList = query->rtable;
+
+	if (LocalTableJoinPolicy == LOCAL_JOIN_POLICY_NEVER)
+	{
+		/* user doesn't want Citus to enable local table joins */
+		return;
+	}
+
+	if (!ContainsLocalTableDistributedTableJoin(rangeTableList))
+	{
+		/* nothing to do as there are no relevant joins */
+		return;
+	}
+
+	{
+		/* TODO: if all tables are local, skip */
+	}
+
+	while (ContainsLocalTableDistributedTableJoin(rangeTableList))
+	{
+		List *localTableRestrictList = NIL;
+		List *distributedTableRestrictList = NIL;
+
+		bool localTable = true;
+
+		RangeTblEntry *mostFilteredLocalRte =
+			MostFilteredRte(plannerRestrictionContext, rangeTableList,
+							&localTableRestrictList, localTable);
+		RangeTblEntry *mostFilteredDistributedRte =
+			MostFilteredRte(plannerRestrictionContext, rangeTableList,
+							&distributedTableRestrictList, !localTable);
+
+		if (LocalTableJoinPolicy == LOCAL_JOIN_POLICY_PULL_LOCAL)
+		{
+			ReplaceRTERelationWithRteSubquery(mostFilteredLocalRte,
+											  localTableRestrictList);
+		}
+		else if (LocalTableJoinPolicy == LOCAL_JOIN_POLICY_PULL_DISTRIBUTED)
+		{
+			ReplaceRTERelationWithRteSubquery(mostFilteredDistributedRte,
+											  distributedTableRestrictList);
+		}
+		else if (LocalTableJoinPolicy == LOCAL_JOIN_POLICY_AUTO)
+		{
+			bool localTableHasFilter = list_length(localTableRestrictList) > 0;
+			bool distributedTableHasFilter =
+				list_length(distributedTableRestrictList) > 0;
+
+			/* TODO: for modifications, either skip or do not plan target table */
+
+			/*
+			 * First, favor recursively planning local table when it has a filter.
+			 * The rationale is that local tables are small, and at least one filter
+			 * they become even smaller. On each iteration, we pick the local table
+			 * with the most filters (e.g., WHERE clause entries). Note that the filters
+			 * don't need to be directly on the table in the query tree, instead we use
+			 * Postgres' filters where filters can be pushed down tables via filters.
+			 *
+			 * Second, if a distributed table doesn't have a filter, we do not ever
+			 * prefer recursively planning that. Instead, we recursively plan the
+			 * local table, assuming that it is smaller.
+			 *
+			 * TODO: If we have better statistics on how many tuples each table returns
+			 * considering the filters on them, we should pick the table with least
+			 * tuples. Today, we do not have such an infrastructure.
+			 */
+			if (localTableHasFilter || !distributedTableHasFilter)
+			{
+				ReplaceRTERelationWithRteSubquery(mostFilteredLocalRte,
+												  localTableRestrictList);
+			}
+			else
+			{
+				ReplaceRTERelationWithRteSubquery(mostFilteredDistributedRte,
+												  distributedTableRestrictList);
+			}
+		}
+		else
+		{
+			elog(ERROR, "unexpected local table join policy: %d", LocalTableJoinPolicy);
+		}
+	}
+}
+
+
+/*
+ * MostFilteredRte returns a range table entry which has the most filters
+ * on it along with the restrictions (e.g., fills **restrictionList).
+ *
+ * The function also gets a boolean localTable parameter, so the caller
+ * can choose to run the function for only local tables or distributed tables.
+ */
+static RangeTblEntry *
+MostFilteredRte(PlannerRestrictionContext *plannerRestrictionContext,
+				List *rangeTableList, List **restrictionList,
+				bool localTable)
+{
+	RangeTblEntry *mostFilteredLocalRte = NULL;
+
+	ListCell *rangeTableCell = NULL;
+
+	foreach(rangeTableCell, rangeTableList)
+	{
+		RangeTblEntry *rangeTableEntry = (RangeTblEntry *) lfirst(rangeTableCell);
+
+		/* we're only interested in tables */
+		if (!(rangeTableEntry->rtekind == RTE_RELATION &&
+			  rangeTableEntry->relkind == RELKIND_RELATION))
+		{
+			continue;
+		}
+
+		if (IsCitusTable(rangeTableEntry->relid) && localTable)
+		{
+			continue;
+		}
+
+		List *currentRestrictionList =
+			GetRestrictInfoListForRelation(rangeTableEntry,
+										   plannerRestrictionContext, 1);
+
+		if (mostFilteredLocalRte == NULL ||
+			list_length(*restrictionList) < list_length(currentRestrictionList))
+		{
+			mostFilteredLocalRte = rangeTableEntry;
+			*restrictionList = currentRestrictionList;
+		}
+	}
+
+	return mostFilteredLocalRte;
+}
+
+
+/*
+ * ReplaceRTERelationWithRteSubquery replaces the input rte relation target entry
+ * with a subquery. The function also pushes down the filters to the subquery.
+ */
+static void
+ReplaceRTERelationWithRteSubquery(RangeTblEntry *rangeTableEntry, List *restrictionList)
+{
+	Query *subquery = WrapRteRelationIntoSubquery(rangeTableEntry);
+	Expr *andedBoundExpressions = make_ands_explicit(restrictionList);
+	subquery->jointree->quals = (Node *) andedBoundExpressions;
+
+	/* force recursively planning of the newly created subquery */
+	subquery->limitOffset = (Node *) MakeIntegerConst(0);
+
+	/* replace the function with the constructed subquery */
+	rangeTableEntry->rtekind = RTE_SUBQUERY;
+	rangeTableEntry->subquery = subquery;
+
+	/*
+	 * If the relation is inherited, it'll still be inherited as
+	 * we've copied it earlier. This is to prevent the newly created
+	 * subquery being treated as inherited.
+	 */
+	rangeTableEntry->inh = false;
+
+	if (IsLoggableLevel(DEBUG1))
+	{
+		StringInfo subqueryString = makeStringInfo();
+
+		pg_get_query_def(subquery, subqueryString);
+
+		ereport(DEBUG1, (errmsg("Wrapping local relation \"%s\" to a subquery: %s ",
+								get_rel_name(rangeTableEntry->relid),
+								ApplyLogRedaction(subqueryString->data))));
+	}
+}
+
+
+/*
+ * ContainsLocalTableDistributedTableJoin returns true if the input range table list
+ * contains a direct join between local and distributed tables.
+ */
+static bool
+ContainsLocalTableDistributedTableJoin(List *rangeTableList)
+{
+	bool containsLocalTable = false;
+	bool containsDistributedTable = false;
+
+	ListCell *rangeTableCell = NULL;
+	foreach(rangeTableCell, rangeTableList)
+	{
+		RangeTblEntry *rangeTableEntry = (RangeTblEntry *) lfirst(rangeTableCell);
+
+		/* we're only interested in tables */
+		if (!(rangeTableEntry->rtekind == RTE_RELATION &&
+			  rangeTableEntry->relkind == RELKIND_RELATION))
+		{
+			continue;
+		}
+
+		/* TODO: do NOT forget Citus local tables */
+		if (IsCitusTable(rangeTableEntry->relid))
+		{
+			containsDistributedTable = true;
+		}
+		else
+		{
+			containsLocalTable = true;
+		}
+
+		if (containsLocalTable && containsDistributedTable)
 		{
 			return true;
 		}
