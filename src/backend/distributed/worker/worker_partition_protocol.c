@@ -780,7 +780,12 @@ CitusRemoveDirectory(const char *filename)
 		/* we now have an empty directory or a regular file, remove it */
 		if (S_ISDIR(fileStat.st_mode))
 		{
-			removed = rmdir(filename);
+			/*
+			 * We ignore the TOCTUO race condition static analysis warning
+			 * here, since we don't actually read the files or directories. We
+			 * simply want to remove them.
+			 */
+			removed = rmdir(filename); /* lgtm[cpp/toctou-race-condition] */
 
 			if (errno == ENOTEMPTY || errno == EEXIST)
 			{
@@ -789,7 +794,12 @@ CitusRemoveDirectory(const char *filename)
 		}
 		else
 		{
-			removed = unlink(filename);
+			/*
+			 * We ignore the TOCTUO race condition static analysis warning
+			 * here, since we don't actually read the files or directories. We
+			 * simply want to remove them.
+			 */
+			removed = unlink(filename); /* lgtm[cpp/toctou-race-condition] */
 		}
 
 		if (removed != 0 && errno != ENOENT)
