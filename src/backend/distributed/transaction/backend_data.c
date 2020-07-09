@@ -217,7 +217,7 @@ Datum
 get_global_active_transactions(PG_FUNCTION_ARGS)
 {
 	TupleDesc tupleDescriptor = NULL;
-	List *workerNodeList = ActivePrimaryWorkerNodeList(NoLock);
+	List *workerNodeList = ActivePrimaryNonCoordinatorNodeList(NoLock);
 	List *connectionList = NIL;
 	StringInfo queryToSend = makeStringInfo();
 

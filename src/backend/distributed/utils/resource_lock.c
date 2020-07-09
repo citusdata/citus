@@ -230,7 +230,7 @@ LockShardListResourcesOnFirstWorker(LOCKMODE lockmode, List *shardIntervalList)
 static bool
 IsFirstWorkerNode()
 {
-	List *workerNodeList = ActivePrimaryWorkerNodeList(NoLock);
+	List *workerNodeList = ActivePrimaryNonCoordinatorNodeList(NoLock);
 
 	workerNodeList = SortList(workerNodeList, CompareWorkerNodes);
 

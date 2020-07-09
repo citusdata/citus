@@ -156,7 +156,7 @@ static void
 SendCommandListToAllWorkersInternal(List *commandList, bool failOnError, const
 									char *superuser)
 {
-	List *workerNodeList = ActivePrimaryWorkerNodeList(NoLock);
+	List *workerNodeList = ActivePrimaryNonCoordinatorNodeList(NoLock);
 
 	WorkerNode *workerNode = NULL;
 	foreach_ptr(workerNode, workerNodeList)
@@ -198,7 +198,7 @@ SendOptionalCommandListToAllWorkers(List *commandList, const char *superuser)
 List *
 TargetWorkerSetNodeList(TargetWorkerSet targetWorkerSet, LOCKMODE lockMode)
 {
-	List *workerNodeList = ActivePrimaryWorkerNodeList(lockMode);
+	List *workerNodeList = ActivePrimaryNonCoordinatorNodeList(lockMode);
 	List *result = NIL;
 
 	int32 localGroupId = GetLocalGroupId();
