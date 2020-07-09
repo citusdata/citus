@@ -1022,7 +1022,7 @@ EnsureSequentialModeForFunctionDDL(void)
 static void
 TriggerSyncMetadataToPrimaryNodes(void)
 {
-	List *workerList = ActivePrimaryWorkerNodeList(ShareLock);
+	List *workerList = ActivePrimaryNonCoordinatorNodeList(ShareLock);
 	bool triggerMetadataSync = false;
 
 	WorkerNode *workerNode = NULL;

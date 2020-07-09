@@ -311,7 +311,7 @@ citus_worker_stat_activity(PG_FUNCTION_ARGS)
 static List *
 CitusStatActivity(const char *statQuery)
 {
-	List *workerNodeList = ActivePrimaryWorkerNodeList(NoLock);
+	List *workerNodeList = ActivePrimaryNonCoordinatorNodeList(NoLock);
 	List *connectionList = NIL;
 
 	/*
@@ -437,7 +437,7 @@ GetLocalNodeCitusDistStat(const char *statQuery)
 	int32 localGroupId = GetLocalGroupId();
 
 	/* get the current worker's node stats */
-	List *workerNodeList = ActivePrimaryWorkerNodeList(NoLock);
+	List *workerNodeList = ActivePrimaryNonCoordinatorNodeList(NoLock);
 	WorkerNode *workerNode = NULL;
 	foreach_ptr(workerNode, workerNodeList)
 	{

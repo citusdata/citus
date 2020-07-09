@@ -2299,7 +2299,7 @@ CreateDummyPlacement(bool hasLocalRelation)
 		return CreateLocalDummyPlacement();
 	}
 
-	List *workerNodeList = ActiveReadableWorkerNodeList();
+	List *workerNodeList = ActiveReadableNonCoordinatorNodeList();
 	if (workerNodeList == NIL)
 	{
 		/*
