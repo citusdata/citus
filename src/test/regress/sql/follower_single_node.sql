@@ -39,7 +39,7 @@ SELECT count(*) FROM local;
 SELECT * FROM local ORDER BY c;
 SELECT * FROM ref, local WHERE a = c ORDER BY a;
 
-SET citus.enable_repartition_joins TO ON;	
+SET citus.enable_repartition_joins TO ON;
 SELECT * FROM test t1, test t2 WHERE t1.x = t2.y ORDER BY t1.x;
 
 -- Confirm that dummy placements work
@@ -84,7 +84,7 @@ SELECT count(*) FROM local;
 SELECT * FROM local ORDER BY c;
 SELECT * FROM ref, local WHERE a = c ORDER BY a;
 
-SET citus.enable_repartition_joins TO ON;	
+SET citus.enable_repartition_joins TO ON;
 SELECT * FROM test t1, test t2 WHERE t1.x = t2.y ORDER BY t1.x;
 
 -- Confirm that dummy placements work
