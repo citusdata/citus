@@ -508,7 +508,9 @@ ResultRelationOidForQuery(Query *query)
 
 
 /*
- * ExtractResultRelationRTE returns the table's resultRelation range table entry.
+ * ExtractResultRelationRTE returns the table's resultRelation range table
+ * entry. This returns NULL when there's no resultRelation, such as in a SELECT
+ * query.
  */
 RangeTblEntry *
 ExtractResultRelationRTE(Query *query)
@@ -519,6 +521,28 @@ ExtractResultRelationRTE(Query *query)
 	}
 
 	return NULL;
+}
+
+
+/*
+ * ExtractResultRelationRTEOrError returns the table's resultRelation range table
+ * entry and errors out if there's no result relation at all, e.g. like in a
+ * SELECT query.
+ *
+ * This is a separate function (instead of using missingOk), so static analysis
+ * reasons about NULL returns correctly.
+ */
+RangeTblEntry *
+ExtractResultRelationRTEOrError(Query *query)
+{
+	RangeTblEntry *relation = ExtractResultRelationRTE(query);
+	if (relation == NULL)
+	{
+		ereport(ERROR, (errmsg("no result relation could be found for the query"),
+						errhint("is this a SELECT query?")));
+	}
+
+	return relation;
 }
 
 
