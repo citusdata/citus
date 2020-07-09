@@ -80,7 +80,7 @@ extern uint32 ActiveReadableNonCoordinatorNodeCount(void);
 extern List * ActiveReadableNonCoordinatorNodeList(void);
 extern List * ActiveReadableNodeList(void);
 extern WorkerNode * FindWorkerNode(const char *nodeName, int32 nodePort);
-extern WorkerNode * ForceFindWorkerNode(const char *nodeName, int32 nodePort);
+extern WorkerNode * FindWorkerNodeOrError(const char *nodeName, int32 nodePort);
 extern WorkerNode * FindWorkerNodeAnyCluster(const char *nodeName, int32 nodePort);
 extern List * ReadDistNode(bool includeNodesFromOtherClusters);
 extern void EnsureCoordinator(void);

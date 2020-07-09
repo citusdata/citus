@@ -819,7 +819,7 @@ ErrorIfUnsupportedIndexStmt(IndexStmt *createIndexStatement)
 								   "is currently unsupported")));
 		}
 
-		Var *partitionKey = ForceDistPartitionKey(relationId);
+		Var *partitionKey = DistPartitionKeyOrError(relationId);
 		List *indexParameterList = createIndexStatement->indexParams;
 		IndexElem *indexElement = NULL;
 		foreach_ptr(indexElement, indexParameterList)

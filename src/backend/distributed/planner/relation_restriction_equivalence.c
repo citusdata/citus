@@ -409,7 +409,7 @@ FindUnionAllVar(PlannerInfo *root, List *appendRelList, Oid relationOid,
 		return NULL;
 	}
 
-	Var *relationPartitionKey = ForceDistPartitionKey(relationOid);
+	Var *relationPartitionKey = DistPartitionKeyOrError(relationOid);
 
 	#if PG_VERSION_NUM >= PG_VERSION_13
 	for (; childAttrNumber < targetAppendRelInfo->num_child_cols; childAttrNumber++)

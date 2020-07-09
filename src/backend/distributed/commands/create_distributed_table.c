@@ -843,7 +843,7 @@ EnsureTableCanBeColocatedWith(Oid relationId, char replicationModel,
 	CitusTableCacheEntry *sourceTableEntry = GetCitusTableCacheEntry(sourceRelationId);
 	char sourceDistributionMethod = sourceTableEntry->partitionMethod;
 	char sourceReplicationModel = sourceTableEntry->replicationModel;
-	Var *sourceDistributionColumn = ForceDistPartitionKey(sourceRelationId);
+	Var *sourceDistributionColumn = DistPartitionKeyOrError(sourceRelationId);
 
 	if (sourceDistributionMethod != DISTRIBUTE_BY_HASH)
 	{

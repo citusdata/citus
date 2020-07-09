@@ -165,7 +165,7 @@ PostprocessCreateTableStmtPartitionOf(CreateStmt *createStatement, const
 			bool missingOk = false;
 			Oid relationId = RangeVarGetRelid(createStatement->relation, NoLock,
 											  missingOk);
-			Var *parentDistributionColumn = ForceDistPartitionKey(parentRelationId);
+			Var *parentDistributionColumn = DistPartitionKeyOrError(parentRelationId);
 			char parentDistributionMethod = DISTRIBUTE_BY_HASH;
 			char *parentRelationName = generate_qualified_relation_name(parentRelationId);
 			bool viaDeprecatedAPI = false;
@@ -242,7 +242,7 @@ PostprocessAlterTableStmtAttachPartition(AlterTableStmt *alterTableStatement,
 			if (IsCitusTable(relationId) &&
 				!IsCitusTable(partitionRelationId))
 			{
-				Var *distributionColumn = ForceDistPartitionKey(relationId);
+				Var *distributionColumn = DistPartitionKeyOrError(relationId);
 				char distributionMethod = DISTRIBUTE_BY_HASH;
 				char *parentRelationName = generate_qualified_relation_name(relationId);
 				bool viaDeprecatedAPI = false;

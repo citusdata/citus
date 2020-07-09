@@ -586,11 +586,11 @@ LookupNodeByNodeId(uint32 nodeId)
 
 
 /*
- * ForceLookupNodeByNodeId returns a worker node by nodeId or errors out if the
+ * LookupNodeByNodeIdOrError returns a worker node by nodeId or errors out if the
  * node cannot be found.
  */
 WorkerNode *
-ForceLookupNodeByNodeId(uint32 nodeId)
+LookupNodeByNodeIdOrError(uint32 nodeId)
 {
 	WorkerNode *node = LookupNodeByNodeId(nodeId);
 	if (node == NULL)

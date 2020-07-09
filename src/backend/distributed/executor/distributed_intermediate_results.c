@@ -609,7 +609,7 @@ FragmentTransferTaskList(List *fragmentListTransfers)
 		/* these should have already been pruned away in ColocationTransfers */
 		Assert(targetNodeId != fragmentsTransfer->nodes.sourceNodeId);
 
-		WorkerNode *workerNode = ForceLookupNodeByNodeId(targetNodeId);
+		WorkerNode *workerNode = LookupNodeByNodeIdOrError(targetNodeId);
 
 		ShardPlacement *targetPlacement = CitusMakeNode(ShardPlacement);
 		SetPlacementNodeMetadata(targetPlacement, workerNode);
@@ -638,7 +638,7 @@ QueryStringForFragmentsTransfer(NodeToNodeFragmentsTransfer *fragmentsTransfer)
 	StringInfo fragmentNamesArrayString = makeStringInfo();
 	int fragmentCount = 0;
 	NodePair *nodePair = &fragmentsTransfer->nodes;
-	WorkerNode *sourceNode = ForceLookupNodeByNodeId(nodePair->sourceNodeId);
+	WorkerNode *sourceNode = LookupNodeByNodeIdOrError(nodePair->sourceNodeId);
 
 	appendStringInfoString(fragmentNamesArrayString, "ARRAY[");
 
