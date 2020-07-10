@@ -1,3 +1,7 @@
+### citus v9.3.3 (July 10, 2020) ###
+
+* Fixes a memory leak in subtransaction memory handling
+
 ### citus v9.3.2 (Jun 22, 2020) ###
 
 * Fixes a version bump issue in 9.3.1
