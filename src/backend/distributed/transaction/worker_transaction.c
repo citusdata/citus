@@ -43,8 +43,6 @@ static void SendCommandToWorkersParamsInternal(TargetWorkerSet targetWorkerSet,
 											   const Oid *parameterTypes,
 											   const char *const *parameterValues);
 static void ErrorIfAnyMetadataNodeOutOfSync(List *metadataNodeList);
-static void SendCommandListToAllWorkersInternal(List *commandList, bool failOnError,
-												const char *superuser);
 static List * OpenConnectionsToWorkersInParallel(TargetWorkerSet targetWorkerSet,
 												 const char *user);
 static void GetConnectionsResults(List *connectionList, bool failOnError);
@@ -122,72 +120,6 @@ SendCommandToWorkersWithMetadata(const char *command)
 {
 	SendCommandToMetadataWorkersParams(command, CitusExtensionOwnerName(),
 									   0, NULL, NULL);
-}
-
-
-/*
- * SendCommandToAllWorkers sends the given command to
- * all workers as a superuser.
- */
-void
-SendCommandToAllWorkers(const char *command, const char *superuser)
-{
-	SendCommandListToAllWorkers(list_make1((char *) command), superuser);
-}
-
-
-/*
- * SendCommandListToAllWorkers sends the given command to all workers in
- * a single transaction.
- */
-void
-SendCommandListToAllWorkers(List *commandList, const char *superuser)
-{
-	SendCommandListToAllWorkersInternal(commandList, true, superuser);
-}
-
-
-/*
- * SendCommandListToAllWorkersInternal sends the given command to all workers in a single
- * transaction as a superuser. If failOnError is false, then it continues sending the commandList to other
- * workers even if it fails in one of them.
- */
-static void
-SendCommandListToAllWorkersInternal(List *commandList, bool failOnError, const
-									char *superuser)
-{
-	List *workerNodeList = ActivePrimaryNonCoordinatorNodeList(NoLock);
-
-	WorkerNode *workerNode = NULL;
-	foreach_ptr(workerNode, workerNodeList)
-	{
-		if (failOnError)
-		{
-			SendCommandListToWorkerInSingleTransaction(workerNode->workerName,
-													   workerNode->workerPort,
-													   superuser,
-													   commandList);
-		}
-		else
-		{
-			SendOptionalCommandListToWorkerInTransaction(workerNode->workerName,
-														 workerNode->workerPort,
-														 superuser,
-														 commandList);
-		}
-	}
-}
-
-
-/*
- * SendOptionalCommandListToAllWorkers sends the given command to all works in
- * a single transaction as a superuser. If there is an error during the command, it is ignored
- * so this method doesnt return any error.
- */
-void
-SendOptionalCommandListToAllWorkers(List *commandList, const char *superuser)
-{
-	SendCommandListToAllWorkersInternal(commandList, false, superuser);
 }
 
 
