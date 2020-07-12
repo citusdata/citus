@@ -7,6 +7,12 @@ safestringlib_builddir = $(citus_top_builddir)/vendor/safestringlib/build
 safestringlib_a = $(safestringlib_builddir)/libsafestring_static.a
 safestringlib_sources = $(wildcard $(safestringlib_srcdir)/safeclib/*)
 
+libbacktrace_srcdir = $(citus_abs_top_srcdir)/vendor/libbacktrace
+libbacktrace_builddir = $(citus_abs_top_srcdir)/vendor/libbacktrace/build
+libbacktrace_a = $(libbacktrace_builddir)/lib/libbacktrace.a
+libbacktrace_sources = $(wildcard $(libbacktrace_srcdir)/*)
+
+
 MODULE_big = citus
 EXTENSION = citus
 
@@ -47,11 +53,18 @@ utils/citus_version.o: $(CITUS_VERSION_INVALIDATE)
 
 SHLIB_LINK += $(filter -lssl -lcrypto -lssleay32 -leay32, $(LIBS))
 
-override LDFLAGS += /usr/lib/gcc/x86_64-linux-gnu/7/libbacktrace.a
-override CPPFLAGS += -I$(libpq_srcdir) -I$(safestringlib_srcdir)/include -I/usr/lib/gcc/x86_64-linux-gnu/7/include/ -L/usr/lib/gcc/x86_64-linux-gnu/7/ -lbacktrace
+override LDFLAGS += $(libbacktrace_a)
+override CPPFLAGS += -I$(libpq_srcdir) -I$(safestringlib_srcdir)/include -I$(libbacktrace_builddir)/include/
 
 SQL_DEPDIR=.deps/sql
 SQL_BUILDDIR=build/sql
+
+$(libbacktrace_a): $(libbacktrace_sources)
+	rm -rf $(libbacktrace_builddir)
+	mkdir -p $(libbacktrace_builddir)
+	cd $(libbacktrace_builddir) && $(libbacktrace_srcdir)/configure --prefix $(libbacktrace_builddir) CFLAGS=-fPIC && make install -j6
+
+citus.so: $(libbacktrace_a)
 
 $(generated_sql_files): $(citus_abs_srcdir)/build/%: %
 	@mkdir -p $(citus_abs_srcdir)/$(SQL_DEPDIR) $(citus_abs_srcdir)/$(SQL_BUILDDIR)
@@ -72,3 +85,4 @@ install: cleanup-before-install
 clean-full:
 	make clean
 	rm -rf $(safestringlib_builddir)
+	rm -rf $(libbacktrace_builddir)
