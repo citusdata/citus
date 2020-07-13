@@ -14,5 +14,3 @@
 void Backtrace(int elevel);
 
 #endif
-
-

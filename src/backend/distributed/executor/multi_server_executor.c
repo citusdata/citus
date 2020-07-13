@@ -105,9 +105,10 @@ JobExecutorType(DistributedPlan *distributedPlan)
 			if (!EnableRepartitionJoins)
 			{
 				ereport(ERROR, (
-								errmsg("the query contains a join that requires repartitioning"),
-								errhint("Set citus.enable_repartition_joins to on "
-										"to enable repartitioning")));
+							errmsg(
+								"the query contains a join that requires repartitioning"),
+							errhint("Set citus.enable_repartition_joins to on "
+									"to enable repartitioning")));
 			}
 			if (HasReplicatedDistributedTable(distributedPlan->relationIdList))
 			{
@@ -133,6 +134,7 @@ JobExecutorType(DistributedPlan *distributedPlan)
 
 	return executorType;
 }
+
 
 /*
  * HasReplicatedDistributedTable returns true if there is any

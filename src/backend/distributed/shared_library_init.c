@@ -368,6 +368,7 @@ multi_log_hook(ErrorData *edata)
 	}
 }
 
+
 /*
  * StartupCitusBackend initializes per-backend infrastructure, and is called
  * the first time citus is used in a database.
