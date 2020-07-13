@@ -34,6 +34,55 @@ CREATE TABLE local(c int, d int);
 INSERT INTO test VALUES (1, 2), (3, 4), (5, 6), (2, 7), (4, 5);
 INSERT INTO ref VALUES (1, 2), (5, 6), (7, 8);
 INSERT INTO local VALUES (1, 2), (3, 4), (7, 8);
+-- Check repartion joins are supported
+SET citus.enable_repartition_joins TO ON;
+SELECT * FROM test t1, test t2 WHERE t1.x = t2.y ORDER BY t1.x;
+ x | y | x | y
+---------------------------------------------------------------------
+ 2 | 7 | 1 | 2
+ 4 | 5 | 3 | 4
+ 5 | 6 | 4 | 5
+(3 rows)
+
+SET citus.enable_single_hash_repartition_joins TO ON;
+SELECT * FROM test t1, test t2 WHERE t1.x = t2.y ORDER BY t1.x;
+ x | y | x | y
+---------------------------------------------------------------------
+ 2 | 7 | 1 | 2
+ 4 | 5 | 3 | 4
+ 5 | 6 | 4 | 5
+(3 rows)
+
+RESET citus.enable_single_hash_repartition_joins;
+SET citus.task_assignment_policy TO 'round-robin';
+SET citus.enable_single_hash_repartition_joins TO ON;
+SELECT * FROM test t1, test t2 WHERE t1.x = t2.y ORDER BY t1.x;
+ x | y | x | y
+---------------------------------------------------------------------
+ 2 | 7 | 1 | 2
+ 4 | 5 | 3 | 4
+ 5 | 6 | 4 | 5
+(3 rows)
+
+SET citus.task_assignment_policy TO 'greedy';
+SELECT * FROM test t1, test t2 WHERE t1.x = t2.y ORDER BY t1.x;
+ x | y | x | y
+---------------------------------------------------------------------
+ 2 | 7 | 1 | 2
+ 4 | 5 | 3 | 4
+ 5 | 6 | 4 | 5
+(3 rows)
+
+SET citus.task_assignment_policy TO 'first-replica';
+SELECT * FROM test t1, test t2 WHERE t1.x = t2.y ORDER BY t1.x;
+ x | y | x | y
+---------------------------------------------------------------------
+ 2 | 7 | 1 | 2
+ 4 | 5 | 3 | 4
+ 5 | 6 | 4 | 5
+(3 rows)
+
+RESET citus.enable_repartition_joins;
 -- connect to the follower and check that a simple select query works, the follower
 -- is still in the default cluster and will send queries to the primary nodes
 \c - - - :follower_master_port
@@ -102,15 +151,29 @@ SELECT * FROM ref, local WHERE a = c ORDER BY a;
  7 | 8 | 7 | 8
 (2 rows)
 
--- Check repartion joins are support
-SELECT * FROM test t1, test t2 WHERE t1.x = t2.y ORDER BY t1.x;
-ERROR:  floating-point exception
-DETAIL:  An invalid floating-point operation was signaled. This probably means an out-of-range result or an invalid operation, such as division by zero.
 SET citus.enable_repartition_joins TO ON;
 SELECT * FROM test t1, test t2 WHERE t1.x = t2.y ORDER BY t1.x;
-ERROR:  floating-point exception
-DETAIL:  An invalid floating-point operation was signaled. This probably means an out-of-range result or an invalid operation, such as division by zero.
+ERROR:  writing to worker nodes is not currently allowed
+DETAIL:  the database is read-only
+SET citus.enable_single_hash_repartition_joins TO ON;
+SELECT * FROM test t1, test t2 WHERE t1.x = t2.y ORDER BY t1.x;
+ERROR:  writing to worker nodes is not currently allowed
+DETAIL:  the database is read-only
+SET citus.task_assignment_policy TO 'round-robin';
+SET citus.enable_single_hash_repartition_joins TO ON;
+SELECT * FROM test t1, test t2 WHERE t1.x = t2.y ORDER BY t1.x;
+ERROR:  writing to worker nodes is not currently allowed
+DETAIL:  the database is read-only
+SET citus.task_assignment_policy TO 'greedy';
+SELECT * FROM test t1, test t2 WHERE t1.x = t2.y ORDER BY t1.x;
+ERROR:  writing to worker nodes is not currently allowed
+DETAIL:  the database is read-only
+SET citus.task_assignment_policy TO 'first-replica';
+SELECT * FROM test t1, test t2 WHERE t1.x = t2.y ORDER BY t1.x;
+ERROR:  writing to worker nodes is not currently allowed
+DETAIL:  the database is read-only
 RESET citus.enable_repartition_joins;
+RESET citus.enable_single_hash_repartition_joins;
 -- Confirm that dummy placements work
 SELECT count(*) FROM test WHERE false;
  count
@@ -125,6 +188,30 @@ SELECT count(*) FROM test WHERE false GROUP BY GROUPING SETS (x,y);
 
 -- Confirm that they work with round-robin task assignment policy
 SET citus.task_assignment_policy TO 'round-robin';
+SELECT count(*) FROM test WHERE false;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+SELECT count(*) FROM test WHERE false GROUP BY GROUPING SETS (x,y);
+ count
+---------------------------------------------------------------------
+(0 rows)
+
+SET citus.task_assignment_policy TO 'greedy';
+SELECT count(*) FROM test WHERE false;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+SELECT count(*) FROM test WHERE false GROUP BY GROUPING SETS (x,y);
+ count
+---------------------------------------------------------------------
+(0 rows)
+
+SET citus.task_assignment_policy TO 'first-replica';
 SELECT count(*) FROM test WHERE false;
  count
 ---------------------------------------------------------------------
@@ -226,15 +313,16 @@ SELECT * FROM ref, local WHERE a = c ORDER BY a;
  7 | 8 | 7 | 8
 (2 rows)
 
--- Check repartion joins are support
-SELECT * FROM test t1, test t2 WHERE t1.x = t2.y ORDER BY t1.x;
-ERROR:  floating-point exception
-DETAIL:  An invalid floating-point operation was signaled. This probably means an out-of-range result or an invalid operation, such as division by zero.
 SET citus.enable_repartition_joins TO ON;
 SELECT * FROM test t1, test t2 WHERE t1.x = t2.y ORDER BY t1.x;
-ERROR:  floating-point exception
-DETAIL:  An invalid floating-point operation was signaled. This probably means an out-of-range result or an invalid operation, such as division by zero.
+ERROR:  writing to worker nodes is not currently allowed
+DETAIL:  the database is read-only
+SET citus.enable_single_hash_repartition_joins TO ON;
+SELECT * FROM test t1, test t2 WHERE t1.x = t2.y ORDER BY t1.x;
+ERROR:  writing to worker nodes is not currently allowed
+DETAIL:  the database is read-only
 RESET citus.enable_repartition_joins;
+RESET citus.enable_single_hash_repartition_joins;
 -- Confirm that dummy placements work
 SELECT count(*) FROM test WHERE false;
  count

@@ -130,7 +130,15 @@ SendCommandToWorkersWithMetadata(const char *command)
 List *
 TargetWorkerSetNodeList(TargetWorkerSet targetWorkerSet, LOCKMODE lockMode)
 {
-	List *workerNodeList = ActivePrimaryNonCoordinatorNodeList(lockMode);
+	List *workerNodeList = NIL;
+	if (targetWorkerSet == ALL_SHARD_NODES)
+	{
+		workerNodeList = ActivePrimaryNodeList(lockMode);
+	}
+	else
+	{
+		workerNodeList = ActivePrimaryNonCoordinatorNodeList(lockMode);
+	}
 	List *result = NIL;
 
 	WorkerNode *workerNode = NULL;
