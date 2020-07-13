@@ -21,7 +21,23 @@ INSERT INTO local VALUES (1, 2), (3, 4), (7, 8);
 -- Check repartion joins are supported
 SET citus.enable_repartition_joins TO ON;
 SELECT * FROM test t1, test t2 WHERE t1.x = t2.y ORDER BY t1.x;
+SET citus.enable_single_hash_repartition_joins TO ON;
+SELECT * FROM test t1, test t2 WHERE t1.x = t2.y ORDER BY t1.x;
+RESET citus.enable_single_hash_repartition_joins;
+
+SET citus.task_assignment_policy TO 'round-robin';
+SET citus.enable_single_hash_repartition_joins TO ON;
+SELECT * FROM test t1, test t2 WHERE t1.x = t2.y ORDER BY t1.x;
+
+SET citus.task_assignment_policy TO 'greedy';
+SELECT * FROM test t1, test t2 WHERE t1.x = t2.y ORDER BY t1.x;
+
+SET citus.task_assignment_policy TO 'first-replica';
+SELECT * FROM test t1, test t2 WHERE t1.x = t2.y ORDER BY t1.x;
+
 RESET citus.enable_repartition_joins;
+
+
 
 -- connect to the follower and check that a simple select query works, the follower
 -- is still in the default cluster and will send queries to the primary nodes
@@ -41,12 +57,33 @@ SELECT * FROM ref, local WHERE a = c ORDER BY a;
 
 SET citus.enable_repartition_joins TO ON;
 SELECT * FROM test t1, test t2 WHERE t1.x = t2.y ORDER BY t1.x;
+SET citus.enable_single_hash_repartition_joins TO ON;
+SELECT * FROM test t1, test t2 WHERE t1.x = t2.y ORDER BY t1.x;
+
+SET citus.task_assignment_policy TO 'round-robin';
+SET citus.enable_single_hash_repartition_joins TO ON;
+SELECT * FROM test t1, test t2 WHERE t1.x = t2.y ORDER BY t1.x;
+
+SET citus.task_assignment_policy TO 'greedy';
+SELECT * FROM test t1, test t2 WHERE t1.x = t2.y ORDER BY t1.x;
+
+SET citus.task_assignment_policy TO 'first-replica';
+SELECT * FROM test t1, test t2 WHERE t1.x = t2.y ORDER BY t1.x;
+
+RESET citus.enable_repartition_joins;
+RESET citus.enable_single_hash_repartition_joins;
 
 -- Confirm that dummy placements work
 SELECT count(*) FROM test WHERE false;
 SELECT count(*) FROM test WHERE false GROUP BY GROUPING SETS (x,y);
 -- Confirm that they work with round-robin task assignment policy
 SET citus.task_assignment_policy TO 'round-robin';
+SELECT count(*) FROM test WHERE false;
+SELECT count(*) FROM test WHERE false GROUP BY GROUPING SETS (x,y);
+SET citus.task_assignment_policy TO 'greedy';
+SELECT count(*) FROM test WHERE false;
+SELECT count(*) FROM test WHERE false GROUP BY GROUPING SETS (x,y);
+SET citus.task_assignment_policy TO 'first-replica';
 SELECT count(*) FROM test WHERE false;
 SELECT count(*) FROM test WHERE false GROUP BY GROUPING SETS (x,y);
 RESET citus.task_assignment_policy;
@@ -86,6 +123,10 @@ SELECT * FROM ref, local WHERE a = c ORDER BY a;
 
 SET citus.enable_repartition_joins TO ON;
 SELECT * FROM test t1, test t2 WHERE t1.x = t2.y ORDER BY t1.x;
+SET citus.enable_single_hash_repartition_joins TO ON;
+SELECT * FROM test t1, test t2 WHERE t1.x = t2.y ORDER BY t1.x;
+RESET citus.enable_repartition_joins;
+RESET citus.enable_single_hash_repartition_joins;
 
 -- Confirm that dummy placements work
 SELECT count(*) FROM test WHERE false;

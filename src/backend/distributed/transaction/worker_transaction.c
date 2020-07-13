@@ -131,7 +131,7 @@ List *
 TargetWorkerSetNodeList(TargetWorkerSet targetWorkerSet, LOCKMODE lockMode)
 {
 	List *workerNodeList = NIL;
-	if (targetWorkerSet == ALL_DATA_NODES)
+	if (targetWorkerSet == ALL_SHARD_NODES)
 	{
 		workerNodeList = ActivePrimaryNodeList(lockMode);
 	}
