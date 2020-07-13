@@ -11,7 +11,7 @@ CREATE TABLE local (a int, b int);
 -- inserts normally do not work on a standby coordinator
 INSERT INTO the_table (a, b, z) VALUES (1, 2, 2);
 ERROR:  writing to worker nodes is not currently allowed
-DETAIL:  the database is in recovery mode
+DETAIL:  the database is read-only
 -- we can allow DML on a writable standby coordinator
 SET citus.writable_standby_coordinator TO on;
 INSERT INTO the_table (a, b, z) VALUES (1, 2, 2);
