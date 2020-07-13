@@ -66,4 +66,14 @@ extern char * HashLogMessage(const char *text);
 		ereport_domain(elevel, TEXTDOMAIN, rest); \
 	} while (0)
 
+#undef Trap
+#define Trap(condition, errorType) \
+	do { \
+		if (condition) { \
+			AssertBacktrace(); \
+			ExceptionalCondition(CppAsString(condition), (errorType), \
+								 __FILE__, __LINE__); \
+		} \
+	} while (0)
+
 #endif /* LOG_UTILS_H */

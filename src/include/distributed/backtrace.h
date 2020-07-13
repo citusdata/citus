@@ -12,5 +12,6 @@
 #define CITUS_BACKTRACE_H
 
 void Backtrace(int elevel);
+void AssertBacktrace(void);
 
 #endif

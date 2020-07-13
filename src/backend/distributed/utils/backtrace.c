@@ -8,7 +8,6 @@
 
 #include "postgres.h"
 #include "backtrace.h"
-// #include "backtrace-supported.h"
 #include "lib/stringinfo.h"
 
 #include "distributed/backtrace.h"
@@ -52,6 +51,11 @@ Backtrace(int elevel)
 		return;
 	}
 	errdetail("%s", GenerateBackTrace());
+}
+
+void AssertBacktrace(void) {
+	const char * backtrace = GenerateBackTrace();
+    ereport(ERROR, (errmsg("%s", backtrace)));
 }
 
 
