@@ -1093,7 +1093,10 @@ set_relation_column_names(deparse_namespace *dpns, RangeTblEntry *rte,
 		if (!changed_any && strcmp(colname, real_colname) != 0)
 			changed_any = true;
 
-		/* Remember if there is a reference to an anonymous column */
+		/*
+		 * Remember if there is a reference to an anonymous column as named by
+		 * char * FigureColname(Node *node)
+		 */
 		if (!has_anonymous && strcmp(real_colname, "?column?") == 0)
 			has_anonymous = true;
 	}

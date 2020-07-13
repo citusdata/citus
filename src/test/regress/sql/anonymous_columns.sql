@@ -17,6 +17,7 @@ WITH a AS (SELECT '' FROM t0 GROUP BY a) SELECT * FROM a;
 WITH a AS (SELECT '' FROM t0 GROUP BY b) SELECT * FROM a;
 WITH a AS (SELECT '','' FROM t0 GROUP BY a) SELECT * FROM a;
 WITH a AS (SELECT '','' FROM t0 GROUP BY b) SELECT * FROM a;
+WITH a AS (SELECT 1, * FROM t0 WHERE a = 1) SELECT * FROM a;
 
 -- test CTE's that are referenced multiple times and hence need to stay CTE's
 WITH a AS (SELECT '' FROM t0 WHERE a = 1) SELECT * FROM a, a b;
@@ -27,6 +28,11 @@ SELECT * FROM (SELECT a, '' FROM t0 GROUP BY a ) as foo;
 SELECT * FROM (SELECT a, '', '' FROM t0 GROUP BY a ) as foo;
 SELECT * FROM (SELECT b, '' FROM t0 GROUP BY b ) as foo;
 SELECT * FROM (SELECT b, '', '' FROM t0 GROUP BY b ) as foo;
+
+-- some tests that follow very similar codeoaths
+SELECT a + 1 FROM t0;
+SELECT a + 1, a - 1 FROM t0;
+WITH cte1 AS (SELECT row_to_json(row(a))->'f1' FROM t0) SELECT * FROM cte1;
 
 -- clean up after test
 SET client_min_messages TO WARNING;
