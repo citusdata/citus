@@ -150,10 +150,18 @@ ErrorIfUnsupportedForeignConstraintExists(Relation relation, char referencingDis
 
 		if (!referencedIsCitus && !selfReferencingTable)
 		{
+			char *referencedTableName = get_rel_name(referencedTableId);
+
 			ereport(ERROR, (errcode(ERRCODE_INVALID_TABLE_DEFINITION),
-							errmsg("cannot create foreign key constraint"),
-							errdetail("Referenced table must be a distributed table"
-									  " or a reference table.")));
+							errmsg("referenced table \"%s\" must be a distributed table"
+								   " or a reference table",
+								   referencedTableName),
+							errdetail("To enforce foreign keys, the referencing and "
+									  "referenced rows need to be stored on the same "
+									  "node."),
+							errhint("You could use SELECT create_reference_table('%s') "
+									"to replicate the referenced table to all nodes",
+									referencedTableName)));
 		}
 
 		/* set referenced table related variables here if table is referencing itself */
