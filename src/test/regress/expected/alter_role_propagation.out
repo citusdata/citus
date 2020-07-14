@@ -1,4 +1,5 @@
 CREATE SCHEMA alter_role;
+CREATE SCHEMA ",CitUs,.TeeN!?";
 -- test if the passowrd of the extension owner can be upgraded
 ALTER ROLE CURRENT_USER PASSWORD 'password123' VALID UNTIL 'infinity';
 SELECT run_command_on_workers($$SELECT row(rolname, rolsuper, rolinherit,  rolcreaterole, rolcreatedb, rolcanlogin, rolreplication, rolbypassrls, rolconnlimit, rolpassword, EXTRACT (year FROM rolvaliduntil)) FROM pg_authid WHERE rolname = current_user$$);
@@ -111,6 +112,12 @@ SELECT run_command_on_workers('SHOW enable_hashagg');
  (localhost,57638,t,off)
 (1 row)
 
+-- provide a list of values in a supported configuration
+ALTER ROLE CURRENT_USER SET search_path TO ",CitUs,.TeeN!?", alter_role, public;
+-- test user defined GUCs that appear to be a list, but instead a single string
+ALTER ROLE ALL SET public.myguc TO "Hello, World";
+-- test for configuration values that should not be downcased even when unquoted
+ALTER ROLE CURRENT_USER SET lc_messages TO 'C';
 -- add worker and check all settings are copied
 SELECT 1 FROM master_add_node('localhost', :worker_1_port);
  ?column?
@@ -137,6 +144,27 @@ SELECT run_command_on_workers('SHOW enable_hashagg');
 ---------------------------------------------------------------------
  (localhost,57637,t,off)
  (localhost,57638,t,off)
+(2 rows)
+
+SELECT run_command_on_workers('SHOW search_path');
+                    run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,""",CitUs,.TeeN!?"", alter_role, public")
+ (localhost,57638,t,""",CitUs,.TeeN!?"", alter_role, public")
+(2 rows)
+
+SELECT run_command_on_workers('SHOW lc_messages');
+ run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,C)
+ (localhost,57638,t,C)
+(2 rows)
+
+SELECT run_command_on_workers('SHOW public.myguc');
+       run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,"Hello, World")
+ (localhost,57638,t,"Hello, World")
 (2 rows)
 
 -- reset to default values
@@ -226,4 +254,4 @@ SELECT run_command_on_workers('SHOW enable_hashjoin');
  (localhost,57638,t,on)
 (2 rows)
 
-DROP SCHEMA alter_role CASCADE;
+DROP SCHEMA alter_role, ",CitUs,.TeeN!?" CASCADE;
