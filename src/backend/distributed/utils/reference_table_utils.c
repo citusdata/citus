@@ -64,6 +64,10 @@ PG_FUNCTION_INFO_V1(replicate_reference_tables);
 bool
 IsReferenceTable(Oid relationId)
 {
+	if (!IsCitusTable(relationId))
+	{
+		return false;
+	}
 	CitusTableCacheEntry *tableEntry = GetCitusTableCacheEntry(relationId);
 
 	if (tableEntry->partitionMethod != DISTRIBUTE_BY_NONE)
