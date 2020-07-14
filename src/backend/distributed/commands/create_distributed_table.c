@@ -83,7 +83,7 @@
 /*
  * once every LOG_PER_TUPLE_AMOUNT, the copy will be logged.
  */
-#define LOG_PER_TUPLE_AMOUNT 1000000
+// #define LOG_PER_TUPLE_AMOUNT 1000000
 
 /* Replication model to use when creating distributed tables */
 int ReplicationModel = REPLICATION_MODEL_COORDINATOR;
