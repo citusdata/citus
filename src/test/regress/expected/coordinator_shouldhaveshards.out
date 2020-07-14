@@ -198,6 +198,23 @@ NOTICE:  executing the command locally: SELECT count(*) AS count FROM coordinato
 (1 row)
 
 ROLLBACK;
+-- repartition queries should work fine
+SET citus.enable_repartition_joins TO ON;
+SELECT count(*) FROM test t1, test t2 WHERE t1.x = t2.y;
+ count
+---------------------------------------------------------------------
+   100
+(1 row)
+
+BEGIN;
+SET citus.enable_repartition_joins TO ON;
+SELECT count(*) FROM test t1, test t2 WHERE t1.x = t2.y;
+ count
+---------------------------------------------------------------------
+   100
+(1 row)
+
+END;
 BEGIN;
 SET citus.enable_repartition_joins TO ON;
 -- trigger local execution
@@ -439,6 +456,7 @@ BEGIN;
 -- copying task
 INSERT INTO dist_table SELECT a + 1 FROM dist_table;
 ROLLBACK;
+SET citus.shard_replication_factor TO 1;
 BEGIN;
 SET citus.shard_replication_factor TO 2;
 CREATE TABLE dist_table1(a int);
@@ -459,11 +477,12 @@ RESET citus.enable_cte_inlining;
 DELETE FROM test;
 DROP TABLE test;
 DROP TABLE dist_table;
+DROP TABLE ref;
+NOTICE:  executing the command locally: DROP TABLE IF EXISTS coordinator_shouldhaveshards.ref_xxxxx CASCADE
+CONTEXT:  SQL statement "SELECT master_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name)"
+PL/pgSQL function citus_drop_trigger() line 19 at PERFORM
 DROP SCHEMA coordinator_shouldhaveshards CASCADE;
-NOTICE:  drop cascades to 3 other objects
-DETAIL:  drop cascades to table ref
-drop cascades to table ref_1503016
-drop cascades to table local
+NOTICE:  drop cascades to table local
 SELECT 1 FROM master_set_node_property('localhost', :master_port, 'shouldhaveshards', false);
  ?column?
 ---------------------------------------------------------------------

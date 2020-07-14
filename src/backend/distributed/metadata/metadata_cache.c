@@ -282,7 +282,7 @@ EnsureModificationsCanRun(void)
 	if (RecoveryInProgress() && !WritableStandbyCoordinator)
 	{
 		ereport(ERROR, (errmsg("writing to worker nodes is not currently allowed"),
-						errdetail("the database is in recovery mode")));
+						errdetail("the database is read-only")));
 	}
 
 	if (ReadFromSecondaries == USE_SECONDARY_NODES_ALWAYS)

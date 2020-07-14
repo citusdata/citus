@@ -87,6 +87,15 @@ SELECT create_distributed_table('dist_table', 'a', colocate_with := 'none');
 SELECT count(*) FROM dist_table;
 ROLLBACK;
 
+-- repartition queries should work fine
+SET citus.enable_repartition_joins TO ON;
+SELECT count(*) FROM test t1, test t2 WHERE t1.x = t2.y;
+
+BEGIN;
+SET citus.enable_repartition_joins TO ON;
+SELECT count(*) FROM test t1, test t2 WHERE t1.x = t2.y;
+END;
+
 BEGIN;
 SET citus.enable_repartition_joins TO ON;
 -- trigger local execution
@@ -182,6 +191,7 @@ BEGIN;
 -- copying task
 INSERT INTO dist_table SELECT a + 1 FROM dist_table;
 ROLLBACK;
+SET citus.shard_replication_factor TO 1;
 
 BEGIN;
 SET citus.shard_replication_factor TO 2;
@@ -196,6 +206,7 @@ RESET citus.enable_cte_inlining;
 DELETE FROM test;
 DROP TABLE test;
 DROP TABLE dist_table;
+DROP TABLE ref;
 
 DROP SCHEMA coordinator_shouldhaveshards CASCADE;
 

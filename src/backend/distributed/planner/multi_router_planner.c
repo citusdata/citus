@@ -156,6 +156,7 @@ static DeferredErrorMessage * MultiRouterPlannableQuery(Query *query);
 static DeferredErrorMessage * ErrorIfQueryHasUnroutableModifyingCTE(Query *queryTree);
 static bool SelectsFromDistributedTable(List *rangeTableList, Query *query);
 static ShardPlacement * CreateDummyPlacement(bool hasLocalRelation);
+static ShardPlacement * CreateLocalDummyPlacement();
 static List * get_all_actual_clauses(List *restrictinfo_list);
 static int CompareInsertValuesByShardId(const void *leftElement,
 										const void *rightElement);
@@ -507,7 +508,9 @@ ResultRelationOidForQuery(Query *query)
 
 
 /*
- * ExtractResultRelationRTE returns the table's resultRelation range table entry.
+ * ExtractResultRelationRTE returns the table's resultRelation range table
+ * entry. This returns NULL when there's no resultRelation, such as in a SELECT
+ * query.
  */
 RangeTblEntry *
 ExtractResultRelationRTE(Query *query)
@@ -518,6 +521,28 @@ ExtractResultRelationRTE(Query *query)
 	}
 
 	return NULL;
+}
+
+
+/*
+ * ExtractResultRelationRTEOrError returns the table's resultRelation range table
+ * entry and errors out if there's no result relation at all, e.g. like in a
+ * SELECT query.
+ *
+ * This is a separate function (instead of using missingOk), so static analysis
+ * reasons about NULL returns correctly.
+ */
+RangeTblEntry *
+ExtractResultRelationRTEOrError(Query *query)
+{
+	RangeTblEntry *relation = ExtractResultRelationRTE(query);
+	if (relation == NULL)
+	{
+		ereport(ERROR, (errmsg("no result relation could be found for the query"),
+						errhint("is this a SELECT query?")));
+	}
+
+	return relation;
 }
 
 
@@ -2234,6 +2259,25 @@ CreateTaskPlacementListForShardIntervals(List *shardIntervalListList, bool shard
 
 
 /*
+ * CreateLocalDummyPlacement creates a dummy placement for the local node that
+ * can be used for queries that don't involve any shards. The typical examples
+ * are:
+ *       (a) queries that consist of only intermediate results
+ *       (b) queries that hit zero shards (... WHERE false;)
+ */
+static ShardPlacement *
+CreateLocalDummyPlacement()
+{
+	ShardPlacement *dummyPlacement = CitusMakeNode(ShardPlacement);
+	dummyPlacement->nodeId = LOCAL_NODE_ID;
+	dummyPlacement->nodeName = LOCAL_HOST_NAME;
+	dummyPlacement->nodePort = PostPortNumber;
+	dummyPlacement->groupId = GetLocalGroupId();
+	return dummyPlacement;
+}
+
+
+/*
  * CreateDummyPlacement creates a dummy placement that can be used for queries
  * that don't involve any shards. The typical examples are:
  *       (a) queries that consist of only intermediate results
@@ -2249,31 +2293,32 @@ static ShardPlacement *
 CreateDummyPlacement(bool hasLocalRelation)
 {
 	static uint32 zeroShardQueryRoundRobin = 0;
+
+	if (TaskAssignmentPolicy != TASK_ASSIGNMENT_ROUND_ROBIN || hasLocalRelation)
+	{
+		return CreateLocalDummyPlacement();
+	}
+
+	List *workerNodeList = ActiveReadableNonCoordinatorNodeList();
+	if (workerNodeList == NIL)
+	{
+		/*
+		 * We want to round-robin over the workers, but there are no workers.
+		 * To make sure the query can still succeed we fall back to returning
+		 * a local dummy placement.
+		 */
+		return CreateLocalDummyPlacement();
+	}
+
+	int workerNodeCount = list_length(workerNodeList);
+	int workerNodeIndex = zeroShardQueryRoundRobin % workerNodeCount;
+	WorkerNode *workerNode = (WorkerNode *) list_nth(workerNodeList,
+													 workerNodeIndex);
+
 	ShardPlacement *dummyPlacement = CitusMakeNode(ShardPlacement);
+	SetPlacementNodeMetadata(dummyPlacement, workerNode);
 
-	if (TaskAssignmentPolicy == TASK_ASSIGNMENT_ROUND_ROBIN && !hasLocalRelation)
-	{
-		List *workerNodeList = ActiveReadableWorkerNodeList();
-		if (workerNodeList == NIL)
-		{
-			return NULL;
-		}
-
-		int workerNodeCount = list_length(workerNodeList);
-		int workerNodeIndex = zeroShardQueryRoundRobin % workerNodeCount;
-		WorkerNode *workerNode = (WorkerNode *) list_nth(workerNodeList,
-														 workerNodeIndex);
-		SetPlacementNodeMetadata(dummyPlacement, workerNode);
-
-		zeroShardQueryRoundRobin++;
-	}
-	else
-	{
-		dummyPlacement->nodeId = LOCAL_NODE_ID;
-		dummyPlacement->nodeName = LOCAL_HOST_NAME;
-		dummyPlacement->nodePort = PostPortNumber;
-		dummyPlacement->groupId = GetLocalGroupId();
-	}
+	zeroShardQueryRoundRobin++;
 
 	return dummyPlacement;
 }
@@ -2655,7 +2700,6 @@ BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError)
 	Oid distributedTableId = ExtractFirstCitusTableId(query);
 	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(distributedTableId);
 	char partitionMethod = cacheEntry->partitionMethod;
-	uint32 rangeTableId = 1;
 	List *modifyRouteList = NIL;
 	ListCell *insertValuesCell = NULL;
 
@@ -2693,7 +2737,7 @@ BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError)
 		return modifyRouteList;
 	}
 
-	Var *partitionColumn = PartitionColumn(distributedTableId, rangeTableId);
+	Var *partitionColumn = cacheEntry->partitionColumn;
 
 	/* get full list of insert values and iterate over them to prune */
 	List *insertValuesList = ExtractInsertValuesList(query, partitionColumn);
@@ -2702,8 +2746,38 @@ BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError)
 	{
 		InsertValues *insertValues = (InsertValues *) lfirst(insertValuesCell);
 		List *prunedShardIntervalList = NIL;
-		Expr *partitionValueExpr = (Expr *) strip_implicit_coercions(
-			(Node *) insertValues->partitionValueExpr);
+		Node *partitionValueExpr = (Node *) insertValues->partitionValueExpr;
+
+		/*
+		 * We only support constant partition values at this point. Sometimes
+		 * they are wrappend in an implicit coercion though. Most notably
+		 * FuncExpr coercions for casts created with CREATE CAST ... WITH
+		 * FUNCTION .. AS IMPLICIT. To support this first we strip them here.
+		 * Then we do the coercion manually below using
+		 * TransformPartitionRestrictionValue, if the types are not the same.
+		 *
+		 * NOTE: eval_const_expressions below would do some of these removals
+		 * too, but it's unclear if it would do all of them. It is possible
+		 * that there are no cases where this strip_implicit_coercions call is
+		 * really necessary at all, but currently that's hard to rule out.
+		 * So to be on the safe side we call strip_implicit_coercions too, to
+		 * be sure we support as much as possible.
+		 */
+		partitionValueExpr = strip_implicit_coercions(partitionValueExpr);
+
+		/*
+		 * By evaluating constant expressions an expression such as 2 + 4
+		 * will become const 6. That way we can use them as a partition column
+		 * value. Normally the planner evaluates constant expressions, but we
+		 * may be working on the original query tree here. So we do it here
+		 * explicitely before checking that the partition value is a const.
+		 *
+		 * NOTE: We do not use expression_planner here, since all it does
+		 * apart from calling eval_const_expressions is call fix_opfuncids.
+		 * This is not needed here, since it's a no-op for T_Const nodes and we
+		 * error out below in all other cases.
+		 */
+		partitionValueExpr = eval_const_expressions(NULL, partitionValueExpr);
 
 		if (!IsA(partitionValueExpr, Const))
 		{
@@ -2720,21 +2794,20 @@ BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError)
 								   "column")));
 		}
 
+		/* actually do the coercions that we skipped before, if fails throw an
+		 * error */
+		if (partitionValueConst->consttype != partitionColumn->vartype)
+		{
+			bool missingOk = false;
+			partitionValueConst =
+				TransformPartitionRestrictionValue(partitionColumn,
+												   partitionValueConst,
+												   missingOk);
+		}
+
 		if (partitionMethod == DISTRIBUTE_BY_HASH || partitionMethod ==
 			DISTRIBUTE_BY_RANGE)
 		{
-			Var *distributionKey = cacheEntry->partitionColumn;
-
-			/* handle coercions, if fails throw an error */
-			if (partitionValueConst->consttype != distributionKey->vartype)
-			{
-				bool missingOk = false;
-				partitionValueConst =
-					TransformPartitionRestrictionValue(distributionKey,
-													   partitionValueConst,
-													   missingOk);
-			}
-
 			Datum partitionValue = partitionValueConst->constvalue;
 
 			ShardInterval *shardInterval = FindShardInterval(partitionValue, cacheEntry);
