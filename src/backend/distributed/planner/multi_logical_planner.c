@@ -466,8 +466,7 @@ bool
 IsReferenceTableRTE(Node *node)
 {
 	Oid relationId = NodeTryGetRteRelid(node);
-	return relationId != InvalidOid && IsCitusTable(relationId) &&
-		   IsReferenceTable(relationId);
+	return relationId != InvalidOid && IsReferenceTable(relationId);
 }
 
 

@@ -1386,12 +1386,16 @@ EnsureHashDistributedTable(Oid relationId)
 
 
 /*
- * IsDistributedTable returns true if the given relation is
+ * IsHashDistributedTable returns true if the given relation is
  * a distributed table.
  */
 bool
 IsHashDistributedTable(Oid relationId)
 {
+	if (!IsCitusTable(relationId))
+	{
+		return false;
+	}
 	CitusTableCacheEntry *sourceTableEntry = GetCitusTableCacheEntry(relationId);
 	char sourceDistributionMethod = sourceTableEntry->partitionMethod;
 	return sourceDistributionMethod == DISTRIBUTE_BY_HASH;
