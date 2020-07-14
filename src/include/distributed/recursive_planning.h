@@ -45,5 +45,7 @@ extern Query * BuildReadIntermediateResultsArrayQuery(List *targetEntryList,
 													  List *resultIdList,
 													  bool useBinaryCopyFormat);
 extern bool GeneratingSubplans(void);
+extern bool ContainsLocalTableDistributedTableJoin(List *rangeTableList);
+
 
 #endif /* RECURSIVE_PLANNING_H */
