@@ -99,7 +99,8 @@ extern void QualifyAlterFunctionDependsStmt(Node *stmt);
 extern char * DeparseAlterRoleStmt(Node *stmt);
 extern char * DeparseAlterRoleSetStmt(Node *stmt);
 
-extern Node * MakeSetStatementArgument(char *configurationName, char *configurationValue);
+extern List * MakeSetStatementArguments(char *configurationName,
+										char *configurationValue);
 extern void QualifyAlterRoleSetStmt(Node *stmt);
 
 /* forward declarations for deparse_extension_stmts.c */
