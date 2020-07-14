@@ -194,7 +194,7 @@ static RangeTblEntry * MostFilteredRte(PlannerRestrictionContext *
 									   bool localTable);
 static void ReplaceRTERelationWithRteSubquery(RangeTblEntry *rangeTableEntry,
 											  List *restrictionList);
-static bool ContainsLocalTableDistributedTableJoin(List *rangeTableList);
+static bool AllDataLocallyAccessible(List *rangeTableList);
 static void WrapFunctionsInSubqueries(Query *query);
 static void TransformFunctionRTE(RangeTblEntry *rangeTblEntry);
 static bool ShouldTransformRTE(RangeTblEntry *rangeTableEntry);
@@ -1385,9 +1385,13 @@ ConvertLocalTableJoinsToSubqueries(Query *query,
 		return;
 	}
 
+	if (AllDataLocallyAccessible(rangeTableList))
 	{
-		/* TODO: if all tables are local, skip */
+		/* recursively planning is overkill, router planner can already handle this */
+		return;
 	}
+
+	RangeTblEntry *resultRelation = ExtractResultRelationRTE(query);
 
 	while (ContainsLocalTableDistributedTableJoin(rangeTableList))
 	{
@@ -1402,6 +1406,11 @@ ConvertLocalTableJoinsToSubqueries(Query *query,
 		RangeTblEntry *mostFilteredDistributedRte =
 			MostFilteredRte(plannerRestrictionContext, rangeTableList,
 							&distributedTableRestrictList, !localTable);
+
+		elog(DEBUG4, "Local relation with the most number of filters "
+					 "on it: \"%s\"", get_rel_name(mostFilteredLocalRte->relid));
+		elog(DEBUG4, "Distributed relation with the most number of filters "
+					 "on it: \"%s\"", get_rel_name(mostFilteredDistributedRte->relid));
 
 		if (LocalTableJoinPolicy == LOCAL_JOIN_POLICY_PULL_LOCAL)
 		{
@@ -1419,26 +1428,37 @@ ConvertLocalTableJoinsToSubqueries(Query *query,
 			bool distributedTableHasFilter =
 				list_length(distributedTableRestrictList) > 0;
 
-			/* TODO: for modifications, either skip or do not plan target table */
-
-			/*
-			 * First, favor recursively planning local table when it has a filter.
-			 * The rationale is that local tables are small, and at least one filter
-			 * they become even smaller. On each iteration, we pick the local table
-			 * with the most filters (e.g., WHERE clause entries). Note that the filters
-			 * don't need to be directly on the table in the query tree, instead we use
-			 * Postgres' filters where filters can be pushed down tables via filters.
-			 *
-			 * Second, if a distributed table doesn't have a filter, we do not ever
-			 * prefer recursively planning that. Instead, we recursively plan the
-			 * local table, assuming that it is smaller.
-			 *
-			 * TODO: If we have better statistics on how many tuples each table returns
-			 * considering the filters on them, we should pick the table with least
-			 * tuples. Today, we do not have such an infrastructure.
-			 */
-			if (localTableHasFilter || !distributedTableHasFilter)
+			if (resultRelation && resultRelation->relid == mostFilteredLocalRte->relid &&
+				!mostFilteredLocalRte->inFromCl)
 			{
+				/*
+				 * We cannot recursively plan result relation, we have to
+				 * recursively plan the distributed table.
+				 *
+				 * TODO: A future improvement could be to pick the next most filtered
+				 * local relation, if exists.
+				 */
+				ReplaceRTERelationWithRteSubquery(mostFilteredDistributedRte,
+												  distributedTableRestrictList);
+			}
+			else if (localTableHasFilter || !distributedTableHasFilter)
+			{
+				/*
+				 * First, favor recursively planning local table when it has a filter.
+				 * The rationale is that local tables are small, and at least one filter
+				 * they become even smaller. On each iteration, we pick the local table
+				 * with the most filters (e.g., WHERE clause entries). Note that the filters
+				 * don't need to be directly on the table in the query tree, instead we use
+				 * Postgres' filters where filters can be pushed down tables via filters.
+				 *
+				 * Second, if a distributed table doesn't have a filter, we do not ever
+				 * prefer recursively planning that. Instead, we recursively plan the
+				 * local table, assuming that it is smaller.
+				 *
+				 * TODO: If we have better statistics on how many tuples each table returns
+				 * considering the filters on them, we should pick the table with least
+				 * tuples. Today, we do not have such an infrastructure.
+				 */
 				ReplaceRTERelationWithRteSubquery(mostFilteredLocalRte,
 												  localTableRestrictList);
 			}
@@ -1483,7 +1503,12 @@ MostFilteredRte(PlannerRestrictionContext *plannerRestrictionContext,
 			continue;
 		}
 
-		if (IsCitusTable(rangeTableEntry->relid) && localTable)
+		if (localTable && IsCitusTable(rangeTableEntry->relid))
+		{
+			continue;
+		}
+
+		if (!localTable && !IsCitusTable(rangeTableEntry->relid))
 		{
 			continue;
 		}
@@ -1543,10 +1568,60 @@ ReplaceRTERelationWithRteSubquery(RangeTblEntry *rangeTableEntry, List *restrict
 
 
 /*
+ * AllDataLocallyAccessible return true if all data for the relations in the
+ * rangeTableList is locally accessible.
+ */
+static bool
+AllDataLocallyAccessible(List *rangeTableList)
+{
+	ListCell *rangeTableCell = NULL;
+	foreach(rangeTableCell, rangeTableList)
+	{
+		RangeTblEntry *rangeTableEntry = (RangeTblEntry *) lfirst(rangeTableCell);
+
+		/* we're only interested in tables */
+		if (!(rangeTableEntry->rtekind == RTE_RELATION &&
+			  rangeTableEntry->relkind == RELKIND_RELATION))
+		{
+			continue;
+		}
+
+
+		Oid relationId = rangeTableEntry->relid;
+
+		if (!IsCitusTable(relationId))
+		{
+			/* local tables are locally accessible */
+			continue;
+		}
+
+		List *shardIntervalList = LoadShardIntervalList(relationId);
+		if (list_length(shardIntervalList) > 1)
+		{
+			/* we currently only consider single placement tables */
+			return false;
+		}
+
+		ShardInterval *shardInterval = linitial(shardIntervalList);
+		uint64 shardId = shardInterval->shardId;
+		ShardPlacement *localShardPlacement =
+			ShardPlacementOnGroup(shardId, GetLocalGroupId());
+		if (localShardPlacement == NULL)
+		{
+			/* the table doesn't have a placement on this node */
+			return false;
+		}
+	}
+
+	return true;
+}
+
+
+/*
  * ContainsLocalTableDistributedTableJoin returns true if the input range table list
  * contains a direct join between local and distributed tables.
  */
-static bool
+bool
 ContainsLocalTableDistributedTableJoin(List *rangeTableList)
 {
 	bool containsLocalTable = false;

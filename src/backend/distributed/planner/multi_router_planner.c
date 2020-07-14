@@ -563,6 +563,8 @@ IsTidColumn(Node *node)
 }
 
 
+#include "distributed/recursive_planning.h"
+
 /*
  * ModifyPartialQuerySupported implements a subset of what ModifyQuerySupported checks,
  * that subset being what's necessary to check modifying CTEs for.
@@ -576,7 +578,7 @@ ModifyPartialQuerySupported(Query *queryTree, bool multiShardQuery,
 
 	Oid distributedTableId = ModifyQueryResultRelationId(queryTree);
 	*distributedTableIdOutput = distributedTableId;
-	if (!IsCitusTable(distributedTableId))
+	if (ContainsLocalTableDistributedTableJoin(queryTree->rtable))
 	{
 		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 							 "cannot plan modifications of local tables involving "
@@ -584,7 +586,12 @@ ModifyPartialQuerySupported(Query *queryTree, bool multiShardQuery,
 							 NULL, NULL);
 	}
 
-	Var *partitionColumn = PartitionColumn(distributedTableId, rangeTableId);
+	Var *partitionColumn = NULL;
+
+	if (IsCitusTable(distributedTableId))
+	{
+		partitionColumn = PartitionColumn(distributedTableId, rangeTableId);
+	}
 
 	DeferredErrorMessage *deferredError = DeferErrorIfModifyView(queryTree);
 	if (deferredError != NULL)
@@ -880,9 +887,7 @@ ModifyQuerySupported(Query *queryTree, Query *originalQuery, bool multiShardQuer
 			/* for other kinds of relations, check if its distributed */
 			else
 			{
-				Oid relationId = rangeTableEntry->relid;
-
-				if (!IsCitusTable(relationId))
+				if (ContainsLocalTableDistributedTableJoin(queryTree->rtable))
 				{
 					StringInfo errorMessage = makeStringInfo();
 					char *relationName = get_rel_name(rangeTableEntry->relid);

@@ -76,7 +76,6 @@ static uint64 DistributedTableSizeOnWorker(WorkerNode *workerNode, Oid relationI
 										   char *sizeQuery);
 static List * ShardIntervalsOnWorkerGroup(WorkerNode *workerNode, Oid relationId);
 static void ErrorIfNotSuitableToGetSize(Oid relationId);
-static ShardPlacement * ShardPlacementOnGroup(uint64 shardId, int groupId);
 
 
 /* exports for SQL callable functions */
@@ -1196,7 +1195,7 @@ UpdatePartitionShardPlacementStates(ShardPlacement *parentShardPlacement, char s
  * of the shard on the given group. If no such placement exists, the function
  * return NULL.
  */
-static ShardPlacement *
+ShardPlacement *
 ShardPlacementOnGroup(uint64 shardId, int groupId)
 {
 	List *placementList = ShardPlacementList(shardId);
