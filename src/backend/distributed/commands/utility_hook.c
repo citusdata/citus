@@ -285,7 +285,7 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		return;
 	}
 
-	/* process SET LOCAL stmts of whitelisted GUCs in multi-stmt xacts */
+	/* process SET LOCAL stmts of allowed GUCs in multi-stmt xacts */
 	if (IsA(parsetree, VariableSetStmt))
 	{
 		VariableSetStmt *setStmt = (VariableSetStmt *) parsetree;

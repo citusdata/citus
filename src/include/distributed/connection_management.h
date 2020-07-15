@@ -213,8 +213,8 @@ extern void AddConnParam(const char *keyword, const char *value);
 extern void GetConnParams(ConnectionHashKey *key, char ***keywords, char ***values,
 						  Index *runtimeParamStart, MemoryContext context);
 extern const char * GetConnParam(const char *keyword);
-extern bool CheckConninfo(const char *conninfo, const char **whitelist,
-						  Size whitelistLength, char **errmsg);
+extern bool CheckConninfo(const char *conninfo, const char **allowedConninfoKeywords,
+						  Size allowedConninfoKeywordsLength, char **errmsg);
 
 
 /* Low-level connection establishment APIs */

@@ -1516,14 +1516,14 @@ WarnIfDeprecatedExecutorUsed(int *newval, void **extra, GucSource source)
 
 /*
  * NodeConninfoGucCheckHook ensures conninfo settings are in the expected form
- * and that the keywords of all non-null settings are on a whitelist devised to
+ * and that the keywords of all non-null settings are on a allowlist devised to
  * keep users from setting options that may result in confusion.
  */
 static bool
 NodeConninfoGucCheckHook(char **newval, void **extra, GucSource source)
 {
 	/* this array _must_ be kept in an order usable by bsearch */
-	const char *whitelist[] = {
+	const char *allowedConninfoKeywords[] = {
 		"application_name",
 		"connect_timeout",
 			#if defined(ENABLE_GSS) && defined(ENABLE_SSPI)
@@ -1542,8 +1542,8 @@ NodeConninfoGucCheckHook(char **newval, void **extra, GucSource source)
 		"sslrootcert"
 	};
 	char *errorMsg = NULL;
-	bool conninfoValid = CheckConninfo(*newval, whitelist, lengthof(whitelist),
-									   &errorMsg);
+	bool conninfoValid = CheckConninfo(*newval, allowedConninfoKeywords,
+									   lengthof(allowedConninfoKeywords), &errorMsg);
 
 	if (!conninfoValid)
 	{
