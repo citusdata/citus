@@ -915,6 +915,12 @@ ShouldRecursivelyPlanSubquery(Query *subquery, RecursivePlanningContext *context
 		 * plan which is much more expensive than pushdown.
 		 */
 		return false;
+	}else if (SingleRelationRepartitionSubquery(subquery)) {
+		/*	
+		 * Citus can plan this and execute via repartitioning. Thus,	
+		 * no need to recursively plan.	
+		 */	
+		return false;
 	}
 
 	return true;
