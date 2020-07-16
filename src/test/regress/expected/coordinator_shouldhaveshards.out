@@ -417,10 +417,22 @@ HINT:  To remove the local data, run: SELECT truncate_local_data_after_distribut
 
 INSERT INTO dist_table VALUES(1);
 NOTICE:  executing the command locally: INSERT INTO coordinator_shouldhaveshards.dist_table_1503017 (a) VALUES (1)
-SELECT * FROM local JOIN dist_table ON (a = x);
-ERROR:  relation local is not distributed
-SELECT * FROM local JOIN dist_table ON (a = x) WHERE a = 1;;
-ERROR:  relation local is not distributed
+SELECT * FROM local JOIN dist_table ON (a = x) ORDER BY 1,2,3;
+ x | y | a
+---------------------------------------------------------------------
+ 1 | 2 | 1
+ 1 | 2 | 1
+ 3 | 2 | 3
+(3 rows)
+
+SELECT * FROM local JOIN dist_table ON (a = x) WHERE a = 1 ORDER BY 1,2,3;
+NOTICE:  executing the command locally: SELECT local.x, local.y, dist_table.a FROM ((SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)) local JOIN coordinator_shouldhaveshards.dist_table_1503017 dist_table ON ((dist_table.a OPERATOR(pg_catalog.=) local.x))) WHERE (dist_table.a OPERATOR(pg_catalog.=) 1) ORDER BY local.x, local.y, dist_table.a
+ x | y | a
+---------------------------------------------------------------------
+ 1 | 2 | 1
+ 1 | 2 | 1
+(2 rows)
+
 -- intermediate results are allowed
 WITH cte_1 AS (SELECT * FROM dist_table LIMIT 1)
 SELECT * FROM ref JOIN local ON (a = x) JOIN cte_1 ON (local.x = cte_1.a);

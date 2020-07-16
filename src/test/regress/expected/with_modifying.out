@@ -668,17 +668,20 @@ SELECT * FROM raw_data ORDER BY val;
 ---------------------------------------------------------------------
 (0 rows)
 
--- Test that local tables are barred
+-- Test that local tables are can be updated
+-- selecting from distributed tables
 UPDATE local_table lt SET val = mt.val
 FROM modify_table mt WHERE mt.id = lt.id;
-ERROR:  cannot plan modifications of local tables involving distributed tables
 -- Including inside CTEs
 WITH cte AS (
 	UPDATE local_table lt SET val = mt.val
 	FROM modify_table mt WHERE mt.id = lt.id
 	RETURNING lt.id, lt.val
 ) SELECT * FROM cte JOIN modify_table mt ON mt.id = cte.id ORDER BY 1,2;
-ERROR:  cannot plan modifications of local tables involving distributed tables
+ id | val | id | val
+---------------------------------------------------------------------
+(0 rows)
+
 -- Make sure checks for volatile functions apply to CTEs too
 WITH cte AS (UPDATE modify_table SET val = random() WHERE id = 3 RETURNING *)
 SELECT * FROM cte JOIN modify_table mt ON mt.id = 3 AND mt.id = cte.id ORDER BY 1,2;

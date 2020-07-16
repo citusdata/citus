@@ -169,8 +169,8 @@ CREATE TABLE dist_table(a int);
 SELECT create_distributed_table('dist_table', 'a');
 INSERT INTO dist_table VALUES(1);
 
-SELECT * FROM local JOIN dist_table ON (a = x);
-SELECT * FROM local JOIN dist_table ON (a = x) WHERE a = 1;;
+SELECT * FROM local JOIN dist_table ON (a = x) ORDER BY 1,2,3;
+SELECT * FROM local JOIN dist_table ON (a = x) WHERE a = 1 ORDER BY 1,2,3;
 
 -- intermediate results are allowed
 WITH cte_1 AS (SELECT * FROM dist_table LIMIT 1)

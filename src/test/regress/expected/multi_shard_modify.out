@@ -72,7 +72,11 @@ CREATE TABLE temp_nations(name text, key integer);
 SELECT master_modify_multiple_shards('DELETE FROM multi_shard_modify_test USING temp_nations WHERE multi_shard_modify_test.t_value = temp_nations.key AND temp_nations.name = ''foobar'' ');
 WARNING:  master_modify_multiple_shards is deprecated and will be removed in a future release.
 HINT:  Run the command directly
-ERROR:  relation temp_nations is not distributed
+ master_modify_multiple_shards
+---------------------------------------------------------------------
+                             0
+(1 row)
+
 -- commands with a USING clause are unsupported
 SELECT create_distributed_table('temp_nations', 'name', 'hash');
  create_distributed_table

@@ -724,17 +724,15 @@ SET    value_2 = subquery.random FROM (SELECT user_id, random()
 WHERE  users_test_table.user_id = subquery.user_id;
 -- Make following tests consistent
 UPDATE users_test_table SET value_2 = 0;
--- Local tables are not supported
+-- Joins with tables not supported
 UPDATE users_test_table
 SET    value_2 = 5
 FROM   events_test_table_local
 WHERE  users_test_table.user_id = events_test_table_local.user_id;
-ERROR:  relation events_test_table_local is not distributed
 UPDATE events_test_table_local
 SET    value_2 = 5
 FROM   users_test_table
 WHERE  events_test_table_local.user_id = users_test_table.user_id;
-ERROR:  cannot plan modifications of local tables involving distributed tables
 -- Local tables in a subquery are supported through recursive planning
 UPDATE users_test_table
 SET    value_2 = 5

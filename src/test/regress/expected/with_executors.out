@@ -302,12 +302,16 @@ SELECT min(user_id) FROM cte JOIN local_table ON (user_id = id);
    1
 (1 row)
 
--- not if there are no distributed tables
+-- even if there are no distributed tables
 WITH cte AS (
 	SELECT user_id FROM users_table
 )
 SELECT min(user_id) FROM cte JOIN local_table ON (user_id = id) JOIN events_table USING (user_id);
-ERROR:  relation local_table is not distributed
+ min
+---------------------------------------------------------------------
+   1
+(1 row)
+
 -- unless the distributed table is part of a recursively planned subquery
 WITH cte AS (
 	SELECT user_id FROM users_table
@@ -318,14 +322,18 @@ SELECT min(user_id) FROM cte JOIN local_table ON (user_id = id) JOIN (SELECT * F
    1
 (1 row)
 
--- joins between local and reference tables not allowed
--- since the coordinator is not in the metadata at this stage
+-- joins between local and reference tables are allowed
+-- even when the coordinator is not in the metadata at this stage
 WITH cte AS (
 	SELECT user_id FROM users_table
 )
 SELECT count(*) FROM local_table JOIN ref_table USING (id)
 WHERE id IN (SELECT * FROM cte);
-ERROR:  relation local_table is not distributed
+ count
+---------------------------------------------------------------------
+     6
+(1 row)
+
 -- CTEs should be able to terminate a router query
 WITH cte AS (
 	WITH cte_1 AS (

@@ -21,6 +21,13 @@
 
 #include "postgres.h"
 
+#include "distributed/pg_version_constants.h"
+
+#if PG_VERSION_NUM >= PG_VERSION_12
+#include "access/relation.h"
+#else
+#include "access/heapam.h"
+#endif
 #include "distributed/multi_logical_planner.h"
 #include "distributed/query_colocation_checker.h"
 #include "distributed/pg_dist_partition.h"
@@ -267,7 +274,6 @@ WrapRteRelationIntoSubquery(RangeTblEntry *rteRelation)
 	newRangeTableRef = makeNode(RangeTblRef);
 	newRangeTableRef->rtindex = 1;
 	subquery->jointree = makeFromExpr(list_make1(newRangeTableRef), NULL);
-
 
 	Relation relation = relation_open(rteRelation->relid, AccessShareLock);
 	int numberOfAttributes = RelationGetNumberOfAttributes(relation);

@@ -327,7 +327,7 @@ UPDATE limit_orders SET id = 246 WHERE id = 246;
 UPDATE limit_orders SET id = 246 WHERE id = 246 AND symbol = 'GM';
 UPDATE limit_orders SET id = limit_orders.id WHERE id = 246;
 
--- UPDATEs with a FROM clause are unsupported
+-- UPDATEs with a FROM clause are supported even with local tables
 UPDATE limit_orders SET limit_price = 0.00 FROM bidders
 					WHERE limit_orders.id = 246 AND
 						  limit_orders.bidder_id = bidders.id AND

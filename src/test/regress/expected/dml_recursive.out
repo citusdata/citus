@@ -340,8 +340,10 @@ FROM cte_1
 WHERE distributed_table.tenant_id < cte_1.tenant_id;
 DEBUG:  generating subplan XXX_1 for CTE cte_1: WITH cte_2 AS (SELECT second_distributed_table.tenant_id AS cte2_id FROM recursive_dml_queries.second_distributed_table WHERE (second_distributed_table.dept OPERATOR(pg_catalog.>=) 2)) UPDATE recursive_dml_queries.distributed_table SET dept = 10 RETURNING tenant_id, dept, info
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: UPDATE recursive_dml_queries.distributed_table SET dept = 5 FROM (SELECT intermediate_result.tenant_id, intermediate_result.dept, intermediate_result.info FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(tenant_id text, dept integer, info jsonb)) cte_1 WHERE (distributed_table.tenant_id OPERATOR(pg_catalog.<) cte_1.tenant_id)
--- we don't support updating local table with a join with
--- distributed tables
+-- we support updating local table with a join with
+-- distributed tables, though as the local table
+-- is target here, distributed table is recursively
+-- planned
 UPDATE
 	local_table
 SET
@@ -350,7 +352,9 @@ FROM
 	distributed_table
 WHERE
 	distributed_table.tenant_id = local_table.id;
-ERROR:  cannot plan modifications of local tables involving distributed tables
+DEBUG:  Wrapping local relation "distributed_table" to a subquery: SELECT tenant_id, dept, info FROM recursive_dml_queries.distributed_table WHERE true OFFSET 0
+DEBUG:  generating subplan XXX_1 for subquery SELECT tenant_id, dept, info FROM recursive_dml_queries.distributed_table WHERE true OFFSET 0
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: UPDATE recursive_dml_queries.local_table SET id = 'citus_test'::text FROM (SELECT intermediate_result.tenant_id, intermediate_result.dept, intermediate_result.info FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(tenant_id text, dept integer, info jsonb)) distributed_table WHERE (distributed_table.tenant_id OPERATOR(pg_catalog.=) local_table.id)
 RESET client_min_messages;
 DROP SCHEMA recursive_dml_queries CASCADE;
 NOTICE:  drop cascades to 5 other objects

@@ -158,7 +158,6 @@ CREATE TABLE bidders ( name text, id bigint );
 DELETE FROM limit_orders_mx USING bidders WHERE limit_orders_mx.id = 246 AND
 											 limit_orders_mx.bidder_id = bidders.id AND
 											 bidders.name = 'Bernie Madoff';
-ERROR:  relation bidders is not distributed
 -- commands containing a CTE are supported
 WITH new_orders AS (INSERT INTO limit_orders_mx VALUES (411, 'FLO', 12, '2017-07-02 16:32:15', 'buy', 66))
 DELETE FROM limit_orders_mx WHERE id < 0;
@@ -225,7 +224,6 @@ UPDATE limit_orders_mx SET limit_price = 0.00 FROM bidders
 					WHERE limit_orders_mx.id = 246 AND
 						  limit_orders_mx.bidder_id = bidders.id AND
 						  bidders.name = 'Bernie Madoff';
-ERROR:  relation bidders is not distributed
 -- commands containing a CTE are supported
 WITH deleted_orders AS (INSERT INTO limit_orders_mx VALUES (399, 'PDR', 14, '2017-07-02 16:32:15', 'sell', 43))
 UPDATE limit_orders_mx SET symbol = 'GM';

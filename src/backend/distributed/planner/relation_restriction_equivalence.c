@@ -30,9 +30,9 @@
 #else
 #include "optimizer/cost.h"
 #include "nodes/relation.h"
+#include "optimizer/var.h"
 #endif
 #include "optimizer/paths.h"
-#include "optimizer/var.h"
 #include "parser/parsetree.h"
 #include "optimizer/pathnode.h"
 
@@ -1872,14 +1872,9 @@ GetRestrictInfoListForRelation(RangeTblEntry *rangeTblEntry,
 	{
 		RestrictInfo *restrictInfo = (RestrictInfo *) lfirst(restrictCell);
 		Expr *restrictionClause = restrictInfo->clause;
-		List *varClauses = NIL;
-		ListCell *varClauseCell = NULL;
-		Relids varnos = NULL;
-
-		Expr *copyOfRestrictClause = NULL;
 
 		/* we cannot process Params beacuse they are not known at this point */
-		if (FindNodeCheck((Node *) restrictionClause, IsParam))
+		if (FindNodeMatchingCheckFunction((Node *) restrictionClause, IsParam))
 		{
 			continue;
 		}
@@ -1888,7 +1883,7 @@ GetRestrictInfoListForRelation(RangeTblEntry *rangeTblEntry,
 		 * If the restriction involves multiple tables, we cannot add it to
 		 * input relation's expression list.
 		 */
-		varnos = pull_varnos((Node *) restrictionClause);
+		Relids varnos = pull_varnos((Node *) restrictionClause);
 		if (bms_num_members(varnos) != 1)
 		{
 			continue;
@@ -1899,14 +1894,15 @@ GetRestrictInfoListForRelation(RangeTblEntry *rangeTblEntry,
 		 * which consists of only one relation in its jointree. Thus,
 		 * simply set the varnos accordingly.
 		 */
-		copyOfRestrictClause = (Expr *) copyObject((Node *) restrictionClause);
-		varClauses = pull_var_clause_default((Node *) copyOfRestrictClause);
+		Expr *copyOfRestrictClause = (Expr *) copyObject((Node *) restrictionClause);
+		List *varClauses = pull_var_clause_default((Node *) copyOfRestrictClause);
+		ListCell *varClauseCell = NULL;
 		foreach(varClauseCell, varClauses)
 		{
 			Var *column = (Var *) lfirst(varClauseCell);
 
 			column->varno = rteIndex;
-			column->varnoold = rteIndex;
+			column->varnosyn = rteIndex;
 		}
 
 		restrictExprList = lappend(restrictExprList, copyOfRestrictClause);

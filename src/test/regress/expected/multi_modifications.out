@@ -270,7 +270,6 @@ CREATE TABLE bidders ( name text, id bigint );
 DELETE FROM limit_orders USING bidders WHERE limit_orders.id = 246 AND
 											 limit_orders.bidder_id = bidders.id AND
 											 bidders.name = 'Bernie Madoff';
-ERROR:  relation bidders is not distributed
 -- commands containing a CTE are supported
 WITH new_orders AS (INSERT INTO limit_orders VALUES (411, 'FLO', 12, '2017-07-02 16:32:15', 'buy', 66))
 DELETE FROM limit_orders WHERE id < 0;
@@ -428,12 +427,11 @@ ERROR:  modifying the partition value of rows is not allowed
 UPDATE limit_orders SET id = 246 WHERE id = 246;
 UPDATE limit_orders SET id = 246 WHERE id = 246 AND symbol = 'GM';
 UPDATE limit_orders SET id = limit_orders.id WHERE id = 246;
--- UPDATEs with a FROM clause are unsupported
+-- UPDATEs with a FROM clause are supported even with local tables
 UPDATE limit_orders SET limit_price = 0.00 FROM bidders
 					WHERE limit_orders.id = 246 AND
 						  limit_orders.bidder_id = bidders.id AND
 						  bidders.name = 'Bernie Madoff';
-ERROR:  relation bidders is not distributed
 -- should succeed with a CTE
 WITH deleted_orders AS (INSERT INTO limit_orders VALUES (399, 'PDR', 14, '2017-07-02 16:32:15', 'sell', 43))
 UPDATE limit_orders SET symbol = 'GM';
@@ -1304,7 +1302,8 @@ DELETE FROM summary_table WHERE id < (
 );
 CREATE TABLE multi_modifications.local (a int default 1, b int);
 INSERT INTO multi_modifications.local VALUES (default, (SELECT min(id) FROM summary_table));
-ERROR:  cannot plan modifications of local tables involving distributed tables
+ERROR:  subqueries are not supported within INSERT queries
+HINT:  Try rewriting your queries with 'INSERT INTO ... SELECT' syntax.
 DROP TABLE raw_table;
 DROP TABLE summary_table;
 DROP TABLE reference_raw_table;
