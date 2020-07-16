@@ -204,66 +204,6 @@ FindNodeCheck(Node *node, bool (*check)(Node *))
 
 
 /*
- * SingleRelationRepartitionSubquery returns true if it is eligible single
- * repartition query planning in the sense that:
- *   - None of the levels of the subquery contains a join
- *   - Only a single RTE_RELATION exists, which means only a single table
- *     name is specified on the whole query
- *   - No sublinks exists in the subquery
- *   - No window functions exists in the subquery
- *
- * Note that the caller should still call DeferErrorIfUnsupportedSubqueryRepartition()
- * to ensure that Citus supports the subquery. Also, this function is designed to run
- * on the original query.
- */
-bool
-SingleRelationRepartitionSubquery(Query *queryTree)
-{
-	List *rangeTableIndexList = NULL;
-	List *rangeTableList = queryTree->rtable;
-
-	/* we don't support subqueries in WHERE */
-	if (queryTree->hasSubLinks)
-	{
-		return false;
-	}
-
-	/* we don't support window functions */
-	if (queryTree->hasWindowFuncs)
-	{
-		return false;
-	}
-
-	/*
-	 * Don't allow joins and set operations. If join appears in the queryTree, the
-	 * length would be greater than 1. If only set operations exists, the length
-	 * would be 0.
-	 */
-	ExtractRangeTableIndexWalker((Node *) queryTree->jointree,
-								 &rangeTableIndexList);
-	if (list_length(rangeTableIndexList) != 1)
-	{
-		return false;
-	}
-
-	int rangeTableIndex = linitial_int(rangeTableIndexList);
-	RangeTblEntry *rangeTableEntry = rt_fetch(rangeTableIndex, rangeTableList);
-	if (rangeTableEntry->rtekind == RTE_RELATION)
-	{
-		return true;
-	}
-	else if (rangeTableEntry->rtekind == RTE_SUBQUERY)
-	{
-		Query *subqueryTree = rangeTableEntry->subquery;
-
-		return SingleRelationRepartitionSubquery(subqueryTree);
-	}
-
-	return false;
-}
-
-
-/*
  * TargetListOnPartitionColumn checks if at least one target list entry is on
  * partition column.
  */

@@ -723,8 +723,8 @@ SET citus.subquery_pushdown to ON;
 -- still not supported since outer query does not have limit
 -- it shows a different (subquery with single relation) error message
 SELECT * FROM recent_10_users;
-ERROR:  cannot perform distributed planning on this query
-DETAIL:  Subqueries with limit are not supported yet
+ERROR:  cannot push down this subquery
+DETAIL:  Limit in subquery without limit in the outermost query is unsupported
 -- now it displays more correct error message
 SELECT et.* FROM recent_10_users JOIN events_table et USING(user_id);
 ERROR:  cannot push down this subquery

@@ -119,14 +119,12 @@ static MultiNode * LeftMostNode(MultiTreeRoot *multiTree);
 static Oid RangePartitionJoinBaseRelationId(MultiJoin *joinNode);
 static MultiTable * FindTableNode(MultiNode *multiNode, int rangeTableId);
 static Query * BuildJobQuery(MultiNode *multiNode, List *dependentJobList);
-static Query * BuildReduceQuery(MultiExtendedOp *extendedOpNode, List *dependentJobList);
 static List * BaseRangeTableList(MultiNode *multiNode);
 static List * QueryTargetList(MultiNode *multiNode);
 static List * TargetEntryList(List *expressionList);
 static Node * AddAnyValueAggregates(Node *node, AddAnyValueAggregatesContext *context);
 static List * QueryGroupClauseList(MultiNode *multiNode);
 static List * QuerySelectClauseList(MultiNode *multiNode);
-static List * QueryJoinClauseList(MultiNode *multiNode);
 static List * QueryFromList(List *rangeTableList);
 static Node * QueryJoinTree(MultiNode *multiNode, List *dependentJobList,
 							List **rangeTableList);
@@ -429,30 +427,6 @@ BuildJobTree(MultiTreeRoot *multiTree)
 				loopDependentJobList = lappend(loopDependentJobList, mapMergeJob);
 			}
 		}
-		else if (boundaryNodeJobType == SUBQUERY_MAP_MERGE_JOB)
-		{
-			MultiPartition *partitionNode = (MultiPartition *) currentNode;
-			MultiNode *queryNode = GrandChildNode((MultiUnaryNode *) partitionNode);
-			Var *partitionKey = partitionNode->partitionColumn;
-
-			/* build query and partition job */
-			List *dependentJobList = list_copy(loopDependentJobList);
-			Query *jobQuery = BuildJobQuery(queryNode, dependentJobList);
-
-			MapMergeJob *mapMergeJob = BuildMapMergeJob(jobQuery, dependentJobList,
-														partitionKey,
-														DUAL_HASH_PARTITION_TYPE,
-														InvalidOid,
-														SUBQUERY_MAP_MERGE_JOB);
-
-			Query *reduceQuery = BuildReduceQuery((MultiExtendedOp *) parentNode,
-												  list_make1(mapMergeJob));
-			mapMergeJob->reduceQuery = reduceQuery;
-
-			/* reset dependent job list */
-			loopDependentJobList = NIL;
-			loopDependentJobList = list_make1(mapMergeJob);
-		}
 		else if (boundaryNodeJobType == TOP_LEVEL_WORKER_JOB)
 		{
 			MultiNode *childNode = ChildNode((MultiUnaryNode *) currentNode);
@@ -745,89 +719,6 @@ BuildJobQuery(MultiNode *multiNode, List *dependentJobList)
 	Assert(jobQuery->hasWindowFuncs == contain_window_function((Node *) jobQuery));
 
 	return jobQuery;
-}
-
-
-/*
- * BuildReduceQuery traverses the given logical plan tree, determines the job that
- * corresponds to this part of the tree, and builds the query structure for that
- * particular job. The function assumes that jobs this particular job depends on
- * have already been built, as their output is needed to build the query.
- */
-static Query *
-BuildReduceQuery(MultiExtendedOp *extendedOpNode, List *dependentJobList)
-{
-	MultiNode *multiNode = (MultiNode *) extendedOpNode;
-	List *derivedRangeTableList = NIL;
-	List *targetList = NIL;
-	ListCell *columnCell = NULL;
-	List *columnNameList = NIL;
-
-	Job *dependentJob = linitial(dependentJobList);
-	List *dependentTargetList = dependentJob->jobQuery->targetList;
-	uint32 columnCount = (uint32) list_length(dependentTargetList);
-
-	for (uint32 columnIndex = 0; columnIndex < columnCount; columnIndex++)
-	{
-		StringInfo columnNameString = makeStringInfo();
-
-		appendStringInfo(columnNameString, MERGE_COLUMN_FORMAT, columnIndex);
-
-		Value *columnValue = makeString(columnNameString->data);
-		columnNameList = lappend(columnNameList, columnValue);
-	}
-
-	/* create a derived range table for the subtree below the collect */
-	RangeTblEntry *rangeTableEntry = DerivedRangeTableEntry(multiNode, columnNameList,
-															OutputTableIdList(multiNode),
-															NIL, NIL, NIL, NIL);
-	rangeTableEntry->eref->colnames = columnNameList;
-	ModifyRangeTblExtraData(rangeTableEntry, CITUS_RTE_SHARD, NULL, NULL, NULL);
-	derivedRangeTableList = lappend(derivedRangeTableList, rangeTableEntry);
-
-	targetList = copyObject(extendedOpNode->targetList);
-	List *columnList = pull_var_clause_default((Node *) targetList);
-
-	foreach(columnCell, columnList)
-	{
-		Var *column = (Var *) lfirst(columnCell);
-		Index originalTableId = column->varnoold;
-
-		/* find the new table identifier */
-		Index newTableId = NewTableId(originalTableId, derivedRangeTableList);
-		column->varno = newTableId;
-	}
-
-	/* build the where clause list using select and join predicates */
-	List *selectClauseList = QuerySelectClauseList((MultiNode *) extendedOpNode);
-	List *joinClauseList = QueryJoinClauseList((MultiNode *) extendedOpNode);
-	List *whereClauseList = list_concat(selectClauseList, joinClauseList);
-
-	/*
-	 * Build the From/Where construct. We keep the where-clause list implicitly
-	 * AND'd, since both partition and join pruning depends on the clauses being
-	 * expressed as a list.
-	 */
-	FromExpr *joinTree = makeNode(FromExpr);
-	joinTree->quals = (Node *) whereClauseList;
-	joinTree->fromlist = QueryFromList(derivedRangeTableList);
-
-	/* build the query structure for this job */
-	Query *reduceQuery = makeNode(Query);
-	reduceQuery->commandType = CMD_SELECT;
-	reduceQuery->querySource = QSRC_ORIGINAL;
-	reduceQuery->canSetTag = true;
-	reduceQuery->rtable = derivedRangeTableList;
-	reduceQuery->targetList = targetList;
-	reduceQuery->jointree = joinTree;
-	reduceQuery->sortClause = extendedOpNode->sortClauseList;
-	reduceQuery->groupClause = extendedOpNode->groupClauseList;
-	reduceQuery->limitOffset = extendedOpNode->limitOffset;
-	reduceQuery->limitCount = extendedOpNode->limitCount;
-	reduceQuery->havingQual = extendedOpNode->havingQual;
-	reduceQuery->hasAggs = contain_aggs_of_level((Node *) targetList, 0);
-
-	return reduceQuery;
 }
 
 
@@ -1194,44 +1085,6 @@ QuerySelectClauseList(MultiNode *multiNode)
 	}
 
 	return selectClauseList;
-}
-
-
-/*
- * QueryJoinClauseList traverses the given logical plan tree, and extracts all
- * join clauses from the join nodes. Note that this function does not walk below
- * a collect node; the clauses below the collect node apply to another query,
- * and they would have been captured by the remote job we depend upon.
- */
-static List *
-QueryJoinClauseList(MultiNode *multiNode)
-{
-	List *joinClauseList = NIL;
-	List *pendingNodeList = list_make1(multiNode);
-
-	while (pendingNodeList != NIL)
-	{
-		MultiNode *currMultiNode = (MultiNode *) linitial(pendingNodeList);
-		CitusNodeTag nodeType = CitusNodeTag(currMultiNode);
-		pendingNodeList = list_delete_first(pendingNodeList);
-
-		/* extract join clauses from the multi join node */
-		if (nodeType == T_MultiJoin)
-		{
-			MultiJoin *joinNode = (MultiJoin *) currMultiNode;
-			List *clauseList = copyObject(joinNode->joinClauseList);
-			joinClauseList = list_concat(joinClauseList, clauseList);
-		}
-
-		/* add this node's children only if the node isn't a multi collect */
-		if (nodeType != T_MultiCollect)
-		{
-			List *childNodeList = ChildNodeList(currMultiNode);
-			pendingNodeList = list_concat(pendingNodeList, childNodeList);
-		}
-	}
-
-	return joinClauseList;
 }
 
 
