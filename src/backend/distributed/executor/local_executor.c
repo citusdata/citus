@@ -228,7 +228,7 @@ ExecuteLocalTaskListExtended(List *taskList,
 
 		if (isUtilityCommand)
 		{
-			LocallyExecuteUtilityTask(TaskQueryStringForAllPlacements(task));
+			LocallyExecuteUtilityTask(TaskQueryString(task));
 			continue;
 		}
 
@@ -280,7 +280,7 @@ ExecuteLocalTaskListExtended(List *taskList,
 				continue;
 			}
 
-			Query *shardQuery = ParseQueryString(TaskQueryStringForAllPlacements(task),
+			Query *shardQuery = ParseQueryString(TaskQueryString(task),
 												 taskParameterTypes,
 												 taskNumParams);
 
@@ -301,7 +301,7 @@ ExecuteLocalTaskListExtended(List *taskList,
 		char *shardQueryString = NULL;
 		if (GetTaskQueryType(task) == TASK_QUERY_TEXT)
 		{
-			shardQueryString = TaskQueryStringForAllPlacements(task);
+			shardQueryString = TaskQueryString(task);
 		}
 		else
 		{
@@ -431,7 +431,7 @@ LogLocalCommand(Task *task)
 	}
 
 	ereport(NOTICE, (errmsg("executing the command locally: %s",
-							ApplyLogRedaction(TaskQueryStringForAllPlacements(task)))));
+							ApplyLogRedaction(TaskQueryString(task)))));
 }
 
 

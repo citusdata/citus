@@ -41,7 +41,6 @@ static void UpdateTaskQueryString(Query *query, Oid distributedTableId,
 static void ConvertRteToSubqueryWithEmptyResult(RangeTblEntry *rte);
 static bool ShouldLazyDeparseQuery(Task *task);
 static char * DeparseTaskQuery(Task *task, Query *query);
-static bool IsEachPlacementQueryStringDifferent(Task *task);
 
 
 /*
@@ -117,8 +116,7 @@ RebuildQueryStrings(Job *workerJob)
 		ereport(DEBUG4, (errmsg("query before rebuilding: %s",
 								!isQueryObjectOrText
 								? "(null)"
-								: ApplyLogRedaction(TaskQueryStringForAllPlacements(
-														task)))));
+								: ApplyLogRedaction(TaskQueryString(task)))));
 
 		UpdateTaskQueryString(query, relationId, valuesRTE, task);
 
@@ -129,8 +127,7 @@ RebuildQueryStrings(Job *workerJob)
 		task->parametersInQueryStringResolved = workerJob->parametersInJobQueryResolved;
 
 		ereport(DEBUG4, (errmsg("query after rebuilding:  %s",
-								ApplyLogRedaction(TaskQueryStringForAllPlacements(
-													  task)))));
+								ApplyLogRedaction(TaskQueryString(task)))));
 	}
 }
 
@@ -465,19 +462,6 @@ SetTaskQueryString(Task *task, char *queryString)
 
 
 /*
- * SetTaskPerPlacementQueryStrings set the perPlacementQueryString for the given task.
- */
-void
-SetTaskPerPlacementQueryStrings(Task *task, List *perPlacementQueryStringList)
-{
-	Assert(perPlacementQueryStringList != NIL);
-	task->taskQuery.queryType = TASK_QUERY_TEXT_PER_PLACEMENT;
-	task->taskQuery.data.perPlacementQueryStrings = perPlacementQueryStringList;
-	task->queryCount = 1;
-}
-
-
-/*
  * SetTaskQueryStringList sets the queryStringList of the given task.
  */
 void
@@ -530,14 +514,14 @@ GetTaskQueryType(Task *task)
 
 
 /*
- * TaskQueryStringForAllPlacements generates task query string text if missing.
+ * TaskQueryString generates task query string text if missing.
  *
  * For performance reasons, the queryString is generated lazily. For example
  * for local queries it is usually not needed to generate it, so this way we
  * can skip the expensive deparsing+parsing.
  */
 char *
-TaskQueryStringForAllPlacements(Task *task)
+TaskQueryString(Task *task)
 {
 	int taskQueryType = GetTaskQueryType(task);
 	if (taskQueryType == TASK_QUERY_NULL)
@@ -562,8 +546,6 @@ TaskQueryStringForAllPlacements(Task *task)
 
 	/*
 	 *	At this point task query type should be TASK_QUERY_OBJECT.
-	 *  if someone calls this method inappropriately with TASK_QUERY_TEXT_PER_PLACEMENT case
-	 *  (instead of TaskQueryStringForPlacement), they will hit this assert.
 	 */
 	Assert(task->taskQuery.queryType == TASK_QUERY_OBJECT &&
 		   jobQueryReferenceForLazyDeparsing != NULL);
@@ -583,33 +565,4 @@ TaskQueryStringForAllPlacements(Task *task)
 	MemoryContextSwitchTo(previousContext);
 	SetTaskQueryString(task, queryString);
 	return task->taskQuery.data.queryStringLazy;
-}
-
-
-/*
- * TaskQueryStringForPlacement returns the query string that should be executed
- * on the placement with the given placementIndex.
- */
-char *
-TaskQueryStringForPlacement(Task *task, int placementIndex)
-{
-	if (IsEachPlacementQueryStringDifferent(task))
-	{
-		List *perPlacementQueryStringList =
-			task->taskQuery.data.perPlacementQueryStrings;
-		Assert(list_length(perPlacementQueryStringList) > placementIndex);
-		return list_nth(perPlacementQueryStringList, placementIndex);
-	}
-	return TaskQueryStringForAllPlacements(task);
-}
-
-
-/*
- * IsEachPlacementQueryStringDifferent returns true if each placement
- * has a different query string.
- */
-static bool
-IsEachPlacementQueryStringDifferent(Task *task)
-{
-	return GetTaskQueryType(task) == TASK_QUERY_TEXT_PER_PLACEMENT;
 }

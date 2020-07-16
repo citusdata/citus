@@ -17,6 +17,7 @@
 #include "distributed/citus_custom_scan.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_server_executor.h"
+#include "distributed/tuple_destination.h"
 
 
 /* managed via guc.c */
@@ -87,11 +88,8 @@ typedef struct ExecutionParams
 	/* taskList contains the tasks for the execution.*/
 	List *taskList;
 
-	/* tupleDescriptor contains the description for the result tuples.*/
-	TupleDesc tupleDescriptor;
-
-	/* tupleStore is where the results will be stored for this execution */
-	Tuplestorestate *tupleStore;
+	/* where to forward each tuple received */
+	TupleDestination *tupleDestination;
 
 	/* expectResults is true if this execution will return some result. */
 	bool expectResults;
@@ -120,10 +118,9 @@ ExecutionParams * CreateBasicExecutionParams(RowModifyLevel modLevel,
 											 bool localExecutionSupported);
 
 extern uint64 ExecuteTaskListExtended(ExecutionParams *executionParams);
-extern uint64 ExecuteTaskListIntoTupleStore(RowModifyLevel modLevel, List *taskList,
-											TupleDesc tupleDescriptor,
-											Tuplestorestate *tupleStore,
-											bool expectResults);
+extern uint64 ExecuteTaskListIntoTupleDest(RowModifyLevel modLevel, List *taskList,
+										   TupleDestination *tupleDest,
+										   bool expectResults);
 extern bool IsCitusCustomState(PlanState *planState);
 extern TupleTableSlot * CitusExecScan(CustomScanState *node);
 extern TupleTableSlot * ReturnTupleFromTuplestore(CitusScanState *scanState);

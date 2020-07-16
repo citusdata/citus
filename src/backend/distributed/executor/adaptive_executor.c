@@ -930,6 +930,7 @@ ExecuteTaskList(RowModifyLevel modLevel, List *taskList,
 		);
 	executionParams->xactProperties = DecideTransactionPropertiesForTaskList(
 		modLevel, taskList, false);
+
 	return ExecuteTaskListExtended(executionParams);
 }
 
@@ -939,9 +940,9 @@ ExecuteTaskList(RowModifyLevel modLevel, List *taskList,
  * for some of the arguments.
  */
 uint64
-ExecuteTaskListIntoTupleStore(RowModifyLevel modLevel, List *taskList,
-							  TupleDesc tupleDescriptor, Tuplestorestate *tupleStore,
-							  bool expectResults)
+ExecuteTaskListIntoTupleDest(RowModifyLevel modLevel, List *taskList,
+							 TupleDestination *tupleDest,
+							 bool expectResults)
 {
 	int targetPoolSize = MaxAdaptiveExecutorPoolSize;
 	bool localExecutionSupported = true;
@@ -952,8 +953,7 @@ ExecuteTaskListIntoTupleStore(RowModifyLevel modLevel, List *taskList,
 	executionParams->xactProperties = DecideTransactionPropertiesForTaskList(
 		modLevel, taskList, false);
 	executionParams->expectResults = expectResults;
-	executionParams->tupleStore = tupleStore;
-	executionParams->tupleDescriptor = tupleDescriptor;
+	executionParams->tupleDestination = tupleDest;
 
 	return ExecuteTaskListExtended(executionParams);
 }
@@ -971,16 +971,7 @@ ExecuteTaskListExtended(ExecutionParams *executionParams)
 	List *localTaskList = NIL;
 	List *remoteTaskList = NIL;
 
-	TupleDestination *defaultTupleDest = NULL;
-	if (executionParams->tupleDescriptor != NULL)
-	{
-		defaultTupleDest = CreateTupleStoreTupleDest(executionParams->tupleStore,
-													 executionParams->tupleDescriptor);
-	}
-	else
-	{
-		defaultTupleDest = CreateTupleDestNone();
-	}
+	TupleDestination *defaultTupleDest = executionParams->tupleDestination;
 
 	if (executionParams->localExecutionSupported && ShouldExecuteTasksLocally(
 			executionParams->taskList))
@@ -1052,8 +1043,7 @@ CreateBasicExecutionParams(RowModifyLevel modLevel,
 	executionParams->targetPoolSize = targetPoolSize;
 	executionParams->localExecutionSupported = localExecutionSupported;
 
-	executionParams->tupleStore = NULL;
-	executionParams->tupleDescriptor = NULL;
+	executionParams->tupleDestination = CreateTupleDestNone();
 	executionParams->expectResults = false;
 	executionParams->isUtilityCommand = false;
 	executionParams->jobIdList = NIL;
@@ -3495,9 +3485,7 @@ StartPlacementExecutionOnSession(TaskPlacementExecution *placementExecution,
 	List *placementAccessList = PlacementAccessListForTask(task, taskPlacement);
 	int querySent = 0;
 
-	char *queryString = TaskQueryStringForPlacement(task,
-													placementExecution->
-													placementExecutionIndex);
+	char *queryString = TaskQueryString(task);
 
 	if (execution->transactionProperties->useRemoteTransactionBlocks !=
 		TRANSACTION_BLOCKS_DISALLOWED)

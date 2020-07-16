@@ -28,6 +28,7 @@
 #include "distributed/adaptive_executor.h"
 #include "distributed/remote_commands.h"
 #include "distributed/shard_pruning.h"
+#include "distributed/tuple_destination.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_log_messages.h"
@@ -193,8 +194,8 @@ CallFuncExprRemotely(CallStmt *callStmt, DistObjectCacheEntry *procedure,
 			ROW_MODIFY_NONE, list_make1(task), MaxAdaptiveExecutorPoolSize,
 			localExecutionSupported
 			);
-		executionParams->tupleStore = tupleStore;
-		executionParams->tupleDescriptor = tupleDesc;
+		executionParams->tupleDestination = CreateTupleStoreTupleDest(tupleStore,
+																	  tupleDesc);
 		executionParams->expectResults = expectResults;
 		executionParams->xactProperties = xactProperties;
 		ExecuteTaskListExtended(executionParams);

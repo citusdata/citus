@@ -200,10 +200,11 @@ NonPushableInsertSelectExecScan(CustomScanState *node)
 			scanState->tuplestorestate =
 				tuplestore_begin_heap(randomAccess, interTransactions, work_mem);
 			TupleDesc tupleDescriptor = ScanStateGetTupleDescriptor(scanState);
-			uint64 rowsInserted = ExecuteTaskListIntoTupleStore(ROW_MODIFY_COMMUTATIVE,
-																taskList, tupleDescriptor,
-																scanState->tuplestorestate,
-																hasReturning);
+			TupleDestination *tupleDest = CreateTupleStoreTupleDest(
+				scanState->tuplestorestate, tupleDescriptor);
+			uint64 rowsInserted = ExecuteTaskListIntoTupleDest(ROW_MODIFY_COMMUTATIVE,
+															   taskList, tupleDest,
+															   hasReturning);
 
 			executorState->es_processed = rowsInserted;
 		}
@@ -262,9 +263,11 @@ NonPushableInsertSelectExecScan(CustomScanState *node)
 					tuplestore_begin_heap(randomAccess, interTransactions, work_mem);
 
 				TupleDesc tupleDescriptor = ScanStateGetTupleDescriptor(scanState);
-				ExecuteTaskListIntoTupleStore(ROW_MODIFY_COMMUTATIVE, prunedTaskList,
-											  tupleDescriptor, scanState->tuplestorestate,
-											  hasReturning);
+				TupleDestination *tupleDest = CreateTupleStoreTupleDest(
+					scanState->tuplestorestate, tupleDescriptor);
+
+				ExecuteTaskListIntoTupleDest(ROW_MODIFY_COMMUTATIVE, prunedTaskList,
+											 tupleDest, hasReturning);
 
 				if (SortReturning && hasReturning)
 				{
@@ -832,7 +835,7 @@ WrapTaskListForProjection(List *taskList, List *projectedTargetEntries)
 		StringInfo wrappedQuery = makeStringInfo();
 		appendStringInfo(wrappedQuery, "SELECT %s FROM (%s) subquery",
 						 projectedColumnsString->data,
-						 TaskQueryStringForAllPlacements(task));
+						 TaskQueryString(task));
 		SetTaskQueryString(task, wrappedQuery->data);
 	}
 }

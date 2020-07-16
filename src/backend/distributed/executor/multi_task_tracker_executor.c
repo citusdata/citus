@@ -1579,8 +1579,7 @@ TrackerQueueSqlTask(TaskTracker *taskTracker, Task *task)
 	 */
 
 	StringInfo sqlTaskQueryString = makeStringInfo();
-	char *escapedTaskQueryString = quote_literal_cstr(TaskQueryStringForAllPlacements(
-														  task));
+	char *escapedTaskQueryString = quote_literal_cstr(TaskQueryString(task));
 
 	if (BinaryMasterCopyFormat)
 	{
@@ -1616,7 +1615,7 @@ TrackerQueueTask(TaskTracker *taskTracker, Task *task)
 
 	/* wrap a task assignment query outside the original query */
 	StringInfo taskAssignmentQuery =
-		TaskAssignmentQuery(task, TaskQueryStringForAllPlacements(task));
+		TaskAssignmentQuery(task, TaskQueryString(task));
 
 	TrackerTaskState *taskState = TaskStateHashEnter(taskStateHash, task->jobId,
 													 task->taskId);
@@ -2753,7 +2752,7 @@ TrackerHashCleanupJob(HTAB *taskTrackerHash, Task *jobCleanupTask)
 			{
 				/* assign through task tracker to manage resource utilization */
 				StringInfo jobCleanupQuery = TaskAssignmentQuery(
-					jobCleanupTask, TaskQueryStringForAllPlacements(jobCleanupTask));
+					jobCleanupTask, TaskQueryString(jobCleanupTask));
 
 				jobCleanupQuerySent = MultiClientSendQuery(taskTracker->connectionId,
 														   jobCleanupQuery->data);
@@ -2832,7 +2831,7 @@ TrackerHashCleanupJob(HTAB *taskTrackerHash, Task *jobCleanupTask)
 											 nodeName, nodePort, (int) queryStatus),
 									  errhint("Manually clean job resources on node "
 											  "\"%s:%u\" by running \"%s\" ", nodeName,
-											  nodePort, TaskQueryStringForAllPlacements(
+											  nodePort, TaskQueryString(
 												  jobCleanupTask))));
 				}
 				else
@@ -2851,7 +2850,7 @@ TrackerHashCleanupJob(HTAB *taskTrackerHash, Task *jobCleanupTask)
 										 nodePort, (int) resultStatus),
 								  errhint("Manually clean job resources on node "
 										  "\"%s:%u\" by running \"%s\" ", nodeName,
-										  nodePort, TaskQueryStringForAllPlacements(
+										  nodePort, TaskQueryString(
 											  jobCleanupTask))));
 			}
 			else
