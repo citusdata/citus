@@ -278,7 +278,11 @@ SELECT count(*) FROM test;
 BEGIN;
 INSERT INTO ref(a, b) SELECT x, y FROM test;
 SELECT count(*) from ref;
-ERROR:  cannot switch local execution status from local execution required to local execution disabled since it can cause visibility problems in the current transaction
+ count
+---------------------------------------------------------------------
+     8
+(1 row)
+
 ROLLBACK;
 -- INSERT SELECT from distributed table to local table
 BEGIN;
