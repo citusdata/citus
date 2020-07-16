@@ -412,7 +412,8 @@ raw_data AS (
 )
 SELECT * FROM raw_data ORDER BY val;
 
--- Test that local tables are barred
+-- Test that local tables are can be updated
+-- selecting from distributed tables
 UPDATE local_table lt SET val = mt.val
 FROM modify_table mt WHERE mt.id = lt.id;
 

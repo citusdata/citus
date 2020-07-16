@@ -226,12 +226,12 @@ SELECT a.title AS name, (SELECT a2.id FROM articles_single_shard a2 WHERE a.id =
 						 AS special_price FROM articles a;
 ERROR:  could not run distributed query with subquery outside the FROM, WHERE and HAVING clauses
 HINT:  Consider using an equality filter on the distributed table's partition column.
--- joins are not supported between local and distributed tables
+-- joins are supported between local and distributed tables
 SELECT title, authors.name FROM authors, articles WHERE authors.id = articles.author_id;
-ERROR:  relation authors is not distributed
--- inner joins are not supported (I think)
+ERROR:  Complex subqueries and CTEs are not supported when task_executor_type is set to 'task-tracker'
+-- inner joins are supported
 SELECT * FROM  (articles INNER JOIN authors ON articles.id = authors.id);
-ERROR:  relation authors is not distributed
+ERROR:  Complex subqueries and CTEs are not supported when task_executor_type is set to 'task-tracker'
 -- test use of EXECUTE statements within plpgsql
 DO $sharded_execute$
 	BEGIN

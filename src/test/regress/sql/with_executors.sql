@@ -231,7 +231,7 @@ WITH cte AS (
 )
 SELECT min(user_id) FROM cte JOIN local_table ON (user_id = id);
 
--- not if there are no distributed tables
+-- even if there are no distributed tables
 WITH cte AS (
 	SELECT user_id FROM users_table
 )
@@ -243,8 +243,8 @@ WITH cte AS (
 )
 SELECT min(user_id) FROM cte JOIN local_table ON (user_id = id) JOIN (SELECT * FROM events_table OFFSET 0) e USING (user_id);
 
--- joins between local and reference tables not allowed
--- since the coordinator is not in the metadata at this stage
+-- joins between local and reference tables are allowed
+-- even when the coordinator is not in the metadata at this stage
 WITH cte AS (
 	SELECT user_id FROM users_table
 )
