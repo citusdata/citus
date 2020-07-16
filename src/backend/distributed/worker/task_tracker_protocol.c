@@ -33,7 +33,7 @@ PG_FUNCTION_INFO_V1(task_tracker_conninfo_cache_invalidate);
 Datum
 task_tracker_assign_task(PG_FUNCTION_ARGS)
 {
-	ereport(ERROR, (errmsg("not supposed to get here, did you cheat?")));
+	ereport(ERROR, (errmsg("This UDF is deprecated.")));
 
 	PG_RETURN_NULL();
 }
@@ -43,7 +43,7 @@ task_tracker_assign_task(PG_FUNCTION_ARGS)
 Datum
 task_tracker_task_status(PG_FUNCTION_ARGS)
 {
-	ereport(ERROR, (errmsg("not supposed to get here, did you cheat?")));
+	ereport(ERROR, (errmsg("This UDF is deprecated.")));
 
 	PG_RETURN_UINT32(0);
 }
@@ -56,7 +56,7 @@ task_tracker_task_status(PG_FUNCTION_ARGS)
 Datum
 task_tracker_cleanup_job(PG_FUNCTION_ARGS)
 {
-	ereport(ERROR, (errmsg("not supposed to get here, did you cheat?")));
+	ereport(ERROR, (errmsg("This UDF is deprecated.")));
 
 	PG_RETURN_NULL();
 }

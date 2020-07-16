@@ -75,7 +75,7 @@ PG_FUNCTION_INFO_V1(worker_execute_sql_task);
 Datum
 worker_execute_sql_task(PG_FUNCTION_ARGS)
 {
-	ereport(ERROR, (errmsg("not supposed to get here, did you cheat?")));
+	ereport(ERROR, (errmsg("This UDF is deprecated.")));
 
 	PG_RETURN_INT64(0);
 }

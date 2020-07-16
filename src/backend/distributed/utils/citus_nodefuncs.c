@@ -341,7 +341,7 @@ GetRangeTblKind(RangeTblEntry *rte)
 Datum
 citus_extradata_container(PG_FUNCTION_ARGS)
 {
-	ereport(ERROR, (errmsg("not supposed to get here, did you cheat?")));
+	ereport(ERROR, (errmsg("This UDF is deprecated.")));
 
 	PG_RETURN_NULL();
 }

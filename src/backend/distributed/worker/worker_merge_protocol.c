@@ -261,7 +261,7 @@ worker_merge_files_into_table(PG_FUNCTION_ARGS)
 Datum
 worker_merge_files_and_run_query(PG_FUNCTION_ARGS)
 {
-	ereport(ERROR, (errmsg("not supposed to get here, did you cheat?")));
+	ereport(ERROR, (errmsg("This UDF is deprecated.")));
 
 	PG_RETURN_VOID();
 }
@@ -278,7 +278,7 @@ worker_merge_files_and_run_query(PG_FUNCTION_ARGS)
 Datum
 worker_cleanup_job_schema_cache(PG_FUNCTION_ARGS)
 {
-	ereport(ERROR, (errmsg("not supposed to get here, did you cheat?")));
+	ereport(ERROR, (errmsg("This UDF is deprecated.")));
 
 	PG_RETURN_VOID();
 }
