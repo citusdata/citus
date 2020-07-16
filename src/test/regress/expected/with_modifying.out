@@ -915,7 +915,7 @@ DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
 DETAIL:  distribution column value: 1
 DEBUG:  generating subplan XXX_2 for subquery SELECT count(*) AS count FROM with_modifying.modify_table WHERE (id OPERATOR(pg_catalog.=) 1)
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result."?column?" FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result("?column?" integer)) mu, (SELECT intermediate_result.count FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(count bigint)) ma
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result."?column?" FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result("?column?" integer)) mu("?column?"), (SELECT intermediate_result.count FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(count bigint)) ma
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  count
@@ -935,7 +935,7 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: UPDATE with_modifyin
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
 DETAIL:  distribution column value: 1
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result."?column?" FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result("?column?" integer)) mu
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result."?column?" FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result("?column?" integer)) mu("?column?")
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  count
@@ -964,6 +964,67 @@ DETAIL:  distribution column value: 1
 (1 row)
 
 RESET client_min_messages;
+-- https://github.com/citusdata/citus/issues/3975
+WITH mb AS (INSERT INTO modify_table VALUES (3, 3) RETURNING NULL, NULL) SELECT * FROM modify_table WHERE id = 3;
+ id | val
+---------------------------------------------------------------------
+  3 |   3
+(1 row)
+
+WITH mb AS (UPDATE modify_table SET val = 3 WHERE id = 3 RETURNING NULL) SELECT * FROM modify_table WHERE id = 3;
+ id | val
+---------------------------------------------------------------------
+  3 |   3
+(1 row)
+
+WITH mb AS (UPDATE modify_table SET val = 3 WHERE id = 3 RETURNING NULL) SELECT * FROM modify_table, mb WHERE id = 3;
+ id | val | ?column?
+---------------------------------------------------------------------
+  3 |   3 |
+(1 row)
+
+WITH mb AS (UPDATE modify_table SET val = 3 WHERE id = 3 RETURNING NULL, NULL) SELECT * FROM modify_table WHERE id = 3;
+ id | val
+---------------------------------------------------------------------
+  3 |   3
+(1 row)
+
+WITH mb AS (UPDATE modify_table SET val = 3 WHERE id = 3 RETURNING NULL, NULL) SELECT * FROM modify_table, mb WHERE id = 3;
+ id | val | ?column? | ?column?
+---------------------------------------------------------------------
+  3 |   3 |          |
+(1 row)
+
+WITH mb AS (UPDATE modify_table SET val = 3 WHERE id = 3 RETURNING NULL alias) SELECT * FROM modify_table WHERE id = 3;
+ id | val
+---------------------------------------------------------------------
+  3 |   3
+(1 row)
+
+WITH mb AS (UPDATE modify_table SET val = 3 WHERE id = 3 RETURNING NULL alias) SELECT * FROM modify_table, mb WHERE id = 3;
+ id | val | alias
+---------------------------------------------------------------------
+  3 |   3 |
+(1 row)
+
+WITH mb AS (UPDATE modify_table SET val = 3 WHERE id = 3 RETURNING val) SELECT * FROM modify_table WHERE id = 3;
+ id | val
+---------------------------------------------------------------------
+  3 |   3
+(1 row)
+
+WITH mb AS (UPDATE modify_table SET val = 3 WHERE id = 3 RETURNING val) SELECT * FROM modify_table, mb WHERE id = 3;
+ id | val | val
+---------------------------------------------------------------------
+  3 |   3 |   3
+(1 row)
+
+WITH mb AS (DELETE FROM modify_table WHERE id = 3 RETURNING NULL, NULL) SELECT * FROM modify_table WHERE id = 3;
+ id | val
+---------------------------------------------------------------------
+  3 |   3
+(1 row)
+
 \set VERBOSITY terse
 DROP SCHEMA with_modifying CASCADE;
 NOTICE:  drop cascades to 9 other objects

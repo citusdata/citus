@@ -43,8 +43,6 @@ static void SendCommandToWorkersParamsInternal(TargetWorkerSet targetWorkerSet,
 											   const Oid *parameterTypes,
 											   const char *const *parameterValues);
 static void ErrorIfAnyMetadataNodeOutOfSync(List *metadataNodeList);
-static void SendCommandListToAllWorkersInternal(List *commandList, bool failOnError,
-												const char *superuser);
 static List * OpenConnectionsToWorkersInParallel(TargetWorkerSet targetWorkerSet,
 												 const char *user);
 static void GetConnectionsResults(List *connectionList, bool failOnError);
@@ -126,91 +124,27 @@ SendCommandToWorkersWithMetadata(const char *command)
 
 
 /*
- * SendCommandToAllWorkers sends the given command to
- * all workers as a superuser.
- */
-void
-SendCommandToAllWorkers(const char *command, const char *superuser)
-{
-	SendCommandListToAllWorkers(list_make1((char *) command), superuser);
-}
-
-
-/*
- * SendCommandListToAllWorkers sends the given command to all workers in
- * a single transaction.
- */
-void
-SendCommandListToAllWorkers(List *commandList, const char *superuser)
-{
-	SendCommandListToAllWorkersInternal(commandList, true, superuser);
-}
-
-
-/*
- * SendCommandListToAllWorkersInternal sends the given command to all workers in a single
- * transaction as a superuser. If failOnError is false, then it continues sending the commandList to other
- * workers even if it fails in one of them.
- */
-static void
-SendCommandListToAllWorkersInternal(List *commandList, bool failOnError, const
-									char *superuser)
-{
-	List *workerNodeList = ActivePrimaryWorkerNodeList(NoLock);
-
-	WorkerNode *workerNode = NULL;
-	foreach_ptr(workerNode, workerNodeList)
-	{
-		if (failOnError)
-		{
-			SendCommandListToWorkerInSingleTransaction(workerNode->workerName,
-													   workerNode->workerPort,
-													   superuser,
-													   commandList);
-		}
-		else
-		{
-			SendOptionalCommandListToWorkerInTransaction(workerNode->workerName,
-														 workerNode->workerPort,
-														 superuser,
-														 commandList);
-		}
-	}
-}
-
-
-/*
- * SendOptionalCommandListToAllWorkers sends the given command to all works in
- * a single transaction as a superuser. If there is an error during the command, it is ignored
- * so this method doesnt return any error.
- */
-void
-SendOptionalCommandListToAllWorkers(List *commandList, const char *superuser)
-{
-	SendCommandListToAllWorkersInternal(commandList, false, superuser);
-}
-
-
-/*
  * TargetWorkerSetNodeList returns a list of WorkerNode's that satisfies the
  * TargetWorkerSet.
  */
 List *
 TargetWorkerSetNodeList(TargetWorkerSet targetWorkerSet, LOCKMODE lockMode)
 {
-	List *workerNodeList = ActivePrimaryWorkerNodeList(lockMode);
+	List *workerNodeList = NIL;
+	if (targetWorkerSet == ALL_SHARD_NODES)
+	{
+		workerNodeList = ActivePrimaryNodeList(lockMode);
+	}
+	else
+	{
+		workerNodeList = ActivePrimaryNonCoordinatorNodeList(lockMode);
+	}
 	List *result = NIL;
-
-	int32 localGroupId = GetLocalGroupId();
 
 	WorkerNode *workerNode = NULL;
 	foreach_ptr(workerNode, workerNodeList)
 	{
-		if (targetWorkerSet == WORKERS_WITH_METADATA && !workerNode->hasMetadata)
-		{
-			continue;
-		}
-		if (targetWorkerSet == OTHER_WORKERS && workerNode->groupId == localGroupId)
+		if (targetWorkerSet == NON_COORDINATOR_METADATA_NODES && !workerNode->hasMetadata)
 		{
 			continue;
 		}
@@ -232,7 +166,7 @@ TargetWorkerSetNodeList(TargetWorkerSet targetWorkerSet, LOCKMODE lockMode)
 void
 SendBareCommandListToMetadataWorkers(List *commandList)
 {
-	TargetWorkerSet targetWorkerSet = WORKERS_WITH_METADATA;
+	TargetWorkerSet targetWorkerSet = NON_COORDINATOR_METADATA_NODES;
 	List *workerNodeList = TargetWorkerSetNodeList(targetWorkerSet, ShareLock);
 	char *nodeUser = CitusExtensionOwnerName();
 
@@ -271,7 +205,7 @@ SendBareCommandListToMetadataWorkers(List *commandList)
 int
 SendBareOptionalCommandListToAllWorkersAsUser(List *commandList, const char *user)
 {
-	TargetWorkerSet targetWorkerSet = ALL_WORKERS;
+	TargetWorkerSet targetWorkerSet = NON_COORDINATOR_NODES;
 	List *workerNodeList = TargetWorkerSetNodeList(targetWorkerSet, ShareLock);
 	int maxError = RESPONSE_OKAY;
 
@@ -318,11 +252,12 @@ SendCommandToMetadataWorkersParams(const char *command,
 								   const Oid *parameterTypes,
 								   const char *const *parameterValues)
 {
-	List *workerNodeList = TargetWorkerSetNodeList(WORKERS_WITH_METADATA, ShareLock);
+	List *workerNodeList = TargetWorkerSetNodeList(NON_COORDINATOR_METADATA_NODES,
+												   ShareLock);
 
 	ErrorIfAnyMetadataNodeOutOfSync(workerNodeList);
 
-	SendCommandToWorkersParamsInternal(WORKERS_WITH_METADATA, command, user,
+	SendCommandToWorkersParamsInternal(NON_COORDINATOR_METADATA_NODES, command, user,
 									   parameterCount, parameterTypes,
 									   parameterValues);
 }

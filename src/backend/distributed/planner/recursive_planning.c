@@ -915,11 +915,13 @@ ShouldRecursivelyPlanSubquery(Query *subquery, RecursivePlanningContext *context
 		 * plan which is much more expensive than pushdown.
 		 */
 		return false;
-	}else if (SingleRelationRepartitionSubquery(subquery)) {
-		/*	
-		 * Citus can plan this and execute via repartitioning. Thus,	
-		 * no need to recursively plan.	
-		 */	
+	}
+	else if (SingleRelationRepartitionSubquery(subquery))
+	{
+		/*
+		 * Citus can plan this and execute via repartitioning. Thus,
+		 * no need to recursively plan.
+		 */
 		return false;
 	}
 
@@ -1437,7 +1439,8 @@ TransformFunctionRTE(RangeTblEntry *rangeTblEntry)
 		{
 			ereport(ERROR, (errmsg("bad number of tuple descriptor attributes")));
 		}
-		for (targetColumnIndex = 0; targetColumnIndex < (AttrNumber) tupleDesc->natts;
+		AttrNumber natts = tupleDesc->natts;
+		for (targetColumnIndex = 0; targetColumnIndex < natts;
 			 targetColumnIndex++)
 		{
 			FormData_pg_attribute *attribute = TupleDescAttr(tupleDesc,

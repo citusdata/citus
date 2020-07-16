@@ -293,7 +293,12 @@ workflows:
   version: 2
   build_and_test:
     jobs:
-      - check-merge-to-enterprise
+      - check-merge-to-enterprise:
+          filters:
+            branches:
+              ignore:
+                - /release-[0-9]+\.[0-9]+.*/ # match with releaseX.Y.*
+
       - build
       - check-style
       - check-sql-snapshots

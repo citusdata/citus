@@ -33,6 +33,21 @@ SELECT create_distributed_table('stock','s_w_id');
 (1 row)
 
 INSERT INTO stock SELECT c, c, c FROM generate_series(1, 5) as c;
+SET citus.enable_repartition_joins TO ON;
+SELECT count(*) FROM the_table t1 JOIN the_table t2 USING(b);
+ count
+---------------------------------------------------------------------
+     2
+(1 row)
+
+SET citus.enable_single_hash_repartition_joins TO ON;
+SELECT count(*) FROM the_table t1 , the_table t2 WHERE t1.a = t2.b;
+ count
+---------------------------------------------------------------------
+     2
+(1 row)
+
+RESET citus.enable_repartition_joins;
 -- connect to the follower and check that a simple select query works, the follower
 -- is still in the default cluster and will send queries to the primary nodes
 \c - - - :follower_master_port
@@ -100,6 +115,14 @@ order by s_i_id;
       5 |          5
 (3 rows)
 
+SET citus.enable_repartition_joins TO ON;
+SELECT count(*) FROM the_table t1 JOIN the_table t2 USING(b);
+ERROR:  writing to worker nodes is not currently allowed
+DETAIL:  the database is read-only
+SET citus.enable_single_hash_repartition_joins TO ON;
+SELECT count(*) FROM the_table t1 , the_table t2 WHERE t1.a = t2.b;
+ERROR:  writing to worker nodes is not currently allowed
+DETAIL:  the database is read-only
 SELECT
   node_name, node_port
 FROM

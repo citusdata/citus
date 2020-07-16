@@ -693,13 +693,7 @@ AdaptiveExecutor(CitusScanState *scanState)
 	Assert(!scanState->finishedRemoteScan);
 
 	/* Reset Task fields that are only valid for a single execution */
-	Task *task = NULL;
-	foreach_ptr(task, taskList)
-	{
-		task->totalReceivedTupleData = 0;
-		task->fetchedExplainAnalyzePlacementIndex = 0;
-		task->fetchedExplainAnalyzePlan = NULL;
-	}
+	ResetExplainAnalyzeData(taskList);
 
 	scanState->tuplestorestate =
 		tuplestore_begin_heap(randomAccess, interTransactions, work_mem);
@@ -1486,8 +1480,7 @@ TaskListRequires2PC(List *taskList)
 
 	if (task->taskType == DDL_TASK)
 	{
-		if (MultiShardCommitProtocol == COMMIT_PROTOCOL_2PC ||
-			task->replicationModel == REPLICATION_MODEL_2PC)
+		if (MultiShardCommitProtocol == COMMIT_PROTOCOL_2PC)
 		{
 			return true;
 		}

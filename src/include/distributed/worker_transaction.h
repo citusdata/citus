@@ -22,9 +22,9 @@
  */
 typedef enum TargetWorkerSet
 {
-	WORKERS_WITH_METADATA,
-	OTHER_WORKERS,
-	ALL_WORKERS
+	NON_COORDINATOR_METADATA_NODES,
+	NON_COORDINATOR_NODES,
+	ALL_SHARD_NODES
 } TargetWorkerSet;
 
 
@@ -42,9 +42,6 @@ extern void SendBareCommandListToMetadataWorkers(List *commandList);
 extern int SendBareOptionalCommandListToAllWorkersAsUser(List *commandList,
 														 const char *user);
 extern void EnsureNoModificationsHaveBeenDone(void);
-extern void SendCommandListToAllWorkers(List *commandList, const char *superuser);
-extern void SendOptionalCommandListToAllWorkers(List *commandList, const char *superuser);
-extern void SendCommandToAllWorkers(const char *command, const char *superuser);
 extern void SendCommandListToWorkerInSingleTransaction(const char *nodeName,
 													   int32 nodePort,
 													   const char *nodeUser,

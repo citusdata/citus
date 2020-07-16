@@ -11,7 +11,9 @@ MODULE_big = citus
 EXTENSION = citus
 
 template_sql_files = $(patsubst $(citus_abs_srcdir)/%,%,$(wildcard $(citus_abs_srcdir)/sql/*.sql))
+template_downgrade_sql_files = $(patsubst $(citus_abs_srcdir)/sql/downgrades/%,%,$(wildcard $(citus_abs_srcdir)/sql/downgrades/*.sql))
 generated_sql_files = $(patsubst %,$(citus_abs_srcdir)/build/%,$(template_sql_files))
+generated_downgrade_sql_files += $(patsubst %,$(citus_abs_srcdir)/build/sql/%,$(template_downgrade_sql_files))
 # All citus--*.sql files that are used to upgrade between versions
 DATA_built = $(generated_sql_files)
 
@@ -54,6 +56,20 @@ SQL_BUILDDIR=build/sql
 
 $(generated_sql_files): $(citus_abs_srcdir)/build/%: %
 	@mkdir -p $(citus_abs_srcdir)/$(SQL_DEPDIR) $(citus_abs_srcdir)/$(SQL_BUILDDIR)
+	@# -MF is used to store dependency files(.Po) in another directory for separation
+	@# -MT is used to change the target of the rule emitted by dependency generation.
+	@# -P is used to inhibit generation of linemarkers in the output from the preprocessor.
+	@# -undef is used to not predefine any system-specific or GCC-specific macros.
+	@# `man cpp` for further information
+	cd $(citus_abs_srcdir) && cpp -undef -w -P -MMD -MP -MF$(SQL_DEPDIR)/$(*F).Po -MT$@ $< > $@
+
+$(generated_downgrade_sql_files): $(citus_abs_srcdir)/build/sql/%: sql/downgrades/%
+	@mkdir -p $(citus_abs_srcdir)/$(SQL_DEPDIR) $(citus_abs_srcdir)/$(SQL_BUILDDIR)
+	@# -MF is used to store dependency files(.Po) in another directory for separation
+	@# -MT is used to change the target of the rule emitted by dependency generation.
+	@# -P is used to inhibit generation of linemarkers in the output from the preprocessor.
+	@# -undef is used to not predefine any system-specific or GCC-specific macros.
+	@# `man cpp` for further information
 	cd $(citus_abs_srcdir) && cpp -undef -w -P -MMD -MP -MF$(SQL_DEPDIR)/$(*F).Po -MT$@ $< > $@
 
 SQL_Po_files := $(wildcard $(SQL_DEPDIR)/*.Po)
@@ -61,12 +77,19 @@ ifneq (,$(SQL_Po_files))
 include $(SQL_Po_files)
 endif
 
-.PHONY: clean-full
+.PHONY: clean-full install install-downgrades install-all
 
 cleanup-before-install:
 	rm -f $(DESTDIR)$(datadir)/$(datamoduledir)/citus*
 
 install: cleanup-before-install
+
+# install and install-downgrades should be run sequentially
+install-all: install
+	make install-downgrades
+
+install-downgrades: $(generated_downgrade_sql_files)
+	$(INSTALL_DATA) $(generated_downgrade_sql_files) '$(DESTDIR)$(datadir)/$(datamoduledir)/'
 
 clean-full:
 	make clean

@@ -19,5 +19,7 @@ SET citus.next_shard_id TO 280000;
 \copy part_append FROM '@abs_srcdir@/data/part.more.data' with delimiter '|'
 
 -- Exchange partition files in binary format in remaining tests
+ALTER SYSTEM SET citus.binary_worker_copy_format TO on;
+SELECT pg_reload_conf();
 SELECT success FROM run_command_on_workers('ALTER SYSTEM SET citus.binary_worker_copy_format TO on');
 SELECT success FROM run_command_on_workers('SELECT pg_reload_conf()');

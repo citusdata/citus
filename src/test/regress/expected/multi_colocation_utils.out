@@ -1420,7 +1420,7 @@ SELECT tables_colocated('d2', 'none');
 SELECT update_distributed_table_colocation('ref', colocate_with => 'none');
 ERROR:  relation ref should be a hash distributed table
 SELECT update_distributed_table_colocation('local_table', colocate_with => 'none');
-ERROR:  relation local_table is not distributed
+ERROR:  relation local_table should be a hash distributed table
 -- make sure that different types cannot be colocated
 SELECT update_distributed_table_colocation('different_d1', colocate_with => 'd1');
 ERROR:  cannot colocate tables d1 and different_d1

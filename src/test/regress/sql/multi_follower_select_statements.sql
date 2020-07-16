@@ -21,6 +21,14 @@ SELECT create_distributed_table('stock','s_w_id');
 
 INSERT INTO stock SELECT c, c, c FROM generate_series(1, 5) as c;
 
+SET citus.enable_repartition_joins TO ON;
+SELECT count(*) FROM the_table t1 JOIN the_table t2 USING(b);
+
+SET citus.enable_single_hash_repartition_joins TO ON;
+
+SELECT count(*) FROM the_table t1 , the_table t2 WHERE t1.a = t2.b;
+RESET citus.enable_repartition_joins;
+
 
 -- connect to the follower and check that a simple select query works, the follower
 -- is still in the default cluster and will send queries to the primary nodes
@@ -65,6 +73,13 @@ from     stock
 group by s_i_id
 having   sum(s_order_cnt) > (select max(s_order_cnt) - 3 as having_query from stock)
 order by s_i_id;
+
+SET citus.enable_repartition_joins TO ON;
+SELECT count(*) FROM the_table t1 JOIN the_table t2 USING(b);
+
+SET citus.enable_single_hash_repartition_joins TO ON;
+
+SELECT count(*) FROM the_table t1 , the_table t2 WHERE t1.a = t2.b;
 
 
 SELECT
