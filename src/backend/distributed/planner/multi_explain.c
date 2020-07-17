@@ -606,9 +606,7 @@ FetchRemoteExplainFromWorkers(Task *task, ExplainState *es)
 	RemoteExplainPlan *remotePlan = (RemoteExplainPlan *) palloc0(
 		sizeof(RemoteExplainPlan));
 
-	StringInfo explainQuery = BuildRemoteExplainQuery(TaskQueryStringForAllPlacements(
-														  task),
-													  es);
+	StringInfo explainQuery = BuildRemoteExplainQuery(TaskQueryString(task), es);
 
 	/*
 	 * Use a coordinated transaction to ensure that we open a transaction block
@@ -694,7 +692,7 @@ ExplainTask(CitusScanState *scanState, Task *task, int placementIndex,
 
 	if (es->verbose)
 	{
-		const char *queryText = TaskQueryStringForAllPlacements(task);
+		const char *queryText = TaskQueryString(task);
 		ExplainPropertyText("Query", queryText, es);
 	}
 
@@ -1312,7 +1310,7 @@ ExplainAnalyzeTaskList(List *originalTaskList,
 		}
 
 		Task *explainAnalyzeTask = copyObject(originalTask);
-		const char *queryString = TaskQueryStringForAllPlacements(explainAnalyzeTask);
+		const char *queryString = TaskQueryString(explainAnalyzeTask);
 		char *wrappedQuery = WrapQueryForExplainAnalyze(queryString, tupleDesc);
 		char *fetchQuery =
 			"SELECT explain_analyze_output FROM worker_last_saved_explain_analyze()";

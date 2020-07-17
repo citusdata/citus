@@ -284,12 +284,6 @@ CopyTaskQuery(Task *newnode, Task *from)
 			break;
 		}
 
-		case TASK_QUERY_TEXT_PER_PLACEMENT:
-		{
-			COPY_STRING_LIST(taskQuery.data.perPlacementQueryStrings);
-			break;
-		}
-
 		case TASK_QUERY_TEXT_LIST:
 		{
 			COPY_STRING_LIST(taskQuery.data.queryStringList);

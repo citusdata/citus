@@ -4534,7 +4534,7 @@ CreateMapQueryString(MapMergeJob *mapMergeJob, Task *filterTask,
 
 	/* wrap repartition query string around filter query string */
 	StringInfo mapQueryString = makeStringInfo();
-	char *filterQueryString = TaskQueryStringForAllPlacements(filterTask);
+	char *filterQueryString = TaskQueryString(filterTask);
 	char *filterQueryEscapedText = quote_literal_cstr(filterQueryString);
 	PartitionType partitionType = mapMergeJob->partitionType;
 
