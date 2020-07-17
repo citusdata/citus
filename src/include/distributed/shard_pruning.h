@@ -20,6 +20,7 @@
 extern List * PruneShards(Oid relationId, Index rangeTableId, List *whereClauseList,
 						  Const **partitionValueConst);
 extern bool ContainsFalseClause(List *whereClauseList);
+extern List * get_all_actual_clauses(List *restrictinfo_list);
 extern Const * TransformPartitionRestrictionValue(Var *partitionColumn,
 												  Const *restrictionValue,
 												  bool missingOk);
