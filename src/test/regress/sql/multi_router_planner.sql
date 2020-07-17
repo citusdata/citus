@@ -793,10 +793,10 @@ SELECT master_create_empty_shard('authors_range') as shard_id \gset
 UPDATE pg_dist_shard SET shardminvalue = 1, shardmaxvalue=10 WHERE shardid = :shard_id;
 
 SELECT master_create_empty_shard('authors_range') as shard_id \gset
-UPDATE pg_dist_shard SET shardminvalue = 11, shardmaxvalue=30 WHERE shardid = :shard_id;
+UPDATE pg_dist_shard SET shardminvalue = 11, shardmaxvalue=20 WHERE shardid = :shard_id;
 
 SELECT master_create_empty_shard('authors_range') as shard_id \gset
-UPDATE pg_dist_shard SET shardminvalue = 21, shardmaxvalue=40 WHERE shardid = :shard_id;
+UPDATE pg_dist_shard SET shardminvalue = 21, shardmaxvalue=30 WHERE shardid = :shard_id;
 
 SELECT master_create_empty_shard('authors_range') as shard_id \gset
 UPDATE pg_dist_shard SET shardminvalue = 31, shardmaxvalue=40 WHERE shardid = :shard_id;
@@ -805,10 +805,10 @@ SELECT master_create_empty_shard('articles_range') as shard_id \gset
 UPDATE pg_dist_shard SET shardminvalue = 1, shardmaxvalue=10 WHERE shardid = :shard_id;
 
 SELECT master_create_empty_shard('articles_range') as shard_id \gset
-UPDATE pg_dist_shard SET shardminvalue = 11, shardmaxvalue=30 WHERE shardid = :shard_id;
+UPDATE pg_dist_shard SET shardminvalue = 11, shardmaxvalue=20 WHERE shardid = :shard_id;
 
 SELECT master_create_empty_shard('articles_range') as shard_id \gset
-UPDATE pg_dist_shard SET shardminvalue = 21, shardmaxvalue=40 WHERE shardid = :shard_id;
+UPDATE pg_dist_shard SET shardminvalue = 21, shardmaxvalue=30 WHERE shardid = :shard_id;
 
 SELECT master_create_empty_shard('articles_range') as shard_id \gset
 UPDATE pg_dist_shard SET shardminvalue = 31, shardmaxvalue=40 WHERE shardid = :shard_id;
@@ -858,7 +858,6 @@ SELECT * FROM articles_hash ar join authors_range au on (ar.author_id = au.id)
 -- not router plannable
 SELECT * FROM articles_hash ar join authors_range au on (ar.author_id = au.id)
 	WHERE ar.author_id = 3;
-
 -- join between a range partitioned table and reference table is router plannable
 SELECT * FROM articles_range ar join authors_reference au on (ar.author_id = au.id)
 	WHERE ar.author_id = 1;
