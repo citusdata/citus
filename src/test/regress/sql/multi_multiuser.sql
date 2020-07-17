@@ -122,9 +122,6 @@ COPY "postgresql.conf" TO STDOUT WITH (format transmit);
 -- should not be able to transmit directly
 COPY "postgresql.conf" TO STDOUT WITH (format transmit);
 
--- create a task that other users should not be able to inspect
-SELECT task_tracker_assign_task(1, 1, 'SELECT 1');
-
 -- check read permission
 SET ROLE read_access;
 
@@ -151,11 +148,6 @@ SELECT count(*) FROM test a JOIN test b ON (a.val = b.val) WHERE a.id = 1 AND b.
 
 -- should not be able to transmit directly
 COPY "postgresql.conf" TO STDOUT WITH (format transmit);
-
--- should not be able to access tasks or jobs belonging to a different user
-SELECT task_tracker_task_status(1, 1);
-SELECT task_tracker_assign_task(1, 2, 'SELECT 1');
-SELECT task_tracker_cleanup_job(1);
 
 -- should not be allowed to take aggressive locks on table
 BEGIN;
@@ -220,8 +212,6 @@ CREATE TABLE my_table (id integer, val integer);
 RESET ROLE;
 SELECT create_distributed_table('my_table', 'id');
 SELECT result FROM run_command_on_workers($$SELECT tableowner FROM pg_tables WHERE tablename LIKE 'my_table_%' LIMIT 1$$);
-
-SELECT task_tracker_cleanup_job(1);
 
 -- table should be distributable by super user when it has data in there
 SET ROLE full_access;
@@ -435,13 +425,6 @@ SET ROLE usage_access;
 SELECT worker_merge_files_into_table(42, 1, ARRAY['a'], ARRAY['integer']);
 RESET ROLE;
 
-SET ROLE full_access;
--- use the side effect of this function to have a schema to use, otherwise only the super
--- user could call worker_merge_files_into_table and store the results in public, which is
--- not what we want
-SELECT task_tracker_assign_task(42, 1, 'SELECT 1');
-RESET ROLE;
-
 -- test that no other user can merge the downloaded file after the task is being tracked
 SET ROLE usage_access;
 SELECT worker_merge_files_into_table(42, 1, ARRAY['a'], ARRAY['integer']);
@@ -459,41 +442,9 @@ SELECT count(*) FROM pg_merge_job_0042.task_000001;
 DROP TABLE pg_merge_job_0042.task_000001; -- drop table so we can reuse the same files for more tests
 RESET ROLE;
 
--- test that no other user can merge files and run query on the already fetched files
-SET ROLE usage_access;
-SELECT worker_merge_files_and_run_query(42, 1,
-    'CREATE TABLE task_000001_merge(merge_column_0 int)',
-    'CREATE TABLE task_000001 (a) AS SELECT sum(merge_column_0) FROM task_000001_merge'
-);
-RESET ROLE;
-
--- test that the super user is unable to read the contents of the partitioned files after
--- trying to merge with run query
-SELECT worker_merge_files_and_run_query(42, 1,
-    'CREATE TABLE task_000001_merge(merge_column_0 int)',
-    'CREATE TABLE task_000001 (a) AS SELECT sum(merge_column_0) FROM task_000001_merge'
-);
 SELECT count(*) FROM pg_merge_job_0042.task_000001_merge;
 SELECT count(*) FROM pg_merge_job_0042.task_000001;
 DROP TABLE pg_merge_job_0042.task_000001, pg_merge_job_0042.task_000001_merge; -- drop table so we can reuse the same files for more tests
-
--- test that the owner of the task can merge files and run query correctly
-SET ROLE full_access;
-SELECT worker_merge_files_and_run_query(42, 1,
-    'CREATE TABLE task_000001_merge(merge_column_0 int)',
-    'CREATE TABLE task_000001 (a) AS SELECT sum(merge_column_0) FROM task_000001_merge'
-);
-
--- test that owner of task cannot execute arbitrary sql
-SELECT worker_merge_files_and_run_query(42, 1,
-    'CREATE TABLE task_000002_merge(merge_column_0 int)',
-    'DROP USER usage_access'
-);
-
-SELECT worker_merge_files_and_run_query(42, 1,
-    'DROP USER usage_access',
-    'CREATE TABLE task_000002 (a) AS SELECT sum(merge_column_0) FROM task_000002_merge'
-);
 
 SELECT count(*) FROM pg_merge_job_0042.task_000001_merge;
 SELECT count(*) FROM pg_merge_job_0042.task_000001;
@@ -507,7 +458,6 @@ SELECT citus_rm_job_directory(42::bigint);
 
 \c - - - :master_port
 
-SELECT run_command_on_workers($$SELECT task_tracker_cleanup_job(42);$$);
 DROP SCHEMA full_access_user_schema CASCADE;
 DROP TABLE
     my_table,
