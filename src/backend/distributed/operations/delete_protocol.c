@@ -450,8 +450,7 @@ DropShards(Oid relationId, char *schemaName, char *relationName,
 				 * connect to that node to drop the shard placement over that
 				 * remote connection.
 				 */
-				const char *dropShardPlacementCommand = TaskQueryStringForAllPlacements(
-					task);
+				const char *dropShardPlacementCommand = TaskQueryString(task);
 				ExecuteDropShardPlacementCommandRemotely(shardPlacement,
 														 relationName,
 														 dropShardPlacementCommand);

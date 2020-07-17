@@ -18,6 +18,7 @@
 #include "miscadmin.h"
 #include "port.h"
 
+#include "access/htup_details.h"
 #include "access/tupdesc.h"
 #include "catalog/pg_type.h"
 #include "distributed/deparse_shard_query.h"
@@ -28,12 +29,31 @@
 #include "distributed/multi_executor.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/transaction_management.h"
+#include "distributed/tuple_destination.h"
 #include "distributed/tuplestore.h"
 #include "distributed/worker_protocol.h"
 #include "tcop/pquery.h"
 #include "tcop/tcopprot.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
+
+
+/*
+ * PartitioningTupleDest is internal representation of a TupleDestination
+ * which consumes queries constructed in WrapTasksForPartitioning.
+ */
+typedef struct PartitioningTupleDest
+{
+	TupleDestination pub;
+
+	CitusTableCacheEntry *targetRelation;
+
+	/* list of DistributedResultFragment pointer */
+	List *fragmentList;
+
+	/* what do tuples look like */
+	TupleDesc tupleDesc;
+} PartitioningTupleDest;
 
 
 /*
@@ -59,23 +79,34 @@ typedef struct NodeToNodeFragmentsTransfer
 
 
 /* forward declarations of local functions */
-static void WrapTasksForPartitioning(const char *resultIdPrefix, List *selectTaskList,
-									 int partitionColumnIndex,
-									 CitusTableCacheEntry *targetRelation,
-									 bool binaryFormat);
+static List * WrapTasksForPartitioning(const char *resultIdPrefix,
+									   List *selectTaskList,
+									   int partitionColumnIndex,
+									   CitusTableCacheEntry *targetRelation,
+									   bool binaryFormat);
 static List * ExecutePartitionTaskList(List *partitionTaskList,
 									   CitusTableCacheEntry *targetRelation);
+static PartitioningTupleDest * CreatePartitioningTupleDest(
+	CitusTableCacheEntry *targetRelation);
+static void PartitioningTupleDestPutTuple(TupleDestination *self, Task *task,
+										  int placementIndex, int queryNumber,
+										  HeapTuple heapTuple, uint64 tupleLibpqSize);
+static TupleDesc PartitioningTupleDestTupleDescForQuery(TupleDestination *self, int
+														queryNumber);
 static ArrayType * CreateArrayFromDatums(Datum *datumArray, bool *nullsArray, int
 										 datumCount, Oid typeId);
 static void ShardMinMaxValueArrays(ShardInterval **shardIntervalArray, int shardCount,
 								   Oid intervalTypeId, ArrayType **minValueArray,
 								   ArrayType **maxValueArray);
 static char * SourceShardPrefix(const char *resultPrefix, uint64 shardId);
-static DistributedResultFragment * TupleToDistributedResultFragment(
-	TupleTableSlot *tupleSlot, CitusTableCacheEntry *targetRelation);
-static Tuplestorestate * ExecuteSelectTasksIntoTupleStore(List *taskList,
-														  TupleDesc resultDescriptor,
-														  bool errorOnAnyFailure);
+static DistributedResultFragment * TupleToDistributedResultFragment(HeapTuple heapTuple,
+																	TupleDesc tupleDesc,
+																	CitusTableCacheEntry *
+																	targetRelation,
+																	uint32 sourceNodeId);
+static void ExecuteSelectTasksIntoTupleDest(List *taskList,
+											TupleDestination *tupleDestination,
+											bool errorOnAnyFailure);
 static List ** ColocateFragmentsWithRelation(List *fragmentList,
 											 CitusTableCacheEntry *targetRelation);
 static List * ColocationTransfers(List *fragmentList,
@@ -157,9 +188,9 @@ PartitionTasklistResults(const char *resultIdPrefix, List *selectTaskList,
 	 */
 	UseCoordinatedTransaction();
 
-	WrapTasksForPartitioning(resultIdPrefix, selectTaskList,
-							 partitionColumnIndex, targetRelation,
-							 binaryFormat);
+	selectTaskList = WrapTasksForPartitioning(resultIdPrefix, selectTaskList,
+											  partitionColumnIndex, targetRelation,
+											  binaryFormat);
 	return ExecutePartitionTaskList(selectTaskList, targetRelation);
 }
 
@@ -169,12 +200,13 @@ PartitionTasklistResults(const char *resultIdPrefix, List *selectTaskList,
  * to worker_partition_query_result(). Target list of the wrapped query should
  * match the tuple descriptor in ExecutePartitionTaskList().
  */
-static void
+static List *
 WrapTasksForPartitioning(const char *resultIdPrefix, List *selectTaskList,
 						 int partitionColumnIndex,
 						 CitusTableCacheEntry *targetRelation,
 						 bool binaryFormat)
 {
+	List *wrappedTaskList = NIL;
 	ShardInterval **shardIntervalArray = targetRelation->sortedShardIntervalArray;
 	int shardCount = targetRelation->shardIntervalArrayLength;
 
@@ -200,41 +232,105 @@ WrapTasksForPartitioning(const char *resultIdPrefix, List *selectTaskList,
 	Task *selectTask = NULL;
 	foreach_ptr(selectTask, selectTaskList)
 	{
-		List *shardPlacementList = selectTask->taskPlacementList;
 		char *taskPrefix = SourceShardPrefix(resultIdPrefix, selectTask->anchorShardId);
 		char *partitionMethodString = targetRelation->partitionMethod == 'h' ?
 									  "hash" : "range";
 		const char *binaryFormatString = binaryFormat ? "true" : "false";
 		List *perPlacementQueries = NIL;
 
-		/*
-		 * We need to know which placement could successfully execute the query,
-		 * so we form a different query per placement, each of which returning
-		 * the node id of the placement.
-		 */
-		ShardPlacement *shardPlacement = NULL;
-		foreach_ptr(shardPlacement, shardPlacementList)
-		{
-			StringInfo wrappedQuery = makeStringInfo();
-			appendStringInfo(wrappedQuery,
-							 "SELECT %u::int, partition_index"
-							 ", %s || '_' || partition_index::text "
-							 ", rows_written "
-							 "FROM worker_partition_query_result"
-							 "(%s,%s,%d,%s,%s,%s,%s) WHERE rows_written > 0",
-							 shardPlacement->nodeId,
-							 quote_literal_cstr(taskPrefix),
-							 quote_literal_cstr(taskPrefix),
-							 quote_literal_cstr(TaskQueryStringForAllPlacements(
-													selectTask)),
-							 partitionColumnIndex,
-							 quote_literal_cstr(partitionMethodString),
-							 minValuesString->data, maxValuesString->data,
-							 binaryFormatString);
-			perPlacementQueries = lappend(perPlacementQueries, wrappedQuery->data);
-		}
-		SetTaskPerPlacementQueryStrings(selectTask, perPlacementQueries);
+		Task *wrappedSelectTask = copyObject(selectTask);
+
+		StringInfo wrappedQuery = makeStringInfo();
+		appendStringInfo(wrappedQuery,
+						 "SELECT partition_index"
+						 ", %s || '_' || partition_index::text "
+						 ", rows_written "
+						 "FROM worker_partition_query_result"
+						 "(%s,%s,%d,%s,%s,%s,%s) WHERE rows_written > 0",
+						 quote_literal_cstr(taskPrefix),
+						 quote_literal_cstr(taskPrefix),
+						 quote_literal_cstr(TaskQueryString(selectTask)),
+						 partitionColumnIndex,
+						 quote_literal_cstr(partitionMethodString),
+						 minValuesString->data, maxValuesString->data,
+						 binaryFormatString);
+		perPlacementQueries = lappend(perPlacementQueries, wrappedQuery->data);
+
+		SetTaskQueryString(wrappedSelectTask, wrappedQuery->data);
+		wrappedTaskList = lappend(wrappedTaskList, wrappedSelectTask);
 	}
+
+	return wrappedTaskList;
+}
+
+
+/*
+ * CreatePartitioningTupleDest creates a TupleDestination which consumes results of
+ * tasks constructed in WrapTasksForPartitioning.
+ */
+static PartitioningTupleDest *
+CreatePartitioningTupleDest(CitusTableCacheEntry *targetRelation)
+{
+	TupleDesc tupleDescriptor = NULL;
+	int resultColumnCount = 3;
+
+#if PG_VERSION_NUM >= PG_VERSION_12
+	tupleDescriptor = CreateTemplateTupleDesc(resultColumnCount);
+#else
+	tupleDescriptor = CreateTemplateTupleDesc(resultColumnCount, false);
+#endif
+
+	TupleDescInitEntry(tupleDescriptor, (AttrNumber) 1, "partition_index",
+					   INT4OID, -1, 0);
+	TupleDescInitEntry(tupleDescriptor, (AttrNumber) 2, "result_id",
+					   TEXTOID, -1, 0);
+	TupleDescInitEntry(tupleDescriptor, (AttrNumber) 3, "rows_written",
+					   INT8OID, -1, 0);
+
+
+	PartitioningTupleDest *tupleDest = palloc0(sizeof(PartitioningTupleDest));
+	tupleDest->targetRelation = targetRelation;
+	tupleDest->tupleDesc = tupleDescriptor;
+	tupleDest->pub.putTuple = PartitioningTupleDestPutTuple;
+	tupleDest->pub.tupleDescForQuery =
+		PartitioningTupleDestTupleDescForQuery;
+
+	return tupleDest;
+}
+
+
+/*
+ * PartitioningTupleDestTupleDescForQuery implements TupleDestination->putTuple for
+ * PartitioningTupleDest.
+ */
+static void
+PartitioningTupleDestPutTuple(TupleDestination *self, Task *task,
+							  int placementIndex, int queryNumber,
+							  HeapTuple heapTuple, uint64 tupleLibpqSize)
+{
+	PartitioningTupleDest *tupleDest = (PartitioningTupleDest *) self;
+	ShardPlacement *placement = list_nth(task->taskPlacementList, placementIndex);
+
+	DistributedResultFragment *fragment =
+		TupleToDistributedResultFragment(heapTuple, tupleDest->tupleDesc,
+										 tupleDest->targetRelation,
+										 placement->nodeId);
+	tupleDest->fragmentList = lappend(tupleDest->fragmentList, fragment);
+}
+
+
+/*
+ * PartitioningTupleDestTupleDescForQuery implements TupleDestination->TupleDescForQuery
+ * for PartitioningTupleDest.
+ */
+static TupleDesc
+PartitioningTupleDestTupleDescForQuery(TupleDestination *self, int queryNumber)
+{
+	Assert(queryNumber == 0);
+
+	PartitioningTupleDest *tupleDest = (PartitioningTupleDest *) self;
+
+	return tupleDest->tupleDesc;
 }
 
 
@@ -323,43 +419,13 @@ CreateArrayFromDatums(Datum *datumArray, bool *nullsArray, int datumCount, Oid t
 static List *
 ExecutePartitionTaskList(List *taskList, CitusTableCacheEntry *targetRelation)
 {
-	TupleDesc resultDescriptor = NULL;
-	Tuplestorestate *resultStore = NULL;
-	int resultColumnCount = 4;
-
-#if PG_VERSION_NUM >= PG_VERSION_12
-	resultDescriptor = CreateTemplateTupleDesc(resultColumnCount);
-#else
-	resultDescriptor = CreateTemplateTupleDesc(resultColumnCount, false);
-#endif
-
-	TupleDescInitEntry(resultDescriptor, (AttrNumber) 1, "node_id",
-					   INT4OID, -1, 0);
-	TupleDescInitEntry(resultDescriptor, (AttrNumber) 2, "partition_index",
-					   INT4OID, -1, 0);
-	TupleDescInitEntry(resultDescriptor, (AttrNumber) 3, "result_id",
-					   TEXTOID, -1, 0);
-	TupleDescInitEntry(resultDescriptor, (AttrNumber) 4, "rows_written",
-					   INT8OID, -1, 0);
+	PartitioningTupleDest *tupleDest = CreatePartitioningTupleDest(targetRelation);
 
 	bool errorOnAnyFailure = false;
-	resultStore = ExecuteSelectTasksIntoTupleStore(taskList, resultDescriptor,
-												   errorOnAnyFailure);
+	ExecuteSelectTasksIntoTupleDest(taskList, (TupleDestination *) tupleDest,
+									errorOnAnyFailure);
 
-	List *fragmentList = NIL;
-	TupleTableSlot *slot = MakeSingleTupleTableSlotCompat(resultDescriptor,
-														  &TTSOpsMinimalTuple);
-	while (tuplestore_gettupleslot(resultStore, true, false, slot))
-	{
-		DistributedResultFragment *distributedResultFragment =
-			TupleToDistributedResultFragment(slot, targetRelation);
-
-		fragmentList = lappend(fragmentList, distributedResultFragment);
-
-		ExecClearTuple(slot);
-	}
-
-	return fragmentList;
+	return tupleDest->fragmentList;
 }
 
 
@@ -368,14 +434,15 @@ ExecutePartitionTaskList(List *taskList, CitusTableCacheEntry *targetRelation)
  * WrapTasksForPartitioning() to a DistributedResultFragment.
  */
 static DistributedResultFragment *
-TupleToDistributedResultFragment(TupleTableSlot *tupleSlot,
-								 CitusTableCacheEntry *targetRelation)
+TupleToDistributedResultFragment(HeapTuple tuple,
+								 TupleDesc tupleDesc,
+								 CitusTableCacheEntry *targetRelation,
+								 uint32 sourceNodeId)
 {
 	bool isNull = false;
-	uint32 sourceNodeId = DatumGetUInt32(slot_getattr(tupleSlot, 1, &isNull));
-	uint32 targetShardIndex = DatumGetUInt32(slot_getattr(tupleSlot, 2, &isNull));
-	text *resultId = DatumGetTextP(slot_getattr(tupleSlot, 3, &isNull));
-	int64 rowCount = DatumGetInt64(slot_getattr(tupleSlot, 4, &isNull));
+	uint32 targetShardIndex = DatumGetUInt32(heap_getattr(tuple, 1, tupleDesc, &isNull));
+	text *resultId = DatumGetTextP(heap_getattr(tuple, 2, tupleDesc, &isNull));
+	int64 rowCount = DatumGetInt64(heap_getattr(tuple, 3, tupleDesc, &isNull));
 
 	Assert(targetShardIndex < targetRelation->shardIntervalArrayLength);
 	ShardInterval *shardInterval =
@@ -395,25 +462,20 @@ TupleToDistributedResultFragment(TupleTableSlot *tupleSlot,
 
 
 /*
- * ExecuteSelectTasksIntoTupleStore executes the given tasks and returns a tuple
- * store containing its results.
+ * ExecuteSelectTasksIntoTupleDest executes the given tasks and forwards its result
+ * to the given destination.
  */
-static Tuplestorestate *
-ExecuteSelectTasksIntoTupleStore(List *taskList, TupleDesc resultDescriptor,
-								 bool errorOnAnyFailure)
+static void
+ExecuteSelectTasksIntoTupleDest(List *taskList, TupleDestination *tupleDestination,
+								bool errorOnAnyFailure)
 {
 	bool expectResults = true;
 	int targetPoolSize = MaxAdaptiveExecutorPoolSize;
-	bool randomAccess = true;
-	bool interTransactions = false;
 	TransactionProperties xactProperties = {
 		.errorOnAnyFailure = errorOnAnyFailure,
 		.useRemoteTransactionBlocks = TRANSACTION_BLOCKS_REQUIRED,
 		.requires2PC = false
 	};
-
-	Tuplestorestate *resultStore = tuplestore_begin_heap(randomAccess, interTransactions,
-														 work_mem);
 
 	/*
 	 * Local execution is not supported because here we use perPlacementQueryStrings.
@@ -425,14 +487,11 @@ ExecuteSelectTasksIntoTupleStore(List *taskList, TupleDesc resultDescriptor,
 	ExecutionParams *executionParams = CreateBasicExecutionParams(
 		ROW_MODIFY_READONLY, taskList, targetPoolSize, localExecutionSupported
 		);
-	executionParams->tupleDescriptor = resultDescriptor;
-	executionParams->tupleStore = resultStore;
+	executionParams->tupleDestination = tupleDestination;
 	executionParams->xactProperties = xactProperties;
 	executionParams->expectResults = expectResults;
 
 	ExecuteTaskListExtended(executionParams);
-
-	return resultStore;
 }
 
 
@@ -622,7 +681,6 @@ static void
 ExecuteFetchTaskList(List *taskList)
 {
 	TupleDesc resultDescriptor = NULL;
-	Tuplestorestate *resultStore = NULL;
 	int resultColumnCount = 1;
 
 #if PG_VERSION_NUM >= PG_VERSION_12
@@ -633,15 +691,8 @@ ExecuteFetchTaskList(List *taskList)
 
 	TupleDescInitEntry(resultDescriptor, (AttrNumber) 1, "byte_count", INT8OID, -1, 0);
 
+	TupleDestination *tupleDestination = CreateTupleDestNone();
+
 	bool errorOnAnyFailure = true;
-	resultStore = ExecuteSelectTasksIntoTupleStore(taskList, resultDescriptor,
-												   errorOnAnyFailure);
-
-	TupleTableSlot *slot = MakeSingleTupleTableSlotCompat(resultDescriptor,
-														  &TTSOpsMinimalTuple);
-
-	while (tuplestore_gettupleslot(resultStore, true, false, slot))
-	{
-		ExecClearTuple(slot);
-	}
+	ExecuteSelectTasksIntoTupleDest(taskList, tupleDestination, errorOnAnyFailure);
 }

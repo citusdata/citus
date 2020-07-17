@@ -490,12 +490,6 @@ static void WriteTaskQuery(OUTFUNC_ARGS) {
 			break;
 		}
 
-		case TASK_QUERY_TEXT_PER_PLACEMENT:
-		{
-			WRITE_NODE_FIELD(taskQuery.data.perPlacementQueryStrings);
-			break;
-		}
-
 		case TASK_QUERY_TEXT_LIST:
 		{
 			WRITE_NODE_FIELD(taskQuery.data.queryStringList);
