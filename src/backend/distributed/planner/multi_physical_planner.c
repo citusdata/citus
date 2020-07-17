@@ -52,7 +52,7 @@
 #include "distributed/query_pushdown_planning.h"
 #include "distributed/shardinterval_utils.h"
 #include "distributed/shard_pruning.h"
-#include "distributed/task_tracker.h"
+
 #include "distributed/worker_manager.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/version_compat.h"
@@ -81,6 +81,8 @@
 #include "utils/rel.h"
 #include "utils/typcache.h"
 
+/* RepartitionJoinBucketCountPerNode determines bucket amount during repartitions */
+int RepartitionJoinBucketCountPerNode = 8;
 
 /* Policy to use when assigning tasks to worker nodes */
 int TaskAssignmentPolicy = TASK_ASSIGNMENT_GREEDY;
@@ -1957,7 +1959,7 @@ static uint32
 HashPartitionCount(void)
 {
 	uint32 groupCount = list_length(ActiveReadableNodeList());
-	double maxReduceTasksPerNode = MaxRunningTasksPerNode / 2.0;
+	double maxReduceTasksPerNode = RepartitionJoinBucketCountPerNode;
 
 	uint32 partitionCount = (uint32) rint(groupCount * maxReduceTasksPerNode);
 	return partitionCount;

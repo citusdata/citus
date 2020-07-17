@@ -34,11 +34,6 @@ int RemoteTaskCheckInterval = 100; /* per cycle sleep interval in millisecs */
 int TaskExecutorType = MULTI_EXECUTOR_ADAPTIVE; /* distributed executor type */
 bool EnableRepartitionJoins = false;
 
-/* deprecated GUC*/
-bool BinaryMasterCopyFormat = false;
-
-/* deprecated GUC*/
-int MaxAssignTaskBatchSize = 0;
 
 /*
  * JobExecutorType selects the executor type for the given distributedPlan using the task
@@ -111,19 +106,6 @@ JobExecutorType(DistributedPlan *distributedPlan)
 										"to enable repartitioning")));
 			}
 			return MULTI_EXECUTOR_ADAPTIVE;
-		}
-	}
-	else
-	{
-		int workerNodeCount = list_length(ActiveReadableNodeList());
-		int taskCount = list_length(job->taskList);
-		double tasksPerNode = taskCount / ((double) workerNodeCount);
-
-		/* if we have more tasks per node than what can be tracked, warn the user */
-		if (tasksPerNode >= MaxTrackedTasksPerNode)
-		{
-			ereport(WARNING, (errmsg("this query assigns more tasks per node than the "
-									 "configured max_tracked_tasks_per_node limit")));
 		}
 	}
 

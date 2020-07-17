@@ -24,7 +24,7 @@
 #include "distributed/metadata_cache.h"
 #include "distributed/remote_commands.h"
 #include "distributed/run_from_same_connection.h"
-#include "distributed/task_tracker.h"
+
 #include "distributed/version_compat.h"
 #include "executor/spi.h"
 #include "lib/stringinfo.h"

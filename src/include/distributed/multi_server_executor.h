@@ -15,7 +15,7 @@
 #define MULTI_SERVER_EXECUTOR_H
 
 #include "distributed/multi_physical_planner.h"
-#include "distributed/task_tracker.h"
+
 #include "distributed/worker_manager.h"
 
 /* Adaptive executor repartioning related defines */
@@ -48,10 +48,8 @@ typedef struct DistributedExecutionStats
 
 /* Config variable managed via guc.c */
 extern int RemoteTaskCheckInterval;
-extern int MaxAssignTaskBatchSize;
 extern int TaskExecutorType;
 extern bool EnableRepartitionJoins;
-extern bool BinaryMasterCopyFormat;
 extern int MultiTaskQueryLogLevel;
 
 

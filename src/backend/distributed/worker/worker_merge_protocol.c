@@ -34,8 +34,7 @@
 #include "distributed/metadata_cache.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/version_compat.h"
-#include "distributed/task_tracker_protocol.h"
-#include "distributed/task_tracker.h"
+
 #include "executor/spi.h"
 #include "nodes/makefuncs.h"
 #include "parser/parse_type.h"

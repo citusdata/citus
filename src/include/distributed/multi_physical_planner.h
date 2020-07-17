@@ -46,6 +46,7 @@
 #define MERGE_FILES_INTO_TABLE_COMMAND "SELECT worker_merge_files_into_table \
  (" UINT64_FORMAT ", %d, '%s', '%s')"
 
+extern int RepartitionJoinBucketCountPerNode;
 
 typedef enum CitusRTEKind
 {
