@@ -278,7 +278,45 @@ worker_merge_files_and_run_query(PG_FUNCTION_ARGS)
 Datum
 worker_cleanup_job_schema_cache(PG_FUNCTION_ARGS)
 {
-	ereport(ERROR, (errmsg("This UDF is deprecated.")));
+	Relation pgNamespace = NULL;
+#if PG_VERSION_NUM >= PG_VERSION_12
+	TableScanDesc scanDescriptor = NULL;
+#else
+	HeapScanDesc scanDescriptor = NULL;
+#endif
+	ScanKey scanKey = NULL;
+	int scanKeyCount = 0;
+	HeapTuple heapTuple = NULL;
+
+	CheckCitusVersion(ERROR);
+
+	pgNamespace = heap_open(NamespaceRelationId, AccessExclusiveLock);
+#if PG_VERSION_NUM >= PG_VERSION_12
+	scanDescriptor = table_beginscan_catalog(pgNamespace, scanKeyCount, scanKey);
+#else
+	scanDescriptor = heap_beginscan_catalog(pgNamespace, scanKeyCount, scanKey);
+#endif
+
+	heapTuple = heap_getnext(scanDescriptor, ForwardScanDirection);
+	while (HeapTupleIsValid(heapTuple))
+	{
+		Form_pg_namespace schemaForm = (Form_pg_namespace) GETSTRUCT(heapTuple);
+		char *schemaName = NameStr(schemaForm->nspname);
+
+		char *jobSchemaFound = strstr(schemaName, JOB_SCHEMA_PREFIX);
+		if (jobSchemaFound != NULL)
+		{
+			StringInfo jobSchemaName = makeStringInfo();
+			appendStringInfoString(jobSchemaName, schemaName);
+
+			RemoveJobSchema(jobSchemaName);
+		}
+
+		heapTuple = heap_getnext(scanDescriptor, ForwardScanDirection);
+	}
+
+	heap_endscan(scanDescriptor);
+	heap_close(pgNamespace, AccessExclusiveLock);
 
 	PG_RETURN_VOID();
 }

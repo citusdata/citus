@@ -634,7 +634,11 @@ $cmd$);
 
 -- super user should be the only one being able to call worker_cleanup_job_schema_cache
 SELECT worker_cleanup_job_schema_cache();
-ERROR:  This UDF is deprecated.
+ worker_cleanup_job_schema_cache
+---------------------------------------------------------------------
+
+(1 row)
+
 SET ROLE full_access;
 SELECT worker_cleanup_job_schema_cache();
 ERROR:  permission denied for function worker_cleanup_job_schema_cache
