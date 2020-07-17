@@ -21,6 +21,7 @@
 #include "distributed/pg_dist_partition.h"
 #include "distributed/query_utils.h"
 #include "distributed/relation_restriction_equivalence.h"
+#include "distributed/shard_pruning.h"
 #include "nodes/nodeFuncs.h"
 #include "nodes/pg_list.h"
 #include "nodes/primnodes.h"
@@ -1864,7 +1865,14 @@ GetRestrictInfoListForRelation(RangeTblEntry *rangeTblEntry,
 
 	RelOptInfo *relOptInfo = relationRestriction->relOptInfo;
 	List *baseRestrictInfo = relOptInfo->baserestrictinfo;
+	List *joinRestrictInfo = relOptInfo->joininfo;
 
+	List *joinRrestrictClauseList = get_all_actual_clauses(joinRestrictInfo);
+	if (ContainsFalseClause(joinRrestrictClauseList))
+	{
+		/* found WHERE false, no need  to continue */
+		return copyObject((List *) joinRrestrictClauseList);
+	}
 
 	List *restrictExprList = NIL;
 	ListCell *restrictCell = NULL;

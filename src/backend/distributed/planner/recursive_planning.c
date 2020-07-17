@@ -72,6 +72,7 @@
 #include "distributed/recursive_planning.h"
 #include "distributed/relation_restriction_equivalence.h"
 #include "distributed/log_utils.h"
+#include "distributed/shard_pruning.h"
 #include "distributed/version_compat.h"
 #include "lib/stringinfo.h"
 #include "optimizer/clauses.h"
@@ -1518,7 +1519,8 @@ MostFilteredRte(PlannerRestrictionContext *plannerRestrictionContext,
 										   plannerRestrictionContext, 1);
 
 		if (mostFilteredLocalRte == NULL ||
-			list_length(*restrictionList) < list_length(currentRestrictionList))
+			list_length(*restrictionList) < list_length(currentRestrictionList) ||
+			ContainsFalseClause(currentRestrictionList))
 		{
 			mostFilteredLocalRte = rangeTableEntry;
 			*restrictionList = currentRestrictionList;

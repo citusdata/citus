@@ -157,7 +157,6 @@ static DeferredErrorMessage * ErrorIfQueryHasUnroutableModifyingCTE(Query *query
 static bool SelectsFromDistributedTable(List *rangeTableList, Query *query);
 static ShardPlacement * CreateDummyPlacement(bool hasLocalRelation);
 static ShardPlacement * CreateLocalDummyPlacement();
-static List * get_all_actual_clauses(List *restrictinfo_list);
 static int CompareInsertValuesByShardId(const void *leftElement,
 										const void *rightElement);
 static List * SingleShardTaskList(Query *query, uint64 jobId,
@@ -3530,7 +3529,7 @@ ErrorIfQueryHasUnroutableModifyingCTE(Query *queryTree)
  * This loses the distinction between regular and pseudoconstant clauses,
  * so be careful what you use it for.
  */
-static List *
+List *
 get_all_actual_clauses(List *restrictinfo_list)
 {
 	List *result = NIL;
