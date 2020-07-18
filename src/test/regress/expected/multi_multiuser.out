@@ -141,7 +141,7 @@ SELECT count(*) FROM test WHERE id = 1;
      1
 (1 row)
 
-SET citus.task_executor_type TO 'task-tracker';
+SET citus.enable_repartition_joins to ON;
 SELECT count(*), min(current_user) FROM test;
  count |     min
 ---------------------------------------------------------------------
@@ -155,7 +155,6 @@ SELECT count(*) FROM test a JOIN test b ON (a.val = b.val) WHERE a.id = 1 AND b.
      0
 (1 row)
 
-SET citus.task_executor_type TO 'adaptive';
 SET citus.enable_repartition_joins TO true;
 SELECT count(*) FROM test a JOIN test b ON (a.val = b.val) WHERE a.id = 1 AND b.id = 2;
  count
@@ -167,18 +166,10 @@ SELECT count(*) FROM test a JOIN test b ON (a.val = b.val) WHERE a.id = 1 AND b.
 COPY "postgresql.conf" TO STDOUT WITH (format transmit);
 ERROR:  operation is not allowed
 HINT:  Run the command with a superuser.
-RESET citus.task_executor_type;
 -- should not be able to transmit directly
 COPY "postgresql.conf" TO STDOUT WITH (format transmit);
 ERROR:  operation is not allowed
 HINT:  Run the command with a superuser.
--- create a task that other users should not be able to inspect
-SELECT task_tracker_assign_task(1, 1, 'SELECT 1');
- task_tracker_assign_task
----------------------------------------------------------------------
-
-(1 row)
-
 -- check read permission
 SET ROLE read_access;
 -- should be allowed to run commands, as the current user
@@ -229,7 +220,7 @@ SELECT count(*) FROM test WHERE id = 1;
      1
 (1 row)
 
-SET citus.task_executor_type TO 'task-tracker';
+SET citus.enable_repartition_joins to ON;
 SELECT count(*), min(current_user) FROM test;
  count |     min
 ---------------------------------------------------------------------
@@ -243,7 +234,6 @@ SELECT count(*) FROM test a JOIN test b ON (a.val = b.val) WHERE a.id = 1 AND b.
      0
 (1 row)
 
-SET citus.task_executor_type TO 'adaptive';
 SET citus.enable_repartition_joins TO true;
 SELECT count(*) FROM test a JOIN test b ON (a.val = b.val) WHERE a.id = 1 AND b.id = 2;
  count
@@ -255,14 +245,6 @@ SELECT count(*) FROM test a JOIN test b ON (a.val = b.val) WHERE a.id = 1 AND b.
 COPY "postgresql.conf" TO STDOUT WITH (format transmit);
 ERROR:  operation is not allowed
 HINT:  Run the command with a superuser.
--- should not be able to access tasks or jobs belonging to a different user
-SELECT task_tracker_task_status(1, 1);
-ERROR:  could not find the worker task
-DETAIL:  Task jobId: 1 and taskId: 1
-SELECT task_tracker_assign_task(1, 2, 'SELECT 1');
-ERROR:  must be owner of schema pg_merge_job_0001
-SELECT task_tracker_cleanup_job(1);
-ERROR:  must be owner of schema pg_merge_job_0001
 -- should not be allowed to take aggressive locks on table
 BEGIN;
 SELECT lock_relation_if_exists('test', 'ACCESS SHARE');
@@ -274,7 +256,6 @@ SELECT lock_relation_if_exists('test', 'ACCESS SHARE');
 SELECT lock_relation_if_exists('test', 'EXCLUSIVE');
 ERROR:  permission denied for table test
 ABORT;
-RESET citus.task_executor_type;
 -- check no permission
 SET ROLE no_access;
 EXECUTE prepare_insert(1);
@@ -287,13 +268,12 @@ SELECT count(*) FROM test;
 ERROR:  permission denied for table test
 SELECT count(*) FROM test WHERE id = 1;
 ERROR:  permission denied for table test
-SET citus.task_executor_type TO 'task-tracker';
+SET citus.enable_repartition_joins to ON;
 SELECT count(*), min(current_user) FROM test;
 ERROR:  permission denied for table test
 -- test re-partition query
 SELECT count(*) FROM test a JOIN test b ON (a.val = b.val) WHERE a.id = 1 AND b.id = 2;
 ERROR:  permission denied for table test
-SET citus.task_executor_type TO 'adaptive';
 SET citus.enable_repartition_joins TO true;
 SELECT count(*) FROM test a JOIN test b ON (a.val = b.val) WHERE a.id = 1 AND b.id = 2;
 ERROR:  permission denied for table test
@@ -301,7 +281,6 @@ ERROR:  permission denied for table test
 COPY "postgresql.conf" TO STDOUT WITH (format transmit);
 ERROR:  operation is not allowed
 HINT:  Run the command with a superuser.
-RESET citus.task_executor_type;
 -- should be able to use intermediate results as any user
 BEGIN;
 SELECT create_intermediate_result('topten', 'SELECT s FROM generate_series(1,10) s');
@@ -364,12 +343,6 @@ SELECT result FROM run_command_on_workers($$SELECT tableowner FROM pg_tables WHE
  full_access
  full_access
 (2 rows)
-
-SELECT task_tracker_cleanup_job(1);
- task_tracker_cleanup_job
----------------------------------------------------------------------
-
-(1 row)
 
 -- table should be distributable by super user when it has data in there
 SET ROLE full_access;
@@ -681,6 +654,10 @@ ERROR:  permission denied for function worker_cleanup_job_schema_cache
 RESET ROLE;
 -- to test access to files created during repartition we will create some on worker 1
 \c - - - :worker_1_port
+CREATE OR REPLACE FUNCTION citus_rm_job_directory(bigint)
+	RETURNS void
+	AS 'citus'
+	LANGUAGE C STRICT;
 SET ROLE full_access;
 SELECT worker_hash_partition_table(42,1,'SELECT a FROM generate_series(1,100) AS a', 'a', 23, ARRAY[-2147483648, -1073741824, 0, 1073741824]::int4[]);
  worker_hash_partition_table
@@ -691,6 +668,10 @@ SELECT worker_hash_partition_table(42,1,'SELECT a FROM generate_series(1,100) AS
 RESET ROLE;
 -- all attempts for transfer are initiated from other workers
 \c - - - :worker_2_port
+CREATE OR REPLACE FUNCTION citus_rm_job_directory(bigint)
+	RETURNS void
+	AS 'citus'
+	LANGUAGE C STRICT;
 -- super user should not be able to copy files created by a user
 SELECT worker_fetch_partition_file(42, 1, 1, 1, 'localhost', :worker_1_port);
 WARNING:  could not open file "base/pgsql_job_cache/job_0042/task_000001/p_00001.xxxx": No such file or directory
@@ -719,21 +700,11 @@ SELECT worker_merge_files_into_table(42, 1, ARRAY['a'], ARRAY['integer']);
 ERROR:  job schema does not exist
 DETAIL:  must be superuser to use public schema
 RESET ROLE;
-SET ROLE full_access;
--- use the side effect of this function to have a schema to use, otherwise only the super
--- user could call worker_merge_files_into_table and store the results in public, which is
--- not what we want
-SELECT task_tracker_assign_task(42, 1, 'SELECT 1');
- task_tracker_assign_task
----------------------------------------------------------------------
-
-(1 row)
-
-RESET ROLE;
 -- test that no other user can merge the downloaded file after the task is being tracked
 SET ROLE usage_access;
 SELECT worker_merge_files_into_table(42, 1, ARRAY['a'], ARRAY['integer']);
-ERROR:  must be owner of schema pg_merge_job_0042
+ERROR:  job schema does not exist
+DETAIL:  must be superuser to use public schema
 RESET ROLE;
 -- test that the super user is unable to read the contents of the intermediate file,
 -- although it does create the table
@@ -745,106 +716,45 @@ WARNING:  Task file "task_000001.xxxx" does not have expected suffix ".10"
 (1 row)
 
 SELECT count(*) FROM pg_merge_job_0042.task_000001;
- count
----------------------------------------------------------------------
-     0
-(1 row)
-
+ERROR:  relation "pg_merge_job_0042.task_000001" does not exist
 DROP TABLE pg_merge_job_0042.task_000001; -- drop table so we can reuse the same files for more tests
+ERROR:  schema "pg_merge_job_0042" does not exist
 SET ROLE full_access;
 SELECT worker_merge_files_into_table(42, 1, ARRAY['a'], ARRAY['integer']);
- worker_merge_files_into_table
----------------------------------------------------------------------
-
-(1 row)
-
+ERROR:  job schema does not exist
+DETAIL:  must be superuser to use public schema
 SELECT count(*) FROM pg_merge_job_0042.task_000001;
- count
----------------------------------------------------------------------
-    25
-(1 row)
-
+ERROR:  relation "pg_merge_job_0042.task_000001" does not exist
 DROP TABLE pg_merge_job_0042.task_000001; -- drop table so we can reuse the same files for more tests
+ERROR:  schema "pg_merge_job_0042" does not exist
 RESET ROLE;
--- test that no other user can merge files and run query on the already fetched files
-SET ROLE usage_access;
-SELECT worker_merge_files_and_run_query(42, 1,
-    'CREATE TABLE task_000001_merge(merge_column_0 int)',
-    'CREATE TABLE task_000001 (a) AS SELECT sum(merge_column_0) FROM task_000001_merge'
-);
-ERROR:  must be owner of schema pg_merge_job_0042
-RESET ROLE;
--- test that the super user is unable to read the contents of the partitioned files after
--- trying to merge with run query
-SELECT worker_merge_files_and_run_query(42, 1,
-    'CREATE TABLE task_000001_merge(merge_column_0 int)',
-    'CREATE TABLE task_000001 (a) AS SELECT sum(merge_column_0) FROM task_000001_merge'
-);
-WARNING:  Task file "task_000001.xxxx" does not have expected suffix ".10"
- worker_merge_files_and_run_query
----------------------------------------------------------------------
-
-(1 row)
-
 SELECT count(*) FROM pg_merge_job_0042.task_000001_merge;
- count
----------------------------------------------------------------------
-     0
-(1 row)
-
+ERROR:  relation "pg_merge_job_0042.task_000001_merge" does not exist
 SELECT count(*) FROM pg_merge_job_0042.task_000001;
- count
----------------------------------------------------------------------
-     1
-(1 row)
-
+ERROR:  relation "pg_merge_job_0042.task_000001" does not exist
 DROP TABLE pg_merge_job_0042.task_000001, pg_merge_job_0042.task_000001_merge; -- drop table so we can reuse the same files for more tests
--- test that the owner of the task can merge files and run query correctly
-SET ROLE full_access;
-SELECT worker_merge_files_and_run_query(42, 1,
-    'CREATE TABLE task_000001_merge(merge_column_0 int)',
-    'CREATE TABLE task_000001 (a) AS SELECT sum(merge_column_0) FROM task_000001_merge'
-);
- worker_merge_files_and_run_query
----------------------------------------------------------------------
-
-(1 row)
-
--- test that owner of task cannot execute arbitrary sql
-SELECT worker_merge_files_and_run_query(42, 1,
-    'CREATE TABLE task_000002_merge(merge_column_0 int)',
-    'DROP USER usage_access'
-);
-ERROR:  permission denied to drop role
-CONTEXT:  SQL statement "DROP USER usage_access"
-SELECT worker_merge_files_and_run_query(42, 1,
-    'DROP USER usage_access',
-    'CREATE TABLE task_000002 (a) AS SELECT sum(merge_column_0) FROM task_000002_merge'
-);
-ERROR:  permission denied to drop role
-CONTEXT:  SQL statement "DROP USER usage_access"
+ERROR:  schema "pg_merge_job_0042" does not exist
 SELECT count(*) FROM pg_merge_job_0042.task_000001_merge;
- count
----------------------------------------------------------------------
-    25
-(1 row)
-
+ERROR:  relation "pg_merge_job_0042.task_000001_merge" does not exist
 SELECT count(*) FROM pg_merge_job_0042.task_000001;
- count
+ERROR:  relation "pg_merge_job_0042.task_000001" does not exist
+DROP TABLE pg_merge_job_0042.task_000001, pg_merge_job_0042.task_000001_merge; -- drop table so we can reuse the same files for more tests
+ERROR:  schema "pg_merge_job_0042" does not exist
+RESET ROLE;
+SELECT citus_rm_job_directory(42::bigint);
+ citus_rm_job_directory
 ---------------------------------------------------------------------
-     1
+
 (1 row)
 
-DROP TABLE pg_merge_job_0042.task_000001, pg_merge_job_0042.task_000001_merge; -- drop table so we can reuse the same files for more tests
-RESET ROLE;
+\c - - - :worker_1_port
+SELECT citus_rm_job_directory(42::bigint);
+ citus_rm_job_directory
+---------------------------------------------------------------------
+
+(1 row)
+
 \c - - - :master_port
-SELECT run_command_on_workers($$SELECT task_tracker_cleanup_job(42);$$);
- run_command_on_workers
----------------------------------------------------------------------
- (localhost,57637,t,"")
- (localhost,57638,t,"")
-(2 rows)
-
 DROP SCHEMA full_access_user_schema CASCADE;
 NOTICE:  drop cascades to 4 other objects
 DETAIL:  drop cascades to table full_access_user_schema.t1

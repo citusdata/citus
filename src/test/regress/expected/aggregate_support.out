@@ -387,7 +387,6 @@ select array_agg(val order by valf) from aggdata;
 (1 row)
 
 -- Test TransformSubqueryNode
-SET citus.task_executor_type to "task-tracker";
 select * FROM (
     SELECT key, mode() within group (order by floor(agg1.val/2)) m from aggdata agg1
     group by key
@@ -404,15 +403,16 @@ select * FROM (
 select * FROM (
     SELECT key k, avg(distinct floor(agg1.val/2)) m from aggdata agg1
     group by key
-) subq;
+) subq
+order by k,m;
  k |  m
 ---------------------------------------------------------------------
  1 |   1
- 5 |
- 3 |   2
- 7 |   4
- 6 |
  2 | 1.5
+ 3 |   2
+ 5 |
+ 6 |
+ 7 |   4
  9 |   0
 (7 rows)
 
@@ -426,7 +426,6 @@ select count(*) FROM (
      7
 (1 row)
 
-RESET citus.task_executor_type;
 select key, count(distinct aggdata)
 from aggdata group by key order by 1, 2;
  key | count

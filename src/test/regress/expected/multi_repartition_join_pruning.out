@@ -6,7 +6,7 @@
 -- jobs with real time executor.
 SET citus.next_shard_id TO 700000;
 SET client_min_messages TO DEBUG2;
-SET citus.task_executor_type TO 'task-tracker';
+SET citus.enable_repartition_joins to ON;
 -- Single range-repartition join to test join-pruning behaviour.
 EXPLAIN (COSTS OFF)
 SELECT
@@ -31,7 +31,7 @@ DETAIL:  Creating dependency on merge taskId 9
                             QUERY PLAN
 ---------------------------------------------------------------------
  Aggregate
-   ->  Custom Scan (Citus Task-Tracker)
+   ->  Custom Scan (Citus Adaptive)
          Task Count: 3
          Tasks Shown: None, not supported for re-partition queries
          ->  MapMergeJob
@@ -77,7 +77,7 @@ DEBUG:  Router planner does not support append-partitioned tables.
                             QUERY PLAN
 ---------------------------------------------------------------------
  Aggregate
-   ->  Custom Scan (Citus Task-Tracker)
+   ->  Custom Scan (Citus Adaptive)
          Task Count: 0
          Tasks Shown: None, not supported for re-partition queries
          ->  MapMergeJob
@@ -112,7 +112,7 @@ DEBUG:  Router planner does not support append-partitioned tables.
                             QUERY PLAN
 ---------------------------------------------------------------------
  Aggregate
-   ->  Custom Scan (Citus Task-Tracker)
+   ->  Custom Scan (Citus Adaptive)
          Task Count: 0
          Tasks Shown: None, not supported for re-partition queries
          ->  MapMergeJob
@@ -175,7 +175,7 @@ DETAIL:  Creating dependency on merge taskId 16
                             QUERY PLAN
 ---------------------------------------------------------------------
  Aggregate
-   ->  Custom Scan (Citus Task-Tracker)
+   ->  Custom Scan (Citus Adaptive)
          Task Count: 4
          Tasks Shown: None, not supported for re-partition queries
          ->  MapMergeJob
@@ -240,7 +240,7 @@ DEBUG:  Router planner does not support append-partitioned tables.
                             QUERY PLAN
 ---------------------------------------------------------------------
  Aggregate
-   ->  Custom Scan (Citus Task-Tracker)
+   ->  Custom Scan (Citus Adaptive)
          Task Count: 0
          Tasks Shown: None, not supported for re-partition queries
          ->  MapMergeJob
@@ -275,7 +275,7 @@ WHERE
 DEBUG:  Router planner does not support append-partitioned tables.
                          QUERY PLAN
 ---------------------------------------------------------------------
- Custom Scan (Citus Task-Tracker)
+ Custom Scan (Citus Adaptive)
    Task Count: 0
    Tasks Shown: None, not supported for re-partition queries
    ->  MapMergeJob
@@ -305,7 +305,7 @@ WHERE
 DEBUG:  Router planner does not support append-partitioned tables.
                          QUERY PLAN
 ---------------------------------------------------------------------
- Custom Scan (Citus Task-Tracker)
+ Custom Scan (Citus Adaptive)
    Task Count: 0
    Tasks Shown: None, not supported for re-partition queries
    ->  MapMergeJob
@@ -319,9 +319,9 @@ SELECT
 FROM
 	orders INNER JOIN customer_append ON (o_custkey = c_custkey AND false);
 DEBUG:  Router planner does not support append-partitioned tables.
-            QUERY PLAN
+          QUERY PLAN
 ---------------------------------------------------------------------
- Custom Scan (Citus Task-Tracker)
+ Custom Scan (Citus Adaptive)
    Task Count: 0
    Tasks Shown: All
 (3 rows)
@@ -334,9 +334,9 @@ FROM
 WHERE
 	o_custkey = c_custkey AND false;
 DEBUG:  Router planner does not support append-partitioned tables.
-            QUERY PLAN
+          QUERY PLAN
 ---------------------------------------------------------------------
- Custom Scan (Citus Task-Tracker)
+ Custom Scan (Citus Adaptive)
    Task Count: 0
    Tasks Shown: All
 (3 rows)

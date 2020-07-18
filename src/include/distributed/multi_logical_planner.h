@@ -188,7 +188,6 @@ extern MultiTreeRoot * MultiLogicalPlanCreate(Query *originalQuery, Query *query
 											  PlannerRestrictionContext *
 											  plannerRestrictionContext);
 extern bool FindNodeCheck(Node *node, bool (*check)(Node *));
-extern bool SingleRelationRepartitionSubquery(Query *queryTree);
 extern bool TargetListOnPartitionColumn(Query *query, List *targetEntryList);
 extern bool FindNodeCheckInRangeTableList(List *rtable, bool (*check)(Node *));
 extern bool IsCitusTableRTE(Node *node);

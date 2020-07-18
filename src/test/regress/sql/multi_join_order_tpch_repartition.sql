@@ -11,6 +11,7 @@ SET citus.next_shard_id TO 660000;
 SET citus.explain_distributed_queries TO off;
 SET citus.log_multi_join_order TO TRUE;
 SET citus.task_executor_type = 'task-tracker'; -- can't explain all queries otherwise
+SET citus.enable_repartition_joins to ON;
 SET client_min_messages TO LOG;
 
 -- The following queries are basically the same as the ones in tpch_small

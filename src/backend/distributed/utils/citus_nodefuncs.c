@@ -40,7 +40,6 @@ static const char *CitusNodeTagNamesD[] = {
 	"UsedDistributedSubPlan",
 	"Task",
 	"LocalPlannedStatement",
-	"TaskExecution",
 	"ShardInterval",
 	"ShardPlacement",
 	"RelationShard",
@@ -343,7 +342,6 @@ Datum
 citus_extradata_container(PG_FUNCTION_ARGS)
 {
 	ereport(ERROR, (errmsg("not supposed to get here, did you cheat?")));
-
 	PG_RETURN_NULL();
 }
 
@@ -400,7 +398,6 @@ const ExtensibleNodeMethods nodeMethods[] =
 	DEFINE_NODE_METHODS(RelationRowLock),
 	DEFINE_NODE_METHODS(Task),
 	DEFINE_NODE_METHODS(LocalPlannedStatement),
-	DEFINE_NODE_METHODS(TaskExecution),
 	DEFINE_NODE_METHODS(DeferredErrorMessage),
 	DEFINE_NODE_METHODS(GroupShardPlacement),
 

@@ -6,6 +6,7 @@ SET citus.next_shard_id TO 650000;
 SET citus.explain_distributed_queries TO off;
 SET citus.log_multi_join_order TO TRUE;
 SET citus.task_executor_type = 'task-tracker'; -- can't explain all queries otherwise
+SET citus.enable_repartition_joins to ON;
 SET citus.shard_count to 2;
 SET citus.shard_replication_factor to 1;
 RESET client_min_messages;
@@ -79,7 +80,7 @@ DEBUG:  join prunable for intervals [1,5986] and [8997,14947]
 DEBUG:  join prunable for intervals [8997,14947] and [1,5986]
                           QUERY PLAN
 ---------------------------------------------------------------------
- Custom Scan (Citus Task-Tracker)
+ Custom Scan (Citus Adaptive)
    explain statements for distributed queries are not enabled
 (2 rows)
 
@@ -95,7 +96,7 @@ LOG:  join order: [ "lineitem" ][ local partition join "orders" ]
                              QUERY PLAN
 ---------------------------------------------------------------------
  Aggregate
-   ->  Custom Scan (Citus Task-Tracker)
+   ->  Custom Scan (Citus Adaptive)
          explain statements for distributed queries are not enabled
 (3 rows)
 
@@ -110,7 +111,7 @@ LOG:  join order: [ "orders" ][ single range partition join "lineitem_hash" ]
                              QUERY PLAN
 ---------------------------------------------------------------------
  Aggregate
-   ->  Custom Scan (Citus Task-Tracker)
+   ->  Custom Scan (Citus Adaptive)
          explain statements for distributed queries are not enabled
 (3 rows)
 
@@ -122,7 +123,7 @@ LOG:  join order: [ "orders_hash" ][ local partition join "lineitem_hash" ]
                              QUERY PLAN
 ---------------------------------------------------------------------
  Aggregate
-   ->  Custom Scan (Citus Task-Tracker)
+   ->  Custom Scan (Citus Adaptive)
          explain statements for distributed queries are not enabled
 (3 rows)
 
@@ -134,7 +135,7 @@ LOG:  join order: [ "customer_hash" ][ reference join "nation" ]
                              QUERY PLAN
 ---------------------------------------------------------------------
  Aggregate
-   ->  Custom Scan (Citus Task-Tracker)
+   ->  Custom Scan (Citus Adaptive)
          explain statements for distributed queries are not enabled
 (3 rows)
 
@@ -147,7 +148,7 @@ LOG:  join order: [ "orders" ][ dual partition join "lineitem" ][ dual partition
                              QUERY PLAN
 ---------------------------------------------------------------------
  Aggregate
-   ->  Custom Scan (Citus Task-Tracker)
+   ->  Custom Scan (Citus Adaptive)
          explain statements for distributed queries are not enabled
 (3 rows)
 
@@ -160,7 +161,7 @@ LOG:  join order: [ "orders" ][ dual partition join "customer_hash" ]
                              QUERY PLAN
 ---------------------------------------------------------------------
  Aggregate
-   ->  Custom Scan (Citus Task-Tracker)
+   ->  Custom Scan (Citus Adaptive)
          explain statements for distributed queries are not enabled
 (3 rows)
 
@@ -173,7 +174,7 @@ LOG:  join order: [ "orders_hash" ][ single range partition join "customer_appen
                              QUERY PLAN
 ---------------------------------------------------------------------
  Aggregate
-   ->  Custom Scan (Citus Task-Tracker)
+   ->  Custom Scan (Citus Adaptive)
          explain statements for distributed queries are not enabled
 (3 rows)
 
@@ -198,7 +199,7 @@ LOG:  join order: [ "users_table" ][ local partition join "events_table" ][ loca
                              QUERY PLAN
 ---------------------------------------------------------------------
  Aggregate
-   ->  Custom Scan (Citus Task-Tracker)
+   ->  Custom Scan (Citus Adaptive)
          explain statements for distributed queries are not enabled
 (3 rows)
 

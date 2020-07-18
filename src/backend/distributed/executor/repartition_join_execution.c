@@ -36,7 +36,7 @@
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_server_executor.h"
-#include "distributed/multi_task_tracker_executor.h"
+#include "distributed/task_execution_utils.h"
 #include "distributed/repartition_join_execution.h"
 #include "distributed/transaction_management.h"
 #include "distributed/transmit.h"
@@ -63,8 +63,7 @@ ExecuteDependentTasks(List *topLevelTasks, Job *topLevelJob)
 {
 	EnsureNoModificationsHaveBeenDone();
 
-	bool createTaskExecution = false;
-	List *allTasks = CreateTaskListForJobTree(topLevelTasks, createTaskExecution);
+	List *allTasks = CreateTaskListForJobTree(topLevelTasks);
 
 	EnsureCompatibleLocalExecutionState(allTasks);
 

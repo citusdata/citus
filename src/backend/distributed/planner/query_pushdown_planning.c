@@ -522,16 +522,7 @@ SubqueryMultiNodeTree(Query *originalQuery, Query *queryTree,
 	}
 	else if (subqueryPushdownError)
 	{
-		/*
-		 * If not eligible for single relation repartition query, we should raise
-		 * subquery pushdown error.
-		 */
-		bool singleRelationRepartitionSubquery =
-			SingleRelationRepartitionSubquery(originalQuery);
-		if (!singleRelationRepartitionSubquery)
-		{
-			RaiseDeferredErrorInternal(subqueryPushdownError, ERROR);
-		}
+		RaiseDeferredErrorInternal(subqueryPushdownError, ERROR);
 
 		List *subqueryEntryList = SubqueryEntryList(queryTree);
 		RangeTblEntry *subqueryRangeTableEntry = (RangeTblEntry *) linitial(

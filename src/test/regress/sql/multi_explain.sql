@@ -6,8 +6,8 @@ SET citus.next_shard_id TO 570000;
 
 \a\t
 
-RESET citus.task_executor_type;
 SET citus.explain_distributed_queries TO on;
+SET citus.enable_repartition_joins to ON;
 
 -- Function that parses explain output as JSON
 CREATE FUNCTION explain_json(query text)
@@ -447,7 +447,6 @@ EXPLAIN (COSTS FALSE)
 	WHERE orders_hash_part.o_orderkey = lineitem_hash_part.l_orderkey;
 
 -- Test track tracker
-SET citus.task_executor_type TO 'task-tracker';
 
 EXPLAIN (COSTS FALSE)
 	SELECT avg(l_linenumber) FROM lineitem WHERE l_orderkey > 9030;
@@ -522,7 +521,6 @@ PREPARE task_tracker_query AS
 	SELECT avg(l_linenumber) FROM lineitem WHERE l_orderkey > 9030;
 EXPLAIN (COSTS FALSE) EXECUTE task_tracker_query;
 
-RESET citus.task_executor_type;
 
 PREPARE router_executor_query AS SELECT l_quantity FROM lineitem WHERE l_orderkey = 5;
 EXPLAIN EXECUTE router_executor_query;

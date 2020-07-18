@@ -123,7 +123,6 @@ INSERT INTO articles_hash VALUES (47,  7, 'abeyance', 1772);
 INSERT INTO articles_hash VALUES (48,  8, 'alkylic', 18610);
 INSERT INTO articles_hash VALUES (49,  9, 'anyone', 2681);
 INSERT INTO articles_hash VALUES (50, 10, 'anjanette', 19519);
-RESET citus.task_executor_type;
 SET client_min_messages TO 'DEBUG2';
 -- insert a single row for the test
 INSERT INTO articles_single_shard_hash VALUES (50, 10, 'anjanette', 19519);
@@ -1107,7 +1106,6 @@ ORDER BY 1,2,3,4;
  43 |         3 | affixal      |      12723
 (15 rows)
 
-RESET citus.task_executor_type;
 -- Test various filtering options for router plannable check
 SET client_min_messages to 'DEBUG2';
 -- this is definitely single shard
@@ -1774,17 +1772,17 @@ SELECT master_create_distributed_table('articles_range', 'author_id', 'range');
 SELECT master_create_empty_shard('authors_range') as shard_id \gset
 UPDATE pg_dist_shard SET shardminvalue = 1, shardmaxvalue=10 WHERE shardid = :shard_id;
 SELECT master_create_empty_shard('authors_range') as shard_id \gset
-UPDATE pg_dist_shard SET shardminvalue = 11, shardmaxvalue=30 WHERE shardid = :shard_id;
+UPDATE pg_dist_shard SET shardminvalue = 11, shardmaxvalue=20 WHERE shardid = :shard_id;
 SELECT master_create_empty_shard('authors_range') as shard_id \gset
-UPDATE pg_dist_shard SET shardminvalue = 21, shardmaxvalue=40 WHERE shardid = :shard_id;
+UPDATE pg_dist_shard SET shardminvalue = 21, shardmaxvalue=30 WHERE shardid = :shard_id;
 SELECT master_create_empty_shard('authors_range') as shard_id \gset
 UPDATE pg_dist_shard SET shardminvalue = 31, shardmaxvalue=40 WHERE shardid = :shard_id;
 SELECT master_create_empty_shard('articles_range') as shard_id \gset
 UPDATE pg_dist_shard SET shardminvalue = 1, shardmaxvalue=10 WHERE shardid = :shard_id;
 SELECT master_create_empty_shard('articles_range') as shard_id \gset
-UPDATE pg_dist_shard SET shardminvalue = 11, shardmaxvalue=30 WHERE shardid = :shard_id;
+UPDATE pg_dist_shard SET shardminvalue = 11, shardmaxvalue=20 WHERE shardid = :shard_id;
 SELECT master_create_empty_shard('articles_range') as shard_id \gset
-UPDATE pg_dist_shard SET shardminvalue = 21, shardmaxvalue=40 WHERE shardid = :shard_id;
+UPDATE pg_dist_shard SET shardminvalue = 21, shardmaxvalue=30 WHERE shardid = :shard_id;
 SELECT master_create_empty_shard('articles_range') as shard_id \gset
 UPDATE pg_dist_shard SET shardminvalue = 31, shardmaxvalue=40 WHERE shardid = :shard_id;
 SET citus.log_remote_commands TO on;
@@ -1840,7 +1838,7 @@ NOTICE:  executing the command locally: SELECT ar.id, ar.author_id, ar.title, ar
 RESET citus.log_remote_commands;
 -- This query was intended to test "multi-shard join is not router plannable"
 -- To run it using repartition join logic we change the join columns
-SET citus.task_executor_type to "task-tracker";
+SET citus.enable_repartition_joins to ON;
 SELECT * FROM articles_range ar join authors_range au on (ar.title = au.name)
 	WHERE ar.author_id = 35;
 DEBUG:  Router planner cannot handle multi-shard select queries
@@ -1857,19 +1855,19 @@ DEBUG:  join prunable for task partitionId 3 and 0
 DEBUG:  join prunable for task partitionId 3 and 1
 DEBUG:  join prunable for task partitionId 3 and 2
 DEBUG:  pruning merge fetch taskId 1
-DETAIL:  Creating dependency on merge taskId 3
+DETAIL:  Creating dependency on merge taskId 2
 DEBUG:  pruning merge fetch taskId 2
 DETAIL:  Creating dependency on merge taskId 5
 DEBUG:  pruning merge fetch taskId 4
-DETAIL:  Creating dependency on merge taskId 6
+DETAIL:  Creating dependency on merge taskId 4
 DEBUG:  pruning merge fetch taskId 5
 DETAIL:  Creating dependency on merge taskId 10
 DEBUG:  pruning merge fetch taskId 7
-DETAIL:  Creating dependency on merge taskId 9
+DETAIL:  Creating dependency on merge taskId 6
 DEBUG:  pruning merge fetch taskId 8
 DETAIL:  Creating dependency on merge taskId 15
 DEBUG:  pruning merge fetch taskId 10
-DETAIL:  Creating dependency on merge taskId 12
+DETAIL:  Creating dependency on merge taskId 8
 DEBUG:  pruning merge fetch taskId 11
 DETAIL:  Creating dependency on merge taskId 20
  id | author_id | title | word_count | name | id
@@ -1914,7 +1912,6 @@ DETAIL:  Creating dependency on merge taskId 20
 ---------------------------------------------------------------------
 (0 rows)
 
-RESET citus.task_executor_type;
 -- bogus query, join on non-partition column, but router plannable due to filters
 SELECT * FROM articles_range ar join authors_range au on (ar.id = au.id)
 	WHERE ar.author_id = 1 and au.id < 10;
@@ -1941,14 +1938,18 @@ DETAIL:  distribution column value: 2
 SELECT * FROM articles_hash ar join authors_range au on (ar.author_id = au.id)
 	WHERE ar.author_id = 3;
 DEBUG:  found no worker with all shard placements
-DEBUG:  join prunable for intervals [1,10] and [11,30]
-DEBUG:  join prunable for intervals [1,10] and [21,40]
+DEBUG:  join prunable for intervals [1,10] and [11,20]
+DEBUG:  join prunable for intervals [1,10] and [21,30]
 DEBUG:  join prunable for intervals [1,10] and [31,40]
-DEBUG:  join prunable for intervals [11,30] and [1,10]
-DEBUG:  join prunable for intervals [11,30] and [31,40]
-DEBUG:  join prunable for intervals [21,40] and [1,10]
+DEBUG:  join prunable for intervals [11,20] and [1,10]
+DEBUG:  join prunable for intervals [11,20] and [21,30]
+DEBUG:  join prunable for intervals [11,20] and [31,40]
+DEBUG:  join prunable for intervals [21,30] and [1,10]
+DEBUG:  join prunable for intervals [21,30] and [11,20]
+DEBUG:  join prunable for intervals [21,30] and [31,40]
 DEBUG:  join prunable for intervals [31,40] and [1,10]
-DEBUG:  join prunable for intervals [31,40] and [11,30]
+DEBUG:  join prunable for intervals [31,40] and [11,20]
+DEBUG:  join prunable for intervals [31,40] and [21,30]
 DEBUG:  pruning merge fetch taskId 1
 DETAIL:  Creating dependency on merge taskId 2
 DEBUG:  pruning merge fetch taskId 3
@@ -1956,17 +1957,11 @@ DETAIL:  Creating dependency on merge taskId 4
 DEBUG:  pruning merge fetch taskId 5
 DETAIL:  Creating dependency on merge taskId 6
 DEBUG:  pruning merge fetch taskId 7
-DETAIL:  Creating dependency on merge taskId 4
-DEBUG:  pruning merge fetch taskId 9
-DETAIL:  Creating dependency on merge taskId 6
-DEBUG:  pruning merge fetch taskId 11
 DETAIL:  Creating dependency on merge taskId 8
-DEBUG:  pruning merge fetch taskId 13
-DETAIL:  Creating dependency on merge taskId 6
-DEBUG:  pruning merge fetch taskId 15
-DETAIL:  Creating dependency on merge taskId 8
-ERROR:  the query contains a join that requires repartitioning
-HINT:  Set citus.enable_repartition_joins to on to enable repartitioning
+ id | author_id | title | word_count | name | id
+---------------------------------------------------------------------
+(0 rows)
+
 -- join between a range partitioned table and reference table is router plannable
 SELECT * FROM articles_range ar join authors_reference au on (ar.author_id = au.id)
 	WHERE ar.author_id = 1;
@@ -2404,7 +2399,6 @@ SELECT * FROM mv_articles_hash_data ORDER BY 1, 2, 3, 4;
 (10 rows)
 
 -- router planner/executor is now enabled for task-tracker executor
-SET citus.task_executor_type to 'task-tracker';
 SELECT id
 	FROM articles_hash
 	WHERE author_id = 1

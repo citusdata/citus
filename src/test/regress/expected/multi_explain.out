@@ -3,8 +3,8 @@
 --
 SET citus.next_shard_id TO 570000;
 \a\t
-RESET citus.task_executor_type;
 SET citus.explain_distributed_queries TO on;
+SET citus.enable_repartition_joins to ON;
 -- Function that parses explain output as JSON
 CREATE FUNCTION explain_json(query text)
 RETURNS jsonb
@@ -1047,11 +1047,10 @@ Custom Scan (Citus Adaptive)
                     ->  Hash
                           ->  Seq Scan on orders_hash_part_360045 orders_hash_part
 -- Test track tracker
-SET citus.task_executor_type TO 'task-tracker';
 EXPLAIN (COSTS FALSE)
 	SELECT avg(l_linenumber) FROM lineitem WHERE l_orderkey > 9030;
 Aggregate
-  ->  Custom Scan (Citus Task-Tracker)
+  ->  Custom Scan (Citus Adaptive)
         Task Count: 1
         Tasks Shown: All
         ->  Task
@@ -1067,7 +1066,7 @@ EXPLAIN (COSTS FALSE)
 	AND o_custkey = c_custkey
 	AND l_suppkey = s_suppkey;
 Aggregate
-  ->  Custom Scan (Citus Task-Tracker)
+  ->  Custom Scan (Citus Adaptive)
         Task Count: 1
         Tasks Shown: None, not supported for re-partition queries
         ->  MapMergeJob
@@ -1093,7 +1092,7 @@ EXPLAIN (COSTS FALSE, FORMAT JSON)
         {
           "Node Type": "Custom Scan",
           "Parent Relationship": "Outer",
-          "Custom Plan Provider": "Citus Task-Tracker",
+          "Custom Plan Provider": "Citus Adaptive",
           "Parallel Aware": false,
           "Distributed Query": {
             "Job": {
@@ -1142,7 +1141,7 @@ EXPLAIN (COSTS FALSE, FORMAT XML)
         <Plan>
           <Node-Type>Custom Scan</Node-Type>
           <Parent-Relationship>Outer</Parent-Relationship>
-          <Custom-Plan-Provider>Citus Task-Tracker</Custom-Plan-Provider>
+          <Custom-Plan-Provider>Citus Adaptive</Custom-Plan-Provider>
           <Parallel-Aware>false</Parallel-Aware>
           <Distributed-Query>
             <Job>
@@ -1201,7 +1200,7 @@ EXPLAIN (COSTS FALSE, FORMAT YAML)
     Plans:
       - Node Type: "Custom Scan"
         Parent Relationship: "Outer"
-        Custom Plan Provider: "Citus Task-Tracker"
+        Custom Plan Provider: "Citus Adaptive"
         Parallel Aware: false
         Distributed Query:
           Job:
@@ -1218,7 +1217,7 @@ Aggregate
 -- ensure distributed plans don't break
 EXPLAIN (COSTS FALSE) SELECT avg(l_linenumber) FROM lineitem;
 Aggregate
-  ->  Custom Scan (Citus Task-Tracker)
+  ->  Custom Scan (Citus Adaptive)
         Task Count: 2
         Tasks Shown: One of 2
         ->  Task
@@ -1230,7 +1229,7 @@ PREPARE task_tracker_query AS
 	SELECT avg(l_linenumber) FROM lineitem WHERE l_orderkey > 9030;
 EXPLAIN (COSTS FALSE) EXECUTE task_tracker_query;
 Aggregate
-  ->  Custom Scan (Citus Task-Tracker)
+  ->  Custom Scan (Citus Adaptive)
         Task Count: 1
         Tasks Shown: All
         ->  Task
@@ -1238,7 +1237,6 @@ Aggregate
               ->  Aggregate
                     ->  Seq Scan on lineitem_290001 lineitem
                           Filter: (l_orderkey > 9030)
-RESET citus.task_executor_type;
 PREPARE router_executor_query AS SELECT l_quantity FROM lineitem WHERE l_orderkey = 5;
 EXPLAIN EXECUTE router_executor_query;
 Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=100000 width=18)

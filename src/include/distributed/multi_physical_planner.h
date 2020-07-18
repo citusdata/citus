@@ -45,9 +45,8 @@
  (" UINT64_FORMAT ", %d, %s, '%s', '%s'::regtype, %s)"
 #define MERGE_FILES_INTO_TABLE_COMMAND "SELECT worker_merge_files_into_table \
  (" UINT64_FORMAT ", %d, '%s', '%s')"
-#define MERGE_FILES_AND_RUN_QUERY_COMMAND \
-	"SELECT worker_merge_files_and_run_query(" UINT64_FORMAT ", %d, %s, %s)"
 
+extern int RepartitionJoinBucketCountPerNode;
 
 typedef enum CitusRTEKind
 {
@@ -181,28 +180,6 @@ typedef struct MapMergeJob
 	List *mergeTaskList;
 } MapMergeJob;
 
-
-/*
- * Task represents an executable unit of work. We conceptualize our tasks into
- * compute and data fetch task types. SQL, map, and merge tasks are considered
- * as compute tasks; and map fetch, and merge fetch tasks are data
- * fetch tasks. We also forward declare the task execution struct here to avoid
- * including the executor header files.
- *
- * We currently do not take replication model into account for tasks other
- * than modifications. When it is set to REPLICATION_MODEL_2PC, the execution
- * of the modification task is done with two-phase commit. Set it to
- * REPLICATION_MODEL_INVALID if it is not relevant for the task.
- *
- * NB: Changing this requires also changing _outTask in citus_outfuncs and _readTask
- * in citus_readfuncs to correctly (de)serialize this struct.
- *
- * INSERT ... SELECT queries and modify queries with subqueries or multiple tables
- * set modifyWithSubquery to true. We need to use it to take the necessary locks
- * to get consistent results for subqueries.
- */
-typedef struct TaskExecution TaskExecution;
-
 typedef enum TaskQueryType
 {
 	TASK_QUERY_NULL,
@@ -286,7 +263,6 @@ typedef struct Task
 	uint32 upstreamTaskId;         /* only applies to data fetch tasks */
 	ShardInterval *shardInterval;  /* only applies to merge tasks */
 	bool assignmentConstrained;    /* only applies to merge tasks */
-	TaskExecution *taskExecution;  /* used by task tracker executor */
 	char replicationModel;         /* only applies to modify tasks */
 
 	/*

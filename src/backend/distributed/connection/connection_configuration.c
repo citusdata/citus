@@ -14,7 +14,7 @@
 #include "distributed/connection_management.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/worker_manager.h"
-#include "distributed/task_tracker.h"
+
 #include "postmaster/postmaster.h"
 #include "mb/pg_wchar.h"
 #include "utils/builtins.h"

@@ -9,7 +9,6 @@ INSERT INTO test VALUES (1,1), (3,3);
 SET citus.propagate_set_commands TO 'local';
 
 -- make sure we send BEGIN before a SELECT
-SET citus.task_executor_type TO 'adaptive';
 SET citus.select_opens_transaction_block TO on;
 
 BEGIN;

@@ -180,7 +180,6 @@ select floor(val/2), corr(valf, valf + val) from aggdata group by floor(val/2) h
 select array_agg(val order by valf) from aggdata;
 
 -- Test TransformSubqueryNode
-SET citus.task_executor_type to "task-tracker";
 
 select * FROM (
     SELECT key, mode() within group (order by floor(agg1.val/2)) m from aggdata agg1
@@ -190,7 +189,8 @@ select * FROM (
 select * FROM (
     SELECT key k, avg(distinct floor(agg1.val/2)) m from aggdata agg1
     group by key
-) subq;
+) subq
+order by k,m;
 
 -- Test TransformsSubqueryNode with group by not in FROM (failed in past)
 select count(*) FROM (
@@ -198,7 +198,6 @@ select count(*) FROM (
     group by key
 ) subq;
 
-RESET citus.task_executor_type;
 
 select key, count(distinct aggdata)
 from aggdata group by key order by 1, 2;

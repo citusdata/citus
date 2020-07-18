@@ -52,7 +52,7 @@
 #include "distributed/query_pushdown_planning.h"
 #include "distributed/shardinterval_utils.h"
 #include "distributed/shard_pruning.h"
-#include "distributed/task_tracker.h"
+
 #include "distributed/worker_manager.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/version_compat.h"
@@ -81,6 +81,8 @@
 #include "utils/rel.h"
 #include "utils/typcache.h"
 
+/* RepartitionJoinBucketCountPerNode determines bucket amount during repartitions */
+int RepartitionJoinBucketCountPerNode = 8;
 
 /* Policy to use when assigning tasks to worker nodes */
 int TaskAssignmentPolicy = TASK_ASSIGNMENT_GREEDY;
@@ -119,14 +121,12 @@ static MultiNode * LeftMostNode(MultiTreeRoot *multiTree);
 static Oid RangePartitionJoinBaseRelationId(MultiJoin *joinNode);
 static MultiTable * FindTableNode(MultiNode *multiNode, int rangeTableId);
 static Query * BuildJobQuery(MultiNode *multiNode, List *dependentJobList);
-static Query * BuildReduceQuery(MultiExtendedOp *extendedOpNode, List *dependentJobList);
 static List * BaseRangeTableList(MultiNode *multiNode);
 static List * QueryTargetList(MultiNode *multiNode);
 static List * TargetEntryList(List *expressionList);
 static Node * AddAnyValueAggregates(Node *node, AddAnyValueAggregatesContext *context);
 static List * QueryGroupClauseList(MultiNode *multiNode);
 static List * QuerySelectClauseList(MultiNode *multiNode);
-static List * QueryJoinClauseList(MultiNode *multiNode);
 static List * QueryFromList(List *rangeTableList);
 static Node * QueryJoinTree(MultiNode *multiNode, List *dependentJobList,
 							List **rangeTableList);
@@ -224,10 +224,6 @@ static List * MergeTaskList(MapMergeJob *mapMergeJob, List *mapTaskList,
 							uint32 taskIdIndex);
 static StringInfo ColumnNameArrayString(uint32 columnCount, uint64 generatingJobId);
 static StringInfo ColumnTypeArrayString(List *targetEntryList);
-static StringInfo MergeTableQueryString(uint32 taskIdIndex, List *targetEntryList);
-static StringInfo IntermediateTableQueryString(uint64 jobId, uint32 taskIdIndex,
-											   Query *reduceQuery);
-static uint32 FinalTargetEntryCount(List *targetEntryList);
 static bool CoPlacedShardIntervals(ShardInterval *firstInterval,
 								   ShardInterval *secondInterval);
 
@@ -432,30 +428,6 @@ BuildJobTree(MultiTreeRoot *multiTree)
 				/* append to the dependent job list for on-going dependencies */
 				loopDependentJobList = lappend(loopDependentJobList, mapMergeJob);
 			}
-		}
-		else if (boundaryNodeJobType == SUBQUERY_MAP_MERGE_JOB)
-		{
-			MultiPartition *partitionNode = (MultiPartition *) currentNode;
-			MultiNode *queryNode = GrandChildNode((MultiUnaryNode *) partitionNode);
-			Var *partitionKey = partitionNode->partitionColumn;
-
-			/* build query and partition job */
-			List *dependentJobList = list_copy(loopDependentJobList);
-			Query *jobQuery = BuildJobQuery(queryNode, dependentJobList);
-
-			MapMergeJob *mapMergeJob = BuildMapMergeJob(jobQuery, dependentJobList,
-														partitionKey,
-														DUAL_HASH_PARTITION_TYPE,
-														InvalidOid,
-														SUBQUERY_MAP_MERGE_JOB);
-
-			Query *reduceQuery = BuildReduceQuery((MultiExtendedOp *) parentNode,
-												  list_make1(mapMergeJob));
-			mapMergeJob->reduceQuery = reduceQuery;
-
-			/* reset dependent job list */
-			loopDependentJobList = NIL;
-			loopDependentJobList = list_make1(mapMergeJob);
 		}
 		else if (boundaryNodeJobType == TOP_LEVEL_WORKER_JOB)
 		{
@@ -749,89 +721,6 @@ BuildJobQuery(MultiNode *multiNode, List *dependentJobList)
 	Assert(jobQuery->hasWindowFuncs == contain_window_function((Node *) jobQuery));
 
 	return jobQuery;
-}
-
-
-/*
- * BuildReduceQuery traverses the given logical plan tree, determines the job that
- * corresponds to this part of the tree, and builds the query structure for that
- * particular job. The function assumes that jobs this particular job depends on
- * have already been built, as their output is needed to build the query.
- */
-static Query *
-BuildReduceQuery(MultiExtendedOp *extendedOpNode, List *dependentJobList)
-{
-	MultiNode *multiNode = (MultiNode *) extendedOpNode;
-	List *derivedRangeTableList = NIL;
-	List *targetList = NIL;
-	ListCell *columnCell = NULL;
-	List *columnNameList = NIL;
-
-	Job *dependentJob = linitial(dependentJobList);
-	List *dependentTargetList = dependentJob->jobQuery->targetList;
-	uint32 columnCount = (uint32) list_length(dependentTargetList);
-
-	for (uint32 columnIndex = 0; columnIndex < columnCount; columnIndex++)
-	{
-		StringInfo columnNameString = makeStringInfo();
-
-		appendStringInfo(columnNameString, MERGE_COLUMN_FORMAT, columnIndex);
-
-		Value *columnValue = makeString(columnNameString->data);
-		columnNameList = lappend(columnNameList, columnValue);
-	}
-
-	/* create a derived range table for the subtree below the collect */
-	RangeTblEntry *rangeTableEntry = DerivedRangeTableEntry(multiNode, columnNameList,
-															OutputTableIdList(multiNode),
-															NIL, NIL, NIL, NIL);
-	rangeTableEntry->eref->colnames = columnNameList;
-	ModifyRangeTblExtraData(rangeTableEntry, CITUS_RTE_SHARD, NULL, NULL, NULL);
-	derivedRangeTableList = lappend(derivedRangeTableList, rangeTableEntry);
-
-	targetList = copyObject(extendedOpNode->targetList);
-	List *columnList = pull_var_clause_default((Node *) targetList);
-
-	foreach(columnCell, columnList)
-	{
-		Var *column = (Var *) lfirst(columnCell);
-		Index originalTableId = column->varnoold;
-
-		/* find the new table identifier */
-		Index newTableId = NewTableId(originalTableId, derivedRangeTableList);
-		column->varno = newTableId;
-	}
-
-	/* build the where clause list using select and join predicates */
-	List *selectClauseList = QuerySelectClauseList((MultiNode *) extendedOpNode);
-	List *joinClauseList = QueryJoinClauseList((MultiNode *) extendedOpNode);
-	List *whereClauseList = list_concat(selectClauseList, joinClauseList);
-
-	/*
-	 * Build the From/Where construct. We keep the where-clause list implicitly
-	 * AND'd, since both partition and join pruning depends on the clauses being
-	 * expressed as a list.
-	 */
-	FromExpr *joinTree = makeNode(FromExpr);
-	joinTree->quals = (Node *) whereClauseList;
-	joinTree->fromlist = QueryFromList(derivedRangeTableList);
-
-	/* build the query structure for this job */
-	Query *reduceQuery = makeNode(Query);
-	reduceQuery->commandType = CMD_SELECT;
-	reduceQuery->querySource = QSRC_ORIGINAL;
-	reduceQuery->canSetTag = true;
-	reduceQuery->rtable = derivedRangeTableList;
-	reduceQuery->targetList = targetList;
-	reduceQuery->jointree = joinTree;
-	reduceQuery->sortClause = extendedOpNode->sortClauseList;
-	reduceQuery->groupClause = extendedOpNode->groupClauseList;
-	reduceQuery->limitOffset = extendedOpNode->limitOffset;
-	reduceQuery->limitCount = extendedOpNode->limitCount;
-	reduceQuery->havingQual = extendedOpNode->havingQual;
-	reduceQuery->hasAggs = contain_aggs_of_level((Node *) targetList, 0);
-
-	return reduceQuery;
 }
 
 
@@ -1198,44 +1087,6 @@ QuerySelectClauseList(MultiNode *multiNode)
 	}
 
 	return selectClauseList;
-}
-
-
-/*
- * QueryJoinClauseList traverses the given logical plan tree, and extracts all
- * join clauses from the join nodes. Note that this function does not walk below
- * a collect node; the clauses below the collect node apply to another query,
- * and they would have been captured by the remote job we depend upon.
- */
-static List *
-QueryJoinClauseList(MultiNode *multiNode)
-{
-	List *joinClauseList = NIL;
-	List *pendingNodeList = list_make1(multiNode);
-
-	while (pendingNodeList != NIL)
-	{
-		MultiNode *currMultiNode = (MultiNode *) linitial(pendingNodeList);
-		CitusNodeTag nodeType = CitusNodeTag(currMultiNode);
-		pendingNodeList = list_delete_first(pendingNodeList);
-
-		/* extract join clauses from the multi join node */
-		if (nodeType == T_MultiJoin)
-		{
-			MultiJoin *joinNode = (MultiJoin *) currMultiNode;
-			List *clauseList = copyObject(joinNode->joinClauseList);
-			joinClauseList = list_concat(joinClauseList, clauseList);
-		}
-
-		/* add this node's children only if the node isn't a multi collect */
-		if (nodeType != T_MultiCollect)
-		{
-			List *childNodeList = ChildNodeList(currMultiNode);
-			pendingNodeList = list_concat(pendingNodeList, childNodeList);
-		}
-	}
-
-	return joinClauseList;
 }
 
 
@@ -2108,7 +1959,7 @@ static uint32
 HashPartitionCount(void)
 {
 	uint32 groupCount = list_length(ActiveReadableNodeList());
-	double maxReduceTasksPerNode = MaxRunningTasksPerNode / 2.0;
+	double maxReduceTasksPerNode = RepartitionJoinBucketCountPerNode;
 
 	uint32 partitionCount = (uint32) rint(groupCount * maxReduceTasksPerNode);
 	return partitionCount;
@@ -4804,25 +4655,6 @@ MergeTaskList(MapMergeJob *mapMergeJob, List *mapTaskList, uint32 taskIdIndex)
 			mergeTask = CreateBasicTask(jobId, mergeTaskId, MERGE_TASK,
 										mergeQueryString->data);
 		}
-		else
-		{
-			StringInfo mergeTableQueryString =
-				MergeTableQueryString(taskIdIndex, targetEntryList);
-			char *escapedMergeTableQueryString =
-				quote_literal_cstr(mergeTableQueryString->data);
-			StringInfo intermediateTableQueryString =
-				IntermediateTableQueryString(jobId, taskIdIndex, reduceQuery);
-			char *escapedIntermediateTableQueryString =
-				quote_literal_cstr(intermediateTableQueryString->data);
-			StringInfo mergeAndRunQueryString = makeStringInfo();
-			appendStringInfo(mergeAndRunQueryString, MERGE_FILES_AND_RUN_QUERY_COMMAND,
-							 jobId, taskIdIndex, escapedMergeTableQueryString,
-							 escapedIntermediateTableQueryString);
-
-			mergeTask = CreateBasicTask(jobId, mergeTaskId, MERGE_TASK,
-										mergeAndRunQueryString->data);
-		}
-
 		mergeTask->partitionId = partitionId;
 		taskIdIndex++;
 
@@ -5841,130 +5673,4 @@ TaskListHighestTaskId(List *taskList)
 	}
 
 	return highestTaskId;
-}
-
-
-/*
- * MergeTableQueryString builds a query string which creates a merge task table
- * within the job's schema, which should have already been created by the task
- * tracker protocol.
- */
-static StringInfo
-MergeTableQueryString(uint32 taskIdIndex, List *targetEntryList)
-{
-	StringInfo taskTableName = TaskTableName(taskIdIndex);
-	StringInfo mergeTableQueryString = makeStringInfo();
-	StringInfo mergeTableName = makeStringInfo();
-	StringInfo columnsString = makeStringInfo();
-	ListCell *targetEntryCell = NULL;
-	uint32 columnIndex = 0;
-
-	appendStringInfo(mergeTableName, "%s%s", taskTableName->data, MERGE_TABLE_SUFFIX);
-
-	uint32 columnCount = (uint32) list_length(targetEntryList);
-
-	foreach(targetEntryCell, targetEntryList)
-	{
-		TargetEntry *targetEntry = (TargetEntry *) lfirst(targetEntryCell);
-		Node *columnExpression = (Node *) targetEntry->expr;
-		Oid columnTypeId = exprType(columnExpression);
-		int32 columnTypeMod = exprTypmod(columnExpression);
-
-		StringInfo columnNameString = makeStringInfo();
-		appendStringInfo(columnNameString, MERGE_COLUMN_FORMAT, columnIndex);
-
-		char *columnName = columnNameString->data;
-		char *columnType = format_type_with_typemod(columnTypeId, columnTypeMod);
-
-		appendStringInfo(columnsString, "%s %s", columnName, columnType);
-
-		columnIndex++;
-		if (columnIndex != columnCount)
-		{
-			appendStringInfo(columnsString, ", ");
-		}
-	}
-
-	appendStringInfo(mergeTableQueryString, CREATE_TABLE_COMMAND, mergeTableName->data,
-					 columnsString->data);
-
-	return mergeTableQueryString;
-}
-
-
-/*
- * IntermediateTableQueryString builds a query string which creates a task table
- * by running reduce query on already created merge table.
- */
-static StringInfo
-IntermediateTableQueryString(uint64 jobId, uint32 taskIdIndex, Query *reduceQuery)
-{
-	StringInfo taskTableName = TaskTableName(taskIdIndex);
-	StringInfo intermediateTableQueryString = makeStringInfo();
-	StringInfo mergeTableName = makeStringInfo();
-	StringInfo columnsString = makeStringInfo();
-	StringInfo taskReduceQueryString = makeStringInfo();
-	Query *taskReduceQuery = copyObject(reduceQuery);
-	ListCell *columnNameCell = NULL;
-	uint32 columnIndex = 0;
-
-	uint32 columnCount = FinalTargetEntryCount(reduceQuery->targetList);
-	List *columnNames = DerivedColumnNameList(columnCount, jobId);
-
-	foreach(columnNameCell, columnNames)
-	{
-		Value *columnNameValue = (Value *) lfirst(columnNameCell);
-		char *columnName = strVal(columnNameValue);
-
-		appendStringInfo(columnsString, "%s", columnName);
-
-		columnIndex++;
-		if (columnIndex != columnCount)
-		{
-			appendStringInfo(columnsString, ", ");
-		}
-	}
-
-	appendStringInfo(mergeTableName, "%s%s", taskTableName->data, MERGE_TABLE_SUFFIX);
-
-	List *rangeTableList = taskReduceQuery->rtable;
-	RangeTblEntry *rangeTableEntry = (RangeTblEntry *) linitial(rangeTableList);
-	Alias *referenceNames = rangeTableEntry->eref;
-	referenceNames->aliasname = mergeTableName->data;
-
-	rangeTableEntry->alias = rangeTableEntry->eref;
-
-	ModifyRangeTblExtraData(rangeTableEntry, GetRangeTblKind(rangeTableEntry),
-							NULL, mergeTableName->data, NIL);
-
-	pg_get_query_def(taskReduceQuery, taskReduceQueryString);
-
-	appendStringInfo(intermediateTableQueryString, CREATE_TABLE_AS_COMMAND,
-					 taskTableName->data, columnsString->data,
-					 taskReduceQueryString->data);
-
-	return intermediateTableQueryString;
-}
-
-
-/*
- * FinalTargetEntryCount returns count of target entries in the final target
- * entry list.
- */
-static uint32
-FinalTargetEntryCount(List *targetEntryList)
-{
-	uint32 finalTargetEntryCount = 0;
-	ListCell *targetEntryCell = NULL;
-
-	foreach(targetEntryCell, targetEntryList)
-	{
-		TargetEntry *targetEntry = (TargetEntry *) lfirst(targetEntryCell);
-		if (!targetEntry->resjunk)
-		{
-			finalTargetEntryCount++;
-		}
-	}
-
-	return finalTargetEntryCount;
 }

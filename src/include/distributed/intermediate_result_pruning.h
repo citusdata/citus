@@ -17,6 +17,7 @@
  * UINT32_MAX is reserved in pg_dist_node, so we can use it safely.
  */
 #define LOCAL_NODE_ID UINT32_MAX
+#define LOCAL_HOST_NAME "localhost" /* connect to local backends using this name */
 
 extern bool LogIntermediateResults;
 

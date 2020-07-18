@@ -4,6 +4,8 @@
 -- Tests to log cross shard queries according to error log level
 --
 
+SET citus.enable_repartition_joins to ON;
+
 -- Create a distributed table and add data to it
 CREATE TABLE multi_task_table
 (
@@ -112,8 +114,7 @@ INSERT INTO tt2 VALUES(1, 'Ahmet', 5);
 INSERT INTO tt2 VALUES(2, 'Mehmet', 15);
 
 -- Should notice since it is a task-tracker query
-SET citus.task_executor_type to "task-tracker";
-SELECT tt1.id, tt2.count from tt1,tt2 where tt1.id = tt2.id;
+SELECT tt1.id, tt2.count from tt1,tt2 where tt1.id = tt2.id ORDER BY 1;
 
 SET citus.task_executor_type to DEFAULT;
 

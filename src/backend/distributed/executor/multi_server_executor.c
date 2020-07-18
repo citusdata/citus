@@ -24,7 +24,6 @@
 #include "distributed/multi_client_executor.h"
 #include "distributed/multi_executor.h"
 #include "distributed/multi_physical_planner.h"
-#include "distributed/multi_resowner.h"
 #include "distributed/multi_server_executor.h"
 #include "distributed/coordinator_protocol.h"
 #include "distributed/subplan_execution.h"
@@ -33,11 +32,8 @@
 
 int RemoteTaskCheckInterval = 100; /* per cycle sleep interval in millisecs */
 int TaskExecutorType = MULTI_EXECUTOR_ADAPTIVE; /* distributed executor type */
-bool BinaryMasterCopyFormat = false; /* copy data from workers in binary format */
 bool EnableRepartitionJoins = false;
 
-
-static bool HasReplicatedDistributedTable(List *relationOids);
 
 /*
  * JobExecutorType selects the executor type for the given distributedPlan using the task
@@ -109,184 +105,11 @@ JobExecutorType(DistributedPlan *distributedPlan)
 								errhint("Set citus.enable_repartition_joins to on "
 										"to enable repartitioning")));
 			}
-			if (HasReplicatedDistributedTable(distributedPlan->relationIdList))
-			{
-				return MULTI_EXECUTOR_TASK_TRACKER;
-			}
 			return MULTI_EXECUTOR_ADAPTIVE;
-		}
-	}
-	else
-	{
-		int workerNodeCount = list_length(ActiveReadableNodeList());
-		int taskCount = list_length(job->taskList);
-		double tasksPerNode = taskCount / ((double) workerNodeCount);
-
-		/* if we have more tasks per node than what can be tracked, warn the user */
-		if (tasksPerNode >= MaxTrackedTasksPerNode)
-		{
-			ereport(WARNING, (errmsg("this query assigns more tasks per node than the "
-									 "configured max_tracked_tasks_per_node limit")));
 		}
 	}
 
 	return executorType;
-}
-
-
-/*
- * HasReplicatedDistributedTable returns true if there is any
- * table in the given list that is:
- * - not a reference table
- * - has replication factor > 1
- */
-static bool
-HasReplicatedDistributedTable(List *relationOids)
-{
-	Oid oid;
-	foreach_oid(oid, relationOids)
-	{
-		char partitionMethod = PartitionMethod(oid);
-		if (partitionMethod == DISTRIBUTE_BY_NONE)
-		{
-			continue;
-		}
-		uint32 tableReplicationFactor = TableShardReplicationFactor(oid);
-		if (tableReplicationFactor > 1)
-		{
-			return true;
-		}
-	}
-	return false;
-}
-
-
-/*
- * RemoveJobDirectory gets automatically called at portal drop (end of query) or
- * at transaction abort. The function removes the job directory and releases the
- * associated job resource from the resource manager.
- */
-void
-RemoveJobDirectory(uint64 jobId)
-{
-	StringInfo jobDirectoryName = MasterJobDirectoryName(jobId);
-	CitusRemoveDirectory(jobDirectoryName->data);
-
-	ResourceOwnerForgetJobDirectory(CurrentResourceOwner, jobId);
-}
-
-
-/*
- * InitTaskExecution creates a task execution structure for the given task, and
- * initializes execution related fields.
- */
-TaskExecution *
-InitTaskExecution(Task *task, TaskExecStatus initialTaskExecStatus)
-{
-	/* each task placement (assignment) corresponds to one worker node */
-	uint32 nodeCount = list_length(task->taskPlacementList);
-
-	TaskExecution *taskExecution = CitusMakeNode(TaskExecution);
-
-	taskExecution->jobId = task->jobId;
-	taskExecution->taskId = task->taskId;
-	taskExecution->nodeCount = nodeCount;
-	taskExecution->currentNodeIndex = 0;
-	taskExecution->failureCount = 0;
-
-	taskExecution->taskStatusArray = palloc0(nodeCount * sizeof(TaskExecStatus));
-	taskExecution->transmitStatusArray = palloc0(nodeCount * sizeof(TransmitExecStatus));
-	taskExecution->connectionIdArray = palloc0(nodeCount * sizeof(int32));
-	taskExecution->fileDescriptorArray = palloc0(nodeCount * sizeof(int32));
-
-	for (uint32 nodeIndex = 0; nodeIndex < nodeCount; nodeIndex++)
-	{
-		taskExecution->taskStatusArray[nodeIndex] = initialTaskExecStatus;
-		taskExecution->transmitStatusArray[nodeIndex] = EXEC_TRANSMIT_UNASSIGNED;
-		taskExecution->connectionIdArray[nodeIndex] = INVALID_CONNECTION_ID;
-		taskExecution->fileDescriptorArray[nodeIndex] = -1;
-	}
-
-	return taskExecution;
-}
-
-
-/*
- * CleanupTaskExecution iterates over all connections and file descriptors for
- * the given task execution. The function first closes all open connections and
- * file descriptors, and then frees memory allocated for the task execution.
- */
-void
-CleanupTaskExecution(TaskExecution *taskExecution)
-{
-	for (uint32 nodeIndex = 0; nodeIndex < taskExecution->nodeCount; nodeIndex++)
-	{
-		int32 connectionId = taskExecution->connectionIdArray[nodeIndex];
-		int32 fileDescriptor = taskExecution->fileDescriptorArray[nodeIndex];
-
-		/* close open connection */
-		if (connectionId != INVALID_CONNECTION_ID)
-		{
-			MultiClientDisconnect(connectionId);
-			taskExecution->connectionIdArray[nodeIndex] = INVALID_CONNECTION_ID;
-		}
-
-		/* close open file */
-		if (fileDescriptor >= 0)
-		{
-			int closed = close(fileDescriptor);
-			taskExecution->fileDescriptorArray[nodeIndex] = -1;
-
-			if (closed < 0)
-			{
-				ereport(WARNING, (errcode_for_file_access(),
-								  errmsg("could not close copy file: %m")));
-			}
-		}
-	}
-
-	/* deallocate memory and reset all fields */
-	pfree(taskExecution->taskStatusArray);
-	pfree(taskExecution->connectionIdArray);
-	pfree(taskExecution->fileDescriptorArray);
-	pfree(taskExecution);
-}
-
-
-/* Determines if the given task exceeded its failure threshold. */
-bool
-TaskExecutionFailed(TaskExecution *taskExecution)
-{
-	if (taskExecution->failureCount >= MAX_TASK_EXECUTION_FAILURES)
-	{
-		return true;
-	}
-
-	return false;
-}
-
-
-/*
- * AdjustStateForFailure increments the failure count for given task execution.
- * The function also determines the next worker node that should be contacted
- * for remote execution.
- */
-void
-AdjustStateForFailure(TaskExecution *taskExecution)
-{
-	int maxNodeIndex = taskExecution->nodeCount - 1;
-	Assert(maxNodeIndex >= 0);
-
-	if (taskExecution->currentNodeIndex < maxNodeIndex)
-	{
-		taskExecution->currentNodeIndex++;   /* try next worker node */
-	}
-	else
-	{
-		taskExecution->currentNodeIndex = 0; /* go back to the first worker node */
-	}
-
-	taskExecution->failureCount++;          /* record failure */
 }
 
 

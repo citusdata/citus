@@ -43,6 +43,7 @@
 #include "distributed/coordinator_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
+#include "distributed/multi_physical_planner.h"
 #include "distributed/multi_executor.h"
 #include "distributed/multi_explain.h"
 #include "distributed/multi_join_order.h"
@@ -64,7 +65,7 @@
 #include "distributed/shared_library_init.h"
 #include "distributed/statistics_collection.h"
 #include "distributed/subplan_execution.h"
-#include "distributed/task_tracker.h"
+
 #include "distributed/transaction_management.h"
 #include "distributed/transaction_recovery.h"
 #include "distributed/worker_log_messages.h"
@@ -91,6 +92,7 @@ static char *CitusVersion = CITUS_VERSION;
 
 void _PG_init(void);
 
+static void DoInitialCleanup(void);
 static void ResizeStackToMaximumDepth(void);
 static void multi_log_hook(ErrorData *edata);
 static void RegisterConnectionCleanup(void);
@@ -107,9 +109,9 @@ static bool StatisticsCollectionGucCheckHook(bool *newval, void **extra, GucSour
 											 source);
 
 /* static variable to hold value of deprecated GUC variable */
-static bool ExpireCachedShards = false;
-static int LargeTableShardCount = 0;
-static int CitusSSLMode = 0;
+static bool DeprecatedBool = false;
+static int DeprecatedInt = 0;
+
 
 /* *INDENT-OFF* */
 /* GUC enum definitions */
@@ -136,7 +138,7 @@ static const struct config_enum_entry replication_model_options[] = {
 static const struct config_enum_entry task_executor_type_options[] = {
 	{ "adaptive", MULTI_EXECUTOR_ADAPTIVE, false },
 	{ "real-time", DUMMY_REAL_TIME_EXECUTOR_ENUM_VALUE, false }, /* keep it for backward comp. */
-	{ "task-tracker", MULTI_EXECUTOR_TASK_TRACKER, false },
+	{ "task-tracker", MULTI_EXECUTOR_ADAPTIVE, false },
 	{ NULL, 0, false }
 };
 
@@ -275,9 +277,6 @@ _PG_init(void)
 
 	InitializeMaintenanceDaemon();
 
-	/* organize that task tracker is started once server is up */
-	TaskTrackerRegister();
-
 	/* initialize coordinated transaction management */
 	InitializeTransactionManagement();
 	InitializeBackendManagement();
@@ -292,6 +291,20 @@ _PG_init(void)
 		SetConfigOption("allow_system_table_mods", "true", PGC_POSTMASTER,
 						PGC_S_OVERRIDE);
 	}
+
+	DoInitialCleanup();
+}
+
+
+/*
+ * DoInitialCleanup does cleanup at start time.
+ * Currently it:
+ * - Removes repartition directories ( in case there are any leftovers)
+ */
+static void
+DoInitialCleanup(void)
+{
+	RepartitionCleanupJobDirectories();
 }
 
 
@@ -464,7 +477,7 @@ RegisterCitusConfigVariables(void)
 		gettext_noop("This variable has been deprecated. Use the citus.node_conninfo "
 					 "GUC instead."),
 		NULL,
-		&CitusSSLMode,
+		&DeprecatedInt,
 		0, 0, 32,
 		PGC_POSTMASTER,
 		GUC_SUPERUSER_ONLY | GUC_NO_SHOW_ALL,
@@ -472,13 +485,12 @@ RegisterCitusConfigVariables(void)
 
 	DefineCustomBoolVariable(
 		"citus.binary_master_copy_format",
-		gettext_noop("Use the binary master copy format."),
-		gettext_noop("When enabled, data is copied from workers to the master "
-					 "in PostgreSQL's binary serialization format."),
-		&BinaryMasterCopyFormat,
+		gettext_noop("This GUC variable has been deprecated."),
+		NULL,
+		&DeprecatedBool,
 		false,
 		PGC_USERSET,
-		GUC_STANDARD,
+		GUC_STANDARD | GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -497,10 +509,10 @@ RegisterCitusConfigVariables(void)
 		"citus.expire_cached_shards",
 		gettext_noop("This GUC variable has been deprecated."),
 		NULL,
-		&ExpireCachedShards,
+		&DeprecatedBool,
 		false,
 		PGC_SIGHUP,
-		GUC_STANDARD,
+		GUC_STANDARD | GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -1043,16 +1055,12 @@ RegisterCitusConfigVariables(void)
 
 	DefineCustomIntVariable(
 		"citus.task_tracker_delay",
-		gettext_noop("Task tracker sleep time between task management rounds."),
-		gettext_noop("The task tracker process wakes up regularly, walks over "
-					 "all tasks assigned to it, and schedules and executes these "
-					 "tasks. Then, the task tracker sleeps for a time period "
-					 "before walking over these tasks again. This configuration "
-					 "value determines the length of that sleeping period."),
-		&TaskTrackerDelay,
+		gettext_noop("This GUC variable has been deprecated."),
+		NULL,
+		&DeprecatedInt,
 		200 * MS, 1, 100 * MS_PER_SECOND,
 		PGC_SIGHUP,
-		GUC_UNIT_MS | GUC_STANDARD,
+		GUC_UNIT_MS | GUC_STANDARD | GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
@@ -1071,43 +1079,43 @@ RegisterCitusConfigVariables(void)
 
 	DefineCustomIntVariable(
 		"citus.max_assign_task_batch_size",
-		gettext_noop("Sets the maximum number of tasks to assign per round."),
-		gettext_noop("The master node synchronously assigns tasks to workers in "
-					 "batches. Bigger batches allow for faster task assignment, "
-					 "but it may take longer for all workers to get tasks "
-					 "if the number of workers is large. This configuration "
-					 "value controls the maximum batch size."),
-		&MaxAssignTaskBatchSize,
+		gettext_noop("This GUC variable has been deprecated."),
+		NULL,
+		&DeprecatedInt,
 		64, 1, INT_MAX,
 		PGC_USERSET,
-		GUC_STANDARD,
+		GUC_STANDARD | GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
 		"citus.max_tracked_tasks_per_node",
-		gettext_noop("Sets the maximum number of tracked tasks per node."),
-		gettext_noop("The task tracker processes keeps all assigned tasks in "
-					 "a shared hash table, and schedules and executes these "
-					 "tasks as appropriate. This configuration value limits "
-					 "the size of the hash table, and therefore the maximum "
-					 "number of tasks that can be tracked at any given time."),
-		&MaxTrackedTasksPerNode,
+		gettext_noop("This GUC variable has been deprecated."),
+		NULL,
+		&DeprecatedInt,
 		1024, 8, INT_MAX,
 		PGC_POSTMASTER,
-		GUC_STANDARD,
+		GUC_STANDARD | GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
+	DefineCustomIntVariable(
+		"citus.repartition_join_bucket_count_per_node",
+		gettext_noop("Sets the bucket size for repartition joins per node"),
+		gettext_noop("Repartition joins create buckets in each node and "
+					 "uses those to shuffle data around nodes. "),
+		&RepartitionJoinBucketCountPerNode,
+		4, 1, INT_MAX,
+		PGC_SIGHUP,
+		GUC_STANDARD | GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
 		"citus.max_running_tasks_per_node",
-		gettext_noop("Sets the maximum number of tasks to run concurrently per node."),
-		gettext_noop("The task tracker process schedules and executes the tasks "
-					 "assigned to it as appropriate. This configuration value "
-					 "sets the maximum number of tasks to execute concurrently "
-					 "on one node at any given time."),
-		&MaxRunningTasksPerNode,
+		gettext_noop("This GUC variable has been deprecated."),
+		NULL,
+		&DeprecatedInt,
 		8, 1, INT_MAX,
 		PGC_SIGHUP,
-		GUC_STANDARD,
+		GUC_STANDARD | GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
@@ -1128,7 +1136,7 @@ RegisterCitusConfigVariables(void)
 		"citus.large_table_shard_count",
 		gettext_noop("This variable has been deprecated."),
 		gettext_noop("Consider reference tables instead"),
-		&LargeTableShardCount,
+		&DeprecatedInt,
 		4, 1, 10000,
 		PGC_USERSET,
 		GUC_NO_SHOW_ALL,
@@ -1392,15 +1400,12 @@ RegisterCitusConfigVariables(void)
 
 	DefineCustomIntVariable(
 		"citus.max_task_string_size",
-		gettext_noop("Sets the maximum size (in bytes) of a worker task call string."),
-		gettext_noop("Active worker tasks' are tracked in a shared hash table "
-					 "on the master node. This configuration value limits the "
-					 "maximum size of an individual worker task, and "
-					 "affects the size of pre-allocated shared memory."),
-		&MaxTaskStringSize,
+		gettext_noop("This GUC variable has been deprecated."),
+		NULL,
+		&DeprecatedInt,
 		12288, 8192, 65536,
 		PGC_POSTMASTER,
-		GUC_STANDARD,
+		GUC_STANDARD | GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(

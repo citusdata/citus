@@ -34,8 +34,7 @@
 #include "distributed/metadata_cache.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/version_compat.h"
-#include "distributed/task_tracker_protocol.h"
-#include "distributed/task_tracker.h"
+
 #include "executor/spi.h"
 #include "nodes/makefuncs.h"
 #include "parser/parse_type.h"
@@ -54,6 +53,7 @@ static void CreateTaskTable(StringInfo schemaName, StringInfo relationName,
 							List *columnNameList, List *columnTypeList);
 static void CopyTaskFilesFromDirectory(StringInfo schemaName, StringInfo relationName,
 									   StringInfo sourceDirectoryName, Oid userId);
+static void CreateJobSchema(StringInfo schemaName, char *schemaOwner);
 
 
 /* exports for SQL callable functions */
@@ -85,6 +85,58 @@ worker_create_schema(PG_FUNCTION_ARGS)
 	}
 
 	PG_RETURN_VOID();
+}
+
+
+/*
+ * CreateJobSchema creates a job schema with the given schema name. Note that
+ * this function ensures that our pg_ prefixed schema names can be created.
+ * Further note that the created schema does not become visible to other
+ * processes until the transaction commits.
+ *
+ * If schemaOwner is NULL, then current user is used.
+ */
+static void
+CreateJobSchema(StringInfo schemaName, char *schemaOwner)
+{
+	const char *queryString = NULL;
+
+	Oid savedUserId = InvalidOid;
+	int savedSecurityContext = 0;
+	RoleSpec currentUserRole = { 0 };
+
+	/* allow schema names that start with pg_ */
+	bool oldAllowSystemTableMods = allowSystemTableMods;
+	allowSystemTableMods = true;
+
+	/* ensure we're allowed to create this schema */
+	GetUserIdAndSecContext(&savedUserId, &savedSecurityContext);
+	SetUserIdAndSecContext(CitusExtensionOwner(), SECURITY_LOCAL_USERID_CHANGE);
+
+	if (schemaOwner == NULL)
+	{
+		schemaOwner = GetUserNameFromId(savedUserId, false);
+	}
+
+	/* build a CREATE SCHEMA statement */
+	currentUserRole.type = T_RoleSpec;
+	currentUserRole.roletype = ROLESPEC_CSTRING;
+	currentUserRole.rolename = schemaOwner;
+	currentUserRole.location = -1;
+
+	CreateSchemaStmt *createSchemaStmt = makeNode(CreateSchemaStmt);
+	createSchemaStmt->schemaname = schemaName->data;
+	createSchemaStmt->schemaElts = NIL;
+
+	/* actually create schema with the current user as owner */
+	createSchemaStmt->authrole = &currentUserRole;
+	CreateSchemaCommand(createSchemaStmt, queryString, -1, -1);
+
+	CommandCounterIncrement();
+
+	/* and reset environment */
+	SetUserIdAndSecContext(savedUserId, savedSecurityContext);
+	allowSystemTableMods = oldAllowSystemTableMods;
 }
 
 
@@ -208,91 +260,7 @@ worker_merge_files_into_table(PG_FUNCTION_ARGS)
 Datum
 worker_merge_files_and_run_query(PG_FUNCTION_ARGS)
 {
-	uint64 jobId = PG_GETARG_INT64(0);
-	uint32 taskId = PG_GETARG_UINT32(1);
-	text *createMergeTableQueryText = PG_GETARG_TEXT_P(2);
-	text *createIntermediateTableQueryText = PG_GETARG_TEXT_P(3);
-
-	const char *createMergeTableQuery = text_to_cstring(createMergeTableQueryText);
-	const char *createIntermediateTableQuery =
-		text_to_cstring(createIntermediateTableQueryText);
-
-	StringInfo taskDirectoryName = TaskDirectoryName(jobId, taskId);
-	StringInfo jobSchemaName = JobSchemaName(jobId);
-	StringInfo intermediateTableName = TaskTableName(taskId);
-	StringInfo mergeTableName = makeStringInfo();
-	StringInfo setSearchPathString = makeStringInfo();
-	Oid savedUserId = InvalidOid;
-	int savedSecurityContext = 0;
-	Oid userId = GetUserId();
-
-	CheckCitusVersion(ERROR);
-
-	/*
-	 * If the schema for the job isn't already created by the task tracker
-	 * protocol, we fall to using the default 'public' schema.
-	 */
-	bool schemaExists = JobSchemaExists(jobSchemaName);
-	if (!schemaExists)
-	{
-		resetStringInfo(jobSchemaName);
-		appendStringInfoString(jobSchemaName, "public");
-	}
-	else
-	{
-		Oid schemaId = get_namespace_oid(jobSchemaName->data, false);
-
-		EnsureSchemaOwner(schemaId);
-	}
-
-	appendStringInfo(setSearchPathString, SET_SEARCH_PATH_COMMAND, jobSchemaName->data);
-
-	/* Add "public" to search path to access UDFs in public schema */
-	appendStringInfo(setSearchPathString, ",public");
-
-	int connected = SPI_connect();
-	if (connected != SPI_OK_CONNECT)
-	{
-		ereport(ERROR, (errmsg("could not connect to SPI manager")));
-	}
-
-	int setSearchPathResult = SPI_exec(setSearchPathString->data, 0);
-	if (setSearchPathResult < 0)
-	{
-		ereport(ERROR, (errmsg("execution was not successful \"%s\"",
-							   setSearchPathString->data)));
-	}
-
-	int createMergeTableResult = SPI_exec(createMergeTableQuery, 0);
-	if (createMergeTableResult < 0)
-	{
-		ereport(ERROR, (errmsg("execution was not successful \"%s\"",
-							   createMergeTableQuery)));
-	}
-
-	/* need superuser to copy from files */
-	GetUserIdAndSecContext(&savedUserId, &savedSecurityContext);
-	SetUserIdAndSecContext(CitusExtensionOwner(), SECURITY_LOCAL_USERID_CHANGE);
-
-	appendStringInfo(mergeTableName, "%s%s", intermediateTableName->data,
-					 MERGE_TABLE_SUFFIX);
-	CopyTaskFilesFromDirectory(jobSchemaName, mergeTableName, taskDirectoryName,
-							   userId);
-
-	SetUserIdAndSecContext(savedUserId, savedSecurityContext);
-
-	int createIntermediateTableResult = SPI_exec(createIntermediateTableQuery, 0);
-	if (createIntermediateTableResult < 0)
-	{
-		ereport(ERROR, (errmsg("execution was not successful \"%s\"",
-							   createIntermediateTableQuery)));
-	}
-
-	int finished = SPI_finish();
-	if (finished != SPI_OK_FINISH)
-	{
-		ereport(ERROR, (errmsg("could not disconnect from SPI manager")));
-	}
+	ereport(ERROR, (errmsg("This UDF is deprecated.")));
 
 	PG_RETURN_VOID();
 }

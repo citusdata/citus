@@ -1590,7 +1590,6 @@ CreateTask(TaskType taskType)
 	task->upstreamTaskId = INVALID_TASK_ID;
 	task->shardInterval = NULL;
 	task->assignmentConstrained = false;
-	task->taskExecution = NULL;
 	task->replicationModel = REPLICATION_MODEL_INVALID;
 	task->relationRowLockList = NIL;
 

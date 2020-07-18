@@ -315,7 +315,6 @@ CopyNodeTask(COPYFUNC_ARGS)
 	COPY_SCALAR_FIELD(upstreamTaskId);
 	COPY_NODE_FIELD(shardInterval);
 	COPY_SCALAR_FIELD(assignmentConstrained);
-	COPY_NODE_FIELD(taskExecution);
 	COPY_SCALAR_FIELD(replicationModel);
 	COPY_SCALAR_FIELD(modifyWithSubquery);
 	COPY_NODE_FIELD(relationShardList);
@@ -339,26 +338,6 @@ CopyNodeLocalPlannedStatement(COPYFUNC_ARGS)
 	COPY_SCALAR_FIELD(shardId);
 	COPY_SCALAR_FIELD(localGroupId);
 	COPY_NODE_FIELD(localPlan);
-}
-
-
-void
-CopyNodeTaskExecution(COPYFUNC_ARGS)
-{
-	DECLARE_FROM_AND_NEW_NODE(TaskExecution);
-
-	COPY_SCALAR_FIELD(jobId);
-	COPY_SCALAR_FIELD(taskId);
-	COPY_SCALAR_FIELD(nodeCount);
-
-	COPY_SCALAR_ARRAY(taskStatusArray, TaskExecStatus, from->nodeCount);
-	COPY_SCALAR_ARRAY(transmitStatusArray, TransmitExecStatus, from->nodeCount);
-	COPY_SCALAR_ARRAY(connectionIdArray, int32, from->nodeCount);
-	COPY_SCALAR_ARRAY(fileDescriptorArray, int32, from->nodeCount);
-
-	COPY_SCALAR_FIELD(currentNodeIndex);
-	COPY_SCALAR_FIELD(querySourceNodeIndex);
-	COPY_SCALAR_FIELD(failureCount);
 }
 
 

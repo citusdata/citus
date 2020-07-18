@@ -43,7 +43,6 @@ $_$;
 -- Run query on master
 \c - - :master_host :master_port
 
-SET citus.task_executor_type TO 'task-tracker';
 
 SELECT * FROM (SELECT median(ARRAY[1,2,sum(l_suppkey)]) as median, count(*)
     	  FROM lineitem GROUP BY l_partkey) AS a

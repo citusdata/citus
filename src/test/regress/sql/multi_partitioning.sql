@@ -5,6 +5,7 @@ SET citus.next_shard_id TO 1660000;
 
 SET citus.shard_count TO 4;
 SET citus.shard_replication_factor TO 1;
+SET citus.enable_repartition_joins to ON;
 
 --
 -- Distributed Partitioned Table Creation Tests
@@ -863,12 +864,10 @@ SELECT relation::regclass, locktype, mode FROM pg_locks WHERE relation::regclass
 COMMIT;
 
 -- test locks on task-tracker SELECT
-SET citus.task_executor_type TO 'task-tracker';
 BEGIN;
 SELECT * FROM partitioning_locks AS pl1 JOIN partitioning_locks AS pl2 ON pl1.id = pl2.ref_id ORDER BY 1, 2;
 SELECT relation::regclass, locktype, mode FROM pg_locks WHERE relation::regclass::text LIKE 'partitioning_locks%' AND pid = pg_backend_pid() ORDER BY 1, 2, 3;
 COMMIT;
-RESET citus.task_executor_type;
 
 -- test locks on INSERT
 BEGIN;

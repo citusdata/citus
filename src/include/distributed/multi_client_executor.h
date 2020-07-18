@@ -78,18 +78,6 @@ typedef enum
 	CLIENT_BATCH_QUERY_DONE = 3
 } BatchQueryStatus;
 
-
-/* Enumeration to track whether a task is ready to run and, if not, what it's blocked on*/
-typedef enum TaskExecutionStatus
-{
-	TASK_STATUS_INVALID = 0,
-	TASK_STATUS_ERROR, /* error occured */
-	TASK_STATUS_READY, /* task ready to be processed further */
-	TASK_STATUS_SOCKET_READ, /* waiting for connection to become ready for reads */
-	TASK_STATUS_SOCKET_WRITE /* waiting for connection to become ready for writes */
-} TaskExecutionStatus;
-
-
 struct pollfd; /* forward declared, to avoid having to include poll.h */
 
 typedef struct WaitInfo

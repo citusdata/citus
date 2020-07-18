@@ -209,7 +209,6 @@ CREATE TABLE wide_table
 
 SELECT create_distributed_table('wide_table', 'long_column_001');
 
-SET citus.task_executor_type TO 'task-tracker';
 
 SHOW citus.max_task_string_size;
 
@@ -225,6 +224,7 @@ SELECT raise_failed_execution('
 SELECT u.* FROM wide_table u JOIN wide_table v ON (u.long_column_002 = v.long_column_003);
 ');
 
+SET citus.enable_repartition_joins to ON;
 -- following will succeed since it fetches few columns
 SELECT u.long_column_001, u.long_column_002, u.long_column_003 FROM wide_table u JOIN wide_table v ON (u.long_column_002 = v.long_column_003);
 
@@ -233,5 +233,4 @@ RESET client_min_messages;
 DROP TABLE wide_table;
 
 RESET citus.shard_count;
-RESET citus.task_executor_type;
 

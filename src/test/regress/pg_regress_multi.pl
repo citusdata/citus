@@ -410,6 +410,7 @@ push(@pgOptions, '-c', "wal_level=logical");
 push(@pgOptions, '-c', "citus.shard_count=4");
 push(@pgOptions, '-c', "citus.shard_max_size=1500kB");
 push(@pgOptions, '-c', "citus.max_running_tasks_per_node=4");
+push(@pgOptions, '-c', "citus.repartition_join_bucket_count_per_node=2");
 push(@pgOptions, '-c', "citus.expire_cached_shards=on");
 push(@pgOptions, '-c', "citus.sort_returning=on");
 push(@pgOptions, '-c', "citus.task_tracker_delay=10ms");

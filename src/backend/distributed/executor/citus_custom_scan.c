@@ -48,7 +48,6 @@
 
 /* functions for creating custom scan nodes */
 static Node * AdaptiveExecutorCreateScan(CustomScan *scan);
-static Node * TaskTrackerCreateScan(CustomScan *scan);
 static Node * NonPushableInsertSelectCreateScan(CustomScan *scan);
 static Node * DelayedErrorCreateScan(CustomScan *scan);
 
@@ -72,11 +71,6 @@ CustomScanMethods AdaptiveExecutorCustomScanMethods = {
 	AdaptiveExecutorCreateScan
 };
 
-CustomScanMethods TaskTrackerCustomScanMethods = {
-	"Citus Task-Tracker",
-	TaskTrackerCreateScan
-};
-
 CustomScanMethods NonPushableInsertSelectCustomScanMethods = {
 	"Citus INSERT ... SELECT",
 	NonPushableInsertSelectCreateScan
@@ -95,15 +89,6 @@ static CustomExecMethods AdaptiveExecutorCustomExecMethods = {
 	.CustomName = "AdaptiveExecutorScan",
 	.BeginCustomScan = CitusBeginScan,
 	.ExecCustomScan = CitusExecScan,
-	.EndCustomScan = CitusEndScan,
-	.ReScanCustomScan = CitusReScan,
-	.ExplainCustomScan = CitusExplainScan
-};
-
-static CustomExecMethods TaskTrackerCustomExecMethods = {
-	.CustomName = "TaskTrackerScan",
-	.BeginCustomScan = CitusBeginScan,
-	.ExecCustomScan = TaskTrackerExecScan,
 	.EndCustomScan = CitusEndScan,
 	.ReScanCustomScan = CitusReScan,
 	.ExplainCustomScan = CitusExplainScan
@@ -132,7 +117,6 @@ IsCitusCustomState(PlanState *planState)
 
 	CustomScanState *css = castNode(CustomScanState, planState);
 	if (css->methods == &AdaptiveExecutorCustomExecMethods ||
-		css->methods == &TaskTrackerCustomExecMethods ||
 		css->methods == &NonPushableInsertSelectCustomExecMethods)
 	{
 		return true;
@@ -149,7 +133,6 @@ void
 RegisterCitusCustomScanMethods(void)
 {
 	RegisterCustomScanMethods(&AdaptiveExecutorCustomScanMethods);
-	RegisterCustomScanMethods(&TaskTrackerCustomScanMethods);
 	RegisterCustomScanMethods(&NonPushableInsertSelectCustomScanMethods);
 	RegisterCustomScanMethods(&DelayedErrorCustomScanMethods);
 }
@@ -574,24 +557,6 @@ AdaptiveExecutorCreateScan(CustomScan *scan)
 
 	scanState->customScanState.methods = &AdaptiveExecutorCustomExecMethods;
 	scanState->PreExecScan = &CitusPreExecScan;
-
-	return (Node *) scanState;
-}
-
-
-/*
- * TaskTrackerCreateScan creates the scan state for task-tracker executor queries.
- */
-static Node *
-TaskTrackerCreateScan(CustomScan *scan)
-{
-	CitusScanState *scanState = palloc0(sizeof(CitusScanState));
-
-	scanState->executorType = MULTI_EXECUTOR_TASK_TRACKER;
-	scanState->customScanState.ss.ps.type = T_CustomScanState;
-	scanState->distributedPlan = GetDistributedPlan(scan);
-
-	scanState->customScanState.methods = &TaskTrackerCustomExecMethods;
 
 	return (Node *) scanState;
 }

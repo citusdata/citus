@@ -148,7 +148,6 @@
 #include "distributed/multi_explain.h"
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/multi_physical_planner.h"
-#include "distributed/multi_resowner.h"
 #include "distributed/multi_server_executor.h"
 #include "distributed/placement_access.h"
 #include "distributed/placement_connection.h"
