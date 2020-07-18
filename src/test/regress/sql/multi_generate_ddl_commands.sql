@@ -41,6 +41,15 @@ CREATE TABLE table_constraint_table (
 
 SELECT master_get_table_ddl_events('table_constraint_table');
 
+-- tables with "simple" CHECK constraints should be able to be distributed
+CREATE TABLE check_constraint_table(
+	id int CHECK(true)
+);
+
+SELECT create_distributed_table('check_constraint_table', 'id');
+
+SELECT master_get_table_ddl_events('check_constraint_table');
+
 -- default values are supported
 CREATE TABLE default_value_table (
 	name text,

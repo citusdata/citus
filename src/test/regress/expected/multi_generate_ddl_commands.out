@@ -54,6 +54,23 @@ SELECT master_get_table_ddl_events('table_constraint_table');
  ALTER TABLE public.table_constraint_table OWNER TO postgres
 (2 rows)
 
+-- tables with "simple" CHECK constraints should be able to be distributed
+CREATE TABLE check_constraint_table(
+	id int CHECK(true)
+);
+SELECT create_distributed_table('check_constraint_table', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT master_get_table_ddl_events('check_constraint_table');
+                                          master_get_table_ddl_events
+---------------------------------------------------------------------
+ CREATE TABLE public.check_constraint_table (id integer, CONSTRAINT check_constraint_table_check CHECK (true))
+ ALTER TABLE public.check_constraint_table OWNER TO postgres
+(2 rows)
+
 -- default values are supported
 CREATE TABLE default_value_table (
 	name text,
@@ -152,10 +169,10 @@ where table_schema='public' and table_name like 'renamed_foreign_table_%' and co
 order by table_name;
           table_name          | column_name | data_type
 ---------------------------------------------------------------------
- renamed_foreign_table_610000 | rename_name | character
- renamed_foreign_table_610001 | rename_name | character
- renamed_foreign_table_610002 | rename_name | character
- renamed_foreign_table_610003 | rename_name | character
+ renamed_foreign_table_610004 | rename_name | character
+ renamed_foreign_table_610005 | rename_name | character
+ renamed_foreign_table_610006 | rename_name | character
+ renamed_foreign_table_610007 | rename_name | character
 (4 rows)
 
 \c - - :master_host :master_port
