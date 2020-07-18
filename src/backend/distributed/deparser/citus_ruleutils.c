@@ -422,7 +422,9 @@ pg_get_tableschemadef_string(Oid tableRelationId, bool includeSequenceDefaults)
 		/* deparse check constraint string */
 		char *checkString = deparse_expression(checkNode, checkContext, false, false);
 
+		appendStringInfoString(&buffer, "(");
 		appendStringInfoString(&buffer, checkString);
+		appendStringInfoString(&buffer, ")");
 	}
 
 	/* close create table's outer parentheses */
