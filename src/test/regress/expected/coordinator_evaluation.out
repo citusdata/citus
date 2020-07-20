@@ -359,7 +359,6 @@ PREPARE router_select_with_param(int) AS SELECT DISTINCT value FROM coordinator_
 EXECUTE router_select_with_param(0 + get_local_node_id_volatile());
 DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  value
 ---------------------------------------------------------------------
      0
@@ -368,7 +367,6 @@ DEBUG:  Plan is router executable
 EXECUTE router_select_with_param(0 + get_local_node_id_volatile());
 DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  value
 ---------------------------------------------------------------------
      0
@@ -377,7 +375,6 @@ DEBUG:  Plan is router executable
 EXECUTE router_select_with_param(0 + get_local_node_id_volatile());
 DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  value
 ---------------------------------------------------------------------
      0
@@ -386,7 +383,6 @@ DEBUG:  Plan is router executable
 EXECUTE router_select_with_param(0 + get_local_node_id_volatile());
 DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  value
 ---------------------------------------------------------------------
      0
@@ -395,7 +391,6 @@ DEBUG:  Plan is router executable
 EXECUTE router_select_with_param(0 + get_local_node_id_volatile());
 DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  value
 ---------------------------------------------------------------------
      0
@@ -404,7 +399,6 @@ DEBUG:  Plan is router executable
 EXECUTE router_select_with_param(0 + get_local_node_id_volatile());
 DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  value
 ---------------------------------------------------------------------
      0
@@ -545,27 +539,21 @@ SET client_min_messages TO DEBUG2;
 CALL test_procedure(100);
 DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 CALL test_procedure(100);
 DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 CALL test_procedure(100);
 DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 CALL test_procedure(100);
 DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 CALL test_procedure(100);
 DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 CALL test_procedure(100);
 DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 CALL test_procedure(100);
 CREATE OR REPLACE PROCEDURE coordinator_evaluation.test_procedure_2(int)
  LANGUAGE plpgsql

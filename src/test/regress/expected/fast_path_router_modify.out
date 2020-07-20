@@ -35,69 +35,55 @@ SET client_min_messages TO DEBUG;
 DELETE FROM modify_fast_path WHERE key = 1;
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 1
+DEBUG:  query has a single distribution column value: 1
 UPDATE modify_fast_path SET value_1 = 1 WHERE key = 1;
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 1
+DEBUG:  query has a single distribution column value: 1
 UPDATE modify_fast_path SET value_1 = value_1 + 1 WHERE key = 1;
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 1
+DEBUG:  query has a single distribution column value: 1
 UPDATE modify_fast_path SET value_1 = value_1 + value_2::int WHERE key = 1;
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 1
+DEBUG:  query has a single distribution column value: 1
 DELETE FROM modify_fast_path WHERE value_1 = 15 AND (key = 1 AND value_2 = 'citus');
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 1
+DEBUG:  query has a single distribution column value: 1
 DELETE FROM modify_fast_path WHERE key = 1 and FALSE;
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 1
+DEBUG:  query has a single distribution column value: 1
 -- UPDATE may include complex target entries
 UPDATE modify_fast_path SET value_1 = value_1 + 12 * value_1 WHERE key = 1;
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 1
+DEBUG:  query has a single distribution column value: 1
 UPDATE modify_fast_path SET value_1 = abs(-19) WHERE key = 1;
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 1
+DEBUG:  query has a single distribution column value: 1
 -- cannot go through fast-path because there are multiple keys
 DELETE FROM modify_fast_path WHERE key = 1 AND key = 2;
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 DELETE FROM modify_fast_path WHERE key = 1 AND (key = 2 AND value_1 = 15);
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 -- cannot go through fast-path because key is not on the top level
 DELETE FROM modify_fast_path WHERE value_1 = 15 OR (key = 1 AND value_2 = 'citus');
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 DELETE FROM modify_fast_path WHERE value_1 = 15 AND (key = 1 OR value_2 = 'citus');
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 -- goes through fast-path planning even if the key is updated to the same value
 UPDATE modify_fast_path SET key = 1 WHERE key = 1;
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 1
+DEBUG:  query has a single distribution column value: 1
 UPDATE modify_fast_path SET key = 1::float WHERE key = 1;
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 1
+DEBUG:  query has a single distribution column value: 1
 -- cannot support if key changes
 UPDATE modify_fast_path SET key = 2 WHERE key = 1;
 DEBUG:  modifying the partition value of rows is not allowed
@@ -108,13 +94,11 @@ ERROR:  modifying the partition value of rows is not allowed
 -- returning is supported via fast-path
 INSERT INTO modify_fast_path (key, value_1) VALUES (1,1);
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 1
+DEBUG:  query has a single distribution column value: 1
 DELETE FROM modify_fast_path WHERE key = 1 RETURNING *;
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 1
+DEBUG:  query has a single distribution column value: 1
  key | value_1 | value_2
 ---------------------------------------------------------------------
    1 |       1 |
@@ -122,8 +106,7 @@ DETAIL:  distribution column value: 1
 
 INSERT INTO modify_fast_path (key, value_1) VALUES (2,1) RETURNING value_1, key;
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 2
+DEBUG:  query has a single distribution column value: 2
  value_1 | key
 ---------------------------------------------------------------------
        1 |   2
@@ -132,8 +115,7 @@ DETAIL:  distribution column value: 2
 DELETE FROM modify_fast_path WHERE key = 2 RETURNING value_1 * 15, value_1::numeric * 16;
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 2
+DEBUG:  query has a single distribution column value: 2
  ?column? | ?column?
 ---------------------------------------------------------------------
        15 |       16
@@ -150,8 +132,7 @@ DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  generating subplan XXX_1 for CTE t1: DELETE FROM fast_path_router_modify.modify_fast_path WHERE (key OPERATOR(pg_catalog.=) 1)
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 1
+DEBUG:  query has a single distribution column value: 1
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT key, value_1, value_2 FROM (SELECT modify_fast_path.key, modify_fast_path.value_1, modify_fast_path.value_2 FROM fast_path_router_modify.modify_fast_path) t2
 DEBUG:  Router planner cannot handle multi-shard select queries
  key | value_1 | value_2
@@ -162,8 +143,7 @@ DEBUG:  Router planner cannot handle multi-shard select queries
 SELECT * FROM modify_fast_path WHERE key = 1 FOR UPDATE;
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 1
+DEBUG:  query has a single distribution column value: 1
  key | value_1 | value_2
 ---------------------------------------------------------------------
 (0 rows)
@@ -171,8 +151,7 @@ DETAIL:  distribution column value: 1
 SELECT * FROM modify_fast_path WHERE key = 1 FOR SHARE;
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 1
+DEBUG:  query has a single distribution column value: 1
  key | value_1 | value_2
 ---------------------------------------------------------------------
 (0 rows)
@@ -180,7 +159,6 @@ DETAIL:  distribution column value: 1
 SELECT * FROM modify_fast_path_reference WHERE key = 1 FOR UPDATE;
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  key | value_1 | value_2
 ---------------------------------------------------------------------
 (0 rows)
@@ -188,7 +166,6 @@ DEBUG:  Plan is router executable
 SELECT * FROM modify_fast_path_reference WHERE key = 1 FOR SHARE;
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  key | value_1 | value_2
 ---------------------------------------------------------------------
 (0 rows)
@@ -206,19 +183,15 @@ HINT:  Consider using an equality filter on the distributed table's partition co
 DELETE FROM modify_fast_path_reference WHERE key = 1;
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 UPDATE modify_fast_path_reference SET value_1 = 1 WHERE key = 1;
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 UPDATE modify_fast_path_reference SET value_1 = value_1 + 1 WHERE key = 1;
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 UPDATE modify_fast_path_reference SET value_1 = value_1 + value_2::int WHERE key = 1;
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 -- joins are not supported via fast-path
 UPDATE modify_fast_path
 	SET value_1 = 1
@@ -228,34 +201,27 @@ UPDATE modify_fast_path
 		modify_fast_path.key  = 1 AND
 		modify_fast_path_reference.key = 1;
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 1
+DEBUG:  query has a single distribution column value: 1
 PREPARE p1 (int, int, int) AS
 	UPDATE modify_fast_path SET value_1 = value_1 + $1 WHERE key = $2 AND value_1 = $3;
 EXECUTE p1(1,1,1);
 DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 EXECUTE p1(2,2,2);
 DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 EXECUTE p1(3,3,3);
 DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 EXECUTE p1(4,4,4);
 DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 EXECUTE p1(5,5,5);
 DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 EXECUTE p1(6,6,6);
 DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 EXECUTE p1(7,7,7);
 CREATE FUNCTION modify_fast_path_plpsql(int, int) RETURNS void as $$
 BEGIN
@@ -267,9 +233,6 @@ DEBUG:  Deferred pruning for a fast-path router query
 CONTEXT:  SQL statement "DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2"
 PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL statement
 DEBUG:  Creating router plan
-CONTEXT:  SQL statement "DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2"
-PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL statement
-DEBUG:  Plan is router executable
 CONTEXT:  SQL statement "DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2"
 PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL statement
  modify_fast_path_plpsql
@@ -284,9 +247,6 @@ PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL stateme
 DEBUG:  Creating router plan
 CONTEXT:  SQL statement "DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2"
 PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL statement
-DEBUG:  Plan is router executable
-CONTEXT:  SQL statement "DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2"
-PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL statement
  modify_fast_path_plpsql
 ---------------------------------------------------------------------
 
@@ -297,9 +257,6 @@ DEBUG:  Deferred pruning for a fast-path router query
 CONTEXT:  SQL statement "DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2"
 PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL statement
 DEBUG:  Creating router plan
-CONTEXT:  SQL statement "DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2"
-PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL statement
-DEBUG:  Plan is router executable
 CONTEXT:  SQL statement "DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2"
 PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL statement
  modify_fast_path_plpsql
@@ -314,9 +271,6 @@ PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL stateme
 DEBUG:  Creating router plan
 CONTEXT:  SQL statement "DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2"
 PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL statement
-DEBUG:  Plan is router executable
-CONTEXT:  SQL statement "DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2"
-PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL statement
  modify_fast_path_plpsql
 ---------------------------------------------------------------------
 
@@ -329,9 +283,6 @@ PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL stateme
 DEBUG:  Creating router plan
 CONTEXT:  SQL statement "DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2"
 PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL statement
-DEBUG:  Plan is router executable
-CONTEXT:  SQL statement "DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2"
-PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL statement
  modify_fast_path_plpsql
 ---------------------------------------------------------------------
 
@@ -342,9 +293,6 @@ DEBUG:  Deferred pruning for a fast-path router query
 CONTEXT:  SQL statement "DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2"
 PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL statement
 DEBUG:  Creating router plan
-CONTEXT:  SQL statement "DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2"
-PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL statement
-DEBUG:  Plan is router executable
 CONTEXT:  SQL statement "DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2"
 PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL statement
  modify_fast_path_plpsql
@@ -366,7 +314,6 @@ SET citus.log_remote_commands TO ON;
 EXECUTE prepared_zero_shard_select(1);
 DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 NOTICE:  executing the command locally: SELECT count(*) AS count FROM (SELECT NULL::integer AS key, NULL::integer AS value_1, NULL::text AS value_2 WHERE false) modify_fast_path(key, value_1, value_2) WHERE ((key OPERATOR(pg_catalog.=) 1) AND false)
  count
 ---------------------------------------------------------------------
@@ -376,7 +323,6 @@ NOTICE:  executing the command locally: SELECT count(*) AS count FROM (SELECT NU
 EXECUTE prepared_zero_shard_select(2);
 DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 NOTICE:  executing the command locally: SELECT count(*) AS count FROM (SELECT NULL::integer AS key, NULL::integer AS value_1, NULL::text AS value_2 WHERE false) modify_fast_path(key, value_1, value_2) WHERE ((key OPERATOR(pg_catalog.=) 2) AND false)
  count
 ---------------------------------------------------------------------
@@ -386,7 +332,6 @@ NOTICE:  executing the command locally: SELECT count(*) AS count FROM (SELECT NU
 EXECUTE prepared_zero_shard_select(3);
 DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 NOTICE:  executing the command locally: SELECT count(*) AS count FROM (SELECT NULL::integer AS key, NULL::integer AS value_1, NULL::text AS value_2 WHERE false) modify_fast_path(key, value_1, value_2) WHERE ((key OPERATOR(pg_catalog.=) 3) AND false)
  count
 ---------------------------------------------------------------------
@@ -396,7 +341,6 @@ NOTICE:  executing the command locally: SELECT count(*) AS count FROM (SELECT NU
 EXECUTE prepared_zero_shard_select(4);
 DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 NOTICE:  executing the command locally: SELECT count(*) AS count FROM (SELECT NULL::integer AS key, NULL::integer AS value_1, NULL::text AS value_2 WHERE false) modify_fast_path(key, value_1, value_2) WHERE ((key OPERATOR(pg_catalog.=) 4) AND false)
  count
 ---------------------------------------------------------------------
@@ -406,7 +350,6 @@ NOTICE:  executing the command locally: SELECT count(*) AS count FROM (SELECT NU
 EXECUTE prepared_zero_shard_select(5);
 DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 NOTICE:  executing the command locally: SELECT count(*) AS count FROM (SELECT NULL::integer AS key, NULL::integer AS value_1, NULL::text AS value_2 WHERE false) modify_fast_path(key, value_1, value_2) WHERE ((key OPERATOR(pg_catalog.=) 5) AND false)
  count
 ---------------------------------------------------------------------
@@ -416,7 +359,6 @@ NOTICE:  executing the command locally: SELECT count(*) AS count FROM (SELECT NU
 EXECUTE prepared_zero_shard_select(6);
 DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 NOTICE:  executing the command locally: SELECT count(*) AS count FROM (SELECT NULL::integer AS key, NULL::integer AS value_1, NULL::text AS value_2 WHERE false) modify_fast_path(key, value_1, value_2) WHERE ((key OPERATOR(pg_catalog.=) 6) AND false)
  count
 ---------------------------------------------------------------------
@@ -433,27 +375,21 @@ NOTICE:  executing the command locally: SELECT count(*) AS count FROM (SELECT NU
 EXECUTE prepared_zero_shard_update(1);
 DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 EXECUTE prepared_zero_shard_update(2);
 DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 EXECUTE prepared_zero_shard_update(3);
 DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 EXECUTE prepared_zero_shard_update(4);
 DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 EXECUTE prepared_zero_shard_update(5);
 DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 EXECUTE prepared_zero_shard_update(6);
 DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 EXECUTE prepared_zero_shard_update(7);
 -- same test with fast-path disabled
 SET citus.enable_fast_path_router_planner TO FALSE;
@@ -479,7 +415,6 @@ PREPARE prepared_zero_shard_select(int) AS SELECT count(*) FROM modify_fast_path
 PREPARE prepared_zero_shard_update(int) AS UPDATE modify_fast_path SET value_1 = 1 WHERE key = $1 AND false;
 EXECUTE prepared_zero_shard_select(1);
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 NOTICE:  executing the command locally: SELECT count(*) AS count FROM (SELECT NULL::integer AS key, NULL::integer AS value_1, NULL::text AS value_2 WHERE false) modify_fast_path(key, value_1, value_2) WHERE ((key OPERATOR(pg_catalog.=) $1) AND false)
  count
 ---------------------------------------------------------------------
@@ -488,7 +423,6 @@ NOTICE:  executing the command locally: SELECT count(*) AS count FROM (SELECT NU
 
 EXECUTE prepared_zero_shard_select(2);
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 NOTICE:  executing the command locally: SELECT count(*) AS count FROM (SELECT NULL::integer AS key, NULL::integer AS value_1, NULL::text AS value_2 WHERE false) modify_fast_path(key, value_1, value_2) WHERE ((key OPERATOR(pg_catalog.=) $1) AND false)
  count
 ---------------------------------------------------------------------
@@ -497,7 +431,6 @@ NOTICE:  executing the command locally: SELECT count(*) AS count FROM (SELECT NU
 
 EXECUTE prepared_zero_shard_select(3);
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 NOTICE:  executing the command locally: SELECT count(*) AS count FROM (SELECT NULL::integer AS key, NULL::integer AS value_1, NULL::text AS value_2 WHERE false) modify_fast_path(key, value_1, value_2) WHERE ((key OPERATOR(pg_catalog.=) $1) AND false)
  count
 ---------------------------------------------------------------------
@@ -506,7 +439,6 @@ NOTICE:  executing the command locally: SELECT count(*) AS count FROM (SELECT NU
 
 EXECUTE prepared_zero_shard_select(4);
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 NOTICE:  executing the command locally: SELECT count(*) AS count FROM (SELECT NULL::integer AS key, NULL::integer AS value_1, NULL::text AS value_2 WHERE false) modify_fast_path(key, value_1, value_2) WHERE ((key OPERATOR(pg_catalog.=) $1) AND false)
  count
 ---------------------------------------------------------------------
@@ -515,7 +447,6 @@ NOTICE:  executing the command locally: SELECT count(*) AS count FROM (SELECT NU
 
 EXECUTE prepared_zero_shard_select(5);
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 NOTICE:  executing the command locally: SELECT count(*) AS count FROM (SELECT NULL::integer AS key, NULL::integer AS value_1, NULL::text AS value_2 WHERE false) modify_fast_path(key, value_1, value_2) WHERE ((key OPERATOR(pg_catalog.=) $1) AND false)
  count
 ---------------------------------------------------------------------
@@ -524,7 +455,6 @@ NOTICE:  executing the command locally: SELECT count(*) AS count FROM (SELECT NU
 
 EXECUTE prepared_zero_shard_select(6);
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 NOTICE:  executing the command locally: SELECT count(*) AS count FROM (SELECT NULL::integer AS key, NULL::integer AS value_1, NULL::text AS value_2 WHERE false) modify_fast_path(key, value_1, value_2) WHERE ((key OPERATOR(pg_catalog.=) $1) AND false)
  count
 ---------------------------------------------------------------------
@@ -540,22 +470,16 @@ NOTICE:  executing the command locally: SELECT count(*) AS count FROM (SELECT NU
 
 EXECUTE prepared_zero_shard_update(1);
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 EXECUTE prepared_zero_shard_update(2);
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 EXECUTE prepared_zero_shard_update(3);
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 EXECUTE prepared_zero_shard_update(4);
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 EXECUTE prepared_zero_shard_update(5);
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 EXECUTE prepared_zero_shard_update(6);
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 EXECUTE prepared_zero_shard_update(7);
 -- same test with fast-path disabled
 -- reset back to the original value, in case any new test comes after

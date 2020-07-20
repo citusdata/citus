@@ -46,40 +46,11 @@ MultiExecutorType
 JobExecutorType(DistributedPlan *distributedPlan)
 {
 	Job *job = distributedPlan->workerJob;
-	MultiExecutorType executorType = TaskExecutorType;
-	bool routerExecutablePlan = distributedPlan->routerExecutable;
-
-	/* debug distribution column value */
-	if (routerExecutablePlan)
-	{
-		if (IsLoggableLevel(DEBUG2))
-		{
-			Const *partitionValueConst = job->partitionKeyValue;
-
-			if (partitionValueConst != NULL && !partitionValueConst->constisnull)
-			{
-				Datum partitionColumnValue = partitionValueConst->constvalue;
-				Oid partitionColumnType = partitionValueConst->consttype;
-				char *partitionColumnString = DatumToString(partitionColumnValue,
-															partitionColumnType);
-
-				ereport(DEBUG2, (errmsg("Plan is router executable"),
-								 errdetail("distribution column value: %s",
-										   ApplyLogRedaction(partitionColumnString))));
-			}
-			else
-			{
-				ereport(DEBUG2, (errmsg("Plan is router executable")));
-			}
-		}
-
-		return MULTI_EXECUTOR_ADAPTIVE;
-	}
 
 	if (distributedPlan->insertSelectQuery != NULL)
 	{
 		/*
-		 * Even if adaptiveExecutorEnabled, we go through
+		 * We go through
 		 * MULTI_EXECUTOR_NON_PUSHABLE_INSERT_SELECT because
 		 * the executor already knows how to handle adaptive
 		 * executor when necessary.
@@ -87,29 +58,40 @@ JobExecutorType(DistributedPlan *distributedPlan)
 		return MULTI_EXECUTOR_NON_PUSHABLE_INSERT_SELECT;
 	}
 
-	Assert(distributedPlan->modLevel == ROW_MODIFY_READONLY);
-
-
-	if (executorType == MULTI_EXECUTOR_ADAPTIVE)
+	/*
+	 * If we have repartition jobs with adaptive executor and repartition
+	 * joins are not enabled, error out.
+	 */
+	int dependentJobCount = list_length(job->dependentJobList);
+	if (!EnableRepartitionJoins && dependentJobCount > 0)
 	{
-		/* if we have repartition jobs with adaptive executor and repartition
-		 * joins are not enabled, error out. Otherwise, switch to task-tracker
-		 */
-		int dependentJobCount = list_length(job->dependentJobList);
-		if (dependentJobCount > 0)
+		ereport(ERROR, (errmsg("the query contains a join that requires repartitioning"),
+						errhint("Set citus.enable_repartition_joins to on to enable "
+								"repartitioning")));
+	}
+
+	/*
+	 * Debug distribution column value if possible. The distributed planner sometimes
+	 * defers creating the tasks, so the task list might be NIL. Still, it sets the
+	 * partitionKeyValue and we print it here.
+	 */
+	if (list_length(job->taskList) <= 1 && IsLoggableLevel(DEBUG2))
+	{
+		Const *partitionValueConst = job->partitionKeyValue;
+
+		if (partitionValueConst != NULL && !partitionValueConst->constisnull)
 		{
-			if (!EnableRepartitionJoins)
-			{
-				ereport(ERROR, (errmsg(
-									"the query contains a join that requires repartitioning"),
-								errhint("Set citus.enable_repartition_joins to on "
-										"to enable repartitioning")));
-			}
-			return MULTI_EXECUTOR_ADAPTIVE;
+			Datum partitionColumnValue = partitionValueConst->constvalue;
+			Oid partitionColumnType = partitionValueConst->consttype;
+			char *partitionColumnString = DatumToString(partitionColumnValue,
+														partitionColumnType);
+
+			ereport(DEBUG2, (errmsg("query has a single distribution column value: "
+									"%s", partitionColumnString)));
 		}
 	}
 
-	return executorType;
+	return MULTI_EXECUTOR_ADAPTIVE;
 }
 
 

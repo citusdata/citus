@@ -78,7 +78,6 @@ INSERT INTO test_range VALUES (U&'\00E4sop', 1), (U&'Vo\1E9Er', 2);
 SET client_min_messages TO debug;
 SELECT * FROM test_range WHERE key > 'Ab' AND key < U&'\00E4z';
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  key  | val
 ---------------------------------------------------------------------
  äsop |   1

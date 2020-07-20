@@ -921,7 +921,6 @@ SELECT create_reference_table('numbers');
 SET client_min_messages TO debug4;
 INSERT INTO numbers VALUES (1), (2), (3), (4);
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 DEBUG:  query before rebuilding: (null)
 DEBUG:  query after rebuilding:  INSERT INTO public.numbers_1250015 AS citus_table_alias (a) VALUES (1), (2), (3), (4)
 DEBUG:  assigned task to node localhost:xxxxx
@@ -934,7 +933,6 @@ DEBUG:  Total number of commands sent over the session 5: 1
 SELECT count(*) FROM numbers;
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      4

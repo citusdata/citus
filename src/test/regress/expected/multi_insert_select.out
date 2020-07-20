@@ -67,7 +67,6 @@ DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300004 AS 
 DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300005 AS citus_table_alias (user_id, "time", value_1, value_2, value_3, value_4) SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.raw_events_first_13300001 raw_events_first WHERE ((worker_hash(user_id) OPERATOR(pg_catalog.>=) '-1073741824'::integer) AND (worker_hash(user_id) OPERATOR(pg_catalog.<=) '-1'::integer))
 DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300006 AS citus_table_alias (user_id, "time", value_1, value_2, value_3, value_4) SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.raw_events_first_13300002 raw_events_first WHERE ((worker_hash(user_id) OPERATOR(pg_catalog.>=) 0) AND (worker_hash(user_id) OPERATOR(pg_catalog.<=) 1073741823))
 DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300007 AS citus_table_alias (user_id, "time", value_1, value_2, value_3, value_4) SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.raw_events_first_13300003 raw_events_first WHERE ((worker_hash(user_id) OPERATOR(pg_catalog.>=) 1073741824) AND (worker_hash(user_id) OPERATOR(pg_catalog.<=) 2147483647))
-DEBUG:  Plan is router executable
 -- see that our first multi shard INSERT...SELECT works expected
 SET client_min_messages TO INFO;
 SELECT
@@ -154,7 +153,6 @@ DEBUG:  Skipping target shard interval 13300004 since SELECT query for it pruned
 DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300005 AS citus_table_alias (user_id, "time") SELECT user_id, "time" FROM public.raw_events_first_13300001 raw_events_first WHERE ((user_id OPERATOR(pg_catalog.=) 7) AND ((worker_hash(user_id) OPERATOR(pg_catalog.>=) '-1073741824'::integer) AND (worker_hash(user_id) OPERATOR(pg_catalog.<=) '-1'::integer)))
 DEBUG:  Skipping target shard interval 13300006 since SELECT query for it pruned away
 DEBUG:  Skipping target shard interval 13300007 since SELECT query for it pruned away
-DEBUG:  Plan is router executable
 SET client_min_messages TO INFO;
 -- add one more row
 INSERT INTO raw_events_first (user_id, time, value_1, value_2, value_3, value_4) VALUES
@@ -172,7 +170,6 @@ DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300004 AS 
 DEBUG:  Skipping target shard interval 13300005 since SELECT query for it pruned away
 DEBUG:  Skipping target shard interval 13300006 since SELECT query for it pruned away
 DEBUG:  Skipping target shard interval 13300007 since SELECT query for it pruned away
-DEBUG:  Plan is router executable
 -- a zero shard select
 INSERT INTO raw_events_second (value_2, value_1, value_3, value_4, user_id, time)
 SELECT
@@ -185,7 +182,6 @@ DEBUG:  Skipping target shard interval 13300004 since SELECT query for it pruned
 DEBUG:  Skipping target shard interval 13300005 since SELECT query for it pruned away
 DEBUG:  Skipping target shard interval 13300006 since SELECT query for it pruned away
 DEBUG:  Skipping target shard interval 13300007 since SELECT query for it pruned away
-DEBUG:  Plan is router executable
 -- another zero shard select
 INSERT INTO raw_events_second (value_2, value_1, value_3, value_4, user_id, time)
 SELECT
@@ -198,7 +194,6 @@ DEBUG:  Skipping target shard interval 13300004 since SELECT query for it pruned
 DEBUG:  Skipping target shard interval 13300005 since SELECT query for it pruned away
 DEBUG:  Skipping target shard interval 13300006 since SELECT query for it pruned away
 DEBUG:  Skipping target shard interval 13300007 since SELECT query for it pruned away
-DEBUG:  Plan is router executable
 -- add one more row
 SET client_min_messages TO INFO;
 INSERT INTO raw_events_first (user_id, time, value_1, value_2, value_3, value_4) VALUES
@@ -217,7 +212,6 @@ DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300004 AS 
 DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300005 AS citus_table_alias (user_id, value_1, value_3) SELECT user_id, value_1, value_3 FROM public.raw_events_first_13300001 raw_events_first WHERE ((value_3 OPERATOR(pg_catalog.=) (9000)::double precision) AND ((worker_hash(user_id) OPERATOR(pg_catalog.>=) '-1073741824'::integer) AND (worker_hash(user_id) OPERATOR(pg_catalog.<=) '-1'::integer))) RETURNING citus_table_alias.user_id, citus_table_alias."time", citus_table_alias.value_1, citus_table_alias.value_2, citus_table_alias.value_3, citus_table_alias.value_4
 DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300006 AS citus_table_alias (user_id, value_1, value_3) SELECT user_id, value_1, value_3 FROM public.raw_events_first_13300002 raw_events_first WHERE ((value_3 OPERATOR(pg_catalog.=) (9000)::double precision) AND ((worker_hash(user_id) OPERATOR(pg_catalog.>=) 0) AND (worker_hash(user_id) OPERATOR(pg_catalog.<=) 1073741823))) RETURNING citus_table_alias.user_id, citus_table_alias."time", citus_table_alias.value_1, citus_table_alias.value_2, citus_table_alias.value_3, citus_table_alias.value_4
 DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300007 AS citus_table_alias (user_id, value_1, value_3) SELECT user_id, value_1, value_3 FROM public.raw_events_first_13300003 raw_events_first WHERE ((value_3 OPERATOR(pg_catalog.=) (9000)::double precision) AND ((worker_hash(user_id) OPERATOR(pg_catalog.>=) 1073741824) AND (worker_hash(user_id) OPERATOR(pg_catalog.<=) 2147483647))) RETURNING citus_table_alias.user_id, citus_table_alias."time", citus_table_alias.value_1, citus_table_alias.value_2, citus_table_alias.value_3, citus_table_alias.value_4
-DEBUG:  Plan is router executable
  user_id | time | value_1 | value_2 | value_3 | value_4
 ---------------------------------------------------------------------
        9 |      |      90 |         |    9000 |
@@ -237,7 +231,6 @@ DEBUG:  Skipping target shard interval 13300004 since SELECT query for it pruned
 DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300005 AS citus_table_alias (user_id, value_1, value_3) SELECT user_id, value_1, value_3 FROM public.raw_events_first_13300001 raw_events_first WHERE (((user_id OPERATOR(pg_catalog.=) 9) OR (user_id OPERATOR(pg_catalog.=) 16)) AND ((worker_hash(user_id) OPERATOR(pg_catalog.>=) '-1073741824'::integer) AND (worker_hash(user_id) OPERATOR(pg_catalog.<=) '-1'::integer))) RETURNING citus_table_alias.user_id, citus_table_alias."time", citus_table_alias.value_1, citus_table_alias.value_2, citus_table_alias.value_3, citus_table_alias.value_4
 DEBUG:  Skipping target shard interval 13300006 since SELECT query for it pruned away
 DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300007 AS citus_table_alias (user_id, value_1, value_3) SELECT user_id, value_1, value_3 FROM public.raw_events_first_13300003 raw_events_first WHERE (((user_id OPERATOR(pg_catalog.=) 9) OR (user_id OPERATOR(pg_catalog.=) 16)) AND ((worker_hash(user_id) OPERATOR(pg_catalog.>=) 1073741824) AND (worker_hash(user_id) OPERATOR(pg_catalog.<=) 2147483647))) RETURNING citus_table_alias.user_id, citus_table_alias."time", citus_table_alias.value_1, citus_table_alias.value_2, citus_table_alias.value_3, citus_table_alias.value_4
-DEBUG:  Plan is router executable
 ERROR:  duplicate key value violates unique constraint "raw_events_second_user_id_value_1_key_xxxxxxx"
 -- now do some aggregations
 INSERT INTO agg_events
@@ -251,7 +244,6 @@ DEBUG:  distributed statement: INSERT INTO public.agg_events_13300008 AS citus_t
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300009 AS citus_table_alias (user_id, value_1_agg, value_2_agg, value_3_agg, value_4_agg) SELECT user_id, sum(value_1) AS sum, avg(value_2) AS avg, sum(value_3) AS sum, count(value_4) AS count FROM public.raw_events_first_13300001 raw_events_first WHERE ((worker_hash(user_id) OPERATOR(pg_catalog.>=) '-1073741824'::integer) AND (worker_hash(user_id) OPERATOR(pg_catalog.<=) '-1'::integer)) GROUP BY user_id
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300010 AS citus_table_alias (user_id, value_1_agg, value_2_agg, value_3_agg, value_4_agg) SELECT user_id, sum(value_1) AS sum, avg(value_2) AS avg, sum(value_3) AS sum, count(value_4) AS count FROM public.raw_events_first_13300002 raw_events_first WHERE ((worker_hash(user_id) OPERATOR(pg_catalog.>=) 0) AND (worker_hash(user_id) OPERATOR(pg_catalog.<=) 1073741823)) GROUP BY user_id
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300011 AS citus_table_alias (user_id, value_1_agg, value_2_agg, value_3_agg, value_4_agg) SELECT user_id, sum(value_1) AS sum, avg(value_2) AS avg, sum(value_3) AS sum, count(value_4) AS count FROM public.raw_events_first_13300003 raw_events_first WHERE ((worker_hash(user_id) OPERATOR(pg_catalog.>=) 1073741824) AND (worker_hash(user_id) OPERATOR(pg_catalog.<=) 2147483647)) GROUP BY user_id
-DEBUG:  Plan is router executable
 -- group by column not exists on the SELECT target list
 INSERT INTO agg_events (value_3_agg, value_4_agg, value_1_agg, user_id)
 SELECT
@@ -265,7 +257,6 @@ DEBUG:  distributed statement: INSERT INTO public.agg_events_13300008 AS citus_t
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300009 AS citus_table_alias (user_id, value_1_agg, value_3_agg, value_4_agg) SELECT user_id, sum(value_1) AS sum, sum(value_3) AS sum, count(value_4) AS count FROM public.raw_events_first_13300001 raw_events_first WHERE ((worker_hash(user_id) OPERATOR(pg_catalog.>=) '-1073741824'::integer) AND (worker_hash(user_id) OPERATOR(pg_catalog.<=) '-1'::integer)) GROUP BY value_2, user_id RETURNING citus_table_alias.user_id, citus_table_alias.value_1_agg, citus_table_alias.value_2_agg, citus_table_alias.value_3_agg, citus_table_alias.value_4_agg, citus_table_alias.agg_time
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300010 AS citus_table_alias (user_id, value_1_agg, value_3_agg, value_4_agg) SELECT user_id, sum(value_1) AS sum, sum(value_3) AS sum, count(value_4) AS count FROM public.raw_events_first_13300002 raw_events_first WHERE ((worker_hash(user_id) OPERATOR(pg_catalog.>=) 0) AND (worker_hash(user_id) OPERATOR(pg_catalog.<=) 1073741823)) GROUP BY value_2, user_id RETURNING citus_table_alias.user_id, citus_table_alias.value_1_agg, citus_table_alias.value_2_agg, citus_table_alias.value_3_agg, citus_table_alias.value_4_agg, citus_table_alias.agg_time
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300011 AS citus_table_alias (user_id, value_1_agg, value_3_agg, value_4_agg) SELECT user_id, sum(value_1) AS sum, sum(value_3) AS sum, count(value_4) AS count FROM public.raw_events_first_13300003 raw_events_first WHERE ((worker_hash(user_id) OPERATOR(pg_catalog.>=) 1073741824) AND (worker_hash(user_id) OPERATOR(pg_catalog.<=) 2147483647)) GROUP BY value_2, user_id RETURNING citus_table_alias.user_id, citus_table_alias.value_1_agg, citus_table_alias.value_2_agg, citus_table_alias.value_3_agg, citus_table_alias.value_4_agg, citus_table_alias.agg_time
-DEBUG:  Plan is router executable
 ERROR:  duplicate key value violates unique constraint "agg_events_user_id_value_1_agg_key_xxxxxxx"
 -- some subquery tests
 INSERT INTO agg_events
@@ -284,7 +275,6 @@ DEBUG:  distributed statement: INSERT INTO public.agg_events_13300008 AS citus_t
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300009 AS citus_table_alias (user_id, value_1_agg) SELECT id, sum(value_1) AS sum FROM (SELECT raw_events_second.user_id AS id, raw_events_second.value_1 FROM public.raw_events_first_13300001 raw_events_first, public.raw_events_second_13300005 raw_events_second WHERE (raw_events_first.user_id OPERATOR(pg_catalog.=) raw_events_second.user_id)) foo WHERE ((worker_hash(id) OPERATOR(pg_catalog.>=) '-1073741824'::integer) AND (worker_hash(id) OPERATOR(pg_catalog.<=) '-1'::integer)) GROUP BY id ORDER BY id
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300010 AS citus_table_alias (user_id, value_1_agg) SELECT id, sum(value_1) AS sum FROM (SELECT raw_events_second.user_id AS id, raw_events_second.value_1 FROM public.raw_events_first_13300002 raw_events_first, public.raw_events_second_13300006 raw_events_second WHERE (raw_events_first.user_id OPERATOR(pg_catalog.=) raw_events_second.user_id)) foo WHERE ((worker_hash(id) OPERATOR(pg_catalog.>=) 0) AND (worker_hash(id) OPERATOR(pg_catalog.<=) 1073741823)) GROUP BY id ORDER BY id
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300011 AS citus_table_alias (user_id, value_1_agg) SELECT id, sum(value_1) AS sum FROM (SELECT raw_events_second.user_id AS id, raw_events_second.value_1 FROM public.raw_events_first_13300003 raw_events_first, public.raw_events_second_13300007 raw_events_second WHERE (raw_events_first.user_id OPERATOR(pg_catalog.=) raw_events_second.user_id)) foo WHERE ((worker_hash(id) OPERATOR(pg_catalog.>=) 1073741824) AND (worker_hash(id) OPERATOR(pg_catalog.<=) 2147483647)) GROUP BY id ORDER BY id
-DEBUG:  Plan is router executable
 ERROR:  duplicate key value violates unique constraint "agg_events_user_id_value_1_agg_key_xxxxxxx"
 -- subquery one more level depth
 INSERT INTO agg_events
@@ -306,7 +296,6 @@ DEBUG:  distributed statement: INSERT INTO public.agg_events_13300008 AS citus_t
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300009 AS citus_table_alias (user_id, value_1_agg, value_4_agg) SELECT id, v1, v4 FROM (SELECT sum(raw_events_second.value_4) AS v4, sum(raw_events_first.value_1) AS v1, raw_events_second.user_id AS id FROM public.raw_events_first_13300001 raw_events_first, public.raw_events_second_13300005 raw_events_second WHERE (raw_events_first.user_id OPERATOR(pg_catalog.=) raw_events_second.user_id) GROUP BY raw_events_second.user_id) foo WHERE ((worker_hash(id) OPERATOR(pg_catalog.>=) '-1073741824'::integer) AND (worker_hash(id) OPERATOR(pg_catalog.<=) '-1'::integer)) ORDER BY id
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300010 AS citus_table_alias (user_id, value_1_agg, value_4_agg) SELECT id, v1, v4 FROM (SELECT sum(raw_events_second.value_4) AS v4, sum(raw_events_first.value_1) AS v1, raw_events_second.user_id AS id FROM public.raw_events_first_13300002 raw_events_first, public.raw_events_second_13300006 raw_events_second WHERE (raw_events_first.user_id OPERATOR(pg_catalog.=) raw_events_second.user_id) GROUP BY raw_events_second.user_id) foo WHERE ((worker_hash(id) OPERATOR(pg_catalog.>=) 0) AND (worker_hash(id) OPERATOR(pg_catalog.<=) 1073741823)) ORDER BY id
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300011 AS citus_table_alias (user_id, value_1_agg, value_4_agg) SELECT id, v1, v4 FROM (SELECT sum(raw_events_second.value_4) AS v4, sum(raw_events_first.value_1) AS v1, raw_events_second.user_id AS id FROM public.raw_events_first_13300003 raw_events_first, public.raw_events_second_13300007 raw_events_second WHERE (raw_events_first.user_id OPERATOR(pg_catalog.=) raw_events_second.user_id) GROUP BY raw_events_second.user_id) foo WHERE ((worker_hash(id) OPERATOR(pg_catalog.>=) 1073741824) AND (worker_hash(id) OPERATOR(pg_catalog.<=) 2147483647)) ORDER BY id
-DEBUG:  Plan is router executable
 ERROR:  duplicate key value violates unique constraint "agg_events_user_id_value_1_agg_key_xxxxxxx"
 \set VERBOSITY DEFAULT
 -- join between subqueries
@@ -336,7 +325,6 @@ DEBUG:  distributed statement: INSERT INTO public.agg_events_13300008 AS citus_t
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300009 AS citus_table_alias (user_id) SELECT f2.id FROM ((SELECT foo.id FROM (SELECT reference_table.user_id AS id FROM public.raw_events_first_13300001 raw_events_first, public.reference_table_13300012 reference_table WHERE (raw_events_first.user_id OPERATOR(pg_catalog.=) reference_table.user_id)) foo) f JOIN (SELECT foo2.v4, foo2.v1, foo2.id FROM (SELECT sum(raw_events_second.value_4) AS v4, sum(raw_events_first.value_1) AS v1, raw_events_second.user_id AS id FROM public.raw_events_first_13300001 raw_events_first, public.raw_events_second_13300005 raw_events_second WHERE (raw_events_first.user_id OPERATOR(pg_catalog.=) raw_events_second.user_id) GROUP BY raw_events_second.user_id HAVING (sum(raw_events_second.value_4) OPERATOR(pg_catalog.>) (10)::numeric)) foo2) f2 ON ((f.id OPERATOR(pg_catalog.=) f2.id))) WHERE ((worker_hash(f2.id) OPERATOR(pg_catalog.>=) '-1073741824'::integer) AND (worker_hash(f2.id) OPERATOR(pg_catalog.<=) '-1'::integer))
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300010 AS citus_table_alias (user_id) SELECT f2.id FROM ((SELECT foo.id FROM (SELECT reference_table.user_id AS id FROM public.raw_events_first_13300002 raw_events_first, public.reference_table_13300012 reference_table WHERE (raw_events_first.user_id OPERATOR(pg_catalog.=) reference_table.user_id)) foo) f JOIN (SELECT foo2.v4, foo2.v1, foo2.id FROM (SELECT sum(raw_events_second.value_4) AS v4, sum(raw_events_first.value_1) AS v1, raw_events_second.user_id AS id FROM public.raw_events_first_13300002 raw_events_first, public.raw_events_second_13300006 raw_events_second WHERE (raw_events_first.user_id OPERATOR(pg_catalog.=) raw_events_second.user_id) GROUP BY raw_events_second.user_id HAVING (sum(raw_events_second.value_4) OPERATOR(pg_catalog.>) (10)::numeric)) foo2) f2 ON ((f.id OPERATOR(pg_catalog.=) f2.id))) WHERE ((worker_hash(f2.id) OPERATOR(pg_catalog.>=) 0) AND (worker_hash(f2.id) OPERATOR(pg_catalog.<=) 1073741823))
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300011 AS citus_table_alias (user_id) SELECT f2.id FROM ((SELECT foo.id FROM (SELECT reference_table.user_id AS id FROM public.raw_events_first_13300003 raw_events_first, public.reference_table_13300012 reference_table WHERE (raw_events_first.user_id OPERATOR(pg_catalog.=) reference_table.user_id)) foo) f JOIN (SELECT foo2.v4, foo2.v1, foo2.id FROM (SELECT sum(raw_events_second.value_4) AS v4, sum(raw_events_first.value_1) AS v1, raw_events_second.user_id AS id FROM public.raw_events_first_13300003 raw_events_first, public.raw_events_second_13300007 raw_events_second WHERE (raw_events_first.user_id OPERATOR(pg_catalog.=) raw_events_second.user_id) GROUP BY raw_events_second.user_id HAVING (sum(raw_events_second.value_4) OPERATOR(pg_catalog.>) (10)::numeric)) foo2) f2 ON ((f.id OPERATOR(pg_catalog.=) f2.id))) WHERE ((worker_hash(f2.id) OPERATOR(pg_catalog.>=) 1073741824) AND (worker_hash(f2.id) OPERATOR(pg_catalog.<=) 2147483647))
-DEBUG:  Plan is router executable
 -- add one more level subqueris on top of subquery JOINs
 INSERT INTO agg_events
             (user_id, value_4_agg)
@@ -370,7 +358,6 @@ DEBUG:  distributed statement: INSERT INTO public.agg_events_13300008 AS citus_t
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300009 AS citus_table_alias (user_id, value_4_agg) SELECT id, max(value) AS max FROM (SELECT f2.id, f2.v4 AS value FROM ((SELECT foo.id FROM (SELECT reference_table.user_id AS id FROM public.raw_events_first_13300001 raw_events_first, public.reference_table_13300012 reference_table WHERE (raw_events_first.user_id OPERATOR(pg_catalog.=) reference_table.user_id)) foo) f JOIN (SELECT foo2.v4, foo2.v1, foo2.id FROM (SELECT sum(raw_events_second.value_4) AS v4, sum(raw_events_first.value_1) AS v1, raw_events_second.user_id AS id FROM public.raw_events_first_13300001 raw_events_first, public.raw_events_second_13300005 raw_events_second WHERE (raw_events_first.user_id OPERATOR(pg_catalog.=) raw_events_second.user_id) GROUP BY raw_events_second.user_id HAVING (sum(raw_events_second.value_4) OPERATOR(pg_catalog.>) (10)::numeric)) foo2) f2 ON ((f.id OPERATOR(pg_catalog.=) f2.id)))) outer_most WHERE ((worker_hash(id) OPERATOR(pg_catalog.>=) '-1073741824'::integer) AND (worker_hash(id) OPERATOR(pg_catalog.<=) '-1'::integer)) GROUP BY id
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300010 AS citus_table_alias (user_id, value_4_agg) SELECT id, max(value) AS max FROM (SELECT f2.id, f2.v4 AS value FROM ((SELECT foo.id FROM (SELECT reference_table.user_id AS id FROM public.raw_events_first_13300002 raw_events_first, public.reference_table_13300012 reference_table WHERE (raw_events_first.user_id OPERATOR(pg_catalog.=) reference_table.user_id)) foo) f JOIN (SELECT foo2.v4, foo2.v1, foo2.id FROM (SELECT sum(raw_events_second.value_4) AS v4, sum(raw_events_first.value_1) AS v1, raw_events_second.user_id AS id FROM public.raw_events_first_13300002 raw_events_first, public.raw_events_second_13300006 raw_events_second WHERE (raw_events_first.user_id OPERATOR(pg_catalog.=) raw_events_second.user_id) GROUP BY raw_events_second.user_id HAVING (sum(raw_events_second.value_4) OPERATOR(pg_catalog.>) (10)::numeric)) foo2) f2 ON ((f.id OPERATOR(pg_catalog.=) f2.id)))) outer_most WHERE ((worker_hash(id) OPERATOR(pg_catalog.>=) 0) AND (worker_hash(id) OPERATOR(pg_catalog.<=) 1073741823)) GROUP BY id
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300011 AS citus_table_alias (user_id, value_4_agg) SELECT id, max(value) AS max FROM (SELECT f2.id, f2.v4 AS value FROM ((SELECT foo.id FROM (SELECT reference_table.user_id AS id FROM public.raw_events_first_13300003 raw_events_first, public.reference_table_13300012 reference_table WHERE (raw_events_first.user_id OPERATOR(pg_catalog.=) reference_table.user_id)) foo) f JOIN (SELECT foo2.v4, foo2.v1, foo2.id FROM (SELECT sum(raw_events_second.value_4) AS v4, sum(raw_events_first.value_1) AS v1, raw_events_second.user_id AS id FROM public.raw_events_first_13300003 raw_events_first, public.raw_events_second_13300007 raw_events_second WHERE (raw_events_first.user_id OPERATOR(pg_catalog.=) raw_events_second.user_id) GROUP BY raw_events_second.user_id HAVING (sum(raw_events_second.value_4) OPERATOR(pg_catalog.>) (10)::numeric)) foo2) f2 ON ((f.id OPERATOR(pg_catalog.=) f2.id)))) outer_most WHERE ((worker_hash(id) OPERATOR(pg_catalog.>=) 1073741824) AND (worker_hash(id) OPERATOR(pg_catalog.<=) 2147483647)) GROUP BY id
-DEBUG:  Plan is router executable
 -- subqueries in WHERE clause
 INSERT INTO raw_events_second
             (user_id)
@@ -383,7 +370,6 @@ DEBUG:  Skipping target shard interval 13300004 since SELECT query for it pruned
 DEBUG:  Skipping target shard interval 13300005 since SELECT query for it pruned away
 DEBUG:  Skipping target shard interval 13300006 since SELECT query for it pruned away
 DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300007 AS citus_table_alias (user_id) SELECT user_id FROM public.raw_events_first_13300003 raw_events_first WHERE ((user_id OPERATOR(pg_catalog.=) ANY (SELECT raw_events_second.user_id FROM public.raw_events_second_13300007 raw_events_second WHERE (raw_events_second.user_id OPERATOR(pg_catalog.=) 2))) AND ((worker_hash(user_id) OPERATOR(pg_catalog.>=) 1073741824) AND (worker_hash(user_id) OPERATOR(pg_catalog.<=) 2147483647)))
-DEBUG:  Plan is router executable
 INSERT INTO raw_events_second
              (user_id)
 SELECT user_id
@@ -396,7 +382,6 @@ DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300004 AS 
 DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300005 AS citus_table_alias (user_id) SELECT user_id FROM public.raw_events_first_13300001 raw_events_first WHERE ((user_id OPERATOR(pg_catalog.=) ANY (SELECT raw_events_second.user_id FROM public.raw_events_second_13300005 raw_events_second WHERE ((raw_events_second.user_id OPERATOR(pg_catalog.<>) 2) AND (raw_events_second.value_1 OPERATOR(pg_catalog.=) 2000)))) AND ((worker_hash(user_id) OPERATOR(pg_catalog.>=) '-1073741824'::integer) AND (worker_hash(user_id) OPERATOR(pg_catalog.<=) '-1'::integer))) ON CONFLICT(user_id, value_1) DO NOTHING
 DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300006 AS citus_table_alias (user_id) SELECT user_id FROM public.raw_events_first_13300002 raw_events_first WHERE ((user_id OPERATOR(pg_catalog.=) ANY (SELECT raw_events_second.user_id FROM public.raw_events_second_13300006 raw_events_second WHERE ((raw_events_second.user_id OPERATOR(pg_catalog.<>) 2) AND (raw_events_second.value_1 OPERATOR(pg_catalog.=) 2000)))) AND ((worker_hash(user_id) OPERATOR(pg_catalog.>=) 0) AND (worker_hash(user_id) OPERATOR(pg_catalog.<=) 1073741823))) ON CONFLICT(user_id, value_1) DO NOTHING
 DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300007 AS citus_table_alias (user_id) SELECT user_id FROM public.raw_events_first_13300003 raw_events_first WHERE ((user_id OPERATOR(pg_catalog.=) ANY (SELECT raw_events_second.user_id FROM public.raw_events_second_13300007 raw_events_second WHERE ((raw_events_second.user_id OPERATOR(pg_catalog.<>) 2) AND (raw_events_second.value_1 OPERATOR(pg_catalog.=) 2000)))) AND ((worker_hash(user_id) OPERATOR(pg_catalog.>=) 1073741824) AND (worker_hash(user_id) OPERATOR(pg_catalog.<=) 2147483647))) ON CONFLICT(user_id, value_1) DO NOTHING
-DEBUG:  Plan is router executable
 INSERT INTO raw_events_second
             (user_id)
 SELECT user_id
@@ -407,7 +392,6 @@ DEBUG:  Skipping target shard interval 13300004 since SELECT query for it pruned
 DEBUG:  Skipping target shard interval 13300005 since SELECT query for it pruned away
 DEBUG:  Skipping target shard interval 13300006 since SELECT query for it pruned away
 DEBUG:  Skipping target shard interval 13300007 since SELECT query for it pruned away
-DEBUG:  Plan is router executable
 INSERT INTO raw_events_second
             (user_id)
 SELECT user_id
@@ -419,7 +403,6 @@ DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300004 AS 
 DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300005 AS citus_table_alias (user_id) SELECT user_id FROM public.raw_events_first_13300001 raw_events_first WHERE ((user_id OPERATOR(pg_catalog.=) ANY (SELECT raw_events_second.user_id FROM public.raw_events_second_13300005 raw_events_second WHERE ((raw_events_second.value_1 OPERATOR(pg_catalog.=) 1000) OR (raw_events_second.value_1 OPERATOR(pg_catalog.=) 2000) OR (raw_events_second.value_1 OPERATOR(pg_catalog.=) 3000)))) AND ((worker_hash(user_id) OPERATOR(pg_catalog.>=) '-1073741824'::integer) AND (worker_hash(user_id) OPERATOR(pg_catalog.<=) '-1'::integer)))
 DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300006 AS citus_table_alias (user_id) SELECT user_id FROM public.raw_events_first_13300002 raw_events_first WHERE ((user_id OPERATOR(pg_catalog.=) ANY (SELECT raw_events_second.user_id FROM public.raw_events_second_13300006 raw_events_second WHERE ((raw_events_second.value_1 OPERATOR(pg_catalog.=) 1000) OR (raw_events_second.value_1 OPERATOR(pg_catalog.=) 2000) OR (raw_events_second.value_1 OPERATOR(pg_catalog.=) 3000)))) AND ((worker_hash(user_id) OPERATOR(pg_catalog.>=) 0) AND (worker_hash(user_id) OPERATOR(pg_catalog.<=) 1073741823)))
 DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300007 AS citus_table_alias (user_id) SELECT user_id FROM public.raw_events_first_13300003 raw_events_first WHERE ((user_id OPERATOR(pg_catalog.=) ANY (SELECT raw_events_second.user_id FROM public.raw_events_second_13300007 raw_events_second WHERE ((raw_events_second.value_1 OPERATOR(pg_catalog.=) 1000) OR (raw_events_second.value_1 OPERATOR(pg_catalog.=) 2000) OR (raw_events_second.value_1 OPERATOR(pg_catalog.=) 3000)))) AND ((worker_hash(user_id) OPERATOR(pg_catalog.>=) 1073741824) AND (worker_hash(user_id) OPERATOR(pg_catalog.<=) 2147483647)))
-DEBUG:  Plan is router executable
 -- lets mix subqueries in FROM clause and subqueries in WHERE
 INSERT INTO agg_events
             (user_id)
@@ -449,7 +432,6 @@ DEBUG:  distributed statement: INSERT INTO public.agg_events_13300008 AS citus_t
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300009 AS citus_table_alias (user_id) SELECT f2.id FROM ((SELECT foo.id FROM (SELECT reference_table.user_id AS id FROM public.raw_events_first_13300001 raw_events_first, public.reference_table_13300012 reference_table WHERE (raw_events_first.user_id OPERATOR(pg_catalog.=) reference_table.user_id)) foo) f JOIN (SELECT foo2.v4, foo2.v1, foo2.id FROM (SELECT sum(raw_events_second.value_4) AS v4, sum(raw_events_first.value_1) AS v1, raw_events_second.user_id AS id FROM public.raw_events_first_13300001 raw_events_first, public.raw_events_second_13300005 raw_events_second WHERE (raw_events_first.user_id OPERATOR(pg_catalog.=) raw_events_second.user_id) GROUP BY raw_events_second.user_id HAVING (sum(raw_events_second.value_4) OPERATOR(pg_catalog.>) (1000)::numeric)) foo2) f2 ON ((f.id OPERATOR(pg_catalog.=) f2.id))) WHERE ((f.id OPERATOR(pg_catalog.=) ANY (SELECT raw_events_second.user_id FROM public.raw_events_second_13300005 raw_events_second)) AND ((worker_hash(f2.id) OPERATOR(pg_catalog.>=) '-1073741824'::integer) AND (worker_hash(f2.id) OPERATOR(pg_catalog.<=) '-1'::integer)))
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300010 AS citus_table_alias (user_id) SELECT f2.id FROM ((SELECT foo.id FROM (SELECT reference_table.user_id AS id FROM public.raw_events_first_13300002 raw_events_first, public.reference_table_13300012 reference_table WHERE (raw_events_first.user_id OPERATOR(pg_catalog.=) reference_table.user_id)) foo) f JOIN (SELECT foo2.v4, foo2.v1, foo2.id FROM (SELECT sum(raw_events_second.value_4) AS v4, sum(raw_events_first.value_1) AS v1, raw_events_second.user_id AS id FROM public.raw_events_first_13300002 raw_events_first, public.raw_events_second_13300006 raw_events_second WHERE (raw_events_first.user_id OPERATOR(pg_catalog.=) raw_events_second.user_id) GROUP BY raw_events_second.user_id HAVING (sum(raw_events_second.value_4) OPERATOR(pg_catalog.>) (1000)::numeric)) foo2) f2 ON ((f.id OPERATOR(pg_catalog.=) f2.id))) WHERE ((f.id OPERATOR(pg_catalog.=) ANY (SELECT raw_events_second.user_id FROM public.raw_events_second_13300006 raw_events_second)) AND ((worker_hash(f2.id) OPERATOR(pg_catalog.>=) 0) AND (worker_hash(f2.id) OPERATOR(pg_catalog.<=) 1073741823)))
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300011 AS citus_table_alias (user_id) SELECT f2.id FROM ((SELECT foo.id FROM (SELECT reference_table.user_id AS id FROM public.raw_events_first_13300003 raw_events_first, public.reference_table_13300012 reference_table WHERE (raw_events_first.user_id OPERATOR(pg_catalog.=) reference_table.user_id)) foo) f JOIN (SELECT foo2.v4, foo2.v1, foo2.id FROM (SELECT sum(raw_events_second.value_4) AS v4, sum(raw_events_first.value_1) AS v1, raw_events_second.user_id AS id FROM public.raw_events_first_13300003 raw_events_first, public.raw_events_second_13300007 raw_events_second WHERE (raw_events_first.user_id OPERATOR(pg_catalog.=) raw_events_second.user_id) GROUP BY raw_events_second.user_id HAVING (sum(raw_events_second.value_4) OPERATOR(pg_catalog.>) (1000)::numeric)) foo2) f2 ON ((f.id OPERATOR(pg_catalog.=) f2.id))) WHERE ((f.id OPERATOR(pg_catalog.=) ANY (SELECT raw_events_second.user_id FROM public.raw_events_second_13300007 raw_events_second)) AND ((worker_hash(f2.id) OPERATOR(pg_catalog.>=) 1073741824) AND (worker_hash(f2.id) OPERATOR(pg_catalog.<=) 2147483647)))
-DEBUG:  Plan is router executable
 -- some UPSERTS
 INSERT INTO agg_events AS ae
             (
@@ -469,7 +451,6 @@ DEBUG:  distributed statement: INSERT INTO public.agg_events_13300008 AS ae (use
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300009 AS ae (user_id, value_1_agg, agg_time) SELECT user_id, value_1, "time" FROM public.raw_events_first_13300001 raw_events_first WHERE ((worker_hash(user_id) OPERATOR(pg_catalog.>=) '-1073741824'::integer) AND (worker_hash(user_id) OPERATOR(pg_catalog.<=) '-1'::integer)) ON CONFLICT(user_id, value_1_agg) DO UPDATE SET agg_time = excluded.agg_time WHERE (ae.agg_time OPERATOR(pg_catalog.<) excluded.agg_time)
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300010 AS ae (user_id, value_1_agg, agg_time) SELECT user_id, value_1, "time" FROM public.raw_events_first_13300002 raw_events_first WHERE ((worker_hash(user_id) OPERATOR(pg_catalog.>=) 0) AND (worker_hash(user_id) OPERATOR(pg_catalog.<=) 1073741823)) ON CONFLICT(user_id, value_1_agg) DO UPDATE SET agg_time = excluded.agg_time WHERE (ae.agg_time OPERATOR(pg_catalog.<) excluded.agg_time)
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300011 AS ae (user_id, value_1_agg, agg_time) SELECT user_id, value_1, "time" FROM public.raw_events_first_13300003 raw_events_first WHERE ((worker_hash(user_id) OPERATOR(pg_catalog.>=) 1073741824) AND (worker_hash(user_id) OPERATOR(pg_catalog.<=) 2147483647)) ON CONFLICT(user_id, value_1_agg) DO UPDATE SET agg_time = excluded.agg_time WHERE (ae.agg_time OPERATOR(pg_catalog.<) excluded.agg_time)
-DEBUG:  Plan is router executable
 -- upserts with returning
 INSERT INTO agg_events AS ae
             (
@@ -490,7 +471,6 @@ DEBUG:  distributed statement: INSERT INTO public.agg_events_13300008 AS ae (use
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300009 AS ae (user_id, value_1_agg, agg_time) SELECT user_id, value_1, "time" FROM public.raw_events_first_13300001 raw_events_first WHERE ((worker_hash(user_id) OPERATOR(pg_catalog.>=) '-1073741824'::integer) AND (worker_hash(user_id) OPERATOR(pg_catalog.<=) '-1'::integer)) ON CONFLICT(user_id, value_1_agg) DO UPDATE SET agg_time = excluded.agg_time WHERE (ae.agg_time OPERATOR(pg_catalog.<) excluded.agg_time) RETURNING ae.user_id, ae.value_1_agg
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300010 AS ae (user_id, value_1_agg, agg_time) SELECT user_id, value_1, "time" FROM public.raw_events_first_13300002 raw_events_first WHERE ((worker_hash(user_id) OPERATOR(pg_catalog.>=) 0) AND (worker_hash(user_id) OPERATOR(pg_catalog.<=) 1073741823)) ON CONFLICT(user_id, value_1_agg) DO UPDATE SET agg_time = excluded.agg_time WHERE (ae.agg_time OPERATOR(pg_catalog.<) excluded.agg_time) RETURNING ae.user_id, ae.value_1_agg
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300011 AS ae (user_id, value_1_agg, agg_time) SELECT user_id, value_1, "time" FROM public.raw_events_first_13300003 raw_events_first WHERE ((worker_hash(user_id) OPERATOR(pg_catalog.>=) 1073741824) AND (worker_hash(user_id) OPERATOR(pg_catalog.<=) 2147483647)) ON CONFLICT(user_id, value_1_agg) DO UPDATE SET agg_time = excluded.agg_time WHERE (ae.agg_time OPERATOR(pg_catalog.<) excluded.agg_time) RETURNING ae.user_id, ae.value_1_agg
-DEBUG:  Plan is router executable
  user_id | value_1_agg
 ---------------------------------------------------------------------
        7 |
@@ -505,7 +485,6 @@ DEBUG:  distributed statement: INSERT INTO public.agg_events_13300008 AS citus_t
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300009 AS citus_table_alias (user_id, value_1_agg) SELECT user_id, sum((value_1 OPERATOR(pg_catalog.+) value_2)) AS sum FROM public.raw_events_first_13300001 raw_events_first WHERE ((worker_hash(user_id) OPERATOR(pg_catalog.>=) '-1073741824'::integer) AND (worker_hash(user_id) OPERATOR(pg_catalog.<=) '-1'::integer)) GROUP BY user_id
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300010 AS citus_table_alias (user_id, value_1_agg) SELECT user_id, sum((value_1 OPERATOR(pg_catalog.+) value_2)) AS sum FROM public.raw_events_first_13300002 raw_events_first WHERE ((worker_hash(user_id) OPERATOR(pg_catalog.>=) 0) AND (worker_hash(user_id) OPERATOR(pg_catalog.<=) 1073741823)) GROUP BY user_id
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300011 AS citus_table_alias (user_id, value_1_agg) SELECT user_id, sum((value_1 OPERATOR(pg_catalog.+) value_2)) AS sum FROM public.raw_events_first_13300003 raw_events_first WHERE ((worker_hash(user_id) OPERATOR(pg_catalog.>=) 1073741824) AND (worker_hash(user_id) OPERATOR(pg_catalog.<=) 2147483647)) GROUP BY user_id
-DEBUG:  Plan is router executable
 --  FILTER CLAUSE
 INSERT INTO agg_events (user_id, value_1_agg)
 SELECT
@@ -516,7 +495,6 @@ DEBUG:  distributed statement: INSERT INTO public.agg_events_13300008 AS citus_t
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300009 AS citus_table_alias (user_id, value_1_agg) SELECT user_id, sum((value_1 OPERATOR(pg_catalog.+) value_2)) FILTER (WHERE (value_3 OPERATOR(pg_catalog.=) (15)::double precision)) AS sum FROM public.raw_events_first_13300001 raw_events_first WHERE ((worker_hash(user_id) OPERATOR(pg_catalog.>=) '-1073741824'::integer) AND (worker_hash(user_id) OPERATOR(pg_catalog.<=) '-1'::integer)) GROUP BY user_id
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300010 AS citus_table_alias (user_id, value_1_agg) SELECT user_id, sum((value_1 OPERATOR(pg_catalog.+) value_2)) FILTER (WHERE (value_3 OPERATOR(pg_catalog.=) (15)::double precision)) AS sum FROM public.raw_events_first_13300002 raw_events_first WHERE ((worker_hash(user_id) OPERATOR(pg_catalog.>=) 0) AND (worker_hash(user_id) OPERATOR(pg_catalog.<=) 1073741823)) GROUP BY user_id
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300011 AS citus_table_alias (user_id, value_1_agg) SELECT user_id, sum((value_1 OPERATOR(pg_catalog.+) value_2)) FILTER (WHERE (value_3 OPERATOR(pg_catalog.=) (15)::double precision)) AS sum FROM public.raw_events_first_13300003 raw_events_first WHERE ((worker_hash(user_id) OPERATOR(pg_catalog.>=) 1073741824) AND (worker_hash(user_id) OPERATOR(pg_catalog.<=) 2147483647)) GROUP BY user_id
-DEBUG:  Plan is router executable
 -- a test with reference table JOINs
 INSERT INTO
   agg_events (user_id, value_1_agg)
@@ -532,7 +510,6 @@ DEBUG:  distributed statement: INSERT INTO public.agg_events_13300008 AS citus_t
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300009 AS citus_table_alias (user_id, value_1_agg) SELECT raw_events_first.user_id, sum(raw_events_first.value_1) AS sum FROM public.reference_table_13300012 reference_table, public.raw_events_first_13300001 raw_events_first WHERE ((raw_events_first.user_id OPERATOR(pg_catalog.=) reference_table.user_id) AND ((worker_hash(raw_events_first.user_id) OPERATOR(pg_catalog.>=) '-1073741824'::integer) AND (worker_hash(raw_events_first.user_id) OPERATOR(pg_catalog.<=) '-1'::integer))) GROUP BY raw_events_first.user_id
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300010 AS citus_table_alias (user_id, value_1_agg) SELECT raw_events_first.user_id, sum(raw_events_first.value_1) AS sum FROM public.reference_table_13300012 reference_table, public.raw_events_first_13300002 raw_events_first WHERE ((raw_events_first.user_id OPERATOR(pg_catalog.=) reference_table.user_id) AND ((worker_hash(raw_events_first.user_id) OPERATOR(pg_catalog.>=) 0) AND (worker_hash(raw_events_first.user_id) OPERATOR(pg_catalog.<=) 1073741823))) GROUP BY raw_events_first.user_id
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300011 AS citus_table_alias (user_id, value_1_agg) SELECT raw_events_first.user_id, sum(raw_events_first.value_1) AS sum FROM public.reference_table_13300012 reference_table, public.raw_events_first_13300003 raw_events_first WHERE ((raw_events_first.user_id OPERATOR(pg_catalog.=) reference_table.user_id) AND ((worker_hash(raw_events_first.user_id) OPERATOR(pg_catalog.>=) 1073741824) AND (worker_hash(raw_events_first.user_id) OPERATOR(pg_catalog.<=) 2147483647))) GROUP BY raw_events_first.user_id
-DEBUG:  Plan is router executable
 -- a note on the outer joins is that
 -- we filter out outer join results
 -- where partition column returns
@@ -581,7 +558,6 @@ DEBUG:  distributed statement: INSERT INTO public.agg_events_13300008 AS citus_t
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300009 AS citus_table_alias (user_id, value_1_agg) SELECT t1.user_id AS col1, t2.user_id AS col2 FROM (public.raw_events_first_13300001 t1 FULL JOIN public.raw_events_second_13300005 t2 ON ((t1.user_id OPERATOR(pg_catalog.=) t2.user_id))) WHERE ((worker_hash(t1.user_id) OPERATOR(pg_catalog.>=) '-1073741824'::integer) AND (worker_hash(t1.user_id) OPERATOR(pg_catalog.<=) '-1'::integer))
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300010 AS citus_table_alias (user_id, value_1_agg) SELECT t1.user_id AS col1, t2.user_id AS col2 FROM (public.raw_events_first_13300002 t1 FULL JOIN public.raw_events_second_13300006 t2 ON ((t1.user_id OPERATOR(pg_catalog.=) t2.user_id))) WHERE ((worker_hash(t1.user_id) OPERATOR(pg_catalog.>=) 0) AND (worker_hash(t1.user_id) OPERATOR(pg_catalog.<=) 1073741823))
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300011 AS citus_table_alias (user_id, value_1_agg) SELECT t1.user_id AS col1, t2.user_id AS col2 FROM (public.raw_events_first_13300003 t1 FULL JOIN public.raw_events_second_13300007 t2 ON ((t1.user_id OPERATOR(pg_catalog.=) t2.user_id))) WHERE ((worker_hash(t1.user_id) OPERATOR(pg_catalog.>=) 1073741824) AND (worker_hash(t1.user_id) OPERATOR(pg_catalog.<=) 2147483647))
-DEBUG:  Plan is router executable
 SET client_min_messages TO INFO;
 -- see that the results are different from the SELECT query
 SELECT
@@ -617,7 +593,6 @@ DEBUG:  distributed statement: INSERT INTO public.agg_events_13300008 AS citus_t
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300009 AS citus_table_alias (user_id, value_1_agg) SELECT DISTINCT user_id, value_1 FROM public.raw_events_first_13300001 raw_events_first WHERE ((worker_hash(user_id) OPERATOR(pg_catalog.>=) '-1073741824'::integer) AND (worker_hash(user_id) OPERATOR(pg_catalog.<=) '-1'::integer))
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300010 AS citus_table_alias (user_id, value_1_agg) SELECT DISTINCT user_id, value_1 FROM public.raw_events_first_13300002 raw_events_first WHERE ((worker_hash(user_id) OPERATOR(pg_catalog.>=) 0) AND (worker_hash(user_id) OPERATOR(pg_catalog.<=) 1073741823))
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300011 AS citus_table_alias (user_id, value_1_agg) SELECT DISTINCT user_id, value_1 FROM public.raw_events_first_13300003 raw_events_first WHERE ((worker_hash(user_id) OPERATOR(pg_catalog.>=) 1073741824) AND (worker_hash(user_id) OPERATOR(pg_catalog.<=) 2147483647))
-DEBUG:  Plan is router executable
 -- we don't want to see constraint violations, so truncate first
 SET client_min_messages TO INFO;
 truncate agg_events;
@@ -663,7 +638,6 @@ DEBUG:  distributed statement: INSERT INTO public.agg_events_13300008 AS citus_t
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300009 AS citus_table_alias (user_id, value_1_agg) SELECT DISTINCT ON (user_id) user_id, value_1 FROM public.raw_events_first_13300001 raw_events_first WHERE ((worker_hash(user_id) OPERATOR(pg_catalog.>=) '-1073741824'::integer) AND (worker_hash(user_id) OPERATOR(pg_catalog.<=) '-1'::integer))
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300010 AS citus_table_alias (user_id, value_1_agg) SELECT DISTINCT ON (user_id) user_id, value_1 FROM public.raw_events_first_13300002 raw_events_first WHERE ((worker_hash(user_id) OPERATOR(pg_catalog.>=) 0) AND (worker_hash(user_id) OPERATOR(pg_catalog.<=) 1073741823))
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300011 AS citus_table_alias (user_id, value_1_agg) SELECT DISTINCT ON (user_id) user_id, value_1 FROM public.raw_events_first_13300003 raw_events_first WHERE ((worker_hash(user_id) OPERATOR(pg_catalog.>=) 1073741824) AND (worker_hash(user_id) OPERATOR(pg_catalog.<=) 2147483647))
-DEBUG:  Plan is router executable
 SELECT user_id, value_1_agg FROM agg_events ORDER BY 1,2;
 DEBUG:  Router planner cannot handle multi-shard select queries
  user_id | value_1_agg
@@ -698,7 +672,6 @@ DEBUG:  generating subplan XXX_1 for CTE fist_table_agg: SELECT (max(value_1) OP
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT user_id, v1_agg AS value_1_agg FROM (SELECT fist_table_agg.v1_agg, fist_table_agg.user_id FROM (SELECT intermediate_result.v1_agg, intermediate_result.user_id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(v1_agg integer, user_id integer)) fist_table_agg) citus_insert_select_subquery
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 ROLLBACK;
 -- We don't support CTEs that are referenced in the target list
@@ -752,11 +725,9 @@ DEBUG:  generating subplan XXX_1 for subquery SELECT user_id FROM public.raw_eve
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  generating subplan XXX_2 for subquery SELECT user_id FROM public.raw_events_first
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 DEBUG:  generating subplan XXX_3 for subquery SELECT intermediate_result.user_id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer) INTERSECT SELECT intermediate_result.user_id FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT user_id FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) citus_insert_select_subquery
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 ROLLBACK;
 -- If the query is router plannable then it is executed via the coordinator
@@ -769,7 +740,6 @@ FROM
    (SELECT user_id FROM raw_events_second where user_id = 17)) as foo;
 DEBUG:  Set operations are not allowed in distributed INSERT ... SELECT queries
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 -- some supported LEFT joins
  INSERT INTO agg_events (user_id)
@@ -781,7 +751,6 @@ DEBUG:  distributed statement: INSERT INTO public.agg_events_13300008 AS citus_t
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300009 AS citus_table_alias (user_id) SELECT raw_events_first.user_id FROM (public.raw_events_first_13300001 raw_events_first LEFT JOIN public.raw_events_second_13300005 raw_events_second ON ((raw_events_first.user_id OPERATOR(pg_catalog.=) raw_events_second.user_id))) WHERE ((worker_hash(raw_events_first.user_id) OPERATOR(pg_catalog.>=) '-1073741824'::integer) AND (worker_hash(raw_events_first.user_id) OPERATOR(pg_catalog.<=) '-1'::integer))
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300010 AS citus_table_alias (user_id) SELECT raw_events_first.user_id FROM (public.raw_events_first_13300002 raw_events_first LEFT JOIN public.raw_events_second_13300006 raw_events_second ON ((raw_events_first.user_id OPERATOR(pg_catalog.=) raw_events_second.user_id))) WHERE ((worker_hash(raw_events_first.user_id) OPERATOR(pg_catalog.>=) 0) AND (worker_hash(raw_events_first.user_id) OPERATOR(pg_catalog.<=) 1073741823))
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300011 AS citus_table_alias (user_id) SELECT raw_events_first.user_id FROM (public.raw_events_first_13300003 raw_events_first LEFT JOIN public.raw_events_second_13300007 raw_events_second ON ((raw_events_first.user_id OPERATOR(pg_catalog.=) raw_events_second.user_id))) WHERE ((worker_hash(raw_events_first.user_id) OPERATOR(pg_catalog.>=) 1073741824) AND (worker_hash(raw_events_first.user_id) OPERATOR(pg_catalog.<=) 2147483647))
-DEBUG:  Plan is router executable
  INSERT INTO agg_events (user_id)
  SELECT
    raw_events_second.user_id
@@ -791,7 +760,6 @@ DEBUG:  distributed statement: INSERT INTO public.agg_events_13300008 AS citus_t
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300009 AS citus_table_alias (user_id) SELECT raw_events_second.user_id FROM (public.reference_table_13300012 reference_table LEFT JOIN public.raw_events_second_13300005 raw_events_second ON ((reference_table.user_id OPERATOR(pg_catalog.=) raw_events_second.user_id))) WHERE ((worker_hash(raw_events_second.user_id) OPERATOR(pg_catalog.>=) '-1073741824'::integer) AND (worker_hash(raw_events_second.user_id) OPERATOR(pg_catalog.<=) '-1'::integer))
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300010 AS citus_table_alias (user_id) SELECT raw_events_second.user_id FROM (public.reference_table_13300012 reference_table LEFT JOIN public.raw_events_second_13300006 raw_events_second ON ((reference_table.user_id OPERATOR(pg_catalog.=) raw_events_second.user_id))) WHERE ((worker_hash(raw_events_second.user_id) OPERATOR(pg_catalog.>=) 0) AND (worker_hash(raw_events_second.user_id) OPERATOR(pg_catalog.<=) 1073741823))
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300011 AS citus_table_alias (user_id) SELECT raw_events_second.user_id FROM (public.reference_table_13300012 reference_table LEFT JOIN public.raw_events_second_13300007 raw_events_second ON ((reference_table.user_id OPERATOR(pg_catalog.=) raw_events_second.user_id))) WHERE ((worker_hash(raw_events_second.user_id) OPERATOR(pg_catalog.>=) 1073741824) AND (worker_hash(raw_events_second.user_id) OPERATOR(pg_catalog.<=) 2147483647))
-DEBUG:  Plan is router executable
  INSERT INTO agg_events (user_id)
  SELECT
    raw_events_first.user_id
@@ -802,7 +770,6 @@ DEBUG:  distributed statement: INSERT INTO public.agg_events_13300008 AS citus_t
 DEBUG:  Skipping target shard interval 13300009 since SELECT query for it pruned away
 DEBUG:  Skipping target shard interval 13300010 since SELECT query for it pruned away
 DEBUG:  Skipping target shard interval 13300011 since SELECT query for it pruned away
-DEBUG:  Plan is router executable
  INSERT INTO agg_events (user_id)
  SELECT
    raw_events_first.user_id
@@ -813,7 +780,6 @@ DEBUG:  distributed statement: INSERT INTO public.agg_events_13300008 AS citus_t
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300009 AS citus_table_alias (user_id) SELECT raw_events_first.user_id FROM (public.raw_events_first_13300001 raw_events_first LEFT JOIN (SELECT NULL::integer AS user_id, NULL::timestamp without time zone AS "time", NULL::integer AS value_1, NULL::integer AS value_2, NULL::double precision AS value_3, NULL::bigint AS value_4 WHERE false) raw_events_second(user_id, "time", value_1, value_2, value_3, value_4) ON ((raw_events_first.user_id OPERATOR(pg_catalog.=) raw_events_second.user_id))) WHERE (((raw_events_second.user_id OPERATOR(pg_catalog.=) 10) OR (raw_events_second.user_id OPERATOR(pg_catalog.=) 11)) AND ((worker_hash(raw_events_first.user_id) OPERATOR(pg_catalog.>=) '-1073741824'::integer) AND (worker_hash(raw_events_first.user_id) OPERATOR(pg_catalog.<=) '-1'::integer)))
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300010 AS citus_table_alias (user_id) SELECT raw_events_first.user_id FROM (public.raw_events_first_13300002 raw_events_first LEFT JOIN (SELECT NULL::integer AS user_id, NULL::timestamp without time zone AS "time", NULL::integer AS value_1, NULL::integer AS value_2, NULL::double precision AS value_3, NULL::bigint AS value_4 WHERE false) raw_events_second(user_id, "time", value_1, value_2, value_3, value_4) ON ((raw_events_first.user_id OPERATOR(pg_catalog.=) raw_events_second.user_id))) WHERE (((raw_events_second.user_id OPERATOR(pg_catalog.=) 10) OR (raw_events_second.user_id OPERATOR(pg_catalog.=) 11)) AND ((worker_hash(raw_events_first.user_id) OPERATOR(pg_catalog.>=) 0) AND (worker_hash(raw_events_first.user_id) OPERATOR(pg_catalog.<=) 1073741823)))
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300011 AS citus_table_alias (user_id) SELECT raw_events_first.user_id FROM (public.raw_events_first_13300003 raw_events_first LEFT JOIN public.raw_events_second_13300007 raw_events_second ON ((raw_events_first.user_id OPERATOR(pg_catalog.=) raw_events_second.user_id))) WHERE (((raw_events_second.user_id OPERATOR(pg_catalog.=) 10) OR (raw_events_second.user_id OPERATOR(pg_catalog.=) 11)) AND ((worker_hash(raw_events_first.user_id) OPERATOR(pg_catalog.>=) 1073741824) AND (worker_hash(raw_events_first.user_id) OPERATOR(pg_catalog.<=) 2147483647)))
-DEBUG:  Plan is router executable
  INSERT INTO agg_events (user_id)
  SELECT
    raw_events_first.user_id
@@ -824,7 +790,6 @@ DEBUG:  Skipping target shard interval 13300008 since SELECT query for it pruned
 DEBUG:  Skipping target shard interval 13300009 since SELECT query for it pruned away
 DEBUG:  Skipping target shard interval 13300010 since SELECT query for it pruned away
 DEBUG:  Skipping target shard interval 13300011 since SELECT query for it pruned away
-DEBUG:  Plan is router executable
  INSERT INTO agg_events (user_id)
  SELECT
    raw_events_first.user_id
@@ -835,7 +800,6 @@ DEBUG:  Skipping target shard interval 13300008 since SELECT query for it pruned
 DEBUG:  Skipping target shard interval 13300009 since SELECT query for it pruned away
 DEBUG:  Skipping target shard interval 13300010 since SELECT query for it pruned away
 DEBUG:  Skipping target shard interval 13300011 since SELECT query for it pruned away
-DEBUG:  Plan is router executable
  INSERT INTO agg_events (user_id)
  SELECT
    raw_events_first.user_id
@@ -846,7 +810,6 @@ DEBUG:  distributed statement: INSERT INTO public.agg_events_13300008 AS citus_t
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300009 AS citus_table_alias (user_id) SELECT raw_events_first.user_id FROM (public.raw_events_first_13300001 raw_events_first LEFT JOIN public.raw_events_second_13300005 raw_events_second ON ((raw_events_first.user_id OPERATOR(pg_catalog.=) raw_events_second.user_id))) WHERE ((raw_events_first.user_id OPERATOR(pg_catalog.=) ANY (ARRAY[19, 20, 21])) AND ((worker_hash(raw_events_first.user_id) OPERATOR(pg_catalog.>=) '-1073741824'::integer) AND (worker_hash(raw_events_first.user_id) OPERATOR(pg_catalog.<=) '-1'::integer)))
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300010 AS citus_table_alias (user_id) SELECT raw_events_first.user_id FROM (public.raw_events_first_13300002 raw_events_first LEFT JOIN public.raw_events_second_13300006 raw_events_second ON ((raw_events_first.user_id OPERATOR(pg_catalog.=) raw_events_second.user_id))) WHERE ((raw_events_first.user_id OPERATOR(pg_catalog.=) ANY (ARRAY[19, 20, 21])) AND ((worker_hash(raw_events_first.user_id) OPERATOR(pg_catalog.>=) 0) AND (worker_hash(raw_events_first.user_id) OPERATOR(pg_catalog.<=) 1073741823)))
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300011 AS citus_table_alias (user_id) SELECT raw_events_first.user_id FROM ((SELECT NULL::integer AS user_id, NULL::timestamp without time zone AS "time", NULL::integer AS value_1, NULL::integer AS value_2, NULL::double precision AS value_3, NULL::bigint AS value_4 WHERE false) raw_events_first(user_id, "time", value_1, value_2, value_3, value_4) LEFT JOIN public.raw_events_second_13300007 raw_events_second ON ((raw_events_first.user_id OPERATOR(pg_catalog.=) raw_events_second.user_id))) WHERE ((raw_events_first.user_id OPERATOR(pg_catalog.=) ANY (ARRAY[19, 20, 21])) AND ((worker_hash(raw_events_first.user_id) OPERATOR(pg_catalog.>=) 1073741824) AND (worker_hash(raw_events_first.user_id) OPERATOR(pg_catalog.<=) 2147483647)))
-DEBUG:  Plan is router executable
  INSERT INTO agg_events (user_id)
  SELECT
    raw_events_first.user_id
@@ -857,7 +820,6 @@ DEBUG:  distributed statement: INSERT INTO public.agg_events_13300008 AS citus_t
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300009 AS citus_table_alias (user_id) SELECT raw_events_first.user_id FROM (public.raw_events_first_13300001 raw_events_first JOIN public.raw_events_second_13300005 raw_events_second ON ((raw_events_first.user_id OPERATOR(pg_catalog.=) raw_events_second.user_id))) WHERE ((raw_events_second.user_id OPERATOR(pg_catalog.=) ANY (ARRAY[19, 20, 21])) AND ((worker_hash(raw_events_first.user_id) OPERATOR(pg_catalog.>=) '-1073741824'::integer) AND (worker_hash(raw_events_first.user_id) OPERATOR(pg_catalog.<=) '-1'::integer)))
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300010 AS citus_table_alias (user_id) SELECT raw_events_first.user_id FROM (public.raw_events_first_13300002 raw_events_first JOIN public.raw_events_second_13300006 raw_events_second ON ((raw_events_first.user_id OPERATOR(pg_catalog.=) raw_events_second.user_id))) WHERE ((raw_events_second.user_id OPERATOR(pg_catalog.=) ANY (ARRAY[19, 20, 21])) AND ((worker_hash(raw_events_first.user_id) OPERATOR(pg_catalog.>=) 0) AND (worker_hash(raw_events_first.user_id) OPERATOR(pg_catalog.<=) 1073741823)))
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300011 AS citus_table_alias (user_id) SELECT raw_events_first.user_id FROM (public.raw_events_first_13300003 raw_events_first JOIN (SELECT NULL::integer AS user_id, NULL::timestamp without time zone AS "time", NULL::integer AS value_1, NULL::integer AS value_2, NULL::double precision AS value_3, NULL::bigint AS value_4 WHERE false) raw_events_second(user_id, "time", value_1, value_2, value_3, value_4) ON ((raw_events_first.user_id OPERATOR(pg_catalog.=) raw_events_second.user_id))) WHERE ((raw_events_second.user_id OPERATOR(pg_catalog.=) ANY (ARRAY[19, 20, 21])) AND ((worker_hash(raw_events_first.user_id) OPERATOR(pg_catalog.>=) 1073741824) AND (worker_hash(raw_events_first.user_id) OPERATOR(pg_catalog.<=) 2147483647)))
-DEBUG:  Plan is router executable
 SET client_min_messages TO WARNING;
  -- following query should use repartitioned joins and results should
  -- be routed via coordinator
@@ -1173,7 +1135,6 @@ DEBUG:  join prunable for intervals [1073741824,2147483647] and [0,1073741823]
 DEBUG:  generating subplan XXX_1 for subquery SELECT sum(raw_events_second.value_4) AS v4, sum(raw_events_first.value_1) AS v1, raw_events_second.value_3 AS id FROM public.raw_events_first, public.raw_events_second WHERE (raw_events_first.user_id OPERATOR(pg_catalog.=) raw_events_second.user_id) GROUP BY raw_events_second.value_3
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT int4(id) AS user_id, int4(v1) AS value_1_agg, int8(v4) AS value_4_agg FROM (SELECT intermediate_result.v4, intermediate_result.v1, intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(v4 numeric, v1 bigint, id double precision)) foo
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 ERROR:  the partition column of table public.agg_events cannot be NULL
 -- error cases
@@ -1287,7 +1248,6 @@ DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition 
 DETAIL:  The target table's partition column should correspond to a partition column in the subquery.
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 -- foo2 is recursively planned and INSERT...SELECT is done via coordinator
 INSERT INTO agg_events
@@ -1685,7 +1645,6 @@ DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300004 AS 
 DEBUG:  Skipping target shard interval 13300005 since SELECT query for it pruned away
 DEBUG:  Skipping target shard interval 13300006 since SELECT query for it pruned away
 DEBUG:  Skipping target shard interval 13300007 since SELECT query for it pruned away
-DEBUG:  Plan is router executable
 RESET client_min_messages;
 -- we cannot push this down since it is NOT IN
 -- we use repartition insert/select instead
@@ -1722,7 +1681,6 @@ DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300004 AS 
 DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300005 AS citus_table_alias (user_id) SELECT user_id FROM public.raw_events_first_13300001 raw_events_first WHERE ((EXISTS (SELECT 1 FROM public.raw_events_second_13300005 raw_events_second WHERE (raw_events_second.user_id OPERATOR(pg_catalog.=) raw_events_first.user_id))) AND ((worker_hash(user_id) OPERATOR(pg_catalog.>=) '-1073741824'::integer) AND (worker_hash(user_id) OPERATOR(pg_catalog.<=) '-1'::integer)))
 DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300006 AS citus_table_alias (user_id) SELECT user_id FROM public.raw_events_first_13300002 raw_events_first WHERE ((EXISTS (SELECT 1 FROM public.raw_events_second_13300006 raw_events_second WHERE (raw_events_second.user_id OPERATOR(pg_catalog.=) raw_events_first.user_id))) AND ((worker_hash(user_id) OPERATOR(pg_catalog.>=) 0) AND (worker_hash(user_id) OPERATOR(pg_catalog.<=) 1073741823)))
 DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300007 AS citus_table_alias (user_id) SELECT user_id FROM public.raw_events_first_13300003 raw_events_first WHERE ((EXISTS (SELECT 1 FROM public.raw_events_second_13300007 raw_events_second WHERE (raw_events_second.user_id OPERATOR(pg_catalog.=) raw_events_first.user_id))) AND ((worker_hash(user_id) OPERATOR(pg_catalog.>=) 1073741824) AND (worker_hash(user_id) OPERATOR(pg_catalog.<=) 2147483647)))
-DEBUG:  Plan is router executable
 -- we cannot push down
 INSERT INTO raw_events_second
             (user_id)
@@ -1735,7 +1693,6 @@ DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300004 AS 
 DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300005 AS citus_table_alias (user_id) SELECT user_id FROM public.raw_events_first_13300001 raw_events_first WHERE ((NOT (EXISTS (SELECT 1 FROM public.raw_events_second_13300005 raw_events_second WHERE (raw_events_second.user_id OPERATOR(pg_catalog.=) raw_events_first.user_id)))) AND ((worker_hash(user_id) OPERATOR(pg_catalog.>=) '-1073741824'::integer) AND (worker_hash(user_id) OPERATOR(pg_catalog.<=) '-1'::integer)))
 DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300006 AS citus_table_alias (user_id) SELECT user_id FROM public.raw_events_first_13300002 raw_events_first WHERE ((NOT (EXISTS (SELECT 1 FROM public.raw_events_second_13300006 raw_events_second WHERE (raw_events_second.user_id OPERATOR(pg_catalog.=) raw_events_first.user_id)))) AND ((worker_hash(user_id) OPERATOR(pg_catalog.>=) 0) AND (worker_hash(user_id) OPERATOR(pg_catalog.<=) 1073741823)))
 DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300007 AS citus_table_alias (user_id) SELECT user_id FROM public.raw_events_first_13300003 raw_events_first WHERE ((NOT (EXISTS (SELECT 1 FROM public.raw_events_second_13300007 raw_events_second WHERE (raw_events_second.user_id OPERATOR(pg_catalog.=) raw_events_first.user_id)))) AND ((worker_hash(user_id) OPERATOR(pg_catalog.>=) 1073741824) AND (worker_hash(user_id) OPERATOR(pg_catalog.<=) 2147483647)))
-DEBUG:  Plan is router executable
 -- more complex LEFT JOINs
  INSERT INTO agg_events
              (user_id, value_4_agg)
@@ -1769,7 +1726,6 @@ DEBUG:  distributed statement: INSERT INTO public.agg_events_13300008 AS citus_t
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300009 AS citus_table_alias (user_id, value_4_agg) SELECT id, max(value) AS max FROM (SELECT f2.id, f2.v4 AS value FROM ((SELECT foo.id FROM (SELECT raw_events_first.user_id AS id FROM (public.raw_events_first_13300001 raw_events_first LEFT JOIN public.reference_table_13300012 reference_table ON ((raw_events_first.user_id OPERATOR(pg_catalog.=) reference_table.user_id)))) foo) f LEFT JOIN (SELECT foo2.v4, foo2.v1, foo2.id FROM (SELECT sum(raw_events_second.value_4) AS v4, sum(raw_events_first.value_1) AS v1, raw_events_second.user_id AS id FROM public.raw_events_first_13300001 raw_events_first, public.raw_events_second_13300005 raw_events_second WHERE (raw_events_first.user_id OPERATOR(pg_catalog.=) raw_events_second.user_id) GROUP BY raw_events_second.user_id HAVING (sum(raw_events_second.value_4) OPERATOR(pg_catalog.>) (10)::numeric)) foo2) f2 ON ((f.id OPERATOR(pg_catalog.=) f2.id)))) outer_most WHERE ((worker_hash(id) OPERATOR(pg_catalog.>=) '-1073741824'::integer) AND (worker_hash(id) OPERATOR(pg_catalog.<=) '-1'::integer)) GROUP BY id
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300010 AS citus_table_alias (user_id, value_4_agg) SELECT id, max(value) AS max FROM (SELECT f2.id, f2.v4 AS value FROM ((SELECT foo.id FROM (SELECT raw_events_first.user_id AS id FROM (public.raw_events_first_13300002 raw_events_first LEFT JOIN public.reference_table_13300012 reference_table ON ((raw_events_first.user_id OPERATOR(pg_catalog.=) reference_table.user_id)))) foo) f LEFT JOIN (SELECT foo2.v4, foo2.v1, foo2.id FROM (SELECT sum(raw_events_second.value_4) AS v4, sum(raw_events_first.value_1) AS v1, raw_events_second.user_id AS id FROM public.raw_events_first_13300002 raw_events_first, public.raw_events_second_13300006 raw_events_second WHERE (raw_events_first.user_id OPERATOR(pg_catalog.=) raw_events_second.user_id) GROUP BY raw_events_second.user_id HAVING (sum(raw_events_second.value_4) OPERATOR(pg_catalog.>) (10)::numeric)) foo2) f2 ON ((f.id OPERATOR(pg_catalog.=) f2.id)))) outer_most WHERE ((worker_hash(id) OPERATOR(pg_catalog.>=) 0) AND (worker_hash(id) OPERATOR(pg_catalog.<=) 1073741823)) GROUP BY id
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300011 AS citus_table_alias (user_id, value_4_agg) SELECT id, max(value) AS max FROM (SELECT f2.id, f2.v4 AS value FROM ((SELECT foo.id FROM (SELECT raw_events_first.user_id AS id FROM (public.raw_events_first_13300003 raw_events_first LEFT JOIN public.reference_table_13300012 reference_table ON ((raw_events_first.user_id OPERATOR(pg_catalog.=) reference_table.user_id)))) foo) f LEFT JOIN (SELECT foo2.v4, foo2.v1, foo2.id FROM (SELECT sum(raw_events_second.value_4) AS v4, sum(raw_events_first.value_1) AS v1, raw_events_second.user_id AS id FROM public.raw_events_first_13300003 raw_events_first, public.raw_events_second_13300007 raw_events_second WHERE (raw_events_first.user_id OPERATOR(pg_catalog.=) raw_events_second.user_id) GROUP BY raw_events_second.user_id HAVING (sum(raw_events_second.value_4) OPERATOR(pg_catalog.>) (10)::numeric)) foo2) f2 ON ((f.id OPERATOR(pg_catalog.=) f2.id)))) outer_most WHERE ((worker_hash(id) OPERATOR(pg_catalog.>=) 1073741824) AND (worker_hash(id) OPERATOR(pg_catalog.<=) 2147483647)) GROUP BY id
-DEBUG:  Plan is router executable
 RESET client_min_messages;
 -- cannot push down since the f.id IN is matched with value_1
 -- we use repartition insert/select instead
@@ -1847,7 +1803,6 @@ DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300004 AS 
 DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300005 AS citus_table_alias (user_id) SELECT user_id FROM public.raw_events_first_13300001 raw_events_first WHERE ((user_id OPERATOR(pg_catalog.=) ANY (SELECT f2.id FROM ((SELECT foo.id FROM (SELECT reference_table.user_id AS id FROM public.raw_events_first_13300001 raw_events_first_1, public.reference_table_13300012 reference_table WHERE (raw_events_first_1.user_id OPERATOR(pg_catalog.=) reference_table.user_id)) foo) f JOIN (SELECT foo2.v4, foo2.v1, foo2.id FROM (SELECT sum(raw_events_second.value_4) AS v4, sum(raw_events_first_1.value_1) AS v1, raw_events_second.user_id AS id FROM public.raw_events_first_13300001 raw_events_first_1, public.raw_events_second_13300005 raw_events_second WHERE (raw_events_first_1.user_id OPERATOR(pg_catalog.=) raw_events_second.user_id) GROUP BY raw_events_second.user_id HAVING (sum(raw_events_second.value_4) OPERATOR(pg_catalog.>) (10)::numeric)) foo2) f2 ON ((f.id OPERATOR(pg_catalog.=) f2.id))) WHERE (f.id OPERATOR(pg_catalog.=) ANY (SELECT raw_events_second.user_id FROM public.raw_events_second_13300005 raw_events_second)))) AND ((worker_hash(user_id) OPERATOR(pg_catalog.>=) '-1073741824'::integer) AND (worker_hash(user_id) OPERATOR(pg_catalog.<=) '-1'::integer)))
 DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300006 AS citus_table_alias (user_id) SELECT user_id FROM public.raw_events_first_13300002 raw_events_first WHERE ((user_id OPERATOR(pg_catalog.=) ANY (SELECT f2.id FROM ((SELECT foo.id FROM (SELECT reference_table.user_id AS id FROM public.raw_events_first_13300002 raw_events_first_1, public.reference_table_13300012 reference_table WHERE (raw_events_first_1.user_id OPERATOR(pg_catalog.=) reference_table.user_id)) foo) f JOIN (SELECT foo2.v4, foo2.v1, foo2.id FROM (SELECT sum(raw_events_second.value_4) AS v4, sum(raw_events_first_1.value_1) AS v1, raw_events_second.user_id AS id FROM public.raw_events_first_13300002 raw_events_first_1, public.raw_events_second_13300006 raw_events_second WHERE (raw_events_first_1.user_id OPERATOR(pg_catalog.=) raw_events_second.user_id) GROUP BY raw_events_second.user_id HAVING (sum(raw_events_second.value_4) OPERATOR(pg_catalog.>) (10)::numeric)) foo2) f2 ON ((f.id OPERATOR(pg_catalog.=) f2.id))) WHERE (f.id OPERATOR(pg_catalog.=) ANY (SELECT raw_events_second.user_id FROM public.raw_events_second_13300006 raw_events_second)))) AND ((worker_hash(user_id) OPERATOR(pg_catalog.>=) 0) AND (worker_hash(user_id) OPERATOR(pg_catalog.<=) 1073741823)))
 DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300007 AS citus_table_alias (user_id) SELECT user_id FROM public.raw_events_first_13300003 raw_events_first WHERE ((user_id OPERATOR(pg_catalog.=) ANY (SELECT f2.id FROM ((SELECT foo.id FROM (SELECT reference_table.user_id AS id FROM public.raw_events_first_13300003 raw_events_first_1, public.reference_table_13300012 reference_table WHERE (raw_events_first_1.user_id OPERATOR(pg_catalog.=) reference_table.user_id)) foo) f JOIN (SELECT foo2.v4, foo2.v1, foo2.id FROM (SELECT sum(raw_events_second.value_4) AS v4, sum(raw_events_first_1.value_1) AS v1, raw_events_second.user_id AS id FROM public.raw_events_first_13300003 raw_events_first_1, public.raw_events_second_13300007 raw_events_second WHERE (raw_events_first_1.user_id OPERATOR(pg_catalog.=) raw_events_second.user_id) GROUP BY raw_events_second.user_id HAVING (sum(raw_events_second.value_4) OPERATOR(pg_catalog.>) (10)::numeric)) foo2) f2 ON ((f.id OPERATOR(pg_catalog.=) f2.id))) WHERE (f.id OPERATOR(pg_catalog.=) ANY (SELECT raw_events_second.user_id FROM public.raw_events_second_13300007 raw_events_second)))) AND ((worker_hash(user_id) OPERATOR(pg_catalog.>=) 1073741824) AND (worker_hash(user_id) OPERATOR(pg_catalog.<=) 2147483647)))
-DEBUG:  Plan is router executable
 RESET client_min_messages;
 -- cannot push down since top level user_id is matched with NOT IN
 INSERT INTO raw_events_second
@@ -2057,7 +2012,6 @@ DEBUG:  distributed statement: INSERT INTO public.raw_events_first_13300000 AS c
 DEBUG:  distributed statement: INSERT INTO public.raw_events_first_13300001 AS citus_table_alias (user_id, "time", value_1, value_2, value_3, value_4) SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.raw_events_second_13300005 raw_events_second WHERE ((worker_hash(user_id) OPERATOR(pg_catalog.>=) '-1073741824'::integer) AND (worker_hash(user_id) OPERATOR(pg_catalog.<=) '-1'::integer))
 DEBUG:  distributed statement: INSERT INTO public.raw_events_first_13300002 AS citus_table_alias (user_id, "time", value_1, value_2, value_3, value_4) SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.raw_events_second_13300006 raw_events_second WHERE ((worker_hash(user_id) OPERATOR(pg_catalog.>=) 0) AND (worker_hash(user_id) OPERATOR(pg_catalog.<=) 1073741823))
 DEBUG:  distributed statement: INSERT INTO public.raw_events_first_13300003 AS citus_table_alias (user_id, "time", value_1, value_2, value_3, value_4) SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.raw_events_second_13300007 raw_events_second WHERE ((worker_hash(user_id) OPERATOR(pg_catalog.>=) 1073741824) AND (worker_hash(user_id) OPERATOR(pg_catalog.<=) 2147483647))
-DEBUG:  Plan is router executable
 SET client_min_messages TO INFO;
 truncate raw_events_first;
 SET client_min_messages TO DEBUG2;
@@ -2067,7 +2021,6 @@ DEBUG:  distributed statement: INSERT INTO public.raw_events_first_13300000 AS c
 DEBUG:  Skipping target shard interval 13300001 since SELECT query for it pruned away
 DEBUG:  Skipping target shard interval 13300002 since SELECT query for it pruned away
 DEBUG:  Skipping target shard interval 13300003 since SELECT query for it pruned away
-DEBUG:  Plan is router executable
 SET client_min_messages TO INFO;
 -- if a single shard of the SELECT is unhealty, the query should fail
 UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid = 13300004 AND nodeport = :worker_1_port;
@@ -2087,7 +2040,6 @@ DEBUG:  Skipping target shard interval 13300000 since SELECT query for it pruned
 DEBUG:  Skipping target shard interval 13300001 since SELECT query for it pruned away
 DEBUG:  distributed statement: INSERT INTO public.raw_events_first_13300002 AS citus_table_alias (user_id, "time", value_1, value_2, value_3, value_4) SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.raw_events_second_13300006 raw_events_second WHERE ((user_id OPERATOR(pg_catalog.=) 6) AND ((worker_hash(user_id) OPERATOR(pg_catalog.>=) 0) AND (worker_hash(user_id) OPERATOR(pg_catalog.<=) 1073741823)))
 DEBUG:  Skipping target shard interval 13300003 since SELECT query for it pruned away
-DEBUG:  Plan is router executable
 SET client_min_messages TO INFO;
 -- mark the unhealthy placement as healthy again for the next tests
 UPDATE pg_dist_shard_placement SET shardstate = 1 WHERE shardid = 13300004 AND nodeport = :worker_1_port;
@@ -2101,7 +2053,6 @@ DEBUG:  distributed statement: INSERT INTO public.raw_events_first_13300000 AS c
 DEBUG:  distributed statement: INSERT INTO public.raw_events_first_13300001 AS citus_table_alias (user_id, "time", value_1, value_2, value_3, value_4) SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.raw_events_second_13300005 raw_events_second WHERE ((worker_hash(user_id) OPERATOR(pg_catalog.>=) '-1073741824'::integer) AND (worker_hash(user_id) OPERATOR(pg_catalog.<=) '-1'::integer))
 DEBUG:  distributed statement: INSERT INTO public.raw_events_first_13300002 AS citus_table_alias (user_id, "time", value_1, value_2, value_3, value_4) SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.raw_events_second_13300006 raw_events_second WHERE ((worker_hash(user_id) OPERATOR(pg_catalog.>=) 0) AND (worker_hash(user_id) OPERATOR(pg_catalog.<=) 1073741823))
 DEBUG:  distributed statement: INSERT INTO public.raw_events_first_13300003 AS citus_table_alias (user_id, "time", value_1, value_2, value_3, value_4) SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.raw_events_second_13300007 raw_events_second WHERE ((worker_hash(user_id) OPERATOR(pg_catalog.>=) 1073741824) AND (worker_hash(user_id) OPERATOR(pg_catalog.<=) 2147483647))
-DEBUG:  Plan is router executable
 SET client_min_messages TO INFO;
 truncate raw_events_first;
 SET client_min_messages TO DEBUG2;
@@ -2111,7 +2062,6 @@ DEBUG:  distributed statement: INSERT INTO public.raw_events_first_13300000 AS c
 DEBUG:  Skipping target shard interval 13300001 since SELECT query for it pruned away
 DEBUG:  Skipping target shard interval 13300002 since SELECT query for it pruned away
 DEBUG:  Skipping target shard interval 13300003 since SELECT query for it pruned away
-DEBUG:  Plan is router executable
 SET client_min_messages TO INFO;
 -- now do some tests with varchars
 INSERT INTO insert_select_varchar_test VALUES ('test_1', 10);
@@ -2164,7 +2114,6 @@ SET client_min_messages TO DEBUG2;
 INSERT INTO table_with_defaults SELECT * FROM table_with_defaults;
 DEBUG:  distributed statement: INSERT INTO public.table_with_defaults_13300017 AS citus_table_alias (store_id, first_name, default_1, last_name, default_2) SELECT store_id, first_name, default_1, last_name, default_2 FROM public.table_with_defaults_13300017 table_with_defaults WHERE ((worker_hash(store_id) OPERATOR(pg_catalog.>=) '-2147483648'::integer) AND (worker_hash(store_id) OPERATOR(pg_catalog.<=) '-1'::integer))
 DEBUG:  distributed statement: INSERT INTO public.table_with_defaults_13300018 AS citus_table_alias (store_id, first_name, default_1, last_name, default_2) SELECT store_id, first_name, default_1, last_name, default_2 FROM public.table_with_defaults_13300018 table_with_defaults WHERE ((worker_hash(store_id) OPERATOR(pg_catalog.>=) 0) AND (worker_hash(store_id) OPERATOR(pg_catalog.<=) 2147483647))
-DEBUG:  Plan is router executable
 -- see that defaults are filled
 INSERT INTO table_with_defaults (store_id, first_name)
 SELECT
@@ -2173,7 +2122,6 @@ FROM
   table_with_defaults;
 DEBUG:  distributed statement: INSERT INTO public.table_with_defaults_13300017 AS citus_table_alias (store_id, first_name, default_1, default_2) SELECT store_id, first_name, 1 AS default_1, '2'::text AS default_2 FROM public.table_with_defaults_13300017 table_with_defaults WHERE ((worker_hash(store_id) OPERATOR(pg_catalog.>=) '-2147483648'::integer) AND (worker_hash(store_id) OPERATOR(pg_catalog.<=) '-1'::integer))
 DEBUG:  distributed statement: INSERT INTO public.table_with_defaults_13300018 AS citus_table_alias (store_id, first_name, default_1, default_2) SELECT store_id, first_name, 1 AS default_1, '2'::text AS default_2 FROM public.table_with_defaults_13300018 table_with_defaults WHERE ((worker_hash(store_id) OPERATOR(pg_catalog.>=) 0) AND (worker_hash(store_id) OPERATOR(pg_catalog.<=) 2147483647))
-DEBUG:  Plan is router executable
 -- shuffle one of the defaults and skip the other
 INSERT INTO table_with_defaults (default_2, store_id, first_name)
 SELECT
@@ -2182,7 +2130,6 @@ FROM
   table_with_defaults;
 DEBUG:  distributed statement: INSERT INTO public.table_with_defaults_13300017 AS citus_table_alias (store_id, first_name, default_1, default_2) SELECT store_id, first_name, 1 AS default_1, default_2 FROM public.table_with_defaults_13300017 table_with_defaults WHERE ((worker_hash(store_id) OPERATOR(pg_catalog.>=) '-2147483648'::integer) AND (worker_hash(store_id) OPERATOR(pg_catalog.<=) '-1'::integer))
 DEBUG:  distributed statement: INSERT INTO public.table_with_defaults_13300018 AS citus_table_alias (store_id, first_name, default_1, default_2) SELECT store_id, first_name, 1 AS default_1, default_2 FROM public.table_with_defaults_13300018 table_with_defaults WHERE ((worker_hash(store_id) OPERATOR(pg_catalog.>=) 0) AND (worker_hash(store_id) OPERATOR(pg_catalog.<=) 2147483647))
-DEBUG:  Plan is router executable
 -- shuffle both defaults
 INSERT INTO table_with_defaults (default_2, store_id, default_1, first_name)
 SELECT
@@ -2191,7 +2138,6 @@ FROM
   table_with_defaults;
 DEBUG:  distributed statement: INSERT INTO public.table_with_defaults_13300017 AS citus_table_alias (store_id, first_name, default_1, default_2) SELECT store_id, first_name, default_1, default_2 FROM public.table_with_defaults_13300017 table_with_defaults WHERE ((worker_hash(store_id) OPERATOR(pg_catalog.>=) '-2147483648'::integer) AND (worker_hash(store_id) OPERATOR(pg_catalog.<=) '-1'::integer))
 DEBUG:  distributed statement: INSERT INTO public.table_with_defaults_13300018 AS citus_table_alias (store_id, first_name, default_1, default_2) SELECT store_id, first_name, default_1, default_2 FROM public.table_with_defaults_13300018 table_with_defaults WHERE ((worker_hash(store_id) OPERATOR(pg_catalog.>=) 0) AND (worker_hash(store_id) OPERATOR(pg_catalog.<=) 2147483647))
-DEBUG:  Plan is router executable
 -- use constants instead of non-default column
 INSERT INTO table_with_defaults (default_2, last_name, store_id, first_name)
 SELECT
@@ -2200,7 +2146,6 @@ FROM
   table_with_defaults;
 DEBUG:  distributed statement: INSERT INTO public.table_with_defaults_13300017 AS citus_table_alias (store_id, first_name, default_1, last_name, default_2) SELECT store_id, 'Andres'::text AS first_name, 1 AS default_1, 'Freund'::text AS last_name, default_2 FROM public.table_with_defaults_13300017 table_with_defaults WHERE ((worker_hash(store_id) OPERATOR(pg_catalog.>=) '-2147483648'::integer) AND (worker_hash(store_id) OPERATOR(pg_catalog.<=) '-1'::integer))
 DEBUG:  distributed statement: INSERT INTO public.table_with_defaults_13300018 AS citus_table_alias (store_id, first_name, default_1, last_name, default_2) SELECT store_id, 'Andres'::text AS first_name, 1 AS default_1, 'Freund'::text AS last_name, default_2 FROM public.table_with_defaults_13300018 table_with_defaults WHERE ((worker_hash(store_id) OPERATOR(pg_catalog.>=) 0) AND (worker_hash(store_id) OPERATOR(pg_catalog.<=) 2147483647))
-DEBUG:  Plan is router executable
 -- use constants instead of non-default column and skip both defauls
 INSERT INTO table_with_defaults (last_name, store_id, first_name)
 SELECT
@@ -2209,7 +2154,6 @@ FROM
   table_with_defaults;
 DEBUG:  distributed statement: INSERT INTO public.table_with_defaults_13300017 AS citus_table_alias (store_id, first_name, default_1, last_name, default_2) SELECT store_id, 'Andres'::text AS first_name, 1 AS default_1, 'Freund'::text AS last_name, '2'::text AS default_2 FROM public.table_with_defaults_13300017 table_with_defaults WHERE ((worker_hash(store_id) OPERATOR(pg_catalog.>=) '-2147483648'::integer) AND (worker_hash(store_id) OPERATOR(pg_catalog.<=) '-1'::integer))
 DEBUG:  distributed statement: INSERT INTO public.table_with_defaults_13300018 AS citus_table_alias (store_id, first_name, default_1, last_name, default_2) SELECT store_id, 'Andres'::text AS first_name, 1 AS default_1, 'Freund'::text AS last_name, '2'::text AS default_2 FROM public.table_with_defaults_13300018 table_with_defaults WHERE ((worker_hash(store_id) OPERATOR(pg_catalog.>=) 0) AND (worker_hash(store_id) OPERATOR(pg_catalog.<=) 2147483647))
-DEBUG:  Plan is router executable
 -- use constants instead of default columns
 INSERT INTO table_with_defaults (default_2, last_name, store_id, first_name, default_1)
 SELECT
@@ -2218,7 +2162,6 @@ FROM
   table_with_defaults;
 DEBUG:  distributed statement: INSERT INTO public.table_with_defaults_13300017 AS citus_table_alias (store_id, first_name, default_1, last_name, default_2) SELECT store_id, first_name, 10, last_name, 20 FROM public.table_with_defaults_13300017 table_with_defaults WHERE ((worker_hash(store_id) OPERATOR(pg_catalog.>=) '-2147483648'::integer) AND (worker_hash(store_id) OPERATOR(pg_catalog.<=) '-1'::integer))
 DEBUG:  distributed statement: INSERT INTO public.table_with_defaults_13300018 AS citus_table_alias (store_id, first_name, default_1, last_name, default_2) SELECT store_id, first_name, 10, last_name, 20 FROM public.table_with_defaults_13300018 table_with_defaults WHERE ((worker_hash(store_id) OPERATOR(pg_catalog.>=) 0) AND (worker_hash(store_id) OPERATOR(pg_catalog.<=) 2147483647))
-DEBUG:  Plan is router executable
 -- use constants instead of both default columns and non-default columns
 INSERT INTO table_with_defaults (default_2, last_name, store_id, first_name, default_1)
 SELECT
@@ -2227,7 +2170,6 @@ FROM
   table_with_defaults;
 DEBUG:  distributed statement: INSERT INTO public.table_with_defaults_13300017 AS citus_table_alias (store_id, first_name, default_1, last_name, default_2) SELECT store_id, 'Andres'::text AS first_name, 10, 'Freund'::text AS last_name, 20 FROM public.table_with_defaults_13300017 table_with_defaults WHERE ((worker_hash(store_id) OPERATOR(pg_catalog.>=) '-2147483648'::integer) AND (worker_hash(store_id) OPERATOR(pg_catalog.<=) '-1'::integer))
 DEBUG:  distributed statement: INSERT INTO public.table_with_defaults_13300018 AS citus_table_alias (store_id, first_name, default_1, last_name, default_2) SELECT store_id, 'Andres'::text AS first_name, 10, 'Freund'::text AS last_name, 20 FROM public.table_with_defaults_13300018 table_with_defaults WHERE ((worker_hash(store_id) OPERATOR(pg_catalog.>=) 0) AND (worker_hash(store_id) OPERATOR(pg_catalog.<=) 2147483647))
-DEBUG:  Plan is router executable
 -- some of the ultimate queries where we have constants,
 -- defaults and group by entry is not on the target entry
 INSERT INTO table_with_defaults (default_2, store_id, first_name)
@@ -2239,7 +2181,6 @@ GROUP BY
   last_name, store_id;
 DEBUG:  distributed statement: INSERT INTO public.table_with_defaults_13300017 AS citus_table_alias (store_id, first_name, default_1, default_2) SELECT store_id, 'Andres'::text AS first_name, 1 AS default_1, '2000'::text AS default_2 FROM public.table_with_defaults_13300017 table_with_defaults WHERE ((worker_hash(store_id) OPERATOR(pg_catalog.>=) '-2147483648'::integer) AND (worker_hash(store_id) OPERATOR(pg_catalog.<=) '-1'::integer)) GROUP BY last_name, store_id
 DEBUG:  distributed statement: INSERT INTO public.table_with_defaults_13300018 AS citus_table_alias (store_id, first_name, default_1, default_2) SELECT store_id, 'Andres'::text AS first_name, 1 AS default_1, '2000'::text AS default_2 FROM public.table_with_defaults_13300018 table_with_defaults WHERE ((worker_hash(store_id) OPERATOR(pg_catalog.>=) 0) AND (worker_hash(store_id) OPERATOR(pg_catalog.<=) 2147483647)) GROUP BY last_name, store_id
-DEBUG:  Plan is router executable
 INSERT INTO table_with_defaults (default_1, store_id, first_name, default_2)
 SELECT
   1000, store_id, 'Andres', '2000'
@@ -2249,7 +2190,6 @@ GROUP BY
   last_name, store_id, first_name;
 DEBUG:  distributed statement: INSERT INTO public.table_with_defaults_13300017 AS citus_table_alias (store_id, first_name, default_1, default_2) SELECT store_id, 'Andres'::text AS first_name, 1000, '2000'::text AS default_2 FROM public.table_with_defaults_13300017 table_with_defaults WHERE ((worker_hash(store_id) OPERATOR(pg_catalog.>=) '-2147483648'::integer) AND (worker_hash(store_id) OPERATOR(pg_catalog.<=) '-1'::integer)) GROUP BY last_name, store_id, first_name
 DEBUG:  distributed statement: INSERT INTO public.table_with_defaults_13300018 AS citus_table_alias (store_id, first_name, default_1, default_2) SELECT store_id, 'Andres'::text AS first_name, 1000, '2000'::text AS default_2 FROM public.table_with_defaults_13300018 table_with_defaults WHERE ((worker_hash(store_id) OPERATOR(pg_catalog.>=) 0) AND (worker_hash(store_id) OPERATOR(pg_catalog.<=) 2147483647)) GROUP BY last_name, store_id, first_name
-DEBUG:  Plan is router executable
 INSERT INTO table_with_defaults (default_1, store_id, first_name, default_2)
 SELECT
   1000, store_id, 'Andres', '2000'
@@ -2259,7 +2199,6 @@ GROUP BY
   last_name, store_id, first_name, default_2;
 DEBUG:  distributed statement: INSERT INTO public.table_with_defaults_13300017 AS citus_table_alias (store_id, first_name, default_1, default_2) SELECT store_id, 'Andres'::text AS first_name, 1000, '2000'::text AS default_2 FROM public.table_with_defaults_13300017 table_with_defaults WHERE ((worker_hash(store_id) OPERATOR(pg_catalog.>=) '-2147483648'::integer) AND (worker_hash(store_id) OPERATOR(pg_catalog.<=) '-1'::integer)) GROUP BY last_name, store_id, first_name, default_2
 DEBUG:  distributed statement: INSERT INTO public.table_with_defaults_13300018 AS citus_table_alias (store_id, first_name, default_1, default_2) SELECT store_id, 'Andres'::text AS first_name, 1000, '2000'::text AS default_2 FROM public.table_with_defaults_13300018 table_with_defaults WHERE ((worker_hash(store_id) OPERATOR(pg_catalog.>=) 0) AND (worker_hash(store_id) OPERATOR(pg_catalog.<=) 2147483647)) GROUP BY last_name, store_id, first_name, default_2
-DEBUG:  Plan is router executable
 INSERT INTO table_with_defaults (default_1, store_id, first_name)
 SELECT
   1000, store_id, 'Andres'
@@ -2269,7 +2208,6 @@ GROUP BY
   last_name, store_id, first_name, default_2;
 DEBUG:  distributed statement: INSERT INTO public.table_with_defaults_13300017 AS citus_table_alias (store_id, first_name, default_1, default_2) SELECT store_id, 'Andres'::text AS first_name, 1000, '2'::text AS default_2 FROM public.table_with_defaults_13300017 table_with_defaults WHERE ((worker_hash(store_id) OPERATOR(pg_catalog.>=) '-2147483648'::integer) AND (worker_hash(store_id) OPERATOR(pg_catalog.<=) '-1'::integer)) GROUP BY last_name, store_id, first_name, default_2
 DEBUG:  distributed statement: INSERT INTO public.table_with_defaults_13300018 AS citus_table_alias (store_id, first_name, default_1, default_2) SELECT store_id, 'Andres'::text AS first_name, 1000, '2'::text AS default_2 FROM public.table_with_defaults_13300018 table_with_defaults WHERE ((worker_hash(store_id) OPERATOR(pg_catalog.>=) 0) AND (worker_hash(store_id) OPERATOR(pg_catalog.<=) 2147483647)) GROUP BY last_name, store_id, first_name, default_2
-DEBUG:  Plan is router executable
 RESET client_min_messages;
 -- Stable function in default should be allowed
 ALTER TABLE table_with_defaults ADD COLUMN t timestamptz DEFAULT now();

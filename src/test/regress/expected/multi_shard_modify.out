@@ -143,8 +143,7 @@ WARNING:  master_modify_multiple_shards is deprecated and will be removed in a f
 HINT:  Run the command directly
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 15
+DEBUG:  query has a single distribution column value: 15
  master_modify_multiple_shards
 ---------------------------------------------------------------------
                              0

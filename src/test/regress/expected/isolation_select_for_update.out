@@ -304,8 +304,7 @@ step s1-select-from-t1-with-subquery:
  SELECT * FROM (SELECT * FROM test_table_1_rf1 FOR UPDATE) foo WHERE id = 1;
  RESET client_min_messages;
 
-DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 1
+DEBUG:  query has a single distribution column value: 1
 id             val_1
 
 1              2

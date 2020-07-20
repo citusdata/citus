@@ -498,17 +498,14 @@ NOTICE:  executing the command locally: SELECT count(*) AS count FROM (coordinat
 (1 row)
 
 ROLLBACK;
+\set VERBOSITY terse
 DROP TABLE ref_table;
 NOTICE:  executing the command locally: DROP TABLE IF EXISTS coordinator_shouldhaveshards.ref_table_xxxxx CASCADE
-CONTEXT:  SQL statement "SELECT master_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name)"
-PL/pgSQL function citus_drop_trigger() line 19 at PERFORM
 DELETE FROM test;
 DROP TABLE test;
 DROP TABLE dist_table;
 DROP TABLE ref;
 NOTICE:  executing the command locally: DROP TABLE IF EXISTS coordinator_shouldhaveshards.ref_xxxxx CASCADE
-CONTEXT:  SQL statement "SELECT master_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name)"
-PL/pgSQL function citus_drop_trigger() line 19 at PERFORM
 DROP SCHEMA coordinator_shouldhaveshards CASCADE;
 NOTICE:  drop cascades to table local
 SELECT 1 FROM master_set_node_property('localhost', :master_port, 'shouldhaveshards', false);
