@@ -3298,21 +3298,33 @@ WorkerAggregateExpressionList(Aggref *originalAggregate,
 			Const *aggOidParam = makeConst(REGPROCEDUREOID, -1, InvalidOid, sizeof(Oid),
 										   ObjectIdGetDatum(originalAggregate->aggfnoid),
 										   false, true);
-			List *aggArguments = list_make1(makeTargetEntry((Expr *) aggOidParam, 1, NULL,
-															false));
+
+			/*
+			 * Aggregation on workers assumes a single aggregation parameter. To still be
+			 * able to handle multiple paramters, we combine all parameters into a single row
+			 * expression.
+			 */
+			RowExpr *rowExpr = makeNode(RowExpr);
+			rowExpr->row_typeid = RECORDOID;
+			rowExpr->row_format = COERCE_EXPLICIT_CALL;
+			rowExpr->location = -1;
+			rowExpr->colnames = NIL;
+
+			List *aggArgs = list_make2(
+				makeTargetEntry((Expr *) aggOidParam, 1, NULL, false),
+				makeTargetEntry((Expr *) rowExpr, 2, NULL, false));
+
 			TargetEntry *arg = NULL;
 			foreach_ptr(arg, originalAggregate->args)
 			{
-				TargetEntry *newArg = copyObject(arg);
-				newArg->resno++;
-				aggArguments = lappend(aggArguments, newArg);
+				rowExpr->args = lappend(rowExpr->args, copyObject(arg->expr));
 			}
 
-			/* worker_partial_agg(agg, ...args) */
+			/* worker_partial_agg(agg, ROW(...args)) */
 			Aggref *newWorkerAggregate = copyObject(originalAggregate);
 			newWorkerAggregate->aggfnoid = workerPartialId;
 			newWorkerAggregate->aggtype = CSTRINGOID;
-			newWorkerAggregate->args = aggArguments;
+			newWorkerAggregate->args = aggArgs;
 			newWorkerAggregate->aggkind = AGGKIND_NORMAL;
 			newWorkerAggregate->aggtranstype = INTERNALOID;
 			newWorkerAggregate->aggargtypes = lcons_oid(OIDOID,
@@ -3485,7 +3497,7 @@ static bool
 AggregateEnabledCustom(Aggref *aggregateExpression)
 {
 	if (aggregateExpression->aggorder != NIL ||
-		list_length(aggregateExpression->args) != 1)
+		list_length(aggregateExpression->args) == 0)
 	{
 		return false;
 	}

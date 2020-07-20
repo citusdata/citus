@@ -27,6 +27,7 @@
 #include "utils/datum.h"
 #include "utils/lsyscache.h"
 #include "utils/syscache.h"
+#include "utils/typcache.h"
 #include "fmgr.h"
 #include "miscadmin.h"
 #include "pg_config_manual.h"
@@ -49,6 +50,7 @@ typedef struct StypeBox
 	bool transtypeByVal;
 	bool valueNull;
 	bool valueInit;
+	TupleDesc combinedInputDesc;
 } StypeBox;
 
 static HeapTuple GetAggregateForm(Oid oid, Form_pg_aggregate *form);
@@ -58,7 +60,7 @@ static void * pallocInAggContext(FunctionCallInfo fcinfo, size_t size);
 static void aclcheckAggregate(ObjectType objectType, Oid userOid, Oid funcOid);
 static Datum GetAggInitVal(Datum textInitVal, Oid transtype);
 static void InitializeStypeBox(FunctionCallInfo fcinfo, StypeBox *box, HeapTuple aggTuple,
-							   Oid transtype);
+							   Oid transtype, TupleDesc combinedInputDesc);
 static StypeBox * TryCreateStypeBoxFromFcinfoAggref(FunctionCallInfo fcinfo);
 static void HandleTransition(StypeBox *box, FunctionCallInfo fcinfo,
 							 FunctionCallInfo innerFcinfo);
@@ -174,7 +176,7 @@ GetAggInitVal(Datum textInitVal, Oid transtype)
  */
 static void
 InitializeStypeBox(FunctionCallInfo fcinfo, StypeBox *box, HeapTuple aggTuple, Oid
-				   transtype)
+				   transtype, TupleDesc combinedInputDesc)
 {
 	Form_pg_aggregate aggform = (Form_pg_aggregate) GETSTRUCT(aggTuple);
 	Oid userId = GetUserId();
@@ -192,6 +194,7 @@ InitializeStypeBox(FunctionCallInfo fcinfo, StypeBox *box, HeapTuple aggTuple, O
 										&box->valueNull);
 	box->transtype = transtype;
 	box->valueInit = !box->valueNull;
+	box->combinedInputDesc = combinedInputDesc;
 	if (box->valueNull)
 	{
 		box->value = (Datum) 0;
@@ -244,7 +247,7 @@ TryCreateStypeBoxFromFcinfoAggref(FunctionCallInfo fcinfo)
 	StypeBox *box = pallocInAggContext(fcinfo, sizeof(StypeBox));
 	box->agg = DatumGetObjectId(aggConst->constvalue);
 	HeapTuple aggTuple = GetAggregateForm(box->agg, &aggform);
-	InitializeStypeBox(fcinfo, box, aggTuple, aggform->aggtranstype);
+	InitializeStypeBox(fcinfo, box, aggTuple, aggform->aggtranstype, NULL);
 	ReleaseSysCache(aggTuple);
 
 	return box;
@@ -345,11 +348,48 @@ worker_partial_agg_sfunc(PG_FUNCTION_ARGS)
 	FmgrInfo info;
 	int argumentIndex = 0;
 	bool initialCall = PG_ARGISNULL(0);
+	TupleDesc combinedInputDesc = NULL;
+	bool isNull;
 
 	if (initialCall)
 	{
+		if (PG_ARGISNULL(1))
+		{
+			ereport(ERROR, (errmsg("worker_partial_agg_sfunc received invalid null "
+								   "input for second argument")));
+		}
 		box = pallocInAggContext(fcinfo, sizeof(StypeBox));
 		box->agg = PG_GETARG_OID(1);
+
+		/* check if input comes combined into record */
+		if (RECORDOID == get_fn_expr_argtype(fcinfo->flinfo, 2))
+		{
+			if (PG_ARGISNULL(2))
+			{
+				ereport(ERROR, (errmsg(
+									"worker_partial_agg_sfunc received invalid input "
+									"for third argument: null record"),
+								errhint("Elements of record may be null")));
+			}
+
+			/* retrieve record description and store it in the box */
+			HeapTupleHeader record = PG_GETARG_HEAPTUPLEHEADER(2);
+
+			combinedInputDesc = lookup_rowtype_tupdesc(
+				HeapTupleHeaderGetTypeId(record),
+				HeapTupleHeaderGetTypMod(record)
+				);
+
+			box->combinedInputDesc = pallocInAggContext(fcinfo, TupleDescSize(
+															combinedInputDesc));
+			TupleDescCopy(box->combinedInputDesc, combinedInputDesc);
+			ReleaseTupleDesc(combinedInputDesc);
+		}
+		else
+		{
+			/* Input parameter comes as is, not combined into a record */
+			box->combinedInputDesc = NULL;
+		}
 
 		if (!TypecheckWorkerPartialAggArgType(fcinfo, box))
 		{
@@ -365,9 +405,11 @@ worker_partial_agg_sfunc(PG_FUNCTION_ARGS)
 
 	HeapTuple aggtuple = GetAggregateForm(box->agg, &aggform);
 	Oid aggsfunc = aggform->aggtransfn;
+	combinedInputDesc = box->combinedInputDesc;
 	if (initialCall)
 	{
-		InitializeStypeBox(fcinfo, box, aggtuple, aggform->aggtranstype);
+		InitializeStypeBox(fcinfo, box, aggtuple, aggform->aggtranstype,
+						   combinedInputDesc);
 	}
 	ReleaseSysCache(aggtuple);
 	if (initialCall)
@@ -380,17 +422,41 @@ worker_partial_agg_sfunc(PG_FUNCTION_ARGS)
 	fmgr_info(aggsfunc, &info);
 	if (info.fn_strict)
 	{
-		for (argumentIndex = 2; argumentIndex < PG_NARGS(); argumentIndex++)
+		/* 'strict' requires function to return null on null input */
+		if (PG_ARGISNULL(2))
 		{
-			if (PG_ARGISNULL(argumentIndex))
+			PG_RETURN_POINTER(box);
+		}
+
+		/*
+		 * For multiple input parameters, 'strict' requires function to return
+		 * null whenever any of its arguments are null.
+		 */
+		if (combinedInputDesc != NULL)
+		{
+			for (argumentIndex = 1; argumentIndex <= combinedInputDesc->natts;
+				 argumentIndex++)
 			{
-				PG_RETURN_POINTER(box);
+				GetAttributeByNum(PG_GETARG_HEAPTUPLEHEADER(2), argumentIndex, &isNull);
+				if (isNull)
+				{
+					PG_RETURN_POINTER(box);
+				}
 			}
 		}
 
 		if (!box->valueInit)
 		{
-			HandleStrictUninit(box, fcinfo, PG_GETARG_DATUM(2));
+			/* For 'strict' transition functions, if the initial state value is null,
+			 * then at the first row with all-nonnull input values, the first argument
+			 * value replaces the state value.
+			 */
+			HandleStrictUninit(box, fcinfo,
+							   combinedInputDesc != NULL ?
+							   GetAttributeByNum(PG_GETARG_HEAPTUPLEHEADER(2), 1,
+												 &isNull) :
+							   PG_GETARG_DATUM(2));
+
 			PG_RETURN_POINTER(box);
 		}
 
@@ -400,13 +466,35 @@ worker_partial_agg_sfunc(PG_FUNCTION_ARGS)
 		}
 	}
 
-	InitFunctionCallInfoData(*innerFcinfo, &info, fcinfo->nargs - 1, fcinfo->fncollation,
-							 fcinfo->context, fcinfo->resultinfo);
-	fcSetArgExt(innerFcinfo, 0, box->value, box->valueNull);
-	for (argumentIndex = 1; argumentIndex < innerFcinfo->nargs; argumentIndex++)
+	if (combinedInputDesc != NULL)
 	{
-		fcSetArgExt(innerFcinfo, argumentIndex, fcGetArgValue(fcinfo, argumentIndex + 1),
-					fcGetArgNull(fcinfo, argumentIndex + 1));
+		InitFunctionCallInfoData(*innerFcinfo, &info, combinedInputDesc->natts + 1,
+								 fcinfo->fncollation,
+								 fcinfo->context, fcinfo->resultinfo);
+		fcSetArgExt(innerFcinfo, 0, box->value, box->valueNull);
+
+		for (argumentIndex = 1; argumentIndex <= combinedInputDesc->natts;
+			 argumentIndex++)
+		{
+			if (PG_ARGISNULL(2))
+			{
+				fcSetArgExt(innerFcinfo, argumentIndex, 0, true);
+			}
+			else
+			{
+				Datum arg = GetAttributeByNum(PG_GETARG_HEAPTUPLEHEADER(2), argumentIndex,
+											  &isNull);
+				fcSetArgExt(innerFcinfo, argumentIndex, arg, isNull);
+			}
+		}
+	}
+	else
+	{
+		InitFunctionCallInfoData(*innerFcinfo, &info, 2, fcinfo->fncollation,
+								 fcinfo->context, fcinfo->resultinfo);
+		fcSetArgExt(innerFcinfo, 0, box->value, box->valueNull);
+		fcSetArgExt(innerFcinfo, argumentIndex, fcGetArgValue(fcinfo, 2),
+					fcGetArgNull(fcinfo, 2));
 	}
 
 	HandleTransition(box, fcinfo, innerFcinfo);
@@ -528,7 +616,7 @@ coord_combine_agg_sfunc(PG_FUNCTION_ARGS)
 
 	if (PG_ARGISNULL(0))
 	{
-		InitializeStypeBox(fcinfo, box, aggtuple, aggform->aggtranstype);
+		InitializeStypeBox(fcinfo, box, aggtuple, aggform->aggtranstype, NULL);
 	}
 
 	ReleaseSysCache(aggtuple);
@@ -703,20 +791,65 @@ TypecheckWorkerPartialAggArgType(FunctionCallInfo fcinfo, StypeBox *box)
 	Assert(!argtypesNull);
 	ReleaseSysCache(proctuple);
 
-	if (ARR_NDIM(DatumGetArrayTypeP(argtypes)) != 1 ||
-		ARR_DIMS(DatumGetArrayTypeP(argtypes))[0] != 1)
+	if (ARR_NDIM(DatumGetArrayTypeP(argtypes)) != 1)
 	{
 		elog(ERROR, "worker_partial_agg_sfunc cannot type check aggregates "
-					"taking anything other than 1 argument");
+					"taking multi-dimensional arguments");
 	}
 
-	int arrayIndex = 0;
-	Datum argtype = array_get_element(argtypes,
-									  1, &arrayIndex, -1, sizeof(Oid), true, 'i',
-									  &argtypesNull);
-	Assert(!argtypesNull);
+	int naggarg = ARR_DIMS(DatumGetArrayTypeP(argtypes))[0];
 
-	return aggarg != NULL && exprType((Node *) aggarg->expr) == DatumGetObjectId(argtype);
+	/* we expect aggregate function to have at least a single parameter */
+	if (naggarg == 0)
+	{
+		return false;
+	}
+
+	int idx = 0;
+	Datum argtype;
+
+	if (box->combinedInputDesc != NULL)
+	{
+		/*
+		 * For input parameters combined into a record, number of elements in record
+		 * are expected to match number of parameters of aggregate function.
+		 */
+		if (box->combinedInputDesc->natts != naggarg)
+		{
+			return false;
+		}
+
+		/* Check if record element types match aggregate input parameters */
+		for (idx = 0; idx < naggarg; idx++)
+		{
+			argtype = array_get_element(argtypes,
+										1, &idx, -1, sizeof(Oid), true, 'i',
+										&argtypesNull);
+			Assert(!argtypesNull);
+
+			if (argtype != box->combinedInputDesc->attrs[idx].atttypid)
+			{
+				return false;
+			}
+		}
+	}
+	else
+	{
+		/* Input not wrapped in a record => must be single-parameter aggregate */
+		if (naggarg != 1)
+		{
+			return false;
+		}
+
+		argtype = array_get_element(argtypes,
+									1, &idx, -1, sizeof(Oid), true, 'i',
+									&argtypesNull);
+		Assert(!argtypesNull);
+
+		return exprType((Node *) aggarg->expr) == DatumGetObjectId(argtype);
+	}
+
+	return true;
 }
 
 
