@@ -1249,10 +1249,7 @@ RegisterCitusConfigVariables(void)
 		gettext_noop("The master node chooses between two different executor types "
 					 "when executing a distributed query.The adaptive executor is "
 					 "optimal for simple key-value lookup queries and queries that "
-					 "involve aggregations and/or co-located joins on multiple shards. "
-					 "The task-tracker executor is optimal for long-running, complex "
-					 "queries that touch thousands of shards and/or that involve table "
-					 "repartitioning."),
+					 "involve aggregations and/or co-located joins on multiple shards. "),
 		&TaskExecutorType,
 		MULTI_EXECUTOR_ADAPTIVE,
 		task_executor_type_options,
@@ -1262,7 +1259,7 @@ RegisterCitusConfigVariables(void)
 
 	DefineCustomBoolVariable(
 		"citus.enable_repartition_joins",
-		gettext_noop("Allows Citus to use task-tracker executor when necessary."),
+		gettext_noop("Allows Citus to repartition data between nodes."),
 		NULL,
 		&EnableRepartitionJoins,
 		false,
