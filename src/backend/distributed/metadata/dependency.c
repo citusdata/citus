@@ -20,7 +20,10 @@
 #include "catalog/pg_depend.h"
 #include "catalog/pg_shdepend.h"
 #include "catalog/pg_type.h"
+#include "catalog/pg_trigger_d.h"
+#include "distributed/commands.h"
 #include "distributed/commands/utility_hook.h"
+#include "distributed/create_citus_local_table.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata/dependency.h"
 #include "distributed/metadata/distobject.h"
@@ -550,6 +553,11 @@ SupportedDependencyByCitus(const ObjectAddress *address)
 			return true;
 		}
 
+		case OCLASS_TRIGGER:
+		{
+			return true;
+		}
+
 		case OCLASS_TYPE:
 		{
 			switch (get_typtype(address->objectId))
@@ -807,6 +815,11 @@ ApplyAddToDependencyList(ObjectAddressCollector *collector,
 		return;
 	}
 
+	if (address.classId == TriggerRelationId)
+	{
+		return;
+	}
+
 	CollectObjectAddress(collector, &address);
 }
 
@@ -862,6 +875,28 @@ ExpandCitusSupportedTypes(ObjectAddressCollector *collector, ObjectAddress targe
 			}
 
 			break;
+		}
+
+		case RelationRelationId:
+		{
+			Oid relationId = target.objectId;
+			if (IsCitusTable(relationId) && IsCitusLocalTable(relationId))
+			{
+				List *triggerIdList = GetExplicitTriggerIdList(relationId);
+
+				Oid triggerId = InvalidOid;
+				foreach_oid(triggerId, triggerIdList)
+				{
+					DependencyDefinition *dependency =
+						palloc0(sizeof(DependencyDefinition));
+					dependency->mode = DependencyObjectAddress;
+					ObjectAddressSet(dependency->data.address,
+									 TriggerRelationId,
+									 triggerId);
+
+					result = lappend(result, dependency);
+				}
+			}
 		}
 
 		default:
