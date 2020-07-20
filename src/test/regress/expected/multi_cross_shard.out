@@ -172,7 +172,6 @@ INSERT INTO tt1 VALUES(1, 'Ahmet');
 INSERT INTO tt1 VALUES(2, 'Mehmet');
 INSERT INTO tt2 VALUES(1, 'Ahmet', 5);
 INSERT INTO tt2 VALUES(2, 'Mehmet', 15);
--- Should notice since it is a adaptive query
 SELECT tt1.id, tt2.count from tt1,tt2 where tt1.id = tt2.id ORDER BY 1;
 NOTICE:  multi-task query about to be executed
 HINT:  Queries are split to multiple tasks if they have to be split into several queries on the workers.

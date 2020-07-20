@@ -4610,8 +4610,10 @@ MergeTaskList(MapMergeJob *mapMergeJob, List *mapTaskList, uint32 taskIdIndex)
 			uint32 mapTaskNodePort = mapTaskPlacement->nodePort;
 
 			/*
-			 * If replication factor is 1, then we know that we will use the first and
-			 * the only placement.
+			 * We will use the first node even if replication factor is greater than 1
+			 * When replication factor is greater than 1 and there
+			 * is a connection problem to the node that has done the map task, we will get
+			 * an error in fetch task execution.
 			 */
 			StringInfo mapFetchQueryString = makeStringInfo();
 			appendStringInfo(mapFetchQueryString, MAP_OUTPUT_FETCH_COMMAND,

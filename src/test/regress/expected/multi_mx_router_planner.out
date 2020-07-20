@@ -1418,13 +1418,6 @@ SET client_min_messages to 'DEBUG2';
 CREATE MATERIALIZED VIEW mv_articles_hash_mx_error AS
 	SELECT * FROM articles_hash_mx WHERE author_id in (1,2);
 DEBUG:  Router planner cannot handle multi-shard select queries
--- router planner/executor is disabled for adaptive executor
--- following query is router plannable, but router planner is disabled
--- TODO: Uncomment once we fix adaptive issue
-----SELECT id
---	FROM articles_hash_mx
---	WHERE author_id = 1;
--- insert query is router plannable even under adaptive
 INSERT INTO articles_hash_mx VALUES (51,  1, 'amateus', 1814);
 DEBUG:  Creating router plan
 DEBUG:  query has a single distribution column value: 1

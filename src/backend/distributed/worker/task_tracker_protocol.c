@@ -3,7 +3,7 @@
  * task_tracker_protocol.c
  *
  * The methods in the file are deprecated.
- * 
+ *
  * Copyright (c) Citus Data, Inc.
  *
  * $Id$
