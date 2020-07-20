@@ -32,7 +32,7 @@ SELECT * FROM (SELECT b, '', '' FROM t0 GROUP BY b ) as foo ORDER BY 1;
 -- some tests that follow very similar codeoaths
 SELECT a + 1 FROM t0 ORDER BY 1;
 SELECT a + 1, a - 1 FROM t0 ORDER BY 1;
-WITH cte1 AS (SELECT row_to_json(row(a))->'f1' FROM t0) SELECT * FROM cte1 ORDER BY 1::text;
+WITH cte1 AS (SELECT row_to_json(row(a))->'f1' FROM t0) SELECT * FROM cte1 ORDER BY "?column?"::text;
 
 -- clean up after test
 SET client_min_messages TO WARNING;
