@@ -211,8 +211,6 @@ DEBUG:  Router planner does not support append-partitioned tables.
 CONTEXT:  PL/pgSQL function coordinator_plan(text) line 3 at FOR over EXECUTE statement
 LOG:  join order: [ "lineitem" ]
 CONTEXT:  PL/pgSQL function coordinator_plan(text) line 3 at FOR over EXECUTE statement
-DEBUG:  Plan is router executable
-CONTEXT:  PL/pgSQL function coordinator_plan(text) line 3 at FOR over EXECUTE statement
        coordinator_plan
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)

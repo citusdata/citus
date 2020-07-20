@@ -712,6 +712,7 @@ INTERSECT
 -- CTEs with where false
 -- terse because distribution column inference varies between pg11 & pg12
 \set VERBOSITY terse
+RESET client_min_messages;
 
 WITH id_author AS ( SELECT id, author_id FROM articles_hash WHERE author_id = 1),
 id_title AS (SELECT id, title from articles_hash WHERE author_id = 1 and 1=0)
@@ -721,6 +722,7 @@ WITH id_author AS ( SELECT id, author_id FROM articles_hash WHERE author_id = 1)
 id_title AS (SELECT id, title from articles_hash WHERE author_id = 1)
 SELECT * FROM id_author, id_title WHERE id_author.id = id_title.id and 1=0;
 
+SET client_min_messages TO DEBUG2;
 \set VERBOSITY DEFAULT
 
 WITH RECURSIVE hierarchy as (

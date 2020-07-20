@@ -384,9 +384,6 @@ typedef struct DistributedPlan
 	 */
 	bool expectResults;
 
-	/* a router executable query is executed entirely on a worker */
-	bool routerExecutable;
-
 	/* job tree containing the tasks to be executed on workers */
 	Job *workerJob;
 

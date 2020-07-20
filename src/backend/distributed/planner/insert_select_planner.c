@@ -354,7 +354,6 @@ CreateDistributedInsertSelectPlan(Query *originalQuery,
 	/* and finally the multi plan */
 	distributedPlan->workerJob = workerJob;
 	distributedPlan->combineQuery = NULL;
-	distributedPlan->routerExecutable = true;
 	distributedPlan->expectResults = originalQuery->returningList != NIL;
 	distributedPlan->targetRelationId = targetRelationId;
 

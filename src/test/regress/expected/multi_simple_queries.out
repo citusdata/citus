@@ -417,8 +417,7 @@ SELECT *
 	FROM articles
 	WHERE author_id = 1;
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 1
+DEBUG:  query has a single distribution column value: 1
  id | author_id |    title     | word_count
 ---------------------------------------------------------------------
   1 |         1 | arsenous     |       9572
@@ -433,7 +432,6 @@ SELECT *
 	FROM articles
 	WHERE author_id = 1 OR author_id = 17;
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  id | author_id |    title     | word_count
 ---------------------------------------------------------------------
   1 |         1 | arsenous     |       9572
@@ -462,8 +460,7 @@ SELECT id as article_id, word_count * id as random_value
 	FROM articles
 	WHERE author_id = 1;
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 1
+DEBUG:  query has a single distribution column value: 1
  article_id | random_value
 ---------------------------------------------------------------------
           1 |         9572
@@ -480,8 +477,7 @@ SELECT a.author_id as first_author, b.word_count as second_word_count
 	WHERE a.author_id = 10 and a.author_id = b.author_id
 	LIMIT 3;
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 10
+DEBUG:  query has a single distribution column value: 10
  first_author | second_word_count
 ---------------------------------------------------------------------
            10 |             17277
@@ -496,8 +492,7 @@ SELECT a.author_id as first_author, b.word_count as second_word_count
 	WHERE a.author_id = 10 and a.author_id = b.author_id
 	LIMIT 3;
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 10
+DEBUG:  query has a single distribution column value: 10
  first_author | second_word_count
 ---------------------------------------------------------------------
            10 |             19519
@@ -511,8 +506,7 @@ SELECT *
 	WHERE author_id = 1
 	LIMIT 2;
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 1
+DEBUG:  query has a single distribution column value: 1
  id | author_id |  title   | word_count
 ---------------------------------------------------------------------
   1 |         1 | arsenous |       9572
@@ -528,8 +522,7 @@ SELECT id
 	GROUP BY id
 	ORDER BY id;
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 1
+DEBUG:  query has a single distribution column value: 1
  id
 ---------------------------------------------------------------------
   1
@@ -546,8 +539,7 @@ SELECT avg(word_count)
 	FROM articles
 	WHERE author_id = 2;
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 2
+DEBUG:  query has a single distribution column value: 2
         avg
 ---------------------------------------------------------------------
  12356.400000000000
@@ -570,8 +562,7 @@ SELECT max(word_count) as max, min(word_count) as min,
 	FROM articles
 	WHERE author_id = 2;
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 2
+DEBUG:  query has a single distribution column value: 2
   max  | min  |  sum  | cnt
 ---------------------------------------------------------------------
  18185 | 2728 | 61782 |   5
@@ -632,24 +623,21 @@ DEBUG:  Router planner cannot handle multi-shard select queries
 -- tablesample is supported
 SELECT * FROM articles TABLESAMPLE SYSTEM (0) WHERE author_id = 1;
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 1
+DEBUG:  query has a single distribution column value: 1
  id | author_id | title | word_count
 ---------------------------------------------------------------------
 (0 rows)
 
 SELECT * FROM articles TABLESAMPLE BERNOULLI (0) WHERE author_id = 1;
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 1
+DEBUG:  query has a single distribution column value: 1
  id | author_id | title | word_count
 ---------------------------------------------------------------------
 (0 rows)
 
 SELECT * FROM articles TABLESAMPLE SYSTEM (100) WHERE author_id = 1 ORDER BY id;
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 1
+DEBUG:  query has a single distribution column value: 1
  id | author_id |    title     | word_count
 ---------------------------------------------------------------------
   1 |         1 | arsenous     |       9572
@@ -661,8 +649,7 @@ DETAIL:  distribution column value: 1
 
 SELECT * FROM articles TABLESAMPLE BERNOULLI (100) WHERE author_id = 1 ORDER BY id;
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 1
+DEBUG:  query has a single distribution column value: 1
  id | author_id |    title     | word_count
 ---------------------------------------------------------------------
   1 |         1 | arsenous     |       9572
@@ -677,8 +664,7 @@ SET citus.enable_fast_path_router_planner TO true;
 SELECT * FROM articles TABLESAMPLE SYSTEM (0) WHERE author_id = 1;
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 1
+DEBUG:  query has a single distribution column value: 1
  id | author_id | title | word_count
 ---------------------------------------------------------------------
 (0 rows)
@@ -686,8 +672,7 @@ DETAIL:  distribution column value: 1
 SELECT * FROM articles TABLESAMPLE BERNOULLI (0) WHERE author_id = 1;
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 1
+DEBUG:  query has a single distribution column value: 1
  id | author_id | title | word_count
 ---------------------------------------------------------------------
 (0 rows)
@@ -695,8 +680,7 @@ DETAIL:  distribution column value: 1
 SELECT * FROM articles TABLESAMPLE SYSTEM (100) WHERE author_id = 1 ORDER BY id;
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 1
+DEBUG:  query has a single distribution column value: 1
  id | author_id |    title     | word_count
 ---------------------------------------------------------------------
   1 |         1 | arsenous     |       9572
@@ -709,8 +693,7 @@ DETAIL:  distribution column value: 1
 SELECT * FROM articles TABLESAMPLE BERNOULLI (100) WHERE author_id = 1 ORDER BY id;
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 1
+DEBUG:  query has a single distribution column value: 1
  id | author_id |    title     | word_count
 ---------------------------------------------------------------------
   1 |         1 | arsenous     |       9572

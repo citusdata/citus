@@ -240,7 +240,6 @@ CreateModifyPlan(Query *originalQuery, Query *query,
 
 	distributedPlan->workerJob = job;
 	distributedPlan->combineQuery = NULL;
-	distributedPlan->routerExecutable = true;
 	distributedPlan->expectResults = originalQuery->returningList != NIL;
 	distributedPlan->targetRelationId = ResultRelationOidForQuery(query);
 
@@ -279,7 +278,6 @@ CreateSingleTaskRouterSelectPlan(DistributedPlan *distributedPlan, Query *origin
 
 	distributedPlan->workerJob = job;
 	distributedPlan->combineQuery = NULL;
-	distributedPlan->routerExecutable = true;
 	distributedPlan->expectResults = true;
 }
 

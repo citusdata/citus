@@ -70,8 +70,7 @@ DEBUG:  Router planner cannot handle multi-shard select queries
 
 SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey = 1;
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 1
+DEBUG:  query has a single distribution column value: 1
  count
 ---------------------------------------------------------------------
      1
@@ -79,8 +78,7 @@ DETAIL:  distribution column value: 1
 
 SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey = 2;
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 2
+DEBUG:  query has a single distribution column value: 2
  count
 ---------------------------------------------------------------------
      1
@@ -88,8 +86,7 @@ DETAIL:  distribution column value: 2
 
 SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey = 3;
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 3
+DEBUG:  query has a single distribution column value: 3
  count
 ---------------------------------------------------------------------
      1
@@ -97,8 +94,7 @@ DETAIL:  distribution column value: 3
 
 SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey = 4;
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 4
+DEBUG:  query has a single distribution column value: 4
  count
 ---------------------------------------------------------------------
      1
@@ -107,8 +103,7 @@ DETAIL:  distribution column value: 4
 SELECT count(*) FROM orders_hash_partitioned
 	WHERE o_orderkey = 1 AND o_clerk = 'aaa';
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 1
+DEBUG:  query has a single distribution column value: 1
  count
 ---------------------------------------------------------------------
      1
@@ -116,8 +111,7 @@ DETAIL:  distribution column value: 1
 
 SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey = abs(-1);
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 1
+DEBUG:  query has a single distribution column value: 1
  count
 ---------------------------------------------------------------------
      1
@@ -232,8 +226,7 @@ DEBUG:  Router planner cannot handle multi-shard select queries
 SELECT count(*) FROM
        (SELECT o_orderkey FROM orders_hash_partitioned WHERE o_orderkey = 1) AS orderkeys;
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 1
+DEBUG:  query has a single distribution column value: 1
  count
 ---------------------------------------------------------------------
      1
@@ -283,7 +276,6 @@ DEBUG:  assigned task to node localhost:xxxxx
 SELECT count(*) FROM lineitem_hash_part
 	WHERE l_orderkey IN (NULL);
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
@@ -447,7 +439,6 @@ DEBUG:  constraint value: '2'::bigint
 DEBUG:  constraint value: '3'::bigint
 DEBUG:  shard count: 1
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
     13
@@ -460,7 +451,6 @@ DEBUG:  constraint value: '2'::bigint
 DEBUG:  constraint value: '3'::bigint
 DEBUG:  shard count: 1
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
     13
@@ -553,8 +543,7 @@ SELECT count(*) FROM orders_hash_partitioned
 DEBUG:  constraint value: 1
 DEBUG:  shard count: 1
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 1
+DEBUG:  query has a single distribution column value: 1
  count
 ---------------------------------------------------------------------
      0
@@ -604,8 +593,7 @@ DEBUG:  shard count: 1
 DEBUG:  constraint value: 1
 DEBUG:  shard count: 1
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 1
+DEBUG:  query has a single distribution column value: 1
  count
 ---------------------------------------------------------------------
      0
@@ -633,8 +621,7 @@ SELECT count(*) FROM orders_hash_partitioned
 DEBUG:  constraint value: 1
 DEBUG:  shard count: 1
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 1
+DEBUG:  query has a single distribution column value: 1
  count
 ---------------------------------------------------------------------
      1
@@ -646,8 +633,7 @@ SELECT count(*) FROM orders_hash_partitioned
 DEBUG:  constraint value: 1
 DEBUG:  shard count: 1
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 1
+DEBUG:  query has a single distribution column value: 1
  count
 ---------------------------------------------------------------------
      1
@@ -912,7 +898,6 @@ SELECT count(*) FROM orders_hash_partitioned
 DEBUG:  constraint value: 1
 DEBUG:  shard count: 1
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      1
@@ -924,8 +909,7 @@ SELECT count(*) FROM orders_hash_partitioned
 DEBUG:  no valid constraints found
 DEBUG:  shard count: 0
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 1
+DEBUG:  query has a single distribution column value: 1
  count
 ---------------------------------------------------------------------
      0
@@ -1023,7 +1007,6 @@ DEBUG:  assigned task to node localhost:xxxxx
 SELECT count(*) FROM orders_hash_partitioned
 	WHERE NOT (o_orderkey != 2 OR o_orderkey != 3);
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
@@ -1092,8 +1075,7 @@ DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  constraint value: 1
 DEBUG:  shard count: 1
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 1
+DEBUG:  query has a single distribution column value: 1
 DEBUG:  generating subplan XXX_1 for subquery SELECT o_custkey FROM public.orders_hash_partitioned WHERE (o_orderkey OPERATOR(pg_catalog.=) 1)
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM public.orders_hash_partitioned WHERE ((o_orderkey OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2])) AND (NOT (o_custkey OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.o_custkey FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(o_custkey integer)))))
 DEBUG:  constraint value: 1
@@ -1121,8 +1103,7 @@ DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  constraint value: 3
 DEBUG:  shard count: 1
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-DETAIL:  distribution column value: 3
+DEBUG:  query has a single distribution column value: 3
 DEBUG:  generating subplan XXX_1 for subquery SELECT o_custkey FROM public.orders_hash_partitioned WHERE (o_orderkey OPERATOR(pg_catalog.=) 3)
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM public.orders_hash_partitioned WHERE ((o_orderkey OPERATOR(pg_catalog.=) ANY (ARRAY[1, 2])) OR (NOT (o_custkey OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.o_custkey FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(o_custkey integer)))))
 DEBUG:  no valid constraints found

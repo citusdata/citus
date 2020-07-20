@@ -214,6 +214,7 @@ INSERT INTO ref_table SELECT *, * FROM generate_series(1, 100);
 SELECT COUNT(*) FROM test JOIN ref_table USING(x);
 ROLLBACK;
 
+\set VERBOSITY terse
 DROP TABLE ref_table;
 
 DELETE FROM test;

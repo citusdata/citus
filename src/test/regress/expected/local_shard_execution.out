@@ -2056,7 +2056,7 @@ NOTICE:  executing the command locally: UPDATE public.event_responses_1480001 ev
 SELECT count(*) FROM event_responses WHERE event_id = 16;
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
+DEBUG:  query has a single distribution column value: 16
 NOTICE:  executing the command locally: SELECT count(*) AS count FROM public.event_responses_1480001 event_responses WHERE (event_id OPERATOR(pg_catalog.=) 16)
  count
 ---------------------------------------------------------------------
@@ -2066,7 +2066,7 @@ NOTICE:  executing the command locally: SELECT count(*) AS count FROM public.eve
 SELECT count(*) FROM event_responses WHERE event_id = 16;
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
+DEBUG:  query has a single distribution column value: 16
 NOTICE:  executing the command locally: SELECT count(*) AS count FROM public.event_responses_1480001 event_responses WHERE (event_id OPERATOR(pg_catalog.=) 16)
  count
 ---------------------------------------------------------------------
@@ -2076,13 +2076,13 @@ NOTICE:  executing the command locally: SELECT count(*) AS count FROM public.eve
 UPDATE event_responses SET response = 'no' WHERE event_id = 16;
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
+DEBUG:  query has a single distribution column value: 16
 NOTICE:  executing the command locally: UPDATE public.event_responses_1480001 event_responses SET response = 'no'::public.invite_resp WHERE (event_id OPERATOR(pg_catalog.=) 16)
 INSERT INTO event_responses VALUES (16, 666, 'maybe')
 ON CONFLICT (event_id, user_id)
 DO UPDATE SET response = EXCLUDED.response RETURNING *;
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
+DEBUG:  query has a single distribution column value: 16
 NOTICE:  executing the command locally: INSERT INTO public.event_responses_1480001 AS citus_table_alias (event_id, user_id, response) VALUES (16, 666, 'maybe'::public.invite_resp) ON CONFLICT(event_id, user_id) DO UPDATE SET response = excluded.response RETURNING citus_table_alias.event_id, citus_table_alias.user_id, citus_table_alias.response
  event_id | user_id | response
 ---------------------------------------------------------------------
@@ -2094,7 +2094,6 @@ INSERT INTO event_responses VALUES (16, 666, 'maybe'), (17, 777, 'no')
 ON CONFLICT (event_id, user_id)
 DO UPDATE SET response = EXCLUDED.response RETURNING *;
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 NOTICE:  executing the command locally: INSERT INTO public.event_responses_1480001 AS citus_table_alias (event_id, user_id, response) VALUES (16,666,'maybe'::public.invite_resp), (17,777,'no'::public.invite_resp) ON CONFLICT(event_id, user_id) DO UPDATE SET response = excluded.response RETURNING citus_table_alias.event_id, citus_table_alias.user_id, citus_table_alias.response
  event_id | user_id | response
 ---------------------------------------------------------------------
@@ -2109,7 +2108,7 @@ CALL register_for_event(19, 1, 'yes');
 -- should be fine even if no parameters exists in the query
 SELECT count(*) FROM event_responses WHERE event_id = 16;
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
+DEBUG:  query has a single distribution column value: 16
  count
 ---------------------------------------------------------------------
      2
@@ -2117,7 +2116,7 @@ DEBUG:  Plan is router executable
 
 SELECT count(*) FROM event_responses WHERE event_id = 16;
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
+DEBUG:  query has a single distribution column value: 16
  count
 ---------------------------------------------------------------------
      2
@@ -2125,12 +2124,12 @@ DEBUG:  Plan is router executable
 
 UPDATE event_responses SET response = 'no' WHERE event_id = 16;
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
+DEBUG:  query has a single distribution column value: 16
 INSERT INTO event_responses VALUES (16, 666, 'maybe')
 ON CONFLICT (event_id, user_id)
 DO UPDATE SET response = EXCLUDED.response RETURNING *;
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
+DEBUG:  query has a single distribution column value: 16
  event_id | user_id | response
 ---------------------------------------------------------------------
        16 |     666 | maybe
@@ -2141,7 +2140,6 @@ INSERT INTO event_responses VALUES (16, 666, 'maybe'), (17, 777, 'no')
 ON CONFLICT (event_id, user_id)
 DO UPDATE SET response = EXCLUDED.response RETURNING *;
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  event_id | user_id | response
 ---------------------------------------------------------------------
        16 |     666 | maybe

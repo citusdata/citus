@@ -77,7 +77,6 @@ SET client_min_messages TO DEBUG;
 SELECT count(*) FROM ref;
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 NOTICE:  executing the command locally: SELECT count(*) AS count FROM mx_add_coordinator.ref_7000000 ref
  count
 ---------------------------------------------------------------------
@@ -87,7 +86,6 @@ NOTICE:  executing the command locally: SELECT count(*) AS count FROM mx_add_coo
 SELECT count(*) FROM ref;
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 NOTICE:  executing the command locally: SELECT count(*) AS count FROM mx_add_coordinator.ref_7000000 ref
  count
 ---------------------------------------------------------------------
@@ -99,7 +97,6 @@ SET citus.task_assignment_policy TO "round-robin";
 SELECT count(*) FROM ref;
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
@@ -108,7 +105,6 @@ DEBUG:  Plan is router executable
 SELECT count(*) FROM ref;
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
@@ -117,7 +113,6 @@ DEBUG:  Plan is router executable
 SELECT count(*) FROM ref;
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count
 ---------------------------------------------------------------------
      0
@@ -126,7 +121,6 @@ DEBUG:  Plan is router executable
 -- modifications always go through local shard as well as remote ones
 INSERT INTO ref VALUES (1);
 DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
 NOTICE:  executing the command locally: INSERT INTO mx_add_coordinator.ref_7000000 (a) VALUES (1)
 -- get it ready for the next executions
 TRUNCATE ref;
