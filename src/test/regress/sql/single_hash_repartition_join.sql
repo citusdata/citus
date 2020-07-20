@@ -151,7 +151,6 @@ CREATE TABLE dist_1 (a int , b int);
 SELECT create_distributed_table('dist_1', 'a');
 INSERT INTO dist_1 SELECT x,10-x FROM generate_series(1,10) x;
 
-SET citus.task_executor_type to 'task-tracker';
 SELECT COUNT(*) FROM dist_1 f, dist_1 s WHERE f.a = s.b;
 
 SET client_min_messages TO ERROR;

@@ -1357,8 +1357,7 @@ FinalizePlan(PlannedStmt *localPlan, DistributedPlan *distributedPlan)
 
 /*
  * FinalizeNonRouterPlan gets the distributed custom scan plan, and creates the
- * final master select plan on the top of this distributed plan for adaptive
- * and task-tracker executors.
+ * final master select plan on the top of this distributed plan for adaptive executor.
  */
 static PlannedStmt *
 FinalizeNonRouterPlan(PlannedStmt *localPlan, DistributedPlan *distributedPlan,

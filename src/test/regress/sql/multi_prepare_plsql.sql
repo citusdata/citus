@@ -362,8 +362,6 @@ SELECT real_time_partition_column_select(4);
 SELECT real_time_partition_column_select(5);
 SELECT real_time_partition_column_select(6);
 
--- check task-tracker executor
-
 CREATE FUNCTION task_tracker_non_partition_column_select(value_arg int)
 	RETURNS TABLE(key int, value int) AS $$
 DECLARE

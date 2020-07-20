@@ -1,4 +1,4 @@
--- Confirm we can use local, router, real-time, and task-tracker execution
+-- Confirm we can use local, and adaptive execution
 
 CREATE SCHEMA with_executors;
 SET search_path TO with_executors, public;
@@ -105,7 +105,7 @@ WITH cte AS (
 SELECT * FROM cte WHERE uid=1 ORDER BY 2 LIMIT 5;
 
 
--- CTEs should be able to use task-tracker queries
+-- CTEs should be able to use adaptive executor
 WITH cte AS (
 	WITH task_tracker_1 AS (
 		SELECT
@@ -294,8 +294,6 @@ WITH cte AS (
 SELECT count(*) FROM cte, users_table where cte.count=user_id;
 
 
-SET citus.task_executor_type='task-tracker';
--- CTEs shouldn't be able to terminate a task-tracker query
 WITH cte_1 AS (
 	SELECT
 		u_table.user_id as u_id, e_table.event_type

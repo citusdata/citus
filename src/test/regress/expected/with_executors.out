@@ -375,7 +375,7 @@ SELECT count(*) FROM cte, users_table where cte.count=user_id;
      0
 (1 row)
 
-SET citus.task_executor_type='task-tracker';
+
 -- CTEs shouldn't be able to terminate a task-tracker query
 WITH cte_1 AS (
 	SELECT

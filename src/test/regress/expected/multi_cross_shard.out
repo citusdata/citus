@@ -145,7 +145,6 @@ SELECT * FROM raw_table WHERE ID = 1;
   1 |          20
 (2 rows)
 
--- Task tracker query test
 CREATE TABLE tt1
 (
 	id int,

@@ -3,8 +3,8 @@
  * multi_server_executor.c
  *
  * Function definitions for distributed task execution for adaptive
- * and task-tracker executors, and routines common to both. The common
- * routines are implement backend-side logic; and they trigger executions
+ * executor.
+ * routines are implemented backend-side logic; and they trigger executions
  * on the client-side via function hooks that they load.
  *
  * Copyright (c) Citus Data, Inc.

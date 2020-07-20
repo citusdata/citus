@@ -90,7 +90,6 @@ SET citus.multi_task_query_log_level TO notice;
 -- Shouldn't log since it is a router select query
 SELECT * FROM raw_table WHERE ID = 1;
 
--- Task tracker query test
 CREATE TABLE tt1
 (
 	id int,
@@ -113,7 +112,6 @@ INSERT INTO tt1 VALUES(2, 'Mehmet');
 INSERT INTO tt2 VALUES(1, 'Ahmet', 5);
 INSERT INTO tt2 VALUES(2, 'Mehmet', 15);
 
--- Should notice since it is a task-tracker query
 SELECT tt1.id, tt2.count from tt1,tt2 where tt1.id = tt2.id ORDER BY 1;
 
 SET citus.task_executor_type to DEFAULT;

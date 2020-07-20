@@ -393,8 +393,6 @@ EXECUTE prepared_real_time_partition_column_select(4);
 EXECUTE prepared_real_time_partition_column_select(5);
 EXECUTE prepared_real_time_partition_column_select(6);
 
--- check task-tracker executor
-
 PREPARE prepared_task_tracker_non_partition_column_select(int) AS
 	SELECT
 		prepare_table.key,

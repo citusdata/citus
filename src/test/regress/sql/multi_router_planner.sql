@@ -1113,13 +1113,11 @@ CREATE MATERIALIZED VIEW mv_articles_hash_data AS
 	SELECT * FROM articles_hash WHERE author_id in (1,2);
 SELECT * FROM mv_articles_hash_data ORDER BY 1, 2, 3, 4;
 
--- router planner/executor is now enabled for task-tracker executor
 SELECT id
 	FROM articles_hash
 	WHERE author_id = 1
 	ORDER BY 1;
 
--- insert query is router plannable even under task-tracker
 INSERT INTO articles_hash VALUES (51, 1, 'amateus', 1814), (52, 1, 'second amateus', 2824);
 
 -- verify insert is successful (not router plannable and executable)

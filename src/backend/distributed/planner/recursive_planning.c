@@ -25,9 +25,6 @@
  *   subqueries if the subquery can be executed on each shard by replacing
  *   table names with shard names and concatenating the result.
  *
- * - Task-tracker queries that can be executed through a tree of
- *   re-partitioning operations.
- *
  *   These queries have very limited SQL support and only support basic
  *   inner joins and subqueries without joins.
  *

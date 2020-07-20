@@ -4611,9 +4611,7 @@ MergeTaskList(MapMergeJob *mapMergeJob, List *mapTaskList, uint32 taskIdIndex)
 
 			/*
 			 * If replication factor is 1, then we know that we will use the first and
-			 * the only placement. If task tracker is used, then it will regenerate the
-			 * query string because if there are multiple placements then it does not
-			 * know in which placement the parent map task was successful.
+			 * the only placement.
 			 */
 			StringInfo mapFetchQueryString = makeStringInfo();
 			appendStringInfo(mapFetchQueryString, MAP_OUTPUT_FETCH_COMMAND,
