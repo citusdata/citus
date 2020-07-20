@@ -2278,7 +2278,7 @@ SELECT * FROM mv_articles_hash_data ORDER BY 1, 2, 3, 4;
  42 |         2 | ausable      |      15885
 (10 rows)
 
--- router planner/executor is now enabled for task-tracker executor
+-- router planner/executor is now enabled for adaptive executor
 SELECT id
 	FROM articles_hash
 	WHERE author_id = 1
@@ -2294,7 +2294,7 @@ DEBUG:  query has a single distribution column value: 1
  41
 (5 rows)
 
--- insert query is router plannable even under task-tracker
+-- insert query is router plannable even under adaptive
 INSERT INTO articles_hash VALUES (51, 1, 'amateus', 1814), (52, 1, 'second amateus', 2824);
 DEBUG:  Creating router plan
 DEBUG:  query has a single distribution column value: 1

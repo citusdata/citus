@@ -15,7 +15,7 @@ ERROR:  the intermediate result size exceeds citus.max_intermediate_result_size 
 DETAIL:  Citus restricts the size of intermediate results of complex subqueries and CTEs to avoid accidentally pulling large result sets into once place.
 HINT:  To run the current query, set citus.max_intermediate_result_size to a higher value or -1 to disable.
 SET citus.max_intermediate_result_size TO 9;
--- regular task-tracker CTE should fail
+-- regular adaptive CTE should fail
 WITH cte AS
 (
 	SELECT
@@ -203,7 +203,7 @@ SELECT * FROM cte4 ORDER BY 1,2,3,4,5 LIMIT 5;
        1 | Wed Nov 22 21:06:57.457147 2017 |       4 |       3 |       2 |
 (5 rows)
 
--- regular task-tracker CTE, should work since -1 disables the limit
+-- regular adaptive CTE, should work since -1 disables the limit
 WITH cte AS
 (
 	SELECT
