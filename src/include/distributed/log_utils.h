@@ -70,7 +70,6 @@ extern char * HashLogMessage(const char *text);
 #define Trap(condition, errorType) \
 	do { \
 		if (condition) { \
-			AssertBacktrace(); \
 			ExceptionalCondition(CppAsString(condition), (errorType), \
 								 __FILE__, __LINE__); \
 		} \

@@ -13,5 +13,6 @@
 
 void Backtrace(int elevel);
 void AssertBacktrace(void);
+void SignalBacktrace(void);
 
 #endif

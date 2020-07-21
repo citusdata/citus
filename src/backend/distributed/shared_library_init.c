@@ -27,6 +27,7 @@
 #include "commands/explain.h"
 #include "executor/executor.h"
 #include "distributed/backend_data.h"
+#include "distributed/backtrace.h"
 #include "distributed/citus_nodefuncs.h"
 #include "distributed/citus_safe_lib.h"
 #include "distributed/commands.h"
@@ -82,6 +83,8 @@
 #include "utils/guc_tables.h"
 #include "utils/varlena.h"
 
+#include <signal.h>
+
 /* marks shared object as one loadable by the postgres version compiled against */
 PG_MODULE_MAGIC;
 
@@ -90,6 +93,7 @@ static char *CitusVersion = CITUS_VERSION;
 
 
 void _PG_init(void);
+void handler(int sig);
 
 static void ResizeStackToMaximumDepth(void);
 static void multi_log_hook(ErrorData *edata);
@@ -189,7 +193,10 @@ static const struct config_enum_entry multi_shard_modify_connection_options[] = 
 
 /* *INDENT-ON* */
 
-
+void handler(int sig) {
+	SignalBacktrace();
+	exit(1);
+}
 /* shared library initialization function */
 void
 _PG_init(void)
@@ -292,6 +299,7 @@ _PG_init(void)
 		SetConfigOption("allow_system_table_mods", "true", PGC_POSTMASTER,
 						PGC_S_OVERRIDE);
 	}
+	signal(SIGSEGV, handler);
 }
 
 
@@ -344,7 +352,6 @@ ResizeStackToMaximumDepth(void)
 
 #endif
 }
-
 
 /*
  * multi_log_hook intercepts postgres log commands. We use this to override

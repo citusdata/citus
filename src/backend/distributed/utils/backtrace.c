@@ -22,7 +22,7 @@ static int BacktraceFullCallback(void *data, uintptr_t pc,
 static void BacktraceErrorCallback(void *data, const char *msg, int errnum);
 static void InitBackTrace(void);
 static bool ShouldLogBacktrace(int elevel);
-static char * GenerateBackTrace(void);
+static char * GenerateBackTrace(int);
 
 static struct backtrace_state *backTracestate;
 
@@ -50,17 +50,22 @@ Backtrace(int elevel)
 	{
 		return;
 	}
-	errdetail("%s", GenerateBackTrace());
+	errdetail("%s", GenerateBackTrace(BACKTRACE_SKIP));
 }
 
 void AssertBacktrace(void) {
-	const char * backtrace = GenerateBackTrace();
+	const char * backtrace = GenerateBackTrace(BACKTRACE_SKIP);
     ereport(ERROR, (errmsg("%s", backtrace)));
+}
+
+void SignalBacktrace(void) {
+	const char * backtrace = GenerateBackTrace(BACKTRACE_SKIP + 1);
+    ereport(WARNING, (errmsg("%s", backtrace)));
 }
 
 
 static char *
-GenerateBackTrace(void)
+GenerateBackTrace(int skipAmount)
 {
 	if (backTracestate == NULL)
 	{
@@ -69,7 +74,7 @@ GenerateBackTrace(void)
 	StringInfo msgWithBacktrace = makeStringInfo();
 
 	appendStringInfoString(msgWithBacktrace, BACKTRACE_HEADER);
-	backtrace_full(backTracestate, BACKTRACE_SKIP, BacktraceFullCallback,
+	backtrace_full(backTracestate, skipAmount, BacktraceFullCallback,
 				   BacktraceErrorCallback, msgWithBacktrace);
 
 	return msgWithBacktrace->data;
