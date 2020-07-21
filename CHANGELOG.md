@@ -1,3 +1,11 @@
+### citus v9.3.4 (July 21, 2020) ###
+
+* Fixes a bug that could cause crashes with certain compile flags
+
+* Fixes a bug with lists of configuration values in ALTER ROLE SET statements
+
+* Fixes deparsing for queries with anonymous column references
+
 ### citus v9.3.3 (July 10, 2020) ###
 
 * Fixes a memory leak in subtransaction memory handling
