@@ -24,7 +24,7 @@ step "s1-copy" { COPY range_copy FROM PROGRAM 'echo 5, f, 5 && echo 6, g, 6 && e
 step "s1-copy-additional-column" { COPY range_copy FROM PROGRAM 'echo 5, f, 5, 5 && echo 6, g, 6, 6 && echo 7, h, 7, 7 && echo 8, i, 8, 8 && echo 9, j, 9, 9' WITH CSV; }
 step "s1-router-select" { SELECT * FROM range_copy WHERE id = 1; }
 step "s1-real-time-select" { SELECT * FROM range_copy ORDER BY 1, 2; }
-step "s1-task-tracker-select"
+step "s1-adaptive-select"
 {
 		SET citus.enable_repartition_joins TO ON;
 	SELECT * FROM range_copy AS t1 JOIN range_copy AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
@@ -59,7 +59,7 @@ step "s2-copy" { COPY range_copy FROM PROGRAM 'echo 5, f, 5 && echo 6, g, 6 && e
 step "s2-copy-additional-column" { COPY range_copy FROM PROGRAM 'echo 5, f, 5, 5 && echo 6, g, 6, 6 && echo 7, h, 7, 7 && echo 8, i, 8, 8 && echo 9, j, 9, 9' WITH CSV; }
 step "s2-router-select" { SELECT * FROM range_copy WHERE id = 1; }
 step "s2-real-time-select" { SELECT * FROM range_copy ORDER BY 1, 2; }
-step "s2-task-tracker-select"
+step "s2-adaptive-select"
 {
 		SET citus.enable_repartition_joins TO ON;
 	SELECT * FROM range_copy AS t1 JOIN range_copy AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
@@ -88,7 +88,7 @@ permutation "s1-initialize" "s1-begin" "s1-copy" "s2-copy" "s1-commit" "s1-selec
 // permutations - COPY first
 permutation "s1-initialize" "s1-begin" "s1-copy" "s2-router-select" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-copy" "s2-real-time-select" "s1-commit" "s1-select-count"
-permutation "s1-initialize" "s1-begin" "s1-copy" "s2-task-tracker-select" "s1-commit" "s1-select-count"
+permutation "s1-initialize" "s1-begin" "s1-copy" "s2-adaptive-select" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-copy" "s2-insert" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-copy" "s2-insert-select" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-copy" "s2-update" "s1-commit" "s1-select-count"
@@ -110,7 +110,7 @@ permutation "s1-drop" "s1-create-non-distributed-table" "s1-begin" "s1-copy" "s2
 // permutations - COPY second
 permutation "s1-initialize" "s1-begin" "s1-router-select" "s2-copy" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-real-time-select" "s2-copy" "s1-commit" "s1-select-count"
-permutation "s1-initialize" "s1-begin" "s1-task-tracker-select" "s2-copy" "s1-commit" "s1-select-count"
+permutation "s1-initialize" "s1-begin" "s1-adaptive-select" "s2-copy" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-insert" "s2-copy" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-insert-select" "s2-copy" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-update" "s2-copy" "s1-commit" "s1-select-count"

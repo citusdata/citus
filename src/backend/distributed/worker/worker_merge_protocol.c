@@ -163,7 +163,7 @@ worker_repartition_cleanup(PG_FUNCTION_ARGS)
 
 /*
  * worker_merge_files_into_table creates a task table within the job's schema,
- * which should have already been created by the task tracker protocol, and
+ * which should have already been created by repartition join execution, and
  * copies files in its task directory into this table. If the schema doesn't
  * exist, the function defaults to the 'public' schema. Note that, unlike
  * partitioning functions, this function is not always idempotent. On success,
@@ -200,8 +200,8 @@ worker_merge_files_into_table(PG_FUNCTION_ARGS)
 	}
 
 	/*
-	 * If the schema for the job isn't already created by the task tracker
-	 * protocol, we fall to using the default 'public' schema.
+	 * If the schema for the job isn't already created by the repartition join
+	 * execution, we fall to using the default 'public' schema.
 	 */
 	bool schemaExists = JobSchemaExists(jobSchemaName);
 	if (!schemaExists)
@@ -245,18 +245,7 @@ worker_merge_files_into_table(PG_FUNCTION_ARGS)
 }
 
 
-/*
- * worker_merge_files_and_run_query creates a merge task table within the job's
- * schema, which should have already been created by the task tracker protocol.
- * It copies files in its task directory into this table. Then it runs final
- * query to create result table of the job.
- *
- * Note that here we followed a different approach to create a task table for merge
- * files than worker_merge_files_into_table(). In future we should unify these
- * two approaches. For this purpose creating a directory_fdw extension and using
- * it would make sense. Then we can merge files with a query or without query
- * through directory_fdw.
- */
+/* This UDF is deprecated.*/
 Datum
 worker_merge_files_and_run_query(PG_FUNCTION_ARGS)
 {

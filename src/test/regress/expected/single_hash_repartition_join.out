@@ -519,7 +519,6 @@ SELECT create_distributed_table('dist_1', 'a');
 (1 row)
 
 INSERT INTO dist_1 SELECT x,10-x FROM generate_series(1,10) x;
-SET citus.task_executor_type to 'task-tracker';
 SELECT COUNT(*) FROM dist_1 f, dist_1 s WHERE f.a = s.b;
  count
 ---------------------------------------------------------------------

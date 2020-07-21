@@ -695,19 +695,13 @@ BEGIN;
 ROLLBACK;
 
 
--- task-tracker select execution
 BEGIN;
 	DELETE FROM distributed_table WHERE key = 500;
-
-	SET LOCAL citus.task_executor_type = 'task-tracker';
 
 	SELECT count(*) FROM distributed_table;
 ROLLBACK;
 
--- local execution should not be executed locally
--- becase a task-tracker query has already been executed
 BEGIN;
-	SET LOCAL citus.task_executor_type = 'task-tracker';
 	SET LOCAL client_min_messages TO INFO;
 	SELECT count(*) FROM distributed_table;
 	SET LOCAL client_min_messages TO LOG;

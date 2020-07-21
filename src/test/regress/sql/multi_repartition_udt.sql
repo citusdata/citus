@@ -190,7 +190,6 @@ SELECT * FROM repartition_udt JOIN repartition_udt_other
 	WHERE repartition_udt.pk = 1;
 
 -- Query that should result in a repartition join on UDT column.
-SET citus.task_executor_type = 'task-tracker';
 SET citus.log_multi_join_order = true;
 
 EXPLAIN (COSTS OFF)

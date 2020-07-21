@@ -16,7 +16,6 @@ SELECT cte.user_id, cte.value_2 FROM cte,cte2 ORDER BY 1,2 LIMIT 10;
 
 
 SET citus.max_intermediate_result_size TO 9;
--- regular task-tracker CTE should fail
 WITH cte AS
 (
 	SELECT
@@ -172,7 +171,7 @@ cte4 AS (
 SELECT * FROM cte UNION ALL
 SELECT * FROM cte4 ORDER BY 1,2,3,4,5 LIMIT 5;
 
--- regular task-tracker CTE, should work since -1 disables the limit
+-- regular adaptive executor CTE, should work since -1 disables the limit
 WITH cte AS
 (
 	SELECT

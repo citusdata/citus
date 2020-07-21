@@ -372,10 +372,6 @@ ArrayObjectCount(ArrayType *arrayObject)
 StringInfo
 InitTaskDirectory(uint64 jobId, uint32 taskId)
 {
-	/*
-	 * If the task tracker assigned this task (regular case), the tracker should
-	 * have already created the job directory.
-	 */
 	StringInfo jobDirectoryName = JobDirectoryName(jobId);
 	StringInfo taskDirectoryName = TaskDirectoryName(jobId, taskId);
 

@@ -1397,11 +1397,9 @@ NOTICE:  executing the command locally: DELETE FROM local_shard_execution.refere
 	DELETE FROM reference_table;
 NOTICE:  executing the command locally: DELETE FROM local_shard_execution.reference_table_1470000 reference_table
 ROLLBACK;
--- task-tracker select execution
 BEGIN;
 	DELETE FROM distributed_table WHERE key = 500;
 NOTICE:  executing the command locally: DELETE FROM local_shard_execution.distributed_table_1470003 distributed_table WHERE (key OPERATOR(pg_catalog.=) 500)
-	SET LOCAL citus.task_executor_type = 'task-tracker';
 	SELECT count(*) FROM distributed_table;
 NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shard_execution.distributed_table_1470001 distributed_table WHERE true
 NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shard_execution.distributed_table_1470003 distributed_table WHERE true
@@ -1411,10 +1409,7 @@ NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shar
 (1 row)
 
 ROLLBACK;
--- local execution should not be executed locally
--- becase a task-tracker query has already been executed
 BEGIN;
-	SET LOCAL citus.task_executor_type = 'task-tracker';
 	SET LOCAL client_min_messages TO INFO;
 	SELECT count(*) FROM distributed_table;
 NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shard_execution.distributed_table_1470001 distributed_table WHERE true

@@ -3,8 +3,7 @@
 --
 -- Tests that cover repartition join planning. Note that we explicitly start a
 -- transaction block here so that we don't emit debug messages with changing
--- transaction ids in them. Also, we set the executor type to task tracker
--- executor here, as we cannot run repartition jobs with real time executor.
+-- transaction ids in them.
 
 
 SET citus.next_shard_id TO 690000;

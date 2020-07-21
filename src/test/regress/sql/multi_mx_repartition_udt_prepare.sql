@@ -182,7 +182,6 @@ INSERT INTO repartition_udt_other values (11, '(2,2)'::test_udt, 'foo');
 INSERT INTO repartition_udt_other values (12, '(2,3)'::test_udt, 'foo');
 
 SET client_min_messages = LOG;
-SET citus.task_executor_type = 'task-tracker';
 SET citus.enable_repartition_joins to ON;
 
 -- Query that should result in a repartition

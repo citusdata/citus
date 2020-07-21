@@ -641,15 +641,6 @@ SET client_min_messages to 'DEBUG2';
 CREATE MATERIALIZED VIEW mv_articles_hash_mx_error AS
 	SELECT * FROM articles_hash_mx WHERE author_id in (1,2);
 
--- router planner/executor is disabled for task-tracker executor
--- following query is router plannable, but router planner is disabled
-
--- TODO: Uncomment once we fix task-tracker issue
-----SELECT id
---	FROM articles_hash_mx
---	WHERE author_id = 1;
-
--- insert query is router plannable even under task-tracker
 INSERT INTO articles_hash_mx VALUES (51,  1, 'amateus', 1814);
 
 -- verify insert is successfull (not router plannable and executable)
