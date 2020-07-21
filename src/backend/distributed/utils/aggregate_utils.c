@@ -493,7 +493,7 @@ worker_partial_agg_sfunc(PG_FUNCTION_ARGS)
 		InitFunctionCallInfoData(*innerFcinfo, &info, 2, fcinfo->fncollation,
 								 fcinfo->context, fcinfo->resultinfo);
 		fcSetArgExt(innerFcinfo, 0, box->value, box->valueNull);
-		fcSetArgExt(innerFcinfo, argumentIndex, fcGetArgValue(fcinfo, 2),
+		fcSetArgExt(innerFcinfo, 1, fcGetArgValue(fcinfo, 2),
 					fcGetArgNull(fcinfo, 2));
 	}
 
