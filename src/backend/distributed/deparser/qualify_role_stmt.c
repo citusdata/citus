@@ -56,5 +56,5 @@ QualifyVarSetCurrent(VariableSetStmt *setStmt)
 	char *configValue = GetConfigOptionByName(configurationName, NULL, false);
 
 	setStmt->kind = VAR_SET_VALUE;
-	setStmt->args = list_make1(MakeSetStatementArgument(configurationName, configValue));
+	setStmt->args = list_make1(MakeSetStatementArguments(configurationName, configValue));
 }
