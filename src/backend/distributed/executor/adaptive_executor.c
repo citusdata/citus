@@ -1931,16 +1931,8 @@ WorkerPoolCompare(const void *lhsKey, const void *rhsKey)
 	const WorkerPool *workerLhs = *(const WorkerPool **) lhsKey;
 	const WorkerPool *workerRhs = *(const WorkerPool **) rhsKey;
 
-	int nameCompare = strncmp(workerLhs->nodeName, workerRhs->nodeName,
-							  WORKER_LENGTH);
-
-	if (nameCompare != 0)
-	{
-		return nameCompare;
-	}
-
-	int portCompare = workerLhs->nodePort - workerRhs->nodePort;
-	return portCompare;
+	return NodeNamePortCompare(workerLhs->nodeName, workerRhs->nodeName,
+							   workerLhs->nodePort, workerRhs->nodePort);
 }
 
 
