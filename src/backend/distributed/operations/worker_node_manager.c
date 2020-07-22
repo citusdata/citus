@@ -584,15 +584,30 @@ WorkerNodeCompare(const void *lhsKey, const void *rhsKey, Size keySize)
 	const WorkerNode *workerLhs = (const WorkerNode *) lhsKey;
 	const WorkerNode *workerRhs = (const WorkerNode *) rhsKey;
 
+	return NodeNamePortCompare(workerLhs->workerName, workerRhs->workerName,
+							   workerLhs->workerPort, workerRhs->workerPort);
+}
 
-	int nameCompare = strncmp(workerLhs->workerName, workerRhs->workerName,
-							  WORKER_LENGTH);
+
+/*
+ * NodeNamePortCompare implements the common logic for comparing two nodes
+ * with their given nodeNames and ports.
+ *
+ * This function is useful for ensuring consistency of sort operations between
+ * different representations of nodes in the cluster such as WorkerNode and
+ * WorkerPool.
+ */
+int
+NodeNamePortCompare(const char *workerLhsName, const char *workerRhsName,
+					int workerLhsPort, int workerRhsPort)
+{
+	int nameCompare = strncmp(workerLhsName, workerRhsName, WORKER_LENGTH);
 	if (nameCompare != 0)
 	{
 		return nameCompare;
 	}
 
-	int portCompare = workerLhs->workerPort - workerRhs->workerPort;
+	int portCompare = workerLhsPort - workerRhsPort;
 	return portCompare;
 }
 

@@ -96,5 +96,7 @@ extern WorkerNode * GetFirstPrimaryWorkerNode(void);
 /* Function declarations for worker node utilities */
 extern int CompareWorkerNodes(const void *leftElement, const void *rightElement);
 extern int WorkerNodeCompare(const void *lhsKey, const void *rhsKey, Size keySize);
+extern int NodeNamePortCompare(const char *workerLhsName, const char *workerRhsName,
+							   int workerLhsPort, int workerRhsPort);
 
 #endif   /* WORKER_MANAGER_H */
