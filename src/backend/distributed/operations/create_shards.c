@@ -200,14 +200,14 @@ CreateShardsWithRoundRobinPolicy(Oid distributedTableId, int32 shardCount,
 		uint32 roundRobinNodeIndex = shardIndex % workerNodeCount;
 
 		/* initialize the hash token space for this shard */
-		int32 shardMinHashToken = INT32_MIN + (shardIndex * hashTokenIncrement);
+		int32 shardMinHashToken = PG_INT32_MIN + (shardIndex * hashTokenIncrement);
 		int32 shardMaxHashToken = shardMinHashToken + (hashTokenIncrement - 1);
 		uint64 shardId = GetNextShardId();
 
 		/* if we are at the last shard, make sure the max token value is INT_MAX */
 		if (shardIndex == (shardCount - 1))
 		{
-			shardMaxHashToken = INT32_MAX;
+			shardMaxHashToken = PG_INT32_MAX;
 		}
 
 		/* insert the shard metadata row along with its min/max values */

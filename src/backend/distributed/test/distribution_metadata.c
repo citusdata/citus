@@ -217,8 +217,8 @@ create_monolithic_shard_row(PG_FUNCTION_ARGS)
 	StringInfo maxInfo = makeStringInfo();
 	uint64 newShardId = GetNextShardId();
 
-	appendStringInfo(minInfo, "%d", INT32_MIN);
-	appendStringInfo(maxInfo, "%d", INT32_MAX);
+	appendStringInfo(minInfo, "%d", PG_INT32_MIN);
+	appendStringInfo(maxInfo, "%d", PG_INT32_MAX);
 
 	text *minInfoText = cstring_to_text(minInfo->data);
 	text *maxInfoText = cstring_to_text(maxInfo->data);
