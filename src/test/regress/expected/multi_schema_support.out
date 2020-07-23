@@ -1197,6 +1197,25 @@ ALTER TABLE existing_schema.non_existent_table SET SCHEMA non_existent_schema;
 ERROR:  relation "existing_schema.non_existent_table" does not exist
 ALTER TABLE existing_schema.table_set_schema SET SCHEMA non_existent_schema;
 ERROR:  schema "non_existent_schema" does not exist
+-- test ALTER TABLE IF EXISTS SET SCHEMA with nonexisting schemas and table
+ALTER TABLE IF EXISTS non_existent_schema.table_set_schema SET SCHEMA another_existing_schema;
+NOTICE:  relation "table_set_schema" does not exist, skipping
+ALTER TABLE IF EXISTS non_existent_schema.non_existent_table SET SCHEMA another_existing_schema;
+NOTICE:  relation "non_existent_table" does not exist, skipping
+ALTER TABLE IF EXISTS non_existent_schema.table_set_schema SET SCHEMA another_non_existent_schema;
+NOTICE:  relation "table_set_schema" does not exist, skipping
+ALTER TABLE IF EXISTS non_existent_schema.non_existent_table SET SCHEMA another_non_existent_schema;
+NOTICE:  relation "non_existent_table" does not exist, skipping
+ALTER TABLE IF EXISTS existing_schema.non_existent_table SET SCHEMA another_existing_schema;
+NOTICE:  relation "non_existent_table" does not exist, skipping
+ALTER TABLE IF EXISTS existing_schema.non_existent_table SET SCHEMA non_existent_schema;
+NOTICE:  relation "non_existent_table" does not exist, skipping
+ALTER TABLE IF EXISTS existing_schema.table_set_schema SET SCHEMA non_existent_schema;
+ERROR:  schema "non_existent_schema" does not exist
+ALTER TABLE IF EXISTS non_existent_table SET SCHEMA another_existing_schema;
+NOTICE:  relation "non_existent_table" does not exist, skipping
+ALTER TABLE IF EXISTS non_existent_table SET SCHEMA non_existent_schema;
+NOTICE:  relation "non_existent_table" does not exist, skipping
 DROP SCHEMA existing_schema, another_existing_schema CASCADE;
 NOTICE:  drop cascades to table existing_schema.table_set_schema
 -- test ALTER TABLE SET SCHEMA with interesting names

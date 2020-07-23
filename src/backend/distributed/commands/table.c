@@ -264,7 +264,10 @@ PostprocessAlterTableSchemaStmt(Node *node, const char *queryString)
 	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
 	Assert(stmt->objectType == OBJECT_TABLE);
 
-	ObjectAddress tableAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
+	/*
+	 * We will let Postgres deal with missing_ok
+	 */
+	ObjectAddress tableAddress = GetObjectAddressFromParseTree((Node *) stmt, true);
 
 	if (!ShouldPropagate() || !IsDistributedTable(tableAddress.objectId))
 	{
@@ -1479,7 +1482,7 @@ AlterTableSchemaStmtObjectAddress(Node *node, bool missing_ok)
 	if (stmt->relation->schemaname)
 	{
 		const char *schemaName = stmt->relation->schemaname;
-		Oid schemaOid = get_namespace_oid(schemaName, false);
+		Oid schemaOid = get_namespace_oid(schemaName, missing_ok);
 		tableOid = get_relname_relid(tableName, schemaOid);
 	}
 	else
