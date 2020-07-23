@@ -47,6 +47,7 @@ extern int CompareShardPlacementsByShardId(const void *leftElement,
 extern int CompareRelationShards(const void *leftElement,
 								 const void *rightElement);
 extern int ShardIndex(ShardInterval *shardInterval);
+extern int CalculateUniformHashRangeIndex(int hashedValue, int shardCount);
 extern ShardInterval * FindShardInterval(Datum partitionColumnValue,
 										 CitusTableCacheEntry *cacheEntry);
 extern int FindShardIntervalIndex(Datum searchedValue, CitusTableCacheEntry *cacheEntry);

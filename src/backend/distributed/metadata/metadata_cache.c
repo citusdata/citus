@@ -1394,12 +1394,12 @@ HasUniformHashDistribution(ShardInterval **shardIntervalArray,
 	for (int shardIndex = 0; shardIndex < shardIntervalArrayLength; shardIndex++)
 	{
 		ShardInterval *shardInterval = shardIntervalArray[shardIndex];
-		int32 shardMinHashToken = INT32_MIN + (shardIndex * hashTokenIncrement);
+		int32 shardMinHashToken = PG_INT32_MIN + (shardIndex * hashTokenIncrement);
 		int32 shardMaxHashToken = shardMinHashToken + (hashTokenIncrement - 1);
 
 		if (shardIndex == (shardIntervalArrayLength - 1))
 		{
-			shardMaxHashToken = INT32_MAX;
+			shardMaxHashToken = PG_INT32_MAX;
 		}
 
 		if (DatumGetInt32(shardInterval->minValue) != shardMinHashToken ||

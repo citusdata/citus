@@ -27,9 +27,6 @@
 #include "utils/memutils.h"
 
 
-static int CalculateUniformHashRangeIndex(int hashedValue, int shardCount);
-
-
 /*
  * LowestShardIntervalById returns the shard interval with the lowest shard
  * ID from a list of shard intervals.
@@ -310,7 +307,7 @@ FindShardInterval(Datum partitionColumnValue, CitusTableCacheEntry *cacheEntry)
  * INVALID_SHARD_INDEX is returned). This should only happen if something is
  * terribly wrong, either metadata tables are corrupted or we have a bug
  * somewhere. Such as a hash function which returns a value not in the range
- * of [INT32_MIN, INT32_MAX] can fire this.
+ * of [PG_INT32_MIN, PG_INT32_MAX] can fire this.
  */
 int
 FindShardIntervalIndex(Datum searchedValue, CitusTableCacheEntry *cacheEntry)
@@ -442,13 +439,13 @@ SearchCachedShardInterval(Datum partitionColumnValue, ShardInterval **shardInter
  * NOTE: This function is ONLY for hash-distributed tables with uniform
  * hash ranges.
  */
-static int
+int
 CalculateUniformHashRangeIndex(int hashedValue, int shardCount)
 {
 	int64 hashedValue64 = (int64) hashedValue;
 
 	/* normalize to the 0-UINT32_MAX range */
-	int64 normalizedHashValue = hashedValue64 - INT32_MIN;
+	int64 normalizedHashValue = hashedValue64 - PG_INT32_MIN;
 
 	/* size of each hash range */
 	int64 hashRangeSize = HASH_TOKEN_COUNT / shardCount;
