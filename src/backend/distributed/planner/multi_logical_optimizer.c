@@ -3299,32 +3299,47 @@ WorkerAggregateExpressionList(Aggref *originalAggregate,
 										   ObjectIdGetDatum(originalAggregate->aggfnoid),
 										   false, true);
 
-			/*
-			 * Aggregation on workers assumes a single aggregation parameter. To still be
-			 * able to handle multiple paramters, we combine all parameters into a single row
-			 * expression.
-			 */
-			RowExpr *rowExpr = makeNode(RowExpr);
-			rowExpr->row_typeid = RECORDOID;
-			rowExpr->row_format = COERCE_EXPLICIT_CALL;
-			rowExpr->location = -1;
-			rowExpr->colnames = NIL;
+			List *newWorkerAggregateArgs =
+				list_make1(makeTargetEntry((Expr *) aggOidParam, 1, NULL, false));
 
-			List *aggArgs = list_make2(
-				makeTargetEntry((Expr *) aggOidParam, 1, NULL, false),
-				makeTargetEntry((Expr *) rowExpr, 2, NULL, false));
-
-			TargetEntry *arg = NULL;
-			foreach_ptr(arg, originalAggregate->args)
+			if (list_length(originalAggregate->args) == 1)
 			{
-				rowExpr->args = lappend(rowExpr->args, copyObject(arg->expr));
+				/* Single aggregation argument. Append 'arg' to worker_partial_agg(agg, arg) */
+				TargetEntry *newArg =
+					copyObject((TargetEntry *) linitial(originalAggregate->args));
+				newArg->resno++;
+				newWorkerAggregateArgs = lappend(newWorkerAggregateArgs, newArg);
+			}
+			else
+			{
+				/*
+				 * Aggregation on workers assumes a single aggregation parameter. To still be
+				 * able to handle multiple paramters, we combine all parameters into a single row
+				 * expression.
+				 * Append 'ROW(...args)' to worker_partial_agg(agg, ROW(...args))
+				 */
+				RowExpr *rowExpr = makeNode(RowExpr);
+				rowExpr->row_typeid = RECORDOID;
+				rowExpr->row_format = COERCE_EXPLICIT_CALL;
+				rowExpr->location = -1;
+				rowExpr->colnames = NIL;
+
+				TargetEntry *arg = NULL;
+				foreach_ptr(arg, originalAggregate->args)
+				{
+					rowExpr->args = lappend(rowExpr->args, copyObject(arg->expr));
+				}
+
+				newWorkerAggregateArgs =
+					lappend(newWorkerAggregateArgs,
+							makeTargetEntry((Expr *) rowExpr, 2, NULL, false));
 			}
 
-			/* worker_partial_agg(agg, ROW(...args)) */
+			/* worker_partial_agg(agg, arg) or worker_partial_agg(agg, ROW(...args)) */
 			Aggref *newWorkerAggregate = copyObject(originalAggregate);
 			newWorkerAggregate->aggfnoid = workerPartialId;
 			newWorkerAggregate->aggtype = CSTRINGOID;
-			newWorkerAggregate->args = aggArgs;
+			newWorkerAggregate->args = newWorkerAggregateArgs;
 			newWorkerAggregate->aggkind = AGGKIND_NORMAL;
 			newWorkerAggregate->aggtranstype = INTERNALOID;
 			newWorkerAggregate->aggargtypes = lcons_oid(OIDOID,

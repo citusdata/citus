@@ -171,6 +171,102 @@ insert into txttbl values (1, 'aaaa', 'bbbb'), (2, 'cccc', 'dddd'), (3, 'eeee', 
 
 select binstragg(col1, col2) from txttbl;
 
+create table users_table (user_id int, time timestamp, value_1 int, value_2 int, value_3 float, value_4 bigint);
+select create_distributed_table('users_table', 'user_id');
+
+create table events_table (user_id int, time timestamp, event_type int, value_2 int, value_3 float, value_4 bigint);
+select create_distributed_table('events_table', 'user_id');
+
+
+insert into users_table select i % 10000, timestamp '2014-01-10 20:00:00' +
+       i * (timestamp '2014-01-20 20:00:00' -
+                   timestamp '2014-01-10 10:00:00'),i, i % 100, i % 5 from generate_series(0, 1000) i;
+
+
+insert into events_table select i % 10000, timestamp '2014-01-10 20:00:00' +
+       i * (timestamp '2014-01-20 20:00:00' -
+                   timestamp '2014-01-10 10:00:00'),i, i % 100, i % 5 from generate_series(0, 10000) i;
+
+-- query with window functions, the agg. inside the window functions
+select value_3, to_char(date_trunc('day', time), 'YYYYMMDD') as time, rank() over my_win as my_rank
+from events_table
+group by
+    value_3, date_trunc('day', time)
+    WINDOW my_win as (partition by regr_syy(event_type%10, value_2)::int order by count(*) desc)
+order by 1,2,3
+limit 5;
+
+-- query with window functions, the agg. outside the window functions
+select regr_syy(event_type%10, value_2)::int, value_3, to_char(date_trunc('day', time), 'YYYYMMDD') as time, rank() over my_win as my_rank
+from events_table
+group by
+    value_3, date_trunc('day', time)
+    WINDOW my_win as (partition by value_3 order by count(*) desc)
+order by 1,2,3
+limit 5;
+
+-- query with only order by
+select regr_syy(event_type%10, value_2)::int
+from events_table
+order by 1 desc;
+
+-- query with group by + target list + order by
+select count(*), regr_syy(event_type%10, value_2)::int
+from events_table
+group by value_3
+order by 2 desc;
+
+-- query with group by + order by
+select count(*)
+from events_table
+group by value_3
+order by regr_syy(event_type%10, value_2)::int desc;
+
+-- query with basic join
+select regr_syy(u1.user_id, u2.user_id)::int
+from users_table  u1, events_table u2
+where u1.user_id = u2.user_id;
+
+-- agg. with filter with columns
+select regr_syy(u1.user_id, u2.user_id) filter (where u1.value_1 < 5)::numeric(10,3)
+from users_table  u1, events_table u2
+where u1.user_id = u2.user_id;
+
+-- agg with filter and group by
+select regr_syy(u1.user_id, u2.user_id) filter (where (u1.value_1) < 5)::numeric(10,3)
+from users_table  u1, events_table u2
+where u1.user_id = u2.user_id
+group by u1.value_3;
+
+-- agg. with filter with consts
+select regr_syy(u1.user_id, u2.user_id) filter (where '0300030' LIKE '%3%')::int
+from users_table  u1, events_table u2
+where u1.user_id = u2.user_id;
+
+-- multiple aggs with filters
+select regr_syy(u1.user_id, u2.user_id) filter (where u1.value_1 < 5)::numeric(10,3), regr_syy(u1.value_1, u2.value_2) filter (where u1.user_id < 5)::numeric(10,3)
+from users_table  u1, events_table u2
+where u1.user_id = u2.user_id;
+
+-- query with where false
+select regr_syy(u1.user_id, u2.user_id) filter (where u1.value_1 < 5)::numeric(10,3), regr_syy(u1.value_1, u2.value_2) filter (where u1.user_id < 5)::numeric(10,3)
+from users_table  u1, events_table u2
+where 1=0;
+
+-- a CTE forced to be planned recursively (via OFFSET 0)
+with cte_1 as
+(
+    select
+        regr_syy(u1.user_id, u2.user_id) filter (where u1.value_1 < 5)::numeric(10,3), regr_syy(u1.value_1, u2.value_2) filter (where u1.user_id < 5)::numeric(10,3)
+    from users_table  u1, events_table u2
+    where u1.user_id = u2.user_id
+    OFFSET 0
+)
+select
+*
+from
+cte_1;
+
 -- Test https://github.com/citusdata/citus/issues/3446
 set citus.coordinator_aggregation_strategy to 'row-gather';
 select id, stddev(val) from aggdata group by id order by 1;
