@@ -410,6 +410,16 @@ PostprocessIndexStmt(Node *node, const char *queryString)
 		return NIL;
 	}
 
+	/*
+	 * We make sure schema name is not null in the PreprocessIndexStmt
+	 */
+	Oid schemaId = get_namespace_oid(indexStmt->relation->schemaname, true);
+	Oid relationId = get_relname_relid(indexStmt->relation->relname, schemaId);
+	if (!IsDistributedTable(relationId))
+	{
+		return NIL;
+	}
+
 	/* commit the current transaction and start anew */
 	CommitTransactionCommand();
 	StartTransactionCommand();
@@ -417,7 +427,7 @@ PostprocessIndexStmt(Node *node, const char *queryString)
 	/* get the affected relation and index */
 	Relation relation = heap_openrv(indexStmt->relation, ShareUpdateExclusiveLock);
 	Oid indexRelationId = get_relname_relid(indexStmt->idxname,
-											RelationGetNamespace(relation));
+											schemaId);
 	Relation indexRelation = index_open(indexRelationId, RowExclusiveLock);
 
 	/* close relations but retain locks */
