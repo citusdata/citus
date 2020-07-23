@@ -250,7 +250,7 @@ worker_hash_partition_table(PG_FUNCTION_ARGS)
 static ShardInterval **
 SyntheticShardIntervalArrayForShardMinValues(Datum *shardMinValues, int shardCount)
 {
-	Datum nextShardMaxValue = Int32GetDatum(INT32_MAX);
+	Datum nextShardMaxValue = Int32GetDatum(PG_INT32_MAX);
 	ShardInterval **syntheticShardIntervalArray =
 		palloc(sizeof(ShardInterval *) * shardCount);
 
@@ -1250,7 +1250,6 @@ HashPartitionId(Datum partitionValue, Oid partitionCollation, const void *contex
 	FmgrInfo *comparisonFunction = hashPartitionContext->comparisonFunction;
 	Datum hashDatum = FunctionCall1Coll(hashFunction, DEFAULT_COLLATION_OID,
 										partitionValue);
-	int32 hashResult = 0;
 	uint32 hashPartitionId = 0;
 
 	if (hashDatum == 0)
@@ -1260,10 +1259,8 @@ HashPartitionId(Datum partitionValue, Oid partitionCollation, const void *contex
 
 	if (hashPartitionContext->hasUniformHashDistribution)
 	{
-		uint64 hashTokenIncrement = HASH_TOKEN_COUNT / partitionCount;
-
-		hashResult = DatumGetInt32(hashDatum);
-		hashPartitionId = (uint32) (hashResult - INT32_MIN) / hashTokenIncrement;
+		int hashValue = DatumGetInt32(hashDatum);
+		hashPartitionId = CalculateUniformHashRangeIndex(hashValue, partitionCount);
 	}
 	else
 	{

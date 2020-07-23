@@ -4599,7 +4599,7 @@ GenerateSyntheticShardIntervalArray(int partitionCount)
 		ShardInterval *shardInterval = CitusMakeNode(ShardInterval);
 
 		/* calculate the split of the hash space */
-		int32 shardMinHashToken = INT32_MIN + (shardIndex * hashTokenIncrement);
+		int32 shardMinHashToken = PG_INT32_MIN + (shardIndex * hashTokenIncrement);
 		int32 shardMaxHashToken = shardMinHashToken + (hashTokenIncrement - 1);
 
 		shardInterval->relationId = InvalidOid;
