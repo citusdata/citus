@@ -450,6 +450,15 @@ FindAvailableConnection(dlist_head *connections, uint32 flags)
 			continue;
 		}
 
+		if (connection->initilizationState != POOL_STATE_INITIALIZED)
+		{
+			/*
+			 * If the connection has not been initialized, it should not be
+			 * considered as available.
+			 */
+			continue;
+		}
+
 		return connection;
 	}
 

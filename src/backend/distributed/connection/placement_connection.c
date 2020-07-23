@@ -301,7 +301,7 @@ StartPlacementListConnection(uint32 flags, List *placementAccessList,
 		Assert((flags & OPTIONAL_CONNECTION) == 0);
 		Assert(chosenConnection != NULL);
 
-		if ((flags & CONNECTION_PER_PLACEMENT) &&
+		if ((flags & REQUIRE_CLEAN_CONNECTION) &&
 			ConnectionAccessedDifferentPlacement(chosenConnection, placement))
 		{
 			/*
