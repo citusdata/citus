@@ -843,6 +843,18 @@ ALTER TABLE non_existent_schema.non_existent_table SET SCHEMA another_non_existe
 ALTER TABLE existing_schema.non_existent_table SET SCHEMA another_existing_schema;
 ALTER TABLE existing_schema.non_existent_table SET SCHEMA non_existent_schema;
 ALTER TABLE existing_schema.table_set_schema SET SCHEMA non_existent_schema;
+
+
+-- test ALTER TABLE IF EXISTS SET SCHEMA with nonexisting schemas and table
+ALTER TABLE IF EXISTS non_existent_schema.table_set_schema SET SCHEMA another_existing_schema;
+ALTER TABLE IF EXISTS non_existent_schema.non_existent_table SET SCHEMA another_existing_schema;
+ALTER TABLE IF EXISTS non_existent_schema.table_set_schema SET SCHEMA another_non_existent_schema;
+ALTER TABLE IF EXISTS non_existent_schema.non_existent_table SET SCHEMA another_non_existent_schema;
+ALTER TABLE IF EXISTS existing_schema.non_existent_table SET SCHEMA another_existing_schema;
+ALTER TABLE IF EXISTS existing_schema.non_existent_table SET SCHEMA non_existent_schema;
+ALTER TABLE IF EXISTS existing_schema.table_set_schema SET SCHEMA non_existent_schema;
+ALTER TABLE IF EXISTS non_existent_table SET SCHEMA another_existing_schema;
+ALTER TABLE IF EXISTS non_existent_table SET SCHEMA non_existent_schema;
 DROP SCHEMA existing_schema, another_existing_schema CASCADE;
 
 
