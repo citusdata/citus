@@ -292,7 +292,7 @@ CreateAggregationArgumentContext(FunctionCallInfo fcinfo, int argumentIndex)
 	if (RECORDOID == get_fn_expr_argtype(fcinfo->flinfo, argumentIndex))
 	{
 		/* Initialize context to handle aggregation argument combined into tuple/record */
-		if (fcinfo->args[argumentIndex].isnull)
+		if (fcGetArgNull(fcinfo, argumentIndex))
 		{
 			ereport(ERROR, (errmsg("worker_partial_agg_sfunc: null record input"),
 							errhint("Elements of record may be null")));
