@@ -445,7 +445,7 @@ CalculateUniformHashRangeIndex(int hashedValue, int shardCount)
 	int64 hashedValue64 = (int64) hashedValue;
 
 	/* normalize to the 0-UINT32_MAX range */
-	int64 normalizedHashValue = hashedValue64 - INT32_MIN;
+	int64 normalizedHashValue = hashedValue64 - PG_INT32_MIN;
 
 	/* size of each hash range */
 	int64 hashRangeSize = HASH_TOKEN_COUNT / shardCount;

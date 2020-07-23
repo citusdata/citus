@@ -3614,7 +3614,7 @@ GetLeastUtilisedCopyConnection(List *connectionStateList, char *nodeName,
 							   int nodePort)
 {
 	MultiConnection *connection = NULL;
-	int minPlacementCount = INT32_MAX;
+	int minPlacementCount = PG_INT32_MAX;
 	ListCell *connectionStateCell = NULL;
 
 	foreach(connectionStateCell, connectionStateList)
