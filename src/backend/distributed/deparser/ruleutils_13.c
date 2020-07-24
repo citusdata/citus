@@ -3556,9 +3556,10 @@ get_variable(Var *var, int levelsup, bool istoplevel, deparse_context *context)
 	if (var->varnosyn > 0 && var->varnosyn <= list_length(dpns->rtable) && dpns->plan == NULL) {
 		rte = rt_fetch(var->varnosyn, dpns->rtable);
 
-		// if the rte var->varnosync points to is not a regular table and it is a join
-		// then the correct relname will be found with var->varnosync and var->varattnosync
-		// TODO:: this is a workaround and it can be simplified.
+		/*
+		 * if the rte var->varnosyn points to is not a regular table and it is a join
+		 * then the correct relname will be found with var->varnosyn and var->varattnosyn
+		 */
 		if (rte->rtekind == RTE_JOIN && rte->relid == 0 && var->varnosyn != var->varno) {
 			varno = var->varnosyn;
 			varattno = var->varattnosyn;
@@ -3969,9 +3970,10 @@ get_name_for_var_field(Var *var, int fieldno,
 	if (var->varnosyn > 0 && var->varnosyn <= list_length(dpns->rtable) && dpns->plan == NULL) {
 		rte = rt_fetch(var->varnosyn, dpns->rtable);
 
-		// if the rte var->varnosync points to is not a regular table and it is a join
-		// then the correct relname will be found with var->varnosync and var->varattnosync
-		// TODO:: this is a workaround and it can be simplified.
+		/*
+		 * if the rte var->varnosyn points to is not a regular table and it is a join
+		 * then the correct relname will be found with var->varnosyn and var->varattnosyn
+		 */
 		if (rte->rtekind == RTE_JOIN && rte->relid == 0 && var->varnosyn != var->varno) {
 			varno = var->varnosyn;
 			varattno = var->varattnosyn;

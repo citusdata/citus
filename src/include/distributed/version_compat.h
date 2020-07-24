@@ -38,7 +38,7 @@
 #define CMDTAG_SELECT_COMPAT CMDTAG_SELECT
 #define ExplainOnePlanCompat(a, b, c, d, e, f, g) ExplainOnePlan(a, b, c, d, e, f, g, \
 																 NULL)
-#define Set_ptr_value(a, b) ((a)->ptr_value = (b))
+#define SetListCellPtr(a, b) ((a)->ptr_value = (b))
 #define RangeTableEntryFromNSItem(a) ((a)->p_rte)
 #define QueryCompletionCompat QueryCompletion
 #else /* pre PG13 */
@@ -50,11 +50,11 @@
 #define CMDTAG_SELECT_COMPAT "SELECT"
 #define getOwnedSequencesCompat(a, b) getOwnedSequences(a, b)
 #define ExplainOnePlanCompat(a, b, c, d, e, f, g) ExplainOnePlan(a, b, c, d, e, f, g)
-#define Set_ptr_value(a, b) ((a)->data.ptr_value = (b))
+#define SetListCellPtr(a, b) ((a)->data.ptr_value = (b))
 #define RangeTableEntryFromNSItem(a) (a)
 #define QueryCompletionCompat char
 #define varattnosyn varoattno
-#define varnosyn varnoold 
+#define varnosyn varnoold
 #endif
 #if PG_VERSION_NUM >= PG_VERSION_12
 

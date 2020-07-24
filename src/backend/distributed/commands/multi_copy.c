@@ -93,13 +93,14 @@
 #include "distributed/hash_helpers.h"
 #include "executor/executor.h"
 #include "foreign/foreign.h"
-#if PG_VERSION_NUM >= PG_VERSION_13
-#include "tcop/cmdtag.h"
-#endif
+
 #include "libpq/libpq.h"
 #include "libpq/pqformat.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
+#if PG_VERSION_NUM >= PG_VERSION_13
+#include "tcop/cmdtag.h"
+#endif
 #include "tsearch/ts_locale.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"

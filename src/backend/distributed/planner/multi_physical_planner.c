@@ -5171,7 +5171,7 @@ GreedyAssignTask(WorkerNode *workerNode, List *taskList, List *activeShardPlacem
 				rotatePlacementListBy = replicaIndex;
 
 				/* overwrite task list to signal that this task is assigned */
-				Set_ptr_value(taskCell, NULL);
+				SetListCellPtr(taskCell, NULL);
 				break;
 			}
 		}
