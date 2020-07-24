@@ -115,8 +115,6 @@ SELECT count(*) FROM test WHERE false;
 SELECT count(*) FROM test WHERE false GROUP BY GROUPING SETS (x,y);
 RESET citus.task_assignment_policy;
 
--- single node task tracker tests:
-SET citus.task_executor_type to 'task-tracker';
 SELECT count(*) FROM test;
 
 -- INSERT SELECT from distributed table to local table

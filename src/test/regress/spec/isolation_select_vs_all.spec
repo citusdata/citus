@@ -31,7 +31,7 @@ step "s1-disable-binary-protocol" {
 }
 step "s1-router-select" { SELECT * FROM select_append WHERE id = 1; }
 step "s1-real-time-select" { SELECT * FROM select_append ORDER BY 1, 2; }
-step "s1-task-tracker-select"
+step "s1-adaptive-select"
 {
 		SET citus.enable_repartition_joins TO ON;
 	SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
@@ -62,7 +62,7 @@ step "s1-commit" { COMMIT; }
 session "s2"
 step "s2-router-select" { SELECT * FROM select_append WHERE id = 1; }
 step "s2-real-time-select" { SELECT * FROM select_append ORDER BY 1, 2; }
-step "s2-task-tracker-select"
+step "s2-adaptive-select"
 {
 		SET citus.enable_repartition_joins TO ON;
 	SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
@@ -88,13 +88,13 @@ step "s2-distribute-table" { SELECT create_distributed_table('select_append', 'i
 // permutations - SELECT vs SELECT
 permutation "s1-initialize" "s1-begin" "s1-router-select" "s2-router-select" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-router-select" "s2-real-time-select" "s1-commit" "s1-select-count"
-permutation "s1-initialize" "s1-begin" "s1-router-select" "s2-task-tracker-select" "s1-commit" "s1-select-count"
+permutation "s1-initialize" "s1-begin" "s1-router-select" "s2-adaptive-select" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-real-time-select" "s2-router-select" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-real-time-select" "s2-real-time-select" "s1-commit" "s1-select-count"
-permutation "s1-initialize" "s1-begin" "s1-real-time-select" "s2-task-tracker-select" "s1-commit" "s1-select-count"
-permutation "s1-initialize" "s1-begin" "s1-task-tracker-select" "s2-router-select" "s1-commit" "s1-select-count"
-permutation "s1-initialize" "s1-begin" "s1-task-tracker-select" "s2-real-time-select" "s1-commit" "s1-select-count"
-permutation "s1-initialize" "s1-begin" "s1-task-tracker-select" "s2-task-tracker-select" "s1-commit" "s1-select-count"
+permutation "s1-initialize" "s1-begin" "s1-real-time-select" "s2-adaptive-select" "s1-commit" "s1-select-count"
+permutation "s1-initialize" "s1-begin" "s1-adaptive-select" "s2-router-select" "s1-commit" "s1-select-count"
+permutation "s1-initialize" "s1-begin" "s1-adaptive-select" "s2-real-time-select" "s1-commit" "s1-select-count"
+permutation "s1-initialize" "s1-begin" "s1-adaptive-select" "s2-adaptive-select" "s1-commit" "s1-select-count"
 
 // permutations - router SELECT first
 permutation "s1-initialize" "s1-begin" "s1-router-select" "s2-insert" "s1-commit" "s1-select-count"
@@ -166,35 +166,35 @@ permutation "s1-initialize" "s1-begin" "s1-table-size" "s2-real-time-select" "s1
 permutation "s1-initialize" "s1-begin" "s1-master-modify-multiple-shards" "s2-real-time-select" "s1-commit" "s1-select-count"
 permutation "s1-drop" "s1-create-non-distributed-table" "s1-begin" "s1-distribute-table" "s2-real-time-select" "s1-commit" "s1-select-count"
 
-// permutations - task-tracker SELECT first
-permutation "s1-initialize" "s1-begin" "s1-task-tracker-select" "s2-insert" "s1-commit" "s1-select-count"
-permutation "s1-initialize" "s1-begin" "s1-task-tracker-select" "s2-insert-select" "s1-commit" "s1-select-count"
-permutation "s1-initialize" "s1-begin" "s1-task-tracker-select" "s2-update" "s1-commit" "s1-select-count"
-permutation "s1-initialize" "s1-begin" "s1-task-tracker-select" "s2-delete" "s1-commit" "s1-select-count"
-permutation "s1-initialize" "s1-begin" "s1-task-tracker-select" "s2-truncate" "s1-commit" "s1-select-count"
-permutation "s1-initialize" "s1-begin" "s1-task-tracker-select" "s2-drop" "s1-commit" "s1-select-count"
-permutation "s1-initialize" "s1-begin" "s1-task-tracker-select" "s2-ddl-create-index" "s1-commit" "s1-select-count" "s1-show-indexes"
-permutation "s1-initialize" "s1-ddl-create-index" "s1-begin" "s1-task-tracker-select" "s2-ddl-drop-index" "s1-commit" "s1-select-count" "s1-show-indexes"
-permutation "s1-initialize" "s1-begin" "s1-task-tracker-select" "s2-ddl-create-index-concurrently" "s1-commit" "s1-select-count" "s1-show-indexes"
-permutation "s1-initialize" "s1-begin" "s1-task-tracker-select" "s2-ddl-add-column" "s1-commit" "s1-select-count" "s1-show-columns"
-permutation "s1-initialize" "s1-ddl-add-column" "s1-begin" "s1-task-tracker-select" "s2-ddl-drop-column" "s1-commit" "s1-select-count" "s1-show-columns"
-permutation "s1-initialize" "s1-begin" "s1-task-tracker-select" "s2-ddl-rename-column" "s1-commit" "s1-select-count" "s1-show-columns"
-permutation "s1-initialize" "s1-begin" "s1-task-tracker-select" "s2-table-size" "s1-commit" "s1-select-count"
-permutation "s1-initialize" "s1-begin" "s1-task-tracker-select" "s2-master-modify-multiple-shards" "s1-commit" "s1-select-count"
-permutation "s1-drop" "s1-create-non-distributed-table" "s1-begin" "s1-task-tracker-select" "s2-distribute-table" "s1-commit" "s1-select-count"
+// permutations - adaptive SELECT first
+permutation "s1-initialize" "s1-begin" "s1-adaptive-select" "s2-insert" "s1-commit" "s1-select-count"
+permutation "s1-initialize" "s1-begin" "s1-adaptive-select" "s2-insert-select" "s1-commit" "s1-select-count"
+permutation "s1-initialize" "s1-begin" "s1-adaptive-select" "s2-update" "s1-commit" "s1-select-count"
+permutation "s1-initialize" "s1-begin" "s1-adaptive-select" "s2-delete" "s1-commit" "s1-select-count"
+permutation "s1-initialize" "s1-begin" "s1-adaptive-select" "s2-truncate" "s1-commit" "s1-select-count"
+permutation "s1-initialize" "s1-begin" "s1-adaptive-select" "s2-drop" "s1-commit" "s1-select-count"
+permutation "s1-initialize" "s1-begin" "s1-adaptive-select" "s2-ddl-create-index" "s1-commit" "s1-select-count" "s1-show-indexes"
+permutation "s1-initialize" "s1-ddl-create-index" "s1-begin" "s1-adaptive-select" "s2-ddl-drop-index" "s1-commit" "s1-select-count" "s1-show-indexes"
+permutation "s1-initialize" "s1-begin" "s1-adaptive-select" "s2-ddl-create-index-concurrently" "s1-commit" "s1-select-count" "s1-show-indexes"
+permutation "s1-initialize" "s1-begin" "s1-adaptive-select" "s2-ddl-add-column" "s1-commit" "s1-select-count" "s1-show-columns"
+permutation "s1-initialize" "s1-ddl-add-column" "s1-begin" "s1-adaptive-select" "s2-ddl-drop-column" "s1-commit" "s1-select-count" "s1-show-columns"
+permutation "s1-initialize" "s1-begin" "s1-adaptive-select" "s2-ddl-rename-column" "s1-commit" "s1-select-count" "s1-show-columns"
+permutation "s1-initialize" "s1-begin" "s1-adaptive-select" "s2-table-size" "s1-commit" "s1-select-count"
+permutation "s1-initialize" "s1-begin" "s1-adaptive-select" "s2-master-modify-multiple-shards" "s1-commit" "s1-select-count"
+permutation "s1-drop" "s1-create-non-distributed-table" "s1-begin" "s1-adaptive-select" "s2-distribute-table" "s1-commit" "s1-select-count"
 
-// permutations - task-tracker SELECT second
-permutation "s1-initialize" "s1-begin" "s1-insert" "s2-task-tracker-select" "s1-commit" "s1-select-count"
-permutation "s1-initialize" "s1-begin" "s1-insert-select" "s2-task-tracker-select" "s1-commit" "s1-select-count"
-permutation "s1-initialize" "s1-begin" "s1-update" "s2-task-tracker-select" "s1-commit" "s1-select-count"
-permutation "s1-initialize" "s1-begin" "s1-delete" "s2-task-tracker-select" "s1-commit" "s1-select-count"
-permutation "s1-initialize" "s1-begin" "s1-truncate" "s2-task-tracker-select" "s1-commit" "s1-select-count"
-permutation "s1-initialize" "s1-begin" "s1-drop" "s2-task-tracker-select" "s1-commit" "s1-select-count"
-permutation "s1-initialize" "s1-begin" "s1-ddl-create-index" "s2-task-tracker-select" "s1-commit" "s1-select-count" "s1-show-indexes"
-permutation "s1-initialize" "s1-ddl-create-index" "s1-begin" "s1-ddl-drop-index" "s2-task-tracker-select" "s1-commit" "s1-select-count" "s1-show-indexes"
-permutation "s1-initialize" "s1-begin" "s1-ddl-add-column" "s2-task-tracker-select" "s1-commit" "s1-select-count" "s1-show-columns"
-permutation "s1-initialize" "s1-ddl-add-column" "s1-begin" "s1-ddl-drop-column" "s2-task-tracker-select" "s1-commit" "s1-select-count" "s1-show-columns"
-permutation "s1-initialize" "s1-begin" "s1-ddl-rename-column" "s2-task-tracker-select" "s1-commit" "s1-select-count" "s1-show-columns"
-permutation "s1-initialize" "s1-begin" "s1-table-size" "s2-task-tracker-select" "s1-commit" "s1-select-count"
-permutation "s1-initialize" "s1-begin" "s1-master-modify-multiple-shards" "s2-task-tracker-select" "s1-commit" "s1-select-count"
-permutation "s1-drop" "s1-create-non-distributed-table" "s1-begin" "s1-distribute-table" "s2-task-tracker-select" "s1-commit" "s1-select-count"
+// permutations - adaptive SELECT second
+permutation "s1-initialize" "s1-begin" "s1-insert" "s2-adaptive-select" "s1-commit" "s1-select-count"
+permutation "s1-initialize" "s1-begin" "s1-insert-select" "s2-adaptive-select" "s1-commit" "s1-select-count"
+permutation "s1-initialize" "s1-begin" "s1-update" "s2-adaptive-select" "s1-commit" "s1-select-count"
+permutation "s1-initialize" "s1-begin" "s1-delete" "s2-adaptive-select" "s1-commit" "s1-select-count"
+permutation "s1-initialize" "s1-begin" "s1-truncate" "s2-adaptive-select" "s1-commit" "s1-select-count"
+permutation "s1-initialize" "s1-begin" "s1-drop" "s2-adaptive-select" "s1-commit" "s1-select-count"
+permutation "s1-initialize" "s1-begin" "s1-ddl-create-index" "s2-adaptive-select" "s1-commit" "s1-select-count" "s1-show-indexes"
+permutation "s1-initialize" "s1-ddl-create-index" "s1-begin" "s1-ddl-drop-index" "s2-adaptive-select" "s1-commit" "s1-select-count" "s1-show-indexes"
+permutation "s1-initialize" "s1-begin" "s1-ddl-add-column" "s2-adaptive-select" "s1-commit" "s1-select-count" "s1-show-columns"
+permutation "s1-initialize" "s1-ddl-add-column" "s1-begin" "s1-ddl-drop-column" "s2-adaptive-select" "s1-commit" "s1-select-count" "s1-show-columns"
+permutation "s1-initialize" "s1-begin" "s1-ddl-rename-column" "s2-adaptive-select" "s1-commit" "s1-select-count" "s1-show-columns"
+permutation "s1-initialize" "s1-begin" "s1-table-size" "s2-adaptive-select" "s1-commit" "s1-select-count"
+permutation "s1-initialize" "s1-begin" "s1-master-modify-multiple-shards" "s2-adaptive-select" "s1-commit" "s1-select-count"
+permutation "s1-drop" "s1-create-non-distributed-table" "s1-begin" "s1-distribute-table" "s2-adaptive-select" "s1-commit" "s1-select-count"

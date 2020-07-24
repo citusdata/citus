@@ -155,6 +155,7 @@
 #include "distributed/remote_commands.h"
 #include "distributed/repartition_join_execution.h"
 #include "distributed/resource_lock.h"
+#include "distributed/shared_connection_stats.h"
 #include "distributed/subplan_execution.h"
 #include "distributed/transaction_management.h"
 #include "distributed/tuple_destination.h"
@@ -596,14 +597,16 @@ static bool TaskListRequires2PC(List *taskList);
 static bool SelectForUpdateOnReferenceTable(List *taskList);
 static void AssignTasksToConnectionsOrWorkerPool(DistributedExecution *execution);
 static void UnclaimAllSessionConnections(List *sessionList);
-static bool UseConnectionPerPlacement(void);
 static PlacementExecutionOrder ExecutionOrderForTask(RowModifyLevel modLevel, Task *task);
 static WorkerPool * FindOrCreateWorkerPool(DistributedExecution *execution,
 										   char *nodeName, int nodePort);
 static WorkerSession * FindOrCreateWorkerSession(WorkerPool *workerPool,
 												 MultiConnection *connection);
 static void ManageWorkerPool(WorkerPool *workerPool);
-static bool ShouldWaitForConnection(WorkerPool *workerPool);
+static bool ShouldWaitForSlowStart(WorkerPool *workerPool);
+static int CalculateNewConnectionCount(WorkerPool *workerPool);
+static void OpenNewConnections(WorkerPool *workerPool, int newConnectionCount,
+							   TransactionProperties *transactionProperties);
 static void CheckConnectionTimeout(WorkerPool *workerPool);
 static int UsableConnectionCount(WorkerPool *workerPool);
 static long NextEventTimeout(DistributedExecution *execution);
@@ -616,6 +619,7 @@ static bool StartPlacementExecutionOnSession(TaskPlacementExecution *placementEx
 											 WorkerSession *session);
 static void ConnectionStateMachine(WorkerSession *session);
 static void HandleMultiConnectionSuccess(WorkerSession *session);
+static bool HasAnyConnectionFailure(WorkerPool *workerPool);
 static void Activate2PCIfModifyingTransactionExpandsToNewNode(WorkerSession *session);
 static bool TransactionModifiedDistributedTable(DistributedExecution *execution);
 static void TransactionStateMachine(WorkerSession *session);
@@ -1931,16 +1935,8 @@ WorkerPoolCompare(const void *lhsKey, const void *rhsKey)
 	const WorkerPool *workerLhs = *(const WorkerPool **) lhsKey;
 	const WorkerPool *workerRhs = *(const WorkerPool **) rhsKey;
 
-	int nameCompare = strncmp(workerLhs->nodeName, workerRhs->nodeName,
-							  WORKER_LENGTH);
-
-	if (nameCompare != 0)
-	{
-		return nameCompare;
-	}
-
-	int portCompare = workerLhs->nodePort - workerRhs->nodePort;
-	return portCompare;
+	return NodeNamePortCompare(workerLhs->nodeName, workerRhs->nodeName,
+							   workerLhs->nodePort, workerRhs->nodePort);
 }
 
 
@@ -1988,19 +1984,6 @@ SetAttributeInputMetadata(DistributedExecution *execution,
 
 		shardCommandExecution->attributeInputMetadata[queryIndex] = attInMetadata;
 	}
-}
-
-
-/*
- * UseConnectionPerPlacement returns whether we should use a separate connection
- * per placement even if another connection is idle. We mostly use this in testing
- * scenarios.
- */
-static bool
-UseConnectionPerPlacement(void)
-{
-	return ForceMaxQueryParallelization &&
-		   MultiShardConnectionType != SEQUENTIAL_CONNECTION;
 }
 
 
@@ -2409,15 +2392,109 @@ static void
 ManageWorkerPool(WorkerPool *workerPool)
 {
 	DistributedExecution *execution = workerPool->distributedExecution;
+
+	/* we do not expand the pool further if there was any failure */
+	if (HasAnyConnectionFailure(workerPool))
+	{
+		return;
+	}
+
+	/* we wait until a slow start interval has passed before expanding the pool */
+	if (ShouldWaitForSlowStart(workerPool))
+	{
+		return;
+	}
+
+	int newConnectionCount = CalculateNewConnectionCount(workerPool);
+
+	if (newConnectionCount <= 0)
+	{
+		return;
+	}
+
+	OpenNewConnections(workerPool, newConnectionCount, execution->transactionProperties);
+
+	INSTR_TIME_SET_CURRENT(workerPool->lastConnectionOpenTime);
+	execution->rebuildWaitEventSet = true;
+}
+
+
+/*
+ * HasAnyConnectionFailure returns true if worker pool has failed,
+ * or connection timed out or we have a failure in connections.
+ */
+static bool
+HasAnyConnectionFailure(WorkerPool *workerPool)
+{
+	if (workerPool->failed)
+	{
+		/* connection pool failed */
+		return true;
+	}
+
+	/* we might fail the execution or warn the user about connection timeouts */
+	if (workerPool->checkForPoolTimeout)
+	{
+		CheckConnectionTimeout(workerPool);
+	}
+
+	int failedConnectionCount = workerPool->failedConnectionCount;
+	if (failedConnectionCount >= 1)
+	{
+		/* do not attempt to open more connections after one failed */
+		return true;
+	}
+	return false;
+}
+
+
+/*
+ * ShouldWaitForSlowStart returns true if we should wait before
+ * opening a new connection because of slow start algorithm.
+ */
+static bool
+ShouldWaitForSlowStart(WorkerPool *workerPool)
+{
+	/* if we can use a connection per placement, we don't need to wait for slowstart */
+	if (UseConnectionPerPlacement())
+	{
+		return false;
+	}
+
+	/* if slow start is disabled, we can open new connections */
+	if (ExecutorSlowStartInterval == SLOW_START_DISABLED)
+	{
+		return false;
+	}
+
+	double milliSecondsPassedSince = MillisecondsPassedSince(
+		workerPool->lastConnectionOpenTime);
+	if (milliSecondsPassedSince < ExecutorSlowStartInterval)
+	{
+		return true;
+	}
+	return false;
+}
+
+
+/*
+ * CalculateNewConnectionCount returns the amount of connections
+ * that we can currently open.
+ */
+static int
+CalculateNewConnectionCount(WorkerPool *workerPool)
+{
+	DistributedExecution *execution = workerPool->distributedExecution;
+
 	int targetPoolSize = execution->targetPoolSize;
 	int initiatedConnectionCount = list_length(workerPool->sessionList);
 	int activeConnectionCount PG_USED_FOR_ASSERTS_ONLY =
 		workerPool->activeConnectionCount;
 	int idleConnectionCount PG_USED_FOR_ASSERTS_ONLY =
 		workerPool->idleConnectionCount;
-	int failedConnectionCount = workerPool->failedConnectionCount;
 	int readyTaskCount = workerPool->readyTaskCount;
 	int newConnectionCount = 0;
+
 
 	/* we should always have more (or equal) active connections than idle connections */
 	Assert(activeConnectionCount >= idleConnectionCount);
@@ -2427,24 +2504,6 @@ ManageWorkerPool(WorkerPool *workerPool)
 
 	/* we should never have less than 0 connections ever */
 	Assert(activeConnectionCount >= 0 && idleConnectionCount >= 0);
-
-	if (workerPool->failed)
-	{
-		/* connection pool failed */
-		return;
-	}
-
-	/* we might fail the execution or warn the user about connection timeouts */
-	if (workerPool->checkForPoolTimeout)
-	{
-		CheckConnectionTimeout(workerPool);
-	}
-
-	if (failedConnectionCount >= 1)
-	{
-		/* do not attempt to open more connections after one failed */
-		return;
-	}
 
 	if (UseConnectionPerPlacement())
 	{
@@ -2470,7 +2529,14 @@ ManageWorkerPool(WorkerPool *workerPool)
 		 * Number of additional connections we would need to run all ready tasks in
 		 * parallel.
 		 */
-		int newConnectionsForReadyTasks = readyTaskCount - usableConnectionCount;
+		int newConnectionsForReadyTasks = Max(0, readyTaskCount - usableConnectionCount);
+
+		/* If Slow start is enabled we need to update the maxNewConnection to the current cycle's maximum.*/
+		if (ExecutorSlowStartInterval != SLOW_START_DISABLED)
+		{
+			maxNewConnectionCount = Min(workerPool->maxNewConnectionsPerCycle,
+										maxNewConnectionCount);
+		}
 
 		/*
 		 * Open enough connections to handle all tasks that are ready, but no more
@@ -2478,30 +2544,23 @@ ManageWorkerPool(WorkerPool *workerPool)
 		 */
 		newConnectionCount = Min(newConnectionsForReadyTasks, maxNewConnectionCount);
 
-		if (newConnectionCount > 0 && ExecutorSlowStartInterval != SLOW_START_DISABLED)
+		if (newConnectionCount > 0)
 		{
-			if (MillisecondsPassedSince(workerPool->lastConnectionOpenTime) >=
-				ExecutorSlowStartInterval)
-			{
-				newConnectionCount = Min(newConnectionCount,
-										 workerPool->maxNewConnectionsPerCycle);
-
-				/* increase the open rate every cycle (like TCP slow start) */
-				workerPool->maxNewConnectionsPerCycle += 1;
-			}
-			else
-			{
-				/* wait a bit until opening more connections */
-				return;
-			}
+			/* increase the open rate every cycle (like TCP slow start) */
+			workerPool->maxNewConnectionsPerCycle += 1;
 		}
 	}
+	return newConnectionCount;
+}
 
-	if (newConnectionCount <= 0)
-	{
-		return;
-	}
 
+/*
+ * OpenNewConnections opens the given amount of connections for the given workerPool.
+ */
+static void
+OpenNewConnections(WorkerPool *workerPool, int newConnectionCount,
+				   TransactionProperties *transactionProperties)
+{
 	ereport(DEBUG4, (errmsg("opening %d new connections to %s:%d", newConnectionCount,
 							workerPool->nodeName, workerPool->nodePort)));
 
@@ -2510,42 +2569,19 @@ ManageWorkerPool(WorkerPool *workerPool)
 		/* experimental: just to see the perf benefits of caching connections */
 		int connectionFlags = 0;
 
-		if (execution->transactionProperties->useRemoteTransactionBlocks ==
+		if (transactionProperties->useRemoteTransactionBlocks ==
 			TRANSACTION_BLOCKS_DISALLOWED)
 		{
 			connectionFlags |= OUTSIDE_TRANSACTION;
 		}
 
-		if (UseConnectionPerPlacement())
-		{
-			/*
-			 * User wants one connection per placement, so no throttling is desired
-			 * and we do not set any flags.
-			 *
-			 * The primary reason for this is that allowing multiple backends to use
-			 * connection per placement could lead to unresolved self deadlocks. In other
-			 * words, each backend may stuck waiting for other backends to get a slot
-			 * in the shared connection counters.
-			 */
-		}
-		else if (ShouldWaitForConnection(workerPool))
-		{
-			/*
-			 * We need this connection to finish the execution. If it is not
-			 * available based on the current number of connections to the worker
-			 * then wait for it.
-			 */
-			connectionFlags |= WAIT_FOR_CONNECTION;
-		}
-		else
-		{
-			/*
-			 * The executor can finish the execution with a single connection,
-			 * remaining are optional. If the executor can get more connections,
-			 * it can increase the parallelism.
-			 */
-			connectionFlags |= OPTIONAL_CONNECTION;
-		}
+		/*
+		 * Enforce the requirements for adaptive connection management (a.k.a.,
+		 * throttle connections if citus.max_shared_pool_size reached)
+		 */
+		int adaptiveConnectionManagementFlag =
+			AdaptiveConnectionManagementFlag(list_length(workerPool->sessionList));
+		connectionFlags |= adaptiveConnectionManagementFlag;
 
 		/* open a new connection to the worker */
 		MultiConnection *connection = StartNodeUserDatabaseConnection(connectionFlags,
@@ -2589,45 +2625,6 @@ ManageWorkerPool(WorkerPool *workerPool)
 		/* immediately run the state machine to handle potential failure */
 		ConnectionStateMachine(session);
 	}
-
-	INSTR_TIME_SET_CURRENT(workerPool->lastConnectionOpenTime);
-	execution->rebuildWaitEventSet = true;
-}
-
-
-/*
- * ShouldWaitForConnection returns true if the workerPool should wait to
- * get the next connection until one slot is empty within
- * citus.max_shared_pool_size on the worker. Note that, if there is an
- * empty slot, the connection will not wait anyway.
- */
-static bool
-ShouldWaitForConnection(WorkerPool *workerPool)
-{
-	if (list_length(workerPool->sessionList) == 0)
-	{
-		/*
-		 * We definitely need at least 1 connection to finish the execution.
-		 * All single shard queries hit here with the default settings.
-		 */
-		return true;
-	}
-
-	if (list_length(workerPool->sessionList) < MaxCachedConnectionsPerWorker)
-	{
-		/*
-		 * Until this session caches MaxCachedConnectionsPerWorker connections,
-		 * this might lead some optional connections to be considered as non-optional
-		 * when MaxCachedConnectionsPerWorker > 1.
-		 *
-		 * However, once the session caches MaxCachedConnectionsPerWorker (which is
-		 * the second transaction executed in the session), Citus would utilize the
-		 * cached connections as much as possible.
-		 */
-		return true;
-	}
-
-	return false;
 }
 
 

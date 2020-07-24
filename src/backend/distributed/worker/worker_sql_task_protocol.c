@@ -2,7 +2,7 @@
  *
  * worker_sql_task_protocol.c
  *
- * Routines for executing SQL tasks during task-tracker execution.
+ * Routines for executing SQL tasks.
  *
  * Copyright (c) Citus Data, Inc.
  *

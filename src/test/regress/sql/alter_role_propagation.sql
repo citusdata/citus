@@ -1,4 +1,5 @@
 CREATE SCHEMA alter_role;
+CREATE SCHEMA ",CitUs,.TeeN!?";
 
 -- test if the passowrd of the extension owner can be upgraded
 ALTER ROLE CURRENT_USER PASSWORD 'password123' VALID UNTIL 'infinity';
@@ -35,11 +36,22 @@ SELECT run_command_on_workers('SHOW enable_indexonlyscan');
 ALTER ROLE CURRENT_USER SET enable_hashagg TO FALSE;
 SELECT run_command_on_workers('SHOW enable_hashagg');
 
+-- provide a list of values in a supported configuration
+ALTER ROLE CURRENT_USER SET search_path TO ",CitUs,.TeeN!?", alter_role, public;
+-- test user defined GUCs that appear to be a list, but instead a single string
+ALTER ROLE ALL SET public.myguc TO "Hello, World";
+
+-- test for configuration values that should not be downcased even when unquoted
+ALTER ROLE CURRENT_USER SET lc_messages TO 'C';
+
 -- add worker and check all settings are copied
 SELECT 1 FROM master_add_node('localhost', :worker_1_port);
 SELECT run_command_on_workers('SHOW enable_hashjoin');
 SELECT run_command_on_workers('SHOW enable_indexonlyscan');
 SELECT run_command_on_workers('SHOW enable_hashagg');
+SELECT run_command_on_workers('SHOW search_path');
+SELECT run_command_on_workers('SHOW lc_messages');
+SELECT run_command_on_workers('SHOW public.myguc');
 
 -- reset to default values
 ALTER ROLE CURRENT_USER RESET enable_hashagg;
@@ -70,4 +82,4 @@ SELECT run_command_on_workers('SHOW enable_hashjoin');
 ALTER ROLE ALL RESET enable_hashjoin;
 SELECT run_command_on_workers('SHOW enable_hashjoin');
 
-DROP SCHEMA alter_role CASCADE;
+DROP SCHEMA alter_role, ",CitUs,.TeeN!?" CASCADE;

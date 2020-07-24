@@ -805,12 +805,10 @@ CREATE MATERIALIZED VIEW mv_articles_hash_empty AS
 SELECT * FROM mv_articles_hash_empty;
 
 
--- fast-path router planner/executor is enabled for task-tracker executor
 SELECT id
 	FROM articles_hash
 	WHERE author_id = 1;
 
--- insert query is router plannable even under task-tracker
 INSERT INTO articles_hash VALUES (51, 1, 'amateus', 1814), (52, 1, 'second amateus', 2824);
 
 -- verify insert is successfull (not router plannable and executable)

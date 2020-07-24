@@ -71,8 +71,6 @@
  *  There are also a few limitations/trade-offs that are worth mentioning.
  *  - The local execution on multiple shards might be slow because the execution
  *  has to happen one task at a time (e.g., no parallelism).
- *  - The local execution cannot be mixed with the executors other than adaptive,
- *  namely task-tracker executor.
  *  - Related with the previous item, COPY command cannot be mixed with local
  *  execution in a transaction. The implication of that is any part of INSERT..SELECT
  *  via coordinator cannot happen via the local execution.
