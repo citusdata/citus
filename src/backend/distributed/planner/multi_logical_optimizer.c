@@ -3304,7 +3304,12 @@ WorkerAggregateExpressionList(Aggref *originalAggregate,
 
 			if (list_length(originalAggregate->args) == 1)
 			{
-				/* Single aggregation argument. Append 'arg' to worker_partial_agg(agg, arg) */
+				/*
+				 * Single argument case, append 'arg' to worker_partial_agg(agg, arg).
+				 * We don't wrap single argument in a row expression because
+				 * it has performance implications to unwrap arguments on each
+				 * SFUNC invocation.
+				 */
 				TargetEntry *newArg =
 					copyObject((TargetEntry *) linitial(originalAggregate->args));
 				newArg->resno++;
@@ -3313,10 +3318,10 @@ WorkerAggregateExpressionList(Aggref *originalAggregate,
 			else
 			{
 				/*
-				 * Aggregation on workers assumes a single aggregation parameter. To still be
-				 * able to handle multiple paramters, we combine all parameters into a single row
-				 * expression.
-				 * Append 'ROW(...args)' to worker_partial_agg(agg, ROW(...args))
+				 * Aggregation on workers assumes a single aggregation parameter.
+				 * To still be able to handle multiple parameters, we combine
+				 * parameters into a single row expression, i.e., append 'ROW(...args)'
+				 * to worker_partial_agg(agg, ROW(...args)).
 				 */
 				RowExpr *rowExpr = makeNode(RowExpr);
 				rowExpr->row_typeid = RECORDOID;

@@ -39,19 +39,22 @@ PG_FUNCTION_INFO_V1(coord_combine_agg_ffunc);
 
 /*
  * Holds information describing the structure of aggregation arguments
- * and helps to efficiently handle both single arguments and multiple
+ * and helps to efficiently handle both a single argument and multiple
  * arguments wrapped in a tuple/record. It exploits the fact that
  * aggregation argument types do not change between subsequent
  * calls to SFUNC.
  */
 typedef struct AggregationArgumentContext
 {
+	/* immutable fields */
 	int argumentCount;
-	Datum *values;
-	bool *nulls;
 	bool isTuple;
 	TupleDesc tupleDesc;
+
+	/* mutable fields */
 	HeapTuple tuple;
+	Datum *values;
+	bool *nulls;
 } AggregationArgumentContext;
 
 /*
@@ -76,16 +79,16 @@ static HeapTuple GetTypeForm(Oid oid, Form_pg_type *form);
 static void * pallocInAggContext(FunctionCallInfo fcinfo, size_t size);
 static void aclcheckAggregate(ObjectType objectType, Oid userOid, Oid funcOid);
 static Datum GetAggInitVal(Datum textInitVal, Oid transtype);
-static void InitializeStypeBox(FunctionCallInfo fcinfo, StypeBox *box, HeapTuple aggTuple,
-							   Oid transtype,
+static void InitializeStypeBox(FunctionCallInfo fcinfo, StypeBox *box,
+							   HeapTuple aggTuple, Oid transtype,
 							   AggregationArgumentContext *aggregationArgumentContext);
 static StypeBox * TryCreateStypeBoxFromFcinfoAggref(FunctionCallInfo fcinfo);
 static AggregationArgumentContext * CreateAggregationArgumentContext(FunctionCallInfo
 																	 fcinfo,
 																	 int argumentIndex);
 static void ExtractAggregationValues(FunctionCallInfo fcinfo, int argumentIndex,
-									 AggregationArgumentContext *
-									 aggregationArgumentContext);
+									 AggregationArgumentContext
+									 *aggregationArgumentContext);
 static void HandleTransition(StypeBox *box, FunctionCallInfo fcinfo,
 							 FunctionCallInfo innerFcinfo);
 static void HandleStrictUninit(StypeBox *box, FunctionCallInfo fcinfo, Datum value);
@@ -279,8 +282,9 @@ TryCreateStypeBoxFromFcinfoAggref(FunctionCallInfo fcinfo)
 
 
 /*
- * Creates an AggregationArgumentContext tailored to handling the aggregation
- * of input arguments identical to type at 'argumentIndex' in 'fcinfo'.
+ * CreateAggregationArgumentContext creates an AggregationArgumentContext tailored
+ * to handling the aggregation of input arguments identical to type at
+ * 'argumentIndex' in 'fcinfo'.
  */
 static AggregationArgumentContext *
 CreateAggregationArgumentContext(FunctionCallInfo fcinfo, int argumentIndex)
@@ -288,35 +292,35 @@ CreateAggregationArgumentContext(FunctionCallInfo fcinfo, int argumentIndex)
 	AggregationArgumentContext *aggregationArgumentContext =
 		pallocInAggContext(fcinfo, sizeof(AggregationArgumentContext));
 
-	/* Check if input comes combined into tuple/record */
+	/* check if input comes combined into tuple/record */
 	if (RECORDOID == get_fn_expr_argtype(fcinfo->flinfo, argumentIndex))
 	{
-		/* Initialize context to handle aggregation argument combined into tuple/record */
+		/* initialize context to handle aggregation argument combined into tuple */
 		if (fcGetArgNull(fcinfo, argumentIndex))
 		{
 			ereport(ERROR, (errmsg("worker_partial_agg_sfunc: null record input"),
 							errhint("Elements of record may be null")));
 		}
 
-		/* Retrieve tuple header */
+		/* retrieve tuple header */
 		HeapTupleHeader tupleHeader = PG_GETARG_HEAPTUPLEHEADER(argumentIndex);
 
-		/* Extract type info from the tuple */
+		/* extract type info from the tuple */
 		TupleDesc tupleDesc =
 			lookup_rowtype_tupdesc(HeapTupleHeaderGetTypeId(tupleHeader),
 								   HeapTupleHeaderGetTypMod(tupleHeader));
 
-		/* Create a copy we can keep */
+		/* create a copy we can keep */
 		TupleDesc tupleDescCopy = pallocInAggContext(fcinfo, TupleDescSize(tupleDesc));
 		TupleDescCopy(tupleDescCopy, tupleDesc);
 		ReleaseTupleDesc(tupleDesc);
 
-		/* Build a HeapTuple control structure */
+		/* build a HeapTuple control structure */
 		HeapTuple tuple = pallocInAggContext(fcinfo, sizeof(HeapTupleData));
 		ItemPointerSetInvalid(&(tuple->t_self));
 		tuple->t_tableOid = InvalidOid;
 
-		/* Initialize context to handle multiple aggregation arguments */
+		/* initialize context to handle multiple aggregation arguments */
 		aggregationArgumentContext->argumentCount = tupleDescCopy->natts;
 
 		aggregationArgumentContext->values =
@@ -331,7 +335,7 @@ CreateAggregationArgumentContext(FunctionCallInfo fcinfo, int argumentIndex)
 	}
 	else
 	{
-		/* Initialize context to handle single aggregation argument */
+		/* initialize context to handle single aggregation argument */
 		aggregationArgumentContext->argumentCount = 1;
 		aggregationArgumentContext->values = pallocInAggContext(fcinfo, sizeof(Datum));
 		aggregationArgumentContext->nulls = pallocInAggContext(fcinfo, sizeof(bool));
@@ -345,8 +349,8 @@ CreateAggregationArgumentContext(FunctionCallInfo fcinfo, int argumentIndex)
 
 
 /*
- * Extract aggregation argument values into an AggregationArgumentContext. Values and
- * related null info are written to values and nulls arrays, respectively.
+ * ExtractAggregationValues extracts aggregation argument values and stores them in
+ * the mutable fields of AggregationArgumentContext.
  */
 static void
 ExtractAggregationValues(FunctionCallInfo fcinfo, int argumentIndex,
@@ -356,7 +360,7 @@ ExtractAggregationValues(FunctionCallInfo fcinfo, int argumentIndex,
 	{
 		if (fcGetArgNull(fcinfo, argumentIndex))
 		{
-			/* Handle null record input */
+			/* handle null record input */
 			for (int i = 0; i < aggregationArgumentContext->argumentCount; i++)
 			{
 				aggregationArgumentContext->values[i] = 0;
@@ -365,7 +369,7 @@ ExtractAggregationValues(FunctionCallInfo fcinfo, int argumentIndex,
 		}
 		else
 		{
-			/* Handle tuple/record input */
+			/* handle tuple/record input */
 			HeapTupleHeader tupleHeader =
 				DatumGetHeapTupleHeader(fcGetArgValue(fcinfo, argumentIndex));
 
@@ -376,8 +380,8 @@ ExtractAggregationValues(FunctionCallInfo fcinfo, int argumentIndex,
 				HeapTupleHeaderGetTypMod(tupleHeader) !=
 				aggregationArgumentContext->tupleDesc->tdtypmod)
 			{
-				ereport(ERROR, (errmsg(
-									"worker_partial_agg_sfunc received incompatible record")));
+				ereport(ERROR, (errmsg("worker_partial_agg_sfunc received "
+									   "incompatible record")));
 			}
 
 			aggregationArgumentContext->tuple->t_len =
@@ -385,7 +389,7 @@ ExtractAggregationValues(FunctionCallInfo fcinfo, int argumentIndex,
 
 			aggregationArgumentContext->tuple->t_data = tupleHeader;
 
-			/* Break down the tuple into fields */
+			/* break down the tuple into fields */
 			heap_deform_tuple(
 				aggregationArgumentContext->tuple,
 				aggregationArgumentContext->tupleDesc,
@@ -395,7 +399,7 @@ ExtractAggregationValues(FunctionCallInfo fcinfo, int argumentIndex,
 	}
 	else
 	{
-		/* Extract single argument value */
+		/* extract single argument value */
 		aggregationArgumentContext->values[0] = fcGetArgValue(fcinfo, argumentIndex);
 		aggregationArgumentContext->nulls[0] = fcGetArgNull(fcinfo, argumentIndex);
 	}
@@ -510,8 +514,8 @@ worker_partial_agg_sfunc(PG_FUNCTION_ARGS)
 
 		if (!TypecheckWorkerPartialAggArgType(fcinfo, box))
 		{
-			ereport(ERROR, (errmsg(
-								"worker_partial_agg_sfunc could not confirm type correctness")));
+			ereport(ERROR, (errmsg("worker_partial_agg_sfunc could not confirm type "
+								   "correctness")));
 		}
 	}
 	else
@@ -557,9 +561,9 @@ worker_partial_agg_sfunc(PG_FUNCTION_ARGS)
 
 		if (!box->valueInit)
 		{
-			/* For 'strict' transition functions, if the initial state value is null,
-			 * then at the first row with all-nonnull input values, the first argument
-			 * value replaces the state value.
+			/* For 'strict' transition functions, if the initial state value is null
+			 * then the first argument value of the first row with all-nonnull input
+			 * values replaces the state value.
 			 */
 			Datum stateValue = box->aggregationArgumentContext->values[0];
 			HandleStrictUninit(box, fcinfo, stateValue);
@@ -573,7 +577,7 @@ worker_partial_agg_sfunc(PG_FUNCTION_ARGS)
 		}
 	}
 
-	/* For an aggregate function with N parameters, corresponding SFUNC has N+1 parameters. */
+	/* if aggregate function has N parameters, corresponding SFUNC has N+1 */
 	InitFunctionCallInfoData(*innerFcinfo, &info,
 							 box->aggregationArgumentContext->argumentCount + 1,
 							 fcinfo->fncollation,
@@ -585,10 +589,9 @@ worker_partial_agg_sfunc(PG_FUNCTION_ARGS)
 		 argumentIndex < box->aggregationArgumentContext->argumentCount;
 		 argumentIndex++)
 	{
-		fcSetArgExt(
-			innerFcinfo, argumentIndex + 1,
-			box->aggregationArgumentContext->values[argumentIndex],
-			box->aggregationArgumentContext->nulls[argumentIndex]);
+		fcSetArgExt(innerFcinfo, argumentIndex + 1,
+					box->aggregationArgumentContext->values[argumentIndex],
+					box->aggregationArgumentContext->nulls[argumentIndex]);
 	}
 
 	HandleTransition(box, fcinfo, innerFcinfo);
@@ -904,18 +907,15 @@ TypecheckWorkerPartialAggArgType(FunctionCallInfo fcinfo, StypeBox *box)
 
 	if (box->aggregationArgumentContext->isTuple)
 	{
-		/* Check if record element types match aggregate input parameters */
+		/* check if record element types match aggregate input parameters */
 		for (aggregateArgIndex = 0; aggregateArgIndex < aggregateArgCount;
 			 aggregateArgIndex++)
 		{
-			argType = array_get_element(argtypes,
-										1, &aggregateArgIndex, -1, sizeof(Oid), true, 'i',
-										&argtypesNull);
+			argType = array_get_element(argtypes, 1, &aggregateArgIndex, -1, sizeof(Oid),
+										true, 'i', &argtypesNull);
 			Assert(!argtypesNull);
-
-			if (argType !=
-				box->aggregationArgumentContext->tupleDesc->attrs[aggregateArgIndex].
-				atttypid)
+			TupleDesc tupleDesc = box->aggregationArgumentContext->tupleDesc;
+			if (argType != tupleDesc->attrs[aggregateArgIndex].atttypid)
 			{
 				return false;
 			}
@@ -925,9 +925,8 @@ TypecheckWorkerPartialAggArgType(FunctionCallInfo fcinfo, StypeBox *box)
 	}
 	else
 	{
-		argType =
-			array_get_element(argtypes, 1, &aggregateArgIndex, -1, sizeof(Oid), true, 'i',
-							  &argtypesNull);
+		argType = array_get_element(argtypes, 1, &aggregateArgIndex, -1, sizeof(Oid),
+									true, 'i', &argtypesNull);
 		Assert(!argtypesNull);
 
 		return exprType((Node *) aggarg->expr) == DatumGetObjectId(argType);
