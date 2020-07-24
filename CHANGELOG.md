@@ -1,3 +1,11 @@
+### citus v9.3.5 (July 24, 2020) ###
+
+* Fixes `ALTER TABLE IF EXISTS SET SCHEMA` with non-existing table bug
+
+* Fixes `CREATE INDEX CONCURRENTLY` with no index name on a postgres table bug
+
+* Fixes a crash because of overflow in partition id with certain compile flags
+
 ### citus v9.3.4 (July 21, 2020) ###
 
 * Fixes a bug that could cause crashes with certain compile flags
