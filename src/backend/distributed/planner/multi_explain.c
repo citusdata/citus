@@ -272,7 +272,16 @@ ExplainSubPlans(DistributedPlan *distributedPlan, ExplainState *es)
 		ParamListInfo params = NULL;
 		char *queryString = NULL;
 		instr_time planduration;
+		#if PG_VERSION_NUM >= PG_VERSION_13
 
+		BufferUsage bufusage_start,
+					bufusage;
+
+		if (es->buffers)
+		{
+			bufusage_start = pgBufferUsage;
+		}
+		#endif
 		if (es->format == EXPLAIN_FORMAT_TEXT)
 		{
 			char *resultId = GenerateResultId(planId, subPlan->subPlanId);
@@ -314,7 +323,18 @@ ExplainSubPlans(DistributedPlan *distributedPlan, ExplainState *es)
 
 		INSTR_TIME_SET_ZERO(planduration);
 
-		ExplainOnePlanCompat(plan, into, es, queryString, params, NULL, &planduration);
+		#if PG_VERSION_NUM >= PG_VERSION_13
+
+		/* calc differences of buffer counters. */
+		if (es->buffers)
+		{
+			memset(&bufusage, 0, sizeof(BufferUsage));
+			BufferUsageAccumDiff(&bufusage, &pgBufferUsage, &bufusage_start);
+		}
+		#endif
+
+		ExplainOnePlanCompat(plan, into, es, queryString, params, NULL, &planduration,
+							 (es->buffers ? &bufusage : NULL));
 
 		if (es->format == EXPLAIN_FORMAT_TEXT)
 		{
@@ -1123,6 +1143,15 @@ CitusExplainOneQuery(Query *query, int cursorOptions, IntoClause *into,
 	/* rest is copied from ExplainOneQuery() */
 	instr_time planstart,
 			   planduration;
+	#if PG_VERSION_NUM >= PG_VERSION_13
+	BufferUsage bufusage_start,
+				bufusage;
+
+	if (es->buffers)
+	{
+		bufusage_start = pgBufferUsage;
+	}
+	#endif
 
 	INSTR_TIME_SET_CURRENT(planstart);
 
@@ -1132,9 +1161,19 @@ CitusExplainOneQuery(Query *query, int cursorOptions, IntoClause *into,
 	INSTR_TIME_SET_CURRENT(planduration);
 	INSTR_TIME_SUBTRACT(planduration, planstart);
 
+	#if PG_VERSION_NUM >= PG_VERSION_13
+
+	/* calc differences of buffer counters. */
+	if (es->buffers)
+	{
+		memset(&bufusage, 0, sizeof(BufferUsage));
+		BufferUsageAccumDiff(&bufusage, &pgBufferUsage, &bufusage_start);
+	}
+	#endif
+
 	/* run it (if needed) and produce output */
 	ExplainOnePlanCompat(plan, into, es, queryString, params, queryEnv,
-						 &planduration);
+						 &planduration, (es->buffers ? &bufusage : NULL));
 }
 
 
@@ -1454,7 +1493,13 @@ ExplainOneQuery(Query *query, int cursorOptions,
 	{
 		instr_time	planstart,
 					planduration;
+		#if PG_VERSION_NUM >= PG_VERSION_13
+		BufferUsage bufusage_start,
+			    bufusage;
 
+		if (es->buffers)
+			bufusage_start = pgBufferUsage;
+		#endif
 		INSTR_TIME_SET_CURRENT(planstart);
 
 		/* plan the query */
@@ -1463,9 +1508,18 @@ ExplainOneQuery(Query *query, int cursorOptions,
 		INSTR_TIME_SET_CURRENT(planduration);
 		INSTR_TIME_SUBTRACT(planduration, planstart);
 
+		#if PG_VERSION_NUM >= PG_VERSION_13
+
+		/* calc differences of buffer counters. */
+		if (es->buffers)
+		{
+			memset(&bufusage, 0, sizeof(BufferUsage));
+			BufferUsageAccumDiff(&bufusage, &pgBufferUsage, &bufusage_start);
+		}
+		#endif
 		/* run it (if needed) and produce output */
 		ExplainOnePlanCompat(plan, into, es, queryString, params, queryEnv,
-					   &planduration);
+					   &planduration, (es->buffers ? &bufusage : NULL));
 	}
 }
 

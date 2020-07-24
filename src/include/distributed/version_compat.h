@@ -36,8 +36,8 @@
 #define standard_planner_compat(a, c, d) standard_planner(a, NULL, c, d)
 #define getOwnedSequencesCompat(a, b) getOwnedSequences(a)
 #define CMDTAG_SELECT_COMPAT CMDTAG_SELECT
-#define ExplainOnePlanCompat(a, b, c, d, e, f, g) ExplainOnePlan(a, b, c, d, e, f, g, \
-																 NULL)
+#define ExplainOnePlanCompat(a, b, c, d, e, f, g, h) ExplainOnePlan(a, b, c, d, e, f, g, \
+																	h)
 #define SetListCellPtr(a, b) ((a)->ptr_value = (b))
 #define RangeTableEntryFromNSItem(a) ((a)->p_rte)
 #define QueryCompletionCompat QueryCompletion
@@ -49,7 +49,7 @@
 #define standard_planner_compat(a, c, d) standard_planner(a, c, d)
 #define CMDTAG_SELECT_COMPAT "SELECT"
 #define getOwnedSequencesCompat(a, b) getOwnedSequences(a, b)
-#define ExplainOnePlanCompat(a, b, c, d, e, f, g) ExplainOnePlan(a, b, c, d, e, f, g)
+#define ExplainOnePlanCompat(a, b, c, d, e, f, g, h) ExplainOnePlan(a, b, c, d, e, f, g)
 #define SetListCellPtr(a, b) ((a)->data.ptr_value = (b))
 #define RangeTableEntryFromNSItem(a) (a)
 #define QueryCompletionCompat char
