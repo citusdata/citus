@@ -27,6 +27,7 @@ extern void SetTaskQueryIfShouldLazyDeparse(Task *task, Query *query);
 extern void SetTaskQueryString(Task *task, char *queryString);
 extern void SetTaskQueryStringList(Task *task, List *queryStringList);
 extern char * TaskQueryString(Task *task);
+extern char * TaskQueryStringAtIndex(Task *task, int index);
 extern bool UpdateRelationsToLocalShardTables(Node *node, List *relationShardList);
 extern int GetTaskQueryType(Task *task);
 

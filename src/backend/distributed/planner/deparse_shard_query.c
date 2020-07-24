@@ -514,6 +514,25 @@ GetTaskQueryType(Task *task)
 
 
 /*
+ * TaskQueryStringAtIndex returns query at given index among the possibly
+ * multiple queries that a task can have.
+ */
+char *
+TaskQueryStringAtIndex(Task *task, int index)
+{
+	Assert(index < task->queryCount);
+
+	int taskQueryType = GetTaskQueryType(task);
+	if (taskQueryType == TASK_QUERY_TEXT_LIST)
+	{
+		return list_nth(task->taskQuery.data.queryStringList, index);
+	}
+
+	return TaskQueryString(task);
+}
+
+
+/*
  * TaskQueryString generates task query string text if missing.
  *
  * For performance reasons, the queryString is generated lazily. For example

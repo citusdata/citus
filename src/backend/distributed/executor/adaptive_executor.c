@@ -618,6 +618,8 @@ static TaskPlacementExecution * PopAssignedPlacementExecution(WorkerSession *ses
 static TaskPlacementExecution * PopUnassignedPlacementExecution(WorkerPool *workerPool);
 static bool StartPlacementExecutionOnSession(TaskPlacementExecution *placementExecution,
 											 WorkerSession *session);
+static bool SendNextQuery(TaskPlacementExecution *placementExecution,
+						  WorkerSession *session);
 static void ConnectionStateMachine(WorkerSession *session);
 static void HandleMultiConnectionSuccess(WorkerSession *session);
 static bool HasAnyConnectionFailure(WorkerPool *workerPool);
@@ -709,6 +711,11 @@ AdaptiveExecutor(CitusScanState *scanState)
 
 	if (RequestedForExplainAnalyze(scanState))
 	{
+		/*
+		 * We use multiple queries per task in EXPLAIN ANALYZE which need to
+		 * be part of the same transaction.
+		 */
+		UseCoordinatedTransaction();
 		taskList = ExplainAnalyzeTaskList(taskList, defaultTupleDest, tupleDescriptor,
 										  paramListInfo);
 	}
@@ -3281,6 +3288,32 @@ TransactionStateMachine(WorkerSession *session)
 					break;
 				}
 
+				/* if this is a multi-query task, send the next query */
+				if (placementExecution->queryIndex < task->queryCount)
+				{
+					bool querySent = SendNextQuery(placementExecution, session);
+					if (!querySent)
+					{
+						/* no need to continue, connection is lost */
+						Assert(session->connection->connectionState ==
+							   MULTI_CONNECTION_LOST);
+
+						return;
+					}
+
+					/*
+					 * At this point the query might be just in pgconn buffers. We
+					 * need to wait until it becomes writeable to actually send
+					 * the query.
+					 */
+					UpdateConnectionWaitFlags(session,
+											  WL_SOCKET_WRITEABLE | WL_SOCKET_READABLE);
+
+					transaction->transactionState = REMOTE_TRANS_SENT_COMMAND;
+
+					break;
+				}
+
 				shardCommandExecution->gotResults = true;
 				transaction->transactionState = REMOTE_TRANS_CLEARING_RESULTS;
 				break;
@@ -3454,7 +3487,7 @@ PopUnassignedPlacementExecution(WorkerPool *workerPool)
 
 
 /*
- * StartPlacementExecutionOnSession gets a TaskPlacementExecition and
+ * StartPlacementExecutionOnSession gets a TaskPlacementExecution and
  * WorkerSession, the task's query is sent to the worker via the session.
  *
  * The function does some bookkeeping such as associating the placement
@@ -3470,17 +3503,13 @@ StartPlacementExecutionOnSession(TaskPlacementExecution *placementExecution,
 {
 	WorkerPool *workerPool = session->workerPool;
 	DistributedExecution *execution = workerPool->distributedExecution;
-	ParamListInfo paramListInfo = execution->paramListInfo;
 	MultiConnection *connection = session->connection;
 	ShardCommandExecution *shardCommandExecution =
 		placementExecution->shardCommandExecution;
-	bool binaryResults = shardCommandExecution->binaryResults;
 	Task *task = shardCommandExecution->task;
 	ShardPlacement *taskPlacement = placementExecution->shardPlacement;
 	List *placementAccessList = PlacementAccessListForTask(task, taskPlacement);
-	int querySent = 0;
 
-	char *queryString = TaskQueryString(task);
 
 	if (execution->transactionProperties->useRemoteTransactionBlocks !=
 		TRANSACTION_BLOCKS_DISALLOWED)
@@ -3492,11 +3521,7 @@ StartPlacementExecutionOnSession(TaskPlacementExecution *placementExecution,
 		AssignPlacementListToConnection(placementAccessList, connection);
 	}
 
-
-	/* one more command is sent over the session */
-	session->commandsSent++;
-
-	if (session->commandsSent == 1)
+	if (session->commandsSent == 0)
 	{
 		/* first time we send a command, consider the connection used (not unused) */
 		workerPool->unusedConnectionCount--;
@@ -3506,6 +3531,38 @@ StartPlacementExecutionOnSession(TaskPlacementExecution *placementExecution,
 	workerPool->idleConnectionCount--;
 	session->currentTask = placementExecution;
 	placementExecution->executionState = PLACEMENT_EXECUTION_RUNNING;
+
+	bool querySent = SendNextQuery(placementExecution, session);
+	if (querySent)
+	{
+		session->commandsSent++;
+	}
+
+	return querySent;
+}
+
+
+/*
+ * SendNextQuery sends the next query for placementExecution on the given
+ * session.
+ */
+static bool
+SendNextQuery(TaskPlacementExecution *placementExecution,
+			  WorkerSession *session)
+{
+	WorkerPool *workerPool = session->workerPool;
+	DistributedExecution *execution = workerPool->distributedExecution;
+	MultiConnection *connection = session->connection;
+	ShardCommandExecution *shardCommandExecution =
+		placementExecution->shardCommandExecution;
+	bool binaryResults = shardCommandExecution->binaryResults;
+	Task *task = shardCommandExecution->task;
+	ParamListInfo paramListInfo = execution->paramListInfo;
+	int querySent = 0;
+	uint32 queryIndex = placementExecution->queryIndex;
+
+	Assert(queryIndex < task->queryCount);
+	char *queryString = TaskQueryStringAtIndex(task, queryIndex);
 
 	if (paramListInfo != NULL && !task->parametersInQueryStringResolved)
 	{
@@ -3659,6 +3716,12 @@ ReceiveResults(WorkerSession *session, bool storeRows)
 		}
 
 		uint32 queryIndex = placementExecution->queryIndex;
+		if (queryIndex >= task->queryCount)
+		{
+			ereport(ERROR, (errmsg("unexpected query index while processing"
+								   " query results")));
+		}
+
 		TupleDesc tupleDescriptor = tupleDest->tupleDescForQuery(tupleDest, queryIndex);
 		if (tupleDescriptor == NULL)
 		{
