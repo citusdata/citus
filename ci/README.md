@@ -61,6 +61,12 @@ below steps. First make sure these two things are the case:
    "squash and merge" on Github later. Otherwise you will certainly get
    duplicate commits and possibly get merge conflicts with enterprise again.
 
+Note that:
+If at any steps, `community/$PR_BRANCH` becomes outdated, you should NOT rebase
+your `community/$PR_BRANCH` onto `community/master`.
+Instead, you should merge `community/master` to `community/$PR_BRANCH` to prevent
+duplicate commits and to make commit history clear.
+
 Once that's done, you need to create a merged version of your PR branch on the
 enterprise repo. For example if `community` is added as a remote in
 your enterprise repo, you can do the following:
