@@ -634,7 +634,7 @@ NodeGroupHasShardPlacements(int32 groupId, bool onlyConsiderActivePlacements)
 	ScanKeyData scanKey[2];
 
 	Relation pgPlacement = table_open(DistPlacementRelationId(),
-									 AccessShareLock);
+									  AccessShareLock);
 
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_placement_groupid,
 				BTEqualStrategyNumber, F_INT4EQ, Int32GetDatum(groupId));

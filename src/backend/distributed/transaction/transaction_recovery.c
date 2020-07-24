@@ -95,7 +95,8 @@ LogTransactionRecord(int32 groupId, char *transactionName)
 	values[Anum_pg_dist_transaction_gid - 1] = CStringGetTextDatum(transactionName);
 
 	/* open transaction relation and insert new tuple */
-	Relation pgDistTransaction = table_open(DistTransactionRelationId(), RowExclusiveLock);
+	Relation pgDistTransaction = table_open(DistTransactionRelationId(),
+											RowExclusiveLock);
 
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistTransaction);
 	HeapTuple heapTuple = heap_form_tuple(tupleDescriptor, values, isNulls);
@@ -172,7 +173,7 @@ RecoverWorkerTransactions(WorkerNode *workerNode)
 
 	/* take table lock first to avoid running concurrently */
 	Relation pgDistTransaction = table_open(DistTransactionRelationId(),
-										   ShareUpdateExclusiveLock);
+											ShareUpdateExclusiveLock);
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistTransaction);
 
 	/*

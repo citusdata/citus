@@ -266,7 +266,8 @@ StartPortalForQueryExecution(const char *queryString)
 	/* don't display the portal in pg_cursors, it is for internal use only */
 	portal->visible = false;
 
-	PortalDefineQuerySelectCompat(portal, NULL, queryString, list_make1(queryPlan), NULL);
+	PortalDefineQuery(portal, NULL, queryString, CMDTAG_SELECT_COMPAT, list_make1(
+						  queryPlan), NULL);
 	int eflags = 0;
 	PortalStart(portal, NULL, eflags, GetActiveSnapshot());
 

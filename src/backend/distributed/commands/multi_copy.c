@@ -2821,8 +2821,8 @@ ProcessCopyStmt(CopyStmt *copyStatement, QueryCompletionCompat *completionTag, c
 
 		/* consider using RangeVarGetRelidExtended to check perms before locking */
 		Relation copiedRelation = table_openrv(copyStatement->relation,
-											  isFrom ? RowExclusiveLock :
-											  AccessShareLock);
+											   isFrom ? RowExclusiveLock :
+											   AccessShareLock);
 
 		bool isCitusRelation = IsCitusTable(RelationGetRelid(copiedRelation));
 

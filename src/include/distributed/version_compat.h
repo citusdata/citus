@@ -34,10 +34,8 @@
 #define pg_plan_query_compat(p, q, c, b) pg_plan_query(p, q, c, b)
 #define planner_compat(p, c, b) planner(p, NULL, c, b)
 #define standard_planner_compat(a, c, d) standard_planner(a, NULL, c, d)
-#define PortalDefineQuerySelectCompat(a, b, c, d, e) PortalDefineQuery(a, b, c, \
-																	   CMDTAG_SELECT, d, \
-																	   e)
 #define getOwnedSequencesCompat(a, b) getOwnedSequences(a)
+#define CMDTAG_SELECT_COMPAT CMDTAG_SELECT
 #define ExplainOnePlanCompat(a, b, c, d, e, f, g) ExplainOnePlan(a, b, c, d, e, f, g, \
 																 NULL)
 #define varoattno varattnosyn
@@ -51,8 +49,7 @@
 #define pg_plan_query_compat(p, q, c, b) pg_plan_query(p, c, b)
 #define planner_compat(p, c, b) planner(p, c, b)
 #define standard_planner_compat(a, c, d) standard_planner(a, c, d)
-#define PortalDefineQuerySelectCompat(a, b, c, d, e) PortalDefineQuery(a, b, c, "SELECT", \
-																	   d, e)
+#define CMDTAG_SELECT_COMPAT "SELECT"
 #define getOwnedSequencesCompat(a, b) getOwnedSequences(a, b)
 #define ExplainOnePlanCompat(a, b, c, d, e, f, g) ExplainOnePlan(a, b, c, d, e, f, g)
 #define Set_ptr_value(a, b) ((a)->data.ptr_value = (b))
