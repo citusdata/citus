@@ -1438,7 +1438,7 @@ MasterExtendedOpNode(MultiExtendedOp *originalOpNode,
 			 */
 			Var *column = makeVarFromTargetEntry(masterTableId, originalTargetEntry);
 			column->varattno = walkerContext.columnId;
-			column->varoattno = walkerContext.columnId;
+			column->varattnosyn = walkerContext.columnId;
 			walkerContext.columnId++;
 
 			if (column->vartype == RECORDOID || column->vartype == RECORDARRAYOID)
@@ -1673,9 +1673,9 @@ MasterAggregateExpression(Aggref *originalAggregate,
 			}
 
 			columnToUpdate->varno = masterTableId;
-			columnToUpdate->varnoold = masterTableId;
+			columnToUpdate->varnosyn = masterTableId;
 			columnToUpdate->varattno = startColumnCount + columnIndex;
-			columnToUpdate->varoattno = startColumnCount + columnIndex;
+			columnToUpdate->varattnosyn = startColumnCount + columnIndex;
 		}
 
 		/* we added that many columns */

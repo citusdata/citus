@@ -38,8 +38,6 @@
 #define CMDTAG_SELECT_COMPAT CMDTAG_SELECT
 #define ExplainOnePlanCompat(a, b, c, d, e, f, g) ExplainOnePlan(a, b, c, d, e, f, g, \
 																 NULL)
-#define varoattno varattnosyn
-#define varnoold varnosyn
 #define Set_ptr_value(a, b) ((a)->ptr_value = (b))
 #define RangeTableEntryFromNSItem(a) ((a)->p_rte)
 #define QueryCompletionCompat QueryCompletion
@@ -55,6 +53,8 @@
 #define Set_ptr_value(a, b) ((a)->data.ptr_value = (b))
 #define RangeTableEntryFromNSItem(a) (a)
 #define QueryCompletionCompat char
+#define varattnosyn varoattno
+#define varnosyn varnoold 
 #endif
 #if PG_VERSION_NUM >= PG_VERSION_12
 

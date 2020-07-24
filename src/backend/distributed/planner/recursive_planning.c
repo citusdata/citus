@@ -1681,8 +1681,8 @@ BuildReadIntermediateResultsQuery(List *targetEntryList, List *columnAliasList,
 		functionColumnVar->vartypmod = columnTypMod;
 		functionColumnVar->varcollid = columnCollation;
 		functionColumnVar->varlevelsup = 0;
-		functionColumnVar->varnoold = 1;
-		functionColumnVar->varoattno = columnNumber;
+		functionColumnVar->varnosyn = 1;
+		functionColumnVar->varattnosyn = columnNumber;
 		functionColumnVar->location = -1;
 
 		TargetEntry *newTargetEntry = makeNode(TargetEntry);

@@ -514,7 +514,7 @@ CreateTargetListForCombineQuery(List *targetList)
 
 		Var *column = makeVarFromTargetEntry(masterTableId, originalTargetEntry);
 		column->varattno = columnId;
-		column->varoattno = columnId;
+		column->varattnosyn = columnId;
 		columnId++;
 
 		if (column->vartype == RECORDOID || column->vartype == RECORDARRAYOID)

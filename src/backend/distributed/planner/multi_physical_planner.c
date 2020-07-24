@@ -1086,8 +1086,8 @@ QueryJoinTree(MultiNode *multiNode, List *dependentJobList, List **rangeTableLis
 				UpdateColumnAttributes(column, *rangeTableList, dependentJobList);
 
 				/* adjust our column old attributes for partition pruning to work */
-				column->varnoold = column->varno;
-				column->varoattno = column->varattno;
+				column->varnosyn = column->varno;
+				column->varattnosyn = column->varattno;
 			}
 
 			/* make AND clauses explicit after fixing them */
@@ -1561,8 +1561,8 @@ UpdateAllColumnAttributes(Node *columnContainer, List *rangeTableList,
 static void
 UpdateColumnAttributes(Var *column, List *rangeTableList, List *dependentJobList)
 {
-	Index originalTableId = column->varnoold;
-	AttrNumber originalColumnId = column->varoattno;
+	Index originalTableId = column->varnosyn;
+	AttrNumber originalColumnId = column->varattnosyn;
 
 	/* find the new table identifier */
 	Index newTableId = NewTableId(originalTableId, rangeTableList);
@@ -1646,8 +1646,8 @@ NewColumnId(Index originalTableId, AttrNumber originalColumnId,
 		 * Check against the *old* values for this column, as the new values
 		 * would have been updated already.
 		 */
-		if (column->varnoold == originalTableId &&
-			column->varoattno == originalColumnId)
+		if (column->varnosyn == originalTableId &&
+			column->varattnosyn == originalColumnId)
 		{
 			newColumnId = columnIndex;
 			break;
@@ -2977,8 +2977,8 @@ AnchorRangeTableIdList(List *rangeTableList, List *baseRangeTableIdList)
 
 
 /*
- * AdjustColumnOldAttributes adjust the old tableId (varnoold) and old columnId
- * (varoattno), and sets them equal to the new values. We need this adjustment
+ * AdjustColumnOldAttributes adjust the old tableId (varnosyn) and old columnId
+ * (varattnosyn), and sets them equal to the new values. We need this adjustment
  * for partition pruning where we compare these columns with partition columns
  * loaded from system catalogs. Since columns loaded from system catalogs always
  * have the same old and new values, we also need to adjust column values here.
@@ -2992,8 +2992,8 @@ AdjustColumnOldAttributes(List *expressionList)
 	foreach(columnCell, columnList)
 	{
 		Var *column = (Var *) lfirst(columnCell);
-		column->varnoold = column->varno;
-		column->varoattno = column->varattno;
+		column->varnosyn = column->varno;
+		column->varattnosyn = column->varattno;
 	}
 }
 

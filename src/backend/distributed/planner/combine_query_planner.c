@@ -93,7 +93,7 @@ RemoteScanTargetList(List *workerTargetList)
 
 		Var *remoteScanColumn = makeVarFromTargetEntry(tableId, workerTargetEntry);
 		remoteScanColumn->varattno = columnId;
-		remoteScanColumn->varoattno = columnId;
+		remoteScanColumn->varattnosyn = columnId;
 		columnId++;
 
 		if (remoteScanColumn->vartype == RECORDOID || remoteScanColumn->vartype ==
