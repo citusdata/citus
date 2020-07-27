@@ -53,7 +53,17 @@ enterprise-master, the check-merge-to-enterprise will fail. Say your branch name
 is `$PR_BRANCH`, we will refer to `$PR_BRANCH` on community as
 `community/$PR_BRANCH` and on enterprise as `enterprise/$PR_BRANCH`. If the
 job already passes, you are done, nothing further required! Otherwise follow the
-below steps. First make sure these two things are the case:
+below steps.
+
+IMPORTANT: Before continuing with the real steps make sure you have enabled
+`git rerere` ([docs](https://git-scm.com/docs/git-rerere), [very useful blog](https://medium.com/@porteneuve/fix-conflicts-only-once-with-git-rerere-7d116b2cec67#.3vui844dt)) in your global git config (you only have to do this once):
+
+```bash
+git config --global rerere.enabled true
+```
+
+After doing that we continue on to the real steps. First make sure these two
+things are the case:
 
 1. Get approval from your reviewer for `community/$PR_BRANCH`. Only follow the
    next steps after you are about to merge the branch to community master.
@@ -106,6 +116,72 @@ git merge "community/$PR_BRANCH"
 The subsequent PRs on community will be able to pass the
 `check-merge-to-enterprise` check as long as they don't have a conflict with
 `enterprise-master`.
+
+### What to do when your branch got outdated?
+
+So there's one issue that can occur. Your branch will become outdated with
+master and you have to make it up to date. There's two ways to do this using
+`git merge` or `git rebase`. As usual, `git merge` is a bit easier than `git
+rebase`, but clutters git history. This section will explain both. If you don't
+know which one makes the most sense, start with `git rebase`, if for whatever
+reason this doesn't work feel free to fall back to `git merge`.
+
+#### Updating both branches with `git rebase`
+
+In the community repo:
+
+```bash
+git checkout $PR_BRANCH
+git pull origin master --rebase
+git push --force-with-lease
+```
+
+In the enterprise repo:
+
+```bash
+git checkout $PR_BRANCH
+git fetch community
+git rebase community/$PR_BRANCH --preserve-merges
+```
+
+Automatic merge might have fail with the above command. However, because of `git
+rerere` it should have re-applied your original merge resolution. If this is
+indeed the case it should show something like this in the output of the previous
+command (note the `Resolved ...` line):
+```
+CONFLICT (content): Merge conflict in .circleci/config.yml
+Resolved '.circleci/config.yml' using previous resolution.
+Automatic merge failed; fix conflicts and then commit the result.
+Error redoing merge 79a899e5b243696fd1a2754d612ae2eca817cdc1
+```
+
+Confirm that the merge conflict is indeed resolved correctly. In that case you
+can do the following
+```bash
+# Add files that were conflicting
+git add "$(git diff --name-only --diff-filter=U)"
+git rebase --continue
+git push --force-with-lease
+```
+
+#### Updating both branches with `git merge`
+
+In the community repo:
+
+```bash
+git checkout $PR_BRANCH
+git pull origin master
+git push
+```
+
+In the enterprise repo:
+
+```bash
+git checkout $PR_BRANCH
+git fetch community
+git merge community/$PR_BRANCH
+git push
+```
 
 ## `check_sql_snapshots.sh`
 
