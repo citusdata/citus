@@ -34,9 +34,9 @@ CREATE TABLE column_constraint_table (
 	age int CONSTRAINT non_negative_age CHECK (age >= 0)
 );
 SELECT master_get_table_ddl_events('column_constraint_table');
-                                                       master_get_table_ddl_events
+                                                        master_get_table_ddl_events
 ---------------------------------------------------------------------
- CREATE TABLE public.column_constraint_table (first_name text, last_name text, age integer, CONSTRAINT non_negative_age CHECK (age >= 0))
+ CREATE TABLE public.column_constraint_table (first_name text, last_name text, age integer, CONSTRAINT non_negative_age CHECK ((age >= 0)))
  ALTER TABLE public.column_constraint_table OWNER TO postgres
 (2 rows)
 
@@ -48,10 +48,46 @@ CREATE TABLE table_constraint_table (
 	CONSTRAINT bids_ordered CHECK (min_bid > max_bid)
 );
 SELECT master_get_table_ddl_events('table_constraint_table');
-                                                                      master_get_table_ddl_events
+                                                                       master_get_table_ddl_events
 ---------------------------------------------------------------------
- CREATE TABLE public.table_constraint_table (bid_item_id bigint, min_bid numeric NOT NULL, max_bid numeric NOT NULL, CONSTRAINT bids_ordered CHECK (min_bid > max_bid))
+ CREATE TABLE public.table_constraint_table (bid_item_id bigint, min_bid numeric NOT NULL, max_bid numeric NOT NULL, CONSTRAINT bids_ordered CHECK ((min_bid > max_bid)))
  ALTER TABLE public.table_constraint_table OWNER TO postgres
+(2 rows)
+
+-- tables with "simple" CHECK constraints should be able to be distributed
+CREATE TABLE check_constraint_table_1(
+	id int,
+	b boolean,
+	CHECK(b)
+);
+SELECT create_distributed_table('check_constraint_table_1', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT master_get_table_ddl_events('check_constraint_table_1');
+                                                 master_get_table_ddl_events
+---------------------------------------------------------------------
+ CREATE TABLE public.check_constraint_table_1 (id integer, b boolean, CONSTRAINT check_constraint_table_1_b_check CHECK (b))
+ ALTER TABLE public.check_constraint_table_1 OWNER TO postgres
+(2 rows)
+
+-- including hardcoded Booleans
+CREATE TABLE check_constraint_table_2(
+	id int CHECK(true)
+);
+SELECT create_distributed_table('check_constraint_table_2', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT master_get_table_ddl_events('check_constraint_table_2');
+                                            master_get_table_ddl_events
+---------------------------------------------------------------------
+ CREATE TABLE public.check_constraint_table_2 (id integer, CONSTRAINT check_constraint_table_2_check CHECK (true))
+ ALTER TABLE public.check_constraint_table_2 OWNER TO postgres
 (2 rows)
 
 -- default values are supported
@@ -152,10 +188,10 @@ where table_schema='public' and table_name like 'renamed_foreign_table_%' and co
 order by table_name;
           table_name          | column_name | data_type
 ---------------------------------------------------------------------
- renamed_foreign_table_610000 | rename_name | character
- renamed_foreign_table_610001 | rename_name | character
- renamed_foreign_table_610002 | rename_name | character
- renamed_foreign_table_610003 | rename_name | character
+ renamed_foreign_table_610008 | rename_name | character
+ renamed_foreign_table_610009 | rename_name | character
+ renamed_foreign_table_610010 | rename_name | character
+ renamed_foreign_table_610011 | rename_name | character
 (4 rows)
 
 \c - - :master_host :master_port
