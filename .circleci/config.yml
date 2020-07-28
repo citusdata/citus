@@ -6,7 +6,7 @@ orbs:
 jobs:
   build:
     docker:
-      - image: 'citus/extbuilder:latest'
+      - image: 'heisenberg302/extbuilder-13:latest'
     steps:
       - checkout
       - run:
@@ -81,6 +81,8 @@ jobs:
       - codecov/upload:
           flags: 'test_11,multi'
 
+
+
   test-11_check-van-mx:
     docker:
       - image: 'citus/exttester-11:latest'
@@ -153,6 +155,18 @@ jobs:
           name: 'Install and test postgres upgrade'
           command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext --target check-pg-upgrade --old-pg-version 11 --new-pg-version 12'
           no_output_timeout: 2m
+
+  test-12-13_check-pg-upgrade:
+    docker:
+      - image: 'heisenberg302/pgupgradetester:latest'
+    working_directory: /home/circleci/project
+    steps:
+      - attach_workspace:
+          at: .
+      - run:
+          name: 'Install and test postgres upgrade'
+          command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext --target check-pg-upgrade --old-pg-version 12 --new-pg-version 13'
+          no_output_timeout: 2m        
 
   test-12_check-multi:
     docker:
@@ -250,6 +264,82 @@ jobs:
            install-and-test-ext --target check-citus-upgrade-mixed --citus-pre-tar /install-pg11-citusv8.3.0.tar
           no_output_timeout: 2m
 
+  test-13_check-multi:
+    docker:
+      - image: 'heisenberg302/exttester-13:latest'
+    working_directory: /home/circleci/project
+    steps:
+      - attach_workspace:
+          at: .
+      - run:
+          name: 'Install and Test (check-multi)'
+          command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext check-multi'
+          no_output_timeout: 2m
+      - codecov/upload:
+          flags: 'test_13,multi'
+
+  test-13_check-van-mx:
+    docker:
+      - image: 'heisenberg302/exttester-13:latest'
+    working_directory: /home/circleci/project
+    steps:
+      - attach_workspace:
+          at: .
+      - run:
+          name: 'Install and Test (check-van-mx)'
+          command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext check-vanilla check-multi-mx'
+          no_output_timeout: 2m
+      - codecov/upload:
+          flags: 'test_13,vanilla,mx'
+  test-13_check-iso-work-fol:
+    docker:
+      - image: 'heisenberg302/exttester-13:latest'
+    working_directory: /home/circleci/project
+    steps:
+      - attach_workspace:
+           at: .
+      - run:
+          name: 'Install and Test (check-iso-work-fol)'
+          command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext check-isolation check-worker'
+          no_output_timeout: 2m
+      - codecov/upload:
+          flags: 'test_13,isolation,worker'
+  test-13_check-fol:
+    docker:
+      - image: 'heisenberg302/exttester-13:latest'
+    working_directory: /home/circleci/project
+    steps:
+      - attach_workspace:
+          at: .
+      - run:
+          name: 'Enable core dumps'
+          command: 'ulimit -c unlimited'
+      - run:
+          name: 'Install and Test (fol)'
+          command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext check-follower-cluster'
+          no_output_timeout: 2m
+      - run:
+          command: |
+            mkdir -p /tmp/core_dumps
+            cp core.* /tmp/core_dumps
+          when: on_fail
+      - codecov/upload:
+          flags: 'test_13,follower'
+      - store_artifacts:
+          path: '/tmp/core_dumps'
+
+  test-13_check-failure:
+    docker:
+      - image: 'heisenberg302/failtester-13:latest'
+    working_directory: /home/circleci/project
+    steps:
+      - attach_workspace:
+          at: .
+      - run:
+          name: 'Install and Test (check-failure)'
+          command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext check-failure'
+          no_output_timeout: 2m
+
   check-merge-to-enterprise:
     docker:
       - image: buildpack-deps:stretch
@@ -325,7 +415,20 @@ workflows:
       - test-12_check-failure:
           requires: [build]
 
+      - test-13_check-multi:
+          requires: [build]
+      - test-13_check-van-mx:
+          requires: [build]
+      - test-13_check-iso-work-fol:
+          requires: [build]
+      - test-13_check-fol:
+          requires: [build]
+      - test-13_check-failure:
+          requires: [build]
+
       - test-11-12_check-pg-upgrade:
+          requires: [build]
+      - test-12-13_check-pg-upgrade:
           requires: [build]
 
       - test-11_check-citus-upgrade:
