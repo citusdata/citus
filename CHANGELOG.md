@@ -1,3 +1,68 @@
+### citus v9.4.0 (July 28, 2020) ###
+
+* Improves COPY by honoring max_adaptive_executor_pool_size config
+
+* Adds support for insert into local table select from distributed table
+
+* Adds support to partially push down tdigest aggregates
+
+* Adds support for receiving binary encoded results from workers using
+  citus.enable_binary_protocol
+
+* Enables joins between local tables and CTEs
+
+* Adds showing query text in EXPLAIN output when explain verbose is true
+
+* Adds support for showing CTE statistics in EXPLAIN ANALYZE
+
+* Adds support for showing amount of data received in EXPLAIN ANALYZE
+
+* Introduces downgrade paths in migration scripts
+
+* Avoids returning incorrect results when changing roles in a transaction
+
+* Fixes `ALTER TABLE IF EXISTS SET SCHEMA` with non-existing table bug
+
+* Fixes `CREATE INDEX CONCURRENTLY` with no index name on a postgres table bug
+
+* Fixes a bug that could cause crashes with certain compile flags
+
+* Fixes a bug with lists of configuration values in ALTER ROLE SET statements
+
+* Fixes a bug that occurs when coordinator is added as a worker node
+
+* Fixes a crash because of overflow in partition id with certain compile flags
+
+* Fixes a crash that may happen if no worker nodes are added
+
+* Fixes a crash that occurs when inserting implicitly coerced constants
+
+* Fixes a crash when aggregating empty tables
+
+* Fixes a memory leak in subtransaction memory handling
+
+* Fixes crash when using rollback to savepoint after cancellation of DML
+
+* Fixes deparsing for queries with anonymous column references
+
+* Fixes distribution of composite types failing to include typemods
+
+* Fixes explain analyze on adaptive executor repartitions
+
+* Fixes possible error throwing in abort handle
+
+* Fixes segfault when evaluating func calls with default params on coordinator
+
+* Fixes several EXPLAIN ANALYZE issues
+
+* Fixes write queries with const expressions and COLLATE in various places
+
+* Fixes wrong cancellation message about distributed deadlocks
+
+* Reports correct INSERT/SELECT method in EXPLAIN
+
+* Disallows triggers on citus tables
+
 ### citus v9.3.2 (Jun 22, 2020) ###
 
 * Fixes a version bump issue in 9.3.1
