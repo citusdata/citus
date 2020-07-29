@@ -172,7 +172,7 @@ git checkout $PR_BRANCH
 # Actually update the branch
 git fetch origin
 git rebase origin/master
-git push --force-with-lease
+git push origin $PR_BRANCH --force-with-lease
 ```
 
 In the enterprise repo, rebase onto the new community branch with
@@ -201,7 +201,7 @@ can do the following:
 # Add files that were conflicting
 git add "$(git diff --name-only --diff-filter=U)"
 git rebase --continue
-git push --force-with-lease
+git push origin $PR_BRANCH --force-with-lease
 ```
 
 #### Updating both branches with `git merge`
@@ -212,6 +212,7 @@ community repo.
 ```bash
 git checkout $PR_BRANCH
 git reset ${PR_BRANCH}-backup --hard
+git push origin $PR_BRANCH --force-with-lease
 ```
 
 In the community repo, first update the outdated branch using `merge`:
@@ -220,7 +221,7 @@ In the community repo, first update the outdated branch using `merge`:
 git checkout $PR_BRANCH
 git fetch origin
 git merge origin/master
-git push
+git push origin $PR_BRANCH
 ```
 
 In the enterprise repo, merge with the updated `community/$PR_BRANCH`:
@@ -229,7 +230,7 @@ In the enterprise repo, merge with the updated `community/$PR_BRANCH`:
 git checkout $PR_BRANCH
 git fetch community
 git merge community/$PR_BRANCH
-git push
+git push origin $PR_BRANCH
 ```
 
 ## `check_sql_snapshots.sh`
