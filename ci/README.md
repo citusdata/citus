@@ -149,10 +149,10 @@ rerere` it should have re-applied your original merge resolution. If this is
 indeed the case it should show something like this in the output of the previous
 command (note the `Resolved ...` line):
 ```
-CONFLICT (content): Merge conflict in .circleci/config.yml
-Resolved '.circleci/config.yml' using previous resolution.
+CONFLICT (content): Merge conflict in <file_path>
+Resolved '<file_path>' using previous resolution.
 Automatic merge failed; fix conflicts and then commit the result.
-Error redoing merge 79a899e5b243696fd1a2754d612ae2eca817cdc1
+Error redoing merge <merge_sha>
 ```
 
 Confirm that the merge conflict is indeed resolved correctly. In that case you
