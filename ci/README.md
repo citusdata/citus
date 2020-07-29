@@ -159,9 +159,10 @@ So there's one issue that can occur. Your branch will become outdated with
 master and you have to make it up to date. There are two ways to do this using
 `git merge` or `git rebase`. As usual, `git merge` is a bit easier than `git
 rebase`, but clutters git history. This section will explain both. If you don't
-know which one makes the most sense, start with `git rebase`. If for whatever
-reason this doesn't work feel free to fall back to `git merge`, by using
-`git rebase --abort`.
+know which one makes the most sense, start with `git rebase`. It's possible that
+for whatever reason this doesn't work or becomes very complex, for instance when
+new merge conflicts appear. Feel free to fall back to `git merge` in that case,
+by using `git rebase --abort`.
 
 #### Updating both branches with `git rebase`
 
@@ -187,10 +188,10 @@ git fetch community
 git rebase community/$PR_BRANCH --preserve-merges
 ```
 
-Automatic merge might have failed with the above command. However, because of `git
-rerere` it should have re-applied your original merge resolution. If this is
-indeed the case it should show something like this in the output of the previous
-command (note the `Resolved ...` line):
+Automatic merge might have failed with the above command. However, because of
+`git rerere` it should have re-applied your original merge resolution. If this
+is indeed the case it should show something like this in the output of the
+previous command (note the `Resolved ...` line):
 ```
 CONFLICT (content): Merge conflict in <file_path>
 Resolved '<file_path>' using previous resolution.
@@ -204,6 +205,17 @@ can do the following:
 # Add files that were conflicting
 git add "$(git diff --name-only --diff-filter=U)"
 git rebase --continue
+```
+
+Before pushing you should do a final check that the commit hash of your final
+non merge commit matches the commit hash that's on the community repo. If that's
+not the case, you should fallback to the `git merge` approach.
+```bash
+git reset origin/$PR_BRANCH --hard
+```
+
+If the commit hashes were as expected, push the branch:
+```bash
 git push origin $PR_BRANCH --force-with-lease
 ```
 
