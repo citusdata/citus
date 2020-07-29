@@ -48,22 +48,55 @@ following:
 
 ## `check_enterprise_merge.sh`
 
-When you open a PR on community, if it creates a conflict with
-enterprise-master, the check-merge-to-enterprise will fail. Say your branch name
-is `$PR_BRANCH`, we will refer to `$PR_BRANCH` on community as
-`community/$PR_BRANCH` and on enterprise as `enterprise/$PR_BRANCH`. If the
-job already passes, you are done, nothing further required! Otherwise follow the
-below steps.
+This check exists to make sure that we can always merge the `master` branch of
+`community` into the `enterprise-master` branch of the `enterprise` repo.
+There are two conditions in which this check passes:
+1. There are no merge conflicts between your PR branch and `enterprise-master`.
+2. There are merge conflicts, but there is a branch with the same name in the
+   enterprise repo that:
+   1. Contains the last commit of the community branch with the same name.
+   2. Merges cleanly into `enterprise-master`
 
-IMPORTANT: Before continuing with the real steps make sure you have enabled
-`git rerere` ([docs](https://git-scm.com/docs/git-rerere), [very useful blog](https://medium.com/@porteneuve/fix-conflicts-only-once-with-git-rerere-7d116b2cec67#.3vui844dt)) in your global git config (you only have to do this once):
+If the job already passes, you are done, nothing further required! Otherwise
+follow the below steps.
 
-```bash
-git config --global rerere.enabled true
-```
+### Prerequisites
 
-After doing that we continue on to the real steps. First make sure these two
-things are the case:
+Before continuing with the real steps make sure you have done the following
+(this only needs to be done once):
+1. You have enabled `git rerere` ([docs](https://git-scm.com/docs/git-rerere),
+   [very useful blog](https://medium.com/@porteneuve/fix-conflicts-only-once-with-git-rerere-7d116b2cec67#.3vui844dt))
+   in your global git config (you only have to do this once):
+   ```bash
+   git config --global rerere.enabled true
+   ```
+2. You have set up the `community` remote on your enterprise as
+   [described in CONTRIBUTING.md](https://github.com/citusdata/citus-enterprise/blob/enterprise-master/CONTRIBUTING.md#merging-community-changes-onto-enterprise).
+
+
+#### Important notes on `git rerere`
+
+This is very useful as it will make sure git will automatically redo merges that
+you have done before. However, this has a downside too. It will also redo merges
+that you did, but that were incorrect. Two work around this you can use these
+commands.
+1. Make `git rerere` forget a merge:
+   ```bash
+   git rerere forget <badly_merged_file>
+   ```
+2. During conflict resolution where `git rerere` already applied the bad merge,
+   simply forgetting it is not enough. Since it is already applied. In that case
+   you also have to undo the apply using:
+   ```bash
+   git checkout --conflict=merge <badly_merged_file>
+   ```
+
+### Actual steps
+
+After the prerequisites are met we continue on to the real steps. Say your
+branch name is `$PR_BRANCH`, we will refer to `$PR_BRANCH` on community as
+`community/$PR_BRANCH` and on enterprise as `enterprise/$PR_BRANCH`. First make
+sure these two things are the case:
 
 1. Get approval from your reviewer for `community/$PR_BRANCH`. Only follow the
    next steps after you are about to merge the branch to community master.
@@ -123,20 +156,27 @@ So there's one issue that can occur. Your branch will become outdated with
 master and you have to make it up to date. There are two ways to do this using
 `git merge` or `git rebase`. As usual, `git merge` is a bit easier than `git
 rebase`, but clutters git history. This section will explain both. If you don't
-know which one makes the most sense, start with `git rebase`, if for whatever
-reason this doesn't work feel free to fall back to `git merge`.
+know which one makes the most sense, start with `git rebase`. If for whatever
+reason this doesn't work feel free to fall back to `git merge`, by using
+`git rebase --abort`.
 
 #### Updating both branches with `git rebase`
 
-In the community repo:
+In the community repo, first update the outdated branch using `rebase`:
 
 ```bash
 git checkout $PR_BRANCH
-git pull origin master --rebase
+# Keep a backup in case you want to fallback to the merge approach
+git checkout -b ${PR_BRANCH}-backup
+git checkout $PR_BRANCH
+# Actually update the branch
+git fetch origin
+git rebase origin/master
 git push --force-with-lease
 ```
 
-In the enterprise repo:
+In the enterprise repo, rebase onto the new community branch with
+`--preserve-merges`:
 
 ```bash
 git checkout $PR_BRANCH
@@ -166,15 +206,24 @@ git push --force-with-lease
 
 #### Updating both branches with `git merge`
 
-In the community repo:
+If you are falling back to the `git merge` approach after trying the
+`git rebase` approach, you should first restore the original branch on the
+community repo.
+```bash
+git checkout $PR_BRANCH
+git reset ${PR_BRANCH}-backup --hard
+```
+
+In the community repo, first update the outdated branch using `merge`:
 
 ```bash
 git checkout $PR_BRANCH
-git pull origin master
+git fetch origin
+git merge origin/master
 git push
 ```
 
-In the enterprise repo:
+In the enterprise repo, merge with the updated `community/$PR_BRANCH`:
 
 ```bash
 git checkout $PR_BRANCH
