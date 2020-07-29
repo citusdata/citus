@@ -64,11 +64,14 @@ follow the below steps.
 
 Before continuing with the real steps make sure you have done the following
 (this only needs to be done once):
-1. You have enabled `git rerere` ([docs](https://git-scm.com/docs/git-rerere),
-   [very useful blog](https://medium.com/@porteneuve/fix-conflicts-only-once-with-git-rerere-7d116b2cec67#.3vui844dt))
-   in your global git config (you only have to do this once):
+1. You have enabled `git rerere` in globally or in your enterprise repo
+   ([docs](https://git-scm.com/docs/git-rerere), [very useful blog](https://medium.com/@porteneuve/fix-conflicts-only-once-with-git-rerere-7d116b2cec67#.3vui844dt)):
    ```bash
+   # Enables it globally for all repos
    git config --global rerere.enabled true
+   # Enables it only for the enterprise repo
+   cd <enterprise-repo>
+   git config rerere.enabled true
    ```
 2. You have set up the `community` remote on your enterprise as
    [described in CONTRIBUTING.md](https://github.com/citusdata/citus-enterprise/blob/enterprise-master/CONTRIBUTING.md#merging-community-changes-onto-enterprise).
