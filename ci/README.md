@@ -144,7 +144,7 @@ git fetch community
 git rebase community/$PR_BRANCH --preserve-merges
 ```
 
-Automatic merge might have fail with the above command. However, because of `git
+Automatic merge might have failed with the above command. However, because of `git
 rerere` it should have re-applied your original merge resolution. If this is
 indeed the case it should show something like this in the output of the previous
 command (note the `Resolved ...` line):
@@ -156,7 +156,7 @@ Error redoing merge <merge_sha>
 ```
 
 Confirm that the merge conflict is indeed resolved correctly. In that case you
-can do the following
+can do the following:
 ```bash
 # Add files that were conflicting
 git add "$(git diff --name-only --diff-filter=U)"
