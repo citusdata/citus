@@ -120,7 +120,7 @@ The subsequent PRs on community will be able to pass the
 ### What to do when your branch got outdated?
 
 So there's one issue that can occur. Your branch will become outdated with
-master and you have to make it up to date. There's two ways to do this using
+master and you have to make it up to date. There are two ways to do this using
 `git merge` or `git rebase`. As usual, `git merge` is a bit easier than `git
 rebase`, but clutters git history. This section will explain both. If you don't
 know which one makes the most sense, start with `git rebase`, if for whatever
