@@ -396,7 +396,7 @@ ALTER TABLE distributed_table ADD CONSTRAINT fkey_dist_to_c FOREIGN KEY(a) refer
 ERROR:  relation "citus_local_tables_test_schema.citus_local_table_1_1504027" does not exist
 -- between citus local tables and local tables
 ALTER TABLE citus_local_table_1 ADD CONSTRAINT fkey_c_to_local FOREIGN KEY(a) references local_table(a);
-ERROR:  cannot create foreign key constraint
+ERROR:  referenced table "local_table" must be a distributed table or a reference table
 ALTER TABLE local_table ADD CONSTRAINT fkey_local_to_c FOREIGN KEY(a) references citus_local_table_1(a);
 -- cleanup at exit
 DROP SCHEMA citus_local_tables_test_schema, "CiTUS!LocalTables" CASCADE;
