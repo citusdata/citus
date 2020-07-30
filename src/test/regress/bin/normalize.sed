@@ -100,6 +100,8 @@ s/partition ".*" would be violated by some row/partition would be violated by so
 /.*Peak Memory Usage:.*$/d
 s/of relation ".*" contains null values/contains null values/g
 s/of relation "t1" is violated by some row/is violated by some row/g
+# can be removed when we remove PG_VERSION_NUM >= 120000
+s/(.*)Output:.*$/\1Output: xxxxxx/g
 
 
 # intermediate_results

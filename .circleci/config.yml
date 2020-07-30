@@ -166,7 +166,7 @@ jobs:
       - run:
           name: 'Install and test postgres upgrade'
           command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext --target check-pg-upgrade --old-pg-version 12 --new-pg-version 13'
-          no_output_timeout: 2m        
+          no_output_timeout: 2m
 
   test-12_check-multi:
     docker:
