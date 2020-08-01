@@ -31,7 +31,7 @@ why we ask this as well as instructions for how to proceed, see the
   cd citus
   ./configure
   make
-  make install
+  make install-all
   cd src/test/regress
   make check
   ```
@@ -61,7 +61,7 @@ why we ask this as well as instructions for how to proceed, see the
   cd citus
   ./configure
   make
-  sudo make install
+  sudo make install-all
   cd src/test/regress
   make check
   ```
@@ -103,7 +103,7 @@ why we ask this as well as instructions for how to proceed, see the
   cd citus
   PG_CONFIG=/usr/pgsql-11/bin/pg_config ./configure
   make
-  sudo make install
+  sudo make install-all
   cd src/test/regress
   make check
   ```
