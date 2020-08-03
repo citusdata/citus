@@ -27,6 +27,7 @@
 #include "distributed/intermediate_results.h"
 #include "distributed/listutils.h"
 #include "distributed/local_executor.h"
+#include "distributed/locally_reserved_shared_connections.h"
 #include "distributed/multi_executor.h"
 #include "distributed/multi_explain.h"
 #include "distributed/repartition_join_execution.h"
@@ -263,6 +264,13 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 
 			ResetGlobalVariables();
 
+			/*
+			 * Make sure that we give the shared connections back to the shared
+			 * pool if any. This operation is a no-op if the reserved connections
+			 * are already given away.
+			 */
+			DeallocateReservedConnections();
+
 			UnSetDistributedTransactionId();
 
 			/* empty the CommitContext to ensure we're not leaking memory */
@@ -314,6 +322,13 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			}
 
 			ResetGlobalVariables();
+
+			/*
+			 * Make sure that we give the shared connections back to the shared
+			 * pool if any. This operation is a no-op if the reserved connections
+			 * are already given away.
+			 */
+			DeallocateReservedConnections();
 
 			/*
 			 * We reset these mainly for posterity. The only way we would normally
@@ -459,7 +474,6 @@ ResetGlobalVariables()
 	activeSetStmts = NULL;
 	CoordinatedTransactionUses2PC = false;
 	TransactionModifiedNodeMetadata = false;
-
 	ResetWorkerErrorIndication();
 }
 

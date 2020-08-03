@@ -77,6 +77,17 @@ SET search_path TO set_role_in_transaction;
 INSERT INTO t values (2);
 ERROR:  cannot perform query on placements that were modified in this transaction by a different user
 ROLLBACK;
+-- we cannot change role in between COPY commands as well
+SET ROLE user1;
+SET search_path TO set_role_in_transaction;
+BEGIN;
+    COPY t FROM STDIN;
+    SET ROLE user2;
+    SET search_path TO set_role_in_transaction;
+    COPY t FROM STDIN;
+ERROR:  cannot perform query on placements that were modified in this transaction by a different user
+CONTEXT:  COPY t, line 1: "1"
+ROLLBACK;
 RESET ROLE;
 REVOKE ALL ON SCHEMA set_role_in_transaction FROM user1;
 REVOKE ALL ON SCHEMA set_role_in_transaction FROM user2;

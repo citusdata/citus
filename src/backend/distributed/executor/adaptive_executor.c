@@ -140,6 +140,7 @@
 #include "distributed/connection_management.h"
 #include "distributed/commands/multi_copy.h"
 #include "distributed/deparse_shard_query.h"
+#include "distributed/shared_connection_stats.h"
 #include "distributed/distributed_execution_locks.h"
 #include "distributed/listutils.h"
 #include "distributed/local_executor.h"
@@ -1924,10 +1925,8 @@ AssignTasksToConnectionsOrWorkerPool(DistributedExecution *execution)
 
 
 /*
- * WorkerPoolCompare is based on WorkerNodeCompare function.
- *
- * The function compares two worker nodes by their host name and port
- * number.
+ * WorkerPoolCompare is based on WorkerNodeCompare function. The function
+ * compares two worker nodes by their host name and port number.
  */
 static int
 WorkerPoolCompare(const void *lhsKey, const void *rhsKey)
