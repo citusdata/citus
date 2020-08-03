@@ -20,7 +20,7 @@ why we ask this as well as instructions for how to proceed, see the
 
   ```bash
   brew update
-  brew install git postgresql
+  brew install git postgresql python
   ```
 
 3. Get, build, and test the code
