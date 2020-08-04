@@ -41,6 +41,7 @@
 #include "distributed/resource_lock.h"
 #include "distributed/shardinterval_utils.h"
 #include "distributed/shared_connection_stats.h"
+#include "distributed/version_compat.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_transaction.h"
 #include "lib/stringinfo.h"
@@ -798,7 +799,7 @@ UpdateNodeLocation(int32 nodeId, char *newNodeName, int32 newNodePort)
 	bool isnull[Natts_pg_dist_node];
 	bool replace[Natts_pg_dist_node];
 
-	Relation pgDistNode = heap_open(DistNodeRelationId(), RowExclusiveLock);
+	Relation pgDistNode = table_open(DistNodeRelationId(), RowExclusiveLock);
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistNode);
 
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_node_nodeid,
@@ -834,7 +835,7 @@ UpdateNodeLocation(int32 nodeId, char *newNodeName, int32 newNodePort)
 	CommandCounterIncrement();
 
 	systable_endscan(scanDescriptor);
-	heap_close(pgDistNode, NoLock);
+	table_close(pgDistNode, NoLock);
 }
 
 
@@ -978,7 +979,7 @@ FindWorkerNodeAnyCluster(const char *nodeName, int32 nodePort)
 {
 	WorkerNode *workerNode = NULL;
 
-	Relation pgDistNode = heap_open(DistNodeRelationId(), AccessShareLock);
+	Relation pgDistNode = table_open(DistNodeRelationId(), AccessShareLock);
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistNode);
 
 	HeapTuple heapTuple = GetNodeTuple(nodeName, nodePort);
@@ -987,7 +988,7 @@ FindWorkerNodeAnyCluster(const char *nodeName, int32 nodePort)
 		workerNode = TupleToWorkerNode(tupleDescriptor, heapTuple);
 	}
 
-	heap_close(pgDistNode, NoLock);
+	table_close(pgDistNode, NoLock);
 	return workerNode;
 }
 
@@ -1007,7 +1008,7 @@ ReadDistNode(bool includeNodesFromOtherClusters)
 	int scanKeyCount = 0;
 	List *workerNodeList = NIL;
 
-	Relation pgDistNode = heap_open(DistNodeRelationId(), AccessShareLock);
+	Relation pgDistNode = table_open(DistNodeRelationId(), AccessShareLock);
 
 	SysScanDesc scanDescriptor = systable_beginscan(pgDistNode,
 													InvalidOid, false,
@@ -1031,7 +1032,7 @@ ReadDistNode(bool includeNodesFromOtherClusters)
 	}
 
 	systable_endscan(scanDescriptor);
-	heap_close(pgDistNode, NoLock);
+	table_close(pgDistNode, NoLock);
 
 	return workerNodeList;
 }
@@ -1208,7 +1209,7 @@ AddNodeMetadata(char *nodeName, int32 nodePort,
 static WorkerNode *
 SetWorkerColumn(WorkerNode *workerNode, int columnIndex, Datum value)
 {
-	Relation pgDistNode = heap_open(DistNodeRelationId(), RowExclusiveLock);
+	Relation pgDistNode = table_open(DistNodeRelationId(), RowExclusiveLock);
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistNode);
 	HeapTuple heapTuple = GetNodeTuple(workerNode->workerName, workerNode->workerPort);
 
@@ -1261,7 +1262,7 @@ SetWorkerColumn(WorkerNode *workerNode, int columnIndex, Datum value)
 
 	WorkerNode *newWorkerNode = TupleToWorkerNode(tupleDescriptor, heapTuple);
 
-	heap_close(pgDistNode, NoLock);
+	table_close(pgDistNode, NoLock);
 
 	/* we also update the column at worker nodes */
 	SendCommandToWorkersWithMetadata(metadataSyncCommand);
@@ -1305,7 +1306,7 @@ SetNodeState(char *nodeName, int nodePort, bool isActive)
 static HeapTuple
 GetNodeTuple(const char *nodeName, int32 nodePort)
 {
-	Relation pgDistNode = heap_open(DistNodeRelationId(), AccessShareLock);
+	Relation pgDistNode = table_open(DistNodeRelationId(), AccessShareLock);
 	const int scanKeyCount = 2;
 	const bool indexOK = false;
 
@@ -1326,7 +1327,7 @@ GetNodeTuple(const char *nodeName, int32 nodePort)
 	}
 
 	systable_endscan(scanDescriptor);
-	heap_close(pgDistNode, NoLock);
+	table_close(pgDistNode, NoLock);
 
 	return nodeTuple;
 }
@@ -1448,7 +1449,7 @@ InsertNodeRow(int nodeid, char *nodeName, int32 nodePort, NodeMetadata *nodeMeta
 	values[Anum_pg_dist_node_shouldhaveshards - 1] = BoolGetDatum(
 		nodeMetadata->shouldHaveShards);
 
-	Relation pgDistNode = heap_open(DistNodeRelationId(), RowExclusiveLock);
+	Relation pgDistNode = table_open(DistNodeRelationId(), RowExclusiveLock);
 
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistNode);
 	HeapTuple heapTuple = heap_form_tuple(tupleDescriptor, values, isNulls);
@@ -1461,7 +1462,7 @@ InsertNodeRow(int nodeid, char *nodeName, int32 nodePort, NodeMetadata *nodeMeta
 	CommandCounterIncrement();
 
 	/* close relation */
-	heap_close(pgDistNode, NoLock);
+	table_close(pgDistNode, NoLock);
 }
 
 
@@ -1475,7 +1476,7 @@ DeleteNodeRow(char *nodeName, int32 nodePort)
 	bool indexOK = false;
 
 	ScanKeyData scanKey[2];
-	Relation pgDistNode = heap_open(DistNodeRelationId(), RowExclusiveLock);
+	Relation pgDistNode = table_open(DistNodeRelationId(), RowExclusiveLock);
 
 	/*
 	 * simple_heap_delete() expects that the caller has at least an
@@ -1510,8 +1511,8 @@ DeleteNodeRow(char *nodeName, int32 nodePort)
 	/* increment the counter so that next command won't see the row */
 	CommandCounterIncrement();
 
-	heap_close(replicaIndex, AccessShareLock);
-	heap_close(pgDistNode, NoLock);
+	table_close(replicaIndex, AccessShareLock);
+	table_close(pgDistNode, NoLock);
 }
 
 
@@ -1628,7 +1629,7 @@ UnsetMetadataSyncedForAll(void)
 	 * pg_dist_node in different orders. To protect against deadlock, we
 	 * get an exclusive lock here.
 	 */
-	Relation relation = heap_open(DistNodeRelationId(), ExclusiveLock);
+	Relation relation = table_open(DistNodeRelationId(), ExclusiveLock);
 	TupleDesc tupleDescriptor = RelationGetDescr(relation);
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_node_hasmetadata,
 				BTEqualStrategyNumber, F_BOOLEQ, BoolGetDatum(true));
@@ -1676,7 +1677,7 @@ UnsetMetadataSyncedForAll(void)
 
 	systable_endscan(scanDescriptor);
 	CatalogCloseIndexes(indstate);
-	heap_close(relation, NoLock);
+	table_close(relation, NoLock);
 
 	return updatedAtLeastOne;
 }

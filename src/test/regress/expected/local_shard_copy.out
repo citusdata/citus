@@ -14,7 +14,6 @@ SET citus.shard_replication_factor TO 1;
 SET citus.replication_model TO 'streaming';
 CREATE TABLE reference_table (key int PRIMARY KEY);
 DEBUG:  CREATE TABLE / PRIMARY KEY will create implicit index "reference_table_pkey" for table "reference_table"
-DEBUG:  building index "reference_table_pkey" on table "reference_table" serially
 SELECT create_reference_table('reference_table');
  create_reference_table
 ---------------------------------------------------------------------
@@ -23,7 +22,6 @@ SELECT create_reference_table('reference_table');
 
 CREATE TABLE distributed_table (key int PRIMARY KEY, age bigint CHECK (age >= 10));
 DEBUG:  CREATE TABLE / PRIMARY KEY will create implicit index "distributed_table_pkey" for table "distributed_table"
-DEBUG:  building index "distributed_table_pkey" on table "distributed_table" serially
 SELECT create_distributed_table('distributed_table','key');
  create_distributed_table
 ---------------------------------------------------------------------
@@ -38,7 +36,6 @@ DEBUG:  distributed INSERT ... SELECT can only select from distributed tables
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 CREATE TABLE local_table (key int PRIMARY KEY);
 DEBUG:  CREATE TABLE / PRIMARY KEY will create implicit index "local_table_pkey" for table "local_table"
-DEBUG:  building index "local_table_pkey" on table "local_table" serially
 INSERT INTO local_table SELECT * from generate_series(1, 10);
 -- partitioned table
 CREATE TABLE collections_list (

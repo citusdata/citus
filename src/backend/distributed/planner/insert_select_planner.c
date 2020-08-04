@@ -514,7 +514,7 @@ CreateTargetListForCombineQuery(List *targetList)
 
 		Var *column = makeVarFromTargetEntry(masterTableId, originalTargetEntry);
 		column->varattno = columnId;
-		column->varoattno = columnId;
+		column->varattnosyn = columnId;
 		columnId++;
 
 		if (column->vartype == RECORDOID || column->vartype == RECORDARRAYOID)
@@ -1388,8 +1388,8 @@ CreateNonPushableInsertSelectPlan(uint64 planId, Query *parse, ParamListInfo bou
 
 	/* plan the subquery, this may be another distributed query */
 	int cursorOptions = CURSOR_OPT_PARALLEL_OK;
-	PlannedStmt *selectPlan = pg_plan_query(selectQueryCopy, cursorOptions,
-											boundParams);
+	PlannedStmt *selectPlan = pg_plan_query_compat(selectQueryCopy, NULL, cursorOptions,
+												   boundParams);
 
 	bool repartitioned = IsRedistributablePlan(selectPlan->planTree) &&
 						 IsSupportedRedistributionTarget(targetRelationId);
@@ -1494,7 +1494,7 @@ AddInsertSelectCasts(List *insertTargetList, List *selectTargetList,
 	 */
 	Assert(list_length(insertTargetList) <= list_length(selectTargetList));
 
-	Relation distributedRelation = heap_open(targetRelationId, RowExclusiveLock);
+	Relation distributedRelation = table_open(targetRelationId, RowExclusiveLock);
 	TupleDesc destTupleDescriptor = RelationGetDescr(distributedRelation);
 
 	int targetEntryIndex = 0;
@@ -1579,7 +1579,7 @@ AddInsertSelectCasts(List *insertTargetList, List *selectTargetList,
 		selectTargetEntry->resno = entryResNo++;
 	}
 
-	heap_close(distributedRelation, NoLock);
+	table_close(distributedRelation, NoLock);
 
 	return selectTargetList;
 }

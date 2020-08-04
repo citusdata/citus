@@ -1365,7 +1365,7 @@ PartitionColumn(Oid relationId, uint32 rangeTableId)
 
 	partitionColumn = partitionKey;
 	partitionColumn->varno = rangeTableId;
-	partitionColumn->varnoold = rangeTableId;
+	partitionColumn->varnosyn = rangeTableId;
 
 	return partitionColumn;
 }

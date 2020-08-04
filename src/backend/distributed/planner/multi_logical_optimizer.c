@@ -1438,7 +1438,7 @@ MasterExtendedOpNode(MultiExtendedOp *originalOpNode,
 			 */
 			Var *column = makeVarFromTargetEntry(masterTableId, originalTargetEntry);
 			column->varattno = walkerContext.columnId;
-			column->varoattno = walkerContext.columnId;
+			column->varattnosyn = walkerContext.columnId;
 			walkerContext.columnId++;
 
 			if (column->vartype == RECORDOID || column->vartype == RECORDARRAYOID)
@@ -1673,9 +1673,9 @@ MasterAggregateExpression(Aggref *originalAggregate,
 			}
 
 			columnToUpdate->varno = masterTableId;
-			columnToUpdate->varnoold = masterTableId;
+			columnToUpdate->varnosyn = masterTableId;
 			columnToUpdate->varattno = startColumnCount + columnIndex;
-			columnToUpdate->varoattno = startColumnCount + columnIndex;
+			columnToUpdate->varattnosyn = startColumnCount + columnIndex;
 		}
 
 		/* we added that many columns */
@@ -3564,7 +3564,7 @@ AggregateFunctionOid(const char *functionName, Oid inputType)
 	ScanKeyData scanKey[1];
 	int scanKeyCount = 1;
 
-	Relation procRelation = heap_open(ProcedureRelationId, AccessShareLock);
+	Relation procRelation = table_open(ProcedureRelationId, AccessShareLock);
 
 	ScanKeyInit(&scanKey[0], Anum_pg_proc_proname,
 				BTEqualStrategyNumber, F_NAMEEQ, CStringGetDatum(functionName));
@@ -3605,7 +3605,7 @@ AggregateFunctionOid(const char *functionName, Oid inputType)
 	}
 
 	systable_endscan(scanDescriptor);
-	heap_close(procRelation, AccessShareLock);
+	table_close(procRelation, AccessShareLock);
 
 	return functionOid;
 }

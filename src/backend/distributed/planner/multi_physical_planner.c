@@ -130,6 +130,9 @@ static List * QuerySelectClauseList(MultiNode *multiNode);
 static List * QueryFromList(List *rangeTableList);
 static Node * QueryJoinTree(MultiNode *multiNode, List *dependentJobList,
 							List **rangeTableList);
+static void SetJoinRelatedColumnsCompat(RangeTblEntry *rangeTableEntry,
+										List *l_colnames, List *r_colnames,
+										List *leftColVars, List *rightColVars);
 static RangeTblEntry * JoinRangeTableEntry(JoinExpr *joinExpr, List *dependentJobList,
 										   List *rangeTableList);
 static int ExtractRangeTableId(Node *node);
@@ -1075,11 +1078,6 @@ QueryJoinTree(MultiNode *multiNode, List *dependentJobList, List **rangeTableLis
 				joinExpr->jointype = JOIN_LEFT;
 			}
 
-			RangeTblEntry *rangeTableEntry = JoinRangeTableEntry(joinExpr,
-																 dependentJobList,
-																 *rangeTableList);
-			*rangeTableList = lappend(*rangeTableList, rangeTableEntry);
-
 			/* fix the column attributes in ON (...) clauses */
 			List *columnList = pull_var_clause_default((Node *) joinNode->joinClauseList);
 			foreach(columnCell, columnList)
@@ -1088,12 +1086,17 @@ QueryJoinTree(MultiNode *multiNode, List *dependentJobList, List **rangeTableLis
 				UpdateColumnAttributes(column, *rangeTableList, dependentJobList);
 
 				/* adjust our column old attributes for partition pruning to work */
-				column->varnoold = column->varno;
-				column->varoattno = column->varattno;
+				column->varnosyn = column->varno;
+				column->varattnosyn = column->varattno;
 			}
 
 			/* make AND clauses explicit after fixing them */
 			joinExpr->quals = (Node *) make_ands_explicit(joinNode->joinClauseList);
+
+			RangeTblEntry *rangeTableEntry = JoinRangeTableEntry(joinExpr,
+																 dependentJobList,
+																 *rangeTableList);
+			*rangeTableList = lappend(*rangeTableList, rangeTableEntry);
 
 			return (Node *) joinExpr;
 		}
@@ -1228,10 +1231,10 @@ static RangeTblEntry *
 JoinRangeTableEntry(JoinExpr *joinExpr, List *dependentJobList, List *rangeTableList)
 {
 	RangeTblEntry *rangeTableEntry = makeNode(RangeTblEntry);
-	List *joinedColumnNames = NIL;
-	List *joinedColumnVars = NIL;
 	List *leftColumnNames = NIL;
 	List *leftColumnVars = NIL;
+	List *joinedColumnNames = NIL;
+	List *joinedColumnVars = NIL;
 	int leftRangeTableId = ExtractRangeTableId(joinExpr->larg);
 	RangeTblEntry *leftRTE = rt_fetch(leftRangeTableId, rangeTableList);
 	List *rightColumnNames = NIL;
@@ -1251,16 +1254,43 @@ JoinRangeTableEntry(JoinExpr *joinExpr, List *dependentJobList, List *rangeTable
 				   &leftColumnNames, &leftColumnVars);
 	ExtractColumns(rightRTE, rightRangeTableId, dependentJobList,
 				   &rightColumnNames, &rightColumnVars);
-
 	joinedColumnNames = list_concat(joinedColumnNames, leftColumnNames);
-	joinedColumnVars = list_concat(joinedColumnVars, leftColumnVars);
 	joinedColumnNames = list_concat(joinedColumnNames, rightColumnNames);
+	joinedColumnVars = list_concat(joinedColumnVars, leftColumnVars);
 	joinedColumnVars = list_concat(joinedColumnVars, rightColumnVars);
 
 	rangeTableEntry->eref->colnames = joinedColumnNames;
 	rangeTableEntry->joinaliasvars = joinedColumnVars;
 
+	SetJoinRelatedColumnsCompat(rangeTableEntry,
+								leftColumnNames, rightColumnNames, leftColumnVars,
+								rightColumnVars);
+
 	return rangeTableEntry;
+}
+
+
+static void
+SetJoinRelatedColumnsCompat(RangeTblEntry *rangeTableEntry,
+							List *leftColumnNames, List *rightColumnNames,
+							List *leftColumnVars, List *rightColumnVars)
+{
+	#if PG_VERSION_NUM >= PG_VERSION_13
+
+	/* We don't have any merged columns so set it to 0 */
+	rangeTableEntry->joinmergedcols = 0;
+	int numvars = list_length(leftColumnVars);
+	for (int varId = 1; varId <= numvars; varId++)
+	{
+		rangeTableEntry->joinleftcols = lappend_int(rangeTableEntry->joinleftcols, varId);
+	}
+	numvars = list_length(rightColumnVars);
+	for (int varId = 1; varId <= numvars; varId++)
+	{
+		rangeTableEntry->joinrightcols = lappend_int(rangeTableEntry->joinrightcols,
+													 varId);
+	}
+	#endif
 }
 
 
@@ -1531,8 +1561,8 @@ UpdateAllColumnAttributes(Node *columnContainer, List *rangeTableList,
 static void
 UpdateColumnAttributes(Var *column, List *rangeTableList, List *dependentJobList)
 {
-	Index originalTableId = column->varnoold;
-	AttrNumber originalColumnId = column->varoattno;
+	Index originalTableId = column->varnosyn;
+	AttrNumber originalColumnId = column->varattnosyn;
 
 	/* find the new table identifier */
 	Index newTableId = NewTableId(originalTableId, rangeTableList);
@@ -1616,8 +1646,8 @@ NewColumnId(Index originalTableId, AttrNumber originalColumnId,
 		 * Check against the *old* values for this column, as the new values
 		 * would have been updated already.
 		 */
-		if (column->varnoold == originalTableId &&
-			column->varoattno == originalColumnId)
+		if (column->varnosyn == originalTableId &&
+			column->varattnosyn == originalColumnId)
 		{
 			newColumnId = columnIndex;
 			break;
@@ -2947,8 +2977,8 @@ AnchorRangeTableIdList(List *rangeTableList, List *baseRangeTableIdList)
 
 
 /*
- * AdjustColumnOldAttributes adjust the old tableId (varnoold) and old columnId
- * (varoattno), and sets them equal to the new values. We need this adjustment
+ * AdjustColumnOldAttributes adjust the old tableId (varnosyn) and old columnId
+ * (varattnosyn), and sets them equal to the new values. We need this adjustment
  * for partition pruning where we compare these columns with partition columns
  * loaded from system catalogs. Since columns loaded from system catalogs always
  * have the same old and new values, we also need to adjust column values here.
@@ -2962,8 +2992,8 @@ AdjustColumnOldAttributes(List *expressionList)
 	foreach(columnCell, columnList)
 	{
 		Var *column = (Var *) lfirst(columnCell);
-		column->varnoold = column->varno;
-		column->varoattno = column->varattno;
+		column->varnosyn = column->varno;
+		column->varattnosyn = column->varattno;
 	}
 }
 
@@ -5141,7 +5171,7 @@ GreedyAssignTask(WorkerNode *workerNode, List *taskList, List *activeShardPlacem
 				rotatePlacementListBy = replicaIndex;
 
 				/* overwrite task list to signal that this task is assigned */
-				taskCell->data.ptr_value = NULL;
+				SetListCellPtr(taskCell, NULL);
 				break;
 			}
 		}

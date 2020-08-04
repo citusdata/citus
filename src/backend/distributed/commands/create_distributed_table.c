@@ -571,7 +571,7 @@ ColocationIdForNewTable(Oid relationId, Var *distributionColumn,
 		 */
 		Assert(distributionMethod == DISTRIBUTE_BY_HASH);
 
-		Relation pgDistColocation = heap_open(DistColocationRelationId(), ExclusiveLock);
+		Relation pgDistColocation = table_open(DistColocationRelationId(), ExclusiveLock);
 
 		Oid distributionColumnType = distributionColumn->vartype;
 		Oid distributionColumnCollation = get_typcollation(distributionColumnType);
@@ -618,12 +618,12 @@ ColocationIdForNewTable(Oid relationId, Var *distributionColumn,
 		if (createdColocationGroup)
 		{
 			/* keep the exclusive lock */
-			heap_close(pgDistColocation, NoLock);
+			table_close(pgDistColocation, NoLock);
 		}
 		else
 		{
 			/* release the exclusive lock */
-			heap_close(pgDistColocation, ExclusiveLock);
+			table_close(pgDistColocation, ExclusiveLock);
 		}
 	}
 
@@ -1266,7 +1266,7 @@ static void
 CopyLocalDataIntoShards(Oid distributedRelationId)
 {
 	/* take an ExclusiveLock to block all operations except SELECT */
-	Relation distributedRelation = heap_open(distributedRelationId, ExclusiveLock);
+	Relation distributedRelation = table_open(distributedRelationId, ExclusiveLock);
 
 	/*
 	 * Skip copying from partitioned tables, we will copy the data from
@@ -1274,7 +1274,7 @@ CopyLocalDataIntoShards(Oid distributedRelationId)
 	 */
 	if (PartitionedTable(distributedRelationId))
 	{
-		heap_close(distributedRelation, NoLock);
+		table_close(distributedRelation, NoLock);
 
 		return;
 	}
@@ -1330,7 +1330,7 @@ CopyLocalDataIntoShards(Oid distributedRelationId)
 	/* free memory and close the relation */
 	ExecDropSingleTupleTableSlot(slot);
 	FreeExecutorState(estate);
-	heap_close(distributedRelation, NoLock);
+	table_close(distributedRelation, NoLock);
 
 	PopActiveSnapshot();
 }

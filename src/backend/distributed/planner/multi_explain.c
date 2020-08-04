@@ -221,6 +221,7 @@ NonPushableInsertSelectExplainScan(CustomScanState *node, List *ancestors,
 
 	bool repartition = distributedPlan->insertSelectMethod == INSERT_SELECT_REPARTITION;
 
+
 	if (es->analyze)
 	{
 		ereport(ERROR, (errmsg("EXPLAIN ANALYZE is currently not supported for INSERT "
@@ -271,7 +272,16 @@ ExplainSubPlans(DistributedPlan *distributedPlan, ExplainState *es)
 		ParamListInfo params = NULL;
 		char *queryString = NULL;
 		instr_time planduration;
+		#if PG_VERSION_NUM >= PG_VERSION_13
 
+		BufferUsage bufusage_start,
+					bufusage;
+
+		if (es->buffers)
+		{
+			bufusage_start = pgBufferUsage;
+		}
+		#endif
 		if (es->format == EXPLAIN_FORMAT_TEXT)
 		{
 			char *resultId = GenerateResultId(planId, subPlan->subPlanId);
@@ -313,7 +323,18 @@ ExplainSubPlans(DistributedPlan *distributedPlan, ExplainState *es)
 
 		INSTR_TIME_SET_ZERO(planduration);
 
-		ExplainOnePlan(plan, into, es, queryString, params, NULL, &planduration);
+		#if PG_VERSION_NUM >= PG_VERSION_13
+
+		/* calc differences of buffer counters. */
+		if (es->buffers)
+		{
+			memset(&bufusage, 0, sizeof(BufferUsage));
+			BufferUsageAccumDiff(&bufusage, &pgBufferUsage, &bufusage_start);
+		}
+		#endif
+
+		ExplainOnePlanCompat(plan, into, es, queryString, params, NULL, &planduration,
+							 (es->buffers ? &bufusage : NULL));
 
 		if (es->format == EXPLAIN_FORMAT_TEXT)
 		{
@@ -961,7 +982,7 @@ worker_save_query_explain_analyze(PG_FUNCTION_ARGS)
 
 	INSTR_TIME_SET_CURRENT(planStart);
 
-	PlannedStmt *plan = pg_plan_query(query, 0, NULL);
+	PlannedStmt *plan = pg_plan_query_compat(query, NULL, 0, NULL);
 
 	INSTR_TIME_SET_CURRENT(planDuration);
 	INSTR_TIME_SUBTRACT(planDuration, planStart);
@@ -1122,18 +1143,37 @@ CitusExplainOneQuery(Query *query, int cursorOptions, IntoClause *into,
 	/* rest is copied from ExplainOneQuery() */
 	instr_time planstart,
 			   planduration;
+	#if PG_VERSION_NUM >= PG_VERSION_13
+	BufferUsage bufusage_start,
+				bufusage;
+
+	if (es->buffers)
+	{
+		bufusage_start = pgBufferUsage;
+	}
+	#endif
 
 	INSTR_TIME_SET_CURRENT(planstart);
 
 	/* plan the query */
-	PlannedStmt *plan = pg_plan_query(query, cursorOptions, params);
+	PlannedStmt *plan = pg_plan_query_compat(query, NULL, cursorOptions, params);
 
 	INSTR_TIME_SET_CURRENT(planduration);
 	INSTR_TIME_SUBTRACT(planduration, planstart);
 
+	#if PG_VERSION_NUM >= PG_VERSION_13
+
+	/* calc differences of buffer counters. */
+	if (es->buffers)
+	{
+		memset(&bufusage, 0, sizeof(BufferUsage));
+		BufferUsageAccumDiff(&bufusage, &pgBufferUsage, &bufusage_start);
+	}
+	#endif
+
 	/* run it (if needed) and produce output */
-	ExplainOnePlan(plan, into, es, queryString, params, queryEnv,
-				   &planduration);
+	ExplainOnePlanCompat(plan, into, es, queryString, params, queryEnv,
+						 &planduration, (es->buffers ? &bufusage : NULL));
 }
 
 
@@ -1453,18 +1493,33 @@ ExplainOneQuery(Query *query, int cursorOptions,
 	{
 		instr_time	planstart,
 					planduration;
+		#if PG_VERSION_NUM >= PG_VERSION_13
+		BufferUsage bufusage_start,
+			    bufusage;
 
+		if (es->buffers)
+			bufusage_start = pgBufferUsage;
+		#endif
 		INSTR_TIME_SET_CURRENT(planstart);
 
 		/* plan the query */
-		PlannedStmt *plan = pg_plan_query(query, cursorOptions, params);
+		PlannedStmt *plan = pg_plan_query_compat(query, NULL, cursorOptions, params);
 
 		INSTR_TIME_SET_CURRENT(planduration);
 		INSTR_TIME_SUBTRACT(planduration, planstart);
 
+		#if PG_VERSION_NUM >= PG_VERSION_13
+
+		/* calc differences of buffer counters. */
+		if (es->buffers)
+		{
+			memset(&bufusage, 0, sizeof(BufferUsage));
+			BufferUsageAccumDiff(&bufusage, &pgBufferUsage, &bufusage_start);
+		}
+		#endif
 		/* run it (if needed) and produce output */
-		ExplainOnePlan(plan, into, es, queryString, params, queryEnv,
-					   &planduration);
+		ExplainOnePlanCompat(plan, into, es, queryString, params, queryEnv,
+					   &planduration, (es->buffers ? &bufusage : NULL));
 	}
 }
 

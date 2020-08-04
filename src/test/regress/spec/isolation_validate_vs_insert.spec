@@ -28,7 +28,6 @@ step "s1-commit" { COMMIT; }
 session "s2"
 step "s2-begin" { BEGIN; }
 step "s2-insert" { INSERT INTO constrained_table VALUES(10, 10); }
-step "s2-insert-invalid" { INSERT INTO constrained_table VALUES(100, 100); }
 step "s2-select" { SELECT sum(int_data) FROM constrained_table; }
 step "s2-commit" { COMMIT; }
 

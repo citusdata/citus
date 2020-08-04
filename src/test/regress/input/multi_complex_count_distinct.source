@@ -154,14 +154,6 @@ SELECT
 	HAVING count(distinct l_suppkey) > 1550
 	ORDER BY 1, 2 DESC;
 
-EXPLAIN (COSTS false, VERBOSE true)
-SELECT
-	l_shipmode, count(distinct l_partkey)
-	FROM lineitem_hash
-	GROUP BY l_shipmode
-	HAVING count(distinct l_suppkey) > 1550
-	ORDER BY 1, 2 DESC;
-
 -- count distinct is supported on single table subqueries
 SELECT *
 	FROM (

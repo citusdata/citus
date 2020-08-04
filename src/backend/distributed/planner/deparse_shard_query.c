@@ -358,7 +358,7 @@ UpdateRelationsToLocalShardTables(Node *node, List *relationShardList)
 static void
 ConvertRteToSubqueryWithEmptyResult(RangeTblEntry *rte)
 {
-	Relation relation = heap_open(rte->relid, NoLock);
+	Relation relation = table_open(rte->relid, NoLock);
 	TupleDesc tupleDescriptor = RelationGetDescr(relation);
 	int columnCount = tupleDescriptor->natts;
 	List *targetList = NIL;
@@ -388,7 +388,7 @@ ConvertRteToSubqueryWithEmptyResult(RangeTblEntry *rte)
 		targetList = lappend(targetList, targetEntry);
 	}
 
-	heap_close(relation, NoLock);
+	table_close(relation, NoLock);
 
 	FromExpr *joinTree = makeNode(FromExpr);
 	joinTree->quals = makeBoolConst(false, false);

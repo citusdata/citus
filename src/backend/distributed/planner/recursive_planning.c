@@ -1174,7 +1174,7 @@ CreateDistributedSubPlan(uint32 subPlanId, Query *subPlanQuery)
 	}
 
 	DistributedSubPlan *subPlan = CitusMakeNode(DistributedSubPlan);
-	subPlan->plan = planner(subPlanQuery, cursorOptions, NULL);
+	subPlan->plan = planner_compat(subPlanQuery, cursorOptions, NULL);
 	subPlan->subPlanId = subPlanId;
 
 	return subPlan;
@@ -1681,8 +1681,8 @@ BuildReadIntermediateResultsQuery(List *targetEntryList, List *columnAliasList,
 		functionColumnVar->vartypmod = columnTypMod;
 		functionColumnVar->varcollid = columnCollation;
 		functionColumnVar->varlevelsup = 0;
-		functionColumnVar->varnoold = 1;
-		functionColumnVar->varoattno = columnNumber;
+		functionColumnVar->varnosyn = 1;
+		functionColumnVar->varattnosyn = columnNumber;
 		functionColumnVar->location = -1;
 
 		TargetEntry *newTargetEntry = makeNode(TargetEntry);

@@ -13,6 +13,8 @@
 CREATE SCHEMA functions_in_joins;
 SET search_path TO 'functions_in_joins';
 SET citus.next_shard_id TO 2500000;
+SET citus.replication_model to 'streaming';
+SET citus.shard_replication_factor to 1;
 
 CREATE TABLE table1 (id int, data int);
 SELECT create_distributed_table('table1','id');
@@ -32,6 +34,7 @@ SELECT * FROM table1 JOIN nextval('numbers') n ON (id = n) ORDER BY id ASC;
 CREATE FUNCTION add(integer, integer) RETURNS integer
 AS 'SELECT $1 + $2;'
 LANGUAGE SQL;
+SELECT create_distributed_function('add(integer,integer)');
 SELECT * FROM table1 JOIN add(3,5) sum ON (id = sum) ORDER BY id ASC;
 
 -- Check join of plpgsql functions

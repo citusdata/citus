@@ -31,6 +31,7 @@
 #include "distributed/metadata/distobject.h"
 #include "distributed/metadata/pg_dist_object.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/version_compat.h"
 #include "executor/spi.h"
 #include "nodes/makefuncs.h"
 #include "nodes/pg_list.h"
@@ -103,7 +104,7 @@ ObjectExists(const ObjectAddress *address)
 	if (is_objectclass_supported(address->classId))
 	{
 		HeapTuple objtup;
-		Relation catalog = heap_open(address->classId, AccessShareLock);
+		Relation catalog = table_open(address->classId, AccessShareLock);
 
 #if PG_VERSION_NUM >= PG_VERSION_12
 		objtup = get_catalog_object_by_oid(catalog, get_object_attnum_oid(
@@ -111,7 +112,7 @@ ObjectExists(const ObjectAddress *address)
 #else
 		objtup = get_catalog_object_by_oid(catalog, address->objectId);
 #endif
-		heap_close(catalog, AccessShareLock);
+		table_close(catalog, AccessShareLock);
 		if (objtup != NULL)
 		{
 			return true;
@@ -257,7 +258,7 @@ IsObjectDistributed(const ObjectAddress *address)
 	ScanKeyData key[3];
 	bool result = false;
 
-	Relation pgDistObjectRel = heap_open(DistObjectRelationId(), AccessShareLock);
+	Relation pgDistObjectRel = table_open(DistObjectRelationId(), AccessShareLock);
 
 	/* scan pg_dist_object for classid = $1 AND objid = $2 AND objsubid = $3 via index */
 	ScanKeyInit(&key[0], Anum_pg_dist_object_classid, BTEqualStrategyNumber, F_OIDEQ,
@@ -295,7 +296,7 @@ ClusterHasDistributedFunctionWithDistArgument(void)
 
 	HeapTuple pgDistObjectTup = NULL;
 
-	Relation pgDistObjectRel = heap_open(DistObjectRelationId(), AccessShareLock);
+	Relation pgDistObjectRel = table_open(DistObjectRelationId(), AccessShareLock);
 
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistObjectRel);
 
@@ -340,7 +341,7 @@ GetDistributedObjectAddressList(void)
 	HeapTuple pgDistObjectTup = NULL;
 	List *objectAddressList = NIL;
 
-	Relation pgDistObjectRel = heap_open(DistObjectRelationId(), AccessShareLock);
+	Relation pgDistObjectRel = table_open(DistObjectRelationId(), AccessShareLock);
 	SysScanDesc pgDistObjectScan = systable_beginscan(pgDistObjectRel, InvalidOid, false,
 													  NULL, 0,
 													  NULL);

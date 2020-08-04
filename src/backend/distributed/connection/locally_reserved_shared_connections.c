@@ -33,6 +33,8 @@
 
 #include "postgres.h"
 
+#include "distributed/pg_version_constants.h"
+
 #include "miscadmin.h"
 
 #include "access/hash.h"
@@ -45,8 +47,12 @@
 #include "distributed/shared_connection_stats.h"
 #include "distributed/tuplestore.h"
 #include "distributed/worker_manager.h"
-#include "utils/hashutils.h"
 #include "utils/builtins.h"
+#if PG_VERSION_NUM < PG_VERSION_13
+#include "utils/hashutils.h"
+#else
+#include "common/hashfn.h"
+#endif
 
 
 #define RESERVED_CONNECTION_COLUMNS 4

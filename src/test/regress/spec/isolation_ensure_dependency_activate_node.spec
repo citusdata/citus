@@ -149,11 +149,6 @@ step "s2-print-distributed-objects"
 
 session "s3"
 
-step "s3-public-schema"
-{
-    SET search_path TO public;
-}
-
 step "s3-use-schema"
 {
     SET search_path TO myschema;
@@ -170,11 +165,6 @@ step "s3-create-table"
 step "s3-wait-for-metadata-sync"
 {
     SELECT public.wait_until_metadata_sync(5000);
-}
-
-step "s3-listen-channel"
-{
-   LISTEN metadata_sync;
 }
 
 step "s3-create-schema2"

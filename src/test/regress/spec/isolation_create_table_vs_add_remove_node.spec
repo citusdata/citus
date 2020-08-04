@@ -38,16 +38,6 @@ step "s1-commit"
 	COMMIT;
 }
 
-step "s1-query-table"
-{
-	SELECT * FROM dist_table;
-}
-
-step "s1-show-nodes"
-{
-	SELECT nodename, nodeport, isactive FROM pg_dist_node ORDER BY nodename, nodeport;
-}
-
 step "s1-show-placements"
 {
 	SELECT

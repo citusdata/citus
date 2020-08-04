@@ -29,6 +29,7 @@
 #include "distributed/pg_dist_colocation.h"
 #include "distributed/resource_lock.h"
 #include "distributed/shardinterval_utils.h"
+#include "distributed/version_compat.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/worker_transaction.h"
 #include "storage/lmgr.h"
@@ -154,7 +155,7 @@ BreakColocation(Oid sourceRelationId)
 	 * can be sure that there will no modifications on the colocation table
 	 * until this transaction is committed.
 	 */
-	Relation pgDistColocation = heap_open(DistColocationRelationId(), ExclusiveLock);
+	Relation pgDistColocation = table_open(DistColocationRelationId(), ExclusiveLock);
 
 	uint32 newColocationId = GetNextColocationId();
 	UpdateRelationColocationGroup(sourceRelationId, newColocationId);
@@ -162,7 +163,7 @@ BreakColocation(Oid sourceRelationId)
 	/* if there is not any remaining table in the colocation group, delete it */
 	DeleteColocationGroupIfNoTablesBelong(sourceRelationId);
 
-	heap_close(pgDistColocation, NoLock);
+	table_close(pgDistColocation, NoLock);
 }
 
 
@@ -248,7 +249,7 @@ MarkTablesColocated(Oid sourceRelationId, Oid targetRelationId)
 	 * can be sure that there will no modifications on the colocation table
 	 * until this transaction is committed.
 	 */
-	Relation pgDistColocation = heap_open(DistColocationRelationId(), ExclusiveLock);
+	Relation pgDistColocation = table_open(DistColocationRelationId(), ExclusiveLock);
 
 	/* check if shard placements are colocated */
 	ErrorIfShardPlacementsNotColocated(sourceRelationId, targetRelationId);
@@ -271,7 +272,7 @@ MarkTablesColocated(Oid sourceRelationId, Oid targetRelationId)
 	/* if there is not any remaining table in the colocation group, delete it */
 	DeleteColocationGroupIfNoTablesBelong(targetColocationId);
 
-	heap_close(pgDistColocation, NoLock);
+	table_close(pgDistColocation, NoLock);
 }
 
 
@@ -514,7 +515,7 @@ ColocationId(int shardCount, int replicationFactor, Oid distributionColumnType, 
 	ScanKeyData scanKey[4];
 	bool indexOK = true;
 
-	Relation pgDistColocation = heap_open(DistColocationRelationId(), AccessShareLock);
+	Relation pgDistColocation = table_open(DistColocationRelationId(), AccessShareLock);
 
 	/* set scan arguments */
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_colocation_distributioncolumntype,
@@ -541,7 +542,7 @@ ColocationId(int shardCount, int replicationFactor, Oid distributionColumnType, 
 	}
 
 	systable_endscan(scanDescriptor);
-	heap_close(pgDistColocation, AccessShareLock);
+	table_close(pgDistColocation, AccessShareLock);
 
 	return colocationId;
 }
@@ -574,7 +575,7 @@ CreateColocationGroup(int shardCount, int replicationFactor, Oid distributionCol
 		ObjectIdGetDatum(distributionColumnCollation);
 
 	/* open colocation relation and insert the new tuple */
-	Relation pgDistColocation = heap_open(DistColocationRelationId(), RowExclusiveLock);
+	Relation pgDistColocation = table_open(DistColocationRelationId(), RowExclusiveLock);
 
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistColocation);
 	HeapTuple heapTuple = heap_form_tuple(tupleDescriptor, values, isNulls);
@@ -583,7 +584,7 @@ CreateColocationGroup(int shardCount, int replicationFactor, Oid distributionCol
 
 	/* increment the counter so that next command can see the row */
 	CommandCounterIncrement();
-	heap_close(pgDistColocation, RowExclusiveLock);
+	table_close(pgDistColocation, RowExclusiveLock);
 
 	return colocationId;
 }
@@ -716,7 +717,7 @@ UpdateRelationColocationGroup(Oid distributedRelationId, uint32 colocationId)
 	bool isNull[Natts_pg_dist_partition];
 	bool replace[Natts_pg_dist_partition];
 
-	Relation pgDistPartition = heap_open(DistPartitionRelationId(), RowExclusiveLock);
+	Relation pgDistPartition = table_open(DistPartitionRelationId(), RowExclusiveLock);
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistPartition);
 
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_partition_logicalrelid,
@@ -753,7 +754,7 @@ UpdateRelationColocationGroup(Oid distributedRelationId, uint32 colocationId)
 	CommandCounterIncrement();
 
 	systable_endscan(scanDescriptor);
-	heap_close(pgDistPartition, NoLock);
+	table_close(pgDistPartition, NoLock);
 
 	bool shouldSyncMetadata = ShouldSyncTableMetadata(distributedRelationId);
 	if (shouldSyncMetadata)
@@ -882,7 +883,7 @@ ColocationGroupTableList(Oid colocationId)
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_partition_colocationid,
 				BTEqualStrategyNumber, F_INT4EQ, ObjectIdGetDatum(colocationId));
 
-	Relation pgDistPartition = heap_open(DistPartitionRelationId(), AccessShareLock);
+	Relation pgDistPartition = table_open(DistPartitionRelationId(), AccessShareLock);
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistPartition);
 	SysScanDesc scanDescriptor = systable_beginscan(pgDistPartition,
 													DistPartitionColocationidIndexId(),
@@ -901,7 +902,7 @@ ColocationGroupTableList(Oid colocationId)
 	}
 
 	systable_endscan(scanDescriptor);
-	heap_close(pgDistPartition, AccessShareLock);
+	table_close(pgDistPartition, AccessShareLock);
 
 	return colocatedTableList;
 }
@@ -997,7 +998,7 @@ ColocatedTableId(Oid colocationId)
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_partition_colocationid,
 				BTEqualStrategyNumber, F_INT4EQ, ObjectIdGetDatum(colocationId));
 
-	Relation pgDistPartition = heap_open(DistPartitionRelationId(), AccessShareLock);
+	Relation pgDistPartition = table_open(DistPartitionRelationId(), AccessShareLock);
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistPartition);
 	SysScanDesc scanDescriptor = systable_beginscan(pgDistPartition,
 													DistPartitionColocationidIndexId(),
@@ -1034,7 +1035,7 @@ ColocatedTableId(Oid colocationId)
 	}
 
 	systable_endscan(scanDescriptor);
-	heap_close(pgDistPartition, AccessShareLock);
+	table_close(pgDistPartition, AccessShareLock);
 
 	return colocatedTableId;
 }
@@ -1085,7 +1086,7 @@ DeleteColocationGroup(uint32 colocationId)
 	ScanKeyData scanKey[1];
 	bool indexOK = false;
 
-	Relation pgDistColocation = heap_open(DistColocationRelationId(), RowExclusiveLock);
+	Relation pgDistColocation = table_open(DistColocationRelationId(), RowExclusiveLock);
 
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_colocation_colocationid,
 				BTEqualStrategyNumber, F_INT4EQ, UInt32GetDatum(colocationId));
@@ -1108,9 +1109,9 @@ DeleteColocationGroup(uint32 colocationId)
 
 		CitusInvalidateRelcacheByRelid(DistColocationRelationId());
 		CommandCounterIncrement();
-		heap_close(replicaIndex, AccessShareLock);
+		table_close(replicaIndex, AccessShareLock);
 	}
 
 	systable_endscan(scanDescriptor);
-	heap_close(pgDistColocation, RowExclusiveLock);
+	table_close(pgDistColocation, RowExclusiveLock);
 }

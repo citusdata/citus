@@ -29,11 +29,6 @@ step "s1-start-session-level-connection"
 	SELECT start_session_level_connection_to_node('localhost', 57637);
 }
 
-step "s1-begin-on-worker"
-{
-	SELECT run_commands_on_session_level_connection_to_node('BEGIN');
-}
-
 step "s1-view-locks"
 {
     SELECT * FROM master_run_on_worker(
@@ -44,11 +39,6 @@ step "s1-view-locks"
           (SELECT mode, count(*) count FROM pg_locks
            WHERE locktype='advisory' GROUP BY mode) t$$]::text[],
 		false);
-}
-
-step "s1-rollback-worker"
-{
-    SELECT run_commands_on_session_level_connection_to_node('ROLLBACK');
 }
 
 step "s1-stop-connection"

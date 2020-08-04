@@ -67,11 +67,6 @@ step "s1-update_value_1_of_1_or_3_to_5"
 	UPDATE users_test_table SET value_1 = 5 WHERE user_id = 1 or user_id = 3;
 }
 
-step "s1-update_value_1_of_1_or_3_to_7"
-{
-	UPDATE users_test_table SET value_1 = 7 WHERE user_id = 1 or user_id = 3;
-}
-
 step "s1-update_value_1_of_2_or_4_to_5"
 {
 	UPDATE users_test_table SET value_1 = 5 WHERE user_id = 2 or user_id = 4;

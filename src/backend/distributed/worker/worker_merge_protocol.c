@@ -278,7 +278,7 @@ worker_cleanup_job_schema_cache(PG_FUNCTION_ARGS)
 
 	CheckCitusVersion(ERROR);
 
-	pgNamespace = heap_open(NamespaceRelationId, AccessExclusiveLock);
+	pgNamespace = table_open(NamespaceRelationId, AccessExclusiveLock);
 #if PG_VERSION_NUM >= PG_VERSION_12
 	scanDescriptor = table_beginscan_catalog(pgNamespace, scanKeyCount, scanKey);
 #else
@@ -304,7 +304,7 @@ worker_cleanup_job_schema_cache(PG_FUNCTION_ARGS)
 	}
 
 	heap_endscan(scanDescriptor);
-	heap_close(pgNamespace, AccessExclusiveLock);
+	table_close(pgNamespace, AccessExclusiveLock);
 
 	PG_RETURN_VOID();
 }

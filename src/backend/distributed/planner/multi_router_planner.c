@@ -2976,8 +2976,7 @@ NormalizeMultiRowInsertTargetList(Query *query)
 
 			expandedValuesList = lappend(expandedValuesList, targetExpr);
 		}
-
-		valuesListCell->data.ptr_value = (void *) expandedValuesList;
+		SetListCellPtr(valuesListCell, (void *) expandedValuesList);
 	}
 
 	/* reset coltypes, coltypmods, colcollations and rebuild them below */

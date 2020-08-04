@@ -21,11 +21,6 @@ step "s1-begin"
     BEGIN;
 }
 
-step "s1-commit"
-{
-    COMMIT;
-}
-
 step "s1-rollback"
 {
     ROLLBACK;

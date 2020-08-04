@@ -93,7 +93,7 @@ RemoteScanTargetList(List *workerTargetList)
 
 		Var *remoteScanColumn = makeVarFromTargetEntry(tableId, workerTargetEntry);
 		remoteScanColumn->varattno = columnId;
-		remoteScanColumn->varoattno = columnId;
+		remoteScanColumn->varattnosyn = columnId;
 		columnId++;
 
 		if (remoteScanColumn->vartype == RECORDOID || remoteScanColumn->vartype ==
@@ -295,7 +295,7 @@ BuildSelectStatementViaStdPlanner(Query *combineQuery, List *remoteScanTargetLis
 		ReplaceCitusExtraDataContainer = true;
 		ReplaceCitusExtraDataContainerWithCustomScan = remoteScan;
 
-		standardStmt = standard_planner(combineQuery, 0, NULL);
+		standardStmt = standard_planner_compat(combineQuery, 0, NULL);
 
 		ReplaceCitusExtraDataContainer = false;
 		ReplaceCitusExtraDataContainerWithCustomScan = NULL;

@@ -138,7 +138,7 @@ PreprocessIndexStmt(Node *node, const char *createIndexCommand)
 		 * checked permissions, and will only fail when executing the actual
 		 * index statements.
 		 */
-		Relation relation = heap_openrv(createIndexStatement->relation, lockmode);
+		Relation relation = table_openrv(createIndexStatement->relation, lockmode);
 		Oid relationId = RelationGetRelid(relation);
 
 		bool isCitusRelation = IsCitusTable(relationId);
@@ -160,7 +160,7 @@ PreprocessIndexStmt(Node *node, const char *createIndexCommand)
 				relationContext, namespaceName);
 		}
 
-		heap_close(relation, NoLock);
+		table_close(relation, NoLock);
 
 		if (isCitusRelation)
 		{
@@ -246,7 +246,7 @@ PreprocessReindexStmt(Node *node, const char *reindexCommand)
 			RangeVarGetRelidExtended(reindexStatement->relation, lockmode, 0,
 									 RangeVarCallbackOwnsTable, NULL);
 
-			relation = heap_openrv(reindexStatement->relation, NoLock);
+			relation = table_openrv(reindexStatement->relation, NoLock);
 			relationId = RelationGetRelid(relation);
 		}
 
@@ -275,7 +275,7 @@ PreprocessReindexStmt(Node *node, const char *reindexCommand)
 		}
 		else
 		{
-			heap_close(relation, NoLock);
+			table_close(relation, NoLock);
 		}
 
 		if (isCitusRelation)
@@ -426,13 +426,13 @@ PostprocessIndexStmt(Node *node, const char *queryString)
 	StartTransactionCommand();
 
 	/* get the affected relation and index */
-	Relation relation = heap_openrv(indexStmt->relation, ShareUpdateExclusiveLock);
+	Relation relation = table_openrv(indexStmt->relation, ShareUpdateExclusiveLock);
 	Oid indexRelationId = get_relname_relid(indexStmt->idxname,
 											schemaId);
 	Relation indexRelation = index_open(indexRelationId, RowExclusiveLock);
 
 	/* close relations but retain locks */
-	heap_close(relation, NoLock);
+	table_close(relation, NoLock);
 	index_close(indexRelation, NoLock);
 
 	/* mark index as invalid, in-place (cannot be rolled back) */
@@ -443,7 +443,7 @@ PostprocessIndexStmt(Node *node, const char *queryString)
 	StartTransactionCommand();
 
 	/* now, update index's validity in a way that can roll back */
-	Relation pg_index = heap_open(IndexRelationId, RowExclusiveLock);
+	Relation pg_index = table_open(IndexRelationId, RowExclusiveLock);
 
 	HeapTuple indexTuple = SearchSysCacheCopy1(INDEXRELID, ObjectIdGetDatum(
 												   indexRelationId));
@@ -457,7 +457,7 @@ PostprocessIndexStmt(Node *node, const char *queryString)
 
 	/* clean up; index now marked valid, but ROLLBACK will mark invalid */
 	heap_freetuple(indexTuple);
-	heap_close(pg_index, RowExclusiveLock);
+	table_close(pg_index, RowExclusiveLock);
 
 	return NIL;
 }
