@@ -6,7 +6,7 @@ orbs:
 jobs:
   build:
     docker:
-      - image: 'heisenberg302/extbuilder-13:latest'
+      - image: 'citus/extbuilder-13:latest'
     steps:
       - checkout
       - run:
@@ -158,7 +158,7 @@ jobs:
 
   test-12-13_check-pg-upgrade:
     docker:
-      - image: 'heisenberg302/pgupgradetester:latest'
+      - image: 'citus/pgupgradetester:latest'
     working_directory: /home/circleci/project
     steps:
       - attach_workspace:
@@ -266,7 +266,7 @@ jobs:
 
   test-13_check-multi:
     docker:
-      - image: 'heisenberg302/exttester-13:latest'
+      - image: 'citus/exttester-13:latest'
     working_directory: /home/circleci/project
     steps:
       - attach_workspace:
@@ -280,7 +280,7 @@ jobs:
 
   test-13_check-van-mx:
     docker:
-      - image: 'heisenberg302/exttester-13:latest'
+      - image: 'citus/exttester-13:latest'
     working_directory: /home/circleci/project
     steps:
       - attach_workspace:
@@ -293,7 +293,7 @@ jobs:
           flags: 'test_13,vanilla,mx'
   test-13_check-iso-work-fol:
     docker:
-      - image: 'heisenberg302/exttester-13:latest'
+      - image: 'citus/exttester-13:latest'
     working_directory: /home/circleci/project
     steps:
       - attach_workspace:
@@ -306,7 +306,7 @@ jobs:
           flags: 'test_13,isolation,worker'
   test-13_check-fol:
     docker:
-      - image: 'heisenberg302/exttester-13:latest'
+      - image: 'citus/exttester-13:latest'
     working_directory: /home/circleci/project
     steps:
       - attach_workspace:
@@ -330,7 +330,7 @@ jobs:
 
   test-13_check-failure:
     docker:
-      - image: 'heisenberg302/failtester-13:latest'
+      - image: 'citus/failtester-13:latest'
     working_directory: /home/circleci/project
     steps:
       - attach_workspace:
