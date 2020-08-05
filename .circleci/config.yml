@@ -83,7 +83,7 @@ jobs:
 
 
 
-  test-11_check-van-mx:
+  test-11_check-van:
     docker:
       - image: 'citus/exttester-11:latest'
     working_directory: /home/circleci/project
@@ -91,12 +91,13 @@ jobs:
       - attach_workspace:
           at: .
       - run:
-          name: 'Install and Test (check-van-mx)'
-          command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext check-vanilla check-multi-mx'
+          name: 'Install and Test (check-van)'
+          command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext check-vanilla'
           no_output_timeout: 2m
       - codecov/upload:
-          flags: 'test_11,vanilla,mx'
-  test-11_check-iso-work-fol:
+          flags: 'test_11,vanilla'
+
+  test-11_check-mx:
     docker:
       - image: 'citus/exttester-11:latest'
     working_directory: /home/circleci/project
@@ -104,11 +105,39 @@ jobs:
       - attach_workspace:
           at: .
       - run:
-          name: 'Install and Test (check-iso-work-fol)'
-          command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext check-isolation check-worker'
+          name: 'Install and Test (check-mx)'
+          command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext check-multi-mx'
           no_output_timeout: 2m
       - codecov/upload:
-          flags: 'test_11,isolation,worker'
+          flags: 'test_11,mx'
+
+  test-11_check-work:
+    docker:
+      - image: 'citus/exttester-11:latest'
+    working_directory: /home/circleci/project
+    steps:
+      - attach_workspace:
+          at: .
+      - run:
+          name: 'Install and Test (check-work)'
+          command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext check-worker'
+          no_output_timeout: 2m
+      - codecov/upload:
+          flags: 'test_11,worker'
+
+  test-11_check-iso:
+    docker:
+      - image: 'citus/exttester-11:latest'
+    working_directory: /home/circleci/project
+    steps:
+      - attach_workspace:
+          at: .
+      - run:
+          name: 'Install and Test (check-iso)'
+          command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext check-isolation'
+          no_output_timeout: 2m
+      - codecov/upload:
+          flags: 'test_11,isolation'
   test-11_check-fol:
     docker:
       - image: 'citus/exttester-11:latest'
@@ -181,7 +210,7 @@ jobs:
           no_output_timeout: 2m
       - codecov/upload:
           flags: 'test_12,multi'
-  test-12_check-van-mx:
+  test-12_check-van:
     docker:
       - image: 'citus/exttester-12:latest'
     working_directory: /home/circleci/project
@@ -189,12 +218,27 @@ jobs:
       - attach_workspace:
           at: .
       - run:
-          name: 'Install and Test (check-van-mx)'
-          command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext check-vanilla check-multi-mx'
+          name: 'Install and Test (check-van)'
+          command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext check-vanilla'
           no_output_timeout: 2m
       - codecov/upload:
-          flags: 'test_12,vanilla,mx'
-  test-12_check-iso-work-fol:
+          flags: 'test_12,vanilla'
+
+  test-12_check-mx:
+    docker:
+      - image: 'citus/exttester-12:latest'
+    working_directory: /home/circleci/project
+    steps:
+      - attach_workspace:
+          at: .
+      - run:
+          name: 'Install and Test (check-mx)'
+          command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext check-multi-mx'
+          no_output_timeout: 2m
+      - codecov/upload:
+          flags: 'test_12,mx'
+
+  test-12_check-iso:
     docker:
       - image: 'citus/exttester-12:latest'
     working_directory: /home/circleci/project
@@ -202,11 +246,26 @@ jobs:
       - attach_workspace:
            at: .
       - run:
-          name: 'Install and Test (check-iso-work-fol)'
-          command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext check-isolation check-worker'
+          name: 'Install and Test (check-iso)'
+          command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext check-isolation'
           no_output_timeout: 2m
       - codecov/upload:
-          flags: 'test_12,isolation,worker'
+          flags: 'test_12,isolation'
+
+  test-12_check-work:
+    docker:
+      - image: 'citus/exttester-12:latest'
+    working_directory: /home/circleci/project
+    steps:
+      - attach_workspace:
+           at: .
+      - run:
+          name: 'Install and Test (check-work)'
+          command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext check-worker'
+          no_output_timeout: 2m
+      - codecov/upload:
+          flags: 'test_12,worker'
+
   test-12_check-fol:
     docker:
       - image: 'citus/exttester-12:latest'
@@ -278,7 +337,7 @@ jobs:
       - codecov/upload:
           flags: 'test_13,multi'
 
-  test-13_check-van-mx:
+  test-13_check-mx:
     docker:
       - image: 'citus/exttester-13:latest'
     working_directory: /home/circleci/project
@@ -286,12 +345,27 @@ jobs:
       - attach_workspace:
           at: .
       - run:
-          name: 'Install and Test (check-van-mx)'
-          command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext check-vanilla check-multi-mx'
+          name: 'Install and Test (check-mx)'
+          command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext check-multi-mx'
           no_output_timeout: 2m
       - codecov/upload:
-          flags: 'test_13,vanilla,mx'
-  test-13_check-iso-work-fol:
+          flags: 'test_13,mx'
+
+  test-13_check-van:
+    docker:
+      - image: 'citus/exttester-13:latest'
+    working_directory: /home/circleci/project
+    steps:
+      - attach_workspace:
+          at: .
+      - run:
+          name: 'Install and Test (check-van)'
+          command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext check-vanilla'
+          no_output_timeout: 2m
+      - codecov/upload:
+          flags: 'test_13,vanilla'
+
+  test-13_check-work:
     docker:
       - image: 'citus/exttester-13:latest'
     working_directory: /home/circleci/project
@@ -299,11 +373,26 @@ jobs:
       - attach_workspace:
            at: .
       - run:
-          name: 'Install and Test (check-iso-work-fol)'
-          command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext check-isolation check-worker'
+          name: 'Install and Test (check-work)'
+          command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext check-worker'
           no_output_timeout: 2m
       - codecov/upload:
-          flags: 'test_13,isolation,worker'
+          flags: 'test_13,worker'
+
+  test-13_check-iso:
+    docker:
+      - image: 'citus/exttester-13:latest'
+    working_directory: /home/circleci/project
+    steps:
+      - attach_workspace:
+           at: .
+      - run:
+          name: 'Install and Test (check-iso)'
+          command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext check-isolation'
+          no_output_timeout: 2m
+      - codecov/upload:
+          flags: 'test_13,isolation'
+
   test-13_check-fol:
     docker:
       - image: 'citus/exttester-13:latest'
@@ -395,9 +484,13 @@ workflows:
 
       - test-11_check-multi:
           requires: [build]
-      - test-11_check-van-mx:
+      - test-11_check-van:
           requires: [build]
-      - test-11_check-iso-work-fol:
+      - test-11_check-iso:
+          requires: [build]
+      - test-11_check-mx:
+          requires: [build]
+      - test-11_check-work:
           requires: [build]
       - test-11_check-fol:
           requires: [build]
@@ -406,9 +499,13 @@ workflows:
 
       - test-12_check-multi:
           requires: [build]
-      - test-12_check-van-mx:
+      - test-12_check-van:
           requires: [build]
-      - test-12_check-iso-work-fol:
+      - test-12_check-iso:
+          requires: [build]
+      - test-12_check-mx:
+          requires: [build]
+      - test-12_check-work:
           requires: [build]
       - test-12_check-fol:
           requires: [build]
@@ -417,9 +514,13 @@ workflows:
 
       - test-13_check-multi:
           requires: [build]
-      - test-13_check-van-mx:
+      - test-13_check-van:
           requires: [build]
-      - test-13_check-iso-work-fol:
+      - test-13_check-iso:
+          requires: [build]
+      - test-13_check-mx:
+          requires: [build]
+      - test-13_check-work:
           requires: [build]
       - test-13_check-fol:
           requires: [build]
