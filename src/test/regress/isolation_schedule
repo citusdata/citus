@@ -63,6 +63,7 @@ test: isolation_ref2ref_foreign_keys
 test: isolation_multiuser_locking
 test: shared_connection_waits
 test: isolation_cancellation
+test: isolation_undistribute_table
 
 # MX tests
 test: isolation_reference_on_mx

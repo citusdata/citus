@@ -539,6 +539,23 @@ GetTableDDLEvents(Oid relationId, bool includeSequenceDefaults)
 															  includeSequenceDefaults);
 	tableDDLEventList = list_concat(tableDDLEventList, tableCreationCommandList);
 
+	List *otherCommands = GetTableConstructionCommands(relationId);
+	tableDDLEventList = list_concat(tableDDLEventList, otherCommands);
+
+	return tableDDLEventList;
+}
+
+
+/*
+ * GetTableConstructionCommands takes in a relationId and returns the list
+ * of DDL commands needed to reconstruct the relation except the ones that actually
+ * create the table.
+ */
+List *
+GetTableConstructionCommands(Oid relationId)
+{
+	List *tableDDLEventList = NIL;
+
 	List *indexAndConstraintCommandList = GetTableIndexAndConstraintCommands(relationId);
 	tableDDLEventList = list_concat(tableDDLEventList, indexAndConstraintCommandList);
 
@@ -611,6 +628,30 @@ GetTableCreationCommands(Oid relationId, bool includeSequenceDefaults)
 		}
 		tableDDLEventList = lappend(tableDDLEventList, serverDef);
 	}
+
+	List *tableBuildingCommands = GetTableBuildingCommands(relationId,
+														   includeSequenceDefaults);
+	tableDDLEventList = list_concat(tableDDLEventList,
+									tableBuildingCommands);
+
+	/* revert back to original search_path */
+	PopOverrideSearchPath();
+
+	return tableDDLEventList;
+}
+
+
+/*
+ * GetTableBuildingCommands takes in a relationId, and returns the list of DDL
+ * commands needed to rebuild the relation. This does not include the schema
+ * and the server commands.
+ */
+List *
+GetTableBuildingCommands(Oid relationId, bool includeSequenceDefaults)
+{
+	List *tableDDLEventList = NIL;
+
+	PushOverrideEmptySearchPath(CurrentMemoryContext);
 
 	/* fetch table schema and column option definitions */
 	char *tableSchemaDef = pg_get_tableschemadef_string(relationId,
