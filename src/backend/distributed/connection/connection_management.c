@@ -233,41 +233,6 @@ GetNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port,
 
 
 /*
- * StartWorkerListConnections starts connections to the given worker list and
- * returns them as a MultiConnection list.
- */
-List *
-StartWorkerListConnections(List *workerNodeList, uint32 flags, const char *user,
-						   const char *database)
-{
-	List *connectionList = NIL;
-
-	WorkerNode *workerNode = NULL;
-	foreach_ptr(workerNode, workerNodeList)
-	{
-		const char *nodeName = workerNode->workerName;
-		int nodePort = workerNode->workerPort;
-		int connectionFlags = 0;
-
-		MultiConnection *connection = StartNodeUserDatabaseConnection(connectionFlags,
-																	  nodeName, nodePort,
-																	  user, database);
-
-		/*
-		 * connection can only be NULL for optional connections, which we don't
-		 * support in this codepath.
-		 */
-		Assert((flags & OPTIONAL_CONNECTION) == 0);
-		Assert(connection != NULL);
-
-		connectionList = lappend(connectionList, connection);
-	}
-
-	return connectionList;
-}
-
-
-/*
  * StartNodeUserDatabaseConnection() initiates a connection to a remote node.
  *
  * If user or database are NULL, the current session's defaults are used. The

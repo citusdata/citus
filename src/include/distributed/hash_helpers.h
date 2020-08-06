@@ -48,6 +48,4 @@ extern void hash_delete_all(HTAB *htab);
 		 (var) != NULL; \
 		 (var) = hash_seq_search(status))
 
-extern void foreach_htab_cleanup(void *var, HASH_SEQ_STATUS *status);
-
 #endif

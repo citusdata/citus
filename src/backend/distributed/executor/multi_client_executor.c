@@ -45,11 +45,6 @@ static MultiConnection *ClientConnectionArray[MAX_CONNECTION_COUNT];
 static PostgresPollingStatusType ClientPollingStatusArray[MAX_CONNECTION_COUNT];
 
 
-/* Local functions forward declarations */
-static bool ClientConnectionReady(MultiConnection *connection,
-								  PostgresPollingStatusType pollingStatus);
-
-
 /* AllocateConnectionId returns a connection id from the connection pool. */
 static int32
 AllocateConnectionId(void)
@@ -121,118 +116,6 @@ MultiClientConnect(const char *nodeName, uint32 nodePort, const char *nodeDataba
 }
 
 
-/*
- * MultiClientConnectStart asynchronously tries to establish a connection. If it
- * succeeds, it returns the connection id. Otherwise, it reports connection
- * error and returns INVALID_CONNECTION_ID.
- */
-int32
-MultiClientConnectStart(const char *nodeName, uint32 nodePort, const char *nodeDatabase,
-						const char *userName)
-{
-	int32 connectionId = AllocateConnectionId();
-	int connectionFlags = FORCE_NEW_CONNECTION; /* no cached connections for now */
-
-	if (connectionId == INVALID_CONNECTION_ID)
-	{
-		ereport(WARNING, (errmsg("could not allocate connection in connection pool")));
-		return connectionId;
-	}
-
-	if (XactModificationLevel > XACT_MODIFICATION_NONE)
-	{
-		ereport(ERROR, (errcode(ERRCODE_ACTIVE_SQL_TRANSACTION),
-						errmsg("cannot open new connections after the first modification "
-							   "command within a transaction")));
-	}
-
-	/* prepare asynchronous request for worker node connection */
-	MultiConnection *connection = StartNodeUserDatabaseConnection(connectionFlags,
-																  nodeName, nodePort,
-																  userName, nodeDatabase);
-
-	/*
-	 * connection can only be NULL for optional connections, which we don't
-	 * support in this codepath.
-	 */
-	Assert((connectionFlags & OPTIONAL_CONNECTION) == 0);
-	Assert(connection != NULL);
-	ConnStatusType connStatusType = PQstatus(connection->pgConn);
-
-	/*
-	 * If prepared, we save the connection, and set its initial polling status
-	 * to PGRES_POLLING_WRITING as specified in "Database Connection Control
-	 * Functions" section of the PostgreSQL documentation.
-	 */
-	if (connStatusType != CONNECTION_BAD)
-	{
-		ClientConnectionArray[connectionId] = connection;
-		ClientPollingStatusArray[connectionId] = PGRES_POLLING_WRITING;
-	}
-	else
-	{
-		ReportConnectionError(connection, WARNING);
-		CloseConnection(connection);
-
-		connectionId = INVALID_CONNECTION_ID;
-	}
-
-	return connectionId;
-}
-
-
-/* MultiClientConnectPoll returns the status of client connection. */
-ConnectStatus
-MultiClientConnectPoll(int32 connectionId)
-{
-	ConnectStatus connectStatus = CLIENT_INVALID_CONNECT;
-
-	Assert(connectionId != INVALID_CONNECTION_ID);
-	MultiConnection *connection = ClientConnectionArray[connectionId];
-	Assert(connection != NULL);
-
-	PostgresPollingStatusType pollingStatus = ClientPollingStatusArray[connectionId];
-	if (pollingStatus == PGRES_POLLING_OK)
-	{
-		connectStatus = CLIENT_CONNECTION_READY;
-	}
-	else if (pollingStatus == PGRES_POLLING_READING)
-	{
-		bool readReady = ClientConnectionReady(connection, PGRES_POLLING_READING);
-		if (readReady)
-		{
-			ClientPollingStatusArray[connectionId] = PQconnectPoll(connection->pgConn);
-			connectStatus = CLIENT_CONNECTION_BUSY;
-		}
-		else
-		{
-			connectStatus = CLIENT_CONNECTION_BUSY_READ;
-		}
-	}
-	else if (pollingStatus == PGRES_POLLING_WRITING)
-	{
-		bool writeReady = ClientConnectionReady(connection, PGRES_POLLING_WRITING);
-		if (writeReady)
-		{
-			ClientPollingStatusArray[connectionId] = PQconnectPoll(connection->pgConn);
-			connectStatus = CLIENT_CONNECTION_BUSY;
-		}
-		else
-		{
-			connectStatus = CLIENT_CONNECTION_BUSY_WRITE;
-		}
-	}
-	else if (pollingStatus == PGRES_POLLING_FAILED)
-	{
-		ReportConnectionError(connection, WARNING);
-
-		connectStatus = CLIENT_CONNECTION_BAD;
-	}
-
-	return connectStatus;
-}
-
-
 /* MultiClientDisconnect disconnects the connection. */
 void
 MultiClientDisconnect(int32 connectionId)
@@ -247,29 +130,6 @@ MultiClientDisconnect(int32 connectionId)
 
 	ClientConnectionArray[connectionId] = NULL;
 	ClientPollingStatusArray[connectionId] = InvalidPollingStatus;
-}
-
-
-/*
- * MultiClientConnectionUp checks if the connection status is up, in other words,
- * it is not bad.
- */
-bool
-MultiClientConnectionUp(int32 connectionId)
-{
-	bool connectionUp = true;
-
-	Assert(connectionId != INVALID_CONNECTION_ID);
-	MultiConnection *connection = ClientConnectionArray[connectionId];
-	Assert(connection != NULL);
-
-	ConnStatusType connStatusType = PQstatus(connection->pgConn);
-	if (connStatusType == CONNECTION_BAD)
-	{
-		connectionUp = false;
-	}
-
-	return connectionUp;
 }
 
 
@@ -303,20 +163,6 @@ MultiClientSendQuery(int32 connectionId, const char *query)
 	}
 
 	return success;
-}
-
-
-/* MultiClientCancel cancels the running query on the given connection. */
-bool
-MultiClientCancel(int32 connectionId)
-{
-	Assert(connectionId != INVALID_CONNECTION_ID);
-	MultiConnection *connection = ClientConnectionArray[connectionId];
-	Assert(connection != NULL);
-
-	bool canceled = SendCancelationRequest(connection);
-
-	return canceled;
 }
 
 
@@ -358,85 +204,6 @@ MultiClientResultStatus(int32 connectionId)
 	}
 
 	return resultStatus;
-}
-
-
-/*
- * MultiClientBatchResult returns results for a "batch" of queries, meaning a
- * string containing multiple select statements separated by semicolons. This
- * function should be called multiple times to retrieve the results for all the
- * queries, until CLIENT_BATCH_QUERY_DONE is returned (even if a failure occurs).
- * If a query in the batch fails, the remaining queries will not be executed. On
- * success, queryResult, rowCount and columnCount will be set to the appropriate
- * values. After use, queryResult should be cleared using ClientClearResult.
- */
-BatchQueryStatus
-MultiClientBatchResult(int32 connectionId, void **queryResult, int *rowCount,
-					   int *columnCount)
-{
-	BatchQueryStatus queryStatus = CLIENT_INVALID_BATCH_QUERY;
-	bool raiseInterrupts = true;
-
-	Assert(connectionId != INVALID_CONNECTION_ID);
-	MultiConnection *connection = ClientConnectionArray[connectionId];
-	Assert(connection != NULL);
-
-	/* set default result */
-	(*queryResult) = NULL;
-	(*rowCount) = -1;
-	(*columnCount) = -1;
-
-	ConnStatusType connStatusType = PQstatus(connection->pgConn);
-	if (connStatusType == CONNECTION_BAD)
-	{
-		ereport(WARNING, (errmsg("could not maintain connection to worker node")));
-		return CLIENT_BATCH_QUERY_FAILED;
-	}
-
-	PGresult *result = GetRemoteCommandResult(connection, raiseInterrupts);
-	if (result == NULL)
-	{
-		return CLIENT_BATCH_QUERY_DONE;
-	}
-
-	ExecStatusType resultStatus = PQresultStatus(result);
-	if (resultStatus == PGRES_TUPLES_OK)
-	{
-		(*queryResult) = (void **) result;
-		(*rowCount) = PQntuples(result);
-		(*columnCount) = PQnfields(result);
-		queryStatus = CLIENT_BATCH_QUERY_CONTINUE;
-	}
-	else if (resultStatus == PGRES_COMMAND_OK)
-	{
-		(*queryResult) = (void **) result;
-		queryStatus = CLIENT_BATCH_QUERY_CONTINUE;
-	}
-	else
-	{
-		ReportResultError(connection, result, WARNING);
-		PQclear(result);
-		queryStatus = CLIENT_BATCH_QUERY_FAILED;
-	}
-
-	return queryStatus;
-}
-
-
-/* MultiClientGetValue returns the value of field at the given position. */
-char *
-MultiClientGetValue(void *queryResult, int rowIndex, int columnIndex)
-{
-	char *value = PQgetvalue((PGresult *) queryResult, rowIndex, columnIndex);
-	return value;
-}
-
-
-/* MultiClientClearResult free's the memory associated with a PGresult. */
-void
-MultiClientClearResult(void *queryResult)
-{
-	PQclear((PGresult *) queryResult);
 }
 
 
@@ -608,102 +375,4 @@ MultiClientCopyData(int32 connectionId, int32 fileDescriptor, uint64 *returnByte
 	}
 
 	return copyStatus;
-}
-
-
-/*
- * ClientConnectionReady checks if the given connection is ready for non-blocking
- * reads or writes. This function is loosely based on pqSocketCheck() at fe-misc.c
- * and libpq_select() at libpqwalreceiver.c.
- */
-static bool
-ClientConnectionReady(MultiConnection *connection,
-					  PostgresPollingStatusType pollingStatus)
-{
-	bool clientConnectionReady = false;
-	int pollResult = 0;
-
-	/* we use poll(2) if available, otherwise select(2) */
-#ifdef HAVE_POLL
-	int fileDescriptorCount = 1;
-	int immediateTimeout = 0;
-	int pollEventMask = 0;
-	struct pollfd pollFileDescriptor;
-
-	if (pollingStatus == PGRES_POLLING_READING)
-	{
-		pollEventMask = POLLERR | POLLIN;
-	}
-	else if (pollingStatus == PGRES_POLLING_WRITING)
-	{
-		pollEventMask = POLLERR | POLLOUT;
-	}
-
-	pollFileDescriptor.fd = PQsocket(connection->pgConn);
-	pollFileDescriptor.events = pollEventMask;
-	pollFileDescriptor.revents = 0;
-
-	pollResult = poll(&pollFileDescriptor, fileDescriptorCount, immediateTimeout);
-#else
-	fd_set readFileDescriptorSet;
-	fd_set writeFileDescriptorSet;
-	fd_set exceptionFileDescriptorSet;
-	struct timeval immediateTimeout = { 0, 0 };
-	int connectionFileDescriptor = PQsocket(connection->pgConn);
-
-	FD_ZERO(&readFileDescriptorSet);
-	FD_ZERO(&writeFileDescriptorSet);
-	FD_ZERO(&exceptionFileDescriptorSet);
-
-	if (pollingStatus == PGRES_POLLING_READING)
-	{
-		FD_SET(connectionFileDescriptor, &exceptionFileDescriptorSet);
-		FD_SET(connectionFileDescriptor, &readFileDescriptorSet);
-	}
-	else if (pollingStatus == PGRES_POLLING_WRITING)
-	{
-		FD_SET(connectionFileDescriptor, &exceptionFileDescriptorSet);
-		FD_SET(connectionFileDescriptor, &writeFileDescriptorSet);
-	}
-
-	pollResult = (select) (connectionFileDescriptor + 1, &readFileDescriptorSet,
-						   &writeFileDescriptorSet, &exceptionFileDescriptorSet,
-						   &immediateTimeout);
-#endif /* HAVE_POLL */
-
-	if (pollResult > 0)
-	{
-		clientConnectionReady = true;
-	}
-	else if (pollResult == 0)
-	{
-		clientConnectionReady = false;
-	}
-	else if (pollResult < 0)
-	{
-		if (errno == EINTR)
-		{
-			/*
-			 * If a signal was caught, we return false so the caller polls the
-			 * connection again.
-			 */
-			clientConnectionReady = false;
-		}
-		else
-		{
-			/*
-			 * poll() can set errno to EFAULT (when socket is not
-			 * contained in the calling program's address space), EBADF (invalid
-			 * file descriptor), EINVAL (invalid arguments to select or poll),
-			 * and ENOMEM (no space to allocate file descriptor tables). Out of
-			 * these, only ENOMEM is likely here, and it is a fatal error, so we
-			 * error out.
-			 */
-			Assert(errno == ENOMEM);
-			ereport(ERROR, (errcode_for_socket_access(),
-							errmsg("select()/poll() failed: %m")));
-		}
-	}
-
-	return clientConnectionReady;
 }

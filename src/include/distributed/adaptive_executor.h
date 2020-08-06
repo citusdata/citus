@@ -11,8 +11,6 @@ extern bool EnableBinaryProtocol;
 /* GUC, number of ms to wait between opening connections to the same worker */
 extern int ExecutorSlowStartInterval;
 
-extern uint64 ExecuteTaskList(RowModifyLevel modLevel, List *taskList,
-							  int targetPoolSize, bool localExecutionSupported);
 extern uint64 ExecuteUtilityTaskList(List *utilityTaskList, bool localExecutionSupported);
 extern uint64 ExecuteUtilityTaskListExtended(List *utilityTaskList, int poolSize,
 											 bool localExecutionSupported);

@@ -544,11 +544,9 @@ extern Node * BuildBaseConstraint(Var *column);
 extern void UpdateConstraint(Node *baseConstraint, ShardInterval *shardInterval);
 extern bool BinaryOpExpression(Expr *clause, Node **leftOperand, Node **rightOperand);
 extern bool SimpleOpExpression(Expr *clause);
-extern bool OpExpressionContainsColumn(OpExpr *operatorExpression, Var *partitionColumn);
 
 /* helper functions */
 extern Var * MakeInt4Column(void);
-extern Const * MakeInt4Constant(Datum constantValue);
 extern int CompareShardPlacements(const void *leftElement, const void *rightElement);
 extern bool ShardIntervalsOverlap(ShardInterval *firstInterval,
 								  ShardInterval *secondInterval);
@@ -561,8 +559,6 @@ extern StringInfo ArrayObjectToString(ArrayType *arrayObject,
 
 /* function declarations for Task and Task list operations */
 extern bool TasksEqual(const Task *a, const Task *b);
-extern List * TaskListAppendUnique(List *list, Task *task);
-extern List * TaskListConcatUnique(List *list1, List *list2);
 extern bool TaskListMember(const List *taskList, const Task *task);
 extern List * TaskListDifference(const List *list1, const List *list2);
 extern List * AssignAnchorShardTaskList(List *taskList);

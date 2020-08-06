@@ -335,18 +335,6 @@ IsCitusTableRTE(Node *node)
 
 
 /*
- * IsPostgresLocalTableRte gets a node and returns true if the node is a
- * range table relation entry that points to a postgres local table.
- */
-bool
-IsPostgresLocalTableRte(Node *node)
-{
-	Oid relationId = NodeTryGetRteRelid(node);
-	return OidIsValid(relationId) && !IsCitusTable(relationId);
-}
-
-
-/*
  * IsDistributedTableRTE gets a node and returns true if the node
  * is a range table relation entry that points to a distributed relation,
  * returning false still if the relation is a reference table.
@@ -368,18 +356,6 @@ IsReferenceTableRTE(Node *node)
 {
 	Oid relationId = NodeTryGetRteRelid(node);
 	return relationId != InvalidOid && IsCitusTableType(relationId, REFERENCE_TABLE);
-}
-
-
-/*
- * IsCitusLocalTableRTE gets a node and returns true if the node
- * is a range table relation entry that points to a citus local table.
- */
-bool
-IsCitusLocalTableRTE(Node *node)
-{
-	Oid relationId = NodeTryGetRteRelid(node);
-	return OidIsValid(relationId) && IsCitusTableType(relationId, CITUS_LOCAL_TABLE);
 }
 
 

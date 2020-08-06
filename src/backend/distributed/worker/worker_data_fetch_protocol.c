@@ -526,32 +526,6 @@ ExtractShardIdFromTableName(const char *tableName, bool missingOk)
 
 
 /*
- * TableDDLCommandList takes in the given table name, and fetches the list of
- * DDL commands used in creating the table. If an error occurs during fetching,
- * the function returns an empty list.
- */
-List *
-TableDDLCommandList(const char *nodeName, uint32 nodePort, const char *tableName)
-{
-	PGresult *result = NULL;
-	uint32 connectionFlag = FORCE_NEW_CONNECTION;
-
-	StringInfo queryString = makeStringInfo();
-	appendStringInfo(queryString, GET_TABLE_DDL_EVENTS, tableName);
-	MultiConnection *connection = GetNodeConnection(connectionFlag, nodeName, nodePort);
-
-	ExecuteOptionalRemoteCommand(connection, queryString->data, &result);
-	List *ddlCommandList = ReadFirstColumnAsText(result);
-
-	PQclear(result);
-	ForgetResults(connection);
-	CloseConnection(connection);
-
-	return ddlCommandList;
-}
-
-
-/*
  * Parses the given DDL command, and returns the tree node for parsed command.
  */
 Node *

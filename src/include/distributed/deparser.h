@@ -24,7 +24,6 @@
 /* Control flags for FormatCollateExtended, compatible with format_type_extended */
 #define FORMAT_COLLATE_ALLOW_INVALID 0x02       /* allow invalid types */
 #define FORMAT_COLLATE_FORCE_QUALIFY 0x04       /* force qualification of collate */
-extern char * FormatCollateBE(Oid collate_oid);
 extern char * FormatCollateBEQualified(Oid collate_oid);
 extern char * FormatCollateExtended(Oid collid, bits16 flags);
 

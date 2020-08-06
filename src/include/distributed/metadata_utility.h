@@ -103,8 +103,6 @@ extern ShardInterval * LoadShardIntervalWithLongestShardName(Oid relationId);
 extern int ShardIntervalCount(Oid relationId);
 extern List * LoadShardList(Oid relationId);
 extern ShardInterval * CopyShardInterval(ShardInterval *srcInterval);
-extern void CopyShardPlacement(ShardPlacement *srcPlacement,
-							   ShardPlacement *destPlacement);
 extern uint64 ShardLength(uint64 shardId);
 extern bool NodeGroupHasShardPlacements(int32 groupId,
 										bool onlyConsiderActivePlacements);
@@ -151,7 +149,6 @@ extern void EnsureTablePermissions(Oid relationId, AclMode mode);
 extern void EnsureTableOwner(Oid relationId);
 extern void EnsureSchemaOwner(Oid schemaId);
 extern void EnsureHashDistributedTable(Oid relationId);
-extern void EnsureSequenceOwner(Oid sequenceOid);
 extern void EnsureFunctionOwner(Oid functionId);
 extern void EnsureSuperUser(void);
 extern void ErrorIfTableIsACatalogTable(Relation relation);
