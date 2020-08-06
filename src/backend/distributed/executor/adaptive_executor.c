@@ -4421,9 +4421,9 @@ RebuildWaitEventSetFlags(WaitEventSet *waitEventSet, List *sessionList)
 
 
 /*
- * SetLocalForceMaxQueryParallelization simply a C interface for
- * setting the following:
- *      SET LOCAL citus.multi_shard_modify_mode TO on;
+ * SetLocalForceMaxQueryParallelization is simply a C interface for setting
+ * the following:
+ *      SET LOCAL citus.force_max_query_parallelization TO on;
  */
 void
 SetLocalForceMaxQueryParallelization(void)

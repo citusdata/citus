@@ -642,8 +642,8 @@ ExecutePlanIntoDestReceiver(PlannedStmt *queryPlan, ParamListInfo params,
 
 
 /*
- * SetLocalMultiShardModifyModeToSequential simply a C interface for
- * setting the following:
+ * SetLocalMultiShardModifyModeToSequential is simply a C interface for setting
+ * the following:
  *      SET LOCAL citus.multi_shard_modify_mode = 'sequential';
  */
 void
