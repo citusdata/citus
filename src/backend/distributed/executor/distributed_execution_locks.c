@@ -10,6 +10,7 @@
  */
 #include "distributed/distributed_execution_locks.h"
 #include "distributed/listutils.h"
+#include "distributed/coordinator_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_executor.h"
 #include "distributed/multi_partitioning_utils.h"
@@ -115,9 +116,13 @@ AcquireExecutorMultiShardLocks(List *taskList)
 			 * reduce to a RowExclusiveLock when citus.enable_deadlock_prevention
 			 * is enabled, which lets multi-shard modifications run in parallel as
 			 * long as they all disable the GUC.
+			 *
+			 * We also skip taking a heavy-weight lock when running a multi-shard
+			 * commands from workers, since we cannot prevent concurrency across
+			 * workers anyway.
 			 */
 
-			if (EnableDeadlockPrevention)
+			if (EnableDeadlockPrevention && IsCoordinator())
 			{
 				lockMode = ShareUpdateExclusiveLock;
 			}
