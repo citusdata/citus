@@ -794,8 +794,7 @@ ErrorIfTransactionAccessedPlacementsLocally(void)
 
 
 /*
- * DisableLocalExecution simply a C interface for
- * setting the following:
+ * DisableLocalExecution is simply a C interface for setting the following:
  *      SET LOCAL citus.enable_local_execution TO off;
  */
 void
