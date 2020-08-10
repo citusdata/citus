@@ -146,6 +146,7 @@ extern void ExtractParametersFromParamList(ParamListInfo paramListInfo,
 										   Oid **parameterTypes,
 										   const char ***parameterValues, bool
 										   useOriginalCustomTypeOids);
+extern ParamListInfo ExecutorBoundParams(void);
 
 
 #endif /* MULTI_EXECUTOR_H */

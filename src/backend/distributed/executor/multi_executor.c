@@ -57,6 +57,12 @@
 int MultiShardConnectionType = PARALLEL_CONNECTION;
 bool WritableStandbyCoordinator = false;
 
+/*
+ * Pointer to bound parameters of the current ongoing call to ExecutorRun.
+ * If executor is not running, then this value is meaningless.
+ */
+ParamListInfo executorBoundParams = NULL;
+
 
 /* sort the returning to get consistent outputs, used only for testing */
 bool SortReturning = false;
@@ -128,6 +134,14 @@ CitusExecutorRun(QueryDesc *queryDesc,
 				 ScanDirection direction, uint64 count, bool execute_once)
 {
 	DestReceiver *dest = queryDesc->dest;
+
+	ParamListInfo savedBoundParams = executorBoundParams;
+
+	/*
+	 * Save a pointer to query params so UDFs can access them by calling
+	 * ExecutorBoundParams().
+	 */
+	executorBoundParams = queryDesc->params;
 
 	/*
 	 * We do some potentially time consuming operations our self now before we hand of
@@ -209,6 +223,7 @@ CitusExecutorRun(QueryDesc *queryDesc,
 			queryDesc->totaltime = totalTime;
 		}
 
+		executorBoundParams = savedBoundParams;
 		ExecutorLevel--;
 
 		if (ExecutorLevel == 0 && PlannerLevel == 0)
@@ -228,6 +243,7 @@ CitusExecutorRun(QueryDesc *queryDesc,
 			queryDesc->totaltime = totalTime;
 		}
 
+		executorBoundParams = savedBoundParams;
 		ExecutorLevel--;
 
 		PG_RE_THROW();
@@ -690,4 +706,17 @@ AlterTableConstraintCheck(QueryDesc *queryDesc)
 	}
 
 	return true;
+}
+
+
+/*
+ * ExecutorBoundParams returns the bound parameters of the current ongoing call
+ * to ExecutorRun. This is meant to be used by UDFs which need to access bound
+ * parameters.
+ */
+ParamListInfo
+ExecutorBoundParams(void)
+{
+	Assert(ExecutorLevel > 0);
+	return executorBoundParams;
 }
