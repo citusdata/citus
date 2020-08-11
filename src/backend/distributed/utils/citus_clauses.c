@@ -57,7 +57,7 @@ RequiresCoordinatorEvaluation(Query *query)
 		return false;
 	}
 
-	return FindNodeCheck((Node *) query, CitusIsMutableFunction);
+	return FindNodeMatchingCheckFunction((Node *) query, CitusIsMutableFunction);
 }
 
 
@@ -152,7 +152,7 @@ PartiallyEvaluateExpression(Node *expression,
 													coordinatorEvaluationContext);
 		}
 
-		if (FindNodeCheck(expression, IsVariableExpression))
+		if (FindNodeMatchingCheckFunction(expression, IsVariableExpression))
 		{
 			/*
 			 * The expression contains a variable expression (e.g. a stable function,

@@ -570,7 +570,7 @@ DistributedInsertSelectSupported(Query *queryTree, RangeTblEntry *insertRte,
 		}
 	}
 
-	if (FindNodeCheck((Node *) queryTree, CitusIsVolatileFunction))
+	if (FindNodeMatchingCheckFunction((Node *) queryTree, CitusIsVolatileFunction))
 	{
 		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 							 "volatile functions are not allowed in distributed "

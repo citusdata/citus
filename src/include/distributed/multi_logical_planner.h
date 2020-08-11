@@ -187,9 +187,10 @@ typedef struct MultiExtendedOp
 extern MultiTreeRoot * MultiLogicalPlanCreate(Query *originalQuery, Query *queryTree,
 											  PlannerRestrictionContext *
 											  plannerRestrictionContext);
-extern bool FindNodeCheck(Node *node, bool (*check)(Node *));
+extern bool FindNodeMatchingCheckFunction(Node *node, bool (*check)(Node *));
 extern bool TargetListOnPartitionColumn(Query *query, List *targetEntryList);
-extern bool FindNodeCheckInRangeTableList(List *rtable, bool (*check)(Node *));
+extern bool FindNodeMatchingCheckFunctionInRangeTableList(List *rtable, bool (*check)(
+															  Node *));
 extern bool IsCitusTableRTE(Node *node);
 extern bool IsDistributedTableRTE(Node *node);
 extern bool IsReferenceTableRTE(Node *node);
