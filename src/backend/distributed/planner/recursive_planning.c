@@ -376,7 +376,7 @@ ShouldRecursivelyPlanNonColocatedSubqueries(Query *subquery,
 	}
 
 	/* direct joins with local tables are not supported by any of Citus planners */
-	if (FindNodeCheckInRangeTableList(subquery->rtable, IsLocalTableRTE))
+	if (FindNodeMatchingCheckFunctionInRangeTableList(subquery->rtable, IsLocalTableRTE))
 	{
 		return false;
 	}
@@ -636,7 +636,8 @@ ShouldRecursivelyPlanAllSubqueriesInWhere(Query *query)
 		return false;
 	}
 
-	if (FindNodeCheckInRangeTableList(query->rtable, IsDistributedTableRTE))
+	if (FindNodeMatchingCheckFunctionInRangeTableList(query->rtable,
+													  IsDistributedTableRTE))
 	{
 		/* there is a distributed table in the FROM clause */
 		return false;
@@ -662,7 +663,7 @@ RecursivelyPlanAllSubqueries(Node *node, RecursivePlanningContext *planningConte
 	if (IsA(node, Query))
 	{
 		Query *query = (Query *) node;
-		if (FindNodeCheckInRangeTableList(query->rtable, IsCitusTableRTE))
+		if (FindNodeMatchingCheckFunctionInRangeTableList(query->rtable, IsCitusTableRTE))
 		{
 			RecursivelyPlanSubquery(query, planningContext);
 		}
@@ -876,7 +877,7 @@ RecursivelyPlanSubqueryWalker(Node *node, RecursivePlanningContext *context)
 static bool
 ShouldRecursivelyPlanSubquery(Query *subquery, RecursivePlanningContext *context)
 {
-	if (FindNodeCheckInRangeTableList(subquery->rtable, IsLocalTableRTE))
+	if (FindNodeMatchingCheckFunctionInRangeTableList(subquery->rtable, IsLocalTableRTE))
 	{
 		/*
 		 * Postgres can always plan queries that don't require distributed planning.
@@ -1029,7 +1030,7 @@ RecursivelyPlanSetOperations(Query *query, Node *node,
 		Query *subquery = rangeTableEntry->subquery;
 
 		if (rangeTableEntry->rtekind == RTE_SUBQUERY &&
-			FindNodeCheck((Node *) subquery, IsDistributedTableRTE))
+			FindNodeMatchingCheckFunction((Node *) subquery, IsDistributedTableRTE))
 		{
 			RecursivelyPlanSubquery(subquery, context);
 		}

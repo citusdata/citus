@@ -648,7 +648,8 @@ ModifyPartialQuerySupported(Query *queryTree, bool multiShardQuery,
 
 
 			if (cteQuery->hasForUpdate &&
-				FindNodeCheckInRangeTableList(cteQuery->rtable, IsReferenceTableRTE))
+				FindNodeMatchingCheckFunctionInRangeTableList(cteQuery->rtable,
+															  IsReferenceTableRTE))
 			{
 				return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 									 "Router planner doesn't support SELECT FOR UPDATE"
@@ -656,7 +657,7 @@ ModifyPartialQuerySupported(Query *queryTree, bool multiShardQuery,
 									 NULL, NULL);
 			}
 
-			if (FindNodeCheck((Node *) cteQuery, CitusIsVolatileFunction))
+			if (FindNodeMatchingCheckFunction((Node *) cteQuery, CitusIsVolatileFunction))
 			{
 				return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 									 "Router planner doesn't support VOLATILE functions"
@@ -705,7 +706,8 @@ ModifyPartialQuerySupported(Query *queryTree, bool multiShardQuery,
 			}
 
 			if (commandType == CMD_UPDATE &&
-				FindNodeCheck((Node *) targetEntry->expr, CitusIsVolatileFunction))
+				FindNodeMatchingCheckFunction((Node *) targetEntry->expr,
+											  CitusIsVolatileFunction))
 			{
 				return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 									 "functions used in UPDATE queries on distributed "
@@ -733,7 +735,8 @@ ModifyPartialQuerySupported(Query *queryTree, bool multiShardQuery,
 
 		if (joinTree != NULL)
 		{
-			if (FindNodeCheck((Node *) joinTree->quals, CitusIsVolatileFunction))
+			if (FindNodeMatchingCheckFunction((Node *) joinTree->quals,
+											  CitusIsVolatileFunction))
 			{
 				return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 									 "functions used in the WHERE clause of modification "
@@ -830,7 +833,9 @@ ModifyQuerySupported(Query *queryTree, Query *originalQuery, bool multiShardQuer
 	if (!fastPathRouterQuery &&
 		ContainsReadIntermediateResultFunction((Node *) originalQuery))
 	{
-		bool hasTidColumn = FindNodeCheck((Node *) originalQuery->jointree, IsTidColumn);
+		bool hasTidColumn = FindNodeMatchingCheckFunction(
+			(Node *) originalQuery->jointree, IsTidColumn);
+
 		if (hasTidColumn)
 		{
 			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
@@ -1138,7 +1143,8 @@ MultiShardModifyQuerySupported(Query *originalQuery,
 									 "ON instead",
 									 NULL, NULL);
 	}
-	else if (FindNodeCheck((Node *) originalQuery, CitusIsVolatileFunction))
+	else if (FindNodeMatchingCheckFunction((Node *) originalQuery,
+										   CitusIsVolatileFunction))
 	{
 		errorMessage = DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 									 "functions used in UPDATE queries on distributed "

@@ -150,7 +150,7 @@ ShouldUseSubqueryPushDown(Query *originalQuery, Query *rewrittenQuery,
 	 * We process function RTEs as subqueries, since the join order planner
 	 * does not know how to handle them.
 	 */
-	if (FindNodeCheck((Node *) originalQuery, IsFunctionRTE))
+	if (FindNodeMatchingCheckFunction((Node *) originalQuery, IsFunctionRTE))
 	{
 		return true;
 	}
@@ -159,7 +159,7 @@ ShouldUseSubqueryPushDown(Query *originalQuery, Query *rewrittenQuery,
 	 * We handle outer joins as subqueries, since the join order planner
 	 * does not know how to handle them.
 	 */
-	if (FindNodeCheck((Node *) originalQuery->jointree, IsOuterJoinExpr))
+	if (FindNodeMatchingCheckFunction((Node *) originalQuery->jointree, IsOuterJoinExpr))
 	{
 		return true;
 	}
@@ -170,7 +170,7 @@ ShouldUseSubqueryPushDown(Query *originalQuery, Query *rewrittenQuery,
 	 * An example of this is https://github.com/citusdata/citus/issues/2739
 	 * where postgres pulls-up the outer-join in the subquery.
 	 */
-	if (FindNodeCheck((Node *) rewrittenQuery->jointree, IsOuterJoinExpr))
+	if (FindNodeMatchingCheckFunction((Node *) rewrittenQuery->jointree, IsOuterJoinExpr))
 	{
 		return true;
 	}
@@ -278,7 +278,7 @@ JoinTreeContainsSubqueryWalker(Node *joinTreeNode, void *context)
 bool
 WhereOrHavingClauseContainsSubquery(Query *query)
 {
-	if (FindNodeCheck(query->havingQual, IsNodeSubquery))
+	if (FindNodeMatchingCheckFunction(query->havingQual, IsNodeSubquery))
 	{
 		return true;
 	}
@@ -294,7 +294,7 @@ WhereOrHavingClauseContainsSubquery(Query *query)
 	 * JoinExpr nodes that also have quals. If that's the case we need to check
 	 * those as well if they contain andy subqueries.
 	 */
-	return FindNodeCheck((Node *) query->jointree, IsNodeSubquery);
+	return FindNodeMatchingCheckFunction((Node *) query->jointree, IsNodeSubquery);
 }
 
 
@@ -305,7 +305,7 @@ WhereOrHavingClauseContainsSubquery(Query *query)
 bool
 TargetListContainsSubquery(Query *query)
 {
-	return FindNodeCheck((Node *) query->targetList, IsNodeSubquery);
+	return FindNodeMatchingCheckFunction((Node *) query->targetList, IsNodeSubquery);
 }
 
 
@@ -724,7 +724,8 @@ FromClauseRecurringTupleType(Query *queryTree)
 		return RECURRING_TUPLES_EMPTY_JOIN_TREE;
 	}
 
-	if (FindNodeCheckInRangeTableList(queryTree->rtable, IsDistributedTableRTE))
+	if (FindNodeMatchingCheckFunctionInRangeTableList(queryTree->rtable,
+													  IsDistributedTableRTE))
 	{
 		/*
 		 * There is a distributed table somewhere in the FROM clause.
@@ -1337,8 +1338,8 @@ RelationInfoContainsOnlyRecurringTuples(PlannerInfo *plannerInfo,
 	{
 		RangeTblEntry *rangeTableEntry = plannerInfo->simple_rte_array[relationId];
 
-		if (FindNodeCheckInRangeTableList(list_make1(rangeTableEntry),
-										  IsDistributedTableRTE))
+		if (FindNodeMatchingCheckFunctionInRangeTableList(list_make1(rangeTableEntry),
+														  IsDistributedTableRTE))
 		{
 			/* we already found a distributed table, no need to check further */
 			return false;
