@@ -851,6 +851,18 @@ DeferredErrorIfUnsupportedRecurringTuplesJoin(
 
 
 /*
+ * CanPushdownSubquery checks if we can push down the given
+ * subquery to worker nodes.
+ */
+bool
+CanPushdownSubquery(Query *subqueryTree, bool outerMostQueryHasLimit)
+{
+	return DeferErrorIfCannotPushdownSubquery(subqueryTree, outerMostQueryHasLimit) ==
+		   NULL;
+}
+
+
+/*
  * DeferErrorIfCannotPushdownSubquery checks if we can push down the given
  * subquery to worker nodes. If we cannot push down the subquery, this function
  * returns a deferred error.
