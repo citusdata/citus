@@ -686,20 +686,11 @@ SELECT create_distributed_function('eq_with_param_names(macaddr, macaddr)', 'val
 -- colocate_with cannot be used without distribution key
 SELECT create_distributed_function('eq_with_param_names(macaddr, macaddr)', colocate_with:='replicated_table_func_test_2');
 ERROR:  cannot distribute the function "eq_with_param_names" since the distribution argument is not valid
-HINT:  To provide "colocate_with" option, the distribution argument parameter should also be provided
+HINT:  To provide "colocate_with" option with a distributed table, the distribution argument parameter should also be provided
 -- a function cannot be colocated with a local table
 CREATE TABLE replicated_table_func_test_3 (a macaddr8);
 SELECT create_distributed_function('eq_with_param_names(macaddr, macaddr)', 'val1', colocate_with:='replicated_table_func_test_3');
 ERROR:  relation replicated_table_func_test_3 is not distributed
--- a function cannot be colocated with a reference table
-SELECT create_reference_table('replicated_table_func_test_3');
- create_reference_table
----------------------------------------------------------------------
-
-(1 row)
-
-SELECT create_distributed_function('eq_with_param_names(macaddr, macaddr)', 'val1', colocate_with:='replicated_table_func_test_3');
-ERROR:  cannot colocate function "eq_with_param_names" and table "replicated_table_func_test_3" because colocate_with option is only supported for hash distributed tables.
 -- finally, colocate the function with a distributed table
 SET citus.shard_replication_factor TO 1;
 CREATE TABLE replicated_table_func_test_4 (a macaddr);
@@ -741,6 +732,22 @@ WHERE pg_dist_partition.logicalrelid = 'replicated_table_func_test_4'::regclass 
  table_and_function_colocated
 ---------------------------------------------------------------------
  t
+(1 row)
+
+-- a function cannot be colocated with a reference table when a distribution column is provided
+SELECT create_reference_table('replicated_table_func_test_3');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_function('eq_with_param_names(macaddr, macaddr)', 'val1', colocate_with:='replicated_table_func_test_3');
+ERROR:  cannot colocate function "eq_with_param_names" and table "replicated_table_func_test_3" because distribution arguments are not supported when colocating with reference tables.
+-- a function can be colocated with a reference table when the distribution argument is omitted
+SELECT create_distributed_function('eq_with_param_names(macaddr, macaddr)', colocate_with:='replicated_table_func_test_3');
+ create_distributed_function
+---------------------------------------------------------------------
+
 (1 row)
 
 -- function with a macaddr8 dist. arg can be colocated with macaddr

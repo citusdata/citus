@@ -114,6 +114,7 @@ extern List * AllShardPlacementsOnNodeGroup(int32 groupId);
 extern List * GroupShardPlacementsForTableOnGroup(Oid relationId, int32 groupId);
 extern StringInfo GenerateSizeQueryOnMultiplePlacements(List *shardIntervalList,
 														char *sizeQuery);
+extern List * RemoveCoordinatorPlacementIfNotSingleNode(List *placementList);
 
 /* Function declarations to modify shard and shard placement data */
 extern void InsertShardRow(Oid relationId, uint64 shardId, char storageType,
@@ -161,6 +162,8 @@ extern Datum StringToDatum(char *inputString, Oid dataType);
 extern char * DatumToString(Datum datum, Oid dataType);
 extern int CompareShardPlacementsByWorker(const void *leftElement,
 										  const void *rightElement);
+extern int CompareShardPlacementsByGroupId(const void *leftElement,
+										   const void *rightElement);
 extern ShardInterval * DeformedDistShardTupleToShardInterval(Datum *datumArray,
 															 bool *isNullArray,
 															 Oid intervalTypeId,

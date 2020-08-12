@@ -40,6 +40,40 @@ create table mx_call_dist_table_enum(id int, key mx_call_enum);
 select create_distributed_table('mx_call_dist_table_enum', 'key');
 insert into mx_call_dist_table_enum values (1,'S'),(2,'A'),(3,'D'),(4,'F');
 
+-- test that a distributed function can be colocated with a reference table
+CREATE TABLE ref(groupid int);
+SELECT create_reference_table('ref');
+
+CREATE OR REPLACE PROCEDURE my_group_id_proc()
+LANGUAGE plpgsql
+SET search_path FROM CURRENT
+AS $$
+DECLARE
+    gid int;
+BEGIN
+    SELECT groupid INTO gid
+    FROM pg_dist_local_group;
+
+    INSERT INTO ref(groupid) VALUES (gid);
+END;
+$$;
+
+SELECT create_distributed_function('my_group_id_proc()', colocate_with := 'ref');
+
+CALL my_group_id_proc();
+CALL my_group_id_proc();
+SELECT DISTINCT(groupid) FROM ref ORDER BY 1;
+TRUNCATE TABLE ref;
+
+-- test round robin task assignment policy uses different workers on consecutive procedure calls.
+SET citus.task_assignment_policy TO 'round-robin';
+CALL my_group_id_proc();
+CALL my_group_id_proc();
+CALL my_group_id_proc();
+SELECT DISTINCT(groupid) FROM ref ORDER BY 1;
+TRUNCATE TABLE ref;
+
+RESET citus.task_assignment_policy;
 
 CREATE PROCEDURE mx_call_proc(x int, INOUT y int)
 LANGUAGE plpgsql AS $$
@@ -120,8 +154,8 @@ call multi_mx_call.mx_call_proc(2, 0);
 select colocate_proc_with_table('mx_call_proc', 'mx_call_dist_table_1'::regclass, 2);
 call multi_mx_call.mx_call_proc(2, 0);
 
--- We don't currently support colocating with reference tables
-select colocate_proc_with_table('mx_call_proc', 'mx_call_dist_table_ref'::regclass, 1);
+-- We support colocating with reference tables
+select colocate_proc_with_table('mx_call_proc', 'mx_call_dist_table_ref'::regclass, NULL);
 call multi_mx_call.mx_call_proc(2, 0);
 
 -- We don't currently support colocating with replicated tables
