@@ -1104,7 +1104,7 @@ ErrorHintRequired(const char *errorHint, Query *queryTree)
 
 
 /*
- * DeferErrorIfSubqueryNotSupported checks that we can perform distributed planning for
+ * DeferErrorIfUnsupportedSubqueryRepartition checks that we can perform distributed planning for
  * the given subquery. If not, a deferred error is returned. The function recursively
  * does this check to all lower levels of the subquery.
  */

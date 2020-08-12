@@ -22,7 +22,7 @@
 /* Config variables managed via guc.c */
 extern bool SubqueryPushdown;
 
-
+extern bool CanPushdownSubquery(Query *subqueryTree, bool outerMostQueryHasLimit);
 extern bool ShouldUseSubqueryPushDown(Query *originalQuery, Query *rewrittenQuery,
 									  PlannerRestrictionContext *plannerRestrictionContext);
 extern bool JoinTreeContainsSubquery(Query *query);

@@ -889,7 +889,7 @@ ShouldRecursivelyPlanSubquery(Query *subquery, RecursivePlanningContext *context
 		 * do not contain any other local tables.
 		 */
 	}
-	else if (DeferErrorIfCannotPushdownSubquery(subquery, false) == NULL)
+	else if (CanPushdownSubquery(subquery, false))
 	{
 		/*
 		 * We should do one more check for the distribution key equality.
