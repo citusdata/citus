@@ -75,7 +75,6 @@ typedef bool (*CheckNodeFunc)(Node *);
 static RuleApplyFunction RuleApplyFunctionArray[JOIN_RULE_LAST] = { 0 }; /* join rules */
 
 /* Local functions forward declarations */
-static bool AllTargetExpressionsAreColumnReferences(List *targetEntryList);
 static FieldSelect * CompositeFieldRecursive(Expr *expression, Query *query);
 static Oid NodeTryGetRteRelid(Node *node);
 static bool FullCompositeFieldList(List *compositeFieldList);
@@ -264,73 +263,18 @@ TargetListOnPartitionColumn(Query *query, List *targetEntryList)
 
 	/*
 	 * We could still behave as if the target list is on partition column if
-	 * all range table entries are reference tables or intermediate results,
-	 * and all target expressions are column references to the given query level.
+	 * range table entries don't contain a distributed table.
 	 */
 	if (!targetListOnPartitionColumn)
 	{
 		if (!FindNodeMatchingCheckFunctionInRangeTableList(query->rtable,
-														   IsDistributedTableRTE) &&
-			AllTargetExpressionsAreColumnReferences(targetEntryList))
+														   IsDistributedTableRTE))
 		{
 			targetListOnPartitionColumn = true;
 		}
 	}
 
 	return targetListOnPartitionColumn;
-}
-
-
-/*
- * AllTargetExpressionsAreColumnReferences returns true if none of the
- * elements in the target entry list belong to an outer query (for
- * example the query is a sublink and references to another query
- * in the from list).
- *
- * The function also returns true if any of the target entries is not
- * a column itself. This might be too restrictive, but, given that we're
- * handling very specific type of queries, that seems acceptable for now.
- */
-static bool
-AllTargetExpressionsAreColumnReferences(List *targetEntryList)
-{
-	ListCell *targetEntryCell = NULL;
-
-	foreach(targetEntryCell, targetEntryList)
-	{
-		TargetEntry *targetEntry = lfirst(targetEntryCell);
-		Var *candidateColumn = NULL;
-		Expr *strippedColumnExpression = (Expr *) strip_implicit_coercions(
-			(Node *) targetEntry->expr);
-
-		if (IsA(strippedColumnExpression, Var))
-		{
-			candidateColumn = (Var *) strippedColumnExpression;
-		}
-		else if (IsA(strippedColumnExpression, FieldSelect))
-		{
-			FieldSelect *compositeField = (FieldSelect *) strippedColumnExpression;
-			Expr *fieldExpression = compositeField->arg;
-
-			if (IsA(fieldExpression, Var))
-			{
-				candidateColumn = (Var *) fieldExpression;
-			}
-		}
-
-		/* we don't support target entries that are not columns */
-		if (candidateColumn == NULL)
-		{
-			return false;
-		}
-
-		if (candidateColumn->varlevelsup > 0)
-		{
-			return false;
-		}
-	}
-
-	return true;
 }
 
 
