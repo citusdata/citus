@@ -94,7 +94,7 @@ GetExplicitTriggerCommandList(Oid relationId)
 HeapTuple
 GetTriggerTupleById(Oid triggerId, bool missingOk)
 {
-	Relation pgTrigger = heap_open(TriggerRelationId, AccessShareLock);
+	Relation pgTrigger = table_open(TriggerRelationId, AccessShareLock);
 
 	int scanKeyCount = 1;
 	ScanKeyData scanKey[1];
@@ -122,7 +122,7 @@ GetTriggerTupleById(Oid triggerId, bool missingOk)
 	}
 
 	systable_endscan(scanDescriptor);
-	heap_close(pgTrigger, NoLock);
+	table_close(pgTrigger, NoLock);
 
 	if (targetHeapTuple == NULL && missingOk == false)
 	{

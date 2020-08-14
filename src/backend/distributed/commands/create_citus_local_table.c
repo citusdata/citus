@@ -33,6 +33,7 @@
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
+#include "utils/ruleutils.h"
 #include "utils/syscache.h"
 
 
@@ -62,6 +63,7 @@ static void DropAndMoveDefaultSequenceOwnerships(Oid sourceRelationId,
 static void ExtractColumnsOwningSequences(Oid relationId, List **columnNameList,
 										  List **ownedSequenceIdList);
 static void DropDefaultColumnDefinition(Oid relationId, char *columnName);
+static List * GetSequencesOwnedByColumn(Oid relationId, AttrNumber attributeNumber);
 static void TransferSequenceOwnership(Oid ownedSequenceId, Oid targetRelationId,
 									  char *columnName);
 static void ExecuteAndLogDDLCommand(const char *commandString);
@@ -415,7 +417,7 @@ GetConstraintNameList(Oid relationId)
 	int scanKeyCount = 1;
 	ScanKeyData scanKey[1];
 
-	Relation pgConstraint = heap_open(ConstraintRelationId, AccessShareLock);
+	Relation pgConstraint = table_open(ConstraintRelationId, AccessShareLock);
 
 	ScanKeyInit(&scanKey[0], Anum_pg_constraint_conrelid,
 				BTEqualStrategyNumber, F_OIDEQ, relationId);
@@ -438,7 +440,7 @@ GetConstraintNameList(Oid relationId)
 	}
 
 	systable_endscan(scanDescriptor);
-	heap_close(pgConstraint, NoLock);
+	table_close(pgConstraint, NoLock);
 
 	return constraintNameList;
 }
@@ -637,7 +639,7 @@ GetExplicitIndexNameList(Oid relationId)
 
 	PushOverrideEmptySearchPath(CurrentMemoryContext);
 
-	Relation pgIndex = heap_open(IndexRelationId, AccessShareLock);
+	Relation pgIndex = table_open(IndexRelationId, AccessShareLock);
 
 	ScanKeyInit(&scanKey[0], Anum_pg_index_indrelid,
 				BTEqualStrategyNumber, F_OIDEQ, relationId);
@@ -673,7 +675,7 @@ GetExplicitIndexNameList(Oid relationId)
 	}
 
 	systable_endscan(scanDescriptor);
-	heap_close(pgIndex, NoLock);
+	table_close(pgIndex, NoLock);
 
 	/* revert back to original search_path */
 	PopOverrideSearchPath();
@@ -759,7 +761,8 @@ ExtractColumnsOwningSequences(Oid relationId, List **columnNameList,
 		char *columnName = NameStr(attributeForm->attname);
 		*columnNameList = lappend(*columnNameList, columnName);
 
-		List *columnOwnedSequences = getOwnedSequences(relationId, attributeIndex + 1);
+		List *columnOwnedSequences =
+			GetSequencesOwnedByColumn(relationId, attributeIndex + 1);
 
 		Oid ownedSequenceId = InvalidOid;
 		if (list_length(columnOwnedSequences) != 0)
@@ -778,6 +781,32 @@ ExtractColumnsOwningSequences(Oid relationId, List **columnNameList,
 	}
 
 	relation_close(relation, NoLock);
+}
+
+
+/*
+ * GetSequencesOwnedByColumn returns a list of OIDs for all the sequences that
+ * the column with attributeNumber of relation with relationId implicitly depends
+ * (DEPENDENCY_AUTO or DEPENDENCY_INTERNAL).
+ */
+static List *
+GetSequencesOwnedByColumn(Oid relationId, AttrNumber attributeNumber)
+{
+#if PG_VERSION_NUM >= PG_VERSION_13
+
+	/*
+	 * getOwnedSequences_internal is actually able to handle attributeNumber=0
+	 * and it returns all such implicit sequences owned by relation. However,
+	 * postgres already has the extern method getOwnedSequences for this purpose.
+	 */
+	Assert(attributeNumber != 0);
+
+	/* fetch all dependencites with DEPENDENCY_AUTO or DEPENDENCY_INTERNAL*/
+	char dependencyType = 0;
+	return getOwnedSequences_internal(relationId, attributeNumber, dependencyType);
+#else
+	return getOwnedSequences(relationId, attributeNumber);
+#endif
 }
 
 

@@ -41,7 +41,6 @@ step "s2-truncate" { TRUNCATE citus_local_table_1; }
 step "s2-fkey-to-another" { ALTER TABLE citus_local_table_1 ADD CONSTRAINT fkey_c_to_c FOREIGN KEY(a) REFERENCES citus_local_table_2(a); }
 step "s2-remove-coordinator" { SELECT master_remove_node('localhost', 57636); }
 step "s2-commit" { COMMIT; }
-step "s2-rollback" { ROLLBACK; }
 
 
 // create_citus_local_table vs command/query //

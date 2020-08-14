@@ -29,6 +29,9 @@
 #if PG_VERSION_NUM >= PG_VERSION_13
 #include "common/hashfn.h"
 #endif
+#include "distributed/commands.h"
+#include "distributed/commands/utility_hook.h"
+#include "distributed/listutils.h"
 #include "distributed/metadata/dependency.h"
 #include "distributed/metadata/distobject.h"
 #include "distributed/metadata_cache.h"
