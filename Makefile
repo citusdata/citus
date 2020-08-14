@@ -7,7 +7,7 @@ MODULE_big = cstore_fdw
 
 PG_CPPFLAGS = -std=c11
 OBJS = cstore.o cstore_fdw.o cstore_writer.o cstore_reader.o \
-       cstore_compression.o mod.o cstore_metadata_tables.o
+       cstore_compression.o mod.o cstore_metadata_tables.o cstore_tableam.o
 
 EXTENSION = cstore_fdw
 DATA = cstore_fdw--1.7.sql cstore_fdw--1.6--1.7.sql  cstore_fdw--1.5--1.6.sql cstore_fdw--1.4--1.5.sql \
