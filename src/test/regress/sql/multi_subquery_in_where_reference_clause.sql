@@ -469,7 +469,6 @@ LIMIT 5;
 
 SET client_min_messages TO DEFAULT;
 
--- not supported since GROUP BY references to an upper level query
 SELECT
   user_id
 FROM
@@ -491,7 +490,6 @@ ORDER BY user_id
 LIMIT 5;
 
 -- similar query with slightly more complex group by
--- though the error message is a bit confusing
 SELECT
   user_id
 FROM
