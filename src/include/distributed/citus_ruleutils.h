@@ -52,6 +52,7 @@ extern char * pg_get_triggerdef_command(Oid triggerId);
 extern char * generate_relation_name(Oid relid, List *namespaces);
 extern char * generate_qualified_relation_name(Oid relid);
 extern char * generate_operator_name(Oid operid, Oid arg1, Oid arg2);
+extern List * getOwnedSequences_internal(Oid relid, AttrNumber attnum, char deptype);
 
 
 #endif /* CITUS_RULEUTILS_H */
