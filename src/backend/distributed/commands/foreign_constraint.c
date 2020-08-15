@@ -419,7 +419,8 @@ ErrorOutForFKeyBetweenPostgresAndCitusLocalTable(Oid localTableId)
 						   "a postgres local table", localTableName),
 					errhint("first create a citus local table from the postgres "
 							"local table using SELECT create_citus_local_table('%s') "
-							"and re-execute the ALTER TABLE command", localTableName)));
+							"and execute the ALTER TABLE command to create the "
+							"foreign key to citus local table", localTableName)));
 }
 
 

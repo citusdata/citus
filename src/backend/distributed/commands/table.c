@@ -42,7 +42,6 @@
 
 
 /* Local functions forward declarations for unsupported command checks */
-static void ErrorIfTableHasForeignKeyToCitusLocalTable(Oid relationId);
 static void PostprocessCreateTableStmtPartitionOf(CreateStmt *createStatement,
 												  const char *queryString);
 static void ErrorIfAlterTableDefinesFKeyFromPostgresToCitusLocalTable(
@@ -153,20 +152,36 @@ PreprocessDropTableStmt(Node *node, const char *queryString)
 /*
  * PostprocessCreateTableStmt takes CreateStmt object as a parameter and errors
  * out if it creates a table with a foreign key that references to a citus local
- * table. It also processes CREATE TABLE ... PARTITION OF statements via
+ * table if pg version is older than 13 (see comment in function).
+ *
+ * This function also processes CREATE TABLE ... PARTITION OF statements via
  * PostprocessCreateTableStmtPartitionOf function.
  */
 void
 PostprocessCreateTableStmt(CreateStmt *createStatement, const char *queryString)
 {
+#if PG_VERSION_NUM < PG_VERSION_13
+
+	/*
+	 * Postgres processes foreign key constraints implied by CREATE TABLE
+	 * commands by internally executing ALTER TABLE commands via standard
+	 * process utility starting from PG13. Hence, we will already perform
+	 * unsupported foreign key checks via PreprocessAlterTableStmt function
+	 * in PG13. But for the older version, we need to do unsupported foreign
+	 * key checks here.
+	 */
+
 	/*
 	 * Relation must exist and it is already locked as standard process utility
 	 * is already executed.
 	 */
 	bool missingOk = false;
 	Oid relationId = RangeVarGetRelid(createStatement->relation, NoLock, missingOk);
-
-	ErrorIfTableHasForeignKeyToCitusLocalTable(relationId);
+	if (HasForeignKeyToCitusLocalTable(relationId))
+	{
+		ErrorOutForFKeyBetweenPostgresAndCitusLocalTable(relationId);
+	}
+#endif
 
 	if (createStatement->inhRelations != NIL && createStatement->partbound != NULL)
 	{
@@ -212,32 +227,6 @@ PostprocessCreateTableStmtPartitionOf(CreateStmt *createStatement, const
 							   parentDistributionMethod, parentRelationName,
 							   viaDeprecatedAPI);
 	}
-}
-
-
-/*
- * ErrorIfTableHasForeignKeyToCitusLocalTable errors out if table has a foreign
- * key to a citus local table.
- */
-static void
-ErrorIfTableHasForeignKeyToCitusLocalTable(Oid relationId)
-{
-	if (!HasForeignKeyToCitusLocalTable(relationId))
-	{
-		return;
-	}
-
-	char *relationName = get_rel_name(relationId);
-	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-					errmsg("cannot create table \"%s\" as it has a foreign key "
-						   "to a citus local table", relationName),
-					errhint("First create the table without foreign keys to "
-							"citus local tables and then convert your table "
-							"either to a citus local table using SELECT "
-							"create_citus_local_table('%s') or to a reference "
-							"table using SELECT create_reference_table('%s'), "
-							"then define the foreign key with ALTER TABLE "
-							"command.", relationName, relationName)));
 }
 
 
