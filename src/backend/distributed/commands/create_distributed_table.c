@@ -119,7 +119,6 @@ static List * TupleDescColumnNameList(TupleDesc tupleDescriptor);
 static bool RelationUsesIdentityColumns(TupleDesc relationDesc);
 static bool DistributionColumnUsesGeneratedStoredColumn(TupleDesc relationDesc,
 														Var *distributionColumn);
-static bool RelationUsesHeapAccessMethodOrNone(Relation relation);
 static bool CanUseExclusiveConnections(Oid relationId, bool localTableEmpty);
 static void DoCopyFromLocalTableIntoShards(Relation distributedRelation,
 										   DestReceiver *copyDest,
@@ -156,16 +155,6 @@ master_create_distributed_table(PG_FUNCTION_ARGS)
 
 	char *colocateWithTableName = NULL;
 	bool viaDeprecatedAPI = true;
-	ObjectAddress tableAddress = { 0 };
-
-	/*
-	 * distributed tables might have dependencies on different objects, since we create
-	 * shards for a distributed table via multiple sessions these objects will be created
-	 * via their own connection and committed immediately so they become visible to all
-	 * sessions creating shards.
-	 */
-	ObjectAddressSet(tableAddress, RelationRelationId, relationId);
-	EnsureDependenciesExistOnAllNodes(&tableAddress);
 
 	/*
 	 * Lock target relation with an exclusive lock - there's no way to make
@@ -203,8 +192,6 @@ master_create_distributed_table(PG_FUNCTION_ARGS)
 Datum
 create_distributed_table(PG_FUNCTION_ARGS)
 {
-	ObjectAddress tableAddress = { 0 };
-
 	bool viaDeprecatedAPI = false;
 
 	Oid relationId = PG_GETARG_OID(0);
@@ -215,15 +202,6 @@ create_distributed_table(PG_FUNCTION_ARGS)
 	CheckCitusVersion(ERROR);
 
 	EnsureCitusTableCanBeCreated(relationId);
-
-	/*
-	 * distributed tables might have dependencies on different objects, since we create
-	 * shards for a distributed table via multiple sessions these objects will be created
-	 * via their own connection and committed immediately so they become visible to all
-	 * sessions creating shards.
-	 */
-	ObjectAddressSet(tableAddress, RelationRelationId, relationId);
-	EnsureDependenciesExistOnAllNodes(&tableAddress);
 
 	/*
 	 * Lock target relation with an exclusive lock - there's no way to make
@@ -267,22 +245,12 @@ create_reference_table(PG_FUNCTION_ARGS)
 
 	char *colocateWithTableName = NULL;
 	Var *distributionColumn = NULL;
-	ObjectAddress tableAddress = { 0 };
 
 	bool viaDeprecatedAPI = false;
 
 	CheckCitusVersion(ERROR);
 
 	EnsureCitusTableCanBeCreated(relationId);
-
-	/*
-	 * distributed tables might have dependencies on different objects, since we create
-	 * shards for a distributed table via multiple sessions these objects will be created
-	 * via their own connection and committed immediately so they become visible to all
-	 * sessions creating shards.
-	 */
-	ObjectAddressSet(tableAddress, RelationRelationId, relationId);
-	EnsureDependenciesExistOnAllNodes(&tableAddress);
 
 	/*
 	 * Lock target relation with an exclusive lock - there's no way to make
@@ -387,6 +355,16 @@ void
 CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributionMethod,
 					   char *colocateWithTableName, bool viaDeprecatedAPI)
 {
+	/*
+	 * distributed tables might have dependencies on different objects, since we create
+	 * shards for a distributed table via multiple sessions these objects will be created
+	 * via their own connection and committed immediately so they become visible to all
+	 * sessions creating shards.
+	 */
+	ObjectAddress tableAddress = { 0 };
+	ObjectAddressSet(tableAddress, RelationRelationId, relationId);
+	EnsureDependenciesExistOnAllNodes(&tableAddress);
+
 	char replicationModel = DecideReplicationModel(distributionMethod,
 												   viaDeprecatedAPI);
 
@@ -703,12 +681,6 @@ EnsureRelationCanBeDistributed(Oid relationId, Var *distributionColumn,
 	char *relationName = RelationGetRelationName(relation);
 
 	ErrorIfTableIsACatalogTable(relation);
-
-	if (!RelationUsesHeapAccessMethodOrNone(relation))
-	{
-		ereport(ERROR, (errmsg(
-							"cannot distribute relations using non-heap access methods")));
-	}
 
 #if PG_VERSION_NUM < PG_VERSION_12
 
@@ -1376,8 +1348,7 @@ CopyLocalDataIntoShards(Oid distributedRelationId)
 
 	/* get the table columns */
 	TupleDesc tupleDescriptor = RelationGetDescr(distributedRelation);
-	TupleTableSlot *slot = MakeSingleTupleTableSlotCompat(tupleDescriptor,
-														  &TTSOpsHeapTuple);
+	TupleTableSlot *slot = CreateTableSlotForRel(distributedRelation);
 	List *columnNameList = TupleDescColumnNameList(tupleDescriptor);
 
 	int partitionColumnIndex = INVALID_PARTITION_COLUMN_INDEX;
@@ -1441,15 +1412,9 @@ DoCopyFromLocalTableIntoShards(Relation distributedRelation,
 	MemoryContext oldContext = MemoryContextSwitchTo(GetPerTupleMemoryContext(estate));
 
 	uint64 rowsCopied = 0;
-	HeapTuple tuple = NULL;
-	while ((tuple = heap_getnext(scan, ForwardScanDirection)) != NULL)
+	while (table_scan_getnextslot(scan, ForwardScanDirection, slot))
 	{
-		/* materialize tuple and send it to a shard */
-#if PG_VERSION_NUM >= PG_VERSION_12
-		ExecStoreHeapTuple(tuple, slot, false);
-#else
-		ExecStoreTuple(tuple, slot, InvalidBuffer, false);
-#endif
+		/* send tuple it to a shard */
 		copyDest->receiveSlot(slot, copyDest);
 
 		/* clear tuple memory */
@@ -1569,22 +1534,6 @@ DistributionColumnUsesGeneratedStoredColumn(TupleDesc relationDesc,
 #endif
 
 	return false;
-}
-
-
-/*
- * Returns whether given relation uses default access method
- */
-static bool
-RelationUsesHeapAccessMethodOrNone(Relation relation)
-{
-#if PG_VERSION_NUM >= PG_VERSION_12
-
-	return relation->rd_rel->relkind != RELKIND_RELATION ||
-		   relation->rd_amhandler == HEAP_TABLE_AM_HANDLER_OID;
-#else
-	return true;
-#endif
 }
 
 

@@ -26,6 +26,7 @@
 #include "catalog/dependency.h"
 #include "catalog/indexing.h"
 #include "catalog/namespace.h"
+#include "catalog/pg_am.h"
 #include "catalog/pg_attribute.h"
 #include "catalog/pg_authid.h"
 #include "catalog/pg_class.h"
@@ -450,6 +451,27 @@ pg_get_tableschemadef_string(Oid tableRelationId, bool includeSequenceDefaults)
 		char *partitioningInformation = GeneratePartitioningInformation(tableRelationId);
 		appendStringInfo(&buffer, " PARTITION BY %s ", partitioningInformation);
 	}
+
+#if PG_VERSION_NUM >= 120000
+
+	/*
+	 * Add table access methods for pg12 and higher when the table is configured with an
+	 * access method
+	 */
+	if (OidIsValid(relation->rd_rel->relam))
+	{
+		HeapTuple amTup = SearchSysCache1(AMOID, ObjectIdGetDatum(
+											  relation->rd_rel->relam));
+		if (!HeapTupleIsValid(amTup))
+		{
+			elog(ERROR, "cache lookup failed for access method %u",
+				 relation->rd_rel->relam);
+		}
+		Form_pg_am amForm = (Form_pg_am) GETSTRUCT(amTup);
+		appendStringInfo(&buffer, " USING %s", quote_identifier(NameStr(amForm->amname)));
+		ReleaseSysCache(amTup);
+	}
+#endif
 
 	/*
 	 * Add any reloptions (storage parameters) defined on the table in a WITH
