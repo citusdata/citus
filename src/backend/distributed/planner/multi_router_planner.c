@@ -1817,7 +1817,7 @@ ReorderTaskPlacementsByTaskAssignmentPolicy(Job *job,
 		placementList = RemoveCoordinatorPlacement(placementList);
 
 		/* reorder the placement list */
-		List *reorderedPlacementList = RoundRobinReorder(task, placementList);
+		List *reorderedPlacementList = RoundRobinReorder(placementList);
 		task->taskPlacementList = reorderedPlacementList;
 
 		ShardPlacement *primaryPlacement = (ShardPlacement *) linitial(
