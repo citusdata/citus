@@ -209,7 +209,7 @@ static List * GreedyAssignTaskList(List *taskList);
 static Task * GreedyAssignTask(WorkerNode *workerNode, List *taskList,
 							   List *activeShardPlacementLists);
 static List * ReorderAndAssignTaskList(List *taskList,
-									   List * (*reorderFunction)(List *));
+									   ReorderFunction reorderFunction);
 static int CompareTasksByShardId(const void *leftElement, const void *rightElement);
 static List * ActiveShardPlacementLists(List *taskList);
 static List * ActivePlacementList(List *placementList);
@@ -5210,7 +5210,7 @@ List *
 FirstReplicaAssignTaskList(List *taskList)
 {
 	/* No additional reordering need take place for this algorithm */
-	List *(*reorderFunction)(List *) = NULL;
+	ReorderFunction reorderFunction = NULL;
 
 	taskList = ReorderAndAssignTaskList(taskList, reorderFunction);
 
@@ -5270,7 +5270,7 @@ RoundRobinReorder(List *placementList)
  * by rotation or shuffling). Returns the task list with placements assigned.
  */
 static List *
-ReorderAndAssignTaskList(List *taskList, List * (*reorderFunction)(List *))
+ReorderAndAssignTaskList(List *taskList, ReorderFunction reorderFunction)
 {
 	List *assignedTaskList = NIL;
 	ListCell *taskCell = NULL;

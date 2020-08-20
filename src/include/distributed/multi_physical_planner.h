@@ -507,6 +507,10 @@ typedef struct OperatorCacheEntry
 } OperatorCacheEntry;
 
 
+/* Named function pointer type for reordering Task lists */
+typedef List *(*ReorderFunction)(List *);
+
+
 /* Config variable managed via guc.c */
 extern int TaskAssignmentPolicy;
 extern bool EnableUniqueJobIds;
