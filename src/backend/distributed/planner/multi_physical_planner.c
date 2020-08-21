@@ -209,7 +209,7 @@ static List * GreedyAssignTaskList(List *taskList);
 static Task * GreedyAssignTask(WorkerNode *workerNode, List *taskList,
 							   List *activeShardPlacementLists);
 static List * ReorderAndAssignTaskList(List *taskList,
-									   List * (*reorderFunction)(Task *, List *));
+									   ReorderFunction reorderFunction);
 static int CompareTasksByShardId(const void *leftElement, const void *rightElement);
 static List * ActiveShardPlacementLists(List *taskList);
 static List * ActivePlacementList(List *placementList);
@@ -5210,7 +5210,7 @@ List *
 FirstReplicaAssignTaskList(List *taskList)
 {
 	/* No additional reordering need take place for this algorithm */
-	List *(*reorderFunction)(Task *, List *) = NULL;
+	ReorderFunction reorderFunction = NULL;
 
 	taskList = ReorderAndAssignTaskList(taskList, reorderFunction);
 
@@ -5237,8 +5237,8 @@ RoundRobinAssignTaskList(List *taskList)
 
 /*
  * RoundRobinReorder implements the core of the round-robin assignment policy.
- * It takes a task and placement list and rotates a copy of the placement list
- * based on the latest stable transaction id provided by PostgreSQL.
+ * It takes a placement list and rotates a copy of it based on the latest stable
+ * transaction id provided by PostgreSQL.
  *
  * We prefer to use transactionId as the seed for the rotation to use the replicas
  * in the same worker node within the same transaction. This becomes more important
@@ -5251,7 +5251,7 @@ RoundRobinAssignTaskList(List *taskList)
  * where as task-assignment happens duing the planning.
  */
 List *
-RoundRobinReorder(Task *task, List *placementList)
+RoundRobinReorder(List *placementList)
 {
 	TransactionId transactionId = GetMyProcLocalTransactionId();
 	uint32 activePlacementCount = list_length(placementList);
@@ -5270,7 +5270,7 @@ RoundRobinReorder(Task *task, List *placementList)
  * by rotation or shuffling). Returns the task list with placements assigned.
  */
 static List *
-ReorderAndAssignTaskList(List *taskList, List * (*reorderFunction)(Task *, List *))
+ReorderAndAssignTaskList(List *taskList, ReorderFunction reorderFunction)
 {
 	List *assignedTaskList = NIL;
 	ListCell *taskCell = NULL;
@@ -5301,7 +5301,7 @@ ReorderAndAssignTaskList(List *taskList, List * (*reorderFunction)(Task *, List 
 		{
 			if (reorderFunction != NULL)
 			{
-				placementList = reorderFunction(task, placementList);
+				placementList = reorderFunction(placementList);
 			}
 			task->taskPlacementList = placementList;
 

@@ -507,6 +507,10 @@ typedef struct OperatorCacheEntry
 } OperatorCacheEntry;
 
 
+/* Named function pointer type for reordering Task lists */
+typedef List *(*ReorderFunction)(List *);
+
+
 /* Config variable managed via guc.c */
 extern int TaskAssignmentPolicy;
 extern bool EnableUniqueJobIds;
@@ -557,7 +561,7 @@ extern List * TaskListDifference(const List *list1, const List *list2);
 extern List * AssignAnchorShardTaskList(List *taskList);
 extern List * FirstReplicaAssignTaskList(List *taskList);
 extern List * RoundRobinAssignTaskList(List *taskList);
-extern List * RoundRobinReorder(Task *task, List *placementList);
+extern List * RoundRobinReorder(List *placementList);
 extern void SetPlacementNodeMetadata(ShardPlacement *placement, WorkerNode *workerNode);
 extern int CompareTasksByTaskId(const void *leftElement, const void *rightElement);
 
