@@ -27,6 +27,7 @@
 #include "distributed/multi_physical_planner.h"
 #include "distributed/adaptive_executor.h"
 #include "distributed/remote_commands.h"
+#include "distributed/reference_table_utils.h"
 #include "distributed/shard_pruning.h"
 #include "distributed/tuple_destination.h"
 #include "distributed/version_compat.h"
@@ -99,9 +100,7 @@ CallFuncExprRemotely(CallStmt *callStmt, DistObjectCacheEntry *procedure,
 		return false;
 	}
 
-	CitusTableCacheEntry *distTable = GetCitusTableCacheEntry(colocatedRelationId);
-	Var *partitionColumn = distTable->partitionColumn;
-	if (partitionColumn == NULL)
+	if (IsReferenceTable(colocatedRelationId))
 	{
 		/* This can happen if colocated with a reference table. Punt for now. */
 		ereport(DEBUG1, (errmsg(
@@ -117,6 +116,9 @@ CallFuncExprRemotely(CallStmt *callStmt, DistObjectCacheEntry *procedure,
 		ereport(DEBUG1, (errmsg("distribution argument value must be a constant")));
 		return false;
 	}
+
+	CitusTableCacheEntry *distTable = GetCitusTableCacheEntry(colocatedRelationId);
+	Var *partitionColumn = distTable->partitionColumn;
 
 	Const *partitionValue = (Const *) partitionValueNode;
 	if (partitionValue->consttype != partitionColumn->vartype)
