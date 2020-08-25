@@ -16,7 +16,10 @@
 
 #include "listutils.h"
 
+#include "distributed/metadata_cache.h"
+
 extern bool IsReferenceTable(Oid relationId);
+bool IsReferenceTableByCacheEntry(CitusTableCacheEntry *tableEntry);
 extern void EnsureReferenceTablesExistOnAllNodes(void);
 extern uint32 CreateReferenceTableColocationId(void);
 extern void DeleteAllReferenceTablePlacementsFromNodeGroup(int32 groupId);
