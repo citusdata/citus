@@ -7,7 +7,7 @@ jobs:
 
   build-11:
     docker:
-      - image: 'heisenberg302/extbuilder:11.9'
+      - image: 'citus/extbuilder:11.9'
     steps:
       - checkout
       - run:
@@ -21,7 +21,7 @@ jobs:
 
   build-12:
     docker:
-      - image: 'heisenberg302/extbuilder:12.4'
+      - image: 'citus/extbuilder:12.4'
     steps:
       - checkout
       - run:
@@ -35,7 +35,7 @@ jobs:
 
   build-13:
     docker:
-      - image: 'heisenberg302/extbuilder:13beta'
+      - image: 'citus/extbuilder:13beta3'
     steps:
       - checkout
       - run:
@@ -101,17 +101,12 @@ jobs:
           command: ci/check_sql_snapshots.sh
   test-11_check-multi:
     docker:
-      - image: 'heisenberg302/exttester:11.9'
+      - image: 'citus/exttester:11.9'
     working_directory: /home/circleci/project
     steps:
       - checkout
       - attach_workspace:
           at: .
-      - run:
-          name : "install necessary tools"
-          command: |
-              apt-get update
-              apt-get install -y autoconf build-essential libcurl4-openssl-dev libicu-dev libreadline-dev libselinux1-dev libxslt-dev libssl-dev
       - run:
           name: 'Install and Test (check-multi)'
           command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext check-multi'
@@ -123,7 +118,7 @@ jobs:
 
   test-11_check-vanilla:
     docker:
-      - image: 'heisenberg302/exttester:11.9'
+      - image: 'citus/exttester:11.9'
     working_directory: /home/circleci/project
     steps:
       - checkout
@@ -138,7 +133,7 @@ jobs:
 
   test-11_check-mx:
     docker:
-      - image: 'heisenberg302/exttester:11.9'
+      - image: 'citus/exttester:11.9'
     working_directory: /home/circleci/project
     steps:
       - checkout
@@ -153,7 +148,7 @@ jobs:
 
   test-11_check-worker:
     docker:
-      - image: 'heisenberg302/exttester:11.9'
+      - image: 'citus/exttester:11.9'
     working_directory: /home/circleci/project
     steps:
       - checkout
@@ -168,7 +163,7 @@ jobs:
 
   test-11_check-isolation:
     docker:
-      - image: 'heisenberg302/exttester:11.9'
+      - image: 'citus/exttester:11.9'
     working_directory: /home/circleci/project
     steps:
       - checkout
@@ -182,7 +177,7 @@ jobs:
           flags: 'test_11,isolation'
   test-11_check-follower-cluster:
     docker:
-      - image: 'heisenberg302/exttester:11.9'
+      - image: 'citus/exttester:11.9'
     working_directory: /home/circleci/project
     steps:
       - checkout
@@ -206,7 +201,7 @@ jobs:
           path: '/tmp/core_dumps'
   test-11_check-failure:
     docker:
-      - image: 'heisenberg302/failtester:11.9'
+      - image: 'citus/failtester:11.9'
     working_directory: /home/circleci/project
     steps:
       - checkout
@@ -219,17 +214,12 @@ jobs:
 
   test-11-12_check-pg-upgrade:
     docker:
-      - image: 'heisenberg302/pgupgradetester:latest'
+      - image: 'citus/pgupgradetester:latest'
     working_directory: /home/circleci/project
     steps:
       - checkout
       - attach_workspace:
           at: .
-      - run:
-          name : "install necessary tools"
-          command: |
-              apt-get update
-              apt-get install -y autoconf build-essential libcurl4-openssl-dev libicu-dev libreadline-dev libselinux1-dev libxslt-dev libssl-dev
       - run:
           name: 'Install and test postgres upgrade'
           command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext --target check-pg-upgrade --old-pg-version 11 --new-pg-version 12'
@@ -237,7 +227,7 @@ jobs:
 
   test-12-13_check-pg-upgrade:
     docker:
-      - image: 'heisenberg302/pgupgradetester:latest'
+      - image: 'citus/pgupgradetester:latest'
     working_directory: /home/circleci/project
     steps:
       - checkout
@@ -250,7 +240,7 @@ jobs:
 
   test-12_check-multi:
     docker:
-      - image: 'heisenberg302/exttester:12.4'
+      - image: 'citus/exttester:12.4'
     working_directory: /home/circleci/project
     steps:
       - checkout
@@ -264,7 +254,7 @@ jobs:
           flags: 'test_12,multi'
   test-12_check-vanilla:
     docker:
-      - image: 'heisenberg302/exttester:12.4'
+      - image: 'citus/exttester:12.4'
     working_directory: /home/circleci/project
     steps:
       - checkout
@@ -279,7 +269,7 @@ jobs:
 
   test-12_check-mx:
     docker:
-      - image: 'heisenberg302/exttester:12.4'
+      - image: 'citus/exttester:12.4'
     working_directory: /home/circleci/project
     steps:
       - checkout
@@ -294,7 +284,7 @@ jobs:
 
   test-12_check-isolation:
     docker:
-      - image: 'heisenberg302/exttester:12.4'
+      - image: 'citus/exttester:12.4'
     working_directory: /home/circleci/project
     steps:
       - checkout
@@ -309,7 +299,7 @@ jobs:
 
   test-12_check-worker:
     docker:
-      - image: 'heisenberg302/exttester:12.4'
+      - image: 'citus/exttester:12.4'
     working_directory: /home/circleci/project
     steps:
       - checkout
@@ -324,7 +314,7 @@ jobs:
 
   test-12_check-follower-cluster:
     docker:
-      - image: 'heisenberg302/exttester:12.4'
+      - image: 'citus/exttester:12.4'
     working_directory: /home/circleci/project
     steps:
       - checkout
@@ -349,7 +339,7 @@ jobs:
 
   test-12_check-failure:
     docker:
-      - image: 'heisenberg302/failtester:12.4'
+      - image: 'citus/failtester:12.4'
     working_directory: /home/circleci/project
     steps:
       - checkout
@@ -362,7 +352,7 @@ jobs:
 
   test-11_check-citus-upgrade:
     docker:
-      - image: 'heisenberg302/citusupgradetester:11.9'
+      - image: 'citus/citusupgradetester:11.9'
     working_directory: /home/circleci/project
     steps:
       - checkout
@@ -385,7 +375,7 @@ jobs:
 
   test-13_check-multi:
     docker:
-      - image: 'heisenberg302/exttester:13beta3'
+      - image: 'citus/exttester:13beta3'
     working_directory: /home/circleci/project
     steps:
       - checkout
@@ -400,7 +390,7 @@ jobs:
 
   test-13_check-mx:
     docker:
-      - image: 'heisenberg302/exttester:13beta3'
+      - image: 'citus/exttester:13beta3'
     working_directory: /home/circleci/project
     steps:
       - checkout
@@ -415,7 +405,7 @@ jobs:
 
   test-13_check-vanilla:
     docker:
-      - image: 'heisenberg302/exttester:13beta3'
+      - image: 'citus/exttester:13beta3'
     working_directory: /home/circleci/project
     steps:
       - checkout
@@ -430,7 +420,7 @@ jobs:
 
   test-13_check-worker:
     docker:
-      - image: 'heisenberg302/exttester:13beta3'
+      - image: 'citus/exttester:13beta3'
     working_directory: /home/circleci/project
     steps:
       - checkout
@@ -445,7 +435,7 @@ jobs:
 
   test-13_check-isolation:
     docker:
-      - image: 'heisenberg302/exttester:13beta3'
+      - image: 'citus/exttester:13beta3'
     working_directory: /home/circleci/project
     steps:
       - checkout
@@ -460,7 +450,7 @@ jobs:
 
   test-13_check-follower-cluster:
     docker:
-      - image: 'heisenberg302/exttester:13beta3'
+      - image: 'citus/exttester:13beta3'
     working_directory: /home/circleci/project
     steps:
       - checkout
@@ -485,7 +475,7 @@ jobs:
 
   test-13_check-failure:
     docker:
-      - image: 'heisenberg302/failtester:13beta'
+      - image: 'citus/failtester:13beta3'
     working_directory: /home/circleci/project
     steps:
       - checkout
