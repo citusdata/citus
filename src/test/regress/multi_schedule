@@ -271,7 +271,7 @@ test: multi_colocated_shard_transfer
 # ----------
 # multi_citus_tools tests utility functions written for citus tools
 # ----------
-test: multi_citus_tools
+test: multi_citus_tools local_table_join
 
 # ----------
 # node_conninfo_reload tests that node_conninfo changes take effect
