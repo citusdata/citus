@@ -2280,7 +2280,6 @@ Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
                     Hash Cond: (ref_table.a = intermediate_result.a)
                     ->  Seq Scan on ref_table_570021 ref_table (actual rows=10 loops=1)
                     ->  Hash (actual rows=10 loops=1)
-                          Buckets: 1024  Batches: 1  Memory Usage: 9kB
                           ->  Function Scan on read_intermediate_result intermediate_result (actual rows=10 loops=1)
 EXPLAIN :default_analyze_flags
 SELECT count(distinct a) FROM (SELECT GREATEST(random(), 2) r, a FROM dist_table) t NATURAL JOIN ref_table;
