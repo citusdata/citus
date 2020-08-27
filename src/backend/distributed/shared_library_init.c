@@ -103,7 +103,7 @@ static void RegisterCitusConfigVariables(void);
 static bool ErrorIfNotASuitableDeadlockFactor(double *newval, void **extra,
 											  GucSource source);
 static bool WarnIfDeprecatedExecutorUsed(int *newval, void **extra, GucSource source);
-static bool WarnIfSubqueryPushdownEnabled(bool *newval, void **extra, GucSource source);
+static bool NoticeIfSubqueryPushdownEnabled(bool *newval, void **extra, GucSource source);
 static bool NodeConninfoGucCheckHook(char **newval, void **extra, GucSource source);
 static void NodeConninfoGucAssignHook(const char *newval, void *extra);
 static const char * MaxSharedPoolSizeGucShowHook(void);
@@ -621,7 +621,7 @@ RegisterCitusConfigVariables(void)
 		false,
 		PGC_USERSET,
 		GUC_NO_SHOW_ALL,
-		WarnIfSubqueryPushdownEnabled, NULL, NULL);
+		NoticeIfSubqueryPushdownEnabled, NULL, NULL);
 
 	DefineCustomBoolVariable(
 		"citus.log_multi_join_order",
@@ -1535,13 +1535,15 @@ WarnIfDeprecatedExecutorUsed(int *newval, void **extra, GucSource source)
 
 
 /*
- * WarnIfSubqueryPushdownEnabled prints a notice when a user sets
- * citus.subquery_pushdown to ON.
+ * NoticeIfSubqueryPushdownEnabled prints a notice when a user sets
+ * citus.subquery_pushdown to ON. It doesn't print the notice if the
+ * value is already true.
  */
 static bool
-WarnIfSubqueryPushdownEnabled(bool *newval, void **extra, GucSource source)
+NoticeIfSubqueryPushdownEnabled(bool *newval, void **extra, GucSource source)
 {
-	if (*newval)
+	/* notice only when the value changes */
+	if (*newval == true && SubqueryPushdown == false)
 	{
 		ereport(NOTICE, (errcode(ERRCODE_WARNING_DEPRECATED_FEATURE),
 						 errmsg("Setting citus.subquery_pushdown flag is "
