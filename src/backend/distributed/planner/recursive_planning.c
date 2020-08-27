@@ -187,14 +187,16 @@ static bool ContainsReferencesToOuterQueryWalker(Node *node,
 												 VarLevelsUpWalkerContext *context);
 static bool NodeContainsSubqueryReferencingOuterQuery(Node *node);
 static void ConvertLocalTableJoinsToSubqueries(Query *query,
-											   PlannerRestrictionContext *
-											   plannerRestrictionContext);
+											   RecursivePlanningContext *planningContext);
+static List * RequiredAttrNumbersForRelation(RangeTblEntry *relationRte,
+											 RecursivePlanningContext *planningContext);
 static RangeTblEntry * MostFilteredRte(PlannerRestrictionContext *
 									   plannerRestrictionContext,
 									   List *rangeTableList, List **restrictionList,
 									   bool localTable);
 static void ReplaceRTERelationWithRteSubquery(RangeTblEntry *rangeTableEntry,
-											  List *restrictionList);
+											  List *restrictionList,
+											  List *requiredAttrNumbers);
 static bool AllDataLocallyAccessible(List *rangeTableList);
 static void WrapFunctionsInSubqueries(Query *query);
 static void TransformFunctionRTE(RangeTblEntry *rangeTblEntry);
@@ -312,7 +314,7 @@ RecursivelyPlanSubqueriesAndCTEs(Query *query, RecursivePlanningContext *context
 	 * Logical planner cannot handle "local_table" [OUTER] JOIN "dist_table", so we
 	 * recursively plan one side of the join so that the logical planner can plan.
 	 */
-	ConvertLocalTableJoinsToSubqueries(query, context->plannerRestrictionContext);
+	ConvertLocalTableJoinsToSubqueries(query, context);
 
 	/* descend into subqueries */
 	query_tree_walker(query, RecursivelyPlanSubqueryWalker, context, 0);
@@ -1370,7 +1372,7 @@ NodeContainsSubqueryReferencingOuterQuery(Node *node)
  */
 static void
 ConvertLocalTableJoinsToSubqueries(Query *query,
-								   PlannerRestrictionContext *plannerRestrictionContext)
+								   RecursivePlanningContext *context)
 {
 	List *rangeTableList = query->rtable;
 
@@ -1401,12 +1403,20 @@ ConvertLocalTableJoinsToSubqueries(Query *query,
 
 		bool localTable = true;
 
+		PlannerRestrictionContext *plannerRestrictionContext =
+			context->plannerRestrictionContext;
 		RangeTblEntry *mostFilteredLocalRte =
 			MostFilteredRte(plannerRestrictionContext, rangeTableList,
 							&localTableRestrictList, localTable);
 		RangeTblEntry *mostFilteredDistributedRte =
 			MostFilteredRte(plannerRestrictionContext, rangeTableList,
 							&distributedTableRestrictList, !localTable);
+
+		List *requiredAttrNumbersForLocalRte =
+			RequiredAttrNumbersForRelation(mostFilteredLocalRte, context);
+		List *requiredAttrNumbersForDistriutedRte =
+			RequiredAttrNumbersForRelation(mostFilteredDistributedRte, context);
+
 
 		elog(DEBUG4, "Local relation with the most number of filters "
 					 "on it: \"%s\"", get_rel_name(mostFilteredLocalRte->relid));
@@ -1416,12 +1426,14 @@ ConvertLocalTableJoinsToSubqueries(Query *query,
 		if (LocalTableJoinPolicy == LOCAL_JOIN_POLICY_PULL_LOCAL)
 		{
 			ReplaceRTERelationWithRteSubquery(mostFilteredLocalRte,
-											  localTableRestrictList);
+											  localTableRestrictList,
+											  requiredAttrNumbersForLocalRte);
 		}
 		else if (LocalTableJoinPolicy == LOCAL_JOIN_POLICY_PULL_DISTRIBUTED)
 		{
 			ReplaceRTERelationWithRteSubquery(mostFilteredDistributedRte,
-											  distributedTableRestrictList);
+											  distributedTableRestrictList,
+											  requiredAttrNumbersForDistriutedRte);
 		}
 		else if (LocalTableJoinPolicy == LOCAL_JOIN_POLICY_AUTO)
 		{
@@ -1440,7 +1452,8 @@ ConvertLocalTableJoinsToSubqueries(Query *query,
 				 * local relation, if exists.
 				 */
 				ReplaceRTERelationWithRteSubquery(mostFilteredDistributedRte,
-												  distributedTableRestrictList);
+												  distributedTableRestrictList,
+												  requiredAttrNumbersForDistriutedRte);
 			}
 			else if (localTableHasFilter || !distributedTableHasFilter)
 			{
@@ -1461,12 +1474,14 @@ ConvertLocalTableJoinsToSubqueries(Query *query,
 				 * tuples. Today, we do not have such an infrastructure.
 				 */
 				ReplaceRTERelationWithRteSubquery(mostFilteredLocalRte,
-												  localTableRestrictList);
+												  localTableRestrictList,
+												  requiredAttrNumbersForLocalRte);
 			}
 			else
 			{
 				ReplaceRTERelationWithRteSubquery(mostFilteredDistributedRte,
-												  distributedTableRestrictList);
+												  distributedTableRestrictList,
+												  requiredAttrNumbersForDistriutedRte);
 			}
 		}
 		else
@@ -1474,6 +1489,56 @@ ConvertLocalTableJoinsToSubqueries(Query *query,
 			elog(ERROR, "unexpected local table join policy: %d", LocalTableJoinPolicy);
 		}
 	}
+}
+
+
+/*
+ * RequiredAttrNumbersForRelation returns the required attribute numbers for
+ * the input RTE relation in order for the planning to succeed.
+ *
+ * The function could be optimized by not adding the columns that only appear
+ * WHERE clause as a filter (e.g., not a join clause).
+ */
+static List *
+RequiredAttrNumbersForRelation(RangeTblEntry *relationRte,
+							   RecursivePlanningContext *planningContext)
+{
+	PlannerRestrictionContext *plannerRestrictionContext =
+		planningContext->plannerRestrictionContext;
+
+	/* TODO: Get rid of this hack, find relation restriction information directly */
+	PlannerRestrictionContext *filteredPlannerRestrictionContext =
+		FilterPlannerRestrictionForQuery(plannerRestrictionContext,
+										 WrapRteRelationIntoSubquery(relationRte, NIL));
+
+	RelationRestrictionContext *relationRestrictionContext =
+		filteredPlannerRestrictionContext->relationRestrictionContext;
+	List *filteredRelationRestrictionList =
+		relationRestrictionContext->relationRestrictionList;
+	RelationRestriction *relationRestriction =
+		(RelationRestriction *) linitial(filteredRelationRestrictionList);
+
+	PlannerInfo *plannerInfo = relationRestriction->plannerInfo;
+	Query *queryToProcess = plannerInfo->parse;
+	int rteIndex = relationRestriction->index;
+
+	List *allVarsInQuery = pull_vars_of_level((Node *) queryToProcess, 0);
+	ListCell *varCell = NULL;
+
+	List *requiredAttrNumbers = NIL;
+
+	foreach(varCell, allVarsInQuery)
+	{
+		Var *var = (Var *) lfirst(varCell);
+
+		if (var->varno == rteIndex)
+		{
+			requiredAttrNumbers = list_append_unique_int(requiredAttrNumbers,
+														 var->varattno);
+		}
+	}
+
+	return requiredAttrNumbers;
 }
 
 
@@ -1536,9 +1601,10 @@ MostFilteredRte(PlannerRestrictionContext *plannerRestrictionContext,
  * with a subquery. The function also pushes down the filters to the subquery.
  */
 static void
-ReplaceRTERelationWithRteSubquery(RangeTblEntry *rangeTableEntry, List *restrictionList)
+ReplaceRTERelationWithRteSubquery(RangeTblEntry *rangeTableEntry, List *restrictionList,
+								  List *requiredAttrNumbers)
 {
-	Query *subquery = WrapRteRelationIntoSubquery(rangeTableEntry);
+	Query *subquery = WrapRteRelationIntoSubquery(rangeTableEntry, requiredAttrNumbers);
 	Expr *andedBoundExpressions = make_ands_explicit(restrictionList);
 	subquery->jointree->quals = (Node *) andedBoundExpressions;
 
@@ -1548,6 +1614,7 @@ ReplaceRTERelationWithRteSubquery(RangeTblEntry *rangeTableEntry, List *restrict
 	/* replace the function with the constructed subquery */
 	rangeTableEntry->rtekind = RTE_SUBQUERY;
 	rangeTableEntry->subquery = subquery;
+
 
 	/*
 	 * If the relation is inherited, it'll still be inherited as

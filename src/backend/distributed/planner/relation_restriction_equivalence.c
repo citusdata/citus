@@ -616,7 +616,8 @@ ReferenceRelationCount(RelationRestrictionContext *restrictionContext)
 		RelationRestriction *relationRestriction =
 			(RelationRestriction *) lfirst(relationRestrictionCell);
 
-		if (PartitionMethod(relationRestriction->relationId) == DISTRIBUTE_BY_NONE)
+		if (IsCitusTable(relationRestriction->relationId) &&
+			PartitionMethod(relationRestriction->relationId) == DISTRIBUTE_BY_NONE)
 		{
 			referenceRelationCount++;
 		}
