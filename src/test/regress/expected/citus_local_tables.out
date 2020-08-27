@@ -27,7 +27,7 @@ SELECT create_citus_local_table('citus_local_table_1');
 
 -- try to remove coordinator and observe failure as there exist a citus local table
 SELECT 1 FROM master_remove_node('localhost', :master_port);
-ERROR:  you cannot remove the primary node of a node group which has shard placements
+ERROR:  cannot remove the primary node of a node group which has shard placements
 DROP TABLE citus_local_table_1;
 NOTICE:  executing the command locally: DROP TABLE IF EXISTS citus_local_tables_test_schema.citus_local_table_1_xxxxx CASCADE
 -- this should work now as the citus local table is dropped
@@ -559,7 +559,7 @@ FROM pg_dist_partition WHERE logicalrelid = 'citus_local_table_4'::regclass;
 (1 row)
 
 SELECT column_name_to_column('citus_local_table_4', 'a');
-                                                  column_name_to_column
+                                                 column_name_to_column
 ---------------------------------------------------------------------
  {VAR :varno 1 :varattno 1 :vartype 23 :vartypmod -1 :varcollid 0 :varlevelsup 0 :varnoold 1 :varoattno 1 :location -1}
 (1 row)

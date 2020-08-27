@@ -126,7 +126,7 @@ create_citus_local_table
 step s2-remove-coordinator: SELECT master_remove_node('localhost', 57636); <waiting ...>
 step s1-commit: COMMIT;
 step s2-remove-coordinator: <... completed>
-error in steps s1-commit s2-remove-coordinator: ERROR:  you cannot remove the primary node of a node group which has shard placements
+error in steps s1-commit s2-remove-coordinator: ERROR:  cannot remove the primary node of a node group which has shard placements
 step s2-commit: COMMIT;
 master_remove_node
 

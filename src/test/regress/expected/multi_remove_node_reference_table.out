@@ -199,6 +199,9 @@ WHERE colocationid IN
           1 |                -1 |                      0
 (1 row)
 
+SELECT master_remove_node('localhost', :worker_1_port);
+ERROR:  cannot remove the last worker node because there are reference tables and it would cause data loss on reference tables
+HINT:  To proceed, either drop the reference tables or use undistribute_table() function to convert them to local tables
 \c - - - :worker_1_port
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
  count

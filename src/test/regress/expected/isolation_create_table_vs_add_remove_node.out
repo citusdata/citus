@@ -299,7 +299,7 @@ step s2-commit:
  COMMIT;
 
 step s1-remove-node-2: <... completed>
-error in steps s2-commit s1-remove-node-2: ERROR:  you cannot remove the primary node of a node group which has shard placements
+error in steps s2-commit s1-remove-node-2: ERROR:  cannot remove the primary node of a node group which has shard placements
 step s1-show-placements:
  SELECT
   nodename, nodeport
@@ -393,7 +393,7 @@ step s2-commit:
  COMMIT;
 
 step s1-remove-node-2: <... completed>
-error in steps s2-commit s1-remove-node-2: ERROR:  you cannot remove the primary node of a node group which has shard placements
+error in steps s2-commit s1-remove-node-2: ERROR:  cannot remove the primary node of a node group which has shard placements
 step s2-select:
  SELECT * FROM dist_table;
 
@@ -480,7 +480,7 @@ step s2-commit:
  COMMIT;
 
 step s1-remove-node-2: <... completed>
-error in steps s2-commit s1-remove-node-2: ERROR:  you cannot remove the primary node of a node group which has shard placements
+error in steps s2-commit s1-remove-node-2: ERROR:  cannot remove the primary node of a node group which has shard placements
 step s2-select:
  SELECT * FROM dist_table;
 

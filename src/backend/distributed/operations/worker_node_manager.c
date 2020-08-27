@@ -308,6 +308,17 @@ ActivePrimaryNonCoordinatorNodeCount(void)
 
 
 /*
+ * ActivePrimaryNodeCount returns the number of groups with a primary in the cluster.
+ */
+uint32
+ActivePrimaryNodeCount(void)
+{
+	List *nodeList = ActivePrimaryNodeList(NoLock);
+	return list_length(nodeList);
+}
+
+
+/*
  * ActiveReadableNonCoordinatorNodeCount returns the number of groups with a node we can read from.
  * This method excludes coordinator even if it is added as a worker.
  */

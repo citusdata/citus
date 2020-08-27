@@ -86,6 +86,7 @@ typedef struct NodeMetadata
 
 /* local function forward declarations */
 static int ActivateNode(char *nodeName, int nodePort);
+static bool CanRemoveReferenceTablePlacements(void);
 static void RemoveNodeFromCluster(char *nodeName, int32 nodePort);
 static int AddNodeMetadata(char *nodeName, int32 nodePort, NodeMetadata
 						   *nodeMetadata, bool *nodeAlreadyExists);
@@ -1053,19 +1054,32 @@ RemoveNodeFromCluster(char *nodeName, int32 nodePort)
 	WorkerNode *workerNode = ModifiableWorkerNode(nodeName, nodePort);
 	if (NodeIsPrimary(workerNode))
 	{
+		if (CanRemoveReferenceTablePlacements())
+		{
+			/*
+			 * Delete reference table placements so they are not taken into account
+			 * for the check if there are placements after this.
+			 */
+			DeleteAllReferenceTablePlacementsFromNodeGroup(workerNode->groupId);
+		}
 		bool onlyConsiderActivePlacements = false;
-
-		/*
-		 * Delete reference table placements so they are not taken into account
-		 * for the check if there are placements after this
-		 */
-		DeleteAllReferenceTablePlacementsFromNodeGroup(workerNode->groupId);
-
 		if (NodeGroupHasShardPlacements(workerNode->groupId,
 										onlyConsiderActivePlacements))
 		{
-			ereport(ERROR, (errmsg("you cannot remove the primary node of a node group "
-								   "which has shard placements")));
+			if (ClusterHasReferenceTable())
+			{
+				ereport(ERROR, (errmsg(
+									"cannot remove the last worker node because there are reference "
+									"tables and it would cause data loss on reference tables"),
+								errhint(
+									"To proceed, either drop the reference tables or use "
+									"undistribute_table() function to convert them to local tables")));
+			}
+			ereport(ERROR, (errmsg("cannot remove the primary node of a node group "
+								   "which has shard placements"),
+							errhint(
+								"To proceed, either drop the distributed tables or use "
+								"undistribute_table() function to convert them to local tables")));
 		}
 	}
 
@@ -1077,6 +1091,18 @@ RemoveNodeFromCluster(char *nodeName, int32 nodePort)
 	CloseNodeConnectionsAfterTransaction(workerNode->workerName, nodePort);
 
 	SendCommandToWorkersWithMetadata(nodeDeleteCommand);
+}
+
+
+/*
+ * CanRemoveReferenceTablePlacements returns true if active primary
+ * node count is more than 1, which means that even if we remove a node
+ * we will still have some other node that has reference table placement.
+ */
+static bool
+CanRemoveReferenceTablePlacements(void)
+{
+	return ActivePrimaryNodeCount() > 1;
 }
 
 
