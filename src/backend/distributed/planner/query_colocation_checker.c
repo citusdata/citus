@@ -76,7 +76,7 @@ CreateColocatedJoinChecker(Query *subquery, PlannerRestrictionContext *restricti
 		 * functions (i.e., FilterPlannerRestrictionForQuery()) rely on queries
 		 * not relations.
 		 */
-		anchorSubquery = WrapRteRelationIntoSubquery(anchorRangeTblEntry);
+		anchorSubquery = WrapRteRelationIntoSubquery(anchorRangeTblEntry, NIL);
 	}
 	else if (anchorRangeTblEntry->rtekind == RTE_SUBQUERY)
 	{
@@ -260,7 +260,7 @@ SubqueryColocated(Query *subquery, ColocatedJoinChecker *checker)
  * designed for generating a stub query.
  */
 Query *
-WrapRteRelationIntoSubquery(RangeTblEntry *rteRelation)
+WrapRteRelationIntoSubquery(RangeTblEntry *rteRelation, List *requiredAttributes)
 {
 	Query *subquery = makeNode(Query);
 	RangeTblRef *newRangeTableRef = makeNode(RangeTblRef);
@@ -290,6 +290,14 @@ WrapRteRelationIntoSubquery(RangeTblEntry *rteRelation)
 		TargetEntry *targetEntry =
 			makeTargetEntry((Expr *) targetColumn, attributeNumber,
 							strdup(attributeTuple->attname.data), false);
+
+		if (!list_member_int(requiredAttributes, attributeNumber))
+		{
+			targetEntry->expr =
+				(Expr *) makeNullConst(attributeTuple->atttypid,
+									   attributeTuple->atttypmod,
+									   attributeTuple->attcollation);
+		}
 
 		subquery->targetList = lappend(subquery->targetList, targetEntry);
 	}
