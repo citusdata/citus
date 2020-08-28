@@ -76,6 +76,11 @@
 #include "distributed/version_compat.h"
 #include "lib/stringinfo.h"
 #include "optimizer/clauses.h"
+#if PG_VERSION_NUM >= PG_VERSION_12
+#include "optimizer/optimizer.h"
+#else
+#include "optimizer/var.h"
+#endif
 #include "optimizer/planner.h"
 #include "optimizer/prep.h"
 #include "parser/parsetree.h"
