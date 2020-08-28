@@ -650,6 +650,8 @@ ERROR:  cannot pushdown the subquery
 DETAIL:  There exist a reference table in the outer part of the outer join
 -- LATERAL JOINs used with INNER JOINs with reference tables
 SET citus.subquery_pushdown to ON;
+NOTICE:  Setting citus.subquery_pushdown flag is discouraged becuase it forces the planner to pushdown certain queries, skipping relevant correctness checks.
+DETAIL:  When enabled, the planner skips many correctness checks for subqueries and pushes down the queries to shards as-is. It means that the queries are likely to return wrong results unless the user is absolutely sure that pushing down the subquery is safe. This GUC is maintained only for backward compatibility, no new users are supposed to use it. The planner is capable of pushing down as much computation as possible to the shards depending on the query.
 SELECT user_id, lastseen
 FROM
   (SELECT
@@ -822,6 +824,8 @@ ORDER BY cnt, value_3 DESC LIMIT 10;
 
 -- nested LATERAL JOINs with reference tables
 SET citus.subquery_pushdown to ON;
+NOTICE:  Setting citus.subquery_pushdown flag is discouraged becuase it forces the planner to pushdown certain queries, skipping relevant correctness checks.
+DETAIL:  When enabled, the planner skips many correctness checks for subqueries and pushes down the queries to shards as-is. It means that the queries are likely to return wrong results unless the user is absolutely sure that pushing down the subquery is safe. This GUC is maintained only for backward compatibility, no new users are supposed to use it. The planner is capable of pushing down as much computation as possible to the shards depending on the query.
 SELECT *
 FROM
   (SELECT "some_users_data".user_id, "some_recent_users".value_3

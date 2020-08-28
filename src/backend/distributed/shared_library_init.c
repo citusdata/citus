@@ -103,6 +103,7 @@ static void RegisterCitusConfigVariables(void);
 static bool ErrorIfNotASuitableDeadlockFactor(double *newval, void **extra,
 											  GucSource source);
 static bool WarnIfDeprecatedExecutorUsed(int *newval, void **extra, GucSource source);
+static bool NoticeIfSubqueryPushdownEnabled(bool *newval, void **extra, GucSource source);
 static bool NodeConninfoGucCheckHook(char **newval, void **extra, GucSource source);
 static void NodeConninfoGucAssignHook(const char *newval, void *extra);
 static const char * MaxSharedPoolSizeGucShowHook(void);
@@ -606,13 +607,21 @@ RegisterCitusConfigVariables(void)
 
 	DefineCustomBoolVariable(
 		"citus.subquery_pushdown",
-		gettext_noop("Enables supported subquery pushdown to workers."),
-		NULL,
+		gettext_noop("Usage of this GUC is highly discouraged, please read the long "
+					 "description"),
+		gettext_noop("When enabled, the planner skips many correctness checks "
+					 "for subqueries and pushes down the queries to shards as-is. "
+					 "It means that the queries are likely to return wrong results "
+					 "unless the user is absolutely sure that pushing down the "
+					 "subquery is safe. This GUC is maintained only for backward "
+					 "compatibility, no new users are supposed to use it. The planner"
+					 "is capable of pushing down as much computation as possible to the "
+					 "shards depending on the query."),
 		&SubqueryPushdown,
 		false,
 		PGC_USERSET,
-		GUC_STANDARD,
-		NULL, NULL, NULL);
+		GUC_NO_SHOW_ALL,
+		NoticeIfSubqueryPushdownEnabled, NULL, NULL);
 
 	DefineCustomBoolVariable(
 		"citus.log_multi_join_order",
@@ -1519,6 +1528,37 @@ WarnIfDeprecatedExecutorUsed(int *newval, void **extra, GucSource source)
 
 		/* adaptive executor is superset of real-time, so switch to that */
 		*newval = MULTI_EXECUTOR_ADAPTIVE;
+	}
+
+	return true;
+}
+
+
+/*
+ * NoticeIfSubqueryPushdownEnabled prints a notice when a user sets
+ * citus.subquery_pushdown to ON. It doesn't print the notice if the
+ * value is already true.
+ */
+static bool
+NoticeIfSubqueryPushdownEnabled(bool *newval, void **extra, GucSource source)
+{
+	/* notice only when the value changes */
+	if (*newval == true && SubqueryPushdown == false)
+	{
+		ereport(NOTICE, (errcode(ERRCODE_WARNING_DEPRECATED_FEATURE),
+						 errmsg("Setting citus.subquery_pushdown flag is "
+								"discouraged becuase it forces the planner "
+								"to pushdown certain queries, skipping "
+								"relevant correctness checks."),
+						 errdetail(
+							 "When enabled, the planner skips many correctness checks "
+							 "for subqueries and pushes down the queries to shards as-is. "
+							 "It means that the queries are likely to return wrong results "
+							 "unless the user is absolutely sure that pushing down the "
+							 "subquery is safe. This GUC is maintained only for backward "
+							 "compatibility, no new users are supposed to use it. The planner "
+							 "is capable of pushing down as much computation as possible to the "
+							 "shards depending on the query.")));
 	}
 
 	return true;

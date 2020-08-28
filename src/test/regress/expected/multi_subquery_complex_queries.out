@@ -1154,6 +1154,8 @@ LIMIT 10;
 -- Simple LATERAL JOINs with GROUP BYs in each side
 -- need to set subquery_pushdown due to limit for next 2 queries
 SET citus.subquery_pushdown to ON;
+NOTICE:  Setting citus.subquery_pushdown flag is discouraged becuase it forces the planner to pushdown certain queries, skipping relevant correctness checks.
+DETAIL:  When enabled, the planner skips many correctness checks for subqueries and pushes down the queries to shards as-is. It means that the queries are likely to return wrong results unless the user is absolutely sure that pushing down the subquery is safe. This GUC is maintained only for backward compatibility, no new users are supposed to use it. The planner is capable of pushing down as much computation as possible to the shards depending on the query.
 SELECT *
 FROM
   (SELECT "some_users_data".user_id, lastseen
@@ -1314,6 +1316,8 @@ ERROR:  cannot push down this subquery
 DETAIL:  Limit in subquery is currently unsupported when a subquery references a column from another query
 -- LATERAL JOINs used with INNER JOINs
 SET citus.subquery_pushdown to ON;
+NOTICE:  Setting citus.subquery_pushdown flag is discouraged becuase it forces the planner to pushdown certain queries, skipping relevant correctness checks.
+DETAIL:  When enabled, the planner skips many correctness checks for subqueries and pushes down the queries to shards as-is. It means that the queries are likely to return wrong results unless the user is absolutely sure that pushing down the subquery is safe. This GUC is maintained only for backward compatibility, no new users are supposed to use it. The planner is capable of pushing down as much computation as possible to the shards depending on the query.
 SELECT user_id, lastseen
 FROM
   (SELECT
@@ -1936,6 +1940,8 @@ SET citus.enable_repartition_joins to OFF;
 RESET client_min_messages;
 -- nested LATERAL JOINs
 SET citus.subquery_pushdown to ON;
+NOTICE:  Setting citus.subquery_pushdown flag is discouraged becuase it forces the planner to pushdown certain queries, skipping relevant correctness checks.
+DETAIL:  When enabled, the planner skips many correctness checks for subqueries and pushes down the queries to shards as-is. It means that the queries are likely to return wrong results unless the user is absolutely sure that pushing down the subquery is safe. This GUC is maintained only for backward compatibility, no new users are supposed to use it. The planner is capable of pushing down as much computation as possible to the shards depending on the query.
 SELECT *
 FROM
   (SELECT "some_users_data".user_id, "some_recent_users".value_3
@@ -2230,6 +2236,8 @@ LIMIT 10;
 
 -- lateral joins in the nested manner
 SET citus.subquery_pushdown to ON;
+NOTICE:  Setting citus.subquery_pushdown flag is discouraged becuase it forces the planner to pushdown certain queries, skipping relevant correctness checks.
+DETAIL:  When enabled, the planner skips many correctness checks for subqueries and pushes down the queries to shards as-is. It means that the queries are likely to return wrong results unless the user is absolutely sure that pushing down the subquery is safe. This GUC is maintained only for backward compatibility, no new users are supposed to use it. The planner is capable of pushing down as much computation as possible to the shards depending on the query.
 SELECT *
 FROM
   (SELECT
