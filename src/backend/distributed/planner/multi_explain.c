@@ -116,12 +116,16 @@ typedef struct ExplainAnalyzeDestination
 
 /* Explain functions for distributed queries */
 static void ExplainSubPlans(DistributedPlan *distributedPlan, ExplainState *es);
-static void ExplainJob(CitusScanState *scanState, Job *job, ExplainState *es);
+static void ExplainJob(CitusScanState *scanState, Job *job, ExplainState *es,
+					   ParamListInfo params);
 static void ExplainMapMergeJob(MapMergeJob *mapMergeJob, ExplainState *es);
-static void ExplainTaskList(CitusScanState *scanState, List *taskList, ExplainState *es);
-static RemoteExplainPlan * RemoteExplain(Task *task, ExplainState *es);
+static void ExplainTaskList(CitusScanState *scanState, List *taskList, ExplainState *es,
+							ParamListInfo params);
+static RemoteExplainPlan * RemoteExplain(Task *task, ExplainState *es, ParamListInfo
+										 params);
 static RemoteExplainPlan * GetSavedRemoteExplain(Task *task, ExplainState *es);
-static RemoteExplainPlan * FetchRemoteExplainFromWorkers(Task *task, ExplainState *es);
+static RemoteExplainPlan * FetchRemoteExplainFromWorkers(Task *task, ExplainState *es,
+														 ParamListInfo params);
 static void ExplainTask(CitusScanState *scanState, Task *task, int placementIndex,
 						List *explainOutputList,
 						ExplainState *es);
@@ -175,6 +179,8 @@ CitusExplainScan(CustomScanState *node, List *ancestors, struct ExplainState *es
 {
 	CitusScanState *scanState = (CitusScanState *) node;
 	DistributedPlan *distributedPlan = scanState->distributedPlan;
+	EState *executorState = ScanStateGetExecutorState(scanState);
+	ParamListInfo params = executorState->es_param_list_info;
 
 	if (!ExplainDistributedQueries)
 	{
@@ -191,7 +197,7 @@ CitusExplainScan(CustomScanState *node, List *ancestors, struct ExplainState *es
 		ExplainSubPlans(distributedPlan, es);
 	}
 
-	ExplainJob(scanState, distributedPlan->workerJob, es);
+	ExplainJob(scanState, distributedPlan->workerJob, es, params);
 
 	ExplainCloseGroup("Distributed Query", "Distributed Query", true, es);
 }
@@ -220,6 +226,7 @@ NonPushableInsertSelectExplainScan(CustomScanState *node, List *ancestors,
 	Query *queryCopy = copyObject(selectRte->subquery);
 
 	bool repartition = distributedPlan->insertSelectMethod == INSERT_SELECT_REPARTITION;
+
 
 	if (es->analyze)
 	{
@@ -271,7 +278,16 @@ ExplainSubPlans(DistributedPlan *distributedPlan, ExplainState *es)
 		ParamListInfo params = NULL;
 		char *queryString = NULL;
 		instr_time planduration;
+		#if PG_VERSION_NUM >= PG_VERSION_13
 
+		BufferUsage bufusage_start,
+					bufusage;
+
+		if (es->buffers)
+		{
+			bufusage_start = pgBufferUsage;
+		}
+		#endif
 		if (es->format == EXPLAIN_FORMAT_TEXT)
 		{
 			char *resultId = GenerateResultId(planId, subPlan->subPlanId);
@@ -313,7 +329,18 @@ ExplainSubPlans(DistributedPlan *distributedPlan, ExplainState *es)
 
 		INSTR_TIME_SET_ZERO(planduration);
 
-		ExplainOnePlan(plan, into, es, queryString, params, NULL, &planduration);
+		#if PG_VERSION_NUM >= PG_VERSION_13
+
+		/* calc differences of buffer counters. */
+		if (es->buffers)
+		{
+			memset(&bufusage, 0, sizeof(BufferUsage));
+			BufferUsageAccumDiff(&bufusage, &pgBufferUsage, &bufusage_start);
+		}
+		#endif
+
+		ExplainOnePlanCompat(plan, into, es, queryString, params, NULL, &planduration,
+							 (es->buffers ? &bufusage : NULL));
 
 		if (es->format == EXPLAIN_FORMAT_TEXT)
 		{
@@ -356,7 +383,8 @@ ShowReceivedTupleData(CitusScanState *scanState, ExplainState *es)
  * or all tasks if citus.explain_all_tasks is on.
  */
 static void
-ExplainJob(CitusScanState *scanState, Job *job, ExplainState *es)
+ExplainJob(CitusScanState *scanState, Job *job, ExplainState *es,
+		   ParamListInfo params)
 {
 	List *dependentJobList = job->dependentJobList;
 	int dependentJobCount = list_length(dependentJobList);
@@ -405,7 +433,7 @@ ExplainJob(CitusScanState *scanState, Job *job, ExplainState *es)
 	{
 		ExplainOpenGroup("Tasks", "Tasks", false, es);
 
-		ExplainTaskList(scanState, taskList, es);
+		ExplainTaskList(scanState, taskList, es, params);
 
 		ExplainCloseGroup("Tasks", "Tasks", false, es);
 	}
@@ -505,7 +533,8 @@ ExplainMapMergeJob(MapMergeJob *mapMergeJob, ExplainState *es)
  * or all tasks if citus.explain_all_tasks is on.
  */
 static void
-ExplainTaskList(CitusScanState *scanState, List *taskList, ExplainState *es)
+ExplainTaskList(CitusScanState *scanState, List *taskList, ExplainState *es,
+				ParamListInfo params)
 {
 	ListCell *taskCell = NULL;
 	ListCell *remoteExplainCell = NULL;
@@ -518,7 +547,7 @@ ExplainTaskList(CitusScanState *scanState, List *taskList, ExplainState *es)
 	{
 		Task *task = (Task *) lfirst(taskCell);
 
-		RemoteExplainPlan *remoteExplain = RemoteExplain(task, es);
+		RemoteExplainPlan *remoteExplain = RemoteExplain(task, es, params);
 		remoteExplainList = lappend(remoteExplainList, remoteExplain);
 
 		if (!ExplainAllTasks)
@@ -543,7 +572,7 @@ ExplainTaskList(CitusScanState *scanState, List *taskList, ExplainState *es)
  * RemoteExplain fetches the remote EXPLAIN output for a single task.
  */
 static RemoteExplainPlan *
-RemoteExplain(Task *task, ExplainState *es)
+RemoteExplain(Task *task, ExplainState *es, ParamListInfo params)
 {
 	/*
 	 * For EXPLAIN EXECUTE we still use the old method, so task->fetchedExplainAnalyzePlan
@@ -555,7 +584,7 @@ RemoteExplain(Task *task, ExplainState *es)
 	}
 	else
 	{
-		return FetchRemoteExplainFromWorkers(task, es);
+		return FetchRemoteExplainFromWorkers(task, es, params);
 	}
 }
 
@@ -598,7 +627,7 @@ GetSavedRemoteExplain(Task *task, ExplainState *es)
  * one succeeds or all failed.
  */
 static RemoteExplainPlan *
-FetchRemoteExplainFromWorkers(Task *task, ExplainState *es)
+FetchRemoteExplainFromWorkers(Task *task, ExplainState *es, ParamListInfo params)
 {
 	List *taskPlacementList = task->taskPlacementList;
 	int placementCount = list_length(taskPlacementList);
@@ -617,13 +646,18 @@ FetchRemoteExplainFromWorkers(Task *task, ExplainState *es)
 	for (int placementIndex = 0; placementIndex < placementCount; placementIndex++)
 	{
 		ShardPlacement *taskPlacement = list_nth(taskPlacementList, placementIndex);
-		PGresult *queryResult = NULL;
 		int connectionFlags = 0;
 
 		remotePlan->placementIndex = placementIndex;
 
 		MultiConnection *connection = GetPlacementConnection(connectionFlags,
 															 taskPlacement, NULL);
+
+		/*
+		 * This code-path doesn't support optional connections, so we don't expect
+		 * NULL connections.
+		 */
+		Assert(connection != NULL);
 
 		/* try other placements if we fail to connect this one */
 		if (PQstatus(connection->pgConn) != CONNECTION_OK)
@@ -641,14 +675,28 @@ FetchRemoteExplainFromWorkers(Task *task, ExplainState *es)
 		ExecuteCriticalRemoteCommand(connection, "SAVEPOINT citus_explain_savepoint");
 
 		/* run explain query */
-		int executeResult = ExecuteOptionalRemoteCommand(connection, explainQuery->data,
-														 &queryResult);
-		if (executeResult != 0)
-		{
-			PQclear(queryResult);
-			ForgetResults(connection);
+		int numParams = params ? params->numParams : 0;
+		Oid *paramTypes = NULL;
+		const char **paramValues = NULL;
+		PGresult *queryResult = NULL;
 
-			continue;
+		if (params)
+		{
+			ExtractParametersFromParamList(params, &paramTypes, &paramValues, false);
+		}
+
+		int sendStatus = SendRemoteCommandParams(connection, explainQuery->data,
+												 numParams, paramTypes, paramValues,
+												 false);
+		if (sendStatus != 0)
+		{
+			queryResult = GetRemoteCommandResult(connection, false);
+			if (!IsResponseOK(queryResult))
+			{
+				PQclear(queryResult);
+				ForgetResults(connection);
+				continue;
+			}
 		}
 
 		/* read explain query results */
@@ -938,7 +986,18 @@ worker_save_query_explain_analyze(PG_FUNCTION_ARGS)
 
 	RawStmt *parseTree = linitial(parseTreeList);
 
-	List *queryList = pg_analyze_and_rewrite(parseTree, queryString, NULL, 0, NULL);
+	ParamListInfo boundParams = ExecutorBoundParams();
+	int numParams = boundParams ? boundParams->numParams : 0;
+	Oid *paramTypes = NULL;
+	const char **paramValues = NULL;
+	if (boundParams != NULL)
+	{
+		ExtractParametersFromParamList(boundParams, &paramTypes, &paramValues, false);
+	}
+
+	List *queryList = pg_analyze_and_rewrite(parseTree, queryString, paramTypes,
+											 numParams, NULL);
+
 	if (list_length(queryList) != 1)
 	{
 		ereport(ERROR, (errmsg("cannot EXPLAIN ANALYZE a query rewritten "
@@ -955,13 +1014,13 @@ worker_save_query_explain_analyze(PG_FUNCTION_ARGS)
 
 	INSTR_TIME_SET_CURRENT(planStart);
 
-	PlannedStmt *plan = pg_plan_query(query, 0, NULL);
+	PlannedStmt *plan = pg_plan_query_compat(query, NULL, 0, NULL);
 
 	INSTR_TIME_SET_CURRENT(planDuration);
 	INSTR_TIME_SUBTRACT(planDuration, planStart);
 
 	/* do the actual EXPLAIN ANALYZE */
-	ExplainWorkerPlan(plan, tupleStoreDest, es, queryString, NULL, NULL,
+	ExplainWorkerPlan(plan, tupleStoreDest, es, queryString, boundParams, NULL,
 					  &planDuration, &executionDurationMillisec);
 
 	ExplainEndOutput(es);
@@ -1116,18 +1175,37 @@ CitusExplainOneQuery(Query *query, int cursorOptions, IntoClause *into,
 	/* rest is copied from ExplainOneQuery() */
 	instr_time planstart,
 			   planduration;
+	#if PG_VERSION_NUM >= PG_VERSION_13
+	BufferUsage bufusage_start,
+				bufusage;
+
+	if (es->buffers)
+	{
+		bufusage_start = pgBufferUsage;
+	}
+	#endif
 
 	INSTR_TIME_SET_CURRENT(planstart);
 
 	/* plan the query */
-	PlannedStmt *plan = pg_plan_query(query, cursorOptions, params);
+	PlannedStmt *plan = pg_plan_query_compat(query, NULL, cursorOptions, params);
 
 	INSTR_TIME_SET_CURRENT(planduration);
 	INSTR_TIME_SUBTRACT(planduration, planstart);
 
+	#if PG_VERSION_NUM >= PG_VERSION_13
+
+	/* calc differences of buffer counters. */
+	if (es->buffers)
+	{
+		memset(&bufusage, 0, sizeof(BufferUsage));
+		BufferUsageAccumDiff(&bufusage, &pgBufferUsage, &bufusage_start);
+	}
+	#endif
+
 	/* run it (if needed) and produce output */
-	ExplainOnePlan(plan, into, es, queryString, params, queryEnv,
-				   &planduration);
+	ExplainOnePlanCompat(plan, into, es, queryString, params, queryEnv,
+						 &planduration, (es->buffers ? &bufusage : NULL));
 }
 
 
@@ -1293,15 +1371,6 @@ ExplainAnalyzeTaskList(List *originalTaskList,
 	List *explainAnalyzeTaskList = NIL;
 	Task *originalTask = NULL;
 
-	/*
-	 * We cannot use multiple commands in a prepared statement, so use the old
-	 * EXPLAIN ANALYZE method for this case.
-	 */
-	if (params != NULL)
-	{
-		return originalTaskList;
-	}
-
 	foreach_ptr(originalTask, originalTaskList)
 	{
 		if (originalTask->queryCount != 1)
@@ -1447,18 +1516,33 @@ ExplainOneQuery(Query *query, int cursorOptions,
 	{
 		instr_time	planstart,
 					planduration;
+		#if PG_VERSION_NUM >= PG_VERSION_13
+		BufferUsage bufusage_start,
+			    bufusage;
 
+		if (es->buffers)
+			bufusage_start = pgBufferUsage;
+		#endif
 		INSTR_TIME_SET_CURRENT(planstart);
 
 		/* plan the query */
-		PlannedStmt *plan = pg_plan_query(query, cursorOptions, params);
+		PlannedStmt *plan = pg_plan_query_compat(query, NULL, cursorOptions, params);
 
 		INSTR_TIME_SET_CURRENT(planduration);
 		INSTR_TIME_SUBTRACT(planduration, planstart);
 
+		#if PG_VERSION_NUM >= PG_VERSION_13
+
+		/* calc differences of buffer counters. */
+		if (es->buffers)
+		{
+			memset(&bufusage, 0, sizeof(BufferUsage));
+			BufferUsageAccumDiff(&bufusage, &pgBufferUsage, &bufusage_start);
+		}
+		#endif
 		/* run it (if needed) and produce output */
-		ExplainOnePlan(plan, into, es, queryString, params, queryEnv,
-					   &planduration);
+		ExplainOnePlanCompat(plan, into, es, queryString, params, queryEnv,
+					   &planduration, (es->buffers ? &bufusage : NULL));
 	}
 }
 

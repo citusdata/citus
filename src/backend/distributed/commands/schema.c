@@ -30,6 +30,7 @@
 #include "distributed/resource_lock.h"
 #include <distributed/remote_commands.h>
 #include <distributed/remote_commands.h>
+#include "distributed/version_compat.h"
 #include "nodes/parsenodes.h"
 #include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
@@ -71,7 +72,7 @@ PreprocessDropSchemaStmt(Node *node, const char *queryString)
 			continue;
 		}
 
-		pgClass = heap_open(RelationRelationId, AccessShareLock);
+		pgClass = table_open(RelationRelationId, AccessShareLock);
 
 		ScanKeyInit(&scanKey[0], Anum_pg_class_relnamespace, BTEqualStrategyNumber,
 					F_OIDEQ, namespaceOid);
@@ -105,7 +106,7 @@ PreprocessDropSchemaStmt(Node *node, const char *queryString)
 				MarkInvalidateForeignKeyGraph();
 
 				systable_endscan(scanDescriptor);
-				heap_close(pgClass, NoLock);
+				table_close(pgClass, NoLock);
 				return NIL;
 			}
 
@@ -113,7 +114,7 @@ PreprocessDropSchemaStmt(Node *node, const char *queryString)
 		}
 
 		systable_endscan(scanDescriptor);
-		heap_close(pgClass, NoLock);
+		table_close(pgClass, NoLock);
 	}
 
 	return NIL;

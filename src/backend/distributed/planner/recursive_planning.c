@@ -376,7 +376,7 @@ ShouldRecursivelyPlanNonColocatedSubqueries(Query *subquery,
 	}
 
 	/* direct joins with local tables are not supported by any of Citus planners */
-	if (FindNodeCheckInRangeTableList(subquery->rtable, IsLocalTableRTE))
+	if (FindNodeMatchingCheckFunctionInRangeTableList(subquery->rtable, IsLocalTableRTE))
 	{
 		return false;
 	}
@@ -636,7 +636,8 @@ ShouldRecursivelyPlanAllSubqueriesInWhere(Query *query)
 		return false;
 	}
 
-	if (FindNodeCheckInRangeTableList(query->rtable, IsDistributedTableRTE))
+	if (FindNodeMatchingCheckFunctionInRangeTableList(query->rtable,
+													  IsDistributedTableRTE))
 	{
 		/* there is a distributed table in the FROM clause */
 		return false;
@@ -662,7 +663,7 @@ RecursivelyPlanAllSubqueries(Node *node, RecursivePlanningContext *planningConte
 	if (IsA(node, Query))
 	{
 		Query *query = (Query *) node;
-		if (FindNodeCheckInRangeTableList(query->rtable, IsCitusTableRTE))
+		if (FindNodeMatchingCheckFunctionInRangeTableList(query->rtable, IsCitusTableRTE))
 		{
 			RecursivelyPlanSubquery(query, planningContext);
 		}
@@ -876,7 +877,7 @@ RecursivelyPlanSubqueryWalker(Node *node, RecursivePlanningContext *context)
 static bool
 ShouldRecursivelyPlanSubquery(Query *subquery, RecursivePlanningContext *context)
 {
-	if (FindNodeCheckInRangeTableList(subquery->rtable, IsLocalTableRTE))
+	if (FindNodeMatchingCheckFunctionInRangeTableList(subquery->rtable, IsLocalTableRTE))
 	{
 		/*
 		 * Postgres can always plan queries that don't require distributed planning.
@@ -888,7 +889,7 @@ ShouldRecursivelyPlanSubquery(Query *subquery, RecursivePlanningContext *context
 		 * do not contain any other local tables.
 		 */
 	}
-	else if (DeferErrorIfCannotPushdownSubquery(subquery, false) == NULL)
+	else if (CanPushdownSubquery(subquery, false))
 	{
 		/*
 		 * We should do one more check for the distribution key equality.
@@ -1029,7 +1030,7 @@ RecursivelyPlanSetOperations(Query *query, Node *node,
 		Query *subquery = rangeTableEntry->subquery;
 
 		if (rangeTableEntry->rtekind == RTE_SUBQUERY &&
-			FindNodeCheck((Node *) subquery, IsDistributedTableRTE))
+			FindNodeMatchingCheckFunction((Node *) subquery, IsDistributedTableRTE))
 		{
 			RecursivelyPlanSubquery(subquery, context);
 		}
@@ -1174,7 +1175,7 @@ CreateDistributedSubPlan(uint32 subPlanId, Query *subPlanQuery)
 	}
 
 	DistributedSubPlan *subPlan = CitusMakeNode(DistributedSubPlan);
-	subPlan->plan = planner(subPlanQuery, cursorOptions, NULL);
+	subPlan->plan = planner_compat(subPlanQuery, cursorOptions, NULL);
 	subPlan->subPlanId = subPlanId;
 
 	return subPlan;
@@ -1681,8 +1682,8 @@ BuildReadIntermediateResultsQuery(List *targetEntryList, List *columnAliasList,
 		functionColumnVar->vartypmod = columnTypMod;
 		functionColumnVar->varcollid = columnCollation;
 		functionColumnVar->varlevelsup = 0;
-		functionColumnVar->varnoold = 1;
-		functionColumnVar->varoattno = columnNumber;
+		functionColumnVar->varnosyn = 1;
+		functionColumnVar->varattnosyn = columnNumber;
 		functionColumnVar->location = -1;
 
 		TargetEntry *newTargetEntry = makeNode(TargetEntry);

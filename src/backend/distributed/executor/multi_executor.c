@@ -32,6 +32,7 @@
 #include "distributed/multi_server_executor.h"
 #include "distributed/resource_lock.h"
 #include "distributed/transaction_management.h"
+#include "distributed/version_compat.h"
 #include "distributed/worker_shard_visibility.h"
 #include "distributed/worker_protocol.h"
 #include "executor/execdebug.h"
@@ -55,6 +56,12 @@
  */
 int MultiShardConnectionType = PARALLEL_CONNECTION;
 bool WritableStandbyCoordinator = false;
+
+/*
+ * Pointer to bound parameters of the current ongoing call to ExecutorRun.
+ * If executor is not running, then this value is meaningless.
+ */
+ParamListInfo executorBoundParams = NULL;
 
 
 /* sort the returning to get consistent outputs, used only for testing */
@@ -127,6 +134,14 @@ CitusExecutorRun(QueryDesc *queryDesc,
 				 ScanDirection direction, uint64 count, bool execute_once)
 {
 	DestReceiver *dest = queryDesc->dest;
+
+	ParamListInfo savedBoundParams = executorBoundParams;
+
+	/*
+	 * Save a pointer to query params so UDFs can access them by calling
+	 * ExecutorBoundParams().
+	 */
+	executorBoundParams = queryDesc->params;
 
 	/*
 	 * We do some potentially time consuming operations our self now before we hand of
@@ -208,6 +223,7 @@ CitusExecutorRun(QueryDesc *queryDesc,
 			queryDesc->totaltime = totalTime;
 		}
 
+		executorBoundParams = savedBoundParams;
 		ExecutorLevel--;
 
 		if (ExecutorLevel == 0 && PlannerLevel == 0)
@@ -227,6 +243,7 @@ CitusExecutorRun(QueryDesc *queryDesc,
 			queryDesc->totaltime = totalTime;
 		}
 
+		executorBoundParams = savedBoundParams;
 		ExecutorLevel--;
 
 		PG_RE_THROW();
@@ -604,7 +621,7 @@ ExecuteQueryIntoDestReceiver(Query *query, ParamListInfo params, DestReceiver *d
 	}
 
 	/* plan the subquery, this may be another distributed query */
-	PlannedStmt *queryPlan = pg_plan_query(query, cursorOptions, params);
+	PlannedStmt *queryPlan = pg_plan_query_compat(query, NULL, cursorOptions, params);
 
 	ExecutePlanIntoDestReceiver(queryPlan, params, dest);
 }
@@ -630,7 +647,7 @@ ExecutePlanIntoDestReceiver(PlannedStmt *queryPlan, ParamListInfo params,
 	PortalDefineQuery(portal,
 					  NULL,
 					  "",
-					  "SELECT",
+					  CMDTAG_SELECT_COMPAT,
 					  list_make1(queryPlan),
 					  NULL);
 
@@ -641,8 +658,8 @@ ExecutePlanIntoDestReceiver(PlannedStmt *queryPlan, ParamListInfo params,
 
 
 /*
- * SetLocalMultiShardModifyModeToSequential simply a C interface for
- * setting the following:
+ * SetLocalMultiShardModifyModeToSequential is simply a C interface for setting
+ * the following:
  *      SET LOCAL citus.multi_shard_modify_mode = 'sequential';
  */
 void
@@ -689,4 +706,17 @@ AlterTableConstraintCheck(QueryDesc *queryDesc)
 	}
 
 	return true;
+}
+
+
+/*
+ * ExecutorBoundParams returns the bound parameters of the current ongoing call
+ * to ExecutorRun. This is meant to be used by UDFs which need to access bound
+ * parameters.
+ */
+ParamListInfo
+ExecutorBoundParams(void)
+{
+	Assert(ExecutorLevel > 0);
+	return executorBoundParams;
 }

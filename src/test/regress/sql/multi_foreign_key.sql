@@ -250,7 +250,7 @@ SELECT create_distributed_table('referencing_table', 'ref_id', 'hash');
 -- not skipping validation would result in a distributed query, which emits debug messages
 BEGIN;
 SET LOCAL citus.enable_ddl_propagation TO off;
-SET LOCAL client_min_messages TO DEBUG2;
+SET LOCAL client_min_messages TO DEBUG1;
 ALTER TABLE referencing_table ADD CONSTRAINT test_constraint FOREIGN KEY (ref_id) REFERENCES referenced_table (id);
 ABORT;
 

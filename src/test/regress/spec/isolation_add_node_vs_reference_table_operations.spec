@@ -44,11 +44,6 @@ step "s1-add-second-worker"
 	SELECT 1 FROM master_add_node('localhost', 57638);
 }
 
-step "s1-remove-second-worker"
-{
-	SELECT master_remove_node('localhost', 57638);
-}
-
 step "s1-drop-reference-table"
 {
 	DROP TABLE test_reference_table;

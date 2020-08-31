@@ -50,6 +50,9 @@ s/"(raw_events_second_user_id_value_1_key_|agg_events_user_id_value_1_agg_key_)[
 # ignore could not consume warnings
 /WARNING:  could not consume data from worker node/d
 
+# ignore page split with pg13
+/DEBUG:  concurrent ROOT page split/d
+
 # ignore WAL warnings
 /DEBUG: .+creating and filling new WAL file/d
 
@@ -86,6 +89,21 @@ s/_ref_id_id_fkey_/_ref_id_fkey_/g
 s/fk_test_2_col1_col2_fkey/fk_test_2_col1_fkey/g
 s/_id_other_column_ref_fkey/_id_fkey/g
 
+# pg13 changes
+s/of relation ".*" violates not-null constraint/violates not-null constraint/g
+s/varnosyn/varnoold/g
+s/varattnosyn/varoattno/g
+/DEBUG:  index ".*" can safely use deduplication.*$/d
+/DEBUG:  index ".*" cannot use deduplication.*$/d
+/DEBUG:  building index ".*" on table ".*" serially.*$/d
+s/partition ".*" would be violated by some row/partition would be violated by some row/g
+/.*Peak Memory Usage:.*$/d
+s/of relation ".*" contains null values/contains null values/g
+s/of relation "t1" is violated by some row/is violated by some row/g
+# can be removed when we remove PG_VERSION_NUM >= 120000
+s/(.*)Output:.*$/\1Output: xxxxxx/g
+
+
 # intermediate_results
 s/(ERROR.*)pgsql_job_cache\/([0-9]+_[0-9]+_[0-9]+)\/(.*).data/\1pgsql_job_cache\/xx_x_xxx\/\3.data/g
 
@@ -117,6 +135,9 @@ s/pg_catalog.citus_extradata_container\([0-9]+/pg_catalog.citus_extradata_contai
 
 # ignore referene table replication messages
 /replicating reference table.*$/d
+
+# ignore memory usage output
+/.*Memory Usage:.*/d
 
 s/Citus.*currently supports/Citus currently supports/g
 

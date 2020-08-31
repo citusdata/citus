@@ -47,11 +47,6 @@ step "s1-update-2"
   UPDATE deadlock_detection_test SET some_val = 1 WHERE user_id = 2;
 }
 
-step "s1-update-3"
-{
-  UPDATE deadlock_detection_test SET some_val = 1 WHERE user_id = 3;
-}
-
 step "s1-update-4"
 {
   UPDATE deadlock_detection_test SET some_val = 1 WHERE user_id = 4;
@@ -234,11 +229,6 @@ step "s4-update-2"
   UPDATE deadlock_detection_test SET some_val = 4 WHERE user_id = 2;
 }
 
-step "s4-update-3"
-{
-  UPDATE deadlock_detection_test SET some_val = 4 WHERE user_id = 3;
-}
-
 step "s4-update-4"
 {
   UPDATE deadlock_detection_test SET some_val = 4 WHERE user_id = 4;
@@ -252,11 +242,6 @@ step "s4-update-5"
 step "s4-update-6"
 {
   UPDATE deadlock_detection_test SET some_val = 4 WHERE user_id = 6;
-}
-
-step "s4-update-7"
-{
-  UPDATE deadlock_detection_test SET some_val = 4 WHERE user_id = 7;
 }
 
 step "s4-random-adv-lock"
@@ -281,21 +266,6 @@ step "s5-update-1"
   UPDATE deadlock_detection_test SET some_val = 5 WHERE user_id = 1;
 }
 
-step "s5-update-2"
-{
-  UPDATE deadlock_detection_test SET some_val = 5 WHERE user_id = 2;
-}
-
-step "s5-update-3"
-{
-  UPDATE deadlock_detection_test SET some_val = 5 WHERE user_id = 3;
-}
-
-step "s5-update-4"
-{
-  UPDATE deadlock_detection_test SET some_val = 5 WHERE user_id = 4;
-}
-
 step "s5-update-5"
 {
   UPDATE deadlock_detection_test SET some_val = 5 WHERE user_id = 5;
@@ -304,11 +274,6 @@ step "s5-update-5"
 step "s5-update-6"
 {
   UPDATE deadlock_detection_test SET some_val = 5 WHERE user_id = 6;
-}
-
-step "s5-update-7"
-{
-  UPDATE deadlock_detection_test SET some_val = 5 WHERE user_id = 7;
 }
 
 step "s5-random-adv-lock"
@@ -328,26 +293,6 @@ step "s6-begin"
   BEGIN;
 }
 
-step "s6-update-1"
-{
-  UPDATE deadlock_detection_test SET some_val = 6 WHERE user_id = 1;
-}
-
-step "s6-update-2"
-{
-  UPDATE deadlock_detection_test SET some_val = 6 WHERE user_id = 2;
-}
-
-step "s6-update-3"
-{
-  UPDATE deadlock_detection_test SET some_val = 6 WHERE user_id = 3;
-}
-
-step "s6-update-4"
-{
-  UPDATE deadlock_detection_test SET some_val = 6 WHERE user_id = 4;
-}
-
 step "s6-update-5"
 {
   UPDATE deadlock_detection_test SET some_val = 6 WHERE user_id = 5;
@@ -356,11 +301,6 @@ step "s6-update-5"
 step "s6-update-6"
 {
   UPDATE deadlock_detection_test SET some_val = 6 WHERE user_id = 6;
-}
-
-step "s6-update-7"
-{
-  UPDATE deadlock_detection_test SET some_val = 6 WHERE user_id = 7;
 }
 
 step "s6-commit"

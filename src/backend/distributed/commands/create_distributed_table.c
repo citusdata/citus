@@ -12,6 +12,7 @@
 #include "miscadmin.h"
 
 #include "distributed/pg_version_constants.h"
+#include "distributed/commands/utility_hook.h"
 
 #include "access/genam.h"
 #include "access/hash.h"
@@ -33,15 +34,19 @@
 #include "catalog/pg_trigger.h"
 #include "commands/defrem.h"
 #include "commands/extension.h"
+#include "commands/tablecmds.h"
 #include "commands/trigger.h"
 #include "distributed/commands/multi_copy.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/commands.h"
+#include "distributed/deparser.h"
 #include "distributed/distribution_column.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata_utility.h"
 #include "distributed/coordinator_protocol.h"
+#include "distributed/metadata/dependency.h"
+#include "distributed/metadata/distobject.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/multi_executor.h"
@@ -119,11 +124,15 @@ static void DoCopyFromLocalTableIntoShards(Relation distributedRelation,
 										   DestReceiver *copyDest,
 										   TupleTableSlot *slot,
 										   EState *estate);
+static void UndistributeTable(Oid relationId);
+static List * GetViewCreationCommandsOfTable(Oid relationId);
+static void ReplaceTable(Oid sourceId, Oid targetId);
 
 /* exports for SQL callable functions */
 PG_FUNCTION_INFO_V1(master_create_distributed_table);
 PG_FUNCTION_INFO_V1(create_distributed_table);
 PG_FUNCTION_INFO_V1(create_reference_table);
+PG_FUNCTION_INFO_V1(undistribute_table);
 
 
 /*
@@ -299,6 +308,25 @@ create_reference_table(PG_FUNCTION_ARGS)
 						   colocateWithTableName, viaDeprecatedAPI);
 
 	relation_close(relation, NoLock);
+
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * undistribute_table gets a distributed table name and
+ * udistributes it.
+ */
+Datum
+undistribute_table(PG_FUNCTION_ARGS)
+{
+	Oid relationId = PG_GETARG_OID(0);
+
+	CheckCitusVersion(ERROR);
+	EnsureCoordinator();
+	EnsureTableOwner(relationId);
+
+	UndistributeTable(relationId);
 
 	PG_RETURN_VOID();
 }
@@ -571,7 +599,7 @@ ColocationIdForNewTable(Oid relationId, Var *distributionColumn,
 		 */
 		Assert(distributionMethod == DISTRIBUTE_BY_HASH);
 
-		Relation pgDistColocation = heap_open(DistColocationRelationId(), ExclusiveLock);
+		Relation pgDistColocation = table_open(DistColocationRelationId(), ExclusiveLock);
 
 		Oid distributionColumnType = distributionColumn->vartype;
 		Oid distributionColumnCollation = get_typcollation(distributionColumnType);
@@ -618,12 +646,12 @@ ColocationIdForNewTable(Oid relationId, Var *distributionColumn,
 		if (createdColocationGroup)
 		{
 			/* keep the exclusive lock */
-			heap_close(pgDistColocation, NoLock);
+			table_close(pgDistColocation, NoLock);
 		}
 		else
 		{
 			/* release the exclusive lock */
-			heap_close(pgDistColocation, ExclusiveLock);
+			table_close(pgDistColocation, ExclusiveLock);
 		}
 	}
 
@@ -1266,7 +1294,7 @@ static void
 CopyLocalDataIntoShards(Oid distributedRelationId)
 {
 	/* take an ExclusiveLock to block all operations except SELECT */
-	Relation distributedRelation = heap_open(distributedRelationId, ExclusiveLock);
+	Relation distributedRelation = table_open(distributedRelationId, ExclusiveLock);
 
 	/*
 	 * Skip copying from partitioned tables, we will copy the data from
@@ -1274,7 +1302,7 @@ CopyLocalDataIntoShards(Oid distributedRelationId)
 	 */
 	if (PartitionedTable(distributedRelationId))
 	{
-		heap_close(distributedRelation, NoLock);
+		table_close(distributedRelation, NoLock);
 
 		return;
 	}
@@ -1330,7 +1358,7 @@ CopyLocalDataIntoShards(Oid distributedRelationId)
 	/* free memory and close the relation */
 	ExecDropSingleTupleTableSlot(slot);
 	FreeExecutorState(estate);
-	heap_close(distributedRelation, NoLock);
+	table_close(distributedRelation, NoLock);
 
 	PopActiveSnapshot();
 }
@@ -1500,5 +1528,233 @@ RelationUsesHeapAccessMethodOrNone(Relation relation)
 		   relation->rd_amhandler == HEAP_TABLE_AM_HANDLER_OID;
 #else
 	return true;
+#endif
+}
+
+
+/*
+ * UndistributeTable undistributes the given table. The undistribution is done by
+ * creating a new table, moving everything to the new table and dropping the old one.
+ * So the oid of the table is not preserved.
+ *
+ * The undistributed table will have the same name, columns and rows. It will also have
+ * partitions, views, sequences of the old table. Finally it will have everything created
+ * by GetTableConstructionCommands function, which include indexes. These will be
+ * re-created during undistribution, so their oids are not preserved either (except for
+ * sequences). However, their names are preserved.
+ *
+ * The tables with references are not supported. The function gives an error if there are
+ * any references to or from the table.
+ *
+ * The dropping of old table is done with CASCADE. Anything not mentioned here will
+ * be dropped.
+ */
+void
+UndistributeTable(Oid relationId)
+{
+	Relation relation = try_relation_open(relationId, ExclusiveLock);
+	if (relation == NULL)
+	{
+		ereport(ERROR, (errmsg("Cannot undistribute table"),
+						errdetail("No such distributed table exists. "
+								  "Might have already been undistributed.")));
+	}
+
+	relation_close(relation, NoLock);
+
+	if (!IsCitusTable(relationId))
+	{
+		ereport(ERROR, (errmsg("Cannot undistribute table."),
+						errdetail("The table is not distributed.")));
+	}
+
+	if (TableReferencing(relationId))
+	{
+		ereport(ERROR, (errmsg("Cannot undistribute table "
+							   "because it has a foreign key.")));
+	}
+
+	if (TableReferenced(relationId))
+	{
+		ereport(ERROR, (errmsg("Cannot undistribute table "
+							   "because a foreign key references to it.")));
+	}
+
+
+	List *tableBuildingCommands = GetTableBuildingCommands(relationId, true);
+	List *tableConstructionCommands = GetTableConstructionCommands(relationId);
+
+	tableConstructionCommands = list_concat(tableConstructionCommands,
+											GetViewCreationCommandsOfTable(relationId));
+
+	int spiResult = SPI_connect();
+	if (spiResult != SPI_OK_CONNECT)
+	{
+		ereport(ERROR, (errmsg("could not connect to SPI manager")));
+	}
+
+	char *relationName = get_rel_name(relationId);
+	Oid schemaId = get_rel_namespace(relationId);
+	char *schemaName = get_namespace_name(schemaId);
+
+	if (PartitionedTable(relationId))
+	{
+		ereport(NOTICE, (errmsg("Undistributing the partitions of %s",
+								quote_qualified_identifier(schemaName, relationName))));
+		List *partitionList = PartitionList(relationId);
+		Oid partitionRelationId = InvalidOid;
+		foreach_oid(partitionRelationId, partitionList)
+		{
+			char *detachPartitionCommand = GenerateDetachPartitionCommand(
+				partitionRelationId);
+			char *attachPartitionCommand = GenerateAlterTableAttachPartitionCommand(
+				partitionRelationId);
+
+			/*
+			 * We first detach the partitions to be able to undistribute them separately.
+			 */
+			spiResult = SPI_execute(detachPartitionCommand, false, 0);
+			if (spiResult != SPI_OK_UTILITY)
+			{
+				ereport(ERROR, (errmsg("could not run SPI query")));
+			}
+			tableBuildingCommands = lappend(tableBuildingCommands,
+											attachPartitionCommand);
+			UndistributeTable(partitionRelationId);
+		}
+	}
+
+	char *tempName = pstrdup(relationName);
+	uint32 hashOfName = hash_any((unsigned char *) tempName, strlen(tempName));
+	AppendShardIdToName(&tempName, hashOfName);
+
+	char *tableCreationCommand = NULL;
+
+	ereport(NOTICE, (errmsg("Creating a new local table for %s",
+							quote_qualified_identifier(schemaName, relationName))));
+
+	foreach_ptr(tableCreationCommand, tableBuildingCommands)
+	{
+		Node *parseTree = ParseTreeNode(tableCreationCommand);
+
+		RelayEventExtendNames(parseTree, schemaName, hashOfName);
+		CitusProcessUtility(parseTree, tableCreationCommand, PROCESS_UTILITY_TOPLEVEL,
+							NULL, None_Receiver, NULL);
+	}
+
+	ReplaceTable(relationId, get_relname_relid(tempName, schemaId));
+
+	char *tableConstructionCommand = NULL;
+	foreach_ptr(tableConstructionCommand, tableConstructionCommands)
+	{
+		spiResult = SPI_execute(tableConstructionCommand, false, 0);
+		if (spiResult != SPI_OK_UTILITY)
+		{
+			ereport(ERROR, (errmsg("could not run SPI query")));
+		}
+	}
+
+	spiResult = SPI_finish();
+	if (spiResult != SPI_OK_FINISH)
+	{
+		ereport(ERROR, (errmsg("could not finish SPI connection")));
+	}
+}
+
+
+/*
+ * GetViewCreationCommandsOfTable takes a table oid generates the CREATE VIEW
+ * commands for views that depend to the given table. This includes the views
+ * that recursively depend on the table too.
+ */
+List *
+GetViewCreationCommandsOfTable(Oid relationId)
+{
+	List *views = GetDependingViews(relationId);
+	List *commands = NIL;
+
+	Oid viewOid = InvalidOid;
+	foreach_oid(viewOid, views)
+	{
+		Datum viewDefinitionDatum = DirectFunctionCall1(pg_get_viewdef,
+														ObjectIdGetDatum(viewOid));
+		char *viewDefinition = TextDatumGetCString(viewDefinitionDatum);
+		StringInfo query = makeStringInfo();
+		char *viewName = get_rel_name(viewOid);
+		char *schemaName = get_namespace_name(get_rel_namespace(viewOid));
+		char *qualifiedViewName = quote_qualified_identifier(schemaName, viewName);
+		appendStringInfo(query,
+						 "CREATE VIEW %s AS %s",
+						 qualifiedViewName,
+						 viewDefinition);
+		commands = lappend(commands, query->data);
+	}
+	return commands;
+}
+
+
+/*
+ * ReplaceTable replaces the source table with the target table.
+ * It moves all the rows of the source table to target table with INSERT SELECT.
+ * Changes the dependencies of the sequences owned by source table to target table.
+ * Then drops the source table and renames the target table to source tables name.
+ *
+ * Source and target tables need to be in the same schema and have the same columns.
+ */
+void
+ReplaceTable(Oid sourceId, Oid targetId)
+{
+	char *sourceName = get_rel_name(sourceId);
+	char *targetName = get_rel_name(targetId);
+	Oid schemaId = get_rel_namespace(sourceId);
+	char *schemaName = get_namespace_name(schemaId);
+
+	StringInfo query = makeStringInfo();
+
+	ereport(NOTICE, (errmsg("Moving the data of %s",
+							quote_qualified_identifier(schemaName, sourceName))));
+
+	appendStringInfo(query, "INSERT INTO %s SELECT * FROM %s",
+					 quote_qualified_identifier(schemaName, targetName),
+					 quote_qualified_identifier(schemaName, sourceName));
+	int spiResult = SPI_execute(query->data, false, 0);
+	if (spiResult != SPI_OK_INSERT)
+	{
+		ereport(ERROR, (errmsg("could not run SPI query")));
+	}
+
+#if PG_VERSION_NUM >= PG_VERSION_13
+	List *ownedSequences = getOwnedSequences(sourceId);
+#else
+	List *ownedSequences = getOwnedSequences(sourceId, InvalidAttrNumber);
+#endif
+	Oid sequenceOid = InvalidOid;
+	foreach_oid(sequenceOid, ownedSequences)
+	{
+		changeDependencyFor(RelationRelationId, sequenceOid,
+							RelationRelationId, sourceId, targetId);
+	}
+
+	ereport(NOTICE, (errmsg("Dropping the old %s",
+							quote_qualified_identifier(schemaName, sourceName))));
+
+	resetStringInfo(query);
+	appendStringInfo(query, "DROP TABLE %s CASCADE",
+					 quote_qualified_identifier(schemaName, sourceName));
+	spiResult = SPI_execute(query->data, false, 0);
+	if (spiResult != SPI_OK_UTILITY)
+	{
+		ereport(ERROR, (errmsg("could not run SPI query")));
+	}
+
+	ereport(NOTICE, (errmsg("Renaming the new table to %s",
+							quote_qualified_identifier(schemaName, sourceName))));
+
+#if PG_VERSION_NUM >= PG_VERSION_12
+	RenameRelationInternal(targetId,
+						   sourceName, false, false);
+#else
+	RenameRelationInternal(targetId,
+						   sourceName, false);
 #endif
 }

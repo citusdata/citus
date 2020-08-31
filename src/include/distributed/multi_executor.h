@@ -76,6 +76,7 @@ extern void CitusExecutorRun(QueryDesc *queryDesc, ScanDirection direction, uint
 extern void AdaptiveExecutorPreExecutorRun(CitusScanState *scanState);
 extern TupleTableSlot * AdaptiveExecutor(CitusScanState *scanState);
 
+
 /*
  * ExecutionParams contains parameters that are used during the execution.
  * Some of these can be the zero value if it is not needed during the execution.
@@ -145,6 +146,7 @@ extern void ExtractParametersFromParamList(ParamListInfo paramListInfo,
 										   Oid **parameterTypes,
 										   const char ***parameterValues, bool
 										   useOriginalCustomTypeOids);
+extern ParamListInfo ExecutorBoundParams(void);
 
 
 #endif /* MULTI_EXECUTOR_H */

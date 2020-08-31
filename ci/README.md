@@ -48,12 +48,60 @@ following:
 
 ## `check_enterprise_merge.sh`
 
-When you open a PR on community, if it creates a conflict with
-enterprise-master, the check-merge-to-enterprise will fail. Say your branch name
-is `$PR_BRANCH`, we will refer to `$PR_BRANCH` on community as
-`community/$PR_BRANCH` and on enterprise as `enterprise/$PR_BRANCH`. If the
-job already passes, you are done, nothing further required! Otherwise follow the
-below steps. First make sure these two things are the case:
+This check exists to make sure that we can always merge the `master` branch of
+`community` into the `enterprise-master` branch of the `enterprise` repo.
+There are two conditions in which this check passes:
+
+1. There are no merge conflicts between your PR branch and `enterprise-master` and after this merge the code compiles.
+2. There are merge conflicts, but there is a branch with the same name in the
+   enterprise repo that:
+   1. Contains the last commit of the community branch with the same name.
+   2. Merges cleanly into `enterprise-master`
+3. After merging, the code can be compiled.
+
+If the job already passes, you are done, nothing further required! Otherwise
+follow the below steps.
+
+### Prerequisites
+
+Before continuing with the real steps make sure you have done the following
+(this only needs to be done once):
+1. You have enabled `git rerere` in globally or in your enterprise repo
+   ([docs](https://git-scm.com/docs/git-rerere), [very useful blog](https://medium.com/@porteneuve/fix-conflicts-only-once-with-git-rerere-7d116b2cec67#.3vui844dt)):
+   ```bash
+   # Enables it globally for all repos
+   git config --global rerere.enabled true
+   # Enables it only for the enterprise repo
+   cd <enterprise-repo>
+   git config rerere.enabled true
+   ```
+2. You have set up the `community` remote on your enterprise as
+   [described in CONTRIBUTING.md](https://github.com/citusdata/citus-enterprise/blob/enterprise-master/CONTRIBUTING.md#merging-community-changes-onto-enterprise).
+
+
+#### Important notes on `git rerere`
+
+This is very useful as it will make sure git will automatically redo merges that
+you have done before. However, this has a downside too. It will also redo merges
+that you did, but that were incorrect. Two work around this you can use these
+commands.
+1. Make `git rerere` forget a merge:
+   ```bash
+   git rerere forget <badly_merged_file>
+   ```
+2. During conflict resolution where `git rerere` already applied the bad merge,
+   simply forgetting it is not enough. Since it is already applied. In that case
+   you also have to undo the apply using:
+   ```bash
+   git checkout --conflict=merge <badly_merged_file>
+   ```
+
+### Actual steps
+
+After the prerequisites are met we continue on to the real steps. Say your
+branch name is `$PR_BRANCH`, we will refer to `$PR_BRANCH` on community as
+`community/$PR_BRANCH` and on enterprise as `enterprise/$PR_BRANCH`. First make
+sure these two things are the case:
 
 1. Get approval from your reviewer for `community/$PR_BRANCH`. Only follow the
    next steps after you are about to merge the branch to community master.
@@ -106,6 +154,101 @@ git merge "community/$PR_BRANCH"
 The subsequent PRs on community will be able to pass the
 `check-merge-to-enterprise` check as long as they don't have a conflict with
 `enterprise-master`.
+
+### What to do when your branch got outdated?
+
+So there's one issue that can occur. Your branch will become outdated with
+master and you have to make it up to date. There are two ways to do this using
+`git merge` or `git rebase`. As usual, `git merge` is a bit easier than `git
+rebase`, but clutters git history. This section will explain both. If you don't
+know which one makes the most sense, start with `git rebase`. It's possible that
+for whatever reason this doesn't work or becomes very complex, for instance when
+new merge conflicts appear. Feel free to fall back to `git merge` in that case,
+by using `git rebase --abort`.
+
+#### Updating both branches with `git rebase`
+
+In the community repo, first update the outdated branch using `rebase`:
+
+```bash
+git checkout $PR_BRANCH
+# Keep a backup in case you want to fallback to the merge approach
+git checkout -b ${PR_BRANCH}-backup
+git checkout $PR_BRANCH
+# Actually update the branch
+git fetch origin
+git rebase origin/master
+git push origin $PR_BRANCH --force-with-lease
+```
+
+In the enterprise repo, rebase onto the new community branch with
+`--preserve-merges`:
+
+```bash
+git checkout $PR_BRANCH
+git fetch community
+git rebase community/$PR_BRANCH --preserve-merges
+```
+
+Automatic merge might have failed with the above command. However, because of
+`git rerere` it should have re-applied your original merge resolution. If this
+is indeed the case it should show something like this in the output of the
+previous command (note the `Resolved ...` line):
+```
+CONFLICT (content): Merge conflict in <file_path>
+Resolved '<file_path>' using previous resolution.
+Automatic merge failed; fix conflicts and then commit the result.
+Error redoing merge <merge_sha>
+```
+
+Confirm that the merge conflict is indeed resolved correctly. In that case you
+can do the following:
+```bash
+# Add files that were conflicting
+git add "$(git diff --name-only --diff-filter=U)"
+git rebase --continue
+```
+
+Before pushing you should do a final check that the commit hash of your final
+non merge commit matches the commit hash that's on the community repo. If that's
+not the case, you should fallback to the `git merge` approach.
+```bash
+git reset origin/$PR_BRANCH --hard
+```
+
+If the commit hashes were as expected, push the branch:
+```bash
+git push origin $PR_BRANCH --force-with-lease
+```
+
+#### Updating both branches with `git merge`
+
+If you are falling back to the `git merge` approach after trying the
+`git rebase` approach, you should first restore the original branch on the
+community repo.
+```bash
+git checkout $PR_BRANCH
+git reset ${PR_BRANCH}-backup --hard
+git push origin $PR_BRANCH --force-with-lease
+```
+
+In the community repo, first update the outdated branch using `merge`:
+
+```bash
+git checkout $PR_BRANCH
+git fetch origin
+git merge origin/master
+git push origin $PR_BRANCH
+```
+
+In the enterprise repo, merge with the updated `community/$PR_BRANCH`:
+
+```bash
+git checkout $PR_BRANCH
+git fetch community
+git merge community/$PR_BRANCH
+git push origin $PR_BRANCH
+```
 
 ## `check_sql_snapshots.sh`
 

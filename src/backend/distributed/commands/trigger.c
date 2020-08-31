@@ -70,7 +70,7 @@ GetExplicitTriggerIdList(Oid relationId)
 {
 	List *triggerIdList = NIL;
 
-	Relation pgTrigger = heap_open(TriggerRelationId, AccessShareLock);
+	Relation pgTrigger = table_open(TriggerRelationId, AccessShareLock);
 
 	int scanKeyCount = 1;
 	ScanKeyData scanKey[1];
@@ -103,7 +103,7 @@ GetExplicitTriggerIdList(Oid relationId)
 	}
 
 	systable_endscan(scanDescriptor);
-	heap_close(pgTrigger, NoLock);
+	table_close(pgTrigger, NoLock);
 
 	return triggerIdList;
 }

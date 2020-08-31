@@ -9,7 +9,7 @@ INSERT INTO test_table SELECT i % 10, 'test' || i, row_to_json(row(i, i*18, 'tes
 -- server version because CTE inlining might produce
 -- different debug messages in PG 11 vs PG 12
 SHOW server_version \gset
-SELECT substring(:'server_version', '\d+')::int;
+SELECT substring(:'server_version', '\d+')::int >= 12;
 
 SET client_min_messages TO DEBUG;
 
@@ -363,7 +363,8 @@ WITH cte_1 AS (SELECT * FROM test_table),
 	 cte_2 AS (SELECT * FROM test_table ORDER BY 1 DESC LIMIT 3)
 (SELECT *, (SELECT 1) FROM cte_1 EXCEPT SELECT *, 1 FROM test_table)
 UNION
-(SELECT *, 1 FROM cte_2);
+(SELECT *, 1 FROM cte_2)
+ORDER BY 1,2;
 
 
 -- cte_1 is safe to inline, even if because after inlining

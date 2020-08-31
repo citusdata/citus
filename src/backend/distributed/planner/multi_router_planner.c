@@ -164,7 +164,7 @@ static List * SingleShardTaskList(Query *query, uint64 jobId,
 								  List *relationShardList, List *placementList,
 								  uint64 shardId, bool parametersInQueryResolved);
 static bool RowLocksOnRelations(Node *node, List **rtiLockList);
-static List * RemoveCoordinatorPlacement(List *placementList);
+static List * RemoveCoordinatorPlacementIfNotSingleNode(List *placementList);
 static void ReorderTaskPlacementsByTaskAssignmentPolicy(Job *job,
 														TaskAssignmentPolicyType
 														taskAssignmentPolicy,
@@ -648,7 +648,8 @@ ModifyPartialQuerySupported(Query *queryTree, bool multiShardQuery,
 
 
 			if (cteQuery->hasForUpdate &&
-				FindNodeCheckInRangeTableList(cteQuery->rtable, IsReferenceTableRTE))
+				FindNodeMatchingCheckFunctionInRangeTableList(cteQuery->rtable,
+															  IsReferenceTableRTE))
 			{
 				return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 									 "Router planner doesn't support SELECT FOR UPDATE"
@@ -656,7 +657,7 @@ ModifyPartialQuerySupported(Query *queryTree, bool multiShardQuery,
 									 NULL, NULL);
 			}
 
-			if (FindNodeCheck((Node *) cteQuery, CitusIsVolatileFunction))
+			if (FindNodeMatchingCheckFunction((Node *) cteQuery, CitusIsVolatileFunction))
 			{
 				return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 									 "Router planner doesn't support VOLATILE functions"
@@ -705,7 +706,8 @@ ModifyPartialQuerySupported(Query *queryTree, bool multiShardQuery,
 			}
 
 			if (commandType == CMD_UPDATE &&
-				FindNodeCheck((Node *) targetEntry->expr, CitusIsVolatileFunction))
+				FindNodeMatchingCheckFunction((Node *) targetEntry->expr,
+											  CitusIsVolatileFunction))
 			{
 				return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 									 "functions used in UPDATE queries on distributed "
@@ -733,7 +735,8 @@ ModifyPartialQuerySupported(Query *queryTree, bool multiShardQuery,
 
 		if (joinTree != NULL)
 		{
-			if (FindNodeCheck((Node *) joinTree->quals, CitusIsVolatileFunction))
+			if (FindNodeMatchingCheckFunction((Node *) joinTree->quals,
+											  CitusIsVolatileFunction))
 			{
 				return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 									 "functions used in the WHERE clause of modification "
@@ -830,7 +833,9 @@ ModifyQuerySupported(Query *queryTree, Query *originalQuery, bool multiShardQuer
 	if (!fastPathRouterQuery &&
 		ContainsReadIntermediateResultFunction((Node *) originalQuery))
 	{
-		bool hasTidColumn = FindNodeCheck((Node *) originalQuery->jointree, IsTidColumn);
+		bool hasTidColumn = FindNodeMatchingCheckFunction(
+			(Node *) originalQuery->jointree, IsTidColumn);
+
 		if (hasTidColumn)
 		{
 			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
@@ -1138,7 +1143,8 @@ MultiShardModifyQuerySupported(Query *originalQuery,
 									 "ON instead",
 									 NULL, NULL);
 	}
-	else if (FindNodeCheck((Node *) originalQuery, CitusIsVolatileFunction))
+	else if (FindNodeMatchingCheckFunction((Node *) originalQuery,
+										   CitusIsVolatileFunction))
 	{
 		errorMessage = DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 									 "functions used in UPDATE queries on distributed "
@@ -1808,10 +1814,10 @@ ReorderTaskPlacementsByTaskAssignmentPolicy(Job *job,
 		 * connect to the worker nodes.
 		 */
 		Assert(ReadOnlyTask(task->taskType));
-		placementList = RemoveCoordinatorPlacement(placementList);
+		placementList = RemoveCoordinatorPlacementIfNotSingleNode(placementList);
 
 		/* reorder the placement list */
-		List *reorderedPlacementList = RoundRobinReorder(task, placementList);
+		List *reorderedPlacementList = RoundRobinReorder(placementList);
 		task->taskPlacementList = reorderedPlacementList;
 
 		ShardPlacement *primaryPlacement = (ShardPlacement *) linitial(
@@ -1824,14 +1830,14 @@ ReorderTaskPlacementsByTaskAssignmentPolicy(Job *job,
 
 
 /*
- * RemoveCoordinatorPlacement gets a task placement list and returns the list
+ * RemoveCoordinatorPlacementIfNotSingleNode gets a task placement list and returns the list
  * by removing the placement belonging to the coordinator (if any).
  *
- * If the list has a single entry or no placements on the coordinator, the list
- * is return unmodified.
+ * If the list has a single element or no placements on the coordinator, the list
+ * returned is unmodified.
  */
 static List *
-RemoveCoordinatorPlacement(List *placementList)
+RemoveCoordinatorPlacementIfNotSingleNode(List *placementList)
 {
 	ListCell *placementCell = NULL;
 
@@ -2976,8 +2982,7 @@ NormalizeMultiRowInsertTargetList(Query *query)
 
 			expandedValuesList = lappend(expandedValuesList, targetExpr);
 		}
-
-		valuesListCell->data.ptr_value = (void *) expandedValuesList;
+		SetListCellPtr(valuesListCell, (void *) expandedValuesList);
 	}
 
 	/* reset coltypes, coltypmods, colcollations and rebuild them below */

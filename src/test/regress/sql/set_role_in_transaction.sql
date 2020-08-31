@@ -48,6 +48,24 @@ SET search_path TO set_role_in_transaction;
 INSERT INTO t values (2);
 ROLLBACK;
 
+-- we cannot change role in between COPY commands as well
+SET ROLE user1;
+SET search_path TO set_role_in_transaction;
+BEGIN;
+    COPY t FROM STDIN;
+1
+2
+3
+\.
+    SET ROLE user2;
+    SET search_path TO set_role_in_transaction;
+    COPY t FROM STDIN;
+1
+2
+3
+\.
+ROLLBACK;
+
 RESET ROLE;
 
 REVOKE ALL ON SCHEMA set_role_in_transaction FROM user1;

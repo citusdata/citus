@@ -45,11 +45,6 @@ step "s1-remove-node-1"
 	SELECT * FROM master_remove_node('localhost', 57637);
 }
 
-step "s1-remove-node-2"
-{
-	SELECT * FROM master_remove_node('localhost', 57638);
-}
-
 step "s1-abort"
 {
 	ABORT;
@@ -66,11 +61,6 @@ step "s1-show-nodes"
 }
 
 session "s2"
-
-step "s2-begin"
-{
-	BEGIN;
-}
 
 step "s2-add-node-1"
 {
@@ -100,11 +90,6 @@ step "s2-remove-node-1"
 step "s2-remove-node-2"
 {
 	SELECT * FROM master_remove_node('localhost', 57638);
-}
-
-step "s2-commit"
-{
-	COMMIT;
 }
 
 // session 1 adds a node, session 2 removes it, should be ok

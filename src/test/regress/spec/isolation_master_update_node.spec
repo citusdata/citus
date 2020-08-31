@@ -18,7 +18,6 @@ teardown
 session "s1"
 step "s1-begin" { BEGIN; }
 step "s1-insert" { INSERT INTO t1 SELECT generate_series(1, 100); }
-step "s1-verify-terminated" { -- verify the connection has been terminated }
 step "s1-abort" { ABORT; }
 
 session "s2"

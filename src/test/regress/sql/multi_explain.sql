@@ -751,6 +751,46 @@ SELECT count(*) FROM worker_save_query_explain_analyze('SELECT pg_sleep(0.05)', 
 SELECT execution_duration BETWEEN 30 AND 200 FROM worker_last_saved_explain_analyze();
 END;
 
+--
+-- verify we handle parametrized queries properly
+--
+
+CREATE TABLE t(a int);
+INSERT INTO t VALUES (1), (2), (3);
+
+-- simple case
+PREPARE save_explain AS
+SELECT $1, * FROM worker_save_query_explain_analyze('SELECT $1::int', :default_opts) as (a int);
+EXECUTE save_explain(1);
+deallocate save_explain;
+
+
+-- Call a UDF first to make sure that we handle stacks of executorBoundParams properly.
+--
+-- The prepared statement will first call f() which will force new executor run with new
+-- set of parameters. Then it will call worker_save_query_explain_analyze with a
+-- parametrized query. If we don't have the correct set of parameters here, it will fail.
+CREATE FUNCTION f() RETURNS INT
+AS $$
+PREPARE pp1 AS SELECT $1 WHERE $2 = $3;
+EXECUTE pp1(4, 5, 5);
+deallocate pp1;
+SELECT 1$$ LANGUAGE sql volatile;
+
+PREPARE save_explain AS
+ SELECT $1, CASE WHEN i < 2 THEN
+             f() = 1
+		    ELSE
+			 EXISTS(SELECT * FROM worker_save_query_explain_analyze('SELECT $1::int', :default_opts) as (a int)
+			        WHERE a = 1)
+			END
+ FROM generate_series(1, 4) i;
+EXECUTE save_explain(1);
+
+deallocate save_explain;
+DROP FUNCTION f();
+DROP TABLE t;
+
 SELECT * FROM explain_analyze_test ORDER BY a;
 
 \a\t
@@ -764,6 +804,7 @@ SET client_min_messages TO WARNING;
 SELECT create_distributed_table('explain_analyze_test', 'a');
 
 \set default_analyze_flags '(ANALYZE on, COSTS off, TIMING off, SUMMARY off)'
+\set default_explain_flags '(ANALYZE off, COSTS off, TIMING off, SUMMARY off)'
 
 -- router SELECT
 EXPLAIN :default_analyze_flags SELECT * FROM explain_analyze_test WHERE a = 1;
@@ -871,6 +912,11 @@ WITH r AS (
 SELECT count(distinct a2) FROM s;
 ROLLBACK;
 
+-- https://github.com/citusdata/citus/issues/4074
+prepare ref_select(int) AS select * from ref_table where 1 = $1;
+explain :default_analyze_flags execute ref_select(1);
+deallocate ref_select;
+
 DROP TABLE ref_table, dist_table;
 
 -- test EXPLAIN ANALYZE with different replication factors
@@ -916,3 +962,74 @@ EXPLAIN :default_analyze_flags EXECUTE p3;
 EXPLAIN :default_analyze_flags EXECUTE p3;
 
 DROP TABLE dist_table_rep1, dist_table_rep2;
+
+-- https://github.com/citusdata/citus/issues/2009
+CREATE TABLE simple (id integer, name text);
+SELECT create_distributed_table('simple', 'id');
+PREPARE simple_router AS SELECT *, $1 FROM simple WHERE id = 1;
+
+EXPLAIN :default_explain_flags EXECUTE simple_router(1);
+EXPLAIN :default_analyze_flags EXECUTE simple_router(1);
+EXPLAIN :default_analyze_flags EXECUTE simple_router(1);
+EXPLAIN :default_analyze_flags EXECUTE simple_router(1);
+EXPLAIN :default_analyze_flags EXECUTE simple_router(1);
+EXPLAIN :default_analyze_flags EXECUTE simple_router(1);
+EXPLAIN :default_analyze_flags EXECUTE simple_router(1);
+EXPLAIN :default_analyze_flags EXECUTE simple_router(1);
+
+deallocate simple_router;
+
+-- prepared multi-row insert
+PREPARE insert_query AS INSERT INTO simple VALUES ($1, 2), (2, $2);
+EXPLAIN :default_explain_flags EXECUTE insert_query(3, 4);
+EXPLAIN :default_analyze_flags EXECUTE insert_query(3, 4);
+deallocate insert_query;
+
+-- prepared updates
+PREPARE update_query AS UPDATE simple SET name=$1 WHERE name=$2;
+EXPLAIN :default_explain_flags EXECUTE update_query('x', 'y');
+EXPLAIN :default_analyze_flags EXECUTE update_query('x', 'y');
+deallocate update_query;
+
+-- prepared deletes
+PREPARE delete_query AS DELETE FROM simple WHERE name=$1 OR name=$2;
+EXPLAIN EXECUTE delete_query('x', 'y');
+EXPLAIN :default_analyze_flags EXECUTE delete_query('x', 'y');
+deallocate delete_query;
+
+-- prepared distributed insert/select
+-- we don't support EXPLAIN for prepared insert/selects of other types.
+PREPARE distributed_insert_select AS INSERT INTO simple SELECT * FROM simple WHERE name IN ($1, $2);
+EXPLAIN :default_explain_flags EXECUTE distributed_insert_select('x', 'y');
+EXPLAIN :default_analyze_flags EXECUTE distributed_insert_select('x', 'y');
+deallocate distributed_insert_select;
+
+-- prepared cte
+BEGIN;
+PREPARE cte_query AS
+WITH keys AS (
+  SELECT count(*) FROM
+   (SELECT DISTINCT l_orderkey, GREATEST(random(), 2) FROM lineitem_hash_part WHERE l_quantity > $1) t
+),
+series AS (
+  SELECT s FROM generate_series(1, $2) s
+),
+delete_result AS (
+  DELETE FROM lineitem_hash_part WHERE l_quantity < $3 RETURNING *
+)
+SELECT s FROM series;
+
+EXPLAIN :default_explain_flags EXECUTE cte_query(2, 10, -1);
+EXPLAIN :default_analyze_flags EXECUTE cte_query(2, 10, -1);
+
+ROLLBACK;
+
+-- https://github.com/citusdata/citus/issues/2009#issuecomment-653036502
+CREATE TABLE users_table_2 (user_id int primary key, time timestamp, value_1 int, value_2 int, value_3 float, value_4 bigint);
+SELECT create_reference_table('users_table_2');
+
+PREPARE p4 (int, int) AS insert into users_table_2 ( value_1, user_id) select value_1, user_id + $2  FROM users_table_2 ON CONFLICT (user_id) DO UPDATE SET value_2 = EXCLUDED.value_1 + $1;
+EXPLAIN :default_explain_flags execute p4(20,20);
+EXPLAIN :default_analyze_flags execute p4(20,20);
+
+DROP TABLE simple, users_table_2;

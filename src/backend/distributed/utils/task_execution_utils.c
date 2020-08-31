@@ -6,6 +6,12 @@
 #include <unistd.h>
 #include <math.h>
 
+#include "distributed/pg_version_constants.h"
+
+#if PG_VERSION_NUM >= PG_VERSION_13
+#include "common/hashfn.h"
+#endif
+
 #include "commands/dbcommands.h"
 #include "distributed/citus_custom_scan.h"
 #include "distributed/citus_nodes.h"

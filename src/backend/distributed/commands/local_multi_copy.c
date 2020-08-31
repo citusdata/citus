@@ -34,6 +34,7 @@
 #include "distributed/local_executor.h"
 #include "distributed/local_multi_copy.h"
 #include "distributed/shard_utils.h"
+#include "distributed/version_compat.h"
 
 static int ReadFromLocalBufferCallback(void *outBuf, int minRead, int maxRead);
 static void AddSlotToBuffer(TupleTableSlot *slot, CitusCopyDestReceiver *copyDest,
@@ -160,7 +161,7 @@ DoLocalCopy(StringInfo buffer, Oid relationId, int64 shardId, CopyStmt *copyStat
 	LocalCopyBuffer = buffer;
 
 	Oid shardOid = GetTableLocalShardOid(relationId, shardId);
-	Relation shard = heap_open(shardOid, RowExclusiveLock);
+	Relation shard = table_open(shardOid, RowExclusiveLock);
 	ParseState *pState = make_parsestate(NULL);
 
 	/* p_rtable of pState is set so that we can check constraints. */
@@ -172,7 +173,7 @@ DoLocalCopy(StringInfo buffer, Oid relationId, int64 shardId, CopyStmt *copyStat
 	CopyFrom(cstate);
 	EndCopyFrom(cstate);
 
-	heap_close(shard, NoLock);
+	table_close(shard, NoLock);
 	free_parsestate(pState);
 }
 

@@ -554,14 +554,14 @@ $$);
                                                                                                                                          coordinator_plan
 ---------------------------------------------------------------------
  Sort
-   Output: remote_scan.k1, remote_scan.k2, remote_scan.k3, (any_value(remote_scan.v1)), (any_value(remote_scan.v2)), ((any_value(remote_scan.v3) || '_notgrouped'::text)), remote_scan.va1, remote_scan.va2, remote_scan.va3, (COALESCE((pg_catalog.sum(remote_scan.count))::bigint, '0'::bigint))
+   Output: xxxxxx
    Sort Key: remote_scan.k1
    ->  HashAggregate
-         Output: remote_scan.k1, remote_scan.k2, remote_scan.k3, any_value(remote_scan.v1), any_value(remote_scan.v2), (any_value(remote_scan.v3) || '_notgrouped'::text), remote_scan.va1, remote_scan.va2, remote_scan.va3, COALESCE((pg_catalog.sum(remote_scan.count))::bigint, '0'::bigint)
+         Output: xxxxxx
          Group Key: remote_scan.k1, remote_scan.va1
          Filter: ((length(remote_scan.worker_column_11) + length(any_value(remote_scan.worker_column_12))) < length((any_value(remote_scan.worker_column_13) || '_append'::text)))
          ->  Custom Scan (Citus Adaptive)
-               Output: remote_scan.k1, remote_scan.k2, remote_scan.k3, remote_scan.v1, remote_scan.v2, remote_scan.v3, remote_scan.va1, remote_scan.va2, remote_scan.va3, remote_scan.count, remote_scan.worker_column_11, remote_scan.worker_column_12, remote_scan.worker_column_13
+               Output: xxxxxx
                Task Count: 4
 (10 rows)
 

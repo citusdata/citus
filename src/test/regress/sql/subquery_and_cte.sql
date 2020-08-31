@@ -381,6 +381,101 @@ FROM
 WHERE foo.user_id = bar.user_id
 ORDER BY 1 DESC;
 
+CREATE TABLE ref_table_1 (a int);
+SELECT create_reference_table('ref_table_1');
+
+CREATE TABLE ref_table_2 (a int);
+SELECT create_reference_table('ref_table_2');
+
+CREATE TABLE dist (a int,  b text);
+SELECT create_distributed_table('dist', 'a');
+
+INSERT INTO ref_table_1 SELECT * FROM generate_series(1, 10);
+INSERT INTO ref_table_2 SELECT * FROM generate_series(1, 10);
+INSERT INTO dist SELECT * FROM generate_series(1, 10);
+
+SELECT count(*) FROM
+	(SELECT DISTINCT ref_table_1.a + 1 as a FROM  ref_table_1 JOIN ref_table_2 ON (ref_table_1.a = ref_table_2.a)) as foo
+		JOIN
+	dist
+		ON(dist.a = foo.a);
+
+SELECT count(*) FROM
+	(SELECT DISTINCT ref_table_1.a + 1 +ref_table_2.a + ref_table_1.a as a FROM  ref_table_1 JOIN ref_table_2 ON (ref_table_1.a = ref_table_2.a)) as foo
+		JOIN
+	dist
+		ON(dist.a = foo.a);
+
+SELECT count(*) FROM
+	(SELECT ref_table_1.a + 1 as a FROM  ref_table_1 JOIN ref_table_2 ON (ref_table_1.a = ref_table_2.a) GROUP BY ref_table_1.a + 1) as foo
+		JOIN
+	dist
+		ON(dist.a = foo.a);
+
+SELECT count(*) FROM
+	(SELECT ref_table_1.a + ref_table_2.a + 1 as a FROM  ref_table_1 JOIN ref_table_2 ON (ref_table_1.a = ref_table_2.a) GROUP BY ref_table_1.a + ref_table_2.a + 1) as foo
+		JOIN
+	dist
+		ON(dist.a = foo.a);
+
+SELECT  count(*) FROM (
+  SELECT
+    a, lag(a) OVER my_win  as lag_event_type, row_number() OVER my_win as row_no
+  FROM
+    ref_table_1 WINDOW my_win AS (PARTITION BY a + 1)) as foo
+
+		JOIN
+	dist
+		ON(dist.a = foo.a);
+
+SET citus.enable_cte_inlining to true;
+
+WITH foo AS (
+	SELECT DISTINCT ref_table_1.a + 1 as a FROM  ref_table_1 JOIN ref_table_2 ON (ref_table_1.a = ref_table_2.a)
+)
+SELECT count(*) FROM
+	foo
+		JOIN
+	dist
+		ON(dist.a = foo.a);
+
+WITH foo AS (
+	SELECT DISTINCT ref_table_1.a + 1 +ref_table_2.a + ref_table_1.a as a FROM  ref_table_1 JOIN ref_table_2 ON (ref_table_1.a = ref_table_2.a)
+)
+SELECT count(*) FROM
+	foo
+		JOIN
+	dist
+		ON(dist.a = foo.a);
+
+WITH foo AS (
+	SELECT ref_table_1.a + 1 as a FROM  ref_table_1 JOIN ref_table_2 ON (ref_table_1.a = ref_table_2.a) GROUP BY ref_table_1.a + 1
+)
+SELECT count(*) FROM
+	foo
+		JOIN
+	dist
+		ON(dist.a = foo.a);
+
+WITH foo AS (
+	SELECT ref_table_1.a + ref_table_2.a + 1 as a FROM  ref_table_1 JOIN ref_table_2 ON (ref_table_1.a = ref_table_2.a) GROUP BY ref_table_1.a + ref_table_2.a + 1
+)
+SELECT count(*) FROM
+	foo
+		JOIN
+	dist
+		ON(dist.a = foo.a);
+
+WITH foo AS (
+  SELECT
+    a, lag(a) OVER my_win  as lag_event_type, row_number() OVER my_win as row_no
+  FROM
+    ref_table_1 WINDOW my_win AS (PARTITION BY a + 1)
+)
+SELECT count(*) FROM foo JOIN dist ON(dist.a = foo.a);
+
+SET citus.enable_cte_inlining to false;
+
 -- We error-out when there's an error in execution of the query. By repeating it
 -- multiple times, we increase the chance of this test failing before PR #1903.
 SET client_min_messages TO ERROR;

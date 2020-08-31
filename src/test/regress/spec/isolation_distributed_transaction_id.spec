@@ -86,17 +86,6 @@ step "s2-commit"
     COMMIT;
 }
 
-// print only the necessary parts to prevent concurrent runs to print different values
-step "s2-get-first-worker-active-transactions"
-{
-		SELECT * FROM run_command_on_workers('SELECT row(initiator_node_identifier, transaction_number)
-												FROM
-											  get_all_active_transactions();
-											')
-		WHERE nodeport = 57637;
-;
-}
-
 step "s2-get-all-transactions"
 {
 	SELECT initiator_node_identifier, transaction_number, transaction_stamp FROM get_current_transaction_id() ORDER BY 1,2,3;

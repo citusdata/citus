@@ -10,21 +10,30 @@
 
 #include "postgres.h"
 
+#include "distributed/pg_version_constants.h"
+
 #include "access/genam.h"
 #include "access/heapam.h"
 #include "access/htup_details.h"
 #include "access/skey.h"
+#include "access/sysattr.h"
 #include "catalog/dependency.h"
 #include "catalog/indexing.h"
 #include "catalog/pg_class.h"
 #include "catalog/pg_depend.h"
+#include "catalog/pg_rewrite.h"
+#include "catalog/pg_rewrite_d.h"
 #include "catalog/pg_shdepend.h"
 #include "catalog/pg_type.h"
+#if PG_VERSION_NUM >= PG_VERSION_13
+#include "common/hashfn.h"
+#endif
 #include "distributed/commands/utility_hook.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata/dependency.h"
 #include "distributed/metadata/distobject.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/version_compat.h"
 #include "miscadmin.h"
 #include "utils/fmgroids.h"
 #include "utils/hsearch.h"
@@ -95,6 +104,17 @@ typedef struct DependencyDefinition
 	} data;
 } DependencyDefinition;
 
+/*
+ * ViewDependencyNode represents a view (or possibly a table) in a dependency graph of
+ * views.
+ */
+typedef struct ViewDependencyNode
+{
+	Oid id;
+	int remainingDependencyCount;
+	List *dependingNodes;
+}ViewDependencyNode;
+
 
 static ObjectAddress DependencyDefinitionObjectAddress(DependencyDefinition *definition);
 
@@ -129,6 +149,8 @@ static void ApplyAddToDependencyList(ObjectAddressCollector *collector,
 									 DependencyDefinition *definition);
 static List * ExpandCitusSupportedTypes(ObjectAddressCollector *collector,
 										ObjectAddress target);
+static ViewDependencyNode * BuildViewDependencyGraph(Oid relationId, HTAB *nodeMap);
+static Oid GetDependingView(Form_pg_depend pg_depend);
 
 
 /*
@@ -304,7 +326,7 @@ DependencyDefinitionFromPgDepend(ObjectAddress target)
 	/*
 	 * iterate the actual pg_depend catalog
 	 */
-	Relation depRel = heap_open(DependRelationId, AccessShareLock);
+	Relation depRel = table_open(DependRelationId, AccessShareLock);
 
 	/* scan pg_depend for classid = $1 AND objid = $2 using pg_depend_depender_index */
 	ScanKeyInit(&key[0], Anum_pg_depend_classid, BTEqualStrategyNumber, F_OIDEQ,
@@ -346,7 +368,7 @@ DependencyDefinitionFromPgShDepend(ObjectAddress target)
 	/*
 	 * iterate the actual pg_shdepend catalog
 	 */
-	Relation shdepRel = heap_open(SharedDependRelationId, AccessShareLock);
+	Relation shdepRel = table_open(SharedDependRelationId, AccessShareLock);
 
 	/*
 	 * Scan pg_shdepend for dbid = $1 AND classid = $2 AND objid = $3 using
@@ -621,7 +643,7 @@ IsObjectAddressOwnedByExtension(const ObjectAddress *target,
 	HeapTuple depTup = NULL;
 	bool result = false;
 
-	Relation depRel = heap_open(DependRelationId, AccessShareLock);
+	Relation depRel = table_open(DependRelationId, AccessShareLock);
 
 	/* scan pg_depend for classid = $1 AND objid = $2 using pg_depend_depender_index */
 	ScanKeyInit(&key[0], Anum_pg_depend_classid, BTEqualStrategyNumber, F_OIDEQ,
@@ -647,7 +669,7 @@ IsObjectAddressOwnedByExtension(const ObjectAddress *target,
 	}
 
 	systable_endscan(depScan);
-	heap_close(depRel, AccessShareLock);
+	table_close(depRel, AccessShareLock);
 
 	return result;
 }
@@ -908,4 +930,153 @@ DependencyDefinitionObjectAddress(DependencyDefinition *definition)
 	}
 
 	ereport(ERROR, (errmsg("unsupported dependency definition mode")));
+}
+
+
+/*
+ * BuildViewDependencyGraph gets a relation (or a view) and builds a dependency graph for the
+ * depending views.
+ */
+static ViewDependencyNode *
+BuildViewDependencyGraph(Oid relationId, HTAB *nodeMap)
+{
+	bool found = false;
+	ViewDependencyNode *node = (ViewDependencyNode *) hash_search(nodeMap, &relationId,
+																  HASH_ENTER, &found);
+
+	if (found)
+	{
+		return node;
+	}
+
+	node->id = relationId;
+	node->remainingDependencyCount = 0;
+	node->dependingNodes = NIL;
+
+	ObjectAddress target = { 0 };
+	ObjectAddressSet(target, RelationRelationId, relationId);
+
+	ScanKeyData key[2];
+	HeapTuple depTup = NULL;
+
+	/*
+	 * iterate the actual pg_depend catalog
+	 */
+	Relation depRel = table_open(DependRelationId, AccessShareLock);
+
+	ScanKeyInit(&key[0], Anum_pg_depend_refclassid, BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(target.classId));
+	ScanKeyInit(&key[1], Anum_pg_depend_refobjid, BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(target.objectId));
+	SysScanDesc depScan = systable_beginscan(depRel, DependReferenceIndexId,
+											 true, NULL, 2, key);
+
+	while (HeapTupleIsValid(depTup = systable_getnext(depScan)))
+	{
+		Form_pg_depend pg_depend = (Form_pg_depend) GETSTRUCT(depTup);
+
+		Oid dependingView = GetDependingView(pg_depend);
+		if (dependingView != InvalidOid)
+		{
+			ViewDependencyNode *dependingNode = BuildViewDependencyGraph(dependingView,
+																		 nodeMap);
+
+			node->dependingNodes = lappend(node->dependingNodes, dependingNode);
+			dependingNode->remainingDependencyCount++;
+		}
+	}
+
+	systable_endscan(depScan);
+	relation_close(depRel, AccessShareLock);
+
+	return node;
+}
+
+
+/*
+ * GetDependingViews takes a relation id, finds the views that depend on the relation
+ * and returns list of the oids of those views. It recurses on the pg_depend table to
+ * find the views that recursively depend on the table.
+ *
+ * The returned views will have the correct order for creating them, from the point of
+ * dependencies between.
+ */
+List *
+GetDependingViews(Oid relationId)
+{
+	HASHCTL info;
+	memset(&info, 0, sizeof(info));
+	info.keysize = sizeof(Oid);
+	info.entrysize = sizeof(ViewDependencyNode);
+	info.hash = oid_hash;
+	uint32 hashFlags = (HASH_ELEM | HASH_FUNCTION);
+	HTAB *nodeMap = hash_create("view dependency map (oid)", 32, &info, hashFlags);
+
+	ViewDependencyNode *tableNode = BuildViewDependencyGraph(relationId, nodeMap);
+
+	List *dependingViews = NIL;
+	List *nodeQueue = list_make1(tableNode);
+	ViewDependencyNode *node = NULL;
+	foreach_ptr(node, nodeQueue)
+	{
+		ViewDependencyNode *dependingNode = NULL;
+		foreach_ptr(dependingNode, node->dependingNodes)
+		{
+			dependingNode->remainingDependencyCount--;
+			if (dependingNode->remainingDependencyCount == 0)
+			{
+				nodeQueue = lappend(nodeQueue, dependingNode);
+				dependingViews = lappend_oid(dependingViews, dependingNode->id);
+			}
+		}
+	}
+	return dependingViews;
+}
+
+
+/*
+ * GetDependingView gets a row of pg_depend and returns the oid of the view that is depended.
+ * If the depended object is not a rewrite object, the object to rewrite is not a view or it
+ * is the same view with the depending one InvalidOid is returned.
+ */
+Oid
+GetDependingView(Form_pg_depend pg_depend)
+{
+	if (pg_depend->classid != RewriteRelationId)
+	{
+		return InvalidOid;
+	}
+
+	Relation rewriteRel = table_open(RewriteRelationId, AccessShareLock);
+	ScanKeyData rkey[1];
+
+#if PG_VERSION_NUM >= PG_VERSION_12
+	ScanKeyInit(&rkey[0],
+				Anum_pg_rewrite_oid,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(pg_depend->objid));
+#else
+	ScanKeyInit(&rkey[0],
+				ObjectIdAttributeNumber,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(pg_depend->objid));
+#endif
+
+	SysScanDesc rscan = systable_beginscan(rewriteRel, RewriteOidIndexId,
+										   true, NULL, 1, rkey);
+
+	HeapTuple rewriteTup = systable_getnext(rscan);
+	Form_pg_rewrite pg_rewrite = (Form_pg_rewrite) GETSTRUCT(rewriteTup);
+
+	bool isView = get_rel_relkind(pg_rewrite->ev_class) == RELKIND_VIEW;
+	bool isDifferentThanRef = pg_rewrite->ev_class != pg_depend->refobjid;
+
+	systable_endscan(rscan);
+	relation_close(rewriteRel, AccessShareLock);
+
+	if (isView && isDifferentThanRef)
+	{
+		return pg_rewrite->ev_class;
+	}
+	return InvalidOid;
 }
