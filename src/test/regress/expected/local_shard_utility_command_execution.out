@@ -241,7 +241,7 @@ NOTICE:  truncate cascades to table "dist_table_xxxxx"
 NOTICE:  truncate cascades to table "dist_table_xxxxx"
 NOTICE:  truncate cascades to table "dist_table_xxxxx"
 NOTICE:  truncate cascades to table "dist_table_xxxxx"
-ERROR:  cannot execute DDL on reference table "ref_table" because there was a parallel SELECT access to distributed table "dist_table" in the same transaction
+ERROR:  cannot execute DDL on table "ref_table" because there was a parallel SELECT access to distributed table "dist_table" in the same transaction
 COMMIT;
 -- as we do not support local ANALYZE execution yet, below block would error out
 BEGIN;

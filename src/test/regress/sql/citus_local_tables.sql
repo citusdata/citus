@@ -357,6 +357,11 @@ ORDER BY 1;
 
 -- execute truncate & drop commands for multiple relations to see that we don't break local execution
 TRUNCATE citus_local_table_1, citus_local_table_2, distributed_table, local_table, reference_table;
+
+-- test vacuum
+VACUUM citus_local_table_1;
+VACUUM citus_local_table_1, distributed_table, local_table, reference_table;
+
 DROP TABLE citus_local_table_1, citus_local_table_2, distributed_table, local_table, reference_table;
 
 -- cleanup at exit

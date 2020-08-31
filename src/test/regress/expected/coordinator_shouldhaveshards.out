@@ -418,9 +418,11 @@ HINT:  To remove the local data, run: SELECT truncate_local_data_after_distribut
 INSERT INTO dist_table VALUES(1);
 NOTICE:  executing the command locally: INSERT INTO coordinator_shouldhaveshards.dist_table_1503017 (a) VALUES (1)
 SELECT * FROM local JOIN dist_table ON (a = x);
-ERROR:  relation local is not distributed
+ERROR:  direct joins between distributed and local tables are not supported
+HINT:  Use CTE's or subqueries to select from local tables and use them in joins
 SELECT * FROM local JOIN dist_table ON (a = x) WHERE a = 1;;
-ERROR:  relation local is not distributed
+ERROR:  direct joins between distributed and local tables are not supported
+HINT:  Use CTE's or subqueries to select from local tables and use them in joins
 -- intermediate results are allowed
 WITH cte_1 AS (SELECT * FROM dist_table LIMIT 1)
 SELECT * FROM ref JOIN local ON (a = x) JOIN cte_1 ON (local.x = cte_1.a);

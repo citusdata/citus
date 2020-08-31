@@ -307,7 +307,8 @@ WITH cte AS (
 	SELECT user_id FROM users_table
 )
 SELECT min(user_id) FROM cte JOIN local_table ON (user_id = id) JOIN events_table USING (user_id);
-ERROR:  relation local_table is not distributed
+ERROR:  direct joins between distributed and local tables are not supported
+HINT:  Use CTE's or subqueries to select from local tables and use them in joins
 -- unless the distributed table is part of a recursively planned subquery
 WITH cte AS (
 	SELECT user_id FROM users_table
@@ -325,7 +326,8 @@ WITH cte AS (
 )
 SELECT count(*) FROM local_table JOIN ref_table USING (id)
 WHERE id IN (SELECT * FROM cte);
-ERROR:  relation local_table is not distributed
+ERROR:  direct joins between distributed and local tables are not supported
+HINT:  Use CTE's or subqueries to select from local tables and use them in joins
 -- CTEs should be able to terminate a router query
 WITH cte AS (
 	WITH cte_1 AS (

@@ -734,8 +734,8 @@ CheckConflictingRelationAccesses(Oid relationId, ShardPlacementAccessType access
 		 */
 		if (relationName == NULL)
 		{
-			ereport(ERROR, (errmsg("cannot execute %s on reference table because "
-								   "there was a parallel %s access to distributed table "
+			ereport(ERROR, (errmsg("cannot execute %s on table because there was "
+								   "a parallel %s access to distributed table "
 								   "\"%s\" in the same transaction",
 								   accessTypeText, conflictingAccessTypeText,
 								   conflictingRelationName),
@@ -745,13 +745,12 @@ CheckConflictingRelationAccesses(Oid relationId, ShardPlacementAccessType access
 		}
 		else
 		{
-			ereport(ERROR, (errmsg(
-								"cannot execute %s on reference table \"%s\" because "
-								"there was a parallel %s access to distributed table "
-								"\"%s\" in the same transaction",
-								accessTypeText, relationName,
-								conflictingAccessTypeText,
-								conflictingRelationName),
+			ereport(ERROR, (errmsg("cannot execute %s on table \"%s\" because "
+								   "there was a parallel %s access to distributed "
+								   "table \"%s\" in the same transaction",
+								   accessTypeText, relationName,
+								   conflictingAccessTypeText,
+								   conflictingRelationName),
 							errhint("Try re-running the transaction with "
 									"\"SET LOCAL citus.multi_shard_modify_mode TO "
 									"\'sequential\';\"")));
@@ -769,13 +768,13 @@ CheckConflictingRelationAccesses(Oid relationId, ShardPlacementAccessType access
 			 * would still use the already opened parallel connections to the workers,
 			 * thus contradicting our purpose of using sequential mode.
 			 */
-			ereport(ERROR, (errmsg("cannot modify reference table \"%s\" because there "
-								   "was a parallel operation on a distributed table",
+			ereport(ERROR, (errmsg("cannot modify table \"%s\" because there was "
+								   "a parallel operation on a distributed table",
 								   relationName),
 							errdetail("When there is a foreign key to a reference "
-									  "table, Citus needs to perform all operations "
-									  "over a single connection per node to ensure "
-									  "consistency."),
+									  "table or to a citus local table, Citus needs "
+									  "to perform all operations over a single "
+									  "connection per node to ensure consistency."),
 							errhint("Try re-running the transaction with "
 									"\"SET LOCAL citus.multi_shard_modify_mode TO "
 									"\'sequential\';\"")));
@@ -788,8 +787,8 @@ CheckConflictingRelationAccesses(Oid relationId, ShardPlacementAccessType access
 			 */
 			ereport(DEBUG1, (errmsg("switching to sequential query execution mode"),
 							 errdetail(
-								 "Reference table \"%s\" is modified, which might lead "
-								 "to data inconsistencies or distributed deadlocks via "
+								 "Table \"%s\" is modified, which might lead to data "
+								 "inconsistencies or distributed deadlocks via "
 								 "parallel accesses to hash distributed tables due to "
 								 "foreign keys. Any parallel modification to "
 								 "those hash distributed tables in the same "

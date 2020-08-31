@@ -165,7 +165,7 @@ static bool ShouldRecursivelyPlanSetOperation(Query *query,
 											  RecursivePlanningContext *context);
 static void RecursivelyPlanSetOperations(Query *query, Node *node,
 										 RecursivePlanningContext *context);
-static bool IsLocalTableRTE(Node *node);
+static bool IsLocalTableRteOrMatView(Node *node);
 static void RecursivelyPlanSubquery(Query *subquery,
 									RecursivePlanningContext *planningContext);
 static DistributedSubPlan * CreateDistributedSubPlan(uint32 subPlanId,
@@ -376,7 +376,8 @@ ShouldRecursivelyPlanNonColocatedSubqueries(Query *subquery,
 	}
 
 	/* direct joins with local tables are not supported by any of Citus planners */
-	if (FindNodeMatchingCheckFunctionInRangeTableList(subquery->rtable, IsLocalTableRTE))
+	if (FindNodeMatchingCheckFunctionInRangeTableList(subquery->rtable,
+													  IsLocalTableRteOrMatView))
 	{
 		return false;
 	}
@@ -877,7 +878,8 @@ RecursivelyPlanSubqueryWalker(Node *node, RecursivePlanningContext *context)
 static bool
 ShouldRecursivelyPlanSubquery(Query *subquery, RecursivePlanningContext *context)
 {
-	if (FindNodeMatchingCheckFunctionInRangeTableList(subquery->rtable, IsLocalTableRTE))
+	if (FindNodeMatchingCheckFunctionInRangeTableList(subquery->rtable,
+													  IsLocalTableRteOrMatView))
 	{
 		/*
 		 * Postgres can always plan queries that don't require distributed planning.
@@ -1045,12 +1047,12 @@ RecursivelyPlanSetOperations(Query *query, Node *node,
 
 
 /*
- * IsLocalTableRTE gets a node and returns true if the node
- * is a range table relation entry that points to a local
- * relation (i.e., not a distributed relation).
+ * IsLocalTableRteOrMatView gets a node and returns true if the node is a range
+ * table entry that points to a postgres local or citus local table or to a
+ * materialized view.
  */
 static bool
-IsLocalTableRTE(Node *node)
+IsLocalTableRteOrMatView(Node *node)
 {
 	if (node == NULL)
 	{
@@ -1074,13 +1076,18 @@ IsLocalTableRTE(Node *node)
 	}
 
 	Oid relationId = rangeTableEntry->relid;
-	if (IsCitusTable(relationId))
+	if (!IsCitusTable(relationId))
 	{
-		return false;
+		/* postgres local table or a materialized view */
+		return true;
+	}
+	else if (IsCitusTableType(relationId, CITUS_LOCAL_TABLE))
+	{
+		return true;
 	}
 
-	/* local table found */
-	return true;
+	/* no local table found */
+	return false;
 }
 
 

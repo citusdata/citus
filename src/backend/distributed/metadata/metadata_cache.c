@@ -211,7 +211,6 @@ static ScanKeyData DistObjectScanKey[3];
 /* local function forward declarations */
 static bool IsCitusTableViaCatalog(Oid relationId);
 static ShardIdCacheEntry * LookupShardIdCacheEntry(int64 shardId);
-static CitusTableCacheEntry * LookupCitusTableCacheEntry(Oid relationId);
 static CitusTableCacheEntry * BuildCitusTableCacheEntry(Oid relationId);
 static void BuildCachedShardList(CitusTableCacheEntry *cacheEntry);
 static void PrepareWorkerNodeCache(void);
@@ -954,7 +953,7 @@ GetCitusTableCacheEntry(Oid distributedRelationId)
  * passed relationId. For efficiency it caches lookups. This function returns
  * NULL if the relation isn't a distributed table.
  */
-static CitusTableCacheEntry *
+CitusTableCacheEntry *
 LookupCitusTableCacheEntry(Oid relationId)
 {
 	bool foundInCache = false;
