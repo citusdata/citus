@@ -274,7 +274,6 @@ TRUNCATE target_table;
 SET citus.log_remote_commands TO true; SET client_min_messages TO DEBUG;
    CREATE TABLE results AS SELECT max(-a), array_agg(mapped_key) FROM source_table GROUP BY a;
 DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  building index "pg_toast_xxxxx_index" on table "pg_toast_xxxxx" serially
 NOTICE:  issuing SELECT max((OPERATOR(pg_catalog.-) a)) AS max, array_agg(mapped_key) AS array_agg, a AS worker_column_3 FROM insert_select_repartition.source_table_4213601 source_table WHERE true GROUP BY a
 NOTICE:  issuing SELECT max((OPERATOR(pg_catalog.-) a)) AS max, array_agg(mapped_key) AS array_agg, a AS worker_column_3 FROM insert_select_repartition.source_table_4213602 source_table WHERE true GROUP BY a
 NOTICE:  issuing SELECT max((OPERATOR(pg_catalog.-) a)) AS max, array_agg(mapped_key) AS array_agg, a AS worker_column_3 FROM insert_select_repartition.source_table_4213603 source_table WHERE true GROUP BY a

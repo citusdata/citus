@@ -46,7 +46,11 @@ enum MultiConnectionMode
 
 	FOR_DML = 1 << 2,
 
-	/* connection must not have accessed any non-co-located placements */
+	/*
+	 * During COPY we do not want to use a connection that accessed non-co-located
+	 * placements. If there is a connection that did not access another placement,
+	 * then use it. Otherwise open a new clean connection.
+	 */
 	REQUIRE_CLEAN_CONNECTION = 1 << 3,
 
 	OUTSIDE_TRANSACTION = 1 << 4,
@@ -195,7 +199,7 @@ extern int MaxCachedConnectionsPerWorker;
 /* parameters used for outbound connections */
 extern char *NodeConninfo;
 
-/* the hash table */
+/* the hash tables are externally accessiable */
 extern HTAB *ConnectionHash;
 extern HTAB *ConnParamsHash;
 
@@ -234,6 +238,9 @@ extern MultiConnection * StartNodeUserDatabaseConnection(uint32 flags,
 														 const char *database);
 extern void CloseAllConnectionsAfterTransaction(void);
 extern void CloseNodeConnectionsAfterTransaction(char *nodeName, int nodePort);
+extern MultiConnection * ConnectionAvailableToNode(char *hostName, int nodePort,
+												   const char *userName,
+												   const char *database);
 extern void CloseConnection(MultiConnection *connection);
 extern void ShutdownAllConnections(void);
 extern void ShutdownConnection(MultiConnection *connection);

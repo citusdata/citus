@@ -388,7 +388,7 @@ ColumnAppearsInForeignKeyToReferenceTable(char *columnName, Oid relationId)
 	int scanKeyCount = 1;
 	bool foreignKeyToReferenceTableIncludesGivenColumn = false;
 
-	Relation pgConstraint = heap_open(ConstraintRelationId, AccessShareLock);
+	Relation pgConstraint = table_open(ConstraintRelationId, AccessShareLock);
 
 	ScanKeyInit(&scanKey[0], Anum_pg_constraint_contype, BTEqualStrategyNumber,
 				F_CHAREQ, CharGetDatum(CONSTRAINT_FOREIGN));
@@ -446,7 +446,7 @@ ColumnAppearsInForeignKeyToReferenceTable(char *columnName, Oid relationId)
 
 	/* clean up scan and close system catalog */
 	systable_endscan(scanDescriptor);
-	heap_close(pgConstraint, NoLock);
+	table_close(pgConstraint, NoLock);
 
 	return foreignKeyToReferenceTableIncludesGivenColumn;
 }
@@ -720,7 +720,7 @@ GetForeignKeyOids(Oid relationId, int flags)
 	ScanKeyData scanKey[1];
 	int scanKeyCount = 1;
 
-	Relation pgConstraint = heap_open(ConstraintRelationId, AccessShareLock);
+	Relation pgConstraint = table_open(ConstraintRelationId, AccessShareLock);
 	ScanKeyInit(&scanKey[0], pgConstraintTargetAttrNumber,
 				BTEqualStrategyNumber, F_OIDEQ, relationId);
 	SysScanDesc scanDescriptor = systable_beginscan(pgConstraint, indexOid, useIndex,
@@ -770,7 +770,7 @@ GetForeignKeyOids(Oid relationId, int flags)
 	 * on pg_constraint to make sure that caller will process valid foreign key
 	 * constraints through the transaction.
 	 */
-	heap_close(pgConstraint, NoLock);
+	table_close(pgConstraint, NoLock);
 
 	return foreignKeyOids;
 }

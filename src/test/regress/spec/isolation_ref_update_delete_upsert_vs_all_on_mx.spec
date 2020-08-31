@@ -33,11 +33,6 @@ step "s1-begin-on-worker"
         SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 }
 
-step "s1-update"
-{
-	SELECT run_commands_on_session_level_connection_to_node('UPDATE ref_table SET value=12 WHERE id=1 OR id=2');
-}
-
 step "s1-delete"
 {
 	SELECT run_commands_on_session_level_connection_to_node('DELETE FROM ref_table WHERE id=1 OR id=2');
@@ -91,11 +86,6 @@ step "s2-drop"
 step "s2-truncate"
 {
 	SELECT run_commands_on_session_level_connection_to_node('TRUNCATE ref_table');
-}
-
-step "s2-coordinator-create-index-concurrently"
-{
-	CREATE INDEX CONCURRENTLY ref_table_index ON ref_table(id);
 }
 
 step "s2-commit-worker"

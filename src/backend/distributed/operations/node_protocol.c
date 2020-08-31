@@ -48,6 +48,7 @@
 #include "distributed/metadata_sync.h"
 #include "distributed/namespace_utils.h"
 #include "distributed/pg_dist_shard.h"
+#include "distributed/version_compat.h"
 #include "distributed/worker_manager.h"
 #include "foreign/foreign.h"
 #include "lib/stringinfo.h"
@@ -74,6 +75,7 @@ int NextPlacementId = 0;
 
 static List * GetTableReplicaIdentityCommand(Oid relationId);
 static Datum WorkerNodeGetDatum(WorkerNode *workerNode, TupleDesc tupleDescriptor);
+
 
 /* exports for SQL callable functions */
 PG_FUNCTION_INFO_V1(master_get_table_metadata);
@@ -221,8 +223,10 @@ master_get_table_ddl_events(PG_FUNCTION_ARGS)
 		/* allocate DDL statements, and then save position in DDL statements */
 		List *tableDDLEventList = GetTableDDLEvents(relationId, includeSequenceDefaults);
 		tableDDLEventCell = list_head(tableDDLEventList);
-
-		functionContext->user_fctx = tableDDLEventCell;
+		ListCellAndListWrapper *wrapper = palloc0(sizeof(ListCellAndListWrapper));
+		wrapper->list = tableDDLEventList;
+		wrapper->listCell = tableDDLEventCell;
+		functionContext->user_fctx = wrapper;
 
 		MemoryContextSwitchTo(oldContext);
 	}
@@ -235,13 +239,14 @@ master_get_table_ddl_events(PG_FUNCTION_ARGS)
 	 */
 	functionContext = SRF_PERCALL_SETUP();
 
-	tableDDLEventCell = (ListCell *) functionContext->user_fctx;
-	if (tableDDLEventCell != NULL)
+	ListCellAndListWrapper *wrapper =
+		(ListCellAndListWrapper *) functionContext->user_fctx;
+	if (wrapper->listCell != NULL)
 	{
-		char *ddlStatement = (char *) lfirst(tableDDLEventCell);
+		char *ddlStatement = (char *) lfirst(wrapper->listCell);
 		text *ddlStatementText = cstring_to_text(ddlStatement);
 
-		functionContext->user_fctx = lnext(tableDDLEventCell);
+		wrapper->listCell = lnext_compat(wrapper->list, wrapper->listCell);
 
 		SRF_RETURN_NEXT(functionContext, PointerGetDatum(ddlStatementText));
 	}
@@ -534,6 +539,23 @@ GetTableDDLEvents(Oid relationId, bool includeSequenceDefaults)
 															  includeSequenceDefaults);
 	tableDDLEventList = list_concat(tableDDLEventList, tableCreationCommandList);
 
+	List *otherCommands = GetTableConstructionCommands(relationId);
+	tableDDLEventList = list_concat(tableDDLEventList, otherCommands);
+
+	return tableDDLEventList;
+}
+
+
+/*
+ * GetTableConstructionCommands takes in a relationId and returns the list
+ * of DDL commands needed to reconstruct the relation except the ones that actually
+ * create the table.
+ */
+List *
+GetTableConstructionCommands(Oid relationId)
+{
+	List *tableDDLEventList = NIL;
+
 	List *indexAndConstraintCommandList = GetTableIndexAndConstraintCommands(relationId);
 	tableDDLEventList = list_concat(tableDDLEventList, indexAndConstraintCommandList);
 
@@ -607,6 +629,30 @@ GetTableCreationCommands(Oid relationId, bool includeSequenceDefaults)
 		tableDDLEventList = lappend(tableDDLEventList, serverDef);
 	}
 
+	List *tableBuildingCommands = GetTableBuildingCommands(relationId,
+														   includeSequenceDefaults);
+	tableDDLEventList = list_concat(tableDDLEventList,
+									tableBuildingCommands);
+
+	/* revert back to original search_path */
+	PopOverrideSearchPath();
+
+	return tableDDLEventList;
+}
+
+
+/*
+ * GetTableBuildingCommands takes in a relationId, and returns the list of DDL
+ * commands needed to rebuild the relation. This does not include the schema
+ * and the server commands.
+ */
+List *
+GetTableBuildingCommands(Oid relationId, bool includeSequenceDefaults)
+{
+	List *tableDDLEventList = NIL;
+
+	PushOverrideEmptySearchPath(CurrentMemoryContext);
+
 	/* fetch table schema and column option definitions */
 	char *tableSchemaDef = pg_get_tableschemadef_string(relationId,
 														includeSequenceDefaults);
@@ -645,7 +691,7 @@ GetTableIndexAndConstraintCommands(Oid relationId)
 	PushOverrideEmptySearchPath(CurrentMemoryContext);
 
 	/* open system catalog and scan all indexes that belong to this table */
-	Relation pgIndex = heap_open(IndexRelationId, AccessShareLock);
+	Relation pgIndex = table_open(IndexRelationId, AccessShareLock);
 
 	ScanKeyInit(&scanKey[0], Anum_pg_index_indrelid,
 				BTEqualStrategyNumber, F_OIDEQ, relationId);
@@ -693,7 +739,7 @@ GetTableIndexAndConstraintCommands(Oid relationId)
 
 	/* clean up scan and close system catalog */
 	systable_endscan(scanDescriptor);
-	heap_close(pgIndex, AccessShareLock);
+	table_close(pgIndex, AccessShareLock);
 
 	/* revert back to original search_path */
 	PopOverrideSearchPath();

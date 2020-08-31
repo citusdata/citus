@@ -33,11 +33,6 @@ step "s1-grant"
 	GRANT ALL ON test_table TO test_user_2;
 }
 
-step "s1-setrole"
-{
-	SET ROLE test_user_1;
-}
-
 step "s1-begin"
 {
 	BEGIN;
@@ -75,11 +70,6 @@ step "s1-commit"
 }
 
 session "s2"
-
-step "s2-setrole"
-{
-	SET ROLE test_user_2;
-}
 
 step "s2-begin"
 {

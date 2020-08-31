@@ -34,6 +34,7 @@
 #include "distributed/shardinterval_utils.h"
 #include "distributed/subplan_execution.h"
 #include "distributed/transaction_management.h"
+#include "distributed/version_compat.h"
 #include "executor/executor.h"
 #include "nodes/execnodes.h"
 #include "nodes/makefuncs.h"
@@ -345,9 +346,10 @@ WrapSubquery(Query *subquery)
 
 	/* create range table entries */
 	Alias *selectAlias = makeAlias("citus_insert_select_subquery", NIL);
-	RangeTblEntry *newRangeTableEntry = addRangeTableEntryForSubquery(pstate, subquery,
-																	  selectAlias, false,
-																	  true);
+	RangeTblEntry *newRangeTableEntry = RangeTableEntryFromNSItem(
+		addRangeTableEntryForSubquery(
+			pstate, subquery,
+			selectAlias, false, true));
 	outerQuery->rtable = list_make1(newRangeTableEntry);
 
 	/* set the FROM expression to the subquery */

@@ -14,6 +14,7 @@
 #include "catalog/pg_type.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/tdigest_extension.h"
+#include "distributed/version_compat.h"
 #include "parser/parse_func.h"
 #include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
@@ -32,7 +33,7 @@ TDigestExtensionSchema()
 	Form_pg_extension extensionForm = NULL;
 	Oid tdigestExtensionSchema = InvalidOid;
 
-	Relation relation = heap_open(ExtensionRelationId, AccessShareLock);
+	Relation relation = table_open(ExtensionRelationId, AccessShareLock);
 
 	ScanKeyInit(&entry[0],
 				Anum_pg_extension_extname,
@@ -57,7 +58,7 @@ TDigestExtensionSchema()
 
 	systable_endscan(scandesc);
 
-	heap_close(relation, AccessShareLock);
+	table_close(relation, AccessShareLock);
 
 	return tdigestExtensionSchema;
 }

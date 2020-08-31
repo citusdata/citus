@@ -70,10 +70,11 @@ typedef MultiNode *(*RuleApplyFunction) (MultiNode *leftNode, MultiNode *rightNo
 										 List *partitionColumnList, JoinType joinType,
 										 List *joinClauses);
 
+typedef bool (*CheckNodeFunc)(Node *);
+
 static RuleApplyFunction RuleApplyFunctionArray[JOIN_RULE_LAST] = { 0 }; /* join rules */
 
 /* Local functions forward declarations */
-static bool AllTargetExpressionsAreColumnReferences(List *targetEntryList);
 static FieldSelect * CompositeFieldRecursive(Expr *expression, Query *query);
 static Oid NodeTryGetRteRelid(Node *node);
 static bool FullCompositeFieldList(List *compositeFieldList);
@@ -170,20 +171,20 @@ MultiLogicalPlanCreate(Query *originalQuery, Query *queryTree,
 
 
 /*
- * FindNodeCheck finds a node for which the check function returns true.
+ * FindNodeMatchingCheckFunction finds a node for which the checker function returns true.
  *
  * To call this function directly with an RTE, use:
- * range_table_walker(rte, FindNodeCheck, check, QTW_EXAMINE_RTES_BEFORE)
+ * range_table_walker(rte, FindNodeMatchingCheckFunction, checker, QTW_EXAMINE_RTES_BEFORE)
  */
 bool
-FindNodeCheck(Node *node, bool (*check)(Node *))
+FindNodeMatchingCheckFunction(Node *node, CheckNodeFunc checker)
 {
 	if (node == NULL)
 	{
 		return false;
 	}
 
-	if (check(node))
+	if (checker(node))
 	{
 		return true;
 	}
@@ -195,11 +196,11 @@ FindNodeCheck(Node *node, bool (*check)(Node *))
 	}
 	else if (IsA(node, Query))
 	{
-		return query_tree_walker((Query *) node, FindNodeCheck, check,
+		return query_tree_walker((Query *) node, FindNodeMatchingCheckFunction, checker,
 								 QTW_EXAMINE_RTES_BEFORE);
 	}
 
-	return expression_tree_walker(node, FindNodeCheck, check);
+	return expression_tree_walker(node, FindNodeMatchingCheckFunction, checker);
 }
 
 
@@ -262,13 +263,12 @@ TargetListOnPartitionColumn(Query *query, List *targetEntryList)
 
 	/*
 	 * We could still behave as if the target list is on partition column if
-	 * all range table entries are reference tables or intermediate results,
-	 * and all target expressions are column references to the given query level.
+	 * range table entries don't contain a distributed table.
 	 */
 	if (!targetListOnPartitionColumn)
 	{
-		if (!FindNodeCheckInRangeTableList(query->rtable, IsDistributedTableRTE) &&
-			AllTargetExpressionsAreColumnReferences(targetEntryList))
+		if (!FindNodeMatchingCheckFunctionInRangeTableList(query->rtable,
+														   IsDistributedTableRTE))
 		{
 			targetListOnPartitionColumn = true;
 		}
@@ -279,69 +279,17 @@ TargetListOnPartitionColumn(Query *query, List *targetEntryList)
 
 
 /*
- * AllTargetExpressionsAreColumnReferences returns true if none of the
- * elements in the target entry list belong to an outer query (for
- * example the query is a sublink and references to another query
- * in the from list).
- *
- * The function also returns true if any of the target entries is not
- * a column itself. This might be too restrictive, but, given that we're
- * handling very specific type of queries, that seems acceptable for now.
- */
-static bool
-AllTargetExpressionsAreColumnReferences(List *targetEntryList)
-{
-	ListCell *targetEntryCell = NULL;
-
-	foreach(targetEntryCell, targetEntryList)
-	{
-		TargetEntry *targetEntry = lfirst(targetEntryCell);
-		Var *candidateColumn = NULL;
-		Expr *strippedColumnExpression = (Expr *) strip_implicit_coercions(
-			(Node *) targetEntry->expr);
-
-		if (IsA(strippedColumnExpression, Var))
-		{
-			candidateColumn = (Var *) strippedColumnExpression;
-		}
-		else if (IsA(strippedColumnExpression, FieldSelect))
-		{
-			FieldSelect *compositeField = (FieldSelect *) strippedColumnExpression;
-			Expr *fieldExpression = compositeField->arg;
-
-			if (IsA(fieldExpression, Var))
-			{
-				candidateColumn = (Var *) fieldExpression;
-			}
-		}
-
-		/* we don't support target entries that are not columns */
-		if (candidateColumn == NULL)
-		{
-			return false;
-		}
-
-		if (candidateColumn->varlevelsup > 0)
-		{
-			return false;
-		}
-	}
-
-	return true;
-}
-
-
-/*
- * FindNodeCheckInRangeTableList finds a node for which the check
+ * FindNodeMatchingCheckFunctionInRangeTableList finds a node for which the checker
  * function returns true.
  *
- * FindNodeCheckInRangeTableList relies on FindNodeCheck() but only
- * considers the range table entries.
+ * FindNodeMatchingCheckFunctionInRangeTableList relies on
+ * FindNodeMatchingCheckFunction() but only considers the range table entries.
  */
 bool
-FindNodeCheckInRangeTableList(List *rtable, bool (*check)(Node *))
+FindNodeMatchingCheckFunctionInRangeTableList(List *rtable, CheckNodeFunc checker)
 {
-	return range_table_walker(rtable, FindNodeCheck, check, QTW_EXAMINE_RTES_BEFORE);
+	return range_table_walker(rtable, FindNodeMatchingCheckFunction, checker,
+							  QTW_EXAMINE_RTES_BEFORE);
 }
 
 
@@ -737,7 +685,7 @@ MultiNodeTree(Query *queryTree)
 bool
 ContainsReadIntermediateResultFunction(Node *node)
 {
-	return FindNodeCheck(node, IsReadIntermediateResultFunction);
+	return FindNodeMatchingCheckFunction(node, IsReadIntermediateResultFunction);
 }
 
 
@@ -749,7 +697,7 @@ ContainsReadIntermediateResultFunction(Node *node)
 bool
 ContainsReadIntermediateResultArrayFunction(Node *node)
 {
-	return FindNodeCheck(node, IsReadIntermediateResultArrayFunction);
+	return FindNodeMatchingCheckFunction(node, IsReadIntermediateResultArrayFunction);
 }
 
 
@@ -793,7 +741,8 @@ IsCitusExtraDataContainerRelation(RangeTblEntry *rte)
 		return false;
 	}
 
-	return FindNodeCheck((Node *) rte->functions, IsCitusExtraDataContainerFunc);
+	return FindNodeMatchingCheckFunction((Node *) rte->functions,
+										 IsCitusExtraDataContainerFunc);
 }
 
 
@@ -933,7 +882,7 @@ DeferErrorIfQueryNotSupported(Query *queryTree)
 		errorHint = filterHint;
 	}
 
-	if (FindNodeCheck((Node *) queryTree, IsGroupingFunc))
+	if (FindNodeMatchingCheckFunction((Node *) queryTree, IsGroupingFunc))
 	{
 		preconditionsSatisfied = false;
 		errorMessage = "could not run distributed query with GROUPING";
@@ -966,13 +915,13 @@ DeferErrorIfQueryNotSupported(Query *queryTree)
 		errorHint = filterHint;
 	}
 
-	if (FindNodeCheck((Node *) queryTree->limitCount, IsNodeSubquery))
+	if (FindNodeMatchingCheckFunction((Node *) queryTree->limitCount, IsNodeSubquery))
 	{
 		preconditionsSatisfied = false;
 		errorMessage = "subquery in LIMIT is not supported in multi-shard queries";
 	}
 
-	if (FindNodeCheck((Node *) queryTree->limitOffset, IsNodeSubquery))
+	if (FindNodeMatchingCheckFunction((Node *) queryTree->limitOffset, IsNodeSubquery))
 	{
 		preconditionsSatisfied = false;
 		errorMessage = "subquery in OFFSET is not supported in multi-shard queries";
@@ -1099,7 +1048,7 @@ ErrorHintRequired(const char *errorHint, Query *queryTree)
 
 
 /*
- * DeferErrorIfSubqueryNotSupported checks that we can perform distributed planning for
+ * DeferErrorIfUnsupportedSubqueryRepartition checks that we can perform distributed planning for
  * the given subquery. If not, a deferred error is returned. The function recursively
  * does this check to all lower levels of the subquery.
  */

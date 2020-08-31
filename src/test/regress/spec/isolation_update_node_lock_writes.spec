@@ -36,11 +36,6 @@ step "s1-commit"
 	COMMIT;
 }
 
-step "s1-abort"
-{
-	ABORT;
-}
-
 session "s2"
 
 step "s2-begin"

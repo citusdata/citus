@@ -58,9 +58,7 @@ step "s2-table-size" { SELECT citus_total_relation_size('truncate_append'); }
 step "s2-master-modify-multiple-shards" { DELETE FROM truncate_append; }
 step "s2-master-apply-delete-command" { SELECT master_apply_delete_command('DELETE FROM truncate_append WHERE id <= 4;'); }
 step "s2-master-drop-all-shards" { SELECT master_drop_all_shards('truncate_append'::regclass, 'public', 'truncate_append'); }
-step "s2-create-non-distributed-table" { CREATE TABLE truncate_append(id integer, data text); }
 step "s2-distribute-table" { SELECT create_distributed_table('truncate_append', 'id', 'append'); }
-step "s2-select" { SELECT * FROM truncate_append ORDER BY 1, 2; }
 step "s2-commit" { COMMIT; }
 
 // permutations - TRUNCATE vs TRUNCATE

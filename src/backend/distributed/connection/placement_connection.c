@@ -11,6 +11,8 @@
 
 #include "postgres.h"
 
+#include "distributed/pg_version_constants.h"
+
 #include "access/hash.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/connection_management.h"
@@ -18,11 +20,15 @@
 #include "distributed/listutils.h"
 #include "distributed/coordinator_protocol.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/multi_executor.h"
 #include "distributed/distributed_planner.h"
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/placement_connection.h"
 #include "distributed/relation_access_tracking.h"
 #include "utils/hsearch.h"
+#if PG_VERSION_NUM >= PG_VERSION_13
+#include "common/hashfn.h"
+#endif
 #include "utils/memutils.h"
 
 
@@ -209,6 +215,14 @@ GetPlacementConnection(uint32 flags, ShardPlacement *placement, const char *user
 {
 	MultiConnection *connection = StartPlacementConnection(flags, placement, userName);
 
+	if (connection == NULL)
+	{
+		/* connection can only be NULL for optional connections */
+		Assert((flags & OPTIONAL_CONNECTION));
+
+		return NULL;
+	}
+
 	FinishConnectionEstablishment(connection);
 	return connection;
 }
@@ -293,25 +307,25 @@ StartPlacementListConnection(uint32 flags, List *placementAccessList,
 		 */
 		chosenConnection = StartNodeUserDatabaseConnection(flags, nodeName, nodePort,
 														   userName, NULL);
+		if (chosenConnection == NULL)
+		{
+			/* connection can only be NULL for optional connections */
+			Assert((flags & OPTIONAL_CONNECTION));
 
-		/*
-		 * chosenConnection can only be NULL for optional connections, which we
-		 * don't support in this codepath.
-		 */
-		Assert((flags & OPTIONAL_CONNECTION) == 0);
-		Assert(chosenConnection != NULL);
+			return NULL;
+		}
 
 		if ((flags & REQUIRE_CLEAN_CONNECTION) &&
 			ConnectionAccessedDifferentPlacement(chosenConnection, placement))
 		{
 			/*
 			 * Cached connection accessed a non-co-located placement in the same
-			 * table or co-location group, while the caller asked for a connection
-			 * per placement. Open a new connection instead.
+			 * table or co-location group, while the caller asked for a clean
+			 * connection. Open a new connection instead.
 			 *
 			 * We use this for situations in which we want to use a different
 			 * connection for every placement, such as COPY. If we blindly returned
-			 * a cached conection that already modified a different, non-co-located
+			 * a cached connection that already modified a different, non-co-located
 			 * placement B in the same table or in a table with the same co-location
 			 * ID as the current placement, then we'd no longer able to write to
 			 * placement B later in the COPY.
@@ -321,12 +335,13 @@ StartPlacementListConnection(uint32 flags, List *placementAccessList,
 															   nodeName, nodePort,
 															   userName, NULL);
 
-			/*
-			 * chosenConnection can only be NULL for optional connections,
-			 * which we don't support in this codepath.
-			 */
-			Assert((flags & OPTIONAL_CONNECTION) == 0);
-			Assert(chosenConnection != NULL);
+			if (chosenConnection == NULL)
+			{
+				/* connection can only be NULL for optional connections */
+				Assert((flags & OPTIONAL_CONNECTION));
+
+				return NULL;
+			}
 
 			Assert(!ConnectionAccessedDifferentPlacement(chosenConnection, placement));
 		}
@@ -1172,6 +1187,19 @@ InitPlacementConnectionManagement(void)
 
 	/* (relationId) = [relationAccessMode] hash */
 	AllocateRelationAccessHash();
+}
+
+
+/*
+ * UseConnectionPerPlacement returns whether we should use as separate connection
+ * per placement even if another connection is idle. We mostly use this in testing
+ * scenarios.
+ */
+bool
+UseConnectionPerPlacement(void)
+{
+	return ForceMaxQueryParallelization &&
+		   MultiShardConnectionType != SEQUENTIAL_CONNECTION;
 }
 
 

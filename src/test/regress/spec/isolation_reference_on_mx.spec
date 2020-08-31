@@ -101,11 +101,6 @@ step "s2-select-from-ref-table"
 	SELECT run_commands_on_session_level_connection_to_node('SELECT count(*) FROM ref_table');
 }
 
-step "s2-delete-from-ref-table"
-{
-	SELECT run_commands_on_session_level_connection_to_node('DELETE FROM ref_table WHERE user_id = 2');
-}
-
 step "s2-insert-into-ref-table"
 {
 	SELECT run_commands_on_session_level_connection_to_node('INSERT INTO ref_table VALUES(8,81),(9,91)');

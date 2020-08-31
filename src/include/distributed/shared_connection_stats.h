@@ -11,6 +11,10 @@
 #ifndef SHARED_CONNECTION_STATS_H
 #define SHARED_CONNECTION_STATS_H
 
+#define ADJUST_POOLSIZE_AUTOMATICALLY 0
+#define DISABLE_CONNECTION_THROTTLING -1
+
+
 extern int MaxSharedPoolSize;
 
 
@@ -23,6 +27,5 @@ extern void WaitLoopForSharedConnection(const char *hostname, int port);
 extern void DecrementSharedConnectionCounter(const char *hostname, int port);
 extern void IncrementSharedConnectionCounter(const char *hostname, int port);
 extern int AdaptiveConnectionManagementFlag(int activeConnectionCount);
-extern bool UseConnectionPerPlacement(void);
 
 #endif /* SHARED_CONNECTION_STATS_H */

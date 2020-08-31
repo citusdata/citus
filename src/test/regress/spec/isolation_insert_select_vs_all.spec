@@ -81,7 +81,6 @@ step "s2-ddl-rename-column-on-inserted" { ALTER TABLE insert_of_insert_select_ha
 step "s2-table-size-on-inserted" { SELECT citus_total_relation_size('insert_of_insert_select_hash'); }
 step "s2-master-modify-multiple-shards-on-inserted" { DELETE FROM insert_of_insert_select_hash; }
 step "s2-master-drop-all-shards-on-inserted" { SELECT master_drop_all_shards('insert_of_insert_select_hash'::regclass, 'public', 'insert_of_insert_select_hash'); }
-step "s2-create-non-distributed-table-on-inserted" { CREATE TABLE insert_of_insert_select_hash(id integer, data text); }
 step "s2-distribute-table-on-inserted" { SELECT create_distributed_table('insert_of_insert_select_hash', 'id'); }
 step "s2-update-on-selected" { UPDATE select_of_insert_select_hash SET data = 'l' WHERE id = 4; }
 step "s2-delete-on-selected" { DELETE FROM select_of_insert_select_hash WHERE id = 4; }
@@ -96,7 +95,6 @@ step "s2-ddl-rename-column-on-selected" { ALTER TABLE select_of_insert_select_ha
 step "s2-table-size-on-selected" { SELECT citus_total_relation_size('select_of_insert_select_hash'); }
 step "s2-master-modify-multiple-shards-on-selected" { DELETE FROM select_of_insert_select_hash; }
 step "s2-master-drop-all-shards-on-selected" { SELECT master_drop_all_shards('select_of_insert_select_hash'::regclass, 'public', 'select_of_insert_select_hash'); }
-step "s2-create-non-distributed-table-on-selected" { CREATE TABLE select_of_insert_select_hash(id integer, data text); }
 step "s2-distribute-table-on-selected" { SELECT create_distributed_table('select_of_insert_select_hash', 'id'); }
 
 // permutations - INSERT/SELECT vs INSERT/SELECT

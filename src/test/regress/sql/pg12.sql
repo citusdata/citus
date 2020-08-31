@@ -263,7 +263,7 @@ SELECT DISTINCT y FROM test;
 -- non deterministic collations
 CREATE COLLATION test_pg12.case_insensitive (
 	provider = icu,
-	locale = 'und-u-ks-level2',
+	locale = '@colStrength=secondary',
 	deterministic = false
 );
 

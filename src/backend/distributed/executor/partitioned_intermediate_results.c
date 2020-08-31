@@ -26,6 +26,7 @@
 #include "distributed/pg_dist_shard.h"
 #include "distributed/remote_commands.h"
 #include "distributed/tuplestore.h"
+#include "distributed/version_compat.h"
 #include "distributed/worker_protocol.h"
 #include "nodes/makefuncs.h"
 #include "nodes/primnodes.h"
@@ -258,14 +259,15 @@ StartPortalForQueryExecution(const char *queryString)
 	Query *query = ParseQueryString(queryString, NULL, 0);
 
 	int cursorOptions = CURSOR_OPT_PARALLEL_OK;
-	PlannedStmt *queryPlan = pg_plan_query(query, cursorOptions, NULL);
+	PlannedStmt *queryPlan = pg_plan_query_compat(query, NULL, cursorOptions, NULL);
 
 	Portal portal = CreateNewPortal();
 
 	/* don't display the portal in pg_cursors, it is for internal use only */
 	portal->visible = false;
 
-	PortalDefineQuery(portal, NULL, queryString, "SELECT", list_make1(queryPlan), NULL);
+	PortalDefineQuery(portal, NULL, queryString, CMDTAG_SELECT_COMPAT,
+					  list_make1(queryPlan), NULL);
 	int eflags = 0;
 	PortalStart(portal, NULL, eflags, GetActiveSnapshot());
 

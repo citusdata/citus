@@ -27,6 +27,7 @@
 #include "distributed/remote_commands.h"
 #include "distributed/tuplestore.h"
 #include "distributed/listutils.h"
+#include "distributed/version_compat.h"
 #include "tcop/tcopprot.h"
 
 PG_FUNCTION_INFO_V1(partition_task_list_results);
@@ -49,9 +50,10 @@ partition_task_list_results(PG_FUNCTION_ARGS)
 	bool binaryFormat = PG_GETARG_BOOL(3);
 
 	Query *parsedQuery = ParseQueryString(queryString, NULL, 0);
-	PlannedStmt *queryPlan = pg_plan_query(parsedQuery,
-										   CURSOR_OPT_PARALLEL_OK,
-										   NULL);
+	PlannedStmt *queryPlan = pg_plan_query_compat(parsedQuery,
+												  queryString,
+												  CURSOR_OPT_PARALLEL_OK,
+												  NULL);
 	if (!IsCitusCustomScan(queryPlan->planTree))
 	{
 		ereport(ERROR, (errmsg("query must be distributed and shouldn't require "
@@ -122,9 +124,10 @@ redistribute_task_list_results(PG_FUNCTION_ARGS)
 	bool binaryFormat = PG_GETARG_BOOL(3);
 
 	Query *parsedQuery = ParseQueryString(queryString, NULL, 0);
-	PlannedStmt *queryPlan = pg_plan_query(parsedQuery,
-										   CURSOR_OPT_PARALLEL_OK,
-										   NULL);
+	PlannedStmt *queryPlan = pg_plan_query_compat(parsedQuery,
+												  queryString,
+												  CURSOR_OPT_PARALLEL_OK,
+												  NULL);
 	if (!IsCitusCustomScan(queryPlan->planTree))
 	{
 		ereport(ERROR, (errmsg("query must be distributed and shouldn't require "

@@ -261,7 +261,6 @@ CREATE TABLE lineitem_mx (
     l_shipmode char(10) not null,
     l_comment varchar(44) not null,
     PRIMARY KEY(l_orderkey, l_linenumber) );
-
 SET citus.shard_count TO 16;
 SELECT create_distributed_table('lineitem_mx', 'l_orderkey');
 

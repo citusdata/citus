@@ -15,11 +15,13 @@
  *-------------------------------------------------------------------------
  */
 
-#include "postgres.h"
-
 #include "distributed/pg_version_constants.h"
 
+#include "pg_config.h"
+
 #if (PG_VERSION_NUM >= PG_VERSION_11) && (PG_VERSION_NUM < PG_VERSION_12)
+
+#include "postgres.h"
 
 #include <ctype.h>
 #include <unistd.h>

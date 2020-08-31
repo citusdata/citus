@@ -13,6 +13,8 @@
 #include "postgres.h"
 #include "pgstat.h"
 
+#include "distributed/pg_version_constants.h"
+
 #include "libpq-fe.h"
 
 #include "miscadmin.h"
@@ -24,21 +26,26 @@
 #include "distributed/cancel_utils.h"
 #include "distributed/connection_management.h"
 #include "distributed/listutils.h"
+#include "distributed/locally_reserved_shared_connections.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_executor.h"
+#include "distributed/placement_connection.h"
 #include "distributed/shared_connection_stats.h"
+#include "distributed/worker_manager.h"
 #include "distributed/time_constants.h"
 #include "distributed/tuplestore.h"
 #include "utils/builtins.h"
-#include "utils/hashutils.h"
+#if PG_VERSION_NUM < PG_VERSION_13
 #include "utils/hsearch.h"
+#include "utils/hashutils.h"
+#else
+#include "common/hashfn.h"
+#endif
 #include "storage/ipc.h"
 
 
 #define REMOTE_CONNECTION_STATS_COLUMNS 4
 
-#define ADJUST_POOLSIZE_AUTOMATICALLY 0
-#define DISABLE_CONNECTION_THROTTLING -1
 
 /*
  * The data structure used to store data in shared memory. This data structure is only
@@ -54,6 +61,7 @@ typedef struct ConnectionStatsSharedData
 	LWLock sharedConnectionHashLock;
 	ConditionVariable waitersConditionVariable;
 } ConnectionStatsSharedData;
+
 
 typedef struct SharedConnStatsHashKey
 {
@@ -106,8 +114,8 @@ static void UnLockConnectionSharedMemory(void);
 static void SharedConnectionStatsShmemInit(void);
 static size_t SharedConnectionStatsShmemSize(void);
 static bool ShouldWaitForConnection(int currentConnectionCount);
-static int SharedConnectionHashCompare(const void *a, const void *b, Size keysize);
 static uint32 SharedConnectionHashHash(const void *key, Size keysize);
+static int SharedConnectionHashCompare(const void *a, const void *b, Size keysize);
 
 
 PG_FUNCTION_INFO_V1(citus_remote_connection_stats);
@@ -247,6 +255,18 @@ TryToIncrementSharedConnectionCounter(const char *hostname, int port)
 							   MAX_NODE_LENGTH)));
 	}
 
+	/*
+	 * The local session might already have some reserved connections to the given
+	 * node. In that case, we don't need to go through the shared memory.
+	 */
+	Oid userId = GetUserId();
+	if (CanUseReservedConnection(hostname, port, userId, MyDatabaseId))
+	{
+		MarkReservedConnectionUsed(hostname, port, userId, MyDatabaseId);
+
+		return true;
+	}
+
 	connKey.port = port;
 	connKey.databaseOid = MyDatabaseId;
 
@@ -363,7 +383,7 @@ IncrementSharedConnectionCounter(const char *hostname, int port)
 
 /*
  * DecrementSharedConnectionCounter decrements the shared counter
- * for the given hostname and port.
+ * for the given hostname and port for the given count.
  */
 void
 DecrementSharedConnectionCounter(const char *hostname, int port)
@@ -631,19 +651,6 @@ AdaptiveConnectionManagementFlag(int activeConnectionCount)
 		 */
 		return OPTIONAL_CONNECTION;
 	}
-}
-
-
-/*
- * UseConnectionPerPlacement returns whether we should use a separate connection
- * per placement even if another connection is idle. We mostly use this in testing
- * scenarios.
- */
-bool
-UseConnectionPerPlacement(void)
-{
-	return ForceMaxQueryParallelization &&
-		   MultiShardConnectionType != SEQUENTIAL_CONNECTION;
 }
 
 

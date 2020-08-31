@@ -40,7 +40,6 @@ step "s1-ddl-drop-index" { DROP INDEX append_copy_index; }
 step "s1-ddl-add-column" { ALTER TABLE append_copy ADD new_column int DEFAULT 0; }
 step "s1-ddl-drop-column" { ALTER TABLE append_copy DROP new_column; }
 step "s1-ddl-rename-column" { ALTER TABLE append_copy RENAME data TO new_column; }
-step "s1-ddl-unique-constraint" { ALTER TABLE append_copy ADD CONSTRAINT append_copy_unique UNIQUE(id); }
 step "s1-table-size" { SELECT citus_total_relation_size('append_copy'); }
 step "s1-master-apply-delete-command" { SELECT master_apply_delete_command('DELETE FROM append_copy WHERE id <= 4;'); }
 step "s1-master-drop-all-shards" { SELECT master_drop_all_shards('append_copy'::regclass, 'public', 'append_copy'); }
@@ -54,7 +53,6 @@ step "s1-commit" { COMMIT; }
 // session 2
 session "s2"
 step "s2-copy" { COPY append_copy FROM PROGRAM 'echo 5, f, 5 && echo 6, g, 6 && echo 7, h, 7 && echo 8, i, 8 && echo 9, j, 9' WITH CSV; }
-step "s2-copy-additional-column" { COPY append_copy FROM PROGRAM 'echo 5, f, 5, 5 && echo 6, g, 6, 6 && echo 7, h, 7, 7 && echo 8, i, 8, 8 && echo 9, j, 9, 9' WITH CSV; }
 step "s2-router-select" { SELECT * FROM append_copy WHERE id = 1; }
 step "s2-real-time-select" { SELECT * FROM append_copy ORDER BY 1, 2; }
 step "s2-adaptive-select"

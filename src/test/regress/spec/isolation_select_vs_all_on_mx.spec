@@ -74,11 +74,6 @@ step "s2-select"
 	SELECT run_commands_on_session_level_connection_to_node('SELECT * FROM select_table');
 }
 
-step "s2-insert"
-{
-        SELECT run_commands_on_session_level_connection_to_node('INSERT INTO select_table VALUES(6, 60)');
-}
-
 step "s2-insert-select"
 {
 	SELECT run_commands_on_session_level_connection_to_node('INSERT INTO select_table SELECT * FROM select_table');
