@@ -775,7 +775,7 @@ TableReferencing(Oid relationId)
 /*
  * ConstraintIsAForeignKey is a wrapper around GetForeignKeyOidByName that
  * returns true if the given constraint name identifies a foreign key
- * contraint defined on relation with relationId.
+ * constraint defined on relation with relationId.
  */
 bool
 ConstraintIsAForeignKey(char *inputConstaintName, Oid relationId)

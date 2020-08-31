@@ -729,12 +729,14 @@ UPDATE users_test_table
 SET    value_2 = 5
 FROM   events_test_table_local
 WHERE  users_test_table.user_id = events_test_table_local.user_id;
-ERROR:  relation events_test_table_local is not distributed
+ERROR:  cannot plan modifications with local tables involving citus tables
+HINT:  Use CTE's or subqueries to select from local tables and use them in joins
 UPDATE events_test_table_local
 SET    value_2 = 5
 FROM   users_test_table
 WHERE  events_test_table_local.user_id = users_test_table.user_id;
-ERROR:  cannot plan modifications of local tables involving distributed tables
+ERROR:  cannot plan modifications with local tables involving citus tables
+HINT:  Use CTE's or subqueries to select from local tables and use them in joins
 -- Local tables in a subquery are supported through recursive planning
 UPDATE users_test_table
 SET    value_2 = 5

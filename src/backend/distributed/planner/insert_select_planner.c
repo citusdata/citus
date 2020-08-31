@@ -556,6 +556,40 @@ DistributedInsertSelectSupported(Query *queryTree, RangeTblEntry *insertRte,
 							 NULL, NULL);
 	}
 
+	RTEListProperties *subqueryRteListProperties = GetRTEListPropertiesForQuery(subquery);
+	if (subqueryRteListProperties->hasDistributedTable &&
+		(subqueryRteListProperties->hasCitusLocalTable ||
+		 subqueryRteListProperties->hasPostgresLocalTable))
+	{
+		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+							 "distributed INSERT ... SELECT cannot select from "
+							 "distributed tables and local tables at the same time",
+							 NULL, NULL);
+	}
+
+	if (subqueryRteListProperties->hasDistributedTable &&
+		IsCitusTableType(targetRelationId, CITUS_LOCAL_TABLE))
+	{
+		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+							 "distributed INSERT ... SELECT cannot insert into a "
+							 "citus local table",
+							 NULL, NULL);
+	}
+
+	/*
+	 * In some cases, it might be possible to allow postgres local tables
+	 * in distributed insert select. However, we want to behave consistent
+	 * on all cases including Citus MX, and let insert select via coordinator
+	 * to kick-in.
+	 */
+	if (subqueryRteListProperties->hasPostgresLocalTable)
+	{
+		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+							 "distributed INSERT ... SELECT cannot select from "
+							 "a local table", NULL, NULL);
+		return NULL;
+	}
+
 	/* we do not expect to see a view in modify target */
 	foreach(rangeTableCell, queryTree->rtable)
 	{
@@ -584,12 +618,19 @@ DistributedInsertSelectSupported(Query *queryTree, RangeTblEntry *insertRte,
 		return error;
 	}
 
-	/*
-	 * If we're inserting into a reference table, all participating tables
-	 * should be reference tables as well.
-	 */
-	if (IsCitusTableType(targetRelationId, REFERENCE_TABLE))
+	if (IsCitusTableType(targetRelationId, CITUS_LOCAL_TABLE))
 	{
+		/*
+		 * If we're inserting into a citus local table, it is ok because we've
+		 * checked the non-existence of distributed tables in the subquery.
+		 */
+	}
+	else if (IsCitusTableType(targetRelationId, REFERENCE_TABLE))
+	{
+		/*
+		 * If we're inserting into a reference table, all participating tables
+		 * should be reference tables as well.
+		 */
 		if (!allReferenceTables)
 		{
 			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
@@ -726,7 +767,9 @@ RouterModifyTaskForShardInterval(Query *originalQuery,
 	 * prevent shard pruning logic (i.e, namely UpdateRelationNames())
 	 * modifies range table entries, which makes hard to add the quals.
 	 */
-	if (!allReferenceTables)
+	RTEListProperties *subqueryRteListProperties = GetRTEListPropertiesForQuery(
+		copiedSubquery);
+	if (subqueryRteListProperties->hasDistributedTable)
 	{
 		AddShardIntervalRestrictionToSelect(copiedSubquery, shardInterval);
 	}

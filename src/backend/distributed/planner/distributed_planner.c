@@ -123,6 +123,7 @@ static PlannedStmt * PlanFastPathDistributedStmt(DistributedPlanningContext *pla
 												 Node *distributionKeyValue);
 static PlannedStmt * PlanDistributedStmt(DistributedPlanningContext *planContext,
 										 int rteIdCounter);
+static RTEListProperties * GetRTEListProperties(List *rangeTableList);
 
 
 /* Distributed planner hook */
@@ -2261,4 +2262,70 @@ HasUnresolvedExternParamsWalker(Node *expression, ParamListInfo boundParams)
 									  HasUnresolvedExternParamsWalker,
 									  boundParams);
 	}
+}
+
+
+/*
+ * GetRTEListPropertiesForQuery is a wrapper around GetRTEListProperties that
+ * returns RTEListProperties for the rte list retrieved from query.
+ */
+RTEListProperties *
+GetRTEListPropertiesForQuery(Query *query)
+{
+	List *rteList = ExtractRangeTableEntryList(query);
+	return GetRTEListProperties(rteList);
+}
+
+
+/*
+ * GetRTEListProperties returns RTEListProperties struct processing the given
+ * rangeTableList.
+ */
+static RTEListProperties *
+GetRTEListProperties(List *rangeTableList)
+{
+	RTEListProperties *rteListProperties = palloc0(sizeof(RTEListProperties));
+
+	RangeTblEntry *rangeTableEntry = NULL;
+	foreach_ptr(rangeTableEntry, rangeTableList)
+	{
+		if (!(rangeTableEntry->rtekind == RTE_RELATION &&
+			  rangeTableEntry->relkind == RELKIND_RELATION))
+		{
+			continue;
+		}
+
+		Oid relationId = rangeTableEntry->relid;
+		CitusTableCacheEntry *cacheEntry = LookupCitusTableCacheEntry(relationId);
+		if (!cacheEntry)
+		{
+			rteListProperties->hasPostgresLocalTable = true;
+		}
+		else if (IsCitusTableTypeCacheEntry(cacheEntry, REFERENCE_TABLE))
+		{
+			rteListProperties->hasReferenceTable = true;
+		}
+		else if (IsCitusTableTypeCacheEntry(cacheEntry, CITUS_LOCAL_TABLE))
+		{
+			rteListProperties->hasCitusLocalTable = true;
+		}
+		else if (IsCitusTableTypeCacheEntry(cacheEntry, DISTRIBUTED_TABLE))
+		{
+			rteListProperties->hasDistributedTable = true;
+		}
+		else
+		{
+			/* it's not expected, but let's do a bug catch here */
+			ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
+							errmsg("encountered with an unexpected citus "
+								   "table type while processing range table "
+								   "entries of query")));
+		}
+	}
+
+	rteListProperties->hasCitusTable = (rteListProperties->hasDistributedTable ||
+										rteListProperties->hasReferenceTable ||
+										rteListProperties->hasCitusLocalTable);
+
+	return rteListProperties;
 }

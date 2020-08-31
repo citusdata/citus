@@ -135,6 +135,24 @@ typedef struct RelationRowLock
 } RelationRowLock;
 
 
+/*
+ * Parameters to be set according to range table entries of a query.
+ */
+typedef struct RTEListProperties
+{
+	bool hasPostgresLocalTable;
+
+	bool hasReferenceTable;
+	bool hasCitusLocalTable;
+
+	/* includes hash, append and range partitioned tables */
+	bool hasDistributedTable;
+
+	/* union of above three */
+	bool hasCitusTable;
+} RTEListProperties;
+
+
 typedef struct DistributedPlanningContext
 {
 	/* The parsed query that is given to the planner. It is a slightly modified
@@ -195,6 +213,14 @@ extern PlannedStmt * distributed_planner(Query *parse,
 #endif
 
 
+/*
+ * Common hint message to workaround using postgres local and citus local tables
+ * in distributed queries
+ */
+#define LOCAL_TABLE_SUBQUERY_CTE_HINT \
+	"Use CTE's or subqueries to select from local tables and use them in joins"
+
+
 extern List * ExtractRangeTableEntryList(Query *query);
 extern bool NeedsDistributedPlanning(Query *query);
 extern struct DistributedPlan * GetDistributedPlan(CustomScan *node);
@@ -218,6 +244,7 @@ extern int32 BlessRecordExpression(Expr *expr);
 extern void DissuadePlannerFromUsingPlan(PlannedStmt *plan);
 extern PlannedStmt * FinalizePlan(PlannedStmt *localPlan,
 								  struct DistributedPlan *distributedPlan);
+extern RTEListProperties * GetRTEListPropertiesForQuery(Query *query);
 
 
 extern struct DistributedPlan * CreateDistributedPlan(uint64 planId, Query *originalQuery,

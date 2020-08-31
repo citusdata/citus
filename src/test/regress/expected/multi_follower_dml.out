@@ -6,13 +6,43 @@ SELECT create_distributed_table('the_table', 'a');
 
 (1 row)
 
+SELECT 1 FROM master_add_node('localhost', :master_port, groupid => 0);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+CREATE TABLE reference_table (a int, b int, z bigserial);
+SELECT create_reference_table('reference_table');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE citus_local_table (a int, b int, z bigserial);
+SELECT create_citus_local_table('citus_local_table');
+ create_citus_local_table
+---------------------------------------------------------------------
+
+(1 row)
+
 CREATE TABLE local (a int, b int);
 \c - - - :follower_master_port
 -- inserts normally do not work on a standby coordinator
 INSERT INTO the_table (a, b, z) VALUES (1, 2, 2);
 ERROR:  writing to worker nodes is not currently allowed
 DETAIL:  the database is read-only
--- we can allow DML on a writable standby coordinator
+INSERT INTO reference_table (a, b, z) VALUES (1, 2, 2);
+ERROR:  writing to worker nodes is not currently allowed
+DETAIL:  the database is read-only
+INSERT INTO citus_local_table (a, b, z) VALUES (1, 2, 2);
+ERROR:  writing to worker nodes is not currently allowed
+DETAIL:  the database is read-only
+-- We can allow DML on a writable standby coordinator.
+-- Note that it doesn't help to enable writes for citus local tables
+-- and coordinator replicated reference tables. This is because, the
+-- data is in the coordinator and will hit read-only tranaction checks
+-- on Postgres
 SET citus.writable_standby_coordinator TO on;
 INSERT INTO the_table (a, b, z) VALUES (1, 2, 2);
 SELECT * FROM the_table;
@@ -21,15 +51,57 @@ SELECT * FROM the_table;
  1 | 2 | 2
 (1 row)
 
+INSERT INTO reference_table (a, b, z) VALUES (1, 2, 2);
+ERROR:  cannot execute INSERT in a read-only transaction
+SELECT * FROM reference_table;
+ a | b | z
+---------------------------------------------------------------------
+(0 rows)
+
+INSERT INTO citus_local_table (a, b, z) VALUES (1, 2, 2);
+ERROR:  cannot execute INSERT in a read-only transaction
+SELECT * FROM citus_local_table;
+ a | b | z
+---------------------------------------------------------------------
+(0 rows)
+
 UPDATE the_table SET z = 3 WHERE a = 1;
+UPDATE reference_table SET z = 3 WHERE a = 1;
+ERROR:  cannot execute UPDATE in a read-only transaction
+UPDATE citus_local_table SET z = 3 WHERE a = 1;
+ERROR:  cannot execute UPDATE in a read-only transaction
 SELECT * FROM the_table;
  a | b | z
 ---------------------------------------------------------------------
  1 | 2 | 3
 (1 row)
 
+SELECT * FROM reference_table;
+ a | b | z
+---------------------------------------------------------------------
+(0 rows)
+
+SELECT * FROM citus_local_table;
+ a | b | z
+---------------------------------------------------------------------
+(0 rows)
+
 DELETE FROM the_table WHERE a = 1;
+DELETE FROM reference_table WHERE a = 1;
+ERROR:  cannot execute DELETE in a read-only transaction
+DELETE FROM citus_local_table WHERE a = 1;
+ERROR:  cannot execute DELETE in a read-only transaction
 SELECT * FROM the_table;
+ a | b | z
+---------------------------------------------------------------------
+(0 rows)
+
+SELECT * FROM reference_table;
+ a | b | z
+---------------------------------------------------------------------
+(0 rows)
+
+SELECT * FROM citus_local_table;
  a | b | z
 ---------------------------------------------------------------------
 (0 rows)
@@ -37,11 +109,23 @@ SELECT * FROM the_table;
 -- drawing from a sequence is not possible
 INSERT INTO the_table (a, b) VALUES (1, 2);
 ERROR:  cannot assign TransactionIds during recovery
+INSERT INTO reference_table (a, b) VALUES (1, 2);
+ERROR:  cannot assign TransactionIds during recovery
+INSERT INTO citus_local_table (a, b) VALUES (1, 2);
+ERROR:  cannot assign TransactionIds during recovery
 -- 2PC is not possible
 INSERT INTO the_table (a, b, z) VALUES (2, 3, 4), (5, 6, 7);
 ERROR:  cannot assign TransactionIds during recovery
+INSERT INTO reference_table (a, b, z) VALUES (2, 3, 4), (5, 6, 7);
+ERROR:  cannot execute INSERT in a read-only transaction
+INSERT INTO citus_local_table (a, b, z) VALUES (2, 3, 4), (5, 6, 7);
+ERROR:  cannot execute INSERT in a read-only transaction
 -- COPY is not possible in 2PC mode
 COPY the_table (a, b, z) FROM STDIN WITH CSV;
+ERROR:  cannot assign TransactionIds during recovery
+COPY reference_table (a, b, z) FROM STDIN WITH CSV;
+ERROR:  cannot assign TransactionIds during recovery
+COPY citus_local_table (a, b, z) FROM STDIN WITH CSV;
 ERROR:  cannot assign TransactionIds during recovery
 -- 1PC is possible
 SET citus.multi_shard_commit_protocol TO '1pc';
@@ -53,6 +137,20 @@ SELECT * FROM the_table ORDER BY a;
  5 | 6 | 7
 (2 rows)
 
+INSERT INTO reference_table (a, b, z) VALUES (2, 3, 4), (5, 6, 7);
+ERROR:  cannot execute INSERT in a read-only transaction
+SELECT * FROM reference_table ORDER BY a;
+ a | b | z
+---------------------------------------------------------------------
+(0 rows)
+
+INSERT INTO citus_local_table (a, b, z) VALUES (2, 3, 4), (5, 6, 7);
+ERROR:  cannot execute INSERT in a read-only transaction
+SELECT * FROM citus_local_table ORDER BY a;
+ a | b | z
+---------------------------------------------------------------------
+(0 rows)
+
 -- modifying CTEs are possible
 WITH del AS (DELETE FROM the_table RETURNING *)
 SELECT * FROM del ORDER BY a;
@@ -62,8 +160,17 @@ SELECT * FROM del ORDER BY a;
  5 | 6 | 7
 (2 rows)
 
+WITH del AS (DELETE FROM reference_table RETURNING *)
+SELECT * FROM del ORDER BY a;
+ERROR:  cannot execute DELETE in a read-only transaction
+WITH del AS (DELETE FROM citus_local_table RETURNING *)
+SELECT * FROM del ORDER BY a;
+ERROR:  cannot execute DELETE in a read-only transaction
 -- COPY is possible in 1PC mode
 COPY the_table (a, b, z) FROM STDIN WITH CSV;
+COPY reference_table (a, b, z) FROM STDIN WITH CSV;
+ERROR:  cannot assign TransactionIds during recovery
+COPY citus_local_table (a, b, z) FROM STDIN WITH CSV;
 SELECT * FROM the_table ORDER BY a;
  a  | b  | z
 ---------------------------------------------------------------------
@@ -71,21 +178,67 @@ SELECT * FROM the_table ORDER BY a;
  11 | 11 | 11
 (2 rows)
 
+SELECT * FROM reference_table ORDER BY a;
+ a | b | z
+---------------------------------------------------------------------
+(0 rows)
+
+SELECT * FROM citus_local_table ORDER BY a;
+ a  | b  | z
+---------------------------------------------------------------------
+ 10 | 10 | 10
+ 11 | 11 | 11
+(2 rows)
+
 DELETE FROM the_table;
+DELETE FROM reference_table;
+ERROR:  cannot execute DELETE in a read-only transaction
+DELETE FROM citus_local_table;
+ERROR:  cannot execute DELETE in a read-only transaction
 -- DDL is not possible
 TRUNCATE the_table;
 ERROR:  cannot execute TRUNCATE TABLE in a read-only transaction
+TRUNCATE reference_table;
+ERROR:  cannot execute TRUNCATE TABLE in a read-only transaction
+TRUNCATE citus_local_table;
+ERROR:  cannot execute TRUNCATE TABLE in a read-only transaction
 ALTER TABLE the_table ADD COLUMN c int;
+ERROR:  cannot acquire lock mode AccessExclusiveLock on database objects while recovery is in progress
+HINT:  Only RowExclusiveLock or less can be acquired on database objects during recovery.
+ALTER TABLE reference_table ADD COLUMN c int;
+ERROR:  cannot acquire lock mode AccessExclusiveLock on database objects while recovery is in progress
+HINT:  Only RowExclusiveLock or less can be acquired on database objects during recovery.
+ALTER TABLE citus_local_table ADD COLUMN c int;
 ERROR:  cannot acquire lock mode AccessExclusiveLock on database objects while recovery is in progress
 HINT:  Only RowExclusiveLock or less can be acquired on database objects during recovery.
 -- rollback is possible
 BEGIN;
 INSERT INTO the_table (a, b, z) VALUES (1, 2, 2);
 ROLLBACK;
+BEGIN;
+INSERT INTO reference_table (a, b, z) VALUES (1, 2, 2);
+ERROR:  cannot execute INSERT in a read-only transaction
+ROLLBACK;
+BEGIN;
+INSERT INTO citus_local_table (a, b, z) VALUES (1, 2, 2);
+ERROR:  cannot execute INSERT in a read-only transaction
+ROLLBACK;
 SELECT * FROM the_table ORDER BY a;
  a | b | z
 ---------------------------------------------------------------------
 (0 rows)
+
+SELECT * FROM reference_table ORDER BY a;
+ a | b | z
+---------------------------------------------------------------------
+(0 rows)
+
+SELECT * FROM citus_local_table ORDER BY a;
+ a  | b  | z
+---------------------------------------------------------------------
+ 10 | 10 | 10
+ 11 | 11 | 11
+(2 rows)
 
 -- we should still disallow writes to local tables
 INSERT INTO local VALUES (1, 1);
@@ -106,5 +259,23 @@ SELECT * FROM the_table ORDER BY a;
 ---------------------------------------------------------------------
 (0 rows)
 
+INSERT INTO reference_table (a, b, z) VALUES (1, 2, 3);
+ERROR:  writing to worker nodes is not currently allowed
+DETAIL:  citus.use_secondary_nodes is set to 'always'
+SELECT * FROM reference_table ORDER BY a;
+ERROR:  there is a shard placement in node group 0 but there are no nodes in that group
+INSERT INTO citus_local_table (a, b, z) VALUES (1, 2, 3);
+ERROR:  writing to worker nodes is not currently allowed
+DETAIL:  citus.use_secondary_nodes is set to 'always'
+SELECT * FROM citus_local_table ORDER BY a;
+ERROR:  there is a shard placement in node group 0 but there are no nodes in that group
 \c - - - :master_port
 DROP TABLE the_table;
+DROP TABLE reference_table;
+DROP TABLE citus_local_table;
+SELECT master_remove_node('localhost', :master_port);
+ master_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+

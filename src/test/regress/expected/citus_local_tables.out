@@ -482,6 +482,9 @@ TRUNCATE citus_local_table_1, citus_local_table_2, distributed_table, local_tabl
 NOTICE:  executing the command locally: TRUNCATE TABLE citus_local_tables_test_schema.citus_local_table_1_xxxxx CASCADE
 NOTICE:  executing the command locally: TRUNCATE TABLE citus_local_tables_test_schema.citus_local_table_2_xxxxx CASCADE
 NOTICE:  executing the command locally: TRUNCATE TABLE citus_local_tables_test_schema.reference_table_xxxxx CASCADE
+-- test vacuum
+VACUUM citus_local_table_1;
+VACUUM citus_local_table_1, distributed_table, local_table, reference_table;
 DROP TABLE citus_local_table_1, citus_local_table_2, distributed_table, local_table, reference_table;
 NOTICE:  executing the command locally: DROP TABLE IF EXISTS citus_local_tables_test_schema.reference_table_xxxxx CASCADE
 NOTICE:  executing the command locally: DROP TABLE IF EXISTS citus_local_tables_test_schema.citus_local_table_2_xxxxx CASCADE
