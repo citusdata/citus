@@ -23,12 +23,10 @@ source ci/ci_helpers.sh
 set -x
 
 check_compile () {
+    echo "INFO: checking if merged code can be compiled"
     ./configure --without-libcurl
-    make install -j10
+    make -j10
 }
-
-apt-get update
-apt-get install -y postgresql-server-dev-all postgresql-common
 
 # Clone current git repo (which should be community) to a temporary working
 # directory and go there
@@ -55,7 +53,7 @@ git fetch enterprise enterprise-master
 git checkout "enterprise/enterprise-master"
 
 if git merge --no-commit "origin/$PR_BRANCH"; then
-    echo "INFO: community PR branch could be merged into enterprise-master, so everything is good"
+    echo "INFO: community PR branch could be merged into enterprise-master"
     # check that we can compile after the merge
     check_compile
     exit 0

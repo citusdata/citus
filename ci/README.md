@@ -51,11 +51,13 @@ following:
 This check exists to make sure that we can always merge the `master` branch of
 `community` into the `enterprise-master` branch of the `enterprise` repo.
 There are two conditions in which this check passes:
-1. There are no merge conflicts between your PR branch and `enterprise-master`.
+
+1. There are no merge conflicts between your PR branch and `enterprise-master` and after this merge the code compiles.
 2. There are merge conflicts, but there is a branch with the same name in the
    enterprise repo that:
    1. Contains the last commit of the community branch with the same name.
    2. Merges cleanly into `enterprise-master`
+3. After merging, the code can be compiled.
 
 If the job already passes, you are done, nothing further required! Otherwise
 follow the below steps.
