@@ -22,6 +22,12 @@ source ci/ci_helpers.sh
 # are not shown in CI output (even though it's also filtered out by CircleCI)
 set -x
 
+check_compile () {
+    echo "INFO: checking if merged code can be compiled"
+    ./configure --without-libcurl
+    make -j10
+}
+
 # Clone current git repo (which should be community) to a temporary working
 # directory and go there
 GIT_DIR_ROOT="$(git rev-parse --show-toplevel)"
@@ -47,7 +53,9 @@ git fetch enterprise enterprise-master
 git checkout "enterprise/enterprise-master"
 
 if git merge --no-commit "origin/$PR_BRANCH"; then
-    echo "INFO: community PR branch could be merged into enterprise-master, so everything is good"
+    echo "INFO: community PR branch could be merged into enterprise-master"
+    # check that we can compile after the merge
+    check_compile
     exit 0
 fi
 
@@ -73,3 +81,5 @@ fi
 # Now check if we can merge the enterprise PR into enterprise-master without
 # issues.
 git merge --no-commit "enterprise/$PR_BRANCH"
+# check that we can compile after the merge
+check_compile

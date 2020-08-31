@@ -488,7 +488,7 @@ jobs:
 
   check-merge-to-enterprise:
     docker:
-      - image: buildpack-deps:stretch
+      - image: citus/extbuilder:13beta3
     working_directory: /home/circleci/project
     steps:
       - checkout
