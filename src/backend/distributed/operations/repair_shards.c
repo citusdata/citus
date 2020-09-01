@@ -364,9 +364,9 @@ RepairShardPlacement(int64 shardId, const char *sourceNodeName, int32 sourceNode
 
 	/* after successful repair, we update shard state as healthy*/
 	List *placementList = ShardPlacementList(shardId);
-	ShardPlacement *placement = ForceSearchShardPlacementInList(placementList,
-																targetNodeName,
-																targetNodePort);
+	ShardPlacement *placement = SearchShardPlacementInListOrError(placementList,
+																  targetNodeName,
+																  targetNodePort);
 	UpdateShardPlacementState(placement->placementId, SHARD_STATE_ACTIVE);
 }
 
@@ -633,18 +633,20 @@ EnsureShardCanBeRepaired(int64 shardId, const char *sourceNodeName, int32 source
 {
 	List *shardPlacementList = ShardPlacementList(shardId);
 
-	ShardPlacement *sourcePlacement = ForceSearchShardPlacementInList(shardPlacementList,
-																	  sourceNodeName,
-																	  sourceNodePort);
+	ShardPlacement *sourcePlacement = SearchShardPlacementInListOrError(
+		shardPlacementList,
+		sourceNodeName,
+		sourceNodePort);
 	if (sourcePlacement->shardState != SHARD_STATE_ACTIVE)
 	{
 		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 						errmsg("source placement must be in active state")));
 	}
 
-	ShardPlacement *targetPlacement = ForceSearchShardPlacementInList(shardPlacementList,
-																	  targetNodeName,
-																	  targetNodePort);
+	ShardPlacement *targetPlacement = SearchShardPlacementInListOrError(
+		shardPlacementList,
+		targetNodeName,
+		targetNodePort);
 	if (targetPlacement->shardState != SHARD_STATE_INACTIVE)
 	{
 		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
@@ -663,9 +665,10 @@ EnsureShardCanBeCopied(int64 shardId, const char *sourceNodeName, int32 sourceNo
 {
 	List *shardPlacementList = ShardPlacementList(shardId);
 
-	ShardPlacement *sourcePlacement = ForceSearchShardPlacementInList(shardPlacementList,
-																	  sourceNodeName,
-																	  sourceNodePort);
+	ShardPlacement *sourcePlacement = SearchShardPlacementInListOrError(
+		shardPlacementList,
+		sourceNodeName,
+		sourceNodePort);
 	if (sourcePlacement->shardState != SHARD_STATE_ACTIVE)
 	{
 		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
@@ -707,7 +710,7 @@ SearchShardPlacementInList(List *shardPlacementList, const char *nodeName,
 
 
 /*
- * ForceSearchShardPlacementInList searches a provided list for a shard
+ * SearchShardPlacementInListOrError searches a provided list for a shard
  * placement with the specified node name and port. This function throws an
  * error if no such placement exists in the provided list.
  *
@@ -715,8 +718,8 @@ SearchShardPlacementInList(List *shardPlacementList, const char *nodeName,
  * reasons about NULL returns correctly.
  */
 ShardPlacement *
-ForceSearchShardPlacementInList(List *shardPlacementList, const char *nodeName,
-								uint32 nodePort)
+SearchShardPlacementInListOrError(List *shardPlacementList, const char *nodeName,
+								  uint32 nodePort)
 {
 	ShardPlacement *placement = SearchShardPlacementInList(shardPlacementList, nodeName,
 														   nodePort);

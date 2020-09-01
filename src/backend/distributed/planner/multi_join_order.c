@@ -1396,11 +1396,11 @@ DistPartitionKey(Oid relationId)
 
 
 /*
- * ForceDistPartitionKey is the same as DistPartitionKey but errors out instead
+ * DistPartitionKeyOrError is the same as DistPartitionKey but errors out instead
  * of returning NULL if this is called with a relationId of a reference table.
  */
 Var *
-ForceDistPartitionKey(Oid relationId)
+DistPartitionKeyOrError(Oid relationId)
 {
 	Var *partitionKey = DistPartitionKey(relationId);
 

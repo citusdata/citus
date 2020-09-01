@@ -169,7 +169,7 @@ extern char LookupDistributionMethod(Oid distributionMethodOid);
 /* access WorkerNodeHash */
 extern HTAB * GetWorkerNodeHash(void);
 extern WorkerNode * LookupNodeByNodeId(uint32 nodeId);
-extern WorkerNode * ForceLookupNodeByNodeId(uint32 nodeId);
+extern WorkerNode * LookupNodeByNodeIdOrError(uint32 nodeId);
 extern WorkerNode * LookupNodeForGroup(int32 groupId);
 
 /* namespace oids */

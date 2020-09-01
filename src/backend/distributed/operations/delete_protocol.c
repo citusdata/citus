@@ -686,7 +686,7 @@ CheckDeleteCriteria(Node *deleteCriteria)
 static void
 CheckPartitionColumn(Oid relationId, Node *whereClause)
 {
-	Var *partitionColumn = ForceDistPartitionKey(relationId);
+	Var *partitionColumn = DistPartitionKeyOrError(relationId);
 
 	List *columnList = pull_var_clause_default(whereClause);
 	Var *var = NULL;

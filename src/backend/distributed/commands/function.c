@@ -546,7 +546,7 @@ EnsureFunctionCanBeColocatedWithTable(Oid functionOid, Oid distributionColumnTyp
 	 * If the types are the same, we're good. If not, we still check if there
 	 * is any coercion path between the types.
 	 */
-	Var *sourceDistributionColumn = ForceDistPartitionKey(sourceRelationId);
+	Var *sourceDistributionColumn = DistPartitionKeyOrError(sourceRelationId);
 	Oid sourceDistributionColumnType = sourceDistributionColumn->vartype;
 	if (sourceDistributionColumnType != distributionColumnType)
 	{
