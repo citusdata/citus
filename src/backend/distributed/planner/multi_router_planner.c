@@ -1,3 +1,4 @@
+
 /*-------------------------------------------------------------------------
  *
  * multi_router_planner.c
@@ -164,7 +165,6 @@ static List * SingleShardTaskList(Query *query, uint64 jobId,
 								  List *relationShardList, List *placementList,
 								  uint64 shardId, bool parametersInQueryResolved);
 static bool RowLocksOnRelations(Node *node, List **rtiLockList);
-static List * RemoveCoordinatorPlacementIfNotSingleNode(List *placementList);
 static void ReorderTaskPlacementsByTaskAssignmentPolicy(Job *job,
 														TaskAssignmentPolicyType
 														taskAssignmentPolicy,
@@ -1836,7 +1836,7 @@ ReorderTaskPlacementsByTaskAssignmentPolicy(Job *job,
  * If the list has a single element or no placements on the coordinator, the list
  * returned is unmodified.
  */
-static List *
+List *
 RemoveCoordinatorPlacementIfNotSingleNode(List *placementList)
 {
 	ListCell *placementCell = NULL;

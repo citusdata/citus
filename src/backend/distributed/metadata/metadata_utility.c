@@ -408,6 +408,31 @@ CompareShardPlacementsByWorker(const void *leftElement, const void *rightElement
 
 
 /*
+ * CompareShardPlacementsByGroupId compares two shard placements by their
+ * group id.
+ */
+int
+CompareShardPlacementsByGroupId(const void *leftElement, const void *rightElement)
+{
+	const ShardPlacement *leftPlacement = *((const ShardPlacement **) leftElement);
+	const ShardPlacement *rightPlacement = *((const ShardPlacement **) rightElement);
+
+	if (leftPlacement->groupId > rightPlacement->groupId)
+	{
+		return 1;
+	}
+	else if (leftPlacement->groupId < rightPlacement->groupId)
+	{
+		return -1;
+	}
+	else
+	{
+		return 0;
+	}
+}
+
+
+/*
  * TableShardReplicationFactor returns the current replication factor of the
  * given relation by looking into shard placements. It errors out if there
  * are different number of shard placements for different shards. It also

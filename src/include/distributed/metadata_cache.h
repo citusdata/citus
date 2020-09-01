@@ -149,6 +149,14 @@ extern bool HasOverlappingShardInterval(ShardInterval **shardIntervalArray,
 										Oid shardIntervalCollation,
 										FmgrInfo *shardIntervalSortCompareFunction);
 
+extern ShardPlacement * ShardPlacementForFunctionColocatedWithReferenceTable(
+	CitusTableCacheEntry *cacheEntry);
+extern ShardPlacement * ShardPlacementForFunctionColocatedWithDistTable(
+	DistObjectCacheEntry *procedure, FuncExpr *funcExpr, Var *partitionColumn,
+	CitusTableCacheEntry
+	*cacheEntry,
+	PlannedStmt *plan);
+
 extern bool CitusHasBeenLoaded(void);
 extern bool CheckCitusVersion(int elevel);
 extern bool CheckAvailableVersion(int elevel);
