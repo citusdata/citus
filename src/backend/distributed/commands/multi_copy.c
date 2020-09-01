@@ -2150,16 +2150,12 @@ CitusCopyDestReceiverStartup(DestReceiver *dest, int operation,
 
 	ListCell *columnNameCell = NULL;
 
-	char partitionMethod = '\0';
-
-
 	const char *delimiterCharacter = "\t";
 	const char *nullPrintCharacter = "\\N";
 
 	/* look up table properties */
 	Relation distributedRelation = table_open(tableId, RowExclusiveLock);
 	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(tableId);
-	partitionMethod = cacheEntry->partitionMethod;
 
 	copyDest->distributedRelation = distributedRelation;
 	copyDest->tupleDescriptor = inputTupleDescriptor;
@@ -2168,7 +2164,7 @@ CitusCopyDestReceiverStartup(DestReceiver *dest, int operation,
 	List *shardIntervalList = LoadShardIntervalList(tableId);
 	if (shardIntervalList == NIL)
 	{
-		if (partitionMethod == DISTRIBUTE_BY_HASH)
+		if (IsHashDistributedTableCacheEntry(cacheEntry))
 		{
 			ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
 							errmsg("could not find any shards into which to copy"),
@@ -2187,7 +2183,7 @@ CitusCopyDestReceiverStartup(DestReceiver *dest, int operation,
 	}
 
 	/* error if any shard missing min/max values */
-	if (partitionMethod != DISTRIBUTE_BY_NONE &&
+	if (IsDistributedTableCacheEntry(cacheEntry) &&
 		cacheEntry->hasUninitializedShardInterval)
 	{
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
@@ -2248,7 +2244,7 @@ CitusCopyDestReceiverStartup(DestReceiver *dest, int operation,
 		attributeList = lappend(attributeList, columnNameValue);
 	}
 
-	if (partitionMethod != DISTRIBUTE_BY_NONE &&
+	if (IsDistributedTableCacheEntry(cacheEntry) &&
 		copyDest->partitionColumnIndex == INVALID_PARTITION_COLUMN_INDEX)
 	{
 		ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),

@@ -921,14 +921,13 @@ ColocatedShardIntervalList(ShardInterval *shardInterval)
 	List *colocatedShardList = NIL;
 
 	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(distributedTableId);
-	char partitionMethod = cacheEntry->partitionMethod;
 
 	/*
-	 * If distribution type of the table is not hash or reference, each shard of
+	 * If distribution type of the table is append or range, each shard of
 	 * the shard is only co-located with itself.
 	 */
-	if ((partitionMethod == DISTRIBUTE_BY_APPEND) ||
-		(partitionMethod == DISTRIBUTE_BY_RANGE))
+	if (IsAppendDistributedTableCacheEntry(cacheEntry) ||
+		IsRangeDistributedTableCacheEntry(cacheEntry))
 	{
 		ShardInterval *copyShardInterval = CopyShardInterval(shardInterval);
 

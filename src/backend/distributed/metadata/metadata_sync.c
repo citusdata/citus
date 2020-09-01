@@ -224,14 +224,11 @@ ShouldSyncTableMetadata(Oid relationId)
 {
 	CitusTableCacheEntry *tableEntry = GetCitusTableCacheEntry(relationId);
 
-	bool hashDistributed = (tableEntry->partitionMethod == DISTRIBUTE_BY_HASH);
 	bool streamingReplicated =
 		(tableEntry->replicationModel == REPLICATION_MODEL_STREAMING);
 
-	bool mxTable = (streamingReplicated && hashDistributed);
-	bool referenceTable = (tableEntry->partitionMethod == DISTRIBUTE_BY_NONE);
-
-	if (mxTable || referenceTable)
+	bool mxTable = (streamingReplicated && IsHashDistributedTableCacheEntry(tableEntry));
+	if (mxTable || IsReferenceTableCacheEntry(tableEntry))
 	{
 		return true;
 	}

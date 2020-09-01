@@ -1855,7 +1855,7 @@ multi_relation_restriction_hook(PlannerInfo *root, RelOptInfo *relOptInfo,
 		cacheEntry = GetCitusTableCacheEntry(rte->relid);
 
 		relationRestrictionContext->allReferenceTables &=
-			(cacheEntry->partitionMethod == DISTRIBUTE_BY_NONE);
+			IsReferenceTableCacheEntry(cacheEntry);
 	}
 
 	relationRestrictionContext->relationRestrictionList =

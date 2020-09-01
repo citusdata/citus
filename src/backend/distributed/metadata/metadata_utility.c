@@ -1422,8 +1422,7 @@ IsHashDistributedTable(Oid relationId)
 		return false;
 	}
 	CitusTableCacheEntry *sourceTableEntry = GetCitusTableCacheEntry(relationId);
-	char sourceDistributionMethod = sourceTableEntry->partitionMethod;
-	return sourceDistributionMethod == DISTRIBUTE_BY_HASH;
+	return IsHashDistributedTableCacheEntry(sourceTableEntry);
 }
 
 

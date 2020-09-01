@@ -1882,9 +1882,8 @@ SingleShardTaskList(Query *query, uint64 jobId, List *relationShardList,
 
 		CitusTableCacheEntry *modificationTableCacheEntry = GetCitusTableCacheEntry(
 			updateOrDeleteRTE->relid);
-		char modificationPartitionMethod = modificationTableCacheEntry->partitionMethod;
 
-		if (modificationPartitionMethod == DISTRIBUTE_BY_NONE &&
+		if (IsReferenceTableCacheEntry(modificationTableCacheEntry) &&
 			SelectsFromDistributedTable(rangeTableList, query))
 		{
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
@@ -2009,7 +2008,7 @@ SelectsFromDistributedTable(List *rangeTableList, Query *query)
 
 		CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(
 			rangeTableEntry->relid);
-		if (cacheEntry->partitionMethod != DISTRIBUTE_BY_NONE &&
+		if (IsDistributedTableCacheEntry(cacheEntry) &&
 			(resultRangeTableEntry == NULL || resultRangeTableEntry->relid !=
 			 rangeTableEntry->relid))
 		{
@@ -2709,7 +2708,7 @@ BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError)
 	Assert(query->commandType == CMD_INSERT);
 
 	/* reference tables can only have one shard */
-	if (partitionMethod == DISTRIBUTE_BY_NONE)
+	if (IsReferenceTableCacheEntry(cacheEntry))
 	{
 		List *shardIntervalList = LoadShardIntervalList(distributedTableId);
 
@@ -3490,13 +3489,11 @@ ErrorIfQueryHasUnroutableModifyingCTE(Query *queryTree)
 
 			CitusTableCacheEntry *modificationTableCacheEntry =
 				GetCitusTableCacheEntry(distributedTableId);
-			char modificationPartitionMethod =
-				modificationTableCacheEntry->partitionMethod;
 
-			if (modificationPartitionMethod == DISTRIBUTE_BY_NONE)
+			if (IsNonDistributedTableCacheEntry(modificationTableCacheEntry))
 			{
 				return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-									 "cannot router plan modification of a reference table",
+									 "cannot router plan modification of a non-distributed table",
 									 NULL, NULL);
 			}
 

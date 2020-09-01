@@ -116,7 +116,12 @@ typedef struct DistObjectCacheEntry
 	int colocationId;
 } DistObjectCacheEntry;
 
-
+extern bool IsReferenceTableCacheEntry(CitusTableCacheEntry *tableEntry);
+extern bool IsDistributedTableCacheEntry(CitusTableCacheEntry *tableEntry);
+extern bool IsHashDistributedTableCacheEntry(CitusTableCacheEntry *tableEntry);
+extern bool IsAppendDistributedTableCacheEntry(CitusTableCacheEntry *tableEntry);
+extern bool IsRangeDistributedTableCacheEntry(CitusTableCacheEntry *tableEntry);
+extern bool IsNonDistributedTableCacheEntry(CitusTableCacheEntry *tableEntry);
 extern bool IsCitusTable(Oid relationId);
 extern List * CitusTableList(void);
 extern ShardInterval * LoadShardInterval(uint64 shardId);

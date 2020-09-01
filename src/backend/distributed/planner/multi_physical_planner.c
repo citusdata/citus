@@ -2141,7 +2141,7 @@ QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 		ListCell *shardIntervalCell = NULL;
 
 		CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
-		if (cacheEntry->partitionMethod == DISTRIBUTE_BY_NONE)
+		if (IsNonDistributedTableCacheEntry(cacheEntry))
 		{
 			continue;
 		}
@@ -2426,9 +2426,9 @@ QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 		ShardInterval *shardInterval = NULL;
 
 		CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
-		if (cacheEntry->partitionMethod == DISTRIBUTE_BY_NONE)
+		if (IsNonDistributedTableCacheEntry(cacheEntry))
 		{
-			/* reference table only has one shard */
+			/* non-distributed tables have only one shard */
 			shardInterval = cacheEntry->sortedShardIntervalArray[0];
 
 			/* only use reference table as anchor shard if none exists yet */
@@ -2537,13 +2537,13 @@ CoPartitionedTables(Oid firstRelationId, Oid secondRelationId)
 	FmgrInfo *comparisonFunction = firstTableCache->shardIntervalCompareFunction;
 
 	/* reference tables are always & only copartitioned with reference tables */
-	if (firstTableCache->partitionMethod == DISTRIBUTE_BY_NONE &&
-		secondTableCache->partitionMethod == DISTRIBUTE_BY_NONE)
+	if (IsReferenceTableCacheEntry(firstTableCache) &&
+		IsReferenceTableCacheEntry(secondTableCache))
 	{
 		return true;
 	}
-	else if (firstTableCache->partitionMethod == DISTRIBUTE_BY_NONE ||
-			 secondTableCache->partitionMethod == DISTRIBUTE_BY_NONE)
+	else if (IsReferenceTableCacheEntry(firstTableCache) ||
+			 IsReferenceTableCacheEntry(secondTableCache))
 	{
 		return false;
 	}
@@ -2578,8 +2578,8 @@ CoPartitionedTables(Oid firstRelationId, Oid secondRelationId)
 	 * different values for the same value. int vs bigint can be given as an
 	 * example.
 	 */
-	if (firstTableCache->partitionMethod == DISTRIBUTE_BY_HASH ||
-		secondTableCache->partitionMethod == DISTRIBUTE_BY_HASH)
+	if (IsHashDistributedTableCacheEntry(firstTableCache) ||
+		IsHashDistributedTableCacheEntry(secondTableCache))
 	{
 		return false;
 	}

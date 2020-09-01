@@ -69,22 +69,7 @@ IsReferenceTable(Oid relationId)
 		return false;
 	}
 	CitusTableCacheEntry *tableEntry = GetCitusTableCacheEntry(relationId);
-	return IsReferenceTableByCacheEntry(tableEntry);
-}
-
-
-/*
- * IsReferenceTableByCacheEntry returns true if the given citus
- * table cache entry belongs to a reference table.
- */
-bool
-IsReferenceTableByCacheEntry(CitusTableCacheEntry *tableEntry)
-{
-	if (tableEntry->partitionMethod != DISTRIBUTE_BY_NONE)
-	{
-		return false;
-	}
-	return true;
+	return IsReferenceTableCacheEntry(tableEntry);
 }
 
 
@@ -359,7 +344,7 @@ upgrade_to_reference_table(PG_FUNCTION_ARGS)
 
 	CitusTableCacheEntry *tableEntry = GetCitusTableCacheEntry(relationId);
 
-	if (tableEntry->partitionMethod == DISTRIBUTE_BY_NONE)
+	if (IsReferenceTableCacheEntry(tableEntry))
 	{
 		char *relationName = get_rel_name(relationId);
 		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),

@@ -499,11 +499,9 @@ EnsureFunctionCanBeColocatedWithTable(Oid functionOid, Oid distributionColumnTyp
 									  Oid sourceRelationId)
 {
 	CitusTableCacheEntry *sourceTableEntry = GetCitusTableCacheEntry(sourceRelationId);
-	char sourceDistributionMethod = sourceTableEntry->partitionMethod;
 	char sourceReplicationModel = sourceTableEntry->replicationModel;
 
-	if (sourceDistributionMethod != DISTRIBUTE_BY_HASH &&
-		sourceDistributionMethod != DISTRIBUTE_BY_NONE)
+	if (!IsHashDistributedTableCacheEntry(sourceTableEntry) && !IsReferenceTableCacheEntry(sourceTableEntry))
 	{
 		char *functionName = get_func_name(functionOid);
 		char *sourceRelationName = get_rel_name(sourceRelationId);

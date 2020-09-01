@@ -697,7 +697,7 @@ CheckConflictingRelationAccesses(Oid relationId, ShardPlacementAccessType access
 
 	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
 
-	if (!(cacheEntry->partitionMethod == DISTRIBUTE_BY_NONE &&
+	if (!(IsReferenceTableCacheEntry(cacheEntry) &&
 		  cacheEntry->referencingRelationsViaForeignKey != NIL))
 	{
 		return;
@@ -817,7 +817,7 @@ CheckConflictingParallelRelationAccesses(Oid relationId, ShardPlacementAccessTyp
 	}
 
 	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
-	if (!(cacheEntry->partitionMethod == DISTRIBUTE_BY_HASH &&
+	if (!(IsHashDistributedTableCacheEntry(cacheEntry) &&
 		  cacheEntry->referencedRelationsViaForeignKey != NIL))
 	{
 		return;
@@ -955,7 +955,7 @@ HoldsConflictingLockWithReferencingRelations(Oid relationId, ShardPlacementAcces
 	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
 	bool holdsConflictingLocks = false;
 
-	Assert(PartitionMethod(relationId) == DISTRIBUTE_BY_NONE);
+	Assert(IsReferenceTableCacheEntry(cacheEntry));
 
 	Oid referencingRelation = InvalidOid;
 	foreach_oid(referencingRelation, cacheEntry->referencingRelationsViaForeignKey)

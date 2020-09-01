@@ -240,13 +240,13 @@ ShardIndex(ShardInterval *shardInterval)
 	Datum shardMinValue = shardInterval->minValue;
 
 	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(distributedTableId);
-	char partitionMethod = cacheEntry->partitionMethod;
 
 	/*
 	 * Note that, we can also support append and range distributed tables, but
 	 * currently it is not required.
 	 */
-	if (partitionMethod != DISTRIBUTE_BY_HASH && partitionMethod != DISTRIBUTE_BY_NONE)
+	if (!IsHashDistributedTableCacheEntry(cacheEntry) && !IsReferenceTableCacheEntry(
+			cacheEntry))
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						errmsg("finding index of a given shard is only supported for "
@@ -254,7 +254,7 @@ ShardIndex(ShardInterval *shardInterval)
 	}
 
 	/* short-circuit for reference tables */
-	if (partitionMethod == DISTRIBUTE_BY_NONE)
+	if (IsReferenceTableCacheEntry(cacheEntry))
 	{
 		/* reference tables has only a single shard, so the index is fixed to 0 */
 		shardIndex = 0;

@@ -620,9 +620,8 @@ IsSupportedRedistributionTarget(Oid targetRelationId)
 {
 	CitusTableCacheEntry *tableEntry = GetCitusTableCacheEntry(targetRelationId);
 
-	/* only range and hash-distributed tables are currently supported */
-	if (tableEntry->partitionMethod != DISTRIBUTE_BY_HASH &&
-		tableEntry->partitionMethod != DISTRIBUTE_BY_RANGE)
+	if (!IsHashDistributedTableCacheEntry(tableEntry) &&
+		!IsRangeDistributedTableCacheEntry(tableEntry))
 	{
 		return false;
 	}

@@ -297,6 +297,95 @@ EnsureModificationsCanRun(void)
 
 
 /*
+ * IsReferenceTableCacheEntry returns true if the given citus
+ * table cache entry belongs to a reference table.
+ */
+bool
+IsReferenceTableCacheEntry(CitusTableCacheEntry *tableEntry)
+{
+	if (tableEntry->partitionMethod == DISTRIBUTE_BY_NONE)
+	{
+		return true;
+	}
+	return false;
+}
+
+
+/*
+ * IsDistributedTableCacheEntry returns true if the given citus
+ * table cache entry belongs to a distributed table.
+ */
+bool
+IsDistributedTableCacheEntry(CitusTableCacheEntry *tableEntry)
+{
+	if (tableEntry->partitionMethod == DISTRIBUTE_BY_HASH ||
+		tableEntry->partitionMethod == DISTRIBUTE_BY_RANGE ||
+		tableEntry->partitionMethod == DISTRIBUTE_BY_APPEND)
+	{
+		return true;
+	}
+	return false;
+}
+
+
+/*
+ * IsHashDistributedTableCacheEntry returns true if the given citus
+ * table cache entry belongs to a hash distributed table.
+ */
+bool
+IsHashDistributedTableCacheEntry(CitusTableCacheEntry *tableEntry)
+{
+	if (tableEntry->partitionMethod == DISTRIBUTE_BY_HASH)
+	{
+		return true;
+	}
+	return false;
+}
+
+
+/*
+ * IsRangeDistributedTableCacheEntry returns true if the given citus
+ * table cache entry belongs to a range distributed table.
+ */
+bool
+IsRangeDistributedTableCacheEntry(CitusTableCacheEntry *tableEntry)
+{
+	if (tableEntry->partitionMethod == DISTRIBUTE_BY_RANGE)
+	{
+		return true;
+	}
+	return false;
+}
+
+
+/*
+ * IsAppendDistributedTableCacheEntry returns true if the given citus
+ * table cache entry belongs to an append distributed table.
+ */
+bool
+IsAppendDistributedTableCacheEntry(CitusTableCacheEntry *tableEntry)
+{
+	if (tableEntry->partitionMethod == DISTRIBUTE_BY_APPEND)
+	{
+		return true;
+	}
+	return false;
+}
+
+
+/*
+ * IsNonDistributedTableCacheEntry returns true if the given citus
+ * table cache entry belongs to a non-distributed table such as reference
+ * tables.
+ */
+bool
+IsNonDistributedTableCacheEntry(CitusTableCacheEntry *tableEntry)
+{
+	return !IsDistributedTableCacheEntry(tableEntry);
+}
+
+
+/*
  * IsCitusTable returns whether relationId is a distributed relation or
  * not.
  */

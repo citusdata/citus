@@ -395,7 +395,7 @@ SetLocktagForShardDistributionMetadata(int64 shardId, LOCKTAG *tag)
 	uint32 colocationId = citusTable->colocationId;
 
 	if (colocationId == INVALID_COLOCATION_ID ||
-		citusTable->partitionMethod != DISTRIBUTE_BY_HASH)
+		!IsHashDistributedTableCacheEntry(citusTable))
 	{
 		SET_LOCKTAG_SHARD_METADATA_RESOURCE(*tag, MyDatabaseId, shardId);
 	}
