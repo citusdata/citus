@@ -773,18 +773,31 @@ TableReferencing(Oid relationId)
 
 
 /*
- * ConstraintIsAForeignKey returns true if the given constraint name
- * is a foreign key defined on the relation.
+ * ConstraintIsAForeignKey is a wrapper around GetForeignKeyOidByName that
+ * returns true if the given constraint name identifies a foreign key
+ * contraint defined on relation with relationId.
  */
 bool
 ConstraintIsAForeignKey(char *inputConstaintName, Oid relationId)
 {
+	Oid foreignKeyId = GetForeignKeyOidByName(inputConstaintName, relationId);
+	return OidIsValid(foreignKeyId);
+}
+
+
+/*
+ * GetForeignKeyOidByName returns OID of the foreign key with name and defined
+ * on relation with relationId. If there is no such foreign key constraint, then
+ * this function returns InvalidOid.
+ */
+Oid
+GetForeignKeyOidByName(char *inputConstaintName, Oid relationId)
+{
 	int flags = INCLUDE_REFERENCING_CONSTRAINTS;
 	List *foreignKeyOids = GetForeignKeyOids(relationId, flags);
 
-	Oid foreignKeyOid = FindForeignKeyOidWithName(foreignKeyOids, inputConstaintName);
-
-	return OidIsValid(foreignKeyOid);
+	Oid foreignKeyId = FindForeignKeyOidWithName(foreignKeyOids, inputConstaintName);
+	return foreignKeyId;
 }
 
 
@@ -944,4 +957,28 @@ GetForeignKeyOids(Oid relationId, int flags)
 	table_close(pgConstraint, NoLock);
 
 	return foreignKeyOids;
+}
+
+
+/*
+ * GetReferencedTableId returns OID of the referenced relation for the foreign
+ * key with foreignKeyId. If there is no such foreign key, then this function
+ * returns InvalidOid.
+ */
+Oid
+GetReferencedTableId(Oid foreignKeyId)
+{
+	HeapTuple heapTuple = SearchSysCache1(CONSTROID, ObjectIdGetDatum(foreignKeyId));
+	if (!HeapTupleIsValid(heapTuple))
+	{
+		/* no such foreign key */
+		return InvalidOid;
+	}
+
+	Form_pg_constraint constraintForm = (Form_pg_constraint) GETSTRUCT(heapTuple);
+	Oid referencedTableId = constraintForm->confrelid;
+
+	ReleaseSysCache(heapTuple);
+
+	return referencedTableId;
 }

@@ -434,7 +434,7 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand)
 				 * only subcommand of ALTER TABLE. It was already checked in
 				 * ErrorIfUnsupportedAlterTableStmt.
 				 */
-				Assert(list_length(commandList) <= 1);
+				Assert(list_length(commandList) == 1);
 
 				rightRelationId = RangeVarGetRelid(constraint->pktable, lockmode,
 												   alterTableStatement->missing_ok);
@@ -447,6 +447,22 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand)
 				 * transaction is in process, which causes deadlock.
 				 */
 				constraint->skip_validation = true;
+			}
+		}
+		else if (alterTableType == AT_DropConstraint)
+		{
+			char *constraintName = command->name;
+			if (ConstraintIsAForeignKey(constraintName, leftRelationId))
+			{
+				/*
+				 * We only support ALTER TABLE DROP CONSTRAINT ... FOREIGN KEY, if it is
+				 * only subcommand of ALTER TABLE. It was already checked in
+				 * ErrorIfUnsupportedAlterTableStmt.
+				 */
+				Assert(list_length(commandList) == 1);
+
+				Oid foreignKeyId = GetForeignKeyOidByName(constraintName, leftRelationId);
+				rightRelationId = GetReferencedTableId(foreignKeyId);
 			}
 		}
 		else if (alterTableType == AT_AddColumn)
@@ -1670,8 +1686,8 @@ CreateRightShardListForInterShardDDLTask(Oid rightRelationId, Oid leftRelationId
 		 * in a way that the right shard stays the same since we only have one
 		 * placement per worker.
 		 * If left relation is a citus local table, then we don't need to populate
-		 * reference table shards as we will set foreign key only on reference
-		 * table's coordinator placement.
+		 * reference table shards as we will execute ADD/DROP constraint command
+		 * only for coordinator placement of reference table.
 		 */
 		ShardInterval *rightShard = (ShardInterval *) linitial(rightShardList);
 		int leftShardCount = list_length(leftShardList);
@@ -1696,9 +1712,9 @@ SetInterShardDDLTaskPlacementList(Task *task, ShardInterval *leftShardInterval,
 		IsCitusTableType(rightRelationId, CITUS_LOCAL_TABLE))
 	{
 		/*
-		 * If we are defining foreign key from a reference table to a citus
-		 * local table, then we will set foreign key only on reference table's
-		 * coordinator placement.
+		 * If we are defining/dropping a foreign key from a reference table
+		 * to a citus local table, then we will execute ADD/DROP constraint
+		 * command only for coordinator placement of reference table.
 		 */
 		task->taskPlacementList = GroupShardPlacementsForTableOnGroup(leftRelationId,
 																	  COORDINATOR_GROUP_ID);

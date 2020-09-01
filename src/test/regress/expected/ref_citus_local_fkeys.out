@@ -51,7 +51,7 @@ NOTICE:  executing the command locally: SELECT l1 FROM ref_citus_local_fkeys.cit
 
 -- show that we support drop constraint
 ALTER TABLE citus_local_table DROP CONSTRAINT fkey_local_to_ref;
-NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1506000, 'ref_citus_local_fkeys', 'ALTER TABLE citus_local_table DROP CONSTRAINT fkey_local_to_ref;')
+NOTICE:  executing the command locally: SELECT worker_apply_inter_shard_ddl_command (1506000, 'ref_citus_local_fkeys', 1506001, 'ref_citus_local_fkeys', 'ALTER TABLE citus_local_table DROP CONSTRAINT fkey_local_to_ref;')
 -- we support ON UPDATE CASCADE behaviour in "ALTER TABLE ADD fkey citus_local_table (to reference table)" commands
 ALTER TABLE citus_local_table ADD CONSTRAINT fkey_local_to_ref FOREIGN KEY(l1) REFERENCES reference_table(r1) ON UPDATE CASCADE;
 NOTICE:  executing the command locally: SELECT worker_apply_inter_shard_ddl_command (1506000, 'ref_citus_local_fkeys', 1506001, 'ref_citus_local_fkeys', 'ALTER TABLE citus_local_table ADD CONSTRAINT fkey_local_to_ref FOREIGN KEY(l1) REFERENCES reference_table(r1) ON UPDATE CASCADE;')
@@ -72,7 +72,7 @@ NOTICE:  executing the command locally: SELECT l1 FROM ref_citus_local_fkeys.cit
 
 -- drop constraint for next commands
 ALTER TABLE citus_local_table DROP CONSTRAINT fkey_local_to_ref;
-NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1506000, 'ref_citus_local_fkeys', 'ALTER TABLE citus_local_table DROP CONSTRAINT fkey_local_to_ref;')
+NOTICE:  executing the command locally: SELECT worker_apply_inter_shard_ddl_command (1506000, 'ref_citus_local_fkeys', 1506001, 'ref_citus_local_fkeys', 'ALTER TABLE citus_local_table DROP CONSTRAINT fkey_local_to_ref;')
 INSERT INTO citus_local_table VALUES (2);
 NOTICE:  executing the command locally: INSERT INTO ref_citus_local_fkeys.citus_local_table_1506000 (l1) VALUES (2)
 -- show that we are checking for foreign key constraint while defining, below should fail
@@ -95,7 +95,7 @@ INSERT INTO citus_local_table VALUES (1);
 NOTICE:  executing the command locally: INSERT INTO ref_citus_local_fkeys.citus_local_table_1506000 (l1) VALUES (1)
 -- drop and add constraint for next commands
 ALTER TABLE citus_local_table DROP CONSTRAINT fkey_local_to_ref;
-NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1506000, 'ref_citus_local_fkeys', 'ALTER TABLE citus_local_table DROP CONSTRAINT fkey_local_to_ref;')
+NOTICE:  executing the command locally: SELECT worker_apply_inter_shard_ddl_command (1506000, 'ref_citus_local_fkeys', 1506001, 'ref_citus_local_fkeys', 'ALTER TABLE citus_local_table DROP CONSTRAINT fkey_local_to_ref;')
 ALTER TABLE citus_local_table ADD CONSTRAINT fkey_local_to_ref FOREIGN KEY(l1) REFERENCES reference_table(r1);
 NOTICE:  executing the command locally: SELECT worker_apply_inter_shard_ddl_command (1506000, 'ref_citus_local_fkeys', 1506001, 'ref_citus_local_fkeys', 'ALTER TABLE citus_local_table ADD CONSTRAINT fkey_local_to_ref FOREIGN KEY(l1) REFERENCES reference_table(r1);')
 -- show that drop table without CASCADE errors out
@@ -186,8 +186,7 @@ NOTICE:  Replicating reference table "reference_table" to the node localhost:xxx
 -- show that we support drop constraint
 BEGIN;
   ALTER TABLE reference_table DROP CONSTRAINT fkey_ref_to_local;
-NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1506003, 'ref_citus_local_fkeys', 'ALTER TABLE reference_table DROP CONSTRAINT fkey_ref_to_local;')
-ERROR:  constraint "fkey_ref_to_local_1506003" of relation "reference_table_1506003" does not exist
+NOTICE:  executing the command locally: SELECT worker_apply_inter_shard_ddl_command (1506003, 'ref_citus_local_fkeys', 1506002, 'ref_citus_local_fkeys', 'ALTER TABLE reference_table DROP CONSTRAINT fkey_ref_to_local;')
 ROLLBACK;
 -- show that drop table errors as expected
 DROP TABLE citus_local_table;
