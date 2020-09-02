@@ -15,30 +15,26 @@
 
 
 #include "postgres.h"
-#include "cstore_fdw.h"
-#include "cstore_metadata_serialization.h"
-#include "cstore_version_compat.h"
 
 #include "access/nbtree.h"
-#include "access/skey.h"
+#include "catalog/pg_am.h"
 #include "commands/defrem.h"
 #include "nodes/makefuncs.h"
 #if PG_VERSION_NUM >= 120000
-#include "nodes/pathnodes.h"
 #include "nodes/nodeFuncs.h"
 #include "optimizer/optimizer.h"
 #else
 #include "optimizer/clauses.h"
 #include "optimizer/predtest.h"
-#include "optimizer/var.h"
 #endif
 #include "optimizer/restrictinfo.h"
-#include "port.h"
 #include "storage/fd.h"
 #include "utils/memutils.h"
 #include "utils/lsyscache.h"
-#include "utils/rel.h"
 
+#include "cstore.h"
+#include "cstore_metadata_serialization.h"
+#include "cstore_version_compat.h"
 
 /* static function declarations */
 static StripeBuffers * LoadFilteredStripeBuffers(FILE *tableFile,

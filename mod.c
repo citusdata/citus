@@ -13,6 +13,8 @@
 
 #include "postgres.h"
 
+#include "fmgr.h"
+
 #include "mod.h"
 #include "cstore_fdw.h"
 

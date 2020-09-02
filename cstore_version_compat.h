@@ -49,7 +49,7 @@
 #define TTS_EMPTY(slot)	((slot)->tts_isempty)
 #define ExecForceStoreHeapTuple(tuple, slot, shouldFree) \
 		ExecStoreTuple(newTuple, tupleSlot, InvalidBuffer,  shouldFree);
-#define HeapScanDesc TableScanDesc
+#define TableScanDesc HeapScanDesc
 #define table_beginscan heap_beginscan
 #define table_endscan heap_endscan
 

@@ -14,11 +14,12 @@
 
 
 #include "postgres.h"
-#include "cstore_fdw.h"
-#include "cstore_metadata_serialization.h"
-#include "cstore.pb-c.h"
+
 #include "access/tupmacs.h"
 
+#include "cstore.h"
+#include "cstore_metadata_serialization.h"
+#include "cstore.pb-c.h"
 
 /* local functions forward declarations */
 static ProtobufCBinaryData DatumToProtobufBinary(Datum datum, bool typeByValue,

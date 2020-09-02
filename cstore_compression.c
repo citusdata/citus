@@ -12,7 +12,6 @@
  *-------------------------------------------------------------------------
  */
 #include "postgres.h"
-#include "cstore_fdw.h"
 
 #if PG_VERSION_NUM >= 90500
 #include "common/pg_lzcompress.h"
@@ -20,6 +19,7 @@
 #include "utils/pg_lzcompress.h"
 #endif
 
+#include "cstore.h"
 
 
 

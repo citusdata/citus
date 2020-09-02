@@ -13,11 +13,13 @@
 
 #include "postgres.h"
 
+#include <sys/stat.h>
+#include <unistd.h>
+
 #include "miscadmin.h"
+#include "utils/rel.h"
 
 #include "cstore.h"
-
-#include <sys/stat.h>
 
 static void CreateDirectory(StringInfo directoryName);
 static bool DirectoryExists(StringInfo directoryName);
@@ -168,3 +170,35 @@ CreateCStoreDatabaseDirectory(Oid databaseOid)
 	}
 }
 
+
+/*
+ * DeleteCStoreTableFiles deletes the data and footer files for a cstore table
+ * whose data filename is given.
+ */
+void
+DeleteCStoreTableFiles(char *filename)
+{
+	int dataFileRemoved = 0;
+	int footerFileRemoved = 0;
+
+	StringInfo tableFooterFilename = makeStringInfo();
+	appendStringInfo(tableFooterFilename, "%s%s", filename, CSTORE_FOOTER_FILE_SUFFIX);
+
+	/* delete the footer file */
+	footerFileRemoved = unlink(tableFooterFilename->data);
+	if (footerFileRemoved != 0)
+	{
+		ereport(WARNING, (errcode_for_file_access(),
+						  errmsg("could not delete file \"%s\": %m",
+								 tableFooterFilename->data)));
+	}
+
+	/* delete the data file */
+	dataFileRemoved = unlink(filename);
+	if (dataFileRemoved != 0)
+	{
+		ereport(WARNING, (errcode_for_file_access(),
+						  errmsg("could not delete file \"%s\": %m",
+								 filename)));
+	}
+}

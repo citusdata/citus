@@ -14,49 +14,9 @@
 #ifndef CSTORE_FDW_H
 #define CSTORE_FDW_H
 
-#include "access/tupdesc.h"
+#include "postgres.h"
+
 #include "fmgr.h"
-#include "catalog/pg_am.h"
-#include "catalog/pg_foreign_server.h"
-#include "catalog/pg_foreign_table.h"
-#include "lib/stringinfo.h"
-#include "utils/rel.h"
-
-#include "cstore.h"
-
-/* table containing information about how to partition distributed tables */
-#define CITUS_EXTENSION_NAME "citus"
-#define CITUS_PARTITION_TABLE_NAME "pg_dist_partition"
-
-/* human-readable names for addressing columns of the pg_dist_partition table */
-#define ATTR_NUM_PARTITION_RELATION_ID 1
-#define ATTR_NUM_PARTITION_TYPE 2
-#define ATTR_NUM_PARTITION_KEY 3
-
-/*
- * CStoreValidOption keeps an option name and a context. When an option is passed
- * into cstore_fdw objects (server and foreign table), we compare this option's
- * name and context against those of valid options.
- */
-typedef struct CStoreValidOption
-{
-	const char *optionName;
-	Oid optionContextId;
-
-} CStoreValidOption;
-
-#define COMPRESSION_STRING_DELIMITED_LIST "none, pglz"
-
-/* Array of options that are valid for cstore_fdw */
-static const uint32 ValidOptionCount = 4;
-static const CStoreValidOption ValidOptionArray[] =
-{
-	/* foreign table options */
-	{ OPTION_NAME_FILENAME, ForeignTableRelationId },
-	{ OPTION_NAME_COMPRESSION_TYPE, ForeignTableRelationId },
-	{ OPTION_NAME_STRIPE_ROW_COUNT, ForeignTableRelationId },
-	{ OPTION_NAME_BLOCK_ROW_COUNT, ForeignTableRelationId }
-};
 
 void cstore_fdw_init(void);
 void cstore_fdw_finish(void);

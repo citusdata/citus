@@ -15,25 +15,17 @@
 
 
 #include "postgres.h"
-#include "cstore_fdw.h"
-#include "cstore_metadata_serialization.h"
-#include "cstore_version_compat.h"
 
 #include <sys/stat.h>
+
 #include "access/nbtree.h"
-#include "catalog/pg_collation.h"
-#include "commands/defrem.h"
-#if PG_VERSION_NUM >= 120000
-#include "optimizer/optimizer.h"
-#else
-#include "optimizer/var.h"
-#endif
-#include "port.h"
+#include "catalog/pg_am.h"
 #include "storage/fd.h"
 #include "utils/memutils.h"
-#include "utils/lsyscache.h"
-#include "utils/rel.h"
 
+#include "cstore.h"
+#include "cstore_metadata_serialization.h"
+#include "cstore_version_compat.h"
 
 static void CStoreWriteFooter(StringInfo footerFileName, TableFooter *tableFooter);
 static StripeBuffers * CreateEmptyStripeBuffers(uint32 stripeMaxRowCount,

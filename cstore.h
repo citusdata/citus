@@ -14,13 +14,9 @@
 #ifndef CSTORE_H
 #define CSTORE_H
 
-#include "access/tupdesc.h"
 #include "fmgr.h"
-#include "catalog/pg_am.h"
-#include "catalog/pg_foreign_server.h"
-#include "catalog/pg_foreign_table.h"
 #include "lib/stringinfo.h"
-#include "utils/rel.h"
+#include "utils/relcache.h"
 
 /* Defines for valid option names */
 #define OPTION_NAME_FILENAME "filename"
@@ -271,6 +267,7 @@ extern void InitializeCStoreTableFile(Oid relationId, Relation relation,
 									  CStoreOptions *cstoreOptions);
 extern void CreateCStoreDatabaseDirectory(Oid databaseOid);
 extern void RemoveCStoreDatabaseDirectory(Oid databaseOid);
+extern void DeleteCStoreTableFiles(char *filename);
 
 /* Function declarations for writing to a cstore file */
 extern TableWriteState * CStoreBeginWrite(const char *filename,

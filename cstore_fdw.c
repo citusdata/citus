@@ -15,15 +15,11 @@
  */
 
 #include "postgres.h"
-#include "cstore_fdw.h"
-#include "cstore_version_compat.h"
 
 #include <sys/stat.h>
-#include <unistd.h>
-#include <limits.h>
-#include "access/htup_details.h"
+
+#include "access/heapam.h"
 #include "access/reloptions.h"
-#include "access/sysattr.h"
 #include "access/tuptoaster.h"
 #include "catalog/namespace.h"
 #include "catalog/pg_foreign_table.h"
@@ -39,35 +35,71 @@
 #include "foreign/foreign.h"
 #include "miscadmin.h"
 #include "nodes/makefuncs.h"
+#if PG_VERSION_NUM < 120000
 #include "optimizer/cost.h"
+#endif
 #include "optimizer/pathnode.h"
 #include "optimizer/planmain.h"
 #include "optimizer/restrictinfo.h"
 #if PG_VERSION_NUM >= 120000
 #include "access/heapam.h"
-#include "access/tableam.h"
-#include "executor/tuptable.h"
 #include "optimizer/optimizer.h"
 #else
 #include "optimizer/var.h"
 #endif
 #include "parser/parser.h"
-#include "parser/parsetree.h"
 #include "parser/parse_coerce.h"
 #include "parser/parse_type.h"
-#include "storage/fd.h"
 #include "tcop/utility.h"
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
-#include "utils/memutils.h"
 #include "utils/lsyscache.h"
-#include "utils/rel.h"
 #if PG_VERSION_NUM >= 120000
 #include "utils/snapmgr.h"
 #else
 #include "utils/tqual.h"
 #endif
+#if PG_VERSION_NUM < 120000
+#include "utils/rel.h"
+#endif
 
+#include "cstore.h"
+#include "cstore_fdw.h"
+#include "cstore_version_compat.h"
+
+/* table containing information about how to partition distributed tables */
+#define CITUS_EXTENSION_NAME "citus"
+#define CITUS_PARTITION_TABLE_NAME "pg_dist_partition"
+
+/* human-readable names for addressing columns of the pg_dist_partition table */
+#define ATTR_NUM_PARTITION_RELATION_ID 1
+#define ATTR_NUM_PARTITION_TYPE 2
+#define ATTR_NUM_PARTITION_KEY 3
+
+/*
+ * CStoreValidOption keeps an option name and a context. When an option is passed
+ * into cstore_fdw objects (server and foreign table), we compare this option's
+ * name and context against those of valid options.
+ */
+typedef struct CStoreValidOption
+{
+	const char *optionName;
+	Oid optionContextId;
+
+} CStoreValidOption;
+
+#define COMPRESSION_STRING_DELIMITED_LIST "none, pglz"
+
+/* Array of options that are valid for cstore_fdw */
+static const uint32 ValidOptionCount = 4;
+static const CStoreValidOption ValidOptionArray[] =
+{
+	/* foreign table options */
+	{ OPTION_NAME_FILENAME, ForeignTableRelationId },
+	{ OPTION_NAME_COMPRESSION_TYPE, ForeignTableRelationId },
+	{ OPTION_NAME_STRIPE_ROW_COUNT, ForeignTableRelationId },
+	{ OPTION_NAME_BLOCK_ROW_COUNT, ForeignTableRelationId }
+};
 
 /* local functions forward declarations */
 #if PG_VERSION_NUM >= 100000
@@ -94,7 +126,6 @@ static List * DroppedCStoreFilenameList(DropStmt *dropStatement);
 static List * FindCStoreTables(List *tableList);
 static List * OpenRelationsForTruncate(List *cstoreTableList);
 static void TruncateCStoreTables(List *cstoreRelationList);
-static void DeleteCStoreTableFiles(char *filename);
 static bool CStoreTable(Oid relationId);
 static bool CStoreServer(ForeignServer *server);
 static bool DistributedTable(Oid relationId);
@@ -857,41 +888,6 @@ TruncateCStoreTables(List *cstoreRelationList)
 		InitializeCStoreTableFile(relationId, relation, CStoreGetOptions(relationId));
 	}
 }
-
-
-/*
- * DeleteCStoreTableFiles deletes the data and footer files for a cstore table
- * whose data filename is given.
- */
-static void
-DeleteCStoreTableFiles(char *filename)
-{
-	int dataFileRemoved = 0;
-	int footerFileRemoved = 0;
-
-	StringInfo tableFooterFilename = makeStringInfo();
-	appendStringInfo(tableFooterFilename, "%s%s", filename, CSTORE_FOOTER_FILE_SUFFIX);
-
-	/* delete the footer file */
-	footerFileRemoved = unlink(tableFooterFilename->data);
-	if (footerFileRemoved != 0)
-	{
-		ereport(WARNING, (errcode_for_file_access(),
-						  errmsg("could not delete file \"%s\": %m",
-								 tableFooterFilename->data)));
-	}
-
-	/* delete the data file */
-	dataFileRemoved = unlink(filename);
-	if (dataFileRemoved != 0)
-	{
-		ereport(WARNING, (errcode_for_file_access(),
-						  errmsg("could not delete file \"%s\": %m",
-								 filename)));
-	}
-}
-
-
 
 /*
  * CStoreTable checks if the given table name belongs to a foreign columnar store

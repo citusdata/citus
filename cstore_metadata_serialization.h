@@ -14,12 +14,6 @@
 #ifndef CSTORE_SERIALIZATION_H
 #define CSTORE_SERIALIZATION_H
 
-#include "catalog/pg_attribute.h"
-#include "nodes/pg_list.h"
-#include "lib/stringinfo.h"
-#include "cstore_fdw.h"
-
-
 /* Function declarations for metadata serialization */
 extern StringInfo SerializePostScript(uint64 tableFooterLength);
 extern StringInfo SerializeTableFooter(TableFooter *tableFooter);
