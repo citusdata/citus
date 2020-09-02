@@ -194,7 +194,7 @@ DistributedTablesSize(List *distTableOids)
 		 * Ignore hash partitioned tables with size greater than 1, since
 		 * citus_table_size() doesn't work on them.
 		 */
-		if (PartitionMethod(relationId) == DISTRIBUTE_BY_HASH &&
+		if (IsHashDistributedTable(relationId) &&
 			!SingleReplicatedTable(relationId))
 		{
 			table_close(relation, AccessShareLock);

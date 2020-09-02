@@ -2299,22 +2299,21 @@ ErrorIfUnsupportedShardDistribution(Query *query)
 	foreach(relationIdCell, relationIdList)
 	{
 		Oid relationId = lfirst_oid(relationIdCell);
-		char partitionMethod = PartitionMethod(relationId);
-		if (partitionMethod == DISTRIBUTE_BY_RANGE)
+		if (IsRangeDistributedTable(relationId))
 		{
 			rangeDistributedRelationCount++;
 			nonReferenceRelations = lappend_oid(nonReferenceRelations,
 												relationId);
 		}
-		else if (partitionMethod == DISTRIBUTE_BY_HASH)
+		else if (IsHashDistributedTable(relationId))
 		{
 			hashDistributedRelationCount++;
 			nonReferenceRelations = lappend_oid(nonReferenceRelations,
 												relationId);
 		}
-		else if (partitionMethod == DISTRIBUTE_BY_NONE)
+		else if (IsNonDistributedTable(relationId))
 		{
-			/* do not need to handle reference tables */
+			/* do not need to handle non-distributed tables */
 			continue;
 		}
 		else
@@ -3562,7 +3561,7 @@ NodeIsRangeTblRefReferenceTable(Node *node, List *rangeTableList)
 	{
 		return false;
 	}
-	return PartitionMethod(rangeTableEntry->relid) == DISTRIBUTE_BY_NONE;
+	return IsReferenceTable(rangeTableEntry->relid);
 }
 
 
@@ -3734,15 +3733,12 @@ PartitionedOnColumn(Var *column, List *rangeTableList, List *dependentJobList)
 	if (rangeTableType == CITUS_RTE_RELATION)
 	{
 		Oid relationId = rangeTableEntry->relid;
-		char partitionMethod = PartitionMethod(relationId);
 		Var *partitionColumn = PartitionColumn(relationId, rangeTableId);
 
-		/* reference tables do not have partition columns */
-		if (partitionMethod == DISTRIBUTE_BY_NONE)
+		/* non-distributed tables do not have partition columns */
+		if (IsNonDistributedTable(relationId))
 		{
-			partitionedOnColumn = false;
-
-			return partitionedOnColumn;
+			return false;
 		}
 
 		if (partitionColumn->varattno == column->varattno)
@@ -3927,7 +3923,7 @@ ShardIntervalsOverlap(ShardInterval *firstInterval, ShardInterval *secondInterva
 	CitusTableCacheEntry *intervalRelation =
 		GetCitusTableCacheEntry(firstInterval->relationId);
 
-	Assert(intervalRelation->partitionMethod != DISTRIBUTE_BY_NONE);
+	Assert(IsDistributedTableCacheEntry(intervalRelation));
 
 	FmgrInfo *comparisonFunction = intervalRelation->shardIntervalCompareFunction;
 	Oid collation = intervalRelation->partitionColumn->varcollid;

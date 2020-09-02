@@ -605,8 +605,10 @@ ReferenceRelationCount(RelationRestrictionContext *restrictionContext)
 	{
 		RelationRestriction *relationRestriction =
 			(RelationRestriction *) lfirst(relationRestrictionCell);
+		CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(
+			relationRestriction->relationId);
 
-		if (PartitionMethod(relationRestriction->relationId) == DISTRIBUTE_BY_NONE)
+		if (IsReferenceTableCacheEntry(cacheEntry))
 		{
 			referenceRelationCount++;
 		}
@@ -657,8 +659,8 @@ EquivalenceListContainsRelationsEquality(List *attributeEquivalenceList,
 			(RelationRestriction *) lfirst(relationRestrictionCell);
 		int rteIdentity = GetRTEIdentity(relationRestriction->rte);
 
-		/* we shouldn't check for the equality of reference tables */
-		if (PartitionMethod(relationRestriction->relationId) == DISTRIBUTE_BY_NONE)
+		/* we shouldn't check for the equality of non-distributed tables */
+		if (IsNonDistributedTable(relationRestriction->relationId))
 		{
 			continue;
 		}
@@ -1721,7 +1723,7 @@ AllRelationsInRestrictionContextColocated(RelationRestrictionContext *restrictio
 	{
 		Oid relationId = relationRestriction->relationId;
 
-		if (PartitionMethod(relationId) == DISTRIBUTE_BY_NONE)
+		if (IsNonDistributedTable(relationId))
 		{
 			continue;
 		}

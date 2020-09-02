@@ -306,8 +306,7 @@ ExtractReferenceTableRTEList(List *rteList)
 		}
 
 		Oid relationOid = rte->relid;
-		if (IsCitusTable(relationOid) && PartitionMethod(relationOid) ==
-			DISTRIBUTE_BY_NONE)
+		if (IsReferenceTable(relationOid))
 		{
 			referenceTableRTEList = lappend(referenceTableRTEList, rte);
 		}

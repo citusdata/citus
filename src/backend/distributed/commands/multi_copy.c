@@ -363,17 +363,18 @@ CitusCopyFrom(CopyStmt *copyStatement, QueryCompletionCompat *completionTag)
 	}
 
 	Oid relationId = RangeVarGetRelid(copyStatement->relation, NoLock, false);
-	char partitionMethod = PartitionMethod(relationId);
+	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
 
 	/* disallow modifications to a partition table which have rep. factor > 1 */
 	EnsurePartitionTableNotReplicated(relationId);
 
-	if (partitionMethod == DISTRIBUTE_BY_HASH || partitionMethod == DISTRIBUTE_BY_RANGE ||
-		partitionMethod == DISTRIBUTE_BY_NONE)
+	if (IsHashDistributedTableCacheEntry(cacheEntry) ||
+		IsRangeDistributedTableCacheEntry(cacheEntry) ||
+		IsNonDistributedTableCacheEntry(cacheEntry))
 	{
 		CopyToExistingShards(copyStatement, completionTag);
 	}
-	else if (partitionMethod == DISTRIBUTE_BY_APPEND)
+	else if (IsAppendDistributedTableCacheEntry(cacheEntry))
 	{
 		CopyToNewShards(copyStatement, completionTag, relationId);
 	}
@@ -409,7 +410,6 @@ CopyToExistingShards(CopyStmt *copyStatement, QueryCompletionCompat *completionT
 	MemoryContext executorTupleContext = NULL;
 	ExprContext *executorExpressionContext = NULL;
 
-	char partitionMethod = 0;
 	bool stopOnFailure = false;
 
 	CopyState copyState = NULL;
@@ -460,8 +460,7 @@ CopyToExistingShards(CopyStmt *copyStatement, QueryCompletionCompat *completionT
 	executorTupleContext = GetPerTupleMemoryContext(executorState);
 	executorExpressionContext = GetPerTupleExprContext(executorState);
 
-	partitionMethod = PartitionMethod(tableId);
-	if (partitionMethod == DISTRIBUTE_BY_NONE)
+	if (IsReferenceTable(tableId))
 	{
 		stopOnFailure = true;
 	}

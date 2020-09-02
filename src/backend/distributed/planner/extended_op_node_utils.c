@@ -129,9 +129,8 @@ GroupedByPartitionColumn(MultiNode *node, MultiExtendedOp *opNode)
 			return false;
 		}
 
-		char partitionMethod = PartitionMethod(relationId);
-		if (partitionMethod != DISTRIBUTE_BY_RANGE &&
-			partitionMethod != DISTRIBUTE_BY_HASH)
+		if (!IsRangeDistributedTable(relationId) &&
+			!IsHashDistributedTable(relationId))
 		{
 			/* only range- and hash-distributed tables are strictly partitioned  */
 			return false;
@@ -298,7 +297,7 @@ PartitionColumnInTableList(Var *column, List *tableNodeList)
 		{
 			Assert(partitionColumn->varno == tableNode->rangeTableId);
 
-			if (PartitionMethod(tableNode->relationId) != DISTRIBUTE_BY_APPEND)
+			if (!IsAppendDistributedTable(tableNode->relationId))
 			{
 				return true;
 			}

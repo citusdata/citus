@@ -493,8 +493,7 @@ ExecutePlanIntoColocatedIntermediateResults(Oid targetRelationId,
 	ParamListInfo paramListInfo = executorState->es_param_list_info;
 	bool stopOnFailure = false;
 
-	char partitionMethod = PartitionMethod(targetRelationId);
-	if (partitionMethod == DISTRIBUTE_BY_NONE)
+	if (IsReferenceTable(targetRelationId))
 	{
 		stopOnFailure = true;
 	}
@@ -535,8 +534,7 @@ ExecutePlanIntoRelation(Oid targetRelationId, List *insertTargetList,
 	ParamListInfo paramListInfo = executorState->es_param_list_info;
 	bool stopOnFailure = false;
 
-	char partitionMethod = PartitionMethod(targetRelationId);
-	if (partitionMethod == DISTRIBUTE_BY_NONE)
+	if (IsReferenceTable(targetRelationId))
 	{
 		stopOnFailure = true;
 	}

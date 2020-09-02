@@ -116,6 +116,13 @@ typedef struct DistObjectCacheEntry
 	int colocationId;
 } DistObjectCacheEntry;
 
+extern bool IsNonDistributedTable(Oid relationId);
+extern bool IsReferenceTable(Oid relationId);
+extern bool IsDistributedTable(Oid relationId);
+extern bool IsAppendDistributedTable(Oid relationId);
+extern bool IsHashDistributedTable(Oid relationId);
+extern bool IsRangeDistributedTable(Oid relationId);
+extern bool IsNonDistributedTable(Oid relationId);
 extern bool IsReferenceTableCacheEntry(CitusTableCacheEntry *tableEntry);
 extern bool IsDistributedTableCacheEntry(CitusTableCacheEntry *tableEntry);
 extern bool IsHashDistributedTableCacheEntry(CitusTableCacheEntry *tableEntry);

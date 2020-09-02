@@ -78,8 +78,7 @@ RebuildQueryStrings(Job *workerJob)
 			Query *copiedSubquery = copiedSubqueryRte->subquery;
 
 			/* there are no restrictions to add for reference tables */
-			char partitionMethod = PartitionMethod(shardInterval->relationId);
-			if (partitionMethod != DISTRIBUTE_BY_NONE)
+			if (IsDistributedTable(shardInterval->relationId))
 			{
 				AddShardIntervalRestrictionToSelect(copiedSubquery, shardInterval);
 			}

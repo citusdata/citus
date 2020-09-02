@@ -870,8 +870,7 @@ get_shard_id_for_distribution_column(PG_FUNCTION_ARGS)
 						errmsg("relation is not distributed")));
 	}
 
-	char distributionMethod = PartitionMethod(relationId);
-	if (distributionMethod == DISTRIBUTE_BY_NONE)
+	if (IsNonDistributedTable(relationId))
 	{
 		List *shardIntervalList = LoadShardIntervalList(relationId);
 		if (shardIntervalList == NIL)
@@ -881,8 +880,8 @@ get_shard_id_for_distribution_column(PG_FUNCTION_ARGS)
 
 		shardInterval = (ShardInterval *) linitial(shardIntervalList);
 	}
-	else if (distributionMethod == DISTRIBUTE_BY_HASH ||
-			 distributionMethod == DISTRIBUTE_BY_RANGE)
+	else if (IsHashDistributedTable(relationId) ||
+			 IsRangeDistributedTable(relationId))
 	{
 		CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
 

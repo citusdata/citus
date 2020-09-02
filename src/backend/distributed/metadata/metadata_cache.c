@@ -297,6 +297,102 @@ EnsureModificationsCanRun(void)
 
 
 /*
+ * IsNonDistributedTable returns whether the given relation ID identifies a
+ * non-distributed table such as reference table.
+ */
+bool
+IsNonDistributedTable(Oid relationId)
+{
+	if (!IsCitusTable(relationId))
+	{
+		return false;
+	}
+	CitusTableCacheEntry *tableEntry = GetCitusTableCacheEntry(relationId);
+	return IsNonDistributedTableCacheEntry(tableEntry);
+}
+
+
+/*
+ * IsReferenceTable returns whether the given relation ID identifies a reference
+ * table.
+ */
+bool
+IsReferenceTable(Oid relationId)
+{
+	if (!IsCitusTable(relationId))
+	{
+		return false;
+	}
+	CitusTableCacheEntry *tableEntry = GetCitusTableCacheEntry(relationId);
+	return IsReferenceTableCacheEntry(tableEntry);
+}
+
+
+/*
+ * IsDistributedTable returns whether the given relation ID identifies a distributed
+ * table. A distributed table can be of hash, range or append type.
+ */
+bool
+IsDistributedTable(Oid relationId)
+{
+	if (!IsCitusTable(relationId))
+	{
+		return false;
+	}
+	CitusTableCacheEntry *tableEntry = GetCitusTableCacheEntry(relationId);
+	return IsDistributedTableCacheEntry(tableEntry);
+}
+
+
+/*
+ * IsHashDistributedTable returns true if the given relation is
+ * a hash distributed table.
+ */
+bool
+IsHashDistributedTable(Oid relationId)
+{
+	if (!IsCitusTable(relationId))
+	{
+		return false;
+	}
+	CitusTableCacheEntry *sourceTableEntry = GetCitusTableCacheEntry(relationId);
+	return IsHashDistributedTableCacheEntry(sourceTableEntry);
+}
+
+
+/*
+ * IsRangeDistributedTable returns true if the given relation is
+ * a range distributed table.
+ */
+bool
+IsRangeDistributedTable(Oid relationId)
+{
+	if (!IsCitusTable(relationId))
+	{
+		return false;
+	}
+	CitusTableCacheEntry *sourceTableEntry = GetCitusTableCacheEntry(relationId);
+	return IsRangeDistributedTableCacheEntry(sourceTableEntry);
+}
+
+
+/*
+ * IsAppendDistributedTable returns true if the given relation is
+ * an append distributed table.
+ */
+bool
+IsAppendDistributedTable(Oid relationId)
+{
+	if (!IsCitusTable(relationId))
+	{
+		return false;
+	}
+	CitusTableCacheEntry *sourceTableEntry = GetCitusTableCacheEntry(relationId);
+	return IsAppendDistributedTableCacheEntry(sourceTableEntry);
+}
+
+
+/*
  * IsReferenceTableCacheEntry returns true if the given citus
  * table cache entry belongs to a reference table.
  */
@@ -505,9 +601,7 @@ ReferenceTableShardId(uint64 shardId)
 {
 	ShardIdCacheEntry *shardIdEntry = LookupShardIdCacheEntry(shardId);
 	CitusTableCacheEntry *tableEntry = shardIdEntry->tableEntry;
-	char partitionMethod = tableEntry->partitionMethod;
-
-	return partitionMethod == DISTRIBUTE_BY_NONE;
+	return IsReferenceTableCacheEntry(tableEntry);
 }
 
 

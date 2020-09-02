@@ -172,8 +172,8 @@ PartitionTasklistResults(const char *resultIdPrefix, List *selectTaskList,
 						 CitusTableCacheEntry *targetRelation,
 						 bool binaryFormat)
 {
-	if (targetRelation->partitionMethod != DISTRIBUTE_BY_HASH &&
-		targetRelation->partitionMethod != DISTRIBUTE_BY_RANGE)
+	if (!IsHashDistributedTableCacheEntry(targetRelation) &&
+		!IsRangeDistributedTableCacheEntry(targetRelation))
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						errmsg("repartitioning results of a tasklist is only supported "

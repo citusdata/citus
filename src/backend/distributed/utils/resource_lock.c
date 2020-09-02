@@ -493,7 +493,7 @@ GetSortedReferenceShardIntervals(List *relationList)
 	Oid relationId = InvalidOid;
 	foreach_oid(relationId, relationList)
 	{
-		if (PartitionMethod(relationId) != DISTRIBUTE_BY_NONE)
+		if (!IsReferenceTable(relationId))
 		{
 			continue;
 		}

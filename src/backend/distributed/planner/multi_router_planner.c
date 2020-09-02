@@ -299,15 +299,13 @@ List *
 ShardIntervalOpExpressions(ShardInterval *shardInterval, Index rteIndex)
 {
 	Oid relationId = shardInterval->relationId;
-	char partitionMethod = PartitionMethod(shardInterval->relationId);
 	Var *partitionColumn = NULL;
 
-	if (partitionMethod == DISTRIBUTE_BY_HASH)
+	if (IsHashDistributedTable(relationId))
 	{
 		partitionColumn = MakeInt4Column();
 	}
-	else if (partitionMethod == DISTRIBUTE_BY_RANGE || partitionMethod ==
-			 DISTRIBUTE_BY_APPEND)
+	else if (IsRangeDistributedTable(relationId) || IsAppendDistributedTable(relationId))
 	{
 		Assert(rteIndex > 0);
 		partitionColumn = PartitionColumn(relationId, rteIndex);
@@ -1134,7 +1132,6 @@ MultiShardModifyQuerySupported(Query *originalQuery,
 	DeferredErrorMessage *errorMessage = NULL;
 	RangeTblEntry *resultRangeTable = ExtractResultRelationRTE(originalQuery);
 	Oid resultRelationOid = resultRangeTable->relid;
-	char resultPartitionMethod = PartitionMethod(resultRelationOid);
 
 	if (HasDangerousJoinUsing(originalQuery->rtable, (Node *) originalQuery->jointree))
 	{
@@ -1151,7 +1148,7 @@ MultiShardModifyQuerySupported(Query *originalQuery,
 									 "tables must not be VOLATILE",
 									 NULL, NULL);
 	}
-	else if (resultPartitionMethod == DISTRIBUTE_BY_NONE)
+	else if (IsReferenceTable(resultRelationOid))
 	{
 		errorMessage = DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 									 "only reference tables may be queried when targeting "
@@ -2423,9 +2420,9 @@ TargetShardIntervalForFastPathQuery(Query *query, bool *isMultiShardQuery,
 {
 	Oid relationId = ExtractFirstCitusTableId(query);
 
-	if (PartitionMethod(relationId) == DISTRIBUTE_BY_NONE)
+	if (IsNonDistributedTable(relationId))
 	{
-		/* we don't need to do shard pruning for reference tables */
+		/* we don't need to do shard pruning for non-distributed tables */
 		return list_make1(LoadShardIntervalList(relationId));
 	}
 
@@ -2701,7 +2698,6 @@ BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError)
 {
 	Oid distributedTableId = ExtractFirstCitusTableId(query);
 	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(distributedTableId);
-	char partitionMethod = cacheEntry->partitionMethod;
 	List *modifyRouteList = NIL;
 	ListCell *insertValuesCell = NULL;
 
@@ -2807,8 +2803,8 @@ BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError)
 												   missingOk);
 		}
 
-		if (partitionMethod == DISTRIBUTE_BY_HASH || partitionMethod ==
-			DISTRIBUTE_BY_RANGE)
+		if (IsHashDistributedTableCacheEntry(cacheEntry) ||
+			IsRangeDistributedTableCacheEntry(cacheEntry))
 		{
 			Datum partitionValue = partitionValueConst->constvalue;
 
@@ -3202,8 +3198,7 @@ ExtractInsertPartitionKeyValue(Query *query)
 	uint32 rangeTableId = 1;
 	Const *singlePartitionValueConst = NULL;
 
-	char partitionMethod = PartitionMethod(distributedTableId);
-	if (partitionMethod == DISTRIBUTE_BY_NONE)
+	if (IsNonDistributedTable(distributedTableId))
 	{
 		return NULL;
 	}
@@ -3335,9 +3330,7 @@ MultiRouterPlannableQuery(Query *query)
 				continue;
 			}
 
-			char partitionMethod = PartitionMethod(distributedTableId);
-			if (!(partitionMethod == DISTRIBUTE_BY_HASH || partitionMethod ==
-				  DISTRIBUTE_BY_NONE || partitionMethod == DISTRIBUTE_BY_RANGE))
+			if (IsAppendDistributedTable(distributedTableId))
 			{
 				return DeferredError(
 					ERRCODE_FEATURE_NOT_SUPPORTED,
@@ -3345,7 +3338,7 @@ MultiRouterPlannableQuery(Query *query)
 					NULL, NULL);
 			}
 
-			if (partitionMethod != DISTRIBUTE_BY_NONE)
+			if (IsDistributedTable(distributedTableId))
 			{
 				hasDistributedTable = true;
 			}
@@ -3360,7 +3353,7 @@ MultiRouterPlannableQuery(Query *query)
 				uint32 tableReplicationFactor = TableShardReplicationFactor(
 					distributedTableId);
 
-				if (tableReplicationFactor > 1 && partitionMethod != DISTRIBUTE_BY_NONE)
+				if (tableReplicationFactor > 1 && IsDistributedTable(distributedTableId))
 				{
 					return DeferredError(
 						ERRCODE_FEATURE_NOT_SUPPORTED,

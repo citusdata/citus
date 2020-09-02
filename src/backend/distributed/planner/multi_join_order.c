@@ -823,12 +823,11 @@ ReferenceJoin(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 		return NULL;
 	}
 
-	char candidatePartitionMethod = PartitionMethod(candidateTable->relationId);
-	char leftPartitionMethod = PartitionMethod(currentJoinNode->tableEntry->relationId);
-
 	if (!IsSupportedReferenceJoin(joinType,
-								  leftPartitionMethod == DISTRIBUTE_BY_NONE,
-								  candidatePartitionMethod == DISTRIBUTE_BY_NONE))
+								  IsReferenceTable(
+									  currentJoinNode->tableEntry->relationId),
+								  IsReferenceTable(candidateTable->relationId)
+								  ))
 	{
 		return NULL;
 	}
@@ -874,12 +873,10 @@ static JoinOrderNode *
 CartesianProductReferenceJoin(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 							  List *applicableJoinClauses, JoinType joinType)
 {
-	char candidatePartitionMethod = PartitionMethod(candidateTable->relationId);
-	char leftPartitionMethod = PartitionMethod(currentJoinNode->tableEntry->relationId);
-
 	if (!IsSupportedReferenceJoin(joinType,
-								  leftPartitionMethod == DISTRIBUTE_BY_NONE,
-								  candidatePartitionMethod == DISTRIBUTE_BY_NONE))
+								  IsReferenceTable(
+									  currentJoinNode->tableEntry->relationId),
+								  IsReferenceTable(candidateTable->relationId)))
 	{
 		return NULL;
 	}

@@ -385,7 +385,7 @@ AcquireExecutorShardLocksForRelationRowLockList(List *relationRowLockList)
 		LockClauseStrength rowLockStrength = relationRowLock->rowLockStrength;
 		Oid relationId = relationRowLock->relationId;
 
-		if (PartitionMethod(relationId) == DISTRIBUTE_BY_NONE)
+		if (IsReferenceTable(relationId))
 		{
 			List *shardIntervalList = LoadShardIntervalList(relationId);
 

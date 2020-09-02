@@ -800,19 +800,18 @@ ErrorIfUnsupportedIndexStmt(IndexStmt *createIndexStatement)
 		/* caller uses ShareLock for non-concurrent indexes, use the same lock here */
 		LOCKMODE lockMode = ShareLock;
 		Oid relationId = RangeVarGetRelid(relation, lockMode, missingOk);
-		char partitionMethod = PartitionMethod(relationId);
 		bool indexContainsPartitionColumn = false;
 
 		/*
-		 * Reference tables do not have partition key, and unique constraints
-		 * are allowed for them. Thus, we added a short-circuit for reference tables.
+		 * Non-distributed tables do not have partition key, and unique constraints
+		 * are allowed for them. Thus, we added a short-circuit for non-distributed tables.
 		 */
-		if (partitionMethod == DISTRIBUTE_BY_NONE)
+		if (IsNonDistributedTable(relationId))
 		{
 			return;
 		}
 
-		if (partitionMethod == DISTRIBUTE_BY_APPEND)
+		if (IsAppendDistributedTable(relationId))
 		{
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 							errmsg("creating unique indexes on append-partitioned tables "

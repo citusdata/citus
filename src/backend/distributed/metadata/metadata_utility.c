@@ -368,7 +368,7 @@ ErrorIfNotSuitableToGetSize(Oid relationId)
 							   "distributed", escapedQueryString)));
 	}
 
-	if (PartitionMethod(relationId) == DISTRIBUTE_BY_HASH &&
+	if (IsHashDistributedTable(relationId) &&
 		!SingleReplicatedTable(relationId))
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
@@ -1407,22 +1407,6 @@ EnsureHashDistributedTable(Oid relationId)
 						errmsg("relation %s should be a "
 							   "hash distributed table", get_rel_name(relationId))));
 	}
-}
-
-
-/*
- * IsHashDistributedTable returns true if the given relation is
- * a distributed table.
- */
-bool
-IsHashDistributedTable(Oid relationId)
-{
-	if (!IsCitusTable(relationId))
-	{
-		return false;
-	}
-	CitusTableCacheEntry *sourceTableEntry = GetCitusTableCacheEntry(relationId);
-	return IsHashDistributedTableCacheEntry(sourceTableEntry);
 }
 
 

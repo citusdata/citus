@@ -163,8 +163,7 @@ master_apply_delete_command(PG_FUNCTION_ARGS)
 	Node *whereClause = (Node *) deleteQuery->jointree->quals;
 	Node *deleteCriteria = eval_const_expressions(NULL, whereClause);
 
-	char partitionMethod = PartitionMethod(relationId);
-	if (partitionMethod == DISTRIBUTE_BY_HASH)
+	if (IsHashDistributedTable(relationId))
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						errmsg("cannot delete from hash distributed table with this "
@@ -173,7 +172,7 @@ master_apply_delete_command(PG_FUNCTION_ARGS)
 								  "are not supported with master_apply_delete_command."),
 						errhint("Use the DELETE command instead.")));
 	}
-	else if (partitionMethod == DISTRIBUTE_BY_NONE)
+	else if (IsReferenceTable(relationId))
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						errmsg("cannot delete from reference table"),

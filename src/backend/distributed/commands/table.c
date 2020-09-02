@@ -1230,8 +1230,7 @@ SetupExecutionModeForAlterTable(Oid relationId, AlterTableCmd *command)
 			{
 				Oid rightRelationId = RangeVarGetRelid(constraint->pktable, NoLock,
 													   false);
-				if (IsCitusTable(rightRelationId) &&
-					PartitionMethod(rightRelationId) == DISTRIBUTE_BY_NONE)
+				if (IsReferenceTable(rightRelationId))
 				{
 					executeSequentially = true;
 				}
@@ -1266,8 +1265,7 @@ SetupExecutionModeForAlterTable(Oid relationId, AlterTableCmd *command)
 		{
 			Oid rightRelationId = RangeVarGetRelid(constraint->pktable, NoLock,
 												   false);
-			if (IsCitusTable(rightRelationId) &&
-				PartitionMethod(rightRelationId) == DISTRIBUTE_BY_NONE)
+			if (IsReferenceTable(rightRelationId))
 			{
 				executeSequentially = true;
 			}
@@ -1288,8 +1286,7 @@ SetupExecutionModeForAlterTable(Oid relationId, AlterTableCmd *command)
 	 * the distributed tables, thus contradicting our purpose of using
 	 * sequential mode.
 	 */
-	if (executeSequentially && IsCitusTable(relationId) &&
-		PartitionMethod(relationId) != DISTRIBUTE_BY_NONE &&
+	if (executeSequentially && !IsReferenceTable(relationId) &&
 		ParallelQueryExecutedInTransaction())
 	{
 		char *relationName = get_rel_name(relationId);
@@ -1331,7 +1328,6 @@ InterShardDDLTaskList(Oid leftRelationId, Oid rightRelationId,
 	char *leftSchemaName = get_namespace_name(leftSchemaId);
 	char *escapedLeftSchemaName = quote_literal_cstr(leftSchemaName);
 
-	char rightPartitionMethod = PartitionMethod(rightRelationId);
 	List *rightShardList = LoadShardIntervalList(rightRelationId);
 	ListCell *rightShardCell = NULL;
 	Oid rightSchemaId = get_rel_namespace(rightRelationId);
@@ -1348,7 +1344,7 @@ InterShardDDLTaskList(Oid leftRelationId, Oid rightRelationId,
 	 * since we only have one placement per worker. This hack is first implemented
 	 * for foreign constraint support from distributed tables to reference tables.
 	 */
-	if (rightPartitionMethod == DISTRIBUTE_BY_NONE)
+	if (IsReferenceTable(rightRelationId))
 	{
 		int rightShardCount = list_length(rightShardList);
 		int leftShardCount = list_length(leftShardList);

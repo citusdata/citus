@@ -628,7 +628,7 @@ DistributionCreateCommand(CitusTableCacheEntry *cacheEntry)
 	char replicationModel = cacheEntry->replicationModel;
 	StringInfo tablePartitionKeyString = makeStringInfo();
 
-	if (distributionMethod == DISTRIBUTE_BY_NONE)
+	if (IsNonDistributedTableCacheEntry(cacheEntry))
 	{
 		appendStringInfo(tablePartitionKeyString, "NULL");
 	}

@@ -492,7 +492,7 @@ EnsureTableListSuitableForReplication(List *tableIdList)
 			GetReferencingForeignConstaintCommands(tableId);
 
 		if (foreignConstraintCommandList != NIL &&
-			PartitionMethod(tableId) != DISTRIBUTE_BY_NONE)
+			IsDistributedTable(tableId))
 		{
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 							errmsg("cannot create foreign key constraint"),
@@ -850,7 +850,7 @@ CopyShardForeignConstraintCommandListGrouped(ShardInterval *shardInterval,
 		char *referencedSchemaName = get_namespace_name(referencedSchemaId);
 		char *escapedReferencedSchemaName = quote_literal_cstr(referencedSchemaName);
 
-		if (PartitionMethod(referencedRelationId) == DISTRIBUTE_BY_NONE)
+		if (IsNonDistributedTable(referencedRelationId))
 		{
 			referencedShardId = GetFirstShardId(referencedRelationId);
 		}

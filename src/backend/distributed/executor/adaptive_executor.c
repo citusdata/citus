@@ -779,7 +779,7 @@ AdaptiveExecutor(CitusScanState *scanState)
 			executorState->es_processed = execution->rowsProcessed;
 		}
 		else if (distributedPlan->targetRelationId != InvalidOid &&
-				 PartitionMethod(distributedPlan->targetRelationId) != DISTRIBUTE_BY_NONE)
+				 !IsReferenceTable(distributedPlan->targetRelationId))
 		{
 			/*
 			 * For reference tables we already add rowsProcessed on the local execution,
@@ -1536,7 +1536,7 @@ SelectForUpdateOnReferenceTable(List *taskList)
 	{
 		Oid relationId = relationRowLock->relationId;
 
-		if (PartitionMethod(relationId) == DISTRIBUTE_BY_NONE)
+		if (IsReferenceTable(relationId))
 		{
 			return true;
 		}

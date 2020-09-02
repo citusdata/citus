@@ -173,7 +173,7 @@ RecordRelationAccessIfReferenceTable(Oid relationId, ShardPlacementAccessType ac
 	 * recursively calling RecordRelationAccessBase(), so becareful about
 	 * removing this check.
 	 */
-	if (PartitionMethod(relationId) != DISTRIBUTE_BY_NONE)
+	if (!IsReferenceTable(relationId))
 	{
 		return;
 	}
@@ -893,7 +893,7 @@ HoldsConflictingLockWithReferencedRelations(Oid relationId, ShardPlacementAccess
 	foreach_oid(referencedRelation, cacheEntry->referencedRelationsViaForeignKey)
 	{
 		/* we're only interested in foreign keys to reference tables */
-		if (PartitionMethod(referencedRelation) != DISTRIBUTE_BY_NONE)
+		if (!IsReferenceTable(referencedRelation))
 		{
 			continue;
 		}
@@ -964,8 +964,7 @@ HoldsConflictingLockWithReferencingRelations(Oid relationId, ShardPlacementAcces
 		 * We're only interested in foreign keys to reference tables from
 		 * hash distributed tables.
 		 */
-		if (!IsCitusTable(referencingRelation) ||
-			PartitionMethod(referencingRelation) != DISTRIBUTE_BY_HASH)
+		if (!IsHashDistributedTable(referencingRelation))
 		{
 			continue;
 		}

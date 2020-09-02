@@ -431,11 +431,11 @@ ShardsIntervalsEqual(ShardInterval *leftShardInterval, ShardInterval *rightShard
 		return false;
 	}
 
-	if (leftIntervalPartitionMethod == DISTRIBUTE_BY_HASH)
+	if (IsHashDistributedTable(leftShardInterval->relationId))
 	{
 		return HashPartitionedShardIntervalsEqual(leftShardInterval, rightShardInterval);
 	}
-	else if (leftIntervalPartitionMethod == DISTRIBUTE_BY_NONE)
+	else if (IsReferenceTable(leftShardInterval->relationId))
 	{
 		/*
 		 * Reference tables has only a single shard and all reference tables
