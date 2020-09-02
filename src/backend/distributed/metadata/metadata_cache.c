@@ -300,7 +300,7 @@ EnsureModificationsCanRun(void)
 /*
  * IsCitusTableType returns true if the given table with relationId
  * belongs to a citus table that matches the given table type. If cache 
- * entry already exists, prefer using IsCacheEntryCitusTableType to avoid
+ * entry already exists, prefer using IsCitusTableTypeCacheEntry to avoid
  * an extra lookup.
  */
 bool IsCitusTableType(Oid relationId, CitusTableType tableType) {
@@ -314,10 +314,10 @@ bool IsCitusTableType(Oid relationId, CitusTableType tableType) {
 }
 
 /*
- * IsCacheEntryCitusTableType returns true if the given table cache entry
+ * IsCitusTableTypeCacheEntry returns true if the given table cache entry
  * belongs to a citus table that matches the given table type.
  */
-bool IsCacheEntryCitusTableType(CitusTableCacheEntry* tableEntry, CitusTableType tableType) {
+bool IsCitusTableTypeCacheEntry(CitusTableCacheEntry* tableEntry, CitusTableType tableType) {
 	return IsCitusTableTypeInternal(tableEntry, tableType);
 }
 
@@ -472,7 +472,7 @@ ReferenceTableShardId(uint64 shardId)
 {
 	ShardIdCacheEntry *shardIdEntry = LookupShardIdCacheEntry(shardId);
 	CitusTableCacheEntry *tableEntry = shardIdEntry->tableEntry;
-	return IsCacheEntryCitusTableType(tableEntry, REFERENCE_TABLE);
+	return IsCitusTableTypeCacheEntry(tableEntry, REFERENCE_TABLE);
 }
 
 

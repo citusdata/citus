@@ -618,8 +618,8 @@ IsSupportedRedistributionTarget(Oid targetRelationId)
 {
 	CitusTableCacheEntry *tableEntry = GetCitusTableCacheEntry(targetRelationId);
 
-	if (!IsCacheEntryCitusTableType(tableEntry, HASH_DISTRIBUTED) &&
-		!IsCacheEntryCitusTableType(tableEntry, RANGE_DISTRIBUTED))
+	if (!IsCitusTableTypeCacheEntry(tableEntry, HASH_DISTRIBUTED) &&
+		!IsCitusTableTypeCacheEntry(tableEntry, RANGE_DISTRIBUTED))
 	{
 		return false;
 	}

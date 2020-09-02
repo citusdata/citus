@@ -368,13 +368,13 @@ CitusCopyFrom(CopyStmt *copyStatement, QueryCompletionCompat *completionTag)
 	/* disallow modifications to a partition table which have rep. factor > 1 */
 	EnsurePartitionTableNotReplicated(relationId);
 
-	if (IsCacheEntryCitusTableType(cacheEntry, HASH_DISTRIBUTED) ||
-		IsCacheEntryCitusTableType(cacheEntry, RANGE_DISTRIBUTED) ||
-		IsCacheEntryCitusTableType(cacheEntry, CITUS_TABLE_WITH_NO_DIST_KEY))
+	if (IsCitusTableTypeCacheEntry(cacheEntry, HASH_DISTRIBUTED) ||
+		IsCitusTableTypeCacheEntry(cacheEntry, RANGE_DISTRIBUTED) ||
+		IsCitusTableTypeCacheEntry(cacheEntry, CITUS_TABLE_WITH_NO_DIST_KEY))
 	{
 		CopyToExistingShards(copyStatement, completionTag);
 	}
-	else if (IsCacheEntryCitusTableType(cacheEntry, APPEND_DISTRIBUTED))
+	else if (IsCitusTableTypeCacheEntry(cacheEntry, APPEND_DISTRIBUTED))
 	{
 		CopyToNewShards(copyStatement, completionTag, relationId);
 	}
@@ -2163,7 +2163,7 @@ CitusCopyDestReceiverStartup(DestReceiver *dest, int operation,
 	List *shardIntervalList = LoadShardIntervalList(tableId);
 	if (shardIntervalList == NIL)
 	{
-		if (IsCacheEntryCitusTableType(cacheEntry, HASH_DISTRIBUTED))
+		if (IsCitusTableTypeCacheEntry(cacheEntry, HASH_DISTRIBUTED))
 		{
 			ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
 							errmsg("could not find any shards into which to copy"),
@@ -2182,7 +2182,7 @@ CitusCopyDestReceiverStartup(DestReceiver *dest, int operation,
 	}
 
 	/* error if any shard missing min/max values */
-	if (IsCacheEntryCitusTableType(cacheEntry, DISTRIBUTED_TABLE) &&
+	if (IsCitusTableTypeCacheEntry(cacheEntry, DISTRIBUTED_TABLE) &&
 		cacheEntry->hasUninitializedShardInterval)
 	{
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
@@ -2243,7 +2243,7 @@ CitusCopyDestReceiverStartup(DestReceiver *dest, int operation,
 		attributeList = lappend(attributeList, columnNameValue);
 	}
 
-	if (IsCacheEntryCitusTableType(cacheEntry, DISTRIBUTED_TABLE) &&
+	if (IsCitusTableTypeCacheEntry(cacheEntry, DISTRIBUTED_TABLE) &&
 		copyDest->partitionColumnIndex == INVALID_PARTITION_COLUMN_INDEX)
 	{
 		ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),

@@ -1880,7 +1880,7 @@ SingleShardTaskList(Query *query, uint64 jobId, List *relationShardList,
 		CitusTableCacheEntry *modificationTableCacheEntry = GetCitusTableCacheEntry(
 			updateOrDeleteRTE->relid);
 
-		if (IsCacheEntryCitusTableType(modificationTableCacheEntry, REFERENCE_TABLE) &&
+		if (IsCitusTableTypeCacheEntry(modificationTableCacheEntry, REFERENCE_TABLE) &&
 			SelectsFromDistributedTable(rangeTableList, query))
 		{
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
@@ -2005,7 +2005,7 @@ SelectsFromDistributedTable(List *rangeTableList, Query *query)
 
 		CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(
 			rangeTableEntry->relid);
-		if (IsCacheEntryCitusTableType(cacheEntry, DISTRIBUTED_TABLE) &&
+		if (IsCitusTableTypeCacheEntry(cacheEntry, DISTRIBUTED_TABLE) &&
 			(resultRangeTableEntry == NULL || resultRangeTableEntry->relid !=
 			 rangeTableEntry->relid))
 		{
@@ -2704,7 +2704,7 @@ BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError)
 	Assert(query->commandType == CMD_INSERT);
 
 	/* reference tables can only have one shard */
-	if (IsCacheEntryCitusTableType(cacheEntry, REFERENCE_TABLE))
+	if (IsCitusTableTypeCacheEntry(cacheEntry, REFERENCE_TABLE))
 	{
 		List *shardIntervalList = LoadShardIntervalList(distributedTableId);
 
@@ -2803,8 +2803,8 @@ BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError)
 												   missingOk);
 		}
 
-		if (IsCacheEntryCitusTableType(cacheEntry, HASH_DISTRIBUTED) ||
-			IsCacheEntryCitusTableType(cacheEntry, RANGE_DISTRIBUTED))
+		if (IsCitusTableTypeCacheEntry(cacheEntry, HASH_DISTRIBUTED) ||
+			IsCitusTableTypeCacheEntry(cacheEntry, RANGE_DISTRIBUTED))
 		{
 			Datum partitionValue = partitionValueConst->constvalue;
 
@@ -3483,7 +3483,7 @@ ErrorIfQueryHasUnroutableModifyingCTE(Query *queryTree)
 			CitusTableCacheEntry *modificationTableCacheEntry =
 				GetCitusTableCacheEntry(distributedTableId);
 
-			if (IsCacheEntryCitusTableType(modificationTableCacheEntry, CITUS_TABLE_WITH_NO_DIST_KEY))
+			if (IsCitusTableTypeCacheEntry(modificationTableCacheEntry, CITUS_TABLE_WITH_NO_DIST_KEY))
 			{
 				return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 									 "cannot router plan modification of a non-distributed table",

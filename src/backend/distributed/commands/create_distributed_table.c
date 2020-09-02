@@ -844,7 +844,7 @@ EnsureTableCanBeColocatedWith(Oid relationId, char replicationModel,
 	char sourceReplicationModel = sourceTableEntry->replicationModel;
 	Var *sourceDistributionColumn = DistPartitionKeyOrError(sourceRelationId);
 
-	if (!IsCacheEntryCitusTableType(sourceTableEntry, HASH_DISTRIBUTED))
+	if (!IsCitusTableTypeCacheEntry(sourceTableEntry, HASH_DISTRIBUTED))
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						errmsg("cannot distribute relation"),

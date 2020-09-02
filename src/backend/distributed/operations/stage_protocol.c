@@ -584,7 +584,7 @@ RelationShardListForShardCreate(ShardInterval *shardInterval)
 	relationShard->shardId = shardInterval->shardId;
 	List *relationShardList = list_make1(relationShard);
 
-	if (IsCacheEntryCitusTableType(cacheEntry, HASH_DISTRIBUTED) &&
+	if (IsCitusTableTypeCacheEntry(cacheEntry, HASH_DISTRIBUTED) &&
 		cacheEntry->colocationId != INVALID_COLOCATION_ID)
 	{
 		shardIndex = ShardIndex(shardInterval);
@@ -607,7 +607,7 @@ RelationShardListForShardCreate(ShardInterval *shardInterval)
 		{
 			fkeyShardId = GetFirstShardId(fkeyRelationid);
 		}
-		else if (IsCacheEntryCitusTableType(cacheEntry, HASH_DISTRIBUTED) &&
+		else if (IsCitusTableTypeCacheEntry(cacheEntry, HASH_DISTRIBUTED) &&
 				 IsCitusTableType(fkeyRelationid, HASH_DISTRIBUTED))
 		{
 			/* hash distributed tables should be colocated to have fkey */

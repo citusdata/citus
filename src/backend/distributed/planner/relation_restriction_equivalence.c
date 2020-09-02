@@ -608,7 +608,7 @@ ReferenceRelationCount(RelationRestrictionContext *restrictionContext)
 		CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(
 			relationRestriction->relationId);
 
-		if (IsCacheEntryCitusTableType(cacheEntry, REFERENCE_TABLE))
+		if (IsCitusTableTypeCacheEntry(cacheEntry, REFERENCE_TABLE))
 		{
 			referenceRelationCount++;
 		}

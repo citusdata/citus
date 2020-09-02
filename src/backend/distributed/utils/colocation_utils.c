@@ -926,8 +926,8 @@ ColocatedShardIntervalList(ShardInterval *shardInterval)
 	 * If distribution type of the table is append or range, each shard of
 	 * the shard is only co-located with itself.
 	 */
-	if (IsCacheEntryCitusTableType(cacheEntry, APPEND_DISTRIBUTED) ||
-		IsCacheEntryCitusTableType(cacheEntry, RANGE_DISTRIBUTED))
+	if (IsCitusTableTypeCacheEntry(cacheEntry, APPEND_DISTRIBUTED) ||
+		IsCitusTableTypeCacheEntry(cacheEntry, RANGE_DISTRIBUTED))
 	{
 		ShardInterval *copyShardInterval = CopyShardInterval(shardInterval);
 

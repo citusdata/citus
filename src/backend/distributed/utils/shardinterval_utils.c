@@ -245,7 +245,7 @@ ShardIndex(ShardInterval *shardInterval)
 	 * Note that, we can also support append and range distributed tables, but
 	 * currently it is not required.
 	 */
-	if (!IsCacheEntryCitusTableType(cacheEntry, HASH_DISTRIBUTED) && !IsCacheEntryCitusTableType(
+	if (!IsCitusTableTypeCacheEntry(cacheEntry, HASH_DISTRIBUTED) && !IsCitusTableTypeCacheEntry(
 			cacheEntry, REFERENCE_TABLE))
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
@@ -254,7 +254,7 @@ ShardIndex(ShardInterval *shardInterval)
 	}
 
 	/* short-circuit for reference tables */
-	if (IsCacheEntryCitusTableType(cacheEntry, REFERENCE_TABLE))
+	if (IsCitusTableTypeCacheEntry(cacheEntry, REFERENCE_TABLE))
 	{
 		/* reference tables has only a single shard, so the index is fixed to 0 */
 		shardIndex = 0;
@@ -279,7 +279,7 @@ FindShardInterval(Datum partitionColumnValue, CitusTableCacheEntry *cacheEntry)
 {
 	Datum searchedValue = partitionColumnValue;
 
-	if (IsCacheEntryCitusTableType(cacheEntry, HASH_DISTRIBUTED))
+	if (IsCitusTableTypeCacheEntry(cacheEntry, HASH_DISTRIBUTED))
 	{
 		searchedValue = FunctionCall1Coll(cacheEntry->hashFunction,
 										  cacheEntry->partitionColumn->varcollid,
@@ -315,7 +315,7 @@ FindShardIntervalIndex(Datum searchedValue, CitusTableCacheEntry *cacheEntry)
 	ShardInterval **shardIntervalCache = cacheEntry->sortedShardIntervalArray;
 	int shardCount = cacheEntry->shardIntervalArrayLength;
 	FmgrInfo *compareFunction = cacheEntry->shardIntervalCompareFunction;
-	bool useBinarySearch = (IsCacheEntryCitusTableType(cacheEntry, HASH_DISTRIBUTED) ||
+	bool useBinarySearch = (IsCitusTableTypeCacheEntry(cacheEntry, HASH_DISTRIBUTED) ||
 							!cacheEntry->hasUniformHashDistribution);
 	int shardIndex = INVALID_SHARD_INDEX;
 
@@ -324,7 +324,7 @@ FindShardIntervalIndex(Datum searchedValue, CitusTableCacheEntry *cacheEntry)
 		return INVALID_SHARD_INDEX;
 	}
 
-	if (IsCacheEntryCitusTableType(cacheEntry, HASH_DISTRIBUTED))
+	if (IsCitusTableTypeCacheEntry(cacheEntry, HASH_DISTRIBUTED))
 	{
 		if (useBinarySearch)
 		{
@@ -351,7 +351,7 @@ FindShardIntervalIndex(Datum searchedValue, CitusTableCacheEntry *cacheEntry)
 			shardIndex = CalculateUniformHashRangeIndex(hashedValue, shardCount);
 		}
 	}
-	else if (IsCacheEntryCitusTableType(cacheEntry, CITUS_TABLE_WITH_NO_DIST_KEY))
+	else if (IsCitusTableTypeCacheEntry(cacheEntry, CITUS_TABLE_WITH_NO_DIST_KEY))
 	{
 		/* non-distributed tables have a single shard, all values mapped to that shard */
 		Assert(shardCount == 1);

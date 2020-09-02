@@ -205,15 +205,15 @@ FastPathRouterQuery(Query *query, Node **distributionKeyValue)
 	/* we don't want to deal with append/range distributed tables */
 	Oid distributedTableId = rangeTableEntry->relid;
 	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(distributedTableId);
-	if (IsCacheEntryCitusTableType(cacheEntry, RANGE_DISTRIBUTED) ||
-		IsCacheEntryCitusTableType(cacheEntry, APPEND_DISTRIBUTED))
+	if (IsCitusTableTypeCacheEntry(cacheEntry, RANGE_DISTRIBUTED) ||
+		IsCitusTableTypeCacheEntry(cacheEntry, APPEND_DISTRIBUTED))
 	{
 		return false;
 	}
 
 	/* WHERE clause should not be empty for distributed tables */
 	if (joinTree == NULL ||
-		(IsCacheEntryCitusTableType(cacheEntry, DISTRIBUTED_TABLE) && joinTree->quals == NULL))
+		(IsCitusTableTypeCacheEntry(cacheEntry, DISTRIBUTED_TABLE) && joinTree->quals == NULL))
 	{
 		return false;
 	}

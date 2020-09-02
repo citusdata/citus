@@ -2141,7 +2141,7 @@ QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 		ListCell *shardIntervalCell = NULL;
 
 		CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
-		if (IsCacheEntryCitusTableType(cacheEntry, CITUS_TABLE_WITH_NO_DIST_KEY))
+		if (IsCitusTableTypeCacheEntry(cacheEntry, CITUS_TABLE_WITH_NO_DIST_KEY))
 		{
 			continue;
 		}
@@ -2425,7 +2425,7 @@ QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 		ShardInterval *shardInterval = NULL;
 
 		CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
-		if (IsCacheEntryCitusTableType(cacheEntry, CITUS_TABLE_WITH_NO_DIST_KEY))
+		if (IsCitusTableTypeCacheEntry(cacheEntry, CITUS_TABLE_WITH_NO_DIST_KEY))
 		{
 			/* non-distributed tables have only one shard */
 			shardInterval = cacheEntry->sortedShardIntervalArray[0];
@@ -2536,13 +2536,13 @@ CoPartitionedTables(Oid firstRelationId, Oid secondRelationId)
 	FmgrInfo *comparisonFunction = firstTableCache->shardIntervalCompareFunction;
 
 	/* reference tables are always & only copartitioned with reference tables */
-	if (IsCacheEntryCitusTableType(firstTableCache, REFERENCE_TABLE) &&
-		IsCacheEntryCitusTableType(secondTableCache, REFERENCE_TABLE))
+	if (IsCitusTableTypeCacheEntry(firstTableCache, REFERENCE_TABLE) &&
+		IsCitusTableTypeCacheEntry(secondTableCache, REFERENCE_TABLE))
 	{
 		return true;
 	}
-	else if (IsCacheEntryCitusTableType(firstTableCache, REFERENCE_TABLE) ||
-			 IsCacheEntryCitusTableType(secondTableCache, REFERENCE_TABLE))
+	else if (IsCitusTableTypeCacheEntry(firstTableCache, REFERENCE_TABLE) ||
+			 IsCitusTableTypeCacheEntry(secondTableCache, REFERENCE_TABLE))
 	{
 		return false;
 	}
@@ -2577,8 +2577,8 @@ CoPartitionedTables(Oid firstRelationId, Oid secondRelationId)
 	 * different values for the same value. int vs bigint can be given as an
 	 * example.
 	 */
-	if (IsCacheEntryCitusTableType(firstTableCache, HASH_DISTRIBUTED) ||
-		IsCacheEntryCitusTableType(secondTableCache, HASH_DISTRIBUTED))
+	if (IsCitusTableTypeCacheEntry(firstTableCache, HASH_DISTRIBUTED) ||
+		IsCitusTableTypeCacheEntry(secondTableCache, HASH_DISTRIBUTED))
 	{
 		return false;
 	}
@@ -3923,7 +3923,7 @@ ShardIntervalsOverlap(ShardInterval *firstInterval, ShardInterval *secondInterva
 	CitusTableCacheEntry *intervalRelation =
 		GetCitusTableCacheEntry(firstInterval->relationId);
 
-	Assert(IsCacheEntryCitusTableType(intervalRelation, DISTRIBUTED_TABLE));
+	Assert(IsCitusTableTypeCacheEntry(intervalRelation, DISTRIBUTED_TABLE));
 
 	FmgrInfo *comparisonFunction = intervalRelation->shardIntervalCompareFunction;
 	Oid collation = intervalRelation->partitionColumn->varcollid;

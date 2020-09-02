@@ -1854,7 +1854,7 @@ multi_relation_restriction_hook(PlannerInfo *root, RelOptInfo *relOptInfo,
 		cacheEntry = GetCitusTableCacheEntry(rte->relid);
 
 		relationRestrictionContext->allReferenceTables &=
-			IsCacheEntryCitusTableType(cacheEntry, REFERENCE_TABLE);
+			IsCitusTableTypeCacheEntry(cacheEntry, REFERENCE_TABLE);
 	}
 
 	relationRestrictionContext->relationRestrictionList =
