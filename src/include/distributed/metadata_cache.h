@@ -121,14 +121,15 @@ typedef enum
 	HASH_DISTRIBUTED,
 	APPEND_DISTRIBUTED,
 	RANGE_DISTRIBUTED,
-	DISTRIBUTED_TABLE,
+	DISTRIBUTED_TABLE, /* hash, range or append distributed table */
 	REFERENCE_TABLE,
 	CITUS_LOCAL_TABLE,
-	CITUS_TABLE_WITH_NO_DIST_KEY
+	CITUS_TABLE_WITH_NO_DIST_KEY /* table without a dist key such as reference table */
 } CitusTableType;
 
 extern bool IsCitusTableType(Oid relationId, CitusTableType tableType);
-extern bool IsCitusTableTypeCacheEntry(CitusTableCacheEntry* tableEtnry, CitusTableType tableType);
+extern bool IsCitusTableTypeCacheEntry(CitusTableCacheEntry *tableEtnry, CitusTableType
+									   tableType);
 
 extern bool IsCitusTable(Oid relationId);
 extern List * CitusTableList(void);

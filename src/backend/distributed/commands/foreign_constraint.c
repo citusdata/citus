@@ -168,7 +168,8 @@ ErrorIfUnsupportedForeignConstraintExists(Relation relation, char referencingDis
 		if (!selfReferencingTable)
 		{
 			referencedDistMethod = PartitionMethod(referencedTableId);
-			referencedDistKey = IsCitusTableType(referencedTableId, CITUS_TABLE_WITH_NO_DIST_KEY) ?
+			referencedDistKey = IsCitusTableType(referencedTableId,
+												 CITUS_TABLE_WITH_NO_DIST_KEY) ?
 								NULL :
 								DistPartitionKey(referencedTableId);
 			referencedColocationId = TableColocationId(referencedTableId);

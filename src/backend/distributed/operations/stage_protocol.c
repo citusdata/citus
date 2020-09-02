@@ -252,7 +252,8 @@ master_append_table_to_shard(PG_FUNCTION_ARGS)
 						errdetail("The underlying shard is not a regular table")));
 	}
 
-	if (IsCitusTableType(relationId, HASH_DISTRIBUTED) || IsCitusTableType(relationId, REFERENCE_TABLE))
+	if (IsCitusTableType(relationId, HASH_DISTRIBUTED) || IsCitusTableType(relationId,
+																		   REFERENCE_TABLE))
 	{
 		ereport(ERROR, (errmsg("cannot append to shardId " UINT64_FORMAT, shardId),
 						errdetail("We currently don't support appending to shards "

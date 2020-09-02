@@ -660,7 +660,8 @@ EquivalenceListContainsRelationsEquality(List *attributeEquivalenceList,
 		int rteIdentity = GetRTEIdentity(relationRestriction->rte);
 
 		/* we shouldn't check for the equality of non-distributed tables */
-		if (IsCitusTableType(relationRestriction->relationId, CITUS_TABLE_WITH_NO_DIST_KEY))
+		if (IsCitusTableType(relationRestriction->relationId,
+							 CITUS_TABLE_WITH_NO_DIST_KEY))
 		{
 			continue;
 		}

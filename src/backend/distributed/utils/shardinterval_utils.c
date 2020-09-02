@@ -245,7 +245,8 @@ ShardIndex(ShardInterval *shardInterval)
 	 * Note that, we can also support append and range distributed tables, but
 	 * currently it is not required.
 	 */
-	if (!IsCitusTableTypeCacheEntry(cacheEntry, HASH_DISTRIBUTED) && !IsCitusTableTypeCacheEntry(
+	if (!IsCitusTableTypeCacheEntry(cacheEntry, HASH_DISTRIBUTED) &&
+		!IsCitusTableTypeCacheEntry(
 			cacheEntry, REFERENCE_TABLE))
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),

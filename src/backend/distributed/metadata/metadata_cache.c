@@ -259,9 +259,9 @@ static void InvalidateCitusTableCacheEntrySlot(CitusTableCacheEntrySlot *cacheSl
 static void InvalidateDistTableCache(void);
 static void InvalidateDistObjectCache(void);
 static void InitializeTableCacheEntry(int64 shardId);
-static bool IsCitusTableTypeInternal(CitusTableCacheEntry* tableEntry, CitusTableType tableType); 
+static bool IsCitusTableTypeInternal(CitusTableCacheEntry *tableEntry, CitusTableType
+									 tableType);
 static bool RefreshTableCacheEntryIfInvalid(ShardIdCacheEntry *shardEntry);
-
 
 
 /* exports for SQL callable functions */
@@ -297,60 +297,87 @@ EnsureModificationsCanRun(void)
 	}
 }
 
+
 /*
  * IsCitusTableType returns true if the given table with relationId
- * belongs to a citus table that matches the given table type. If cache 
+ * belongs to a citus table that matches the given table type. If cache
  * entry already exists, prefer using IsCitusTableTypeCacheEntry to avoid
  * an extra lookup.
  */
-bool IsCitusTableType(Oid relationId, CitusTableType tableType) {
+bool
+IsCitusTableType(Oid relationId, CitusTableType tableType)
+{
 	CitusTableCacheEntry *tableEntry = LookupCitusTableCacheEntry(relationId);
-	// we are not interested in postgres tables
-	if (tableEntry == NULL) {
+
+	/* we are not interested in postgres tables */
+	if (tableEntry == NULL)
+	{
 		return false;
 	}
-	CitusTableCacheEntry *tableEntry = GetCitusTableCacheEntry(relationId);
 	return IsCitusTableTypeInternal(tableEntry, tableType);
 }
+
 
 /*
  * IsCitusTableTypeCacheEntry returns true if the given table cache entry
  * belongs to a citus table that matches the given table type.
  */
-bool IsCitusTableTypeCacheEntry(CitusTableCacheEntry* tableEntry, CitusTableType tableType) {
+bool
+IsCitusTableTypeCacheEntry(CitusTableCacheEntry *tableEntry, CitusTableType tableType)
+{
 	return IsCitusTableTypeInternal(tableEntry, tableType);
 }
+
 
 /*
  * IsCitusTableTypeInternal returns true if the given table entry belongs to
  * the given table type group. For definition of table types, see CitusTableType.
  */
-static bool IsCitusTableTypeInternal(CitusTableCacheEntry* tableEntry, CitusTableType tableType) {
-	switch(tableType) {
-		case HASH_DISTRIBUTED: {
+static bool
+IsCitusTableTypeInternal(CitusTableCacheEntry *tableEntry, CitusTableType tableType)
+{
+	switch (tableType)
+	{
+		case HASH_DISTRIBUTED:
+		{
 			return tableEntry->partitionMethod == DISTRIBUTE_BY_HASH;
 		}
-		case APPEND_DISTRIBUTED: {
+
+		case APPEND_DISTRIBUTED:
+		{
 			return tableEntry->partitionMethod == DISTRIBUTE_BY_APPEND;
 		}
-		case RANGE_DISTRIBUTED: {
+
+		case RANGE_DISTRIBUTED:
+		{
 			return tableEntry->partitionMethod == DISTRIBUTE_BY_RANGE;
 		}
-		case DISTRIBUTED_TABLE: {
-			return tableEntry->partitionMethod == DISTRIBUTE_BY_HASH || tableEntry->partitionMethod == DISTRIBUTE_BY_RANGE || tableEntry->partitionMethod == DISTRIBUTE_BY_APPEND;
+
+		case DISTRIBUTED_TABLE:
+		{
+			return tableEntry->partitionMethod == DISTRIBUTE_BY_HASH ||
+				   tableEntry->partitionMethod == DISTRIBUTE_BY_RANGE ||
+				   tableEntry->partitionMethod == DISTRIBUTE_BY_APPEND;
 		}
-		case REFERENCE_TABLE: {
+
+		case REFERENCE_TABLE:
+		{
 			return tableEntry->partitionMethod == DISTRIBUTE_BY_NONE;
 		}
-		case CITUS_TABLE_WITH_NO_DIST_KEY: {
+
+		case CITUS_TABLE_WITH_NO_DIST_KEY:
+		{
 			return tableEntry->partitionMethod == DISTRIBUTE_BY_NONE;
 		}
-		default: {
+
+		default:
+		{
 			ereport(ERROR, (errmsg("Unknown table type %d", tableType)));
 		}
 	}
 	return false;
 }
+
 
 /*
  * IsCitusTable returns whether relationId is a distributed relation or

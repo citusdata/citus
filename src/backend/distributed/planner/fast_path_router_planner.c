@@ -213,7 +213,8 @@ FastPathRouterQuery(Query *query, Node **distributionKeyValue)
 
 	/* WHERE clause should not be empty for distributed tables */
 	if (joinTree == NULL ||
-		(IsCitusTableTypeCacheEntry(cacheEntry, DISTRIBUTED_TABLE) && joinTree->quals == NULL))
+		(IsCitusTableTypeCacheEntry(cacheEntry, DISTRIBUTED_TABLE) && joinTree->quals ==
+		 NULL))
 	{
 		return false;
 	}

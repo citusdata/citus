@@ -227,7 +227,8 @@ ShouldSyncTableMetadata(Oid relationId)
 	bool streamingReplicated =
 		(tableEntry->replicationModel == REPLICATION_MODEL_STREAMING);
 
-	bool mxTable = (streamingReplicated && IsCitusTableTypeCacheEntry(tableEntry, HASH_DISTRIBUTED));
+	bool mxTable = (streamingReplicated && IsCitusTableTypeCacheEntry(tableEntry,
+																	  HASH_DISTRIBUTED));
 	if (mxTable || IsCitusTableTypeCacheEntry(tableEntry, REFERENCE_TABLE))
 	{
 		return true;

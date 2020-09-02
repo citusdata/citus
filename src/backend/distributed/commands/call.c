@@ -94,11 +94,9 @@ CallFuncExprRemotely(CallStmt *callStmt, DistObjectCacheEntry *procedure,
 		return false;
 	}
 	CitusTableCacheEntry *distTable = GetCitusTableCacheEntry(colocatedRelationId);
-
-	CitusTableCacheEntry *distTable = GetCitusTableCacheEntry(colocatedRelationId);
 	Var *partitionColumn = distTable->partitionColumn;
 	bool colocatedWithReferenceTable = false;
-	if (IsCitusTableTypeCacheEntry(colocatedRelationId, REFERENCE_TABLE))
+	if (IsCitusTableTypeCacheEntry(distTable, REFERENCE_TABLE))
 	{
 		/* This can happen if colocated with a reference table. Punt for now. */
 		ereport(DEBUG1, (errmsg(

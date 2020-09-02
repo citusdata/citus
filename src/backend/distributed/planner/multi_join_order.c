@@ -825,8 +825,10 @@ ReferenceJoin(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 
 	if (!IsSupportedReferenceJoin(joinType,
 								  IsCitusTableType(
-									  currentJoinNode->tableEntry->relationId, REFERENCE_TABLE),
-								  IsCitusTableType(candidateTable->relationId, REFERENCE_TABLE)
+									  currentJoinNode->tableEntry->relationId,
+									  REFERENCE_TABLE),
+								  IsCitusTableType(candidateTable->relationId,
+												   REFERENCE_TABLE)
 								  ))
 	{
 		return NULL;
@@ -875,8 +877,10 @@ CartesianProductReferenceJoin(JoinOrderNode *currentJoinNode, TableEntry *candid
 {
 	if (!IsSupportedReferenceJoin(joinType,
 								  IsCitusTableType(
-									  currentJoinNode->tableEntry->relationId, REFERENCE_TABLE),
-								  IsCitusTableType(candidateTable->relationId, REFERENCE_TABLE)))
+									  currentJoinNode->tableEntry->relationId,
+									  REFERENCE_TABLE),
+								  IsCitusTableType(candidateTable->relationId,
+												   REFERENCE_TABLE)))
 	{
 		return NULL;
 	}

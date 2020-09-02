@@ -305,7 +305,8 @@ ShardIntervalOpExpressions(ShardInterval *shardInterval, Index rteIndex)
 	{
 		partitionColumn = MakeInt4Column();
 	}
-	else if (IsCitusTableType(relationId, RANGE_DISTRIBUTED) || IsCitusTableType(relationId, APPEND_DISTRIBUTED))
+	else if (IsCitusTableType(relationId, RANGE_DISTRIBUTED) || IsCitusTableType(
+				 relationId, APPEND_DISTRIBUTED))
 	{
 		Assert(rteIndex > 0);
 		partitionColumn = PartitionColumn(relationId, rteIndex);
@@ -3353,7 +3354,8 @@ MultiRouterPlannableQuery(Query *query)
 				uint32 tableReplicationFactor = TableShardReplicationFactor(
 					distributedTableId);
 
-				if (tableReplicationFactor > 1 && IsCitusTableType(distributedTableId, DISTRIBUTED_TABLE))
+				if (tableReplicationFactor > 1 && IsCitusTableType(distributedTableId,
+																   DISTRIBUTED_TABLE))
 				{
 					return DeferredError(
 						ERRCODE_FEATURE_NOT_SUPPORTED,
@@ -3483,7 +3485,8 @@ ErrorIfQueryHasUnroutableModifyingCTE(Query *queryTree)
 			CitusTableCacheEntry *modificationTableCacheEntry =
 				GetCitusTableCacheEntry(distributedTableId);
 
-			if (IsCitusTableTypeCacheEntry(modificationTableCacheEntry, CITUS_TABLE_WITH_NO_DIST_KEY))
+			if (IsCitusTableTypeCacheEntry(modificationTableCacheEntry,
+										   CITUS_TABLE_WITH_NO_DIST_KEY))
 			{
 				return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 									 "cannot router plan modification of a non-distributed table",

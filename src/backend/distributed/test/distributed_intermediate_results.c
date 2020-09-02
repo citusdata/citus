@@ -146,7 +146,8 @@ redistribute_task_list_results(PG_FUNCTION_ARGS)
 	 * Here SELECT query's target list should match column list of target relation,
 	 * so their partition column indexes are equal.
 	 */
-	int partitionColumnIndex = IsCitusTableTypeCacheEntry(targetRelation, DISTRIBUTED_TABLE) ?
+	int partitionColumnIndex = IsCitusTableTypeCacheEntry(targetRelation,
+														  DISTRIBUTED_TABLE) ?
 							   targetRelation->partitionColumn->varattno - 1 : 0;
 
 	List **shardResultIds = RedistributeTaskListResults(resultIdPrefix, taskList,
