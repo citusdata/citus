@@ -58,3 +58,31 @@ CREATE EVENT TRIGGER cstore_drop_event
     ON SQL_DROP
     EXECUTE PROCEDURE cstore_drop_trigger();
 
+CREATE TABLE cstore_table_metadata(
+	relid oid,
+	version_major int,
+	version_minor int
+);
+
+CREATE TABLE cstore_stripe(
+    relid oid,
+    stripe bigint
+);
+
+CREATE TABLE cstore_column_block_skip_node(
+    relid oid,
+    stripe bigint,
+    attr int,
+    blockid int,
+    rowcount bigint,
+    min_value text,
+    max_value text,
+    value_offset bigint,
+    value_length bigint,
+    value_compression_type char,
+    exists_offset bigint,
+    exists_length bigint);
+
+CREATE INDEX cstore_column_block_skip_node_idx
+    ON cstore_column_block_skip_node
+    USING BTREE(relid, stripe, attr, blockid);
