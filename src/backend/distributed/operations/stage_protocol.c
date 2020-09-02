@@ -143,7 +143,7 @@ master_create_empty_shard(PG_FUNCTION_ARGS)
 						errdetail("We currently don't support creating shards "
 								  "on hash-partitioned tables")));
 	}
-	else if (IsCitusTableType(relationId, REFERENCE_TABLE))
+	else if (IsCitusTableType(relationId, CITUS_TABLE_WITH_NO_DIST_KEY))
 	{
 		ereport(ERROR, (errmsg("relation \"%s\" is a reference table",
 							   relationName),
@@ -253,7 +253,7 @@ master_append_table_to_shard(PG_FUNCTION_ARGS)
 	}
 
 	if (IsCitusTableType(relationId, HASH_DISTRIBUTED) || IsCitusTableType(relationId,
-																		   REFERENCE_TABLE))
+																		   CITUS_TABLE_WITH_NO_DIST_KEY))
 	{
 		ereport(ERROR, (errmsg("cannot append to shardId " UINT64_FORMAT, shardId),
 						errdetail("We currently don't support appending to shards "

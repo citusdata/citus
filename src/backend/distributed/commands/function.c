@@ -515,7 +515,7 @@ EnsureFunctionCanBeColocatedWithTable(Oid functionOid, Oid distributionColumnTyp
 							   functionName, sourceRelationName)));
 	}
 
-	if (IsCitusTableTypeCacheEntry(sourceTableEntry, CITUS_TABLE_WITH_NO_DIST_KEY) &&
+	if (IsCitusTableTypeCacheEntry(sourceTableEntry, REFERENCE_TABLE) &&
 		distributionColumnType != InvalidOid)
 	{
 		char *functionName = get_func_name(functionOid);

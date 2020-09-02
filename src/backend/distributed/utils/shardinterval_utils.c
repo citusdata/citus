@@ -255,7 +255,7 @@ ShardIndex(ShardInterval *shardInterval)
 	}
 
 	/* short-circuit for reference tables */
-	if (IsCitusTableTypeCacheEntry(cacheEntry, REFERENCE_TABLE))
+	if (IsCitusTableTypeCacheEntry(cacheEntry, CITUS_TABLE_WITH_NO_DIST_KEY))
 	{
 		/* reference tables has only a single shard, so the index is fixed to 0 */
 		shardIndex = 0;

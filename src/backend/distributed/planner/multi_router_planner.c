@@ -2705,7 +2705,7 @@ BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError)
 	Assert(query->commandType == CMD_INSERT);
 
 	/* reference tables can only have one shard */
-	if (IsCitusTableTypeCacheEntry(cacheEntry, REFERENCE_TABLE))
+	if (IsCitusTableTypeCacheEntry(cacheEntry, CITUS_TABLE_WITH_NO_DIST_KEY))
 	{
 		List *shardIntervalList = LoadShardIntervalList(distributedTableId);
 

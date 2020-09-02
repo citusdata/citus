@@ -287,36 +287,6 @@ ExtractRangeTableEntryList(Query *query)
 
 
 /*
- * ExtractClassifiedRangeTableEntryList extracts reference table rte's from
- * the given rte list.
- * Callers of this function are responsible for passing referenceTableRTEList
- * to be non-null and initially pointing to an empty list.
- */
-List *
-ExtractReferenceTableRTEList(List *rteList)
-{
-	List *referenceTableRTEList = NIL;
-
-	RangeTblEntry *rte = NULL;
-	foreach_ptr(rte, rteList)
-	{
-		if (rte->rtekind != RTE_RELATION || rte->relkind != RELKIND_RELATION)
-		{
-			continue;
-		}
-
-		Oid relationOid = rte->relid;
-		if (IsCitusTableType(relationOid, REFERENCE_TABLE))
-		{
-			referenceTableRTEList = lappend(referenceTableRTEList, rte);
-		}
-	}
-
-	return referenceTableRTEList;
-}
-
-
-/*
  * NeedsDistributedPlanning returns true if the Citus extension is loaded and
  * the query contains a distributed table.
  *

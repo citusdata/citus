@@ -2536,13 +2536,13 @@ CoPartitionedTables(Oid firstRelationId, Oid secondRelationId)
 	FmgrInfo *comparisonFunction = firstTableCache->shardIntervalCompareFunction;
 
 	/* reference tables are always & only copartitioned with reference tables */
-	if (IsCitusTableTypeCacheEntry(firstTableCache, REFERENCE_TABLE) &&
-		IsCitusTableTypeCacheEntry(secondTableCache, REFERENCE_TABLE))
+	if (IsCitusTableTypeCacheEntry(firstTableCache, CITUS_TABLE_WITH_NO_DIST_KEY) &&
+		IsCitusTableTypeCacheEntry(secondTableCache, CITUS_TABLE_WITH_NO_DIST_KEY))
 	{
 		return true;
 	}
-	else if (IsCitusTableTypeCacheEntry(firstTableCache, REFERENCE_TABLE) ||
-			 IsCitusTableTypeCacheEntry(secondTableCache, REFERENCE_TABLE))
+	else if (IsCitusTableTypeCacheEntry(firstTableCache, CITUS_TABLE_WITH_NO_DIST_KEY) ||
+			 IsCitusTableTypeCacheEntry(secondTableCache, CITUS_TABLE_WITH_NO_DIST_KEY))
 	{
 		return false;
 	}

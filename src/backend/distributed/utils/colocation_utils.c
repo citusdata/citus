@@ -435,7 +435,8 @@ ShardsIntervalsEqual(ShardInterval *leftShardInterval, ShardInterval *rightShard
 	{
 		return HashPartitionedShardIntervalsEqual(leftShardInterval, rightShardInterval);
 	}
-	else if (IsCitusTableType(leftShardInterval->relationId, REFERENCE_TABLE))
+	else if (IsCitusTableType(leftShardInterval->relationId,
+							  CITUS_TABLE_WITH_NO_DIST_KEY))
 	{
 		/*
 		 * Reference tables has only a single shard and all reference tables

@@ -823,13 +823,12 @@ ReferenceJoin(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 		return NULL;
 	}
 
-	if (!IsSupportedReferenceJoin(joinType,
-								  IsCitusTableType(
-									  currentJoinNode->tableEntry->relationId,
-									  REFERENCE_TABLE),
-								  IsCitusTableType(candidateTable->relationId,
-												   REFERENCE_TABLE)
-								  ))
+	bool leftIsReferenceTable = IsCitusTableType(
+		currentJoinNode->tableEntry->relationId,
+		REFERENCE_TABLE);
+	bool rightIsReferenceTable = IsCitusTableType(candidateTable->relationId,
+												  REFERENCE_TABLE);
+	if (!IsSupportedReferenceJoin(joinType, leftIsReferenceTable, rightIsReferenceTable))
 	{
 		return NULL;
 	}
@@ -875,12 +874,13 @@ static JoinOrderNode *
 CartesianProductReferenceJoin(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 							  List *applicableJoinClauses, JoinType joinType)
 {
-	if (!IsSupportedReferenceJoin(joinType,
-								  IsCitusTableType(
-									  currentJoinNode->tableEntry->relationId,
-									  REFERENCE_TABLE),
-								  IsCitusTableType(candidateTable->relationId,
-												   REFERENCE_TABLE)))
+	bool leftIsReferenceTable = IsCitusTableType(
+		currentJoinNode->tableEntry->relationId,
+		REFERENCE_TABLE);
+	bool rightIsReferenceTable = IsCitusTableType(candidateTable->relationId,
+												  REFERENCE_TABLE);
+
+	if (!IsSupportedReferenceJoin(joinType, leftIsReferenceTable, rightIsReferenceTable))
 	{
 		return NULL;
 	}
