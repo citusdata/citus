@@ -823,12 +823,12 @@ ReferenceJoin(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 		return NULL;
 	}
 
-	char candidatePartitionMethod = PartitionMethod(candidateTable->relationId);
-	char leftPartitionMethod = PartitionMethod(currentJoinNode->tableEntry->relationId);
-
-	if (!IsSupportedReferenceJoin(joinType,
-								  leftPartitionMethod == DISTRIBUTE_BY_NONE,
-								  candidatePartitionMethod == DISTRIBUTE_BY_NONE))
+	bool leftIsReferenceTable = IsCitusTableType(
+		currentJoinNode->tableEntry->relationId,
+		REFERENCE_TABLE);
+	bool rightIsReferenceTable = IsCitusTableType(candidateTable->relationId,
+												  REFERENCE_TABLE);
+	if (!IsSupportedReferenceJoin(joinType, leftIsReferenceTable, rightIsReferenceTable))
 	{
 		return NULL;
 	}
@@ -874,12 +874,13 @@ static JoinOrderNode *
 CartesianProductReferenceJoin(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 							  List *applicableJoinClauses, JoinType joinType)
 {
-	char candidatePartitionMethod = PartitionMethod(candidateTable->relationId);
-	char leftPartitionMethod = PartitionMethod(currentJoinNode->tableEntry->relationId);
+	bool leftIsReferenceTable = IsCitusTableType(
+		currentJoinNode->tableEntry->relationId,
+		REFERENCE_TABLE);
+	bool rightIsReferenceTable = IsCitusTableType(candidateTable->relationId,
+												  REFERENCE_TABLE);
 
-	if (!IsSupportedReferenceJoin(joinType,
-								  leftPartitionMethod == DISTRIBUTE_BY_NONE,
-								  candidatePartitionMethod == DISTRIBUTE_BY_NONE))
+	if (!IsSupportedReferenceJoin(joinType, leftIsReferenceTable, rightIsReferenceTable))
 	{
 		return NULL;
 	}
@@ -1385,8 +1386,8 @@ DistPartitionKey(Oid relationId)
 {
 	CitusTableCacheEntry *partitionEntry = GetCitusTableCacheEntry(relationId);
 
-	/* reference tables do not have partition column */
-	if (partitionEntry->partitionMethod == DISTRIBUTE_BY_NONE)
+	/* non-distributed tables do not have partition column */
+	if (IsCitusTableTypeCacheEntry(partitionEntry, CITUS_TABLE_WITH_NO_DIST_KEY))
 	{
 		return NULL;
 	}

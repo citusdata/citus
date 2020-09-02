@@ -2141,7 +2141,7 @@ QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 		ListCell *shardIntervalCell = NULL;
 
 		CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
-		if (cacheEntry->partitionMethod == DISTRIBUTE_BY_NONE)
+		if (IsCitusTableTypeCacheEntry(cacheEntry, CITUS_TABLE_WITH_NO_DIST_KEY))
 		{
 			continue;
 		}
@@ -2299,22 +2299,21 @@ ErrorIfUnsupportedShardDistribution(Query *query)
 	foreach(relationIdCell, relationIdList)
 	{
 		Oid relationId = lfirst_oid(relationIdCell);
-		char partitionMethod = PartitionMethod(relationId);
-		if (partitionMethod == DISTRIBUTE_BY_RANGE)
+		if (IsCitusTableType(relationId, RANGE_DISTRIBUTED))
 		{
 			rangeDistributedRelationCount++;
 			nonReferenceRelations = lappend_oid(nonReferenceRelations,
 												relationId);
 		}
-		else if (partitionMethod == DISTRIBUTE_BY_HASH)
+		else if (IsCitusTableType(relationId, HASH_DISTRIBUTED))
 		{
 			hashDistributedRelationCount++;
 			nonReferenceRelations = lappend_oid(nonReferenceRelations,
 												relationId);
 		}
-		else if (partitionMethod == DISTRIBUTE_BY_NONE)
+		else if (IsCitusTableType(relationId, CITUS_TABLE_WITH_NO_DIST_KEY))
 		{
-			/* do not need to handle reference tables */
+			/* do not need to handle non-distributed tables */
 			continue;
 		}
 		else
@@ -2426,9 +2425,9 @@ QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 		ShardInterval *shardInterval = NULL;
 
 		CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
-		if (cacheEntry->partitionMethod == DISTRIBUTE_BY_NONE)
+		if (IsCitusTableTypeCacheEntry(cacheEntry, CITUS_TABLE_WITH_NO_DIST_KEY))
 		{
-			/* reference table only has one shard */
+			/* non-distributed tables have only one shard */
 			shardInterval = cacheEntry->sortedShardIntervalArray[0];
 
 			/* only use reference table as anchor shard if none exists yet */
@@ -2537,13 +2536,13 @@ CoPartitionedTables(Oid firstRelationId, Oid secondRelationId)
 	FmgrInfo *comparisonFunction = firstTableCache->shardIntervalCompareFunction;
 
 	/* reference tables are always & only copartitioned with reference tables */
-	if (firstTableCache->partitionMethod == DISTRIBUTE_BY_NONE &&
-		secondTableCache->partitionMethod == DISTRIBUTE_BY_NONE)
+	if (IsCitusTableTypeCacheEntry(firstTableCache, CITUS_TABLE_WITH_NO_DIST_KEY) &&
+		IsCitusTableTypeCacheEntry(secondTableCache, CITUS_TABLE_WITH_NO_DIST_KEY))
 	{
 		return true;
 	}
-	else if (firstTableCache->partitionMethod == DISTRIBUTE_BY_NONE ||
-			 secondTableCache->partitionMethod == DISTRIBUTE_BY_NONE)
+	else if (IsCitusTableTypeCacheEntry(firstTableCache, CITUS_TABLE_WITH_NO_DIST_KEY) ||
+			 IsCitusTableTypeCacheEntry(secondTableCache, CITUS_TABLE_WITH_NO_DIST_KEY))
 	{
 		return false;
 	}
@@ -2578,8 +2577,8 @@ CoPartitionedTables(Oid firstRelationId, Oid secondRelationId)
 	 * different values for the same value. int vs bigint can be given as an
 	 * example.
 	 */
-	if (firstTableCache->partitionMethod == DISTRIBUTE_BY_HASH ||
-		secondTableCache->partitionMethod == DISTRIBUTE_BY_HASH)
+	if (IsCitusTableTypeCacheEntry(firstTableCache, HASH_DISTRIBUTED) ||
+		IsCitusTableTypeCacheEntry(secondTableCache, HASH_DISTRIBUTED))
 	{
 		return false;
 	}
@@ -3562,7 +3561,7 @@ NodeIsRangeTblRefReferenceTable(Node *node, List *rangeTableList)
 	{
 		return false;
 	}
-	return PartitionMethod(rangeTableEntry->relid) == DISTRIBUTE_BY_NONE;
+	return IsCitusTableType(rangeTableEntry->relid, REFERENCE_TABLE);
 }
 
 
@@ -3734,15 +3733,12 @@ PartitionedOnColumn(Var *column, List *rangeTableList, List *dependentJobList)
 	if (rangeTableType == CITUS_RTE_RELATION)
 	{
 		Oid relationId = rangeTableEntry->relid;
-		char partitionMethod = PartitionMethod(relationId);
 		Var *partitionColumn = PartitionColumn(relationId, rangeTableId);
 
-		/* reference tables do not have partition columns */
-		if (partitionMethod == DISTRIBUTE_BY_NONE)
+		/* non-distributed tables do not have partition columns */
+		if (IsCitusTableType(relationId, CITUS_TABLE_WITH_NO_DIST_KEY))
 		{
-			partitionedOnColumn = false;
-
-			return partitionedOnColumn;
+			return false;
 		}
 
 		if (partitionColumn->varattno == column->varattno)
@@ -3927,7 +3923,7 @@ ShardIntervalsOverlap(ShardInterval *firstInterval, ShardInterval *secondInterva
 	CitusTableCacheEntry *intervalRelation =
 		GetCitusTableCacheEntry(firstInterval->relationId);
 
-	Assert(intervalRelation->partitionMethod != DISTRIBUTE_BY_NONE);
+	Assert(IsCitusTableTypeCacheEntry(intervalRelation, DISTRIBUTED_TABLE));
 
 	FmgrInfo *comparisonFunction = intervalRelation->shardIntervalCompareFunction;
 	Oid collation = intervalRelation->partitionColumn->varcollid;

@@ -227,10 +227,10 @@ TargetListOnPartitionColumn(Query *query, List *targetEntryList)
 		FindReferencedTableColumn(targetExpression, NIL, query, &relationId, &column);
 
 		/*
-		 * If the expression belongs to a reference table continue searching for
+		 * If the expression belongs to a non-distributed table continue searching for
 		 * other partition keys.
 		 */
-		if (IsCitusTable(relationId) && PartitionMethod(relationId) == DISTRIBUTE_BY_NONE)
+		if (IsCitusTableType(relationId, CITUS_TABLE_WITH_NO_DIST_KEY))
 		{
 			continue;
 		}
@@ -341,8 +341,7 @@ bool
 IsDistributedTableRTE(Node *node)
 {
 	Oid relationId = NodeTryGetRteRelid(node);
-	return relationId != InvalidOid && IsCitusTable(relationId) &&
-		   PartitionMethod(relationId) != DISTRIBUTE_BY_NONE;
+	return relationId != InvalidOid && IsCitusTableType(relationId, DISTRIBUTED_TABLE);
 }
 
 
@@ -354,7 +353,7 @@ bool
 IsReferenceTableRTE(Node *node)
 {
 	Oid relationId = NodeTryGetRteRelid(node);
-	return relationId != InvalidOid && IsReferenceTable(relationId);
+	return relationId != InvalidOid && IsCitusTableType(relationId, REFERENCE_TABLE);
 }
 
 
@@ -1021,12 +1020,11 @@ ErrorHintRequired(const char *errorHint, Query *queryTree)
 	foreach(relationIdCell, distributedRelationIdList)
 	{
 		Oid relationId = lfirst_oid(relationIdCell);
-		char partitionMethod = PartitionMethod(relationId);
-		if (partitionMethod == DISTRIBUTE_BY_NONE)
+		if (IsCitusTableType(relationId, REFERENCE_TABLE))
 		{
 			continue;
 		}
-		else if (partitionMethod == DISTRIBUTE_BY_HASH)
+		else if (IsCitusTableType(relationId, HASH_DISTRIBUTED))
 		{
 			int colocationId = TableColocationId(relationId);
 			colocationIdList = list_append_unique_int(colocationIdList, colocationId);

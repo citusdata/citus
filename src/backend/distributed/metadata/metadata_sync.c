@@ -224,14 +224,12 @@ ShouldSyncTableMetadata(Oid relationId)
 {
 	CitusTableCacheEntry *tableEntry = GetCitusTableCacheEntry(relationId);
 
-	bool hashDistributed = (tableEntry->partitionMethod == DISTRIBUTE_BY_HASH);
 	bool streamingReplicated =
 		(tableEntry->replicationModel == REPLICATION_MODEL_STREAMING);
 
-	bool mxTable = (streamingReplicated && hashDistributed);
-	bool referenceTable = (tableEntry->partitionMethod == DISTRIBUTE_BY_NONE);
-
-	if (mxTable || referenceTable)
+	bool mxTable = (streamingReplicated && IsCitusTableTypeCacheEntry(tableEntry,
+																	  HASH_DISTRIBUTED));
+	if (mxTable || IsCitusTableTypeCacheEntry(tableEntry, REFERENCE_TABLE))
 	{
 		return true;
 	}
@@ -631,7 +629,7 @@ DistributionCreateCommand(CitusTableCacheEntry *cacheEntry)
 	char replicationModel = cacheEntry->replicationModel;
 	StringInfo tablePartitionKeyString = makeStringInfo();
 
-	if (distributionMethod == DISTRIBUTE_BY_NONE)
+	if (IsCitusTableTypeCacheEntry(cacheEntry, CITUS_TABLE_WITH_NO_DIST_KEY))
 	{
 		appendStringInfo(tablePartitionKeyString, "NULL");
 	}

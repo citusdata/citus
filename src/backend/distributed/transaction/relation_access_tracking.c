@@ -173,7 +173,7 @@ RecordRelationAccessIfReferenceTable(Oid relationId, ShardPlacementAccessType ac
 	 * recursively calling RecordRelationAccessBase(), so becareful about
 	 * removing this check.
 	 */
-	if (PartitionMethod(relationId) != DISTRIBUTE_BY_NONE)
+	if (!IsCitusTableType(relationId, REFERENCE_TABLE))
 	{
 		return;
 	}
@@ -697,7 +697,7 @@ CheckConflictingRelationAccesses(Oid relationId, ShardPlacementAccessType access
 
 	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
 
-	if (!(cacheEntry->partitionMethod == DISTRIBUTE_BY_NONE &&
+	if (!(IsCitusTableTypeCacheEntry(cacheEntry, REFERENCE_TABLE) &&
 		  cacheEntry->referencingRelationsViaForeignKey != NIL))
 	{
 		return;
@@ -817,7 +817,7 @@ CheckConflictingParallelRelationAccesses(Oid relationId, ShardPlacementAccessTyp
 	}
 
 	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
-	if (!(cacheEntry->partitionMethod == DISTRIBUTE_BY_HASH &&
+	if (!(IsCitusTableTypeCacheEntry(cacheEntry, HASH_DISTRIBUTED) &&
 		  cacheEntry->referencedRelationsViaForeignKey != NIL))
 	{
 		return;
@@ -893,7 +893,7 @@ HoldsConflictingLockWithReferencedRelations(Oid relationId, ShardPlacementAccess
 	foreach_oid(referencedRelation, cacheEntry->referencedRelationsViaForeignKey)
 	{
 		/* we're only interested in foreign keys to reference tables */
-		if (PartitionMethod(referencedRelation) != DISTRIBUTE_BY_NONE)
+		if (!IsCitusTableType(referencedRelation, REFERENCE_TABLE))
 		{
 			continue;
 		}
@@ -955,7 +955,7 @@ HoldsConflictingLockWithReferencingRelations(Oid relationId, ShardPlacementAcces
 	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
 	bool holdsConflictingLocks = false;
 
-	Assert(PartitionMethod(relationId) == DISTRIBUTE_BY_NONE);
+	Assert(IsCitusTableTypeCacheEntry(cacheEntry, REFERENCE_TABLE));
 
 	Oid referencingRelation = InvalidOid;
 	foreach_oid(referencingRelation, cacheEntry->referencingRelationsViaForeignKey)
@@ -964,8 +964,7 @@ HoldsConflictingLockWithReferencingRelations(Oid relationId, ShardPlacementAcces
 		 * We're only interested in foreign keys to reference tables from
 		 * hash distributed tables.
 		 */
-		if (!IsCitusTable(referencingRelation) ||
-			PartitionMethod(referencingRelation) != DISTRIBUTE_BY_HASH)
+		if (!IsCitusTableType(referencingRelation, HASH_DISTRIBUTED))
 		{
 			continue;
 		}

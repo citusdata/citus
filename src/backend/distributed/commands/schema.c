@@ -93,7 +93,7 @@ PreprocessDropSchemaStmt(Node *node, const char *queryString)
 				continue;
 			}
 
-			if (IsReferenceTable(relationId))
+			if (IsCitusTableType(relationId, REFERENCE_TABLE))
 			{
 				/* prevent concurrent EnsureReferenceTablesExistOnAllNodes */
 				int colocationId = CreateReferenceTableColocationId();

@@ -74,14 +74,13 @@ citus_truncate_trigger(PG_FUNCTION_ARGS)
 	TriggerData *triggerData = (TriggerData *) fcinfo->context;
 	Relation truncatedRelation = triggerData->tg_relation;
 	Oid relationId = RelationGetRelid(truncatedRelation);
-	char partitionMethod = PartitionMethod(relationId);
 
 	if (!EnableDDLPropagation)
 	{
 		PG_RETURN_DATUM(PointerGetDatum(NULL));
 	}
 
-	if (partitionMethod == DISTRIBUTE_BY_APPEND)
+	if (IsCitusTableType(relationId, APPEND_DISTRIBUTED))
 	{
 		Oid schemaId = get_rel_namespace(relationId);
 		char *schemaName = get_namespace_name(schemaId);
@@ -317,8 +316,7 @@ ExecuteTruncateStmtSequentialIfNecessary(TruncateStmt *command)
 	{
 		Oid relationId = RangeVarGetRelid(rangeVar, NoLock, failOK);
 
-		if (IsCitusTable(relationId) &&
-			PartitionMethod(relationId) == DISTRIBUTE_BY_NONE &&
+		if (IsCitusTableType(relationId, REFERENCE_TABLE) &&
 			TableReferenced(relationId))
 		{
 			char *relationName = get_rel_name(relationId);

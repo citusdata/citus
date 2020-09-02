@@ -16,7 +16,8 @@
 
 #include "listutils.h"
 
-extern bool IsReferenceTable(Oid relationId);
+#include "distributed/metadata_cache.h"
+
 extern void EnsureReferenceTablesExistOnAllNodes(void);
 extern uint32 CreateReferenceTableColocationId(void);
 extern void DeleteAllReferenceTablePlacementsFromNodeGroup(int32 groupId);

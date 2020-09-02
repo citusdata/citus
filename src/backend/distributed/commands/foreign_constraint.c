@@ -138,7 +138,6 @@ ErrorIfUnsupportedForeignConstraintExists(Relation relation, char referencingDis
 
 		int referencingAttrIndex = -1;
 
-		char referencedDistMethod = 0;
 		Var *referencedDistKey = NULL;
 		int referencedAttrIndex = -1;
 		uint32 referencedColocationId = INVALID_COLOCATION_ID;
@@ -165,11 +164,12 @@ ErrorIfUnsupportedForeignConstraintExists(Relation relation, char referencingDis
 		}
 
 		/* set referenced table related variables here if table is referencing itself */
-
+		char referencedDistMethod = 0;
 		if (!selfReferencingTable)
 		{
 			referencedDistMethod = PartitionMethod(referencedTableId);
-			referencedDistKey = (referencedDistMethod == DISTRIBUTE_BY_NONE) ?
+			referencedDistKey = IsCitusTableType(referencedTableId,
+												 CITUS_TABLE_WITH_NO_DIST_KEY) ?
 								NULL :
 								DistPartitionKey(referencedTableId);
 			referencedColocationId = TableColocationId(referencedTableId);
@@ -428,7 +428,7 @@ ColumnAppearsInForeignKeyToReferenceTable(char *columnName, Oid relationId)
 		 * any foreign constraint from a distributed table to a local table.
 		 */
 		Assert(IsCitusTable(referencedTableId));
-		if (PartitionMethod(referencedTableId) != DISTRIBUTE_BY_NONE)
+		if (!IsCitusTableType(referencedTableId, REFERENCE_TABLE))
 		{
 			heapTuple = systable_getnext(scanDescriptor);
 			continue;
@@ -559,7 +559,7 @@ GetForeignKeyOidsToReferenceTables(Oid relationId)
 
 		Oid referencedTableOid = constraintForm->confrelid;
 
-		if (IsReferenceTable(referencedTableOid))
+		if (IsCitusTableType(referencedTableOid, REFERENCE_TABLE))
 		{
 			fkeyOidsToReferenceTables = lappend_oid(fkeyOidsToReferenceTables,
 													foreignKeyOid);

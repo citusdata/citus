@@ -116,6 +116,25 @@ typedef struct DistObjectCacheEntry
 	int colocationId;
 } DistObjectCacheEntry;
 
+typedef enum
+{
+	HASH_DISTRIBUTED,
+	APPEND_DISTRIBUTED,
+	RANGE_DISTRIBUTED,
+
+	/* hash, range or append distributed table */
+	DISTRIBUTED_TABLE,
+
+	REFERENCE_TABLE,
+	CITUS_LOCAL_TABLE,
+
+	/* table without a dist key such as reference table */
+	CITUS_TABLE_WITH_NO_DIST_KEY
+} CitusTableType;
+
+extern bool IsCitusTableType(Oid relationId, CitusTableType tableType);
+extern bool IsCitusTableTypeCacheEntry(CitusTableCacheEntry *tableEtnry, CitusTableType
+									   tableType);
 
 extern bool IsCitusTable(Oid relationId);
 extern List * CitusTableList(void);

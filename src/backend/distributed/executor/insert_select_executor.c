@@ -493,8 +493,7 @@ ExecutePlanIntoColocatedIntermediateResults(Oid targetRelationId,
 	ParamListInfo paramListInfo = executorState->es_param_list_info;
 	bool stopOnFailure = false;
 
-	char partitionMethod = PartitionMethod(targetRelationId);
-	if (partitionMethod == DISTRIBUTE_BY_NONE)
+	if (IsCitusTableType(targetRelationId, REFERENCE_TABLE))
 	{
 		stopOnFailure = true;
 	}
@@ -535,8 +534,7 @@ ExecutePlanIntoRelation(Oid targetRelationId, List *insertTargetList,
 	ParamListInfo paramListInfo = executorState->es_param_list_info;
 	bool stopOnFailure = false;
 
-	char partitionMethod = PartitionMethod(targetRelationId);
-	if (partitionMethod == DISTRIBUTE_BY_NONE)
+	if (IsCitusTableType(targetRelationId, REFERENCE_TABLE))
 	{
 		stopOnFailure = true;
 	}
@@ -620,9 +618,8 @@ IsSupportedRedistributionTarget(Oid targetRelationId)
 {
 	CitusTableCacheEntry *tableEntry = GetCitusTableCacheEntry(targetRelationId);
 
-	/* only range and hash-distributed tables are currently supported */
-	if (tableEntry->partitionMethod != DISTRIBUTE_BY_HASH &&
-		tableEntry->partitionMethod != DISTRIBUTE_BY_RANGE)
+	if (!IsCitusTableTypeCacheEntry(tableEntry, HASH_DISTRIBUTED) &&
+		!IsCitusTableTypeCacheEntry(tableEntry, RANGE_DISTRIBUTED))
 	{
 		return false;
 	}

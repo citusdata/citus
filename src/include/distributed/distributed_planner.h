@@ -196,7 +196,6 @@ extern PlannedStmt * distributed_planner(Query *parse,
 
 
 extern List * ExtractRangeTableEntryList(Query *query);
-extern List * ExtractReferenceTableRTEList(List *rteList);
 extern bool NeedsDistributedPlanning(Query *query);
 extern struct DistributedPlan * GetDistributedPlan(CustomScan *node);
 extern void multi_relation_restriction_hook(PlannerInfo *root, RelOptInfo *relOptInfo,

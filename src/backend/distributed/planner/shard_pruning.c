@@ -306,8 +306,8 @@ static int ConstraintCount(PruningTreeNode *node);
  * PruneShards returns all shards from a distributed table that cannot be
  * proven to be eliminated by whereClauseList.
  *
- * For reference tables, the function simply returns the single shard that the
- * table has.
+ * For non-distributed tables such as reference table, the function
+ * simply returns the single shard that the table has.
  *
  * When there is a single <partition column> = <constant> filter in the where
  * clause list, the constant is written to the partitionValueConst pointer.
@@ -338,8 +338,8 @@ PruneShards(Oid relationId, Index rangeTableId, List *whereClauseList,
 		return NIL;
 	}
 
-	/* short circuit for reference tables */
-	if (partitionMethod == DISTRIBUTE_BY_NONE)
+	/* short circuit for non-distributed tables such as reference table */
+	if (IsCitusTableTypeCacheEntry(cacheEntry, CITUS_TABLE_WITH_NO_DIST_KEY))
 	{
 		prunedList = ShardArrayToList(cacheEntry->sortedShardIntervalArray,
 									  cacheEntry->shardIntervalArrayLength);

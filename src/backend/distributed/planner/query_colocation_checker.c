@@ -25,6 +25,7 @@
 #include "distributed/query_colocation_checker.h"
 #include "distributed/pg_dist_partition.h"
 #include "distributed/relation_restriction_equivalence.h"
+#include "distributed/metadata_cache.h"
 #include "distributed/multi_logical_planner.h" /* only to access utility functions */
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
@@ -153,10 +154,10 @@ AnchorRte(Query *subquery)
 		{
 			Oid relationId = currentRte->relid;
 
-			if (PartitionMethod(relationId) == DISTRIBUTE_BY_NONE)
+			if (IsCitusTableType(relationId, CITUS_TABLE_WITH_NO_DIST_KEY))
 			{
 				/*
-				 * Reference tables should not be the anchor rte since they
+				 * Non-distributed tables should not be the anchor rte since they
 				 * don't have distribution key.
 				 */
 				continue;

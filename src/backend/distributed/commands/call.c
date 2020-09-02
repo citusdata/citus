@@ -28,6 +28,7 @@
 #include "distributed/adaptive_executor.h"
 #include "distributed/reference_table_utils.h"
 #include "distributed/remote_commands.h"
+#include "distributed/reference_table_utils.h"
 #include "distributed/shard_pruning.h"
 #include "distributed/tuple_destination.h"
 #include "distributed/version_compat.h"
@@ -92,17 +93,16 @@ CallFuncExprRemotely(CallStmt *callStmt, DistObjectCacheEntry *procedure,
 								"be constant expressions")));
 		return false;
 	}
-
 	CitusTableCacheEntry *distTable = GetCitusTableCacheEntry(colocatedRelationId);
 	Var *partitionColumn = distTable->partitionColumn;
 	bool colocatedWithReferenceTable = false;
-	if (partitionColumn == NULL)
+	if (IsCitusTableTypeCacheEntry(distTable, REFERENCE_TABLE))
 	{
 		/* This can happen if colocated with a reference table. Punt for now. */
 		ereport(DEBUG1, (errmsg(
 							 "will push down CALL for reference tables")));
 		colocatedWithReferenceTable = true;
-		Assert(IsReferenceTable(colocatedRelationId));
+		Assert(IsCitusTableType(colocatedRelationId, REFERENCE_TABLE));
 	}
 
 	ShardPlacement *placement = NULL;

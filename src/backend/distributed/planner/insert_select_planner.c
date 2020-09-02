@@ -541,7 +541,6 @@ DistributedInsertSelectSupported(Query *queryTree, RangeTblEntry *insertRte,
 {
 	Oid selectPartitionColumnTableId = InvalidOid;
 	Oid targetRelationId = insertRte->relid;
-	char targetPartitionMethod = PartitionMethod(targetRelationId);
 	ListCell *rangeTableCell = NULL;
 
 	/* we only do this check for INSERT ... SELECT queries */
@@ -589,7 +588,7 @@ DistributedInsertSelectSupported(Query *queryTree, RangeTblEntry *insertRte,
 	 * If we're inserting into a reference table, all participating tables
 	 * should be reference tables as well.
 	 */
-	if (targetPartitionMethod == DISTRIBUTE_BY_NONE)
+	if (IsCitusTableType(targetRelationId, REFERENCE_TABLE))
 	{
 		if (!allReferenceTables)
 		{
@@ -1424,7 +1423,7 @@ NonPushableInsertSelectSupported(Query *insertSelectQuery)
 	}
 
 	RangeTblEntry *insertRte = ExtractResultRelationRTE(insertSelectQuery);
-	if (PartitionMethod(insertRte->relid) == DISTRIBUTE_BY_APPEND)
+	if (IsCitusTableType(insertRte->relid, APPEND_DISTRIBUTED))
 	{
 		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 							 "INSERT ... SELECT into an append-distributed table is "

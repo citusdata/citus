@@ -363,17 +363,18 @@ CitusCopyFrom(CopyStmt *copyStatement, QueryCompletionCompat *completionTag)
 	}
 
 	Oid relationId = RangeVarGetRelid(copyStatement->relation, NoLock, false);
-	char partitionMethod = PartitionMethod(relationId);
+	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
 
 	/* disallow modifications to a partition table which have rep. factor > 1 */
 	EnsurePartitionTableNotReplicated(relationId);
 
-	if (partitionMethod == DISTRIBUTE_BY_HASH || partitionMethod == DISTRIBUTE_BY_RANGE ||
-		partitionMethod == DISTRIBUTE_BY_NONE)
+	if (IsCitusTableTypeCacheEntry(cacheEntry, HASH_DISTRIBUTED) ||
+		IsCitusTableTypeCacheEntry(cacheEntry, RANGE_DISTRIBUTED) ||
+		IsCitusTableTypeCacheEntry(cacheEntry, CITUS_TABLE_WITH_NO_DIST_KEY))
 	{
 		CopyToExistingShards(copyStatement, completionTag);
 	}
-	else if (partitionMethod == DISTRIBUTE_BY_APPEND)
+	else if (IsCitusTableTypeCacheEntry(cacheEntry, APPEND_DISTRIBUTED))
 	{
 		CopyToNewShards(copyStatement, completionTag, relationId);
 	}
@@ -409,7 +410,6 @@ CopyToExistingShards(CopyStmt *copyStatement, QueryCompletionCompat *completionT
 	MemoryContext executorTupleContext = NULL;
 	ExprContext *executorExpressionContext = NULL;
 
-	char partitionMethod = 0;
 	bool stopOnFailure = false;
 
 	CopyState copyState = NULL;
@@ -460,8 +460,7 @@ CopyToExistingShards(CopyStmt *copyStatement, QueryCompletionCompat *completionT
 	executorTupleContext = GetPerTupleMemoryContext(executorState);
 	executorExpressionContext = GetPerTupleExprContext(executorState);
 
-	partitionMethod = PartitionMethod(tableId);
-	if (partitionMethod == DISTRIBUTE_BY_NONE)
+	if (IsCitusTableType(tableId, REFERENCE_TABLE))
 	{
 		stopOnFailure = true;
 	}
@@ -2150,16 +2149,12 @@ CitusCopyDestReceiverStartup(DestReceiver *dest, int operation,
 
 	ListCell *columnNameCell = NULL;
 
-	char partitionMethod = '\0';
-
-
 	const char *delimiterCharacter = "\t";
 	const char *nullPrintCharacter = "\\N";
 
 	/* look up table properties */
 	Relation distributedRelation = table_open(tableId, RowExclusiveLock);
 	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(tableId);
-	partitionMethod = cacheEntry->partitionMethod;
 
 	copyDest->distributedRelation = distributedRelation;
 	copyDest->tupleDescriptor = inputTupleDescriptor;
@@ -2168,7 +2163,7 @@ CitusCopyDestReceiverStartup(DestReceiver *dest, int operation,
 	List *shardIntervalList = LoadShardIntervalList(tableId);
 	if (shardIntervalList == NIL)
 	{
-		if (partitionMethod == DISTRIBUTE_BY_HASH)
+		if (IsCitusTableTypeCacheEntry(cacheEntry, HASH_DISTRIBUTED))
 		{
 			ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
 							errmsg("could not find any shards into which to copy"),
@@ -2187,7 +2182,7 @@ CitusCopyDestReceiverStartup(DestReceiver *dest, int operation,
 	}
 
 	/* error if any shard missing min/max values */
-	if (partitionMethod != DISTRIBUTE_BY_NONE &&
+	if (IsCitusTableTypeCacheEntry(cacheEntry, DISTRIBUTED_TABLE) &&
 		cacheEntry->hasUninitializedShardInterval)
 	{
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
@@ -2248,7 +2243,7 @@ CitusCopyDestReceiverStartup(DestReceiver *dest, int operation,
 		attributeList = lappend(attributeList, columnNameValue);
 	}
 
-	if (partitionMethod != DISTRIBUTE_BY_NONE &&
+	if (IsCitusTableTypeCacheEntry(cacheEntry, DISTRIBUTED_TABLE) &&
 		copyDest->partitionColumnIndex == INVALID_PARTITION_COLUMN_INDEX)
 	{
 		ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),

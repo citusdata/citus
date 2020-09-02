@@ -299,15 +299,14 @@ List *
 ShardIntervalOpExpressions(ShardInterval *shardInterval, Index rteIndex)
 {
 	Oid relationId = shardInterval->relationId;
-	char partitionMethod = PartitionMethod(shardInterval->relationId);
 	Var *partitionColumn = NULL;
 
-	if (partitionMethod == DISTRIBUTE_BY_HASH)
+	if (IsCitusTableType(relationId, HASH_DISTRIBUTED))
 	{
 		partitionColumn = MakeInt4Column();
 	}
-	else if (partitionMethod == DISTRIBUTE_BY_RANGE || partitionMethod ==
-			 DISTRIBUTE_BY_APPEND)
+	else if (IsCitusTableType(relationId, RANGE_DISTRIBUTED) || IsCitusTableType(
+				 relationId, APPEND_DISTRIBUTED))
 	{
 		Assert(rteIndex > 0);
 		partitionColumn = PartitionColumn(relationId, rteIndex);
@@ -1134,7 +1133,6 @@ MultiShardModifyQuerySupported(Query *originalQuery,
 	DeferredErrorMessage *errorMessage = NULL;
 	RangeTblEntry *resultRangeTable = ExtractResultRelationRTE(originalQuery);
 	Oid resultRelationOid = resultRangeTable->relid;
-	char resultPartitionMethod = PartitionMethod(resultRelationOid);
 
 	if (HasDangerousJoinUsing(originalQuery->rtable, (Node *) originalQuery->jointree))
 	{
@@ -1151,7 +1149,7 @@ MultiShardModifyQuerySupported(Query *originalQuery,
 									 "tables must not be VOLATILE",
 									 NULL, NULL);
 	}
-	else if (resultPartitionMethod == DISTRIBUTE_BY_NONE)
+	else if (IsCitusTableType(resultRelationOid, REFERENCE_TABLE))
 	{
 		errorMessage = DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 									 "only reference tables may be queried when targeting "
@@ -1882,9 +1880,8 @@ SingleShardTaskList(Query *query, uint64 jobId, List *relationShardList,
 
 		CitusTableCacheEntry *modificationTableCacheEntry = GetCitusTableCacheEntry(
 			updateOrDeleteRTE->relid);
-		char modificationPartitionMethod = modificationTableCacheEntry->partitionMethod;
 
-		if (modificationPartitionMethod == DISTRIBUTE_BY_NONE &&
+		if (IsCitusTableTypeCacheEntry(modificationTableCacheEntry, REFERENCE_TABLE) &&
 			SelectsFromDistributedTable(rangeTableList, query))
 		{
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
@@ -2009,7 +2006,7 @@ SelectsFromDistributedTable(List *rangeTableList, Query *query)
 
 		CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(
 			rangeTableEntry->relid);
-		if (cacheEntry->partitionMethod != DISTRIBUTE_BY_NONE &&
+		if (IsCitusTableTypeCacheEntry(cacheEntry, DISTRIBUTED_TABLE) &&
 			(resultRangeTableEntry == NULL || resultRangeTableEntry->relid !=
 			 rangeTableEntry->relid))
 		{
@@ -2424,9 +2421,9 @@ TargetShardIntervalForFastPathQuery(Query *query, bool *isMultiShardQuery,
 {
 	Oid relationId = ExtractFirstCitusTableId(query);
 
-	if (PartitionMethod(relationId) == DISTRIBUTE_BY_NONE)
+	if (IsCitusTableType(relationId, CITUS_TABLE_WITH_NO_DIST_KEY))
 	{
-		/* we don't need to do shard pruning for reference tables */
+		/* we don't need to do shard pruning for non-distributed tables */
 		return list_make1(LoadShardIntervalList(relationId));
 	}
 
@@ -2702,14 +2699,13 @@ BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError)
 {
 	Oid distributedTableId = ExtractFirstCitusTableId(query);
 	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(distributedTableId);
-	char partitionMethod = cacheEntry->partitionMethod;
 	List *modifyRouteList = NIL;
 	ListCell *insertValuesCell = NULL;
 
 	Assert(query->commandType == CMD_INSERT);
 
 	/* reference tables can only have one shard */
-	if (partitionMethod == DISTRIBUTE_BY_NONE)
+	if (IsCitusTableTypeCacheEntry(cacheEntry, CITUS_TABLE_WITH_NO_DIST_KEY))
 	{
 		List *shardIntervalList = LoadShardIntervalList(distributedTableId);
 
@@ -2808,8 +2804,8 @@ BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError)
 												   missingOk);
 		}
 
-		if (partitionMethod == DISTRIBUTE_BY_HASH || partitionMethod ==
-			DISTRIBUTE_BY_RANGE)
+		if (IsCitusTableTypeCacheEntry(cacheEntry, HASH_DISTRIBUTED) ||
+			IsCitusTableTypeCacheEntry(cacheEntry, RANGE_DISTRIBUTED))
 		{
 			Datum partitionValue = partitionValueConst->constvalue;
 
@@ -3203,8 +3199,7 @@ ExtractInsertPartitionKeyValue(Query *query)
 	uint32 rangeTableId = 1;
 	Const *singlePartitionValueConst = NULL;
 
-	char partitionMethod = PartitionMethod(distributedTableId);
-	if (partitionMethod == DISTRIBUTE_BY_NONE)
+	if (IsCitusTableType(distributedTableId, CITUS_TABLE_WITH_NO_DIST_KEY))
 	{
 		return NULL;
 	}
@@ -3336,9 +3331,7 @@ MultiRouterPlannableQuery(Query *query)
 				continue;
 			}
 
-			char partitionMethod = PartitionMethod(distributedTableId);
-			if (!(partitionMethod == DISTRIBUTE_BY_HASH || partitionMethod ==
-				  DISTRIBUTE_BY_NONE || partitionMethod == DISTRIBUTE_BY_RANGE))
+			if (IsCitusTableType(distributedTableId, APPEND_DISTRIBUTED))
 			{
 				return DeferredError(
 					ERRCODE_FEATURE_NOT_SUPPORTED,
@@ -3346,7 +3339,7 @@ MultiRouterPlannableQuery(Query *query)
 					NULL, NULL);
 			}
 
-			if (partitionMethod != DISTRIBUTE_BY_NONE)
+			if (IsCitusTableType(distributedTableId, DISTRIBUTED_TABLE))
 			{
 				hasDistributedTable = true;
 			}
@@ -3361,7 +3354,8 @@ MultiRouterPlannableQuery(Query *query)
 				uint32 tableReplicationFactor = TableShardReplicationFactor(
 					distributedTableId);
 
-				if (tableReplicationFactor > 1 && partitionMethod != DISTRIBUTE_BY_NONE)
+				if (tableReplicationFactor > 1 && IsCitusTableType(distributedTableId,
+																   DISTRIBUTED_TABLE))
 				{
 					return DeferredError(
 						ERRCODE_FEATURE_NOT_SUPPORTED,
@@ -3490,13 +3484,12 @@ ErrorIfQueryHasUnroutableModifyingCTE(Query *queryTree)
 
 			CitusTableCacheEntry *modificationTableCacheEntry =
 				GetCitusTableCacheEntry(distributedTableId);
-			char modificationPartitionMethod =
-				modificationTableCacheEntry->partitionMethod;
 
-			if (modificationPartitionMethod == DISTRIBUTE_BY_NONE)
+			if (IsCitusTableTypeCacheEntry(modificationTableCacheEntry,
+										   CITUS_TABLE_WITH_NO_DIST_KEY))
 			{
 				return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-									 "cannot router plan modification of a reference table",
+									 "cannot router plan modification of a non-distributed table",
 									 NULL, NULL);
 			}
 

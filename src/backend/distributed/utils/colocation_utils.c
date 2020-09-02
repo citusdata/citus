@@ -431,11 +431,12 @@ ShardsIntervalsEqual(ShardInterval *leftShardInterval, ShardInterval *rightShard
 		return false;
 	}
 
-	if (leftIntervalPartitionMethod == DISTRIBUTE_BY_HASH)
+	if (IsCitusTableType(leftShardInterval->relationId, HASH_DISTRIBUTED))
 	{
 		return HashPartitionedShardIntervalsEqual(leftShardInterval, rightShardInterval);
 	}
-	else if (leftIntervalPartitionMethod == DISTRIBUTE_BY_NONE)
+	else if (IsCitusTableType(leftShardInterval->relationId,
+							  CITUS_TABLE_WITH_NO_DIST_KEY))
 	{
 		/*
 		 * Reference tables has only a single shard and all reference tables
@@ -921,14 +922,13 @@ ColocatedShardIntervalList(ShardInterval *shardInterval)
 	List *colocatedShardList = NIL;
 
 	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(distributedTableId);
-	char partitionMethod = cacheEntry->partitionMethod;
 
 	/*
-	 * If distribution type of the table is not hash or reference, each shard of
+	 * If distribution type of the table is append or range, each shard of
 	 * the shard is only co-located with itself.
 	 */
-	if ((partitionMethod == DISTRIBUTE_BY_APPEND) ||
-		(partitionMethod == DISTRIBUTE_BY_RANGE))
+	if (IsCitusTableTypeCacheEntry(cacheEntry, APPEND_DISTRIBUTED) ||
+		IsCitusTableTypeCacheEntry(cacheEntry, RANGE_DISTRIBUTED))
 	{
 		ShardInterval *copyShardInterval = CopyShardInterval(shardInterval);
 

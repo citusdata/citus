@@ -395,7 +395,7 @@ SetLocktagForShardDistributionMetadata(int64 shardId, LOCKTAG *tag)
 	uint32 colocationId = citusTable->colocationId;
 
 	if (colocationId == INVALID_COLOCATION_ID ||
-		citusTable->partitionMethod != DISTRIBUTE_BY_HASH)
+		!IsCitusTableTypeCacheEntry(citusTable, HASH_DISTRIBUTED))
 	{
 		SET_LOCKTAG_SHARD_METADATA_RESOURCE(*tag, MyDatabaseId, shardId);
 	}
@@ -493,7 +493,7 @@ GetSortedReferenceShardIntervals(List *relationList)
 	Oid relationId = InvalidOid;
 	foreach_oid(relationId, relationList)
 	{
-		if (PartitionMethod(relationId) != DISTRIBUTE_BY_NONE)
+		if (!IsCitusTableType(relationId, REFERENCE_TABLE))
 		{
 			continue;
 		}

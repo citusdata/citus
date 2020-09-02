@@ -56,29 +56,6 @@ static bool AnyRelationsModifiedInTransaction(List *relationIdList);
 PG_FUNCTION_INFO_V1(upgrade_to_reference_table);
 PG_FUNCTION_INFO_V1(replicate_reference_tables);
 
-
-/*
- * IsReferenceTable returns whether the given relation ID identifies a reference
- * table.
- */
-bool
-IsReferenceTable(Oid relationId)
-{
-	if (!IsCitusTable(relationId))
-	{
-		return false;
-	}
-	CitusTableCacheEntry *tableEntry = GetCitusTableCacheEntry(relationId);
-
-	if (tableEntry->partitionMethod != DISTRIBUTE_BY_NONE)
-	{
-		return false;
-	}
-
-	return true;
-}
-
-
 /*
  * replicate_reference_tables is a UDF to ensure that allreference tables are
  * replicated to all nodes.
@@ -350,7 +327,7 @@ upgrade_to_reference_table(PG_FUNCTION_ARGS)
 
 	CitusTableCacheEntry *tableEntry = GetCitusTableCacheEntry(relationId);
 
-	if (tableEntry->partitionMethod == DISTRIBUTE_BY_NONE)
+	if (IsCitusTableTypeCacheEntry(tableEntry, REFERENCE_TABLE))
 	{
 		char *relationName = get_rel_name(relationId);
 		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
