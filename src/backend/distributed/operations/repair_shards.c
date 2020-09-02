@@ -420,7 +420,7 @@ ReplicateColocatedShardPlacement(int64 shardId, char *sourceNodeName,
 		 * Since this a long-running operation we do this after the error checks, but
 		 * before taking metadata locks.
 		 */
-		EnsureReferenceTablesExistOnAllNodes();
+		EnsureReferenceTablesExistOnAllNodesExtended(shardReplicationMode);
 	}
 
 	CopyShardTables(colocatedShardList, sourceNodeName, sourceNodePort,
