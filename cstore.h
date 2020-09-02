@@ -266,10 +266,6 @@ typedef struct TableWriteState
 
 } TableWriteState;
 
-/* Function declarations for extension loading and unloading */
-extern void _PG_init(void);
-extern void _PG_fini(void);
-
 extern CompressionType ParseCompressionType(const char *compressionTypeString);
 extern void InitializeCStoreTableFile(Oid relationId, Relation relation,
 									  CStoreOptions *cstoreOptions);

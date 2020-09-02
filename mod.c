@@ -13,6 +13,7 @@
 
 #include "postgres.h"
 
+#include "mod.h"
 #include "cstore_fdw.h"
 
 PG_MODULE_MAGIC;
