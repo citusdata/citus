@@ -824,9 +824,9 @@ ReferenceJoin(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 	}
 
 	if (!IsSupportedReferenceJoin(joinType,
-								  IsReferenceTable(
-									  currentJoinNode->tableEntry->relationId),
-								  IsReferenceTable(candidateTable->relationId)
+								  IsCitusTableType(
+									  currentJoinNode->tableEntry->relationId, REFERENCE_TABLE),
+								  IsCitusTableType(candidateTable->relationId, REFERENCE_TABLE)
 								  ))
 	{
 		return NULL;
@@ -874,9 +874,9 @@ CartesianProductReferenceJoin(JoinOrderNode *currentJoinNode, TableEntry *candid
 							  List *applicableJoinClauses, JoinType joinType)
 {
 	if (!IsSupportedReferenceJoin(joinType,
-								  IsReferenceTable(
-									  currentJoinNode->tableEntry->relationId),
-								  IsReferenceTable(candidateTable->relationId)))
+								  IsCitusTableType(
+									  currentJoinNode->tableEntry->relationId, REFERENCE_TABLE),
+								  IsCitusTableType(candidateTable->relationId, REFERENCE_TABLE)))
 	{
 		return NULL;
 	}
@@ -1383,7 +1383,7 @@ DistPartitionKey(Oid relationId)
 	CitusTableCacheEntry *partitionEntry = GetCitusTableCacheEntry(relationId);
 
 	/* non-distributed tables do not have partition column */
-	if (IsNonDistributedTableCacheEntry(partitionEntry))
+	if (IsCacheEntryCitusTableType(partitionEntry, CITUS_TABLE_WITH_NO_DIST_KEY))
 	{
 		return NULL;
 	}

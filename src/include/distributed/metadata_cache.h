@@ -116,19 +116,20 @@ typedef struct DistObjectCacheEntry
 	int colocationId;
 } DistObjectCacheEntry;
 
-extern bool IsNonDistributedTable(Oid relationId);
-extern bool IsReferenceTable(Oid relationId);
-extern bool IsDistributedTable(Oid relationId);
-extern bool IsAppendDistributedTable(Oid relationId);
-extern bool IsHashDistributedTable(Oid relationId);
-extern bool IsRangeDistributedTable(Oid relationId);
-extern bool IsNonDistributedTable(Oid relationId);
-extern bool IsReferenceTableCacheEntry(CitusTableCacheEntry *tableEntry);
-extern bool IsDistributedTableCacheEntry(CitusTableCacheEntry *tableEntry);
-extern bool IsHashDistributedTableCacheEntry(CitusTableCacheEntry *tableEntry);
-extern bool IsAppendDistributedTableCacheEntry(CitusTableCacheEntry *tableEntry);
-extern bool IsRangeDistributedTableCacheEntry(CitusTableCacheEntry *tableEntry);
-extern bool IsNonDistributedTableCacheEntry(CitusTableCacheEntry *tableEntry);
+typedef enum
+{
+	HASH_DISTRIBUTED,
+	APPEND_DISTRIBUTED,
+	RANGE_DISTRIBUTED,
+	DISTRIBUTED_TABLE,
+	REFERENCE_TABLE,
+	CITUS_LOCAL_TABLE,
+	CITUS_TABLE_WITH_NO_DIST_KEY
+} CitusTableType;
+
+extern bool IsCitusTableType(Oid relationId, CitusTableType tableType);
+extern bool IsCacheEntryCitusTableType(CitusTableCacheEntry* tableEtnry, CitusTableType tableType);
+
 extern bool IsCitusTable(Oid relationId);
 extern List * CitusTableList(void);
 extern ShardInterval * LoadShardInterval(uint64 shardId);

@@ -173,7 +173,7 @@ RecordRelationAccessIfReferenceTable(Oid relationId, ShardPlacementAccessType ac
 	 * recursively calling RecordRelationAccessBase(), so becareful about
 	 * removing this check.
 	 */
-	if (!IsReferenceTable(relationId))
+	if (!IsCitusTableType(relationId, REFERENCE_TABLE))
 	{
 		return;
 	}
@@ -697,7 +697,7 @@ CheckConflictingRelationAccesses(Oid relationId, ShardPlacementAccessType access
 
 	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
 
-	if (!(IsReferenceTableCacheEntry(cacheEntry) &&
+	if (!(IsCacheEntryCitusTableType(cacheEntry, REFERENCE_TABLE) &&
 		  cacheEntry->referencingRelationsViaForeignKey != NIL))
 	{
 		return;
@@ -817,7 +817,7 @@ CheckConflictingParallelRelationAccesses(Oid relationId, ShardPlacementAccessTyp
 	}
 
 	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
-	if (!(IsHashDistributedTableCacheEntry(cacheEntry) &&
+	if (!(IsCacheEntryCitusTableType(cacheEntry, HASH_DISTRIBUTED) &&
 		  cacheEntry->referencedRelationsViaForeignKey != NIL))
 	{
 		return;
@@ -893,7 +893,7 @@ HoldsConflictingLockWithReferencedRelations(Oid relationId, ShardPlacementAccess
 	foreach_oid(referencedRelation, cacheEntry->referencedRelationsViaForeignKey)
 	{
 		/* we're only interested in foreign keys to reference tables */
-		if (!IsReferenceTable(referencedRelation))
+		if (!IsCitusTableType(referencedRelation, REFERENCE_TABLE))
 		{
 			continue;
 		}
@@ -955,7 +955,7 @@ HoldsConflictingLockWithReferencingRelations(Oid relationId, ShardPlacementAcces
 	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
 	bool holdsConflictingLocks = false;
 
-	Assert(IsReferenceTableCacheEntry(cacheEntry));
+	Assert(IsCacheEntryCitusTableType(cacheEntry, REFERENCE_TABLE));
 
 	Oid referencingRelation = InvalidOid;
 	foreach_oid(referencingRelation, cacheEntry->referencingRelationsViaForeignKey)
@@ -964,7 +964,7 @@ HoldsConflictingLockWithReferencingRelations(Oid relationId, ShardPlacementAcces
 		 * We're only interested in foreign keys to reference tables from
 		 * hash distributed tables.
 		 */
-		if (!IsHashDistributedTable(referencingRelation))
+		if (!IsCitusTableType(referencingRelation, HASH_DISTRIBUTED))
 		{
 			continue;
 		}

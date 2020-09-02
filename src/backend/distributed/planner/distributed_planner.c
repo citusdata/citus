@@ -306,7 +306,7 @@ ExtractReferenceTableRTEList(List *rteList)
 		}
 
 		Oid relationOid = rte->relid;
-		if (IsReferenceTable(relationOid))
+		if (IsCitusTableType(relationOid, REFERENCE_TABLE))
 		{
 			referenceTableRTEList = lappend(referenceTableRTEList, rte);
 		}
@@ -1854,7 +1854,7 @@ multi_relation_restriction_hook(PlannerInfo *root, RelOptInfo *relOptInfo,
 		cacheEntry = GetCitusTableCacheEntry(rte->relid);
 
 		relationRestrictionContext->allReferenceTables &=
-			IsReferenceTableCacheEntry(cacheEntry);
+			IsCacheEntryCitusTableType(cacheEntry, REFERENCE_TABLE);
 	}
 
 	relationRestrictionContext->relationRestrictionList =

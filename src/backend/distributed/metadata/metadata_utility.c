@@ -368,7 +368,7 @@ ErrorIfNotSuitableToGetSize(Oid relationId)
 							   "distributed", escapedQueryString)));
 	}
 
-	if (IsHashDistributedTable(relationId) &&
+	if (IsCitusTableType(relationId, HASH_DISTRIBUTED) &&
 		!SingleReplicatedTable(relationId))
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
@@ -1401,7 +1401,7 @@ EnsureFunctionOwner(Oid functionId)
 void
 EnsureHashDistributedTable(Oid relationId)
 {
-	if (!IsHashDistributedTable(relationId))
+	if (!IsCitusTableType(relationId, HASH_DISTRIBUTED))
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						errmsg("relation %s should be a "

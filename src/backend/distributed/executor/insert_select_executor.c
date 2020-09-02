@@ -493,7 +493,7 @@ ExecutePlanIntoColocatedIntermediateResults(Oid targetRelationId,
 	ParamListInfo paramListInfo = executorState->es_param_list_info;
 	bool stopOnFailure = false;
 
-	if (IsReferenceTable(targetRelationId))
+	if (IsCitusTableType(targetRelationId, REFERENCE_TABLE))
 	{
 		stopOnFailure = true;
 	}
@@ -534,7 +534,7 @@ ExecutePlanIntoRelation(Oid targetRelationId, List *insertTargetList,
 	ParamListInfo paramListInfo = executorState->es_param_list_info;
 	bool stopOnFailure = false;
 
-	if (IsReferenceTable(targetRelationId))
+	if (IsCitusTableType(targetRelationId, REFERENCE_TABLE))
 	{
 		stopOnFailure = true;
 	}
@@ -618,8 +618,8 @@ IsSupportedRedistributionTarget(Oid targetRelationId)
 {
 	CitusTableCacheEntry *tableEntry = GetCitusTableCacheEntry(targetRelationId);
 
-	if (!IsHashDistributedTableCacheEntry(tableEntry) &&
-		!IsRangeDistributedTableCacheEntry(tableEntry))
+	if (!IsCacheEntryCitusTableType(tableEntry, HASH_DISTRIBUTED) &&
+		!IsCacheEntryCitusTableType(tableEntry, RANGE_DISTRIBUTED))
 	{
 		return false;
 	}

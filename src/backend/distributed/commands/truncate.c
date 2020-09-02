@@ -80,7 +80,7 @@ citus_truncate_trigger(PG_FUNCTION_ARGS)
 		PG_RETURN_DATUM(PointerGetDatum(NULL));
 	}
 
-	if (IsAppendDistributedTable(relationId))
+	if (IsCitusTableType(relationId, APPEND_DISTRIBUTED))
 	{
 		Oid schemaId = get_rel_namespace(relationId);
 		char *schemaName = get_namespace_name(schemaId);
@@ -316,7 +316,7 @@ ExecuteTruncateStmtSequentialIfNecessary(TruncateStmt *command)
 	{
 		Oid relationId = RangeVarGetRelid(rangeVar, NoLock, failOK);
 
-		if (IsReferenceTable(relationId) &&
+		if (IsCitusTableType(relationId, REFERENCE_TABLE) &&
 			TableReferenced(relationId))
 		{
 			char *relationName = get_rel_name(relationId);

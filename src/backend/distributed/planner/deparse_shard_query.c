@@ -78,7 +78,7 @@ RebuildQueryStrings(Job *workerJob)
 			Query *copiedSubquery = copiedSubqueryRte->subquery;
 
 			/* there are no restrictions to add for reference tables */
-			if (IsDistributedTable(shardInterval->relationId))
+			if (IsCitusTableType(shardInterval->relationId, DISTRIBUTED_TABLE))
 			{
 				AddShardIntervalRestrictionToSelect(copiedSubquery, shardInterval);
 			}

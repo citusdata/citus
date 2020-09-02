@@ -167,7 +167,7 @@ create_distributed_function(PG_FUNCTION_ARGS)
 		if (pg_strncasecmp(colocateWithTableName, "default", NAMEDATALEN) != 0)
 		{
 			Oid colocationRelationId = ResolveRelationId(colocateWithText, false);
-			colocatedWithReferenceTable = IsReferenceTable(colocationRelationId);
+			colocatedWithReferenceTable = IsCitusTableType(colocationRelationId, REFERENCE_TABLE);
 		}
 	}
 
@@ -501,7 +501,7 @@ EnsureFunctionCanBeColocatedWithTable(Oid functionOid, Oid distributionColumnTyp
 	CitusTableCacheEntry *sourceTableEntry = GetCitusTableCacheEntry(sourceRelationId);
 	char sourceReplicationModel = sourceTableEntry->replicationModel;
 
-	if (!IsHashDistributedTableCacheEntry(sourceTableEntry) && !IsReferenceTableCacheEntry(sourceTableEntry))
+	if (!IsCacheEntryCitusTableType(sourceTableEntry, HASH_DISTRIBUTED) && !IsCacheEntryCitusTableType(sourceTableEntry, REFERENCE_TABLE))
 	{
 		char *functionName = get_func_name(functionOid);
 		char *sourceRelationName = get_rel_name(sourceRelationId);
@@ -513,7 +513,7 @@ EnsureFunctionCanBeColocatedWithTable(Oid functionOid, Oid distributionColumnTyp
 							   functionName, sourceRelationName)));
 	}
 
-	if (sourceDistributionMethod == DISTRIBUTE_BY_NONE &&
+	if (IsCitusTableTypeCacheEntry(sourceTableEntry, CITUS_TABLE_WITH_NO_DIST_KEY) &&
 		distributionColumnType != InvalidOid)
 	{
 		char *functionName = get_func_name(functionOid);

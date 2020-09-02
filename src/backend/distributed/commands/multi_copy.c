@@ -368,13 +368,13 @@ CitusCopyFrom(CopyStmt *copyStatement, QueryCompletionCompat *completionTag)
 	/* disallow modifications to a partition table which have rep. factor > 1 */
 	EnsurePartitionTableNotReplicated(relationId);
 
-	if (IsHashDistributedTableCacheEntry(cacheEntry) ||
-		IsRangeDistributedTableCacheEntry(cacheEntry) ||
-		IsNonDistributedTableCacheEntry(cacheEntry))
+	if (IsCacheEntryCitusTableType(cacheEntry, HASH_DISTRIBUTED) ||
+		IsCacheEntryCitusTableType(cacheEntry, RANGE_DISTRIBUTED) ||
+		IsCacheEntryCitusTableType(cacheEntry, CITUS_TABLE_WITH_NO_DIST_KEY))
 	{
 		CopyToExistingShards(copyStatement, completionTag);
 	}
-	else if (IsAppendDistributedTableCacheEntry(cacheEntry))
+	else if (IsCacheEntryCitusTableType(cacheEntry, APPEND_DISTRIBUTED))
 	{
 		CopyToNewShards(copyStatement, completionTag, relationId);
 	}
@@ -460,7 +460,7 @@ CopyToExistingShards(CopyStmt *copyStatement, QueryCompletionCompat *completionT
 	executorTupleContext = GetPerTupleMemoryContext(executorState);
 	executorExpressionContext = GetPerTupleExprContext(executorState);
 
-	if (IsReferenceTable(tableId))
+	if (IsCitusTableType(tableId, REFERENCE_TABLE))
 	{
 		stopOnFailure = true;
 	}
@@ -2163,7 +2163,7 @@ CitusCopyDestReceiverStartup(DestReceiver *dest, int operation,
 	List *shardIntervalList = LoadShardIntervalList(tableId);
 	if (shardIntervalList == NIL)
 	{
-		if (IsHashDistributedTableCacheEntry(cacheEntry))
+		if (IsCacheEntryCitusTableType(cacheEntry, HASH_DISTRIBUTED))
 		{
 			ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
 							errmsg("could not find any shards into which to copy"),
@@ -2182,7 +2182,7 @@ CitusCopyDestReceiverStartup(DestReceiver *dest, int operation,
 	}
 
 	/* error if any shard missing min/max values */
-	if (IsDistributedTableCacheEntry(cacheEntry) &&
+	if (IsCacheEntryCitusTableType(cacheEntry, DISTRIBUTED_TABLE) &&
 		cacheEntry->hasUninitializedShardInterval)
 	{
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
@@ -2243,7 +2243,7 @@ CitusCopyDestReceiverStartup(DestReceiver *dest, int operation,
 		attributeList = lappend(attributeList, columnNameValue);
 	}
 
-	if (IsDistributedTableCacheEntry(cacheEntry) &&
+	if (IsCacheEntryCitusTableType(cacheEntry, DISTRIBUTED_TABLE) &&
 		copyDest->partitionColumnIndex == INVALID_PARTITION_COLUMN_INDEX)
 	{
 		ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),

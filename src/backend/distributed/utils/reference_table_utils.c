@@ -327,7 +327,7 @@ upgrade_to_reference_table(PG_FUNCTION_ARGS)
 
 	CitusTableCacheEntry *tableEntry = GetCitusTableCacheEntry(relationId);
 
-	if (IsReferenceTableCacheEntry(tableEntry))
+	if (IsCacheEntryCitusTableType(tableEntry, REFERENCE_TABLE))
 	{
 		char *relationName = get_rel_name(relationId);
 		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),

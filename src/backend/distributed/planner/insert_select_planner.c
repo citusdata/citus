@@ -588,7 +588,7 @@ DistributedInsertSelectSupported(Query *queryTree, RangeTblEntry *insertRte,
 	 * If we're inserting into a reference table, all participating tables
 	 * should be reference tables as well.
 	 */
-	if (IsReferenceTable(targetRelationId))
+	if (IsCitusTableType(targetRelationId, REFERENCE_TABLE))
 	{
 		if (!allReferenceTables)
 		{
@@ -1423,7 +1423,7 @@ NonPushableInsertSelectSupported(Query *insertSelectQuery)
 	}
 
 	RangeTblEntry *insertRte = ExtractResultRelationRTE(insertSelectQuery);
-	if (IsAppendDistributedTable(insertRte->relid))
+	if (IsCitusTableType(insertRte->relid, APPEND_DISTRIBUTED))
 	{
 		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 							 "INSERT ... SELECT into an append-distributed table is "

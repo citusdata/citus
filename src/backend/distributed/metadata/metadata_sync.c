@@ -227,8 +227,8 @@ ShouldSyncTableMetadata(Oid relationId)
 	bool streamingReplicated =
 		(tableEntry->replicationModel == REPLICATION_MODEL_STREAMING);
 
-	bool mxTable = (streamingReplicated && IsHashDistributedTableCacheEntry(tableEntry));
-	if (mxTable || IsReferenceTableCacheEntry(tableEntry))
+	bool mxTable = (streamingReplicated && IsCacheEntryCitusTableType(tableEntry, HASH_DISTRIBUTED));
+	if (mxTable || IsCacheEntryCitusTableType(tableEntry, REFERENCE_TABLE))
 	{
 		return true;
 	}
@@ -628,7 +628,7 @@ DistributionCreateCommand(CitusTableCacheEntry *cacheEntry)
 	char replicationModel = cacheEntry->replicationModel;
 	StringInfo tablePartitionKeyString = makeStringInfo();
 
-	if (IsNonDistributedTableCacheEntry(cacheEntry))
+	if (IsCacheEntryCitusTableType(cacheEntry, CITUS_TABLE_WITH_NO_DIST_KEY))
 	{
 		appendStringInfo(tablePartitionKeyString, "NULL");
 	}

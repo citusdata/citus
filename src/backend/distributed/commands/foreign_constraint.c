@@ -168,7 +168,7 @@ ErrorIfUnsupportedForeignConstraintExists(Relation relation, char referencingDis
 		if (!selfReferencingTable)
 		{
 			referencedDistMethod = PartitionMethod(referencedTableId);
-			referencedDistKey = IsNonDistributedTable(referencedTableId) ?
+			referencedDistKey = IsCitusTableType(referencedTableId, CITUS_TABLE_WITH_NO_DIST_KEY) ?
 								NULL :
 								DistPartitionKey(referencedTableId);
 			referencedColocationId = TableColocationId(referencedTableId);
@@ -427,7 +427,7 @@ ColumnAppearsInForeignKeyToReferenceTable(char *columnName, Oid relationId)
 		 * any foreign constraint from a distributed table to a local table.
 		 */
 		Assert(IsCitusTable(referencedTableId));
-		if (!IsReferenceTable(referencedTableId))
+		if (!IsCitusTableType(referencedTableId, REFERENCE_TABLE))
 		{
 			heapTuple = systable_getnext(scanDescriptor);
 			continue;
@@ -558,7 +558,7 @@ GetForeignKeyOidsToReferenceTables(Oid relationId)
 
 		Oid referencedTableOid = constraintForm->confrelid;
 
-		if (IsReferenceTable(referencedTableOid))
+		if (IsCitusTableType(referencedTableOid, REFERENCE_TABLE))
 		{
 			fkeyOidsToReferenceTables = lappend_oid(fkeyOidsToReferenceTables,
 													foreignKeyOid);

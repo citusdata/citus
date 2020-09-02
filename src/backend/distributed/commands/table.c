@@ -86,7 +86,7 @@ PreprocessDropTableStmt(Node *node, const char *queryString)
 			continue;
 		}
 
-		if (IsReferenceTable(relationId))
+		if (IsCitusTableType(relationId, REFERENCE_TABLE))
 		{
 			/* prevent concurrent EnsureReferenceTablesExistOnAllNodes */
 			int colocationId = CreateReferenceTableColocationId();
@@ -1230,7 +1230,7 @@ SetupExecutionModeForAlterTable(Oid relationId, AlterTableCmd *command)
 			{
 				Oid rightRelationId = RangeVarGetRelid(constraint->pktable, NoLock,
 													   false);
-				if (IsReferenceTable(rightRelationId))
+				if (IsCitusTableType(rightRelationId, REFERENCE_TABLE))
 				{
 					executeSequentially = true;
 				}
@@ -1265,7 +1265,7 @@ SetupExecutionModeForAlterTable(Oid relationId, AlterTableCmd *command)
 		{
 			Oid rightRelationId = RangeVarGetRelid(constraint->pktable, NoLock,
 												   false);
-			if (IsReferenceTable(rightRelationId))
+			if (IsCitusTableType(rightRelationId, REFERENCE_TABLE))
 			{
 				executeSequentially = true;
 			}
@@ -1286,7 +1286,7 @@ SetupExecutionModeForAlterTable(Oid relationId, AlterTableCmd *command)
 	 * the distributed tables, thus contradicting our purpose of using
 	 * sequential mode.
 	 */
-	if (executeSequentially && !IsReferenceTable(relationId) &&
+	if (executeSequentially && !IsCitusTableType(relationId, REFERENCE_TABLE) &&
 		ParallelQueryExecutedInTransaction())
 	{
 		char *relationName = get_rel_name(relationId);
@@ -1344,7 +1344,7 @@ InterShardDDLTaskList(Oid leftRelationId, Oid rightRelationId,
 	 * since we only have one placement per worker. This hack is first implemented
 	 * for foreign constraint support from distributed tables to reference tables.
 	 */
-	if (IsReferenceTable(rightRelationId))
+	if (IsCitusTableType(rightRelationId, REFERENCE_TABLE))
 	{
 		int rightShardCount = list_length(rightShardList);
 		int leftShardCount = list_length(leftShardList);

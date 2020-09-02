@@ -4276,8 +4276,8 @@ TablePartitioningSupportsDistinct(List *tableNodeList, MultiExtendedOp *opNode,
 		 * We need to check that task results don't overlap. We can only do this
 		 * if table is range partitioned.
 		 */
-		if (IsRangeDistributedTable(relationId) ||
-			IsHashDistributedTable(relationId))
+		if (IsCitusTableType(relationId, RANGE_DISTRIBUTED) ||
+			IsCitusTableType(relationId, HASH_DISTRIBUTED))
 		{
 			Var *tablePartitionColumn = tableNode->partitionColumn;
 

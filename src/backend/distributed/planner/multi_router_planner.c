@@ -301,11 +301,11 @@ ShardIntervalOpExpressions(ShardInterval *shardInterval, Index rteIndex)
 	Oid relationId = shardInterval->relationId;
 	Var *partitionColumn = NULL;
 
-	if (IsHashDistributedTable(relationId))
+	if (IsCitusTableType(relationId, HASH_DISTRIBUTED))
 	{
 		partitionColumn = MakeInt4Column();
 	}
-	else if (IsRangeDistributedTable(relationId) || IsAppendDistributedTable(relationId))
+	else if (IsCitusTableType(relationId, RANGE_DISTRIBUTED) || IsCitusTableType(relationId, APPEND_DISTRIBUTED))
 	{
 		Assert(rteIndex > 0);
 		partitionColumn = PartitionColumn(relationId, rteIndex);
@@ -1148,7 +1148,7 @@ MultiShardModifyQuerySupported(Query *originalQuery,
 									 "tables must not be VOLATILE",
 									 NULL, NULL);
 	}
-	else if (IsReferenceTable(resultRelationOid))
+	else if (IsCitusTableType(resultRelationOid, REFERENCE_TABLE))
 	{
 		errorMessage = DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 									 "only reference tables may be queried when targeting "
@@ -1880,7 +1880,7 @@ SingleShardTaskList(Query *query, uint64 jobId, List *relationShardList,
 		CitusTableCacheEntry *modificationTableCacheEntry = GetCitusTableCacheEntry(
 			updateOrDeleteRTE->relid);
 
-		if (IsReferenceTableCacheEntry(modificationTableCacheEntry) &&
+		if (IsCacheEntryCitusTableType(modificationTableCacheEntry, REFERENCE_TABLE) &&
 			SelectsFromDistributedTable(rangeTableList, query))
 		{
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
@@ -2005,7 +2005,7 @@ SelectsFromDistributedTable(List *rangeTableList, Query *query)
 
 		CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(
 			rangeTableEntry->relid);
-		if (IsDistributedTableCacheEntry(cacheEntry) &&
+		if (IsCacheEntryCitusTableType(cacheEntry, DISTRIBUTED_TABLE) &&
 			(resultRangeTableEntry == NULL || resultRangeTableEntry->relid !=
 			 rangeTableEntry->relid))
 		{
@@ -2420,7 +2420,7 @@ TargetShardIntervalForFastPathQuery(Query *query, bool *isMultiShardQuery,
 {
 	Oid relationId = ExtractFirstCitusTableId(query);
 
-	if (IsNonDistributedTable(relationId))
+	if (IsCitusTableType(relationId, CITUS_TABLE_WITH_NO_DIST_KEY))
 	{
 		/* we don't need to do shard pruning for non-distributed tables */
 		return list_make1(LoadShardIntervalList(relationId));
@@ -2704,7 +2704,7 @@ BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError)
 	Assert(query->commandType == CMD_INSERT);
 
 	/* reference tables can only have one shard */
-	if (IsReferenceTableCacheEntry(cacheEntry))
+	if (IsCacheEntryCitusTableType(cacheEntry, REFERENCE_TABLE))
 	{
 		List *shardIntervalList = LoadShardIntervalList(distributedTableId);
 
@@ -2803,8 +2803,8 @@ BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError)
 												   missingOk);
 		}
 
-		if (IsHashDistributedTableCacheEntry(cacheEntry) ||
-			IsRangeDistributedTableCacheEntry(cacheEntry))
+		if (IsCacheEntryCitusTableType(cacheEntry, HASH_DISTRIBUTED) ||
+			IsCacheEntryCitusTableType(cacheEntry, RANGE_DISTRIBUTED))
 		{
 			Datum partitionValue = partitionValueConst->constvalue;
 
@@ -3198,7 +3198,7 @@ ExtractInsertPartitionKeyValue(Query *query)
 	uint32 rangeTableId = 1;
 	Const *singlePartitionValueConst = NULL;
 
-	if (IsNonDistributedTable(distributedTableId))
+	if (IsCitusTableType(distributedTableId, CITUS_TABLE_WITH_NO_DIST_KEY))
 	{
 		return NULL;
 	}
@@ -3330,7 +3330,7 @@ MultiRouterPlannableQuery(Query *query)
 				continue;
 			}
 
-			if (IsAppendDistributedTable(distributedTableId))
+			if (IsCitusTableType(distributedTableId, APPEND_DISTRIBUTED))
 			{
 				return DeferredError(
 					ERRCODE_FEATURE_NOT_SUPPORTED,
@@ -3338,7 +3338,7 @@ MultiRouterPlannableQuery(Query *query)
 					NULL, NULL);
 			}
 
-			if (IsDistributedTable(distributedTableId))
+			if (IsCitusTableType(distributedTableId, DISTRIBUTED_TABLE))
 			{
 				hasDistributedTable = true;
 			}
@@ -3353,7 +3353,7 @@ MultiRouterPlannableQuery(Query *query)
 				uint32 tableReplicationFactor = TableShardReplicationFactor(
 					distributedTableId);
 
-				if (tableReplicationFactor > 1 && IsDistributedTable(distributedTableId))
+				if (tableReplicationFactor > 1 && IsCitusTableType(distributedTableId, DISTRIBUTED_TABLE))
 				{
 					return DeferredError(
 						ERRCODE_FEATURE_NOT_SUPPORTED,
@@ -3483,7 +3483,7 @@ ErrorIfQueryHasUnroutableModifyingCTE(Query *queryTree)
 			CitusTableCacheEntry *modificationTableCacheEntry =
 				GetCitusTableCacheEntry(distributedTableId);
 
-			if (IsNonDistributedTableCacheEntry(modificationTableCacheEntry))
+			if (IsCacheEntryCitusTableType(modificationTableCacheEntry, CITUS_TABLE_WITH_NO_DIST_KEY))
 			{
 				return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 									 "cannot router plan modification of a non-distributed table",

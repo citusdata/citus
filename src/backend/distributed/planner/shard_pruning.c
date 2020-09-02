@@ -339,7 +339,7 @@ PruneShards(Oid relationId, Index rangeTableId, List *whereClauseList,
 	}
 
 	/* short circuit for non-distributed tables such as reference table */
-	if (IsNonDistributedTableCacheEntry(cacheEntry))
+	if (IsCacheEntryCitusTableType(cacheEntry, CITUS_TABLE_WITH_NO_DIST_KEY))
 	{
 		prunedList = ShardArrayToList(cacheEntry->sortedShardIntervalArray,
 									  cacheEntry->shardIntervalArrayLength);

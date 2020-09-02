@@ -230,7 +230,7 @@ TargetListOnPartitionColumn(Query *query, List *targetEntryList)
 		 * If the expression belongs to a non-distributed table continue searching for
 		 * other partition keys.
 		 */
-		if (IsNonDistributedTable(relationId))
+		if (IsCitusTableType(relationId, CITUS_TABLE_WITH_NO_DIST_KEY))
 		{
 			continue;
 		}
@@ -341,7 +341,7 @@ bool
 IsDistributedTableRTE(Node *node)
 {
 	Oid relationId = NodeTryGetRteRelid(node);
-	return relationId != InvalidOid && IsDistributedTable(relationId);
+	return relationId != InvalidOid && IsCitusTableType(relationId, DISTRIBUTED_TABLE);
 }
 
 
@@ -353,7 +353,7 @@ bool
 IsReferenceTableRTE(Node *node)
 {
 	Oid relationId = NodeTryGetRteRelid(node);
-	return relationId != InvalidOid && IsReferenceTable(relationId);
+	return relationId != InvalidOid && IsCitusTableType(relationId, REFERENCE_TABLE);
 }
 
 
@@ -1020,11 +1020,11 @@ ErrorHintRequired(const char *errorHint, Query *queryTree)
 	foreach(relationIdCell, distributedRelationIdList)
 	{
 		Oid relationId = lfirst_oid(relationIdCell);
-		if (IsReferenceTable(relationId))
+		if (IsCitusTableType(relationId, REFERENCE_TABLE))
 		{
 			continue;
 		}
-		else if (IsHashDistributedTable(relationId))
+		else if (IsCitusTableType(relationId, HASH_DISTRIBUTED))
 		{
 			int colocationId = TableColocationId(relationId);
 			colocationIdList = list_append_unique_int(colocationIdList, colocationId);

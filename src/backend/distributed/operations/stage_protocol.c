@@ -136,14 +136,14 @@ master_create_empty_shard(PG_FUNCTION_ARGS)
 		}
 	}
 
-	if (IsHashDistributedTable(relationId))
+	if (IsCitusTableType(relationId, HASH_DISTRIBUTED))
 	{
 		ereport(ERROR, (errmsg("relation \"%s\" is a hash partitioned table",
 							   relationName),
 						errdetail("We currently don't support creating shards "
 								  "on hash-partitioned tables")));
 	}
-	else if (IsReferenceTable(relationId))
+	else if (IsCitusTableType(relationId, REFERENCE_TABLE))
 	{
 		ereport(ERROR, (errmsg("relation \"%s\" is a reference table",
 							   relationName),
@@ -252,7 +252,7 @@ master_append_table_to_shard(PG_FUNCTION_ARGS)
 						errdetail("The underlying shard is not a regular table")));
 	}
 
-	if (IsHashDistributedTable(relationId) || IsReferenceTable(relationId))
+	if (IsCitusTableType(relationId, HASH_DISTRIBUTED) || IsCitusTableType(relationId, REFERENCE_TABLE))
 	{
 		ereport(ERROR, (errmsg("cannot append to shardId " UINT64_FORMAT, shardId),
 						errdetail("We currently don't support appending to shards "
@@ -584,7 +584,7 @@ RelationShardListForShardCreate(ShardInterval *shardInterval)
 	relationShard->shardId = shardInterval->shardId;
 	List *relationShardList = list_make1(relationShard);
 
-	if (IsHashDistributedTableCacheEntry(cacheEntry) &&
+	if (IsCacheEntryCitusTableType(cacheEntry, HASH_DISTRIBUTED) &&
 		cacheEntry->colocationId != INVALID_COLOCATION_ID)
 	{
 		shardIndex = ShardIndex(shardInterval);
@@ -603,12 +603,12 @@ RelationShardListForShardCreate(ShardInterval *shardInterval)
 			continue;
 		}
 
-		if (IsReferenceTable(fkeyRelationid))
+		if (IsCitusTableType(fkeyRelationid, REFERENCE_TABLE))
 		{
 			fkeyShardId = GetFirstShardId(fkeyRelationid);
 		}
-		else if (IsHashDistributedTableCacheEntry(cacheEntry) &&
-				 IsHashDistributedTable(fkeyRelationid))
+		else if (IsCacheEntryCitusTableType(cacheEntry, HASH_DISTRIBUTED) &&
+				 IsCitusTableType(fkeyRelationid, HASH_DISTRIBUTED))
 		{
 			/* hash distributed tables should be colocated to have fkey */
 			Assert(TableColocationId(fkeyRelationid) == cacheEntry->colocationId);
@@ -724,7 +724,7 @@ WorkerCreateShardCommandList(Oid relationId, int shardIndex, uint64 shardId,
 		{
 			referencedShardId = shardId;
 		}
-		else if (IsReferenceTable(referencedRelationId))
+		else if (IsCitusTableType(referencedRelationId, REFERENCE_TABLE))
 		{
 			referencedShardId = GetFirstShardId(referencedRelationId);
 		}
@@ -824,7 +824,7 @@ UpdateShardStatistics(int64 shardId)
 	}
 
 	/* only update shard min/max values for append-partitioned tables */
-	if (IsAppendDistributedTable(relationId))
+	if (IsCitusTableType(relationId, APPEND_DISTRIBUTED))
 	{
 		DeleteShardRow(shardId);
 		InsertShardRow(relationId, shardId, storageType, minValue, maxValue);
@@ -917,7 +917,7 @@ WorkerShardStats(ShardPlacement *placement, Oid relationId, const char *shardNam
 	PQclear(queryResult);
 	ForgetResults(connection);
 
-	if (!IsAppendDistributedTable(relationId))
+	if (!IsCitusTableType(relationId, APPEND_DISTRIBUTED))
 	{
 		/* we don't need min/max for non-append distributed tables */
 		return true;

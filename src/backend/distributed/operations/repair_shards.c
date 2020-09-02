@@ -410,7 +410,7 @@ ReplicateColocatedShardPlacement(int64 shardId, char *sourceNodeName,
 							   targetNodeName, targetNodePort);
 	}
 
-	if (!IsReferenceTable(distributedTableId))
+	if (!IsCitusTableType(distributedTableId, REFERENCE_TABLE))
 	{
 		/*
 		 * When copying a shard to a new node, we should first ensure that reference
@@ -492,7 +492,7 @@ EnsureTableListSuitableForReplication(List *tableIdList)
 			GetReferencingForeignConstaintCommands(tableId);
 
 		if (foreignConstraintCommandList != NIL &&
-			IsDistributedTable(tableId))
+			IsCitusTableType(tableId, DISTRIBUTED_TABLE))
 		{
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 							errmsg("cannot create foreign key constraint"),
@@ -850,7 +850,7 @@ CopyShardForeignConstraintCommandListGrouped(ShardInterval *shardInterval,
 		char *referencedSchemaName = get_namespace_name(referencedSchemaId);
 		char *escapedReferencedSchemaName = quote_literal_cstr(referencedSchemaName);
 
-		if (IsNonDistributedTable(referencedRelationId))
+		if (IsCitusTableType(referencedRelationId, CITUS_TABLE_WITH_NO_DIST_KEY))
 		{
 			referencedShardId = GetFirstShardId(referencedRelationId);
 		}

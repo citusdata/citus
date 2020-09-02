@@ -97,14 +97,13 @@ CallFuncExprRemotely(CallStmt *callStmt, DistObjectCacheEntry *procedure,
 	CitusTableCacheEntry *distTable = GetCitusTableCacheEntry(colocatedRelationId);
 	Var *partitionColumn = distTable->partitionColumn;
 	bool colocatedWithReferenceTable = false;
-	if (partitionColumn == NULL)
-	if (IsReferenceTable(colocatedRelationId))
+	if (IsCitusTableType(colocatedRelationId, REFERENCE_TABLE))
 	{
 		/* This can happen if colocated with a reference table. Punt for now. */
 		ereport(DEBUG1, (errmsg(
 							 "will push down CALL for reference tables")));
 		colocatedWithReferenceTable = true;
-		Assert(IsReferenceTable(colocatedRelationId));
+		Assert(IsCitusTableType(colocatedRelationId, REFERENCE_TABLE));
 	}
 
 	ShardPlacement *placement = NULL;
