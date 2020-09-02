@@ -176,5 +176,6 @@ extern ShardPlacement * SearchShardPlacementInList(List *shardPlacementList,
 extern ShardPlacement * SearchShardPlacementInListOrError(List *shardPlacementList,
 														  const char *nodeName,
 														  uint32 nodePort);
+extern char LookupShardTransferMode(Oid shardReplicationModeOid);
 
 #endif   /* COORDINATOR_PROTOCOL_H */

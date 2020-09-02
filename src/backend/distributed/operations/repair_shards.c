@@ -44,7 +44,6 @@
 #include "utils/palloc.h"
 
 /* local function forward declarations */
-static char LookupShardTransferMode(Oid shardReplicationModeOid);
 static void ErrorIfTableCannotBeReplicated(Oid relationId);
 static void RepairShardPlacement(int64 shardId, const char *sourceNodeName,
 								 int32 sourceNodePort, const char *targetNodeName,
@@ -226,7 +225,7 @@ ErrorIfTableCannotBeReplicated(Oid relationId)
  * LookupShardTransferMode maps the oids of citus.shard_transfer_mode enum
  * values to a char.
  */
-static char
+char
 LookupShardTransferMode(Oid shardReplicationModeOid)
 {
 	char shardReplicationMode = 0;
