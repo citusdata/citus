@@ -78,6 +78,22 @@ replicate_reference_tables(PG_FUNCTION_ARGS)
 void
 EnsureReferenceTablesExistOnAllNodes(void)
 {
+	EnsureReferenceTablesExistOnAllNodesExtended(TRANSFER_MODE_BLOCK_WRITES);
+}
+
+
+/*
+ * EnsureReferenceTablesExistOnAllNodesExtended ensures that a shard placement for every
+ * reference table exists on all nodes. If a node does not have a set of shard placements,
+ * then master_copy_shard_placement is called in a subtransaction to pull the data to the
+ * new node.
+ *
+ * The transferMode is passed on to the implementation of the copy to control the locks
+ * and transferMode.
+ */
+void
+EnsureReferenceTablesExistOnAllNodesExtended(char transferMode)
+{
 	/*
 	 * Prevent this function from running concurrently with itself.
 	 *
@@ -192,7 +208,7 @@ EnsureReferenceTablesExistOnAllNodes(void)
 			StringInfo placementCopyCommand =
 				CopyShardPlacementToWorkerNodeQuery(sourceShardPlacement,
 													newWorkerNode,
-													TRANSFER_MODE_BLOCK_WRITES);
+													transferMode);
 			ExecuteCriticalRemoteCommand(connection, placementCopyCommand->data);
 			RemoteTransactionCommit(connection);
 		}

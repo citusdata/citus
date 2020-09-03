@@ -19,6 +19,7 @@
 #include "distributed/metadata_cache.h"
 
 extern void EnsureReferenceTablesExistOnAllNodes(void);
+extern void EnsureReferenceTablesExistOnAllNodesExtended(char transferMode);
 extern uint32 CreateReferenceTableColocationId(void);
 extern void DeleteAllReferenceTablePlacementsFromNodeGroup(int32 groupId);
 extern int CompareOids(const void *leftElement, const void *rightElement);
