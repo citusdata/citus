@@ -118,6 +118,7 @@ static void SplitLocalAndRemotePlacements(List *taskPlacementList,
 static uint64 ExecuteLocalTaskPlan(PlannedStmt *taskPlan, char *queryString,
 								   TupleDestination *tupleDest, Task *task,
 								   ParamListInfo paramListInfo);
+static void RecordReferenceTableAccessesForTask(Task *task);
 static void LogLocalCommand(Task *task);
 static uint64 LocallyPlanAndExecuteMultipleQueries(List *queryStrings,
 												   TupleDestination *tupleDest,
@@ -549,6 +550,8 @@ ExecuteLocalTaskPlan(PlannedStmt *taskPlan, char *queryString,
 	int eflags = 0;
 	uint64 totalRowsProcessed = 0;
 
+	RecordReferenceTableAccessesForTask(task);
+
 	/*
 	 * Use the tupleStore provided by the scanState because it is shared accross
 	 * the other task executions and the adaptive executor.
@@ -582,6 +585,39 @@ ExecuteLocalTaskPlan(PlannedStmt *taskPlan, char *queryString,
 	FreeQueryDesc(queryDesc);
 
 	return totalRowsProcessed;
+}
+
+
+/*
+ * RecordReferenceTableAccessesForTask records relation accesses for reference
+ * tables that given task will access.
+ */
+static void
+RecordReferenceTableAccessesForTask(Task *task)
+{
+	ShardPlacement *taskPlacement = NULL;
+	foreach_ptr(taskPlacement, task->taskPlacementList)
+	{
+		uint64 shardId = taskPlacement->shardId;
+		if (shardId == INVALID_SHARD_ID)
+		{
+			/*
+			 * When a SELECT prunes down to 0 shard, we still may pass through
+			 * the local executor. In that case, we don't need to record any
+			 * relation access as we don't actually access any shard placement.
+			 */
+			continue;
+		}
+
+		Oid relationId = RelationIdForShard(shardId);
+
+		List *placementAccessList = PlacementAccessListForTask(task, taskPlacement);
+		ShardPlacementAccess *placementAccess = NULL;
+		foreach_ptr(placementAccess, placementAccessList)
+		{
+			RecordRelationAccessIfReferenceTable(relationId, placementAccess->accessType);
+		}
+	}
 }
 
 
