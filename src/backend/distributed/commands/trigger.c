@@ -236,7 +236,7 @@ PostprocessCreateTriggerStmt(Node *node, const char *queryString)
 
 	ErrorOutForTriggerIfNotCitusLocalTable(relationId);
 
-	if (IsCitusLocalTable(relationId))
+	if (IsCitusTableType(relationId, CITUS_LOCAL_TABLE))
 	{
 		ObjectAddress objectAddress = GetObjectAddressFromParseTree(node, missingOk);
 		EnsureDependenciesExistOnAllNodes(&objectAddress);
@@ -348,7 +348,7 @@ PostprocessAlterTriggerRenameStmt(Node *node, const char *queryString)
 	EnsureCoordinator();
 	ErrorOutForTriggerIfNotCitusLocalTable(relationId);
 
-	if (IsCitusLocalTable(relationId))
+	if (IsCitusTableType(relationId, CITUS_LOCAL_TABLE))
 	{
 		/* use newname as standard process utility already renamed it */
 		char *triggerName = renameTriggerStmt->newname;
@@ -412,7 +412,7 @@ PostprocessAlterTriggerDependsStmt(Node *node, const char *queryString)
 	EnsureCoordinator();
 	ErrorOutForTriggerIfNotCitusLocalTable(relationId);
 
-	if (IsCitusLocalTable(relationId))
+	if (IsCitusTableType(relationId, CITUS_LOCAL_TABLE))
 	{
 		Value *triggerNameValue =
 			GetAlterTriggerDependsTriggerNameValue(alterTriggerDependsStmt);
@@ -504,7 +504,7 @@ PreprocessDropTriggerStmt(Node *node, const char *queryString)
 
 	ErrorIfUnsupportedDropTriggerCommand(dropTriggerStmt);
 
-	if (IsCitusLocalTable(relationId))
+	if (IsCitusTableType(relationId, CITUS_LOCAL_TABLE))
 	{
 		char *triggerName = NULL;
 		ExtractDropStmtTriggerAndRelationName(dropTriggerStmt, &triggerName, NULL);
@@ -545,7 +545,7 @@ ErrorIfUnsupportedDropTriggerCommand(DropStmt *dropTriggerStmt)
 void
 ErrorOutForTriggerIfNotCitusLocalTable(Oid relationId)
 {
-	if (IsCitusLocalTable(relationId))
+	if (IsCitusTableType(relationId, CITUS_LOCAL_TABLE))
 	{
 		return;
 	}

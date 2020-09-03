@@ -521,7 +521,7 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand)
 			 * We already error'ed out for ENABLE/DISABLE trigger commands for
 			 * other citus table types in ErrorIfUnsupportedAlterTableStmt.
 			 */
-			Assert(IsCitusLocalTable(leftRelationId));
+			Assert(IsCitusTableType(leftRelationId, CITUS_LOCAL_TABLE));
 
 			char *triggerName = command->name;
 			return CitusLocalTableTriggerCommandDDLJob(leftRelationId, triggerName,
@@ -600,7 +600,7 @@ ErrorIfAlterTableDefinesFKeyFromPostgresToCitusLocalTable(
 	{
 		Oid rightRelationId = RangeVarGetRelid(constraint->pktable, lockmode,
 											   alterTableStatement->missing_ok);
-		if (IsCitusLocalTable(rightRelationId))
+		if (IsCitusTableType(rightRelationId, CITUS_LOCAL_TABLE))
 		{
 			ErrorOutForFKeyBetweenPostgresAndCitusLocalTable(relationId);
 		}
@@ -1416,7 +1416,8 @@ ErrorIfCitusLocalTablePartitionCommand(AlterTableCmd *alterTableCmd, Oid parentR
 
 	bool missingOK = false;
 	Oid childRelationId = GetPartitionCommandChildRelationId(alterTableCmd, missingOK);
-	if (!IsCitusLocalTable(parentRelationId) && !IsCitusLocalTable(childRelationId))
+	if (!IsCitusTableType(parentRelationId, CITUS_LOCAL_TABLE) &&
+		!IsCitusTableType(childRelationId, CITUS_LOCAL_TABLE))
 	{
 		return;
 	}
@@ -1557,7 +1558,8 @@ SetupExecutionModeForAlterTable(Oid relationId, AlterTableCmd *command)
 	 * the distributed tables, thus contradicting our purpose of using
 	 * sequential mode.
 	 */
-	if (executeSequentially && !IsCitusTableType(relationId, REFERENCE_TABLE) &&
+	if (executeSequentially &&
+		!IsCitusTableType(relationId, CITUS_TABLE_WITH_NO_DIST_KEY) &&
 		ParallelQueryExecutedInTransaction())
 	{
 		char *relationName = get_rel_name(relationId);
@@ -1660,7 +1662,7 @@ CreateRightShardListForInterShardDDLTask(Oid rightRelationId, Oid leftRelationId
 
 
 	if (!IsCitusTableType(leftRelationId, CITUS_LOCAL_TABLE) &&
-		 IsCitusTableType(rightRelationId, REFERENCE_TABLE))
+		IsCitusTableType(rightRelationId, REFERENCE_TABLE))
 	{
 		/*
 		 * If the right relation is a reference table and left relation is not
@@ -1690,7 +1692,8 @@ SetInterShardDDLTaskPlacementList(Task *task, ShardInterval *leftShardInterval,
 {
 	Oid leftRelationId = leftShardInterval->relationId;
 	Oid rightRelationId = rightShardInterval->relationId;
-	if (IsReferenceTable(leftRelationId) && IsCitusLocalTable(rightRelationId))
+	if (IsCitusTableType(leftRelationId, REFERENCE_TABLE) &&
+		IsCitusTableType(rightRelationId, CITUS_LOCAL_TABLE))
 	{
 		/*
 		 * If we are defining foreign key from a reference table to a citus

@@ -684,8 +684,8 @@ GetForeignKeyOidsToReferenceTables(Oid relationId)
 
 /*
  * FilterFKeyOidListByReferencedTableType takes a list of foreign key OIDs and
- * a predicate function to filter the foreign key OIDs that the predicate function
- * returns true when referenced relation is passed to that function.
+ * CitusTableType to filter the foreign key OIDs that CitusTableType matches
+ * referenced relation's type.
  */
 static List *
 FilterFKeyOidListByReferencedTableType(List *foreignKeyOidList,

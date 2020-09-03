@@ -862,7 +862,7 @@ CopyShardForeignConstraintCommandListGrouped(ShardInterval *shardInterval,
 			 * local table shards. So, the referencing table must be a reference
 			 * table in this context.
 			 */
-			Assert(IsReferenceTable(relationId));
+			Assert(IsCitusTableType(relationId, REFERENCE_TABLE));
 
 			/*
 			 * We don't set foreign keys from reference tables to citus local

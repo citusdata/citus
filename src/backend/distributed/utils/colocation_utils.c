@@ -241,10 +241,11 @@ CreateColocationGroupForRelation(Oid sourceRelationId)
 static void
 MarkTablesColocated(Oid sourceRelationId, Oid targetRelationId)
 {
-	if (IsCitusLocalTable(sourceRelationId) || IsCitusLocalTable(targetRelationId))
+	if (IsCitusTableType(sourceRelationId, CITUS_LOCAL_TABLE) ||
+		IsCitusTableType(targetRelationId, CITUS_LOCAL_TABLE))
 	{
-		ereport(ERROR, (errmsg(
-							"citus local tables cannot be colocated with other tables")));
+		ereport(ERROR, (errmsg("citus local tables cannot be colocated with "
+							   "other tables")));
 	}
 
 	CheckReplicationModel(sourceRelationId, targetRelationId);
