@@ -89,6 +89,7 @@ typedef struct StripeMetadata
 	uint64 skipListLength;
 	uint64 dataLength;
 	uint64 footerLength;
+	uint64 id;
 
 } StripeMetadata;
 
@@ -213,6 +214,8 @@ typedef struct StripeFooter
 /* TableReadState represents state of a cstore file read operation. */
 typedef struct TableReadState
 {
+	Oid relationId;
+
 	FILE *tableFile;
 	TableFooter *tableFooter;
 	TupleDesc tupleDescriptor;
@@ -238,6 +241,7 @@ typedef struct TableReadState
 /* TableWriteState represents state of a cstore file write operation. */
 typedef struct TableWriteState
 {
+	Oid relationId;
 	FILE *tableFile;
 	TableFooter *tableFooter;
 	StringInfo tableFooterFilename;
@@ -248,6 +252,7 @@ typedef struct TableWriteState
 	Relation relation;
 
 	MemoryContext stripeWriteContext;
+	uint64 currentStripeId;
 	StripeBuffers *stripeBuffers;
 	StripeSkipList *stripeSkipList;
 	uint32 stripeMaxRowCount;
@@ -270,7 +275,8 @@ extern void RemoveCStoreDatabaseDirectory(Oid databaseOid);
 extern void DeleteCStoreTableFiles(char *filename);
 
 /* Function declarations for writing to a cstore file */
-extern TableWriteState * CStoreBeginWrite(const char *filename,
+extern TableWriteState * CStoreBeginWrite(Oid relationId,
+										  const char *filename,
 										  CompressionType compressionType,
 										  uint64 stripeMaxRowCount,
 										  uint32 blockRowCount,
@@ -280,7 +286,8 @@ extern void CStoreWriteRow(TableWriteState *state, Datum *columnValues,
 extern void CStoreEndWrite(TableWriteState * state);
 
 /* Function declarations for reading from a cstore file */
-extern TableReadState * CStoreBeginRead(const char *filename, TupleDesc tupleDescriptor,
+extern TableReadState * CStoreBeginRead(Oid relationId, const char *filename,
+										TupleDesc tupleDescriptor,
 										List *projectedColumnList, List *qualConditions);
 extern TableFooter * CStoreReadFooter(StringInfo tableFooterFilename);
 extern bool CStoreReadFinished(TableReadState *state);
@@ -295,10 +302,14 @@ extern ColumnBlockData ** CreateEmptyBlockDataArray(uint32 columnCount, bool *co
 													uint32 blockRowCount);
 extern void FreeColumnBlockDataArray(ColumnBlockData **blockDataArray,
 									 uint32 columnCount);
-extern uint64 CStoreTableRowCount(const char *filename);
+extern uint64 CStoreTableRowCount(Oid relid, const char *filename);
 extern bool CompressBuffer(StringInfo inputBuffer, StringInfo outputBuffer,
 						   CompressionType compressionType);
 extern StringInfo DecompressBuffer(StringInfo buffer, CompressionType compressionType);
+
+/* cstore_metadata_tables.c */
+extern void SaveStripeFooter(Oid relid, uint64 stripe, StripeFooter *footer);
+extern StripeFooter * ReadStripeFooter(Oid relid, uint64 stripe, int relationColumnCount);
 
 
 #endif /* CSTORE_H */

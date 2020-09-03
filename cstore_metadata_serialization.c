@@ -95,6 +95,8 @@ SerializeTableFooter(TableFooter *tableFooter)
 		protobufStripeMetadata->datalength = stripeMetadata->dataLength;
 		protobufStripeMetadata->has_footerlength = true;
 		protobufStripeMetadata->footerlength = stripeMetadata->footerLength;
+		protobufStripeMetadata->has_id = true;
+		protobufStripeMetadata->id = stripeMetadata->id;
 
 		stripeMetadataArray[stripeIndex] = protobufStripeMetadata;
 		stripeIndex++;
@@ -115,38 +117,6 @@ SerializeTableFooter(TableFooter *tableFooter)
 	tableFooterBuffer->data = (char *) tableFooterData;
 
 	return tableFooterBuffer;
-}
-
-
-/*
- * SerializeStripeFooter serializes given stripe footer and returns the result
- * as a StringInfo.
- */
-StringInfo
-SerializeStripeFooter(StripeFooter *stripeFooter)
-{
-	StringInfo stripeFooterBuffer = NULL;
-	Protobuf__StripeFooter protobufStripeFooter = PROTOBUF__STRIPE_FOOTER__INIT;
-	uint8 *stripeFooterData = NULL;
-	uint32 stripeFooterSize = 0;
-
-	protobufStripeFooter.n_skiplistsizearray = stripeFooter->columnCount;
-	protobufStripeFooter.skiplistsizearray = (uint64_t *) stripeFooter->skipListSizeArray;
-	protobufStripeFooter.n_existssizearray = stripeFooter->columnCount;
-	protobufStripeFooter.existssizearray = (uint64_t *) stripeFooter->existsSizeArray;
-	protobufStripeFooter.n_valuesizearray = stripeFooter->columnCount;
-	protobufStripeFooter.valuesizearray = (uint64_t *) stripeFooter->valueSizeArray;
-
-	stripeFooterSize = protobuf__stripe_footer__get_packed_size(&protobufStripeFooter);
-	stripeFooterData = palloc0(stripeFooterSize);
-	protobuf__stripe_footer__pack(&protobufStripeFooter, stripeFooterData);
-
-	stripeFooterBuffer = palloc0(sizeof(StringInfoData));
-	stripeFooterBuffer->len = stripeFooterSize;
-	stripeFooterBuffer->maxlen = stripeFooterSize;
-	stripeFooterBuffer->data = (char *) stripeFooterData;
-
-	return stripeFooterBuffer;
 }
 
 
@@ -315,6 +285,7 @@ DeserializeTableFooter(StringInfo buffer)
 		stripeMetadata->skipListLength = protobufStripeMetadata->skiplistlength;
 		stripeMetadata->dataLength = protobufStripeMetadata->datalength;
 		stripeMetadata->footerLength = protobufStripeMetadata->footerlength;
+		stripeMetadata->id = protobufStripeMetadata->id;
 
 		stripeMetadataList = lappend(stripeMetadataList, stripeMetadata);
 	}
@@ -326,59 +297,6 @@ DeserializeTableFooter(StringInfo buffer)
 	tableFooter->blockRowCount = blockRowCount;
 
 	return tableFooter;
-}
-
-
-/*
- * DeserializeStripeFooter deserializes the given buffer and returns the result
- * as a StripeFooter struct.
- */
-StripeFooter *
-DeserializeStripeFooter(StringInfo buffer)
-{
-	StripeFooter *stripeFooter = NULL;
-	Protobuf__StripeFooter *protobufStripeFooter = NULL;
-	uint64 *skipListSizeArray = NULL;
-	uint64 *existsSizeArray = NULL;
-	uint64 *valueSizeArray = NULL;
-	uint64 sizeArrayLength = 0;
-	uint32 columnCount = 0;
-
-	protobufStripeFooter = protobuf__stripe_footer__unpack(NULL, buffer->len,
-														   (uint8 *) buffer->data);
-	if (protobufStripeFooter == NULL)
-	{
-		ereport(ERROR, (errmsg("could not unpack column store"),
-						errdetail("invalid stripe footer buffer")));
-	}
-
-	columnCount = protobufStripeFooter->n_skiplistsizearray;
-	if (protobufStripeFooter->n_existssizearray != columnCount ||
-		protobufStripeFooter->n_valuesizearray != columnCount)
-	{
-		ereport(ERROR, (errmsg("could not unpack column store"),
-						errdetail("stripe size array lengths don't match")));
-	}
-
-	sizeArrayLength = columnCount * sizeof(uint64);
-
-	skipListSizeArray = palloc0(sizeArrayLength);
-	existsSizeArray = palloc0(sizeArrayLength);
-	valueSizeArray = palloc0(sizeArrayLength);
-
-	memcpy(skipListSizeArray, protobufStripeFooter->skiplistsizearray, sizeArrayLength);
-	memcpy(existsSizeArray, protobufStripeFooter->existssizearray, sizeArrayLength);
-	memcpy(valueSizeArray, protobufStripeFooter->valuesizearray, sizeArrayLength);
-
-	protobuf__stripe_footer__free_unpacked(protobufStripeFooter, NULL);
-
-	stripeFooter = palloc0(sizeof(StripeFooter));
-	stripeFooter->skipListSizeArray = skipListSizeArray;
-	stripeFooter->existsSizeArray = existsSizeArray;
-	stripeFooter->valueSizeArray = valueSizeArray;
-	stripeFooter->columnCount = columnCount;
-
-	return stripeFooter;
 }
 
 

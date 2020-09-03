@@ -58,31 +58,17 @@ CREATE EVENT TRIGGER cstore_drop_event
     ON SQL_DROP
     EXECUTE PROCEDURE cstore_drop_trigger();
 
-CREATE TABLE cstore_table_metadata(
-	relid oid,
-	version_major int,
-	version_minor int
-);
-
-CREATE TABLE cstore_stripe(
-    relid oid,
-    stripe bigint
-);
-
-CREATE TABLE cstore_column_block_skip_node(
+CREATE TABLE cstore_stripe_attr (
     relid oid,
     stripe bigint,
     attr int,
-    blockid int,
-    rowcount bigint,
-    min_value text,
-    max_value text,
-    value_offset bigint,
-    value_length bigint,
-    value_compression_type char,
-    exists_offset bigint,
-    exists_length bigint);
+    exists_size bigint,
+    value_size bigint,
+    skiplist_size bigint
+) WITH (user_catalog_table = true);
 
-CREATE INDEX cstore_column_block_skip_node_idx
-    ON cstore_column_block_skip_node
-    USING BTREE(relid, stripe, attr, blockid);
+CREATE INDEX cstore_stripe_attr_idx
+    ON cstore_stripe_attr
+    USING BTREE(relid, stripe, attr);
+
+ALTER TABLE cstore_stripe_attr SET SCHEMA pg_catalog;

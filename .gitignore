@@ -57,5 +57,6 @@
 /.deps/*
 /regression.diffs
 /regression.out
+.vscode
 
 *.pb-c.*

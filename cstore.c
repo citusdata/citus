@@ -131,7 +131,7 @@ InitializeCStoreTableFile(Oid relationId, Relation relation, CStoreOptions *csto
 	 * Initialize state to write to the cstore file. This creates an
 	 * empty data file and a valid footer file for the table.
 	 */
-	writeState = CStoreBeginWrite(cstoreOptions->filename,
+	writeState = CStoreBeginWrite(relationId, cstoreOptions->filename,
 			cstoreOptions->compressionType, cstoreOptions->stripeRowCount,
 			cstoreOptions->blockRowCount, tupleDescriptor);
 	CStoreEndWrite(writeState);
