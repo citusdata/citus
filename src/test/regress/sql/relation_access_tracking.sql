@@ -89,6 +89,12 @@ INSERT INTO table_4 SELECT i, i FROM generate_series(0,100) i;
 INSERT INTO table_5 SELECT i, i FROM generate_series(0,100) i;
 INSERT INTO table_6 SELECT i, i FROM generate_series(0,100) i;
 
+-- to make the tests consistent, we should force parallelism
+-- otherwise distinguishing parallel queries might be hard
+-- as the executor is smart enough to use as less connections
+-- as possible
+SET citus.force_max_query_parallelization TO ON;
+
 -- create_distributed_table works fine
 BEGIN;
 	CREATE TABLE table_7 (key int, value int);
@@ -106,7 +112,7 @@ BEGIN;
 	SELECT * FROM relation_accesses WHERE table_name = 'table_1';
 	SELECT count(*) FROM table_1 WHERE key = 1;
 	SELECT * FROM relation_accesses WHERE table_name = 'table_1';
-	SELECT count(*) FROM table_1 WHERE key = 1 OR key = 2;
+	SELECT count(*) FROM table_1 WHERE key = 2 OR key = 4;
 	SELECT * FROM relation_accesses WHERE table_name = 'table_1';
 	INSERT INTO table_1 VALUES (1,1);
 	SELECT * FROM relation_accesses WHERE table_name = 'table_1';

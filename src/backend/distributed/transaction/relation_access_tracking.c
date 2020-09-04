@@ -275,15 +275,9 @@ RecordPlacementAccessToCache(Oid relationId, ShardPlacementAccessType accessType
 void
 RecordParallelRelationAccessForTaskList(List *taskList)
 {
-	if (MultiShardConnectionType == SEQUENTIAL_CONNECTION)
+	if (list_length(taskList) < 1)
 	{
-		/* sequential mode prevents parallel access */
-		return;
-	}
-
-	if (list_length(taskList) < 2)
-	{
-		/* single shard task doesn't mean parallel access in our definition */
+		/* we need at least one task to record accesses */
 		return;
 	}
 
@@ -292,7 +286,6 @@ RecordParallelRelationAccessForTaskList(List *taskList)
 	 * distributed table(s), we only need to process the first task.
 	 */
 	Task *firstTask = linitial(taskList);
-
 	if (firstTask->taskType == READ_TASK)
 	{
 		RecordRelationParallelSelectAccessForTask(firstTask);
@@ -491,6 +484,17 @@ RecordParallelRelationAccess(Oid relationId, ShardPlacementAccessType placementA
 
 	/* act accordingly if it's a conflicting access */
 	CheckConflictingParallelRelationAccesses(relationId, placementAccess);
+
+	/*
+	 * CheckConflictingParallelRelationAccesses might switch to sequential
+	 * execution. If that's the case, no need to continue because the executor
+	 * would take the necessary actions to switch to sequential execution
+	 * immediately.
+	 */
+	if (MultiShardConnectionType == SEQUENTIAL_CONNECTION)
+	{
+		return;
+	}
 
 	/* If a relation is partitioned, record accesses to all of its partitions as well. */
 	if (PartitionedTable(relationId))

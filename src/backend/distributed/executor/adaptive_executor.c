@@ -1274,21 +1274,6 @@ StartDistributedExecution(DistributedExecution *execution)
 	 * should use transaction blocks (see below).
 	 */
 	AcquireExecutorShardLocksForExecution(execution);
-
-	/*
-	 * We should not record parallel access if the target pool size is less than 2.
-	 * The reason is that we define parallel access as at least two connections
-	 * accessing established to worker node.
-	 *
-	 * It is not ideal to have this check here, it'd have been better if we simply passed
-	 * DistributedExecution directly to the RecordParallelAccess*() function. However,
-	 * since we have two other executors that rely on the function, we had to only pass
-	 * the tasklist to have a common API.
-	 */
-	if (execution->targetPoolSize > 1)
-	{
-		RecordParallelRelationAccessForTaskList(execution->tasksToExecute);
-	}
 }
 
 
@@ -1858,10 +1843,21 @@ AssignTasksToConnectionsOrWorkerPool(DistributedExecution *execution)
 				UpdateConnectionWaitFlags(session,
 										  WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE);
 
-				/* If the connections are already avaliable, make sure to activate
+				/*
+				 * If the connections are already avaliable, make sure to activate
 				 * 2PC when necessary.
 				 */
 				Activate2PCIfModifyingTransactionExpandsToNewNode(session);
+
+				/*
+				 * The previous command in the same transaction has accessed to shards
+				 * in parallel (e.g., more than 1 connection). When we are at the second
+				 * connection, we mark the relations as accessed in parallel.
+				 */
+				if (list_length(workerPool->sessionList) == 2)
+				{
+					RecordParallelRelationAccessForTaskList(execution->tasksToExecute);
+				}
 			}
 			else
 			{
@@ -2579,6 +2575,35 @@ OpenNewConnections(WorkerPool *workerPool, int newConnectionCount,
 			TRANSACTION_BLOCKS_DISALLOWED)
 		{
 			connectionFlags |= OUTSIDE_TRANSACTION;
+		}
+
+		/*
+		 * Before opening the second connection to a worker, it is time to mark
+		 * the parallel execution. This is useful for supporting foreign keys to
+		 * reference tables. See details in RecordParallelRelationAccessForTaskList().
+		 */
+		if (list_length(workerPool->sessionList) == 1)
+		{
+			DistributedExecution *execution = workerPool->distributedExecution;
+
+			/*
+			 * Recording parallel relation access might trigger the
+			 * execution to be finished sequentially.
+			 */
+			RecordParallelRelationAccessForTaskList(execution->tasksToExecute);
+			if (MultiShardConnectionType == SEQUENTIAL_CONNECTION)
+			{
+				execution->targetPoolSize = 1;
+
+				ereport(DEBUG4, (errmsg(
+									 "not openning new connections to node %s:%d as it has "
+									 "switched to sequential mode",
+									 workerPool->nodeName,
+									 workerPool->nodePort)));
+
+
+				return;
+			}
 		}
 
 		/*

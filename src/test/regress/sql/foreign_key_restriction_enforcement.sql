@@ -36,6 +36,12 @@ INSERT INTO unrelated_dist_table SELECT i, i % 100  FROM generate_series(0, 1000
 -- in order to see when the mode automatically swithces to sequential execution
 SET client_min_messages TO DEBUG1;
 
+-- to make the tests consistent, we should force parallelism
+-- otherwise distinguishing parallel queries might be hard
+-- as the executor is smart enough to use as less connections
+-- as possible
+SET citus.force_max_query_parallelization TO ON;
+
 -- case 1.1: SELECT to a reference table is followed by a parallel SELECT to a distributed table
 BEGIN;
 	SELECT count(*) FROM reference_table;
@@ -666,6 +672,10 @@ BEGIN;
 ROLLBACK;
 
 BEGIN;
+	-- we cannot force in this case as that breaks the
+        -- transaction visibility
+	SET LOCAL citus.force_max_query_parallelization TO OFF;
+
 	CREATE TABLE test_table_1(id int PRIMARY KEY);
 	SELECT create_reference_table('test_table_1');
 
