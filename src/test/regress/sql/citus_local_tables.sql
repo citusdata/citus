@@ -219,7 +219,6 @@ CREATE TABLE reference_table (a int primary key);
 SELECT create_reference_table('reference_table');
 
 -- show that colociation of citus local tables are not supported for now
-
 -- between citus local tables
 SELECT mark_tables_colocated('citus_local_table_1', ARRAY['citus_local_table_2']);
 
@@ -230,6 +229,21 @@ SELECT mark_tables_colocated('reference_table', ARRAY['citus_local_table_1']);
 -- between citus local tables and distributed tables
 SELECT mark_tables_colocated('citus_local_table_1', ARRAY['distributed_table']);
 SELECT mark_tables_colocated('distributed_table', ARRAY['citus_local_table_1']);
+
+-- upgrade_to_reference_table is not supported
+SELECT upgrade_to_reference_table('citus_local_table_1');
+-- master_create_empty_shard is not supported
+SELECT master_create_empty_shard('citus_local_table_1');
+-- get_shard_id_for_distribution_column is supported
+SELECT get_shard_id_for_distribution_column('citus_local_table_1', 'not_checking_this_arg_for_non_dist_tables');
+SELECT get_shard_id_for_distribution_column('citus_local_table_1');
+-- master_copy_shard_placement is not supported
+SELECT master_copy_shard_placement(shardid, 'localhost', :master_port, 'localhost', :worker_1_port, true)
+FROM (SELECT shardid FROM pg_dist_shard WHERE logicalrelid='citus_local_table_1'::regclass) as shardid;
+-- undistribute_table is supported
+BEGIN;
+  SELECT undistribute_table('citus_local_table_1');
+ROLLBACK;
 
 -- tests with citus local tables initially having foreign key relationships
 

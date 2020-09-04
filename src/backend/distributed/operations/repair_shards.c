@@ -204,6 +204,14 @@ ErrorIfTableCannotBeReplicated(Oid relationId)
 	CitusTableCacheEntry *tableEntry = GetCitusTableCacheEntry(relationId);
 	char *relationName = get_rel_name(relationId);
 
+	if (IsCitusTableTypeCacheEntry(tableEntry, CITUS_LOCAL_TABLE))
+	{
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						(errmsg("Table %s is a citus local table. Replicating "
+								"shard of a citus local table currently is not "
+								"supported", quote_literal_cstr(relationName)))));
+	}
+
 	/*
 	 * ShouldSyncTableMetadata() returns true also for reference table,
 	 * we don't want to error in that case since reference tables aren't

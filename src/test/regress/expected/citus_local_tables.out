@@ -307,6 +307,44 @@ SELECT mark_tables_colocated('citus_local_table_1', ARRAY['distributed_table']);
 ERROR:  citus local tables cannot be colocated with other tables
 SELECT mark_tables_colocated('distributed_table', ARRAY['citus_local_table_1']);
 ERROR:  citus local tables cannot be colocated with other tables
+-- upgrade_to_reference_table is not supported
+SELECT upgrade_to_reference_table('citus_local_table_1');
+ERROR:  cannot upgrade to reference table
+-- master_create_empty_shard is not supported
+SELECT master_create_empty_shard('citus_local_table_1');
+ERROR:  relation "citus_local_table_1" is a citus local table
+-- get_shard_id_for_distribution_column is supported
+SELECT get_shard_id_for_distribution_column('citus_local_table_1', 'not_checking_this_arg_for_non_dist_tables');
+ get_shard_id_for_distribution_column
+---------------------------------------------------------------------
+                              1504027
+(1 row)
+
+SELECT get_shard_id_for_distribution_column('citus_local_table_1');
+ get_shard_id_for_distribution_column
+---------------------------------------------------------------------
+                              1504027
+(1 row)
+
+-- master_copy_shard_placement is not supported
+SELECT master_copy_shard_placement(shardid, 'localhost', :master_port, 'localhost', :worker_1_port, true)
+FROM (SELECT shardid FROM pg_dist_shard WHERE logicalrelid='citus_local_table_1'::regclass) as shardid;
+ERROR:  Table 'citus_local_table_1' is a citus local table. Replicating shard of a citus local table currently is not supported
+-- undistribute_table is supported
+BEGIN;
+  SELECT undistribute_table('citus_local_table_1');
+NOTICE:  Creating a new local table for citus_local_tables_test_schema.citus_local_table_1
+NOTICE:  Moving the data of citus_local_tables_test_schema.citus_local_table_1
+NOTICE:  executing the command locally: SELECT a FROM citus_local_tables_test_schema.citus_local_table_1_1504027 citus_local_table_1
+NOTICE:  Dropping the old citus_local_tables_test_schema.citus_local_table_1
+NOTICE:  executing the command locally: DROP TABLE IF EXISTS citus_local_tables_test_schema.citus_local_table_1_xxxxx CASCADE
+NOTICE:  Renaming the new table to citus_local_tables_test_schema.citus_local_table_1
+ undistribute_table
+---------------------------------------------------------------------
+
+(1 row)
+
+ROLLBACK;
 -- tests with citus local tables initially having foreign key relationships
 CREATE TABLE local_table_1 (a int primary key);
 CREATE TABLE local_table_2 (a int primary key references local_table_1(a));

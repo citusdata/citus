@@ -351,6 +351,16 @@ upgrade_to_reference_table(PG_FUNCTION_ARGS)
 						errdetail("Relation \"%s\" is already a reference table",
 								  relationName)));
 	}
+	else if (IsCitusTableTypeCacheEntry(tableEntry, CITUS_LOCAL_TABLE))
+	{
+		char *relationName = get_rel_name(relationId);
+		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+						errmsg("cannot upgrade to reference table"),
+						errdetail("Relation \"%s\" is a citus local table and "
+								  "currently it is not supported to upgrade "
+								  "a citus local table to a reference table ",
+								  relationName)));
+	}
 
 	if (tableEntry->replicationModel == REPLICATION_MODEL_STREAMING)
 	{
