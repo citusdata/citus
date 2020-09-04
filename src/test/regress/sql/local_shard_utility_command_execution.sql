@@ -278,6 +278,7 @@ BEGIN;
   SELECT tablename FROM pg_tables where schemaname='foo_schema' ORDER BY tablename;
 ROLLBACK;
 
+-- Try a bunch of commands and expect failure at SELECT create_distributed_table
 BEGIN;
   -- here this SELECT will enforce the whole block for local execution
   SELECT COUNT(*) FROM ref_table;
@@ -286,10 +287,28 @@ BEGIN;
   ALTER TABLE dist_table ADD column c int;
   ALTER TABLE dist_table ALTER COLUMN c SET NOT NULL;
 
-  -- then create a distributed table succesfully
+  -- as we executed ALTER TABLE commands parallelly, below
+  -- SELECT create_distributed_table would error out
   CREATE TABLE another_dist_table(a int);
   SELECT create_distributed_table('another_dist_table', 'a', colocate_with:='dist_table');
 COMMIT;
+
+-- add a column to be dropped and a foreign key for next test
+ALTER TABLE dist_table ADD column c int;
+ALTER TABLE dist_table ADD CONSTRAINT fkey_dist_to_ref FOREIGN KEY (b) REFERENCES ref_table(a);
+
+BEGIN;
+  SELECT count(*) FROM ref_table;
+
+  -- should show parallel
+  SHOW citus.multi_shard_modify_mode ;
+
+  -- wants to do parallel execution but will switch to sequential mode
+  ALTER TABLE dist_table DROP COLUMN c;
+
+  -- should show sequential
+  SHOW citus.multi_shard_modify_mode;
+ROLLBACK;
 
 ---------------------------------------------
 ------------ partitioned tables -------------
