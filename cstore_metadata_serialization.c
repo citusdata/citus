@@ -143,8 +143,8 @@ SerializeColumnSkipList(ColumnBlockSkipNode *blockSkipNodeArray, uint32 blockCou
 	{
 		ColumnBlockSkipNode blockSkipNode = blockSkipNodeArray[blockIndex];
 		Protobuf__ColumnBlockSkipNode *protobufBlockSkipNode = NULL;
-		ProtobufCBinaryData binaryMinimumValue = {0, 0};
-		ProtobufCBinaryData binaryMaximumValue = {0, 0};
+		ProtobufCBinaryData binaryMinimumValue = { 0, 0 };
+		ProtobufCBinaryData binaryMaximumValue = { 0, 0 };
 
 		if (blockSkipNode.hasMinMax)
 		{
@@ -352,7 +352,7 @@ DeserializeRowCount(StringInfo buffer)
 	for (blockIndex = 0; blockIndex < blockCount; blockIndex++)
 	{
 		Protobuf__ColumnBlockSkipNode *protobufBlockSkipNode =
-				protobufBlockSkipList->blockskipnodearray[blockIndex];
+			protobufBlockSkipList->blockskipnodearray[blockIndex];
 		rowCount += protobufBlockSkipNode->rowcount;
 	}
 
@@ -452,7 +452,7 @@ DeserializeColumnSkipList(StringInfo buffer, bool typeByValue, int typeLength,
 static ProtobufCBinaryData
 DatumToProtobufBinary(Datum datum, bool datumTypeByValue, int datumTypeLength)
 {
-	ProtobufCBinaryData protobufBinary = {0, 0};
+	ProtobufCBinaryData protobufBinary = { 0, 0 };
 
 	int datumLength = att_addlength_datum(0, datumTypeLength, datum);
 	char *datumBuffer = palloc0(datumLength);

@@ -31,4 +31,4 @@ extern ColumnBlockSkipNode * DeserializeColumnSkipList(StringInfo buffer,
 													   uint32 blockCount);
 
 
-#endif   /* CSTORE_SERIALIZATION_H */ 
+#endif   /* CSTORE_SERIALIZATION_H */

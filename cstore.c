@@ -43,6 +43,7 @@ ParseCompressionType(const char *compressionTypeString)
 	return compressionType;
 }
 
+
 /* CreateDirectory creates a new directory with the given directory name. */
 static void
 CreateDirectory(StringInfo directoryName)
@@ -55,6 +56,7 @@ CreateDirectory(StringInfo directoryName)
 							   directoryName->data)));
 	}
 }
+
 
 /* DirectoryExists checks if a directory exists for the given directory name. */
 static bool
@@ -90,6 +92,7 @@ DirectoryExists(StringInfo directoryName)
 
 	return directoryExists;
 }
+
 
 /*
  * RemoveCStoreDatabaseDirectory removes CStore directory previously
@@ -132,8 +135,9 @@ InitializeCStoreTableFile(Oid relationId, Relation relation, CStoreOptions *csto
 	 * empty data file and a valid footer file for the table.
 	 */
 	writeState = CStoreBeginWrite(relationId, cstoreOptions->filename,
-			cstoreOptions->compressionType, cstoreOptions->stripeRowCount,
-			cstoreOptions->blockRowCount, tupleDescriptor);
+								  cstoreOptions->compressionType,
+								  cstoreOptions->stripeRowCount,
+								  cstoreOptions->blockRowCount, tupleDescriptor);
 	CStoreEndWrite(writeState);
 }
 

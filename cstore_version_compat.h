@@ -22,7 +22,8 @@
 #endif
 
 #if PG_VERSION_NUM < 110000
-#define ALLOCSET_DEFAULT_SIZES ALLOCSET_DEFAULT_MINSIZE, ALLOCSET_DEFAULT_INITSIZE, ALLOCSET_DEFAULT_MAXSIZE
+#define ALLOCSET_DEFAULT_SIZES ALLOCSET_DEFAULT_MINSIZE, ALLOCSET_DEFAULT_INITSIZE, \
+	ALLOCSET_DEFAULT_MAXSIZE
 #define ACLCHECK_OBJECT_TABLE ACL_KIND_CLASS
 #else
 #define ACLCHECK_OBJECT_TABLE OBJECT_TABLE
@@ -46,9 +47,9 @@
 #endif
 
 #if PG_VERSION_NUM < 120000
-#define TTS_EMPTY(slot)	((slot)->tts_isempty)
+#define TTS_EMPTY(slot) ((slot)->tts_isempty)
 #define ExecForceStoreHeapTuple(tuple, slot, shouldFree) \
-		ExecStoreTuple(newTuple, tupleSlot, InvalidBuffer,  shouldFree);
+	ExecStoreTuple(newTuple, tupleSlot, InvalidBuffer, shouldFree);
 #define TableScanDesc HeapScanDesc
 #define table_beginscan heap_beginscan
 #define table_endscan heap_endscan

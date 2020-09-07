@@ -58,3 +58,6 @@ installcheck: remove_cstore_files
 
 remove_cstore_files:
 	rm -f data/*.cstore data/*.cstore.footer
+
+reindent:
+	citus_indent .

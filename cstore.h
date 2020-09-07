@@ -60,7 +60,6 @@ typedef enum
 	COMPRESSION_PG_LZ = 1,
 
 	COMPRESSION_COUNT
-
 } CompressionType;
 
 
@@ -75,7 +74,6 @@ typedef struct CStoreOptions
 	CompressionType compressionType;
 	uint64 stripeRowCount;
 	uint32 blockRowCount;
-
 } CStoreOptions;
 
 
@@ -90,7 +88,6 @@ typedef struct StripeMetadata
 	uint64 dataLength;
 	uint64 footerLength;
 	uint64 id;
-
 } StripeMetadata;
 
 
@@ -99,7 +96,6 @@ typedef struct TableFooter
 {
 	List *stripeMetadataList;
 	uint64 blockRowCount;
-
 } TableFooter;
 
 
@@ -123,7 +119,6 @@ typedef struct ColumnBlockSkipNode
 	uint64 existsLength;
 
 	CompressionType valueCompressionType;
-
 } ColumnBlockSkipNode;
 
 
@@ -137,7 +132,6 @@ typedef struct StripeSkipList
 	ColumnBlockSkipNode **blockSkipNodeArray;
 	uint32 columnCount;
 	uint32 blockCount;
-
 } StripeSkipList;
 
 
@@ -155,7 +149,6 @@ typedef struct ColumnBlockData
 
 	/* valueBuffer keeps actual data for type-by-reference datums from valueArray. */
 	StringInfo valueBuffer;
-
 } ColumnBlockData;
 
 
@@ -171,7 +164,6 @@ typedef struct ColumnBlockBuffers
 	StringInfo existsBuffer;
 	StringInfo valueBuffer;
 	CompressionType valueCompressionType;
-
 } ColumnBlockBuffers;
 
 
@@ -182,7 +174,6 @@ typedef struct ColumnBlockBuffers
 typedef struct ColumnBuffers
 {
 	ColumnBlockBuffers **blockBuffersArray;
-
 } ColumnBuffers;
 
 
@@ -192,7 +183,6 @@ typedef struct StripeBuffers
 	uint32 columnCount;
 	uint32 rowCount;
 	ColumnBuffers **columnBuffersArray;
-
 } StripeBuffers;
 
 
@@ -207,7 +197,6 @@ typedef struct StripeFooter
 	uint64 *skipListSizeArray;
 	uint64 *existsSizeArray;
 	uint64 *valueSizeArray;
-
 } StripeFooter;
 
 
@@ -234,7 +223,6 @@ typedef struct TableReadState
 	uint64 stripeReadRowCount;
 	ColumnBlockData **blockDataArray;
 	int32 deserializedBlockIndex;
-
 } TableReadState;
 
 
@@ -257,6 +245,7 @@ typedef struct TableWriteState
 	StripeSkipList *stripeSkipList;
 	uint32 stripeMaxRowCount;
 	ColumnBlockData **blockDataArray;
+
 	/*
 	 * compressionBuffer buffer is used as temporary storage during
 	 * data value compression operation. It is kept here to minimize
@@ -264,7 +253,6 @@ typedef struct TableWriteState
 	 * deallocated when memory context is reset.
 	 */
 	StringInfo compressionBuffer;
-
 } TableWriteState;
 
 extern CompressionType ParseCompressionType(const char *compressionTypeString);
@@ -283,7 +271,7 @@ extern TableWriteState * CStoreBeginWrite(Oid relationId,
 										  TupleDesc tupleDescriptor);
 extern void CStoreWriteRow(TableWriteState *state, Datum *columnValues,
 						   bool *columnNulls);
-extern void CStoreEndWrite(TableWriteState * state);
+extern void CStoreEndWrite(TableWriteState *state);
 
 /* Function declarations for reading from a cstore file */
 extern TableReadState * CStoreBeginRead(Oid relationId, const char *filename,
