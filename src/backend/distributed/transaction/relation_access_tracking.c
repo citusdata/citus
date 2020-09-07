@@ -266,14 +266,20 @@ RecordPlacementAccessToCache(Oid relationId, ShardPlacementAccessType accessType
 
 
 /*
- * RecordParallelRelationAccessForTaskList gets a task list and records
+ * EnforceRestrictionsOnParallelRelationAccess gets a task list and records
  * the necessary parallel relation accesses for the task list.
+ *
+ * Depending on the current state, the function may do one of the three
+ * things. First, simply record parallel relation access and return. Second,
+ * throw an error noting that the state is not eligable for parallel access.
+ * Third, set the execution mode to sequential. For the details, see
+ * EnforceRestrictionsOnParallelRelationAccess().
  *
  * This function is used to enforce foreign keys from distributed
  * tables to reference tables.
  */
 void
-RecordParallelRelationAccessForTaskList(List *taskList)
+EnforceRestrictionsOnParallelRelationAccess(List *taskList)
 {
 	if (list_length(taskList) < 1)
 	{

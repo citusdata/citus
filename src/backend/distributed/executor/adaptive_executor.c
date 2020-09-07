@@ -1850,13 +1850,18 @@ AssignTasksToConnectionsOrWorkerPool(DistributedExecution *execution)
 				Activate2PCIfModifyingTransactionExpandsToNewNode(session);
 
 				/*
-				 * The previous command in the same transaction has accessed to shards
-				 * in parallel (e.g., more than 1 connection). When we are at the second
-				 * connection, we mark the relations as accessed in parallel.
+				 * We have found the second connection where the placement (or
+				 * colocated-placement) has already been accessed in the same
+				 * distributed transaction. It means that the previous command
+				 * in the transaction has already marked parallel access for
+				 * the relations it accessed. Now, for this execution, mark
+				 * the parallel accesses for the relations that this execution
+				 * touches.
 				 */
 				if (list_length(workerPool->sessionList) == 2)
 				{
-					RecordParallelRelationAccessForTaskList(execution->tasksToExecute);
+					EnforceRestrictionsOnParallelRelationAccess(
+						execution->tasksToExecute);
 				}
 			}
 			else
@@ -2580,7 +2585,8 @@ OpenNewConnections(WorkerPool *workerPool, int newConnectionCount,
 		/*
 		 * Before opening the second connection to a worker, it is time to mark
 		 * the parallel execution. This is useful for supporting foreign keys to
-		 * reference tables. See details in RecordParallelRelationAccessForTaskList().
+		 * reference tables. See details in
+		 * EnforceRestrictionsOnParallelRelationAccess().
 		 */
 		if (list_length(workerPool->sessionList) == 1)
 		{
@@ -2590,7 +2596,7 @@ OpenNewConnections(WorkerPool *workerPool, int newConnectionCount,
 			 * Recording parallel relation access might trigger the
 			 * execution to be finished sequentially.
 			 */
-			RecordParallelRelationAccessForTaskList(execution->tasksToExecute);
+			EnforceRestrictionsOnParallelRelationAccess(execution->tasksToExecute);
 			if (MultiShardConnectionType == SEQUENTIAL_CONNECTION)
 			{
 				execution->targetPoolSize = 1;
