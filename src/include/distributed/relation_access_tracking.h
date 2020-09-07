@@ -36,8 +36,8 @@ typedef enum RelationAccessMode
 
 extern void AllocateRelationAccessHash(void);
 extern void ResetRelationAccessHash(void);
-extern void RecordRelationAccessIfReferenceTable(Oid relationId,
-												 ShardPlacementAccessType accessType);
+extern void RecordRelationAccessIfNonDistTable(Oid relationId,
+											   ShardPlacementAccessType accessType);
 extern void RecordParallelRelationAccessForTaskList(List *taskList);
 extern void RecordParallelSelectAccess(Oid relationId);
 extern void RecordParallelModifyAccess(Oid relationId);

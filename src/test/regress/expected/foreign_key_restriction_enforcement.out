@@ -1268,9 +1268,8 @@ BEGIN;
 	SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
 	CREATE TABLE test_table_2(id int PRIMARY KEY, value_1 int);
 	SELECT create_distributed_table('test_table_2', 'id');
-ERROR:  cannot distribute relation "test_table_2" in this transaction because it has a foreign key to a reference table
-DETAIL:  If a hash distributed table has a foreign key to a reference table, it has to be created in sequential mode before any parallel commands have been executed in the same transaction
-HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
+ERROR:  cannot distribute "test_table_2" in sequential mode because a parallel query was executed in this transaction
+HINT:  If you have manually set citus.multi_shard_modify_mode to 'sequential', try with 'parallel' option.
 	CREATE TABLE test_table_1(id int PRIMARY KEY);
 ERROR:  current transaction is aborted, commands ignored until end of transaction block
 	SELECT create_reference_table('test_table_1');

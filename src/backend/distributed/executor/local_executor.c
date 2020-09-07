@@ -118,6 +118,7 @@ static void SplitLocalAndRemotePlacements(List *taskPlacementList,
 static uint64 ExecuteLocalTaskPlan(PlannedStmt *taskPlan, char *queryString,
 								   TupleDestination *tupleDest, Task *task,
 								   ParamListInfo paramListInfo);
+static void RecordNonDistTableAccessesForTask(Task *task);
 static void LogLocalCommand(Task *task);
 static uint64 LocallyPlanAndExecuteMultipleQueries(List *queryStrings,
 												   TupleDestination *tupleDest,
@@ -549,6 +550,8 @@ ExecuteLocalTaskPlan(PlannedStmt *taskPlan, char *queryString,
 	int eflags = 0;
 	uint64 totalRowsProcessed = 0;
 
+	RecordNonDistTableAccessesForTask(task);
+
 	/*
 	 * Use the tupleStore provided by the scanState because it is shared accross
 	 * the other task executions and the adaptive executor.
@@ -582,6 +585,59 @@ ExecuteLocalTaskPlan(PlannedStmt *taskPlan, char *queryString,
 	FreeQueryDesc(queryDesc);
 
 	return totalRowsProcessed;
+}
+
+
+/*
+ * RecordNonDistTableAccessesForTask records relation accesses for the non-distributed
+ * relations that given task will access (if any).
+ */
+static void
+RecordNonDistTableAccessesForTask(Task *task)
+{
+	List *taskPlacementList = task->taskPlacementList;
+	if (list_length(taskPlacementList) == 0)
+	{
+		/*
+		 * We need at least one task placement to record relation access.
+		 * FIXME: Unfortunately, it is possible due to
+		 * https://github.com/citusdata/citus/issues/4104.
+		 * We can safely remove this check when above bug is fixed.
+		 */
+		return;
+	}
+
+	/*
+	 * We use only the first placement to find the relation accesses. It is
+	 * sufficient as PlacementAccessListForTask iterates relationShardList
+	 * field of the task and generates accesses per relation in the task.
+	 * As we are only interested in relations, not the placements, we can
+	 * skip rest of the placements.
+	 * Also, here we don't need to iterate relationShardList field of task
+	 * to mark each accessed relation because PlacementAccessListForTask
+	 * already computes and returns relations that task accesses.
+	 */
+	ShardPlacement *taskPlacement = linitial(taskPlacementList);
+	List *placementAccessList = PlacementAccessListForTask(task, taskPlacement);
+
+	ShardPlacementAccess *placementAccess = NULL;
+	foreach_ptr(placementAccess, placementAccessList)
+	{
+		uint64 placementAccessShardId = placementAccess->placement->shardId;
+		if (placementAccessShardId == INVALID_SHARD_ID)
+		{
+			/*
+			 * When a SELECT prunes down to 0 shard, we still may pass through
+			 * the local executor. In that case, we don't need to record any
+			 * relation access as we don't actually access any shard placement.
+			 */
+			continue;
+		}
+
+		Oid accessedRelationId = RelationIdForShard(placementAccessShardId);
+		ShardPlacementAccessType shardPlacementAccessType = placementAccess->accessType;
+		RecordRelationAccessIfNonDistTable(accessedRelationId, shardPlacementAccessType);
+	}
 }
 
 

@@ -1183,23 +1183,43 @@ CanUseExclusiveConnections(Oid relationId, bool localTableEmpty)
 	}
 	else if (shouldRunSequential && ParallelQueryExecutedInTransaction())
 	{
+		/*
+		 * We decided to use sequential execution. It's either because relation
+		 * has a pre-existing foreign key to a reference table or because we
+		 * decided to use sequential execution due to a query executed in the
+		 * current xact beforehand.
+		 * We have specific error messages for either cases.
+		 */
+
 		char *relationName = get_rel_name(relationId);
 
-		/*
-		 * If there has already been a parallel query executed, the sequential mode
-		 * would still use the already opened parallel connections to the workers,
-		 * thus contradicting our purpose of using sequential mode.
-		 */
-		ereport(ERROR, (errmsg("cannot distribute relation \"%s\" in this "
-							   "transaction because it has a foreign key to "
-							   "a reference table", relationName),
-						errdetail("If a hash distributed table has a foreign key "
-								  "to a reference table, it has to be created "
-								  "in sequential mode before any parallel commands "
-								  "have been executed in the same transaction"),
-						errhint("Try re-running the transaction with "
-								"\"SET LOCAL citus.multi_shard_modify_mode TO "
-								"\'sequential\';\"")));
+		if (hasForeignKeyToReferenceTable)
+		{
+			/*
+			 * If there has already been a parallel query executed, the sequential mode
+			 * would still use the already opened parallel connections to the workers,
+			 * thus contradicting our purpose of using sequential mode.
+			 */
+			ereport(ERROR, (errmsg("cannot distribute relation \"%s\" in this "
+								   "transaction because it has a foreign key to "
+								   "a reference table", relationName),
+							errdetail("If a hash distributed table has a foreign key "
+									  "to a reference table, it has to be created "
+									  "in sequential mode before any parallel commands "
+									  "have been executed in the same transaction"),
+							errhint("Try re-running the transaction with "
+									"\"SET LOCAL citus.multi_shard_modify_mode TO "
+									"\'sequential\';\"")));
+		}
+		else if (MultiShardConnectionType == SEQUENTIAL_CONNECTION)
+		{
+			ereport(ERROR, (errmsg("cannot distribute \"%s\" in sequential mode because "
+								   "a parallel query was executed in this transaction",
+								   relationName),
+							errhint("If you have manually set "
+									"citus.multi_shard_modify_mode to 'sequential', "
+									"try with 'parallel' option. ")));
+		}
 	}
 	else if (shouldRunSequential)
 	{

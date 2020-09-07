@@ -466,7 +466,7 @@ AssignPlacementListToConnection(List *placementAccessList, MultiConnection *conn
 
 		/* record the relation access */
 		Oid relationId = RelationIdForShard(placement->shardId);
-		RecordRelationAccessIfReferenceTable(relationId, accessType);
+		RecordRelationAccessIfNonDistTable(relationId, accessType);
 	}
 }
 
