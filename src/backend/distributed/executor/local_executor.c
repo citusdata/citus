@@ -607,14 +607,19 @@ RecordNonDistTableAccessesForTask(Task *task)
 		return;
 	}
 
+	/*
+	 * We use only the first placement to find the relation accesses. It is
+	 * sufficient as PlacementAccessListForTask iterates relationShardList
+	 * field of the task and generates accesses per relation in the task.
+	 * As we are only interested in relations, not the placements, we can
+	 * skip rest of the placements.
+	 * Also, here we don't need to iterate relationShardList field of task
+	 * to mark each accessed relation because PlacementAccessListForTask
+	 * already computes and returns relations that task accesses.
+	 */
 	ShardPlacement *taskPlacement = linitial(taskPlacementList);
 	List *placementAccessList = PlacementAccessListForTask(task, taskPlacement);
 
-	/*
-	 * Here we don't need to iterate task->relationShardList to mark each
-	 * accessed relation because PlacementAccessListForTask already computes
-	 * and returns relations that task accesses.
-	 */
 	ShardPlacementAccess *placementAccess = NULL;
 	foreach_ptr(placementAccess, placementAccessList)
 	{
