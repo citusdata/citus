@@ -85,7 +85,6 @@ typedef struct CStoreValidOption
 {
 	const char *optionName;
 	Oid optionContextId;
-
 } CStoreValidOption;
 
 #define COMPRESSION_STRING_DELIMITED_LIST "none, pglz"
@@ -114,13 +113,13 @@ static void CStoreProcessUtility(Node *parseTree, const char *queryString,
 								 ParamListInfo paramListInfo,
 								 DestReceiver *destReceiver, char *completionTag);
 #endif
-static bool CopyCStoreTableStatement(CopyStmt* copyStatement);
-static void CheckSuperuserPrivilegesForCopy(const CopyStmt* copyStatement);
+static bool CopyCStoreTableStatement(CopyStmt *copyStatement);
+static void CheckSuperuserPrivilegesForCopy(const CopyStmt *copyStatement);
 static void CStoreProcessCopyCommand(CopyStmt *copyStatement, const char *queryString,
 									 char *completionTag);
 static uint64 CopyIntoCStoreTable(const CopyStmt *copyStatement,
 								  const char *queryString);
-static uint64 CopyOutCStoreTable(CopyStmt* copyStatement, const char* queryString);
+static uint64 CopyOutCStoreTable(CopyStmt *copyStatement, const char *queryString);
 static void CStoreProcessAlterTableCommand(AlterTableStmt *alterStatement);
 static List * DroppedCStoreFilenameList(DropStmt *dropStatement);
 static List * FindCStoreTables(List *tableList);
@@ -168,7 +167,7 @@ static int CStoreAcquireSampleRows(Relation relation, int logLevel,
 								   HeapTuple *sampleRows, int targetRowCount,
 								   double *totalRowCount, double *totalDeadRowCount);
 static List * CStorePlanForeignModify(PlannerInfo *plannerInfo, ModifyTable *plan,
-									 Index resultRelation, int subplanIndex);
+									  Index resultRelation, int subplanIndex);
 static void CStoreBeginForeignModify(ModifyTableState *modifyTableState,
 									 ResultRelInfo *relationInfo, List *fdwPrivate,
 									 int subplanIndex, int executorflags);
@@ -201,7 +200,8 @@ static ProcessUtility_hook_type PreviousProcessUtilityHook = NULL;
  * previous utility hook, and then install our hook to pre-intercept calls to
  * the copy command.
  */
-void cstore_fdw_init()
+void
+cstore_fdw_init()
 {
 	PreviousProcessUtilityHook = ProcessUtility_hook;
 	ProcessUtility_hook = CStoreProcessUtility;
@@ -212,7 +212,8 @@ void cstore_fdw_init()
  * Called when the module is unloaded. This function uninstalls the
  * extension's hooks.
  */
-void cstore_fdw_finish()
+void
+cstore_fdw_finish()
 {
 	ProcessUtility_hook = PreviousProcessUtilityHook;
 }
@@ -296,10 +297,10 @@ CStoreProcessUtility(PlannedStmt *plannedStatement, const char *queryString,
 					 DestReceiver *destReceiver, char *completionTag)
 #else
 static void
-CStoreProcessUtility(Node * parseTree, const char *queryString,
+CStoreProcessUtility(Node * parseTree, const char * queryString,
 					 ProcessUtilityContext context,
 					 ParamListInfo paramListInfo,
-					 DestReceiver *destReceiver, char *completionTag)
+					 DestReceiver * destReceiver, char * completionTag)
 #endif
 {
 #if PG_VERSION_NUM >= 100000
@@ -387,11 +388,12 @@ CStoreProcessUtility(Node * parseTree, const char *queryString,
 
 			CALL_PREVIOUS_UTILITY(parseTree, queryString, context, paramListInfo,
 								  destReceiver, completionTag);
-                        /* restore the former relation list. Our
-                         * replacement could be freed but still needed
-                         * in a cached plan. A truncate can be cached
-                         * if run from a pl/pgSQL function */
-                        truncateStatement->relations = allTablesList;
+
+			/* restore the former relation list. Our
+			 * replacement could be freed but still needed
+			 * in a cached plan. A truncate can be cached
+			 * if run from a pl/pgSQL function */
+			truncateStatement->relations = allTablesList;
 		}
 
 		TruncateCStoreTables(cstoreRelationList);
@@ -439,7 +441,7 @@ CStoreProcessUtility(Node * parseTree, const char *queryString,
  * true. The function returns false otherwise.
  */
 static bool
-CopyCStoreTableStatement(CopyStmt* copyStatement)
+CopyCStoreTableStatement(CopyStmt *copyStatement)
 {
 	bool copyCStoreTableStatement = false;
 
@@ -474,7 +476,7 @@ CopyCStoreTableStatement(CopyStmt* copyStatement)
  * copy operation and reports error if user does not have superuser rights.
  */
 static void
-CheckSuperuserPrivilegesForCopy(const CopyStmt* copyStatement)
+CheckSuperuserPrivilegesForCopy(const CopyStmt *copyStatement)
 {
 	/*
 	 * We disallow copy from file or program except to superusers. These checks
@@ -485,16 +487,16 @@ CheckSuperuserPrivilegesForCopy(const CopyStmt* copyStatement)
 		if (copyStatement->is_program)
 		{
 			ereport(ERROR, (errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
-					 errmsg("must be superuser to COPY to or from a program"),
-					 errhint("Anyone can COPY to stdout or from stdin. "
-							 "psql's \\copy command also works for anyone.")));
+							errmsg("must be superuser to COPY to or from a program"),
+							errhint("Anyone can COPY to stdout or from stdin. "
+									"psql's \\copy command also works for anyone.")));
 		}
 		else
 		{
 			ereport(ERROR, (errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
-					 errmsg("must be superuser to COPY to or from a file"),
-					 errhint("Anyone can COPY to stdout or from stdin. "
-							 "psql's \\copy command also works for anyone.")));
+							errmsg("must be superuser to COPY to or from a file"),
+							errhint("Anyone can COPY to stdout or from stdin. "
+									"psql's \\copy command also works for anyone.")));
 		}
 	}
 }
@@ -505,7 +507,7 @@ CheckSuperuserPrivilegesForCopy(const CopyStmt* copyStatement)
  * It determines the copy direction and forwards execution to appropriate function.
  */
 static void
-CStoreProcessCopyCommand(CopyStmt *copyStatement, const char* queryString,
+CStoreProcessCopyCommand(CopyStmt *copyStatement, const char *queryString,
 						 char *completionTag)
 {
 	uint64 processedCount = 0;
@@ -648,7 +650,7 @@ CopyIntoCStoreTable(const CopyStmt *copyStatement, const char *queryString)
  * stream. Copying selected columns from cstore table is not currently supported.
  */
 static uint64
-CopyOutCStoreTable(CopyStmt* copyStatement, const char* queryString)
+CopyOutCStoreTable(CopyStmt *copyStatement, const char *queryString)
 {
 	uint64 processedCount = 0;
 	RangeVar *relation = NULL;
@@ -682,6 +684,7 @@ CopyOutCStoreTable(CopyStmt* copyStatement, const char* queryString)
 	copyStatement->relation = NULL;
 
 #if (PG_VERSION_NUM >= 100000)
+
 	/*
 	 * raw_parser returns list of RawStmt* in PG 10+ we need to
 	 * extract actual query from it.
@@ -737,7 +740,7 @@ CStoreProcessAlterTableCommand(AlterTableStmt *alterStatement)
 	foreach(commandCell, commandList)
 	{
 		AlterTableCmd *alterCommand = (AlterTableCmd *) lfirst(commandCell);
-		if(alterCommand->subtype == AT_AlterColumnType)
+		if (alterCommand->subtype == AT_AlterColumnType)
 		{
 			char *columnName = alterCommand->name;
 			ColumnDef *columnDef = (ColumnDef *) alterCommand->def;
@@ -849,7 +852,7 @@ OpenRelationsForTruncate(List *cstoreTableList)
 		Relation relation = heap_openrv(rangeVar, AccessExclusiveLock);
 		Oid relationId = relation->rd_id;
 		AclResult aclresult = pg_class_aclcheck(relationId, GetUserId(),
-											   ACL_TRUNCATE);
+												ACL_TRUNCATE);
 		if (aclresult != ACLCHECK_OK)
 		{
 			aclcheck_error(aclresult, ACLCHECK_OBJECT_TABLE, get_rel_name(relationId));
@@ -889,6 +892,7 @@ TruncateCStoreTables(List *cstoreRelationList)
 		InitializeCStoreTableFile(relationId, relation, CStoreGetOptions(relationId));
 	}
 }
+
 
 /*
  * CStoreTable checks if the given table name belongs to a foreign columnar store
@@ -996,21 +1000,18 @@ DistributedTable(Oid relationId)
 static bool
 DistributedWorkerCopy(CopyStmt *copyStatement)
 {
-    ListCell *optionCell = NULL;
-    foreach(optionCell, copyStatement->options)
-    {
-        DefElem *defel = (DefElem *) lfirst(optionCell);
-        if (strncmp(defel->defname, "master_host", NAMEDATALEN) == 0)
-        {
-            return true;
-        }
-    }
+	ListCell *optionCell = NULL;
+	foreach(optionCell, copyStatement->options)
+	{
+		DefElem *defel = (DefElem *) lfirst(optionCell);
+		if (strncmp(defel->defname, "master_host", NAMEDATALEN) == 0)
+		{
+			return true;
+		}
+	}
 
-    return false;
+	return false;
 }
-
-
-
 
 
 /*
@@ -1056,7 +1057,7 @@ cstore_table_size(PG_FUNCTION_ARGS)
 	{
 		ereport(ERROR, (errcode_for_file_access(),
 						errmsg("could not stat file \"%s\": %m",
-								footerFilename->data)));
+							   footerFilename->data)));
 	}
 
 	tableSize += dataFileStatBuffer.st_size;
@@ -1428,7 +1429,6 @@ CStoreDefaultFilePath(Oid foreignTableId)
 	{
 		databaseOid = MyDatabaseId;
 		relationFileOid = foreignTableId;
-
 	}
 
 	cstoreFilePath = makeStringInfo();
@@ -1447,7 +1447,8 @@ static void
 CStoreGetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel, Oid foreignTableId)
 {
 	CStoreOptions *cstoreOptions = CStoreGetOptions(foreignTableId);
-	double tupleCountEstimate = TupleCountEstimate(foreignTableId, baserel, cstoreOptions->filename);
+	double tupleCountEstimate = TupleCountEstimate(foreignTableId, baserel,
+												   cstoreOptions->filename);
 	double rowSelectivity = clauselist_selectivity(root, baserel->baserestrictinfo,
 												   0, JOIN_INNER, NULL);
 
@@ -1494,7 +1495,8 @@ CStoreGetForeignPaths(PlannerInfo *root, RelOptInfo *baserel, Oid foreignTableId
 	double queryPageCount = relationPageCount * queryColumnRatio;
 	double totalDiskAccessCost = seq_page_cost * queryPageCount;
 
-	double tupleCountEstimate = TupleCountEstimate(foreignTableId, baserel, cstoreOptions->filename);
+	double tupleCountEstimate = TupleCountEstimate(foreignTableId, baserel,
+												   cstoreOptions->filename);
 
 	/*
 	 * We estimate costs almost the same way as cost_seqscan(), thus assuming
@@ -1505,7 +1507,7 @@ CStoreGetForeignPaths(PlannerInfo *root, RelOptInfo *baserel, Oid foreignTableId
 	double totalCpuCost = cpuCostPerTuple * tupleCountEstimate;
 
 	double startupCost = baserel->baserestrictcost.startup;
-	double totalCost  = startupCost + totalCpuCost + totalDiskAccessCost;
+	double totalCost = startupCost + totalCpuCost + totalDiskAccessCost;
 
 	/* create a foreign path node and add it as the only possible path */
 #if PG_VERSION_NUM >= 90600
@@ -1550,8 +1552,8 @@ CStoreGetForeignPlan(PlannerInfo *root, RelOptInfo *baserel, Oid foreignTableId,
 					 Plan *outerPlan)
 #else
 static ForeignScan *
-CStoreGetForeignPlan(PlannerInfo *root, RelOptInfo *baserel, Oid foreignTableId,
-					 ForeignPath *bestPath, List *targetList, List *scanClauses)
+CStoreGetForeignPlan(PlannerInfo * root, RelOptInfo * baserel, Oid foreignTableId,
+					 ForeignPath * bestPath, List * targetList, List * scanClauses)
 #endif
 {
 	ForeignScan *foreignScan = NULL;
@@ -1720,7 +1722,7 @@ ColumnList(RelOptInfo *baserel, Oid foreignTableId)
 	{
 		ListCell *neededColumnCell = NULL;
 		Var *column = NULL;
-		Form_pg_attribute attributeForm =  TupleDescAttr(tupleDescriptor, columnIndex - 1);
+		Form_pg_attribute attributeForm = TupleDescAttr(tupleDescriptor, columnIndex - 1);
 
 		if (attributeForm->attisdropped)
 		{
@@ -1920,7 +1922,7 @@ CStoreAcquireSampleRows(Relation relation, int logLevel,
 {
 	int sampleRowCount = 0;
 	double rowCount = 0.0;
-	double rowCountToSkip = -1;	/* -1 means not set yet */
+	double rowCountToSkip = -1; /* -1 means not set yet */
 	double selectionState = 0;
 	MemoryContext oldContext = CurrentMemoryContext;
 	MemoryContext tupleContext = NULL;
@@ -1948,7 +1950,8 @@ CStoreAcquireSampleRows(Relation relation, int logLevel,
 		if (!attributeForm->attisdropped)
 		{
 			Var *column = makeVar(tableId, columnIndex + 1, attributeForm->atttypid,
-								  attributeForm->atttypmod, attributeForm->attcollation, 0);
+								  attributeForm->atttypmod, attributeForm->attcollation,
+								  0);
 			columnList = lappend(columnList, column);
 		}
 	}
@@ -2139,7 +2142,7 @@ CStoreBeginForeignModify(ModifyTableState *modifyTableState,
 		return;
 	}
 
-	Assert (modifyTableState->operation == CMD_INSERT);
+	Assert(modifyTableState->operation == CMD_INSERT);
 
 	CStoreBeginForeignInsert(modifyTableState, relationInfo);
 }
@@ -2152,7 +2155,7 @@ CStoreBeginForeignModify(ModifyTableState *modifyTableState,
 static void
 CStoreBeginForeignInsert(ModifyTableState *modifyTableState, ResultRelInfo *relationInfo)
 {
-	Oid  foreignTableOid = InvalidOid;
+	Oid foreignTableOid = InvalidOid;
 	CStoreOptions *cstoreOptions = NULL;
 	TupleDesc tupleDescriptor = NULL;
 	TableWriteState *writeState = NULL;
@@ -2183,7 +2186,7 @@ static TupleTableSlot *
 CStoreExecForeignInsert(EState *executorState, ResultRelInfo *relationInfo,
 						TupleTableSlot *tupleSlot, TupleTableSlot *planSlot)
 {
-	TableWriteState *writeState = (TableWriteState*) relationInfo->ri_FdwState;
+	TableWriteState *writeState = (TableWriteState *) relationInfo->ri_FdwState;
 	HeapTuple heapTuple;
 
 	Assert(writeState != NULL);
@@ -2224,7 +2227,7 @@ CStoreEndForeignModify(EState *executorState, ResultRelInfo *relationInfo)
 static void
 CStoreEndForeignInsert(EState *executorState, ResultRelInfo *relationInfo)
 {
-	TableWriteState *writeState = (TableWriteState*) relationInfo->ri_FdwState;
+	TableWriteState *writeState = (TableWriteState *) relationInfo->ri_FdwState;
 
 	/* writeState is NULL during Explain queries */
 	if (writeState != NULL)
@@ -2238,6 +2241,7 @@ CStoreEndForeignInsert(EState *executorState, ResultRelInfo *relationInfo)
 
 
 #if PG_VERSION_NUM >= 90600
+
 /*
  * CStoreIsForeignScanParallelSafe always returns true to indicate that
  * reading from a cstore_fdw table in a parallel worker is safe. This
@@ -2254,4 +2258,6 @@ CStoreIsForeignScanParallelSafe(PlannerInfo *root, RelOptInfo *rel,
 {
 	return true;
 }
+
+
 #endif

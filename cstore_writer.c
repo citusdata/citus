@@ -149,13 +149,15 @@ CStoreBeginWrite(Oid relationId,
 	for (columnIndex = 0; columnIndex < columnCount; columnIndex++)
 	{
 		FmgrInfo *comparisonFunction = NULL;
-		FormData_pg_attribute *attributeForm = TupleDescAttr(tupleDescriptor, columnIndex);
+		FormData_pg_attribute *attributeForm = TupleDescAttr(tupleDescriptor,
+															 columnIndex);
 
 		if (!attributeForm->attisdropped)
 		{
 			Oid typeId = attributeForm->atttypid;
 
-			comparisonFunction = GetFunctionInfoOrNull(typeId, BTREE_AM_OID, BTORDER_PROC);
+			comparisonFunction = GetFunctionInfoOrNull(typeId, BTREE_AM_OID,
+													   BTORDER_PROC);
 		}
 
 		comparisonFunctionArray[columnIndex] = comparisonFunction;
@@ -262,7 +264,7 @@ CStoreWriteRow(TableWriteState *writeState, Datum *columnValues, bool *columnNul
 			bool columnTypeByValue = attributeForm->attbyval;
 			int columnTypeLength = attributeForm->attlen;
 			Oid columnCollation = attributeForm->attcollation;
-			char columnTypeAlign  = attributeForm->attalign;
+			char columnTypeAlign = attributeForm->attalign;
 
 			blockData->existsArray[blockRowIndex] = true;
 
@@ -492,7 +494,7 @@ CreateEmptyStripeSkipList(uint32 stripeMaxRowCount, uint32 blockRowCount,
 static StripeMetadata
 FlushStripe(TableWriteState *writeState)
 {
-	StripeMetadata stripeMetadata = {0, 0, 0, 0};
+	StripeMetadata stripeMetadata = { 0, 0, 0, 0 };
 	uint64 skipListLength = 0;
 	uint64 dataLength = 0;
 	StringInfo *skipListBufferArray = NULL;
@@ -531,7 +533,7 @@ FlushStripe(TableWriteState *writeState)
 		for (blockIndex = 0; blockIndex < blockCount; blockIndex++)
 		{
 			ColumnBlockBuffers *blockBuffers =
-					columnBuffers->blockBuffersArray[blockIndex];
+				columnBuffers->blockBuffersArray[blockIndex];
 			uint64 existsBufferSize = blockBuffers->existsBuffer->len;
 			uint64 valueBufferSize = blockBuffers->valueBuffer->len;
 			CompressionType valueCompressionType = blockBuffers->valueCompressionType;
@@ -582,7 +584,7 @@ FlushStripe(TableWriteState *writeState)
 		for (blockIndex = 0; blockIndex < stripeSkipList->blockCount; blockIndex++)
 		{
 			ColumnBlockBuffers *blockBuffers =
-					columnBuffers->blockBuffersArray[blockIndex];
+				columnBuffers->blockBuffersArray[blockIndex];
 			StringInfo existsBuffer = blockBuffers->existsBuffer;
 
 			WriteToFile(tableFile, existsBuffer->data, existsBuffer->len);
@@ -591,7 +593,7 @@ FlushStripe(TableWriteState *writeState)
 		for (blockIndex = 0; blockIndex < stripeSkipList->blockCount; blockIndex++)
 		{
 			ColumnBlockBuffers *blockBuffers =
-					columnBuffers->blockBuffersArray[blockIndex];
+				columnBuffers->blockBuffersArray[blockIndex];
 			StringInfo valueBuffer = blockBuffers->valueBuffer;
 
 			WriteToFile(tableFile, valueBuffer->data, valueBuffer->len);

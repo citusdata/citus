@@ -67,7 +67,7 @@ static OpExpr * MakeOpExpression(Var *variable, int16 strategyNumber);
 static Oid GetOperatorByType(Oid typeId, Oid accessMethodId, int16 strategyNumber);
 static void UpdateConstraint(Node *baseConstraint, Datum minValue, Datum maxValue);
 static StripeSkipList * SelectedBlockSkipList(StripeSkipList *stripeSkipList,
-		 	 	 	 	 	 	 	 	 	  bool *projectedColumnMask,
+											  bool *projectedColumnMask,
 											  bool *selectedBlockMask);
 static uint32 StripeSkipListRowCount(StripeSkipList *stripeSkipList);
 static bool * ProjectedColumnMask(uint32 columnCount, List *projectedColumnList);
@@ -104,7 +104,7 @@ CStoreBeginRead(Oid relationId, const char *filename, TupleDesc tupleDescriptor,
 	MemoryContext stripeReadContext = NULL;
 	uint32 columnCount = 0;
 	bool *projectedColumnMask = NULL;
-	ColumnBlockData **blockDataArray  = NULL;
+	ColumnBlockData **blockDataArray = NULL;
 
 	StringInfo tableFooterFilename = makeStringInfo();
 	appendStringInfo(tableFooterFilename, "%s%s", filename, CSTORE_FOOTER_FILE_SUFFIX);
@@ -134,7 +134,7 @@ CStoreBeginRead(Oid relationId, const char *filename, TupleDesc tupleDescriptor,
 	columnCount = tupleDescriptor->natts;
 	projectedColumnMask = ProjectedColumnMask(columnCount, projectedColumnList);
 	blockDataArray = CreateEmptyBlockDataArray(columnCount, projectedColumnMask,
-										 	   tableFooter->blockRowCount);
+											   tableFooter->blockRowCount);
 
 	readState = palloc0(sizeof(TableReadState));
 	readState->relationId = relationId;
@@ -356,7 +356,7 @@ ColumnBlockData **
 CreateEmptyBlockDataArray(uint32 columnCount, bool *columnMask, uint32 blockRowCount)
 {
 	uint32 columnIndex = 0;
-	ColumnBlockData **blockDataArray = palloc0(columnCount * sizeof(ColumnBlockData*));
+	ColumnBlockData **blockDataArray = palloc0(columnCount * sizeof(ColumnBlockData *));
 
 	/* allocate block memory for deserialized data */
 	for (columnIndex = 0; columnIndex < columnCount; columnIndex++)
@@ -448,12 +448,12 @@ StripeRowCount(Oid relid, FILE *tableFile, StripeMetadata *stripeMetadata)
 	uint64 rowCount = 0;
 	StringInfo firstColumnSkipListBuffer = NULL;
 
-	StripeFooter * stripeFooter = ReadStripeFooter(relid, stripeMetadata->id,
-												   RelationColumnCount(relid));
+	StripeFooter *stripeFooter = ReadStripeFooter(relid, stripeMetadata->id,
+												  RelationColumnCount(relid));
 
 	firstColumnSkipListBuffer = ReadFromFile(tableFile, stripeMetadata->fileOffset,
-	                                         stripeFooter->skipListSizeArray[0]);
-	rowCount =  DeserializeRowCount(firstColumnSkipListBuffer);
+											 stripeFooter->skipListSizeArray[0]);
+	rowCount = DeserializeRowCount(firstColumnSkipListBuffer);
 
 	return rowCount;
 }
@@ -573,7 +573,7 @@ LoadColumnBuffers(FILE *tableFile, ColumnBlockSkipNode *blockSkipNodeArray,
 	ColumnBuffers *columnBuffers = NULL;
 	uint32 blockIndex = 0;
 	ColumnBlockBuffers **blockBuffersArray =
-			palloc0(blockCount * sizeof(ColumnBlockBuffers *));
+		palloc0(blockCount * sizeof(ColumnBlockBuffers *));
 
 	for (blockIndex = 0; blockIndex < blockCount; blockIndex++)
 	{
@@ -761,7 +761,8 @@ SelectedBlockMask(StripeSkipList *stripeSkipList, List *projectedColumnList,
 
 			constraintList = list_make1(baseConstraint);
 #if (PG_VERSION_NUM >= 100000)
-			predicateRefuted = predicate_refuted_by(constraintList, restrictInfoList, false);
+			predicateRefuted = predicate_refuted_by(constraintList, restrictInfoList,
+													false);
 #else
 			predicateRefuted = predicate_refuted_by(constraintList, restrictInfoList);
 #endif
@@ -877,7 +878,7 @@ MakeOpExpression(Var *variable, int16 strategyNumber)
 
 	Oid accessMethodId = BTREE_AM_OID;
 	Oid operatorId = InvalidOid;
-	Const  *constantValue = NULL;
+	Const *constantValue = NULL;
 	OpExpr *expression = NULL;
 
 	/* Load the operator from system catalogs */
@@ -888,7 +889,7 @@ MakeOpExpression(Var *variable, int16 strategyNumber)
 	/* Now make the expression with the given variable and a null constant */
 	expression = (OpExpr *) make_opclause(operatorId,
 										  InvalidOid, /* no result type yet */
-										  false,	  /* no return set */
+										  false,      /* no return set */
 										  (Expr *) variable,
 										  (Expr *) constantValue,
 										  InvalidOid, collationId);
@@ -1163,7 +1164,8 @@ DeserializeBlockData(StripeBuffers *stripeBuffers, uint64 blockIndex,
 
 		if (columnBuffers != NULL)
 		{
-			ColumnBlockBuffers *blockBuffers = columnBuffers->blockBuffersArray[blockIndex];
+			ColumnBlockBuffers *blockBuffers =
+				columnBuffers->blockBuffersArray[blockIndex];
 			StringInfo valueBuffer = NULL;
 
 			/* free previous block's data buffers */
@@ -1214,7 +1216,6 @@ DeserializeBlockData(StripeBuffers *stripeBuffers, uint64 blockIndex,
 			{
 				memset(blockData->existsArray, false, rowCount);
 			}
-
 		}
 	}
 }
@@ -1328,8 +1329,6 @@ ReadFromFile(FILE *file, uint64 offset, uint32 size)
 
 	return resultBuffer;
 }
-
-
 
 
 /*

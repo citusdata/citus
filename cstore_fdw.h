@@ -32,4 +32,4 @@ extern Datum cstore_clean_table_resources(PG_FUNCTION_ARGS);
 extern Datum cstore_fdw_handler(PG_FUNCTION_ARGS);
 extern Datum cstore_fdw_validator(PG_FUNCTION_ARGS);
 
-#endif   /* CSTORE_FDW_H */ 
+#endif   /* CSTORE_FDW_H */

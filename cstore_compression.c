@@ -22,36 +22,37 @@
 #include "cstore.h"
 
 
-
 #if PG_VERSION_NUM >= 90500
+
 /*
  *	The information at the start of the compressed data. This decription is taken
  *	from pg_lzcompress in pre-9.5 version of PostgreSQL.
  */
 typedef struct CStoreCompressHeader
 {
-	int32		vl_len_;		/* varlena header (do not touch directly!) */
-	int32		rawsize;
+	int32 vl_len_;              /* varlena header (do not touch directly!) */
+	int32 rawsize;
 } CStoreCompressHeader;
 
 /*
  * Utilities for manipulation of header information for compressed data
  */
 
-#define CSTORE_COMPRESS_HDRSZ		((int32) sizeof(CStoreCompressHeader))
+#define CSTORE_COMPRESS_HDRSZ ((int32) sizeof(CStoreCompressHeader))
 #define CSTORE_COMPRESS_RAWSIZE(ptr) (((CStoreCompressHeader *) (ptr))->rawsize)
 #define CSTORE_COMPRESS_RAWDATA(ptr) (((char *) (ptr)) + CSTORE_COMPRESS_HDRSZ)
-#define CSTORE_COMPRESS_SET_RAWSIZE(ptr, len) (((CStoreCompressHeader *) (ptr))->rawsize = (len))
+#define CSTORE_COMPRESS_SET_RAWSIZE(ptr, len) (((CStoreCompressHeader *) (ptr))->rawsize = \
+												   (len))
 
 #else
 
-#define CSTORE_COMPRESS_HDRSZ		(0)
+#define CSTORE_COMPRESS_HDRSZ (0)
 #define CSTORE_COMPRESS_RAWSIZE(ptr) (PGLZ_RAW_SIZE((PGLZ_Header *) buffer->data))
 #define CSTORE_COMPRESS_RAWDATA(ptr) (((PGLZ_Header *) (ptr)))
-#define CSTORE_COMPRESS_SET_RAWSIZE(ptr, len) (((CStoreCompressHeader *) (ptr))->rawsize = (len))
+#define CSTORE_COMPRESS_SET_RAWSIZE(ptr, len) (((CStoreCompressHeader *) (ptr))->rawsize = \
+												   (len))
 
 #endif
-
 
 
 /*
