@@ -1268,8 +1268,8 @@ BEGIN;
 	SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
 	CREATE TABLE test_table_2(id int PRIMARY KEY, value_1 int);
 	SELECT create_distributed_table('test_table_2', 'id');
-ERROR:  cannot distribute "test_table_2" in sequential mode a parallel query was executed in this transaction
-HINT:  TODO: a proper hint ??
+ERROR:  cannot distribute "test_table_2" in sequential mode because a parallel query was executed in this transaction
+HINT:  If you have manually set citus.multi_shard_modify_mode to 'sequential', try with 'parallel' option.
 	CREATE TABLE test_table_1(id int PRIMARY KEY);
 ERROR:  current transaction is aborted, commands ignored until end of transaction block
 	SELECT create_reference_table('test_table_1');

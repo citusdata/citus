@@ -1213,11 +1213,12 @@ CanUseExclusiveConnections(Oid relationId, bool localTableEmpty)
 		}
 		else if (MultiShardConnectionType == SEQUENTIAL_CONNECTION)
 		{
-			/* FIXME: TODO: I think we should actually return false here or improve error message(/hint) ? */
-			ereport(ERROR, (errmsg("cannot distribute \"%s\" in sequential mode "
+			ereport(ERROR, (errmsg("cannot distribute \"%s\" in sequential mode because "
 								   "a parallel query was executed in this transaction",
 								   relationName),
-							errhint("TODO: a proper hint ??")));
+							errhint("If you have manually set "
+									"citus.multi_shard_modify_mode to 'sequential', "
+									"try with 'parallel' option. ")));
 		}
 	}
 	else if (shouldRunSequential)
