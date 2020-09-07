@@ -153,13 +153,13 @@ AllocateRelationAccessHash(void)
 
 
 /*
- * RecordRelationAccessIfReferenceTable marks the relation accessed if it is a
+ * RecordRelationAccessIfNonDistTable marks the relation accessed if it is a
  * reference relation.
  *
  * The function is a wrapper around RecordRelationAccessBase().
  */
 void
-RecordRelationAccessIfReferenceTable(Oid relationId, ShardPlacementAccessType accessType)
+RecordRelationAccessIfNonDistTable(Oid relationId, ShardPlacementAccessType accessType)
 {
 	if (!ShouldRecordRelationAccess())
 	{

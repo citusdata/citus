@@ -118,7 +118,8 @@ static void SplitLocalAndRemotePlacements(List *taskPlacementList,
 static uint64 ExecuteLocalTaskPlan(PlannedStmt *taskPlan, char *queryString,
 								   TupleDestination *tupleDest, Task *task,
 								   ParamListInfo paramListInfo);
-static void RecordReferenceTableAccessesForTask(Task *task);
+static void RecordNonDistTableAccessesForTask(Task *task);
+static bool ShouldRecordNonDistTableAccessForTask(Task *task);
 static void LogLocalCommand(Task *task);
 static uint64 LocallyPlanAndExecuteMultipleQueries(List *queryStrings,
 												   TupleDestination *tupleDest,
@@ -550,7 +551,7 @@ ExecuteLocalTaskPlan(PlannedStmt *taskPlan, char *queryString,
 	int eflags = 0;
 	uint64 totalRowsProcessed = 0;
 
-	RecordReferenceTableAccessesForTask(task);
+	RecordNonDistTableAccessesForTask(task);
 
 	/*
 	 * Use the tupleStore provided by the scanState because it is shared accross
@@ -589,35 +590,80 @@ ExecuteLocalTaskPlan(PlannedStmt *taskPlan, char *queryString,
 
 
 /*
- * RecordReferenceTableAccessesForTask records relation accesses for reference
- * tables that given task will access.
+ * RecordNonDistTableAccessesForTask records relation accesses for the non-distributed
+ * relations that given task will access (if any).
  */
 static void
-RecordReferenceTableAccessesForTask(Task *task)
+RecordNonDistTableAccessesForTask(Task *task)
 {
-	ShardPlacement *taskPlacement = NULL;
-	foreach_ptr(taskPlacement, task->taskPlacementList)
+	if (!ShouldRecordNonDistTableAccessForTask(task))
 	{
-		uint64 shardId = taskPlacement->shardId;
-		if (shardId == INVALID_SHARD_ID)
-		{
-			/*
-			 * When a SELECT prunes down to 0 shard, we still may pass through
-			 * the local executor. In that case, we don't need to record any
-			 * relation access as we don't actually access any shard placement.
-			 */
-			continue;
-		}
+		return;
+	}
 
-		Oid relationId = RelationIdForShard(shardId);
+	/*
+	 * We verified that we have only one task placement in
+	 * ShouldRecordNonDistTableAccessForTask.
+	 */
+	ShardPlacement *taskPlacement = linitial(task->taskPlacementList);
 
+	List *relationShardList = task->relationShardList;
+	RelationShard *relationShard = NULL;
+	foreach_ptr(relationShard, relationShardList)
+	{
 		List *placementAccessList = PlacementAccessListForTask(task, taskPlacement);
 		ShardPlacementAccess *placementAccess = NULL;
 		foreach_ptr(placementAccess, placementAccessList)
 		{
-			RecordRelationAccessIfReferenceTable(relationId, placementAccess->accessType);
+			Oid relationId = relationShard->relationId;
+			ShardPlacementAccessType shardPlacementAccessType =
+				placementAccess->accessType;
+			RecordRelationAccessIfNonDistTable(relationId, shardPlacementAccessType);
 		}
 	}
+}
+
+
+/*
+ * ShouldRecordNonDistTableAccessForTask returns true if we should record
+ * relation accesses for the non-distributed relations that given task will
+ * access (if any).
+ */
+static bool
+ShouldRecordNonDistTableAccessForTask(Task *task)
+{
+	List *taskPlacementList = task->taskPlacementList;
+	int numberOfTaskPlacements = list_length(taskPlacementList);
+	if (numberOfTaskPlacements > 1)
+	{
+		/*
+		 * It can't be a non-distributed table, early exit. This is
+		 * because we are in the local executor and non-distributed
+		 * tables can't already have more than one placements in any node.
+		 */
+		return false;
+	}
+	if (numberOfTaskPlacements == 0)
+	{
+		/*
+		 * FIXME: Unfortunately, it is possible due to
+		 * https://github.com/citusdata/citus/issues/4104.
+		 * We can safely remove this check when above bug is fixed.
+		 */
+		return false;
+	}
+	ShardPlacement *taskPlacement = linitial(task->taskPlacementList);
+	uint64 shardId = taskPlacement->shardId;
+	if (shardId == INVALID_SHARD_ID)
+	{
+		/*
+		 * When a SELECT prunes down to 0 shard, we still may pass through
+		 * the local executor. In that case, we don't need to record any
+		 * relation access as we don't actually access any shard placement.
+		 */
+		return false;
+	}
+	return true;
 }
 
 

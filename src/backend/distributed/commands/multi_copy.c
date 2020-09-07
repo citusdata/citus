@@ -2288,7 +2288,7 @@ CitusCopyDestReceiverStartup(DestReceiver *dest, int operation,
 	copyDest->shardStateHash = CreateShardStateHash(TopTransactionContext);
 	copyDest->connectionStateHash = CreateConnectionStateHash(TopTransactionContext);
 
-	RecordRelationAccessIfReferenceTable(tableId, PLACEMENT_ACCESS_DML);
+	RecordRelationAccessIfNonDistTable(tableId, PLACEMENT_ACCESS_DML);
 
 	/*
 	 * For all the primary (e.g., writable) nodes, reserve a shared connection.
