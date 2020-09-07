@@ -602,24 +602,29 @@ RecordNonDistTableAccessesForTask(Task *task)
 	}
 
 	/*
-	 * We verified that we have only one task placement in
+	 * We verified that we have only one & valid task placement in
 	 * ShouldRecordNonDistTableAccessForTask.
 	 */
 	ShardPlacement *taskPlacement = linitial(task->taskPlacementList);
+	List *placementAccessList = PlacementAccessListForTask(task, taskPlacement);
 
-	List *relationShardList = task->relationShardList;
-	RelationShard *relationShard = NULL;
-	foreach_ptr(relationShard, relationShardList)
+	ShardPlacementAccess *placementAccess = NULL;
+	foreach_ptr(placementAccess, placementAccessList)
 	{
-		List *placementAccessList = PlacementAccessListForTask(task, taskPlacement);
-		ShardPlacementAccess *placementAccess = NULL;
-		foreach_ptr(placementAccess, placementAccessList)
+		uint64 placementAccessShardId = placementAccess->placement->shardId;
+		if (placementAccessShardId == INVALID_SHARD_ID)
 		{
-			Oid relationId = relationShard->relationId;
-			ShardPlacementAccessType shardPlacementAccessType =
-				placementAccess->accessType;
-			RecordRelationAccessIfNonDistTable(relationId, shardPlacementAccessType);
+			/*
+			 * When a SELECT prunes down to 0 shard, we still may pass through
+			 * the local executor. In that case, we don't need to record any
+			 * relation access as we don't actually access any shard placement.
+			 */
+			continue;
 		}
+
+		Oid accessedRelationId = RelationIdForShard(placementAccessShardId);
+		ShardPlacementAccessType shardPlacementAccessType = placementAccess->accessType;
+		RecordRelationAccessIfNonDistTable(accessedRelationId, shardPlacementAccessType);
 	}
 }
 
@@ -652,17 +657,7 @@ ShouldRecordNonDistTableAccessForTask(Task *task)
 		 */
 		return false;
 	}
-	ShardPlacement *taskPlacement = linitial(task->taskPlacementList);
-	uint64 shardId = taskPlacement->shardId;
-	if (shardId == INVALID_SHARD_ID)
-	{
-		/*
-		 * When a SELECT prunes down to 0 shard, we still may pass through
-		 * the local executor. In that case, we don't need to record any
-		 * relation access as we don't actually access any shard placement.
-		 */
-		return false;
-	}
+
 	return true;
 }
 
