@@ -65,7 +65,8 @@ static StringInfo CopyStringInfo(StringInfo sourceString);
  * will be added.
  */
 TableWriteState *
-CStoreBeginWrite(const char *filename, CompressionType compressionType,
+CStoreBeginWrite(Oid relationId,
+				 const char *filename, CompressionType compressionType,
 				 uint64 stripeMaxRowCount, uint32 blockRowCount,
 				 TupleDesc tupleDescriptor)
 {
@@ -82,6 +83,7 @@ CStoreBeginWrite(const char *filename, CompressionType compressionType,
 	int statResult = 0;
 	bool *columnMaskArray = NULL;
 	ColumnBlockData **blockData = NULL;
+	uint64 currentStripeId = 0;
 
 	tableFooterFilename = makeStringInfo();
 	appendStringInfo(tableFooterFilename, "%s%s", filename, CSTORE_FOOTER_FILE_SUFFIX);
@@ -130,6 +132,7 @@ CStoreBeginWrite(const char *filename, CompressionType compressionType,
 		lastStripeSize += lastStripe->footerLength;
 
 		currentFileOffset = lastStripe->fileOffset + lastStripeSize;
+		currentStripeId = lastStripe->id + 1;
 
 		errno = 0;
 		fseekResult = fseeko(tableFile, currentFileOffset, SEEK_SET);
@@ -173,6 +176,7 @@ CStoreBeginWrite(const char *filename, CompressionType compressionType,
 	blockData = CreateEmptyBlockDataArray(columnCount, columnMaskArray, blockRowCount);
 
 	writeState = palloc0(sizeof(TableWriteState));
+	writeState->relationId = relationId;
 	writeState->tableFile = tableFile;
 	writeState->tableFooterFilename = tableFooterFilename;
 	writeState->tableFooter = tableFooter;
@@ -186,6 +190,7 @@ CStoreBeginWrite(const char *filename, CompressionType compressionType,
 	writeState->stripeWriteContext = stripeWriteContext;
 	writeState->blockDataArray = blockData;
 	writeState->compressionBuffer = NULL;
+	writeState->currentStripeId = currentStripeId;
 
 	return writeState;
 }
@@ -285,6 +290,8 @@ CStoreWriteRow(TableWriteState *writeState, Datum *columnValues, bool *columnNul
 	{
 		StripeMetadata stripeMetadata = FlushStripe(writeState);
 		MemoryContextReset(writeState->stripeWriteContext);
+
+		writeState->currentStripeId++;
 
 		/* set stripe data and skip list to NULL so they are recreated next time */
 		writeState->stripeBuffers = NULL;
@@ -490,7 +497,6 @@ FlushStripe(TableWriteState *writeState)
 	uint64 dataLength = 0;
 	StringInfo *skipListBufferArray = NULL;
 	StripeFooter *stripeFooter = NULL;
-	StringInfo stripeFooterBuffer = NULL;
 	uint32 columnIndex = 0;
 	uint32 blockIndex = 0;
 	TableFooter *tableFooter = writeState->tableFooter;
@@ -545,7 +551,6 @@ FlushStripe(TableWriteState *writeState)
 	/* create skip list and footer buffers */
 	skipListBufferArray = CreateSkipListBufferArray(stripeSkipList, tupleDescriptor);
 	stripeFooter = CreateStripeFooter(stripeSkipList, skipListBufferArray);
-	stripeFooterBuffer = SerializeStripeFooter(stripeFooter);
 
 	/*
 	 * Each stripe has three sections:
@@ -594,7 +599,9 @@ FlushStripe(TableWriteState *writeState)
 	}
 
 	/* finally, we flush the footer buffer */
-	WriteToFile(tableFile, stripeFooterBuffer->data, stripeFooterBuffer->len);
+	SaveStripeFooter(writeState->relationId,
+					 writeState->currentStripeId,
+					 stripeFooter);
 
 	/* set stripe metadata */
 	for (columnIndex = 0; columnIndex < columnCount; columnIndex++)
@@ -607,12 +614,12 @@ FlushStripe(TableWriteState *writeState)
 	stripeMetadata.fileOffset = writeState->currentFileOffset;
 	stripeMetadata.skipListLength = skipListLength;
 	stripeMetadata.dataLength = dataLength;
-	stripeMetadata.footerLength = stripeFooterBuffer->len;
+	stripeMetadata.footerLength = 0;
+	stripeMetadata.id = writeState->currentStripeId;
 
 	/* advance current file offset */
 	writeState->currentFileOffset += skipListLength;
 	writeState->currentFileOffset += dataLength;
-	writeState->currentFileOffset += stripeFooterBuffer->len;
 
 	return stripeMetadata;
 }

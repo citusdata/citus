@@ -152,7 +152,7 @@ static ForeignScan * CStoreGetForeignPlan(PlannerInfo *root, RelOptInfo *baserel
 										  Oid foreignTableId, ForeignPath *bestPath,
 										  List *targetList, List *scanClauses);
 #endif
-static double TupleCountEstimate(RelOptInfo *baserel, const char *filename);
+static double TupleCountEstimate(Oid relid, RelOptInfo *baserel, const char *filename);
 static BlockNumber PageCount(const char *filename);
 static List * ColumnList(RelOptInfo *baserel, Oid foreignTableId);
 static void CStoreExplainForeignScan(ForeignScanState *scanState,
@@ -602,7 +602,8 @@ CopyIntoCStoreTable(const CopyStmt *copyStatement, const char *queryString)
 #endif
 
 	/* init state to write to the cstore file */
-	writeState = CStoreBeginWrite(cstoreOptions->filename,
+	writeState = CStoreBeginWrite(relationId,
+								  cstoreOptions->filename,
 								  cstoreOptions->compressionType,
 								  cstoreOptions->stripeRowCount,
 								  cstoreOptions->blockRowCount,
@@ -1414,6 +1415,7 @@ ValidateForeignTableOptions(char *filename, char *compressionTypeString,
 static char *
 CStoreDefaultFilePath(Oid foreignTableId)
 {
+	StringInfo cstoreFilePath = NULL;
 	Relation relation = relation_open(foreignTableId, AccessShareLock);
 	RelFileNode relationFileNode = relation->rd_node;
 	Oid databaseOid = relationFileNode.dbNode;
@@ -1429,7 +1431,7 @@ CStoreDefaultFilePath(Oid foreignTableId)
 
 	}
 
-	StringInfo cstoreFilePath = makeStringInfo();
+	cstoreFilePath = makeStringInfo();
 	appendStringInfo(cstoreFilePath, "%s/%s/%u/%u", DataDir, CSTORE_FDW_NAME,
 					 databaseOid, relationFileOid);
 
@@ -1445,7 +1447,7 @@ static void
 CStoreGetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel, Oid foreignTableId)
 {
 	CStoreOptions *cstoreOptions = CStoreGetOptions(foreignTableId);
-	double tupleCountEstimate = TupleCountEstimate(baserel, cstoreOptions->filename);
+	double tupleCountEstimate = TupleCountEstimate(foreignTableId, baserel, cstoreOptions->filename);
 	double rowSelectivity = clauselist_selectivity(root, baserel->baserestrictinfo,
 												   0, JOIN_INNER, NULL);
 
@@ -1492,7 +1494,7 @@ CStoreGetForeignPaths(PlannerInfo *root, RelOptInfo *baserel, Oid foreignTableId
 	double queryPageCount = relationPageCount * queryColumnRatio;
 	double totalDiskAccessCost = seq_page_cost * queryPageCount;
 
-	double tupleCountEstimate = TupleCountEstimate(baserel, cstoreOptions->filename);
+	double tupleCountEstimate = TupleCountEstimate(foreignTableId, baserel, cstoreOptions->filename);
 
 	/*
 	 * We estimate costs almost the same way as cost_seqscan(), thus assuming
@@ -1597,7 +1599,7 @@ CStoreGetForeignPlan(PlannerInfo *root, RelOptInfo *baserel, Oid foreignTableId,
  * file.
  */
 static double
-TupleCountEstimate(RelOptInfo *baserel, const char *filename)
+TupleCountEstimate(Oid relid, RelOptInfo *baserel, const char *filename)
 {
 	double tupleCountEstimate = 0.0;
 
@@ -1616,7 +1618,7 @@ TupleCountEstimate(RelOptInfo *baserel, const char *filename)
 	}
 	else
 	{
-		tupleCountEstimate = (double) CStoreTableRowCount(filename);
+		tupleCountEstimate = (double) CStoreTableRowCount(relid, filename);
 	}
 
 	return tupleCountEstimate;
@@ -1809,8 +1811,8 @@ CStoreBeginForeignScan(ForeignScanState *scanState, int executorFlags)
 	whereClauseList = foreignScan->scan.plan.qual;
 
 	columnList = (List *) linitial(foreignPrivateList);
-	readState = CStoreBeginRead(cstoreOptions->filename, tupleDescriptor,
-								columnList, whereClauseList);
+	readState = CStoreBeginRead(foreignTableId, cstoreOptions->filename,
+								tupleDescriptor, columnList, whereClauseList);
 
 	scanState->fdw_state = (void *) readState;
 }
@@ -2161,7 +2163,8 @@ CStoreBeginForeignInsert(ModifyTableState *modifyTableState, ResultRelInfo *rela
 	cstoreOptions = CStoreGetOptions(foreignTableOid);
 	tupleDescriptor = RelationGetDescr(relationInfo->ri_RelationDesc);
 
-	writeState = CStoreBeginWrite(cstoreOptions->filename,
+	writeState = CStoreBeginWrite(foreignTableOid,
+								  cstoreOptions->filename,
 								  cstoreOptions->compressionType,
 								  cstoreOptions->stripeRowCount,
 								  cstoreOptions->blockRowCount,

@@ -53,5 +53,10 @@
 /expected/create.out
 /expected/data_types.out
 /expected/load.out
+/results/*
+/.deps/*
+/regression.diffs
+/regression.out
+.vscode
 
 *.pb-c.*

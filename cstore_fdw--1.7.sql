@@ -58,3 +58,17 @@ CREATE EVENT TRIGGER cstore_drop_event
     ON SQL_DROP
     EXECUTE PROCEDURE cstore_drop_trigger();
 
+CREATE TABLE cstore_stripe_attr (
+    relid oid,
+    stripe bigint,
+    attr int,
+    exists_size bigint,
+    value_size bigint,
+    skiplist_size bigint
+) WITH (user_catalog_table = true);
+
+CREATE INDEX cstore_stripe_attr_idx
+    ON cstore_stripe_attr
+    USING BTREE(relid, stripe, attr);
+
+ALTER TABLE cstore_stripe_attr SET SCHEMA pg_catalog;
