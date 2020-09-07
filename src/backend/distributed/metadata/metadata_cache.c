@@ -3847,8 +3847,7 @@ ReferenceTableOidList()
 											 Anum_pg_dist_partition_repmodel,
 											 tupleDescriptor, &isNull);
 
-		if (partitionMethod == DISTRIBUTE_BY_NONE &&
-			replicationModel == REPLICATION_MODEL_2PC)
+		if (IsReferenceTableByDistParams(partitionMethod, replicationModel))
 		{
 			Datum relationIdDatum = heap_getattr(heapTuple,
 												 Anum_pg_dist_partition_logicalrelid,
