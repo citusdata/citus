@@ -629,7 +629,6 @@ NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1
 (2 rows)
 
 ROLLBACK;
--- Try a bunch of commands and expect failure at SELECT create_distributed_table
 BEGIN;
   -- here this SELECT will enforce the whole block for local execution
   SELECT COUNT(*) FROM ref_table;
@@ -664,14 +663,26 @@ NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1
 NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500124, 'local_commands_test_schema', 'ALTER TABLE dist_table ALTER COLUMN c SET NOT NULL;')
 NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500127, 'local_commands_test_schema', 'ALTER TABLE dist_table ALTER COLUMN c SET NOT NULL;')
 NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500130, 'local_commands_test_schema', 'ALTER TABLE dist_table ALTER COLUMN c SET NOT NULL;')
-  -- as we executed ALTER TABLE commands parallelly, below
-  -- SELECT create_distributed_table would error out
   CREATE TABLE another_dist_table(a int);
   SELECT create_distributed_table('another_dist_table', 'a', colocate_with:='dist_table');
-ERROR:  cannot distribute "another_dist_table" in sequential mode a parallel query was executed in this transaction
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500133, 'local_commands_test_schema', 'CREATE TABLE local_commands_test_schema.another_dist_table (a integer)');SELECT worker_apply_shard_ddl_command (1500133, 'local_commands_test_schema', 'ALTER TABLE local_commands_test_schema.another_dist_table OWNER TO postgres')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500136, 'local_commands_test_schema', 'CREATE TABLE local_commands_test_schema.another_dist_table (a integer)');SELECT worker_apply_shard_ddl_command (1500136, 'local_commands_test_schema', 'ALTER TABLE local_commands_test_schema.another_dist_table OWNER TO postgres')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500139, 'local_commands_test_schema', 'CREATE TABLE local_commands_test_schema.another_dist_table (a integer)');SELECT worker_apply_shard_ddl_command (1500139, 'local_commands_test_schema', 'ALTER TABLE local_commands_test_schema.another_dist_table OWNER TO postgres')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500142, 'local_commands_test_schema', 'CREATE TABLE local_commands_test_schema.another_dist_table (a integer)');SELECT worker_apply_shard_ddl_command (1500142, 'local_commands_test_schema', 'ALTER TABLE local_commands_test_schema.another_dist_table OWNER TO postgres')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500145, 'local_commands_test_schema', 'CREATE TABLE local_commands_test_schema.another_dist_table (a integer)');SELECT worker_apply_shard_ddl_command (1500145, 'local_commands_test_schema', 'ALTER TABLE local_commands_test_schema.another_dist_table OWNER TO postgres')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500148, 'local_commands_test_schema', 'CREATE TABLE local_commands_test_schema.another_dist_table (a integer)');SELECT worker_apply_shard_ddl_command (1500148, 'local_commands_test_schema', 'ALTER TABLE local_commands_test_schema.another_dist_table OWNER TO postgres')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500151, 'local_commands_test_schema', 'CREATE TABLE local_commands_test_schema.another_dist_table (a integer)');SELECT worker_apply_shard_ddl_command (1500151, 'local_commands_test_schema', 'ALTER TABLE local_commands_test_schema.another_dist_table OWNER TO postgres')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500154, 'local_commands_test_schema', 'CREATE TABLE local_commands_test_schema.another_dist_table (a integer)');SELECT worker_apply_shard_ddl_command (1500154, 'local_commands_test_schema', 'ALTER TABLE local_commands_test_schema.another_dist_table OWNER TO postgres')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500157, 'local_commands_test_schema', 'CREATE TABLE local_commands_test_schema.another_dist_table (a integer)');SELECT worker_apply_shard_ddl_command (1500157, 'local_commands_test_schema', 'ALTER TABLE local_commands_test_schema.another_dist_table OWNER TO postgres')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500160, 'local_commands_test_schema', 'CREATE TABLE local_commands_test_schema.another_dist_table (a integer)');SELECT worker_apply_shard_ddl_command (1500160, 'local_commands_test_schema', 'ALTER TABLE local_commands_test_schema.another_dist_table OWNER TO postgres')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500163, 'local_commands_test_schema', 'CREATE TABLE local_commands_test_schema.another_dist_table (a integer)');SELECT worker_apply_shard_ddl_command (1500163, 'local_commands_test_schema', 'ALTER TABLE local_commands_test_schema.another_dist_table OWNER TO postgres')
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
 COMMIT;
--- add a column to be dropped and a foreign key for next test
-ALTER TABLE dist_table ADD column c int;
+-- add a foreign key for next test
 ALTER TABLE dist_table ADD CONSTRAINT fkey_dist_to_ref FOREIGN KEY (b) REFERENCES ref_table(a);
 BEGIN;
   SELECT count(*) FROM ref_table;
@@ -740,17 +751,17 @@ NOTICE:  executing the command locally: SELECT a FROM local_commands_test_schema
 
   INSERT INTO partitioning_test VALUES (7, '2012-07-07');
   SELECT COUNT(*) FROM partitioning_test;
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_commands_test_schema.partitioning_test_1500133 partitioning_test WHERE true
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_commands_test_schema.partitioning_test_1500136 partitioning_test WHERE true
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_commands_test_schema.partitioning_test_1500139 partitioning_test WHERE true
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_commands_test_schema.partitioning_test_1500142 partitioning_test WHERE true
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_commands_test_schema.partitioning_test_1500145 partitioning_test WHERE true
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_commands_test_schema.partitioning_test_1500148 partitioning_test WHERE true
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_commands_test_schema.partitioning_test_1500151 partitioning_test WHERE true
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_commands_test_schema.partitioning_test_1500154 partitioning_test WHERE true
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_commands_test_schema.partitioning_test_1500157 partitioning_test WHERE true
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_commands_test_schema.partitioning_test_1500160 partitioning_test WHERE true
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_commands_test_schema.partitioning_test_1500163 partitioning_test WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_commands_test_schema.partitioning_test_1500165 partitioning_test WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_commands_test_schema.partitioning_test_1500168 partitioning_test WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_commands_test_schema.partitioning_test_1500171 partitioning_test WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_commands_test_schema.partitioning_test_1500174 partitioning_test WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_commands_test_schema.partitioning_test_1500177 partitioning_test WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_commands_test_schema.partitioning_test_1500180 partitioning_test WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_commands_test_schema.partitioning_test_1500183 partitioning_test WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_commands_test_schema.partitioning_test_1500186 partitioning_test WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_commands_test_schema.partitioning_test_1500189 partitioning_test WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_commands_test_schema.partitioning_test_1500192 partitioning_test WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_commands_test_schema.partitioning_test_1500195 partitioning_test WHERE true
  count
 ---------------------------------------------------------------------
      4
@@ -758,17 +769,17 @@ NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_comm
 
   -- execute bunch of DDL & DROP commands succesfully
   ALTER TABLE partitioning_test ADD column c int;
-NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500133, 'local_commands_test_schema', 'ALTER TABLE partitioning_test ADD column c int;')
-NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500136, 'local_commands_test_schema', 'ALTER TABLE partitioning_test ADD column c int;')
-NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500139, 'local_commands_test_schema', 'ALTER TABLE partitioning_test ADD column c int;')
-NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500142, 'local_commands_test_schema', 'ALTER TABLE partitioning_test ADD column c int;')
-NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500145, 'local_commands_test_schema', 'ALTER TABLE partitioning_test ADD column c int;')
-NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500148, 'local_commands_test_schema', 'ALTER TABLE partitioning_test ADD column c int;')
-NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500151, 'local_commands_test_schema', 'ALTER TABLE partitioning_test ADD column c int;')
-NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500154, 'local_commands_test_schema', 'ALTER TABLE partitioning_test ADD column c int;')
-NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500157, 'local_commands_test_schema', 'ALTER TABLE partitioning_test ADD column c int;')
-NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500160, 'local_commands_test_schema', 'ALTER TABLE partitioning_test ADD column c int;')
-NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500163, 'local_commands_test_schema', 'ALTER TABLE partitioning_test ADD column c int;')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500165, 'local_commands_test_schema', 'ALTER TABLE partitioning_test ADD column c int;')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500168, 'local_commands_test_schema', 'ALTER TABLE partitioning_test ADD column c int;')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500171, 'local_commands_test_schema', 'ALTER TABLE partitioning_test ADD column c int;')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500174, 'local_commands_test_schema', 'ALTER TABLE partitioning_test ADD column c int;')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500177, 'local_commands_test_schema', 'ALTER TABLE partitioning_test ADD column c int;')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500180, 'local_commands_test_schema', 'ALTER TABLE partitioning_test ADD column c int;')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500183, 'local_commands_test_schema', 'ALTER TABLE partitioning_test ADD column c int;')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500186, 'local_commands_test_schema', 'ALTER TABLE partitioning_test ADD column c int;')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500189, 'local_commands_test_schema', 'ALTER TABLE partitioning_test ADD column c int;')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500192, 'local_commands_test_schema', 'ALTER TABLE partitioning_test ADD column c int;')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500195, 'local_commands_test_schema', 'ALTER TABLE partitioning_test ADD column c int;')
   TRUNCATE partitioning_test;
 NOTICE:  executing the command locally: TRUNCATE TABLE local_commands_test_schema.partitioning_test_xxxxx CASCADE
 NOTICE:  executing the command locally: TRUNCATE TABLE local_commands_test_schema.partitioning_test_xxxxx CASCADE
@@ -816,56 +827,56 @@ NOTICE:  executing the command locally: DROP TABLE IF EXISTS local_commands_test
 NOTICE:  executing the command locally: DROP TABLE IF EXISTS local_commands_test_schema.partitioning_test_xxxxx CASCADE
 NOTICE:  executing the command locally: DROP TABLE IF EXISTS local_commands_test_schema.partitioning_test_xxxxx CASCADE
 NOTICE:  executing the command locally: DROP TABLE IF EXISTS local_commands_test_schema.partitioning_test_2012_xxxxx CASCADE
-NOTICE:  table "partitioning_test_2012_1500165" does not exist, skipping
+NOTICE:  table "partitioning_test_2012_1500197" does not exist, skipping
 NOTICE:  executing the command locally: DROP TABLE IF EXISTS local_commands_test_schema.partitioning_test_2012_xxxxx CASCADE
-NOTICE:  table "partitioning_test_2012_1500168" does not exist, skipping
+NOTICE:  table "partitioning_test_2012_1500200" does not exist, skipping
 NOTICE:  executing the command locally: DROP TABLE IF EXISTS local_commands_test_schema.partitioning_test_2012_xxxxx CASCADE
-NOTICE:  table "partitioning_test_2012_1500171" does not exist, skipping
+NOTICE:  table "partitioning_test_2012_1500203" does not exist, skipping
 NOTICE:  executing the command locally: DROP TABLE IF EXISTS local_commands_test_schema.partitioning_test_2012_xxxxx CASCADE
-NOTICE:  table "partitioning_test_2012_1500174" does not exist, skipping
+NOTICE:  table "partitioning_test_2012_1500206" does not exist, skipping
 NOTICE:  executing the command locally: DROP TABLE IF EXISTS local_commands_test_schema.partitioning_test_2012_xxxxx CASCADE
-NOTICE:  table "partitioning_test_2012_1500177" does not exist, skipping
+NOTICE:  table "partitioning_test_2012_1500209" does not exist, skipping
 NOTICE:  executing the command locally: DROP TABLE IF EXISTS local_commands_test_schema.partitioning_test_2012_xxxxx CASCADE
-NOTICE:  table "partitioning_test_2012_1500180" does not exist, skipping
+NOTICE:  table "partitioning_test_2012_1500212" does not exist, skipping
 NOTICE:  executing the command locally: DROP TABLE IF EXISTS local_commands_test_schema.partitioning_test_2012_xxxxx CASCADE
-NOTICE:  table "partitioning_test_2012_1500183" does not exist, skipping
+NOTICE:  table "partitioning_test_2012_1500215" does not exist, skipping
 NOTICE:  executing the command locally: DROP TABLE IF EXISTS local_commands_test_schema.partitioning_test_2012_xxxxx CASCADE
-NOTICE:  table "partitioning_test_2012_1500186" does not exist, skipping
+NOTICE:  table "partitioning_test_2012_1500218" does not exist, skipping
 NOTICE:  executing the command locally: DROP TABLE IF EXISTS local_commands_test_schema.partitioning_test_2012_xxxxx CASCADE
-NOTICE:  table "partitioning_test_2012_1500189" does not exist, skipping
+NOTICE:  table "partitioning_test_2012_1500221" does not exist, skipping
 NOTICE:  executing the command locally: DROP TABLE IF EXISTS local_commands_test_schema.partitioning_test_2012_xxxxx CASCADE
-NOTICE:  table "partitioning_test_2012_1500192" does not exist, skipping
+NOTICE:  table "partitioning_test_2012_1500224" does not exist, skipping
 NOTICE:  executing the command locally: DROP TABLE IF EXISTS local_commands_test_schema.partitioning_test_2012_xxxxx CASCADE
-NOTICE:  table "partitioning_test_2012_1500195" does not exist, skipping
+NOTICE:  table "partitioning_test_2012_1500227" does not exist, skipping
 NOTICE:  executing the command locally: DROP TABLE IF EXISTS local_commands_test_schema.partitioning_test_2013_xxxxx CASCADE
-NOTICE:  table "partitioning_test_2013_1500197" does not exist, skipping
+NOTICE:  table "partitioning_test_2013_1500229" does not exist, skipping
 NOTICE:  executing the command locally: DROP TABLE IF EXISTS local_commands_test_schema.partitioning_test_2013_xxxxx CASCADE
-NOTICE:  table "partitioning_test_2013_1500200" does not exist, skipping
+NOTICE:  table "partitioning_test_2013_1500232" does not exist, skipping
 NOTICE:  executing the command locally: DROP TABLE IF EXISTS local_commands_test_schema.partitioning_test_2013_xxxxx CASCADE
-NOTICE:  table "partitioning_test_2013_1500203" does not exist, skipping
+NOTICE:  table "partitioning_test_2013_1500235" does not exist, skipping
 NOTICE:  executing the command locally: DROP TABLE IF EXISTS local_commands_test_schema.partitioning_test_2013_xxxxx CASCADE
-NOTICE:  table "partitioning_test_2013_1500206" does not exist, skipping
+NOTICE:  table "partitioning_test_2013_1500238" does not exist, skipping
 NOTICE:  executing the command locally: DROP TABLE IF EXISTS local_commands_test_schema.partitioning_test_2013_xxxxx CASCADE
-NOTICE:  table "partitioning_test_2013_1500209" does not exist, skipping
+NOTICE:  table "partitioning_test_2013_1500241" does not exist, skipping
 NOTICE:  executing the command locally: DROP TABLE IF EXISTS local_commands_test_schema.partitioning_test_2013_xxxxx CASCADE
-NOTICE:  table "partitioning_test_2013_1500212" does not exist, skipping
+NOTICE:  table "partitioning_test_2013_1500244" does not exist, skipping
 NOTICE:  executing the command locally: DROP TABLE IF EXISTS local_commands_test_schema.partitioning_test_2013_xxxxx CASCADE
-NOTICE:  table "partitioning_test_2013_1500215" does not exist, skipping
+NOTICE:  table "partitioning_test_2013_1500247" does not exist, skipping
 NOTICE:  executing the command locally: DROP TABLE IF EXISTS local_commands_test_schema.partitioning_test_2013_xxxxx CASCADE
-NOTICE:  table "partitioning_test_2013_1500218" does not exist, skipping
+NOTICE:  table "partitioning_test_2013_1500250" does not exist, skipping
 NOTICE:  executing the command locally: DROP TABLE IF EXISTS local_commands_test_schema.partitioning_test_2013_xxxxx CASCADE
-NOTICE:  table "partitioning_test_2013_1500221" does not exist, skipping
+NOTICE:  table "partitioning_test_2013_1500253" does not exist, skipping
 NOTICE:  executing the command locally: DROP TABLE IF EXISTS local_commands_test_schema.partitioning_test_2013_xxxxx CASCADE
-NOTICE:  table "partitioning_test_2013_1500224" does not exist, skipping
+NOTICE:  table "partitioning_test_2013_1500256" does not exist, skipping
 NOTICE:  executing the command locally: DROP TABLE IF EXISTS local_commands_test_schema.partitioning_test_2013_xxxxx CASCADE
-NOTICE:  table "partitioning_test_2013_1500227" does not exist, skipping
+NOTICE:  table "partitioning_test_2013_1500259" does not exist, skipping
 ROLLBACK;
 -- below should be executed via remote connections
 TRUNCATE partitioning_test;
 DROP TABLE partitioning_test;
 -- cleanup at exit
 DROP SCHEMA local_commands_test_schema CASCADE;
-NOTICE:  drop cascades to 16 other objects
+NOTICE:  drop cascades to 28 other objects
 DROP SCHEMA foo_schema;
 SELECT 1 FROM master_set_node_property('localhost', :master_port, 'shouldhaveshards', false);
  ?column?
