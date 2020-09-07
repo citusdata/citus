@@ -119,7 +119,6 @@ static uint64 ExecuteLocalTaskPlan(PlannedStmt *taskPlan, char *queryString,
 								   TupleDestination *tupleDest, Task *task,
 								   ParamListInfo paramListInfo);
 static void RecordNonDistTableAccessesForTask(Task *task);
-static bool ShouldRecordNonDistTableAccessForTask(Task *task);
 static void LogLocalCommand(Task *task);
 static uint64 LocallyPlanAndExecuteMultipleQueries(List *queryStrings,
 												   TupleDestination *tupleDest,
@@ -596,16 +595,19 @@ ExecuteLocalTaskPlan(PlannedStmt *taskPlan, char *queryString,
 static void
 RecordNonDistTableAccessesForTask(Task *task)
 {
-	if (!ShouldRecordNonDistTableAccessForTask(task))
+	List *taskPlacementList = task->taskPlacementList;
+	if (list_length(taskPlacementList) == 0)
 	{
+		/*
+		 * We need at least one task placement to record relation access.
+		 * FIXME: Unfortunately, it is possible due to
+		 * https://github.com/citusdata/citus/issues/4104.
+		 * We can safely remove this check when above bug is fixed.
+		 */
 		return;
 	}
 
-	/*
-	 * We verified that we have only one & valid task placement in
-	 * ShouldRecordNonDistTableAccessForTask.
-	 */
-	ShardPlacement *taskPlacement = linitial(task->taskPlacementList);
+	ShardPlacement *taskPlacement = linitial(taskPlacementList);
 	List *placementAccessList = PlacementAccessListForTask(task, taskPlacement);
 
 	/*
@@ -631,39 +633,6 @@ RecordNonDistTableAccessesForTask(Task *task)
 		ShardPlacementAccessType shardPlacementAccessType = placementAccess->accessType;
 		RecordRelationAccessIfNonDistTable(accessedRelationId, shardPlacementAccessType);
 	}
-}
-
-
-/*
- * ShouldRecordNonDistTableAccessForTask returns true if we should record
- * relation accesses for the non-distributed relations that given task will
- * access (if any).
- */
-static bool
-ShouldRecordNonDistTableAccessForTask(Task *task)
-{
-	List *taskPlacementList = task->taskPlacementList;
-	int numberOfTaskPlacements = list_length(taskPlacementList);
-	if (numberOfTaskPlacements > 1)
-	{
-		/*
-		 * It can't be a non-distributed table, early exit. This is
-		 * because we are in the local executor and non-distributed
-		 * tables can't already have more than one placements in any node.
-		 */
-		return false;
-	}
-	if (numberOfTaskPlacements == 0)
-	{
-		/*
-		 * FIXME: Unfortunately, it is possible due to
-		 * https://github.com/citusdata/citus/issues/4104.
-		 * We can safely remove this check when above bug is fixed.
-		 */
-		return false;
-	}
-
-	return true;
 }
 
 
