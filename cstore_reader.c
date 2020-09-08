@@ -82,7 +82,6 @@ static void DeserializeBlockData(StripeBuffers *stripeBuffers, uint64 blockIndex
 								 TupleDesc tupleDescriptor);
 static Datum ColumnDefaultValue(TupleConstr *tupleConstraints,
 								Form_pg_attribute attributeForm);
-static int64 FILESize(FILE *file);
 static StringInfo ReadFromFile(FILE *file, uint64 offset, uint32 size);
 static void ResetUncompressedBlockData(ColumnBlockData **blockDataArray,
 									   uint32 columnCount);
@@ -99,20 +98,14 @@ CStoreBeginRead(Oid relationId, const char *filename, TupleDesc tupleDescriptor,
 				List *projectedColumnList, List *whereClauseList)
 {
 	TableReadState *readState = NULL;
-	TableFooter *tableFooter = NULL;
+	TableMetadata *tableMetadata = NULL;
 	FILE *tableFile = NULL;
 	MemoryContext stripeReadContext = NULL;
 	uint32 columnCount = 0;
 	bool *projectedColumnMask = NULL;
 	ColumnBlockData **blockDataArray = NULL;
 
-	StringInfo tableFooterFilename = makeStringInfo();
-	appendStringInfo(tableFooterFilename, "%s%s", filename, CSTORE_FOOTER_FILE_SUFFIX);
-
-	tableFooter = CStoreReadFooter(tableFooterFilename);
-
-	pfree(tableFooterFilename->data);
-	pfree(tableFooterFilename);
+	tableMetadata = ReadTableMetadata(relationId);
 
 	tableFile = AllocateFile(filename, PG_BINARY_R);
 	if (tableFile == NULL)
@@ -134,12 +127,12 @@ CStoreBeginRead(Oid relationId, const char *filename, TupleDesc tupleDescriptor,
 	columnCount = tupleDescriptor->natts;
 	projectedColumnMask = ProjectedColumnMask(columnCount, projectedColumnList);
 	blockDataArray = CreateEmptyBlockDataArray(columnCount, projectedColumnMask,
-											   tableFooter->blockRowCount);
+											   tableMetadata->blockRowCount);
 
 	readState = palloc0(sizeof(TableReadState));
 	readState->relationId = relationId;
 	readState->tableFile = tableFile;
-	readState->tableFooter = tableFooter;
+	readState->tableMetadata = tableMetadata;
 	readState->projectedColumnList = projectedColumnList;
 	readState->whereClauseList = whereClauseList;
 	readState->stripeBuffers = NULL;
@@ -155,76 +148,6 @@ CStoreBeginRead(Oid relationId, const char *filename, TupleDesc tupleDescriptor,
 
 
 /*
- * CStoreReadFooter reads the cstore file footer from the given file. First, the
- * function reads the last byte of the file as the postscript size. Then, the
- * function reads the postscript. Last, the function reads and deserializes the
- * footer.
- */
-TableFooter *
-CStoreReadFooter(StringInfo tableFooterFilename)
-{
-	TableFooter *tableFooter = NULL;
-	FILE *tableFooterFile = NULL;
-	uint64 footerOffset = 0;
-	uint64 footerLength = 0;
-	StringInfo postscriptBuffer = NULL;
-	StringInfo postscriptSizeBuffer = NULL;
-	uint64 postscriptSizeOffset = 0;
-	uint8 postscriptSize = 0;
-	uint64 footerFileSize = 0;
-	uint64 postscriptOffset = 0;
-	StringInfo footerBuffer = NULL;
-	int freeResult = 0;
-
-	tableFooterFile = AllocateFile(tableFooterFilename->data, PG_BINARY_R);
-	if (tableFooterFile == NULL)
-	{
-		ereport(ERROR, (errcode_for_file_access(),
-						errmsg("could not open file \"%s\" for reading: %m",
-							   tableFooterFilename->data),
-						errhint("Try copying in data to the table.")));
-	}
-
-	footerFileSize = FILESize(tableFooterFile);
-	if (footerFileSize < CSTORE_POSTSCRIPT_SIZE_LENGTH)
-	{
-		ereport(ERROR, (errmsg("invalid cstore file")));
-	}
-
-	postscriptSizeOffset = footerFileSize - CSTORE_POSTSCRIPT_SIZE_LENGTH;
-	postscriptSizeBuffer = ReadFromFile(tableFooterFile, postscriptSizeOffset,
-										CSTORE_POSTSCRIPT_SIZE_LENGTH);
-	memcpy(&postscriptSize, postscriptSizeBuffer->data, CSTORE_POSTSCRIPT_SIZE_LENGTH);
-	if (postscriptSize + CSTORE_POSTSCRIPT_SIZE_LENGTH > footerFileSize)
-	{
-		ereport(ERROR, (errmsg("invalid postscript size")));
-	}
-
-	postscriptOffset = footerFileSize - (CSTORE_POSTSCRIPT_SIZE_LENGTH + postscriptSize);
-	postscriptBuffer = ReadFromFile(tableFooterFile, postscriptOffset, postscriptSize);
-
-	DeserializePostScript(postscriptBuffer, &footerLength);
-	if (footerLength + postscriptSize + CSTORE_POSTSCRIPT_SIZE_LENGTH > footerFileSize)
-	{
-		ereport(ERROR, (errmsg("invalid footer size")));
-	}
-
-	footerOffset = postscriptOffset - footerLength;
-	footerBuffer = ReadFromFile(tableFooterFile, footerOffset, footerLength);
-	tableFooter = DeserializeTableFooter(footerBuffer);
-
-	freeResult = FreeFile(tableFooterFile);
-	if (freeResult != 0)
-	{
-		ereport(ERROR, (errcode_for_file_access(),
-						errmsg("could not close file: %m")));
-	}
-
-	return tableFooter;
-}
-
-
-/*
  * CStoreReadNextRow tries to read a row from the cstore file. On success, it sets
  * column values and nulls, and returns true. If there are no more rows to read,
  * the function returns false.
@@ -234,7 +157,7 @@ CStoreReadNextRow(TableReadState *readState, Datum *columnValues, bool *columnNu
 {
 	uint32 blockIndex = 0;
 	uint32 blockRowIndex = 0;
-	TableFooter *tableFooter = readState->tableFooter;
+	TableMetadata *tableMetadata = readState->tableMetadata;
 	MemoryContext oldContext = NULL;
 
 	/*
@@ -247,7 +170,7 @@ CStoreReadNextRow(TableReadState *readState, Datum *columnValues, bool *columnNu
 	{
 		StripeBuffers *stripeBuffers = NULL;
 		StripeMetadata *stripeMetadata = NULL;
-		List *stripeMetadataList = tableFooter->stripeMetadataList;
+		List *stripeMetadataList = tableMetadata->stripeMetadataList;
 		uint32 stripeCount = list_length(stripeMetadataList);
 		StripeFooter *stripeFooter = NULL;
 
@@ -284,8 +207,8 @@ CStoreReadNextRow(TableReadState *readState, Datum *columnValues, bool *columnNu
 		}
 	}
 
-	blockIndex = readState->stripeReadRowCount / tableFooter->blockRowCount;
-	blockRowIndex = readState->stripeReadRowCount % tableFooter->blockRowCount;
+	blockIndex = readState->stripeReadRowCount / tableMetadata->blockRowCount;
+	blockRowIndex = readState->stripeReadRowCount % tableMetadata->blockRowCount;
 
 	if (blockIndex != readState->deserializedBlockIndex)
 	{
@@ -294,14 +217,14 @@ CStoreReadNextRow(TableReadState *readState, Datum *columnValues, bool *columnNu
 		uint32 stripeRowCount = 0;
 
 		stripeRowCount = readState->stripeBuffers->rowCount;
-		lastBlockIndex = stripeRowCount / tableFooter->blockRowCount;
+		lastBlockIndex = stripeRowCount / tableMetadata->blockRowCount;
 		if (blockIndex == lastBlockIndex)
 		{
-			blockRowCount = stripeRowCount % tableFooter->blockRowCount;
+			blockRowCount = stripeRowCount % tableMetadata->blockRowCount;
 		}
 		else
 		{
-			blockRowCount = tableFooter->blockRowCount;
+			blockRowCount = tableMetadata->blockRowCount;
 		}
 
 		oldContext = MemoryContextSwitchTo(readState->stripeReadContext);
@@ -341,9 +264,9 @@ CStoreEndRead(TableReadState *readState)
 
 	MemoryContextDelete(readState->stripeReadContext);
 	FreeFile(readState->tableFile);
-	list_free_deep(readState->tableFooter->stripeMetadataList);
+	list_free_deep(readState->tableMetadata->stripeMetadataList);
 	FreeColumnBlockDataArray(readState->blockDataArray, columnCount);
-	pfree(readState->tableFooter);
+	pfree(readState->tableMetadata);
 	pfree(readState);
 }
 
@@ -405,19 +328,12 @@ FreeColumnBlockDataArray(ColumnBlockData **blockDataArray, uint32 columnCount)
 uint64
 CStoreTableRowCount(Oid relid, const char *filename)
 {
-	TableFooter *tableFooter = NULL;
+	TableMetadata *tableMetadata = NULL;
 	FILE *tableFile;
 	ListCell *stripeMetadataCell = NULL;
 	uint64 totalRowCount = 0;
 
-	StringInfo tableFooterFilename = makeStringInfo();
-
-	appendStringInfo(tableFooterFilename, "%s%s", filename, CSTORE_FOOTER_FILE_SUFFIX);
-
-	tableFooter = CStoreReadFooter(tableFooterFilename);
-
-	pfree(tableFooterFilename->data);
-	pfree(tableFooterFilename);
+	tableMetadata = ReadTableMetadata(relid);
 
 	tableFile = AllocateFile(filename, PG_BINARY_R);
 	if (tableFile == NULL)
@@ -426,7 +342,7 @@ CStoreTableRowCount(Oid relid, const char *filename)
 						errmsg("could not open file \"%s\" for reading: %m", filename)));
 	}
 
-	foreach(stripeMetadataCell, tableFooter->stripeMetadataList)
+	foreach(stripeMetadataCell, tableMetadata->stripeMetadataList)
 	{
 		StripeMetadata *stripeMetadata = (StripeMetadata *) lfirst(stripeMetadataCell);
 		totalRowCount += StripeRowCount(relid, tableFile, stripeMetadata);
@@ -1260,32 +1176,6 @@ ColumnDefaultValue(TupleConstr *tupleConstraints, Form_pg_attribute attributeFor
 	}
 
 	return defaultValue;
-}
-
-
-/* Returns the size of the given file handle. */
-static int64
-FILESize(FILE *file)
-{
-	int64 fileSize = 0;
-	int fseekResult = 0;
-
-	errno = 0;
-	fseekResult = fseeko(file, 0, SEEK_END);
-	if (fseekResult != 0)
-	{
-		ereport(ERROR, (errcode_for_file_access(),
-						errmsg("could not seek in file: %m")));
-	}
-
-	fileSize = ftello(file);
-	if (fileSize == -1)
-	{
-		ereport(ERROR, (errcode_for_file_access(),
-						errmsg("could not get position in file: %m")));
-	}
-
-	return fileSize;
 }
 
 

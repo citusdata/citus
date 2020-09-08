@@ -58,17 +58,37 @@ CREATE EVENT TRIGGER cstore_drop_event
     ON SQL_DROP
     EXECUTE PROCEDURE cstore_drop_trigger();
 
+CREATE TABLE cstore_tables (
+    relid oid,
+    block_row_count int,
+    version_major bigint,
+    version_minor bigint,
+    PRIMARY KEY (relid)
+) WITH (user_catalog_table = true);
+
+ALTER TABLE cstore_tables SET SCHEMA pg_catalog;
+
+CREATE TABLE cstore_stripes (
+    relid oid,
+    stripe bigint,
+    file_offset bigint,
+    skiplist_length bigint,
+    data_length bigint,
+    PRIMARY KEY (relid, stripe),
+    FOREIGN KEY (relid) REFERENCES cstore_tables(relid) ON DELETE CASCADE
+) WITH (user_catalog_table = true);
+
+ALTER TABLE cstore_stripes SET SCHEMA pg_catalog;
+
 CREATE TABLE cstore_stripe_attr (
     relid oid,
     stripe bigint,
     attr int,
     exists_size bigint,
     value_size bigint,
-    skiplist_size bigint
+    skiplist_size bigint,
+    PRIMARY KEY (relid, stripe, attr),
+    FOREIGN KEY (relid, stripe) REFERENCES cstore_stripes(relid, stripe) ON DELETE CASCADE
 ) WITH (user_catalog_table = true);
-
-CREATE INDEX cstore_stripe_attr_idx
-    ON cstore_stripe_attr
-    USING BTREE(relid, stripe, attr);
 
 ALTER TABLE cstore_stripe_attr SET SCHEMA pg_catalog;

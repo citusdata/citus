@@ -130,6 +130,8 @@ InitializeCStoreTableFile(Oid relationId, Relation relation, CStoreOptions *csto
 	TableWriteState *writeState = NULL;
 	TupleDesc tupleDescriptor = RelationGetDescr(relation);
 
+	InitCStoreTableMetadata(relationId, cstoreOptions->blockRowCount);
+
 	/*
 	 * Initialize state to write to the cstore file. This creates an
 	 * empty data file and a valid footer file for the table.
@@ -183,19 +185,6 @@ void
 DeleteCStoreTableFiles(char *filename)
 {
 	int dataFileRemoved = 0;
-	int footerFileRemoved = 0;
-
-	StringInfo tableFooterFilename = makeStringInfo();
-	appendStringInfo(tableFooterFilename, "%s%s", filename, CSTORE_FOOTER_FILE_SUFFIX);
-
-	/* delete the footer file */
-	footerFileRemoved = unlink(tableFooterFilename->data);
-	if (footerFileRemoved != 0)
-	{
-		ereport(WARNING, (errcode_for_file_access(),
-						  errmsg("could not delete file \"%s\": %m",
-								 tableFooterFilename->data)));
-	}
 
 	/* delete the data file */
 	dataFileRemoved = unlink(filename);

@@ -426,6 +426,7 @@ CStoreProcessUtility(Node * parseTree, const char * queryString,
 			RemoveCStoreDatabaseDirectory(databaseOid);
 		}
 	}
+
 	/* handle other utility statements */
 	else
 	{
@@ -1026,11 +1027,8 @@ cstore_table_size(PG_FUNCTION_ARGS)
 	int64 tableSize = 0;
 	CStoreOptions *cstoreOptions = NULL;
 	char *dataFilename = NULL;
-	StringInfo footerFilename = NULL;
 	int dataFileStatResult = 0;
-	int footerFileStatResult = 0;
 	struct stat dataFileStatBuffer;
-	struct stat footerFileStatBuffer;
 
 	bool cstoreTable = CStoreTable(relationId);
 	if (!cstoreTable)
@@ -1048,20 +1046,7 @@ cstore_table_size(PG_FUNCTION_ARGS)
 						errmsg("could not stat file \"%s\": %m", dataFilename)));
 	}
 
-	footerFilename = makeStringInfo();
-	appendStringInfo(footerFilename, "%s%s", dataFilename,
-					 CSTORE_FOOTER_FILE_SUFFIX);
-
-	footerFileStatResult = stat(footerFilename->data, &footerFileStatBuffer);
-	if (footerFileStatResult != 0)
-	{
-		ereport(ERROR, (errcode_for_file_access(),
-						errmsg("could not stat file \"%s\": %m",
-							   footerFilename->data)));
-	}
-
 	tableSize += dataFileStatBuffer.st_size;
-	tableSize += footerFileStatBuffer.st_size;
 
 	PG_RETURN_INT64(tableSize);
 }
