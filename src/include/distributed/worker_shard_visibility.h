@@ -17,6 +17,7 @@ extern bool OverrideTableVisibility;
 
 
 extern void ReplaceTableVisibleFunction(Node *inputNode);
+extern void ErrorIfRelationIsAKnownShard(Oid relationId);
 extern bool RelationIsAKnownShard(Oid shardRelationId, bool onlySearchPath);
 
 

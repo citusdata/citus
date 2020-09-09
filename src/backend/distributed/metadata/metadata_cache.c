@@ -211,7 +211,6 @@ static ScanKeyData DistObjectScanKey[3];
 /* local function forward declarations */
 static bool IsCitusTableViaCatalog(Oid relationId);
 static ShardIdCacheEntry * LookupShardIdCacheEntry(int64 shardId);
-static CitusTableCacheEntry * LookupCitusTableCacheEntry(Oid relationId);
 static CitusTableCacheEntry * BuildCitusTableCacheEntry(Oid relationId);
 static void BuildCachedShardList(CitusTableCacheEntry *cacheEntry);
 static void PrepareWorkerNodeCache(void);
@@ -362,7 +361,14 @@ IsCitusTableTypeInternal(CitusTableCacheEntry *tableEntry, CitusTableType tableT
 
 		case REFERENCE_TABLE:
 		{
-			return tableEntry->partitionMethod == DISTRIBUTE_BY_NONE;
+			return tableEntry->partitionMethod == DISTRIBUTE_BY_NONE &&
+				   tableEntry->replicationModel == REPLICATION_MODEL_2PC;
+		}
+
+		case CITUS_LOCAL_TABLE:
+		{
+			return tableEntry->partitionMethod == DISTRIBUTE_BY_NONE &&
+				   tableEntry->replicationModel != REPLICATION_MODEL_2PC;
 		}
 
 		case CITUS_TABLE_WITH_NO_DIST_KEY:
@@ -423,6 +429,30 @@ IsCitusTableViaCatalog(Oid relationId)
 	table_close(pgDistPartition, AccessShareLock);
 
 	return HeapTupleIsValid(partitionTuple);
+}
+
+
+/*
+ * IsCitusLocalTableByDistParams returns true if given partitionMethod and
+ * replicationModel would identify a citus local table.
+ */
+bool
+IsCitusLocalTableByDistParams(char partitionMethod, char replicationModel)
+{
+	return partitionMethod == DISTRIBUTE_BY_NONE &&
+		   replicationModel != REPLICATION_MODEL_2PC;
+}
+
+
+/*
+ * IsReferenceTableByDistParams returns true if given partitionMethod and
+ * replicationModel would identify a reference table.
+ */
+bool
+IsReferenceTableByDistParams(char partitionMethod, char replicationModel)
+{
+	return partitionMethod == DISTRIBUTE_BY_NONE &&
+		   replicationModel == REPLICATION_MODEL_2PC;
 }
 
 
@@ -923,7 +953,7 @@ GetCitusTableCacheEntry(Oid distributedRelationId)
  * passed relationId. For efficiency it caches lookups. This function returns
  * NULL if the relation isn't a distributed table.
  */
-static CitusTableCacheEntry *
+CitusTableCacheEntry *
 LookupCitusTableCacheEntry(Oid relationId)
 {
 	bool foundInCache = false;
@@ -3809,16 +3839,21 @@ ReferenceTableOidList()
 	while (HeapTupleIsValid(heapTuple))
 	{
 		bool isNull = false;
-		Datum relationIdDatum = heap_getattr(heapTuple,
-											 Anum_pg_dist_partition_logicalrelid,
-											 tupleDescriptor, &isNull);
-		Oid relationId = DatumGetObjectId(relationIdDatum);
 		char partitionMethod = heap_getattr(heapTuple,
 											Anum_pg_dist_partition_partmethod,
 											tupleDescriptor, &isNull);
+		char replicationModel = heap_getattr(heapTuple,
+											 Anum_pg_dist_partition_repmodel,
+											 tupleDescriptor, &isNull);
 
-		if (partitionMethod == DISTRIBUTE_BY_NONE)
+		if (IsReferenceTableByDistParams(partitionMethod, replicationModel))
 		{
+			Datum relationIdDatum = heap_getattr(heapTuple,
+												 Anum_pg_dist_partition_logicalrelid,
+												 tupleDescriptor, &isNull);
+
+			Oid relationId = DatumGetObjectId(relationIdDatum);
+
 			referenceTableOidList = lappend_oid(referenceTableOidList, relationId);
 		}
 

@@ -284,10 +284,12 @@ ERROR:  could not run distributed query with subquery outside the FROM, WHERE an
 HINT:  Consider using an equality filter on the distributed table's partition column.
 -- joins are not supported between local and distributed tables
 SELECT title, authors.name FROM authors, articles WHERE authors.id = articles.author_id;
-ERROR:  relation authors is not distributed
+ERROR:  direct joins between distributed and local tables are not supported
+HINT:  Use CTE's or subqueries to select from local tables and use them in joins
 -- inner joins are not supported (I think)
 SELECT * FROM  (articles INNER JOIN authors ON articles.id = authors.id);
-ERROR:  relation authors is not distributed
+ERROR:  direct joins between distributed and local tables are not supported
+HINT:  Use CTE's or subqueries to select from local tables and use them in joins
 -- test use of EXECUTE statements within plpgsql
 DO $sharded_execute$
 	BEGIN

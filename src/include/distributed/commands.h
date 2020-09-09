@@ -48,6 +48,22 @@ typedef struct DistributeObjectOps
 
 const DistributeObjectOps * GetDistributeObjectOps(Node *node);
 
+/*
+ * Flags that can be passed to GetForeignKeyOids to indicate
+ * which foreign key constraint OIDs are to be extracted
+ */
+typedef enum ExtractForeignKeyConstraintsMode
+{
+	/* extract the foreign key OIDs where the table is the referencing one */
+	INCLUDE_REFERENCING_CONSTRAINTS = 1 << 0,
+
+	/* extract the foreign key OIDs the table is the referenced one */
+	INCLUDE_REFERENCED_CONSTRAINTS = 1 << 1,
+
+	/* exclude the self-referencing foreign keys */
+	EXCLUDE_SELF_REFERENCES = 1 << 2
+} ExtractForeignKeyConstraintMode;
+
 /* cluster.c - forward declarations */
 extern List * PreprocessClusterStmt(Node *node, const char *clusterCommand);
 
@@ -98,16 +114,23 @@ extern ObjectAddress AlterExtensionUpdateStmtObjectAddress(Node *stmt,
 extern bool ConstraintIsAForeignKeyToReferenceTable(char *constraintName,
 													Oid leftRelationId);
 extern void ErrorIfUnsupportedForeignConstraintExists(Relation relation,
+													  char referencingReplicationModel,
 													  char distributionMethod,
 													  Var *distributionColumn,
 													  uint32 colocationId);
+extern void ErrorOutForFKeyBetweenPostgresAndCitusLocalTable(Oid localTableId);
 extern bool ColumnAppearsInForeignKeyToReferenceTable(char *columnName, Oid
 													  relationId);
 extern List * GetReferencingForeignConstaintCommands(Oid relationOid);
+extern bool HasForeignKeyToCitusLocalTable(Oid relationId);
 extern bool HasForeignKeyToReferenceTable(Oid relationOid);
 extern bool TableReferenced(Oid relationOid);
 extern bool TableReferencing(Oid relationOid);
 extern bool ConstraintIsAForeignKey(char *inputConstaintName, Oid relationOid);
+extern Oid GetForeignKeyOidByName(char *inputConstaintName, Oid relationId);
+extern void ErrorIfTableHasExternalForeignKeys(Oid relationId);
+extern List * GetForeignKeyOids(Oid relationId, int flags);
+extern Oid GetReferencedTableId(Oid foreignKeyId);
 
 
 /* function.c - forward declarations */
@@ -213,8 +236,8 @@ extern Node * ProcessCreateSubscriptionStmt(CreateSubscriptionStmt *createSubStm
 
 /* table.c - forward declarations */
 extern List * PreprocessDropTableStmt(Node *stmt, const char *queryString);
-extern List * PostprocessCreateTableStmtPartitionOf(CreateStmt *createStatement,
-													const char *queryString);
+extern void PostprocessCreateTableStmt(CreateStmt *createStatement,
+									   const char *queryString);
 extern List * PostprocessAlterTableStmtAttachPartition(
 	AlterTableStmt *alterTableStatement,
 	const char *queryString);
@@ -230,6 +253,7 @@ extern void PostprocessAlterTableStmt(AlterTableStmt *pStmt);
 extern void ErrorUnsupportedAlterTableAddColumn(Oid relationId, AlterTableCmd *command,
 												Constraint *constraint);
 extern void ErrorIfUnsupportedConstraint(Relation relation, char distributionMethod,
+										 char referencingReplicationModel,
 										 Var *distributionColumn, uint32 colocationId);
 extern ObjectAddress AlterTableSchemaStmtObjectAddress(Node *stmt,
 													   bool missing_ok);
@@ -237,7 +261,7 @@ extern List * MakeNameListFromRangeVar(const RangeVar *rel);
 
 
 /* truncate.c - forward declarations */
-extern void PostprocessTruncateStatement(TruncateStmt *truncateStatement);
+extern void PreprocessTruncateStatement(TruncateStmt *truncateStatement);
 
 /* type.c - forward declarations */
 extern List * PreprocessCompositeTypeStmt(Node *stmt, const char *queryString);
@@ -278,9 +302,27 @@ extern void PostprocessVacuumStmt(VacuumStmt *vacuumStmt, const char *vacuumComm
 
 /* trigger.c - forward declarations */
 extern List * GetExplicitTriggerCommandList(Oid relationId);
+extern HeapTuple GetTriggerTupleById(Oid triggerId, bool missingOk);
 extern List * GetExplicitTriggerIdList(Oid relationId);
 extern Oid get_relation_trigger_oid_compat(HeapTuple heapTuple);
-extern void ErrorIfUnsupportedCreateTriggerCommand(CreateTrigStmt *createTriggerStmt);
+extern List * PostprocessCreateTriggerStmt(Node *node, const char *queryString);
+extern ObjectAddress CreateTriggerStmtObjectAddress(Node *node, bool missingOk);
+extern void CreateTriggerEventExtendNames(CreateTrigStmt *createTriggerStmt,
+										  char *schemaName, uint64 shardId);
+extern List * PostprocessAlterTriggerRenameStmt(Node *node, const char *queryString);
+extern void AlterTriggerRenameEventExtendNames(RenameStmt *renameTriggerStmt,
+											   char *schemaName, uint64 shardId);
+extern List * PostprocessAlterTriggerDependsStmt(Node *node, const char *queryString);
+extern void AlterTriggerDependsEventExtendNames(
+	AlterObjectDependsStmt *alterTriggerDependsStmt,
+	char *schemaName, uint64 shardId);
+extern List * PreprocessDropTriggerStmt(Node *node, const char *queryString);
+extern void ErrorOutForTriggerIfNotCitusLocalTable(Oid relationId);
+extern void DropTriggerEventExtendNames(DropStmt *dropTriggerStmt, char *schemaName,
+										uint64 shardId);
+extern List * CitusLocalTableTriggerCommandDDLJob(Oid relationId, char *triggerName,
+												  const char *queryString);
+extern Oid GetTriggerFunctionId(Oid triggerId);
 
 extern bool ShouldPropagateSetCommand(VariableSetStmt *setStmt);
 extern void PostprocessVariableSetStmt(VariableSetStmt *setStmt, const char *setCommand);

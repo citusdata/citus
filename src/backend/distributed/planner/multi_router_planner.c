@@ -130,6 +130,12 @@ static bool IsTidColumn(Node *node);
 static DeferredErrorMessage * ModifyPartialQuerySupported(Query *queryTree, bool
 														  multiShardQuery,
 														  Oid *distributedTableId);
+static DeferredErrorMessage * DeferErrorIfUnsupportedModifyQueryWithLocalTable(
+	Query *query);
+static DeferredErrorMessage * DeferErrorIfUnsupportedModifyQueryWithCitusLocalTable(
+	RTEListProperties *rteListProperties, Oid targetRelationId);
+static DeferredErrorMessage * DeferErrorIfUnsupportedModifyQueryWithPostgresLocalTable(
+	RTEListProperties *rteListProperties, Oid targetRelationId);
 static DeferredErrorMessage * MultiShardModifyQuerySupported(Query *originalQuery,
 															 PlannerRestrictionContext *
 															 plannerRestrictionContext);
@@ -570,22 +576,14 @@ static DeferredErrorMessage *
 ModifyPartialQuerySupported(Query *queryTree, bool multiShardQuery,
 							Oid *distributedTableIdOutput)
 {
-	uint32 rangeTableId = 1;
-	CmdType commandType = queryTree->commandType;
-
-	Oid distributedTableId = ModifyQueryResultRelationId(queryTree);
-	*distributedTableIdOutput = distributedTableId;
-	if (!IsCitusTable(distributedTableId))
+	DeferredErrorMessage *deferredError =
+		DeferErrorIfUnsupportedModifyQueryWithLocalTable(queryTree);
+	if (deferredError != NULL)
 	{
-		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-							 "cannot plan modifications of local tables involving "
-							 "distributed tables",
-							 NULL, NULL);
+		return deferredError;
 	}
 
-	Var *partitionColumn = PartitionColumn(distributedTableId, rangeTableId);
-
-	DeferredErrorMessage *deferredError = DeferErrorIfModifyView(queryTree);
+	deferredError = DeferErrorIfModifyView(queryTree);
 	if (deferredError != NULL)
 	{
 		return deferredError;
@@ -675,6 +673,11 @@ ModifyPartialQuerySupported(Query *queryTree, bool multiShardQuery,
 		}
 	}
 
+	Oid distributedTableId = ModifyQueryResultRelationId(queryTree);
+	uint32 rangeTableId = 1;
+	Var *partitionColumn = PartitionColumn(distributedTableId, rangeTableId);
+
+	CmdType commandType = queryTree->commandType;
 	if (commandType == CMD_INSERT || commandType == CMD_UPDATE ||
 		commandType == CMD_DELETE)
 	{
@@ -786,6 +789,97 @@ ModifyPartialQuerySupported(Query *queryTree, bool multiShardQuery,
 	if (deferredError != NULL)
 	{
 		return deferredError;
+	}
+
+
+	/* set it for caller to use when we don't return any errors */
+	*distributedTableIdOutput = distributedTableId;
+
+	return NULL;
+}
+
+
+/*
+ * DeferErrorIfUnsupportedModifyQueryWithLocalTable returns DeferredErrorMessage
+ * for unsupported modify queries that cannot be planned by router planner due to
+ * unsupported usage of postgres local or citus local tables.
+ */
+static DeferredErrorMessage *
+DeferErrorIfUnsupportedModifyQueryWithLocalTable(Query *query)
+{
+	RTEListProperties *rteListProperties = GetRTEListPropertiesForQuery(query);
+	Oid targetRelationId = ModifyQueryResultRelationId(query);
+
+	DeferredErrorMessage *deferredErrorMessage =
+		DeferErrorIfUnsupportedModifyQueryWithCitusLocalTable(rteListProperties,
+															  targetRelationId);
+	if (deferredErrorMessage)
+	{
+		return deferredErrorMessage;
+	}
+
+	deferredErrorMessage = DeferErrorIfUnsupportedModifyQueryWithPostgresLocalTable(
+		rteListProperties,
+		targetRelationId);
+	return deferredErrorMessage;
+}
+
+
+/*
+ * DeferErrorIfUnsupportedModifyQueryWithCitusLocalTable is a helper function
+ * that takes RTEListProperties & targetRelationId and returns deferred error
+ * if query is not supported due to unsupported usage of citus local tables.
+ */
+static DeferredErrorMessage *
+DeferErrorIfUnsupportedModifyQueryWithCitusLocalTable(
+	RTEListProperties *rteListProperties, Oid targetRelationId)
+{
+	if (rteListProperties->hasDistributedTable && rteListProperties->hasCitusLocalTable)
+	{
+		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+							 "cannot plan modifications with citus local tables and "
+							 "distributed tables", NULL,
+							 LOCAL_TABLE_SUBQUERY_CTE_HINT);
+	}
+
+	if (IsCitusTableType(targetRelationId, REFERENCE_TABLE) &&
+		rteListProperties->hasCitusLocalTable)
+	{
+		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+							 "cannot plan modifications of reference tables with citus "
+							 "local tables", NULL,
+							 LOCAL_TABLE_SUBQUERY_CTE_HINT);
+	}
+
+	return NULL;
+}
+
+
+/*
+ * DeferErrorIfUnsupportedModifyQueryWithPostgresLocalTable is a helper
+ * function that takes RTEListProperties & targetRelationId and returns
+ * deferred error if query is not supported due to unsupported usage of
+ * postgres local tables.
+ */
+static DeferredErrorMessage *
+DeferErrorIfUnsupportedModifyQueryWithPostgresLocalTable(
+	RTEListProperties *rteListProperties, Oid targetRelationId)
+{
+	if (rteListProperties->hasPostgresLocalTable &&
+		rteListProperties->hasCitusTable)
+	{
+		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+							 "cannot plan modifications with local tables involving "
+							 "citus tables", NULL,
+							 LOCAL_TABLE_SUBQUERY_CTE_HINT);
+	}
+
+	if (!IsCitusTable(targetRelationId))
+	{
+		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+							 "cannot plan modifications of local tables involving "
+							 "distributed tables",
+							 NULL, NULL);
 	}
 
 	return NULL;
@@ -2704,7 +2798,7 @@ BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError)
 
 	Assert(query->commandType == CMD_INSERT);
 
-	/* reference tables can only have one shard */
+	/* reference tables and citus local tables can only have one shard */
 	if (IsCitusTableTypeCacheEntry(cacheEntry, CITUS_TABLE_WITH_NO_DIST_KEY))
 	{
 		List *shardIntervalList = LoadShardIntervalList(distributedTableId);
@@ -2712,7 +2806,16 @@ BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError)
 		int shardCount = list_length(shardIntervalList);
 		if (shardCount != 1)
 		{
-			ereport(ERROR, (errmsg("reference table cannot have %d shards", shardCount)));
+			if (IsCitusTableTypeCacheEntry(cacheEntry, REFERENCE_TABLE))
+			{
+				ereport(ERROR, (errmsg("reference table cannot have %d shards",
+									   shardCount)));
+			}
+			else if (IsCitusTableTypeCacheEntry(cacheEntry, CITUS_LOCAL_TABLE))
+			{
+				ereport(ERROR, (errmsg("citus local table cannot have %d shards",
+									   shardCount)));
+			}
 		}
 
 		ShardInterval *shardInterval = linitial(shardIntervalList);
@@ -3313,7 +3416,7 @@ MultiRouterPlannableQuery(Query *query)
 							 NULL, NULL);
 	}
 
-	bool hasLocalTable = false;
+	bool hasPostgresOrCitusLocalTable = false;
 	bool hasDistributedTable = false;
 
 	ExtractRangeTableRelationWalker((Node *) query, &rangeTableRelationList);
@@ -3327,7 +3430,13 @@ MultiRouterPlannableQuery(Query *query)
 			/* local tables are allowed if there are no distributed tables */
 			if (!IsCitusTable(distributedTableId))
 			{
-				hasLocalTable = true;
+				hasPostgresOrCitusLocalTable = true;
+				continue;
+			}
+			else if (IsCitusTableType(distributedTableId, CITUS_LOCAL_TABLE))
+			{
+				hasPostgresOrCitusLocalTable = true;
+				elog(DEBUG4, "Router planner finds a citus local table");
 				continue;
 			}
 
@@ -3367,7 +3476,7 @@ MultiRouterPlannableQuery(Query *query)
 	}
 
 	/* local tables are not allowed if there are distributed tables */
-	if (hasLocalTable && hasDistributedTable)
+	if (hasPostgresOrCitusLocalTable && hasDistributedTable)
 	{
 		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 							 "Local tables cannot be used in distributed queries.",

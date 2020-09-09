@@ -357,7 +357,7 @@ ORDER BY nodeport;
 (2 rows)
 
 -- register after insert trigger
-SELECT * FROM run_command_on_placements('researchers', 'CREATE CONSTRAINT TRIGGER reject_large_researcher_id AFTER INSERT ON %s DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE PROCEDURE  reject_large_id()')
+SELECT * FROM run_command_on_placements('researchers', 'CREATE CONSTRAINT TRIGGER reject_large_researcher_id AFTER INSERT ON %s DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION  reject_large_id()')
 ORDER BY nodeport, shardid;
  nodename  | nodeport | shardid | success |     result
 ---------------------------------------------------------------------
@@ -519,7 +519,7 @@ $rb$ LANGUAGE plpgsql;
 CREATE CONSTRAINT TRIGGER reject_bad
 AFTER INSERT ON objects_1200003
 DEFERRABLE INITIALLY IMMEDIATE
-FOR EACH ROW EXECUTE PROCEDURE reject_bad();
+FOR EACH ROW EXECUTE FUNCTION reject_bad();
 \c - - - :master_port
 -- test partial failure; worker_1 succeeds, 2 fails
 -- in this case, we expect the transaction to abort
@@ -570,7 +570,7 @@ $rb$ LANGUAGE plpgsql;
 CREATE CONSTRAINT TRIGGER reject_bad
 AFTER INSERT ON labs_1200002
 DEFERRABLE INITIALLY IMMEDIATE
-FOR EACH ROW EXECUTE PROCEDURE reject_bad();
+FOR EACH ROW EXECUTE FUNCTION reject_bad();
 \c - - - :master_port
 BEGIN;
 INSERT INTO objects VALUES (1, 'apple');
@@ -611,7 +611,7 @@ DROP TRIGGER reject_bad ON objects_1200003;
 CREATE CONSTRAINT TRIGGER reject_bad
 AFTER INSERT ON objects_1200003
 DEFERRABLE INITIALLY DEFERRED
-FOR EACH ROW EXECUTE PROCEDURE reject_bad();
+FOR EACH ROW EXECUTE FUNCTION reject_bad();
 \c - - - :master_port
 -- should be the same story as before, just at COMMIT time
 BEGIN;
@@ -654,7 +654,7 @@ DROP TRIGGER reject_bad ON labs_1200002;
 CREATE CONSTRAINT TRIGGER reject_bad
 AFTER INSERT ON labs_1200002
 DEFERRABLE INITIALLY DEFERRED
-FOR EACH ROW EXECUTE PROCEDURE reject_bad();
+FOR EACH ROW EXECUTE FUNCTION reject_bad();
 \c - - - :master_port
 BEGIN;
 INSERT INTO objects VALUES (1, 'apple');
@@ -856,7 +856,7 @@ $rb$ LANGUAGE plpgsql;
 CREATE CONSTRAINT TRIGGER reject_bad_reference
 AFTER INSERT ON reference_modifying_xacts_1200006
 DEFERRABLE INITIALLY IMMEDIATE
-FOR EACH ROW EXECUTE PROCEDURE reject_bad_reference();
+FOR EACH ROW EXECUTE FUNCTION reject_bad_reference();
 \c - - - :master_port
 \set VERBOSITY terse
 -- try without wrapping inside a transaction
@@ -873,7 +873,7 @@ DROP TRIGGER reject_bad_reference ON reference_modifying_xacts_1200006;
 CREATE CONSTRAINT TRIGGER reject_bad_reference
 AFTER INSERT ON reference_modifying_xacts_1200006
 DEFERRABLE INITIALLY  DEFERRED
-FOR EACH ROW EXECUTE PROCEDURE reject_bad_reference();
+FOR EACH ROW EXECUTE FUNCTION reject_bad_reference();
 \c - - - :master_port
 \set VERBOSITY terse
 -- try without wrapping inside a transaction
@@ -944,7 +944,7 @@ $rb$ LANGUAGE plpgsql;
 CREATE CONSTRAINT TRIGGER reject_bad_hash
 AFTER INSERT ON hash_modifying_xacts_1200007
 DEFERRABLE INITIALLY IMMEDIATE
-FOR EACH ROW EXECUTE PROCEDURE reject_bad_hash();
+FOR EACH ROW EXECUTE FUNCTION reject_bad_hash();
 \c - - - :master_port
 \set VERBOSITY terse
 -- the transaction as a whole should fail
@@ -967,7 +967,7 @@ DROP TRIGGER reject_bad_hash ON hash_modifying_xacts_1200007;
 CREATE CONSTRAINT TRIGGER reject_bad_hash
 AFTER INSERT ON hash_modifying_xacts_1200007
 DEFERRABLE INITIALLY DEFERRED
-FOR EACH ROW EXECUTE PROCEDURE reject_bad_hash();
+FOR EACH ROW EXECUTE FUNCTION reject_bad_hash();
 \c - - - :master_port
 \set VERBOSITY terse
 -- the transaction as a whole should fail
@@ -1004,7 +1004,7 @@ ORDER BY s.logicalrelid, sp.shardstate;
 CREATE CONSTRAINT TRIGGER reject_bad_reference
 AFTER INSERT ON reference_modifying_xacts_1200006
 DEFERRABLE INITIALLY IMMEDIATE
-FOR EACH ROW EXECUTE PROCEDURE reject_bad_reference();
+FOR EACH ROW EXECUTE FUNCTION reject_bad_reference();
 \c - - - :master_port
 \set VERBOSITY terse
 BEGIN;

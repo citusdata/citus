@@ -103,7 +103,6 @@ static void EnsureTableCanBeColocatedWith(Oid relationId, char replicationModel,
 										  Oid distributionColumnType,
 										  Oid sourceRelationId);
 static void EnsureLocalTableEmpty(Oid relationId);
-static void EnsureTableNotDistributed(Oid relationId);
 static void EnsureRelationHasNoTriggers(Oid relationId);
 static Oid SupportFunctionForColumn(Var *partitionColumn, Oid accessMethodId,
 									int16 supportFunctionNumber);
@@ -398,7 +397,7 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 	InsertIntoPgDistPartition(relationId, distributionMethod, distributionColumn,
 							  colocationId, replicationModel);
 
-	/* foreign tables does not support TRUNCATE trigger */
+	/* foreign tables do not support TRUNCATE trigger */
 	if (RegularTable(relationId))
 	{
 		CreateTruncateTrigger(relationId);
@@ -423,7 +422,6 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 	{
 		CreateReferenceTableShard(relationId);
 	}
-
 
 	if (ShouldSyncTableMetadata(relationId))
 	{
@@ -820,8 +818,8 @@ EnsureRelationCanBeDistributed(Oid relationId, Var *distributionColumn,
 		}
 	}
 
-	ErrorIfUnsupportedConstraint(relation, distributionMethod, distributionColumn,
-								 colocationId);
+	ErrorIfUnsupportedConstraint(relation, distributionMethod, replicationModel,
+								 distributionColumn, colocationId);
 
 
 	ErrorIfUnsupportedPolicy(relation);
@@ -955,7 +953,7 @@ EnsureLocalTableEmpty(Oid relationId)
 /*
  * EnsureTableNotDistributed errors out if the table is distributed.
  */
-static void
+void
 EnsureTableNotDistributed(Oid relationId)
 {
 	char *relationName = get_rel_name(relationId);
@@ -989,7 +987,8 @@ EnsureReplicationSettings(Oid relationId, char replicationModel)
 		extraHint = "";
 	}
 
-	if (replicationModel == REPLICATION_MODEL_STREAMING && ShardReplicationFactor != 1)
+	if (replicationModel == REPLICATION_MODEL_STREAMING &&
+		DistributedTableReplicationIsEnabled())
 	{
 		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 						errmsg("replication factors above one are incompatible with %s",

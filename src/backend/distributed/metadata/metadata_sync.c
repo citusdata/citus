@@ -229,7 +229,7 @@ ShouldSyncTableMetadata(Oid relationId)
 
 	bool mxTable = (streamingReplicated && IsCitusTableTypeCacheEntry(tableEntry,
 																	  HASH_DISTRIBUTED));
-	if (mxTable || IsCitusTableTypeCacheEntry(tableEntry, REFERENCE_TABLE))
+	if (mxTable || IsCitusTableTypeCacheEntry(tableEntry, CITUS_TABLE_WITH_NO_DIST_KEY))
 	{
 		return true;
 	}
@@ -1036,7 +1036,7 @@ List *
 SequenceDDLCommandsForTable(Oid relationId)
 {
 	List *sequenceDDLList = NIL;
-	List *ownedSequences = getOwnedSequencesCompat(relationId, InvalidAttrNumber);
+	List *ownedSequences = GetSequencesOwnedByRelation(relationId);
 	char *ownerName = TableOwner(relationId);
 
 	Oid sequenceOid = InvalidOid;

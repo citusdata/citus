@@ -34,7 +34,8 @@
 #define pg_plan_query_compat(p, q, c, b) pg_plan_query(p, q, c, b)
 #define planner_compat(p, c, b) planner(p, NULL, c, b)
 #define standard_planner_compat(a, c, d) standard_planner(a, NULL, c, d)
-#define getOwnedSequencesCompat(a, b) getOwnedSequences(a)
+#define GetSequencesOwnedByRelation(a) getOwnedSequences(a)
+#define GetSequencesOwnedByColumn(a, b) getOwnedSequences_internal(a, b, 0)
 #define CMDTAG_SELECT_COMPAT CMDTAG_SELECT
 #define ExplainOnePlanCompat(a, b, c, d, e, f, g, h) \
 	ExplainOnePlan(a, b, c, d, e, f, g, h)
@@ -48,7 +49,8 @@
 #define planner_compat(p, c, b) planner(p, c, b)
 #define standard_planner_compat(a, c, d) standard_planner(a, c, d)
 #define CMDTAG_SELECT_COMPAT "SELECT"
-#define getOwnedSequencesCompat(a, b) getOwnedSequences(a, b)
+#define GetSequencesOwnedByRelation(a) getOwnedSequences(a, InvalidAttrNumber)
+#define GetSequencesOwnedByColumn(a, b) getOwnedSequences(a, b)
 #define ExplainOnePlanCompat(a, b, c, d, e, f, g, h) ExplainOnePlan(a, b, c, d, e, f, g)
 #define SetListCellPtr(a, b) ((a)->data.ptr_value = (b))
 #define RangeTableEntryFromNSItem(a) (a)

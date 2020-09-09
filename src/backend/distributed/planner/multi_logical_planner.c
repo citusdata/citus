@@ -311,7 +311,9 @@ NodeTryGetRteRelid(Node *node)
 	}
 
 	RangeTblEntry *rangeTableEntry = (RangeTblEntry *) node;
-	if (rangeTableEntry->rtekind != RTE_RELATION)
+
+	if (!(rangeTableEntry->rtekind == RTE_RELATION &&
+		  rangeTableEntry->relkind == RELKIND_RELATION))
 	{
 		return InvalidOid;
 	}
@@ -329,6 +331,18 @@ IsCitusTableRTE(Node *node)
 {
 	Oid relationId = NodeTryGetRteRelid(node);
 	return relationId != InvalidOid && IsCitusTable(relationId);
+}
+
+
+/*
+ * IsPostgresLocalTableRte gets a node and returns true if the node is a
+ * range table relation entry that points to a postgres local table.
+ */
+bool
+IsPostgresLocalTableRte(Node *node)
+{
+	Oid relationId = NodeTryGetRteRelid(node);
+	return OidIsValid(relationId) && !IsCitusTable(relationId);
 }
 
 
@@ -354,6 +368,18 @@ IsReferenceTableRTE(Node *node)
 {
 	Oid relationId = NodeTryGetRteRelid(node);
 	return relationId != InvalidOid && IsCitusTableType(relationId, REFERENCE_TABLE);
+}
+
+
+/*
+ * IsCitusLocalTableRTE gets a node and returns true if the node
+ * is a range table relation entry that points to a citus local table.
+ */
+bool
+IsCitusLocalTableRTE(Node *node)
+{
+	Oid relationId = NodeTryGetRteRelid(node);
+	return OidIsValid(relationId) && IsCitusTableType(relationId, CITUS_LOCAL_TABLE);
 }
 
 
@@ -924,6 +950,16 @@ DeferErrorIfQueryNotSupported(Query *queryTree)
 	{
 		preconditionsSatisfied = false;
 		errorMessage = "subquery in OFFSET is not supported in multi-shard queries";
+	}
+
+	RTEListProperties *queryRteListProperties = GetRTEListPropertiesForQuery(queryTree);
+	if (queryRteListProperties->hasCitusLocalTable ||
+		queryRteListProperties->hasPostgresLocalTable)
+	{
+		preconditionsSatisfied = false;
+		errorMessage = "direct joins between distributed and local tables are "
+					   "not supported";
+		errorHint = LOCAL_TABLE_SUBQUERY_CTE_HINT;
 	}
 
 	/* finally check and error out if not satisfied */

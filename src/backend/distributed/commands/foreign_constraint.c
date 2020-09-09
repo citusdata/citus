@@ -36,23 +36,23 @@
 #include "utils/ruleutils.h"
 #include "utils/syscache.h"
 
-/*
- * Flags that can be passed to GetForeignKeyOids to indicate
- * which foreign key constraint OIDs are to be extracted
- */
-typedef enum ExtractForeignKeyConstrainstMode
-{
-	/* extract the foreign key OIDs where the table is the referencing one */
-	INCLUDE_REFERENCING_CONSTRAINTS = 1 << 0,
 
-	/* extract the foreign key OIDs the table is the referenced one */
-	INCLUDE_REFERENCED_CONSTRAINTS = 1 << 1,
+#define BehaviorIsRestrictOrNoAction(x) \
+	((x) == FKCONSTR_ACTION_NOACTION || (x) == FKCONSTR_ACTION_RESTRICT)
 
-	/* exclude the self-referencing foreign keys */
-	EXCLUDE_SELF_REFERENCES = 1 << 2
-} ExtractForeignKeyConstraintMode;
+
+typedef bool (*CheckRelationFunc)(Oid);
+
 
 /* Local functions forward declarations */
+static void EnsureReferencingTableNotReplicated(Oid referencingTableId);
+static void EnsureSupportedFKeyOnDistKey(Form_pg_constraint constraintForm);
+static void EnsureSupportedFKeyBetweenCitusLocalAndRefTable(Form_pg_constraint
+															constraintForm,
+															char
+															referencingReplicationModel,
+															char
+															referencedReplicationModel);
 static bool HeapTupleOfForeignConstraintIncludesColumn(HeapTuple heapTuple,
 													   Oid relationId,
 													   int pgConstraintKey,
@@ -66,8 +66,10 @@ static void ForeignConstraintFindDistKeys(HeapTuple pgConstraintTuple,
 										  int *referencedAttrIndex);
 static List * GetForeignConstraintCommandsInternal(Oid relationId, int flags);
 static Oid get_relation_constraint_oid_compat(HeapTuple heapTuple);
+static List * GetForeignKeyOidsToCitusLocalTables(Oid relationId);
 static List * GetForeignKeyOidsToReferenceTables(Oid relationId);
-static List * GetForeignKeyOids(Oid relationId, int flags);
+static List * FilterFKeyOidListByReferencedTableType(List *foreignKeyOidList,
+													 CitusTableType citusTableType);
 
 /*
  * ConstraintIsAForeignKeyToReferenceTable checks if the given constraint is a
@@ -102,27 +104,21 @@ ConstraintIsAForeignKeyToReferenceTable(char *inputConstaintName, Oid relationId
  *        ON UPDATE CASCADE options are not used on the distribution key
  *        of the referencing column.
  * - If referencing table is a reference table, error out if the referenced
- *   table is not a reference table.
+ *   table is a distributed table.
+ * - If referencing table is a reference table and referenced table is a
+ *   citus local table:
+ *      - ON DELETE/UPDATE SET NULL, ON DELETE/UPDATE SET DEFAULT and
+ *        ON CASCADE options are not used.
+ * - If referencing or referenced table is distributed table, then the
+ *   other table is not a citus local table.
  */
 void
 ErrorIfUnsupportedForeignConstraintExists(Relation relation, char referencingDistMethod,
+										  char referencingReplicationModel,
 										  Var *referencingDistKey,
 										  uint32 referencingColocationId)
 {
 	Oid referencingTableId = relation->rd_id;
-	bool referencingNotReplicated = true;
-	bool referencingIsCitus = IsCitusTable(referencingTableId);
-
-	if (referencingIsCitus)
-	{
-		/* ALTER TABLE command is applied over single replicated table */
-		referencingNotReplicated = SingleReplicatedTable(referencingTableId);
-	}
-	else
-	{
-		/* Creating single replicated table with foreign constraint */
-		referencingNotReplicated = (ShardReplicationFactor == 1);
-	}
 
 	int flags = INCLUDE_REFERENCING_CONSTRAINTS;
 	List *foreignKeyOids = GetForeignKeyOids(referencingTableId, flags);
@@ -149,6 +145,12 @@ ErrorIfUnsupportedForeignConstraintExists(Relation relation, char referencingDis
 
 		if (!referencedIsCitus && !selfReferencingTable)
 		{
+			if (IsCitusLocalTableByDistParams(referencingDistMethod,
+											  referencingReplicationModel))
+			{
+				ErrorOutForFKeyBetweenPostgresAndCitusLocalTable(referencedTableId);
+			}
+
 			char *referencedTableName = get_rel_name(referencedTableId);
 
 			ereport(ERROR, (errcode(ERRCODE_INVALID_TABLE_DEFINITION),
@@ -165,6 +167,7 @@ ErrorIfUnsupportedForeignConstraintExists(Relation relation, char referencingDis
 
 		/* set referenced table related variables here if table is referencing itself */
 		char referencedDistMethod = 0;
+		char referencedReplicationModel = REPLICATION_MODEL_INVALID;
 		if (!selfReferencingTable)
 		{
 			referencedDistMethod = PartitionMethod(referencedTableId);
@@ -173,45 +176,51 @@ ErrorIfUnsupportedForeignConstraintExists(Relation relation, char referencingDis
 								NULL :
 								DistPartitionKey(referencedTableId);
 			referencedColocationId = TableColocationId(referencedTableId);
+			referencedReplicationModel = TableReplicationModel(referencedTableId);
 		}
 		else
 		{
 			referencedDistMethod = referencingDistMethod;
 			referencedDistKey = referencingDistKey;
 			referencedColocationId = referencingColocationId;
+			referencedReplicationModel = referencingReplicationModel;
 		}
 
-		bool referencingIsReferenceTable = (referencingDistMethod == DISTRIBUTE_BY_NONE);
-		bool referencedIsReferenceTable = (referencedDistMethod == DISTRIBUTE_BY_NONE);
-
-		/*
-		 * We support foreign keys between reference tables. No more checks
-		 * are necessary.
-		 */
-		if (referencingIsReferenceTable && referencedIsReferenceTable)
+		bool referencingIsCitusLocalOrRefTable =
+			(referencingDistMethod == DISTRIBUTE_BY_NONE);
+		bool referencedIsCitusLocalOrRefTable =
+			(referencedDistMethod == DISTRIBUTE_BY_NONE);
+		if (referencingIsCitusLocalOrRefTable && referencedIsCitusLocalOrRefTable)
 		{
+			EnsureSupportedFKeyBetweenCitusLocalAndRefTable(constraintForm,
+															referencingReplicationModel,
+															referencedReplicationModel);
+
 			ReleaseSysCache(heapTuple);
 			continue;
 		}
 
 		/*
-		 * Foreign keys from reference tables to distributed tables are not
-		 * supported.
+		 * Foreign keys from citus local tables or reference tables to distributed
+		 * tables are not supported.
 		 */
-		if (referencingIsReferenceTable && !referencedIsReferenceTable)
+		if (referencingIsCitusLocalOrRefTable && !referencedIsCitusLocalOrRefTable)
 		{
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 							errmsg("cannot create foreign key constraint "
 								   "since foreign keys from reference tables "
 								   "to distributed tables are not supported"),
-							errdetail("A reference table can only have reference "
-									  "keys to other reference tables")));
+							errdetail("A reference table can only have foreign "
+									  "keys to other reference tables or citus "
+									  "local tables")));
 		}
 
 		/*
 		 * To enforce foreign constraints, tables must be co-located unless a
 		 * reference table is referenced.
 		 */
+		bool referencedIsReferenceTable =
+			(referencedReplicationModel == REPLICATION_MODEL_2PC);
 		if (referencingColocationId == INVALID_COLOCATION_ID ||
 			(referencingColocationId != referencedColocationId &&
 			 !referencedIsReferenceTable))
@@ -243,44 +252,14 @@ ErrorIfUnsupportedForeignConstraintExists(Relation relation, char referencingDis
 		 */
 		if (referencingColumnsIncludeDistKey)
 		{
-			/*
-			 * ON DELETE SET NULL and ON DELETE SET DEFAULT is not supported. Because we do
-			 * not want to set partition column to NULL or default value.
-			 */
-			if (constraintForm->confdeltype == FKCONSTR_ACTION_SETNULL ||
-				constraintForm->confdeltype == FKCONSTR_ACTION_SETDEFAULT)
-			{
-				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-								errmsg("cannot create foreign key constraint"),
-								errdetail("SET NULL or SET DEFAULT is not supported"
-										  " in ON DELETE operation when distribution "
-										  "key is included in the foreign key constraint")));
-			}
-
-			/*
-			 * ON UPDATE SET NULL, ON UPDATE SET DEFAULT and UPDATE CASCADE is not supported.
-			 * Because we do not want to set partition column to NULL or default value. Also
-			 * cascading update operation would require re-partitioning. Updating partition
-			 * column value is not allowed anyway even outside of foreign key concept.
-			 */
-			if (constraintForm->confupdtype == FKCONSTR_ACTION_SETNULL ||
-				constraintForm->confupdtype == FKCONSTR_ACTION_SETDEFAULT ||
-				constraintForm->confupdtype == FKCONSTR_ACTION_CASCADE)
-			{
-				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-								errmsg("cannot create foreign key constraint"),
-								errdetail("SET NULL, SET DEFAULT or CASCADE is not "
-										  "supported in ON UPDATE operation  when "
-										  "distribution key included in the foreign "
-										  "constraint.")));
-			}
+			EnsureSupportedFKeyOnDistKey(constraintForm);
 		}
 
 		/*
 		 * if tables are hash-distributed and colocated, we need to make sure that
 		 * the distribution key is included in foreign constraint.
 		 */
-		if (!referencedIsReferenceTable && !foreignConstraintOnDistKey)
+		if (!referencedIsCitusLocalOrRefTable && !foreignConstraintOnDistKey)
 		{
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 							errmsg("cannot create foreign key constraint"),
@@ -300,21 +279,148 @@ ErrorIfUnsupportedForeignConstraintExists(Relation relation, char referencingDis
 		 * placements always be in the same state (b) executors are aware of reference
 		 * tables and handle concurrency related issues accordingly.
 		 */
-		if (!referencingNotReplicated)
-		{
-			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("cannot create foreign key constraint"),
-							errdetail("Citus Community Edition currently supports "
-									  "foreign key constraints only for "
-									  "\"citus.shard_replication_factor = 1\"."),
-							errhint("Please change \"citus.shard_replication_factor to "
-									"1\". To learn more about using foreign keys with "
-									"other replication factors, please contact us at "
-									"https://citusdata.com/about/contact_us.")));
-		}
+		EnsureReferencingTableNotReplicated(referencingTableId);
 
 		ReleaseSysCache(heapTuple);
 	}
+}
+
+
+/*
+ * EnsureSupportedFKeyBetweenCitusLocalAndRefTable is a helper function that
+ * takes a foreign key constraint form for a foreign key between two citus
+ * tables that are either citus local table or reference table and errors
+ * out if it it an unsupported foreign key from a reference table to a citus
+ * local table according to given replication model parameters.
+ */
+static void
+EnsureSupportedFKeyBetweenCitusLocalAndRefTable(Form_pg_constraint fKeyConstraintForm,
+												char referencingReplicationModel,
+												char referencedReplicationModel)
+{
+	bool referencingIsReferenceTable =
+		(referencingReplicationModel == REPLICATION_MODEL_2PC);
+	bool referencedIsCitusLocalTable =
+		(referencedReplicationModel != REPLICATION_MODEL_2PC);
+	if (referencingIsReferenceTable && referencedIsCitusLocalTable)
+	{
+		/*
+		 * We only support RESTRICT and NO ACTION behaviors for the
+		 * foreign keys from reference tables to citus local tables.
+		 * This is because, we can't cascade dml operations from citus
+		 * local tables's coordinator placement to the remote placements
+		 * of the reference table.
+		 * Note that for the foreign keys from citus local tables to
+		 * reference tables, we support all foreign key behaviors.
+		 */
+		if (!(BehaviorIsRestrictOrNoAction(fKeyConstraintForm->confdeltype) &&
+			  BehaviorIsRestrictOrNoAction(fKeyConstraintForm->confupdtype)))
+		{
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("cannot define foreign key constraint, "
+								   "foreign keys from reference tables to "
+								   "citus local tables can only be defined "
+								   "with NO ACTION or RESTRICT behaviors")));
+		}
+	}
+}
+
+
+/*
+ * EnsureSupportedFKeyOnDistKey errors out if given foreign key constraint form
+ * implies an unsupported ON DELETE/UPDATE behavior assuming the referencing column
+ * is the distribution column of the referencing distributed table.
+ */
+static void
+EnsureSupportedFKeyOnDistKey(Form_pg_constraint fKeyConstraintForm)
+{
+	/*
+	 * ON DELETE SET NULL and ON DELETE SET DEFAULT is not supported. Because we do
+	 * not want to set partition column to NULL or default value.
+	 */
+	if (fKeyConstraintForm->confdeltype == FKCONSTR_ACTION_SETNULL ||
+		fKeyConstraintForm->confdeltype == FKCONSTR_ACTION_SETDEFAULT)
+	{
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("cannot create foreign key constraint"),
+						errdetail("SET NULL or SET DEFAULT is not supported "
+								  "in ON DELETE operation when distribution "
+								  "key is included in the foreign key constraint")));
+	}
+
+	/*
+	 * ON UPDATE SET NULL, ON UPDATE SET DEFAULT and UPDATE CASCADE is not supported.
+	 * Because we do not want to set partition column to NULL or default value. Also
+	 * cascading update operation would require re-partitioning. Updating partition
+	 * column value is not allowed anyway even outside of foreign key concept.
+	 */
+	if (fKeyConstraintForm->confupdtype == FKCONSTR_ACTION_SETNULL ||
+		fKeyConstraintForm->confupdtype == FKCONSTR_ACTION_SETDEFAULT ||
+		fKeyConstraintForm->confupdtype == FKCONSTR_ACTION_CASCADE)
+	{
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("cannot create foreign key constraint"),
+						errdetail("SET NULL, SET DEFAULT or CASCADE is not "
+								  "supported in ON UPDATE operation when "
+								  "distribution key included in the foreign "
+								  "constraint.")));
+	}
+}
+
+
+/*
+ * EnsureReferencingTableNotReplicated takes referencingTableId for the
+ * referencing table of the foreign key and errors out if it's not a single
+ * replicated table.
+ */
+static void
+EnsureReferencingTableNotReplicated(Oid referencingTableId)
+{
+	bool referencingNotReplicated = true;
+	bool referencingIsCitus = IsCitusTable(referencingTableId);
+
+	if (referencingIsCitus)
+	{
+		/* ALTER TABLE command is applied over single replicated table */
+		referencingNotReplicated = SingleReplicatedTable(referencingTableId);
+	}
+	else
+	{
+		/* Creating single replicated table with foreign constraint */
+		referencingNotReplicated = !DistributedTableReplicationIsEnabled();
+	}
+
+	if (!referencingNotReplicated)
+	{
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("cannot create foreign key constraint"),
+						errdetail("Citus Community Edition currently supports "
+								  "foreign key constraints only for "
+								  "\"citus.shard_replication_factor = 1\"."),
+						errhint("Please change \"citus.shard_replication_factor to "
+								"1\". To learn more about using foreign keys with "
+								"other replication factors, please contact us at "
+								"https://citusdata.com/about/contact_us.")));
+	}
+}
+
+
+/*
+ * ErrorOutForFKeyBetweenPostgresAndCitusLocalTable is a helper function to
+ * error out for foreign keys between postgres local tables and citus local
+ * tables.
+ */
+void
+ErrorOutForFKeyBetweenPostgresAndCitusLocalTable(Oid localTableId)
+{
+	char *localTableName = get_rel_name(localTableId);
+	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					errmsg("cannot create foreign key constraint as \"%s\" is "
+						   "a postgres local table", localTableName),
+					errhint("first create a citus local table from the postgres "
+							"local table using SELECT create_citus_local_table('%s') "
+							"and execute the ALTER TABLE command to create the "
+							"foreign key to citus local table", localTableName)));
 }
 
 
@@ -521,8 +627,35 @@ get_relation_constraint_oid_compat(HeapTuple heapTuple)
 
 
 /*
- * HasForeignKeyToReferenceTable function returns true if any of the foreign
- * key constraints on the relation with relationId references to a reference
+ * HasForeignKeyToCitusLocalTable returns true if any of the foreign key constraints
+ * on the relation with relationId references to a citus local table.
+ */
+bool
+HasForeignKeyToCitusLocalTable(Oid relationId)
+{
+	List *foreignKeyOidList = GetForeignKeyOidsToCitusLocalTables(relationId);
+	return list_length(foreignKeyOidList) > 0;
+}
+
+
+/*
+ * GetForeignKeyOidsToCitusLocalTables returns list of OIDs for the foreign key
+ * constraints on the given relationId that are referencing to citus local tables.
+ */
+static List *
+GetForeignKeyOidsToCitusLocalTables(Oid relationId)
+{
+	int flags = INCLUDE_REFERENCING_CONSTRAINTS;
+	List *foreignKeyOidList = GetForeignKeyOids(relationId, flags);
+	List *fKeyOidsToCitusLocalTables =
+		FilterFKeyOidListByReferencedTableType(foreignKeyOidList, CITUS_LOCAL_TABLE);
+	return fKeyOidsToCitusLocalTables;
+}
+
+
+/*
+ * HasForeignKeyToReferenceTable returns true if any of the foreign key
+ * constraints on the relation with relationId references to a reference
  * table.
  */
 bool
@@ -535,40 +668,47 @@ HasForeignKeyToReferenceTable(Oid relationId)
 
 
 /*
- * GetForeignKeyOidsToReferenceTables function returns list of OIDs for the
- * foreign key constraints on the given relationId that are referencing to
- * reference tables.
+ * GetForeignKeyOidsToReferenceTables returns list of OIDs for the foreign key
+ * constraints on the given relationId that are referencing to reference tables.
  */
 static List *
 GetForeignKeyOidsToReferenceTables(Oid relationId)
 {
 	int flags = INCLUDE_REFERENCING_CONSTRAINTS;
-	List *foreignKeyOids = GetForeignKeyOids(relationId, flags);
+	List *foreignKeyOidList = GetForeignKeyOids(relationId, flags);
+	List *fKeyOidsToReferenceTables =
+		FilterFKeyOidListByReferencedTableType(foreignKeyOidList, REFERENCE_TABLE);
+	return fKeyOidsToReferenceTables;
+}
 
-	List *fkeyOidsToReferenceTables = NIL;
+
+/*
+ * FilterFKeyOidListByReferencedTableType takes a list of foreign key OIDs and
+ * CitusTableType to filter the foreign key OIDs that CitusTableType matches
+ * referenced relation's type.
+ */
+static List *
+FilterFKeyOidListByReferencedTableType(List *foreignKeyOidList,
+									   CitusTableType citusTableType)
+{
+	List *filteredFKeyOidList = NIL;
 
 	Oid foreignKeyOid = InvalidOid;
-	foreach_oid(foreignKeyOid, foreignKeyOids)
+	foreach_oid(foreignKeyOid, foreignKeyOidList)
 	{
-		HeapTuple heapTuple =
-			SearchSysCache1(CONSTROID, ObjectIdGetDatum(foreignKeyOid));
-
-		Assert(HeapTupleIsValid(heapTuple));
-
+		HeapTuple heapTuple = SearchSysCache1(CONSTROID, ObjectIdGetDatum(foreignKeyOid));
 		Form_pg_constraint constraintForm = (Form_pg_constraint) GETSTRUCT(heapTuple);
 
 		Oid referencedTableOid = constraintForm->confrelid;
-
-		if (IsCitusTableType(referencedTableOid, REFERENCE_TABLE))
+		if (IsCitusTableType(referencedTableOid, citusTableType))
 		{
-			fkeyOidsToReferenceTables = lappend_oid(fkeyOidsToReferenceTables,
-													foreignKeyOid);
+			filteredFKeyOidList = lappend_oid(filteredFKeyOidList, foreignKeyOid);
 		}
 
 		ReleaseSysCache(heapTuple);
 	}
 
-	return fkeyOidsToReferenceTables;
+	return filteredFKeyOidList;
 }
 
 
@@ -633,18 +773,31 @@ TableReferencing(Oid relationId)
 
 
 /*
- * ConstraintIsAForeignKey returns true if the given constraint name
- * is a foreign key defined on the relation.
+ * ConstraintIsAForeignKey is a wrapper around GetForeignKeyOidByName that
+ * returns true if the given constraint name identifies a foreign key
+ * constraint defined on relation with relationId.
  */
 bool
 ConstraintIsAForeignKey(char *inputConstaintName, Oid relationId)
 {
+	Oid foreignKeyId = GetForeignKeyOidByName(inputConstaintName, relationId);
+	return OidIsValid(foreignKeyId);
+}
+
+
+/*
+ * GetForeignKeyOidByName returns OID of the foreign key with name and defined
+ * on relation with relationId. If there is no such foreign key constraint, then
+ * this function returns InvalidOid.
+ */
+Oid
+GetForeignKeyOidByName(char *inputConstaintName, Oid relationId)
+{
 	int flags = INCLUDE_REFERENCING_CONSTRAINTS;
 	List *foreignKeyOids = GetForeignKeyOids(relationId, flags);
 
-	Oid foreignKeyOid = FindForeignKeyOidWithName(foreignKeyOids, inputConstaintName);
-
-	return OidIsValid(foreignKeyOid);
+	Oid foreignKeyId = FindForeignKeyOidWithName(foreignKeyOids, inputConstaintName);
+	return foreignKeyId;
 }
 
 
@@ -675,12 +828,43 @@ FindForeignKeyOidWithName(List *foreignKeyOids, const char *inputConstraintName)
 
 
 /*
+ * ErrorIfTableHasExternalForeignKeys errors out if the relation with relationId
+ * is involved in a foreign key relationship other than the self-referencing ones.
+ */
+void
+ErrorIfTableHasExternalForeignKeys(Oid relationId)
+{
+	int flags = (INCLUDE_REFERENCING_CONSTRAINTS | EXCLUDE_SELF_REFERENCES);
+	List *foreignKeyIdsTableReferencing = GetForeignKeyOids(relationId, flags);
+
+	flags = (INCLUDE_REFERENCED_CONSTRAINTS | EXCLUDE_SELF_REFERENCES);
+	List *foreignKeyIdsTableReferenced = GetForeignKeyOids(relationId, flags);
+
+	List *foreignKeysWithOtherTables = list_concat(foreignKeyIdsTableReferencing,
+												   foreignKeyIdsTableReferenced);
+
+	if (list_length(foreignKeysWithOtherTables) == 0)
+	{
+		return;
+	}
+
+	const char *relationName = get_rel_name(relationId);
+	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					errmsg("relation \"%s\" is involved in a foreign key relationship "
+						   "with another table", relationName),
+					errhint("Drop foreign keys with other tables and re-define them "
+							"with ALTER TABLE commands after the current operation "
+							"is done.")));
+}
+
+
+/*
  * GetForeignKeyOids takes in a relationId, and returns a list of OIDs for
  * foreign constraints that the relation with relationId is involved according
- * to "flags" argument. See ExtractForeignKeyConstrainstMode enum definition
+ * to "flags" argument. See ExtractForeignKeyConstraintsMode enum definition
  * for usage of the flags.
  */
-static List *
+List *
 GetForeignKeyOids(Oid relationId, int flags)
 {
 	AttrNumber pgConstraintTargetAttrNumber = InvalidAttrNumber;
@@ -773,4 +957,28 @@ GetForeignKeyOids(Oid relationId, int flags)
 	table_close(pgConstraint, NoLock);
 
 	return foreignKeyOids;
+}
+
+
+/*
+ * GetReferencedTableId returns OID of the referenced relation for the foreign
+ * key with foreignKeyId. If there is no such foreign key, then this function
+ * returns InvalidOid.
+ */
+Oid
+GetReferencedTableId(Oid foreignKeyId)
+{
+	HeapTuple heapTuple = SearchSysCache1(CONSTROID, ObjectIdGetDatum(foreignKeyId));
+	if (!HeapTupleIsValid(heapTuple))
+	{
+		/* no such foreign key */
+		return InvalidOid;
+	}
+
+	Form_pg_constraint constraintForm = (Form_pg_constraint) GETSTRUCT(heapTuple);
+	Oid referencedTableId = constraintForm->confrelid;
+
+	ReleaseSysCache(heapTuple);
+
+	return referencedTableId;
 }

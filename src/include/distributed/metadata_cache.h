@@ -133,10 +133,12 @@ typedef enum
 } CitusTableType;
 
 extern bool IsCitusTableType(Oid relationId, CitusTableType tableType);
-extern bool IsCitusTableTypeCacheEntry(CitusTableCacheEntry *tableEtnry, CitusTableType
-									   tableType);
+extern bool IsCitusTableTypeCacheEntry(CitusTableCacheEntry *tableEtnry,
+									   CitusTableType tableType);
 
 extern bool IsCitusTable(Oid relationId);
+extern bool IsCitusLocalTableByDistParams(char partitionMethod, char replicationModel);
+extern bool IsReferenceTableByDistParams(char partitionMethod, char replicationModel);
 extern List * CitusTableList(void);
 extern ShardInterval * LoadShardInterval(uint64 shardId);
 extern Oid RelationIdForShard(uint64 shardId);
@@ -145,6 +147,7 @@ extern ShardPlacement * FindShardPlacementOnGroup(int32 groupId, uint64 shardId)
 extern GroupShardPlacement * LoadGroupShardPlacement(uint64 shardId, uint64 placementId);
 extern ShardPlacement * LoadShardPlacement(uint64 shardId, uint64 placementId);
 extern CitusTableCacheEntry * GetCitusTableCacheEntry(Oid distributedRelationId);
+extern CitusTableCacheEntry * LookupCitusTableCacheEntry(Oid relationId);
 extern DistObjectCacheEntry * LookupDistObjectCacheEntry(Oid classid, Oid objid, int32
 														 objsubid);
 extern int32 GetLocalGroupId(void);
