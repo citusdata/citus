@@ -22,6 +22,7 @@
 #include "catalog/pg_namespace.h"
 #include "catalog/pg_collation.h"
 #include "catalog/pg_type.h"
+#include "catalog/namespace.h"
 #include "commands/defrem.h"
 #include "commands/trigger.h"
 #include "executor/executor.h"
@@ -45,6 +46,7 @@ static Oid CStoreStripesRelationId(void);
 static Oid CStoreStripesIndexRelationId(void);
 static Oid CStoreTablesRelationId(void);
 static Oid CStoreTablesIndexRelationId(void);
+static Oid CStoreNamespaceId(void);
 static void InsertStripeAttrRow(Oid relid, uint64 stripe, AttrNumber attr,
 								uint64 existsSize, uint64 valuesSize,
 								uint64 skiplistSize);
@@ -494,7 +496,7 @@ ReadStripeFooter(Oid relid, uint64 stripe, int relationColumnCount)
 static Oid
 CStoreStripeAttrRelationId(void)
 {
-	return get_relname_relid("cstore_stripe_attr", PG_CATALOG_NAMESPACE);
+	return get_relname_relid("cstore_stripe_attr", CStoreNamespaceId());
 }
 
 
@@ -505,7 +507,7 @@ CStoreStripeAttrRelationId(void)
 static Oid
 CStoreStripeAttrIndexRelationId(void)
 {
-	return get_relname_relid("cstore_stripe_attr_pkey", PG_CATALOG_NAMESPACE);
+	return get_relname_relid("cstore_stripe_attr_pkey", CStoreNamespaceId());
 }
 
 
@@ -516,7 +518,7 @@ CStoreStripeAttrIndexRelationId(void)
 static Oid
 CStoreStripesRelationId(void)
 {
-	return get_relname_relid("cstore_stripes", PG_CATALOG_NAMESPACE);
+	return get_relname_relid("cstore_stripes", CStoreNamespaceId());
 }
 
 
@@ -527,7 +529,7 @@ CStoreStripesRelationId(void)
 static Oid
 CStoreStripesIndexRelationId(void)
 {
-	return get_relname_relid("cstore_stripes_pkey", PG_CATALOG_NAMESPACE);
+	return get_relname_relid("cstore_stripes_pkey", CStoreNamespaceId());
 }
 
 
@@ -538,7 +540,7 @@ CStoreStripesIndexRelationId(void)
 static Oid
 CStoreTablesRelationId(void)
 {
-	return get_relname_relid("cstore_tables", PG_CATALOG_NAMESPACE);
+	return get_relname_relid("cstore_tables", CStoreNamespaceId());
 }
 
 
@@ -549,5 +551,12 @@ CStoreTablesRelationId(void)
 static Oid
 CStoreTablesIndexRelationId(void)
 {
-	return get_relname_relid("cstore_tables_pkey", PG_CATALOG_NAMESPACE);
+	return get_relname_relid("cstore_tables_pkey", CStoreNamespaceId());
+}
+
+
+static Oid
+CStoreNamespaceId(void)
+{
+	return get_namespace_oid("cstore", false);
 }
