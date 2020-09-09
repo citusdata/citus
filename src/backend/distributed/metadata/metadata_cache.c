@@ -362,7 +362,14 @@ IsCitusTableTypeInternal(CitusTableCacheEntry *tableEntry, CitusTableType tableT
 
 		case REFERENCE_TABLE:
 		{
-			return tableEntry->partitionMethod == DISTRIBUTE_BY_NONE;
+			return tableEntry->partitionMethod == DISTRIBUTE_BY_NONE &&
+				   tableEntry->replicationModel == REPLICATION_MODEL_2PC;
+		}
+
+		case CITUS_LOCAL_TABLE:
+		{
+			return tableEntry->partitionMethod == DISTRIBUTE_BY_NONE &&
+				   tableEntry->replicationModel != REPLICATION_MODEL_2PC;
 		}
 
 		case CITUS_TABLE_WITH_NO_DIST_KEY:

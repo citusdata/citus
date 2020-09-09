@@ -102,7 +102,6 @@ CallFuncExprRemotely(CallStmt *callStmt, DistObjectCacheEntry *procedure,
 		ereport(DEBUG1, (errmsg(
 							 "will push down CALL for reference tables")));
 		colocatedWithReferenceTable = true;
-		Assert(IsCitusTableType(colocatedRelationId, REFERENCE_TABLE));
 	}
 
 	ShardPlacement *placement = NULL;

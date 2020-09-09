@@ -2704,7 +2704,7 @@ BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError)
 
 	Assert(query->commandType == CMD_INSERT);
 
-	/* reference tables can only have one shard */
+	/* reference tables and citus local tables can only have one shard */
 	if (IsCitusTableTypeCacheEntry(cacheEntry, CITUS_TABLE_WITH_NO_DIST_KEY))
 	{
 		List *shardIntervalList = LoadShardIntervalList(distributedTableId);
@@ -2712,7 +2712,16 @@ BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError)
 		int shardCount = list_length(shardIntervalList);
 		if (shardCount != 1)
 		{
-			ereport(ERROR, (errmsg("reference table cannot have %d shards", shardCount)));
+			if (IsCitusTableTypeCacheEntry(cacheEntry, REFERENCE_TABLE))
+			{
+				ereport(ERROR, (errmsg("reference table cannot have %d shards",
+									   shardCount)));
+			}
+			else if (IsCitusTableTypeCacheEntry(cacheEntry, CITUS_LOCAL_TABLE))
+			{
+				ereport(ERROR, (errmsg("citus local table cannot have %d shards",
+									   shardCount)));
+			}
 		}
 
 		ShardInterval *shardInterval = linitial(shardIntervalList);

@@ -172,12 +172,12 @@ master_apply_delete_command(PG_FUNCTION_ARGS)
 								  "are not supported with master_apply_delete_command."),
 						errhint("Use the DELETE command instead.")));
 	}
-	else if (IsCitusTableType(relationId, REFERENCE_TABLE))
+	else if (IsCitusTableType(relationId, CITUS_TABLE_WITH_NO_DIST_KEY))
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("cannot delete from reference table"),
-						errdetail("Delete statements on reference tables "
-								  "are not supported.")));
+						errmsg("cannot delete from table"),
+						errdetail("Delete statements on reference and citus "
+								  "local tables are not supported.")));
 	}
 
 

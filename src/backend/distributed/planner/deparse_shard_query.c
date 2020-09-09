@@ -77,7 +77,7 @@ RebuildQueryStrings(Job *workerJob)
 			RangeTblEntry *copiedSubqueryRte = ExtractSelectRangeTableEntry(query);
 			Query *copiedSubquery = copiedSubqueryRte->subquery;
 
-			/* there are no restrictions to add for reference tables */
+			/* there are no restrictions to add for reference and citus local tables */
 			if (IsCitusTableType(shardInterval->relationId, DISTRIBUTED_TABLE))
 			{
 				AddShardIntervalRestrictionToSelect(copiedSubquery, shardInterval);
