@@ -59,36 +59,36 @@ CREATE EVENT TRIGGER cstore_drop_event
     EXECUTE PROCEDURE cstore_drop_trigger();
 
 CREATE TABLE cstore_tables (
-    relid oid,
-    block_row_count int,
-    version_major bigint,
-    version_minor bigint,
+    relid oid NOT NULL,
+    block_row_count int NOT NULL,
+    version_major bigint NOT NULL,
+    version_minor bigint NOT NULL,
     PRIMARY KEY (relid)
 ) WITH (user_catalog_table = true);
 
 ALTER TABLE cstore_tables SET SCHEMA pg_catalog;
 
 CREATE TABLE cstore_stripes (
-    relid oid,
-    stripe bigint,
-    file_offset bigint,
-    skiplist_length bigint,
-    data_length bigint,
+    relid oid NOT NULL,
+    stripe bigint NOT NULL,
+    file_offset bigint NOT NULL,
+    skiplist_length bigint NOT NULL,
+    data_length bigint NOT NULL,
     PRIMARY KEY (relid, stripe),
-    FOREIGN KEY (relid) REFERENCES cstore_tables(relid) ON DELETE CASCADE
+    FOREIGN KEY (relid) REFERENCES cstore_tables(relid) ON DELETE CASCADE INITIALLY DEFERRED
 ) WITH (user_catalog_table = true);
 
 ALTER TABLE cstore_stripes SET SCHEMA pg_catalog;
 
 CREATE TABLE cstore_stripe_attr (
-    relid oid,
-    stripe bigint,
-    attr int,
-    exists_size bigint,
-    value_size bigint,
-    skiplist_size bigint,
+    relid oid NOT NULL,
+    stripe bigint NOT NULL,
+    attr int NOT NULL,
+    exists_size bigint NOT NULL,
+    value_size bigint NOT NULL,
+    skiplist_size bigint NOT NULL,
     PRIMARY KEY (relid, stripe, attr),
-    FOREIGN KEY (relid, stripe) REFERENCES cstore_stripes(relid, stripe) ON DELETE CASCADE
+    FOREIGN KEY (relid, stripe) REFERENCES cstore_stripes(relid, stripe) ON DELETE CASCADE INITIALLY DEFERRED
 ) WITH (user_catalog_table = true);
 
 ALTER TABLE cstore_stripe_attr SET SCHEMA pg_catalog;

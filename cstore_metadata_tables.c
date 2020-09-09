@@ -50,6 +50,8 @@ static void InsertStripeAttrRow(Oid relid, uint64 stripe, AttrNumber attr,
 								uint64 skiplistSize);
 static int TableBlockRowCount(Oid relid);
 static void DeleteTableMetadataRowIfExists(Oid relid);
+static void InsertTupleAndEnforceConstraints(Relation rel, HeapTuple heapTuple);
+static void DeleteTupleAndEnforceConstraints(Relation rel, HeapTuple heapTuple);
 static EState * create_estate_for_relation(Relation rel);
 
 /* constants for cstore_stripe_attr */
@@ -103,7 +105,7 @@ InitCStoreTableMetadata(Oid relid, int blockRowCount)
 
 	tuple = heap_form_tuple(tupleDescriptor, values, nulls);
 
-	CatalogTupleInsert(cstoreTable, tuple);
+	InsertTupleAndEnforceConstraints(cstoreTable, tuple);
 
 	CommandCounterIncrement();
 
@@ -132,7 +134,7 @@ InsertStripeMetadataRow(Oid relid, StripeMetadata *stripe)
 
 	HeapTuple tuple = heap_form_tuple(tupleDescriptor, values, nulls);
 
-	CatalogTupleInsert(cstoreStripes, tuple);
+	InsertTupleAndEnforceConstraints(cstoreStripes, tuple);
 
 	CommandCounterIncrement();
 
@@ -264,28 +266,65 @@ DeleteTableMetadataRowIfExists(Oid relid)
 	heapTuple = systable_getnext(scanDescriptor);
 	if (HeapTupleIsValid(heapTuple))
 	{
-		EState *estate = create_estate_for_relation(cstoreTables);
-		ResultRelInfo *resultRelInfo = estate->es_result_relation_info;
-
-		ItemPointer tid = &(heapTuple->t_self);
-		simple_table_tuple_delete(cstoreTables, tid, estate->es_snapshot);
-
-		/*
-         * Execute AFTER ROW DELETE Triggers to enforce foreign key
-         * constraints.
-         */
-		ExecARDeleteTriggers(estate, resultRelInfo,
-							 tid, NULL, NULL);
-
-		AfterTriggerEndQuery(estate);
-		ExecCleanUpTriggerState(estate);
-		ExecResetTupleTable(estate->es_tupleTable, false);
-		FreeExecutorState(estate);
+		DeleteTupleAndEnforceConstraints(cstoreTables, heapTuple);
 	}
 
 	systable_endscan_ordered(scanDescriptor);
 	index_close(index, NoLock);
 	table_close(cstoreTables, NoLock);
+}
+
+
+/*
+ * InsertTupleAndEnforceConstraints inserts a tuple into a relation and
+ * makes sure constraints (e.g. FK constraints, NOT NULL, ...) are enforced.
+ */
+static void
+InsertTupleAndEnforceConstraints(Relation rel, HeapTuple heapTuple)
+{
+	EState *estate = NULL;
+	TupleTableSlot *slot = NULL;
+
+	estate = create_estate_for_relation(rel);
+	slot = ExecInitExtraTupleSlot(estate, RelationGetDescr(rel), &TTSOpsHeapTuple);
+	ExecStoreHeapTuple(heapTuple, slot, false);
+
+	ExecOpenIndices(estate->es_result_relation_info, false);
+
+	/* ExecSimpleRelationInsert executes any constraints */
+	ExecSimpleRelationInsert(estate, slot);
+	
+	ExecCloseIndices(estate->es_result_relation_info);
+
+	AfterTriggerEndQuery(estate);
+	ExecCleanUpTriggerState(estate);
+	ExecResetTupleTable(estate->es_tupleTable, false);
+	FreeExecutorState(estate);
+}
+
+
+
+/*
+ * DeleteTupleAndEnforceConstraints deletes a tuple from a relation and
+ * makes sure constraints (e.g. FK constraints) are enforced.
+ */
+static void
+DeleteTupleAndEnforceConstraints(Relation rel, HeapTuple heapTuple)
+{
+	EState *estate = create_estate_for_relation(rel);
+	ResultRelInfo *resultRelInfo = estate->es_result_relation_info;
+
+	ItemPointer tid = &(heapTuple->t_self);
+	simple_table_tuple_delete(rel, tid, estate->es_snapshot);
+
+	/* execute AFTER ROW DELETE Triggers to enforce constraints */
+	ExecARDeleteTriggers(estate, resultRelInfo,
+							tid, NULL, NULL);
+
+	AfterTriggerEndQuery(estate);
+	ExecCleanUpTriggerState(estate);
+	ExecResetTupleTable(estate->es_tupleTable, false);
+	FreeExecutorState(estate);
 }
 
 
@@ -370,7 +409,7 @@ InsertStripeAttrRow(Oid relid, uint64 stripe, AttrNumber attr,
 
 	HeapTuple tuple = heap_form_tuple(tupleDescriptor, values, nulls);
 
-	CatalogTupleInsert(cstoreStripeAttrs, tuple);
+	InsertTupleAndEnforceConstraints(cstoreStripeAttrs, tuple);
 
 	CommandCounterIncrement();
 
