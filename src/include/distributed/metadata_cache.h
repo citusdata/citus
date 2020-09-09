@@ -133,10 +133,12 @@ typedef enum
 } CitusTableType;
 
 extern bool IsCitusTableType(Oid relationId, CitusTableType tableType);
-extern bool IsCitusTableTypeCacheEntry(CitusTableCacheEntry *tableEtnry, CitusTableType
-									   tableType);
+extern bool IsCitusTableTypeCacheEntry(CitusTableCacheEntry *tableEtnry,
+									   CitusTableType tableType);
 
 extern bool IsCitusTable(Oid relationId);
+extern bool IsCitusLocalTableByDistParams(char partitionMethod, char replicationModel);
+extern bool IsReferenceTableByDistParams(char partitionMethod, char replicationModel);
 extern List * CitusTableList(void);
 extern ShardInterval * LoadShardInterval(uint64 shardId);
 extern Oid RelationIdForShard(uint64 shardId);

@@ -817,13 +817,13 @@ CopyShardForeignConstraintCommandListGrouped(ShardInterval *shardInterval,
 											 colocatedShardForeignConstraintCommandList,
 											 List **referenceTableForeignConstraintList)
 {
-	Oid schemaId = get_rel_namespace(shardInterval->relationId);
+	Oid relationId = shardInterval->relationId;
+	Oid schemaId = get_rel_namespace(relationId);
 	char *schemaName = get_namespace_name(schemaId);
 	char *escapedSchemaName = quote_literal_cstr(schemaName);
 	int shardIndex = 0;
 
-	List *commandList = GetReferencingForeignConstaintCommands(
-		shardInterval->relationId);
+	List *commandList = GetReferencingForeignConstaintCommands(relationId);
 
 	/* we will only use shardIndex if there is a foreign constraint */
 	if (commandList != NIL)
@@ -844,7 +844,7 @@ CopyShardForeignConstraintCommandListGrouped(ShardInterval *shardInterval,
 
 		StringInfo applyForeignConstraintCommand = makeStringInfo();
 
-		/* we need to parse the foreign constraint command to get referencing table id */
+		/* we need to parse the foreign constraint command to get referenced table id */
 		Oid referencedRelationId = ForeignConstraintGetReferencedTableId(command);
 		if (referencedRelationId == InvalidOid)
 		{
@@ -857,9 +857,28 @@ CopyShardForeignConstraintCommandListGrouped(ShardInterval *shardInterval,
 		char *referencedSchemaName = get_namespace_name(referencedSchemaId);
 		char *escapedReferencedSchemaName = quote_literal_cstr(referencedSchemaName);
 
-		if (IsCitusTableType(referencedRelationId, CITUS_TABLE_WITH_NO_DIST_KEY))
+		if (IsCitusTableType(referencedRelationId, REFERENCE_TABLE))
 		{
 			referencedShardId = GetFirstShardId(referencedRelationId);
+		}
+		else if (IsCitusTableType(referencedRelationId, CITUS_LOCAL_TABLE))
+		{
+			/*
+			 * Only reference tables and citus local tables can have foreign
+			 * keys to citus local tables but we already do not allow copying
+			 * citus local table shards and we don't try to replicate citus
+			 * local table shards. So, the referencing table must be a reference
+			 * table in this context.
+			 */
+			Assert(IsCitusTableType(relationId, REFERENCE_TABLE));
+
+			/*
+			 * We don't set foreign keys from reference tables to citus local
+			 * tables in worker shard placements of reference tables because
+			 * we don't have the shard placement for citus local table in worker
+			 * nodes.
+			 */
+			continue;
 		}
 		else
 		{

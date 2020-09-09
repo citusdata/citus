@@ -96,8 +96,8 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 		case T_AlterTableStmt:
 		{
 			/*
-			 * We append shardId to the very end of table and index names to
-			 * avoid name collisions. We also append shardId to constraint names.
+			 * We append shardId to the very end of table and index, constraint
+			 * and trigger names to avoid name collisions.
 			 */
 
 			AlterTableStmt *alterTableStmt = (AlterTableStmt *) parseTree;
@@ -167,6 +167,14 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 						AppendShardIdToName(indexName, shardId);
 					}
 				}
+				else if (command->subtype == AT_EnableTrig ||
+						 command->subtype == AT_DisableTrig ||
+						 command->subtype == AT_EnableAlwaysTrig ||
+						 command->subtype == AT_EnableReplicaTrig)
+				{
+					char **triggerName = &(command->name);
+					AppendShardIdToName(triggerName, shardId);
+				}
 			}
 
 			break;
@@ -233,6 +241,33 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 			SetSchemaNameIfNotExist(relationSchemaName, schemaName);
 
 			AppendShardIdToName(relationName, shardId);
+			break;
+		}
+
+		case T_CreateTrigStmt:
+		{
+			CreateTrigStmt *createTriggerStmt = (CreateTrigStmt *) parseTree;
+			CreateTriggerEventExtendNames(createTriggerStmt, schemaName, shardId);
+			break;
+		}
+
+		case T_AlterObjectDependsStmt:
+		{
+			AlterObjectDependsStmt *alterTriggerDependsStmt =
+				(AlterObjectDependsStmt *) parseTree;
+			ObjectType objectType = alterTriggerDependsStmt->objectType;
+
+			if (objectType == OBJECT_TRIGGER)
+			{
+				AlterTriggerDependsEventExtendNames(alterTriggerDependsStmt,
+													schemaName, shardId);
+			}
+			else
+			{
+				ereport(WARNING, (errmsg("unsafe object type in alter object "
+										 "depends statement"),
+								  errdetail("Object type: %u", (uint32) objectType)));
+			}
 			break;
 		}
 
@@ -309,6 +344,10 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 			else if (objectType == OBJECT_POLICY)
 			{
 				DropPolicyEventExtendNames(dropStmt, schemaName, shardId);
+			}
+			else if (objectType == OBJECT_TRIGGER)
+			{
+				DropTriggerEventExtendNames(dropStmt, schemaName, shardId);
 			}
 			else
 			{
@@ -456,7 +495,7 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 								 *newRelationName, NAMEDATALEN - 1)));
 				}
 			}
-			else if (objectType == OBJECT_COLUMN || objectType == OBJECT_TRIGGER)
+			else if (objectType == OBJECT_COLUMN)
 			{
 				char **relationName = &(renameStmt->relation->relname);
 				char **objectSchemaName = &(renameStmt->relation->schemaname);
@@ -465,6 +504,10 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 				SetSchemaNameIfNotExist(objectSchemaName, schemaName);
 
 				AppendShardIdToName(relationName, shardId);
+			}
+			else if (objectType == OBJECT_TRIGGER)
+			{
+				AlterTriggerRenameEventExtendNames(renameStmt, schemaName, shardId);
 			}
 			else if (objectType == OBJECT_POLICY)
 			{
