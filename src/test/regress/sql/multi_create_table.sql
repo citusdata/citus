@@ -201,3 +201,7 @@ WHERE col1 = 132;
 
 DROP TABLE data_load_test1, data_load_test2;
 END;
+
+-- distributing catalog tables is not supported
+SELECT create_distributed_table('pg_class', 'relname');
+SELECT create_reference_table('pg_class');
