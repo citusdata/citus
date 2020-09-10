@@ -3,6 +3,8 @@
 -- complain if script is sourced in psql, rather than via CREATE EXTENSION
 \echo Use "CREATE EXTENSION cstore_fdw" to load this file. \quit
 
+CREATE SCHEMA cstore;
+
 CREATE FUNCTION cstore_fdw_handler()
 RETURNS fdw_handler
 AS 'MODULE_PATHNAME'
@@ -58,17 +60,31 @@ CREATE EVENT TRIGGER cstore_drop_event
     ON SQL_DROP
     EXECUTE PROCEDURE cstore_drop_trigger();
 
-CREATE TABLE cstore_stripe_attr (
-    relid oid,
-    stripe bigint,
-    attr int,
-    exists_size bigint,
-    value_size bigint,
-    skiplist_size bigint
+CREATE TABLE cstore.cstore_tables (
+    relid oid NOT NULL,
+    block_row_count int NOT NULL,
+    version_major bigint NOT NULL,
+    version_minor bigint NOT NULL,
+    PRIMARY KEY (relid)
 ) WITH (user_catalog_table = true);
 
-CREATE INDEX cstore_stripe_attr_idx
-    ON cstore_stripe_attr
-    USING BTREE(relid, stripe, attr);
+CREATE TABLE cstore.cstore_stripes (
+    relid oid NOT NULL,
+    stripe bigint NOT NULL,
+    file_offset bigint NOT NULL,
+    skiplist_length bigint NOT NULL,
+    data_length bigint NOT NULL,
+    PRIMARY KEY (relid, stripe),
+    FOREIGN KEY (relid) REFERENCES cstore.cstore_tables(relid) ON DELETE CASCADE INITIALLY DEFERRED
+) WITH (user_catalog_table = true);
 
-ALTER TABLE cstore_stripe_attr SET SCHEMA pg_catalog;
+CREATE TABLE cstore.cstore_stripe_attr (
+    relid oid NOT NULL,
+    stripe bigint NOT NULL,
+    attr int NOT NULL,
+    exists_size bigint NOT NULL,
+    value_size bigint NOT NULL,
+    skiplist_size bigint NOT NULL,
+    PRIMARY KEY (relid, stripe, attr),
+    FOREIGN KEY (relid, stripe) REFERENCES cstore.cstore_stripes(relid, stripe) ON DELETE CASCADE INITIALLY DEFERRED
+) WITH (user_catalog_table = true);

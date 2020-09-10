@@ -27,7 +27,6 @@
 #include "cstore_metadata_serialization.h"
 #include "cstore_version_compat.h"
 
-static void CStoreWriteFooter(StringInfo footerFileName, TableFooter *tableFooter);
 static StripeBuffers * CreateEmptyStripeBuffers(uint32 stripeMaxRowCount,
 												uint32 blockRowCount,
 												uint32 columnCount);
@@ -50,7 +49,7 @@ static void UpdateBlockSkipNodeMinMax(ColumnBlockSkipNode *blockSkipNode,
 									  int columnTypeLength, Oid columnCollation,
 									  FmgrInfo *comparisonFunction);
 static Datum DatumCopy(Datum datum, bool datumTypeByValue, int datumTypeLength);
-static void AppendStripeMetadata(TableFooter *tableFooter,
+static void AppendStripeMetadata(TableMetadata *tableMetadata,
 								 StripeMetadata stripeMetadata);
 static void WriteToFile(FILE *file, void *data, uint32 dataLength);
 static void SyncAndCloseFile(FILE *file);
@@ -72,61 +71,37 @@ CStoreBeginWrite(Oid relationId,
 {
 	TableWriteState *writeState = NULL;
 	FILE *tableFile = NULL;
-	StringInfo tableFooterFilename = NULL;
-	TableFooter *tableFooter = NULL;
+	TableMetadata *tableMetadata = NULL;
 	FmgrInfo **comparisonFunctionArray = NULL;
 	MemoryContext stripeWriteContext = NULL;
 	uint64 currentFileOffset = 0;
 	uint32 columnCount = 0;
 	uint32 columnIndex = 0;
-	struct stat statBuffer;
-	int statResult = 0;
 	bool *columnMaskArray = NULL;
 	ColumnBlockData **blockData = NULL;
 	uint64 currentStripeId = 0;
 
-	tableFooterFilename = makeStringInfo();
-	appendStringInfo(tableFooterFilename, "%s%s", filename, CSTORE_FOOTER_FILE_SUFFIX);
-
-	statResult = stat(tableFooterFilename->data, &statBuffer);
-	if (statResult < 0)
+	tableFile = AllocateFile(filename, "a+");
+	if (tableFile == NULL)
 	{
-		tableFile = AllocateFile(filename, "w");
-		if (tableFile == NULL)
-		{
-			ereport(ERROR, (errcode_for_file_access(),
-							errmsg("could not open file \"%s\" for writing: %m",
-								   filename)));
-		}
-
-		tableFooter = palloc0(sizeof(TableFooter));
-		tableFooter->blockRowCount = blockRowCount;
-		tableFooter->stripeMetadataList = NIL;
+		ereport(ERROR, (errcode_for_file_access(),
+						errmsg("could not open file \"%s\" for writing: %m",
+							   filename)));
 	}
-	else
-	{
-		tableFile = AllocateFile(filename, "r+");
-		if (tableFile == NULL)
-		{
-			ereport(ERROR, (errcode_for_file_access(),
-							errmsg("could not open file \"%s\" for writing: %m",
-								   filename)));
-		}
 
-		tableFooter = CStoreReadFooter(tableFooterFilename);
-	}
+	tableMetadata = ReadTableMetadata(relationId);
 
 	/*
 	 * If stripeMetadataList is not empty, jump to the position right after
 	 * the last position.
 	 */
-	if (tableFooter->stripeMetadataList != NIL)
+	if (tableMetadata->stripeMetadataList != NIL)
 	{
 		StripeMetadata *lastStripe = NULL;
 		uint64 lastStripeSize = 0;
 		int fseekResult = 0;
 
-		lastStripe = llast(tableFooter->stripeMetadataList);
+		lastStripe = llast(tableMetadata->stripeMetadataList);
 		lastStripeSize += lastStripe->skipListLength;
 		lastStripeSize += lastStripe->dataLength;
 		lastStripeSize += lastStripe->footerLength;
@@ -180,8 +155,7 @@ CStoreBeginWrite(Oid relationId,
 	writeState = palloc0(sizeof(TableWriteState));
 	writeState->relationId = relationId;
 	writeState->tableFile = tableFile;
-	writeState->tableFooterFilename = tableFooterFilename;
-	writeState->tableFooter = tableFooter;
+	writeState->tableMetadata = tableMetadata;
 	writeState->compressionType = compressionType;
 	writeState->stripeMaxRowCount = stripeMaxRowCount;
 	writeState->tupleDescriptor = tupleDescriptor;
@@ -215,8 +189,8 @@ CStoreWriteRow(TableWriteState *writeState, Datum *columnValues, bool *columnNul
 	StripeBuffers *stripeBuffers = writeState->stripeBuffers;
 	StripeSkipList *stripeSkipList = writeState->stripeSkipList;
 	uint32 columnCount = writeState->tupleDescriptor->natts;
-	TableFooter *tableFooter = writeState->tableFooter;
-	const uint32 blockRowCount = tableFooter->blockRowCount;
+	TableMetadata *tableMetadata = writeState->tableMetadata;
+	const uint32 blockRowCount = tableMetadata->blockRowCount;
 	ColumnBlockData **blockDataArray = writeState->blockDataArray;
 	MemoryContext oldContext = MemoryContextSwitchTo(writeState->stripeWriteContext);
 
@@ -304,7 +278,8 @@ CStoreWriteRow(TableWriteState *writeState, Datum *columnValues, bool *columnNul
 		 * doesn't free it.
 		 */
 		MemoryContextSwitchTo(oldContext);
-		AppendStripeMetadata(tableFooter, stripeMetadata);
+		InsertStripeMetadataRow(writeState->relationId, &stripeMetadata);
+		AppendStripeMetadata(tableMetadata, stripeMetadata);
 	}
 	else
 	{
@@ -322,9 +297,6 @@ CStoreWriteRow(TableWriteState *writeState, Datum *columnValues, bool *columnNul
 void
 CStoreEndWrite(TableWriteState *writeState)
 {
-	StringInfo tableFooterFilename = NULL;
-	StringInfo tempTableFooterFileName = NULL;
-	int renameResult = 0;
 	int columnCount = writeState->tupleDescriptor->natts;
 	StripeBuffers *stripeBuffers = writeState->stripeBuffers;
 
@@ -336,82 +308,17 @@ CStoreEndWrite(TableWriteState *writeState)
 		MemoryContextReset(writeState->stripeWriteContext);
 
 		MemoryContextSwitchTo(oldContext);
-		AppendStripeMetadata(writeState->tableFooter, stripeMetadata);
+		InsertStripeMetadataRow(writeState->relationId, &stripeMetadata);
+		AppendStripeMetadata(writeState->tableMetadata, stripeMetadata);
 	}
 
 	SyncAndCloseFile(writeState->tableFile);
 
-	tableFooterFilename = writeState->tableFooterFilename;
-	tempTableFooterFileName = makeStringInfo();
-	appendStringInfo(tempTableFooterFileName, "%s%s", tableFooterFilename->data,
-					 CSTORE_TEMP_FILE_SUFFIX);
-
-	CStoreWriteFooter(tempTableFooterFileName, writeState->tableFooter);
-
-	renameResult = rename(tempTableFooterFileName->data, tableFooterFilename->data);
-	if (renameResult != 0)
-	{
-		ereport(ERROR, (errcode_for_file_access(),
-						errmsg("could not rename file \"%s\" to \"%s\": %m",
-							   tempTableFooterFileName->data,
-							   tableFooterFilename->data)));
-	}
-
-	pfree(tempTableFooterFileName->data);
-	pfree(tempTableFooterFileName);
-
 	MemoryContextDelete(writeState->stripeWriteContext);
-	list_free_deep(writeState->tableFooter->stripeMetadataList);
-	pfree(writeState->tableFooter);
-	pfree(writeState->tableFooterFilename->data);
-	pfree(writeState->tableFooterFilename);
+	list_free_deep(writeState->tableMetadata->stripeMetadataList);
 	pfree(writeState->comparisonFunctionArray);
 	FreeColumnBlockDataArray(writeState->blockDataArray, columnCount);
 	pfree(writeState);
-}
-
-
-/*
- * CStoreWriteFooter writes the given footer to given file. First, the function
- * serializes and writes the footer to the file. Then, the function serializes
- * and writes the postscript. Then, the function writes the postscript size as
- * the last byte of the file. Last, the function syncs and closes the footer file.
- */
-static void
-CStoreWriteFooter(StringInfo tableFooterFilename, TableFooter *tableFooter)
-{
-	FILE *tableFooterFile = NULL;
-	StringInfo tableFooterBuffer = NULL;
-	StringInfo postscriptBuffer = NULL;
-	uint8 postscriptSize = 0;
-
-	tableFooterFile = AllocateFile(tableFooterFilename->data, PG_BINARY_W);
-	if (tableFooterFile == NULL)
-	{
-		ereport(ERROR, (errcode_for_file_access(),
-						errmsg("could not open file \"%s\" for writing: %m",
-							   tableFooterFilename->data)));
-	}
-
-	/* write the footer */
-	tableFooterBuffer = SerializeTableFooter(tableFooter);
-	WriteToFile(tableFooterFile, tableFooterBuffer->data, tableFooterBuffer->len);
-
-	/* write the postscript */
-	postscriptBuffer = SerializePostScript(tableFooterBuffer->len);
-	WriteToFile(tableFooterFile, postscriptBuffer->data, postscriptBuffer->len);
-
-	/* write the 1-byte postscript size */
-	Assert(postscriptBuffer->len < CSTORE_POSTSCRIPT_SIZE_MAX);
-	postscriptSize = postscriptBuffer->len;
-	WriteToFile(tableFooterFile, &postscriptSize, CSTORE_POSTSCRIPT_SIZE_LENGTH);
-
-	SyncAndCloseFile(tableFooterFile);
-
-	pfree(tableFooterBuffer->data);
-	pfree(tableFooterBuffer);
-	pfree(postscriptBuffer->data);
-	pfree(postscriptBuffer);
 }
 
 
@@ -501,7 +408,7 @@ FlushStripe(TableWriteState *writeState)
 	StripeFooter *stripeFooter = NULL;
 	uint32 columnIndex = 0;
 	uint32 blockIndex = 0;
-	TableFooter *tableFooter = writeState->tableFooter;
+	TableMetadata *tableMetadata = writeState->tableMetadata;
 	FILE *tableFile = writeState->tableFile;
 	StripeBuffers *stripeBuffers = writeState->stripeBuffers;
 	StripeSkipList *stripeSkipList = writeState->stripeSkipList;
@@ -509,7 +416,7 @@ FlushStripe(TableWriteState *writeState)
 	TupleDesc tupleDescriptor = writeState->tupleDescriptor;
 	uint32 columnCount = tupleDescriptor->natts;
 	uint32 blockCount = stripeSkipList->blockCount;
-	uint32 blockRowCount = tableFooter->blockRowCount;
+	uint32 blockRowCount = tableMetadata->blockRowCount;
 	uint32 lastBlockIndex = stripeBuffers->rowCount / blockRowCount;
 	uint32 lastBlockRowCount = stripeBuffers->rowCount % blockRowCount;
 
@@ -918,13 +825,13 @@ DatumCopy(Datum datum, bool datumTypeByValue, int datumTypeLength)
  * table footer's stripeMetadataList.
  */
 static void
-AppendStripeMetadata(TableFooter *tableFooter, StripeMetadata stripeMetadata)
+AppendStripeMetadata(TableMetadata *tableMetadata, StripeMetadata stripeMetadata)
 {
 	StripeMetadata *stripeMetadataCopy = palloc0(sizeof(StripeMetadata));
 	memcpy(stripeMetadataCopy, &stripeMetadata, sizeof(StripeMetadata));
 
-	tableFooter->stripeMetadataList = lappend(tableFooter->stripeMetadataList,
-											  stripeMetadataCopy);
+	tableMetadata->stripeMetadataList = lappend(tableMetadata->stripeMetadataList,
+												stripeMetadataCopy);
 }
 
 

@@ -46,8 +46,6 @@
 
 /* miscellaneous defines */
 #define CSTORE_FDW_NAME "cstore_fdw"
-#define CSTORE_FOOTER_FILE_SUFFIX ".footer"
-#define CSTORE_TEMP_FILE_SUFFIX ".tmp"
 #define CSTORE_TUPLE_COST_MULTIPLIER 10
 #define CSTORE_POSTSCRIPT_SIZE_LENGTH 1
 #define CSTORE_POSTSCRIPT_SIZE_MAX 256
@@ -91,12 +89,12 @@ typedef struct StripeMetadata
 } StripeMetadata;
 
 
-/* TableFooter represents the footer of a cstore file. */
-typedef struct TableFooter
+/* TableMetadata represents the metadata of a cstore file. */
+typedef struct TableMetadata
 {
 	List *stripeMetadataList;
 	uint64 blockRowCount;
-} TableFooter;
+} TableMetadata;
 
 
 /* ColumnBlockSkipNode contains statistics for a ColumnBlockData. */
@@ -206,7 +204,7 @@ typedef struct TableReadState
 	Oid relationId;
 
 	FILE *tableFile;
-	TableFooter *tableFooter;
+	TableMetadata *tableMetadata;
 	TupleDesc tupleDescriptor;
 
 	/*
@@ -231,8 +229,7 @@ typedef struct TableWriteState
 {
 	Oid relationId;
 	FILE *tableFile;
-	TableFooter *tableFooter;
-	StringInfo tableFooterFilename;
+	TableMetadata *tableMetadata;
 	CompressionType compressionType;
 	TupleDesc tupleDescriptor;
 	FmgrInfo **comparisonFunctionArray;
@@ -277,7 +274,6 @@ extern void CStoreEndWrite(TableWriteState *state);
 extern TableReadState * CStoreBeginRead(Oid relationId, const char *filename,
 										TupleDesc tupleDescriptor,
 										List *projectedColumnList, List *qualConditions);
-extern TableFooter * CStoreReadFooter(StringInfo tableFooterFilename);
 extern bool CStoreReadFinished(TableReadState *state);
 extern bool CStoreReadNextRow(TableReadState *state, Datum *columnValues,
 							  bool *columnNulls);
@@ -298,6 +294,8 @@ extern StringInfo DecompressBuffer(StringInfo buffer, CompressionType compressio
 /* cstore_metadata_tables.c */
 extern void SaveStripeFooter(Oid relid, uint64 stripe, StripeFooter *footer);
 extern StripeFooter * ReadStripeFooter(Oid relid, uint64 stripe, int relationColumnCount);
-
+extern void InitCStoreTableMetadata(Oid relid, int blockRowCount);
+extern void InsertStripeMetadataRow(Oid relid, StripeMetadata *stripe);
+extern TableMetadata * ReadTableMetadata(Oid relid);
 
 #endif /* CSTORE_H */

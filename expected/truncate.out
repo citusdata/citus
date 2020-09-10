@@ -72,7 +72,7 @@ SELECT count(*) FROM cstore_truncate_test_compressed;
 SELECT cstore_table_size('cstore_truncate_test_compressed');
  cstore_table_size 
 -------------------
-                26
+                 0
 (1 row)
 
 -- make sure data files still present 
@@ -82,7 +82,7 @@ SELECT count(*) FROM (
 	) AS q1) AS q2;
  count 
 -------
-     6
+     3
 (1 row)
 
 INSERT INTO cstore_truncate_test select a, a from generate_series(1, 10) a;
