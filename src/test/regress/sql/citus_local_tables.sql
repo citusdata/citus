@@ -362,7 +362,85 @@ TRUNCATE citus_local_table_1, citus_local_table_2, distributed_table, local_tabl
 VACUUM citus_local_table_1;
 VACUUM citus_local_table_1, distributed_table, local_table, reference_table;
 
+-- test drop
 DROP TABLE citus_local_table_1, citus_local_table_2, distributed_table, local_table, reference_table;
+
+-- test some other udf's with citus local tables
+
+CREATE TABLE citus_local_table_4(a int);
+SELECT create_citus_local_table('citus_local_table_4');
+
+-- should work --
+
+-- insert some data & create an index for table size udf's
+INSERT INTO citus_local_table_4 VALUES (1), (2), (3);
+CREATE INDEX citus_local_table_4_idx ON citus_local_table_4(a);
+
+SELECT citus_table_size('citus_local_table_4');
+SELECT citus_total_relation_size('citus_local_table_4');
+SELECT citus_relation_size('citus_local_table_4');
+
+BEGIN;
+  SELECT lock_relation_if_exists('citus_local_table_4', 'ACCESS SHARE');
+  SELECT count(*) FROM pg_locks where relation='citus_local_table_4'::regclass;
+COMMIT;
+
+-- hide first column (relationId) as it might change
+SELECT part_storage_type, part_method, part_key, part_replica_count, part_max_size, part_placement_policy FROM master_get_table_metadata('citus_local_table_4');
+SELECT master_get_table_ddl_events('citus_local_table_4');
+
+SELECT column_to_column_name(logicalrelid, partkey)
+FROM pg_dist_partition WHERE logicalrelid = 'citus_local_table_4'::regclass;
+
+SELECT column_name_to_column('citus_local_table_4', 'a');
+
+SELECT master_update_shard_statistics(shardid)
+FROM (SELECT shardid FROM pg_dist_shard WHERE logicalrelid='citus_local_table_4'::regclass) as shardid;
+
+-- will always be no-op as we create the shell table from scratch
+-- while creating a citus local table, but let's see it works
+SELECT truncate_local_data_after_distributing_table('citus_local_table_4');
+
+BEGIN;
+  SELECT worker_drop_distributed_table('citus_local_table_4');
+
+  -- should only see shard relation
+  SELECT tableName FROM pg_catalog.pg_tables WHERE tablename LIKE 'citus_local_table_4%';
+ROLLBACK;
+
+-- should return a single element array that for its own shard id
+SELECT shardid, get_colocated_shard_array(shardid)
+FROM (SELECT shardid FROM pg_dist_shard WHERE logicalrelid='citus_local_table_4'::regclass) as shardid;
+
+BEGIN;
+  SELECT master_remove_partition_metadata('citus_local_table_4'::regclass::oid, 'citus_local_tables_test_schema', 'citus_local_table_4');
+
+  -- should print 0
+  select count(*) from pg_dist_partition where logicalrelid='citus_local_table_4'::regclass;
+ROLLBACK;
+
+-- should fail --
+
+SELECT upgrade_to_reference_table('citus_local_table_4');
+SELECT update_distributed_table_colocation('citus_local_table_4', colocate_with => 'none');
+
+SELECT master_create_worker_shards('citus_local_table_4', 10, 1);
+SELECT master_create_empty_shard('citus_local_table_4');
+SELECT master_apply_delete_command('DELETE FROM citus_local_table_4');
+
+CREATE TABLE postgres_local_table (a int);
+SELECT master_append_table_to_shard(shardId, 'postgres_local_table', 'localhost', :master_port)
+FROM (SELECT shardid FROM pg_dist_shard WHERE logicalrelid='citus_local_table_4'::regclass) as shardid;
+
+-- return true
+SELECT citus_table_is_visible('citus_local_table_4'::regclass::oid);
+
+-- return false
+SELECT relation_is_a_known_shard('citus_local_table_4');
+
+-- return | false | true |
+SELECT citus_table_is_visible(tableName::regclass::oid), relation_is_a_known_shard(tableName::regclass)
+FROM (SELECT tableName FROM pg_catalog.pg_tables WHERE tablename LIKE 'citus_local_table_4_%') as tableName;
 
 -- cleanup at exit
 DROP SCHEMA citus_local_tables_test_schema, "CiTUS!LocalTables" CASCADE;
