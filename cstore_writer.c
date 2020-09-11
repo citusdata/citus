@@ -18,6 +18,7 @@
 
 #include "access/nbtree.h"
 #include "catalog/pg_am.h"
+#include "miscadmin.h"
 #include "storage/fd.h"
 #include "storage/smgr.h"
 #include "utils/memutils.h"
@@ -401,11 +402,30 @@ WriteToSmgr(TableWriteState *writeState, char *data, uint32 dataLength)
 		/* always appending */
 		Assert(phdr->pd_lower == addr.offset);
 
+		START_CRIT_SECTION();
+
 		to_write = Min(phdr->pd_upper - phdr->pd_lower, remaining);
 		memcpy(page + phdr->pd_lower, data, to_write);
 		phdr->pd_lower += to_write;
 
 		MarkBufferDirty(buffer);
+
+		if (RelationNeedsWAL(rel))
+		{
+			XLogBeginInsert();
+
+			/*
+			 * Since cstore will mostly write whole pages we force the transmission of the
+			 * whole image in the buffer
+			 */
+			XLogRegisterBuffer(0, buffer, REGBUF_FORCE_IMAGE);
+
+			XLogRecPtr recptr = XLogInsert(RM_GENERIC_ID, 0);
+			PageSetLSN(page, recptr);
+		}
+
+		END_CRIT_SECTION();
+
 		UnlockReleaseBuffer(buffer);
 
 		data += to_write;
