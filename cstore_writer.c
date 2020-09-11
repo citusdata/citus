@@ -405,12 +405,13 @@ WriteToSmgr(TableWriteState *writeState, char *data, uint32 dataLength)
 			PageInit(page, BLCKSZ, 0);
 
 		/* always appending */
-		Assert(phdr->pd_lower == addr.offset + SizeOfPageHeaderData);
+		Assert(phdr->pd_lower == addr.offset);
 
 		to_write = Min(phdr->pd_upper - phdr->pd_lower, remaining);
 		memcpy(page + phdr->pd_lower, data, to_write);
 		phdr->pd_lower += to_write;
 
+		MarkBufferDirty(buffer);
 		UnlockReleaseBuffer(buffer);
 
 		data += to_write;

@@ -1175,14 +1175,13 @@ ReadFromSmgr(Relation rel, uint64 offset, uint32 size)
 		PageHeader	phdr;
 		uint32		to_read;
 		SmgrAddr	addr = logical_to_smgr(offset + read);
-		uint32		pageoffset = addr.offset + SizeOfPageHeaderData;
 
 		buffer = ReadBuffer(rel, addr.blockno);
 		page = BufferGetPage(buffer);
 		phdr = (PageHeader)page;
 
-		to_read = Min(size - read, phdr->pd_upper - pageoffset);
-		memcpy(resultBuffer->data + read, page + pageoffset, to_read);
+		to_read = Min(size - read, phdr->pd_upper - addr.offset);
+		memcpy(resultBuffer->data + read, page + addr.offset, to_read);
 		ReleaseBuffer(buffer);
 		read += to_read;
 	}

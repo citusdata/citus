@@ -300,6 +300,10 @@ typedef struct SmgrAddr
 	uint32		offset;
 } SmgrAddr;
 
+/*
+ * Map logical offsets (as tracked in the metadata) to a physical page and
+ * offset where the data is kept.
+ */
 static inline SmgrAddr
 logical_to_smgr(uint64 logicalOffset)
 {
@@ -307,7 +311,7 @@ logical_to_smgr(uint64 logicalOffset)
 	SmgrAddr addr;
 
 	addr.blockno = logicalOffset / bytes_per_page;
-	addr.offset = logicalOffset % bytes_per_page;
+	addr.offset = SizeOfPageHeaderData + (logicalOffset % bytes_per_page);
 
 	return addr;
 }
