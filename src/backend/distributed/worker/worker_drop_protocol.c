@@ -24,6 +24,7 @@
 #include "distributed/metadata_utility.h"
 #include "distributed/coordinator_protocol.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/metadata/distobject.h"
 #include "foreign/foreign.h"
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
@@ -100,9 +101,15 @@ worker_drop_distributed_table(PG_FUNCTION_ARGS)
 		performMultipleDeletions(objects, DROP_RESTRICT,
 								 PERFORM_DELETION_INTERNAL);
 	}
-	else
+	else if (!IsObjectAddressOwnedByExtension(&distributedTableObject, NULL))
 	{
-		/* drop the table with cascade since other tables may be referring to it */
+		/*
+		 * If the table is owned by an extension, we cannot drop it, nor should we
+		 * until the user runs DROP EXTENSION. Therefore, we skip dropping the
+		 * table and only delete the metadata.
+		 *
+		 * We drop the table with cascade since other tables may be referring to it.
+		 */
 		performDeletion(&distributedTableObject, DROP_CASCADE,
 						PERFORM_DELETION_INTERNAL);
 	}

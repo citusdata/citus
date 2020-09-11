@@ -27,6 +27,7 @@
 #include "catalog/pg_attribute.h"
 #include "catalog/pg_enum.h"
 #include "catalog/pg_extension.h"
+#include "catalog/pg_namespace.h"
 #include "catalog/pg_opclass.h"
 #if PG_VERSION_NUM >= 12000
 #include "catalog/pg_proc.h"
@@ -155,7 +156,6 @@ master_create_distributed_table(PG_FUNCTION_ARGS)
 	char *colocateWithTableName = NULL;
 	bool viaDeprecatedAPI = true;
 	ObjectAddress tableAddress = { 0 };
-
 
 	/*
 	 * distributed tables might have dependencies on different objects, since we create
@@ -682,6 +682,13 @@ EnsureRelationCanBeDistributed(Oid relationId, Var *distributionColumn,
 	Relation relation = relation_open(relationId, NoLock);
 	TupleDesc relationDesc = RelationGetDescr(relation);
 	char *relationName = RelationGetRelationName(relation);
+
+	if (relation->rd_rel->relnamespace == PG_CATALOG_NAMESPACE)
+	{
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("cannot distribute catalog tables")));
+	}
+
 
 	if (!RelationUsesHeapAccessMethodOrNone(relation))
 	{

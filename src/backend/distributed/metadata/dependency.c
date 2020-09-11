@@ -632,6 +632,20 @@ SupportedDependencyByCitus(const ObjectAddress *address)
 
 
 /*
+ * IsTableOwnedByExtension returns whether the table with the given relation ID is
+ * owned by an extension.
+ */
+bool
+IsTableOwnedByExtension(Oid relationId)
+{
+	ObjectAddress tableAddress = { 0 };
+	ObjectAddressSet(tableAddress, RelationRelationId, relationId);
+
+	return IsObjectAddressOwnedByExtension(&tableAddress, NULL);
+}
+
+
+/*
  * IsObjectAddressOwnedByExtension returns whether or not the object is owned by an
  * extension. It is assumed that an object having a dependency on an extension is created
  * by that extension and therefore owned by that extension.
