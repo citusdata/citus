@@ -12,7 +12,7 @@ OBJS = cstore.o cstore_fdw.o cstore_writer.o cstore_reader.o \
 EXTENSION = cstore_fdw
 DATA = cstore_fdw--1.7.sql cstore_fdw--1.6--1.7.sql  cstore_fdw--1.5--1.6.sql cstore_fdw--1.4--1.5.sql \
 	   cstore_fdw--1.3--1.4.sql cstore_fdw--1.2--1.3.sql cstore_fdw--1.1--1.2.sql \
-	   cstore_fdw--1.0--1.1.sql
+	   cstore_fdw--1.0--1.1.sql cstore_fdw--1.7--1.8.sql
 
 REGRESS = fdw_create fdw_load fdw_query fdw_analyze fdw_data_types fdw_functions \
 	  fdw_block_filtering fdw_drop fdw_insert fdw_copyto fdw_alter fdw_truncate
