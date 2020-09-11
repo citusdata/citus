@@ -143,6 +143,17 @@ SELECT * FROM citus_local_table_3;
 -- finally show that we do not allow defining foreign key in mx nodes
 ALTER TABLE citus_local_table_3 ADD CONSTRAINT fkey_local_to_local_2 FOREIGN KEY(l1) REFERENCES citus_local_table_4(l1);
 
--- cleanup at exit
 \c - - - :master_port
+SET search_path TO citus_local_tables_mx;
+
+SELECT master_remove_distributed_table_metadata_from_workers('citus_local_table_4'::regclass::oid, 'citus_local_tables_mx', 'citus_local_table_4');
+
+-- both workers should print 0 as master_remove_distributed_table_metadata_from_workers
+-- drops the table as well
+SELECT run_command_on_workers(
+$$
+SELECT count(*) FROM pg_catalog.pg_tables WHERE tablename='citus_local_table_4'
+$$);
+
+-- cleanup at exit
 DROP SCHEMA citus_local_tables_mx CASCADE;
