@@ -948,11 +948,20 @@ InitializeRelFileNode(Relation relation)
 
 	if (!OidIsValid(classform->relfilenode))
 	{
+		Relation		tmprel;
 		Oid				tablespace;
 		Oid				filenode	= relation->rd_id;
 		char			persistence = relation->rd_rel->relpersistence;
 		RelFileNode		newrnode;
 		SMgrRelation	srel;
+
+		/*
+		 * Upgrade to AccessExclusiveLock, and hold until the end of the
+		 * transaction. This shouldn't happen during a read, but it's hard to
+		 * prove that because it happens lazily.
+		 */
+		tmprel = heap_open(relation->rd_id, AccessExclusiveLock);
+		heap_close(tmprel, NoLock);
 
 		if (OidIsValid(relation->rd_rel->reltablespace))
 			tablespace = relation->rd_rel->reltablespace;
