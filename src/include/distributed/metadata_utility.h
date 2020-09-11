@@ -153,6 +153,7 @@ extern void EnsureHashDistributedTable(Oid relationId);
 extern void EnsureSequenceOwner(Oid sequenceOid);
 extern void EnsureFunctionOwner(Oid functionId);
 extern void EnsureSuperUser(void);
+extern void ErrorIfTableIsACatalogTable(Relation relation);
 extern void EnsureTableNotDistributed(Oid relationId);
 extern void EnsureReplicationSettings(Oid relationId, char replicationModel);
 extern bool RegularTable(Oid relationId);
