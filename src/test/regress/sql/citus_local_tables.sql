@@ -408,7 +408,7 @@ BEGIN;
   SELECT tableName FROM pg_catalog.pg_tables WHERE tablename LIKE 'citus_local_table_4%';
 ROLLBACK;
 
--- should return a single element array that for its own shard id
+-- should return a single element array that only includes its own shard id
 SELECT shardid, get_colocated_shard_array(shardid)
 FROM (SELECT shardid FROM pg_dist_shard WHERE logicalrelid='citus_local_table_4'::regclass) as shardid;
 
