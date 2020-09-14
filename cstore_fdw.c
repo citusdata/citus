@@ -96,7 +96,7 @@ typedef struct CStoreValidOption
 #define COMPRESSION_STRING_DELIMITED_LIST "none, pglz"
 
 /* Array of options that are valid for cstore_fdw */
-static const uint32 ValidOptionCount = 4;
+static const uint32 ValidOptionCount = 3;
 static const CStoreValidOption ValidOptionArray[] =
 {
 	/* foreign table options */
@@ -319,54 +319,22 @@ CStoreProcessUtility(Node * parseTree, const char * queryString,
 	}
 	else if (nodeTag(parseTree) == T_DropStmt)
 	{
-		DropStmt *dropStmt = (DropStmt *) parseTree;
+		List		*dropRelids = DroppedCStoreRelidList((DropStmt *) parseTree);
+		ListCell	*lc			= NULL;
 
-		if (dropStmt->removeType == OBJECT_EXTENSION)
+		/* drop smgr storage */
+		foreach(lc, dropRelids)
 		{
-			bool removeCStoreDirectory = false;
-			ListCell *objectCell = NULL;
+			Oid				 relid			 = lfirst_oid(lc);
+			Relation		 relation		 = cstore_fdw_open(relid, AccessExclusiveLock);
 
-			foreach(objectCell, dropStmt->objects)
-			{
-				Node *object = (Node *) lfirst(objectCell);
-				char *objectName = NULL;
-
-#if PG_VERSION_NUM >= 100000
-				Assert(IsA(object, String));
-				objectName = strVal(object);
-#else
-				Assert(IsA(object, List));
-				objectName = strVal(linitial((List *) object));
-#endif
-
-				if (strncmp(CSTORE_FDW_NAME, objectName, NAMEDATALEN) == 0)
-				{
-					removeCStoreDirectory = true;
-				}
-			}
-
-			CALL_PREVIOUS_UTILITY(parseTree, queryString, context, paramListInfo,
-								  destReceiver, completionTag);
+			RelationOpenSmgr(relation);
+			RelationDropStorage(relation);
+			heap_close(relation, AccessExclusiveLock);
 		}
-		else
-		{
-			List		*dropRelids = DroppedCStoreRelidList((DropStmt *) parseTree);
-			ListCell	*lc			= NULL;
 
-			/* drop smgr storage */
-			foreach(lc, dropRelids)
-			{
-				Oid				 relid			 = lfirst_oid(lc);
-				Relation		 relation		 = cstore_fdw_open(relid, AccessExclusiveLock);
-
-				RelationOpenSmgr(relation);
-				RelationDropStorage(relation);
-				heap_close(relation, AccessExclusiveLock);
-			}
-
-			CALL_PREVIOUS_UTILITY(parseTree, queryString, context, paramListInfo,
-								  destReceiver, completionTag);
-		}
+		CALL_PREVIOUS_UTILITY(parseTree, queryString, context, paramListInfo,
+								destReceiver, completionTag);
 	}
 	else if (nodeTag(parseTree) == T_TruncateStmt)
 	{
@@ -857,11 +825,9 @@ TruncateCStoreTables(List *cstoreRelationList)
 	{
 		Relation relation = (Relation) lfirst(relationCell);
 		Oid relationId = relation->rd_id;
-		CStoreOptions *cstoreOptions = NULL;
 
 		Assert(CStoreTable(relationId));
 
-		cstoreOptions = CStoreGetOptions(relationId);
 		InitializeRelFileNode(relation, true);
 		InitializeCStoreTableFile(relationId, relation, CStoreGetOptions(relationId));
 	}
@@ -1735,7 +1701,6 @@ CStoreBeginForeignScan(ForeignScanState *scanState, int executorFlags)
 {
 	TableReadState *readState = NULL;
 	Oid foreignTableId = InvalidOid;
-	CStoreOptions *cstoreOptions = NULL;
 	Relation currentRelation = scanState->ss.ss_currentRelation;
 	TupleDesc tupleDescriptor = RelationGetDescr(currentRelation);
 	List *columnList = NIL;
@@ -1752,7 +1717,6 @@ CStoreBeginForeignScan(ForeignScanState *scanState, int executorFlags)
 	}
 
 	foreignTableId = RelationGetRelid(scanState->ss.ss_currentRelation);
-	cstoreOptions = CStoreGetOptions(foreignTableId);
 
 	foreignScan = (ForeignScan *) scanState->ss.ps.plan;
 	foreignPrivateList = (List *) foreignScan->fdw_private;
@@ -1873,6 +1837,7 @@ CStoreAcquireSampleRows(Relation relation, int logLevel,
 	ForeignScan *foreignScan = NULL;
 	char *relationName = NULL;
 	int executorFlags = 0;
+	uint32 columnIndex = 0;
 
 	TupleDesc tupleDescriptor = RelationGetDescr(relation);
 	uint32 columnCount = tupleDescriptor->natts;
@@ -1880,7 +1845,6 @@ CStoreAcquireSampleRows(Relation relation, int logLevel,
 	cstore_fdw_initrel(relation);
 
 	/* create list of columns of the relation */
-	uint32 columnIndex = 0;
 	for (columnIndex = 0; columnIndex < columnCount; columnIndex++)
 	{
 		Form_pg_attribute attributeForm = TupleDescAttr(tupleDescriptor, columnIndex);
