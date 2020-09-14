@@ -31,12 +31,11 @@
 #include "lib/stringinfo.h"
 #include "port.h"
 #include "storage/fd.h"
+#include "utils/builtins.h"
 #include "utils/fmgroids.h"
 #include "utils/memutils.h"
 #include "utils/lsyscache.h"
 #include "utils/rel.h"
-
-#include "cstore_metadata_serialization.h"
 
 typedef struct
 {
@@ -50,6 +49,8 @@ static Oid CStoreStripesRelationId(void);
 static Oid CStoreStripesIndexRelationId(void);
 static Oid CStoreTablesRelationId(void);
 static Oid CStoreTablesIndexRelationId(void);
+static Oid CStoreSkipNodesRelationId(void);
+static Oid CStoreSkipNodesIndexRelationId(void);
 static Oid CStoreNamespaceId(void);
 static int TableBlockRowCount(Oid relid);
 static void DeleteTableMetadataRowIfExists(Oid relid);
@@ -59,15 +60,16 @@ static void InsertTupleAndEnforceConstraints(ModifyState *state, Datum *values,
 static void DeleteTupleAndEnforceConstraints(ModifyState *state, HeapTuple heapTuple);
 static void FinishModifyRelation(ModifyState *state);
 static EState * create_estate_for_relation(Relation rel);
+static bytea * DatumToBytea(Datum value, Form_pg_attribute attrForm);
+static Datum ByteaToDatum(bytea *bytes, Form_pg_attribute attrForm);
 
 /* constants for cstore_stripe_attr */
-#define Natts_cstore_stripe_attr 6
+#define Natts_cstore_stripe_attr 5
 #define Anum_cstore_stripe_attr_relid 1
 #define Anum_cstore_stripe_attr_stripe 2
 #define Anum_cstore_stripe_attr_attr 3
 #define Anum_cstore_stripe_attr_exists_size 4
 #define Anum_cstore_stripe_attr_value_size 5
-#define Anum_cstore_stripe_attr_skiplist_size 6
 
 /* constants for cstore_table */
 #define Natts_cstore_tables 4
@@ -77,12 +79,29 @@ static EState * create_estate_for_relation(Relation rel);
 #define Anum_cstore_tables_version_minor 4
 
 /* constants for cstore_stripe */
-#define Natts_cstore_stripes 5
+#define Natts_cstore_stripes 6
 #define Anum_cstore_stripes_relid 1
 #define Anum_cstore_stripes_stripe 2
 #define Anum_cstore_stripes_file_offset 3
-#define Anum_cstore_stripes_skiplist_length 4
-#define Anum_cstore_stripes_data_length 5
+#define Anum_cstore_stripes_data_length 4
+#define Anum_cstore_stripes_block_count 5
+#define Anum_cstore_stripes_row_count 6
+
+/* constants for cstore_skipnodes */
+#define Natts_cstore_skipnodes 12
+#define Anum_cstore_skipnodes_relid 1
+#define Anum_cstore_skipnodes_stripe 2
+#define Anum_cstore_skipnodes_attr 3
+#define Anum_cstore_skipnodes_block 4
+#define Anum_cstore_skipnodes_row_count 5
+#define Anum_cstore_skipnodes_minimum_value 6
+#define Anum_cstore_skipnodes_maximum_value 7
+#define Anum_cstore_skipnodes_value_stream_offset 8
+#define Anum_cstore_skipnodes_value_stream_length 9
+#define Anum_cstore_skipnodes_exists_stream_offset 10
+#define Anum_cstore_skipnodes_exists_stream_length 11
+#define Anum_cstore_skipnodes_value_compression_type 12
+
 
 /*
  * InitCStoreTableMetadata adds a record for the given relation in cstore_table.
@@ -118,6 +137,185 @@ InitCStoreTableMetadata(Oid relid, int blockRowCount)
 
 
 /*
+ * SaveStripeSkipList saves StripeSkipList for a given stripe as rows
+ * of cstore_skipnodes.
+ */
+void
+SaveStripeSkipList(Oid relid, uint64 stripe, StripeSkipList *stripeSkipList,
+				   TupleDesc tupleDescriptor)
+{
+	uint32 columnIndex = 0;
+	uint32 blockIndex = 0;
+	Oid cstoreSkipNodesOid = InvalidOid;
+	Relation cstoreSkipNodes = NULL;
+	ModifyState *modifyState = NULL;
+	uint32 columnCount = stripeSkipList->columnCount;
+
+	cstoreSkipNodesOid = CStoreSkipNodesRelationId();
+	cstoreSkipNodes = heap_open(cstoreSkipNodesOid, RowExclusiveLock);
+	modifyState = StartModifyRelation(cstoreSkipNodes);
+
+	for (columnIndex = 0; columnIndex < columnCount; columnIndex++)
+	{
+		for (blockIndex = 0; blockIndex < stripeSkipList->blockCount; blockIndex++)
+		{
+			ColumnBlockSkipNode *skipNode =
+				&stripeSkipList->blockSkipNodeArray[columnIndex][blockIndex];
+
+			Datum values[Natts_cstore_skipnodes] = {
+				ObjectIdGetDatum(relid),
+				Int64GetDatum(stripe),
+				Int32GetDatum(columnIndex + 1),
+				Int32GetDatum(blockIndex),
+				Int64GetDatum(skipNode->rowCount),
+				0, /* to be filled below */
+				0, /* to be filled below */
+				Int64GetDatum(skipNode->valueBlockOffset),
+				Int64GetDatum(skipNode->valueLength),
+				Int64GetDatum(skipNode->existsBlockOffset),
+				Int64GetDatum(skipNode->existsLength),
+				Int32GetDatum(skipNode->valueCompressionType)
+			};
+
+			bool nulls[Natts_cstore_skipnodes] = { false };
+
+			if (skipNode->hasMinMax)
+			{
+				values[Anum_cstore_skipnodes_minimum_value - 1] =
+					PointerGetDatum(DatumToBytea(skipNode->minimumValue,
+												 &tupleDescriptor->attrs[columnIndex]));
+				values[Anum_cstore_skipnodes_maximum_value - 1] =
+					PointerGetDatum(DatumToBytea(skipNode->maximumValue,
+												 &tupleDescriptor->attrs[columnIndex]));
+			}
+			else
+			{
+				nulls[Anum_cstore_skipnodes_minimum_value - 1] = true;
+				nulls[Anum_cstore_skipnodes_maximum_value - 1] = true;
+			}
+
+			InsertTupleAndEnforceConstraints(modifyState, values, nulls);
+		}
+	}
+
+	FinishModifyRelation(modifyState);
+	heap_close(cstoreSkipNodes, NoLock);
+
+	CommandCounterIncrement();
+}
+
+
+/*
+ * ReadStripeSkipList fetches StripeSkipList for a given stripe.
+ */
+StripeSkipList *
+ReadStripeSkipList(Oid relid, uint64 stripe, TupleDesc tupleDescriptor,
+				   uint32 blockCount)
+{
+	StripeSkipList *skipList = NULL;
+	uint32 columnIndex = 0;
+	Oid cstoreSkipNodesOid = InvalidOid;
+	Relation cstoreSkipNodes = NULL;
+	Relation index = NULL;
+	HeapTuple heapTuple = NULL;
+	uint32 columnCount = tupleDescriptor->natts;
+	ScanKeyData scanKey[2];
+	SysScanDesc scanDescriptor = NULL;
+
+	cstoreSkipNodesOid = CStoreSkipNodesRelationId();
+	cstoreSkipNodes = heap_open(cstoreSkipNodesOid, AccessShareLock);
+	index = index_open(CStoreSkipNodesIndexRelationId(), AccessShareLock);
+
+	ScanKeyInit(&scanKey[0], Anum_cstore_skipnodes_relid,
+				BTEqualStrategyNumber, F_OIDEQ, Int32GetDatum(relid));
+	ScanKeyInit(&scanKey[1], Anum_cstore_skipnodes_stripe,
+				BTEqualStrategyNumber, F_OIDEQ, Int32GetDatum(stripe));
+
+	scanDescriptor = systable_beginscan_ordered(cstoreSkipNodes, index, NULL, 2, scanKey);
+
+	skipList = palloc0(sizeof(StripeSkipList));
+	skipList->blockCount = blockCount;
+	skipList->columnCount = columnCount;
+	skipList->blockSkipNodeArray = palloc0(columnCount * sizeof(ColumnBlockSkipNode *));
+	for (columnIndex = 0; columnIndex < columnCount; columnIndex++)
+	{
+		skipList->blockSkipNodeArray[columnIndex] =
+			palloc0(blockCount * sizeof(ColumnBlockSkipNode));
+	}
+
+	while (HeapTupleIsValid(heapTuple = systable_getnext(scanDescriptor)))
+	{
+		uint32 attr = 0;
+		uint32 blockIndex = 0;
+		ColumnBlockSkipNode *skipNode = NULL;
+
+		Datum datumArray[Natts_cstore_skipnodes];
+		bool isNullArray[Natts_cstore_skipnodes];
+
+		heap_deform_tuple(heapTuple, RelationGetDescr(cstoreSkipNodes), datumArray,
+						  isNullArray);
+
+		attr = DatumGetInt32(datumArray[Anum_cstore_skipnodes_attr - 1]);
+		blockIndex = DatumGetInt32(datumArray[Anum_cstore_skipnodes_block - 1]);
+
+		if (attr <= 0 || attr > columnCount)
+		{
+			ereport(ERROR, (errmsg("invalid stripe skipnode entry"),
+							errdetail("Attribute number out of range: %u", attr)));
+		}
+
+		if (blockIndex < 0 || blockIndex >= blockCount)
+		{
+			ereport(ERROR, (errmsg("invalid stripe skipnode entry"),
+							errdetail("Block number out of range: %u", blockIndex)));
+		}
+
+		columnIndex = attr - 1;
+
+		skipNode = &skipList->blockSkipNodeArray[columnIndex][blockIndex];
+		skipNode->rowCount = DatumGetInt64(datumArray[Anum_cstore_skipnodes_row_count -
+													  1]);
+		skipNode->valueBlockOffset =
+			DatumGetInt64(datumArray[Anum_cstore_skipnodes_value_stream_offset - 1]);
+		skipNode->valueLength =
+			DatumGetInt64(datumArray[Anum_cstore_skipnodes_value_stream_length - 1]);
+		skipNode->existsBlockOffset =
+			DatumGetInt64(datumArray[Anum_cstore_skipnodes_exists_stream_offset - 1]);
+		skipNode->existsLength =
+			DatumGetInt64(datumArray[Anum_cstore_skipnodes_exists_stream_length - 1]);
+		skipNode->valueCompressionType =
+			DatumGetInt32(datumArray[Anum_cstore_skipnodes_value_compression_type - 1]);
+
+		if (isNullArray[Anum_cstore_skipnodes_minimum_value - 1] ||
+			isNullArray[Anum_cstore_skipnodes_maximum_value - 1])
+		{
+			skipNode->hasMinMax = false;
+		}
+		else
+		{
+			bytea *minValue = DatumGetByteaP(
+				datumArray[Anum_cstore_skipnodes_minimum_value - 1]);
+			bytea *maxValue = DatumGetByteaP(
+				datumArray[Anum_cstore_skipnodes_maximum_value - 1]);
+
+			skipNode->minimumValue =
+				ByteaToDatum(minValue, &tupleDescriptor->attrs[columnIndex]);
+			skipNode->maximumValue =
+				ByteaToDatum(maxValue, &tupleDescriptor->attrs[columnIndex]);
+
+			skipNode->hasMinMax = true;
+		}
+	}
+
+	systable_endscan_ordered(scanDescriptor);
+	index_close(index, NoLock);
+	heap_close(cstoreSkipNodes, NoLock);
+
+	return skipList;
+}
+
+
+/*
  * InsertStripeMetadataRow adds a row to cstore_stripes.
  */
 void
@@ -128,8 +326,9 @@ InsertStripeMetadataRow(Oid relid, StripeMetadata *stripe)
 		ObjectIdGetDatum(relid),
 		Int64GetDatum(stripe->id),
 		Int64GetDatum(stripe->fileOffset),
-		Int64GetDatum(stripe->skipListLength),
-		Int64GetDatum(stripe->dataLength)
+		Int64GetDatum(stripe->dataLength),
+		Int32GetDatum(stripe->blockCount),
+		Int64GetDatum(stripe->rowCount)
 	};
 
 	Oid cstoreStripesOid = CStoreStripesRelationId();
@@ -187,8 +386,10 @@ ReadTableMetadata(Oid relid)
 			datumArray[Anum_cstore_stripes_file_offset - 1]);
 		stripeMetadata->dataLength = DatumGetInt64(
 			datumArray[Anum_cstore_stripes_data_length - 1]);
-		stripeMetadata->skipListLength = DatumGetInt64(
-			datumArray[Anum_cstore_stripes_skiplist_length - 1]);
+		stripeMetadata->blockCount = DatumGetInt32(
+			datumArray[Anum_cstore_stripes_block_count - 1]);
+		stripeMetadata->rowCount = DatumGetInt64(
+			datumArray[Anum_cstore_stripes_row_count - 1]);
 
 		tableMetadata->stripeMetadataList = lappend(tableMetadata->stripeMetadataList,
 													stripeMetadata);
@@ -299,8 +500,7 @@ SaveStripeFooter(Oid relid, uint64 stripe, StripeFooter *footer)
 			Int64GetDatum(stripe),
 			Int16GetDatum(attr),
 			Int64GetDatum(footer->existsSizeArray[attr - 1]),
-			Int64GetDatum(footer->valueSizeArray[attr - 1]),
-			Int64GetDatum(footer->skipListSizeArray[attr - 1])
+			Int64GetDatum(footer->valueSizeArray[attr - 1])
 		};
 
 		InsertTupleAndEnforceConstraints(modifyState, values, nulls);
@@ -339,7 +539,6 @@ ReadStripeFooter(Oid relid, uint64 stripe, int relationColumnCount)
 	footer = palloc0(sizeof(StripeFooter));
 	footer->existsSizeArray = palloc0(relationColumnCount * sizeof(int64));
 	footer->valueSizeArray = palloc0(relationColumnCount * sizeof(int64));
-	footer->skipListSizeArray = palloc0(relationColumnCount * sizeof(int64));
 
 	/*
 	 * Stripe can have less columns than the relation if ALTER TABLE happens
@@ -369,8 +568,6 @@ ReadStripeFooter(Oid relid, uint64 stripe, int relationColumnCount)
 			DatumGetInt64(datumArray[Anum_cstore_stripe_attr_exists_size - 1]);
 		footer->valueSizeArray[attr - 1] =
 			DatumGetInt64(datumArray[Anum_cstore_stripe_attr_value_size - 1]);
-		footer->skipListSizeArray[attr - 1] =
-			DatumGetInt64(datumArray[Anum_cstore_stripe_attr_skiplist_size - 1]);
 	}
 
 	systable_endscan_ordered(scanDescriptor);
@@ -508,6 +705,55 @@ create_estate_for_relation(Relation rel)
 
 
 /*
+ * DatumToBytea serializes a datum into a bytea value.
+ */
+static bytea *
+DatumToBytea(Datum value, Form_pg_attribute attrForm)
+{
+	int datumLength = att_addlength_datum(0, attrForm->attlen, value);
+	bytea *result = palloc0(datumLength + VARHDRSZ);
+
+	SET_VARSIZE(result, datumLength + VARHDRSZ);
+
+	if (attrForm->attlen > 0)
+	{
+		if (attrForm->attbyval)
+		{
+			store_att_byval(VARDATA(result), value, attrForm->attlen);
+		}
+		else
+		{
+			memcpy(VARDATA(result), DatumGetPointer(value), attrForm->attlen);
+		}
+	}
+	else
+	{
+		memcpy(VARDATA(result), DatumGetPointer(value), datumLength);
+	}
+
+	return result;
+}
+
+
+/*
+ * ByteaToDatum deserializes a value which was previously serialized using
+ * DatumToBytea.
+ */
+static Datum
+ByteaToDatum(bytea *bytes, Form_pg_attribute attrForm)
+{
+	/*
+	 * We copy the data so the result of this function lives even
+	 * after the byteaDatum is freed.
+	 */
+	char *binaryDataCopy = palloc0(VARSIZE_ANY_EXHDR(bytes));
+	memcpy(binaryDataCopy, VARDATA_ANY(bytes), VARSIZE_ANY_EXHDR(bytes));
+
+	return fetch_att(binaryDataCopy, attrForm->attbyval, attrForm->attlen);
+}
+
+
+/*
  * CStoreStripeAttrRelationId returns relation id of cstore_stripe_attr.
  * TODO: should we cache this similar to citus?
  */
@@ -570,6 +816,28 @@ static Oid
 CStoreTablesIndexRelationId(void)
 {
 	return get_relname_relid("cstore_tables_pkey", CStoreNamespaceId());
+}
+
+
+/*
+ * CStoreSkipNodesRelationId returns relation id of cstore_skipnodes.
+ * TODO: should we cache this similar to citus?
+ */
+static Oid
+CStoreSkipNodesRelationId(void)
+{
+	return get_relname_relid("cstore_skipnodes", CStoreNamespaceId());
+}
+
+
+/*
+ * CStoreSkipNodesIndexRelationId returns relation id of cstore_skipnodes_pkey.
+ * TODO: should we cache this similar to citus?
+ */
+static Oid
+CStoreSkipNodesIndexRelationId(void)
+{
+	return get_relname_relid("cstore_skipnodes_pkey", CStoreNamespaceId());
 }
 
 
