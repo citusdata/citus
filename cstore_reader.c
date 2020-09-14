@@ -34,7 +34,6 @@
 #include "utils/rel.h"
 
 #include "cstore.h"
-#include "cstore_metadata_serialization.h"
 #include "cstore_version_compat.h"
 
 /* static function declarations */
@@ -53,12 +52,6 @@ static ColumnBuffers * LoadColumnBuffers(Relation relation,
 										 uint32 blockCount, uint64 existsFileOffset,
 										 uint64 valueFileOffset,
 										 Form_pg_attribute attributeForm);
-static StripeSkipList * LoadStripeSkipList(Relation relation,
-										   StripeMetadata *stripeMetadata,
-										   StripeFooter *stripeFooter,
-										   uint32 columnCount,
-										   bool *projectedColumnMask,
-										   TupleDesc tupleDescriptor);
 static bool * SelectedBlockMask(StripeSkipList *stripeSkipList,
 								List *projectedColumnList, List *whereClauseList);
 static List * BuildRestrictInfoList(List *whereClauseList);
@@ -85,8 +78,6 @@ static Datum ColumnDefaultValue(TupleConstr *tupleConstraints,
 static StringInfo ReadFromSmgr(Relation rel, uint64 offset, uint32 size);
 static void ResetUncompressedBlockData(ColumnBlockData **blockDataArray,
 									   uint32 columnCount);
-static uint64 StripeRowCount(Relation relation, StripeMetadata *stripeMetadata);
-static int RelationColumnCount(Oid relid);
 
 
 /*
@@ -327,31 +318,10 @@ CStoreTableRowCount(Relation relation)
 	foreach(stripeMetadataCell, tableMetadata->stripeMetadataList)
 	{
 		StripeMetadata *stripeMetadata = (StripeMetadata *) lfirst(stripeMetadataCell);
-		totalRowCount += StripeRowCount(relation, stripeMetadata);
+		totalRowCount += stripeMetadata->rowCount;
 	}
 
 	return totalRowCount;
-}
-
-
-/*
- * StripeRowCount reads serialized stripe footer, the first column's
- * skip list, and returns number of rows for given stripe.
- */
-static uint64
-StripeRowCount(Relation relation, StripeMetadata *stripeMetadata)
-{
-	uint64 rowCount = 0;
-	StringInfo firstColumnSkipListBuffer = NULL;
-
-	StripeFooter *stripeFooter = ReadStripeFooter(relation->rd_id, stripeMetadata->id,
-												  RelationColumnCount(relation->rd_id));
-
-	firstColumnSkipListBuffer = ReadFromSmgr(relation, stripeMetadata->fileOffset,
-											 stripeFooter->skipListSizeArray[0]);
-	rowCount = DeserializeRowCount(firstColumnSkipListBuffer);
-
-	return rowCount;
 }
 
 
@@ -373,10 +343,10 @@ LoadFilteredStripeBuffers(Relation relation, StripeMetadata *stripeMetadata,
 
 	bool *projectedColumnMask = ProjectedColumnMask(columnCount, projectedColumnList);
 
-	StripeSkipList *stripeSkipList = LoadStripeSkipList(relation, stripeMetadata,
-														stripeFooter, columnCount,
-														projectedColumnMask,
-														tupleDescriptor);
+	StripeSkipList *stripeSkipList = ReadStripeSkipList(RelationGetRelid(relation),
+														stripeMetadata->id,
+														tupleDescriptor,
+														stripeMetadata->blockCount);
 
 	bool *selectedBlockMask = SelectedBlockMask(stripeSkipList, projectedColumnList,
 												whereClauseList);
@@ -387,7 +357,7 @@ LoadFilteredStripeBuffers(Relation relation, StripeMetadata *stripeMetadata,
 
 	/* load column data for projected columns */
 	columnBuffersArray = palloc0(columnCount * sizeof(ColumnBuffers *));
-	currentColumnFileOffset = stripeMetadata->fileOffset + stripeMetadata->skipListLength;
+	currentColumnFileOffset = stripeMetadata->fileOffset;
 
 	for (columnIndex = 0; columnIndex < stripeFooter->columnCount; columnIndex++)
 	{
@@ -508,98 +478,6 @@ LoadColumnBuffers(Relation relation, ColumnBlockSkipNode *blockSkipNodeArray,
 	columnBuffers->blockBuffersArray = blockBuffersArray;
 
 	return columnBuffers;
-}
-
-
-/* Reads the skip list for the given stripe. */
-static StripeSkipList *
-LoadStripeSkipList(Relation relation,
-				   StripeMetadata *stripeMetadata,
-				   StripeFooter *stripeFooter, uint32 columnCount,
-				   bool *projectedColumnMask,
-				   TupleDesc tupleDescriptor)
-{
-	StripeSkipList *stripeSkipList = NULL;
-	ColumnBlockSkipNode **blockSkipNodeArray = NULL;
-	StringInfo firstColumnSkipListBuffer = NULL;
-	uint64 currentColumnSkipListFileOffset = 0;
-	uint32 columnIndex = 0;
-	uint32 stripeBlockCount = 0;
-	uint32 stripeColumnCount = stripeFooter->columnCount;
-
-	/* deserialize block count */
-	firstColumnSkipListBuffer = ReadFromSmgr(relation, stripeMetadata->fileOffset,
-											 stripeFooter->skipListSizeArray[0]);
-	stripeBlockCount = DeserializeBlockCount(firstColumnSkipListBuffer);
-
-	/* deserialize column skip lists */
-	blockSkipNodeArray = palloc0(columnCount * sizeof(ColumnBlockSkipNode *));
-	currentColumnSkipListFileOffset = stripeMetadata->fileOffset;
-
-	for (columnIndex = 0; columnIndex < stripeColumnCount; columnIndex++)
-	{
-		uint64 columnSkipListSize = stripeFooter->skipListSizeArray[columnIndex];
-		bool firstColumn = columnIndex == 0;
-
-		/*
-		 * Only selected columns' column skip lists are read. However, the first
-		 * column's skip list is read regardless of being selected. It is used by
-		 * StripeSkipListRowCount later.
-		 */
-		if (projectedColumnMask[columnIndex] || firstColumn)
-		{
-			Form_pg_attribute attributeForm = TupleDescAttr(tupleDescriptor, columnIndex);
-
-			StringInfo columnSkipListBuffer =
-				ReadFromSmgr(relation, currentColumnSkipListFileOffset,
-							 columnSkipListSize);
-			ColumnBlockSkipNode *columnSkipList =
-				DeserializeColumnSkipList(columnSkipListBuffer, attributeForm->attbyval,
-										  attributeForm->attlen, stripeBlockCount);
-			blockSkipNodeArray[columnIndex] = columnSkipList;
-		}
-
-		currentColumnSkipListFileOffset += columnSkipListSize;
-	}
-
-	/* table contains additional columns added after this stripe is created */
-	for (columnIndex = stripeColumnCount; columnIndex < columnCount; columnIndex++)
-	{
-		ColumnBlockSkipNode *columnSkipList = NULL;
-		uint32 blockIndex = 0;
-		bool firstColumn = columnIndex == 0;
-
-		/* no need to create ColumnBlockSkipList if the column is not selected */
-		if (!projectedColumnMask[columnIndex] && !firstColumn)
-		{
-			blockSkipNodeArray[columnIndex] = NULL;
-			continue;
-		}
-
-		/* create empty ColumnBlockSkipNode for missing columns*/
-		columnSkipList = palloc0(stripeBlockCount * sizeof(ColumnBlockSkipNode));
-
-		for (blockIndex = 0; blockIndex < stripeBlockCount; blockIndex++)
-		{
-			columnSkipList[blockIndex].rowCount = 0;
-			columnSkipList[blockIndex].hasMinMax = false;
-			columnSkipList[blockIndex].minimumValue = 0;
-			columnSkipList[blockIndex].maximumValue = 0;
-			columnSkipList[blockIndex].existsBlockOffset = 0;
-			columnSkipList[blockIndex].valueBlockOffset = 0;
-			columnSkipList[blockIndex].existsLength = 0;
-			columnSkipList[blockIndex].valueLength = 0;
-			columnSkipList[blockIndex].valueCompressionType = COMPRESSION_NONE;
-		}
-		blockSkipNodeArray[columnIndex] = columnSkipList;
-	}
-
-	stripeSkipList = palloc0(sizeof(StripeSkipList));
-	stripeSkipList->blockSkipNodeArray = blockSkipNodeArray;
-	stripeSkipList->columnCount = columnCount;
-	stripeSkipList->blockCount = stripeBlockCount;
-
-	return stripeSkipList;
 }
 
 
@@ -1206,16 +1084,4 @@ ResetUncompressedBlockData(ColumnBlockData **blockDataArray, uint32 columnCount)
 			blockData->valueBuffer = makeStringInfo();
 		}
 	}
-}
-
-
-static int
-RelationColumnCount(Oid relid)
-{
-	Relation rel = RelationIdGetRelation(relid);
-	TupleDesc tupleDesc = RelationGetDescr(rel);
-	int columnCount = tupleDesc->natts;
-	RelationClose(rel);
-
-	return columnCount;
 }

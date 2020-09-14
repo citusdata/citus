@@ -81,9 +81,9 @@ typedef struct CStoreOptions
 typedef struct StripeMetadata
 {
 	uint64 fileOffset;
-	uint64 skipListLength;
 	uint64 dataLength;
-	uint64 footerLength;
+	uint32 blockCount;
+	uint64 rowCount;
 	uint64 id;
 } StripeMetadata;
 
@@ -191,7 +191,6 @@ typedef struct StripeBuffers
 typedef struct StripeFooter
 {
 	uint32 columnCount;
-	uint64 *skipListSizeArray;
 	uint64 *existsSizeArray;
 	uint64 *valueSizeArray;
 } StripeFooter;
@@ -293,6 +292,11 @@ extern StripeFooter * ReadStripeFooter(Oid relid, uint64 stripe, int relationCol
 extern void InitCStoreTableMetadata(Oid relid, int blockRowCount);
 extern void InsertStripeMetadataRow(Oid relid, StripeMetadata *stripe);
 extern TableMetadata * ReadTableMetadata(Oid relid);
+extern void SaveStripeSkipList(Oid relid, uint64 stripe, StripeSkipList *stripeSkipList,
+							   TupleDesc tupleDescriptor);
+extern StripeSkipList * ReadStripeSkipList(Oid relid, uint64 stripe,
+										   TupleDesc tupleDescriptor,
+										   uint32 blockCount);
 
 typedef struct SmgrAddr
 {

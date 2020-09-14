@@ -6,10 +6,8 @@
 MODULE_big = cstore_fdw
 
 PG_CPPFLAGS = -std=c11
-SHLIB_LINK = -lprotobuf-c
-OBJS = cstore.pb-c.o cstore.o cstore_fdw.o cstore_writer.o cstore_reader.o \
-       cstore_metadata_serialization.o cstore_compression.o mod.o \
-       cstore_metadata_tables.o
+OBJS = cstore.o cstore_fdw.o cstore_writer.o cstore_reader.o \
+       cstore_compression.o mod.o cstore_metadata_tables.o
 
 EXTENSION = cstore_fdw
 DATA = cstore_fdw--1.7.sql cstore_fdw--1.6--1.7.sql  cstore_fdw--1.5--1.6.sql cstore_fdw--1.4--1.5.sql \
@@ -50,9 +48,6 @@ endif
 ifeq (,$(findstring $(MAJORVERSION), 9.3 9.4 9.5 9.6 10 11 12))
     $(error PostgreSQL 9.3 to 12 is required to compile this extension)
 endif
-
-cstore.pb-c.c: cstore.proto
-	protoc-c --c_out=. cstore.proto
 
 installcheck: remove_cstore_files
 
