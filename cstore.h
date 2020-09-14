@@ -16,10 +16,10 @@
 
 #include "fmgr.h"
 #include "lib/stringinfo.h"
+#include "storage/bufpage.h"
 #include "utils/relcache.h"
 
 /* Defines for valid option names */
-#define OPTION_NAME_FILENAME "filename"
 #define OPTION_NAME_COMPRESSION_TYPE "compression"
 #define OPTION_NAME_STRIPE_ROW_COUNT "stripe_row_count"
 #define OPTION_NAME_BLOCK_ROW_COUNT "block_row_count"
@@ -68,7 +68,6 @@ typedef enum
  */
 typedef struct CStoreOptions
 {
-	char *filename;
 	CompressionType compressionType;
 	uint64 stripeRowCount;
 	uint32 blockRowCount;
@@ -203,10 +202,9 @@ typedef struct TableReadState
 {
 	Oid relationId;
 
-	FILE *tableFile;
 	TableMetadata *tableMetadata;
 	TupleDesc tupleDescriptor;
-
+	Relation relation;
 	/*
 	 * List of Var pointers for columns in the query. We use this both for
 	 * getting vector of projected columns, and also when we want to build
@@ -228,7 +226,6 @@ typedef struct TableReadState
 typedef struct TableWriteState
 {
 	Oid relationId;
-	FILE *tableFile;
 	TableMetadata *tableMetadata;
 	CompressionType compressionType;
 	TupleDesc tupleDescriptor;
@@ -257,11 +254,9 @@ extern void InitializeCStoreTableFile(Oid relationId, Relation relation,
 									  CStoreOptions *cstoreOptions);
 extern void CreateCStoreDatabaseDirectory(Oid databaseOid);
 extern void RemoveCStoreDatabaseDirectory(Oid databaseOid);
-extern void DeleteCStoreTableFiles(char *filename);
 
 /* Function declarations for writing to a cstore file */
 extern TableWriteState * CStoreBeginWrite(Oid relationId,
-										  const char *filename,
 										  CompressionType compressionType,
 										  uint64 stripeMaxRowCount,
 										  uint32 blockRowCount,
@@ -271,7 +266,7 @@ extern void CStoreWriteRow(TableWriteState *state, Datum *columnValues,
 extern void CStoreEndWrite(TableWriteState *state);
 
 /* Function declarations for reading from a cstore file */
-extern TableReadState * CStoreBeginRead(Oid relationId, const char *filename,
+extern TableReadState * CStoreBeginRead(Oid relationId,
 										TupleDesc tupleDescriptor,
 										List *projectedColumnList, List *qualConditions);
 extern bool CStoreReadFinished(TableReadState *state);
@@ -286,7 +281,7 @@ extern ColumnBlockData ** CreateEmptyBlockDataArray(uint32 columnCount, bool *co
 													uint32 blockRowCount);
 extern void FreeColumnBlockDataArray(ColumnBlockData **blockDataArray,
 									 uint32 columnCount);
-extern uint64 CStoreTableRowCount(Oid relid, const char *filename);
+extern uint64 CStoreTableRowCount(Relation relation);
 extern bool CompressBuffer(StringInfo inputBuffer, StringInfo outputBuffer,
 						   CompressionType compressionType);
 extern StringInfo DecompressBuffer(StringInfo buffer, CompressionType compressionType);
@@ -294,8 +289,31 @@ extern StringInfo DecompressBuffer(StringInfo buffer, CompressionType compressio
 /* cstore_metadata_tables.c */
 extern void SaveStripeFooter(Oid relid, uint64 stripe, StripeFooter *footer);
 extern StripeFooter * ReadStripeFooter(Oid relid, uint64 stripe, int relationColumnCount);
+
 extern void InitCStoreTableMetadata(Oid relid, int blockRowCount);
 extern void InsertStripeMetadataRow(Oid relid, StripeMetadata *stripe);
 extern TableMetadata * ReadTableMetadata(Oid relid);
+
+typedef struct SmgrAddr
+{
+	BlockNumber blockno;
+	uint32		offset;
+} SmgrAddr;
+
+/*
+ * Map logical offsets (as tracked in the metadata) to a physical page and
+ * offset where the data is kept.
+ */
+static inline SmgrAddr
+logical_to_smgr(uint64 logicalOffset)
+{
+	uint64 bytes_per_page = BLCKSZ - SizeOfPageHeaderData;
+	SmgrAddr addr;
+
+	addr.blockno = logicalOffset / bytes_per_page;
+	addr.offset = SizeOfPageHeaderData + (logicalOffset % bytes_per_page);
+
+	return addr;
+}
 
 #endif /* CSTORE_H */

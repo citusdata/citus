@@ -30,8 +30,7 @@ $$ LANGUAGE PLPGSQL;
 -- Create and load data
 CREATE FOREIGN TABLE test_block_filtering (a int)
     SERVER cstore_server
-    OPTIONS(filename '@abs_srcdir@/data/block_filtering.cstore',
-            block_row_count '1000', stripe_row_count '2000');
+    OPTIONS(block_row_count '1000', stripe_row_count '2000');
 
 COPY test_block_filtering FROM '@abs_srcdir@/data/block_filtering.csv' WITH CSV;
 
@@ -60,8 +59,7 @@ SELECT filtered_row_count('SELECT count(*) FROM test_block_filtering WHERE a BET
 
 -- Verify that we are fine with collations which use a different alphabet order
 CREATE FOREIGN TABLE collation_block_filtering_test(A text collate "da_DK")
-    SERVER cstore_server
-    OPTIONS(filename '@abs_srcdir@/data/collation_block_filtering.cstore');
+    SERVER cstore_server;
 COPY collation_block_filtering_test FROM STDIN;
 A
 Å

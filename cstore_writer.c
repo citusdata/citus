@@ -16,12 +16,12 @@
 
 #include "postgres.h"
 
-#include <sys/stat.h>
-
 #include "access/nbtree.h"
 #include "catalog/pg_am.h"
 #include "storage/fd.h"
+#include "storage/smgr.h"
 #include "utils/memutils.h"
+#include "utils/rel.h"
 
 #include "cstore.h"
 #include "cstore_metadata_serialization.h"
@@ -51,8 +51,6 @@ static void UpdateBlockSkipNodeMinMax(ColumnBlockSkipNode *blockSkipNode,
 static Datum DatumCopy(Datum datum, bool datumTypeByValue, int datumTypeLength);
 static void AppendStripeMetadata(TableMetadata *tableMetadata,
 								 StripeMetadata stripeMetadata);
-static void WriteToFile(FILE *file, void *data, uint32 dataLength);
-static void SyncAndCloseFile(FILE *file);
 static StringInfo CopyStringInfo(StringInfo sourceString);
 
 
@@ -65,12 +63,11 @@ static StringInfo CopyStringInfo(StringInfo sourceString);
  */
 TableWriteState *
 CStoreBeginWrite(Oid relationId,
-				 const char *filename, CompressionType compressionType,
+				 CompressionType compressionType,
 				 uint64 stripeMaxRowCount, uint32 blockRowCount,
 				 TupleDesc tupleDescriptor)
 {
 	TableWriteState *writeState = NULL;
-	FILE *tableFile = NULL;
 	TableMetadata *tableMetadata = NULL;
 	FmgrInfo **comparisonFunctionArray = NULL;
 	MemoryContext stripeWriteContext = NULL;
@@ -80,14 +77,6 @@ CStoreBeginWrite(Oid relationId,
 	bool *columnMaskArray = NULL;
 	ColumnBlockData **blockData = NULL;
 	uint64 currentStripeId = 0;
-
-	tableFile = AllocateFile(filename, "a+");
-	if (tableFile == NULL)
-	{
-		ereport(ERROR, (errcode_for_file_access(),
-						errmsg("could not open file \"%s\" for writing: %m",
-							   filename)));
-	}
 
 	tableMetadata = ReadTableMetadata(relationId);
 
@@ -99,7 +88,6 @@ CStoreBeginWrite(Oid relationId,
 	{
 		StripeMetadata *lastStripe = NULL;
 		uint64 lastStripeSize = 0;
-		int fseekResult = 0;
 
 		lastStripe = llast(tableMetadata->stripeMetadataList);
 		lastStripeSize += lastStripe->skipListLength;
@@ -108,14 +96,6 @@ CStoreBeginWrite(Oid relationId,
 
 		currentFileOffset = lastStripe->fileOffset + lastStripeSize;
 		currentStripeId = lastStripe->id + 1;
-
-		errno = 0;
-		fseekResult = fseeko(tableFile, currentFileOffset, SEEK_SET);
-		if (fseekResult != 0)
-		{
-			ereport(ERROR, (errcode_for_file_access(),
-							errmsg("could not seek in file \"%s\": %m", filename)));
-		}
 	}
 
 	/* get comparison function pointers for each of the columns */
@@ -154,7 +134,6 @@ CStoreBeginWrite(Oid relationId,
 
 	writeState = palloc0(sizeof(TableWriteState));
 	writeState->relationId = relationId;
-	writeState->tableFile = tableFile;
 	writeState->tableMetadata = tableMetadata;
 	writeState->compressionType = compressionType;
 	writeState->stripeMaxRowCount = stripeMaxRowCount;
@@ -312,8 +291,6 @@ CStoreEndWrite(TableWriteState *writeState)
 		AppendStripeMetadata(writeState->tableMetadata, stripeMetadata);
 	}
 
-	SyncAndCloseFile(writeState->tableFile);
-
 	MemoryContextDelete(writeState->stripeWriteContext);
 	list_free_deep(writeState->tableMetadata->stripeMetadataList);
 	pfree(writeState->comparisonFunctionArray);
@@ -391,6 +368,57 @@ CreateEmptyStripeSkipList(uint32 stripeMaxRowCount, uint32 blockRowCount,
 	return stripeSkipList;
 }
 
+static void
+WriteToSmgr(TableWriteState *writeState, char *data, uint32 dataLength)
+{
+	uint64		logicalOffset = writeState->currentFileOffset;
+	uint64		remaining	  = dataLength;
+	Relation	rel			  = writeState->relation;
+	Buffer		buffer;
+
+	while (remaining > 0)
+	{
+		SmgrAddr	addr	= logical_to_smgr(logicalOffset);
+		BlockNumber nblocks;
+		Page		page;
+		PageHeader	phdr;
+		uint64		to_write;
+
+		RelationOpenSmgr(rel);
+		nblocks = smgrnblocks(rel->rd_smgr, MAIN_FORKNUM);
+
+		while (addr.blockno >= nblocks)
+		{
+			Buffer buffer = ReadBuffer(rel, P_NEW);
+			ReleaseBuffer(buffer);
+			nblocks = smgrnblocks(rel->rd_smgr, MAIN_FORKNUM);
+		}
+
+		RelationCloseSmgr(rel);
+
+		buffer = ReadBuffer(rel, addr.blockno);
+		LockBuffer(buffer, BUFFER_LOCK_EXCLUSIVE);
+
+		page = BufferGetPage(buffer);
+		phdr = (PageHeader) page;
+		if (PageIsNew(page))
+			PageInit(page, BLCKSZ, 0);
+
+		/* always appending */
+		Assert(phdr->pd_lower == addr.offset);
+
+		to_write = Min(phdr->pd_upper - phdr->pd_lower, remaining);
+		memcpy(page + phdr->pd_lower, data, to_write);
+		phdr->pd_lower += to_write;
+
+		MarkBufferDirty(buffer);
+		UnlockReleaseBuffer(buffer);
+
+		data += to_write;
+		remaining -= to_write;
+		logicalOffset += to_write;
+	}
+}
 
 /*
  * FlushStripe flushes current stripe data into the file. The function first ensures
@@ -409,7 +437,6 @@ FlushStripe(TableWriteState *writeState)
 	uint32 columnIndex = 0;
 	uint32 blockIndex = 0;
 	TableMetadata *tableMetadata = writeState->tableMetadata;
-	FILE *tableFile = writeState->tableFile;
 	StripeBuffers *stripeBuffers = writeState->stripeBuffers;
 	StripeSkipList *stripeSkipList = writeState->stripeSkipList;
 	ColumnBlockSkipNode **columnSkipNodeArray = stripeSkipList->blockSkipNodeArray;
@@ -419,6 +446,7 @@ FlushStripe(TableWriteState *writeState)
 	uint32 blockRowCount = tableMetadata->blockRowCount;
 	uint32 lastBlockIndex = stripeBuffers->rowCount / blockRowCount;
 	uint32 lastBlockRowCount = stripeBuffers->rowCount % blockRowCount;
+	uint64 initialFileOffset = writeState->currentFileOffset;
 
 	/*
 	 * check if the last block needs serialization , the last block was not serialized
@@ -479,7 +507,8 @@ FlushStripe(TableWriteState *writeState)
 	for (columnIndex = 0; columnIndex < columnCount; columnIndex++)
 	{
 		StringInfo skipListBuffer = skipListBufferArray[columnIndex];
-		WriteToFile(tableFile, skipListBuffer->data, skipListBuffer->len);
+		WriteToSmgr(writeState, skipListBuffer->data, skipListBuffer->len);
+		writeState->currentFileOffset += skipListBuffer->len;
 	}
 
 	/* then, we flush the data buffers */
@@ -494,7 +523,8 @@ FlushStripe(TableWriteState *writeState)
 				columnBuffers->blockBuffersArray[blockIndex];
 			StringInfo existsBuffer = blockBuffers->existsBuffer;
 
-			WriteToFile(tableFile, existsBuffer->data, existsBuffer->len);
+			WriteToSmgr(writeState, existsBuffer->data, existsBuffer->len);
+			writeState->currentFileOffset += existsBuffer->len;
 		}
 
 		for (blockIndex = 0; blockIndex < stripeSkipList->blockCount; blockIndex++)
@@ -503,7 +533,8 @@ FlushStripe(TableWriteState *writeState)
 				columnBuffers->blockBuffersArray[blockIndex];
 			StringInfo valueBuffer = blockBuffers->valueBuffer;
 
-			WriteToFile(tableFile, valueBuffer->data, valueBuffer->len);
+			WriteToSmgr(writeState, valueBuffer->data, valueBuffer->len);
+			writeState->currentFileOffset += valueBuffer->len;
 		}
 	}
 
@@ -520,15 +551,11 @@ FlushStripe(TableWriteState *writeState)
 		dataLength += stripeFooter->valueSizeArray[columnIndex];
 	}
 
-	stripeMetadata.fileOffset = writeState->currentFileOffset;
+	stripeMetadata.fileOffset = initialFileOffset;
 	stripeMetadata.skipListLength = skipListLength;
 	stripeMetadata.dataLength = dataLength;
 	stripeMetadata.footerLength = 0;
 	stripeMetadata.id = writeState->currentStripeId;
-
-	/* advance current file offset */
-	writeState->currentFileOffset += skipListLength;
-	writeState->currentFileOffset += dataLength;
 
 	return stripeMetadata;
 }
@@ -833,76 +860,6 @@ AppendStripeMetadata(TableMetadata *tableMetadata, StripeMetadata stripeMetadata
 	tableMetadata->stripeMetadataList = lappend(tableMetadata->stripeMetadataList,
 												stripeMetadataCopy);
 }
-
-
-/* Writes the given data to the given file pointer and checks for errors. */
-static void
-WriteToFile(FILE *file, void *data, uint32 dataLength)
-{
-	int writeResult = 0;
-	int errorResult = 0;
-
-	if (dataLength == 0)
-	{
-		return;
-	}
-
-	errno = 0;
-	writeResult = fwrite(data, dataLength, 1, file);
-	if (writeResult != 1)
-	{
-		ereport(ERROR, (errcode_for_file_access(),
-						errmsg("could not write file: %m")));
-	}
-
-	errorResult = ferror(file);
-	if (errorResult != 0)
-	{
-		ereport(ERROR, (errcode_for_file_access(),
-						errmsg("error in file: %m")));
-	}
-}
-
-
-/* Flushes, syncs, and closes the given file pointer and checks for errors. */
-static void
-SyncAndCloseFile(FILE *file)
-{
-	int flushResult = 0;
-	int syncResult = 0;
-	int errorResult = 0;
-	int freeResult = 0;
-
-	errno = 0;
-	flushResult = fflush(file);
-	if (flushResult != 0)
-	{
-		ereport(ERROR, (errcode_for_file_access(),
-						errmsg("could not flush file: %m")));
-	}
-
-	syncResult = pg_fsync(fileno(file));
-	if (syncResult != 0)
-	{
-		ereport(ERROR, (errcode_for_file_access(),
-						errmsg("could not sync file: %m")));
-	}
-
-	errorResult = ferror(file);
-	if (errorResult != 0)
-	{
-		ereport(ERROR, (errcode_for_file_access(),
-						errmsg("error in file: %m")));
-	}
-
-	freeResult = FreeFile(file);
-	if (freeResult != 0)
-	{
-		ereport(ERROR, (errcode_for_file_access(),
-						errmsg("could not close file: %m")));
-	}
-}
-
 
 /*
  * CopyStringInfo creates a deep copy of given source string allocating only needed
