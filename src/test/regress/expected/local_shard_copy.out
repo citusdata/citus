@@ -177,37 +177,37 @@ NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_shar
 NOTICE:  executing the copy locally for shard xxxxx
 CONTEXT:  COPY distributed_table, line 1: "1, 100"
     -- verify the put ages.
-    SELECT * FROM distributed_table;
+    SELECT * FROM distributed_table ORDER BY 1,2 DESC;
 NOTICE:  executing the command locally: SELECT key, age FROM local_shard_copy.distributed_table_1570001 distributed_table WHERE true
 NOTICE:  executing the command locally: SELECT key, age FROM local_shard_copy.distributed_table_1570003 distributed_table WHERE true
  key | age
 ---------------------------------------------------------------------
+   1 | 100
+   2 | 200
+   3 | 300
+   4 | 400
+   5 | 500
   20 |  20
+  21 |  21
+  22 |  22
+  23 |  23
   24 |  24
   25 |  25
   26 |  26
-  31 |  31
-  33 |  33
-  35 |  35
-   1 | 100
-   5 | 500
-  21 |  21
-  28 |  28
-  34 |  34
-  38 |  38
-  39 |  39
-  36 |  36
-  37 |  37
-  40 |  40
-   3 | 300
-   4 | 400
-  22 |  22
-  23 |  23
   27 |  27
+  28 |  28
   29 |  29
   30 |  30
+  31 |  31
   32 |  32
-   2 | 200
+  33 |  33
+  34 |  34
+  35 |  35
+  36 |  36
+  37 |  37
+  38 |  38
+  39 |  39
+  40 |  40
 (26 rows)
 
 ROLLBACK;
