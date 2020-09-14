@@ -14,9 +14,8 @@
 
 #include <sys/stat.h>
 #include "access/heapam.h"
+#include "access/htup_details.h"
 #include "access/nbtree.h"
-#include "access/table.h"
-#include "access/tableam.h"
 #include "access/xact.h"
 #include "catalog/indexing.h"
 #include "catalog/pg_namespace.h"
@@ -30,7 +29,6 @@
 #include "miscadmin.h"
 #include "nodes/execnodes.h"
 #include "lib/stringinfo.h"
-#include "optimizer/optimizer.h"
 #include "port.h"
 #include "storage/fd.h"
 #include "utils/fmgroids.h"
@@ -263,7 +261,7 @@ DeleteTableMetadataRowIfExists(Oid relid)
 				BTEqualStrategyNumber, F_OIDEQ, Int32GetDatum(relid));
 
 	cstoreTablesOid = CStoreTablesRelationId();
-	cstoreTables = table_open(cstoreTablesOid, AccessShareLock);
+	cstoreTables = heap_open(cstoreTablesOid, AccessShareLock);
 	index = index_open(CStoreTablesIndexRelationId(), AccessShareLock);
 
 	scanDescriptor = systable_beginscan_ordered(cstoreTables, index, NULL, 1, scanKey);
@@ -278,7 +276,7 @@ DeleteTableMetadataRowIfExists(Oid relid)
 
 	systable_endscan_ordered(scanDescriptor);
 	index_close(index, NoLock);
-	table_close(cstoreTables, NoLock);
+	heap_close(cstoreTables, NoLock);
 }
 
 
@@ -412,9 +410,15 @@ InsertTupleAndEnforceConstraints(ModifyState *state, Datum *values, bool *nulls)
 {
 	TupleDesc tupleDescriptor = RelationGetDescr(state->rel);
 	HeapTuple tuple = heap_form_tuple(tupleDescriptor, values, nulls);
+
+#if PG_VERSION_NUM >= 120000
 	TupleTableSlot *slot = ExecInitExtraTupleSlot(state->estate, tupleDescriptor,
 												  &TTSOpsHeapTuple);
 	ExecStoreHeapTuple(tuple, slot, false);
+#else
+	TupleTableSlot *slot = ExecInitExtraTupleSlot(state->estate, tupleDescriptor);
+	ExecStoreTuple(tuple, slot, InvalidBuffer, false);
+#endif
 
 	/* use ExecSimpleRelationInsert to enforce constraints */
 	ExecSimpleRelationInsert(state->estate, slot);
@@ -432,7 +436,7 @@ DeleteTupleAndEnforceConstraints(ModifyState *state, HeapTuple heapTuple)
 	ResultRelInfo *resultRelInfo = estate->es_result_relation_info;
 
 	ItemPointer tid = &(heapTuple->t_self);
-	simple_table_tuple_delete(state->rel, tid, estate->es_snapshot);
+	simple_heap_delete(state->rel, tid);
 
 	/* execute AFTER ROW DELETE Triggers to enforce constraints */
 	ExecARDeleteTriggers(estate, resultRelInfo, tid, NULL, NULL);
@@ -476,8 +480,10 @@ create_estate_for_relation(Relation rel)
 	rte->rtekind = RTE_RELATION;
 	rte->relid = RelationGetRelid(rel);
 	rte->relkind = rel->rd_rel->relkind;
+#if PG_VERSION_NUM >= 120000
 	rte->rellockmode = AccessShareLock;
 	ExecInitRangeTable(estate, list_make1(rte));
+#endif
 
 	resultRelInfo = makeNode(ResultRelInfo);
 	InitResultRelInfo(resultRelInfo, rel, 1, NULL, 0);
@@ -487,6 +493,12 @@ create_estate_for_relation(Relation rel)
 	estate->es_result_relation_info = resultRelInfo;
 
 	estate->es_output_cid = GetCurrentCommandId(true);
+
+#if PG_VERSION_NUM < 120000
+	/* Triggers might need a slot */
+	if (resultRelInfo->ri_TrigDesc)
+		estate->es_trig_tuple_slot = ExecInitExtraTupleSlot(estate, NULL);
+#endif
 
 	/* Prepare to catch AFTER triggers. */
 	AfterTriggerBeginQuery();
