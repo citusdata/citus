@@ -173,7 +173,7 @@ SELECT * FROM local JOIN dist_table ON (a = x);
 SELECT * FROM local JOIN dist_table ON (a = x) WHERE a = 1;;
 
 -- intermediate results are allowed
-WITH cte_1 AS (SELECT * FROM dist_table LIMIT 1)
+WITH cte_1 AS (SELECT * FROM dist_table ORDER BY 1 LIMIT 1)
 SELECT * FROM ref JOIN local ON (a = x) JOIN cte_1 ON (local.x = cte_1.a);
 
 -- full router query with CTE and local
