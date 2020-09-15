@@ -23,12 +23,12 @@ SELECT * FROM contestant_compressed ORDER BY handle;
 SELECT to_json(v) FROM contestant v ORDER BY rating LIMIT 1;
 
 -- Test variables used in expressions
-CREATE FOREIGN TABLE union_first (a int, b int) SERVER cstore_server;
-CREATE FOREIGN TABLE union_second (a int, b int) SERVER cstore_server;
+CREATE TABLE union_first (a int, b int) USING cstore_tableam;
+CREATE TABLE union_second (a int, b int) USING cstore_tableam;
 
 INSERT INTO union_first SELECT a, a FROM generate_series(1, 5) a;
 INSERT INTO union_second SELECT a, a FROM generate_series(11, 15) a;
 
 (SELECT a*1, b FROM union_first) union all (SELECT a*1, b FROM union_second);
 
-DROP FOREIGN TABLE union_first, union_second;
+DROP TABLE union_first, union_second;

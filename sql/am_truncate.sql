@@ -7,9 +7,9 @@ SHOW server_version \gset
 SELECT substring(:'server_version', '\d+')::int > 10 AS version_above_ten;
 
 -- CREATE a cstore_fdw table, fill with some data --
-CREATE FOREIGN TABLE cstore_truncate_test (a int, b int) SERVER cstore_server;
-CREATE FOREIGN TABLE cstore_truncate_test_second (a int, b int) SERVER cstore_server;
-CREATE FOREIGN TABLE cstore_truncate_test_compressed (a int, b int) SERVER cstore_server OPTIONS (compression 'pglz');
+CREATE TABLE cstore_truncate_test (a int, b int) USING cstore_tableam;
+CREATE TABLE cstore_truncate_test_second (a int, b int) USING cstore_tableam;
+CREATE TABLE cstore_truncate_test_compressed (a int, b int) USING cstore_tableam OPTIONS (compression 'pglz');
 CREATE TABLE cstore_truncate_test_regular (a int, b int);
 
 INSERT INTO cstore_truncate_test select a, a from generate_series(1, 10) a;
@@ -70,13 +70,13 @@ SELECT cstore_truncate_test_regular_func();
 SELECT cstore_truncate_test_regular_func();
 DROP FUNCTION cstore_truncate_test_regular_func();
 
-DROP FOREIGN TABLE cstore_truncate_test, cstore_truncate_test_second;
+DROP TABLE cstore_truncate_test, cstore_truncate_test_second;
 DROP TABLE cstore_truncate_test_regular;
-DROP FOREIGN TABLE cstore_truncate_test_compressed;
+DROP TABLE cstore_truncate_test_compressed;
 
 -- test truncate with schema
 CREATE SCHEMA truncate_schema;
-CREATE FOREIGN TABLE truncate_schema.truncate_tbl (id int) SERVER cstore_server OPTIONS(compression 'pglz');
+CREATE TABLE truncate_schema.truncate_tbl (id int) USING cstore_tableam OPTIONS(compression 'pglz');
 INSERT INTO truncate_schema.truncate_tbl SELECT generate_series(1, 100);
 SELECT COUNT(*) FROM truncate_schema.truncate_tbl;
 

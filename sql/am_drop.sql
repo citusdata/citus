@@ -1,7 +1,7 @@
 --
 -- Tests the different DROP commands for cstore_fdw tables.
 --
--- DROP FOREIGN TABL
+-- DROP TABL
 -- DROP SCHEMA
 -- DROP EXTENSION
 -- DROP DATABASE
@@ -16,12 +16,12 @@
 SELECT oid postgres_oid FROM pg_database WHERE datname = 'postgres' \gset
 
 -- DROP cstore_fdw tables
-DROP FOREIGN TABLE contestant;
-DROP FOREIGN TABLE contestant_compressed;
+DROP TABLE contestant;
+DROP TABLE contestant_compressed;
 
 -- Create a cstore_fdw table under a schema and drop it.
 CREATE SCHEMA test_schema;
-CREATE FOREIGN TABLE test_schema.test_table(data int) SERVER cstore_server;
+CREATE TABLE test_schema.test_table(data int) USING cstore_tableam;
 DROP SCHEMA test_schema CASCADE;
 
 SELECT current_database() datname \gset
@@ -29,19 +29,19 @@ SELECT current_database() datname \gset
 CREATE DATABASE db_to_drop;
 \c db_to_drop
 CREATE EXTENSION cstore_fdw;
-CREATE SERVER cstore_server FOREIGN DATA WRAPPER cstore_fdw;
+CREATE USING cstore_tableam DATA WRAPPER cstore_fdw;
 SELECT oid::text databaseoid FROM pg_database WHERE datname = current_database() \gset
 
-CREATE FOREIGN TABLE test_table(data int) SERVER cstore_server;
+CREATE TABLE test_table(data int) USING cstore_tableam;
 
 DROP EXTENSION cstore_fdw CASCADE;
 
 -- test database drop
 CREATE EXTENSION cstore_fdw;
-CREATE SERVER cstore_server FOREIGN DATA WRAPPER cstore_fdw;
+CREATE USING cstore_tableam DATA WRAPPER cstore_fdw;
 SELECT oid::text databaseoid FROM pg_database WHERE datname = current_database() \gset
 
-CREATE FOREIGN TABLE test_table(data int) SERVER cstore_server;
+CREATE TABLE test_table(data int) USING cstore_tableam;
 
 \c :datname
 

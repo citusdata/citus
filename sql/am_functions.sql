@@ -2,8 +2,8 @@
 -- Test utility functions for cstore_fdw tables.
 --
 
-CREATE FOREIGN TABLE empty_table (a int) SERVER cstore_server;
-CREATE FOREIGN TABLE table_with_data (a int) SERVER cstore_server;
+CREATE TABLE empty_table (a int) USING cstore_tableam;
+CREATE TABLE table_with_data (a int) USING cstore_tableam;
 CREATE TABLE non_cstore_table (a int);
 
 COPY table_with_data FROM STDIN;
@@ -15,6 +15,6 @@ COPY table_with_data FROM STDIN;
 SELECT cstore_table_size('empty_table') < cstore_table_size('table_with_data');
 SELECT cstore_table_size('non_cstore_table');
 
-DROP FOREIGN TABLE empty_table;
-DROP FOREIGN TABLE table_with_data;
+DROP TABLE empty_table;
+DROP TABLE table_with_data;
 DROP TABLE non_cstore_table;

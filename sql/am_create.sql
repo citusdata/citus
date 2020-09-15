@@ -1,42 +1,18 @@
 --
--- Test the CREATE statements related to cstore_fdw.
+-- Test the CREATE statements related to cstore.
 --
 
 
--- Install cstore_fdw
-CREATE EXTENSION cstore_fdw;
-
-CREATE SERVER cstore_server FOREIGN DATA WRAPPER cstore_fdw;
-
-
--- Validator tests
-CREATE FOREIGN TABLE test_validator_invalid_option () 
-	SERVER cstore_server 
-	OPTIONS(bad_option_name '1'); -- ERROR
-
-CREATE FOREIGN TABLE test_validator_invalid_stripe_row_count () 
-	SERVER cstore_server
-	OPTIONS(stripe_row_count '0'); -- ERROR
-
-CREATE FOREIGN TABLE test_validator_invalid_block_row_count () 
-	SERVER cstore_server
-	OPTIONS(block_row_count '0'); -- ERROR
-
-CREATE FOREIGN TABLE test_validator_invalid_compression_type () 
-	SERVER cstore_server
-	OPTIONS(compression 'invalid_compression'); -- ERROR
-
 -- Create uncompressed table
-CREATE FOREIGN TABLE contestant (handle TEXT, birthdate DATE, rating INT,
+CREATE TABLE contestant (handle TEXT, birthdate DATE, rating INT,
 	percentile FLOAT, country CHAR(3), achievements TEXT[])
-	SERVER cstore_server;
+	USING cstore_tableam;
 
 
 -- Create compressed table with automatically determined file path
-CREATE FOREIGN TABLE contestant_compressed (handle TEXT, birthdate DATE, rating INT,
+CREATE TABLE contestant_compressed (handle TEXT, birthdate DATE, rating INT,
 	percentile FLOAT, country CHAR(3), achievements TEXT[])
-	SERVER cstore_server
-	OPTIONS(compression 'pglz');
+	USING cstore_tableam;
 
 -- Test that querying an empty table works
 ANALYZE contestant;

@@ -43,6 +43,7 @@ typedef struct CStoreScanDescData
 typedef struct CStoreScanDescData *CStoreScanDesc;
 
 static TableWriteState *CStoreWriteState = NULL;
+static ExecutorEnd_hook_type PreviousExecutorEndHook = NULL;
 
 static CStoreOptions *
 CStoreGetDefaultOptions(void)
@@ -71,7 +72,7 @@ cstore_init_write_state(Relation relation)
 		CStoreOptions *cstoreOptions = CStoreGetDefaultOptions();
 		TupleDesc tupdesc = RelationGetDescr(relation);
 
-		elog(NOTICE, "initializing write state for relation %d", relation->rd_id);
+		elog(LOG, "initializing write state for relation %d", relation->rd_id);
 		CStoreWriteState = CStoreBeginWrite(relation->rd_id,
 											cstoreOptions->compressionType,
 											cstoreOptions->stripeRowCount,
@@ -87,7 +88,7 @@ cstore_free_write_state()
 {
 	if (CStoreWriteState != NULL)
 	{
-		elog(NOTICE, "flushing write state for relation %d", CStoreWriteState->relation->rd_id);
+		elog(LOG, "flushing write state for relation %d", CStoreWriteState->relation->rd_id);
 		CStoreEndWrite(CStoreWriteState);
 		CStoreWriteState = NULL;
 	}
@@ -493,6 +494,29 @@ cstore_scan_sample_next_tuple(TableScanDesc scan, SampleScanState *scanstate,
 							  TupleTableSlot *slot)
 {
 	elog(ERROR, "cstore_scan_sample_next_tuple not implemented");
+}
+
+static void
+CStoreExecutorEnd(QueryDesc *queryDesc)
+{
+	cstore_free_write_state();
+	if (PreviousExecutorEndHook)
+		PreviousExecutorEndHook(queryDesc);
+	else
+		standard_ExecutorEnd(queryDesc);
+}
+
+void
+cstore_tableam_init()
+{
+	PreviousExecutorEndHook = ExecutorEnd_hook;
+	ExecutorEnd_hook = CStoreExecutorEnd;
+}
+
+void
+cstore_tableam_finish()
+{
+	ExecutorEnd_hook = PreviousExecutorEndHook;
 }
 
 static const TableAmRoutine cstore_am_methods = {

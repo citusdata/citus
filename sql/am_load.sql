@@ -23,8 +23,8 @@ COPY contestant_compressed FROM PROGRAM 'cat /Users/jefdavi/wd/cstore2/data/cont
 	WITH CSV;
 
 -- Test column list
-CREATE FOREIGN TABLE famous_constants (id int, name text, value real)
-    SERVER cstore_server;
+CREATE TABLE famous_constants (id int, name text, value real)
+    USING cstore_tableam;
 COPY famous_constants (value, name, id) FROM STDIN WITH CSV;
 3.141,pi,1
 2.718,e,2
@@ -41,4 +41,4 @@ speed of light,2.997e8
 
 SELECT * FROM famous_constants ORDER BY id, name;
 
-DROP FOREIGN TABLE famous_constants;
+DROP TABLE famous_constants;

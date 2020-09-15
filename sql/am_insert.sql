@@ -2,7 +2,7 @@
 -- Testing insert on cstore_fdw tables.
 --
 
-CREATE FOREIGN TABLE test_insert_command (a int) SERVER cstore_server;
+CREATE TABLE test_insert_command (a int) USING cstore_tableam;
 
 -- test single row inserts fail
 select count(*) from test_insert_command;
@@ -37,8 +37,8 @@ CREATE TABLE test_long_text_hash AS
 SELECT int_val, md5(text_val) AS hash
 FROM test_long_text;
 
-CREATE FOREIGN TABLE test_cstore_long_text(int_val int, text_val text)
-SERVER cstore_server;
+CREATE TABLE test_cstore_long_text(int_val int, text_val text)
+USING cstore_tableam;
 
 -- store long text in cstore table
 INSERT INTO test_cstore_long_text SELECT * FROM test_long_text;
@@ -53,4 +53,4 @@ FROM  test_long_text_hash a, test_cstore_long_text c
 WHERE a.int_val = c.int_val AND a.hash = md5(c.text_val);
 
 DROP TABLE test_long_text_hash;
-DROP FOREIGN TABLE test_cstore_long_text;
+DROP TABLE test_cstore_long_text;

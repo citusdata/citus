@@ -16,6 +16,7 @@
 #include "fmgr.h"
 
 #include "mod.h"
+#include "cstore_tableam.h"
 #include "cstore_fdw.h"
 
 PG_MODULE_MAGIC;
@@ -23,6 +24,7 @@ PG_MODULE_MAGIC;
 void
 _PG_init(void)
 {
+	cstore_tableam_init();
 	cstore_fdw_init();
 }
 
@@ -30,5 +32,6 @@ _PG_init(void)
 void
 _PG_fini(void)
 {
+	cstore_tableam_finish();
 	cstore_fdw_finish();
 }
