@@ -252,8 +252,6 @@ typedef struct TableWriteState
 extern CompressionType ParseCompressionType(const char *compressionTypeString);
 extern void InitializeCStoreTableFile(Oid relationId, Relation relation,
 									  CStoreOptions *cstoreOptions);
-extern void CreateCStoreDatabaseDirectory(Oid databaseOid);
-extern void RemoveCStoreDatabaseDirectory(Oid databaseOid);
 
 /* Function declarations for writing to a cstore file */
 extern TableWriteState * CStoreBeginWrite(Oid relationId,

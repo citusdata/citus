@@ -31,8 +31,8 @@
 #include "utils/builtins.h"
 #include "utils/rel.h"
 
+#include "cstore.h"
 #include "cstore_tableam.h"
-#include "cstore_fdw.h"
 
 typedef struct CStoreScanDescData
 {
@@ -43,6 +43,16 @@ typedef struct CStoreScanDescData
 typedef struct CStoreScanDescData *CStoreScanDesc;
 
 static TableWriteState *CStoreWriteState = NULL;
+
+static CStoreOptions *
+CStoreGetDefaultOptions(void)
+{
+	CStoreOptions *cstoreOptions = palloc0(sizeof(CStoreOptions));
+	cstoreOptions->compressionType = DEFAULT_COMPRESSION_TYPE;
+	cstoreOptions->stripeRowCount = DEFAULT_STRIPE_ROW_COUNT;
+	cstoreOptions->blockRowCount = DEFAULT_BLOCK_ROW_COUNT;
+	return cstoreOptions;
+}
 
 static void
 cstore_init_write_state(Relation relation)
@@ -58,14 +68,14 @@ cstore_init_write_state(Relation relation)
 
 	if (CStoreWriteState == NULL)
 	{
-		CStoreFdwOptions *cstoreFdwOptions = CStoreGetOptions(relation->rd_id);
+		CStoreOptions *cstoreOptions = CStoreGetDefaultOptions();
 		TupleDesc tupdesc = RelationGetDescr(relation);
 
 		elog(NOTICE, "initializing write state for relation %d", relation->rd_id);
-		CStoreWriteState = CStoreBeginWrite(cstoreFdwOptions->filename,
-											cstoreFdwOptions->compressionType,
-											cstoreFdwOptions->stripeRowCount,
-											cstoreFdwOptions->blockRowCount,
+		CStoreWriteState = CStoreBeginWrite(relation->rd_id,
+											cstoreOptions->compressionType,
+											cstoreOptions->stripeRowCount,
+											cstoreOptions->blockRowCount,
 											tupdesc);
 
 		CStoreWriteState->relation = relation;
@@ -95,13 +105,14 @@ cstore_beginscan(Relation relation, Snapshot snapshot,
 				 ParallelTableScanDesc parallel_scan,
 				 uint32 flags)
 {
-	TupleDesc tupdesc = relation->rd_att;
-	CStoreFdwOptions *cstoreFdwOptions = NULL;
-	TableReadState *readState = NULL;
-	CStoreScanDesc scan = palloc(sizeof(CStoreScanDescData));
-	List *columnList = NIL;
+	Oid				 relid		   = relation->rd_id;
+	TupleDesc		 tupdesc	   = relation->rd_att;
+	CStoreOptions	*cstoreOptions = NULL;
+	TableReadState	*readState	   = NULL;
+	CStoreScanDesc	 scan		   = palloc(sizeof(CStoreScanDescData));
+	List			*columnList	   = NIL;
 
-	cstoreFdwOptions = CStoreGetOptions(relation->rd_id);
+	cstoreOptions = CStoreGetDefaultOptions();
 
 	scan->cs_base.rs_rd = relation;
 	scan->cs_base.rs_snapshot = snapshot;
@@ -124,8 +135,8 @@ cstore_beginscan(Relation relation, Snapshot snapshot,
 		columnList = lappend(columnList, var);
 	}
 	
-	readState = CStoreBeginRead(cstoreFdwOptions->filename, tupdesc,
-								columnList, NULL);
+	readState = CStoreBeginRead(relid, tupdesc, columnList, NULL);
+	readState->relation = relation;
 
 	scan->cs_readState = readState;
 
@@ -258,7 +269,7 @@ cstore_tuple_insert(Relation relation, TupleTableSlot *slot, CommandId cid,
 
 	cstore_init_write_state(relation);
 
-	heapTuple = GetSlotHeapTuple(slot);
+	heapTuple = ExecCopySlotHeapTuple(slot);
 	if (HeapTupleHasExternal(heapTuple))
 	{
 		/* detoast any toasted attributes */
@@ -297,7 +308,7 @@ cstore_multi_insert(Relation relation, TupleTableSlot **slots, int ntuples,
 	for (int i = 0; i < ntuples; i++)
 	{
 		TupleTableSlot *tupleSlot = slots[i];
-		HeapTuple heapTuple = GetSlotHeapTuple(tupleSlot);
+		HeapTuple heapTuple = ExecCopySlotHeapTuple(tupleSlot);
 
 		if (HeapTupleHasExternal(heapTuple))
 		{
@@ -363,8 +374,7 @@ cstore_relation_set_new_filenode(Relation rel,
 	*freezeXid = RecentXmin;
 	*minmulti = GetOldestMultiXactId();
 	srel = RelationCreateStorage(*newrnode, persistence);
-	CreateCStoreDatabaseDirectory(MyDatabaseId);
-	InitializeCStoreTableFile(rel->rd_id, rel);
+	InitializeCStoreTableFile(rel->rd_id, rel, CStoreGetDefaultOptions());
 	smgrclose(srel);
 }
 
