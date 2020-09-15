@@ -14,8 +14,8 @@ DATA = cstore_fdw--1.7.sql cstore_fdw--1.6--1.7.sql  cstore_fdw--1.5--1.6.sql cs
 	   cstore_fdw--1.3--1.4.sql cstore_fdw--1.2--1.3.sql cstore_fdw--1.1--1.2.sql \
 	   cstore_fdw--1.0--1.1.sql
 
-REGRESS = create load query analyze data_types functions block_filtering drop \
-		  insert copyto alter truncate
+REGRESS = fdw_create fdw_load fdw_query fdw_analyze fdw_data_types fdw_functions \
+	  fdw_block_filtering fdw_drop fdw_insert fdw_copyto fdw_alter fdw_truncate
 EXTRA_CLEAN = cstore.pb-c.h cstore.pb-c.c data/*.cstore data/*.cstore.footer \
               sql/block_filtering.sql sql/create.sql sql/data_types.sql sql/load.sql \
               sql/copyto.sql expected/block_filtering.out expected/create.out \
