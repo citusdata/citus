@@ -3,8 +3,6 @@
 -- complain if script is sourced in psql, rather than via CREATE EXTENSION
 \echo Use "CREATE EXTENSION cstore_fdw" to load this file. \quit
 
-CREATE SCHEMA cstore;
-
 CREATE FUNCTION cstore_fdw_handler()
 RETURNS fdw_handler
 AS 'MODULE_PATHNAME'
@@ -28,7 +26,7 @@ CREATE EVENT TRIGGER cstore_ddl_event_end
 ON ddl_command_end
 EXECUTE PROCEDURE cstore_ddl_event_end_trigger();
 
-CREATE FUNCTION cstore_table_size(relation regclass)
+CREATE FUNCTION public.cstore_table_size(relation regclass)
 RETURNS bigint
 AS 'MODULE_PATHNAME'
 LANGUAGE C STRICT;
@@ -50,7 +48,7 @@ BEGIN
 			CONTINUE;
 		END IF;
 
-		PERFORM public.cstore_clean_table_resources(v_obj.objid);
+		PERFORM cstore.cstore_clean_table_resources(v_obj.objid);
 
 	END LOOP;
 END;
@@ -60,7 +58,7 @@ CREATE EVENT TRIGGER cstore_drop_event
     ON SQL_DROP
     EXECUTE PROCEDURE cstore_drop_trigger();
 
-CREATE TABLE cstore.cstore_tables (
+CREATE TABLE cstore_tables (
     relid oid NOT NULL,
     block_row_count int NOT NULL,
     version_major bigint NOT NULL,
@@ -68,9 +66,9 @@ CREATE TABLE cstore.cstore_tables (
     PRIMARY KEY (relid)
 ) WITH (user_catalog_table = true);
 
-COMMENT ON TABLE cstore.cstore_tables IS 'CStore table wide metadata';
+COMMENT ON TABLE cstore_tables IS 'CStore table wide metadata';
 
-CREATE TABLE cstore.cstore_stripes (
+CREATE TABLE cstore_stripes (
     relid oid NOT NULL,
     stripe bigint NOT NULL,
     file_offset bigint NOT NULL,
@@ -78,24 +76,24 @@ CREATE TABLE cstore.cstore_stripes (
     block_count int NOT NULL,
     row_count bigint NOT NULL,
     PRIMARY KEY (relid, stripe),
-    FOREIGN KEY (relid) REFERENCES cstore.cstore_tables(relid) ON DELETE CASCADE INITIALLY DEFERRED
+    FOREIGN KEY (relid) REFERENCES cstore_tables(relid) ON DELETE CASCADE INITIALLY DEFERRED
 ) WITH (user_catalog_table = true);
 
-COMMENT ON TABLE cstore.cstore_tables IS 'CStore per stripe metadata';
+COMMENT ON TABLE cstore_tables IS 'CStore per stripe metadata';
 
-CREATE TABLE cstore.cstore_stripe_attr (
+CREATE TABLE cstore_stripe_attr (
     relid oid NOT NULL,
     stripe bigint NOT NULL,
     attr int NOT NULL,
     exists_size bigint NOT NULL,
     value_size bigint NOT NULL,
     PRIMARY KEY (relid, stripe, attr),
-    FOREIGN KEY (relid, stripe) REFERENCES cstore.cstore_stripes(relid, stripe) ON DELETE CASCADE INITIALLY DEFERRED
+    FOREIGN KEY (relid, stripe) REFERENCES cstore_stripes(relid, stripe) ON DELETE CASCADE INITIALLY DEFERRED
 ) WITH (user_catalog_table = true);
 
-COMMENT ON TABLE cstore.cstore_tables IS 'CStore per stripe/column combination metadata';
+COMMENT ON TABLE cstore_tables IS 'CStore per stripe/column combination metadata';
 
-CREATE TABLE cstore.cstore_skipnodes (
+CREATE TABLE cstore_skipnodes (
     relid oid NOT NULL,
     stripe bigint NOT NULL,
     attr int NOT NULL,
@@ -109,7 +107,7 @@ CREATE TABLE cstore.cstore_skipnodes (
     exists_stream_length bigint NOT NULL,
     value_compression_type int NOT NULL,
     PRIMARY KEY (relid, stripe, attr, block),
-    FOREIGN KEY (relid, stripe, attr) REFERENCES cstore.cstore_stripe_attr(relid, stripe, attr) ON DELETE CASCADE INITIALLY DEFERRED
+    FOREIGN KEY (relid, stripe, attr) REFERENCES cstore_stripe_attr(relid, stripe, attr) ON DELETE CASCADE INITIALLY DEFERRED
 ) WITH (user_catalog_table = true);
 
-COMMENT ON TABLE cstore.cstore_tables IS 'CStore per block metadata';
+COMMENT ON TABLE cstore_tables IS 'CStore per block metadata';

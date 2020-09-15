@@ -2,4 +2,5 @@
 comment = 'foreign-data wrapper for flat cstore access'
 default_version = '1.7'
 module_pathname = '$libdir/cstore_fdw'
-relocatable = true
+relocatable = false
+schema = cstore
