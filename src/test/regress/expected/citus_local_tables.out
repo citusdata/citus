@@ -654,6 +654,9 @@ FROM (SELECT tableName FROM pg_catalog.pg_tables WHERE tablename LIKE 'citus_loc
  f                      | t
 (1 row)
 
+-- cannot create a citus local table from a catalog table
+SELECT create_citus_local_table('pg_class');
+ERROR:  cannot create a citus table from a catalog table
 -- cleanup at exit
 DROP SCHEMA citus_local_tables_test_schema, "CiTUS!LocalTables" CASCADE;
 NOTICE:  drop cascades to 18 other objects

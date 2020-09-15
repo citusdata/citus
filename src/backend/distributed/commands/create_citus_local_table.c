@@ -202,6 +202,8 @@ ErrorIfUnsupportedCreateCitusLocalTable(Relation relation)
 							   "not exist")));
 	}
 
+	ErrorIfTableIsACatalogTable(relation);
+
 	Oid relationId = relation->rd_id;
 
 	ErrorIfCoordinatorNotAddedAsWorkerNode();

@@ -442,5 +442,8 @@ SELECT relation_is_a_known_shard('citus_local_table_4');
 SELECT citus_table_is_visible(tableName::regclass::oid), relation_is_a_known_shard(tableName::regclass)
 FROM (SELECT tableName FROM pg_catalog.pg_tables WHERE tablename LIKE 'citus_local_table_4_%') as tableName;
 
+-- cannot create a citus local table from a catalog table
+SELECT create_citus_local_table('pg_class');
+
 -- cleanup at exit
 DROP SCHEMA citus_local_tables_test_schema, "CiTUS!LocalTables" CASCADE;

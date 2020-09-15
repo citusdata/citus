@@ -683,12 +683,7 @@ EnsureRelationCanBeDistributed(Oid relationId, Var *distributionColumn,
 	TupleDesc relationDesc = RelationGetDescr(relation);
 	char *relationName = RelationGetRelationName(relation);
 
-	if (relation->rd_rel->relnamespace == PG_CATALOG_NAMESPACE)
-	{
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("cannot distribute catalog tables")));
-	}
-
+	ErrorIfTableIsACatalogTable(relation);
 
 	if (!RelationUsesHeapAccessMethodOrNone(relation))
 	{
@@ -831,6 +826,23 @@ EnsureRelationCanBeDistributed(Oid relationId, Var *distributionColumn,
 
 	ErrorIfUnsupportedPolicy(relation);
 	relation_close(relation, NoLock);
+}
+
+
+/*
+ * ErrorIfTableIsACatalogTable is a helper function to error out for citus
+ * table creation from a catalog table.
+ */
+void
+ErrorIfTableIsACatalogTable(Relation relation)
+{
+	if (relation->rd_rel->relnamespace != PG_CATALOG_NAMESPACE)
+	{
+		return;
+	}
+
+	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					errmsg("cannot create a citus table from a catalog table")));
 }
 
 
