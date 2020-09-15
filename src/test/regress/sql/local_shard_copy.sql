@@ -118,7 +118,7 @@ BEGIN;
 5, 500
 \.
     -- verify the put ages.
-    SELECT * FROM distributed_table;
+    SELECT * FROM distributed_table ORDER BY 1,2 DESC;
 
 ROLLBACK;
 
