@@ -129,7 +129,7 @@ static void CStoreProcessAlterTableCommand(AlterTableStmt *alterStatement);
 static List * DroppedCStoreRelidList(DropStmt *dropStatement);
 static List * FindCStoreTables(List *tableList);
 static List * OpenRelationsForTruncate(List *cstoreTableList);
-static void InitializeRelFileNode(Relation relation, bool force);
+static void FdwNewRelFileNode(Relation relation);
 static void TruncateCStoreTables(List *cstoreRelationList);
 static bool CStoreTable(Oid relationId);
 static bool CStoreServer(ForeignServer *server);
@@ -828,26 +828,22 @@ TruncateCStoreTables(List *cstoreRelationList)
 
 		Assert(CStoreTable(relationId));
 
-		InitializeRelFileNode(relation, true);
+		FdwNewRelFileNode(relation);
 		InitializeCStoreTableFile(relationId, relation, CStoreGetOptions(relationId));
 	}
 }
 
 /*
- * Version 11 and earlier already create a relfilenode for foreign
+ * Version 11 and earlier already assign a relfilenode for foreign
  * tables. Version 12 and later do not, so we need to create one manually.
  */
 static void
-InitializeRelFileNode(Relation relation, bool force)
+FdwNewRelFileNode(Relation relation)
 {
-#if PG_VERSION_NUM >= 120000
 	Relation        pg_class;
 	HeapTuple       tuple;
 	Form_pg_class   classform;
 
-	/*
-	 * Get a writable copy of the pg_class tuple for the given relation.
-	 */
 	pg_class = heap_open(RelationRelationId, RowExclusiveLock);
 
 	tuple = SearchSysCacheCopy1(RELOID,
@@ -857,14 +853,13 @@ InitializeRelFileNode(Relation relation, bool force)
 			 RelationGetRelid(relation));
 	classform = (Form_pg_class) GETSTRUCT(tuple);
 
-	if (!OidIsValid(classform->relfilenode) || force)
+	if (true)
 	{
 		char			persistence = relation->rd_rel->relpersistence;
 		Relation		tmprel;
 		Oid				tablespace;
 		Oid				filenode;
 		RelFileNode		newrnode;
-		SMgrRelation	srel;
 
 		/*
 		 * Upgrade to AccessExclusiveLock, and hold until the end of the
@@ -873,6 +868,9 @@ InitializeRelFileNode(Relation relation, bool force)
 		 */
 		tmprel = heap_open(relation->rd_id, AccessExclusiveLock);
 		heap_close(tmprel, NoLock);
+
+		if (OidIsValid(relation->rd_rel->relfilenode))
+			RelationDropStorage(relation);
 
 		if (OidIsValid(relation->rd_rel->reltablespace))
 			tablespace = relation->rd_rel->reltablespace;
@@ -884,9 +882,6 @@ InitializeRelFileNode(Relation relation, bool force)
 		newrnode.spcNode = tablespace;
 		newrnode.dbNode = MyDatabaseId;
 		newrnode.relNode = filenode;
-
-		srel = RelationCreateStorage(newrnode, persistence);
-		smgrclose(srel);
 
 		classform->relfilenode = filenode;
 		classform->relpages = 0;    /* it's empty until further notice */
@@ -901,7 +896,25 @@ InitializeRelFileNode(Relation relation, bool force)
 
 	heap_freetuple(tuple);
 	heap_close(pg_class, RowExclusiveLock);
+}
+
+static void
+FdwCreateStorage(Relation relation)
+{
+	Assert(OidIsValid(relation->rd_rel->relfilenode));
+	RelationOpenSmgr(relation);
+	if (!smgrexists(relation->rd_smgr, MAIN_FORKNUM))
+	{
+#if PG_VERSION_NUM >= 120000
+		SMgrRelation srel;
+		srel = RelationCreateStorage(relation->rd_node,
+									 relation->rd_rel->relpersistence);
+		smgrclose(srel);
+#else
+		RelationCreateStorage(relation->rd_node,
+							  relation->rd_rel->relpersistence);
 #endif
+	}
 }
 
 
@@ -2174,7 +2187,7 @@ cstore_fdw_initrel(Relation rel)
 {
 #if PG_VERSION_NUM >= 120000
 	if (rel->rd_rel->relfilenode == InvalidOid)
-		InitializeRelFileNode(rel, false);
+		FdwNewRelFileNode(rel);
 
 	/*
 	 * Copied code from RelationInitPhysicalAddr(), which doesn't
@@ -2188,6 +2201,7 @@ cstore_fdw_initrel(Relation rel)
 	rel->rd_node.dbNode = MyDatabaseId;
 	rel->rd_node.relNode = rel->rd_rel->relfilenode;
 #endif
+	FdwCreateStorage(rel);
 }
 
 static Relation
