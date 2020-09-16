@@ -16,28 +16,38 @@
 #include "fmgr.h"
 
 #include "mod.h"
-#if PG_VERSION_NUM >= 120000
+
+#ifdef USE_TABLEAM
 #include "cstore_tableam.h"
 #endif
+
+#ifdef USE_FDW
 #include "cstore_fdw.h"
+#endif
 
 PG_MODULE_MAGIC;
 
 void
 _PG_init(void)
 {
-#if PG_VERSION_NUM >= 120000
+#ifdef USE_TABLEAM
 	cstore_tableam_init();
 #endif
+
+#ifdef USE_FDW
 	cstore_fdw_init();
+#endif
 }
 
 
 void
 _PG_fini(void)
 {
-#if PG_VERSION_NUM >= 120000
+#if USE_TABLEAM
 	cstore_tableam_finish();
 #endif
+
+#ifdef USE_FDW
 	cstore_fdw_finish();
+#endif
 }
