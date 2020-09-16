@@ -458,7 +458,21 @@ cstore_index_validate_scan(Relation heapRelation,
 static uint64
 cstore_relation_size(Relation rel, ForkNumber forkNumber)
 {
-	elog(ERROR, "cstore_relation_size not implemented");
+    uint64      nblocks = 0;
+
+    /* Open it at the smgr level if not already done */
+    RelationOpenSmgr(rel);
+
+    /* InvalidForkNumber indicates returning the size for all forks */
+    if (forkNumber == InvalidForkNumber)
+    {
+        for (int i = 0; i < MAX_FORKNUM; i++)
+            nblocks += smgrnblocks(rel->rd_smgr, i);
+    }
+    else
+        nblocks = smgrnblocks(rel->rd_smgr, forkNumber);
+
+    return nblocks * BLCKSZ;
 }
 
 static bool

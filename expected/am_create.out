@@ -1,15 +1,14 @@
 --
--- Test the CREATE statements related to cstore_fdw.
+-- Test the CREATE statements related to cstore.
 --
--- Validator tests
 -- Create uncompressed table
-CREATE FOREIGN TABLE contestant (handle TEXT, birthdate DATE, rating INT,
+CREATE TABLE contestant (handle TEXT, birthdate DATE, rating INT,
 	percentile FLOAT, country CHAR(3), achievements TEXT[])
 	USING cstore_tableam;
 -- Create compressed table with automatically determined file path
-CREATE FOREIGN TABLE contestant_compressed (handle TEXT, birthdate DATE, rating INT,
+CREATE TABLE contestant_compressed (handle TEXT, birthdate DATE, rating INT,
 	percentile FLOAT, country CHAR(3), achievements TEXT[])
-	USING cstore_tableam
+	USING cstore_tableam;
 -- Test that querying an empty table works
 ANALYZE contestant;
 SELECT count(*) FROM contestant;
