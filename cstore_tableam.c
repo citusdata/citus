@@ -44,6 +44,7 @@ typedef struct CStoreScanDescData *CStoreScanDesc;
 
 static TableWriteState *CStoreWriteState = NULL;
 static ExecutorEnd_hook_type PreviousExecutorEndHook = NULL;
+static MemoryContext CStoreContext = NULL;
 
 static CStoreOptions *
 CStoreGetDefaultOptions(void)
@@ -71,13 +72,22 @@ cstore_init_write_state(Relation relation)
 	{
 		CStoreOptions *cstoreOptions = CStoreGetDefaultOptions();
 		TupleDesc tupdesc = RelationGetDescr(relation);
+		MemoryContext oldContext;
+
+		if (CStoreContext == NULL)
+		{
+			CStoreContext = AllocSetContextCreate(TopMemoryContext, "cstore context",
+												  ALLOCSET_DEFAULT_SIZES);
+		}
 
 		elog(LOG, "initializing write state for relation %d", relation->rd_id);
+		oldContext = MemoryContextSwitchTo(CStoreContext);
 		CStoreWriteState = CStoreBeginWrite(relation->rd_id,
 											cstoreOptions->compressionType,
 											cstoreOptions->stripeRowCount,
 											cstoreOptions->blockRowCount,
 											tupdesc);
+		MemoryContextSwitchTo(oldContext);
 
 		CStoreWriteState->relation = relation;
 	}

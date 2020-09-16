@@ -12,8 +12,8 @@ COPY table_with_data FROM STDIN;
 3
 \.
 
-SELECT cstore_table_size('empty_table') < cstore_table_size('table_with_data');
-SELECT cstore_table_size('non_cstore_table');
+SELECT pg_relation_size('empty_table') < cstore_table_size('table_with_data');
+SELECT pg_relation_size('non_cstore_table');
 
 DROP TABLE empty_table;
 DROP TABLE table_with_data;

@@ -1,4 +1,5 @@
 
+DROP TABLE test_block_filtering;
 DROP TABLE test_insert_command;
 DROP TABLE collation_block_filtering_test;
 DROP TABLE test_null_values;

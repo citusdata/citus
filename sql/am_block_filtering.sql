@@ -29,8 +29,7 @@ $$ LANGUAGE PLPGSQL;
 
 -- Create and load data
 CREATE TABLE test_block_filtering (a int)
-    USING cstore_tableam
-    OPTIONS(block_row_count '1000', stripe_row_count '2000');
+    USING cstore_tableam;
 
 COPY test_block_filtering FROM '/Users/jefdavi/wd/cstore2/data/block_filtering.csv' WITH CSV;
 

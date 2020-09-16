@@ -9,7 +9,7 @@ SELECT substring(:'server_version', '\d+')::int > 10 AS version_above_ten;
 -- CREATE a cstore_fdw table, fill with some data --
 CREATE TABLE cstore_truncate_test (a int, b int) USING cstore_tableam;
 CREATE TABLE cstore_truncate_test_second (a int, b int) USING cstore_tableam;
-CREATE TABLE cstore_truncate_test_compressed (a int, b int) USING cstore_tableam OPTIONS (compression 'pglz');
+CREATE TABLE cstore_truncate_test_compressed (a int, b int) USING cstore_tableam;
 CREATE TABLE cstore_truncate_test_regular (a int, b int);
 
 INSERT INTO cstore_truncate_test select a, a from generate_series(1, 10) a;
@@ -30,7 +30,7 @@ SELECT count(*) FROM cstore_truncate_test_compressed;
 TRUNCATE TABLE cstore_truncate_test_compressed;
 SELECT count(*) FROM cstore_truncate_test_compressed;
 
-SELECT cstore_table_size('cstore_truncate_test_compressed');
+SELECT pg_relation_size('cstore_truncate_test_compressed');
 
 INSERT INTO cstore_truncate_test select a, a from generate_series(1, 10) a;
 INSERT INTO cstore_truncate_test_regular select a, a from generate_series(10, 20) a;
@@ -76,7 +76,7 @@ DROP TABLE cstore_truncate_test_compressed;
 
 -- test truncate with schema
 CREATE SCHEMA truncate_schema;
-CREATE TABLE truncate_schema.truncate_tbl (id int) USING cstore_tableam OPTIONS(compression 'pglz');
+CREATE TABLE truncate_schema.truncate_tbl (id int) USING cstore_tableam;
 INSERT INTO truncate_schema.truncate_tbl SELECT generate_series(1, 100);
 SELECT COUNT(*) FROM truncate_schema.truncate_tbl;
 
