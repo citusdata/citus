@@ -1,5 +1,3 @@
-DROP TABLE test_insert_command;
-DROP TABLE collation_block_filtering_test;
 DROP TABLE test_null_values;
 DROP TABLE test_other_types;
 DROP TABLE test_range_types;
