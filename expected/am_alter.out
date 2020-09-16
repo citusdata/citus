@@ -1,7 +1,7 @@
 --
 -- Testing ALTER TABLE on cstore_fdw tables.
 --
-CREATE FOREIGN TABLE test_alter_table (a int, b int, c int) SERVER cstore_server;
+CREATE TABLE test_alter_table (a int, b int, c int) USING cstore_tableam;
 WITH sample_data AS (VALUES
     (1, 2, 3),
     (4, 5, 6),
@@ -9,7 +9,7 @@ WITH sample_data AS (VALUES
 )
 INSERT INTO test_alter_table SELECT * FROM sample_data;
 -- drop a column
-ALTER FOREIGN TABLE test_alter_table DROP COLUMN a;
+ALTER TABLE test_alter_table DROP COLUMN a;
 -- test analyze
 ANALYZE test_alter_table;
 -- verify select queries run as expected
@@ -40,7 +40,7 @@ LINE 1: INSERT INTO test_alter_table (SELECT 3, 5, 8);
                                                    ^
 INSERT INTO test_alter_table (SELECT 5, 8);
 -- add a column with no defaults
-ALTER FOREIGN TABLE test_alter_table ADD COLUMN d int;
+ALTER TABLE test_alter_table ADD COLUMN d int;
 SELECT * FROM test_alter_table;
  b | c | d 
 ---+---+---
@@ -62,7 +62,7 @@ SELECT * FROM test_alter_table;
 (5 rows)
 
 -- add a fixed-length column with default value
-ALTER FOREIGN TABLE test_alter_table ADD COLUMN e int default 3;
+ALTER TABLE test_alter_table ADD COLUMN e int default 3;
 SELECT * from test_alter_table;
  b | c | d | e 
 ---+---+---+---
@@ -86,7 +86,7 @@ SELECT * from test_alter_table;
 (6 rows)
 
 -- add a variable-length column with default value
-ALTER FOREIGN TABLE test_alter_table ADD COLUMN f text DEFAULT 'TEXT ME';
+ALTER TABLE test_alter_table ADD COLUMN f text DEFAULT 'TEXT ME';
 SELECT * from test_alter_table;
  b | c | d | e |    f    
 ---+---+---+---+---------
@@ -112,8 +112,8 @@ SELECT * from test_alter_table;
 (7 rows)
 
 -- drop couple of columns
-ALTER FOREIGN TABLE test_alter_table DROP COLUMN c;
-ALTER FOREIGN TABLE test_alter_table DROP COLUMN e;
+ALTER TABLE test_alter_table DROP COLUMN c;
+ALTER TABLE test_alter_table DROP COLUMN e;
 ANALYZE test_alter_table;
 SELECT * from test_alter_table;
  b | d |    f    
@@ -140,16 +140,16 @@ SELECT count(t.*) from test_alter_table t;
 (1 row)
 
 -- unsupported default values
-ALTER FOREIGN TABLE test_alter_table ADD COLUMN g boolean DEFAULT isfinite(current_date);
-ALTER FOREIGN TABLE test_alter_table ADD COLUMN h DATE DEFAULT current_date;
+ALTER TABLE test_alter_table ADD COLUMN g boolean DEFAULT isfinite(current_date);
+ALTER TABLE test_alter_table ADD COLUMN h DATE DEFAULT current_date;
 SELECT * FROM test_alter_table;
 ERROR:  unsupported default value for column "g"
 HINT:  Expression is either mutable or does not evaluate to constant value
-ALTER FOREIGN TABLE test_alter_table ALTER COLUMN g DROP DEFAULT;
+ALTER TABLE test_alter_table ALTER COLUMN g DROP DEFAULT;
 SELECT * FROM test_alter_table;
 ERROR:  unsupported default value for column "h"
 HINT:  Expression is either mutable or does not evaluate to constant value
-ALTER FOREIGN TABLE test_alter_table ALTER COLUMN h DROP DEFAULT;
+ALTER TABLE test_alter_table ALTER COLUMN h DROP DEFAULT;
 ANALYZE test_alter_table;
 SELECT * FROM test_alter_table;
  b | d |    f    | g | h 
@@ -164,15 +164,14 @@ SELECT * FROM test_alter_table;
 (7 rows)
 
 -- unsupported type change
-ALTER FOREIGN TABLE test_alter_table ADD COLUMN i int;
-ALTER FOREIGN TABLE test_alter_table ADD COLUMN j float;
-ALTER FOREIGN TABLE test_alter_table ADD COLUMN k text;
+ALTER TABLE test_alter_table ADD COLUMN i int;
+ALTER TABLE test_alter_table ADD COLUMN j float;
+ALTER TABLE test_alter_table ADD COLUMN k text;
 -- this is valid type change
-ALTER FOREIGN TABLE test_alter_table ALTER COLUMN i TYPE float;
+ALTER TABLE test_alter_table ALTER COLUMN i TYPE float;
 -- this is not valid
-ALTER FOREIGN TABLE test_alter_table ALTER COLUMN j TYPE int;
-ERROR:  Column j cannot be cast automatically to type pg_catalog.int4
+ALTER TABLE test_alter_table ALTER COLUMN j TYPE int;
 -- text / varchar conversion is valid both ways
-ALTER FOREIGN TABLE test_alter_table ALTER COLUMN k TYPE varchar(20);
-ALTER FOREIGN TABLE test_alter_table ALTER COLUMN k TYPE text;
-DROP FOREIGN TABLE test_alter_table;
+ALTER TABLE test_alter_table ALTER COLUMN k TYPE varchar(20);
+ALTER TABLE test_alter_table ALTER COLUMN k TYPE text;
+DROP TABLE test_alter_table;

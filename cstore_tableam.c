@@ -143,7 +143,8 @@ cstore_beginscan(Relation relation, Snapshot snapshot,
 		Var			*var		 = makeVar(varno, varattno, vartype, vartypmod,
 										   varcollid, varlevelsup);
 
-		columnList = lappend(columnList, var);
+		if (!tupdesc->attrs[i].attisdropped)
+			columnList = lappend(columnList, var);
 	}
 	
 	readState = CStoreBeginRead(relid, tupdesc, columnList, NULL);
