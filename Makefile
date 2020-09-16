@@ -5,10 +5,6 @@
 
 MODULE_big = cstore_fdw
 
-ifndef MAJORVERSION
-    MAJORVERSION := $(basename $(VERSION))
-endif
-
 PG_CPPFLAGS = -std=c11
 OBJS = cstore.o cstore_fdw.o cstore_writer.o cstore_reader.o \
        cstore_compression.o mod.o cstore_metadata_tables.o cstore_tableam.o
@@ -49,6 +45,10 @@ endif
 PG_CONFIG = pg_config
 PGXS := $(shell $(PG_CONFIG) --pgxs)
 include $(PGXS)
+
+ifndef MAJORVERSION
+    MAJORVERSION := $(basename $(VERSION))
+endif
 
 ifeq (,$(findstring $(MAJORVERSION), 9.3 9.4 9.5 9.6 10 11 12))
     $(error PostgreSQL 9.3 to 12 is required to compile this extension)
