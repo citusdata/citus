@@ -36,8 +36,8 @@
 
 typedef struct CStoreScanDescData
 {
-	TableScanDescData	 cs_base;
-	TableReadState		*cs_readState;
+	TableScanDescData cs_base;
+	TableReadState *cs_readState;
 } CStoreScanDescData;
 
 typedef struct CStoreScanDescData *CStoreScanDesc;
@@ -56,15 +56,16 @@ CStoreGetDefaultOptions(void)
 	return cstoreOptions;
 }
 
+
 static void
 cstore_init_write_state(Relation relation)
 {
-	//TODO: upgrade lock to serialize writes
+	/*TODO: upgrade lock to serialize writes */
 
 	if (CStoreWriteState != NULL)
 	{
-		// TODO: consider whether it's possible for a new write to start
-		// before an old one is flushed
+		/* TODO: consider whether it's possible for a new write to start */
+		/* before an old one is flushed */
 		Assert(CStoreWriteState->relation->rd_id == relation->rd_id);
 	}
 
@@ -93,16 +94,19 @@ cstore_init_write_state(Relation relation)
 	}
 }
 
+
 void
 cstore_free_write_state()
 {
 	if (CStoreWriteState != NULL)
 	{
-		elog(LOG, "flushing write state for relation %d", CStoreWriteState->relation->rd_id);
+		elog(LOG, "flushing write state for relation %d",
+			 CStoreWriteState->relation->rd_id);
 		CStoreEndWrite(CStoreWriteState);
 		CStoreWriteState = NULL;
 	}
 }
+
 
 static const TupleTableSlotOps *
 cstore_slot_callbacks(Relation relation)
@@ -110,18 +114,19 @@ cstore_slot_callbacks(Relation relation)
 	return &TTSOpsVirtual;
 }
 
+
 static TableScanDesc
 cstore_beginscan(Relation relation, Snapshot snapshot,
 				 int nkeys, ScanKey key,
 				 ParallelTableScanDesc parallel_scan,
 				 uint32 flags)
 {
-	Oid				 relid		   = relation->rd_id;
-	TupleDesc		 tupdesc	   = relation->rd_att;
-	CStoreOptions	*cstoreOptions = NULL;
-	TableReadState	*readState	   = NULL;
-	CStoreScanDesc	 scan		   = palloc(sizeof(CStoreScanDescData));
-	List			*columnList	   = NIL;
+	Oid relid = relation->rd_id;
+	TupleDesc tupdesc = relation->rd_att;
+	CStoreOptions *cstoreOptions = NULL;
+	TableReadState *readState = NULL;
+	CStoreScanDesc scan = palloc(sizeof(CStoreScanDescData));
+	List *columnList = NIL;
 
 	cstoreOptions = CStoreGetDefaultOptions();
 
@@ -134,19 +139,21 @@ cstore_beginscan(Relation relation, Snapshot snapshot,
 
 	for (int i = 0; i < tupdesc->natts; i++)
 	{
-		Index		 varno		 = 0;
-		AttrNumber	 varattno	 = i+1;
-		Oid			 vartype	 = tupdesc->attrs[i].atttypid;
-		int32		 vartypmod	 = 0;
-		Oid			 varcollid	 = 0;
-		Index		 varlevelsup = 0;
-		Var			*var		 = makeVar(varno, varattno, vartype, vartypmod,
-										   varcollid, varlevelsup);
+		Index varno = 0;
+		AttrNumber varattno = i + 1;
+		Oid vartype = tupdesc->attrs[i].atttypid;
+		int32 vartypmod = 0;
+		Oid varcollid = 0;
+		Index varlevelsup = 0;
+		Var *var = makeVar(varno, varattno, vartype, vartypmod,
+						   varcollid, varlevelsup);
 
 		if (!tupdesc->attrs[i].attisdropped)
+		{
 			columnList = lappend(columnList, var);
+		}
 	}
-	
+
 	readState = CStoreBeginRead(relid, tupdesc, columnList, NULL);
 	readState->relation = relation;
 
@@ -155,6 +162,7 @@ cstore_beginscan(Relation relation, Snapshot snapshot,
 	return ((TableScanDesc) scan);
 }
 
+
 static void
 cstore_endscan(TableScanDesc sscan)
 {
@@ -162,12 +170,14 @@ cstore_endscan(TableScanDesc sscan)
 	CStoreEndRead(scan->cs_readState);
 }
 
+
 static void
 cstore_rescan(TableScanDesc sscan, ScanKey key, bool set_params,
-			bool allow_strat, bool allow_sync, bool allow_pagemode)
+			  bool allow_strat, bool allow_sync, bool allow_pagemode)
 {
 	elog(ERROR, "cstore_rescan not implemented");
 }
+
 
 static bool
 cstore_getnextslot(TableScanDesc sscan, ScanDirection direction, TupleTableSlot *slot)
@@ -181,14 +191,18 @@ cstore_getnextslot(TableScanDesc sscan, ScanDirection direction, TupleTableSlot 
 	memset(slot->tts_values, 0, sizeof(Datum) * natts);
 	memset(slot->tts_isnull, true, sizeof(bool) * natts);
 
-	nextRowFound = CStoreReadNextRow(scan->cs_readState, slot->tts_values, slot->tts_isnull);
+	nextRowFound = CStoreReadNextRow(scan->cs_readState, slot->tts_values,
+									 slot->tts_isnull);
 
 	if (!nextRowFound)
+	{
 		return false;
+	}
 
 	ExecStoreVirtualTuple(slot);
 	return true;
 }
+
 
 static Size
 cstore_parallelscan_estimate(Relation rel)
@@ -196,11 +210,13 @@ cstore_parallelscan_estimate(Relation rel)
 	elog(ERROR, "cstore_parallelscan_estimate not implemented");
 }
 
+
 static Size
 cstore_parallelscan_initialize(Relation rel, ParallelTableScanDesc pscan)
 {
 	elog(ERROR, "cstore_parallelscan_initialize not implemented");
 }
+
 
 static void
 cstore_parallelscan_reinitialize(Relation rel, ParallelTableScanDesc pscan)
@@ -208,11 +224,13 @@ cstore_parallelscan_reinitialize(Relation rel, ParallelTableScanDesc pscan)
 	elog(ERROR, "cstore_parallelscan_reinitialize not implemented");
 }
 
+
 static IndexFetchTableData *
 cstore_index_fetch_begin(Relation rel)
 {
 	elog(ERROR, "cstore_index_fetch_begin not implemented");
 }
+
 
 static void
 cstore_index_fetch_reset(IndexFetchTableData *scan)
@@ -220,11 +238,13 @@ cstore_index_fetch_reset(IndexFetchTableData *scan)
 	elog(ERROR, "cstore_index_fetch_reset not implemented");
 }
 
+
 static void
 cstore_index_fetch_end(IndexFetchTableData *scan)
 {
 	elog(ERROR, "cstore_index_fetch_end not implemented");
 }
+
 
 static bool
 cstore_index_fetch_tuple(struct IndexFetchTableData *scan,
@@ -236,6 +256,7 @@ cstore_index_fetch_tuple(struct IndexFetchTableData *scan,
 	elog(ERROR, "cstore_index_fetch_tuple not implemented");
 }
 
+
 static bool
 cstore_fetch_row_version(Relation relation,
 						 ItemPointer tid,
@@ -245,6 +266,7 @@ cstore_fetch_row_version(Relation relation,
 	elog(ERROR, "cstore_fetch_row_version not implemented");
 }
 
+
 static void
 cstore_get_latest_tid(TableScanDesc sscan,
 					  ItemPointer tid)
@@ -252,11 +274,13 @@ cstore_get_latest_tid(TableScanDesc sscan,
 	elog(ERROR, "cstore_get_latest_tid not implemented");
 }
 
+
 static bool
 cstore_tuple_tid_valid(TableScanDesc scan, ItemPointer tid)
 {
 	elog(ERROR, "cstore_tuple_tid_valid not implemented");
 }
+
 
 static bool
 cstore_tuple_satisfies_snapshot(Relation rel, TupleTableSlot *slot,
@@ -265,6 +289,7 @@ cstore_tuple_satisfies_snapshot(Relation rel, TupleTableSlot *slot,
 	return true;
 }
 
+
 static TransactionId
 cstore_compute_xid_horizon_for_tuples(Relation rel,
 									  ItemPointerData *tids,
@@ -272,6 +297,7 @@ cstore_compute_xid_horizon_for_tuples(Relation rel,
 {
 	elog(ERROR, "cstore_compute_xid_horizon_for_tuples not implemented");
 }
+
 
 static void
 cstore_tuple_insert(Relation relation, TupleTableSlot *slot, CommandId cid,
@@ -296,6 +322,7 @@ cstore_tuple_insert(Relation relation, TupleTableSlot *slot, CommandId cid,
 	CStoreWriteRow(CStoreWriteState, slot->tts_values, slot->tts_isnull);
 }
 
+
 static void
 cstore_tuple_insert_speculative(Relation relation, TupleTableSlot *slot,
 								CommandId cid, int options,
@@ -304,12 +331,14 @@ cstore_tuple_insert_speculative(Relation relation, TupleTableSlot *slot,
 	elog(ERROR, "cstore_tuple_insert_speculative not implemented");
 }
 
+
 static void
 cstore_tuple_complete_speculative(Relation relation, TupleTableSlot *slot,
 								  uint32 specToken, bool succeeded)
 {
 	elog(ERROR, "cstore_tuple_complete_speculative not implemented");
 }
+
 
 static void
 cstore_multi_insert(Relation relation, TupleTableSlot **slots, int ntuples,
@@ -337,6 +366,7 @@ cstore_multi_insert(Relation relation, TupleTableSlot **slots, int ntuples,
 	}
 }
 
+
 static TM_Result
 cstore_tuple_delete(Relation relation, ItemPointer tid, CommandId cid,
 					Snapshot snapshot, Snapshot crosscheck, bool wait,
@@ -344,6 +374,7 @@ cstore_tuple_delete(Relation relation, ItemPointer tid, CommandId cid,
 {
 	elog(ERROR, "cstore_tuple_delete not implemented");
 }
+
 
 static TM_Result
 cstore_tuple_update(Relation relation, ItemPointer otid, TupleTableSlot *slot,
@@ -354,6 +385,7 @@ cstore_tuple_update(Relation relation, ItemPointer otid, TupleTableSlot *slot,
 	elog(ERROR, "cstore_tuple_update not implemented");
 }
 
+
 static TM_Result
 cstore_tuple_lock(Relation relation, ItemPointer tid, Snapshot snapshot,
 				  TupleTableSlot *slot, CommandId cid, LockTupleMode mode,
@@ -363,15 +395,17 @@ cstore_tuple_lock(Relation relation, ItemPointer tid, Snapshot snapshot,
 	elog(ERROR, "cstore_tuple_lock not implemented");
 }
 
+
 static void
 cstore_finish_bulk_insert(Relation relation, int options)
 {
-	//TODO: flush relation like for heap?
-	// free write state or only in ExecutorEnd_hook?
+	/*TODO: flush relation like for heap? */
+	/* free write state or only in ExecutorEnd_hook? */
 
-	// for COPY
+	/* for COPY */
 	cstore_free_write_state();
 }
+
 
 static void
 cstore_relation_set_new_filenode(Relation rel,
@@ -390,17 +424,20 @@ cstore_relation_set_new_filenode(Relation rel,
 	smgrclose(srel);
 }
 
+
 static void
 cstore_relation_nontransactional_truncate(Relation rel)
 {
 	elog(ERROR, "cstore_relation_nontransactional_truncate not implemented");
 }
 
+
 static void
 cstore_relation_copy_data(Relation rel, const RelFileNode *newrnode)
 {
 	elog(ERROR, "cstore_relation_copy_data not implemented");
 }
+
 
 static void
 cstore_relation_copy_for_cluster(Relation OldHeap, Relation NewHeap,
@@ -415,12 +452,14 @@ cstore_relation_copy_for_cluster(Relation OldHeap, Relation NewHeap,
 	elog(ERROR, "cstore_relation_copy_for_cluster not implemented");
 }
 
+
 static bool
 cstore_scan_analyze_next_block(TableScanDesc scan, BlockNumber blockno,
 							   BufferAccessStrategy bstrategy)
 {
 	elog(ERROR, "cstore_scan_analyze_next_block not implemented");
 }
+
 
 static bool
 cstore_scan_analyze_next_tuple(TableScanDesc scan, TransactionId OldestXmin,
@@ -429,6 +468,7 @@ cstore_scan_analyze_next_tuple(TableScanDesc scan, TransactionId OldestXmin,
 {
 	elog(ERROR, "cstore_scan_analyze_next_tuple not implemented");
 }
+
 
 static double
 cstore_index_build_range_scan(Relation heapRelation,
@@ -446,6 +486,7 @@ cstore_index_build_range_scan(Relation heapRelation,
 	elog(ERROR, "cstore_index_build_range_scan not implemented");
 }
 
+
 static void
 cstore_index_validate_scan(Relation heapRelation,
 						   Relation indexRelation,
@@ -456,31 +497,38 @@ cstore_index_validate_scan(Relation heapRelation,
 	elog(ERROR, "cstore_index_validate_scan not implemented");
 }
 
+
 static uint64
 cstore_relation_size(Relation rel, ForkNumber forkNumber)
 {
-    uint64      nblocks = 0;
+	uint64 nblocks = 0;
 
-    /* Open it at the smgr level if not already done */
-    RelationOpenSmgr(rel);
+	/* Open it at the smgr level if not already done */
+	RelationOpenSmgr(rel);
 
-    /* InvalidForkNumber indicates returning the size for all forks */
-    if (forkNumber == InvalidForkNumber)
-    {
-        for (int i = 0; i < MAX_FORKNUM; i++)
-            nblocks += smgrnblocks(rel->rd_smgr, i);
-    }
-    else
-        nblocks = smgrnblocks(rel->rd_smgr, forkNumber);
+	/* InvalidForkNumber indicates returning the size for all forks */
+	if (forkNumber == InvalidForkNumber)
+	{
+		for (int i = 0; i < MAX_FORKNUM; i++)
+		{
+			nblocks += smgrnblocks(rel->rd_smgr, i);
+		}
+	}
+	else
+	{
+		nblocks = smgrnblocks(rel->rd_smgr, forkNumber);
+	}
 
-    return nblocks * BLCKSZ;
+	return nblocks * BLCKSZ;
 }
+
 
 static bool
 cstore_relation_needs_toast_table(Relation rel)
 {
 	return false;
 }
+
 
 static void
 cstore_estimate_rel_size(Relation rel, int32 *attr_widths,
@@ -493,12 +541,14 @@ cstore_estimate_rel_size(Relation rel, int32 *attr_widths,
 	*allvisfrac = 1.0;
 }
 
+
 static bool
 cstore_scan_bitmap_next_block(TableScanDesc scan,
 							  TBMIterateResult *tbmres)
 {
 	elog(ERROR, "cstore_scan_bitmap_next_block not implemented");
 }
+
 
 static bool
 cstore_scan_bitmap_next_tuple(TableScanDesc scan,
@@ -508,11 +558,13 @@ cstore_scan_bitmap_next_tuple(TableScanDesc scan,
 	elog(ERROR, "cstore_scan_bitmap_next_tuple not implemented");
 }
 
+
 static bool
 cstore_scan_sample_next_block(TableScanDesc scan, SampleScanState *scanstate)
 {
 	elog(ERROR, "cstore_scan_sample_next_block not implemented");
 }
+
 
 static bool
 cstore_scan_sample_next_tuple(TableScanDesc scan, SampleScanState *scanstate,
@@ -521,15 +573,21 @@ cstore_scan_sample_next_tuple(TableScanDesc scan, SampleScanState *scanstate,
 	elog(ERROR, "cstore_scan_sample_next_tuple not implemented");
 }
 
+
 static void
 CStoreExecutorEnd(QueryDesc *queryDesc)
 {
 	cstore_free_write_state();
 	if (PreviousExecutorEndHook)
+	{
 		PreviousExecutorEndHook(queryDesc);
+	}
 	else
+	{
 		standard_ExecutorEnd(queryDesc);
+	}
 }
+
 
 void
 cstore_tableam_init()
@@ -538,11 +596,13 @@ cstore_tableam_init()
 	ExecutorEnd_hook = CStoreExecutorEnd;
 }
 
+
 void
 cstore_tableam_finish()
 {
 	ExecutorEnd_hook = PreviousExecutorEndHook;
 }
+
 
 static const TableAmRoutine cstore_am_methods = {
 	.type = T_TableAmRoutine,
@@ -605,6 +665,7 @@ GetCstoreTableAmRoutine(void)
 {
 	return &cstore_am_methods;
 }
+
 
 PG_FUNCTION_INFO_V1(cstore_tableam_handler);
 Datum

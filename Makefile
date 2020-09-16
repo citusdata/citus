@@ -7,21 +7,22 @@ MODULE_big = cstore_fdw
 
 VER := $(lastword $(shell pg_config --version))
 VER_WORDS = $(subst ., ,$(VER))
+MVER = $(firstword $(VER_WORDS))
 
-# versions prior to 10 (those with 3 version numbers) not supported
-ifeq ($(words $(VER_WORDS)),3)
+# error for versions earlier than 10 so that lex comparison will work
+ifneq ($(shell printf '%02d' $(MVER)),$(MVER))
 $(error version $(VER) not supported)
 endif
 
-MVER = $(firstword $(VER_WORDS))
-
-# version >= 12?
+# lexicographic comparison of version number
 ifeq ($(lastword $(sort 12 $(MVER))),$(MVER))
 	USE_TABLEAM = yes
 	USE_FDW = yes
-else
+else ifeq ($(lastword $(sort 11 $(MVER))),$(MVER))
 	USE_TABLEAM = no
 	USE_FDW = yes
+else
+$(error version $(VER) is not supported)
 endif
 
 PG_CPPFLAGS = -std=c11
