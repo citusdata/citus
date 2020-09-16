@@ -23,7 +23,7 @@ insert into test_insert_command select * from test_insert_command_data;
 select count(*) from test_insert_command;
 
 drop table test_insert_command_data;
-drop foreign table test_insert_command;
+drop table test_insert_command;
 
 -- test long attribute value insertion
 -- create sufficiently long text so that data is stored in toast
