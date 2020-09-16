@@ -5,6 +5,7 @@
 COPY contestant FROM '/Users/jefdavi/wd/cstore2/data/contestants.1.csv'
 	WITH DELIMITER '|'; -- ERROR
 ERROR:  missing data for column "birthdate"
+CONTEXT:  COPY contestant, line 1: "a,1990-01-10,2090,97.1,XA ,{a}"
 -- COPY with invalid program
 COPY contestant FROM PROGRAM 'invalid_program' WITH CSV; -- ERROR
 ERROR:  program "invalid_program" failed
@@ -19,8 +20,8 @@ COPY contestant_compressed FROM '/Users/jefdavi/wd/cstore2/data/contestants.1.cs
 COPY contestant_compressed FROM PROGRAM 'cat /Users/jefdavi/wd/cstore2/data/contestants.2.csv'
 	WITH CSV;
 -- Test column list
-CREATE FOREIGN TABLE famous_constants (id int, name text, value real)
-    SERVER cstore_server;
+CREATE TABLE famous_constants (id int, name text, value real)
+    USING cstore_tableam;
 COPY famous_constants (value, name, id) FROM STDIN WITH CSV;
 COPY famous_constants (name, value) FROM STDIN WITH CSV;
 SELECT * FROM famous_constants ORDER BY id, name;
@@ -36,4 +37,4 @@ SELECT * FROM famous_constants ORDER BY id, name;
     | speed of light | 2.997e+08
 (8 rows)
 
-DROP FOREIGN TABLE famous_constants;
+DROP TABLE famous_constants;
