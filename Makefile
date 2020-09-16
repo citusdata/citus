@@ -7,7 +7,7 @@ MODULE_big = cstore_fdw
 
 PG_CPPFLAGS = -std=c11
 OBJS = cstore.o cstore_fdw.o cstore_writer.o cstore_reader.o \
-       cstore_compression.o mod.o cstore_metadata_tables.o cstore_tableam.o
+       cstore_compression.o mod.o cstore_metadata_tables.o
 
 EXTENSION = cstore_fdw
 DATA = cstore_fdw--1.7.sql cstore_fdw--1.6--1.7.sql  cstore_fdw--1.5--1.6.sql cstore_fdw--1.4--1.5.sql \
@@ -17,14 +17,21 @@ DATA = cstore_fdw--1.7.sql cstore_fdw--1.6--1.7.sql  cstore_fdw--1.5--1.6.sql cs
 #
 # disabled tests: am_block_filtering am_analyze am_alter
 #
-REGRESS = extension_create am_create am_load am_query am_data_types am_functions \
-	  am_drop am_insert am_copyto am_truncate clean \
-	  fdw_create fdw_load fdw_query fdw_analyze fdw_data_types fdw_functions \
-	  fdw_block_filtering fdw_drop fdw_insert fdw_copyto fdw_alter fdw_truncate
+REGRESS = extension_create
 EXTRA_CLEAN = cstore.pb-c.h cstore.pb-c.c data/*.cstore data/*.cstore.footer \
               sql/block_filtering.sql sql/create.sql sql/data_types.sql sql/load.sql \
               sql/copyto.sql expected/block_filtering.out expected/create.out \
               expected/data_types.out expected/load.out expected/copyto.out
+
+VER := $(shell pg_config --version)
+ifeq ($(findstring 12,$(VER)),12)
+	REGRESS += am_create am_load am_query am_data_types am_functions \
+			am_drop am_insert am_copyto am_truncate clean
+	OBJS += cstore_tableam.o
+endif
+
+REGRESS += fdw_create fdw_load fdw_query fdw_analyze fdw_data_types fdw_functions \
+		fdw_block_filtering fdw_drop fdw_insert fdw_copyto fdw_alter fdw_truncate
 
 ifeq ($(enable_coverage),yes)
 	PG_CPPFLAGS += --coverage
