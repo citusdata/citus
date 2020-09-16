@@ -692,9 +692,12 @@ create_estate_for_relation(Relation rel)
 	estate->es_output_cid = GetCurrentCommandId(true);
 
 #if PG_VERSION_NUM < 120000
+
 	/* Triggers might need a slot */
 	if (resultRelInfo->ri_TrigDesc)
+	{
 		estate->es_trig_tuple_slot = ExecInitExtraTupleSlot(estate, NULL);
+	}
 #endif
 
 	/* Prepare to catch AFTER triggers. */

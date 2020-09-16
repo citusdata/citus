@@ -363,21 +363,22 @@ CreateEmptyStripeSkipList(uint32 stripeMaxRowCount, uint32 blockRowCount,
 	return stripeSkipList;
 }
 
+
 static void
 WriteToSmgr(TableWriteState *writeState, char *data, uint32 dataLength)
 {
-	uint64		logicalOffset = writeState->currentFileOffset;
-	uint64		remaining	  = dataLength;
-	Relation	rel			  = writeState->relation;
-	Buffer		buffer;
+	uint64 logicalOffset = writeState->currentFileOffset;
+	uint64 remaining = dataLength;
+	Relation rel = writeState->relation;
+	Buffer buffer;
 
 	while (remaining > 0)
 	{
-		SmgrAddr	addr	= logical_to_smgr(logicalOffset);
+		SmgrAddr addr = logical_to_smgr(logicalOffset);
 		BlockNumber nblocks;
-		Page		page;
-		PageHeader	phdr;
-		uint64		to_write;
+		Page page;
+		PageHeader phdr;
+		uint64 to_write;
 
 		RelationOpenSmgr(rel);
 		nblocks = smgrnblocks(rel->rd_smgr, MAIN_FORKNUM);
@@ -397,7 +398,9 @@ WriteToSmgr(TableWriteState *writeState, char *data, uint32 dataLength)
 		page = BufferGetPage(buffer);
 		phdr = (PageHeader) page;
 		if (PageIsNew(page))
+		{
 			PageInit(page, BLCKSZ, 0);
+		}
 
 		/* always appending */
 		Assert(phdr->pd_lower == addr.offset);
@@ -433,6 +436,7 @@ WriteToSmgr(TableWriteState *writeState, char *data, uint32 dataLength)
 		logicalOffset += to_write;
 	}
 }
+
 
 /*
  * FlushStripe flushes current stripe data into the file. The function first ensures
@@ -831,6 +835,7 @@ AppendStripeMetadata(TableMetadata *tableMetadata, StripeMetadata stripeMetadata
 	tableMetadata->stripeMetadataList = lappend(tableMetadata->stripeMetadataList,
 												stripeMetadataCopy);
 }
+
 
 /*
  * CopyStringInfo creates a deep copy of given source string allocating only needed

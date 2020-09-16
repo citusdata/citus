@@ -204,6 +204,7 @@ typedef struct TableReadState
 	TableMetadata *tableMetadata;
 	TupleDesc tupleDescriptor;
 	Relation relation;
+
 	/*
 	 * List of Var pointers for columns in the query. We use this both for
 	 * getting vector of projected columns, and also when we want to build
@@ -301,7 +302,7 @@ extern StripeSkipList * ReadStripeSkipList(Oid relid, uint64 stripe,
 typedef struct SmgrAddr
 {
 	BlockNumber blockno;
-	uint32		offset;
+	uint32 offset;
 } SmgrAddr;
 
 /*
@@ -319,5 +320,6 @@ logical_to_smgr(uint64 logicalOffset)
 
 	return addr;
 }
+
 
 #endif /* CSTORE_H */

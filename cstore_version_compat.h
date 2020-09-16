@@ -2,7 +2,7 @@
  *
  * cstore_version_compat.h
  *
- * 	Compatibility macros for writing code agnostic to PostgreSQL versions
+ *  Compatibility macros for writing code agnostic to PostgreSQL versions
  *
  * Copyright (c) 2018, Citus Data, Inc.
  *
