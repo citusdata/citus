@@ -1037,26 +1037,27 @@ ColumnDefaultValue(TupleConstr *tupleConstraints, Form_pg_attribute attributeFor
 	return defaultValue;
 }
 
+
 static StringInfo
 ReadFromSmgr(Relation rel, uint64 offset, uint32 size)
 {
-	StringInfo	resultBuffer = makeStringInfo();
-	uint64		read		 = 0;
+	StringInfo resultBuffer = makeStringInfo();
+	uint64 read = 0;
 
 	enlargeStringInfo(resultBuffer, size);
 	resultBuffer->len = size;
 
 	while (read < size)
 	{
-		Buffer		buffer;
-		Page		page;
-		PageHeader	phdr;
-		uint32		to_read;
-		SmgrAddr	addr = logical_to_smgr(offset + read);
+		Buffer buffer;
+		Page page;
+		PageHeader phdr;
+		uint32 to_read;
+		SmgrAddr addr = logical_to_smgr(offset + read);
 
 		buffer = ReadBuffer(rel, addr.blockno);
 		page = BufferGetPage(buffer);
-		phdr = (PageHeader)page;
+		phdr = (PageHeader) page;
 
 		to_read = Min(size - read, phdr->pd_upper - addr.offset);
 		memcpy(resultBuffer->data + read, page + addr.offset, to_read);
@@ -1066,6 +1067,7 @@ ReadFromSmgr(Relation rel, uint64 offset, uint32 size)
 
 	return resultBuffer;
 }
+
 
 /*
  * ResetUncompressedBlockData iterates over deserialized column block data

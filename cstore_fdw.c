@@ -319,14 +319,14 @@ CStoreProcessUtility(Node * parseTree, const char * queryString,
 	}
 	else if (nodeTag(parseTree) == T_DropStmt)
 	{
-		List		*dropRelids = DroppedCStoreRelidList((DropStmt *) parseTree);
-		ListCell	*lc			= NULL;
+		List *dropRelids = DroppedCStoreRelidList((DropStmt *) parseTree);
+		ListCell *lc = NULL;
 
 		/* drop smgr storage */
 		foreach(lc, dropRelids)
 		{
-			Oid				 relid			 = lfirst_oid(lc);
-			Relation		 relation		 = cstore_fdw_open(relid, AccessExclusiveLock);
+			Oid relid = lfirst_oid(lc);
+			Relation relation = cstore_fdw_open(relid, AccessExclusiveLock);
 
 			RelationOpenSmgr(relation);
 			RelationDropStorage(relation);
@@ -334,7 +334,7 @@ CStoreProcessUtility(Node * parseTree, const char * queryString,
 		}
 
 		CALL_PREVIOUS_UTILITY(parseTree, queryString, context, paramListInfo,
-								destReceiver, completionTag);
+							  destReceiver, completionTag);
 	}
 	else if (nodeTag(parseTree) == T_TruncateStmt)
 	{
@@ -833,6 +833,7 @@ TruncateCStoreTables(List *cstoreRelationList)
 	}
 }
 
+
 /*
  * Version 11 and earlier already assign a relfilenode for foreign
  * tables. Version 12 and later do not, so we need to create one manually.
@@ -840,26 +841,28 @@ TruncateCStoreTables(List *cstoreRelationList)
 static void
 FdwNewRelFileNode(Relation relation)
 {
-	Relation        pg_class;
-	HeapTuple       tuple;
-	Form_pg_class   classform;
+	Relation pg_class;
+	HeapTuple tuple;
+	Form_pg_class classform;
 
 	pg_class = heap_open(RelationRelationId, RowExclusiveLock);
 
 	tuple = SearchSysCacheCopy1(RELOID,
 								ObjectIdGetDatum(RelationGetRelid(relation)));
 	if (!HeapTupleIsValid(tuple))
+	{
 		elog(ERROR, "could not find tuple for relation %u",
 			 RelationGetRelid(relation));
+	}
 	classform = (Form_pg_class) GETSTRUCT(tuple);
 
 	if (true)
 	{
-		char			persistence = relation->rd_rel->relpersistence;
-		Relation		tmprel;
-		Oid				tablespace;
-		Oid				filenode;
-		RelFileNode		newrnode;
+		char persistence = relation->rd_rel->relpersistence;
+		Relation tmprel;
+		Oid tablespace;
+		Oid filenode;
+		RelFileNode newrnode;
 
 		/*
 		 * Upgrade to AccessExclusiveLock, and hold until the end of the
@@ -870,12 +873,18 @@ FdwNewRelFileNode(Relation relation)
 		heap_close(tmprel, NoLock);
 
 		if (OidIsValid(relation->rd_rel->relfilenode))
+		{
 			RelationDropStorage(relation);
+		}
 
 		if (OidIsValid(relation->rd_rel->reltablespace))
+		{
 			tablespace = relation->rd_rel->reltablespace;
+		}
 		else
+		{
 			tablespace = MyDatabaseTableSpace;
+		}
 
 		filenode = GetNewRelFileNode(tablespace, NULL, persistence);
 
@@ -897,6 +906,7 @@ FdwNewRelFileNode(Relation relation)
 	heap_freetuple(tuple);
 	heap_close(pg_class, RowExclusiveLock);
 }
+
 
 static void
 FdwCreateStorage(Relation relation)
@@ -1692,7 +1702,7 @@ ColumnList(RelOptInfo *baserel, Oid foreignTableId)
 static void
 CStoreExplainForeignScan(ForeignScanState *scanState, ExplainState *explainState)
 {
-	Relation		 relation = scanState->ss.ss_currentRelation;
+	Relation relation = scanState->ss.ss_currentRelation;
 
 	cstore_fdw_initrel(relation);
 
@@ -2187,22 +2197,29 @@ cstore_fdw_initrel(Relation rel)
 {
 #if PG_VERSION_NUM >= 120000
 	if (rel->rd_rel->relfilenode == InvalidOid)
+	{
 		FdwNewRelFileNode(rel);
+	}
 
 	/*
 	 * Copied code from RelationInitPhysicalAddr(), which doesn't
 	 * work on foreign tables.
 	 */
 	if (OidIsValid(rel->rd_rel->reltablespace))
+	{
 		rel->rd_node.spcNode = rel->rd_rel->reltablespace;
+	}
 	else
+	{
 		rel->rd_node.spcNode = MyDatabaseTableSpace;
+	}
 
 	rel->rd_node.dbNode = MyDatabaseId;
 	rel->rd_node.relNode = rel->rd_rel->relfilenode;
 #endif
 	FdwCreateStorage(rel);
 }
+
 
 static Relation
 cstore_fdw_open(Oid relationId, LOCKMODE lockmode)
@@ -2213,6 +2230,7 @@ cstore_fdw_open(Oid relationId, LOCKMODE lockmode)
 
 	return rel;
 }
+
 
 static Relation
 cstore_fdw_openrv(RangeVar *relation, LOCKMODE lockmode)
