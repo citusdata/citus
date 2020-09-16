@@ -457,7 +457,8 @@ static bool
 cstore_scan_analyze_next_block(TableScanDesc scan, BlockNumber blockno,
 							   BufferAccessStrategy bstrategy)
 {
-	elog(ERROR, "cstore_scan_analyze_next_block not implemented");
+	/* TODO */
+	return false;
 }
 
 
@@ -466,7 +467,8 @@ cstore_scan_analyze_next_tuple(TableScanDesc scan, TransactionId OldestXmin,
 							   double *liverows, double *deadrows,
 							   TupleTableSlot *slot)
 {
-	elog(ERROR, "cstore_scan_analyze_next_tuple not implemented");
+	/* TODO */
+	return false;
 }
 
 
