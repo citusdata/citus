@@ -579,6 +579,21 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		{
 			ExecuteDistributedDDLJob(ddlJob);
 		}
+
+		/*
+		 * For CREATE/DROP/REINDEX CONCURRENTLY we mark the index as valid
+		 * after successfully completing the distributed DDL job.
+		 */
+		if (IsA(parsetree, IndexStmt))
+		{
+			IndexStmt *indexStmt = (IndexStmt *) parsetree;
+
+			if (indexStmt->concurrent)
+			{
+				/* no failures during CONCURRENTLY, mark the index as valid */
+				MarkIndexValid(indexStmt);
+			}
+		}
 	}
 
 	/* TODO: fold VACUUM's processing into the above block */
@@ -675,6 +690,18 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 	}
 	else
 	{
+		localExecutionSupported = false;
+
+		/*
+		 * Start a new transaction to make sure CONCURRENTLY commands
+		 * on localhost do not block waiting for this transaction to finish.
+		 */
+		if (ddlJob->startNewTransaction)
+		{
+			CommitTransactionCommand();
+			StartTransactionCommand();
+		}
+
 		/* save old commit protocol to restore at xact end */
 		Assert(SavedMultiShardCommitProtocol == COMMIT_PROTOCOL_BARE);
 		SavedMultiShardCommitProtocol = MultiShardCommitProtocol;

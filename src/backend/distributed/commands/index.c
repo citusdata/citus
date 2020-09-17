@@ -178,6 +178,7 @@ PreprocessIndexStmt(Node *node, const char *createIndexCommand)
 				DDLJob *ddlJob = palloc0(sizeof(DDLJob));
 				ddlJob->targetRelationId = relationId;
 				ddlJob->concurrentIndexCmd = createIndexStatement->concurrent;
+				ddlJob->startNewTransaction = createIndexStatement->concurrent;
 				ddlJob->commandString = createIndexCommand;
 				ddlJob->taskList = CreateIndexTaskList(relationId, createIndexStatement);
 
@@ -284,6 +285,7 @@ PreprocessReindexStmt(Node *node, const char *reindexCommand)
 			ddlJob->targetRelationId = relationId;
 #if PG_VERSION_NUM >= PG_VERSION_12
 			ddlJob->concurrentIndexCmd = reindexStatement->concurrent;
+			ddlJob->startNewTransaction = reindexStatement->concurrent;
 #else
 			ddlJob->concurrentIndexCmd = false;
 #endif
@@ -377,6 +379,13 @@ PreprocessDropIndexStmt(Node *node, const char *dropIndexCommand)
 
 		ddlJob->targetRelationId = distributedRelationId;
 		ddlJob->concurrentIndexCmd = dropIndexStatement->concurrent;
+
+		/*
+		 * We do not want DROP INDEX CONCURRENTLY to commit locally before
+		 * sending commands, because if there is a failure we would like to
+		 * to be able to repeat the DROP INDEX later.
+		 */
+		ddlJob->startNewTransaction = false;
 		ddlJob->commandString = dropIndexCommand;
 		ddlJob->taskList = DropIndexTaskList(distributedRelationId, distributedIndexId,
 											 dropIndexStatement);
@@ -441,23 +450,6 @@ PostprocessIndexStmt(Node *node, const char *queryString)
 	/* re-open a transaction command from here on out */
 	CommitTransactionCommand();
 	StartTransactionCommand();
-
-	/* now, update index's validity in a way that can roll back */
-	Relation pg_index = table_open(IndexRelationId, RowExclusiveLock);
-
-	HeapTuple indexTuple = SearchSysCacheCopy1(INDEXRELID, ObjectIdGetDatum(
-												   indexRelationId));
-	Assert(HeapTupleIsValid(indexTuple)); /* better be present, we have lock! */
-
-	/* mark as valid, save, and update pg_index indexes */
-	Form_pg_index indexForm = (Form_pg_index) GETSTRUCT(indexTuple);
-	indexForm->indisvalid = true;
-
-	CatalogTupleUpdate(pg_index, &indexTuple->t_self, indexTuple);
-
-	/* clean up; index now marked valid, but ROLLBACK will mark invalid */
-	heap_freetuple(indexTuple);
-	table_close(pg_index, RowExclusiveLock);
 
 	return NIL;
 }
@@ -920,4 +912,41 @@ DropIndexTaskList(Oid relationId, Oid indexId, DropStmt *dropStmt)
 	}
 
 	return taskList;
+}
+
+
+/*
+ * MarkIndexValid marks an index as valid after a CONCURRENTLY command. We mark
+ * indexes invalid in PostProcessIndexStmt and then commit, such that any failure
+ * leaves behind an invalid index. We mark it as valid here when the command
+ * completes.
+ */
+void
+MarkIndexValid(IndexStmt *indexStmt)
+{
+	Assert(indexStmt->concurrent);
+	Assert(IsCoordinator());
+
+	/*
+	 * We make sure schema name is not null in the PreprocessIndexStmt
+	 */
+	bool missingOk = false;
+	Oid schemaId = get_namespace_oid(indexStmt->relation->schemaname, missingOk);
+
+	Oid relationId PG_USED_FOR_ASSERTS_ONLY =
+		get_relname_relid(indexStmt->relation->relname, schemaId);
+
+	Assert(IsCitusTable(relationId));
+
+	/* get the affected relation and index */
+	Relation relation = table_openrv(indexStmt->relation, ShareUpdateExclusiveLock);
+	Oid indexRelationId = get_relname_relid(indexStmt->idxname,
+											schemaId);
+	Relation indexRelation = index_open(indexRelationId, RowExclusiveLock);
+
+	/* mark index as valid, in-place (cannot be rolled back) */
+	index_set_state_flags(indexRelationId, INDEX_CREATE_SET_VALID);
+
+	table_close(relation, NoLock);
+	index_close(indexRelation, NoLock);
 }
