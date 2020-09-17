@@ -147,7 +147,7 @@ static void ExplainAnalyzeDestPutTuple(TupleDestination *self, Task *task,
 static TupleDesc ExplainAnalyzeDestTupleDescForQuery(TupleDestination *self, int
 													 queryNumber);
 static char * WrapQueryForExplainAnalyze(const char *queryString, TupleDesc tupleDesc);
-static List * SplitString(const char *str, char delimiter);
+static List * SplitString(const char *str, char delimiter, int maxLength);
 
 /* Static Explain functions copied from explain.c */
 static void ExplainOneQuery(Query *query, int cursorOptions,
@@ -576,8 +576,11 @@ GetSavedRemoteExplain(Task *task, ExplainState *es)
 	 */
 	if (es->format == EXPLAIN_FORMAT_TEXT)
 	{
+		/*
+		 * We limit the size of EXPLAIN plans to RSIZE_MAX_MEM (256MB).
+		 */
 		remotePlan->explainOutputList = SplitString(task->fetchedExplainAnalyzePlan,
-													'\n');
+													'\n', RSIZE_MAX_MEM);
 	}
 	else
 	{
@@ -1392,9 +1395,9 @@ WrapQueryForExplainAnalyze(const char *queryString, TupleDesc tupleDesc)
  * it isn't safe if by any chance str is not null-terminated.
  */
 static List *
-SplitString(const char *str, char delimiter)
+SplitString(const char *str, char delimiter, int maxLength)
 {
-	size_t len = strnlen_s(str, RSIZE_MAX_STR);
+	size_t len = strnlen(str, maxLength);
 	if (len == 0)
 	{
 		return NIL;
