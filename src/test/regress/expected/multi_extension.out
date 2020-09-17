@@ -408,6 +408,27 @@ SELECT * FROM print_extension_changes();
 
 -- Test downgrade to 9.4-1 from 9.5-1
 ALTER EXTENSION citus UPDATE TO '9.5-1';
+BEGIN;
+  SELECT master_add_node('localhost', :master_port, groupId=>0);
+ master_add_node
+---------------------------------------------------------------------
+               1
+(1 row)
+
+  CREATE TABLE citus_local_table (a int);
+  SELECT create_citus_local_table('citus_local_table');
+ create_citus_local_table
+---------------------------------------------------------------------
+
+(1 row)
+
+  -- downgrade from 9.5-1 to 9.4-1 should fail as we have a citus local table
+  ALTER EXTENSION citus UPDATE TO '9.4-1';
+ERROR:  citus local tables are introduced in Citus 9.5
+HINT:  To downgrade Citus to an older version, you should first convert each citus local table to a postgres table by executing SELECT undistribute_table("%s")
+CONTEXT:  PL/pgSQL function inline_code_block line 10 at RAISE
+ROLLBACK;
+-- now we can downgrade
 ALTER EXTENSION citus UPDATE TO '9.4-1';
 -- Should be empty result since upgrade+downgrade should be a no-op
 SELECT * FROM print_extension_changes();
@@ -418,7 +439,7 @@ SELECT * FROM print_extension_changes();
 -- Snapshot of state at 9.5-1
 ALTER EXTENSION citus UPDATE TO '9.5-1';
 SELECT * FROM print_extension_changes();
-                           previous_object                           |            current_object
+                           previous_object                           |               current_object
 ---------------------------------------------------------------------
  function task_tracker_assign_task(bigint,integer,text)              |
  function task_tracker_cleanup_job(bigint)                           |
@@ -426,9 +447,10 @@ SELECT * FROM print_extension_changes();
  function task_tracker_task_status(bigint,integer)                   |
  function worker_execute_sql_task(bigint,integer,text,boolean)       |
  function worker_merge_files_and_run_query(bigint,integer,text,text) |
+                                                                     | function cluster_has_citus_local_table()
                                                                      | function create_citus_local_table(regclass)
                                                                      | function undistribute_table(regclass)
-(8 rows)
+(9 rows)
 
 DROP TABLE prev_objects, extension_diff;
 -- show running version

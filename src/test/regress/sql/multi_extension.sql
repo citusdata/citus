@@ -195,7 +195,19 @@ SELECT * FROM print_extension_changes();
 
 -- Test downgrade to 9.4-1 from 9.5-1
 ALTER EXTENSION citus UPDATE TO '9.5-1';
+
+BEGIN;
+  SELECT master_add_node('localhost', :master_port, groupId=>0);
+  CREATE TABLE citus_local_table (a int);
+  SELECT create_citus_local_table('citus_local_table');
+
+  -- downgrade from 9.5-1 to 9.4-1 should fail as we have a citus local table
+  ALTER EXTENSION citus UPDATE TO '9.4-1';
+ROLLBACK;
+
+-- now we can downgrade
 ALTER EXTENSION citus UPDATE TO '9.4-1';
+
 -- Should be empty result since upgrade+downgrade should be a no-op
 SELECT * FROM print_extension_changes();
 

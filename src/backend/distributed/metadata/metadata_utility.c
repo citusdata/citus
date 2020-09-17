@@ -154,6 +154,7 @@ citus_relation_size(PG_FUNCTION_ARGS)
 	PG_RETURN_INT64(relationSize);
 }
 
+
 /*
  * has_citus_local_table returns true if the cluster has any citus local
  * table.
