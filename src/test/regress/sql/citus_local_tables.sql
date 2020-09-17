@@ -445,5 +445,24 @@ FROM (SELECT tableName FROM pg_catalog.pg_tables WHERE tablename LIKE 'citus_loc
 -- cannot create a citus local table from a catalog table
 SELECT create_citus_local_table('pg_class');
 
+CREATE TABLE referencing_table(a int);
+SELECT create_citus_local_table('referencing_table');
+
+CREATE TABLE referenced_table(a int UNIQUE);
+SELECT create_citus_local_table('referenced_table');
+
+ALTER TABLE referencing_table ADD CONSTRAINT fkey_cl_to_cl FOREIGN KEY (a) REFERENCES referenced_table(a);
+
+-- observe the debug messages telling that we switch to sequential
+-- execution when truncating a citus local table that is referenced
+-- by another table
+\set VERBOSITY default
+SET client_min_messages TO DEBUG1;
+
+TRUNCATE referenced_table CASCADE;
+
+RESET client_min_messages;
+\set VERBOSITY terse
+
 -- cleanup at exit
 DROP SCHEMA citus_local_tables_test_schema, "CiTUS!LocalTables" CASCADE;

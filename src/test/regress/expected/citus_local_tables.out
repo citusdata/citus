@@ -657,6 +657,36 @@ FROM (SELECT tableName FROM pg_catalog.pg_tables WHERE tablename LIKE 'citus_loc
 -- cannot create a citus local table from a catalog table
 SELECT create_citus_local_table('pg_class');
 ERROR:  cannot create a citus table from a catalog table
+CREATE TABLE referencing_table(a int);
+SELECT create_citus_local_table('referencing_table');
+ create_citus_local_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE referenced_table(a int UNIQUE);
+SELECT create_citus_local_table('referenced_table');
+ create_citus_local_table
+---------------------------------------------------------------------
+
+(1 row)
+
+ALTER TABLE referencing_table ADD CONSTRAINT fkey_cl_to_cl FOREIGN KEY (a) REFERENCES referenced_table(a);
+NOTICE:  executing the command locally: SELECT worker_apply_inter_shard_ddl_command (1504038, 'citus_local_tables_test_schema', 1504039, 'citus_local_tables_test_schema', 'ALTER TABLE referencing_table ADD CONSTRAINT fkey_cl_to_cl FOREIGN KEY (a) REFERENCES referenced_table(a);')
+-- observe the debug messages telling that we switch to sequential
+-- execution when truncating a citus local table that is referenced
+-- by another table
+\set VERBOSITY default
+SET client_min_messages TO DEBUG1;
+TRUNCATE referenced_table CASCADE;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  Table "referenced_table" is modified, which might lead to data inconsistencies or distributed deadlocks via parallel accesses to hash distributed tables due to foreign keys. Any parallel modification to those hash distributed tables in the same transaction can only be executed in sequential query execution mode
+NOTICE:  truncate cascades to table "referencing_table"
+NOTICE:  executing the command locally: TRUNCATE TABLE citus_local_tables_test_schema.referenced_table_xxxxx CASCADE
+NOTICE:  truncate cascades to table "referencing_table_xxxxxxx"
+NOTICE:  executing the command locally: TRUNCATE TABLE citus_local_tables_test_schema.referencing_table_xxxxx CASCADE
+RESET client_min_messages;
+\set VERBOSITY terse
 -- cleanup at exit
 DROP SCHEMA citus_local_tables_test_schema, "CiTUS!LocalTables" CASCADE;
-NOTICE:  drop cascades to 18 other objects
+NOTICE:  drop cascades to 22 other objects
