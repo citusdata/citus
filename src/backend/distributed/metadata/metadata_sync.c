@@ -927,6 +927,24 @@ ShouldHaveShardsUpdateCommand(uint32 nodeId, bool shouldHaveShards)
 
 
 /*
+ * MetadataSyncedUpdateCommand generates a command that can be executed to
+ * update the metadatasynced column of a node in pg_dist_node table.
+ */
+char *
+MetadataSyncedUpdateCommand(uint32 nodeId, bool metadataSynced)
+{
+	StringInfo nodeStateUpdateCommand = makeStringInfo();
+	char *metadataSyncedString = metadataSynced ? "TRUE" : "FALSE";
+
+	appendStringInfo(nodeStateUpdateCommand,
+					 "UPDATE pg_catalog.pg_dist_node SET metadatasynced = %s "
+					 "WHERE nodeid = %u", metadataSyncedString, nodeId);
+
+	return nodeStateUpdateCommand->data;
+}
+
+
+/*
  * ColocationIdUpdateCommand creates the SQL command to change the colocationId
  * of the table with the given name to the given colocationId in pg_dist_partition
  * table.

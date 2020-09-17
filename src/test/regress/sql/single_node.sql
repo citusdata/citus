@@ -360,7 +360,18 @@ BEGIN
 END;$$;
 SELECT * FROM pg_dist_node;
 SELECT create_distributed_function('call_delegation(int)', '$1', 'test');
+
+CREATE FUNCTION function_delegation(int) RETURNS void AS $$
+BEGIN
+UPDATE test SET y = y + 1 WHERE x <  $1;
+END;
+$$ LANGUAGE plpgsql;
+SELECT create_distributed_function('function_delegation(int)', '$1', 'test');
+
+SET client_min_messages TO DEBUG1;
 CALL call_delegation(1);
+SELECT function_delegation(1);
+
 DROP TABLE test CASCADE;
 -- cannot remove coordinator since a reference table exists on coordinator and no other worker nodes are added
 SELECT 1 FROM master_remove_node('localhost', :master_port);

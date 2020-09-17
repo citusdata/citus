@@ -91,6 +91,8 @@ static void RemoveNodeFromCluster(char *nodeName, int32 nodePort);
 static int AddNodeMetadata(char *nodeName, int32 nodePort, NodeMetadata
 						   *nodeMetadata, bool *nodeAlreadyExists);
 static WorkerNode * SetNodeState(char *nodeName, int32 nodePort, bool isActive);
+static WorkerNode * SetNodeMetadataSync(char *nodeName, int nodePort, bool
+										metadataSynced);
 static HeapTuple GetNodeTuple(const char *nodeName, int32 nodePort);
 static int32 GetNextGroupId(void);
 static int GetNextNodeId(void);
@@ -641,6 +643,16 @@ ActivateNode(char *nodeName, int nodePort)
 	LockRelationOid(DistNodeRelationId(), ExclusiveLock);
 
 	WorkerNode *newWorkerNode = SetNodeState(nodeName, nodePort, isActive);
+
+	/*
+	 * Coordinator has always the authoritative metadata, reflect this
+	 * fact in the pg_dist_node.
+	 */
+	if (newWorkerNode->groupId == COORDINATOR_GROUP_ID)
+	{
+		bool metadataSynced = true;
+		SetNodeMetadataSync(nodeName, nodePort, metadataSynced);
+	}
 
 	SetUpDistributedTableDependencies(newWorkerNode);
 	return newWorkerNode->nodeId;
@@ -1260,6 +1272,13 @@ SetWorkerColumn(WorkerNode *workerNode, int columnIndex, Datum value)
 			break;
 		}
 
+		case Anum_pg_dist_node_metadatasynced:
+		{
+			metadataSyncCommand = MetadataSyncedUpdateCommand(workerNode->nodeId,
+															  DatumGetBool(value));
+			break;
+		}
+
 		default:
 		{
 			ereport(ERROR, (errmsg("could not find valid entry for node \"%s:%d\"",
@@ -1319,6 +1338,20 @@ SetNodeState(char *nodeName, int nodePort, bool isActive)
 	WorkerNode *workerNode = FindWorkerNodeAnyCluster(nodeName, nodePort);
 	return SetWorkerColumn(workerNode, Anum_pg_dist_node_isactive,
 						   BoolGetDatum(isActive));
+}
+
+
+/*
+ * SetNodeState function sets the isactive column of the specified worker in
+ * pg_dist_node to isActive.
+ * It returns the new worker node after the modification.
+ */
+static WorkerNode *
+SetNodeMetadataSync(char *nodeName, int nodePort, bool metadataSynced)
+{
+	WorkerNode *workerNode = FindWorkerNodeAnyCluster(nodeName, nodePort);
+	return SetWorkerColumn(workerNode, Anum_pg_dist_node_metadatasynced,
+						   BoolGetDatum(metadataSynced));
 }
 
 
