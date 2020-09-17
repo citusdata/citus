@@ -2982,5 +2982,21 @@ Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
                                                                           ->  Seq Scan on public.test_570030 l (never executed)
                                                                                 Output: xxxxxx
                                                                                 Filter: (l.x = 2)
-                                                              ->  M
+                                                              ->  Materialize (never executed)
+                                                                    Output: xxxxxx
+                                                                    ->  Nested Loop (never executed)
+                                                                          Output: xxxxxx
+                                                                          ->  Seq Scan on public.test_570030 m (never executed)
+                                                                                Output: xxxxxx
+                                                                                Filter: (m.x = 2)
+                                                                          ->  Materialize (never executed)
+                                                                                Output: xxxxxx
+                                                                                ->  Seq Scan on public.test_570030 n (never executed)
+                                                                                      Output: xxxxxx
+                                                                                      Filter: (n.x = 2)
+                                            ->  Materialize (never executed)
+                                                  Output: xxxxxx
+                                                  ->  Seq Scan on public.test_570030 f (never executed)
+                                                        Output: xxxxxx
+                                                        Filter: (f.x = 2)
 DROP TABLE simple, users_table_2, test;
