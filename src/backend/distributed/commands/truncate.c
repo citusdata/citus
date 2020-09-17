@@ -326,7 +326,7 @@ ExecuteTruncateStmtSequentialIfNecessary(TruncateStmt *command)
 
 			ereport(DEBUG1, (errmsg("switching to sequential query execution mode"),
 							 errdetail(
-								 "Reference table \"%s\" is modified, which might lead "
+								 "Table \"%s\" is modified, which might lead "
 								 "to data inconsistencies or distributed deadlocks via "
 								 "parallel accesses to hash distributed tables due to "
 								 "foreign keys. Any parallel modification to "

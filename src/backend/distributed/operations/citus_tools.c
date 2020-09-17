@@ -112,7 +112,12 @@ master_run_on_worker(PG_FUNCTION_ARGS)
 						"function return type are not compatible")));
 	}
 
-	/* prepare storage for status and result values */
+	/*
+	 * prepare storage for status and result values.
+	 * commandCount is based on user input however, it is the length of list
+	 * instead of a user given integer, hence this should be safe here in terms
+	 * of memory allocation.
+	 */
 	bool *statusArray = palloc0(commandCount * sizeof(bool));
 	StringInfo *resultArray = palloc0(commandCount * sizeof(StringInfo));
 	for (int commandIndex = 0; commandIndex < commandCount; commandIndex++)
