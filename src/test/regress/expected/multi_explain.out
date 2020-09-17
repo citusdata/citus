@@ -2913,4 +2913,74 @@ Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
               Tuples Inserted: 0
               Conflicting Tuples: 0
               ->  Seq Scan on users_table_2_570028 users_table_2 (actual rows=0 loops=1)
-DROP TABLE simple, users_table_2;
+-- https://github.com/citusdata/citus/issues/4169
+CREATE TABLE test (x int, y int);
+SELECT create_distributed_table('test', 'x');
+
+EXPLAIN  (VERBOSE on, COSTS off, ANALYZE on, TIMING off, SUMMARY off) SELECT * FROM (SELECT x, count(*), row_number() OVER (), lead(x) OVER (PARTITION BY x) FROM test a JOIN test b USING (x) JOIN test c JOIN test d JOIN test e JOIN test l JOIN test m JOIN test n USING (x) USING (x) USING (x) USING(x) USING(x) USING(x) JOIN test f USING (x) WHERE x = 2 OR x = 2 AND b.y > random() GROUP BY x ORDER BY x) foo ORDER BY 3 LIMIT 10;
+Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
+  Output: xxxxxx
+  Task Count: 1
+  Tuple data received from nodes: 0 bytes
+  Tasks Shown: All
+  ->  Task
+        Query: SELECT x, count, row_number, lead FROM (SELECT a.x, count(*) AS count, row_number() OVER () AS row_number, lead(a.x) OVER (PARTITION BY a.x) AS lead FROM (((public.test_570030 a(x, y) JOIN public.test_570030 b(x, y) USING (x)) JOIN (public.test_570030 c(x, y) JOIN (public.test_570030 d(x, y) JOIN (public.test_570030 e(x, y) JOIN (public.test_570030 l(x, y) JOIN (public.test_570030 m(x, y) JOIN public.test_570030 n(x, y) USING (x)) USING (x)) USING (x)) USING (x)) USING (x)) USING (x)) JOIN public.test_570030 f(x, y) USING (x)) WHERE ((a.x OPERATOR(pg_catalog.=) 2) OR ((a.x OPERATOR(pg_catalog.=) 2) AND ((b.y)::double precision OPERATOR(pg_catalog.>) random()))) GROUP BY a.x ORDER BY a.x) foo ORDER BY row_number LIMIT 10
+        Tuple data received from node: 0 bytes
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Limit (actual rows=0 loops=1)
+              Output: xxxxxx
+              ->  Sort (actual rows=0 loops=1)
+                    Output: xxxxxx
+                    Sort Key: (row_number() OVER (?))
+                    Sort Method: quicksort  Memory: 25kB
+                    ->  WindowAgg (actual rows=0 loops=1)
+                          Output: xxxxxx
+                          ->  WindowAgg (actual rows=0 loops=1)
+                                Output: xxxxxx
+                                ->  GroupAggregate (actual rows=0 loops=1)
+                                      Output: xxxxxx
+                                      Group Key: a.x
+                                      ->  Nested Loop (actual rows=0 loops=1)
+                                            Output: xxxxxx
+                                            ->  Nested Loop (actual rows=0 loops=1)
+                                                  Output: xxxxxx
+                                                  ->  Nested Loop (actual rows=0 loops=1)
+                                                        Output: xxxxxx
+                                                        ->  Nested Loop (actual rows=0 loops=1)
+                                                              Output: xxxxxx
+                                                              ->  Seq Scan on public.test_570030 a (actual rows=0 loops=1)
+                                                                    Output: xxxxxx
+                                                                    Filter: (a.x = 2)
+                                                              ->  Materialize (never executed)
+                                                                    Output: xxxxxx
+                                                                    ->  Seq Scan on public.test_570030 b (never executed)
+                                                                          Output: xxxxxx
+                                                                          Filter: (b.x = 2)
+                                                        ->  Materialize (never executed)
+                                                              Output: xxxxxx
+                                                              ->  Nested Loop (never executed)
+                                                                    Output: xxxxxx
+                                                                    ->  Seq Scan on public.test_570030 c (never executed)
+                                                                          Output: xxxxxx
+                                                                          Filter: (c.x = 2)
+                                                                    ->  Materialize (never executed)
+                                                                          Output: xxxxxx
+                                                                          ->  Seq Scan on public.test_570030 d (never executed)
+                                                                                Output: xxxxxx
+                                                                                Filter: (d.x = 2)
+                                                  ->  Materialize (never executed)
+                                                        Output: xxxxxx
+                                                        ->  Nested Loop (never executed)
+                                                              Output: xxxxxx
+                                                              ->  Nested Loop (never executed)
+                                                                    Output: xxxxxx
+                                                                    ->  Seq Scan on public.test_570030 e (never executed)
+                                                                          Output: xxxxxx
+                                                                          Filter: (e.x = 2)
+                                                                    ->  Materialize (never executed)
+                                                                          Output: xxxxxx
+                                                                          ->  Seq Scan on public.test_570030 l (never executed)
+                                                                                Output: xxxxxx
+                                                                                Filter: (l.x = 2)
+                                                              ->  M
+DROP TABLE simple, users_table_2, test;

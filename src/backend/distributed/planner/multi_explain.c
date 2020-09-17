@@ -1461,7 +1461,7 @@ WrapQueryForExplainAnalyze(const char *queryString, TupleDesc tupleDesc)
 static List *
 SplitString(const char *str, char delimiter)
 {
-	size_t len = strnlen_s(str, RSIZE_MAX_STR);
+	size_t len = strnlen(str, RSIZE_MAX_STR);
 	if (len == 0)
 	{
 		return NIL;

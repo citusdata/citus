@@ -1032,4 +1032,9 @@ PREPARE p4 (int, int) AS insert into users_table_2 ( value_1, user_id) select va
 EXPLAIN :default_explain_flags execute p4(20,20);
 EXPLAIN :default_analyze_flags execute p4(20,20);
 
-DROP TABLE simple, users_table_2;
+-- https://github.com/citusdata/citus/issues/4169
+CREATE TABLE test (x int, y int);
+SELECT create_distributed_table('test', 'x');
+EXPLAIN  (VERBOSE on, COSTS off, ANALYZE on, TIMING off, SUMMARY off) SELECT * FROM (SELECT x, count(*), row_number() OVER (), lead(x) OVER (PARTITION BY x) FROM test a JOIN test b USING (x) JOIN test c JOIN test d JOIN test e JOIN test l JOIN test m JOIN test n USING (x) USING (x) USING (x) USING(x) USING(x) USING(x) JOIN test f USING (x) WHERE x = 2 OR x = 2 AND b.y > random() GROUP BY x ORDER BY x) foo ORDER BY 3 LIMIT 10;
+
+DROP TABLE simple, users_table_2, test;
