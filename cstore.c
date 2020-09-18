@@ -17,9 +17,64 @@
 #include <unistd.h>
 
 #include "miscadmin.h"
+#include "utils/guc.h"
 #include "utils/rel.h"
 
 #include "cstore.h"
+
+int cstore_compression = DEFAULT_COMPRESSION_TYPE;
+int cstore_stripe_row_count = DEFAULT_STRIPE_ROW_COUNT;
+int cstore_block_row_count = DEFAULT_BLOCK_ROW_COUNT;
+
+static const struct config_enum_entry cstore_compression_options[] =
+{
+	{"none", COMPRESSION_NONE, false},
+	{"pglz", COMPRESSION_PG_LZ, false},
+	{NULL, 0, false}
+};
+
+void
+cstore_init()
+{
+	DefineCustomEnumVariable("cstore.compression",
+							 "Sets the maximum number of statements tracked by pg_stat_statements.",
+							 NULL,
+							 &cstore_compression,
+							 DEFAULT_COMPRESSION_TYPE,
+							 cstore_compression_options,
+							 PGC_POSTMASTER,
+							 0,
+							 NULL,
+							 NULL,
+							 NULL);
+
+	DefineCustomIntVariable("cstore.stripe_row_count",
+							"Sets the maximum number of statements tracked by pg_stat_statements.",
+							NULL,
+							&cstore_stripe_row_count,
+							DEFAULT_STRIPE_ROW_COUNT,
+							STRIPE_ROW_COUNT_MINIMUM,
+							STRIPE_ROW_COUNT_MAXIMUM,
+							PGC_USERSET,
+							0,
+							NULL,
+							NULL,
+							NULL);
+
+	DefineCustomIntVariable("cstore.block_row_count",
+							"Sets the maximum number of statements tracked by pg_stat_statements.",
+							NULL,
+							&cstore_block_row_count,
+							DEFAULT_BLOCK_ROW_COUNT,
+							BLOCK_ROW_COUNT_MINIMUM,
+							BLOCK_ROW_COUNT_MAXIMUM,
+							PGC_USERSET,
+							0,
+							NULL,
+							NULL,
+							NULL);
+}
+
 
 /* ParseCompressionType converts a string to a compression type. */
 CompressionType

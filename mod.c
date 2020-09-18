@@ -15,6 +15,7 @@
 
 #include "fmgr.h"
 
+#include "cstore.h"
 #include "mod.h"
 
 #ifdef USE_TABLEAM
@@ -30,6 +31,8 @@ PG_MODULE_MAGIC;
 void
 _PG_init(void)
 {
+	cstore_init();
+
 #ifdef USE_TABLEAM
 	cstore_tableam_init();
 #endif

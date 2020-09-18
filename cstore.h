@@ -249,6 +249,12 @@ typedef struct TableWriteState
 	StringInfo compressionBuffer;
 } TableWriteState;
 
+extern int cstore_compression;
+extern int cstore_stripe_row_count;
+extern int cstore_block_row_count;
+
+extern void cstore_init(void);
+
 extern CompressionType ParseCompressionType(const char *compressionTypeString);
 extern void InitializeCStoreTableFile(Oid relationId, Relation relation,
 									  CStoreOptions *cstoreOptions);
