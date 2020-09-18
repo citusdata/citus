@@ -47,12 +47,12 @@ static ExecutorEnd_hook_type PreviousExecutorEndHook = NULL;
 static MemoryContext CStoreContext = NULL;
 
 static CStoreOptions *
-CStoreGetDefaultOptions(void)
+CStoreTableAMGetOptions(void)
 {
 	CStoreOptions *cstoreOptions = palloc0(sizeof(CStoreOptions));
-	cstoreOptions->compressionType = DEFAULT_COMPRESSION_TYPE;
-	cstoreOptions->stripeRowCount = DEFAULT_STRIPE_ROW_COUNT;
-	cstoreOptions->blockRowCount = DEFAULT_BLOCK_ROW_COUNT;
+	cstoreOptions->compressionType = cstore_compression;
+	cstoreOptions->stripeRowCount = cstore_stripe_row_count;
+	cstoreOptions->blockRowCount = cstore_block_row_count;
 	return cstoreOptions;
 }
 
@@ -71,7 +71,7 @@ cstore_init_write_state(Relation relation)
 
 	if (CStoreWriteState == NULL)
 	{
-		CStoreOptions *cstoreOptions = CStoreGetDefaultOptions();
+		CStoreOptions *cstoreOptions = CStoreTableAMGetOptions();
 		TupleDesc tupdesc = RelationGetDescr(relation);
 		MemoryContext oldContext;
 
@@ -128,7 +128,7 @@ cstore_beginscan(Relation relation, Snapshot snapshot,
 	CStoreScanDesc scan = palloc(sizeof(CStoreScanDescData));
 	List *columnList = NIL;
 
-	cstoreOptions = CStoreGetDefaultOptions();
+	cstoreOptions = CStoreTableAMGetOptions();
 
 	scan->cs_base.rs_rd = relation;
 	scan->cs_base.rs_snapshot = snapshot;
@@ -419,7 +419,7 @@ cstore_relation_set_new_filenode(Relation rel,
 	*freezeXid = RecentXmin;
 	*minmulti = GetOldestMultiXactId();
 	srel = RelationCreateStorage(*newrnode, persistence);
-	InitializeCStoreTableFile(rel->rd_id, rel, CStoreGetDefaultOptions());
+	InitializeCStoreTableFile(rel->rd_id, rel, CStoreTableAMGetOptions());
 	smgrclose(srel);
 }
 

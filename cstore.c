@@ -22,6 +22,11 @@
 
 #include "cstore.h"
 
+/* Default values for option parameters */
+#define DEFAULT_COMPRESSION_TYPE COMPRESSION_NONE
+#define DEFAULT_STRIPE_ROW_COUNT 150000
+#define DEFAULT_BLOCK_ROW_COUNT 10000
+
 int cstore_compression = DEFAULT_COMPRESSION_TYPE;
 int cstore_stripe_row_count = DEFAULT_STRIPE_ROW_COUNT;
 int cstore_block_row_count = DEFAULT_BLOCK_ROW_COUNT;
