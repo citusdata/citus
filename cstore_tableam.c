@@ -56,6 +56,16 @@ CStoreTableAMGetOptions(void)
 	return cstoreOptions;
 }
 
+static MemoryContext
+CStoreMemoryContext(void)
+{
+	if (CStoreContext == NULL)
+	{
+		CStoreContext = AllocSetContextCreate(TopMemoryContext, "cstore context",
+											  ALLOCSET_DEFAULT_SIZES);
+	}
+	return CStoreContext;
+}
 
 static void
 cstore_init_write_state(Relation relation)
@@ -73,22 +83,13 @@ cstore_init_write_state(Relation relation)
 	{
 		CStoreOptions *cstoreOptions = CStoreTableAMGetOptions();
 		TupleDesc tupdesc = RelationGetDescr(relation);
-		MemoryContext oldContext;
-
-		if (CStoreContext == NULL)
-		{
-			CStoreContext = AllocSetContextCreate(TopMemoryContext, "cstore context",
-												  ALLOCSET_DEFAULT_SIZES);
-		}
 
 		elog(LOG, "initializing write state for relation %d", relation->rd_id);
-		oldContext = MemoryContextSwitchTo(CStoreContext);
 		CStoreWriteState = CStoreBeginWrite(relation->rd_id,
 											cstoreOptions->compressionType,
 											cstoreOptions->stripeRowCount,
 											cstoreOptions->blockRowCount,
 											tupdesc);
-		MemoryContextSwitchTo(oldContext);
 
 		CStoreWriteState->relation = relation;
 	}
@@ -127,6 +128,7 @@ cstore_beginscan(Relation relation, Snapshot snapshot,
 	TableReadState *readState = NULL;
 	CStoreScanDesc scan = palloc(sizeof(CStoreScanDescData));
 	List *columnList = NIL;
+	MemoryContext oldContext = MemoryContextSwitchTo(CStoreMemoryContext());
 
 	cstoreOptions = CStoreTableAMGetOptions();
 
@@ -162,6 +164,7 @@ cstore_beginscan(Relation relation, Snapshot snapshot,
 
 	scan->cs_readState = readState;
 
+	MemoryContextSwitchTo(oldContext);
 	return ((TableScanDesc) scan);
 }
 
@@ -187,11 +190,14 @@ cstore_getnextslot(TableScanDesc sscan, ScanDirection direction, TupleTableSlot 
 {
 	CStoreScanDesc scan = (CStoreScanDesc) sscan;
 	bool nextRowFound;
+	MemoryContext oldContext = MemoryContextSwitchTo(CStoreMemoryContext());
 
 	ExecClearTuple(slot);
 
 	nextRowFound = CStoreReadNextRow(scan->cs_readState, slot->tts_values,
 									 slot->tts_isnull);
+
+	MemoryContextSwitchTo(oldContext);
 
 	if (!nextRowFound)
 	{
@@ -303,6 +309,7 @@ cstore_tuple_insert(Relation relation, TupleTableSlot *slot, CommandId cid,
 					int options, BulkInsertState bistate)
 {
 	HeapTuple heapTuple;
+	MemoryContext oldContext = MemoryContextSwitchTo(CStoreMemoryContext());
 
 	cstore_init_write_state(relation);
 
@@ -319,6 +326,7 @@ cstore_tuple_insert(Relation relation, TupleTableSlot *slot, CommandId cid,
 	slot_getallattrs(slot);
 
 	CStoreWriteRow(CStoreWriteState, slot->tts_values, slot->tts_isnull);
+	MemoryContextSwitchTo(oldContext);
 }
 
 
@@ -343,6 +351,8 @@ static void
 cstore_multi_insert(Relation relation, TupleTableSlot **slots, int ntuples,
 					CommandId cid, int options, BulkInsertState bistate)
 {
+	MemoryContext oldContext = MemoryContextSwitchTo(CStoreMemoryContext());
+
 	cstore_init_write_state(relation);
 
 	for (int i = 0; i < ntuples; i++)
@@ -363,6 +373,7 @@ cstore_multi_insert(Relation relation, TupleTableSlot **slots, int ntuples,
 
 		CStoreWriteRow(CStoreWriteState, tupleSlot->tts_values, tupleSlot->tts_isnull);
 	}
+	MemoryContextSwitchTo(oldContext);
 }
 
 

@@ -16,11 +16,13 @@ COPY contestant FROM '/Users/jefdavi/wd/cstore2/data/contestants.1.csv' WITH CSV
 COPY contestant FROM PROGRAM 'cat /Users/jefdavi/wd/cstore2/data/contestants.2.csv' WITH CSV;
 
 -- COPY into compressed table
+set cstore.compression = 'pglz';
 COPY contestant_compressed FROM '/Users/jefdavi/wd/cstore2/data/contestants.1.csv' WITH CSV;
 
 -- COPY into uncompressed table from program
 COPY contestant_compressed FROM PROGRAM 'cat /Users/jefdavi/wd/cstore2/data/contestants.2.csv'
 	WITH CSV;
+set cstore.compression to default;
 
 -- Test column list
 CREATE TABLE famous_constants (id int, name text, value real)

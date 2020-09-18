@@ -53,7 +53,8 @@ ifeq ($(USE_TABLEAM),yes)
 	PG_CFLAGS += -DUSE_TABLEAM
 	OBJS += cstore_tableam.o
 	REGRESS += am_create am_load am_query am_data_types am_functions \
-	           am_drop am_insert am_copyto am_alter am_truncate am_clean
+	           am_block_filtering am_drop am_insert am_copyto am_alter \
+		   am_truncate am_clean
 endif
 
 ifeq ($(enable_coverage),yes)

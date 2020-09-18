@@ -12,11 +12,14 @@ SELECT substring(:'server_version', '\d+')::int > 10 AS version_above_ten;
 -- CREATE a cstore_fdw table, fill with some data --
 CREATE TABLE cstore_truncate_test (a int, b int) USING cstore_tableam;
 CREATE TABLE cstore_truncate_test_second (a int, b int) USING cstore_tableam;
+-- COMPRESSED
 CREATE TABLE cstore_truncate_test_compressed (a int, b int) USING cstore_tableam;
 CREATE TABLE cstore_truncate_test_regular (a int, b int);
 INSERT INTO cstore_truncate_test select a, a from generate_series(1, 10) a;
+set cstore.compression = 'pglz';
 INSERT INTO cstore_truncate_test_compressed select a, a from generate_series(1, 10) a;
 INSERT INTO cstore_truncate_test_compressed select a, a from generate_series(1, 10) a;
+set cstore.compression to default;
 -- query rows
 SELECT * FROM cstore_truncate_test;
  a  | b  
@@ -168,8 +171,11 @@ DROP TABLE cstore_truncate_test_regular;
 DROP TABLE cstore_truncate_test_compressed;
 -- test truncate with schema
 CREATE SCHEMA truncate_schema;
+-- COMPRESSED
 CREATE TABLE truncate_schema.truncate_tbl (id int) USING cstore_tableam;
+set cstore.compression = 'pglz';
 INSERT INTO truncate_schema.truncate_tbl SELECT generate_series(1, 100);
+set cstore.compression to default;
 SELECT COUNT(*) FROM truncate_schema.truncate_tbl;
  count 
 -------
@@ -183,7 +189,9 @@ SELECT COUNT(*) FROM truncate_schema.truncate_tbl;
      0
 (1 row)
 
+set cstore.compression = 'pglz';
 INSERT INTO truncate_schema.truncate_tbl SELECT generate_series(1, 100);
+set cstore.compression to default;
 -- create a user that can not truncate
 CREATE USER truncate_user;
 GRANT USAGE ON SCHEMA truncate_schema TO truncate_user;

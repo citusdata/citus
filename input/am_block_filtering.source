@@ -28,6 +28,9 @@ $$ LANGUAGE PLPGSQL;
 
 
 -- Create and load data
+-- block_row_count '1000', stripe_row_count '2000'
+set cstore.stripe_row_count = 2000;
+set cstore.block_row_count = 1000;
 CREATE TABLE test_block_filtering (a int)
     USING cstore_tableam;
 
@@ -55,6 +58,8 @@ SELECT filtered_row_count('SELECT count(*) FROM test_block_filtering WHERE a < 2
 SELECT filtered_row_count('SELECT count(*) FROM test_block_filtering WHERE a < 0');
 SELECT filtered_row_count('SELECT count(*) FROM test_block_filtering WHERE a BETWEEN 990 AND 2010');
 
+set cstore.stripe_row_count to default;
+set cstore.block_row_count to default;
 
 -- Verify that we are fine with collations which use a different alphabet order
 CREATE TABLE collation_block_filtering_test(A text collate "da_DK")

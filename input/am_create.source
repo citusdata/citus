@@ -10,6 +10,7 @@ CREATE TABLE contestant (handle TEXT, birthdate DATE, rating INT,
 
 
 -- Create compressed table with automatically determined file path
+-- COMPRESSED
 CREATE TABLE contestant_compressed (handle TEXT, birthdate DATE, rating INT,
 	percentile FLOAT, country CHAR(3), achievements TEXT[])
 	USING cstore_tableam;
