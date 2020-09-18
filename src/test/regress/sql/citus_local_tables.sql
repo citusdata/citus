@@ -27,6 +27,9 @@ SELECT 1 FROM master_remove_node('localhost', :master_port);
 
 DROP TABLE citus_local_table_1;
 
+-- should return false
+SELECT cluster_has_citus_local_table();
+
 -- this should work now as the citus local table is dropped
 SELECT 1 FROM master_remove_node('localhost', :master_port);
 
@@ -42,6 +45,9 @@ RESET client_min_messages;
 
 -- creating citus local table having no data initially would work
 SELECT create_citus_local_table('citus_local_table_1');
+
+-- should return true
+SELECT cluster_has_citus_local_table();
 
 -- creating citus local table having data in it would also work
 CREATE TABLE citus_local_table_2(a int primary key);

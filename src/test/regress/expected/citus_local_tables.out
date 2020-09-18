@@ -30,6 +30,13 @@ SELECT 1 FROM master_remove_node('localhost', :master_port);
 ERROR:  cannot remove the primary node of a node group which has shard placements
 DROP TABLE citus_local_table_1;
 NOTICE:  executing the command locally: DROP TABLE IF EXISTS citus_local_tables_test_schema.citus_local_table_1_xxxxx CASCADE
+-- should return false
+SELECT cluster_has_citus_local_table();
+ cluster_has_citus_local_table
+---------------------------------------------------------------------
+ f
+(1 row)
+
 -- this should work now as the citus local table is dropped
 SELECT 1 FROM master_remove_node('localhost', :master_port);
  ?column?
@@ -55,6 +62,13 @@ SELECT create_citus_local_table('citus_local_table_1');
  create_citus_local_table
 ---------------------------------------------------------------------
 
+(1 row)
+
+-- should return true
+SELECT cluster_has_citus_local_table();
+ cluster_has_citus_local_table
+---------------------------------------------------------------------
+ t
 (1 row)
 
 -- creating citus local table having data in it would also work
