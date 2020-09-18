@@ -72,7 +72,7 @@ WarnIfSyncDNS(void)
 bool
 CollectBasicUsageStatistics(void)
 {
-	List *distTableOids = NIL;
+	List *citusTableIdList = NIL;
 	uint64 roundedDistTableCount = 0;
 	uint64 roundedClusterSize = 0;
 	uint32 workerNodeCount = 0;
@@ -93,9 +93,9 @@ CollectBasicUsageStatistics(void)
 
 	PG_TRY();
 	{
-		distTableOids = DistTableOidList();
-		roundedDistTableCount = NextPow2(list_length(distTableOids));
-		roundedClusterSize = NextPow2(DistributedTablesSize(distTableOids));
+		citusTableIdList = CitusTableTypeIdList(ANY_CITUS_TABLE_TYPE);
+		roundedDistTableCount = NextPow2(list_length(citusTableIdList));
+		roundedClusterSize = NextPow2(DistributedTablesSize(citusTableIdList));
 		workerNodeCount = ActivePrimaryNonCoordinatorNodeCount();
 		metadataJsonbDatum = DistNodeMetadata();
 		metadataJsonbStr = DatumGetCString(DirectFunctionCall1(jsonb_out,

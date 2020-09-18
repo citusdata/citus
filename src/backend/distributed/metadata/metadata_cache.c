@@ -376,6 +376,11 @@ IsCitusTableTypeInternal(CitusTableCacheEntry *tableEntry, CitusTableType tableT
 			return tableEntry->partitionMethod == DISTRIBUTE_BY_NONE;
 		}
 
+		case ANY_CITUS_TABLE_TYPE:
+		{
+			return true;
+		}
+
 		default:
 		{
 			ereport(ERROR, (errmsg("Unknown table type %d", tableType)));
@@ -468,10 +473,10 @@ CitusTableList(void)
 	Assert(CitusHasBeenLoaded() && CheckCitusVersion(WARNING));
 
 	/* first, we need to iterate over pg_dist_partition */
-	List *distTableOidList = DistTableOidList();
+	List *citusTableIdList = CitusTableTypeIdList(ANY_CITUS_TABLE_TYPE);
 
 	Oid relationId = InvalidOid;
-	foreach_oid(relationId, distTableOidList)
+	foreach_oid(relationId, citusTableIdList)
 	{
 		CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
 
@@ -3775,15 +3780,19 @@ InvalidateMetadataSystemCache(void)
 
 
 /*
- * DistTableOidList iterates over the pg_dist_partition table and returns
- * a list that consists of the logicalrelids.
+ * CitusTableTypeIdList function scans pg_dist_partition and returns a
+ * list of OID's for the tables matching given citusTableType.
+ * To create the list, it performs sequential scan. Since it is not expected
+ * that this function will be called frequently, it is OK not to use index
+ * scan. If this function becomes performance bottleneck, it is possible to
+ * modify this function to perform index scan.
  */
 List *
-DistTableOidList(void)
+CitusTableTypeIdList(CitusTableType citusTableType)
 {
 	ScanKeyData scanKey[1];
 	int scanKeyCount = 0;
-	List *distTableOidList = NIL;
+	List *relationIdList = NIL;
 
 	Relation pgDistPartition = table_open(DistPartitionRelationId(), AccessShareLock);
 
@@ -3801,60 +3810,9 @@ DistTableOidList(void)
 											 Anum_pg_dist_partition_logicalrelid,
 											 tupleDescriptor, &isNull);
 		Oid relationId = DatumGetObjectId(relationIdDatum);
-		distTableOidList = lappend_oid(distTableOidList, relationId);
-
-		heapTuple = systable_getnext(scanDescriptor);
-	}
-
-	systable_endscan(scanDescriptor);
-	table_close(pgDistPartition, AccessShareLock);
-
-	return distTableOidList;
-}
-
-
-/*
- * ReferenceTableOidList function scans pg_dist_partition to create a list of all
- * reference tables. To create the list, it performs sequential scan. Since it is not
- * expected that this function will be called frequently, it is OK not to use index scan.
- * If this function becomes performance bottleneck, it is possible to modify this function
- * to perform index scan.
- */
-List *
-ReferenceTableOidList()
-{
-	ScanKeyData scanKey[1];
-	int scanKeyCount = 0;
-	List *referenceTableOidList = NIL;
-
-	Relation pgDistPartition = table_open(DistPartitionRelationId(), AccessShareLock);
-
-	SysScanDesc scanDescriptor = systable_beginscan(pgDistPartition,
-													InvalidOid, false,
-													NULL, scanKeyCount, scanKey);
-
-	TupleDesc tupleDescriptor = RelationGetDescr(pgDistPartition);
-
-	HeapTuple heapTuple = systable_getnext(scanDescriptor);
-	while (HeapTupleIsValid(heapTuple))
-	{
-		bool isNull = false;
-		char partitionMethod = heap_getattr(heapTuple,
-											Anum_pg_dist_partition_partmethod,
-											tupleDescriptor, &isNull);
-		char replicationModel = heap_getattr(heapTuple,
-											 Anum_pg_dist_partition_repmodel,
-											 tupleDescriptor, &isNull);
-
-		if (IsReferenceTableByDistParams(partitionMethod, replicationModel))
+		if (IsCitusTableType(relationId, citusTableType))
 		{
-			Datum relationIdDatum = heap_getattr(heapTuple,
-												 Anum_pg_dist_partition_logicalrelid,
-												 tupleDescriptor, &isNull);
-
-			Oid relationId = DatumGetObjectId(relationIdDatum);
-
-			referenceTableOidList = lappend_oid(referenceTableOidList, relationId);
+			relationIdList = lappend_oid(relationIdList, relationId);
 		}
 
 		heapTuple = systable_getnext(scanDescriptor);
@@ -3863,7 +3821,7 @@ ReferenceTableOidList()
 	systable_endscan(scanDescriptor);
 	table_close(pgDistPartition, AccessShareLock);
 
-	return referenceTableOidList;
+	return relationIdList;
 }
 
 
@@ -3874,7 +3832,7 @@ ReferenceTableOidList()
 bool
 ClusterHasReferenceTable(void)
 {
-	return list_length(ReferenceTableOidList()) > 0;
+	return list_length(CitusTableTypeIdList(REFERENCE_TABLE)) > 0;
 }
 
 
