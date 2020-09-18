@@ -56,6 +56,7 @@ CStoreTableAMGetOptions(void)
 	return cstoreOptions;
 }
 
+
 static MemoryContext
 CStoreMemoryContext(void)
 {
@@ -66,6 +67,7 @@ CStoreMemoryContext(void)
 	}
 	return CStoreContext;
 }
+
 
 static void
 cstore_init_write_state(Relation relation)

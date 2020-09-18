@@ -33,9 +33,9 @@ int cstore_block_row_count = DEFAULT_BLOCK_ROW_COUNT;
 
 static const struct config_enum_entry cstore_compression_options[] =
 {
-	{"none", COMPRESSION_NONE, false},
-	{"pglz", COMPRESSION_PG_LZ, false},
-	{NULL, 0, false}
+	{ "none", COMPRESSION_NONE, false },
+	{ "pglz", COMPRESSION_PG_LZ, false },
+	{ NULL, 0, false }
 };
 
 void
