@@ -37,7 +37,6 @@
 #define X509_SUBJECT_COMMON_NAME "CN"
 
 #define POSTGRES_DEFAULT_SSL_CIPHERS "HIGH:MEDIUM:+3DES:!aNULL"
-#define CITUS_DEFAULT_SSL_CIPHERS_OLD "TLSv1.2+HIGH:!aNULL:!eNULL"
 
 /*
  * Microsoft approved cipher string.
