@@ -145,13 +145,16 @@ cstore_beginscan(Relation relation, Snapshot snapshot,
 		int32 vartypmod = 0;
 		Oid varcollid = 0;
 		Index varlevelsup = 0;
-		Var *var = makeVar(varno, varattno, vartype, vartypmod,
-						   varcollid, varlevelsup);
+		Var *var;
 
 		if (!tupdesc->attrs[i].attisdropped)
 		{
-			columnList = lappend(columnList, var);
+			continue;
 		}
+
+		var = makeVar(varno, varattno, vartype, vartypmod,
+					  varcollid, varlevelsup);
+		columnList = lappend(columnList, var);
 	}
 
 	readState = CStoreBeginRead(relid, tupdesc, columnList, NULL);
@@ -183,13 +186,9 @@ static bool
 cstore_getnextslot(TableScanDesc sscan, ScanDirection direction, TupleTableSlot *slot)
 {
 	CStoreScanDesc scan = (CStoreScanDesc) sscan;
-	TupleDesc tupdesc = slot->tts_tupleDescriptor;
-	int natts = tupdesc->natts;
 	bool nextRowFound;
 
 	ExecClearTuple(slot);
-	memset(slot->tts_values, 0, sizeof(Datum) * natts);
-	memset(slot->tts_isnull, true, sizeof(bool) * natts);
 
 	nextRowFound = CStoreReadNextRow(scan->cs_readState, slot->tts_values,
 									 slot->tts_isnull);
@@ -537,6 +536,7 @@ cstore_estimate_rel_size(Relation rel, int32 *attr_widths,
 						 BlockNumber *pages, double *tuples,
 						 double *allvisfrac)
 {
+	/* TODO */
 	*attr_widths = 12;
 	*tuples = 100;
 	*pages = 10;
