@@ -549,11 +549,17 @@ cstore_estimate_rel_size(Relation rel, int32 *attr_widths,
 						 BlockNumber *pages, double *tuples,
 						 double *allvisfrac)
 {
-	/* TODO */
-	*attr_widths = 12;
-	*tuples = 100;
-	*pages = 10;
+	RelationOpenSmgr(rel);
+	*pages = smgrnblocks(rel->rd_smgr, MAIN_FORKNUM);
+	*tuples = CStoreTableRowCount(rel);
+
+	/*
+	 * Append-only, so everything is visible except in-progress or rolled-back
+	 * transactions.
+	 */
 	*allvisfrac = 1.0;
+
+	get_rel_data_width(rel, attr_widths);
 }
 
 
