@@ -741,7 +741,7 @@ SELECT create_distributed_function('call_delegation(int)', '$1', 'test');
 CALL call_delegation(1);
 DROP TABLE test CASCADE;
 NOTICE:  drop cascades to view single_node_view
--- cannot remove since a ref table exists on coordinator and no other nodes is added
+-- cannot remove coordinator since a reference table exists on coordinator and no other worker nodes are added
 SELECT 1 FROM master_remove_node('localhost', :master_port);
 ERROR:  cannot remove the last worker node because there are reference tables and it would cause data loss on reference tables
 HINT:  To proceed, either drop the reference tables or use undistribute_table() function to convert them to local tables
