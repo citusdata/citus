@@ -47,7 +47,7 @@ cstore_init()
 							 &cstore_compression,
 							 DEFAULT_COMPRESSION_TYPE,
 							 cstore_compression_options,
-							 PGC_POSTMASTER,
+							 PGC_USERSET,
 							 0,
 							 NULL,
 							 NULL,
