@@ -147,7 +147,7 @@ cstore_beginscan(Relation relation, Snapshot snapshot,
 		Index varlevelsup = 0;
 		Var *var;
 
-		if (!tupdesc->attrs[i].attisdropped)
+		if (tupdesc->attrs[i].attisdropped)
 		{
 			continue;
 		}
