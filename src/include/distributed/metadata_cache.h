@@ -162,6 +162,7 @@ extern void InvalidateForeignKeyGraph(void);
 extern void FlushDistTableCache(void);
 extern void InvalidateMetadataSystemCache(void);
 extern Datum DistNodeMetadata(void);
+extern bool ClusterHasReferenceTable(void);
 extern bool HasUniformHashDistribution(ShardInterval **shardIntervalArray,
 									   int shardIntervalArrayLength);
 extern bool HasUninitializedShardInterval(ShardInterval **sortedShardIntervalArray,

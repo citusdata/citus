@@ -104,6 +104,8 @@ WHERE colocationid IN
      FROM pg_dist_partition
      WHERE logicalrelid = 'remove_node_reference_table'::regclass);
 
+SELECT master_remove_node('localhost', :worker_1_port);
+
 \c - - - :worker_1_port
 
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;

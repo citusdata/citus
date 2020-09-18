@@ -117,7 +117,8 @@ SELECT shardid, shardstate, nodename, nodeport FROM pg_dist_shard_placement WHER
 
 -- try to remove a node with active placements and see that node removal is failed
 SELECT master_remove_node('localhost', :worker_2_port);
-ERROR:  you cannot remove the primary node of a node group which has shard placements
+ERROR:  cannot remove the primary node of a node group which has shard placements
+HINT:  To proceed, either drop the distributed tables or use undistribute_table() function to convert them to local tables
 SELECT master_get_active_worker_nodes();
  master_get_active_worker_nodes
 ---------------------------------------------------------------------
@@ -256,7 +257,8 @@ DETAIL:  distributed objects are only kept in sync when citus.enable_object_prop
 
 -- try to remove a node with active placements and see that node removal is failed
 SELECT master_remove_node('localhost', :worker_2_port);
-ERROR:  you cannot remove the primary node of a node group which has shard placements
+ERROR:  cannot remove the primary node of a node group which has shard placements
+HINT:  To proceed, either drop the distributed tables or use undistribute_table() function to convert them to local tables
 -- mark all placements in the candidate node as inactive
 SELECT groupid AS worker_2_group FROM pg_dist_node WHERE nodeport=:worker_2_port \gset
 UPDATE pg_dist_placement SET shardstate=3 WHERE groupid=:worker_2_group;
@@ -275,7 +277,8 @@ SELECT shardid, shardstate, nodename, nodeport FROM pg_dist_shard_placement WHER
 
 -- try to remove a node with only inactive placements and see that removal still fails
 SELECT master_remove_node('localhost', :worker_2_port);
-ERROR:  you cannot remove the primary node of a node group which has shard placements
+ERROR:  cannot remove the primary node of a node group which has shard placements
+HINT:  To proceed, either drop the distributed tables or use undistribute_table() function to convert them to local tables
 SELECT master_get_active_worker_nodes();
  master_get_active_worker_nodes
 ---------------------------------------------------------------------
@@ -337,7 +340,8 @@ SELECT logicalrelid, shardid, shardstate, nodename, nodeport FROM pg_dist_shard_
 
 -- try to remove a node with only to be deleted placements and see that removal still fails
 SELECT master_remove_node('localhost', :worker_2_port);
-ERROR:  you cannot remove the primary node of a node group which has shard placements
+ERROR:  cannot remove the primary node of a node group which has shard placements
+HINT:  To proceed, either drop the distributed tables or use undistribute_table() function to convert them to local tables
 SELECT master_get_active_worker_nodes();
  master_get_active_worker_nodes
 ---------------------------------------------------------------------
@@ -378,7 +382,8 @@ SELECT 1 FROM master_add_node('localhost', 9990, groupid => :new_group, noderole
 (1 row)
 
 SELECT master_remove_node('localhost', :worker_2_port);
-ERROR:  you cannot remove the primary node of a node group which has shard placements
+ERROR:  cannot remove the primary node of a node group which has shard placements
+HINT:  To proceed, either drop the distributed tables or use undistribute_table() function to convert them to local tables
 SELECT master_remove_node('localhost', 9990);
  master_remove_node
 ---------------------------------------------------------------------

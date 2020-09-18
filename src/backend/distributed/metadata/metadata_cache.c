@@ -3868,6 +3868,17 @@ ReferenceTableOidList()
 
 
 /*
+ * ClusterHasReferenceTable returns true if the cluster has
+ * any reference table.
+ */
+bool
+ClusterHasReferenceTable(void)
+{
+	return list_length(ReferenceTableOidList()) > 0;
+}
+
+
+/*
  * InvalidateNodeRelationCacheCallback destroys the WorkerNodeHash when
  * any change happens on pg_dist_node table. It also set WorkerNodeHash to
  * NULL, which allows consequent accesses to the hash read from the
