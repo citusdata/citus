@@ -111,7 +111,7 @@ EnsureReferenceTablesExistOnAllNodesExtended(char transferMode)
 	int colocationId = CreateReferenceTableColocationId();
 	LockColocationId(colocationId, ExclusiveLock);
 
-	List *referenceTableIdList = ReferenceTableOidList();
+	List *referenceTableIdList = CitusTableTypeIdList(REFERENCE_TABLE);
 	if (referenceTableIdList == NIL)
 	{
 		/* no reference tables exist */
@@ -620,7 +620,7 @@ CreateReferenceTableColocationId()
 void
 DeleteAllReferenceTablePlacementsFromNodeGroup(int32 groupId)
 {
-	List *referenceTableList = ReferenceTableOidList();
+	List *referenceTableList = CitusTableTypeIdList(REFERENCE_TABLE);
 	List *referenceShardIntervalList = NIL;
 
 	/* if there are no reference tables, we do not need to do anything */
@@ -714,7 +714,7 @@ ReferenceTableReplicationFactor(void)
 void
 ReplicateAllReferenceTablesToNode(char *nodeName, int nodePort)
 {
-	List *referenceTableList = ReferenceTableOidList();
+	List *referenceTableList = CitusTableTypeIdList(REFERENCE_TABLE);
 
 	/* if there is no reference table, we do not need to replicate anything */
 	if (list_length(referenceTableList) > 0)

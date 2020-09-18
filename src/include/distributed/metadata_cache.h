@@ -129,7 +129,9 @@ typedef enum
 	CITUS_LOCAL_TABLE,
 
 	/* table without a dist key such as reference table */
-	CITUS_TABLE_WITH_NO_DIST_KEY
+	CITUS_TABLE_WITH_NO_DIST_KEY,
+
+	ANY_CITUS_TABLE_TYPE
 } CitusTableType;
 
 extern bool IsCitusTableType(Oid relationId, CitusTableType tableType);
@@ -151,8 +153,6 @@ extern CitusTableCacheEntry * LookupCitusTableCacheEntry(Oid relationId);
 extern DistObjectCacheEntry * LookupDistObjectCacheEntry(Oid classid, Oid objid, int32
 														 objsubid);
 extern int32 GetLocalGroupId(void);
-extern List * DistTableOidList(void);
-extern List * ReferenceTableOidList(void);
 extern void CitusTableCacheFlushInvalidatedEntries(void);
 extern Oid LookupShardRelationFromCatalog(int64 shardId, bool missing_ok);
 extern List * ShardPlacementList(uint64 shardId);
@@ -161,6 +161,7 @@ extern void CitusInvalidateRelcacheByShardId(int64 shardId);
 extern void InvalidateForeignKeyGraph(void);
 extern void FlushDistTableCache(void);
 extern void InvalidateMetadataSystemCache(void);
+extern List * CitusTableTypeIdList(CitusTableType citusTableType);
 extern Datum DistNodeMetadata(void);
 extern bool ClusterHasReferenceTable(void);
 extern bool HasUniformHashDistribution(ShardInterval **shardIntervalArray,

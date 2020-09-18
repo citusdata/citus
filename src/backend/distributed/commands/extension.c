@@ -555,14 +555,14 @@ MarkExistingObjectDependenciesDistributedIfSupported()
 	/* resulting object addresses to be marked as distributed */
 	List *resultingObjectAddresses = NIL;
 
-	/* resolve dependencies of distributed tables */
-	List *distributedTableOidList = DistTableOidList();
+	/* resolve dependencies of citus tables */
+	List *citusTableIdList = CitusTableTypeIdList(ANY_CITUS_TABLE_TYPE);
 
-	Oid distributedTableOid = InvalidOid;
-	foreach_oid(distributedTableOid, distributedTableOidList)
+	Oid citusTableId = InvalidOid;
+	foreach_oid(citusTableId, citusTableIdList)
 	{
 		ObjectAddress tableAddress = { 0 };
-		ObjectAddressSet(tableAddress, RelationRelationId, distributedTableOid);
+		ObjectAddressSet(tableAddress, RelationRelationId, citusTableId);
 
 		List *distributableDependencyObjectAddresses =
 			GetDistributableDependenciesForObject(&tableAddress);
