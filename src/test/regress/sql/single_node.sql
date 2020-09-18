@@ -362,7 +362,7 @@ SELECT * FROM pg_dist_node;
 SELECT create_distributed_function('call_delegation(int)', '$1', 'test');
 CALL call_delegation(1);
 DROP TABLE test CASCADE;
--- cannot remove since a ref table exists on coordinator and no other nodes is added
+-- cannot remove coordinator since a reference table exists on coordinator and no other worker nodes are added
 SELECT 1 FROM master_remove_node('localhost', :master_port);
 
 -- Cleanup
