@@ -129,6 +129,18 @@ CallFuncExprRemotely(CallStmt *callStmt, DistObjectCacheEntry *procedure,
 		ereport(DEBUG1, (errmsg("there is no worker node with metadata")));
 		return false;
 	}
+	else if (workerNode->groupId == GetLocalGroupId())
+	{
+		/*
+		 * Two reasons for this:
+		 *  (a) It would lead to infinite recursion as the node would
+		 *      keep pushing down the procedure as it gets
+		 *  (b) It doesn't have any value to pushdown as we are already
+		 *      on the node itself
+		 */
+		ereport(DEBUG1, (errmsg("not pushing down procedure to the same node")));
+		return false;
+	}
 
 	ereport(DEBUG1, (errmsg("pushing down the procedure")));
 
@@ -175,6 +187,7 @@ CallFuncExprRemotely(CallStmt *callStmt, DistObjectCacheEntry *procedure,
 																	  tupleDesc);
 		executionParams->expectResults = expectResults;
 		executionParams->xactProperties = xactProperties;
+		executionParams->isUtilityCommand = true;
 		ExecuteTaskListExtended(executionParams);
 
 		DisableWorkerMessagePropagation();

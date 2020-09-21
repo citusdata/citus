@@ -5,9 +5,16 @@ SET citus.shard_replication_factor TO 1;
 SET citus.next_shard_id TO 90630500;
 SET citus.replication_model TO 'streaming';
 
+-- adding the coordinator as inactive is disallowed
+SELECT 1 FROM master_add_inactive_node('localhost', :master_port, groupid => 0);
+
 -- idempotently add node to allow this test to run without add_coordinator
 SET client_min_messages TO WARNING;
 SELECT 1 FROM master_add_node('localhost', :master_port, groupid => 0);
+
+-- coordinator cannot be disabled
+SELECT 1 FROM master_disable_node('localhost', :master_port);
+
 RESET client_min_messages;
 
 SELECT 1 FROM master_set_node_property('localhost', :master_port, 'shouldhaveshards', true);
@@ -360,13 +367,24 @@ BEGIN
 END;$$;
 SELECT * FROM pg_dist_node;
 SELECT create_distributed_function('call_delegation(int)', '$1', 'test');
+
+CREATE FUNCTION function_delegation(int) RETURNS void AS $$
+BEGIN
+UPDATE test SET y = y + 1 WHERE x <  $1;
+END;
+$$ LANGUAGE plpgsql;
+SELECT create_distributed_function('function_delegation(int)', '$1', 'test');
+
+SET client_min_messages TO DEBUG1;
 CALL call_delegation(1);
+SELECT function_delegation(1);
+
+SET client_min_messages TO WARNING;
 DROP TABLE test CASCADE;
 -- cannot remove coordinator since a reference table exists on coordinator and no other worker nodes are added
 SELECT 1 FROM master_remove_node('localhost', :master_port);
 
 -- Cleanup
-SET client_min_messages TO WARNING;
 DROP SCHEMA single_node CASCADE;
 -- Remove the coordinator again
 SELECT 1 FROM master_remove_node('localhost', :master_port);
