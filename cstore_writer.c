@@ -72,7 +72,7 @@ CStoreBeginWrite(Oid relationId,
 	uint32 columnCount = 0;
 	uint32 columnIndex = 0;
 	bool *columnMaskArray = NULL;
-	ColumnBlockData **blockData = NULL;
+	BlockData *blockData = NULL;
 	uint64 currentStripeId = 0;
 
 	tableMetadata = ReadTableMetadata(relationId);
@@ -125,20 +125,21 @@ CStoreBeginWrite(Oid relationId,
 	columnMaskArray = palloc(columnCount * sizeof(bool));
 	memset(columnMaskArray, true, columnCount);
 
-	blockData = CreateEmptyBlockDataArray(columnCount, columnMaskArray, blockRowCount);
+	blockData = CreateEmptyBlockData(columnCount, columnMaskArray, blockRowCount);
 
 	writeState = palloc0(sizeof(TableWriteState));
 	writeState->relationId = relationId;
 	writeState->tableMetadata = tableMetadata;
 	writeState->compressionType = compressionType;
 	writeState->stripeMaxRowCount = stripeMaxRowCount;
+	writeState->blockRowCount = blockRowCount;
 	writeState->tupleDescriptor = tupleDescriptor;
 	writeState->currentFileOffset = currentFileOffset;
 	writeState->comparisonFunctionArray = comparisonFunctionArray;
 	writeState->stripeBuffers = NULL;
 	writeState->stripeSkipList = NULL;
 	writeState->stripeWriteContext = stripeWriteContext;
-	writeState->blockDataArray = blockData;
+	writeState->blockData = blockData;
 	writeState->compressionBuffer = NULL;
 	writeState->currentStripeId = currentStripeId;
 
@@ -164,8 +165,8 @@ CStoreWriteRow(TableWriteState *writeState, Datum *columnValues, bool *columnNul
 	StripeSkipList *stripeSkipList = writeState->stripeSkipList;
 	uint32 columnCount = writeState->tupleDescriptor->natts;
 	TableMetadata *tableMetadata = writeState->tableMetadata;
-	const uint32 blockRowCount = tableMetadata->blockRowCount;
-	ColumnBlockData **blockDataArray = writeState->blockDataArray;
+	const uint32 blockRowCount = writeState->blockRowCount;
+	BlockData *blockData = writeState->blockData;
 	MemoryContext oldContext = MemoryContextSwitchTo(writeState->stripeWriteContext);
 
 	if (stripeBuffers == NULL)
@@ -184,8 +185,7 @@ CStoreWriteRow(TableWriteState *writeState, Datum *columnValues, bool *columnNul
 		 */
 		for (columnIndex = 0; columnIndex < columnCount; columnIndex++)
 		{
-			ColumnBlockData *blockData = blockDataArray[columnIndex];
-			blockData->valueBuffer = makeStringInfo();
+			blockData->valueBufferArray[columnIndex] = makeStringInfo();
 		}
 	}
 
@@ -194,14 +194,13 @@ CStoreWriteRow(TableWriteState *writeState, Datum *columnValues, bool *columnNul
 
 	for (columnIndex = 0; columnIndex < columnCount; columnIndex++)
 	{
-		ColumnBlockData *blockData = blockDataArray[columnIndex];
 		ColumnBlockSkipNode **blockSkipNodeArray = stripeSkipList->blockSkipNodeArray;
 		ColumnBlockSkipNode *blockSkipNode =
 			&blockSkipNodeArray[columnIndex][blockIndex];
 
 		if (columnNulls[columnIndex])
 		{
-			blockData->existsArray[blockRowIndex] = false;
+			blockData->existsArray[columnIndex][blockRowIndex] = false;
 		}
 		else
 		{
@@ -214,10 +213,11 @@ CStoreWriteRow(TableWriteState *writeState, Datum *columnValues, bool *columnNul
 			Oid columnCollation = attributeForm->attcollation;
 			char columnTypeAlign = attributeForm->attalign;
 
-			blockData->existsArray[blockRowIndex] = true;
+			blockData->existsArray[columnIndex][blockRowIndex] = true;
 
-			SerializeSingleDatum(blockData->valueBuffer, columnValues[columnIndex],
-								 columnTypeByValue, columnTypeLength, columnTypeAlign);
+			SerializeSingleDatum(blockData->valueBufferArray[columnIndex],
+								 columnValues[columnIndex], columnTypeByValue,
+								 columnTypeLength, columnTypeAlign);
 
 			UpdateBlockSkipNodeMinMax(blockSkipNode, columnValues[columnIndex],
 									  columnTypeByValue, columnTypeLength,
@@ -271,7 +271,6 @@ CStoreWriteRow(TableWriteState *writeState, Datum *columnValues, bool *columnNul
 void
 CStoreEndWrite(TableWriteState *writeState)
 {
-	int columnCount = writeState->tupleDescriptor->natts;
 	StripeBuffers *stripeBuffers = writeState->stripeBuffers;
 
 	if (stripeBuffers != NULL)
@@ -289,7 +288,7 @@ CStoreEndWrite(TableWriteState *writeState)
 	MemoryContextDelete(writeState->stripeWriteContext);
 	list_free_deep(writeState->tableMetadata->stripeMetadataList);
 	pfree(writeState->comparisonFunctionArray);
-	FreeColumnBlockDataArray(writeState->blockDataArray, columnCount);
+	FreeBlockData(writeState->blockData);
 	pfree(writeState);
 }
 
@@ -415,6 +414,8 @@ WriteToSmgr(TableWriteState *writeState, char *data, uint32 dataLength)
 
 		if (RelationNeedsWAL(rel))
 		{
+			XLogRecPtr recptr = 0;
+
 			XLogBeginInsert();
 
 			/*
@@ -423,7 +424,7 @@ WriteToSmgr(TableWriteState *writeState, char *data, uint32 dataLength)
 			 */
 			XLogRegisterBuffer(0, buffer, REGBUF_FORCE_IMAGE);
 
-			XLogRecPtr recptr = XLogInsert(RM_GENERIC_ID, 0);
+			recptr = XLogInsert(RM_GENERIC_ID, 0);
 			PageSetLSN(page, recptr);
 		}
 
@@ -452,14 +453,13 @@ FlushStripe(TableWriteState *writeState)
 	StripeFooter *stripeFooter = NULL;
 	uint32 columnIndex = 0;
 	uint32 blockIndex = 0;
-	TableMetadata *tableMetadata = writeState->tableMetadata;
 	StripeBuffers *stripeBuffers = writeState->stripeBuffers;
 	StripeSkipList *stripeSkipList = writeState->stripeSkipList;
 	ColumnBlockSkipNode **columnSkipNodeArray = stripeSkipList->blockSkipNodeArray;
 	TupleDesc tupleDescriptor = writeState->tupleDescriptor;
 	uint32 columnCount = tupleDescriptor->natts;
 	uint32 blockCount = stripeSkipList->blockCount;
-	uint32 blockRowCount = tableMetadata->blockRowCount;
+	uint32 blockRowCount = writeState->blockRowCount;
 	uint32 lastBlockIndex = stripeBuffers->rowCount / blockRowCount;
 	uint32 lastBlockRowCount = stripeBuffers->rowCount % blockRowCount;
 	uint64 initialFileOffset = writeState->currentFileOffset;
@@ -565,6 +565,7 @@ FlushStripe(TableWriteState *writeState)
 	stripeMetadata.dataLength = dataLength;
 	stripeMetadata.id = writeState->currentStripeId;
 	stripeMetadata.blockCount = blockCount;
+	stripeMetadata.blockRowCount = writeState->blockRowCount;
 
 	return stripeMetadata;
 }
@@ -679,7 +680,7 @@ SerializeBlockData(TableWriteState *writeState, uint32 blockIndex, uint32 rowCou
 {
 	uint32 columnIndex = 0;
 	StripeBuffers *stripeBuffers = writeState->stripeBuffers;
-	ColumnBlockData **blockDataArray = writeState->blockDataArray;
+	BlockData *blockData = writeState->blockData;
 	CompressionType requestedCompressionType = writeState->compressionType;
 	const uint32 columnCount = stripeBuffers->columnCount;
 	StringInfo compressionBuffer = writeState->compressionBuffer;
@@ -689,9 +690,9 @@ SerializeBlockData(TableWriteState *writeState, uint32 blockIndex, uint32 rowCou
 	{
 		ColumnBuffers *columnBuffers = stripeBuffers->columnBuffersArray[columnIndex];
 		ColumnBlockBuffers *blockBuffers = columnBuffers->blockBuffersArray[blockIndex];
-		ColumnBlockData *blockData = blockDataArray[columnIndex];
 
-		blockBuffers->existsBuffer = SerializeBoolArray(blockData->existsArray, rowCount);
+		blockBuffers->existsBuffer =
+			SerializeBoolArray(blockData->existsArray[columnIndex], rowCount);
 	}
 
 	/*
@@ -702,12 +703,11 @@ SerializeBlockData(TableWriteState *writeState, uint32 blockIndex, uint32 rowCou
 	{
 		ColumnBuffers *columnBuffers = stripeBuffers->columnBuffersArray[columnIndex];
 		ColumnBlockBuffers *blockBuffers = columnBuffers->blockBuffersArray[blockIndex];
-		ColumnBlockData *blockData = blockDataArray[columnIndex];
 		StringInfo serializedValueBuffer = NULL;
 		CompressionType actualCompressionType = COMPRESSION_NONE;
 		bool compressed = false;
 
-		serializedValueBuffer = blockData->valueBuffer;
+		serializedValueBuffer = blockData->valueBufferArray[columnIndex];
 
 		/* the only other supported compression type is pg_lz for now */
 		Assert(requestedCompressionType == COMPRESSION_NONE ||
@@ -730,7 +730,7 @@ SerializeBlockData(TableWriteState *writeState, uint32 blockIndex, uint32 rowCou
 		blockBuffers->valueBuffer = CopyStringInfo(serializedValueBuffer);
 
 		/* valueBuffer needs to be reset for next block's data */
-		resetStringInfo(blockData->valueBuffer);
+		resetStringInfo(blockData->valueBufferArray[columnIndex]);
 	}
 }
 

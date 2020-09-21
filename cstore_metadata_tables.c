@@ -79,13 +79,14 @@ static Datum ByteaToDatum(bytea *bytes, Form_pg_attribute attrForm);
 #define Anum_cstore_tables_version_minor 4
 
 /* constants for cstore_stripe */
-#define Natts_cstore_stripes 6
+#define Natts_cstore_stripes 7
 #define Anum_cstore_stripes_relid 1
 #define Anum_cstore_stripes_stripe 2
 #define Anum_cstore_stripes_file_offset 3
 #define Anum_cstore_stripes_data_length 4
 #define Anum_cstore_stripes_block_count 5
-#define Anum_cstore_stripes_row_count 6
+#define Anum_cstore_stripes_block_row_count 6
+#define Anum_cstore_stripes_row_count 7
 
 /* constants for cstore_skipnodes */
 #define Natts_cstore_skipnodes 12
@@ -328,6 +329,7 @@ InsertStripeMetadataRow(Oid relid, StripeMetadata *stripe)
 		Int64GetDatum(stripe->fileOffset),
 		Int64GetDatum(stripe->dataLength),
 		Int32GetDatum(stripe->blockCount),
+		Int32GetDatum(stripe->blockRowCount),
 		Int64GetDatum(stripe->rowCount)
 	};
 
@@ -388,6 +390,8 @@ ReadTableMetadata(Oid relid)
 			datumArray[Anum_cstore_stripes_data_length - 1]);
 		stripeMetadata->blockCount = DatumGetInt32(
 			datumArray[Anum_cstore_stripes_block_count - 1]);
+		stripeMetadata->blockRowCount = DatumGetInt32(
+			datumArray[Anum_cstore_stripes_block_row_count - 1]);
 		stripeMetadata->rowCount = DatumGetInt64(
 			datumArray[Anum_cstore_stripes_row_count - 1]);
 

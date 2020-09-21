@@ -74,6 +74,7 @@ CREATE TABLE cstore_stripes (
     file_offset bigint NOT NULL,
     data_length bigint NOT NULL,
     block_count int NOT NULL,
+    block_row_count int NOT NULL,
     row_count bigint NOT NULL,
     PRIMARY KEY (relid, stripe),
     FOREIGN KEY (relid) REFERENCES cstore_tables(relid) ON DELETE CASCADE INITIALLY DEFERRED

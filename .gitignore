@@ -42,17 +42,17 @@
 /data/*.cstore
 /data/*.footer
 
-/sql/block_filtering.sql
-/sql/copyto.sql
-/sql/create.sql
-/sql/data_types.sql
-/sql/load.sql
+/sql/*block_filtering.sql
+/sql/*copyto.sql
+/sql/*create.sql
+/sql/*data_types.sql
+/sql/*load.sql
 
-/expected/block_filtering.out
-/expected/copyto.out
-/expected/create.out
-/expected/data_types.out
-/expected/load.out
+/expected/*block_filtering.out
+/expected/*copyto.out
+/expected/*create.out
+/expected/*data_types.out
+/expected/*load.out
 /results/*
 /.deps/*
 /regression.diffs

@@ -45,8 +45,8 @@ static StripeBuffers * LoadFilteredStripeBuffers(Relation relation,
 												 List *whereClauseList);
 static void ReadStripeNextRow(StripeBuffers *stripeBuffers, List *projectedColumnList,
 							  uint64 blockIndex, uint64 blockRowIndex,
-							  ColumnBlockData **blockDataArray,
-							  Datum *columnValues, bool *columnNulls);
+							  BlockData *blockData, Datum *columnValues,
+							  bool *columnNulls);
 static ColumnBuffers * LoadColumnBuffers(Relation relation,
 										 ColumnBlockSkipNode *blockSkipNodeArray,
 										 uint32 blockCount, uint64 existsFileOffset,
@@ -70,15 +70,12 @@ static void DeserializeDatumArray(StringInfo datumBuffer, bool *existsArray,
 								  uint32 datumCount, bool datumTypeByValue,
 								  int datumTypeLength, char datumTypeAlign,
 								  Datum *datumArray);
-static void DeserializeBlockData(StripeBuffers *stripeBuffers, uint64 blockIndex,
-								 uint32 rowCount, ColumnBlockData **blockDataArray,
-								 TupleDesc tupleDescriptor);
+static BlockData * DeserializeBlockData(StripeBuffers *stripeBuffers, uint64 blockIndex,
+										uint32 rowCount, TupleDesc tupleDescriptor,
+										List *projectedColumnList);
 static Datum ColumnDefaultValue(TupleConstr *tupleConstraints,
 								Form_pg_attribute attributeForm);
 static StringInfo ReadFromSmgr(Relation rel, uint64 offset, uint32 size);
-static void ResetUncompressedBlockData(ColumnBlockData **blockDataArray,
-									   uint32 columnCount);
-
 
 /*
  * CStoreBeginRead initializes a cstore read operation. This function returns a
@@ -91,9 +88,6 @@ CStoreBeginRead(Oid relationId, TupleDesc tupleDescriptor,
 	TableReadState *readState = NULL;
 	TableMetadata *tableMetadata = NULL;
 	MemoryContext stripeReadContext = NULL;
-	uint32 columnCount = 0;
-	bool *projectedColumnMask = NULL;
-	ColumnBlockData **blockDataArray = NULL;
 
 	tableMetadata = ReadTableMetadata(relationId);
 
@@ -106,11 +100,6 @@ CStoreBeginRead(Oid relationId, TupleDesc tupleDescriptor,
 											  "Stripe Read Memory Context",
 											  ALLOCSET_DEFAULT_SIZES);
 
-	columnCount = tupleDescriptor->natts;
-	projectedColumnMask = ProjectedColumnMask(columnCount, projectedColumnList);
-	blockDataArray = CreateEmptyBlockDataArray(columnCount, projectedColumnMask,
-											   tableMetadata->blockRowCount);
-
 	readState = palloc0(sizeof(TableReadState));
 	readState->relationId = relationId;
 	readState->tableMetadata = tableMetadata;
@@ -121,7 +110,7 @@ CStoreBeginRead(Oid relationId, TupleDesc tupleDescriptor,
 	readState->stripeReadRowCount = 0;
 	readState->tupleDescriptor = tupleDescriptor;
 	readState->stripeReadContext = stripeReadContext;
-	readState->blockDataArray = blockDataArray;
+	readState->blockData = NULL;
 	readState->deserializedBlockIndex = -1;
 
 	return readState;
@@ -138,7 +127,7 @@ CStoreReadNextRow(TableReadState *readState, Datum *columnValues, bool *columnNu
 {
 	uint32 blockIndex = 0;
 	uint32 blockRowIndex = 0;
-	TableMetadata *tableMetadata = readState->tableMetadata;
+	StripeMetadata *stripeMetadata = readState->currentStripeMetadata;
 	MemoryContext oldContext = NULL;
 
 	/*
@@ -151,7 +140,7 @@ CStoreReadNextRow(TableReadState *readState, Datum *columnValues, bool *columnNu
 	{
 		StripeBuffers *stripeBuffers = NULL;
 		StripeMetadata *stripeMetadata = NULL;
-		List *stripeMetadataList = tableMetadata->stripeMetadataList;
+		List *stripeMetadataList = readState->tableMetadata->stripeMetadataList;
 		uint32 stripeCount = list_length(stripeMetadataList);
 		StripeFooter *stripeFooter = NULL;
 
@@ -163,6 +152,7 @@ CStoreReadNextRow(TableReadState *readState, Datum *columnValues, bool *columnNu
 
 		oldContext = MemoryContextSwitchTo(readState->stripeReadContext);
 		MemoryContextReset(readState->stripeReadContext);
+		readState->blockData = NULL;
 
 		stripeMetadata = list_nth(stripeMetadataList, readState->readStripeCount);
 		stripeFooter = ReadStripeFooter(readState->relationId,
@@ -175,6 +165,7 @@ CStoreReadNextRow(TableReadState *readState, Datum *columnValues, bool *columnNu
 												  readState->projectedColumnList,
 												  readState->whereClauseList);
 		readState->readStripeCount++;
+		readState->currentStripeMetadata = stripeMetadata;
 
 		MemoryContextSwitchTo(oldContext);
 
@@ -183,37 +174,38 @@ CStoreReadNextRow(TableReadState *readState, Datum *columnValues, bool *columnNu
 			readState->stripeBuffers = stripeBuffers;
 			readState->stripeReadRowCount = 0;
 			readState->deserializedBlockIndex = -1;
-			ResetUncompressedBlockData(readState->blockDataArray,
-									   stripeBuffers->columnCount);
 			break;
 		}
 	}
 
-	blockIndex = readState->stripeReadRowCount / tableMetadata->blockRowCount;
-	blockRowIndex = readState->stripeReadRowCount % tableMetadata->blockRowCount;
+	blockIndex = readState->stripeReadRowCount / stripeMetadata->blockRowCount;
+	blockRowIndex = readState->stripeReadRowCount % stripeMetadata->blockRowCount;
 
 	if (blockIndex != readState->deserializedBlockIndex)
 	{
 		uint32 lastBlockIndex = 0;
 		uint32 blockRowCount = 0;
 		uint32 stripeRowCount = 0;
+		StripeMetadata *stripeMetadata = readState->currentStripeMetadata;
 
-		stripeRowCount = readState->stripeBuffers->rowCount;
-		lastBlockIndex = stripeRowCount / tableMetadata->blockRowCount;
+		stripeRowCount = stripeMetadata->rowCount;
+		lastBlockIndex = stripeRowCount / stripeMetadata->blockRowCount;
 		if (blockIndex == lastBlockIndex)
 		{
-			blockRowCount = stripeRowCount % tableMetadata->blockRowCount;
+			blockRowCount = stripeRowCount % stripeMetadata->blockRowCount;
 		}
 		else
 		{
-			blockRowCount = tableMetadata->blockRowCount;
+			blockRowCount = stripeMetadata->blockRowCount;
 		}
 
 		oldContext = MemoryContextSwitchTo(readState->stripeReadContext);
 
-		DeserializeBlockData(readState->stripeBuffers, blockIndex,
-							 blockRowCount, readState->blockDataArray,
-							 readState->tupleDescriptor);
+		FreeBlockData(readState->blockData);
+		readState->blockData =
+			DeserializeBlockData(readState->stripeBuffers, blockIndex,
+								 blockRowCount, readState->tupleDescriptor,
+								 readState->projectedColumnList);
 
 		MemoryContextSwitchTo(oldContext);
 
@@ -221,7 +213,7 @@ CStoreReadNextRow(TableReadState *readState, Datum *columnValues, bool *columnNu
 	}
 
 	ReadStripeNextRow(readState->stripeBuffers, readState->projectedColumnList,
-					  blockIndex, blockRowIndex, readState->blockDataArray,
+					  blockIndex, blockRowIndex, readState->blockData,
 					  columnValues, columnNulls);
 
 	/*
@@ -242,11 +234,8 @@ CStoreReadNextRow(TableReadState *readState, Datum *columnValues, bool *columnNu
 void
 CStoreEndRead(TableReadState *readState)
 {
-	int columnCount = readState->tupleDescriptor->natts;
-
 	MemoryContextDelete(readState->stripeReadContext);
 	list_free_deep(readState->tableMetadata->stripeMetadataList);
-	FreeColumnBlockDataArray(readState->blockDataArray, columnCount);
 	pfree(readState->tableMetadata);
 	pfree(readState);
 }
@@ -256,52 +245,65 @@ CStoreEndRead(TableReadState *readState)
  * CreateEmptyBlockDataArray creates data buffers to keep deserialized exist and
  * value arrays for requested columns in columnMask.
  */
-ColumnBlockData **
-CreateEmptyBlockDataArray(uint32 columnCount, bool *columnMask, uint32 blockRowCount)
+BlockData *
+CreateEmptyBlockData(uint32 columnCount, bool *columnMask, uint32 blockRowCount)
 {
 	uint32 columnIndex = 0;
-	ColumnBlockData **blockDataArray = palloc0(columnCount * sizeof(ColumnBlockData *));
+
+	BlockData *blockData = palloc0(sizeof(BlockData));
+	blockData->existsArray = palloc0(columnCount * sizeof(bool *));
+	blockData->valueArray = palloc0(columnCount * sizeof(Datum *));
+	blockData->valueBufferArray = palloc0(columnCount * sizeof(StringInfo));
+	blockData->columnCount = columnCount;
+	blockData->rowCount = blockRowCount;
 
 	/* allocate block memory for deserialized data */
 	for (columnIndex = 0; columnIndex < columnCount; columnIndex++)
 	{
 		if (columnMask[columnIndex])
 		{
-			ColumnBlockData *blockData = palloc0(sizeof(ColumnBlockData));
-
-			blockData->existsArray = palloc0(blockRowCount * sizeof(bool));
-			blockData->valueArray = palloc0(blockRowCount * sizeof(Datum));
-			blockData->valueBuffer = NULL;
-			blockDataArray[columnIndex] = blockData;
+			blockData->existsArray[columnIndex] = palloc0(blockRowCount * sizeof(bool));
+			blockData->valueArray[columnIndex] = palloc0(blockRowCount * sizeof(Datum));
+			blockData->valueBufferArray[columnIndex] = NULL;
 		}
 	}
 
-	return blockDataArray;
+	return blockData;
 }
 
 
 /*
- * FreeColumnBlockDataArray deallocates data buffers to keep deserialized exist and
+ * FreeBlockData deallocates data buffers to keep deserialized exist and
  * value arrays for requested columns in columnMask.
  * ColumnBlockData->serializedValueBuffer lives in memory read/write context
  * so it is deallocated automatically when the context is deleted.
  */
 void
-FreeColumnBlockDataArray(ColumnBlockData **blockDataArray, uint32 columnCount)
+FreeBlockData(BlockData *blockData)
 {
 	uint32 columnIndex = 0;
-	for (columnIndex = 0; columnIndex < columnCount; columnIndex++)
+
+	if (blockData == NULL)
 	{
-		ColumnBlockData *blockData = blockDataArray[columnIndex];
-		if (blockData != NULL)
+		return;
+	}
+
+	for (columnIndex = 0; columnIndex < blockData->columnCount; columnIndex++)
+	{
+		if (blockData->existsArray[columnIndex] != NULL)
 		{
-			pfree(blockData->existsArray);
-			pfree(blockData->valueArray);
-			pfree(blockData);
+			pfree(blockData->existsArray[columnIndex]);
+		}
+
+		if (blockData->valueArray[columnIndex] != NULL)
+		{
+			pfree(blockData->valueArray[columnIndex]);
 		}
 	}
 
-	pfree(blockDataArray);
+	pfree(blockData->existsArray);
+	pfree(blockData->valueArray);
+	pfree(blockData);
 }
 
 
@@ -403,7 +405,7 @@ LoadFilteredStripeBuffers(Relation relation, StripeMetadata *stripeMetadata,
 static void
 ReadStripeNextRow(StripeBuffers *stripeBuffers, List *projectedColumnList,
 				  uint64 blockIndex, uint64 blockRowIndex,
-				  ColumnBlockData **blockDataArray, Datum *columnValues,
+				  BlockData *blockData, Datum *columnValues,
 				  bool *columnNulls)
 {
 	ListCell *projectedColumnCell = NULL;
@@ -414,13 +416,12 @@ ReadStripeNextRow(StripeBuffers *stripeBuffers, List *projectedColumnList,
 	foreach(projectedColumnCell, projectedColumnList)
 	{
 		Var *projectedColumn = lfirst(projectedColumnCell);
-		uint32 projectedColumnIndex = projectedColumn->varattno - 1;
-		ColumnBlockData *blockData = blockDataArray[projectedColumnIndex];
+		uint32 columnIndex = projectedColumn->varattno - 1;
 
-		if (blockData->existsArray[blockRowIndex])
+		if (blockData->existsArray[columnIndex][blockRowIndex])
 		{
-			columnValues[projectedColumnIndex] = blockData->valueArray[blockRowIndex];
-			columnNulls[projectedColumnIndex] = false;
+			columnValues[columnIndex] = blockData->valueArray[columnIndex][blockRowIndex];
+			columnNulls[columnIndex] = false;
 		}
 	}
 }
@@ -919,20 +920,23 @@ DeserializeDatumArray(StringInfo datumBuffer, bool *existsArray, uint32 datumCou
  * data is not present serialized buffer, then default value (or null) is used
  * to fill value array.
  */
-static void
+static BlockData *
 DeserializeBlockData(StripeBuffers *stripeBuffers, uint64 blockIndex,
-					 uint32 rowCount,
-					 ColumnBlockData **blockDataArray, TupleDesc tupleDescriptor)
+					 uint32 rowCount, TupleDesc tupleDescriptor,
+					 List *projectedColumnList)
 {
 	int columnIndex = 0;
+	bool *columnMask = ProjectedColumnMask(tupleDescriptor->natts, projectedColumnList);
+	BlockData *blockData = CreateEmptyBlockData(tupleDescriptor->natts, columnMask,
+												rowCount);
+
 	for (columnIndex = 0; columnIndex < stripeBuffers->columnCount; columnIndex++)
 	{
-		ColumnBlockData *blockData = blockDataArray[columnIndex];
 		Form_pg_attribute attributeForm = TupleDescAttr(tupleDescriptor, columnIndex);
 		ColumnBuffers *columnBuffers = stripeBuffers->columnBuffersArray[columnIndex];
 		bool columnAdded = false;
 
-		if ((columnBuffers == NULL) && (blockData != NULL))
+		if (columnBuffers == NULL && columnMask[columnIndex])
 		{
 			columnAdded = true;
 		}
@@ -942,10 +946,6 @@ DeserializeBlockData(StripeBuffers *stripeBuffers, uint64 blockIndex,
 			ColumnBlockBuffers *blockBuffers =
 				columnBuffers->blockBuffersArray[blockIndex];
 			StringInfo valueBuffer = NULL;
-
-			/* free previous block's data buffers */
-			pfree(blockData->valueBuffer->data);
-			pfree(blockData->valueBuffer);
 
 			/* decompress and deserialize current block's data */
 			valueBuffer = DecompressBuffer(blockBuffers->valueBuffer,
@@ -958,15 +958,16 @@ DeserializeBlockData(StripeBuffers *stripeBuffers, uint64 blockIndex,
 				pfree(blockBuffers->valueBuffer);
 			}
 
-			DeserializeBoolArray(blockBuffers->existsBuffer, blockData->existsArray,
+			DeserializeBoolArray(blockBuffers->existsBuffer,
+								 blockData->existsArray[columnIndex],
 								 rowCount);
-			DeserializeDatumArray(valueBuffer, blockData->existsArray,
+			DeserializeDatumArray(valueBuffer, blockData->existsArray[columnIndex],
 								  rowCount, attributeForm->attbyval,
 								  attributeForm->attlen, attributeForm->attalign,
-								  blockData->valueArray);
+								  blockData->valueArray[columnIndex]);
 
 			/* store current block's data buffer to be freed at next block read */
-			blockData->valueBuffer = valueBuffer;
+			blockData->valueBufferArray[columnIndex] = valueBuffer;
 		}
 		else if (columnAdded)
 		{
@@ -983,16 +984,19 @@ DeserializeBlockData(StripeBuffers *stripeBuffers, uint64 blockIndex,
 
 				for (rowIndex = 0; rowIndex < rowCount; rowIndex++)
 				{
-					blockData->existsArray[rowIndex] = true;
-					blockData->valueArray[rowIndex] = defaultValue;
+					blockData->existsArray[columnIndex][rowIndex] = true;
+					blockData->valueArray[columnIndex][rowIndex] = defaultValue;
 				}
 			}
 			else
 			{
-				memset(blockData->existsArray, false, rowCount);
+				memset(blockData->existsArray[columnIndex], false,
+					   rowCount * sizeof(bool));
 			}
 		}
 	}
+
+	return blockData;
 }
 
 
@@ -1066,24 +1070,4 @@ ReadFromSmgr(Relation rel, uint64 offset, uint32 size)
 	}
 
 	return resultBuffer;
-}
-
-
-/*
- * ResetUncompressedBlockData iterates over deserialized column block data
- * and sets valueBuffer field to empty buffer. This field is allocated in stripe
- * memory context and becomes invalid once memory context is reset.
- */
-static void
-ResetUncompressedBlockData(ColumnBlockData **blockDataArray, uint32 columnCount)
-{
-	uint32 columnIndex = 0;
-	for (columnIndex = 0; columnIndex < columnCount; columnIndex++)
-	{
-		ColumnBlockData *blockData = blockDataArray[columnIndex];
-		if (blockData != NULL)
-		{
-			blockData->valueBuffer = makeStringInfo();
-		}
-	}
 }
