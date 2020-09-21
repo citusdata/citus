@@ -62,7 +62,10 @@ if git merge --no-commit "origin/$PR_BRANCH"; then
     fi
 
     # check that we can compile after the merge
-    check_compile
+    if check_compile; then 
+        exit 0
+    fi
+    echo "WARN: Failed to compile after community PR branch was merged into enterprise"
     exit 0
 fi
 
