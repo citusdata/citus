@@ -36,6 +36,7 @@ jobs:
   build-13:
     docker:
       - image: 'citus/extbuilder:13beta3'
+    working_directory: /mnt/ramdisk  
     steps:
       - checkout
       - run:
@@ -381,7 +382,7 @@ jobs:
     docker:
       - image: 'citus/exttester:13beta3'
     resource_class: xlarge
-    working_directory: /home/circleci/project
+    working_directory: /mnt/ramdisk
     steps:
       - checkout
       - attach_workspace:
