@@ -302,6 +302,18 @@ TryToDelegateFunctionCall(DistributedPlanningContext *planContext)
 		ereport(DEBUG1, (errmsg("the worker node does not have metadata")));
 		return NULL;
 	}
+	else if (workerNode->groupId == GetLocalGroupId())
+	{
+		/*
+		 * Two reasons for this:
+		 *  (a) It would lead to infinite recursion as the node would
+		 *      keep pushing down the procedure as it gets
+		 *  (b) It doesn't have any value to pushdown as we are already
+		 *      on the node itself
+		 */
+		ereport(DEBUG1, (errmsg("not pushing down function to the same node")));
+		return NULL;
+	}
 
 	(void) expression_tree_walker((Node *) funcExpr->args, contain_param_walker,
 								  &walkerParamContext);

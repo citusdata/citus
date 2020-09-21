@@ -103,6 +103,8 @@ static void PropagateNodeWideObjects(WorkerNode *newWorkerNode);
 static WorkerNode * ModifiableWorkerNode(const char *nodeName, int32 nodePort);
 static void UpdateNodeLocation(int32 nodeId, char *newNodeName, int32 newNodePort);
 static bool UnsetMetadataSyncedForAll(void);
+static void ErrorIfCoordinatorMetadataSetFalse(WorkerNode *workerNode, Datum value,
+											   char *field);
 static WorkerNode * SetShouldHaveShards(WorkerNode *workerNode, bool shouldHaveShards);
 
 /* declarations for dynamic loading */
@@ -208,6 +210,11 @@ master_add_inactive_node(PG_FUNCTION_ARGS)
 	nodeMetadata.nodeCluster = NameStr(*nodeClusterName);
 
 	CheckCitusVersion(ERROR);
+
+	if (nodeMetadata.groupId == COORDINATOR_GROUP_ID)
+	{
+		ereport(ERROR, (errmsg("coordinator node cannot be added as inactive node")));
+	}
 
 	int nodeId = AddNodeMetadata(nodeNameString, nodePort, &nodeMetadata,
 								 &nodeAlreadyExists);
@@ -331,13 +338,23 @@ master_disable_node(PG_FUNCTION_ARGS)
 		MemoryContextSwitchTo(savedContext);
 		ErrorData *edata = CopyErrorData();
 
-		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
-						errmsg("Disabling %s:%d failed", workerNode->workerName,
-							   nodePort),
-						errdetail("%s", edata->message),
-						errhint(
-							"If you are using MX, try stop_metadata_sync_to_node(hostname, port) "
-							"for nodes that are down before disabling them.")));
+		if (ClusterHasKnownMetadataWorkers())
+		{
+			ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+							errmsg("Disabling %s:%d failed", workerNode->workerName,
+								   nodePort),
+							errdetail("%s", edata->message),
+							errhint(
+								"If you are using MX, try stop_metadata_sync_to_node(hostname, port) "
+								"for nodes that are down before disabling them.")));
+		}
+		else
+		{
+			ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+							errmsg("Disabling %s:%d failed", workerNode->workerName,
+								   nodePort),
+							errdetail("%s", edata->message)));
+		}
 	}
 	PG_END_TRY();
 
@@ -1174,7 +1191,18 @@ AddNodeMetadata(char *nodeName, int32 nodePort,
 	if (nodeMetadata->groupId == COORDINATOR_GROUP_ID)
 	{
 		nodeMetadata->shouldHaveShards = false;
+
+		/*
+		 * Coordinator has always the authoritative metadata, reflect this
+		 * fact in the pg_dist_node.
+		 */
 		nodeMetadata->hasMetadata = true;
+		nodeMetadata->metadataSynced = true;
+
+		/*
+		 * There is no concept of "inactive" coordinator, so hard code it.
+		 */
+		nodeMetadata->isActive = true;
 	}
 
 	/* if nodeRole hasn't been added yet there's a constraint for one-node-per-group */
@@ -1246,8 +1274,17 @@ SetWorkerColumn(WorkerNode *workerNode, int columnIndex, Datum value)
 
 	switch (columnIndex)
 	{
+		case Anum_pg_dist_node_hasmetadata:
+		{
+			ErrorIfCoordinatorMetadataSetFalse(workerNode, value, "hasmetadata");
+
+			break;
+		}
+
 		case Anum_pg_dist_node_isactive:
 		{
+			ErrorIfCoordinatorMetadataSetFalse(workerNode, value, "isactive");
+
 			metadataSyncCommand = NodeStateUpdateCommand(workerNode->nodeId,
 														 DatumGetBool(value));
 			break;
@@ -1257,6 +1294,13 @@ SetWorkerColumn(WorkerNode *workerNode, int columnIndex, Datum value)
 		{
 			metadataSyncCommand = ShouldHaveShardsUpdateCommand(workerNode->nodeId,
 																DatumGetBool(value));
+			break;
+		}
+
+		case Anum_pg_dist_node_metadatasynced:
+		{
+			ErrorIfCoordinatorMetadataSetFalse(workerNode, value, "metadatasynced");
+
 			break;
 		}
 
@@ -1292,6 +1336,22 @@ SetWorkerColumn(WorkerNode *workerNode, int columnIndex, Datum value)
 	/* we also update the column at worker nodes */
 	SendCommandToWorkersWithMetadata(metadataSyncCommand);
 	return newWorkerNode;
+}
+
+
+/*
+ * ErrorIfCoordinatorMetadataSetFalse throws an error if the input node
+ * is the coordinator and the value is false.
+ */
+static void
+ErrorIfCoordinatorMetadataSetFalse(WorkerNode *workerNode, Datum value, char *field)
+{
+	bool valueBool = DatumGetBool(value);
+	if (!valueBool && workerNode->groupId == COORDINATOR_GROUP_ID)
+	{
+		ereport(ERROR, (errmsg("cannot change \"%s\" field of the "
+							   "coordinator node", field)));
+	}
 }
 
 
