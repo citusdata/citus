@@ -551,7 +551,7 @@ LockTransactionRecovery(LOCKMODE lockmode)
 	const bool sessionLock = false;
 	const bool dontWait = false;
 
-	SET_LOCKTAG_TRANSACTION_RECOVERY(tag);
+	SET_LOCKTAG_CITUS_OPERATION(tag, CITUS_TRANSACTION_RECOVERY);
 
 	(void) LockAcquire(&tag, lockmode, sessionLock, dontWait);
 }

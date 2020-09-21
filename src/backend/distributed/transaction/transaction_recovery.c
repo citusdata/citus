@@ -120,6 +120,9 @@ RecoverTwoPhaseCommits(void)
 {
 	int recoveredTransactionCount = 0;
 
+	/* take advisory lock first to avoid running concurrently */
+	LockTransactionRecovery(ShareUpdateExclusiveLock);
+
 	List *workerList = ActivePrimaryNodeList(NoLock);
 	WorkerNode *workerNode = NULL;
 	foreach_ptr(workerNode, workerList)
@@ -172,8 +175,6 @@ RecoverWorkerTransactions(WorkerNode *workerNode)
 
 	MemoryContext oldContext = MemoryContextSwitchTo(localContext);
 
-	/* take advisory lock first to avoid running concurrently */
-	LockTransactionRecovery(ShareUpdateExclusiveLock);
 	Relation pgDistTransaction = table_open(DistTransactionRelationId(),
 											RowExclusiveLock);
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistTransaction);
