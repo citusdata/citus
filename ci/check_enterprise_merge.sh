@@ -55,8 +55,11 @@ git checkout "enterprise/enterprise-master"
 if git merge --no-commit "origin/$PR_BRANCH"; then
     echo "INFO: community PR branch could be merged into enterprise-master"
     # check that we can compile after the merge
-    check_compile
-    exit 0
+    if check_compile; then
+        exit 0
+    fi
+
+    echo "WARN: Failed to compile after community PR branch was merged into enterprise"
 fi
 
 # undo partial merge
