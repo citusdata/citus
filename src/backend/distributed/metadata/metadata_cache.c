@@ -209,6 +209,11 @@ static ScanKeyData DistObjectScanKey[3];
 
 
 /* local function forward declarations */
+static bool IsCitusTableTypeInternal(char partitionMethod, char replicationModel,
+									 CitusTableType tableType);
+static bool IsCitusTableViaCatalogInternal(Oid relationId, char *partitionMethod,
+										   char *replicationModel);
+static bool IsCitusTableTypeViaCatalog(Oid relationId, CitusTableType tableType);
 static bool IsCitusTableViaCatalog(Oid relationId);
 static ShardIdCacheEntry * LookupShardIdCacheEntry(int64 shardId);
 static CitusTableCacheEntry * BuildCitusTableCacheEntry(Oid relationId);
@@ -258,8 +263,6 @@ static void InvalidateCitusTableCacheEntrySlot(CitusTableCacheEntrySlot *cacheSl
 static void InvalidateDistTableCache(void);
 static void InvalidateDistObjectCache(void);
 static void InitializeTableCacheEntry(int64 shardId);
-static bool IsCitusTableTypeInternal(CitusTableCacheEntry *tableEntry, CitusTableType
-									 tableType);
 static bool RefreshTableCacheEntryIfInvalid(ShardIdCacheEntry *shardEntry);
 
 
@@ -307,73 +310,97 @@ bool
 IsCitusTableType(Oid relationId, CitusTableType tableType)
 {
 	CitusTableCacheEntry *tableEntry = LookupCitusTableCacheEntry(relationId);
-
-	/* we are not interested in postgres tables */
-	if (tableEntry == NULL)
+	if (tableEntry)
 	{
+		return IsCitusTableTypeCacheEntry(tableEntry, tableType);
+	}
+
+	if (CitusHasBeenLoaded())
+	{
+		/*
+		 * Even if Citus has been loaded, we couldn't find (or build) a cache
+		 * entry for relation. Then it's definitely a postgres table.
+		 */
 		return false;
 	}
-	return IsCitusTableTypeInternal(tableEntry, tableType);
+
+	/*
+	 * If we are issuing ALTER EXTENSION citus UPDATE, CitusHasBeenLoaded()
+	 * returns false and we cannot access/build cache entries. In that case,
+	 * we need to decide table type directly reading from pg_dist_partition
+	 * table.
+	 * Reading from pg_dist_partition wouldn't be as efficient as accessing
+	 * to cache, but this is the case only when upgrading/downgrading Citus
+	 * so we don't expect any performance critical code-paths to reach here.
+	 */
+	ereport(DEBUG4, (errmsg("will scan pg_dist_partition for relation with "
+							"OID=%u", relationId)));
+	return IsCitusTableTypeViaCatalog(relationId, tableType);
 }
 
 
 /*
  * IsCitusTableTypeCacheEntry returns true if the given table cache entry
- * belongs to a citus table that matches the given table type.
+ * belongs to the given table type group. For definition of table types,
+ * see CitusTableType.
  */
 bool
 IsCitusTableTypeCacheEntry(CitusTableCacheEntry *tableEntry, CitusTableType tableType)
 {
-	return IsCitusTableTypeInternal(tableEntry, tableType);
+	return IsCitusTableTypeInternal(tableEntry->partitionMethod,
+									tableEntry->replicationModel,
+									tableType);
 }
 
 
 /*
- * IsCitusTableTypeInternal returns true if the given table entry belongs to
- * the given table type group. For definition of table types, see CitusTableType.
+ * IsCitusTableTypeInternal returns true if given partitionMethod and
+ * replicationModel identifies given table type group. For definition
+ * of table types, see CitusTableType.
  */
 static bool
-IsCitusTableTypeInternal(CitusTableCacheEntry *tableEntry, CitusTableType tableType)
+IsCitusTableTypeInternal(char partitionMethod, char replicationModel,
+						 CitusTableType tableType)
 {
 	switch (tableType)
 	{
 		case HASH_DISTRIBUTED:
 		{
-			return tableEntry->partitionMethod == DISTRIBUTE_BY_HASH;
+			return partitionMethod == DISTRIBUTE_BY_HASH;
 		}
 
 		case APPEND_DISTRIBUTED:
 		{
-			return tableEntry->partitionMethod == DISTRIBUTE_BY_APPEND;
+			return partitionMethod == DISTRIBUTE_BY_APPEND;
 		}
 
 		case RANGE_DISTRIBUTED:
 		{
-			return tableEntry->partitionMethod == DISTRIBUTE_BY_RANGE;
+			return partitionMethod == DISTRIBUTE_BY_RANGE;
 		}
 
 		case DISTRIBUTED_TABLE:
 		{
-			return tableEntry->partitionMethod == DISTRIBUTE_BY_HASH ||
-				   tableEntry->partitionMethod == DISTRIBUTE_BY_RANGE ||
-				   tableEntry->partitionMethod == DISTRIBUTE_BY_APPEND;
+			return partitionMethod == DISTRIBUTE_BY_HASH ||
+				   partitionMethod == DISTRIBUTE_BY_RANGE ||
+				   partitionMethod == DISTRIBUTE_BY_APPEND;
 		}
 
 		case REFERENCE_TABLE:
 		{
-			return tableEntry->partitionMethod == DISTRIBUTE_BY_NONE &&
-				   tableEntry->replicationModel == REPLICATION_MODEL_2PC;
+			return partitionMethod == DISTRIBUTE_BY_NONE &&
+				   replicationModel == REPLICATION_MODEL_2PC;
 		}
 
 		case CITUS_LOCAL_TABLE:
 		{
-			return tableEntry->partitionMethod == DISTRIBUTE_BY_NONE &&
-				   tableEntry->replicationModel != REPLICATION_MODEL_2PC;
+			return partitionMethod == DISTRIBUTE_BY_NONE &&
+				   replicationModel != REPLICATION_MODEL_2PC;
 		}
 
 		case CITUS_TABLE_WITH_NO_DIST_KEY:
 		{
-			return tableEntry->partitionMethod == DISTRIBUTE_BY_NONE;
+			return partitionMethod == DISTRIBUTE_BY_NONE;
 		}
 
 		case ANY_CITUS_TABLE_TYPE:
@@ -402,19 +429,49 @@ IsCitusTable(Oid relationId)
 
 
 /*
- * IsCitusTableViaCatalog returns whether the given relation is a
- * distributed table or not.
- *
- * It does so by searching pg_dist_partition, explicitly bypassing caches,
- * because this function is designed to be used in cases where accessing
- * metadata tables is not safe.
- *
- * NB: Currently this still hardcodes pg_dist_partition logicalrelid column
- * offset and the corresponding index.  If we ever come close to changing
- * that, we'll have to work a bit harder.
+ * IsCitusTableTypeViaCatalog returns true if given relation belongs to the
+ * given table type group by performing index-scan on pg_dist_partition.
+ */
+static bool
+IsCitusTableTypeViaCatalog(Oid relationId, CitusTableType tableType)
+{
+	char partitionMethod = 0;
+	char replicationModel = REPLICATION_MODEL_INVALID;
+	bool isCitusTable = IsCitusTableViaCatalogInternal(relationId, &partitionMethod,
+													   &replicationModel);
+	if (!isCitusTable)
+	{
+		return false;
+	}
+
+	return IsCitusTableTypeInternal(partitionMethod, replicationModel, tableType);
+}
+
+
+/*
+ * IsCitusTableViaCatalog returns true if given relation belongs to the
+ * given table type group by performing index-scan on pg_dist_partition.
  */
 static bool
 IsCitusTableViaCatalog(Oid relationId)
+{
+	/* we are not interested in partitionMethod and replicationModel */
+	char *partitionMethod = NULL;
+	char *replicationModel = NULL;
+	bool isCitusTable = IsCitusTableViaCatalogInternal(relationId, partitionMethod,
+													   replicationModel);
+	return isCitusTable;
+}
+
+
+/*
+ * IsCitusTableViaCatalogInternal returns true and sets partitionMethod
+ * & replicationModel params if given relationId belongs to a citus table.
+ * It does that by performing index scan on pg_dist_partition.
+ */
+static bool
+IsCitusTableViaCatalogInternal(Oid relationId, char *partitionMethod,
+							   char *replicationModel)
 {
 	const int scanKeyCount = 1;
 	ScanKeyData scanKey[1];
@@ -430,10 +487,31 @@ IsCitusTableViaCatalog(Oid relationId)
 													indexOK, NULL, scanKeyCount, scanKey);
 
 	HeapTuple partitionTuple = systable_getnext(scanDescriptor);
+
+	bool isCitusTable = HeapTupleIsValid(partitionTuple);
+	if (isCitusTable)
+	{
+		TupleDesc tupleDescriptor = RelationGetDescr(pgDistPartition);
+		bool isNull = false;
+
+		if (partitionMethod)
+		{
+			*partitionMethod = heap_getattr(partitionTuple,
+											Anum_pg_dist_partition_partmethod,
+											tupleDescriptor, &isNull);
+		}
+		if (replicationModel)
+		{
+			*replicationModel = heap_getattr(partitionTuple,
+											 Anum_pg_dist_partition_repmodel,
+											 tupleDescriptor, &isNull);
+		}
+	}
+
 	systable_endscan(scanDescriptor);
 	table_close(pgDistPartition, AccessShareLock);
 
-	return HeapTupleIsValid(partitionTuple);
+	return isCitusTable;
 }
 
 
