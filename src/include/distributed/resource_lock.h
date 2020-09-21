@@ -38,8 +38,14 @@ typedef enum AdvisoryLocktagClass
 	ADV_LOCKTAG_CLASS_CITUS_JOB = 6,
 	ADV_LOCKTAG_CLASS_CITUS_REBALANCE_COLOCATION = 7,
 	ADV_LOCKTAG_CLASS_CITUS_COLOCATED_SHARDS_METADATA = 8,
+	ADV_LOCKTAG_CLASS_CITUS_OPERATIONS = 9
 } AdvisoryLocktagClass;
 
+/* CitusOperations has constants for citus operations */
+typedef enum CitusOperations
+{
+	CITUS_TRANSACTION_RECOVERY = 0
+} CitusOperations;
 
 /* reuse advisory lock, but with different, unused field 4 (4)*/
 #define SET_LOCKTAG_SHARD_METADATA_RESOURCE(tag, db, shardid) \
@@ -83,6 +89,14 @@ typedef enum AdvisoryLocktagClass
 						 (uint32) (colocationOrTableId), \
 						 ADV_LOCKTAG_CLASS_CITUS_REBALANCE_COLOCATION)
 
+/* advisory lock for citus operations, also it has the database hardcoded to MyDatabaseId,
+ * to ensure the locks are local to each database */
+#define SET_LOCKTAG_CITUS_OPERATION(tag, operationId) \
+	SET_LOCKTAG_ADVISORY(tag, \
+						 MyDatabaseId, \
+						 (uint32) 0, \
+						 (uint32) operationId, \
+						 ADV_LOCKTAG_CLASS_CITUS_OPERATIONS)
 
 /* Lock shard/relation metadata for safe modifications */
 extern void LockShardDistributionMetadata(int64 shardId, LOCKMODE lockMode);
@@ -110,6 +124,9 @@ extern void UnlockColocationId(int colocationId, LOCKMODE lockMode);
 extern void LockShardListMetadata(List *shardIntervalList, LOCKMODE lockMode);
 extern void LockShardsInPlacementListMetadata(List *shardPlacementList,
 											  LOCKMODE lockMode);
+
+extern void LockTransactionRecovery(LOCKMODE lockMode);
+
 extern void SerializeNonCommutativeWrites(List *shardIntervalList, LOCKMODE lockMode);
 extern void LockRelationShardResources(List *relationShardList, LOCKMODE lockMode);
 extern List * GetSortedReferenceShardIntervals(List *relationList);
