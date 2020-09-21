@@ -543,6 +543,20 @@ UnlockShardResource(uint64 shardId, LOCKMODE lockmode)
 }
 
 
+/* LockTransactionRecovery acquires a lock for transaction recovery */
+void
+LockTransactionRecovery(LOCKMODE lockmode)
+{
+	LOCKTAG tag;
+	const bool sessionLock = false;
+	const bool dontWait = false;
+
+	SET_LOCKTAG_TRANSACTION_RECOVERY(tag);
+
+	(void) LockAcquire(&tag, lockmode, sessionLock, dontWait);
+}
+
+
 /*
  * LockJobResource acquires a lock for creating resources associated with the
  * given jobId. This resource is typically a job schema (namespace), and less

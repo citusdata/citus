@@ -36,6 +36,7 @@
 #include "distributed/metadata_cache.h"
 #include "distributed/pg_dist_transaction.h"
 #include "distributed/remote_commands.h"
+#include "distributed/resource_lock.h"
 #include "distributed/transaction_recovery.h"
 #include "distributed/worker_manager.h"
 #include "distributed/version_compat.h"
@@ -171,9 +172,10 @@ RecoverWorkerTransactions(WorkerNode *workerNode)
 
 	MemoryContext oldContext = MemoryContextSwitchTo(localContext);
 
-	/* take table lock first to avoid running concurrently */
+	/* take advisory lock first to avoid running concurrently */
+	LockTransactionRecovery(ShareUpdateExclusiveLock);
 	Relation pgDistTransaction = table_open(DistTransactionRelationId(),
-											ShareUpdateExclusiveLock);
+											RowExclusiveLock);
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistTransaction);
 
 	/*

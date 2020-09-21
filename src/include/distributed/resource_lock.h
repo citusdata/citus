@@ -38,6 +38,7 @@ typedef enum AdvisoryLocktagClass
 	ADV_LOCKTAG_CLASS_CITUS_JOB = 6,
 	ADV_LOCKTAG_CLASS_CITUS_REBALANCE_COLOCATION = 7,
 	ADV_LOCKTAG_CLASS_CITUS_COLOCATED_SHARDS_METADATA = 8,
+	ADV_LOCKTAG_CLASS_CITUS_TRANSACTION_RECOVERY = 9
 } AdvisoryLocktagClass;
 
 
@@ -83,6 +84,12 @@ typedef enum AdvisoryLocktagClass
 						 (uint32) (colocationOrTableId), \
 						 ADV_LOCKTAG_CLASS_CITUS_REBALANCE_COLOCATION)
 
+#define SET_LOCKTAG_TRANSACTION_RECOVERY(tag) \
+	SET_LOCKTAG_ADVISORY(tag, \
+						 MyDatabaseId, \
+						 (uint32) 0, \
+						 (uint32) 0, \
+						 ADV_LOCKTAG_CLASS_CITUS_TRANSACTION_RECOVERY)
 
 /* Lock shard/relation metadata for safe modifications */
 extern void LockShardDistributionMetadata(int64 shardId, LOCKMODE lockMode);
@@ -110,6 +117,9 @@ extern void UnlockColocationId(int colocationId, LOCKMODE lockMode);
 extern void LockShardListMetadata(List *shardIntervalList, LOCKMODE lockMode);
 extern void LockShardsInPlacementListMetadata(List *shardPlacementList,
 											  LOCKMODE lockMode);
+
+extern void LockTransactionRecovery(LOCKMODE lockMode);
+
 extern void SerializeNonCommutativeWrites(List *shardIntervalList, LOCKMODE lockMode);
 extern void LockRelationShardResources(List *relationShardList, LOCKMODE lockMode);
 extern List * GetSortedReferenceShardIntervals(List *relationList);
