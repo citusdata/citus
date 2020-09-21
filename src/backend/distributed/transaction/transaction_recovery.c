@@ -36,6 +36,7 @@
 #include "distributed/metadata_cache.h"
 #include "distributed/pg_dist_transaction.h"
 #include "distributed/remote_commands.h"
+#include "distributed/resource_lock.h"
 #include "distributed/transaction_recovery.h"
 #include "distributed/worker_manager.h"
 #include "distributed/version_compat.h"
@@ -119,6 +120,9 @@ RecoverTwoPhaseCommits(void)
 {
 	int recoveredTransactionCount = 0;
 
+	/* take advisory lock first to avoid running concurrently */
+	LockTransactionRecovery(ShareUpdateExclusiveLock);
+
 	List *workerList = ActivePrimaryNodeList(NoLock);
 	WorkerNode *workerNode = NULL;
 	foreach_ptr(workerNode, workerList)
@@ -171,9 +175,8 @@ RecoverWorkerTransactions(WorkerNode *workerNode)
 
 	MemoryContext oldContext = MemoryContextSwitchTo(localContext);
 
-	/* take table lock first to avoid running concurrently */
 	Relation pgDistTransaction = table_open(DistTransactionRelationId(),
-											ShareUpdateExclusiveLock);
+											RowExclusiveLock);
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistTransaction);
 
 	/*
