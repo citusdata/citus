@@ -191,6 +191,12 @@ static const struct config_enum_entry multi_shard_modify_connection_options[] = 
 	{ NULL, 0, false }
 };
 
+static const struct config_enum_entry explain_analyze_sort_method_options[] = {
+	{ "execution-time", EXPLAIN_ANALYZE_SORT_BY_TIME, false },
+	{ "taskId", EXPLAIN_ANALYZE_SORT_BY_TASK_ID, false },
+	{ NULL, 0, false }
+};
+
 /* *INDENT-ON* */
 
 
@@ -1483,6 +1489,21 @@ RegisterCitusConfigVariables(void)
 		NULL,
 		&ReplicateReferenceTablesOnActivate,
 		true,
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
+	DefineCustomEnumVariable(
+		"citus.explain_analyze_sort_method",
+		gettext_noop("Sets the sorting method for EXPLAIN ANALYZE queries."),
+		gettext_noop("This parameter is intended for testing. It is developed "
+					 "to get consistent regression test outputs. When it is set "
+					 "to 'time', EXPLAIN ANALYZE output is sorted by execution "
+					 "duration on workers. When it is set to 'taskId', it is "
+					 "sorted by task id. By default, it is set to 'time'; but "
+					 "in regression tests, it's set to 'taskId' for consistency."),
+		&ExplainAnalyzeSortMethod,
+		EXPLAIN_ANALYZE_SORT_BY_TIME, explain_analyze_sort_method_options,
 		PGC_USERSET,
 		GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
