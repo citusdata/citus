@@ -209,6 +209,7 @@ static ScanKeyData DistObjectScanKey[3];
 
 
 /* local function forward declarations */
+static bool AlterExtensionCitusUpdateInProgress(void);
 static bool IsCitusTableTypeInternal(char partitionMethod, char replicationModel,
 									 CitusTableType tableType);
 static bool IsCitusTableViaCatalogInternal(Oid relationId, char *partitionMethod,
@@ -324,18 +325,46 @@ IsCitusTableType(Oid relationId, CitusTableType tableType)
 		return false;
 	}
 
-	/*
-	 * If we are issuing ALTER EXTENSION citus UPDATE, CitusHasBeenLoaded()
-	 * returns false and we cannot access/build cache entries. In that case,
-	 * we need to decide table type directly reading from pg_dist_partition
-	 * table.
-	 * Reading from pg_dist_partition wouldn't be as efficient as accessing
-	 * to cache, but this is the case only when upgrading/downgrading Citus
-	 * so we don't expect any performance critical code-paths to reach here.
-	 */
-	ereport(DEBUG4, (errmsg("will scan pg_dist_partition for relation with "
-							"OID=%u", relationId)));
-	return IsCitusTableTypeViaCatalog(relationId, tableType);
+	if (AlterExtensionCitusUpdateInProgress())
+	{
+		/*
+		 * If we are issuing ALTER EXTENSION citus UPDATE, CitusHasBeenLoaded()
+		 * returns false and we cannot access/build cache entries. In that case,
+		 * we need to decide table type directly reading from pg_dist_partition
+		 * table.
+		 * Reading from pg_dist_partition wouldn't be as efficient as accessing
+		 * to cache, but this is the case only when upgrading/downgrading Citus
+		 * so we don't expect any performance critical code-paths to reach here.
+		 */
+		ereport(DEBUG4, (errmsg("will scan pg_dist_partition for relation with "
+								"OID=%u", relationId)));
+		return IsCitusTableTypeViaCatalog(relationId, tableType);
+	}
+
+	return false;
+}
+
+
+/*
+ * AlterExtensionCitusUpdateInProgress returns true if
+ * ALTER EXTENSION citus UPDATE command is in progress.
+ */
+static bool
+AlterExtensionCitusUpdateInProgress(void)
+{
+	Oid citusExtensionOid = get_extension_oid("citus", true);
+	if (citusExtensionOid == InvalidOid)
+	{
+		/* Citus extension does not exist yet */
+		return false;
+	}
+
+	if (creating_extension && CurrentExtensionObject == citusExtensionOid)
+	{
+		return true;
+	}
+
+	return false;
 }
 
 
