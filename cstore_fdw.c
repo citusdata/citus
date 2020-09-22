@@ -1260,9 +1260,9 @@ static CStoreOptions *
 CStoreGetOptions(Oid foreignTableId)
 {
 	CStoreOptions *cstoreOptions = NULL;
-	CompressionType compressionType = DEFAULT_COMPRESSION_TYPE;
-	int32 stripeRowCount = DEFAULT_STRIPE_ROW_COUNT;
-	int32 blockRowCount = DEFAULT_BLOCK_ROW_COUNT;
+	CompressionType compressionType = cstore_compression;
+	int32 stripeRowCount = cstore_stripe_row_count;
+	int32 blockRowCount = cstore_block_row_count;
 	char *compressionTypeString = NULL;
 	char *stripeRowCountString = NULL;
 	char *blockRowCountString = NULL;

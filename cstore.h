@@ -24,11 +24,6 @@
 #define OPTION_NAME_STRIPE_ROW_COUNT "stripe_row_count"
 #define OPTION_NAME_BLOCK_ROW_COUNT "block_row_count"
 
-/* Default values for option parameters */
-#define DEFAULT_COMPRESSION_TYPE COMPRESSION_NONE
-#define DEFAULT_STRIPE_ROW_COUNT 150000
-#define DEFAULT_BLOCK_ROW_COUNT 10000
-
 /* Limits for option parameters */
 #define STRIPE_ROW_COUNT_MINIMUM 1000
 #define STRIPE_ROW_COUNT_MAXIMUM 10000000
@@ -249,11 +244,15 @@ typedef struct TableWriteState
 	StringInfo compressionBuffer;
 } TableWriteState;
 
+extern int cstore_compression;
+extern int cstore_stripe_row_count;
+extern int cstore_block_row_count;
+
+extern void cstore_init(void);
+
 extern CompressionType ParseCompressionType(const char *compressionTypeString);
 extern void InitializeCStoreTableFile(Oid relationId, Relation relation,
 									  CStoreOptions *cstoreOptions);
-extern void CreateCStoreDatabaseDirectory(Oid databaseOid);
-extern void RemoveCStoreDatabaseDirectory(Oid databaseOid);
 
 /* Function declarations for writing to a cstore file */
 extern TableWriteState * CStoreBeginWrite(Oid relationId,

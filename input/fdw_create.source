@@ -2,10 +2,6 @@
 -- Test the CREATE statements related to cstore_fdw.
 --
 
-
--- Install cstore_fdw
-CREATE EXTENSION cstore_fdw;
-
 CREATE SERVER cstore_server FOREIGN DATA WRAPPER cstore_fdw;
 
 
