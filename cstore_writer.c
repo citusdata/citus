@@ -242,6 +242,7 @@ CStoreWriteRow(TableWriteState *writeState, Datum *columnValues, bool *columnNul
 		MemoryContextReset(writeState->stripeWriteContext);
 
 		writeState->currentStripeId++;
+		writeState->currentStripeOffset = 0;
 
 		/* set stripe data and skip list to NULL so they are recreated next time */
 		writeState->stripeBuffers = NULL;
@@ -473,12 +474,10 @@ FlushStripe(TableWriteState *writeState)
 		SerializeBlockData(writeState, lastBlockIndex, lastBlockRowCount);
 	}
 
-	/* update buffer sizes and positions in stripe skip list */
+	/* update buffer sizes in stripe skip list */
 	for (columnIndex = 0; columnIndex < columnCount; columnIndex++)
 	{
 		ColumnBlockSkipNode *blockSkipNodeArray = columnSkipNodeArray[columnIndex];
-		uint64 currentExistsBlockOffset = 0;
-		uint64 currentValueBlockOffset = 0;
 		ColumnBuffers *columnBuffers = stripeBuffers->columnBuffersArray[columnIndex];
 
 		for (blockIndex = 0; blockIndex < blockCount; blockIndex++)
@@ -486,20 +485,35 @@ FlushStripe(TableWriteState *writeState)
 			ColumnBlockBuffers *blockBuffers =
 				columnBuffers->blockBuffersArray[blockIndex];
 			uint64 existsBufferSize = blockBuffers->existsBuffer->len;
+			ColumnBlockSkipNode *blockSkipNode = &blockSkipNodeArray[blockIndex];
+
+			blockSkipNode->existsBlockOffset = writeState->currentStripeOffset;
+			blockSkipNode->existsLength = existsBufferSize;
+			writeState->currentStripeOffset += existsBufferSize;
+		}
+	}
+
+	for (columnIndex = 0; columnIndex < columnCount; columnIndex++)
+	{
+		ColumnBlockSkipNode *blockSkipNodeArray = columnSkipNodeArray[columnIndex];
+		ColumnBuffers *columnBuffers = stripeBuffers->columnBuffersArray[columnIndex];
+
+		for (blockIndex = 0; blockIndex < blockCount; blockIndex++)
+		{
+			ColumnBlockBuffers *blockBuffers =
+				columnBuffers->blockBuffersArray[blockIndex];
 			uint64 valueBufferSize = blockBuffers->valueBuffer->len;
 			CompressionType valueCompressionType = blockBuffers->valueCompressionType;
 			ColumnBlockSkipNode *blockSkipNode = &blockSkipNodeArray[blockIndex];
 
-			blockSkipNode->existsBlockOffset = currentExistsBlockOffset;
-			blockSkipNode->existsLength = existsBufferSize;
-			blockSkipNode->valueBlockOffset = currentValueBlockOffset;
+			blockSkipNode->valueBlockOffset = writeState->currentStripeOffset;
 			blockSkipNode->valueLength = valueBufferSize;
 			blockSkipNode->valueCompressionType = valueCompressionType;
 
-			currentExistsBlockOffset += existsBufferSize;
-			currentValueBlockOffset += valueBufferSize;
+			writeState->currentStripeOffset += valueBufferSize;
 		}
 	}
+
 
 	/* create skip list and footer buffers */
 	SaveStripeSkipList(writeState->relationId, writeState->currentStripeId,

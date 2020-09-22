@@ -235,6 +235,7 @@ typedef struct TableWriteState
 	TupleDesc tupleDescriptor;
 	FmgrInfo **comparisonFunctionArray;
 	uint64 currentFileOffset;
+	uint64 currentStripeOffset;
 	Relation relation;
 
 	MemoryContext stripeWriteContext;

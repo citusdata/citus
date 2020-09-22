@@ -49,8 +49,7 @@ static void ReadStripeNextRow(StripeBuffers *stripeBuffers, List *projectedColum
 							  bool *columnNulls);
 static ColumnBuffers * LoadColumnBuffers(Relation relation,
 										 ColumnBlockSkipNode *blockSkipNodeArray,
-										 uint32 blockCount, uint64 existsFileOffset,
-										 uint64 valueFileOffset,
+										 uint32 blockCount, uint64 stripeOffset,
 										 Form_pg_attribute attributeForm);
 static bool * SelectedBlockMask(StripeSkipList *stripeSkipList,
 								List *projectedColumnList, List *whereClauseList);
@@ -365,8 +364,6 @@ LoadFilteredStripeBuffers(Relation relation, StripeMetadata *stripeMetadata,
 	{
 		uint64 existsSize = stripeFooter->existsSizeArray[columnIndex];
 		uint64 valueSize = stripeFooter->valueSizeArray[columnIndex];
-		uint64 existsFileOffset = currentColumnFileOffset;
-		uint64 valueFileOffset = currentColumnFileOffset + existsSize;
 
 		if (projectedColumnMask[columnIndex])
 		{
@@ -377,8 +374,7 @@ LoadFilteredStripeBuffers(Relation relation, StripeMetadata *stripeMetadata,
 
 			ColumnBuffers *columnBuffers = LoadColumnBuffers(relation, blockSkipNode,
 															 blockCount,
-															 existsFileOffset,
-															 valueFileOffset,
+															 stripeMetadata->fileOffset,
 															 attributeForm);
 
 			columnBuffersArray[columnIndex] = columnBuffers;
@@ -434,7 +430,7 @@ ReadStripeNextRow(StripeBuffers *stripeBuffers, List *projectedColumnList,
  */
 static ColumnBuffers *
 LoadColumnBuffers(Relation relation, ColumnBlockSkipNode *blockSkipNodeArray,
-				  uint32 blockCount, uint64 existsFileOffset, uint64 valueFileOffset,
+				  uint32 blockCount, uint64 stripeOffset,
 				  Form_pg_attribute attributeForm)
 {
 	ColumnBuffers *columnBuffers = NULL;
@@ -455,7 +451,7 @@ LoadColumnBuffers(Relation relation, ColumnBlockSkipNode *blockSkipNodeArray,
 	for (blockIndex = 0; blockIndex < blockCount; blockIndex++)
 	{
 		ColumnBlockSkipNode *blockSkipNode = &blockSkipNodeArray[blockIndex];
-		uint64 existsOffset = existsFileOffset + blockSkipNode->existsBlockOffset;
+		uint64 existsOffset = stripeOffset + blockSkipNode->existsBlockOffset;
 		StringInfo rawExistsBuffer = ReadFromSmgr(relation, existsOffset,
 												  blockSkipNode->existsLength);
 
@@ -467,7 +463,7 @@ LoadColumnBuffers(Relation relation, ColumnBlockSkipNode *blockSkipNodeArray,
 	{
 		ColumnBlockSkipNode *blockSkipNode = &blockSkipNodeArray[blockIndex];
 		CompressionType compressionType = blockSkipNode->valueCompressionType;
-		uint64 valueOffset = valueFileOffset + blockSkipNode->valueBlockOffset;
+		uint64 valueOffset = stripeOffset + blockSkipNode->valueBlockOffset;
 		StringInfo rawValueBuffer = ReadFromSmgr(relation, valueOffset,
 												 blockSkipNode->valueLength);
 
