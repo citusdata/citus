@@ -3,7 +3,7 @@
 SET search_path = 'pg_catalog';
 
 -- Check if user has any citus local tables.
--- If not, DROP create_citus_local_table UDF continue safely.
+-- If not, DROP create_citus_local_table UDF and continue safely.
 -- Otherwise, raise an exception to stop the downgrade process.
 DO $$
 DECLARE

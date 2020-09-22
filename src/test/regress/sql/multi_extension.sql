@@ -205,7 +205,7 @@ BEGIN;
   ALTER EXTENSION citus UPDATE TO '9.4-1';
 ROLLBACK;
 
--- now we can downgrade
+-- now we can downgrade as there is no citus local table
 ALTER EXTENSION citus UPDATE TO '9.4-1';
 
 -- Should be empty result since upgrade+downgrade should be a no-op
