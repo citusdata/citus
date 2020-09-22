@@ -3837,17 +3837,6 @@ ClusterHasReferenceTable(void)
 
 
 /*
- * ClusterHasCitusLocalTable returns true if the cluster has
- * any citus local table.
- */
-bool
-ClusterHasCitusLocalTable(void)
-{
-	return list_length(CitusTableTypeIdList(CITUS_LOCAL_TABLE)) > 0;
-}
-
-
-/*
  * InvalidateNodeRelationCacheCallback destroys the WorkerNodeHash when
  * any change happens on pg_dist_node table. It also set WorkerNodeHash to
  * NULL, which allows consequent accesses to the hash read from the

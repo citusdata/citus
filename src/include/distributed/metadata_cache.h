@@ -164,7 +164,6 @@ extern void InvalidateMetadataSystemCache(void);
 extern List * CitusTableTypeIdList(CitusTableType citusTableType);
 extern Datum DistNodeMetadata(void);
 extern bool ClusterHasReferenceTable(void);
-extern bool ClusterHasCitusLocalTable(void);
 extern bool HasUniformHashDistribution(ShardInterval **shardIntervalArray,
 									   int shardIntervalArrayLength);
 extern bool HasUninitializedShardInterval(ShardInterval **sortedShardIntervalArray,

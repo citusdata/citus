@@ -83,7 +83,6 @@ static ShardPlacement * ShardPlacementOnGroup(uint64 shardId, int groupId);
 PG_FUNCTION_INFO_V1(citus_table_size);
 PG_FUNCTION_INFO_V1(citus_total_relation_size);
 PG_FUNCTION_INFO_V1(citus_relation_size);
-PG_FUNCTION_INFO_V1(cluster_has_citus_local_table);
 
 
 /*
@@ -152,19 +151,6 @@ citus_relation_size(PG_FUNCTION_ARGS)
 	uint64 relationSize = DistributedTableSize(relationId, tableSizeFunction);
 
 	PG_RETURN_INT64(relationSize);
-}
-
-
-/*
- * has_citus_local_table returns true if the cluster has any citus local
- * table.
- */
-Datum
-cluster_has_citus_local_table(PG_FUNCTION_ARGS)
-{
-	CheckCitusVersion(ERROR);
-
-	PG_RETURN_BOOL(ClusterHasCitusLocalTable());
 }
 
 

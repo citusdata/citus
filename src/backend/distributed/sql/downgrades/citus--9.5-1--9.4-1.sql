@@ -22,8 +22,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-DROP FUNCTION cluster_has_citus_local_table;
-
 --  task_tracker_* functions
 
 CREATE FUNCTION task_tracker_assign_task(bigint, integer, text)
