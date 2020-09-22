@@ -58,7 +58,7 @@ CStoreTableAMGetOptions(void)
 
 
 static MemoryContext
-CStoreMemoryContext(void)
+GetCStoreMemoryContext(void)
 {
 	if (CStoreContext == NULL)
 	{
@@ -98,7 +98,7 @@ cstore_init_write_state(Relation relation)
 }
 
 
-void
+static void
 cstore_free_write_state()
 {
 	if (CStoreWriteState != NULL)
@@ -130,7 +130,7 @@ cstore_beginscan(Relation relation, Snapshot snapshot,
 	TableReadState *readState = NULL;
 	CStoreScanDesc scan = palloc(sizeof(CStoreScanDescData));
 	List *columnList = NIL;
-	MemoryContext oldContext = MemoryContextSwitchTo(CStoreMemoryContext());
+	MemoryContext oldContext = MemoryContextSwitchTo(GetCStoreMemoryContext());
 
 	cstoreOptions = CStoreTableAMGetOptions();
 
@@ -176,6 +176,7 @@ cstore_endscan(TableScanDesc sscan)
 {
 	CStoreScanDesc scan = (CStoreScanDesc) sscan;
 	CStoreEndRead(scan->cs_readState);
+	scan->cs_readState = NULL;
 }
 
 
@@ -192,7 +193,7 @@ cstore_getnextslot(TableScanDesc sscan, ScanDirection direction, TupleTableSlot 
 {
 	CStoreScanDesc scan = (CStoreScanDesc) sscan;
 	bool nextRowFound;
-	MemoryContext oldContext = MemoryContextSwitchTo(CStoreMemoryContext());
+	MemoryContext oldContext = MemoryContextSwitchTo(GetCStoreMemoryContext());
 
 	ExecClearTuple(slot);
 
@@ -311,7 +312,7 @@ cstore_tuple_insert(Relation relation, TupleTableSlot *slot, CommandId cid,
 					int options, BulkInsertState bistate)
 {
 	HeapTuple heapTuple;
-	MemoryContext oldContext = MemoryContextSwitchTo(CStoreMemoryContext());
+	MemoryContext oldContext = MemoryContextSwitchTo(GetCStoreMemoryContext());
 
 	cstore_init_write_state(relation);
 
@@ -353,7 +354,7 @@ static void
 cstore_multi_insert(Relation relation, TupleTableSlot **slots, int ntuples,
 					CommandId cid, int options, BulkInsertState bistate)
 {
-	MemoryContext oldContext = MemoryContextSwitchTo(CStoreMemoryContext());
+	MemoryContext oldContext = MemoryContextSwitchTo(GetCStoreMemoryContext());
 
 	cstore_init_write_state(relation);
 
@@ -564,23 +565,6 @@ cstore_estimate_rel_size(Relation rel, int32 *attr_widths,
 
 
 static bool
-cstore_scan_bitmap_next_block(TableScanDesc scan,
-							  TBMIterateResult *tbmres)
-{
-	elog(ERROR, "cstore_scan_bitmap_next_block not implemented");
-}
-
-
-static bool
-cstore_scan_bitmap_next_tuple(TableScanDesc scan,
-							  TBMIterateResult *tbmres,
-							  TupleTableSlot *slot)
-{
-	elog(ERROR, "cstore_scan_bitmap_next_tuple not implemented");
-}
-
-
-static bool
 cstore_scan_sample_next_block(TableScanDesc scan, SampleScanState *scanstate)
 {
 	elog(ERROR, "cstore_scan_sample_next_block not implemented");
@@ -674,8 +658,8 @@ static const TableAmRoutine cstore_am_methods = {
 
 	.relation_estimate_size = cstore_estimate_rel_size,
 
-	.scan_bitmap_next_block = cstore_scan_bitmap_next_block,
-	.scan_bitmap_next_tuple = cstore_scan_bitmap_next_tuple,
+	.scan_bitmap_next_block = NULL,
+	.scan_bitmap_next_tuple = NULL,
 	.scan_sample_next_block = cstore_scan_sample_next_block,
 	.scan_sample_next_tuple = cstore_scan_sample_next_tuple
 };

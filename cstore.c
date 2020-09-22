@@ -42,7 +42,7 @@ void
 cstore_init()
 {
 	DefineCustomEnumVariable("cstore.compression",
-							 "Sets the maximum number of statements tracked by pg_stat_statements.",
+							 "Compression type for cstore.",
 							 NULL,
 							 &cstore_compression,
 							 DEFAULT_COMPRESSION_TYPE,
@@ -54,7 +54,7 @@ cstore_init()
 							 NULL);
 
 	DefineCustomIntVariable("cstore.stripe_row_count",
-							"Sets the maximum number of statements tracked by pg_stat_statements.",
+							"Maximum number of tuples per stripe.",
 							NULL,
 							&cstore_stripe_row_count,
 							DEFAULT_STRIPE_ROW_COUNT,
@@ -67,7 +67,7 @@ cstore_init()
 							NULL);
 
 	DefineCustomIntVariable("cstore.block_row_count",
-							"Sets the maximum number of statements tracked by pg_stat_statements.",
+							"Maximum number of rows per block.",
 							NULL,
 							&cstore_block_row_count,
 							DEFAULT_BLOCK_ROW_COUNT,
