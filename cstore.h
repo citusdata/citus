@@ -77,6 +77,7 @@ typedef struct StripeMetadata
 {
 	uint64 fileOffset;
 	uint64 dataLength;
+	uint32 columnCount;
 	uint32 blockCount;
 	uint32 blockRowCount;
 	uint64 rowCount;
@@ -186,19 +187,6 @@ typedef struct StripeBuffers
 } StripeBuffers;
 
 
-/*
- * StripeFooter represents a stripe's footer. In this footer, we keep three
- * arrays of sizes. The number of elements in each of the arrays is equal
- * to the number of columns.
- */
-typedef struct StripeFooter
-{
-	uint32 columnCount;
-	uint64 *existsSizeArray;
-	uint64 *valueSizeArray;
-} StripeFooter;
-
-
 /* TableReadState represents state of a cstore file read operation. */
 typedef struct TableReadState
 {
@@ -235,7 +223,6 @@ typedef struct TableWriteState
 	TupleDesc tupleDescriptor;
 	FmgrInfo **comparisonFunctionArray;
 	uint64 currentFileOffset;
-	uint64 currentStripeOffset;
 	Relation relation;
 
 	MemoryContext stripeWriteContext;
@@ -296,9 +283,6 @@ extern bool CompressBuffer(StringInfo inputBuffer, StringInfo outputBuffer,
 extern StringInfo DecompressBuffer(StringInfo buffer, CompressionType compressionType);
 
 /* cstore_metadata_tables.c */
-extern void SaveStripeFooter(Oid relid, uint64 stripe, StripeFooter *footer);
-extern StripeFooter * ReadStripeFooter(Oid relid, uint64 stripe, int relationColumnCount);
-
 extern void InitCStoreTableMetadata(Oid relid, int blockRowCount);
 extern void InsertStripeMetadataRow(Oid relid, StripeMetadata *stripe);
 extern TableMetadata * ReadTableMetadata(Oid relid);

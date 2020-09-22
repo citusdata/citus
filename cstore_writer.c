@@ -34,7 +34,6 @@ static StripeSkipList * CreateEmptyStripeSkipList(uint32 stripeMaxRowCount,
 												  uint32 blockRowCount,
 												  uint32 columnCount);
 static StripeMetadata FlushStripe(TableWriteState *writeState);
-static StripeFooter * CreateStripeFooter(StripeSkipList *stripeSkipList);
 static StringInfo SerializeBoolArray(bool *boolArray, uint32 boolArrayLength);
 static void SerializeSingleDatum(StringInfo datumBuffer, Datum datum,
 								 bool datumTypeByValue, int datumTypeLength,
@@ -242,7 +241,6 @@ CStoreWriteRow(TableWriteState *writeState, Datum *columnValues, bool *columnNul
 		MemoryContextReset(writeState->stripeWriteContext);
 
 		writeState->currentStripeId++;
-		writeState->currentStripeOffset = 0;
 
 		/* set stripe data and skip list to NULL so they are recreated next time */
 		writeState->stripeBuffers = NULL;
@@ -450,8 +448,6 @@ static StripeMetadata
 FlushStripe(TableWriteState *writeState)
 {
 	StripeMetadata stripeMetadata = { 0 };
-	uint64 dataLength = 0;
-	StripeFooter *stripeFooter = NULL;
 	uint32 columnIndex = 0;
 	uint32 blockIndex = 0;
 	StripeBuffers *stripeBuffers = writeState->stripeBuffers;
@@ -464,6 +460,7 @@ FlushStripe(TableWriteState *writeState)
 	uint32 lastBlockIndex = stripeBuffers->rowCount / blockRowCount;
 	uint32 lastBlockRowCount = stripeBuffers->rowCount % blockRowCount;
 	uint64 initialFileOffset = writeState->currentFileOffset;
+	uint64 stripeSize = 0;
 
 	/*
 	 * check if the last block needs serialization , the last block was not serialized
@@ -487,16 +484,10 @@ FlushStripe(TableWriteState *writeState)
 			uint64 existsBufferSize = blockBuffers->existsBuffer->len;
 			ColumnBlockSkipNode *blockSkipNode = &blockSkipNodeArray[blockIndex];
 
-			blockSkipNode->existsBlockOffset = writeState->currentStripeOffset;
+			blockSkipNode->existsBlockOffset = stripeSize;
 			blockSkipNode->existsLength = existsBufferSize;
-			writeState->currentStripeOffset += existsBufferSize;
+			stripeSize += existsBufferSize;
 		}
-	}
-
-	for (columnIndex = 0; columnIndex < columnCount; columnIndex++)
-	{
-		ColumnBlockSkipNode *blockSkipNodeArray = columnSkipNodeArray[columnIndex];
-		ColumnBuffers *columnBuffers = stripeBuffers->columnBuffersArray[columnIndex];
 
 		for (blockIndex = 0; blockIndex < blockCount; blockIndex++)
 		{
@@ -506,19 +497,13 @@ FlushStripe(TableWriteState *writeState)
 			CompressionType valueCompressionType = blockBuffers->valueCompressionType;
 			ColumnBlockSkipNode *blockSkipNode = &blockSkipNodeArray[blockIndex];
 
-			blockSkipNode->valueBlockOffset = writeState->currentStripeOffset;
+			blockSkipNode->valueBlockOffset = stripeSize;
 			blockSkipNode->valueLength = valueBufferSize;
 			blockSkipNode->valueCompressionType = valueCompressionType;
 
-			writeState->currentStripeOffset += valueBufferSize;
+			stripeSize += valueBufferSize;
 		}
 	}
-
-
-	/* create skip list and footer buffers */
-	SaveStripeSkipList(writeState->relationId, writeState->currentStripeId,
-					   stripeSkipList, tupleDescriptor);
-	stripeFooter = CreateStripeFooter(stripeSkipList);
 
 	/*
 	 * Each stripe has only one section:
@@ -557,17 +542,9 @@ FlushStripe(TableWriteState *writeState)
 		}
 	}
 
-	/* finally, we flush the footer buffer */
-	SaveStripeFooter(writeState->relationId,
-					 writeState->currentStripeId,
-					 stripeFooter);
-
-	/* set stripe metadata */
-	for (columnIndex = 0; columnIndex < columnCount; columnIndex++)
-	{
-		dataLength += stripeFooter->existsSizeArray[columnIndex];
-		dataLength += stripeFooter->valueSizeArray[columnIndex];
-	}
+	/* create skip list and footer buffers */
+	SaveStripeSkipList(writeState->relationId, writeState->currentStripeId,
+					   stripeSkipList, tupleDescriptor);
 
 	for (blockIndex = 0; blockIndex < blockCount; blockIndex++)
 	{
@@ -576,44 +553,13 @@ FlushStripe(TableWriteState *writeState)
 	}
 
 	stripeMetadata.fileOffset = initialFileOffset;
-	stripeMetadata.dataLength = dataLength;
+	stripeMetadata.dataLength = stripeSize;
 	stripeMetadata.id = writeState->currentStripeId;
 	stripeMetadata.blockCount = blockCount;
 	stripeMetadata.blockRowCount = writeState->blockRowCount;
+	stripeMetadata.columnCount = columnCount;
 
 	return stripeMetadata;
-}
-
-
-/* Creates and returns the footer for given stripe. */
-static StripeFooter *
-CreateStripeFooter(StripeSkipList *stripeSkipList)
-{
-	StripeFooter *stripeFooter = NULL;
-	uint32 columnIndex = 0;
-	uint32 columnCount = stripeSkipList->columnCount;
-	uint64 *existsSizeArray = palloc0(columnCount * sizeof(uint64));
-	uint64 *valueSizeArray = palloc0(columnCount * sizeof(uint64));
-
-	for (columnIndex = 0; columnIndex < columnCount; columnIndex++)
-	{
-		ColumnBlockSkipNode *blockSkipNodeArray =
-			stripeSkipList->blockSkipNodeArray[columnIndex];
-		uint32 blockIndex = 0;
-
-		for (blockIndex = 0; blockIndex < stripeSkipList->blockCount; blockIndex++)
-		{
-			existsSizeArray[columnIndex] += blockSkipNodeArray[blockIndex].existsLength;
-			valueSizeArray[columnIndex] += blockSkipNodeArray[blockIndex].valueLength;
-		}
-	}
-
-	stripeFooter = palloc0(sizeof(StripeFooter));
-	stripeFooter->columnCount = columnCount;
-	stripeFooter->existsSizeArray = existsSizeArray;
-	stripeFooter->valueSizeArray = valueSizeArray;
-
-	return stripeFooter;
 }
 
 

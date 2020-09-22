@@ -39,7 +39,6 @@
 /* static function declarations */
 static StripeBuffers * LoadFilteredStripeBuffers(Relation relation,
 												 StripeMetadata *stripeMetadata,
-												 StripeFooter *stripeFooter,
 												 TupleDesc tupleDescriptor,
 												 List *projectedColumnList,
 												 List *whereClauseList);
@@ -141,7 +140,6 @@ CStoreReadNextRow(TableReadState *readState, Datum *columnValues, bool *columnNu
 		StripeMetadata *stripeMetadata = NULL;
 		List *stripeMetadataList = readState->tableMetadata->stripeMetadataList;
 		uint32 stripeCount = list_length(stripeMetadataList);
-		StripeFooter *stripeFooter = NULL;
 
 		/* if we have read all stripes, return false */
 		if (readState->readStripeCount == stripeCount)
@@ -154,12 +152,8 @@ CStoreReadNextRow(TableReadState *readState, Datum *columnValues, bool *columnNu
 		readState->blockData = NULL;
 
 		stripeMetadata = list_nth(stripeMetadataList, readState->readStripeCount);
-		stripeFooter = ReadStripeFooter(readState->relationId,
-										stripeMetadata->id,
-										readState->tupleDescriptor->natts);
 		stripeBuffers = LoadFilteredStripeBuffers(readState->relation,
 												  stripeMetadata,
-												  stripeFooter,
 												  readState->tupleDescriptor,
 												  readState->projectedColumnList,
 												  readState->whereClauseList);
@@ -333,12 +327,11 @@ CStoreTableRowCount(Relation relation)
  */
 static StripeBuffers *
 LoadFilteredStripeBuffers(Relation relation, StripeMetadata *stripeMetadata,
-						  StripeFooter *stripeFooter, TupleDesc tupleDescriptor,
-						  List *projectedColumnList, List *whereClauseList)
+						  TupleDesc tupleDescriptor, List *projectedColumnList,
+						  List *whereClauseList)
 {
 	StripeBuffers *stripeBuffers = NULL;
 	ColumnBuffers **columnBuffersArray = NULL;
-	uint64 currentColumnFileOffset = 0;
 	uint32 columnIndex = 0;
 	uint32 columnCount = tupleDescriptor->natts;
 
@@ -358,13 +351,9 @@ LoadFilteredStripeBuffers(Relation relation, StripeMetadata *stripeMetadata,
 
 	/* load column data for projected columns */
 	columnBuffersArray = palloc0(columnCount * sizeof(ColumnBuffers *));
-	currentColumnFileOffset = stripeMetadata->fileOffset;
 
-	for (columnIndex = 0; columnIndex < stripeFooter->columnCount; columnIndex++)
+	for (columnIndex = 0; columnIndex < stripeMetadata->columnCount; columnIndex++)
 	{
-		uint64 existsSize = stripeFooter->existsSizeArray[columnIndex];
-		uint64 valueSize = stripeFooter->valueSizeArray[columnIndex];
-
 		if (projectedColumnMask[columnIndex])
 		{
 			ColumnBlockSkipNode *blockSkipNode =
@@ -379,9 +368,6 @@ LoadFilteredStripeBuffers(Relation relation, StripeMetadata *stripeMetadata,
 
 			columnBuffersArray[columnIndex] = columnBuffers;
 		}
-
-		currentColumnFileOffset += existsSize;
-		currentColumnFileOffset += valueSize;
 	}
 
 	stripeBuffers = palloc0(sizeof(StripeBuffers));

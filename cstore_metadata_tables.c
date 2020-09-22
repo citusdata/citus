@@ -43,8 +43,6 @@ typedef struct
 	EState *estate;
 } ModifyState;
 
-static Oid CStoreStripeAttrRelationId(void);
-static Oid CStoreStripeAttrIndexRelationId(void);
 static Oid CStoreStripesRelationId(void);
 static Oid CStoreStripesIndexRelationId(void);
 static Oid CStoreTablesRelationId(void);
@@ -63,14 +61,6 @@ static EState * create_estate_for_relation(Relation rel);
 static bytea * DatumToBytea(Datum value, Form_pg_attribute attrForm);
 static Datum ByteaToDatum(bytea *bytes, Form_pg_attribute attrForm);
 
-/* constants for cstore_stripe_attr */
-#define Natts_cstore_stripe_attr 5
-#define Anum_cstore_stripe_attr_relid 1
-#define Anum_cstore_stripe_attr_stripe 2
-#define Anum_cstore_stripe_attr_attr 3
-#define Anum_cstore_stripe_attr_exists_size 4
-#define Anum_cstore_stripe_attr_value_size 5
-
 /* constants for cstore_table */
 #define Natts_cstore_tables 4
 #define Anum_cstore_tables_relid 1
@@ -79,14 +69,15 @@ static Datum ByteaToDatum(bytea *bytes, Form_pg_attribute attrForm);
 #define Anum_cstore_tables_version_minor 4
 
 /* constants for cstore_stripe */
-#define Natts_cstore_stripes 7
+#define Natts_cstore_stripes 8
 #define Anum_cstore_stripes_relid 1
 #define Anum_cstore_stripes_stripe 2
 #define Anum_cstore_stripes_file_offset 3
 #define Anum_cstore_stripes_data_length 4
-#define Anum_cstore_stripes_block_count 5
-#define Anum_cstore_stripes_block_row_count 6
-#define Anum_cstore_stripes_row_count 7
+#define Anum_cstore_stripes_column_count 5
+#define Anum_cstore_stripes_block_count 6
+#define Anum_cstore_stripes_block_row_count 7
+#define Anum_cstore_stripes_row_count 8
 
 /* constants for cstore_skipnodes */
 #define Natts_cstore_skipnodes 12
@@ -328,6 +319,7 @@ InsertStripeMetadataRow(Oid relid, StripeMetadata *stripe)
 		Int64GetDatum(stripe->id),
 		Int64GetDatum(stripe->fileOffset),
 		Int64GetDatum(stripe->dataLength),
+		Int32GetDatum(stripe->columnCount),
 		Int32GetDatum(stripe->blockCount),
 		Int32GetDatum(stripe->blockRowCount),
 		Int64GetDatum(stripe->rowCount)
@@ -388,6 +380,8 @@ ReadTableMetadata(Oid relid)
 			datumArray[Anum_cstore_stripes_file_offset - 1]);
 		stripeMetadata->dataLength = DatumGetInt64(
 			datumArray[Anum_cstore_stripes_data_length - 1]);
+		stripeMetadata->columnCount = DatumGetInt32(
+			datumArray[Anum_cstore_stripes_column_count - 1]);
 		stripeMetadata->blockCount = DatumGetInt32(
 			datumArray[Anum_cstore_stripes_block_count - 1]);
 		stripeMetadata->blockRowCount = DatumGetInt32(
@@ -482,103 +476,6 @@ DeleteTableMetadataRowIfExists(Oid relid)
 	systable_endscan_ordered(scanDescriptor);
 	index_close(index, NoLock);
 	heap_close(cstoreTables, NoLock);
-}
-
-
-/*
- * SaveStripeFooter stores give StripeFooter as cstore_stripe_attr records.
- */
-void
-SaveStripeFooter(Oid relid, uint64 stripe, StripeFooter *footer)
-{
-	Oid cstoreStripeAttrOid = CStoreStripeAttrRelationId();
-	Relation cstoreStripeAttrs = heap_open(cstoreStripeAttrOid, RowExclusiveLock);
-
-	ModifyState *modifyState = StartModifyRelation(cstoreStripeAttrs);
-
-	for (AttrNumber attr = 1; attr <= footer->columnCount; attr++)
-	{
-		bool nulls[Natts_cstore_stripe_attr] = { 0 };
-		Datum values[Natts_cstore_stripe_attr] = {
-			ObjectIdGetDatum(relid),
-			Int64GetDatum(stripe),
-			Int16GetDatum(attr),
-			Int64GetDatum(footer->existsSizeArray[attr - 1]),
-			Int64GetDatum(footer->valueSizeArray[attr - 1])
-		};
-
-		InsertTupleAndEnforceConstraints(modifyState, values, nulls);
-	}
-
-	FinishModifyRelation(modifyState);
-	heap_close(cstoreStripeAttrs, NoLock);
-}
-
-
-/*
- * ReadStripeFooter returns a StripeFooter by reading relevant records from
- * cstore_stripe_attr.
- */
-StripeFooter *
-ReadStripeFooter(Oid relid, uint64 stripe, int relationColumnCount)
-{
-	StripeFooter *footer = NULL;
-	HeapTuple heapTuple;
-
-	Oid cstoreStripeAttrOid = CStoreStripeAttrRelationId();
-	Relation cstoreStripeAttrs = heap_open(cstoreStripeAttrOid, AccessShareLock);
-	Relation index = index_open(CStoreStripeAttrIndexRelationId(), AccessShareLock);
-	TupleDesc tupleDescriptor = RelationGetDescr(cstoreStripeAttrs);
-
-	SysScanDesc scanDescriptor = NULL;
-	ScanKeyData scanKey[2];
-	ScanKeyInit(&scanKey[0], Anum_cstore_stripe_attr_relid,
-				BTEqualStrategyNumber, F_OIDEQ, Int32GetDatum(relid));
-	ScanKeyInit(&scanKey[1], Anum_cstore_stripe_attr_stripe,
-				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(stripe));
-
-	scanDescriptor = systable_beginscan_ordered(cstoreStripeAttrs, index, NULL, 2,
-												scanKey);
-
-	footer = palloc0(sizeof(StripeFooter));
-	footer->existsSizeArray = palloc0(relationColumnCount * sizeof(int64));
-	footer->valueSizeArray = palloc0(relationColumnCount * sizeof(int64));
-
-	/*
-	 * Stripe can have less columns than the relation if ALTER TABLE happens
-	 * after stripe is formed. So we calculate column count of a stripe as
-	 * maximum attribute number for that stripe.
-	 */
-	footer->columnCount = 0;
-
-	while (HeapTupleIsValid(heapTuple = systable_getnext(scanDescriptor)))
-	{
-		Datum datumArray[Natts_cstore_stripe_attr];
-		bool isNullArray[Natts_cstore_stripe_attr];
-		AttrNumber attr = 0;
-
-		heap_deform_tuple(heapTuple, tupleDescriptor, datumArray, isNullArray);
-		attr = DatumGetInt16(datumArray[2]);
-
-		footer->columnCount = Max(footer->columnCount, attr);
-
-		while (attr > relationColumnCount)
-		{
-			ereport(ERROR, (errmsg("unexpected attribute %d for a relation with %d attrs",
-								   attr, relationColumnCount)));
-		}
-
-		footer->existsSizeArray[attr - 1] =
-			DatumGetInt64(datumArray[Anum_cstore_stripe_attr_exists_size - 1]);
-		footer->valueSizeArray[attr - 1] =
-			DatumGetInt64(datumArray[Anum_cstore_stripe_attr_value_size - 1]);
-	}
-
-	systable_endscan_ordered(scanDescriptor);
-	index_close(index, NoLock);
-	heap_close(cstoreStripeAttrs, NoLock);
-
-	return footer;
 }
 
 
@@ -757,28 +654,6 @@ ByteaToDatum(bytea *bytes, Form_pg_attribute attrForm)
 	memcpy(binaryDataCopy, VARDATA_ANY(bytes), VARSIZE_ANY_EXHDR(bytes));
 
 	return fetch_att(binaryDataCopy, attrForm->attbyval, attrForm->attlen);
-}
-
-
-/*
- * CStoreStripeAttrRelationId returns relation id of cstore_stripe_attr.
- * TODO: should we cache this similar to citus?
- */
-static Oid
-CStoreStripeAttrRelationId(void)
-{
-	return get_relname_relid("cstore_stripe_attr", CStoreNamespaceId());
-}
-
-
-/*
- * CStoreStripeAttrRelationId returns relation id of cstore_stripe_attr_pkey.
- * TODO: should we cache this similar to citus?
- */
-static Oid
-CStoreStripeAttrIndexRelationId(void)
-{
-	return get_relname_relid("cstore_stripe_attr_pkey", CStoreNamespaceId());
 }
 
 
