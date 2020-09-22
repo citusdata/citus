@@ -2,7 +2,27 @@
 
 SET search_path = 'pg_catalog';
 
-DROP FUNCTION create_citus_local_table(table_name regclass);
+-- Check if user has any citus local tables.
+-- If not, DROP create_citus_local_table UDF and continue safely.
+-- Otherwise, raise an exception to stop the downgrade process.
+DO $$
+DECLARE
+    citus_local_table_count INTEGER;
+BEGIN
+    SELECT COUNT(*) INTO citus_local_table_count
+    FROM pg_dist_partition WHERE repmodel != 't' AND partmethod = 'n';
+
+    IF citus_local_table_count = 0 THEN
+        -- no citus local tables exist, can safely downgrade
+        DROP FUNCTION create_citus_local_table(table_name regclass);
+    ELSE
+        RAISE EXCEPTION 'citus local tables are introduced in Citus 9.5'
+        USING HINT = 'To downgrade Citus to an older version, you should '
+                     'first convert each citus local table to a postgres '
+                     'table by executing SELECT undistribute_table("%s")';
+    END IF;
+END;
+$$ LANGUAGE plpgsql;
 
 --  task_tracker_* functions
 
