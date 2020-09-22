@@ -426,7 +426,7 @@ BEGIN;
   ALTER EXTENSION citus UPDATE TO '9.4-1';
 ERROR:  citus local tables are introduced in Citus 9.5
 HINT:  To downgrade Citus to an older version, you should first convert each citus local table to a postgres table by executing SELECT undistribute_table("%s")
-CONTEXT:  PL/pgSQL function inline_code_block line 10 at RAISE
+CONTEXT:  PL/pgSQL function inline_code_block line 11 at RAISE
 ROLLBACK;
 -- now we can downgrade
 ALTER EXTENSION citus UPDATE TO '9.4-1';
@@ -447,10 +447,9 @@ SELECT * FROM print_extension_changes();
  function task_tracker_task_status(bigint,integer)                   |
  function worker_execute_sql_task(bigint,integer,text,boolean)       |
  function worker_merge_files_and_run_query(bigint,integer,text,text) |
-                                                                     | function cluster_has_citus_local_table()
                                                                      | function create_citus_local_table(regclass)
                                                                      | function undistribute_table(regclass)
-(9 rows)
+(8 rows)
 
 DROP TABLE prev_objects, extension_diff;
 -- show running version

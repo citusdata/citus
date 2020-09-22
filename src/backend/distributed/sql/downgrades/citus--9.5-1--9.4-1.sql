@@ -7,10 +7,12 @@ SET search_path = 'pg_catalog';
 -- Otherwise, raise an exception to stop the downgrade process.
 DO $$
 DECLARE
-    cluster_has_citus_local_table boolean;
+    citus_local_table_count INTEGER;
 BEGIN
-    SELECT cluster_has_citus_local_table() INTO cluster_has_citus_local_table;
-    IF cluster_has_citus_local_table IS false THEN
+    SELECT COUNT(*) INTO citus_local_table_count
+    FROM pg_dist_partition WHERE repmodel != 't' AND partmethod = 'n';
+
+    IF citus_local_table_count = 0 THEN
         -- no citus local tables exist, can safely downgrade
         DROP FUNCTION create_citus_local_table(table_name regclass);
     ELSE
