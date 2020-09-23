@@ -77,7 +77,9 @@ typedef struct StripeMetadata
 {
 	uint64 fileOffset;
 	uint64 dataLength;
+	uint32 columnCount;
 	uint32 blockCount;
+	uint32 blockRowCount;
 	uint64 rowCount;
 	uint64 id;
 } StripeMetadata;
@@ -128,20 +130,27 @@ typedef struct StripeSkipList
 
 
 /*
- * ColumnBlockData represents a block of data in a column. valueArray stores
+ * BlockData represents a block of data for multiple columns. valueArray stores
  * the values of data, and existsArray stores whether a value is present.
  * valueBuffer is used to store (uncompressed) serialized values
  * referenced by Datum's in valueArray. It is only used for by-reference Datum's.
  * There is a one-to-one correspondence between valueArray and existsArray.
  */
-typedef struct ColumnBlockData
+typedef struct BlockData
 {
-	bool *existsArray;
-	Datum *valueArray;
+	uint32 rowCount;
+	uint32 columnCount;
+
+	/*
+	 * Following are indexed by [column][row]. If a column is not projected,
+	 * then existsArray[column] and valueArray[column] are NULL.
+	 */
+	bool **existsArray;
+	Datum **valueArray;
 
 	/* valueBuffer keeps actual data for type-by-reference datums from valueArray. */
-	StringInfo valueBuffer;
-} ColumnBlockData;
+	StringInfo *valueBufferArray;
+} BlockData;
 
 
 /*
@@ -178,25 +187,13 @@ typedef struct StripeBuffers
 } StripeBuffers;
 
 
-/*
- * StripeFooter represents a stripe's footer. In this footer, we keep three
- * arrays of sizes. The number of elements in each of the arrays is equal
- * to the number of columns.
- */
-typedef struct StripeFooter
-{
-	uint32 columnCount;
-	uint64 *existsSizeArray;
-	uint64 *valueSizeArray;
-} StripeFooter;
-
-
 /* TableReadState represents state of a cstore file read operation. */
 typedef struct TableReadState
 {
 	Oid relationId;
 
 	TableMetadata *tableMetadata;
+	StripeMetadata *currentStripeMetadata;
 	TupleDesc tupleDescriptor;
 	Relation relation;
 
@@ -212,7 +209,7 @@ typedef struct TableReadState
 	StripeBuffers *stripeBuffers;
 	uint32 readStripeCount;
 	uint64 stripeReadRowCount;
-	ColumnBlockData **blockDataArray;
+	BlockData *blockData;
 	int32 deserializedBlockIndex;
 } TableReadState;
 
@@ -233,7 +230,8 @@ typedef struct TableWriteState
 	StripeBuffers *stripeBuffers;
 	StripeSkipList *stripeSkipList;
 	uint32 stripeMaxRowCount;
-	ColumnBlockData **blockDataArray;
+	uint32 blockRowCount;
+	BlockData *blockData;
 
 	/*
 	 * compressionBuffer buffer is used as temporary storage during
@@ -276,19 +274,15 @@ extern void CStoreEndRead(TableReadState *state);
 /* Function declarations for common functions */
 extern FmgrInfo * GetFunctionInfoOrNull(Oid typeId, Oid accessMethodId,
 										int16 procedureId);
-extern ColumnBlockData ** CreateEmptyBlockDataArray(uint32 columnCount, bool *columnMask,
-													uint32 blockRowCount);
-extern void FreeColumnBlockDataArray(ColumnBlockData **blockDataArray,
-									 uint32 columnCount);
+extern BlockData * CreateEmptyBlockData(uint32 columnCount, bool *columnMask,
+										uint32 blockRowCount);
+extern void FreeBlockData(BlockData *blockData);
 extern uint64 CStoreTableRowCount(Relation relation);
 extern bool CompressBuffer(StringInfo inputBuffer, StringInfo outputBuffer,
 						   CompressionType compressionType);
 extern StringInfo DecompressBuffer(StringInfo buffer, CompressionType compressionType);
 
 /* cstore_metadata_tables.c */
-extern void SaveStripeFooter(Oid relid, uint64 stripe, StripeFooter *footer);
-extern StripeFooter * ReadStripeFooter(Oid relid, uint64 stripe, int relationColumnCount);
-
 extern void InitCStoreTableMetadata(Oid relid, int blockRowCount);
 extern void InsertStripeMetadataRow(Oid relid, StripeMetadata *stripe);
 extern TableMetadata * ReadTableMetadata(Oid relid);

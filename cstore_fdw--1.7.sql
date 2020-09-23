@@ -73,25 +73,15 @@ CREATE TABLE cstore_stripes (
     stripe bigint NOT NULL,
     file_offset bigint NOT NULL,
     data_length bigint NOT NULL,
+    column_count int NOT NULL,
     block_count int NOT NULL,
+    block_row_count int NOT NULL,
     row_count bigint NOT NULL,
     PRIMARY KEY (relid, stripe),
     FOREIGN KEY (relid) REFERENCES cstore_tables(relid) ON DELETE CASCADE INITIALLY DEFERRED
 ) WITH (user_catalog_table = true);
 
 COMMENT ON TABLE cstore_tables IS 'CStore per stripe metadata';
-
-CREATE TABLE cstore_stripe_attr (
-    relid oid NOT NULL,
-    stripe bigint NOT NULL,
-    attr int NOT NULL,
-    exists_size bigint NOT NULL,
-    value_size bigint NOT NULL,
-    PRIMARY KEY (relid, stripe, attr),
-    FOREIGN KEY (relid, stripe) REFERENCES cstore_stripes(relid, stripe) ON DELETE CASCADE INITIALLY DEFERRED
-) WITH (user_catalog_table = true);
-
-COMMENT ON TABLE cstore_tables IS 'CStore per stripe/column combination metadata';
 
 CREATE TABLE cstore_skipnodes (
     relid oid NOT NULL,
@@ -107,7 +97,7 @@ CREATE TABLE cstore_skipnodes (
     exists_stream_length bigint NOT NULL,
     value_compression_type int NOT NULL,
     PRIMARY KEY (relid, stripe, attr, block),
-    FOREIGN KEY (relid, stripe, attr) REFERENCES cstore_stripe_attr(relid, stripe, attr) ON DELETE CASCADE INITIALLY DEFERRED
+    FOREIGN KEY (relid, stripe) REFERENCES cstore_stripes(relid, stripe) ON DELETE CASCADE INITIALLY DEFERRED
 ) WITH (user_catalog_table = true);
 
 COMMENT ON TABLE cstore_tables IS 'CStore per block metadata';
