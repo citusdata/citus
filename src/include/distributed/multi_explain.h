@@ -13,9 +13,16 @@
 #include "executor/executor.h"
 #include "tuple_destination.h"
 
+typedef enum
+{
+	EXPLAIN_ANALYZE_SORT_BY_TIME = 0,
+	EXPLAIN_ANALYZE_SORT_BY_TASK_ID = 1
+} ExplainAnalyzeSortMethods;
+
 /* Config variables managed via guc.c to explain distributed query plans */
 extern bool ExplainDistributedQueries;
 extern bool ExplainAllTasks;
+extern int ExplainAnalyzeSortMethod;
 
 extern void FreeSavedExplainPlan(void);
 extern void CitusExplainOneQuery(Query *query, int cursorOptions, IntoClause *into,

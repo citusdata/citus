@@ -5570,7 +5570,9 @@ SetPlacementNodeMetadata(ShardPlacement *placement, WorkerNode *workerNode)
 }
 
 
-/* Helper function to compare two tasks by their taskId. */
+/*
+ * CompareTasksByTaskId is a helper function to compare two tasks by their taskId.
+ */
 int
 CompareTasksByTaskId(const void *leftElement, const void *rightElement)
 {
