@@ -58,7 +58,7 @@ CStoreTableAMGetOptions(void)
 
 
 static MemoryContext
-GetCStoreMemoryContext(void)
+GetCStoreMemoryContext()
 {
 	if (CStoreContext == NULL)
 	{
@@ -66,6 +66,16 @@ GetCStoreMemoryContext(void)
 											  ALLOCSET_DEFAULT_SIZES);
 	}
 	return CStoreContext;
+}
+
+
+static void
+ResetCStoreMemoryContext()
+{
+	if (CStoreContext != NULL)
+	{
+		MemoryContextReset(CStoreContext);
+	}
 }
 
 
@@ -591,6 +601,7 @@ CStoreExecutorEnd(QueryDesc *queryDesc)
 	{
 		standard_ExecutorEnd(queryDesc);
 	}
+	ResetCStoreMemoryContext();
 }
 
 
