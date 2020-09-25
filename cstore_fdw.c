@@ -196,7 +196,6 @@ PG_FUNCTION_INFO_V1(cstore_ddl_event_end_trigger);
 PG_FUNCTION_INFO_V1(cstore_table_size);
 PG_FUNCTION_INFO_V1(cstore_fdw_handler);
 PG_FUNCTION_INFO_V1(cstore_fdw_validator);
-PG_FUNCTION_INFO_V1(cstore_clean_table_resources);
 
 
 /* saved hook value in case of unload */
@@ -1174,30 +1173,6 @@ cstore_fdw_validator(PG_FUNCTION_ARGS)
 		ValidateForeignTableOptions(compressionTypeString,
 									stripeRowCountString, blockRowCountString);
 	}
-
-	PG_RETURN_VOID();
-}
-
-
-/*
- * cstore_clean_table_resources cleans up table data and metadata with provided
- * relation id. The function is meant to be called from drop_event_trigger. It
- * has no way of knowing if the provided relation id belongs to a cstore table.
- * Therefore it first checks if data file exists at default location before
- * attempting to remove data and footer files. If the table is created at a
- * custom path than its resources would not be removed.
- */
-Datum
-cstore_clean_table_resources(PG_FUNCTION_ARGS)
-{
-	/*
-	 * TODO: Event triggers do not offer the relfilenode of the
-	 * dropped table, and by the time the sql_drop event trigger
-	 * is called, the object is already gone so we can't look it
-	 * up. Therefore, we can't drop the Smgr storage here, which
-	 * means that cascaded drops of cstore foreign tables will
-	 * leak storage.
-	 */
 
 	PG_RETURN_VOID();
 }
