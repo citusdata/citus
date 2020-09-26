@@ -126,7 +126,6 @@ static uint64 CopyIntoCStoreTable(const CopyStmt *copyStatement,
 								  const char *queryString);
 static uint64 CopyOutCStoreTable(CopyStmt *copyStatement, const char *queryString);
 static void CStoreProcessAlterTableCommand(AlterTableStmt *alterStatement);
-static List * DroppedCStoreRelidList(DropStmt *dropStatement);
 static List * FindCStoreTables(List *tableList);
 static List * OpenRelationsForTruncate(List *cstoreTableList);
 static void FdwNewRelFileNode(Relation relation);
@@ -314,25 +313,6 @@ CStoreProcessUtility(Node * parseTree, const char * queryString,
 			CALL_PREVIOUS_UTILITY(parseTree, queryString, context, paramListInfo,
 								  destReceiver, completionTag);
 		}
-	}
-	else if (nodeTag(parseTree) == T_DropStmt)
-	{
-		List *dropRelids = DroppedCStoreRelidList((DropStmt *) parseTree);
-		ListCell *lc = NULL;
-
-		/* drop smgr storage */
-		foreach(lc, dropRelids)
-		{
-			Oid relid = lfirst_oid(lc);
-			Relation relation = cstore_fdw_open(relid, AccessExclusiveLock);
-
-			RelationOpenSmgr(relation);
-			RelationDropStorage(relation);
-			heap_close(relation, AccessExclusiveLock);
-		}
-
-		CALL_PREVIOUS_UTILITY(parseTree, queryString, context, paramListInfo,
-							  destReceiver, completionTag);
 	}
 	else if (nodeTag(parseTree) == T_TruncateStmt)
 	{
@@ -720,36 +700,6 @@ CStoreProcessAlterTableCommand(AlterTableStmt *alterStatement)
 			}
 		}
 	}
-}
-
-
-/*
- * DropppedCStoreRelidList extracts and returns the list of cstore relids
- * from DROP table statement
- */
-static List *
-DroppedCStoreRelidList(DropStmt *dropStatement)
-{
-	List *droppedCStoreRelidList = NIL;
-
-	if (dropStatement->removeType == OBJECT_FOREIGN_TABLE)
-	{
-		ListCell *dropObjectCell = NULL;
-		foreach(dropObjectCell, dropStatement->objects)
-		{
-			List *tableNameList = (List *) lfirst(dropObjectCell);
-			RangeVar *rangeVar = makeRangeVarFromNameList(tableNameList);
-
-			Oid relationId = RangeVarGetRelid(rangeVar, AccessShareLock, true);
-			if (CStoreTable(relationId))
-			{
-				droppedCStoreRelidList = lappend_oid(droppedCStoreRelidList,
-													 relationId);
-			}
-		}
-	}
-
-	return droppedCStoreRelidList;
 }
 
 

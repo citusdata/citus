@@ -95,6 +95,17 @@ static Datum ByteaToDatum(bytea *bytes, Form_pg_attribute attrForm);
 
 
 /*
+ * IsCStoreStorage returns if relfilenode belongs to a cstore table.
+ */
+bool
+IsCStoreStorage(Oid relfilenode)
+{
+	uint64 blockRowCount = 0;
+	return ReadCStoreTables(relfilenode, &blockRowCount);
+}
+
+
+/*
  * InitCStoreTableMetadata adds a record for the given relation in cstore_table.
  */
 void

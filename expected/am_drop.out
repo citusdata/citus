@@ -12,14 +12,29 @@
 -- 'postgres' directory is excluded from comparison to have the same result.
 -- store postgres database oid
 SELECT oid postgres_oid FROM pg_database WHERE datname = 'postgres' \gset
+SELECT count(*) AS cstore_tables_before_drop FROM cstore.cstore_tables \gset
 -- DROP cstore_fdw tables
 DROP TABLE contestant;
 DROP TABLE contestant_compressed;
+-- make sure DROP deletes metadata
+SELECT :cstore_tables_before_drop - count(*) FROM cstore.cstore_tables;
+ ?column? 
+----------
+        2
+(1 row)
+
 -- Create a cstore_fdw table under a schema and drop it.
 CREATE SCHEMA test_schema;
 CREATE TABLE test_schema.test_table(data int) USING cstore_tableam;
+SELECT count(*) AS cstore_tables_before_drop FROM cstore.cstore_tables \gset
 DROP SCHEMA test_schema CASCADE;
 NOTICE:  drop cascades to table test_schema.test_table
+SELECT :cstore_tables_before_drop - count(*) FROM cstore.cstore_tables;
+ ?column? 
+----------
+        1
+(1 row)
+
 SELECT current_database() datname \gset
 CREATE DATABASE db_to_drop;
 \c db_to_drop

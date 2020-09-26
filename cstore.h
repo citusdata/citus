@@ -283,6 +283,7 @@ extern bool CompressBuffer(StringInfo inputBuffer, StringInfo outputBuffer,
 extern StringInfo DecompressBuffer(StringInfo buffer, CompressionType compressionType);
 
 /* cstore_metadata_tables.c */
+extern bool IsCStoreStorage(Oid relfilenode);
 extern void DeleteTableMetadataRowIfExists(Oid relfilenode);
 extern void InitCStoreTableMetadata(Oid relfilenode, int blockRowCount);
 extern void InsertStripeMetadataRow(Oid relfilenode, StripeMetadata *stripe);
