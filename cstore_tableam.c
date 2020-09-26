@@ -97,13 +97,11 @@ cstore_init_write_state(Relation relation)
 		TupleDesc tupdesc = RelationGetDescr(relation);
 
 		elog(LOG, "initializing write state for relation %d", relation->rd_id);
-		CStoreWriteState = CStoreBeginWrite(relation->rd_id,
+		CStoreWriteState = CStoreBeginWrite(relation,
 											cstoreOptions->compressionType,
 											cstoreOptions->stripeRowCount,
 											cstoreOptions->blockRowCount,
 											tupdesc);
-
-		CStoreWriteState->relation = relation;
 	}
 }
 
@@ -134,15 +132,11 @@ cstore_beginscan(Relation relation, Snapshot snapshot,
 				 ParallelTableScanDesc parallel_scan,
 				 uint32 flags)
 {
-	Oid relid = relation->rd_id;
 	TupleDesc tupdesc = relation->rd_att;
-	CStoreOptions *cstoreOptions = NULL;
 	TableReadState *readState = NULL;
 	CStoreScanDesc scan = palloc(sizeof(CStoreScanDescData));
 	List *columnList = NIL;
 	MemoryContext oldContext = MemoryContextSwitchTo(GetCStoreMemoryContext());
-
-	cstoreOptions = CStoreTableAMGetOptions();
 
 	scan->cs_base.rs_rd = relation;
 	scan->cs_base.rs_snapshot = snapshot;
@@ -171,8 +165,7 @@ cstore_beginscan(Relation relation, Snapshot snapshot,
 		columnList = lappend(columnList, var);
 	}
 
-	readState = CStoreBeginRead(relid, tupdesc, columnList, NULL);
-	readState->relation = relation;
+	readState = CStoreBeginRead(relation, tupdesc, columnList, NULL);
 
 	scan->cs_readState = readState;
 
@@ -443,7 +436,7 @@ cstore_relation_set_new_filenode(Relation rel,
 	*freezeXid = RecentXmin;
 	*minmulti = GetOldestMultiXactId();
 	srel = RelationCreateStorage(*newrnode, persistence);
-	InitializeCStoreTableFile(rel->rd_id, rel, CStoreTableAMGetOptions());
+	InitializeCStoreTableFile(newrnode->relNode, CStoreTableAMGetOptions());
 	smgrclose(srel);
 }
 

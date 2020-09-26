@@ -131,7 +131,6 @@ static List * FindCStoreTables(List *tableList);
 static List * OpenRelationsForTruncate(List *cstoreTableList);
 static void FdwNewRelFileNode(Relation relation);
 static void TruncateCStoreTables(List *cstoreRelationList);
-static bool CStoreTable(Oid relationId);
 static bool CStoreServer(ForeignServer *server);
 static bool DistributedTable(Oid relationId);
 static bool DistributedWorkerCopy(CopyStmt *copyStatement);
@@ -189,7 +188,6 @@ static bool CStoreIsForeignScanParallelSafe(PlannerInfo *root, RelOptInfo *rel,
 											RangeTblEntry *rte);
 #endif
 static void cstore_fdw_initrel(Relation rel);
-static Relation cstore_fdw_open(Oid relationId, LOCKMODE lockmode);
 static Relation cstore_fdw_openrv(RangeVar *relation, LOCKMODE lockmode);
 
 PG_FUNCTION_INFO_V1(cstore_ddl_event_end_trigger);
@@ -267,7 +265,8 @@ cstore_ddl_event_end_trigger(PG_FUNCTION_ARGS)
 			 * We have no chance to hook into server creation to create data
 			 * directory for it during database creation time.
 			 */
-			InitializeCStoreTableFile(relationId, relation, CStoreGetOptions(relationId));
+			InitializeCStoreTableFile(relation->rd_node.relNode,
+									  CStoreGetOptions(relationId));
 			heap_close(relation, AccessExclusiveLock);
 		}
 	}
@@ -403,7 +402,7 @@ CopyCStoreTableStatement(CopyStmt *copyStatement)
 	{
 		Oid relationId = RangeVarGetRelid(copyStatement->relation,
 										  AccessShareLock, true);
-		bool cstoreTable = CStoreTable(relationId);
+		bool cstoreTable = IsCStoreFdwTable(relationId);
 		if (cstoreTable)
 		{
 			bool distributedTable = DistributedTable(relationId);
@@ -558,12 +557,11 @@ CopyIntoCStoreTable(const CopyStmt *copyStatement, const char *queryString)
 #endif
 
 	/* init state to write to the cstore file */
-	writeState = CStoreBeginWrite(relationId,
+	writeState = CStoreBeginWrite(relation,
 								  cstoreOptions->compressionType,
 								  cstoreOptions->stripeRowCount,
 								  cstoreOptions->blockRowCount,
 								  tupleDescriptor);
-	writeState->relation = relation;
 
 	while (nextRowFound)
 	{
@@ -686,7 +684,7 @@ CStoreProcessAlterTableCommand(AlterTableStmt *alterStatement)
 	}
 
 	relationId = RangeVarGetRelid(relationRangeVar, AccessShareLock, true);
-	if (!CStoreTable(relationId))
+	if (!IsCStoreFdwTable(relationId))
 	{
 		return;
 	}
@@ -765,7 +763,7 @@ FindCStoreTables(List *tableList)
 	{
 		RangeVar *rangeVar = (RangeVar *) lfirst(relationCell);
 		Oid relationId = RangeVarGetRelid(rangeVar, AccessShareLock, true);
-		if (CStoreTable(relationId) && !DistributedTable(relationId))
+		if (IsCStoreFdwTable(relationId) && !DistributedTable(relationId))
 		{
 			cstoreTableList = lappend(cstoreTableList, rangeVar);
 		}
@@ -825,10 +823,11 @@ TruncateCStoreTables(List *cstoreRelationList)
 		Relation relation = (Relation) lfirst(relationCell);
 		Oid relationId = relation->rd_id;
 
-		Assert(CStoreTable(relationId));
+		Assert(IsCStoreFdwTable(relationId));
 
 		FdwNewRelFileNode(relation);
-		InitializeCStoreTableFile(relationId, relation, CStoreGetOptions(relationId));
+		InitializeCStoreTableFile(relation->rd_node.relNode,
+								  CStoreGetOptions(relationId));
 	}
 }
 
@@ -861,7 +860,6 @@ FdwNewRelFileNode(Relation relation)
 		Relation tmprel;
 		Oid tablespace;
 		Oid filenode;
-		RelFileNode newrnode;
 
 		/*
 		 * Upgrade to AccessExclusiveLock, and hold until the end of the
@@ -887,10 +885,6 @@ FdwNewRelFileNode(Relation relation)
 
 		filenode = GetNewRelFileNode(tablespace, NULL, persistence);
 
-		newrnode.spcNode = tablespace;
-		newrnode.dbNode = MyDatabaseId;
-		newrnode.relNode = filenode;
-
 		classform->relfilenode = filenode;
 		classform->relpages = 0;    /* it's empty until further notice */
 		classform->reltuples = 0;
@@ -900,6 +894,10 @@ FdwNewRelFileNode(Relation relation)
 
 		CatalogTupleUpdate(pg_class, &tuple->t_self, tuple);
 		CommandCounterIncrement();
+
+		relation->rd_node.spcNode = tablespace;
+		relation->rd_node.dbNode = MyDatabaseId;
+		relation->rd_node.relNode = filenode;
 	}
 
 	heap_freetuple(tuple);
@@ -928,11 +926,11 @@ FdwCreateStorage(Relation relation)
 
 
 /*
- * CStoreTable checks if the given table name belongs to a foreign columnar store
+ * IsCStoreFdwTable checks if the given table name belongs to a foreign columnar store
  * table. If it does, the function returns true. Otherwise, it returns false.
  */
-static bool
-CStoreTable(Oid relationId)
+bool
+IsCStoreFdwTable(Oid relationId)
 {
 	bool cstoreTable = false;
 	char relationKind = 0;
@@ -1055,7 +1053,7 @@ Datum
 cstore_table_size(PG_FUNCTION_ARGS)
 {
 	Oid relationId = PG_GETARG_OID(0);
-	bool cstoreTable = CStoreTable(relationId);
+	bool cstoreTable = IsCStoreFdwTable(relationId);
 	Relation relation;
 	BlockNumber nblocks;
 
@@ -1705,6 +1703,7 @@ CStoreBeginForeignScan(ForeignScanState *scanState, int executorFlags)
 	ForeignScan *foreignScan = NULL;
 	List *foreignPrivateList = NIL;
 	List *whereClauseList = NIL;
+	Relation relation = NULL;
 
 	cstore_fdw_initrel(currentRelation);
 
@@ -1721,9 +1720,8 @@ CStoreBeginForeignScan(ForeignScanState *scanState, int executorFlags)
 	whereClauseList = foreignScan->scan.plan.qual;
 
 	columnList = (List *) linitial(foreignPrivateList);
-	readState = CStoreBeginRead(foreignTableId,
-								tupleDescriptor, columnList, whereClauseList);
-	readState->relation = cstore_fdw_open(foreignTableId, AccessShareLock);
+	relation = cstore_fdw_open(foreignTableId, AccessShareLock);
+	readState = CStoreBeginRead(relation, tupleDescriptor, columnList, whereClauseList);
 
 	scanState->fdw_state = (void *) readState;
 }
@@ -2067,13 +2065,12 @@ CStoreBeginForeignInsert(ModifyTableState *modifyTableState, ResultRelInfo *rela
 	cstoreOptions = CStoreGetOptions(foreignTableOid);
 	tupleDescriptor = RelationGetDescr(relationInfo->ri_RelationDesc);
 
-	writeState = CStoreBeginWrite(foreignTableOid,
+	writeState = CStoreBeginWrite(relation,
 								  cstoreOptions->compressionType,
 								  cstoreOptions->stripeRowCount,
 								  cstoreOptions->blockRowCount,
 								  tupleDescriptor);
 
-	writeState->relation = relation;
 	relationInfo->ri_FdwState = (void *) writeState;
 }
 
@@ -2196,7 +2193,7 @@ cstore_fdw_initrel(Relation rel)
 }
 
 
-static Relation
+Relation
 cstore_fdw_open(Oid relationId, LOCKMODE lockmode)
 {
 	Relation rel = heap_open(relationId, lockmode);

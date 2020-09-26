@@ -58,7 +58,7 @@ static StringInfo CopyStringInfo(StringInfo sourceString);
  * will be added.
  */
 TableWriteState *
-CStoreBeginWrite(Oid relationId,
+CStoreBeginWrite(Relation relation,
 				 CompressionType compressionType,
 				 uint64 stripeMaxRowCount, uint32 blockRowCount,
 				 TupleDesc tupleDescriptor)
@@ -73,8 +73,9 @@ CStoreBeginWrite(Oid relationId,
 	bool *columnMaskArray = NULL;
 	BlockData *blockData = NULL;
 	uint64 currentStripeId = 0;
+	Oid relNode = relation->rd_node.relNode;
 
-	tableMetadata = ReadTableMetadata(relationId);
+	tableMetadata = ReadTableMetadata(relNode);
 
 	/*
 	 * If stripeMetadataList is not empty, jump to the position right after
@@ -127,7 +128,7 @@ CStoreBeginWrite(Oid relationId,
 	blockData = CreateEmptyBlockData(columnCount, columnMaskArray, blockRowCount);
 
 	writeState = palloc0(sizeof(TableWriteState));
-	writeState->relationId = relationId;
+	writeState->relation = relation;
 	writeState->tableMetadata = tableMetadata;
 	writeState->compressionType = compressionType;
 	writeState->stripeMaxRowCount = stripeMaxRowCount;
@@ -251,7 +252,8 @@ CStoreWriteRow(TableWriteState *writeState, Datum *columnValues, bool *columnNul
 		 * doesn't free it.
 		 */
 		MemoryContextSwitchTo(oldContext);
-		InsertStripeMetadataRow(writeState->relationId, &stripeMetadata);
+		InsertStripeMetadataRow(writeState->relation->rd_node.relNode,
+								&stripeMetadata);
 		AppendStripeMetadata(tableMetadata, stripeMetadata);
 	}
 	else
@@ -280,7 +282,8 @@ CStoreEndWrite(TableWriteState *writeState)
 		MemoryContextReset(writeState->stripeWriteContext);
 
 		MemoryContextSwitchTo(oldContext);
-		InsertStripeMetadataRow(writeState->relationId, &stripeMetadata);
+		InsertStripeMetadataRow(writeState->relation->rd_node.relNode,
+								&stripeMetadata);
 		AppendStripeMetadata(writeState->tableMetadata, stripeMetadata);
 	}
 
@@ -543,7 +546,8 @@ FlushStripe(TableWriteState *writeState)
 	}
 
 	/* create skip list and footer buffers */
-	SaveStripeSkipList(writeState->relationId, writeState->currentStripeId,
+	SaveStripeSkipList(writeState->relation->rd_node.relNode,
+					   writeState->currentStripeId,
 					   stripeSkipList, tupleDescriptor);
 
 	for (blockIndex = 0; blockIndex < blockCount; blockIndex++)

@@ -80,14 +80,15 @@ static StringInfo ReadFromSmgr(Relation rel, uint64 offset, uint32 size);
  * read handle that's used during reading rows and finishing the read operation.
  */
 TableReadState *
-CStoreBeginRead(Oid relationId, TupleDesc tupleDescriptor,
+CStoreBeginRead(Relation relation, TupleDesc tupleDescriptor,
 				List *projectedColumnList, List *whereClauseList)
 {
 	TableReadState *readState = NULL;
 	TableMetadata *tableMetadata = NULL;
 	MemoryContext stripeReadContext = NULL;
+	Oid relNode = relation->rd_node.relNode;
 
-	tableMetadata = ReadTableMetadata(relationId);
+	tableMetadata = ReadTableMetadata(relNode);
 
 	/*
 	 * We allocate all stripe specific data in the stripeReadContext, and reset
@@ -99,7 +100,7 @@ CStoreBeginRead(Oid relationId, TupleDesc tupleDescriptor,
 											  ALLOCSET_DEFAULT_SIZES);
 
 	readState = palloc0(sizeof(TableReadState));
-	readState->relationId = relationId;
+	readState->relation = relation;
 	readState->tableMetadata = tableMetadata;
 	readState->projectedColumnList = projectedColumnList;
 	readState->whereClauseList = whereClauseList;
@@ -308,7 +309,7 @@ CStoreTableRowCount(Relation relation)
 	ListCell *stripeMetadataCell = NULL;
 	uint64 totalRowCount = 0;
 
-	tableMetadata = ReadTableMetadata(relation->rd_id);
+	tableMetadata = ReadTableMetadata(relation->rd_node.relNode);
 
 	foreach(stripeMetadataCell, tableMetadata->stripeMetadataList)
 	{
@@ -337,7 +338,7 @@ LoadFilteredStripeBuffers(Relation relation, StripeMetadata *stripeMetadata,
 
 	bool *projectedColumnMask = ProjectedColumnMask(columnCount, projectedColumnList);
 
-	StripeSkipList *stripeSkipList = ReadStripeSkipList(RelationGetRelid(relation),
+	StripeSkipList *stripeSkipList = ReadStripeSkipList(relation->rd_node.relNode,
 														stripeMetadata->id,
 														tupleDescriptor,
 														stripeMetadata->blockCount);

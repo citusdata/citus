@@ -16,7 +16,9 @@
 
 #include "fmgr.h"
 #include "lib/stringinfo.h"
+#include "nodes/parsenodes.h"
 #include "storage/bufpage.h"
+#include "storage/lockdefs.h"
 #include "utils/relcache.h"
 
 /* Defines for valid option names */
@@ -190,8 +192,6 @@ typedef struct StripeBuffers
 /* TableReadState represents state of a cstore file read operation. */
 typedef struct TableReadState
 {
-	Oid relationId;
-
 	TableMetadata *tableMetadata;
 	StripeMetadata *currentStripeMetadata;
 	TupleDesc tupleDescriptor;
@@ -217,7 +217,6 @@ typedef struct TableReadState
 /* TableWriteState represents state of a cstore file write operation. */
 typedef struct TableWriteState
 {
-	Oid relationId;
 	TableMetadata *tableMetadata;
 	CompressionType compressionType;
 	TupleDesc tupleDescriptor;
@@ -249,11 +248,12 @@ extern int cstore_block_row_count;
 extern void cstore_init(void);
 
 extern CompressionType ParseCompressionType(const char *compressionTypeString);
-extern void InitializeCStoreTableFile(Oid relationId, Relation relation,
-									  CStoreOptions *cstoreOptions);
+extern void InitializeCStoreTableFile(Oid relNode, CStoreOptions *cstoreOptions);
+extern bool IsCStoreFdwTable(Oid relationId);
+extern Relation cstore_fdw_open(Oid relationId, LOCKMODE lockmode);
 
 /* Function declarations for writing to a cstore file */
-extern TableWriteState * CStoreBeginWrite(Oid relationId,
+extern TableWriteState * CStoreBeginWrite(Relation relation,
 										  CompressionType compressionType,
 										  uint64 stripeMaxRowCount,
 										  uint32 blockRowCount,
@@ -263,7 +263,7 @@ extern void CStoreWriteRow(TableWriteState *state, Datum *columnValues,
 extern void CStoreEndWrite(TableWriteState *state);
 
 /* Function declarations for reading from a cstore file */
-extern TableReadState * CStoreBeginRead(Oid relationId,
+extern TableReadState * CStoreBeginRead(Relation relation,
 										TupleDesc tupleDescriptor,
 										List *projectedColumnList, List *qualConditions);
 extern bool CStoreReadFinished(TableReadState *state);
@@ -283,12 +283,14 @@ extern bool CompressBuffer(StringInfo inputBuffer, StringInfo outputBuffer,
 extern StringInfo DecompressBuffer(StringInfo buffer, CompressionType compressionType);
 
 /* cstore_metadata_tables.c */
-extern void InitCStoreTableMetadata(Oid relid, int blockRowCount);
-extern void InsertStripeMetadataRow(Oid relid, StripeMetadata *stripe);
-extern TableMetadata * ReadTableMetadata(Oid relid);
-extern void SaveStripeSkipList(Oid relid, uint64 stripe, StripeSkipList *stripeSkipList,
+extern void DeleteTableMetadataRowIfExists(Oid relfilenode);
+extern void InitCStoreTableMetadata(Oid relfilenode, int blockRowCount);
+extern void InsertStripeMetadataRow(Oid relfilenode, StripeMetadata *stripe);
+extern TableMetadata * ReadTableMetadata(Oid relfilenode);
+extern void SaveStripeSkipList(Oid relfilenode, uint64 stripe,
+							   StripeSkipList *stripeSkipList,
 							   TupleDesc tupleDescriptor);
-extern StripeSkipList * ReadStripeSkipList(Oid relid, uint64 stripe,
+extern StripeSkipList * ReadStripeSkipList(Oid relfilenode, uint64 stripe,
 										   TupleDesc tupleDescriptor,
 										   uint32 blockCount);
 
