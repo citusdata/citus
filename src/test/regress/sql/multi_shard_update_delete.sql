@@ -579,6 +579,12 @@ SET    value_2 = 5 * random()
 FROM   events_test_table
 WHERE  users_test_table.user_id = events_test_table.user_id;
 
+UPDATE users_test_table
+SET    value_1 = 3
+WHERE  user_id = 1 AND value_1 IN (SELECT value_1
+                                   FROM users_test_table
+                                   WHERE user_id = 1 AND value_2 > random());
+
 -- Recursive modify planner does not take care of following test because the query
 -- is fully pushdownable, yet not allowed because it would lead to inconsistent replicas.
 UPDATE users_test_table

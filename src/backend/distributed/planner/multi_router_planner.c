@@ -136,9 +136,12 @@ static DeferredErrorMessage * DeferErrorIfUnsupportedModifyQueryWithCitusLocalTa
 	RTEListProperties *rteListProperties, Oid targetRelationId);
 static DeferredErrorMessage * DeferErrorIfUnsupportedModifyQueryWithPostgresLocalTable(
 	RTEListProperties *rteListProperties, Oid targetRelationId);
-static DeferredErrorMessage * MultiShardModifyQuerySupported(Query *originalQuery,
-															 PlannerRestrictionContext *
-															 plannerRestrictionContext);
+static DeferredErrorMessage * MultiShardUpdateDeleteSupported(Query *originalQuery,
+															  PlannerRestrictionContext *
+															  plannerRestrictionContext);
+static DeferredErrorMessage * SingleShardUpdateDeleteSupported(Query *originalQuery,
+															   PlannerRestrictionContext *
+															   plannerRestrictionContext);
 static bool HasDangerousJoinUsing(List *rtableList, Node *jtnode);
 static bool MasterIrreducibleExpression(Node *expression, bool *varArgument,
 										bool *badCoalesce);
@@ -1061,10 +1064,20 @@ ModifyQuerySupported(Query *queryTree, Query *originalQuery, bool multiShardQuer
 		}
 	}
 
-	if (commandType != CMD_INSERT && multiShardQuery)
+	if (commandType != CMD_INSERT)
 	{
-		DeferredErrorMessage *errorMessage = MultiShardModifyQuerySupported(
-			originalQuery, plannerRestrictionContext);
+		DeferredErrorMessage *errorMessage = NULL;
+
+		if (multiShardQuery)
+		{
+			errorMessage = MultiShardUpdateDeleteSupported(originalQuery,
+														   plannerRestrictionContext);
+		}
+		else
+		{
+			errorMessage = SingleShardUpdateDeleteSupported(originalQuery,
+															plannerRestrictionContext);
+		}
 
 		if (errorMessage != NULL)
 		{
@@ -1217,12 +1230,12 @@ ErrorIfOnConflictNotSupported(Query *queryTree)
 
 
 /*
- * MultiShardModifyQuerySupported returns the error message if the modify query is
+ * MultiShardUpdateDeleteSupported returns the error message if the update/delete is
  * not pushdownable, otherwise it returns NULL.
  */
 static DeferredErrorMessage *
-MultiShardModifyQuerySupported(Query *originalQuery,
-							   PlannerRestrictionContext *plannerRestrictionContext)
+MultiShardUpdateDeleteSupported(Query *originalQuery,
+								PlannerRestrictionContext *plannerRestrictionContext)
 {
 	DeferredErrorMessage *errorMessage = NULL;
 	RangeTblEntry *resultRangeTable = ExtractResultRelationRTE(originalQuery);
@@ -1255,6 +1268,35 @@ MultiShardModifyQuerySupported(Query *originalQuery,
 	{
 		errorMessage = DeferErrorIfUnsupportedSubqueryPushdown(originalQuery,
 															   plannerRestrictionContext);
+	}
+
+	return errorMessage;
+}
+
+
+/*
+ * SingleShardUpdateDeleteSupported returns the error message if the update/delete query is
+ * not routable, otherwise it returns NULL.
+ */
+static DeferredErrorMessage *
+SingleShardUpdateDeleteSupported(Query *originalQuery,
+								 PlannerRestrictionContext *plannerRestrictionContext)
+{
+	DeferredErrorMessage *errorMessage = NULL;
+
+	/*
+	 * We currently do not support volatile functions in update/delete statements because
+	 * the function evaluation logic does not know how to distinguish volatile functions
+	 * (that need to be evaluated per row) from stable functions (that need to be evaluated per query),
+	 * and it is also not safe to push the volatile functions down on replicated tables.
+	 */
+	if (FindNodeMatchingCheckFunction((Node *) originalQuery,
+									  CitusIsVolatileFunction))
+	{
+		errorMessage = DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+									 "functions used in UPDATE queries on distributed "
+									 "tables must not be VOLATILE",
+									 NULL, NULL);
 	}
 
 	return errorMessage;
