@@ -156,7 +156,7 @@ static Job * RouterJob(Query *originalQuery,
 					   DeferredErrorMessage **planningError);
 static bool RelationPrunesToMultipleShards(List *relationShardList);
 static void NormalizeMultiRowInsertTargetList(Query *query);
-static void AppendDummyColumnReference(Alias *expendedReferenceNames);
+static void AppendNextDummyColReference(Alias *expendedReferenceNames);
 static Value * MakeDummyColumnString(int i);
 static List * BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError);
 static List * GroupInsertValuesByShardId(List *insertValuesList);
@@ -3122,20 +3122,22 @@ NormalizeMultiRowInsertTargetList(Query *query)
 		targetEntry->expr = (Expr *) syntheticVar;
 
 		/*
-		 * We should add a dummy column reference for the replaced column as
-		 * postgres would do in addRangeTableEntryForValues function.
+		 * Postgres appends a dummy column reference into valuesRTE->eref->colnames
+		 * list in addRangeTableEntryForValues for each column specified in VALUES
+		 * clause. Now that we replaced DEFAULT column with a synthetic Var, we also
+		 * need to add a dummy column reference for that column.
 		 */
-		AppendDummyColumnReference(valuesRTE->eref);
+		AppendNextDummyColReference(valuesRTE->eref);
 	}
 }
 
 
 /*
- * AppendDummyColumnReference appends a new dummy column reference to colnames
+ * AppendNextDummyColReference appends a new dummy column reference to colnames
  * list of given Alias object.
  */
 static void
-AppendDummyColumnReference(Alias *expendedReferenceNames)
+AppendNextDummyColReference(Alias *expendedReferenceNames)
 {
 	int existingColReferences = list_length(expendedReferenceNames->colnames);
 	int nextColReferenceId = existingColReferences + 1;
@@ -3152,11 +3154,11 @@ AppendDummyColumnReference(Alias *expendedReferenceNames)
 static Value *
 MakeDummyColumnString(int i)
 {
-	StringInfo missingColStrInfo = makeStringInfo();
-	appendStringInfo(missingColStrInfo, "column%d", i);
-	Value *missingColStr = makeString(missingColStrInfo->data);
+	StringInfo dummyColumnStringInfo = makeStringInfo();
+	appendStringInfo(dummyColumnStringInfo, "column%d", i);
+	Value *dummyColumnString = makeString(dummyColumnStringInfo->data);
 
-	return missingColStr;
+	return dummyColumnString;
 }
 
 
