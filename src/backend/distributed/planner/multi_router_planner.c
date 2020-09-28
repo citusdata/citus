@@ -156,6 +156,10 @@ static Job * RouterJob(Query *originalQuery,
 					   DeferredErrorMessage **planningError);
 static bool RelationPrunesToMultipleShards(List *relationShardList);
 static void NormalizeMultiRowInsertTargetList(Query *query);
+static int GetNumberOfUnspecifiedDefaultCols(Query *query);
+static void AppendUnspecifiedDefaultColReferences(RangeTblEntry *valuesRTE,
+												  int unspecifiedDefaultCols);
+static Value * MakeColumnString(int i);
 static List * BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError);
 static List * GroupInsertValuesByShardId(List *insertValuesList);
 static List * ExtractInsertValuesList(Query *query, Var *partitionColumn);
@@ -3056,6 +3060,13 @@ NormalizeMultiRowInsertTargetList(Query *query)
 		return;
 	}
 
+	/*
+	 * As we will append unspecified default columns in next loop, we should add
+	 * dummy column references for those columns now.
+	 */
+	int unspecifiedDefaultCols = GetNumberOfUnspecifiedDefaultCols(query);
+	AppendUnspecifiedDefaultColReferences(valuesRTE, unspecifiedDefaultCols);
+
 	foreach(valuesListCell, valuesRTE->values_lists)
 	{
 		List *valuesList = (List *) lfirst(valuesListCell);
@@ -3119,6 +3130,71 @@ NormalizeMultiRowInsertTargetList(Query *query)
 									targetColl, 0);
 		targetEntry->expr = (Expr *) syntheticVar;
 	}
+}
+
+
+/*
+ * GetNumberOfUnspecifiedDefaultCols returns number of default columns that
+ * are not explicitly specified in given INSERT query's values_lists. We do
+ * that by counting non-Var nodes in targetList of given query object.
+ */
+static int
+GetNumberOfUnspecifiedDefaultCols(Query *query)
+{
+	int unspecifiedDefaultCols = 0;
+
+	TargetEntry *targetEntry = NULL;
+	foreach_ptr(targetEntry, query->targetList)
+	{
+		Expr *targetExpr = targetEntry->expr;
+		if (!IsA(targetExpr, Var))
+		{
+			unspecifiedDefaultCols++;
+		}
+	}
+
+	return unspecifiedDefaultCols;
+}
+
+
+/*
+ * AppendUnspecifiedDefaultColReferences appends dummy reference names for each
+ * column that has a DEFAULT definition but not specified in VALUES clause of
+ * INSERT query.
+ */
+static void
+AppendUnspecifiedDefaultColReferences(RangeTblEntry *valuesRTE,
+									  int unspecifiedDefaultCols)
+{
+	/*
+	 * Postgres starts from 1 to name columns in VALUES clause. So we start
+	 * with next integer to naming columns that we explicitly append to target
+	 * list in NormalizeMultiRowInsertTargetList function.
+	 * Also see addRangeTableEntryForValues.
+	 */
+	int existingColReferences = list_length(valuesRTE->eref->colnames);
+	int unspecifiedColId = existingColReferences + 1;
+	for (int i = 0; i < unspecifiedDefaultCols; i++)
+	{
+		Value *missingColumnString = MakeColumnString(unspecifiedColId++);
+		valuesRTE->eref->colnames = lappend(valuesRTE->eref->colnames,
+											missingColumnString);
+	}
+}
+
+
+/*
+ * MakeColumnString returns a String (Value) object by appending given integer
+ * to end of the "column" string.
+ */
+static Value *
+MakeColumnString(int i)
+{
+	StringInfo missingColStrInfo = makeStringInfo();
+	appendStringInfo(missingColStrInfo, "column%d", i);
+	Value *missingColStr = makeString(missingColStrInfo->data);
+
+	return missingColStr;
 }
 
 
