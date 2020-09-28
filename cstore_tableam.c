@@ -480,8 +480,13 @@ static bool
 cstore_scan_analyze_next_block(TableScanDesc scan, BlockNumber blockno,
 							   BufferAccessStrategy bstrategy)
 {
-	/* TODO */
-	return false;
+	/*
+	 * Our access method is not pages based, i.e. tuples are not confined
+	 * to pages boundaries. So not much to do here. We return true anyway
+	 * so acquire_sample_rows() in analyze.c would call our
+	 * cstore_scan_analyze_next_tuple() callback.
+	 */
+	return true;
 }
 
 
@@ -490,7 +495,23 @@ cstore_scan_analyze_next_tuple(TableScanDesc scan, TransactionId OldestXmin,
 							   double *liverows, double *deadrows,
 							   TupleTableSlot *slot)
 {
-	/* TODO */
+	/*
+	 * Currently we don't do anything smart to reduce number of rows returned
+	 * for ANALYZE. The TableAM API's ANALYZE functions are designed for page
+	 * based access methods where it chooses random pages, and then reads
+	 * tuples from those pages.
+	 *
+	 * We could do something like that here by choosing sample stripes or blocks,
+	 * but getting that correct might need quite some work. Since cstore_fdw's
+	 * ANALYZE scanned all rows, as a starter we do the same here and scan all
+	 * rows.
+	 */
+	if (cstore_getnextslot(scan, ForwardScanDirection, slot))
+	{
+		(*liverows)++;
+		return true;
+	}
+
 	return false;
 }
 
