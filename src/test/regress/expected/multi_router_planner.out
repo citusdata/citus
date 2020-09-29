@@ -2314,11 +2314,6 @@ DEBUG:  query has a single distribution column value: 1
  52
 (7 rows)
 
--- https://github.com/citusdata/citus/issues/3624
-UPDATE articles_hash SET id = id
-WHERE author_id = 1 AND title IN (SELECT name FROM authors_reference WHERE random() > 0.5);
-DEBUG:  Creating router plan
-DEBUG:  query has a single distribution column value: 1
 SET client_min_messages to 'NOTICE';
 -- test that a connection failure marks placements invalid
 SET citus.shard_replication_factor TO 2;

@@ -1126,10 +1126,6 @@ SELECT id
 	WHERE author_id = 1
 	ORDER BY 1;
 
--- https://github.com/citusdata/citus/issues/3624
-UPDATE articles_hash SET id = id
-WHERE author_id = 1 AND title IN (SELECT name FROM authors_reference WHERE random() > 0.5);
-
 SET client_min_messages to 'NOTICE';
 
 -- test that a connection failure marks placements invalid
