@@ -94,4 +94,15 @@ SELECT create_distributed_table('test_table', 'a');
 -- we currently don't support this
 CREATE INDEX test_table_index ON test_table USING gist (b tsvector_ops(siglen = 100));
 
+-- testing WAL
+CREATE TABLE test_wal(a int, b int);
+-- test WAL without ANALYZE, this should raise an error
+EXPLAIN (WAL) INSERT INTO test_wal VALUES(1,11);
+-- test WAL working properly
+EXPLAIN (ANALYZE TRUE, WAL TRUE, COSTS FALSE, SUMMARY FALSE, BUFFERS FALSE, TIMING FALSE) INSERT INTO test_wal VALUES(1,11);
+SELECT create_distributed_table('test_wal', 'a');
+EXPLAIN (ANALYZE TRUE, WAL TRUE, COSTS FALSE, SUMMARY FALSE, BUFFERS FALSE, TIMING FALSE) INSERT INTO test_wal VALUES(2,22);
+EXPLAIN (ANALYZE TRUE, WAL TRUE, COSTS FALSE, SUMMARY FALSE, BUFFERS FALSE, TIMING FALSE) WITH cte_1 AS (DELETE FROM test_wal WHERE a=2 RETURNING *) SELECT * FROM cte_1;
+SET client_min_messages TO WARNING;
+
 drop schema test_pg13 cascade;
