@@ -177,6 +177,7 @@ extern List * PreprocessDropIndexStmt(Node *dropIndexStatement,
 extern List * PostprocessIndexStmt(Node *node,
 								   const char *queryString);
 extern void ErrorIfUnsupportedAlterIndexStmt(AlterTableStmt *alterTableStatement);
+extern void MarkIndexValid(IndexStmt *indexStmt);
 
 /* objectaddress.c - forward declarations */
 extern ObjectAddress CreateExtensionStmtObjectAddress(Node *stmt, bool missing_ok);
