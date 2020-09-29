@@ -2,6 +2,8 @@
 
 SET search_path = 'pg_catalog';
 
+#include "../udfs/citus_drop_trigger/9.0-1.sql"
+
 -- Check if user has any citus local tables.
 -- If not, DROP create_citus_local_table UDF and continue safely.
 -- Otherwise, raise an exception to stop the downgrade process.
@@ -77,6 +79,13 @@ CREATE TRIGGER dist_authinfo_task_tracker_cache_invalidate
     AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE
     ON pg_catalog.pg_dist_authinfo
     FOR EACH STATEMENT EXECUTE PROCEDURE task_tracker_conninfo_cache_invalidate();
+
+CREATE FUNCTION master_drop_sequences(sequence_names text[])
+    RETURNS void
+    LANGUAGE C STRICT
+    AS 'MODULE_PATHNAME', $$master_drop_sequences$$;
+COMMENT ON FUNCTION master_drop_sequences(text[])
+    IS 'drop specified sequences from the cluster';
 
 RESET search_path;
 
