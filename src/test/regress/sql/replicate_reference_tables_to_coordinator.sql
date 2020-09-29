@@ -16,6 +16,14 @@ CREATE TABLE squares(a int, b int);
 SELECT create_reference_table('squares');
 INSERT INTO squares SELECT i, i * i FROM generate_series(1, 10) i;
 
+CREATE INDEX CONCURRENTLY squares_a_idx ON squares (a);
+SELECT substring(current_Setting('server_version'), '\d+')::int > 11 AS server_version_above_eleven
+\gset
+\if :server_version_above_eleven
+REINDEX INDEX CONCURRENTLY squares_a_idx;
+\endif
+DROP INDEX CONCURRENTLY squares_a_idx;
+
 -- should be executed locally
 SELECT count(*) FROM squares;
 
@@ -33,13 +41,13 @@ END; $$ language plpgsql VOLATILE;
 
 -- INSERT ... SELECT between reference tables
 BEGIN;
-EXPLAIN INSERT INTO squares SELECT a, a*a FROM numbers;
+EXPLAIN (COSTS OFF) INSERT INTO squares SELECT a, a*a FROM numbers;
 INSERT INTO squares SELECT a, a*a FROM numbers;
 SELECT * FROM squares WHERE a >= 20 ORDER BY a;
 ROLLBACK;
 
 BEGIN;
-EXPLAIN INSERT INTO numbers SELECT a FROM squares WHERE a < 3;
+EXPLAIN (COSTS OFF) INSERT INTO numbers SELECT a FROM squares WHERE a < 3;
 INSERT INTO numbers SELECT a FROM squares WHERE a < 3;
 SELECT * FROM numbers ORDER BY a;
 ROLLBACK;
@@ -190,7 +198,7 @@ DROP VIEW numbers_v, local_table_v;
 CREATE MATERIALIZED VIEW numbers_v AS SELECT * FROM numbers WHERE a BETWEEN 1 AND 10;
 REFRESH MATERIALIZED VIEW numbers_v;
 
-SELECT * FROM squares JOIN numbers_v ON squares.a = numbers_v.a;
+SELECT * FROM squares JOIN numbers_v ON squares.a = numbers_v.a ORDER BY 1;
 
 --
 -- Joins between reference tables, local tables, and function calls

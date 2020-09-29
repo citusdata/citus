@@ -45,6 +45,15 @@ typedef struct DDLJob
 {
 	Oid targetRelationId;      /* oid of the target distributed relation */
 	bool concurrentIndexCmd;   /* related to a CONCURRENTLY index command? */
+
+	/*
+	 * Whether to commit and start a new transaction before sending commands
+	 * (only applies to CONCURRENTLY commands). This is needed for REINDEX CONCURRENTLY
+	 * and CREATE INDEX CONCURRENTLY on local shards, which would otherwise
+	 * get blocked waiting for the current transaction to finish.
+	 */
+	bool startNewTransaction;
+
 	const char *commandString; /* initial (coordinator) DDL command string */
 	List *taskList;            /* worker DDL tasks to execute */
 } DDLJob;
