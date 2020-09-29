@@ -175,8 +175,9 @@ CREATE TABLE test_wal(a int, b int);
 -- test WAL without ANALYZE, this should raise an error
 EXPLAIN (WAL) INSERT INTO test_wal VALUES(1,11);
 ERROR:  EXPLAIN option WAL requires ANALYZE
--- test WAL working properly
-EXPLAIN (ANALYZE TRUE, WAL TRUE, COSTS FALSE, SUMMARY FALSE, BUFFERS FALSE, TIMING FALSE) INSERT INTO test_wal VALUES(1,11);
+-- test WAL working properly for router queries
+EXPLAIN (ANALYZE TRUE, WAL TRUE, COSTS FALSE, SUMMARY FALSE, BUFFERS FALSE, TIMING FALSE)
+INSERT INTO test_wal VALUES(1,11);
                  QUERY PLAN
 ---------------------------------------------------------------------
  Insert on test_wal (actual rows=0 loops=1)
@@ -194,7 +195,8 @@ HINT:  To remove the local data, run: SELECT truncate_local_data_after_distribut
 
 (1 row)
 
-EXPLAIN (ANALYZE TRUE, WAL TRUE, COSTS FALSE, SUMMARY FALSE, BUFFERS FALSE, TIMING FALSE) INSERT INTO test_wal VALUES(2,22);
+EXPLAIN (ANALYZE TRUE, WAL TRUE, COSTS FALSE, SUMMARY FALSE, BUFFERS FALSE, TIMING FALSE)
+INSERT INTO test_wal VALUES(2,22);
                           QUERY PLAN
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
@@ -207,24 +209,64 @@ EXPLAIN (ANALYZE TRUE, WAL TRUE, COSTS FALSE, SUMMARY FALSE, BUFFERS FALSE, TIMI
                ->  Result (actual rows=1 loops=1)
 (8 rows)
 
-EXPLAIN (ANALYZE TRUE, WAL TRUE, COSTS FALSE, SUMMARY FALSE, BUFFERS FALSE, TIMING FALSE) WITH cte_1 AS (DELETE FROM test_wal WHERE a=2 RETURNING *) SELECT * FROM cte_1;
-                                      QUERY PLAN
+-- Test WAL working for multi-shard query
+SET citus.explain_all_tasks TO on;
+EXPLAIN (ANALYZE TRUE, WAL TRUE, COSTS FALSE, SUMMARY FALSE, BUFFERS FALSE, TIMING FALSE)
+DELETE FROM test_wal RETURNING *;
+                                  QUERY PLAN
 ---------------------------------------------------------------------
- Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
-   Task Count: 1
-   Tuple data received from nodes: 3 bytes
+ Custom Scan (Citus Adaptive) (actual rows=2 loops=1)
+   Task Count: 2
+   Tuple data received from nodes: 6 bytes
    Tasks Shown: All
    ->  Task
          Tuple data received from node: 3 bytes
          Node: host=localhost port=xxxxx dbname=regression
-         ->  CTE Scan on cte_1 (actual rows=1 loops=1)
+         ->  Delete on test_wal_65012 test_wal (actual rows=1 loops=1)
                WAL: records=1 bytes=54
-               CTE cte_1
-                 ->  Delete on test_wal_65013 test_wal (actual rows=1 loops=1)
-                       WAL: records=1 bytes=54
-                       ->  Seq Scan on test_wal_65013 test_wal (actual rows=1 loops=1)
-                             Filter: (a = 2)
-(14 rows)
+               ->  Seq Scan on test_wal_65012 test_wal (actual rows=1 loops=1)
+   ->  Task
+         Tuple data received from node: 3 bytes
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  Delete on test_wal_65013 test_wal (actual rows=1 loops=1)
+               WAL: records=1 bytes=54
+               ->  Seq Scan on test_wal_65013 test_wal (actual rows=1 loops=1)
+(16 rows)
+
+-- insert items back for next query
+INSERT INTO test_wal VALUES(1,11), (2,22);
+-- make sure WAL works in distributed subplans
+EXPLAIN (ANALYZE TRUE, WAL TRUE, COSTS FALSE, SUMMARY FALSE, BUFFERS FALSE, TIMING FALSE)
+WITH cte_1 AS (DELETE FROM test_wal RETURNING *)
+SELECT * FROM cte_1;
+                                            QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive) (actual rows=2 loops=1)
+   ->  Distributed Subplan XXX_1
+         Intermediate Data Size: 36 bytes
+         Result destination: Write locally
+         ->  Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
+               Task Count: 2
+               Tuple data received from nodes: 0 bytes
+               Tasks Shown: All
+               ->  Task
+                     Tuple data received from node: 0 bytes
+                     Node: host=localhost port=xxxxx dbname=regression
+                     ->  Delete on test_wal_65012 test_wal (actual rows=0 loops=1)
+                           ->  Seq Scan on test_wal_65012 test_wal (actual rows=0 loops=1)
+               ->  Task
+                     Tuple data received from node: 0 bytes
+                     Node: host=localhost port=xxxxx dbname=regression
+                     ->  Delete on test_wal_65013 test_wal (actual rows=0 loops=1)
+                           ->  Seq Scan on test_wal_65013 test_wal (actual rows=0 loops=1)
+   Task Count: 1
+   Tuple data received from nodes: 6 bytes
+   Tasks Shown: All
+   ->  Task
+         Tuple data received from node: 6 bytes
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  Function Scan on read_intermediate_result intermediate_result (actual rows=2 loops=1)
+(25 rows)
 
 SET client_min_messages TO WARNING;
 drop schema test_pg13 cascade;
