@@ -771,7 +771,7 @@ RouterModifyTaskForShardInterval(Query *originalQuery,
 		copiedSubquery);
 	if (subqueryRteListProperties->hasDistributedTable)
 	{
-		AddShardIntervalRestrictionToSelect(copiedSubquery, shardInterval);
+		AddPartitionKeyNotNullFilterToSelect(copiedSubquery);
 	}
 
 	/* mark that we don't want the router planner to generate dummy hosts/queries */
