@@ -9,6 +9,9 @@
 -- CREATE TEST TABLES
 --
 
+CREATE SCHEMA multi_index_statements;
+SET search_path TO multi_index_statements;
+
 SET citus.next_shard_id TO 102080;
 
 CREATE TABLE index_test_range(a int, b int, c int);
@@ -32,17 +35,17 @@ SELECT master_create_empty_shard('index_test_append');
 
 -- Verify that we can create different types of indexes
 
-CREATE INDEX lineitem_orderkey_index ON lineitem (l_orderkey);
+CREATE INDEX lineitem_orderkey_index ON public.lineitem (l_orderkey);
 
-CREATE INDEX lineitem_partkey_desc_index ON lineitem (l_partkey DESC);
+CREATE INDEX lineitem_partkey_desc_index ON public.lineitem (l_partkey DESC);
 
-CREATE INDEX lineitem_partial_index ON lineitem (l_shipdate)
+CREATE INDEX lineitem_partial_index ON public.lineitem (l_shipdate)
 	WHERE l_shipdate < '1995-01-01';
 
-CREATE INDEX lineitem_colref_index ON lineitem (record_ne(lineitem.*, NULL));
+CREATE INDEX lineitem_colref_index ON public.lineitem (record_ne(lineitem.*, NULL));
 
 SET client_min_messages = ERROR; -- avoid version dependant warning about WAL
-CREATE INDEX lineitem_orderkey_hash_index ON lineitem USING hash (l_partkey);
+CREATE INDEX lineitem_orderkey_hash_index ON public.lineitem USING hash (l_partkey);
 CREATE UNIQUE INDEX index_test_range_index_a ON index_test_range(a);
 CREATE UNIQUE INDEX index_test_range_index_a_b ON index_test_range(a,b);
 CREATE UNIQUE INDEX index_test_hash_index_a ON index_test_hash(a);
@@ -53,16 +56,16 @@ CREATE UNIQUE INDEX index_test_hash_index_a_b_c ON index_test_hash(a) INCLUDE (b
 RESET client_min_messages;
 
 -- Verify that we handle if not exists statements correctly
-CREATE INDEX lineitem_orderkey_index on lineitem(l_orderkey);
-CREATE INDEX IF NOT EXISTS lineitem_orderkey_index on lineitem(l_orderkey);
-CREATE INDEX IF NOT EXISTS lineitem_orderkey_index_new on lineitem(l_orderkey);
+CREATE INDEX lineitem_orderkey_index on public.lineitem(l_orderkey);
+CREATE INDEX IF NOT EXISTS lineitem_orderkey_index on public.lineitem(l_orderkey);
+CREATE INDEX IF NOT EXISTS lineitem_orderkey_index_new on public.lineitem(l_orderkey);
 
 -- Verify if not exists behavior with an index with same name on a different table
-CREATE INDEX lineitem_orderkey_index on index_test_hash(a);
-CREATE INDEX IF NOT EXISTS lineitem_orderkey_index on index_test_hash(a);
+CREATE INDEX lineitem_orderkey_index on public.nation(n_nationkey);
+CREATE INDEX IF NOT EXISTS lineitem_orderkey_index on public.nation(n_nationkey);
 
 -- Verify that we can create indexes concurrently
-CREATE INDEX CONCURRENTLY lineitem_concurrently_index ON lineitem (l_orderkey);
+CREATE INDEX CONCURRENTLY lineitem_concurrently_index ON public.lineitem (l_orderkey);
 
 -- Verify that no-name local CREATE INDEX CONCURRENTLY works
 CREATE TABLE local_table (id integer, name text);
@@ -86,10 +89,11 @@ SELECT count(*) FROM pg_indexes WHERE tablename LIKE 'index_test_hash%';
 SELECT count(*) FROM pg_indexes WHERE tablename LIKE 'index_test_range%';
 SELECT count(*) FROM pg_indexes WHERE tablename LIKE 'index_test_append%';
 \c - - - :master_port
+SET search_path TO multi_index_statements, public;
 
 -- Verify that we error out on unsupported statement types
 
-CREATE UNIQUE INDEX try_index ON lineitem (l_orderkey);
+CREATE UNIQUE INDEX try_index ON public.lineitem (l_orderkey);
 CREATE INDEX try_index ON lineitem (l_orderkey) TABLESPACE newtablespace;
 
 CREATE UNIQUE INDEX try_unique_range_index ON index_test_range(b);
@@ -162,9 +166,10 @@ SELECT indrelid::regclass, indexrelid::regclass FROM pg_index WHERE indrelid = (
 SELECT * FROM pg_indexes WHERE tablename LIKE 'index_test_%' ORDER BY indexname;
 
 -- create index that will conflict with master operations
-CREATE INDEX CONCURRENTLY ith_b_idx_102089 ON index_test_hash_102089(b);
+CREATE INDEX CONCURRENTLY ith_b_idx_102089 ON multi_index_statements.index_test_hash_102089(b);
 
 \c - - - :master_port
+SET search_path TO multi_index_statements;
 
 -- should fail because worker index already exists
 CREATE INDEX CONCURRENTLY ith_b_idx ON index_test_hash(b);
@@ -178,11 +183,100 @@ CREATE INDEX CONCURRENTLY ith_b_idx ON index_test_hash(b);
 SELECT indisvalid AS "Index Valid?" FROM pg_index WHERE indexrelid='ith_b_idx'::regclass;
 
 \c - - - :worker_1_port
+SET search_path TO multi_index_statements;
 
 -- now drop shard index to test partial master DROP failure
 DROP INDEX CONCURRENTLY ith_b_idx_102089;
 
 \c - - - :master_port
+SET search_path TO multi_index_statements;
+SET citus.next_shard_id TO 103080;
+
+SET citus.shard_count TO 32;
+SET citus.shard_replication_factor TO 1;
+
+-- the following tests are intended to show that
+-- Citus does not get into self-deadlocks because
+-- of long index names. So, make sure that we have
+-- enough remote connections to trigger the case
+SET citus.force_max_query_parallelization TO ON;
+
+CREATE TABLE test_index_creation1
+(
+    tenant_id integer NOT NULL,
+    timeperiod timestamp without time zone NOT NULL,
+    field1 integer NOT NULL,
+    inserted_utc timestamp without time zone NOT NULL DEFAULT now(),
+    PRIMARY KEY(tenant_id, timeperiod)
+) PARTITION BY RANGE (timeperiod);
+
+select create_distributed_table('test_index_creation1', 'tenant_id');
+
+
+-- should be able to create short named indexes in parallel
+-- as there are no partitions even if the index name is too long
+SET client_min_messages TO DEBUG1;
+CREATE INDEX ix_test_index_creation1_ix_test_index_creation1_ix_test_index_creation1_ix_test_index_creation1_ix_test_index_creation1
+    ON test_index_creation1 USING btree
+    (tenant_id, timeperiod);
+RESET client_min_messages;
+
+CREATE TABLE test_index_creation1_p2020_09_26 PARTITION OF test_index_creation1 FOR VALUES FROM ('2020-09-26 00:00:00') TO ('2020-09-27 00:00:00');
+CREATE TABLE test_index_creation1_p2020_09_27 PARTITION OF test_index_creation1 FOR VALUES FROM ('2020-09-27 00:00:00') TO ('2020-09-28 00:00:00');
+
+-- should switch to sequential execution as the index name on the partition is
+-- longer than 63
+SET client_min_messages TO DEBUG1;
+CREATE INDEX ix_test_index_creation2
+    ON test_index_creation1 USING btree
+    (tenant_id, timeperiod);
+
+-- same test with schema qualified
+SET search_path TO public;
+CREATE INDEX ix_test_index_creation3
+    ON multi_index_statements.test_index_creation1 USING btree
+    (tenant_id, timeperiod);
+SET search_path TO multi_index_statements;
+
+-- we cannot switch to sequential execution
+-- after a parallel query
+BEGIN;
+	SELECT count(*) FROM test_index_creation1;
+	CREATE INDEX ix_test_index_creation4
+	ON test_index_creation1 USING btree
+	(tenant_id, timeperiod);
+ROLLBACK;
+
+-- try inside a sequential block
+BEGIN;
+	SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
+	SELECT count(*) FROM test_index_creation1;
+	CREATE INDEX ix_test_index_creation4
+	ON test_index_creation1 USING btree
+	(tenant_id, timeperiod);
+ROLLBACK;
+
+-- should be able to create indexes with INCLUDE/WHERE
+CREATE INDEX ix_test_index_creation5 ON test_index_creation1
+	USING btree(tenant_id, timeperiod)
+	INCLUDE (field1) WHERE (tenant_id = 100);
+
+CREATE UNIQUE INDEX ix_test_index_creation6 ON test_index_creation1
+	USING btree(tenant_id, timeperiod);
+
+-- should be able to create short named indexes in parallel
+-- as  the table/index name is short
+CREATE INDEX f1
+    ON test_index_creation1 USING btree
+    (field1);
+
+SET citus.force_max_query_parallelization TO OFF;
+
+SET client_min_messages TO ERROR;
+\set VERBOSITY terse
+DROP INDEX f1;
+DROP INDEX ix_test_index_creation2;
+DROP INDEX ix_test_index_creation1_ix_test_index_creation1_ix_test_index_creation1_ix_test_index_creation1_ix_test_index_creation1;
 DROP INDEX CONCURRENTLY ith_b_idx;
 
 -- the failure results in an INVALID index
@@ -191,7 +285,4 @@ SELECT indisvalid AS "Index Valid?" FROM pg_index WHERE indexrelid='ith_b_idx'::
 -- final clean up
 DROP INDEX CONCURRENTLY IF EXISTS ith_b_idx;
 
--- Drop created tables
-DROP TABLE index_test_range;
-DROP TABLE index_test_hash;
-DROP TABLE index_test_append;
+DROP SCHEMA multi_index_statements CASCADE;

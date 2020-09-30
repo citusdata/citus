@@ -513,6 +513,50 @@ LoadShardIntervalList(Oid relationId)
 
 
 /*
+ * LoadShardIntervalWithLongestShardName is a utility function that returns
+ * the shard interaval with the largest shardId for the given relationId. Note
+ * that largest shardId implies longest shard name.
+ */
+ShardInterval *
+LoadShardIntervalWithLongestShardName(Oid relationId)
+{
+	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
+	int maxShardIndex = cacheEntry->shardIntervalArrayLength - 1;
+	uint64 largestShardId = INVALID_SHARD_ID;
+
+	if (cacheEntry->hasUniformHashDistribution)
+	{
+		ShardInterval *shardInterval =
+			(cacheEntry->sortedShardIntervalArray[maxShardIndex]);
+
+		largestShardId = shardInterval->shardId;
+	}
+	else
+	{
+		int shardIndex = 0;
+		for (; shardIndex <= maxShardIndex; ++shardIndex)
+		{
+			ShardInterval *currentShardInterval =
+				cacheEntry->sortedShardIntervalArray[shardIndex];
+
+			if (largestShardId < currentShardInterval->shardId)
+			{
+				largestShardId = currentShardInterval->shardId;
+			}
+		}
+	}
+
+	/* this cannot happen, still be defensive */
+	if (largestShardId == 0)
+	{
+		ereport(ERROR, (errmsg("unexpected shardId: %lu", largestShardId)));
+	}
+
+	return LoadShardInterval(largestShardId);
+}
+
+
+/*
  * ShardIntervalCount returns number of shard intervals for a given distributed table.
  * The function returns 0 if no shards can be found for the given relation id.
  */
