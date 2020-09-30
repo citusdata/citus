@@ -1,3 +1,9 @@
+### citus v9.4.1 (September 30, 2020) ###
+
+* Fixes EXPLAIN ANALYZE output truncation
+
+* Fixes a deadlock during transaction recovery
+
 ### citus v9.4.0 (July 28, 2020) ###
 
 * Improves COPY by honoring max_adaptive_executor_pool_size config
