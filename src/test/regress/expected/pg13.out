@@ -212,61 +212,55 @@ INSERT INTO test_wal VALUES(2,22);
 -- Test WAL working for multi-shard query
 SET citus.explain_all_tasks TO on;
 EXPLAIN (ANALYZE TRUE, WAL TRUE, COSTS FALSE, SUMMARY FALSE, BUFFERS FALSE, TIMING FALSE)
-DELETE FROM test_wal RETURNING *;
-                                  QUERY PLAN
+INSERT INTO test_wal VALUES(3,33),(4,44),(5,55) RETURNING *;
+                                   QUERY PLAN
 ---------------------------------------------------------------------
- Custom Scan (Citus Adaptive) (actual rows=2 loops=1)
-   Task Count: 2
-   Tuple data received from nodes: 6 bytes
+ Custom Scan (Citus Adaptive) (actual rows=3 loops=1)
+   Task Count: 1
+   Tuple data received from nodes: 9 bytes
    Tasks Shown: All
    ->  Task
-         Tuple data received from node: 3 bytes
+         Tuple data received from node: 9 bytes
          Node: host=localhost port=xxxxx dbname=regression
-         ->  Delete on test_wal_65012 test_wal (actual rows=1 loops=1)
-               WAL: records=1 bytes=54
-               ->  Seq Scan on test_wal_65012 test_wal (actual rows=1 loops=1)
-   ->  Task
-         Tuple data received from node: 3 bytes
-         Node: host=localhost port=xxxxx dbname=regression
-         ->  Delete on test_wal_65013 test_wal (actual rows=1 loops=1)
-               WAL: records=1 bytes=54
-               ->  Seq Scan on test_wal_65013 test_wal (actual rows=1 loops=1)
-(16 rows)
+         ->  Insert on test_wal_65012 citus_table_alias (actual rows=3 loops=1)
+               WAL: records=3 bytes=189
+               ->  Values Scan on "*VALUES*" (actual rows=3 loops=1)
+(10 rows)
 
--- insert items back for next query
-INSERT INTO test_wal VALUES(1,11), (2,22);
 -- make sure WAL works in distributed subplans
 EXPLAIN (ANALYZE TRUE, WAL TRUE, COSTS FALSE, SUMMARY FALSE, BUFFERS FALSE, TIMING FALSE)
-WITH cte_1 AS (DELETE FROM test_wal RETURNING *)
+WITH cte_1 AS (INSERT INTO test_wal VALUES(6,66),(7,77),(8,88) RETURNING *)
 SELECT * FROM cte_1;
                                             QUERY PLAN
 ---------------------------------------------------------------------
- Custom Scan (Citus Adaptive) (actual rows=2 loops=1)
+ Custom Scan (Citus Adaptive) (actual rows=3 loops=1)
    ->  Distributed Subplan XXX_1
-         Intermediate Data Size: 36 bytes
+         Intermediate Data Size: 54 bytes
          Result destination: Write locally
-         ->  Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
+         ->  Custom Scan (Citus Adaptive) (actual rows=3 loops=1)
                Task Count: 2
-               Tuple data received from nodes: 0 bytes
+               Tuple data received from nodes: 9 bytes
                Tasks Shown: All
                ->  Task
-                     Tuple data received from node: 0 bytes
+                     Tuple data received from node: 6 bytes
                      Node: host=localhost port=xxxxx dbname=regression
-                     ->  Delete on test_wal_65012 test_wal (actual rows=0 loops=1)
-                           ->  Seq Scan on test_wal_65012 test_wal (actual rows=0 loops=1)
+                     ->  Insert on test_wal_65012 citus_table_alias (actual rows=2 loops=1)
+                           WAL: records=2 bytes=126
+                           ->  Values Scan on "*VALUES*" (actual rows=2 loops=1)
                ->  Task
-                     Tuple data received from node: 0 bytes
+                     Tuple data received from node: 3 bytes
                      Node: host=localhost port=xxxxx dbname=regression
-                     ->  Delete on test_wal_65013 test_wal (actual rows=0 loops=1)
-                           ->  Seq Scan on test_wal_65013 test_wal (actual rows=0 loops=1)
+                     ->  Insert on test_wal_65013 citus_table_alias (actual rows=1 loops=1)
+                           WAL: records=1 bytes=63
+                           ->  Result (actual rows=1 loops=1)
    Task Count: 1
-   Tuple data received from nodes: 6 bytes
+   Tuple data received from nodes: 9 bytes
    Tasks Shown: All
    ->  Task
-         Tuple data received from node: 6 bytes
+         Tuple data received from node: 9 bytes
          Node: host=localhost port=xxxxx dbname=regression
-         ->  Function Scan on read_intermediate_result intermediate_result (actual rows=2 loops=1)
-(25 rows)
+         ->  Function Scan on read_intermediate_result intermediate_result (actual rows=3 loops=1)
+(27 rows)
 
 SET client_min_messages TO WARNING;
 drop schema test_pg13 cascade;

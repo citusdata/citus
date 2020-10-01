@@ -108,13 +108,11 @@ INSERT INTO test_wal VALUES(2,22);
 -- Test WAL working for multi-shard query
 SET citus.explain_all_tasks TO on;
 EXPLAIN (ANALYZE TRUE, WAL TRUE, COSTS FALSE, SUMMARY FALSE, BUFFERS FALSE, TIMING FALSE)
-DELETE FROM test_wal RETURNING *;
+INSERT INTO test_wal VALUES(3,33),(4,44),(5,55) RETURNING *;
 
--- insert items back for next query
-INSERT INTO test_wal VALUES(1,11), (2,22);
 -- make sure WAL works in distributed subplans
 EXPLAIN (ANALYZE TRUE, WAL TRUE, COSTS FALSE, SUMMARY FALSE, BUFFERS FALSE, TIMING FALSE)
-WITH cte_1 AS (DELETE FROM test_wal RETURNING *)
+WITH cte_1 AS (INSERT INTO test_wal VALUES(6,66),(7,77),(8,88) RETURNING *)
 SELECT * FROM cte_1;
 
 SET client_min_messages TO WARNING;
