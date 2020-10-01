@@ -287,8 +287,8 @@ GetShellTableDDLEventsForCitusLocalTable(Oid relationId)
 	 */
 	bool includeSequenceDefaults = true;
 
-	List *shellTableDDLEvents = GetTableDDLEvents(relationId,
-												  includeSequenceDefaults);
+	List *shellTableDDLEvents = GetFullTableCreationCommands(relationId,
+															 includeSequenceDefaults);
 	shellTableDDLEvents = list_concat(shellTableDDLEvents, foreignConstraintCommands);
 
 	return shellTableDDLEvents;

@@ -775,7 +775,7 @@ CopyShardCommandList(ShardInterval *shardInterval, const char *sourceNodeName,
 											  copyShardDataCommand->data);
 	}
 
-	List *indexCommandList = GetTableConstructionCommands(relationId);
+	List *indexCommandList = GetPostLoadTableCreationCommands(relationId);
 	indexCommandList = WorkerApplyShardDDLCommandList(indexCommandList, shardId);
 
 	copyShardToNodeCommandsList = list_concat(copyShardToNodeCommandsList,
@@ -980,8 +980,8 @@ RecreateTableDDLCommandList(Oid relationId)
 	}
 
 	List *dropCommandList = list_make1(dropCommand->data);
-	List *createCommandList = GetTableCreationCommands(relationId,
-													   includeSequenceDefaults);
+	List *createCommandList = GetPreLoadTableCreationCommands(relationId,
+															  includeSequenceDefaults);
 	List *recreateCommandList = list_concat(dropCommandList, createCommandList);
 
 	return recreateCommandList;
