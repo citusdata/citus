@@ -301,7 +301,16 @@ _PG_init(void)
 						PGC_S_OVERRIDE);
 	}
 
-	DoInitialCleanup();
+	/*
+	 * In postmasters execution of _PG_init, IsUnderPostmaster will be false and
+	 * we want to do the cleanup at that time only, otherwise there is a chance that
+	 * there will be parallel queries and we might do a cleanup for things that are
+	 * already in use. This is only needed in Windows.
+	 */
+	if (!IsUnderPostmaster)
+	{
+		DoInitialCleanup();
+	}
 }
 
 
