@@ -562,9 +562,6 @@ GetTableConstructionCommands(Oid relationId)
 	List *replicaIdentityEvents = GetTableReplicaIdentityCommand(relationId);
 	tableDDLEventList = list_concat(tableDDLEventList, replicaIdentityEvents);
 
-	List *policyCommands = CreatePolicyCommands(relationId);
-	tableDDLEventList = list_concat(tableDDLEventList, policyCommands);
-
 	List *triggerCommands = GetExplicitTriggerCommandList(relationId);
 	tableDDLEventList = list_concat(tableDDLEventList, triggerCommands);
 
@@ -669,6 +666,9 @@ GetTableBuildingCommands(Oid relationId, bool includeSequenceDefaults)
 	{
 		tableDDLEventList = lappend(tableDDLEventList, tableOwnerDef);
 	}
+
+	List *policyCommands = CreatePolicyCommands(relationId);
+	tableDDLEventList = list_concat(tableDDLEventList, policyCommands);
 
 	/* revert back to original search_path */
 	PopOverrideSearchPath();
