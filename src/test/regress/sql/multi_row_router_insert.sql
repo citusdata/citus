@@ -26,7 +26,9 @@ INSERT INTO reference_table (b) VALUES (8), (9);
 PREPARE prepared_statement(int) AS INSERT INTO reference_table (b) VALUES ($1), ($1 * 500);
 EXECUTE prepared_statement(1);
 EXECUTE prepared_statement(1);
+EXECUTE prepared_statement(1);
 EXECUTE prepared_statement(2);
+EXECUTE prepared_statement(3);
 EXECUTE prepared_statement(3);
 
 SELECT * FROM reference_table ORDER BY 1,2;

@@ -160,7 +160,7 @@ static Job * RouterJob(Query *originalQuery,
 static bool RelationPrunesToMultipleShards(List *relationShardList);
 static void NormalizeMultiRowInsertTargetList(Query *query);
 static void AppendNextDummyColReference(Alias *expendedReferenceNames);
-static Value * MakeDummyColumnString(int i);
+static Value * MakeDummyColumnString(int dummyColumnId);
 static List * BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError);
 static List * GroupInsertValuesByShardId(List *insertValuesList);
 static List * ExtractInsertValuesList(Query *query, Var *partitionColumn);
@@ -3194,10 +3194,10 @@ AppendNextDummyColReference(Alias *expendedReferenceNames)
  * integer to end of the "column" string.
  */
 static Value *
-MakeDummyColumnString(int i)
+MakeDummyColumnString(int dummyColumnId)
 {
 	StringInfo dummyColumnStringInfo = makeStringInfo();
-	appendStringInfo(dummyColumnStringInfo, "column%d", i);
+	appendStringInfo(dummyColumnStringInfo, "column%d", dummyColumnId);
 	Value *dummyColumnString = makeString(dummyColumnStringInfo->data);
 
 	return dummyColumnString;
