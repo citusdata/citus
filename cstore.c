@@ -16,13 +16,9 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include "access/heapam.h"
-#include "catalog/objectaccess.h"
-#include "catalog/storage.h"
 #include "miscadmin.h"
 #include "utils/guc.h"
 #include "utils/rel.h"
-#include "utils/relcache.h"
 
 #include "cstore.h"
 
@@ -41,11 +37,6 @@ static const struct config_enum_entry cstore_compression_options[] =
 	{ "pglz", COMPRESSION_PG_LZ, false },
 	{ NULL, 0, false }
 };
-
-static object_access_hook_type prevObjectAccess = NULL;
-
-static void ObjectAccess(ObjectAccessType access, Oid classId, Oid objectId, int subId,
-						 void *arg);
 
 void
 cstore_init()
@@ -87,9 +78,6 @@ cstore_init()
 							NULL,
 							NULL,
 							NULL);
-
-	prevObjectAccess = object_access_hook;
-	object_access_hook = ObjectAccess;
 }
 
 
@@ -121,72 +109,4 @@ void
 InitializeCStoreTableFile(Oid relNode, CStoreOptions *cstoreOptions)
 {
 	InitCStoreTableMetadata(relNode, cstoreOptions->blockRowCount);
-}
-
-
-/*
- * Implements object_access_hook. One of the places this is called is just
- * before dropping an object, which allows us to clean-up resources for
- * cstore tables while the pg_class record for the table is still there.
- */
-static void
-ObjectAccess(ObjectAccessType access, Oid classId, Oid objectId, int subId, void *arg)
-{
-	if (prevObjectAccess)
-	{
-		prevObjectAccess(access, classId, objectId, subId, arg);
-	}
-
-	/*
-	 * Do nothing if this is not a DROP relation command.
-	 */
-	if (access != OAT_DROP || classId != RelationRelationId || OidIsValid(subId))
-	{
-		return;
-	}
-
-	if (IsCStoreFdwTable(objectId))
-	{
-		/*
-		 * Drop both metadata and storage. We need to drop storage here since
-		 * we manage relfilenode for FDW tables in the extension.
-		 */
-		Relation rel = cstore_fdw_open(objectId, AccessExclusiveLock);
-		RelationOpenSmgr(rel);
-		RelationDropStorage(rel);
-		DeleteTableMetadataRowIfExists(rel->rd_node.relNode);
-
-		/* keep the lock since we did physical changes to the relation */
-		relation_close(rel, NoLock);
-	}
-	else
-	{
-		Oid relNode = InvalidOid;
-		Relation rel = try_relation_open(objectId, AccessExclusiveLock);
-		if (rel == NULL)
-		{
-			return;
-		}
-
-		relNode = rel->rd_node.relNode;
-		if (IsCStoreStorage(relNode))
-		{
-			/*
-			 * Drop only metadata for table am cstore tables. Postgres manages
-			 * storage for these tables, so we don't need to drop that.
-			 */
-			DeleteTableMetadataRowIfExists(relNode);
-
-			/* keep the lock since we did physical changes to the relation */
-			relation_close(rel, NoLock);
-		}
-		else
-		{
-			/*
-			 * For non-cstore tables, we do nothing.
-			 * Release the lock since we haven't changed the relation.
-			 */
-			relation_close(rel, AccessExclusiveLock);
-		}
-	}
 }

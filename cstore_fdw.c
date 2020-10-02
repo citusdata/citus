@@ -25,6 +25,7 @@
 #include "catalog/catalog.h"
 #include "catalog/indexing.h"
 #include "catalog/namespace.h"
+#include "catalog/objectaccess.h"
 #include "catalog/pg_foreign_table.h"
 #include "catalog/pg_namespace.h"
 #include "catalog/storage.h"
@@ -54,6 +55,7 @@
 #include "parser/parser.h"
 #include "parser/parse_coerce.h"
 #include "parser/parse_type.h"
+#include "storage/lmgr.h"
 #include "storage/smgr.h"
 #include "tcop/utility.h"
 #include "utils/builtins.h"
@@ -105,6 +107,8 @@ static const CStoreValidOption ValidOptionArray[] =
 	{ OPTION_NAME_BLOCK_ROW_COUNT, ForeignTableRelationId }
 };
 
+static object_access_hook_type prevObjectAccessHook = NULL;
+
 /* local functions forward declarations */
 #if PG_VERSION_NUM >= 100000
 static void CStoreProcessUtility(PlannedStmt *plannedStatement, const char *queryString,
@@ -130,7 +134,8 @@ static List * FindCStoreTables(List *tableList);
 static List * OpenRelationsForTruncate(List *cstoreTableList);
 static void FdwNewRelFileNode(Relation relation);
 static void TruncateCStoreTables(List *cstoreRelationList);
-static bool CStoreServer(ForeignServer *server);
+static bool IsCStoreFdwTable(Oid relationId);
+static bool IsCStoreServer(ForeignServer *server);
 static bool DistributedTable(Oid relationId);
 static bool DistributedWorkerCopy(CopyStmt *copyStatement);
 static StringInfo OptionNamesString(Oid currentContextId);
@@ -187,7 +192,11 @@ static bool CStoreIsForeignScanParallelSafe(PlannerInfo *root, RelOptInfo *rel,
 											RangeTblEntry *rte);
 #endif
 static void cstore_fdw_initrel(Relation rel);
+static Relation cstore_fdw_open(Oid relationId, LOCKMODE lockmode);
 static Relation cstore_fdw_openrv(RangeVar *relation, LOCKMODE lockmode);
+static void CStoreFdwObjectAccessHook(ObjectAccessType access, Oid classId, Oid objectId,
+									  int subId,
+									  void *arg);
 
 PG_FUNCTION_INFO_V1(cstore_ddl_event_end_trigger);
 PG_FUNCTION_INFO_V1(cstore_table_size);
@@ -209,6 +218,8 @@ cstore_fdw_init()
 {
 	PreviousProcessUtilityHook = ProcessUtility_hook;
 	ProcessUtility_hook = CStoreProcessUtility;
+	prevObjectAccessHook = object_access_hook;
+	object_access_hook = CStoreFdwObjectAccessHook;
 }
 
 
@@ -251,7 +262,7 @@ cstore_ddl_event_end_trigger(PG_FUNCTION_ARGS)
 
 		bool missingOK = false;
 		ForeignServer *server = GetForeignServerByName(serverName, missingOK);
-		if (CStoreServer(server))
+		if (IsCStoreServer(server))
 		{
 			Oid relationId = RangeVarGetRelid(createStatement->base.relation,
 											  AccessShareLock, false);
@@ -358,7 +369,6 @@ CStoreProcessUtility(Node * parseTree, const char * queryString,
 		CALL_PREVIOUS_UTILITY(parseTree, queryString, context, paramListInfo,
 							  destReceiver, completionTag);
 	}
-
 	/* handle other utility statements */
 	else
 	{
@@ -895,7 +905,7 @@ IsCStoreFdwTable(Oid relationId)
 	{
 		ForeignTable *foreignTable = GetForeignTable(relationId);
 		ForeignServer *server = GetForeignServer(foreignTable->serverid);
-		if (CStoreServer(server))
+		if (IsCStoreServer(server))
 		{
 			cstoreTable = true;
 		}
@@ -906,11 +916,11 @@ IsCStoreFdwTable(Oid relationId)
 
 
 /*
- * CStoreServer checks if the given foreign server belongs to cstore_fdw. If it
+ * IsCStoreServer checks if the given foreign server belongs to cstore_fdw. If it
  * does, the function returns true. Otherwise, it returns false.
  */
 static bool
-CStoreServer(ForeignServer *server)
+IsCStoreServer(ForeignServer *server)
 {
 	ForeignDataWrapper *foreignDataWrapper = GetForeignDataWrapper(server->fdwid);
 	bool cstoreServer = false;
@@ -2143,7 +2153,7 @@ cstore_fdw_initrel(Relation rel)
 }
 
 
-Relation
+static Relation
 cstore_fdw_open(Oid relationId, LOCKMODE lockmode)
 {
 	Relation rel = heap_open(relationId, lockmode);
@@ -2162,4 +2172,62 @@ cstore_fdw_openrv(RangeVar *relation, LOCKMODE lockmode)
 	cstore_fdw_initrel(rel);
 
 	return rel;
+}
+
+
+/*
+ * Implements object_access_hook. One of the places this is called is just
+ * before dropping an object, which allows us to clean-up resources for
+ * cstore tables.
+ *
+ * When cleaning up resources, we need to have access to the pg_class record
+ * for the table so we can indentify the relfilenode belonging to the relation.
+ * We don't have access to this information in sql_drop event triggers, since
+ * the relation has already been dropped there. object_access_hook is called
+ * __before__ dropping tables, so we still have access to the pg_class
+ * entry here.
+ *
+ * Note that the utility hook is called once per __command__, and not for
+ * every object dropped, and since a drop can cascade to other objects, it
+ * is difficult to get full set of dropped objects in the utility hook.
+ * But object_access_hook is called once per dropped object, so it is
+ * much easier to clean-up all dropped objects here.
+ */
+static void
+CStoreFdwObjectAccessHook(ObjectAccessType access, Oid classId, Oid objectId,
+						  int subId, void *arg)
+{
+	if (prevObjectAccessHook)
+	{
+		prevObjectAccessHook(access, classId, objectId, subId, arg);
+	}
+
+	/*
+	 * Do nothing if this is not a DROP relation command.
+	 */
+	if (access != OAT_DROP || classId != RelationRelationId || OidIsValid(subId))
+	{
+		return;
+	}
+
+	/*
+	 * Lock relation to prevent it from being dropped and to avoid
+	 * race conditions in the next if block.
+	 */
+	LockRelationOid(objectId, AccessShareLock);
+
+	if (IsCStoreFdwTable(objectId))
+	{
+		/*
+		 * Drop both metadata and storage. We need to drop storage here since
+		 * we manage relfilenode for FDW tables in the extension.
+		 */
+		Relation rel = cstore_fdw_open(objectId, AccessExclusiveLock);
+		RelationOpenSmgr(rel);
+		RelationDropStorage(rel);
+		DeleteTableMetadataRowIfExists(rel->rd_node.relNode);
+
+		/* keep the lock since we did physical changes to the relation */
+		relation_close(rel, NoLock);
+	}
 }

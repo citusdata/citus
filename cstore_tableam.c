@@ -14,6 +14,8 @@
 #include "access/xact.h"
 #include "catalog/catalog.h"
 #include "catalog/index.h"
+#include "catalog/objectaccess.h"
+#include "catalog/pg_am.h"
 #include "catalog/storage.h"
 #include "catalog/storage_xlog.h"
 #include "commands/progress.h"
@@ -30,9 +32,12 @@
 #include "storage/smgr.h"
 #include "utils/builtins.h"
 #include "utils/rel.h"
+#include "utils/syscache.h"
 
 #include "cstore.h"
 #include "cstore_tableam.h"
+
+#define CSTORE_TABLEAM_NAME "cstore_tableam"
 
 typedef struct CStoreScanDescData
 {
@@ -45,6 +50,13 @@ typedef struct CStoreScanDescData *CStoreScanDesc;
 static TableWriteState *CStoreWriteState = NULL;
 static ExecutorEnd_hook_type PreviousExecutorEndHook = NULL;
 static MemoryContext CStoreContext = NULL;
+static object_access_hook_type prevObjectAccessHook = NULL;
+
+/* forward declaration for static functions */
+static void CStoreTableAMObjectAccessHook(ObjectAccessType access, Oid classId, Oid
+										  objectId, int subId,
+										  void *arg);
+static bool IsCStoreTableAmTable(Oid relationId);
 
 static CStoreOptions *
 CStoreTableAMGetOptions(void)
@@ -624,6 +636,8 @@ cstore_tableam_init()
 {
 	PreviousExecutorEndHook = ExecutorEnd_hook;
 	ExecutorEnd_hook = CStoreExecutorEnd;
+	prevObjectAccessHook = object_access_hook;
+	object_access_hook = CStoreTableAMObjectAccessHook;
 }
 
 
@@ -631,6 +645,79 @@ void
 cstore_tableam_finish()
 {
 	ExecutorEnd_hook = PreviousExecutorEndHook;
+}
+
+
+/*
+ * Implements object_access_hook. One of the places this is called is just
+ * before dropping an object, which allows us to clean-up resources for
+ * cstore tables.
+ *
+ * See the comments for CStoreFdwObjectAccessHook for more details.
+ */
+static void
+CStoreTableAMObjectAccessHook(ObjectAccessType access, Oid classId, Oid objectId, int
+							  subId,
+							  void *arg)
+{
+	if (prevObjectAccessHook)
+	{
+		prevObjectAccessHook(access, classId, objectId, subId, arg);
+	}
+
+	/*
+	 * Do nothing if this is not a DROP relation command.
+	 */
+	if (access != OAT_DROP || classId != RelationRelationId || OidIsValid(subId))
+	{
+		return;
+	}
+
+	/*
+	 * Lock relation to prevent it from being dropped and to avoid
+	 * race conditions in the next if block.
+	 */
+	LockRelationOid(objectId, AccessShareLock);
+
+	if (IsCStoreTableAmTable(objectId))
+	{
+		/*
+		 * Drop metadata. No need to drop storage here since for
+		 * tableam tables storage is managed by postgres.
+		 */
+		Relation rel = table_open(objectId, AccessExclusiveLock);
+		DeleteTableMetadataRowIfExists(rel->rd_node.relNode);
+
+		/* keep the lock since we did physical changes to the relation */
+		table_close(rel, NoLock);
+	}
+}
+
+
+/*
+ * IsCStoreTableAmTable returns true if relation has cstore_tableam
+ * access method. This can be called before extension creation.
+ */
+static bool
+IsCStoreTableAmTable(Oid relationId)
+{
+	bool result;
+	Relation rel;
+
+	if (!OidIsValid(relationId))
+	{
+		return false;
+	}
+
+	/*
+	 * Lock relation to prevent it from being dropped &
+	 * avoid race conditions.
+	 */
+	rel = relation_open(relationId, AccessShareLock);
+	result = rel->rd_tableam == GetCstoreTableAmRoutine();
+	relation_close(rel, NoLock);
+
+	return result;
 }
 
 

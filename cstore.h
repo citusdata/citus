@@ -249,8 +249,6 @@ extern void cstore_init(void);
 
 extern CompressionType ParseCompressionType(const char *compressionTypeString);
 extern void InitializeCStoreTableFile(Oid relNode, CStoreOptions *cstoreOptions);
-extern bool IsCStoreFdwTable(Oid relationId);
-extern Relation cstore_fdw_open(Oid relationId, LOCKMODE lockmode);
 
 /* Function declarations for writing to a cstore file */
 extern TableWriteState * CStoreBeginWrite(Relation relation,
