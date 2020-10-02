@@ -74,8 +74,7 @@ extern RangeTblEntry * ExtractResultRelationRTE(Query *query);
 extern RangeTblEntry * ExtractResultRelationRTEOrError(Query *query);
 extern RangeTblEntry * ExtractDistributedInsertValuesRTE(Query *query);
 extern bool IsMultiRowInsert(Query *query);
-extern void AddShardIntervalRestrictionToSelect(Query *subqery,
-												ShardInterval *shardInterval);
+extern void AddPartitionKeyNotNullFilterToSelect(Query *subqery);
 extern bool UpdateOrDeleteQuery(Query *query);
 
 extern uint64 GetAnchorShardId(List *relationShardList);

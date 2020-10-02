@@ -871,10 +871,10 @@ WITH fist_table_cte AS
     FROM
       fist_table_cte;
 DEBUG:  CTE fist_table_cte is going to be inlined via distributed planning
-DEBUG:  distributed statement: INSERT INTO cte_inline.test_table_1960000 AS citus_table_alias (key, value) SELECT key, value FROM (SELECT test_table.key, test_table.value, test_table.other_value FROM cte_inline.test_table_1960000 test_table) fist_table_cte WHERE ((worker_hash(key) OPERATOR(pg_catalog.>=) '-2147483648'::integer) AND (worker_hash(key) OPERATOR(pg_catalog.<=) '-1073741825'::integer))
-DEBUG:  distributed statement: INSERT INTO cte_inline.test_table_1960001 AS citus_table_alias (key, value) SELECT key, value FROM (SELECT test_table.key, test_table.value, test_table.other_value FROM cte_inline.test_table_1960001 test_table) fist_table_cte WHERE ((worker_hash(key) OPERATOR(pg_catalog.>=) '-1073741824'::integer) AND (worker_hash(key) OPERATOR(pg_catalog.<=) '-1'::integer))
-DEBUG:  distributed statement: INSERT INTO cte_inline.test_table_1960002 AS citus_table_alias (key, value) SELECT key, value FROM (SELECT test_table.key, test_table.value, test_table.other_value FROM cte_inline.test_table_1960002 test_table) fist_table_cte WHERE ((worker_hash(key) OPERATOR(pg_catalog.>=) 0) AND (worker_hash(key) OPERATOR(pg_catalog.<=) 1073741823))
-DEBUG:  distributed statement: INSERT INTO cte_inline.test_table_1960003 AS citus_table_alias (key, value) SELECT key, value FROM (SELECT test_table.key, test_table.value, test_table.other_value FROM cte_inline.test_table_1960003 test_table) fist_table_cte WHERE ((worker_hash(key) OPERATOR(pg_catalog.>=) 1073741824) AND (worker_hash(key) OPERATOR(pg_catalog.<=) 2147483647))
+DEBUG:  distributed statement: INSERT INTO cte_inline.test_table_1960000 AS citus_table_alias (key, value) SELECT key, value FROM (SELECT test_table.key, test_table.value, test_table.other_value FROM cte_inline.test_table_1960000 test_table) fist_table_cte WHERE (key IS NOT NULL)
+DEBUG:  distributed statement: INSERT INTO cte_inline.test_table_1960001 AS citus_table_alias (key, value) SELECT key, value FROM (SELECT test_table.key, test_table.value, test_table.other_value FROM cte_inline.test_table_1960001 test_table) fist_table_cte WHERE (key IS NOT NULL)
+DEBUG:  distributed statement: INSERT INTO cte_inline.test_table_1960002 AS citus_table_alias (key, value) SELECT key, value FROM (SELECT test_table.key, test_table.value, test_table.other_value FROM cte_inline.test_table_1960002 test_table) fist_table_cte WHERE (key IS NOT NULL)
+DEBUG:  distributed statement: INSERT INTO cte_inline.test_table_1960003 AS citus_table_alias (key, value) SELECT key, value FROM (SELECT test_table.key, test_table.value, test_table.other_value FROM cte_inline.test_table_1960003 test_table) fist_table_cte WHERE (key IS NOT NULL)
 -- update/delete/modifying ctes
 -- we don't support any cte inlining in modifications
 -- queries and modifying CTEs

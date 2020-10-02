@@ -2029,7 +2029,7 @@ Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
         Node: host=localhost port=xxxxx dbname=regression
         ->  Insert on explain_analyze_test_570009 citus_table_alias (actual rows=0 loops=1)
               ->  Seq Scan on explain_analyze_test_570009 explain_analyze_test (actual rows=1 loops=1)
-                    Filter: ((worker_hash(a) >= '-2147483648'::integer) AND (worker_hash(a) <= '-1073741825'::integer))
+                    Filter: (a IS NOT NULL)
 ROLLBACK;
 DROP TABLE explain_analyze_test;
 -- test EXPLAIN ANALYZE works fine with primary keys
@@ -2366,7 +2366,7 @@ Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
                     Node: host=localhost port=xxxxx dbname=regression
                     ->  Insert on dist_table_570017 citus_table_alias (actual rows=8 loops=1)
                           ->  Seq Scan on dist_table_570017 dist_table (actual rows=8 loops=1)
-                                Filter: ((worker_hash(a) >= '-2147483648'::integer) AND (worker_hash(a) <= '-1073741825'::integer))
+                                Filter: (a IS NOT NULL)
   ->  Distributed Subplan XXX_2
         Intermediate Data Size: 150 bytes
         Result destination: Write locally
@@ -2820,7 +2820,7 @@ Custom Scan (Citus Adaptive)
         Node: host=localhost port=xxxxx dbname=regression
         ->  Insert on simple_570026 citus_table_alias
               ->  Seq Scan on simple_570026 simple
-                    Filter: ((name = ANY ('{x,y}'::text[])) AND (worker_hash(id) >= '-2147483648'::integer) AND (worker_hash(id) <= '-1'::integer))
+                    Filter: ((id IS NOT NULL) AND (name = ANY ('{x,y}'::text[])))
 EXPLAIN :default_analyze_flags EXECUTE distributed_insert_select('x', 'y');
 Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
   Task Count: 2
@@ -2829,7 +2829,7 @@ Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
         Node: host=localhost port=xxxxx dbname=regression
         ->  Insert on simple_570026 citus_table_alias (actual rows=0 loops=1)
               ->  Seq Scan on simple_570026 simple (actual rows=0 loops=1)
-                    Filter: ((name = ANY (ARRAY[$1, $2])) AND (worker_hash(id) >= '-2147483648'::integer) AND (worker_hash(id) <= '-1'::integer))
+                    Filter: ((id IS NOT NULL) AND (name = ANY (ARRAY[$1, $2])))
                     Rows Removed by Filter: 1
 deallocate distributed_insert_select;
 -- prepared cte
