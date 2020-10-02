@@ -523,14 +523,6 @@ LoadShardIntervalWithLongestShardName(Oid relationId)
 	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
 	int shardIntervalCount = cacheEntry->shardIntervalArrayLength;
 
-	/* this cannot happen, still be defensive */
-	if (shardIntervalCount == 0)
-	{
-		char *relationName = get_rel_name(relationId);
-		ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
-						errmsg("relation %s has no shards", relationName)));
-	}
-
 	int maxShardIndex = shardIntervalCount - 1;
 	uint64 largestShardId = INVALID_SHARD_ID;
 

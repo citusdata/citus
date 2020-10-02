@@ -235,6 +235,15 @@ SwitchToSequentialExecutionIfIndexNameTooLong(Oid relationId, Oid namespaceId,
 		return;
 	}
 
+	if (ShardIntervalCount(relationId) == 0)
+	{
+		/*
+		 * Relation has no shards, so we cannot run into "long shard index
+		 * name" issue.
+		 */
+		return;
+	}
+
 	char *indexName =
 		GenerateLongestShardPartitionIndexName(relationId, namespaceId,
 											   createIndexStatement);
