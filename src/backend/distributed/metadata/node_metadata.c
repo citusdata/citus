@@ -41,6 +41,7 @@
 #include "distributed/resource_lock.h"
 #include "distributed/shardinterval_utils.h"
 #include "distributed/shared_connection_stats.h"
+#include "distributed/string_utils.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_transaction.h"
@@ -101,6 +102,7 @@ static void SetUpDistributedTableDependencies(WorkerNode *workerNode);
 static WorkerNode * TupleToWorkerNode(TupleDesc tupleDescriptor, HeapTuple heapTuple);
 static void PropagateNodeWideObjects(WorkerNode *newWorkerNode);
 static WorkerNode * ModifiableWorkerNode(const char *nodeName, int32 nodePort);
+static void SetLockTimeoutLocally(int32 lock_cooldown);
 static void UpdateNodeLocation(int32 nodeId, char *newNodeName, int32 newNodePort);
 static bool UnsetMetadataSyncedForAll(void);
 static void ErrorIfCoordinatorMetadataSetFalse(WorkerNode *workerNode, Datum value,
@@ -757,6 +759,24 @@ master_update_node(PG_FUNCTION_ARGS)
 		if (force)
 		{
 			handle = StartLockAcquireHelperBackgroundWorker(MyProcPid, lock_cooldown);
+			if (!handle)
+			{
+				/*
+				 * We failed to start a background worker, which probably means that we exceeded
+				 * max_worker_processes, and this is unlikely to be resolved by retrying. We do not want
+				 * to repeatedly throw an error because if master_update_node is called to complete a
+				 * failover then finishing is the only way to bring the cluster back up. Therefore we
+				 * give up on killing other backends and simply wait for the lock. We do set
+				 * lock_timeout to lock_cooldown, because we don't want to wait forever to get a lock.
+				 */
+				SetLockTimeoutLocally(lock_cooldown);
+				ereport(WARNING, (errmsg(
+									  "could not start background worker to kill backends with conflicting"
+									  " locks to force the update. Degrading to acquiring locks "
+									  "with a lock time out."),
+								  errhint(
+									  "Increasing max_worker_processes might help.")));
+			}
 		}
 
 		placementList = AllShardPlacementsOnNodeGroup(workerNode->groupId);
@@ -804,6 +824,19 @@ master_update_node(PG_FUNCTION_ARGS)
 	TransactionModifiedNodeMetadata = true;
 
 	PG_RETURN_VOID();
+}
+
+
+/*
+ * SetLockTimeoutLocally sets the lock_timeout to the given value.
+ * This setting is local.
+ */
+static void
+SetLockTimeoutLocally(int32 lockCooldown)
+{
+	set_config_option("lock_timeout", ConvertIntToString(lockCooldown),
+					  (superuser() ? PGC_SUSET : PGC_USERSET), PGC_S_SESSION,
+					  GUC_ACTION_LOCAL, true, 0, false);
 }
 
 

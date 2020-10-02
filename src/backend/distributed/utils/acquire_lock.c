@@ -94,9 +94,7 @@ StartLockAcquireHelperBackgroundWorker(int backendToHelp, int32 lock_cooldown)
 
 	if (!RegisterDynamicBackgroundWorker(&worker, &handle))
 	{
-		ereport(ERROR, (errmsg("could not start lock acquiring background worker to "
-							   "force the update"),
-						errhint("Increasing max_worker_processes might help.")));
+		return NULL;
 	}
 
 	MemoryContextCallback *workerCleanup = palloc0(sizeof(MemoryContextCallback));
