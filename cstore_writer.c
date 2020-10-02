@@ -45,7 +45,7 @@ static void UpdateBlockSkipNodeMinMax(ColumnBlockSkipNode *blockSkipNode,
 									  int columnTypeLength, Oid columnCollation,
 									  FmgrInfo *comparisonFunction);
 static Datum DatumCopy(Datum datum, bool datumTypeByValue, int datumTypeLength);
-static void AppendStripeMetadata(TableMetadata *tableMetadata,
+static void AppendStripeMetadata(DataFileMetadata *datafileMetadata,
 								 StripeMetadata stripeMetadata);
 static StringInfo CopyStringInfo(StringInfo sourceString);
 
@@ -64,7 +64,7 @@ CStoreBeginWrite(Relation relation,
 				 TupleDesc tupleDescriptor)
 {
 	TableWriteState *writeState = NULL;
-	TableMetadata *tableMetadata = NULL;
+	DataFileMetadata *datafileMetadata = NULL;
 	FmgrInfo **comparisonFunctionArray = NULL;
 	MemoryContext stripeWriteContext = NULL;
 	uint64 currentFileOffset = 0;
@@ -75,18 +75,18 @@ CStoreBeginWrite(Relation relation,
 	uint64 currentStripeId = 0;
 	Oid relNode = relation->rd_node.relNode;
 
-	tableMetadata = ReadTableMetadata(relNode);
+	datafileMetadata = ReadDataFileMetadata(relNode);
 
 	/*
 	 * If stripeMetadataList is not empty, jump to the position right after
 	 * the last position.
 	 */
-	if (tableMetadata->stripeMetadataList != NIL)
+	if (datafileMetadata->stripeMetadataList != NIL)
 	{
 		StripeMetadata *lastStripe = NULL;
 		uint64 lastStripeSize = 0;
 
-		lastStripe = llast(tableMetadata->stripeMetadataList);
+		lastStripe = llast(datafileMetadata->stripeMetadataList);
 		lastStripeSize += lastStripe->dataLength;
 
 		currentFileOffset = lastStripe->fileOffset + lastStripeSize;
@@ -129,7 +129,7 @@ CStoreBeginWrite(Relation relation,
 
 	writeState = palloc0(sizeof(TableWriteState));
 	writeState->relation = relation;
-	writeState->tableMetadata = tableMetadata;
+	writeState->datafileMetadata = datafileMetadata;
 	writeState->compressionType = compressionType;
 	writeState->stripeMaxRowCount = stripeMaxRowCount;
 	writeState->blockRowCount = blockRowCount;
@@ -164,7 +164,7 @@ CStoreWriteRow(TableWriteState *writeState, Datum *columnValues, bool *columnNul
 	StripeBuffers *stripeBuffers = writeState->stripeBuffers;
 	StripeSkipList *stripeSkipList = writeState->stripeSkipList;
 	uint32 columnCount = writeState->tupleDescriptor->natts;
-	TableMetadata *tableMetadata = writeState->tableMetadata;
+	DataFileMetadata *datafileMetadata = writeState->datafileMetadata;
 	const uint32 blockRowCount = writeState->blockRowCount;
 	BlockData *blockData = writeState->blockData;
 	MemoryContext oldContext = MemoryContextSwitchTo(writeState->stripeWriteContext);
@@ -254,7 +254,7 @@ CStoreWriteRow(TableWriteState *writeState, Datum *columnValues, bool *columnNul
 		MemoryContextSwitchTo(oldContext);
 		InsertStripeMetadataRow(writeState->relation->rd_node.relNode,
 								&stripeMetadata);
-		AppendStripeMetadata(tableMetadata, stripeMetadata);
+		AppendStripeMetadata(datafileMetadata, stripeMetadata);
 	}
 	else
 	{
@@ -284,11 +284,11 @@ CStoreEndWrite(TableWriteState *writeState)
 		MemoryContextSwitchTo(oldContext);
 		InsertStripeMetadataRow(writeState->relation->rd_node.relNode,
 								&stripeMetadata);
-		AppendStripeMetadata(writeState->tableMetadata, stripeMetadata);
+		AppendStripeMetadata(writeState->datafileMetadata, stripeMetadata);
 	}
 
 	MemoryContextDelete(writeState->stripeWriteContext);
-	list_free_deep(writeState->tableMetadata->stripeMetadataList);
+	list_free_deep(writeState->datafileMetadata->stripeMetadataList);
 	pfree(writeState->comparisonFunctionArray);
 	FreeBlockData(writeState->blockData);
 	pfree(writeState);
@@ -791,13 +791,13 @@ DatumCopy(Datum datum, bool datumTypeByValue, int datumTypeLength)
  * table footer's stripeMetadataList.
  */
 static void
-AppendStripeMetadata(TableMetadata *tableMetadata, StripeMetadata stripeMetadata)
+AppendStripeMetadata(DataFileMetadata *datafileMetadata, StripeMetadata stripeMetadata)
 {
 	StripeMetadata *stripeMetadataCopy = palloc0(sizeof(StripeMetadata));
 	memcpy(stripeMetadataCopy, &stripeMetadata, sizeof(StripeMetadata));
 
-	tableMetadata->stripeMetadataList = lappend(tableMetadata->stripeMetadataList,
-												stripeMetadataCopy);
+	datafileMetadata->stripeMetadataList = lappend(datafileMetadata->stripeMetadataList,
+												   stripeMetadataCopy);
 }
 
 

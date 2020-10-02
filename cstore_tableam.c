@@ -443,12 +443,13 @@ cstore_relation_set_new_filenode(Relation rel,
 								 MultiXactId *minmulti)
 {
 	SMgrRelation srel;
+	CStoreOptions *options = CStoreTableAMGetOptions();
 
 	Assert(persistence == RELPERSISTENCE_PERMANENT);
 	*freezeXid = RecentXmin;
 	*minmulti = GetOldestMultiXactId();
 	srel = RelationCreateStorage(*newrnode, persistence);
-	InitializeCStoreTableFile(newrnode->relNode, CStoreTableAMGetOptions());
+	InitCStoreDataFileMetadata(newrnode->relNode, options->blockRowCount);
 	smgrclose(srel);
 }
 
@@ -686,7 +687,7 @@ CStoreTableAMObjectAccessHook(ObjectAccessType access, Oid classId, Oid objectId
 		 * tableam tables storage is managed by postgres.
 		 */
 		Relation rel = table_open(objectId, AccessExclusiveLock);
-		DeleteTableMetadataRowIfExists(rel->rd_node.relNode);
+		DeleteDataFileMetadataRowIfExists(rel->rd_node.relNode);
 
 		/* keep the lock since we did physical changes to the relation */
 		table_close(rel, NoLock);

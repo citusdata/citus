@@ -99,14 +99,3 @@ ParseCompressionType(const char *compressionTypeString)
 
 	return compressionType;
 }
-
-
-/*
- * InitializeCStoreTableFile initializes metadata for the given relation
- * file node.
- */
-void
-InitializeCStoreTableFile(Oid relNode, CStoreOptions *cstoreOptions)
-{
-	InitCStoreTableMetadata(relNode, cstoreOptions->blockRowCount);
-}

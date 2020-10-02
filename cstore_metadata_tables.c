@@ -45,12 +45,12 @@ typedef struct
 
 static Oid CStoreStripesRelationId(void);
 static Oid CStoreStripesIndexRelationId(void);
-static Oid CStoreTablesRelationId(void);
-static Oid CStoreTablesIndexRelationId(void);
+static Oid CStoreDataFilesRelationId(void);
+static Oid CStoreDataFilesIndexRelationId(void);
 static Oid CStoreSkipNodesRelationId(void);
 static Oid CStoreSkipNodesIndexRelationId(void);
 static Oid CStoreNamespaceId(void);
-static bool ReadCStoreTables(Oid relfilenode, uint64 *blockRowCount);
+static bool ReadCStoreDataFiles(Oid relfilenode, uint64 *blockRowCount);
 static ModifyState * StartModifyRelation(Relation rel);
 static void InsertTupleAndEnforceConstraints(ModifyState *state, Datum *values,
 											 bool *nulls);
@@ -61,11 +61,11 @@ static bytea * DatumToBytea(Datum value, Form_pg_attribute attrForm);
 static Datum ByteaToDatum(bytea *bytes, Form_pg_attribute attrForm);
 
 /* constants for cstore_table */
-#define Natts_cstore_tables 4
-#define Anum_cstore_tables_relfilenode 1
-#define Anum_cstore_tables_block_row_count 2
-#define Anum_cstore_tables_version_major 3
-#define Anum_cstore_tables_version_minor 4
+#define Natts_cstore_data_files 4
+#define Anum_cstore_data_files_relfilenode 1
+#define Anum_cstore_data_files_block_row_count 2
+#define Anum_cstore_data_files_version_major 3
+#define Anum_cstore_data_files_version_minor 4
 
 /* constants for cstore_stripe */
 #define Natts_cstore_stripes 8
@@ -95,35 +95,36 @@ static Datum ByteaToDatum(bytea *bytes, Form_pg_attribute attrForm);
 
 
 /*
- * InitCStoreTableMetadata adds a record for the given relation in cstore_table.
+ * InitCStoreDataFileMetadata adds a record for the given relfilenode
+ * in cstore_data_files.
  */
 void
-InitCStoreTableMetadata(Oid relfilenode, int blockRowCount)
+InitCStoreDataFileMetadata(Oid relfilenode, int blockRowCount)
 {
-	Oid cstoreTablesOid = InvalidOid;
-	Relation cstoreTables = NULL;
+	Oid cstoreDataFilesOid = InvalidOid;
+	Relation cstoreDataFiles = NULL;
 	ModifyState *modifyState = NULL;
 
-	bool nulls[Natts_cstore_tables] = { 0 };
-	Datum values[Natts_cstore_tables] = {
+	bool nulls[Natts_cstore_data_files] = { 0 };
+	Datum values[Natts_cstore_data_files] = {
 		ObjectIdGetDatum(relfilenode),
 		Int32GetDatum(blockRowCount),
 		Int32GetDatum(CSTORE_VERSION_MAJOR),
 		Int32GetDatum(CSTORE_VERSION_MINOR)
 	};
 
-	DeleteTableMetadataRowIfExists(relfilenode);
+	DeleteDataFileMetadataRowIfExists(relfilenode);
 
-	cstoreTablesOid = CStoreTablesRelationId();
-	cstoreTables = heap_open(cstoreTablesOid, RowExclusiveLock);
+	cstoreDataFilesOid = CStoreDataFilesRelationId();
+	cstoreDataFiles = heap_open(cstoreDataFilesOid, RowExclusiveLock);
 
-	modifyState = StartModifyRelation(cstoreTables);
+	modifyState = StartModifyRelation(cstoreDataFiles);
 	InsertTupleAndEnforceConstraints(modifyState, values, nulls);
 	FinishModifyRelation(modifyState);
 
 	CommandCounterIncrement();
 
-	heap_close(cstoreTables, NoLock);
+	heap_close(cstoreDataFiles, NoLock);
 }
 
 
@@ -338,11 +339,11 @@ InsertStripeMetadataRow(Oid relfilenode, StripeMetadata *stripe)
 
 
 /*
- * ReadTableMetadata constructs TableMetadata for a given relfilenode by reading
- * from cstore_tables and cstore_stripes.
+ * ReadDataFileMetadata constructs DataFileMetadata for a given relfilenode by reading
+ * from cstore_data_files and cstore_stripes.
  */
-TableMetadata *
-ReadTableMetadata(Oid relfilenode)
+DataFileMetadata *
+ReadDataFileMetadata(Oid relfilenode)
 {
 	Oid cstoreStripesOid = InvalidOid;
 	Relation cstoreStripes = NULL;
@@ -353,8 +354,8 @@ ReadTableMetadata(Oid relfilenode)
 	HeapTuple heapTuple;
 	bool found = false;
 
-	TableMetadata *tableMetadata = palloc0(sizeof(TableMetadata));
-	found = ReadCStoreTables(relfilenode, &tableMetadata->blockRowCount);
+	DataFileMetadata *datafileMetadata = palloc0(sizeof(DataFileMetadata));
+	found = ReadCStoreDataFiles(relfilenode, &datafileMetadata->blockRowCount);
 	if (!found)
 	{
 		ereport(ERROR, (errmsg("Relfilenode %d doesn't belong to a cstore table.",
@@ -394,40 +395,41 @@ ReadTableMetadata(Oid relfilenode)
 		stripeMetadata->rowCount = DatumGetInt64(
 			datumArray[Anum_cstore_stripes_row_count - 1]);
 
-		tableMetadata->stripeMetadataList = lappend(tableMetadata->stripeMetadataList,
-													stripeMetadata);
+		datafileMetadata->stripeMetadataList = lappend(
+			datafileMetadata->stripeMetadataList,
+			stripeMetadata);
 	}
 
 	systable_endscan_ordered(scanDescriptor);
 	index_close(index, NoLock);
 	heap_close(cstoreStripes, NoLock);
 
-	return tableMetadata;
+	return datafileMetadata;
 }
 
 
 /*
- * ReadCStoreTables reads corresponding record from cstore_tables. Returns false if
- * table was not found in cstore_tables.
+ * ReadCStoreDataFiles reads corresponding record from cstore_data_files. Returns
+ * false if table was not found in cstore_data_files.
  */
 static bool
-ReadCStoreTables(Oid relfilenode, uint64 *blockRowCount)
+ReadCStoreDataFiles(Oid relfilenode, uint64 *blockRowCount)
 {
 	bool found = false;
-	Oid cstoreTablesOid = InvalidOid;
-	Relation cstoreTables = NULL;
+	Oid cstoreDataFilesOid = InvalidOid;
+	Relation cstoreDataFiles = NULL;
 	Relation index = NULL;
 	TupleDesc tupleDescriptor = NULL;
 	ScanKeyData scanKey[1];
 	SysScanDesc scanDescriptor = NULL;
 	HeapTuple heapTuple = NULL;
 
-	ScanKeyInit(&scanKey[0], Anum_cstore_tables_relfilenode,
+	ScanKeyInit(&scanKey[0], Anum_cstore_data_files_relfilenode,
 				BTEqualStrategyNumber, F_OIDEQ, Int32GetDatum(relfilenode));
 
-	cstoreTablesOid = CStoreTablesRelationId();
-	cstoreTables = try_relation_open(cstoreTablesOid, AccessShareLock);
-	if (cstoreTables == NULL)
+	cstoreDataFilesOid = CStoreDataFilesRelationId();
+	cstoreDataFiles = try_relation_open(cstoreDataFilesOid, AccessShareLock);
+	if (cstoreDataFiles == NULL)
 	{
 		/*
 		 * Extension has been dropped. This can be called while
@@ -436,77 +438,77 @@ ReadCStoreTables(Oid relfilenode, uint64 *blockRowCount)
 		return false;
 	}
 
-	index = try_relation_open(CStoreTablesIndexRelationId(), AccessShareLock);
+	index = try_relation_open(CStoreDataFilesIndexRelationId(), AccessShareLock);
 	if (index == NULL)
 	{
-		heap_close(cstoreTables, NoLock);
+		heap_close(cstoreDataFiles, NoLock);
 
 		/* extension has been dropped */
 		return false;
 	}
 
-	tupleDescriptor = RelationGetDescr(cstoreTables);
+	tupleDescriptor = RelationGetDescr(cstoreDataFiles);
 
-	scanDescriptor = systable_beginscan_ordered(cstoreTables, index, NULL, 1, scanKey);
+	scanDescriptor = systable_beginscan_ordered(cstoreDataFiles, index, NULL, 1, scanKey);
 
 	heapTuple = systable_getnext(scanDescriptor);
 	if (HeapTupleIsValid(heapTuple))
 	{
-		Datum datumArray[Natts_cstore_tables];
-		bool isNullArray[Natts_cstore_tables];
+		Datum datumArray[Natts_cstore_data_files];
+		bool isNullArray[Natts_cstore_data_files];
 		heap_deform_tuple(heapTuple, tupleDescriptor, datumArray, isNullArray);
-		*blockRowCount = DatumGetInt32(datumArray[Anum_cstore_tables_block_row_count -
+		*blockRowCount = DatumGetInt32(datumArray[Anum_cstore_data_files_block_row_count -
 												  1]);
 		found = true;
 	}
 
 	systable_endscan_ordered(scanDescriptor);
 	index_close(index, NoLock);
-	heap_close(cstoreTables, NoLock);
+	heap_close(cstoreDataFiles, NoLock);
 
 	return found;
 }
 
 
 /*
- * DeleteTableMetadataRowIfExists removes the row with given relfilenode from cstore_stripes.
+ * DeleteDataFileMetadataRowIfExists removes the row with given relfilenode from cstore_stripes.
  */
 void
-DeleteTableMetadataRowIfExists(Oid relfilenode)
+DeleteDataFileMetadataRowIfExists(Oid relfilenode)
 {
-	Oid cstoreTablesOid = InvalidOid;
-	Relation cstoreTables = NULL;
+	Oid cstoreDataFilesOid = InvalidOid;
+	Relation cstoreDataFiles = NULL;
 	Relation index = NULL;
 	ScanKeyData scanKey[1];
 	SysScanDesc scanDescriptor = NULL;
 	HeapTuple heapTuple = NULL;
 
-	ScanKeyInit(&scanKey[0], Anum_cstore_tables_relfilenode,
+	ScanKeyInit(&scanKey[0], Anum_cstore_data_files_relfilenode,
 				BTEqualStrategyNumber, F_OIDEQ, Int32GetDatum(relfilenode));
 
-	cstoreTablesOid = CStoreTablesRelationId();
-	cstoreTables = try_relation_open(cstoreTablesOid, AccessShareLock);
-	if (cstoreTables == NULL)
+	cstoreDataFilesOid = CStoreDataFilesRelationId();
+	cstoreDataFiles = try_relation_open(cstoreDataFilesOid, AccessShareLock);
+	if (cstoreDataFiles == NULL)
 	{
 		/* extension has been dropped */
 		return;
 	}
 
-	index = index_open(CStoreTablesIndexRelationId(), AccessShareLock);
+	index = index_open(CStoreDataFilesIndexRelationId(), AccessShareLock);
 
-	scanDescriptor = systable_beginscan_ordered(cstoreTables, index, NULL, 1, scanKey);
+	scanDescriptor = systable_beginscan_ordered(cstoreDataFiles, index, NULL, 1, scanKey);
 
 	heapTuple = systable_getnext(scanDescriptor);
 	if (HeapTupleIsValid(heapTuple))
 	{
-		ModifyState *modifyState = StartModifyRelation(cstoreTables);
+		ModifyState *modifyState = StartModifyRelation(cstoreDataFiles);
 		DeleteTupleAndEnforceConstraints(modifyState, heapTuple);
 		FinishModifyRelation(modifyState);
 	}
 
 	systable_endscan_ordered(scanDescriptor);
 	index_close(index, NoLock);
-	heap_close(cstoreTables, NoLock);
+	heap_close(cstoreDataFiles, NoLock);
 }
 
 
@@ -711,24 +713,24 @@ CStoreStripesIndexRelationId(void)
 
 
 /*
- * CStoreTablesRelationId returns relation id of cstore_tables.
+ * CStoreDataFilesRelationId returns relation id of cstore_data_files.
  * TODO: should we cache this similar to citus?
  */
 static Oid
-CStoreTablesRelationId(void)
+CStoreDataFilesRelationId(void)
 {
-	return get_relname_relid("cstore_tables", CStoreNamespaceId());
+	return get_relname_relid("cstore_data_files", CStoreNamespaceId());
 }
 
 
 /*
- * CStoreTablesIndexRelationId returns relation id of cstore_tables_idx.
+ * CStoreDataFilesIndexRelationId returns relation id of cstore_data_files_pkey.
  * TODO: should we cache this similar to citus?
  */
 static Oid
-CStoreTablesIndexRelationId(void)
+CStoreDataFilesIndexRelationId(void)
 {
-	return get_relname_relid("cstore_tables_pkey", CStoreNamespaceId());
+	return get_relname_relid("cstore_data_files_pkey", CStoreNamespaceId());
 }
 
 

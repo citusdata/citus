@@ -84,11 +84,11 @@ CStoreBeginRead(Relation relation, TupleDesc tupleDescriptor,
 				List *projectedColumnList, List *whereClauseList)
 {
 	TableReadState *readState = NULL;
-	TableMetadata *tableMetadata = NULL;
+	DataFileMetadata *datafileMetadata = NULL;
 	MemoryContext stripeReadContext = NULL;
 	Oid relNode = relation->rd_node.relNode;
 
-	tableMetadata = ReadTableMetadata(relNode);
+	datafileMetadata = ReadDataFileMetadata(relNode);
 
 	/*
 	 * We allocate all stripe specific data in the stripeReadContext, and reset
@@ -101,7 +101,7 @@ CStoreBeginRead(Relation relation, TupleDesc tupleDescriptor,
 
 	readState = palloc0(sizeof(TableReadState));
 	readState->relation = relation;
-	readState->tableMetadata = tableMetadata;
+	readState->datafileMetadata = datafileMetadata;
 	readState->projectedColumnList = projectedColumnList;
 	readState->whereClauseList = whereClauseList;
 	readState->stripeBuffers = NULL;
@@ -139,7 +139,7 @@ CStoreReadNextRow(TableReadState *readState, Datum *columnValues, bool *columnNu
 	{
 		StripeBuffers *stripeBuffers = NULL;
 		StripeMetadata *stripeMetadata = NULL;
-		List *stripeMetadataList = readState->tableMetadata->stripeMetadataList;
+		List *stripeMetadataList = readState->datafileMetadata->stripeMetadataList;
 		uint32 stripeCount = list_length(stripeMetadataList);
 
 		/* if we have read all stripes, return false */
@@ -229,8 +229,8 @@ void
 CStoreEndRead(TableReadState *readState)
 {
 	MemoryContextDelete(readState->stripeReadContext);
-	list_free_deep(readState->tableMetadata->stripeMetadataList);
-	pfree(readState->tableMetadata);
+	list_free_deep(readState->datafileMetadata->stripeMetadataList);
+	pfree(readState->datafileMetadata);
 	pfree(readState);
 }
 
@@ -305,13 +305,13 @@ FreeBlockData(BlockData *blockData)
 uint64
 CStoreTableRowCount(Relation relation)
 {
-	TableMetadata *tableMetadata = NULL;
+	DataFileMetadata *datafileMetadata = NULL;
 	ListCell *stripeMetadataCell = NULL;
 	uint64 totalRowCount = 0;
 
-	tableMetadata = ReadTableMetadata(relation->rd_node.relNode);
+	datafileMetadata = ReadDataFileMetadata(relation->rd_node.relNode);
 
-	foreach(stripeMetadataCell, tableMetadata->stripeMetadataList)
+	foreach(stripeMetadataCell, datafileMetadata->stripeMetadataList)
 	{
 		StripeMetadata *stripeMetadata = (StripeMetadata *) lfirst(stripeMetadataCell);
 		totalRowCount += stripeMetadata->rowCount;

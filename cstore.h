@@ -87,12 +87,12 @@ typedef struct StripeMetadata
 } StripeMetadata;
 
 
-/* TableMetadata represents the metadata of a cstore file. */
-typedef struct TableMetadata
+/* DataFileMetadata represents the metadata of a cstore file. */
+typedef struct DataFileMetadata
 {
 	List *stripeMetadataList;
 	uint64 blockRowCount;
-} TableMetadata;
+} DataFileMetadata;
 
 
 /* ColumnBlockSkipNode contains statistics for a ColumnBlockData. */
@@ -192,7 +192,7 @@ typedef struct StripeBuffers
 /* TableReadState represents state of a cstore file read operation. */
 typedef struct TableReadState
 {
-	TableMetadata *tableMetadata;
+	DataFileMetadata *datafileMetadata;
 	StripeMetadata *currentStripeMetadata;
 	TupleDesc tupleDescriptor;
 	Relation relation;
@@ -217,7 +217,7 @@ typedef struct TableReadState
 /* TableWriteState represents state of a cstore file write operation. */
 typedef struct TableWriteState
 {
-	TableMetadata *tableMetadata;
+	DataFileMetadata *datafileMetadata;
 	CompressionType compressionType;
 	TupleDesc tupleDescriptor;
 	FmgrInfo **comparisonFunctionArray;
@@ -248,7 +248,6 @@ extern int cstore_block_row_count;
 extern void cstore_init(void);
 
 extern CompressionType ParseCompressionType(const char *compressionTypeString);
-extern void InitializeCStoreTableFile(Oid relNode, CStoreOptions *cstoreOptions);
 
 /* Function declarations for writing to a cstore file */
 extern TableWriteState * CStoreBeginWrite(Relation relation,
@@ -281,11 +280,10 @@ extern bool CompressBuffer(StringInfo inputBuffer, StringInfo outputBuffer,
 extern StringInfo DecompressBuffer(StringInfo buffer, CompressionType compressionType);
 
 /* cstore_metadata_tables.c */
-extern bool IsCStoreStorage(Oid relfilenode);
-extern void DeleteTableMetadataRowIfExists(Oid relfilenode);
-extern void InitCStoreTableMetadata(Oid relfilenode, int blockRowCount);
+extern void DeleteDataFileMetadataRowIfExists(Oid relfilenode);
+extern void InitCStoreDataFileMetadata(Oid relfilenode, int blockRowCount);
 extern void InsertStripeMetadataRow(Oid relfilenode, StripeMetadata *stripe);
-extern TableMetadata * ReadTableMetadata(Oid relfilenode);
+extern DataFileMetadata * ReadDataFileMetadata(Oid relfilenode);
 extern void SaveStripeSkipList(Oid relfilenode, uint64 stripe,
 							   StripeSkipList *stripeSkipList,
 							   TupleDesc tupleDescriptor);

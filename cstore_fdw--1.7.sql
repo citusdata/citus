@@ -31,7 +31,7 @@ RETURNS bigint
 AS 'MODULE_PATHNAME'
 LANGUAGE C STRICT;
 
-CREATE TABLE cstore_tables (
+CREATE TABLE cstore_data_files (
     relfilenode oid NOT NULL,
     block_row_count int NOT NULL,
     version_major bigint NOT NULL,
@@ -39,7 +39,7 @@ CREATE TABLE cstore_tables (
     PRIMARY KEY (relfilenode)
 ) WITH (user_catalog_table = true);
 
-COMMENT ON TABLE cstore_tables IS 'CStore table wide metadata';
+COMMENT ON TABLE cstore_data_files IS 'CStore data file wide metadata';
 
 CREATE TABLE cstore_stripes (
     relfilenode oid NOT NULL,
@@ -51,10 +51,10 @@ CREATE TABLE cstore_stripes (
     block_row_count int NOT NULL,
     row_count bigint NOT NULL,
     PRIMARY KEY (relfilenode, stripe),
-    FOREIGN KEY (relfilenode) REFERENCES cstore_tables(relfilenode) ON DELETE CASCADE INITIALLY DEFERRED
+    FOREIGN KEY (relfilenode) REFERENCES cstore_data_files(relfilenode) ON DELETE CASCADE INITIALLY DEFERRED
 ) WITH (user_catalog_table = true);
 
-COMMENT ON TABLE cstore_tables IS 'CStore per stripe metadata';
+COMMENT ON TABLE cstore_stripes IS 'CStore per stripe metadata';
 
 CREATE TABLE cstore_skipnodes (
     relfilenode oid NOT NULL,
@@ -73,4 +73,4 @@ CREATE TABLE cstore_skipnodes (
     FOREIGN KEY (relfilenode, stripe) REFERENCES cstore_stripes(relfilenode, stripe) ON DELETE CASCADE INITIALLY DEFERRED
 ) WITH (user_catalog_table = true);
 
-COMMENT ON TABLE cstore_tables IS 'CStore per block metadata';
+COMMENT ON TABLE cstore_skipnodes IS 'CStore per block metadata';

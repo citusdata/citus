@@ -267,16 +267,8 @@ cstore_ddl_event_end_trigger(PG_FUNCTION_ARGS)
 			Oid relationId = RangeVarGetRelid(createStatement->base.relation,
 											  AccessShareLock, false);
 			Relation relation = cstore_fdw_open(relationId, AccessExclusiveLock);
-
-			/*
-			 * Make sure database directory exists before creating a table.
-			 * This is necessary when a foreign server is created inside
-			 * a template database and a new database is created out of it.
-			 * We have no chance to hook into server creation to create data
-			 * directory for it during database creation time.
-			 */
-			InitializeCStoreTableFile(relation->rd_node.relNode,
-									  CStoreGetOptions(relationId));
+			CStoreOptions *options = CStoreGetOptions(relationId);
+			InitCStoreDataFileMetadata(relation->rd_node.relNode, options->blockRowCount);
 			heap_close(relation, AccessExclusiveLock);
 		}
 	}
@@ -369,6 +361,7 @@ CStoreProcessUtility(Node * parseTree, const char * queryString,
 		CALL_PREVIOUS_UTILITY(parseTree, queryString, context, paramListInfo,
 							  destReceiver, completionTag);
 	}
+
 	/* handle other utility statements */
 	else
 	{
@@ -782,12 +775,12 @@ TruncateCStoreTables(List *cstoreRelationList)
 	{
 		Relation relation = (Relation) lfirst(relationCell);
 		Oid relationId = relation->rd_id;
+		CStoreOptions *options = CStoreGetOptions(relationId);
 
 		Assert(IsCStoreFdwTable(relationId));
 
 		FdwNewRelFileNode(relation);
-		InitializeCStoreTableFile(relation->rd_node.relNode,
-								  CStoreGetOptions(relationId));
+		InitCStoreDataFileMetadata(relation->rd_node.relNode, options->blockRowCount);
 	}
 }
 
@@ -2225,7 +2218,7 @@ CStoreFdwObjectAccessHook(ObjectAccessType access, Oid classId, Oid objectId,
 		Relation rel = cstore_fdw_open(objectId, AccessExclusiveLock);
 		RelationOpenSmgr(rel);
 		RelationDropStorage(rel);
-		DeleteTableMetadataRowIfExists(rel->rd_node.relNode);
+		DeleteDataFileMetadataRowIfExists(rel->rd_node.relNode);
 
 		/* keep the lock since we did physical changes to the relation */
 		relation_close(rel, NoLock);
