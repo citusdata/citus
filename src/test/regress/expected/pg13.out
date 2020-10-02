@@ -170,15 +170,97 @@ SELECT create_distributed_table('test_table', 'a');
 -- we currently don't support this
 CREATE INDEX test_table_index ON test_table USING gist (b tsvector_ops(siglen = 100));
 ERROR:  citus currently doesn't support operator class parameters in indexes
+-- testing WAL
+CREATE TABLE test_wal(a int, b int);
+-- test WAL without ANALYZE, this should raise an error
+EXPLAIN (WAL) INSERT INTO test_wal VALUES(1,11);
+ERROR:  EXPLAIN option WAL requires ANALYZE
+-- test WAL working properly for router queries
+EXPLAIN (ANALYZE TRUE, WAL TRUE, COSTS FALSE, SUMMARY FALSE, BUFFERS FALSE, TIMING FALSE)
+INSERT INTO test_wal VALUES(1,11);
+                 QUERY PLAN
+---------------------------------------------------------------------
+ Insert on test_wal (actual rows=0 loops=1)
+   WAL: records=1 bytes=63
+   ->  Result (actual rows=1 loops=1)
+(3 rows)
+
+SELECT create_distributed_table('test_wal', 'a');
+NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$test_pg13.test_wal$$)
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+EXPLAIN (ANALYZE TRUE, WAL TRUE, COSTS FALSE, SUMMARY FALSE, BUFFERS FALSE, TIMING FALSE)
+INSERT INTO test_wal VALUES(2,22);
+                          QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
+   Task Count: 1
+   Tasks Shown: All
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  Insert on test_wal_65013 (actual rows=0 loops=1)
+               WAL: records=1 bytes=63
+               ->  Result (actual rows=1 loops=1)
+(8 rows)
+
+-- Test WAL working for multi-shard query
+SET citus.explain_all_tasks TO on;
+EXPLAIN (ANALYZE TRUE, WAL TRUE, COSTS FALSE, SUMMARY FALSE, BUFFERS FALSE, TIMING FALSE)
+INSERT INTO test_wal VALUES(3,33),(4,44),(5,55) RETURNING *;
+                                   QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive) (actual rows=3 loops=1)
+   Task Count: 1
+   Tuple data received from nodes: 9 bytes
+   Tasks Shown: All
+   ->  Task
+         Tuple data received from node: 9 bytes
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  Insert on test_wal_65012 citus_table_alias (actual rows=3 loops=1)
+               WAL: records=3 bytes=189
+               ->  Values Scan on "*VALUES*" (actual rows=3 loops=1)
+(10 rows)
+
+-- make sure WAL works in distributed subplans
+EXPLAIN (ANALYZE TRUE, WAL TRUE, COSTS FALSE, SUMMARY FALSE, BUFFERS FALSE, TIMING FALSE)
+WITH cte_1 AS (INSERT INTO test_wal VALUES(6,66),(7,77),(8,88) RETURNING *)
+SELECT * FROM cte_1;
+                                            QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive) (actual rows=3 loops=1)
+   ->  Distributed Subplan XXX_1
+         Intermediate Data Size: 54 bytes
+         Result destination: Write locally
+         ->  Custom Scan (Citus Adaptive) (actual rows=3 loops=1)
+               Task Count: 2
+               Tuple data received from nodes: 9 bytes
+               Tasks Shown: All
+               ->  Task
+                     Tuple data received from node: 6 bytes
+                     Node: host=localhost port=xxxxx dbname=regression
+                     ->  Insert on test_wal_65012 citus_table_alias (actual rows=2 loops=1)
+                           WAL: records=2 bytes=126
+                           ->  Values Scan on "*VALUES*" (actual rows=2 loops=1)
+               ->  Task
+                     Tuple data received from node: 3 bytes
+                     Node: host=localhost port=xxxxx dbname=regression
+                     ->  Insert on test_wal_65013 citus_table_alias (actual rows=1 loops=1)
+                           WAL: records=1 bytes=63
+                           ->  Result (actual rows=1 loops=1)
+   Task Count: 1
+   Tuple data received from nodes: 9 bytes
+   Tasks Shown: All
+   ->  Task
+         Tuple data received from node: 9 bytes
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  Function Scan on read_intermediate_result intermediate_result (actual rows=3 loops=1)
+(27 rows)
+
+SET client_min_messages TO WARNING;
 drop schema test_pg13 cascade;
-NOTICE:  drop cascades to 10 other objects
-DETAIL:  drop cascades to table dist_table
-drop cascades to table generated_col_table
-drop cascades to view v
-drop cascades to table ab
-drop cascades to table text_table
-drop cascades to function myvarcharout(myvarchar)
-drop cascades to type myvarchar
-drop cascades to function myvarcharin(cstring,oid,integer)
-drop cascades to table my_table
-drop cascades to table test_table

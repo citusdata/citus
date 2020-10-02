@@ -17,6 +17,7 @@
 #include "catalog/pg_inherits.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/colocation_utils.h"
+#include "distributed/listutils.h"
 #include "distributed/metadata_utility.h"
 #include "distributed/coordinator_protocol.h"
 #include "distributed/multi_partitioning_utils.h"
@@ -268,6 +269,33 @@ PartitionParentOid(Oid partitionOid)
 	Oid partitionParentOid = get_partition_parent(partitionOid);
 
 	return partitionParentOid;
+}
+
+
+/*
+ * LongestPartitionName is a uitility function that returns the partition
+ * name which is the longest in terms of number of characters.
+ */
+char *
+LongestPartitionName(Oid parentRelationId)
+{
+	char *longestName = NULL;
+	int longestNameLength = 0;
+	List *partitionList = PartitionList(parentRelationId);
+
+	Oid partitionRelationId = InvalidOid;
+	foreach_oid(partitionRelationId, partitionList)
+	{
+		char *partitionName = get_rel_name(partitionRelationId);
+		int partitionNameLength = strnlen(partitionName, NAMEDATALEN);
+		if (partitionNameLength > longestNameLength)
+		{
+			longestName = partitionName;
+			longestNameLength = partitionNameLength;
+		}
+	}
+
+	return longestName;
 }
 
 

@@ -83,6 +83,7 @@ typedef struct
 	bool verbose;
 	bool costs;
 	bool buffers;
+	bool wal;
 	bool timing;
 	bool summary;
 	ExplainFormat format;
@@ -91,7 +92,7 @@ typedef struct
 
 /* EXPLAIN flags of current distributed explain */
 static ExplainOptions CurrentDistributedQueryExplainOptions = {
-	0, 0, 0, 0, 0, EXPLAIN_FORMAT_TEXT
+	0, 0, 0, 0, 0, 0, EXPLAIN_FORMAT_TEXT
 };
 
 /* Result for a single remote EXPLAIN command */
@@ -904,12 +905,18 @@ BuildRemoteExplainQuery(char *queryString, ExplainState *es)
 
 	appendStringInfo(explainQuery,
 					 "EXPLAIN (ANALYZE %s, VERBOSE %s, "
-					 "COSTS %s, BUFFERS %s, TIMING %s, SUMMARY %s, "
-					 "FORMAT %s) %s",
+					 "COSTS %s, BUFFERS %s, "
+#if PG_VERSION_NUM >= PG_VERSION_13
+					 "WAL %s, "
+#endif
+					 "TIMING %s, SUMMARY %s, FORMAT %s) %s",
 					 es->analyze ? "TRUE" : "FALSE",
 					 es->verbose ? "TRUE" : "FALSE",
 					 es->costs ? "TRUE" : "FALSE",
 					 es->buffers ? "TRUE" : "FALSE",
+#if PG_VERSION_NUM >= PG_VERSION_13
+					 es->wal ? "TRUE" : "FALSE",
+#endif
 					 es->timing ? "TRUE" : "FALSE",
 					 es->summary ? "TRUE" : "FALSE",
 					 formatStr,
@@ -1005,6 +1012,9 @@ worker_save_query_explain_analyze(PG_FUNCTION_ARGS)
 
 	/* use the same defaults as NewExplainState() for following options */
 	es->buffers = ExtractFieldBoolean(explainOptions, "buffers", es->buffers);
+#if PG_VERSION_NUM >= PG_VERSION_13
+	es->wal = ExtractFieldBoolean(explainOptions, "wal", es->wal);
+#endif
 	es->costs = ExtractFieldBoolean(explainOptions, "costs", es->costs);
 	es->summary = ExtractFieldBoolean(explainOptions, "summary", es->summary);
 	es->verbose = ExtractFieldBoolean(explainOptions, "verbose", es->verbose);
@@ -1206,6 +1216,9 @@ CitusExplainOneQuery(Query *query, int cursorOptions, IntoClause *into,
 	/* save the flags of current EXPLAIN command */
 	CurrentDistributedQueryExplainOptions.costs = es->costs;
 	CurrentDistributedQueryExplainOptions.buffers = es->buffers;
+#if PG_VERSION_NUM >= PG_VERSION_13
+	CurrentDistributedQueryExplainOptions.wal = es->wal;
+#endif
 	CurrentDistributedQueryExplainOptions.verbose = es->verbose;
 	CurrentDistributedQueryExplainOptions.summary = es->summary;
 	CurrentDistributedQueryExplainOptions.timing = es->timing;
@@ -1482,11 +1495,18 @@ WrapQueryForExplainAnalyze(const char *queryString, TupleDesc tupleDesc)
 	}
 
 	StringInfo explainOptions = makeStringInfo();
-	appendStringInfo(explainOptions, "{\"verbose\": %s, \"costs\": %s, \"buffers\": %s, "
-									 "\"timing\": %s, \"summary\": %s, \"format\": \"%s\"}",
+	appendStringInfo(explainOptions,
+					 "{\"verbose\": %s, \"costs\": %s, \"buffers\": %s, "
+#if PG_VERSION_NUM >= PG_VERSION_13
+					 "\"wal\": %s, "
+#endif
+					 "\"timing\": %s, \"summary\": %s, \"format\": \"%s\"}",
 					 CurrentDistributedQueryExplainOptions.verbose ? "true" : "false",
 					 CurrentDistributedQueryExplainOptions.costs ? "true" : "false",
 					 CurrentDistributedQueryExplainOptions.buffers ? "true" : "false",
+#if PG_VERSION_NUM >= PG_VERSION_13
+					 CurrentDistributedQueryExplainOptions.wal ? "true" : "false",
+#endif
 					 CurrentDistributedQueryExplainOptions.timing ? "true" : "false",
 					 CurrentDistributedQueryExplainOptions.summary ? "true" : "false",
 					 ExplainFormatStr(CurrentDistributedQueryExplainOptions.format));
@@ -1632,7 +1652,10 @@ ExplainWorkerPlan(PlannedStmt *plannedstmt, DestReceiver *dest, ExplainState *es
 
 	if (es->buffers)
 		instrument_option |= INSTRUMENT_BUFFERS;
-
+#if PG_VERSION_NUM >= PG_VERSION_13
+	if (es->wal)
+		instrument_option |= INSTRUMENT_WAL;
+#endif
 	/*
 	 * We always collect timing for the entire statement, even when node-level
 	 * timing is off, so we don't look at es->timing here.  (We could skip
