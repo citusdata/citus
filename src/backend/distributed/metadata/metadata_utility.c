@@ -521,35 +521,28 @@ ShardInterval *
 LoadShardIntervalWithLongestShardName(Oid relationId)
 {
 	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
-	int maxShardIndex = cacheEntry->shardIntervalArrayLength - 1;
-	uint64 largestShardId = INVALID_SHARD_ID;
-
-	if (cacheEntry->hasUniformHashDistribution)
-	{
-		ShardInterval *shardInterval =
-			(cacheEntry->sortedShardIntervalArray[maxShardIndex]);
-
-		largestShardId = shardInterval->shardId;
-	}
-	else
-	{
-		int shardIndex = 0;
-		for (; shardIndex <= maxShardIndex; ++shardIndex)
-		{
-			ShardInterval *currentShardInterval =
-				cacheEntry->sortedShardIntervalArray[shardIndex];
-
-			if (largestShardId < currentShardInterval->shardId)
-			{
-				largestShardId = currentShardInterval->shardId;
-			}
-		}
-	}
+	int shardIntervalCount = cacheEntry->shardIntervalArrayLength;
 
 	/* this cannot happen, still be defensive */
-	if (largestShardId == 0)
+	if (shardIntervalCount == 0)
 	{
-		ereport(ERROR, (errmsg("unexpected shardId: %lu", largestShardId)));
+		char *relationName = get_rel_name(relationId);
+		ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
+						errmsg("relation %s has no shards", relationName)));
+	}
+
+	int maxShardIndex = shardIntervalCount - 1;
+	uint64 largestShardId = INVALID_SHARD_ID;
+
+	for (int shardIndex = 0; shardIndex <= maxShardIndex; ++shardIndex)
+	{
+		ShardInterval *currentShardInterval =
+			cacheEntry->sortedShardIntervalArray[shardIndex];
+
+		if (largestShardId < currentShardInterval->shardId)
+		{
+			largestShardId = currentShardInterval->shardId;
+		}
 	}
 
 	return LoadShardInterval(largestShardId);
