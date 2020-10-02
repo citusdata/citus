@@ -170,6 +170,11 @@ extern List * PreprocessGrantStmt(Node *node, const char *queryString);
 extern bool IsIndexRenameStmt(RenameStmt *renameStmt);
 extern List * PreprocessIndexStmt(Node *createIndexStatement,
 								  const char *createIndexCommand);
+extern char * ChooseIndexName(const char *tabname, Oid namespaceId,
+							  List *colnames, List *exclusionOpNames,
+							  bool primary, bool isconstraint);
+extern char * ChooseIndexNameAddition(List *colnames);
+extern List * ChooseIndexColumnNames(List *indexElems);
 extern List * PreprocessReindexStmt(Node *ReindexStatement,
 									const char *ReindexCommand);
 extern List * PreprocessDropIndexStmt(Node *dropIndexStatement,
