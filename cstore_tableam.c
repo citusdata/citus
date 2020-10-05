@@ -19,6 +19,7 @@
 #include "catalog/storage.h"
 #include "catalog/storage_xlog.h"
 #include "commands/progress.h"
+#include "commands/vacuum.h"
 #include "executor/executor.h"
 #include "nodes/makefuncs.h"
 #include "optimizer/plancat.h"
@@ -131,6 +132,36 @@ cstore_free_write_state()
 }
 
 
+static List *
+RelationColumnList(Relation rel)
+{
+	List *columnList = NIL;
+	TupleDesc tupdesc = RelationGetDescr(rel);
+
+	for (int i = 0; i < tupdesc->natts; i++)
+	{
+		Index varno = 0;
+		AttrNumber varattno = i + 1;
+		Oid vartype = tupdesc->attrs[i].atttypid;
+		int32 vartypmod = 0;
+		Oid varcollid = 0;
+		Index varlevelsup = 0;
+		Var *var;
+
+		if (tupdesc->attrs[i].attisdropped)
+		{
+			continue;
+		}
+
+		var = makeVar(varno, varattno, vartype, vartypmod,
+					  varcollid, varlevelsup);
+		columnList = lappend(columnList, var);
+	}
+
+	return columnList;
+}
+
+
 static const TupleTableSlotOps *
 cstore_slot_callbacks(Relation relation)
 {
@@ -157,25 +188,7 @@ cstore_beginscan(Relation relation, Snapshot snapshot,
 	scan->cs_base.rs_flags = flags;
 	scan->cs_base.rs_parallel = parallel_scan;
 
-	for (int i = 0; i < tupdesc->natts; i++)
-	{
-		Index varno = 0;
-		AttrNumber varattno = i + 1;
-		Oid vartype = tupdesc->attrs[i].atttypid;
-		int32 vartypmod = 0;
-		Oid varcollid = 0;
-		Index varlevelsup = 0;
-		Var *var;
-
-		if (tupdesc->attrs[i].attisdropped)
-		{
-			continue;
-		}
-
-		var = makeVar(varno, varattno, vartype, vartypmod,
-					  varcollid, varlevelsup);
-		columnList = lappend(columnList, var);
-	}
+	columnList = RelationColumnList(relation);
 
 	readState = CStoreBeginRead(relation, tupdesc, columnList, NULL);
 
@@ -497,6 +510,13 @@ cstore_relation_copy_data(Relation rel, const RelFileNode *newrnode)
 }
 
 
+/*
+ * cstore_relation_copy_for_cluster is called on VACUUM FULL, at which
+ * we should copy data from OldHeap to NewHeap.
+ *
+ * In general TableAM case this can also be called for the CLUSTER command
+ * which is not applicable for cstore since it doesn't support indexes.
+ */
 static void
 cstore_relation_copy_for_cluster(Relation OldHeap, Relation NewHeap,
 								 Relation OldIndex, bool use_sort,
@@ -507,7 +527,69 @@ cstore_relation_copy_for_cluster(Relation OldHeap, Relation NewHeap,
 								 double *tups_vacuumed,
 								 double *tups_recently_dead)
 {
-	elog(ERROR, "cstore_relation_copy_for_cluster not implemented");
+	TableWriteState *writeState = NULL;
+	TableReadState *readState = NULL;
+	CStoreOptions *cstoreOptions = NULL;
+	Datum *sourceValues = NULL;
+	bool *sourceNulls = NULL;
+	Datum *targetValues = NULL;
+	bool *targetNulls = NULL;
+	TupleDesc sourceDesc = RelationGetDescr(OldHeap);
+	TupleDesc targetDesc = RelationGetDescr(NewHeap);
+
+	if (OldIndex != NULL || use_sort)
+	{
+		ereport(ERROR, (errmsg("cstore_am doesn't support indexes")));
+	}
+
+	/*
+	 * copy_table_data in cluster.c assumes tuple descriptors are exactly
+	 * the same. Even dropped columns exist and are marked as attisdropped
+	 * in the target relation.
+	 */
+	Assert(sourceDesc->natts == targetDesc->natts);
+
+	cstoreOptions = CStoreTableAMGetOptions();
+
+	writeState = CStoreBeginWrite(NewHeap,
+								  cstoreOptions->compressionType,
+								  cstoreOptions->stripeRowCount,
+								  cstoreOptions->blockRowCount,
+								  targetDesc);
+
+	readState = CStoreBeginRead(OldHeap, sourceDesc, RelationColumnList(OldHeap), NULL);
+
+	sourceValues = palloc0(sourceDesc->natts * sizeof(Datum));
+	sourceNulls = palloc0(sourceDesc->natts * sizeof(bool));
+
+	targetValues = palloc0(targetDesc->natts * sizeof(Datum));
+	targetNulls = palloc0(targetDesc->natts * sizeof(bool));
+
+	*num_tuples = 0;
+
+	while (CStoreReadNextRow(readState, sourceValues, sourceNulls))
+	{
+		memset(targetNulls, true, targetDesc->natts * sizeof(bool));
+
+		for (int attrIndex = 0; attrIndex < sourceDesc->natts; attrIndex++)
+		{
+			FormData_pg_attribute *sourceAttr = TupleDescAttr(sourceDesc, attrIndex);
+
+			if (!sourceAttr->attisdropped)
+			{
+				targetNulls[attrIndex] = sourceNulls[attrIndex];
+				targetValues[attrIndex] = sourceValues[attrIndex];
+			}
+		}
+
+		CStoreWriteRow(writeState, targetValues, targetNulls);
+		(*num_tuples)++;
+	}
+
+	*tups_vacuumed = *num_tuples;
+
+	CStoreEndWrite(writeState);
+	CStoreEndRead(readState);
 }
 
 
