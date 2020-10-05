@@ -251,6 +251,19 @@ END
     close $fh;
 }
 
+sub write_settings_to_postgres_conf
+{
+    my ($pgOptions, $pgConfigPath) = @_;
+    open(my $fd, ">>", $pgConfigPath);
+
+    foreach (@$pgOptions)
+    {
+      print $fd "$_\n";
+    }
+
+    close $fd;
+}
+
 # revert changes replace_postgres() performed
 sub revert_replace_postgres
 {
@@ -370,13 +383,11 @@ for (my $workerIndex = 1; $workerIndex <= $workerCount; $workerIndex++) {
 my @pgOptions = ();
 
 # Postgres options set for the tests
-push(@pgOptions, '-c', "listen_addresses=${host}");
-# not required, and we don't necessarily have access to the default directory
-push(@pgOptions, '-c', "unix_socket_directories=");
-push(@pgOptions, '-c', "fsync=off");
+push(@pgOptions, "listen_addresses='${host}'");
+push(@pgOptions, "fsync=off");
 if (! $vanillatest)
 {
-    push(@pgOptions, '-c', "extra_float_digits=0");
+    push(@pgOptions, "extra_float_digits=0");
 }
 
 my $sharedPreloadLibraries = "citus";
@@ -398,37 +409,37 @@ if (-e $hll_control)
 {
   $sharedPreloadLibraries .= ',hll';
 }
-push(@pgOptions, '-c', "shared_preload_libraries=${sharedPreloadLibraries}");
+push(@pgOptions, "shared_preload_libraries='${sharedPreloadLibraries}'");
 
 # Avoid parallelism to stabilize explain plans
-push(@pgOptions, '-c', "max_parallel_workers_per_gather=0");
+push(@pgOptions, "max_parallel_workers_per_gather=0");
 
 # Allow CREATE SUBSCRIPTION to work
-push(@pgOptions, '-c', "wal_level=logical");
+push(@pgOptions, "wal_level='logical'");
 
 # Citus options set for the tests
-push(@pgOptions, '-c', "citus.shard_count=4");
-push(@pgOptions, '-c', "citus.shard_max_size=1500kB");
-push(@pgOptions, '-c', "citus.repartition_join_bucket_count_per_node=2");
-push(@pgOptions, '-c', "citus.sort_returning=on");
-push(@pgOptions, '-c', "citus.shard_replication_factor=2");
-push(@pgOptions, '-c', "citus.node_connection_timeout=${connectionTimeout}");
-push(@pgOptions, '-c', "citus.explain_analyze_sort_method=taskId");
+push(@pgOptions, "citus.shard_count=4");
+push(@pgOptions, "citus.shard_max_size=1500kB");
+push(@pgOptions, "citus.repartition_join_bucket_count_per_node=2");
+push(@pgOptions, "citus.sort_returning='on'");
+push(@pgOptions, "citus.shard_replication_factor=2");
+push(@pgOptions, "citus.node_connection_timeout=${connectionTimeout}");
+push(@pgOptions, "citus.explain_analyze_sort_method='taskId'");
 
 # we disable slow start by default to encourage parallelism within tests
-push(@pgOptions, '-c', "citus.executor_slow_start_interval=0ms");
+push(@pgOptions, "citus.executor_slow_start_interval=0ms");
 
 if ($useMitmproxy)
 {
   # make tests reproducible by never trying to negotiate ssl
-  push(@pgOptions, '-c', "citus.node_conninfo=sslmode=disable");
+  push(@pgOptions, "citus.node_conninfo='sslmode=disable'");
 }
 elsif ($followercluster)
 {
   # follower clusters don't work well when automatically generating certificates as the
   # followers do not execute the extension creation sql scripts that trigger the creation
   # of certificates
-  push(@pgOptions, '-c', "citus.node_conninfo=sslmode=prefer");
+  push(@pgOptions, "citus.node_conninfo='sslmode=prefer'");
 }
 
 if ($useMitmproxy)
@@ -439,14 +450,14 @@ if ($useMitmproxy)
   }
   my $absoluteFifoPath = abs_path($mitmFifoPath);
   die 'abs_path returned empty string' unless ($absoluteFifoPath ne "");
-  push(@pgOptions, '-c', "citus.mitmfifo=$absoluteFifoPath");
+  push(@pgOptions, "citus.mitmfifo='$absoluteFifoPath'");
 }
 
 if ($followercluster)
 {
-  push(@pgOptions, '-c', "max_wal_senders=10");
-  push(@pgOptions, '-c', "hot_standby=on");
-  push(@pgOptions, '-c', "wal_level=replica");
+  push(@pgOptions, "max_wal_senders=10");
+  push(@pgOptions, "hot_standby=on");
+  push(@pgOptions, "wal_level='replica'");
 }
 
 
@@ -459,19 +470,19 @@ if ($followercluster)
 # shard_count to 4 to speed up the tests.
 if($isolationtester)
 {
-   push(@pgOptions, '-c', "citus.worker_min_messages='warning'");
-   push(@pgOptions, '-c', "citus.log_distributed_deadlock_detection=on");
-   push(@pgOptions, '-c', "citus.distributed_deadlock_detection_factor=-1");
-   push(@pgOptions, '-c', "citus.shard_count=4");
-   push(@pgOptions, '-c', "citus.metadata_sync_interval=1000");
-   push(@pgOptions, '-c', "citus.metadata_sync_retry_interval=100");
-   push(@pgOptions, '-c', "client_min_messages=warning"); # pg12 introduced notice showing during isolation tests
+   push(@pgOptions, "citus.worker_min_messages='warning'");
+   push(@pgOptions, "citus.log_distributed_deadlock_detection=on");
+   push(@pgOptions, "citus.distributed_deadlock_detection_factor=-1");
+   push(@pgOptions, "citus.shard_count=4");
+   push(@pgOptions, "citus.metadata_sync_interval=1000");
+   push(@pgOptions, "citus.metadata_sync_retry_interval=100");
+   push(@pgOptions, "client_min_messages='warning'"); # pg12 introduced notice showing during isolation tests
 }
 
 # Add externally added options last, so they overwrite the default ones above
 for my $option (@userPgOptions)
 {
-	push(@pgOptions, '-c', $option);
+	push(@pgOptions, $option);
 }
 
 # define functions as signature->definition
@@ -766,9 +777,10 @@ if ($followercluster)
 # Start servers
 if (!$conninfo)
 {
+    write_settings_to_postgres_conf(\@pgOptions, catfile($TMP_CHECKDIR, $MASTERDIR, "data/postgresql.conf"));
     if(system(catfile("$bindir", "pg_ctl"),
         ('start', '-w',
-            '-o', join(" ", @pgOptions)." -c port=$masterPort $synchronousReplication",
+            '-o', " -c port=$masterPort $synchronousReplication",
         '-D', catfile($TMP_CHECKDIR, $MASTERDIR, 'data'), '-l', catfile($TMP_CHECKDIR, $MASTERDIR, 'log', 'postmaster.log'))) != 0)
     {
     system("tail", ("-n20", catfile($TMP_CHECKDIR, $MASTERDIR, "log", "postmaster.log")));
@@ -777,9 +789,10 @@ if (!$conninfo)
 
     for my $port (@workerPorts)
     {
+        write_settings_to_postgres_conf(\@pgOptions, catfile($TMP_CHECKDIR, "worker.$port", "data/postgresql.conf"));
         if(system(catfile("$bindir", "pg_ctl"),
             ('start', '-w',
-                '-o', join(" ", @pgOptions)." -c port=$port $synchronousReplication",
+                '-o', " -c port=$port $synchronousReplication",
                 '-D', catfile($TMP_CHECKDIR, "worker.$port", "data"),
                 '-l', catfile($TMP_CHECKDIR, "worker.$port", "log", "postmaster.log"))) != 0)
         {
@@ -807,9 +820,10 @@ if ($followercluster)
             or die "Could not take basebackup";
     }
 
+    write_settings_to_postgres_conf(\@pgOptions, catfile($TMP_CHECKDIR, $MASTER_FOLLOWERDIR, "data/postgresql.conf"));
     if(system(catfile("$bindir", "pg_ctl"),
            ('start', '-w',
-            '-o', join(" ", @pgOptions)." -c port=$followerCoordPort",
+            '-o', " -c port=$followerCoordPort",
            '-D', catfile($TMP_CHECKDIR, $MASTER_FOLLOWERDIR, 'data'), '-l', catfile($TMP_CHECKDIR, $MASTER_FOLLOWERDIR, 'log', 'postmaster.log'))) != 0)
     {
       system("tail", ("-n20", catfile($TMP_CHECKDIR, $MASTER_FOLLOWERDIR, "log", "postmaster.log")));
@@ -818,9 +832,10 @@ if ($followercluster)
 
     for my $port (@followerWorkerPorts)
     {
+        write_settings_to_postgres_conf(\@pgOptions, catfile($TMP_CHECKDIR, "follower.$port", "data/postgresql.conf"));
         if(system(catfile("$bindir", "pg_ctl"),
                ('start', '-w',
-                '-o', join(" ", @pgOptions)." -c port=$port",
+                '-o', " -c port=$port",
                 '-D', catfile($TMP_CHECKDIR, "follower.$port", "data"),
                 '-l', catfile($TMP_CHECKDIR, "follower.$port", "log", "postmaster.log"))) != 0)
         {
