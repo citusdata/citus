@@ -1,0 +1,105 @@
+\set VERBOSITY terse
+SET citus.next_shard_id TO 1511000;
+SET citus.shard_replication_factor TO 1;
+SET citus.enable_local_execution TO ON;
+SET citus.log_local_commands TO ON;
+CREATE SCHEMA multi_row_router_insert;
+SET search_path TO multi_row_router_insert;
+SET client_min_messages to ERROR;
+SELECT 1 FROM master_add_node('localhost', :master_port, groupId => 0);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+RESET client_min_messages;
+-- when using local execution, multi-row & router inserts works fine
+-- even when not specifying some default columns
+CREATE TABLE reference_table(column1 INT DEFAULT 1111, column2 INT DEFAULT 2222);
+SELECT create_reference_table('reference_table');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO reference_table VALUES (5), (6);
+NOTICE:  executing the command locally: INSERT INTO multi_row_router_insert.reference_table_1511000 AS citus_table_alias (column1, column2) VALUES (5,2222), (6,2222)
+-- note that first column is specified in below INSERT
+INSERT INTO reference_table VALUES (DEFAULT), (7);
+NOTICE:  executing the command locally: INSERT INTO multi_row_router_insert.reference_table_1511000 AS citus_table_alias (column1, column2) VALUES (1111,2222), (7,2222)
+INSERT INTO reference_table (column2) VALUES (8), (9);
+NOTICE:  executing the command locally: INSERT INTO multi_row_router_insert.reference_table_1511000 AS citus_table_alias (column1, column2) VALUES (1111,8), (1111,9)
+PREPARE prepared_statement(int) AS INSERT INTO reference_table (column2) VALUES ($1), ($1 * 500);
+EXECUTE prepared_statement(1);
+NOTICE:  executing the command locally: INSERT INTO multi_row_router_insert.reference_table_1511000 AS citus_table_alias (column1, column2) VALUES (1111,1), (1111,500)
+EXECUTE prepared_statement(1);
+NOTICE:  executing the command locally: INSERT INTO multi_row_router_insert.reference_table_1511000 AS citus_table_alias (column1, column2) VALUES (1111,1), (1111,500)
+EXECUTE prepared_statement(1);
+NOTICE:  executing the command locally: INSERT INTO multi_row_router_insert.reference_table_1511000 AS citus_table_alias (column1, column2) VALUES (1111,1), (1111,500)
+EXECUTE prepared_statement(2);
+NOTICE:  executing the command locally: INSERT INTO multi_row_router_insert.reference_table_1511000 AS citus_table_alias (column1, column2) VALUES (1111,2), (1111,1000)
+EXECUTE prepared_statement(3);
+NOTICE:  executing the command locally: INSERT INTO multi_row_router_insert.reference_table_1511000 AS citus_table_alias (column1, column2) VALUES (1111,3), (1111,1500)
+EXECUTE prepared_statement(3);
+NOTICE:  executing the command locally: INSERT INTO multi_row_router_insert.reference_table_1511000 AS citus_table_alias (column1, column2) VALUES (1111,3), (1111,1500)
+SELECT * FROM reference_table ORDER BY 1,2;
+NOTICE:  executing the command locally: SELECT column1, column2 FROM multi_row_router_insert.reference_table_1511000 reference_table ORDER BY column1, column2
+ column1 | column2
+---------------------------------------------------------------------
+       5 |    2222
+       6 |    2222
+       7 |    2222
+    1111 |       1
+    1111 |       1
+    1111 |       1
+    1111 |       2
+    1111 |       3
+    1111 |       3
+    1111 |       8
+    1111 |       9
+    1111 |     500
+    1111 |     500
+    1111 |     500
+    1111 |    1000
+    1111 |    1500
+    1111 |    1500
+    1111 |    2222
+(18 rows)
+
+CREATE OR REPLACE FUNCTION square(a INT) RETURNS INT AS $$
+BEGIN
+    RETURN a*a;
+END; $$ LANGUAGE PLPGSQL STABLE;
+CREATE TABLE citus_local_table(a int, b int DEFAULT square(10));
+SELECT create_citus_local_table('citus_local_table');
+ create_citus_local_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO citus_local_table VALUES (10), (11);
+NOTICE:  executing the command locally: INSERT INTO multi_row_router_insert.citus_local_table_1511001 AS citus_table_alias (a, b) VALUES (10,100), (11,100)
+INSERT INTO citus_local_table (a) VALUES (12), (13);
+NOTICE:  executing the command locally: INSERT INTO multi_row_router_insert.citus_local_table_1511001 AS citus_table_alias (a, b) VALUES (12,100), (13,100)
+ALTER TABLE citus_local_table ADD COLUMN c INT DEFAULT to_number('5', '91');
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1511001, 'multi_row_router_insert', 'ALTER TABLE citus_local_table ADD COLUMN c INT DEFAULT to_number(''5'', ''91'');')
+ALTER TABLE citus_local_table ADD COLUMN d INT;
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1511001, 'multi_row_router_insert', 'ALTER TABLE citus_local_table ADD COLUMN d INT;')
+INSERT INTO citus_local_table (d, a, b) VALUES (13, 14, 15), (16, 17, 18), (19, 20, 21);
+NOTICE:  executing the command locally: INSERT INTO multi_row_router_insert.citus_local_table_1511001 AS citus_table_alias (a, b, c, d) VALUES (14,15,5,13), (17,18,5,16), (20,21,5,19)
+SELECT * FROM citus_local_table ORDER BY 1,2,3,4;
+NOTICE:  executing the command locally: SELECT a, b, c, d FROM multi_row_router_insert.citus_local_table_1511001 citus_local_table ORDER BY a, b, c, d
+ a  |  b  | c | d
+---------------------------------------------------------------------
+ 10 | 100 | 5 |
+ 11 | 100 | 5 |
+ 12 | 100 | 5 |
+ 13 | 100 | 5 |
+ 14 |  15 | 5 | 13
+ 17 |  18 | 5 | 16
+ 20 |  21 | 5 | 19
+(7 rows)
+
+-- cleanup at exit
+DROP SCHEMA multi_row_router_insert CASCADE;
+NOTICE:  drop cascades to 5 other objects
