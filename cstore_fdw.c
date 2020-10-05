@@ -825,6 +825,7 @@ FdwNewRelFileNode(Relation relation)
 		if (OidIsValid(relation->rd_rel->relfilenode))
 		{
 			RelationDropStorage(relation);
+			DeleteDataFileMetadataRowIfExists(relation->rd_rel->relfilenode);
 		}
 
 		if (OidIsValid(relation->rd_rel->reltablespace))

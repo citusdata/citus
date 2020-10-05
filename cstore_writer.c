@@ -75,7 +75,7 @@ CStoreBeginWrite(Relation relation,
 	uint64 currentStripeId = 0;
 	Oid relNode = relation->rd_node.relNode;
 
-	datafileMetadata = ReadDataFileMetadata(relNode);
+	datafileMetadata = ReadDataFileMetadata(relNode, false);
 
 	/*
 	 * If stripeMetadataList is not empty, jump to the position right after

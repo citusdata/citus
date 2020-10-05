@@ -343,7 +343,7 @@ InsertStripeMetadataRow(Oid relfilenode, StripeMetadata *stripe)
  * from cstore_data_files and cstore_stripes.
  */
 DataFileMetadata *
-ReadDataFileMetadata(Oid relfilenode)
+ReadDataFileMetadata(Oid relfilenode, bool missingOk)
 {
 	Oid cstoreStripesOid = InvalidOid;
 	Relation cstoreStripes = NULL;
@@ -358,8 +358,15 @@ ReadDataFileMetadata(Oid relfilenode)
 	found = ReadCStoreDataFiles(relfilenode, &datafileMetadata->blockRowCount);
 	if (!found)
 	{
-		ereport(ERROR, (errmsg("Relfilenode %d doesn't belong to a cstore table.",
-							   relfilenode)));
+		if (!missingOk)
+		{
+			ereport(ERROR, (errmsg("Relfilenode %d doesn't belong to a cstore table.",
+								   relfilenode)));
+		}
+		else
+		{
+			return NULL;
+		}
 	}
 
 	ScanKeyInit(&scanKey[0], Anum_cstore_stripes_relfilenode,

@@ -88,7 +88,7 @@ CStoreBeginRead(Relation relation, TupleDesc tupleDescriptor,
 	MemoryContext stripeReadContext = NULL;
 	Oid relNode = relation->rd_node.relNode;
 
-	datafileMetadata = ReadDataFileMetadata(relNode);
+	datafileMetadata = ReadDataFileMetadata(relNode, false);
 
 	/*
 	 * We allocate all stripe specific data in the stripeReadContext, and reset
@@ -309,7 +309,7 @@ CStoreTableRowCount(Relation relation)
 	ListCell *stripeMetadataCell = NULL;
 	uint64 totalRowCount = 0;
 
-	datafileMetadata = ReadDataFileMetadata(relation->rd_node.relNode);
+	datafileMetadata = ReadDataFileMetadata(relation->rd_node.relNode, false);
 
 	foreach(stripeMetadataCell, datafileMetadata->stripeMetadataList)
 	{

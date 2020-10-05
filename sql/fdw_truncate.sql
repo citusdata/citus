@@ -12,6 +12,8 @@ CREATE FOREIGN TABLE cstore_truncate_test_second (a int, b int) SERVER cstore_se
 CREATE FOREIGN TABLE cstore_truncate_test_compressed (a int, b int) SERVER cstore_server OPTIONS (compression 'pglz');
 CREATE TABLE cstore_truncate_test_regular (a int, b int);
 
+SELECT count(*) AS cstore_data_files_before_truncate FROM cstore.cstore_data_files \gset
+
 INSERT INTO cstore_truncate_test select a, a from generate_series(1, 10) a;
 
 INSERT INTO cstore_truncate_test_compressed select a, a from generate_series(1, 10) a;
@@ -56,6 +58,23 @@ SELECT * from cstore_truncate_test_regular;
 -- test if truncate on empty table works
 TRUNCATE TABLE cstore_truncate_test;
 SELECT * from cstore_truncate_test;
+
+-- make sure TRUNATE deletes metadata for old relfilenode
+SELECT :cstore_data_files_before_truncate - count(*) FROM cstore.cstore_data_files;
+
+-- test if truncation in the same transaction that created the table works properly
+BEGIN;
+CREATE FOREIGN TABLE cstore_same_transaction_truncate(a int) SERVER cstore_server;
+INSERT INTO cstore_same_transaction_truncate SELECT * FROM generate_series(1, 100);
+TRUNCATE cstore_same_transaction_truncate;
+INSERT INTO cstore_same_transaction_truncate SELECT * FROM generate_series(20, 23);
+COMMIT;
+
+-- should output "1" for the newly created relation
+SELECT count(*) - :cstore_data_files_before_truncate FROM cstore.cstore_data_files;
+SELECT * FROM cstore_same_transaction_truncate;
+
+DROP FOREIGN TABLE cstore_same_transaction_truncate;
 
 -- test if a cached truncate from a pl/pgsql function works
 CREATE FUNCTION cstore_truncate_test_regular_func() RETURNS void AS $$
