@@ -13,6 +13,8 @@ CREATE TABLE cstore_truncate_test_second (a int, b int) USING cstore_tableam;
 CREATE TABLE cstore_truncate_test_compressed (a int, b int) USING cstore_tableam;
 CREATE TABLE cstore_truncate_test_regular (a int, b int);
 
+SELECT count(*) AS cstore_data_files_before_truncate FROM cstore.cstore_data_files \gset
+
 INSERT INTO cstore_truncate_test select a, a from generate_series(1, 10) a;
 
 set cstore.compression = 'pglz';
@@ -59,6 +61,9 @@ SELECT * from cstore_truncate_test_regular;
 -- test if truncate on empty table works
 TRUNCATE TABLE cstore_truncate_test;
 SELECT * from cstore_truncate_test;
+
+-- make sure TRUNATE deletes metadata for old relfilenode
+SELECT :cstore_data_files_before_truncate - count(*) FROM cstore.cstore_data_files;
 
 -- test if a cached truncate from a pl/pgsql function works
 CREATE FUNCTION cstore_truncate_test_regular_func() RETURNS void AS $$

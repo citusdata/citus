@@ -445,6 +445,9 @@ cstore_relation_set_new_filenode(Relation rel,
 	SMgrRelation srel;
 	CStoreOptions *options = CStoreTableAMGetOptions();
 
+	/* delete old relfilenode metadata */
+	DeleteDataFileMetadataRowIfExists(rel->rd_node.relNode);
+
 	Assert(persistence == RELPERSISTENCE_PERMANENT);
 	*freezeXid = RecentXmin;
 	*minmulti = GetOldestMultiXactId();
