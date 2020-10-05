@@ -10,8 +10,9 @@ step s1-begin:
 step s1-insert: 
     INSERT INTO test_vacuum_vs_insert SELECT i, 2 * i FROM generate_series(1, 3) i;
 
+s2: INFO:  "test_vacuum_vs_insert": stopping truncate due to conflicting lock request
 step s2-vacuum: 
-    VACUUM test_vacuum_vs_insert;
+    VACUUM VERBOSE test_vacuum_vs_insert;
 
 step s1-commit: 
     COMMIT;
@@ -39,11 +40,15 @@ step s1-insert:
     INSERT INTO test_vacuum_vs_insert SELECT i, 2 * i FROM generate_series(1, 3) i;
 
 step s2-vacuum-full: 
-    VACUUM FULL test_vacuum_vs_insert;
+    VACUUM FULL VERBOSE test_vacuum_vs_insert;
  <waiting ...>
 step s1-commit: 
     COMMIT;
 
+s2: INFO:  vacuuming "public.test_vacuum_vs_insert"
+s2: INFO:  "test_vacuum_vs_insert": found 0 removable, 6 nonremovable row versions in 1 pages
+DETAIL:  0 dead row versions cannot be removed yet.
+CPU: user: 0.00 s, system: 0.00 s, elapsed: 0.00 s.
 step s2-vacuum-full: <... completed>
 step s2-select: 
     SELECT * FROM test_vacuum_vs_insert;

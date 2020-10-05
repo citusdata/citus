@@ -29,12 +29,12 @@ session "s2"
 
 step "s2-vacuum"
 {
-    VACUUM test_vacuum_vs_insert;
+    VACUUM VERBOSE test_vacuum_vs_insert;
 }
 
 step "s2-vacuum-full"
 {
-    VACUUM FULL test_vacuum_vs_insert;
+    VACUUM FULL VERBOSE test_vacuum_vs_insert;
 }
 
 step "s2-select"

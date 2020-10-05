@@ -46,7 +46,6 @@
  *
  * These are the same values from src/backend/access/heap/vacuumlazy.c
  */
-#define VACUUM_TRUNCATE_LOCK_CHECK_INTERVAL 20      /* ms */
 #define VACUUM_TRUNCATE_LOCK_WAIT_INTERVAL 50       /* ms */
 #define VACUUM_TRUNCATE_LOCK_TIMEOUT 5000               /* ms */
 
@@ -68,6 +67,8 @@ static void CStoreTableAMObjectAccessHook(ObjectAccessType access, Oid classId, 
 										  objectId, int subId,
 										  void *arg);
 static bool IsCStoreTableAmTable(Oid relationId);
+static bool ConditionalLockRelationWithTimeout(Relation rel, LOCKMODE lockMode,
+											   int timeout, int retryInterval);
 
 
 static void TruncateCStore(Relation rel, int elevel);
@@ -622,7 +623,6 @@ static void
 TruncateCStore(Relation rel, int elevel)
 {
 	PGRUsage ru0;
-	int lock_retry = 0;
 	BlockNumber old_rel_pages = 0;
 	BlockNumber new_rel_pages = 0;
 	DataFileMetadata *metadata = NULL;
@@ -634,45 +634,46 @@ TruncateCStore(Relation rel, int elevel)
 	pgstat_progress_update_param(PROGRESS_VACUUM_PHASE,
 								 PROGRESS_VACUUM_PHASE_TRUNCATE);
 
+
 	/*
-	 * We need an ExclusiveLock to do the truncation.
-	 * Loop until we acquire a lock or retry threshold is reached.
+	 * We need access exclusive lock on the relation in order to do
+	 * truncation. If we can't get it, give up rather than waiting --- we
+	 * don't want to block other backends, and we don't want to deadlock
+	 * (which is quite possible considering we already hold a lower-grade
+	 * lock).
+	 *
+	 * The decisions for AccessExclusiveLock and conditional lock with
+	 * a timeout is based on lazy_truncate_heap in vacuumlazy.c.
 	 */
-	while (true)
+	if (!ConditionalLockRelationWithTimeout(rel, AccessExclusiveLock,
+											VACUUM_TRUNCATE_LOCK_TIMEOUT,
+											VACUUM_TRUNCATE_LOCK_WAIT_INTERVAL))
 	{
-		if (ConditionalLockRelation(rel, AccessExclusiveLock))
-		{
-			break;
-		}
-
 		/*
-		 * Check for interrupts while trying to (re-)acquire the exclusive
-		 * lock.
+		 * We failed to establish the lock in the specified number of
+		 * retries. This means we give up truncating.
 		 */
-		CHECK_FOR_INTERRUPTS();
-
-		if (++lock_retry > (VACUUM_TRUNCATE_LOCK_TIMEOUT /
-							VACUUM_TRUNCATE_LOCK_WAIT_INTERVAL))
-		{
-			/*
-			 * We failed to establish the lock in the specified number of
-			 * retries. This means we give up truncating.
-			 */
-			ereport(elevel,
-					(errmsg("\"%s\": stopping truncate due to conflicting lock request",
-							RelationGetRelationName(rel))));
-			return;
-		}
-
-		pg_usleep(VACUUM_TRUNCATE_LOCK_WAIT_INTERVAL * 1000L);
+		ereport(elevel,
+				(errmsg("\"%s\": stopping truncate due to conflicting lock request",
+						RelationGetRelationName(rel))));
+		return;
 	}
 
 	RelationOpenSmgr(rel);
 	old_rel_pages = smgrnblocks(rel->rd_smgr, MAIN_FORKNUM);
 	RelationCloseSmgr(rel);
 
-	/* loop over stripes and find max used block */
+	/*
+	 * Get metadata as viewed in latest snapshot. Reading metadata in transaction
+	 * snapshot is not enough, since stripes could have been created between
+	 * current transaction start and lock acquisition time. Ignoring those
+	 * stripes can destory data.
+	 */
+	PushActiveSnapshot(GetLatestSnapshot());
 	metadata = ReadDataFileMetadata(rel->rd_node.relNode);
+	PopActiveSnapshot();
+
+	/* loop over stripes and find max used block */
 	foreach(stripeMetadataCell, metadata->stripeMetadataList)
 	{
 		StripeMetadata *stripe = lfirst(stripeMetadataCell);
@@ -707,6 +708,43 @@ TruncateCStore(Relation rel, int elevel)
 					RelationGetRelationName(rel),
 					old_rel_pages, new_rel_pages),
 			 errdetail_internal("%s", pg_rusage_show(&ru0))));
+}
+
+
+/*
+ * ConditionalLockRelationWithTimeout tries to acquire a relation lock until
+ * it either succeeds or timesout. It doesn't enter wait queue and instead it
+ * sleeps between lock tries.
+ *
+ * This is based on the lock loop in lazy_truncate_heap().
+ */
+static bool
+ConditionalLockRelationWithTimeout(Relation rel, LOCKMODE lockMode, int timeout,
+								   int retryInterval)
+{
+	int lock_retry = 0;
+
+	while (true)
+	{
+		if (ConditionalLockRelation(rel, lockMode))
+		{
+			break;
+		}
+
+		/*
+		 * Check for interrupts while trying to (re-)acquire the lock
+		 */
+		CHECK_FOR_INTERRUPTS();
+
+		if (++lock_retry > (timeout / retryInterval))
+		{
+			return false;
+		}
+
+		pg_usleep(retryInterval * 1000L);
+	}
+
+	return true;
 }
 
 
