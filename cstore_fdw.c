@@ -25,6 +25,7 @@
 #include "catalog/catalog.h"
 #include "catalog/indexing.h"
 #include "catalog/namespace.h"
+#include "catalog/objectaccess.h"
 #include "catalog/pg_foreign_table.h"
 #include "catalog/pg_namespace.h"
 #include "catalog/storage.h"
@@ -54,6 +55,7 @@
 #include "parser/parser.h"
 #include "parser/parse_coerce.h"
 #include "parser/parse_type.h"
+#include "storage/lmgr.h"
 #include "storage/smgr.h"
 #include "tcop/utility.h"
 #include "utils/builtins.h"
@@ -105,6 +107,8 @@ static const CStoreValidOption ValidOptionArray[] =
 	{ OPTION_NAME_BLOCK_ROW_COUNT, ForeignTableRelationId }
 };
 
+static object_access_hook_type prevObjectAccessHook = NULL;
+
 /* local functions forward declarations */
 #if PG_VERSION_NUM >= 100000
 static void CStoreProcessUtility(PlannedStmt *plannedStatement, const char *queryString,
@@ -126,13 +130,12 @@ static uint64 CopyIntoCStoreTable(const CopyStmt *copyStatement,
 								  const char *queryString);
 static uint64 CopyOutCStoreTable(CopyStmt *copyStatement, const char *queryString);
 static void CStoreProcessAlterTableCommand(AlterTableStmt *alterStatement);
-static List * DroppedCStoreRelidList(DropStmt *dropStatement);
 static List * FindCStoreTables(List *tableList);
 static List * OpenRelationsForTruncate(List *cstoreTableList);
 static void FdwNewRelFileNode(Relation relation);
 static void TruncateCStoreTables(List *cstoreRelationList);
-static bool CStoreTable(Oid relationId);
-static bool CStoreServer(ForeignServer *server);
+static bool IsCStoreFdwTable(Oid relationId);
+static bool IsCStoreServer(ForeignServer *server);
 static bool DistributedTable(Oid relationId);
 static bool DistributedWorkerCopy(CopyStmt *copyStatement);
 static StringInfo OptionNamesString(Oid currentContextId);
@@ -191,6 +194,9 @@ static bool CStoreIsForeignScanParallelSafe(PlannerInfo *root, RelOptInfo *rel,
 static void cstore_fdw_initrel(Relation rel);
 static Relation cstore_fdw_open(Oid relationId, LOCKMODE lockmode);
 static Relation cstore_fdw_openrv(RangeVar *relation, LOCKMODE lockmode);
+static void CStoreFdwObjectAccessHook(ObjectAccessType access, Oid classId, Oid objectId,
+									  int subId,
+									  void *arg);
 
 PG_FUNCTION_INFO_V1(cstore_ddl_event_end_trigger);
 PG_FUNCTION_INFO_V1(cstore_table_size);
@@ -212,6 +218,8 @@ cstore_fdw_init()
 {
 	PreviousProcessUtilityHook = ProcessUtility_hook;
 	ProcessUtility_hook = CStoreProcessUtility;
+	prevObjectAccessHook = object_access_hook;
+	object_access_hook = CStoreFdwObjectAccessHook;
 }
 
 
@@ -254,20 +262,13 @@ cstore_ddl_event_end_trigger(PG_FUNCTION_ARGS)
 
 		bool missingOK = false;
 		ForeignServer *server = GetForeignServerByName(serverName, missingOK);
-		if (CStoreServer(server))
+		if (IsCStoreServer(server))
 		{
 			Oid relationId = RangeVarGetRelid(createStatement->base.relation,
 											  AccessShareLock, false);
 			Relation relation = cstore_fdw_open(relationId, AccessExclusiveLock);
-
-			/*
-			 * Make sure database directory exists before creating a table.
-			 * This is necessary when a foreign server is created inside
-			 * a template database and a new database is created out of it.
-			 * We have no chance to hook into server creation to create data
-			 * directory for it during database creation time.
-			 */
-			InitializeCStoreTableFile(relationId, relation, CStoreGetOptions(relationId));
+			CStoreOptions *options = CStoreGetOptions(relationId);
+			InitCStoreDataFileMetadata(relation->rd_node.relNode, options->blockRowCount);
 			heap_close(relation, AccessExclusiveLock);
 		}
 	}
@@ -315,25 +316,6 @@ CStoreProcessUtility(Node * parseTree, const char * queryString,
 			CALL_PREVIOUS_UTILITY(parseTree, queryString, context, paramListInfo,
 								  destReceiver, completionTag);
 		}
-	}
-	else if (nodeTag(parseTree) == T_DropStmt)
-	{
-		List *dropRelids = DroppedCStoreRelidList((DropStmt *) parseTree);
-		ListCell *lc = NULL;
-
-		/* drop smgr storage */
-		foreach(lc, dropRelids)
-		{
-			Oid relid = lfirst_oid(lc);
-			Relation relation = cstore_fdw_open(relid, AccessExclusiveLock);
-
-			RelationOpenSmgr(relation);
-			RelationDropStorage(relation);
-			heap_close(relation, AccessExclusiveLock);
-		}
-
-		CALL_PREVIOUS_UTILITY(parseTree, queryString, context, paramListInfo,
-							  destReceiver, completionTag);
 	}
 	else if (nodeTag(parseTree) == T_TruncateStmt)
 	{
@@ -403,7 +385,7 @@ CopyCStoreTableStatement(CopyStmt *copyStatement)
 	{
 		Oid relationId = RangeVarGetRelid(copyStatement->relation,
 										  AccessShareLock, true);
-		bool cstoreTable = CStoreTable(relationId);
+		bool cstoreTable = IsCStoreFdwTable(relationId);
 		if (cstoreTable)
 		{
 			bool distributedTable = DistributedTable(relationId);
@@ -558,12 +540,11 @@ CopyIntoCStoreTable(const CopyStmt *copyStatement, const char *queryString)
 #endif
 
 	/* init state to write to the cstore file */
-	writeState = CStoreBeginWrite(relationId,
+	writeState = CStoreBeginWrite(relation,
 								  cstoreOptions->compressionType,
 								  cstoreOptions->stripeRowCount,
 								  cstoreOptions->blockRowCount,
 								  tupleDescriptor);
-	writeState->relation = relation;
 
 	while (nextRowFound)
 	{
@@ -686,7 +667,7 @@ CStoreProcessAlterTableCommand(AlterTableStmt *alterStatement)
 	}
 
 	relationId = RangeVarGetRelid(relationRangeVar, AccessShareLock, true);
-	if (!CStoreTable(relationId))
+	if (!IsCStoreFdwTable(relationId))
 	{
 		return;
 	}
@@ -725,36 +706,6 @@ CStoreProcessAlterTableCommand(AlterTableStmt *alterStatement)
 }
 
 
-/*
- * DropppedCStoreRelidList extracts and returns the list of cstore relids
- * from DROP table statement
- */
-static List *
-DroppedCStoreRelidList(DropStmt *dropStatement)
-{
-	List *droppedCStoreRelidList = NIL;
-
-	if (dropStatement->removeType == OBJECT_FOREIGN_TABLE)
-	{
-		ListCell *dropObjectCell = NULL;
-		foreach(dropObjectCell, dropStatement->objects)
-		{
-			List *tableNameList = (List *) lfirst(dropObjectCell);
-			RangeVar *rangeVar = makeRangeVarFromNameList(tableNameList);
-
-			Oid relationId = RangeVarGetRelid(rangeVar, AccessShareLock, true);
-			if (CStoreTable(relationId))
-			{
-				droppedCStoreRelidList = lappend_oid(droppedCStoreRelidList,
-													 relationId);
-			}
-		}
-	}
-
-	return droppedCStoreRelidList;
-}
-
-
 /* FindCStoreTables returns list of CStore tables from given table list */
 static List *
 FindCStoreTables(List *tableList)
@@ -765,7 +716,7 @@ FindCStoreTables(List *tableList)
 	{
 		RangeVar *rangeVar = (RangeVar *) lfirst(relationCell);
 		Oid relationId = RangeVarGetRelid(rangeVar, AccessShareLock, true);
-		if (CStoreTable(relationId) && !DistributedTable(relationId))
+		if (IsCStoreFdwTable(relationId) && !DistributedTable(relationId))
 		{
 			cstoreTableList = lappend(cstoreTableList, rangeVar);
 		}
@@ -824,11 +775,12 @@ TruncateCStoreTables(List *cstoreRelationList)
 	{
 		Relation relation = (Relation) lfirst(relationCell);
 		Oid relationId = relation->rd_id;
+		CStoreOptions *options = CStoreGetOptions(relationId);
 
-		Assert(CStoreTable(relationId));
+		Assert(IsCStoreFdwTable(relationId));
 
 		FdwNewRelFileNode(relation);
-		InitializeCStoreTableFile(relationId, relation, CStoreGetOptions(relationId));
+		InitCStoreDataFileMetadata(relation->rd_node.relNode, options->blockRowCount);
 	}
 }
 
@@ -861,7 +813,6 @@ FdwNewRelFileNode(Relation relation)
 		Relation tmprel;
 		Oid tablespace;
 		Oid filenode;
-		RelFileNode newrnode;
 
 		/*
 		 * Upgrade to AccessExclusiveLock, and hold until the end of the
@@ -887,10 +838,6 @@ FdwNewRelFileNode(Relation relation)
 
 		filenode = GetNewRelFileNode(tablespace, NULL, persistence);
 
-		newrnode.spcNode = tablespace;
-		newrnode.dbNode = MyDatabaseId;
-		newrnode.relNode = filenode;
-
 		classform->relfilenode = filenode;
 		classform->relpages = 0;    /* it's empty until further notice */
 		classform->reltuples = 0;
@@ -900,6 +847,10 @@ FdwNewRelFileNode(Relation relation)
 
 		CatalogTupleUpdate(pg_class, &tuple->t_self, tuple);
 		CommandCounterIncrement();
+
+		relation->rd_node.spcNode = tablespace;
+		relation->rd_node.dbNode = MyDatabaseId;
+		relation->rd_node.relNode = filenode;
 	}
 
 	heap_freetuple(tuple);
@@ -928,11 +879,11 @@ FdwCreateStorage(Relation relation)
 
 
 /*
- * CStoreTable checks if the given table name belongs to a foreign columnar store
+ * IsCStoreFdwTable checks if the given table name belongs to a foreign columnar store
  * table. If it does, the function returns true. Otherwise, it returns false.
  */
-static bool
-CStoreTable(Oid relationId)
+bool
+IsCStoreFdwTable(Oid relationId)
 {
 	bool cstoreTable = false;
 	char relationKind = 0;
@@ -947,7 +898,7 @@ CStoreTable(Oid relationId)
 	{
 		ForeignTable *foreignTable = GetForeignTable(relationId);
 		ForeignServer *server = GetForeignServer(foreignTable->serverid);
-		if (CStoreServer(server))
+		if (IsCStoreServer(server))
 		{
 			cstoreTable = true;
 		}
@@ -958,11 +909,11 @@ CStoreTable(Oid relationId)
 
 
 /*
- * CStoreServer checks if the given foreign server belongs to cstore_fdw. If it
+ * IsCStoreServer checks if the given foreign server belongs to cstore_fdw. If it
  * does, the function returns true. Otherwise, it returns false.
  */
 static bool
-CStoreServer(ForeignServer *server)
+IsCStoreServer(ForeignServer *server)
 {
 	ForeignDataWrapper *foreignDataWrapper = GetForeignDataWrapper(server->fdwid);
 	bool cstoreServer = false;
@@ -1055,7 +1006,7 @@ Datum
 cstore_table_size(PG_FUNCTION_ARGS)
 {
 	Oid relationId = PG_GETARG_OID(0);
-	bool cstoreTable = CStoreTable(relationId);
+	bool cstoreTable = IsCStoreFdwTable(relationId);
 	Relation relation;
 	BlockNumber nblocks;
 
@@ -1705,6 +1656,7 @@ CStoreBeginForeignScan(ForeignScanState *scanState, int executorFlags)
 	ForeignScan *foreignScan = NULL;
 	List *foreignPrivateList = NIL;
 	List *whereClauseList = NIL;
+	Relation relation = NULL;
 
 	cstore_fdw_initrel(currentRelation);
 
@@ -1721,9 +1673,8 @@ CStoreBeginForeignScan(ForeignScanState *scanState, int executorFlags)
 	whereClauseList = foreignScan->scan.plan.qual;
 
 	columnList = (List *) linitial(foreignPrivateList);
-	readState = CStoreBeginRead(foreignTableId,
-								tupleDescriptor, columnList, whereClauseList);
-	readState->relation = cstore_fdw_open(foreignTableId, AccessShareLock);
+	relation = cstore_fdw_open(foreignTableId, AccessShareLock);
+	readState = CStoreBeginRead(relation, tupleDescriptor, columnList, whereClauseList);
 
 	scanState->fdw_state = (void *) readState;
 }
@@ -2067,13 +2018,12 @@ CStoreBeginForeignInsert(ModifyTableState *modifyTableState, ResultRelInfo *rela
 	cstoreOptions = CStoreGetOptions(foreignTableOid);
 	tupleDescriptor = RelationGetDescr(relationInfo->ri_RelationDesc);
 
-	writeState = CStoreBeginWrite(foreignTableOid,
+	writeState = CStoreBeginWrite(relation,
 								  cstoreOptions->compressionType,
 								  cstoreOptions->stripeRowCount,
 								  cstoreOptions->blockRowCount,
 								  tupleDescriptor);
 
-	writeState->relation = relation;
 	relationInfo->ri_FdwState = (void *) writeState;
 }
 
@@ -2215,4 +2165,62 @@ cstore_fdw_openrv(RangeVar *relation, LOCKMODE lockmode)
 	cstore_fdw_initrel(rel);
 
 	return rel;
+}
+
+
+/*
+ * Implements object_access_hook. One of the places this is called is just
+ * before dropping an object, which allows us to clean-up resources for
+ * cstore tables.
+ *
+ * When cleaning up resources, we need to have access to the pg_class record
+ * for the table so we can indentify the relfilenode belonging to the relation.
+ * We don't have access to this information in sql_drop event triggers, since
+ * the relation has already been dropped there. object_access_hook is called
+ * __before__ dropping tables, so we still have access to the pg_class
+ * entry here.
+ *
+ * Note that the utility hook is called once per __command__, and not for
+ * every object dropped, and since a drop can cascade to other objects, it
+ * is difficult to get full set of dropped objects in the utility hook.
+ * But object_access_hook is called once per dropped object, so it is
+ * much easier to clean-up all dropped objects here.
+ */
+static void
+CStoreFdwObjectAccessHook(ObjectAccessType access, Oid classId, Oid objectId,
+						  int subId, void *arg)
+{
+	if (prevObjectAccessHook)
+	{
+		prevObjectAccessHook(access, classId, objectId, subId, arg);
+	}
+
+	/*
+	 * Do nothing if this is not a DROP relation command.
+	 */
+	if (access != OAT_DROP || classId != RelationRelationId || OidIsValid(subId))
+	{
+		return;
+	}
+
+	/*
+	 * Lock relation to prevent it from being dropped and to avoid
+	 * race conditions in the next if block.
+	 */
+	LockRelationOid(objectId, AccessShareLock);
+
+	if (IsCStoreFdwTable(objectId))
+	{
+		/*
+		 * Drop both metadata and storage. We need to drop storage here since
+		 * we manage relfilenode for FDW tables in the extension.
+		 */
+		Relation rel = cstore_fdw_open(objectId, AccessExclusiveLock);
+		RelationOpenSmgr(rel);
+		RelationDropStorage(rel);
+		DeleteDataFileMetadataRowIfExists(rel->rd_node.relNode);
+
+		/* keep the lock since we did physical changes to the relation */
+		relation_close(rel, NoLock);
+	}
 }

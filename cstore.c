@@ -99,29 +99,3 @@ ParseCompressionType(const char *compressionTypeString)
 
 	return compressionType;
 }
-
-
-/*
- * InitializeCStoreTableFile creates data and footer file for a cstore table.
- * The function assumes data and footer files do not exist, therefore
- * it should be called on empty or non-existing table. Notice that the caller
- * is expected to acquire AccessExclusiveLock on the relation.
- */
-void
-InitializeCStoreTableFile(Oid relationId, Relation relation, CStoreOptions *cstoreOptions)
-{
-	TableWriteState *writeState = NULL;
-	TupleDesc tupleDescriptor = RelationGetDescr(relation);
-
-	InitCStoreTableMetadata(relationId, cstoreOptions->blockRowCount);
-
-	/*
-	 * Initialize state to write to the cstore file. This creates an
-	 * empty data file and a valid footer file for the table.
-	 */
-	writeState = CStoreBeginWrite(relationId,
-								  cstoreOptions->compressionType,
-								  cstoreOptions->stripeRowCount,
-								  cstoreOptions->blockRowCount, tupleDescriptor);
-	CStoreEndWrite(writeState);
-}

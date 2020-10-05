@@ -15,14 +15,22 @@
 -- store postgres database oid
 SELECT oid postgres_oid FROM pg_database WHERE datname = 'postgres' \gset
 
+SELECT count(*) AS cstore_data_files_before_drop FROM cstore.cstore_data_files \gset
+
 -- DROP cstore_fdw tables
 DROP FOREIGN TABLE contestant;
 DROP FOREIGN TABLE contestant_compressed;
 
+-- make sure DROP deletes metadata
+SELECT :cstore_data_files_before_drop - count(*) FROM cstore.cstore_data_files;
+
 -- Create a cstore_fdw table under a schema and drop it.
 CREATE SCHEMA test_schema;
 CREATE FOREIGN TABLE test_schema.test_table(data int) SERVER cstore_server;
+
+SELECT count(*) AS cstore_data_files_before_drop FROM cstore.cstore_data_files \gset
 DROP SCHEMA test_schema CASCADE;
+SELECT :cstore_data_files_before_drop - count(*) FROM cstore.cstore_data_files;
 
 SELECT current_database() datname \gset
 

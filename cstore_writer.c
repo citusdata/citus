@@ -45,7 +45,7 @@ static void UpdateBlockSkipNodeMinMax(ColumnBlockSkipNode *blockSkipNode,
 									  int columnTypeLength, Oid columnCollation,
 									  FmgrInfo *comparisonFunction);
 static Datum DatumCopy(Datum datum, bool datumTypeByValue, int datumTypeLength);
-static void AppendStripeMetadata(TableMetadata *tableMetadata,
+static void AppendStripeMetadata(DataFileMetadata *datafileMetadata,
 								 StripeMetadata stripeMetadata);
 static StringInfo CopyStringInfo(StringInfo sourceString);
 
@@ -58,13 +58,13 @@ static StringInfo CopyStringInfo(StringInfo sourceString);
  * will be added.
  */
 TableWriteState *
-CStoreBeginWrite(Oid relationId,
+CStoreBeginWrite(Relation relation,
 				 CompressionType compressionType,
 				 uint64 stripeMaxRowCount, uint32 blockRowCount,
 				 TupleDesc tupleDescriptor)
 {
 	TableWriteState *writeState = NULL;
-	TableMetadata *tableMetadata = NULL;
+	DataFileMetadata *datafileMetadata = NULL;
 	FmgrInfo **comparisonFunctionArray = NULL;
 	MemoryContext stripeWriteContext = NULL;
 	uint64 currentFileOffset = 0;
@@ -73,19 +73,20 @@ CStoreBeginWrite(Oid relationId,
 	bool *columnMaskArray = NULL;
 	BlockData *blockData = NULL;
 	uint64 currentStripeId = 0;
+	Oid relNode = relation->rd_node.relNode;
 
-	tableMetadata = ReadTableMetadata(relationId);
+	datafileMetadata = ReadDataFileMetadata(relNode);
 
 	/*
 	 * If stripeMetadataList is not empty, jump to the position right after
 	 * the last position.
 	 */
-	if (tableMetadata->stripeMetadataList != NIL)
+	if (datafileMetadata->stripeMetadataList != NIL)
 	{
 		StripeMetadata *lastStripe = NULL;
 		uint64 lastStripeSize = 0;
 
-		lastStripe = llast(tableMetadata->stripeMetadataList);
+		lastStripe = llast(datafileMetadata->stripeMetadataList);
 		lastStripeSize += lastStripe->dataLength;
 
 		currentFileOffset = lastStripe->fileOffset + lastStripeSize;
@@ -127,8 +128,8 @@ CStoreBeginWrite(Oid relationId,
 	blockData = CreateEmptyBlockData(columnCount, columnMaskArray, blockRowCount);
 
 	writeState = palloc0(sizeof(TableWriteState));
-	writeState->relationId = relationId;
-	writeState->tableMetadata = tableMetadata;
+	writeState->relation = relation;
+	writeState->datafileMetadata = datafileMetadata;
 	writeState->compressionType = compressionType;
 	writeState->stripeMaxRowCount = stripeMaxRowCount;
 	writeState->blockRowCount = blockRowCount;
@@ -163,7 +164,7 @@ CStoreWriteRow(TableWriteState *writeState, Datum *columnValues, bool *columnNul
 	StripeBuffers *stripeBuffers = writeState->stripeBuffers;
 	StripeSkipList *stripeSkipList = writeState->stripeSkipList;
 	uint32 columnCount = writeState->tupleDescriptor->natts;
-	TableMetadata *tableMetadata = writeState->tableMetadata;
+	DataFileMetadata *datafileMetadata = writeState->datafileMetadata;
 	const uint32 blockRowCount = writeState->blockRowCount;
 	BlockData *blockData = writeState->blockData;
 	MemoryContext oldContext = MemoryContextSwitchTo(writeState->stripeWriteContext);
@@ -251,8 +252,9 @@ CStoreWriteRow(TableWriteState *writeState, Datum *columnValues, bool *columnNul
 		 * doesn't free it.
 		 */
 		MemoryContextSwitchTo(oldContext);
-		InsertStripeMetadataRow(writeState->relationId, &stripeMetadata);
-		AppendStripeMetadata(tableMetadata, stripeMetadata);
+		InsertStripeMetadataRow(writeState->relation->rd_node.relNode,
+								&stripeMetadata);
+		AppendStripeMetadata(datafileMetadata, stripeMetadata);
 	}
 	else
 	{
@@ -280,12 +282,13 @@ CStoreEndWrite(TableWriteState *writeState)
 		MemoryContextReset(writeState->stripeWriteContext);
 
 		MemoryContextSwitchTo(oldContext);
-		InsertStripeMetadataRow(writeState->relationId, &stripeMetadata);
-		AppendStripeMetadata(writeState->tableMetadata, stripeMetadata);
+		InsertStripeMetadataRow(writeState->relation->rd_node.relNode,
+								&stripeMetadata);
+		AppendStripeMetadata(writeState->datafileMetadata, stripeMetadata);
 	}
 
 	MemoryContextDelete(writeState->stripeWriteContext);
-	list_free_deep(writeState->tableMetadata->stripeMetadataList);
+	list_free_deep(writeState->datafileMetadata->stripeMetadataList);
 	pfree(writeState->comparisonFunctionArray);
 	FreeBlockData(writeState->blockData);
 	pfree(writeState);
@@ -543,7 +546,8 @@ FlushStripe(TableWriteState *writeState)
 	}
 
 	/* create skip list and footer buffers */
-	SaveStripeSkipList(writeState->relationId, writeState->currentStripeId,
+	SaveStripeSkipList(writeState->relation->rd_node.relNode,
+					   writeState->currentStripeId,
 					   stripeSkipList, tupleDescriptor);
 
 	for (blockIndex = 0; blockIndex < blockCount; blockIndex++)
@@ -787,13 +791,13 @@ DatumCopy(Datum datum, bool datumTypeByValue, int datumTypeLength)
  * table footer's stripeMetadataList.
  */
 static void
-AppendStripeMetadata(TableMetadata *tableMetadata, StripeMetadata stripeMetadata)
+AppendStripeMetadata(DataFileMetadata *datafileMetadata, StripeMetadata stripeMetadata)
 {
 	StripeMetadata *stripeMetadataCopy = palloc0(sizeof(StripeMetadata));
 	memcpy(stripeMetadataCopy, &stripeMetadata, sizeof(StripeMetadata));
 
-	tableMetadata->stripeMetadataList = lappend(tableMetadata->stripeMetadataList,
-												stripeMetadataCopy);
+	datafileMetadata->stripeMetadataList = lappend(datafileMetadata->stripeMetadataList,
+												   stripeMetadataCopy);
 }
 
 
