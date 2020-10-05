@@ -65,6 +65,20 @@ SELECT * from cstore_truncate_test;
 -- make sure TRUNATE deletes metadata for old relfilenode
 SELECT :cstore_data_files_before_truncate - count(*) FROM cstore.cstore_data_files;
 
+-- test if truncation in the same transaction that created the table works properly
+BEGIN;
+CREATE TABLE cstore_same_transaction_truncate(a int) USING cstore_tableam;
+INSERT INTO cstore_same_transaction_truncate SELECT * FROM generate_series(1, 100);
+TRUNCATE cstore_same_transaction_truncate;
+INSERT INTO cstore_same_transaction_truncate SELECT * FROM generate_series(20, 23);
+COMMIT;
+
+-- should output "1" for the newly created relation
+SELECT count(*) - :cstore_data_files_before_truncate FROM cstore.cstore_data_files;
+SELECT * FROM cstore_same_transaction_truncate;
+
+DROP TABLE cstore_same_transaction_truncate;
+
 -- test if a cached truncate from a pl/pgsql function works
 CREATE FUNCTION cstore_truncate_test_regular_func() RETURNS void AS $$
 BEGIN

@@ -443,7 +443,20 @@ cstore_relation_set_new_filenode(Relation rel,
 								 MultiXactId *minmulti)
 {
 	SMgrRelation srel;
-	CStoreOptions *options = CStoreTableAMGetOptions();
+	DataFileMetadata *metadata = ReadDataFileMetadata(rel->rd_node.relNode, true);
+	uint64 blockRowCount = 0;
+
+	if (metadata != NULL)
+	{
+		/* existing table (e.g. TRUNCATE), use existing blockRowCount */
+		blockRowCount = metadata->blockRowCount;
+	}
+	else
+	{
+		/* new table, use options */
+		CStoreOptions *options = CStoreTableAMGetOptions();
+		blockRowCount = options->blockRowCount;
+	}
 
 	/* delete old relfilenode metadata */
 	DeleteDataFileMetadataRowIfExists(rel->rd_node.relNode);
@@ -452,7 +465,7 @@ cstore_relation_set_new_filenode(Relation rel,
 	*freezeXid = RecentXmin;
 	*minmulti = GetOldestMultiXactId();
 	srel = RelationCreateStorage(*newrnode, persistence);
-	InitCStoreDataFileMetadata(newrnode->relNode, options->blockRowCount);
+	InitCStoreDataFileMetadata(newrnode->relNode, blockRowCount);
 	smgrclose(srel);
 }
 
@@ -460,7 +473,20 @@ cstore_relation_set_new_filenode(Relation rel,
 static void
 cstore_relation_nontransactional_truncate(Relation rel)
 {
-	elog(ERROR, "cstore_relation_nontransactional_truncate not implemented");
+	DataFileMetadata *metadata = ReadDataFileMetadata(rel->rd_node.relNode, false);
+
+	/*
+	 * No need to set new relfilenode, since the table was created in this
+	 * transaction and no other transaction can see this relation yet. We
+	 * can just truncate the relation.
+	 *
+	 * This is similar to what is done in heapam_relation_nontransactional_truncate.
+	 */
+	RelationTruncate(rel, 0);
+
+	/* Delete old relfilenode metadata and recreate it */
+	DeleteDataFileMetadataRowIfExists(rel->rd_node.relNode);
+	InitCStoreDataFileMetadata(rel->rd_node.relNode, metadata->blockRowCount);
 }
 
 
