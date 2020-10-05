@@ -342,22 +342,19 @@ ShardIntervalOpExpressions(ShardInterval *shardInterval, Index rteIndex)
 
 
 /*
- * AddShardIntervalRestrictionToSelect adds the following range boundaries
- * with the given subquery and shardInterval:
+ * AddPartitionKeyNotNullFilterToSelect adds the following filters to a subquery:
  *
- *    hashfunc(partitionColumn) >= $lower_bound AND
- *    hashfunc(partitionColumn) <= $upper_bound
+ *    partitionColumn IS NOT NULL
  *
  * The function expects and asserts that subquery's target list contains a partition
  * column value. Thus, this function should never be called with reference tables.
  */
 void
-AddShardIntervalRestrictionToSelect(Query *subqery, ShardInterval *shardInterval)
+AddPartitionKeyNotNullFilterToSelect(Query *subqery)
 {
 	List *targetList = subqery->targetList;
 	ListCell *targetEntryCell = NULL;
 	Var *targetPartitionColumnVar = NULL;
-	List *boundExpressionList = NIL;
 
 	/* iterate through the target entries */
 	foreach(targetEntryCell, targetList)
@@ -375,82 +372,21 @@ AddShardIntervalRestrictionToSelect(Query *subqery, ShardInterval *shardInterval
 	/* we should have found target partition column */
 	Assert(targetPartitionColumnVar != NULL);
 
-	Oid integer4GEoperatorId = get_opfamily_member(INTEGER_BTREE_FAM_OID, INT4OID,
-												   INT4OID,
-												   BTGreaterEqualStrategyNumber);
-	Oid integer4LEoperatorId = get_opfamily_member(INTEGER_BTREE_FAM_OID, INT4OID,
-												   INT4OID,
-												   BTLessEqualStrategyNumber);
-
-	/* ensure that we find the correct operators */
-	Assert(integer4GEoperatorId != InvalidOid);
-	Assert(integer4LEoperatorId != InvalidOid);
-
-	/* look up the type cache */
-	TypeCacheEntry *typeEntry = lookup_type_cache(targetPartitionColumnVar->vartype,
-												  TYPECACHE_HASH_PROC_FINFO);
-
-	/* probably never possible given that the tables are already hash partitioned */
-	if (!OidIsValid(typeEntry->hash_proc_finfo.fn_oid))
-	{
-		ereport(ERROR, (errcode(ERRCODE_UNDEFINED_FUNCTION),
-						errmsg("could not identify a hash function for type %s",
-							   format_type_be(targetPartitionColumnVar->vartype))));
-	}
-
-	/*
-	 * Generate hashfunc(partCol) expression.
-	 * Don't set inputcollid as we don't support non deterministic collations.
-	 */
-	FuncExpr *hashFunctionExpr = makeNode(FuncExpr);
-	hashFunctionExpr->funcid = CitusWorkerHashFunctionId();
-	hashFunctionExpr->args = list_make1(targetPartitionColumnVar);
-
-	/* hash functions always return INT4 */
-	hashFunctionExpr->funcresulttype = INT4OID;
-
-	/* generate hashfunc(partCol) >= shardMinValue OpExpr */
-	OpExpr *greaterThanAndEqualsBoundExpr =
-		(OpExpr *) make_opclause(integer4GEoperatorId,
-								 InvalidOid, false,
-								 (Expr *) hashFunctionExpr,
-								 (Expr *) MakeInt4Constant(shardInterval->minValue),
-								 InvalidOid, InvalidOid);
-
-	/* update the operators with correct operator numbers and function ids */
-	greaterThanAndEqualsBoundExpr->opfuncid =
-		get_opcode(greaterThanAndEqualsBoundExpr->opno);
-	greaterThanAndEqualsBoundExpr->opresulttype =
-		get_func_rettype(greaterThanAndEqualsBoundExpr->opfuncid);
-
-	/* generate hashfunc(partCol) <= shardMinValue OpExpr */
-	OpExpr *lessThanAndEqualsBoundExpr =
-		(OpExpr *) make_opclause(integer4LEoperatorId,
-								 InvalidOid, false,
-								 (Expr *) hashFunctionExpr,
-								 (Expr *) MakeInt4Constant(shardInterval->maxValue),
-								 InvalidOid, InvalidOid);
-
-	/* update the operators with correct operator numbers and function ids */
-	lessThanAndEqualsBoundExpr->opfuncid = get_opcode(lessThanAndEqualsBoundExpr->opno);
-	lessThanAndEqualsBoundExpr->opresulttype =
-		get_func_rettype(lessThanAndEqualsBoundExpr->opfuncid);
-
-	/* finally add the operators to a list and make them explicitly anded */
-	boundExpressionList = lappend(boundExpressionList, greaterThanAndEqualsBoundExpr);
-	boundExpressionList = lappend(boundExpressionList, lessThanAndEqualsBoundExpr);
-
-	Expr *andedBoundExpressions = make_ands_explicit(boundExpressionList);
+	/* create expression for partition_column IS NOT NULL */
+	NullTest *nullTest = makeNode(NullTest);
+	nullTest->nulltesttype = IS_NOT_NULL;
+	nullTest->arg = (Expr *) targetPartitionColumnVar;
+	nullTest->argisrow = false;
 
 	/* finally add the quals */
 	if (subqery->jointree->quals == NULL)
 	{
-		subqery->jointree->quals = (Node *) andedBoundExpressions;
+		subqery->jointree->quals = (Node *) nullTest;
 	}
 	else
 	{
 		subqery->jointree->quals = make_and_qual(subqery->jointree->quals,
-												 (Node *) andedBoundExpressions);
+												 (Node *) nullTest);
 	}
 }
 
