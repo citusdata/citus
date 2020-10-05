@@ -20,6 +20,7 @@
 #include "storage/bufpage.h"
 #include "storage/lockdefs.h"
 #include "utils/relcache.h"
+#include "utils/snapmgr.h"
 
 /* Defines for valid option names */
 #define OPTION_NAME_COMPRESSION_TYPE "compression"

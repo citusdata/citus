@@ -377,7 +377,8 @@ ReadDataFileMetadata(Oid relfilenode, bool missingOk)
 	index = index_open(CStoreStripesIndexRelationId(), AccessShareLock);
 	tupleDescriptor = RelationGetDescr(cstoreStripes);
 
-	scanDescriptor = systable_beginscan_ordered(cstoreStripes, index, NULL, 1, scanKey);
+	scanDescriptor = systable_beginscan_ordered(cstoreStripes, index, NULL, 1,
+												scanKey);
 
 	while (HeapTupleIsValid(heapTuple = systable_getnext(scanDescriptor)))
 	{

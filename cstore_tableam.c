@@ -631,7 +631,7 @@ LogRelationStats(Relation rel, int elevel)
 	TupleDesc tupdesc = RelationGetDescr(rel);
 	uint64 droppedBlocksWithData = 0;
 
-	datafileMetadata = ReadDataFileMetadata(relfilenode);
+	datafileMetadata = ReadDataFileMetadata(relfilenode, false);
 	stripeCount = list_length(datafileMetadata->stripeMetadataList);
 
 	foreach(stripeMetadataCell, datafileMetadata->stripeMetadataList)
@@ -765,15 +765,7 @@ TruncateCStore(Relation rel, int elevel)
 	old_rel_pages = smgrnblocks(rel->rd_smgr, MAIN_FORKNUM);
 	RelationCloseSmgr(rel);
 
-	/*
-	 * Get metadata as viewed in latest snapshot. Reading metadata in transaction
-	 * snapshot is not enough, since stripes could have been created between
-	 * current transaction start and lock acquisition time. Ignoring those
-	 * stripes can destory data.
-	 */
-	PushActiveSnapshot(GetLatestSnapshot());
-	metadata = ReadDataFileMetadata(rel->rd_node.relNode);
-	PopActiveSnapshot();
+	metadata = ReadDataFileMetadata(rel->rd_node.relNode, false);
 
 	/* loop over stripes and find max used block */
 	foreach(stripeMetadataCell, metadata->stripeMetadataList)
