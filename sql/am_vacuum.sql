@@ -1,4 +1,4 @@
-SELECT count(*) AS columnar_table_count FROM cstore.cstore_tables \gset
+SELECT count(*) AS columnar_table_count FROM cstore.cstore_data_files \gset
 
 CREATE TABLE t(a int, b int) USING cstore_tableam;
 
@@ -39,9 +39,9 @@ VACUUM FULL t;
 SELECT stripe, attr, block, minimum_value IS NULL, maximum_value IS NULL FROM cstore.cstore_skipnodes a, pg_class b WHERE a.relfilenode=b.relfilenode AND b.relname='t' ORDER BY 1, 2, 3;
 
 -- Make sure we cleaned-up the transient table metadata after VACUUM FULL commands
-SELECT count(*) - :columnar_table_count FROM cstore.cstore_tables;
+SELECT count(*) - :columnar_table_count FROM cstore.cstore_data_files;
 
 DROP TABLE t;
 
 -- Make sure we cleaned the metadata for t too
-SELECT count(*) - :columnar_table_count FROM cstore.cstore_tables;
+SELECT count(*) - :columnar_table_count FROM cstore.cstore_data_files;

@@ -143,8 +143,8 @@ RelationColumnList(Relation rel)
 		Index varno = 0;
 		AttrNumber varattno = i + 1;
 		Oid vartype = tupdesc->attrs[i].atttypid;
-		int32 vartypmod = 0;
-		Oid varcollid = 0;
+		int32 vartypmod = tupdesc->attrs[i].atttypmod;
+		Oid varcollid = tupdesc->attrs[i].attcollation;
 		Index varlevelsup = 0;
 		Var *var;
 
@@ -530,16 +530,14 @@ cstore_relation_copy_for_cluster(Relation OldHeap, Relation NewHeap,
 	TableWriteState *writeState = NULL;
 	TableReadState *readState = NULL;
 	CStoreOptions *cstoreOptions = NULL;
-	Datum *sourceValues = NULL;
-	bool *sourceNulls = NULL;
-	Datum *targetValues = NULL;
-	bool *targetNulls = NULL;
+	Datum *values = NULL;
+	bool *nulls = NULL;
 	TupleDesc sourceDesc = RelationGetDescr(OldHeap);
 	TupleDesc targetDesc = RelationGetDescr(NewHeap);
 
 	if (OldIndex != NULL || use_sort)
 	{
-		ereport(ERROR, (errmsg("cstore_am doesn't support indexes")));
+		ereport(ERROR, (errmsg(CSTORE_TABLEAM_NAME " doesn't support indexes")));
 	}
 
 	/*
@@ -559,34 +557,18 @@ cstore_relation_copy_for_cluster(Relation OldHeap, Relation NewHeap,
 
 	readState = CStoreBeginRead(OldHeap, sourceDesc, RelationColumnList(OldHeap), NULL);
 
-	sourceValues = palloc0(sourceDesc->natts * sizeof(Datum));
-	sourceNulls = palloc0(sourceDesc->natts * sizeof(bool));
-
-	targetValues = palloc0(targetDesc->natts * sizeof(Datum));
-	targetNulls = palloc0(targetDesc->natts * sizeof(bool));
+	values = palloc0(sourceDesc->natts * sizeof(Datum));
+	nulls = palloc0(sourceDesc->natts * sizeof(bool));
 
 	*num_tuples = 0;
 
-	while (CStoreReadNextRow(readState, sourceValues, sourceNulls))
+	while (CStoreReadNextRow(readState, values, nulls))
 	{
-		memset(targetNulls, true, targetDesc->natts * sizeof(bool));
-
-		for (int attrIndex = 0; attrIndex < sourceDesc->natts; attrIndex++)
-		{
-			FormData_pg_attribute *sourceAttr = TupleDescAttr(sourceDesc, attrIndex);
-
-			if (!sourceAttr->attisdropped)
-			{
-				targetNulls[attrIndex] = sourceNulls[attrIndex];
-				targetValues[attrIndex] = sourceValues[attrIndex];
-			}
-		}
-
-		CStoreWriteRow(writeState, targetValues, targetNulls);
+		CStoreWriteRow(writeState, values, nulls);
 		(*num_tuples)++;
 	}
 
-	*tups_vacuumed = *num_tuples;
+	*tups_vacuumed = 0;
 
 	CStoreEndWrite(writeState);
 	CStoreEndRead(readState);
