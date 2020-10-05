@@ -15,7 +15,7 @@ SELECT 1 FROM master_add_node('localhost', :master_port, groupId => 0);
 RESET client_min_messages;
 -- when using local execution, multi-row & router inserts works fine
 -- even when not specifying some default columns
-CREATE TABLE reference_table(a INT DEFAULT 1111, b INT DEFAULT 2222);
+CREATE TABLE reference_table(column1 INT DEFAULT 1111, column2 INT DEFAULT 2222);
 SELECT create_reference_table('reference_table');
  create_reference_table
 ---------------------------------------------------------------------
@@ -23,47 +23,47 @@ SELECT create_reference_table('reference_table');
 (1 row)
 
 INSERT INTO reference_table VALUES (5), (6);
-NOTICE:  executing the command locally: INSERT INTO multi_row_router_insert.reference_table_1511000 AS citus_table_alias (a, b) VALUES (5,2222), (6,2222)
+NOTICE:  executing the command locally: INSERT INTO multi_row_router_insert.reference_table_1511000 AS citus_table_alias (column1, column2) VALUES (5,2222), (6,2222)
 -- note that first column is specified in below INSERT
 INSERT INTO reference_table VALUES (DEFAULT), (7);
-NOTICE:  executing the command locally: INSERT INTO multi_row_router_insert.reference_table_1511000 AS citus_table_alias (a, b) VALUES (1111,2222), (7,2222)
-INSERT INTO reference_table (b) VALUES (8), (9);
-NOTICE:  executing the command locally: INSERT INTO multi_row_router_insert.reference_table_1511000 AS citus_table_alias (a, b) VALUES (1111,8), (1111,9)
-PREPARE prepared_statement(int) AS INSERT INTO reference_table (b) VALUES ($1), ($1 * 500);
+NOTICE:  executing the command locally: INSERT INTO multi_row_router_insert.reference_table_1511000 AS citus_table_alias (column1, column2) VALUES (1111,2222), (7,2222)
+INSERT INTO reference_table (column2) VALUES (8), (9);
+NOTICE:  executing the command locally: INSERT INTO multi_row_router_insert.reference_table_1511000 AS citus_table_alias (column1, column2) VALUES (1111,8), (1111,9)
+PREPARE prepared_statement(int) AS INSERT INTO reference_table (column2) VALUES ($1), ($1 * 500);
 EXECUTE prepared_statement(1);
-NOTICE:  executing the command locally: INSERT INTO multi_row_router_insert.reference_table_1511000 AS citus_table_alias (a, b) VALUES (1111,1), (1111,500)
+NOTICE:  executing the command locally: INSERT INTO multi_row_router_insert.reference_table_1511000 AS citus_table_alias (column1, column2) VALUES (1111,1), (1111,500)
 EXECUTE prepared_statement(1);
-NOTICE:  executing the command locally: INSERT INTO multi_row_router_insert.reference_table_1511000 AS citus_table_alias (a, b) VALUES (1111,1), (1111,500)
+NOTICE:  executing the command locally: INSERT INTO multi_row_router_insert.reference_table_1511000 AS citus_table_alias (column1, column2) VALUES (1111,1), (1111,500)
 EXECUTE prepared_statement(1);
-NOTICE:  executing the command locally: INSERT INTO multi_row_router_insert.reference_table_1511000 AS citus_table_alias (a, b) VALUES (1111,1), (1111,500)
+NOTICE:  executing the command locally: INSERT INTO multi_row_router_insert.reference_table_1511000 AS citus_table_alias (column1, column2) VALUES (1111,1), (1111,500)
 EXECUTE prepared_statement(2);
-NOTICE:  executing the command locally: INSERT INTO multi_row_router_insert.reference_table_1511000 AS citus_table_alias (a, b) VALUES (1111,2), (1111,1000)
+NOTICE:  executing the command locally: INSERT INTO multi_row_router_insert.reference_table_1511000 AS citus_table_alias (column1, column2) VALUES (1111,2), (1111,1000)
 EXECUTE prepared_statement(3);
-NOTICE:  executing the command locally: INSERT INTO multi_row_router_insert.reference_table_1511000 AS citus_table_alias (a, b) VALUES (1111,3), (1111,1500)
+NOTICE:  executing the command locally: INSERT INTO multi_row_router_insert.reference_table_1511000 AS citus_table_alias (column1, column2) VALUES (1111,3), (1111,1500)
 EXECUTE prepared_statement(3);
-NOTICE:  executing the command locally: INSERT INTO multi_row_router_insert.reference_table_1511000 AS citus_table_alias (a, b) VALUES (1111,3), (1111,1500)
+NOTICE:  executing the command locally: INSERT INTO multi_row_router_insert.reference_table_1511000 AS citus_table_alias (column1, column2) VALUES (1111,3), (1111,1500)
 SELECT * FROM reference_table ORDER BY 1,2;
-NOTICE:  executing the command locally: SELECT a, b FROM multi_row_router_insert.reference_table_1511000 reference_table ORDER BY a, b
-  a   |  b
+NOTICE:  executing the command locally: SELECT column1, column2 FROM multi_row_router_insert.reference_table_1511000 reference_table ORDER BY column1, column2
+ column1 | column2
 ---------------------------------------------------------------------
-    5 | 2222
-    6 | 2222
-    7 | 2222
- 1111 |    1
- 1111 |    1
- 1111 |    1
- 1111 |    2
- 1111 |    3
- 1111 |    3
- 1111 |    8
- 1111 |    9
- 1111 |  500
- 1111 |  500
- 1111 |  500
- 1111 | 1000
- 1111 | 1500
- 1111 | 1500
- 1111 | 2222
+       5 |    2222
+       6 |    2222
+       7 |    2222
+    1111 |       1
+    1111 |       1
+    1111 |       1
+    1111 |       2
+    1111 |       3
+    1111 |       3
+    1111 |       8
+    1111 |       9
+    1111 |     500
+    1111 |     500
+    1111 |     500
+    1111 |    1000
+    1111 |    1500
+    1111 |    1500
+    1111 |    2222
 (18 rows)
 
 CREATE OR REPLACE FUNCTION square(a INT) RETURNS INT AS $$

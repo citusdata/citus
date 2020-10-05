@@ -15,15 +15,15 @@ RESET client_min_messages;
 -- when using local execution, multi-row & router inserts works fine
 -- even when not specifying some default columns
 
-CREATE TABLE reference_table(a INT DEFAULT 1111, b INT DEFAULT 2222);
+CREATE TABLE reference_table(column1 INT DEFAULT 1111, column2 INT DEFAULT 2222);
 SELECT create_reference_table('reference_table');
 
 INSERT INTO reference_table VALUES (5), (6);
 -- note that first column is specified in below INSERT
 INSERT INTO reference_table VALUES (DEFAULT), (7);
-INSERT INTO reference_table (b) VALUES (8), (9);
+INSERT INTO reference_table (column2) VALUES (8), (9);
 
-PREPARE prepared_statement(int) AS INSERT INTO reference_table (b) VALUES ($1), ($1 * 500);
+PREPARE prepared_statement(int) AS INSERT INTO reference_table (column2) VALUES ($1), ($1 * 500);
 EXECUTE prepared_statement(1);
 EXECUTE prepared_statement(1);
 EXECUTE prepared_statement(1);
