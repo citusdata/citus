@@ -45,7 +45,7 @@ ifeq ($(USE_FDW),yes)
 	OBJS += cstore_fdw.o
 	REGRESS += fdw_create fdw_load fdw_query fdw_analyze fdw_data_types \
 		   fdw_functions fdw_block_filtering fdw_drop fdw_insert \
-		   fdw_copyto fdw_alter fdw_truncate fdw_clean
+		   fdw_copyto fdw_alter fdw_rollback fdw_truncate fdw_clean
 endif
 
 # disabled tests: am_block_filtering
@@ -53,7 +53,7 @@ ifeq ($(USE_TABLEAM),yes)
 	PG_CFLAGS += -DUSE_TABLEAM
 	OBJS += cstore_tableam.o
 	REGRESS += am_create am_load am_query am_analyze am_data_types am_functions \
-	           am_drop am_insert am_copyto am_alter am_truncate am_clean
+	           am_drop am_insert am_copyto am_alter am_rollback am_truncate am_clean
 endif
 
 ifeq ($(enable_coverage),yes)

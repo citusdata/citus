@@ -403,7 +403,19 @@ WriteToSmgr(TableWriteState *writeState, char *data, uint32 dataLength)
 			PageInit(page, BLCKSZ, 0);
 		}
 
-		/* always appending */
+		/*
+		 * After a transaction has been rolled-back, we might be
+		 * over-writing the rolledback write, so phdr->pd_lower can be
+		 * different from addr.offset.
+		 *
+		 * We reset pd_lower to reset the rolledback write.
+		 */
+		if (phdr->pd_lower > addr.offset)
+		{
+			ereport(DEBUG1, (errmsg("over-writing page %u", addr.blockno),
+							 errdetail("This can happen after a roll-back.")));
+			phdr->pd_lower = addr.offset;
+		}
 		Assert(phdr->pd_lower == addr.offset);
 
 		START_CRIT_SECTION();
