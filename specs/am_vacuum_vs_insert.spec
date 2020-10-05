@@ -44,4 +44,3 @@ step "s2-select"
 
 permutation "s1-insert" "s1-begin" "s1-insert" "s2-vacuum" "s1-commit" "s2-select"
 permutation "s1-insert" "s1-begin" "s1-insert" "s2-vacuum-full" "s1-commit" "s2-select"
-

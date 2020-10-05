@@ -57,9 +57,45 @@ SELECT pg_size_pretty(pg_relation_size('t'));
 COMMIT;
 
 -- vacuum should truncate the relation to the usable space
-VACUUM t;
+VACUUM VERBOSE t;
 SELECT pg_size_pretty(pg_relation_size('t'));
 SELECT count(*) FROM t;
+
+-- add some stripes with different compression types and create some gaps,
+-- then vacuum to print stats
+
+BEGIN;
+SET cstore.block_row_count TO 1000;
+SET cstore.stripe_row_count TO 2000;
+SET cstore.compression TO "pglz";
+SAVEPOINT s1;
+INSERT INTO t SELECT i FROM generate_series(1, 1500) i;
+ROLLBACK TO SAVEPOINT s1;
+INSERT INTO t SELECT i / 5 FROM generate_series(1, 1500) i;
+SET cstore.compression TO "none";
+SAVEPOINT s2;
+INSERT INTO t SELECT i FROM generate_series(1, 1500) i;
+ROLLBACK TO SAVEPOINT s2;
+INSERT INTO t SELECT i / 5 FROM generate_series(1, 1500) i;
+COMMIT;
+
+VACUUM VERBOSE t;
+
+SELECT count(*) FROM t;
+
+-- check that we report blocks with data for dropped columns
+ALTER TABLE t ADD COLUMN c int;
+INSERT INTO t SELECT 1, i / 5 FROM generate_series(1, 1500) i;
+ALTER TABLE t DROP COLUMN c;
+
+VACUUM VERBOSE t;
+
+-- vacuum full should remove blocks for dropped columns
+-- note that, a block will be stored in non-compressed for if compression
+-- doesn't reduce its size.
+SET cstore.compression TO "pglz";
+VACUUM FULL t;
+VACUUM VERBOSE t;
 
 DROP TABLE t;
 

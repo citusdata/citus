@@ -134,7 +134,14 @@ SELECT pg_size_pretty(pg_relation_size('t'));
 
 COMMIT;
 -- vacuum should truncate the relation to the usable space
-VACUUM t;
+VACUUM VERBOSE t;
+INFO:  "t": truncated 7 to 2 pages
+DETAIL:  CPU: user: 0.00 s, system: 0.00 s, elapsed: 0.00 s
+INFO:  statistics for "t":
+total file size: 16384, total data size: 10754
+total row count: 2530, stripe count: 3, average rows per stripe: 843
+block count: 3, containing data for dropped columns: 0, none compressed: 3, pglz compressed: 0
+
 SELECT pg_size_pretty(pg_relation_size('t'));
  pg_size_pretty 
 ----------------
@@ -146,6 +153,55 @@ SELECT count(*) FROM t;
 -------
   2530
 (1 row)
+
+-- add some stripes with different compression types and create some gaps,
+-- then vacuum to print stats
+BEGIN;
+SET cstore.block_row_count TO 1000;
+SET cstore.stripe_row_count TO 2000;
+SET cstore.compression TO "pglz";
+SAVEPOINT s1;
+INSERT INTO t SELECT i FROM generate_series(1, 1500) i;
+ROLLBACK TO SAVEPOINT s1;
+INSERT INTO t SELECT i / 5 FROM generate_series(1, 1500) i;
+SET cstore.compression TO "none";
+SAVEPOINT s2;
+INSERT INTO t SELECT i FROM generate_series(1, 1500) i;
+ROLLBACK TO SAVEPOINT s2;
+INSERT INTO t SELECT i / 5 FROM generate_series(1, 1500) i;
+COMMIT;
+VACUUM VERBOSE t;
+INFO:  statistics for "t":
+total file size: 24576, total data size: 18808
+total row count: 5530, stripe count: 5, average rows per stripe: 1106
+block count: 7, containing data for dropped columns: 0, none compressed: 5, pglz compressed: 2
+
+SELECT count(*) FROM t;
+ count 
+-------
+  5530
+(1 row)
+
+-- check that we report blocks with data for dropped columns
+ALTER TABLE t ADD COLUMN c int;
+INSERT INTO t SELECT 1, i / 5 FROM generate_series(1, 1500) i;
+ALTER TABLE t DROP COLUMN c;
+VACUUM VERBOSE t;
+INFO:  statistics for "t":
+total file size: 32768, total data size: 31372
+total row count: 7030, stripe count: 6, average rows per stripe: 1171
+block count: 11, containing data for dropped columns: 2, none compressed: 9, pglz compressed: 2
+
+-- vacuum full should remove blocks for dropped columns
+-- note that, a block will be stored in non-compressed for if compression
+-- doesn't reduce its size.
+SET cstore.compression TO "pglz";
+VACUUM FULL t;
+VACUUM VERBOSE t;
+INFO:  statistics for "t":
+total file size: 16384, total data size: 15728
+total row count: 7030, stripe count: 4, average rows per stripe: 1757
+block count: 8, containing data for dropped columns: 0, none compressed: 2, pglz compressed: 6
 
 DROP TABLE t;
 -- Make sure we cleaned the metadata for t too

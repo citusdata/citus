@@ -69,8 +69,8 @@ static void CStoreTableAMObjectAccessHook(ObjectAccessType access, Oid classId, 
 static bool IsCStoreTableAmTable(Oid relationId);
 static bool ConditionalLockRelationWithTimeout(Relation rel, LOCKMODE lockMode,
 											   int timeout, int retryInterval);
-
-
+static void LogRelationStats(Relation rel, int elevel);
+static char * CompressionTypeStr(CompressionType type);
 static void TruncateCStore(Relation rel, int elevel);
 
 static CStoreOptions *
@@ -608,6 +608,108 @@ cstore_vacuum_rel(Relation rel, VacuumParams *params,
 	if (params->truncate == VACOPT_TERNARY_ENABLED)
 	{
 		TruncateCStore(rel, elevel);
+	}
+
+	LogRelationStats(rel, elevel);
+}
+
+
+static void
+LogRelationStats(Relation rel, int elevel)
+{
+	DataFileMetadata *datafileMetadata = NULL;
+	ListCell *stripeMetadataCell = NULL;
+	Oid relfilenode = rel->rd_node.relNode;
+	StringInfo infoBuf = makeStringInfo();
+
+	int compressionStats[COMPRESSION_COUNT] = { 0 };
+	uint64 totalStripeLength = 0;
+	uint64 tupleCount = 0;
+	uint64 blockCount = 0;
+	uint64 relPages = 0;
+	int stripeCount = 0;
+	TupleDesc tupdesc = RelationGetDescr(rel);
+	uint64 droppedBlocksWithData = 0;
+
+	datafileMetadata = ReadDataFileMetadata(relfilenode);
+	stripeCount = list_length(datafileMetadata->stripeMetadataList);
+
+	foreach(stripeMetadataCell, datafileMetadata->stripeMetadataList)
+	{
+		StripeMetadata *stripe = lfirst(stripeMetadataCell);
+		StripeSkipList *skiplist = ReadStripeSkipList(relfilenode, stripe->id,
+													  RelationGetDescr(rel),
+													  stripe->blockCount);
+		for (uint32 column = 0; column < skiplist->columnCount; column++)
+		{
+			bool attrDropped = tupdesc->attrs[column].attisdropped;
+			for (uint32 block = 0; block < skiplist->blockCount; block++)
+			{
+				ColumnBlockSkipNode *skipnode =
+					&skiplist->blockSkipNodeArray[column][block];
+
+				/* ignore zero length blocks for dropped attributes */
+				if (skipnode->valueLength > 0)
+				{
+					compressionStats[skipnode->valueCompressionType]++;
+					blockCount++;
+
+					if (attrDropped)
+					{
+						droppedBlocksWithData++;
+					}
+				}
+			}
+		}
+
+		tupleCount += stripe->rowCount;
+		totalStripeLength += stripe->dataLength;
+	}
+
+	RelationOpenSmgr(rel);
+	relPages = smgrnblocks(rel->rd_smgr, MAIN_FORKNUM);
+	RelationCloseSmgr(rel);
+
+	appendStringInfo(infoBuf, "total file size: %ld, total data size: %ld\n",
+					 relPages * BLCKSZ, totalStripeLength);
+	appendStringInfo(infoBuf,
+					 "total row count: %ld, stripe count: %d, "
+					 "average rows per stripe: %ld\n",
+					 tupleCount, stripeCount, tupleCount / stripeCount);
+	appendStringInfo(infoBuf,
+					 "block count: %ld"
+					 ", containing data for dropped columns: %ld",
+					 blockCount, droppedBlocksWithData);
+	for (int compressionType = 0; compressionType < COMPRESSION_COUNT; compressionType++)
+	{
+		appendStringInfo(infoBuf,
+						 ", %s compressed: %d",
+						 CompressionTypeStr(compressionType),
+						 compressionStats[compressionType]);
+	}
+	appendStringInfoString(infoBuf, "\n");
+
+	ereport(elevel, (errmsg("statistics for \"%s\":\n%s", RelationGetRelationName(rel),
+							infoBuf->data)));
+}
+
+
+/*
+ * CompressionTypeStr returns string representation of a compression type.
+ */
+static char *
+CompressionTypeStr(CompressionType type)
+{
+	switch (type)
+	{
+		case COMPRESSION_NONE:
+			return "none";
+
+		case COMPRESSION_PG_LZ:
+			return "pglz";
+
+		default:
+			return "unknown";
 	}
 }
 
