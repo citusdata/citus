@@ -17,6 +17,7 @@
 
 #include "commands/explain.h"
 #include "catalog/namespace.h"
+#include "distributed/citus_ruleutils.h"
 #include "distributed/citus_safe_lib.h"
 #include "nodes/parsenodes.h"
 #include "parser/parse_func.h"

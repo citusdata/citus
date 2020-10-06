@@ -334,42 +334,9 @@ SELECT raise_failed_aclcheck($$
 $$);
 ERROR:  must be owner of the object
 CONTEXT:  PL/pgSQL function raise_failed_aclcheck(text) line 6 at RAISE
-SELECT raise_failed_aclcheck($$
-    SELECT master_drop_sequences(ARRAY['public.distributed_mx_table_some_val_seq']);
-$$);
-ERROR:  must be owner of the object
-CONTEXT:  PL/pgSQL function raise_failed_aclcheck(text) line 6 at RAISE
-SELECT raise_failed_aclcheck($$
-    SELECT master_drop_sequences(ARRAY['distributed_mx_table_some_val_seq']);
-$$);
-ERROR:  must be owner of the object
-CONTEXT:  PL/pgSQL function raise_failed_aclcheck(text) line 6 at RAISE
-SELECT master_drop_sequences(ARRAY['non_existing_schema.distributed_mx_table_some_val_seq']);
- master_drop_sequences
----------------------------------------------------------------------
-
-(1 row)
-
-SELECT master_drop_sequences(ARRAY['']);
-ERROR:  invalid name syntax
-SELECT master_drop_sequences(ARRAY['public.']);
-ERROR:  invalid name syntax
-SELECT master_drop_sequences(ARRAY['public.distributed_mx_table_some_val_seq_not_existing']);
- master_drop_sequences
----------------------------------------------------------------------
-
-(1 row)
-
 -- make sure that we can drop unrelated tables/sequences
 CREATE TABLE unrelated_table(key serial);
 DROP TABLE unrelated_table;
--- doesn't error out but it has no effect, so no need to error out
-SELECT master_drop_sequences(NULL);
- master_drop_sequences
----------------------------------------------------------------------
-
-(1 row)
-
 \c - postgres - :master_port
 -- finally make sure that the sequence remains
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='distributed_mx_table'::regclass;

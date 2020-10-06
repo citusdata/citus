@@ -210,24 +210,10 @@ $$);
 SELECT raise_failed_aclcheck($$
     SELECT master_remove_partition_metadata('distributed_mx_table'::regclass, 'public', 'distributed_mx_table');
 $$);
-SELECT raise_failed_aclcheck($$
-    SELECT master_drop_sequences(ARRAY['public.distributed_mx_table_some_val_seq']);
-$$);
-SELECT raise_failed_aclcheck($$
-    SELECT master_drop_sequences(ARRAY['distributed_mx_table_some_val_seq']);
-$$);
-
-SELECT master_drop_sequences(ARRAY['non_existing_schema.distributed_mx_table_some_val_seq']);
-SELECT master_drop_sequences(ARRAY['']);
-SELECT master_drop_sequences(ARRAY['public.']);
-SELECT master_drop_sequences(ARRAY['public.distributed_mx_table_some_val_seq_not_existing']);
 
 -- make sure that we can drop unrelated tables/sequences
 CREATE TABLE unrelated_table(key serial);
 DROP TABLE unrelated_table;
-
--- doesn't error out but it has no effect, so no need to error out
-SELECT master_drop_sequences(NULL);
 
 \c - postgres - :master_port
 
