@@ -1576,7 +1576,7 @@ RelationUsesHeapAccessMethodOrNone(Relation relation)
  *
  * The undistributed table will have the same name, columns and rows. It will also have
  * partitions, views, sequences of the old table. Finally it will have everything created
- * by GetTableConstructionCommands function, which include indexes. These will be
+ * by GetPostLoadTableCreationCommands function, which include indexes. These will be
  * re-created during undistribution, so their oids are not preserved either (except for
  * sequences). However, their names are preserved.
  *
@@ -1618,11 +1618,11 @@ UndistributeTable(Oid relationId)
 	}
 
 
-	List *tableBuildingCommands = GetTableBuildingCommands(relationId, true);
-	List *tableConstructionCommands = GetTableConstructionCommands(relationId);
+	List *preLoadCommands = GetPreLoadTableCreationCommands(relationId, true);
+	List *postLoadCommands = GetPostLoadTableCreationCommands(relationId);
 
-	tableConstructionCommands = list_concat(tableConstructionCommands,
-											GetViewCreationCommandsOfTable(relationId));
+	postLoadCommands = list_concat(postLoadCommands,
+								   GetViewCreationCommandsOfTable(relationId));
 
 	int spiResult = SPI_connect();
 	if (spiResult != SPI_OK_CONNECT)
@@ -1655,8 +1655,8 @@ UndistributeTable(Oid relationId)
 			{
 				ereport(ERROR, (errmsg("could not run SPI query")));
 			}
-			tableBuildingCommands = lappend(tableBuildingCommands,
-											attachPartitionCommand);
+			preLoadCommands = lappend(preLoadCommands,
+									  attachPartitionCommand);
 			UndistributeTable(partitionRelationId);
 		}
 	}
@@ -1670,7 +1670,7 @@ UndistributeTable(Oid relationId)
 	ereport(NOTICE, (errmsg("Creating a new local table for %s",
 							quote_qualified_identifier(schemaName, relationName))));
 
-	foreach_ptr(tableCreationCommand, tableBuildingCommands)
+	foreach_ptr(tableCreationCommand, preLoadCommands)
 	{
 		Node *parseTree = ParseTreeNode(tableCreationCommand);
 
@@ -1682,7 +1682,7 @@ UndistributeTable(Oid relationId)
 	ReplaceTable(relationId, get_relname_relid(tempName, schemaId));
 
 	char *tableConstructionCommand = NULL;
-	foreach_ptr(tableConstructionCommand, tableConstructionCommands)
+	foreach_ptr(tableConstructionCommand, postLoadCommands)
 	{
 		spiResult = SPI_execute(tableConstructionCommand, false, 0);
 		if (spiResult != SPI_OK_UTILITY)

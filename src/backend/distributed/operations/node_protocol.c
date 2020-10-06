@@ -221,7 +221,8 @@ master_get_table_ddl_events(PG_FUNCTION_ARGS)
 			functionContext->multi_call_memory_ctx);
 
 		/* allocate DDL statements, and then save position in DDL statements */
-		List *tableDDLEventList = GetTableDDLEvents(relationId, includeSequenceDefaults);
+		List *tableDDLEventList = GetFullTableCreationCommands(relationId,
+															   includeSequenceDefaults);
 		tableDDLEventCell = list_head(tableDDLEventList);
 		ListCellAndListWrapper *wrapper = palloc0(sizeof(ListCellAndListWrapper));
 		wrapper->list = tableDDLEventList;
@@ -522,7 +523,7 @@ ResolveRelationId(text *relationName, bool missingOk)
 
 
 /*
- * GetTableDDLEvents takes in a relationId, includeSequenceDefaults flag,
+ * GetFullTableCreationCommands takes in a relationId, includeSequenceDefaults flag,
  * and returns the list of DDL commands needed to reconstruct the relation.
  * When the flag includeSequenceDefaults is set, the function also creates
  * DEFAULT clauses for columns getting their default values from a sequence.
@@ -531,28 +532,30 @@ ResolveRelationId(text *relationName, bool missingOk)
  * constraint and trigger definitions.
  */
 List *
-GetTableDDLEvents(Oid relationId, bool includeSequenceDefaults)
+GetFullTableCreationCommands(Oid relationId, bool includeSequenceDefaults)
 {
 	List *tableDDLEventList = NIL;
 
-	List *tableCreationCommandList = GetTableCreationCommands(relationId,
-															  includeSequenceDefaults);
-	tableDDLEventList = list_concat(tableDDLEventList, tableCreationCommandList);
+	List *preLoadCreationCommandList =
+		GetPreLoadTableCreationCommands(relationId, includeSequenceDefaults);
 
-	List *otherCommands = GetTableConstructionCommands(relationId);
-	tableDDLEventList = list_concat(tableDDLEventList, otherCommands);
+	tableDDLEventList = list_concat(tableDDLEventList, preLoadCreationCommandList);
+
+	List *postLoadCreationCommandList =
+		GetPostLoadTableCreationCommands(relationId);
+
+	tableDDLEventList = list_concat(tableDDLEventList, postLoadCreationCommandList);
 
 	return tableDDLEventList;
 }
 
 
 /*
- * GetTableConstructionCommands takes in a relationId and returns the list
- * of DDL commands needed to reconstruct the relation except the ones that actually
- * create the table.
+ * GetPostLoadTableCreationCommands takes in a relationId and returns the list
+ * of DDL commands that should be applied after loading the data.
  */
 List *
-GetTableConstructionCommands(Oid relationId)
+GetPostLoadTableCreationCommands(Oid relationId)
 {
 	List *tableDDLEventList = NIL;
 
@@ -561,9 +564,6 @@ GetTableConstructionCommands(Oid relationId)
 
 	List *replicaIdentityEvents = GetTableReplicaIdentityCommand(relationId);
 	tableDDLEventList = list_concat(tableDDLEventList, replicaIdentityEvents);
-
-	List *policyCommands = CreatePolicyCommands(relationId);
-	tableDDLEventList = list_concat(tableDDLEventList, policyCommands);
 
 	List *triggerCommands = GetExplicitTriggerCommandList(relationId);
 	tableDDLEventList = list_concat(tableDDLEventList, triggerCommands);
@@ -604,12 +604,12 @@ GetTableReplicaIdentityCommand(Oid relationId)
 
 
 /*
- * GetTableCreationCommands takes in a relationId, and returns the list of DDL
- * commands needed to reconstruct the relation, excluding indexes and
- * constraints.
+ * GetPreLoadTableCreationCommands takes in a relationId, and returns the list of DDL
+ * commands needed to reconstruct the relation, excluding indexes and constraints,
+ * to facilitate faster data load.
  */
 List *
-GetTableCreationCommands(Oid relationId, bool includeSequenceDefaults)
+GetPreLoadTableCreationCommands(Oid relationId, bool includeSequenceDefaults)
 {
 	List *tableDDLEventList = NIL;
 
@@ -629,30 +629,6 @@ GetTableCreationCommands(Oid relationId, bool includeSequenceDefaults)
 		tableDDLEventList = lappend(tableDDLEventList, serverDef);
 	}
 
-	List *tableBuildingCommands = GetTableBuildingCommands(relationId,
-														   includeSequenceDefaults);
-	tableDDLEventList = list_concat(tableDDLEventList,
-									tableBuildingCommands);
-
-	/* revert back to original search_path */
-	PopOverrideSearchPath();
-
-	return tableDDLEventList;
-}
-
-
-/*
- * GetTableBuildingCommands takes in a relationId, and returns the list of DDL
- * commands needed to rebuild the relation. This does not include the schema
- * and the server commands.
- */
-List *
-GetTableBuildingCommands(Oid relationId, bool includeSequenceDefaults)
-{
-	List *tableDDLEventList = NIL;
-
-	PushOverrideEmptySearchPath(CurrentMemoryContext);
-
 	/* fetch table schema and column option definitions */
 	char *tableSchemaDef = pg_get_tableschemadef_string(relationId,
 														includeSequenceDefaults);
@@ -669,6 +645,9 @@ GetTableBuildingCommands(Oid relationId, bool includeSequenceDefaults)
 	{
 		tableDDLEventList = lappend(tableDDLEventList, tableOwnerDef);
 	}
+
+	List *policyCommands = CreatePolicyCommands(relationId);
+	tableDDLEventList = list_concat(tableDDLEventList, policyCommands);
 
 	/* revert back to original search_path */
 	PopOverrideSearchPath();

@@ -398,7 +398,8 @@ MetadataCreateCommands(void)
 		}
 
 		List *workerSequenceDDLCommands = SequenceDDLCommandsForTable(relationId);
-		List *ddlCommandList = GetTableDDLEvents(relationId, includeSequenceDefaults);
+		List *ddlCommandList = GetFullTableCreationCommands(relationId,
+															includeSequenceDefaults);
 		char *tableOwnerResetCommand = TableOwnerResetCommand(relationId);
 		List *sequenceDependencyCommandList = SequenceDependencyCommandList(relationId);
 
@@ -510,12 +511,9 @@ GetDistributedTableDDLEvents(Oid relationId)
 		commandList = list_concat(commandList, sequenceDDLCommands);
 
 		/* commands to create the table */
-		List *tableDDLCommands = GetTableDDLEvents(relationId, includeSequenceDefaults);
+		List *tableDDLCommands = GetFullTableCreationCommands(relationId,
+															  includeSequenceDefaults);
 		commandList = list_concat(commandList, tableDDLCommands);
-
-		/* command to reset the table owner */
-		char *tableOwnerResetCommand = TableOwnerResetCommand(relationId);
-		commandList = lappend(commandList, tableOwnerResetCommand);
 
 		/* command to associate sequences with table */
 		List *sequenceDependencyCommandList = SequenceDependencyCommandList(relationId);
