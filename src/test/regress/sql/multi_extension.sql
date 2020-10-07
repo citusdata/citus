@@ -470,6 +470,8 @@ SELECT pg_cancel_backend(pid) FROM pg_stat_activity WHERE application_name = 'Ci
 
 -- reconnect
 \c - - - :master_port
+-- run something that goes through planner hook and therefore kicks of maintenance daemon
+SELECT 1;
 
 -- wait for maintenance daemon restart
 SELECT datname, current_database(),
