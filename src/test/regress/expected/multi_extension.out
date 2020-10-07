@@ -723,3 +723,62 @@ CONTEXT:  PL/pgSQL function inline_code_block line 6 at RAISE
 DROP DATABASE another;
 \c - - - :worker_1_port
 DROP DATABASE another;
+\c - - - :master_port
+-- only the regression database should have a maintenance daemon
+SELECT count(*) FROM pg_stat_activity WHERE application_name = 'Citus Maintenance Daemon';
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+-- recreate the extension immediately after the maintenancae daemon errors
+SELECT pg_cancel_backend(pid) FROM pg_stat_activity WHERE application_name = 'Citus Maintenance Daemon';
+ pg_cancel_backend
+---------------------------------------------------------------------
+ t
+(1 row)
+
+DROP EXTENSION citus;
+CREATE EXTENSION citus;
+-- wait for maintenance daemon restart
+SELECT datname, current_database(),
+    usename, (SELECT extowner::regrole::text FROM pg_extension WHERE extname = 'citus')
+FROM test.maintenance_worker();
+  datname   | current_database | usename  | extowner
+---------------------------------------------------------------------
+ regression | regression       | postgres | postgres
+(1 row)
+
+-- confirm that there is only one maintenance daemon
+SELECT count(*) FROM pg_stat_activity WHERE application_name = 'Citus Maintenance Daemon';
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+-- kill the maintenance daemon
+SELECT pg_cancel_backend(pid) FROM pg_stat_activity WHERE application_name = 'Citus Maintenance Daemon';
+ pg_cancel_backend
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- reconnect
+\c - - - :master_port
+-- wait for maintenance daemon restart
+SELECT datname, current_database(),
+    usename, (SELECT extowner::regrole::text FROM pg_extension WHERE extname = 'citus')
+FROM test.maintenance_worker();
+  datname   | current_database | usename  | extowner
+---------------------------------------------------------------------
+ regression | regression       | postgres | postgres
+(1 row)
+
+-- confirm that there is only one maintenance daemon
+SELECT count(*) FROM pg_stat_activity WHERE application_name = 'Citus Maintenance Daemon';
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+DROP TABLE version_mismatch_table;
