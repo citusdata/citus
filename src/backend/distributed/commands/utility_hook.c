@@ -65,6 +65,7 @@
 #include "tcop/utility.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
+#include "utils/snapmgr.h"
 #include "utils/syscache.h"
 
 bool EnableDDLPropagation = true; /* ddl propagation is enabled */
@@ -513,6 +514,26 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		CommandCounterIncrement();
 
 		PostStandardProcessUtility(parsetree);
+
+		if (IsA(parsetree, VacuumStmt))
+		{
+			/*
+			 * We commit the current transaction here so that the global lock
+			 * taken from the shell table for VACUUM is released, which would block execution
+			 * of shard placements.
+			 */
+			if (ActiveSnapshotSet())
+			{
+				PopActiveSnapshot();
+			}
+			CommitTransactionCommand();
+			StartTransactionCommand();
+
+			/*
+			 * We will take the necessary locks in PostprocessVacuumStmt on the shell table(s)
+			 * so no need to take it here.
+			 */
+		}
 	}
 	PG_CATCH();
 	{
