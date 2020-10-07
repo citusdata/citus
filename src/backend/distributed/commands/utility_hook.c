@@ -463,6 +463,15 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		StopMaintenanceDaemon(MyDatabaseId);
 	}
 
+	List *citusVacuumRels = ExtractCitusShellTablesFromVacuum(parsetree);
+	bool shouldSkipStandardUtility = false;
+
+	if (IsA(parsetree, VacuumStmt))
+	{
+		VacuumStmt *vacuumStmt = (VacuumStmt *) parsetree;
+		shouldSkipStandardUtility |= list_length(vacuumStmt->rels) == 0;
+	}
+
 	pstmt->utilityStmt = parsetree;
 
 	PG_TRY();
@@ -484,8 +493,12 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 			citusCanBeUpdatedToAvailableVersion = !InstalledAndAvailableVersionsSame();
 		}
 
-		standard_ProcessUtility(pstmt, queryString, context,
-								params, queryEnv, dest, completionTag);
+		if (!shouldSkipStandardUtility)
+		{
+			standard_ProcessUtility(pstmt, queryString, context,
+									params, queryEnv, dest, completionTag);
+		}
+
 
 		/*
 		 * if we are running ALTER EXTENSION citus UPDATE (to "<version>") command, we may need
@@ -514,26 +527,6 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		CommandCounterIncrement();
 
 		PostStandardProcessUtility(parsetree);
-
-		if (IsA(parsetree, VacuumStmt))
-		{
-			/*
-			 * We commit the current transaction here so that the global lock
-			 * taken from the shell table for VACUUM is released, which would block execution
-			 * of shard placements.
-			 */
-			if (ActiveSnapshotSet())
-			{
-				PopActiveSnapshot();
-			}
-			CommitTransactionCommand();
-			StartTransactionCommand();
-
-			/*
-			 * We will take the necessary locks in PostprocessVacuumStmt on the shell table(s)
-			 * so no need to take it here.
-			 */
-		}
 	}
 	PG_CATCH();
 	{
@@ -621,6 +614,7 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 	if (IsA(parsetree, VacuumStmt))
 	{
 		VacuumStmt *vacuumStmt = (VacuumStmt *) parsetree;
+		vacuumStmt->rels = citusVacuumRels;
 
 		PostprocessVacuumStmt(vacuumStmt, queryString);
 	}

@@ -378,8 +378,8 @@ ROLLBACK;
 BEGIN;
 	INSERT INTO distributed_table VALUES (11, '111',29) ON CONFLICT(key) DO UPDATE SET value = '29' RETURNING *;
 
-	-- this is already disallowed because VACUUM cannot be executed in tx block
-	-- adding in case this is supported some day
+	-- here we don't error because we skip the vacuum on shell table
+	-- and the vacuum on shard placements are not executed in a transaction block
 	VACUUM second_distributed_table;
 ROLLBACK;
 

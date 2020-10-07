@@ -305,6 +305,7 @@ extern ObjectWithArgs * ObjectWithArgsFromOid(Oid funcOid);
 
 /* vacuum.c - forward declarations */
 extern void PostprocessVacuumStmt(VacuumStmt *vacuumStmt, const char *vacuumCommand);
+extern List * ExtractCitusShellTablesFromVacuum(Node *parsetree);
 
 /* trigger.c - forward declarations */
 extern List * GetExplicitTriggerCommandList(Oid relationId);

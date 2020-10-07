@@ -128,6 +128,54 @@ PostprocessVacuumStmt(VacuumStmt *vacuumStmt, const char *vacuumCommand)
 }
 
 
+List *
+ExtractCitusShellTablesFromVacuum(Node *parsetree)
+{
+	if (!IsA(parsetree, VacuumStmt))
+	{
+		return NIL;
+	}
+	VacuumStmt *vacuumStmt = (VacuumStmt *) parsetree;
+
+	CitusVacuumParams vacuumParams = VacuumStmtParams(vacuumStmt);
+	const char *stmtName = (vacuumParams.options & VACOPT_VACUUM) ? "VACUUM" : "ANALYZE";
+	LOCKMODE lockMode = (vacuumParams.options & VACOPT_FULL) ? AccessExclusiveLock :
+						ShareUpdateExclusiveLock;
+
+	/*
+	 * No table in the vacuum statement means vacuuming all relations
+	 * which is not supported by citus.
+	 */
+	int vacuumedRelationCount = list_length(vacuumStmt->rels);
+	if (vacuumedRelationCount == 0)
+	{
+		/* WARN for unqualified VACUUM commands */
+		ereport(WARNING, (errmsg("not propagating %s command to worker nodes", stmtName),
+						  errhint("Provide a specific table in order to %s "
+								  "distributed tables.", stmtName)));
+	}
+
+	VacuumRelation *vacuumRelation = NULL;
+	List *remainingVacuumRels = NIL;
+	List *citusVacuumRels = NIL;
+
+	foreach_ptr(vacuumRelation, vacuumStmt->rels)
+	{
+		Oid relationId = RangeVarGetRelid(vacuumRelation->relation, lockMode, false);
+		if (IsCitusTable(relationId))
+		{
+			citusVacuumRels = lappend(citusVacuumRels, vacuumRelation);
+		}
+		else
+		{
+			remainingVacuumRels = lappend(remainingVacuumRels, vacuumRelation);
+		}
+	}
+	vacuumStmt->rels = remainingVacuumRels;
+	return citusVacuumRels;
+}
+
+
 /*
  * IsSupportedDistributedVacuumStmt returns whether distributed execution of a
  * given VacuumStmt is supported. The provided relationId list represents
@@ -142,19 +190,6 @@ IsDistributedVacuumStmt(int vacuumOptions, List *vacuumRelationIdList)
 	const char *stmtName = (vacuumOptions & VACOPT_VACUUM) ? "VACUUM" : "ANALYZE";
 	bool distributeStmt = false;
 	int distributedRelationCount = 0;
-
-	/*
-	 * No table in the vacuum statement means vacuuming all relations
-	 * which is not supported by citus.
-	 */
-	int vacuumedRelationCount = list_length(vacuumRelationIdList);
-	if (vacuumedRelationCount == 0)
-	{
-		/* WARN for unqualified VACUUM commands */
-		ereport(WARNING, (errmsg("not propagating %s command to worker nodes", stmtName),
-						  errhint("Provide a specific table in order to %s "
-								  "distributed tables.", stmtName)));
-	}
 
 	Oid relationId = InvalidOid;
 	foreach_oid(relationId, vacuumRelationIdList)

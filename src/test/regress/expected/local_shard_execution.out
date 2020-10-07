@@ -702,10 +702,9 @@ BEGIN;
   11 | 29    | 121
 (1 row)
 
-	-- this is already disallowed because VACUUM cannot be executed in tx block
-	-- adding in case this is supported some day
+	-- here we don't error because we skip the vacuum on shell table
+	-- and the vacuum on shard placements are not executed in a transaction block
 	VACUUM second_distributed_table;
-ERROR:  VACUUM cannot run inside a transaction block
 ROLLBACK;
 -- make sure that functions can use local execution
 CREATE OR REPLACE PROCEDURE only_local_execution() AS $$
