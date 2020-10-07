@@ -104,6 +104,9 @@ static HTAB *MaintenanceDaemonDBHash;
 static volatile sig_atomic_t got_SIGHUP = false;
 static volatile sig_atomic_t got_SIGTERM = false;
 
+/* set to true when becoming a maintenance daemon */
+static bool IsMaintenanceDaemon = false;
+
 static void MaintenanceDaemonSigTermHandler(SIGNAL_ARGS);
 static void MaintenanceDaemonSigHupHandler(SIGNAL_ARGS);
 static size_t MaintenanceDaemonShmemSize(void);
@@ -160,15 +163,31 @@ InitializeMaintenanceDaemonBackend(void)
 		return;
 	}
 
-	/* maintenance daemon can ignore itself */
-	if (dbData->workerPid == MyProcPid)
+	if (!found)
 	{
+		/* ensure the values in MaintenanceDaemonDBData are zero */
+		memset(((char *) dbData) + sizeof(Oid), 0,
+			   sizeof(MaintenanceDaemonDBData) - sizeof(Oid));
+	}
+
+	if (IsMaintenanceDaemon)
+	{
+		/*
+		 * InitializeMaintenanceDaemonBackend is called by the maintenance daemon
+		 * itself. In that case, we clearly don't need to start another maintenance
+		 * daemon.
+		 */
+		Assert(found);
+		Assert(dbData->workerPid == MyProcPid);
+
 		LWLockRelease(&MaintenanceDaemonControl->lock);
 		return;
 	}
 
 	if (!found || !dbData->daemonStarted)
 	{
+		Assert(dbData->workerPid == 0);
+
 		BackgroundWorker worker;
 		BackgroundWorkerHandle *handle = NULL;
 
@@ -287,12 +306,32 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 		proc_exit(0);
 	}
 
+	if (myDbData->workerPid != 0)
+	{
+		/*
+		 * Another maintenance daemon is running. This usually happens because
+		 * postgres restarts the daemon after an non-zero exit, and
+		 * InitializeMaintenanceDaemonBackend started one before postgres did.
+		 * In that case, the first one stays and the last one exits.
+		 */
+
+		proc_exit(0);
+	}
+
 	before_shmem_exit(MaintenanceDaemonShmemExit, main_arg);
 
-	Assert(myDbData->workerPid == 0);
-
-	/* from this point, DROP DATABASE will attempt to kill the worker */
+	/*
+	 * Signal that I am the maintenance daemon now.
+	 *
+	 * From this point, DROP DATABASE/EXTENSION will send a SIGTERM to me.
+	 */
 	myDbData->workerPid = MyProcPid;
+
+	/*
+	 * Signal that we are running. This in mainly needed in case of restart after
+	 * an error, otherwise the daemonStarted flag is already true.
+	 */
+	myDbData->daemonStarted = true;
 
 	/* wire up signals */
 	pqsignal(SIGTERM, MaintenanceDaemonSigTermHandler);
@@ -300,6 +339,8 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 	BackgroundWorkerUnblockSignals();
 
 	myDbData->latch = MyLatch;
+
+	IsMaintenanceDaemon = true;
 
 	LWLockRelease(&MaintenanceDaemonControl->lock);
 
@@ -333,8 +374,6 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 		bool foundDeadlock = false;
 
 		CHECK_FOR_INTERRUPTS();
-
-		Assert(myDbData->workerPid == MyProcPid);
 
 		/*
 		 * XXX: Each task should clear the metadata cache before every iteration
@@ -560,15 +599,6 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 			/* check for changed configuration */
 			if (myDbData->userOid != GetSessionUserId())
 			{
-				/*
-				 * Reset myDbData->daemonStarted so InitializeMaintenanceDaemonBackend()
-				 * notices this is a restart.
-				 */
-				LWLockAcquire(&MaintenanceDaemonControl->lock, LW_EXCLUSIVE);
-				myDbData->daemonStarted = false;
-				myDbData->workerPid = 0;
-				LWLockRelease(&MaintenanceDaemonControl->lock);
-
 				/* return code of 1 requests worker restart */
 				proc_exit(1);
 			}
@@ -680,8 +710,15 @@ MaintenanceDaemonShmemExit(int code, Datum arg)
 	MaintenanceDaemonDBData *myDbData = (MaintenanceDaemonDBData *)
 										hash_search(MaintenanceDaemonDBHash, &databaseOid,
 													HASH_FIND, NULL);
-	if (myDbData && myDbData->workerPid == MyProcPid)
+
+	/* myDbData is NULL after StopMaintenanceDaemon */
+	if (myDbData != NULL)
 	{
+		/*
+		 * Confirm that I am still the registered maintenance daemon before exiting.
+		 */
+		Assert(myDbData->workerPid == MyProcPid);
+
 		myDbData->daemonStarted = false;
 		myDbData->workerPid = 0;
 	}
