@@ -30,6 +30,7 @@
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
 #include "postmaster/bgworker_internals.h"
+#include "access/xact.h"
 
 
 #define VACUUM_PARALLEL_NOTSET -2
@@ -58,6 +59,8 @@ static char * DeparseVacuumStmtPrefix(CitusVacuumParams vacuumParams);
 static char * DeparseVacuumColumnNames(List *columnNameList);
 static List * VacuumColumnList(VacuumStmt *vacuumStmt, int relationIndex);
 static List * ExtractVacuumTargetRels(VacuumStmt *vacuumStmt);
+static void ExecuteVacuumOnDistributedTables(VacuumStmt *vacuumStmt, List *relationIdList,
+											 CitusVacuumParams vacuumParams);
 static CitusVacuumParams VacuumStmtParams(VacuumStmt *vacstmt);
 
 /*
@@ -73,13 +76,24 @@ static CitusVacuumParams VacuumStmtParams(VacuumStmt *vacstmt);
 void
 PostprocessVacuumStmt(VacuumStmt *vacuumStmt, const char *vacuumCommand)
 {
-	int relationIndex = 0;
-	List *vacuumRelationList = ExtractVacuumTargetRels(vacuumStmt);
-	List *relationIdList = NIL;
 	CitusVacuumParams vacuumParams = VacuumStmtParams(vacuumStmt);
 	LOCKMODE lockMode = (vacuumParams.options & VACOPT_FULL) ? AccessExclusiveLock :
 						ShareUpdateExclusiveLock;
-	int executedVacuumCount = 0;
+
+
+	if (vacuumParams.options & VACOPT_VACUUM)
+	{
+		/*
+		 * We commit the current transaction here so that the global lock
+		 * taken from the shell table for VACUUM is released, which would block execution
+		 * of shard placements.
+		 */
+		CommitTransactionCommand();
+		StartTransactionCommand();
+	}
+
+	List *vacuumRelationList = ExtractVacuumTargetRels(vacuumStmt);
+	List *relationIdList = NIL;
 
 	RangeVar *vacuumRelation = NULL;
 	foreach_ptr(vacuumRelation, vacuumRelationList)
@@ -95,7 +109,21 @@ PostprocessVacuumStmt(VacuumStmt *vacuumStmt, const char *vacuumCommand)
 		return;
 	}
 
-	/* execute vacuum on distributed tables */
+	ExecuteVacuumOnDistributedTables(vacuumStmt, relationIdList, vacuumParams);
+}
+
+
+/*
+ * ExecuteVacuumOnDistributedTables executes the vacuum for the shard placements of given tables
+ * if they are citus tables.
+ */
+static void
+ExecuteVacuumOnDistributedTables(VacuumStmt *vacuumStmt, List *relationIdList,
+								 CitusVacuumParams vacuumParams)
+{
+	int relationIndex = 0;
+	int executedVacuumCount = 0;
+
 	Oid relationId = InvalidOid;
 	foreach_oid(relationId, relationIdList)
 	{
