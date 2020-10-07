@@ -50,7 +50,7 @@ why we ask this as well as instructions for how to proceed, see the
   sudo apt-get install -y postgresql-server-dev-11 postgresql-11 \
                           libreadline-dev libselinux1-dev libxslt-dev  \
                           libpam0g-dev git flex make libssl-dev    \
-                          libicu-dev \
+                          libicu-dev uuid-dev \
                           libkrb5-dev libcurl4-gnutls-dev autoconf
   ```
 
