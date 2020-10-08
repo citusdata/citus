@@ -138,7 +138,6 @@ CStoreReadNextRow(TableReadState *readState, Datum *columnValues, bool *columnNu
 	while (readState->stripeBuffers == NULL)
 	{
 		StripeBuffers *stripeBuffers = NULL;
-		StripeMetadata *stripeMetadata = NULL;
 		List *stripeMetadataList = readState->datafileMetadata->stripeMetadataList;
 		uint32 stripeCount = list_length(stripeMetadataList);
 
