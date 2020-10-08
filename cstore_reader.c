@@ -179,7 +179,6 @@ CStoreReadNextRow(TableReadState *readState, Datum *columnValues, bool *columnNu
 		uint32 lastBlockIndex = 0;
 		uint32 blockRowCount = 0;
 		uint32 stripeRowCount = 0;
-		StripeMetadata *stripeMetadata = readState->currentStripeMetadata;
 
 		stripeRowCount = stripeMetadata->rowCount;
 		lastBlockIndex = stripeRowCount / stripeMetadata->blockRowCount;
@@ -989,16 +988,15 @@ DeserializeBlockData(StripeBuffers *stripeBuffers, uint64 blockIndex,
 static Datum
 ColumnDefaultValue(TupleConstr *tupleConstraints, Form_pg_attribute attributeForm)
 {
-	Datum defaultValue = 0;
 	Node *defaultValueNode = NULL;
 	int defValIndex = 0;
 
 	for (defValIndex = 0; defValIndex < tupleConstraints->num_defval; defValIndex++)
 	{
-		AttrDefault defaultValue = tupleConstraints->defval[defValIndex];
-		if (defaultValue.adnum == attributeForm->attnum)
+		AttrDefault attrDefault = tupleConstraints->defval[defValIndex];
+		if (attrDefault.adnum == attributeForm->attnum)
 		{
-			defaultValueNode = stringToNode(defaultValue.adbin);
+			defaultValueNode = stringToNode(attrDefault.adbin);
 			break;
 		}
 	}
@@ -1010,7 +1008,7 @@ ColumnDefaultValue(TupleConstr *tupleConstraints, Form_pg_attribute attributeFor
 	if (IsA(defaultValueNode, Const))
 	{
 		Const *constNode = (Const *) defaultValueNode;
-		defaultValue = constNode->constvalue;
+		return constNode->constvalue;
 	}
 	else
 	{
@@ -1019,8 +1017,6 @@ ColumnDefaultValue(TupleConstr *tupleConstraints, Form_pg_attribute attributeFor
 						errhint("Expression is either mutable or "
 								"does not evaluate to constant value")));
 	}
-
-	return defaultValue;
 }
 
 

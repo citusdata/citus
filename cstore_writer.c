@@ -386,8 +386,8 @@ WriteToSmgr(TableWriteState *writeState, char *data, uint32 dataLength)
 
 		while (addr.blockno >= nblocks)
 		{
-			Buffer buffer = ReadBuffer(rel, P_NEW);
-			ReleaseBuffer(buffer);
+			Buffer newBuffer = ReadBuffer(rel, P_NEW);
+			ReleaseBuffer(newBuffer);
 			nblocks = smgrnblocks(rel->rd_smgr, MAIN_FORKNUM);
 		}
 
@@ -534,7 +534,6 @@ FlushStripe(TableWriteState *writeState)
 	for (columnIndex = 0; columnIndex < columnCount; columnIndex++)
 	{
 		ColumnBuffers *columnBuffers = stripeBuffers->columnBuffersArray[columnIndex];
-		uint32 blockIndex = 0;
 
 		for (blockIndex = 0; blockIndex < stripeSkipList->blockCount; blockIndex++)
 		{
