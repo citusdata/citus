@@ -179,7 +179,6 @@ CStoreReadNextRow(TableReadState *readState, Datum *columnValues, bool *columnNu
 		uint32 lastBlockIndex = 0;
 		uint32 blockRowCount = 0;
 		uint32 stripeRowCount = 0;
-		StripeMetadata *stripeMetadata = readState->currentStripeMetadata;
 
 		stripeRowCount = stripeMetadata->rowCount;
 		lastBlockIndex = stripeRowCount / stripeMetadata->blockRowCount;
@@ -995,10 +994,10 @@ ColumnDefaultValue(TupleConstr *tupleConstraints, Form_pg_attribute attributeFor
 
 	for (defValIndex = 0; defValIndex < tupleConstraints->num_defval; defValIndex++)
 	{
-		AttrDefault defaultValue = tupleConstraints->defval[defValIndex];
-		if (defaultValue.adnum == attributeForm->attnum)
+		AttrDefault attrDefault = tupleConstraints->defval[defValIndex];
+		if (attrDefault.adnum == attributeForm->attnum)
 		{
-			defaultValueNode = stringToNode(defaultValue.adbin);
+			defaultValueNode = stringToNode(attrDefault.adbin);
 			break;
 		}
 	}

@@ -25,7 +25,7 @@ else
 $(error version $(VER) is not supported)
 endif
 
-PG_CPPFLAGS = -std=c11
+PG_CPPFLAGS = -std=c11 -Wshadow
 OBJS = cstore.o cstore_writer.o cstore_reader.o \
        cstore_compression.o mod.o cstore_metadata_tables.o
 
