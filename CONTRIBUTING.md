@@ -6,10 +6,10 @@ We're happy you want to contribute! You can help us in different ways:
   suggestions for improvements
 * Fork this repository and submit a pull request
 
-Before accepting any code contributions we ask that Citus contributors
+Before accepting any code contributions we ask that contributors
 sign a Contributor License Agreement (CLA). For an explanation of
 why we ask this as well as instructions for how to proceed, see the
-[Citus CLA](https://cla.citusdata.com).
+[Microsoft CLA](https://cla.opensource.microsoft.com/).
 
 ### Getting and building
 
