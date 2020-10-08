@@ -63,6 +63,9 @@ VACUUM ref, test;
 VACUUM ANALYZE test(x);
 ANALYZE ref;
 ANALYZE test_2;
+VACUUM local;
+VACUUM local, ref, test, test_2;
+VACUUM FULL test, ref;
 
 BEGIN;
 	ALTER TABLE test ADD COLUMN z INT DEFAULT 66;
