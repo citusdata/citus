@@ -48,6 +48,7 @@ BEGIN
     DROP TABLE public.pg_dist_poolinfo;
     DROP TABLE public.pg_dist_shard;
     DROP TABLE public.pg_dist_transaction;
+    DROP TABLE public.pg_dist_rebalance_strategy;
 
     --
     -- reset sequences
