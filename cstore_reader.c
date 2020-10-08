@@ -988,7 +988,6 @@ DeserializeBlockData(StripeBuffers *stripeBuffers, uint64 blockIndex,
 static Datum
 ColumnDefaultValue(TupleConstr *tupleConstraints, Form_pg_attribute attributeForm)
 {
-	Datum defaultValue = 0;
 	Node *defaultValueNode = NULL;
 	int defValIndex = 0;
 
@@ -1009,7 +1008,7 @@ ColumnDefaultValue(TupleConstr *tupleConstraints, Form_pg_attribute attributeFor
 	if (IsA(defaultValueNode, Const))
 	{
 		Const *constNode = (Const *) defaultValueNode;
-		defaultValue = constNode->constvalue;
+		return constNode->constvalue;
 	}
 	else
 	{
@@ -1018,8 +1017,6 @@ ColumnDefaultValue(TupleConstr *tupleConstraints, Form_pg_attribute attributeFor
 						errhint("Expression is either mutable or "
 								"does not evaluate to constant value")));
 	}
-
-	return defaultValue;
 }
 
 
