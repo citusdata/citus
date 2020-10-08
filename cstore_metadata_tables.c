@@ -43,6 +43,7 @@ typedef struct
 	EState *estate;
 } ModifyState;
 
+static List * ReadDataFileStripeList(Oid relfilenode, Snapshot snapshot);
 static Oid CStoreStripesRelationId(void);
 static Oid CStoreStripesIndexRelationId(void);
 static Oid CStoreDataFilesRelationId(void);
@@ -345,17 +346,8 @@ InsertStripeMetadataRow(Oid relfilenode, StripeMetadata *stripe)
 DataFileMetadata *
 ReadDataFileMetadata(Oid relfilenode, bool missingOk)
 {
-	Oid cstoreStripesOid = InvalidOid;
-	Relation cstoreStripes = NULL;
-	Relation index = NULL;
-	TupleDesc tupleDescriptor = NULL;
-	ScanKeyData scanKey[1];
-	SysScanDesc scanDescriptor = NULL;
-	HeapTuple heapTuple;
-	bool found = false;
-
 	DataFileMetadata *datafileMetadata = palloc0(sizeof(DataFileMetadata));
-	found = ReadCStoreDataFiles(relfilenode, &datafileMetadata->blockRowCount);
+	bool found = ReadCStoreDataFiles(relfilenode, &datafileMetadata->blockRowCount);
 	if (!found)
 	{
 		if (!missingOk)
@@ -368,6 +360,56 @@ ReadDataFileMetadata(Oid relfilenode, bool missingOk)
 			return NULL;
 		}
 	}
+
+	datafileMetadata->stripeMetadataList =
+		ReadDataFileStripeList(relfilenode, GetTransactionSnapshot());
+
+	return datafileMetadata;
+}
+
+
+/*
+ * GetHighestUsedAddress returns the highest used address for the given
+ * relfilenode across all active and inactive transactions.
+ */
+uint64
+GetHighestUsedAddress(Oid relfilenode)
+{
+	uint64 highestUsedAddress = 0;
+	ListCell *stripeMetadataCell = NULL;
+	List *stripeMetadataList = NIL;
+
+	SnapshotData SnapshotDirty;
+	InitDirtySnapshot(SnapshotDirty);
+
+	stripeMetadataList = ReadDataFileStripeList(relfilenode, &SnapshotDirty);
+
+	foreach(stripeMetadataCell, stripeMetadataList)
+	{
+		StripeMetadata *stripe = lfirst(stripeMetadataCell);
+		uint64 lastByte = stripe->fileOffset + stripe->dataLength - 1;
+		highestUsedAddress = Max(highestUsedAddress, lastByte);
+	}
+
+	return highestUsedAddress;
+}
+
+
+/*
+ * ReadDataFileStripeList reads the stripe list for a given relfilenode
+ * in the given snapshot.
+ */
+static List *
+ReadDataFileStripeList(Oid relfilenode, Snapshot snapshot)
+{
+	List *stripeMetadataList = NIL;
+	Oid cstoreStripesOid = InvalidOid;
+	Relation cstoreStripes = NULL;
+	Relation index = NULL;
+	TupleDesc tupleDescriptor = NULL;
+	ScanKeyData scanKey[1];
+	SysScanDesc scanDescriptor = NULL;
+	HeapTuple heapTuple;
 
 	ScanKeyInit(&scanKey[0], Anum_cstore_stripes_relfilenode,
 				BTEqualStrategyNumber, F_OIDEQ, Int32GetDatum(relfilenode));
@@ -403,16 +445,14 @@ ReadDataFileMetadata(Oid relfilenode, bool missingOk)
 		stripeMetadata->rowCount = DatumGetInt64(
 			datumArray[Anum_cstore_stripes_row_count - 1]);
 
-		datafileMetadata->stripeMetadataList = lappend(
-			datafileMetadata->stripeMetadataList,
-			stripeMetadata);
+		stripeMetadataList = lappend(stripeMetadataList, stripeMetadata);
 	}
 
 	systable_endscan_ordered(scanDescriptor);
 	index_close(index, NoLock);
 	heap_close(cstoreStripes, NoLock);
 
-	return datafileMetadata;
+	return stripeMetadataList;
 }
 
 

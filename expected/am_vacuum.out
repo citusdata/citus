@@ -135,13 +135,13 @@ SELECT pg_size_pretty(pg_relation_size('t'));
 COMMIT;
 -- vacuum should truncate the relation to the usable space
 VACUUM VERBOSE t;
-INFO:  "t": truncated 7 to 2 pages
-DETAIL:  CPU: user: 0.00 s, system: 0.00 s, elapsed: 0.00 s
 INFO:  statistics for "t":
-total file size: 16384, total data size: 10754
+total file size: 57344, total data size: 10754
 total row count: 2530, stripe count: 3, average rows per stripe: 843
 block count: 3, containing data for dropped columns: 0, none compressed: 3, pglz compressed: 0
 
+INFO:  "t": truncated 7 to 2 pages
+DETAIL:  CPU: user: 0.00 s, system: 0.00 s, elapsed: 0.00 s
 SELECT pg_size_pretty(pg_relation_size('t'));
  pg_size_pretty 
 ----------------

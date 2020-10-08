@@ -285,6 +285,7 @@ extern void DeleteDataFileMetadataRowIfExists(Oid relfilenode);
 extern void InitCStoreDataFileMetadata(Oid relfilenode, int blockRowCount);
 extern void InsertStripeMetadataRow(Oid relfilenode, StripeMetadata *stripe);
 extern DataFileMetadata * ReadDataFileMetadata(Oid relfilenode, bool missingOk);
+extern uint64 GetHighestUsedAddress(Oid relfilenode);
 extern void SaveStripeSkipList(Oid relfilenode, uint64 stripe,
 							   StripeSkipList *stripeSkipList,
 							   TupleDesc tupleDescriptor);

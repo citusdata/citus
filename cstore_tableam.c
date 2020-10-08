@@ -601,6 +601,8 @@ cstore_vacuum_rel(Relation rel, VacuumParams *params,
 	/* this should have been resolved by vacuum.c until now */
 	Assert(params->truncate != VACOPT_TERNARY_DEFAULT);
 
+	LogRelationStats(rel, elevel);
+
 	/*
 	 * We don't have updates, deletes, or concurrent updates, so all we
 	 * care for now is truncating the unused space at the end of storage.
@@ -609,8 +611,6 @@ cstore_vacuum_rel(Relation rel, VacuumParams *params,
 	{
 		TruncateCStore(rel, elevel);
 	}
-
-	LogRelationStats(rel, elevel);
 }
 
 
@@ -727,8 +727,7 @@ TruncateCStore(Relation rel, int elevel)
 	PGRUsage ru0;
 	BlockNumber old_rel_pages = 0;
 	BlockNumber new_rel_pages = 0;
-	DataFileMetadata *metadata = NULL;
-	ListCell *stripeMetadataCell = NULL;
+	SmgrAddr highestPhysicalAddress;
 
 	pg_rusage_init(&ru0);
 
@@ -765,17 +764,15 @@ TruncateCStore(Relation rel, int elevel)
 	old_rel_pages = smgrnblocks(rel->rd_smgr, MAIN_FORKNUM);
 	RelationCloseSmgr(rel);
 
-	metadata = ReadDataFileMetadata(rel->rd_node.relNode, false);
+	/*
+	 * Due to the AccessExclusive lock there's no danger that
+	 * new stripes be added beyond highestPhysicalAddress while
+	 * we're truncating.
+	 */
+	highestPhysicalAddress =
+		logical_to_smgr(GetHighestUsedAddress(rel->rd_node.relNode));
 
-	/* loop over stripes and find max used block */
-	foreach(stripeMetadataCell, metadata->stripeMetadataList)
-	{
-		StripeMetadata *stripe = lfirst(stripeMetadataCell);
-		uint64 lastByte = stripe->fileOffset + stripe->dataLength - 1;
-		SmgrAddr addr = logical_to_smgr(lastByte);
-		new_rel_pages = Max(new_rel_pages, addr.blockno + 1);
-	}
-
+	new_rel_pages = highestPhysicalAddress.blockno + 1;
 	if (new_rel_pages == old_rel_pages)
 	{
 		UnlockRelation(rel, AccessExclusiveLock);
