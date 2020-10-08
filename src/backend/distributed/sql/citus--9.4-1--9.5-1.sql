@@ -6,6 +6,8 @@
 #include "udfs/citus_drop_trigger/9.5-1.sql"
 #include "udfs/worker_record_sequence_dependency/9.5-1.sql"
 #include "udfs/citus_prepare_pg_upgrade/9.5-1.sql"
+#include "udfs/citus_finish_pg_upgrade/9.5-1.sql"
+
 
 SET search_path = 'pg_catalog';
 
