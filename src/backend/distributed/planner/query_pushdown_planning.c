@@ -805,6 +805,10 @@ DeferredErrorIfUnsupportedRecurringTuplesJoin(
 			 */
 			if (RelationInfoContainsOnlyRecurringTuples(plannerInfo, outerrel))
 			{
+				/*
+				 * Find the first (or only) recurring RTE to give a meaningful
+				 * error to the user.
+				 */
 				recurType = FetchFirstRecurType(plannerInfo, outerrel);
 
 				break;
@@ -814,6 +818,10 @@ DeferredErrorIfUnsupportedRecurringTuplesJoin(
 		{
 			if (RelationInfoContainsOnlyRecurringTuples(plannerInfo, innerrel))
 			{
+				/*
+				 * Find the first (or only) recurring RTE to give a meaningful
+				 * error to the user.
+				 */
 				recurType = FetchFirstRecurType(plannerInfo, innerrel);
 
 				break;
@@ -821,6 +829,10 @@ DeferredErrorIfUnsupportedRecurringTuplesJoin(
 
 			if (RelationInfoContainsOnlyRecurringTuples(plannerInfo, outerrel))
 			{
+				/*
+				 * Find the first (or only) recurring RTE to give a meaningful
+				 * error to the user.
+				 */
 				recurType = FetchFirstRecurType(plannerInfo, outerrel);
 
 				break;
