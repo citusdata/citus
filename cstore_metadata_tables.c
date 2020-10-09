@@ -205,7 +205,7 @@ ReadStripeSkipList(Oid relfilenode, uint64 stripe, TupleDesc tupleDescriptor,
 				   uint32 blockCount)
 {
 	StripeSkipList *skipList = NULL;
-	uint32 columnIndex = 0;
+	int32 columnIndex = 0;
 	Oid cstoreSkipNodesOid = InvalidOid;
 	Relation cstoreSkipNodes = NULL;
 	Relation index = NULL;
@@ -237,8 +237,8 @@ ReadStripeSkipList(Oid relfilenode, uint64 stripe, TupleDesc tupleDescriptor,
 
 	while (HeapTupleIsValid(heapTuple = systable_getnext(scanDescriptor)))
 	{
-		uint32 attr = 0;
-		uint32 blockIndex = 0;
+		int32 attr = 0;
+		int32 blockIndex = 0;
 		ColumnBlockSkipNode *skipNode = NULL;
 
 		Datum datumArray[Natts_cstore_skipnodes];
@@ -253,13 +253,13 @@ ReadStripeSkipList(Oid relfilenode, uint64 stripe, TupleDesc tupleDescriptor,
 		if (attr <= 0 || attr > columnCount)
 		{
 			ereport(ERROR, (errmsg("invalid stripe skipnode entry"),
-							errdetail("Attribute number out of range: %u", attr)));
+							errdetail("Attribute number out of range: %d", attr)));
 		}
 
 		if (blockIndex < 0 || blockIndex >= blockCount)
 		{
 			ereport(ERROR, (errmsg("invalid stripe skipnode entry"),
-							errdetail("Block number out of range: %u", blockIndex)));
+							errdetail("Block number out of range: %d", blockIndex)));
 		}
 
 		columnIndex = attr - 1;
