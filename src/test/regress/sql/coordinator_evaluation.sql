@@ -210,5 +210,18 @@ CALL test_procedure_2(100);
 CALL test_procedure_2(100);
 SELECT count(*) FROM coordinator_evaluation_table_2 WHERE key = 101;
 
+CREATE TYPE comptype_int as (int_a int);
+CREATE DOMAIN domain_comptype_int AS comptype_int CHECK ((VALUE).int_a > 0);
+-- citus does not propagate domain types
+SELECT run_command_on_workers(
+$$
+    CREATE DOMAIN coordinator_evaluation.domain_comptype_int AS coordinator_evaluation.comptype_int CHECK ((VALUE).int_a > 0)
+$$);
+
+CREATE TABLE reference_table(column_a coordinator_evaluation.domain_comptype_int);
+SELECT create_reference_table('reference_table');
+
+INSERT INTO reference_table (column_a.int_a) VALUES (1);
+
 SET client_min_messages TO ERROR;
 DROP SCHEMA coordinator_evaluation CASCADE;
