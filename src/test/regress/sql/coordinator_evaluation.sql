@@ -222,6 +222,7 @@ CREATE TABLE reference_table(column_a coordinator_evaluation.domain_comptype_int
 SELECT create_reference_table('reference_table');
 
 INSERT INTO reference_table (column_a.int_a) VALUES (1);
+INSERT INTO reference_table (column_a) VALUES ('(1)');
 
 SET client_min_messages TO ERROR;
 DROP SCHEMA coordinator_evaluation CASCADE;
