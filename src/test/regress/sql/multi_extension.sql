@@ -448,3 +448,37 @@ DROP DATABASE another;
 \c - - - :worker_1_port
 DROP DATABASE another;
 
+\c - - - :master_port
+-- only the regression database should have a maintenance daemon
+SELECT count(*) FROM pg_stat_activity WHERE application_name = 'Citus Maintenance Daemon';
+
+-- recreate the extension immediately after the maintenancae daemon errors
+SELECT pg_cancel_backend(pid) FROM pg_stat_activity WHERE application_name = 'Citus Maintenance Daemon';
+DROP EXTENSION citus;
+CREATE EXTENSION citus;
+
+-- wait for maintenance daemon restart
+SELECT datname, current_database(),
+    usename, (SELECT extowner::regrole::text FROM pg_extension WHERE extname = 'citus')
+FROM test.maintenance_worker();
+
+-- confirm that there is only one maintenance daemon
+SELECT count(*) FROM pg_stat_activity WHERE application_name = 'Citus Maintenance Daemon';
+
+-- kill the maintenance daemon
+SELECT pg_cancel_backend(pid) FROM pg_stat_activity WHERE application_name = 'Citus Maintenance Daemon';
+
+-- reconnect
+\c - - - :master_port
+-- run something that goes through planner hook and therefore kicks of maintenance daemon
+SELECT 1;
+
+-- wait for maintenance daemon restart
+SELECT datname, current_database(),
+    usename, (SELECT extowner::regrole::text FROM pg_extension WHERE extname = 'citus')
+FROM test.maintenance_worker();
+
+-- confirm that there is only one maintenance daemon
+SELECT count(*) FROM pg_stat_activity WHERE application_name = 'Citus Maintenance Daemon';
+
+DROP TABLE version_mismatch_table;
