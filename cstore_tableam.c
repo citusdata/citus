@@ -32,6 +32,7 @@
 #include "storage/procarray.h"
 #include "storage/smgr.h"
 #include "utils/builtins.h"
+#include "utils/pg_rusage.h"
 #include "utils/rel.h"
 #include "utils/syscache.h"
 
@@ -39,6 +40,14 @@
 #include "cstore_tableam.h"
 
 #define CSTORE_TABLEAM_NAME "cstore_tableam"
+
+/*
+ * Timing parameters for truncate locking heuristics.
+ *
+ * These are the same values from src/backend/access/heap/vacuumlazy.c
+ */
+#define VACUUM_TRUNCATE_LOCK_WAIT_INTERVAL 50       /* ms */
+#define VACUUM_TRUNCATE_LOCK_TIMEOUT 5000               /* ms */
 
 typedef struct CStoreScanDescData
 {
@@ -58,6 +67,11 @@ static void CStoreTableAMObjectAccessHook(ObjectAccessType access, Oid classId, 
 										  objectId, int subId,
 										  void *arg);
 static bool IsCStoreTableAmTable(Oid relationId);
+static bool ConditionalLockRelationWithTimeout(Relation rel, LOCKMODE lockMode,
+											   int timeout, int retryInterval);
+static void LogRelationStats(Relation rel, int elevel);
+static char * CompressionTypeStr(CompressionType type);
+static void TruncateCStore(Relation rel, int elevel);
 
 static CStoreOptions *
 CStoreTableAMGetOptions(void)
@@ -575,6 +589,256 @@ cstore_relation_copy_for_cluster(Relation OldHeap, Relation NewHeap,
 }
 
 
+/*
+ * cstore_vacuum_rel implements VACUUM without FULL option.
+ */
+static void
+cstore_vacuum_rel(Relation rel, VacuumParams *params,
+				  BufferAccessStrategy bstrategy)
+{
+	int elevel = (params->options & VACOPT_VERBOSE) ? INFO : DEBUG2;
+
+	/* this should have been resolved by vacuum.c until now */
+	Assert(params->truncate != VACOPT_TERNARY_DEFAULT);
+
+	LogRelationStats(rel, elevel);
+
+	/*
+	 * We don't have updates, deletes, or concurrent updates, so all we
+	 * care for now is truncating the unused space at the end of storage.
+	 */
+	if (params->truncate == VACOPT_TERNARY_ENABLED)
+	{
+		TruncateCStore(rel, elevel);
+	}
+}
+
+
+static void
+LogRelationStats(Relation rel, int elevel)
+{
+	DataFileMetadata *datafileMetadata = NULL;
+	ListCell *stripeMetadataCell = NULL;
+	Oid relfilenode = rel->rd_node.relNode;
+	StringInfo infoBuf = makeStringInfo();
+
+	int compressionStats[COMPRESSION_COUNT] = { 0 };
+	uint64 totalStripeLength = 0;
+	uint64 tupleCount = 0;
+	uint64 blockCount = 0;
+	uint64 relPages = 0;
+	int stripeCount = 0;
+	TupleDesc tupdesc = RelationGetDescr(rel);
+	uint64 droppedBlocksWithData = 0;
+
+	datafileMetadata = ReadDataFileMetadata(relfilenode, false);
+	stripeCount = list_length(datafileMetadata->stripeMetadataList);
+
+	foreach(stripeMetadataCell, datafileMetadata->stripeMetadataList)
+	{
+		StripeMetadata *stripe = lfirst(stripeMetadataCell);
+		StripeSkipList *skiplist = ReadStripeSkipList(relfilenode, stripe->id,
+													  RelationGetDescr(rel),
+													  stripe->blockCount);
+		for (uint32 column = 0; column < skiplist->columnCount; column++)
+		{
+			bool attrDropped = tupdesc->attrs[column].attisdropped;
+			for (uint32 block = 0; block < skiplist->blockCount; block++)
+			{
+				ColumnBlockSkipNode *skipnode =
+					&skiplist->blockSkipNodeArray[column][block];
+
+				/* ignore zero length blocks for dropped attributes */
+				if (skipnode->valueLength > 0)
+				{
+					compressionStats[skipnode->valueCompressionType]++;
+					blockCount++;
+
+					if (attrDropped)
+					{
+						droppedBlocksWithData++;
+					}
+				}
+			}
+		}
+
+		tupleCount += stripe->rowCount;
+		totalStripeLength += stripe->dataLength;
+	}
+
+	RelationOpenSmgr(rel);
+	relPages = smgrnblocks(rel->rd_smgr, MAIN_FORKNUM);
+	RelationCloseSmgr(rel);
+
+	appendStringInfo(infoBuf, "total file size: %ld, total data size: %ld\n",
+					 relPages * BLCKSZ, totalStripeLength);
+	appendStringInfo(infoBuf,
+					 "total row count: %ld, stripe count: %d, "
+					 "average rows per stripe: %ld\n",
+					 tupleCount, stripeCount, tupleCount / stripeCount);
+	appendStringInfo(infoBuf,
+					 "block count: %ld"
+					 ", containing data for dropped columns: %ld",
+					 blockCount, droppedBlocksWithData);
+	for (int compressionType = 0; compressionType < COMPRESSION_COUNT; compressionType++)
+	{
+		appendStringInfo(infoBuf,
+						 ", %s compressed: %d",
+						 CompressionTypeStr(compressionType),
+						 compressionStats[compressionType]);
+	}
+	appendStringInfoString(infoBuf, "\n");
+
+	ereport(elevel, (errmsg("statistics for \"%s\":\n%s", RelationGetRelationName(rel),
+							infoBuf->data)));
+}
+
+
+/*
+ * CompressionTypeStr returns string representation of a compression type.
+ */
+static char *
+CompressionTypeStr(CompressionType type)
+{
+	switch (type)
+	{
+		case COMPRESSION_NONE:
+			return "none";
+
+		case COMPRESSION_PG_LZ:
+			return "pglz";
+
+		default:
+			return "unknown";
+	}
+}
+
+
+/*
+ * TruncateCStore truncates the unused space at the end of main fork for
+ * a cstore table. This unused space can be created by aborted transactions.
+ *
+ * This implementation is based on heap_vacuum_rel in vacuumlazy.c with some
+ * changes so it suits columnar store relations.
+ */
+static void
+TruncateCStore(Relation rel, int elevel)
+{
+	PGRUsage ru0;
+	BlockNumber old_rel_pages = 0;
+	BlockNumber new_rel_pages = 0;
+	SmgrAddr highestPhysicalAddress;
+
+	pg_rusage_init(&ru0);
+
+	/* Report that we are now truncating */
+	pgstat_progress_update_param(PROGRESS_VACUUM_PHASE,
+								 PROGRESS_VACUUM_PHASE_TRUNCATE);
+
+
+	/*
+	 * We need access exclusive lock on the relation in order to do
+	 * truncation. If we can't get it, give up rather than waiting --- we
+	 * don't want to block other backends, and we don't want to deadlock
+	 * (which is quite possible considering we already hold a lower-grade
+	 * lock).
+	 *
+	 * The decisions for AccessExclusiveLock and conditional lock with
+	 * a timeout is based on lazy_truncate_heap in vacuumlazy.c.
+	 */
+	if (!ConditionalLockRelationWithTimeout(rel, AccessExclusiveLock,
+											VACUUM_TRUNCATE_LOCK_TIMEOUT,
+											VACUUM_TRUNCATE_LOCK_WAIT_INTERVAL))
+	{
+		/*
+		 * We failed to establish the lock in the specified number of
+		 * retries. This means we give up truncating.
+		 */
+		ereport(elevel,
+				(errmsg("\"%s\": stopping truncate due to conflicting lock request",
+						RelationGetRelationName(rel))));
+		return;
+	}
+
+	RelationOpenSmgr(rel);
+	old_rel_pages = smgrnblocks(rel->rd_smgr, MAIN_FORKNUM);
+	RelationCloseSmgr(rel);
+
+	/*
+	 * Due to the AccessExclusive lock there's no danger that
+	 * new stripes be added beyond highestPhysicalAddress while
+	 * we're truncating.
+	 */
+	highestPhysicalAddress =
+		logical_to_smgr(GetHighestUsedAddress(rel->rd_node.relNode));
+
+	new_rel_pages = highestPhysicalAddress.blockno + 1;
+	if (new_rel_pages == old_rel_pages)
+	{
+		UnlockRelation(rel, AccessExclusiveLock);
+		return;
+	}
+
+	/*
+	 * Truncate the storage. Note that RelationTruncate() takes care of
+	 * Write Ahead Logging.
+	 */
+	RelationTruncate(rel, new_rel_pages);
+
+	/*
+	 * We can release the exclusive lock as soon as we have truncated.
+	 * Other backends can't safely access the relation until they have
+	 * processed the smgr invalidation that smgrtruncate sent out ... but
+	 * that should happen as part of standard invalidation processing once
+	 * they acquire lock on the relation.
+	 */
+	UnlockRelation(rel, AccessExclusiveLock);
+
+	ereport(elevel,
+			(errmsg("\"%s\": truncated %u to %u pages",
+					RelationGetRelationName(rel),
+					old_rel_pages, new_rel_pages),
+			 errdetail_internal("%s", pg_rusage_show(&ru0))));
+}
+
+
+/*
+ * ConditionalLockRelationWithTimeout tries to acquire a relation lock until
+ * it either succeeds or timesout. It doesn't enter wait queue and instead it
+ * sleeps between lock tries.
+ *
+ * This is based on the lock loop in lazy_truncate_heap().
+ */
+static bool
+ConditionalLockRelationWithTimeout(Relation rel, LOCKMODE lockMode, int timeout,
+								   int retryInterval)
+{
+	int lock_retry = 0;
+
+	while (true)
+	{
+		if (ConditionalLockRelation(rel, lockMode))
+		{
+			break;
+		}
+
+		/*
+		 * Check for interrupts while trying to (re-)acquire the lock
+		 */
+		CHECK_FOR_INTERRUPTS();
+
+		if (++lock_retry > (timeout / retryInterval))
+		{
+			return false;
+		}
+
+		pg_usleep(retryInterval * 1000L);
+	}
+
+	return true;
+}
+
+
 static bool
 cstore_scan_analyze_next_block(TableScanDesc scan, BlockNumber blockno,
 							   BufferAccessStrategy bstrategy)
@@ -853,7 +1117,7 @@ static const TableAmRoutine cstore_am_methods = {
 	.relation_nontransactional_truncate = cstore_relation_nontransactional_truncate,
 	.relation_copy_data = cstore_relation_copy_data,
 	.relation_copy_for_cluster = cstore_relation_copy_for_cluster,
-	.relation_vacuum = heap_vacuum_rel,
+	.relation_vacuum = cstore_vacuum_rel,
 	.scan_analyze_next_block = cstore_scan_analyze_next_block,
 	.scan_analyze_next_tuple = cstore_scan_analyze_next_tuple,
 	.index_build_range_scan = cstore_index_build_range_scan,

@@ -35,6 +35,7 @@ DATA = cstore_fdw--1.7.sql cstore_fdw--1.6--1.7.sql  cstore_fdw--1.5--1.6.sql cs
 	   cstore_fdw--1.0--1.1.sql cstore_fdw--1.7--1.8.sql
 
 REGRESS = extension_create
+ISOLATION = create
 EXTRA_CLEAN = cstore.pb-c.h cstore.pb-c.c data/*.cstore data/*.cstore.footer \
               sql/block_filtering.sql sql/create.sql sql/data_types.sql sql/load.sql \
               sql/copyto.sql expected/block_filtering.out expected/create.out \
@@ -54,6 +55,7 @@ ifeq ($(USE_TABLEAM),yes)
 	OBJS += cstore_tableam.o
 	REGRESS += am_create am_load am_query am_analyze am_data_types am_functions \
 	           am_drop am_insert am_copyto am_alter am_rollback am_truncate am_vacuum am_clean
+	ISOLATION += am_vacuum_vs_insert
 endif
 
 ifeq ($(enable_coverage),yes)
@@ -75,6 +77,22 @@ endif
 PG_CONFIG = pg_config
 PGXS := $(shell $(PG_CONFIG) --pgxs)
 include $(PGXS)
+
+# command for getting postgres source directory is taken from citus/configure.in
+POSTGRES_SRCDIR=$(shell grep ^abs_top_srcdir $(shell dirname $(shell $(PG_CONFIG) --pgxs))/../Makefile.global|cut -d ' ' -f3-)
+PGXS_ISOLATION_TESTER=$(top_builddir)/src/test/isolation/pg_isolation_regress
+
+# If postgres installation doesn't include pg_isolation_regress, try using the
+# one in postgres source directory.
+ifeq (,$(wildcard $(PGXS_ISOLATION_TESTER)))
+	pg_isolation_regress_installcheck = \
+		$(POSTGRES_SRCDIR)/src/test/isolation/pg_isolation_regress \
+		--inputdir=$(srcdir) $(EXTRA_REGRESS_OPTS)
+else
+	pg_isolation_regress_installcheck = \
+		$(PGXS_ISOLATION_TESTER) \
+		--inputdir=$(srcdir) $(EXTRA_REGRESS_OPTS)
+endif
 
 installcheck:
 

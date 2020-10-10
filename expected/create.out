@@ -1,0 +1,6 @@
+Parsed test spec with 1 sessions
+
+starting permutation: s1a
+step s1a: 
+    CREATE EXTENSION cstore_fdw;
+

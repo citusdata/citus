@@ -20,6 +20,7 @@
 #include "storage/bufpage.h"
 #include "storage/lockdefs.h"
 #include "utils/relcache.h"
+#include "utils/snapmgr.h"
 
 /* Defines for valid option names */
 #define OPTION_NAME_COMPRESSION_TYPE "compression"
@@ -284,6 +285,7 @@ extern void DeleteDataFileMetadataRowIfExists(Oid relfilenode);
 extern void InitCStoreDataFileMetadata(Oid relfilenode, int blockRowCount);
 extern void InsertStripeMetadataRow(Oid relfilenode, StripeMetadata *stripe);
 extern DataFileMetadata * ReadDataFileMetadata(Oid relfilenode, bool missingOk);
+extern uint64 GetHighestUsedAddress(Oid relfilenode);
 extern void SaveStripeSkipList(Oid relfilenode, uint64 stripe,
 							   StripeSkipList *stripeSkipList,
 							   TupleDesc tupleDescriptor);
