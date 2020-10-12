@@ -1343,10 +1343,10 @@ static bool
 RelationInfoContainsOnlyRecurringTuples(PlannerInfo *plannerInfo,
 										RelOptInfo *relationInfo)
 {
-	Relids relids = bms_copy(relationInfo->relids);
+	Relids relids = relationInfo->relids;
 	int relationId = -1;
 
-	while ((relationId = bms_first_member(relids)) >= 0)
+	while ((relationId = bms_next_member(relids, relationId)) >= 0)
 	{
 		RangeTblEntry *rangeTableEntry = plannerInfo->simple_rte_array[relationId];
 
@@ -1382,10 +1382,10 @@ static bool
 RelationInfoContainsRecurringTuples(PlannerInfo *plannerInfo, RelOptInfo *relationInfo,
 									RecurringTuplesType *recurType)
 {
-	Relids relids = bms_copy(relationInfo->relids);
+	Relids relids = relationInfo->relids;
 	int relationId = -1;
 
-	while ((relationId = bms_first_member(relids)) >= 0)
+	while ((relationId = bms_next_member(relids, relationId)) >= 0)
 	{
 		RangeTblEntry *rangeTableEntry = plannerInfo->simple_rte_array[relationId];
 

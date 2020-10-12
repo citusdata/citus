@@ -30,6 +30,7 @@
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
 #include "postmaster/bgworker_internals.h"
+#include "access/xact.h"
 
 
 #define VACUUM_PARALLEL_NOTSET -2
@@ -51,14 +52,18 @@ typedef struct CitusVacuumParams
 } CitusVacuumParams;
 
 /* Local functions forward declarations for processing distributed table commands */
-static bool IsDistributedVacuumStmt(int vacuumOptions, List *vacuumRelationIdList);
+static bool IsDistributedVacuumStmt(int vacuumOptions, List *VacuumCitusRelationIdList);
 static List * VacuumTaskList(Oid relationId, CitusVacuumParams vacuumParams,
 							 List *vacuumColumnList);
 static char * DeparseVacuumStmtPrefix(CitusVacuumParams vacuumParams);
 static char * DeparseVacuumColumnNames(List *columnNameList);
 static List * VacuumColumnList(VacuumStmt *vacuumStmt, int relationIndex);
 static List * ExtractVacuumTargetRels(VacuumStmt *vacuumStmt);
+static void ExecuteVacuumOnDistributedTables(VacuumStmt *vacuumStmt, List *relationIdList,
+											 CitusVacuumParams vacuumParams);
 static CitusVacuumParams VacuumStmtParams(VacuumStmt *vacstmt);
+static List * VacuumCitusRelationIdList(VacuumStmt *vacuumStmt, CitusVacuumParams
+										vacuumParams);
 
 /*
  * PostprocessVacuumStmt processes vacuum statements that may need propagation to
@@ -73,29 +78,97 @@ static CitusVacuumParams VacuumStmtParams(VacuumStmt *vacstmt);
 void
 PostprocessVacuumStmt(VacuumStmt *vacuumStmt, const char *vacuumCommand)
 {
-	int relationIndex = 0;
-	List *vacuumRelationList = ExtractVacuumTargetRels(vacuumStmt);
-	List *relationIdList = NIL;
 	CitusVacuumParams vacuumParams = VacuumStmtParams(vacuumStmt);
-	LOCKMODE lockMode = (vacuumParams.options & VACOPT_FULL) ? AccessExclusiveLock :
-						ShareUpdateExclusiveLock;
-	int executedVacuumCount = 0;
+	const char *stmtName = (vacuumParams.options & VACOPT_VACUUM) ? "VACUUM" : "ANALYZE";
 
-	RangeVar *vacuumRelation = NULL;
-	foreach_ptr(vacuumRelation, vacuumRelationList)
+	/*
+	 * No table in the vacuum statement means vacuuming all relations
+	 * which is not supported by citus.
+	 */
+	if (list_length(vacuumStmt->rels) == 0)
 	{
-		Oid relationId = RangeVarGetRelid(vacuumRelation, lockMode, false);
-		relationIdList = lappend_oid(relationIdList, relationId);
+		/* WARN for unqualified VACUUM commands */
+		ereport(WARNING, (errmsg("not propagating %s command to worker nodes", stmtName),
+						  errhint("Provide a specific table in order to %s "
+								  "distributed tables.", stmtName)));
 	}
 
+
+	List *citusRelationIdList = VacuumCitusRelationIdList(vacuumStmt, vacuumParams);
+	if (list_length(citusRelationIdList) == 0)
+	{
+		return;
+	}
+
+	if (vacuumParams.options & VACOPT_VACUUM)
+	{
+		/*
+		 * We commit the current transaction here so that the global lock
+		 * taken from the shell table for VACUUM is released, which would block execution
+		 * of shard placements. We don't do this in case of "ANALYZE <table>" command because
+		 * its semantics are different than VACUUM and it doesn't acquire the global lock.
+		 */
+		CommitTransactionCommand();
+		StartTransactionCommand();
+	}
+
+	/*
+	 * Here we get the relation list again because we might have
+	 * closed the current transaction and the memory context got reset.
+	 * Vacuum's context is PortalContext, which lasts for the whole session
+	 * so committing/starting a new transaction doesn't affect it.
+	 */
+	citusRelationIdList = VacuumCitusRelationIdList(vacuumStmt, vacuumParams);
 	bool distributedVacuumStmt = IsDistributedVacuumStmt(vacuumParams.options,
-														 relationIdList);
+														 citusRelationIdList);
 	if (!distributedVacuumStmt)
 	{
 		return;
 	}
 
-	/* execute vacuum on distributed tables */
+	ExecuteVacuumOnDistributedTables(vacuumStmt, citusRelationIdList, vacuumParams);
+}
+
+
+/*
+ * VacuumCitusRelationIdList returns the oid of the relations in the given vacuum statement.
+ */
+static List *
+VacuumCitusRelationIdList(VacuumStmt *vacuumStmt, CitusVacuumParams vacuumParams)
+{
+	LOCKMODE lockMode = (vacuumParams.options & VACOPT_FULL) ? AccessExclusiveLock :
+						ShareUpdateExclusiveLock;
+
+	List *vacuumRelationList = ExtractVacuumTargetRels(vacuumStmt);
+
+	List *relationIdList = NIL;
+
+	RangeVar *vacuumRelation = NULL;
+	foreach_ptr(vacuumRelation, vacuumRelationList)
+	{
+		Oid relationId = RangeVarGetRelid(vacuumRelation, lockMode, false);
+		if (!IsCitusTable(relationId))
+		{
+			continue;
+		}
+		relationIdList = lappend_oid(relationIdList, relationId);
+	}
+
+	return relationIdList;
+}
+
+
+/*
+ * ExecuteVacuumOnDistributedTables executes the vacuum for the shard placements of given tables
+ * if they are citus tables.
+ */
+static void
+ExecuteVacuumOnDistributedTables(VacuumStmt *vacuumStmt, List *relationIdList,
+								 CitusVacuumParams vacuumParams)
+{
+	int relationIndex = 0;
+	int executedVacuumCount = 0;
+
 	Oid relationId = InvalidOid;
 	foreach_oid(relationId, relationIdList)
 	{
@@ -137,27 +210,16 @@ PostprocessVacuumStmt(VacuumStmt *vacuumStmt, const char *vacuumCommand)
  * false otherwise.
  */
 static bool
-IsDistributedVacuumStmt(int vacuumOptions, List *vacuumRelationIdList)
+IsDistributedVacuumStmt(int vacuumOptions, List *VacuumCitusRelationIdList)
 {
-	const char *stmtName = (vacuumOptions & VACOPT_VACUUM) ? "VACUUM" : "ANALYZE";
 	bool distributeStmt = false;
 	int distributedRelationCount = 0;
 
-	/*
-	 * No table in the vacuum statement means vacuuming all relations
-	 * which is not supported by citus.
-	 */
-	int vacuumedRelationCount = list_length(vacuumRelationIdList);
-	if (vacuumedRelationCount == 0)
-	{
-		/* WARN for unqualified VACUUM commands */
-		ereport(WARNING, (errmsg("not propagating %s command to worker nodes", stmtName),
-						  errhint("Provide a specific table in order to %s "
-								  "distributed tables.", stmtName)));
-	}
+	const char *stmtName = (vacuumOptions & VACOPT_VACUUM) ? "VACUUM" : "ANALYZE";
+
 
 	Oid relationId = InvalidOid;
-	foreach_oid(relationId, vacuumRelationIdList)
+	foreach_oid(relationId, VacuumCitusRelationIdList)
 	{
 		if (OidIsValid(relationId) && IsCitusTable(relationId))
 		{

@@ -35,7 +35,7 @@ jobs:
 
   build-13:
     docker:
-      - image: 'citus/extbuilder:13beta3'
+      - image: 'citus/extbuilder:13.0'
     steps:
       - checkout
       - run:
@@ -375,7 +375,7 @@ jobs:
 
   test-13_check-multi:
     docker:
-      - image: 'citus/exttester:13beta3'
+      - image: 'citus/exttester:13.0'
     working_directory: /home/circleci/project
     steps:
       - checkout
@@ -390,7 +390,7 @@ jobs:
 
   test-13_check-mx:
     docker:
-      - image: 'citus/exttester:13beta3'
+      - image: 'citus/exttester:13.0'
     working_directory: /home/circleci/project
     steps:
       - checkout
@@ -405,7 +405,7 @@ jobs:
 
   test-13_check-vanilla:
     docker:
-      - image: 'citus/exttester:13beta3'
+      - image: 'citus/exttester:13.0'
     working_directory: /home/circleci/project
     steps:
       - checkout
@@ -420,7 +420,7 @@ jobs:
 
   test-13_check-worker:
     docker:
-      - image: 'citus/exttester:13beta3'
+      - image: 'citus/exttester:13.0'
     working_directory: /home/circleci/project
     steps:
       - checkout
@@ -435,7 +435,7 @@ jobs:
 
   test-13_check-isolation:
     docker:
-      - image: 'citus/exttester:13beta3'
+      - image: 'citus/exttester:13.0'
     working_directory: /home/circleci/project
     steps:
       - checkout
@@ -450,7 +450,7 @@ jobs:
 
   test-13_check-follower-cluster:
     docker:
-      - image: 'citus/exttester:13beta3'
+      - image: 'citus/exttester:13.0'
     working_directory: /home/circleci/project
     steps:
       - checkout
@@ -475,7 +475,7 @@ jobs:
 
   test-13_check-failure:
     docker:
-      - image: 'citus/failtester:13beta3'
+      - image: 'citus/failtester:13.0'
     working_directory: /home/circleci/project
     steps:
       - checkout
@@ -488,7 +488,7 @@ jobs:
 
   check-merge-to-enterprise:
     docker:
-      - image: citus/extbuilder:13beta3
+      - image: citus/extbuilder:13.0
     working_directory: /home/circleci/project
     steps:
       - checkout
