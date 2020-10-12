@@ -240,6 +240,24 @@ SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname IN ('
 
 RESET citus.enable_create_type_propagation;
 
+CREATE TYPE ct1 as (int_1 int, int_2 int);
+CREATE TABLE field_indirection_test_1 (int_col int, ct1_col ct1);
+SELECT create_distributed_table('field_indirection_test_1', 'int_col');
+
+INSERT INTO field_indirection_test_1 (int_col, ct1_col.int_1, ct1_col.int_2) VALUES (0, 1, 2);
+SELECT * FROM field_indirection_test_1 ORDER BY int_col, ct1_col;
+
+CREATE TYPE ct2 as (int_2 int, text_1 text, int_1 int);
+CREATE TABLE field_indirection_test_2 (int_col int, ct2_col ct2, ct1_col ct1);
+SELECT create_distributed_table('field_indirection_test_2', 'int_col');
+
+INSERT INTO field_indirection_test_2 (ct2_col.int_1, int_col, ct2_col.text_1, ct1_col.int_2) VALUES (0, 1, 'text1', 2);
+INSERT INTO field_indirection_test_2 (ct2_col.int_1, int_col, ct2_col.text_1, ct1_col.int_2) VALUES (3, 4, 'text1', 5);
+
+UPDATE field_indirection_test_2 SET (ct2_col.text_1, ct1_col.int_2) = ('text2', 10) WHERE int_col=4;
+
+SELECT * FROM field_indirection_test_2 ORDER BY int_col, ct2_col, ct1_col;
+
 -- clear objects
 SET client_min_messages TO error; -- suppress cascading objects dropping
 DROP SCHEMA type_tests CASCADE;

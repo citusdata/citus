@@ -3057,7 +3057,9 @@ get_insert_query_def(Query *query, deparse_context *context)
 	sep = "";
 	if (query->targetList)
 		appendStringInfoChar(buf, '(');
-	foreach(l, query->targetList)
+
+	List *targetList = ExtendFieldStoreTargetEntries(query->targetList);
+	foreach(l, targetList)
 	{
 		TargetEntry *tle = (TargetEntry *) lfirst(l);
 
@@ -3333,6 +3335,8 @@ get_update_query_targetlist_def(Query *query, List *targetList,
 
 	/* Add the comma separated list of 'attname = value' */
 	sep = "";
+
+	targetList = ExtendFieldStoreTargetEntries(targetList);
 	foreach(l, targetList)
 	{
 		TargetEntry *tle = (TargetEntry *) lfirst(l);

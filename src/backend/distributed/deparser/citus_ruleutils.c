@@ -74,6 +74,9 @@ static void AppendStorageParametersToString(StringInfo stringBuffer,
 static const char * convert_aclright_to_string(int aclright);
 static void simple_quote_literal(StringInfo buf, const char *val);
 static char * flatten_reloptions(Oid relid);
+static List * ExtendFieldStoreTargetEntry(TargetEntry *targetEntry);
+static TargetEntry * CreateFieldStoreTargetEntryForSubField(TargetEntry *targetEntry,
+															int subFieldIndex);
 
 /*
  * pg_get_extensiondef_string finds the foreign data wrapper that corresponds to
@@ -1382,4 +1385,84 @@ RoleSpecString(RoleSpec *spec, bool withQuoteIdentifier)
 			elog(ERROR, "unexpected role type %d", spec->roletype);
 		}
 	}
+}
+
+
+/*
+ * ExtendFieldStoreTargetEntries takes a list of target entries and retuns a
+ * new list by extending each target entry pointing to a FieldStore by
+ * executing ExtendFieldStoreTargetEntry.
+ *
+ * This is required for deparsing INSERT/UPDATE queries for remote execution
+ * as postgres planner combines field accesses to same column into in a single
+ * FieldStore object but processIndirection does not know how to handle such
+ * FieldStore objects.
+ */
+List *
+ExtendFieldStoreTargetEntries(List *targetList)
+{
+	List *extendedTargetList = NIL;
+
+	TargetEntry *targetEntry = NULL;
+	foreach_ptr(targetEntry, targetList)
+	{
+		Node *expr = (Node *) targetEntry->expr;
+		if (IsA(expr, FieldStore))
+		{
+			List *fieldStoreTargetEntries = ExtendFieldStoreTargetEntry(targetEntry);
+			extendedTargetList = list_concat(extendedTargetList,
+											 fieldStoreTargetEntries);
+		}
+		else
+		{
+			extendedTargetList = lappend(extendedTargetList, targetEntry);
+		}
+	}
+
+	return extendedTargetList;
+}
+
+
+/*
+ * ExtendFieldStoreTargetEntry takes a target entry pointing to a FieldStore
+ * object and returns a list of TargetEntry's by seperating each element in
+ * newvals and fieldnums lists into separate TargetEntry objects.
+ */
+static List *
+ExtendFieldStoreTargetEntry(TargetEntry *targetEntry)
+{
+	Assert(IsA(targetEntry->expr, FieldStore));
+
+	List *extendedFieldStoreList = NIL;
+
+	FieldStore *fieldStore = (FieldStore *) targetEntry->expr;
+	int numberOfSubFields = list_length(fieldStore->newvals);
+	for (int subFieldIndex = 0; subFieldIndex < numberOfSubFields; subFieldIndex++)
+	{
+		TargetEntry *subFieldTargetEntry =
+			CreateFieldStoreTargetEntryForSubField(targetEntry, subFieldIndex);
+		extendedFieldStoreList = lappend(extendedFieldStoreList, subFieldTargetEntry);
+	}
+
+	return extendedFieldStoreList;
+}
+
+
+/*
+ * CreateFieldStoreTargetEntryForSubField takes a TargetEntry pointing to a
+ * FieldStore and returns a new TargetEntry for specified subFieldIndex.
+ */
+static TargetEntry *
+CreateFieldStoreTargetEntryForSubField(TargetEntry *targetEntry, int subFieldIndex)
+{
+	TargetEntry *newTargetEntry = copyObject(targetEntry);
+	FieldStore *fieldStore = (FieldStore *) newTargetEntry->expr;
+
+	int fieldNum = list_nth_int(fieldStore->fieldnums, subFieldIndex);
+	fieldStore->fieldnums = list_make1_int(fieldNum);
+
+	Node *fieldNewVal = list_nth(fieldStore->newvals, subFieldIndex);
+	fieldStore->newvals = list_make1(fieldNewVal);
+
+	return newTargetEntry;
 }
