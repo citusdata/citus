@@ -2097,7 +2097,7 @@ ShouldExecuteCopyLocally(bool isIntermediateResult)
 		return false;
 	}
 
-	if (CurrentLocalExecutionStatus == LOCAL_EXECUTION_REQUIRED)
+	if (GetCurrentLocalExecutionStatus() == LOCAL_EXECUTION_REQUIRED)
 	{
 		/*
 		 * For various reasons, including the transaction visibility
@@ -2120,7 +2120,7 @@ ShouldExecuteCopyLocally(bool isIntermediateResult)
 	}
 
 	/* if we connected to the localhost via a connection, we might not be able to see some previous changes that are done via the connection */
-	return CurrentLocalExecutionStatus != LOCAL_EXECUTION_DISABLED &&
+	return GetCurrentLocalExecutionStatus() != LOCAL_EXECUTION_DISABLED &&
 		   IsMultiStatementTransaction();
 }
 

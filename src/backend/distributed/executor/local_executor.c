@@ -110,7 +110,7 @@
 bool EnableLocalExecution = true;
 bool LogLocalCommands = false;
 
-LocalExecutionStatus CurrentLocalExecutionStatus = LOCAL_EXECUTION_OPTIONAL;
+static LocalExecutionStatus CurrentLocalExecutionStatus = LOCAL_EXECUTION_OPTIONAL;
 
 static void SplitLocalAndRemotePlacements(List *taskPlacementList,
 										  List **localTaskPlacementList,
@@ -130,6 +130,17 @@ static void LocallyExecuteUtilityTask(const char *utilityCommand);
 static void LocallyExecuteUdfTaskQuery(Query *localUdfCommandQuery);
 static void EnsureTransitionPossible(LocalExecutionStatus from,
 									 LocalExecutionStatus to);
+
+
+/*
+ * GetCurrentLocalExecutionStatus returns the current local execution status.
+ */
+LocalExecutionStatus
+GetCurrentLocalExecutionStatus(void)
+{
+	return CurrentLocalExecutionStatus;
+}
+
 
 /*
  * ExecuteLocalTasks executes the given tasks locally.
@@ -649,7 +660,7 @@ RecordNonDistTableAccessesForTask(Task *task)
 void
 SetLocalExecutionStatus(LocalExecutionStatus newStatus)
 {
-	EnsureTransitionPossible(CurrentLocalExecutionStatus, newStatus);
+	EnsureTransitionPossible(GetCurrentLocalExecutionStatus(), newStatus);
 
 	CurrentLocalExecutionStatus = newStatus;
 }
@@ -695,7 +706,7 @@ ShouldExecuteTasksLocally(List *taskList)
 		return false;
 	}
 
-	if (CurrentLocalExecutionStatus == LOCAL_EXECUTION_DISABLED)
+	if (GetCurrentLocalExecutionStatus() == LOCAL_EXECUTION_DISABLED)
 	{
 		/*
 		 * if the current transaction accessed the local node over a connection
@@ -704,42 +715,21 @@ ShouldExecuteTasksLocally(List *taskList)
 		return false;
 	}
 
-	if (CurrentLocalExecutionStatus == LOCAL_EXECUTION_REQUIRED)
+	if (GetCurrentLocalExecutionStatus() == LOCAL_EXECUTION_REQUIRED)
 	{
-		bool isValidLocalExecutionPath PG_USED_FOR_ASSERTS_ONLY = false;
-
 		/*
-		 * For various reasons, including the transaction visibility
-		 * rules (e.g., read-your-own-writes), we have to use local
-		 * execution again if it has already happened within this
-		 * transaction block.
+		 * If we already used local execution for a previous command
+		 * we should stick to it for read-your-writes policy, this can be a
+		 * case when we are inside a transaction block. Such as:
+		 *
+		 * BEGIN;
+		 * some-command; -- executed via local execution
+		 * another-command; -- this should be executed via local execution for visibility
+		 * COMMIT;
+		 *
+		 * We may need to use local execution even if we are not inside a transaction block,
+		 * however the state will go back to LOCAL_EXECUTION_OPTIONAL at the end of transaction.
 		 */
-		isValidLocalExecutionPath = IsMultiStatementTransaction() ||
-									InCoordinatedTransaction();
-
-		/*
-		 * In some cases, such as when a single command leads to a local
-		 * command execution followed by remote task (list) execution, we
-		 * still expect the remote execution to first try local execution
-		 * as TransactionAccessedLocalPlacement is set by the local execution.
-		 * The remote execution shouldn't create any local tasks as the local
-		 * execution should have executed all the local tasks. And, we are
-		 * ensuring it here.
-		 */
-		isValidLocalExecutionPath |= !AnyTaskAccessesLocalNode(taskList);
-
-		/*
-		 * We might error out later in the execution if it is not suitable
-		 * to execute the tasks locally.
-		 */
-		Assert(isValidLocalExecutionPath);
-
-		/*
-		 * TODO: A future improvement could be to keep track of which placements
-		 * have been locally executed. At this point, only use local execution
-		 * for those placements. That'd help to benefit more from parallelism.
-		 */
-
 		return true;
 	}
 
@@ -836,7 +826,7 @@ TaskAccessesLocalNode(Task *task)
 void
 ErrorIfTransactionAccessedPlacementsLocally(void)
 {
-	if (CurrentLocalExecutionStatus == LOCAL_EXECUTION_REQUIRED)
+	if (GetCurrentLocalExecutionStatus() == LOCAL_EXECUTION_REQUIRED)
 	{
 		ereport(ERROR,
 				(errmsg("cannot execute command because a local execution has "
