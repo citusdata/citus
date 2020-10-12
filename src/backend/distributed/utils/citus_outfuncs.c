@@ -321,6 +321,9 @@ OutMultiExtendedOp(OUTFUNC_ARGS)
 	WRITE_NODE_FIELD(sortClauseList);
 	WRITE_NODE_FIELD(limitCount);
 	WRITE_NODE_FIELD(limitOffset);
+#if PG_VERSION_NUM >= PG_VERSION_13
+	WRITE_ENUM_FIELD(limitOption, LimitOption);
+#endif
 	WRITE_NODE_FIELD(havingQual);
 	WRITE_BOOL_FIELD(hasDistinctOn);
 	WRITE_NODE_FIELD(distinctClause);
