@@ -309,7 +309,6 @@ citus_evaluate_expr(Expr *expr, Oid result_type, int32 result_typmod,
 	PlanState *planState = NULL;
 	EState     *estate;
 	ExprState  *exprstate;
-	ExprContext *econtext;
 	Datum		const_val;
 	bool		const_is_null;
 	int16		resultTypLen;
@@ -357,15 +356,19 @@ citus_evaluate_expr(Expr *expr, Oid result_type, int32 result_typmod,
 	 */
 	exprstate = ExecInitExpr(expr, planState);
 
-	if (planState != NULL)
+	/*
+	 * Get short lived per tuple context as evaluate_expr does. Here we don't
+	 * use planState->ExprContext as it might cause double-free'ing executor
+	 * state.
+	 */
+	ExprContext *econtext = GetPerTupleExprContext(estate);
+	if (planState)
 	{
-		/* use executor's context to pass down parameters */
-		econtext = planState->ps_ExprContext;
-	}
-	else
-	{
-		/* when called from a function, use a default context */
-		econtext = GetPerTupleExprContext(estate);
+		/*
+		 * If planState exists, then we add es_param_list_info to per tuple
+		 * ExprContext as we need them when evaluating prepared statements.
+		 */
+		econtext->ecxt_param_list_info = planState->state->es_param_list_info;
 	}
 
 	/*
