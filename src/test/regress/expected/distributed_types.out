@@ -433,10 +433,10 @@ SELECT create_distributed_table('domain_indirection_test', 'f1');
 (1 row)
 
 -- not supported (field indirection to underlying composite type)
-INSERT INTO domain_indirection_test (f1,f3.if1, f3.if2) values (0, 1, 2);
+INSERT INTO domain_indirection_test (f1,f3.if1, f3.if2) VALUES (0, 1, 2);
 ERROR:  inserting or modifying composite type fields is not supported
 HINT:  Use whole column for inserting or modifying composite type fields
-INSERT INTO domain_indirection_test (f1,f3.if1) values (0, 1);
+INSERT INTO domain_indirection_test (f1,f3.if1) VALUES (0, 1);
 ERROR:  inserting or modifying composite type fields is not supported
 HINT:  Use whole column for inserting or modifying composite type fields
 UPDATE domain_indirection_test SET domain_array[0].if2 = 5;

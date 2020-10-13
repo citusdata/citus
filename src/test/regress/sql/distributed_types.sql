@@ -270,8 +270,8 @@ CREATE TABLE domain_indirection_test (f1 int, f3 domain, domain_array domain[]);
 SELECT create_distributed_table('domain_indirection_test', 'f1');
 
 -- not supported (field indirection to underlying composite type)
-INSERT INTO domain_indirection_test (f1,f3.if1, f3.if2) values (0, 1, 2);
-INSERT INTO domain_indirection_test (f1,f3.if1) values (0, 1);
+INSERT INTO domain_indirection_test (f1,f3.if1, f3.if2) VALUES (0, 1, 2);
+INSERT INTO domain_indirection_test (f1,f3.if1) VALUES (0, 1);
 UPDATE domain_indirection_test SET domain_array[0].if2 = 5;
 
 -- below are supported as we don't do any field indirection
