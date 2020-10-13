@@ -37,6 +37,7 @@
 #include "utils/syscache.h"
 
 #include "cstore.h"
+#include "cstore_customscan.h"
 #include "cstore_tableam.h"
 
 #define CSTORE_TABLEAM_NAME "cstore_tableam"
@@ -154,7 +155,7 @@ RelationColumnList(Relation rel)
 
 	for (int i = 0; i < tupdesc->natts; i++)
 	{
-		Index varno = 0;
+		Index varno = 1;
 		AttrNumber varattno = i + 1;
 		Oid vartype = tupdesc->attrs[i].atttypid;
 		int32 vartypmod = tupdesc->attrs[i].atttypmod;
@@ -189,10 +190,35 @@ cstore_beginscan(Relation relation, Snapshot snapshot,
 				 ParallelTableScanDesc parallel_scan,
 				 uint32 flags)
 {
+	TableScanDesc scandesc;
+	int natts = relation->rd_att->natts;
+	Bitmapset *attr_needed = NULL;
+
+	attr_needed = bms_add_range(attr_needed, 0, natts - 1);
+
+	/* the cstore access method does not use the flags, they are specific to heap */
+	flags = 0;
+
+	scandesc = cstore_beginscan_extended(relation, snapshot, nkeys, key, parallel_scan,
+										 flags, attr_needed, NULL);
+
+	pfree(attr_needed);
+
+	return scandesc;
+}
+
+
+TableScanDesc
+cstore_beginscan_extended(Relation relation, Snapshot snapshot,
+						  int nkeys, ScanKey key,
+						  ParallelTableScanDesc parallel_scan,
+						  uint32 flags, Bitmapset *attr_needed, List *scanQual)
+{
 	TupleDesc tupdesc = relation->rd_att;
 	TableReadState *readState = NULL;
 	CStoreScanDesc scan = palloc(sizeof(CStoreScanDescData));
 	List *columnList = NIL;
+	List *neededColumnList = NIL;
 	MemoryContext oldContext = MemoryContextSwitchTo(GetCStoreMemoryContext());
 
 	scan->cs_base.rs_rd = relation;
@@ -204,7 +230,18 @@ cstore_beginscan(Relation relation, Snapshot snapshot,
 
 	columnList = RelationColumnList(relation);
 
-	readState = CStoreBeginRead(relation, tupdesc, columnList, NULL);
+	/* only collect columns that we need for the scan */
+	ListCell *columnCell = NULL;
+	foreach(columnCell, columnList)
+	{
+		Var *var = castNode(Var, lfirst(columnCell));
+		if (bms_is_member(var->varattno - 1, attr_needed))
+		{
+			neededColumnList = lappend(neededColumnList, var);
+		}
+	}
+
+	readState = CStoreBeginRead(relation, tupdesc, neededColumnList, scanQual);
 
 	scan->cs_readState = readState;
 
@@ -226,7 +263,8 @@ static void
 cstore_rescan(TableScanDesc sscan, ScanKey key, bool set_params,
 			  bool allow_strat, bool allow_sync, bool allow_pagemode)
 {
-	elog(ERROR, "cstore_rescan not implemented");
+	CStoreScanDesc scan = (CStoreScanDesc) sscan;
+	CStoreRescan(scan->cs_readState);
 }
 
 
@@ -996,6 +1034,8 @@ cstore_tableam_init()
 	ExecutorEnd_hook = CStoreExecutorEnd;
 	prevObjectAccessHook = object_access_hook;
 	object_access_hook = CStoreTableAMObjectAccessHook;
+
+	cstore_customscan_init();
 }
 
 

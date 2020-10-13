@@ -49,12 +49,12 @@ ifeq ($(USE_FDW),yes)
 		   fdw_copyto fdw_alter fdw_rollback fdw_truncate fdw_clean
 endif
 
-# disabled tests: am_block_filtering
 ifeq ($(USE_TABLEAM),yes)
 	PG_CFLAGS += -DUSE_TABLEAM
-	OBJS += cstore_tableam.o
+	OBJS += cstore_tableam.o cstore_customscan.o
 	REGRESS += am_create am_load am_query am_analyze am_data_types am_functions \
-	           am_drop am_insert am_copyto am_alter am_rollback am_truncate am_vacuum am_clean
+	           am_drop am_insert am_copyto am_alter am_rollback am_truncate am_vacuum am_clean \
+	           am_block_filtering am_join
 	ISOLATION += am_vacuum_vs_insert
 endif
 

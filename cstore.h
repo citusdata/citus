@@ -267,6 +267,7 @@ extern TableReadState * CStoreBeginRead(Relation relation,
 extern bool CStoreReadFinished(TableReadState *state);
 extern bool CStoreReadNextRow(TableReadState *state, Datum *columnValues,
 							  bool *columnNulls);
+extern void CStoreRescan(TableReadState *readState);
 extern void CStoreEndRead(TableReadState *state);
 
 /* Function declarations for common functions */

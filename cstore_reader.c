@@ -29,6 +29,7 @@
 #endif
 #include "optimizer/restrictinfo.h"
 #include "storage/fd.h"
+#include "utils/guc.h"
 #include "utils/memutils.h"
 #include "utils/lsyscache.h"
 #include "utils/rel.h"
@@ -219,6 +220,19 @@ CStoreReadNextRow(TableReadState *readState, Datum *columnValues, bool *columnNu
 	}
 
 	return true;
+}
+
+
+/*
+ * CStoreRescan clears the position where we were scanning so that the next read starts at
+ * the beginning again
+ */
+void
+CStoreRescan(TableReadState *readState)
+{
+	readState->stripeBuffers = NULL;
+	readState->readStripeCount = 0;
+	readState->stripeReadRowCount = 0;
 }
 
 
