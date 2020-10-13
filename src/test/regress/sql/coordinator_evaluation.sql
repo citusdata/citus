@@ -223,6 +223,7 @@ SELECT create_reference_table('reference_table');
 
 INSERT INTO reference_table (column_a) VALUES ('(1)');
 INSERT INTO reference_table (column_a) VALUES ('(2)'), ('(3)');
+INSERT INTO reference_table VALUES ('(4)'), ('(5)');
 
 SELECT * FROM reference_table ORDER BY 1;
 
