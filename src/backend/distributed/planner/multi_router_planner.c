@@ -677,7 +677,7 @@ ModifyPartialQuerySupported(Query *queryTree, bool multiShardQuery,
 				Assert(hasVarArgument || hasBadCoalesce);
 			}
 
-			if (ExprHasFieldStore(targetEntry->expr))			
+			if (ExprHasFieldStore(targetEntry->expr))
 			{
 				/* DELETE cannot do field indirection already */
 				Assert(commandType == CMD_UPDATE || commandType == CMD_INSERT);
@@ -780,7 +780,7 @@ has_field_store_walker(Node *node, void *context)
 		return true;
 	}
 
-	return expression_tree_walker(node, has_field_store_walker, context);		
+	return expression_tree_walker(node, has_field_store_walker, context);
 }
 
 
