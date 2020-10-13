@@ -683,7 +683,9 @@ ModifyPartialQuerySupported(Query *queryTree, bool multiShardQuery,
 				Assert(commandType == CMD_UPDATE || commandType == CMD_INSERT);
 				return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 									 "inserting or modifying composite type fields is not "
-									 "supported", NULL, NULL);
+									 "supported", NULL,
+									 "Use whole column for inserting or modifying composite "
+									 "type fields");
 			}
 		}
 
