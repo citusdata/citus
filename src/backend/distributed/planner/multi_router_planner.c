@@ -674,6 +674,15 @@ ModifyPartialQuerySupported(Query *queryTree, bool multiShardQuery,
 			{
 				Assert(hasVarArgument || hasBadCoalesce);
 			}
+
+			if (IsA((Node *) targetEntry->expr, FieldStore))
+			{
+				/* DELETE cannot do field indirection already */
+				Assert(commandType == CMD_UPDATE || commandType == CMD_INSERT);
+				return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+									 "inserting or modifying composite type fields is not "
+									 "supported", NULL, NULL);
+			}
 		}
 
 		if (joinTree != NULL)
