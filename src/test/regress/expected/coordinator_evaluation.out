@@ -580,5 +580,38 @@ SELECT count(*) FROM coordinator_evaluation_table_2 WHERE key = 101;
      7
 (1 row)
 
+CREATE TYPE comptype_int as (int_a int);
+CREATE DOMAIN domain_comptype_int AS comptype_int CHECK ((VALUE).int_a > 0);
+-- citus does not propagate domain types
+SELECT run_command_on_workers(
+$$
+    CREATE DOMAIN coordinator_evaluation.domain_comptype_int AS coordinator_evaluation.comptype_int CHECK ((VALUE).int_a > 0)
+$$);
+       run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,"CREATE DOMAIN")
+ (localhost,57638,t,"CREATE DOMAIN")
+(2 rows)
+
+CREATE TABLE reference_table(column_a coordinator_evaluation.domain_comptype_int);
+SELECT create_reference_table('reference_table');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO reference_table (column_a) VALUES ('(1)');
+INSERT INTO reference_table (column_a) VALUES ('(2)'), ('(3)');
+INSERT INTO reference_table VALUES ('(4)'), ('(5)');
+SELECT * FROM reference_table ORDER BY 1;
+ column_a
+---------------------------------------------------------------------
+ (1)
+ (2)
+ (3)
+ (4)
+ (5)
+(5 rows)
+
 SET client_min_messages TO ERROR;
 DROP SCHEMA coordinator_evaluation CASCADE;
