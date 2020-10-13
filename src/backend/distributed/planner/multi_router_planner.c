@@ -130,6 +130,8 @@ static bool IsTidColumn(Node *node);
 static DeferredErrorMessage * ModifyPartialQuerySupported(Query *queryTree, bool
 														  multiShardQuery,
 														  Oid *distributedTableId);
+static bool ExprHasFieldStore(Expr *expr);
+static bool has_field_store_walker(Node *node, void *context);
 static DeferredErrorMessage * DeferErrorIfUnsupportedModifyQueryWithLocalTable(
 	Query *query);
 static DeferredErrorMessage * DeferErrorIfUnsupportedModifyQueryWithCitusLocalTable(
@@ -675,7 +677,7 @@ ModifyPartialQuerySupported(Query *queryTree, bool multiShardQuery,
 				Assert(hasVarArgument || hasBadCoalesce);
 			}
 
-			if (IsA((Node *) targetEntry->expr, FieldStore))
+			if (ExprHasFieldStore(targetEntry->expr))			
 			{
 				/* DELETE cannot do field indirection already */
 				Assert(commandType == CMD_UPDATE || commandType == CMD_INSERT);
@@ -746,6 +748,39 @@ ModifyPartialQuerySupported(Query *queryTree, bool multiShardQuery,
 	*distributedTableIdOutput = distributedTableId;
 
 	return NULL;
+}
+
+
+/*
+ * ExprHasFieldStore returns true if given Expr is a FieldStore object
+ * or it indirectly contains FieldStore object.
+ */
+static bool
+ExprHasFieldStore(Expr *expr)
+{
+	void *context = NULL;
+	return has_field_store_walker((Node *) expr, context);
+}
+
+
+/*
+ * has_field_store_walker walks over the Expr objects in given node and returns
+ * true if it can find a FieldStore object.
+ */
+static bool
+has_field_store_walker(Node *node, void *context)
+{
+	if (node == NULL)
+	{
+		return false;
+	}
+
+	if (IsA(node, FieldStore))
+	{
+		return true;
+	}
+
+	return expression_tree_walker(node, has_field_store_walker, context);		
 }
 
 
