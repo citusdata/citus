@@ -39,6 +39,27 @@ SELECT * FROM test ORDER BY x;
 UPDATE test SET y = y + 1 RETURNING *;
 WITH cte_1 AS (UPDATE test SET y = y - 1 RETURNING *) SELECT * FROM cte_1 ORDER BY 1,2;
 
+-- we should be able to limit intermediate results
+BEGIN;
+       SET LOCAL citus.max_intermediate_result_size TO 0;
+       WITH cte_1 AS (SELECT * FROM test OFFSET 0) SELECT * FROM cte_1;
+ROLLBACK;
+
+-- the first cte (cte_1) does not exceed the limit
+-- but the second (cte_2) exceeds, so we error out
+BEGIN;
+	SET LOCAL citus.max_intermediate_result_size TO '1kB';
+	INSERT INTO  test SELECT i,i from generate_series(0,1000)i;
+
+	-- only pulls 1 row, should not hit the limit
+	WITH cte_1 AS (SELECT * FROM test LIMIT 1) SELECT count(*) FROM cte_1;
+
+	-- cte_1 only pulls 1 row, but cte_2 all rows
+	WITH cte_1 AS (SELECT * FROM test LIMIT 1),
+	     cte_2 AS (SELECT * FROM test OFFSET 0)
+	SELECT count(*) FROM cte_1, cte_2;
+ROLLBACK;
+
 -- single shard and multi-shard delete
 -- inside a transaction block
 BEGIN;

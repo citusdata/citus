@@ -15,7 +15,6 @@
 #define MULTI_SERVER_EXECUTOR_H
 
 #include "distributed/multi_physical_planner.h"
-
 #include "distributed/worker_manager.h"
 
 /* Adaptive executor repartioning related defines */
@@ -34,18 +33,6 @@ typedef enum
 } MultiExecutorType;
 
 
-/*
- * DistributedExecutionStats holds the execution related stats.
- *
- * totalIntermediateResultSize is a counter to keep the size
- * of the intermediate results of complex subqueries and CTEs
- * so that we can put a limit on the size.
- */
-typedef struct DistributedExecutionStats
-{
-	uint64 totalIntermediateResultSize;
-} DistributedExecutionStats;
-
 /* Config variable managed via guc.c */
 extern int RemoteTaskCheckInterval;
 extern int TaskExecutorType;
@@ -55,7 +42,5 @@ extern int MultiTaskQueryLogLevel;
 
 /* Function declarations common to more than one executor */
 extern MultiExecutorType JobExecutorType(DistributedPlan *distributedPlan);
-extern bool CheckIfSizeLimitIsExceeded(DistributedExecutionStats *executionStats);
-extern void ErrorSizeLimitIsExceeded(void);
 
 #endif /* MULTI_SERVER_EXECUTOR_H */

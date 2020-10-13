@@ -311,7 +311,8 @@ typedef struct Task
 	/*
 	 * totalReceivedTupleData only counts the data for a single placement. So
 	 * for RETURNING DML this is not really correct. This is used by
-	 * EXPLAIN ANALYZE, to display the amount of received bytes.
+	 * EXPLAIN ANALYZE, to display the amount of received bytes. The local execution
+	 * does not increment this value, so only used for remote execution.
 	 */
 	uint64 totalReceivedTupleData;
 
