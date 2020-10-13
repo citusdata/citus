@@ -115,5 +115,18 @@ EXPLAIN (ANALYZE TRUE, WAL TRUE, COSTS FALSE, SUMMARY FALSE, BUFFERS FALSE, TIMI
 WITH cte_1 AS (INSERT INTO test_wal VALUES(6,66),(7,77),(8,88) RETURNING *)
 SELECT * FROM cte_1;
 
+CREATE TABLE distributed_table(a int, b int);
+SELECT create_distributed_table('distributed_table', 'a');
+
+CREATE TABLE reference_table(a int, c int, b int);
+SELECT create_reference_table('reference_table');
+
+SELECT distributed_table.* from distributed_table JOIN reference_table ON (true);
+
+ALTER TABLE reference_table DROP COLUMN c;
+
+-- #4129: make sure a join after drop column works
+SELECT distributed_table.* from distributed_table JOIN reference_table ON (true);
+
 SET client_min_messages TO WARNING;
 drop schema test_pg13 cascade;

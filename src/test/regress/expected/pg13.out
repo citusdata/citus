@@ -262,5 +262,31 @@ SELECT * FROM cte_1;
          ->  Function Scan on read_intermediate_result intermediate_result (actual rows=3 loops=1)
 (27 rows)
 
+CREATE TABLE distributed_table(a int, b int);
+SELECT create_distributed_table('distributed_table', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE reference_table(a int, c int, b int);
+SELECT create_reference_table('reference_table');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT distributed_table.* from distributed_table JOIN reference_table ON (true);
+ a | b
+---------------------------------------------------------------------
+(0 rows)
+
+ALTER TABLE reference_table DROP COLUMN c;
+-- #4129: make sure a join after drop column works
+SELECT distributed_table.* from distributed_table JOIN reference_table ON (true);
+ a | b
+---------------------------------------------------------------------
+(0 rows)
+
 SET client_min_messages TO WARNING;
 drop schema test_pg13 cascade;
