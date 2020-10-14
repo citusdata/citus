@@ -130,6 +130,7 @@ static bool IsTidColumn(Node *node);
 static DeferredErrorMessage * ModifyPartialQuerySupported(Query *queryTree, bool
 														  multiShardQuery,
 														  Oid *distributedTableId);
+static bool NodeIsFieldStore(Node *node);
 static DeferredErrorMessage * DeferErrorIfUnsupportedModifyQueryWithLocalTable(
 	Query *query);
 static DeferredErrorMessage * DeferErrorIfUnsupportedModifyQueryWithCitusLocalTable(
@@ -674,6 +675,18 @@ ModifyPartialQuerySupported(Query *queryTree, bool multiShardQuery,
 			{
 				Assert(hasVarArgument || hasBadCoalesce);
 			}
+
+			if (FindNodeMatchingCheckFunction((Node *) targetEntry->expr,
+											  NodeIsFieldStore))
+			{
+				/* DELETE cannot do field indirection already */
+				Assert(commandType == CMD_UPDATE || commandType == CMD_INSERT);
+				return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+									 "inserting or modifying composite type fields is not "
+									 "supported", NULL,
+									 "Use the column name to insert or update the composite "
+									 "type as a single value");
+			}
 		}
 
 		if (joinTree != NULL)
@@ -737,6 +750,16 @@ ModifyPartialQuerySupported(Query *queryTree, bool multiShardQuery,
 	*distributedTableIdOutput = distributedTableId;
 
 	return NULL;
+}
+
+
+/*
+ * NodeIsFieldStore returns true if given Node is a FieldStore object.
+ */
+static bool
+NodeIsFieldStore(Node *node)
+{
+	return node && IsA(node, FieldStore);
 }
 
 
