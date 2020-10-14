@@ -108,5 +108,48 @@ EXPLAIN (COSTS FALSE) SELECT FROM t5 WHERE c0 = CASE WHEN 2 BETWEEN 1 AND 3 THEN
                Filter: (c0 = 2)
 (7 rows)
 
+CREATE TABLE IF NOT EXISTS t6(c0 TEXT  CHECK (TRUE), c1 money ) WITH (autovacuum_vacuum_threshold=1180014707, autovacuum_freeze_table_age=13771154, autovacuum_vacuum_cost_delay=23, autovacuum_analyze_threshold=1935153914, autovacuum_freeze_min_age=721733768, autovacuum_enabled=0, autovacuum_vacuum_cost_limit=9983);
+CREATE UNLOGGED TABLE IF NOT EXISTS t7(LIKE t6);
+CREATE TABLE t8(LIKE t6 INCLUDING INDEXES);
+CREATE UNLOGGED TABLE t9(LIKE t6 EXCLUDING STATISTICS);
+CREATE TABLE t10(LIKE t7);
+SELECT create_distributed_table('t6', 'c0');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+ALTER TABLE t6 ALTER COLUMN c0 SET NOT NULL;
+SELECT create_reference_table('t7');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_table('t8', 'c0');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+ALTER TABLE t8 ALTER COLUMN c0 SET NOT NULL;
+SELECT create_distributed_table('t9', 'c0');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+ALTER TABLE t9 ALTER COLUMN c0 SET NOT NULL;
+SELECT create_reference_table('t10');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT count(*) FROM (
+SELECT ALL t7.c1, t7.c0, t8.c1, t10.c1, t8.c0 FROM t7 CROSS JOIN t10 FULL OUTER JOIN t8 ON (((((((('[832125354,1134163512)'::int4range)*('(0,2106623281)'::int4range)))-('(-600267905,509840582]'::int4range)))*('(-365203965,1662828182)'::int4range)))&<((((((('(-1286467417,697584012]'::int4range)*('[-1691485781,1341103963)'::int4range)))*((('(-1768368435,1719707648)'::int4range)*('(139536997,1275813540]'::int4range)))))*((((('[-2103910157,-1961746758)'::int4range)*('[-834534078,533073939)'::int4range)))*((('[-1030552151,552856781]'::int4range)*('[-1109419376,1205173697]'::int4range))))))))
+) AS foo;
+ERROR:  cannot pushdown the subquery
+DETAIL:  There exist a reference table in the outer part of the outer join
 SET client_min_messages TO WARNING;
 DROP SCHEMA sqlancer_failures CASCADE;

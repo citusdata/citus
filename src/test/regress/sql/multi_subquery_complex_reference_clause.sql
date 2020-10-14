@@ -401,6 +401,102 @@ ORDER BY 1 DESC,
          2 DESC
 LIMIT 5;
 
+-- should be fine even if the tables are deep inside subqueries
+SELECT max(events_all.cnt),
+       events_all.usr_id
+	FROM
+(SELECT *, random() FROM
+	(SELECT *, random()
+			FROM (SELECT users_table.user_id AS usr_id, count(*) AS cnt
+					FROM (SELECT *,random FROM (SELECT *, random() FROM events_reference_table) as events_reference_table) as events_reference_table
+					INNER JOIN users_table ON (users_table.user_id = events_reference_table.user_id)
+					GROUP BY users_table.user_id) AS events_all_inner
+          ) AS events_all
+	) AS events_all
+	LEFT JOIN (SELECT *,random() FROM (SELECT *, random() FROM  events_table)  as events_table) as events_table ON (events_all.usr_id = events_table.user_id)
+GROUP BY 2
+ORDER BY 1 DESC,
+         2 DESC
+LIMIT 5;
+
+-- should be fine with FULL join as well
+SELECT max(events_all.cnt),
+       events_all.usr_id
+	FROM events_table
+	FULL JOIN (SELECT *, random()
+			FROM (SELECT users_table.user_id AS usr_id, count(*) AS cnt
+					FROM events_reference_table
+					INNER JOIN users_table ON (users_table.user_id = events_reference_table.user_id)
+					GROUP BY users_table.user_id) AS events_all_inner
+          ) AS events_all ON (events_all.usr_id = events_table.user_id)
+GROUP BY 2
+ORDER BY 1 DESC,
+         2 DESC
+LIMIT 5;
+
+-- two levels of "(ref_table JOIN dist_table) LEFT JOIN"
+-- should be fine as well
+SELECT
+	users_table.*
+FROM
+	(SELECT
+		events_all.*, random()
+	FROM
+			events_reference_table JOIN users_table USING(user_id)
+		JOIN
+			(SELECT *, random()
+				FROM (SELECT users_table.user_id AS usr_id, count(*) AS cnt
+						FROM (SELECT *,random FROM (SELECT *, random() FROM events_reference_table) as events_reference_table) as events_reference_table
+						INNER JOIN users_table ON (users_table.user_id = events_reference_table.user_id)
+						GROUP BY users_table.user_id) AS events_all_inner
+	          ) AS events_all ON (user_id = usr_id)
+	) AS events_all
+	LEFT JOIN (SELECT *,random() FROM (SELECT *, random() FROM  events_table)  as events_table) as events_table ON (events_all.usr_id = events_table.user_id)
+	LEFT JOIN users_table USING (user_id)
+ORDER BY 1,2,3,4 LIMIT 5;
+
+
+-- we should be able to support OUTER joins involving
+-- reference tables even if the subquery is in WHERE clause
+SELECT count(*)
+FROM events_table
+WHERE user_id IN
+    (SELECT subquery_1.user_id
+     FROM
+       (SELECT tt1.user_id,
+               random()
+        FROM users_table AS tt1
+        JOIN events_table AS tt2 ON tt1.user_id = tt2.user_id) subquery_1
+     RIGHT JOIN
+       (SELECT *,
+               random()
+        FROM
+          (SELECT tt1.user_id,
+                  random()
+           FROM users_table AS tt1
+           JOIN events_reference_table AS REF ON tt1.user_id = ref.user_id) subquery_2_inner) subquery_2 ON subquery_1.user_id = subquery_2.user_id);
+
+-- we should be able to support OUTER joins involving
+-- reference tables even if the subquery is in the outer part of a JOIN
+
+SELECT count(*)
+FROM users_table
+RIGHT JOIN
+  (SELECT subquery_1.user_id
+   FROM
+     (SELECT tt1.user_id,
+             random()
+      FROM users_table AS tt1
+      JOIN events_table AS tt2 ON tt1.user_id = tt2.user_id) subquery_1
+   RIGHT JOIN
+     (SELECT *,
+             random()
+      FROM
+        (SELECT tt1.user_id,
+                random()
+         FROM users_table AS tt1
+         JOIN events_reference_table AS REF ON tt1.user_id = ref.user_id) subquery_2_inner) subquery_2 ON subquery_1.user_id = subquery_2.user_id) AS foo USING (user_id);
+
 -- LATERAL JOINs used with INNER JOINs with reference tables
 SET citus.subquery_pushdown to ON;
 SELECT user_id, lastseen
@@ -1328,6 +1424,52 @@ JOIN
  ON (mx = user_id)
 ORDER BY 1
 LIMIT 5;
+
+-- outer part of the LEFT JOIN consists only reference tables, so we cannot push down
+-- we have different combinations for ON condition, true/false/two column join/single column filter
+SELECT count(*) FROM users_ref_test_table ref1 INNER JOIN users_ref_test_table ref2 on ref1.id = ref2.id LEFT JOIN user_buy_test_table ON true;
+SELECT count(*) FROM users_ref_test_table ref1 LEFT JOIN users_ref_test_table ref2 on ref1.id = ref2.id LEFT JOIN user_buy_test_table ON true;
+SELECT count(*) FROM users_ref_test_table ref1 INNER JOIN users_ref_test_table ref2 on ref1.id = ref2.id LEFT JOIN user_buy_test_table ON false;
+SELECT count(*) FROM users_ref_test_table ref1 LEFT JOIN users_ref_test_table ref2 on ref1.id = ref2.id LEFT JOIN user_buy_test_table ON false;
+SELECT count(*) FROM users_ref_test_table ref1 INNER JOIN users_ref_test_table ref2 on ref1.id = ref2.id LEFT JOIN user_buy_test_table ON (ref1.id > 5);
+SELECT count(*) FROM users_ref_test_table ref1 INNER JOIN users_ref_test_table ref2 on ref1.id = ref2.id LEFT JOIN user_buy_test_table ON (user_buy_test_table.user_id > 5);
+SELECT count(*) FROM users_ref_test_table ref1 INNER JOIN users_ref_test_table ref2 on ref1.id = ref2.id LEFT JOIN user_buy_test_table ON (ref1.id = user_buy_test_table.user_id);
+SELECT count(*) FROM users_ref_test_table ref1 INNER JOIN users_ref_test_table ref2 on ref1.id = ref2.id LEFT JOIN user_buy_test_table ON (ref2.id = user_buy_test_table.user_id);
+SELECT count(*) FROM users_ref_test_table ref1 LEFT JOIN users_ref_test_table ref2 on ref1.id = ref2.id LEFT JOIN user_buy_test_table ON (ref1.id = user_buy_test_table.user_id);
+SELECT count(*) FROM users_ref_test_table ref1 LEFT JOIN users_ref_test_table ref2 on ref1.id = ref2.id LEFT JOIN user_buy_test_table ON (ref2.id = user_buy_test_table.user_id);
+
+
+-- outer part of the LEFT JOIN consists only reference tables within a subquery, so we cannot push down
+-- we have different combinations for ON condition, true/false/two column join/single column filter
+SELECT count(*) FROM (SELECT ref1.*, random() FROM users_ref_test_table ref1 INNER JOIN users_ref_test_table ref2 on ref1.id = ref2.id) as foo LEFT JOIN user_buy_test_table ON true;
+SELECT count(*) FROM (SELECT ref1.*, random() FROM users_ref_test_table ref1 LEFT JOIN users_ref_test_table ref2 on ref1.id = ref2.id) as foo LEFT JOIN user_buy_test_table ON true;
+SELECT count(*) FROM (SELECT ref1.*, random() FROM users_ref_test_table ref1 INNER JOIN users_ref_test_table ref2 on ref1.id = ref2.id) as foo LEFT JOIN user_buy_test_table ON false;
+SELECT count(*) FROM (SELECT ref1.*, random() FROM users_ref_test_table ref1 LEFT JOIN users_ref_test_table ref2 on ref1.id = ref2.id) as foo LEFT JOIN user_buy_test_table ON false;
+SELECT count(*) FROM (SELECT ref1.*, random() FROM users_ref_test_table ref1 INNER JOIN users_ref_test_table ref2 on ref1.id = ref2.id) as foo LEFT JOIN user_buy_test_table ON (foo.id > 5);
+SELECT count(*) FROM (SELECT ref1.*, random() FROM users_ref_test_table ref1 LEFT JOIN users_ref_test_table ref2 on ref1.id = ref2.id) as foo LEFT JOIN user_buy_test_table ON (user_buy_test_table.user_id > 19);
+SELECT count(*) FROM (SELECT ref1.*, random() FROM users_ref_test_table ref1 INNER JOIN users_ref_test_table ref2 on ref1.id = ref2.id) as foo LEFT JOIN user_buy_test_table ON (foo.id = user_buy_test_table.user_id);
+
+-- one example where unsupported outer join is deep inside a subquery
+SELECT *, random() FROM (
+SELECT *,random() FROM user_buy_test_table WHERE user_id > (
+SELECT count(*) FROM (SELECT *,random() FROM (SELECT ref1.*, random() FROM users_ref_test_table ref1 INNER JOIN users_ref_test_table ref2 on ref1.id = ref2.id) as bar) as foo LEFT JOIN (SELECT *, random() FROM (SELECT *,random() FROM user_buy_test_table d1 JOIN user_buy_test_table d2 USING (user_id)) as bar_inner ) as bar ON true)) as boo;
+
+-- In theory, we should be able to pushdown this query
+-- however, as the LEFT JOIN condition is between a reference table and the distributed table
+-- Postgres generates a LEFT JOIN alternative among those tables
+SELECT count(*) FROM (SELECT ref1.*, random() FROM users_ref_test_table ref1 INNER JOIN user_buy_test_table u1 on ref1.id = u1.user_id) as foo LEFT JOIN user_buy_test_table ON (foo.id = user_buy_test_table.user_id);
+
+-- same as the above query, but this time LEFT JOIN condition is between distributed tables
+-- so Postgres doesn't generate join restriction between reference and distributed tables
+SELECT count(*) FROM (SELECT u1.*, random() FROM users_ref_test_table ref1 INNER JOIN user_buy_test_table u1 on ref1.id = u1.user_id) as foo LEFT JOIN user_buy_test_table ON (foo.user_id = user_buy_test_table.user_id);
+
+-- outer part of the LEFT JOIN consists only intermediate result due to LIMIT, so we cannot push down
+SELECT count(*) FROM (SELECT ref1.* FROM users_ref_test_table ref1 INNER JOIN users_ref_test_table ref2 on ref1.id = ref2.id LIMIT 5) as foo LEFT JOIN user_buy_test_table ON true;
+
+-- should be fine as OUTER part is the distributed table
+SELECT count(*) FROM users_ref_test_table ref1 INNER JOIN users_ref_test_table ref2 on ref1.id = ref2.id RIGHT JOIN user_buy_test_table ON true;
+SELECT count(*) FROM users_ref_test_table ref1 INNER JOIN users_ref_test_table ref2 on ref1.id = ref2.id RIGHT JOIN user_buy_test_table ON false;
+SELECT count(*) FROM users_ref_test_table ref1 INNER JOIN users_ref_test_table ref2 on ref1.id = ref2.id RIGHT JOIN user_buy_test_table ON (ref1.id = user_id);
 
 DROP TABLE user_buy_test_table;
 DROP TABLE users_ref_test_table;
