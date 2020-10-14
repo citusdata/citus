@@ -145,7 +145,7 @@ CStoreSetRelPathlistHook(PlannerInfo *root, RelOptInfo *rel, Index rti,
 		return;
 	}
 
-	if (!OidIsValid(rte->relid))
+	if (!OidIsValid(rte->relid) || rte->rtekind != RTE_RELATION)
 	{
 		/* some calls to the pathlist hook don't have a valid relation set. Do nothing */
 		return;
