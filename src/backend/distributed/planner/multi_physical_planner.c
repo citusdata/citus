@@ -2938,6 +2938,24 @@ SqlTaskList(Job *job)
 
 
 /*
+ * RelabelTypeToCollateExpr converts RelabelType's into CollationExpr's.
+ * With that, we will be able to pushdown COLLATE's.
+ */
+CollateExpr *
+RelabelTypeToCollateExpr(RelabelType *relabelType)
+{
+	Assert(OidIsValid(relabelType->resultcollid));
+
+	CollateExpr *collateExpr = makeNode(CollateExpr);
+	collateExpr->arg = relabelType->arg;
+	collateExpr->collOid = relabelType->resultcollid;
+	collateExpr->location = relabelType->location;
+
+	return collateExpr;
+}
+
+
+/*
  * DependsOnHashPartitionJob checks if the given job depends on a hash
  * partitioning job.
  */
