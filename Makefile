@@ -55,7 +55,7 @@ ifeq ($(USE_TABLEAM),yes)
 	REGRESS += am_create am_load am_query am_analyze am_data_types am_functions \
 	           am_drop am_insert am_copyto am_alter am_rollback am_truncate am_vacuum am_clean \
 	           am_block_filtering am_join am_trigger
-	ISOLATION += am_vacuum_vs_insert
+	ISOLATION += am_write_concurrency am_vacuum_vs_insert
 endif
 
 ifeq ($(enable_coverage),yes)
