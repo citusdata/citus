@@ -30,6 +30,8 @@ CREATE TABLE ref(a int, b int);
 SELECT create_reference_table('ref');
 CREATE TABLE local(c int, d int);
 
+CREATE TABLE public.another_schema_table(a int);
+SELECT create_distributed_table('public.another_schema_table', 'a');
 
 -- Confirm the basics work
 INSERT INTO test VALUES (1, 2), (3, 4), (5, 6), (2, 7), (4, 5);
@@ -71,7 +73,27 @@ BEGIN;
 COMMIT;
 
 CREATE INDEX single_node_i1 ON test(x);
-DROP INDEX single_node_i1;
+CREATE INDEX single_node_i2 ON test(x,y);
+REINDEX SCHEMA single_node;
+
+-- PG 11 does not support CONCURRENTLY
+-- and we do not want to add a new output
+-- file just for that. Enable the test
+-- once we remove PG_VERSION_11
+--REINDEX SCHEMA CONCURRENTLY single_node;
+
+-- keep one of the indexes
+-- drop w/wout tx blocks
+BEGIN;
+	DROP INDEX single_node_i2;
+ROLLBACK;
+DROP INDEX single_node_i2;
+
+-- change the schema w/wout TX block
+BEGIN;
+	ALTER TABLE public.another_schema_table SET SCHEMA single_node;
+ROLLBACK;
+ALTER TABLE public.another_schema_table SET SCHEMA single_node;
 
 BEGIN;
 	TRUNCATE test;
