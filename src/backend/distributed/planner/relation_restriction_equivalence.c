@@ -2057,11 +2057,6 @@ ContextCoversJoinRestriction(JoinRestrictionContext *joinRestrictionContext,
 		 * We check whether the restrictions in joinRestrictionInTest is a subset
 		 * of the restrictions in joinRestrictionInContext in the sense that all the
 		 * restrictions in the latter already exists in the former.
-		 *
-		 * Also, note that list_difference() returns a list that contains all the
-		 * cells in joinRestrictInfoList that are not in inputJoinRestrictInfoList.
-		 * Finally, each element in these lists is a pointer to RestrictInfo
-		 * structure, where equal() function is implemented for the struct.
 		 */
 		List *joinRestrictInfoListInContext =
 			joinRestrictionInContext->joinRestrictInfoList;
