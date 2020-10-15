@@ -275,9 +275,6 @@ typedef struct DistributedExecution
 	 */
 	uint64 rowsProcessed;
 
-	/* statistics on distributed execution */
-	DistributedExecutionStats *executionStats;
-
 	/*
 	 * The following fields are used while receiving results from remote nodes.
 	 * We store this information here to avoid re-allocating it every time.
@@ -1004,7 +1001,7 @@ ExecuteTaskListExtended(ExecutionParams *executionParams)
 	 * then we should error out as it would cause inconsistencies across the
 	 * remote connection and local execution.
 	 */
-	if (CurrentLocalExecutionStatus == LOCAL_EXECUTION_REQUIRED &&
+	if (GetCurrentLocalExecutionStatus() == LOCAL_EXECUTION_REQUIRED &&
 		AnyTaskAccessesLocalNode(remoteTaskList))
 	{
 		ErrorIfTransactionAccessedPlacementsLocally();
@@ -1085,8 +1082,6 @@ CreateDistributedExecution(RowModifyLevel modLevel, List *taskList,
 	execution->localTaskList = NIL;
 	execution->remoteTaskList = NIL;
 
-	execution->executionStats =
-		(DistributedExecutionStats *) palloc0(sizeof(DistributedExecutionStats));
 	execution->paramListInfo = paramListInfo;
 	execution->workerList = NIL;
 	execution->sessionList = NIL;
@@ -1187,7 +1182,7 @@ DecideTransactionPropertiesForTaskList(RowModifyLevel modLevel, List *taskList, 
 		return xactProperties;
 	}
 
-	if (CurrentLocalExecutionStatus == LOCAL_EXECUTION_REQUIRED)
+	if (GetCurrentLocalExecutionStatus() == LOCAL_EXECUTION_REQUIRED)
 	{
 		/*
 		 * In case localExecutionHappened, we force the executor to use 2PC.
@@ -3681,7 +3676,6 @@ ReceiveResults(WorkerSession *session, bool storeRows)
 	MultiConnection *connection = session->connection;
 	WorkerPool *workerPool = session->workerPool;
 	DistributedExecution *execution = workerPool->distributedExecution;
-	DistributedExecutionStats *executionStats = execution->executionStats;
 	TaskPlacementExecution *placementExecution = session->currentTask;
 	ShardCommandExecution *shardCommandExecution =
 		placementExecution->shardCommandExecution;
@@ -3822,10 +3816,10 @@ ReceiveResults(WorkerSession *session, bool storeRows)
 		 */
 		Assert(EnableBinaryProtocol || !binaryResults);
 
-		uint64 tupleLibpqSize = 0;
-
 		for (uint32 rowIndex = 0; rowIndex < rowsProcessed; rowIndex++)
 		{
+			uint64 tupleLibpqSize = 0;
+
 			/*
 			 * Switch to a temporary memory context that we reset after each
 			 * tuple. This protects us from any memory leaks that might be
@@ -3864,10 +3858,7 @@ ReceiveResults(WorkerSession *session, bool storeRows)
 						}
 						columnArray[columnIndex] = value;
 					}
-					if (SubPlanLevel > 0 && executionStats != NULL)
-					{
-						executionStats->totalIntermediateResultSize += valueLength;
-					}
+
 					tupleLibpqSize += valueLength;
 				}
 			}
@@ -3898,11 +3889,6 @@ ReceiveResults(WorkerSession *session, bool storeRows)
 		}
 
 		PQclear(result);
-
-		if (executionStats != NULL && CheckIfSizeLimitIsExceeded(executionStats))
-		{
-			ErrorSizeLimitIsExceeded();
-		}
 	}
 
 	/* the context is local to the function, so not needed anymore */

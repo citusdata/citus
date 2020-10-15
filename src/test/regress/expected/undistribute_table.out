@@ -31,6 +31,14 @@ SELECT * FROM dist_table ORDER BY 1, 2, 3;
   2 | 3 | abcd
 (3 rows)
 
+-- we cannot immediately convert in the same statement, because
+-- the name->OID conversion happens at parse time.
+SELECT undistribute_table('dist_table'), create_distributed_table('dist_table', 'a');
+NOTICE:  Creating a new local table for undistribute_table.dist_table
+NOTICE:  Moving the data of undistribute_table.dist_table
+NOTICE:  Dropping the old undistribute_table.dist_table
+NOTICE:  Renaming the new table to undistribute_table.dist_table
+ERROR:  relation with OID XXXX does not exist
 SELECT undistribute_table('dist_table');
 NOTICE:  Creating a new local table for undistribute_table.dist_table
 NOTICE:  Moving the data of undistribute_table.dist_table

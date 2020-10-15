@@ -31,9 +31,8 @@ typedef enum LocalExecutionStatus
 	LOCAL_EXECUTION_DISABLED
 } LocalExecutionStatus;
 
-extern enum LocalExecutionStatus CurrentLocalExecutionStatus;
-
 /* extern function declarations */
+extern LocalExecutionStatus GetCurrentLocalExecutionStatus(void);
 extern uint64 ExecuteLocalTaskList(List *taskList, TupleDestination *defaultTupleDest);
 extern uint64 ExecuteLocalUtilityTaskList(List *utilityTaskList);
 extern uint64 ExecuteLocalTaskListExtended(List *taskList, ParamListInfo

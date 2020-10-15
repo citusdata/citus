@@ -116,7 +116,7 @@ WITH cte AS (
 SELECT count(*) FROM cte;
 
 
--- this will fail in real_time_executor
+-- this will fail in remote execution
 SET citus.max_intermediate_result_size TO 2;
 WITH cte AS (
 	WITH cte2 AS (
