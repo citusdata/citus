@@ -27,6 +27,7 @@
 #include "distributed/multi_server_executor.h"
 #include "distributed/coordinator_protocol.h"
 #include "distributed/subplan_execution.h"
+#include "distributed/tuple_destination.h"
 #include "distributed/worker_protocol.h"
 #include "utils/lsyscache.h"
 
@@ -92,46 +93,4 @@ JobExecutorType(DistributedPlan *distributedPlan)
 	}
 
 	return MULTI_EXECUTOR_ADAPTIVE;
-}
-
-
-/*
- * CheckIfSizeLimitIsExceeded checks if the limit is exceeded by intermediate
- * results, if there is any.
- */
-bool
-CheckIfSizeLimitIsExceeded(DistributedExecutionStats *executionStats)
-{
-	if (!SubPlanLevel || MaxIntermediateResult < 0)
-	{
-		return false;
-	}
-
-	uint64 maxIntermediateResultInBytes = MaxIntermediateResult * 1024L;
-	if (executionStats->totalIntermediateResultSize < maxIntermediateResultInBytes)
-	{
-		return false;
-	}
-
-	return true;
-}
-
-
-/*
- * This function is called when the intermediate result size limitation is
- * exceeded. It basically errors out with a detailed explanation.
- */
-void
-ErrorSizeLimitIsExceeded()
-{
-	ereport(ERROR, (errmsg("the intermediate result size exceeds "
-						   "citus.max_intermediate_result_size (currently %d kB)",
-						   MaxIntermediateResult),
-					errdetail("Citus restricts the size of intermediate "
-							  "results of complex subqueries and CTEs to "
-							  "avoid accidentally pulling large result sets "
-							  "into once place."),
-					errhint("To run the current query, set "
-							"citus.max_intermediate_result_size to a higher"
-							" value or -1 to disable.")));
 }

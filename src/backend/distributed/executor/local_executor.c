@@ -88,9 +88,10 @@
 #include "distributed/listutils.h"
 #include "distributed/local_executor.h"
 #include "distributed/local_plan_cache.h"
-#include "distributed/multi_executor.h"
 #include "distributed/coordinator_protocol.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/multi_executor.h"
+#include "distributed/multi_server_executor.h"
 #include "distributed/relation_access_tracking.h"
 #include "distributed/remote_commands.h" /* to access LogRemoteCommands */
 #include "distributed/transaction_management.h"
@@ -284,10 +285,9 @@ ExecuteLocalTaskListExtended(List *taskList,
 			if (GetTaskQueryType(task) == TASK_QUERY_TEXT_LIST)
 			{
 				List *queryStringList = task->taskQuery.data.queryStringList;
-				totalRowsProcessed += LocallyPlanAndExecuteMultipleQueries(
-					queryStringList,
-					tupleDest,
-					task);
+				totalRowsProcessed +=
+					LocallyPlanAndExecuteMultipleQueries(queryStringList, tupleDest,
+														 task);
 				continue;
 			}
 

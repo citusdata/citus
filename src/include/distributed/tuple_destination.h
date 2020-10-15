@@ -15,7 +15,22 @@
 #include "tcop/dest.h"
 #include "utils/tuplestore.h"
 
+
 typedef struct TupleDestination TupleDestination;
+
+
+/*
+ * TupleDestinationStats holds the size related stats.
+ *
+ * totalIntermediateResultSize is a counter to keep the size
+ * of the intermediate results of complex subqueries and CTEs
+ * so that we can put a limit on the size.
+ */
+typedef struct TupleDestinationStats
+{
+	uint64 totalIntermediateResultSize;
+} TupleDestinationStats;
+
 
 /*
  * TupleDestination provides a generic interface for where to send tuples.
@@ -36,6 +51,12 @@ struct TupleDestination
 
 	/* tupleDescForQuery returns tuple descriptor for a query number. Can return NULL. */
 	TupleDesc (*tupleDescForQuery)(TupleDestination *self, int queryNumber);
+
+	/*
+	 * Used to enforce citus.max_intermediate_result_size, could be NULL
+	 * if the caller is not interested in the size.
+	 */
+	TupleDestinationStats *tupleDestinationStats;
 };
 
 extern TupleDestination * CreateTupleStoreTupleDest(Tuplestorestate *tupleStore, TupleDesc

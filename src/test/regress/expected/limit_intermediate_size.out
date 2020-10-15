@@ -133,12 +133,10 @@ WITH cte AS (
 	SELECT * FROM cte2, cte3 WHERE cte2.value_1 IN (SELECT value_2 FROM cte3)
 )
 SELECT count(*) FROM cte;
- count
----------------------------------------------------------------------
-  1824
-(1 row)
-
--- this will fail in real_time_executor
+ERROR:  the intermediate result size exceeds citus.max_intermediate_result_size (currently 3 kB)
+DETAIL:  Citus restricts the size of intermediate results of complex subqueries and CTEs to avoid accidentally pulling large result sets into once place.
+HINT:  To run the current query, set citus.max_intermediate_result_size to a higher value or -1 to disable.
+-- this will fail in remote execution
 SET citus.max_intermediate_result_size TO 2;
 WITH cte AS (
 	WITH cte2 AS (
