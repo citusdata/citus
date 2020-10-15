@@ -241,3 +241,14 @@ GenerateListFromElement(void *listElement, int listLength)
 
 	return list;
 }
+
+
+/*
+ * LeftListIsSubset returns true if lhs is subset of rhs list.
+ */
+bool
+LeftListIsSubset(const List *lhs, const List *rhs)
+{
+	List *listDifference = list_difference(lhs, rhs);
+	return list_length(listDifference) == 0;
+}
