@@ -159,3 +159,6 @@ s/failed to roll back prepared transaction '.*'/failed to roll back prepared tra
 
 # Errors with binary decoding where OIDs should be normalized
 s/wrong data type: [0-9]+, expected [0-9]+/wrong data type: XXXX, expected XXXX/g
+
+# Errors with relation OID does not exist
+s/relation with OID [0-9]+ does not exist/relation with OID XXXX does not exist/g

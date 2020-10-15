@@ -189,6 +189,7 @@ extern bool MajorVersionsCompatible(char *leftVersion, char *rightVersion);
 extern void ErrorIfInconsistentShardIntervals(CitusTableCacheEntry *cacheEntry);
 extern void EnsureModificationsCanRun(void);
 extern char LookupDistributionMethod(Oid distributionMethodOid);
+extern bool RelationExists(Oid relationId);
 
 /* access WorkerNodeHash */
 extern HTAB * GetWorkerNodeHash(void);

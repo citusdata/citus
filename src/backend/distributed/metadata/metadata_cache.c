@@ -4263,6 +4263,24 @@ CachedRelationNamespaceLookup(const char *relationName, Oid relnamespace,
 
 
 /*
+ * RelationExists returns whether a relation with the given OID exists.
+ */
+bool
+RelationExists(Oid relationId)
+{
+	HeapTuple relTuple = SearchSysCache1(RELOID, ObjectIdGetDatum(relationId));
+
+	bool relationExists = HeapTupleIsValid(relTuple);
+	if (relationExists)
+	{
+		ReleaseSysCache(relTuple);
+	}
+
+	return relationExists;
+}
+
+
+/*
  * Register a relcache invalidation for a non-shared relation.
  *
  * We ignore the case that there's no corresponding pg_class entry - that
