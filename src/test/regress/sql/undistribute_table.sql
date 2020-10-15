@@ -11,6 +11,10 @@ SELECT logicalrelid FROM pg_dist_partition WHERE logicalrelid = 'dist_table'::re
 SELECT run_command_on_workers($$SELECT COUNT(*) FROM pg_catalog.pg_class WHERE relname LIKE 'dist\_table\_%'$$);
 SELECT * FROM dist_table ORDER BY 1, 2, 3;
 
+-- we cannot immediately convert in the same statement, because
+-- the name->OID conversion happens at parse time.
+SELECT undistribute_table('dist_table'), create_distributed_table('dist_table', 'a');
+
 SELECT undistribute_table('dist_table');
 
 SELECT logicalrelid FROM pg_dist_partition WHERE logicalrelid = 'dist_table'::regclass;

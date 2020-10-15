@@ -112,6 +112,7 @@ static void EnsureLocalTableEmptyIfNecessary(Oid relationId, char distributionMe
 static bool ShouldLocalTableBeEmpty(Oid relationId, char distributionMethod, bool
 									viaDeprecatedAPI);
 static void EnsureCitusTableCanBeCreated(Oid relationOid);
+static void EnsureRelationExists(Oid relationId);
 static bool LocalTableEmpty(Oid tableId);
 static void CopyLocalDataIntoShards(Oid relationId);
 static List * TupleDescColumnNameList(TupleDesc tupleDescriptor);
@@ -323,6 +324,7 @@ undistribute_table(PG_FUNCTION_ARGS)
 
 	CheckCitusVersion(ERROR);
 	EnsureCoordinator();
+	EnsureRelationExists(relationId);
 	EnsureTableOwner(relationId);
 
 	UndistributeTable(relationId);
@@ -341,6 +343,7 @@ static void
 EnsureCitusTableCanBeCreated(Oid relationOid)
 {
 	EnsureCoordinator();
+	EnsureRelationExists(relationOid);
 	EnsureTableOwner(relationOid);
 
 	/*
@@ -349,6 +352,22 @@ EnsureCitusTableCanBeCreated(Oid relationOid)
 	 * will be performed in CreateDistributedTable.
 	 */
 	EnsureRelationKindSupported(relationOid);
+}
+
+
+/*
+ * EnsureRelationExists does a basic check on whether the OID belongs to
+ * an existing relation.
+ */
+static void
+EnsureRelationExists(Oid relationId)
+{
+	if (!RelationExists(relationId))
+	{
+		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+						errmsg("relation with OID %d does not exist",
+							   relationId)));
+	}
 }
 
 

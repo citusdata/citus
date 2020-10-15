@@ -478,6 +478,12 @@ void
 EnsureRelationKindSupported(Oid relationId)
 {
 	char relationKind = get_rel_relkind(relationId);
+	if (!relationKind)
+	{
+		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+						errmsg("relation with OID %d does not exist",
+							   relationId)));
+	}
 
 	bool supportedRelationKind = RegularTable(relationId) ||
 								 relationKind == RELKIND_FOREIGN_TABLE;
