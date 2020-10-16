@@ -15,10 +15,13 @@
 
 #include "distributed/pg_version_constants.h"
 
+#include "access/sdir.h"
+#include "access/heapam.h"
 #include "commands/explain.h"
 #include "catalog/namespace.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/citus_safe_lib.h"
+#include "executor/tuptable.h"
 #include "nodes/parsenodes.h"
 #include "parser/parse_func.h"
 #if (PG_VERSION_NUM >= PG_VERSION_12)
@@ -61,6 +64,7 @@
 #endif
 #if PG_VERSION_NUM >= PG_VERSION_12
 
+#define CreateTableSlotForRel(rel) table_slot_create(rel, NULL)
 #define MakeSingleTupleTableSlotCompat MakeSingleTupleTableSlot
 #define AllocSetContextCreateExtended AllocSetContextCreateInternal
 #define NextCopyFromCompat NextCopyFrom
@@ -122,6 +126,7 @@ FileCompatFromFileStart(File fileDesc)
 
 
 #else /* pre PG12 */
+#define CreateTableSlotForRel(rel) MakeSingleTupleTableSlot(RelationGetDescr(rel))
 #define table_open(r, l) heap_open(r, l)
 #define table_openrv(r, l) heap_openrv(r, l)
 #define table_openrv_extended(r, l, m) heap_openrv_extended(r, l, m)
@@ -181,6 +186,23 @@ FileCompatFromFileStart(File fileDesc)
 	};
 
 	return fc;
+}
+
+
+/*
+ * postgres 11 equivalent for a function with the same name in postgres 12+.
+ */
+static inline bool
+table_scan_getnextslot(HeapScanDesc scan, ScanDirection dir, TupleTableSlot *slot)
+{
+	HeapTuple tuple = heap_getnext(scan, ForwardScanDirection);
+	if (tuple == NULL)
+	{
+		return false;
+	}
+
+	ExecStoreTuple(tuple, slot, InvalidBuffer, false);
+	return true;
 }
 
 

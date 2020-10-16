@@ -13,17 +13,6 @@ SET citus.next_placement_id TO 60000;
 create schema test_pg12;
 set search_path to test_pg12;
 
-CREATE FUNCTION blackhole_am_handler(internal)
-RETURNS table_am_handler
-AS 'citus'
-LANGUAGE C;
-CREATE ACCESS METHOD blackhole_am TYPE TABLE HANDLER blackhole_am_handler;
-
-create table test_am(id int, val int) using blackhole_am;
-insert into test_am values (1, 1);
--- Custom table access methods should be rejected
-select create_distributed_table('test_am','id');
-
 -- Test generated columns
 -- val1 after val2 to test https://github.com/citusdata/citus/issues/3538
 create table gen1 (
