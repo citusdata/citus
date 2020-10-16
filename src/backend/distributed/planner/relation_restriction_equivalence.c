@@ -152,7 +152,7 @@ static bool RangeTableArrayContainsAnyRTEIdentities(RangeTblEntry **rangeTableEn
 static int RangeTableOffsetCompat(PlannerInfo *root, AppendRelInfo *appendRelInfo);
 static Relids QueryRteIdentities(Query *queryTree);
 static bool ContextCoversJoinRestriction(JoinRestrictionContext *joinRestrictionContext,
-										 JoinRestriction *joinRestriction);
+										 JoinRestriction *joinRestrictionInTest);
 
 
 /*
@@ -2007,7 +2007,7 @@ RemoveDuplicateJoinRestrictions(JoinRestrictionContext *joinRestrictionContext)
 	{
 		JoinRestriction *joinRestriction = lfirst(joinRestrictionCell);
 
-		if (ContextCoversJoinRestriction(joinRestriction, filteredContext))
+		if (ContextCoversJoinRestriction(filteredContext, joinRestriction))
 		{
 			continue;
 		}
@@ -2026,14 +2026,14 @@ RemoveDuplicateJoinRestrictions(JoinRestrictionContext *joinRestrictionContext)
  */
 static bool
 ContextCoversJoinRestriction(JoinRestrictionContext *joinRestrictionContext,
-							 JoinRestriction *joinRestriction)
+							 JoinRestriction *joinRestrictionInTest)
 {
 	JoinRestriction *joinRestrictionInContext = NULL;
 	List *joinRestrictionInContextList = joinRestrictionContext->joinRestrictionList;
 	foreach_ptr(joinRestrictionInContext, joinRestrictionInContextList)
 	{
 		/* obviously we shouldn't treat different join types as being the same */
-		if (joinRestrictionInContext->joinType != joinRestriction->joinType)
+		if (joinRestrictionInContext->joinType != joinRestrictionInTest->joinType)
 		{
 			continue;
 		}
@@ -2042,14 +2042,14 @@ ContextCoversJoinRestriction(JoinRestrictionContext *joinRestrictionContext,
 		 * If we're dealing with different queries, we shouldn't treat their
 		 * restrictions as being the same.
 		 */
-		if (joinRestrictionInContext->plannerInfo != joinRestriction->plannerInfo)
+		if (joinRestrictionInContext->plannerInfo != joinRestrictionInTest->plannerInfo)
 		{
 			continue;
 		}
 
 		/*
 		 * We check whether the restrictions in joinRestrictionInContext is a super
-		 * set of the restrictions in joinRestriction in the sense that all the
+		 * set of the restrictions in joinRestrictionInTest in the sense that all the
 		 * restrictions in the latter already exists in the former.
 		 *
 		 * Also, note that list_difference() returns a list that contains all the
@@ -2059,8 +2059,9 @@ ContextCoversJoinRestriction(JoinRestrictionContext *joinRestrictionContext,
 		 */
 		List *joinRestrictInfoListInContext =
 			joinRestrictionInContext->joinRestrictInfoList;
-		List *joinRestrictInfoList = joinRestriction->joinRestrictInfoList;
-		if (LeftListIsSubset(joinRestrictInfoListInContext, joinRestrictInfoList))
+		List *joinRestrictInfoListInTest =
+			joinRestrictionInTest->joinRestrictInfoList;
+		if (LeftListIsSubset(joinRestrictInfoListInContext, joinRestrictInfoListInTest))
 		{
 			return true;
 		}
