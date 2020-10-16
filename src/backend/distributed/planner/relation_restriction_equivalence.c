@@ -1897,6 +1897,7 @@ FilterJoinRestrictionContext(JoinRestrictionContext *joinRestrictionContext, Rel
 		}
 	}
 
+	/* the filtered restriction might not have semiJoin, but it is OK for now */
 	filtererdJoinRestrictionContext->hasSemiJoin = joinRestrictionContext->hasSemiJoin;
 
 	return filtererdJoinRestrictionContext;
@@ -2018,6 +2019,7 @@ RemoveDuplicateJoinRestrictions(JoinRestrictionContext *joinRestrictionContext)
 			lappend(filteredContext->joinRestrictionList, joinRestriction);
 	}
 
+	/* the filtered restriction might not have semiJoin, but it is OK for now */
 	filteredContext->hasSemiJoin = joinRestrictionContext->hasSemiJoin;
 
 	return filteredContext;
