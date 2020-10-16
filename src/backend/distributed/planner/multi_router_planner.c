@@ -2101,6 +2101,16 @@ SelectsFromDistributedTable(List *rangeTableList, Query *query)
 			continue;
 		}
 
+		if (rangeTableEntry->relkind == RELKIND_VIEW ||
+			rangeTableEntry->relkind == RELKIND_MATVIEW)
+		{
+			/*
+			 * Skip over views, which would error out in GetCitusTableCacheEntry.
+			 * Distributed tables within (regular) views are already in rangeTableList.
+			 */
+			continue;
+		}
+
 		CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(
 			rangeTableEntry->relid);
 		if (IsCitusTableTypeCacheEntry(cacheEntry, DISTRIBUTED_TABLE) &&
