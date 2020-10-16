@@ -1897,8 +1897,10 @@ FilterJoinRestrictionContext(JoinRestrictionContext *joinRestrictionContext, Rel
 		}
 	}
 
-	/* the filtered restriction might not have semiJoin, but it is OK for now */
+	/* we don't need to evaluate hasXJoin fields again */
 	filtererdJoinRestrictionContext->hasSemiJoin = joinRestrictionContext->hasSemiJoin;
+	filtererdJoinRestrictionContext->hasOnlyInnerJoin =
+		joinRestrictionContext->hasOnlyInnerJoin;
 
 	return filtererdJoinRestrictionContext;
 }
@@ -2019,8 +2021,9 @@ RemoveDuplicateJoinRestrictions(JoinRestrictionContext *joinRestrictionContext)
 			lappend(filteredContext->joinRestrictionList, joinRestriction);
 	}
 
-	/* the filtered restriction might not have semiJoin, but it is OK for now */
+	/* we don't need to evaluate hasXJoin fields again */
 	filteredContext->hasSemiJoin = joinRestrictionContext->hasSemiJoin;
+	filteredContext->hasOnlyInnerJoin = joinRestrictionContext->hasOnlyInnerJoin;
 
 	return filteredContext;
 }
@@ -2053,6 +2056,22 @@ ContextCoversJoinRestriction(JoinRestrictionContext *joinRestrictionContext,
 			continue;
 		}
 
+		List *joinRestrictInfoListInTest =
+			joinRestrictionInTest->joinRestrictInfoList;
+		bool joinIsOnTrue = list_length(joinRestrictInfoListInTest) == 0;
+		bool hasOnlyInnerJoin = joinRestrictionContext->hasOnlyInnerJoin;
+		if (!hasOnlyInnerJoin && joinIsOnTrue)
+		{
+			/*
+			 * If join doesn't have a restriction (e.g., ON (true)) and planner
+			 * is aware of at least one non-inner JOIN (e.g., outer/semi joins),
+			 * we should not eliminiate joinRestrictionInTest. It can still be
+			 * useful for detecting not supported outer-join checks even if it
+			 * doesn't help for colocation checks.
+			 */
+			continue;
+		}
+
 		/*
 		 * We check whether the restrictions in joinRestrictionInTest is a subset
 		 * of the restrictions in joinRestrictionInContext in the sense that all the
@@ -2060,8 +2079,6 @@ ContextCoversJoinRestriction(JoinRestrictionContext *joinRestrictionContext,
 		 */
 		List *joinRestrictInfoListInContext =
 			joinRestrictionInContext->joinRestrictInfoList;
-		List *joinRestrictInfoListInTest =
-			joinRestrictionInTest->joinRestrictInfoList;
 		if (LeftListIsSubset(joinRestrictInfoListInTest, joinRestrictInfoListInContext))
 		{
 			return true;
