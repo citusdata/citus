@@ -128,5 +128,9 @@ ALTER TABLE reference_table DROP COLUMN c;
 -- #4129: make sure a join after drop column works
 SELECT distributed_table.* from distributed_table JOIN reference_table ON (true);
 
+BEGIN;
+SELECT distributed_table.* from distributed_table JOIN reference_table ON (true);
+END;
+
 SET client_min_messages TO WARNING;
 drop schema test_pg13 cascade;

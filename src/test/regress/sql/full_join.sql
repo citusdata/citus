@@ -10,10 +10,13 @@ SET search_path TO full_join, public;
 CREATE TABLE test_table_1(id int, val1 int);
 CREATE TABLE test_table_2(id bigint, val1 int);
 CREATE TABLE test_table_3(id int, val1 bigint);
+CREATE TABLE abcd(a int, b int, c int, d int);
 
 SELECT create_distributed_table('test_table_1', 'id');
 SELECT create_distributed_table('test_table_2', 'id');
 SELECT create_distributed_table('test_table_3', 'id');
+SELECT create_distributed_table('abcd', 'b');
+
 
 INSERT INTO test_table_1 VALUES(1,1),(2,2),(3,3);
 INSERT INTO test_table_2 VALUES(2,2),(3,3),(4,4);
@@ -111,5 +114,59 @@ SELECT * FROM
 
 -- Full join using multiple columns
 SELECT * FROM test_table_1 FULL JOIN test_table_2 USING(id, val1) ORDER BY 1,2;
+
+SET citus.enable_repartition_joins to ON;
+
+INSERT INTO abcd VALUES (1,2,3,4);
+INSERT INTO abcd VALUES (2,3,4,5);
+INSERT INTO abcd VALUES (3,4,5,6);
+
+SELECT * FROM abcd first join abcd second on first.a = second.a ORDER BY 1,2,3,4;
+SELECT * FROM abcd first join abcd second on first.b = second.b ORDER BY 1,2,3,4;
+SELECT * FROM abcd first join abcd second on first.c = second.c ORDER BY 1,2,3,4;
+
+BEGIN;
+SELECT * FROM abcd first join abcd second on first.a = second.a ORDER BY 1,2,3,4;
+SELECT * FROM abcd first join abcd second on first.b = second.b ORDER BY 1,2,3,4;
+SELECT * FROM abcd first join abcd second on first.c = second.c ORDER BY 1,2,3,4;
+END;
+
+ALTER TABLE abcd DROP COLUMN a;
+
+SELECT * FROM abcd first join abcd second on first.b = second.b ORDER BY 1,2,3,4;
+SELECT * FROM abcd first join abcd second on first.c = second.c ORDER BY 1,2,3,4;
+
+BEGIN;
+SELECT * FROM abcd first join abcd second on first.b = second.b ORDER BY 1,2,3,4;
+SELECT * FROM abcd first join abcd second on first.c = second.c ORDER BY 1,2,3,4;
+END;
+
+CREATE VIEW abcd_view AS SELECT * FROM abcd;
+
+SELECT * FROM abcd_view first join abcd_view second on first.b = second.b ORDER BY 1,2,3,4;
+SELECT * FROM abcd_view first join abcd_view second on first.c = second.c ORDER BY 1,2,3,4;
+
+BEGIN;
+SELECT * FROM abcd_view first join abcd_view second on first.b = second.b ORDER BY 1,2,3,4;
+SELECT * FROM abcd_view first join abcd_view second on first.c = second.c ORDER BY 1,2,3,4;
+END;
+
+SELECT * FROM abcd first full join abcd second on first.b = second.b ORDER BY 1,2,3,4;
+BEGIN;
+SELECT * FROM abcd first full join abcd second on first.b = second.b ORDER BY 1,2,3,4;
+END;
+
+SELECT * FROM abcd_view first join abcd second USING(b) ORDER BY 1,2,3,4;
+BEGIN;
+SELECT * FROM abcd first join abcd second USING(b) ORDER BY 1,2,3,4;
+END;
+
+SELECT * FROM abcd first join abcd second USING(b) join abcd third on first.b=third.b ORDER BY 1,2,3,4;
+BEGIN;
+SELECT * FROM abcd first join abcd second USING(b) join abcd third on first.b=third.b ORDER BY 1,2,3,4;
+END;
+
+
+
 
 DROP SCHEMA full_join CASCADE;

@@ -56,6 +56,15 @@ SELECT create_distributed_table('stats', 'account_id', colocate_with => 'account
 INSERT INTO accounts (id) VALUES ('foo');
 INSERT INTO stats (account_id, spent) VALUES ('foo', 100);
 
+CREATE TABLE abcd(a int, b int, c int, d int);
+SELECT create_distributed_table('abcd', 'b');
+
+INSERT INTO abcd VALUES (1,2,3,4);
+INSERT INTO abcd VALUES (2,3,4,5);
+INSERT INTO abcd VALUES (3,4,5,6);
+
+ALTER TABLE abcd DROP COLUMN a;
+
 -- connection worker and get ready for the tests
 \c - - - :worker_1_port
 SET search_path TO local_shard_execution;
@@ -217,6 +226,29 @@ SELECT * FROM second_distributed_table WHERE key = 1 ORDER BY 1,2;
 INSERT INTO distributed_table VALUES (1, '22', 20);
 INSERT INTO second_distributed_table VALUES (1, '1');
 
+CREATE VIEW abcd_view AS SELECT * FROM abcd;
+
+SELECT * FROM abcd first join abcd second on first.b = second.b ORDER BY 1,2,3,4;
+
+BEGIN;
+SELECT * FROM abcd first join abcd second on first.b = second.b ORDER BY 1,2,3,4;
+END;
+
+BEGIN;
+SELECT * FROM abcd_view first join abcd_view second on first.b = second.b ORDER BY 1,2,3,4;
+END;
+
+BEGIN;
+SELECT * FROM abcd first full join abcd second on first.b = second.b ORDER BY 1,2,3,4;
+END;
+
+BEGIN;
+SELECT * FROM abcd first join abcd second USING(b) ORDER BY 1,2,3,4;
+END;
+
+BEGIN;
+SELECT * FROM abcd first join abcd second USING(b) join abcd third on first.b=third.b ORDER BY 1,2,3,4;
+END;
 
 -- copy always happens via distributed execution irrespective of the
 -- shards that are accessed

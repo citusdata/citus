@@ -78,6 +78,17 @@ SELECT create_distributed_table('stats', 'account_id', colocate_with => 'account
 
 INSERT INTO accounts (id) VALUES ('foo');
 INSERT INTO stats (account_id, spent) VALUES ('foo', 100);
+CREATE TABLE abcd(a int, b int, c int, d int);
+SELECT create_distributed_table('abcd', 'b');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO abcd VALUES (1,2,3,4);
+INSERT INTO abcd VALUES (2,3,4,5);
+INSERT INTO abcd VALUES (3,4,5,6);
+ALTER TABLE abcd DROP COLUMN a;
 -- connection worker and get ready for the tests
 \c - - - :worker_1_port
 SET search_path TO local_shard_execution;
@@ -380,6 +391,75 @@ INSERT INTO distributed_table VALUES (1, '22', 20);
 NOTICE:  executing the command locally: INSERT INTO local_shard_execution.distributed_table_1470001 (key, value, age) VALUES (1, '22'::text, 20)
 INSERT INTO second_distributed_table VALUES (1, '1');
 NOTICE:  executing the command locally: INSERT INTO local_shard_execution.second_distributed_table_1470005 (key, value) VALUES (1, '1'::text)
+CREATE VIEW abcd_view AS SELECT * FROM abcd;
+SELECT * FROM abcd first join abcd second on first.b = second.b ORDER BY 1,2,3,4;
+ b | c | d | b | c | d
+---------------------------------------------------------------------
+ 2 | 3 | 4 | 2 | 3 | 4
+ 3 | 4 | 5 | 3 | 4 | 5
+ 4 | 5 | 6 | 4 | 5 | 6
+(3 rows)
+
+BEGIN;
+SELECT * FROM abcd first join abcd second on first.b = second.b ORDER BY 1,2,3,4;
+NOTICE:  executing the command locally: SELECT first.b, first.c, first.d, second.b, second.c, second.d FROM (local_shard_execution.abcd_1470025 first JOIN local_shard_execution.abcd_1470025 second ON ((first.b OPERATOR(pg_catalog.=) second.b))) WHERE true
+NOTICE:  executing the command locally: SELECT first.b, first.c, first.d, second.b, second.c, second.d FROM (local_shard_execution.abcd_1470027 first JOIN local_shard_execution.abcd_1470027 second ON ((first.b OPERATOR(pg_catalog.=) second.b))) WHERE true
+ b | c | d | b | c | d
+---------------------------------------------------------------------
+ 2 | 3 | 4 | 2 | 3 | 4
+ 3 | 4 | 5 | 3 | 4 | 5
+ 4 | 5 | 6 | 4 | 5 | 6
+(3 rows)
+
+END;
+BEGIN;
+SELECT * FROM abcd_view first join abcd_view second on first.b = second.b ORDER BY 1,2,3,4;
+NOTICE:  executing the command locally: SELECT abcd.b, abcd.c, abcd.d, abcd_1.b, abcd_1.c, abcd_1.d FROM (local_shard_execution.abcd_1470025 abcd JOIN local_shard_execution.abcd_1470025 abcd_1 ON ((abcd.b OPERATOR(pg_catalog.=) abcd_1.b))) WHERE true
+NOTICE:  executing the command locally: SELECT abcd.b, abcd.c, abcd.d, abcd_1.b, abcd_1.c, abcd_1.d FROM (local_shard_execution.abcd_1470027 abcd JOIN local_shard_execution.abcd_1470027 abcd_1 ON ((abcd.b OPERATOR(pg_catalog.=) abcd_1.b))) WHERE true
+ b | c | d | b | c | d
+---------------------------------------------------------------------
+ 2 | 3 | 4 | 2 | 3 | 4
+ 3 | 4 | 5 | 3 | 4 | 5
+ 4 | 5 | 6 | 4 | 5 | 6
+(3 rows)
+
+END;
+BEGIN;
+SELECT * FROM abcd first full join abcd second on first.b = second.b ORDER BY 1,2,3,4;
+NOTICE:  executing the command locally: SELECT worker_column_1 AS b, worker_column_2 AS c, worker_column_3 AS d, worker_column_4 AS b, worker_column_5 AS c, worker_column_6 AS d FROM (SELECT first.b AS worker_column_1, first.c AS worker_column_2, first.d AS worker_column_3, second.b AS worker_column_4, second.c AS worker_column_5, second.d AS worker_column_6 FROM (local_shard_execution.abcd_1470025 first FULL JOIN local_shard_execution.abcd_1470025 second ON ((first.b OPERATOR(pg_catalog.=) second.b)))) worker_subquery
+NOTICE:  executing the command locally: SELECT worker_column_1 AS b, worker_column_2 AS c, worker_column_3 AS d, worker_column_4 AS b, worker_column_5 AS c, worker_column_6 AS d FROM (SELECT first.b AS worker_column_1, first.c AS worker_column_2, first.d AS worker_column_3, second.b AS worker_column_4, second.c AS worker_column_5, second.d AS worker_column_6 FROM (local_shard_execution.abcd_1470027 first FULL JOIN local_shard_execution.abcd_1470027 second ON ((first.b OPERATOR(pg_catalog.=) second.b)))) worker_subquery
+ b | c | d | b | c | d
+---------------------------------------------------------------------
+ 2 | 3 | 4 | 2 | 3 | 4
+ 3 | 4 | 5 | 3 | 4 | 5
+ 4 | 5 | 6 | 4 | 5 | 6
+(3 rows)
+
+END;
+BEGIN;
+SELECT * FROM abcd first join abcd second USING(b) ORDER BY 1,2,3,4;
+NOTICE:  executing the command locally: SELECT first.b, first.c, first.d, second.c, second.d FROM (local_shard_execution.abcd_1470025 first JOIN local_shard_execution.abcd_1470025 second ON ((first.b OPERATOR(pg_catalog.=) second.b))) WHERE true
+NOTICE:  executing the command locally: SELECT first.b, first.c, first.d, second.c, second.d FROM (local_shard_execution.abcd_1470027 first JOIN local_shard_execution.abcd_1470027 second ON ((first.b OPERATOR(pg_catalog.=) second.b))) WHERE true
+ b | c | d | c | d
+---------------------------------------------------------------------
+ 2 | 3 | 4 | 3 | 4
+ 3 | 4 | 5 | 4 | 5
+ 4 | 5 | 6 | 5 | 6
+(3 rows)
+
+END;
+BEGIN;
+SELECT * FROM abcd first join abcd second USING(b) join abcd third on first.b=third.b ORDER BY 1,2,3,4;
+NOTICE:  executing the command locally: SELECT first.b, first.c, first.d, second.c, second.d, third.b, third.c, third.d FROM ((local_shard_execution.abcd_1470025 first JOIN local_shard_execution.abcd_1470025 second ON ((first.b OPERATOR(pg_catalog.=) second.b))) JOIN local_shard_execution.abcd_1470025 third ON ((first.b OPERATOR(pg_catalog.=) third.b))) WHERE true
+NOTICE:  executing the command locally: SELECT first.b, first.c, first.d, second.c, second.d, third.b, third.c, third.d FROM ((local_shard_execution.abcd_1470027 first JOIN local_shard_execution.abcd_1470027 second ON ((first.b OPERATOR(pg_catalog.=) second.b))) JOIN local_shard_execution.abcd_1470027 third ON ((first.b OPERATOR(pg_catalog.=) third.b))) WHERE true
+ b | c | d | c | d | b | c | d
+---------------------------------------------------------------------
+ 2 | 3 | 4 | 3 | 4 | 2 | 3 | 4
+ 3 | 4 | 5 | 4 | 5 | 3 | 4 | 5
+ 4 | 5 | 6 | 5 | 6 | 4 | 5 | 6
+(3 rows)
+
+END;
 -- copy always happens via distributed execution irrespective of the
 -- shards that are accessed
 COPY reference_table FROM STDIN;

@@ -288,5 +288,12 @@ SELECT distributed_table.* from distributed_table JOIN reference_table ON (true)
 ---------------------------------------------------------------------
 (0 rows)
 
+BEGIN;
+SELECT distributed_table.* from distributed_table JOIN reference_table ON (true);
+ a | b
+---------------------------------------------------------------------
+(0 rows)
+
+END;
 SET client_min_messages TO WARNING;
 drop schema test_pg13 cascade;
