@@ -1897,6 +1897,8 @@ FilterJoinRestrictionContext(JoinRestrictionContext *joinRestrictionContext, Rel
 		}
 	}
 
+	filtererdJoinRestrictionContext->hasSemiJoin = joinRestrictionContext->hasSemiJoin;
+
 	return filtererdJoinRestrictionContext;
 }
 
@@ -2015,6 +2017,8 @@ RemoveDuplicateJoinRestrictions(JoinRestrictionContext *joinRestrictionContext)
 		filteredContext->joinRestrictionList =
 			lappend(filteredContext->joinRestrictionList, joinRestriction);
 	}
+
+	filteredContext->hasSemiJoin = joinRestrictionContext->hasSemiJoin;
 
 	return filteredContext;
 }
