@@ -201,7 +201,8 @@ SELECT master_copy_shard_placement(
            get_shard_id_for_distribution_column('test_range_dist', '1'),
            'localhost', :worker_1_port,
            'localhost', :worker_2_port,
-           do_repair := false);
+           do_repair := false,
+		   transfer_mode := 'block_writes');
  master_copy_shard_placement
 ---------------------------------------------------------------------
 

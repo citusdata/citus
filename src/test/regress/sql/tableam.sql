@@ -99,7 +99,8 @@ SELECT master_copy_shard_placement(
            get_shard_id_for_distribution_column('test_range_dist', '1'),
            'localhost', :worker_1_port,
            'localhost', :worker_2_port,
-           do_repair := false);
+           do_repair := false,
+		   transfer_mode := 'block_writes');
 
 select a.shardid, a.nodeport
 FROM pg_dist_shard b, pg_dist_shard_placement a
