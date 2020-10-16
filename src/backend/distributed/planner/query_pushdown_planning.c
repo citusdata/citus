@@ -138,7 +138,9 @@ ShouldUseSubqueryPushDown(Query *originalQuery, Query *rewrittenQuery,
 	 * joins of type JOIN_SEMI are sent it is safe to convert all JOIN_SEMI
 	 * nodes to JOIN_INNER nodes (which is what is done in MultiNodeTree).
 	 */
-	if (plannerRestrictionContext->hasSemiJoin)
+	JoinRestrictionContext *joinRestrictionContext =
+		plannerRestrictionContext->joinRestrictionContext;
+	if (joinRestrictionContext->hasSemiJoin)
 	{
 		return true;
 	}

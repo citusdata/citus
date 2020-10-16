@@ -1742,8 +1742,8 @@ multi_join_restriction_hook(PlannerInfo *root,
 	 * later safely convert any semi joins in the rewritten query to inner
 	 * joins.
 	 */
-	plannerRestrictionContext->hasSemiJoin = plannerRestrictionContext->hasSemiJoin ||
-											 extra->sjinfo->jointype == JOIN_SEMI;
+	joinRestrictionContext->hasSemiJoin = joinRestrictionContext->hasSemiJoin ||
+										  extra->sjinfo->jointype == JOIN_SEMI;
 
 	MemoryContextSwitchTo(oldMemoryContext);
 }
