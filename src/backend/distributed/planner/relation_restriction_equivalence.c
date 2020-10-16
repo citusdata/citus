@@ -534,9 +534,8 @@ ContainsMultipleDistributedRelations(PlannerRestrictionContext *
 	RelationRestrictionContext *restrictionContext =
 		plannerRestrictionContext->relationRestrictionContext;
 
-	uint32 referenceRelationCount = ReferenceRelationCount(restrictionContext);
-	uint32 totalRelationCount = list_length(restrictionContext->relationRestrictionList);
-	uint32 nonReferenceRelationCount = totalRelationCount - referenceRelationCount;
+	uint32 distributedRelationCount =
+		UniqueRelationCount(restrictionContext, DISTRIBUTED_TABLE);
 
 	/*
 	 * If the query includes a single relation which is not a reference table,
@@ -551,7 +550,7 @@ ContainsMultipleDistributedRelations(PlannerRestrictionContext *
 	 * tasks that are going to be created should not need data from other tasks. In both
 	 * cases mentioned above, the necessary data per task would be on available.
 	 */
-	if (nonReferenceRelationCount <= 1)
+	if (distributedRelationCount <= 1)
 	{
 		return false;
 	}
@@ -591,29 +590,39 @@ GenerateAllAttributeEquivalences(PlannerRestrictionContext *plannerRestrictionCo
 
 
 /*
- * ReferenceRelationCount iterates over the relations and returns the reference table
- * relation count.
+ * UniqueRelationCount iterates over the relations and returns the
+ * unique relation count. We use RTEIdentity as the identifiers, so if
+ * the same relation appears twice in the restrictionContext, we count
+ * it as a single item.
  */
 uint32
-ReferenceRelationCount(RelationRestrictionContext *restrictionContext)
+UniqueRelationCount(RelationRestrictionContext *restrictionContext, CitusTableType
+					tableType)
 {
 	ListCell *relationRestrictionCell = NULL;
-	uint32 referenceRelationCount = 0;
+	List *rteIdentityList = NIL;
 
 	foreach(relationRestrictionCell, restrictionContext->relationRestrictionList)
 	{
 		RelationRestriction *relationRestriction =
 			(RelationRestriction *) lfirst(relationRestrictionCell);
-		CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(
-			relationRestriction->relationId);
+		Oid relationId = relationRestriction->relationId;
 
-		if (IsCitusTableTypeCacheEntry(cacheEntry, REFERENCE_TABLE))
+		CitusTableCacheEntry *cacheEntry = LookupCitusTableCacheEntry(relationId);
+		if (cacheEntry == NULL)
 		{
-			referenceRelationCount++;
+			/* we  don't expect non-distributed tables, still be no harm to skip */
+			continue;
+		}
+
+		if (IsCitusTableTypeCacheEntry(cacheEntry, tableType))
+		{
+			int rteIdentity = GetRTEIdentity(relationRestriction->rte);
+			rteIdentityList = list_append_unique_int(rteIdentityList, rteIdentity);
 		}
 	}
 
-	return referenceRelationCount;
+	return list_length(rteIdentityList);
 }
 
 
@@ -1805,10 +1814,10 @@ FilterPlannerRestrictionForQuery(PlannerRestrictionContext *plannerRestrictionCo
 	filteredPlannerRestrictionContext->memoryContext =
 		plannerRestrictionContext->memoryContext;
 
-	int totalRelationCount = list_length(
-		filteredRelationRestrictionContext->relationRestrictionList);
-	int referenceRelationCount = ReferenceRelationCount(
-		filteredRelationRestrictionContext);
+	int totalRelationCount = UniqueRelationCount(
+		filteredRelationRestrictionContext, ANY_CITUS_TABLE_TYPE);
+	int referenceRelationCount = UniqueRelationCount(
+		filteredRelationRestrictionContext, REFERENCE_TABLE);
 
 	filteredRelationRestrictionContext->allReferenceTables =
 		(totalRelationCount == referenceRelationCount);
