@@ -244,7 +244,8 @@ GenerateListFromElement(void *listElement, int listLength)
 
 
 /*
- * LeftListIsSubset returns true if lhs is subset of rhs list.
+ * LeftListIsSubset returns true if lhs is subset of rhs list. Note that input
+ * lists' entries should implement equal() function.
  */
 bool
 LeftListIsSubset(const List *lhs, const List *rhs)

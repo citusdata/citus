@@ -2048,8 +2048,8 @@ ContextCoversJoinRestriction(JoinRestrictionContext *joinRestrictionContext,
 		}
 
 		/*
-		 * We check whether the restrictions in joinRestrictionInContext is a super
-		 * set of the restrictions in joinRestrictionInTest in the sense that all the
+		 * We check whether the restrictions in joinRestrictionInTest is a subset
+		 * of the restrictions in joinRestrictionInContext in the sense that all the
 		 * restrictions in the latter already exists in the former.
 		 *
 		 * Also, note that list_difference() returns a list that contains all the
