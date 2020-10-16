@@ -151,9 +151,8 @@ static bool RangeTableArrayContainsAnyRTEIdentities(RangeTblEntry **rangeTableEn
 													queryRteIdentities);
 static int RangeTableOffsetCompat(PlannerInfo *root, AppendRelInfo *appendRelInfo);
 static Relids QueryRteIdentities(Query *queryTree);
-static bool ShouldAddJoinRestrictionToContext(JoinRestriction *joinRestriction,
-											  JoinRestrictionContext *
-											  joinRestrictionContext);
+static bool ContextCoversJoinRestriction(JoinRestrictionContext *joinRestrictionContext,
+										 JoinRestriction *joinRestriction);
 
 
 /*
@@ -2008,7 +2007,7 @@ RemoveDuplicateJoinRestrictions(JoinRestrictionContext *joinRestrictionContext)
 	{
 		JoinRestriction *joinRestriction = lfirst(joinRestrictionCell);
 
-		if (ShouldAddJoinRestrictionToContext(joinRestriction, filteredContext))
+		if (ContextCoversJoinRestriction(joinRestriction, filteredContext))
 		{
 			continue;
 		}
@@ -2022,19 +2021,19 @@ RemoveDuplicateJoinRestrictions(JoinRestrictionContext *joinRestrictionContext)
 
 
 /*
- * ShouldAddJoinRestrictionToContext returns true if the given joinRestriction
+ * ContextCoversJoinRestriction returns true if the given joinRestriction
  * has an equivalent of in the given joinRestrictionContext.
  */
 static bool
-ShouldAddJoinRestrictionToContext(JoinRestriction *joinRestriction,
-								  JoinRestrictionContext *joinRestrictionContext)
+ContextCoversJoinRestriction(JoinRestrictionContext *joinRestrictionContext,
+							 JoinRestriction *joinRestriction)
 {
-	JoinRestriction *contextJoinRestriction = NULL;
-	List *contextJoinRestrictionList = joinRestrictionContext->joinRestrictionList;
-	foreach_ptr(contextJoinRestriction, contextJoinRestrictionList)
+	JoinRestriction *joinRestrictionInContext = NULL;
+	List *joinRestrictionInContextList = joinRestrictionContext->joinRestrictionList;
+	foreach_ptr(joinRestrictionInContext, joinRestrictionInContextList)
 	{
 		/* obviously we shouldn't treat different join types as being the same */
-		if (contextJoinRestriction->joinType != joinRestriction->joinType)
+		if (joinRestrictionInContext->joinType != joinRestriction->joinType)
 		{
 			continue;
 		}
@@ -2043,13 +2042,13 @@ ShouldAddJoinRestrictionToContext(JoinRestriction *joinRestriction,
 		 * If we're dealing with different queries, we shouldn't treat their
 		 * restrictions as being the same.
 		 */
-		if (contextJoinRestriction->plannerInfo != joinRestriction->plannerInfo)
+		if (joinRestrictionInContext->plannerInfo != joinRestriction->plannerInfo)
 		{
 			continue;
 		}
 
 		/*
-		 * We check whether the restrictions in contextJoinRestriction is a super
+		 * We check whether the restrictions in joinRestrictionInContext is a super
 		 * set of the restrictions in joinRestriction in the sense that all the
 		 * restrictions in the latter already exists in the former.
 		 *
@@ -2058,9 +2057,10 @@ ShouldAddJoinRestrictionToContext(JoinRestriction *joinRestriction,
 		 * Finally, each element in these lists is a pointer to RestrictInfo
 		 * structure, where equal() function is implemented for the struct.
 		 */
-		List *contextJoinRestrictInfoList = contextJoinRestriction->joinRestrictInfoList;
+		List *joinRestrictInfoListInContext =
+			joinRestrictionInContext->joinRestrictInfoList;
 		List *joinRestrictInfoList = joinRestriction->joinRestrictInfoList;
-		if (LeftListIsSubset(contextJoinRestrictInfoList, joinRestrictInfoList))
+		if (LeftListIsSubset(joinRestrictInfoListInContext, joinRestrictInfoList))
 		{
 			return true;
 		}
