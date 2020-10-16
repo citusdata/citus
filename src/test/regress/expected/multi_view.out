@@ -1279,6 +1279,62 @@ INSERT INTO small_view VALUES(3, 3);
 ERROR:  cannot insert into view "small_view"
 DETAIL:  Views that do not select from a single table or view are not automatically updatable.
 HINT:  To enable inserting into the view, provide an INSTEAD OF INSERT trigger or an unconditional ON INSERT DO INSTEAD rule.
-DROP TABLE large;
-DROP TABLE small CASCADE;
-NOTICE:  drop cascades to view small_view
+-- create a reference table only view
+CREATE TABLE ref_1 (key  int, value int);
+SELECT create_reference_table('ref_1');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE VIEW  v1 AS SELECT key AS col1, value AS col2 FROM ref_1;
+-- remove rows where values are equal
+INSERT INTO ref_1 VALUES (1,1), (2,2), (3,99);
+DELETE  FROM ref_1  WHERE value in (SELECT col1 FROM v1);
+SELECT * FROM ref_1 ORDER BY key, value;
+ key | value
+---------------------------------------------------------------------
+   3 |    99
+(1 row)
+
+-- add 2 remove 1
+INSERT INTO ref_1 VALUES (1,1), (2,99);
+WITH c1 AS (SELECT col1 FROM v1 ORDER BY col1 LIMIT 1)
+DELETE  FROM ref_1  WHERE value in (SELECT col1 FROM c1);
+SELECT * FROM ref_1 ORDER BY key, value;
+ key | value
+---------------------------------------------------------------------
+   2 |    99
+   3 |    99
+(2 rows)
+
+-- remove a rows based on id column in small
+WITH c1 AS (SELECT id AS col1 FROM small)
+DELETE  FROM ref_1  WHERE value in (SELECT col1 FROM c1);
+SELECT * FROM ref_1 ORDER BY key, value;
+ key | value
+---------------------------------------------------------------------
+(0 rows)
+
+INSERT INTO ref_1 VALUES (3,99);
+CREATE VIEW v2 AS SELECT id AS col1 FROM small;
+DELETE  FROM ref_1  WHERE value in (SELECT col1 FROM v2);
+SELECT * FROM ref_1 ORDER BY key, value;
+ key | value
+---------------------------------------------------------------------
+(0 rows)
+
+INSERT INTO ref_1 VALUES (3,99);
+CREATE MATERIALIZED VIEW v3 AS SELECT id AS col1 FROM small;
+DELETE  FROM ref_1  WHERE value in (SELECT col1 FROM v3);
+SELECT * FROM ref_1 ORDER BY key, value;
+ key | value
+---------------------------------------------------------------------
+(0 rows)
+
+DROP TABLE large, small, ref_1 CASCADE;
+NOTICE:  drop cascades to 4 other objects
+DETAIL:  drop cascades to view v1
+drop cascades to view small_view
+drop cascades to view v2
+drop cascades to materialized view v3
