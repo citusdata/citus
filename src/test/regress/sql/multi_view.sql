@@ -640,5 +640,36 @@ SELECT * FROM large ORDER BY 1, 2;
 -- INSERT INTO views is still not supported
 INSERT INTO small_view VALUES(3, 3);
 
-DROP TABLE large;
-DROP TABLE small CASCADE;
+-- create a reference table only view
+CREATE TABLE ref_1 (key  int, value int);
+SELECT create_reference_table('ref_1');
+CREATE VIEW  v1 AS SELECT key AS col1, value AS col2 FROM ref_1;
+
+-- remove rows where values are equal
+INSERT INTO ref_1 VALUES (1,1), (2,2), (3,99);
+DELETE  FROM ref_1  WHERE value in (SELECT col1 FROM v1);
+SELECT * FROM ref_1 ORDER BY key, value;
+
+-- add 2 remove 1
+INSERT INTO ref_1 VALUES (1,1), (2,99);
+WITH c1 AS (SELECT col1 FROM v1 ORDER BY col1 LIMIT 1)
+DELETE  FROM ref_1  WHERE value in (SELECT col1 FROM c1);
+SELECT * FROM ref_1 ORDER BY key, value;
+
+-- remove a rows based on id column in small
+WITH c1 AS (SELECT id AS col1 FROM small)
+DELETE  FROM ref_1  WHERE value in (SELECT col1 FROM c1);
+SELECT * FROM ref_1 ORDER BY key, value;
+
+INSERT INTO ref_1 VALUES (3,99);
+CREATE VIEW v2 AS SELECT id AS col1 FROM small;
+DELETE  FROM ref_1  WHERE value in (SELECT col1 FROM v2);
+SELECT * FROM ref_1 ORDER BY key, value;
+
+INSERT INTO ref_1 VALUES (3,99);
+CREATE MATERIALIZED VIEW v3 AS SELECT id AS col1 FROM small;
+DELETE  FROM ref_1  WHERE value in (SELECT col1 FROM v3);
+SELECT * FROM ref_1 ORDER BY key, value;
+
+
+DROP TABLE large, small, ref_1 CASCADE;
