@@ -75,6 +75,7 @@ typedef struct RelationRestriction
 typedef struct JoinRestrictionContext
 {
 	List *joinRestrictionList;
+	bool hasSemiJoin;
 } JoinRestrictionContext;
 
 typedef struct JoinRestriction
@@ -116,7 +117,6 @@ typedef struct PlannerRestrictionContext
 	 * Instead, we keep this struct to pass some extra information.
 	 */
 	FastPathRestrictionContext *fastPathRestrictionContext;
-	bool hasSemiJoin;
 	MemoryContext memoryContext;
 } PlannerRestrictionContext;
 
