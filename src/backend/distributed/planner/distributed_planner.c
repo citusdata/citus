@@ -1702,6 +1702,19 @@ multi_join_restriction_hook(PlannerInfo *root,
 							JoinType jointype,
 							JoinPathExtraData *extra)
 {
+	if (bms_is_empty(innerrel->relids) || bms_is_empty(outerrel->relids))
+	{
+		/*
+		 * We do not expect empty relids. Still, ignoring such JoinRestriction is
+		 * preferable for two reasons:
+		 * 1. This might be a query that doesn't rely on JoinRestrictions at all (e.g.,
+		 * local query).
+		 * 2. We cannot process them when they are empty (and likely to segfault if
+		 * we allow as-is).
+		 */
+		ereport(DEBUG1, (errmsg("Join restriction information is NULL")));
+	}
+
 	/*
 	 * Use a memory context that's guaranteed to live long enough, could be
 	 * called in a more shortly lived one (e.g. with GEQO).
@@ -1711,23 +1724,22 @@ multi_join_restriction_hook(PlannerInfo *root,
 	MemoryContext restrictionsMemoryContext = plannerRestrictionContext->memoryContext;
 	MemoryContext oldMemoryContext = MemoryContextSwitchTo(restrictionsMemoryContext);
 
-	/*
-	 * We create a copy of restrictInfoList because it may be created in a memory
-	 * context which will be deleted when we still need it, thus we create a copy
-	 * of it in our memory context.
-	 */
-	List *restrictInfoList = copyObject(extra->restrictlist);
-
 	JoinRestrictionContext *joinRestrictionContext =
 		plannerRestrictionContext->joinRestrictionContext;
 	Assert(joinRestrictionContext != NULL);
 
 	JoinRestriction *joinRestriction = palloc0(sizeof(JoinRestriction));
 	joinRestriction->joinType = jointype;
-	joinRestriction->joinRestrictInfoList = restrictInfoList;
 	joinRestriction->plannerInfo = root;
-	joinRestriction->innerrel = innerrel;
-	joinRestriction->outerrel = outerrel;
+
+	/*
+	 * We create a copy of restrictInfoList and relids because with geqo they may
+	 * be created in a memory context which will be deleted when we still need it,
+	 * thus we create a copy of it in our memory context.
+	 */
+	joinRestriction->joinRestrictInfoList = copyObject(extra->restrictlist);
+	joinRestriction->innerrelRelids = bms_copy(innerrel->relids);
+	joinRestriction->outerrelRelids = bms_copy(outerrel->relids);
 
 	joinRestrictionContext->joinRestrictionList =
 		lappend(joinRestrictionContext->joinRestrictionList, joinRestriction);

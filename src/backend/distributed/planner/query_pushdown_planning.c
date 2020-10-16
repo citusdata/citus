@@ -79,8 +79,8 @@ static DeferredErrorMessage * DeferredErrorIfUnsupportedRecurringTuplesJoin(
 	PlannerRestrictionContext *plannerRestrictionContext);
 static DeferredErrorMessage * DeferErrorIfUnsupportedTableCombination(Query *queryTree);
 static bool ExtractSetOperationStatmentWalker(Node *node, List **setOperationList);
-static RecurringTuplesType FetchFirstRecurType(PlannerInfo *plannerInfo, RelOptInfo *
-											   relationInfo);
+static RecurringTuplesType FetchFirstRecurType(PlannerInfo *plannerInfo,
+											   Relids relids);
 static bool ContainsRecurringRTE(RangeTblEntry *rangeTableEntry,
 								 RecurringTuplesType *recurType);
 static bool ContainsRecurringRangeTable(List *rangeTable, RecurringTuplesType *recurType);
@@ -93,7 +93,7 @@ static void UpdateColumnToMatchingTargetEntry(Var *column,
 static MultiTable * MultiSubqueryPushdownTable(Query *subquery);
 static List * CreateSubqueryTargetEntryList(List *columnList);
 static bool RelationInfoContainsOnlyRecurringTuples(PlannerInfo *plannerInfo,
-													RelOptInfo *relationInfo);
+													Relids relids);
 
 /*
  * ShouldUseSubqueryPushDown determines whether it's desirable to use
@@ -782,8 +782,8 @@ DeferredErrorIfUnsupportedRecurringTuplesJoin(
 			joinRestrictionCell);
 		JoinType joinType = joinRestriction->joinType;
 		PlannerInfo *plannerInfo = joinRestriction->plannerInfo;
-		RelOptInfo *innerrel = joinRestriction->innerrel;
-		RelOptInfo *outerrel = joinRestriction->outerrel;
+		Relids innerrelRelids = joinRestriction->innerrelRelids;
+		Relids outerrelRelids = joinRestriction->outerrelRelids;
 
 		if (joinType == JOIN_SEMI || joinType == JOIN_ANTI || joinType == JOIN_LEFT)
 		{
@@ -793,7 +793,7 @@ DeferredErrorIfUnsupportedRecurringTuplesJoin(
 			 * recurring or not. Otherwise, we check the outer side for recurring
 			 * tuples.
 			 */
-			if (RelationInfoContainsOnlyRecurringTuples(plannerInfo, innerrel))
+			if (RelationInfoContainsOnlyRecurringTuples(plannerInfo, innerrelRelids))
 			{
 				continue;
 			}
@@ -805,37 +805,37 @@ DeferredErrorIfUnsupportedRecurringTuplesJoin(
 			 * the query. The reason is that recurring tuples on every shard would
 			 * be added to the result, which is wrong.
 			 */
-			if (RelationInfoContainsOnlyRecurringTuples(plannerInfo, outerrel))
+			if (RelationInfoContainsOnlyRecurringTuples(plannerInfo, outerrelRelids))
 			{
 				/*
 				 * Find the first (or only) recurring RTE to give a meaningful
 				 * error to the user.
 				 */
-				recurType = FetchFirstRecurType(plannerInfo, outerrel);
+				recurType = FetchFirstRecurType(plannerInfo, outerrelRelids);
 
 				break;
 			}
 		}
 		else if (joinType == JOIN_FULL)
 		{
-			if (RelationInfoContainsOnlyRecurringTuples(plannerInfo, innerrel))
+			if (RelationInfoContainsOnlyRecurringTuples(plannerInfo, innerrelRelids))
 			{
 				/*
 				 * Find the first (or only) recurring RTE to give a meaningful
 				 * error to the user.
 				 */
-				recurType = FetchFirstRecurType(plannerInfo, innerrel);
+				recurType = FetchFirstRecurType(plannerInfo, innerrelRelids);
 
 				break;
 			}
 
-			if (RelationInfoContainsOnlyRecurringTuples(plannerInfo, outerrel))
+			if (RelationInfoContainsOnlyRecurringTuples(plannerInfo, outerrelRelids))
 			{
 				/*
 				 * Find the first (or only) recurring RTE to give a meaningful
 				 * error to the user.
 				 */
-				recurType = FetchFirstRecurType(plannerInfo, outerrel);
+				recurType = FetchFirstRecurType(plannerInfo, outerrelRelids);
 
 				break;
 			}
@@ -1301,10 +1301,8 @@ ExtractSetOperationStatmentWalker(Node *node, List **setOperationList)
  * a RelOptInfo is not recurring.
  */
 static bool
-RelationInfoContainsOnlyRecurringTuples(PlannerInfo *plannerInfo,
-										RelOptInfo *relationInfo)
+RelationInfoContainsOnlyRecurringTuples(PlannerInfo *plannerInfo, Relids relids)
 {
-	Relids relids = relationInfo->relids;
 	int relationId = -1;
 
 	while ((relationId = bms_next_member(relids, relationId)) >= 0)
@@ -1340,10 +1338,8 @@ RelationInfoContainsOnlyRecurringTuples(PlannerInfo *plannerInfo,
  * table entry list of planner info, planner info is also passed.
  */
 static RecurringTuplesType
-FetchFirstRecurType(PlannerInfo *plannerInfo, RelOptInfo *
-					relationInfo)
+FetchFirstRecurType(PlannerInfo *plannerInfo, Relids relids)
 {
-	Relids relids = relationInfo->relids;
 	RecurringTuplesType recurType = RECURRING_TUPLES_INVALID;
 	int relationId = -1;
 

@@ -83,8 +83,8 @@ typedef struct JoinRestriction
 	JoinType joinType;
 	List *joinRestrictInfoList;
 	PlannerInfo *plannerInfo;
-	RelOptInfo *innerrel;
-	RelOptInfo *outerrel;
+	Relids innerrelRelids;
+	Relids outerrelRelids;
 } JoinRestriction;
 
 typedef struct FastPathRestrictionContext
