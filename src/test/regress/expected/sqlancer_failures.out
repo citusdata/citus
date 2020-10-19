@@ -238,15 +238,15 @@ SELECT count(*) FROM (
 SELECT ALL t4.c1, t0.c0, t0.c1 FROM ONLY t0
    LEFT OUTER JOIN t4 ON CAST(masklen('142.158.96.44') AS BOOLEAN)
    RIGHT OUTER JOIN t1 ON (CAST(0.024767844 AS MONEY)) BETWEEN (t1.c1) AND (CAST(0.0602135 AS MONEY))
-   WHERE NOT (((t0.c0)LIKE((t4.c0 COLLATE "en_US.utf8"))))
+   WHERE NOT (((t0.c0)LIKE((t4.c0))))
 UNION ALL SELECT t4.c1, t0.c0, t0.c1 FROM ONLY t0
    LEFT OUTER JOIN t4 ON CAST(masklen('142.158.96.44') AS BOOLEAN)
    RIGHT OUTER JOIN t1 ON ((0.024767844)::MONEY) BETWEEN (t1.c1) AND (CAST(0.0602135 AS MONEY))
-   WHERE NOT (NOT (((t0.c0)LIKE((t4.c0 COLLATE "en_US.utf8")))))
+   WHERE NOT (NOT (((t0.c0)LIKE((t4.c0)))))
 UNION ALL SELECT ALL t4.c1, t0.c0, t0.c1 FROM ONLY t0
    LEFT OUTER JOIN t4 ON (masklen('142.158.96.44'))::BOOLEAN
    RIGHT OUTER JOIN t1 ON ((0.024767844)::MONEY) BETWEEN (t1.c1) AND ((0.0602135)::MONEY)
-   WHERE (NOT (((t0.c0)LIKE((t4.c0 COLLATE "en_US.utf8"))))) ISNULL
+   WHERE (NOT (((t0.c0)LIKE((t4.c0))))) ISNULL
 ) AS foo;
 ERROR:  cannot pushdown the subquery
 DETAIL:  There exist a reference table in the outer part of the outer join
