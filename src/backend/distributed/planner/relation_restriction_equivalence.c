@@ -1908,7 +1908,7 @@ FilterJoinRestrictionContext(JoinRestrictionContext *joinRestrictionContext, Rel
 
 	/*
 	 * No need to re calculate has join fields as we are still operating on
-	 * the same query.
+	 * the same query and as these values are calculated per-query basis.
 	 */
 	filtererdJoinRestrictionContext->hasOnlyInnerJoin =
 		joinRestrictionContext->hasOnlyInnerJoin;
@@ -2035,7 +2035,7 @@ RemoveDuplicateJoinRestrictions(JoinRestrictionContext *joinRestrictionContext)
 
 	/*
 	 * No need to re calculate has join fields as we are still operating on
-	 * the same query.
+	 * the same query and as these values are calculated per-query basis.
 	 */
 	filteredContext->hasOnlyInnerJoin = joinRestrictionContext->hasOnlyInnerJoin;
 	filteredContext->hasSemiJoin = joinRestrictionContext->hasSemiJoin;
@@ -2073,7 +2073,7 @@ ContextCoversJoinRestriction(JoinRestrictionContext *joinRestrictionContext,
 
 		List *joinRestrictInfoListInTest =
 			joinRestrictionInTest->joinRestrictInfoList;
-		bool hasJoinRestriction = list_length(joinRestrictInfoListInTest) != 0;
+		bool hasJoinRestriction = list_length(joinRestrictInfoListInTest) > 0;
 		bool hasOnlyInnerJoin = joinRestrictionContext->hasOnlyInnerJoin;
 		if (!hasOnlyInnerJoin && !hasJoinRestriction)
 		{

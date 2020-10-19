@@ -250,5 +250,67 @@ UNION ALL SELECT ALL t4.c1, t0.c0, t0.c1 FROM ONLY t0
 ) AS foo;
 ERROR:  cannot pushdown the subquery
 DETAIL:  There exist a reference table in the outer part of the outer join
+-- unsupported outer JOIN inside a subquery in WHERE clause
+SELECT * FROM distributed_table WHERE buy_count > (
+SELECT count(*) FROM distributed_table a
+LEFT JOIN reference_table b ON (true)
+RIGHT JOIN reference_table c ON (false));
+ERROR:  cannot pushdown the subquery
+DETAIL:  There exist a reference table in the outer part of the outer join
+-- unsupported outer JOIN via subqueries
+SELECT count(*) FROM (SELECT *, random() FROM distributed_table) AS a
+LEFT JOIN (SELECT *, random() FROM reference_table) AS b ON (true)
+RIGHT JOIN (SELECT *, random() FROM reference_table) AS c ON (false);
+ERROR:  cannot pushdown the subquery
+DETAIL:  There exist a reference table in the outer part of the outer join
+-- unsupported outer JOIN in a sublevel subquery
+SELECT
+   count(*)
+FROM
+   (
+    SELECT a.* FROM distributed_table a JOIN distributed_table b USING (user_id)
+   ) AS bar
+JOIN
+   (
+      SELECT a.* FROM distributed_table a
+      LEFT JOIN reference_table b ON (true)
+      RIGHT JOIN reference_table c ON (true)
+   ) AS unsupported_join
+ON (true);
+ERROR:  cannot pushdown the subquery
+DETAIL:  There exist a reference table in the outer part of the outer join
+-- unsupported outer JOIN in a sublevel INNER JOIN
+SELECT
+ unsupported_join.*
+FROM
+   (distributed_table a
+   LEFT JOIN reference_table b ON (true)
+   RIGHT JOIN reference_table c ON (true)) as unsupported_join (x,y,z,t,e,f,q)
+JOIN
+   (reference_table d JOIN reference_table e ON(true)) ON (true);
+ERROR:  cannot pushdown the subquery
+DETAIL:  There exist a reference table in the outer part of the outer join
+-- unsupported outer JOIN in a sublevel LEFT JOIN
+SELECT
+ unsupported_join.*
+FROM
+   (distributed_table a
+   LEFT JOIN reference_table b ON (true)
+   RIGHT JOIN reference_table c ON (true)) as unsupported_join
+LEFT JOIN
+   (reference_table d JOIN reference_table e ON(true)) ON (true);
+ERROR:  cannot pushdown the subquery
+DETAIL:  There exist a reference table in the outer part of the outer join
+-- unsupported outer JOIN in a sublevel RIGHT JOIN
+SELECT
+ unsupported_join.*
+FROM
+   (distributed_table a
+   LEFT JOIN reference_table b ON (true)
+   RIGHT JOIN reference_table c ON (false)) as unsupported_join
+RIGHT JOIN
+   (reference_table d JOIN reference_table e ON(true)) ON (true);
+ERROR:  cannot pushdown the subquery
+DETAIL:  There exist a reference table in the outer part of the outer join
 SET client_min_messages TO WARNING;
 DROP SCHEMA sqlancer_failures CASCADE;
