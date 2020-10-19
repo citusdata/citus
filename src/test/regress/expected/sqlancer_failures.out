@@ -312,5 +312,15 @@ RIGHT JOIN
    (reference_table d JOIN reference_table e ON(true)) ON (true);
 ERROR:  cannot pushdown the subquery
 DETAIL:  There exist a reference table in the outer part of the outer join
+EXPLAIN SELECT
+  unsupported_join.*
+FROM
+   (distributed_table a
+   LEFT JOIN reference_table b ON (true)
+   RIGHT JOIN reference_table c ON (true)) as unsupported_join (x,y,z,t,e,f,q)
+JOIN
+   (reference_table d JOIN reference_table e ON(true)) ON (d.id > 0);
+ERROR:  cannot pushdown the subquery
+DETAIL:  There exist a reference table in the outer part of the outer join
 SET client_min_messages TO WARNING;
 DROP SCHEMA sqlancer_failures CASCADE;

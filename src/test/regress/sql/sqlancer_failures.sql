@@ -180,5 +180,14 @@ FROM
 RIGHT JOIN
    (reference_table d JOIN reference_table e ON(true)) ON (true);
 
+EXPLAIN SELECT
+  unsupported_join.*
+FROM
+   (distributed_table a
+   LEFT JOIN reference_table b ON (true)
+   RIGHT JOIN reference_table c ON (true)) as unsupported_join (x,y,z,t,e,f,q)
+JOIN
+   (reference_table d JOIN reference_table e ON(true)) ON (d.id > 0);
+
 SET client_min_messages TO WARNING;
 DROP SCHEMA sqlancer_failures CASCADE;
