@@ -1906,7 +1906,12 @@ FilterJoinRestrictionContext(JoinRestrictionContext *joinRestrictionContext, Rel
 		}
 	}
 
-	/* the filtered restriction might not have semiJoin, but it is OK for now */
+	/*
+	 * No need to re calculate has join fields as we are still operating on
+	 * the same query and as these values are calculated per-query basis.
+	 */
+	filtererdJoinRestrictionContext->hasOnlyInnerJoin =
+		joinRestrictionContext->hasOnlyInnerJoin;
 	filtererdJoinRestrictionContext->hasSemiJoin = joinRestrictionContext->hasSemiJoin;
 
 	return filtererdJoinRestrictionContext;
@@ -2028,7 +2033,11 @@ RemoveDuplicateJoinRestrictions(JoinRestrictionContext *joinRestrictionContext)
 			lappend(filteredContext->joinRestrictionList, joinRestriction);
 	}
 
-	/* the filtered restriction might not have semiJoin, but it is OK for now */
+	/*
+	 * No need to re calculate has join fields as we are still operating on
+	 * the same query and as these values are calculated per-query basis.
+	 */
+	filteredContext->hasOnlyInnerJoin = joinRestrictionContext->hasOnlyInnerJoin;
 	filteredContext->hasSemiJoin = joinRestrictionContext->hasSemiJoin;
 
 	return filteredContext;
@@ -2062,21 +2071,30 @@ ContextCoversJoinRestriction(JoinRestrictionContext *joinRestrictionContext,
 			continue;
 		}
 
+		List *joinRestrictInfoListInTest =
+			joinRestrictionInTest->joinRestrictInfoList;
+		bool hasJoinRestriction = list_length(joinRestrictInfoListInTest) > 0;
+		bool hasOnlyInnerJoin = joinRestrictionContext->hasOnlyInnerJoin;
+		if (!hasOnlyInnerJoin && !hasJoinRestriction)
+		{
+			/*
+			 * If join doesn't have a restriction (e.g., ON (true)) and planner
+			 * is aware of at least one non-inner JOIN (e.g., outer/semi joins),
+			 * we should not eliminiate joinRestrictionInTest. It can still be
+			 * useful for detecting not supported outer-join checks even if it
+			 * doesn't help for colocation checks.
+			 */
+			continue;
+		}
+
 		/*
 		 * We check whether the restrictions in joinRestrictionInTest is a subset
 		 * of the restrictions in joinRestrictionInContext in the sense that all the
 		 * restrictions in the latter already exists in the former.
-		 *
-		 * Also, note that list_difference() returns a list that contains all the
-		 * cells in joinRestrictInfoList that are not in inputJoinRestrictInfoList.
-		 * Finally, each element in these lists is a pointer to RestrictInfo
-		 * structure, where equal() function is implemented for the struct.
 		 */
 		List *joinRestrictInfoListInContext =
 			joinRestrictionInContext->joinRestrictInfoList;
-		List *joinRestrictInfoListInTest =
-			joinRestrictionInTest->joinRestrictInfoList;
-		if (LeftListIsSubset(joinRestrictInfoListInContext, joinRestrictInfoListInTest))
+		if (LeftListIsSubset(joinRestrictInfoListInTest, joinRestrictInfoListInContext))
 		{
 			return true;
 		}
