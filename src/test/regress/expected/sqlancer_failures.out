@@ -190,33 +190,33 @@ CREATE TABLE t2(LIKE t0 INCLUDING INDEXES);
 CREATE UNLOGGED TABLE t3(LIKE t0 EXCLUDING STATISTICS);
 CREATE TABLE t4(LIKE t1);
 SELECT create_distributed_table('t0', 'c0');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 SELECT create_reference_table('t1');
- create_reference_table 
-------------------------
- 
+ create_reference_table
+---------------------------------------------------------------------
+
 (1 row)
 
 SELECT create_distributed_table('t2', 'c0');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 SELECT create_distributed_table('t3', 'c0');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 SELECT create_reference_table('t4');
- create_reference_table 
-------------------------
- 
+ create_reference_table
+---------------------------------------------------------------------
+
 (1 row)
 
 -- whole join tree for below query is:
@@ -227,25 +227,25 @@ SELECT create_reference_table('t4');
 --       t0(dist)  t4(ref)
 -- -- so we should error out
 SELECT count(*) FROM (
-SELECT ALL t4.c1, t0.c0, t0.c1 FROM ONLY t0 
-   LEFT OUTER JOIN t4 ON CAST(masklen('142.158.96.44') AS BOOLEAN) 
+SELECT ALL t4.c1, t0.c0, t0.c1 FROM ONLY t0
+   LEFT OUTER JOIN t4 ON CAST(masklen('142.158.96.44') AS BOOLEAN)
    RIGHT OUTER JOIN t1 ON ((0.024767844)::MONEY) BETWEEN (t1.c1) AND (CAST(0.0602135 AS MONEY))
 ) AS foo;
 ERROR:  cannot pushdown the subquery
 DETAIL:  There exist a reference table in the outer part of the outer join
 -- first subquery has the same join tree as above, so we should error out
 SELECT count(*) FROM (
-SELECT ALL t4.c1, t0.c0, t0.c1 FROM ONLY t0 
-   LEFT OUTER JOIN t4 ON CAST(masklen('142.158.96.44') AS BOOLEAN) 
-   RIGHT OUTER JOIN t1 ON (CAST(0.024767844 AS MONEY)) BETWEEN (t1.c1) AND (CAST(0.0602135 AS MONEY)) 
-   WHERE NOT (((t0.c0)LIKE((t4.c0 COLLATE "en_US.utf8")))) 
-UNION ALL SELECT t4.c1, t0.c0, t0.c1 FROM ONLY t0 
-   LEFT OUTER JOIN t4 ON CAST(masklen('142.158.96.44') AS BOOLEAN) 
-   RIGHT OUTER JOIN t1 ON ((0.024767844)::MONEY) BETWEEN (t1.c1) AND (CAST(0.0602135 AS MONEY)) 
-   WHERE NOT (NOT (((t0.c0)LIKE((t4.c0 COLLATE "en_US.utf8"))))) 
-UNION ALL SELECT ALL t4.c1, t0.c0, t0.c1 FROM ONLY t0 
-   LEFT OUTER JOIN t4 ON (masklen('142.158.96.44'))::BOOLEAN 
-   RIGHT OUTER JOIN t1 ON ((0.024767844)::MONEY) BETWEEN (t1.c1) AND ((0.0602135)::MONEY) 
+SELECT ALL t4.c1, t0.c0, t0.c1 FROM ONLY t0
+   LEFT OUTER JOIN t4 ON CAST(masklen('142.158.96.44') AS BOOLEAN)
+   RIGHT OUTER JOIN t1 ON (CAST(0.024767844 AS MONEY)) BETWEEN (t1.c1) AND (CAST(0.0602135 AS MONEY))
+   WHERE NOT (((t0.c0)LIKE((t4.c0 COLLATE "en_US.utf8"))))
+UNION ALL SELECT t4.c1, t0.c0, t0.c1 FROM ONLY t0
+   LEFT OUTER JOIN t4 ON CAST(masklen('142.158.96.44') AS BOOLEAN)
+   RIGHT OUTER JOIN t1 ON ((0.024767844)::MONEY) BETWEEN (t1.c1) AND (CAST(0.0602135 AS MONEY))
+   WHERE NOT (NOT (((t0.c0)LIKE((t4.c0 COLLATE "en_US.utf8")))))
+UNION ALL SELECT ALL t4.c1, t0.c0, t0.c1 FROM ONLY t0
+   LEFT OUTER JOIN t4 ON (masklen('142.158.96.44'))::BOOLEAN
+   RIGHT OUTER JOIN t1 ON ((0.024767844)::MONEY) BETWEEN (t1.c1) AND ((0.0602135)::MONEY)
    WHERE (NOT (((t0.c0)LIKE((t4.c0 COLLATE "en_US.utf8"))))) ISNULL
 ) AS foo;
 ERROR:  cannot pushdown the subquery
