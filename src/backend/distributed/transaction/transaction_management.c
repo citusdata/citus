@@ -659,26 +659,6 @@ PopSubXact(SubTransactionId subId)
 }
 
 
-/* ActiveSubXacts returns list of active sub-transactions in temporal order. */
-List *
-ActiveSubXacts(void)
-{
-	List *activeSubXactsReversed = NIL;
-
-	/*
-	 * activeSubXactContexts is in reversed temporal order, so we reverse it to get it
-	 * in temporal order.
-	 */
-	SubXactContext *state = NULL;
-	foreach_ptr(state, activeSubXactContexts)
-	{
-		activeSubXactsReversed = lcons_int(state->subId, activeSubXactsReversed);
-	}
-
-	return activeSubXactsReversed;
-}
-
-
 /* ActiveSubXactContexts returns the list of active sub-xact context in temporal order. */
 List *
 ActiveSubXactContexts(void)

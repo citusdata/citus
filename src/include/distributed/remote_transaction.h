@@ -102,7 +102,6 @@ extern void RemoteTransactionListBegin(List *connectionList);
 
 extern void StartRemoteTransactionPrepare(struct MultiConnection *connection);
 extern void FinishRemoteTransactionPrepare(struct MultiConnection *connection);
-extern void RemoteTransactionPrepare(struct MultiConnection *connection);
 
 extern void StartRemoteTransactionCommit(struct MultiConnection *connection);
 extern void FinishRemoteTransactionCommit(struct MultiConnection *connection);
@@ -124,7 +123,6 @@ extern void HandleRemoteTransactionResultError(struct MultiConnection *connectio
 extern void MarkRemoteTransactionFailed(struct MultiConnection *connection,
 										bool allowErrorPromotion);
 extern void MarkRemoteTransactionCritical(struct MultiConnection *connection);
-extern bool IsRemoteTransactionCritical(struct MultiConnection *connection);
 
 
 /*

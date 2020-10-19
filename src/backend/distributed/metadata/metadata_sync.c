@@ -855,35 +855,6 @@ ShardListInsertCommand(List *shardIntervalList)
 
 
 /*
- * ShardListDeleteCommand generates a command list that can be executed to delete
- * shard and shard placement metadata for the given shard.
- */
-List *
-ShardDeleteCommandList(ShardInterval *shardInterval)
-{
-	uint64 shardId = shardInterval->shardId;
-	List *commandList = NIL;
-
-	/* create command to delete shard placements */
-	StringInfo deletePlacementCommand = makeStringInfo();
-	appendStringInfo(deletePlacementCommand,
-					 "DELETE FROM pg_dist_placement WHERE shardid = " UINT64_FORMAT,
-					 shardId);
-
-	commandList = lappend(commandList, deletePlacementCommand->data);
-
-	/* create command to delete shard */
-	StringInfo deleteShardCommand = makeStringInfo();
-	appendStringInfo(deleteShardCommand,
-					 "DELETE FROM pg_dist_shard WHERE shardid = " UINT64_FORMAT, shardId);
-
-	commandList = lappend(commandList, deleteShardCommand->data);
-
-	return commandList;
-}
-
-
-/*
  * NodeDeleteCommand generate a command that can be
  * executed to delete the metadata for a worker node.
  */

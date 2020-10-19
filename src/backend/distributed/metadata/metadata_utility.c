@@ -632,24 +632,6 @@ CopyShardInterval(ShardInterval *srcInterval)
 
 
 /*
- * CopyShardPlacement copies the values of the source placement into the
- * target placement.
- */
-void
-CopyShardPlacement(ShardPlacement *srcPlacement, ShardPlacement *destPlacement)
-{
-	/* first copy all by-value fields */
-	*destPlacement = *srcPlacement;
-
-	/* and then the fields pointing to external values */
-	if (srcPlacement->nodeName)
-	{
-		destPlacement->nodeName = pstrdup(srcPlacement->nodeName);
-	}
-}
-
-
-/*
  * ShardLength finds shard placements for the given shardId, extracts the length
  * of an active shard, and returns the shard's length. This function errors
  * out if we cannot find any active shard placements for the given shardId.
@@ -1388,21 +1370,6 @@ EnsureSchemaOwner(Oid schemaId)
 	{
 		aclcheck_error(ACLCHECK_NOT_OWNER, OBJECT_SCHEMA,
 					   get_namespace_name(schemaId));
-	}
-}
-
-
-/*
- * Check that the current user has owner rights to sequenceRelationId, error out if
- * not. Superusers are regarded as owners.
- */
-void
-EnsureSequenceOwner(Oid sequenceOid)
-{
-	if (!pg_class_ownercheck(sequenceOid, GetUserId()))
-	{
-		aclcheck_error(ACLCHECK_NOT_OWNER, OBJECT_SEQUENCE,
-					   get_rel_name(sequenceOid));
 	}
 }
 

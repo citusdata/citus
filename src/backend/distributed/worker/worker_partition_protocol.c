@@ -565,31 +565,6 @@ UserPartitionFilename(StringInfo directoryName, uint32 partitionId)
 
 
 /*
- * JobDirectoryElement takes in a filename, and checks if this name lives in the
- * directory path that is used for task output files. Note that this function's
- * implementation is coupled with JobDirectoryName().
- */
-bool
-JobDirectoryElement(const char *filename)
-{
-	bool directoryElement = false;
-
-	StringInfo directoryPath = makeStringInfo();
-	appendStringInfo(directoryPath, "base/%s/%s", PG_JOB_CACHE_DIR, JOB_DIRECTORY_PREFIX);
-
-	char *directoryPathFound = strstr(filename, directoryPath->data);
-	if (directoryPathFound != NULL)
-	{
-		directoryElement = true;
-	}
-
-	pfree(directoryPath);
-
-	return directoryElement;
-}
-
-
-/*
  * CacheDirectoryElement takes in a filename, and checks if this name lives in
  * the directory path that is used for job, task, table etc. files.
  */

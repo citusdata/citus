@@ -28,29 +28,6 @@
 
 
 /*
- * LowestShardIntervalById returns the shard interval with the lowest shard
- * ID from a list of shard intervals.
- */
-ShardInterval *
-LowestShardIntervalById(List *shardIntervalList)
-{
-	ShardInterval *lowestShardInterval = NULL;
-
-	ShardInterval *shardInterval = NULL;
-	foreach_ptr(shardInterval, shardIntervalList)
-	{
-		if (lowestShardInterval == NULL ||
-			lowestShardInterval->shardId > shardInterval->shardId)
-		{
-			lowestShardInterval = shardInterval;
-		}
-	}
-
-	return lowestShardInterval;
-}
-
-
-/*
  * SortedShardIntervalArray sorts the input shardIntervalArray. Shard intervals with
  * no min/max values are placed at the end of the array.
  */

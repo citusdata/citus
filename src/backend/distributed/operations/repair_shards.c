@@ -517,8 +517,8 @@ EnsureTableListSuitableForReplication(List *tableIdList)
 
 
 /*
- * CopyColocatedShardPlacement copies a shard along with its co-located shards from a
- * source node to target node. CopyShardPlacement does not make any checks about state
+ * CopyColocatedShardPlacement copies a shard along with its co-located shards
+ * from a source node to target node. It does not make any checks about state
  * of the shards. It is caller's responsibility to make those checks if they are
  * necessary.
  */

@@ -3341,36 +3341,6 @@ SimpleOpExpression(Expr *clause)
 
 
 /*
- * OpExpressionContainsColumn checks if the operator expression contains the
- * given partition column. We assume that given operator expression is a simple
- * operator expression which means it is a binary operator expression with
- * operands of a var and a non-null constant.
- */
-bool
-OpExpressionContainsColumn(OpExpr *operatorExpression, Var *partitionColumn)
-{
-	Node *leftOperand;
-	Node *rightOperand;
-	if (!BinaryOpExpression((Expr *) operatorExpression, &leftOperand, &rightOperand))
-	{
-		return false;
-	}
-	Var *column = NULL;
-
-	if (IsA(leftOperand, Var))
-	{
-		column = (Var *) leftOperand;
-	}
-	else
-	{
-		column = (Var *) rightOperand;
-	}
-
-	return equal(column, partitionColumn);
-}
-
-
-/*
  * MakeInt4Column creates a column of int4 type with invalid table id and max
  * attribute number.
  */
@@ -3387,27 +3357,6 @@ MakeInt4Column()
 	Var *int4Column = makeVar(tableId, columnAttributeNumber, columnType,
 							  columnTypeMod, columnCollationOid, columnLevelSup);
 	return int4Column;
-}
-
-
-/*
- * MakeInt4Constant creates a new constant of int4 type and assigns the given
- * value as a constant value.
- */
-Const *
-MakeInt4Constant(Datum constantValue)
-{
-	Oid constantType = INT4OID;
-	int32 constantTypeMode = -1;
-	Oid constantCollationId = InvalidOid;
-	int constantLength = sizeof(int32);
-	bool constantIsNull = false;
-	bool constantByValue = true;
-
-	Const *int4Constant = makeConst(constantType, constantTypeMode, constantCollationId,
-									constantLength, constantValue, constantIsNull,
-									constantByValue);
-	return int4Constant;
 }
 
 
@@ -4940,47 +4889,6 @@ TasksEqual(const Task *a, const Task *b)
 	}
 
 	return true;
-}
-
-
-/*
- * TaskListAppendUnique returns a list that contains the elements of the
- * input task list and appends the input task parameter if it doesn't already
- * exists the list.
- */
-List *
-TaskListAppendUnique(List *list, Task *task)
-{
-	if (TaskListMember(list, task))
-	{
-		return list;
-	}
-
-	return lappend(list, task);
-}
-
-
-/*
- * TaskListConcatUnique append to list1 each member of list2 that isn't
- * already in list1. Whether an element is already a member of the list
- * is determined via TaskListMember().
- */
-List *
-TaskListConcatUnique(List *list1, List *list2)
-{
-	ListCell *taskCell = NULL;
-
-	foreach(taskCell, list2)
-	{
-		Task *currentTask = (Task *) lfirst(taskCell);
-
-		if (!TaskListMember(list1, currentTask))
-		{
-			list1 = lappend(list1, currentTask);
-		}
-	}
-
-	return list1;
 }
 
 

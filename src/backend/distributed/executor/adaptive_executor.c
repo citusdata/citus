@@ -927,24 +927,6 @@ ExecuteTaskListOutsideTransaction(RowModifyLevel modLevel, List *taskList,
 
 
 /*
- * ExecuteTaskList is a proxy to ExecuteTaskListExtended() with defaults
- * for some of the arguments.
- */
-uint64
-ExecuteTaskList(RowModifyLevel modLevel, List *taskList,
-				int targetPoolSize, bool localExecutionSupported)
-{
-	ExecutionParams *executionParams = CreateBasicExecutionParams(
-		modLevel, taskList, targetPoolSize, localExecutionSupported
-		);
-	executionParams->xactProperties = DecideTransactionPropertiesForTaskList(
-		modLevel, taskList, false);
-
-	return ExecuteTaskListExtended(executionParams);
-}
-
-
-/*
  * ExecuteTaskListIntoTupleStore is a proxy to ExecuteTaskListExtended() with defaults
  * for some of the arguments.
  */

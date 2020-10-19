@@ -69,14 +69,6 @@ ErrorIfUnsupportedPolicy(Relation relation)
 }
 
 
-/* placeholder for ErrorIfUnsupportedPolicyExpr */
-void
-ErrorIfUnsupportedPolicyExpr(Node *expr)
-{
-	/* placeholder for future implementation */
-}
-
-
 /* placeholder for PreprocessDropPolicyStmt */
 List *
 PreprocessDropPolicyStmt(Node *node, const char *queryString)
