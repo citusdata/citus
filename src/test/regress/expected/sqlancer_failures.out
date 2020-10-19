@@ -151,5 +151,36 @@ SELECT ALL t7.c1, t7.c0, t8.c1, t10.c1, t8.c0 FROM t7 CROSS JOIN t10 FULL OUTER 
 ) AS foo;
 ERROR:  cannot pushdown the subquery
 DETAIL:  There exist a reference table in the outer part of the outer join
+CREATE TABLE reference_table(id int, it_name varchar(25), k_no int);
+SELECT create_reference_table('reference_table');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE distributed_table(user_id int, item_id int, buy_count int);
+SELECT create_distributed_table('distributed_table', 'user_id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- postgres plans below queries by evaluating joins as below:
+--     L
+--   /   \
+-- ref     L
+--       /   \
+--     dist  ref
+-- so we should error out as reference table is in the outer part of the top level (left) outer join
+SELECT count(*) FROM distributed_table a
+LEFT JOIN reference_table b ON (true)
+RIGHT JOIN reference_table c ON (true);
+ERROR:  cannot pushdown the subquery
+DETAIL:  There exist a reference table in the outer part of the outer join
+SELECT count(*) FROM distributed_table a
+LEFT JOIN reference_table b ON (true)
+RIGHT JOIN reference_table c ON (c.id > 0);
+ERROR:  cannot pushdown the subquery
+DETAIL:  There exist a reference table in the outer part of the outer join
 SET client_min_messages TO WARNING;
 DROP SCHEMA sqlancer_failures CASCADE;

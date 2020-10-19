@@ -58,5 +58,27 @@ SELECT count(*) FROM (
 SELECT ALL t7.c1, t7.c0, t8.c1, t10.c1, t8.c0 FROM t7 CROSS JOIN t10 FULL OUTER JOIN t8 ON (((((((('[832125354,1134163512)'::int4range)*('(0,2106623281)'::int4range)))-('(-600267905,509840582]'::int4range)))*('(-365203965,1662828182)'::int4range)))&<((((((('(-1286467417,697584012]'::int4range)*('[-1691485781,1341103963)'::int4range)))*((('(-1768368435,1719707648)'::int4range)*('(139536997,1275813540]'::int4range)))))*((((('[-2103910157,-1961746758)'::int4range)*('[-834534078,533073939)'::int4range)))*((('[-1030552151,552856781]'::int4range)*('[-1109419376,1205173697]'::int4range))))))))
 ) AS foo;
 
+CREATE TABLE reference_table(id int, it_name varchar(25), k_no int);
+SELECT create_reference_table('reference_table');
+
+CREATE TABLE distributed_table(user_id int, item_id int, buy_count int);
+SELECT create_distributed_table('distributed_table', 'user_id');
+
+-- postgres plans below queries by evaluating joins as below:
+--     L
+--   /   \
+-- ref     L
+--       /   \
+--     dist  ref
+-- so we should error out as reference table is in the outer part of the top level (left) outer join
+
+SELECT count(*) FROM distributed_table a
+LEFT JOIN reference_table b ON (true)
+RIGHT JOIN reference_table c ON (true);
+
+SELECT count(*) FROM distributed_table a
+LEFT JOIN reference_table b ON (true)
+RIGHT JOIN reference_table c ON (c.id > 0);
+
 SET client_min_messages TO WARNING;
 DROP SCHEMA sqlancer_failures CASCADE;
