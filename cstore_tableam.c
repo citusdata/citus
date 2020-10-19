@@ -16,6 +16,7 @@
 #include "catalog/index.h"
 #include "catalog/objectaccess.h"
 #include "catalog/pg_am.h"
+#include "catalog/pg_trigger.h"
 #include "catalog/storage.h"
 #include "catalog/storage_xlog.h"
 #include "commands/progress.h"
@@ -31,6 +32,7 @@
 #include "storage/predicate.h"
 #include "storage/procarray.h"
 #include "storage/smgr.h"
+#include "tcop/utility.h"
 #include "utils/builtins.h"
 #include "utils/pg_rusage.h"
 #include "utils/rel.h"
@@ -62,11 +64,19 @@ static TableWriteState *CStoreWriteState = NULL;
 static ExecutorEnd_hook_type PreviousExecutorEndHook = NULL;
 static MemoryContext CStoreContext = NULL;
 static object_access_hook_type prevObjectAccessHook = NULL;
+static ProcessUtility_hook_type PreviousProcessUtilityHook = NULL;
 
 /* forward declaration for static functions */
 static void CStoreTableAMObjectAccessHook(ObjectAccessType access, Oid classId, Oid
 										  objectId, int subId,
 										  void *arg);
+static void CStoreTableAMProcessUtility(PlannedStmt *plannedStatement,
+										const char *queryString,
+										ProcessUtilityContext context,
+										ParamListInfo paramListInfo,
+										QueryEnvironment *queryEnvironment,
+										DestReceiver *destReceiver,
+										char *completionTag);
 static bool IsCStoreTableAmTable(Oid relationId);
 static bool ConditionalLockRelationWithTimeout(Relation rel, LOCKMODE lockMode,
 											   int timeout, int retryInterval);
@@ -1027,11 +1037,60 @@ CStoreExecutorEnd(QueryDesc *queryDesc)
 }
 
 
+static void
+CStoreTableAMProcessUtility(PlannedStmt *plannedStatement,
+							const char *queryString,
+							ProcessUtilityContext context,
+							ParamListInfo paramListInfo,
+							QueryEnvironment *queryEnvironment,
+							DestReceiver *destReceiver,
+							char *completionTag)
+{
+	Node *parseTree = plannedStatement->utilityStmt;
+
+	if (nodeTag(parseTree) == T_CreateTrigStmt)
+	{
+		CreateTrigStmt *createTrigStmt = (CreateTrigStmt *) parseTree;
+		Relation rel;
+		bool isCStore;
+
+		rel = relation_openrv(createTrigStmt->relation, AccessShareLock);
+		isCStore = rel->rd_tableam == GetCstoreTableAmRoutine();
+		relation_close(rel, AccessShareLock);
+
+		if (isCStore &&
+			createTrigStmt->row &&
+			createTrigStmt->timing == TRIGGER_TYPE_AFTER)
+		{
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg(
+								"AFTER ROW triggers are not supported for columnstore access method"),
+							errhint("Consider an AFTER STATEMENT trigger instead.")));
+		}
+	}
+
+	if (PreviousProcessUtilityHook != NULL)
+	{
+		PreviousProcessUtilityHook(plannedStatement, queryString, context,
+								   paramListInfo, queryEnvironment,
+								   destReceiver, completionTag);
+	}
+	else
+	{
+		standard_ProcessUtility(plannedStatement, queryString, context,
+								paramListInfo, queryEnvironment,
+								destReceiver, completionTag);
+	}
+}
+
+
 void
 cstore_tableam_init()
 {
 	PreviousExecutorEndHook = ExecutorEnd_hook;
 	ExecutorEnd_hook = CStoreExecutorEnd;
+	PreviousProcessUtilityHook = ProcessUtility_hook;
+	ProcessUtility_hook = CStoreTableAMProcessUtility;
 	prevObjectAccessHook = object_access_hook;
 	object_access_hook = CStoreTableAMObjectAccessHook;
 
