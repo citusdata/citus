@@ -153,8 +153,6 @@ static int RangeTableOffsetCompat(PlannerInfo *root, AppendRelInfo *appendRelInf
 static Relids QueryRteIdentities(Query *queryTree);
 static bool ContextCoversJoinRestriction(JoinRestrictionContext *joinRestrictionContext,
 										 JoinRestriction *joinRestrictionInTest);
-static void CopyJoinRestrictionContextHasJoinFields(JoinRestrictionContext *destination,
-													JoinRestrictionContext *source);
 
 
 /*
@@ -1908,8 +1906,13 @@ FilterJoinRestrictionContext(JoinRestrictionContext *joinRestrictionContext, Rel
 		}
 	}
 
-	CopyJoinRestrictionContextHasJoinFields(filtererdJoinRestrictionContext,
-											joinRestrictionContext);
+	/*
+	 * No need to re calculate has join fields as we are still operating on
+	 * the same query.
+	 */
+	filtererdJoinRestrictionContext->hasOnlyInnerJoin =
+		joinRestrictionContext->hasOnlyInnerJoin;
+	filtererdJoinRestrictionContext->hasSemiJoin = joinRestrictionContext->hasSemiJoin;
 
 	return filtererdJoinRestrictionContext;
 }
@@ -2030,7 +2033,12 @@ RemoveDuplicateJoinRestrictions(JoinRestrictionContext *joinRestrictionContext)
 			lappend(filteredContext->joinRestrictionList, joinRestriction);
 	}
 
-	CopyJoinRestrictionContextHasJoinFields(filteredContext, joinRestrictionContext);
+	/*
+	 * No need to re calculate has join fields as we are still operating on
+	 * the same query.
+	 */
+	filteredContext->hasOnlyInnerJoin = joinRestrictionContext->hasOnlyInnerJoin;
+	filteredContext->hasSemiJoin = joinRestrictionContext->hasSemiJoin;
 
 	return filteredContext;
 }
@@ -2093,17 +2101,4 @@ ContextCoversJoinRestriction(JoinRestrictionContext *joinRestrictionContext,
 	}
 
 	return false;
-}
-
-
-/*
- * CopyJoinRestrictionContextHasJoinFields copies hasJoin boolean fields from
- * source to destination.
- */
-static void
-CopyJoinRestrictionContextHasJoinFields(JoinRestrictionContext *destination,
-										JoinRestrictionContext *source)
-{
-	destination->hasOnlyInnerJoin = source->hasOnlyInnerJoin;
-	destination->hasSemiJoin = source->hasSemiJoin;
 }
