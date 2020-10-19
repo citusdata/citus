@@ -38,7 +38,6 @@ extern void deparse_shard_index_statement(IndexStmt *origStmt, Oid distrelid,
 extern void deparse_shard_reindex_statement(ReindexStmt *origStmt, Oid distrelid,
 											int64 shardid, StringInfo buffer);
 extern char * pg_get_indexclusterdef_string(Oid indexRelationId);
-extern List * pg_get_table_grants(Oid relationId);
 extern bool contain_nextval_expression_walker(Node *node, void *context);
 extern char * pg_get_replica_identity_command(Oid tableRelationId);
 extern const char * RoleSpecString(RoleSpec *spec, bool withQuoteIdentifier);

@@ -21,18 +21,6 @@
 
 #include "distributed/deparser.h"
 
-/*
- * This version is for use within the backend in error messages, etc.
- * One difference is that it will fail for an invalid collate.
- *
- * The result is always a palloc'd string.
- */
-char *
-FormatCollateBE(Oid collate_oid)
-{
-	return FormatCollateExtended(collate_oid, 0);
-}
-
 
 /*
  * This version returns a name that is always qualified.

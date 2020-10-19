@@ -563,18 +563,6 @@ FinishRemoteTransactionPrepare(struct MultiConnection *connection)
 
 
 /*
- * RemoteTransactionPrepare prepares a remote transaction in a blocking
- * manner.
- */
-void
-RemoteTransactionPrepare(struct MultiConnection *connection)
-{
-	StartRemoteTransactionPrepare(connection);
-	FinishRemoteTransactionPrepare(connection);
-}
-
-
-/*
  * RemoteTransactionBeginIfNecessary is a convenience wrapper around
  * RemoteTransactionsBeginIfNecessary(), for a single connection.
  */
@@ -743,19 +731,6 @@ MarkRemoteTransactionCritical(struct MultiConnection *connection)
 	RemoteTransaction *transaction = &connection->remoteTransaction;
 
 	transaction->transactionCritical = true;
-}
-
-
-/*
- * IsRemoteTransactionCritical returns whether the remote transaction on
- * the given connection has been marked as critical.
- */
-bool
-IsRemoteTransactionCritical(struct MultiConnection *connection)
-{
-	RemoteTransaction *transaction = &connection->remoteTransaction;
-
-	return transaction->transactionCritical;
 }
 
 

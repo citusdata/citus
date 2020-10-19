@@ -100,21 +100,12 @@ typedef struct WaitInfo
 /* Function declarations for executing client-side (libpq) logic. */
 extern int32 MultiClientConnect(const char *nodeName, uint32 nodePort,
 								const char *nodeDatabase, const char *nodeUser);
-extern int32 MultiClientConnectStart(const char *nodeName, uint32 nodePort,
-									 const char *nodeDatabase, const char *nodeUser);
-extern ConnectStatus MultiClientConnectPoll(int32 connectionId);
 extern void MultiClientDisconnect(int32 connectionId);
-extern bool MultiClientConnectionUp(int32 connectionId);
 extern bool MultiClientSendQuery(int32 connectionId, const char *query);
-extern bool MultiClientCancel(int32 connectionId);
 extern ResultStatus MultiClientResultStatus(int32 connectionId);
 extern QueryStatus MultiClientQueryStatus(int32 connectionId);
 extern CopyStatus MultiClientCopyData(int32 connectionId, int32 fileDescriptor,
 									  uint64 *returnBytesReceived);
-extern BatchQueryStatus MultiClientBatchResult(int32 connectionId, void **queryResult,
-											   int *rowCount, int *columnCount);
-extern char * MultiClientGetValue(void *queryResult, int rowIndex, int columnIndex);
-extern void MultiClientClearResult(void *queryResult);
 
 
 #endif /* MULTI_CLIENT_EXECUTOR_H */

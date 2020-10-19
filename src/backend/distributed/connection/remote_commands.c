@@ -230,35 +230,6 @@ ClearResultsIfReady(MultiConnection *connection)
 }
 
 
-/*
- * SqlStateMatchesCategory returns true if the given sql state (which may be
- * NULL if unknown) is in the given error category. Note that we use
- * ERRCODE_TO_CATEGORY macro to determine error category of the sql state and
- * expect the caller to use the same macro for the error category.
- */
-bool
-SqlStateMatchesCategory(char *sqlStateString, int category)
-{
-	bool sqlStateMatchesCategory = false;
-
-	if (sqlStateString == NULL)
-	{
-		return false;
-	}
-
-	int sqlState = MAKE_SQLSTATE(sqlStateString[0], sqlStateString[1], sqlStateString[2],
-								 sqlStateString[3], sqlStateString[4]);
-
-	int sqlStateCategory = ERRCODE_TO_CATEGORY(sqlState);
-	if (sqlStateCategory == category)
-	{
-		sqlStateMatchesCategory = true;
-	}
-
-	return sqlStateMatchesCategory;
-}
-
-
 /* report errors & warnings */
 
 /*

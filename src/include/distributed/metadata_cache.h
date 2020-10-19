@@ -140,7 +140,6 @@ extern bool IsCitusTableTypeCacheEntry(CitusTableCacheEntry *tableEtnry,
 
 extern bool IsCitusTable(Oid relationId);
 extern bool IsCitusLocalTableByDistParams(char partitionMethod, char replicationModel);
-extern bool IsReferenceTableByDistParams(char partitionMethod, char replicationModel);
 extern List * CitusTableList(void);
 extern ShardInterval * LoadShardInterval(uint64 shardId);
 extern Oid RelationIdForShard(uint64 shardId);
@@ -203,12 +202,10 @@ extern Oid CitusCatalogNamespaceId(void);
 /* relation oids */
 extern Oid DistColocationRelationId(void);
 extern Oid DistColocationConfigurationIndexId(void);
-extern Oid DistColocationColocationidIndexId(void);
 extern Oid DistPartitionRelationId(void);
 extern Oid DistShardRelationId(void);
 extern Oid DistPlacementRelationId(void);
 extern Oid DistNodeRelationId(void);
-extern Oid DistRebalanceStrategyRelationId(void);
 extern Oid DistLocalGroupIdRelationId(void);
 extern Oid DistObjectRelationId(void);
 extern Oid DistEnabledCustomAggregatesId(void);
@@ -223,7 +220,6 @@ extern Oid DistPlacementShardidIndexId(void);
 extern Oid DistPlacementPlacementidIndexId(void);
 extern Oid DistTransactionRelationId(void);
 extern Oid DistTransactionGroupIndexId(void);
-extern Oid DistTransactionRecordIndexId(void);
 extern Oid DistPlacementGroupidIndexId(void);
 extern Oid DistObjectPrimaryKeyIndexId(void);
 
@@ -235,9 +231,7 @@ extern Oid CitusCopyFormatTypeId(void);
 extern Oid CitusReadIntermediateResultFuncId(void);
 Oid CitusReadIntermediateResultArrayFuncId(void);
 extern Oid CitusExtraDataContainerFuncId(void);
-extern Oid CitusWorkerHashFunctionId(void);
 extern Oid CitusAnyValueFunctionId(void);
-extern Oid CitusTextSendAsJsonbFunctionId(void);
 extern Oid PgTableVisibleFuncId(void);
 extern Oid CitusTableVisibleFuncId(void);
 extern Oid JsonbExtractPathFuncId(void);
@@ -245,7 +239,6 @@ extern Oid JsonbExtractPathFuncId(void);
 /* enum oids */
 extern Oid PrimaryNodeRoleId(void);
 extern Oid SecondaryNodeRoleId(void);
-extern Oid UnavailableNodeRoleId(void);
 extern Oid CitusCopyFormatTypeId(void);
 extern Oid TextCopyFormatId(void);
 extern Oid BinaryCopyFormatId(void);

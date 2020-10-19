@@ -119,7 +119,6 @@ extern void EnsureDistributedTransactionId(void);
 extern void InitializeTransactionManagement(void);
 
 /* other functions */
-extern List * ActiveSubXacts(void);
 extern List * ActiveSubXactContexts(void);
 extern StringInfo BeginAndSetDistributedTransactionIdCommand(void);
 

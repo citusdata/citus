@@ -862,17 +862,6 @@ ConnectionModifiedPlacement(MultiConnection *connection)
 
 
 /*
- * ConnectionUsedForAnyPlacements returns true if the connection
- * has not been associated with any placement.
- */
-bool
-ConnectionUsedForAnyPlacements(MultiConnection *connection)
-{
-	return !dlist_is_empty(&connection->referencedPlacements);
-}
-
-
-/*
  * AssociatePlacementWithShard records shard->placement relation in
  * ConnectionShardHash.
  *

@@ -28,7 +28,6 @@ extern void ForgetResults(MultiConnection *connection);
 extern bool ClearResults(MultiConnection *connection, bool raiseErrors);
 extern bool ClearResultsDiscardWarnings(MultiConnection *connection, bool raiseErrors);
 extern bool ClearResultsIfReady(MultiConnection *connection);
-extern bool SqlStateMatchesCategory(char *sqlStateString, int category);
 
 /* report errors & warnings */
 extern void ReportConnectionError(MultiConnection *connection, int elevel);
