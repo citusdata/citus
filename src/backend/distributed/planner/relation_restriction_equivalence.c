@@ -2065,9 +2065,9 @@ ContextCoversJoinRestriction(JoinRestrictionContext *joinRestrictionContext,
 
 		List *joinRestrictInfoListInTest =
 			joinRestrictionInTest->joinRestrictInfoList;
-		bool hasJoinRestriction = list_length(joinRestrictInfoListInTest) == 0;
+		bool hasJoinRestriction = list_length(joinRestrictInfoListInTest) != 0;
 		bool hasOnlyInnerJoin = joinRestrictionContext->hasOnlyInnerJoin;
-		if (!hasOnlyInnerJoin && hasJoinRestriction)
+		if (!hasOnlyInnerJoin && !hasJoinRestriction)
 		{
 			/*
 			 * If join doesn't have a restriction (e.g., ON (true)) and planner
