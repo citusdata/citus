@@ -155,6 +155,23 @@ ListToHashSet(List *itemList, Size keySize, bool isStringList)
 
 
 /*
+ * GeneratePositiveIntSequenceList generates a positive int
+ * sequence list up to the given number. The list will have:
+ * [1:upto]
+ */
+List *
+GeneratePositiveIntSequenceList(int upTo)
+{
+	List *intList = NIL;
+	for (int i = 1; i <= upTo; i++)
+	{
+		intList = lappend_int(intList, i);
+	}
+	return intList;
+}
+
+
+/*
  * StringJoin gets a list of char * and then simply
  * returns a newly allocated char * joined with the
  * given delimiter.

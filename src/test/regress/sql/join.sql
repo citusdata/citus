@@ -1,22 +1,26 @@
 --
--- Full join with subquery pushdown support
+-- join with subquery pushdown support
 --
 
 SET citus.next_shard_id TO 9000000;
 
-CREATE SCHEMA full_join;
-SET search_path TO full_join, public;
+CREATE SCHEMA join_schema;
+SET search_path TO join_schema, public;
 
 CREATE TABLE test_table_1(id int, val1 int);
 CREATE TABLE test_table_2(id bigint, val1 int);
 CREATE TABLE test_table_3(id int, val1 bigint);
 CREATE TABLE abcd(a int, b int, c int, d int);
 
+CREATE TABLE distributed_table(a int, b int);
+CREATE TABLE reference_table(a int, c int, b int);
+
+SELECT create_distributed_table('distributed_table', 'a');
+SELECT create_reference_table('reference_table');
 SELECT create_distributed_table('test_table_1', 'id');
 SELECT create_distributed_table('test_table_2', 'id');
 SELECT create_distributed_table('test_table_3', 'id');
 SELECT create_distributed_table('abcd', 'b');
-
 
 INSERT INTO test_table_1 VALUES(1,1),(2,2),(3,3);
 INSERT INTO test_table_2 VALUES(2,2),(3,3),(4,4);
@@ -117,6 +121,15 @@ SELECT * FROM test_table_1 FULL JOIN test_table_2 USING(id, val1) ORDER BY 1,2;
 
 SET citus.enable_repartition_joins to ON;
 
+SELECT distributed_table.* from distributed_table JOIN reference_table ON (true);
+ALTER TABLE reference_table DROP COLUMN c;
+
+-- #4129: make sure a join after drop column works
+SELECT distributed_table.* from distributed_table JOIN reference_table ON (true);
+BEGIN;
+SELECT distributed_table.* from distributed_table JOIN reference_table ON (true);
+END;
+
 INSERT INTO abcd VALUES (1,2,3,4);
 INSERT INTO abcd VALUES (2,3,4,5);
 INSERT INTO abcd VALUES (3,4,5,6);
@@ -169,4 +182,4 @@ END;
 
 
 
-DROP SCHEMA full_join CASCADE;
+DROP SCHEMA join_schema CASCADE;

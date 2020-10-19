@@ -234,7 +234,6 @@ static bool CoPlacedShardIntervals(ShardInterval *firstInterval,
 								   ShardInterval *secondInterval);
 
 #if PG_VERSION_NUM >= PG_VERSION_13
-static List * CreateJoinColIndexes(List *columnVars);
 static List * GetColumnOriginalIndexes(Oid relationId);
 #endif
 
@@ -1293,6 +1292,8 @@ JoinRangeTableEntry(JoinExpr *joinExpr, List *dependentJobList, List *rangeTable
 
 /*
  * SetJoinRelatedColumnsCompat sets join related fields on the given range table entry.
+ * Currently it sets joinleftcols/joinrightcols which are introduced with postgres 13.
+ * For more info see postgres commit: 9ce77d75c5ab094637cc4a446296dc3be6e3c221
  */
 static void
 SetJoinRelatedColumnsCompat(RangeTblEntry *rangeTableEntry, Oid leftRelId, Oid rightRelId,
@@ -1309,7 +1310,8 @@ SetJoinRelatedColumnsCompat(RangeTblEntry *rangeTableEntry, Oid leftRelId, Oid r
 	}
 	else
 	{
-		rangeTableEntry->joinleftcols = CreateJoinColIndexes(leftColumnVars);
+		int leftColsSize = list_length(leftColumnVars);
+		rangeTableEntry->joinleftcols = GeneratePositiveIntSequenceList(leftColsSize);
 	}
 
 	if (OidIsValid(rightRelId))
@@ -1318,7 +1320,8 @@ SetJoinRelatedColumnsCompat(RangeTblEntry *rangeTableEntry, Oid leftRelId, Oid r
 	}
 	else
 	{
-		rangeTableEntry->joinrightcols = CreateJoinColIndexes(rightColumnVars);
+		int rightColsSize = list_length(rightColumnVars);
+		rangeTableEntry->joinrightcols = GeneratePositiveIntSequenceList(rightColsSize);
 	}
 
 	#endif
@@ -1326,22 +1329,6 @@ SetJoinRelatedColumnsCompat(RangeTblEntry *rangeTableEntry, Oid leftRelId, Oid r
 
 
 #if PG_VERSION_NUM >= PG_VERSION_13
-
-/*
- * CreateJoinColIndexes creates join column indexes based on the given columnVars.
- */
-static List *
-CreateJoinColIndexes(List *columnVars)
-{
-	List *joinColIndexes = NIL;
-	int numvars = list_length(columnVars);
-	for (int varId = 1; varId <= numvars; varId++)
-	{
-		joinColIndexes = lappend_int(joinColIndexes, varId);
-	}
-	return joinColIndexes;
-}
-
 
 /*
  * GetColumnOriginalIndexes gets the original indexes of columns by taking column drops into account.

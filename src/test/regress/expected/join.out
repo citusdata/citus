@@ -1,13 +1,27 @@
 --
--- Full join with subquery pushdown support
+-- join with subquery pushdown support
 --
 SET citus.next_shard_id TO 9000000;
-CREATE SCHEMA full_join;
-SET search_path TO full_join, public;
+CREATE SCHEMA join_schema;
+SET search_path TO join_schema, public;
 CREATE TABLE test_table_1(id int, val1 int);
 CREATE TABLE test_table_2(id bigint, val1 int);
 CREATE TABLE test_table_3(id int, val1 bigint);
 CREATE TABLE abcd(a int, b int, c int, d int);
+CREATE TABLE distributed_table(a int, b int);
+CREATE TABLE reference_table(a int, c int, b int);
+SELECT create_distributed_table('distributed_table', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_reference_table('reference_table');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
 SELECT create_distributed_table('test_table_1', 'id');
  create_distributed_table
 ---------------------------------------------------------------------
@@ -252,6 +266,25 @@ SELECT * FROM test_table_1 FULL JOIN test_table_2 USING(id, val1) ORDER BY 1,2;
 (6 rows)
 
 SET citus.enable_repartition_joins to ON;
+SELECT distributed_table.* from distributed_table JOIN reference_table ON (true);
+ a | b
+---------------------------------------------------------------------
+(0 rows)
+
+ALTER TABLE reference_table DROP COLUMN c;
+-- #4129: make sure a join after drop column works
+SELECT distributed_table.* from distributed_table JOIN reference_table ON (true);
+ a | b
+---------------------------------------------------------------------
+(0 rows)
+
+BEGIN;
+SELECT distributed_table.* from distributed_table JOIN reference_table ON (true);
+ a | b
+---------------------------------------------------------------------
+(0 rows)
+
+END;
 INSERT INTO abcd VALUES (1,2,3,4);
 INSERT INTO abcd VALUES (2,3,4,5);
 INSERT INTO abcd VALUES (3,4,5,6);
@@ -429,9 +462,11 @@ SELECT * FROM abcd first join abcd second USING(b) join abcd third on first.b=th
 (3 rows)
 
 END;
-DROP SCHEMA full_join CASCADE;
-NOTICE:  drop cascades to 4 other objects
+DROP SCHEMA join_schema CASCADE;
+NOTICE:  drop cascades to 6 other objects
 DETAIL:  drop cascades to table abcd
+drop cascades to table distributed_table
+drop cascades to table reference_table
 drop cascades to table test_table_1
 drop cascades to table test_table_2
 drop cascades to view abcd_view
