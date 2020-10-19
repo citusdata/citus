@@ -131,13 +131,17 @@ static List * QueryFromList(List *rangeTableList);
 static Node * QueryJoinTree(MultiNode *multiNode, List *dependentJobList,
 							List **rangeTableList);
 static void SetJoinRelatedColumnsCompat(RangeTblEntry *rangeTableEntry,
-										List *l_colnames, List *r_colnames,
-										List *leftColVars, List *rightColVars);
+										Oid leftRelId,
+										Oid rightRelId,
+										List *leftColumnVars,
+										List *rightColumnVars);
 static RangeTblEntry * JoinRangeTableEntry(JoinExpr *joinExpr, List *dependentJobList,
 										   List *rangeTableList);
 static int ExtractRangeTableId(Node *node);
-static void ExtractColumns(RangeTblEntry *rangeTableEntry, int rangeTableId,
-						   List *dependentJobList, List **columnNames, List **columnVars);
+static void ExtractColumns(RangeTblEntry *callingRTE, int rangeTableId,
+						   List **columnNames, List **columnVars);
+static RangeTblEntry * ConstructCallingRTE(RangeTblEntry *rangeTableEntry,
+										   List *dependentJobList);
 static Query * BuildSubqueryJobQuery(MultiNode *multiNode);
 static void UpdateAllColumnAttributes(Node *columnContainer, List *rangeTableList,
 									  List *dependentJobList);
@@ -228,6 +232,10 @@ static StringInfo ColumnNameArrayString(uint32 columnCount, uint64 generatingJob
 static StringInfo ColumnTypeArrayString(List *targetEntryList);
 static bool CoPlacedShardIntervals(ShardInterval *firstInterval,
 								   ShardInterval *secondInterval);
+
+#if PG_VERSION_NUM >= PG_VERSION_13
+static List * GetColumnOriginalIndexes(Oid relationId);
+#endif
 
 
 /*
@@ -1259,10 +1267,14 @@ JoinRangeTableEntry(JoinExpr *joinExpr, List *dependentJobList, List *rangeTable
 	rangeTableEntry->subquery = NULL;
 	rangeTableEntry->eref = makeAlias("unnamed_join", NIL);
 
-	ExtractColumns(leftRTE, leftRangeTableId, dependentJobList,
+	RangeTblEntry *leftCallingRTE = ConstructCallingRTE(leftRTE, dependentJobList);
+	RangeTblEntry *rightCallingRte = ConstructCallingRTE(rightRTE, dependentJobList);
+	ExtractColumns(leftCallingRTE, leftRangeTableId,
 				   &leftColumnNames, &leftColumnVars);
-	ExtractColumns(rightRTE, rightRangeTableId, dependentJobList,
+	ExtractColumns(rightCallingRte, rightRangeTableId,
 				   &rightColumnNames, &rightColumnVars);
+	Oid leftRelId = leftCallingRTE->relid;
+	Oid rightRelId = rightCallingRte->relid;
 	joinedColumnNames = list_concat(joinedColumnNames, leftColumnNames);
 	joinedColumnNames = list_concat(joinedColumnNames, rightColumnNames);
 	joinedColumnVars = list_concat(joinedColumnVars, leftColumnVars);
@@ -1271,37 +1283,77 @@ JoinRangeTableEntry(JoinExpr *joinExpr, List *dependentJobList, List *rangeTable
 	rangeTableEntry->eref->colnames = joinedColumnNames;
 	rangeTableEntry->joinaliasvars = joinedColumnVars;
 
-	SetJoinRelatedColumnsCompat(rangeTableEntry,
-								leftColumnNames, rightColumnNames, leftColumnVars,
+	SetJoinRelatedColumnsCompat(rangeTableEntry, leftRelId, rightRelId, leftColumnVars,
 								rightColumnVars);
 
 	return rangeTableEntry;
 }
 
 
+/*
+ * SetJoinRelatedColumnsCompat sets join related fields on the given range table entry.
+ * Currently it sets joinleftcols/joinrightcols which are introduced with postgres 13.
+ * For more info see postgres commit: 9ce77d75c5ab094637cc4a446296dc3be6e3c221
+ */
 static void
-SetJoinRelatedColumnsCompat(RangeTblEntry *rangeTableEntry,
-							List *leftColumnNames, List *rightColumnNames,
+SetJoinRelatedColumnsCompat(RangeTblEntry *rangeTableEntry, Oid leftRelId, Oid rightRelId,
 							List *leftColumnVars, List *rightColumnVars)
 {
 	#if PG_VERSION_NUM >= PG_VERSION_13
 
 	/* We don't have any merged columns so set it to 0 */
 	rangeTableEntry->joinmergedcols = 0;
-	int numvars = list_length(leftColumnVars);
-	for (int varId = 1; varId <= numvars; varId++)
+
+	if (OidIsValid(leftRelId))
 	{
-		rangeTableEntry->joinleftcols = lappend_int(rangeTableEntry->joinleftcols, varId);
+		rangeTableEntry->joinleftcols = GetColumnOriginalIndexes(leftRelId);
 	}
-	numvars = list_length(rightColumnVars);
-	for (int varId = 1; varId <= numvars; varId++)
+	else
 	{
-		rangeTableEntry->joinrightcols = lappend_int(rangeTableEntry->joinrightcols,
-													 varId);
+		int leftColsSize = list_length(leftColumnVars);
+		rangeTableEntry->joinleftcols = GeneratePositiveIntSequenceList(leftColsSize);
 	}
+
+	if (OidIsValid(rightRelId))
+	{
+		rangeTableEntry->joinrightcols = GetColumnOriginalIndexes(rightRelId);
+	}
+	else
+	{
+		int rightColsSize = list_length(rightColumnVars);
+		rangeTableEntry->joinrightcols = GeneratePositiveIntSequenceList(rightColsSize);
+	}
+
 	#endif
 }
 
+
+#if PG_VERSION_NUM >= PG_VERSION_13
+
+/*
+ * GetColumnOriginalIndexes gets the original indexes of columns by taking column drops into account.
+ */
+static List *
+GetColumnOriginalIndexes(Oid relationId)
+{
+	List *originalIndexes = NIL;
+	Relation relation = table_open(relationId, AccessShareLock);
+	TupleDesc tupleDescriptor = RelationGetDescr(relation);
+	for (int columnIndex = 0; columnIndex < tupleDescriptor->natts; columnIndex++)
+	{
+		Form_pg_attribute currentColumn = TupleDescAttr(tupleDescriptor, columnIndex);
+		if (currentColumn->attisdropped)
+		{
+			continue;
+		}
+		originalIndexes = lappend_int(originalIndexes, columnIndex + 1);
+	}
+	table_close(relation, NoLock);
+	return originalIndexes;
+}
+
+
+#endif
 
 /*
  * ExtractRangeTableId gets the range table id from a node that could
@@ -1331,13 +1383,28 @@ ExtractRangeTableId(Node *node)
 
 /*
  * ExtractColumns gets a list of column names and vars for a given range
- * table entry using expandRTE. Since the range table entries in a job
- * query are mocked RTE_FUNCTION entries, it first translates the RTE's
- * to a form that expandRTE can handle.
+ * table entry using expandRTE.
  */
 static void
-ExtractColumns(RangeTblEntry *rangeTableEntry, int rangeTableId, List *dependentJobList,
+ExtractColumns(RangeTblEntry *callingRTE, int rangeTableId,
 			   List **columnNames, List **columnVars)
+{
+	int subLevelsUp = 0;
+	int location = -1;
+	bool includeDroppedColumns = false;
+	expandRTE(callingRTE, rangeTableId, subLevelsUp, location, includeDroppedColumns,
+			  columnNames, columnVars);
+}
+
+
+/*
+ * ConstructCallingRTE constructs a calling RTE from the given range table entry and
+ * dependentJobList in case of repartition joins. Since the range table entries in a job
+ * query are mocked RTE_FUNCTION entries, this construction is needed to form an RTE
+ * that expandRTE can handle.
+ */
+static RangeTblEntry *
+ConstructCallingRTE(RangeTblEntry *rangeTableEntry, List *dependentJobList)
 {
 	RangeTblEntry *callingRTE = NULL;
 
@@ -1379,8 +1446,7 @@ ExtractColumns(RangeTblEntry *rangeTableEntry, int rangeTableId, List *dependent
 	{
 		ereport(ERROR, (errmsg("unsupported Citus RTE kind: %d", rangeTableKind)));
 	}
-
-	expandRTE(callingRTE, rangeTableId, 0, -1, false, columnNames, columnVars);
+	return callingRTE;
 }
 
 
