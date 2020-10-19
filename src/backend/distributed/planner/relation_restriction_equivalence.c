@@ -153,6 +153,8 @@ static int RangeTableOffsetCompat(PlannerInfo *root, AppendRelInfo *appendRelInf
 static Relids QueryRteIdentities(Query *queryTree);
 static bool ContextCoversJoinRestriction(JoinRestrictionContext *joinRestrictionContext,
 										 JoinRestriction *joinRestrictionInTest);
+static void CopyJoinRestrictionContextHasJoinFields(JoinRestrictionContext *destination,
+													JoinRestrictionContext *source);
 
 
 /*
@@ -1906,10 +1908,8 @@ FilterJoinRestrictionContext(JoinRestrictionContext *joinRestrictionContext, Rel
 		}
 	}
 
-	/* we don't need to evaluate hasXJoin fields again */
-	filtererdJoinRestrictionContext->hasSemiJoin = joinRestrictionContext->hasSemiJoin;
-	filtererdJoinRestrictionContext->hasOnlyInnerJoin =
-		joinRestrictionContext->hasOnlyInnerJoin;
+	CopyJoinRestrictionContextHasJoinFields(filtererdJoinRestrictionContext,
+											joinRestrictionContext);
 
 	return filtererdJoinRestrictionContext;
 }
@@ -2030,9 +2030,7 @@ RemoveDuplicateJoinRestrictions(JoinRestrictionContext *joinRestrictionContext)
 			lappend(filteredContext->joinRestrictionList, joinRestriction);
 	}
 
-	/* we don't need to evaluate hasXJoin fields again */
-	filteredContext->hasSemiJoin = joinRestrictionContext->hasSemiJoin;
-	filteredContext->hasOnlyInnerJoin = joinRestrictionContext->hasOnlyInnerJoin;
+	CopyJoinRestrictionContextHasJoinFields(filteredContext, joinRestrictionContext);
 
 	return filteredContext;
 }
@@ -2067,9 +2065,9 @@ ContextCoversJoinRestriction(JoinRestrictionContext *joinRestrictionContext,
 
 		List *joinRestrictInfoListInTest =
 			joinRestrictionInTest->joinRestrictInfoList;
-		bool joinIsOnTrue = list_length(joinRestrictInfoListInTest) == 0;
+		bool hasJoinRestriction = list_length(joinRestrictInfoListInTest) == 0;
 		bool hasOnlyInnerJoin = joinRestrictionContext->hasOnlyInnerJoin;
-		if (!hasOnlyInnerJoin && joinIsOnTrue)
+		if (!hasOnlyInnerJoin && hasJoinRestriction)
 		{
 			/*
 			 * If join doesn't have a restriction (e.g., ON (true)) and planner
@@ -2095,4 +2093,17 @@ ContextCoversJoinRestriction(JoinRestrictionContext *joinRestrictionContext,
 	}
 
 	return false;
+}
+
+
+/*
+ * CopyJoinRestrictionContextHasJoinFields copies hasJoin boolean fields from
+ * source to destination.
+ */
+static void
+CopyJoinRestrictionContextHasJoinFields(JoinRestrictionContext *destination,
+										JoinRestrictionContext *source)
+{
+	destination->hasOnlyInnerJoin = source->hasOnlyInnerJoin;
+	destination->hasSemiJoin = source->hasSemiJoin;
 }
