@@ -13,7 +13,7 @@
 #define RELATION_RESTRICTION_EQUIVALENCE_H
 
 #include "distributed/distributed_planner.h"
-
+#include "distributed/metadata_cache.h"
 
 extern bool AllDistributionKeysInQueryAreEqual(Query *originalQuery,
 											   PlannerRestrictionContext *
@@ -29,7 +29,8 @@ bool RestrictionEquivalenceForPartitionKeysViaEquivalences(PlannerRestrictionCon
 														   allAttributeEquivalenceList);
 extern List * GenerateAllAttributeEquivalences(PlannerRestrictionContext *
 											   plannerRestrictionContext);
-extern uint32 ReferenceRelationCount(RelationRestrictionContext *restrictionContext);
+extern uint32 UniqueRelationCount(RelationRestrictionContext *restrictionContext,
+								  CitusTableType tableType);
 
 extern List * DistributedRelationIdList(Query *query);
 extern PlannerRestrictionContext * FilterPlannerRestrictionForQuery(

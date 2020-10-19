@@ -546,6 +546,19 @@ SupportedDependencyByCitus(const ObjectAddress *address)
 	 */
 	switch (getObjectClass(address))
 	{
+#if PG_VERSION_NUM >= 120000
+		case OCLASS_AM:
+		{
+			/*
+			 * Only support access methods if they came from extensions
+			 * During the dependency resolution it will cascade into the extension and
+			 * distributed that one instead of the Access Method. Now access methods can
+			 * be configured on tables on the workers.
+			 */
+			return IsObjectAddressOwnedByExtension(address, NULL);
+		}
+#endif
+
 		case OCLASS_COLLATION:
 		case OCLASS_SCHEMA:
 		{

@@ -10,16 +10,6 @@ SET citus.next_shard_id TO 60000;
 SET citus.next_placement_id TO 60000;
 create schema test_pg12;
 set search_path to test_pg12;
-CREATE FUNCTION blackhole_am_handler(internal)
-RETURNS table_am_handler
-AS 'citus'
-LANGUAGE C;
-CREATE ACCESS METHOD blackhole_am TYPE TABLE HANDLER blackhole_am_handler;
-create table test_am(id int, val int) using blackhole_am;
-insert into test_am values (1, 1);
--- Custom table access methods should be rejected
-select create_distributed_table('test_am','id');
-ERROR:  cannot distribute relations using non-heap access methods
 -- Test generated columns
 -- val1 after val2 to test https://github.com/citusdata/citus/issues/3538
 create table gen1 (
@@ -302,8 +292,8 @@ HINT:  To remove the local data, run: SELECT truncate_local_data_after_distribut
 
 -- should still fail because of fkey
 INSERT INTO collection_users VALUES (1, 1000, 1);
-ERROR:  insert or update on table "collection_users_60028" violates foreign key constraint "collection_users_fkey_60028"
-DETAIL:  Key (key, collection_id)=(1, 1000) is not present in table "collections_list_60016".
+ERROR:  insert or update on table "collection_users_xxxxxxx" violates foreign key constraint "collection_users_fkey_xxxxxxx"
+DETAIL:  Key (key, collection_id)=(1, 1000) is not present in table "collections_list_xxxxxxx".
 CONTEXT:  while executing command on localhost:xxxxx
 -- whereas new record with partition should go through
 INSERT INTO collections_list VALUES (2, 1, '1.2');
@@ -423,6 +413,6 @@ where val = 'asdf';
 
 \set VERBOSITY terse
 drop schema test_pg12 cascade;
-NOTICE:  drop cascades to 13 other objects
+NOTICE:  drop cascades to 10 other objects
 \set VERBOSITY default
 SET citus.shard_replication_factor to 2;

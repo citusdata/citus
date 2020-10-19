@@ -1,8 +1,43 @@
 -- ===================================================================
 -- test recursive planning functionality
 -- ===================================================================
-
 SET client_min_messages TO DEBUG1;
+
+-- the subquery is safe to pushdown, should not
+-- recursively plan
+SELECT
+	user_id, value_1
+FROM
+	(SELECT user_id, value_1 FROM users_table) as foo
+ORDER BY 1 DESC, 2 DESC LIMIT 3;
+
+-- the subquery is safe to pushdown, should not
+-- recursively plan
+SELECT
+	sum(sel_val_1), sum(sel_val_2)
+FROM
+	(SELECT max(value_1) as  sel_val_1, min(value_2) as sel_val_2 FROM users_table GROUP BY user_id) as foo;
+
+-- the subquery is safe to pushdown, should not
+-- recursively plan
+SELECT
+	min(user_id), max(value_1)
+FROM
+	(SELECT user_id, value_1 FROM users_table) as foo;
+
+-- the subquery is safe to pushdown, should not
+-- recursively plan
+SELECT
+	min(user_id)
+FROM
+	(SELECT user_id, value_1 FROM users_table GROUP BY user_id, value_1) as bar;
+
+-- the subquery is safe to pushdown, should not
+-- recursively plan
+SELECT
+	min(user_id), sum(max_value_1)
+FROM
+	(SELECT user_id, max(value_1) as max_value_1 FROM users_table GROUP BY user_id) as bar;
 
 -- subqueries in FROM clause with LIMIT should be recursively planned
 SELECT

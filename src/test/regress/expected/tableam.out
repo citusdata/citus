@@ -1,0 +1,324 @@
+SHOW server_version \gset
+SELECT substring(:'server_version', '\d+')::int > 11 AS server_version_above_eleven
+\gset
+\if :server_version_above_eleven
+\else
+\q
+\endif
+SET citus.shard_replication_factor to 1;
+SET citus.next_shard_id TO 60000;
+SET citus.next_placement_id TO 60000;
+SET citus.shard_count TO 4;
+create schema test_tableam;
+set search_path to test_tableam;
+SELECT public.run_command_on_coordinator_and_workers($Q$
+	CREATE FUNCTION fake_am_handler(internal)
+	RETURNS table_am_handler
+	AS 'citus'
+	LANGUAGE C;
+	CREATE ACCESS METHOD fake_am TYPE TABLE HANDLER fake_am_handler;
+$Q$);
+ run_command_on_coordinator_and_workers
+---------------------------------------------------------------------
+
+(1 row)
+
+--
+-- Hash distributed table using a non-default table access method
+--
+create table test_hash_dist(id int, val int) using fake_am;
+insert into test_hash_dist values (1, 1);
+WARNING:  fake_tuple_insert
+select create_distributed_table('test_hash_dist','id');
+WARNING:  fake_scan_getnextslot
+CONTEXT:  SQL statement "SELECT EXISTS (SELECT 1 FROM test_tableam.test_hash_dist)"
+WARNING:  fake_scan_getnextslot
+NOTICE:  Copying data from local table...
+WARNING:  fake_scan_getnextslot
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$test_tableam.test_hash_dist$$)
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+select * from test_hash_dist;
+WARNING:  fake_scan_getnextslot
+DETAIL:  from localhost:xxxxx
+WARNING:  fake_scan_getnextslot
+DETAIL:  from localhost:xxxxx
+WARNING:  fake_scan_getnextslot
+DETAIL:  from localhost:xxxxx
+WARNING:  fake_scan_getnextslot
+DETAIL:  from localhost:xxxxx
+WARNING:  fake_scan_getnextslot
+DETAIL:  from localhost:xxxxx
+ id | val
+---------------------------------------------------------------------
+  1 |   1
+(1 row)
+
+insert into test_hash_dist values (1, 1);
+WARNING:  fake_tuple_insert
+DETAIL:  from localhost:xxxxx
+-- we should error on following, since this AM is append only
+SET client_min_messages TO ERROR;
+delete from test_hash_dist where id=1;
+ERROR:  fake_tuple_delete not implemented
+CONTEXT:  while executing command on localhost:xxxxx
+update test_hash_dist set val=2 where id=2;
+RESET client_min_messages;
+-- ddl events should include "USING fake_am"
+SELECT * FROM master_get_table_ddl_events('test_hash_dist');
+                           master_get_table_ddl_events
+---------------------------------------------------------------------
+ CREATE TABLE test_tableam.test_hash_dist (id integer, val integer) USING fake_am
+ ALTER TABLE test_tableam.test_hash_dist OWNER TO postgres
+(2 rows)
+
+--
+-- Reference table using a non-default table access method
+--
+create table test_ref(a int) using fake_am;
+insert into test_ref values (1);
+WARNING:  fake_tuple_insert
+select create_reference_table('test_ref');
+WARNING:  fake_scan_getnextslot
+CONTEXT:  SQL statement "SELECT EXISTS (SELECT 1 FROM test_tableam.test_ref)"
+WARNING:  fake_scan_getnextslot
+NOTICE:  Copying data from local table...
+WARNING:  fake_scan_getnextslot
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$test_tableam.test_ref$$)
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+select * from test_ref;
+WARNING:  fake_scan_getnextslot
+DETAIL:  from localhost:xxxxx
+WARNING:  fake_scan_getnextslot
+DETAIL:  from localhost:xxxxx
+ a
+---------------------------------------------------------------------
+ 1
+(1 row)
+
+insert into test_ref values (1);
+WARNING:  fake_tuple_insert
+DETAIL:  from localhost:xxxxx
+WARNING:  fake_tuple_insert
+DETAIL:  from localhost:xxxxx
+-- we should error on following, since this AM is append only
+SET client_min_messages TO ERROR;
+delete from test_ref;
+ERROR:  fake_tuple_delete not implemented
+CONTEXT:  while executing command on localhost:xxxxx
+update test_ref set a=2;
+ERROR:  fake_tuple_update not implemented
+CONTEXT:  while executing command on localhost:xxxxx
+RESET client_min_messages;
+-- ddl events should include "USING fake_am"
+SELECT * FROM master_get_table_ddl_events('test_ref');
+                 master_get_table_ddl_events
+---------------------------------------------------------------------
+ CREATE TABLE test_tableam.test_ref (a integer) USING fake_am
+ ALTER TABLE test_tableam.test_ref OWNER TO postgres
+(2 rows)
+
+-- replicate to coordinator
+SET client_min_messages TO WARNING;
+SELECT 1 FROM master_add_node('localhost', :master_port, groupid => 0);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+RESET client_min_messages;
+delete from test_ref;
+WARNING:  fake_scan_getnextslot
+ERROR:  fake_tuple_delete not implemented
+SELECT master_remove_node('localhost', :master_port);
+ master_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+--
+-- Range partitioned table using a non-default table access method
+--
+CREATE TABLE test_range_dist(id int, val int) using fake_am;
+SELECT create_distributed_table('test_range_dist', 'id', 'range');
+WARNING:  fake_scan_getnextslot
+CONTEXT:  SQL statement "SELECT EXISTS (SELECT 1 FROM test_tableam.test_range_dist)"
+WARNING:  fake_scan_getnextslot
+CONTEXT:  SQL statement "SELECT EXISTS (SELECT 1 FROM test_tableam.test_range_dist)"
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CALL public.create_range_partitioned_shards('test_range_dist', '{"0","25"}','{"24","49"}');
+select * from test_range_dist;
+WARNING:  fake_scan_getnextslot
+DETAIL:  from localhost:xxxxx
+WARNING:  fake_scan_getnextslot
+DETAIL:  from localhost:xxxxx
+ id | val
+---------------------------------------------------------------------
+(0 rows)
+
+insert into test_range_dist values (1, 1);
+WARNING:  fake_tuple_insert
+DETAIL:  from localhost:xxxxx
+COPY test_range_dist FROM PROGRAM 'echo 0, 0 && echo 1, -1 && echo 2, 4 && echo 3, 9' WITH CSV;
+COPY test_range_dist FROM PROGRAM 'echo 25, 16 && echo 26, 1 && echo 27, 4 && echo 7, 9' WITH CSV;
+-- ddl events should include "USING fake_am"
+SELECT * FROM master_get_table_ddl_events('test_range_dist');
+                            master_get_table_ddl_events
+---------------------------------------------------------------------
+ CREATE TABLE test_tableam.test_range_dist (id integer, val integer) USING fake_am
+ ALTER TABLE test_tableam.test_range_dist OWNER TO postgres
+(2 rows)
+
+--
+-- Test master_copy_shard_placement with a fake_am table
+--
+select a.shardid, a.nodeport
+FROM pg_dist_shard b, pg_dist_shard_placement a
+WHERE a.shardid=b.shardid AND logicalrelid = 'test_range_dist'::regclass::oid
+ORDER BY a.shardid, nodeport;
+ shardid | nodeport
+---------------------------------------------------------------------
+   60005 |    57637
+   60006 |    57638
+(2 rows)
+
+SELECT master_copy_shard_placement(
+           get_shard_id_for_distribution_column('test_range_dist', '1'),
+           'localhost', :worker_1_port,
+           'localhost', :worker_2_port,
+           do_repair := false,
+		   transfer_mode := 'block_writes');
+ master_copy_shard_placement
+---------------------------------------------------------------------
+
+(1 row)
+
+select a.shardid, a.nodeport
+FROM pg_dist_shard b, pg_dist_shard_placement a
+WHERE a.shardid=b.shardid AND logicalrelid = 'test_range_dist'::regclass::oid
+ORDER BY a.shardid, nodeport;
+ shardid | nodeport
+---------------------------------------------------------------------
+   60005 |    57637
+   60005 |    57638
+   60006 |    57638
+(3 rows)
+
+-- verify that data was copied correctly
+\c - - - :worker_1_port
+select * from test_tableam.test_range_dist_60005 ORDER BY id;
+WARNING:  fake_scan_getnextslot
+WARNING:  fake_scan_getnextslot
+WARNING:  fake_scan_getnextslot
+WARNING:  fake_scan_getnextslot
+WARNING:  fake_scan_getnextslot
+WARNING:  fake_scan_getnextslot
+WARNING:  fake_scan_getnextslot
+ id | val
+---------------------------------------------------------------------
+  0 |   0
+  1 |   1
+  1 |  -1
+  2 |   4
+  3 |   9
+  7 |   9
+(6 rows)
+
+\c - - - :worker_2_port
+select * from test_tableam.test_range_dist_60005 ORDER BY id;
+WARNING:  fake_scan_getnextslot
+WARNING:  fake_scan_getnextslot
+WARNING:  fake_scan_getnextslot
+WARNING:  fake_scan_getnextslot
+WARNING:  fake_scan_getnextslot
+WARNING:  fake_scan_getnextslot
+WARNING:  fake_scan_getnextslot
+ id | val
+---------------------------------------------------------------------
+  0 |   0
+  1 |   1
+  1 |  -1
+  2 |   4
+  3 |   9
+  7 |   9
+(6 rows)
+
+\c - - - :master_port
+--
+-- Test that partitioned tables work correctly with a fake_am table
+--
+-- parent using default am, one of children using fake_am
+CREATE TABLE test_partitioned(id int, p int, val int)
+PARTITION BY RANGE (p);
+CREATE TABLE test_partitioned_p1 PARTITION OF test_partitioned
+	FOR VALUES FROM (1) TO (10);
+CREATE TABLE test_partitioned_p2 PARTITION OF test_partitioned
+	FOR VALUES FROM (11) TO (20) USING fake_am;
+INSERT INTO test_partitioned VALUES (1, 5, -1), (2, 15, -2);
+WARNING:  fake_tuple_insert
+SELECT create_distributed_table('test_partitioned', 'id');
+NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$public.test_partitioned_p1$$)
+WARNING:  fake_scan_getnextslot
+CONTEXT:  SQL statement "SELECT EXISTS (SELECT 1 FROM public.test_partitioned_p2)"
+WARNING:  fake_scan_getnextslot
+NOTICE:  Copying data from local table...
+WARNING:  fake_scan_getnextslot
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$public.test_partitioned_p2$$)
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO test_partitioned VALUES (3, 6, -6), (4, 16, -4);
+WARNING:  fake_tuple_insert
+DETAIL:  from localhost:xxxxx
+WARNING:  fake_tuple_insert
+DETAIL:  from localhost:xxxxx
+SELECT count(*) FROM test_partitioned;
+WARNING:  fake_scan_getnextslot
+DETAIL:  from localhost:xxxxx
+WARNING:  fake_scan_getnextslot
+DETAIL:  from localhost:xxxxx
+WARNING:  fake_scan_getnextslot
+DETAIL:  from localhost:xxxxx
+WARNING:  fake_scan_getnextslot
+DETAIL:  from localhost:xxxxx
+WARNING:  fake_scan_getnextslot
+DETAIL:  from localhost:xxxxx
+WARNING:  fake_scan_getnextslot
+DETAIL:  from localhost:xxxxx
+ count
+---------------------------------------------------------------------
+     4
+(1 row)
+
+DROP TABLE test_partitioned;
+-- Specifying access method in parent is not supported.
+-- If the below statement ever succeeds, add more tests for
+-- the case where children inherit access method from parent.
+CREATE TABLE test_partitioned(id int, p int, val int)
+PARTITION BY RANGE (p) USING fake_am;
+ERROR:  specifying a table access method is not supported on a partitioned table
+\set VERBOSITY terse
+drop schema test_tableam cascade;
+NOTICE:  drop cascades to 6 other objects

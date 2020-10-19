@@ -14,6 +14,9 @@ s/shard [0-9]+/shard xxxxx/g
 s/assigned task [0-9]+ to node/assigned task to node/
 s/node group [12] (but|does)/node group \1/
 
+# discard "USING heap" in "CREATE TABLE ... USING heap"
+s/CREATE(.*)TABLE(.*)USING heap/CREATE\1TABLE\2/g
+
 # Differing names can have differing table column widths
 s/^-[+-]{2,}$/---------------------------------------------------------------------/g
 
@@ -100,6 +103,7 @@ s/_id_ref_id_fkey/_id_fkey/g
 s/_ref_id_id_fkey_/_ref_id_fkey_/g
 s/fk_test_2_col1_col2_fkey/fk_test_2_col1_fkey/g
 s/_id_other_column_ref_fkey/_id_fkey/g
+s/"(collections_list_|collection_users_|collection_users_fkey_)[0-9]+"/"\1xxxxxxx"/g
 
 # pg13 changes
 s/of relation ".*" violates not-null constraint/violates not-null constraint/g
