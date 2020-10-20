@@ -77,6 +77,10 @@ LEFT JOIN reference_table b ON (true)
 RIGHT JOIN reference_table c ON (true);
 
 SELECT count(*) FROM distributed_table a
+LEFT JOIN (SELECT * FROM reference_table OFFSET 0) b ON (true)
+RIGHT JOIN (SELECT * FROM reference_table OFFSET 0) c ON (true);
+
+SELECT count(*) FROM distributed_table a
 LEFT JOIN reference_table b ON (true)
 RIGHT JOIN reference_table c ON (c.id > 0);
 
