@@ -182,6 +182,11 @@ LEFT JOIN reference_table b ON (true)
 RIGHT JOIN reference_table c ON (c.id > 0);
 ERROR:  cannot pushdown the subquery
 DETAIL:  There exist a reference table in the outer part of the outer join
+SELECT count(*) FROM distributed_table a
+LEFT JOIN (SELECT * FROM reference_table OFFSET 0) b ON (true)
+RIGHT JOIN (SELECT * FROM reference_table OFFSET 0) c ON (c.id > 0);
+ERROR:  cannot pushdown the subquery
+DETAIL:  Complex subqueries and CTEs cannot be in the outer part of the outer join
 -- drop existing sqlancer tables before next tests
 DROP TABLE t0, t1, t2, t3, t4 CASCADE;
 CREATE TABLE IF NOT EXISTS t0(c0 TEXT CHECK (TRUE), c1 money ) WITH (autovacuum_vacuum_threshold=1180014707, autovacuum_freeze_table_age=13771154, autovacuum_vacuum_cost_delay=23, autovacuum_analyze_threshold=1935153914, autovacuum_freeze_min_age=721733768, autovacuum_enabled=0, autovacuum_vacuum_cost_limit=9983);
@@ -279,6 +284,21 @@ JOIN
 ON (true);
 ERROR:  cannot pushdown the subquery
 DETAIL:  There exist a reference table in the outer part of the outer join
+SELECT
+   count(*)
+FROM
+   (
+    SELECT a.* FROM distributed_table a JOIN distributed_table b USING (user_id)
+   ) AS bar
+JOIN
+   (
+      SELECT a.* FROM distributed_table a
+      LEFT JOIN (SELECT * FROM reference_table OFFSET 0) b ON (true)
+      RIGHT JOIN (SELECT * FROM reference_table OFFSET 0) c ON (true)
+   ) AS unsupported_join
+ON (true);
+ERROR:  cannot pushdown the subquery
+DETAIL:  Complex subqueries and CTEs cannot be in the outer part of the outer join
 -- unsupported outer JOIN in a sublevel INNER JOIN
 SELECT
  unsupported_join.*
@@ -301,6 +321,22 @@ LEFT JOIN
    (reference_table d JOIN reference_table e ON(true)) ON (true);
 ERROR:  cannot pushdown the subquery
 DETAIL:  There exist a reference table in the outer part of the outer join
+SELECT
+ unsupported_join.*
+FROM
+   (distributed_table a
+   LEFT JOIN (SELECT * FROM reference_table OFFSET 0) b ON (true)
+   RIGHT JOIN (SELECT * FROM reference_table OFFSET 0) c ON (true)) as unsupported_join
+LEFT JOIN
+   (
+    (SELECT * FROM reference_table OFFSET 0) d
+    JOIN
+    (SELECT * FROM reference_table OFFSET 0) e
+    ON(true)
+   )
+ON (true);
+ERROR:  cannot pushdown the subquery
+DETAIL:  Complex subqueries and CTEs cannot be in the outer part of the outer join
 -- unsupported outer JOIN in a sublevel RIGHT JOIN
 SELECT
  unsupported_join.*
@@ -312,6 +348,22 @@ RIGHT JOIN
    (reference_table d JOIN reference_table e ON(true)) ON (true);
 ERROR:  cannot pushdown the subquery
 DETAIL:  There exist a reference table in the outer part of the outer join
+SELECT
+ unsupported_join.*
+FROM
+   (distributed_table a
+   LEFT JOIN (SELECT * FROM reference_table OFFSET 0) b ON (true)
+   RIGHT JOIN (SELECT * FROM reference_table OFFSET 0) c ON (false)) as unsupported_join
+RIGHT JOIN
+   (
+    (SELECT * FROM reference_table OFFSET 0) d
+    JOIN
+    (SELECT * FROM reference_table OFFSET 0) e
+    ON(true)
+   )
+ON (true);
+ERROR:  cannot pushdown the subquery
+DETAIL:  Complex subqueries and CTEs cannot be in the outer part of the outer join
 EXPLAIN SELECT
   unsupported_join.*
 FROM

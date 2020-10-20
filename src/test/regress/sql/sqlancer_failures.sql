@@ -80,6 +80,10 @@ SELECT count(*) FROM distributed_table a
 LEFT JOIN reference_table b ON (true)
 RIGHT JOIN reference_table c ON (c.id > 0);
 
+SELECT count(*) FROM distributed_table a
+LEFT JOIN (SELECT * FROM reference_table OFFSET 0) b ON (true)
+RIGHT JOIN (SELECT * FROM reference_table OFFSET 0) c ON (c.id > 0);
+
 -- drop existing sqlancer tables before next tests
 DROP TABLE t0, t1, t2, t3, t4 CASCADE;
 
@@ -150,6 +154,21 @@ JOIN
    ) AS unsupported_join
 ON (true);
 
+SELECT
+   count(*)
+FROM
+   (
+    SELECT a.* FROM distributed_table a JOIN distributed_table b USING (user_id)
+   ) AS bar
+JOIN
+   (
+      SELECT a.* FROM distributed_table a
+      LEFT JOIN (SELECT * FROM reference_table OFFSET 0) b ON (true)
+      RIGHT JOIN (SELECT * FROM reference_table OFFSET 0) c ON (true)
+   ) AS unsupported_join
+ON (true);
+
+
 -- unsupported outer JOIN in a sublevel INNER JOIN
 SELECT
  unsupported_join.*
@@ -170,6 +189,21 @@ FROM
 LEFT JOIN
    (reference_table d JOIN reference_table e ON(true)) ON (true);
 
+SELECT
+ unsupported_join.*
+FROM
+   (distributed_table a
+   LEFT JOIN (SELECT * FROM reference_table OFFSET 0) b ON (true)
+   RIGHT JOIN (SELECT * FROM reference_table OFFSET 0) c ON (true)) as unsupported_join
+LEFT JOIN
+   (
+    (SELECT * FROM reference_table OFFSET 0) d
+    JOIN
+    (SELECT * FROM reference_table OFFSET 0) e
+    ON(true)
+   )
+ON (true);
+
 -- unsupported outer JOIN in a sublevel RIGHT JOIN
 SELECT
  unsupported_join.*
@@ -179,6 +213,21 @@ FROM
    RIGHT JOIN reference_table c ON (false)) as unsupported_join
 RIGHT JOIN
    (reference_table d JOIN reference_table e ON(true)) ON (true);
+
+SELECT
+ unsupported_join.*
+FROM
+   (distributed_table a
+   LEFT JOIN (SELECT * FROM reference_table OFFSET 0) b ON (true)
+   RIGHT JOIN (SELECT * FROM reference_table OFFSET 0) c ON (false)) as unsupported_join
+RIGHT JOIN
+   (
+    (SELECT * FROM reference_table OFFSET 0) d
+    JOIN
+    (SELECT * FROM reference_table OFFSET 0) e
+    ON(true)
+   )
+ON (true);
 
 EXPLAIN SELECT
   unsupported_join.*
