@@ -1,3 +1,9 @@
+### citus v9.4.2 (October 21, 2020) ###
+
+* Fixes a bug that could lead to multiple maintenance daemons
+
+* Fixes an issue preventing views in reference table modifications
+
 ### citus v9.4.1 (September 30, 2020) ###
 
 * Fixes EXPLAIN ANALYZE output truncation
