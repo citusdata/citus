@@ -93,6 +93,5 @@ extern List * ListTake(List *pointerList, int size);
 extern void * safe_list_nth(const List *list, int index);
 extern List * GeneratePositiveIntSequenceList(int upTo);
 extern List * GenerateListFromElement(void *listElement, int listLength);
-extern bool LeftListIsSubset(const List *lhs, const List *rhs);
 
 #endif /* CITUS_LISTUTILS_H */

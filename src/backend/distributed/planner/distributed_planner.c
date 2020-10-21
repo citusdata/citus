@@ -615,8 +615,6 @@ CreateDistributedPlannedStmt(DistributedPlanningContext *planContext)
 {
 	uint64 planId = NextPlanId++;
 	bool hasUnresolvedParams = false;
-	JoinRestrictionContext *joinRestrictionContext =
-		planContext->plannerRestrictionContext->joinRestrictionContext;
 
 	PlannedStmt *resultPlan = NULL;
 
@@ -645,9 +643,6 @@ CreateDistributedPlannedStmt(DistributedPlanningContext *planContext)
 	{
 		hasUnresolvedParams = true;
 	}
-
-	planContext->plannerRestrictionContext->joinRestrictionContext =
-		RemoveDuplicateJoinRestrictions(joinRestrictionContext);
 
 	DistributedPlan *distributedPlan =
 		CreateDistributedPlan(planId, planContext->originalQuery, planContext->query,
@@ -1744,8 +1739,6 @@ multi_join_restriction_hook(PlannerInfo *root,
 	 */
 	joinRestrictionContext->hasSemiJoin = joinRestrictionContext->hasSemiJoin ||
 										  extra->sjinfo->jointype == JOIN_SEMI;
-	joinRestrictionContext->hasOnlyInnerJoin = joinRestrictionContext->hasOnlyInnerJoin &&
-											   extra->sjinfo->jointype == JOIN_INNER;
 
 	MemoryContextSwitchTo(oldMemoryContext);
 }
@@ -2135,7 +2128,6 @@ CreateAndPushPlannerRestrictionContext(void)
 
 	/* we'll apply logical AND as we add tables */
 	plannerRestrictionContext->relationRestrictionContext->allReferenceTables = true;
-	plannerRestrictionContext->joinRestrictionContext->hasOnlyInnerJoin = true;
 
 	plannerRestrictionContextList = lcons(plannerRestrictionContext,
 										  plannerRestrictionContextList);
