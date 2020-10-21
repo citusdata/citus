@@ -110,8 +110,6 @@ static void AddRteRelationToAttributeEquivalenceClass(AttributeEquivalenceClass 
 static Var * GetVarFromAssignedParam(List *outerPlanParamsList, Param *plannerParam,
 									 PlannerInfo **rootContainingVar);
 static Var * SearchPlannerParamList(List *plannerParamList, Param *plannerParam);
-static List * GenerateAttributeEquivalencesForJoinRestrictions(JoinRestrictionContext
-															   *joinRestrictionContext);
 static bool AttributeClassContainsAttributeClassMember(AttributeEquivalenceClassMember *
 													   inputMember,
 													   AttributeEquivalenceClass *
@@ -340,12 +338,8 @@ SafeToPushdownUnionSubquery(PlannerRestrictionContext *plannerRestrictionContext
 	 */
 	List *relationRestrictionAttributeEquivalenceList =
 		GenerateAttributeEquivalencesForRelationRestrictions(restrictionContext);
-	List *joinRestrictionAttributeEquivalenceList =
-		GenerateAttributeEquivalencesForJoinRestrictions(joinRestrictionContext);
 
-	List *allAttributeEquivalenceList =
-		list_concat(relationRestrictionAttributeEquivalenceList,
-					joinRestrictionAttributeEquivalenceList);
+	List *allAttributeEquivalenceList =relationRestrictionAttributeEquivalenceList;
 
 	allAttributeEquivalenceList = lappend(allAttributeEquivalenceList,
 										  attributeEquivalence);
@@ -576,14 +570,9 @@ GenerateAllAttributeEquivalences(PlannerRestrictionContext *plannerRestrictionCo
 
 	List *relationRestrictionAttributeEquivalenceList =
 		GenerateAttributeEquivalencesForRelationRestrictions(relationRestrictionContext);
-	List *joinRestrictionAttributeEquivalenceList =
-		GenerateAttributeEquivalencesForJoinRestrictions(joinRestrictionContext);
 
-	List *allAttributeEquivalenceList = list_concat(
-		relationRestrictionAttributeEquivalenceList,
-		joinRestrictionAttributeEquivalenceList);
 
-	return allAttributeEquivalenceList;
+	return relationRestrictionAttributeEquivalenceList;
 }
 
 
@@ -1069,91 +1058,6 @@ ListConcatUniqueAttributeClassMemberLists(AttributeEquivalenceClass **firstClass
 	}
 }
 
-
-/*
- * GenerateAttributeEquivalencesForJoinRestrictions gets a join restriction
- * context and returns a list of AttrributeEquivalenceClass.
- *
- * The algorithm followed can be summarized as below:
- *
- * - Per join restriction
- *     - Per RestrictInfo of the join restriction
- *     - Check whether the join restriction is in the form of (Var1 = Var2)
- *         - Create an AttributeEquivalenceClass
- *         - Add both Var1 and Var2 to the AttributeEquivalenceClass
- */
-static List *
-GenerateAttributeEquivalencesForJoinRestrictions(JoinRestrictionContext *
-												 joinRestrictionContext)
-{
-	List *attributeEquivalenceList = NIL;
-	ListCell *joinRestrictionCell = NULL;
-
-	if (joinRestrictionContext == NULL)
-	{
-		return attributeEquivalenceList;
-	}
-
-	foreach(joinRestrictionCell, joinRestrictionContext->joinRestrictionList)
-	{
-		JoinRestriction *joinRestriction =
-			(JoinRestriction *) lfirst(joinRestrictionCell);
-		ListCell *restrictionInfoList = NULL;
-
-		foreach(restrictionInfoList, joinRestriction->joinRestrictInfoList)
-		{
-			RestrictInfo *rinfo = (RestrictInfo *) lfirst(restrictionInfoList);
-			Expr *restrictionClause = rinfo->clause;
-
-			if (!IsA(restrictionClause, OpExpr))
-			{
-				continue;
-			}
-
-			OpExpr *restrictionOpExpr = (OpExpr *) restrictionClause;
-			if (list_length(restrictionOpExpr->args) != 2)
-			{
-				continue;
-			}
-			if (!OperatorImplementsEquality(restrictionOpExpr->opno))
-			{
-				continue;
-			}
-
-			Node *leftNode = linitial(restrictionOpExpr->args);
-			Node *rightNode = lsecond(restrictionOpExpr->args);
-
-			/* we also don't want implicit coercions */
-			Expr *strippedLeftExpr = (Expr *) strip_implicit_coercions((Node *) leftNode);
-			Expr *strippedRightExpr = (Expr *) strip_implicit_coercions(
-				(Node *) rightNode);
-
-			if (!(IsA(strippedLeftExpr, Var) && IsA(strippedRightExpr, Var)))
-			{
-				continue;
-			}
-
-			Var *leftVar = (Var *) strippedLeftExpr;
-			Var *rightVar = (Var *) strippedRightExpr;
-
-			AttributeEquivalenceClass *attributeEquivalence = palloc0(
-				sizeof(AttributeEquivalenceClass));
-			attributeEquivalence->equivalenceId = attributeEquivalenceId++;
-
-			AddToAttributeEquivalenceClass(&attributeEquivalence,
-										   joinRestriction->plannerInfo, leftVar);
-
-			AddToAttributeEquivalenceClass(&attributeEquivalence,
-										   joinRestriction->plannerInfo, rightVar);
-
-			attributeEquivalenceList =
-				AddAttributeClassToAttributeClassList(attributeEquivalenceList,
-													  attributeEquivalence);
-		}
-	}
-
-	return attributeEquivalenceList;
-}
 
 
 /*
