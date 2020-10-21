@@ -141,12 +141,7 @@ static RelationRestrictionContext * FilterRelationRestrictionContext(
 	RelationRestrictionContext *relationRestrictionContext,
 	Relids
 	queryRteIdentities);
-static JoinRestrictionContext * FilterJoinRestrictionContext(
-	JoinRestrictionContext *joinRestrictionContext, Relids
-	queryRteIdentities);
-static bool RangeTableArrayContainsAnyRTEIdentities(RangeTblEntry **rangeTableEntries, int
-													rangeTableArrayLength, Relids
-													queryRteIdentities);
+
 static int RangeTableOffsetCompat(PlannerInfo *root, AppendRelInfo *appendRelInfo);
 static Relids QueryRteIdentities(Query *queryTree);
 
@@ -239,8 +234,6 @@ SafeToPushdownUnionSubquery(PlannerRestrictionContext *plannerRestrictionContext
 {
 	RelationRestrictionContext *restrictionContext =
 		plannerRestrictionContext->relationRestrictionContext;
-	JoinRestrictionContext *joinRestrictionContext =
-		plannerRestrictionContext->joinRestrictionContext;
 	Index unionQueryPartitionKeyIndex = 0;
 	AttributeEquivalenceClass *attributeEquivalence =
 		palloc0(sizeof(AttributeEquivalenceClass));
@@ -561,8 +554,6 @@ GenerateAllAttributeEquivalences(PlannerRestrictionContext *plannerRestrictionCo
 {
 	RelationRestrictionContext *relationRestrictionContext =
 		plannerRestrictionContext->relationRestrictionContext;
-	JoinRestrictionContext *joinRestrictionContext =
-		plannerRestrictionContext->joinRestrictionContext;
 
 
 	/* reset the equivalence id counter per call to prevent overflows */
@@ -1700,14 +1691,9 @@ FilterPlannerRestrictionForQuery(PlannerRestrictionContext *plannerRestrictionCo
 
 	RelationRestrictionContext *relationRestrictionContext =
 		plannerRestrictionContext->relationRestrictionContext;
-	JoinRestrictionContext *joinRestrictionContext =
-		plannerRestrictionContext->joinRestrictionContext;
 
 	RelationRestrictionContext *filteredRelationRestrictionContext =
 		FilterRelationRestrictionContext(relationRestrictionContext, queryRteIdentities);
-
-	JoinRestrictionContext *filtererdJoinRestrictionContext =
-		FilterJoinRestrictionContext(joinRestrictionContext, queryRteIdentities);
 
 	/* allocate the filtered planner restriction context and set all the fields */
 	PlannerRestrictionContext *filteredPlannerRestrictionContext = palloc0(
@@ -1731,8 +1717,6 @@ FilterPlannerRestrictionForQuery(PlannerRestrictionContext *plannerRestrictionCo
 	/* finally set the relation and join restriction contexts */
 	filteredPlannerRestrictionContext->relationRestrictionContext =
 		filteredRelationRestrictionContext;
-	filteredPlannerRestrictionContext->joinRestrictionContext =
-		filtererdJoinRestrictionContext;
 
 	return filteredPlannerRestrictionContext;
 }
@@ -1771,105 +1755,6 @@ FilterRelationRestrictionContext(RelationRestrictionContext *relationRestriction
 	return filteredRestrictionContext;
 }
 
-
-/*
- * FilterJoinRestrictionContext gets a join restriction context and
- * set of rte identities. It returns the join restrictions that that appear
- * in the queryRteIdentities and returns a newly allocated
- * JoinRestrictionContext.
- *
- * Note that the join restriction is added to the return context as soon as
- * any range table entry that appear in the join belongs to queryRteIdentities.
- */
-static JoinRestrictionContext *
-FilterJoinRestrictionContext(JoinRestrictionContext *joinRestrictionContext, Relids
-							 queryRteIdentities)
-{
-	JoinRestrictionContext *filtererdJoinRestrictionContext =
-		palloc0(sizeof(JoinRestrictionContext));
-
-	ListCell *joinRestrictionCell = NULL;
-
-	foreach(joinRestrictionCell, joinRestrictionContext->joinRestrictionList)
-	{
-		JoinRestriction *joinRestriction =
-			(JoinRestriction *) lfirst(joinRestrictionCell);
-		RangeTblEntry **rangeTableEntries =
-			joinRestriction->plannerInfo->simple_rte_array;
-		int rangeTableArrayLength = joinRestriction->plannerInfo->simple_rel_array_size;
-
-		if (RangeTableArrayContainsAnyRTEIdentities(rangeTableEntries,
-													rangeTableArrayLength,
-													queryRteIdentities))
-		{
-			filtererdJoinRestrictionContext->joinRestrictionList = lappend(
-				filtererdJoinRestrictionContext->joinRestrictionList,
-				joinRestriction);
-		}
-	}
-
-	/*
-	 * No need to re calculate has join fields as we are still operating on
-	 * the same query and as these values are calculated per-query basis.
-	 */
-	filtererdJoinRestrictionContext->hasSemiJoin = joinRestrictionContext->hasSemiJoin;
-
-	return filtererdJoinRestrictionContext;
-}
-
-
-/*
- * RangeTableArrayContainsAnyRTEIdentities returns true if any of the range table entries
- * int rangeTableEntries array is an range table relation specified in queryRteIdentities.
- */
-static bool
-RangeTableArrayContainsAnyRTEIdentities(RangeTblEntry **rangeTableEntries, int
-										rangeTableArrayLength, Relids queryRteIdentities)
-{
-	/* simple_rte_array starts from 1, see plannerInfo struct */
-	for (int rteIndex = 1; rteIndex < rangeTableArrayLength; ++rteIndex)
-	{
-		RangeTblEntry *rangeTableEntry = rangeTableEntries[rteIndex];
-		List *rangeTableRelationList = NULL;
-		ListCell *rteRelationCell = NULL;
-
-		/*
-		 * Get list of all RTE_RELATIONs in the given range table entry
-		 * (i.e.,rangeTableEntry could be a subquery where we're interested
-		 * in relations).
-		 */
-		if (rangeTableEntry->rtekind == RTE_SUBQUERY)
-		{
-			ExtractRangeTableRelationWalker((Node *) rangeTableEntry->subquery,
-											&rangeTableRelationList);
-		}
-		else if (rangeTableEntry->rtekind == RTE_RELATION)
-		{
-			ExtractRangeTableRelationWalker((Node *) rangeTableEntry,
-											&rangeTableRelationList);
-		}
-		else
-		{
-			/* we currently do not accept any other RTE types here */
-			continue;
-		}
-
-		foreach(rteRelationCell, rangeTableRelationList)
-		{
-			RangeTblEntry *rteRelation = (RangeTblEntry *) lfirst(rteRelationCell);
-
-			Assert(rteRelation->rtekind == RTE_RELATION);
-
-			int rteIdentity = GetRTEIdentity(rteRelation);
-			if (bms_is_member(rteIdentity, queryRteIdentities))
-			{
-				return true;
-			}
-		}
-	}
-
-	return false;
-}
 
 
 /*
