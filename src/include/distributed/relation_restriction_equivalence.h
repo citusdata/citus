@@ -36,9 +36,6 @@ extern List * DistributedRelationIdList(Query *query);
 extern PlannerRestrictionContext * FilterPlannerRestrictionForQuery(
 	PlannerRestrictionContext *plannerRestrictionContext,
 	Query *query);
-extern JoinRestrictionContext * RemoveDuplicateJoinRestrictions(JoinRestrictionContext *
-																joinRestrictionContext);
-
 extern bool EquivalenceListContainsRelationsEquality(List *attributeEquivalenceList,
 													 RelationRestrictionContext *
 													 restrictionContext);

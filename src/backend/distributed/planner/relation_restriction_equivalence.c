@@ -151,8 +151,6 @@ static bool RangeTableArrayContainsAnyRTEIdentities(RangeTblEntry **rangeTableEn
 													queryRteIdentities);
 static int RangeTableOffsetCompat(PlannerInfo *root, AppendRelInfo *appendRelInfo);
 static Relids QueryRteIdentities(Query *queryTree);
-static bool ContextCoversJoinRestriction(JoinRestrictionContext *joinRestrictionContext,
-										 JoinRestriction *joinRestrictionInTest);
 
 
 /*
@@ -1910,8 +1908,6 @@ FilterJoinRestrictionContext(JoinRestrictionContext *joinRestrictionContext, Rel
 	 * No need to re calculate has join fields as we are still operating on
 	 * the same query and as these values are calculated per-query basis.
 	 */
-	filtererdJoinRestrictionContext->hasOnlyInnerJoin =
-		joinRestrictionContext->hasOnlyInnerJoin;
 	filtererdJoinRestrictionContext->hasSemiJoin = joinRestrictionContext->hasSemiJoin;
 
 	return filtererdJoinRestrictionContext;
@@ -1999,106 +1995,4 @@ QueryRteIdentities(Query *queryTree)
 	}
 
 	return queryRteIdentities;
-}
-
-
-/*
- * RemoveDuplicateJoinRestrictions gets a join restriction context and returns a
- * newly allocated join restriction context where the duplicate join restrictions
- * removed.
- *
- * Note that we use PostgreSQL hooks to accumulate the join restrictions and PostgreSQL
- * gives us all the join paths it tries while deciding on the join order. Thus, for
- * queries that has many joins, this function is likely to remove lots of duplicate join
- * restrictions. This becomes relevant for Citus on query pushdown check peformance.
- */
-JoinRestrictionContext *
-RemoveDuplicateJoinRestrictions(JoinRestrictionContext *joinRestrictionContext)
-{
-	JoinRestrictionContext *filteredContext = palloc0(sizeof(JoinRestrictionContext));
-	ListCell *joinRestrictionCell = NULL;
-
-	filteredContext->joinRestrictionList = NIL;
-
-	foreach(joinRestrictionCell, joinRestrictionContext->joinRestrictionList)
-	{
-		JoinRestriction *joinRestriction = lfirst(joinRestrictionCell);
-
-		if (ContextCoversJoinRestriction(filteredContext, joinRestriction))
-		{
-			continue;
-		}
-
-		filteredContext->joinRestrictionList =
-			lappend(filteredContext->joinRestrictionList, joinRestriction);
-	}
-
-	/*
-	 * No need to re calculate has join fields as we are still operating on
-	 * the same query and as these values are calculated per-query basis.
-	 */
-	filteredContext->hasOnlyInnerJoin = joinRestrictionContext->hasOnlyInnerJoin;
-	filteredContext->hasSemiJoin = joinRestrictionContext->hasSemiJoin;
-
-	return filteredContext;
-}
-
-
-/*
- * ContextCoversJoinRestriction returns true if the given joinRestriction
- * has an equivalent of in the given joinRestrictionContext.
- */
-static bool
-ContextCoversJoinRestriction(JoinRestrictionContext *joinRestrictionContext,
-							 JoinRestriction *joinRestrictionInTest)
-{
-	JoinRestriction *joinRestrictionInContext = NULL;
-	List *joinRestrictionInContextList = joinRestrictionContext->joinRestrictionList;
-	foreach_ptr(joinRestrictionInContext, joinRestrictionInContextList)
-	{
-		/* obviously we shouldn't treat different join types as being the same */
-		if (joinRestrictionInContext->joinType != joinRestrictionInTest->joinType)
-		{
-			continue;
-		}
-
-		/*
-		 * If we're dealing with different queries, we shouldn't treat their
-		 * restrictions as being the same.
-		 */
-		if (joinRestrictionInContext->plannerInfo != joinRestrictionInTest->plannerInfo)
-		{
-			continue;
-		}
-
-		List *joinRestrictInfoListInTest =
-			joinRestrictionInTest->joinRestrictInfoList;
-		bool hasJoinRestriction = list_length(joinRestrictInfoListInTest) > 0;
-		bool hasOnlyInnerJoin = joinRestrictionContext->hasOnlyInnerJoin;
-		if (!hasOnlyInnerJoin && !hasJoinRestriction)
-		{
-			/*
-			 * If join doesn't have a restriction (e.g., ON (true)) and planner
-			 * is aware of at least one non-inner JOIN (e.g., outer/semi joins),
-			 * we should not eliminiate joinRestrictionInTest. It can still be
-			 * useful for detecting not supported outer-join checks even if it
-			 * doesn't help for colocation checks.
-			 */
-			continue;
-		}
-
-		/*
-		 * We check whether the restrictions in joinRestrictionInTest is a subset
-		 * of the restrictions in joinRestrictionInContext in the sense that all the
-		 * restrictions in the latter already exists in the former.
-		 */
-		List *joinRestrictInfoListInContext =
-			joinRestrictionInContext->joinRestrictInfoList;
-		if (LeftListIsSubset(joinRestrictInfoListInTest, joinRestrictInfoListInContext))
-		{
-			return true;
-		}
-	}
-
-	return false;
 }
