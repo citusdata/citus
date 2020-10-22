@@ -757,6 +757,9 @@ deparse_shard_reindex_statement(ReindexStmt *origStmt, Oid distrelid, int64 shar
 
 		/* extend relation and index name using shard identifier */
 		AppendShardIdToName(&relationName, shardid);
+
+		/* AppendShardIdToName might invalidate original pointer, assign it back */
+		reindexStmt->relation->relname = relationName;
 	}
 
 	appendStringInfoString(buffer, "REINDEX ");
