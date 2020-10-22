@@ -684,12 +684,13 @@ deparse_shard_index_statement(IndexStmt *origStmt, Oid distrelid, int64 shardid,
 							  StringInfo buffer)
 {
 	IndexStmt *indexStmt = copyObject(origStmt); /* copy to avoid modifications */
-	char *relationName = indexStmt->relation->relname;
-	char *indexName = indexStmt->idxname;
 
 	/* extend relation and index name using shard identifier */
-	AppendShardIdToName(&relationName, shardid);
-	AppendShardIdToName(&indexName, shardid);
+	AppendShardIdToName(&(indexStmt->relation->relname), shardid);
+	AppendShardIdToName(&(indexStmt->idxname), shardid);
+
+	char *relationName = indexStmt->relation->relname;
+	char *indexName = indexStmt->idxname;
 
 	/* use extended shard name and transformed stmt for deparsing */
 	List *deparseContext = deparse_context_for(relationName, distrelid);
@@ -749,10 +750,10 @@ deparse_shard_reindex_statement(ReindexStmt *origStmt, Oid distrelid, int64 shar
 	if (reindexStmt->kind == REINDEX_OBJECT_INDEX ||
 		reindexStmt->kind == REINDEX_OBJECT_TABLE)
 	{
-		relationName = reindexStmt->relation->relname;
-
 		/* extend relation and index name using shard identifier */
-		AppendShardIdToName(&relationName, shardid);
+		AppendShardIdToName(&(reindexStmt->relation->relname), shardid);
+
+		relationName = reindexStmt->relation->relname;
 	}
 
 	appendStringInfoString(buffer, "REINDEX ");
