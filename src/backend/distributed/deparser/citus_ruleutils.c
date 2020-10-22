@@ -691,6 +691,10 @@ deparse_shard_index_statement(IndexStmt *origStmt, Oid distrelid, int64 shardid,
 	AppendShardIdToName(&relationName, shardid);
 	AppendShardIdToName(&indexName, shardid);
 
+	/* AppendShardIdToName might invalidate original pointer, assign it back */
+	indexStmt->relation->relname = relationName;
+	indexStmt->idxname = indexName;
+
 	/* use extended shard name and transformed stmt for deparsing */
 	List *deparseContext = deparse_context_for(relationName, distrelid);
 	indexStmt = transformIndexStmt(distrelid, indexStmt, NULL);
