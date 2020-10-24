@@ -47,6 +47,8 @@
 
 
 /* Local functions forward declarations for helper functions */
+static bool CanGenerateDefaultIndexName(IndexStmt *createIndexStatement);
+static int GetNumberOfIndexParameters(IndexStmt *createIndexStatement);
 static bool IndexAlreadyExists(IndexStmt *createIndexStatement);
 static Oid CreateIndexStmtGetIndexId(IndexStmt *createIndexStatement);
 static Oid CreateIndexStmtGetSchemaId(IndexStmt *createIndexStatement);
@@ -172,7 +174,21 @@ PreprocessIndexStmt(Node *node, const char *createIndexCommand)
 		return NIL;
 	}
 
-	ErrorIfUnsupportedIndexStmt(createIndexStatement);
+	if (createIndexStatement->idxname == NULL)
+	{
+		if (!CanGenerateDefaultIndexName(createIndexStatement))
+		{
+			/*
+			 * Logic that CanGenerateDefaultIndexName follows is aligned with
+			 * postgres function DefineIndex and we return NIL here to let
+			 * standart_processUtility error out if we cannot generate a default
+			 * name for index.
+			 */
+			return NIL;
+		}
+
+		createIndexStatement->idxname = GenerateDefaultIndexName(createIndexStatement);
+	}
 
 	if (IndexAlreadyExists(createIndexStatement))
 	{
@@ -182,6 +198,8 @@ PreprocessIndexStmt(Node *node, const char *createIndexCommand)
 		 */
 		return NIL;
 	}
+
+	ErrorIfUnsupportedIndexStmt(createIndexStatement);
 
 	/*
 	 * Citus has the logic to truncate the long shard names to prevent
@@ -203,6 +221,40 @@ PreprocessIndexStmt(Node *node, const char *createIndexCommand)
 
 	DDLJob *ddlJob = GenerateCreateIndexDDLJob(createIndexStatement, createIndexCommand);
 	return list_make1(ddlJob);
+}
+
+
+/*
+ * CanGenerateDefaultIndexName returns true if we can assign a default name for
+ * the index to be defined by given CREATE INDEX command.
+ */
+static bool
+CanGenerateDefaultIndexName(IndexStmt *createIndexStatement)
+{
+	int numberOfAttributes = GetNumberOfIndexParameters(createIndexStatement);
+	if (numberOfAttributes == 0 || numberOfAttributes > INDEX_MAX_KEYS)
+	{
+		/*
+		 * Postgres function DefineIndex also wouldn't be able to generate a
+		 * default name for that index and would error out.
+		 */
+		return false;
+	}
+
+	return true;
+}
+
+
+/*
+ * GetNumberOfIndexParameters returns number of parameters to be used when
+ * creating the index to be defined by given CREATE INDEX command.
+ */
+static int
+GetNumberOfIndexParameters(IndexStmt *createIndexStatement)
+{
+	List *indexParams = createIndexStatement->indexParams;
+	List *indexIncludingParams = createIndexStatement->indexIncludingParams;
+	return list_length(indexParams) + list_length(indexIncludingParams);
 }
 
 
@@ -997,14 +1049,6 @@ RangeVarCallbackForReindexIndex(const RangeVar *relation, Oid relId, Oid oldRelI
 static void
 ErrorIfUnsupportedIndexStmt(IndexStmt *createIndexStatement)
 {
-	char *indexRelationName = createIndexStatement->idxname;
-	if (indexRelationName == NULL)
-	{
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("creating index without a name on a distributed table is "
-							   "currently unsupported")));
-	}
-
 	if (createIndexStatement->tableSpace != NULL)
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
