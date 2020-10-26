@@ -66,7 +66,6 @@ typedef struct RelationRestriction
 	RangeTblEntry *rte;
 	RelOptInfo *relOptInfo;
 	PlannerInfo *plannerInfo;
-	List *prunedShardIntervalList;
 
 	/* list of RootPlanParams for all outer nodes */
 	List *outerPlanParamsList;

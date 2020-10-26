@@ -1813,7 +1813,6 @@ multi_relation_restriction_hook(PlannerInfo *root, RelOptInfo *relOptInfo,
 	relationRestriction->relOptInfo = relOptInfo;
 	relationRestriction->distributedRelation = distributedTable;
 	relationRestriction->plannerInfo = root;
-	relationRestriction->prunedShardIntervalList = NIL;
 
 	/* see comments on GetVarFromAssignedParam() */
 	relationRestriction->outerPlanParamsList = OuterPlanParamsList(root);
