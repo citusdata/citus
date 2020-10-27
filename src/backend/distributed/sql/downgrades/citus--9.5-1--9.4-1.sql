@@ -92,3 +92,14 @@ COMMENT ON FUNCTION master_drop_sequences(text[])
 RESET search_path;
 
 DROP FUNCTION pg_catalog.undistribute_table(table_name regclass);
+
+DROP AGGREGATE pg_catalog.finalize_agg(oid, bytea, anyelement);
+DROP AGGREGATE pg_catalog.combine_agg(oid, bytea);
+DROP FUNCTION pg_catalog.combine_agg_ffunc(internal, oid, bytea, anyelement);
+DROP FUNCTION pg_catalog.combine_agg_sfunc(internal, oid, bytea);
+DROP FUNCTION pg_catalog.combine_agg_sfunc(internal, oid, bytea, anyelement);
+DROP AGGREGATE pg_catalog.partial_agg(oid, anyelement, int);
+DROP FUNCTION pg_catalog.partial_agg_ffunc(internal);
+DROP FUNCTION pg_catalog.partial_agg_sfunc(internal, oid, anyelement, int);
+
+DROP TABLE pg_catalog.pg_cimv;

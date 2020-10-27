@@ -23,6 +23,7 @@
 #include "catalog/objectaddress.h"
 #include "distributed/citus_nodes.h"
 #include "distributed/relay_utility.h"
+#include "distributed/pg_cimv.h"
 #include "utils/acl.h"
 #include "utils/relcache.h"
 
@@ -125,6 +126,9 @@ extern uint64 InsertShardPlacementRow(uint64 shardId, uint64 placementId,
 extern void InsertIntoPgDistPartition(Oid relationId, char distributionMethod,
 									  Var *distributionColumn, uint32 colocationId,
 									  char replicationModel);
+extern void InsertIntoPgCimv(Form_pg_cimv cimv);
+extern void DeletePgCimvRow(Oid userViewId);
+extern Form_pg_cimv LookupCimvFromCatalog(Oid userViewId, bool missingOk);
 extern void DeletePartitionRow(Oid distributedRelationId);
 extern void DeleteShardRow(uint64 shardId);
 extern void UpdatePartitionShardPlacementStates(ShardPlacement *parentShardPlacement,

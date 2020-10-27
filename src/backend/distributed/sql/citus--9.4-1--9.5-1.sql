@@ -20,4 +20,82 @@ DROP TRIGGER dist_poolinfo_task_tracker_cache_invalidate ON pg_catalog.pg_dist_p
 DROP FUNCTION task_tracker_conninfo_cache_invalidate();
 DROP FUNCTION master_drop_sequences(text[]);
 
+CREATE FUNCTION pg_catalog.partial_agg_sfunc(internal, oid, anyelement, int)
+RETURNS internal
+AS 'MODULE_PATHNAME'
+LANGUAGE C PARALLEL SAFE;
+
+CREATE FUNCTION pg_catalog.partial_agg_ffunc(internal)
+RETURNS bytea
+AS 'MODULE_PATHNAME'
+LANGUAGE C PARALLEL SAFE;
+
+CREATE AGGREGATE pg_catalog.partial_agg(oid, anyelement, int) (
+    STYPE = internal,
+    SFUNC = pg_catalog.partial_agg_sfunc,
+    FINALFUNC = pg_catalog.partial_agg_ffunc
+);
+
+CREATE FUNCTION pg_catalog.combine_agg_sfunc(internal, oid, bytea, anyelement)
+RETURNS internal
+AS 'MODULE_PATHNAME'
+LANGUAGE C PARALLEL SAFE;
+
+CREATE FUNCTION pg_catalog.combine_agg_sfunc(internal, oid, bytea)
+RETURNS internal
+AS 'MODULE_PATHNAME'
+LANGUAGE C PARALLEL SAFE;
+
+CREATE FUNCTION pg_catalog.combine_agg_ffunc(internal, oid, bytea, anyelement)
+RETURNS anyelement
+AS 'MODULE_PATHNAME'
+LANGUAGE C PARALLEL SAFE;
+
+CREATE AGGREGATE pg_catalog.combine_agg(oid, bytea) (
+    STYPE = internal,
+    SFUNC = pg_catalog.combine_agg_sfunc,
+    FINALFUNC = pg_catalog.partial_agg_ffunc
+
+);
+
+CREATE AGGREGATE pg_catalog.finalize_agg(oid, bytea, anyelement) (
+    STYPE = internal,
+    SFUNC = pg_catalog.combine_agg_sfunc,
+    FINALFUNC = pg_catalog.combine_agg_ffunc,
+    FINALFUNC_EXTRA
+);
+
+REVOKE ALL ON FUNCTION pg_catalog.partial_agg_sfunc FROM PUBLIC;
+REVOKE ALL ON FUNCTION pg_catalog.partial_agg_ffunc FROM PUBLIC;
+REVOKE ALL ON FUNCTION pg_catalog.partial_agg FROM PUBLIC;
+REVOKE ALL ON FUNCTION pg_catalog.combine_agg_sfunc(internal, oid, bytea, anyelement) FROM PUBLIC;
+REVOKE ALL ON FUNCTION pg_catalog.combine_agg_sfunc(internal, oid, bytea) FROM PUBLIC;
+REVOKE ALL ON FUNCTION pg_catalog.combine_agg_ffunc FROM PUBLIC;
+REVOKE ALL ON FUNCTION pg_catalog.combine_agg FROM PUBLIC;
+REVOKE ALL ON FUNCTION pg_catalog.finalize_agg FROM PUBLIC;
+
+GRANT EXECUTE ON FUNCTION pg_catalog.partial_agg_sfunc TO PUBLIC;
+GRANT EXECUTE ON FUNCTION pg_catalog.partial_agg_ffunc TO PUBLIC;
+GRANT EXECUTE ON FUNCTION pg_catalog.partial_agg TO PUBLIC;
+GRANT EXECUTE ON FUNCTION pg_catalog.combine_agg_sfunc(internal, oid, bytea, anyelement) TO PUBLIC;
+GRANT EXECUTE ON FUNCTION pg_catalog.combine_agg_sfunc(internal, oid, bytea) TO PUBLIC;
+GRANT EXECUTE ON FUNCTION pg_catalog.combine_agg_ffunc TO PUBLIC;
+GRANT EXECUTE ON FUNCTION pg_catalog.combine_agg TO PUBLIC;
+GRANT EXECUTE ON FUNCTION pg_catalog.finalize_agg TO PUBLIC;
+
+--  add pg_cimv TODO: finalize name of this table
+CREATE TABLE citus.pg_cimv(
+    userview regclass NOT NULL PRIMARY KEY,
+    basetable regclass NOT NULL,
+    mattable regclass NOT NULL,
+    refreshview regclass NOT NULL,
+    deltatriggerfnnamespace name NOT NULL,
+    deltatriggerfnname name NOT NULL,
+    landingtable regclass NOT NULL,
+    jobid bigint NOT NULL
+);
+
+ALTER TABLE citus.pg_cimv SET SCHEMA pg_catalog;
+GRANT SELECT ON pg_catalog.pg_cimv TO public;
+
 RESET search_path;

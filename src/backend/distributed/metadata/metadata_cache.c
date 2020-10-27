@@ -33,6 +33,7 @@
 #include "commands/trigger.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/connection_management.h"
+#include "distributed/cimv.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/function_utils.h"
 #include "distributed/foreign_key_relationship.h"
@@ -140,6 +141,8 @@ typedef struct MetadataCacheData
 	Oid distColocationRelationId;
 	Oid distColocationConfigurationIndexId;
 	Oid distPartitionRelationId;
+	Oid pgCimvId;
+	Oid pgCimvIndexId;
 	Oid distPartitionLogicalRelidIndexId;
 	Oid distPartitionColocationidIndexId;
 	Oid distShardLogicalRelidIndexId;
@@ -2115,6 +2118,28 @@ DistPartitionRelationId(void)
 						 &MetadataCache.distPartitionRelationId);
 
 	return MetadataCache.distPartitionRelationId;
+}
+
+
+/* return oid of pg_cimv relation */
+Oid
+PgCimvId(void)
+{
+	CachedRelationLookup("pg_cimv",
+						 &MetadataCache.pgCimvId);
+
+	return MetadataCache.pgCimvId;
+}
+
+
+/* return oid of pg_cimv_pkey index */
+Oid
+PgCimvIndexId(void)
+{
+	CachedRelationLookup("pg_cimv_pkey",
+						 &MetadataCache.pgCimvIndexId);
+
+	return MetadataCache.pgCimvIndexId;
 }
 
 
