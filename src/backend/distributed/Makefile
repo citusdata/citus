@@ -18,7 +18,7 @@ generated_downgrade_sql_files += $(patsubst %,$(citus_abs_srcdir)/build/sql/%,$(
 DATA_built = $(generated_sql_files)
 
 # directories with source files
-SUBDIRS = . commands connection ddl deparser executor metadata operations planner progress relay safeclib test transaction utils worker
+SUBDIRS = . commands connection ddl deparser executor metadata operations planner progress relay safeclib test transaction utils worker cimv
 # columnar modules
 SUBDIRS += ../columnar
 # enterprise modules

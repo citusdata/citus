@@ -46,6 +46,7 @@
 #include "distributed/pg_dist_partition.h"
 #include "distributed/pg_dist_shard.h"
 #include "distributed/pg_dist_placement.h"
+#include "distributed/pg_cimv.h"
 #include "distributed/reference_table_utils.h"
 #include "distributed/relay_utility.h"
 #include "distributed/resource_lock.h"
@@ -1090,6 +1091,110 @@ InsertIntoPgDistPartition(Oid relationId, char distributionMethod,
 
 	CommandCounterIncrement();
 	table_close(pgDistPartition, NoLock);
+}
+
+
+/*
+ * InsertIntoPgCimv inserts a new tuple into pg_cimv.
+ */
+void
+InsertIntoPgCimv(Form_pg_cimv cimv)
+{
+	Datum newValues[Natts_pg_cimv];
+	bool newNulls[Natts_pg_cimv];
+
+	/* open system catalog and insert new tuple */
+	Relation pgCimv = table_open(PgCimvId(), RowExclusiveLock);
+
+	/* form new tuple for pg_cimv */
+	memset(newValues, 0, sizeof(newValues));
+	memset(newNulls, false, sizeof(newNulls));
+
+	newValues[Anum_pg_cimv_userview - 1] = ObjectIdGetDatum(cimv->userview);
+	newValues[Anum_pg_cimv_basetable - 1] = ObjectIdGetDatum(cimv->basetable);
+	newValues[Anum_pg_cimv_mattable - 1] = ObjectIdGetDatum(cimv->mattable);
+	newValues[Anum_pg_cimv_refreshview - 1] = ObjectIdGetDatum(cimv->refreshview);
+	newValues[Anum_pg_cimv_triggernamespace - 1] = NameGetDatum(
+		&cimv->triggerfnnamespace);
+	newValues[Anum_pg_cimv_triggername - 1] = NameGetDatum(&cimv->triggerfnname);
+	newValues[Anum_pg_cimv_landingtable - 1] = ObjectIdGetDatum(cimv->landingtable);
+	newValues[Anum_pg_cimv_jobid - 1] = Int64GetDatum(cimv->jobid);
+
+	HeapTuple newTuple = heap_form_tuple(RelationGetDescr(pgCimv), newValues,
+										 newNulls);
+
+	/* finally insert tuple, build index entries & register cache invalidation */
+	CatalogTupleInsert(pgCimv, newTuple);
+
+
+	CommandCounterIncrement();
+	table_close(pgCimv, NoLock);
+}
+
+
+void
+DeletePgCimvRow(Oid userViewId)
+{
+	ScanKeyData scanKey[1];
+	int scanKeyCount = 1;
+
+	Relation pgCimv = table_open(PgCimvId(), RowExclusiveLock);
+
+	ScanKeyInit(&scanKey[0], Anum_pg_cimv_userview,
+				BTEqualStrategyNumber, F_OIDEQ, ObjectIdGetDatum(userViewId));
+
+	SysScanDesc scanDescriptor = systable_beginscan(pgCimv, InvalidOid, false,
+													NULL,
+													scanKeyCount, scanKey);
+
+	HeapTuple heapTuple = systable_getnext(scanDescriptor);
+	if (!HeapTupleIsValid(heapTuple))
+	{
+		ereport(ERROR, (errmsg("could not find valid entry for cimv %d",
+							   userViewId)));
+	}
+
+	simple_heap_delete(pgCimv, &heapTuple->t_self);
+
+	systable_endscan(scanDescriptor);
+
+	/* increment the counter so that next command can see the row */
+	CommandCounterIncrement();
+
+	table_close(pgCimv, NoLock);
+}
+
+
+Form_pg_cimv
+LookupCimvFromCatalog(Oid userViewId, bool missingOk)
+{
+	ScanKeyData scanKey[1];
+	int scanKeyCount = 1;
+	Form_pg_cimv cimvForm = NULL;
+	Relation pgCimv = table_open(PgCimvId(), AccessShareLock);
+
+	ScanKeyInit(&scanKey[0], Anum_pg_cimv_userview,
+				BTEqualStrategyNumber, F_OIDEQ, ObjectIdGetDatum(userViewId));
+
+	SysScanDesc scanDescriptor = systable_beginscan(pgCimv,
+													PgCimvIndexId(), true,
+													NULL, scanKeyCount, scanKey);
+
+	HeapTuple heapTuple = systable_getnext(scanDescriptor);
+	if (!HeapTupleIsValid(heapTuple) && !missingOk)
+	{
+		ereport(ERROR, (errmsg("could not find valid entry for view %u", userViewId)));
+	}
+
+	if (HeapTupleIsValid(heapTuple))
+	{
+		cimvForm = (Form_pg_cimv) GETSTRUCT(heapTuple);
+	}
+
+	systable_endscan(scanDescriptor);
+	table_close(pgCimv, NoLock);
+
+	return cimvForm;
 }
 
 

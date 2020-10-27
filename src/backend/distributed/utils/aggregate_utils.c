@@ -22,9 +22,11 @@
 #include "catalog/pg_type.h"
 #include "distributed/version_compat.h"
 #include "nodes/nodeFuncs.h"
+#include "parser/parse_agg.h"
 #include "utils/acl.h"
 #include "utils/builtins.h"
 #include "utils/datum.h"
+#include "utils/expandeddatum.h"
 #include "utils/lsyscache.h"
 #include "utils/syscache.h"
 #include "utils/typcache.h"
@@ -36,6 +38,11 @@ PG_FUNCTION_INFO_V1(worker_partial_agg_sfunc);
 PG_FUNCTION_INFO_V1(worker_partial_agg_ffunc);
 PG_FUNCTION_INFO_V1(coord_combine_agg_sfunc);
 PG_FUNCTION_INFO_V1(coord_combine_agg_ffunc);
+
+PG_FUNCTION_INFO_V1(partial_agg_sfunc);
+PG_FUNCTION_INFO_V1(partial_agg_ffunc);
+PG_FUNCTION_INFO_V1(combine_agg_sfunc);
+PG_FUNCTION_INFO_V1(combine_agg_ffunc);
 
 /*
  * Holds information describing the structure of aggregation arguments
@@ -73,6 +80,11 @@ typedef struct StypeBox
 	AggregationArgumentContext *aggregationArgumentContext;
 } StypeBox;
 
+/* TODO: replace PG_FUNCTION_ARGS with explicit parameters */
+static Datum partial_agg_sfunc_internal(PG_FUNCTION_ARGS);
+static Datum partial_agg_ffunc_internal(PG_FUNCTION_ARGS, bool serializeToCString);
+static Datum combine_agg_sfunc_internal(PG_FUNCTION_ARGS, bool deserializeFromCString);
+static Datum combine_agg_ffunc_internal(PG_FUNCTION_ARGS);
 static HeapTuple GetAggregateForm(Oid oid, Form_pg_aggregate *form);
 static HeapTuple GetProcForm(Oid oid, Form_pg_proc *form);
 static HeapTuple GetTypeForm(Oid oid, Form_pg_type *form);
@@ -482,6 +494,62 @@ HandleStrictUninit(StypeBox *box, FunctionCallInfo fcinfo, Datum value)
 }
 
 
+Datum
+worker_partial_agg_sfunc(PG_FUNCTION_ARGS)
+{
+	return partial_agg_sfunc_internal(fcinfo);
+}
+
+
+Datum
+worker_partial_agg_ffunc(PG_FUNCTION_ARGS)
+{
+	return partial_agg_ffunc_internal(fcinfo, true);
+}
+
+
+Datum
+coord_combine_agg_sfunc(PG_FUNCTION_ARGS)
+{
+	return combine_agg_sfunc_internal(fcinfo, true);
+}
+
+
+Datum
+coord_combine_agg_ffunc(PG_FUNCTION_ARGS)
+{
+	return combine_agg_ffunc_internal(fcinfo);
+}
+
+
+Datum
+partial_agg_sfunc(PG_FUNCTION_ARGS)
+{
+	return partial_agg_sfunc_internal(fcinfo);
+}
+
+
+Datum
+partial_agg_ffunc(PG_FUNCTION_ARGS)
+{
+	return partial_agg_ffunc_internal(fcinfo, false);
+}
+
+
+Datum
+combine_agg_sfunc(PG_FUNCTION_ARGS)
+{
+	return combine_agg_sfunc_internal(fcinfo, false);
+}
+
+
+Datum
+combine_agg_ffunc(PG_FUNCTION_ARGS)
+{
+	return combine_agg_ffunc_internal(fcinfo);
+}
+
+
 /*
  * worker_partial_agg_sfunc advances transition state,
  * essentially implementing the following pseudocode:
@@ -492,7 +560,7 @@ HandleStrictUninit(StypeBox *box, FunctionCallInfo fcinfo, Datum value)
  * return box
  */
 Datum
-worker_partial_agg_sfunc(PG_FUNCTION_ARGS)
+partial_agg_sfunc_internal(PG_FUNCTION_ARGS)
 {
 	StypeBox *box = NULL;
 	Form_pg_aggregate aggform;
@@ -500,6 +568,7 @@ worker_partial_agg_sfunc(PG_FUNCTION_ARGS)
 	FmgrInfo info;
 	int argumentIndex = 0;
 	bool initialCall = PG_ARGISNULL(0);
+	int mode = PG_NARGS() < 4 ? 0 : PG_GETARG_INT32(3);
 
 	if (initialCall)
 	{
@@ -525,7 +594,25 @@ worker_partial_agg_sfunc(PG_FUNCTION_ARGS)
 	}
 
 	HeapTuple aggtuple = GetAggregateForm(box->agg, &aggform);
-	Oid aggsfunc = aggform->aggtransfn;
+
+	if (mode == 1 &&
+		(aggform->aggminvtransfn == 0 ||
+		 aggform->aggtransfn != aggform->aggmtransfn))
+	{
+		ereport(ERROR, (errmsg("applying inverse state transition not supported "
+							   "for this aggregate")));
+	}
+
+	Oid aggsfunc = InvalidOid;
+	if (mode == 1)
+	{
+		aggsfunc = aggform->aggminvtransfn;
+	}
+	else
+	{
+		aggsfunc = aggform->aggtransfn;
+	}
+
 
 	if (initialCall)
 	{
@@ -604,11 +691,11 @@ worker_partial_agg_sfunc(PG_FUNCTION_ARGS)
  * worker_partial_agg_ffunc serializes transition state,
  * essentially implementing the following pseudocode:
  *
- * (box) -> text
+ * (box) -> text/byte
  * return box.agg.stype.output(box.value)
  */
 Datum
-worker_partial_agg_ffunc(PG_FUNCTION_ARGS)
+partial_agg_ffunc_internal(PG_FUNCTION_ARGS, bool serializeToCString)
 {
 	LOCAL_FCINFO(innerFcinfo, 1);
 	FmgrInfo info;
@@ -635,27 +722,66 @@ worker_partial_agg_ffunc(PG_FUNCTION_ARGS)
 							"worker_partial_agg_ffunc expects an aggregate with COMBINEFUNC")));
 	}
 
-	if (aggform->aggtranstype == INTERNALOID)
+	if (serializeToCString && aggform->aggtranstype == INTERNALOID)
 	{
 		ereport(ERROR,
 				(errmsg(
 					 "worker_partial_agg_ffunc does not support aggregates with INTERNAL transition state")));
 	}
-
 	Oid transtype = aggform->aggtranstype;
+
 	ReleaseSysCache(aggtuple);
 
-	getTypeOutputInfo(transtype, &typoutput, &typIsVarlena);
+	Datum result = (Datum) 0;
+	bool isNull = false;
 
-	fmgr_info(typoutput, &info);
+	/* TODO: move function call info into box to avoid initializing it repeatedly */
+	if (OidIsValid(aggform->aggserialfn))
+	{
+		Expr *serialfnexpr = NULL;
+		FmgrInfo serialfn;
+		build_aggregate_serialfn_expr(aggform->aggserialfn,
+									  &serialfnexpr);
+		fmgr_info(aggform->aggserialfn, &serialfn);
+		fmgr_info_set_expr((Node *) serialfnexpr, &serialfn);
 
-	InitFunctionCallInfoData(*innerFcinfo, &info, 1, fcinfo->fncollation,
-							 fcinfo->context, fcinfo->resultinfo);
-	fcSetArgExt(innerFcinfo, 0, box->value, box->valueNull);
+		LOCAL_FCINFO(serialfn_fcinfo, 2);
+		InitFunctionCallInfoData(*serialfn_fcinfo,
+								 &serialfn,
+								 1,
+								 InvalidOid,
+								 (void *) fcinfo->context, NULL);
 
-	Datum result = FunctionCallInvoke(innerFcinfo);
+		fcSetArgExt(serialfn_fcinfo, 0,
+					MakeExpandedObjectReadOnly(box->value, box->valueNull,
+											   box->transtypeLen),
+					false);
 
-	if (innerFcinfo->isnull)
+		result = FunctionCallInvoke(serialfn_fcinfo);
+		isNull = serialfn_fcinfo->isnull;
+	}
+	else
+	{
+		if (serializeToCString)
+		{
+			getTypeOutputInfo(transtype, &typoutput, &typIsVarlena);
+		}
+		else
+		{
+			getTypeBinaryOutputInfo(transtype, &typoutput, &typIsVarlena);
+		}
+
+		fmgr_info(typoutput, &info);
+
+		InitFunctionCallInfoData(*innerFcinfo, &info, 1, fcinfo->fncollation,
+								 fcinfo->context, fcinfo->resultinfo);
+		fcSetArgExt(innerFcinfo, 0, box->value, box->valueNull);
+
+		result = FunctionCallInvoke(innerFcinfo);
+		isNull = innerFcinfo->isnull;
+	}
+
+	if (isNull)
 	{
 		PG_RETURN_NULL();
 	}
@@ -674,7 +800,7 @@ worker_partial_agg_ffunc(PG_FUNCTION_ARGS)
  * return box
  */
 Datum
-coord_combine_agg_sfunc(PG_FUNCTION_ARGS)
+combine_agg_sfunc_internal(PG_FUNCTION_ARGS, bool deserializeFromCString)
 {
 	LOCAL_FCINFO(innerFcinfo, 3);
 	FmgrInfo info;
@@ -702,7 +828,7 @@ coord_combine_agg_sfunc(PG_FUNCTION_ARGS)
 							"coord_combine_agg_sfunc expects an aggregate with COMBINEFUNC")));
 	}
 
-	if (aggform->aggtranstype == INTERNALOID)
+	if (deserializeFromCString && aggform->aggtranstype == INTERNALOID)
 	{
 		ereport(ERROR,
 				(errmsg(
@@ -728,19 +854,67 @@ coord_combine_agg_sfunc(PG_FUNCTION_ARGS)
 	bool valueNull = PG_ARGISNULL(2);
 	HeapTuple transtypetuple = GetTypeForm(box->transtype, &transtypeform);
 	Oid ioparam = getTypeIOParam(transtypetuple);
-	Oid deserial = transtypeform->typinput;
+	Oid deserial = deserializeFromCString ? transtypeform->typinput :
+				   transtypeform->typreceive;
 	ReleaseSysCache(transtypetuple);
 
-	fmgr_info(deserial, &info);
-	if (valueNull && info.fn_strict)
+	bool strictDeserial = false;
+	if (OidIsValid(aggform->aggdeserialfn))
+	{
+		strictDeserial = true;
+	}
+	else
+	{
+		fmgr_info(deserial, &info);
+		strictDeserial = info.fn_strict;
+	}
+
+	if (valueNull && strictDeserial)
 	{
 		value = (Datum) 0;
+	}
+	/* TODO: store function call info in box to avoid recurring initialization overhead */
+	else if (OidIsValid(aggform->aggdeserialfn))
+	{
+		Expr *deserialfnexpr = NULL;
+		FmgrInfo deserialfn;
+		build_aggregate_deserialfn_expr(aggform->aggdeserialfn,
+										&deserialfnexpr);
+		fmgr_info(aggform->aggdeserialfn, &deserialfn);
+		fmgr_info_set_expr((Node *) deserialfnexpr, &deserialfn);
+
+		LOCAL_FCINFO(deserialfn_fcinfo, 2);
+		InitFunctionCallInfoData(*deserialfn_fcinfo,
+								 &deserialfn,
+								 2,
+								 InvalidOid,
+								 (void *) fcinfo->context, NULL);
+
+
+		fcSetArgExt(deserialfn_fcinfo, 0, PointerGetDatum(PG_GETARG_BYTEA_P(2)),
+					valueNull);
+		fcSetArgExt(deserialfn_fcinfo, 1, PointerGetDatum(NULL), false);
+
+		value = FunctionCallInvoke(deserialfn_fcinfo);
+		valueNull = deserialfn_fcinfo->isnull;
 	}
 	else
 	{
 		InitFunctionCallInfoData(*innerFcinfo, &info, 3, fcinfo->fncollation,
 								 fcinfo->context, fcinfo->resultinfo);
-		fcSetArgExt(innerFcinfo, 0, PG_GETARG_DATUM(2), valueNull);
+		if (deserializeFromCString)
+		{
+			fcSetArgExt(innerFcinfo, 0, PG_GETARG_DATUM(2), valueNull);
+		}
+		else
+		{
+			StringInfo string = makeStringInfo();
+			appendBinaryStringInfo(string,
+								   VARDATA_ANY(PG_GETARG_DATUM(2)),
+								   VARSIZE_ANY_EXHDR(PG_GETARG_DATUM(2)));
+			fcSetArgExt(innerFcinfo, 0, PointerGetDatum(string), valueNull);
+		}
+
 		fcSetArg(innerFcinfo, 1, ObjectIdGetDatum(ioparam));
 		fcSetArg(innerFcinfo, 2, Int32GetDatum(-1)); /* typmod */
 
@@ -788,7 +962,7 @@ coord_combine_agg_sfunc(PG_FUNCTION_ARGS)
  * return box.agg.ffunc(box.value)
  */
 Datum
-coord_combine_agg_ffunc(PG_FUNCTION_ARGS)
+combine_agg_ffunc_internal(PG_FUNCTION_ARGS)
 {
 	StypeBox *box = (StypeBox *) (PG_ARGISNULL(0) ? NULL : PG_GETARG_POINTER(0));
 	LOCAL_FCINFO(innerFcinfo, FUNC_MAX_ARGS);
@@ -872,7 +1046,7 @@ TypecheckWorkerPartialAggArgType(FunctionCallInfo fcinfo, StypeBox *box)
 		return false;
 	}
 
-	Assert(list_length(aggref->args) == 2);
+	Assert(list_length(aggref->args) == 2 || list_length(aggref->args) == 3);
 	TargetEntry *aggarg = list_nth(aggref->args, 1);
 
 	bool argtypesNull;

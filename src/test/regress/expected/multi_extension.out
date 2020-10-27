@@ -426,10 +426,19 @@ SELECT * FROM print_extension_changes();
  function task_tracker_task_status(bigint,integer)                   |
  function worker_execute_sql_task(bigint,integer,text,boolean)       |
  function worker_merge_files_and_run_query(bigint,integer,text,text) |
+                                                                     | function combine_agg(oid,bytea)
+                                                                     | function combine_agg_ffunc(internal,oid,bytea,anyelement)
+                                                                     | function combine_agg_sfunc(internal,oid,bytea)
+                                                                     | function combine_agg_sfunc(internal,oid,bytea,anyelement)
                                                                      | function create_citus_local_table(regclass)
+                                                                     | function finalize_agg(oid,bytea,anyelement)
+                                                                     | function partial_agg(oid,anyelement,integer)
+                                                                     | function partial_agg_ffunc(internal)
+                                                                     | function partial_agg_sfunc(internal,oid,anyelement,integer)
                                                                      | function undistribute_table(regclass)
                                                                      | function worker_record_sequence_dependency(regclass,regclass,name)
-(10 rows)
+                                                                     | table pg_cimv
+(19 rows)
 
 -- Test downgrade to 9.5-1 from 10.0-1
 ALTER EXTENSION citus UPDATE TO '10.0-1';

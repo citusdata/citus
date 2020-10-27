@@ -59,6 +59,7 @@
 #include "distributed/transmit.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_transaction.h"
+#include "distributed/cimv.h"
 #include "lib/stringinfo.h"
 #include "nodes/parsenodes.h"
 #include "nodes/pg_list.h"
@@ -456,6 +457,35 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		}
 	}
 
+	bool continueProcessing = true;
+	if (IsA(parsetree, CreateTableAsStmt))
+	{
+		continueProcessing = !ProcessCreateMaterializedViewStmt((const
+																 CreateTableAsStmt *)
+																parsetree, queryString,
+																pstmt);
+	}
+
+	if (IsA(parsetree, RefreshMatViewStmt))
+	{
+		continueProcessing = !ProcessRefreshMaterializedViewStmt(
+			(RefreshMatViewStmt *) parsetree);
+	}
+
+	if (IsA(parsetree, DropStmt))
+	{
+		DropStmt *dropStatement = (DropStmt *) parsetree;
+
+		if (dropStatement->removeType == OBJECT_MATVIEW)
+		{
+			ProcessDropMaterializedViewStmt(dropStatement);
+		}
+		else if (dropStatement->removeType == OBJECT_VIEW)
+		{
+			ProcessDropViewStmt(dropStatement);
+		}
+	}
+
 	if (IsDropCitusExtensionStmt(parsetree))
 	{
 		StopMaintenanceDaemon(MyDatabaseId);
@@ -482,8 +512,11 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 			citusCanBeUpdatedToAvailableVersion = !InstalledAndAvailableVersionsSame();
 		}
 
-		standard_ProcessUtility(pstmt, queryString, context,
-								params, queryEnv, dest, completionTag);
+		if (continueProcessing)
+		{
+			standard_ProcessUtility(pstmt, queryString, context,
+									params, queryEnv, dest, completionTag);
+		}
 
 		/*
 		 * if we are running ALTER EXTENSION citus UPDATE (to "<version>") command, we may need
