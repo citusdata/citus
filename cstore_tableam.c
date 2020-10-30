@@ -120,8 +120,6 @@ ResetCStoreMemoryContext()
 static void
 cstore_init_write_state(Relation relation)
 {
-	/*TODO: upgrade lock to serialize writes */
-
 	if (CStoreWriteState != NULL)
 	{
 		/* TODO: consider whether it's possible for a new write to start */

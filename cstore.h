@@ -218,15 +218,12 @@ typedef struct TableReadState
 /* TableWriteState represents state of a cstore file write operation. */
 typedef struct TableWriteState
 {
-	DataFileMetadata *datafileMetadata;
 	CompressionType compressionType;
 	TupleDesc tupleDescriptor;
 	FmgrInfo **comparisonFunctionArray;
-	uint64 currentFileOffset;
 	Relation relation;
 
 	MemoryContext stripeWriteContext;
-	uint64 currentStripeId;
 	StripeBuffers *stripeBuffers;
 	StripeSkipList *stripeSkipList;
 	uint32 stripeMaxRowCount;
@@ -284,9 +281,11 @@ extern StringInfo DecompressBuffer(StringInfo buffer, CompressionType compressio
 /* cstore_metadata_tables.c */
 extern void DeleteDataFileMetadataRowIfExists(Oid relfilenode);
 extern void InitCStoreDataFileMetadata(Oid relfilenode, int blockRowCount);
-extern void InsertStripeMetadataRow(Oid relfilenode, StripeMetadata *stripe);
 extern DataFileMetadata * ReadDataFileMetadata(Oid relfilenode, bool missingOk);
 extern uint64 GetHighestUsedAddress(Oid relfilenode);
+extern StripeMetadata ReserveStripe(Relation rel, uint64 size,
+									uint64 rowCount, uint64 columnCount,
+									uint64 blockCount, uint64 blockRowCount);
 extern void SaveStripeSkipList(Oid relfilenode, uint64 stripe,
 							   StripeSkipList *stripeSkipList,
 							   TupleDesc tupleDescriptor);
@@ -314,6 +313,32 @@ logical_to_smgr(uint64 logicalOffset)
 	addr.offset = SizeOfPageHeaderData + (logicalOffset % bytes_per_page);
 
 	return addr;
+}
+
+
+/*
+ * Map a physical page adnd offset address to a logical address.
+ */
+static inline uint64
+smgr_to_logical(SmgrAddr addr)
+{
+	uint64 bytes_per_page = BLCKSZ - SizeOfPageHeaderData;
+	return bytes_per_page * addr.blockno + addr.offset - SizeOfPageHeaderData;
+}
+
+
+/*
+ * Get the first usable address of next block.
+ */
+static inline SmgrAddr
+next_block_start(SmgrAddr addr)
+{
+	SmgrAddr result = {
+		.blockno = addr.blockno + 1,
+		.offset = SizeOfPageHeaderData
+	};
+
+	return result;
 }
 
 

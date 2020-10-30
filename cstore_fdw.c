@@ -494,10 +494,10 @@ CopyIntoCStoreTable(const CopyStmt *copyStatement, const char *queryString)
 	Assert(copyStatement->relation != NULL);
 
 	/*
-	 * Open and lock the relation. We acquire ShareUpdateExclusiveLock to allow
-	 * concurrent reads, but block concurrent writes.
+	 * Open and lock the relation. We acquire RowExclusiveLock to allow
+	 * concurrent reads and writes.
 	 */
-	relation = cstore_fdw_openrv(copyStatement->relation, ShareUpdateExclusiveLock);
+	relation = cstore_fdw_openrv(copyStatement->relation, RowExclusiveLock);
 	relationId = RelationGetRelid(relation);
 
 	/* allocate column values and nulls arrays */
@@ -572,7 +572,7 @@ CopyIntoCStoreTable(const CopyStmt *copyStatement, const char *queryString)
 	/* end read/write sessions and close the relation */
 	EndCopyFrom(copyState);
 	CStoreEndWrite(writeState);
-	heap_close(relation, ShareUpdateExclusiveLock);
+	heap_close(relation, RowExclusiveLock);
 
 	return processedRowCount;
 }
@@ -2015,7 +2015,7 @@ CStoreBeginForeignInsert(ModifyTableState *modifyTableState, ResultRelInfo *rela
 	Relation relation = NULL;
 
 	foreignTableOid = RelationGetRelid(relationInfo->ri_RelationDesc);
-	relation = cstore_fdw_open(foreignTableOid, ShareUpdateExclusiveLock);
+	relation = cstore_fdw_open(foreignTableOid, RowExclusiveLock);
 	cstoreOptions = CStoreGetOptions(foreignTableOid);
 	tupleDescriptor = RelationGetDescr(relationInfo->ri_RelationDesc);
 
@@ -2086,7 +2086,7 @@ CStoreEndForeignInsert(EState *executorState, ResultRelInfo *relationInfo)
 		Relation relation = writeState->relation;
 
 		CStoreEndWrite(writeState);
-		heap_close(relation, ShareUpdateExclusiveLock);
+		heap_close(relation, RowExclusiveLock);
 	}
 }
 

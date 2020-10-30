@@ -31,6 +31,8 @@
 #include "lib/stringinfo.h"
 #include "port.h"
 #include "storage/fd.h"
+#include "storage/lmgr.h"
+#include "storage/smgr.h"
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
 #include "utils/memutils.h"
@@ -43,6 +45,10 @@ typedef struct
 	EState *estate;
 } ModifyState;
 
+static void InsertStripeMetadataRow(Oid relfilenode, StripeMetadata *stripe);
+static void GetHighestUsedAddressAndId(Oid relfilenode,
+									   uint64 *highestUsedAddress,
+									   uint64 *highestUsedId);
 static List * ReadDataFileStripeList(Oid relfilenode, Snapshot snapshot);
 static Oid CStoreStripesRelationId(void);
 static Oid CStoreStripesIndexRelationId(void);
@@ -311,7 +317,7 @@ ReadStripeSkipList(Oid relfilenode, uint64 stripe, TupleDesc tupleDescriptor,
 /*
  * InsertStripeMetadataRow adds a row to cstore_stripes.
  */
-void
+static void
 InsertStripeMetadataRow(Oid relfilenode, StripeMetadata *stripe)
 {
 	bool nulls[Natts_cstore_stripes] = { 0 };
@@ -330,7 +336,9 @@ InsertStripeMetadataRow(Oid relfilenode, StripeMetadata *stripe)
 	Relation cstoreStripes = heap_open(cstoreStripesOid, RowExclusiveLock);
 
 	ModifyState *modifyState = StartModifyRelation(cstoreStripes);
+
 	InsertTupleAndEnforceConstraints(modifyState, values, nulls);
+
 	FinishModifyRelation(modifyState);
 
 	CommandCounterIncrement();
@@ -376,6 +384,23 @@ uint64
 GetHighestUsedAddress(Oid relfilenode)
 {
 	uint64 highestUsedAddress = 0;
+	uint64 highestUsedId = 0;
+
+	GetHighestUsedAddressAndId(relfilenode, &highestUsedAddress, &highestUsedId);
+
+	return highestUsedAddress;
+}
+
+
+/*
+ * GetHighestUsedAddressAndId returns the highest used address and id for
+ * the given relfilenode across all active and inactive transactions.
+ */
+static void
+GetHighestUsedAddressAndId(Oid relfilenode,
+						   uint64 *highestUsedAddress,
+						   uint64 *highestUsedId)
+{
 	ListCell *stripeMetadataCell = NULL;
 	List *stripeMetadataList = NIL;
 
@@ -384,14 +409,83 @@ GetHighestUsedAddress(Oid relfilenode)
 
 	stripeMetadataList = ReadDataFileStripeList(relfilenode, &SnapshotDirty);
 
+	*highestUsedId = 0;
+	*highestUsedAddress = 0;
+
 	foreach(stripeMetadataCell, stripeMetadataList)
 	{
 		StripeMetadata *stripe = lfirst(stripeMetadataCell);
 		uint64 lastByte = stripe->fileOffset + stripe->dataLength - 1;
-		highestUsedAddress = Max(highestUsedAddress, lastByte);
+		*highestUsedAddress = Max(*highestUsedAddress, lastByte);
+		*highestUsedId = Max(*highestUsedId, stripe->id);
+	}
+}
+
+
+/*
+ * ReserveStripe reserves and stripe of given size for the given relation,
+ * and inserts it into cstore_stripes. It is guaranteed that concurrent
+ * writes won't overwrite the returned stripe.
+ */
+StripeMetadata
+ReserveStripe(Relation rel, uint64 sizeBytes,
+			  uint64 rowCount, uint64 columnCount,
+			  uint64 blockCount, uint64 blockRowCount)
+{
+	StripeMetadata stripe = { 0 };
+	Oid relfilenode = InvalidOid;
+	uint64 currLogicalHigh = 0;
+	SmgrAddr currSmgrHigh;
+	uint64 nblocks = 0;
+	uint64 resLogicalStart = 0;
+	SmgrAddr resSmgrStart;
+	uint64 resLogicalEnd = 0;
+	SmgrAddr resSmgrEnd;
+	uint64 highestId = 0;
+
+	/*
+	 * We take ShareUpdateExclusiveLock here, so two space
+	 * reservations conflict, space reservation <-> vacuum
+	 * conflict, but space reservation doesn't conflict with
+	 * reads & writes.
+	 */
+	LockRelation(rel, ShareUpdateExclusiveLock);
+
+	relfilenode = rel->rd_node.relNode;
+	GetHighestUsedAddressAndId(relfilenode, &currLogicalHigh, &highestId);
+	currSmgrHigh = logical_to_smgr(currLogicalHigh);
+
+	resSmgrStart = next_block_start(currSmgrHigh);
+	resLogicalStart = smgr_to_logical(resSmgrStart);
+
+	resLogicalEnd = resLogicalStart + sizeBytes - 1;
+	resSmgrEnd = logical_to_smgr(resLogicalEnd);
+
+	RelationOpenSmgr(rel);
+	nblocks = smgrnblocks(rel->rd_smgr, MAIN_FORKNUM);
+
+	while (resSmgrEnd.blockno >= nblocks)
+	{
+		Buffer newBuffer = ReadBuffer(rel, P_NEW);
+		ReleaseBuffer(newBuffer);
+		nblocks = smgrnblocks(rel->rd_smgr, MAIN_FORKNUM);
 	}
 
-	return highestUsedAddress;
+	RelationCloseSmgr(rel);
+
+	stripe.fileOffset = resLogicalStart;
+	stripe.dataLength = sizeBytes;
+	stripe.blockCount = blockCount;
+	stripe.blockRowCount = blockRowCount;
+	stripe.columnCount = columnCount;
+	stripe.rowCount = rowCount;
+	stripe.id = highestId + 1;
+
+	InsertStripeMetadataRow(relfilenode, &stripe);
+
+	UnlockRelation(rel, ShareUpdateExclusiveLock);
+
+	return stripe;
 }
 
 
@@ -419,7 +513,7 @@ ReadDataFileStripeList(Oid relfilenode, Snapshot snapshot)
 	index = index_open(CStoreStripesIndexRelationId(), AccessShareLock);
 	tupleDescriptor = RelationGetDescr(cstoreStripes);
 
-	scanDescriptor = systable_beginscan_ordered(cstoreStripes, index, NULL, 1,
+	scanDescriptor = systable_beginscan_ordered(cstoreStripes, index, snapshot, 1,
 												scanKey);
 
 	while (HeapTupleIsValid(heapTuple = systable_getnext(scanDescriptor)))
@@ -593,6 +687,7 @@ InsertTupleAndEnforceConstraints(ModifyState *state, Datum *values, bool *nulls)
 #if PG_VERSION_NUM >= 120000
 	TupleTableSlot *slot = ExecInitExtraTupleSlot(state->estate, tupleDescriptor,
 												  &TTSOpsHeapTuple);
+
 	ExecStoreHeapTuple(tuple, slot, false);
 #else
 	TupleTableSlot *slot = ExecInitExtraTupleSlot(state->estate, tupleDescriptor);

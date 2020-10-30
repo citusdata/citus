@@ -33,7 +33,7 @@ static StripeBuffers * CreateEmptyStripeBuffers(uint32 stripeMaxRowCount,
 static StripeSkipList * CreateEmptyStripeSkipList(uint32 stripeMaxRowCount,
 												  uint32 blockRowCount,
 												  uint32 columnCount);
-static StripeMetadata FlushStripe(TableWriteState *writeState);
+static void FlushStripe(TableWriteState *writeState);
 static StringInfo SerializeBoolArray(bool *boolArray, uint32 boolArrayLength);
 static void SerializeSingleDatum(StringInfo datumBuffer, Datum datum,
 								 bool datumTypeByValue, int datumTypeLength,
@@ -45,8 +45,6 @@ static void UpdateBlockSkipNodeMinMax(ColumnBlockSkipNode *blockSkipNode,
 									  int columnTypeLength, Oid columnCollation,
 									  FmgrInfo *comparisonFunction);
 static Datum DatumCopy(Datum datum, bool datumTypeByValue, int datumTypeLength);
-static void AppendStripeMetadata(DataFileMetadata *datafileMetadata,
-								 StripeMetadata stripeMetadata);
 static StringInfo CopyStringInfo(StringInfo sourceString);
 
 
@@ -64,34 +62,12 @@ CStoreBeginWrite(Relation relation,
 				 TupleDesc tupleDescriptor)
 {
 	TableWriteState *writeState = NULL;
-	DataFileMetadata *datafileMetadata = NULL;
 	FmgrInfo **comparisonFunctionArray = NULL;
 	MemoryContext stripeWriteContext = NULL;
-	uint64 currentFileOffset = 0;
 	uint32 columnCount = 0;
 	uint32 columnIndex = 0;
 	bool *columnMaskArray = NULL;
 	BlockData *blockData = NULL;
-	uint64 currentStripeId = 0;
-	Oid relNode = relation->rd_node.relNode;
-
-	datafileMetadata = ReadDataFileMetadata(relNode, false);
-
-	/*
-	 * If stripeMetadataList is not empty, jump to the position right after
-	 * the last position.
-	 */
-	if (datafileMetadata->stripeMetadataList != NIL)
-	{
-		StripeMetadata *lastStripe = NULL;
-		uint64 lastStripeSize = 0;
-
-		lastStripe = llast(datafileMetadata->stripeMetadataList);
-		lastStripeSize += lastStripe->dataLength;
-
-		currentFileOffset = lastStripe->fileOffset + lastStripeSize;
-		currentStripeId = lastStripe->id + 1;
-	}
 
 	/* get comparison function pointers for each of the columns */
 	columnCount = tupleDescriptor->natts;
@@ -129,19 +105,16 @@ CStoreBeginWrite(Relation relation,
 
 	writeState = palloc0(sizeof(TableWriteState));
 	writeState->relation = relation;
-	writeState->datafileMetadata = datafileMetadata;
 	writeState->compressionType = compressionType;
 	writeState->stripeMaxRowCount = stripeMaxRowCount;
 	writeState->blockRowCount = blockRowCount;
 	writeState->tupleDescriptor = tupleDescriptor;
-	writeState->currentFileOffset = currentFileOffset;
 	writeState->comparisonFunctionArray = comparisonFunctionArray;
 	writeState->stripeBuffers = NULL;
 	writeState->stripeSkipList = NULL;
 	writeState->stripeWriteContext = stripeWriteContext;
 	writeState->blockData = blockData;
 	writeState->compressionBuffer = NULL;
-	writeState->currentStripeId = currentStripeId;
 
 	return writeState;
 }
@@ -164,7 +137,6 @@ CStoreWriteRow(TableWriteState *writeState, Datum *columnValues, bool *columnNul
 	StripeBuffers *stripeBuffers = writeState->stripeBuffers;
 	StripeSkipList *stripeSkipList = writeState->stripeSkipList;
 	uint32 columnCount = writeState->tupleDescriptor->natts;
-	DataFileMetadata *datafileMetadata = writeState->datafileMetadata;
 	const uint32 blockRowCount = writeState->blockRowCount;
 	BlockData *blockData = writeState->blockData;
 	MemoryContext oldContext = MemoryContextSwitchTo(writeState->stripeWriteContext);
@@ -238,28 +210,14 @@ CStoreWriteRow(TableWriteState *writeState, Datum *columnValues, bool *columnNul
 	stripeBuffers->rowCount++;
 	if (stripeBuffers->rowCount >= writeState->stripeMaxRowCount)
 	{
-		StripeMetadata stripeMetadata = FlushStripe(writeState);
-		MemoryContextReset(writeState->stripeWriteContext);
-
-		writeState->currentStripeId++;
+		FlushStripe(writeState);
 
 		/* set stripe data and skip list to NULL so they are recreated next time */
 		writeState->stripeBuffers = NULL;
 		writeState->stripeSkipList = NULL;
+	}
 
-		/*
-		 * Append stripeMetadata in old context so next MemoryContextReset
-		 * doesn't free it.
-		 */
-		MemoryContextSwitchTo(oldContext);
-		InsertStripeMetadataRow(writeState->relation->rd_node.relNode,
-								&stripeMetadata);
-		AppendStripeMetadata(datafileMetadata, stripeMetadata);
-	}
-	else
-	{
-		MemoryContextSwitchTo(oldContext);
-	}
+	MemoryContextSwitchTo(oldContext);
 }
 
 
@@ -278,17 +236,13 @@ CStoreEndWrite(TableWriteState *writeState)
 	{
 		MemoryContext oldContext = MemoryContextSwitchTo(writeState->stripeWriteContext);
 
-		StripeMetadata stripeMetadata = FlushStripe(writeState);
+		FlushStripe(writeState);
 		MemoryContextReset(writeState->stripeWriteContext);
 
 		MemoryContextSwitchTo(oldContext);
-		InsertStripeMetadataRow(writeState->relation->rd_node.relNode,
-								&stripeMetadata);
-		AppendStripeMetadata(writeState->datafileMetadata, stripeMetadata);
 	}
 
 	MemoryContextDelete(writeState->stripeWriteContext);
-	list_free_deep(writeState->datafileMetadata->stripeMetadataList);
 	pfree(writeState->comparisonFunctionArray);
 	FreeBlockData(writeState->blockData);
 	pfree(writeState);
@@ -366,11 +320,9 @@ CreateEmptyStripeSkipList(uint32 stripeMaxRowCount, uint32 blockRowCount,
 
 
 static void
-WriteToSmgr(TableWriteState *writeState, char *data, uint32 dataLength)
+WriteToSmgr(Relation rel, uint64 logicalOffset, char *data, uint32 dataLength)
 {
-	uint64 logicalOffset = writeState->currentFileOffset;
 	uint64 remaining = dataLength;
-	Relation rel = writeState->relation;
 	Buffer buffer;
 
 	while (remaining > 0)
@@ -383,14 +335,7 @@ WriteToSmgr(TableWriteState *writeState, char *data, uint32 dataLength)
 
 		RelationOpenSmgr(rel);
 		nblocks = smgrnblocks(rel->rd_smgr, MAIN_FORKNUM);
-
-		while (addr.blockno >= nblocks)
-		{
-			Buffer newBuffer = ReadBuffer(rel, P_NEW);
-			ReleaseBuffer(newBuffer);
-			nblocks = smgrnblocks(rel->rd_smgr, MAIN_FORKNUM);
-		}
-
+		Assert(addr.blockno < nblocks);
 		RelationCloseSmgr(rel);
 
 		buffer = ReadBuffer(rel, addr.blockno);
@@ -459,7 +404,7 @@ WriteToSmgr(TableWriteState *writeState, char *data, uint32 dataLength)
  * the function creates the skip list and footer buffers. Finally, the function
  * flushes the skip list, data, and footer buffers to the file.
  */
-static StripeMetadata
+static void
 FlushStripe(TableWriteState *writeState)
 {
 	StripeMetadata stripeMetadata = { 0 };
@@ -474,8 +419,9 @@ FlushStripe(TableWriteState *writeState)
 	uint32 blockRowCount = writeState->blockRowCount;
 	uint32 lastBlockIndex = stripeBuffers->rowCount / blockRowCount;
 	uint32 lastBlockRowCount = stripeBuffers->rowCount % blockRowCount;
-	uint64 initialFileOffset = writeState->currentFileOffset;
+	uint64 currentFileOffset = 0;
 	uint64 stripeSize = 0;
+	uint64 stripeRowCount = 0;
 
 	/*
 	 * check if the last block needs serialization , the last block was not serialized
@@ -520,6 +466,18 @@ FlushStripe(TableWriteState *writeState)
 		}
 	}
 
+	for (blockIndex = 0; blockIndex < blockCount; blockIndex++)
+	{
+		stripeRowCount +=
+			stripeSkipList->blockSkipNodeArray[0][blockIndex].rowCount;
+	}
+
+	stripeMetadata = ReserveStripe(writeState->relation, stripeSize,
+								   stripeRowCount, columnCount, blockCount,
+								   blockRowCount);
+
+	currentFileOffset = stripeMetadata.fileOffset;
+
 	/*
 	 * Each stripe has only one section:
 	 * Data section, in which we store data for each column continuously.
@@ -541,8 +499,9 @@ FlushStripe(TableWriteState *writeState)
 				columnBuffers->blockBuffersArray[blockIndex];
 			StringInfo existsBuffer = blockBuffers->existsBuffer;
 
-			WriteToSmgr(writeState, existsBuffer->data, existsBuffer->len);
-			writeState->currentFileOffset += existsBuffer->len;
+			WriteToSmgr(writeState->relation, currentFileOffset,
+						existsBuffer->data, existsBuffer->len);
+			currentFileOffset += existsBuffer->len;
 		}
 
 		for (blockIndex = 0; blockIndex < stripeSkipList->blockCount; blockIndex++)
@@ -551,30 +510,16 @@ FlushStripe(TableWriteState *writeState)
 				columnBuffers->blockBuffersArray[blockIndex];
 			StringInfo valueBuffer = blockBuffers->valueBuffer;
 
-			WriteToSmgr(writeState, valueBuffer->data, valueBuffer->len);
-			writeState->currentFileOffset += valueBuffer->len;
+			WriteToSmgr(writeState->relation, currentFileOffset,
+						valueBuffer->data, valueBuffer->len);
+			currentFileOffset += valueBuffer->len;
 		}
 	}
 
 	/* create skip list and footer buffers */
 	SaveStripeSkipList(writeState->relation->rd_node.relNode,
-					   writeState->currentStripeId,
+					   stripeMetadata.id,
 					   stripeSkipList, tupleDescriptor);
-
-	for (blockIndex = 0; blockIndex < blockCount; blockIndex++)
-	{
-		stripeMetadata.rowCount +=
-			stripeSkipList->blockSkipNodeArray[0][blockIndex].rowCount;
-	}
-
-	stripeMetadata.fileOffset = initialFileOffset;
-	stripeMetadata.dataLength = stripeSize;
-	stripeMetadata.id = writeState->currentStripeId;
-	stripeMetadata.blockCount = blockCount;
-	stripeMetadata.blockRowCount = writeState->blockRowCount;
-	stripeMetadata.columnCount = columnCount;
-
-	return stripeMetadata;
 }
 
 
@@ -794,21 +739,6 @@ DatumCopy(Datum datum, bool datumTypeByValue, int datumTypeLength)
 	}
 
 	return datumCopy;
-}
-
-
-/*
- * AppendStripeMetadata adds a copy of given stripeMetadata to the given
- * table footer's stripeMetadataList.
- */
-static void
-AppendStripeMetadata(DataFileMetadata *datafileMetadata, StripeMetadata stripeMetadata)
-{
-	StripeMetadata *stripeMetadataCopy = palloc0(sizeof(StripeMetadata));
-	memcpy(stripeMetadataCopy, &stripeMetadata, sizeof(StripeMetadata));
-
-	datafileMetadata->stripeMetadataList = lappend(datafileMetadata->stripeMetadataList,
-												   stripeMetadataCopy);
 }
 
 

@@ -68,24 +68,24 @@ ALTER TABLE t DROP COLUMN a;
 SELECT stripe, attr, block, minimum_value IS NULL, maximum_value IS NULL FROM cstore.cstore_skipnodes a, pg_class b WHERE a.relfilenode=b.relfilenode AND b.relname='t' ORDER BY 1, 2, 3;
  stripe | attr | block | ?column? | ?column? 
 --------+------+-------+----------+----------
-      0 |    1 |     0 | f        | f
-      0 |    2 |     0 | f        | f
       1 |    1 |     0 | f        | f
       1 |    2 |     0 | f        | f
       2 |    1 |     0 | f        | f
       2 |    2 |     0 | f        | f
+      3 |    1 |     0 | f        | f
+      3 |    2 |     0 | f        | f
 (6 rows)
 
 VACUUM FULL t;
 SELECT stripe, attr, block, minimum_value IS NULL, maximum_value IS NULL FROM cstore.cstore_skipnodes a, pg_class b WHERE a.relfilenode=b.relfilenode AND b.relname='t' ORDER BY 1, 2, 3;
  stripe | attr | block | ?column? | ?column? 
 --------+------+-------+----------+----------
-      0 |    1 |     0 | t        | t
-      0 |    2 |     0 | f        | f
       1 |    1 |     0 | t        | t
       1 |    2 |     0 | f        | f
       2 |    1 |     0 | t        | t
       2 |    2 |     0 | f        | f
+      3 |    1 |     0 | t        | t
+      3 |    2 |     0 | f        | f
 (6 rows)
 
 -- Make sure we cleaned-up the transient table metadata after VACUUM FULL commands
@@ -107,14 +107,14 @@ SELECT count(*) FROM t;
 SELECT pg_size_pretty(pg_relation_size('t'));
  pg_size_pretty 
 ----------------
- 16 kB
+ 32 kB
 (1 row)
 
 INSERT INTO t SELECT i FROM generate_series(1, 10000) i;
 SELECT pg_size_pretty(pg_relation_size('t'));
  pg_size_pretty 
 ----------------
- 56 kB
+ 112 kB
 (1 row)
 
 SELECT count(*) FROM t;
@@ -129,23 +129,23 @@ ROLLBACK TO SAVEPOINT s1;
 SELECT pg_size_pretty(pg_relation_size('t'));
  pg_size_pretty 
 ----------------
- 56 kB
+ 112 kB
 (1 row)
 
 COMMIT;
 -- vacuum should truncate the relation to the usable space
 VACUUM VERBOSE t;
 INFO:  statistics for "t":
-total file size: 57344, total data size: 10754
+total file size: 114688, total data size: 10754
 total row count: 2530, stripe count: 3, average rows per stripe: 843
 block count: 3, containing data for dropped columns: 0, none compressed: 3, pglz compressed: 0
 
-INFO:  "t": truncated 7 to 2 pages
+INFO:  "t": truncated 14 to 4 pages
 DETAIL:  CPU: user: 0.00 s, system: 0.00 s, elapsed: 0.00 s
 SELECT pg_size_pretty(pg_relation_size('t'));
  pg_size_pretty 
 ----------------
- 16 kB
+ 32 kB
 (1 row)
 
 SELECT count(*) FROM t;
@@ -172,7 +172,7 @@ INSERT INTO t SELECT i / 5 FROM generate_series(1, 1500) i;
 COMMIT;
 VACUUM VERBOSE t;
 INFO:  statistics for "t":
-total file size: 24576, total data size: 18808
+total file size: 49152, total data size: 18808
 total row count: 5530, stripe count: 5, average rows per stripe: 1106
 block count: 7, containing data for dropped columns: 0, none compressed: 5, pglz compressed: 2
 
@@ -188,7 +188,7 @@ INSERT INTO t SELECT 1, i / 5 FROM generate_series(1, 1500) i;
 ALTER TABLE t DROP COLUMN c;
 VACUUM VERBOSE t;
 INFO:  statistics for "t":
-total file size: 32768, total data size: 31372
+total file size: 65536, total data size: 31372
 total row count: 7030, stripe count: 6, average rows per stripe: 1171
 block count: 11, containing data for dropped columns: 2, none compressed: 9, pglz compressed: 2
 
@@ -199,7 +199,7 @@ SET cstore.compression TO "pglz";
 VACUUM FULL t;
 VACUUM VERBOSE t;
 INFO:  statistics for "t":
-total file size: 16384, total data size: 15728
+total file size: 49152, total data size: 15728
 total row count: 7030, stripe count: 4, average rows per stripe: 1757
 block count: 8, containing data for dropped columns: 0, none compressed: 2, pglz compressed: 6
 
