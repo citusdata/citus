@@ -36,10 +36,12 @@ DATA = cstore_fdw--1.7.sql cstore_fdw--1.6--1.7.sql  cstore_fdw--1.5--1.6.sql cs
 
 REGRESS = extension_create
 ISOLATION = create
-EXTRA_CLEAN = cstore.pb-c.h cstore.pb-c.c data/*.cstore data/*.cstore.footer \
-              sql/block_filtering.sql sql/create.sql sql/data_types.sql sql/load.sql \
-              sql/copyto.sql expected/block_filtering.out expected/create.out \
-              expected/data_types.out expected/load.out expected/copyto.out
+EXTRA_CLEAN = sql/fdw_block_filtering.sql sql/fdw_create.sql sql/fdw_data_types.sql sql/fdw_load.sql \
+              sql/fdw_copyto.sql expected/fdw_block_filtering.out expected/fdw_create.out \
+              expected/fdw_data_types.out expected/fdw_load.out expected/fdw_copyto.out \
+              sql/am_block_filtering.sql sql/am_create.sql sql/am_data_types.sql sql/am_load.sql \
+              sql/am_copyto.sql expected/am_block_filtering.out expected/am_create.out \
+              expected/am_data_types.out expected/am_load.out expected/am_copyto.out
 
 ifeq ($(USE_FDW),yes)
 	PG_CFLAGS += -DUSE_FDW
