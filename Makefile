@@ -25,7 +25,7 @@ else
 $(error version $(VER) is not supported)
 endif
 
-PG_CFLAGS = -std=c11 -Wshadow
+PG_CFLAGS = -std=c11 -Wshadow -Werror
 OBJS = cstore.o cstore_writer.o cstore_reader.o \
        cstore_compression.o mod.o cstore_metadata_tables.o
 
@@ -40,7 +40,7 @@ EXTRA_CLEAN = sql/fdw_block_filtering.sql sql/fdw_create.sql sql/fdw_data_types.
               sql/fdw_copyto.sql expected/fdw_block_filtering.out expected/fdw_create.out \
               expected/fdw_data_types.out expected/fdw_load.out expected/fdw_copyto.out \
               sql/am_block_filtering.sql sql/am_create.sql sql/am_data_types.sql sql/am_load.sql \
-              sql/am_copyto.sql expected/am_block_filtering.out expected/am_create.out \
+              sql/am_copyto.sql expected/am_block_filtering.out \
               expected/am_data_types.out expected/am_load.out expected/am_copyto.out
 
 ifeq ($(USE_FDW),yes)

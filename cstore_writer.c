@@ -336,6 +336,7 @@ WriteToSmgr(Relation rel, uint64 logicalOffset, char *data, uint32 dataLength)
 		RelationOpenSmgr(rel);
 		nblocks = smgrnblocks(rel->rd_smgr, MAIN_FORKNUM);
 		Assert(addr.blockno < nblocks);
+		(void) nblocks; /* keep compiler quiet */
 		RelationCloseSmgr(rel);
 
 		buffer = ReadBuffer(rel, addr.blockno);
