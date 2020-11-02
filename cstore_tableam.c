@@ -244,6 +244,7 @@ cstore_beginscan_extended(Relation relation, Snapshot snapshot,
 	List *columnList = NIL;
 	List *neededColumnList = NIL;
 	MemoryContext oldContext = MemoryContextSwitchTo(GetCStoreMemoryContext());
+	ListCell *columnCell = NULL;
 
 	scan->cs_base.rs_rd = relation;
 	scan->cs_base.rs_snapshot = snapshot;
@@ -255,7 +256,6 @@ cstore_beginscan_extended(Relation relation, Snapshot snapshot,
 	columnList = RelationColumnList(relation);
 
 	/* only collect columns that we need for the scan */
-	ListCell *columnCell = NULL;
 	foreach(columnCell, columnList)
 	{
 		Var *var = castNode(Var, lfirst(columnCell));

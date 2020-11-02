@@ -133,6 +133,8 @@ static void
 CStoreSetRelPathlistHook(PlannerInfo *root, RelOptInfo *rel, Index rti,
 						 RangeTblEntry *rte)
 {
+	Relation relation;
+
 	/* call into previous hook if assigned */
 	if (PreviousSetRelPathlistHook)
 	{
@@ -156,13 +158,14 @@ CStoreSetRelPathlistHook(PlannerInfo *root, RelOptInfo *rel, Index rti,
 	 * If that is the case we want to insert an extra path that pushes down the projection
 	 * into the scan of the table to minimize the data read.
 	 */
-	Relation relation = RelationIdGetRelation(rte->relid);
+	relation = RelationIdGetRelation(rte->relid);
 	if (relation->rd_tableam == GetCstoreTableAmRoutine())
 	{
+		Path *customPath = CreateCStoreScanPath(rel, rte);
+
 		ereport(DEBUG1, (errmsg("pathlist hook for cstore table am")));
 
 		/* we propose a new path that will be the only path for scanning this relation */
-		Path *customPath = CreateCStoreScanPath(rel, rte);
 		clear_paths(rel);
 		add_path(rel, customPath);
 	}
@@ -175,17 +178,19 @@ CreateCStoreScanPath(RelOptInfo *rel, RangeTblEntry *rte)
 {
 	CStoreScanPath *cspath = (CStoreScanPath *) newNode(sizeof(CStoreScanPath),
 														T_CustomPath);
+	CustomPath *cpath;
+	Path *path;
 
 	/*
 	 * popuate custom path information
 	 */
-	CustomPath *cpath = &cspath->custom_path;
+	cpath = &cspath->custom_path;
 	cpath->methods = &CStoreScanPathMethods;
 
 	/*
 	 * populate generic path information
 	 */
-	Path *path = &cpath->path;
+	path = &cpath->path;
 	path->pathtype = T_CustomScan;
 	path->parent = rel;
 	path->pathtarget = rel->reltarget;
@@ -212,12 +217,13 @@ CStoreScanCost(RangeTblEntry *rte)
 {
 	Relation rel = RelationIdGetRelation(rte->relid);
 	DataFileMetadata *metadata = ReadDataFileMetadata(rel->rd_node.relNode, false);
-	RelationClose(rel);
-	rel = NULL;
-
 	uint32 maxColumnCount = 0;
 	uint64 totalStripeSize = 0;
 	ListCell *stripeMetadataCell = NULL;
+
+	RelationClose(rel);
+	rel = NULL;
+
 	foreach(stripeMetadataCell, metadata->stripeMetadataList)
 	{
 		StripeMetadata *stripeMetadata = (StripeMetadata *) lfirst(stripeMetadataCell);
@@ -225,12 +231,13 @@ CStoreScanCost(RangeTblEntry *rte)
 		maxColumnCount = Max(maxColumnCount, stripeMetadata->columnCount);
 	}
 
-	Bitmapset *attr_needed = rte->selectedCols;
-	double numberOfColumnsRead = bms_num_members(attr_needed);
-	double selectionRatio = numberOfColumnsRead / (double) maxColumnCount;
-	Cost scanCost = (double) totalStripeSize / BLCKSZ * selectionRatio;
-
-	return scanCost;
+	{
+		Bitmapset *attr_needed = rte->selectedCols;
+		double numberOfColumnsRead = bms_num_members(attr_needed);
+		double selectionRatio = numberOfColumnsRead / (double) maxColumnCount;
+		Cost scanCost = (double) totalStripeSize / BLCKSZ * selectionRatio;
+		return scanCost;
+	}
 }
 
 
