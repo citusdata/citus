@@ -20,7 +20,11 @@
 
 #include "access/heapam.h"
 #include "access/reloptions.h"
+#if PG_VERSION_NUM >= 130000
+#include "access/heaptoast.h"
+#else
 #include "access/tuptoaster.h"
+#endif
 #include "access/xact.h"
 #include "catalog/catalog.h"
 #include "catalog/indexing.h"
@@ -110,7 +114,14 @@ static const CStoreValidOption ValidOptionArray[] =
 static object_access_hook_type prevObjectAccessHook = NULL;
 
 /* local functions forward declarations */
-#if PG_VERSION_NUM >= 100000
+#if PG_VERSION_NUM >= 130000
+static void CStoreProcessUtility(PlannedStmt *plannedStatement, const char *queryString,
+								 ProcessUtilityContext context,
+								 ParamListInfo paramListInfo,
+								 QueryEnvironment *queryEnvironment,
+								 DestReceiver *destReceiver,
+								 QueryCompletion *queryCompletion);
+#elif PG_VERSION_NUM >= 100000
 static void CStoreProcessUtility(PlannedStmt *plannedStatement, const char *queryString,
 								 ProcessUtilityContext context,
 								 ParamListInfo paramListInfo,
@@ -216,7 +227,8 @@ static ProcessUtility_hook_type PreviousProcessUtilityHook = NULL;
 void
 cstore_fdw_init()
 {
-	PreviousProcessUtilityHook = ProcessUtility_hook;
+	PreviousProcessUtilityHook = (ProcessUtility_hook != NULL) ?
+								 ProcessUtility_hook : standard_ProcessUtility;
 	ProcessUtility_hook = CStoreProcessUtility;
 	prevObjectAccessHook = object_access_hook;
 	object_access_hook = CStoreFdwObjectAccessHook;
@@ -284,13 +296,20 @@ cstore_ddl_event_end_trigger(PG_FUNCTION_ARGS)
  * the previous utility hook or the standard utility command via macro
  * CALL_PREVIOUS_UTILITY.
  */
-#if PG_VERSION_NUM >= 100000
+#if PG_VERSION_NUM >= 130000
 static void
 CStoreProcessUtility(PlannedStmt *plannedStatement, const char *queryString,
 					 ProcessUtilityContext context,
 					 ParamListInfo paramListInfo,
 					 QueryEnvironment *queryEnvironment,
-					 DestReceiver *destReceiver, char *completionTag)
+					 DestReceiver *destReceiver, QueryCompletion *queryCompletion)
+#elif PG_VERSION_NUM >= 100000
+static void
+CStoreProcessUtility(PlannedStmt * plannedStatement, const char * queryString,
+					 ProcessUtilityContext context,
+					 ParamListInfo paramListInfo,
+					 QueryEnvironment * queryEnvironment,
+					 DestReceiver * destReceiver, char * completionTag)
 #else
 static void
 CStoreProcessUtility(Node * parseTree, const char * queryString,
@@ -299,6 +318,9 @@ CStoreProcessUtility(Node * parseTree, const char * queryString,
 					 DestReceiver * destReceiver, char * completionTag)
 #endif
 {
+#if PG_VERSION_NUM >= 130000
+	char *completionTag = NULL;
+#endif
 #if PG_VERSION_NUM >= 100000
 	Node *parseTree = plannedStatement->utilityStmt;
 #endif
@@ -313,8 +335,7 @@ CStoreProcessUtility(Node * parseTree, const char * queryString,
 		}
 		else
 		{
-			CALL_PREVIOUS_UTILITY(parseTree, queryString, context, paramListInfo,
-								  destReceiver, completionTag);
+			CALL_PREVIOUS_UTILITY();
 		}
 	}
 	else if (nodeTag(parseTree) == T_TruncateStmt)
@@ -330,8 +351,7 @@ CStoreProcessUtility(Node * parseTree, const char * queryString,
 		{
 			truncateStatement->relations = otherTablesList;
 
-			CALL_PREVIOUS_UTILITY(parseTree, queryString, context, paramListInfo,
-								  destReceiver, completionTag);
+			CALL_PREVIOUS_UTILITY();
 
 			/* restore the former relation list. Our
 			 * replacement could be freed but still needed
@@ -352,21 +372,18 @@ CStoreProcessUtility(Node * parseTree, const char * queryString,
 	{
 		AlterTableStmt *alterTable = (AlterTableStmt *) parseTree;
 		CStoreProcessAlterTableCommand(alterTable);
-		CALL_PREVIOUS_UTILITY(parseTree, queryString, context, paramListInfo,
-							  destReceiver, completionTag);
+		CALL_PREVIOUS_UTILITY();
 	}
 	else if (nodeTag(parseTree) == T_DropdbStmt)
 	{
 		/* let postgres handle error checking and dropping of the database */
-		CALL_PREVIOUS_UTILITY(parseTree, queryString, context, paramListInfo,
-							  destReceiver, completionTag);
+		CALL_PREVIOUS_UTILITY();
 	}
 
 	/* handle other utility statements */
 	else
 	{
-		CALL_PREVIOUS_UTILITY(parseTree, queryString, context, paramListInfo,
-							  destReceiver, completionTag);
+		CALL_PREVIOUS_UTILITY();
 	}
 }
 

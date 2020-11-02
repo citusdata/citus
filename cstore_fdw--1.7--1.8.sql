@@ -3,7 +3,7 @@
 DO $proc$
 BEGIN
 
-IF version() ~ '12' THEN
+IF version() ~ '12' or version() ~ '13' THEN
   EXECUTE $$
     CREATE FUNCTION cstore_tableam_handler(internal)
     RETURNS table_am_handler
