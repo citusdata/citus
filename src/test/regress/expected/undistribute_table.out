@@ -194,6 +194,11 @@ SELECT * FROM partitioned_table_6_10 ORDER BY 1, 2;
   7 | 2
 (1 row)
 
+-- undistributing partitions are not supported
+SELECT undistribute_table('partitioned_table_1_5');
+ERROR:  Cannot undistribute table because it is a partition.
+HINT:  Undistribute the partitioned table "partitioned_table" instead.
+-- we can undistribute partitioned parent tables
 SELECT undistribute_table('partitioned_table');
 NOTICE:  Undistributing the partitions of undistribute_table.partitioned_table
 NOTICE:  Creating a new local table for undistribute_table.partitioned_table_1_5

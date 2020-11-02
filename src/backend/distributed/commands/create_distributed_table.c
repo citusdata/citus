@@ -1592,6 +1592,16 @@ UndistributeTable(Oid relationId)
 							   "because it is a foreign table.")));
 	}
 
+	if (PartitionTable(relationId))
+	{
+		Oid parentRelationId = PartitionParentOid(relationId);
+		char *parentRelationName = get_rel_name(parentRelationId);
+		ereport(ERROR, (errmsg("Cannot undistribute table "
+							   "because it is a partition."),
+						errhint("Undistribute the partitioned table \"%s\" instead.",
+								parentRelationName)));
+	}
+
 	List *preLoadCommands = GetPreLoadTableCreationCommands(relationId, true);
 	List *postLoadCommands = GetPostLoadTableCreationCommands(relationId);
 

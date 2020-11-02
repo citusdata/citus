@@ -77,6 +77,9 @@ SELECT * FROM partitioned_table ORDER BY 1, 2;
 SELECT * FROM partitioned_table_1_5 ORDER BY 1, 2;
 SELECT * FROM partitioned_table_6_10 ORDER BY 1, 2;
 
+-- undistributing partitions are not supported
+SELECT undistribute_table('partitioned_table_1_5');
+-- we can undistribute partitioned parent tables
 SELECT undistribute_table('partitioned_table');
 
 SELECT logicalrelid FROM pg_dist_partition WHERE logicalrelid::regclass::text LIKE 'partitioned\_table%'  ORDER BY 1;
