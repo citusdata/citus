@@ -10,7 +10,11 @@
 #include "access/rewriteheap.h"
 #include "access/tableam.h"
 #include "access/tsmapi.h"
+#if PG_VERSION_NUM >= 130000
+#include "access/heaptoast.h"
+#else
 #include "access/tuptoaster.h"
+#endif
 #include "access/xact.h"
 #include "catalog/catalog.h"
 #include "catalog/index.h"
@@ -41,6 +45,7 @@
 #include "cstore.h"
 #include "cstore_customscan.h"
 #include "cstore_tableam.h"
+#include "cstore_version_compat.h"
 
 #define CSTORE_TABLEAM_NAME "cstore_tableam"
 
@@ -70,6 +75,15 @@ static ProcessUtility_hook_type PreviousProcessUtilityHook = NULL;
 static void CStoreTableAMObjectAccessHook(ObjectAccessType access, Oid classId, Oid
 										  objectId, int subId,
 										  void *arg);
+#if PG_VERSION_NUM >= 130000
+static void CStoreTableAMProcessUtility(PlannedStmt *plannedStatement,
+										const char *queryString,
+										ProcessUtilityContext context,
+										ParamListInfo paramListInfo,
+										QueryEnvironment *queryEnvironment,
+										DestReceiver *destReceiver,
+										QueryCompletion *qc);
+#else
 static void CStoreTableAMProcessUtility(PlannedStmt *plannedStatement,
 										const char *queryString,
 										ProcessUtilityContext context,
@@ -77,6 +91,8 @@ static void CStoreTableAMProcessUtility(PlannedStmt *plannedStatement,
 										QueryEnvironment *queryEnvironment,
 										DestReceiver *destReceiver,
 										char *completionTag);
+#endif
+
 static bool IsCStoreTableAmTable(Oid relationId);
 static bool ConditionalLockRelationWithTimeout(Relation rel, LOCKMODE lockMode,
 											   int timeout, int retryInterval);
@@ -1035,6 +1051,7 @@ CStoreExecutorEnd(QueryDesc *queryDesc)
 }
 
 
+#if PG_VERSION_NUM >= 130000
 static void
 CStoreTableAMProcessUtility(PlannedStmt *plannedStatement,
 							const char *queryString,
@@ -1042,7 +1059,17 @@ CStoreTableAMProcessUtility(PlannedStmt *plannedStatement,
 							ParamListInfo paramListInfo,
 							QueryEnvironment *queryEnvironment,
 							DestReceiver *destReceiver,
-							char *completionTag)
+							QueryCompletion *queryCompletion)
+#else
+static void
+CStoreTableAMProcessUtility(PlannedStmt * plannedStatement,
+							const char * queryString,
+							ProcessUtilityContext context,
+							ParamListInfo paramListInfo,
+							QueryEnvironment * queryEnvironment,
+							DestReceiver * destReceiver,
+							char * completionTag)
+#endif
 {
 	Node *parseTree = plannedStatement->utilityStmt;
 
@@ -1067,18 +1094,7 @@ CStoreTableAMProcessUtility(PlannedStmt *plannedStatement,
 		}
 	}
 
-	if (PreviousProcessUtilityHook != NULL)
-	{
-		PreviousProcessUtilityHook(plannedStatement, queryString, context,
-								   paramListInfo, queryEnvironment,
-								   destReceiver, completionTag);
-	}
-	else
-	{
-		standard_ProcessUtility(plannedStatement, queryString, context,
-								paramListInfo, queryEnvironment,
-								destReceiver, completionTag);
-	}
+	CALL_PREVIOUS_UTILITY();
 }
 
 
@@ -1087,7 +1103,8 @@ cstore_tableam_init()
 {
 	PreviousExecutorEndHook = ExecutorEnd_hook;
 	ExecutorEnd_hook = CStoreExecutorEnd;
-	PreviousProcessUtilityHook = ProcessUtility_hook;
+	PreviousProcessUtilityHook = (ProcessUtility_hook != NULL) ?
+								 ProcessUtility_hook : standard_ProcessUtility;
 	ProcessUtility_hook = CStoreTableAMProcessUtility;
 	prevObjectAccessHook = object_access_hook;
 	object_access_hook = CStoreTableAMObjectAccessHook;
