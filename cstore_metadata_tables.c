@@ -740,6 +740,15 @@ DeleteDataFileMetadataRowIfExists(Oid relfilenode)
 	SysScanDesc scanDescriptor = NULL;
 	HeapTuple heapTuple = NULL;
 
+	/*
+	 * During a restore for binary upgrade, metadata tables and indexes may or
+	 * may not exist.
+	 */
+	if (IsBinaryUpgrade)
+	{
+		return;
+	}
+
 	ScanKeyInit(&scanKey[0], Anum_cstore_data_files_relfilenode,
 				BTEqualStrategyNumber, F_OIDEQ, Int32GetDatum(relfilenode));
 
