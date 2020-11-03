@@ -312,8 +312,7 @@ NodeTryGetRteRelid(Node *node)
 
 	RangeTblEntry *rangeTableEntry = (RangeTblEntry *) node;
 
-	if (!(rangeTableEntry->rtekind == RTE_RELATION &&
-		  rangeTableEntry->relkind == RELKIND_RELATION))
+	if (rangeTableEntry->rtekind != RTE_RELATION)
 	{
 		return InvalidOid;
 	}

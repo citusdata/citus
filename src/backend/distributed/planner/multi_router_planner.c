@@ -518,14 +518,13 @@ static DeferredErrorMessage *
 ModifyPartialQuerySupported(Query *queryTree, bool multiShardQuery,
 							Oid *distributedTableIdOutput)
 {
-	DeferredErrorMessage *deferredError =
-		DeferErrorIfUnsupportedModifyQueryWithLocalTable(queryTree);
+	DeferredErrorMessage *deferredError = DeferErrorIfModifyView(queryTree);
 	if (deferredError != NULL)
 	{
 		return deferredError;
 	}
 
-	deferredError = DeferErrorIfModifyView(queryTree);
+	deferredError = DeferErrorIfUnsupportedModifyQueryWithLocalTable(queryTree);
 	if (deferredError != NULL)
 	{
 		return deferredError;
