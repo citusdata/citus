@@ -1585,6 +1585,12 @@ UndistributeTable(Oid relationId)
 							   "because a foreign key references to it.")));
 	}
 
+	char relationKind = get_rel_relkind(relationId);
+	if (relationKind == RELKIND_FOREIGN_TABLE)
+	{
+		ereport(ERROR, (errmsg("Cannot undistribute table "
+							   "because it is a foreign table.")));
+	}
 
 	List *preLoadCommands = GetPreLoadTableCreationCommands(relationId, true);
 	List *postLoadCommands = GetPostLoadTableCreationCommands(relationId);
