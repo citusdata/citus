@@ -118,7 +118,7 @@ jobs:
 
   test-11_check-vanilla:
     docker:
-      - image: 'citus/exttester:11.9'
+      - image: 'citus/exttester:11-9_dev'
     working_directory: /home/circleci/project
     steps:
       - checkout
@@ -254,7 +254,7 @@ jobs:
           flags: 'test_12,multi'
   test-12_check-vanilla:
     docker:
-      - image: 'citus/exttester:12.4'
+      - image: 'citus/exttester:12.4_dev'
     working_directory: /home/circleci/project
     steps:
       - checkout
@@ -405,7 +405,7 @@ jobs:
 
   test-13_check-vanilla:
     docker:
-      - image: 'citus/exttester:13.0'
+      - image: 'citus/exttester:13.0_dev'
     working_directory: /home/circleci/project
     steps:
       - checkout
@@ -544,60 +544,60 @@ workflows:
       - check-style
       - check-sql-snapshots
 
-      - test-11_check-multi:
-          requires: [build-11]
+      # - test-11_check-multi:
+      #     requires: [build-11]
       - test-11_check-vanilla:
           requires: [build-11]
-      - test-11_check-isolation:
-          requires: [build-11]
-      - test-11_check-mx:
-          requires: [build-11]
-      - test-11_check-worker:
-          requires: [build-11]
-      - test-11_check-follower-cluster:
-          requires: [build-11]
-      - test-11_check-failure:
-          requires: [build-11]
+      # - test-11_check-isolation:
+      #     requires: [build-11]
+      # - test-11_check-mx:
+      #     requires: [build-11]
+      # - test-11_check-worker:
+      #     requires: [build-11]
+      # - test-11_check-follower-cluster:
+      #     requires: [build-11]
+      # - test-11_check-failure:
+      #     requires: [build-11]
 
-      - test-12_check-multi:
-          requires: [build-12]
+      # - test-12_check-multi:
+      #     requires: [build-12]
       - test-12_check-vanilla:
           requires: [build-12]
-      - test-12_check-isolation:
-          requires: [build-12]
-      - test-12_check-mx:
-          requires: [build-12]
-      - test-12_check-worker:
-          requires: [build-12]
-      - test-12_check-follower-cluster:
-          requires: [build-12]
-      - test-12_check-failure:
-          requires: [build-12]
+      # - test-12_check-isolation:
+      #     requires: [build-12]
+      # - test-12_check-mx:
+      #     requires: [build-12]
+      # - test-12_check-worker:
+      #     requires: [build-12]
+      # - test-12_check-follower-cluster:
+      #     requires: [build-12]
+      # - test-12_check-failure:
+      #     requires: [build-12]
 
-      - test-13_check-multi:
-          requires: [build-13]
+      # - test-13_check-multi:
+      #     requires: [build-13]
       - test-13_check-vanilla:
           requires: [build-13]
-      - test-13_check-isolation:
-          requires: [build-13]
-      - test-13_check-mx:
-          requires: [build-13]
-      - test-13_check-worker:
-          requires: [build-13]
-      - test-13_check-follower-cluster:
-          requires: [build-13]
-      - test-13_check-failure:
-          requires: [build-13]
+      # - test-13_check-isolation:
+      #     requires: [build-13]
+      # - test-13_check-mx:
+      #     requires: [build-13]
+      # - test-13_check-worker:
+      #     requires: [build-13]
+      # - test-13_check-follower-cluster:
+      #     requires: [build-13]
+      # - test-13_check-failure:
+      #     requires: [build-13]
 
-      - test-11-12_check-pg-upgrade:
-          requires:
-            - build-11
-            - build-12
+      # - test-11-12_check-pg-upgrade:
+      #     requires:
+      #       - build-11
+      #       - build-12
 
-      - test-12-13_check-pg-upgrade:
-          requires:
-            - build-12
-            - build-13
+      # - test-12-13_check-pg-upgrade:
+      #     requires:
+      #       - build-12
+      #       - build-13
 
       - test-11_check-citus-upgrade:
           requires: [build-11]
