@@ -93,6 +93,8 @@ typedef struct DataFileMetadata
 {
 	List *stripeMetadataList;
 	uint64 blockRowCount;
+	uint64 stripeRowCount;
+	CompressionType compression;
 } DataFileMetadata;
 
 
@@ -277,10 +279,14 @@ extern uint64 CStoreTableRowCount(Relation relation);
 extern bool CompressBuffer(StringInfo inputBuffer, StringInfo outputBuffer,
 						   CompressionType compressionType);
 extern StringInfo DecompressBuffer(StringInfo buffer, CompressionType compressionType);
+extern char * CompressionTypeStr(CompressionType type);
 
 /* cstore_metadata_tables.c */
 extern void DeleteDataFileMetadataRowIfExists(Oid relfilenode);
-extern void InitCStoreDataFileMetadata(Oid relfilenode, int blockRowCount);
+extern void InitCStoreDataFileMetadata(Oid relfilenode, int blockRowCount, int
+									   stripeRowCount, CompressionType compression);
+extern void UpdateCStoreDataFileMetadata(Oid relfilenode, int blockRowCount, int
+										 stripeRowCount, CompressionType compression);
 extern DataFileMetadata * ReadDataFileMetadata(Oid relfilenode, bool missingOk);
 extern uint64 GetHighestUsedAddress(Oid relfilenode);
 extern StripeMetadata ReserveStripe(Relation rel, uint64 size,

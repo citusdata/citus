@@ -34,6 +34,8 @@ LANGUAGE C STRICT;
 CREATE TABLE cstore_data_files (
     relfilenode oid NOT NULL,
     block_row_count int NOT NULL,
+    stripe_row_count int NOT NULL,
+    compression name NOT NULL,
     version_major bigint NOT NULL,
     version_minor bigint NOT NULL,
     PRIMARY KEY (relfilenode)
@@ -74,3 +76,13 @@ CREATE TABLE cstore_skipnodes (
 ) WITH (user_catalog_table = true);
 
 COMMENT ON TABLE cstore_skipnodes IS 'CStore per block metadata';
+
+CREATE VIEW cstore_options AS
+SELECT c.oid::regclass regclass,
+       d.block_row_count,
+       d.stripe_row_count,
+       d.compression
+FROM pg_class c
+JOIN cstore.cstore_data_files d USING(relfilenode);
+
+COMMENT ON VIEW cstore_options IS 'CStore per table settings';

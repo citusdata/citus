@@ -170,3 +170,27 @@ DecompressBuffer(StringInfo buffer, CompressionType compressionType)
 
 	return decompressedBuffer;
 }
+
+
+/*
+ * CompressionTypeStr returns string representation of a compression type.
+ */
+char *
+CompressionTypeStr(CompressionType type)
+{
+	switch (type)
+	{
+		case COMPRESSION_NONE:
+		{
+			return "none";
+		}
+
+		case COMPRESSION_PG_LZ:
+		{
+			return "pglz";
+		}
+
+		default:
+			return "unknown";
+	}
+}

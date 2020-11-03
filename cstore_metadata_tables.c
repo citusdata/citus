@@ -57,7 +57,7 @@ static Oid CStoreDataFilesIndexRelationId(void);
 static Oid CStoreSkipNodesRelationId(void);
 static Oid CStoreSkipNodesIndexRelationId(void);
 static Oid CStoreNamespaceId(void);
-static bool ReadCStoreDataFiles(Oid relfilenode, uint64 *blockRowCount);
+static bool ReadCStoreDataFiles(Oid relfilenode, DataFileMetadata *metadata);
 static ModifyState * StartModifyRelation(Relation rel);
 static void InsertTupleAndEnforceConstraints(ModifyState *state, Datum *values,
 											 bool *nulls);
@@ -68,11 +68,31 @@ static bytea * DatumToBytea(Datum value, Form_pg_attribute attrForm);
 static Datum ByteaToDatum(bytea *bytes, Form_pg_attribute attrForm);
 
 /* constants for cstore_table */
-#define Natts_cstore_data_files 4
+#define Natts_cstore_data_files 6
 #define Anum_cstore_data_files_relfilenode 1
 #define Anum_cstore_data_files_block_row_count 2
-#define Anum_cstore_data_files_version_major 3
-#define Anum_cstore_data_files_version_minor 4
+#define Anum_cstore_data_files_stripe_row_count 3
+#define Anum_cstore_data_files_compression 4
+#define Anum_cstore_data_files_version_major 5
+#define Anum_cstore_data_files_version_minor 6
+
+/* ----------------
+ *		cstore.cstore_data_files definition.
+ * ----------------
+ */
+typedef struct FormData_cstore_data_files
+{
+	Oid relfilenode;
+	int32 block_row_count;
+	int32 stripe_row_count;
+	NameData compression;
+	int64 version_major;
+	int64 version_minor;
+
+#ifdef CATALOG_VARLEN           /* variable-length fields start here */
+#endif
+} FormData_cstore_data_files;
+typedef FormData_cstore_data_files *Form_cstore_data_files;
 
 /* constants for cstore_stripe */
 #define Natts_cstore_stripes 8
@@ -106,16 +126,22 @@ static Datum ByteaToDatum(bytea *bytes, Form_pg_attribute attrForm);
  * in cstore_data_files.
  */
 void
-InitCStoreDataFileMetadata(Oid relfilenode, int blockRowCount)
+InitCStoreDataFileMetadata(Oid relfilenode, int blockRowCount, int stripeRowCount,
+						   CompressionType compression)
 {
 	Oid cstoreDataFilesOid = InvalidOid;
 	Relation cstoreDataFiles = NULL;
 	ModifyState *modifyState = NULL;
+	NameData compressionName = { 0 };
+
+	namestrcpy(&compressionName, CompressionTypeStr(compression));
 
 	bool nulls[Natts_cstore_data_files] = { 0 };
 	Datum values[Natts_cstore_data_files] = {
 		ObjectIdGetDatum(relfilenode),
 		Int32GetDatum(blockRowCount),
+		Int32GetDatum(stripeRowCount),
+		NameGetDatum(&compressionName),
 		Int32GetDatum(CSTORE_VERSION_MAJOR),
 		Int32GetDatum(CSTORE_VERSION_MINOR)
 	};
@@ -130,6 +156,84 @@ InitCStoreDataFileMetadata(Oid relfilenode, int blockRowCount)
 	FinishModifyRelation(modifyState);
 
 	CommandCounterIncrement();
+
+	heap_close(cstoreDataFiles, NoLock);
+}
+
+
+void
+UpdateCStoreDataFileMetadata(Oid relfilenode, int blockRowCount, int stripeRowCount,
+							 CompressionType compression)
+{
+	const int scanKeyCount = 1;
+	ScanKeyData scanKey[1];
+	bool indexOK = true;
+	SysScanDesc scanDescriptor = NULL;
+	Form_cstore_data_files metadata = NULL;
+	HeapTuple heapTuple = NULL;
+	Datum values[Natts_cstore_data_files] = { 0 };
+	bool isnull[Natts_cstore_data_files] = { 0 };
+	bool replace[Natts_cstore_data_files] = { 0 };
+
+	Relation cstoreDataFiles = heap_open(CStoreDataFilesRelationId(), RowExclusiveLock);
+	TupleDesc tupleDescriptor = RelationGetDescr(cstoreDataFiles);
+
+	ScanKeyInit(&scanKey[0], Anum_cstore_data_files_relfilenode, BTEqualStrategyNumber,
+				F_INT8EQ, ObjectIdGetDatum(relfilenode));
+
+	scanDescriptor = systable_beginscan(cstoreDataFiles,
+										CStoreDataFilesIndexRelationId(),
+										indexOK,
+										NULL, scanKeyCount, scanKey);
+
+	heapTuple = systable_getnext(scanDescriptor);
+	if (heapTuple == NULL)
+	{
+		ereport(ERROR, (errmsg("relfilenode %d doesn't belong to a cstore table",
+							   relfilenode)));
+	}
+
+	metadata = (Form_cstore_data_files) GETSTRUCT(heapTuple);
+
+	bool changed = false;
+	if (metadata->block_row_count != blockRowCount)
+	{
+		values[Anum_cstore_data_files_block_row_count - 1] = Int32GetDatum(blockRowCount);
+		isnull[Anum_cstore_data_files_block_row_count - 1] = false;
+		replace[Anum_cstore_data_files_block_row_count - 1] = true;
+		changed = true;
+	}
+
+	if (metadata->stripe_row_count != stripeRowCount)
+	{
+		values[Anum_cstore_data_files_stripe_row_count - 1] = Int32GetDatum(
+			stripeRowCount);
+		isnull[Anum_cstore_data_files_stripe_row_count - 1] = false;
+		replace[Anum_cstore_data_files_stripe_row_count - 1] = true;
+		changed = true;
+	}
+
+	if (ParseCompressionType(NameStr(metadata->compression)) != compression)
+	{
+		Name compressionName = palloc0(sizeof(NameData));
+		namestrcpy(compressionName, CompressionTypeStr(compression));
+		values[Anum_cstore_data_files_compression - 1] = NameGetDatum(compressionName);
+		isnull[Anum_cstore_data_files_compression - 1] = false;
+		replace[Anum_cstore_data_files_compression - 1] = true;
+		changed = true;
+	}
+
+	if (changed)
+	{
+		heapTuple = heap_modify_tuple(heapTuple, tupleDescriptor, values, isnull,
+									  replace);
+
+		CatalogTupleUpdate(cstoreDataFiles, &heapTuple->t_self, heapTuple);
+
+		CommandCounterIncrement();
+	}
+
+	systable_endscan(scanDescriptor);
 
 	heap_close(cstoreDataFiles, NoLock);
 }
@@ -355,7 +459,7 @@ DataFileMetadata *
 ReadDataFileMetadata(Oid relfilenode, bool missingOk)
 {
 	DataFileMetadata *datafileMetadata = palloc0(sizeof(DataFileMetadata));
-	bool found = ReadCStoreDataFiles(relfilenode, &datafileMetadata->blockRowCount);
+	bool found = ReadCStoreDataFiles(relfilenode, datafileMetadata);
 	if (!found)
 	{
 		if (!missingOk)
@@ -555,7 +659,7 @@ ReadDataFileStripeList(Oid relfilenode, Snapshot snapshot)
  * false if table was not found in cstore_data_files.
  */
 static bool
-ReadCStoreDataFiles(Oid relfilenode, uint64 *blockRowCount)
+ReadCStoreDataFiles(Oid relfilenode, DataFileMetadata *metadata)
 {
 	bool found = false;
 	Oid cstoreDataFilesOid = InvalidOid;
@@ -599,8 +703,19 @@ ReadCStoreDataFiles(Oid relfilenode, uint64 *blockRowCount)
 		Datum datumArray[Natts_cstore_data_files];
 		bool isNullArray[Natts_cstore_data_files];
 		heap_deform_tuple(heapTuple, tupleDescriptor, datumArray, isNullArray);
-		*blockRowCount = DatumGetInt32(datumArray[Anum_cstore_data_files_block_row_count -
-												  1]);
+
+		if (metadata)
+		{
+			Name compressionName = NULL;
+
+			metadata->blockRowCount = DatumGetInt32(
+				datumArray[Anum_cstore_data_files_block_row_count - 1]);
+			metadata->stripeRowCount = DatumGetInt32(
+				datumArray[Anum_cstore_data_files_stripe_row_count - 1]);
+			compressionName = DatumGetName(
+				datumArray[Anum_cstore_data_files_compression - 1]);
+			metadata->compression = ParseCompressionType(NameStr(*compressionName));
+		}
 		found = true;
 	}
 

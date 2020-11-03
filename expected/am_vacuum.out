@@ -36,7 +36,12 @@ SELECT count(*) FROM cstore.cstore_stripes a, pg_class b WHERE a.relfilenode=b.r
 (1 row)
 
 -- test the case when all data cannot fit into a single stripe
-SET cstore.stripe_row_count TO 1000;
+SELECT alter_cstore_table_set('t', stripe_row_count => 1000);
+ alter_cstore_table_set 
+------------------------
+ 
+(1 row)
+
 INSERT INTO t SELECT i, 2 * i FROM generate_series(1,2500) i;
 SELECT sum(a), sum(b) FROM t;
    sum   |   sum   
@@ -157,14 +162,25 @@ SELECT count(*) FROM t;
 -- add some stripes with different compression types and create some gaps,
 -- then vacuum to print stats
 BEGIN;
-SET cstore.block_row_count TO 1000;
-SET cstore.stripe_row_count TO 2000;
-SET cstore.compression TO "pglz";
+SELECT alter_cstore_table_set('t',
+    block_row_count => 1000,
+    stripe_row_count => 2000,
+    compression => 'pglz');
+ alter_cstore_table_set 
+------------------------
+ 
+(1 row)
+
 SAVEPOINT s1;
 INSERT INTO t SELECT i FROM generate_series(1, 1500) i;
 ROLLBACK TO SAVEPOINT s1;
 INSERT INTO t SELECT i / 5 FROM generate_series(1, 1500) i;
-SET cstore.compression TO "none";
+SELECT alter_cstore_table_set('t', compression => 'none');
+ alter_cstore_table_set 
+------------------------
+ 
+(1 row)
+
 SAVEPOINT s2;
 INSERT INTO t SELECT i FROM generate_series(1, 1500) i;
 ROLLBACK TO SAVEPOINT s2;
@@ -195,7 +211,12 @@ block count: 11, containing data for dropped columns: 2, none compressed: 9, pgl
 -- vacuum full should remove blocks for dropped columns
 -- note that, a block will be stored in non-compressed for if compression
 -- doesn't reduce its size.
-SET cstore.compression TO "pglz";
+SELECT alter_cstore_table_set('t', compression => 'pglz');
+ alter_cstore_table_set 
+------------------------
+ 
+(1 row)
+
 VACUUM FULL t;
 VACUUM VERBOSE t;
 INFO:  statistics for "t":

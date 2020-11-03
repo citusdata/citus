@@ -280,7 +280,8 @@ cstore_ddl_event_end_trigger(PG_FUNCTION_ARGS)
 											  AccessShareLock, false);
 			Relation relation = cstore_fdw_open(relationId, AccessExclusiveLock);
 			CStoreOptions *options = CStoreGetOptions(relationId);
-			InitCStoreDataFileMetadata(relation->rd_node.relNode, options->blockRowCount);
+			InitCStoreDataFileMetadata(relation->rd_node.relNode, options->blockRowCount,
+									   options->stripeRowCount, options->compressionType);
 			heap_close(relation, AccessExclusiveLock);
 		}
 	}
@@ -797,7 +798,8 @@ TruncateCStoreTables(List *cstoreRelationList)
 		Assert(IsCStoreFdwTable(relationId));
 
 		FdwNewRelFileNode(relation);
-		InitCStoreDataFileMetadata(relation->rd_node.relNode, options->blockRowCount);
+		InitCStoreDataFileMetadata(relation->rd_node.relNode, options->blockRowCount,
+								   options->stripeRowCount, options->compressionType);
 	}
 }
 
