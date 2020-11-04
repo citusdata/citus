@@ -1560,36 +1560,45 @@ UndistributeTable(Oid relationId)
 	Relation relation = try_relation_open(relationId, ExclusiveLock);
 	if (relation == NULL)
 	{
-		ereport(ERROR, (errmsg("Cannot undistribute table"),
-						errdetail("No such distributed table exists. "
-								  "Might have already been undistributed.")));
+		ereport(ERROR, (errmsg("cannot undistribute table"),
+						errdetail("because no such distributed table exists")));
 	}
 
 	relation_close(relation, NoLock);
 
 	if (!IsCitusTable(relationId))
 	{
-		ereport(ERROR, (errmsg("Cannot undistribute table."),
-						errdetail("The table is not distributed.")));
+		ereport(ERROR, (errmsg("cannot undistribute table "),
+						errdetail("because the table is not distributed")));
 	}
 
 	if (TableReferencing(relationId))
 	{
-		ereport(ERROR, (errmsg("Cannot undistribute table "
-							   "because it has a foreign key.")));
+		ereport(ERROR, (errmsg("cannot undistribute table "
+							   "because it has a foreign key")));
 	}
 
 	if (TableReferenced(relationId))
 	{
-		ereport(ERROR, (errmsg("Cannot undistribute table "
-							   "because a foreign key references to it.")));
+		ereport(ERROR, (errmsg("cannot undistribute table "
+							   "because a foreign key references to it")));
 	}
 
 	char relationKind = get_rel_relkind(relationId);
 	if (relationKind == RELKIND_FOREIGN_TABLE)
 	{
-		ereport(ERROR, (errmsg("Cannot undistribute table "
-							   "because it is a foreign table.")));
+		ereport(ERROR, (errmsg("cannot undistribute table "
+							   "because it is a foreign table")));
+	}
+
+	if (PartitionTable(relationId))
+	{
+		Oid parentRelationId = PartitionParentOid(relationId);
+		char *parentRelationName = get_rel_name(parentRelationId);
+		ereport(ERROR, (errmsg("cannot undistribute table "
+							   "because it is a partition"),
+						errhint("undistribute the partitioned table \"%s\" instead",
+								parentRelationName)));
 	}
 
 	List *preLoadCommands = GetPreLoadTableCreationCommands(relationId, true);
@@ -1610,7 +1619,7 @@ UndistributeTable(Oid relationId)
 
 	if (PartitionedTable(relationId))
 	{
-		ereport(NOTICE, (errmsg("Undistributing the partitions of %s",
+		ereport(NOTICE, (errmsg("undistributing the partitions of %s",
 								quote_qualified_identifier(schemaName, relationName))));
 		List *partitionList = PartitionList(relationId);
 		Oid partitionRelationId = InvalidOid;
@@ -1641,7 +1650,7 @@ UndistributeTable(Oid relationId)
 
 	char *tableCreationCommand = NULL;
 
-	ereport(NOTICE, (errmsg("Creating a new local table for %s",
+	ereport(NOTICE, (errmsg("creating a new local table for %s",
 							quote_qualified_identifier(schemaName, relationName))));
 
 	foreach_ptr(tableCreationCommand, preLoadCommands)
