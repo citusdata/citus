@@ -7763,6 +7763,7 @@ pg_get_triggerdef_worker(Oid trigid, bool pretty)
 		context.wrapColumn = WRAP_COLUMN_DEFAULT;
 		context.indentLevel = PRETTYINDENT_STD;
 		context.special_exprkind = EXPR_KIND_NONE;
+		context.appendparents = NULL;
 
 		get_rule_expr(qual, &context, false);
 
