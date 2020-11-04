@@ -1097,11 +1097,33 @@ GetDependingViews(Oid relationId)
 	List *dependingViews = NIL;
 	List *nodeQueue = list_make1(tableNode);
 	ViewDependencyNode *node = NULL;
+	ViewDependencyNode *dependingNode = NULL;
+
+#if PG_VERSION_NUM >= PG_VERSION_13
+
+	/*
+	 * We do not use foreach here because we may insert new nodes to the list,
+	 * and there is a risk of having the list repalloc'ed in PG13.
+	 *
+	 * For more information, see postgres commit with sha
+	 * 1cff1b95ab6ddae32faa3efe0d95a820dbfdc164
+	 * that changed the representation of Lists to expansible arrays, not chains
+	 * of cons-cells.
+	 */
+	for (int dependingNodesPosition = 0; dependingNodesPosition < list_length(nodeQueue);
+		 dependingNodesPosition++)
+	{
+		node = list_nth(nodeQueue, dependingNodesPosition);
+		for (int dependingNodePosition = 0; dependingNodePosition < list_length(
+				 node->dependingNodes); dependingNodePosition++)
+		{
+			dependingNode = list_nth(node->dependingNodes, dependingNodePosition);
+#else
 	foreach_ptr(node, nodeQueue)
 	{
-		ViewDependencyNode *dependingNode = NULL;
 		foreach_ptr(dependingNode, node->dependingNodes)
 		{
+#endif
 			dependingNode->remainingDependencyCount--;
 			if (dependingNode->remainingDependencyCount == 0)
 			{
