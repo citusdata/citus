@@ -84,23 +84,20 @@ TableReadState *
 CStoreBeginRead(Relation relation, TupleDesc tupleDescriptor,
 				List *projectedColumnList, List *whereClauseList)
 {
-	TableReadState *readState = NULL;
-	DataFileMetadata *datafileMetadata = NULL;
-	MemoryContext stripeReadContext = NULL;
 	Oid relNode = relation->rd_node.relNode;
 
-	datafileMetadata = ReadDataFileMetadata(relNode, false);
+	DataFileMetadata *datafileMetadata = ReadDataFileMetadata(relNode, false);
 
 	/*
 	 * We allocate all stripe specific data in the stripeReadContext, and reset
 	 * this memory context before loading a new stripe. This is to avoid memory
 	 * leaks.
 	 */
-	stripeReadContext = AllocSetContextCreate(CurrentMemoryContext,
-											  "Stripe Read Memory Context",
-											  ALLOCSET_DEFAULT_SIZES);
+	MemoryContext stripeReadContext = AllocSetContextCreate(CurrentMemoryContext,
+															"Stripe Read Memory Context",
+															ALLOCSET_DEFAULT_SIZES);
 
-	readState = palloc0(sizeof(TableReadState));
+	TableReadState *readState = palloc0(sizeof(TableReadState));
 	readState->relation = relation;
 	readState->datafileMetadata = datafileMetadata;
 	readState->projectedColumnList = projectedColumnList;
@@ -125,8 +122,6 @@ CStoreBeginRead(Relation relation, TupleDesc tupleDescriptor,
 bool
 CStoreReadNextRow(TableReadState *readState, Datum *columnValues, bool *columnNulls)
 {
-	uint32 blockIndex = 0;
-	uint32 blockRowIndex = 0;
 	StripeMetadata *stripeMetadata = readState->currentStripeMetadata;
 	MemoryContext oldContext = NULL;
 
@@ -138,7 +133,6 @@ CStoreReadNextRow(TableReadState *readState, Datum *columnValues, bool *columnNu
 	 */
 	while (readState->stripeBuffers == NULL)
 	{
-		StripeBuffers *stripeBuffers = NULL;
 		List *stripeMetadataList = readState->datafileMetadata->stripeMetadataList;
 		uint32 stripeCount = list_length(stripeMetadataList);
 
@@ -153,11 +147,14 @@ CStoreReadNextRow(TableReadState *readState, Datum *columnValues, bool *columnNu
 		readState->blockData = NULL;
 
 		stripeMetadata = list_nth(stripeMetadataList, readState->readStripeCount);
-		stripeBuffers = LoadFilteredStripeBuffers(readState->relation,
-												  stripeMetadata,
-												  readState->tupleDescriptor,
-												  readState->projectedColumnList,
-												  readState->whereClauseList);
+		StripeBuffers *stripeBuffers = LoadFilteredStripeBuffers(readState->relation,
+																 stripeMetadata,
+																 readState->
+																 tupleDescriptor,
+																 readState->
+																 projectedColumnList,
+																 readState->
+																 whereClauseList);
 		readState->readStripeCount++;
 		readState->currentStripeMetadata = stripeMetadata;
 
@@ -172,17 +169,15 @@ CStoreReadNextRow(TableReadState *readState, Datum *columnValues, bool *columnNu
 		}
 	}
 
-	blockIndex = readState->stripeReadRowCount / stripeMetadata->blockRowCount;
-	blockRowIndex = readState->stripeReadRowCount % stripeMetadata->blockRowCount;
+	uint32 blockIndex = readState->stripeReadRowCount / stripeMetadata->blockRowCount;
+	uint32 blockRowIndex = readState->stripeReadRowCount % stripeMetadata->blockRowCount;
 
 	if (blockIndex != readState->deserializedBlockIndex)
 	{
-		uint32 lastBlockIndex = 0;
 		uint32 blockRowCount = 0;
-		uint32 stripeRowCount = 0;
 
-		stripeRowCount = stripeMetadata->rowCount;
-		lastBlockIndex = stripeRowCount / stripeMetadata->blockRowCount;
+		uint32 stripeRowCount = stripeMetadata->rowCount;
+		uint32 lastBlockIndex = stripeRowCount / stripeMetadata->blockRowCount;
 		if (blockIndex == lastBlockIndex)
 		{
 			blockRowCount = stripeRowCount % stripeMetadata->blockRowCount;
@@ -317,11 +312,11 @@ FreeBlockData(BlockData *blockData)
 uint64
 CStoreTableRowCount(Relation relation)
 {
-	DataFileMetadata *datafileMetadata = NULL;
 	ListCell *stripeMetadataCell = NULL;
 	uint64 totalRowCount = 0;
 
-	datafileMetadata = ReadDataFileMetadata(relation->rd_node.relNode, false);
+	DataFileMetadata *datafileMetadata = ReadDataFileMetadata(relation->rd_node.relNode,
+															  false);
 
 	foreach(stripeMetadataCell, datafileMetadata->stripeMetadataList)
 	{
@@ -343,8 +338,6 @@ LoadFilteredStripeBuffers(Relation relation, StripeMetadata *stripeMetadata,
 						  TupleDesc tupleDescriptor, List *projectedColumnList,
 						  List *whereClauseList)
 {
-	StripeBuffers *stripeBuffers = NULL;
-	ColumnBuffers **columnBuffersArray = NULL;
 	uint32 columnIndex = 0;
 	uint32 columnCount = tupleDescriptor->natts;
 
@@ -363,7 +356,7 @@ LoadFilteredStripeBuffers(Relation relation, StripeMetadata *stripeMetadata,
 							  selectedBlockMask);
 
 	/* load column data for projected columns */
-	columnBuffersArray = palloc0(columnCount * sizeof(ColumnBuffers *));
+	ColumnBuffers **columnBuffersArray = palloc0(columnCount * sizeof(ColumnBuffers *));
 
 	for (columnIndex = 0; columnIndex < stripeMetadata->columnCount; columnIndex++)
 	{
@@ -383,7 +376,7 @@ LoadFilteredStripeBuffers(Relation relation, StripeMetadata *stripeMetadata,
 		}
 	}
 
-	stripeBuffers = palloc0(sizeof(StripeBuffers));
+	StripeBuffers *stripeBuffers = palloc0(sizeof(StripeBuffers));
 	stripeBuffers->columnCount = columnCount;
 	stripeBuffers->rowCount = StripeSkipListRowCount(selectedBlockSkipList);
 	stripeBuffers->columnBuffersArray = columnBuffersArray;
@@ -432,7 +425,6 @@ LoadColumnBuffers(Relation relation, ColumnBlockSkipNode *blockSkipNodeArray,
 				  uint32 blockCount, uint64 stripeOffset,
 				  Form_pg_attribute attributeForm)
 {
-	ColumnBuffers *columnBuffers = NULL;
 	uint32 blockIndex = 0;
 	ColumnBlockBuffers **blockBuffersArray =
 		palloc0(blockCount * sizeof(ColumnBlockBuffers *));
@@ -470,7 +462,7 @@ LoadColumnBuffers(Relation relation, ColumnBlockSkipNode *blockSkipNodeArray,
 		blockBuffersArray[blockIndex]->valueCompressionType = compressionType;
 	}
 
-	columnBuffers = palloc0(sizeof(ColumnBuffers));
+	ColumnBuffers *columnBuffers = palloc0(sizeof(ColumnBuffers));
 	columnBuffers->blockBuffersArray = blockBuffersArray;
 
 	return columnBuffers;
@@ -486,34 +478,31 @@ static bool *
 SelectedBlockMask(StripeSkipList *stripeSkipList, List *projectedColumnList,
 				  List *whereClauseList)
 {
-	bool *selectedBlockMask = NULL;
 	ListCell *columnCell = NULL;
 	uint32 blockIndex = 0;
 	List *restrictInfoList = BuildRestrictInfoList(whereClauseList);
 
-	selectedBlockMask = palloc0(stripeSkipList->blockCount * sizeof(bool));
+	bool *selectedBlockMask = palloc0(stripeSkipList->blockCount * sizeof(bool));
 	memset(selectedBlockMask, true, stripeSkipList->blockCount * sizeof(bool));
 
 	foreach(columnCell, projectedColumnList)
 	{
 		Var *column = lfirst(columnCell);
 		uint32 columnIndex = column->varattno - 1;
-		FmgrInfo *comparisonFunction = NULL;
-		Node *baseConstraint = NULL;
 
 		/* if this column's data type doesn't have a comparator, skip it */
-		comparisonFunction = GetFunctionInfoOrNull(column->vartype, BTREE_AM_OID,
-												   BTORDER_PROC);
+		FmgrInfo *comparisonFunction = GetFunctionInfoOrNull(column->vartype,
+															 BTREE_AM_OID,
+															 BTORDER_PROC);
 		if (comparisonFunction == NULL)
 		{
 			continue;
 		}
 
-		baseConstraint = BuildBaseConstraint(column);
+		Node *baseConstraint = BuildBaseConstraint(column);
 		for (blockIndex = 0; blockIndex < stripeSkipList->blockCount; blockIndex++)
 		{
 			bool predicateRefuted = false;
-			List *constraintList = NIL;
 			ColumnBlockSkipNode *blockSkipNodeArray =
 				stripeSkipList->blockSkipNodeArray[columnIndex];
 			ColumnBlockSkipNode *blockSkipNode = &blockSkipNodeArray[blockIndex];
@@ -530,7 +519,7 @@ SelectedBlockMask(StripeSkipList *stripeSkipList, List *projectedColumnList,
 			UpdateConstraint(baseConstraint, blockSkipNode->minimumValue,
 							 blockSkipNode->maximumValue);
 
-			constraintList = list_make1(baseConstraint);
+			List *constraintList = list_make1(baseConstraint);
 #if (PG_VERSION_NUM >= 100000)
 			predicateRefuted = predicate_refuted_by(constraintList, restrictInfoList,
 													false);
@@ -558,24 +547,21 @@ FmgrInfo *
 GetFunctionInfoOrNull(Oid typeId, Oid accessMethodId, int16 procedureId)
 {
 	FmgrInfo *functionInfo = NULL;
-	Oid operatorClassId = InvalidOid;
-	Oid operatorFamilyId = InvalidOid;
-	Oid operatorId = InvalidOid;
 
 	/* get default operator class from pg_opclass for datum type */
-	operatorClassId = GetDefaultOpClass(typeId, accessMethodId);
+	Oid operatorClassId = GetDefaultOpClass(typeId, accessMethodId);
 	if (operatorClassId == InvalidOid)
 	{
 		return NULL;
 	}
 
-	operatorFamilyId = get_opclass_family(operatorClassId);
+	Oid operatorFamilyId = get_opclass_family(operatorClassId);
 	if (operatorFamilyId == InvalidOid)
 	{
 		return NULL;
 	}
 
-	operatorId = get_opfamily_proc(operatorFamilyId, typeId, typeId, procedureId);
+	Oid operatorId = get_opfamily_proc(operatorFamilyId, typeId, typeId, procedureId);
 	if (operatorId != InvalidOid)
 	{
 		functionInfo = (FmgrInfo *) palloc0(sizeof(FmgrInfo));
@@ -601,10 +587,9 @@ BuildRestrictInfoList(List *whereClauseList)
 	ListCell *qualCell = NULL;
 	foreach(qualCell, whereClauseList)
 	{
-		RestrictInfo *restrictInfo = NULL;
 		Node *qualNode = (Node *) lfirst(qualCell);
 
-		restrictInfo = make_simple_restrictinfo((Expr *) qualNode);
+		RestrictInfo *restrictInfo = make_simple_restrictinfo((Expr *) qualNode);
 		restrictInfoList = lappend(restrictInfoList, restrictInfo);
 	}
 
@@ -622,14 +607,10 @@ BuildRestrictInfoList(List *whereClauseList)
 static Node *
 BuildBaseConstraint(Var *variable)
 {
-	Node *baseConstraint = NULL;
-	OpExpr *lessThanExpr = NULL;
-	OpExpr *greaterThanExpr = NULL;
+	OpExpr *lessThanExpr = MakeOpExpression(variable, BTLessEqualStrategyNumber);
+	OpExpr *greaterThanExpr = MakeOpExpression(variable, BTGreaterEqualStrategyNumber);
 
-	lessThanExpr = MakeOpExpression(variable, BTLessEqualStrategyNumber);
-	greaterThanExpr = MakeOpExpression(variable, BTGreaterEqualStrategyNumber);
-
-	baseConstraint = make_and_qual((Node *) lessThanExpr, (Node *) greaterThanExpr);
+	Node *baseConstraint = make_and_qual((Node *) lessThanExpr, (Node *) greaterThanExpr);
 
 	return baseConstraint;
 }
@@ -648,22 +629,19 @@ MakeOpExpression(Var *variable, int16 strategyNumber)
 	Oid collationId = variable->varcollid;
 
 	Oid accessMethodId = BTREE_AM_OID;
-	Oid operatorId = InvalidOid;
-	Const *constantValue = NULL;
-	OpExpr *expression = NULL;
 
 	/* Load the operator from system catalogs */
-	operatorId = GetOperatorByType(typeId, accessMethodId, strategyNumber);
+	Oid operatorId = GetOperatorByType(typeId, accessMethodId, strategyNumber);
 
-	constantValue = makeNullConst(typeId, typeModId, collationId);
+	Const *constantValue = makeNullConst(typeId, typeModId, collationId);
 
 	/* Now make the expression with the given variable and a null constant */
-	expression = (OpExpr *) make_opclause(operatorId,
-										  InvalidOid, /* no result type yet */
-										  false,      /* no return set */
-										  (Expr *) variable,
-										  (Expr *) constantValue,
-										  InvalidOid, collationId);
+	OpExpr *expression = (OpExpr *) make_opclause(operatorId,
+												  InvalidOid, /* no result type yet */
+												  false, /* no return set */
+												  (Expr *) variable,
+												  (Expr *) constantValue,
+												  InvalidOid, collationId);
 
 	/* Set implementing function id and result type */
 	expression->opfuncid = get_opcode(operatorId);
@@ -707,14 +685,12 @@ UpdateConstraint(Node *baseConstraint, Datum minValue, Datum maxValue)
 
 	Node *minNode = get_rightop((Expr *) greaterThanExpr);
 	Node *maxNode = get_rightop((Expr *) lessThanExpr);
-	Const *minConstant = NULL;
-	Const *maxConstant = NULL;
 
 	Assert(IsA(minNode, Const));
 	Assert(IsA(maxNode, Const));
 
-	minConstant = (Const *) minNode;
-	maxConstant = (Const *) maxNode;
+	Const *minConstant = (Const *) minNode;
+	Const *maxConstant = (Const *) maxNode;
 
 	minConstant->constvalue = minValue;
 	maxConstant->constvalue = maxValue;
@@ -735,8 +711,6 @@ static StripeSkipList *
 SelectedBlockSkipList(StripeSkipList *stripeSkipList, bool *projectedColumnMask,
 					  bool *selectedBlockMask)
 {
-	StripeSkipList *SelectedBlockSkipList = NULL;
-	ColumnBlockSkipNode **selectedBlockSkipNodeArray = NULL;
 	uint32 selectedBlockCount = 0;
 	uint32 blockIndex = 0;
 	uint32 columnIndex = 0;
@@ -750,7 +724,9 @@ SelectedBlockSkipList(StripeSkipList *stripeSkipList, bool *projectedColumnMask,
 		}
 	}
 
-	selectedBlockSkipNodeArray = palloc0(columnCount * sizeof(ColumnBlockSkipNode *));
+	ColumnBlockSkipNode **selectedBlockSkipNodeArray = palloc0(columnCount *
+															   sizeof(ColumnBlockSkipNode
+																	  *));
 	for (columnIndex = 0; columnIndex < columnCount; columnIndex++)
 	{
 		uint32 selectedBlockIndex = 0;
@@ -779,7 +755,7 @@ SelectedBlockSkipList(StripeSkipList *stripeSkipList, bool *projectedColumnMask,
 		}
 	}
 
-	SelectedBlockSkipList = palloc0(sizeof(StripeSkipList));
+	StripeSkipList *SelectedBlockSkipList = palloc0(sizeof(StripeSkipList));
 	SelectedBlockSkipList->blockSkipNodeArray = selectedBlockSkipNodeArray;
 	SelectedBlockSkipList->blockCount = selectedBlockCount;
 	SelectedBlockSkipList->columnCount = stripeSkipList->columnCount;
@@ -882,14 +858,12 @@ DeserializeDatumArray(StringInfo datumBuffer, bool *existsArray, uint32 datumCou
 
 	for (datumIndex = 0; datumIndex < datumCount; datumIndex++)
 	{
-		char *currentDatumDataPointer = NULL;
-
 		if (!existsArray[datumIndex])
 		{
 			continue;
 		}
 
-		currentDatumDataPointer = datumBuffer->data + currentDatumDataOffset;
+		char *currentDatumDataPointer = datumBuffer->data + currentDatumDataOffset;
 
 		datumArray[datumIndex] = fetch_att(currentDatumDataPointer, datumTypeByValue,
 										   datumTypeLength);
@@ -940,11 +914,10 @@ DeserializeBlockData(StripeBuffers *stripeBuffers, uint64 blockIndex,
 		{
 			ColumnBlockBuffers *blockBuffers =
 				columnBuffers->blockBuffersArray[blockIndex];
-			StringInfo valueBuffer = NULL;
 
 			/* decompress and deserialize current block's data */
-			valueBuffer = DecompressBuffer(blockBuffers->valueBuffer,
-										   blockBuffers->valueCompressionType);
+			StringInfo valueBuffer = DecompressBuffer(blockBuffers->valueBuffer,
+													  blockBuffers->valueCompressionType);
 
 			if (blockBuffers->valueCompressionType != COMPRESSION_NONE)
 			{
@@ -1045,17 +1018,13 @@ ReadFromSmgr(Relation rel, uint64 offset, uint32 size)
 
 	while (read < size)
 	{
-		Buffer buffer;
-		Page page;
-		PageHeader phdr;
-		uint32 to_read;
 		SmgrAddr addr = logical_to_smgr(offset + read);
 
-		buffer = ReadBuffer(rel, addr.blockno);
-		page = BufferGetPage(buffer);
-		phdr = (PageHeader) page;
+		Buffer buffer = ReadBuffer(rel, addr.blockno);
+		Page page = BufferGetPage(buffer);
+		PageHeader phdr = (PageHeader) page;
 
-		to_read = Min(size - read, phdr->pd_upper - addr.offset);
+		uint32 to_read = Min(size - read, phdr->pd_upper - addr.offset);
 		memcpy(resultBuffer->data + read, page + addr.offset, to_read);
 		ReleaseBuffer(buffer);
 		read += to_read;

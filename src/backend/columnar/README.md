@@ -47,7 +47,7 @@ So we need to install these packages first:
     # Ubuntu 10.4+
     sudo apt-get install protobuf-c-compiler
     sudo apt-get install libprotobuf-c0-dev
-    
+
     # Ubuntu 18.4+
     sudo apt-get install protobuf-c-compiler
     sudo apt-get install libprotobuf-c-dev
@@ -87,7 +87,7 @@ The following parameters can be set on a cstore foreign table object.
 
 * filename (optional): The absolute path to the location for storing table data.
   If you don't specify the filename option, cstore\_fdw will automatically
-  choose the $PGDATA/cstore\_fdw directory to store the files. If specified the 
+  choose the $PGDATA/cstore\_fdw directory to store the files. If specified the
   value of this parameter will be used as a prefix for all files created to
   store table data. For example, the value ```/cstore_fdw/my_table``` could result in
   the files ```/cstore_fdw/my_table``` and ```/cstore_fdw/my_table.footer``` being used

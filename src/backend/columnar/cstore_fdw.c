@@ -255,17 +255,14 @@ cstore_fdw_finish()
 Datum
 cstore_ddl_event_end_trigger(PG_FUNCTION_ARGS)
 {
-	EventTriggerData *triggerData = NULL;
-	Node *parseTree = NULL;
-
 	/* error if event trigger manager did not call this function */
 	if (!CALLED_AS_EVENT_TRIGGER(fcinfo))
 	{
 		ereport(ERROR, (errmsg("trigger not fired by event trigger manager")));
 	}
 
-	triggerData = (EventTriggerData *) fcinfo->context;
-	parseTree = triggerData->parsetree;
+	EventTriggerData *triggerData = (EventTriggerData *) fcinfo->context;
+	Node *parseTree = triggerData->parsetree;
 
 	if (nodeTag(parseTree) == T_CreateForeignTableStmt)
 	{
@@ -495,16 +492,9 @@ CopyIntoCStoreTable(const CopyStmt *copyStatement, const char *queryString)
 {
 	uint64 processedRowCount = 0;
 	Relation relation = NULL;
-	Oid relationId = InvalidOid;
-	TupleDesc tupleDescriptor = NULL;
-	uint32 columnCount = 0;
 	CopyState copyState = NULL;
 	bool nextRowFound = true;
-	Datum *columnValues = NULL;
-	bool *columnNulls = NULL;
 	TableWriteState *writeState = NULL;
-	CStoreOptions *cstoreOptions = NULL;
-	MemoryContext tupleContext = NULL;
 
 	/* Only superuser can copy from or to local file */
 	CheckSuperuserPrivilegesForCopy(copyStatement);
@@ -516,15 +506,15 @@ CopyIntoCStoreTable(const CopyStmt *copyStatement, const char *queryString)
 	 * concurrent reads and writes.
 	 */
 	relation = cstore_fdw_openrv(copyStatement->relation, RowExclusiveLock);
-	relationId = RelationGetRelid(relation);
+	Oid relationId = RelationGetRelid(relation);
 
 	/* allocate column values and nulls arrays */
-	tupleDescriptor = RelationGetDescr(relation);
-	columnCount = tupleDescriptor->natts;
-	columnValues = palloc0(columnCount * sizeof(Datum));
-	columnNulls = palloc0(columnCount * sizeof(bool));
+	TupleDesc tupleDescriptor = RelationGetDescr(relation);
+	uint32 columnCount = tupleDescriptor->natts;
+	Datum *columnValues = palloc0(columnCount * sizeof(Datum));
+	bool *columnNulls = palloc0(columnCount * sizeof(bool));
 
-	cstoreOptions = CStoreGetOptions(relationId);
+	CStoreOptions *cstoreOptions = CStoreGetOptions(relationId);
 
 	/*
 	 * We create a new memory context called tuple context, and read and write
@@ -533,9 +523,9 @@ CopyIntoCStoreTable(const CopyStmt *copyStatement, const char *queryString)
 	 * allocated for each row, and don't bloat memory usage with large input
 	 * files.
 	 */
-	tupleContext = AllocSetContextCreate(CurrentMemoryContext,
-										 "CStore COPY Row Memory Context",
-										 ALLOCSET_DEFAULT_SIZES);
+	MemoryContext tupleContext = AllocSetContextCreate(CurrentMemoryContext,
+													   "CStore COPY Row Memory Context",
+													   ALLOCSET_DEFAULT_SIZES);
 
 	/* init state to read from COPY data source */
 #if (PG_VERSION_NUM >= 100000)
@@ -606,10 +596,6 @@ static uint64
 CopyOutCStoreTable(CopyStmt *copyStatement, const char *queryString)
 {
 	uint64 processedCount = 0;
-	RangeVar *relation = NULL;
-	char *qualifiedName = NULL;
-	List *queryList = NIL;
-	Node *rawQuery = NULL;
 
 	StringInfo newQuerySubstring = makeStringInfo();
 
@@ -621,14 +607,14 @@ CopyOutCStoreTable(CopyStmt *copyStatement, const char *queryString)
 								"...' instead")));
 	}
 
-	relation = copyStatement->relation;
-	qualifiedName = quote_qualified_identifier(relation->schemaname,
-											   relation->relname);
+	RangeVar *relation = copyStatement->relation;
+	char *qualifiedName = quote_qualified_identifier(relation->schemaname,
+													 relation->relname);
 	appendStringInfo(newQuerySubstring, "select * from %s", qualifiedName);
-	queryList = raw_parser(newQuerySubstring->data);
+	List *queryList = raw_parser(newQuerySubstring->data);
 
 	/* take the first parse tree */
-	rawQuery = linitial(queryList);
+	Node *rawQuery = linitial(queryList);
 
 	/*
 	 * Set the relation field to NULL so that COPY command works on
@@ -674,7 +660,6 @@ CStoreProcessAlterTableCommand(AlterTableStmt *alterStatement)
 {
 	ObjectType objectType = alterStatement->relkind;
 	RangeVar *relationRangeVar = alterStatement->relation;
-	Oid relationId = InvalidOid;
 	List *commandList = alterStatement->cmds;
 	ListCell *commandCell = NULL;
 
@@ -684,7 +669,7 @@ CStoreProcessAlterTableCommand(AlterTableStmt *alterStatement)
 		return;
 	}
 
-	relationId = RangeVarGetRelid(relationRangeVar, AccessShareLock, true);
+	Oid relationId = RangeVarGetRelid(relationRangeVar, AccessShareLock, true);
 	if (!IsCStoreFdwTable(relationId))
 	{
 		return;
@@ -700,7 +685,6 @@ CStoreProcessAlterTableCommand(AlterTableStmt *alterStatement)
 			Oid targetTypeId = typenameTypeId(NULL, columnDef->typeName);
 			char *typeName = TypeNameToString(columnDef->typeName);
 			AttrNumber attributeNumber = get_attnum(relationId, columnName);
-			Oid currentTypeId = InvalidOid;
 
 			if (attributeNumber <= 0)
 			{
@@ -708,7 +692,7 @@ CStoreProcessAlterTableCommand(AlterTableStmt *alterStatement)
 				continue;
 			}
 
-			currentTypeId = get_atttype(relationId, attributeNumber);
+			Oid currentTypeId = get_atttype(relationId, attributeNumber);
 
 			/*
 			 * We are only interested in implicit coersion type compatibility.
@@ -811,34 +795,28 @@ TruncateCStoreTables(List *cstoreRelationList)
 static void
 FdwNewRelFileNode(Relation relation)
 {
-	Relation pg_class;
-	HeapTuple tuple;
-	Form_pg_class classform;
+	Relation pg_class = heap_open(RelationRelationId, RowExclusiveLock);
 
-	pg_class = heap_open(RelationRelationId, RowExclusiveLock);
-
-	tuple = SearchSysCacheCopy1(RELOID,
-								ObjectIdGetDatum(RelationGetRelid(relation)));
+	HeapTuple tuple = SearchSysCacheCopy1(RELOID,
+										  ObjectIdGetDatum(RelationGetRelid(relation)));
 	if (!HeapTupleIsValid(tuple))
 	{
 		elog(ERROR, "could not find tuple for relation %u",
 			 RelationGetRelid(relation));
 	}
-	classform = (Form_pg_class) GETSTRUCT(tuple);
+	Form_pg_class classform = (Form_pg_class) GETSTRUCT(tuple);
 
 	if (true)
 	{
 		char persistence = relation->rd_rel->relpersistence;
-		Relation tmprel;
 		Oid tablespace;
-		Oid filenode;
 
 		/*
 		 * Upgrade to AccessExclusiveLock, and hold until the end of the
 		 * transaction. This shouldn't happen during a read, but it's hard to
 		 * prove that because it happens lazily.
 		 */
-		tmprel = heap_open(relation->rd_id, AccessExclusiveLock);
+		Relation tmprel = heap_open(relation->rd_id, AccessExclusiveLock);
 		heap_close(tmprel, NoLock);
 
 		if (OidIsValid(relation->rd_rel->relfilenode))
@@ -856,7 +834,7 @@ FdwNewRelFileNode(Relation relation)
 			tablespace = MyDatabaseTableSpace;
 		}
 
-		filenode = GetNewRelFileNode(tablespace, NULL, persistence);
+		Oid filenode = GetNewRelFileNode(tablespace, NULL, persistence);
 
 		classform->relfilenode = filenode;
 		classform->relpages = 0;    /* it's empty until further notice */
@@ -886,9 +864,8 @@ FdwCreateStorage(Relation relation)
 	if (!smgrexists(relation->rd_smgr, MAIN_FORKNUM))
 	{
 #if PG_VERSION_NUM >= 120000
-		SMgrRelation srel;
-		srel = RelationCreateStorage(relation->rd_node,
-									 relation->rd_rel->relpersistence);
+		SMgrRelation srel = RelationCreateStorage(relation->rd_node,
+												  relation->rd_rel->relpersistence);
 		smgrclose(srel);
 #else
 		RelationCreateStorage(relation->rd_node,
@@ -906,14 +883,13 @@ bool
 IsCStoreFdwTable(Oid relationId)
 {
 	bool cstoreTable = false;
-	char relationKind = 0;
 
 	if (relationId == InvalidOid)
 	{
 		return false;
 	}
 
-	relationKind = get_rel_relkind(relationId);
+	char relationKind = get_rel_relkind(relationId);
 	if (relationKind == RELKIND_FOREIGN_TABLE)
 	{
 		ForeignTable *foreignTable = GetForeignTable(relationId);
@@ -956,13 +932,8 @@ IsCStoreServer(ForeignServer *server)
 static bool
 DistributedTable(Oid relationId)
 {
-	bool distributedTable = false;
-	Oid partitionOid = InvalidOid;
-	Relation heapRelation = NULL;
-	TableScanDesc scanDesc = NULL;
 	const int scanKeyCount = 1;
 	ScanKeyData scanKey[1];
-	HeapTuple heapTuple = NULL;
 
 	bool missingOK = true;
 	Oid extensionOid = get_extension_oid(CITUS_EXTENSION_NAME, missingOK);
@@ -972,23 +943,25 @@ DistributedTable(Oid relationId)
 		return false;
 	}
 
-	partitionOid = get_relname_relid(CITUS_PARTITION_TABLE_NAME, PG_CATALOG_NAMESPACE);
+	Oid partitionOid = get_relname_relid(CITUS_PARTITION_TABLE_NAME,
+										 PG_CATALOG_NAMESPACE);
 	if (partitionOid == InvalidOid)
 	{
 		/* the pg_dist_partition table does not exist */
 		return false;
 	}
 
-	heapRelation = heap_open(partitionOid, AccessShareLock);
+	Relation heapRelation = heap_open(partitionOid, AccessShareLock);
 
 	ScanKeyInit(&scanKey[0], ATTR_NUM_PARTITION_RELATION_ID, InvalidStrategy,
 				F_OIDEQ, ObjectIdGetDatum(relationId));
 
-	scanDesc = table_beginscan(heapRelation, SnapshotSelf, scanKeyCount, scanKey);
+	TableScanDesc scanDesc = table_beginscan(heapRelation, SnapshotSelf, scanKeyCount,
+											 scanKey);
 
-	heapTuple = heap_getnext(scanDesc, ForwardScanDirection);
+	HeapTuple heapTuple = heap_getnext(scanDesc, ForwardScanDirection);
 
-	distributedTable = HeapTupleIsValid(heapTuple);
+	bool distributedTable = HeapTupleIsValid(heapTuple);
 
 	table_endscan(scanDesc);
 	relation_close(heapRelation, AccessShareLock);
@@ -1027,17 +1000,15 @@ cstore_table_size(PG_FUNCTION_ARGS)
 {
 	Oid relationId = PG_GETARG_OID(0);
 	bool cstoreTable = IsCStoreFdwTable(relationId);
-	Relation relation;
-	BlockNumber nblocks;
 
 	if (!cstoreTable)
 	{
 		ereport(ERROR, (errmsg("relation is not a cstore table")));
 	}
 
-	relation = cstore_fdw_open(relationId, AccessShareLock);
+	Relation relation = cstore_fdw_open(relationId, AccessShareLock);
 	RelationOpenSmgr(relation);
-	nblocks = smgrnblocks(relation->rd_smgr, MAIN_FORKNUM);
+	BlockNumber nblocks = smgrnblocks(relation->rd_smgr, MAIN_FORKNUM);
 	heap_close(relation, AccessShareLock);
 	PG_RETURN_INT64(nblocks * BLCKSZ);
 }
@@ -1205,20 +1176,16 @@ GetSlotHeapTuple(TupleTableSlot *tts)
 static CStoreOptions *
 CStoreGetOptions(Oid foreignTableId)
 {
-	CStoreOptions *cstoreOptions = NULL;
 	CompressionType compressionType = cstore_compression;
 	int32 stripeRowCount = cstore_stripe_row_count;
 	int32 blockRowCount = cstore_block_row_count;
-	char *compressionTypeString = NULL;
-	char *stripeRowCountString = NULL;
-	char *blockRowCountString = NULL;
 
-	compressionTypeString = CStoreGetOptionValue(foreignTableId,
-												 OPTION_NAME_COMPRESSION_TYPE);
-	stripeRowCountString = CStoreGetOptionValue(foreignTableId,
-												OPTION_NAME_STRIPE_ROW_COUNT);
-	blockRowCountString = CStoreGetOptionValue(foreignTableId,
-											   OPTION_NAME_BLOCK_ROW_COUNT);
+	char *compressionTypeString = CStoreGetOptionValue(foreignTableId,
+													   OPTION_NAME_COMPRESSION_TYPE);
+	char *stripeRowCountString = CStoreGetOptionValue(foreignTableId,
+													  OPTION_NAME_STRIPE_ROW_COUNT);
+	char *blockRowCountString = CStoreGetOptionValue(foreignTableId,
+													 OPTION_NAME_BLOCK_ROW_COUNT);
 
 	ValidateForeignTableOptions(compressionTypeString,
 								stripeRowCountString, blockRowCountString);
@@ -1237,7 +1204,7 @@ CStoreGetOptions(Oid foreignTableId)
 		blockRowCount = pg_atoi(blockRowCountString, sizeof(int32), 0);
 	}
 
-	cstoreOptions = palloc0(sizeof(CStoreOptions));
+	CStoreOptions *cstoreOptions = palloc0(sizeof(CStoreOptions));
 	cstoreOptions->compressionType = compressionType;
 	cstoreOptions->stripeRowCount = stripeRowCount;
 	cstoreOptions->blockRowCount = blockRowCount;
@@ -1254,14 +1221,12 @@ CStoreGetOptions(Oid foreignTableId)
 static char *
 CStoreGetOptionValue(Oid foreignTableId, const char *optionName)
 {
-	ForeignTable *foreignTable = NULL;
-	ForeignServer *foreignServer = NULL;
 	List *optionList = NIL;
 	ListCell *optionCell = NULL;
 	char *optionValue = NULL;
 
-	foreignTable = GetForeignTable(foreignTableId);
-	foreignServer = GetForeignServer(foreignTable->serverid);
+	ForeignTable *foreignTable = GetForeignTable(foreignTableId);
+	ForeignServer *foreignServer = GetForeignServer(foreignTable->serverid);
 
 	optionList = list_concat(optionList, foreignTable->options);
 	optionList = list_concat(optionList, foreignServer->options);
@@ -1451,8 +1416,6 @@ CStoreGetForeignPlan(PlannerInfo * root, RelOptInfo * baserel, Oid foreignTableI
 #endif
 {
 	ForeignScan *foreignScan = NULL;
-	List *columnList = NIL;
-	List *foreignPrivateList = NIL;
 
 	/*
 	 * Although we skip row blocks that are refuted by the WHERE clause, but
@@ -1469,8 +1432,8 @@ CStoreGetForeignPlan(PlannerInfo * root, RelOptInfo * baserel, Oid foreignTableI
 	 * in executor's callback functions, so we get the column list here and put
 	 * it into foreign scan node's private list.
 	 */
-	columnList = ColumnList(baserel, foreignTableId);
-	foreignPrivateList = list_make1(columnList);
+	List *columnList = ColumnList(baserel, foreignTableId);
+	List *foreignPrivateList = list_make1(columnList);
 
 	/* create the foreign scan node */
 #if PG_VERSION_NUM >= 90500
@@ -1525,10 +1488,8 @@ TupleCountEstimate(Relation relation, RelOptInfo *baserel)
 static BlockNumber
 PageCount(Relation relation)
 {
-	BlockNumber nblocks;
-
 	RelationOpenSmgr(relation);
-	nblocks = smgrnblocks(relation->rd_smgr, MAIN_FORKNUM);
+	BlockNumber nblocks = smgrnblocks(relation->rd_smgr, MAIN_FORKNUM);
 
 	return (nblocks > 0) ? nblocks : 1;
 }
@@ -1655,9 +1616,8 @@ CStoreExplainForeignScan(ForeignScanState *scanState, ExplainState *explainState
 	/* supress file size if we're not showing cost details */
 	if (explainState->costs)
 	{
-		long nblocks;
 		RelationOpenSmgr(relation);
-		nblocks = smgrnblocks(relation->rd_smgr, MAIN_FORKNUM);
+		long nblocks = smgrnblocks(relation->rd_smgr, MAIN_FORKNUM);
 		ExplainPropertyLong("CStore File Size", (long) (nblocks * BLCKSZ),
 							explainState);
 	}
@@ -1668,15 +1628,8 @@ CStoreExplainForeignScan(ForeignScanState *scanState, ExplainState *explainState
 static void
 CStoreBeginForeignScan(ForeignScanState *scanState, int executorFlags)
 {
-	TableReadState *readState = NULL;
-	Oid foreignTableId = InvalidOid;
 	Relation currentRelation = scanState->ss.ss_currentRelation;
 	TupleDesc tupleDescriptor = RelationGetDescr(currentRelation);
-	List *columnList = NIL;
-	ForeignScan *foreignScan = NULL;
-	List *foreignPrivateList = NIL;
-	List *whereClauseList = NIL;
-	Relation relation = NULL;
 
 	cstore_fdw_initrel(currentRelation);
 
@@ -1686,15 +1639,16 @@ CStoreBeginForeignScan(ForeignScanState *scanState, int executorFlags)
 		return;
 	}
 
-	foreignTableId = RelationGetRelid(scanState->ss.ss_currentRelation);
+	Oid foreignTableId = RelationGetRelid(scanState->ss.ss_currentRelation);
 
-	foreignScan = (ForeignScan *) scanState->ss.ps.plan;
-	foreignPrivateList = (List *) foreignScan->fdw_private;
-	whereClauseList = foreignScan->scan.plan.qual;
+	ForeignScan *foreignScan = (ForeignScan *) scanState->ss.ps.plan;
+	List *foreignPrivateList = (List *) foreignScan->fdw_private;
+	List *whereClauseList = foreignScan->scan.plan.qual;
 
-	columnList = (List *) linitial(foreignPrivateList);
-	relation = cstore_fdw_open(foreignTableId, AccessShareLock);
-	readState = CStoreBeginRead(relation, tupleDescriptor, columnList, whereClauseList);
+	List *columnList = (List *) linitial(foreignPrivateList);
+	Relation relation = cstore_fdw_open(foreignTableId, AccessShareLock);
+	TableReadState *readState = CStoreBeginRead(relation, tupleDescriptor, columnList,
+												whereClauseList);
 
 	scanState->fdw_state = (void *) readState;
 }
@@ -1710,7 +1664,6 @@ CStoreIterateForeignScan(ForeignScanState *scanState)
 {
 	TableReadState *readState = (TableReadState *) scanState->fdw_state;
 	TupleTableSlot *tupleSlot = scanState->ss.ss_ScanTupleSlot;
-	bool nextRowFound = false;
 
 	TupleDesc tupleDescriptor = tupleSlot->tts_tupleDescriptor;
 	Datum *columnValues = tupleSlot->tts_values;
@@ -1723,7 +1676,7 @@ CStoreIterateForeignScan(ForeignScanState *scanState)
 
 	ExecClearTuple(tupleSlot);
 
-	nextRowFound = CStoreReadNextRow(readState, columnValues, columnNulls);
+	bool nextRowFound = CStoreReadNextRow(readState, columnValues, columnNulls);
 	if (nextRowFound)
 	{
 		ExecStoreVirtualTuple(tupleSlot);
@@ -1797,13 +1750,9 @@ CStoreAcquireSampleRows(Relation relation, int logLevel,
 	double selectionState = 0;
 	MemoryContext oldContext = CurrentMemoryContext;
 	MemoryContext tupleContext = NULL;
-	Datum *columnValues = NULL;
-	bool *columnNulls = NULL;
 	TupleTableSlot *scanTupleSlot = NULL;
 	List *columnList = NIL;
-	List *foreignPrivateList = NULL;
 	ForeignScanState *scanState = NULL;
-	ForeignScan *foreignScan = NULL;
 	char *relationName = NULL;
 	int executorFlags = 0;
 	uint32 columnIndex = 0;
@@ -1829,13 +1778,13 @@ CStoreAcquireSampleRows(Relation relation, int logLevel,
 	}
 
 	/* setup foreign scan plan node */
-	foreignPrivateList = list_make1(columnList);
-	foreignScan = makeNode(ForeignScan);
+	List *foreignPrivateList = list_make1(columnList);
+	ForeignScan *foreignScan = makeNode(ForeignScan);
 	foreignScan->fdw_private = foreignPrivateList;
 
 	/* set up tuple slot */
-	columnValues = palloc0(columnCount * sizeof(Datum));
-	columnNulls = palloc0(columnCount * sizeof(bool));
+	Datum *columnValues = palloc0(columnCount * sizeof(Datum));
+	bool *columnNulls = palloc0(columnCount * sizeof(bool));
 #if PG_VERSION_NUM >= 120000
 	scanTupleSlot = MakeTupleTableSlot(NULL, &TTSOpsVirtual);
 #elif PG_VERSION_NUM >= 110000
@@ -1968,13 +1917,12 @@ CStorePlanForeignModify(PlannerInfo *plannerInfo, ModifyTable *plan,
 	if (plan->operation == CMD_INSERT)
 	{
 		ListCell *tableCell = NULL;
-		Query *query = NULL;
 
 		/*
 		 * Only insert operation with select subquery is supported. Other forms
 		 * of insert, update, and delete operations are not supported.
 		 */
-		query = plannerInfo->parse;
+		Query *query = plannerInfo->parse;
 		foreach(tableCell, query->rtable)
 		{
 			RangeTblEntry *tableEntry = lfirst(tableCell);
@@ -2027,22 +1975,16 @@ CStoreBeginForeignModify(ModifyTableState *modifyTableState,
 static void
 CStoreBeginForeignInsert(ModifyTableState *modifyTableState, ResultRelInfo *relationInfo)
 {
-	Oid foreignTableOid = InvalidOid;
-	CStoreOptions *cstoreOptions = NULL;
-	TupleDesc tupleDescriptor = NULL;
-	TableWriteState *writeState = NULL;
-	Relation relation = NULL;
+	Oid foreignTableOid = RelationGetRelid(relationInfo->ri_RelationDesc);
+	Relation relation = cstore_fdw_open(foreignTableOid, RowExclusiveLock);
+	CStoreOptions *cstoreOptions = CStoreGetOptions(foreignTableOid);
+	TupleDesc tupleDescriptor = RelationGetDescr(relationInfo->ri_RelationDesc);
 
-	foreignTableOid = RelationGetRelid(relationInfo->ri_RelationDesc);
-	relation = cstore_fdw_open(foreignTableOid, RowExclusiveLock);
-	cstoreOptions = CStoreGetOptions(foreignTableOid);
-	tupleDescriptor = RelationGetDescr(relationInfo->ri_RelationDesc);
-
-	writeState = CStoreBeginWrite(relation,
-								  cstoreOptions->compressionType,
-								  cstoreOptions->stripeRowCount,
-								  cstoreOptions->blockRowCount,
-								  tupleDescriptor);
+	TableWriteState *writeState = CStoreBeginWrite(relation,
+												   cstoreOptions->compressionType,
+												   cstoreOptions->stripeRowCount,
+												   cstoreOptions->blockRowCount,
+												   tupleDescriptor);
 
 	relationInfo->ri_FdwState = (void *) writeState;
 }
@@ -2057,11 +1999,10 @@ CStoreExecForeignInsert(EState *executorState, ResultRelInfo *relationInfo,
 						TupleTableSlot *tupleSlot, TupleTableSlot *planSlot)
 {
 	TableWriteState *writeState = (TableWriteState *) relationInfo->ri_FdwState;
-	HeapTuple heapTuple;
 
 	Assert(writeState != NULL);
 
-	heapTuple = GetSlotHeapTuple(tupleSlot);
+	HeapTuple heapTuple = GetSlotHeapTuple(tupleSlot);
 
 	if (HeapTupleHasExternal(heapTuple))
 	{

@@ -1,13 +1,13 @@
 Parsed test spec with 2 sessions
 
 starting permutation: s1-insert s1-begin s1-insert s2-vacuum s1-commit s2-select
-step s1-insert: 
+step s1-insert:
     INSERT INTO test_vacuum_vs_insert SELECT i, 2 * i FROM generate_series(1, 3) i;
 
-step s1-begin: 
+step s1-begin:
     BEGIN;
 
-step s1-insert: 
+step s1-insert:
     INSERT INTO test_vacuum_vs_insert SELECT i, 2 * i FROM generate_series(1, 3) i;
 
 s2: INFO:  statistics for "test_vacuum_vs_insert":
@@ -16,38 +16,38 @@ total row count: 3, stripe count: 1, average rows per stripe: 3
 block count: 2, containing data for dropped columns: 0, none compressed: 2, pglz compressed: 0
 
 s2: INFO:  "test_vacuum_vs_insert": stopping truncate due to conflicting lock request
-step s2-vacuum: 
+step s2-vacuum:
     VACUUM VERBOSE test_vacuum_vs_insert;
 
-step s1-commit: 
+step s1-commit:
     COMMIT;
 
-step s2-select: 
+step s2-select:
     SELECT * FROM test_vacuum_vs_insert;
 
-a              b              
+a              b
 
-1              2              
-2              4              
-3              6              
-1              2              
-2              4              
-3              6              
+1              2
+2              4
+3              6
+1              2
+2              4
+3              6
 
 starting permutation: s1-insert s1-begin s1-insert s2-vacuum-full s1-commit s2-select
-step s1-insert: 
+step s1-insert:
     INSERT INTO test_vacuum_vs_insert SELECT i, 2 * i FROM generate_series(1, 3) i;
 
-step s1-begin: 
+step s1-begin:
     BEGIN;
 
-step s1-insert: 
+step s1-insert:
     INSERT INTO test_vacuum_vs_insert SELECT i, 2 * i FROM generate_series(1, 3) i;
 
-step s2-vacuum-full: 
+step s2-vacuum-full:
     VACUUM FULL VERBOSE test_vacuum_vs_insert;
  <waiting ...>
-step s1-commit: 
+step s1-commit:
     COMMIT;
 
 s2: INFO:  vacuuming "public.test_vacuum_vs_insert"
@@ -55,14 +55,14 @@ s2: INFO:  "test_vacuum_vs_insert": found 0 removable, 6 nonremovable row versio
 DETAIL:  0 dead row versions cannot be removed yet.
 CPU: user: 0.00 s, system: 0.00 s, elapsed: 0.00 s.
 step s2-vacuum-full: <... completed>
-step s2-select: 
+step s2-select:
     SELECT * FROM test_vacuum_vs_insert;
 
-a              b              
+a              b
 
-1              2              
-2              4              
-3              6              
-1              2              
-2              4              
-3              6              
+1              2
+2              4
+3              6
+1              2
+2              4
+3              6

@@ -6,19 +6,19 @@ CREATE SERVER cstore_server FOREIGN DATA WRAPPER cstore_fdw;
 
 
 -- Validator tests
-CREATE FOREIGN TABLE test_validator_invalid_option () 
-	SERVER cstore_server 
+CREATE FOREIGN TABLE test_validator_invalid_option ()
+	SERVER cstore_server
 	OPTIONS(bad_option_name '1'); -- ERROR
 
-CREATE FOREIGN TABLE test_validator_invalid_stripe_row_count () 
+CREATE FOREIGN TABLE test_validator_invalid_stripe_row_count ()
 	SERVER cstore_server
 	OPTIONS(stripe_row_count '0'); -- ERROR
 
-CREATE FOREIGN TABLE test_validator_invalid_block_row_count () 
+CREATE FOREIGN TABLE test_validator_invalid_block_row_count ()
 	SERVER cstore_server
 	OPTIONS(block_row_count '0'); -- ERROR
 
-CREATE FOREIGN TABLE test_validator_invalid_compression_type () 
+CREATE FOREIGN TABLE test_validator_invalid_compression_type ()
 	SERVER cstore_server
 	OPTIONS(compression 'invalid_compression'); -- ERROR
 
