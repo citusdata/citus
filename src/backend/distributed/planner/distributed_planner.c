@@ -2296,9 +2296,24 @@ GetRTEListProperties(List *rangeTableList)
 	RangeTblEntry *rangeTableEntry = NULL;
 	foreach_ptr(rangeTableEntry, rangeTableList)
 	{
-		if (!(rangeTableEntry->rtekind == RTE_RELATION &&
-			  rangeTableEntry->relkind == RELKIND_RELATION))
+		if (rangeTableEntry->rtekind != RTE_RELATION)
 		{
+			continue;
+		}
+		else if (rangeTableEntry->relkind == RELKIND_VIEW)
+		{
+			/*
+			 * Skip over views, distributed tables within (regular) views are
+			 * already in rangeTableList.
+			 */
+			continue;
+		}
+		else if (rangeTableEntry->relkind == RELKIND_MATVIEW)
+		{
+			/*
+			 * Skip over materialized views, here we should not consider
+			 * materialized views as local tables.
+			 */
 			continue;
 		}
 
