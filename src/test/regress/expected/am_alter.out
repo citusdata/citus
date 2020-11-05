@@ -14,8 +14,8 @@ ALTER TABLE test_alter_table DROP COLUMN a;
 ANALYZE test_alter_table;
 -- verify select queries run as expected
 SELECT * FROM test_alter_table;
- b | c 
----+---
+ b | c
+---------------------------------------------------------------------
  2 | 3
  5 | 6
  8 | 9
@@ -23,11 +23,9 @@ SELECT * FROM test_alter_table;
 
 SELECT a FROM test_alter_table;
 ERROR:  column "a" does not exist
-LINE 1: SELECT a FROM test_alter_table;
-               ^
 SELECT b FROM test_alter_table;
- b 
----
+ b
+---------------------------------------------------------------------
  2
  5
  8
@@ -36,36 +34,34 @@ SELECT b FROM test_alter_table;
 -- verify insert runs as expected
 INSERT INTO test_alter_table (SELECT 3, 5, 8);
 ERROR:  INSERT has more expressions than target columns
-LINE 1: INSERT INTO test_alter_table (SELECT 3, 5, 8);
-                                                   ^
 INSERT INTO test_alter_table (SELECT 5, 8);
 -- add a column with no defaults
 ALTER TABLE test_alter_table ADD COLUMN d int;
 SELECT * FROM test_alter_table;
- b | c | d 
----+---+---
- 2 | 3 |  
- 5 | 6 |  
- 8 | 9 |  
- 5 | 8 |  
+ b | c | d
+---------------------------------------------------------------------
+ 2 | 3 |
+ 5 | 6 |
+ 8 | 9 |
+ 5 | 8 |
 (4 rows)
 
 INSERT INTO test_alter_table (SELECT 3, 5, 8);
 SELECT * FROM test_alter_table;
- b | c | d 
----+---+---
- 2 | 3 |  
- 5 | 6 |  
- 8 | 9 |  
- 5 | 8 |  
+ b | c | d
+---------------------------------------------------------------------
+ 2 | 3 |
+ 5 | 6 |
+ 8 | 9 |
+ 5 | 8 |
  3 | 5 | 8
 (5 rows)
 
 -- add a fixed-length column with default value
 ALTER TABLE test_alter_table ADD COLUMN e int default 3;
 SELECT * from test_alter_table;
- b | c | d | e 
----+---+---+---
+ b | c | d | e
+---------------------------------------------------------------------
  2 | 3 |   | 3
  5 | 6 |   | 3
  8 | 9 |   | 3
@@ -75,8 +71,8 @@ SELECT * from test_alter_table;
 
 INSERT INTO test_alter_table (SELECT 1, 2, 4, 8);
 SELECT * from test_alter_table;
- b | c | d | e 
----+---+---+---
+ b | c | d | e
+---------------------------------------------------------------------
  2 | 3 |   | 3
  5 | 6 |   | 3
  8 | 9 |   | 3
@@ -88,8 +84,8 @@ SELECT * from test_alter_table;
 -- add a variable-length column with default value
 ALTER TABLE test_alter_table ADD COLUMN f text DEFAULT 'TEXT ME';
 SELECT * from test_alter_table;
- b | c | d | e |    f    
----+---+---+---+---------
+ b | c | d | e |    f
+---------------------------------------------------------------------
  2 | 3 |   | 3 | TEXT ME
  5 | 6 |   | 3 | TEXT ME
  8 | 9 |   | 3 | TEXT ME
@@ -100,8 +96,8 @@ SELECT * from test_alter_table;
 
 INSERT INTO test_alter_table (SELECT 1, 2, 4, 8, 'ABCDEF');
 SELECT * from test_alter_table;
- b | c | d | e |    f    
----+---+---+---+---------
+ b | c | d | e |    f
+---------------------------------------------------------------------
  2 | 3 |   | 3 | TEXT ME
  5 | 6 |   | 3 | TEXT ME
  8 | 9 |   | 3 | TEXT ME
@@ -116,8 +112,8 @@ ALTER TABLE test_alter_table DROP COLUMN c;
 ALTER TABLE test_alter_table DROP COLUMN e;
 ANALYZE test_alter_table;
 SELECT * from test_alter_table;
- b | d |    f    
----+---+---------
+ b | d |    f
+---------------------------------------------------------------------
  2 |   | TEXT ME
  5 |   | TEXT ME
  8 |   | TEXT ME
@@ -128,14 +124,14 @@ SELECT * from test_alter_table;
 (7 rows)
 
 SELECT count(*) from test_alter_table;
- count 
--------
+ count
+---------------------------------------------------------------------
      7
 (1 row)
 
 SELECT count(t.*) from test_alter_table t;
- count 
--------
+ count
+---------------------------------------------------------------------
      7
 (1 row)
 
@@ -152,15 +148,15 @@ HINT:  Expression is either mutable or does not evaluate to constant value
 ALTER TABLE test_alter_table ALTER COLUMN h DROP DEFAULT;
 ANALYZE test_alter_table;
 SELECT * FROM test_alter_table;
- b | d |    f    | g | h 
----+---+---------+---+---
- 2 |   | TEXT ME |   | 
- 5 |   | TEXT ME |   | 
- 8 |   | TEXT ME |   | 
- 5 |   | TEXT ME |   | 
- 3 | 8 | TEXT ME |   | 
- 1 | 4 | TEXT ME |   | 
- 1 | 4 | ABCDEF  |   | 
+ b | d |    f    | g | h
+---------------------------------------------------------------------
+ 2 |   | TEXT ME |   |
+ 5 |   | TEXT ME |   |
+ 8 |   | TEXT ME |   |
+ 5 |   | TEXT ME |   |
+ 3 | 8 | TEXT ME |   |
+ 1 | 4 | TEXT ME |   |
+ 1 | 4 | ABCDEF  |   |
 (7 rows)
 
 -- unsupported type change

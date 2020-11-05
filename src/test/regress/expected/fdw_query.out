@@ -5,21 +5,21 @@
 SET datestyle = "ISO, YMD";
 -- Query uncompressed data
 SELECT count(*) FROM contestant;
- count 
--------
+ count
+---------------------------------------------------------------------
      8
 (1 row)
 
 SELECT avg(rating), stddev_samp(rating) FROM contestant;
-          avg          |   stddev_samp    
------------------------+------------------
+          avg          |   stddev_samp
+---------------------------------------------------------------------
  2344.3750000000000000 | 433.746119785032
 (1 row)
 
 SELECT country, avg(rating) FROM contestant WHERE rating > 2200
 	GROUP BY country ORDER BY country;
- country |          avg          
----------+-----------------------
+ country |          avg
+---------------------------------------------------------------------
  XA      | 2203.0000000000000000
  XB      | 2610.5000000000000000
  XC      | 2236.0000000000000000
@@ -27,8 +27,8 @@ SELECT country, avg(rating) FROM contestant WHERE rating > 2200
 (4 rows)
 
 SELECT * FROM contestant ORDER BY handle;
- handle | birthdate  | rating | percentile | country | achievements 
---------+------------+--------+------------+---------+--------------
+ handle | birthdate  | rating | percentile | country | achievements
+---------------------------------------------------------------------
  a      | 1990-01-10 |   2090 |       97.1 | XA      | {a}
  b      | 1990-11-01 |   2203 |       98.1 | XA      | {a,b}
  c      | 1988-11-01 |   2907 |       99.4 | XB      | {w,y}
@@ -41,21 +41,21 @@ SELECT * FROM contestant ORDER BY handle;
 
 -- Query compressed data
 SELECT count(*) FROM contestant_compressed;
- count 
--------
+ count
+---------------------------------------------------------------------
      8
 (1 row)
 
 SELECT avg(rating), stddev_samp(rating) FROM contestant_compressed;
-          avg          |   stddev_samp    
------------------------+------------------
+          avg          |   stddev_samp
+---------------------------------------------------------------------
  2344.3750000000000000 | 433.746119785032
 (1 row)
 
 SELECT country, avg(rating) FROM contestant_compressed WHERE rating > 2200
 	GROUP BY country ORDER BY country;
- country |          avg          
----------+-----------------------
+ country |          avg
+---------------------------------------------------------------------
  XA      | 2203.0000000000000000
  XB      | 2610.5000000000000000
  XC      | 2236.0000000000000000
@@ -63,8 +63,8 @@ SELECT country, avg(rating) FROM contestant_compressed WHERE rating > 2200
 (4 rows)
 
 SELECT * FROM contestant_compressed ORDER BY handle;
- handle | birthdate  | rating | percentile | country | achievements 
---------+------------+--------+------------+---------+--------------
+ handle | birthdate  | rating | percentile | country | achievements
+---------------------------------------------------------------------
  a      | 1990-01-10 |   2090 |       97.1 | XA      | {a}
  b      | 1990-11-01 |   2203 |       98.1 | XA      | {a,b}
  c      | 1988-11-01 |   2907 |       99.4 | XB      | {w,y}
@@ -77,8 +77,8 @@ SELECT * FROM contestant_compressed ORDER BY handle;
 
 -- Verify that we handle whole-row references correctly
 SELECT to_json(v) FROM contestant v ORDER BY rating LIMIT 1;
-                                                     to_json                                                      
-------------------------------------------------------------------------------------------------------------------
+                                                     to_json
+---------------------------------------------------------------------
  {"handle":"g","birthdate":"1991-12-13","rating":1803,"percentile":85.1,"country":"XD ","achievements":["a","c"]}
 (1 row)
 
@@ -88,8 +88,8 @@ CREATE FOREIGN TABLE union_second (a int, b int) SERVER cstore_server;
 INSERT INTO union_first SELECT a, a FROM generate_series(1, 5) a;
 INSERT INTO union_second SELECT a, a FROM generate_series(11, 15) a;
 (SELECT a*1, b FROM union_first) union all (SELECT a*1, b FROM union_second);
- ?column? | b  
-----------+----
+ ?column? | b
+---------------------------------------------------------------------
         1 |  1
         2 |  2
         3 |  3

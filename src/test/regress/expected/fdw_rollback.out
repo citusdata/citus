@@ -6,30 +6,30 @@ BEGIN;
 INSERT INTO t SELECT i, i+1 FROM generate_series(1, 10) i;
 ROLLBACK;
 SELECT count(*) FROM t;
- count 
--------
+ count
+---------------------------------------------------------------------
      0
 (1 row)
 
 -- check stripe metadata also have been rolled-back
 SELECT count(*) FROM cstore.cstore_stripes a, pg_class b
 WHERE a.relfilenode = b.relfilenode AND b.relname = 't';
- count 
--------
+ count
+---------------------------------------------------------------------
      0
 (1 row)
 
 INSERT INTO t SELECT i, i+1 FROM generate_series(1, 10) i;
 SELECT count(*) FROM t;
- count 
--------
+ count
+---------------------------------------------------------------------
     10
 (1 row)
 
 SELECT count(*) FROM cstore.cstore_stripes a, pg_class b
 WHERE a.relfilenode = b.relfilenode AND b.relname = 't';
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
@@ -40,37 +40,37 @@ INSERT INTO t SELECT i, i+1 FROM generate_series(1, 10) i;
 SAVEPOINT s1;
 INSERT INTO t SELECT i, i+1 FROM generate_series(1, 10) i;
 SELECT count(*) FROM t;
- count 
--------
+ count
+---------------------------------------------------------------------
     30
 (1 row)
 
 ROLLBACK TO SAVEPOINT s1;
 SELECT count(*) FROM t;
- count 
--------
+ count
+---------------------------------------------------------------------
     20
 (1 row)
 
 ROLLBACK TO SAVEPOINT s0;
 SELECT count(*) FROM t;
- count 
--------
+ count
+---------------------------------------------------------------------
     10
 (1 row)
 
 INSERT INTO t SELECT i, i+1 FROM generate_series(1, 10) i;
 COMMIT;
 SELECT count(*) FROM t;
- count 
--------
+ count
+---------------------------------------------------------------------
     20
 (1 row)
 
 SELECT count(*) FROM cstore.cstore_stripes a, pg_class b
 WHERE a.relfilenode = b.relfilenode AND b.relname = 't';
- count 
--------
+ count
+---------------------------------------------------------------------
      2
 (1 row)
 

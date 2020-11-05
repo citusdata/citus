@@ -6,8 +6,8 @@ CREATE TABLE table_with_data (a int) USING cstore_tableam;
 CREATE TABLE non_cstore_table (a int);
 COPY table_with_data FROM STDIN;
 SELECT pg_relation_size('empty_table') < pg_relation_size('table_with_data');
- ?column? 
-----------
+ ?column?
+---------------------------------------------------------------------
  t
 (1 row)
 

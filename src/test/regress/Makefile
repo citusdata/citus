@@ -169,6 +169,18 @@ check-failure-base: all
 	$(pg_regress_multi_check) --load-extension=citus --mitmproxy \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/failure_base_schedule $(EXTRA_TESTS)
 
+COLUMNAR_SCHEDULES =
+ifeq ($(USE_FDW),yes)
+  COLUMNAR_SCHEDULES += columnar_fdw_schedule
+endif
+ifeq ($(USE_TABLEAM),yes)
+  COLUMNAR_SCHEDULES += columnar_am_schedule
+endif
+
+check-columnar:
+	$(pg_regress_multi_check) --load-extension=citus \
+	-- $(MULTI_REGRESS_OPTS) $(addprefix --schedule=$(citus_abs_srcdir)/,$(COLUMNAR_SCHEDULES)) $(EXTRA_TESTS)
+
 check-pg-upgrade:
 	$(pg_upgrade_check) --old-bindir=$(old-bindir) --new-bindir=$(new-bindir) --pgxsdir=$(pgxsdir)
 

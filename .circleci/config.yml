@@ -212,6 +212,21 @@ jobs:
           command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext check-failure'
           no_output_timeout: 2m
 
+  test-11_check-columnar:
+    docker:
+      - image: 'citus/exttester:11.9'
+    working_directory: /home/circleci/project
+    steps:
+      - checkout
+      - attach_workspace:
+          at: .
+      - run:
+          name: 'Install and Test (check-isolation)'
+          command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext check-columnar'
+          no_output_timeout: 2m
+      - codecov/upload:
+          flags: 'test_11,columnar'
+
   test-11-12_check-pg-upgrade:
     docker:
       - image: 'citus/pgupgradetester:latest'
@@ -350,6 +365,21 @@ jobs:
           command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext check-failure'
           no_output_timeout: 2m
 
+  test-12_check-columnar:
+    docker:
+      - image: 'citus/exttester:12.4'
+    working_directory: /home/circleci/project
+    steps:
+      - checkout
+      - attach_workspace:
+          at: .
+      - run:
+          name: 'Install and Test (check-isolation)'
+          command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext check-columnar'
+          no_output_timeout: 2m
+      - codecov/upload:
+          flags: 'test_12,columnar'
+
   test-11_check-citus-upgrade:
     docker:
       - image: 'citus/citusupgradetester:11.9'
@@ -486,6 +516,21 @@ jobs:
           command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext check-failure'
           no_output_timeout: 2m
 
+  test-13_check-columnar:
+    docker:
+      - image: 'citus/exttester:13.0'
+    working_directory: /home/circleci/project
+    steps:
+      - checkout
+      - attach_workspace:
+          at: .
+      - run:
+          name: 'Install and Test (check-isolation)'
+          command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext check-columnar'
+          no_output_timeout: 2m
+      - codecov/upload:
+          flags: 'test_13,columnar'
+
   check-merge-to-enterprise:
     docker:
       - image: citus/extbuilder:13.0
@@ -558,6 +603,8 @@ workflows:
           requires: [build-11]
       - test-11_check-failure:
           requires: [build-11]
+      - test-11_check-columnar:
+          requires: [build-11]
 
       - test-12_check-multi:
           requires: [build-12]
@@ -573,6 +620,8 @@ workflows:
           requires: [build-12]
       - test-12_check-failure:
           requires: [build-12]
+      - test-12_check-columnar:
+          requires: [build-12]
 
       - test-13_check-multi:
           requires: [build-13]
@@ -587,6 +636,8 @@ workflows:
       - test-13_check-follower-cluster:
           requires: [build-13]
       - test-13_check-failure:
+          requires: [build-13]
+      - test-13_check-columnar:
           requires: [build-13]
 
       - test-11-12_check-pg-upgrade:

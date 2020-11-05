@@ -4,8 +4,8 @@
 -- print whether we're using version > 10 to make version-specific tests clear
 SHOW server_version \gset
 SELECT substring(:'server_version', '\d+')::int > 10 AS version_above_ten;
- version_above_ten 
--------------------
+ version_above_ten
+---------------------------------------------------------------------
  t
 (1 row)
 
@@ -23,8 +23,8 @@ INSERT INTO cstore_truncate_test_compressed select a, a from generate_series(1, 
 set cstore.compression to default;
 -- query rows
 SELECT * FROM cstore_truncate_test;
- a  | b  
-----+----
+ a  | b
+---------------------------------------------------------------------
   1 |  1
   2 |  2
   3 |  3
@@ -39,32 +39,32 @@ SELECT * FROM cstore_truncate_test;
 
 TRUNCATE TABLE cstore_truncate_test;
 SELECT * FROM cstore_truncate_test;
- a | b 
----+---
+ a | b
+---------------------------------------------------------------------
 (0 rows)
 
 SELECT COUNT(*) from cstore_truncate_test;
- count 
--------
+ count
+---------------------------------------------------------------------
      0
 (1 row)
 
 SELECT count(*) FROM cstore_truncate_test_compressed;
- count 
--------
+ count
+---------------------------------------------------------------------
     20
 (1 row)
 
 TRUNCATE TABLE cstore_truncate_test_compressed;
 SELECT count(*) FROM cstore_truncate_test_compressed;
- count 
--------
+ count
+---------------------------------------------------------------------
      0
 (1 row)
 
 SELECT pg_relation_size('cstore_truncate_test_compressed');
- pg_relation_size 
-------------------
+ pg_relation_size
+---------------------------------------------------------------------
                 0
 (1 row)
 
@@ -72,8 +72,8 @@ INSERT INTO cstore_truncate_test select a, a from generate_series(1, 10) a;
 INSERT INTO cstore_truncate_test_regular select a, a from generate_series(10, 20) a;
 INSERT INTO cstore_truncate_test_second select a, a from generate_series(20, 30) a;
 SELECT * from cstore_truncate_test;
- a  | b  
-----+----
+ a  | b
+---------------------------------------------------------------------
   1 |  1
   2 |  2
   3 |  3
@@ -87,8 +87,8 @@ SELECT * from cstore_truncate_test;
 (10 rows)
 
 SELECT * from cstore_truncate_test_second;
- a  | b  
-----+----
+ a  | b
+---------------------------------------------------------------------
  20 | 20
  21 | 21
  22 | 22
@@ -103,8 +103,8 @@ SELECT * from cstore_truncate_test_second;
 (11 rows)
 
 SELECT * from cstore_truncate_test_regular;
- a  | b  
-----+----
+ a  | b
+---------------------------------------------------------------------
  10 | 10
  11 | 11
  12 | 12
@@ -125,31 +125,31 @@ TRUNCATE TABLE cstore_truncate_test,
 			   cstore_truncate_test_second,
    			   cstore_truncate_test;
 SELECT * from cstore_truncate_test;
- a | b 
----+---
+ a | b
+---------------------------------------------------------------------
 (0 rows)
 
 SELECT * from cstore_truncate_test_second;
- a | b 
----+---
+ a | b
+---------------------------------------------------------------------
 (0 rows)
 
 SELECT * from cstore_truncate_test_regular;
- a | b 
----+---
+ a | b
+---------------------------------------------------------------------
 (0 rows)
 
 -- test if truncate on empty table works
 TRUNCATE TABLE cstore_truncate_test;
 SELECT * from cstore_truncate_test;
- a | b 
----+---
+ a | b
+---------------------------------------------------------------------
 (0 rows)
 
 -- make sure TRUNATE deletes metadata for old relfilenode
 SELECT :cstore_data_files_before_truncate - count(*) FROM cstore.cstore_data_files;
- ?column? 
-----------
+ ?column?
+---------------------------------------------------------------------
         0
 (1 row)
 
@@ -162,14 +162,14 @@ INSERT INTO cstore_same_transaction_truncate SELECT * FROM generate_series(20, 2
 COMMIT;
 -- should output "1" for the newly created relation
 SELECT count(*) - :cstore_data_files_before_truncate FROM cstore.cstore_data_files;
- ?column? 
-----------
+ ?column?
+---------------------------------------------------------------------
         1
 (1 row)
 
 SELECT * FROM cstore_same_transaction_truncate;
- a  
-----
+ a
+---------------------------------------------------------------------
  20
  21
  22
@@ -185,16 +185,16 @@ BEGIN
 END;$$
 LANGUAGE plpgsql;
 SELECT cstore_truncate_test_regular_func();
- cstore_truncate_test_regular_func 
------------------------------------
- 
+ cstore_truncate_test_regular_func
+---------------------------------------------------------------------
+
 (1 row)
 
 -- the cached plans are used stating from the second call
 SELECT cstore_truncate_test_regular_func();
- cstore_truncate_test_regular_func 
------------------------------------
- 
+ cstore_truncate_test_regular_func
+---------------------------------------------------------------------
+
 (1 row)
 
 DROP FUNCTION cstore_truncate_test_regular_func();
@@ -209,15 +209,15 @@ set cstore.compression = 'pglz';
 INSERT INTO truncate_schema.truncate_tbl SELECT generate_series(1, 100);
 set cstore.compression to default;
 SELECT COUNT(*) FROM truncate_schema.truncate_tbl;
- count 
--------
+ count
+---------------------------------------------------------------------
    100
 (1 row)
 
 TRUNCATE TABLE truncate_schema.truncate_tbl;
 SELECT COUNT(*) FROM truncate_schema.truncate_tbl;
- count 
--------
+ count
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -233,34 +233,34 @@ SELECT current_user \gset
 \c - truncate_user
 -- verify truncate command fails and check number of rows
 SELECT count(*) FROM truncate_schema.truncate_tbl;
- count 
--------
+ count
+---------------------------------------------------------------------
    100
 (1 row)
 
 TRUNCATE TABLE truncate_schema.truncate_tbl;
 ERROR:  permission denied for table truncate_tbl
 SELECT count(*) FROM truncate_schema.truncate_tbl;
- count 
--------
+ count
+---------------------------------------------------------------------
    100
 (1 row)
 
--- switch to super user, grant truncate to truncate_user 
+-- switch to super user, grant truncate to truncate_user
 \c - :current_user
 GRANT TRUNCATE ON TABLE truncate_schema.truncate_tbl TO truncate_user;
 -- verify truncate_user can truncate now
 \c - truncate_user
 SELECT count(*) FROM truncate_schema.truncate_tbl;
- count 
--------
+ count
+---------------------------------------------------------------------
    100
 (1 row)
 
 TRUNCATE TABLE truncate_schema.truncate_tbl;
 SELECT count(*) FROM truncate_schema.truncate_tbl;
- count 
--------
+ count
+---------------------------------------------------------------------
      0
 (1 row)
 

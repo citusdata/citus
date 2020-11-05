@@ -12,8 +12,8 @@ SELECT count(*)
 FROM users
 JOIN things ON (users.id = things.user_id)
 WHERE things.id > 290;
- count 
--------
+ count
+---------------------------------------------------------------------
     10
 (1 row)
 
@@ -23,8 +23,8 @@ SELECT count(*)
 FROM users
 JOIN things ON (users.id = things.user_id)
 WHERE things.id > 299990;
-                    QUERY PLAN                    
---------------------------------------------------
+                    QUERY PLAN
+---------------------------------------------------------------------
  Aggregate
    ->  Nested Loop
          Join Filter: (users.id = things.user_id)

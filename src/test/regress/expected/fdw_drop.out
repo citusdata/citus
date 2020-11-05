@@ -18,8 +18,8 @@ DROP FOREIGN TABLE contestant;
 DROP FOREIGN TABLE contestant_compressed;
 -- make sure DROP deletes metadata
 SELECT :cstore_data_files_before_drop - count(*) FROM cstore.cstore_data_files;
- ?column? 
-----------
+ ?column?
+---------------------------------------------------------------------
         2
 (1 row)
 
@@ -30,8 +30,8 @@ SELECT count(*) AS cstore_data_files_before_drop FROM cstore.cstore_data_files \
 DROP SCHEMA test_schema CASCADE;
 NOTICE:  drop cascades to foreign table test_schema.test_table
 SELECT :cstore_data_files_before_drop - count(*) FROM cstore.cstore_data_files;
- ?column? 
-----------
+ ?column?
+---------------------------------------------------------------------
         1
 (1 row)
 
