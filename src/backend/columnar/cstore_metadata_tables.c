@@ -9,6 +9,7 @@
 
 
 #include "postgres.h"
+
 #include "columnar/cstore.h"
 #include "columnar/cstore_version_compat.h"
 

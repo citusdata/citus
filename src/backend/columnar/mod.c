@@ -15,6 +15,8 @@
 
 #include "fmgr.h"
 
+#include "citus_version.h"
+
 #include "columnar/cstore.h"
 #include "columnar/mod.h"
 
@@ -26,10 +28,8 @@
 #include "columnar/cstore_fdw.h"
 #endif
 
-PG_MODULE_MAGIC;
-
 void
-_PG_init(void)
+columnar_init(void)
 {
 	cstore_init();
 
@@ -44,7 +44,7 @@ _PG_init(void)
 
 
 void
-_PG_fini(void)
+columnar_fini(void)
 {
 #if USE_TABLEAM
 	cstore_tableam_finish();

@@ -87,3 +87,11 @@
 
 /* Define to 1 if you have the ANSI C header files. */
 #undef STDC_HEADERS
+
+/* Define to 1 to build with foreign datawrapper support.
+   (--with-columnar-fdw) */
+#undef USE_FDW
+
+/* Define to 1 to build with table access method support.
+   (--with-columnar-tableam) */
+#undef USE_TABLEAM

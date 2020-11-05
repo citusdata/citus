@@ -13,6 +13,7 @@
 
 #ifndef CSTORE_H
 #define CSTORE_H
+#include "postgres.h"
 
 #include "fmgr.h"
 #include "lib/stringinfo.h"

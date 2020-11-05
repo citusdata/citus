@@ -21,3 +21,5 @@ DROP FUNCTION task_tracker_conninfo_cache_invalidate();
 DROP FUNCTION master_drop_sequences(text[]);
 
 RESET search_path;
+
+#include "columnar/columnar.sql"

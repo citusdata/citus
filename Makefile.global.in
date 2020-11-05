@@ -92,5 +92,8 @@ endif
 override CPPFLAGS := @CPPFLAGS@ @CITUS_CPPFLAGS@ -I '${citus_abs_top_srcdir}/src/include' -I'${citus_top_builddir}/src/include' $(CPPFLAGS)
 override LDFLAGS += @LDFLAGS@ @CITUS_LDFLAGS@
 
+USE_FDW:=@USE_FDW@
+USE_TABLEAM:=@USE_TABLEAM@
+
 # optional file with user defined, additional, rules
 -include ${citus_abs_srcdir}/src/Makefile.custom

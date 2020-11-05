@@ -1,3 +1,6 @@
+#include "citus_version.h"
+#if USE_TABLEAM
+
 #include "postgres.h"
 #include "fmgr.h"
 #include "access/tableam.h"
@@ -13,3 +16,4 @@ extern TableScanDesc cstore_beginscan_extended(Relation relation, Snapshot snaps
 											   ParallelTableScanDesc parallel_scan,
 											   uint32 flags, Bitmapset *attr_needed,
 											   List *scanQual);
+#endif
