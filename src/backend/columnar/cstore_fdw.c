@@ -75,9 +75,9 @@
 #endif
 #include "utils/syscache.h"
 
-#include "cstore.h"
-#include "cstore_fdw.h"
-#include "cstore_version_compat.h"
+#include "columnar/cstore.h"
+#include "columnar/cstore_fdw.h"
+#include "columnar/cstore_version_compat.h"
 
 /* table containing information about how to partition distributed tables */
 #define CITUS_EXTENSION_NAME "citus"

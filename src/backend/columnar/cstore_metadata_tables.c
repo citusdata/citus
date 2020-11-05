@@ -9,8 +9,8 @@
 
 
 #include "postgres.h"
-#include "cstore.h"
-#include "cstore_version_compat.h"
+#include "columnar/cstore.h"
+#include "columnar/cstore_version_compat.h"
 
 #include <sys/stat.h>
 #include "access/heapam.h"

@@ -19,7 +19,7 @@
 #include "utils/pg_lzcompress.h"
 #endif
 
-#include "cstore.h"
+#include "columnar/cstore.h"
 
 
 #if PG_VERSION_NUM >= 90500
