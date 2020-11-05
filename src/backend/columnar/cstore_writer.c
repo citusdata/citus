@@ -16,6 +16,8 @@
 
 #include "postgres.h"
 
+#include "safe_lib.h"
+
 #include "access/nbtree.h"
 #include "catalog/pg_am.h"
 #include "miscadmin.h"
@@ -354,7 +356,7 @@ WriteToSmgr(Relation rel, uint64 logicalOffset, char *data, uint32 dataLength)
 		START_CRIT_SECTION();
 
 		uint64 to_write = Min(phdr->pd_upper - phdr->pd_lower, remaining);
-		memcpy(page + phdr->pd_lower, data, to_write);
+		memcpy_s(page + phdr->pd_lower, phdr->pd_upper - phdr->pd_lower, data, to_write);
 		phdr->pd_lower += to_write;
 
 		MarkBufferDirty(buffer);
@@ -561,13 +563,15 @@ SerializeSingleDatum(StringInfo datumBuffer, Datum datum, bool datumTypeByValue,
 		}
 		else
 		{
-			memcpy(currentDatumDataPointer, DatumGetPointer(datum), datumTypeLength);
+			memcpy_s(currentDatumDataPointer, datumBuffer->maxlen - datumBuffer->len,
+					 DatumGetPointer(datum), datumTypeLength);
 		}
 	}
 	else
 	{
 		Assert(!datumTypeByValue);
-		memcpy(currentDatumDataPointer, DatumGetPointer(datum), datumLength);
+		memcpy_s(currentDatumDataPointer, datumBuffer->maxlen - datumBuffer->len,
+				 DatumGetPointer(datum), datumLength);
 	}
 
 	datumBuffer->len += datumLengthAligned;
@@ -714,7 +718,7 @@ DatumCopy(Datum datum, bool datumTypeByValue, int datumTypeLength)
 	{
 		uint32 datumLength = att_addlength_datum(0, datumTypeLength, datum);
 		char *datumData = palloc0(datumLength);
-		memcpy(datumData, DatumGetPointer(datum), datumLength);
+		memcpy_s(datumData, datumLength, DatumGetPointer(datum), datumLength);
 
 		datumCopy = PointerGetDatum(datumData);
 	}
@@ -737,7 +741,8 @@ CopyStringInfo(StringInfo sourceString)
 		targetString->data = palloc0(sourceString->len);
 		targetString->len = sourceString->len;
 		targetString->maxlen = sourceString->len;
-		memcpy(targetString->data, sourceString->data, sourceString->len);
+		memcpy_s(targetString->data, sourceString->len,
+				 sourceString->data, sourceString->len);
 	}
 
 	return targetString;
