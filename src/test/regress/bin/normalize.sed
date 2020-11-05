@@ -161,6 +161,16 @@ s/Citus.*currently supports/Citus currently supports/g
 s/prepared transaction with identifier .* does not exist/prepared transaction with identifier "citus_x_yyyyyy_zzz_w" does not exist/g
 s/failed to roll back prepared transaction '.*'/failed to roll back prepared transaction 'citus_x_yyyyyy_zzz_w'/g
 
+# Table aliases for partitioned tables in explain outputs might change
+# regardless of postgres appended an _int suffix to alias, we always append _xxx suffix
+s/(->\ +Seq Scan on\ +)(.*)(_[0-9]+)(_[0-9]+) \2(_[0-9]+|_xxx)?/\1\2\3\4 \2_xxx/g
+
+# Table aliases in for partitioned tables in "Hash Cond:" lines of explain outputs might change
+# This is only for multi_partitioning.sql test file
+# regardless of postgres appended an _int suffix to alias, we always append _xxx suffix
+s/(partitioning_hash_join_test)(_[0-9]|_xxx)?(\.[a-zA-Z]+)/\1_xxx\3/g
+s/(partitioning_hash_test)(_[0-9]|_xxx)?(\.[a-zA-Z]+)/\1_xxx\3/g
+
 # Errors with binary decoding where OIDs should be normalized
 s/wrong data type: [0-9]+, expected [0-9]+/wrong data type: XXXX, expected XXXX/g
 
