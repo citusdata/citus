@@ -1,6 +1,0 @@
-# cstore_fdw extension
-comment = 'foreign-data wrapper for flat cstore access'
-default_version = '1.8'
-module_pathname = '$libdir/cstore_fdw'
-relocatable = false
-schema = cstore

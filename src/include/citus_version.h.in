@@ -26,3 +26,9 @@
 
 /* Base URL for statistics collection and update checks */
 #undef REPORTS_BASE_URL
+
+/* columnar foreign data wrapper capability */
+#undef USE_FDW
+
+/* columnar table access method capability */
+#undef USE_TABLEAM

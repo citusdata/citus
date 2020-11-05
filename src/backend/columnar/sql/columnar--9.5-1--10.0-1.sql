@@ -1,7 +1,7 @@
-/* cstore_fdw/cstore_fdw--1.7.sql */
+/* columnar--9.5-1--10.0-1.sql */
 
--- complain if script is sourced in psql, rather than via CREATE EXTENSION
-\echo Use "CREATE EXTENSION cstore_fdw" to load this file. \quit
+CREATE SCHEMA cstore;
+SET search_path TO cstore;
 
 CREATE FUNCTION cstore_fdw_handler()
 RETURNS fdw_handler
@@ -86,3 +86,42 @@ FROM pg_class c
 JOIN cstore.cstore_data_files d USING(relfilenode);
 
 COMMENT ON VIEW cstore_options IS 'CStore per table settings';
+
+DO $proc$
+BEGIN
+
+-- from version 12 and up we have support for tableam's if installed on pg11 we can't
+-- create the objects here. Instead we rely on citus_finish_pg_upgrade to be called by the
+-- user instead to add the missing objects
+IF substring(current_Setting('server_version'), '\d+')::int >= 12 THEN
+  EXECUTE $$
+    CREATE FUNCTION cstore_tableam_handler(internal)
+    RETURNS table_am_handler
+    LANGUAGE C
+    AS 'MODULE_PATHNAME', 'cstore_tableam_handler';
+
+    CREATE ACCESS METHOD cstore_tableam
+    TYPE TABLE HANDLER cstore_tableam_handler;
+
+    CREATE FUNCTION pg_catalog.alter_cstore_table_set(
+        table_name regclass,
+        block_row_count int DEFAULT NULL,
+        stripe_row_count int DEFAULT NULL,
+        compression name DEFAULT null)
+    RETURNS void
+    LANGUAGE C
+    AS 'MODULE_PATHNAME', 'alter_cstore_table_set';
+
+    CREATE FUNCTION pg_catalog.alter_cstore_table_reset(
+        table_name regclass,
+        block_row_count bool DEFAULT false,
+        stripe_row_count bool DEFAULT false,
+        compression bool DEFAULT false)
+    RETURNS void
+    LANGUAGE C
+    AS 'MODULE_PATHNAME', 'alter_cstore_table_reset';
+  $$;
+END IF;
+END$proc$;
+
+RESET search_path;

@@ -1,3 +1,6 @@
+#include "citus_version.h"
+#if USE_TABLEAM
+
 #include "postgres.h"
 
 #include <math.h>
@@ -1417,3 +1420,6 @@ alter_cstore_table_reset(PG_FUNCTION_ARGS)
 
 	PG_RETURN_VOID();
 }
+
+
+#endif

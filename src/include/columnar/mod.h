@@ -15,7 +15,7 @@
 #define MOD_H
 
 /* Function declarations for extension loading and unloading */
-extern void _PG_init(void);
-extern void _PG_fini(void);
+extern void columnar_init(void);
+extern void columnar_fini(void);
 
 #endif /* MOD_H */

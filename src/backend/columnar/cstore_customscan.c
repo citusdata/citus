@@ -10,6 +10,9 @@
  *-------------------------------------------------------------------------
  */
 
+#include "citus_version.h"
+#if USE_TABLEAM
+
 #include "postgres.h"
 
 #include "access/skey.h"
@@ -431,3 +434,6 @@ CStoreScan_ReScanCustomScan(CustomScanState *node)
 		table_rescan(node->ss.ss_currentScanDesc, NULL);
 	}
 }
+
+
+#endif /* USE_TABLEAM */
