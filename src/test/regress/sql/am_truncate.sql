@@ -125,7 +125,7 @@ SELECT count(*) FROM truncate_schema.truncate_tbl;
 TRUNCATE TABLE truncate_schema.truncate_tbl;
 SELECT count(*) FROM truncate_schema.truncate_tbl;
 
--- switch to super user, grant truncate to truncate_user 
+-- switch to super user, grant truncate to truncate_user
 \c - :current_user
 GRANT TRUNCATE ON TABLE truncate_schema.truncate_tbl TO truncate_user;
 

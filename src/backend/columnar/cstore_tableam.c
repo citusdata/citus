@@ -125,13 +125,10 @@ CStoreTableAMDefaultOptions()
 static CStoreOptions *
 CStoreTableAMGetOptions(Relation rel)
 {
-	CStoreOptions *cstoreOptions = NULL;
-	DataFileMetadata *metadata = NULL;
-
 	Assert(rel != NULL);
 
-	cstoreOptions = palloc0(sizeof(CStoreOptions));
-	metadata = ReadDataFileMetadata(rel->rd_node.relNode, false);
+	CStoreOptions *cstoreOptions = palloc0(sizeof(CStoreOptions));
+	DataFileMetadata *metadata = ReadDataFileMetadata(rel->rd_node.relNode, false);
 	cstoreOptions->compressionType = metadata->compression;
 	cstoreOptions->stripeRowCount = metadata->stripeRowCount;
 	cstoreOptions->blockRowCount = metadata->blockRowCount;
@@ -213,15 +210,14 @@ RelationColumnList(Relation rel)
 		int32 vartypmod = tupdesc->attrs[i].atttypmod;
 		Oid varcollid = tupdesc->attrs[i].attcollation;
 		Index varlevelsup = 0;
-		Var *var;
 
 		if (tupdesc->attrs[i].attisdropped)
 		{
 			continue;
 		}
 
-		var = makeVar(varno, varattno, vartype, vartypmod,
-					  varcollid, varlevelsup);
+		Var *var = makeVar(varno, varattno, vartype, vartypmod,
+						   varcollid, varlevelsup);
 		columnList = lappend(columnList, var);
 	}
 
@@ -242,7 +238,6 @@ cstore_beginscan(Relation relation, Snapshot snapshot,
 				 ParallelTableScanDesc parallel_scan,
 				 uint32 flags)
 {
-	TableScanDesc scandesc;
 	int natts = relation->rd_att->natts;
 	Bitmapset *attr_needed = NULL;
 
@@ -251,8 +246,9 @@ cstore_beginscan(Relation relation, Snapshot snapshot,
 	/* the cstore access method does not use the flags, they are specific to heap */
 	flags = 0;
 
-	scandesc = cstore_beginscan_extended(relation, snapshot, nkeys, key, parallel_scan,
-										 flags, attr_needed, NULL);
+	TableScanDesc scandesc = cstore_beginscan_extended(relation, snapshot, nkeys, key,
+													   parallel_scan,
+													   flags, attr_needed, NULL);
 
 	pfree(attr_needed);
 
@@ -267,9 +263,7 @@ cstore_beginscan_extended(Relation relation, Snapshot snapshot,
 						  uint32 flags, Bitmapset *attr_needed, List *scanQual)
 {
 	TupleDesc tupdesc = relation->rd_att;
-	TableReadState *readState = NULL;
 	CStoreScanDesc scan = palloc(sizeof(CStoreScanDescData));
-	List *columnList = NIL;
 	List *neededColumnList = NIL;
 	MemoryContext oldContext = MemoryContextSwitchTo(GetCStoreMemoryContext());
 	ListCell *columnCell = NULL;
@@ -281,7 +275,7 @@ cstore_beginscan_extended(Relation relation, Snapshot snapshot,
 	scan->cs_base.rs_flags = flags;
 	scan->cs_base.rs_parallel = parallel_scan;
 
-	columnList = RelationColumnList(relation);
+	List *columnList = RelationColumnList(relation);
 
 	/* only collect columns that we need for the scan */
 	foreach(columnCell, columnList)
@@ -293,7 +287,8 @@ cstore_beginscan_extended(Relation relation, Snapshot snapshot,
 		}
 	}
 
-	readState = CStoreBeginRead(relation, tupdesc, neededColumnList, scanQual);
+	TableReadState *readState = CStoreBeginRead(relation, tupdesc, neededColumnList,
+												scanQual);
 
 	scan->cs_readState = readState;
 
@@ -324,13 +319,12 @@ static bool
 cstore_getnextslot(TableScanDesc sscan, ScanDirection direction, TupleTableSlot *slot)
 {
 	CStoreScanDesc scan = (CStoreScanDesc) sscan;
-	bool nextRowFound;
 	MemoryContext oldContext = MemoryContextSwitchTo(GetCStoreMemoryContext());
 
 	ExecClearTuple(slot);
 
-	nextRowFound = CStoreReadNextRow(scan->cs_readState, slot->tts_values,
-									 slot->tts_isnull);
+	bool nextRowFound = CStoreReadNextRow(scan->cs_readState, slot->tts_values,
+										  slot->tts_isnull);
 
 	MemoryContextSwitchTo(oldContext);
 
@@ -443,12 +437,11 @@ static void
 cstore_tuple_insert(Relation relation, TupleTableSlot *slot, CommandId cid,
 					int options, BulkInsertState bistate)
 {
-	HeapTuple heapTuple;
 	MemoryContext oldContext = MemoryContextSwitchTo(GetCStoreMemoryContext());
 
 	cstore_init_write_state(relation);
 
-	heapTuple = ExecCopySlotHeapTuple(slot);
+	HeapTuple heapTuple = ExecCopySlotHeapTuple(slot);
 	if (HeapTupleHasExternal(heapTuple))
 	{
 		/* detoast any toasted attributes */
@@ -559,7 +552,6 @@ cstore_relation_set_new_filenode(Relation rel,
 								 TransactionId *freezeXid,
 								 MultiXactId *minmulti)
 {
-	SMgrRelation srel;
 	DataFileMetadata *metadata = ReadDataFileMetadata(rel->rd_node.relNode, true);
 	uint64 blockRowCount = 0;
 	uint64 stripeRowCount = 0;
@@ -587,7 +579,7 @@ cstore_relation_set_new_filenode(Relation rel,
 	Assert(persistence == RELPERSISTENCE_PERMANENT);
 	*freezeXid = RecentXmin;
 	*minmulti = GetOldestMultiXactId();
-	srel = RelationCreateStorage(*newrnode, persistence);
+	SMgrRelation srel = RelationCreateStorage(*newrnode, persistence);
 	InitCStoreDataFileMetadata(newrnode->relNode, blockRowCount, stripeRowCount,
 							   compression);
 	smgrclose(srel);
@@ -639,11 +631,6 @@ cstore_relation_copy_for_cluster(Relation OldHeap, Relation NewHeap,
 								 double *tups_vacuumed,
 								 double *tups_recently_dead)
 {
-	TableWriteState *writeState = NULL;
-	TableReadState *readState = NULL;
-	CStoreOptions *cstoreOptions = NULL;
-	Datum *values = NULL;
-	bool *nulls = NULL;
 	TupleDesc sourceDesc = RelationGetDescr(OldHeap);
 	TupleDesc targetDesc = RelationGetDescr(NewHeap);
 
@@ -664,7 +651,7 @@ cstore_relation_copy_for_cluster(Relation OldHeap, Relation NewHeap,
 	 * relation first.
 	 */
 
-	cstoreOptions = CStoreTableAMGetOptions(OldHeap);
+	CStoreOptions *cstoreOptions = CStoreTableAMGetOptions(OldHeap);
 
 	UpdateCStoreDataFileMetadata(NewHeap->rd_node.relNode,
 								 cstoreOptions->blockRowCount,
@@ -673,16 +660,17 @@ cstore_relation_copy_for_cluster(Relation OldHeap, Relation NewHeap,
 
 	cstoreOptions = CStoreTableAMGetOptions(NewHeap);
 
-	writeState = CStoreBeginWrite(NewHeap,
-								  cstoreOptions->compressionType,
-								  cstoreOptions->stripeRowCount,
-								  cstoreOptions->blockRowCount,
-								  targetDesc);
+	TableWriteState *writeState = CStoreBeginWrite(NewHeap,
+												   cstoreOptions->compressionType,
+												   cstoreOptions->stripeRowCount,
+												   cstoreOptions->blockRowCount,
+												   targetDesc);
 
-	readState = CStoreBeginRead(OldHeap, sourceDesc, RelationColumnList(OldHeap), NULL);
+	TableReadState *readState = CStoreBeginRead(OldHeap, sourceDesc, RelationColumnList(
+													OldHeap), NULL);
 
-	values = palloc0(sourceDesc->natts * sizeof(Datum));
-	nulls = palloc0(sourceDesc->natts * sizeof(bool));
+	Datum *values = palloc0(sourceDesc->natts * sizeof(Datum));
+	bool *nulls = palloc0(sourceDesc->natts * sizeof(bool));
 
 	*num_tuples = 0;
 
@@ -727,7 +715,6 @@ cstore_vacuum_rel(Relation rel, VacuumParams *params,
 static void
 LogRelationStats(Relation rel, int elevel)
 {
-	DataFileMetadata *datafileMetadata = NULL;
 	ListCell *stripeMetadataCell = NULL;
 	Oid relfilenode = rel->rd_node.relNode;
 	StringInfo infoBuf = makeStringInfo();
@@ -736,13 +723,11 @@ LogRelationStats(Relation rel, int elevel)
 	uint64 totalStripeLength = 0;
 	uint64 tupleCount = 0;
 	uint64 blockCount = 0;
-	uint64 relPages = 0;
-	int stripeCount = 0;
 	TupleDesc tupdesc = RelationGetDescr(rel);
 	uint64 droppedBlocksWithData = 0;
 
-	datafileMetadata = ReadDataFileMetadata(relfilenode, false);
-	stripeCount = list_length(datafileMetadata->stripeMetadataList);
+	DataFileMetadata *datafileMetadata = ReadDataFileMetadata(relfilenode, false);
+	int stripeCount = list_length(datafileMetadata->stripeMetadataList);
 
 	foreach(stripeMetadataCell, datafileMetadata->stripeMetadataList)
 	{
@@ -777,7 +762,7 @@ LogRelationStats(Relation rel, int elevel)
 	}
 
 	RelationOpenSmgr(rel);
-	relPages = smgrnblocks(rel->rd_smgr, MAIN_FORKNUM);
+	uint64 relPages = smgrnblocks(rel->rd_smgr, MAIN_FORKNUM);
 	RelationCloseSmgr(rel);
 
 	appendStringInfo(infoBuf, "total file size: %ld, total data size: %ld\n",
@@ -815,9 +800,6 @@ static void
 TruncateCStore(Relation rel, int elevel)
 {
 	PGRUsage ru0;
-	BlockNumber old_rel_pages = 0;
-	BlockNumber new_rel_pages = 0;
-	SmgrAddr highestPhysicalAddress;
 
 	pg_rusage_init(&ru0);
 
@@ -851,7 +833,7 @@ TruncateCStore(Relation rel, int elevel)
 	}
 
 	RelationOpenSmgr(rel);
-	old_rel_pages = smgrnblocks(rel->rd_smgr, MAIN_FORKNUM);
+	BlockNumber old_rel_pages = smgrnblocks(rel->rd_smgr, MAIN_FORKNUM);
 	RelationCloseSmgr(rel);
 
 	/*
@@ -859,10 +841,10 @@ TruncateCStore(Relation rel, int elevel)
 	 * new stripes be added beyond highestPhysicalAddress while
 	 * we're truncating.
 	 */
-	highestPhysicalAddress =
+	SmgrAddr highestPhysicalAddress =
 		logical_to_smgr(GetHighestUsedAddress(rel->rd_node.relNode));
 
-	new_rel_pages = highestPhysicalAddress.blockno + 1;
+	BlockNumber new_rel_pages = highestPhysicalAddress.blockno + 1;
 	if (new_rel_pages == old_rel_pages)
 	{
 		UnlockRelation(rel, AccessExclusiveLock);
@@ -1104,11 +1086,9 @@ CStoreTableAMProcessUtility(PlannedStmt * plannedStatement,
 	if (nodeTag(parseTree) == T_CreateTrigStmt)
 	{
 		CreateTrigStmt *createTrigStmt = (CreateTrigStmt *) parseTree;
-		Relation rel;
-		bool isCStore;
 
-		rel = relation_openrv(createTrigStmt->relation, AccessShareLock);
-		isCStore = rel->rd_tableam == GetCstoreTableAmRoutine();
+		Relation rel = relation_openrv(createTrigStmt->relation, AccessShareLock);
+		bool isCStore = rel->rd_tableam == GetCstoreTableAmRoutine();
 		relation_close(rel, AccessShareLock);
 
 		if (isCStore &&
@@ -1201,9 +1181,6 @@ CStoreTableAMObjectAccessHook(ObjectAccessType access, Oid classId, Oid objectId
 static bool
 IsCStoreTableAmTable(Oid relationId)
 {
-	bool result;
-	Relation rel;
-
 	if (!OidIsValid(relationId))
 	{
 		return false;
@@ -1213,8 +1190,8 @@ IsCStoreTableAmTable(Oid relationId)
 	 * Lock relation to prevent it from being dropped &
 	 * avoid race conditions.
 	 */
-	rel = relation_open(relationId, AccessShareLock);
-	result = rel->rd_tableam == GetCstoreTableAmRoutine();
+	Relation rel = relation_open(relationId, AccessShareLock);
+	bool result = rel->rd_tableam == GetCstoreTableAmRoutine();
 	relation_close(rel, NoLock);
 
 	return result;
@@ -1317,9 +1294,6 @@ Datum
 alter_cstore_table_set(PG_FUNCTION_ARGS)
 {
 	Oid relationId = PG_GETARG_OID(0);
-	int blockRowCount = 0;
-	int stripeRowCount = 0;
-	CompressionType compression = COMPRESSION_TYPE_INVALID;
 
 	Relation rel = table_open(relationId, AccessExclusiveLock); /* ALTER TABLE LOCK */
 	DataFileMetadata *metadata = ReadDataFileMetadata(rel->rd_node.relNode, true);
@@ -1329,9 +1303,9 @@ alter_cstore_table_set(PG_FUNCTION_ARGS)
 							   quote_identifier(RelationGetRelationName(rel)))));
 	}
 
-	blockRowCount = metadata->blockRowCount;
-	stripeRowCount = metadata->stripeRowCount;
-	compression = metadata->compression;
+	int blockRowCount = metadata->blockRowCount;
+	int stripeRowCount = metadata->stripeRowCount;
+	CompressionType compression = metadata->compression;
 
 	/* block_row_count => not null */
 	if (!PG_ARGISNULL(1))
@@ -1375,9 +1349,6 @@ Datum
 alter_cstore_table_reset(PG_FUNCTION_ARGS)
 {
 	Oid relationId = PG_GETARG_OID(0);
-	int blockRowCount = 0;
-	int stripeRowCount = 0;
-	CompressionType compression = COMPRESSION_TYPE_INVALID;
 
 	Relation rel = table_open(relationId, AccessExclusiveLock); /* ALTER TABLE LOCK */
 	DataFileMetadata *metadata = ReadDataFileMetadata(rel->rd_node.relNode, true);
@@ -1387,9 +1358,9 @@ alter_cstore_table_reset(PG_FUNCTION_ARGS)
 							   quote_identifier(RelationGetRelationName(rel)))));
 	}
 
-	blockRowCount = metadata->blockRowCount;
-	stripeRowCount = metadata->stripeRowCount;
-	compression = metadata->compression;
+	int blockRowCount = metadata->blockRowCount;
+	int stripeRowCount = metadata->stripeRowCount;
+	CompressionType compression = metadata->compression;
 
 	/* block_row_count => true */
 	if (!PG_ARGISNULL(1) && PG_GETARG_BOOL(1))

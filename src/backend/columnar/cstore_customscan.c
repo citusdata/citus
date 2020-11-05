@@ -136,8 +136,6 @@ static void
 CStoreSetRelPathlistHook(PlannerInfo *root, RelOptInfo *rel, Index rti,
 						 RangeTblEntry *rte)
 {
-	Relation relation;
-
 	/* call into previous hook if assigned */
 	if (PreviousSetRelPathlistHook)
 	{
@@ -161,7 +159,7 @@ CStoreSetRelPathlistHook(PlannerInfo *root, RelOptInfo *rel, Index rti,
 	 * If that is the case we want to insert an extra path that pushes down the projection
 	 * into the scan of the table to minimize the data read.
 	 */
-	relation = RelationIdGetRelation(rte->relid);
+	Relation relation = RelationIdGetRelation(rte->relid);
 	if (relation->rd_tableam == GetCstoreTableAmRoutine())
 	{
 		Path *customPath = CreateCStoreScanPath(rel, rte);
@@ -181,19 +179,17 @@ CreateCStoreScanPath(RelOptInfo *rel, RangeTblEntry *rte)
 {
 	CStoreScanPath *cspath = (CStoreScanPath *) newNode(sizeof(CStoreScanPath),
 														T_CustomPath);
-	CustomPath *cpath;
-	Path *path;
 
 	/*
 	 * popuate custom path information
 	 */
-	cpath = &cspath->custom_path;
+	CustomPath *cpath = &cspath->custom_path;
 	cpath->methods = &CStoreScanPathMethods;
 
 	/*
 	 * populate generic path information
 	 */
-	path = &cpath->path;
+	Path *path = &cpath->path;
 	path->pathtype = T_CustomScan;
 	path->parent = rel;
 	path->pathtarget = rel->reltarget;
@@ -329,18 +325,14 @@ static TupleTableSlot *
 CStoreScanNext(CStoreScanState *cstorescanstate)
 {
 	CustomScanState *node = (CustomScanState *) cstorescanstate;
-	TableScanDesc scandesc;
-	EState *estate;
-	ScanDirection direction;
-	TupleTableSlot *slot;
 
 	/*
 	 * get information from the estate and scan state
 	 */
-	scandesc = node->ss.ss_currentScanDesc;
-	estate = node->ss.ps.state;
-	direction = estate->es_direction;
-	slot = node->ss.ss_ScanTupleSlot;
+	TableScanDesc scandesc = node->ss.ss_currentScanDesc;
+	EState *estate = node->ss.ps.state;
+	ScanDirection direction = estate->es_direction;
+	TupleTableSlot *slot = node->ss.ss_ScanTupleSlot;
 
 	if (scandesc == NULL)
 	{
@@ -394,12 +386,10 @@ CStoreScan_ExecCustomScan(CustomScanState *node)
 static void
 CStoreScan_EndCustomScan(CustomScanState *node)
 {
-	TableScanDesc scanDesc;
-
 	/*
 	 * get information from node
 	 */
-	scanDesc = node->ss.ss_currentScanDesc;
+	TableScanDesc scanDesc = node->ss.ss_currentScanDesc;
 
 	/*
 	 * Free the exprcontext
