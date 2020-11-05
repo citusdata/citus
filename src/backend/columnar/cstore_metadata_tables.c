@@ -10,6 +10,8 @@
 
 #include "postgres.h"
 
+#include "safe_lib.h"
+
 #include "columnar/cstore.h"
 #include "columnar/cstore_version_compat.h"
 
@@ -885,12 +887,14 @@ DatumToBytea(Datum value, Form_pg_attribute attrForm)
 		}
 		else
 		{
-			memcpy(VARDATA(result), DatumGetPointer(value), attrForm->attlen);
+			memcpy_s(VARDATA(result), datumLength + VARHDRSZ,
+					 DatumGetPointer(value), attrForm->attlen);
 		}
 	}
 	else
 	{
-		memcpy(VARDATA(result), DatumGetPointer(value), datumLength);
+		memcpy_s(VARDATA(result), datumLength + VARHDRSZ,
+				 DatumGetPointer(value), datumLength);
 	}
 
 	return result;
@@ -909,7 +913,8 @@ ByteaToDatum(bytea *bytes, Form_pg_attribute attrForm)
 	 * after the byteaDatum is freed.
 	 */
 	char *binaryDataCopy = palloc0(VARSIZE_ANY_EXHDR(bytes));
-	memcpy(binaryDataCopy, VARDATA_ANY(bytes), VARSIZE_ANY_EXHDR(bytes));
+	memcpy_s(binaryDataCopy, VARSIZE_ANY_EXHDR(bytes),
+			 VARDATA_ANY(bytes), VARSIZE_ANY_EXHDR(bytes));
 
 	return fetch_att(binaryDataCopy, attrForm->attbyval, attrForm->attlen);
 }

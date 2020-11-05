@@ -78,6 +78,7 @@
 #include "columnar/cstore.h"
 #include "columnar/cstore_fdw.h"
 #include "columnar/cstore_version_compat.h"
+#include "distributed/citus_safe_lib.h"
 
 /* table containing information about how to partition distributed tables */
 #define CITUS_EXTENSION_NAME "citus"
@@ -474,8 +475,8 @@ CStoreProcessCopyCommand(CopyStmt *copyStatement, const char *queryString,
 
 	if (completionTag != NULL)
 	{
-		snprintf(completionTag, COMPLETION_TAG_BUFSIZE, "COPY " UINT64_FORMAT,
-				 processedCount);
+		SafeSnprintf(completionTag, COMPLETION_TAG_BUFSIZE, "COPY " UINT64_FORMAT,
+					 processedCount);
 	}
 }
 
