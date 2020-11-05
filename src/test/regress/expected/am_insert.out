@@ -4,44 +4,44 @@
 CREATE TABLE test_insert_command (a int) USING cstore_tableam;
 -- test single row inserts fail
 select count(*) from test_insert_command;
- count 
--------
+ count
+---------------------------------------------------------------------
      0
 (1 row)
 
 insert into test_insert_command values(1);
 select count(*) from test_insert_command;
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
 insert into test_insert_command default values;
 select count(*) from test_insert_command;
- count 
--------
+ count
+---------------------------------------------------------------------
      2
 (1 row)
 
 -- test inserting from another table succeed
 CREATE TABLE test_insert_command_data (a int);
 select count(*) from test_insert_command_data;
- count 
--------
+ count
+---------------------------------------------------------------------
      0
 (1 row)
 
 insert into test_insert_command_data values(1);
 select count(*) from test_insert_command_data;
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
 insert into test_insert_command select * from test_insert_command_data;
 select count(*) from test_insert_command;
- count 
--------
+ count
+---------------------------------------------------------------------
      3
 (1 row)
 
@@ -68,8 +68,8 @@ DROP TABLE test_long_text;
 SELECT a.int_val
 FROM  test_long_text_hash a, test_cstore_long_text c
 WHERE a.int_val = c.int_val AND a.hash = md5(c.text_val);
- int_val 
----------
+ int_val
+---------------------------------------------------------------------
        1
        2
        3
