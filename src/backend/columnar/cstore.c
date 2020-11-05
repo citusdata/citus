@@ -20,7 +20,7 @@
 #include "utils/guc.h"
 #include "utils/rel.h"
 
-#include "cstore.h"
+#include "columnar/cstore.h"
 
 /* Default values for option parameters */
 #define DEFAULT_COMPRESSION_TYPE COMPRESSION_NONE

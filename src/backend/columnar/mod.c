@@ -15,15 +15,15 @@
 
 #include "fmgr.h"
 
-#include "cstore.h"
-#include "mod.h"
+#include "columnar/cstore.h"
+#include "columnar/mod.h"
 
 #ifdef USE_TABLEAM
-#include "cstore_tableam.h"
+#include "columnar/cstore_tableam.h"
 #endif
 
 #ifdef USE_FDW
-#include "cstore_fdw.h"
+#include "columnar/cstore_fdw.h"
 #endif
 
 PG_MODULE_MAGIC;

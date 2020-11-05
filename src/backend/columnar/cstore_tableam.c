@@ -42,10 +42,10 @@
 #include "utils/rel.h"
 #include "utils/syscache.h"
 
-#include "cstore.h"
-#include "cstore_customscan.h"
-#include "cstore_tableam.h"
-#include "cstore_version_compat.h"
+#include "columnar/cstore.h"
+#include "columnar/cstore_customscan.h"
+#include "columnar/cstore_tableam.h"
+#include "columnar/cstore_version_compat.h"
 
 #define CSTORE_TABLEAM_NAME "cstore_tableam"
 

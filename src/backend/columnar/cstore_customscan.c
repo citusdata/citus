@@ -22,9 +22,9 @@
 #include "optimizer/restrictinfo.h"
 #include "utils/relcache.h"
 
-#include "cstore.h"
-#include "cstore_customscan.h"
-#include "cstore_tableam.h"
+#include "columnar/cstore.h"
+#include "columnar/cstore_customscan.h"
+#include "columnar/cstore_tableam.h"
 
 typedef struct CStoreScanPath
 {
