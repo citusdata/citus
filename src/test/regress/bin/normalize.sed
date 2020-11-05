@@ -163,7 +163,7 @@ s/failed to roll back prepared transaction '.*'/failed to roll back prepared tra
 
 # Table aliases for partitioned tables in explain outputs might change
 # regardless of postgres appended an _int suffix to alias, we always append _xxx suffix
-s/(->\ +Seq Scan on\ +)(.*)(_[0-9]+)(_[0-9]+) \2(_[0-9]+|_xxx)?/\1\2\3\4 \2_xxx/g
+s/(->.*Scan on\ +)(.*)(_[0-9]+)(_[0-9]+) \2(_[0-9]+|_xxx)?/\1\2\3\4 \2_xxx/g
 
 # Table aliases in for partitioned tables in "Hash Cond:" lines of explain outputs might change
 # This is only for multi_partitioning.sql test file
