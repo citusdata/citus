@@ -585,8 +585,8 @@ static void CleanUpSessions(DistributedExecution *execution);
 
 static void LockPartitionsForDistributedPlan(DistributedPlan *distributedPlan);
 static void AcquireExecutorShardLocksForExecution(DistributedExecution *execution);
-static void AdjustDistributedExecutionAfterLocalExecution(DistributedExecution *
-														  execution);
+static void AdjustDistributedExecutionWithLocalExecution(DistributedExecution *
+														 execution);
 static bool DistributedExecutionModifiesDatabase(DistributedExecution *execution);
 static bool IsMultiShardModification(RowModifyLevel modLevel, List *taskList);
 static bool TaskListModifiesDatabase(RowModifyLevel modLevel, List *taskList);
@@ -762,14 +762,11 @@ AdaptiveExecutor(CitusScanState *scanState)
 	 */
 	StartDistributedExecution(execution);
 
-	/* execute tasks local to the node (if any) */
-	if (list_length(execution->localTaskList) > 0)
-	{
-		RunLocalExecution(scanState, execution);
-
-		/* make sure that we only execute remoteTaskList afterwards */
-		AdjustDistributedExecutionAfterLocalExecution(execution);
-	}
+	/*
+	 * Make sure that we only execute remoteTaskList via remote execution
+	 * and let localTaskList to be executed via localexecution.
+	 */
+	AdjustDistributedExecutionWithLocalExecution(execution);
 
 	if (ShouldRunTasksSequentially(execution->tasksToExecute))
 	{
@@ -780,24 +777,17 @@ AdaptiveExecutor(CitusScanState *scanState)
 		RunDistributedExecution(execution);
 	}
 
-	if (job->jobQuery->commandType != CMD_SELECT)
+	/* execute tasks local to the node (if any) */
+	if (list_length(execution->localTaskList) > 0)
 	{
-		if (list_length(execution->localTaskList) == 0)
-		{
-			Assert(executorState->es_processed == 0);
+		/* now execute the local tasks */
+		RunLocalExecution(scanState, execution);
+	}
 
-			executorState->es_processed = execution->rowsProcessed;
-		}
-		else if (distributedPlan->targetRelationId != InvalidOid &&
-				 !IsCitusTableType(distributedPlan->targetRelationId, REFERENCE_TABLE))
-		{
-			/*
-			 * For reference tables we already add rowsProcessed on the local execution,
-			 * this is required to ensure that mixed local/remote executions reports
-			 * the accurate number of rowsProcessed to the user.
-			 */
-			executorState->es_processed += execution->rowsProcessed;
-		}
+	CmdType commandType = job->jobQuery->commandType;
+	if (commandType != CMD_SELECT)
+	{
+		executorState->es_processed = execution->rowsProcessed;
 	}
 
 	FinishDistributedExecution(execution);
@@ -807,8 +797,7 @@ AdaptiveExecutor(CitusScanState *scanState)
 		DoRepartitionCleanup(jobIdList);
 	}
 
-	if (SortReturning && distributedPlan->expectResults &&
-		job->jobQuery->commandType != CMD_SELECT)
+	if (SortReturning && distributedPlan->expectResults && commandType != CMD_SELECT)
 	{
 		SortTupleStore(scanState);
 	}
@@ -845,29 +834,25 @@ RunLocalExecution(CitusScanState *scanState, DistributedExecution *execution)
 														execution->defaultTupleDest,
 														isUtilityCommand);
 
-	/*
-	 * We're deliberately not setting execution->rowsProcessed here. The main reason
-	 * is that modifications to reference tables would end-up setting it both here
-	 * and in AdaptiveExecutor. Instead, we set executorState here and skip updating it
-	 * for reference table modifications in AdaptiveExecutor.
-	 */
-	EState *executorState = ScanStateGetExecutorState(scanState);
-	executorState->es_processed = rowsProcessed;
+	execution->rowsProcessed += rowsProcessed;
 }
 
 
 /*
- * AdjustDistributedExecutionAfterLocalExecution simply updates the necessary fields of
+ * AdjustDistributedExecutionWithLocalExecution simply updates the necessary fields of
  * the distributed execution.
  */
 static void
-AdjustDistributedExecutionAfterLocalExecution(DistributedExecution *execution)
+AdjustDistributedExecutionWithLocalExecution(DistributedExecution *execution)
 {
-	/* we only need to execute the remote tasks */
-	execution->tasksToExecute = execution->remoteTaskList;
+	if (list_length(execution->localTaskList) > 0)
+	{
+		/* we only need to execute the remote tasks */
+		execution->tasksToExecute = execution->remoteTaskList;
 
-	execution->totalTaskCount = list_length(execution->remoteTaskList);
-	execution->unfinishedTaskCount = list_length(execution->remoteTaskList);
+		execution->totalTaskCount = list_length(execution->remoteTaskList);
+		execution->unfinishedTaskCount = list_length(execution->remoteTaskList);
+	}
 }
 
 
@@ -3327,11 +3312,6 @@ TransactionStateMachine(WorkerSession *session)
 					/* already received results from another replica */
 					storeRows = false;
 				}
-				else if (task->partiallyLocalOrRemote)
-				{
-					/* already received results from local execution */
-					storeRows = false;
-				}
 
 				bool fetchDone = ReceiveResults(session, storeRows);
 				if (!fetchDone)
@@ -3727,7 +3707,6 @@ ReceiveResults(WorkerSession *session, bool storeRows)
 			{
 				scanint8(currentAffectedTupleString, false, &currentAffectedTupleCount);
 				Assert(currentAffectedTupleCount >= 0);
-
 				execution->rowsProcessed += currentAffectedTupleCount;
 			}
 

@@ -64,6 +64,7 @@ SELECT * FROM master_get_table_ddl_events('test_ref');
 
 -- replicate to coordinator
 SET client_min_messages TO WARNING;
+\set VERBOSIY terse
 SELECT 1 FROM master_add_node('localhost', :master_port, groupid => 0);
 RESET client_min_messages;
 delete from test_ref;
