@@ -26,7 +26,7 @@ CREATE EVENT TRIGGER cstore_ddl_event_end
 ON ddl_command_end
 EXECUTE PROCEDURE cstore_ddl_event_end_trigger();
 
-CREATE FUNCTION public.cstore_table_size(relation regclass)
+CREATE FUNCTION pg_catalog.cstore_table_size(relation regclass)
 RETURNS bigint
 AS 'MODULE_PATHNAME'
 LANGUAGE C STRICT;
