@@ -163,6 +163,7 @@ s/failed to roll back prepared transaction '.*'/failed to roll back prepared tra
 
 # Table aliases for partitioned tables in explain outputs might change
 # regardless of postgres appended an _int suffix to alias, we always append _xxx suffix
+# Can be removed when we remove support for pg11 and pg12.
 # "->  <scanMethod> Scan on <tableName>_<partitionId>_<shardId> <tableName>_<aliasId>" and
 # "->  <scanMethod> Scan on <tableName>_<partitionId>_<shardId> <tableName>" becomes
 # "->  <scanMethod> Scan on <tableName>_<partitionId>_<shardId> <tableName>_xxx"
@@ -171,6 +172,7 @@ s/(->.*Scan on\ +)(.*)(_[0-9]+)(_[0-9]+) \2(_[0-9]+|_xxx)?/\1\2\3\4 \2_xxx/g
 # Table aliases for partitioned tables in "Hash Cond:" lines of explain outputs might change
 # This is only for multi_partitioning.sql test file
 # regardless of postgres appended an _int suffix to alias, we always append _xxx suffix
+# Can be removed when we remove support for pg11 and pg12.
 s/(partitioning_hash_join_test)(_[0-9]|_xxx)?(\.[a-zA-Z]+)/\1_xxx\3/g
 s/(partitioning_hash_test)(_[0-9]|_xxx)?(\.[a-zA-Z]+)/\1_xxx\3/g
 
