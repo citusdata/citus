@@ -78,7 +78,7 @@ SELECT * FROM mat_view_on_dist UNION SELECT 1 ORDER BY 1;
 SET client_min_messages TO DEBUG1;
 
 -- can push down the union in subquery
-SELECT * FROM (SELECT * FROM partitioned_distributed_table UNION SELECT * FROM partitioned_distributed_table) AS foo;
+SELECT * FROM (SELECT * FROM partitioned_distributed_table UNION SELECT * FROM partitioned_distributed_table) AS foo ORDER BY 1,2;
 
 -- cannot push down the subquery, should evaluate subquery by creating a subplan
 SELECT COUNT(*) FROM (SELECT b, random() FROM partitioned_distributed_table GROUP BY b) AS foo;
