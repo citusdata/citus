@@ -36,15 +36,15 @@ SELECT current_database() datname \gset
 
 CREATE DATABASE db_to_drop;
 \c db_to_drop
-CREATE EXTENSION cstore_fdw;
+CREATE EXTENSION citus;
 SELECT oid::text databaseoid FROM pg_database WHERE datname = current_database() \gset
 
 CREATE TABLE test_table(data int) USING cstore_tableam;
 
-DROP EXTENSION cstore_fdw CASCADE;
+DROP EXTENSION citus CASCADE;
 
 -- test database drop
-CREATE EXTENSION cstore_fdw;
+CREATE EXTENSION citus;
 SELECT oid::text databaseoid FROM pg_database WHERE datname = current_database() \gset
 
 CREATE TABLE test_table(data int) USING cstore_tableam;

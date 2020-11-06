@@ -37,14 +37,17 @@ SELECT :cstore_data_files_before_drop - count(*) FROM cstore.cstore_data_files;
 
 SELECT current_database() datname \gset
 CREATE DATABASE db_to_drop;
+NOTICE:  Citus partially supports CREATE DATABASE for distributed databases
+DETAIL:  Citus does not propagate CREATE DATABASE command to workers
+HINT:  You can manually create a database and its extensions on workers.
 \c db_to_drop
-CREATE EXTENSION cstore_fdw;
+CREATE EXTENSION citus;
 SELECT oid::text databaseoid FROM pg_database WHERE datname = current_database() \gset
 CREATE TABLE test_table(data int) USING cstore_tableam;
-DROP EXTENSION cstore_fdw CASCADE;
+DROP EXTENSION citus CASCADE;
 NOTICE:  drop cascades to table test_table
 -- test database drop
-CREATE EXTENSION cstore_fdw;
+CREATE EXTENSION citus;
 SELECT oid::text databaseoid FROM pg_database WHERE datname = current_database() \gset
 CREATE TABLE test_table(data int) USING cstore_tableam;
 \c :datname

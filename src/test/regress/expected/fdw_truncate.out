@@ -218,6 +218,8 @@ SELECT COUNT(*) FROM truncate_schema.truncate_tbl;
 INSERT INTO truncate_schema.truncate_tbl SELECT generate_series(1, 100);
 -- create a user that can not truncate
 CREATE USER truncate_user;
+NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
+HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
 GRANT USAGE ON SCHEMA truncate_schema TO truncate_user;
 GRANT SELECT ON TABLE truncate_schema.truncate_tbl TO truncate_user;
 REVOKE TRUNCATE ON TABLE truncate_schema.truncate_tbl FROM truncate_user;

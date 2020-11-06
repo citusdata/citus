@@ -50,16 +50,28 @@ ERROR:  AFTER ROW triggers are not supported for columnstore access method
 HINT:  Consider an AFTER STATEMENT trigger instead.
 insert into test_tr values(1);
 NOTICE:  BEFORE STATEMENT INSERT
+CONTEXT:  PL/pgSQL function trs_before() line 3 at RAISE
 NOTICE:  BEFORE ROW INSERT: (1)
+CONTEXT:  PL/pgSQL function trr_before() line 3 at RAISE
 NOTICE:  AFTER STATEMENT INSERT
+CONTEXT:  PL/pgSQL function trs_after() line 5 at RAISE
 NOTICE:    (1)
+CONTEXT:  PL/pgSQL function trs_after() line 14 at RAISE
 insert into test_tr values(2),(3),(4);
 NOTICE:  BEFORE STATEMENT INSERT
+CONTEXT:  PL/pgSQL function trs_before() line 3 at RAISE
 NOTICE:  BEFORE ROW INSERT: (2)
+CONTEXT:  PL/pgSQL function trr_before() line 3 at RAISE
 NOTICE:  BEFORE ROW INSERT: (3)
+CONTEXT:  PL/pgSQL function trr_before() line 3 at RAISE
 NOTICE:  BEFORE ROW INSERT: (4)
+CONTEXT:  PL/pgSQL function trr_before() line 3 at RAISE
 NOTICE:  AFTER STATEMENT INSERT
+CONTEXT:  PL/pgSQL function trs_after() line 5 at RAISE
 NOTICE:    (2)
+CONTEXT:  PL/pgSQL function trs_after() line 14 at RAISE
 NOTICE:    (3)
+CONTEXT:  PL/pgSQL function trs_after() line 14 at RAISE
 NOTICE:    (4)
+CONTEXT:  PL/pgSQL function trs_after() line 14 at RAISE
 drop table test_tr;
