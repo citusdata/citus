@@ -1804,7 +1804,6 @@ multi_relation_restriction_hook(PlannerInfo *root, RelOptInfo *relOptInfo,
 	MemoryContext oldMemoryContext = MemoryContextSwitchTo(restrictionsMemoryContext);
 
 	bool distributedTable = IsCitusTable(rte->relid);
-	bool localTable = !distributedTable;
 
 	RelationRestriction *relationRestriction = palloc0(sizeof(RelationRestriction));
 	relationRestriction->index = restrictionIndex;
@@ -1820,8 +1819,6 @@ multi_relation_restriction_hook(PlannerInfo *root, RelOptInfo *relOptInfo,
 
 	RelationRestrictionContext *relationRestrictionContext =
 		plannerRestrictionContext->relationRestrictionContext;
-	relationRestrictionContext->hasDistributedRelation |= distributedTable;
-	relationRestrictionContext->hasLocalRelation |= localTable;
 
 	/*
 	 * We're also keeping track of whether all participant
@@ -2308,12 +2305,26 @@ GetRTEListProperties(List *rangeTableList)
 			 */
 			continue;
 		}
-		else if (rangeTableEntry->relkind == RELKIND_MATVIEW)
+
+
+		if (rangeTableEntry->relkind == RELKIND_MATVIEW)
 		{
 			/*
-			 * Skip over materialized views, here we should not consider
-			 * materialized views as local tables.
+			 * Record materialized views as they are similar to postgres local tables
+			 * but it is nice to record them separately.
+			 *
+			 * Regular tables, partitioned tables or foreign tables can be a local or
+			 * distributed tables and we can qualify them accurately.
+			 *
+			 * For regular views, we don't care because their definitions are already
+			 * in the same query tree and we can detect what is inside the view definition.
+			 *
+			 * For materialized views, they are just local tables in the queries. But, when
+			 * REFRESH MATERIALIZED VIEW is used, they behave similar to regular views, adds
+			 * the view definition to the query. Hence, it is useful to record it seperately
+			 * and let the callers decide on what to do.
 			 */
+			rteListProperties->hasMaterializedView = true;
 			continue;
 		}
 

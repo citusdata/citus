@@ -19,6 +19,11 @@ SELECT count(*) FROM temp_lineitem;
 INSERT INTO temp_lineitem SELECT * FROM air_shipped_lineitems WHERE l_shipmode = 'MAIL';
 SELECT count(*) FROM temp_lineitem;
 
+-- can create router materialized views
+CREATE MATERIALIZED VIEW mode_counts_router
+AS SELECT l_shipmode, count(*) FROM temp_lineitem WHERE  l_orderkey = 1 GROUP BY l_shipmode;
+SELECT  * FROM mode_counts_router;
+
 -- can create and query materialized views
 CREATE MATERIALIZED VIEW mode_counts
 AS SELECT l_shipmode, count(*) FROM temp_lineitem GROUP BY l_shipmode;
