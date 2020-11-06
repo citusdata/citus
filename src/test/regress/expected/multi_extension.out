@@ -80,7 +80,7 @@ FROM pg_depend AS pgd,
 WHERE pgd.refclassid = 'pg_extension'::regclass AND
 	  pgd.refobjid   = pge.oid AND
 	  pge.extname    = 'citus' AND
-	  pgio.schema    NOT IN ('pg_catalog', 'citus', 'citus_internal', 'test');
+	  pgio.schema    NOT IN ('pg_catalog', 'citus', 'citus_internal', 'test', 'cstore');
  count
 ---------------------------------------------------------------------
      0
@@ -465,9 +465,24 @@ SELECT * FROM print_extension_changes();
 -- Snapshot of state at 10.0-1
 ALTER EXTENSION citus UPDATE TO '10.0-1';
 SELECT * FROM print_extension_changes();
- previous_object | current_object
+ previous_object |                           current_object
 ---------------------------------------------------------------------
-(0 rows)
+                 | access method cstore_tableam
+                 | event trigger cstore_ddl_event_end
+                 | foreign-data wrapper cstore_fdw
+                 | function alter_cstore_table_reset(regclass,boolean,boolean,boolean)
+                 | function alter_cstore_table_set(regclass,integer,integer,name)
+                 | function cstore.cstore_ddl_event_end_trigger()
+                 | function cstore.cstore_fdw_handler()
+                 | function cstore.cstore_fdw_validator(text[],oid)
+                 | function cstore.cstore_tableam_handler(internal)
+                 | function cstore_table_size(regclass)
+                 | schema cstore
+                 | table cstore.cstore_data_files
+                 | table cstore.cstore_skipnodes
+                 | table cstore.cstore_stripes
+                 | view cstore.cstore_options
+(15 rows)
 
 DROP TABLE prev_objects, extension_diff;
 -- show running version
@@ -485,7 +500,7 @@ FROM pg_depend AS pgd,
 WHERE pgd.refclassid = 'pg_extension'::regclass AND
 	  pgd.refobjid   = pge.oid AND
 	  pge.extname    = 'citus' AND
-	  pgio.schema    NOT IN ('pg_catalog', 'citus', 'citus_internal', 'test');
+	  pgio.schema    NOT IN ('pg_catalog', 'citus', 'citus_internal', 'test', 'cstore');
  count
 ---------------------------------------------------------------------
      0

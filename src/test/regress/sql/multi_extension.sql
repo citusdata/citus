@@ -83,7 +83,7 @@ FROM pg_depend AS pgd,
 WHERE pgd.refclassid = 'pg_extension'::regclass AND
 	  pgd.refobjid   = pge.oid AND
 	  pge.extname    = 'citus' AND
-	  pgio.schema    NOT IN ('pg_catalog', 'citus', 'citus_internal', 'test');
+	  pgio.schema    NOT IN ('pg_catalog', 'citus', 'citus_internal', 'test', 'cstore');
 
 
 -- DROP EXTENSION pre-created by the regression suite
@@ -238,7 +238,7 @@ FROM pg_depend AS pgd,
 WHERE pgd.refclassid = 'pg_extension'::regclass AND
 	  pgd.refobjid   = pge.oid AND
 	  pge.extname    = 'citus' AND
-	  pgio.schema    NOT IN ('pg_catalog', 'citus', 'citus_internal', 'test');
+	  pgio.schema    NOT IN ('pg_catalog', 'citus', 'citus_internal', 'test', 'cstore');
 
 -- see incompatible version errors out
 RESET citus.enable_version_checks;
