@@ -81,8 +81,8 @@ typedef struct ListCellAndListWrapper
 		 var ## CellDoNotUse = lnext_compat(l, var ## CellDoNotUse))
 
 /*
- * foreach_ptr_modify -
- *	  a convenience macro which loops through a pointer List and can modify list
+ * foreach_ptr_append -
+ *	  a convenience macro which loops through a pointer List and can append list
  *	  elements without needing a ListCell or and index variable, just a declared
  *	  pointer variable to store the iterated values.
  *
@@ -104,79 +104,13 @@ typedef struct ListCellAndListWrapper
  *	    declared there.
  *	  - || true is used to always enter the loop even if var is NULL.
  */
-#define foreach_ptr_modify(var, l) \
+#define foreach_ptr_append(var, l) \
 	for (int var ## PositionDoNotUse = 0; \
 		 (var ## PositionDoNotUse) < list_length(l) && \
 		 (((var) = list_nth(l, var ## PositionDoNotUse)) || true); \
-		 var ## PositionDoNotUse++)
+		 var ## PositionDoNotUse ++)
 #else
-#define foreach_ptr_modify(var, l) foreach_ptr(var, l)
-#endif
-
-/*
- * foreach_int_modify -
- *	  a convenience macro which loops through an integer List and can modify list
- *	  elements without needing a ListCell or and index variable, just a declared
- *	  int variable to store the iterated values.
- *
- *	  PostgreSQL 13 changed the representation of Lists to expansible arrays,
- *	  not chains of cons-cells. This changes the costs for accessing and
- *	  mutating List contents. Therefore different implementations are provided.
- *
- *	  For more information, see postgres commit with sha
- *	  1cff1b95ab6ddae32faa3efe0d95a820dbfdc164
- */
-#if PG_VERSION_NUM >= PG_VERSION_13
-
-/*
- *	  How it works:
- *	  - An index is declared with the name {var}PositionDoNotUse and used
- *	    throughout the for loop using ## to concat.
- *	  - To assign to var it needs to be done in the condition of the for loop,
- *	    because we cannot use the initializer since the index variable is
- *	    declared there.
- *	  - || true is used to always enter the loop even if var is NULL.
- */
-#define foreach_int_modify(var, l) \
-	for (int var ## PositionDoNotUse = 0; \
-		 (var ## PositionDoNotUse) < list_length(l) && \
-		 (((var) = list_nth(l, var ## PositionDoNotUse)) || true); \
-		 var ## PositionDoNotUse++)
-#else
-#define foreach_int_modify(var, l) foreach_int(var, l)
-#endif
-
-/*
- * foreach_oid_modify -
- *	  a convenience macro which loops through a Oid List and can modify list
- *	  elements without needing a ListCell or and index variable, just a declared
- *	  Oid variable to store the iterated values.
- *
- *	  PostgreSQL 13 changed the representation of Lists to expansible arrays,
- *	  not chains of cons-cells. This changes the costs for accessing and
- *	  mutating List contents. Therefore different implementations are provided.
- *
- *	  For more information, see postgres commit with sha
- *	  1cff1b95ab6ddae32faa3efe0d95a820dbfdc164
- */
-#if PG_VERSION_NUM >= PG_VERSION_13
-
-/*
- *	  How it works:
- *	  - An index is declared with the name {var}PositionDoNotUse and used
- *	    throughout the for loop using ## to concat.
- *	  - To assign to var it needs to be done in the condition of the for loop,
- *	    because we cannot use the initializer since the index variable is
- *	    declared there.
- *	  - || true is used to always enter the loop even if var is NULL.
- */
-#define foreach_oid_modify(var, l) \
-	for (int var ## PositionDoNotUse = 0; \
-		 (var ## PositionDoNotUse) < list_length(l) && \
-		 (((var) = list_nth(l, var ## PositionDoNotUse)) || true); \
-		 var ## PositionDoNotUse++)
-#else
-#define foreach_oid_modify(var, l) foreach_oid(var, l)
+#define foreach_ptr_append(var, l) foreach_ptr(var, l)
 #endif
 
 /* utility functions declaration shared within this module */
