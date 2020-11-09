@@ -1,0 +1,69 @@
+--
+-- Test block filtering in cstore_fdw using min/max values in stripe skip lists.
+--
+
+
+--
+-- filtered_row_count returns number of rows filtered by the WHERE clause.
+-- If blocks get filtered by cstore_fdw, less rows are passed to WHERE
+-- clause, so this function should return a lower number.
+--
+CREATE OR REPLACE FUNCTION filtered_row_count (query text) RETURNS bigint AS
+$$
+    DECLARE
+        result bigint;
+        rec text;
+    BEGIN
+        result := 0;
+
+        FOR rec IN EXECUTE 'EXPLAIN ANALYZE ' || query LOOP
+            IF rec ~ '^\s+Rows Removed by Filter' then
+                result := regexp_replace(rec, '[^0-9]*', '', 'g');
+            END IF;
+        END LOOP;
+
+        RETURN result;
+    END;
+$$ LANGUAGE PLPGSQL;
+
+
+-- Create and load data
+CREATE FOREIGN TABLE test_block_filtering (a int)
+    SERVER cstore_server
+    OPTIONS(block_row_count '1000', stripe_row_count '2000');
+
+COPY test_block_filtering FROM '@abs_srcdir@/data/block_filtering.csv' WITH CSV;
+
+
+-- Verify that filtered_row_count is less than 1000 for the following queries
+SELECT filtered_row_count('SELECT count(*) FROM test_block_filtering');
+SELECT filtered_row_count('SELECT count(*) FROM test_block_filtering WHERE a < 200');
+SELECT filtered_row_count('SELECT count(*) FROM test_block_filtering WHERE a > 200');
+SELECT filtered_row_count('SELECT count(*) FROM test_block_filtering WHERE a < 9900');
+SELECT filtered_row_count('SELECT count(*) FROM test_block_filtering WHERE a > 9900');
+SELECT filtered_row_count('SELECT count(*) FROM test_block_filtering WHERE a < 0');
+
+
+-- Verify that filtered_row_count is less than 2000 for the following queries
+SELECT filtered_row_count('SELECT count(*) FROM test_block_filtering WHERE a BETWEEN 1 AND 10');
+SELECT filtered_row_count('SELECT count(*) FROM test_block_filtering WHERE a BETWEEN 990 AND 2010');
+SELECT filtered_row_count('SELECT count(*) FROM test_block_filtering WHERE a BETWEEN -10 AND 0');
+
+
+-- Load data for second time and verify that filtered_row_count is exactly twice as before
+COPY test_block_filtering FROM '@abs_srcdir@/data/block_filtering.csv' WITH CSV;
+SELECT filtered_row_count('SELECT count(*) FROM test_block_filtering WHERE a < 200');
+SELECT filtered_row_count('SELECT count(*) FROM test_block_filtering WHERE a < 0');
+SELECT filtered_row_count('SELECT count(*) FROM test_block_filtering WHERE a BETWEEN 990 AND 2010');
+
+
+-- Verify that we are fine with collations which use a different alphabet order
+CREATE FOREIGN TABLE collation_block_filtering_test(A text collate "da_DK")
+    SERVER cstore_server;
+COPY collation_block_filtering_test FROM STDIN;
+A
+Å
+B
+\.
+
+SELECT * FROM collation_block_filtering_test WHERE A > 'B';
