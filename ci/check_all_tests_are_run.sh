@@ -17,9 +17,11 @@ test_names=$(
     sed -E 's#^\w+/([^/]+)\.[^.]+$#\1#g' |
     grep -v '.include$'
 )
+code=0
 for name in $test_names; do
     if ! grep "\\b$name\\b" ./*_schedule > /dev/null; then
         echo "ERROR: Test with name \"$name\" is not used in any of the schedule files"
-        exit 1
+        code=1
     fi
 done
+exit $code
