@@ -221,11 +221,26 @@ jobs:
       - attach_workspace:
           at: .
       - run:
-          name: 'Install and Test (check-isolation)'
+          name: 'Install and Test (check-columnar)'
           command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext check-columnar'
           no_output_timeout: 2m
       - codecov/upload:
           flags: 'test_11,columnar'
+
+  test-11_check-columnar-isolation:
+    docker:
+      - image: 'citus/exttester:11.9'
+    working_directory: /home/circleci/project
+    steps:
+      - checkout
+      - attach_workspace:
+          at: .
+      - run:
+          name: 'Install and Test (check-columnar-isolation)'
+          command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext check-columnar-isolation'
+          no_output_timeout: 2m
+      - codecov/upload:
+          flags: 'test_11,columnar,isolation'
 
   test-11-12_check-pg-upgrade:
     docker:
@@ -374,11 +389,26 @@ jobs:
       - attach_workspace:
           at: .
       - run:
-          name: 'Install and Test (check-isolation)'
+          name: 'Install and Test (check-columnar)'
           command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext check-columnar'
           no_output_timeout: 2m
       - codecov/upload:
           flags: 'test_12,columnar'
+
+  test-12_check-columnar-isolation:
+    docker:
+      - image: 'citus/exttester:12.4'
+    working_directory: /home/circleci/project
+    steps:
+      - checkout
+      - attach_workspace:
+          at: .
+      - run:
+          name: 'Install and Test (check-columnar-isolation)'
+          command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext check-columnar-isolation'
+          no_output_timeout: 2m
+      - codecov/upload:
+          flags: 'test_12,columnar,isolation'
 
   test-11_check-citus-upgrade:
     docker:
@@ -525,11 +555,26 @@ jobs:
       - attach_workspace:
           at: .
       - run:
-          name: 'Install and Test (check-isolation)'
+          name: 'Install and Test (check-columnar)'
           command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext check-columnar'
           no_output_timeout: 2m
       - codecov/upload:
           flags: 'test_13,columnar'
+
+  test-13_check-columnar-isolation:
+    docker:
+      - image: 'citus/exttester:13.0'
+    working_directory: /home/circleci/project
+    steps:
+      - checkout
+      - attach_workspace:
+          at: .
+      - run:
+          name: 'Install and Test (check-columnar-isolation)'
+          command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext check-columnar-isolation'
+          no_output_timeout: 2m
+      - codecov/upload:
+          flags: 'test_13,columnar,isolation'
 
   check-merge-to-enterprise:
     docker:
@@ -605,6 +650,8 @@ workflows:
           requires: [build-11]
       - test-11_check-columnar:
           requires: [build-11]
+      - test-11_check-columnar-isolation:
+          requires: [build-11]
 
       - test-12_check-multi:
           requires: [build-12]
@@ -622,6 +669,8 @@ workflows:
           requires: [build-12]
       - test-12_check-columnar:
           requires: [build-12]
+      - test-12_check-columnar-isolation:
+          requires: [build-12]
 
       - test-13_check-multi:
           requires: [build-13]
@@ -638,6 +687,8 @@ workflows:
       - test-13_check-failure:
           requires: [build-13]
       - test-13_check-columnar:
+          requires: [build-13]
+      - test-13_check-columnar-isolation:
           requires: [build-13]
 
       - test-11-12_check-pg-upgrade:

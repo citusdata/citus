@@ -170,16 +170,24 @@ check-failure-base: all
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/failure_base_schedule $(EXTRA_TESTS)
 
 COLUMNAR_SCHEDULES =
+COLUMNAR_ISOLATION_SCHEDULES =
 ifeq ($(USE_FDW),yes)
   COLUMNAR_SCHEDULES += columnar_fdw_schedule
+  COLUMNAR_ISOLATION_SCHEDULES += columnar_fdw_isolation_schedule
 endif
 ifeq ($(USE_TABLEAM),yes)
   COLUMNAR_SCHEDULES += columnar_am_schedule
+  COLUMNAR_ISOLATION_SCHEDULES += columnar_am_isolation_schedule
 endif
 
 check-columnar:
 	$(pg_regress_multi_check) --load-extension=citus \
 	-- $(MULTI_REGRESS_OPTS) $(addprefix --schedule=$(citus_abs_srcdir)/,$(COLUMNAR_SCHEDULES)) $(EXTRA_TESTS)
+
+
+check-columnar-isolation: all  $(isolation_test_files)
+	$(pg_regress_multi_check) --load-extension=citus --isolationtester \
+	-- $(MULTI_REGRESS_OPTS) --inputdir=$(citus_abs_srcdir)/build $(addprefix --schedule=$(citus_abs_srcdir)/,$(COLUMNAR_ISOLATION_SCHEDULES)) $(EXTRA_TESTS)
 
 check-pg-upgrade:
 	$(pg_upgrade_check) --old-bindir=$(old-bindir) --new-bindir=$(new-bindir) --pgxsdir=$(pgxsdir)
