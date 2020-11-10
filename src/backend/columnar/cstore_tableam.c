@@ -58,7 +58,7 @@
  * These are the same values from src/backend/access/heap/vacuumlazy.c
  */
 #define VACUUM_TRUNCATE_LOCK_WAIT_INTERVAL 50       /* ms */
-#define VACUUM_TRUNCATE_LOCK_TIMEOUT 5000               /* ms */
+#define VACUUM_TRUNCATE_LOCK_TIMEOUT 4500               /* ms */
 
 typedef struct CStoreScanDescData
 {

@@ -718,7 +718,7 @@ FindCStoreTables(List *tableList)
 	foreach(relationCell, tableList)
 	{
 		RangeVar *rangeVar = (RangeVar *) lfirst(relationCell);
-		Oid relationId = RangeVarGetRelid(rangeVar, AccessShareLock, true);
+		Oid relationId = RangeVarGetRelid(rangeVar, NoLock, true);
 		if (IsCStoreFdwTable(relationId) && !DistributedTable(relationId))
 		{
 			cstoreTableList = lappend(cstoreTableList, rangeVar);
@@ -757,6 +757,17 @@ OpenRelationsForTruncate(List *cstoreTableList)
 		if (list_member_oid(relationIdList, relationId))
 		{
 			heap_close(relation, AccessExclusiveLock);
+		}
+
+		/*
+		 * Type of cstore tables can change since we checked last time,
+		 * since we didn't hold a lock when checking.
+		 */
+		else if (!IsCStoreFdwTable(relationId))
+		{
+			ereport(ERROR, (errmsg("relation \"%s\" not columnar anymore",
+								   RelationGetRelationName(relation)),
+							errhint("try repeating the truncate command")));
 		}
 		else
 		{
