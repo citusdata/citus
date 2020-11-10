@@ -1,0 +1,226 @@
+-- print version above 11 (eg. 12 and above)
+SHOW server_version \gset
+SELECT substring(:'server_version', '\d+')::int > 11 AS version_above_eleven;
+ version_above_eleven
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- list all postgres objects belonging to the citus extension
+SELECT pg_catalog.pg_describe_object(classid, objid, 0) AS description
+FROM pg_catalog.pg_depend, pg_catalog.pg_extension e
+WHERE refclassid = 'pg_catalog.pg_extension'::pg_catalog.regclass
+  AND refobjid = e.oid
+  AND deptype = 'e'
+  AND e.extname='citus'
+ORDER BY 1;
+                                               description
+---------------------------------------------------------------------
+ access method cstore_tableam
+ event trigger citus_cascade_to_partition
+ event trigger cstore_ddl_event_end
+ foreign-data wrapper cstore_fdw
+ function alter_cstore_table_reset(regclass,boolean,boolean,boolean)
+ function alter_cstore_table_set(regclass,integer,integer,name)
+ function alter_role_if_exists(text,text)
+ function any_value(anyelement)
+ function any_value_agg(anyelement,anyelement)
+ function array_cat_agg(anyarray)
+ function assign_distributed_transaction_id(integer,bigint,timestamp with time zone)
+ function authinfo_valid(text)
+ function broadcast_intermediate_result(text,text)
+ function check_distributed_deadlocks()
+ function citus_add_rebalance_strategy(name,regproc,regproc,regproc,real,real)
+ function citus_blocking_pids(integer)
+ function citus_create_restore_point(text)
+ function citus_dist_stat_activity()
+ function citus_drop_trigger()
+ function citus_executor_name(integer)
+ function citus_extradata_container(internal)
+ function citus_finish_pg_upgrade()
+ function citus_internal.find_groupid_for_node(text,integer)
+ function citus_internal.pg_dist_node_trigger_func()
+ function citus_internal.pg_dist_rebalance_strategy_enterprise_check()
+ function citus_internal.pg_dist_rebalance_strategy_trigger_func()
+ function citus_internal.pg_dist_shard_placement_trigger_func()
+ function citus_internal.refresh_isolation_tester_prepared_statement()
+ function citus_internal.replace_isolation_tester_func()
+ function citus_internal.restore_isolation_tester_func()
+ function citus_isolation_test_session_is_blocked(integer,integer[])
+ function citus_json_concatenate(json,json)
+ function citus_json_concatenate_final(json)
+ function citus_jsonb_concatenate(jsonb,jsonb)
+ function citus_jsonb_concatenate_final(jsonb)
+ function citus_node_capacity_1(integer)
+ function citus_prepare_pg_upgrade()
+ function citus_query_stats()
+ function citus_relation_size(regclass)
+ function citus_remote_connection_stats()
+ function citus_server_id()
+ function citus_set_default_rebalance_strategy(text)
+ function citus_shard_allowed_on_node_true(bigint,integer)
+ function citus_shard_cost_1(bigint)
+ function citus_shard_cost_by_disk_size(bigint)
+ function citus_stat_statements()
+ function citus_stat_statements_reset()
+ function citus_table_is_visible(oid)
+ function citus_table_size(regclass)
+ function citus_text_send_as_jsonb(text)
+ function citus_total_relation_size(regclass)
+ function citus_truncate_trigger()
+ function citus_validate_rebalance_strategy_functions(regproc,regproc,regproc)
+ function citus_version()
+ function citus_worker_stat_activity()
+ function column_name_to_column(regclass,text)
+ function column_to_column_name(regclass,text)
+ function coord_combine_agg(oid,cstring,anyelement)
+ function coord_combine_agg_ffunc(internal,oid,cstring,anyelement)
+ function coord_combine_agg_sfunc(internal,oid,cstring,anyelement)
+ function create_citus_local_table(regclass)
+ function create_distributed_function(regprocedure,text,text)
+ function create_distributed_table(regclass,text,citus.distribution_type,text)
+ function create_intermediate_result(text,text)
+ function create_reference_table(regclass)
+ function cstore.cstore_ddl_event_end_trigger()
+ function cstore.cstore_fdw_handler()
+ function cstore.cstore_fdw_validator(text[],oid)
+ function cstore.cstore_tableam_handler(internal)
+ function cstore_table_size(regclass)
+ function distributed_tables_colocated(regclass,regclass)
+ function dump_global_wait_edges()
+ function dump_local_wait_edges()
+ function fetch_intermediate_results(text[],text,integer)
+ function get_all_active_transactions()
+ function get_colocated_shard_array(bigint)
+ function get_colocated_table_array(regclass)
+ function get_current_transaction_id()
+ function get_global_active_transactions()
+ function get_rebalance_progress()
+ function get_rebalance_table_shards_plan(regclass,real,integer,bigint[],boolean,name)
+ function get_shard_id_for_distribution_column(regclass,"any")
+ function isolate_tenant_to_new_shard(regclass,"any",text)
+ function json_cat_agg(json)
+ function jsonb_cat_agg(jsonb)
+ function lock_relation_if_exists(text,text)
+ function lock_shard_metadata(integer,bigint[])
+ function lock_shard_resources(integer,bigint[])
+ function mark_tables_colocated(regclass,regclass[])
+ function master_activate_node(text,integer)
+ function master_add_inactive_node(text,integer,integer,noderole,name)
+ function master_add_node(text,integer,integer,noderole,name)
+ function master_add_secondary_node(text,integer,text,integer,name)
+ function master_append_table_to_shard(bigint,text,text,integer)
+ function master_apply_delete_command(text)
+ function master_conninfo_cache_invalidate()
+ function master_copy_shard_placement(bigint,text,integer,text,integer,boolean,citus.shard_transfer_mode)
+ function master_create_distributed_table(regclass,text,citus.distribution_type)
+ function master_create_empty_shard(text)
+ function master_create_worker_shards(text,integer,integer)
+ function master_disable_node(text,integer)
+ function master_dist_local_group_cache_invalidate()
+ function master_dist_node_cache_invalidate()
+ function master_dist_object_cache_invalidate()
+ function master_dist_partition_cache_invalidate()
+ function master_dist_placement_cache_invalidate()
+ function master_dist_shard_cache_invalidate()
+ function master_drain_node(text,integer,citus.shard_transfer_mode,name)
+ function master_drop_all_shards(regclass,text,text)
+ function master_get_active_worker_nodes()
+ function master_get_new_placementid()
+ function master_get_new_shardid()
+ function master_get_table_ddl_events(text)
+ function master_get_table_metadata(text)
+ function master_modify_multiple_shards(text)
+ function master_move_shard_placement(bigint,text,integer,text,integer,citus.shard_transfer_mode)
+ function master_remove_distributed_table_metadata_from_workers(regclass,text,text)
+ function master_remove_node(text,integer)
+ function master_remove_partition_metadata(regclass,text,text)
+ function master_run_on_worker(text[],integer[],text[],boolean)
+ function master_set_node_property(text,integer,text,boolean)
+ function master_unmark_object_distributed(oid,oid,integer)
+ function master_update_node(integer,text,integer,boolean,integer)
+ function master_update_shard_statistics(bigint)
+ function master_update_table_statistics(regclass)
+ function poolinfo_valid(text)
+ function read_intermediate_result(text,citus_copy_format)
+ function read_intermediate_results(text[],citus_copy_format)
+ function rebalance_table_shards(regclass,real,integer,bigint[],citus.shard_transfer_mode,boolean,name)
+ function recover_prepared_transactions()
+ function relation_is_a_known_shard(regclass)
+ function replicate_reference_tables()
+ function replicate_table_shards(regclass,integer,integer,bigint[],citus.shard_transfer_mode)
+ function role_exists(name)
+ function run_command_on_colocated_placements(regclass,regclass,text,boolean)
+ function run_command_on_placements(regclass,text,boolean)
+ function run_command_on_shards(regclass,text,boolean)
+ function run_command_on_workers(text,boolean)
+ function shard_name(regclass,bigint)
+ function start_metadata_sync_to_node(text,integer)
+ function stop_metadata_sync_to_node(text,integer)
+ function truncate_local_data_after_distributing_table(regclass)
+ function undistribute_table(regclass)
+ function update_distributed_table_colocation(regclass,text)
+ function upgrade_to_reference_table(regclass)
+ function worker_append_table_to_shard(text,text,text,integer)
+ function worker_apply_inter_shard_ddl_command(bigint,text,bigint,text,text)
+ function worker_apply_sequence_command(text)
+ function worker_apply_sequence_command(text,regtype)
+ function worker_apply_shard_ddl_command(bigint,text)
+ function worker_apply_shard_ddl_command(bigint,text,text)
+ function worker_cleanup_job_schema_cache()
+ function worker_create_or_alter_role(text,text,text)
+ function worker_create_or_replace_object(text)
+ function worker_create_schema(bigint,text)
+ function worker_create_truncate_trigger(regclass)
+ function worker_drop_distributed_table(text)
+ function worker_fetch_foreign_file(text,text,bigint,text[],integer[])
+ function worker_fetch_partition_file(bigint,integer,integer,integer,text,integer)
+ function worker_hash("any")
+ function worker_hash_partition_table(bigint,integer,text,text,oid,anyarray)
+ function worker_last_saved_explain_analyze()
+ function worker_merge_files_into_table(bigint,integer,text[],text[])
+ function worker_partial_agg(oid,anyelement)
+ function worker_partial_agg_ffunc(internal)
+ function worker_partial_agg_sfunc(internal,oid,anyelement)
+ function worker_partition_query_result(text,text,integer,citus.distribution_type,text[],text[],boolean)
+ function worker_range_partition_table(bigint,integer,text,text,oid,anyarray)
+ function worker_record_sequence_dependency(regclass,regclass,name)
+ function worker_repartition_cleanup(bigint)
+ function worker_save_query_explain_analyze(text,jsonb)
+ schema citus
+ schema citus_internal
+ schema cstore
+ sequence pg_dist_colocationid_seq
+ sequence pg_dist_groupid_seq
+ sequence pg_dist_node_nodeid_seq
+ sequence pg_dist_placement_placementid_seq
+ sequence pg_dist_shardid_seq
+ table citus.pg_dist_object
+ table cstore.cstore_data_files
+ table cstore.cstore_skipnodes
+ table cstore.cstore_stripes
+ table pg_dist_authinfo
+ table pg_dist_colocation
+ table pg_dist_local_group
+ table pg_dist_node
+ table pg_dist_node_metadata
+ table pg_dist_partition
+ table pg_dist_placement
+ table pg_dist_poolinfo
+ table pg_dist_rebalance_strategy
+ table pg_dist_shard
+ table pg_dist_transaction
+ type citus.distribution_type
+ type citus.shard_transfer_mode
+ type citus_copy_format
+ type noderole
+ view citus_dist_stat_activity
+ view citus_lock_waits
+ view citus_shard_indexes_on_worker
+ view citus_shards_on_worker
+ view citus_stat_statements
+ view citus_worker_stat_activity
+ view cstore.cstore_options
+ view pg_dist_shard_placement
+(206 rows)
+
