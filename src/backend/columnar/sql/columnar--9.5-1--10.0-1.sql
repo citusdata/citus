@@ -95,33 +95,13 @@ BEGIN
 -- user instead to add the missing objects
 IF substring(current_Setting('server_version'), '\d+')::int >= 12 THEN
   EXECUTE $$
-    CREATE FUNCTION cstore_tableam_handler(internal)
-    RETURNS table_am_handler
-    LANGUAGE C
-    AS 'MODULE_PATHNAME', 'cstore_tableam_handler';
-
-    CREATE ACCESS METHOD cstore_tableam
-    TYPE TABLE HANDLER cstore_tableam_handler;
-
-    CREATE FUNCTION pg_catalog.alter_cstore_table_set(
-        table_name regclass,
-        block_row_count int DEFAULT NULL,
-        stripe_row_count int DEFAULT NULL,
-        compression name DEFAULT null)
-    RETURNS void
-    LANGUAGE C
-    AS 'MODULE_PATHNAME', 'alter_cstore_table_set';
-
-    CREATE FUNCTION pg_catalog.alter_cstore_table_reset(
-        table_name regclass,
-        block_row_count bool DEFAULT false,
-        stripe_row_count bool DEFAULT false,
-        compression bool DEFAULT false)
-    RETURNS void
-    LANGUAGE C
-    AS 'MODULE_PATHNAME', 'alter_cstore_table_reset';
+#include "udfs/cstore_tableam_handler/10.0-1.sql"
+#include "udfs/alter_cstore_table_set/10.0-1.sql"
+#include "udfs/alter_cstore_table_reset/10.0-1.sql"
   $$;
 END IF;
 END$proc$;
+
+#include "udfs/cstore_ensure_objects_exist/10.0-1.sql"
 
 RESET search_path;

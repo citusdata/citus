@@ -38,6 +38,7 @@ ORDER BY 1;
  function citus_executor_name(integer)
  function citus_extradata_container(internal)
  function citus_finish_pg_upgrade()
+ function citus_internal.cstore_ensure_objects_exist()
  function citus_internal.find_groupid_for_node(text,integer)
  function citus_internal.pg_dist_node_trigger_func()
  function citus_internal.pg_dist_rebalance_strategy_enterprise_check()
@@ -222,5 +223,5 @@ ORDER BY 1;
  view citus_worker_stat_activity
  view cstore.cstore_options
  view pg_dist_shard_placement
-(206 rows)
+(207 rows)
 

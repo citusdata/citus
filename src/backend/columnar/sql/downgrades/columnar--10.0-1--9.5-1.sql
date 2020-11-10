@@ -41,5 +41,7 @@ DROP FOREIGN DATA WRAPPER cstore_fdw;
 DROP FUNCTION cstore_fdw_validator(text[], oid);
 DROP FUNCTION cstore_fdw_handler();
 
+DROP FUNCTION citus_internal.cstore_ensure_objects_exist();
+
 RESET search_path;
 DROP SCHEMA cstore;
