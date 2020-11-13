@@ -113,6 +113,7 @@ static bool NoticeIfSubqueryPushdownEnabled(bool *newval, void **extra, GucSourc
 static bool NodeConninfoGucCheckHook(char **newval, void **extra, GucSource source);
 static void NodeConninfoGucAssignHook(const char *newval, void *extra);
 static const char * MaxSharedPoolSizeGucShowHook(void);
+static const char * LocalPoolSizeGucShowHook(void);
 static bool StatisticsCollectionGucCheckHook(bool *newval, void **extra, GucSource
 											 source);
 static void CitusAuthHook(Port *port, int status);
@@ -692,6 +693,21 @@ RegisterCitusConfigVariables(void)
 		PGC_USERSET,
 		GUC_NO_SHOW_ALL,
 		NoticeIfSubqueryPushdownEnabled, NULL, NULL);
+
+	DefineCustomIntVariable(
+		"citus.local_shared_pool_size",
+		gettext_noop(
+			"Sets the maximum number of connections allowed for the shards on the "
+			"local node across all the backends from this node. Setting to -1 disables "
+			"connections throttling. Setting to 0 makes it auto-adjust, meaning "
+			"equal to the half of max_connections on the coordinator."),
+		gettext_noop("As a rule of thumb, the value should be at most equal to the "
+					 "max_connections on the local node."),
+		&LocalSharedPoolSize,
+		0, -1, INT_MAX,
+		PGC_SIGHUP,
+		GUC_SUPERUSER_ONLY,
+		NULL, NULL, LocalPoolSizeGucShowHook);
 
 	DefineCustomBoolVariable(
 		"citus.log_multi_join_order",
@@ -1759,6 +1775,21 @@ MaxSharedPoolSizeGucShowHook(void)
 	{
 		appendStringInfo(newvalue, "%d", MaxSharedPoolSize);
 	}
+
+	return (const char *) newvalue->data;
+}
+
+
+/*
+ * LocalPoolSizeGucShowHook overrides the value that is shown to the
+ * user when the default value has not been set.
+ */
+static const char *
+LocalPoolSizeGucShowHook(void)
+{
+	StringInfo newvalue = makeStringInfo();
+
+	appendStringInfo(newvalue, "%d", GetLocalSharedPoolSize());
 
 	return (const char *) newvalue->data;
 }
