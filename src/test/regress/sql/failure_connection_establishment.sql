@@ -66,7 +66,10 @@ SELECT name FROM r1 WHERE id = 2;
 
 -- verify a connection attempt was made to the intercepted node, this would have cause the
 -- connection to have been delayed and thus caused a timeout
-SELECT citus.dump_network_traffic();
+-- Still, even if Citus does not use that connection, the establishment
+-- is finished. If Citus terminates the connection before it is fully
+-- established (or failed), Postgres would complain that
+SELECT conn, source FROM citus.dump_network_traffic() ORDER BY 1,2;
 
 SELECT citus.mitmproxy('conn.allow()');
 
@@ -80,9 +83,12 @@ SELECT citus.mitmproxy('conn.delay(500)');
 SELECT count(*) FROM products;
 SELECT count(*) FROM products;
 
--- use OFFSET 1 to prevent printing the line where source
--- is the worker, and LIMIT 1 in case there were multiple connections
-SELECT citus.dump_network_traffic() ORDER BY 1 LIMIT 1 OFFSET 1;
+-- verify all connection attempts was made to the intercepted node, this would have cause the
+-- first connection to have been delayed and thus caused a timeout
+-- Still, even if Citus does not use those connections, the establishments
+-- are finished. If Citus terminates the connection before it is fully
+-- established (or failed), Postgres would complain that
+SELECT conn, source FROM citus.dump_network_traffic() ORDER BY 1, 2;
 
 SELECT citus.mitmproxy('conn.allow()');
 SET citus.shard_replication_factor TO 1;
