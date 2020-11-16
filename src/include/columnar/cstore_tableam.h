@@ -1,5 +1,5 @@
 #include "citus_version.h"
-#if USE_TABLEAM
+#if HAS_TABLEAM
 
 #include "postgres.h"
 #include "fmgr.h"

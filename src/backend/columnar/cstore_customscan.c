@@ -11,7 +11,7 @@
  */
 
 #include "citus_version.h"
-#if USE_TABLEAM
+#if HAS_TABLEAM
 
 #include "postgres.h"
 
@@ -426,4 +426,4 @@ CStoreScan_ReScanCustomScan(CustomScanState *node)
 }
 
 
-#endif /* USE_TABLEAM */
+#endif /* HAS_TABLEAM */

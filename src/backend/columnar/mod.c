@@ -18,27 +18,22 @@
 #include "citus_version.h"
 
 #include "columnar/cstore.h"
+#include "columnar/cstore_fdw.h"
 #include "columnar/mod.h"
 
-#ifdef USE_TABLEAM
+#ifdef HAS_TABLEAM
 #include "columnar/cstore_tableam.h"
 #endif
 
-#ifdef USE_FDW
-#include "columnar/cstore_fdw.h"
-#endif
 
 void
 columnar_init(void)
 {
 	cstore_init();
-
-#ifdef USE_TABLEAM
-	cstore_tableam_init();
-#endif
-
-#ifdef USE_FDW
 	cstore_fdw_init();
+
+#ifdef HAS_TABLEAM
+	cstore_tableam_init();
 #endif
 }
 
@@ -46,11 +41,9 @@ columnar_init(void)
 void
 columnar_fini(void)
 {
-#if USE_TABLEAM
-	cstore_tableam_finish();
-#endif
-
-#ifdef USE_FDW
 	cstore_fdw_finish();
+
+#if HAS_TABLEAM
+	cstore_tableam_finish();
 #endif
 }

@@ -622,8 +622,7 @@ ac_includes_default="\
 
 ac_subst_vars='LTLIBOBJS
 LIBOBJS
-USE_TABLEAM
-USE_FDW
+HAS_TABLEAM
 HAS_DOTGIT
 POSTGRES_BUILDDIR
 POSTGRES_SRCDIR
@@ -692,8 +691,6 @@ with_extra_version
 enable_coverage
 with_libcurl
 with_reports_hostname
-with_columnar_tableam
-with_columnar_fdw
 '
       ac_precious_vars='build_alias
 host_alias
@@ -1327,9 +1324,6 @@ Optional Packages:
   --with-reports-hostname=HOSTNAME
                           Use HOSTNAME as hostname for statistics collection
                           and update checks
-  --without-columnar-tableam
-                          compile with table access methods for columnar
-  --without-columnar-fdw  compile with foreign data wrappers for columnar
 
 Some influential environment variables:
   PG_CONFIG   Location to find pg_config for target PostgreSQL instalation
@@ -4476,69 +4470,13 @@ _ACEOF
 
 
 if test "$version_num" != '11'; then
+   HAS_TABLEAM=yes
 
-
-
-# Check whether --with-columnar-tableam was given.
-if test "${with_columnar_tableam+set}" = set; then :
-  withval=$with_columnar_tableam;
-  case $withval in
-    yes)
-      USE_TABLEAM=yes
-      ;;
-    no)
-      :
-      ;;
-    *)
-      as_fn_error $? "no argument expected for --with-columnar-tableam option" "$LINENO" 5
-      ;;
-  esac
+$as_echo "#define HAS_TABLEAM 1" >>confdefs.h
 
 else
-  with_columnar_tableam=yes
-USE_TABLEAM=yes
-fi
-
-
-else
-   { $as_echo "$as_me:${as_lineno-$LINENO}: postgres does not support table access methodds" >&5
-$as_echo "$as_me: postgres does not support table access methodds" >&6;}
-fi;
-
-if test "$USE_TABLEAM" = yes; then
-
-$as_echo "#define USE_TABLEAM 1" >>confdefs.h
-
-fi;
-
-
-
-
-# Check whether --with-columnar-fdw was given.
-if test "${with_columnar_fdw+set}" = set; then :
-  withval=$with_columnar_fdw;
-  case $withval in
-    yes)
-      USE_FDW=yes
-      ;;
-    no)
-      :
-      ;;
-    *)
-      as_fn_error $? "no argument expected for --with-columnar-fdw option" "$LINENO" 5
-      ;;
-  esac
-
-else
-  with_columnar_fdw=yes
-USE_FDW=yes
-fi
-
-
-if test "$USE_FDW" = yes; then
-
-$as_echo "#define USE_FDW 1" >>confdefs.h
-
+   { $as_echo "$as_me:${as_lineno-$LINENO}: postgres version does not support table access methodds" >&5
+$as_echo "$as_me: postgres version does not support table access methodds" >&6;}
 fi;
 
 # Check if git is installed, when installed the gitref of the checkout will be baked in the application
@@ -4616,9 +4554,7 @@ POSTGRES_BUILDDIR="$POSTGRES_BUILDDIR"
 
 HAS_DOTGIT="$HAS_DOTGIT"
 
-USE_FDW="$USE_FDW"
-
-USE_TABLEAM="$USE_TABLEAM"
+HAS_TABLEAM="$HAS_TABLEAM"
 
 
 ac_config_files="$ac_config_files Makefile.global"

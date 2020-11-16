@@ -213,22 +213,10 @@ AC_DEFINE_UNQUOTED(REPORTS_BASE_URL, "$REPORTS_BASE_URL",
                    [Base URL for statistics collection and update checks])
 
 if test "$version_num" != '11'; then
-   PGAC_ARG_BOOL(with, columnar-tableam, yes,
-                 [compile with table access methods for columnar],
-                 [USE_TABLEAM=yes])
+   HAS_TABLEAM=yes
+   AC_DEFINE([HAS_TABLEAM], 1, [Define to 1 to build with table access method support, pg12 and up])
 else
-   AC_MSG_NOTICE([postgres does not support table access methodds])
-fi;
-
-if test "$USE_TABLEAM" = yes; then
-	AC_DEFINE([USE_TABLEAM], 1, [Define to 1 to build with table access method support. (--with-columnar-tableam)])
-fi;
-
-PGAC_ARG_BOOL(with, columnar-fdw, yes,
-              [compile with foreign data wrappers for columnar],
-              [USE_FDW=yes])
-if test "$USE_FDW" = yes; then
-	AC_DEFINE([USE_FDW], 1, [Define to 1 to build with foreign datawrapper support. (--with-columnar-fdw)])
+   AC_MSG_NOTICE([postgres version does not support table access methodds])
 fi;
 
 # Check if git is installed, when installed the gitref of the checkout will be baked in the application
@@ -241,8 +229,7 @@ AC_SUBST(CITUS_LDFLAGS, "$LIBS $CITUS_LDFLAGS")
 AC_SUBST(POSTGRES_SRCDIR, "$POSTGRES_SRCDIR")
 AC_SUBST(POSTGRES_BUILDDIR, "$POSTGRES_BUILDDIR")
 AC_SUBST(HAS_DOTGIT, "$HAS_DOTGIT")
-AC_SUBST(USE_FDW, "$USE_FDW")
-AC_SUBST(USE_TABLEAM, "$USE_TABLEAM")
+AC_SUBST(HAS_TABLEAM, "$HAS_TABLEAM")
 
 AC_CONFIG_FILES([Makefile.global])
 AC_CONFIG_HEADERS([src/include/citus_config.h] [src/include/citus_version.h])
