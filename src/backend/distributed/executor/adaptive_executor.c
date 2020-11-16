@@ -2228,7 +2228,7 @@ RunDistributedExecution(DistributedExecution *execution)
 		/* always (re)build the wait event set the first time */
 		execution->rebuildWaitEventSet = true;
 
-		while (execution->unfinishedTaskCount > 0 && !cancellationReceived)
+		while (execution->unfinishedTaskCount > 0)
 		{
 			WorkerPool *workerPool = NULL;
 			foreach_ptr(workerPool, execution->workerList)
@@ -2269,6 +2269,11 @@ RunDistributedExecution(DistributedExecution *execution)
 			int eventCount = WaitEventSetWait(execution->waitEventSet, timeout, events,
 											  eventSetSize, WAIT_EVENT_CLIENT_READ);
 			ProcessWaitEvents(execution, events, eventCount, &cancellationReceived);
+			if (cancellationReceived)
+			{
+				/* user requested cancel, do not continue the execution */
+				break;
+			}
 		}
 
 		if (events != NULL)
