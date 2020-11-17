@@ -40,8 +40,6 @@ extern int PlannerLevel;
 
 typedef struct RelationRestrictionContext
 {
-	bool hasDistributedRelation;
-	bool hasLocalRelation;
 	bool allReferenceTables;
 	List *relationRestrictionList;
 } RelationRestrictionContext;
@@ -66,7 +64,6 @@ typedef struct RelationRestriction
 	RangeTblEntry *rte;
 	RelOptInfo *relOptInfo;
 	PlannerInfo *plannerInfo;
-	List *prunedShardIntervalList;
 
 	/* list of RootPlanParams for all outer nodes */
 	List *outerPlanParamsList;
@@ -148,8 +145,10 @@ typedef struct RTEListProperties
 	/* includes hash, append and range partitioned tables */
 	bool hasDistributedTable;
 
-	/* union of above three */
+	/* union of hasReferenceTable, hasCitusLocalTable and hasDistributedTable */
 	bool hasCitusTable;
+
+	bool hasMaterializedView;
 } RTEListProperties;
 
 

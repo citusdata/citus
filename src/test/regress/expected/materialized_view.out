@@ -29,6 +29,15 @@ SELECT count(*) FROM temp_lineitem;
   1706
 (1 row)
 
+-- can create router materialized views
+CREATE MATERIALIZED VIEW mode_counts_router
+AS SELECT l_shipmode, count(*) FROM temp_lineitem WHERE  l_orderkey = 1 GROUP BY l_shipmode;
+SELECT  * FROM mode_counts_router;
+ l_shipmode | count
+---------------------------------------------------------------------
+ AIR        |     1
+(1 row)
+
 -- can create and query materialized views
 CREATE MATERIALIZED VIEW mode_counts
 AS SELECT l_shipmode, count(*) FROM temp_lineitem GROUP BY l_shipmode;
@@ -59,6 +68,7 @@ SELECT * FROM mode_counts WHERE l_shipmode = 'AIR' ORDER BY 2 DESC, 1 LIMIT 10;
 
 DROP MATERIALIZED VIEW mode_counts;
 DROP TABLE temp_lineitem CASCADE;
+NOTICE:  drop cascades to materialized view mode_counts_router
 -- Refresh single-shard materialized view
 CREATE MATERIALIZED VIEW materialized_view AS
 SELECT orders_hash_part.o_orderdate, total_price.price_sum

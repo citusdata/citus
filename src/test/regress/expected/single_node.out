@@ -775,7 +775,7 @@ RESET citus.task_executor_type;
 -- make sure undistribute table works fine
 ALTER TABLE test DROP CONSTRAINT foreign_key;
 SELECT undistribute_table('test_2');
-NOTICE:  Creating a new local table for single_node.test_2
+NOTICE:  creating a new local table for single_node.test_2
 NOTICE:  Moving the data of single_node.test_2
 NOTICE:  Dropping the old single_node.test_2
 NOTICE:  Renaming the new table to single_node.test_2
