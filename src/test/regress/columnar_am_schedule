@@ -16,3 +16,5 @@ test: am_block_filtering
 test: am_join
 test: am_trigger
 test: am_tableoptions
+test: am_recursive
+test: am_transactions

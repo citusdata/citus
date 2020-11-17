@@ -20,6 +20,7 @@
 #include "nodes/parsenodes.h"
 #include "storage/bufpage.h"
 #include "storage/lockdefs.h"
+#include "storage/relfilenode.h"
 #include "utils/relcache.h"
 #include "utils/snapmgr.h"
 
@@ -224,7 +225,7 @@ typedef struct TableWriteState
 	CompressionType compressionType;
 	TupleDesc tupleDescriptor;
 	FmgrInfo **comparisonFunctionArray;
-	Relation relation;
+	RelFileNode relfilenode;
 
 	MemoryContext stripeWriteContext;
 	StripeBuffers *stripeBuffers;
@@ -251,14 +252,16 @@ extern void cstore_init(void);
 extern CompressionType ParseCompressionType(const char *compressionTypeString);
 
 /* Function declarations for writing to a cstore file */
-extern TableWriteState * CStoreBeginWrite(Relation relation,
+extern TableWriteState * CStoreBeginWrite(RelFileNode relfilenode,
 										  CompressionType compressionType,
 										  uint64 stripeMaxRowCount,
 										  uint32 blockRowCount,
 										  TupleDesc tupleDescriptor);
 extern void CStoreWriteRow(TableWriteState *state, Datum *columnValues,
 						   bool *columnNulls);
+extern void CStoreFlushPendingWrites(TableWriteState *state);
 extern void CStoreEndWrite(TableWriteState *state);
+extern bool ContainsPendingWrites(TableWriteState *state);
 
 /* Function declarations for reading from a cstore file */
 extern TableReadState * CStoreBeginRead(Relation relation,
@@ -281,6 +284,7 @@ extern bool CompressBuffer(StringInfo inputBuffer, StringInfo outputBuffer,
 						   CompressionType compressionType);
 extern StringInfo DecompressBuffer(StringInfo buffer, CompressionType compressionType);
 extern char * CompressionTypeStr(CompressionType type);
+extern CStoreOptions * CStoreTableAMGetOptions(Oid relfilenode);
 
 /* cstore_metadata_tables.c */
 extern void DeleteDataFileMetadataRowIfExists(Oid relfilenode);
@@ -299,6 +303,22 @@ extern void SaveStripeSkipList(Oid relfilenode, uint64 stripe,
 extern StripeSkipList * ReadStripeSkipList(Oid relfilenode, uint64 stripe,
 										   TupleDesc tupleDescriptor,
 										   uint32 blockCount);
+
+
+/* write_state_management.c */
+extern TableWriteState * cstore_init_write_state(RelFileNode relfilenode, TupleDesc
+												 tupdesc,
+												 SubTransactionId currentSubXid);
+extern void FlushWriteStateForRelfilenode(Oid relfilenode, SubTransactionId
+										  currentSubXid);
+extern void FlushWriteStateForAllRels(SubTransactionId currentSubXid, SubTransactionId
+									  parentSubXid);
+extern void DiscardWriteStateForAllRels(SubTransactionId currentSubXid, SubTransactionId
+										parentSubXid);
+extern void MarkRelfilenodeDropped(Oid relfilenode, SubTransactionId currentSubXid);
+extern void NonTransactionDropWriteState(Oid relfilenode);
+extern bool PendingWritesInUpperTransactions(Oid relfilenode,
+											 SubTransactionId currentSubXid);
 
 typedef struct SmgrAddr
 {

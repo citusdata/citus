@@ -1,0 +1,252 @@
+CREATE TABLE t1(a int, b int) USING cstore_tableam;
+CREATE TABLE t2(a int, b int) USING cstore_tableam;
+CREATE FUNCTION f(x INT) RETURNS INT AS $$
+  INSERT INTO t1 VALUES(x, x * 2) RETURNING b - 1;
+$$ LANGUAGE SQL;
+--
+-- Following query will start a write to t1 before finishing
+-- write to t1, so it tests that we handle recursive writes
+-- correctly.
+--
+INSERT INTO t2 SELECT i, f(i) FROM generate_series(1, 5) i;
+-- there are no subtransactions, so above statement should batch
+-- INSERTs inside the UDF and create on stripe per table.
+SELECT relname, count(*) FROM cstore.cstore_stripes a, pg_class b
+WHERE a.relfilenode=b.relfilenode AND relname IN ('t1', 't2')
+GROUP BY relname
+ORDER BY relname;
+ relname | count
+---------------------------------------------------------------------
+ t1      |     1
+ t2      |     1
+(2 rows)
+
+SELECT * FROM t1 ORDER BY a;
+ a | b
+---------------------------------------------------------------------
+ 1 |  2
+ 2 |  4
+ 3 |  6
+ 4 |  8
+ 5 | 10
+(5 rows)
+
+SELECT * FROM t2 ORDER BY a;
+ a | b
+---------------------------------------------------------------------
+ 1 | 1
+ 2 | 3
+ 3 | 5
+ 4 | 7
+ 5 | 9
+(5 rows)
+
+TRUNCATE t1;
+TRUNCATE t2;
+DROP FUNCTION f(INT);
+--
+-- Test the case when 2 writes are going on concurrently in the
+-- same executor, and those 2 writes are dependent.
+--
+WITH t AS (
+	INSERT INTO t1 SELECT i, 2*i FROM generate_series(1, 5) i RETURNING *
+)
+INSERT INTO t2 SELECT t.a, t.a+1 FROM t;
+SELECT * FROM t1;
+ a | b
+---------------------------------------------------------------------
+ 1 |  2
+ 2 |  4
+ 3 |  6
+ 4 |  8
+ 5 | 10
+(5 rows)
+
+SELECT * FROM t2;
+ a | b
+---------------------------------------------------------------------
+ 1 | 2
+ 2 | 3
+ 3 | 4
+ 4 | 5
+ 5 | 6
+(5 rows)
+
+TRUNCATE t1;
+TRUNCATE t2;
+--
+-- Test the case when there are 2 independent inserts in a CTE.
+-- Also tests the case where some of the tuple_inserts happen in
+-- ExecutorFinish() instead of ExecutorRun().
+--
+WITH t AS (
+	INSERT INTO t1 SELECT i, 2*i FROM generate_series(1, 5) i RETURNING *
+)
+INSERT INTO t2 SELECT i, (select count(*) from t1) FROM generate_series(1, 3) i;
+SELECT * FROM t1;
+ a | b
+---------------------------------------------------------------------
+ 1 |  2
+ 2 |  4
+ 3 |  6
+ 4 |  8
+ 5 | 10
+(5 rows)
+
+SELECT * FROM t2;
+ a | b
+---------------------------------------------------------------------
+ 1 | 0
+ 2 | 0
+ 3 | 0
+(3 rows)
+
+TRUNCATE t1;
+TRUNCATE t2;
+--
+-- double insert on the same relation
+--
+WITH t AS (
+	INSERT INTO t1 SELECT i, 2*i FROM generate_series(1, 5) i RETURNING *
+)
+INSERT INTO t1 SELECT t.a, t.a+1 FROM t;
+SELECT * FROM t1 ORDER BY a, b;
+ a | b
+---------------------------------------------------------------------
+ 1 |  2
+ 1 |  2
+ 2 |  3
+ 2 |  4
+ 3 |  4
+ 3 |  6
+ 4 |  5
+ 4 |  8
+ 5 |  6
+ 5 | 10
+(10 rows)
+
+TRUNCATE t1;
+TRUNCATE t2;
+--
+-- A test where result of a UDF call will depend on execution
+-- of previous UDF calls.
+--
+CREATE FUNCTION g(x INT) RETURNS INT AS $$
+  INSERT INTO t1 VALUES(x, x * 2);
+  SELECT count(*)::int FROM t1;
+$$ LANGUAGE SQL;
+-- t3 and t4 are heap tables to help with cross-checking results
+CREATE TABLE t3(a int, b int);
+CREATE TABLE t4(a int, b int);
+CREATE FUNCTION g2(x INT) RETURNS INT AS $$
+  INSERT INTO t3 VALUES(x, x * 2);
+  SELECT count(*)::int FROM t3;
+$$ LANGUAGE SQL;
+INSERT INTO t2 SELECT i, g(i) FROM generate_series(1, 5) i;
+INSERT INTO t4 SELECT i, g2(i) FROM generate_series(1, 5) i;
+-- check that t1==t3 and t2==t4.
+((table t1) except (table t3)) union ((table t3) except (table t1));
+ a | b
+---------------------------------------------------------------------
+(0 rows)
+
+((table t2) except (table t4)) union ((table t4) except (table t2));
+ a | b
+---------------------------------------------------------------------
+(0 rows)
+
+SELECT * FROM t2 ORDER BY a, b;
+ a | b
+---------------------------------------------------------------------
+ 1 | 1
+ 2 | 2
+ 3 | 3
+ 4 | 4
+ 5 | 5
+(5 rows)
+
+TRUNCATE t1, t2, t3, t4;
+--
+-- INSERT into the same relation that was INSERTed into in the UDF
+--
+INSERT INTO t1 SELECT i, g(i) FROM generate_series(1, 3) i;
+INSERT INTO t3 SELECT i, g2(i) FROM generate_series(1, 3) i;
+SELECT * FROM t1 ORDER BY a, b;
+ a | b
+---------------------------------------------------------------------
+ 1 | 1
+ 1 | 2
+ 2 | 3
+ 2 | 4
+ 3 | 5
+ 3 | 6
+(6 rows)
+
+SELECT * FROM t3 ORDER BY a, b;
+ a | b
+---------------------------------------------------------------------
+ 1 | 1
+ 1 | 2
+ 2 | 3
+ 2 | 4
+ 3 | 5
+ 3 | 6
+(6 rows)
+
+-- check that t1==t3 and t2==t4.
+((table t1) except (table t3)) union ((table t3) except (table t1));
+ a | b
+---------------------------------------------------------------------
+(0 rows)
+
+((table t2) except (table t4)) union ((table t4) except (table t2));
+ a | b
+---------------------------------------------------------------------
+(0 rows)
+
+DROP FUNCTION g(int), g2(int);
+TRUNCATE t1, t2, t3, t4;
+--
+-- EXCEPTION in plpgsql, which is implemented internally using
+-- subtransactions. plgpsql uses SPI to execute INSERT statements.
+--
+CREATE FUNCTION f(a int) RETURNS VOID AS $$
+DECLARE
+ x int;
+BEGIN
+  INSERT INTO t1 SELECT i, i + 1 FROM generate_series(a, a + 1) i;
+  x := 10 / a;
+  INSERT INTO t1 SELECT i, i * 2 FROM generate_series(a + 2, a + 3) i;
+EXCEPTION WHEN division_by_zero THEN
+  INSERT INTO t1 SELECT i, i + 1 FROM generate_series(a + 2, a + 3) i;
+END;
+$$ LANGUAGE plpgsql;
+SELECT f(10);
+ f
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT f(0), f(20);
+ f | f
+---------------------------------------------------------------------
+   |
+(1 row)
+
+SELECT * FROM t1 ORDER BY a, b;
+ a  | b
+---------------------------------------------------------------------
+  2 |  3
+  3 |  4
+ 10 | 11
+ 11 | 12
+ 12 | 24
+ 13 | 26
+ 20 | 21
+ 21 | 22
+ 22 | 44
+ 23 | 46
+(10 rows)
+
+DROP FUNCTION f(int);
+DROP TABLE t1, t2, t3, t4;
