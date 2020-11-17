@@ -1,0 +1,23 @@
+--
+-- Test copying data from cstore_fdw tables.
+--
+CREATE TABLE test_contestant(handle TEXT, birthdate DATE, rating INT,
+        percentile FLOAT, country CHAR(3), achievements TEXT[])
+        USING cstore_tableam;
+-- load table data from file
+COPY test_contestant FROM '@abs_srcdir@/data/contestants.1.csv' WITH CSV;
+-- export using COPY table TO ...
+COPY test_contestant TO STDOUT;
+a	01-10-1990	2090	97.1	XA 	{a}
+b	11-01-1990	2203	98.1	XA 	{a,b}
+c	11-01-1988	2907	99.4	XB 	{w,y}
+d	05-05-1985	2314	98.3	XB 	{}
+e	05-05-1995	2236	98.2	XC 	{a}
+-- export using COPY (SELECT * FROM table) TO ...
+COPY (select * from test_contestant) TO STDOUT;
+a	01-10-1990	2090	97.1	XA 	{a}
+b	11-01-1990	2203	98.1	XA 	{a,b}
+c	11-01-1988	2907	99.4	XB 	{w,y}
+d	05-05-1985	2314	98.3	XB 	{}
+e	05-05-1995	2236	98.2	XC 	{a}
+DROP TABLE test_contestant CASCADE;

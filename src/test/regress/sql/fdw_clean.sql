@@ -1,0 +1,10 @@
+DROP FOREIGN TABLE collation_block_filtering_test;
+DROP FOREIGN TABLE test_block_filtering;
+DROP FOREIGN TABLE test_null_values;
+DROP FOREIGN TABLE test_other_types;
+DROP FOREIGN TABLE test_range_types;
+DROP FOREIGN TABLE test_enum_and_composite_types;
+DROP TYPE composite_type;
+DROP TYPE enum_type;
+DROP FOREIGN TABLE test_datetime_types;
+DROP FOREIGN TABLE test_array_types;

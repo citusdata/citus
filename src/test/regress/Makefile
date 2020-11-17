@@ -161,6 +161,25 @@ check-follower-cluster: all
 	$(pg_regress_multi_check) --load-extension=citus --follower-cluster \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/multi_follower_schedule $(EXTRA_TESTS)
 
+COLUMNAR_SCHEDULES =
+COLUMNAR_ISOLATION_SCHEDULES =
+# even though we always add the fdw schedules, keep them separate from the declaration
+# above for easy removabl when fdw support is removed
+COLUMNAR_SCHEDULES += columnar_fdw_schedule
+COLUMNAR_ISOLATION_SCHEDULES += columnar_fdw_isolation_schedule
+ifeq ($(HAS_TABLEAM),yes)
+  COLUMNAR_SCHEDULES += columnar_am_schedule
+  COLUMNAR_ISOLATION_SCHEDULES += columnar_am_isolation_schedule
+endif
+
+check-columnar:
+	$(pg_regress_multi_check) --load-extension=citus \
+	-- $(MULTI_REGRESS_OPTS) $(addprefix --schedule=$(citus_abs_srcdir)/,$(COLUMNAR_SCHEDULES)) $(EXTRA_TESTS)
+
+check-columnar-isolation: all  $(isolation_test_files)
+	$(pg_regress_multi_check) --load-extension=citus --isolationtester \
+	-- $(MULTI_REGRESS_OPTS) --inputdir=$(citus_abs_srcdir)/build $(addprefix --schedule=$(citus_abs_srcdir)/,$(COLUMNAR_ISOLATION_SCHEDULES)) $(EXTRA_TESTS)
+
 check-failure: all
 	$(pg_regress_multi_check) --load-extension=citus --mitmproxy \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/failure_schedule $(EXTRA_TESTS)
