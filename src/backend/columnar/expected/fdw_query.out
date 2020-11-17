@@ -1,0 +1,105 @@
+--
+-- Test querying cstore_fdw tables.
+--
+-- Settings to make the result deterministic
+SET datestyle = "ISO, YMD";
+-- Query uncompressed data
+SELECT count(*) FROM contestant;
+ count 
+-------
+     8
+(1 row)
+
+SELECT avg(rating), stddev_samp(rating) FROM contestant;
+          avg          |   stddev_samp    
+-----------------------+------------------
+ 2344.3750000000000000 | 433.746119785032
+(1 row)
+
+SELECT country, avg(rating) FROM contestant WHERE rating > 2200
+	GROUP BY country ORDER BY country;
+ country |          avg          
+---------+-----------------------
+ XA      | 2203.0000000000000000
+ XB      | 2610.5000000000000000
+ XC      | 2236.0000000000000000
+ XD      | 3090.0000000000000000
+(4 rows)
+
+SELECT * FROM contestant ORDER BY handle;
+ handle | birthdate  | rating | percentile | country | achievements 
+--------+------------+--------+------------+---------+--------------
+ a      | 1990-01-10 |   2090 |       97.1 | XA      | {a}
+ b      | 1990-11-01 |   2203 |       98.1 | XA      | {a,b}
+ c      | 1988-11-01 |   2907 |       99.4 | XB      | {w,y}
+ d      | 1985-05-05 |   2314 |       98.3 | XB      | {}
+ e      | 1995-05-05 |   2236 |       98.2 | XC      | {a}
+ f      | 1983-04-02 |   3090 |       99.6 | XD      | {a,b,c,y}
+ g      | 1991-12-13 |   1803 |       85.1 | XD      | {a,c}
+ h      | 1987-10-26 |   2112 |       95.4 | XD      | {w,a}
+(8 rows)
+
+-- Query compressed data
+SELECT count(*) FROM contestant_compressed;
+ count 
+-------
+     8
+(1 row)
+
+SELECT avg(rating), stddev_samp(rating) FROM contestant_compressed;
+          avg          |   stddev_samp    
+-----------------------+------------------
+ 2344.3750000000000000 | 433.746119785032
+(1 row)
+
+SELECT country, avg(rating) FROM contestant_compressed WHERE rating > 2200
+	GROUP BY country ORDER BY country;
+ country |          avg          
+---------+-----------------------
+ XA      | 2203.0000000000000000
+ XB      | 2610.5000000000000000
+ XC      | 2236.0000000000000000
+ XD      | 3090.0000000000000000
+(4 rows)
+
+SELECT * FROM contestant_compressed ORDER BY handle;
+ handle | birthdate  | rating | percentile | country | achievements 
+--------+------------+--------+------------+---------+--------------
+ a      | 1990-01-10 |   2090 |       97.1 | XA      | {a}
+ b      | 1990-11-01 |   2203 |       98.1 | XA      | {a,b}
+ c      | 1988-11-01 |   2907 |       99.4 | XB      | {w,y}
+ d      | 1985-05-05 |   2314 |       98.3 | XB      | {}
+ e      | 1995-05-05 |   2236 |       98.2 | XC      | {a}
+ f      | 1983-04-02 |   3090 |       99.6 | XD      | {a,b,c,y}
+ g      | 1991-12-13 |   1803 |       85.1 | XD      | {a,c}
+ h      | 1987-10-26 |   2112 |       95.4 | XD      | {w,a}
+(8 rows)
+
+-- Verify that we handle whole-row references correctly
+SELECT to_json(v) FROM contestant v ORDER BY rating LIMIT 1;
+                                                     to_json                                                      
+------------------------------------------------------------------------------------------------------------------
+ {"handle":"g","birthdate":"1991-12-13","rating":1803,"percentile":85.1,"country":"XD ","achievements":["a","c"]}
+(1 row)
+
+-- Test variables used in expressions
+CREATE FOREIGN TABLE union_first (a int, b int) SERVER cstore_server;
+CREATE FOREIGN TABLE union_second (a int, b int) SERVER cstore_server;
+INSERT INTO union_first SELECT a, a FROM generate_series(1, 5) a;
+INSERT INTO union_second SELECT a, a FROM generate_series(11, 15) a;
+(SELECT a*1, b FROM union_first) union all (SELECT a*1, b FROM union_second);
+ ?column? | b  
+----------+----
+        1 |  1
+        2 |  2
+        3 |  3
+        4 |  4
+        5 |  5
+       11 | 11
+       12 | 12
+       13 | 13
+       14 | 14
+       15 | 15
+(10 rows)
+
+DROP FOREIGN TABLE union_first, union_second;

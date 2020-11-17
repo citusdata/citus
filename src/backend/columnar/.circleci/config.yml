@@ -1,0 +1,138 @@
+version: 2.1
+orbs:
+  codecov: codecov/codecov@1.1.1
+
+jobs:
+  check-style:
+    docker:
+      - image: 'citus/stylechecker:latest'
+    steps:
+      - checkout
+      - run:
+          name: 'Check Style'
+          command: |
+            citus_indent --check
+      - run:
+          name: 'Check if whitespace fixing changed anything, install editorconfig if it did'
+          command: |
+            git diff --exit-code
+
+  build-11:
+    docker:
+      - image: 'citus/extbuilder:11.9'
+    steps:
+      - checkout
+      - run:
+          name: 'Configure, Build, and Install'
+          command: |
+            PG_MAJOR=11 .circleci/build.sh
+      - persist_to_workspace:
+          root: .
+          paths:
+            - install-11.tar
+
+  build-12:
+    docker:
+      - image: 'citus/extbuilder:12.4'
+    steps:
+      - checkout
+      - run:
+          name: 'Configure, Build, and Install'
+          command: |
+            PG_MAJOR=12 .circleci/build.sh
+      - persist_to_workspace:
+          root: .
+          paths:
+            - install-12.tar
+
+  build-13:
+    docker:
+      - image: 'citus/extbuilder:13.0'
+    steps:
+      - checkout
+      - run:
+          name: 'Configure, Build, and Install'
+          command: |
+            PG_MAJOR=13 .circleci/build.sh
+      - persist_to_workspace:
+          root: .
+          paths:
+            - install-13.tar
+
+  test-11_checkinstall:
+    docker:
+      - image: 'citus/exttester:11.9'
+    working_directory: /home/circleci/project
+    steps:
+      - checkout
+      - attach_workspace:
+          at: .
+      - run:
+          name: 'Prepare Container & Install Extension'
+          command: |
+            chown -R circleci:circleci /home/circleci
+            tar xfv "${CIRCLE_WORKING_DIRECTORY}/install-${PG_MAJOR}.tar" --directory /
+      - run:
+          name: 'Run Test'
+          command: |
+            gosu circleci .circleci/run_test.sh installcheck
+      - codecov/upload:
+          flags: 'test_11,installcheck'
+
+  test-12_checkinstall:
+    docker:
+      - image: 'citus/exttester:12.4'
+    working_directory: /home/circleci/project
+    steps:
+      - checkout
+      - attach_workspace:
+          at: .
+      - run:
+          name: 'Prepare Container & Install Extension'
+          command: |
+            chown -R circleci:circleci /home/circleci
+            tar xfv "${CIRCLE_WORKING_DIRECTORY}/install-${PG_MAJOR}.tar" --directory /
+      - run:
+          name: 'Run Test'
+          command: |
+            gosu circleci .circleci/run_test.sh installcheck
+      - codecov/upload:
+          flags: 'test_12,installcheck'
+
+  test-13_checkinstall:
+    docker:
+      - image: 'citus/exttester:13.0'
+    working_directory: /home/circleci/project
+    steps:
+      - checkout
+      - attach_workspace:
+          at: .
+      - run:
+          name: 'Prepare Container & Install Extension'
+          command: |
+            chown -R circleci:circleci /home/circleci
+            tar xfv "${CIRCLE_WORKING_DIRECTORY}/install-${PG_MAJOR}.tar" --directory /
+      - run:
+          name: 'Run Test'
+          command: |
+            gosu circleci .circleci/run_test.sh installcheck
+      - codecov/upload:
+          flags: 'test_13,installcheck'
+
+workflows:
+  version: 2
+  build_and_test:
+    jobs:
+
+      - check-style
+
+      - build-11
+      - build-12
+      - build-13
+
+      - test-11_checkinstall:
+          requires: [build-11]
+      - test-12_checkinstall:
+          requires: [build-12]
+      - test-13_checkinstall:
+          requires: [build-13]

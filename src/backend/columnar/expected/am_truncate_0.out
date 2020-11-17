@@ -1,0 +1,262 @@
+--
+-- Test the TRUNCATE TABLE command for cstore_fdw tables.
+--
+-- print whether we're using version > 10 to make version-specific tests clear
+SHOW server_version \gset
+SELECT substring(:'server_version', '\d+')::int > 10 AS version_above_ten;
+ version_above_ten 
+-------------------
+ f
+(1 row)
+
+-- Check that files for the automatically managed table exist in the
+-- cstore_fdw/{databaseoid} directory.
+SELECT count(*) FROM (
+	SELECT pg_ls_dir('cstore_fdw/' || databaseoid ) FROM (
+	SELECT oid::text databaseoid FROM pg_database WHERE datname = current_database()
+	) AS q1) AS q2;
+ count 
+-------
+     0
+(1 row)
+
+-- CREATE a cstore_fdw table, fill with some data --
+CREATE FOREIGN TABLE cstore_truncate_test (a int, b int) SERVER cstore_server;
+CREATE FOREIGN TABLE cstore_truncate_test_second (a int, b int) SERVER cstore_server;
+CREATE FOREIGN TABLE cstore_truncate_test_compressed (a int, b int) SERVER cstore_server OPTIONS (compression 'pglz');
+CREATE TABLE cstore_truncate_test_regular (a int, b int);
+INSERT INTO cstore_truncate_test select a, a from generate_series(1, 10) a;
+INSERT INTO cstore_truncate_test_compressed select a, a from generate_series(1, 10) a;
+INSERT INTO cstore_truncate_test_compressed select a, a from generate_series(1, 10) a;
+-- query rows
+SELECT * FROM cstore_truncate_test;
+ a  | b  
+----+----
+  1 |  1
+  2 |  2
+  3 |  3
+  4 |  4
+  5 |  5
+  6 |  6
+  7 |  7
+  8 |  8
+  9 |  9
+ 10 | 10
+(10 rows)
+
+TRUNCATE TABLE cstore_truncate_test;
+SELECT * FROM cstore_truncate_test;
+ a | b 
+---+---
+(0 rows)
+
+SELECT COUNT(*) from cstore_truncate_test;
+ count 
+-------
+     0
+(1 row)
+
+SELECT count(*) FROM cstore_truncate_test_compressed;
+ count 
+-------
+    20
+(1 row)
+
+TRUNCATE TABLE cstore_truncate_test_compressed;
+SELECT count(*) FROM cstore_truncate_test_compressed;
+ count 
+-------
+     0
+(1 row)
+
+SELECT cstore_table_size('cstore_truncate_test_compressed');
+ cstore_table_size 
+-------------------
+                26
+(1 row)
+
+-- make sure data files still present 
+SELECT count(*) FROM (
+	SELECT pg_ls_dir('cstore_fdw/' || databaseoid ) FROM (
+	SELECT oid::text databaseoid FROM pg_database WHERE datname = current_database()
+	) AS q1) AS q2;
+ count 
+-------
+     6
+(1 row)
+
+INSERT INTO cstore_truncate_test select a, a from generate_series(1, 10) a;
+INSERT INTO cstore_truncate_test_regular select a, a from generate_series(10, 20) a;
+INSERT INTO cstore_truncate_test_second select a, a from generate_series(20, 30) a;
+SELECT * from cstore_truncate_test;
+ a  | b  
+----+----
+  1 |  1
+  2 |  2
+  3 |  3
+  4 |  4
+  5 |  5
+  6 |  6
+  7 |  7
+  8 |  8
+  9 |  9
+ 10 | 10
+(10 rows)
+
+SELECT * from cstore_truncate_test_second;
+ a  | b  
+----+----
+ 20 | 20
+ 21 | 21
+ 22 | 22
+ 23 | 23
+ 24 | 24
+ 25 | 25
+ 26 | 26
+ 27 | 27
+ 28 | 28
+ 29 | 29
+ 30 | 30
+(11 rows)
+
+SELECT * from cstore_truncate_test_regular;
+ a  | b  
+----+----
+ 10 | 10
+ 11 | 11
+ 12 | 12
+ 13 | 13
+ 14 | 14
+ 15 | 15
+ 16 | 16
+ 17 | 17
+ 18 | 18
+ 19 | 19
+ 20 | 20
+(11 rows)
+
+-- make sure multi truncate works
+-- notice that the same table might be repeated
+TRUNCATE TABLE cstore_truncate_test,
+			   cstore_truncate_test_regular,
+			   cstore_truncate_test_second,
+   			   cstore_truncate_test;
+SELECT * from cstore_truncate_test;
+ a | b 
+---+---
+(0 rows)
+
+SELECT * from cstore_truncate_test_second;
+ a | b 
+---+---
+(0 rows)
+
+SELECT * from cstore_truncate_test_regular;
+ a | b 
+---+---
+(0 rows)
+
+-- test if truncate on empty table works
+TRUNCATE TABLE cstore_truncate_test;
+SELECT * from cstore_truncate_test;
+ a | b 
+---+---
+(0 rows)
+
+-- test if a cached truncate from a pl/pgsql function works
+CREATE FUNCTION cstore_truncate_test_regular_func() RETURNS void AS $$
+BEGIN
+	INSERT INTO cstore_truncate_test_regular select a, a from generate_series(1, 10) a;
+	TRUNCATE TABLE cstore_truncate_test_regular;
+END;$$
+LANGUAGE plpgsql;
+SELECT cstore_truncate_test_regular_func();
+ cstore_truncate_test_regular_func 
+-----------------------------------
+ 
+(1 row)
+
+-- the cached plans are used stating from the second call
+SELECT cstore_truncate_test_regular_func();
+ cstore_truncate_test_regular_func 
+-----------------------------------
+ 
+(1 row)
+
+DROP FUNCTION cstore_truncate_test_regular_func();
+DROP FOREIGN TABLE cstore_truncate_test, cstore_truncate_test_second;
+DROP TABLE cstore_truncate_test_regular;
+DROP FOREIGN TABLE cstore_truncate_test_compressed;
+-- test truncate with schema
+CREATE SCHEMA truncate_schema;
+CREATE FOREIGN TABLE truncate_schema.truncate_tbl (id int) SERVER cstore_server OPTIONS(compression 'pglz');
+INSERT INTO truncate_schema.truncate_tbl SELECT generate_series(1, 100);
+SELECT COUNT(*) FROM truncate_schema.truncate_tbl;
+ count 
+-------
+   100
+(1 row)
+
+TRUNCATE TABLE truncate_schema.truncate_tbl;
+SELECT COUNT(*) FROM truncate_schema.truncate_tbl;
+ count 
+-------
+     0
+(1 row)
+
+INSERT INTO truncate_schema.truncate_tbl SELECT generate_series(1, 100);
+-- create a user that can not truncate
+CREATE USER truncate_user;
+GRANT USAGE ON SCHEMA truncate_schema TO truncate_user;
+GRANT SELECT ON TABLE truncate_schema.truncate_tbl TO truncate_user;
+REVOKE TRUNCATE ON TABLE truncate_schema.truncate_tbl FROM truncate_user;
+SELECT current_user \gset
+\c - truncate_user
+-- verify truncate command fails and check number of rows
+SELECT count(*) FROM truncate_schema.truncate_tbl;
+ count 
+-------
+   100
+(1 row)
+
+TRUNCATE TABLE truncate_schema.truncate_tbl;
+ERROR:  permission denied for relation truncate_tbl
+SELECT count(*) FROM truncate_schema.truncate_tbl;
+ count 
+-------
+   100
+(1 row)
+
+-- switch to super user, grant truncate to truncate_user 
+\c - :current_user
+GRANT TRUNCATE ON TABLE truncate_schema.truncate_tbl TO truncate_user;
+-- verify truncate_user can truncate now
+\c - truncate_user
+SELECT count(*) FROM truncate_schema.truncate_tbl;
+ count 
+-------
+   100
+(1 row)
+
+TRUNCATE TABLE truncate_schema.truncate_tbl;
+SELECT count(*) FROM truncate_schema.truncate_tbl;
+ count 
+-------
+     0
+(1 row)
+
+\c - :current_user
+-- cleanup
+DROP SCHEMA truncate_schema CASCADE;
+NOTICE:  drop cascades to foreign table truncate_schema.truncate_tbl
+DROP USER truncate_user;
+-- verify files are removed
+SELECT count(*) FROM (
+	SELECT pg_ls_dir('cstore_fdw/' || databaseoid ) FROM (
+	SELECT oid::text databaseoid FROM pg_database WHERE datname = current_database()
+	) AS q1) AS q2;
+ count 
+-------
+     0
+(1 row)
+
