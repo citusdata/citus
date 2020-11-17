@@ -201,7 +201,7 @@ jobs:
           path: '/tmp/core_dumps'
   test-11_check-failure:
     docker:
-      - image: 'citus/failtester:11.9'
+      - image: 'citus/failtester:11.9-dev'
     working_directory: /home/circleci/project
     steps:
       - checkout
@@ -339,7 +339,7 @@ jobs:
 
   test-12_check-failure:
     docker:
-      - image: 'citus/failtester:12.4'
+      - image: 'citus/failtester:12.4-dev'
     working_directory: /home/circleci/project
     steps:
       - checkout
@@ -475,7 +475,7 @@ jobs:
 
   test-13_check-failure:
     docker:
-      - image: 'citus/failtester:13.0'
+      - image: 'citus/failtester:13.0-dev'
     working_directory: /home/circleci/project
     steps:
       - checkout
