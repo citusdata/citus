@@ -12,7 +12,7 @@ SHOW server_version \gset
 SELECT substring(:'server_version', '\d+')::int > 11 AS version_above_eleven;
  version_above_eleven
 ---------------------------------------------------------------------
- t
+ f
 (1 row)
 
 SET citus.next_shard_id TO 580000;
@@ -475,25 +475,21 @@ SELECT * FROM print_extension_changes();
 -- Snapshot of state at 10.0-1
 ALTER EXTENSION citus UPDATE TO '10.0-1';
 SELECT * FROM print_extension_changes();
- previous_object |                           current_object
+ previous_object |                    current_object
 ---------------------------------------------------------------------
-                 | access method cstore_tableam
                  | event trigger cstore_ddl_event_end
                  | foreign-data wrapper cstore_fdw
-                 | function alter_cstore_table_reset(regclass,boolean,boolean,boolean)
-                 | function alter_cstore_table_set(regclass,integer,integer,name)
                  | function citus_internal.cstore_ensure_objects_exist()
                  | function cstore.cstore_ddl_event_end_trigger()
                  | function cstore.cstore_fdw_handler()
                  | function cstore.cstore_fdw_validator(text[],oid)
-                 | function cstore.cstore_tableam_handler(internal)
                  | function cstore_table_size(regclass)
                  | schema cstore
                  | table cstore.cstore_data_files
                  | table cstore.cstore_skipnodes
                  | table cstore.cstore_stripes
                  | view cstore.cstore_options
-(16 rows)
+(12 rows)
 
 DROP TABLE prev_objects, extension_diff;
 -- show running version
