@@ -549,7 +549,7 @@ CopyIntoCStoreTable(const CopyStmt *copyStatement, const char *queryString)
 #endif
 
 	/* init state to write to the cstore file */
-	writeState = CStoreBeginWrite(relation,
+	writeState = CStoreBeginWrite(relation->rd_node,
 								  cstoreOptions->compressionType,
 								  cstoreOptions->stripeRowCount,
 								  cstoreOptions->blockRowCount,
@@ -1992,13 +1992,16 @@ CStoreBeginForeignInsert(ModifyTableState *modifyTableState, ResultRelInfo *rela
 	CStoreOptions *cstoreOptions = CStoreGetOptions(foreignTableOid);
 	TupleDesc tupleDescriptor = RelationGetDescr(relationInfo->ri_RelationDesc);
 
-	TableWriteState *writeState = CStoreBeginWrite(relation,
+	TableWriteState *writeState = CStoreBeginWrite(relation->rd_node,
 												   cstoreOptions->compressionType,
 												   cstoreOptions->stripeRowCount,
 												   cstoreOptions->blockRowCount,
 												   tupleDescriptor);
 
 	relationInfo->ri_FdwState = (void *) writeState;
+
+	/* keep the lock */
+	relation_close(relation, NoLock);
 }
 
 
@@ -2055,10 +2058,7 @@ CStoreEndForeignInsert(EState *executorState, ResultRelInfo *relationInfo)
 	/* writeState is NULL during Explain queries */
 	if (writeState != NULL)
 	{
-		Relation relation = writeState->relation;
-
 		CStoreEndWrite(writeState);
-		heap_close(relation, RowExclusiveLock);
 	}
 }
 

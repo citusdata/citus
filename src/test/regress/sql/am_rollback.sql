@@ -23,6 +23,7 @@ WHERE a.relfilenode = b.relfilenode AND b.relname = 't';
 BEGIN;
 SAVEPOINT s0;
 INSERT INTO t SELECT i, i+1 FROM generate_series(1, 10) i;
+SELECT count(*) FROM t;  -- force flush
 SAVEPOINT s1;
 INSERT INTO t SELECT i, i+1 FROM generate_series(1, 10) i;
 SELECT count(*) FROM t;

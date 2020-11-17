@@ -134,17 +134,18 @@ InitCStoreDataFileMetadata(Oid relfilenode, int blockRowCount, int stripeRowCoun
 {
 	NameData compressionName = { 0 };
 
-	namestrcpy(&compressionName, CompressionTypeStr(compression));
-
 	bool nulls[Natts_cstore_data_files] = { 0 };
 	Datum values[Natts_cstore_data_files] = {
 		ObjectIdGetDatum(relfilenode),
 		Int32GetDatum(blockRowCount),
 		Int32GetDatum(stripeRowCount),
-		NameGetDatum(&compressionName),
+		0, /* to be filled below */
 		Int32GetDatum(CSTORE_VERSION_MAJOR),
 		Int32GetDatum(CSTORE_VERSION_MINOR)
 	};
+
+	namestrcpy(&compressionName, CompressionTypeStr(compression));
+	values[Anum_cstore_data_files_compression - 1] = NameGetDatum(&compressionName);
 
 	DeleteDataFileMetadataRowIfExists(relfilenode);
 
@@ -171,6 +172,7 @@ UpdateCStoreDataFileMetadata(Oid relfilenode, int blockRowCount, int stripeRowCo
 	Datum values[Natts_cstore_data_files] = { 0 };
 	bool isnull[Natts_cstore_data_files] = { 0 };
 	bool replace[Natts_cstore_data_files] = { 0 };
+	bool changed = false;
 
 	Relation cstoreDataFiles = heap_open(CStoreDataFilesRelationId(), RowExclusiveLock);
 	TupleDesc tupleDescriptor = RelationGetDescr(cstoreDataFiles);
@@ -192,7 +194,6 @@ UpdateCStoreDataFileMetadata(Oid relfilenode, int blockRowCount, int stripeRowCo
 
 	Form_cstore_data_files metadata = (Form_cstore_data_files) GETSTRUCT(heapTuple);
 
-	bool changed = false;
 	if (metadata->block_row_count != blockRowCount)
 	{
 		values[Anum_cstore_data_files_block_row_count - 1] = Int32GetDatum(blockRowCount);

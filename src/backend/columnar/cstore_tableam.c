@@ -68,10 +68,7 @@ typedef struct CStoreScanDescData
 
 typedef struct CStoreScanDescData *CStoreScanDesc;
 
-static TableWriteState *CStoreWriteState = NULL;
-static ExecutorEnd_hook_type PreviousExecutorEndHook = NULL;
-static MemoryContext CStoreContext = NULL;
-static object_access_hook_type prevObjectAccessHook = NULL;
+static object_access_hook_type PrevObjectAccessHook = NULL;
 static ProcessUtility_hook_type PreviousProcessUtilityHook = NULL;
 
 /* forward declaration for static functions */
@@ -122,77 +119,17 @@ CStoreTableAMDefaultOptions()
  * CStoreTableAMGetOptions returns the options based on a relation. It is advised the
  * relation is a cstore table am table, if not it will raise an error
  */
-static CStoreOptions *
-CStoreTableAMGetOptions(Relation rel)
+CStoreOptions *
+CStoreTableAMGetOptions(Oid relfilenode)
 {
-	Assert(rel != NULL);
+	Assert(OidIsValid(relfilenode));
 
 	CStoreOptions *cstoreOptions = palloc0(sizeof(CStoreOptions));
-	DataFileMetadata *metadata = ReadDataFileMetadata(rel->rd_node.relNode, false);
+	DataFileMetadata *metadata = ReadDataFileMetadata(relfilenode, false);
 	cstoreOptions->compressionType = metadata->compression;
 	cstoreOptions->stripeRowCount = metadata->stripeRowCount;
 	cstoreOptions->blockRowCount = metadata->blockRowCount;
 	return cstoreOptions;
-}
-
-
-static MemoryContext
-GetCStoreMemoryContext()
-{
-	if (CStoreContext == NULL)
-	{
-		CStoreContext = AllocSetContextCreate(TopMemoryContext, "cstore context",
-											  ALLOCSET_DEFAULT_SIZES);
-	}
-	return CStoreContext;
-}
-
-
-static void
-ResetCStoreMemoryContext()
-{
-	if (CStoreContext != NULL)
-	{
-		MemoryContextReset(CStoreContext);
-	}
-}
-
-
-static void
-cstore_init_write_state(Relation relation)
-{
-	if (CStoreWriteState != NULL)
-	{
-		/* TODO: consider whether it's possible for a new write to start */
-		/* before an old one is flushed */
-		Assert(CStoreWriteState->relation->rd_id == relation->rd_id);
-	}
-
-	if (CStoreWriteState == NULL)
-	{
-		CStoreOptions *cstoreOptions = CStoreTableAMGetOptions(relation);
-		TupleDesc tupdesc = RelationGetDescr(relation);
-
-		elog(LOG, "initializing write state for relation %d", relation->rd_id);
-		CStoreWriteState = CStoreBeginWrite(relation,
-											cstoreOptions->compressionType,
-											cstoreOptions->stripeRowCount,
-											cstoreOptions->blockRowCount,
-											tupdesc);
-	}
-}
-
-
-static void
-cstore_free_write_state()
-{
-	if (CStoreWriteState != NULL)
-	{
-		elog(LOG, "flushing write state for relation %d",
-			 CStoreWriteState->relation->rd_id);
-		CStoreEndWrite(CStoreWriteState);
-		CStoreWriteState = NULL;
-	}
 }
 
 
@@ -263,9 +200,10 @@ cstore_beginscan_extended(Relation relation, Snapshot snapshot,
 						  uint32 flags, Bitmapset *attr_needed, List *scanQual)
 {
 	TupleDesc tupdesc = relation->rd_att;
+	Oid relfilenode = relation->rd_node.relNode;
 	CStoreScanDesc scan = palloc(sizeof(CStoreScanDescData));
 	List *neededColumnList = NIL;
-	MemoryContext oldContext = MemoryContextSwitchTo(GetCStoreMemoryContext());
+	MemoryContext oldContext = MemoryContextSwitchTo(TopTransactionContext);
 	ListCell *columnCell = NULL;
 
 	scan->cs_base.rs_rd = relation;
@@ -274,6 +212,15 @@ cstore_beginscan_extended(Relation relation, Snapshot snapshot,
 	scan->cs_base.rs_key = key;
 	scan->cs_base.rs_flags = flags;
 	scan->cs_base.rs_parallel = parallel_scan;
+
+	if (PendingWritesInUpperTransactions(relfilenode, GetCurrentSubTransactionId()))
+	{
+		elog(ERROR,
+			 "cannot read from table when there is unflushed data in upper transactions");
+	}
+
+	FlushWriteStateForRelfilenode(relfilenode, GetCurrentSubTransactionId());
+
 
 	List *columnList = RelationColumnList(relation);
 
@@ -319,7 +266,7 @@ static bool
 cstore_getnextslot(TableScanDesc sscan, ScanDirection direction, TupleTableSlot *slot)
 {
 	CStoreScanDesc scan = (CStoreScanDesc) sscan;
-	MemoryContext oldContext = MemoryContextSwitchTo(GetCStoreMemoryContext());
+	MemoryContext oldContext = MemoryContextSwitchTo(TopTransactionContext);
 
 	ExecClearTuple(slot);
 
@@ -437,9 +384,9 @@ static void
 cstore_tuple_insert(Relation relation, TupleTableSlot *slot, CommandId cid,
 					int options, BulkInsertState bistate)
 {
-	MemoryContext oldContext = MemoryContextSwitchTo(GetCStoreMemoryContext());
-
-	cstore_init_write_state(relation);
+	TableWriteState *writeState = cstore_init_write_state(relation->rd_node,
+														  RelationGetDescr(relation),
+														  GetCurrentSubTransactionId());
 
 	HeapTuple heapTuple = ExecCopySlotHeapTuple(slot);
 	if (HeapTupleHasExternal(heapTuple))
@@ -453,8 +400,7 @@ cstore_tuple_insert(Relation relation, TupleTableSlot *slot, CommandId cid,
 
 	slot_getallattrs(slot);
 
-	CStoreWriteRow(CStoreWriteState, slot->tts_values, slot->tts_isnull);
-	MemoryContextSwitchTo(oldContext);
+	CStoreWriteRow(writeState, slot->tts_values, slot->tts_isnull);
 }
 
 
@@ -479,9 +425,9 @@ static void
 cstore_multi_insert(Relation relation, TupleTableSlot **slots, int ntuples,
 					CommandId cid, int options, BulkInsertState bistate)
 {
-	MemoryContext oldContext = MemoryContextSwitchTo(GetCStoreMemoryContext());
-
-	cstore_init_write_state(relation);
+	TableWriteState *writeState = cstore_init_write_state(relation->rd_node,
+														  RelationGetDescr(relation),
+														  GetCurrentSubTransactionId());
 
 	for (int i = 0; i < ntuples; i++)
 	{
@@ -499,9 +445,8 @@ cstore_multi_insert(Relation relation, TupleTableSlot **slots, int ntuples,
 
 		slot_getallattrs(tupleSlot);
 
-		CStoreWriteRow(CStoreWriteState, tupleSlot->tts_values, tupleSlot->tts_isnull);
+		CStoreWriteRow(writeState, tupleSlot->tts_values, tupleSlot->tts_isnull);
 	}
-	MemoryContextSwitchTo(oldContext);
 }
 
 
@@ -537,11 +482,9 @@ cstore_tuple_lock(Relation relation, ItemPointer tid, Snapshot snapshot,
 static void
 cstore_finish_bulk_insert(Relation relation, int options)
 {
-	/*TODO: flush relation like for heap? */
-	/* free write state or only in ExecutorEnd_hook? */
-
-	/* for COPY */
-	cstore_free_write_state();
+	/*
+	 * Nothing to do here. We keep write states live until transaction end.
+	 */
 }
 
 
@@ -556,6 +499,9 @@ cstore_relation_set_new_filenode(Relation rel,
 	uint64 blockRowCount = 0;
 	uint64 stripeRowCount = 0;
 	CompressionType compression = 0;
+	Oid oldRelfilenode = rel->rd_node.relNode;
+
+	MarkRelfilenodeDropped(oldRelfilenode, GetCurrentSubTransactionId());
 
 	if (metadata != NULL)
 	{
@@ -589,7 +535,10 @@ cstore_relation_set_new_filenode(Relation rel,
 static void
 cstore_relation_nontransactional_truncate(Relation rel)
 {
-	DataFileMetadata *metadata = ReadDataFileMetadata(rel->rd_node.relNode, false);
+	Oid relfilenode = rel->rd_node.relNode;
+	DataFileMetadata *metadata = ReadDataFileMetadata(relfilenode, false);
+
+	NonTransactionDropWriteState(relfilenode);
 
 	/*
 	 * No need to set new relfilenode, since the table was created in this
@@ -651,23 +600,23 @@ cstore_relation_copy_for_cluster(Relation OldHeap, Relation NewHeap,
 	 * relation first.
 	 */
 
-	CStoreOptions *cstoreOptions = CStoreTableAMGetOptions(OldHeap);
+	CStoreOptions *cstoreOptions = CStoreTableAMGetOptions(OldHeap->rd_node.relNode);
 
 	UpdateCStoreDataFileMetadata(NewHeap->rd_node.relNode,
 								 cstoreOptions->blockRowCount,
 								 cstoreOptions->stripeRowCount,
 								 cstoreOptions->compressionType);
 
-	cstoreOptions = CStoreTableAMGetOptions(NewHeap);
+	cstoreOptions = CStoreTableAMGetOptions(NewHeap->rd_node.relNode);
 
-	TableWriteState *writeState = CStoreBeginWrite(NewHeap,
+	TableWriteState *writeState = CStoreBeginWrite(NewHeap->rd_node,
 												   cstoreOptions->compressionType,
 												   cstoreOptions->stripeRowCount,
 												   cstoreOptions->blockRowCount,
 												   targetDesc);
 
-	TableReadState *readState = CStoreBeginRead(OldHeap, sourceDesc, RelationColumnList(
-													OldHeap), NULL);
+	TableReadState *readState = CStoreBeginRead(OldHeap, sourceDesc,
+												RelationColumnList(OldHeap), NULL);
 
 	Datum *values = palloc0(sourceDesc->natts * sizeof(Datum));
 	bool *nulls = palloc0(sourceDesc->natts * sizeof(bool));
@@ -1046,18 +995,61 @@ cstore_scan_sample_next_tuple(TableScanDesc scan, SampleScanState *scanstate,
 
 
 static void
-CStoreExecutorEnd(QueryDesc *queryDesc)
+CStoreXactCallback(XactEvent event, void *arg)
 {
-	cstore_free_write_state();
-	if (PreviousExecutorEndHook)
+	switch (event)
 	{
-		PreviousExecutorEndHook(queryDesc);
+		case XACT_EVENT_COMMIT:
+		case XACT_EVENT_PARALLEL_COMMIT:
+		case XACT_EVENT_PREPARE:
+		{
+			/* nothing to do */
+			break;
+		}
+
+		case XACT_EVENT_ABORT:
+		case XACT_EVENT_PARALLEL_ABORT:
+		{
+			DiscardWriteStateForAllRels(GetCurrentSubTransactionId(), 0);
+			break;
+		}
+
+		case XACT_EVENT_PRE_COMMIT:
+		case XACT_EVENT_PARALLEL_PRE_COMMIT:
+		case XACT_EVENT_PRE_PREPARE:
+		{
+			FlushWriteStateForAllRels(GetCurrentSubTransactionId(), 0);
+			break;
+		}
 	}
-	else
+}
+
+
+static void
+CStoreSubXactCallback(SubXactEvent event, SubTransactionId mySubid,
+					  SubTransactionId parentSubid, void *arg)
+{
+	switch (event)
 	{
-		standard_ExecutorEnd(queryDesc);
+		case SUBXACT_EVENT_START_SUB:
+		case SUBXACT_EVENT_COMMIT_SUB:
+		{
+			/* nothing to do */
+			break;
+		}
+
+		case SUBXACT_EVENT_ABORT_SUB:
+		{
+			DiscardWriteStateForAllRels(mySubid, parentSubid);
+			break;
+		}
+
+		case SUBXACT_EVENT_PRE_COMMIT_SUB:
+		{
+			FlushWriteStateForAllRels(mySubid, parentSubid);
+			break;
+		}
 	}
-	ResetCStoreMemoryContext();
 }
 
 
@@ -1109,12 +1101,13 @@ CStoreTableAMProcessUtility(PlannedStmt * plannedStatement,
 void
 cstore_tableam_init()
 {
-	PreviousExecutorEndHook = ExecutorEnd_hook;
-	ExecutorEnd_hook = CStoreExecutorEnd;
+	RegisterXactCallback(CStoreXactCallback, NULL);
+	RegisterSubXactCallback(CStoreSubXactCallback, NULL);
+
 	PreviousProcessUtilityHook = (ProcessUtility_hook != NULL) ?
 								 ProcessUtility_hook : standard_ProcessUtility;
 	ProcessUtility_hook = CStoreTableAMProcessUtility;
-	prevObjectAccessHook = object_access_hook;
+	PrevObjectAccessHook = object_access_hook;
 	object_access_hook = CStoreTableAMObjectAccessHook;
 
 	cstore_customscan_init();
@@ -1124,7 +1117,7 @@ cstore_tableam_init()
 void
 cstore_tableam_finish()
 {
-	ExecutorEnd_hook = PreviousExecutorEndHook;
+	object_access_hook = PrevObjectAccessHook;
 }
 
 
@@ -1140,9 +1133,9 @@ CStoreTableAMObjectAccessHook(ObjectAccessType access, Oid classId, Oid objectId
 							  subId,
 							  void *arg)
 {
-	if (prevObjectAccessHook)
+	if (PrevObjectAccessHook)
 	{
-		prevObjectAccessHook(access, classId, objectId, subId, arg);
+		PrevObjectAccessHook(access, classId, objectId, subId, arg);
 	}
 
 	/*
@@ -1166,7 +1159,10 @@ CStoreTableAMObjectAccessHook(ObjectAccessType access, Oid classId, Oid objectId
 		 * tableam tables storage is managed by postgres.
 		 */
 		Relation rel = table_open(objectId, AccessExclusiveLock);
-		DeleteDataFileMetadataRowIfExists(rel->rd_node.relNode);
+		Oid relfilenode = rel->rd_node.relNode;
+		DeleteDataFileMetadataRowIfExists(relfilenode);
+
+		MarkRelfilenodeDropped(relfilenode, GetCurrentSubTransactionId());
 
 		/* keep the lock since we did physical changes to the relation */
 		table_close(rel, NoLock);

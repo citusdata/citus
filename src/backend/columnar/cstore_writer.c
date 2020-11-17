@@ -18,6 +18,7 @@
 
 #include "safe_lib.h"
 
+#include "access/heapam.h"
 #include "access/nbtree.h"
 #include "catalog/pg_am.h"
 #include "miscadmin.h"
@@ -25,6 +26,7 @@
 #include "storage/smgr.h"
 #include "utils/memutils.h"
 #include "utils/rel.h"
+#include "utils/relfilenodemap.h"
 
 #include "columnar/cstore.h"
 #include "columnar/cstore_version_compat.h"
@@ -58,7 +60,7 @@ static StringInfo CopyStringInfo(StringInfo sourceString);
  * will be added.
  */
 TableWriteState *
-CStoreBeginWrite(Relation relation,
+CStoreBeginWrite(RelFileNode relfilenode,
 				 CompressionType compressionType,
 				 uint64 stripeMaxRowCount, uint32 blockRowCount,
 				 TupleDesc tupleDescriptor)
@@ -101,11 +103,11 @@ CStoreBeginWrite(Relation relation,
 												blockRowCount);
 
 	TableWriteState *writeState = palloc0(sizeof(TableWriteState));
-	writeState->relation = relation;
+	writeState->relfilenode = relfilenode;
 	writeState->compressionType = compressionType;
 	writeState->stripeMaxRowCount = stripeMaxRowCount;
 	writeState->blockRowCount = blockRowCount;
-	writeState->tupleDescriptor = tupleDescriptor;
+	writeState->tupleDescriptor = CreateTupleDescCopy(tupleDescriptor);
 	writeState->comparisonFunctionArray = comparisonFunctionArray;
 	writeState->stripeBuffers = NULL;
 	writeState->stripeSkipList = NULL;
@@ -205,11 +207,7 @@ CStoreWriteRow(TableWriteState *writeState, Datum *columnValues, bool *columnNul
 	stripeBuffers->rowCount++;
 	if (stripeBuffers->rowCount >= writeState->stripeMaxRowCount)
 	{
-		FlushStripe(writeState);
-
-		/* set stripe data and skip list to NULL so they are recreated next time */
-		writeState->stripeBuffers = NULL;
-		writeState->stripeSkipList = NULL;
+		CStoreFlushPendingWrites(writeState);
 	}
 
 	MemoryContextSwitchTo(oldContext);
@@ -225,22 +223,31 @@ CStoreWriteRow(TableWriteState *writeState, Datum *columnValues, bool *columnNul
 void
 CStoreEndWrite(TableWriteState *writeState)
 {
-	StripeBuffers *stripeBuffers = writeState->stripeBuffers;
-
-	if (stripeBuffers != NULL)
-	{
-		MemoryContext oldContext = MemoryContextSwitchTo(writeState->stripeWriteContext);
-
-		FlushStripe(writeState);
-		MemoryContextReset(writeState->stripeWriteContext);
-
-		MemoryContextSwitchTo(oldContext);
-	}
+	CStoreFlushPendingWrites(writeState);
 
 	MemoryContextDelete(writeState->stripeWriteContext);
 	pfree(writeState->comparisonFunctionArray);
 	FreeBlockData(writeState->blockData);
 	pfree(writeState);
+}
+
+
+void
+CStoreFlushPendingWrites(TableWriteState *writeState)
+{
+	StripeBuffers *stripeBuffers = writeState->stripeBuffers;
+	if (stripeBuffers != NULL)
+	{
+		MemoryContext oldContext = MemoryContextSwitchTo(writeState->stripeWriteContext);
+
+		FlushStripe(writeState);
+
+		/* set stripe data and skip list to NULL so they are recreated next time */
+		writeState->stripeBuffers = NULL;
+		writeState->stripeSkipList = NULL;
+
+		MemoryContextSwitchTo(oldContext);
+	}
 }
 
 
@@ -410,6 +417,10 @@ FlushStripe(TableWriteState *writeState)
 	uint64 stripeSize = 0;
 	uint64 stripeRowCount = 0;
 
+	Oid relationId = RelidByRelfilenode(writeState->relfilenode.spcNode,
+										writeState->relfilenode.relNode);
+	Relation relation = relation_open(relationId, NoLock);
+
 	/*
 	 * check if the last block needs serialization , the last block was not serialized
 	 * if it was not full yet, e.g.  (rowCount > 0)
@@ -459,7 +470,7 @@ FlushStripe(TableWriteState *writeState)
 			stripeSkipList->blockSkipNodeArray[0][blockIndex].rowCount;
 	}
 
-	stripeMetadata = ReserveStripe(writeState->relation, stripeSize,
+	stripeMetadata = ReserveStripe(relation, stripeSize,
 								   stripeRowCount, columnCount, blockCount,
 								   blockRowCount);
 
@@ -486,7 +497,7 @@ FlushStripe(TableWriteState *writeState)
 				columnBuffers->blockBuffersArray[blockIndex];
 			StringInfo existsBuffer = blockBuffers->existsBuffer;
 
-			WriteToSmgr(writeState->relation, currentFileOffset,
+			WriteToSmgr(relation, currentFileOffset,
 						existsBuffer->data, existsBuffer->len);
 			currentFileOffset += existsBuffer->len;
 		}
@@ -497,16 +508,18 @@ FlushStripe(TableWriteState *writeState)
 				columnBuffers->blockBuffersArray[blockIndex];
 			StringInfo valueBuffer = blockBuffers->valueBuffer;
 
-			WriteToSmgr(writeState->relation, currentFileOffset,
+			WriteToSmgr(relation, currentFileOffset,
 						valueBuffer->data, valueBuffer->len);
 			currentFileOffset += valueBuffer->len;
 		}
 	}
 
 	/* create skip list and footer buffers */
-	SaveStripeSkipList(writeState->relation->rd_node.relNode,
+	SaveStripeSkipList(relation->rd_node.relNode,
 					   stripeMetadata.id,
 					   stripeSkipList, tupleDescriptor);
+
+	relation_close(relation, NoLock);
 }
 
 
@@ -746,4 +759,11 @@ CopyStringInfo(StringInfo sourceString)
 	}
 
 	return targetString;
+}
+
+
+bool
+ContainsPendingWrites(TableWriteState *state)
+{
+	return state->stripeBuffers != NULL && state->stripeBuffers->rowCount != 0;
 }
