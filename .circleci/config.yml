@@ -201,7 +201,7 @@ jobs:
           path: '/tmp/core_dumps'
   test-11_check-failure:
     docker:
-      - image: 'citus/failtester:11.9-dev'
+      - image: 'citus/failtester:11.9'
     working_directory: /home/circleci/project
     steps:
       - checkout
@@ -214,7 +214,7 @@ jobs:
 
   test-11-12_check-pg-upgrade:
     docker:
-      - image: 'citus/pgupgradetester:dev'
+      - image: 'citus/pgupgradetester:latest'
     working_directory: /home/circleci/project
     steps:
       - checkout
@@ -227,7 +227,7 @@ jobs:
 
   test-12-13_check-pg-upgrade:
     docker:
-      - image: 'citus/pgupgradetester:dev'
+      - image: 'citus/pgupgradetester:latest'
     working_directory: /home/circleci/project
     steps:
       - checkout
@@ -339,7 +339,7 @@ jobs:
 
   test-12_check-failure:
     docker:
-      - image: 'citus/failtester:12.4-dev'
+      - image: 'citus/failtester:12.4'
     working_directory: /home/circleci/project
     steps:
       - checkout
@@ -352,7 +352,7 @@ jobs:
 
   test-11_check-citus-upgrade:
     docker:
-      - image: 'citus/citusupgradetester:dev'
+      - image: 'citus/citusupgradetester:11.9'
     working_directory: /home/circleci/project
     steps:
       - checkout
@@ -475,7 +475,7 @@ jobs:
 
   test-13_check-failure:
     docker:
-      - image: 'citus/failtester:13.0-dev'
+      - image: 'citus/failtester:13.0'
     working_directory: /home/circleci/project
     steps:
       - checkout
