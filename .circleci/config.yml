@@ -214,7 +214,7 @@ jobs:
 
   test-11-12_check-pg-upgrade:
     docker:
-      - image: 'citus/pgupgradetester:latest'
+      - image: 'citus/pgupgradetester:dev'
     working_directory: /home/circleci/project
     steps:
       - checkout
@@ -227,7 +227,7 @@ jobs:
 
   test-12-13_check-pg-upgrade:
     docker:
-      - image: 'citus/pgupgradetester:latest'
+      - image: 'citus/pgupgradetester:dev'
     working_directory: /home/circleci/project
     steps:
       - checkout
@@ -352,7 +352,7 @@ jobs:
 
   test-11_check-citus-upgrade:
     docker:
-      - image: 'citus/citusupgradetester:11.9'
+      - image: 'citus/citusupgradetester:dev'
     working_directory: /home/circleci/project
     steps:
       - checkout
