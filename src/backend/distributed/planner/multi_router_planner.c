@@ -518,14 +518,13 @@ static DeferredErrorMessage *
 ModifyPartialQuerySupported(Query *queryTree, bool multiShardQuery,
 							Oid *distributedTableIdOutput)
 {
-	DeferredErrorMessage *deferredError =
-		DeferErrorIfUnsupportedModifyQueryWithLocalTable(queryTree);
+	DeferredErrorMessage *deferredError = DeferErrorIfModifyView(queryTree);
 	if (deferredError != NULL)
 	{
 		return deferredError;
 	}
 
-	deferredError = DeferErrorIfModifyView(queryTree);
+	deferredError = DeferErrorIfUnsupportedModifyQueryWithLocalTable(queryTree);
 	if (deferredError != NULL)
 	{
 		return deferredError;
@@ -2154,8 +2153,6 @@ PlanRouterQuery(Query *originalQuery,
 				bool replacePrunedQueryWithDummy, bool *multiShardModifyQuery,
 				Const **partitionValueConst)
 {
-	RelationRestrictionContext *relationRestrictionContext =
-		plannerRestrictionContext->relationRestrictionContext;
 	bool isMultiShardQuery = false;
 	DeferredErrorMessage *planningError = NULL;
 	bool shardsPresent = false;
@@ -2268,13 +2265,15 @@ PlanRouterQuery(Query *originalQuery,
 	/* we need anchor shard id for select queries with router planner */
 	uint64 shardId = GetAnchorShardId(*prunedShardIntervalListList);
 
-	bool hasLocalRelation = relationRestrictionContext->hasLocalRelation;
-
+	/* both Postgres tables and materialized tables are locally avaliable */
+	RTEListProperties *rteProperties = GetRTEListPropertiesForQuery(originalQuery);
+	bool hasPostgresLocalRelation =
+		rteProperties->hasPostgresLocalTable || rteProperties->hasMaterializedView;
 	List *taskPlacementList =
 		CreateTaskPlacementListForShardIntervals(*prunedShardIntervalListList,
 												 shardsPresent,
 												 replacePrunedQueryWithDummy,
-												 hasLocalRelation);
+												 hasPostgresLocalRelation);
 	if (taskPlacementList == NIL)
 	{
 		planningError = DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
@@ -3552,8 +3551,6 @@ CopyRelationRestrictionContext(RelationRestrictionContext *oldContext)
 		(RelationRestrictionContext *) palloc(sizeof(RelationRestrictionContext));
 	ListCell *relationRestrictionCell = NULL;
 
-	newContext->hasDistributedRelation = oldContext->hasDistributedRelation;
-	newContext->hasLocalRelation = oldContext->hasLocalRelation;
 	newContext->allReferenceTables = oldContext->allReferenceTables;
 	newContext->relationRestrictionList = NIL;
 

@@ -52,6 +52,17 @@ SELECT undistribute_table('referencing_table');
 
 DROP TABLE referenced_table, referencing_table;
 
+-- test distributed foreign tables
+-- we expect errors
+CREATE FOREIGN TABLE foreign_table (
+  id bigint not null,
+  full_name text not null default ''
+) SERVER fake_fdw_server OPTIONS (encoding 'utf-8', compression 'true');
+SELECT create_distributed_table('foreign_table', 'id');
+SELECT undistribute_table('foreign_table');
+
+DROP FOREIGN TABLE foreign_table;
+
 -- test partitioned tables
 CREATE TABLE partitioned_table (id INT, a INT) PARTITION BY RANGE (id);
 CREATE TABLE partitioned_table_1_5 PARTITION OF partitioned_table FOR VALUES FROM (1) TO (5);
@@ -66,6 +77,9 @@ SELECT * FROM partitioned_table ORDER BY 1, 2;
 SELECT * FROM partitioned_table_1_5 ORDER BY 1, 2;
 SELECT * FROM partitioned_table_6_10 ORDER BY 1, 2;
 
+-- undistributing partitions are not supported
+SELECT undistribute_table('partitioned_table_1_5');
+-- we can undistribute partitioned parent tables
 SELECT undistribute_table('partitioned_table');
 
 SELECT logicalrelid FROM pg_dist_partition WHERE logicalrelid::regclass::text LIKE 'partitioned\_table%'  ORDER BY 1;
