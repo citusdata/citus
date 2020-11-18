@@ -139,4 +139,106 @@ SELECT * FROM t ORDER BY a;
  5 | 10
 (5 rows)
 
+--
+-- Prepared transactions
+--
+BEGIN;
+INSERT INTO t VALUES (6, 12);
+INSERT INTO t VALUES (7, 14);
+SELECT * FROM t ORDER BY a;
+ a | b
+---------------------------------------------------------------------
+ 1 |  2
+ 2 |  4
+ 3 |  6
+ 4 |  8
+ 5 | 10
+ 6 | 12
+ 7 | 14
+(7 rows)
+
+PREPARE TRANSACTION 'tx01';
+SELECT * FROM t ORDER BY a;
+ a | b
+---------------------------------------------------------------------
+ 1 |  2
+ 2 |  4
+ 3 |  6
+ 4 |  8
+ 5 | 10
+(5 rows)
+
+ROLLBACK PREPARED 'tx01';
+SELECT * FROM t ORDER BY a;
+ a | b
+---------------------------------------------------------------------
+ 1 |  2
+ 2 |  4
+ 3 |  6
+ 4 |  8
+ 5 | 10
+(5 rows)
+
+BEGIN;
+INSERT INTO t VALUES (6, 13);
+INSERT INTO t VALUES (7, 15);
+PREPARE TRANSACTION 'tx02';
+SELECT * FROM t ORDER BY a;
+ a | b
+---------------------------------------------------------------------
+ 1 |  2
+ 2 |  4
+ 3 |  6
+ 4 |  8
+ 5 | 10
+(5 rows)
+
+COMMIT PREPARED 'tx02';
+SELECT * FROM t ORDER BY a;
+ a | b
+---------------------------------------------------------------------
+ 1 |  2
+ 2 |  4
+ 3 |  6
+ 4 |  8
+ 5 | 10
+ 6 | 13
+ 7 | 15
+(7 rows)
+
+--
+-- Prepared statements
+--
+PREPARE p1(int) AS INSERT INTO t VALUES (8, $1), (9, $1+2);
+EXPLAIN (COSTS OFF) EXECUTE p1(16);
+           QUERY PLAN
+---------------------------------------------------------------------
+ Insert on t
+   ->  Values Scan on "*VALUES*"
+(2 rows)
+
+EXECUTE p1(16);
+EXPLAIN (ANALYZE true, COSTS off, TIMING off, SUMMARY off) EXECUTE p1(20);
+                       QUERY PLAN
+---------------------------------------------------------------------
+ Insert on t (actual rows=0 loops=1)
+   ->  Values Scan on "*VALUES*" (actual rows=2 loops=1)
+(2 rows)
+
+SELECT * FROM t ORDER BY a;
+ a | b
+---------------------------------------------------------------------
+ 1 |  2
+ 2 |  4
+ 3 |  6
+ 4 |  8
+ 5 | 10
+ 6 | 13
+ 7 | 15
+ 8 | 16
+ 8 | 20
+ 9 | 18
+ 9 | 22
+(11 rows)
+
 DROP TABLE t;
