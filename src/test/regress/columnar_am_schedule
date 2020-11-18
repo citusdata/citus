@@ -18,3 +18,4 @@ test: am_trigger
 test: am_tableoptions
 test: am_recursive
 test: am_transactions
+test: am_matview
