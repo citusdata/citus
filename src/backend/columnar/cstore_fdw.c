@@ -818,50 +818,47 @@ FdwNewRelFileNode(Relation relation)
 	}
 	Form_pg_class classform = (Form_pg_class) GETSTRUCT(tuple);
 
-	if (true)
+	char persistence = relation->rd_rel->relpersistence;
+	Oid tablespace;
+
+	/*
+	 * Upgrade to AccessExclusiveLock, and hold until the end of the
+	 * transaction. This shouldn't happen during a read, but it's hard to
+	 * prove that because it happens lazily.
+	 */
+	Relation tmprel = heap_open(relation->rd_id, AccessExclusiveLock);
+	heap_close(tmprel, NoLock);
+
+	if (OidIsValid(relation->rd_rel->relfilenode))
 	{
-		char persistence = relation->rd_rel->relpersistence;
-		Oid tablespace;
-
-		/*
-		 * Upgrade to AccessExclusiveLock, and hold until the end of the
-		 * transaction. This shouldn't happen during a read, but it's hard to
-		 * prove that because it happens lazily.
-		 */
-		Relation tmprel = heap_open(relation->rd_id, AccessExclusiveLock);
-		heap_close(tmprel, NoLock);
-
-		if (OidIsValid(relation->rd_rel->relfilenode))
-		{
-			RelationDropStorage(relation);
-			DeleteDataFileMetadataRowIfExists(relation->rd_rel->relfilenode);
-		}
-
-		if (OidIsValid(relation->rd_rel->reltablespace))
-		{
-			tablespace = relation->rd_rel->reltablespace;
-		}
-		else
-		{
-			tablespace = MyDatabaseTableSpace;
-		}
-
-		Oid filenode = GetNewRelFileNode(tablespace, NULL, persistence);
-
-		classform->relfilenode = filenode;
-		classform->relpages = 0;    /* it's empty until further notice */
-		classform->reltuples = 0;
-		classform->relallvisible = 0;
-		classform->relfrozenxid = InvalidTransactionId;
-		classform->relminmxid = InvalidTransactionId;
-
-		CatalogTupleUpdate(pg_class, &tuple->t_self, tuple);
-		CommandCounterIncrement();
-
-		relation->rd_node.spcNode = tablespace;
-		relation->rd_node.dbNode = MyDatabaseId;
-		relation->rd_node.relNode = filenode;
+		RelationDropStorage(relation);
+		DeleteDataFileMetadataRowIfExists(relation->rd_rel->relfilenode);
 	}
+
+	if (OidIsValid(relation->rd_rel->reltablespace))
+	{
+		tablespace = relation->rd_rel->reltablespace;
+	}
+	else
+	{
+		tablespace = MyDatabaseTableSpace;
+	}
+
+	Oid filenode = GetNewRelFileNode(tablespace, NULL, persistence);
+
+	classform->relfilenode = filenode;
+	classform->relpages = 0;    /* it's empty until further notice */
+	classform->reltuples = 0;
+	classform->relallvisible = 0;
+	classform->relfrozenxid = InvalidTransactionId;
+	classform->relminmxid = InvalidTransactionId;
+
+	CatalogTupleUpdate(pg_class, &tuple->t_self, tuple);
+	CommandCounterIncrement();
+
+	relation->rd_node.spcNode = tablespace;
+	relation->rd_node.dbNode = MyDatabaseId;
+	relation->rd_node.relNode = filenode;
 
 	heap_freetuple(tuple);
 	heap_close(pg_class, RowExclusiveLock);
