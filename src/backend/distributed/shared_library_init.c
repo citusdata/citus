@@ -200,8 +200,8 @@ static const struct config_enum_entry log_level_options[] = {
 
 static const struct config_enum_entry local_table_join_policies[] = {
 	{ "never", LOCAL_JOIN_POLICY_NEVER, false},
-	{ "pull-local", LOCAL_JOIN_POLICY_PULL_LOCAL, false},
-	{ "pull-distributed", LOCAL_JOIN_POLICY_PULL_DISTRIBUTED, false},
+	{ "prefer-local", LOCAL_JOIN_POLICY_PREFER_LOCAL, false},
+	{ "prefer-distributed", LOCAL_JOIN_POLICY_PREFER_DISTRIBUTED, false},
 	{ "auto", LOCAL_JOIN_POLICY_AUTO, false},
 	{ NULL, 0, false}
 };

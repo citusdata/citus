@@ -26,12 +26,26 @@
 typedef enum
 {
 	LOCAL_JOIN_POLICY_NEVER = 0,
-	LOCAL_JOIN_POLICY_PULL_LOCAL = 1,
-	LOCAL_JOIN_POLICY_PULL_DISTRIBUTED = 2,
+	LOCAL_JOIN_POLICY_PREFER_LOCAL = 1,
+	LOCAL_JOIN_POLICY_PREFER_DISTRIBUTED = 2,
 	LOCAL_JOIN_POLICY_AUTO = 3,
 } LocalJoinPolicy;
 
 extern int LocalTableJoinPolicy;
+
+/*
+ * RecursivePlanningContext is used to recursively plan subqueries
+ * and CTEs, pull results to the coordinator, and push it back into
+ * the workers.
+ */
+typedef struct RecursivePlanningContext
+{
+	int level;
+	uint64 planId;
+	bool allDistributionKeysInQueryAreEqual; /* used for some optimizations */
+	List *subPlanList;
+	PlannerRestrictionContext *plannerRestrictionContext;
+} RecursivePlanningContext;
 
 
 extern List * GenerateSubplansForSubqueriesAndCTEs(uint64 planId, Query *originalQuery,
@@ -46,6 +60,9 @@ extern Query * BuildReadIntermediateResultsArrayQuery(List *targetEntryList,
 													  bool useBinaryCopyFormat);
 extern bool GeneratingSubplans(void);
 extern bool ContainsLocalTableDistributedTableJoin(List *rangeTableList);
+extern void ReplaceRTERelationWithRteSubquery(RangeTblEntry *rangeTableEntry,
+											  List *restrictionList,
+											  List *requiredAttrNumbers);
 
 
 #endif /* RECURSIVE_PLANNING_H */

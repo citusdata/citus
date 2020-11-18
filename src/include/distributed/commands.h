@@ -70,6 +70,7 @@ extern List * PreprocessClusterStmt(Node *node, const char *clusterCommand);
 /* index.c */
 typedef void (*PGIndexProcessor)(Form_pg_index, List **);
 
+
 /* call.c */
 extern bool CallDistributedProcedureRemotely(CallStmt *callStmt, DestReceiver *dest);
 

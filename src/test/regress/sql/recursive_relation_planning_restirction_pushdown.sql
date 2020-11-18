@@ -26,7 +26,7 @@ SET client_min_messages TO DEBUG1;
 
 -- for the purposes of these tests, we always want to recursively
 -- plan local tables.
-SET citus.local_table_join_policy TO "pull-local";
+SET citus.local_table_join_policy TO "prefer-local";
 
 
 -- there are no filters, hence cannot pushdown any filters
