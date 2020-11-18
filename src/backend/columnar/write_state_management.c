@@ -1,8 +1,10 @@
 
 #include "citus_version.h"
-#if HAS_TABLEAM
 
 #include "postgres.h"
+#include "columnar/cstore.h"
+
+#if HAS_TABLEAM
 
 #include <math.h>
 
@@ -45,7 +47,6 @@
 #include "utils/rel.h"
 #include "utils/syscache.h"
 
-#include "columnar/cstore.h"
 #include "columnar/cstore_customscan.h"
 #include "columnar/cstore_tableam.h"
 #include "columnar/cstore_version_compat.h"
@@ -378,3 +379,17 @@ PendingWritesInUpperTransactions(Oid relfilenode, SubTransactionId currentSubXid
 
 
 #endif
+
+/*
+ * GetWriteContextForDebug exposes WriteStateContext for debugging
+ * purposes.
+ */
+extern MemoryContext
+GetWriteContextForDebug(void)
+{
+#if HAS_TABLEAM
+	return WriteStateContext;
+#else
+	return NULL;
+#endif
+}

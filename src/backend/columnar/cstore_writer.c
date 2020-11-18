@@ -24,6 +24,7 @@
 #include "miscadmin.h"
 #include "storage/fd.h"
 #include "storage/smgr.h"
+#include "utils/guc.h"
 #include "utils/memutils.h"
 #include "utils/rel.h"
 #include "utils/relfilenodemap.h"
@@ -50,7 +51,6 @@ static void UpdateBlockSkipNodeMinMax(ColumnBlockSkipNode *blockSkipNode,
 									  FmgrInfo *comparisonFunction);
 static Datum DatumCopy(Datum datum, bool datumTypeByValue, int datumTypeLength);
 static StringInfo CopyStringInfo(StringInfo sourceString);
-
 
 /*
  * CStoreBeginWrite initializes a cstore data load operation and returns a table
@@ -114,6 +114,9 @@ CStoreBeginWrite(RelFileNode relfilenode,
 	writeState->stripeWriteContext = stripeWriteContext;
 	writeState->blockData = blockData;
 	writeState->compressionBuffer = NULL;
+	writeState->perTupleContext = AllocSetContextCreate(stripeWriteContext,
+														"CStore per tuple context",
+														ALLOCSET_DEFAULT_SIZES);
 
 	return writeState;
 }
@@ -241,6 +244,7 @@ CStoreFlushPendingWrites(TableWriteState *writeState)
 		MemoryContext oldContext = MemoryContextSwitchTo(writeState->stripeWriteContext);
 
 		FlushStripe(writeState);
+		MemoryContextReset(writeState->stripeWriteContext);
 
 		/* set stripe data and skip list to NULL so they are recreated next time */
 		writeState->stripeBuffers = NULL;
@@ -416,6 +420,8 @@ FlushStripe(TableWriteState *writeState)
 	uint32 lastBlockRowCount = stripeBuffers->rowCount % blockRowCount;
 	uint64 stripeSize = 0;
 	uint64 stripeRowCount = 0;
+
+	elog(DEBUG1, "Flushing Stripe of size %d", stripeBuffers->rowCount);
 
 	Oid relationId = RelidByRelfilenode(writeState->relfilenode.spcNode,
 										writeState->relfilenode.relNode);

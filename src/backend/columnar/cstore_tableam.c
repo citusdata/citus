@@ -41,6 +41,7 @@
 #include "storage/smgr.h"
 #include "tcop/utility.h"
 #include "utils/builtins.h"
+#include "utils/memutils.h"
 #include "utils/pg_rusage.h"
 #include "utils/rel.h"
 #include "utils/syscache.h"
@@ -445,9 +446,15 @@ static void
 cstore_tuple_insert(Relation relation, TupleTableSlot *slot, CommandId cid,
 					int options, BulkInsertState bistate)
 {
+	/*
+	 * cstore_init_write_state allocates the write state in a longer
+	 * lasting context, so no need to worry about it.
+	 */
 	TableWriteState *writeState = cstore_init_write_state(relation->rd_node,
 														  RelationGetDescr(relation),
 														  GetCurrentSubTransactionId());
+
+	MemoryContext oldContext = MemoryContextSwitchTo(writeState->perTupleContext);
 
 	HeapTuple heapTuple = ExecCopySlotHeapTuple(slot);
 	if (HeapTupleHasExternal(heapTuple))
@@ -462,6 +469,9 @@ cstore_tuple_insert(Relation relation, TupleTableSlot *slot, CommandId cid,
 	slot_getallattrs(slot);
 
 	CStoreWriteRow(writeState, slot->tts_values, slot->tts_isnull);
+
+	MemoryContextSwitchTo(oldContext);
+	MemoryContextReset(writeState->perTupleContext);
 }
 
 
@@ -493,6 +503,7 @@ cstore_multi_insert(Relation relation, TupleTableSlot **slots, int ntuples,
 	for (int i = 0; i < ntuples; i++)
 	{
 		TupleTableSlot *tupleSlot = slots[i];
+		MemoryContext oldContext = MemoryContextSwitchTo(writeState->perTupleContext);
 		HeapTuple heapTuple = ExecCopySlotHeapTuple(tupleSlot);
 
 		if (HeapTupleHasExternal(heapTuple))
@@ -507,7 +518,10 @@ cstore_multi_insert(Relation relation, TupleTableSlot **slots, int ntuples,
 		slot_getallattrs(tupleSlot);
 
 		CStoreWriteRow(writeState, tupleSlot->tts_values, tupleSlot->tts_isnull);
+		MemoryContextSwitchTo(oldContext);
 	}
+
+	MemoryContextReset(writeState->perTupleContext);
 }
 
 

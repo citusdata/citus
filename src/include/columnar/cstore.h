@@ -228,6 +228,7 @@ typedef struct TableWriteState
 	RelFileNode relfilenode;
 
 	MemoryContext stripeWriteContext;
+	MemoryContext perTupleContext;
 	StripeBuffers *stripeBuffers;
 	StripeSkipList *stripeSkipList;
 	uint32 stripeMaxRowCount;
@@ -319,6 +320,7 @@ extern void MarkRelfilenodeDropped(Oid relfilenode, SubTransactionId currentSubX
 extern void NonTransactionDropWriteState(Oid relfilenode);
 extern bool PendingWritesInUpperTransactions(Oid relfilenode,
 											 SubTransactionId currentSubXid);
+extern MemoryContext GetWriteContextForDebug(void);
 
 typedef struct SmgrAddr
 {
