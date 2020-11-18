@@ -486,6 +486,7 @@ PruneShards(Oid relationId, Index rangeTableId, List *whereClauseList,
 
 	if (IsLoggableLevel(DEBUG3))
 	{
+		char *relationName = get_rel_name(relationId);
 		if (foundRestriction && debugLoggedPruningInstances != NIL)
 		{
 			List *deparseCtx = deparse_context_for("unknown", relationId);
@@ -497,10 +498,12 @@ PruneShards(Oid relationId, Index rangeTableId, List *whereClauseList,
 		}
 		else
 		{
-			ereport(DEBUG3, (errmsg("no valid constraints found")));
+			ereport(DEBUG3, (errmsg("no sharding pruning constraints on %s found",
+									relationName)));
 		}
 
-		ereport(DEBUG3, (errmsg("shard count: %d", list_length(prunedList))));
+		ereport(DEBUG3, (errmsg("shard count after pruning for %s: %d", relationName,
+								list_length(prunedList))));
 	}
 
 	/* if requested, copy the partition value constant */
