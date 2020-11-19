@@ -483,10 +483,10 @@ SELECT * FROM print_extension_changes();
                  | function alter_columnar_table_reset(regclass,boolean,boolean,boolean)
                  | function alter_columnar_table_set(regclass,integer,integer,name)
                  | function citus_internal.cstore_ensure_objects_exist()
+                 | function cstore.columnar_handler(internal)
                  | function cstore.cstore_ddl_event_end_trigger()
                  | function cstore.cstore_fdw_handler()
                  | function cstore.cstore_fdw_validator(text[],oid)
-                 | function cstore.columnar_handler(internal)
                  | function cstore_table_size(regclass)
                  | schema cstore
                  | table cstore.cstore_data_files
