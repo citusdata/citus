@@ -41,6 +41,86 @@ SELECT * FROM test ORDER BY x;
 UPDATE test SET y = y + 1 RETURNING *;
 WITH cte_1 AS (UPDATE test SET y = y - 1 RETURNING *) SELECT * FROM cte_1 ORDER BY 1,2;
 
+-- Test upsert with constraint
+CREATE TABLE upsert_test
+(
+	part_key int UNIQUE,
+	other_col int,
+	third_col int
+);
+
+-- distribute the table
+SELECT create_distributed_table('upsert_test', 'part_key');
+
+-- do a regular insert
+INSERT INTO upsert_test (part_key, other_col) VALUES (1, 1), (2, 2) RETURNING *;
+
+SET citus.log_remote_commands to true;
+
+-- observe that there is a conflict and the following query does nothing
+INSERT INTO upsert_test (part_key, other_col) VALUES (1, 1) ON CONFLICT DO NOTHING RETURNING *;
+
+-- same as the above with different syntax
+INSERT INTO upsert_test (part_key, other_col) VALUES (1, 1) ON CONFLICT (part_key) DO NOTHING RETURNING *;
+
+-- again the same query with another syntax
+INSERT INTO upsert_test (part_key, other_col) VALUES (1, 1) ON CONFLICT ON CONSTRAINT upsert_test_part_key_key DO NOTHING RETURNING *;
+
+BEGIN;
+
+-- force local execution
+SELECT count(*) FROM upsert_test WHERE part_key = 1;
+
+SET citus.log_remote_commands to false;
+
+-- multi-shard pushdown query that goes through local execution
+INSERT INTO upsert_test (part_key, other_col) SELECT part_key, other_col FROM upsert_test ON CONFLICT ON CONSTRAINT upsert_test_part_key_key DO NOTHING RETURNING *;
+
+-- multi-shard pull-to-coordinator query that goes through local execution
+
+INSERT INTO upsert_test (part_key, other_col) SELECT part_key, other_col FROM upsert_test LIMIT 100 ON CONFLICT ON CONSTRAINT upsert_test_part_key_key DO NOTHING RETURNING *;
+
+COMMIT;
+
+-- to test citus local tables
+select undistribute_table('upsert_test');
+-- create citus local table
+select create_citus_local_table('upsert_test');
+-- test the constraint with local execution
+INSERT INTO upsert_test (part_key, other_col) VALUES (1, 1) ON CONFLICT ON CONSTRAINT upsert_test_part_key_key DO NOTHING RETURNING *;
+
+DROP TABLE upsert_test;
+
+CREATE SCHEMA "Quoed.Schema";
+SET search_path TO "Quoed.Schema";
+
+
+CREATE TABLE "long_constraint_upsert\_test"
+(
+	part_key int,
+	other_col int,
+	third_col int,
+
+	CONSTRAINT "looo oooo ooooo ooooooooooooooooo oooooooo oooooooo ng quoted  \aconstraint" UNIQUE (part_key)
+);
+-- distribute the table and create shards
+SELECT create_distributed_table('"long_constraint_upsert\_test"', 'part_key');
+
+
+INSERT INTO "long_constraint_upsert\_test" (part_key, other_col) VALUES (1, 1) ON CONFLICT ON CONSTRAINT  "looo oooo ooooo ooooooooooooooooo oooooooo oooooooo ng quoted  \aconstraint" DO NOTHING RETURNING *;
+
+ALTER TABLE "long_constraint_upsert\_test" RENAME TO simple_table_name;
+
+INSERT INTO simple_table_name (part_key, other_col) VALUES (1, 1) ON CONFLICT ON CONSTRAINT  "looo oooo ooooo ooooooooooooooooo oooooooo oooooooo ng quoted  \aconstraint" DO NOTHING RETURNING *;
+
+-- this is currently not supported, but once we support
+-- make sure that the following query also works fine
+ALTER TABLE simple_table_name RENAME CONSTRAINT "looo oooo ooooo ooooooooooooooooo oooooooo oooooooo ng quoted  \aconstraint"  TO simple_constraint_name;
+--INSERT INTO simple_table_name (part_key, other_col) VALUES (1, 1) ON CONFLICT ON CONSTRAINT  simple_constraint_name DO NOTHING RETURNING *;
+
+SET search_path TO single_node;
+DROP SCHEMA  "Quoed.Schema" CASCADE;
+
 -- we should be able to limit intermediate results
 BEGIN;
        SET LOCAL citus.max_intermediate_result_size TO 0;
