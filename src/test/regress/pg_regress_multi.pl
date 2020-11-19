@@ -245,6 +245,7 @@ exec $valgrindPath \\
     --error-markers=VALGRINDERROR-BEGIN,VALGRINDERROR-END \\
     --max-stackframe=16000000 \\
     --log-file=$valgrindLogFile \\
+    --fullpath-after=/ \\
     $bindir/postgres.orig \\
     "\$@"
 END

@@ -1097,7 +1097,7 @@ GetDependingViews(Oid relationId)
 	List *dependingViews = NIL;
 	List *nodeQueue = list_make1(tableNode);
 	ViewDependencyNode *node = NULL;
-	foreach_ptr(node, nodeQueue)
+	foreach_ptr_append(node, nodeQueue)
 	{
 		ViewDependencyNode *dependingNode = NULL;
 		foreach_ptr(dependingNode, node->dependingNodes)

@@ -65,6 +65,10 @@ test: ensure_no_intermediate_data_leak
 # ----------
 test: multi_partitioning_utils multi_partitioning replicated_partitioned_table
 
+# ----------
+# Tests for foreign data wrapper support
+# ----------
+test: multi_create_fdw
 
 # ----------
 # Tests for recursive subquery planning
@@ -81,7 +85,7 @@ test: set_operation_and_local_tables
 
 test: subqueries_deep subquery_view subquery_partitioning subquery_complex_target_list subqueries_not_supported subquery_in_where
 test: non_colocated_leaf_subquery_joins non_colocated_subquery_joins non_colocated_join_order
-test: subquery_prepared_statements pg12 cte_inline pg13
+test: subquery_prepared_statements pg12 cte_inline pg13 recursive_view_local_table
 test: tableam
 
 # ----------
@@ -199,7 +203,6 @@ test: multi_outer_join
 # Note that the order of the following tests are important. multi_complex_count_distinct
 # is independent from the rest of the group, it is added to increase parallelism.
 # ---
-test: multi_create_fdw
 test: multi_complex_count_distinct multi_select_distinct
 test: multi_modifications
 test: multi_distribution_metadata
@@ -307,7 +310,7 @@ test: replicate_reference_tables_to_coordinator
 test: coordinator_shouldhaveshards
 test: local_shard_utility_command_execution
 test: citus_local_tables
-test: multi_row_router_insert
+test: multi_row_router_insert mixed_relkind_tests
 
 test: remove_coordinator
 

@@ -1,0 +1,39 @@
+--
+-- Test loading data into cstore_fdw tables.
+--
+-- COPY with incorrect delimiter
+COPY contestant FROM '@abs_srcdir@/data/contestants.1.csv'
+	WITH DELIMITER '|'; -- ERROR
+ERROR:  missing data for column "birthdate"
+-- COPY with invalid program
+COPY contestant FROM PROGRAM 'invalid_program' WITH CSV; -- ERROR
+ERROR:  program "invalid_program" failed
+DETAIL:  command not found
+-- COPY into uncompressed table from file
+COPY contestant FROM '@abs_srcdir@/data/contestants.1.csv' WITH CSV;
+-- COPY into uncompressed table from program
+COPY contestant FROM PROGRAM 'cat @abs_srcdir@/data/contestants.2.csv' WITH CSV;
+-- COPY into compressed table
+COPY contestant_compressed FROM '@abs_srcdir@/data/contestants.1.csv' WITH CSV;
+-- COPY into uncompressed table from program
+COPY contestant_compressed FROM PROGRAM 'cat @abs_srcdir@/data/contestants.2.csv'
+	WITH CSV;
+-- Test column list
+CREATE FOREIGN TABLE famous_constants (id int, name text, value real)
+    SERVER cstore_server;
+COPY famous_constants (value, name, id) FROM STDIN WITH CSV;
+COPY famous_constants (name, value) FROM STDIN WITH CSV;
+SELECT * FROM famous_constants ORDER BY id, name;
+ id |      name      |   value   
+----+----------------+-----------
+  1 | pi             |     3.141
+  2 | e              |     2.718
+  3 | gamma          |     0.577
+  4 | bohr radius    | 5.291e-11
+    | avagadro       | 6.022e+23
+    | electron mass  | 9.109e-31
+    | proton mass    | 1.672e-27
+    | speed of light | 2.997e+08
+(8 rows)
+
+DROP FOREIGN TABLE famous_constants;

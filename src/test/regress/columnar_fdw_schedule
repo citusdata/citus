@@ -1,0 +1,14 @@
+test: fdw_create
+test: fdw_load
+test: fdw_query
+test: fdw_analyze
+test: fdw_data_types
+test: fdw_functions
+test: fdw_block_filtering
+test: fdw_drop
+test: fdw_insert
+test: fdw_copyto
+test: fdw_alter
+test: fdw_rollback
+test: fdw_truncate
+test: fdw_clean

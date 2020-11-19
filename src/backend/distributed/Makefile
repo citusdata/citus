@@ -19,6 +19,10 @@ DATA_built = $(generated_sql_files)
 
 # directories with source files
 SUBDIRS = . commands connection ddl deparser executor metadata operations planner progress relay safeclib test transaction utils worker
+# columnar modules
+SUBDIRS += ../columnar
+# enterprise modules
+SUBDIRS +=
 
 # Symlinks are not copied over to the build directory if a separete build
 # directory is used during configure (such as on CI)

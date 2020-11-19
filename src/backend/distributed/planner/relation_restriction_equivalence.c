@@ -1820,10 +1820,6 @@ FilterPlannerRestrictionForQuery(PlannerRestrictionContext *plannerRestrictionCo
 	filteredRelationRestrictionContext->allReferenceTables =
 		(totalRelationCount == referenceRelationCount);
 
-	/* we currently don't support local relations and we cannot come up to this point */
-	filteredRelationRestrictionContext->hasLocalRelation = false;
-	filteredRelationRestrictionContext->hasDistributedRelation = true;
-
 	/* finally set the relation and join restriction contexts */
 	filteredPlannerRestrictionContext->relationRestrictionContext =
 		filteredRelationRestrictionContext;
