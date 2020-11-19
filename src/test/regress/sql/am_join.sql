@@ -1,10 +1,10 @@
 CREATE SCHEMA am_cstore_join;
 SET search_path TO am_cstore_join;
 
-CREATE TABLE users (id int, name text) USING cstore_tableam;
+CREATE TABLE users (id int, name text) USING columnar;
 INSERT INTO users SELECT a, 'name' || a FROM generate_series(0,30-1) AS a;
 
-CREATE TABLE things (id int, user_id int, name text) USING cstore_tableam;
+CREATE TABLE things (id int, user_id int, name text) USING columnar;
 INSERT INTO things SELECT a, a % 30, 'thing' || a FROM generate_series(1,300) AS a;
 
 -- force the nested loop to rescan the table

@@ -2,7 +2,7 @@
 -- Testing ALTER TABLE on cstore_fdw tables.
 --
 
-CREATE TABLE test_alter_table (a int, b int, c int) USING cstore_tableam;
+CREATE TABLE test_alter_table (a int, b int, c int) USING columnar;
 
 WITH sample_data AS (VALUES
     (1, 2, 3),

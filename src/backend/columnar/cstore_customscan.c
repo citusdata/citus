@@ -160,7 +160,7 @@ CStoreSetRelPathlistHook(PlannerInfo *root, RelOptInfo *rel, Index rti,
 	 * into the scan of the table to minimize the data read.
 	 */
 	Relation relation = RelationIdGetRelation(rte->relid);
-	if (relation->rd_tableam == GetCstoreTableAmRoutine())
+	if (relation->rd_tableam == GetColumnarTableAmRoutine())
 	{
 		Path *customPath = CreateCStoreScanPath(rel, rte);
 

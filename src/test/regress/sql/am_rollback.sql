@@ -2,7 +2,7 @@
 -- Testing we handle rollbacks properly
 --
 
-CREATE TABLE t(a int, b int) USING cstore_tableam;
+CREATE TABLE t(a int, b int) USING columnar;
 
 BEGIN;
 INSERT INTO t SELECT i, i+1 FROM generate_series(1, 10) i;

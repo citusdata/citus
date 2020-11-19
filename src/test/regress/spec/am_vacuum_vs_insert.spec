@@ -1,6 +1,6 @@
 setup
 {
-    CREATE TABLE test_vacuum_vs_insert (a int, b int) USING cstore_tableam;
+    CREATE TABLE test_vacuum_vs_insert (a int, b int) USING columnar;
 }
 
 teardown

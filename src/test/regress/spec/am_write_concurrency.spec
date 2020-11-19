@@ -1,6 +1,6 @@
 setup
 {
-    CREATE TABLE test_insert_concurrency (a int, b int) USING cstore_tableam;
+    CREATE TABLE test_insert_concurrency (a int, b int) USING columnar;
 }
 
 teardown

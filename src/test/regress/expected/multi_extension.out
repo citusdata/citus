@@ -477,7 +477,7 @@ ALTER EXTENSION citus UPDATE TO '10.0-1';
 SELECT * FROM print_extension_changes();
  previous_object |                           current_object
 ---------------------------------------------------------------------
-                 | access method cstore_tableam
+                 | access method columnar
                  | event trigger cstore_ddl_event_end
                  | foreign-data wrapper cstore_fdw
                  | function alter_cstore_table_reset(regclass,boolean,boolean,boolean)
@@ -486,13 +486,13 @@ SELECT * FROM print_extension_changes();
                  | function cstore.cstore_ddl_event_end_trigger()
                  | function cstore.cstore_fdw_handler()
                  | function cstore.cstore_fdw_validator(text[],oid)
-                 | function cstore.cstore_tableam_handler(internal)
+                 | function cstore.columnar_handler(internal)
                  | function cstore_table_size(regclass)
                  | schema cstore
                  | table cstore.cstore_data_files
                  | table cstore.cstore_skipnodes
                  | table cstore.cstore_stripes
-                 | view cstore.cstore_options
+                 | view cstore.columnar_options
 (16 rows)
 
 DROP TABLE prev_objects, extension_diff;

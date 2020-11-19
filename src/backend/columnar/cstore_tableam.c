@@ -1080,7 +1080,7 @@ CStoreTableAMProcessUtility(PlannedStmt * plannedStatement,
 		CreateTrigStmt *createTrigStmt = (CreateTrigStmt *) parseTree;
 
 		Relation rel = relation_openrv(createTrigStmt->relation, AccessShareLock);
-		bool isCStore = rel->rd_tableam == GetCstoreTableAmRoutine();
+		bool isCStore = rel->rd_tableam == GetColumnarTableAmRoutine();
 		relation_close(rel, AccessShareLock);
 
 		if (isCStore &&
@@ -1187,7 +1187,7 @@ IsCStoreTableAmTable(Oid relationId)
 	 * avoid race conditions.
 	 */
 	Relation rel = relation_open(relationId, AccessShareLock);
-	bool result = rel->rd_tableam == GetCstoreTableAmRoutine();
+	bool result = rel->rd_tableam == GetColumnarTableAmRoutine();
 	relation_close(rel, NoLock);
 
 	return result;
@@ -1251,15 +1251,15 @@ static const TableAmRoutine cstore_am_methods = {
 
 
 const TableAmRoutine *
-GetCstoreTableAmRoutine(void)
+GetColumnarTableAmRoutine(void)
 {
 	return &cstore_am_methods;
 }
 
 
-PG_FUNCTION_INFO_V1(cstore_tableam_handler);
+PG_FUNCTION_INFO_V1(columnar_handler);
 Datum
-cstore_tableam_handler(PG_FUNCTION_ARGS)
+columnar_handler(PG_FUNCTION_ARGS)
 {
 	PG_RETURN_POINTER(&cstore_am_methods);
 }

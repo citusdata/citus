@@ -217,7 +217,7 @@ ORDER BY 1;
  view citus_shards_on_worker
  view citus_stat_statements
  view citus_worker_stat_activity
- view cstore.cstore_options
+ view cstore.columnar_options
  view pg_dist_shard_placement
 (203 rows)
 
