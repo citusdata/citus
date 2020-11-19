@@ -7,10 +7,10 @@ SHOW server_version \gset
 SELECT substring(:'server_version', '\d+')::int > 10 AS version_above_ten;
 
 -- CREATE a cstore_fdw table, fill with some data --
-CREATE TABLE cstore_truncate_test (a int, b int) USING cstore_tableam;
-CREATE TABLE cstore_truncate_test_second (a int, b int) USING cstore_tableam;
+CREATE TABLE cstore_truncate_test (a int, b int) USING columnar;
+CREATE TABLE cstore_truncate_test_second (a int, b int) USING columnar;
 -- COMPRESSED
-CREATE TABLE cstore_truncate_test_compressed (a int, b int) USING cstore_tableam;
+CREATE TABLE cstore_truncate_test_compressed (a int, b int) USING columnar;
 CREATE TABLE cstore_truncate_test_regular (a int, b int);
 
 SELECT count(*) AS cstore_data_files_before_truncate FROM cstore.cstore_data_files \gset
@@ -67,7 +67,7 @@ SELECT :cstore_data_files_before_truncate - count(*) FROM cstore.cstore_data_fil
 
 -- test if truncation in the same transaction that created the table works properly
 BEGIN;
-CREATE TABLE cstore_same_transaction_truncate(a int) USING cstore_tableam;
+CREATE TABLE cstore_same_transaction_truncate(a int) USING columnar;
 INSERT INTO cstore_same_transaction_truncate SELECT * FROM generate_series(1, 100);
 TRUNCATE cstore_same_transaction_truncate;
 INSERT INTO cstore_same_transaction_truncate SELECT * FROM generate_series(20, 23);
@@ -99,7 +99,7 @@ DROP TABLE cstore_truncate_test_compressed;
 -- test truncate with schema
 CREATE SCHEMA truncate_schema;
 -- COMPRESSED
-CREATE TABLE truncate_schema.truncate_tbl (id int) USING cstore_tableam;
+CREATE TABLE truncate_schema.truncate_tbl (id int) USING columnar;
 set cstore.compression = 'pglz';
 INSERT INTO truncate_schema.truncate_tbl SELECT generate_series(1, 100);
 set cstore.compression to default;

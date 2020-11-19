@@ -2,7 +2,7 @@
 -- Testing insert on cstore_fdw tables.
 --
 
-CREATE TABLE test_insert_command (a int) USING cstore_tableam;
+CREATE TABLE test_insert_command (a int) USING columnar;
 
 -- test single row inserts fail
 select count(*) from test_insert_command;
@@ -38,7 +38,7 @@ SELECT int_val, md5(text_val) AS hash
 FROM test_long_text;
 
 CREATE TABLE test_cstore_long_text(int_val int, text_val text)
-USING cstore_tableam;
+USING columnar;
 
 -- store long text in cstore table
 INSERT INTO test_cstore_long_text SELECT * FROM test_long_text;

@@ -40,7 +40,7 @@ BEGIN
 END;
 $$;
 
-create table test_tr(i int) using cstore_tableam;
+create table test_tr(i int) using columnar;
 
 create trigger tr_before_stmt before insert on test_tr
   for each statement execute procedure trs_before();
@@ -61,7 +61,7 @@ insert into test_tr values(2),(3),(4);
 SELECT * FROM test_tr ORDER BY i;
 
 drop table test_tr;
-create table test_tr(i int) using cstore_tableam;
+create table test_tr(i int) using columnar;
 
 -- we should be able to clean-up and continue gracefully if we
 -- error out in AFTER STATEMENT triggers.
@@ -102,13 +102,13 @@ create table events(
 
 create table events_p2020_11_04_102965
 PARTITION OF events FOR VALUES FROM ('2020-11-04 00:00:00+01') TO ('2020-11-05 00:00:00+01')
-USING cstore_tableam;
+USING columnar;
 
 create table events_trigger_target(
   user_id bigint,
   avg float,
   __count__ bigint
-) USING cstore_tableam;
+) USING columnar;
 
 CREATE OR REPLACE FUNCTION user_value_by_day()
  RETURNS trigger

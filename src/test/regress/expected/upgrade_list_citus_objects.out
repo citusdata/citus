@@ -16,12 +16,12 @@ WHERE refclassid = 'pg_catalog.pg_extension'::pg_catalog.regclass
 ORDER BY 1;
                                                description
 ---------------------------------------------------------------------
- access method cstore_tableam
+ access method columnar
  event trigger citus_cascade_to_partition
  event trigger cstore_ddl_event_end
  foreign-data wrapper cstore_fdw
- function alter_cstore_table_reset(regclass,boolean,boolean,boolean)
- function alter_cstore_table_set(regclass,integer,integer,name)
+ function alter_columnar_table_reset(regclass,boolean,boolean,boolean)
+ function alter_columnar_table_set(regclass,integer,integer,name)
  function alter_role_if_exists(text,text)
  function any_value(anyelement)
  function any_value_agg(anyelement,anyelement)
@@ -82,10 +82,10 @@ ORDER BY 1;
  function create_distributed_table(regclass,text,citus.distribution_type,text)
  function create_intermediate_result(text,text)
  function create_reference_table(regclass)
+ function cstore.columnar_handler(internal)
  function cstore.cstore_ddl_event_end_trigger()
  function cstore.cstore_fdw_handler()
  function cstore.cstore_fdw_validator(text[],oid)
- function cstore.cstore_tableam_handler(internal)
  function cstore_table_size(regclass)
  function distributed_tables_colocated(regclass,regclass)
  function dump_global_wait_edges()
@@ -221,7 +221,7 @@ ORDER BY 1;
  view citus_shards_on_worker
  view citus_stat_statements
  view citus_worker_stat_activity
- view cstore.cstore_options
+ view cstore.columnar_options
  view pg_dist_shard_placement
 (207 rows)
 

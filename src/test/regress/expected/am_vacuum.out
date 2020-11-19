@@ -1,5 +1,5 @@
 SELECT count(*) AS columnar_table_count FROM cstore.cstore_data_files \gset
-CREATE TABLE t(a int, b int) USING cstore_tableam;
+CREATE TABLE t(a int, b int) USING columnar;
 SELECT count(*) FROM cstore.cstore_stripes a, pg_class b WHERE a.relfilenode=b.relfilenode AND b.relname='t';
  count
 ---------------------------------------------------------------------
@@ -36,8 +36,8 @@ SELECT count(*) FROM cstore.cstore_stripes a, pg_class b WHERE a.relfilenode=b.r
 (1 row)
 
 -- test the case when all data cannot fit into a single stripe
-SELECT alter_cstore_table_set('t', stripe_row_count => 1000);
- alter_cstore_table_set
+SELECT alter_columnar_table_set('t', stripe_row_count => 1000);
+ alter_columnar_table_set
 ---------------------------------------------------------------------
 
 (1 row)
@@ -162,11 +162,11 @@ SELECT count(*) FROM t;
 -- add some stripes with different compression types and create some gaps,
 -- then vacuum to print stats
 BEGIN;
-SELECT alter_cstore_table_set('t',
+SELECT alter_columnar_table_set('t',
     block_row_count => 1000,
     stripe_row_count => 2000,
     compression => 'pglz');
- alter_cstore_table_set
+ alter_columnar_table_set
 ---------------------------------------------------------------------
 
 (1 row)
@@ -175,8 +175,8 @@ SAVEPOINT s1;
 INSERT INTO t SELECT i FROM generate_series(1, 1500) i;
 ROLLBACK TO SAVEPOINT s1;
 INSERT INTO t SELECT i / 5 FROM generate_series(1, 1500) i;
-SELECT alter_cstore_table_set('t', compression => 'none');
- alter_cstore_table_set
+SELECT alter_columnar_table_set('t', compression => 'none');
+ alter_columnar_table_set
 ---------------------------------------------------------------------
 
 (1 row)
@@ -211,8 +211,8 @@ block count: 11, containing data for dropped columns: 2, none compressed: 9, pgl
 -- vacuum full should remove blocks for dropped columns
 -- note that, a block will be stored in non-compressed for if compression
 -- doesn't reduce its size.
-SELECT alter_cstore_table_set('t', compression => 'pglz');
- alter_cstore_table_set
+SELECT alter_columnar_table_set('t', compression => 'pglz');
+ alter_columnar_table_set
 ---------------------------------------------------------------------
 
 (1 row)

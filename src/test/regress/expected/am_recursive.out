@@ -1,5 +1,5 @@
-CREATE TABLE t1(a int, b int) USING cstore_tableam;
-CREATE TABLE t2(a int, b int) USING cstore_tableam;
+CREATE TABLE t1(a int, b int) USING columnar;
+CREATE TABLE t2(a int, b int) USING columnar;
 CREATE FUNCTION f(x INT) RETURNS INT AS $$
   INSERT INTO t1 VALUES(x, x * 2) RETURNING b - 1;
 $$ LANGUAGE SQL;

@@ -7,7 +7,7 @@
 #include "access/skey.h"
 #include "nodes/bitmapset.h"
 
-const TableAmRoutine * GetCstoreTableAmRoutine(void);
+const TableAmRoutine * GetColumnarTableAmRoutine(void);
 extern void cstore_tableam_init(void);
 extern void cstore_tableam_finish(void);
 

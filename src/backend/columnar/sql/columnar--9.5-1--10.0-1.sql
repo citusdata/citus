@@ -77,7 +77,7 @@ CREATE TABLE cstore_skipnodes (
 
 COMMENT ON TABLE cstore_skipnodes IS 'CStore per block metadata';
 
-CREATE VIEW cstore_options AS
+CREATE VIEW columnar_options AS
 SELECT c.oid::regclass regclass,
        d.block_row_count,
        d.stripe_row_count,
@@ -85,7 +85,7 @@ SELECT c.oid::regclass regclass,
 FROM pg_class c
 JOIN cstore.cstore_data_files d USING(relfilenode);
 
-COMMENT ON VIEW cstore_options IS 'CStore per table settings';
+COMMENT ON VIEW columnar_options IS 'CStore per table settings';
 
 DO $proc$
 BEGIN
@@ -95,9 +95,9 @@ BEGIN
 -- user instead to add the missing objects
 IF substring(current_Setting('server_version'), '\d+')::int >= 12 THEN
   EXECUTE $$
-#include "udfs/cstore_tableam_handler/10.0-1.sql"
-#include "udfs/alter_cstore_table_set/10.0-1.sql"
-#include "udfs/alter_cstore_table_reset/10.0-1.sql"
+#include "udfs/columnar_handler/10.0-1.sql"
+#include "udfs/alter_columnar_table_set/10.0-1.sql"
+#include "udfs/alter_columnar_table_reset/10.0-1.sql"
   $$;
 END IF;
 END$proc$;

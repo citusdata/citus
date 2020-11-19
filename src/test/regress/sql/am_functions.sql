@@ -2,8 +2,8 @@
 -- Test utility functions for cstore_fdw tables.
 --
 
-CREATE TABLE empty_table (a int) USING cstore_tableam;
-CREATE TABLE table_with_data (a int) USING cstore_tableam;
+CREATE TABLE empty_table (a int) USING columnar;
+CREATE TABLE table_with_data (a int) USING columnar;
 CREATE TABLE non_cstore_table (a int);
 
 COPY table_with_data FROM STDIN;

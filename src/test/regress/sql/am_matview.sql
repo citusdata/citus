@@ -2,11 +2,11 @@
 -- Testing we materialized views properly
 --
 
-CREATE TABLE t(a int, b int) USING cstore_tableam;
+CREATE TABLE t(a int, b int) USING columnar;
 
 INSERT INTO t SELECT floor(i / 4), 2 * i FROM generate_series(1, 10) i;
 
-CREATE MATERIALIZED VIEW t_view(a, bsum, cnt) USING cstore_tableam AS
+CREATE MATERIALIZED VIEW t_view(a, bsum, cnt) USING columnar AS
    SELECT a, sum(b), count(*) FROM t GROUP BY a;
 
 SELECT * FROM t_view a ORDER BY a;

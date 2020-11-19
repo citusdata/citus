@@ -26,7 +26,7 @@ set cstore.compression to default;
 
 -- Test column list
 CREATE TABLE famous_constants (id int, name text, value real)
-    USING cstore_tableam;
+    USING columnar;
 COPY famous_constants (value, name, id) FROM STDIN WITH CSV;
 3.141,pi,1
 2.718,e,2

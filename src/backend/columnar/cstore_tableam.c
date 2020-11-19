@@ -1080,7 +1080,7 @@ CStoreTableAMProcessUtility(PlannedStmt * plannedStatement,
 		CreateTrigStmt *createTrigStmt = (CreateTrigStmt *) parseTree;
 
 		Relation rel = relation_openrv(createTrigStmt->relation, AccessShareLock);
-		bool isCStore = rel->rd_tableam == GetCstoreTableAmRoutine();
+		bool isCStore = rel->rd_tableam == GetColumnarTableAmRoutine();
 		relation_close(rel, AccessShareLock);
 
 		if (isCStore &&
@@ -1187,7 +1187,7 @@ IsCStoreTableAmTable(Oid relationId)
 	 * avoid race conditions.
 	 */
 	Relation rel = relation_open(relationId, AccessShareLock);
-	bool result = rel->rd_tableam == GetCstoreTableAmRoutine();
+	bool result = rel->rd_tableam == GetColumnarTableAmRoutine();
 	relation_close(rel, NoLock);
 
 	return result;
@@ -1251,26 +1251,26 @@ static const TableAmRoutine cstore_am_methods = {
 
 
 const TableAmRoutine *
-GetCstoreTableAmRoutine(void)
+GetColumnarTableAmRoutine(void)
 {
 	return &cstore_am_methods;
 }
 
 
-PG_FUNCTION_INFO_V1(cstore_tableam_handler);
+PG_FUNCTION_INFO_V1(columnar_handler);
 Datum
-cstore_tableam_handler(PG_FUNCTION_ARGS)
+columnar_handler(PG_FUNCTION_ARGS)
 {
 	PG_RETURN_POINTER(&cstore_am_methods);
 }
 
 
 /*
- * alter_cstore_table_set is a UDF exposed in postgres to change settings on a columnar
+ * alter_columnar_table_set is a UDF exposed in postgres to change settings on a columnar
  * table. Calling this function on a non-columnar table gives an error.
  *
  * sql syntax:
- *   pg_catalog.alter_cstore_table_set(
+ *   pg_catalog.alter_columnar_table_set(
  *        table_name regclass,
  *        block_row_count int DEFAULT NULL,
  *        stripe_row_count int DEFAULT NULL,
@@ -1278,16 +1278,16 @@ cstore_tableam_handler(PG_FUNCTION_ARGS)
  *
  * All arguments except the table name are optional. The UDF is supposed to be called
  * like:
- *   SELECT alter_cstore_table_set('table', compression => 'pglz');
+ *   SELECT alter_columnar_table_set('table', compression => 'pglz');
  *
  * This will only update the compression of the table, keeping all other settings the
  * same. Multiple settings can be changed at the same time by providing multiple
  * arguments. Calling the argument with the NULL value will be interperted as not having
  * provided the argument.
  */
-PG_FUNCTION_INFO_V1(alter_cstore_table_set);
+PG_FUNCTION_INFO_V1(alter_columnar_table_set);
 Datum
-alter_cstore_table_set(PG_FUNCTION_ARGS)
+alter_columnar_table_set(PG_FUNCTION_ARGS)
 {
 	Oid relationId = PG_GETARG_OID(0);
 
@@ -1340,9 +1340,9 @@ alter_cstore_table_set(PG_FUNCTION_ARGS)
 }
 
 
-PG_FUNCTION_INFO_V1(alter_cstore_table_reset);
+PG_FUNCTION_INFO_V1(alter_columnar_table_reset);
 Datum
-alter_cstore_table_reset(PG_FUNCTION_ARGS)
+alter_columnar_table_reset(PG_FUNCTION_ARGS)
 {
 	Oid relationId = PG_GETARG_OID(0);
 
