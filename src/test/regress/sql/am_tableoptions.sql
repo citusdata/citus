@@ -9,21 +9,21 @@ SELECT * FROM cstore.columnar_options
 WHERE regclass = 'table_options'::regclass;
 
 -- test changing the compression
-SELECT alter_cstore_table_set('table_options', compression => 'pglz');
+SELECT alter_columnar_table_set('table_options', compression => 'pglz');
 
 -- show table_options settings
 SELECT * FROM cstore.columnar_options
 WHERE regclass = 'table_options'::regclass;
 
 -- test changing the block_row_count
-SELECT alter_cstore_table_set('table_options', block_row_count => 10);
+SELECT alter_columnar_table_set('table_options', block_row_count => 10);
 
 -- show table_options settings
 SELECT * FROM cstore.columnar_options
 WHERE regclass = 'table_options'::regclass;
 
 -- test changing the block_row_count
-SELECT alter_cstore_table_set('table_options', stripe_row_count => 100);
+SELECT alter_columnar_table_set('table_options', stripe_row_count => 100);
 
 -- show table_options settings
 SELECT * FROM cstore.columnar_options
@@ -37,7 +37,7 @@ SELECT * FROM cstore.columnar_options
 WHERE regclass = 'table_options'::regclass;
 
 -- set all settings at the same time
-SELECT alter_cstore_table_set('table_options', stripe_row_count => 1000, block_row_count => 100, compression => 'none');
+SELECT alter_columnar_table_set('table_options', stripe_row_count => 1000, block_row_count => 100, compression => 'none');
 
 -- show table_options settings
 SELECT * FROM cstore.columnar_options
@@ -53,18 +53,18 @@ SET cstore.compression TO 'pglz';
 SELECT * FROM cstore.columnar_options
 WHERE regclass = 'table_options'::regclass;
 
-SELECT alter_cstore_table_reset('table_options', block_row_count => true);
+SELECT alter_columnar_table_reset('table_options', block_row_count => true);
 -- show table_options settings
 SELECT * FROM cstore.columnar_options
 WHERE regclass = 'table_options'::regclass;
 
-SELECT alter_cstore_table_reset('table_options', stripe_row_count => true);
+SELECT alter_columnar_table_reset('table_options', stripe_row_count => true);
 
 -- show table_options settings
 SELECT * FROM cstore.columnar_options
 WHERE regclass = 'table_options'::regclass;
 
-SELECT alter_cstore_table_reset('table_options', compression => true);
+SELECT alter_columnar_table_reset('table_options', compression => true);
 
 -- show table_options settings
 SELECT * FROM cstore.columnar_options
@@ -79,7 +79,7 @@ SET cstore.compression TO 'none';
 SELECT * FROM cstore.columnar_options
 WHERE regclass = 'table_options'::regclass;
 
-SELECT alter_cstore_table_reset(
+SELECT alter_columnar_table_reset(
     'table_options',
     block_row_count => true,
     stripe_row_count => true,
@@ -92,11 +92,11 @@ WHERE regclass = 'table_options'::regclass;
 -- verify edge cases
 -- first start with a table that is not a cstore table
 CREATE TABLE not_a_cstore_table (a int);
-SELECT alter_cstore_table_set('not_a_cstore_table', compression => 'pglz');
-SELECT alter_cstore_table_reset('not_a_cstore_table', compression => true);
+SELECT alter_columnar_table_set('not_a_cstore_table', compression => 'pglz');
+SELECT alter_columnar_table_reset('not_a_cstore_table', compression => true);
 
 -- verify you can't use a compression that is not known
-SELECT alter_cstore_table_set('table_options', compression => 'foobar');
+SELECT alter_columnar_table_set('table_options', compression => 'foobar');
 
 SET client_min_messages TO warning;
 DROP SCHEMA am_tableoptions CASCADE;

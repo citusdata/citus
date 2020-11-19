@@ -96,8 +96,8 @@ BEGIN
 IF substring(current_Setting('server_version'), '\d+')::int >= 12 THEN
   EXECUTE $$
 #include "udfs/columnar_handler/10.0-1.sql"
-#include "udfs/alter_cstore_table_set/10.0-1.sql"
-#include "udfs/alter_cstore_table_reset/10.0-1.sql"
+#include "udfs/alter_columnar_table_set/10.0-1.sql"
+#include "udfs/alter_columnar_table_reset/10.0-1.sql"
   $$;
 END IF;
 END$proc$;

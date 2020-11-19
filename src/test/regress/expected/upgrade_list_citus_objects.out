@@ -20,8 +20,8 @@ ORDER BY 1;
  event trigger citus_cascade_to_partition
  event trigger cstore_ddl_event_end
  foreign-data wrapper cstore_fdw
- function alter_cstore_table_reset(regclass,boolean,boolean,boolean)
- function alter_cstore_table_set(regclass,integer,integer,name)
+ function alter_columnar_table_reset(regclass,boolean,boolean,boolean)
+ function alter_columnar_table_set(regclass,integer,integer,name)
  function alter_role_if_exists(text,text)
  function any_value(anyelement)
  function any_value_agg(anyelement,anyelement)

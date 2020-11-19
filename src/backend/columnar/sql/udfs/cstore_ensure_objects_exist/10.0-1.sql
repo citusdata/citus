@@ -20,9 +20,9 @@ IF NOT EXISTS (SELECT 1 FROM pg_am WHERE amname = 'columnar') THEN
 
 #include "../columnar_handler/10.0-1.sql"
 
-#include "../alter_cstore_table_set/10.0-1.sql"
+#include "../alter_columnar_table_set/10.0-1.sql"
 
-#include "../alter_cstore_table_reset/10.0-1.sql"
+#include "../alter_columnar_table_reset/10.0-1.sql"
 
     -- add the missing objects to the extension
     ALTER EXTENSION citus ADD FUNCTION cstore.columnar_handler(internal);

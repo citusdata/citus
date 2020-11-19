@@ -480,8 +480,8 @@ SELECT * FROM print_extension_changes();
                  | access method columnar
                  | event trigger cstore_ddl_event_end
                  | foreign-data wrapper cstore_fdw
-                 | function alter_cstore_table_reset(regclass,boolean,boolean,boolean)
-                 | function alter_cstore_table_set(regclass,integer,integer,name)
+                 | function alter_columnar_table_reset(regclass,boolean,boolean,boolean)
+                 | function alter_columnar_table_set(regclass,integer,integer,name)
                  | function citus_internal.cstore_ensure_objects_exist()
                  | function cstore.cstore_ddl_event_end_trigger()
                  | function cstore.cstore_fdw_handler()
