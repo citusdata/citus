@@ -200,7 +200,7 @@ cstore_init_write_state(RelFileNode relfilenode, TupleDesc tupdesc,
 void
 FlushWriteStateForRelfilenode(Oid relfilenode, SubTransactionId currentSubXid)
 {
-	WriteStateMapEntry *entry;
+	WriteStateMapEntry *entry = NULL;
 	bool found = false;
 
 	if (WriteStateMap)
