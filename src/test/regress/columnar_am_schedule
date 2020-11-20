@@ -3,7 +3,6 @@ test: am_load
 test: am_query
 test: am_analyze
 test: am_data_types
-test: am_functions
 test: am_drop
 test: am_insert
 test: am_copyto

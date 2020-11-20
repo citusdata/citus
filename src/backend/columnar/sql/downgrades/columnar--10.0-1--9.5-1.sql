@@ -32,15 +32,6 @@ DROP TABLE cstore_skipnodes;
 DROP TABLE cstore_stripes;
 DROP TABLE cstore_data_files;
 
-DROP FUNCTION pg_catalog.cstore_table_size(relation regclass);
-
-DROP EVENT TRIGGER cstore_ddl_event_end;
-DROP FUNCTION cstore_ddl_event_end_trigger();
-
-DROP FOREIGN DATA WRAPPER cstore_fdw;
-DROP FUNCTION cstore_fdw_validator(text[], oid);
-DROP FUNCTION cstore_fdw_handler();
-
 DROP FUNCTION citus_internal.cstore_ensure_objects_exist();
 
 RESET search_path;

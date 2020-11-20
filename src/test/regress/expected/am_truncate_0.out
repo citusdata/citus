@@ -69,12 +69,6 @@ SELECT count(*) FROM cstore_truncate_test_compressed;
      0
 (1 row)
 
-SELECT cstore_table_size('cstore_truncate_test_compressed');
- cstore_table_size
----------------------------------------------------------------------
-                26
-(1 row)
-
 -- make sure data files still present
 SELECT count(*) FROM (
 	SELECT pg_ls_dir('cstore_fdw/' || databaseoid ) FROM (

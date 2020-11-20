@@ -200,36 +200,6 @@ jobs:
       - store_artifacts:
           path: '/tmp/core_dumps'
 
-  test-11_check-columnar:
-    docker:
-      - image: 'citus/exttester:11.9'
-    working_directory: /home/circleci/project
-    steps:
-      - checkout
-      - attach_workspace:
-          at: .
-      - run:
-          name: 'Install and Test (check-columnar)'
-          command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext check-columnar'
-          no_output_timeout: 2m
-      - codecov/upload:
-          flags: 'test_11,columnar'
-
-  test-11_check-columnar-isolation:
-    docker:
-      - image: 'citus/exttester:11.9'
-    working_directory: /home/circleci/project
-    steps:
-      - checkout
-      - attach_workspace:
-          at: .
-      - run:
-          name: 'Install and Test (check-columnar-isolation)'
-          command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext check-columnar-isolation'
-          no_output_timeout: 2m
-      - codecov/upload:
-          flags: 'test_11,columnar,isolation'
-
   test-11_check-failure:
     docker:
       - image: 'citus/failtester:11.9'
@@ -646,10 +616,6 @@ workflows:
       - test-11_check-worker:
           requires: [build-11]
       - test-11_check-follower-cluster:
-          requires: [build-11]
-      - test-11_check-columnar:
-          requires: [build-11]
-      - test-11_check-columnar-isolation:
           requires: [build-11]
       - test-11_check-failure:
           requires: [build-11]

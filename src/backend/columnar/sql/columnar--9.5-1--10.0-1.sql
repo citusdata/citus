@@ -3,34 +3,6 @@
 CREATE SCHEMA cstore;
 SET search_path TO cstore;
 
-CREATE FUNCTION cstore_fdw_handler()
-RETURNS fdw_handler
-AS 'MODULE_PATHNAME'
-LANGUAGE C STRICT;
-
-CREATE FUNCTION cstore_fdw_validator(text[], oid)
-RETURNS void
-AS 'MODULE_PATHNAME'
-LANGUAGE C STRICT;
-
-CREATE FOREIGN DATA WRAPPER cstore_fdw
-HANDLER cstore_fdw_handler
-VALIDATOR cstore_fdw_validator;
-
-CREATE FUNCTION cstore_ddl_event_end_trigger()
-RETURNS event_trigger
-AS 'MODULE_PATHNAME'
-LANGUAGE C STRICT;
-
-CREATE EVENT TRIGGER cstore_ddl_event_end
-ON ddl_command_end
-EXECUTE PROCEDURE cstore_ddl_event_end_trigger();
-
-CREATE FUNCTION pg_catalog.cstore_table_size(relation regclass)
-RETURNS bigint
-AS 'MODULE_PATHNAME'
-LANGUAGE C STRICT;
-
 CREATE TABLE cstore_data_files (
     relfilenode oid NOT NULL,
     block_row_count int NOT NULL,
