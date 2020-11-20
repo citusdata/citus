@@ -478,22 +478,16 @@ SELECT * FROM print_extension_changes();
  previous_object |                           current_object
 ---------------------------------------------------------------------
                  | access method columnar
-                 | event trigger cstore_ddl_event_end
-                 | foreign-data wrapper cstore_fdw
                  | function alter_columnar_table_reset(regclass,boolean,boolean,boolean)
                  | function alter_columnar_table_set(regclass,integer,integer,name)
                  | function citus_internal.cstore_ensure_objects_exist()
                  | function cstore.columnar_handler(internal)
-                 | function cstore.cstore_ddl_event_end_trigger()
-                 | function cstore.cstore_fdw_handler()
-                 | function cstore.cstore_fdw_validator(text[],oid)
-                 | function cstore_table_size(regclass)
                  | schema cstore
                  | table cstore.cstore_data_files
                  | table cstore.cstore_skipnodes
                  | table cstore.cstore_stripes
                  | view cstore.columnar_options
-(16 rows)
+(10 rows)
 
 DROP TABLE prev_objects, extension_diff;
 -- show running version

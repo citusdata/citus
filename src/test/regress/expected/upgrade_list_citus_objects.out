@@ -18,8 +18,6 @@ ORDER BY 1;
 ---------------------------------------------------------------------
  access method columnar
  event trigger citus_cascade_to_partition
- event trigger cstore_ddl_event_end
- foreign-data wrapper cstore_fdw
  function alter_columnar_table_reset(regclass,boolean,boolean,boolean)
  function alter_columnar_table_set(regclass,integer,integer,name)
  function alter_role_if_exists(text,text)
@@ -83,10 +81,6 @@ ORDER BY 1;
  function create_intermediate_result(text,text)
  function create_reference_table(regclass)
  function cstore.columnar_handler(internal)
- function cstore.cstore_ddl_event_end_trigger()
- function cstore.cstore_fdw_handler()
- function cstore.cstore_fdw_validator(text[],oid)
- function cstore_table_size(regclass)
  function distributed_tables_colocated(regclass,regclass)
  function dump_global_wait_edges()
  function dump_local_wait_edges()
@@ -223,5 +217,5 @@ ORDER BY 1;
  view citus_worker_stat_activity
  view cstore.columnar_options
  view pg_dist_shard_placement
-(207 rows)
+(201 rows)
 

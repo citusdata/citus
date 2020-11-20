@@ -163,10 +163,6 @@ check-follower-cluster: all
 
 COLUMNAR_SCHEDULES =
 COLUMNAR_ISOLATION_SCHEDULES =
-# even though we always add the fdw schedules, keep them separate from the declaration
-# above for easy removabl when fdw support is removed
-COLUMNAR_SCHEDULES += columnar_fdw_schedule
-COLUMNAR_ISOLATION_SCHEDULES += columnar_fdw_isolation_schedule
 ifeq ($(HAS_TABLEAM),yes)
   COLUMNAR_SCHEDULES += columnar_am_schedule
   COLUMNAR_ISOLATION_SCHEDULES += columnar_am_isolation_schedule
