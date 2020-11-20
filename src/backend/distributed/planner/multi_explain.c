@@ -960,7 +960,7 @@ worker_save_query_explain_analyze(PG_FUNCTION_ARGS)
 
 	INSTR_TIME_SET_CURRENT(planStart);
 
-	PlannedStmt *plan = pg_plan_query(query, 0, NULL);
+	PlannedStmt *plan = pg_plan_query(query, CURSOR_OPT_PARALLEL_OK, NULL);
 
 	INSTR_TIME_SET_CURRENT(planDuration);
 	INSTR_TIME_SUBTRACT(planDuration, planStart);
