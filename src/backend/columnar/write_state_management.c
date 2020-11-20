@@ -200,17 +200,16 @@ cstore_init_write_state(RelFileNode relfilenode, TupleDesc tupdesc,
 void
 FlushWriteStateForRelfilenode(Oid relfilenode, SubTransactionId currentSubXid)
 {
-	WriteStateMapEntry *entry = NULL;
-	bool found = false;
-
-	if (WriteStateMap)
+	if (WriteStateMap == NULL)
 	{
-		entry = hash_search(WriteStateMap, &relfilenode, HASH_FIND, &found);
+		return;
 	}
 
-	Assert(!found || !entry->dropped);
+	WriteStateMapEntry *entry = hash_search(WriteStateMap, &relfilenode, HASH_FIND, NULL);
 
-	if (found && entry->writeStateStack != NULL)
+	Assert(!entry || !entry->dropped);
+
+	if (entry && entry->writeStateStack != NULL)
 	{
 		SubXidWriteState *stackEntry = entry->writeStateStack;
 		if (stackEntry->subXid == currentSubXid)
@@ -315,16 +314,14 @@ DiscardWriteStateForAllRels(SubTransactionId currentSubXid, SubTransactionId par
 void
 MarkRelfilenodeDropped(Oid relfilenode, SubTransactionId currentSubXid)
 {
-	bool found = false;
-
 	if (WriteStateMap == NULL)
 	{
 		return;
 	}
 
 	WriteStateMapEntry *entry = hash_search(WriteStateMap, &relfilenode, HASH_FIND,
-											&found);
-	if (!found || entry->dropped)
+											NULL);
+	if (!entry || entry->dropped)
 	{
 		return;
 	}
@@ -353,15 +350,14 @@ NonTransactionDropWriteState(Oid relfilenode)
 bool
 PendingWritesInUpperTransactions(Oid relfilenode, SubTransactionId currentSubXid)
 {
-	WriteStateMapEntry *entry;
-	bool found = false;
-
-	if (WriteStateMap)
+	if (WriteStateMap == NULL)
 	{
-		entry = hash_search(WriteStateMap, &relfilenode, HASH_FIND, &found);
+		return false;
 	}
 
-	if (found && entry->writeStateStack != NULL)
+	WriteStateMapEntry *entry = hash_search(WriteStateMap, &relfilenode, HASH_FIND, NULL);
+
+	if (entry && entry->writeStateStack != NULL)
 	{
 		SubXidWriteState *stackEntry = entry->writeStateStack;
 
