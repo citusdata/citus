@@ -23,8 +23,8 @@ SELECT * FROM contestant_compressed ORDER BY handle;
 SELECT to_json(v) FROM contestant v ORDER BY rating LIMIT 1;
 
 -- Test variables used in expressions
-CREATE TABLE union_first (a int, b int) USING cstore_tableam;
-CREATE TABLE union_second (a int, b int) USING cstore_tableam;
+CREATE TABLE union_first (a int, b int) USING columnar;
+CREATE TABLE union_second (a int, b int) USING columnar;
 
 INSERT INTO union_first SELECT a, a FROM generate_series(1, 5) a;
 INSERT INTO union_second SELECT a, a FROM generate_series(11, 15) a;

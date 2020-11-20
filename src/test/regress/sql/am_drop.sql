@@ -26,7 +26,7 @@ SELECT :cstore_data_files_before_drop - count(*) FROM cstore.cstore_data_files;
 
 -- Create a cstore_fdw table under a schema and drop it.
 CREATE SCHEMA test_schema;
-CREATE TABLE test_schema.test_table(data int) USING cstore_tableam;
+CREATE TABLE test_schema.test_table(data int) USING columnar;
 
 SELECT count(*) AS cstore_data_files_before_drop FROM cstore.cstore_data_files \gset
 DROP SCHEMA test_schema CASCADE;
@@ -39,7 +39,7 @@ CREATE DATABASE db_to_drop;
 CREATE EXTENSION citus;
 SELECT oid::text databaseoid FROM pg_database WHERE datname = current_database() \gset
 
-CREATE TABLE test_table(data int) USING cstore_tableam;
+CREATE TABLE test_table(data int) USING columnar;
 
 DROP EXTENSION citus CASCADE;
 
@@ -47,7 +47,7 @@ DROP EXTENSION citus CASCADE;
 CREATE EXTENSION citus;
 SELECT oid::text databaseoid FROM pg_database WHERE datname = current_database() \gset
 
-CREATE TABLE test_table(data int) USING cstore_tableam;
+CREATE TABLE test_table(data int) USING columnar;
 
 \c :datname
 

@@ -60,10 +60,22 @@
 #define VACUUM_TRUNCATE_LOCK_WAIT_INTERVAL 50       /* ms */
 #define VACUUM_TRUNCATE_LOCK_TIMEOUT 4500               /* ms */
 
+/*
+ * CStoreScanDescData is the scan state passed between beginscan(),
+ * getnextslot(), rescan(), and endscan() calls.
+ */
 typedef struct CStoreScanDescData
 {
 	TableScanDescData cs_base;
 	TableReadState *cs_readState;
+
+	/*
+	 * We initialize cs_readState lazily in the first getnextslot() call. We
+	 * need the following for initialization. We save them in beginscan().
+	 */
+	MemoryContext scanContext;
+	Bitmapset *attr_needed;
+	List *scanQual;
 } CStoreScanDescData;
 
 typedef struct CStoreScanDescData *CStoreScanDesc;
@@ -199,19 +211,40 @@ cstore_beginscan_extended(Relation relation, Snapshot snapshot,
 						  ParallelTableScanDesc parallel_scan,
 						  uint32 flags, Bitmapset *attr_needed, List *scanQual)
 {
-	TupleDesc tupdesc = relation->rd_att;
 	Oid relfilenode = relation->rd_node.relNode;
-	CStoreScanDesc scan = palloc(sizeof(CStoreScanDescData));
-	List *neededColumnList = NIL;
-	MemoryContext oldContext = MemoryContextSwitchTo(TopTransactionContext);
-	ListCell *columnCell = NULL;
 
+	/*
+	 * A memory context to use for scan-wide data, including the lazily
+	 * initialized read state. We assume that beginscan is called in a
+	 * context that will last until end of scan.
+	 */
+	MemoryContext scanContext =
+		AllocSetContextCreate(
+			CurrentMemoryContext,
+			"Column Store Scan Context",
+			ALLOCSET_DEFAULT_SIZES);
+
+	MemoryContext oldContext = MemoryContextSwitchTo(scanContext);
+
+	CStoreScanDesc scan = palloc(sizeof(CStoreScanDescData));
 	scan->cs_base.rs_rd = relation;
 	scan->cs_base.rs_snapshot = snapshot;
 	scan->cs_base.rs_nkeys = nkeys;
 	scan->cs_base.rs_key = key;
 	scan->cs_base.rs_flags = flags;
 	scan->cs_base.rs_parallel = parallel_scan;
+
+	/*
+	 * We will initialize this lazily in first tuple, where we have the actual
+	 * tuple descriptor to use for reading. In some cases like ALTER TABLE ...
+	 * ALTER COLUMN ... TYPE, the tuple descriptor of relation doesn't match
+	 * the storage which we are reading, so we need to use the tuple descriptor
+	 * of "slot" in first read.
+	 */
+	scan->cs_readState = NULL;
+	scan->attr_needed = bms_copy(attr_needed);
+	scan->scanQual = copyObject(scanQual);
+	scan->scanContext = scanContext;
 
 	if (PendingWritesInUpperTransactions(relfilenode, GetCurrentSubTransactionId()))
 	{
@@ -221,8 +254,24 @@ cstore_beginscan_extended(Relation relation, Snapshot snapshot,
 
 	FlushWriteStateForRelfilenode(relfilenode, GetCurrentSubTransactionId());
 
+	MemoryContextSwitchTo(oldContext);
 
+	return ((TableScanDesc) scan);
+}
+
+
+/*
+ * init_cstore_read_state initializes a column store table read and returns the
+ * state.
+ */
+static TableReadState *
+init_cstore_read_state(Relation relation, TupleDesc tupdesc, Bitmapset *attr_needed,
+					   List *scanQual)
+{
 	List *columnList = RelationColumnList(relation);
+	ListCell *columnCell = NULL;
+
+	List *neededColumnList = NIL;
 
 	/* only collect columns that we need for the scan */
 	foreach(columnCell, columnList)
@@ -237,10 +286,7 @@ cstore_beginscan_extended(Relation relation, Snapshot snapshot,
 	TableReadState *readState = CStoreBeginRead(relation, tupdesc, neededColumnList,
 												scanQual);
 
-	scan->cs_readState = readState;
-
-	MemoryContextSwitchTo(oldContext);
-	return ((TableScanDesc) scan);
+	return readState;
 }
 
 
@@ -248,8 +294,11 @@ static void
 cstore_endscan(TableScanDesc sscan)
 {
 	CStoreScanDesc scan = (CStoreScanDesc) sscan;
-	CStoreEndRead(scan->cs_readState);
-	scan->cs_readState = NULL;
+	if (scan->cs_readState != NULL)
+	{
+		CStoreEndRead(scan->cs_readState);
+		scan->cs_readState = NULL;
+	}
 }
 
 
@@ -258,7 +307,10 @@ cstore_rescan(TableScanDesc sscan, ScanKey key, bool set_params,
 			  bool allow_strat, bool allow_sync, bool allow_pagemode)
 {
 	CStoreScanDesc scan = (CStoreScanDesc) sscan;
-	CStoreRescan(scan->cs_readState);
+	if (scan->cs_readState != NULL)
+	{
+		CStoreRescan(scan->cs_readState);
+	}
 }
 
 
@@ -266,14 +318,23 @@ static bool
 cstore_getnextslot(TableScanDesc sscan, ScanDirection direction, TupleTableSlot *slot)
 {
 	CStoreScanDesc scan = (CStoreScanDesc) sscan;
-	MemoryContext oldContext = MemoryContextSwitchTo(TopTransactionContext);
+
+	/*
+	 * if this is the first row, initialize read state.
+	 */
+	if (scan->cs_readState == NULL)
+	{
+		MemoryContext oldContext = MemoryContextSwitchTo(scan->scanContext);
+		scan->cs_readState =
+			init_cstore_read_state(scan->cs_base.rs_rd, slot->tts_tupleDescriptor,
+								   scan->attr_needed, scan->scanQual);
+		MemoryContextSwitchTo(oldContext);
+	}
 
 	ExecClearTuple(slot);
 
 	bool nextRowFound = CStoreReadNextRow(scan->cs_readState, slot->tts_values,
 										  slot->tts_isnull);
-
-	MemoryContextSwitchTo(oldContext);
 
 	if (!nextRowFound)
 	{
@@ -1080,7 +1141,7 @@ CStoreTableAMProcessUtility(PlannedStmt * plannedStatement,
 		CreateTrigStmt *createTrigStmt = (CreateTrigStmt *) parseTree;
 
 		Relation rel = relation_openrv(createTrigStmt->relation, AccessShareLock);
-		bool isCStore = rel->rd_tableam == GetCstoreTableAmRoutine();
+		bool isCStore = rel->rd_tableam == GetColumnarTableAmRoutine();
 		relation_close(rel, AccessShareLock);
 
 		if (isCStore &&
@@ -1187,7 +1248,7 @@ IsCStoreTableAmTable(Oid relationId)
 	 * avoid race conditions.
 	 */
 	Relation rel = relation_open(relationId, AccessShareLock);
-	bool result = rel->rd_tableam == GetCstoreTableAmRoutine();
+	bool result = rel->rd_tableam == GetColumnarTableAmRoutine();
 	relation_close(rel, NoLock);
 
 	return result;
@@ -1251,26 +1312,26 @@ static const TableAmRoutine cstore_am_methods = {
 
 
 const TableAmRoutine *
-GetCstoreTableAmRoutine(void)
+GetColumnarTableAmRoutine(void)
 {
 	return &cstore_am_methods;
 }
 
 
-PG_FUNCTION_INFO_V1(cstore_tableam_handler);
+PG_FUNCTION_INFO_V1(columnar_handler);
 Datum
-cstore_tableam_handler(PG_FUNCTION_ARGS)
+columnar_handler(PG_FUNCTION_ARGS)
 {
 	PG_RETURN_POINTER(&cstore_am_methods);
 }
 
 
 /*
- * alter_cstore_table_set is a UDF exposed in postgres to change settings on a columnar
+ * alter_columnar_table_set is a UDF exposed in postgres to change settings on a columnar
  * table. Calling this function on a non-columnar table gives an error.
  *
  * sql syntax:
- *   pg_catalog.alter_cstore_table_set(
+ *   pg_catalog.alter_columnar_table_set(
  *        table_name regclass,
  *        block_row_count int DEFAULT NULL,
  *        stripe_row_count int DEFAULT NULL,
@@ -1278,16 +1339,16 @@ cstore_tableam_handler(PG_FUNCTION_ARGS)
  *
  * All arguments except the table name are optional. The UDF is supposed to be called
  * like:
- *   SELECT alter_cstore_table_set('table', compression => 'pglz');
+ *   SELECT alter_columnar_table_set('table', compression => 'pglz');
  *
  * This will only update the compression of the table, keeping all other settings the
  * same. Multiple settings can be changed at the same time by providing multiple
  * arguments. Calling the argument with the NULL value will be interperted as not having
  * provided the argument.
  */
-PG_FUNCTION_INFO_V1(alter_cstore_table_set);
+PG_FUNCTION_INFO_V1(alter_columnar_table_set);
 Datum
-alter_cstore_table_set(PG_FUNCTION_ARGS)
+alter_columnar_table_set(PG_FUNCTION_ARGS)
 {
 	Oid relationId = PG_GETARG_OID(0);
 
@@ -1340,9 +1401,9 @@ alter_cstore_table_set(PG_FUNCTION_ARGS)
 }
 
 
-PG_FUNCTION_INFO_V1(alter_cstore_table_reset);
+PG_FUNCTION_INFO_V1(alter_columnar_table_reset);
 Datum
-alter_cstore_table_reset(PG_FUNCTION_ARGS)
+alter_columnar_table_reset(PG_FUNCTION_ARGS)
 {
 	Oid relationId = PG_GETARG_OID(0);
 

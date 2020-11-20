@@ -2,7 +2,7 @@
 -- Testing we handle transactions properly
 --
 
-CREATE TABLE t(a int, b int) USING cstore_tableam;
+CREATE TABLE t(a int, b int) USING columnar;
 
 INSERT INTO t SELECT i, 2 * i FROM generate_series(1, 3) i;
 SELECT * FROM t ORDER BY a;
