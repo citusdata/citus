@@ -181,7 +181,7 @@ static void ReorderTaskPlacementsByTaskAssignmentPolicy(Job *job,
 														TaskAssignmentPolicyType
 														taskAssignmentPolicy,
 														List *placementList);
-
+static bool IsLocalOrCitusLocalTable(Oid relationId);
 
 /*
  * CreateRouterPlan attempts to create a router executor plan for the given
@@ -530,11 +530,11 @@ ModifyPartialQuerySupported(Query *queryTree, bool multiShardQuery,
 
 	Oid distributedTableId = ModifyQueryResultRelationId(queryTree);
 	*distributedTableIdOutput = distributedTableId;
-	if (ContainsLocalTableDistributedTableJoin(queryTree->rtable))
+	if (ContainsTableToBeConvertedToSubquery(queryTree->rtable, distributedTableId))
 	{
 		return deferredError;
 	}
-	
+
 	Var *partitionColumn = NULL;
 
 	if (IsCitusTable(distributedTableId))
@@ -773,6 +773,13 @@ ModifyPartialQuerySupported(Query *queryTree, bool multiShardQuery,
 	return NULL;
 }
 
+static bool IsLocalOrCitusLocalTable(Oid relationId) {
+	if (!IsCitusTable(relationId)) {
+		return true;
+	}
+	return IsCitusTableType(relationId, CITUS_LOCAL_TABLE);
+}
+
 
 /*
  * NodeIsFieldStore returns true if given Node is a FieldStore object.
@@ -896,7 +903,7 @@ ModifyQuerySupported(Query *queryTree, Query *originalQuery, bool multiShardQuer
 	List *rangeTableList = NIL;
 	uint32 queryTableCount = 0;
 	CmdType commandType = queryTree->commandType;
-	bool fastPathRouterQuery =
+bool fastPathRouterQuery =
 		plannerRestrictionContext->fastPathRestrictionContext->fastPathRouterQuery;
 
 	/*
@@ -958,13 +965,24 @@ ModifyQuerySupported(Query *queryTree, Query *originalQuery, bool multiShardQuer
 			/* for other kinds of relations, check if its distributed */
 			else
 			{
-				if (ContainsLocalTableDistributedTableJoin(queryTree->rtable))
-				{
+				RangeTblEntry *resultRte = ExtractResultRelationRTE(queryTree);
+				Oid resultRelationId = InvalidOid;
+				if (resultRte) {
+					resultRelationId = resultRte->relid;
+				}
+				if (IsLocalOrCitusLocalTable(rangeTableEntry->relid) &&
+				    ContainsTableToBeConvertedToSubquery(queryTree->rtable, resultRelationId)
+					)
+				{ 
 					StringInfo errorMessage = makeStringInfo();
 					char *relationName = get_rel_name(rangeTableEntry->relid);
-
-					appendStringInfo(errorMessage, "relation %s is not distributed",
+					if (IsCitusTable(rangeTableEntry->relid)) {
+						appendStringInfo(errorMessage, "citus local table %s cannot be used in this join",
 									 relationName);
+					}else {
+						appendStringInfo(errorMessage, "relation %s is not distributed",
+									 relationName);
+					}
 
 					return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 										 errorMessage->data, NULL, NULL);

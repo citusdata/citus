@@ -254,8 +254,6 @@ static bool IsValidPartitionKeyRestriction(OpExpr *opClause);
 static void AddPartitionKeyRestrictionToInstance(ClauseWalkerContext *context,
 												 OpExpr *opClause, Var *varClause,
 												 Const *constantClause);
-static bool VarConstOpExprClause(OpExpr *opClause, Var **varClause,
-								 Const **constantClause);
 static void AddSAOPartitionKeyRestrictionToInstance(ClauseWalkerContext *context,
 													ScalarArrayOpExpr *
 													arrayOperatorExpression);

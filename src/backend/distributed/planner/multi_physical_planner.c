@@ -3588,6 +3588,56 @@ NodeIsRangeTblRefReferenceTable(Node *node, List *rangeTableList)
 	return IsCitusTableType(rangeTableEntry->relid, REFERENCE_TABLE);
 }
 
+List* FetchAttributeNumsForRTEFromQuals(Node* quals, Index rteIndex) {
+	List* attributeNums = NIL;
+	if (quals == NULL)
+	{
+		return NIL;
+	}
+
+	if (IsA(quals, OpExpr))
+	{
+		if (!NodeIsEqualsOpExpr(quals))
+		{
+			return NIL;
+		}
+		OpExpr *nextJoinClauseOpExpr = castNode(OpExpr, quals);
+
+		Var* var = NULL;
+		if (VarConstOpExprClause(nextJoinClauseOpExpr, &var, NULL)) {
+			attributeNums = lappend_int(attributeNums, var->varattno);
+			return attributeNums;
+		}
+
+	}
+	else if (IsA(quals, BoolExpr))
+	{
+		BoolExpr *boolExpr = (BoolExpr *) quals;
+
+		if (boolExpr->boolop != AND_EXPR && boolExpr->boolop != OR_EXPR) {
+			return attributeNums;
+		}
+
+		bool hasEquality = true;
+		Node* arg = NULL;
+		foreach_ptr(arg, boolExpr->args)
+		{
+			List* attributeNumsInSubExpression = FetchAttributeNumsForRTEFromQuals(arg, rteIndex);
+			if (boolExpr->boolop == AND_EXPR)
+			{
+				hasEquality |= list_length(attributeNumsInSubExpression) > 0;
+			}else if (boolExpr->boolop == OR_EXPR){
+				hasEquality &= list_length(attributeNumsInSubExpression) > 0;
+			}
+			attributeNums = list_concat(attributeNums, attributeNumsInSubExpression);
+			
+		}
+		if (hasEquality) {
+			return attributeNums;
+		}
+	}
+	return NIL;
+}
 
 /*
  * JoinSequenceArray walks over the join nodes in the job query and constructs a join

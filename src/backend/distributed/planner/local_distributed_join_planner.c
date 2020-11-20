@@ -54,20 +54,34 @@
 #include "utils/guc.h"
 #include "utils/lsyscache.h"
 
-static bool ShouldConvertLocalTableJoinsToSubqueries(List* rangeTableList);
+typedef struct RTEToSubqueryConverterReference {
+	RangeTblEntry* rangeTableEntry;
+	Index rteIndex;
+	List* restrictionList;
+	List* requiredAttributeNumbers;
+} RTEToSubqueryConverterReference;
+
+typedef struct RTEToSubqueryConverterContext{
+	List* distributedTableList; /* reference or distributed table */
+	List* localTableList;
+	List* citusLocalTableList;
+	bool hasSubqueryRTE;
+}RTEToSubqueryConverterContext;
+
+static bool ShouldConvertLocalTableJoinsToSubqueries(List* rangeTableList, Oid resultRelationId);
 static bool HasUniqueFilter(RangeTblEntry* distRTE, List* distRTERestrictionList, List* requiredAttrNumbersForDistRTE);
-static void AutoConvertLocalTableJoinToSubquery(RangeTblEntry* localRTE, RangeTblEntry* distRTE,
-		List* localRTERestrictionList, List* distRTERestrictionList,
-		List *requiredAttrNumbersForLocalRTE, List *requiredAttrNumbersForDistRTE);
+static bool AutoConvertLocalTableJoinToSubquery(FromExpr* joinTree,
+ RTEToSubqueryConverterReference* distRTEContext);
 static List * RequiredAttrNumbersForRelation(RangeTblEntry *relationRte,
 											 RecursivePlanningContext *planningContext);
-static RangeTblEntry * FindNextRTECandidate(PlannerRestrictionContext *
-									   plannerRestrictionContext,
-									   List *rangeTableList, List **restrictionList,
-									   bool localTable);
-static bool AllDataLocallyAccessible(List *rangeTableList);
+static RTEToSubqueryConverterContext * CreateRTEToSubqueryConverterContext(RecursivePlanningContext *context,
+				List *rangeTableList);
 static void GetAllUniqueIndexes(Form_pg_index indexForm, List** uniqueIndexes);
-
+static RTEToSubqueryConverterReference* 
+	GetNextRTEToConvertToSubquery(FromExpr* joinTree, RTEToSubqueryConverterContext* rteToSubqueryConverterContext,
+		PlannerRestrictionContext *plannerRestrictionContext, RangeTblEntry* resultRelation);
+static void PopFromRTEToSubqueryConverterContext(RTEToSubqueryConverterContext* rteToSubqueryConverterContext,
+	bool isCitusLocalTable);		
 /*
  * ConvertLocalTableJoinsToSubqueries gets a query and the planner
  * restrictions. As long as there is a join between a local table
@@ -83,70 +97,109 @@ ConvertLocalTableJoinsToSubqueries(Query *query,
 								   RecursivePlanningContext *context)
 {
 	List *rangeTableList = query->rtable;
-	if(!ShouldConvertLocalTableJoinsToSubqueries(rangeTableList)) {
+	RangeTblEntry *resultRelation = ExtractResultRelationRTE(query);
+	Oid resultRelationId = InvalidOid;
+	if (resultRelation) {
+		resultRelationId = resultRelation->relid;
+	}
+	if (!ShouldConvertLocalTableJoinsToSubqueries(rangeTableList, resultRelationId)) {
 		return;
 	}
+	RTEToSubqueryConverterContext* rteToSubqueryConverterContext = CreateRTEToSubqueryConverterContext(
+		context, rangeTableList);
 
-	RangeTblEntry *resultRelation = ExtractResultRelationRTE(query);
 
-	while (ContainsLocalTableDistributedTableJoin(rangeTableList))
+	RTEToSubqueryConverterReference* rteToSubqueryConverterReference = 
+			GetNextRTEToConvertToSubquery(query->jointree, rteToSubqueryConverterContext,
+		 context->plannerRestrictionContext, resultRelation);
+	while (rteToSubqueryConverterReference)
 	{
-		List *localTableRestrictList = NIL;
-		List *distributedTableRestrictList = NIL;
+		ReplaceRTERelationWithRteSubquery(rteToSubqueryConverterReference->rangeTableEntry,
+									rteToSubqueryConverterReference->restrictionList,
+									rteToSubqueryConverterReference->requiredAttributeNumbers);
+		rteToSubqueryConverterReference = 
+			GetNextRTEToConvertToSubquery(query->jointree, rteToSubqueryConverterContext,
+		 		context->plannerRestrictionContext, resultRelation);
+	}
+}
 
-		bool localTable = true;
+static RTEToSubqueryConverterReference* 
+	GetNextRTEToConvertToSubquery(FromExpr* joinTree, RTEToSubqueryConverterContext* rteToSubqueryConverterContext,
+		PlannerRestrictionContext *plannerRestrictionContext, RangeTblEntry* resultRelation) {	
 
-		PlannerRestrictionContext *plannerRestrictionContext =
-			context->plannerRestrictionContext;
-		RangeTblEntry *localRTECandidate =
-			FindNextRTECandidate(plannerRestrictionContext, rangeTableList,
-							&localTableRestrictList, localTable);
-		RangeTblEntry *distributedRTECandidate =
-			FindNextRTECandidate(plannerRestrictionContext, rangeTableList,
-							&distributedTableRestrictList, !localTable);
+	RTEToSubqueryConverterReference* localRTECandidate = NULL;
+	RTEToSubqueryConverterReference* nonLocalRTECandidate = NULL;
+	bool citusLocalTableChosen = false;
 
-		List *requiredAttrNumbersForLocalRte =
-			RequiredAttrNumbersForRelation(localRTECandidate, context);
-		List *requiredAttrNumbersForDistributedRte =
-			RequiredAttrNumbersForRelation(distributedRTECandidate, context);
+	if (list_length(rteToSubqueryConverterContext->localTableList) > 0) {
+		localRTECandidate = linitial(rteToSubqueryConverterContext->localTableList);
+	}else if (list_length(rteToSubqueryConverterContext->citusLocalTableList) > 0) {
+		localRTECandidate = linitial(rteToSubqueryConverterContext->citusLocalTableList);
+		citusLocalTableChosen = true;
+	}
+	if (localRTECandidate == NULL) {
+		return NULL;
+	}
 
-		if (resultRelation) {
+	if (list_length(rteToSubqueryConverterContext->distributedTableList) > 0) {
+		nonLocalRTECandidate = linitial(rteToSubqueryConverterContext->distributedTableList);
+	}
+	if (nonLocalRTECandidate == NULL && !rteToSubqueryConverterContext->hasSubqueryRTE) {
+		return NULL;
+	}
 
-			if (resultRelation->relid == localRTECandidate->relid) {
-				ReplaceRTERelationWithRteSubquery(distributedRTECandidate,
-										distributedTableRestrictList,
-										requiredAttrNumbersForDistributedRte);
-				continue;						
-			}else if (resultRelation->relid == distributedRTECandidate->relid) {
-				ReplaceRTERelationWithRteSubquery(localRTECandidate,
-										localTableRestrictList,
-										requiredAttrNumbersForLocalRte);
-				continue;						
-			}
+	if (resultRelation) {
+		if(resultRelation == localRTECandidate->rangeTableEntry) {
+			rteToSubqueryConverterContext->distributedTableList = list_delete_first(
+				rteToSubqueryConverterContext->distributedTableList
+			);
+			return nonLocalRTECandidate;
+		}
+		if (resultRelation == nonLocalRTECandidate->rangeTableEntry) {
+			PopFromRTEToSubqueryConverterContext(rteToSubqueryConverterContext,citusLocalTableChosen);
+			return localRTECandidate;
+		}
+	}
+
+	if (LocalTableJoinPolicy == LOCAL_JOIN_POLICY_PREFER_LOCAL) {
+		PopFromRTEToSubqueryConverterContext(rteToSubqueryConverterContext,citusLocalTableChosen);
+		return localRTECandidate;
+	}else if (LocalTableJoinPolicy == LOCAL_JOIN_POLICY_PREFER_DISTRIBUTED) {
+		if (nonLocalRTECandidate) {
+			rteToSubqueryConverterContext->distributedTableList = list_delete_first(
+				rteToSubqueryConverterContext->distributedTableList
+			);
+			return nonLocalRTECandidate;
+		}else {
+			PopFromRTEToSubqueryConverterContext(rteToSubqueryConverterContext,citusLocalTableChosen);
+			return localRTECandidate;
 		}
 
-		if (LocalTableJoinPolicy == LOCAL_JOIN_POLICY_PREFER_LOCAL)
-		{
-			ReplaceRTERelationWithRteSubquery(localRTECandidate,
-											  localTableRestrictList,
-											  requiredAttrNumbersForLocalRte);
+	}else if (LocalTableJoinPolicy == LOCAL_JOIN_POLICY_AUTO) {
+		bool shouldConvertNonLocalTable = AutoConvertLocalTableJoinToSubquery(joinTree, nonLocalRTECandidate);
+		if (shouldConvertNonLocalTable) {
+			rteToSubqueryConverterContext->distributedTableList = list_delete_first(
+				rteToSubqueryConverterContext->distributedTableList
+			);
+			return nonLocalRTECandidate;
+		}else {
+			PopFromRTEToSubqueryConverterContext(rteToSubqueryConverterContext,citusLocalTableChosen);
+			return localRTECandidate;
 		}
-		else if (LocalTableJoinPolicy == LOCAL_JOIN_POLICY_PREFER_DISTRIBUTED)
-		{
-			ReplaceRTERelationWithRteSubquery(distributedRTECandidate,
-											  distributedTableRestrictList,
-											  requiredAttrNumbersForDistributedRte);
-		}
-		else if (LocalTableJoinPolicy == LOCAL_JOIN_POLICY_AUTO)
-		{
-			AutoConvertLocalTableJoinToSubquery(localRTECandidate, distributedRTECandidate,
-				localTableRestrictList, distributedTableRestrictList, 
-				requiredAttrNumbersForLocalRte, requiredAttrNumbersForDistributedRte);
-		}
-		else
-		{
-			elog(ERROR, "unexpected local table join policy: %d", LocalTableJoinPolicy);
-		}
+	}else {
+		elog(ERROR, "unexpected local table join policy: %d", LocalTableJoinPolicy);
+	}
+	return NULL;
+}
+
+static void PopFromRTEToSubqueryConverterContext(RTEToSubqueryConverterContext* rteToSubqueryConverterContext,
+	bool isCitusLocalTable) {
+	if (isCitusLocalTable) {
+		rteToSubqueryConverterContext->citusLocalTableList = 
+			list_delete_first(rteToSubqueryConverterContext->citusLocalTableList);
+	}else {
+		rteToSubqueryConverterContext->localTableList = 
+			list_delete_first(rteToSubqueryConverterContext->localTableList);
 	}
 }
 
@@ -154,46 +207,42 @@ ConvertLocalTableJoinsToSubqueries(Query *query,
  * ShouldConvertLocalTableJoinsToSubqueries returns true if we should
  * convert local-dist table joins to subqueries.
  */
-static bool ShouldConvertLocalTableJoinsToSubqueries(List* rangeTableList) {
+static bool ShouldConvertLocalTableJoinsToSubqueries(List* rangeTableList, Oid resultRelationId) {
 	if (LocalTableJoinPolicy == LOCAL_JOIN_POLICY_NEVER)
 	{
 		/* user doesn't want Citus to enable local table joins */
 		return false;
 	}
-
-	if (!ContainsLocalTableDistributedTableJoin(rangeTableList))
-	{
-		/* nothing to do as there are no relevant joins */
-		return false;
-	}
-
-	if (AllDataLocallyAccessible(rangeTableList))
-	{
-		/* recursively planning is overkill, router planner can already handle this */
+	if (!ContainsTableToBeConvertedToSubquery(rangeTableList, resultRelationId)) {
 		return false;
 	}
 	return true;
 }
 
-static void AutoConvertLocalTableJoinToSubquery(RangeTblEntry* localRTE, RangeTblEntry* distRTE,
-		List* localRTERestrictionList, List* distRTERestrictionList,
-		List *requiredAttrNumbersForLocalRTE, List *requiredAttrNumbersForDistRTE) {
-
-	bool hasUniqueFilter = HasUniqueFilter(distRTE, distRTERestrictionList, requiredAttrNumbersForDistRTE);
-	if (hasUniqueFilter) {
-		ReplaceRTERelationWithRteSubquery(distRTE,
-									distRTERestrictionList,
-									requiredAttrNumbersForDistRTE);
-	}else {
-		ReplaceRTERelationWithRteSubquery(localRTE,
-											localRTERestrictionList,
-											requiredAttrNumbersForLocalRTE);
+static bool AutoConvertLocalTableJoinToSubquery(FromExpr* joinTree,
+ 		RTEToSubqueryConverterReference* rteToSubqueryConverterReference) {
+	if (rteToSubqueryConverterReference == NULL) {
+		return false;
 	}
+	List* distRTEEqualityQuals =
+		FetchAttributeNumsForRTEFromQuals(joinTree->quals, rteToSubqueryConverterReference->rteIndex);
+
+	Node* join = NULL;
+	foreach_ptr(join, joinTree->fromlist) {
+		if (IsA(join, JoinExpr)) {
+			JoinExpr* joinExpr = (JoinExpr*) join;
+			distRTEEqualityQuals = list_concat(distRTEEqualityQuals, 
+				FetchAttributeNumsForRTEFromQuals(joinExpr->quals, rteToSubqueryConverterReference->rteIndex)
+			);
+		}
+	}
+
+	bool hasUniqueFilter = HasUniqueFilter(rteToSubqueryConverterReference->rangeTableEntry, 
+		rteToSubqueryConverterReference->restrictionList, distRTEEqualityQuals);	
+	return hasUniqueFilter;	
 	
 }
 
-// TODO:: This function should only consider equality,
-// currently it will return true for dist.a > 5. We should check this from join->quals.
 static bool HasUniqueFilter(RangeTblEntry* distRTE, List* distRTERestrictionList, List* requiredAttrNumbersForDistRTE) {
 	List* uniqueIndexes = ExecuteFunctionOnEachTableIndex(distRTE->relid, GetAllUniqueIndexes);
     int columnNumber = 0;
@@ -237,6 +286,10 @@ RequiredAttrNumbersForRelation(RangeTblEntry *relationRte,
 		filteredPlannerRestrictionContext->relationRestrictionContext;
 	List *filteredRelationRestrictionList =
 		relationRestrictionContext->relationRestrictionList;
+
+	if (list_length(filteredRelationRestrictionList) == 0) {
+		return NIL;
+	}
 	RelationRestriction *relationRestriction =
 		(RelationRestriction *) linitial(filteredRelationRestrictionList);
 
@@ -265,23 +318,27 @@ RequiredAttrNumbersForRelation(RangeTblEntry *relationRte,
 
 
 /*
- * FindNextRTECandidate returns a range table entry which has the most filters
+ * CreateRTEToSubqueryConverterContext returns a range table entry which has the most filters
  * on it along with the restrictions (e.g., fills **restrictionList).
  *
  * The function also gets a boolean localTable parameter, so the caller
  * can choose to run the function for only local tables or distributed tables.
  */
-static RangeTblEntry *
-FindNextRTECandidate(PlannerRestrictionContext *plannerRestrictionContext,
-				List *rangeTableList, List **restrictionList,
-				bool localTable)
+static RTEToSubqueryConverterContext*
+CreateRTEToSubqueryConverterContext(RecursivePlanningContext *context,
+				List *rangeTableList)
 {
-	ListCell *rangeTableCell = NULL;
+	
+	RTEToSubqueryConverterContext* rteToSubqueryConverterContext = palloc0(sizeof(RTEToSubqueryConverterContext));
 
-	foreach(rangeTableCell, rangeTableList)
+	int rteIndex = 0;
+	RangeTblEntry* rangeTableEntry = NULL;
+	foreach_ptr(rangeTableEntry, rangeTableList)
 	{
-		RangeTblEntry *rangeTableEntry = (RangeTblEntry *) lfirst(rangeTableCell);
-
+		rteIndex++;
+		if (rangeTableEntry->rtekind == RTE_SUBQUERY) {
+			rteToSubqueryConverterContext->hasSubqueryRTE = true;
+		}
 		/* we're only interested in tables */
 		if (!(rangeTableEntry->rtekind == RTE_RELATION &&
 			  rangeTableEntry->relkind == RELKIND_RELATION))
@@ -289,73 +346,25 @@ FindNextRTECandidate(PlannerRestrictionContext *plannerRestrictionContext,
 			continue;
 		}
 
-		if (localTable && IsCitusTable(rangeTableEntry->relid))
-		{
-			continue;
-		}
+		RTEToSubqueryConverterReference* rteToSubqueryConverter = palloc(sizeof(RTEToSubqueryConverterReference));
+		rteToSubqueryConverter->rangeTableEntry = rangeTableEntry;
+		rteToSubqueryConverter->rteIndex = rteIndex;
+		rteToSubqueryConverter->restrictionList = GetRestrictInfoListForRelation(rangeTableEntry,
+										   context->plannerRestrictionContext, 1);
+		rteToSubqueryConverter->requiredAttributeNumbers = RequiredAttrNumbersForRelation(rangeTableEntry, context);								   
 
-		if (!localTable && !IsCitusTable(rangeTableEntry->relid))
-		{
-			continue;
-		}
-
-		List *currentRestrictionList =
-			GetRestrictInfoListForRelation(rangeTableEntry,
-										   plannerRestrictionContext, 1);
-
-		*restrictionList = currentRestrictionList;
-		return rangeTableEntry;
-	}
-	// TODO:: Put Illegal state error code
-	ereport(ERROR, (errmsg("unexpected state: could not find any RTE to convert to subquery in range table list")));
-	return NULL;
-}
-
-/*
- * AllDataLocallyAccessible return true if all data for the relations in the
- * rangeTableList is locally accessible.
- */
-static bool
-AllDataLocallyAccessible(List *rangeTableList)
-{
-	ListCell *rangeTableCell = NULL;
-	foreach(rangeTableCell, rangeTableList)
-	{
-		RangeTblEntry *rangeTableEntry = (RangeTblEntry *) lfirst(rangeTableCell);
-
-		/* we're only interested in tables */
-		if (!(rangeTableEntry->rtekind == RTE_RELATION &&
-			  rangeTableEntry->relkind == RELKIND_RELATION))
-		{
-			continue;
-		}
-
-
-		Oid relationId = rangeTableEntry->relid;
-
-		if (!IsCitusTable(relationId))
-		{
-			/* local tables are locally accessible */
-			continue;
-		}
-
-		List *shardIntervalList = LoadShardIntervalList(relationId);
-		if (list_length(shardIntervalList) > 1)
-		{
-			/* we currently only consider single placement tables */
-			return false;
-		}
-
-		ShardInterval *shardInterval = linitial(shardIntervalList);
-		uint64 shardId = shardInterval->shardId;
-		ShardPlacement *localShardPlacement =
-			ShardPlacementOnGroup(shardId, GetLocalGroupId());
-		if (localShardPlacement == NULL)
-		{
-			/* the table doesn't have a placement on this node */
-			return false;
+		bool referenceOrDistributedTable = IsCitusTableType(rangeTableEntry->relid, REFERENCE_TABLE) || 
+			IsCitusTableType(rangeTableEntry->relid, DISTRIBUTED_TABLE);
+		if (referenceOrDistributedTable) {
+			rteToSubqueryConverterContext->distributedTableList = 
+				lappend(rteToSubqueryConverterContext->distributedTableList, rteToSubqueryConverter);
+		}else if (IsCitusTableType(rangeTableEntry->relid, CITUS_LOCAL_TABLE)) {
+			rteToSubqueryConverterContext->citusLocalTableList = 
+				lappend(rteToSubqueryConverterContext->citusLocalTableList, rteToSubqueryConverter);
+		}else {
+			rteToSubqueryConverterContext->localTableList = 
+				lappend(rteToSubqueryConverterContext->localTableList, rteToSubqueryConverter);
 		}
 	}
-
-	return true;
+	return rteToSubqueryConverterContext;
 }
