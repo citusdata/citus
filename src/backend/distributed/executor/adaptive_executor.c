@@ -656,6 +656,16 @@ static void SetAttributeInputMetadata(DistributedExecution *execution,
 void
 AdaptiveExecutorPreExecutorRun(CitusScanState *scanState)
 {
+	if (scanState->finishedPreScan)
+	{
+		/*
+		 * Cursors (and hence RETURN QUERY syntax in pl/pgsql functions)
+		 * may trigger AdaptiveExecutorPreExecutorRun() on every fetch
+		 * operation. Though, we should only execute PreScan once.
+		 */
+		return;
+	}
+
 	DistributedPlan *distributedPlan = scanState->distributedPlan;
 
 	/*
@@ -666,6 +676,8 @@ AdaptiveExecutorPreExecutorRun(CitusScanState *scanState)
 	LockPartitionsForDistributedPlan(distributedPlan);
 
 	ExecuteSubPlans(distributedPlan);
+
+	scanState->finishedPreScan = true;
 }
 
 

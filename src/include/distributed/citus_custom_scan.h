@@ -20,6 +20,7 @@ typedef struct CitusScanState
 	CustomScanState customScanState;  /* underlying custom scan node */
 
 	/* function that gets called before postgres starts its execution */
+	bool finishedPreScan;          /* flag to check if the pre scan is finished */
 	void (*PreExecScan)(struct CitusScanState *scanState);
 
 	DistributedPlan *distributedPlan; /* distributed execution plan */
