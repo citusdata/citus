@@ -119,7 +119,6 @@ static void SplitLocalAndRemotePlacements(List *taskPlacementList,
 static uint64 ExecuteLocalTaskPlan(PlannedStmt *taskPlan, char *queryString,
 								   TupleDestination *tupleDest, Task *task,
 								   ParamListInfo paramListInfo);
-static int ActivePlacementCount(uint64 shardId);
 static void RecordNonDistTableAccessesForTask(Task *task);
 static void LogLocalCommand(Task *task);
 static uint64 LocallyPlanAndExecuteMultipleQueries(List *queryStrings,
@@ -561,26 +560,18 @@ ExecuteLocalTaskPlan(PlannedStmt *taskPlan, char *queryString,
 	QueryEnvironment *queryEnv = create_queryEnv();
 	int eflags = 0;
 	uint64 totalRowsProcessed = 0;
-	bool storeTuples = true;
 
 	RecordNonDistTableAccessesForTask(task);
 
 	/*
-	 * For modifications to reference tables (or any replicated table in
-	 * general), remote execution have already stored the tuples and
-	 * incremented es_processed, so skip now.
-	 */
-	if (task->partiallyLocalOrRemote && !ReadOnlyTask(task->taskType) &&
-		ActivePlacementCount(task->anchorShardId) > 1)
-	{
-		storeTuples = false;
-	}
-
-	/*
 	 * Use the tupleStore provided by the scanState because it is shared accross
 	 * the other task executions and the adaptive executor.
+	 *
+	 * Also note that as long as the tupleDest is provided, local execution always
+	 * stores the tuples. This is also valid for partiallyLocalOrRemote tasks
+	 * as well.
 	 */
-	DestReceiver *destReceiver = tupleDest && storeTuples ?
+	DestReceiver *destReceiver = tupleDest ?
 								 CreateTupleDestDestReceiver(tupleDest, task,
 															 LOCAL_PLACEMENT_INDEX) :
 								 CreateDestReceiver(DestNone);
@@ -598,7 +589,7 @@ ExecuteLocalTaskPlan(PlannedStmt *taskPlan, char *queryString,
 	 * We'll set the executorState->es_processed later, for now only remember
 	 * the count.
 	 */
-	if (taskPlan->commandType != CMD_SELECT && storeTuples)
+	if (taskPlan->commandType != CMD_SELECT)
 	{
 		totalRowsProcessed = queryDesc->estate->es_processed;
 	}
@@ -609,25 +600,6 @@ ExecuteLocalTaskPlan(PlannedStmt *taskPlan, char *queryString,
 	FreeQueryDesc(queryDesc);
 
 	return totalRowsProcessed;
-}
-
-
-/*
- * ActivePlacementCount gets a shardId and returns the number of
- * active placements. If the input shardId is INVALID_SHARD_ID,
- * the function returns 0.
- */
-static int
-ActivePlacementCount(uint64 shardId)
-{
-	if (shardId == INVALID_SHARD_ID)
-	{
-		return 0;
-	}
-
-	List *activeShardPlacementList = ActiveShardPlacementList(shardId);
-
-	return list_length(activeShardPlacementList);
 }
 
 

@@ -3312,6 +3312,16 @@ TransactionStateMachine(WorkerSession *session)
 					/* already received results from another replica */
 					storeRows = false;
 				}
+				else if (task->partiallyLocalOrRemote)
+				{
+					/*
+					 * For the tasks that involves placements from both
+					 * remote and local placments, such as modifications
+					 * to reference tables, we store the rows during the
+					 * local placement/execution.
+					 */
+					storeRows = false;
+				}
 
 				bool fetchDone = ReceiveResults(session, storeRows);
 				if (!fetchDone)
@@ -3703,7 +3713,7 @@ ReceiveResults(WorkerSession *session, bool storeRows)
 			int64 currentAffectedTupleCount = 0;
 
 			/* if there are multiple replicas, make sure to consider only one */
-			if (!shardCommandExecution->gotResults && *currentAffectedTupleString != '\0')
+			if (storeRows && *currentAffectedTupleString != '\0')
 			{
 				scanint8(currentAffectedTupleString, false, &currentAffectedTupleCount);
 				Assert(currentAffectedTupleCount >= 0);
