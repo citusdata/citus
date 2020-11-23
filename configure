@@ -622,6 +622,7 @@ ac_includes_default="\
 
 ac_subst_vars='LTLIBOBJS
 LIBOBJS
+HAS_TABLEAM
 HAS_DOTGIT
 POSTGRES_BUILDDIR
 POSTGRES_SRCDIR
@@ -4468,6 +4469,16 @@ cat >>confdefs.h <<_ACEOF
 _ACEOF
 
 
+if test "$version_num" != '11'; then
+   HAS_TABLEAM=yes
+
+$as_echo "#define HAS_TABLEAM 1" >>confdefs.h
+
+else
+   { $as_echo "$as_me:${as_lineno-$LINENO}: postgres version does not support table access methodds" >&5
+$as_echo "$as_me: postgres version does not support table access methodds" >&6;}
+fi;
+
 # Check if git is installed, when installed the gitref of the checkout will be baked in the application
 # Extract the first word of "git", so it can be a program name with args.
 set dummy git; ac_word=$2
@@ -4542,6 +4553,8 @@ POSTGRES_SRCDIR="$POSTGRES_SRCDIR"
 POSTGRES_BUILDDIR="$POSTGRES_BUILDDIR"
 
 HAS_DOTGIT="$HAS_DOTGIT"
+
+HAS_TABLEAM="$HAS_TABLEAM"
 
 
 ac_config_files="$ac_config_files Makefile.global"

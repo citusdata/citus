@@ -2651,8 +2651,6 @@ TargetShardIntervalsForRestrictInfo(RelationRestrictionContext *restrictionConte
 		List *joinInfoList = relationRestriction->relOptInfo->joininfo;
 		List *pseudoRestrictionList = extract_actual_clauses(joinInfoList, true);
 
-		relationRestriction->prunedShardIntervalList = NIL;
-
 		/*
 		 * Queries may have contradiction clauses like 'false', or '1=0' in
 		 * their filters. Such queries would have pseudo constant 'false'
@@ -2682,7 +2680,6 @@ TargetShardIntervalsForRestrictInfo(RelationRestrictionContext *restrictionConte
 			}
 		}
 
-		relationRestriction->prunedShardIntervalList = prunedShardIntervalList;
 		prunedShardIntervalListList = lappend(prunedShardIntervalListList,
 											  prunedShardIntervalList);
 	}
@@ -3581,7 +3578,6 @@ CopyRelationRestrictionContext(RelationRestrictionContext *oldContext)
 
 		/* not copyable, but readonly */
 		newRestriction->plannerInfo = oldRestriction->plannerInfo;
-		newRestriction->prunedShardIntervalList = oldRestriction->prunedShardIntervalList;
 
 		newContext->relationRestrictionList =
 			lappend(newContext->relationRestrictionList, newRestriction);

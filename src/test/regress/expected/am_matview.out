@@ -1,0 +1,77 @@
+--
+-- Testing we materialized views properly
+--
+CREATE TABLE t(a int, b int) USING columnar;
+INSERT INTO t SELECT floor(i / 4), 2 * i FROM generate_series(1, 10) i;
+CREATE MATERIALIZED VIEW t_view(a, bsum, cnt) USING columnar AS
+   SELECT a, sum(b), count(*) FROM t GROUP BY a;
+SELECT * FROM t_view a ORDER BY a;
+ a | bsum | cnt
+---------------------------------------------------------------------
+ 0 |   12 |   3
+ 1 |   44 |   4
+ 2 |   54 |   3
+(3 rows)
+
+INSERT INTO t SELECT floor(i / 4), 2 * i FROM generate_series(11, 20) i;
+SELECT * FROM t_view a ORDER BY a;
+ a | bsum | cnt
+---------------------------------------------------------------------
+ 0 |   12 |   3
+ 1 |   44 |   4
+ 2 |   54 |   3
+(3 rows)
+
+REFRESH MATERIALIZED VIEW t_view;
+SELECT * FROM t_view a ORDER BY a;
+ a | bsum | cnt
+---------------------------------------------------------------------
+ 0 |   12 |   3
+ 1 |   44 |   4
+ 2 |   76 |   4
+ 3 |  108 |   4
+ 4 |  140 |   4
+ 5 |   40 |   1
+(6 rows)
+
+-- verify that we have created metadata entries for the materialized view
+SELECT relfilenode FROM pg_class WHERE relname='t_view' \gset
+SELECT count(*) FROM cstore.cstore_data_files WHERE relfilenode=:relfilenode;
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+SELECT count(*) FROM cstore.cstore_stripes WHERE relfilenode=:relfilenode;
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+SELECT count(*) FROM cstore.cstore_skipnodes WHERE relfilenode=:relfilenode;
+ count
+---------------------------------------------------------------------
+     3
+(1 row)
+
+DROP TABLE t CASCADE;
+NOTICE:  drop cascades to materialized view t_view
+-- dropping must remove metadata
+SELECT count(*) FROM cstore.cstore_data_files WHERE relfilenode=:relfilenode;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+SELECT count(*) FROM cstore.cstore_stripes WHERE relfilenode=:relfilenode;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+SELECT count(*) FROM cstore.cstore_skipnodes WHERE relfilenode=:relfilenode;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+

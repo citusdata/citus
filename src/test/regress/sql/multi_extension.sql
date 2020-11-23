@@ -6,6 +6,11 @@
 -- It'd be nice to script generation of this file, but alas, that's
 -- not done yet.
 
+-- differentiate the output file for pg11 and versions above, with regards to objects
+-- created per citus version depending on the postgres version. Upgrade tests verify the
+-- objects are added in citus_finish_pg_upgrade()
+SHOW server_version \gset
+SELECT substring(:'server_version', '\d+')::int > 11 AS version_above_eleven;
 
 SET citus.next_shard_id TO 580000;
 
@@ -83,7 +88,7 @@ FROM pg_depend AS pgd,
 WHERE pgd.refclassid = 'pg_extension'::regclass AND
 	  pgd.refobjid   = pge.oid AND
 	  pge.extname    = 'citus' AND
-	  pgio.schema    NOT IN ('pg_catalog', 'citus', 'citus_internal', 'test');
+	  pgio.schema    NOT IN ('pg_catalog', 'citus', 'citus_internal', 'test', 'cstore');
 
 
 -- DROP EXTENSION pre-created by the regression suite
@@ -238,7 +243,7 @@ FROM pg_depend AS pgd,
 WHERE pgd.refclassid = 'pg_extension'::regclass AND
 	  pgd.refobjid   = pge.oid AND
 	  pge.extname    = 'citus' AND
-	  pgio.schema    NOT IN ('pg_catalog', 'citus', 'citus_internal', 'test');
+	  pgio.schema    NOT IN ('pg_catalog', 'citus', 'citus_internal', 'test', 'cstore');
 
 -- see incompatible version errors out
 RESET citus.enable_version_checks;

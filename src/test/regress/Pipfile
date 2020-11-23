@@ -4,9 +4,10 @@ url = "https://pypi.python.org/simple"
 verify_ssl = true
 
 [packages]
-mitmproxy = "==4.0.4"
+mitmproxy = "==5.3.0"
 construct = "==2.9.45"
 docopt = "==0.6.2"
+cryptography = "==3.2.1"
 
 [dev-packages]
 

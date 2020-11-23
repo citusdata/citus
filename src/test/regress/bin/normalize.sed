@@ -181,3 +181,6 @@ s/wrong data type: [0-9]+, expected [0-9]+/wrong data type: XXXX, expected XXXX/
 
 # Errors with relation OID does not exist
 s/relation with OID [0-9]+ does not exist/relation with OID XXXX does not exist/g
+
+# ignore event triggers, mainly due to the event trigger for columnar
+/^DEBUG:  EventTriggerInvoke [0-9]+$/d
