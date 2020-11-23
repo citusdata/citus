@@ -259,7 +259,7 @@ NOTICE:  executing the command locally: TRUNCATE TABLE local_commands_test_schem
 NOTICE:  executing the command locally: TRUNCATE TABLE local_commands_test_schema.dist_table_xxxxx CASCADE
 NOTICE:  executing the command locally: TRUNCATE TABLE local_commands_test_schema.dist_table_xxxxx CASCADE
   ANALYZE ref_table;
-ERROR:  cannot switch local execution status from local execution required to local execution disabled since it can cause visibility problems in the current transaction
+ERROR:  cannot execute command because a local execution has accessed a placement in the transaction
 COMMIT;
 -- insert some data
 INSERT INTO ref_table VALUES(7);

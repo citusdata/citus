@@ -186,11 +186,14 @@ typedef struct DistributedExecution
 	RowModifyLevel modLevel;
 
 	/*
-	 * tasksToExecute contains all the tasks required to finish the execution, and
-	 * it is the union of remoteTaskList and localTaskList. After (if any) local
-	 * tasks are executed, remoteTaskList becomes equivalent of tasksToExecute.
+	 * remoteAndLocalTaskList contains all the tasks required to finish the
+	 * execution. remoteTaskList contains all the tasks required to
+	 * finish the remote execution. localTaskList contains all the
+	 * local tasks required to finish the local execution.
+	 *
+	 * remoteAndLocalTaskList is the union of remoteTaskList and localTaskList.
 	 */
-	List *tasksToExecute;
+	List *remoteAndLocalTaskList;
 	List *remoteTaskList;
 	List *localTaskList;
 
@@ -762,7 +765,7 @@ AdaptiveExecutor(CitusScanState *scanState)
 	 */
 	StartDistributedExecution(execution);
 
-	if (ShouldRunTasksSequentially(execution->tasksToExecute))
+	if (ShouldRunTasksSequentially(execution->remoteTaskList))
 	{
 		SequentialRunDistributedExecution(execution);
 	}
@@ -953,9 +956,7 @@ ExecuteTaskListExtended(ExecutionParams *executionParams)
 	 * then we should error out as it would cause inconsistencies across the
 	 * remote connection and local execution.
 	 */
-	List *localTaskList = execution->localTaskList;
-	List *remoteTaskList =
-		localTaskList != NIL ? execution->remoteTaskList : execution->tasksToExecute;
+	List *remoteTaskList = execution->remoteTaskList;
 	if (GetCurrentLocalExecutionStatus() == LOCAL_EXECUTION_REQUIRED &&
 		AnyTaskAccessesLocalNode(remoteTaskList))
 	{
@@ -974,7 +975,8 @@ ExecuteTaskListExtended(ExecutionParams *executionParams)
 	}
 	else
 	{
-		locallyProcessedRows += ExecuteLocalTaskList(localTaskList, defaultTupleDest);
+		locallyProcessedRows += ExecuteLocalTaskList(execution->localTaskList,
+													 defaultTupleDest);
 	}
 
 	return execution->rowsProcessed + locallyProcessedRows;
@@ -1021,9 +1023,10 @@ CreateDistributedExecution(RowModifyLevel modLevel, List *taskList,
 		(DistributedExecution *) palloc0(sizeof(DistributedExecution));
 
 	execution->modLevel = modLevel;
-	execution->tasksToExecute = taskList;
+	execution->remoteAndLocalTaskList = taskList;
 	execution->transactionProperties = xactProperties;
 
+	/* we are going to calculate this values below */
 	execution->localTaskList = NIL;
 	execution->remoteTaskList = NIL;
 
@@ -1033,8 +1036,6 @@ CreateDistributedExecution(RowModifyLevel modLevel, List *taskList,
 	execution->targetPoolSize = targetPoolSize;
 	execution->defaultTupleDest = defaultTupleDest;
 
-	execution->totalTaskCount = list_length(taskList);
-	execution->unfinishedTaskCount = list_length(taskList);
 	execution->rowsProcessed = 0;
 
 	execution->raiseInterrupts = true;
@@ -1075,17 +1076,16 @@ CreateDistributedExecution(RowModifyLevel modLevel, List *taskList,
 	if (localExecutionSupported && ShouldExecuteTasksLocally(taskList))
 	{
 		bool readOnlyPlan = !TaskListModifiesDatabase(modLevel, taskList);
-
 		ExtractLocalAndRemoteTasks(readOnlyPlan, taskList, &execution->localTaskList,
 								   &execution->remoteTaskList);
-		if (list_length(execution->localTaskList) > 0)
-		{
-			/* tasksToExecute field is used for remote execution */
-			execution->tasksToExecute = execution->remoteTaskList;
-			execution->totalTaskCount = list_length(execution->remoteTaskList);
-			execution->unfinishedTaskCount = list_length(execution->remoteTaskList);
-		}
 	}
+	else
+	{
+		execution->remoteTaskList = execution->remoteAndLocalTaskList;
+	}
+
+	execution->totalTaskCount = list_length(execution->remoteTaskList);
+	execution->unfinishedTaskCount = list_length(execution->remoteTaskList);
 
 	return execution;
 }
@@ -1235,7 +1235,12 @@ StartDistributedExecution(DistributedExecution *execution)
 	 */
 	if (execution->targetPoolSize > 1)
 	{
-		RecordParallelRelationAccessForTaskList(execution->tasksToExecute);
+		/*
+		 * Record the access for both the local and remote tasks. The main goal
+		 * is to make sure that Citus behaves consistently even if the local
+		 * shards are moved away.
+		 */
+		RecordParallelRelationAccessForTaskList(execution->remoteAndLocalTaskList);
 	}
 }
 
@@ -1247,7 +1252,8 @@ StartDistributedExecution(DistributedExecution *execution)
 static bool
 DistributedExecutionModifiesDatabase(DistributedExecution *execution)
 {
-	return TaskListModifiesDatabase(execution->modLevel, execution->tasksToExecute);
+	return TaskListModifiesDatabase(execution->modLevel,
+									execution->remoteAndLocalTaskList);
 }
 
 
@@ -1539,7 +1545,9 @@ static void
 AcquireExecutorShardLocksForExecution(DistributedExecution *execution)
 {
 	RowModifyLevel modLevel = execution->modLevel;
-	List *taskList = execution->tasksToExecute;
+
+	/* acquire the locks for both the remote and local tasks */
+	List *taskList = execution->remoteAndLocalTaskList;
 
 	if (modLevel <= ROW_MODIFY_READONLY &&
 		!SelectForUpdateOnReferenceTable(taskList))
@@ -1699,7 +1707,7 @@ static void
 AssignTasksToConnectionsOrWorkerPool(DistributedExecution *execution)
 {
 	RowModifyLevel modLevel = execution->modLevel;
-	List *taskList = execution->tasksToExecute;
+	List *taskList = execution->remoteTaskList;
 
 	int32 localGroupId = GetLocalGroupId();
 
@@ -2127,7 +2135,7 @@ ShouldRunTasksSequentially(List *taskList)
 static void
 SequentialRunDistributedExecution(DistributedExecution *execution)
 {
-	List *taskList = execution->tasksToExecute;
+	List *taskList = execution->remoteTaskList;
 	int connectionMode = MultiShardConnectionType;
 
 	/*
@@ -2140,7 +2148,8 @@ SequentialRunDistributedExecution(DistributedExecution *execution)
 	foreach_ptr(taskToExecute, taskList)
 	{
 		/* execute each task one by one */
-		execution->tasksToExecute = list_make1(taskToExecute);
+		execution->remoteAndLocalTaskList = list_make1(taskToExecute);
+		execution->remoteTaskList = execution->remoteAndLocalTaskList;
 		execution->totalTaskCount = 1;
 		execution->unfinishedTaskCount = 1;
 
