@@ -186,7 +186,7 @@ NOTICE:  executing the command locally: INSERT INTO local_commands_test_schema.r
 BEGIN;
   CREATE TABLE ref_table_1(a int);
   SELECT create_reference_table('ref_table_1');
-NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500033, 'local_commands_test_schema', 'CREATE TABLE local_commands_test_schema.ref_table_1 (a integer)');SELECT worker_apply_shard_ddl_command (1500033, 'local_commands_test_schema', 'ALTER TABLE local_commands_test_schema.ref_table_1 OWNER TO postgres')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500033, 'local_commands_test_schema', 'CREATE TABLE local_commands_test_schema.ref_table_1 (a integer) ');SELECT worker_apply_shard_ddl_command (1500033, 'local_commands_test_schema', 'ALTER TABLE local_commands_test_schema.ref_table_1 OWNER TO postgres')
  create_reference_table
 ---------------------------------------------------------------------
 
@@ -229,18 +229,6 @@ NOTICE:  executing the command locally: SELECT count(*) AS count FROM local_comm
 
   TRUNCATE ref_table CASCADE;
 NOTICE:  truncate cascades to table "dist_table"
-NOTICE:  executing the command locally: TRUNCATE TABLE local_commands_test_schema.ref_table_xxxxx CASCADE
-NOTICE:  truncate cascades to table "dist_table_xxxxx"
-NOTICE:  truncate cascades to table "dist_table_xxxxx"
-NOTICE:  truncate cascades to table "dist_table_xxxxx"
-NOTICE:  truncate cascades to table "dist_table_xxxxx"
-NOTICE:  truncate cascades to table "dist_table_xxxxx"
-NOTICE:  truncate cascades to table "dist_table_xxxxx"
-NOTICE:  truncate cascades to table "dist_table_xxxxx"
-NOTICE:  truncate cascades to table "dist_table_xxxxx"
-NOTICE:  truncate cascades to table "dist_table_xxxxx"
-NOTICE:  truncate cascades to table "dist_table_xxxxx"
-NOTICE:  truncate cascades to table "dist_table_xxxxx"
 ERROR:  cannot execute DDL on table "ref_table" because there was a parallel SELECT access to distributed table "dist_table" in the same transaction
 COMMIT;
 -- as we do not support local ANALYZE execution yet, below block would error out
@@ -271,7 +259,7 @@ NOTICE:  executing the command locally: TRUNCATE TABLE local_commands_test_schem
 NOTICE:  executing the command locally: TRUNCATE TABLE local_commands_test_schema.dist_table_xxxxx CASCADE
 NOTICE:  executing the command locally: TRUNCATE TABLE local_commands_test_schema.dist_table_xxxxx CASCADE
   ANALYZE ref_table;
-ERROR:  cannot execute command because a local execution has accessed a placement in the transaction
+ERROR:  cannot switch local execution status from local execution required to local execution disabled since it can cause visibility problems in the current transaction
 COMMIT;
 -- insert some data
 INSERT INTO ref_table VALUES(7);
@@ -665,17 +653,17 @@ NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1
 NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500130, 'local_commands_test_schema', 'ALTER TABLE dist_table ALTER COLUMN c SET NOT NULL;')
   CREATE TABLE another_dist_table(a int);
   SELECT create_distributed_table('another_dist_table', 'a', colocate_with:='dist_table');
-NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500133, 'local_commands_test_schema', 'CREATE TABLE local_commands_test_schema.another_dist_table (a integer)');SELECT worker_apply_shard_ddl_command (1500133, 'local_commands_test_schema', 'ALTER TABLE local_commands_test_schema.another_dist_table OWNER TO postgres')
-NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500136, 'local_commands_test_schema', 'CREATE TABLE local_commands_test_schema.another_dist_table (a integer)');SELECT worker_apply_shard_ddl_command (1500136, 'local_commands_test_schema', 'ALTER TABLE local_commands_test_schema.another_dist_table OWNER TO postgres')
-NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500139, 'local_commands_test_schema', 'CREATE TABLE local_commands_test_schema.another_dist_table (a integer)');SELECT worker_apply_shard_ddl_command (1500139, 'local_commands_test_schema', 'ALTER TABLE local_commands_test_schema.another_dist_table OWNER TO postgres')
-NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500142, 'local_commands_test_schema', 'CREATE TABLE local_commands_test_schema.another_dist_table (a integer)');SELECT worker_apply_shard_ddl_command (1500142, 'local_commands_test_schema', 'ALTER TABLE local_commands_test_schema.another_dist_table OWNER TO postgres')
-NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500145, 'local_commands_test_schema', 'CREATE TABLE local_commands_test_schema.another_dist_table (a integer)');SELECT worker_apply_shard_ddl_command (1500145, 'local_commands_test_schema', 'ALTER TABLE local_commands_test_schema.another_dist_table OWNER TO postgres')
-NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500148, 'local_commands_test_schema', 'CREATE TABLE local_commands_test_schema.another_dist_table (a integer)');SELECT worker_apply_shard_ddl_command (1500148, 'local_commands_test_schema', 'ALTER TABLE local_commands_test_schema.another_dist_table OWNER TO postgres')
-NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500151, 'local_commands_test_schema', 'CREATE TABLE local_commands_test_schema.another_dist_table (a integer)');SELECT worker_apply_shard_ddl_command (1500151, 'local_commands_test_schema', 'ALTER TABLE local_commands_test_schema.another_dist_table OWNER TO postgres')
-NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500154, 'local_commands_test_schema', 'CREATE TABLE local_commands_test_schema.another_dist_table (a integer)');SELECT worker_apply_shard_ddl_command (1500154, 'local_commands_test_schema', 'ALTER TABLE local_commands_test_schema.another_dist_table OWNER TO postgres')
-NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500157, 'local_commands_test_schema', 'CREATE TABLE local_commands_test_schema.another_dist_table (a integer)');SELECT worker_apply_shard_ddl_command (1500157, 'local_commands_test_schema', 'ALTER TABLE local_commands_test_schema.another_dist_table OWNER TO postgres')
-NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500160, 'local_commands_test_schema', 'CREATE TABLE local_commands_test_schema.another_dist_table (a integer)');SELECT worker_apply_shard_ddl_command (1500160, 'local_commands_test_schema', 'ALTER TABLE local_commands_test_schema.another_dist_table OWNER TO postgres')
-NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500163, 'local_commands_test_schema', 'CREATE TABLE local_commands_test_schema.another_dist_table (a integer)');SELECT worker_apply_shard_ddl_command (1500163, 'local_commands_test_schema', 'ALTER TABLE local_commands_test_schema.another_dist_table OWNER TO postgres')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500133, 'local_commands_test_schema', 'CREATE TABLE local_commands_test_schema.another_dist_table (a integer) ');SELECT worker_apply_shard_ddl_command (1500133, 'local_commands_test_schema', 'ALTER TABLE local_commands_test_schema.another_dist_table OWNER TO postgres')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500136, 'local_commands_test_schema', 'CREATE TABLE local_commands_test_schema.another_dist_table (a integer) ');SELECT worker_apply_shard_ddl_command (1500136, 'local_commands_test_schema', 'ALTER TABLE local_commands_test_schema.another_dist_table OWNER TO postgres')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500139, 'local_commands_test_schema', 'CREATE TABLE local_commands_test_schema.another_dist_table (a integer) ');SELECT worker_apply_shard_ddl_command (1500139, 'local_commands_test_schema', 'ALTER TABLE local_commands_test_schema.another_dist_table OWNER TO postgres')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500142, 'local_commands_test_schema', 'CREATE TABLE local_commands_test_schema.another_dist_table (a integer) ');SELECT worker_apply_shard_ddl_command (1500142, 'local_commands_test_schema', 'ALTER TABLE local_commands_test_schema.another_dist_table OWNER TO postgres')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500145, 'local_commands_test_schema', 'CREATE TABLE local_commands_test_schema.another_dist_table (a integer) ');SELECT worker_apply_shard_ddl_command (1500145, 'local_commands_test_schema', 'ALTER TABLE local_commands_test_schema.another_dist_table OWNER TO postgres')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500148, 'local_commands_test_schema', 'CREATE TABLE local_commands_test_schema.another_dist_table (a integer) ');SELECT worker_apply_shard_ddl_command (1500148, 'local_commands_test_schema', 'ALTER TABLE local_commands_test_schema.another_dist_table OWNER TO postgres')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500151, 'local_commands_test_schema', 'CREATE TABLE local_commands_test_schema.another_dist_table (a integer) ');SELECT worker_apply_shard_ddl_command (1500151, 'local_commands_test_schema', 'ALTER TABLE local_commands_test_schema.another_dist_table OWNER TO postgres')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500154, 'local_commands_test_schema', 'CREATE TABLE local_commands_test_schema.another_dist_table (a integer) ');SELECT worker_apply_shard_ddl_command (1500154, 'local_commands_test_schema', 'ALTER TABLE local_commands_test_schema.another_dist_table OWNER TO postgres')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500157, 'local_commands_test_schema', 'CREATE TABLE local_commands_test_schema.another_dist_table (a integer) ');SELECT worker_apply_shard_ddl_command (1500157, 'local_commands_test_schema', 'ALTER TABLE local_commands_test_schema.another_dist_table OWNER TO postgres')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500160, 'local_commands_test_schema', 'CREATE TABLE local_commands_test_schema.another_dist_table (a integer) ');SELECT worker_apply_shard_ddl_command (1500160, 'local_commands_test_schema', 'ALTER TABLE local_commands_test_schema.another_dist_table OWNER TO postgres')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1500163, 'local_commands_test_schema', 'CREATE TABLE local_commands_test_schema.another_dist_table (a integer) ');SELECT worker_apply_shard_ddl_command (1500163, 'local_commands_test_schema', 'ALTER TABLE local_commands_test_schema.another_dist_table OWNER TO postgres')
  create_distributed_table
 ---------------------------------------------------------------------
 

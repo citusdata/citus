@@ -568,7 +568,8 @@ static DistributedExecution * CreateDistributedExecution(RowModifyLevel modLevel
 														 defaultTupleDest,
 														 TransactionProperties *
 														 xactProperties,
-														 List *jobIdList);
+														 List *jobIdList,
+														 bool localExecutionSupported);
 static TransactionProperties DecideTransactionPropertiesForTaskList(RowModifyLevel
 																	modLevel,
 																	List *taskList,
@@ -585,8 +586,6 @@ static void CleanUpSessions(DistributedExecution *execution);
 
 static void LockPartitionsForDistributedPlan(DistributedPlan *distributedPlan);
 static void AcquireExecutorShardLocksForExecution(DistributedExecution *execution);
-static void AdjustDistributedExecutionWithLocalExecution(DistributedExecution *
-														 execution);
 static bool DistributedExecutionModifiesDatabase(DistributedExecution *execution);
 static bool IsMultiShardModification(RowModifyLevel modLevel, List *taskList);
 static bool TaskListModifiesDatabase(RowModifyLevel modLevel, List *taskList);
@@ -746,7 +745,7 @@ AdaptiveExecutor(CitusScanState *scanState)
 		distributedPlan->modLevel, taskList,
 		hasDependentJobs);
 
-
+	bool localExecutionSupported = true;
 	DistributedExecution *execution = CreateDistributedExecution(
 		distributedPlan->modLevel,
 		taskList,
@@ -754,19 +753,14 @@ AdaptiveExecutor(CitusScanState *scanState)
 		targetPoolSize,
 		defaultTupleDest,
 		&xactProperties,
-		jobIdList);
+		jobIdList,
+		localExecutionSupported);
 
 	/*
 	 * Make sure that we acquire the appropriate locks even if the local tasks
 	 * are going to be executed with local execution.
 	 */
 	StartDistributedExecution(execution);
-
-	/*
-	 * Make sure that we only execute remoteTaskList via remote execution
-	 * and let localTaskList to be executed via localexecution.
-	 */
-	AdjustDistributedExecutionWithLocalExecution(execution);
 
 	if (ShouldRunTasksSequentially(execution->tasksToExecute))
 	{
@@ -835,24 +829,6 @@ RunLocalExecution(CitusScanState *scanState, DistributedExecution *execution)
 														isUtilityCommand);
 
 	execution->rowsProcessed += rowsProcessed;
-}
-
-
-/*
- * AdjustDistributedExecutionWithLocalExecution simply updates the necessary fields of
- * the distributed execution.
- */
-static void
-AdjustDistributedExecutionWithLocalExecution(DistributedExecution *execution)
-{
-	if (list_length(execution->localTaskList) > 0)
-	{
-		/* we only need to execute the remote tasks */
-		execution->tasksToExecute = execution->remoteTaskList;
-
-		execution->totalTaskCount = list_length(execution->remoteTaskList);
-		execution->unfinishedTaskCount = list_length(execution->remoteTaskList);
-	}
 }
 
 
@@ -956,44 +932,8 @@ ExecuteTaskListExtended(ExecutionParams *executionParams)
 {
 	ParamListInfo paramListInfo = NULL;
 	uint64 locallyProcessedRows = 0;
-	List *localTaskList = NIL;
-	List *remoteTaskList = NIL;
 
 	TupleDestination *defaultTupleDest = executionParams->tupleDestination;
-
-	if (executionParams->localExecutionSupported && ShouldExecuteTasksLocally(
-			executionParams->taskList))
-	{
-		bool readOnlyPlan = false;
-		ExtractLocalAndRemoteTasks(readOnlyPlan, executionParams->taskList,
-								   &localTaskList,
-								   &remoteTaskList);
-	}
-	else
-	{
-		remoteTaskList = executionParams->taskList;
-	}
-
-	/*
-	 * If current transaction accessed local placements and task list includes
-	 * tasks that should be executed locally (accessing any of the local placements),
-	 * then we should error out as it would cause inconsistencies across the
-	 * remote connection and local execution.
-	 */
-	if (GetCurrentLocalExecutionStatus() == LOCAL_EXECUTION_REQUIRED &&
-		AnyTaskAccessesLocalNode(remoteTaskList))
-	{
-		ErrorIfTransactionAccessedPlacementsLocally();
-	}
-
-	if (executionParams->isUtilityCommand)
-	{
-		locallyProcessedRows += ExecuteLocalUtilityTaskList(localTaskList);
-	}
-	else
-	{
-		locallyProcessedRows += ExecuteLocalTaskList(localTaskList, defaultTupleDest);
-	}
 
 	if (MultiShardConnectionType == SEQUENTIAL_CONNECTION)
 	{
@@ -1002,14 +942,40 @@ ExecuteTaskListExtended(ExecutionParams *executionParams)
 
 	DistributedExecution *execution =
 		CreateDistributedExecution(
-			executionParams->modLevel, remoteTaskList,
+			executionParams->modLevel, executionParams->taskList,
 			paramListInfo, executionParams->targetPoolSize,
 			defaultTupleDest, &executionParams->xactProperties,
-			executionParams->jobIdList);
+			executionParams->jobIdList, executionParams->localExecutionSupported);
 
+	/*
+	 * If current transaction accessed local placements and task list includes
+	 * tasks that should be executed locally (accessing any of the local placements),
+	 * then we should error out as it would cause inconsistencies across the
+	 * remote connection and local execution.
+	 */
+	List *localTaskList = execution->localTaskList;
+	List *remoteTaskList =
+		localTaskList != NIL ? execution->remoteTaskList : execution->tasksToExecute;
+	if (GetCurrentLocalExecutionStatus() == LOCAL_EXECUTION_REQUIRED &&
+		AnyTaskAccessesLocalNode(remoteTaskList))
+	{
+		ErrorIfTransactionAccessedPlacementsLocally();
+	}
+
+	/* run the remote execution */
 	StartDistributedExecution(execution);
 	RunDistributedExecution(execution);
 	FinishDistributedExecution(execution);
+
+	/* now, switch back to the local execution */
+	if (executionParams->isUtilityCommand)
+	{
+		locallyProcessedRows += ExecuteLocalUtilityTaskList(execution->localTaskList);
+	}
+	else
+	{
+		locallyProcessedRows += ExecuteLocalTaskList(localTaskList, defaultTupleDest);
+	}
 
 	return execution->rowsProcessed + locallyProcessedRows;
 }
@@ -1049,7 +1015,7 @@ CreateDistributedExecution(RowModifyLevel modLevel, List *taskList,
 						   ParamListInfo paramListInfo,
 						   int targetPoolSize, TupleDestination *defaultTupleDest,
 						   TransactionProperties *xactProperties,
-						   List *jobIdList)
+						   List *jobIdList, bool localExecutionSupported)
 {
 	DistributedExecution *execution =
 		(DistributedExecution *) palloc0(sizeof(DistributedExecution));
@@ -1106,12 +1072,19 @@ CreateDistributedExecution(RowModifyLevel modLevel, List *taskList,
 		}
 	}
 
-	if (ShouldExecuteTasksLocally(taskList))
+	if (localExecutionSupported && ShouldExecuteTasksLocally(taskList))
 	{
 		bool readOnlyPlan = !TaskListModifiesDatabase(modLevel, taskList);
 
 		ExtractLocalAndRemoteTasks(readOnlyPlan, taskList, &execution->localTaskList,
 								   &execution->remoteTaskList);
+		if (list_length(execution->localTaskList) > 0)
+		{
+			/* tasksToExecute field is used for remote execution */
+			execution->tasksToExecute = execution->remoteTaskList;
+			execution->totalTaskCount = list_length(execution->remoteTaskList);
+			execution->unfinishedTaskCount = list_length(execution->remoteTaskList);
+		}
 	}
 
 	return execution;
