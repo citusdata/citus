@@ -24,6 +24,7 @@
 
 #include "distributed/citus_nodefuncs.h"
 #include "distributed/citus_nodes.h"
+#include "distributed/coordinator_protocol.h"
 #include "distributed/errormessage.h"
 #include "distributed/log_utils.h"
 #include "distributed/multi_logical_planner.h"
@@ -563,4 +564,21 @@ OutDeferredErrorMessage(OUTFUNC_ARGS)
 	WRITE_STRING_FIELD(filename);
 	WRITE_INT_FIELD(linenumber);
 	WRITE_STRING_FIELD(functionname);
+}
+
+
+void
+OutTableDDLCommand(OUTFUNC_ARGS)
+{
+	WRITE_LOCALS(TableDDLCommand);
+	WRITE_NODE_TYPE("TableDDLCommand");
+
+	switch (node->type)
+	{
+		case TABLE_DDL_COMMAND_STRING:
+		{
+			WRITE_STRING_FIELD(commandStr);
+			break;
+		}
+	}
 }

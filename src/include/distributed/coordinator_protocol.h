@@ -83,6 +83,59 @@ typedef enum
 	SHARD_PLACEMENT_RANDOM = 3
 } ShardPlacementPolicyType;
 
+/*
+ * TableDDLCommandType encodes the implementation used by TableDDLCommand. See comments in
+ * TableDDLCpmmand for details.
+ */
+typedef enum TableDDLCommandType
+{
+	TABLE_DDL_COMMAND_STRING,
+} TableDDLCommandType;
+
+
+/*
+ * TableDDLCommand holds the definition of a command to be executed to bring the table and
+ * or shard into a certain state. The command needs to be able to serialized into two
+ * versions:
+ *  - one version should have the vanilla commands operating on the base table. These are
+ *    used for example to create the MX table shards
+ *  - the second versions should replace all identifiers with an identifier containing the
+ *    shard id.
+ *
+ * Current implementations are
+ *  - command string, created via makeTableDDLCommandString. This variant contains a ddl
+ *    command that will be wrapped in `worker_apply_shard_ddl_command` when applied
+ *    against a shard.
+ */
+typedef struct TableDDLCommand
+{
+	CitusNode node;
+
+	/* encoding the type this TableDDLCommand contains */
+	TableDDLCommandType type;
+
+	/*
+	 * This union contains one (1) typed field for every implementation for
+	 * TableDDLCommand. A union enforces no overloading of fields but instead requiers at
+	 * most one of the fields to be used at any time.
+	 */
+	union
+	{
+		/*
+		 * CommandStr is used when type is set to TABLE_DDL_COMMAND_STRING. It holds the
+		 * sql ddl command string representing the ddl command.
+		 */
+		char *commandStr;
+	};
+} TableDDLCommand;
+
+/* make functions for TableDDLCommand */
+extern TableDDLCommand * makeTableDDLCommandString(char *commandStr);
+
+extern char * GetShardedTableDDLCommand(TableDDLCommand *command, uint64 shardId,
+										char *schemaName);
+extern char * GetTableDDLCommand(TableDDLCommand *command);
+
 
 /* Config variables managed via guc.c */
 extern int ShardCount;

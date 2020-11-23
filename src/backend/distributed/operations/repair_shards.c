@@ -979,7 +979,7 @@ RecreateTableDDLCommandList(Oid relationId)
 							   "table")));
 	}
 
-	List *dropCommandList = list_make1(dropCommand->data);
+	List *dropCommandList = list_make1(makeTableDDLCommandString(dropCommand->data));
 	List *createCommandList = GetPreLoadTableCreationCommands(relationId,
 															  includeSequenceDefaults);
 	List *recreateCommandList = list_concat(dropCommandList, createCommandList);
@@ -996,20 +996,15 @@ RecreateTableDDLCommandList(Oid relationId)
 static List *
 WorkerApplyShardDDLCommandList(List *ddlCommandList, int64 shardId)
 {
-	List *applyDdlCommandList = NIL;
+	List *applyDDLCommandList = NIL;
 
-	const char *ddlCommand = NULL;
+	TableDDLCommand *ddlCommand = NULL;
 	foreach_ptr(ddlCommand, ddlCommandList)
 	{
-		char *escapedDdlCommand = quote_literal_cstr(ddlCommand);
-
-		StringInfo applyDdlCommand = makeStringInfo();
-		appendStringInfo(applyDdlCommand,
-						 WORKER_APPLY_SHARD_DDL_COMMAND_WITHOUT_SCHEMA,
-						 shardId, escapedDdlCommand);
-
-		applyDdlCommandList = lappend(applyDdlCommandList, applyDdlCommand->data);
+		Assert(CitusIsA(ddlCommand, TableDDLCommand));
+		char *applyDDLCommand = GetShardedTableDDLCommand(ddlCommand, shardId, NULL);
+		applyDDLCommandList = lappend(applyDDLCommandList, applyDDLCommand);
 	}
 
-	return applyDdlCommandList;
+	return applyDDLCommandList;
 }

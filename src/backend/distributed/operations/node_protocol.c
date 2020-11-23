@@ -244,8 +244,9 @@ master_get_table_ddl_events(PG_FUNCTION_ARGS)
 		(ListCellAndListWrapper *) functionContext->user_fctx;
 	if (wrapper->listCell != NULL)
 	{
-		char *ddlStatement = (char *) lfirst(wrapper->listCell);
-		text *ddlStatementText = cstring_to_text(ddlStatement);
+		TableDDLCommand *ddlStatement = (TableDDLCommand *) lfirst(wrapper->listCell);
+		Assert(CitusIsA(ddlStatement, TableDDLCommand));
+		text *ddlStatementText = cstring_to_text(GetTableDDLCommand(ddlStatement));
 
 		wrapper->listCell = lnext_compat(wrapper->list, wrapper->listCell);
 
@@ -595,8 +596,9 @@ GetTableReplicaIdentityCommand(Oid relationId)
 
 	if (replicaIdentityCreateCommand)
 	{
-		replicaIdentityCreateCommandList = lappend(replicaIdentityCreateCommandList,
-												   replicaIdentityCreateCommand);
+		replicaIdentityCreateCommandList = lappend(
+			replicaIdentityCreateCommandList,
+			makeTableDDLCommandString(replicaIdentityCreateCommand));
 	}
 
 	return replicaIdentityCreateCommandList;
@@ -624,9 +626,11 @@ GetPreLoadTableCreationCommands(Oid relationId, bool includeSequenceDefaults)
 
 		if (extensionDef != NULL)
 		{
-			tableDDLEventList = lappend(tableDDLEventList, extensionDef);
+			tableDDLEventList = lappend(tableDDLEventList,
+										makeTableDDLCommandString(extensionDef));
 		}
-		tableDDLEventList = lappend(tableDDLEventList, serverDef);
+		tableDDLEventList = lappend(tableDDLEventList,
+									makeTableDDLCommandString(serverDef));
 	}
 
 	/* fetch table schema and column option definitions */
@@ -634,16 +638,19 @@ GetPreLoadTableCreationCommands(Oid relationId, bool includeSequenceDefaults)
 														includeSequenceDefaults);
 	char *tableColumnOptionsDef = pg_get_tablecolumnoptionsdef_string(relationId);
 
-	tableDDLEventList = lappend(tableDDLEventList, tableSchemaDef);
+	tableDDLEventList = lappend(tableDDLEventList, makeTableDDLCommandString(
+									tableSchemaDef));
 	if (tableColumnOptionsDef != NULL)
 	{
-		tableDDLEventList = lappend(tableDDLEventList, tableColumnOptionsDef);
+		tableDDLEventList = lappend(tableDDLEventList, makeTableDDLCommandString(
+										tableColumnOptionsDef));
 	}
 
 	char *tableOwnerDef = TableOwnerResetCommand(relationId);
 	if (tableOwnerDef != NULL)
 	{
-		tableDDLEventList = lappend(tableDDLEventList, tableOwnerDef);
+		tableDDLEventList = lappend(tableDDLEventList, makeTableDDLCommandString(
+										tableOwnerDef));
 	}
 
 	List *policyCommands = CreatePolicyCommands(relationId);
@@ -676,7 +683,8 @@ GetTableIndexAndConstraintCommands(Oid relationId)
 				BTEqualStrategyNumber, F_OIDEQ, relationId);
 
 	SysScanDesc scanDescriptor = systable_beginscan(pgIndex,
-													IndexIndrelidIndexId, true, /* indexOK */
+													IndexIndrelidIndexId,
+													true, /* indexOK */
 													NULL, scanKeyCount, scanKey);
 
 	HeapTuple heapTuple = systable_getnext(scanDescriptor);
@@ -702,7 +710,8 @@ GetTableIndexAndConstraintCommands(Oid relationId)
 		}
 
 		/* append found constraint or index definition to the list */
-		indexDDLEventList = lappend(indexDDLEventList, statementDef);
+		indexDDLEventList = lappend(indexDDLEventList, makeTableDDLCommandString(
+										statementDef));
 
 		/* if table is clustered on this index, append definition to the list */
 		if (indexForm->indisclustered)
@@ -710,7 +719,8 @@ GetTableIndexAndConstraintCommands(Oid relationId)
 			char *clusteredDef = pg_get_indexclusterdef_string(indexId);
 			Assert(clusteredDef != NULL);
 
-			indexDDLEventList = lappend(indexDDLEventList, clusteredDef);
+			indexDDLEventList = lappend(indexDDLEventList, makeTableDDLCommandString(
+											clusteredDef));
 		}
 
 		heapTuple = systable_getnext(scanDescriptor);
@@ -840,4 +850,106 @@ bool
 DistributedTableReplicationIsEnabled()
 {
 	return (ShardReplicationFactor > 1);
+}
+
+
+/*
+ * makeTableDDLCommandString creates a TableDDLCommand based on a constant string. If the
+ * TableDDLCommand is turned into a sharded table command the constant will be wrapped in
+ * worker_apply_shard_ddl_command with the target shardId. If the command applies to an
+ * un-sharded table (eg. mx) the command is applied as is.
+ */
+TableDDLCommand *
+makeTableDDLCommandString(char *commandStr)
+{
+	TableDDLCommand *command = CitusMakeNode(TableDDLCommand);
+
+	command->type = TABLE_DDL_COMMAND_STRING;
+	command->commandStr = commandStr;
+
+	return command;
+}
+
+
+/*
+ * GetShardedTableDDLCommandString is the internal function for TableDDLCommand objects
+ * created with makeTableDDLCommandString.
+ */
+static char *
+GetShardedTableDDLCommandString(TableDDLCommand *command, uint64 shardId,
+								char *schemaName)
+{
+	StringInfoData buf = { 0 };
+	initStringInfo(&buf);
+
+	Assert(command->type == TABLE_DDL_COMMAND_STRING);
+
+	char *escapedDDLCommand = quote_literal_cstr(command->commandStr);
+
+	if (schemaName != NULL && strcmp(schemaName, "public") != 0)
+	{
+		char *escapedSchemaName = quote_literal_cstr(schemaName);
+		appendStringInfo(&buf, WORKER_APPLY_SHARD_DDL_COMMAND, shardId, escapedSchemaName,
+						 escapedDDLCommand);
+	}
+	else
+	{
+		appendStringInfo(&buf, WORKER_APPLY_SHARD_DDL_COMMAND_WITHOUT_SCHEMA, shardId,
+						 escapedDDLCommand);
+	}
+
+	return buf.data;
+}
+
+
+/*
+ * GetTableDDLCommandString is the internal function for TableDDLCommand objects created
+ * with makeTableDDLCommandString to return the non-sharded version of the ddl command.
+ */
+static char *
+GetTableDDLCommandString(TableDDLCommand *command)
+{
+	Assert(command->type == TABLE_DDL_COMMAND_STRING);
+	return command->commandStr;
+}
+
+
+/*
+ * GetShardedTableDDLCommand returns the ddl command expressed by this TableDDLCommand
+ * where all applicable names are transformed into the names for a shard identified by
+ * shardId
+ */
+char *
+GetShardedTableDDLCommand(TableDDLCommand *command, uint64 shardId, char *schemaName)
+{
+	switch (command->type)
+	{
+		case TABLE_DDL_COMMAND_STRING:
+		{
+			return GetShardedTableDDLCommandString(command, shardId, schemaName);
+		}
+	}
+
+	/* unreachable: compiler should warn/error when not all cases are covered above */
+	ereport(ERROR, (errmsg("unsupported TableDDLCommand: %d", command->type)));
+}
+
+
+/*
+ * GetTableDDLCommand returns the ddl command expressed by this TableDDLCommand where all
+ * table names are targeting the base table, not any shards.
+ */
+char *
+GetTableDDLCommand(TableDDLCommand *command)
+{
+	switch (command->type)
+	{
+		case TABLE_DDL_COMMAND_STRING:
+		{
+			return GetTableDDLCommandString(command);
+		}
+	}
+
+	/* unreachable: compiler should warn/error when not all cases are covered above */
+	ereport(ERROR, (errmsg("unsupported TableDDLCommand: %d", command->type)));
 }

@@ -26,6 +26,7 @@
 #include "distributed/citus_ruleutils.h"
 #include "distributed/commands.h"
 #include "distributed/commands/utility_hook.h"
+#include "distributed/coordinator_protocol.h"
 #include "distributed/deparser.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
@@ -75,8 +76,9 @@ GetExplicitTriggerCommandList(Oid relationId)
 	{
 		char *createTriggerCommand = pg_get_triggerdef_command(triggerId);
 
-		createTriggerCommandList = lappend(createTriggerCommandList,
-										   createTriggerCommand);
+		createTriggerCommandList = lappend(
+			createTriggerCommandList,
+			makeTableDDLCommandString(createTriggerCommand));
 	}
 
 	/* revert back to original search_path */

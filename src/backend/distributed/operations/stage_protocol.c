@@ -678,25 +678,13 @@ WorkerCreateShardCommandList(Oid relationId, int shardIndex, uint64 shardId,
 	char *schemaName = get_namespace_name(schemaId);
 	char *escapedSchemaName = quote_literal_cstr(schemaName);
 
-	const char *ddlCommand = NULL;
+	TableDDLCommand *ddlCommand = NULL;
 	foreach_ptr(ddlCommand, ddlCommandList)
 	{
-		char *escapedDDLCommand = quote_literal_cstr(ddlCommand);
-		StringInfo applyDDLCommand = makeStringInfo();
-
-		if (strcmp(schemaName, "public") != 0)
-		{
-			appendStringInfo(applyDDLCommand, WORKER_APPLY_SHARD_DDL_COMMAND, shardId,
-							 escapedSchemaName, escapedDDLCommand);
-		}
-		else
-		{
-			appendStringInfo(applyDDLCommand,
-							 WORKER_APPLY_SHARD_DDL_COMMAND_WITHOUT_SCHEMA, shardId,
-							 escapedDDLCommand);
-		}
-
-		commandList = lappend(commandList, applyDDLCommand->data);
+		Assert(CitusIsA(ddlCommand, TableDDLCommand));
+		char *applyDDLCommand = GetShardedTableDDLCommand(ddlCommand, shardId,
+														  schemaName);
+		commandList = lappend(commandList, applyDDLCommand);
 	}
 
 	const char *command = NULL;
