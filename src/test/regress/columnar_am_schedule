@@ -19,3 +19,4 @@ test: am_tableoptions
 test: am_recursive
 test: am_transactions
 test: am_matview
+test: am_memory
