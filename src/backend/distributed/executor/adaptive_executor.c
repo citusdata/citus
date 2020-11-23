@@ -2470,6 +2470,20 @@ ShouldWaitForSlowStart(WorkerPool *workerPool)
 	{
 		return true;
 	}
+
+	/*
+	 * Refrain from establishing new connections unless we have already
+	 * finalized all the earlier connection attempts. This prevents unnecessary
+	 * load on the remote nodes and emulates the TCP slow-start algorithm.
+	 */
+	int initiatedConnectionCount = list_length(workerPool->sessionList);
+	int finalizedConnectionCount =
+		workerPool->activeConnectionCount + workerPool->failedConnectionCount;
+	if (finalizedConnectionCount < initiatedConnectionCount)
+	{
+		return true;
+	}
+
 	return false;
 }
 
