@@ -1,3 +1,9 @@
+### citus v9.4.3 (November 24, 2020) ###
+
+* Enables PostgreSQL's parallel queries on EXPLAIN ANALYZE
+
+* Fixes a bug that triggers subplan executions unnecessarily with cursors
+
 ### citus v9.4.2 (October 21, 2020) ###
 
 * Fixes a bug that could lead to multiple maintenance daemons
