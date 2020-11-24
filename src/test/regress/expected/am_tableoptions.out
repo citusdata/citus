@@ -3,7 +3,7 @@ SET search_path TO am_tableoptions;
 CREATE TABLE table_options (a int) USING columnar;
 INSERT INTO table_options SELECT generate_series(1,100);
 -- show table_options settings
-SELECT * FROM cstore.columnar_options
+SELECT * FROM cstore.options
 WHERE regclass = 'table_options'::regclass;
    regclass    | block_row_count | stripe_row_count | compression
 ---------------------------------------------------------------------
@@ -18,7 +18,7 @@ SELECT alter_columnar_table_set('table_options', compression => 'pglz');
 (1 row)
 
 -- show table_options settings
-SELECT * FROM cstore.columnar_options
+SELECT * FROM cstore.options
 WHERE regclass = 'table_options'::regclass;
    regclass    | block_row_count | stripe_row_count | compression
 ---------------------------------------------------------------------
@@ -33,7 +33,7 @@ SELECT alter_columnar_table_set('table_options', block_row_count => 10);
 (1 row)
 
 -- show table_options settings
-SELECT * FROM cstore.columnar_options
+SELECT * FROM cstore.options
 WHERE regclass = 'table_options'::regclass;
    regclass    | block_row_count | stripe_row_count | compression
 ---------------------------------------------------------------------
@@ -48,7 +48,7 @@ SELECT alter_columnar_table_set('table_options', stripe_row_count => 100);
 (1 row)
 
 -- show table_options settings
-SELECT * FROM cstore.columnar_options
+SELECT * FROM cstore.options
 WHERE regclass = 'table_options'::regclass;
    regclass    | block_row_count | stripe_row_count | compression
 ---------------------------------------------------------------------
@@ -58,7 +58,7 @@ WHERE regclass = 'table_options'::regclass;
 -- VACUUM FULL creates a new table, make sure it copies settings from the table you are vacuuming
 VACUUM FULL table_options;
 -- show table_options settings
-SELECT * FROM cstore.columnar_options
+SELECT * FROM cstore.options
 WHERE regclass = 'table_options'::regclass;
    regclass    | block_row_count | stripe_row_count | compression
 ---------------------------------------------------------------------
@@ -73,7 +73,7 @@ SELECT alter_columnar_table_set('table_options', stripe_row_count => 1000, block
 (1 row)
 
 -- show table_options settings
-SELECT * FROM cstore.columnar_options
+SELECT * FROM cstore.options
 WHERE regclass = 'table_options'::regclass;
    regclass    | block_row_count | stripe_row_count | compression
 ---------------------------------------------------------------------
@@ -86,7 +86,7 @@ SET cstore.stripe_row_count TO 10000;
 SET cstore.compression TO 'pglz';
 -- verify setting the GUC's didn't change the settings
 -- show table_options settings
-SELECT * FROM cstore.columnar_options
+SELECT * FROM cstore.options
 WHERE regclass = 'table_options'::regclass;
    regclass    | block_row_count | stripe_row_count | compression
 ---------------------------------------------------------------------
@@ -100,7 +100,7 @@ SELECT alter_columnar_table_reset('table_options', block_row_count => true);
 (1 row)
 
 -- show table_options settings
-SELECT * FROM cstore.columnar_options
+SELECT * FROM cstore.options
 WHERE regclass = 'table_options'::regclass;
    regclass    | block_row_count | stripe_row_count | compression
 ---------------------------------------------------------------------
@@ -114,7 +114,7 @@ SELECT alter_columnar_table_reset('table_options', stripe_row_count => true);
 (1 row)
 
 -- show table_options settings
-SELECT * FROM cstore.columnar_options
+SELECT * FROM cstore.options
 WHERE regclass = 'table_options'::regclass;
    regclass    | block_row_count | stripe_row_count | compression
 ---------------------------------------------------------------------
@@ -128,7 +128,7 @@ SELECT alter_columnar_table_reset('table_options', compression => true);
 (1 row)
 
 -- show table_options settings
-SELECT * FROM cstore.columnar_options
+SELECT * FROM cstore.options
 WHERE regclass = 'table_options'::regclass;
    regclass    | block_row_count | stripe_row_count | compression
 ---------------------------------------------------------------------
@@ -140,7 +140,7 @@ SET cstore.block_row_count TO 10000;
 SET cstore.stripe_row_count TO 100000;
 SET cstore.compression TO 'none';
 -- show table_options settings
-SELECT * FROM cstore.columnar_options
+SELECT * FROM cstore.options
 WHERE regclass = 'table_options'::regclass;
    regclass    | block_row_count | stripe_row_count | compression
 ---------------------------------------------------------------------
@@ -158,7 +158,7 @@ SELECT alter_columnar_table_reset(
 (1 row)
 
 -- show table_options settings
-SELECT * FROM cstore.columnar_options
+SELECT * FROM cstore.options
 WHERE regclass = 'table_options'::regclass;
    regclass    | block_row_count | stripe_row_count | compression
 ---------------------------------------------------------------------

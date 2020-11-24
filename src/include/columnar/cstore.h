@@ -66,12 +66,12 @@ typedef enum
  * a cstore file. To resolve these values, we first check foreign table's options,
  * and if not present, we then fall back to the default values specified above.
  */
-typedef struct CStoreOptions
+typedef struct ColumnarOptions
 {
-	CompressionType compressionType;
 	uint64 stripeRowCount;
 	uint32 blockRowCount;
-} CStoreOptions;
+	CompressionType compressionType;
+} ColumnarOptions;
 
 
 /*
@@ -94,9 +94,7 @@ typedef struct StripeMetadata
 typedef struct DataFileMetadata
 {
 	List *stripeMetadataList;
-	uint64 blockRowCount;
-	uint64 stripeRowCount;
-	CompressionType compression;
+	ColumnarOptions options;
 } DataFileMetadata;
 
 
@@ -285,12 +283,12 @@ extern bool CompressBuffer(StringInfo inputBuffer, StringInfo outputBuffer,
 						   CompressionType compressionType);
 extern StringInfo DecompressBuffer(StringInfo buffer, CompressionType compressionType);
 extern char * CompressionTypeStr(CompressionType type);
-extern CStoreOptions * CStoreTableAMGetOptions(Oid relfilenode);
 
 /* cstore_metadata_tables.c */
+extern void SetColumnarOptions(Oid regclass, ColumnarOptions *options);
+extern bool ReadColumnarOptions(Oid regclass, ColumnarOptions *options);
 extern void DeleteDataFileMetadataRowIfExists(Oid relfilenode);
-extern void InitCStoreDataFileMetadata(Oid relfilenode, int blockRowCount, int
-									   stripeRowCount, CompressionType compression);
+extern void InitCStoreDataFileMetadata(Oid relfilenode);
 extern void UpdateCStoreDataFileMetadata(Oid relfilenode, int blockRowCount, int
 										 stripeRowCount, CompressionType compression);
 extern DataFileMetadata * ReadDataFileMetadata(Oid relfilenode, bool missingOk);
@@ -307,7 +305,7 @@ extern StripeSkipList * ReadStripeSkipList(Oid relfilenode, uint64 stripe,
 
 
 /* write_state_management.c */
-extern TableWriteState * cstore_init_write_state(RelFileNode relfilenode, TupleDesc
+extern TableWriteState * cstore_init_write_state(Relation relation, TupleDesc
 												 tupdesc,
 												 SubTransactionId currentSubXid);
 extern void FlushWriteStateForRelfilenode(Oid relfilenode, SubTransactionId

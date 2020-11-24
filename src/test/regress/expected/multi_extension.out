@@ -475,7 +475,7 @@ SELECT * FROM print_extension_changes();
 -- Snapshot of state at 10.0-1
 ALTER EXTENSION citus UPDATE TO '10.0-1';
 SELECT * FROM print_extension_changes();
- previous_object |                           current_object
+ previous_object |                            current_object
 ---------------------------------------------------------------------
                  | access method columnar
                  | function alter_columnar_table_reset(regclass,boolean,boolean,boolean)
@@ -486,7 +486,7 @@ SELECT * FROM print_extension_changes();
                  | table cstore.cstore_data_files
                  | table cstore.cstore_skipnodes
                  | table cstore.cstore_stripes
-                 | view cstore.columnar_options
+                 | table cstore.options
 (10 rows)
 
 DROP TABLE prev_objects, extension_diff;

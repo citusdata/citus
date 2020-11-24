@@ -113,39 +113,6 @@ static void LogRelationStats(Relation rel, int elevel);
 static void TruncateCStore(Relation rel, int elevel);
 
 
-/*
- * CStoreTableAMDefaultOptions returns the default options for a cstore table am table.
- * These options are based on the GUC's controlling the defaults.
- */
-static CStoreOptions *
-CStoreTableAMDefaultOptions()
-{
-	CStoreOptions *cstoreOptions = palloc0(sizeof(CStoreOptions));
-	cstoreOptions->compressionType = cstore_compression;
-	cstoreOptions->stripeRowCount = cstore_stripe_row_count;
-	cstoreOptions->blockRowCount = cstore_block_row_count;
-	return cstoreOptions;
-}
-
-
-/*
- * CStoreTableAMGetOptions returns the options based on a relation. It is advised the
- * relation is a cstore table am table, if not it will raise an error
- */
-CStoreOptions *
-CStoreTableAMGetOptions(Oid relfilenode)
-{
-	Assert(OidIsValid(relfilenode));
-
-	CStoreOptions *cstoreOptions = palloc0(sizeof(CStoreOptions));
-	DataFileMetadata *metadata = ReadDataFileMetadata(relfilenode, false);
-	cstoreOptions->compressionType = metadata->compression;
-	cstoreOptions->stripeRowCount = metadata->stripeRowCount;
-	cstoreOptions->blockRowCount = metadata->blockRowCount;
-	return cstoreOptions;
-}
-
-
 static List *
 RelationColumnList(Relation rel)
 {
@@ -450,7 +417,7 @@ cstore_tuple_insert(Relation relation, TupleTableSlot *slot, CommandId cid,
 	 * cstore_init_write_state allocates the write state in a longer
 	 * lasting context, so no need to worry about it.
 	 */
-	TableWriteState *writeState = cstore_init_write_state(relation->rd_node,
+	TableWriteState *writeState = cstore_init_write_state(relation,
 														  RelationGetDescr(relation),
 														  GetCurrentSubTransactionId());
 
@@ -496,7 +463,7 @@ static void
 cstore_multi_insert(Relation relation, TupleTableSlot **slots, int ntuples,
 					CommandId cid, int options, BulkInsertState bistate)
 {
-	TableWriteState *writeState = cstore_init_write_state(relation->rd_node,
+	TableWriteState *writeState = cstore_init_write_state(relation,
 														  RelationGetDescr(relation),
 														  GetCurrentSubTransactionId());
 
@@ -570,29 +537,9 @@ cstore_relation_set_new_filenode(Relation rel,
 								 TransactionId *freezeXid,
 								 MultiXactId *minmulti)
 {
-	DataFileMetadata *metadata = ReadDataFileMetadata(rel->rd_node.relNode, true);
-	uint64 blockRowCount = 0;
-	uint64 stripeRowCount = 0;
-	CompressionType compression = 0;
 	Oid oldRelfilenode = rel->rd_node.relNode;
 
 	MarkRelfilenodeDropped(oldRelfilenode, GetCurrentSubTransactionId());
-
-	if (metadata != NULL)
-	{
-		/* existing table (e.g. TRUNCATE), use existing blockRowCount */
-		blockRowCount = metadata->blockRowCount;
-		stripeRowCount = metadata->stripeRowCount;
-		compression = metadata->compression;
-	}
-	else
-	{
-		/* new table, use options */
-		CStoreOptions *options = CStoreTableAMDefaultOptions();
-		blockRowCount = options->blockRowCount;
-		stripeRowCount = options->stripeRowCount;
-		compression = options->compressionType;
-	}
 
 	/* delete old relfilenode metadata */
 	DeleteDataFileMetadataRowIfExists(rel->rd_node.relNode);
@@ -601,8 +548,16 @@ cstore_relation_set_new_filenode(Relation rel,
 	*freezeXid = RecentXmin;
 	*minmulti = GetOldestMultiXactId();
 	SMgrRelation srel = RelationCreateStorage(*newrnode, persistence);
-	InitCStoreDataFileMetadata(newrnode->relNode, blockRowCount, stripeRowCount,
-							   compression);
+	InitCStoreDataFileMetadata(newrnode->relNode);
+
+	/* populate with default options */
+	ColumnarOptions defaultOptions = {
+		.blockRowCount = cstore_block_row_count,
+		.stripeRowCount = cstore_stripe_row_count,
+		.compressionType = cstore_compression
+	};
+	SetColumnarOptions(rel->rd_id, &defaultOptions);
+
 	smgrclose(srel);
 }
 
@@ -611,7 +566,6 @@ static void
 cstore_relation_nontransactional_truncate(Relation rel)
 {
 	Oid relfilenode = rel->rd_node.relNode;
-	DataFileMetadata *metadata = ReadDataFileMetadata(relfilenode, false);
 
 	NonTransactionDropWriteState(relfilenode);
 
@@ -626,8 +580,7 @@ cstore_relation_nontransactional_truncate(Relation rel)
 
 	/* Delete old relfilenode metadata and recreate it */
 	DeleteDataFileMetadataRowIfExists(rel->rd_node.relNode);
-	InitCStoreDataFileMetadata(rel->rd_node.relNode, metadata->blockRowCount,
-							   metadata->stripeRowCount, metadata->compression);
+	InitCStoreDataFileMetadata(rel->rd_node.relNode);
 }
 
 
@@ -670,24 +623,14 @@ cstore_relation_copy_for_cluster(Relation OldHeap, Relation NewHeap,
 	 */
 	Assert(sourceDesc->natts == targetDesc->natts);
 
-	/*
-	 * Since we are copying into a new relation we need to copy the settings from the old
-	 * relation first.
-	 */
-
-	CStoreOptions *cstoreOptions = CStoreTableAMGetOptions(OldHeap->rd_node.relNode);
-
-	UpdateCStoreDataFileMetadata(NewHeap->rd_node.relNode,
-								 cstoreOptions->blockRowCount,
-								 cstoreOptions->stripeRowCount,
-								 cstoreOptions->compressionType);
-
-	cstoreOptions = CStoreTableAMGetOptions(NewHeap->rd_node.relNode);
+	/* read settings from old heap, relfilenode will be swapped at the end */
+	ColumnarOptions cstoreOptions = { 0 };
+	ReadColumnarOptions(OldHeap->rd_id, &cstoreOptions);
 
 	TableWriteState *writeState = CStoreBeginWrite(NewHeap->rd_node,
-												   cstoreOptions->compressionType,
-												   cstoreOptions->stripeRowCount,
-												   cstoreOptions->blockRowCount,
+												   cstoreOptions.compressionType,
+												   cstoreOptions.stripeRowCount,
+												   cstoreOptions.blockRowCount,
 												   targetDesc);
 
 	TableReadState *readState = CStoreBeginRead(OldHeap, sourceDesc,
@@ -1367,47 +1310,50 @@ alter_columnar_table_set(PG_FUNCTION_ARGS)
 	Oid relationId = PG_GETARG_OID(0);
 
 	Relation rel = table_open(relationId, AccessExclusiveLock); /* ALTER TABLE LOCK */
-	DataFileMetadata *metadata = ReadDataFileMetadata(rel->rd_node.relNode, true);
-	if (!metadata)
+	if (!IsCStoreTableAmTable(relationId))
 	{
 		ereport(ERROR, (errmsg("table %s is not a cstore table",
 							   quote_identifier(RelationGetRelationName(rel)))));
 	}
 
-	int blockRowCount = metadata->blockRowCount;
-	int stripeRowCount = metadata->stripeRowCount;
-	CompressionType compression = metadata->compression;
+	ColumnarOptions options = { 0 };
+	if (!ReadColumnarOptions(relationId, &options))
+	{
+		ereport(ERROR, (errmsg("unable to read current options for table")));
+	}
 
 	/* block_row_count => not null */
 	if (!PG_ARGISNULL(1))
 	{
-		blockRowCount = PG_GETARG_INT32(1);
-		ereport(DEBUG1, (errmsg("updating block row count to %d", blockRowCount)));
+		options.blockRowCount = PG_GETARG_INT32(1);
+		ereport(DEBUG1,
+				(errmsg("updating block row count to %d", options.blockRowCount)));
 	}
 
 	/* stripe_row_count => not null */
 	if (!PG_ARGISNULL(2))
 	{
-		stripeRowCount = PG_GETARG_INT32(2);
-		ereport(DEBUG1, (errmsg("updating stripe row count to %d", stripeRowCount)));
+		options.stripeRowCount = PG_GETARG_INT32(2);
+		ereport(DEBUG1, (errmsg(
+							 "updating stripe row count to " UINT64_FORMAT,
+							 options.stripeRowCount)));
 	}
 
 	/* compression => not null */
 	if (!PG_ARGISNULL(3))
 	{
 		Name compressionName = PG_GETARG_NAME(3);
-		compression = ParseCompressionType(NameStr(*compressionName));
-		if (compression == COMPRESSION_TYPE_INVALID)
+		options.compressionType = ParseCompressionType(NameStr(*compressionName));
+		if (options.compressionType == COMPRESSION_TYPE_INVALID)
 		{
 			ereport(ERROR, (errmsg("unknown compression type for cstore table: %s",
 								   quote_identifier(NameStr(*compressionName)))));
 		}
 		ereport(DEBUG1, (errmsg("updating compression to %s",
-								CompressionTypeStr(compression))));
+								CompressionTypeStr(options.compressionType))));
 	}
 
-	UpdateCStoreDataFileMetadata(rel->rd_node.relNode, blockRowCount, stripeRowCount,
-								 compression);
+	SetColumnarOptions(relationId, &options);
 
 	table_close(rel, NoLock);
 
@@ -1422,41 +1368,44 @@ alter_columnar_table_reset(PG_FUNCTION_ARGS)
 	Oid relationId = PG_GETARG_OID(0);
 
 	Relation rel = table_open(relationId, AccessExclusiveLock); /* ALTER TABLE LOCK */
-	DataFileMetadata *metadata = ReadDataFileMetadata(rel->rd_node.relNode, true);
-	if (!metadata)
+	if (!IsCStoreTableAmTable(relationId))
 	{
 		ereport(ERROR, (errmsg("table %s is not a cstore table",
 							   quote_identifier(RelationGetRelationName(rel)))));
 	}
 
-	int blockRowCount = metadata->blockRowCount;
-	int stripeRowCount = metadata->stripeRowCount;
-	CompressionType compression = metadata->compression;
+	ColumnarOptions options = { 0 };
+	if (!ReadColumnarOptions(relationId, &options))
+	{
+		ereport(ERROR, (errmsg("unable to read current options for table")));
+	}
 
 	/* block_row_count => true */
 	if (!PG_ARGISNULL(1) && PG_GETARG_BOOL(1))
 	{
-		blockRowCount = cstore_block_row_count;
-		ereport(DEBUG1, (errmsg("resetting block row count to %d", blockRowCount)));
+		options.blockRowCount = cstore_block_row_count;
+		ereport(DEBUG1,
+				(errmsg("resetting block row count to %d", options.blockRowCount)));
 	}
 
 	/* stripe_row_count => true */
 	if (!PG_ARGISNULL(2) && PG_GETARG_BOOL(2))
 	{
-		stripeRowCount = cstore_stripe_row_count;
-		ereport(DEBUG1, (errmsg("resetting stripe row count to %d", stripeRowCount)));
+		options.stripeRowCount = cstore_stripe_row_count;
+		ereport(DEBUG1,
+				(errmsg("resetting stripe row count to " UINT64_FORMAT,
+						options.stripeRowCount)));
 	}
 
 	/* compression => true */
 	if (!PG_ARGISNULL(3) && PG_GETARG_BOOL(3))
 	{
-		compression = cstore_compression;
+		options.compressionType = cstore_compression;
 		ereport(DEBUG1, (errmsg("resetting compression to %s",
-								CompressionTypeStr(compression))));
+								CompressionTypeStr(options.compressionType))));
 	}
 
-	UpdateCStoreDataFileMetadata(rel->rd_node.relNode, blockRowCount, stripeRowCount,
-								 compression);
+	SetColumnarOptions(relationId, &options);
 
 	table_close(rel, NoLock);
 
