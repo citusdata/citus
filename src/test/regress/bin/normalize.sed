@@ -184,3 +184,6 @@ s/relation with OID [0-9]+ does not exist/relation with OID XXXX does not exist/
 
 # ignore event triggers, mainly due to the event trigger for columnar
 /^DEBUG:  EventTriggerInvoke [0-9]+$/d
+
+# ignore DEBUG1 messages that Postgres generates
+/^DEBUG:  rehashing catalog cache id [0-9]+$/d
