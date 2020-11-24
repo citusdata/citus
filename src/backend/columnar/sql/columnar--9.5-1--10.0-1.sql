@@ -3,20 +3,22 @@
 CREATE SCHEMA cstore;
 SET search_path TO cstore;
 
+CREATE SEQUENCE cstore_storageid_seq NO CYCLE;
+
 CREATE TABLE cstore_data_files (
-    relfilenode oid NOT NULL,
+    storageid bigint NOT NULL,
     block_row_count int NOT NULL,
     stripe_row_count int NOT NULL,
     compression name NOT NULL,
     version_major bigint NOT NULL,
     version_minor bigint NOT NULL,
-    PRIMARY KEY (relfilenode)
+    PRIMARY KEY (storageid)
 ) WITH (user_catalog_table = true);
 
 COMMENT ON TABLE cstore_data_files IS 'CStore data file wide metadata';
 
 CREATE TABLE cstore_stripes (
-    relfilenode oid NOT NULL,
+    storageid bigint NOT NULL,
     stripe bigint NOT NULL,
     file_offset bigint NOT NULL,
     data_length bigint NOT NULL,
@@ -24,14 +26,14 @@ CREATE TABLE cstore_stripes (
     block_count int NOT NULL,
     block_row_count int NOT NULL,
     row_count bigint NOT NULL,
-    PRIMARY KEY (relfilenode, stripe),
-    FOREIGN KEY (relfilenode) REFERENCES cstore_data_files(relfilenode) ON DELETE CASCADE INITIALLY DEFERRED
+    PRIMARY KEY (storageid, stripe),
+    FOREIGN KEY (storageid) REFERENCES cstore_data_files(storageid) ON DELETE CASCADE INITIALLY DEFERRED
 ) WITH (user_catalog_table = true);
 
 COMMENT ON TABLE cstore_stripes IS 'CStore per stripe metadata';
 
 CREATE TABLE cstore_skipnodes (
-    relfilenode oid NOT NULL,
+    storageid bigint NOT NULL,
     stripe bigint NOT NULL,
     attr int NOT NULL,
     block int NOT NULL,
@@ -43,19 +45,23 @@ CREATE TABLE cstore_skipnodes (
     exists_stream_offset bigint NOT NULL,
     exists_stream_length bigint NOT NULL,
     value_compression_type int NOT NULL,
-    PRIMARY KEY (relfilenode, stripe, attr, block),
-    FOREIGN KEY (relfilenode, stripe) REFERENCES cstore_stripes(relfilenode, stripe) ON DELETE CASCADE INITIALLY DEFERRED
+    PRIMARY KEY (storageid, stripe, attr, block),
+    FOREIGN KEY (storageid, stripe) REFERENCES cstore_stripes(storageid, stripe) ON DELETE CASCADE INITIALLY DEFERRED
 ) WITH (user_catalog_table = true);
 
 COMMENT ON TABLE cstore_skipnodes IS 'CStore per block metadata';
+
+CREATE FUNCTION columnar_relation_storageid(relid oid) RETURNS bigint
+    LANGUAGE C STABLE STRICT
+    AS 'MODULE_PATHNAME', $$columnar_relation_storageid$$;
 
 CREATE VIEW columnar_options AS
 SELECT c.oid::regclass regclass,
        d.block_row_count,
        d.stripe_row_count,
        d.compression
-FROM pg_class c
-JOIN cstore.cstore_data_files d USING(relfilenode);
+FROM pg_class c, cstore.cstore_data_files d
+WHERE d.storageid=columnar_relation_storageid(c.oid);
 
 COMMENT ON VIEW columnar_options IS 'CStore per table settings';
 

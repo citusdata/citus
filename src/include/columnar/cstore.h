@@ -263,6 +263,7 @@ extern void CStoreWriteRow(TableWriteState *state, Datum *columnValues,
 extern void CStoreFlushPendingWrites(TableWriteState *state);
 extern void CStoreEndWrite(TableWriteState *state);
 extern bool ContainsPendingWrites(TableWriteState *state);
+extern bool UninitializedDatafile(RelFileNode relfilenode);
 
 /* Function declarations for reading from a cstore file */
 extern TableReadState * CStoreBeginRead(Relation relation,
@@ -285,23 +286,29 @@ extern bool CompressBuffer(StringInfo inputBuffer, StringInfo outputBuffer,
 						   CompressionType compressionType);
 extern StringInfo DecompressBuffer(StringInfo buffer, CompressionType compressionType);
 extern char * CompressionTypeStr(CompressionType type);
-extern CStoreOptions * CStoreTableAMGetOptions(Oid relfilenode);
+extern CStoreOptions * CStoreTableAMGetOptions(RelFileNode relfilenode);
+extern void WriteToSmgr(Relation relation, uint64 logicalOffset,
+						char *data, uint32 dataLength);
+extern StringInfo ReadFromSmgr(Relation rel, uint64 offset, uint32 size);
+extern bool IsCStoreTableAmTable(Oid relationId);
+extern CStoreOptions * CStoreTableAMDefaultOptions(void);
 
 /* cstore_metadata_tables.c */
-extern void DeleteDataFileMetadataRowIfExists(Oid relfilenode);
-extern void InitCStoreDataFileMetadata(Oid relfilenode, int blockRowCount, int
-									   stripeRowCount, CompressionType compression);
-extern void UpdateCStoreDataFileMetadata(Oid relfilenode, int blockRowCount, int
+extern void DeleteDataFileMetadataRowIfExists(RelFileNode relfilenode);
+extern void InitCStoreDataFileMetadata(Relation relation,
+									   int blockRowCount, int stripeRowCount,
+									   CompressionType compression);
+extern void UpdateCStoreDataFileMetadata(RelFileNode relfilenode, int blockRowCount, int
 										 stripeRowCount, CompressionType compression);
-extern DataFileMetadata * ReadDataFileMetadata(Oid relfilenode, bool missingOk);
-extern uint64 GetHighestUsedAddress(Oid relfilenode);
+extern DataFileMetadata * ReadDataFileMetadata(RelFileNode relfilenode, bool missingOk);
+extern uint64 GetHighestUsedAddress(RelFileNode relfilenode);
 extern StripeMetadata ReserveStripe(Relation rel, uint64 size,
 									uint64 rowCount, uint64 columnCount,
 									uint64 blockCount, uint64 blockRowCount);
-extern void SaveStripeSkipList(Oid relfilenode, uint64 stripe,
+extern void SaveStripeSkipList(RelFileNode relfilenode, uint64 stripe,
 							   StripeSkipList *stripeSkipList,
 							   TupleDesc tupleDescriptor);
-extern StripeSkipList * ReadStripeSkipList(Oid relfilenode, uint64 stripe,
+extern StripeSkipList * ReadStripeSkipList(RelFileNode relfilenode, uint64 stripe,
 										   TupleDesc tupleDescriptor,
 										   uint32 blockCount);
 

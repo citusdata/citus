@@ -12,7 +12,7 @@ INSERT INTO t2 SELECT i, f(i) FROM generate_series(1, 5) i;
 -- there are no subtransactions, so above statement should batch
 -- INSERTs inside the UDF and create on stripe per table.
 SELECT relname, count(*) FROM cstore.cstore_stripes a, pg_class b
-WHERE a.relfilenode=b.relfilenode AND relname IN ('t1', 't2')
+WHERE cstore.columnar_relation_storageid(b.oid)=a.storageid AND relname IN ('t1', 't2')
 GROUP BY relname
 ORDER BY relname;
  relname | count

@@ -215,12 +215,18 @@ static Cost
 CStoreScanCost(RangeTblEntry *rte)
 {
 	Relation rel = RelationIdGetRelation(rte->relid);
-	DataFileMetadata *metadata = ReadDataFileMetadata(rel->rd_node.relNode, false);
+	if (UninitializedDatafile(rel->rd_node))
+	{
+		RelationClose(rel);
+		return 0;
+	}
+
+	DataFileMetadata *metadata = ReadDataFileMetadata(rel->rd_node, false);
+	RelationClose(rel);
+
 	uint32 maxColumnCount = 0;
 	uint64 totalStripeSize = 0;
 	ListCell *stripeMetadataCell = NULL;
-
-	RelationClose(rel);
 	rel = NULL;
 
 	foreach(stripeMetadataCell, metadata->stripeMetadataList)

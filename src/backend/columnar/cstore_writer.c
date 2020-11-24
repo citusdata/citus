@@ -51,6 +51,7 @@ static void UpdateBlockSkipNodeMinMax(ColumnBlockSkipNode *blockSkipNode,
 									  FmgrInfo *comparisonFunction);
 static Datum DatumCopy(Datum datum, bool datumTypeByValue, int datumTypeLength);
 static StringInfo CopyStringInfo(StringInfo sourceString);
+static void InitializeMetadata(RelFileNode relfilenode);
 
 /*
  * CStoreBeginWrite initializes a cstore data load operation and returns a table
@@ -65,12 +66,16 @@ CStoreBeginWrite(RelFileNode relfilenode,
 				 uint64 stripeMaxRowCount, uint32 blockRowCount,
 				 TupleDesc tupleDescriptor)
 {
-	uint32 columnIndex = 0;
+	/* initialize metadata if this is the first write */
+	if (UninitializedDatafile(relfilenode))
+	{
+		InitializeMetadata(relfilenode);
+	}
 
 	/* get comparison function pointers for each of the columns */
 	uint32 columnCount = tupleDescriptor->natts;
 	FmgrInfo **comparisonFunctionArray = palloc0(columnCount * sizeof(FmgrInfo *));
-	for (columnIndex = 0; columnIndex < columnCount; columnIndex++)
+	for (uint32 columnIndex = 0; columnIndex < columnCount; columnIndex++)
 	{
 		FmgrInfo *comparisonFunction = NULL;
 		FormData_pg_attribute *attributeForm = TupleDescAttr(tupleDescriptor,
@@ -119,6 +124,34 @@ CStoreBeginWrite(RelFileNode relfilenode,
 														ALLOCSET_DEFAULT_SIZES);
 
 	return writeState;
+}
+
+
+/*
+ * UninitializedDatafile returns true if metadata for the
+ * given relfilenode hasn't been initialized.
+ */
+bool
+UninitializedDatafile(RelFileNode relfilenode)
+{
+	return ReadDataFileMetadata(relfilenode, true) == NULL;
+}
+
+
+static void
+InitializeMetadata(RelFileNode relfilenode)
+{
+	Oid relationId = RelidByRelfilenode(relfilenode.spcNode, relfilenode.relNode);
+	Relation relation = relation_open(relationId, NoLock);
+
+	CStoreOptions *options = CStoreTableAMDefaultOptions();
+
+	InitCStoreDataFileMetadata(relation,
+							   options->blockRowCount,
+							   options->stripeRowCount,
+							   options->compressionType);
+
+	relation_close(relation, NoLock);
 }
 
 
@@ -323,8 +356,9 @@ CreateEmptyStripeSkipList(uint32 stripeMaxRowCount, uint32 blockRowCount,
 }
 
 
-static void
-WriteToSmgr(Relation rel, uint64 logicalOffset, char *data, uint32 dataLength)
+void
+WriteToSmgr(Relation relation, uint64 logicalOffset, char *data,
+			uint32 dataLength)
 {
 	uint64 remaining = dataLength;
 	Buffer buffer;
@@ -333,13 +367,13 @@ WriteToSmgr(Relation rel, uint64 logicalOffset, char *data, uint32 dataLength)
 	{
 		SmgrAddr addr = logical_to_smgr(logicalOffset);
 
-		RelationOpenSmgr(rel);
-		BlockNumber nblocks = smgrnblocks(rel->rd_smgr, MAIN_FORKNUM);
+		RelationOpenSmgr(relation);
+		BlockNumber nblocks = smgrnblocks(relation->rd_smgr, MAIN_FORKNUM);
 		Assert(addr.blockno < nblocks);
 		(void) nblocks; /* keep compiler quiet */
-		RelationCloseSmgr(rel);
+		RelationCloseSmgr(relation);
 
-		buffer = ReadBuffer(rel, addr.blockno);
+		buffer = ReadBuffer(relation, addr.blockno);
 		LockBuffer(buffer, BUFFER_LOCK_EXCLUSIVE);
 
 		Page page = BufferGetPage(buffer);
@@ -372,7 +406,7 @@ WriteToSmgr(Relation rel, uint64 logicalOffset, char *data, uint32 dataLength)
 
 		MarkBufferDirty(buffer);
 
-		if (RelationNeedsWAL(rel))
+		if (RelationNeedsWAL(relation))
 		{
 			XLogBeginInsert();
 
@@ -521,7 +555,7 @@ FlushStripe(TableWriteState *writeState)
 	}
 
 	/* create skip list and footer buffers */
-	SaveStripeSkipList(relation->rd_node.relNode,
+	SaveStripeSkipList(writeState->relfilenode,
 					   stripeMetadata.id,
 					   stripeSkipList, tupleDescriptor);
 

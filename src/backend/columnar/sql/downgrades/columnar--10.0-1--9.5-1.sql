@@ -31,6 +31,7 @@ DROP VIEW columnar_options;
 DROP TABLE cstore_skipnodes;
 DROP TABLE cstore_stripes;
 DROP TABLE cstore_data_files;
+DROP SEQUENCE cstore_storageid_seq;
 
 DROP FUNCTION citus_internal.cstore_ensure_objects_exist();
 

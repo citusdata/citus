@@ -27,6 +27,7 @@ SELECT :cstore_data_files_before_drop - count(*) FROM cstore.cstore_data_files;
 -- Create a cstore_fdw table under a schema and drop it.
 CREATE SCHEMA test_schema;
 CREATE TABLE test_schema.test_table(data int) USING columnar;
+INSERT INTO test_schema.test_table VALUES (1);
 
 SELECT count(*) AS cstore_data_files_before_drop FROM cstore.cstore_data_files \gset
 DROP SCHEMA test_schema CASCADE;

@@ -178,7 +178,7 @@ cstore_init_write_state(RelFileNode relfilenode, TupleDesc tupdesc,
 	 */
 	MemoryContext oldContext = MemoryContextSwitchTo(WriteStateContext);
 
-	CStoreOptions *cstoreOptions = CStoreTableAMGetOptions(relfilenode.relNode);
+	CStoreOptions *cstoreOptions = CStoreTableAMGetOptions(relfilenode);
 	SubXidWriteState *stackEntry = palloc0(sizeof(SubXidWriteState));
 	stackEntry->writeState = CStoreBeginWrite(relfilenode,
 											  cstoreOptions->compressionType,

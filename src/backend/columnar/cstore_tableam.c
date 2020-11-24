@@ -106,7 +106,6 @@ static void CStoreTableAMProcessUtility(PlannedStmt *plannedStatement,
 										char *completionTag);
 #endif
 
-static bool IsCStoreTableAmTable(Oid relationId);
 static bool ConditionalLockRelationWithTimeout(Relation rel, LOCKMODE lockMode,
 											   int timeout, int retryInterval);
 static void LogRelationStats(Relation rel, int elevel);
@@ -117,8 +116,8 @@ static void TruncateCStore(Relation rel, int elevel);
  * CStoreTableAMDefaultOptions returns the default options for a cstore table am table.
  * These options are based on the GUC's controlling the defaults.
  */
-static CStoreOptions *
-CStoreTableAMDefaultOptions()
+CStoreOptions *
+CStoreTableAMDefaultOptions(void)
 {
 	CStoreOptions *cstoreOptions = palloc0(sizeof(CStoreOptions));
 	cstoreOptions->compressionType = cstore_compression;
@@ -133,11 +132,14 @@ CStoreTableAMDefaultOptions()
  * relation is a cstore table am table, if not it will raise an error
  */
 CStoreOptions *
-CStoreTableAMGetOptions(Oid relfilenode)
+CStoreTableAMGetOptions(RelFileNode relfilenode)
 {
-	Assert(OidIsValid(relfilenode));
-
 	CStoreOptions *cstoreOptions = palloc0(sizeof(CStoreOptions));
+	if (UninitializedDatafile(relfilenode))
+	{
+		return CStoreTableAMDefaultOptions();
+	}
+
 	DataFileMetadata *metadata = ReadDataFileMetadata(relfilenode, false);
 	cstoreOptions->compressionType = metadata->compression;
 	cstoreOptions->stripeRowCount = metadata->stripeRowCount;
@@ -570,50 +572,32 @@ cstore_relation_set_new_filenode(Relation rel,
 								 TransactionId *freezeXid,
 								 MultiXactId *minmulti)
 {
-	DataFileMetadata *metadata = ReadDataFileMetadata(rel->rd_node.relNode, true);
-	uint64 blockRowCount = 0;
-	uint64 stripeRowCount = 0;
-	CompressionType compression = 0;
 	Oid oldRelfilenode = rel->rd_node.relNode;
 
 	MarkRelfilenodeDropped(oldRelfilenode, GetCurrentSubTransactionId());
 
-	if (metadata != NULL)
-	{
-		/* existing table (e.g. TRUNCATE), use existing blockRowCount */
-		blockRowCount = metadata->blockRowCount;
-		stripeRowCount = metadata->stripeRowCount;
-		compression = metadata->compression;
-	}
-	else
-	{
-		/* new table, use options */
-		CStoreOptions *options = CStoreTableAMDefaultOptions();
-		blockRowCount = options->blockRowCount;
-		stripeRowCount = options->stripeRowCount;
-		compression = options->compressionType;
-	}
-
 	/* delete old relfilenode metadata */
-	DeleteDataFileMetadataRowIfExists(rel->rd_node.relNode);
+	DeleteDataFileMetadataRowIfExists(rel->rd_node);
 
 	Assert(persistence == RELPERSISTENCE_PERMANENT);
 	*freezeXid = RecentXmin;
 	*minmulti = GetOldestMultiXactId();
 	SMgrRelation srel = RelationCreateStorage(*newrnode, persistence);
-	InitCStoreDataFileMetadata(newrnode->relNode, blockRowCount, stripeRowCount,
-							   compression);
 	smgrclose(srel);
+
+	/* we will lazily initialize metadata in first write */
 }
 
 
 static void
 cstore_relation_nontransactional_truncate(Relation rel)
 {
-	Oid relfilenode = rel->rd_node.relNode;
-	DataFileMetadata *metadata = ReadDataFileMetadata(relfilenode, false);
+	RelFileNode relfilenode = rel->rd_node;
 
-	NonTransactionDropWriteState(relfilenode);
+	NonTransactionDropWriteState(relfilenode.relNode);
+
+	/* Delete old relfilenode metadata and recreate it */
+	DeleteDataFileMetadataRowIfExists(relfilenode);
 
 	/*
 	 * No need to set new relfilenode, since the table was created in this
@@ -624,10 +608,7 @@ cstore_relation_nontransactional_truncate(Relation rel)
 	 */
 	RelationTruncate(rel, 0);
 
-	/* Delete old relfilenode metadata and recreate it */
-	DeleteDataFileMetadataRowIfExists(rel->rd_node.relNode);
-	InitCStoreDataFileMetadata(rel->rd_node.relNode, metadata->blockRowCount,
-							   metadata->stripeRowCount, metadata->compression);
+	/* we will lazily initialize new metadata in first write */
 }
 
 
@@ -675,14 +656,9 @@ cstore_relation_copy_for_cluster(Relation OldHeap, Relation NewHeap,
 	 * relation first.
 	 */
 
-	CStoreOptions *cstoreOptions = CStoreTableAMGetOptions(OldHeap->rd_node.relNode);
+	CStoreOptions *cstoreOptions = CStoreTableAMGetOptions(OldHeap->rd_node);
 
-	UpdateCStoreDataFileMetadata(NewHeap->rd_node.relNode,
-								 cstoreOptions->blockRowCount,
-								 cstoreOptions->stripeRowCount,
-								 cstoreOptions->compressionType);
-
-	cstoreOptions = CStoreTableAMGetOptions(NewHeap->rd_node.relNode);
+	cstoreOptions = CStoreTableAMGetOptions(NewHeap->rd_node);
 
 	TableWriteState *writeState = CStoreBeginWrite(NewHeap->rd_node,
 												   cstoreOptions->compressionType,
@@ -740,7 +716,7 @@ static void
 LogRelationStats(Relation rel, int elevel)
 {
 	ListCell *stripeMetadataCell = NULL;
-	Oid relfilenode = rel->rd_node.relNode;
+	RelFileNode relfilenode = rel->rd_node;
 	StringInfo infoBuf = makeStringInfo();
 
 	int compressionStats[COMPRESSION_COUNT] = { 0 };
@@ -866,7 +842,7 @@ TruncateCStore(Relation rel, int elevel)
 	 * we're truncating.
 	 */
 	SmgrAddr highestPhysicalAddress =
-		logical_to_smgr(GetHighestUsedAddress(rel->rd_node.relNode));
+		logical_to_smgr(GetHighestUsedAddress(rel->rd_node));
 
 	BlockNumber new_rel_pages = highestPhysicalAddress.blockno + 1;
 	if (new_rel_pages == old_rel_pages)
@@ -1234,10 +1210,10 @@ CStoreTableAMObjectAccessHook(ObjectAccessType access, Oid classId, Oid objectId
 		 * tableam tables storage is managed by postgres.
 		 */
 		Relation rel = table_open(objectId, AccessExclusiveLock);
-		Oid relfilenode = rel->rd_node.relNode;
+		RelFileNode relfilenode = rel->rd_node;
 		DeleteDataFileMetadataRowIfExists(relfilenode);
 
-		MarkRelfilenodeDropped(relfilenode, GetCurrentSubTransactionId());
+		MarkRelfilenodeDropped(relfilenode.relNode, GetCurrentSubTransactionId());
 
 		/* keep the lock since we did physical changes to the relation */
 		table_close(rel, NoLock);
@@ -1249,7 +1225,7 @@ CStoreTableAMObjectAccessHook(ObjectAccessType access, Oid classId, Oid objectId
  * IsCStoreTableAmTable returns true if relation has cstore_tableam
  * access method. This can be called before extension creation.
  */
-static bool
+bool
 IsCStoreTableAmTable(Oid relationId)
 {
 	if (!OidIsValid(relationId))
@@ -1367,7 +1343,7 @@ alter_columnar_table_set(PG_FUNCTION_ARGS)
 	Oid relationId = PG_GETARG_OID(0);
 
 	Relation rel = table_open(relationId, AccessExclusiveLock); /* ALTER TABLE LOCK */
-	DataFileMetadata *metadata = ReadDataFileMetadata(rel->rd_node.relNode, true);
+	DataFileMetadata *metadata = ReadDataFileMetadata(rel->rd_node, true);
 	if (!metadata)
 	{
 		ereport(ERROR, (errmsg("table %s is not a cstore table",
@@ -1406,7 +1382,7 @@ alter_columnar_table_set(PG_FUNCTION_ARGS)
 								CompressionTypeStr(compression))));
 	}
 
-	UpdateCStoreDataFileMetadata(rel->rd_node.relNode, blockRowCount, stripeRowCount,
+	UpdateCStoreDataFileMetadata(rel->rd_node, blockRowCount, stripeRowCount,
 								 compression);
 
 	table_close(rel, NoLock);
@@ -1422,7 +1398,7 @@ alter_columnar_table_reset(PG_FUNCTION_ARGS)
 	Oid relationId = PG_GETARG_OID(0);
 
 	Relation rel = table_open(relationId, AccessExclusiveLock); /* ALTER TABLE LOCK */
-	DataFileMetadata *metadata = ReadDataFileMetadata(rel->rd_node.relNode, true);
+	DataFileMetadata *metadata = ReadDataFileMetadata(rel->rd_node, true);
 	if (!metadata)
 	{
 		ereport(ERROR, (errmsg("table %s is not a cstore table",
@@ -1455,7 +1431,7 @@ alter_columnar_table_reset(PG_FUNCTION_ARGS)
 								CompressionTypeStr(compression))));
 	}
 
-	UpdateCStoreDataFileMetadata(rel->rd_node.relNode, blockRowCount, stripeRowCount,
+	UpdateCStoreDataFileMetadata(rel->rd_node, blockRowCount, stripeRowCount,
 								 compression);
 
 	table_close(rel, NoLock);

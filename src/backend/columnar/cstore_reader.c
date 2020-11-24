@@ -76,7 +76,6 @@ static BlockData * DeserializeBlockData(StripeBuffers *stripeBuffers, uint64 blo
 										List *projectedColumnList);
 static Datum ColumnDefaultValue(TupleConstr *tupleConstraints,
 								Form_pg_attribute attributeForm);
-static StringInfo ReadFromSmgr(Relation rel, uint64 offset, uint32 size);
 
 /*
  * CStoreBeginRead initializes a cstore read operation. This function returns a
@@ -86,9 +85,7 @@ TableReadState *
 CStoreBeginRead(Relation relation, TupleDesc tupleDescriptor,
 				List *projectedColumnList, List *whereClauseList)
 {
-	Oid relNode = relation->rd_node.relNode;
-
-	DataFileMetadata *datafileMetadata = ReadDataFileMetadata(relNode, false);
+	DataFileMetadata *datafileMetadata = ReadDataFileMetadata(relation->rd_node, true);
 
 	/*
 	 * We allocate all stripe specific data in the stripeReadContext, and reset
@@ -126,6 +123,11 @@ CStoreReadNextRow(TableReadState *readState, Datum *columnValues, bool *columnNu
 {
 	StripeMetadata *stripeMetadata = readState->currentStripeMetadata;
 	MemoryContext oldContext = NULL;
+
+	if (readState->datafileMetadata == NULL)
+	{
+		return false;
+	}
 
 	/*
 	 * If no stripes are loaded, load the next non-empty stripe. Note that when
@@ -238,8 +240,13 @@ void
 CStoreEndRead(TableReadState *readState)
 {
 	MemoryContextDelete(readState->stripeReadContext);
-	list_free_deep(readState->datafileMetadata->stripeMetadataList);
-	pfree(readState->datafileMetadata);
+
+	if (readState->datafileMetadata)
+	{
+		list_free_deep(readState->datafileMetadata->stripeMetadataList);
+		pfree(readState->datafileMetadata);
+	}
+
 	pfree(readState);
 }
 
@@ -317,7 +324,12 @@ CStoreTableRowCount(Relation relation)
 	ListCell *stripeMetadataCell = NULL;
 	uint64 totalRowCount = 0;
 
-	DataFileMetadata *datafileMetadata = ReadDataFileMetadata(relation->rd_node.relNode,
+	if (UninitializedDatafile(relation->rd_node))
+	{
+		return 0;
+	}
+
+	DataFileMetadata *datafileMetadata = ReadDataFileMetadata(relation->rd_node,
 															  false);
 
 	foreach(stripeMetadataCell, datafileMetadata->stripeMetadataList)
@@ -345,7 +357,7 @@ LoadFilteredStripeBuffers(Relation relation, StripeMetadata *stripeMetadata,
 
 	bool *projectedColumnMask = ProjectedColumnMask(columnCount, projectedColumnList);
 
-	StripeSkipList *stripeSkipList = ReadStripeSkipList(relation->rd_node.relNode,
+	StripeSkipList *stripeSkipList = ReadStripeSkipList(relation->rd_node,
 														stripeMetadata->id,
 														tupleDescriptor,
 														stripeMetadata->blockCount);
@@ -1009,7 +1021,7 @@ ColumnDefaultValue(TupleConstr *tupleConstraints, Form_pg_attribute attributeFor
 }
 
 
-static StringInfo
+StringInfo
 ReadFromSmgr(Relation rel, uint64 offset, uint32 size)
 {
 	StringInfo resultBuffer = makeStringInfo();
