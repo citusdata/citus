@@ -254,8 +254,8 @@ static bool IsValidPartitionKeyRestriction(OpExpr *opClause);
 static void AddPartitionKeyRestrictionToInstance(ClauseWalkerContext *context,
 												 OpExpr *opClause, Var *varClause,
 												 Const *constantClause);
-static bool VarConstOpExprClause(OpExpr *opClause, Var *partitionColumn,
-								 Var **varClause, Const **constantClause);
+static bool VarConstOpExprClause(OpExpr *opClause, Var **varClause,
+								 Const **constantClause);
 static void AddSAOPartitionKeyRestrictionToInstance(ClauseWalkerContext *context,
 													ScalarArrayOpExpr *
 													arrayOperatorExpression);
@@ -537,7 +537,7 @@ IsValidConditionNode(Node *node, Var *partitionColumn)
 	{
 		OpExpr *opClause = (OpExpr *) node;
 		Var *varClause = NULL;
-		if (VarConstOpExprClause(opClause, partitionColumn, &varClause, NULL))
+		if (VarConstOpExprClause(opClause, &varClause, NULL))
 		{
 			if (equal(varClause, partitionColumn))
 			{
@@ -824,8 +824,7 @@ PrunableExpressionsWalker(PruningTreeNode *node, ClauseWalkerContext *context)
 				prune->addedToPruningInstances = true;
 			}
 
-			if (VarConstOpExprClause(opClause, context->partitionColumn, &varClause,
-									 &constantClause))
+			if (VarConstOpExprClause(opClause, &varClause, &constantClause))
 			{
 				if (equal(varClause, context->partitionColumn))
 				{
@@ -898,8 +897,7 @@ PrunableExpressionsWalker(PruningTreeNode *node, ClauseWalkerContext *context)
  * Also obtaining the var with constant when valid.
  */
 static bool
-VarConstOpExprClause(OpExpr *opClause, Var *partitionColumn, Var **varClause,
-					 Const **constantClause)
+VarConstOpExprClause(OpExpr *opClause, Var **varClause, Const **constantClause)
 {
 	Var *foundVarClause = NULL;
 	Const *foundConstantClause = NULL;
