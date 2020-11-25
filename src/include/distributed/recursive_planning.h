@@ -66,5 +66,6 @@ extern void ReplaceRTERelationWithRteSubquery(RangeTblEntry *rangeTableEntry,
 extern bool
 ContainsLocalTableSubqueryJoin(List *rangeTableList, Oid resultRelationId);
 extern bool ContainsTableToBeConvertedToSubquery(List* rangeTableList, Oid resultRelationId);
+extern bool SubqueryConvertableRelationForJoin(RangeTblEntry* rangeTableEntry);
 
 #endif /* RECURSIVE_PLANNING_H */

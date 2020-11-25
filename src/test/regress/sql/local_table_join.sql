@@ -10,9 +10,15 @@ SELECT create_distributed_table('distributed_table', 'key');
 CREATE TABLE distributed_table_pkey (key int primary key, value text, value_2 jsonb);
 SELECT create_distributed_table('distributed_table_pkey', 'key');
 
-CREATE TABLE distributed_table_windex (key int, value text, value_2 jsonb);
+CREATE TABLE distributed_table_windex (key int primary key, value text, value_2 jsonb);
 SELECT create_distributed_table('distributed_table_windex', 'key');
 CREATE UNIQUE INDEX key_index ON distributed_table_windex (key);
+
+CREATE TABLE distributed_partitioned_table(key int, value text) PARTITION BY RANGE (key);
+CREATE TABLE distributed_partitioned_table_1 PARTITION OF distributed_partitioned_table FOR VALUES FROM (0) TO (10);
+CREATE TABLE distributed_partitioned_table_2 PARTITION OF distributed_partitioned_table FOR VALUES FROM (10) TO (20);
+SELECT create_distributed_table('distributed_partitioned_table', 'key');
+
 
 SET client_min_messages TO DEBUG1;
 
@@ -33,7 +39,6 @@ SET citus.local_table_join_policy TO 'prefer-distributed';
 SELECT count(*) FROM postgres_table JOIN distributed_table USING(key);
 SELECT count(*) FROM postgres_table JOIN reference_table USING(key);
 
-
 -- update/delete
 -- auto tests
 
@@ -45,6 +50,11 @@ SET citus.local_table_join_policy to 'auto';
 SELECT count(*) FROM distributed_table JOIN postgres_table USING(key);
 SELECT count(*) FROM reference_table JOIN postgres_table USING(key);
 SELECT count(*) FROM distributed_table JOIN postgres_table USING(key) JOIN reference_table USING (key);
+
+-- partitioned tables should work as well
+SELECT count(*) FROM distributed_partitioned_table JOIN postgres_table USING(key);
+SELECT count(*) FROM distributed_partitioned_table JOIN postgres_table USING(key) WHERE distributed_partitioned_table.key = 10;
+SELECT count(*) FROM distributed_partitioned_table JOIN postgres_table USING(key) JOIN reference_table USING (key);
 
 -- a unique index on key so dist table should be recursively planned
 SELECT count(*) FROM postgres_table JOIN distributed_table_pkey USING(key);
@@ -296,6 +306,9 @@ SELECT count(*) FROM citus_local JOIN distributed_table ON citus_local.key = dis
 SELECT count(*) FROM citus_local JOIN distributed_table ON distributed_table.key = 10;
 
 SELECT count(*) FROM citus_local JOIN distributed_table USING(key) JOIN postgres_table USING (key) JOIN reference_table USING(key);
+
+SELECT count(*) FROM distributed_partitioned_table JOIN postgres_table USING(key) JOIN reference_table USING (key)
+	JOIN citus_local USING(key) WHERE distributed_partitioned_table.key > 10 and distributed_partitioned_table.key = 10;
 
 -- update
 UPDATE

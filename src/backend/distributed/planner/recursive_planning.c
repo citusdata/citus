@@ -1407,9 +1407,7 @@ AllDataLocallyAccessible(List *rangeTableList)
 			// TODO:: check if it has distributed table
 			return false;
 		}
-		/* we're only interested in tables */
-		if (!(rangeTableEntry->rtekind == RTE_RELATION &&
-			  rangeTableEntry->relkind == RELKIND_RELATION))
+		if (!SubqueryConvertableRelationForJoin(rangeTableEntry))
 		{
 			continue;
 		}
@@ -1445,6 +1443,18 @@ AllDataLocallyAccessible(List *rangeTableList)
 }
 
 /*
+ * SubqueryConvertableRelationForJoin returns true if the given range table entry
+ * is a relation type that can be converted to a subquery.
+ */
+bool SubqueryConvertableRelationForJoin(RangeTblEntry* rangeTableEntry) {
+	if (rangeTableEntry->rtekind != RTE_RELATION) {
+		return false;
+	}
+	return rangeTableEntry->relkind == RELKIND_PARTITIONED_TABLE ||
+		rangeTableEntry->relkind == RELKIND_RELATION;
+}
+
+/*
  * ContainsLocalTableDistributedTableJoin returns true if the input range table list
  * contains a direct join between local and distributed tables.
  */
@@ -1459,10 +1469,7 @@ ContainsLocalTableDistributedTableJoin(List *rangeTableList)
 	{
 		RangeTblEntry *rangeTableEntry = (RangeTblEntry *) lfirst(rangeTableCell);
 
-		/* we're only interested in tables */
-		/* TODO:: What about partitioned tables? */
-		if (!(rangeTableEntry->rtekind == RTE_RELATION &&
-			  rangeTableEntry->relkind == RELKIND_RELATION))
+		if (!SubqueryConvertableRelationForJoin(rangeTableEntry))
 		{
 			continue;
 		}
@@ -1500,10 +1507,8 @@ ContainsLocalTableSubqueryJoin(List *rangeTableList, Oid resultRelationId)
 		if (rangeTableEntry->rtekind == RTE_SUBQUERY) {
 			containsSubquery = true;
 		}
-		/* we're only interested in tables */
-		/* TODO:: What about partitioned tables? */
-		if (!(rangeTableEntry->rtekind == RTE_RELATION &&
-			  rangeTableEntry->relkind == RELKIND_RELATION))
+
+		if (!SubqueryConvertableRelationForJoin(rangeTableEntry))
 		{
 			continue;
 		}

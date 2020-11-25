@@ -340,8 +340,7 @@ CreateRTEToSubqueryConverterContext(RecursivePlanningContext *context,
 			rteToSubqueryConverterContext->hasSubqueryRTE = true;
 		}
 		/* we're only interested in tables */
-		if (!(rangeTableEntry->rtekind == RTE_RELATION &&
-			  rangeTableEntry->relkind == RELKIND_RELATION))
+		if (!SubqueryConvertableRelationForJoin(rangeTableEntry))
 		{
 			continue;
 		}
