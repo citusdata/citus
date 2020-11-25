@@ -100,6 +100,143 @@ WITH cte_1 AS (UPDATE test SET y = y - 1 RETURNING *) SELECT * FROM cte_1 ORDER 
  5 | 6
 (5 rows)
 
+-- Test upsert with constraint
+CREATE TABLE upsert_test
+(
+	part_key int UNIQUE,
+	other_col int,
+	third_col int
+);
+-- distribute the table
+SELECT create_distributed_table('upsert_test', 'part_key');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- do a regular insert
+INSERT INTO upsert_test (part_key, other_col) VALUES (1, 1), (2, 2) RETURNING *;
+ part_key | other_col | third_col
+---------------------------------------------------------------------
+        1 |         1 |
+        2 |         2 |
+(2 rows)
+
+SET citus.log_remote_commands to true;
+-- observe that there is a conflict and the following query does nothing
+INSERT INTO upsert_test (part_key, other_col) VALUES (1, 1) ON CONFLICT DO NOTHING RETURNING *;
+NOTICE:  executing the command locally: INSERT INTO single_node.upsert_test_90630513 AS citus_table_alias (part_key, other_col) VALUES (1, 1) ON CONFLICT DO NOTHING RETURNING part_key, other_col, third_col
+ part_key | other_col | third_col
+---------------------------------------------------------------------
+(0 rows)
+
+-- same as the above with different syntax
+INSERT INTO upsert_test (part_key, other_col) VALUES (1, 1) ON CONFLICT (part_key) DO NOTHING RETURNING *;
+NOTICE:  executing the command locally: INSERT INTO single_node.upsert_test_90630513 AS citus_table_alias (part_key, other_col) VALUES (1, 1) ON CONFLICT(part_key) DO NOTHING RETURNING part_key, other_col, third_col
+ part_key | other_col | third_col
+---------------------------------------------------------------------
+(0 rows)
+
+-- again the same query with another syntax
+INSERT INTO upsert_test (part_key, other_col) VALUES (1, 1) ON CONFLICT ON CONSTRAINT upsert_test_part_key_key DO NOTHING RETURNING *;
+NOTICE:  executing the command locally: INSERT INTO single_node.upsert_test_90630513 AS citus_table_alias (part_key, other_col) VALUES (1, 1) ON CONFLICT ON CONSTRAINT upsert_test_part_key_key_90630513 DO NOTHING RETURNING part_key, other_col, third_col
+ part_key | other_col | third_col
+---------------------------------------------------------------------
+(0 rows)
+
+BEGIN;
+-- force local execution
+SELECT count(*) FROM upsert_test WHERE part_key = 1;
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM single_node.upsert_test_90630513 upsert_test WHERE (part_key OPERATOR(pg_catalog.=) 1)
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+SET citus.log_remote_commands to false;
+-- multi-shard pushdown query that goes through local execution
+INSERT INTO upsert_test (part_key, other_col) SELECT part_key, other_col FROM upsert_test ON CONFLICT ON CONSTRAINT upsert_test_part_key_key DO NOTHING RETURNING *;
+ part_key | other_col | third_col
+---------------------------------------------------------------------
+(0 rows)
+
+-- multi-shard pull-to-coordinator query that goes through local execution
+INSERT INTO upsert_test (part_key, other_col) SELECT part_key, other_col FROM upsert_test LIMIT 100 ON CONFLICT ON CONSTRAINT upsert_test_part_key_key DO NOTHING RETURNING *;
+ part_key | other_col | third_col
+---------------------------------------------------------------------
+(0 rows)
+
+COMMIT;
+-- to test citus local tables
+select undistribute_table('upsert_test');
+NOTICE:  creating a new local table for single_node.upsert_test
+NOTICE:  Moving the data of single_node.upsert_test
+NOTICE:  Dropping the old single_node.upsert_test
+NOTICE:  Renaming the new table to single_node.upsert_test
+ undistribute_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- create citus local table
+select create_citus_local_table('upsert_test');
+ create_citus_local_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- test the constraint with local execution
+INSERT INTO upsert_test (part_key, other_col) VALUES (1, 1) ON CONFLICT ON CONSTRAINT upsert_test_part_key_key DO NOTHING RETURNING *;
+ part_key | other_col | third_col
+---------------------------------------------------------------------
+(0 rows)
+
+DROP TABLE upsert_test;
+CREATE SCHEMA "Quoed.Schema";
+SET search_path TO "Quoed.Schema";
+CREATE TABLE "long_constraint_upsert\_test"
+(
+	part_key int,
+	other_col int,
+	third_col int,
+	CONSTRAINT "looo oooo ooooo ooooooooooooooooo oooooooo oooooooo ng quoted  \aconstraint" UNIQUE (part_key)
+);
+NOTICE:  identifier "looo oooo ooooo ooooooooooooooooo oooooooo oooooooo ng quoted  \aconstraint" will be truncated to "looo oooo ooooo ooooooooooooooooo oooooooo oooooooo ng quoted  "
+-- distribute the table and create shards
+SELECT create_distributed_table('"long_constraint_upsert\_test"', 'part_key');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO "long_constraint_upsert\_test" (part_key, other_col) VALUES (1, 1) ON CONFLICT ON CONSTRAINT  "looo oooo ooooo ooooooooooooooooo oooooooo oooooooo ng quoted  \aconstraint" DO NOTHING RETURNING *;
+NOTICE:  identifier "looo oooo ooooo ooooooooooooooooo oooooooo oooooooo ng quoted  \aconstraint" will be truncated to "looo oooo ooooo ooooooooooooooooo oooooooo oooooooo ng quoted  "
+ part_key | other_col | third_col
+---------------------------------------------------------------------
+        1 |         1 |
+(1 row)
+
+ALTER TABLE "long_constraint_upsert\_test" RENAME TO simple_table_name;
+INSERT INTO simple_table_name (part_key, other_col) VALUES (1, 1) ON CONFLICT ON CONSTRAINT  "looo oooo ooooo ooooooooooooooooo oooooooo oooooooo ng quoted  \aconstraint" DO NOTHING RETURNING *;
+NOTICE:  identifier "looo oooo ooooo ooooooooooooooooo oooooooo oooooooo ng quoted  \aconstraint" will be truncated to "looo oooo ooooo ooooooooooooooooo oooooooo oooooooo ng quoted  "
+ part_key | other_col | third_col
+---------------------------------------------------------------------
+(0 rows)
+
+-- this is currently not supported, but once we support
+-- make sure that the following query also works fine
+ALTER TABLE simple_table_name RENAME CONSTRAINT "looo oooo ooooo ooooooooooooooooo oooooooo oooooooo ng quoted  \aconstraint"  TO simple_constraint_name;
+NOTICE:  identifier "looo oooo ooooo ooooooooooooooooo oooooooo oooooooo ng quoted  \aconstraint" will be truncated to "looo oooo ooooo ooooooooooooooooo oooooooo oooooooo ng quoted  "
+ERROR:  renaming constraints belonging to distributed tables is currently unsupported
+--INSERT INTO simple_table_name (part_key, other_col) VALUES (1, 1) ON CONFLICT ON CONSTRAINT  simple_constraint_name DO NOTHING RETURNING *;
+SET search_path TO single_node;
+DROP SCHEMA  "Quoed.Schema" CASCADE;
+NOTICE:  drop cascades to 5 other objects
+DETAIL:  drop cascades to table "Quoed.Schema".simple_table_name
+drop cascades to table "Quoed.Schema".simple_table_name_90630518
+drop cascades to table "Quoed.Schema".simple_table_name_90630519
+drop cascades to table "Quoed.Schema".simple_table_name_90630520
+drop cascades to table "Quoed.Schema".simple_table_name_90630521
 -- we should be able to limit intermediate results
 BEGIN;
        SET LOCAL citus.max_intermediate_result_size TO 0;
