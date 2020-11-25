@@ -27,6 +27,7 @@
 #include "distributed/lock_graph.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/remote_commands.h"
+#include "distributed/shared_connection_stats.h"
 #include "distributed/transaction_identifier.h"
 #include "distributed/tuplestore.h"
 #include "nodes/execnodes.h"
@@ -62,6 +63,16 @@ typedef struct BackendManagementShmemData
 	 * (ii) allowing read-only replicas to be able to generate ids
 	 */
 	pg_atomic_uint64 nextTransactionNumber;
+
+	/*
+	 * Total number of client backends that are authenticated.
+	 * We only care about activeClientBackendCounter when adaptive
+	 * connection management is enabled, otherwise always zero.
+	 *
+	 * Note that the counter does not consider any background workers
+	 * or such, it only counts client_backends.
+	 */
+	pg_atomic_uint32 activeClientBackendCounter;
 
 	BackendData backends[FLEXIBLE_ARRAY_MEMBER];
 } BackendManagementShmemData;
@@ -495,6 +506,9 @@ BackendManagementShmemInit(void)
 
 		/* start the distributed transaction ids from 1 */
 		pg_atomic_init_u64(&backendManagementShmemData->nextTransactionNumber, 1);
+
+		/* there are no active backends yet, so start with zero */
+		pg_atomic_init_u32(&backendManagementShmemData->activeClientBackendCounter, 0);
 
 		/*
 		 * We need to init per backend's spinlock before any backend
@@ -944,4 +958,40 @@ LocalTransactionId
 GetMyProcLocalTransactionId(void)
 {
 	return MyProc->lxid;
+}
+
+
+/*
+ * GetAllActiveClientBackendCount returns activeClientBackendCounter in
+ * the shared memory.
+ */
+int
+GetAllActiveClientBackendCount(void)
+{
+	uint32 activeBackendCount =
+		pg_atomic_read_u32(&backendManagementShmemData->activeClientBackendCounter);
+
+	return activeBackendCount;
+}
+
+
+/*
+ * IncrementClientBackendCounter increments activeClientBackendCounter in
+ * the shared memory by one.
+ */
+void
+IncrementClientBackendCounter(void)
+{
+	pg_atomic_add_fetch_u32(&backendManagementShmemData->activeClientBackendCounter, 1);
+}
+
+
+/*
+ * DecrementClientBackendCounter decrements activeClientBackendCounter in
+ * the shared memory by one.
+ */
+void
+DecrementClientBackendCounter(void)
+{
+	pg_atomic_sub_fetch_u32(&backendManagementShmemData->activeClientBackendCounter, 1);
 }

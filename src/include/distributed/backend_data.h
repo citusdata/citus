@@ -67,6 +67,9 @@ extern void GetBackendDataForProc(PGPROC *proc, BackendData *result);
 extern void CancelTransactionDueToDeadlock(PGPROC *proc);
 extern bool MyBackendGotCancelledDueToDeadlock(bool clearState);
 extern List * ActiveDistributedTransactionNumbers(void);
-LocalTransactionId GetMyProcLocalTransactionId(void);
+extern LocalTransactionId GetMyProcLocalTransactionId(void);
+extern int GetAllActiveClientBackendCount(void);
+extern void IncrementClientBackendCounter(void);
+extern void DecrementClientBackendCounter(void);
 
 #endif /* BACKEND_DATA_H */

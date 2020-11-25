@@ -74,6 +74,7 @@
 #include "distributed/worker_protocol.h"
 #include "distributed/worker_shard_visibility.h"
 #include "distributed/adaptive_executor.h"
+#include "libpq/auth.h"
 #include "port/atomics.h"
 #include "postmaster/postmaster.h"
 #include "storage/ipc.h"
@@ -100,7 +101,9 @@ static void DoInitialCleanup(void);
 static void ResizeStackToMaximumDepth(void);
 static void multi_log_hook(ErrorData *edata);
 static void RegisterConnectionCleanup(void);
+static void RegisterClientBackendCounterDecrement(void);
 static void CitusCleanupConnectionsAtExit(int code, Datum arg);
+static void DecrementClientBackendCounterAtExit(int code, Datum arg);
 static void CreateRequiredDirectories(void);
 static void RegisterCitusConfigVariables(void);
 static bool ErrorIfNotASuitableDeadlockFactor(double *newval, void **extra,
@@ -112,10 +115,14 @@ static void NodeConninfoGucAssignHook(const char *newval, void *extra);
 static const char * MaxSharedPoolSizeGucShowHook(void);
 static bool StatisticsCollectionGucCheckHook(bool *newval, void **extra, GucSource
 											 source);
+static void CitusAuthHook(Port *port, int status);
+
 
 /* static variable to hold value of deprecated GUC variable */
 static bool DeprecatedBool = false;
 static int DeprecatedInt = 0;
+
+static ClientAuthentication_hook_type original_client_auth_hook = NULL;
 
 
 /* *INDENT-OFF* */
@@ -286,6 +293,14 @@ _PG_init(void)
 	/* register hook for error messages */
 	emit_log_hook = multi_log_hook;
 
+
+	/*
+	 * Register hook for counting client backends that
+	 * are successfully authenticated.
+	 */
+	original_client_auth_hook = ClientAuthentication_hook;
+	ClientAuthentication_hook = CitusAuthHook;
+
 	InitializeMaintenanceDaemon();
 
 	/* initialize coordinated transaction management */
@@ -448,6 +463,23 @@ RegisterConnectionCleanup(void)
 
 
 /*
+ * RegisterClientBackendCounterDecrement is called when the backend terminates.
+ * For all client backends, we register a callback that will undo
+ */
+static void
+RegisterClientBackendCounterDecrement(void)
+{
+	static bool registeredCleanup = false;
+	if (registeredCleanup == false)
+	{
+		before_shmem_exit(DecrementClientBackendCounterAtExit, 0);
+
+		registeredCleanup = true;
+	}
+}
+
+
+/*
  * CitusCleanupConnectionsAtExit is called before_shmem_exit() of the
  * backend for the purposes of any clean-up needed.
  */
@@ -463,6 +495,17 @@ CitusCleanupConnectionsAtExit(int code, Datum arg)
 	 * are already given away.
 	 */
 	DeallocateReservedConnections();
+}
+
+
+/*
+ * DecrementClientBackendCounterAtExit is called before_shmem_exit() of the
+ * backend for the purposes decrementing
+ */
+static void
+DecrementClientBackendCounterAtExit(int code, Datum arg)
+{
+	DecrementClientBackendCounter();
 }
 
 
@@ -1740,4 +1783,22 @@ StatisticsCollectionGucCheckHook(bool *newval, void **extra, GucSource source)
 		return true;
 	}
 #endif
+}
+
+
+/*
+ * CitusAuthHook is a callback for client authentication that Postgres provides.
+ * Citus uses this hook to count the number of active backends.
+ */
+static void
+CitusAuthHook(Port *port, int status)
+{
+	/* let other authentication hooks to kick in first */
+	if (original_client_auth_hook)
+	{
+		original_client_auth_hook(port, status);
+	}
+
+	RegisterClientBackendCounterDecrement();
+	IncrementClientBackendCounter();
 }
