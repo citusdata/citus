@@ -646,6 +646,7 @@ static bool StartPlacementExecutionOnSession(TaskPlacementExecution *placementEx
 static bool SendNextQuery(TaskPlacementExecution *placementExecution,
 						  WorkerSession *session);
 static void ConnectionStateMachine(WorkerSession *session);
+static bool HasUnfinishedTaskForSession(WorkerSession *session);
 static void HandleMultiConnectionSuccess(WorkerSession *session);
 static bool HasAnyConnectionFailure(WorkerPool *workerPool);
 static void Activate2PCIfModifyingTransactionExpandsToNewNode(WorkerSession *session);
@@ -2241,9 +2242,14 @@ RunDistributedExecution(DistributedExecution *execution)
 		 * decides to establish new connections, the execution might have tasks
 		 * to finish. But, the execution might finish before the new connections
 		 * are established.
+		 *
+		 * Note that the rules explained above could be overriden by any
+		 * cancellation to the query. In that case, we terminate the execution
+		 * irrespective of the current status of the tasks or the connections.
 		 */
-		while (execution->unfinishedTaskCount > 0 ||
-			   HasIncompleteConnectionEstablishment(execution))
+		while (!cancellationReceived &&
+			   (execution->unfinishedTaskCount > 0 ||
+				HasIncompleteConnectionEstablishment(execution)))
 		{
 			WorkerPool *workerPool = NULL;
 			foreach_ptr(workerPool, execution->workerList)
@@ -2284,11 +2290,6 @@ RunDistributedExecution(DistributedExecution *execution)
 			int eventCount = WaitEventSetWait(execution->waitEventSet, timeout, events,
 											  eventSetSize, WAIT_EVENT_CLIENT_READ);
 			ProcessWaitEvents(execution, events, eventCount, &cancellationReceived);
-			if (cancellationReceived)
-			{
-				/* user requested cancel, do not continue the execution */
-				break;
-			}
 		}
 
 		if (events != NULL)
@@ -3052,14 +3053,32 @@ ConnectionStateMachine(WorkerSession *session)
 
 			case MULTI_CONNECTION_CONNECTED:
 			{
-				/*
-				 * Connection is ready, and we have unfinished tasks.
-				 * So, run the transaction state machine.
-				 */
-				if (execution->unfinishedTaskCount > 0)
+				if (HasUnfinishedTaskForSession(session))
 				{
+					/*
+					 * Connection is ready, and we have unfinished tasks.
+					 * So, run the transaction state machine.
+					 */
 					TransactionStateMachine(session);
 				}
+				else
+				{
+					/*
+					 * Connection is ready, but we don't have any unfinished
+					 * task that this session can execute. So, there is no
+					 * reason to wait for this connection.
+					 *
+					 * Note that we can be in a situation where the executor
+					 * decides to establish a connection, but not need to
+					 * use it when the connection is established. This could
+					 * happen when the earlier connections manages to
+					 *
+					 * As no tasks are ready to be executed at the moment, we
+					 * mark the socket readable to get any notices if exists.
+					 */
+					UpdateConnectionWaitFlags(session, WL_SOCKET_READABLE);
+				}
+
 				break;
 			}
 
@@ -3171,6 +3190,41 @@ ConnectionStateMachine(WorkerSession *session)
 			}
 		}
 	} while (connection->connectionState != currentState);
+}
+
+
+/*
+ * HasUnfinishedTaskForSession gets a session and returns true if there
+ * are any tasks that this session can execute.
+ */
+static bool
+HasUnfinishedTaskForSession(WorkerSession *session)
+{
+	if (session->currentTask != NULL)
+	{
+		/* the session is executing a command right now */
+		return true;
+	}
+
+	dlist_head *sessionReadyTaskQueue = &(session->readyTaskQueue);
+	if (!dlist_is_empty(sessionReadyTaskQueue))
+	{
+		/* session has an assigned task, which is ready for execution */
+		return true;
+	}
+
+	WorkerPool *workerPool = session->workerPool;
+	dlist_head *poolReadyTaskQueue = &(workerPool->readyTaskQueue);
+	if (!dlist_is_empty(poolReadyTaskQueue))
+	{
+		/*
+		 * Pool has unassigned tasks that can be executed
+		 * by the input session.
+		 */
+		return true;
+	}
+
+	return false;
 }
 
 
