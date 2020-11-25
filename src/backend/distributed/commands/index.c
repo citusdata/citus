@@ -176,7 +176,10 @@ PreprocessIndexStmt(Node *node, const char *createIndexCommand)
 
 	if (IndexAlreadyExists(createIndexStatement))
 	{
-		/* let standard_processUtility to error out */
+		/*
+		 * Let standard_processUtility to error out or skip if command has
+		 * IF NOT EXISTS.
+		 */
 		return NIL;
 	}
 
