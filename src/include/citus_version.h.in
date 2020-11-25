@@ -26,3 +26,6 @@
 
 /* Base URL for statistics collection and update checks */
 #undef REPORTS_BASE_URL
+
+/* columnar table access method capability */
+#undef HAS_TABLEAM

@@ -84,6 +84,8 @@
 #include "utils/guc_tables.h"
 #include "utils/varlena.h"
 
+#include "columnar/mod.h"
+
 /* marks shared object as one loadable by the postgres version compiled against */
 PG_MODULE_MAGIC;
 
@@ -92,6 +94,7 @@ static char *CitusVersion = CITUS_VERSION;
 
 
 void _PG_init(void);
+void _PG_fini(void);
 
 static void DoInitialCleanup(void);
 static void ResizeStackToMaximumDepth(void);
@@ -311,6 +314,15 @@ _PG_init(void)
 	{
 		DoInitialCleanup();
 	}
+	columnar_init();
+}
+
+
+/* shared library deconstruction function */
+void
+_PG_fini(void)
+{
+	columnar_fini();
 }
 
 

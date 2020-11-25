@@ -1,3 +1,101 @@
+### citus v9.4.3 (November 24, 2020) ###
+
+* Enables PostgreSQL's parallel queries on EXPLAIN ANALYZE
+
+* Fixes a bug that triggers subplan executions unnecessarily with cursors
+
+### citus v9.5.0 (November 10, 2020) ###
+
+* Adds support for PostgreSQL 13
+
+* Removes the task-tracker executor
+
+* Introduces citus local tables
+
+* Introduces `undistribute_table` UDF to convert tables back to postgres tables
+
+* Adds support for `EXPLAIN (ANALYZE) EXECUTE` and `EXPLAIN EXECUTE`
+
+* Adds support for `EXPLAIN (ANALYZE, WAL)` for PG13
+
+* Sorts the output of `EXPLAIN (ANALYZE)` by execution duration.
+
+* Adds support for CREATE TABLE ... USING table_access_method
+
+* Adds support for `WITH TIES` option in SELECT and INSERT SELECT queries
+
+* Avoids taking multi-shard locks on workers
+
+* Enforces `citus.max_shared_pool_size` config in COPY queries
+
+* Enables custom aggregates with multiple parameters to be executed on workers
+
+* Enforces `citus.max_intermediate_result_size` in local execution
+
+* Improves cost estimation of INSERT SELECT plans
+
+* Introduces delegation of procedures that read from reference tables
+
+* Prevents pull-push execution for simple pushdownable subqueries
+
+* Improves error message when creating a foreign key to a local table
+
+* Makes `citus_prepare_pg_upgrade` idempotent by dropping transition tables
+
+* Disallows `ON TRUE` outer joins with reference & distributed tables when
+  reference table is outer relation to avoid incorrect results
+
+* Disallows field indirection in INSERT/UPDATE queries to avoid incorrect
+  results
+
+* Disallows volatile functions in UPDATE subqueries to avoid incorrect results
+
+* Fixes CREATE INDEX CONCURRENTLY crash with local execution
+
+* Fixes `citus_finish_pg_upgrade` to drop all backup tables
+
+* Fixes a bug that cause failures when `RECURSIVE VIEW` joined reference table
+
+* Fixes DROP SEQUENCE failures when metadata syncing is enabled
+
+* Fixes a bug that caused CREATE TABLE with CHECK constraint to fail
+
+* Fixes a bug that could cause VACUUM to deadlock
+
+* Fixes master_update_node failure when no background worker slots are available
+
+* Fixes a bug that caused replica identity to not be propagated on shard repair
+
+* Fixes a bug that could cause crashes after connection timeouts
+
+* Fixes a bug that could cause crashes with certain compile flags
+
+* Fixes a bug that could cause deadlocks on CREATE INDEX
+
+* Fixes a bug with genetic query optimization in outer joins
+
+* Fixes a crash when aggregating empty tables
+
+* Fixes a crash with inserting domain constrained composite types
+
+* Fixes a crash with multi-row & router INSERT's in local execution
+
+* Fixes a possibility of doing temporary file cleanup more than once
+
+* Fixes incorrect setting of join related fields
+
+* Fixes memory issues around deparsing index commands
+
+* Fixes reference table access tracking for sequential execution
+
+* Fixes removal of a single node with only reference tables
+
+* Fixes sending commands to coordinator when it is added as a worker
+
+* Fixes write queries with const expressions and COLLATE in various places
+
+* Fixes wrong cancellation message about distributed deadlock
+
 ### citus v9.4.2 (October 21, 2020) ###
 
 * Fixes a bug that could lead to multiple maintenance daemons
