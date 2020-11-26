@@ -287,8 +287,17 @@ GetShellTableDDLEventsForCitusLocalTable(Oid relationId)
 	 */
 	bool includeSequenceDefaults = true;
 
-	List *shellTableDDLEvents = GetFullTableCreationCommands(relationId,
-															 includeSequenceDefaults);
+	List *tableDDLCommands = GetFullTableCreationCommands(relationId,
+														  includeSequenceDefaults);
+
+	List *shellTableDDLEvents = NIL;
+	TableDDLCommand *tableDDLCommand = NULL;
+	foreach_ptr(tableDDLCommand, tableDDLCommands)
+	{
+		Assert(CitusIsA(tableDDLCommand, TableDDLCommand));
+		shellTableDDLEvents = lappend(shellTableDDLEvents,
+									  GetTableDDLCommand(tableDDLCommand));
+	}
 	shellTableDDLEvents = list_concat(shellTableDDLEvents, foreignConstraintCommands);
 
 	return shellTableDDLEvents;

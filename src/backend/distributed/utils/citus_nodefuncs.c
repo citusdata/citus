@@ -15,6 +15,7 @@
 #include "catalog/pg_type.h"
 #include "distributed/citus_nodes.h"
 #include "distributed/citus_nodefuncs.h"
+#include "distributed/coordinator_protocol.h"
 #include "distributed/errormessage.h"
 #include "distributed/log_utils.h"
 #include "distributed/metadata_cache.h"
@@ -45,7 +46,8 @@ static const char *CitusNodeTagNamesD[] = {
 	"RelationShard",
 	"RelationRowLock",
 	"DeferredErrorMessage",
-	"GroupShardPlacement"
+	"GroupShardPlacement",
+	"TableDDLCommand"
 };
 
 const char **CitusNodeTagNames = CitusNodeTagNamesD;
@@ -411,7 +413,8 @@ const ExtensibleNodeMethods nodeMethods[] =
 	DEFINE_NODE_METHODS_NO_READ(MultiJoin),
 	DEFINE_NODE_METHODS_NO_READ(MultiPartition),
 	DEFINE_NODE_METHODS_NO_READ(MultiCartesianProduct),
-	DEFINE_NODE_METHODS_NO_READ(MultiExtendedOp)
+	DEFINE_NODE_METHODS_NO_READ(MultiExtendedOp),
+	DEFINE_NODE_METHODS_NO_READ(TableDDLCommand)
 };
 
 void
