@@ -165,7 +165,8 @@ static Value * MakeDummyColumnString(int dummyColumnId);
 static List * BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError);
 static List * GroupInsertValuesByShardId(List *insertValuesList);
 static List * ExtractInsertValuesList(Query *query, Var *partitionColumn);
-static DeferredErrorMessage * MultiRouterPlannableQuery(Query *query);
+static DeferredErrorMessage * DeferErrorIfUnsupportedRouterPlannableSelectQuery(
+	Query *query);
 static DeferredErrorMessage * ErrorIfQueryHasUnroutableModifyingCTE(Query *queryTree);
 static bool SelectsFromDistributedTable(List *rangeTableList, Query *query);
 static ShardPlacement * CreateDummyPlacement(bool hasLocalRelation);
@@ -193,7 +194,8 @@ CreateRouterPlan(Query *originalQuery, Query *query,
 {
 	DistributedPlan *distributedPlan = CitusMakeNode(DistributedPlan);
 
-	distributedPlan->planningError = MultiRouterPlannableQuery(query);
+	distributedPlan->planningError = DeferErrorIfUnsupportedRouterPlannableSelectQuery(
+		query);
 
 	if (distributedPlan->planningError == NULL)
 	{
@@ -605,7 +607,8 @@ ModifyPartialQuerySupported(Query *queryTree, bool multiShardQuery,
 
 			if (cteQuery->commandType == CMD_SELECT)
 			{
-				DeferredErrorMessage *cteError = MultiRouterPlannableQuery(cteQuery);
+				DeferredErrorMessage *cteError =
+					DeferErrorIfUnsupportedRouterPlannableSelectQuery(cteQuery);
 				if (cteError)
 				{
 					return cteError;
@@ -3430,20 +3433,25 @@ ExtractInsertPartitionKeyValue(Query *query)
 
 
 /*
- * MultiRouterPlannableQuery checks if given select query is router plannable,
- * setting distributedPlan->planningError if not.
+ * DeferErrorIfUnsupportedRouterPlannableSelectQuery checks if given query is router plannable,
+ * SELECT query, setting distributedPlan->planningError if not.
  * The query is router plannable if it is a modify query, or if it is a select
  * query issued on a hash partitioned distributed table. Router plannable checks
  * for select queries can be turned off by setting citus.enable_router_execution
  * flag to false.
  */
 static DeferredErrorMessage *
-MultiRouterPlannableQuery(Query *query)
+DeferErrorIfUnsupportedRouterPlannableSelectQuery(Query *query)
 {
 	List *rangeTableRelationList = NIL;
 	ListCell *rangeTableRelationCell = NULL;
 
-	Assert(query->commandType == CMD_SELECT);
+	if (query->commandType != CMD_SELECT)
+	{
+		return DeferredError(ERRCODE_ASSERT_FAILURE,
+							 "Only SELECT query types are supported in this path",
+							 NULL, NULL);
+	}
 
 	if (!EnableRouterExecution)
 	{
