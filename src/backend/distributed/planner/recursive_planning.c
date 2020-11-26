@@ -163,14 +163,14 @@ static bool ShouldRecursivelyPlanSubquery(Query *subquery,
 static bool AllDistributionKeysInSubqueryAreEqual(Query *subquery,
 												  PlannerRestrictionContext *
 												  restrictionContext);
-static bool AllDataLocallyAccessible(List *rangeTableList);												  
+static bool AllDataLocallyAccessible(List *rangeTableList);
 static bool ShouldRecursivelyPlanSetOperation(Query *query,
 											  RecursivePlanningContext *context);
+static void RecursivelyPlanSubquery(Query *subquery,
+									RecursivePlanningContext *planningContext);
 static void RecursivelyPlanSetOperations(Query *query, Node *node,
 										 RecursivePlanningContext *context);
 static bool IsLocalTableRteOrMatView(Node *node);
-static void RecursivelyPlanSubquery(Query *subquery,
-									RecursivePlanningContext *planningContext);
 static DistributedSubPlan * CreateDistributedSubPlan(uint32 subPlanId,
 													 Query *subPlanQuery);
 static bool CteReferenceListWalker(Node *node, CteReferenceWalkerContext *context);
@@ -290,12 +290,6 @@ RecursivelyPlanSubqueriesAndCTEs(Query *query, RecursivePlanningContext *context
 	/* make sure function calls in joins are executed in the coordinator */
 	WrapFunctionsInSubqueries(query);
 
-	/*
-	 * Logical planner cannot handle "local_table" [OUTER] JOIN "dist_table", so we
-	 * recursively plan one side of the join so that the logical planner can plan.
-	 */
-	ConvertLocalTableJoinsToSubqueries(query, context);
-
 	/* descend into subqueries */
 	query_tree_walker(query, RecursivelyPlanSubqueryWalker, context, 0);
 
@@ -345,6 +339,13 @@ RecursivelyPlanSubqueriesAndCTEs(Query *query, RecursivePlanningContext *context
 	{
 		RecursivelyPlanNonColocatedSubqueries(query, context);
 	}
+
+	/*
+	 * Logical planner cannot handle "local_table" [OUTER] JOIN "dist_table", or
+	 * a query with local table/citus local table and subquery. We convert local/citus local
+	 * tables to a subquery until they can be planned
+	 */
+	ConvertUnplannableTableJoinsToSubqueries(query, context);
 
 	return NULL;
 }
@@ -1346,13 +1347,15 @@ NodeContainsSubqueryReferencingOuterQuery(Node *node)
 	return false;
 }
 
+
 /*
  * ReplaceRTERelationWithRteSubquery replaces the input rte relation target entry
  * with a subquery. The function also pushes down the filters to the subquery.
  */
 void
 ReplaceRTERelationWithRteSubquery(RangeTblEntry *rangeTableEntry, List *restrictionList,
-								  List *requiredAttrNumbers)
+								  List *requiredAttrNumbers,
+								  RecursivePlanningContext *context)
 {
 	Query *subquery = WrapRteRelationIntoSubquery(rangeTableEntry, requiredAttrNumbers);
 	Expr *andedBoundExpressions = make_ands_explicit(restrictionList);
@@ -1364,7 +1367,6 @@ ReplaceRTERelationWithRteSubquery(RangeTblEntry *rangeTableEntry, List *restrict
 	/* replace the function with the constructed subquery */
 	rangeTableEntry->rtekind = RTE_SUBQUERY;
 	rangeTableEntry->subquery = subquery;
-
 
 	/*
 	 * If the relation is inherited, it'll still be inherited as
@@ -1383,15 +1385,25 @@ ReplaceRTERelationWithRteSubquery(RangeTblEntry *rangeTableEntry, List *restrict
 								get_rel_name(rangeTableEntry->relid),
 								ApplyLogRedaction(subqueryString->data))));
 	}
+	RecursivelyPlanSubquery(rangeTableEntry->subquery, context);
 }
 
-bool ContainsTableToBeConvertedToSubquery(List* rangeTableList, Oid resultRelationId) {
-	if (AllDataLocallyAccessible(rangeTableList)) {
+
+/*
+ * ContainsTableToBeConvertedToSubquery checks if the given range table list contains
+ * any table that should be converted to a subquery, which otherwise is not plannable.
+ */
+bool
+ContainsTableToBeConvertedToSubquery(List *rangeTableList, Oid resultRelationId)
+{
+	if (AllDataLocallyAccessible(rangeTableList))
+	{
 		return false;
 	}
-	return ContainsLocalTableDistributedTableJoin(rangeTableList) || 
-		ContainsLocalTableSubqueryJoin(rangeTableList, resultRelationId);
+	return ContainsLocalTableDistributedTableJoin(rangeTableList) ||
+		   ContainsLocalTableSubqueryJoin(rangeTableList, resultRelationId);
 }
+
 
 /*
  * AllDataLocallyAccessible return true if all data for the relations in the
@@ -1400,11 +1412,12 @@ bool ContainsTableToBeConvertedToSubquery(List* rangeTableList, Oid resultRelati
 static bool
 AllDataLocallyAccessible(List *rangeTableList)
 {
-	RangeTblEntry* rangeTableEntry = NULL;
+	RangeTblEntry *rangeTableEntry = NULL;
 	foreach_ptr(rangeTableEntry, rangeTableList)
 	{
-		if (rangeTableEntry->rtekind == RTE_SUBQUERY) {
-			// TODO:: check if it has distributed table
+		if (rangeTableEntry->rtekind == RTE_SUBQUERY)
+		{
+			/* TODO:: check if it has distributed table */
 			return false;
 		}
 		if (!SubqueryConvertableRelationForJoin(rangeTableEntry))
@@ -1442,17 +1455,22 @@ AllDataLocallyAccessible(List *rangeTableList)
 	return true;
 }
 
+
 /*
  * SubqueryConvertableRelationForJoin returns true if the given range table entry
  * is a relation type that can be converted to a subquery.
  */
-bool SubqueryConvertableRelationForJoin(RangeTblEntry* rangeTableEntry) {
-	if (rangeTableEntry->rtekind != RTE_RELATION) {
+bool
+SubqueryConvertableRelationForJoin(RangeTblEntry *rangeTableEntry)
+{
+	if (rangeTableEntry->rtekind != RTE_RELATION)
+	{
 		return false;
 	}
 	return rangeTableEntry->relkind == RELKIND_PARTITIONED_TABLE ||
-		rangeTableEntry->relkind == RELKIND_RELATION;
+		   rangeTableEntry->relkind == RELKIND_RELATION;
 }
+
 
 /*
  * ContainsLocalTableDistributedTableJoin returns true if the input range table list
@@ -1474,11 +1492,13 @@ ContainsLocalTableDistributedTableJoin(List *rangeTableList)
 			continue;
 		}
 
-		if (IsCitusTableType(rangeTableEntry->relid, DISTRIBUTED_TABLE) || IsCitusTableType(rangeTableEntry->relid, REFERENCE_TABLE))
+		if (IsCitusTableType(rangeTableEntry->relid, DISTRIBUTED_TABLE) ||
+			IsCitusTableType(rangeTableEntry->relid, REFERENCE_TABLE))
 		{
 			containsDistributedTable = true;
 		}
-		else if (IsCitusTableType(rangeTableEntry->relid, CITUS_LOCAL_TABLE) || !IsCitusTable(rangeTableEntry->relid))
+		else if (IsCitusTableType(rangeTableEntry->relid, CITUS_LOCAL_TABLE) ||
+				 !IsCitusTable(rangeTableEntry->relid))
 		{
 			/* we consider citus local tables as local table */
 			containsLocalTable = true;
@@ -1504,7 +1524,8 @@ ContainsLocalTableSubqueryJoin(List *rangeTableList, Oid resultRelationId)
 	{
 		RangeTblEntry *rangeTableEntry = (RangeTblEntry *) lfirst(rangeTableCell);
 
-		if (rangeTableEntry->rtekind == RTE_SUBQUERY) {
+		if (rangeTableEntry->rtekind == RTE_SUBQUERY)
+		{
 			containsSubquery = true;
 		}
 
@@ -1513,7 +1534,8 @@ ContainsLocalTableSubqueryJoin(List *rangeTableList, Oid resultRelationId)
 			continue;
 		}
 
-		if (!IsCitusTable(rangeTableEntry->relid) && rangeTableEntry->relid != resultRelationId)
+		if (!IsCitusTable(rangeTableEntry->relid) && rangeTableEntry->relid !=
+			resultRelationId)
 		{
 			containsLocalTable = true;
 		}
@@ -1521,6 +1543,7 @@ ContainsLocalTableSubqueryJoin(List *rangeTableList, Oid resultRelationId)
 
 	return containsLocalTable && containsSubquery;
 }
+
 
 /*
  * WrapFunctionsInSubqueries iterates over all the immediate Range Table Entries
@@ -1645,7 +1668,6 @@ TransformFunctionRTE(RangeTblEntry *rangeTblEntry)
 			subquery->targetList = lappend(subquery->targetList, targetEntry);
 		}
 	}
-
 	/*
 	 * If tupleDesc is NULL we have 2 different cases:
 	 *
@@ -1695,7 +1717,6 @@ TransformFunctionRTE(RangeTblEntry *rangeTblEntry)
 				columnType = list_nth_oid(rangeTblFunction->funccoltypes,
 										  targetColumnIndex);
 			}
-
 			/* use the types in the function definition otherwise */
 			else
 			{

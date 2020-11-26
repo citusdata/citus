@@ -249,7 +249,15 @@ CreateIndexStmtGetSchemaId(IndexStmt *createIndexStatement)
 	return namespaceId;
 }
 
-List* ExecuteFunctionOnEachTableIndex(Oid relationId, IndexProcesor indexProcessor) {
+
+/*
+ * ExecuteFunctionOnEachTableIndex executes the given indexProcessor function on each
+ * index of the given relation.
+ * It returns a list that is filled by the indexProcessor.
+ */
+List *
+ExecuteFunctionOnEachTableIndex(Oid relationId, IndexProcesor indexProcessor)
+{
 	List *result = NIL;
 	ScanKeyData scanKey[1];
 	int scanKeyCount = 1;
@@ -284,6 +292,7 @@ List* ExecuteFunctionOnEachTableIndex(Oid relationId, IndexProcesor indexProcess
 
 	return result;
 }
+
 
 /*
  * ExecuteFunctionOnEachTableIndex executes the given pgIndexProcessor function on each

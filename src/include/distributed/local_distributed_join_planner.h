@@ -17,8 +17,7 @@
 #include "distributed/recursive_planning.h"
 
 
-extern void
-ConvertLocalTableJoinsToSubqueries(Query *query,
-								   RecursivePlanningContext *context);
+extern void ConvertUnplannableTableJoinsToSubqueries(Query *query,
+													 RecursivePlanningContext *context);
 
 #endif /* LOCAL_DISTRIBUTED_JOIN_PLANNER_H */

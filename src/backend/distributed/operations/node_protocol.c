@@ -729,6 +729,7 @@ GatherIndexAndConstraintDefinitionList(Form_pg_index indexForm, List **indexDDLE
 	}
 }
 
+
 /*
  * IndexImpliedByAConstraint is a helper function to be used while scanning
  * pg_index. It returns true if the index identified by the given indexForm is

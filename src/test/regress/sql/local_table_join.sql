@@ -45,7 +45,7 @@ SELECT count(*) FROM postgres_table JOIN reference_table USING(key);
 -- switch back to the default policy, which is auto
 SET citus.local_table_join_policy to 'auto';
 
--- on the auto mode, the local tables should be recursively planned 
+-- on the auto mode, the local tables should be recursively planned
 -- unless a unique index exists in a column for distributed table
 SELECT count(*) FROM distributed_table JOIN postgres_table USING(key);
 SELECT count(*) FROM reference_table JOIN postgres_table USING(key);
@@ -80,6 +80,12 @@ SELECT count(*) FROM postgres_table JOIN distributed_table_pkey ON distributed_t
 SELECT count(*) FROM postgres_table JOIN distributed_table_pkey ON distributed_table_pkey.key = 10 OR (distributed_table_pkey.key > 10 and distributed_table_pkey.value = 'notext');
 SELECT count(*) FROM postgres_table JOIN distributed_table_pkey ON distributed_table_pkey.key = 10 OR (distributed_table_pkey.key = 10 and distributed_table_pkey.value = 'notext');
 
+SELECT count(*) FROM postgres_table JOIN distributed_table_pkey ON postgres_table.key = 10;
+
+
+SELECT count(*) FROM postgres_table JOIN (SELECT * FROM distributed_table) d1 USING(key);
+-- since this is already router plannable, we don't recursively plan the postgres table
+SELECT count(*) FROM postgres_table JOIN (SELECT * FROM distributed_table LIMIT 1) d1 USING(key);
 
 -- a unique index on key so dist table should be recursively planned
 SELECT count(*) FROM postgres_table JOIN distributed_table_windex USING(key);
@@ -93,7 +99,7 @@ SELECT count(*) FROM distributed_table JOIN postgres_table USING(key) WHERE dist
 SELECT count(*) FROM distributed_table JOIN postgres_table USING(key) WHERE distributed_table.key = 1;
 
 
--- if both local and distributed tables have a filter, we prefer local unless distributed table has unique indexes on any equality filter 
+-- if both local and distributed tables have a filter, we prefer local unless distributed table has unique indexes on any equality filter
 SELECT count(*) FROM distributed_table JOIN postgres_table USING(key) WHERE distributed_table.value = 'test' AND postgres_table.value = 'test';
 SELECT count(*) FROM distributed_table JOIN postgres_table USING(key) WHERE distributed_table.value = 'test' OR postgres_table.value = 'test';
 
@@ -158,9 +164,9 @@ SET
 FROM
 	postgres_table
 WHERE
-	distributed_table_windex.key = postgres_table.key;		
+	distributed_table_windex.key = postgres_table.key;
 
--- in case of update/delete we always recursively plan 
+-- in case of update/delete we always recursively plan
 -- the tables other than target table no matter what the policy is
 
 SET citus.local_table_join_policy TO 'prefer-local';
@@ -200,7 +206,7 @@ SET
 FROM
 	postgres_table
 WHERE
-	distributed_table_windex.key = postgres_table.key;	
+	distributed_table_windex.key = postgres_table.key;
 
 
 SET citus.local_table_join_policy TO 'prefer-distributed';
@@ -240,7 +246,7 @@ SET
 FROM
 	postgres_table
 WHERE
-	distributed_table_windex.key = postgres_table.key;	
+	distributed_table_windex.key = postgres_table.key;
 
 -- modifications with multiple tables
 UPDATE
@@ -252,6 +258,23 @@ FROM
 WHERE
 	distributed_table.key = p1.key AND p1.key = p2.key;
 
+UPDATE
+	postgres_table
+SET
+	value = 'test'
+FROM
+	(SELECT * FROM distributed_table) d1
+WHERE
+	d1.key = postgres_table.key;
+
+UPDATE
+	postgres_table
+SET
+	value = 'test'
+FROM
+	(SELECT * FROM distributed_table LIMIT 1) d1
+WHERE
+	d1.key = postgres_table.key;
 
 UPDATE
 	distributed_table
@@ -274,8 +297,8 @@ WHERE
 	postgres_table.key = d1.key AND d1.key = d2.key;
 
 -- currently can't plan subquery-local table join
-SELECT count(*) 
-FROM 
+SELECT count(*)
+FROM
 	(SELECT * FROM (SELECT * FROM distributed_table) d1) d2
 JOIN postgres_table
 USING(key);
@@ -318,7 +341,7 @@ SET
 FROM
 	citus_local
 WHERE
-	distributed_table_windex.key = citus_local.key;	
+	distributed_table_windex.key = citus_local.key;
 
 UPDATE
 	citus_local
@@ -327,7 +350,7 @@ SET
 FROM
 	distributed_table_windex
 WHERE
-	distributed_table_windex.key = citus_local.key;		
+	distributed_table_windex.key = citus_local.key;
 
 DROP TABLE citus_local;
 RESET client_min_messages;

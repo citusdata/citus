@@ -1818,8 +1818,8 @@ FilterPlannerRestrictionForQuery(PlannerRestrictionContext *plannerRestrictionCo
 	/* allocate the filtered planner restriction context and set all the fields */
 	PlannerRestrictionContext *filteredPlannerRestrictionContext = palloc0(
 		sizeof(PlannerRestrictionContext));
-	filteredPlannerRestrictionContext->fastPathRestrictionContext =
-		palloc0(sizeof(FastPathRestrictionContext));
+	filteredPlannerRestrictionContext->fastPathRestrictionContext = palloc0(
+		sizeof(FastPathRestrictionContext));
 
 	filteredPlannerRestrictionContext->memoryContext =
 		plannerRestrictionContext->memoryContext;
@@ -1882,10 +1882,9 @@ GetRestrictInfoListForRelation(RangeTblEntry *rangeTblEntry,
 	}
 
 	List *restrictExprList = NIL;
-	ListCell *restrictCell = NULL;
-	foreach(restrictCell, baseRestrictInfo)
+	RestrictInfo *restrictInfo = NULL;
+	foreach_ptr(restrictInfo, baseRestrictInfo)
 	{
-		RestrictInfo *restrictInfo = (RestrictInfo *) lfirst(restrictCell);
 		Expr *restrictionClause = restrictInfo->clause;
 
 		/* we cannot process Params beacuse they are not known at this point */
@@ -1912,10 +1911,9 @@ GetRestrictInfoListForRelation(RangeTblEntry *rangeTblEntry,
 		Expr *copyOfRestrictClause = (Expr *) copyObject((Node *) restrictionClause);
 		List *varClauses = pull_var_clause_default((Node *) copyOfRestrictClause);
 		ListCell *varClauseCell = NULL;
-		foreach(varClauseCell, varClauses)
+		Var *column = NULL;
+		foreach_ptr(column, varClauses)
 		{
-			Var *column = (Var *) lfirst(varClauseCell);
-
 			column->varno = rteIndex;
 			column->varnosyn = rteIndex;
 		}

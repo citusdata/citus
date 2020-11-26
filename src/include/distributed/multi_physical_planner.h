@@ -589,6 +589,6 @@ extern RangeTblEntry * DerivedRangeTableEntry(MultiNode *multiNode, List *column
 											  List *funcColumnTypeMods,
 											  List *funcCollations);
 
-extern List* FetchAttributeNumsForRTEFromQuals(Node* quals, Index rteIndex);
+extern List * FetchEqualityAttrNumsForRTEFromQuals(Node *quals, Index rteIndex);
 
 #endif   /* MULTI_PHYSICAL_PLANNER_H */

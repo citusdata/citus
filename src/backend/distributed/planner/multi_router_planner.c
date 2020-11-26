@@ -49,6 +49,7 @@
 #include "distributed/reference_table_utils.h"
 #include "distributed/relation_restriction_equivalence.h"
 #include "distributed/relay_utility.h"
+#include "distributed/recursive_planning.h"
 #include "distributed/resource_lock.h"
 #include "distributed/shardinterval_utils.h"
 #include "distributed/shard_pruning.h"
@@ -181,7 +182,6 @@ static void ReorderTaskPlacementsByTaskAssignmentPolicy(Job *job,
 														TaskAssignmentPolicyType
 														taskAssignmentPolicy,
 														List *placementList);
-static bool IsLocalOrCitusLocalTable(Oid relationId);
 
 /*
  * CreateRouterPlan attempts to create a router executor plan for the given
@@ -292,6 +292,32 @@ CreateSingleTaskRouterSelectPlan(DistributedPlan *distributedPlan, Query *origin
 	distributedPlan->workerJob = job;
 	distributedPlan->combineQuery = NULL;
 	distributedPlan->expectResults = true;
+}
+
+
+/*
+ * IsRouterPlannable returns true if the given query can be planned by
+ * router planner.
+ */
+bool
+IsRouterPlannable(Query *query, PlannerRestrictionContext *plannerRestrictionContext)
+{
+	/* copy the query as the following methods can change the underlying query */
+	Query *copyQuery = copyObject(query);
+	DeferredErrorMessage *deferredErrorMessage = NULL;
+	if (copyQuery->commandType == CMD_SELECT)
+	{
+		deferredErrorMessage = MultiRouterPlannableQuery(copyQuery);
+	}
+	if (deferredErrorMessage)
+	{
+		return false;
+	}
+
+	/* TODO:: we might not need this copy*/
+	copyQuery = copyObject(query);
+	RouterJob(copyQuery, plannerRestrictionContext, &deferredErrorMessage);
+	return deferredErrorMessage == NULL;
 }
 
 
@@ -511,8 +537,6 @@ IsTidColumn(Node *node)
 }
 
 
-#include "distributed/recursive_planning.h"
-
 /*
  * ModifyPartialQuerySupported implements a subset of what ModifyQuerySupported checks,
  * that subset being what's necessary to check modifying CTEs for.
@@ -522,24 +546,25 @@ ModifyPartialQuerySupported(Query *queryTree, bool multiShardQuery,
 							Oid *distributedTableIdOutput)
 {
 	DeferredErrorMessage *deferredError = DeferErrorIfModifyView(queryTree);
-	if (deferredError != NULL) {
+	if (deferredError != NULL)
+	{
 		return deferredError;
 	}
 	uint32 rangeTableId = 1;
 	CmdType commandType = queryTree->commandType;
 
-	Oid distributedTableId = ModifyQueryResultRelationId(queryTree);
-	*distributedTableIdOutput = distributedTableId;
-	if (ContainsTableToBeConvertedToSubquery(queryTree->rtable, distributedTableId))
+	Oid resultRelationId = ModifyQueryResultRelationId(queryTree);
+	*distributedTableIdOutput = resultRelationId;
+	if (ContainsTableToBeConvertedToSubquery(queryTree->rtable, resultRelationId))
 	{
 		return deferredError;
 	}
 
 	Var *partitionColumn = NULL;
 
-	if (IsCitusTable(distributedTableId))
+	if (IsCitusTable(resultRelationId))
 	{
-		partitionColumn = PartitionColumn(distributedTableId, rangeTableId);
+		partitionColumn = PartitionColumn(resultRelationId, rangeTableId);
 	}
 
 	deferredError = DeferErrorIfModifyView(queryTree);
@@ -633,12 +658,12 @@ ModifyPartialQuerySupported(Query *queryTree, bool multiShardQuery,
 		}
 	}
 
-	distributedTableId = ModifyQueryResultRelationId(queryTree);
+	resultRelationId = ModifyQueryResultRelationId(queryTree);
 	rangeTableId = 1;
 
-	if (IsCitusTable(distributedTableId))
+	if (IsCitusTable(resultRelationId))
 	{
-		partitionColumn = PartitionColumn(distributedTableId, rangeTableId);
+		partitionColumn = PartitionColumn(resultRelationId, rangeTableId);
 	}
 	commandType = queryTree->commandType;
 	if (commandType == CMD_INSERT || commandType == CMD_UPDATE ||
@@ -768,16 +793,9 @@ ModifyPartialQuerySupported(Query *queryTree, bool multiShardQuery,
 
 
 	/* set it for caller to use when we don't return any errors */
-	*distributedTableIdOutput = distributedTableId;
+	*distributedTableIdOutput = resultRelationId;
 
 	return NULL;
-}
-
-static bool IsLocalOrCitusLocalTable(Oid relationId) {
-	if (!IsCitusTable(relationId)) {
-		return true;
-	}
-	return IsCitusTableType(relationId, CITUS_LOCAL_TABLE);
 }
 
 
@@ -903,7 +921,7 @@ ModifyQuerySupported(Query *queryTree, Query *originalQuery, bool multiShardQuer
 	List *rangeTableList = NIL;
 	uint32 queryTableCount = 0;
 	CmdType commandType = queryTree->commandType;
-bool fastPathRouterQuery =
+	bool fastPathRouterQuery =
 		plannerRestrictionContext->fastPathRestrictionContext->fastPathRouterQuery;
 
 	/*
@@ -941,6 +959,14 @@ bool fastPathRouterQuery =
 	{
 		ExtractRangeTableEntryWalker((Node *) originalQuery, &rangeTableList);
 	}
+	RangeTblEntry *resultRte = ExtractResultRelationRTE(queryTree);
+	Oid resultRelationId = InvalidOid;
+	if (resultRte)
+	{
+		resultRelationId = resultRte->relid;
+	}
+	bool containsTableToBeConvertedToSubquery =
+		ContainsTableToBeConvertedToSubquery(queryTree->rtable, resultRelationId);
 
 	RangeTblEntry *rangeTableEntry = NULL;
 	foreach_ptr(rangeTableEntry, rangeTableList)
@@ -965,25 +991,22 @@ bool fastPathRouterQuery =
 			/* for other kinds of relations, check if its distributed */
 			else
 			{
-				RangeTblEntry *resultRte = ExtractResultRelationRTE(queryTree);
-				Oid resultRelationId = InvalidOid;
-				if (resultRte) {
-					resultRelationId = resultRte->relid;
-				}
 				if (IsLocalOrCitusLocalTable(rangeTableEntry->relid) &&
-				    ContainsTableToBeConvertedToSubquery(queryTree->rtable, resultRelationId)
-					)
-				{ 
+					containsTableToBeConvertedToSubquery)
+				{
 					StringInfo errorMessage = makeStringInfo();
 					char *relationName = get_rel_name(rangeTableEntry->relid);
-					if (IsCitusTable(rangeTableEntry->relid)) {
-						appendStringInfo(errorMessage, "citus local table %s cannot be used in this join",
-									 relationName);
-					}else {
-						appendStringInfo(errorMessage, "relation %s is not distributed",
-									 relationName);
+					if (IsCitusTable(rangeTableEntry->relid))
+					{
+						appendStringInfo(errorMessage,
+										 "citus local table %s cannot be joined with these distributed tables",
+										 relationName);
 					}
-
+					else
+					{
+						appendStringInfo(errorMessage, "relation %s is not distributed",
+										 relationName);
+					}
 					return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 										 errorMessage->data, NULL, NULL);
 				}
