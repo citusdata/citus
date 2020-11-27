@@ -12,6 +12,7 @@
 
 #include "safe_lib.h"
 
+#include "citus_version.h"
 #include "columnar/cstore.h"
 #include "columnar/cstore_version_compat.h"
 
@@ -27,6 +28,7 @@
 #include "catalog/namespace.h"
 #include "commands/defrem.h"
 #include "commands/trigger.h"
+#include "distributed/metadata_cache.h"
 #include "executor/executor.h"
 #include "executor/spi.h"
 #include "miscadmin.h"
@@ -41,6 +43,30 @@
 #include "utils/memutils.h"
 #include "utils/lsyscache.h"
 #include "utils/rel.h"
+#include "utils/relfilenodemap.h"
+
+
+/*
+ * Content of the first page in main fork, which stores metadata at file
+ * level.
+ */
+typedef struct ColumnarMetapage
+{
+	/*
+	 * Store version of file format used, so we can detect files from
+	 * previous versions if we change file format.
+	 */
+	int versionMajor;
+	int versionMinor;
+
+	/*
+	 * Each of the metadata table rows are identified by a storageId.
+	 * We store it also in the main fork so we can link metadata rows
+	 * with data files.
+	 */
+	uint64 storageId;
+} ColumnarMetapage;
+
 
 typedef struct
 {
@@ -48,21 +74,18 @@ typedef struct
 	EState *estate;
 } ModifyState;
 
-static void InsertStripeMetadataRow(Oid relfilenode, StripeMetadata *stripe);
-static void GetHighestUsedAddressAndId(Oid relfilenode,
+static void InsertStripeMetadataRow(uint64 storageId, StripeMetadata *stripe);
+static void GetHighestUsedAddressAndId(uint64 storageId,
 									   uint64 *highestUsedAddress,
 									   uint64 *highestUsedId);
-static List * ReadDataFileStripeList(Oid relfilenode, Snapshot snapshot);
+static List * ReadDataFileStripeList(uint64 storageId, Snapshot snapshot);
 static Oid CStoreStripesRelationId(void);
 static Oid CStoreStripesIndexRelationId(void);
 static Oid ColumnarOptionsRelationId(void);
 static Oid ColumnarOptionsIndexRegclass(void);
-static Oid CStoreDataFilesRelationId(void);
-static Oid CStoreDataFilesIndexRelationId(void);
 static Oid CStoreSkipNodesRelationId(void);
 static Oid CStoreSkipNodesIndexRelationId(void);
 static Oid CStoreNamespaceId(void);
-static bool ReadCStoreDataFiles(Oid relfilenode, DataFileMetadata *metadata);
 static ModifyState * StartModifyRelation(Relation rel);
 static void InsertTupleAndEnforceConstraints(ModifyState *state, Datum *values,
 											 bool *nulls);
@@ -71,8 +94,12 @@ static void FinishModifyRelation(ModifyState *state);
 static EState * create_estate_for_relation(Relation rel);
 static bytea * DatumToBytea(Datum value, Form_pg_attribute attrForm);
 static Datum ByteaToDatum(bytea *bytes, Form_pg_attribute attrForm);
-
+static ColumnarMetapage * InitMetapage(Relation relation);
+static ColumnarMetapage * ReadMetapage(RelFileNode relfilenode, bool missingOk);
+static uint64 GetNextStorageId(void);
 static bool WriteColumnarOptions(Oid regclass, ColumnarOptions *options, bool overwrite);
+
+PG_FUNCTION_INFO_V1(columnar_relation_storageid);
 
 /* constants for cstore.options */
 #define Natts_cstore_options 4
@@ -97,33 +124,10 @@ typedef struct FormData_cstore_options
 } FormData_cstore_options;
 typedef FormData_cstore_options *Form_cstore_options;
 
-/* constants for cstore_table */
-#define Natts_cstore_data_files 3
-#define Anum_cstore_data_files_relfilenode 1
-#define Anum_cstore_data_files_version_major 2
-#define Anum_cstore_data_files_version_minor 3
-
-/* ----------------
- *		cstore.cstore_data_files definition.
- * ----------------
- */
-typedef struct FormData_cstore_data_files
-{
-	Oid relfilenode;
-	int32 block_row_count;
-	int32 stripe_row_count;
-	NameData compression;
-	int64 version_major;
-	int64 version_minor;
-
-#ifdef CATALOG_VARLEN           /* variable-length fields start here */
-#endif
-} FormData_cstore_data_files;
-typedef FormData_cstore_data_files *Form_cstore_data_files;
 
 /* constants for cstore_stripe */
 #define Natts_cstore_stripes 8
-#define Anum_cstore_stripes_relfilenode 1
+#define Anum_cstore_stripes_storageid 1
 #define Anum_cstore_stripes_stripe 2
 #define Anum_cstore_stripes_file_offset 3
 #define Anum_cstore_stripes_data_length 4
@@ -134,7 +138,7 @@ typedef FormData_cstore_data_files *Form_cstore_data_files;
 
 /* constants for cstore_skipnodes */
 #define Natts_cstore_skipnodes 12
-#define Anum_cstore_skipnodes_relfilenode 1
+#define Anum_cstore_skipnodes_storageid 1
 #define Anum_cstore_skipnodes_stripe 2
 #define Anum_cstore_skipnodes_attr 3
 #define Anum_cstore_skipnodes_block 4
@@ -358,46 +362,18 @@ ReadColumnarOptions(Oid regclass, ColumnarOptions *options)
 
 
 /*
- * InitCStoreDataFileMetadata adds a record for the given relfilenode
- * in cstore_data_files.
- */
-void
-InitCStoreDataFileMetadata(Oid relfilenode)
-{
-	bool nulls[Natts_cstore_data_files] = { 0 };
-	Datum values[Natts_cstore_data_files] = {
-		ObjectIdGetDatum(relfilenode),
-		Int32GetDatum(CSTORE_VERSION_MAJOR),
-		Int32GetDatum(CSTORE_VERSION_MINOR)
-	};
-
-	DeleteDataFileMetadataRowIfExists(relfilenode);
-
-	Oid cstoreDataFilesOid = CStoreDataFilesRelationId();
-	Relation cstoreDataFiles = heap_open(cstoreDataFilesOid, RowExclusiveLock);
-
-	ModifyState *modifyState = StartModifyRelation(cstoreDataFiles);
-	InsertTupleAndEnforceConstraints(modifyState, values, nulls);
-	FinishModifyRelation(modifyState);
-
-	CommandCounterIncrement();
-
-	heap_close(cstoreDataFiles, NoLock);
-}
-
-
-/*
  * SaveStripeSkipList saves StripeSkipList for a given stripe as rows
  * of cstore_skipnodes.
  */
 void
-SaveStripeSkipList(Oid relfilenode, uint64 stripe, StripeSkipList *stripeSkipList,
+SaveStripeSkipList(RelFileNode relfilenode, uint64 stripe, StripeSkipList *stripeSkipList,
 				   TupleDesc tupleDescriptor)
 {
 	uint32 columnIndex = 0;
 	uint32 blockIndex = 0;
 	uint32 columnCount = stripeSkipList->columnCount;
 
+	ColumnarMetapage *metapage = ReadMetapage(relfilenode, false);
 	Oid cstoreSkipNodesOid = CStoreSkipNodesRelationId();
 	Relation cstoreSkipNodes = heap_open(cstoreSkipNodesOid, RowExclusiveLock);
 	ModifyState *modifyState = StartModifyRelation(cstoreSkipNodes);
@@ -410,7 +386,7 @@ SaveStripeSkipList(Oid relfilenode, uint64 stripe, StripeSkipList *stripeSkipLis
 				&stripeSkipList->blockSkipNodeArray[columnIndex][blockIndex];
 
 			Datum values[Natts_cstore_skipnodes] = {
-				ObjectIdGetDatum(relfilenode),
+				UInt64GetDatum(metapage->storageId),
 				Int64GetDatum(stripe),
 				Int32GetDatum(columnIndex + 1),
 				Int32GetDatum(blockIndex),
@@ -456,7 +432,7 @@ SaveStripeSkipList(Oid relfilenode, uint64 stripe, StripeSkipList *stripeSkipLis
  * ReadStripeSkipList fetches StripeSkipList for a given stripe.
  */
 StripeSkipList *
-ReadStripeSkipList(Oid relfilenode, uint64 stripe, TupleDesc tupleDescriptor,
+ReadStripeSkipList(RelFileNode relfilenode, uint64 stripe, TupleDesc tupleDescriptor,
 				   uint32 blockCount)
 {
 	int32 columnIndex = 0;
@@ -464,12 +440,14 @@ ReadStripeSkipList(Oid relfilenode, uint64 stripe, TupleDesc tupleDescriptor,
 	uint32 columnCount = tupleDescriptor->natts;
 	ScanKeyData scanKey[2];
 
+	ColumnarMetapage *metapage = ReadMetapage(relfilenode, false);
+
 	Oid cstoreSkipNodesOid = CStoreSkipNodesRelationId();
 	Relation cstoreSkipNodes = heap_open(cstoreSkipNodesOid, AccessShareLock);
 	Relation index = index_open(CStoreSkipNodesIndexRelationId(), AccessShareLock);
 
-	ScanKeyInit(&scanKey[0], Anum_cstore_skipnodes_relfilenode,
-				BTEqualStrategyNumber, F_OIDEQ, Int32GetDatum(relfilenode));
+	ScanKeyInit(&scanKey[0], Anum_cstore_skipnodes_storageid,
+				BTEqualStrategyNumber, F_OIDEQ, UInt64GetDatum(metapage->storageId));
 	ScanKeyInit(&scanKey[1], Anum_cstore_skipnodes_stripe,
 				BTEqualStrategyNumber, F_OIDEQ, Int32GetDatum(stripe));
 
@@ -559,11 +537,11 @@ ReadStripeSkipList(Oid relfilenode, uint64 stripe, TupleDesc tupleDescriptor,
  * InsertStripeMetadataRow adds a row to cstore_stripes.
  */
 static void
-InsertStripeMetadataRow(Oid relfilenode, StripeMetadata *stripe)
+InsertStripeMetadataRow(uint64 storageId, StripeMetadata *stripe)
 {
 	bool nulls[Natts_cstore_stripes] = { 0 };
 	Datum values[Natts_cstore_stripes] = {
-		ObjectIdGetDatum(relfilenode),
+		UInt64GetDatum(storageId),
 		Int64GetDatum(stripe->id),
 		Int64GetDatum(stripe->fileOffset),
 		Int64GetDatum(stripe->dataLength),
@@ -589,31 +567,21 @@ InsertStripeMetadataRow(Oid relfilenode, StripeMetadata *stripe)
 
 
 /*
- * ReadDataFileMetadata constructs DataFileMetadata for a given relfilenode by reading
- * from cstore_data_files and cstore_stripes.
+ * StripesForRelfilenode returns a list of StripeMetadata for stripes
+ * of the given relfilenode.
  */
-DataFileMetadata *
-ReadDataFileMetadata(Oid relfilenode, bool missingOk)
+List *
+StripesForRelfilenode(RelFileNode relfilenode)
 {
-	DataFileMetadata *datafileMetadata = palloc0(sizeof(DataFileMetadata));
-	bool found = ReadCStoreDataFiles(relfilenode, datafileMetadata);
-	if (!found)
+	ColumnarMetapage *metapage = ReadMetapage(relfilenode, true);
+	if (metapage == NULL)
 	{
-		if (!missingOk)
-		{
-			ereport(ERROR, (errmsg("Relfilenode %d doesn't belong to a cstore table.",
-								   relfilenode)));
-		}
-		else
-		{
-			return NULL;
-		}
+		/* empty relation */
+		return NIL;
 	}
 
-	datafileMetadata->stripeMetadataList =
-		ReadDataFileStripeList(relfilenode, GetTransactionSnapshot());
 
-	return datafileMetadata;
+	return ReadDataFileStripeList(metapage->storageId, GetTransactionSnapshot());
 }
 
 
@@ -622,12 +590,13 @@ ReadDataFileMetadata(Oid relfilenode, bool missingOk)
  * relfilenode across all active and inactive transactions.
  */
 uint64
-GetHighestUsedAddress(Oid relfilenode)
+GetHighestUsedAddress(RelFileNode relfilenode)
 {
 	uint64 highestUsedAddress = 0;
 	uint64 highestUsedId = 0;
+	ColumnarMetapage *metapage = ReadMetapage(relfilenode, false);
 
-	GetHighestUsedAddressAndId(relfilenode, &highestUsedAddress, &highestUsedId);
+	GetHighestUsedAddressAndId(metapage->storageId, &highestUsedAddress, &highestUsedId);
 
 	return highestUsedAddress;
 }
@@ -638,7 +607,7 @@ GetHighestUsedAddress(Oid relfilenode)
  * the given relfilenode across all active and inactive transactions.
  */
 static void
-GetHighestUsedAddressAndId(Oid relfilenode,
+GetHighestUsedAddressAndId(uint64 storageId,
 						   uint64 *highestUsedAddress,
 						   uint64 *highestUsedId)
 {
@@ -647,10 +616,12 @@ GetHighestUsedAddressAndId(Oid relfilenode,
 	SnapshotData SnapshotDirty;
 	InitDirtySnapshot(SnapshotDirty);
 
-	List *stripeMetadataList = ReadDataFileStripeList(relfilenode, &SnapshotDirty);
+	List *stripeMetadataList = ReadDataFileStripeList(storageId, &SnapshotDirty);
 
 	*highestUsedId = 0;
-	*highestUsedAddress = 0;
+
+	/* file starts with metapage */
+	*highestUsedAddress = CSTORE_BYTES_PER_PAGE;
 
 	foreach(stripeMetadataCell, stripeMetadataList)
 	{
@@ -684,8 +655,20 @@ ReserveStripe(Relation rel, uint64 sizeBytes,
 	 */
 	LockRelation(rel, ShareUpdateExclusiveLock);
 
-	Oid relfilenode = rel->rd_node.relNode;
-	GetHighestUsedAddressAndId(relfilenode, &currLogicalHigh, &highestId);
+	RelFileNode relfilenode = rel->rd_node;
+
+
+	/*
+	 * If this is the first stripe for this relation, initialize the
+	 * metapage, otherwise use the previously initialized metapage.
+	 */
+	ColumnarMetapage *metapage = ReadMetapage(relfilenode, true);
+	if (metapage == NULL)
+	{
+		metapage = InitMetapage(rel);
+	}
+
+	GetHighestUsedAddressAndId(metapage->storageId, &currLogicalHigh, &highestId);
 	SmgrAddr currSmgrHigh = logical_to_smgr(currLogicalHigh);
 
 	SmgrAddr resSmgrStart = next_block_start(currSmgrHigh);
@@ -714,7 +697,7 @@ ReserveStripe(Relation rel, uint64 sizeBytes,
 	stripe.rowCount = rowCount;
 	stripe.id = highestId + 1;
 
-	InsertStripeMetadataRow(relfilenode, &stripe);
+	InsertStripeMetadataRow(metapage->storageId, &stripe);
 
 	UnlockRelation(rel, ShareUpdateExclusiveLock);
 
@@ -723,18 +706,18 @@ ReserveStripe(Relation rel, uint64 sizeBytes,
 
 
 /*
- * ReadDataFileStripeList reads the stripe list for a given relfilenode
+ * ReadDataFileStripeList reads the stripe list for a given storageId
  * in the given snapshot.
  */
 static List *
-ReadDataFileStripeList(Oid relfilenode, Snapshot snapshot)
+ReadDataFileStripeList(uint64 storageId, Snapshot snapshot)
 {
 	List *stripeMetadataList = NIL;
 	ScanKeyData scanKey[1];
 	HeapTuple heapTuple;
 
-	ScanKeyInit(&scanKey[0], Anum_cstore_stripes_relfilenode,
-				BTEqualStrategyNumber, F_OIDEQ, Int32GetDatum(relfilenode));
+	ScanKeyInit(&scanKey[0], Anum_cstore_stripes_storageid,
+				BTEqualStrategyNumber, F_OIDEQ, Int32GetDatum(storageId));
 
 	Oid cstoreStripesOid = CStoreStripesRelationId();
 	Relation cstoreStripes = heap_open(cstoreStripesOid, AccessShareLock);
@@ -779,60 +762,10 @@ ReadDataFileStripeList(Oid relfilenode, Snapshot snapshot)
 
 
 /*
- * ReadCStoreDataFiles reads corresponding record from cstore_data_files. Returns
- * false if table was not found in cstore_data_files.
- */
-static bool
-ReadCStoreDataFiles(Oid relfilenode, DataFileMetadata *metadata)
-{
-	bool found = false;
-	ScanKeyData scanKey[1];
-
-	ScanKeyInit(&scanKey[0], Anum_cstore_data_files_relfilenode,
-				BTEqualStrategyNumber, F_OIDEQ, Int32GetDatum(relfilenode));
-
-	Oid cstoreDataFilesOid = CStoreDataFilesRelationId();
-	Relation cstoreDataFiles = try_relation_open(cstoreDataFilesOid, AccessShareLock);
-	if (cstoreDataFiles == NULL)
-	{
-		/*
-		 * Extension has been dropped. This can be called while
-		 * dropping extension or database via ObjectAccess().
-		 */
-		return false;
-	}
-
-	Relation index = try_relation_open(CStoreDataFilesIndexRelationId(), AccessShareLock);
-	if (index == NULL)
-	{
-		heap_close(cstoreDataFiles, NoLock);
-
-		/* extension has been dropped */
-		return false;
-	}
-
-	SysScanDesc scanDescriptor = systable_beginscan_ordered(cstoreDataFiles, index, NULL,
-															1, scanKey);
-
-	HeapTuple heapTuple = systable_getnext(scanDescriptor);
-	if (HeapTupleIsValid(heapTuple))
-	{
-		found = true;
-	}
-
-	systable_endscan_ordered(scanDescriptor);
-	index_close(index, NoLock);
-	heap_close(cstoreDataFiles, NoLock);
-
-	return found;
-}
-
-
-/*
- * DeleteDataFileMetadataRowIfExists removes the row with given relfilenode from cstore_stripes.
+ * DeleteMetadataRows removes the rows with given relfilenode from cstore_stripes.
  */
 void
-DeleteDataFileMetadataRowIfExists(Oid relfilenode)
+DeleteMetadataRows(RelFileNode relfilenode)
 {
 	ScanKeyData scanKey[1];
 
@@ -845,33 +778,46 @@ DeleteDataFileMetadataRowIfExists(Oid relfilenode)
 		return;
 	}
 
-	ScanKeyInit(&scanKey[0], Anum_cstore_data_files_relfilenode,
-				BTEqualStrategyNumber, F_OIDEQ, Int32GetDatum(relfilenode));
+	ColumnarMetapage *metapage = ReadMetapage(relfilenode, true);
+	if (metapage == NULL)
+	{
+		/*
+		 * No data has been written to this storage yet, so there is no
+		 * associated metadata yet.
+		 */
+		return;
+	}
 
-	Oid cstoreDataFilesOid = CStoreDataFilesRelationId();
-	Relation cstoreDataFiles = try_relation_open(cstoreDataFilesOid, AccessShareLock);
-	if (cstoreDataFiles == NULL)
+	ScanKeyInit(&scanKey[0], Anum_cstore_stripes_storageid,
+				BTEqualStrategyNumber, F_INT8EQ, UInt64GetDatum(metapage->storageId));
+
+	Oid cstoreStripesOid = CStoreStripesRelationId();
+	Relation cstoreStripes = try_relation_open(cstoreStripesOid, AccessShareLock);
+	if (cstoreStripes == NULL)
 	{
 		/* extension has been dropped */
 		return;
 	}
 
-	Relation index = index_open(CStoreDataFilesIndexRelationId(), AccessShareLock);
+	Relation index = index_open(CStoreStripesIndexRelationId(), AccessShareLock);
 
-	SysScanDesc scanDescriptor = systable_beginscan_ordered(cstoreDataFiles, index, NULL,
+	SysScanDesc scanDescriptor = systable_beginscan_ordered(cstoreStripes, index, NULL,
 															1, scanKey);
 
+	ModifyState *modifyState = StartModifyRelation(cstoreStripes);
+
 	HeapTuple heapTuple = systable_getnext(scanDescriptor);
-	if (HeapTupleIsValid(heapTuple))
+	while (HeapTupleIsValid(heapTuple))
 	{
-		ModifyState *modifyState = StartModifyRelation(cstoreDataFiles);
 		DeleteTupleAndEnforceConstraints(modifyState, heapTuple);
-		FinishModifyRelation(modifyState);
+		heapTuple = systable_getnext(scanDescriptor);
 	}
+
+	FinishModifyRelation(modifyState);
 
 	systable_endscan_ordered(scanDescriptor);
 	index_close(index, NoLock);
-	heap_close(cstoreDataFiles, NoLock);
+	heap_close(cstoreStripes, NoLock);
 }
 
 
@@ -1097,28 +1043,6 @@ ColumnarOptionsIndexRegclass(void)
 
 
 /*
- * CStoreDataFilesRelationId returns relation id of cstore_data_files.
- * TODO: should we cache this similar to citus?
- */
-static Oid
-CStoreDataFilesRelationId(void)
-{
-	return get_relname_relid("cstore_data_files", CStoreNamespaceId());
-}
-
-
-/*
- * CStoreDataFilesIndexRelationId returns relation id of cstore_data_files_pkey.
- * TODO: should we cache this similar to citus?
- */
-static Oid
-CStoreDataFilesIndexRelationId(void)
-{
-	return get_relname_relid("cstore_data_files_pkey", CStoreNamespaceId());
-}
-
-
-/*
  * CStoreSkipNodesRelationId returns relation id of cstore_skipnodes.
  * TODO: should we cache this similar to citus?
  */
@@ -1148,4 +1072,129 @@ static Oid
 CStoreNamespaceId(void)
 {
 	return get_namespace_oid("cstore", false);
+}
+
+
+/*
+ * ReadMetapage reads metapage for the given relfilenode. It returns
+ * false if the relation doesn't have a meta page yet.
+ */
+static ColumnarMetapage *
+ReadMetapage(RelFileNode relfilenode, bool missingOk)
+{
+	StringInfo metapageBuffer = NULL;
+	Oid relationId = RelidByRelfilenode(relfilenode.spcNode,
+										relfilenode.relNode);
+	if (OidIsValid(relationId))
+	{
+		Relation relation = relation_open(relationId, NoLock);
+
+		RelationOpenSmgr(relation);
+		int nblocks = smgrnblocks(relation->rd_smgr, MAIN_FORKNUM);
+		RelationCloseSmgr(relation);
+
+		if (nblocks != 0)
+		{
+			metapageBuffer = ReadFromSmgr(relation, 0, sizeof(ColumnarMetapage));
+		}
+
+		relation_close(relation, NoLock);
+	}
+
+	if (metapageBuffer == NULL)
+	{
+		if (!missingOk)
+		{
+			elog(ERROR, "columnar metapage was not found");
+		}
+
+		return NULL;
+	}
+
+	ColumnarMetapage *metapage = palloc0(sizeof(ColumnarMetapage));
+	memcpy_s((void *) metapage, sizeof(ColumnarMetapage),
+			 metapageBuffer->data, sizeof(ColumnarMetapage));
+
+	return metapage;
+}
+
+
+/*
+ * InitMetapage initializes metapage for the given relation.
+ */
+static ColumnarMetapage *
+InitMetapage(Relation relation)
+{
+	ColumnarMetapage *metapage = palloc0(sizeof(ColumnarMetapage));
+	metapage->storageId = GetNextStorageId();
+	metapage->versionMajor = CSTORE_VERSION_MAJOR;
+	metapage->versionMinor = CSTORE_VERSION_MINOR;
+
+	/* create the first block */
+	Buffer newBuffer = ReadBuffer(relation, P_NEW);
+	ReleaseBuffer(newBuffer);
+
+	Assert(sizeof(ColumnarMetapage) <= BLCKSZ - SizeOfPageHeaderData);
+	WriteToSmgr(relation, 0, (char *) metapage, sizeof(ColumnarMetapage));
+
+	return metapage;
+}
+
+
+/*
+ * GetNextStorageId returns the next value from the storage id sequence.
+ */
+static uint64
+GetNextStorageId(void)
+{
+	Oid savedUserId = InvalidOid;
+	int savedSecurityContext = 0;
+	Oid sequenceId = get_relname_relid("storageid_seq", CStoreNamespaceId());
+	Datum sequenceIdDatum = ObjectIdGetDatum(sequenceId);
+
+	/*
+	 * Not all users have update access to the sequence, so switch
+	 * security context.
+	 */
+	GetUserIdAndSecContext(&savedUserId, &savedSecurityContext);
+	SetUserIdAndSecContext(CitusExtensionOwner(), SECURITY_LOCAL_USERID_CHANGE);
+
+	/*
+	 * Generate new and unique storage id from sequence.
+	 */
+	Datum storageIdDatum = DirectFunctionCall1(nextval_oid, sequenceIdDatum);
+
+	SetUserIdAndSecContext(savedUserId, savedSecurityContext);
+
+	uint64 storageId = DatumGetInt64(storageIdDatum);
+
+	return storageId;
+}
+
+
+/*
+ * columnar_relation_storageid returns storage id associated with the
+ * given relation id, or -1 if there is no associated storage id yet.
+ */
+Datum
+columnar_relation_storageid(PG_FUNCTION_ARGS)
+{
+	uint64 storageId = -1;
+
+#if HAS_TABLEAM
+	Oid relationId = PG_GETARG_OID(0);
+	Relation relation = relation_open(relationId, AccessShareLock);
+	if (IsCStoreTableAmTable(relationId))
+	{
+		ColumnarMetapage *metadata = ReadMetapage(relation->rd_node, true);
+		if (metadata != NULL)
+		{
+			storageId = metadata->storageId;
+		}
+	}
+
+	relation_close(relation, AccessShareLock);
+#endif
+
+	PG_RETURN_INT64(storageId);
 }

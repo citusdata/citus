@@ -65,12 +65,10 @@ CStoreBeginWrite(RelFileNode relfilenode,
 				 uint64 stripeMaxRowCount, uint32 blockRowCount,
 				 TupleDesc tupleDescriptor)
 {
-	uint32 columnIndex = 0;
-
 	/* get comparison function pointers for each of the columns */
 	uint32 columnCount = tupleDescriptor->natts;
 	FmgrInfo **comparisonFunctionArray = palloc0(columnCount * sizeof(FmgrInfo *));
-	for (columnIndex = 0; columnIndex < columnCount; columnIndex++)
+	for (uint32 columnIndex = 0; columnIndex < columnCount; columnIndex++)
 	{
 		FmgrInfo *comparisonFunction = NULL;
 		FormData_pg_attribute *attributeForm = TupleDescAttr(tupleDescriptor,
@@ -323,7 +321,7 @@ CreateEmptyStripeSkipList(uint32 stripeMaxRowCount, uint32 blockRowCount,
 }
 
 
-static void
+void
 WriteToSmgr(Relation rel, uint64 logicalOffset, char *data, uint32 dataLength)
 {
 	uint64 remaining = dataLength;
@@ -521,7 +519,7 @@ FlushStripe(TableWriteState *writeState)
 	}
 
 	/* create skip list and footer buffers */
-	SaveStripeSkipList(relation->rd_node.relNode,
+	SaveStripeSkipList(writeState->relfilenode,
 					   stripeMetadata.id,
 					   stripeSkipList, tupleDescriptor);
 

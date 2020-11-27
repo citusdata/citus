@@ -185,13 +185,13 @@ ORDER BY 1;
  schema citus
  schema citus_internal
  schema cstore
+ sequence cstore.storageid_seq
  sequence pg_dist_colocationid_seq
  sequence pg_dist_groupid_seq
  sequence pg_dist_node_nodeid_seq
  sequence pg_dist_placement_placementid_seq
  sequence pg_dist_shardid_seq
  table citus.pg_dist_object
- table cstore.cstore_data_files
  table cstore.cstore_skipnodes
  table cstore.cstore_stripes
  table cstore.options

@@ -49,6 +49,7 @@
 #define CSTORE_TUPLE_COST_MULTIPLIER 10
 #define CSTORE_POSTSCRIPT_SIZE_LENGTH 1
 #define CSTORE_POSTSCRIPT_SIZE_MAX 256
+#define CSTORE_BYTES_PER_PAGE (BLCKSZ - SizeOfPageHeaderData)
 
 /* Enumaration for cstore file's compression method */
 typedef enum
@@ -195,7 +196,7 @@ typedef struct StripeBuffers
 /* TableReadState represents state of a cstore file read operation. */
 typedef struct TableReadState
 {
-	DataFileMetadata *datafileMetadata;
+	List *stripeList;
 	StripeMetadata *currentStripeMetadata;
 	TupleDesc tupleDescriptor;
 	Relation relation;
@@ -289,21 +290,25 @@ extern bool InitColumnarOptions(Oid regclass);
 extern void SetColumnarOptions(Oid regclass, ColumnarOptions *options);
 extern bool DeleteColumnarTableOptions(Oid regclass, bool missingOk);
 extern bool ReadColumnarOptions(Oid regclass, ColumnarOptions *options);
-extern void DeleteDataFileMetadataRowIfExists(Oid relfilenode);
-extern void InitCStoreDataFileMetadata(Oid relfilenode);
-extern void UpdateCStoreDataFileMetadata(Oid relfilenode, int blockRowCount, int
-										 stripeRowCount, CompressionType compression);
-extern DataFileMetadata * ReadDataFileMetadata(Oid relfilenode, bool missingOk);
-extern uint64 GetHighestUsedAddress(Oid relfilenode);
+extern void WriteToSmgr(Relation relation, uint64 logicalOffset,
+						char *data, uint32 dataLength);
+extern StringInfo ReadFromSmgr(Relation rel, uint64 offset, uint32 size);
+extern bool IsCStoreTableAmTable(Oid relationId);
+
+/* cstore_metadata_tables.c */
+extern void DeleteMetadataRows(RelFileNode relfilenode);
+extern List * StripesForRelfilenode(RelFileNode relfilenode);
+extern uint64 GetHighestUsedAddress(RelFileNode relfilenode);
 extern StripeMetadata ReserveStripe(Relation rel, uint64 size,
 									uint64 rowCount, uint64 columnCount,
 									uint64 blockCount, uint64 blockRowCount);
-extern void SaveStripeSkipList(Oid relfilenode, uint64 stripe,
+extern void SaveStripeSkipList(RelFileNode relfilenode, uint64 stripe,
 							   StripeSkipList *stripeSkipList,
 							   TupleDesc tupleDescriptor);
-extern StripeSkipList * ReadStripeSkipList(Oid relfilenode, uint64 stripe,
+extern StripeSkipList * ReadStripeSkipList(RelFileNode relfilenode, uint64 stripe,
 										   TupleDesc tupleDescriptor,
 										   uint32 blockCount);
+extern Datum columnar_relation_storageid(PG_FUNCTION_ARGS);
 
 
 /* write_state_management.c */
@@ -335,11 +340,10 @@ typedef struct SmgrAddr
 static inline SmgrAddr
 logical_to_smgr(uint64 logicalOffset)
 {
-	uint64 bytes_per_page = BLCKSZ - SizeOfPageHeaderData;
 	SmgrAddr addr;
 
-	addr.blockno = logicalOffset / bytes_per_page;
-	addr.offset = SizeOfPageHeaderData + (logicalOffset % bytes_per_page);
+	addr.blockno = logicalOffset / CSTORE_BYTES_PER_PAGE;
+	addr.offset = SizeOfPageHeaderData + (logicalOffset % CSTORE_BYTES_PER_PAGE);
 
 	return addr;
 }
@@ -351,8 +355,7 @@ logical_to_smgr(uint64 logicalOffset)
 static inline uint64
 smgr_to_logical(SmgrAddr addr)
 {
-	uint64 bytes_per_page = BLCKSZ - SizeOfPageHeaderData;
-	return bytes_per_page * addr.blockno + addr.offset - SizeOfPageHeaderData;
+	return CSTORE_BYTES_PER_PAGE * addr.blockno + addr.offset - SizeOfPageHeaderData;
 }
 
 
