@@ -132,12 +132,6 @@ static DeferredErrorMessage * ModifyPartialQuerySupported(Query *queryTree, bool
 														  multiShardQuery,
 														  Oid *distributedTableId);
 static bool NodeIsFieldStore(Node *node);
-static DeferredErrorMessage * DeferErrorIfUnsupportedModifyQueryWithLocalTable(
-	Query *query);
-static DeferredErrorMessage * DeferErrorIfUnsupportedModifyQueryWithCitusLocalTable(
-	RTEListProperties *rteListProperties, Oid targetRelationId);
-static DeferredErrorMessage * DeferErrorIfUnsupportedModifyQueryWithPostgresLocalTable(
-	RTEListProperties *rteListProperties, Oid targetRelationId);
 static DeferredErrorMessage * MultiShardUpdateDeleteSupported(Query *originalQuery,
 															  PlannerRestrictionContext *
 															  plannerRestrictionContext);
@@ -307,7 +301,8 @@ IsRouterPlannable(Query *query, PlannerRestrictionContext *plannerRestrictionCon
 	DeferredErrorMessage *deferredErrorMessage = NULL;
 	if (copyQuery->commandType == CMD_SELECT)
 	{
-		deferredErrorMessage = MultiRouterPlannableQuery(copyQuery);
+		deferredErrorMessage = DeferErrorIfUnsupportedRouterPlannableSelectQuery(
+			copyQuery);
 	}
 	if (deferredErrorMessage)
 	{
@@ -806,93 +801,6 @@ static bool
 NodeIsFieldStore(Node *node)
 {
 	return node && IsA(node, FieldStore);
-}
-
-
-/*
- * DeferErrorIfUnsupportedModifyQueryWithLocalTable returns DeferredErrorMessage
- * for unsupported modify queries that cannot be planned by router planner due to
- * unsupported usage of postgres local or citus local tables.
- */
-static DeferredErrorMessage *
-DeferErrorIfUnsupportedModifyQueryWithLocalTable(Query *query)
-{
-	RTEListProperties *rteListProperties = GetRTEListPropertiesForQuery(query);
-	Oid targetRelationId = ModifyQueryResultRelationId(query);
-
-	DeferredErrorMessage *deferredErrorMessage =
-		DeferErrorIfUnsupportedModifyQueryWithCitusLocalTable(rteListProperties,
-															  targetRelationId);
-	if (deferredErrorMessage)
-	{
-		return deferredErrorMessage;
-	}
-
-	deferredErrorMessage = DeferErrorIfUnsupportedModifyQueryWithPostgresLocalTable(
-		rteListProperties,
-		targetRelationId);
-	return deferredErrorMessage;
-}
-
-
-/*
- * DeferErrorIfUnsupportedModifyQueryWithCitusLocalTable is a helper function
- * that takes RTEListProperties & targetRelationId and returns deferred error
- * if query is not supported due to unsupported usage of citus local tables.
- */
-static DeferredErrorMessage *
-DeferErrorIfUnsupportedModifyQueryWithCitusLocalTable(
-	RTEListProperties *rteListProperties, Oid targetRelationId)
-{
-	if (rteListProperties->hasDistributedTable && rteListProperties->hasCitusLocalTable)
-	{
-		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-							 "cannot plan modifications with citus local tables and "
-							 "distributed tables", NULL,
-							 LOCAL_TABLE_SUBQUERY_CTE_HINT);
-	}
-
-	if (IsCitusTableType(targetRelationId, REFERENCE_TABLE) &&
-		rteListProperties->hasCitusLocalTable)
-	{
-		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-							 "cannot plan modifications of reference tables with citus "
-							 "local tables", NULL,
-							 LOCAL_TABLE_SUBQUERY_CTE_HINT);
-	}
-
-	return NULL;
-}
-
-
-/*
- * DeferErrorIfUnsupportedModifyQueryWithPostgresLocalTable is a helper
- * function that takes RTEListProperties & targetRelationId and returns
- * deferred error if query is not supported due to unsupported usage of
- * postgres local tables.
- */
-static DeferredErrorMessage *
-DeferErrorIfUnsupportedModifyQueryWithPostgresLocalTable(
-	RTEListProperties *rteListProperties, Oid targetRelationId)
-{
-	if (rteListProperties->hasPostgresLocalTable &&
-		rteListProperties->hasCitusTable)
-	{
-		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-							 "cannot plan modifications with local tables involving "
-							 "citus tables", NULL,
-							 LOCAL_TABLE_SUBQUERY_CTE_HINT);
-	}
-
-	if (!IsCitusTable(targetRelationId))
-	{
-		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-							 "cannot plan modifications of local tables involving "
-							 "distributed tables",
-							 NULL, NULL);
-	}
-
-	return NULL;
 }
 
 

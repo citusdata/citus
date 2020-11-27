@@ -1910,7 +1910,6 @@ GetRestrictInfoListForRelation(RangeTblEntry *rangeTblEntry,
 		 */
 		Expr *copyOfRestrictClause = (Expr *) copyObject((Node *) restrictionClause);
 		List *varClauses = pull_var_clause_default((Node *) copyOfRestrictClause);
-		ListCell *varClauseCell = NULL;
 		Var *column = NULL;
 		foreach_ptr(column, varClauses)
 		{

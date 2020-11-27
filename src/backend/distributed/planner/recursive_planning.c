@@ -1400,8 +1400,16 @@ ContainsTableToBeConvertedToSubquery(List *rangeTableList, Oid resultRelationId)
 	{
 		return false;
 	}
-	return ContainsLocalTableDistributedTableJoin(rangeTableList) ||
-		   ContainsLocalTableSubqueryJoin(rangeTableList, resultRelationId);
+	if (ContainsLocalTableDistributedTableJoin(rangeTableList))
+	{
+		return true;
+	}
+	if (ContainsLocalTableSubqueryJoin(rangeTableList, resultRelationId))
+	{
+		return true;
+	}
+
+	return false;
 }
 
 
@@ -1420,7 +1428,7 @@ AllDataLocallyAccessible(List *rangeTableList)
 			/* TODO:: check if it has distributed table */
 			return false;
 		}
-		if (!SubqueryConvertableRelationForJoin(rangeTableEntry))
+		if (!IsRecursivelyPlannableRelation(rangeTableEntry))
 		{
 			continue;
 		}
@@ -1457,11 +1465,11 @@ AllDataLocallyAccessible(List *rangeTableList)
 
 
 /*
- * SubqueryConvertableRelationForJoin returns true if the given range table entry
+ * IsRecursivelyPlannableRelation returns true if the given range table entry
  * is a relation type that can be converted to a subquery.
  */
 bool
-SubqueryConvertableRelationForJoin(RangeTblEntry *rangeTableEntry)
+IsRecursivelyPlannableRelation(RangeTblEntry *rangeTableEntry)
 {
 	if (rangeTableEntry->rtekind != RTE_RELATION)
 	{
@@ -1487,7 +1495,7 @@ ContainsLocalTableDistributedTableJoin(List *rangeTableList)
 	{
 		RangeTblEntry *rangeTableEntry = (RangeTblEntry *) lfirst(rangeTableCell);
 
-		if (!SubqueryConvertableRelationForJoin(rangeTableEntry))
+		if (!IsRecursivelyPlannableRelation(rangeTableEntry))
 		{
 			continue;
 		}
@@ -1529,7 +1537,7 @@ ContainsLocalTableSubqueryJoin(List *rangeTableList, Oid resultRelationId)
 			containsSubquery = true;
 		}
 
-		if (!SubqueryConvertableRelationForJoin(rangeTableEntry))
+		if (!IsRecursivelyPlannableRelation(rangeTableEntry))
 		{
 			continue;
 		}

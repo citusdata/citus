@@ -19,6 +19,12 @@ CREATE TABLE distributed_partitioned_table_1 PARTITION OF distributed_partitione
 CREATE TABLE distributed_partitioned_table_2 PARTITION OF distributed_partitioned_table FOR VALUES FROM (10) TO (20);
 SELECT create_distributed_table('distributed_partitioned_table', 'key');
 
+CREATE TABLE local_partitioned_table(key int, value text) PARTITION BY RANGE (key);
+CREATE TABLE local_partitioned_table_1 PARTITION OF local_partitioned_table FOR VALUES FROM (0) TO (10);
+CREATE TABLE local_partitioned_table_2 PARTITION OF local_partitioned_table FOR VALUES FROM (10) TO (20);
+
+CREATE TABLE distributed_table_composite (key int, value text, value_2 jsonb, primary key (key, value));
+SELECT create_distributed_table('distributed_table_composite', 'key');
 
 SET client_min_messages TO DEBUG1;
 
@@ -51,10 +57,22 @@ SELECT count(*) FROM distributed_table JOIN postgres_table USING(key);
 SELECT count(*) FROM reference_table JOIN postgres_table USING(key);
 SELECT count(*) FROM distributed_table JOIN postgres_table USING(key) JOIN reference_table USING (key);
 
+-- partititoned local tables should work as well
+SELECT count(*) FROM distributed_table JOIN local_partitioned_table USING(key);
+SELECT count(*) FROM reference_table JOIN local_partitioned_table USING(key);
+SELECT count(*) FROM distributed_table JOIN local_partitioned_table USING(key) JOIN reference_table USING (key);
+
 -- partitioned tables should work as well
 SELECT count(*) FROM distributed_partitioned_table JOIN postgres_table USING(key);
 SELECT count(*) FROM distributed_partitioned_table JOIN postgres_table USING(key) WHERE distributed_partitioned_table.key = 10;
 SELECT count(*) FROM distributed_partitioned_table JOIN postgres_table USING(key) JOIN reference_table USING (key);
+
+SELECT count(*) FROM distributed_partitioned_table JOIN local_partitioned_table USING(key);
+SELECT count(*) FROM distributed_partitioned_table JOIN local_partitioned_table USING(key) WHERE distributed_partitioned_table.key = 10;
+SELECT count(*) FROM distributed_partitioned_table JOIN local_partitioned_table USING(key) JOIN reference_table USING (key);
+
+-- TODO:: We should probably recursively plan postgres table here because primary key is on key,value not key.
+SELECT count(*) FROM distributed_table_composite JOIN postgres_table USING(key) WHERE distributed_table_composite.key = 10;
 
 -- a unique index on key so dist table should be recursively planned
 SELECT count(*) FROM postgres_table JOIN distributed_table_pkey USING(key);
@@ -351,6 +369,18 @@ FROM
 	distributed_table_windex
 WHERE
 	distributed_table_windex.key = citus_local.key;
+
+-- complex queries
+SELECT count(*) FROM postgres_table JOIN (SELECT * FROM (SELECT * FROM distributed_table LIMIT 1) d1) d2 using (key) JOIN reference_table USING(key) JOIN citus_local USING (key) JOIN (SELECT * FROM citus_local) c1  USING (key) WHERE d2.key > 10 AND d2.key = 10;
+SELECT count(*) FROM postgres_table JOIN (SELECT * FROM (SELECT * FROM distributed_table LIMIT 1) d1) d2 using (key) JOIN reference_table USING(key) JOIN citus_local USING (key) JOIN (SELECT * FROM citus_local) c1  USING (key) WHERE d2.key > 10 AND d2.key = 10;
+
+-- TODO:: we should support this?
+UPDATE reference_table SET key = 1 FROM postgres_table WHERE postgres_table.key = 10;
+UPDATE reference_table SET key = 1 FROM (SELECT * FROM postgres_table) l WHERE l.key = 10;
+
+-- TODO:: we should probably not wrap postgres_table here as there is a WHERE FALSE?
+-- though then the planner could give an error
+SELECT count(*) FROM postgres_table JOIN distributed_table USING(key) WHERE FALSE;
 
 DROP TABLE citus_local;
 RESET client_min_messages;
