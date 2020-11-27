@@ -72,6 +72,8 @@ static EState * create_estate_for_relation(Relation rel);
 static bytea * DatumToBytea(Datum value, Form_pg_attribute attrForm);
 static Datum ByteaToDatum(bytea *bytes, Form_pg_attribute attrForm);
 
+static bool WriteColumnarOptions(Oid regclass, ColumnarOptions *options, bool overwrite);
+
 /* constants for cstore.options */
 #define Natts_cstore_options 4
 #define Anum_cstore_options_regclass 1
@@ -146,9 +148,50 @@ typedef FormData_cstore_data_files *Form_cstore_data_files;
 #define Anum_cstore_skipnodes_value_compression_type 12
 
 
+/*
+ * InitColumnarOptions initialized the columnar table options. Meaning it writes the
+ * default options to the options table if not already existing.
+ *
+ * The return value indicates if options have actually been written.
+ */
+bool
+InitColumnarOptions(Oid regclass)
+{
+	ColumnarOptions defaultOptions = {
+		.blockRowCount = cstore_block_row_count,
+		.stripeRowCount = cstore_stripe_row_count,
+		.compressionType = cstore_compression,
+	};
+
+	return WriteColumnarOptions(regclass, &defaultOptions, false);
+}
+
+
+/*
+ * SetColumnarOptions writes the passed table options as the authoritive options to the
+ * table irregardless of the optiones already existing or not. This can be used to put a
+ * table in a certain state.
+ */
 void
 SetColumnarOptions(Oid regclass, ColumnarOptions *options)
 {
+	WriteColumnarOptions(regclass, options, true);
+}
+
+
+/*
+ * WriteColumnarOptions writes the options to the catalog table for a given regclass.
+ *  - If overwrite is false it will only write the values if there is not already a record
+ *    found.
+ *  - If overwrite is true it will always write the settings
+ *
+ * The return value indicates if the record has been written.
+ */
+static bool
+WriteColumnarOptions(Oid regclass, ColumnarOptions *options, bool overwrite)
+{
+	bool written = false;
+
 	bool nulls[Natts_cstore_options] = { 0 };
 	Datum values[Natts_cstore_options] = {
 		ObjectIdGetDatum(regclass),
@@ -178,28 +221,39 @@ SetColumnarOptions(Oid regclass, ColumnarOptions *options)
 	HeapTuple heapTuple = systable_getnext(scanDescriptor);
 	if (HeapTupleIsValid(heapTuple))
 	{
-		/* update existing record */
-		bool update[Natts_cstore_options] = { 0 };
-		update[Anum_cstore_options_block_row_count - 1] = true;
-		update[Anum_cstore_options_stripe_row_count - 1] = true;
-		update[Anum_cstore_options_compression - 1] = true;
+		if (overwrite)
+		{
+			/* TODO check if the options are actually different, skip if not changed */
+			/* update existing record */
+			bool update[Natts_cstore_options] = { 0 };
+			update[Anum_cstore_options_block_row_count - 1] = true;
+			update[Anum_cstore_options_stripe_row_count - 1] = true;
+			update[Anum_cstore_options_compression - 1] = true;
 
-		HeapTuple tuple = heap_modify_tuple(heapTuple, tupleDescriptor,
-											values, nulls, update);
-		CatalogTupleUpdate(columnarOptions, &tuple->t_self, tuple);
+			HeapTuple tuple = heap_modify_tuple(heapTuple, tupleDescriptor,
+												values, nulls, update);
+			CatalogTupleUpdate(columnarOptions, &tuple->t_self, tuple);
+			written = true;
+		}
 	}
 	else
 	{
 		/* inserting new record */
 		HeapTuple newTuple = heap_form_tuple(tupleDescriptor, values, nulls);
 		CatalogTupleInsert(columnarOptions, newTuple);
+		written = true;
 	}
 
-	CommandCounterIncrement();
+	if (written)
+	{
+		CommandCounterIncrement();
+	}
 
 	systable_endscan_ordered(scanDescriptor);
 	index_close(index, NoLock);
 	relation_close(columnarOptions, NoLock);
+
+	return written;
 }
 
 

@@ -550,13 +550,7 @@ cstore_relation_set_new_filenode(Relation rel,
 	SMgrRelation srel = RelationCreateStorage(*newrnode, persistence);
 	InitCStoreDataFileMetadata(newrnode->relNode);
 
-	/* populate with default options */
-	ColumnarOptions defaultOptions = {
-		.blockRowCount = cstore_block_row_count,
-		.stripeRowCount = cstore_stripe_row_count,
-		.compressionType = cstore_compression
-	};
-	SetColumnarOptions(rel->rd_id, &defaultOptions);
+	InitColumnarOptions(rel->rd_id);
 
 	smgrclose(srel);
 }
