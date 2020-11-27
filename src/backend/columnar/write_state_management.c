@@ -116,7 +116,7 @@ CleanupWriteStateMap(void *arg)
 
 
 TableWriteState *
-cstore_init_write_state(RelFileNode relfilenode, TupleDesc tupdesc,
+cstore_init_write_state(Relation relation, TupleDesc tupdesc,
 						SubTransactionId currentSubXid)
 {
 	bool found;
@@ -148,7 +148,7 @@ cstore_init_write_state(RelFileNode relfilenode, TupleDesc tupdesc,
 		MemoryContextRegisterResetCallback(WriteStateContext, &cleanupCallback);
 	}
 
-	WriteStateMapEntry *hashEntry = hash_search(WriteStateMap, &relfilenode.relNode,
+	WriteStateMapEntry *hashEntry = hash_search(WriteStateMap, &relation->rd_node.relNode,
 												HASH_ENTER, &found);
 	if (!found)
 	{
@@ -178,12 +178,14 @@ cstore_init_write_state(RelFileNode relfilenode, TupleDesc tupdesc,
 	 */
 	MemoryContext oldContext = MemoryContextSwitchTo(WriteStateContext);
 
-	CStoreOptions *cstoreOptions = CStoreTableAMGetOptions(relfilenode.relNode);
+	ColumnarOptions cstoreOptions = { 0 };
+	ReadColumnarOptions(relation->rd_id, &cstoreOptions);
+
 	SubXidWriteState *stackEntry = palloc0(sizeof(SubXidWriteState));
-	stackEntry->writeState = CStoreBeginWrite(relfilenode,
-											  cstoreOptions->compressionType,
-											  cstoreOptions->stripeRowCount,
-											  cstoreOptions->blockRowCount,
+	stackEntry->writeState = CStoreBeginWrite(relation->rd_node,
+											  cstoreOptions.compressionType,
+											  cstoreOptions.stripeRowCount,
+											  cstoreOptions.blockRowCount,
 											  tupdesc);
 	stackEntry->subXid = currentSubXid;
 	stackEntry->next = hashEntry->writeStateStack;

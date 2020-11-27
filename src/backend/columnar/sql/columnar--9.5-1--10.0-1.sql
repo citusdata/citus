@@ -3,11 +3,17 @@
 CREATE SCHEMA cstore;
 SET search_path TO cstore;
 
-CREATE TABLE cstore_data_files (
-    relfilenode oid NOT NULL,
+CREATE TABLE options (
+    regclass regclass NOT NULL PRIMARY KEY,
     block_row_count int NOT NULL,
     stripe_row_count int NOT NULL,
-    compression name NOT NULL,
+    compression name NOT NULL
+);
+
+COMMENT ON TABLE options IS 'columnar table specific options, maintained by alter_columnar_table_set';
+
+CREATE TABLE cstore_data_files (
+    relfilenode oid NOT NULL,
     version_major bigint NOT NULL,
     version_minor bigint NOT NULL,
     PRIMARY KEY (relfilenode)
@@ -48,16 +54,6 @@ CREATE TABLE cstore_skipnodes (
 ) WITH (user_catalog_table = true);
 
 COMMENT ON TABLE cstore_skipnodes IS 'CStore per block metadata';
-
-CREATE VIEW columnar_options AS
-SELECT c.oid::regclass regclass,
-       d.block_row_count,
-       d.stripe_row_count,
-       d.compression
-FROM pg_class c
-JOIN cstore.cstore_data_files d USING(relfilenode);
-
-COMMENT ON VIEW columnar_options IS 'CStore per table settings';
 
 DO $proc$
 BEGIN

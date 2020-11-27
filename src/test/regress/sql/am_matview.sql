@@ -15,7 +15,20 @@ INSERT INTO t SELECT floor(i / 4), 2 * i FROM generate_series(11, 20) i;
 
 SELECT * FROM t_view a ORDER BY a;
 
+-- show columnar options for materialized view
+SELECT * FROM cstore.options
+WHERE regclass = 't_view'::regclass;
+
+-- show we can set options on a materialized view
+SELECT alter_columnar_table_set('t_view', compression => 'pglz');
+SELECT * FROM cstore.options
+WHERE regclass = 't_view'::regclass;
+
 REFRESH MATERIALIZED VIEW t_view;
+
+-- verify options have not been changed
+SELECT * FROM cstore.options
+WHERE regclass = 't_view'::regclass;
 
 SELECT * FROM t_view a ORDER BY a;
 
