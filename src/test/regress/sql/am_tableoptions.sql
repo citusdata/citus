@@ -43,6 +43,13 @@ SELECT alter_columnar_table_set('table_options', stripe_row_count => 1000, block
 SELECT * FROM cstore.options
 WHERE regclass = 'table_options'::regclass;
 
+-- make sure table options are not changed when truncating a table
+TRUNCATE table_options;
+
+-- show table_options settings
+SELECT * FROM cstore.options
+WHERE regclass = 'table_options'::regclass;
+
 -- reset settings one by one to the version of the GUC's
 SET cstore.block_row_count TO 1000;
 SET cstore.stripe_row_count TO 10000;

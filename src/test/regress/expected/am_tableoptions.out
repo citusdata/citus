@@ -80,6 +80,16 @@ WHERE regclass = 'table_options'::regclass;
  table_options |             100 |             1000 | none
 (1 row)
 
+-- make sure table options are not changed when truncating a table
+TRUNCATE table_options;
+-- show table_options settings
+SELECT * FROM cstore.options
+WHERE regclass = 'table_options'::regclass;
+   regclass    | block_row_count | stripe_row_count | compression
+---------------------------------------------------------------------
+ table_options |             100 |             1000 | none
+(1 row)
+
 -- reset settings one by one to the version of the GUC's
 SET cstore.block_row_count TO 1000;
 SET cstore.stripe_row_count TO 10000;
