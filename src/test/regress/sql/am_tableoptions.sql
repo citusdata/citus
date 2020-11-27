@@ -43,9 +43,25 @@ SELECT alter_columnar_table_set('table_options', stripe_row_count => 1000, block
 SELECT * FROM cstore.options
 WHERE regclass = 'table_options'::regclass;
 
+-- make sure table options are not changed when VACUUM a table
+VACUUM table_options;
+-- show table_options settings
+SELECT * FROM cstore.options
+WHERE regclass = 'table_options'::regclass;
+
+-- make sure table options are not changed when VACUUM FULL a table
+VACUUM FULL table_options;
+-- show table_options settings
+SELECT * FROM cstore.options
+WHERE regclass = 'table_options'::regclass;
+
 -- make sure table options are not changed when truncating a table
 TRUNCATE table_options;
+-- show table_options settings
+SELECT * FROM cstore.options
+WHERE regclass = 'table_options'::regclass;
 
+ALTER TABLE table_options ALTER COLUMN a TYPE bigint;
 -- show table_options settings
 SELECT * FROM cstore.options
 WHERE regclass = 'table_options'::regclass;

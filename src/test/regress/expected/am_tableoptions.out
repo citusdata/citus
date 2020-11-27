@@ -80,8 +80,37 @@ WHERE regclass = 'table_options'::regclass;
  table_options |             100 |             1000 | none
 (1 row)
 
+-- make sure table options are not changed when VACUUM a table
+VACUUM table_options;
+-- show table_options settings
+SELECT * FROM cstore.options
+WHERE regclass = 'table_options'::regclass;
+   regclass    | block_row_count | stripe_row_count | compression
+---------------------------------------------------------------------
+ table_options |             100 |             1000 | none
+(1 row)
+
+-- make sure table options are not changed when VACUUM FULL a table
+VACUUM FULL table_options;
+-- show table_options settings
+SELECT * FROM cstore.options
+WHERE regclass = 'table_options'::regclass;
+   regclass    | block_row_count | stripe_row_count | compression
+---------------------------------------------------------------------
+ table_options |             100 |             1000 | none
+(1 row)
+
 -- make sure table options are not changed when truncating a table
 TRUNCATE table_options;
+-- show table_options settings
+SELECT * FROM cstore.options
+WHERE regclass = 'table_options'::regclass;
+   regclass    | block_row_count | stripe_row_count | compression
+---------------------------------------------------------------------
+ table_options |             100 |             1000 | none
+(1 row)
+
+ALTER TABLE table_options ALTER COLUMN a TYPE bigint;
 -- show table_options settings
 SELECT * FROM cstore.options
 WHERE regclass = 'table_options'::regclass;
