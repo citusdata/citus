@@ -105,5 +105,10 @@ SELECT alter_columnar_table_reset('not_a_cstore_table', compression => true);
 -- verify you can't use a compression that is not known
 SELECT alter_columnar_table_set('table_options', compression => 'foobar');
 
+-- verify options are removed when table is dropped
+DROP TABLE table_options;
+-- we expect no entries in çstore.options for anything not found int pg_class
+SELECT * FROM cstore.options o WHERE o.regclass NOT IN (SELECT oid FROM pg_class);
+
 SET client_min_messages TO warning;
 DROP SCHEMA am_tableoptions CASCADE;
