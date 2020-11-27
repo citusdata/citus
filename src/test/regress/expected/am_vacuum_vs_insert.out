@@ -53,7 +53,6 @@ step s1-commit:
 s2: INFO:  vacuuming "public.test_vacuum_vs_insert"
 s2: INFO:  "test_vacuum_vs_insert": found 0 removable, 6 nonremovable row versions in 3 pages
 DETAIL:  0 dead row versions cannot be removed yet.
-CPU: user: 0.00 s, system: 0.00 s, elapsed: 0.00 s.
 step s2-vacuum-full: <... completed>
 step s2-select:
     SELECT * FROM test_vacuum_vs_insert;

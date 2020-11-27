@@ -146,7 +146,6 @@ total row count: 2530, stripe count: 3, average rows per stripe: 843
 block count: 3, containing data for dropped columns: 0, none compressed: 3, pglz compressed: 0
 
 INFO:  "t": truncated 14 to 4 pages
-DETAIL:  CPU: user: 0.00 s, system: 0.00 s, elapsed: 0.00 s
 SELECT pg_size_pretty(pg_relation_size('t'));
  pg_size_pretty
 ---------------------------------------------------------------------
