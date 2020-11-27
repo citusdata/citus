@@ -287,6 +287,7 @@ extern char * CompressionTypeStr(CompressionType type);
 /* cstore_metadata_tables.c */
 extern bool InitColumnarOptions(Oid regclass);
 extern void SetColumnarOptions(Oid regclass, ColumnarOptions *options);
+extern bool DeleteColumnarTableOptions(Oid regclass, bool missingOk);
 extern bool ReadColumnarOptions(Oid regclass, ColumnarOptions *options);
 extern void DeleteDataFileMetadataRowIfExists(Oid relfilenode);
 extern void InitCStoreDataFileMetadata(Oid relfilenode);

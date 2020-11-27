@@ -257,6 +257,50 @@ WriteColumnarOptions(Oid regclass, ColumnarOptions *options, bool overwrite)
 }
 
 
+/*
+ * DeleteColumnarTableOptions removes the columnar table options for a regclass. When
+ * missingOk is false it will throw an error when no table options can be found.
+ *
+ * Returns whether a record has been removed.
+ */
+bool
+DeleteColumnarTableOptions(Oid regclass, bool missingOk)
+{
+	bool result = false;
+
+	Relation columnarOptions = relation_open(ColumnarOptionsRelationId(),
+											 RowExclusiveLock);
+
+	/* find existing item to remove */
+	ScanKeyData scanKey[1] = { 0 };
+	ScanKeyInit(&scanKey[0], Anum_cstore_options_regclass, BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(regclass));
+
+	Relation index = index_open(ColumnarOptionsIndexRegclass(), AccessShareLock);
+	SysScanDesc scanDescriptor = systable_beginscan_ordered(columnarOptions, index, NULL,
+															1, scanKey);
+
+	HeapTuple heapTuple = systable_getnext(scanDescriptor);
+	if (HeapTupleIsValid(heapTuple))
+	{
+		CatalogTupleDelete(columnarOptions, &heapTuple->t_self);
+		CommandCounterIncrement();
+
+		result = true;
+	}
+	else if (!missingOk)
+	{
+		ereport(ERROR, (errmsg("missing options for regclass: %d", regclass)));
+	}
+
+	systable_endscan_ordered(scanDescriptor);
+	index_close(index, NoLock);
+	relation_close(columnarOptions, NoLock);
+
+	return result;
+}
+
+
 bool
 ReadColumnarOptions(Oid regclass, ColumnarOptions *options)
 {

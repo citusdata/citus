@@ -1173,6 +1173,7 @@ CStoreTableAMObjectAccessHook(ObjectAccessType access, Oid classId, Oid objectId
 		Relation rel = table_open(objectId, AccessExclusiveLock);
 		Oid relfilenode = rel->rd_node.relNode;
 		DeleteDataFileMetadataRowIfExists(relfilenode);
+		DeleteColumnarTableOptions(rel->rd_id, true);
 
 		MarkRelfilenodeDropped(relfilenode, GetCurrentSubTransactionId());
 
