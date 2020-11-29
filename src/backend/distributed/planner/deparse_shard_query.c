@@ -15,10 +15,12 @@
 #include "access/heapam.h"
 #include "access/htup_details.h"
 #include "catalog/pg_constraint.h"
+#include "catalog/pg_type.h"
 #include "distributed/citus_nodefuncs.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/deparse_shard_query.h"
 #include "distributed/insert_select_planner.h"
+#include "distributed/intermediate_results.h"
 #include "distributed/listutils.h"
 #include "distributed/local_executor.h"
 #include "distributed/metadata_cache.h"
@@ -43,6 +45,10 @@ static void UpdateTaskQueryString(Query *query, Oid distributedTableId,
 static bool ReplaceRelationConstraintByShardConstraint(List *relationShardList,
 													   OnConflictExpr *onConflict);
 static RelationShard * FindRelationShard(Oid inputRelationId, List *relationShardList);
+static void ConvertReadDistributedResultForShard(RangeTblEntry *rte,
+												 List *relationShardList);
+static RelationShard * FindDistributedResultRelationShard(List *relationShardList,
+														  char *resultId);
 static void ConvertRteToSubqueryWithEmptyResult(RangeTblEntry *rte);
 static bool ShouldLazyDeparseQuery(Task *task);
 static char * DeparseTaskQuery(Task *task, Query *query);
@@ -229,6 +235,12 @@ UpdateRelationToShardNames(Node *node, List *relationShardList)
 
 	RangeTblEntry *newRte = (RangeTblEntry *) node;
 
+	if (IsDistributedIntermediateResultRTE(newRte))
+	{
+		ConvertReadDistributedResultForShard(newRte, relationShardList);
+		return false;
+	}
+
 	if (newRte->rtekind != RTE_RELATION)
 	{
 		return false;
@@ -385,6 +397,89 @@ ReplaceRelationConstraintByShardConstraint(List *relationShardList,
 
 
 /*
+ * ConvertReadDistributedResultForShard converts a
+ * read_distributed_intermediate_result('<result id>') call to a
+ * read_intermediate_result(ARRAY[..fragments...]) call for the fragments belonging to
+ * a particular shard.
+ *
+ * The shard is obtained from the relationShardList.
+ */
+static void
+ConvertReadDistributedResultForShard(RangeTblEntry *rte,
+									 List *relationShardList)
+{
+	char *resultId = FindDistributedResultId(rte);
+	DistributedResult *distributedResult = GetNamedDistributedResult(resultId);
+
+	List *sortedResultIds = NIL;
+
+	RelationShard *relationShard = FindDistributedResultRelationShard(relationShardList,
+																	  resultId);
+	if (relationShard != NULL)
+	{
+		int shardIndex = relationShard->shardIndex;
+
+		DistributedResultShard *resultShard =
+			&(distributedResult->resultShards[shardIndex]);
+		List *resultIdList = resultShard->fragmentList;
+
+		/* sort result ids for consistent test output */
+		sortedResultIds = SortList(resultIdList, pg_qsort_strcmp);
+	}
+	else
+	{
+		/* no matching relation shard, use empty array */
+	}
+
+	bool useBinaryFormat = distributedResult->binaryFormat;
+
+	/* generate the query on the intermediate result */
+	RangeTblFunction *rangeTableFunction =
+		(RangeTblFunction *) linitial(rte->functions);
+
+	/* build read_intermediate_result call */
+	Const *resultIdConst = makeNode(Const);
+	resultIdConst->consttype = TEXTARRAYOID;
+	resultIdConst->consttypmod = -1;
+	resultIdConst->constlen = -1;
+	resultIdConst->constvalue = PointerGetDatum(strlist_to_textarray(sortedResultIds));
+	resultIdConst->constbyval = false;
+	resultIdConst->constisnull = false;
+	resultIdConst->location = -1;
+
+	Oid copyFormatId = BinaryCopyFormatId();
+
+	if (!useBinaryFormat)
+	{
+		copyFormatId = TextCopyFormatId();
+	}
+
+	Const *resultFormatConst = makeNode(Const);
+	resultFormatConst->consttype = CitusCopyFormatTypeId();
+	resultFormatConst->consttypmod = -1;
+	resultFormatConst->constlen = 4;
+	resultFormatConst->constvalue = ObjectIdGetDatum(copyFormatId);
+	resultFormatConst->constbyval = true;
+	resultFormatConst->constisnull = false;
+	resultFormatConst->location = -1;
+
+	/* build the call to read_intermediate_result */
+	FuncExpr *funcExpr = makeNode(FuncExpr);
+	funcExpr->funcid = CitusReadIntermediateResultArrayFuncId();
+	funcExpr->funcretset = true;
+	funcExpr->funcvariadic = false;
+	funcExpr->funcformat = 0;
+	funcExpr->funccollid = 0;
+	funcExpr->inputcollid = 0;
+	funcExpr->location = -1;
+	funcExpr->args = list_make2(resultIdConst, resultFormatConst);
+
+	/* replace function expression in RTE */
+	rangeTableFunction->funcexpr = (Node *) funcExpr;
+}
+
+
+/*
  * FindRelationShard finds the RelationShard for shard relation with
  * given Oid if exists in given relationShardList. Otherwise, returns NULL.
  */
@@ -401,6 +496,29 @@ FindRelationShard(Oid inputRelationId, List *relationShardList)
 	foreach_ptr(relationShard, relationShardList)
 	{
 		if (inputRelationId == relationShard->relationId)
+		{
+			return relationShard;
+		}
+	}
+
+	return NULL;
+}
+
+
+
+/*
+ * FindDistributedResultRelationShard finds a relation shard for a distributed
+ * result with the name <resultId>, or NULL if it's not in the list.
+ */
+static RelationShard *
+FindDistributedResultRelationShard(List *relationShardList, char *resultId)
+{
+	RelationShard *relationShard = NULL;
+
+	foreach_ptr(relationShard, relationShardList)
+	{
+		if (relationShard->shardedRelationType == SHARDED_RESULT &&
+			strncmp(relationShard->resultId, resultId, NAMEDATALEN) == 0)
 		{
 			return relationShard;
 		}

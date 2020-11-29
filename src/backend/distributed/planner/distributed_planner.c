@@ -331,6 +331,11 @@ ListContainsDistributedTableRTE(List *rangeTableList)
 	{
 		RangeTblEntry *rangeTableEntry = (RangeTblEntry *) lfirst(rangeTableCell);
 
+		if (IsDistributedIntermediateResultRTE(rangeTableEntry))
+		{
+			return true;
+		}
+
 		if (rangeTableEntry->rtekind != RTE_RELATION)
 		{
 			continue;
@@ -375,7 +380,8 @@ AssignRTEIdentities(List *rangeTableList, int rteIdCounter)
 		 * Note that we're only interested in RTE_RELATIONs and thus assigning
 		 * identifiers to those RTEs only.
 		 */
-		if (rangeTableEntry->rtekind == RTE_RELATION &&
+		if ((rangeTableEntry->rtekind == RTE_RELATION ||
+			IsDistributedIntermediateResultRTE(rangeTableEntry)) &&
 			rangeTableEntry->values_lists == NIL)
 		{
 			AssignRTEIdentity(rangeTableEntry, rteIdCounter++);
@@ -446,8 +452,6 @@ AdjustPartitioningForDistributedPlanning(List *rangeTableList,
 static void
 AssignRTEIdentity(RangeTblEntry *rangeTableEntry, int rteIdentifier)
 {
-	Assert(rangeTableEntry->rtekind == RTE_RELATION);
-
 	rangeTableEntry->values_lists = list_make1_int(rteIdentifier);
 }
 
@@ -456,7 +460,6 @@ AssignRTEIdentity(RangeTblEntry *rangeTableEntry, int rteIdentifier)
 int
 GetRTEIdentity(RangeTblEntry *rte)
 {
-	Assert(rte->rtekind == RTE_RELATION);
 	Assert(rte->values_lists != NIL);
 	Assert(IsA(rte->values_lists, IntList));
 	Assert(list_length(rte->values_lists) == 1);
@@ -1767,6 +1770,11 @@ multi_relation_restriction_hook(PlannerInfo *root, RelOptInfo *relOptInfo,
 {
 	CitusTableCacheEntry *cacheEntry = NULL;
 
+	if (!CitusHasBeenLoaded())
+	{
+		return;
+	}
+
 	if (ReplaceCitusExtraDataContainer && IsCitusExtraDataContainerRelation(rte))
 	{
 		/*
@@ -1789,7 +1797,7 @@ multi_relation_restriction_hook(PlannerInfo *root, RelOptInfo *relOptInfo,
 	AdjustReadIntermediateResultCost(rte, relOptInfo);
 	AdjustReadIntermediateResultArrayCost(rte, relOptInfo);
 
-	if (rte->rtekind != RTE_RELATION)
+	if (rte->rtekind != RTE_RELATION && !IsDistributedIntermediateResultRTE(rte))
 	{
 		return;
 	}

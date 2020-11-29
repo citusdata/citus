@@ -1560,7 +1560,8 @@ ShouldTransformRTE(RangeTblEntry *rangeTableEntry)
 	 */
 	if (rangeTableEntry->rtekind != RTE_FUNCTION ||
 		rangeTableEntry->lateral ||
-		rangeTableEntry->funcordinality)
+		rangeTableEntry->funcordinality ||
+		IsDistributedIntermediateResultRTE(rangeTableEntry))
 	{
 		return false;
 	}

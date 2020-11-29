@@ -250,8 +250,11 @@ CopyNodeRelationShard(COPYFUNC_ARGS)
 {
 	DECLARE_FROM_AND_NEW_NODE(RelationShard);
 
+	COPY_SCALAR_FIELD(shardedRelationType);
 	COPY_SCALAR_FIELD(relationId);
 	COPY_SCALAR_FIELD(shardId);
+	COPY_STRING_FIELD(resultId);
+	COPY_SCALAR_FIELD(shardIndex);
 }
 
 

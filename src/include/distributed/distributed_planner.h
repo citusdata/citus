@@ -117,11 +117,32 @@ typedef struct PlannerRestrictionContext
 	MemoryContext memoryContext;
 } PlannerRestrictionContext;
 
+/* type of relation in a relation shard */
+typedef enum ShardedRelationType
+{
+	SHARDED_TABLE,
+	SHARDED_RESULT
+} ShardedRelationType;
+
+/* mapping from relation to shard */
 typedef struct RelationShard
 {
 	CitusNode type;
+
+	/* type of relation (table or result) */
+	ShardedRelationType shardedRelationType;
+
+	/* OID of the relation (InvalidOid in case of result) */
 	Oid relationId;
+
+	/* shard ID in the distributed table */
 	uint64 shardId;
+
+	/* name of the result (NULL in case of table) */
+	char *resultId;
+
+	/* index of the shard in a sorted shard interval array */
+	int shardIndex;
 } RelationShard;
 
 typedef struct RelationRowLock

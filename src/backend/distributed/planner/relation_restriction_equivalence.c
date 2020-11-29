@@ -14,6 +14,7 @@
 
 #include "distributed/colocation_utils.h"
 #include "distributed/distributed_planner.h"
+#include "distributed/intermediate_results.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_logical_planner.h"
@@ -65,7 +66,15 @@ typedef struct AttributeEquivalenceClass
  */
 typedef struct AttributeEquivalenceClassMember
 {
+	/* whether the class member is a table or a result */
+	ShardedRelationType shardedRelationType;
+
+	/* relation ID (in case of a table) */
 	Oid relationId;
+
+	/* result ID (in case of a distributed result) */
+	char *resultId;
+
 	int rteIdentity;
 	Index varno;
 	AttrNumber varattno;
@@ -90,6 +99,10 @@ static void AddRteSubqueryToAttributeEquivalenceClass(AttributeEquivalenceClass 
 													  rangeTableEntry,
 													  PlannerInfo *root,
 													  Var *varToBeAdded);
+static void AddDistResultRteToAttributeEquivalenceClass(AttributeEquivalenceClass **
+														attrEquivalenceClass,
+														RangeTblEntry *rangeTableEntry,
+														Var *varToBeAdded);
 static Query * GetTargetSubquery(PlannerInfo *root, RangeTblEntry *rangeTableEntry,
 								 Var *varToBeAdded);
 static void AddUnionAllSetOperationsToAttributeEquivalenceClass(
@@ -604,6 +617,17 @@ UniqueRelationCount(RelationRestrictionContext *restrictionContext, CitusTableTy
 	{
 		RelationRestriction *relationRestriction =
 			(RelationRestriction *) lfirst(relationRestrictionCell);
+
+		if (IsDistributedIntermediateResultRTE(relationRestriction->rte))
+		{
+			if (tableType == DISTRIBUTED_TABLE || tableType == ANY_CITUS_TABLE_TYPE)
+			{
+				int rteIdentity = GetRTEIdentity(relationRestriction->rte);
+				rteIdentityList = list_append_unique_int(rteIdentityList, rteIdentity);
+			}
+			continue;
+		}
+
 		Oid relationId = relationRestriction->relationId;
 
 		CitusTableCacheEntry *cacheEntry = LookupCitusTableCacheEntry(relationId);
@@ -665,10 +689,11 @@ EquivalenceListContainsRelationsEquality(List *attributeEquivalenceList,
 			(RelationRestriction *) lfirst(relationRestrictionCell);
 		int rteIdentity = GetRTEIdentity(relationRestriction->rte);
 
-		/* we shouldn't check for the equality of non-distributed tables */
-		if (IsCitusTableType(relationRestriction->relationId,
+		if (relationRestriction->rte->rtekind == RTE_RELATION &&
+			IsCitusTableType(relationRestriction->relationId,
 							 CITUS_TABLE_WITH_NO_DIST_KEY))
 		{
+			/* we shouldn't check for the equality of non-distributed tables */
 			continue;
 		}
 
@@ -1016,22 +1041,39 @@ GenerateEquivalenceClassForRelationRestriction(
 	{
 		RelationRestriction *relationRestriction =
 			(RelationRestriction *) lfirst(relationRestrictionCell);
-		Var *relationPartitionKey = DistPartitionKey(relationRestriction->relationId);
+		int partitionAttributeNumber = 0;
 
-		if (relationPartitionKey)
+		if (IsDistributedIntermediateResultRTE(relationRestriction->rte))
 		{
-			eqClassForRelation = palloc0(sizeof(AttributeEquivalenceClass));
-			eqMember = palloc0(sizeof(AttributeEquivalenceClassMember));
-			eqMember->relationId = relationRestriction->relationId;
-			eqMember->rteIdentity = GetRTEIdentity(relationRestriction->rte);
-			eqMember->varno = relationRestriction->index;
-			eqMember->varattno = relationPartitionKey->varattno;
+			char *resultId = FindDistributedResultId(relationRestriction->rte);
+			DistributedResult *distResult = GetNamedDistributedResult(resultId);
 
-			eqClassForRelation->equivalentAttributes =
-				lappend(eqClassForRelation->equivalentAttributes, eqMember);
-
-			break;
+			partitionAttributeNumber = distResult->partitionColumnIndex + 1;
 		}
+		else
+		{
+			Var *relationPartitionKey = DistPartitionKey(relationRestriction->relationId);
+
+			if (relationPartitionKey == NULL)
+			{
+				/* skip reference tables */
+				continue;
+			}
+
+			partitionAttributeNumber = relationPartitionKey->varattno;
+		}
+
+		eqClassForRelation = palloc0(sizeof(AttributeEquivalenceClass));
+		eqMember = palloc0(sizeof(AttributeEquivalenceClassMember));
+		eqMember->relationId = relationRestriction->relationId;
+		eqMember->rteIdentity = GetRTEIdentity(relationRestriction->rte);
+		eqMember->varno = relationRestriction->index;
+		eqMember->varattno = partitionAttributeNumber;
+
+		eqClassForRelation->equivalentAttributes =
+			lappend(eqClassForRelation->equivalentAttributes, eqMember);
+
+		break;
 	}
 
 	return eqClassForRelation;
@@ -1211,6 +1253,12 @@ AddToAttributeEquivalenceClass(AttributeEquivalenceClass **attributeEquivalenceC
 		AddRteSubqueryToAttributeEquivalenceClass(attributeEquivalenceClass,
 												  rangeTableEntry, root,
 												  varToBeAdded);
+	}
+	else if (IsDistributedIntermediateResultRTE(rangeTableEntry))
+	{
+		AddDistResultRteToAttributeEquivalenceClass(attributeEquivalenceClass,
+													rangeTableEntry,
+													varToBeAdded);
 	}
 }
 
@@ -1484,6 +1532,43 @@ AddRteRelationToAttributeEquivalenceClass(AttributeEquivalenceClass **
 
 
 /*
+ * AddRteRelationToAttributeEquivalenceClass adds the given var to the given equivalence
+ * class using the rteIdentity provided by the rangeTableEntry. Note that
+ * rteIdentities are only assigned to RTE_RELATIONs and this function asserts
+ * the input rte to be an RTE_RELATION.
+ */
+static void
+AddDistResultRteToAttributeEquivalenceClass(AttributeEquivalenceClass **
+											attrEquivalenceClass,
+											RangeTblEntry *rangeTableEntry,
+											Var *varToBeAdded)
+{
+	char *resultId = FindDistributedResultId(rangeTableEntry);
+	DistributedResult *distributedResult = GetNamedDistributedResult(resultId);
+
+	/* we're only interested in partition columns */
+	if (distributedResult->partitionColumnIndex + 1 != varToBeAdded->varattno)
+	{
+		return;
+	}
+
+	AttributeEquivalenceClassMember *attributeEqMember = palloc0(
+		sizeof(AttributeEquivalenceClassMember));
+
+	attributeEqMember->varattno = varToBeAdded->varattno;
+	attributeEqMember->varno = varToBeAdded->varno;
+	attributeEqMember->rteIdentity = GetRTEIdentity(rangeTableEntry);
+	attributeEqMember->resultId = pstrdup(resultId);
+	attributeEqMember->shardedRelationType = SHARDED_RESULT;
+
+	(*attrEquivalenceClass)->equivalentAttributes =
+		lappend((*attrEquivalenceClass)->equivalentAttributes,
+				attributeEqMember);
+}
+
+
+
+/*
  * AttributeClassContainsAttributeClassMember returns true if it the input class member
  * is already exists in the attributeEquivalenceClass. An equality is identified by the
  * varattno and rteIdentity.
@@ -1728,14 +1813,26 @@ AllRelationsInRestrictionContextColocated(RelationRestrictionContext *restrictio
 	/* check whether all relations exists in the main restriction list */
 	foreach_ptr(relationRestriction, restrictionContext->relationRestrictionList)
 	{
-		Oid relationId = relationRestriction->relationId;
+		int colocationId = INVALID_COLOCATION_ID;
 
-		if (IsCitusTableType(relationId, CITUS_TABLE_WITH_NO_DIST_KEY))
+		if (IsDistributedIntermediateResultRTE(relationRestriction->rte))
 		{
-			continue;
-		}
+			char *resultId = FindDistributedResultId(relationRestriction->rte);
+			DistributedResult *distributedResult = GetNamedDistributedResult(resultId);
 
-		int colocationId = TableColocationId(relationId);
+			colocationId = distributedResult->colocationId;
+		}
+		else
+		{
+			Oid relationId = relationRestriction->relationId;
+
+			if (IsCitusTableType(relationId, CITUS_TABLE_WITH_NO_DIST_KEY))
+			{
+				continue;
+			}
+
+			colocationId = TableColocationId(relationId);
+		}
 
 		if (initialColocationId == INVALID_COLOCATION_ID)
 		{
@@ -1937,7 +2034,8 @@ RangeTableArrayContainsAnyRTEIdentities(RangeTblEntry **rangeTableEntries, int
 			ExtractRangeTableRelationWalker((Node *) rangeTableEntry->subquery,
 											&rangeTableRelationList);
 		}
-		else if (rangeTableEntry->rtekind == RTE_RELATION)
+		else if (rangeTableEntry->rtekind == RTE_RELATION ||
+				 IsDistributedIntermediateResultRTE(rangeTableEntry))
 		{
 			ExtractRangeTableRelationWalker((Node *) rangeTableEntry,
 											&rangeTableRelationList);
@@ -1951,8 +2049,6 @@ RangeTableArrayContainsAnyRTEIdentities(RangeTblEntry **rangeTableEntries, int
 		foreach(rteRelationCell, rangeTableRelationList)
 		{
 			RangeTblEntry *rteRelation = (RangeTblEntry *) lfirst(rteRelationCell);
-
-			Assert(rteRelation->rtekind == RTE_RELATION);
 
 			int rteIdentity = GetRTEIdentity(rteRelation);
 			if (bms_is_member(rteIdentity, queryRteIdentities))

@@ -21,7 +21,9 @@
 #include "access/htup_details.h"
 #include "access/tupdesc.h"
 #include "catalog/pg_type.h"
+#include "distributed/coordinator_protocol.h"
 #include "distributed/deparse_shard_query.h"
+#include "distributed/insert_select_executor.h"
 #include "distributed/intermediate_results.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata_utility.h"
@@ -78,7 +80,29 @@ typedef struct NodeToNodeFragmentsTransfer
 } NodeToNodeFragmentsTransfer;
 
 
+/*
+ * NamedDistributedResult represents a distributed intermediate result with a
+ * name that can be queried via read_intermediate_distributed_result.
+ */
+typedef struct NamedDistributedResult
+{
+	/* name of the distributed intermediate result */
+	char resultId[NAMEDATALEN];
+
+	/* pointer to the distributed intermediate result */
+	DistributedResult *distributedResult;
+
+} NamedDistributedResult;
+
+
+/* hash of distributed intermediate results in the current transaction */
+static HTAB *NamedDistributedResults = NULL;
+
+
 /* forward declarations of local functions */
+static void CreateDistributedResult(char *resultIdPrefix, Query *query,
+									int partitionColumnIndex, Oid targetRelationId);
+static void InitializeNamedDistributedResultsHash(void);
 static List * WrapTasksForPartitioning(const char *resultIdPrefix,
 									   List *selectTaskList,
 									   int partitionColumnIndex,
@@ -107,8 +131,9 @@ static DistributedResultFragment * TupleToDistributedResultFragment(HeapTuple he
 static void ExecuteSelectTasksIntoTupleDest(List *taskList,
 											TupleDestination *tupleDestination,
 											bool errorOnAnyFailure);
-static List ** ColocateFragmentsWithRelation(List *fragmentList,
-											 CitusTableCacheEntry *targetRelation);
+static void ColocateFragmentsWithRelation(List *fragmentList,
+										  CitusTableCacheEntry *targetRelation,
+										  DistributedResultShard *resultShards);
 static List * ColocationTransfers(List *fragmentList,
 								  CitusTableCacheEntry *targetRelation);
 static List * FragmentTransferTaskList(List *fragmentListTransfers);
@@ -117,21 +142,238 @@ static char * QueryStringForFragmentsTransfer(
 static void ExecuteFetchTaskList(List *fetchTaskList);
 
 
+PG_FUNCTION_INFO_V1(read_distributed_intermediate_result);
+PG_FUNCTION_INFO_V1(create_distributed_intermediate_result);
+
+
+/*
+ * read_distributed_intermediate_result is a placeholder for reading from
+ * temporary distributed results.
+ */
+Datum
+read_distributed_intermediate_result(PG_FUNCTION_ARGS)
+{
+	ereport(ERROR, (errmsg("read_distributed_intermediate_result is a placeholder for "
+						   "reading from temporary distributed results")));
+}
+
+
+/*
+ * create_distributed_intermediate_result executes a query and writes
+ * the result into a distributed intermediate result.
+ */
+Datum
+create_distributed_intermediate_result(PG_FUNCTION_ARGS)
+{
+	text *resultIdText = PG_GETARG_TEXT_P(0);
+	char *resultIdPrefix = text_to_cstring(resultIdText);
+	text *queryText = PG_GETARG_TEXT_P(1);
+	char *queryString = text_to_cstring(queryText);
+	int columnIndex = PG_GETARG_INT32(2);
+	text *colocateWithText = PG_GETARG_TEXT_P(3);
+	Oid targetRelationId = ResolveRelationId(colocateWithText, false);
+
+	CheckCitusVersion(ERROR);
+
+	if (!IsCitusTableType(targetRelationId, DISTRIBUTED_TABLE))
+	{
+		ereport(ERROR, (errmsg("result can only be co-located with a distributed "
+							   "table")));
+	}
+
+	Query *query = ParseQueryString(queryString, NULL, 0);
+
+	CreateDistributedResult(resultIdPrefix, query, columnIndex, targetRelationId);
+
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * RegisterDistributedResult registers a named distributed intermediate result
+ * for use in the planner.
+ */
+DistributedResult *
+RegisterDistributedResult(char *resultIdPrefix, Query *query, int partitionColumnIndex,
+						  Oid targetRelationId)
+{
+	InitializeNamedDistributedResultsHash();
+
+	/*
+	 * Make sure that this transaction has a distributed transaction ID.
+	 *
+	 * Intermediate results will be stored in a directory that is derived
+	 * from the distributed transaction ID.
+	 */
+	UseCoordinatedTransaction();
+
+	/* look in the hash first to do error checking early */
+	bool found = false;
+	NamedDistributedResult *namedDistributedResult =
+		hash_search(NamedDistributedResults, resultIdPrefix, HASH_ENTER, &found);
+	if (found)
+	{
+		ereport(ERROR, (errmsg("A distributed intermediate result named \"%s\" already "
+							   "exists in the current transaction", resultIdPrefix)));
+	}
+
+	CitusTableCacheEntry *targetRelation = GetCitusTableCacheEntry(targetRelationId);
+	int shardCount = targetRelation->shardIntervalArrayLength;
+	bool binaryFormat = CanUseBinaryCopyFormatForTargetList(query->targetList);
+
+	MemoryContext oldContext = MemoryContextSwitchTo(TopTransactionContext);
+
+	DistributedResult *distributedResult = palloc0(sizeof(DistributedResult));
+	distributedResult->state = DISTRIBUTED_RESULT_PLANNED;
+	distributedResult->shardCount = shardCount;
+	distributedResult->colocationId = targetRelation->colocationId;
+	distributedResult->binaryFormat = binaryFormat;
+	distributedResult->partitionColumnIndex = partitionColumnIndex;
+	distributedResult->resultShards =
+		palloc0(sizeof(DistributedResultShard) * shardCount);
+
+	ShardInterval **shardIntervalArray = targetRelation->sortedShardIntervalArray;
+
+	for(int targetShardIndex = 0; targetShardIndex < shardCount; targetShardIndex++)
+	{
+		DistributedResultShard *resultShard =
+			&(distributedResult->resultShards[targetShardIndex]);
+		ShardInterval *targetShardInterval = shardIntervalArray[targetShardIndex];
+
+		resultShard->targetShardId = targetShardInterval->shardId;
+		resultShard->targetShardIndex = targetShardIndex;
+		resultShard->fragmentList = NIL;
+		resultShard->rowCount = -1;
+	}
+
+	namedDistributedResult->distributedResult = distributedResult;
+
+	MemoryContextSwitchTo(oldContext);
+
+	return distributedResult;
+}
+
+
+/*
+ * CreateDistributedResult creates a distributed intermediate
+ * result by executing the query, reshuffling the results, and then storing
+ * the results in the global hash map.
+ */
+static void
+CreateDistributedResult(char *resultIdPrefix, Query *query, int partitionColumnIndex,
+						Oid targetRelationId)
+{
+	DistributedResult *distResult = RegisterDistributedResult(resultIdPrefix, query,
+															  partitionColumnIndex,
+															  targetRelationId);
+
+	int cursorOptions = CURSOR_OPT_PARALLEL_OK;
+	ParamListInfo params = NULL;
+	PlannedStmt *selectPlan = pg_plan_query_compat(query, NULL, cursorOptions,
+												   params);
+
+	if (!IsRedistributablePlan(selectPlan->planTree) ||
+		!IsSupportedRedistributionTarget(targetRelationId))
+	{
+		ereport(ERROR, (errmsg("query cannot be re-partitioned"),
+						errhint("use create_intermediate_result instead")));
+	}
+
+	DistributedPlan *distSelectPlan =
+		GetDistributedPlan((CustomScan *) selectPlan->planTree);
+	Job *distSelectJob = distSelectPlan->workerJob;
+	List *taskList = distSelectJob->taskList;
+
+	CitusTableCacheEntry *targetRelation = GetCitusTableCacheEntry(targetRelationId);
+	bool binaryFormat = CanUseBinaryCopyFormatForTargetList(query->targetList);
+
+	List *fragmentList = PartitionTasklistResults(resultIdPrefix, taskList,
+												  partitionColumnIndex,
+												  targetRelation, binaryFormat);
+
+	ColocateFragmentsWithRelation(fragmentList, targetRelation,
+								  distResult->resultShards);
+
+	distResult->state = DISTRIBUTED_RESULT_AVAILABLE;
+}
+
+
+/*
+ * GetNamedDistributedResult returns a named distributed result, allocated in the
+ * top transaction context.
+ */
+DistributedResult *
+GetNamedDistributedResult(char *resultId)
+{
+	if (NamedDistributedResults == NULL)
+	{
+		ereport(ERROR, (errmsg("distributed intermediate result \"%s\" does not exist",
+							   resultId)));
+	}
+
+	bool found = false;
+
+	NamedDistributedResult *namedDistributedResult =
+		hash_search(NamedDistributedResults, resultId, HASH_FIND, &found);
+	if (!found)
+	{
+		ereport(ERROR, (errmsg("distributed intermediate result \"%s\" does not exist",
+							   resultId)));
+	}
+
+	return namedDistributedResult->distributedResult;
+}
+
+
+/*
+ * InitializeNamedDistributedResultsHash creates the NamedDistributedResult
+ * hash if not already created. The hash is kept until the end of the transaction.
+ */
+static void
+InitializeNamedDistributedResultsHash(void)
+{
+	if (NamedDistributedResults != NULL)
+	{
+		return;
+	}
+
+	HASHCTL info;
+	memset(&info, 0, sizeof(info));
+	info.keysize = NAMEDATALEN;
+	info.entrysize = sizeof(NamedDistributedResult);
+	info.hash = string_hash;
+	info.hcxt = TopTransactionContext;
+	uint32 hashFlags = (HASH_ELEM | HASH_FUNCTION | HASH_CONTEXT);
+
+	NamedDistributedResults = hash_create("named distributed results hash", 8, &info,
+										  hashFlags);
+}
+
+
+/*
+ * ClearNamedDistributedResultsHash resets the distributed intermediate results
+ * hash. The memory is allocated in the top transaction context and will automatically
+ * be freed.
+ */
+void
+ClearNamedDistributedResultsHash(void)
+{
+	NamedDistributedResults = NULL;
+}
+
+
 /*
  * RedistributeTaskListResults partitions the results of given task list using
  * shard ranges and partition method of given targetRelation, and then colocates
  * the result files with shards.
  *
- * If a shard has a replication factor > 1, corresponding result files are copied
- * to all nodes containing that shard.
- *
- * returnValue[shardIndex] is list of cstrings each of which is a resultId which
- * correspond to targetRelation->sortedShardIntervalArray[shardIndex].
- *
  * partitionColumnIndex determines the column in the selectTaskList to use for
  * partitioning.
+ *
+ * If a shard has a replication factor > 1, corresponding result files are copied
+ * to all nodes containing that shard.
  */
-List **
+DistributedResult *
 RedistributeTaskListResults(const char *resultIdPrefix, List *selectTaskList,
 							int partitionColumnIndex,
 							CitusTableCacheEntry *targetRelation,
@@ -148,7 +390,21 @@ RedistributeTaskListResults(const char *resultIdPrefix, List *selectTaskList,
 	List *fragmentList = PartitionTasklistResults(resultIdPrefix, selectTaskList,
 												  partitionColumnIndex,
 												  targetRelation, binaryFormat);
-	return ColocateFragmentsWithRelation(fragmentList, targetRelation);
+
+	DistributedResult *distributedResult = palloc0(sizeof(DistributedResult));
+	distributedResult->state = DISTRIBUTED_RESULT_AVAILABLE;
+	distributedResult->shardCount = targetRelation->shardIntervalArrayLength;
+	distributedResult->colocationId = targetRelation->colocationId;
+	distributedResult->partitionColumnIndex = partitionColumnIndex;
+	distributedResult->binaryFormat = binaryFormat;
+
+	distributedResult->resultShards =
+		palloc0(sizeof(DistributedResultShard) * distributedResult->shardCount);
+
+	ColocateFragmentsWithRelation(fragmentList, targetRelation,
+								  distributedResult->resultShards);
+
+	return distributedResult;
 }
 
 
@@ -504,28 +760,38 @@ ExecuteSelectTasksIntoTupleDest(List *taskList, TupleDestination *tupleDestinati
  * targetRelation->sortedShardIntervalArray[shardIndex] after fetch tasks are
  * done.
  */
-static List **
-ColocateFragmentsWithRelation(List *fragmentList, CitusTableCacheEntry *targetRelation)
+static void
+ColocateFragmentsWithRelation(List *fragmentList, CitusTableCacheEntry *targetRelation,
+							  DistributedResultShard *resultShards)
 {
 	List *fragmentListTransfers = ColocationTransfers(fragmentList, targetRelation);
 	List *fragmentTransferTaskList = FragmentTransferTaskList(fragmentListTransfers);
 
 	ExecuteFetchTaskList(fragmentTransferTaskList);
 
-	int shardCount = targetRelation->shardIntervalArrayLength;
-	List **shardResultIdList = palloc0(shardCount * sizeof(List *));
+	MemoryContext shardsContext = GetMemoryChunkContext(resultShards);
 
 	DistributedResultFragment *sourceFragment = NULL;
 	foreach_ptr(sourceFragment, fragmentList)
 	{
 		int shardIndex = sourceFragment->targetShardIndex;
 
-		Assert(shardIndex < shardCount);
-		shardResultIdList[shardIndex] = lappend(shardResultIdList[shardIndex],
-												sourceFragment->resultId);
-	}
+		Assert(shardIndex < targetRelation->shardIntervalArrayLength);
 
-	return shardResultIdList;
+		DistributedResultShard *resultShard = &(resultShards[shardIndex]);
+		resultShard->targetShardIndex = shardIndex;
+		resultShard->targetShardId = sourceFragment->targetShardId;
+		resultShard->rowCount += sourceFragment->rowCount;
+
+		/* use the named distributed intermediate result context where needed  */
+		MemoryContext oldContext = MemoryContextSwitchTo(shardsContext);
+
+		/* assign fragment to distributed result shard */
+		resultShard->fragmentList = lappend(resultShard->fragmentList,
+											pstrdup(sourceFragment->resultId));
+
+		MemoryContextSwitchTo(oldContext);
+	}
 }
 
 

@@ -230,6 +230,7 @@ extern Oid CitusCopyFormatTypeId(void);
 /* function oids */
 extern Oid CitusReadIntermediateResultFuncId(void);
 Oid CitusReadIntermediateResultArrayFuncId(void);
+extern Oid CitusReadDistributedIntermediateResultFuncId(void);
 extern Oid CitusExtraDataContainerFuncId(void);
 extern Oid CitusAnyValueFunctionId(void);
 extern Oid PgTableVisibleFuncId(void);

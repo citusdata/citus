@@ -725,7 +725,7 @@ FromClauseRecurringTupleType(Query *queryTree)
 	}
 
 	if (FindNodeMatchingCheckFunctionInRangeTableList(queryTree->rtable,
-													  IsDistributedTableRTE))
+													  IsDistributedRelationRTE))
 	{
 		/*
 		 * There is a distributed table somewhere in the FROM clause.
@@ -1310,7 +1310,7 @@ RelationInfoContainsOnlyRecurringTuples(PlannerInfo *plannerInfo, Relids relids)
 		RangeTblEntry *rangeTableEntry = plannerInfo->simple_rte_array[relationId];
 
 		if (FindNodeMatchingCheckFunctionInRangeTableList(list_make1(rangeTableEntry),
-														  IsDistributedTableRTE))
+														  IsDistributedRelationRTE))
 		{
 			/* we already found a distributed table, no need to check further */
 			return false;
@@ -1417,6 +1417,11 @@ HasRecurringTuples(Node *node, RecurringTuplesType *recurType)
 		else if (rangeTableEntry->rtekind == RTE_FUNCTION)
 		{
 			List *functionList = rangeTableEntry->functions;
+
+			if (IsDistributedIntermediateResultRTE(rangeTableEntry))
+			{
+				return false;
+			}
 
 			if (list_length(functionList) == 1 &&
 				ContainsReadIntermediateResultFunction((Node *) functionList))

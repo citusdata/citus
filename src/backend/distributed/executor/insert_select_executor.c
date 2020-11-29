@@ -70,7 +70,7 @@ static List * BuildColumnNameListFromTargetList(Oid targetRelationId,
 static int PartitionColumnIndexFromColumnList(Oid relationId, List *columnNameList);
 static List * RedistributedInsertSelectTaskList(Query *insertSelectQuery,
 												CitusTableCacheEntry *targetRelation,
-												List **redistributedResults,
+												DistributedResult *redistributedResult,
 												bool useBinaryFormat);
 static int PartitionColumnIndex(List *insertTargetList, Var *partitionColumn);
 static void WrapTaskListForProjection(List *taskList, List *projectedTargetEntries);
@@ -181,11 +181,10 @@ NonPushableInsertSelectExecScan(CustomScanState *node)
 				WrapTaskListForProjection(distSelectTaskList, projectedTargetEntries);
 			}
 
-			List **redistributedResults = RedistributeTaskListResults(distResultPrefix,
-																	  distSelectTaskList,
-																	  partitionColumnIndex,
-																	  targetRelation,
-																	  binaryFormat);
+			DistributedResult *redistributedResult =
+				RedistributeTaskListResults(distResultPrefix, distSelectTaskList,
+											partitionColumnIndex, targetRelation,
+											binaryFormat);
 
 			/*
 			 * At this point select query has been executed on workers and results
@@ -195,7 +194,7 @@ NonPushableInsertSelectExecScan(CustomScanState *node)
 			 */
 			List *taskList = RedistributedInsertSelectTaskList(insertSelectQuery,
 															   targetRelation,
-															   redistributedResults,
+															   redistributedResult,
 															   binaryFormat);
 
 			scanState->tuplestorestate =
@@ -638,7 +637,7 @@ IsSupportedRedistributionTarget(Oid targetRelationId)
 static List *
 RedistributedInsertSelectTaskList(Query *insertSelectQuery,
 								  CitusTableCacheEntry *targetRelation,
-								  List **redistributedResults,
+								  DistributedResult *redistributedResult,
 								  bool useBinaryFormat)
 {
 	List *taskList = NIL;
@@ -663,7 +662,9 @@ RedistributedInsertSelectTaskList(Query *insertSelectQuery,
 	{
 		ShardInterval *targetShardInterval =
 			targetRelation->sortedShardIntervalArray[shardOffset];
-		List *resultIdList = redistributedResults[targetShardInterval->shardIndex];
+		DistributedResultShard *resultShard =
+			&(redistributedResult->resultShards[shardOffset]);
+		List *resultIdList = resultShard->fragmentList;
 		uint64 shardId = targetShardInterval->shardId;
 		StringInfo queryString = makeStringInfo();
 

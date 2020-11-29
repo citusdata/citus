@@ -23,7 +23,8 @@
 
 
 /*
- * DistributedResultFragment represents a fragment of a distributed result.
+ * DistributedResultFragment represents a fragment of a distributed result
+ * shard.
  */
 typedef struct DistributedResultFragment
 {
@@ -34,7 +35,7 @@ typedef struct DistributedResultFragment
 	uint32 nodeId;
 
 	/* number of rows in the result file */
-	int rowCount;
+	uint64 rowCount;
 
 	/*
 	 * The fragment contains the rows which match the partitioning method
@@ -46,6 +47,72 @@ typedef struct DistributedResultFragment
 	/* what is the index of targetShardId in its relation's sorted shard list? */
 	int targetShardIndex;
 } DistributedResultFragment;
+
+/*
+ * DistributedResultState describes whether a distributed result is planned
+ * or already executed.
+ */
+typedef enum DistributedResultState
+{
+	DISTRIBUTED_RESULT_PLANNED,
+	DISTRIBUTED_RESULT_AVAILABLE
+} DistributedResultState;
+
+
+/*
+ * DistributedResultShard represents a shard of a distributed result. A shard
+ * can consist of multiple fragments, which are intermediate results that are
+ * no the same node.
+ */
+typedef struct DistributedResultShard
+{
+	/* what is the index of targetShardId in its relation's sorted shard list? */
+	int targetShardIndex;
+
+	/*
+	 * The fragment contains the rows which match the partitioning method
+	 * and partitioning ranges of targetShardId. The shape of each row matches
+	 * the schema of the relation to which targetShardId belongs to.
+	 */
+	uint64 targetShardId;
+
+	/* result ids of fragments that make up the shard (if result is available) */
+	List *fragmentList;
+
+	/* sum of the number of rows in the fragments (if result is available) */
+	int64 rowCount;
+
+} DistributedResultShard;
+
+
+/*
+ * DistributedResult describes a distributed intermediate result which can be
+ * queried like a distributed table.
+ *
+ * A distributed intermediate result has a set of distributed result fragment
+ * for each shard.
+ */
+typedef struct DistributedResult
+{
+	/* state of this distributed result (planner or executed) */
+	DistributedResultState state;
+
+	/* co-location ID with which the result is co-located */
+	int colocationId;
+
+	/* number of shards in the co-location group */
+	int shardCount;
+
+	/* index of the partition column */
+	int partitionColumnIndex;
+
+	/* whether the file format is binary */
+	bool binaryFormat;
+
+	/* array containing a list of result shards */
+	DistributedResultShard *resultShards;
+
+} DistributedResult;
 
 
 /* intermediate_results.c */
@@ -62,11 +129,17 @@ extern char * QueryResultFileName(const char *resultId);
 extern char * CreateIntermediateResultsDirectory(void);
 
 /* distributed_intermediate_results.c */
-extern List ** RedistributeTaskListResults(const char *resultIdPrefix,
-										   List *selectTaskList,
-										   int partitionColumnIndex,
-										   CitusTableCacheEntry *targetRelation,
-										   bool binaryFormat);
+extern DistributedResult * RegisterDistributedResult(char *resultIdPrefix, Query *query,
+													 int partitionColumnIndex,
+													 Oid targetRelationId);
+extern DistributedResult * GetNamedDistributedResult(char *resultId);
+extern void ClearNamedDistributedResultsHash(void);
+extern DistributedResult * RedistributeTaskListResults(const char *resultIdPrefix,
+													   List *selectTaskList,
+													   int partitionColumnIndex,
+													   CitusTableCacheEntry *
+													   targetRelation,
+													   bool binaryFormat);
 extern List * PartitionTasklistResults(const char *resultIdPrefix, List *selectTaskList,
 									   int partitionColumnIndex,
 									   CitusTableCacheEntry *distributionScheme,

@@ -459,8 +459,11 @@ OutRelationShard(OUTFUNC_ARGS)
 	WRITE_LOCALS(RelationShard);
 	WRITE_NODE_TYPE("RELATIONSHARD");
 
+	WRITE_ENUM_FIELD(shardedRelationType, ShardedRelationType);
 	WRITE_OID_FIELD(relationId);
 	WRITE_UINT64_FIELD(shardId);
+	WRITE_STRING_FIELD(resultId);
+	WRITE_INT_FIELD(shardIndex);
 }
 
 

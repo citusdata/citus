@@ -196,12 +196,15 @@ extern bool FindNodeMatchingCheckFunctionInRangeTableList(List *rtable, bool (*c
 															  Node *));
 extern bool IsCitusTableRTE(Node *node);
 extern bool IsDistributedTableRTE(Node *node);
+extern bool IsDistributedRelationRTE(Node *node);
 extern bool IsReferenceTableRTE(Node *node);
 extern bool QueryContainsDistributedTableRTE(Query *query);
 extern bool IsCitusExtraDataContainerRelation(RangeTblEntry *rte);
 extern bool ContainsReadIntermediateResultFunction(Node *node);
 extern bool ContainsReadIntermediateResultArrayFunction(Node *node);
+extern bool IsDistributedIntermediateResultRTE(RangeTblEntry *rangeTableEntry);
 extern char * FindIntermediateResultIdIfExists(RangeTblEntry *rte);
+extern char * FindDistributedResultId(RangeTblEntry *rte);
 extern MultiNode * ParentNode(MultiNode *multiNode);
 extern MultiNode * ChildNode(MultiUnaryNode *multiNode);
 extern MultiNode * GrandChildNode(MultiUnaryNode *multiNode);

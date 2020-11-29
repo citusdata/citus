@@ -475,19 +475,21 @@ SELECT * FROM print_extension_changes();
 -- Snapshot of state at 10.0-1
 ALTER EXTENSION citus UPDATE TO '10.0-1';
 SELECT * FROM print_extension_changes();
- previous_object |                            current_object
+ previous_object |                             current_object
 ---------------------------------------------------------------------
                  | access method columnar
                  | function alter_columnar_table_reset(regclass,boolean,boolean,boolean)
                  | function alter_columnar_table_set(regclass,integer,integer,name)
                  | function citus_internal.cstore_ensure_objects_exist()
+                 | function create_distributed_intermediate_result(text,text,integer,text)
                  | function cstore.columnar_handler(internal)
+                 | function read_distributed_intermediate_result(text)
                  | schema cstore
                  | table cstore.cstore_data_files
                  | table cstore.cstore_skipnodes
                  | table cstore.cstore_stripes
                  | table cstore.options
-(10 rows)
+(12 rows)
 
 DROP TABLE prev_objects, extension_diff;
 -- show running version

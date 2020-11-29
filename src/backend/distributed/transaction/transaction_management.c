@@ -271,6 +271,8 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			 */
 			DeallocateReservedConnections();
 
+			ClearNamedDistributedResultsHash();
+
 			UnSetDistributedTransactionId();
 
 			/* empty the CommitContext to ensure we're not leaking memory */
@@ -329,6 +331,8 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			 * are already given away.
 			 */
 			DeallocateReservedConnections();
+
+			ClearNamedDistributedResultsHash();
 
 			/*
 			 * We reset these mainly for posterity. The only way we would normally

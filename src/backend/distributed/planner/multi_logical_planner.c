@@ -347,6 +347,24 @@ IsDistributedTableRTE(Node *node)
 
 
 /*
+ * IsDistributedRelationRTE returns true if the given range table entry
+ * describes a distributed table or a distributed intermediate result.
+ */
+bool
+IsDistributedRelationRTE(Node *node)
+{
+	RangeTblEntry *rangeTableEntry = (RangeTblEntry *) node;
+	if (!IsA(rangeTableEntry, RangeTblEntry))
+	{
+		return false;
+	}
+
+	return IsDistributedTableRTE((Node *) rangeTableEntry) ||
+		   IsDistributedIntermediateResultRTE(rangeTableEntry);
+}
+
+
+/*
  * IsReferenceTableRTE gets a node and returns true if the node
  * is a range table relation entry that points to a reference table.
  */
@@ -679,6 +697,26 @@ MultiNodeTree(Query *queryTree)
 
 
 /*
+ * IsDistributedIntermediateResultRTE returns whether an RTE describes a
+ * FROM read_distributed_intermediate_result() call.
+ */
+bool
+IsDistributedIntermediateResultRTE(RangeTblEntry *rangeTableEntry)
+{
+	if (rangeTableEntry->rtekind != RTE_FUNCTION)
+	{
+		return false;
+	}
+
+	RangeTblFunction *rangeTableFunction = (RangeTblFunction *) linitial(
+		rangeTableEntry->functions);
+	FuncExpr *funcExpression = (FuncExpr *) rangeTableFunction->funcexpr;
+
+	return funcExpression->funcid == CitusReadDistributedIntermediateResultFuncId();
+}
+
+
+/*
  * ContainsReadIntermediateResultFunction determines whether an expresion tree contains
  * a call to the read_intermediate_result function.
  */
@@ -814,6 +852,38 @@ FindIntermediateResultIdIfExists(RangeTblEntry *rte)
 	}
 
 	return resultId;
+}
+
+
+/*
+ * FindDistributedResultId extracts the result ID from a
+ * read_distributed_intermediate_result call.
+ */
+char *
+FindDistributedResultId(RangeTblEntry *rte)
+{
+	if (rte->rtekind != RTE_FUNCTION)
+	{
+		ereport(ERROR, (errmsg("not a read_distributed_intermediate_result RTE")));
+	}
+
+	List *functionList = rte->functions;
+	RangeTblFunction *rangeTblfunction = (RangeTblFunction *) linitial(functionList);
+	FuncExpr *funcExpr = (FuncExpr *) rangeTblfunction->funcexpr;
+
+	if (funcExpr->funcid != CitusReadDistributedIntermediateResultFuncId())
+	{
+		ereport(ERROR, (errmsg("not a read_distributed_intermediate_result RTE")));
+	}
+
+	Const *resultIdConst = linitial(funcExpr->args);
+
+	if (resultIdConst->constisnull)
+	{
+		ereport(ERROR, (errmsg("distributed intermediate result ID cannot be NULL")));
+	}
+
+	return TextDatumGetCString(resultIdConst->constvalue);
 }
 
 

@@ -30,6 +30,7 @@
 #include "distributed/errormessage.h"
 #include "distributed/log_utils.h"
 #include "distributed/insert_select_planner.h"
+#include "distributed/intermediate_results.h"
 #include "distributed/intermediate_result_pruning.h"
 #include "distributed/metadata_utility.h"
 #include "distributed/coordinator_protocol.h"
@@ -2463,6 +2464,7 @@ RelationShardListForShardIntervalList(List *shardIntervalList, bool *shardsPrese
 
 			relationShard->relationId = shardInterval->relationId;
 			relationShard->shardId = shardInterval->shardId;
+			relationShard->shardIndex = shardInterval->shardIndex;
 
 			relationShardList = lappend(relationShardList, relationShard);
 		}
@@ -2638,16 +2640,29 @@ TargetShardIntervalsForRestrictInfo(RelationRestrictionContext *restrictionConte
 		RelationRestriction *relationRestriction =
 			(RelationRestriction *) lfirst(restrictionCell);
 		Oid relationId = relationRestriction->relationId;
+		int shardCount = 0;
 
-		if (!IsCitusTable(relationId))
+		if (IsCitusTable(relationId))
+		{
+			CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
+			shardCount = cacheEntry->shardIntervalArrayLength;
+		}
+		else if (IsDistributedIntermediateResultRTE(relationRestriction->rte))
+		{
+			char *resultId = FindDistributedResultId(relationRestriction->rte);
+			DistributedResult *distributedResult = GetNamedDistributedResult(resultId);
+			int colocationId = distributedResult->colocationId;
+
+			relationId = ColocatedTableId(colocationId);
+			shardCount = distributedResult->shardCount;
+		}
+		else
 		{
 			/* ignore local tables for shard pruning purposes */
 			continue;
 		}
 
 		Index tableId = relationRestriction->index;
-		CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
-		int shardCount = cacheEntry->shardIntervalArrayLength;
 		List *baseRestrictionList = relationRestriction->relOptInfo->baserestrictinfo;
 		List *restrictClauseList = get_all_actual_clauses(baseRestrictionList);
 		List *prunedShardIntervalList = NIL;

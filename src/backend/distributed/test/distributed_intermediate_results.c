@@ -150,9 +150,9 @@ redistribute_task_list_results(PG_FUNCTION_ARGS)
 														  DISTRIBUTED_TABLE) ?
 							   targetRelation->partitionColumn->varattno - 1 : 0;
 
-	List **shardResultIds = RedistributeTaskListResults(resultIdPrefix, taskList,
-														partitionColumnIndex,
-														targetRelation, binaryFormat);
+	DistributedResult *distResult =
+		RedistributeTaskListResults(resultIdPrefix, taskList, partitionColumnIndex,
+									targetRelation, binaryFormat);
 
 	TupleDesc tupleDescriptor = NULL;
 	Tuplestorestate *tupleStore = SetupTuplestore(fcinfo, &tupleDescriptor);
@@ -163,10 +163,12 @@ redistribute_task_list_results(PG_FUNCTION_ARGS)
 		ShardInterval *shardInterval =
 			targetRelation->sortedShardIntervalArray[shardIndex];
 		uint64 shardId = shardInterval->shardId;
+		DistributedResultShard *resultShard = &(distResult->resultShards[shardIndex]);
+		List *fragmentList = resultShard->fragmentList;
 
-		int fragmentCount = list_length(shardResultIds[shardIndex]);
+		int fragmentCount = list_length(fragmentList);
 		Datum *resultIdValues = palloc0(fragmentCount * sizeof(Datum));
-		List *sortedResultIds = SortList(shardResultIds[shardIndex], pg_qsort_strcmp);
+		List *sortedResultIds = SortList(fragmentList, pg_qsort_strcmp);
 
 		const char *resultId = NULL;
 		int resultIdIndex = 0;

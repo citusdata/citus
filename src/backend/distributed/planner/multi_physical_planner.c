@@ -40,6 +40,7 @@
 #include "distributed/colocation_utils.h"
 #include "distributed/deparse_shard_query.h"
 #include "distributed/coordinator_protocol.h"
+#include "distributed/intermediate_results.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_router_planner.h"
 #include "distributed/multi_join_order.h"
@@ -2211,18 +2212,32 @@ QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 	{
 		RelationRestriction *relationRestriction =
 			(RelationRestriction *) lfirst(restrictionCell);
-		Oid relationId = relationRestriction->relationId;
 		List *prunedShardList = (List *) lfirst(prunedRelationShardCell);
 		ListCell *shardIntervalCell = NULL;
+		int currentShardCount = 0;
+		DistributedResult *distributedResult = NULL;
 
-		CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
-		if (IsCitusTableTypeCacheEntry(cacheEntry, CITUS_TABLE_WITH_NO_DIST_KEY))
+		if (IsDistributedIntermediateResultRTE(relationRestriction->rte))
 		{
-			continue;
+			char *resultId = FindDistributedResultId(relationRestriction->rte);
+			distributedResult = GetNamedDistributedResult(resultId);
+
+			currentShardCount = distributedResult->shardCount;
+		}
+		else
+		{
+			Oid relationId = relationRestriction->relationId;
+			CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
+			if (IsCitusTableTypeCacheEntry(cacheEntry, CITUS_TABLE_WITH_NO_DIST_KEY))
+			{
+				continue;
+			}
+
+			currentShardCount = cacheEntry->shardIntervalArrayLength;
 		}
 
 		/* we expect distributed tables to have the same shard count */
-		if (shardCount > 0 && shardCount != cacheEntry->shardIntervalArrayLength)
+		if (shardCount > 0 && shardCount != currentShardCount)
 		{
 			ereport(ERROR, (errmsg("shard counts of co-located tables do not "
 								   "match")));
@@ -2230,7 +2245,7 @@ QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 
 		if (taskRequiredForShardIndex == NULL)
 		{
-			shardCount = cacheEntry->shardIntervalArrayLength;
+			shardCount = currentShardCount;
 			taskRequiredForShardIndex = (bool *) palloc0(shardCount);
 
 			/* there is a distributed table, find the shard range */
@@ -2257,6 +2272,18 @@ QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 		{
 			ShardInterval *shardInterval = (ShardInterval *) lfirst(shardIntervalCell);
 			int shardIndex = shardInterval->shardIndex;
+
+			if (distributedResult != NULL)
+			{
+				DistributedResultShard *resultShard =
+					&(distributedResult->resultShards[shardIndex]);
+
+				if (resultShard->fragmentList == NIL)
+				{
+					/* can skip empty result shard */
+					continue;
+				}
+			}
 
 			taskRequiredForShardIndex[shardIndex] = true;
 
@@ -2499,6 +2526,37 @@ QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 		Oid relationId = relationRestriction->relationId;
 		ShardInterval *shardInterval = NULL;
 
+		if (IsDistributedIntermediateResultRTE(relationRestriction->rte))
+		{
+			char *resultId = FindDistributedResultId(relationRestriction->rte);
+			DistributedResult *distributedResult = GetNamedDistributedResult(resultId);
+			DistributedResultShard *resultShard =
+					&(distributedResult->resultShards[shardIndex]);
+
+			if (resultShard->fragmentList == NIL)
+			{
+				/* skip generating a relation shard */
+				continue;
+			}
+
+			RelationShard *relationShard = CitusMakeNode(RelationShard);
+			relationShard->shardedRelationType = SHARDED_RESULT;
+			relationShard->resultId = resultId;
+			relationShard->shardId = resultShard->targetShardId;
+			relationShard->shardIndex = shardIndex;
+
+			if (anchorShardId == INVALID_SHARD_ID)
+			{
+				anchorShardId = resultShard->targetShardId;
+			}
+
+			relationShardList = lappend(relationShardList, relationShard);
+
+			shardInterval = LoadShardInterval(resultShard->targetShardId);
+			taskShardList = lappend(taskShardList, list_make1(shardInterval));
+			continue;
+		}
+
 		CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
 		if (IsCitusTableTypeCacheEntry(cacheEntry, CITUS_TABLE_WITH_NO_DIST_KEY))
 		{
@@ -2534,6 +2592,7 @@ QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 		RelationShard *relationShard = CitusMakeNode(RelationShard);
 		relationShard->relationId = copiedShardInterval->relationId;
 		relationShard->shardId = copiedShardInterval->shardId;
+		relationShard->shardIndex = shardIndex;
 
 		relationShardList = lappend(relationShardList, relationShard);
 	}
