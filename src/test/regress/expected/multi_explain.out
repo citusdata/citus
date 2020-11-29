@@ -2286,15 +2286,14 @@ Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
 EXPLAIN :default_analyze_flags
 SELECT count(distinct a) FROM (SELECT GREATEST(random(), 2) r, a FROM dist_table) t NATURAL JOIN ref_table;
 Aggregate (actual rows=1 loops=1)
-  ->  Custom Scan (Citus Adaptive) (actual rows=10 loops=1)
+  ->  Custom Scan (Citus Adaptive) (actual rows=4 loops=1)
         Task Count: 4
-        Tuple data received from nodes: 11 bytes
+        Tuple data received from nodes: 4 bytes
         Tasks Shown: One of 4
         ->  Task
-              Tuple data received from node: 5 bytes
+              Tuple data received from node: 1 bytes
               Node: host=localhost port=xxxxx dbname=regression
-              ->  Group (actual rows=4 loops=1)
-                    Group Key: t.a
+              ->  Aggregate (actual rows=1 loops=1)
                     ->  Merge Join (actual rows=4 loops=1)
                           Merge Cond: (t.a = ref_table.a)
                           ->  Sort (actual rows=4 loops=1)
@@ -2310,7 +2309,7 @@ EXPLAIN :default_analyze_flags
 SELECT count(distinct a) FROM dist_table
 WHERE EXISTS(SELECT random() < 2 FROM dist_table NATURAL JOIN ref_table);
 Aggregate (actual rows=1 loops=1)
-  ->  Custom Scan (Citus Adaptive) (actual rows=10 loops=1)
+  ->  Custom Scan (Citus Adaptive) (actual rows=4 loops=1)
         ->  Distributed Subplan XXX_1
               Intermediate Data Size: 70 bytes
               Result destination: Send to 2 nodes
@@ -2332,13 +2331,12 @@ Aggregate (actual rows=1 loops=1)
                                       Sort Method: quicksort  Memory: 25kB
                                       ->  Seq Scan on ref_table_570021 ref_table (actual rows=10 loops=1)
         Task Count: 4
-        Tuple data received from nodes: 11 bytes
+        Tuple data received from nodes: 4 bytes
         Tasks Shown: One of 4
         ->  Task
-              Tuple data received from node: 5 bytes
+              Tuple data received from node: 1 bytes
               Node: host=localhost port=xxxxx dbname=regression
-              ->  HashAggregate (actual rows=4 loops=1)
-                    Group Key: dist_table.a
+              ->  Aggregate (actual rows=1 loops=1)
                     InitPlan 1 (returns $0)
                       ->  Function Scan on read_intermediate_result intermediate_result (actual rows=1 loops=1)
                     ->  Result (actual rows=4 loops=1)

@@ -185,6 +185,18 @@ SELECT sum(e.user_id) + (SELECT max(value_3) FROM users_table WHERE user_id = e.
 FROM events_table e
 GROUP BY e.user_id
 ORDER BY 1 LIMIT 3;
+ ?column?
+---------------------------------------------------------------------
+       19
+       53
+       65
+(3 rows)
+
+-- correlated subquery outside of a non-pushdownable aggregate
+SELECT sum(e.user_id) + (SELECT max(value_3) FROM users_reference_table WHERE value_2 = e.value_2 GROUP BY user_id)
+FROM events_table e
+GROUP BY e.value_2
+ORDER BY 1 LIMIT 3;
 ERROR:  cannot push down subquery on the target list
 DETAIL:  Subqueries in the SELECT part of the query can only be pushed down if they happen before aggregates and window functions
 -- subquery outside of an aggregate

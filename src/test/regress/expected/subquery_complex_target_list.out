@@ -551,19 +551,15 @@ GROUP BY a.key, a.value ||'_append'
 HAVING length(a.key) + length(a.value) < length(a.value || '_append')
 ORDER BY 1
 $$);
-                                                                                                                                         coordinator_plan
+                                                                                   coordinator_plan
 ---------------------------------------------------------------------
  Sort
    Output: xxxxxx
    Sort Key: remote_scan.k1
-   ->  HashAggregate
+   ->  Custom Scan (Citus Adaptive)
          Output: xxxxxx
-         Group Key: remote_scan.k1, remote_scan.va1
-         Filter: ((length(remote_scan.worker_column_11) + length(any_value(remote_scan.worker_column_12))) < length((any_value(remote_scan.worker_column_13) || '_append'::text)))
-         ->  Custom Scan (Citus Adaptive)
-               Output: xxxxxx
-               Task Count: 4
-(10 rows)
+         Task Count: 4
+(6 rows)
 
 SELECT a FROM items a ORDER BY key;
                      a

@@ -357,6 +357,12 @@ IsCitusTableTypeInternal(char partitionMethod, char replicationModel,
 				   partitionMethod == DISTRIBUTE_BY_APPEND;
 		}
 
+		case STRICTLY_PARTITIONED_DISTRIBUTED_TABLE:
+		{
+			return partitionMethod == DISTRIBUTE_BY_HASH ||
+				   partitionMethod == DISTRIBUTE_BY_RANGE;
+		}
+
 		case REFERENCE_TABLE:
 		{
 			return partitionMethod == DISTRIBUTE_BY_NONE &&

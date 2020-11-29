@@ -93,6 +93,8 @@ static List * CreateSubqueryTargetListAndAdjustVars(List *columnList);
 static AttrNumber FindResnoForVarInTargetList(List *targetList, int varno, int varattno);
 static bool RelationInfoContainsOnlyRecurringTuples(PlannerInfo *plannerInfo,
 													Relids relids);
+static Var * PartitionColumnForPushedDownSubquery(Query *query);
+
 
 /*
  * ShouldUseSubqueryPushDown determines whether it's desirable to use
@@ -1769,7 +1771,7 @@ MultiSubqueryPushdownTable(Query *subquery)
 	subqueryTableNode->subquery = subquery;
 	subqueryTableNode->relationId = SUBQUERY_PUSHDOWN_RELATION_ID;
 	subqueryTableNode->rangeTableId = SUBQUERY_RANGE_TABLE_ID;
-	subqueryTableNode->partitionColumn = NULL;
+	subqueryTableNode->partitionColumn = PartitionColumnForPushedDownSubquery(subquery);
 	subqueryTableNode->alias = makeNode(Alias);
 	subqueryTableNode->alias->aliasname = rteName->data;
 	subqueryTableNode->referenceNames = makeNode(Alias);
@@ -1777,4 +1779,44 @@ MultiSubqueryPushdownTable(Query *subquery)
 	subqueryTableNode->referenceNames->colnames = columnNamesList;
 
 	return subqueryTableNode;
+}
+
+
+/*
+ * PartitionColumnForPushedDownSubquery finds the partition column on the target
+ * list of a pushed down subquery.
+ */
+static Var *
+PartitionColumnForPushedDownSubquery(Query *query)
+{
+	List *targetEntryList = query->targetList;
+
+	TargetEntry *targetEntry = NULL;
+	foreach_ptr(targetEntry, targetEntryList)
+	{
+		if (targetEntry->resjunk)
+		{
+			continue;
+		}
+
+		Expr *targetExpression = targetEntry->expr;
+		if (IsA(targetExpression, Var))
+		{
+			bool isPartitionColumn = IsPartitionColumn(targetExpression, query);
+			if (isPartitionColumn)
+			{
+				Var *partitionColumn = copyObject((Var *) targetExpression);
+
+				/* the pushed down subquery is the only range table entry */
+				partitionColumn->varno = 1;
+
+				/* point the var to the position in the subquery target list */
+				partitionColumn->varattno = targetEntry->resno;
+
+				return partitionColumn;
+			}
+		}
+	}
+
+	return NULL;
 }
