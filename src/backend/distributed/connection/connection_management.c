@@ -302,6 +302,7 @@ StartNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port,
 		 * invalid state as we couldn't allocate memory for it.
 		 * So initialize entry->connections list here.
 		 */
+		entry->isValid = false;
 		entry->connections = MemoryContextAlloc(ConnectionContext,
 												sizeof(dlist_head));
 		dlist_init(entry->connections);
