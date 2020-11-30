@@ -160,6 +160,12 @@ AfterXactConnectionHandling(bool isCommit)
 	hash_seq_init(&status, ConnectionHash);
 	while ((entry = (ConnectionHashEntry *) hash_seq_search(&status)) != 0)
 	{
+		if (!entry->isValid)
+		{
+			/* skip invalid connection hash entries */
+			continue;
+		}
+
 		AfterXactHostConnectionHandling(entry, isCommit);
 
 		/*
@@ -323,11 +329,24 @@ StartNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port,
 	 */
 
 	ConnectionHashEntry *entry = hash_search(ConnectionHash, &key, HASH_ENTER, &found);
-	if (!found)
+	if (!found || !entry->isValid)
 	{
+		/*
+		 * We are just building hash entry or previously it was left in an
+		 * invalid state as we couldn't allocate memory for it.
+		 * So initialize entry->connections list here.
+		 */
+		entry->isValid = false;
 		entry->connections = MemoryContextAlloc(ConnectionContext,
 												sizeof(dlist_head));
 		dlist_init(entry->connections);
+
+		/*
+		 * If MemoryContextAlloc errors out -e.g. during an OOM-, entry->connections
+		 * stays as NULL. So entry->isValid should be set to true right after we
+		 * initialize entry->connections properly.
+		 */
+		entry->isValid = true;
 	}
 
 	/* if desired, check whether there's a usable connection */
@@ -474,6 +493,12 @@ CloseAllConnectionsAfterTransaction(void)
 	hash_seq_init(&status, ConnectionHash);
 	while ((entry = (ConnectionHashEntry *) hash_seq_search(&status)) != 0)
 	{
+		if (!entry->isValid)
+		{
+			/* skip invalid connection hash entries */
+			continue;
+		}
+
 		dlist_iter iter;
 
 		dlist_head *connections = entry->connections;
@@ -502,6 +527,12 @@ CloseNodeConnectionsAfterTransaction(char *nodeName, int nodePort)
 	hash_seq_init(&status, ConnectionHash);
 	while ((entry = (ConnectionHashEntry *) hash_seq_search(&status)) != 0)
 	{
+		if (!entry->isValid)
+		{
+			/* skip invalid connection hash entries */
+			continue;
+		}
+
 		dlist_iter iter;
 
 		if (strcmp(entry->key.hostname, nodeName) != 0 || entry->key.port != nodePort)
@@ -577,6 +608,12 @@ ShutdownAllConnections(void)
 	hash_seq_init(&status, ConnectionHash);
 	while ((entry = (ConnectionHashEntry *) hash_seq_search(&status)) != NULL)
 	{
+		if (!entry->isValid)
+		{
+			/* skip invalid connection hash entries */
+			continue;
+		}
+
 		dlist_iter iter;
 
 		dlist_foreach(iter, entry->connections)
@@ -1187,6 +1224,12 @@ FreeConnParamsHashEntryFields(ConnParamsHashEntry *entry)
 static void
 AfterXactHostConnectionHandling(ConnectionHashEntry *entry, bool isCommit)
 {
+	if (!entry || !entry->isValid)
+	{
+		/* callers only pass valid hash entries but let's be on the safe side */
+		ereport(ERROR, (errmsg("connection hash entry is NULL or invalid")));
+	}
+
 	dlist_mutable_iter iter;
 	int cachedConnectionCount = 0;
 

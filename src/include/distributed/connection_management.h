@@ -173,6 +173,9 @@ typedef struct ConnectionHashEntry
 {
 	ConnectionHashKey key;
 	dlist_head *connections;
+
+	/* connections list is valid or not */
+	bool isValid;
 } ConnectionHashEntry;
 
 /* hash entry for cached connection parameters */
