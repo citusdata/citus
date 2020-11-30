@@ -27,10 +27,10 @@ IF substring(current_Setting('server_version'), '\d+')::int >= 12 THEN
 END IF;
 END$proc$;
 
-DROP VIEW columnar_options;
 DROP TABLE cstore_skipnodes;
 DROP TABLE cstore_stripes;
 DROP TABLE cstore_data_files;
+DROP TABLE options;
 
 DROP FUNCTION citus_internal.cstore_ensure_objects_exist();
 

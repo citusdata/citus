@@ -482,7 +482,7 @@ SELECT * FROM print_extension_changes();
                  | table cstore.cstore_data_files
                  | table cstore.cstore_skipnodes
                  | table cstore.cstore_stripes
-                 | view cstore.columnar_options
+                 | table cstore.options
 (6 rows)
 
 DROP TABLE prev_objects, extension_diff;

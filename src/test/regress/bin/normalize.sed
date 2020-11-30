@@ -187,3 +187,6 @@ s/relation with OID [0-9]+ does not exist/relation with OID XXXX does not exist/
 
 # ignore DEBUG1 messages that Postgres generates
 /^DEBUG:  rehashing catalog cache id [0-9]+$/d
+
+# ignore timing statistics for VACUUM VERBOSE
+/CPU: user: .*s, system: .*s, elapsed: .*s/d

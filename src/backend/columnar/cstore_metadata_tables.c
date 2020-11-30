@@ -55,6 +55,8 @@ static void GetHighestUsedAddressAndId(Oid relfilenode,
 static List * ReadDataFileStripeList(Oid relfilenode, Snapshot snapshot);
 static Oid CStoreStripesRelationId(void);
 static Oid CStoreStripesIndexRelationId(void);
+static Oid ColumnarOptionsRelationId(void);
+static Oid ColumnarOptionsIndexRegclass(void);
 static Oid CStoreDataFilesRelationId(void);
 static Oid CStoreDataFilesIndexRelationId(void);
 static Oid CStoreSkipNodesRelationId(void);
@@ -70,14 +72,36 @@ static EState * create_estate_for_relation(Relation rel);
 static bytea * DatumToBytea(Datum value, Form_pg_attribute attrForm);
 static Datum ByteaToDatum(bytea *bytes, Form_pg_attribute attrForm);
 
+static bool WriteColumnarOptions(Oid regclass, ColumnarOptions *options, bool overwrite);
+
+/* constants for cstore.options */
+#define Natts_cstore_options 4
+#define Anum_cstore_options_regclass 1
+#define Anum_cstore_options_block_row_count 2
+#define Anum_cstore_options_stripe_row_count 3
+#define Anum_cstore_options_compression 4
+
+/* ----------------
+ *		cstore.options definition.
+ * ----------------
+ */
+typedef struct FormData_cstore_options
+{
+	Oid regclass;
+	int32 block_row_count;
+	int32 stripe_row_count;
+	NameData compression;
+
+#ifdef CATALOG_VARLEN           /* variable-length fields start here */
+#endif
+} FormData_cstore_options;
+typedef FormData_cstore_options *Form_cstore_options;
+
 /* constants for cstore_table */
-#define Natts_cstore_data_files 6
+#define Natts_cstore_data_files 3
 #define Anum_cstore_data_files_relfilenode 1
-#define Anum_cstore_data_files_block_row_count 2
-#define Anum_cstore_data_files_stripe_row_count 3
-#define Anum_cstore_data_files_compression 4
-#define Anum_cstore_data_files_version_major 5
-#define Anum_cstore_data_files_version_minor 6
+#define Anum_cstore_data_files_version_major 2
+#define Anum_cstore_data_files_version_minor 3
 
 /* ----------------
  *		cstore.cstore_data_files definition.
@@ -125,27 +149,227 @@ typedef FormData_cstore_data_files *Form_cstore_data_files;
 
 
 /*
+ * InitColumnarOptions initialized the columnar table options. Meaning it writes the
+ * default options to the options table if not already existing.
+ *
+ * The return value indicates if options have actually been written.
+ */
+bool
+InitColumnarOptions(Oid regclass)
+{
+	ColumnarOptions defaultOptions = {
+		.blockRowCount = cstore_block_row_count,
+		.stripeRowCount = cstore_stripe_row_count,
+		.compressionType = cstore_compression,
+	};
+
+	return WriteColumnarOptions(regclass, &defaultOptions, false);
+}
+
+
+/*
+ * SetColumnarOptions writes the passed table options as the authoritive options to the
+ * table irregardless of the optiones already existing or not. This can be used to put a
+ * table in a certain state.
+ */
+void
+SetColumnarOptions(Oid regclass, ColumnarOptions *options)
+{
+	WriteColumnarOptions(regclass, options, true);
+}
+
+
+/*
+ * WriteColumnarOptions writes the options to the catalog table for a given regclass.
+ *  - If overwrite is false it will only write the values if there is not already a record
+ *    found.
+ *  - If overwrite is true it will always write the settings
+ *
+ * The return value indicates if the record has been written.
+ */
+static bool
+WriteColumnarOptions(Oid regclass, ColumnarOptions *options, bool overwrite)
+{
+	bool written = false;
+
+	bool nulls[Natts_cstore_options] = { 0 };
+	Datum values[Natts_cstore_options] = {
+		ObjectIdGetDatum(regclass),
+		Int32GetDatum(options->blockRowCount),
+		Int32GetDatum(options->stripeRowCount),
+		0, /* to be filled below */
+	};
+
+	NameData compressionName = { 0 };
+	namestrcpy(&compressionName, CompressionTypeStr(options->compressionType));
+	values[Anum_cstore_options_compression - 1] = NameGetDatum(&compressionName);
+
+	/* create heap tuple and insert into catalog table */
+	Relation columnarOptions = relation_open(ColumnarOptionsRelationId(),
+											 RowExclusiveLock);
+	TupleDesc tupleDescriptor = RelationGetDescr(columnarOptions);
+
+	/* find existing item to perform update if exist */
+	ScanKeyData scanKey[1] = { 0 };
+	ScanKeyInit(&scanKey[0], Anum_cstore_options_regclass, BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(regclass));
+
+	Relation index = index_open(ColumnarOptionsIndexRegclass(), AccessShareLock);
+	SysScanDesc scanDescriptor = systable_beginscan_ordered(columnarOptions, index, NULL,
+															1, scanKey);
+
+	HeapTuple heapTuple = systable_getnext(scanDescriptor);
+	if (HeapTupleIsValid(heapTuple))
+	{
+		if (overwrite)
+		{
+			/* TODO check if the options are actually different, skip if not changed */
+			/* update existing record */
+			bool update[Natts_cstore_options] = { 0 };
+			update[Anum_cstore_options_block_row_count - 1] = true;
+			update[Anum_cstore_options_stripe_row_count - 1] = true;
+			update[Anum_cstore_options_compression - 1] = true;
+
+			HeapTuple tuple = heap_modify_tuple(heapTuple, tupleDescriptor,
+												values, nulls, update);
+			CatalogTupleUpdate(columnarOptions, &tuple->t_self, tuple);
+			written = true;
+		}
+	}
+	else
+	{
+		/* inserting new record */
+		HeapTuple newTuple = heap_form_tuple(tupleDescriptor, values, nulls);
+		CatalogTupleInsert(columnarOptions, newTuple);
+		written = true;
+	}
+
+	if (written)
+	{
+		CommandCounterIncrement();
+	}
+
+	systable_endscan_ordered(scanDescriptor);
+	index_close(index, NoLock);
+	relation_close(columnarOptions, NoLock);
+
+	return written;
+}
+
+
+/*
+ * DeleteColumnarTableOptions removes the columnar table options for a regclass. When
+ * missingOk is false it will throw an error when no table options can be found.
+ *
+ * Returns whether a record has been removed.
+ */
+bool
+DeleteColumnarTableOptions(Oid regclass, bool missingOk)
+{
+	bool result = false;
+
+	Relation columnarOptions = relation_open(ColumnarOptionsRelationId(),
+											 RowExclusiveLock);
+
+	/* find existing item to remove */
+	ScanKeyData scanKey[1] = { 0 };
+	ScanKeyInit(&scanKey[0], Anum_cstore_options_regclass, BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(regclass));
+
+	Relation index = index_open(ColumnarOptionsIndexRegclass(), AccessShareLock);
+	SysScanDesc scanDescriptor = systable_beginscan_ordered(columnarOptions, index, NULL,
+															1, scanKey);
+
+	HeapTuple heapTuple = systable_getnext(scanDescriptor);
+	if (HeapTupleIsValid(heapTuple))
+	{
+		CatalogTupleDelete(columnarOptions, &heapTuple->t_self);
+		CommandCounterIncrement();
+
+		result = true;
+	}
+	else if (!missingOk)
+	{
+		ereport(ERROR, (errmsg("missing options for regclass: %d", regclass)));
+	}
+
+	systable_endscan_ordered(scanDescriptor);
+	index_close(index, NoLock);
+	relation_close(columnarOptions, NoLock);
+
+	return result;
+}
+
+
+bool
+ReadColumnarOptions(Oid regclass, ColumnarOptions *options)
+{
+	ScanKeyData scanKey[1];
+
+	ScanKeyInit(&scanKey[0], Anum_cstore_options_regclass, BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(regclass));
+
+	Oid columnarOptionsOid = ColumnarOptionsRelationId();
+	Relation columnarOptions = try_relation_open(columnarOptionsOid, AccessShareLock);
+	if (columnarOptions == NULL)
+	{
+		/*
+		 * Extension has been dropped. This can be called while
+		 * dropping extension or database via ObjectAccess().
+		 */
+		return false;
+	}
+
+	Relation index = try_relation_open(ColumnarOptionsIndexRegclass(), AccessShareLock);
+	if (index == NULL)
+	{
+		heap_close(columnarOptions, NoLock);
+
+		/* extension has been dropped */
+		return false;
+	}
+
+	SysScanDesc scanDescriptor = systable_beginscan_ordered(columnarOptions, index, NULL,
+															1, scanKey);
+
+	HeapTuple heapTuple = systable_getnext(scanDescriptor);
+	if (HeapTupleIsValid(heapTuple))
+	{
+		Form_cstore_options tupOptions = (Form_cstore_options) GETSTRUCT(heapTuple);
+
+		options->blockRowCount = tupOptions->block_row_count;
+		options->stripeRowCount = tupOptions->stripe_row_count;
+		options->compressionType = ParseCompressionType(NameStr(tupOptions->compression));
+	}
+	else
+	{
+		/* populate options with system defaults */
+		options->compressionType = cstore_compression;
+		options->stripeRowCount = cstore_stripe_row_count;
+		options->blockRowCount = cstore_block_row_count;
+	}
+
+	systable_endscan_ordered(scanDescriptor);
+	index_close(index, NoLock);
+	relation_close(columnarOptions, NoLock);
+
+	return true;
+}
+
+
+/*
  * InitCStoreDataFileMetadata adds a record for the given relfilenode
  * in cstore_data_files.
  */
 void
-InitCStoreDataFileMetadata(Oid relfilenode, int blockRowCount, int stripeRowCount,
-						   CompressionType compression)
+InitCStoreDataFileMetadata(Oid relfilenode)
 {
-	NameData compressionName = { 0 };
-
 	bool nulls[Natts_cstore_data_files] = { 0 };
 	Datum values[Natts_cstore_data_files] = {
 		ObjectIdGetDatum(relfilenode),
-		Int32GetDatum(blockRowCount),
-		Int32GetDatum(stripeRowCount),
-		0, /* to be filled below */
 		Int32GetDatum(CSTORE_VERSION_MAJOR),
 		Int32GetDatum(CSTORE_VERSION_MINOR)
 	};
-
-	namestrcpy(&compressionName, CompressionTypeStr(compression));
-	values[Anum_cstore_data_files_compression - 1] = NameGetDatum(&compressionName);
 
 	DeleteDataFileMetadataRowIfExists(relfilenode);
 
@@ -157,81 +381,6 @@ InitCStoreDataFileMetadata(Oid relfilenode, int blockRowCount, int stripeRowCoun
 	FinishModifyRelation(modifyState);
 
 	CommandCounterIncrement();
-
-	heap_close(cstoreDataFiles, NoLock);
-}
-
-
-void
-UpdateCStoreDataFileMetadata(Oid relfilenode, int blockRowCount, int stripeRowCount,
-							 CompressionType compression)
-{
-	const int scanKeyCount = 1;
-	ScanKeyData scanKey[1];
-	bool indexOK = true;
-	Datum values[Natts_cstore_data_files] = { 0 };
-	bool isnull[Natts_cstore_data_files] = { 0 };
-	bool replace[Natts_cstore_data_files] = { 0 };
-	bool changed = false;
-
-	Relation cstoreDataFiles = heap_open(CStoreDataFilesRelationId(), RowExclusiveLock);
-	TupleDesc tupleDescriptor = RelationGetDescr(cstoreDataFiles);
-
-	ScanKeyInit(&scanKey[0], Anum_cstore_data_files_relfilenode, BTEqualStrategyNumber,
-				F_INT8EQ, ObjectIdGetDatum(relfilenode));
-
-	SysScanDesc scanDescriptor = systable_beginscan(cstoreDataFiles,
-													CStoreDataFilesIndexRelationId(),
-													indexOK,
-													NULL, scanKeyCount, scanKey);
-
-	HeapTuple heapTuple = systable_getnext(scanDescriptor);
-	if (heapTuple == NULL)
-	{
-		ereport(ERROR, (errmsg("relfilenode %d doesn't belong to a cstore table",
-							   relfilenode)));
-	}
-
-	Form_cstore_data_files metadata = (Form_cstore_data_files) GETSTRUCT(heapTuple);
-
-	if (metadata->block_row_count != blockRowCount)
-	{
-		values[Anum_cstore_data_files_block_row_count - 1] = Int32GetDatum(blockRowCount);
-		isnull[Anum_cstore_data_files_block_row_count - 1] = false;
-		replace[Anum_cstore_data_files_block_row_count - 1] = true;
-		changed = true;
-	}
-
-	if (metadata->stripe_row_count != stripeRowCount)
-	{
-		values[Anum_cstore_data_files_stripe_row_count - 1] = Int32GetDatum(
-			stripeRowCount);
-		isnull[Anum_cstore_data_files_stripe_row_count - 1] = false;
-		replace[Anum_cstore_data_files_stripe_row_count - 1] = true;
-		changed = true;
-	}
-
-	if (ParseCompressionType(NameStr(metadata->compression)) != compression)
-	{
-		Name compressionName = palloc0(sizeof(NameData));
-		namestrcpy(compressionName, CompressionTypeStr(compression));
-		values[Anum_cstore_data_files_compression - 1] = NameGetDatum(compressionName);
-		isnull[Anum_cstore_data_files_compression - 1] = false;
-		replace[Anum_cstore_data_files_compression - 1] = true;
-		changed = true;
-	}
-
-	if (changed)
-	{
-		heapTuple = heap_modify_tuple(heapTuple, tupleDescriptor, values, isnull,
-									  replace);
-
-		CatalogTupleUpdate(cstoreDataFiles, &heapTuple->t_self, heapTuple);
-
-		CommandCounterIncrement();
-	}
-
-	systable_endscan(scanDescriptor);
 
 	heap_close(cstoreDataFiles, NoLock);
 }
@@ -662,28 +811,12 @@ ReadCStoreDataFiles(Oid relfilenode, DataFileMetadata *metadata)
 		return false;
 	}
 
-	TupleDesc tupleDescriptor = RelationGetDescr(cstoreDataFiles);
-
 	SysScanDesc scanDescriptor = systable_beginscan_ordered(cstoreDataFiles, index, NULL,
 															1, scanKey);
 
 	HeapTuple heapTuple = systable_getnext(scanDescriptor);
 	if (HeapTupleIsValid(heapTuple))
 	{
-		Datum datumArray[Natts_cstore_data_files];
-		bool isNullArray[Natts_cstore_data_files];
-		heap_deform_tuple(heapTuple, tupleDescriptor, datumArray, isNullArray);
-
-		if (metadata)
-		{
-			metadata->blockRowCount = DatumGetInt32(
-				datumArray[Anum_cstore_data_files_block_row_count - 1]);
-			metadata->stripeRowCount = DatumGetInt32(
-				datumArray[Anum_cstore_data_files_stripe_row_count - 1]);
-			Name compressionName = DatumGetName(
-				datumArray[Anum_cstore_data_files_compression - 1]);
-			metadata->compression = ParseCompressionType(NameStr(*compressionName));
-		}
 		found = true;
 	}
 
@@ -940,6 +1073,26 @@ static Oid
 CStoreStripesIndexRelationId(void)
 {
 	return get_relname_relid("cstore_stripes_pkey", CStoreNamespaceId());
+}
+
+
+/*
+ * ColumnarOptionsRelationId returns relation id of cstore.options.
+ */
+static Oid
+ColumnarOptionsRelationId(void)
+{
+	return get_relname_relid("options", CStoreNamespaceId());
+}
+
+
+/*
+ * ColumnarOptionsIndexRegclass returns relation id of cstore.options_pkey.
+ */
+static Oid
+ColumnarOptionsIndexRegclass(void)
+{
+	return get_relname_relid("options_pkey", CStoreNamespaceId());
 }
 
 

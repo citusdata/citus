@@ -5,42 +5,65 @@ CREATE TABLE table_options (a int) USING columnar;
 INSERT INTO table_options SELECT generate_series(1,100);
 
 -- show table_options settings
-SELECT * FROM cstore.columnar_options
+SELECT * FROM cstore.options
 WHERE regclass = 'table_options'::regclass;
 
 -- test changing the compression
 SELECT alter_columnar_table_set('table_options', compression => 'pglz');
 
 -- show table_options settings
-SELECT * FROM cstore.columnar_options
+SELECT * FROM cstore.options
 WHERE regclass = 'table_options'::regclass;
 
 -- test changing the block_row_count
 SELECT alter_columnar_table_set('table_options', block_row_count => 10);
 
 -- show table_options settings
-SELECT * FROM cstore.columnar_options
+SELECT * FROM cstore.options
 WHERE regclass = 'table_options'::regclass;
 
 -- test changing the block_row_count
 SELECT alter_columnar_table_set('table_options', stripe_row_count => 100);
 
 -- show table_options settings
-SELECT * FROM cstore.columnar_options
+SELECT * FROM cstore.options
 WHERE regclass = 'table_options'::regclass;
 
 -- VACUUM FULL creates a new table, make sure it copies settings from the table you are vacuuming
 VACUUM FULL table_options;
 
 -- show table_options settings
-SELECT * FROM cstore.columnar_options
+SELECT * FROM cstore.options
 WHERE regclass = 'table_options'::regclass;
 
 -- set all settings at the same time
 SELECT alter_columnar_table_set('table_options', stripe_row_count => 1000, block_row_count => 100, compression => 'none');
 
 -- show table_options settings
-SELECT * FROM cstore.columnar_options
+SELECT * FROM cstore.options
+WHERE regclass = 'table_options'::regclass;
+
+-- make sure table options are not changed when VACUUM a table
+VACUUM table_options;
+-- show table_options settings
+SELECT * FROM cstore.options
+WHERE regclass = 'table_options'::regclass;
+
+-- make sure table options are not changed when VACUUM FULL a table
+VACUUM FULL table_options;
+-- show table_options settings
+SELECT * FROM cstore.options
+WHERE regclass = 'table_options'::regclass;
+
+-- make sure table options are not changed when truncating a table
+TRUNCATE table_options;
+-- show table_options settings
+SELECT * FROM cstore.options
+WHERE regclass = 'table_options'::regclass;
+
+ALTER TABLE table_options ALTER COLUMN a TYPE bigint;
+-- show table_options settings
+SELECT * FROM cstore.options
 WHERE regclass = 'table_options'::regclass;
 
 -- reset settings one by one to the version of the GUC's
@@ -50,24 +73,24 @@ SET cstore.compression TO 'pglz';
 
 -- verify setting the GUC's didn't change the settings
 -- show table_options settings
-SELECT * FROM cstore.columnar_options
+SELECT * FROM cstore.options
 WHERE regclass = 'table_options'::regclass;
 
 SELECT alter_columnar_table_reset('table_options', block_row_count => true);
 -- show table_options settings
-SELECT * FROM cstore.columnar_options
+SELECT * FROM cstore.options
 WHERE regclass = 'table_options'::regclass;
 
 SELECT alter_columnar_table_reset('table_options', stripe_row_count => true);
 
 -- show table_options settings
-SELECT * FROM cstore.columnar_options
+SELECT * FROM cstore.options
 WHERE regclass = 'table_options'::regclass;
 
 SELECT alter_columnar_table_reset('table_options', compression => true);
 
 -- show table_options settings
-SELECT * FROM cstore.columnar_options
+SELECT * FROM cstore.options
 WHERE regclass = 'table_options'::regclass;
 
 -- verify resetting all settings at once work
@@ -76,7 +99,7 @@ SET cstore.stripe_row_count TO 100000;
 SET cstore.compression TO 'none';
 
 -- show table_options settings
-SELECT * FROM cstore.columnar_options
+SELECT * FROM cstore.options
 WHERE regclass = 'table_options'::regclass;
 
 SELECT alter_columnar_table_reset(
@@ -86,7 +109,7 @@ SELECT alter_columnar_table_reset(
     compression => true);
 
 -- show table_options settings
-SELECT * FROM cstore.columnar_options
+SELECT * FROM cstore.options
 WHERE regclass = 'table_options'::regclass;
 
 -- verify edge cases
@@ -97,6 +120,11 @@ SELECT alter_columnar_table_reset('not_a_cstore_table', compression => true);
 
 -- verify you can't use a compression that is not known
 SELECT alter_columnar_table_set('table_options', compression => 'foobar');
+
+-- verify options are removed when table is dropped
+DROP TABLE table_options;
+-- we expect no entries in çstore.options for anything not found int pg_class
+SELECT * FROM cstore.options o WHERE o.regclass NOT IN (SELECT oid FROM pg_class);
 
 SET client_min_messages TO warning;
 DROP SCHEMA am_tableoptions CASCADE;
