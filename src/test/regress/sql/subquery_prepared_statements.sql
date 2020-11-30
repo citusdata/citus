@@ -64,7 +64,6 @@ EXECUTE subquery_prepare_without_param;
 EXECUTE subquery_prepare_without_param;
 EXECUTE subquery_prepare_without_param;
 EXECUTE subquery_prepare_without_param;
-EXECUTE subquery_prepare_without_param;
 
 
 EXECUTE subquery_prepare_param_on_partkey(1);
