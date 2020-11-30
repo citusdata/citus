@@ -121,6 +121,65 @@ ALTER TABLE simple_table_name RENAME CONSTRAINT "looo oooo ooooo ooooooooooooooo
 SET search_path TO single_node;
 DROP SCHEMA  "Quoed.Schema" CASCADE;
 
+-- test citus size functions in transaction with modification
+CREATE TABLE test_citus_size_func (a int);
+SELECT create_distributed_table('test_citus_size_func', 'a');
+INSERT INTO test_citus_size_func VALUES(1), (2);
+
+BEGIN;
+	-- DDL with citus_table_size
+	ALTER TABLE test_citus_size_func ADD COLUMN newcol INT;
+	SELECT citus_table_size('test_citus_size_func');
+ROLLBACK;
+
+BEGIN;
+	-- DDL with citus_relation_size
+	ALTER TABLE test_citus_size_func ADD COLUMN newcol INT;
+	SELECT citus_relation_size('test_citus_size_func');
+ROLLBACK;
+
+BEGIN;
+	-- DDL with citus_total_relation_size
+	ALTER TABLE test_citus_size_func ADD COLUMN newcol INT;
+	SELECT citus_total_relation_size('test_citus_size_func');
+ROLLBACK;
+
+BEGIN;
+	-- single shard insert with citus_table_size
+	INSERT INTO test_citus_size_func VALUES (3);
+	SELECT citus_table_size('test_citus_size_func');
+ROLLBACK;
+
+BEGIN;
+	-- multi shard modification with citus_table_size
+	INSERT INTO test_citus_size_func  SELECT * FROM  test_citus_size_func;
+	SELECT citus_table_size('test_citus_size_func');
+ROLLBACK;
+
+BEGIN;
+	-- single shard insert with citus_relation_size
+	INSERT INTO test_citus_size_func VALUES (3);
+	SELECT citus_relation_size('test_citus_size_func');
+ROLLBACK;
+
+BEGIN;
+	-- multi shard modification with citus_relation_size
+	INSERT INTO test_citus_size_func  SELECT * FROM  test_citus_size_func;
+	SELECT citus_relation_size('test_citus_size_func');
+ROLLBACK;
+
+BEGIN;
+	-- single shard insert with citus_total_relation_size
+	INSERT INTO test_citus_size_func VALUES (3);
+	SELECT citus_total_relation_size('test_citus_size_func');
+ROLLBACK;
+
+BEGIN;
+	-- multi shard modification with citus_total_relation_size
+	INSERT INTO test_citus_size_func  SELECT * FROM  test_citus_size_func;
+	SELECT citus_total_relation_size('test_citus_size_func');
+ROLLBACK;
+
 -- we should be able to limit intermediate results
 BEGIN;
        SET LOCAL citus.max_intermediate_result_size TO 0;
