@@ -65,7 +65,8 @@ typedef enum CitusNodeTag
 	T_RelationShard,
 	T_RelationRowLock,
 	T_DeferredErrorMessage,
-	T_GroupShardPlacement
+	T_GroupShardPlacement,
+	T_TableDDLCommand
 } CitusNodeTag;
 
 

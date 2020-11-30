@@ -254,8 +254,8 @@ static void InvalidateCitusTableCacheEntrySlot(CitusTableCacheEntrySlot *cacheSl
 static void InvalidateDistTableCache(void);
 static void InvalidateDistObjectCache(void);
 static void InitializeTableCacheEntry(int64 shardId);
-static bool IsCitusTableTypeInternal(CitusTableCacheEntry *tableEntry, CitusTableType
-									 tableType);
+static bool IsCitusTableTypeInternal(char partitionMethod, char replicationModel,
+									 CitusTableType tableType);
 static bool RefreshTableCacheEntryIfInvalid(ShardIdCacheEntry *shardEntry);
 
 
@@ -309,7 +309,7 @@ IsCitusTableType(Oid relationId, CitusTableType tableType)
 	{
 		return false;
 	}
-	return IsCitusTableTypeInternal(tableEntry, tableType);
+	return IsCitusTableTypeCacheEntry(tableEntry, tableType);
 }
 
 
@@ -320,7 +320,8 @@ IsCitusTableType(Oid relationId, CitusTableType tableType)
 bool
 IsCitusTableTypeCacheEntry(CitusTableCacheEntry *tableEntry, CitusTableType tableType)
 {
-	return IsCitusTableTypeInternal(tableEntry, tableType);
+	return IsCitusTableTypeInternal(tableEntry->partitionMethod,
+									tableEntry->replicationModel, tableType);
 }
 
 
@@ -329,47 +330,48 @@ IsCitusTableTypeCacheEntry(CitusTableCacheEntry *tableEntry, CitusTableType tabl
  * the given table type group. For definition of table types, see CitusTableType.
  */
 static bool
-IsCitusTableTypeInternal(CitusTableCacheEntry *tableEntry, CitusTableType tableType)
+IsCitusTableTypeInternal(char partitionMethod, char replicationModel,
+						 CitusTableType tableType)
 {
 	switch (tableType)
 	{
 		case HASH_DISTRIBUTED:
 		{
-			return tableEntry->partitionMethod == DISTRIBUTE_BY_HASH;
+			return partitionMethod == DISTRIBUTE_BY_HASH;
 		}
 
 		case APPEND_DISTRIBUTED:
 		{
-			return tableEntry->partitionMethod == DISTRIBUTE_BY_APPEND;
+			return partitionMethod == DISTRIBUTE_BY_APPEND;
 		}
 
 		case RANGE_DISTRIBUTED:
 		{
-			return tableEntry->partitionMethod == DISTRIBUTE_BY_RANGE;
+			return partitionMethod == DISTRIBUTE_BY_RANGE;
 		}
 
 		case DISTRIBUTED_TABLE:
 		{
-			return tableEntry->partitionMethod == DISTRIBUTE_BY_HASH ||
-				   tableEntry->partitionMethod == DISTRIBUTE_BY_RANGE ||
-				   tableEntry->partitionMethod == DISTRIBUTE_BY_APPEND;
+			return partitionMethod == DISTRIBUTE_BY_HASH ||
+				   partitionMethod == DISTRIBUTE_BY_RANGE ||
+				   partitionMethod == DISTRIBUTE_BY_APPEND;
 		}
 
 		case REFERENCE_TABLE:
 		{
-			return tableEntry->partitionMethod == DISTRIBUTE_BY_NONE &&
-				   tableEntry->replicationModel == REPLICATION_MODEL_2PC;
+			return partitionMethod == DISTRIBUTE_BY_NONE &&
+				   replicationModel == REPLICATION_MODEL_2PC;
 		}
 
 		case CITUS_LOCAL_TABLE:
 		{
-			return tableEntry->partitionMethod == DISTRIBUTE_BY_NONE &&
-				   tableEntry->replicationModel != REPLICATION_MODEL_2PC;
+			return partitionMethod == DISTRIBUTE_BY_NONE &&
+				   replicationModel != REPLICATION_MODEL_2PC;
 		}
 
 		case CITUS_TABLE_WITH_NO_DIST_KEY:
 		{
-			return tableEntry->partitionMethod == DISTRIBUTE_BY_NONE;
+			return partitionMethod == DISTRIBUTE_BY_NONE;
 		}
 
 		case ANY_CITUS_TABLE_TYPE:
@@ -3706,12 +3708,25 @@ CitusTableTypeIdList(CitusTableType citusTableType)
 	while (HeapTupleIsValid(heapTuple))
 	{
 		bool isNull = false;
-		Datum relationIdDatum = heap_getattr(heapTuple,
-											 Anum_pg_dist_partition_logicalrelid,
-											 tupleDescriptor, &isNull);
-		Oid relationId = DatumGetObjectId(relationIdDatum);
-		if (IsCitusTableType(relationId, citusTableType))
+
+		Datum partMethodDatum =
+			heap_getattr(heapTuple, Anum_pg_dist_partition_partmethod,
+						 tupleDescriptor, &isNull);
+		Datum replicationModelDatum =
+			heap_getattr(heapTuple, Anum_pg_dist_partition_repmodel,
+						 tupleDescriptor, &isNull);
+
+		Oid partitionMethod = DatumGetChar(partMethodDatum);
+		Oid replicationModel = DatumGetChar(replicationModelDatum);
+
+		if (IsCitusTableTypeInternal(partitionMethod, replicationModel, citusTableType))
 		{
+			Datum relationIdDatum = heap_getattr(heapTuple,
+												 Anum_pg_dist_partition_logicalrelid,
+												 tupleDescriptor, &isNull);
+
+			Oid relationId = DatumGetObjectId(relationIdDatum);
+
 			relationIdList = lappend_oid(relationIdList, relationId);
 		}
 

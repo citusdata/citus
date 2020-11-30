@@ -5,6 +5,16 @@
 --
 -- It'd be nice to script generation of this file, but alas, that's
 -- not done yet.
+-- differentiate the output file for pg11 and versions above, with regards to objects
+-- created per citus version depending on the postgres version. Upgrade tests verify the
+-- objects are added in citus_finish_pg_upgrade()
+SHOW server_version \gset
+SELECT substring(:'server_version', '\d+')::int > 11 AS version_above_eleven;
+ version_above_eleven
+---------------------------------------------------------------------
+ t
+(1 row)
+
 SET citus.next_shard_id TO 580000;
 SELECT $definition$
 CREATE OR REPLACE FUNCTION test.maintenance_worker()
@@ -80,7 +90,7 @@ FROM pg_depend AS pgd,
 WHERE pgd.refclassid = 'pg_extension'::regclass AND
 	  pgd.refobjid   = pge.oid AND
 	  pge.extname    = 'citus' AND
-	  pgio.schema    NOT IN ('pg_catalog', 'citus', 'citus_internal', 'test');
+	  pgio.schema    NOT IN ('pg_catalog', 'citus', 'citus_internal', 'test', 'cstore');
  count
 ---------------------------------------------------------------------
      0
@@ -453,12 +463,38 @@ SELECT * FROM print_extension_changes();
                                                                      | function worker_record_sequence_dependency(regclass,regclass,name)
 (10 rows)
 
+-- Test downgrade to 9.5-1 from 10.0-1
+ALTER EXTENSION citus UPDATE TO '10.0-1';
+ALTER EXTENSION citus UPDATE TO '9.5-1';
+-- Should be empty result since upgrade+downgrade should be a no-op
+SELECT * FROM print_extension_changes();
+ previous_object | current_object
+---------------------------------------------------------------------
+(0 rows)
+
+-- Snapshot of state at 10.0-1
+ALTER EXTENSION citus UPDATE TO '10.0-1';
+SELECT * FROM print_extension_changes();
+ previous_object |                            current_object
+---------------------------------------------------------------------
+                 | access method columnar
+                 | function alter_columnar_table_reset(regclass,boolean,boolean,boolean)
+                 | function alter_columnar_table_set(regclass,integer,integer,name)
+                 | function citus_internal.cstore_ensure_objects_exist()
+                 | function cstore.columnar_handler(internal)
+                 | schema cstore
+                 | table cstore.cstore_data_files
+                 | table cstore.cstore_skipnodes
+                 | table cstore.cstore_stripes
+                 | table cstore.options
+(10 rows)
+
 DROP TABLE prev_objects, extension_diff;
 -- show running version
 SHOW citus.version;
  citus.version
 ---------------------------------------------------------------------
- 9.5devel
+ 10.0devel
 (1 row)
 
 -- ensure no objects were created outside pg_catalog
@@ -469,7 +505,7 @@ FROM pg_depend AS pgd,
 WHERE pgd.refclassid = 'pg_extension'::regclass AND
 	  pgd.refobjid   = pge.oid AND
 	  pge.extname    = 'citus' AND
-	  pgio.schema    NOT IN ('pg_catalog', 'citus', 'citus_internal', 'test');
+	  pgio.schema    NOT IN ('pg_catalog', 'citus', 'citus_internal', 'test', 'cstore');
  count
 ---------------------------------------------------------------------
      0
@@ -480,7 +516,7 @@ RESET citus.enable_version_checks;
 DROP EXTENSION citus;
 CREATE EXTENSION citus VERSION '7.0-1';
 ERROR:  specified version incompatible with loaded Citus library
-DETAIL:  Loaded library requires 9.5, but 7.0-1 was specified.
+DETAIL:  Loaded library requires 10.0, but 7.0-1 was specified.
 HINT:  If a newer library is present, restart the database and try the command again.
 -- Test non-distributed queries work even in version mismatch
 SET citus.enable_version_checks TO 'false';
@@ -523,7 +559,7 @@ ORDER BY 1;
 -- We should not distribute table in version mistmatch
 SELECT create_distributed_table('version_mismatch_table', 'column1');
 ERROR:  loaded Citus library version differs from installed extension version
-DETAIL:  Loaded library requires 9.5, but the installed extension version is 7.1-1.
+DETAIL:  Loaded library requires 10.0, but the installed extension version is 7.1-1.
 HINT:  Run ALTER EXTENSION citus UPDATE and try again.
 -- This function will cause fail in next ALTER EXTENSION
 CREATE OR REPLACE FUNCTION pg_catalog.master_dist_authinfo_cache_invalidate()

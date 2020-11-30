@@ -558,6 +558,9 @@ AdaptiveExecutorCreateScan(CustomScan *scan)
 	scanState->customScanState.methods = &AdaptiveExecutorCustomExecMethods;
 	scanState->PreExecScan = &CitusPreExecScan;
 
+	scanState->finishedPreScan = false;
+	scanState->finishedRemoteScan = false;
+
 	return (Node *) scanState;
 }
 
@@ -577,6 +580,9 @@ NonPushableInsertSelectCreateScan(CustomScan *scan)
 
 	scanState->customScanState.methods =
 		&NonPushableInsertSelectCustomExecMethods;
+
+	scanState->finishedPreScan = false;
+	scanState->finishedRemoteScan = false;
 
 	return (Node *) scanState;
 }

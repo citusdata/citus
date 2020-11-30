@@ -13,6 +13,8 @@
 #include "c.h"
 
 #include "access/heapam.h"
+#include "access/htup_details.h"
+#include "catalog/pg_constraint.h"
 #include "distributed/citus_nodefuncs.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/deparse_shard_query.h"
@@ -34,10 +36,13 @@
 #include "storage/lock.h"
 #include "utils/lsyscache.h"
 #include "utils/rel.h"
-
+#include "utils/syscache.h"
 
 static void UpdateTaskQueryString(Query *query, Oid distributedTableId,
 								  RangeTblEntry *valuesRTE, Task *task);
+static bool ReplaceRelationConstraintByShardConstraint(List *relationShardList,
+													   OnConflictExpr *onConflict);
+static RelationShard * FindRelationShard(Oid inputRelationId, List *relationShardList);
 static void ConvertRteToSubqueryWithEmptyResult(RangeTblEntry *rte);
 static bool ShouldLazyDeparseQuery(Task *task);
 static char * DeparseTaskQuery(Task *task, Query *query);
@@ -203,9 +208,6 @@ bool
 UpdateRelationToShardNames(Node *node, List *relationShardList)
 {
 	uint64 shardId = INVALID_SHARD_ID;
-	Oid relationId = InvalidOid;
-	ListCell *relationShardCell = NULL;
-	RelationShard *relationShard = NULL;
 
 	if (node == NULL)
 	{
@@ -238,24 +240,8 @@ UpdateRelationToShardNames(Node *node, List *relationShardList)
 		return false;
 	}
 
-	/*
-	 * Search for the restrictions associated with the RTE. There better be
-	 * some, otherwise this query wouldn't be eligible as a router query.
-	 *
-	 * FIXME: We should probably use a hashtable here, to do efficient
-	 * lookup.
-	 */
-	foreach(relationShardCell, relationShardList)
-	{
-		relationShard = (RelationShard *) lfirst(relationShardCell);
-
-		if (newRte->relid == relationShard->relationId)
-		{
-			break;
-		}
-
-		relationShard = NULL;
-	}
+	RelationShard *relationShard = FindRelationShard(newRte->relid,
+													 relationShardList);
 
 	bool replaceRteWithNullValues = relationShard == NULL ||
 									relationShard->shardId == INVALID_SHARD_ID;
@@ -266,7 +252,7 @@ UpdateRelationToShardNames(Node *node, List *relationShardList)
 	}
 
 	shardId = relationShard->shardId;
-	relationId = relationShard->relationId;
+	Oid relationId = relationShard->relationId;
 
 	char *relationName = get_rel_name(relationId);
 	AppendShardIdToName(&relationName, shardId);
@@ -300,6 +286,13 @@ UpdateRelationsToLocalShardTables(Node *node, List *relationShardList)
 								 relationShardList, QTW_EXAMINE_RTES_BEFORE);
 	}
 
+	if (IsA(node, OnConflictExpr))
+	{
+		OnConflictExpr *onConflict = (OnConflictExpr *) node;
+
+		return ReplaceRelationConstraintByShardConstraint(relationShardList, onConflict);
+	}
+
 	if (!IsA(node, RangeTblEntry))
 	{
 		return expression_tree_walker(node, UpdateRelationsToLocalShardTables,
@@ -313,27 +306,8 @@ UpdateRelationsToLocalShardTables(Node *node, List *relationShardList)
 		return false;
 	}
 
-	/*
-	 * Search for the restrictions associated with the RTE. There better be
-	 * some, otherwise this query wouldn't be eligible as a router query.
-	 *
-	 * FIXME: We should probably use a hashtable here, to do efficient
-	 * lookup.
-	 */
-	ListCell *relationShardCell = NULL;
-	RelationShard *relationShard = NULL;
-
-	foreach(relationShardCell, relationShardList)
-	{
-		relationShard = (RelationShard *) lfirst(relationShardCell);
-
-		if (newRte->relid == relationShard->relationId)
-		{
-			break;
-		}
-
-		relationShard = NULL;
-	}
+	RelationShard *relationShard = FindRelationShard(newRte->relid,
+													 relationShardList);
 
 	/* the function should only be called with local shards */
 	if (relationShard == NULL)
@@ -347,6 +321,92 @@ UpdateRelationsToLocalShardTables(Node *node, List *relationShardList)
 	newRte->relid = shardOid;
 
 	return false;
+}
+
+
+/*
+ * ReplaceRelationConstraintByShardConstraint replaces given OnConflictExpr's
+ * constraint id with constraint id of the corresponding shard.
+ */
+static bool
+ReplaceRelationConstraintByShardConstraint(List *relationShardList,
+										   OnConflictExpr *onConflict)
+{
+	Oid constraintId = onConflict->constraint;
+
+	if (!OidIsValid(constraintId))
+	{
+		return false;
+	}
+
+	Oid constraintRelationId = InvalidOid;
+
+	HeapTuple heapTuple = SearchSysCache1(CONSTROID, ObjectIdGetDatum(constraintId));
+	if (HeapTupleIsValid(heapTuple))
+	{
+		Form_pg_constraint contup = (Form_pg_constraint) GETSTRUCT(heapTuple);
+
+		constraintRelationId = contup->conrelid;
+		ReleaseSysCache(heapTuple);
+	}
+
+	/*
+	 * We can return here without calling the walker function, since we know there
+	 * will be no possible tables or constraints after this point, by the syntax.
+	 */
+	if (!OidIsValid(constraintRelationId))
+	{
+		ereport(ERROR, (errmsg("Invalid relation id (%u) for constraint: %s",
+							   constraintRelationId, get_constraint_name(constraintId))));
+	}
+
+	RelationShard *relationShard = FindRelationShard(constraintRelationId,
+													 relationShardList);
+
+	if (relationShard != NULL)
+	{
+		char *constraintName = get_constraint_name(constraintId);
+
+		AppendShardIdToName(&constraintName, relationShard->shardId);
+
+		Oid shardOid = GetTableLocalShardOid(relationShard->relationId,
+											 relationShard->shardId);
+
+		Oid shardConstraintId = get_relation_constraint_oid(shardOid, constraintName,
+															false);
+
+		onConflict->constraint = shardConstraintId;
+
+		return false;
+	}
+
+	return true;
+}
+
+
+/*
+ * FindRelationShard finds the RelationShard for shard relation with
+ * given Oid if exists in given relationShardList. Otherwise, returns NULL.
+ */
+static RelationShard *
+FindRelationShard(Oid inputRelationId, List *relationShardList)
+{
+	RelationShard *relationShard = NULL;
+
+	/*
+	 * Search for the restrictions associated with the RTE. There better be
+	 * some, otherwise this query wouldn't be eligible as a router query.
+	 * FIXME: We should probably use a hashtable here, to do efficient lookup.
+	 */
+	foreach_ptr(relationShard, relationShardList)
+	{
+		if (inputRelationId == relationShard->relationId)
+		{
+			return relationShard;
+		}
+	}
+
+	return NULL;
 }
 
 

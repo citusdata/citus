@@ -1808,6 +1808,8 @@ FilterPlannerRestrictionForQuery(PlannerRestrictionContext *plannerRestrictionCo
 	/* allocate the filtered planner restriction context and set all the fields */
 	PlannerRestrictionContext *filteredPlannerRestrictionContext = palloc0(
 		sizeof(PlannerRestrictionContext));
+	filteredPlannerRestrictionContext->fastPathRestrictionContext =
+		palloc0(sizeof(FastPathRestrictionContext));
 
 	filteredPlannerRestrictionContext->memoryContext =
 		plannerRestrictionContext->memoryContext;

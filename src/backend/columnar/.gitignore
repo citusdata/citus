@@ -1,0 +1,68 @@
+# =====
+# = C =
+# =====
+
+# Object files
+*.o
+*.ko
+*.obj
+*.elf
+*.bc
+
+# Libraries
+*.lib
+*.a
+
+# Shared objects (inc. Windows DLLs)
+*.dll
+*.so
+*.so.*
+*.dylib
+
+# Executables
+*.exe
+*.app
+*.i*86
+*.x86_64
+*.hex
+
+# ========
+# = Gcov =
+# ========
+
+# gcc coverage testing tool files
+
+*.gcno
+*.gcda
+*.gcov
+
+# ====================
+# = Project-Specific =
+# ====================
+
+/data/*.cstore
+/data/*.footer
+
+/sql/*block_filtering.sql
+/sql/*copyto.sql
+/sql/*create.sql
+/sql/*data_types.sql
+/sql/*load.sql
+
+/expected/*block_filtering.out
+/expected/*copyto.out
+/expected/*create.out
+/expected/*data_types.out
+/expected/*load.out
+/results/*
+/.deps/*
+/regression.diffs
+/regression.out
+.vscode
+
+*.pb-c.*
+
+# ignore files that could be created by circleci automation
+files.lst
+install-*.tar
+install-*/

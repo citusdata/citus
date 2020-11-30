@@ -41,6 +41,86 @@ SELECT * FROM test ORDER BY x;
 UPDATE test SET y = y + 1 RETURNING *;
 WITH cte_1 AS (UPDATE test SET y = y - 1 RETURNING *) SELECT * FROM cte_1 ORDER BY 1,2;
 
+-- Test upsert with constraint
+CREATE TABLE upsert_test
+(
+	part_key int UNIQUE,
+	other_col int,
+	third_col int
+);
+
+-- distribute the table
+SELECT create_distributed_table('upsert_test', 'part_key');
+
+-- do a regular insert
+INSERT INTO upsert_test (part_key, other_col) VALUES (1, 1), (2, 2) RETURNING *;
+
+SET citus.log_remote_commands to true;
+
+-- observe that there is a conflict and the following query does nothing
+INSERT INTO upsert_test (part_key, other_col) VALUES (1, 1) ON CONFLICT DO NOTHING RETURNING *;
+
+-- same as the above with different syntax
+INSERT INTO upsert_test (part_key, other_col) VALUES (1, 1) ON CONFLICT (part_key) DO NOTHING RETURNING *;
+
+-- again the same query with another syntax
+INSERT INTO upsert_test (part_key, other_col) VALUES (1, 1) ON CONFLICT ON CONSTRAINT upsert_test_part_key_key DO NOTHING RETURNING *;
+
+BEGIN;
+
+-- force local execution
+SELECT count(*) FROM upsert_test WHERE part_key = 1;
+
+SET citus.log_remote_commands to false;
+
+-- multi-shard pushdown query that goes through local execution
+INSERT INTO upsert_test (part_key, other_col) SELECT part_key, other_col FROM upsert_test ON CONFLICT ON CONSTRAINT upsert_test_part_key_key DO NOTHING RETURNING *;
+
+-- multi-shard pull-to-coordinator query that goes through local execution
+
+INSERT INTO upsert_test (part_key, other_col) SELECT part_key, other_col FROM upsert_test LIMIT 100 ON CONFLICT ON CONSTRAINT upsert_test_part_key_key DO NOTHING RETURNING *;
+
+COMMIT;
+
+-- to test citus local tables
+select undistribute_table('upsert_test');
+-- create citus local table
+select create_citus_local_table('upsert_test');
+-- test the constraint with local execution
+INSERT INTO upsert_test (part_key, other_col) VALUES (1, 1) ON CONFLICT ON CONSTRAINT upsert_test_part_key_key DO NOTHING RETURNING *;
+
+DROP TABLE upsert_test;
+
+CREATE SCHEMA "Quoed.Schema";
+SET search_path TO "Quoed.Schema";
+
+
+CREATE TABLE "long_constraint_upsert\_test"
+(
+	part_key int,
+	other_col int,
+	third_col int,
+
+	CONSTRAINT "looo oooo ooooo ooooooooooooooooo oooooooo oooooooo ng quoted  \aconstraint" UNIQUE (part_key)
+);
+-- distribute the table and create shards
+SELECT create_distributed_table('"long_constraint_upsert\_test"', 'part_key');
+
+
+INSERT INTO "long_constraint_upsert\_test" (part_key, other_col) VALUES (1, 1) ON CONFLICT ON CONSTRAINT  "looo oooo ooooo ooooooooooooooooo oooooooo oooooooo ng quoted  \aconstraint" DO NOTHING RETURNING *;
+
+ALTER TABLE "long_constraint_upsert\_test" RENAME TO simple_table_name;
+
+INSERT INTO simple_table_name (part_key, other_col) VALUES (1, 1) ON CONFLICT ON CONSTRAINT  "looo oooo ooooo ooooooooooooooooo oooooooo oooooooo ng quoted  \aconstraint" DO NOTHING RETURNING *;
+
+-- this is currently not supported, but once we support
+-- make sure that the following query also works fine
+ALTER TABLE simple_table_name RENAME CONSTRAINT "looo oooo ooooo ooooooooooooooooo oooooooo oooooooo ng quoted  \aconstraint"  TO simple_constraint_name;
+--INSERT INTO simple_table_name (part_key, other_col) VALUES (1, 1) ON CONFLICT ON CONSTRAINT  simple_constraint_name DO NOTHING RETURNING *;
+
+SET search_path TO single_node;
+DROP SCHEMA  "Quoed.Schema" CASCADE;
+
 -- we should be able to limit intermediate results
 BEGIN;
        SET LOCAL citus.max_intermediate_result_size TO 0;
@@ -432,6 +512,69 @@ SELECT function_delegation(1);
 
 SET client_min_messages TO WARNING;
 DROP TABLE test CASCADE;
+
+CREATE OR REPLACE FUNCTION pg_catalog.get_all_active_client_backend_count()
+    RETURNS bigint
+    LANGUAGE C STRICT
+    AS 'citus', $$get_all_active_client_backend_count$$;
+
+-- set the cached connections to zero
+-- and execute a distributed query so that
+-- we end up with zero cached connections afterwards
+ALTER SYSTEM SET citus.max_cached_conns_per_worker TO 0;
+SELECT pg_reload_conf();
+
+-- disable deadlock detection and re-trigger 2PC recovery
+-- once more when citus.max_cached_conns_per_worker is zero
+-- so that we can be sure that the connections established for
+-- maintanince daemon is closed properly.
+-- this is to prevent random failures in the tests (otherwise, we
+-- might see connections established for this operations)
+ALTER SYSTEM SET citus.distributed_deadlock_detection_factor TO -1;
+ALTER SYSTEM SET citus.recover_2pc_interval TO '1ms';
+SELECT pg_reload_conf();
+SELECT pg_sleep(0.1);
+
+-- now that last 2PC recovery is done, we're good to disable it
+ALTER SYSTEM SET citus.recover_2pc_interval TO '-1';
+SELECT pg_reload_conf();
+
+
+\c - - - :master_port
+-- sometimes Postgres is a little slow to terminate the backends
+-- even if PGFinish is sent. So, to prevent any flaky tests, sleep
+SELECT pg_sleep(0.1);
+-- since max_cached_conns_per_worker == 0 at this point, the
+-- backend(s) that execute on the shards will be terminated
+-- so show that there is only a single client backend,
+-- which is actually the backend that executes here
+SET search_path TO single_node;
+SELECT count(*) from should_commit;
+SELECT pg_catalog.get_all_active_client_backend_count();
+BEGIN;
+	SET citus.shard_count TO 32;
+	SET citus.force_max_query_parallelization TO ON;
+	SET citus.enable_local_execution TO false;
+
+	CREATE TABLE test (a int);
+	SET citus.shard_replication_factor TO 1;
+	SELECT create_distributed_table('test', 'a');
+	SELECT count(*) FROM test;
+
+	-- now, we should have additional 32 connections
+	SELECT pg_catalog.get_all_active_client_backend_count();
+ROLLBACK;
+
+-- set the values to originals back
+ALTER SYSTEM RESET citus.max_cached_conns_per_worker;
+ALTER SYSTEM RESET citus.distributed_deadlock_detection_factor;
+ALTER SYSTEM RESET citus.recover_2pc_interval;
+ALTER SYSTEM RESET citus.distributed_deadlock_detection_factor;
+SELECT pg_reload_conf();
+
+-- suppress notices
+SET client_min_messages TO error;
+
 -- cannot remove coordinator since a reference table exists on coordinator and no other worker nodes are added
 SELECT 1 FROM master_remove_node('localhost', :master_port);
 
