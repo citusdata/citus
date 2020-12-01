@@ -1506,7 +1506,7 @@ ContainsLocalTableDistributedTableJoin(List *rangeTableList)
 		{
 			containsDistributedTable = true;
 		}
-		else if (IsLocalTableRteOrMatView((Node*) rangeTableEntry))
+		else if (IsLocalTableRteOrMatView((Node *) rangeTableEntry))
 		{
 			/* we consider citus local tables as local table */
 			containsLocalTable = true;
@@ -1542,7 +1542,8 @@ ContainsLocalTableSubqueryJoin(List *rangeTableList, Oid resultRelationId)
 			continue;
 		}
 
-		if (IsLocalTableRteOrMatView((Node*) rangeTableEntry) && rangeTableEntry->relid != resultRelationId)
+		if (IsLocalTableRteOrMatView((Node *) rangeTableEntry) &&
+			rangeTableEntry->relid != resultRelationId)
 		{
 			containsLocalTable = true;
 		}
@@ -1675,6 +1676,7 @@ TransformFunctionRTE(RangeTblEntry *rangeTblEntry)
 			subquery->targetList = lappend(subquery->targetList, targetEntry);
 		}
 	}
+
 	/*
 	 * If tupleDesc is NULL we have 2 different cases:
 	 *
@@ -1724,6 +1726,7 @@ TransformFunctionRTE(RangeTblEntry *rangeTblEntry)
 				columnType = list_nth_oid(rangeTblFunction->funccoltypes,
 										  targetColumnIndex);
 			}
+
 			/* use the types in the function definition otherwise */
 			else
 			{

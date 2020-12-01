@@ -60,6 +60,7 @@ typedef struct RangeTableEntryDetails
 	Index rteIndex;
 	List *restrictionList;
 	List *requiredAttributeNumbers;
+	bool hasUniqueIndex;
 } RangeTableEntryDetails;
 
 typedef struct ConversionCandidates
@@ -71,26 +72,30 @@ typedef struct ConversionCandidates
 static Oid GetResultRelationId(Query *query);
 static bool ShouldConvertLocalTableJoinsToSubqueries(Query *query, List *rangeTableList,
 													 Oid resultRelationId,
-													 PlannerRestrictionContext *plannerRestrictionContext);
-static bool HasUniqueFilter(RangeTblEntry *distRTE, List *distRTERestrictionList,
-							List *requiredAttrNumbersForDistRTE);
-static bool ShouldConvertDistributedTable(FromExpr *joinTree,
-										  RangeTableEntryDetails *distRTEContext);
+													 PlannerRestrictionContext *
+													 plannerRestrictionContext);
+static bool HasUniqueIndex(FromExpr *joinTree,
+						   RangeTblEntry *rangeTableEntry, Index rteIndex);
 static List * RequiredAttrNumbersForRelation(RangeTblEntry *relationRte,
-											 PlannerRestrictionContext *plannerRestrictionContext);
-static ConversionCandidates * CreateConversionCandidates(
-	PlannerRestrictionContext *plannerRestrictionContext,
-	List *rangeTableList,
-	Oid resultRelationId);
+											 PlannerRestrictionContext *
+											 plannerRestrictionContext);
+static ConversionCandidates * CreateConversionCandidates(FromExpr *joinTree,
+														 PlannerRestrictionContext *
+														 plannerRestrictionContext,
+														 List *rangeTableList,
+														 Oid resultRelationId);
 static void GetAllUniqueIndexes(Form_pg_index indexForm, List **uniqueIndexes);
 static RangeTableEntryDetails * GetNextRTEToConvertToSubquery(FromExpr *joinTree,
-															  ConversionCandidates *conversionCandidates,
-															  PlannerRestrictionContext* plannerRestrictionContext,
+															  ConversionCandidates *
+															  conversionCandidates,
+															  PlannerRestrictionContext *
+															  plannerRestrictionContext,
 															  Oid resultRelationId);
 static void GetRangeTableEntriesFromJoinTree(Node *joinNode, List *rangeTableList,
 											 List **joinRangeTableEntries);
 static void RemoveFromConversionCandidates(ConversionCandidates *conversionCandidates, Oid
 										   relationId);
+static bool AllRangeTableEntriesHaveUniqueIndex(List *rangeTableEntryDetailsList);
 
 /*
  * ConvertUnplannableTableJoinsToSubqueries gets a query and the planner
@@ -101,18 +106,22 @@ void
 ConvertUnplannableTableJoinsToSubqueries(Query *query,
 										 RecursivePlanningContext *context)
 {
-	PlannerRestrictionContext* plannerRestrictionContext = context->plannerRestrictionContext;
+	PlannerRestrictionContext *plannerRestrictionContext =
+		context->plannerRestrictionContext;
 
 	List *rangeTableList = NIL;
 	GetRangeTableEntriesFromJoinTree((Node *) query->jointree, query->rtable,
 									 &rangeTableList);
 
 	Oid resultRelationId = GetResultRelationId(query);
-	if (!ShouldConvertLocalTableJoinsToSubqueries(query, rangeTableList, resultRelationId, plannerRestrictionContext)) {
+	if (!ShouldConvertLocalTableJoinsToSubqueries(query, rangeTableList, resultRelationId,
+												  plannerRestrictionContext))
+	{
 		return;
 	}
 	ConversionCandidates *conversionCandidates =
-		CreateConversionCandidates(plannerRestrictionContext, rangeTableList, resultRelationId);
+		CreateConversionCandidates(query->jointree, plannerRestrictionContext,
+								   rangeTableList, resultRelationId);
 
 	RangeTableEntryDetails *rangeTableEntryDetails =
 		GetNextRTEToConvertToSubquery(query->jointree, conversionCandidates,
@@ -120,7 +129,8 @@ ConvertUnplannableTableJoinsToSubqueries(Query *query,
 									  resultRelationId);
 
 	while (ShouldConvertLocalTableJoinsToSubqueries(query, rangeTableList,
-													resultRelationId, plannerRestrictionContext))
+													resultRelationId,
+													plannerRestrictionContext))
 	{
 		ReplaceRTERelationWithRteSubquery(
 			rangeTableEntryDetails->rangeTableEntry,
@@ -219,7 +229,6 @@ GetNextRTEToConvertToSubquery(FromExpr *joinTree,
 	{
 		localRTECandidate = linitial(conversionCandidates->localTableList);
 	}
-
 	if (list_length(conversionCandidates->distributedTableList) > 0)
 	{
 		distributedRTECandidate = linitial(conversionCandidates->distributedTableList);
@@ -227,38 +236,45 @@ GetNextRTEToConvertToSubquery(FromExpr *joinTree,
 
 	if (LocalTableJoinPolicy == LOCAL_JOIN_POLICY_PREFER_LOCAL)
 	{
-		if (localRTECandidate)
-		{
-			return localRTECandidate;
-		}
-		else
-		{
-			return distributedRTECandidate;
-		}
+		return localRTECandidate ? localRTECandidate : distributedRTECandidate;
 	}
 	else if (LocalTableJoinPolicy == LOCAL_JOIN_POLICY_PREFER_DISTRIBUTED)
 	{
-		if (distributedRTECandidate)
-		{
-			return distributedRTECandidate;
-		}
-		else
-		{
-			return localRTECandidate;
-		}
+		return distributedRTECandidate ? distributedRTECandidate : localRTECandidate;
 	}
 	else
 	{
-		if (ShouldConvertDistributedTable(joinTree, distributedRTECandidate) ||
-			localRTECandidate == NULL)
+		bool allRangeTableEntriesHaveUniqueIndex = AllRangeTableEntriesHaveUniqueIndex(
+			conversionCandidates->distributedTableList);
+
+		if (allRangeTableEntriesHaveUniqueIndex)
 		{
-			return distributedRTECandidate;
+			return distributedRTECandidate ? distributedRTECandidate : localRTECandidate;
 		}
 		else
 		{
-			return localRTECandidate;
+			return localRTECandidate ? localRTECandidate : distributedRTECandidate;
 		}
 	}
+}
+
+
+/*
+ * AllRangeTableEntriesHaveUniqueIndex returns true if all of the RTE's in the given
+ * list have a unique index.
+ */
+static bool
+AllRangeTableEntriesHaveUniqueIndex(List *rangeTableEntryDetailsList)
+{
+	RangeTableEntryDetails *rangeTableEntryDetails = NULL;
+	foreach_ptr(rangeTableEntryDetails, rangeTableEntryDetailsList)
+	{
+		if (!rangeTableEntryDetails->hasUniqueIndex)
+		{
+			return false;
+		}
+	}
+	return true;
 }
 
 
@@ -289,7 +305,8 @@ RemoveFromConversionCandidates(ConversionCandidates *conversionCandidates, Oid r
 static bool
 ShouldConvertLocalTableJoinsToSubqueries(Query *query, List *rangeTableList,
 										 Oid resultRelationId,
-										 PlannerRestrictionContext *plannerRestrictionContext)
+										 PlannerRestrictionContext *
+										 plannerRestrictionContext)
 {
 	if (LocalTableJoinPolicy == LOCAL_JOIN_POLICY_NEVER)
 	{
@@ -301,7 +318,8 @@ ShouldConvertLocalTableJoinsToSubqueries(Query *query, List *rangeTableList,
 		return false;
 	}
 
-	plannerRestrictionContext = FilterPlannerRestrictionForQuery(plannerRestrictionContext, query);
+	plannerRestrictionContext = FilterPlannerRestrictionForQuery(
+		plannerRestrictionContext, query);
 	if (IsRouterPlannable(query, plannerRestrictionContext))
 	{
 		return false;
@@ -311,22 +329,18 @@ ShouldConvertLocalTableJoinsToSubqueries(Query *query, List *rangeTableList,
 
 
 /*
- * ShouldConvertDistributedTable returns true if we should convert the
- * distributed table rte to a subquery. This will be the case if the distributed
- * table has a unique index on a column that appears in filter.
+ * HasUniqueIndex returns true if the given rangeTableEntry has a constant
+ * filter on a unique column.
  */
 static bool
-ShouldConvertDistributedTable(FromExpr *joinTree,
-							  RangeTableEntryDetails *
-							  rangeTableEntryDetails)
+HasUniqueIndex(FromExpr *joinTree, RangeTblEntry *rangeTableEntry, Index rteIndex)
 {
-	if (rangeTableEntryDetails == NULL)
+	if (rangeTableEntry == NULL)
 	{
 		return false;
 	}
-	List *distRTEEqualityQuals =
-		FetchEqualityAttrNumsForRTEFromQuals(joinTree->quals,
-											 rangeTableEntryDetails->rteIndex);
+	List *rteEqualityQuals =
+		FetchEqualityAttrNumsForRTEFromQuals(joinTree->quals, rteIndex);
 
 	Node *join = NULL;
 	foreach_ptr(join, joinTree->fromlist)
@@ -334,37 +348,18 @@ ShouldConvertDistributedTable(FromExpr *joinTree,
 		if (IsA(join, JoinExpr))
 		{
 			JoinExpr *joinExpr = (JoinExpr *) join;
-			distRTEEqualityQuals = list_concat(distRTEEqualityQuals,
-											   FetchEqualityAttrNumsForRTEFromQuals(
-												   joinExpr->quals,
-												   rangeTableEntryDetails->
-												   rteIndex)
-											   );
+			List *joinExprEqualityQuals = FetchEqualityAttrNumsForRTEFromQuals(
+				joinExpr->quals, rteIndex);
+			rteEqualityQuals = list_concat(rteEqualityQuals, joinExprEqualityQuals);
 		}
 	}
 
-	bool hasUniqueFilter = HasUniqueFilter(
-		rangeTableEntryDetails->rangeTableEntry,
-		rangeTableEntryDetails->
-		restrictionList, distRTEEqualityQuals);
-	return hasUniqueFilter;
-}
-
-
-/*
- * HasUniqueFilter returns true if the given RTE has a unique filter
- * on a column, which is a member of the given requiredAttrNumbersForDistRTE.
- */
-static bool
-HasUniqueFilter(RangeTblEntry *distRTE, List *distRTERestrictionList,
-				List *requiredAttrNumbersForDistRTE)
-{
-	List *uniqueIndexes = ExecuteFunctionOnEachTableIndex(distRTE->relid,
+	List *uniqueIndexes = ExecuteFunctionOnEachTableIndex(rangeTableEntry->relid,
 														  GetAllUniqueIndexes);
 	int columnNumber = 0;
 	foreach_int(columnNumber, uniqueIndexes)
 	{
-		if (list_member_int(requiredAttrNumbersForDistRTE, columnNumber))
+		if (list_member_int(rteEqualityQuals, columnNumber))
 		{
 			return true;
 		}
@@ -450,7 +445,8 @@ RequiredAttrNumbersForRelation(RangeTblEntry *relationRte,
  * be converted to a subquery so that citus planners can work.
  */
 static ConversionCandidates *
-CreateConversionCandidates(PlannerRestrictionContext *plannerRestrictionContext,
+CreateConversionCandidates(FromExpr *joinTree,
+						   PlannerRestrictionContext *plannerRestrictionContext,
 						   List *rangeTableList, Oid resultRelationId)
 {
 	ConversionCandidates *conversionCandidates = palloc0(
@@ -487,6 +483,9 @@ CreateConversionCandidates(PlannerRestrictionContext *plannerRestrictionContext,
 			rangeTableEntry, plannerRestrictionContext, 1);
 		rangeTableEntryDetails->requiredAttributeNumbers = RequiredAttrNumbersForRelation(
 			rangeTableEntry, plannerRestrictionContext);
+		rangeTableEntryDetails->hasUniqueIndex = HasUniqueIndex(joinTree,
+																rangeTableEntry,
+																rteIndex);
 
 		if (referenceOrDistributedTable)
 		{

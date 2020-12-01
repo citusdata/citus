@@ -221,8 +221,8 @@ CreateModifyPlan(Query *originalQuery, Query *query,
 	distributedPlan->modLevel = RowModifyLevelForQuery(query);
 
 	distributedPlan->planningError = ModifyQuerySupported(query, originalQuery,
-														multiShardQuery,
-														plannerRestrictionContext);
+														  multiShardQuery,
+														  plannerRestrictionContext);
 
 	if (distributedPlan->planningError != NULL)
 	{
