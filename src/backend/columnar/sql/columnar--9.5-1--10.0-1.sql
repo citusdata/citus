@@ -10,7 +10,7 @@ CREATE TABLE options (
     block_row_count int NOT NULL,
     stripe_row_count int NOT NULL,
     compression name NOT NULL
-);
+) WITH (user_catalog_table = true);
 
 COMMENT ON TABLE options IS 'columnar table specific options, maintained by alter_columnar_table_set';
 
