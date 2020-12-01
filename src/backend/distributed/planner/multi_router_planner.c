@@ -221,8 +221,9 @@ CreateModifyPlan(Query *originalQuery, Query *query,
 	distributedPlan->modLevel = RowModifyLevelForQuery(query);
 
 	distributedPlan->planningError = ModifyQuerySupported(query, originalQuery,
-														  multiShardQuery,
-														  plannerRestrictionContext);
+														multiShardQuery,
+														plannerRestrictionContext);
+
 	if (distributedPlan->planningError != NULL)
 	{
 		return distributedPlan;
@@ -550,10 +551,6 @@ ModifyPartialQuerySupported(Query *queryTree, bool multiShardQuery,
 
 	Oid resultRelationId = ModifyQueryResultRelationId(queryTree);
 	*distributedTableIdOutput = resultRelationId;
-	if (ContainsTableToBeConvertedToSubquery(queryTree->rtable, resultRelationId))
-	{
-		return deferredError;
-	}
 
 	Var *partitionColumn = NULL;
 

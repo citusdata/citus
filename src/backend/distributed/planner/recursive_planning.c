@@ -1542,8 +1542,7 @@ ContainsLocalTableSubqueryJoin(List *rangeTableList, Oid resultRelationId)
 			continue;
 		}
 
-		if (!IsCitusTable(rangeTableEntry->relid) && rangeTableEntry->relid !=
-			resultRelationId)
+		if (!IsCitusTable(rangeTableEntry->relid) && rangeTableEntry->relid != resultRelationId)
 		{
 			containsLocalTable = true;
 		}

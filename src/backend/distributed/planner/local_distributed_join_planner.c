@@ -71,27 +71,22 @@ typedef struct ConversionCandidates
 static Oid GetResultRelationId(Query *query);
 static bool ShouldConvertLocalTableJoinsToSubqueries(Query *query, List *rangeTableList,
 													 Oid resultRelationId,
-													 RecursivePlanningContext *context);
+													 PlannerRestrictionContext *plannerRestrictionContext);
 static bool HasUniqueFilter(RangeTblEntry *distRTE, List *distRTERestrictionList,
 							List *requiredAttrNumbersForDistRTE);
 static bool ShouldConvertDistributedTable(FromExpr *joinTree,
 										  RangeTableEntryDetails *distRTEContext);
 static List * RequiredAttrNumbersForRelation(RangeTblEntry *relationRte,
-											 RecursivePlanningContext *planningContext);
+											 PlannerRestrictionContext *plannerRestrictionContext);
 static ConversionCandidates * CreateConversionCandidates(
-	RecursivePlanningContext *context,
+	PlannerRestrictionContext *plannerRestrictionContext,
 	List *rangeTableList,
 	Oid resultRelationId);
 static void GetAllUniqueIndexes(Form_pg_index indexForm, List **uniqueIndexes);
 static RangeTableEntryDetails * GetNextRTEToConvertToSubquery(FromExpr *joinTree,
-															  ConversionCandidates
-															  *
-															  conversionCandidates,
-															  PlannerRestrictionContext
-															  *
-															  plannerRestrictionContext,
-															  Oid
-															  resultRelationId);
+															  ConversionCandidates *conversionCandidates,
+															  PlannerRestrictionContext* plannerRestrictionContext,
+															  Oid resultRelationId);
 static void GetRangeTableEntriesFromJoinTree(Node *joinNode, List *rangeTableList,
 											 List **joinRangeTableEntries);
 static void RemoveFromConversionCandidates(ConversionCandidates *conversionCandidates, Oid
@@ -106,13 +101,18 @@ void
 ConvertUnplannableTableJoinsToSubqueries(Query *query,
 										 RecursivePlanningContext *context)
 {
+	PlannerRestrictionContext* plannerRestrictionContext = context->plannerRestrictionContext;
+
 	List *rangeTableList = NIL;
 	GetRangeTableEntriesFromJoinTree((Node *) query->jointree, query->rtable,
 									 &rangeTableList);
 
 	Oid resultRelationId = GetResultRelationId(query);
+	if (!ShouldConvertLocalTableJoinsToSubqueries(query, rangeTableList, resultRelationId, plannerRestrictionContext)) {
+		return;
+	}
 	ConversionCandidates *conversionCandidates =
-		CreateConversionCandidates(context, rangeTableList, resultRelationId);
+		CreateConversionCandidates(plannerRestrictionContext, rangeTableList, resultRelationId);
 
 	RangeTableEntryDetails *rangeTableEntryDetails =
 		GetNextRTEToConvertToSubquery(query->jointree, conversionCandidates,
@@ -120,7 +120,7 @@ ConvertUnplannableTableJoinsToSubqueries(Query *query,
 									  resultRelationId);
 
 	while (ShouldConvertLocalTableJoinsToSubqueries(query, rangeTableList,
-													resultRelationId, context))
+													resultRelationId, plannerRestrictionContext))
 	{
 		ReplaceRTERelationWithRteSubquery(
 			rangeTableEntryDetails->rangeTableEntry,
@@ -289,7 +289,7 @@ RemoveFromConversionCandidates(ConversionCandidates *conversionCandidates, Oid r
 static bool
 ShouldConvertLocalTableJoinsToSubqueries(Query *query, List *rangeTableList,
 										 Oid resultRelationId,
-										 RecursivePlanningContext *context)
+										 PlannerRestrictionContext *plannerRestrictionContext)
 {
 	if (LocalTableJoinPolicy == LOCAL_JOIN_POLICY_NEVER)
 	{
@@ -301,8 +301,7 @@ ShouldConvertLocalTableJoinsToSubqueries(Query *query, List *rangeTableList,
 		return false;
 	}
 
-	PlannerRestrictionContext *plannerRestrictionContext =
-		FilterPlannerRestrictionForQuery(context->plannerRestrictionContext, query);
+	plannerRestrictionContext = FilterPlannerRestrictionForQuery(plannerRestrictionContext, query);
 	if (IsRouterPlannable(query, plannerRestrictionContext))
 	{
 		return false;
@@ -403,11 +402,8 @@ GetAllUniqueIndexes(Form_pg_index indexForm, List **uniqueIndexes)
  */
 static List *
 RequiredAttrNumbersForRelation(RangeTblEntry *relationRte,
-							   RecursivePlanningContext *planningContext)
+							   PlannerRestrictionContext *plannerRestrictionContext)
 {
-	PlannerRestrictionContext *plannerRestrictionContext =
-		planningContext->plannerRestrictionContext;
-
 	/* TODO: Get rid of this hack, find relation restriction information directly */
 	PlannerRestrictionContext *filteredPlannerRestrictionContext =
 		FilterPlannerRestrictionForQuery(plannerRestrictionContext,
@@ -454,7 +450,7 @@ RequiredAttrNumbersForRelation(RangeTblEntry *relationRte,
  * be converted to a subquery so that citus planners can work.
  */
 static ConversionCandidates *
-CreateConversionCandidates(RecursivePlanningContext *context,
+CreateConversionCandidates(PlannerRestrictionContext *plannerRestrictionContext,
 						   List *rangeTableList, Oid resultRelationId)
 {
 	ConversionCandidates *conversionCandidates = palloc0(
@@ -488,11 +484,9 @@ CreateConversionCandidates(RecursivePlanningContext *context,
 		rangeTableEntryDetails->rangeTableEntry = rangeTableEntry;
 		rangeTableEntryDetails->rteIndex = rteIndex;
 		rangeTableEntryDetails->restrictionList = GetRestrictInfoListForRelation(
-			rangeTableEntry,
-			context->
-			plannerRestrictionContext, 1);
+			rangeTableEntry, plannerRestrictionContext, 1);
 		rangeTableEntryDetails->requiredAttributeNumbers = RequiredAttrNumbersForRelation(
-			rangeTableEntry, context);
+			rangeTableEntry, plannerRestrictionContext);
 
 		if (referenceOrDistributedTable)
 		{
