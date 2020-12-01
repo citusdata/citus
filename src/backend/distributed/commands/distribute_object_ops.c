@@ -400,6 +400,13 @@ static DistributeObjectOps Schema_Grant = {
 	.postprocess = NULL,
 	.address = NULL,
 };
+static DistributeObjectOps Schema_Rename = {
+	.deparse = DeparseAlterSchemaRenameStmt,
+	.qualify = NULL,
+	.preprocess = PreprocessAlterSchemaRenameStmt,
+	.postprocess = NULL,
+	.address = AlterSchemaRenameStmtObjectAddress,
+};
 static DistributeObjectOps Table_AlterTable = {
 	.deparse = NULL,
 	.qualify = NULL,
@@ -869,6 +876,11 @@ GetDistributeObjectOps(Node *node)
 				case OBJECT_ROUTINE:
 				{
 					return &Routine_Rename;
+				}
+
+				case OBJECT_SCHEMA:
+				{
+					return &Schema_Rename;
 				}
 
 				case OBJECT_TYPE:

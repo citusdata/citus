@@ -21,6 +21,7 @@ static void AppendGrantOnSchemaStmt(StringInfo buf, GrantStmt *stmt);
 static void AppendGrantOnSchemaPrivileges(StringInfo buf, GrantStmt *stmt);
 static void AppendGrantOnSchemaSchemas(StringInfo buf, GrantStmt *stmt);
 static void AppendGrantOnSchemaGrantees(StringInfo buf, GrantStmt *stmt);
+static void AppendAlterSchemaRenameStmt(StringInfo buf, RenameStmt *stmt);
 
 char *
 DeparseGrantOnSchemaStmt(Node *node)
@@ -32,6 +33,20 @@ DeparseGrantOnSchemaStmt(Node *node)
 	initStringInfo(&str);
 
 	AppendGrantOnSchemaStmt(&str, stmt);
+
+	return str.data;
+}
+
+
+char *
+DeparseAlterSchemaRenameStmt(Node *node)
+{
+	RenameStmt *stmt = castNode(RenameStmt, node);
+
+	StringInfoData str = { 0 };
+	initStringInfo(&str);
+
+	AppendAlterSchemaRenameStmt(&str, stmt);
 
 	return str.data;
 }
@@ -130,4 +145,13 @@ AppendGrantOnSchemaGrantees(StringInfo buf, GrantStmt *stmt)
 			appendStringInfo(buf, ", ");
 		}
 	}
+}
+
+
+static void
+AppendAlterSchemaRenameStmt(StringInfo buf, RenameStmt *stmt)
+{
+	Assert(stmt->renameType == OBJECT_SCHEMA);
+
+	appendStringInfo(buf, "ALTER SCHEMA %s RENAME TO %s;", stmt->subname, stmt->newname);
 }
