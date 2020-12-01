@@ -106,7 +106,6 @@ static void CStoreTableAMProcessUtility(PlannedStmt *plannedStatement,
 										char *completionTag);
 #endif
 
-static bool IsCStoreTableAmTable(Oid relationId);
 static bool ConditionalLockRelationWithTimeout(Relation rel, LOCKMODE lockMode,
 											   int timeout, int retryInterval);
 static void LogRelationStats(Relation rel, int elevel);
@@ -542,26 +541,30 @@ cstore_relation_set_new_filenode(Relation rel,
 	MarkRelfilenodeDropped(oldRelfilenode, GetCurrentSubTransactionId());
 
 	/* delete old relfilenode metadata */
-	DeleteDataFileMetadataRowIfExists(rel->rd_node.relNode);
+	DeleteMetadataRows(rel->rd_node);
 
 	Assert(persistence == RELPERSISTENCE_PERMANENT);
 	*freezeXid = RecentXmin;
 	*minmulti = GetOldestMultiXactId();
 	SMgrRelation srel = RelationCreateStorage(*newrnode, persistence);
-	InitCStoreDataFileMetadata(newrnode->relNode);
 
 	InitColumnarOptions(rel->rd_id);
 
 	smgrclose(srel);
+
+	/* we will lazily initialize metadata in first stripe reservation */
 }
 
 
 static void
 cstore_relation_nontransactional_truncate(Relation rel)
 {
-	Oid relfilenode = rel->rd_node.relNode;
+	RelFileNode relfilenode = rel->rd_node;
 
-	NonTransactionDropWriteState(relfilenode);
+	NonTransactionDropWriteState(relfilenode.relNode);
+
+	/* Delete old relfilenode metadata */
+	DeleteMetadataRows(relfilenode);
 
 	/*
 	 * No need to set new relfilenode, since the table was created in this
@@ -572,9 +575,7 @@ cstore_relation_nontransactional_truncate(Relation rel)
 	 */
 	RelationTruncate(rel, 0);
 
-	/* Delete old relfilenode metadata and recreate it */
-	DeleteDataFileMetadataRowIfExists(rel->rd_node.relNode);
-	InitCStoreDataFileMetadata(rel->rd_node.relNode);
+	/* we will lazily initialize new metadata in first stripe reservation */
 }
 
 
@@ -673,11 +674,14 @@ cstore_vacuum_rel(Relation rel, VacuumParams *params,
 }
 
 
+/*
+ * LogRelationStats logs statistics as the output of the VACUUM VERBOSE.
+ */
 static void
 LogRelationStats(Relation rel, int elevel)
 {
 	ListCell *stripeMetadataCell = NULL;
-	Oid relfilenode = rel->rd_node.relNode;
+	RelFileNode relfilenode = rel->rd_node;
 	StringInfo infoBuf = makeStringInfo();
 
 	int compressionStats[COMPRESSION_COUNT] = { 0 };
@@ -687,10 +691,10 @@ LogRelationStats(Relation rel, int elevel)
 	TupleDesc tupdesc = RelationGetDescr(rel);
 	uint64 droppedBlocksWithData = 0;
 
-	DataFileMetadata *datafileMetadata = ReadDataFileMetadata(relfilenode, false);
-	int stripeCount = list_length(datafileMetadata->stripeMetadataList);
+	List *stripeList = StripesForRelfilenode(relfilenode);
+	int stripeCount = list_length(stripeList);
 
-	foreach(stripeMetadataCell, datafileMetadata->stripeMetadataList)
+	foreach(stripeMetadataCell, stripeList)
 	{
 		StripeMetadata *stripe = lfirst(stripeMetadataCell);
 		StripeSkipList *skiplist = ReadStripeSkipList(relfilenode, stripe->id,
@@ -726,6 +730,10 @@ LogRelationStats(Relation rel, int elevel)
 	uint64 relPages = smgrnblocks(rel->rd_smgr, MAIN_FORKNUM);
 	RelationCloseSmgr(rel);
 
+	Datum storageId = DirectFunctionCall1(columnar_relation_storageid,
+										  ObjectIdGetDatum(RelationGetRelid(rel)));
+
+	appendStringInfo(infoBuf, "storage id: %ld\n", DatumGetInt64(storageId));
 	appendStringInfo(infoBuf, "total file size: %ld, total data size: %ld\n",
 					 relPages * BLCKSZ, totalStripeLength);
 	appendStringInfo(infoBuf,
@@ -803,7 +811,7 @@ TruncateCStore(Relation rel, int elevel)
 	 * we're truncating.
 	 */
 	SmgrAddr highestPhysicalAddress =
-		logical_to_smgr(GetHighestUsedAddress(rel->rd_node.relNode));
+		logical_to_smgr(GetHighestUsedAddress(rel->rd_node));
 
 	BlockNumber new_rel_pages = highestPhysicalAddress.blockno + 1;
 	if (new_rel_pages == old_rel_pages)
@@ -1171,11 +1179,11 @@ CStoreTableAMObjectAccessHook(ObjectAccessType access, Oid classId, Oid objectId
 		 * tableam tables storage is managed by postgres.
 		 */
 		Relation rel = table_open(objectId, AccessExclusiveLock);
-		Oid relfilenode = rel->rd_node.relNode;
-		DeleteDataFileMetadataRowIfExists(relfilenode);
+		RelFileNode relfilenode = rel->rd_node;
+		DeleteMetadataRows(relfilenode);
 		DeleteColumnarTableOptions(rel->rd_id, true);
 
-		MarkRelfilenodeDropped(relfilenode, GetCurrentSubTransactionId());
+		MarkRelfilenodeDropped(relfilenode.relNode, GetCurrentSubTransactionId());
 
 		/* keep the lock since we did physical changes to the relation */
 		table_close(rel, NoLock);
@@ -1187,7 +1195,7 @@ CStoreTableAMObjectAccessHook(ObjectAccessType access, Oid classId, Oid objectId
  * IsCStoreTableAmTable returns true if relation has cstore_tableam
  * access method. This can be called before extension creation.
  */
-static bool
+bool
 IsCStoreTableAmTable(Oid relationId)
 {
 	if (!OidIsValid(relationId))

@@ -215,15 +215,15 @@ static Cost
 CStoreScanCost(RangeTblEntry *rte)
 {
 	Relation rel = RelationIdGetRelation(rte->relid);
-	DataFileMetadata *metadata = ReadDataFileMetadata(rel->rd_node.relNode, false);
+	List *stripeList = StripesForRelfilenode(rel->rd_node);
+	RelationClose(rel);
+
 	uint32 maxColumnCount = 0;
 	uint64 totalStripeSize = 0;
 	ListCell *stripeMetadataCell = NULL;
-
-	RelationClose(rel);
 	rel = NULL;
 
-	foreach(stripeMetadataCell, metadata->stripeMetadataList)
+	foreach(stripeMetadataCell, stripeList)
 	{
 		StripeMetadata *stripeMetadata = (StripeMetadata *) lfirst(stripeMetadataCell);
 		totalStripeSize += stripeMetadata->dataLength;

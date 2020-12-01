@@ -65,20 +65,15 @@ SELECT * FROM t_view a ORDER BY a;
 (6 rows)
 
 -- verify that we have created metadata entries for the materialized view
-SELECT relfilenode FROM pg_class WHERE relname='t_view' \gset
-SELECT count(*) FROM cstore.cstore_data_files WHERE relfilenode=:relfilenode;
+SELECT columnar_relation_storageid(oid) AS storageid
+FROM pg_class WHERE relname='t_view' \gset
+SELECT count(*) FROM cstore.cstore_stripes WHERE storageid=:storageid;
  count
 ---------------------------------------------------------------------
      1
 (1 row)
 
-SELECT count(*) FROM cstore.cstore_stripes WHERE relfilenode=:relfilenode;
- count
----------------------------------------------------------------------
-     1
-(1 row)
-
-SELECT count(*) FROM cstore.cstore_skipnodes WHERE relfilenode=:relfilenode;
+SELECT count(*) FROM cstore.cstore_skipnodes WHERE storageid=:storageid;
  count
 ---------------------------------------------------------------------
      3
@@ -87,19 +82,13 @@ SELECT count(*) FROM cstore.cstore_skipnodes WHERE relfilenode=:relfilenode;
 DROP TABLE t CASCADE;
 NOTICE:  drop cascades to materialized view t_view
 -- dropping must remove metadata
-SELECT count(*) FROM cstore.cstore_data_files WHERE relfilenode=:relfilenode;
+SELECT count(*) FROM cstore.cstore_stripes WHERE storageid=:storageid;
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
-SELECT count(*) FROM cstore.cstore_stripes WHERE relfilenode=:relfilenode;
- count
----------------------------------------------------------------------
-     0
-(1 row)
-
-SELECT count(*) FROM cstore.cstore_skipnodes WHERE relfilenode=:relfilenode;
+SELECT count(*) FROM cstore.cstore_skipnodes WHERE storageid=:storageid;
  count
 ---------------------------------------------------------------------
      0
