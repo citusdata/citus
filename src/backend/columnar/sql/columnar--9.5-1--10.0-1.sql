@@ -42,7 +42,7 @@ CREATE TABLE cstore_skipnodes (
     exists_stream_length bigint NOT NULL,
     value_compression_type int NOT NULL,
     PRIMARY KEY (storageid, stripe, attr, block),
-    FOREIGN KEY (storageid, stripe) REFERENCES cstore_stripes(storageid, stripe) ON DELETE CASCADE INITIALLY DEFERRED
+    FOREIGN KEY (storageid, stripe) REFERENCES cstore_stripes(storageid, stripe) ON DELETE CASCADE
 ) WITH (user_catalog_table = true);
 
 COMMENT ON TABLE cstore_skipnodes IS 'CStore per block metadata';
