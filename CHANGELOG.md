@@ -1,3 +1,15 @@
+### citus v9.5.1 (December 1, 2020) ###
+
+* Enables PostgreSQL's parallel queries on EXPLAIN ANALYZE
+
+* Fixes a bug that could cause excessive memory consumption when a partition is
+  created
+
+* Fixes a bug that triggers subplan executions unnecessarily with cursors
+
+* Fixes a segfault in connection management due to invalid connection hash
+  entries
+
 ### citus v9.5.0 (November 10, 2020) ###
 
 * Adds support for PostgreSQL 13
