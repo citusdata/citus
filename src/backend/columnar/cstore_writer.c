@@ -112,7 +112,7 @@ CStoreBeginWrite(RelFileNode relfilenode,
 	writeState->stripeWriteContext = stripeWriteContext;
 	writeState->blockData = blockData;
 	writeState->compressionBuffer = NULL;
-	writeState->perTupleContext = AllocSetContextCreate(stripeWriteContext,
+	writeState->perTupleContext = AllocSetContextCreate(CurrentMemoryContext,
 														"CStore per tuple context",
 														ALLOCSET_DEFAULT_SIZES);
 
