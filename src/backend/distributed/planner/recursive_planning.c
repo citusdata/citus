@@ -1476,7 +1476,8 @@ IsRecursivelyPlannableRelation(RangeTblEntry *rangeTableEntry)
 		return false;
 	}
 	return rangeTableEntry->relkind == RELKIND_PARTITIONED_TABLE ||
-		   rangeTableEntry->relkind == RELKIND_RELATION;
+		   rangeTableEntry->relkind == RELKIND_RELATION ||
+		   rangeTableEntry->relkind == RELKIND_MATVIEW;
 }
 
 
@@ -1505,8 +1506,7 @@ ContainsLocalTableDistributedTableJoin(List *rangeTableList)
 		{
 			containsDistributedTable = true;
 		}
-		else if (IsCitusTableType(rangeTableEntry->relid, CITUS_LOCAL_TABLE) ||
-				 !IsCitusTable(rangeTableEntry->relid))
+		else if (IsLocalTableRteOrMatView((Node*) rangeTableEntry))
 		{
 			/* we consider citus local tables as local table */
 			containsLocalTable = true;
@@ -1542,7 +1542,7 @@ ContainsLocalTableSubqueryJoin(List *rangeTableList, Oid resultRelationId)
 			continue;
 		}
 
-		if (!IsCitusTable(rangeTableEntry->relid) && rangeTableEntry->relid != resultRelationId)
+		if (IsLocalTableRteOrMatView((Node*) rangeTableEntry) && rangeTableEntry->relid != resultRelationId)
 		{
 			containsLocalTable = true;
 		}

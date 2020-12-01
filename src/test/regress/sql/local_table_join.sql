@@ -26,6 +26,10 @@ CREATE TABLE local_partitioned_table_2 PARTITION OF local_partitioned_table FOR 
 CREATE TABLE distributed_table_composite (key int, value text, value_2 jsonb, primary key (key, value));
 SELECT create_distributed_table('distributed_table_composite', 'key');
 
+CREATE MATERIALIZED VIEW mv1 AS SELECT * FROM postgres_table;
+CREATE MATERIALIZED VIEW mv2 AS SELECT * FROM distributed_table;
+
+
 SET client_min_messages TO DEBUG1;
 
 
@@ -61,6 +65,16 @@ SELECT count(*) FROM distributed_table JOIN postgres_table USING(key) JOIN refer
 SELECT count(*) FROM distributed_table JOIN local_partitioned_table USING(key);
 SELECT count(*) FROM reference_table JOIN local_partitioned_table USING(key);
 SELECT count(*) FROM distributed_table JOIN local_partitioned_table USING(key) JOIN reference_table USING (key);
+
+-- materialized views should work too
+SELECT count(*) FROM distributed_table JOIN mv1 USING(key);
+SELECT count(*) FROM (SELECT * FROM distributed_table) d1 JOIN mv1 USING(key);
+SELECT count(*) FROM reference_table JOIN mv1 USING(key);
+SELECT count(*) FROM distributed_table JOIN mv1 USING(key) JOIN reference_table USING (key);
+SELECT count(*) FROM distributed_table JOIN mv2 USING(key);
+SELECT count(*) FROM (SELECT * FROM distributed_table) d1 JOIN mv2 USING(key);
+SELECT count(*) FROM reference_table JOIN mv2 USING(key);
+SELECT count(*) FROM distributed_table JOIN mv2 USING(key) JOIN reference_table USING (key);
 
 -- partitioned tables should work as well
 SELECT count(*) FROM distributed_partitioned_table JOIN postgres_table USING(key);
