@@ -153,5 +153,6 @@ AppendAlterSchemaRenameStmt(StringInfo buf, RenameStmt *stmt)
 {
 	Assert(stmt->renameType == OBJECT_SCHEMA);
 
-	appendStringInfo(buf, "ALTER SCHEMA %s RENAME TO %s;", stmt->subname, stmt->newname);
+	appendStringInfo(buf, "ALTER SCHEMA %s RENAME TO %s;",
+					 quote_identifier(stmt->subname), quote_identifier(stmt->newname));
 }

@@ -991,9 +991,36 @@ DELETE FROM "CiTuS.TeeN"."TeeNTabLE.1!?!" WHERE "TeNANt_Id"=1;
 -- Some more DDL
 ALTER TABLE "CiTuS.TeeN"."TeeNTabLE.1!?!" ADD CONSTRAINT "ConsNAmE<>" PRIMARY KEY ("TeNANt_Id");
 
+-- test schema rename propagation
+CREATE SCHEMA foo;
+CREATE TABLE foo.test (x int, y int);
+SELECT create_distributed_table('foo.test', 'x');
+INSERT INTO foo.test VALUES (1, 1), (2, 2);
+ALTER SCHEMA foo rename to bar;
+SELECT COUNT(*) FROM bar.test;
+
+-- test propagation with weird name
+ALTER SCHEMA "CiTuS.TeeN" RENAME TO "Citus'Teen123";
+SELECT * FROM "Citus'Teen123"."TeeNTabLE.1!?!" ORDER BY id;
+
+-- test error
+INSERT INTO bar.test VALUES (3,3), (4,4), (5,5), (6,6), (7,7), (8,8), (9,9);
+
+BEGIN;
+    SELECT COUNT(*) FROM bar.test;
+    ALTER SCHEMA bar RENAME TO foo;
+ROLLBACK;
+
+BEGIN;
+    SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
+    SELECT COUNT(*) FROM bar.test;
+    ALTER SCHEMA bar RENAME TO foo;
+ROLLBACK;
+
 -- Clean up the created schema
 DROP SCHEMA run_test_schema CASCADE;
 DROP SCHEMA test_schema_support_join_1 CASCADE;
 DROP SCHEMA test_schema_support_join_2 CASCADE;
-DROP SCHEMA "CiTuS.TeeN" CASCADE;
+DROP SCHEMA "Citus'Teen123" CASCADE;
 DROP SCHEMA "CiTUS.TEEN2" CASCADE;
+DROP SCHEMA bar CASCADE;

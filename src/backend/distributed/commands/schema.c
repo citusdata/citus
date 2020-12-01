@@ -174,6 +174,9 @@ PreprocessAlterSchemaRenameStmt(Node *node, const char *queryString)
 		return NIL;
 	}
 
+	/* fully qualify */
+	QualifyTreeNode(node);
+
 	/* deparse sql*/
 	const char *renameStmtSql = DeparseTreeNode(node);
 
@@ -262,7 +265,7 @@ EnsureSequentialModeForSchemaDDL(void)
 
 	if (ParallelQueryExecutedInTransaction())
 	{
-		ereport(ERROR, (errmsg("cannot create or modify type because there was a "
+		ereport(ERROR, (errmsg("cannot create or modify schema because there was a "
 							   "parallel operation on a distributed table in the "
 							   "transaction"),
 						errdetail("When creating or altering a schema, Citus needs to "
