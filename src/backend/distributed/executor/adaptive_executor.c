@@ -581,7 +581,6 @@ static TransactionProperties DecideTransactionPropertiesForTaskList(RowModifyLev
 static void StartDistributedExecution(DistributedExecution *execution);
 static void RunLocalExecution(CitusScanState *scanState, DistributedExecution *execution);
 static void RunDistributedExecution(DistributedExecution *execution);
-static bool ShouldRunTasksSequentially(List *taskList);
 static void SequentialRunDistributedExecution(DistributedExecution *execution);
 
 static void FinishDistributedExecution(DistributedExecution *execution);
@@ -2105,7 +2104,7 @@ FindOrCreateWorkerSession(WorkerPool *workerPool, MultiConnection *connection)
  * true sequential execution, concurrent multi-row upserts could easily form
  * a distributed deadlock when the upserts touch the same rows.
  */
-static bool
+bool
 ShouldRunTasksSequentially(List *taskList)
 {
 	if (list_length(taskList) < 2)
