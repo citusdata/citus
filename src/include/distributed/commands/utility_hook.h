@@ -17,6 +17,7 @@
 #include "utils/relcache.h"
 #include "tcop/utility.h"
 
+#include "distributed/coordinator_protocol.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_transaction.h"
 
@@ -75,5 +76,9 @@ extern List * DDLTaskList(Oid relationId, const char *commandString);
 extern List * NodeDDLTaskList(TargetWorkerSet targets, List *commands);
 extern bool AlterTableInProgress(void);
 extern bool DropSchemaOrDBInProgress(void);
+extern void ExecuteDistributedDDLJob(DDLJob *ddlJob);
+
+/* forward declarations for sending custom commands to a distributed table */
+extern DDLJob * CreateCustomDDLTaskList(Oid relationId, TableDDLCommand *command);
 
 #endif /* MULTI_UTILITY_H */

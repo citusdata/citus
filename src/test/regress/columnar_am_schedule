@@ -1,3 +1,7 @@
+test: multi_cluster_management
+test: multi_test_helpers multi_test_helpers_superuser
+test: multi_test_catalog_views
+
 test: am_create
 test: am_load
 test: am_query
@@ -20,3 +24,4 @@ test: am_recursive
 test: am_transactions
 test: am_matview
 test: am_memory
+test: columnar_citus_integration

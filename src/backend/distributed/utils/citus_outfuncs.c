@@ -115,6 +115,10 @@
 	(appendStringInfo(str, " :" CppAsString(fldname) " "), \
 	 _outBitmapset(str, node->fldname))
 
+#define WRITE_CUSTOM_FIELD(fldname, fldvalue) \
+	(appendStringInfo(str, " :" CppAsString(fldname) " "), \
+	appendStringInfoString(str, (fldvalue)))
+
 
 /* Write an integer array (anything written as ":fldname (%d, %d") */
 #define WRITE_INT_ARRAY(fldname, count) \
@@ -578,6 +582,13 @@ OutTableDDLCommand(OUTFUNC_ARGS)
 		case TABLE_DDL_COMMAND_STRING:
 		{
 			WRITE_STRING_FIELD(commandStr);
+			break;
+		}
+
+		case TABLE_DDL_COMMAND_FUNCTION:
+		{
+			char *example = node->function.function(node->function.context);
+			WRITE_CUSTOM_FIELD(function, example);
 			break;
 		}
 	}
