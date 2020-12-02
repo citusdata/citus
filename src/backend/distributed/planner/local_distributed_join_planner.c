@@ -60,7 +60,7 @@ typedef struct RangeTableEntryDetails
 	Index rteIndex;
 	List *restrictionList;
 	List *requiredAttributeNumbers;
-	bool hasUniqueIndex;
+	bool hasConstantFilterOnUniqueColumn;
 } RangeTableEntryDetails;
 
 typedef struct ConversionCandidates
@@ -69,13 +69,13 @@ typedef struct ConversionCandidates
 	List *localTableList; /* local or citus local table */
 }ConversionCandidates;
 
-static Oid GetResultRelationId(Query *query);
 static bool ShouldConvertLocalTableJoinsToSubqueries(Query *query, List *rangeTableList,
 													 Oid resultRelationId,
 													 PlannerRestrictionContext *
 													 plannerRestrictionContext);
-static bool HasUniqueIndex(FromExpr *joinTree,
-						   RangeTblEntry *rangeTableEntry, Index rteIndex);
+static bool HasConstantFilterOnUniqueColumn(FromExpr *joinTree,
+											RangeTblEntry *rangeTableEntry, Index
+											rteIndex);
 static List * RequiredAttrNumbersForRelation(RangeTblEntry *relationRte,
 											 PlannerRestrictionContext *
 											 plannerRestrictionContext);
@@ -113,7 +113,12 @@ ConvertUnplannableTableJoinsToSubqueries(Query *query,
 	GetRangeTableEntriesFromJoinTree((Node *) query->jointree, query->rtable,
 									 &rangeTableList);
 
-	Oid resultRelationId = GetResultRelationId(query);
+	Oid resultRelationId = InvalidOid;
+	if (IsModifyCommand(query))
+	{
+		resultRelationId = ModifyQueryResultRelationId(query);
+	}
+
 	if (!ShouldConvertLocalTableJoinsToSubqueries(query, rangeTableList, resultRelationId,
 												  plannerRestrictionContext))
 	{
@@ -125,7 +130,7 @@ ConvertUnplannableTableJoinsToSubqueries(Query *query,
 
 	RangeTableEntryDetails *rangeTableEntryDetails =
 		GetNextRTEToConvertToSubquery(query->jointree, conversionCandidates,
-									  context->plannerRestrictionContext,
+									  plannerRestrictionContext,
 									  resultRelationId);
 
 	while (ShouldConvertLocalTableJoinsToSubqueries(query, rangeTableList,
@@ -135,35 +140,17 @@ ConvertUnplannableTableJoinsToSubqueries(Query *query,
 		ReplaceRTERelationWithRteSubquery(
 			rangeTableEntryDetails->rangeTableEntry,
 			rangeTableEntryDetails->restrictionList,
-			rangeTableEntryDetails->
-			requiredAttributeNumbers,
+			rangeTableEntryDetails->requiredAttributeNumbers,
 			context);
-		RemoveFromConversionCandidates(conversionCandidates,
-									   rangeTableEntryDetails->
-									   rangeTableEntry->relid);
+		RemoveFromConversionCandidates(
+			conversionCandidates,
+			rangeTableEntryDetails->rangeTableEntry->relid);
 
 		rangeTableEntryDetails =
 			GetNextRTEToConvertToSubquery(query->jointree, conversionCandidates,
-										  context->plannerRestrictionContext,
+										  plannerRestrictionContext,
 										  resultRelationId);
 	}
-}
-
-
-/*
- * GetResultRelationId gets the result relation id from query
- * if it exists.
- */
-static Oid
-GetResultRelationId(Query *query)
-{
-	RangeTblEntry *resultRelation = ExtractResultRelationRTE(query);
-	Oid resultRelationId = InvalidOid;
-	if (resultRelation)
-	{
-		resultRelationId = resultRelation->relid;
-	}
-	return resultRelationId;
 }
 
 
@@ -269,7 +256,7 @@ AllRangeTableEntriesHaveUniqueIndex(List *rangeTableEntryDetailsList)
 	RangeTableEntryDetails *rangeTableEntryDetails = NULL;
 	foreach_ptr(rangeTableEntryDetails, rangeTableEntryDetailsList)
 	{
-		if (!rangeTableEntryDetails->hasUniqueIndex)
+		if (!rangeTableEntryDetails->hasConstantFilterOnUniqueColumn)
 		{
 			return false;
 		}
@@ -329,11 +316,12 @@ ShouldConvertLocalTableJoinsToSubqueries(Query *query, List *rangeTableList,
 
 
 /*
- * HasUniqueIndex returns true if the given rangeTableEntry has a constant
+ * HasConstantFilterOnUniqueColumn returns true if the given rangeTableEntry has a constant
  * filter on a unique column.
  */
 static bool
-HasUniqueIndex(FromExpr *joinTree, RangeTblEntry *rangeTableEntry, Index rteIndex)
+HasConstantFilterOnUniqueColumn(FromExpr *joinTree, RangeTblEntry *rangeTableEntry, Index
+								rteIndex)
 {
 	if (rangeTableEntry == NULL)
 	{
@@ -348,8 +336,8 @@ HasUniqueIndex(FromExpr *joinTree, RangeTblEntry *rangeTableEntry, Index rteInde
 		if (IsA(join, JoinExpr))
 		{
 			JoinExpr *joinExpr = (JoinExpr *) join;
-			List *joinExprEqualityQuals = FetchEqualityAttrNumsForRTEFromQuals(
-				joinExpr->quals, rteIndex);
+			List *joinExprEqualityQuals =
+				FetchEqualityAttrNumsForRTEFromQuals(joinExpr->quals, rteIndex);
 			rteEqualityQuals = list_concat(rteEqualityQuals, joinExprEqualityQuals);
 		}
 	}
@@ -483,9 +471,10 @@ CreateConversionCandidates(FromExpr *joinTree,
 			rangeTableEntry, plannerRestrictionContext, 1);
 		rangeTableEntryDetails->requiredAttributeNumbers = RequiredAttrNumbersForRelation(
 			rangeTableEntry, plannerRestrictionContext);
-		rangeTableEntryDetails->hasUniqueIndex = HasUniqueIndex(joinTree,
-																rangeTableEntry,
-																rteIndex);
+		rangeTableEntryDetails->hasConstantFilterOnUniqueColumn =
+			HasConstantFilterOnUniqueColumn(joinTree,
+											rangeTableEntry,
+											rteIndex);
 
 		if (referenceOrDistributedTable)
 		{

@@ -185,6 +185,7 @@ static Query * BuildReadIntermediateResultsQuery(List *targetEntryList,
 												 List *columnAliasList,
 												 Const *resultIdConst, Oid functionOid,
 												 bool useBinaryCopyFormat);
+static void UpdateVarNosInQualForSubquery(Node *node);
 
 /*
  * GenerateSubplansForSubqueriesAndCTEs is a wrapper around RecursivelyPlanSubqueriesAndCTEs.
@@ -1360,6 +1361,7 @@ ReplaceRTERelationWithRteSubquery(RangeTblEntry *rangeTableEntry, List *restrict
 	Query *subquery = WrapRteRelationIntoSubquery(rangeTableEntry, requiredAttrNumbers);
 	Expr *andedBoundExpressions = make_ands_explicit(restrictionList);
 	subquery->jointree->quals = (Node *) andedBoundExpressions;
+	UpdateVarNosInQualForSubquery(subquery->jointree->quals);
 
 	/* force recursively planning of the newly created subquery */
 	subquery->limitOffset = (Node *) MakeIntegerConst(0);
@@ -1379,13 +1381,56 @@ ReplaceRTERelationWithRteSubquery(RangeTblEntry *rangeTableEntry, List *restrict
 	{
 		StringInfo subqueryString = makeStringInfo();
 
-		pg_get_query_def(subquery, subqueryString);
+		pg_get_query_def(subquery,
+						 subqueryString);
 
 		ereport(DEBUG1, (errmsg("Wrapping local relation \"%s\" to a subquery: %s ",
 								get_rel_name(rangeTableEntry->relid),
 								ApplyLogRedaction(subqueryString->data))));
 	}
 	RecursivelyPlanSubquery(rangeTableEntry->subquery, context);
+}
+
+
+/*
+ * UpdateVarNosInQualForSubquery iterates the Vars in the
+ * given quals node and updates the varno's as 1 as there
+ * will be only one RTE in rtable, which is the subquery.
+ */
+static void
+UpdateVarNosInQualForSubquery(Node *node)
+{
+	if (node == NULL)
+	{
+		return;
+	}
+
+	if (IsA(node, Var))
+	{
+		Var *var = (Var *) node;
+
+		/* we update the varno as 1 as there is only one subquery */
+		var->varno = 1;
+	}
+	else if (IsA(node, OpExpr))
+	{
+		OpExpr *opExpr = (OpExpr *) node;
+		Var *leftColumn = LeftColumnOrNULL(opExpr);
+		Var *rightColumn = RightColumnOrNULL(opExpr);
+		UpdateVarNosInQualForSubquery((Node *) leftColumn);
+		UpdateVarNosInQualForSubquery((Node *) rightColumn);
+	}
+	else if (IsA(node, BoolExpr))
+	{
+		BoolExpr *boolExpr = (BoolExpr *) node;
+		List *argumentList = boolExpr->args;
+
+		Node *arg = NULL;
+		foreach_ptr(arg, argumentList)
+		{
+			UpdateVarNosInQualForSubquery(arg);
+		}
+	}
 }
 
 
