@@ -49,6 +49,16 @@ SELECT create_distributed_table('distributed_table_composite', 'key');
 
 (1 row)
 
+CREATE FUNCTION fake_fdw_handler()
+RETURNS fdw_handler
+AS 'citus'
+LANGUAGE C STRICT;
+CREATE FOREIGN DATA WRAPPER fake_fdw HANDLER fake_fdw_handler;
+CREATE SERVER fake_fdw_server FOREIGN DATA WRAPPER fake_fdw;
+CREATE FOREIGN TABLE foreign_table (
+  key int,
+  value text
+) SERVER fake_fdw_server OPTIONS (encoding 'utf-8', compression 'true');
 CREATE MATERIALIZED VIEW mv1 AS SELECT * FROM postgres_table;
 CREATE MATERIALIZED VIEW mv2 AS SELECT * FROM distributed_table;
 SET client_min_messages TO DEBUG1;
@@ -229,6 +239,16 @@ SELECT count(*) FROM distributed_table JOIN mv2 USING(key) JOIN reference_table 
 DEBUG:  Wrapping local relation "mv2" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.mv2 WHERE true OFFSET 0
 DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.mv2 WHERE true OFFSET 0
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((local_table_join.distributed_table JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) mv2 USING (key)) JOIN local_table_join.reference_table USING (key))
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+-- foreign tables should work too
+SELECT count(*) FROM foreign_table JOIN distributed_table USING(key);
+DEBUG:  Wrapping local relation "foreign_table" to a subquery: SELECT key, NULL::text AS value FROM local_table_join.foreign_table WHERE true OFFSET 0
+DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value FROM local_table_join.foreign_table WHERE true OFFSET 0
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) foreign_table JOIN local_table_join.distributed_table USING (key))
  count
 ---------------------------------------------------------------------
      0
@@ -1083,4 +1103,4 @@ SELECT master_remove_node('localhost', :master_port);
 
 \set VERBOSITY terse
 DROP SCHEMA local_table_join CASCADE;
-NOTICE:  drop cascades to 11 other objects
+NOTICE:  drop cascades to 15 other objects

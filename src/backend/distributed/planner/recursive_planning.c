@@ -1522,7 +1522,8 @@ IsRecursivelyPlannableRelation(RangeTblEntry *rangeTableEntry)
 	}
 	return rangeTableEntry->relkind == RELKIND_PARTITIONED_TABLE ||
 		   rangeTableEntry->relkind == RELKIND_RELATION ||
-		   rangeTableEntry->relkind == RELKIND_MATVIEW;
+		   rangeTableEntry->relkind == RELKIND_MATVIEW ||
+		   rangeTableEntry->relkind == RELKIND_FOREIGN_TABLE;
 }
 
 

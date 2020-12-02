@@ -26,6 +26,18 @@ CREATE TABLE local_partitioned_table_2 PARTITION OF local_partitioned_table FOR 
 CREATE TABLE distributed_table_composite (key int, value text, value_2 jsonb, primary key (key, value));
 SELECT create_distributed_table('distributed_table_composite', 'key');
 
+CREATE FUNCTION fake_fdw_handler()
+RETURNS fdw_handler
+AS 'citus'
+LANGUAGE C STRICT;
+CREATE FOREIGN DATA WRAPPER fake_fdw HANDLER fake_fdw_handler;
+CREATE SERVER fake_fdw_server FOREIGN DATA WRAPPER fake_fdw;
+
+CREATE FOREIGN TABLE foreign_table (
+  key int,
+  value text
+) SERVER fake_fdw_server OPTIONS (encoding 'utf-8', compression 'true');
+
 CREATE MATERIALIZED VIEW mv1 AS SELECT * FROM postgres_table;
 CREATE MATERIALIZED VIEW mv2 AS SELECT * FROM distributed_table;
 
@@ -75,6 +87,9 @@ SELECT count(*) FROM distributed_table JOIN mv2 USING(key);
 SELECT count(*) FROM (SELECT * FROM distributed_table) d1 JOIN mv2 USING(key);
 SELECT count(*) FROM reference_table JOIN mv2 USING(key);
 SELECT count(*) FROM distributed_table JOIN mv2 USING(key) JOIN reference_table USING (key);
+
+-- foreign tables should work too
+SELECT count(*) FROM foreign_table JOIN distributed_table USING(key);
 
 -- partitioned tables should work as well
 SELECT count(*) FROM distributed_partitioned_table JOIN postgres_table USING(key);
