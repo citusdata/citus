@@ -1940,10 +1940,12 @@ SingleShardTaskList(Query *query, uint64 jobId, List *relationShardList,
 		RangeTblEntry *updateOrDeleteRTE = ExtractResultRelationRTE(query);
 		Assert(updateOrDeleteRTE != NULL);
 
-		CitusTableCacheEntry *modificationTableCacheEntry = GetCitusTableCacheEntry(
-			updateOrDeleteRTE->relid);
+		CitusTableCacheEntry *modificationTableCacheEntry = NULL;
+		if (IsCitusTable(updateOrDeleteRTE->relid)) {
+			modificationTableCacheEntry = GetCitusTableCacheEntry(updateOrDeleteRTE->relid);
+		}
 
-		if (IsCitusTableTypeCacheEntry(modificationTableCacheEntry, REFERENCE_TABLE) &&
+		if (IsCitusTableType(updateOrDeleteRTE->relid, REFERENCE_TABLE) &&
 			SelectsFromDistributedTable(rangeTableList, query))
 		{
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
@@ -1952,7 +1954,9 @@ SingleShardTaskList(Query *query, uint64 jobId, List *relationShardList,
 		}
 
 		taskType = MODIFY_TASK;
-		replicationModel = modificationTableCacheEntry->replicationModel;
+		if (modificationTableCacheEntry) {
+			replicationModel = modificationTableCacheEntry->replicationModel;
+		}
 	}
 
 	if (taskType == READ_TASK && query->hasModifyingCTE)

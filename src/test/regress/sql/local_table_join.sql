@@ -418,6 +418,10 @@ SELECT count(*) FROM postgres_table JOIN (SELECT * FROM (SELECT * FROM distribut
 UPDATE reference_table SET key = 1 FROM postgres_table WHERE postgres_table.key = 10;
 UPDATE reference_table SET key = 1 FROM (SELECT * FROM postgres_table) l WHERE l.key = 10;
 
+UPDATE citus_local SET key = 1 FROM postgres_table WHERE citus_local.key = 10; 
+UPDATE postgres_table SET key = 1 FROM citus_local WHERE citus_local.key = 10;
+
+
 -- TODO:: we should probably not wrap postgres_table here as there is a WHERE FALSE?
 -- though then the planner could give an error
 SELECT count(*) FROM postgres_table JOIN distributed_table USING(key) WHERE FALSE;

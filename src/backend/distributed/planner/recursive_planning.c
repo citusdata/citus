@@ -1453,10 +1453,8 @@ ContainsTableToBeConvertedToSubquery(List *rangeTableList, Oid resultRelationId)
 	{
 		return true;
 	}
-
 	return false;
 }
-
 
 /*
  * AllDataLocallyAccessible return true if all data for the relations in the
