@@ -285,7 +285,7 @@ extern StringInfo DecompressBuffer(StringInfo buffer, CompressionType compressio
 extern char * CompressionTypeStr(CompressionType type);
 
 /* cstore_metadata_tables.c */
-extern bool InitColumnarOptions(Oid regclass);
+extern void InitColumnarOptions(Oid regclass);
 extern void SetColumnarOptions(Oid regclass, ColumnarOptions *options);
 extern bool DeleteColumnarTableOptions(Oid regclass, bool missingOk);
 extern bool ReadColumnarOptions(Oid regclass, ColumnarOptions *options);

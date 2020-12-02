@@ -155,19 +155,26 @@ typedef FormData_cstore_options *Form_cstore_options;
 /*
  * InitColumnarOptions initialized the columnar table options. Meaning it writes the
  * default options to the options table if not already existing.
- *
- * The return value indicates if options have actually been written.
  */
-bool
+void
 InitColumnarOptions(Oid regclass)
 {
+	/*
+	 * When upgrading we retain options for all columnar tables by upgrading
+	 * "cstore.options" catalog table, so we shouldn't do anything here.
+	 */
+	if (IsBinaryUpgrade)
+	{
+		return;
+	}
+
 	ColumnarOptions defaultOptions = {
 		.blockRowCount = cstore_block_row_count,
 		.stripeRowCount = cstore_stripe_row_count,
 		.compressionType = cstore_compression,
 	};
 
-	return WriteColumnarOptions(regclass, &defaultOptions, false);
+	WriteColumnarOptions(regclass, &defaultOptions, false);
 }
 
 
@@ -194,6 +201,12 @@ SetColumnarOptions(Oid regclass, ColumnarOptions *options)
 static bool
 WriteColumnarOptions(Oid regclass, ColumnarOptions *options, bool overwrite)
 {
+	/*
+	 * When upgrading we should retain the options from the previous
+	 * cluster and don't write new options.
+	 */
+	Assert(!IsBinaryUpgrade);
+
 	bool written = false;
 
 	bool nulls[Natts_cstore_options] = { 0 };
@@ -271,6 +284,12 @@ bool
 DeleteColumnarTableOptions(Oid regclass, bool missingOk)
 {
 	bool result = false;
+
+	/*
+	 * When upgrading we shouldn't delete or modify table options and
+	 * retain options from the previous cluster.
+	 */
+	Assert(!IsBinaryUpgrade);
 
 	Relation columnarOptions = relation_open(ColumnarOptionsRelationId(),
 											 RowExclusiveLock);
@@ -720,6 +739,7 @@ ReadDataFileStripeList(uint64 storageId, Snapshot snapshot)
 				BTEqualStrategyNumber, F_OIDEQ, Int32GetDatum(storageId));
 
 	Oid cstoreStripesOid = CStoreStripesRelationId();
+
 	Relation cstoreStripes = heap_open(cstoreStripesOid, AccessShareLock);
 	Relation index = index_open(CStoreStripesIndexRelationId(), AccessShareLock);
 	TupleDesc tupleDescriptor = RelationGetDescr(cstoreStripes);
@@ -1125,6 +1145,13 @@ ReadMetapage(RelFileNode relfilenode, bool missingOk)
 static ColumnarMetapage *
 InitMetapage(Relation relation)
 {
+	/*
+	 * If we init metapage during upgrade, we might override the
+	 * pre-upgrade storage id which will render pre-upgrade data
+	 * invisible.
+	 */
+	Assert(!IsBinaryUpgrade);
+
 	ColumnarMetapage *metapage = palloc0(sizeof(ColumnarMetapage));
 	metapage->storageId = GetNextStorageId();
 	metapage->versionMajor = CSTORE_VERSION_MAJOR;
