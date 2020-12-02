@@ -225,6 +225,8 @@ jobs:
           name: 'Install and test postgres upgrade'
           command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext --target check-pg-upgrade --old-pg-version 11 --new-pg-version 12'
           no_output_timeout: 2m
+      - codecov/upload:
+          flags: 'test_11_12,upgrade'
 
   test-12-13_check-pg-upgrade:
     docker:
@@ -238,6 +240,8 @@ jobs:
           name: 'Install and test postgres upgrade'
           command: 'chown -R circleci:circleci /home/circleci && install-and-test-ext --target check-pg-upgrade --old-pg-version 12 --new-pg-version 13'
           no_output_timeout: 2m
+      - codecov/upload:
+          flags: 'test_12_13,upgrade'
 
   test-12_check-multi:
     docker:
