@@ -534,13 +534,13 @@ ROLLBACK;
 
 BEGIN;
 	WITH cte AS (UPDATE on_update_fkey_table SET value_1 = 16 WHERE value_1 = 15 RETURNING *)
-    SELECT * FROM cte;
+    SELECT * FROM cte ORDER BY 1, 2;
 	UPDATE reference_table SET id = 160 WHERE id = 15;
 ROLLBACK;
 
 BEGIN;
 	WITH cte AS (UPDATE on_update_fkey_table SET value_1 = 16 WHERE value_1 = 15 RETURNING *)
-    SELECT * FROM cte;
+    SELECT * FROM cte ORDER BY 1, 2;
 	UPDATE transitive_reference_table SET id = 160 WHERE id = 15;
 ROLLBACK;
 
