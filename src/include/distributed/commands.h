@@ -227,7 +227,8 @@ extern List * PreprocessDropSchemaStmt(Node *dropSchemaStatement,
 extern List * PreprocessAlterObjectSchemaStmt(Node *alterObjectSchemaStmt,
 											  const char *alterObjectSchemaCommand);
 extern List * PreprocessGrantOnSchemaStmt(Node *node, const char *queryString);
-
+extern List * PreprocessAlterSchemaRenameStmt(Node *node, const char *queryString);
+extern ObjectAddress AlterSchemaRenameStmtObjectAddress(Node *node, bool missing_ok);
 
 /* sequence.c - forward declarations */
 extern void ErrorIfUnsupportedSeqStmt(CreateSeqStmt *createSeqStmt);

@@ -53,6 +53,7 @@ extern void QualifyAlterTableSchemaStmt(Node *stmt);
 
 /* forward declarations for deparse_schema_stmts.c */
 extern char * DeparseGrantOnSchemaStmt(Node *stmt);
+extern char * DeparseAlterSchemaRenameStmt(Node *stmt);
 
 /* forward declarations for deparse_type_stmts.c */
 extern char * DeparseCompositeTypeStmt(Node *stmt);
