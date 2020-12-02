@@ -15,7 +15,7 @@ CREATE TABLE cstore_truncate_test_second (a int, b int) USING columnar;
 -- COMPRESSED
 CREATE TABLE cstore_truncate_test_compressed (a int, b int) USING columnar;
 CREATE TABLE cstore_truncate_test_regular (a int, b int);
-SELECT count(*) AS cstore_data_files_before_truncate FROM cstore.cstore_data_files \gset
+SELECT count(distinct storageid) AS cstore_data_files_before_truncate FROM cstore.cstore_stripes \gset
 INSERT INTO cstore_truncate_test select a, a from generate_series(1, 10) a;
 set cstore.compression = 'pglz';
 INSERT INTO cstore_truncate_test_compressed select a, a from generate_series(1, 10) a;
@@ -147,7 +147,7 @@ SELECT * from cstore_truncate_test;
 (0 rows)
 
 -- make sure TRUNATE deletes metadata for old relfilenode
-SELECT :cstore_data_files_before_truncate - count(*) FROM cstore.cstore_data_files;
+SELECT :cstore_data_files_before_truncate - count(distinct storageid) FROM cstore.cstore_stripes;
  ?column?
 ---------------------------------------------------------------------
         0
@@ -161,7 +161,7 @@ TRUNCATE cstore_same_transaction_truncate;
 INSERT INTO cstore_same_transaction_truncate SELECT * FROM generate_series(20, 23);
 COMMIT;
 -- should output "1" for the newly created relation
-SELECT count(*) - :cstore_data_files_before_truncate FROM cstore.cstore_data_files;
+SELECT count(distinct storageid) - :cstore_data_files_before_truncate FROM cstore.cstore_stripes;
  ?column?
 ---------------------------------------------------------------------
         1

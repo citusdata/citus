@@ -148,6 +148,7 @@ COMMIT;
 -- now, some of the optional connections would be skipped,
 -- and only 5 connections are used per node
 BEGIN;
+	SET LOCAL citus.max_adaptive_executor_pool_size TO 16;
 	SELECT count(*), pg_sleep(0.1) FROM test;
 	SELECT
 		connection_count_to_node
@@ -325,6 +326,7 @@ BEGIN;
 	-- when COPY is used with _max_query_parallelization
 	-- it ignores the shared pool size
 	SET LOCAL citus.force_max_query_parallelization TO ON;
+	SET LOCAL citus.max_adaptive_executor_pool_size TO 16;
 	COPY test FROM PROGRAM 'seq 32';
 
 	SELECT

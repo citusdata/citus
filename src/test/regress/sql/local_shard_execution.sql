@@ -562,9 +562,8 @@ INSERT INTO reference_table VALUES (1),(2),(3),(4),(5),(6) RETURNING *;
 INSERT INTO distributed_table VALUES (1, '11',21), (5,'55',22) ON CONFLICT(key) DO UPDATE SET value = (EXCLUDED.value::int + 1)::text RETURNING *;
 
 
--- distributed execution of multi-rows INSERTs, where some part of the execution
--- could have been done via local execution but the executor choose the other way around
--- because the command is a multi-shard query
+-- distributed execution of multi-rows INSERTs, where executor
+-- is smart enough to execute local tasks via local execution
 INSERT INTO distributed_table VALUES (1, '11',21), (2,'22',22), (3,'33',33), (4,'44',44),(5,'55',55) ON CONFLICT(key) DO UPDATE SET value = (EXCLUDED.value::int + 1)::text RETURNING *;
 
 

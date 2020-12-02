@@ -85,7 +85,7 @@ INSERT INTO t
  SELECT i, 'last batch', 0 /* no need to record memusage per row */
  FROM generate_series(1, 50000) i;
 
-SELECT 1.0 * TopMemoryContext / :top_post BETWEEN 0.99 AND 1.01 AS top_growth_ok
+SELECT 1.0 * TopMemoryContext / :top_post BETWEEN 0.98 AND 1.02 AS top_growth_ok
 FROM column_store_memory_stats();
 
 -- before this change, max mem usage while executing inserts was 28MB and

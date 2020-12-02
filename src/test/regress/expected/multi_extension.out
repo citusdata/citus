@@ -483,7 +483,7 @@ SELECT * FROM print_extension_changes();
                  | function citus_internal.cstore_ensure_objects_exist()
                  | function cstore.columnar_handler(internal)
                  | schema cstore
-                 | table cstore.cstore_data_files
+                 | sequence cstore.storageid_seq
                  | table cstore.cstore_skipnodes
                  | table cstore.cstore_stripes
                  | table cstore.options
