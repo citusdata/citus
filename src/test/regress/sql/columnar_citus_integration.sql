@@ -28,22 +28,22 @@ SELECT run_command_on_placements('table_option',$cmd$
   SELECT compression FROM cstore.options WHERE regclass = '%s'::regclass;
 $cmd$);
 
--- setting: block_row_count
+-- setting: chunk_row_count
 -- get baseline for setting
 SELECT run_command_on_placements('table_option',$cmd$
-  SELECT block_row_count FROM cstore.options WHERE regclass = '%s'::regclass;
+  SELECT chunk_row_count FROM cstore.options WHERE regclass = '%s'::regclass;
 $cmd$);
 -- change setting
-SELECT alter_columnar_table_set('table_option', block_row_count => 100);
+SELECT alter_columnar_table_set('table_option', chunk_row_count => 100);
 -- verify setting
 SELECT run_command_on_placements('table_option',$cmd$
-  SELECT block_row_count FROM cstore.options WHERE regclass = '%s'::regclass;
+  SELECT chunk_row_count FROM cstore.options WHERE regclass = '%s'::regclass;
 $cmd$);
 -- reset setting
-SELECT alter_columnar_table_reset('table_option', block_row_count => true);
+SELECT alter_columnar_table_reset('table_option', chunk_row_count => true);
 -- verify setting
 SELECT run_command_on_placements('table_option',$cmd$
-  SELECT block_row_count FROM cstore.options WHERE regclass = '%s'::regclass;
+  SELECT chunk_row_count FROM cstore.options WHERE regclass = '%s'::regclass;
 $cmd$);
 
 -- setting: stripe_row_count
@@ -67,14 +67,14 @@ $cmd$);
 -- verify settings are propagated when creating a table
 CREATE TABLE table_option_2 (a int, b text) USING columnar;
 SELECT alter_columnar_table_set('table_option_2',
-                                block_row_count => 100,
+                                chunk_row_count => 100,
                                 stripe_row_count => 1000,
                                 compression => 'pglz');
 SELECT create_distributed_table('table_option_2', 'a');
 
 -- verify settings on placements
 SELECT run_command_on_placements('table_option_2',$cmd$
-  SELECT ROW(block_row_count, stripe_row_count, compression) FROM cstore.options WHERE regclass = '%s'::regclass;
+  SELECT ROW(chunk_row_count, stripe_row_count, compression) FROM cstore.options WHERE regclass = '%s'::regclass;
 $cmd$);
 
 DROP TABLE table_option, table_option_2;
@@ -104,22 +104,22 @@ SELECT run_command_on_placements('table_option',$cmd$
   SELECT compression FROM cstore.options WHERE regclass = '%s'::regclass;
 $cmd$);
 
--- setting: block_row_count
+-- setting: chunk_row_count
 -- get baseline for setting
 SELECT run_command_on_placements('table_option',$cmd$
-  SELECT block_row_count FROM cstore.options WHERE regclass = '%s'::regclass;
+  SELECT chunk_row_count FROM cstore.options WHERE regclass = '%s'::regclass;
 $cmd$);
 -- change setting
-SELECT alter_columnar_table_set('table_option', block_row_count => 100);
+SELECT alter_columnar_table_set('table_option', chunk_row_count => 100);
 -- verify setting
 SELECT run_command_on_placements('table_option',$cmd$
-  SELECT block_row_count FROM cstore.options WHERE regclass = '%s'::regclass;
+  SELECT chunk_row_count FROM cstore.options WHERE regclass = '%s'::regclass;
 $cmd$);
 -- reset setting
-SELECT alter_columnar_table_reset('table_option', block_row_count => true);
+SELECT alter_columnar_table_reset('table_option', chunk_row_count => true);
 -- verify setting
 SELECT run_command_on_placements('table_option',$cmd$
-  SELECT block_row_count FROM cstore.options WHERE regclass = '%s'::regclass;
+  SELECT chunk_row_count FROM cstore.options WHERE regclass = '%s'::regclass;
 $cmd$);
 
 -- setting: stripe_row_count
@@ -143,14 +143,14 @@ $cmd$);
 -- verify settings are propagated when creating a table
 CREATE TABLE table_option_2 (a int, b text) USING columnar;
 SELECT alter_columnar_table_set('table_option_2',
-                                block_row_count => 100,
+                                chunk_row_count => 100,
                                 stripe_row_count => 1000,
                                 compression => 'pglz');
 SELECT create_distributed_table('table_option_2', 'a');
 
 -- verify settings on placements
 SELECT run_command_on_placements('table_option_2',$cmd$
-  SELECT ROW(block_row_count, stripe_row_count, compression) FROM cstore.options WHERE regclass = '%s'::regclass;
+  SELECT ROW(chunk_row_count, stripe_row_count, compression) FROM cstore.options WHERE regclass = '%s'::regclass;
 $cmd$);
 
 DROP TABLE table_option, table_option_2;
@@ -177,22 +177,22 @@ SELECT run_command_on_placements('table_option_reference',$cmd$
   SELECT compression FROM cstore.options WHERE regclass = '%s'::regclass;
 $cmd$);
 
--- setting: block_row_count
+-- setting: chunk_row_count
 -- get baseline for setting
 SELECT run_command_on_placements('table_option_reference',$cmd$
-  SELECT block_row_count FROM cstore.options WHERE regclass = '%s'::regclass;
+  SELECT chunk_row_count FROM cstore.options WHERE regclass = '%s'::regclass;
 $cmd$);
 -- change setting
-SELECT alter_columnar_table_set('table_option_reference', block_row_count => 100);
+SELECT alter_columnar_table_set('table_option_reference', chunk_row_count => 100);
 -- verify setting
 SELECT run_command_on_placements('table_option_reference',$cmd$
-  SELECT block_row_count FROM cstore.options WHERE regclass = '%s'::regclass;
+  SELECT chunk_row_count FROM cstore.options WHERE regclass = '%s'::regclass;
 $cmd$);
 -- reset setting
-SELECT alter_columnar_table_reset('table_option_reference', block_row_count => true);
+SELECT alter_columnar_table_reset('table_option_reference', chunk_row_count => true);
 -- verify setting
 SELECT run_command_on_placements('table_option_reference',$cmd$
-  SELECT block_row_count FROM cstore.options WHERE regclass = '%s'::regclass;
+  SELECT chunk_row_count FROM cstore.options WHERE regclass = '%s'::regclass;
 $cmd$);
 
 -- setting: stripe_row_count
@@ -216,14 +216,14 @@ $cmd$);
 -- verify settings are propagated when creating a table
 CREATE TABLE table_option_reference_2 (a int, b text) USING columnar;
 SELECT alter_columnar_table_set('table_option_reference_2',
-                                block_row_count => 100,
+                                chunk_row_count => 100,
                                 stripe_row_count => 1000,
                                 compression => 'pglz');
 SELECT create_reference_table('table_option_reference_2');
 
 -- verify settings on placements
 SELECT run_command_on_placements('table_option_reference_2',$cmd$
-  SELECT ROW(block_row_count, stripe_row_count, compression) FROM cstore.options WHERE regclass = '%s'::regclass;
+  SELECT ROW(chunk_row_count, stripe_row_count, compression) FROM cstore.options WHERE regclass = '%s'::regclass;
 $cmd$);
 
 DROP TABLE table_option_reference, table_option_reference_2;

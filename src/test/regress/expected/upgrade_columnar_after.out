@@ -102,7 +102,7 @@ SELECT * FROM matview ORDER BY a;
 
 -- test we retained options
 SELECT * FROM cstore.options WHERE regclass = 'test_options_1'::regclass;
-    regclass    | block_row_count | stripe_row_count | compression
+    regclass    | chunk_row_count | stripe_row_count | compression
 ---------------------------------------------------------------------
  test_options_1 |            1000 |             5000 | pglz
 (1 row)
@@ -112,7 +112,7 @@ INFO:  statistics for "test_options_1":
 storage id: xxxxx
 total file size: 65536, total data size: 43136
 total row count: 10000, stripe count: 2, average rows per stripe: 5000
-block count: 20, containing data for dropped columns: 0, none compressed: 10, pglz compressed: 10
+chunk count: 20, containing data for dropped columns: 0, none compressed: 10, pglz compressed: 10
 
 SELECT count(*), sum(a), sum(b) FROM test_options_1;
  count |   sum    |  sum
@@ -121,7 +121,7 @@ SELECT count(*), sum(a), sum(b) FROM test_options_1;
 (1 row)
 
 SELECT * FROM cstore.options WHERE regclass = 'test_options_2'::regclass;
-    regclass    | block_row_count | stripe_row_count | compression
+    regclass    | chunk_row_count | stripe_row_count | compression
 ---------------------------------------------------------------------
  test_options_2 |            2000 |             6000 | none
 (1 row)
@@ -131,7 +131,7 @@ INFO:  statistics for "test_options_2":
 storage id: xxxxx
 total file size: 163840, total data size: 125636
 total row count: 20000, stripe count: 4, average rows per stripe: 5000
-block count: 30, containing data for dropped columns: 0, none compressed: 20, pglz compressed: 10
+chunk count: 30, containing data for dropped columns: 0, none compressed: 20, pglz compressed: 10
 
 SELECT count(*), sum(a), sum(b) FROM test_options_2;
  count |    sum    |  sum

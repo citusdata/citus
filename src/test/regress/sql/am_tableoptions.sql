@@ -15,14 +15,14 @@ SELECT alter_columnar_table_set('table_options', compression => 'pglz');
 SELECT * FROM cstore.options
 WHERE regclass = 'table_options'::regclass;
 
--- test changing the block_row_count
-SELECT alter_columnar_table_set('table_options', block_row_count => 10);
+-- test changing the chunk_row_count
+SELECT alter_columnar_table_set('table_options', chunk_row_count => 10);
 
 -- show table_options settings
 SELECT * FROM cstore.options
 WHERE regclass = 'table_options'::regclass;
 
--- test changing the block_row_count
+-- test changing the chunk_row_count
 SELECT alter_columnar_table_set('table_options', stripe_row_count => 100);
 
 -- show table_options settings
@@ -37,7 +37,7 @@ SELECT * FROM cstore.options
 WHERE regclass = 'table_options'::regclass;
 
 -- set all settings at the same time
-SELECT alter_columnar_table_set('table_options', stripe_row_count => 1000, block_row_count => 100, compression => 'none');
+SELECT alter_columnar_table_set('table_options', stripe_row_count => 1000, chunk_row_count => 100, compression => 'none');
 
 -- show table_options settings
 SELECT * FROM cstore.options
@@ -67,7 +67,7 @@ SELECT * FROM cstore.options
 WHERE regclass = 'table_options'::regclass;
 
 -- reset settings one by one to the version of the GUC's
-SET cstore.block_row_count TO 1000;
+SET cstore.chunk_row_count TO 1000;
 SET cstore.stripe_row_count TO 10000;
 SET cstore.compression TO 'pglz';
 
@@ -76,7 +76,7 @@ SET cstore.compression TO 'pglz';
 SELECT * FROM cstore.options
 WHERE regclass = 'table_options'::regclass;
 
-SELECT alter_columnar_table_reset('table_options', block_row_count => true);
+SELECT alter_columnar_table_reset('table_options', chunk_row_count => true);
 -- show table_options settings
 SELECT * FROM cstore.options
 WHERE regclass = 'table_options'::regclass;
@@ -94,7 +94,7 @@ SELECT * FROM cstore.options
 WHERE regclass = 'table_options'::regclass;
 
 -- verify resetting all settings at once work
-SET cstore.block_row_count TO 10000;
+SET cstore.chunk_row_count TO 10000;
 SET cstore.stripe_row_count TO 100000;
 SET cstore.compression TO 'none';
 
@@ -104,7 +104,7 @@ WHERE regclass = 'table_options'::regclass;
 
 SELECT alter_columnar_table_reset(
     'table_options',
-    block_row_count => true,
+    chunk_row_count => true,
     stripe_row_count => true,
     compression => true);
 

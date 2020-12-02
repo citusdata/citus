@@ -29,12 +29,12 @@ IF NOT EXISTS (SELECT 1 FROM pg_am WHERE amname = 'columnar') THEN
     ALTER EXTENSION citus ADD ACCESS METHOD columnar;
     ALTER EXTENSION citus ADD FUNCTION pg_catalog.alter_columnar_table_set(
         table_name regclass,
-        block_row_count int,
+        chunk_row_count int,
         stripe_row_count int,
         compression name);
     ALTER EXTENSION citus ADD FUNCTION pg_catalog.alter_columnar_table_reset(
         table_name regclass,
-        block_row_count bool,
+        chunk_row_count bool,
         stripe_row_count bool,
         compression bool);
 

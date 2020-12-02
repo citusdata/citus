@@ -9,7 +9,7 @@ create table t_compressed(a int) using columnar;
 -- set options
 SELECT alter_columnar_table_set('t_compressed', compression => 'pglz');
 SELECT alter_columnar_table_set('t_compressed', stripe_row_count => 100);
-SELECT alter_columnar_table_set('t_compressed', block_row_count => 100);
+SELECT alter_columnar_table_set('t_compressed', chunk_row_count => 100);
 
 SELECT * FROM cstore.options WHERE regclass = 't_compressed'::regclass;
 
