@@ -135,7 +135,6 @@ typedef enum
 } CitusTableType;
 
 
-extern bool IsLocalOrCitusLocalTable(Oid relationId);
 extern bool IsCitusTableType(Oid relationId, CitusTableType tableType);
 extern bool IsCitusTableTypeCacheEntry(CitusTableCacheEntry *tableEtnry,
 									   CitusTableType tableType);

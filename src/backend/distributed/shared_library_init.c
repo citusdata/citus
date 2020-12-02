@@ -38,6 +38,7 @@
 #include "distributed/insert_select_executor.h"
 #include "distributed/intermediate_result_pruning.h"
 #include "distributed/local_executor.h"
+#include "distributed/local_distributed_join_planner.h"
 #include "distributed/locally_reserved_shared_connections.h"
 #include "distributed/maintenanced.h"
 #include "distributed/metadata_utility.h"

@@ -30,13 +30,13 @@ CREATE FUNCTION fake_fdw_handler()
 RETURNS fdw_handler
 AS 'citus'
 LANGUAGE C STRICT;
-CREATE FOREIGN DATA WRAPPER fake_fdw HANDLER fake_fdw_handler;
-CREATE SERVER fake_fdw_server FOREIGN DATA WRAPPER fake_fdw;
+CREATE FOREIGN DATA WRAPPER fake_fdw_1 HANDLER fake_fdw_handler;
+CREATE SERVER fake_fdw_server_1 FOREIGN DATA WRAPPER fake_fdw_1;
 
 CREATE FOREIGN TABLE foreign_table (
   key int,
   value text
-) SERVER fake_fdw_server OPTIONS (encoding 'utf-8', compression 'true');
+) SERVER fake_fdw_server_1 OPTIONS (encoding 'utf-8', compression 'true');
 
 CREATE MATERIALIZED VIEW mv1 AS SELECT * FROM postgres_table;
 CREATE MATERIALIZED VIEW mv2 AS SELECT * FROM distributed_table;
@@ -109,7 +109,7 @@ SELECT COUNT(*) FROM distributed_table_pkey join distributed_table using(key) jo
 SELECT count(*) FROM (SELECT *, random() FROM distributed_table) as d1  JOIN postgres_table ON (postgres_table.key = d1.key AND d1.key < postgres_table.key) WHERE d1.key = 1 AND false;
 SELECT count(*) FROM (SELECT *, random() FROM distributed_table_pkey) as d1  JOIN postgres_table ON (postgres_table.key = d1.key AND d1.key < postgres_table.key) WHERE d1.key = 1 AND false;
 SELECT count(*) FROM (SELECT *, random() FROM distributed_partitioned_table) as d1  JOIN postgres_table ON (postgres_table.key = d1.key AND d1.key < postgres_table.key) WHERE d1.key = 1 AND false;
-
+SELECT count(*) FROM (SELECT *, random() FROM distributed_partitioned_table) as d1  JOIN postgres_table ON (postgres_table.key::int = d1.key::int AND d1.key < postgres_table.key) WHERE d1.key::int = 1 AND false;
 
 -- TODO:: We should probably recursively plan postgres table here because primary key is on key,value not key.
 SELECT count(*) FROM distributed_table_composite JOIN postgres_table USING(key) WHERE distributed_table_composite.key = 10;
@@ -306,6 +306,8 @@ FROM
 WHERE
 	distributed_table_windex.key = postgres_table.key;
 
+SET citus.local_table_join_policy TO 'auto';
+
 -- modifications with multiple tables
 UPDATE
 	distributed_table
@@ -418,7 +420,7 @@ SELECT count(*) FROM postgres_table JOIN (SELECT * FROM (SELECT * FROM distribut
 UPDATE reference_table SET key = 1 FROM postgres_table WHERE postgres_table.key = 10;
 UPDATE reference_table SET key = 1 FROM (SELECT * FROM postgres_table) l WHERE l.key = 10;
 
-UPDATE citus_local SET key = 1 FROM postgres_table WHERE citus_local.key = 10; 
+UPDATE citus_local SET key = 1 FROM postgres_table WHERE citus_local.key = 10;
 UPDATE postgres_table SET key = 1 FROM citus_local WHERE citus_local.key = 10;
 
 

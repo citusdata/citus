@@ -22,17 +22,6 @@
 #include "nodes/relation.h"
 #endif
 
-/* managed via guc.c */
-typedef enum
-{
-	LOCAL_JOIN_POLICY_NEVER = 0,
-	LOCAL_JOIN_POLICY_PREFER_LOCAL = 1,
-	LOCAL_JOIN_POLICY_PREFER_DISTRIBUTED = 2,
-	LOCAL_JOIN_POLICY_AUTO = 3,
-} LocalJoinPolicy;
-
-extern int LocalTableJoinPolicy;
-
 /*
  * RecursivePlanningContext is used to recursively plan subqueries
  * and CTEs, pull results to the coordinator, and push it back into
@@ -68,5 +57,5 @@ extern bool ContainsLocalTableSubqueryJoin(List *rangeTableList, Oid resultRelat
 extern bool ContainsTableToBeConvertedToSubquery(List *rangeTableList, Oid
 												 resultRelationId);
 extern bool IsRecursivelyPlannableRelation(RangeTblEntry *rangeTableEntry);
-
+extern bool IsRelationLocalTableOrMatView(Oid relationId);
 #endif /* RECURSIVE_PLANNING_H */

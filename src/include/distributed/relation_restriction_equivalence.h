@@ -15,6 +15,8 @@
 #include "distributed/distributed_planner.h"
 #include "distributed/metadata_cache.h"
 
+#define SINGLE_RTE_INDEX 1
+
 extern bool AllDistributionKeysInQueryAreEqual(Query *originalQuery,
 											   PlannerRestrictionContext *
 											   plannerRestrictionContext);
@@ -38,7 +40,7 @@ extern PlannerRestrictionContext * FilterPlannerRestrictionForQuery(
 	Query *query);
 extern List * GetRestrictInfoListForRelation(RangeTblEntry *rangeTblEntry,
 											 PlannerRestrictionContext *
-											 plannerRestrictionContext, int rteIndex);
+											 plannerRestrictionContext);
 extern JoinRestrictionContext * RemoveDuplicateJoinRestrictions(JoinRestrictionContext *
 																joinRestrictionContext);
 

@@ -54,6 +54,12 @@
 #include "utils/guc.h"
 #include "utils/lsyscache.h"
 
+
+/*
+ * Managed via a GUC
+ */
+int LocalTableJoinPolicy = LOCAL_JOIN_POLICY_AUTO;
+
 typedef struct RangeTableEntryDetails
 {
 	RangeTblEntry *rangeTableEntry;
@@ -89,8 +95,7 @@ static RangeTableEntryDetails * GetNextRTEToConvertToSubquery(FromExpr *joinTree
 															  ConversionCandidates *
 															  conversionCandidates,
 															  PlannerRestrictionContext *
-															  plannerRestrictionContext,
-															  Oid resultRelationId);
+															  plannerRestrictionContext);
 static void GetRangeTableEntriesFromJoinTree(Node *joinNode, List *rangeTableList,
 											 List **joinRangeTableEntries);
 static void RemoveFromConversionCandidates(ConversionCandidates *conversionCandidates, Oid
@@ -98,13 +103,13 @@ static void RemoveFromConversionCandidates(ConversionCandidates *conversionCandi
 static bool AllRangeTableEntriesHaveUniqueIndex(List *rangeTableEntryDetailsList);
 
 /*
- * ConvertUnplannableTableJoinsToSubqueries gets a query and the planner
+ * RecursivelyPlanLocalTableJoins gets a query and the planner
  * restrictions. As long as the query is not plannable by router planner,
  * it converts either a local or distributed table to a subquery.
  */
 void
-ConvertUnplannableTableJoinsToSubqueries(Query *query,
-										 RecursivePlanningContext *context)
+RecursivelyPlanLocalTableJoins(Query *query,
+							   RecursivePlanningContext *context)
 {
 	PlannerRestrictionContext *plannerRestrictionContext =
 		context->plannerRestrictionContext;
@@ -128,28 +133,22 @@ ConvertUnplannableTableJoinsToSubqueries(Query *query,
 		CreateConversionCandidates(query->jointree, plannerRestrictionContext,
 								   rangeTableList, resultRelationId);
 
-	RangeTableEntryDetails *rangeTableEntryDetails =
-		GetNextRTEToConvertToSubquery(query->jointree, conversionCandidates,
-									  plannerRestrictionContext,
-									  resultRelationId);
-
 	while (ShouldConvertLocalTableJoinsToSubqueries(query, rangeTableList,
 													resultRelationId,
 													plannerRestrictionContext))
 	{
-		ReplaceRTERelationWithRteSubquery(
-			rangeTableEntryDetails->rangeTableEntry,
-			rangeTableEntryDetails->restrictionList,
-			rangeTableEntryDetails->requiredAttributeNumbers,
-			context);
-		RemoveFromConversionCandidates(
-			conversionCandidates,
-			rangeTableEntryDetails->rangeTableEntry->relid);
+		FromExpr *joinTree = query->jointree;
+		RangeTableEntryDetails *rangeTableEntryDetails =
+			GetNextRTEToConvertToSubquery(joinTree, conversionCandidates,
+										  plannerRestrictionContext);
 
-		rangeTableEntryDetails =
-			GetNextRTEToConvertToSubquery(query->jointree, conversionCandidates,
-										  plannerRestrictionContext,
-										  resultRelationId);
+		RangeTblEntry *rangeTableEntry = rangeTableEntryDetails->rangeTableEntry;
+		Oid relId = rangeTableEntryDetails->rangeTableEntry->relid;
+		List *restrictionList = rangeTableEntryDetails->restrictionList;
+		List *requiredAttributeNumbers = rangeTableEntryDetails->requiredAttributeNumbers;
+		ReplaceRTERelationWithRteSubquery(rangeTableEntry, restrictionList,
+										  requiredAttributeNumbers, context);
+		RemoveFromConversionCandidates(conversionCandidates, relId);
 	}
 }
 
@@ -206,8 +205,7 @@ GetRangeTableEntriesFromJoinTree(Node *joinNode, List *rangeTableList,
 static RangeTableEntryDetails *
 GetNextRTEToConvertToSubquery(FromExpr *joinTree,
 							  ConversionCandidates *conversionCandidates,
-							  PlannerRestrictionContext *plannerRestrictionContext, Oid
-							  resultRelationId)
+							  PlannerRestrictionContext *plannerRestrictionContext)
 {
 	RangeTableEntryDetails *localRTECandidate = NULL;
 	RangeTableEntryDetails *distributedRTECandidate = NULL;
@@ -272,7 +270,7 @@ AllRangeTableEntriesHaveUniqueIndex(List *rangeTableEntryDetailsList)
 static void
 RemoveFromConversionCandidates(ConversionCandidates *conversionCandidates, Oid relationId)
 {
-	if (IsLocalOrCitusLocalTable(relationId))
+	if (IsRelationLocalTableOrMatView(relationId))
 	{
 		conversionCandidates->localTableList =
 			list_delete_first(conversionCandidates->localTableList);
@@ -452,23 +450,18 @@ CreateConversionCandidates(FromExpr *joinTree,
 			continue;
 		}
 
-		bool referenceOrDistributedTable = IsCitusTableType(rangeTableEntry->relid,
-															REFERENCE_TABLE) ||
-										   IsCitusTableType(rangeTableEntry->relid,
-															DISTRIBUTED_TABLE);
-
 		/* result relation cannot converted to a subquery */
 		if (resultRelationId == rangeTableEntry->relid)
 		{
 			continue;
 		}
 
-		RangeTableEntryDetails *rangeTableEntryDetails = palloc0(
-			sizeof(RangeTableEntryDetails));
+		RangeTableEntryDetails *rangeTableEntryDetails =
+			palloc0(sizeof(RangeTableEntryDetails));
 		rangeTableEntryDetails->rangeTableEntry = rangeTableEntry;
 		rangeTableEntryDetails->rteIndex = rteIndex;
 		rangeTableEntryDetails->restrictionList = GetRestrictInfoListForRelation(
-			rangeTableEntry, plannerRestrictionContext, 1);
+			rangeTableEntry, plannerRestrictionContext);
 		rangeTableEntryDetails->requiredAttributeNumbers = RequiredAttrNumbersForRelation(
 			rangeTableEntry, plannerRestrictionContext);
 		rangeTableEntryDetails->hasConstantFilterOnUniqueColumn =
@@ -476,6 +469,10 @@ CreateConversionCandidates(FromExpr *joinTree,
 											rangeTableEntry,
 											rteIndex);
 
+		bool referenceOrDistributedTable = IsCitusTableType(rangeTableEntry->relid,
+															REFERENCE_TABLE) ||
+										   IsCitusTableType(rangeTableEntry->relid,
+															DISTRIBUTED_TABLE);
 		if (referenceOrDistributedTable)
 		{
 			conversionCandidates->distributedTableList =

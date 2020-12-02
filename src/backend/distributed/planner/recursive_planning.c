@@ -100,13 +100,6 @@
 #include "utils/guc.h"
 #include "utils/lsyscache.h"
 
-
-/*
- * Managed via a GUC
- */
-int LocalTableJoinPolicy = LOCAL_JOIN_POLICY_AUTO;
-
-
 /* track depth of current recursive planner query */
 static int recursivePlanningDepth = 0;
 
@@ -164,6 +157,7 @@ static bool AllDistributionKeysInSubqueryAreEqual(Query *subquery,
 												  PlannerRestrictionContext *
 												  restrictionContext);
 static bool AllDataLocallyAccessible(List *rangeTableList);
+static bool IsTableLocallyAccessible(Oid relationId);
 static bool ShouldRecursivelyPlanSetOperation(Query *query,
 											  RecursivePlanningContext *context);
 static void RecursivelyPlanSubquery(Query *subquery,
@@ -185,7 +179,10 @@ static Query * BuildReadIntermediateResultsQuery(List *targetEntryList,
 												 List *columnAliasList,
 												 Const *resultIdConst, Oid functionOid,
 												 bool useBinaryCopyFormat);
-static void UpdateVarNosInQualForSubquery(Node *node);
+static void UpdateVarNosInQualForSubquery(Query *query);
+static bool ModifiesLocalTableWithRemoteCitusLocalTable(List *rangeTableList, Oid
+														resultRelationId);
+static bool ContainsOnlyReferenceAndCitusLocalRelation(List *rangeTableList);
 
 /*
  * GenerateSubplansForSubqueriesAndCTEs is a wrapper around RecursivelyPlanSubqueriesAndCTEs.
@@ -344,9 +341,11 @@ RecursivelyPlanSubqueriesAndCTEs(Query *query, RecursivePlanningContext *context
 	/*
 	 * Logical planner cannot handle "local_table" [OUTER] JOIN "dist_table", or
 	 * a query with local table/citus local table and subquery. We convert local/citus local
-	 * tables to a subquery until they can be planned
+	 * tables to a subquery until they can be planned.
+	 * This is the last call in this function since we want the other calls to be finished
+	 * so that we can check if the current plan is router plannable at any step within this function.
 	 */
-	ConvertUnplannableTableJoinsToSubqueries(query, context);
+	RecursivelyPlanLocalTableJoins(query, context);
 
 	return NULL;
 }
@@ -1087,6 +1086,17 @@ IsLocalTableRteOrMatView(Node *node)
 	}
 
 	Oid relationId = rangeTableEntry->relid;
+	return IsRelationLocalTableOrMatView(relationId);
+}
+
+
+/*
+ * IsRelationLocalTableOrMatView returns true if the given relation
+ * is a citus local, local, or materialized view.
+ */
+bool
+IsRelationLocalTableOrMatView(Oid relationId)
+{
 	if (!IsCitusTable(relationId))
 	{
 		/* postgres local table or a materialized view */
@@ -1361,7 +1371,7 @@ ReplaceRTERelationWithRteSubquery(RangeTblEntry *rangeTableEntry, List *restrict
 	Query *subquery = WrapRteRelationIntoSubquery(rangeTableEntry, requiredAttrNumbers);
 	Expr *andedBoundExpressions = make_ands_explicit(restrictionList);
 	subquery->jointree->quals = (Node *) andedBoundExpressions;
-	UpdateVarNosInQualForSubquery(subquery->jointree->quals);
+	UpdateVarNosInQualForSubquery(subquery);
 
 	/* force recursively planning of the newly created subquery */
 	subquery->limitOffset = (Node *) MakeIntegerConst(0);
@@ -1384,7 +1394,7 @@ ReplaceRTERelationWithRteSubquery(RangeTblEntry *rangeTableEntry, List *restrict
 		pg_get_query_def(subquery,
 						 subqueryString);
 
-		ereport(DEBUG1, (errmsg("Wrapping local relation \"%s\" to a subquery: %s ",
+		ereport(DEBUG1, (errmsg("Wrapping relation \"%s\" to a subquery: %s ",
 								get_rel_name(rangeTableEntry->relid),
 								ApplyLogRedaction(subqueryString->data))));
 	}
@@ -1398,38 +1408,14 @@ ReplaceRTERelationWithRteSubquery(RangeTblEntry *rangeTableEntry, List *restrict
  * will be only one RTE in rtable, which is the subquery.
  */
 static void
-UpdateVarNosInQualForSubquery(Node *node)
+UpdateVarNosInQualForSubquery(Query *query)
 {
-	if (node == NULL)
+	List *varList = pull_var_clause(query->jointree->quals, PVC_RECURSE_AGGREGATES |
+									PVC_RECURSE_PLACEHOLDERS);
+	Var *var = NULL;
+	foreach_ptr(var, varList)
 	{
-		return;
-	}
-
-	if (IsA(node, Var))
-	{
-		Var *var = (Var *) node;
-
-		/* we update the varno as 1 as there is only one subquery */
-		var->varno = 1;
-	}
-	else if (IsA(node, OpExpr))
-	{
-		OpExpr *opExpr = (OpExpr *) node;
-		Var *leftColumn = LeftColumnOrNULL(opExpr);
-		Var *rightColumn = RightColumnOrNULL(opExpr);
-		UpdateVarNosInQualForSubquery((Node *) leftColumn);
-		UpdateVarNosInQualForSubquery((Node *) rightColumn);
-	}
-	else if (IsA(node, BoolExpr))
-	{
-		BoolExpr *boolExpr = (BoolExpr *) node;
-		List *argumentList = boolExpr->args;
-
-		Node *arg = NULL;
-		foreach_ptr(arg, argumentList)
-		{
-			UpdateVarNosInQualForSubquery(arg);
-		}
+		var->varno = SINGLE_RTE_INDEX;
 	}
 }
 
@@ -1445,6 +1431,10 @@ ContainsTableToBeConvertedToSubquery(List *rangeTableList, Oid resultRelationId)
 	{
 		return false;
 	}
+	if (ContainsOnlyReferenceAndCitusLocalRelation(rangeTableList))
+	{
+		return false;
+	}
 	if (ContainsLocalTableDistributedTableJoin(rangeTableList))
 	{
 		return true;
@@ -1453,8 +1443,47 @@ ContainsTableToBeConvertedToSubquery(List *rangeTableList, Oid resultRelationId)
 	{
 		return true;
 	}
+	if (ModifiesLocalTableWithRemoteCitusLocalTable(rangeTableList, resultRelationId))
+	{
+		return true;
+	}
 	return false;
 }
+
+
+/*
+ * ModifiesLocalTableWithRemoteCitusLocalTable returns true if a local
+ * table is modified with a remote citus local table. This could be a case with
+ * MX structure.
+ */
+static bool
+ModifiesLocalTableWithRemoteCitusLocalTable(List *rangeTableList, Oid resultRelationId)
+{
+	bool containsLocalResultRelation = false;
+	bool containsRemoteCitusLocalTable = false;
+
+	RangeTblEntry *rangeTableEntry = NULL;
+	foreach_ptr(rangeTableEntry, rangeTableList)
+	{
+		if (!IsRecursivelyPlannableRelation(rangeTableEntry))
+		{
+			continue;
+		}
+		if (IsCitusTableType(rangeTableEntry->relid, CITUS_LOCAL_TABLE))
+		{
+			if (!IsTableLocallyAccessible(rangeTableEntry->relid))
+			{
+				containsRemoteCitusLocalTable = true;
+			}
+		}
+		else if (!IsCitusTable(rangeTableEntry->relid))
+		{
+			containsLocalResultRelation = true;
+		}
+	}
+	return containsLocalResultRelation && containsRemoteCitusLocalTable;
+}
+
 
 /*
  * AllDataLocallyAccessible return true if all data for the relations in the
@@ -1476,34 +1505,46 @@ AllDataLocallyAccessible(List *rangeTableList)
 			continue;
 		}
 
-
 		Oid relationId = rangeTableEntry->relid;
-
-		if (!IsCitusTable(relationId))
+		if (!IsTableLocallyAccessible(relationId))
 		{
-			/* local tables are locally accessible */
-			continue;
-		}
-
-		List *shardIntervalList = LoadShardIntervalList(relationId);
-		if (list_length(shardIntervalList) != 1)
-		{
-			/* we currently only consider single placement tables */
-			return false;
-		}
-
-		ShardInterval *shardInterval = linitial(shardIntervalList);
-		uint64 shardId = shardInterval->shardId;
-		ShardPlacement *localShardPlacement =
-			ShardPlacementOnGroup(shardId, GetLocalGroupId());
-		if (localShardPlacement == NULL)
-		{
-			/* the table doesn't have a placement on this node */
 			return false;
 		}
 	}
 
 	return true;
+}
+
+
+/*
+ * IsTableLocallyAccessible returns true if the given table
+ * can be accessed in local.
+ */
+static bool
+IsTableLocallyAccessible(Oid relationId)
+{
+	if (!IsCitusTable(relationId))
+	{
+		/* local tables are locally accessible */
+		return true;
+	}
+
+	List *shardIntervalList = LoadShardIntervalList(relationId);
+	if (list_length(shardIntervalList) != 1)
+	{
+		return false;
+	}
+
+	ShardInterval *shardInterval = linitial(shardIntervalList);
+	uint64 shardId = shardInterval->shardId;
+	ShardPlacement *localShardPlacement =
+		ShardPlacementOnGroup(shardId, GetLocalGroupId());
+	if (localShardPlacement != NULL)
+	{
+		/* the table has a placement on this node */
+		return true;
+	}
+	return false;
 }
 
 
@@ -1558,6 +1599,32 @@ ContainsLocalTableDistributedTableJoin(List *rangeTableList)
 	}
 
 	return containsLocalTable && containsDistributedTable;
+}
+
+
+/*
+ * ContainsOnlyReferenceAndCitusLocalRelation returns true if there is no
+ * relation other than citus local and reference tables
+ */
+static bool
+ContainsOnlyReferenceAndCitusLocalRelation(List *rangeTableList)
+{
+	RangeTblEntry *rangeTableEntry = NULL;
+	foreach_ptr(rangeTableEntry, rangeTableList)
+	{
+		if (!IsRecursivelyPlannableRelation(rangeTableEntry))
+		{
+			continue;
+		}
+
+		if (!IsCitusTableType(rangeTableEntry->relid, REFERENCE_TABLE) &&
+			!IsCitusTableType(rangeTableEntry->relid, CITUS_LOCAL_TABLE))
+		{
+			return false;
+		}
+	}
+
+	return true;
 }
 
 

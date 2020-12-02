@@ -294,21 +294,6 @@ EnsureModificationsCanRun(void)
 
 
 /*
- * IsLocalOrCitusLocalTable returns true if the given relation
- * is either a local or citus local table.
- */
-bool
-IsLocalOrCitusLocalTable(Oid relationId)
-{
-	if (!IsCitusTable(relationId))
-	{
-		return true;
-	}
-	return IsCitusTableType(relationId, CITUS_LOCAL_TABLE);
-}
-
-
-/*
  * IsCitusTableType returns true if the given table with relationId
  * belongs to a citus table that matches the given table type. If cache
  * entry already exists, prefer using IsCitusTableTypeCacheEntry to avoid

@@ -1850,8 +1850,7 @@ FilterPlannerRestrictionForQuery(PlannerRestrictionContext *plannerRestrictionCo
  */
 List *
 GetRestrictInfoListForRelation(RangeTblEntry *rangeTblEntry,
-							   PlannerRestrictionContext *plannerRestrictionContext,
-							   int rteIndex)
+							   PlannerRestrictionContext *plannerRestrictionContext)
 {
 	int rteIdentity = GetRTEIdentity(rangeTblEntry);
 	RelationRestrictionContext *relationRestrictionContext =
@@ -1913,8 +1912,8 @@ GetRestrictInfoListForRelation(RangeTblEntry *rangeTblEntry,
 		Var *column = NULL;
 		foreach_ptr(column, varClauses)
 		{
-			column->varno = rteIndex;
-			column->varnosyn = rteIndex;
+			column->varno = SINGLE_RTE_INDEX;
+			column->varnosyn = SINGLE_RTE_INDEX;
 		}
 
 		restrictExprList = lappend(restrictExprList, copyOfRestrictClause);

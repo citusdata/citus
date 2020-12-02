@@ -222,6 +222,8 @@ test: multi_modifying_xacts
 test: multi_repartition_udt multi_repartitioned_subquery_udf multi_subtransactions
 test: multi_transaction_recovery
 
+test: local_table_join
+
 # ---------
 # multi_copy creates hash and range-partitioned tables and performs COPY
 # multi_router_planner creates hash partitioned tables.
@@ -282,7 +284,7 @@ test: multi_colocated_shard_transfer
 # ----------
 # multi_citus_tools tests utility functions written for citus tools
 # ----------
-test: multi_citus_tools local_table_join
+test: multi_citus_tools
 
 # ----------
 # node_conninfo_reload tests that node_conninfo changes take effect

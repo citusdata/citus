@@ -1,9 +1,9 @@
 
 /*-------------------------------------------------------------------------
  *
- * listutils.h
+ * local_distributed_join_planner.h
  *
- * Declarations for public utility functions related to lists.
+ * Declarations for functions to handle local-distributed table joins.
  *
  * Copyright (c) Citus Data, Inc.
  *
@@ -16,8 +16,18 @@
 #include "postgres.h"
 #include "distributed/recursive_planning.h"
 
+/* managed via guc.c */
+typedef enum
+{
+	LOCAL_JOIN_POLICY_NEVER = 0,
+	LOCAL_JOIN_POLICY_PREFER_LOCAL = 1,
+	LOCAL_JOIN_POLICY_PREFER_DISTRIBUTED = 2,
+	LOCAL_JOIN_POLICY_AUTO = 3,
+} LocalJoinPolicy;
 
-extern void ConvertUnplannableTableJoinsToSubqueries(Query *query,
-													 RecursivePlanningContext *context);
+extern int LocalTableJoinPolicy;
+
+extern void RecursivelyPlanLocalTableJoins(Query *query,
+										   RecursivePlanningContext *context);
 
 #endif /* LOCAL_DISTRIBUTED_JOIN_PLANNER_H */
