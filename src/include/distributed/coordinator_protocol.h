@@ -90,8 +90,14 @@ typedef enum
 typedef enum TableDDLCommandType
 {
 	TABLE_DDL_COMMAND_STRING,
+	TABLE_DDL_COMMAND_FUNCTION,
 } TableDDLCommandType;
 
+
+struct TableDDLCommand;
+typedef struct TableDDLCommand TableDDLCommand;
+typedef char *(*TableDDLFunction)(void *context);
+typedef char *(*TableDDLShardedFunction)(uint64 shardId, void *context);
 
 /*
  * TableDDLCommand holds the definition of a command to be executed to bring the table and
@@ -107,7 +113,7 @@ typedef enum TableDDLCommandType
  *    command that will be wrapped in `worker_apply_shard_ddl_command` when applied
  *    against a shard.
  */
-typedef struct TableDDLCommand
+struct TableDDLCommand
 {
 	CitusNode node;
 
@@ -126,11 +132,28 @@ typedef struct TableDDLCommand
 		 * sql ddl command string representing the ddl command.
 		 */
 		char *commandStr;
+
+		/*
+		 * function is used when type is set to TABLE_DDL_COMMAND_FUNCTION. It contains
+		 * function pointers and a context to be passed to the functions to be able to
+		 * construct the sql commands for sharded and non-sharded tables.
+		 */
+		struct
+		{
+			TableDDLFunction function;
+			TableDDLShardedFunction shardedFunction;
+			void *context;
+		}
+		function;
 	};
-} TableDDLCommand;
+};
 
 /* make functions for TableDDLCommand */
 extern TableDDLCommand * makeTableDDLCommandString(char *commandStr);
+extern TableDDLCommand * makeTableDDLCommandFunction(TableDDLFunction function,
+													 TableDDLShardedFunction
+													 shardedFunction,
+													 void *context);
 
 extern char * GetShardedTableDDLCommand(TableDDLCommand *command, uint64 shardId,
 										char *schemaName);

@@ -95,7 +95,6 @@ typedef struct StripeMetadata
 typedef struct DataFileMetadata
 {
 	List *stripeMetadataList;
-	ColumnarOptions options;
 } DataFileMetadata;
 
 

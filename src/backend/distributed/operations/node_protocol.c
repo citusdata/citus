@@ -64,6 +64,7 @@
 #include "utils/ruleutils.h"
 #include "utils/varlena.h"
 
+#include "columnar/cstore_tableam.h"
 
 /* Shard related configuration */
 int ShardCount = 32;
@@ -646,6 +647,19 @@ GetPreLoadTableCreationCommands(Oid relationId, bool includeSequenceDefaults)
 										tableColumnOptionsDef));
 	}
 
+#if PG_VERSION_NUM >= 120000
+
+	/* add columnar options for cstore tables */
+	if (IsCStoreTableAmTable(relationId))
+	{
+		TableDDLCommand *cstoreOptionsDDL = ColumnarGetTableOptionsDDL(relationId);
+		if (cstoreOptionsDDL != NULL)
+		{
+			tableDDLEventList = lappend(tableDDLEventList, cstoreOptionsDDL);
+		}
+	}
+#endif
+
 	char *tableOwnerDef = TableOwnerResetCommand(relationId);
 	if (tableOwnerDef != NULL)
 	{
@@ -872,6 +886,33 @@ makeTableDDLCommandString(char *commandStr)
 
 
 /*
+ * makeTableDDLCommandString creates an implementation of TableDDLCommand that creates the
+ * final sql command based on function pointers being passed.
+ */
+TableDDLCommand *
+makeTableDDLCommandFunction(TableDDLFunction function,
+							TableDDLShardedFunction shardedFunction,
+							void *context)
+{
+	TableDDLCommand *command = CitusMakeNode(TableDDLCommand);
+
+	/*
+	 * Function pointers are called later without verifying them not being NULL. Guard
+	 * developers from making a mistake with them directly when they could be made.
+	 */
+	Assert(function != NULL);
+	Assert(shardedFunction != NULL);
+
+	command->type = TABLE_DDL_COMMAND_FUNCTION;
+	command->function.function = function;
+	command->function.shardedFunction = shardedFunction;
+	command->function.context = context;
+
+	return command;
+}
+
+
+/*
  * GetShardedTableDDLCommandString is the internal function for TableDDLCommand objects
  * created with makeTableDDLCommandString.
  */
@@ -918,6 +959,9 @@ GetTableDDLCommandString(TableDDLCommand *command)
  * GetShardedTableDDLCommand returns the ddl command expressed by this TableDDLCommand
  * where all applicable names are transformed into the names for a shard identified by
  * shardId
+ *
+ * schemaName is deprecated but used for TableDDLCommandString. All other implementations
+ * will need to rely solely on the shardId.
  */
 char *
 GetShardedTableDDLCommand(TableDDLCommand *command, uint64 shardId, char *schemaName)
@@ -927,6 +971,11 @@ GetShardedTableDDLCommand(TableDDLCommand *command, uint64 shardId, char *schema
 		case TABLE_DDL_COMMAND_STRING:
 		{
 			return GetShardedTableDDLCommandString(command, shardId, schemaName);
+		}
+
+		case TABLE_DDL_COMMAND_FUNCTION:
+		{
+			return command->function.shardedFunction(shardId, command->function.context);
 		}
 	}
 
@@ -947,6 +996,11 @@ GetTableDDLCommand(TableDDLCommand *command)
 		case TABLE_DDL_COMMAND_STRING:
 		{
 			return GetTableDDLCommandString(command);
+		}
+
+		case TABLE_DDL_COMMAND_FUNCTION:
+		{
+			return command->function.function(command->function.context);
 		}
 	}
 

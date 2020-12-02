@@ -44,12 +44,16 @@
 #include "utils/memutils.h"
 #include "utils/pg_rusage.h"
 #include "utils/rel.h"
+#include "utils/lsyscache.h"
 #include "utils/syscache.h"
 
 #include "columnar/cstore.h"
 #include "columnar/cstore_customscan.h"
 #include "columnar/cstore_tableam.h"
 #include "columnar/cstore_version_compat.h"
+#include "distributed/commands.h"
+#include "distributed/commands/utility_hook.h"
+#include "distributed/metadata_cache.h"
 
 #define CSTORE_TABLEAM_NAME "cstore_tableam"
 
@@ -1287,6 +1291,131 @@ columnar_handler(PG_FUNCTION_ARGS)
 
 
 /*
+ * CitusCreateAlterColumnarTableSet generates a portable
+ */
+static char *
+CitusCreateAlterColumnarTableSet(char *qualifiedRelationName,
+								 const ColumnarOptions *options)
+{
+	StringInfoData buf = { 0 };
+	initStringInfo(&buf);
+
+	appendStringInfo(&buf,
+					 "SELECT alter_columnar_table_set(%s, "
+					 "block_row_count => %d, "
+					 "stripe_row_count => %lu, "
+					 "compression => %s);",
+					 quote_literal_cstr(qualifiedRelationName),
+					 options->blockRowCount,
+					 options->stripeRowCount,
+					 quote_literal_cstr(CompressionTypeStr(options->compressionType)));
+
+	return buf.data;
+}
+
+
+/*
+ * ColumnarTableDDLContext holds the instance variable for the TableDDLCommandFunction
+ * instance described below.
+ */
+typedef struct ColumnarTableDDLContext
+{
+	char *schemaName;
+	char *relationName;
+	ColumnarOptions options;
+} ColumnarTableDDLContext;
+
+
+/*
+ * GetTableDDLCommandColumnar is an internal function used to turn a
+ * ColumnarTableDDLContext stored on the context of a TableDDLCommandFunction into a sql
+ * command that will be executed against a table. The resulting command will set the
+ * options of the table to the same options as the relation on the coordinator.
+ */
+static char *
+GetTableDDLCommandColumnar(void *context)
+{
+	ColumnarTableDDLContext *tableDDLContext = (ColumnarTableDDLContext *) context;
+
+	char *qualifiedShardName = quote_qualified_identifier(tableDDLContext->schemaName,
+														  tableDDLContext->relationName);
+
+	return CitusCreateAlterColumnarTableSet(qualifiedShardName,
+											&tableDDLContext->options);
+}
+
+
+/*
+ * GetShardedTableDDLCommandColumnar is an internal function used to turn a
+ * ColumnarTableDDLContext stored on the context of a TableDDLCommandFunction into a sql
+ * command that will be executed against a shard. The resulting command will set the
+ * options of the shard to the same options as the relation the shard is based on.
+ */
+static char *
+GetShardedTableDDLCommandColumnar(uint64 shardId, void *context)
+{
+	ColumnarTableDDLContext *tableDDLContext = (ColumnarTableDDLContext *) context;
+
+	/*
+	 * AppendShardId is destructive of the original cahr *, given we want to serialize
+	 * more than once we copy it before appending the shard id.
+	 */
+	char *relationName = pstrdup(tableDDLContext->relationName);
+	AppendShardIdToName(&relationName, shardId);
+
+	char *qualifiedShardName = quote_qualified_identifier(tableDDLContext->schemaName,
+														  relationName);
+
+	return CitusCreateAlterColumnarTableSet(qualifiedShardName,
+											&tableDDLContext->options);
+}
+
+
+/*
+ * ColumnarGetCustomTableOptionsDDL returns a TableDDLCommand representing a command that
+ * will apply the passed columnar options to the relation identified by relationId on a
+ * new table or shard.
+ */
+static TableDDLCommand *
+ColumnarGetCustomTableOptionsDDL(char *schemaName, char *relationName,
+								 ColumnarOptions options)
+{
+	ColumnarTableDDLContext *context = (ColumnarTableDDLContext *) palloc0(
+		sizeof(ColumnarTableDDLContext));
+
+	/* build the context */
+	context->schemaName = schemaName;
+	context->relationName = relationName;
+	context->options = options;
+
+	/* create TableDDLCommand based on the context build above */
+	return makeTableDDLCommandFunction(
+		GetTableDDLCommandColumnar,
+		GetShardedTableDDLCommandColumnar,
+		context);
+}
+
+
+/*
+ * ColumnarGetTableOptionsDDL returns a TableDDLCommand representing a command that will
+ * apply the columnar options currently applicable to the relation identified by
+ * relationId on a new table or shard.
+ */
+TableDDLCommand *
+ColumnarGetTableOptionsDDL(Oid relationId)
+{
+	Oid namespaceId = get_rel_namespace(relationId);
+	char *schemaName = get_namespace_name(namespaceId);
+	char *relationName = get_rel_name(relationId);
+
+	ColumnarOptions options = { 0 };
+	ReadColumnarOptions(relationId, &options);
+
+	return ColumnarGetCustomTableOptionsDDL(schemaName, relationName, options);
+}
+
+
+/*
  * alter_columnar_table_set is a UDF exposed in postgres to change settings on a columnar
  * table. Calling this function on a non-columnar table gives an error.
  *
@@ -1356,6 +1485,20 @@ alter_columnar_table_set(PG_FUNCTION_ARGS)
 								CompressionTypeStr(options.compressionType))));
 	}
 
+	if (EnableDDLPropagation && IsCitusTable(relationId))
+	{
+		/* when a columnar table is distributed update all settings on the shards */
+		Oid namespaceId = get_rel_namespace(relationId);
+		char *schemaName = get_namespace_name(namespaceId);
+		char *relationName = get_rel_name(relationId);
+		TableDDLCommand *command = ColumnarGetCustomTableOptionsDDL(schemaName,
+																	relationName,
+																	options);
+		DDLJob *ddljob = CreateCustomDDLTaskList(relationId, command);
+
+		ExecuteDistributedDDLJob(ddljob);
+	}
+
 	SetColumnarOptions(relationId, &options);
 
 	table_close(rel, NoLock);
@@ -1364,6 +1507,24 @@ alter_columnar_table_set(PG_FUNCTION_ARGS)
 }
 
 
+/*
+ * alter_columnar_table_reset is a UDF exposed in postgres to reset the settings on a
+ * columnar table. Calling this function on a non-columnar table gives an error.
+ *
+ * sql syntax:
+ *   pg_catalog.alter_columnar_table_re
+ *   teset(
+ *        table_name regclass,
+ *        block_row_count bool DEFAULT FALSE,
+ *        stripe_row_count bool DEFAULT FALSE,
+ *        compression bool DEFAULT FALSE)
+ *
+ * All arguments except the table name are optional. The UDF is supposed to be called
+ * like:
+ *   SELECT alter_columnar_table_set('table', compression => true);
+ *
+ * All options set to true will be reset to the default system value.
+ */
 PG_FUNCTION_INFO_V1(alter_columnar_table_reset);
 Datum
 alter_columnar_table_reset(PG_FUNCTION_ARGS)
@@ -1406,6 +1567,20 @@ alter_columnar_table_reset(PG_FUNCTION_ARGS)
 		options.compressionType = cstore_compression;
 		ereport(DEBUG1, (errmsg("resetting compression to %s",
 								CompressionTypeStr(options.compressionType))));
+	}
+
+	if (EnableDDLPropagation && IsCitusTable(relationId))
+	{
+		/* when a columnar table is distributed update all settings on the shards */
+		Oid namespaceId = get_rel_namespace(relationId);
+		char *schemaName = get_namespace_name(namespaceId);
+		char *relationName = get_rel_name(relationId);
+		TableDDLCommand *command = ColumnarGetCustomTableOptionsDDL(schemaName,
+																	relationName,
+																	options);
+		DDLJob *ddljob = CreateCustomDDLTaskList(relationId, command);
+
+		ExecuteDistributedDDLJob(ddljob);
 	}
 
 	SetColumnarOptions(relationId, &options);
