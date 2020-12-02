@@ -407,6 +407,8 @@ jobs:
            install-and-test-ext --target check-citus-upgrade-mixed --citus-pre-tar /install-pg11-citusv8.2.0.tar
            install-and-test-ext --target check-citus-upgrade-mixed --citus-pre-tar /install-pg11-citusv8.3.0.tar
           no_output_timeout: 2m
+      - codecov/upload:
+          flags: 'test_11,upgrade'
 
   test-13_check-multi:
     docker:
