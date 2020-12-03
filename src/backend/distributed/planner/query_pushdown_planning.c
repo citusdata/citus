@@ -928,19 +928,91 @@ DeferErrorIfCannotPushdownSubquery(Query *subqueryTree, bool outerMostQueryHasLi
 					  "functions";
 	}
 
-	if (subqueryTree->limitOffset)
+	/*
+	 * Correlated subqueries are effectively functions that are repeatedly called
+	 * for the values of the vars that point to the outer query. We can liberally
+	 * push down SQL features within such a function, as long as co-located join
+	 * checks are applied.
+	 */
+	if (!contain_vars_of_level((Node *) subqueryTree, 1))
 	{
-		preconditionsSatisfied = false;
-		errorDetail = "Offset clause is currently unsupported when a subquery "
-					  "references a column from another query";
-	}
+		if (subqueryTree->limitOffset)
+		{
+			preconditionsSatisfied = false;
+			errorDetail = "Offset clause is currently unsupported when a subquery "
+						  "references a column from another query";
+		}
 
-	/* limit is not supported when SubqueryPushdown is not set */
-	if (subqueryTree->limitCount && !SubqueryPushdown)
-	{
-		preconditionsSatisfied = false;
-		errorDetail = "Limit in subquery is currently unsupported when a "
-					  "subquery references a column from another query";
+		/* limit is not supported when SubqueryPushdown is not set */
+		if (subqueryTree->limitCount && !SubqueryPushdown)
+		{
+			preconditionsSatisfied = false;
+			errorDetail = "Limit in subquery is currently unsupported when a "
+						  "subquery references a column from another query";
+		}
+
+		/* group clause list must include partition column */
+		if (subqueryTree->groupClause)
+		{
+			List *groupClauseList = subqueryTree->groupClause;
+			List *targetEntryList = subqueryTree->targetList;
+			List *groupTargetEntryList = GroupTargetEntryList(groupClauseList,
+															  targetEntryList);
+			bool groupOnPartitionColumn =
+				TargetListOnPartitionColumn(subqueryTree, groupTargetEntryList);
+			if (!groupOnPartitionColumn)
+			{
+				preconditionsSatisfied = false;
+				errorDetail = "Group by list without partition column is currently "
+							  "unsupported when a subquery references a column "
+							  "from another query";
+			}
+		}
+
+		/* we don't support aggregates without group by */
+		if (subqueryTree->hasAggs && (subqueryTree->groupClause == NULL))
+		{
+			preconditionsSatisfied = false;
+			errorDetail = "Aggregates without group by are currently unsupported "
+						  "when a subquery references a column from another query";
+		}
+
+		/* having clause without group by on partition column is not supported */
+		if (subqueryTree->havingQual && (subqueryTree->groupClause == NULL))
+		{
+			preconditionsSatisfied = false;
+			errorDetail = "Having qual without group by on partition column is "
+						  "currently unsupported when a subquery references "
+						  "a column from another query";
+		}
+
+		/*
+		 * We support window functions when the window function
+		 * is partitioned on distribution column.
+		 */
+		if (subqueryTree->hasWindowFuncs && !SafeToPushdownWindowFunction(subqueryTree,
+																		  &errorInfo))
+		{
+			errorDetail = (char *) errorInfo->data;
+			preconditionsSatisfied = false;
+		}
+
+		/* distinct clause list must include partition column */
+		if (subqueryTree->distinctClause)
+		{
+			List *distinctClauseList = subqueryTree->distinctClause;
+			List *targetEntryList = subqueryTree->targetList;
+			List *distinctTargetEntryList = GroupTargetEntryList(distinctClauseList,
+																 targetEntryList);
+			bool distinctOnPartitionColumn =
+				TargetListOnPartitionColumn(subqueryTree, distinctTargetEntryList);
+			if (!distinctOnPartitionColumn)
+			{
+				preconditionsSatisfied = false;
+				errorDetail = "Distinct on columns without partition column is "
+							  "currently unsupported";
+			}
+		}
 	}
 
 	/*
@@ -981,75 +1053,12 @@ DeferErrorIfCannotPushdownSubquery(Query *subqueryTree, bool outerMostQueryHasLi
 		errorDetail = "For Update/Share commands are currently unsupported";
 	}
 
-	/* group clause list must include partition column */
-	if (subqueryTree->groupClause)
-	{
-		List *groupClauseList = subqueryTree->groupClause;
-		List *targetEntryList = subqueryTree->targetList;
-		List *groupTargetEntryList = GroupTargetEntryList(groupClauseList,
-														  targetEntryList);
-		bool groupOnPartitionColumn = TargetListOnPartitionColumn(subqueryTree,
-																  groupTargetEntryList);
-		if (!groupOnPartitionColumn)
-		{
-			preconditionsSatisfied = false;
-			errorDetail = "Group by list without partition column is currently "
-						  "unsupported when a subquery references a column "
-						  "from another query";
-		}
-	}
-
 	/* grouping sets are not allowed in subqueries*/
 	if (subqueryTree->groupingSets)
 	{
 		preconditionsSatisfied = false;
 		errorDetail = "could not run distributed query with GROUPING SETS, CUBE, "
 					  "or ROLLUP";
-	}
-
-	/*
-	 * We support window functions when the window function
-	 * is partitioned on distribution column.
-	 */
-	if (subqueryTree->hasWindowFuncs && !SafeToPushdownWindowFunction(subqueryTree,
-																	  &errorInfo))
-	{
-		errorDetail = (char *) errorInfo->data;
-		preconditionsSatisfied = false;
-	}
-
-	/* we don't support aggregates without group by */
-	if (subqueryTree->hasAggs && (subqueryTree->groupClause == NULL))
-	{
-		preconditionsSatisfied = false;
-		errorDetail = "Aggregates without group by are currently unsupported "
-					  "when a subquery references a column from another query";
-	}
-
-	/* having clause without group by on partition column is not supported */
-	if (subqueryTree->havingQual && (subqueryTree->groupClause == NULL))
-	{
-		preconditionsSatisfied = false;
-		errorDetail = "Having qual without group by on partition column is "
-					  "currently unsupported when a subquery references "
-					  "a column from another query";
-	}
-
-	/* distinct clause list must include partition column */
-	if (subqueryTree->distinctClause)
-	{
-		List *distinctClauseList = subqueryTree->distinctClause;
-		List *targetEntryList = subqueryTree->targetList;
-		List *distinctTargetEntryList = GroupTargetEntryList(distinctClauseList,
-															 targetEntryList);
-		bool distinctOnPartitionColumn =
-			TargetListOnPartitionColumn(subqueryTree, distinctTargetEntryList);
-		if (!distinctOnPartitionColumn)
-		{
-			preconditionsSatisfied = false;
-			errorDetail = "Distinct on columns without partition column is "
-						  "currently unsupported";
-		}
 	}
 
 	deferredError = DeferErrorIfFromClauseRecurs(subqueryTree);

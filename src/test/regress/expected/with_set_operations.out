@@ -413,7 +413,14 @@ DEBUG:  generating subplan XXX_1 for CTE cte_1: SELECT user_id FROM public.users
 DEBUG:  generating subplan XXX_2 for CTE cte_1: SELECT user_id FROM public.users_table
 DEBUG:  generating subplan XXX_3 for subquery SELECT cte_1.user_id FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) cte_1 UNION SELECT cte_1.user_id FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) cte_1
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT DISTINCT user_id FROM public.events_table WHERE (event_type OPERATOR(pg_catalog.=) ANY (SELECT users_table.user_id FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) foo, public.users_table WHERE ((users_table.value_2 OPERATOR(pg_catalog.=) foo.user_id) AND (events_table.user_id OPERATOR(pg_catalog.=) users_table.user_id)) LIMIT 5)) ORDER BY user_id DESC
-ERROR:  cannot push down this subquery
-DETAIL:  Limit in subquery is currently unsupported when a subquery references a column from another query
+ user_id
+---------------------------------------------------------------------
+       5
+       4
+       3
+       2
+       1
+(5 rows)
+
 SET client_min_messages TO DEFAULT;
 SET search_path TO public;

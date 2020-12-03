@@ -90,46 +90,6 @@ FROM
 	ON(foo.value_2 = bar.value_2);
 
 
--- Aggregates in subquery without partition column can be planned recursively
--- unless there is a reference to an outer query
-SELECT
-    *
-FROM
-    users_table
-WHERE
-    user_id IN
-    (
-        SELECT
-            SUM(events_table.user_id)
-        FROM
-            events_table
-        WHERE
-            users_table.user_id = events_table.user_id
-    )
-;
-
-
--- Having qual without group by on partition column can be planned recursively
--- unless there is a reference to an outer query
-SELECT
-    *
-FROM
-    users_table
-WHERE
-    user_id IN
-    (
-        SELECT
-            SUM(events_table.user_id)
-        FROM
-            events_table
-        WHERE
-            events_table.user_id = users_table.user_id
-        HAVING
-            MIN(value_2) > 2
-    )
-;
-
-
 -- We do not support GROUPING SETS in subqueries
 -- This also includes ROLLUP or CUBE clauses
 SELECT * FROM (SELECT user_id, value_1 FROM users_table GROUP BY GROUPING SETS ((user_id), (value_1))) s;
