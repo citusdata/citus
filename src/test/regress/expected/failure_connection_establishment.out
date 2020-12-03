@@ -141,8 +141,8 @@ SELECT count(*) FROM products;
 (1 row)
 
 -- use OFFSET 1 to prevent printing the line where source
--- is the worker
-SELECT citus.dump_network_traffic() ORDER BY 1 OFFSET 1;
+-- is the worker, and LIMIT 1 in case there were multiple connections
+SELECT citus.dump_network_traffic() ORDER BY 1 LIMIT 1 OFFSET 1;
         dump_network_traffic
 ---------------------------------------------------------------------
  (1,coordinator,"[initial message]")
