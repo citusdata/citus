@@ -31,9 +31,11 @@ SELECT
    USING
      (shardid)
    WHERE p.groupid = n.groupid AND t.partmethod = 'n' AND t.repmodel = 't'
-  ) AS "Reference Tables"
+  ) AS "Reference Tables",
+  round(100 * (1. - (ds.available_disk_size::double precision / ds.total_disk_size))) || '%' AS "Disk Usage"
 FROM
-  pg_dist_node n
+  pg_dist_node n,
+  citus_node_disk_space_stats(n.nodename, n.nodeport) ds
 ORDER BY
   groupid;
 

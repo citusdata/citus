@@ -51,8 +51,10 @@ ORDER BY 1;
  function citus_json_concatenate_final(json)
  function citus_jsonb_concatenate(jsonb,jsonb)
  function citus_jsonb_concatenate_final(jsonb)
+ function citus_local_disk_space_stats()
  function citus_node_capacity_1(integer)
  function citus_node_database_size(text,integer,name)
+ function citus_node_disk_space_stats(text,integer)
  function citus_prepare_pg_upgrade()
  function citus_query_stats()
  function citus_relation_size(regclass)
@@ -221,5 +223,5 @@ ORDER BY 1;
  view citus_tables
  view citus_worker_stat_activity
  view pg_dist_shard_placement
-(205 rows)
+(207 rows)
 

@@ -9,6 +9,7 @@
  *
  *-------------------------------------------------------------------------
  */
+#include <sys/statvfs.h>
 
 #include "postgres.h"
 #include "funcapi.h"
@@ -67,6 +68,9 @@
 
 
 /* Local functions forward declarations */
+static bool GetNodeDiskSpaceStats(char *nodeName, int nodePort, uint64 *availableBytes,
+								  uint64 *totalBytes);
+static bool GetLocalDiskSpaceStats(uint64 *availableBytes, uint64 *totalBytes);
 static uint64 NodeDatabaseSize(char *nodeName, int nodePort, char *databaseName);
 static uint64 * AllocateUint64(uint64 value);
 static void RecordDistributedRelationDependencies(Oid distributedRelationId);
@@ -82,11 +86,165 @@ static void ErrorIfNotSuitableToGetSize(Oid relationId);
 
 
 /* exports for SQL callable functions */
+PG_FUNCTION_INFO_V1(citus_node_disk_space_stats);
+PG_FUNCTION_INFO_V1(citus_local_disk_space_stats);
 PG_FUNCTION_INFO_V1(citus_database_size);
 PG_FUNCTION_INFO_V1(citus_node_database_size);
 PG_FUNCTION_INFO_V1(citus_table_size);
 PG_FUNCTION_INFO_V1(citus_total_relation_size);
 PG_FUNCTION_INFO_V1(citus_relation_size);
+
+
+/*
+ * citus_node_database_size is a UDF that returns the size of the database
+ * on a given node.
+ */
+Datum
+citus_node_disk_space_stats(PG_FUNCTION_ARGS)
+{
+	text *nodeNameText = PG_GETARG_TEXT_P(0);
+	char *nodeNameString = text_to_cstring(nodeNameText);
+	int32 nodePort = PG_GETARG_INT32(1);
+
+	CheckCitusVersion(ERROR);
+
+	uint64 availableBytes = 0;
+	uint64 totalBytes = 0;
+
+	GetNodeDiskSpaceStats(nodeNameString, nodePort, &availableBytes, &totalBytes);
+
+	TupleDesc tupleDescriptor = NULL;
+	Datum values[TABLE_METADATA_FIELDS];
+	bool isNulls[TABLE_METADATA_FIELDS];
+
+	TypeFuncClass resultTypeClass = get_call_result_type(fcinfo, NULL,
+														 &tupleDescriptor);
+	if (resultTypeClass != TYPEFUNC_COMPOSITE)
+	{
+		ereport(ERROR, (errmsg("return type must be a row type")));
+	}
+
+	/* form heap tuple for remote disk space statistics */
+	memset(values, 0, sizeof(values));
+	memset(isNulls, false, sizeof(isNulls));
+
+	values[0] = UInt64GetDatum(availableBytes);
+	values[1] = UInt64GetDatum(totalBytes);
+
+	HeapTuple diskSpaceTuple = heap_form_tuple(tupleDescriptor, values, isNulls);
+
+	PG_RETURN_UINT64(HeapTupleGetDatum(diskSpaceTuple));
+}
+
+
+/*
+ * GetNodeDiskSpaceStats fetches the disk space statistics for a given node,
+ * or returns false if unsuccessful.
+ */
+static bool
+GetNodeDiskSpaceStats(char *nodeName, int nodePort, uint64 *availableBytes,
+					  uint64 *totalBytes)
+{
+	uint32 connectionFlags = 0;
+	PGresult *result = NULL;
+	bool raiseErrors = true;
+
+	char *sizeQuery = "SELECT available_disk_size, total_disk_size "
+					  "FROM pg_catalog.citus_local_disk_space_stats()";
+
+	MultiConnection *connection = GetNodeConnection(connectionFlags, nodeName, nodePort);
+
+	int queryResult = ExecuteOptionalRemoteCommand(connection, sizeQuery, &result);
+	if (queryResult != 0)
+	{
+		ereport(WARNING, (errcode(ERRCODE_CONNECTION_FAILURE),
+						  errmsg("cannot get the disk space statistics for node %s:%d",
+								 nodeName, nodePort)));
+		return false;
+	}
+
+	if (!IsResponseOK(result) || PQntuples(result) != 1)
+	{
+		ereport(WARNING, (errcode(ERRCODE_CONNECTION_FAILURE),
+						  errmsg("cannot get the disk space statistics for node %s:%d",
+								 nodeName, nodePort)));
+
+		PQclear(result);
+		ClearResults(connection, raiseErrors);
+
+		return false;
+	}
+
+	char *availableBytesString = PQgetvalue(result, 0, 0);
+	char *totalBytesString = PQgetvalue(result, 0, 1);
+
+	*availableBytes = SafeStringToUint64(availableBytesString);
+	*totalBytes = SafeStringToUint64(totalBytesString);
+
+	PQclear(result);
+	ClearResults(connection, raiseErrors);
+
+	return true;
+}
+
+
+/*
+ * citus_local_disk_space_stats returns total disk space and available disk
+ * space for the disk that contains PGDATA.
+ */
+Datum
+citus_local_disk_space_stats(PG_FUNCTION_ARGS)
+{
+	uint64 availableBytes = 0;
+	uint64 totalBytes = 0;
+
+	if (GetLocalDiskSpaceStats(&availableBytes, &totalBytes))
+	{
+		ereport(WARNING, (errmsg("could not get disk space")));
+	}
+
+	TupleDesc tupleDescriptor = NULL;
+	Datum values[TABLE_METADATA_FIELDS];
+	bool isNulls[TABLE_METADATA_FIELDS];
+
+	TypeFuncClass resultTypeClass = get_call_result_type(fcinfo, NULL,
+														 &tupleDescriptor);
+	if (resultTypeClass != TYPEFUNC_COMPOSITE)
+	{
+		ereport(ERROR, (errmsg("return type must be a row type")));
+	}
+
+	/* form heap tuple for local disk space statistics */
+	memset(values, 0, sizeof(values));
+	memset(isNulls, false, sizeof(isNulls));
+
+	values[0] = UInt64GetDatum(availableBytes);
+	values[1] = UInt64GetDatum(totalBytes);
+
+	HeapTuple diskSpaceTuple = heap_form_tuple(tupleDescriptor, values, isNulls);
+
+	PG_RETURN_DATUM(HeapTupleGetDatum(diskSpaceTuple));
+}
+
+
+/*
+ * GetLocalDiskSpaceStats returns total and available disk space for the disk containing
+ * PGDATA (not considering tablespaces, quota).
+ */
+static bool
+GetLocalDiskSpaceStats(uint64 *availableBytes, uint64 *totalBytes)
+{
+	struct statvfs buffer;
+	if (statvfs(DataDir, &buffer) != 0)
+	{
+		return false;
+	}
+
+	*availableBytes = buffer.f_bfree * buffer.f_frsize;
+	*totalBytes = buffer.f_blocks * buffer.f_frsize;
+
+	return true;
+}
 
 
 /*
@@ -235,7 +393,8 @@ citus_relation_size(PG_FUNCTION_ARGS)
 
 
 /*
- * NodeDatabaseSize returns the size of a database on a given node.
+ * NodeDatabaseSize returns the size of a database on a given node or
+ * 0 in case of failure.
  */
 static uint64
 NodeDatabaseSize(char *nodeName, int nodePort, char *databaseName)
@@ -243,24 +402,37 @@ NodeDatabaseSize(char *nodeName, int nodePort, char *databaseName)
 	uint32 connectionFlags = 0;
 	PGresult *result = NULL;
 	StringInfo sizeQuery = makeStringInfo();
-	bool raiseErrors = true;
+	bool raiseErrors = false;
 
 	appendStringInfo(sizeQuery, "SELECT pg_catalog.pg_database_size(%s)",
 					 quote_literal_cstr(quote_identifier(databaseName)));
 
 	MultiConnection *connection = GetNodeConnection(connectionFlags, nodeName, nodePort);
 
-	int queryResult = ExecuteOptionalRemoteCommand(connection, sizeQuery->data,
-												   &result);
+	int queryResult = ExecuteOptionalRemoteCommand(connection, sizeQuery->data, &result);
 	if (queryResult != 0)
 	{
-		ereport(ERROR, (errcode(ERRCODE_CONNECTION_FAILURE),
-						errmsg("cannot get the size because of a connection error")));
+		ereport(WARNING, (errcode(ERRCODE_CONNECTION_FAILURE),
+						  errmsg("cannot get the database size for node %s:%d",
+								 nodeName, nodePort)));
+		return 0;
 	}
 
-	List *sizeList = ReadFirstColumnAsText(result);
-	StringInfo databaseSizeStringInfo = (StringInfo) linitial(sizeList);
-	uint64 databaseSize = SafeStringToUint64(databaseSizeStringInfo->data);
+	if (!IsResponseOK(result) || PQntuples(result) != 1)
+	{
+		ereport(WARNING, (errcode(ERRCODE_CONNECTION_FAILURE),
+						  errmsg("cannot get the disk space statistics for node %s:%d",
+								 nodeName, nodePort)));
+
+		PQclear(result);
+		ClearResults(connection, raiseErrors);
+
+		return false;
+	}
+
+	char *databaseSizeString = PQgetvalue(result, 0, 0);
+
+	uint64 databaseSize = SafeStringToUint64(databaseSizeString);
 
 	PQclear(result);
 	ClearResults(connection, raiseErrors);
