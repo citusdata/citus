@@ -22,12 +22,25 @@ SELECT citus_total_relation_size('non_distributed_table');
 ERROR:  cannot calculate the size because relation 'non_distributed_table' is not distributed
 DROP TABLE non_distributed_table;
 -- Tests on distributed table with replication factor > 1
+VACUUM (FULL) lineitem_hash_part;
 SELECT citus_table_size('lineitem_hash_part');
-ERROR:  cannot calculate the size because replication factor is greater than 1
+ citus_table_size
+---------------------------------------------------------------------
+          3801088
+(1 row)
+
 SELECT citus_relation_size('lineitem_hash_part');
-ERROR:  cannot calculate the size because replication factor is greater than 1
+ citus_relation_size
+---------------------------------------------------------------------
+             3801088
+(1 row)
+
 SELECT citus_total_relation_size('lineitem_hash_part');
-ERROR:  cannot calculate the size because replication factor is greater than 1
+ citus_total_relation_size
+---------------------------------------------------------------------
+                   3801088
+(1 row)
+
 VACUUM (FULL) customer_copy_hash;
 -- Tests on distributed tables with streaming replication.
 SELECT citus_table_size('customer_copy_hash');

@@ -20,6 +20,8 @@ SELECT citus_total_relation_size('non_distributed_table');
 DROP TABLE non_distributed_table;
 
 -- Tests on distributed table with replication factor > 1
+VACUUM (FULL) lineitem_hash_part;
+
 SELECT citus_table_size('lineitem_hash_part');
 SELECT citus_relation_size('lineitem_hash_part');
 SELECT citus_total_relation_size('lineitem_hash_part');

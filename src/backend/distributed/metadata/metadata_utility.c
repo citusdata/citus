@@ -367,14 +367,6 @@ ErrorIfNotSuitableToGetSize(Oid relationId)
 						errmsg("cannot calculate the size because relation %s is not "
 							   "distributed", escapedQueryString)));
 	}
-
-	if (IsCitusTableType(relationId, HASH_DISTRIBUTED) &&
-		!SingleReplicatedTable(relationId))
-	{
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("cannot calculate the size because replication factor "
-							   "is greater than 1")));
-	}
 }
 
 
