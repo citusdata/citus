@@ -773,8 +773,6 @@ WHERE
   )
 GROUP BY
   user_id;
-ERROR:  cannot push down this subquery
-DETAIL:  Window functions without PARTITION BY on distribution column is currently unsupported
 INSERT INTO agg_results_window(user_id, value_2_agg)
 SELECT * FROM (
   SELECT

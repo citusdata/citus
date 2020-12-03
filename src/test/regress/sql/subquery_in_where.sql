@@ -502,6 +502,43 @@ WHERE value_1 IN
     (SELECT value_1
      FROM users_Table) OR (EXISTS (SELECT * FROM events_table));
 
+-- correlated subquery with aggregate in WHERE
+SELECT
+    *
+FROM
+    users_table
+WHERE
+    user_id IN
+    (
+        SELECT
+            SUM(events_table.user_id)
+        FROM
+            events_table
+        WHERE
+            users_table.user_id = events_table.user_id
+    )
+;
+
+-- correlated subquery with aggregate in HAVING
+SELECT
+    *
+FROM
+    users_table
+WHERE
+    user_id IN
+    (
+        SELECT
+            SUM(events_table.user_id)
+        FROM
+            events_table
+        WHERE
+            events_table.user_id = users_table.user_id
+        HAVING
+            MIN(value_2) > 2
+    )
+;
+
+
 -- Local tables also planned recursively, so using it as part of the FROM clause
 -- make the clause recurring
 CREATE TABLE local_table(id int, value_1 int);
