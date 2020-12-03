@@ -743,7 +743,8 @@ LogRelationStats(Relation rel, int elevel)
 	appendStringInfo(infoBuf,
 					 "total row count: %ld, stripe count: %d, "
 					 "average rows per stripe: %ld\n",
-					 tupleCount, stripeCount, tupleCount / stripeCount);
+					 tupleCount, stripeCount,
+					 stripeCount ? tupleCount / stripeCount : 0);
 	appendStringInfo(infoBuf,
 					 "block count: %ld"
 					 ", containing data for dropped columns: %ld",
@@ -817,7 +818,11 @@ TruncateCStore(Relation rel, int elevel)
 	SmgrAddr highestPhysicalAddress =
 		logical_to_smgr(GetHighestUsedAddress(rel->rd_node));
 
-	BlockNumber new_rel_pages = highestPhysicalAddress.blockno + 1;
+	/*
+	 * Unlock and return if truncation won't reduce data file's size.
+	 */
+	BlockNumber new_rel_pages = Min(old_rel_pages,
+									highestPhysicalAddress.blockno + 1);
 	if (new_rel_pages == old_rel_pages)
 	{
 		UnlockRelation(rel, AccessExclusiveLock);

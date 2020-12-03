@@ -607,13 +607,23 @@ StripesForRelfilenode(RelFileNode relfilenode)
 /*
  * GetHighestUsedAddress returns the highest used address for the given
  * relfilenode across all active and inactive transactions.
+ *
+ * This is used by truncate stage of VACUUM, and VACUUM can be called
+ * for empty tables. So this doesn't throw errors for empty tables and
+ * returns 0.
  */
 uint64
 GetHighestUsedAddress(RelFileNode relfilenode)
 {
 	uint64 highestUsedAddress = 0;
 	uint64 highestUsedId = 0;
-	ColumnarMetapage *metapage = ReadMetapage(relfilenode, false);
+	ColumnarMetapage *metapage = ReadMetapage(relfilenode, true);
+
+	/* empty data file? */
+	if (metapage == NULL)
+	{
+		return 0;
+	}
 
 	GetHighestUsedAddressAndId(metapage->storageId, &highestUsedAddress, &highestUsedId);
 
