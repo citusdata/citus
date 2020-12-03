@@ -30,7 +30,7 @@ CREATE TABLE ref(a int, b int);
 SELECT create_reference_table('ref');
 CREATE TABLE local(c int, d int);
 
-CREATE TABLE public.another_schema_table(a int);
+CREATE TABLE public.another_schema_table(a int, b int);
 SELECT create_distributed_table('public.another_schema_table', 'a');
 
 -- Confirm the basics work
@@ -611,9 +611,9 @@ SET search_path TO single_node;
 SELECT count(*) from should_commit;
 SELECT pg_catalog.get_all_active_client_backend_count();
 BEGIN;
-	SET citus.shard_count TO 32;
-	SET citus.force_max_query_parallelization TO ON;
-	SET citus.enable_local_execution TO false;
+	SET LOCAL citus.shard_count TO 32;
+	SET LOCAL citus.force_max_query_parallelization TO ON;
+	SET LOCAL citus.enable_local_execution TO false;
 
 	CREATE TABLE test (a int);
 	SET citus.shard_replication_factor TO 1;
@@ -624,11 +624,54 @@ BEGIN;
 	SELECT pg_catalog.get_all_active_client_backend_count();
 ROLLBACK;
 
+
+\c - - - :master_port
+SET search_path TO single_node;
+
+
+-- simulate that even if there is no connection slots
+-- to connect, Citus can switch to local execution
+SET citus.force_max_query_parallelization TO false;
+SET citus.log_remote_commands TO ON;
+ALTER SYSTEM SET citus.local_shared_pool_size TO -1;
+SELECT pg_reload_conf();
+SELECT pg_sleep(0.1);
+SET citus.executor_slow_start_interval TO 10;
+SELECT count(*) from another_schema_table;
+
+UPDATE another_schema_table SET b = b;
+
+-- INSERT .. SELECT pushdown and INSERT .. SELECT via repartitioning
+-- not that we ignore INSERT .. SELECT via coordinator as it relies on
+-- COPY command
+INSERT INTO another_schema_table SELECT * FROM another_schema_table;
+INSERT INTO another_schema_table SELECT b::int, a::int FROM another_schema_table;
+
+-- multi-row INSERTs
+INSERT INTO another_schema_table VALUES (1,1), (2,2), (3,3), (4,4), (5,5),(6,6),(7,7);
+
+-- intermediate results
+WITH cte_1 AS (SELECT * FROM another_schema_table LIMIT 1000)
+	SELECT count(*) FROM cte_1;
+
+-- if the local execution is disabled, we cannot failover to
+-- local execution and the queries would fail
+SET citus.enable_local_execution TO  false;
+SELECT count(*) from another_schema_table;
+UPDATE another_schema_table SET b = b;
+INSERT INTO another_schema_table SELECT * FROM another_schema_table;
+INSERT INTO another_schema_table SELECT b::int, a::int FROM another_schema_table;
+WITH cte_1 AS (SELECT * FROM another_schema_table LIMIT 1000)
+	SELECT count(*) FROM cte_1;
+
+INSERT INTO another_schema_table VALUES (1,1), (2,2), (3,3), (4,4), (5,5),(6,6),(7,7);
+
 -- set the values to originals back
 ALTER SYSTEM RESET citus.max_cached_conns_per_worker;
 ALTER SYSTEM RESET citus.distributed_deadlock_detection_factor;
 ALTER SYSTEM RESET citus.recover_2pc_interval;
 ALTER SYSTEM RESET citus.distributed_deadlock_detection_factor;
+ALTER SYSTEM RESET citus.local_shared_pool_size;
 SELECT pg_reload_conf();
 
 -- suppress notices
