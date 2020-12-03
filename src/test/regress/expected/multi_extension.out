@@ -476,20 +476,22 @@ SELECT * FROM print_extension_changes();
 -- Snapshot of state at 10.0-1
 ALTER EXTENSION citus UPDATE TO '10.0-1';
 SELECT * FROM print_extension_changes();
- previous_object |                            current_object
+               previous_object                |                                current_object
 ---------------------------------------------------------------------
-                 | access method columnar
-                 | function alter_columnar_table_reset(regclass,boolean,boolean,boolean,boolean)
-                 | function alter_columnar_table_set(regclass,integer,integer,name,integer)
-                 | function citus_internal.columnar_ensure_objects_exist()
-                 | function columnar.columnar_handler(internal)
-                 | schema columnar
-                 | sequence columnar.storageid_seq
-                 | table columnar.columnar_skipnodes
-                 | table columnar.columnar_stripes
-                 | table columnar.options
-                 | view citus_tables
-(11 rows)
+ function citus_total_relation_size(regclass) |
+                                              | access method columnar
+                                              | function alter_columnar_table_reset(regclass,boolean,boolean,boolean,boolean)
+                                              | function alter_columnar_table_set(regclass,integer,integer,name,integer)
+                                              | function citus_internal.columnar_ensure_objects_exist()
+                                              | function citus_total_relation_size(regclass,boolean)
+                                              | function columnar.columnar_handler(internal)
+                                              | schema columnar
+                                              | sequence columnar.storageid_seq
+                                              | table columnar.columnar_skipnodes
+                                              | table columnar.columnar_stripes
+                                              | table columnar.options
+                                              | view citus_tables
+(13 rows)
 
 DROP TABLE prev_objects, extension_diff;
 -- show running version
