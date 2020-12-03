@@ -27,13 +27,13 @@
 /* Defines for valid option names */
 #define OPTION_NAME_COMPRESSION_TYPE "compression"
 #define OPTION_NAME_STRIPE_ROW_COUNT "stripe_row_count"
-#define OPTION_NAME_BLOCK_ROW_COUNT "block_row_count"
+#define OPTION_NAME_CHUNK_ROW_COUNT "chunk_row_count"
 
 /* Limits for option parameters */
 #define STRIPE_ROW_COUNT_MINIMUM 1000
 #define STRIPE_ROW_COUNT_MAXIMUM 10000000
-#define BLOCK_ROW_COUNT_MINIMUM 1000
-#define BLOCK_ROW_COUNT_MAXIMUM 100000
+#define CHUNK_ROW_COUNT_MINIMUM 1000
+#define CHUNK_ROW_COUNT_MAXIMUM 100000
 
 /* String representations of compression types */
 #define COMPRESSION_STRING_NONE "none"
@@ -70,7 +70,7 @@ typedef enum
 typedef struct ColumnarOptions
 {
 	uint64 stripeRowCount;
-	uint32 blockRowCount;
+	uint32 chunkRowCount;
 	CompressionType compressionType;
 } ColumnarOptions;
 
@@ -84,8 +84,8 @@ typedef struct StripeMetadata
 	uint64 fileOffset;
 	uint64 dataLength;
 	uint32 columnCount;
-	uint32 blockCount;
-	uint32 blockRowCount;
+	uint32 chunkCount;
+	uint32 chunkRowCount;
 	uint64 rowCount;
 	uint64 id;
 } StripeMetadata;
@@ -98,10 +98,10 @@ typedef struct DataFileMetadata
 } DataFileMetadata;
 
 
-/* ColumnBlockSkipNode contains statistics for a ColumnBlockData. */
-typedef struct ColumnBlockSkipNode
+/* ColumnChunkSkipNode contains statistics for a ColumnChunkData. */
+typedef struct ColumnChunkSkipNode
 {
-	/* statistics about values of a column block */
+	/* statistics about values of a column chunk */
 	bool hasMinMax;
 	Datum minimumValue;
 	Datum maximumValue;
@@ -109,39 +109,39 @@ typedef struct ColumnBlockSkipNode
 
 	/*
 	 * Offsets and sizes of value and exists streams in the column data.
-	 * These enable us to skip reading suppressed row blocks, and start reading
-	 * a block without reading previous blocks.
+	 * These enable us to skip reading suppressed row chunks, and start reading
+	 * a chunk without reading previous chunks.
 	 */
-	uint64 valueBlockOffset;
+	uint64 valueChunkOffset;
 	uint64 valueLength;
-	uint64 existsBlockOffset;
+	uint64 existsChunkOffset;
 	uint64 existsLength;
 
 	CompressionType valueCompressionType;
-} ColumnBlockSkipNode;
+} ColumnChunkSkipNode;
 
 
 /*
- * StripeSkipList can be used for skipping row blocks. It contains a column block
- * skip node for each block of each column. blockSkipNodeArray[column][block]
- * is the entry for the specified column block.
+ * StripeSkipList can be used for skipping row chunks. It contains a column chunk
+ * skip node for each chunk of each column. chunkSkipNodeArray[column][chunk]
+ * is the entry for the specified column chunk.
  */
 typedef struct StripeSkipList
 {
-	ColumnBlockSkipNode **blockSkipNodeArray;
+	ColumnChunkSkipNode **chunkSkipNodeArray;
 	uint32 columnCount;
-	uint32 blockCount;
+	uint32 chunkCount;
 } StripeSkipList;
 
 
 /*
- * BlockData represents a block of data for multiple columns. valueArray stores
+ * ChunkData represents a chunk of data for multiple columns. valueArray stores
  * the values of data, and existsArray stores whether a value is present.
  * valueBuffer is used to store (uncompressed) serialized values
  * referenced by Datum's in valueArray. It is only used for by-reference Datum's.
  * There is a one-to-one correspondence between valueArray and existsArray.
  */
-typedef struct BlockData
+typedef struct ChunkData
 {
 	uint32 rowCount;
 	uint32 columnCount;
@@ -155,31 +155,31 @@ typedef struct BlockData
 
 	/* valueBuffer keeps actual data for type-by-reference datums from valueArray. */
 	StringInfo *valueBufferArray;
-} BlockData;
+} ChunkData;
 
 
 /*
- * ColumnBlockBuffers represents a block of serialized data in a column.
+ * ColumnChunkBuffers represents a chunk of serialized data in a column.
  * valueBuffer stores the serialized values of data, and existsBuffer stores
  * serialized value of presence information. valueCompressionType contains
  * compression type if valueBuffer is compressed. Finally rowCount has
- * the number of rows in this block.
+ * the number of rows in this chunk.
  */
-typedef struct ColumnBlockBuffers
+typedef struct ColumnChunkBuffers
 {
 	StringInfo existsBuffer;
 	StringInfo valueBuffer;
 	CompressionType valueCompressionType;
-} ColumnBlockBuffers;
+} ColumnChunkBuffers;
 
 
 /*
  * ColumnBuffers represents data buffers for a column in a row stripe. Each
- * column is made of multiple column blocks.
+ * column is made of multiple column chunks.
  */
 typedef struct ColumnBuffers
 {
-	ColumnBlockBuffers **blockBuffersArray;
+	ColumnChunkBuffers **chunkBuffersArray;
 } ColumnBuffers;
 
 
@@ -203,7 +203,7 @@ typedef struct TableReadState
 	/*
 	 * List of Var pointers for columns in the query. We use this both for
 	 * getting vector of projected columns, and also when we want to build
-	 * base constraint to find selected row blocks.
+	 * base constraint to find selected row chunks.
 	 */
 	List *projectedColumnList;
 
@@ -212,8 +212,8 @@ typedef struct TableReadState
 	StripeBuffers *stripeBuffers;
 	uint32 readStripeCount;
 	uint64 stripeReadRowCount;
-	BlockData *blockData;
-	int32 deserializedBlockIndex;
+	ChunkData *chunkData;
+	int32 deserializedChunkIndex;
 } TableReadState;
 
 
@@ -230,8 +230,8 @@ typedef struct TableWriteState
 	StripeBuffers *stripeBuffers;
 	StripeSkipList *stripeSkipList;
 	uint32 stripeMaxRowCount;
-	uint32 blockRowCount;
-	BlockData *blockData;
+	uint32 chunkRowCount;
+	ChunkData *chunkData;
 
 	/*
 	 * compressionBuffer buffer is used as temporary storage during
@@ -244,7 +244,7 @@ typedef struct TableWriteState
 
 extern int cstore_compression;
 extern int cstore_stripe_row_count;
-extern int cstore_block_row_count;
+extern int cstore_chunk_row_count;
 
 extern void cstore_init(void);
 
@@ -254,7 +254,7 @@ extern CompressionType ParseCompressionType(const char *compressionTypeString);
 extern TableWriteState * CStoreBeginWrite(RelFileNode relfilenode,
 										  CompressionType compressionType,
 										  uint64 stripeMaxRowCount,
-										  uint32 blockRowCount,
+										  uint32 chunkRowCount,
 										  TupleDesc tupleDescriptor);
 extern void CStoreWriteRow(TableWriteState *state, Datum *columnValues,
 						   bool *columnNulls);
@@ -275,9 +275,9 @@ extern void CStoreEndRead(TableReadState *state);
 /* Function declarations for common functions */
 extern FmgrInfo * GetFunctionInfoOrNull(Oid typeId, Oid accessMethodId,
 										int16 procedureId);
-extern BlockData * CreateEmptyBlockData(uint32 columnCount, bool *columnMask,
-										uint32 blockRowCount);
-extern void FreeBlockData(BlockData *blockData);
+extern ChunkData * CreateEmptyChunkData(uint32 columnCount, bool *columnMask,
+										uint32 chunkRowCount);
+extern void FreeChunkData(ChunkData *chunkData);
 extern uint64 CStoreTableRowCount(Relation relation);
 extern bool CompressBuffer(StringInfo inputBuffer, StringInfo outputBuffer,
 						   CompressionType compressionType);
@@ -300,13 +300,13 @@ extern List * StripesForRelfilenode(RelFileNode relfilenode);
 extern uint64 GetHighestUsedAddress(RelFileNode relfilenode);
 extern StripeMetadata ReserveStripe(Relation rel, uint64 size,
 									uint64 rowCount, uint64 columnCount,
-									uint64 blockCount, uint64 blockRowCount);
+									uint64 chunkCount, uint64 chunkRowCount);
 extern void SaveStripeSkipList(RelFileNode relfilenode, uint64 stripe,
 							   StripeSkipList *stripeSkipList,
 							   TupleDesc tupleDescriptor);
 extern StripeSkipList * ReadStripeSkipList(RelFileNode relfilenode, uint64 stripe,
 										   TupleDesc tupleDescriptor,
-										   uint32 blockCount);
+										   uint32 chunkCount);
 extern Datum columnar_relation_storageid(PG_FUNCTION_ARGS);
 
 

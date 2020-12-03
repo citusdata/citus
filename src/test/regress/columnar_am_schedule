@@ -17,7 +17,7 @@ test: am_rollback
 test: am_truncate
 test: am_vacuum
 test: am_clean
-test: am_block_filtering
+test: am_chunk_filtering
 test: am_join
 test: am_trigger
 test: am_tableoptions

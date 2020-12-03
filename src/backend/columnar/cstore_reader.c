@@ -4,7 +4,7 @@
  *
  * This file contains function definitions for reading cstore files. This
  * includes the logic for reading file level metadata, reading row stripes,
- * and skipping unrelated row blocks and columns.
+ * and skipping unrelated row chunks and columns.
  *
  * Copyright (c) 2016, Citus Data, Inc.
  *
@@ -46,23 +46,23 @@ static StripeBuffers * LoadFilteredStripeBuffers(Relation relation,
 												 List *projectedColumnList,
 												 List *whereClauseList);
 static void ReadStripeNextRow(StripeBuffers *stripeBuffers, List *projectedColumnList,
-							  uint64 blockIndex, uint64 blockRowIndex,
-							  BlockData *blockData, Datum *columnValues,
+							  uint64 chunkIndex, uint64 chunkRowIndex,
+							  ChunkData *chunkData, Datum *columnValues,
 							  bool *columnNulls);
 static ColumnBuffers * LoadColumnBuffers(Relation relation,
-										 ColumnBlockSkipNode *blockSkipNodeArray,
-										 uint32 blockCount, uint64 stripeOffset,
+										 ColumnChunkSkipNode *chunkSkipNodeArray,
+										 uint32 chunkCount, uint64 stripeOffset,
 										 Form_pg_attribute attributeForm);
-static bool * SelectedBlockMask(StripeSkipList *stripeSkipList,
+static bool * SelectedChunkMask(StripeSkipList *stripeSkipList,
 								List *projectedColumnList, List *whereClauseList);
 static List * BuildRestrictInfoList(List *whereClauseList);
 static Node * BuildBaseConstraint(Var *variable);
 static OpExpr * MakeOpExpression(Var *variable, int16 strategyNumber);
 static Oid GetOperatorByType(Oid typeId, Oid accessMethodId, int16 strategyNumber);
 static void UpdateConstraint(Node *baseConstraint, Datum minValue, Datum maxValue);
-static StripeSkipList * SelectedBlockSkipList(StripeSkipList *stripeSkipList,
+static StripeSkipList * SelectedChunkSkipList(StripeSkipList *stripeSkipList,
 											  bool *projectedColumnMask,
-											  bool *selectedBlockMask);
+											  bool *selectedChunkMask);
 static uint32 StripeSkipListRowCount(StripeSkipList *stripeSkipList);
 static bool * ProjectedColumnMask(uint32 columnCount, List *projectedColumnList);
 static void DeserializeBoolArray(StringInfo boolArrayBuffer, bool *boolArray,
@@ -71,7 +71,7 @@ static void DeserializeDatumArray(StringInfo datumBuffer, bool *existsArray,
 								  uint32 datumCount, bool datumTypeByValue,
 								  int datumTypeLength, char datumTypeAlign,
 								  Datum *datumArray);
-static BlockData * DeserializeBlockData(StripeBuffers *stripeBuffers, uint64 blockIndex,
+static ChunkData * DeserializeChunkData(StripeBuffers *stripeBuffers, uint64 chunkIndex,
 										uint32 rowCount, TupleDesc tupleDescriptor,
 										List *projectedColumnList);
 static Datum ColumnDefaultValue(TupleConstr *tupleConstraints,
@@ -106,8 +106,8 @@ CStoreBeginRead(Relation relation, TupleDesc tupleDescriptor,
 	readState->stripeReadRowCount = 0;
 	readState->tupleDescriptor = tupleDescriptor;
 	readState->stripeReadContext = stripeReadContext;
-	readState->blockData = NULL;
-	readState->deserializedBlockIndex = -1;
+	readState->chunkData = NULL;
+	readState->deserializedChunkIndex = -1;
 
 	return readState;
 }
@@ -126,7 +126,7 @@ CStoreReadNextRow(TableReadState *readState, Datum *columnValues, bool *columnNu
 
 	/*
 	 * If no stripes are loaded, load the next non-empty stripe. Note that when
-	 * loading stripes, we skip over blocks whose contents can be filtered with
+	 * loading stripes, we skip over chunks whose contents can be filtered with
 	 * the query's restriction qualifiers. So, even when a stripe is physically
 	 * not empty, we may end up loading it as an empty stripe.
 	 */
@@ -143,7 +143,7 @@ CStoreReadNextRow(TableReadState *readState, Datum *columnValues, bool *columnNu
 
 		oldContext = MemoryContextSwitchTo(readState->stripeReadContext);
 		MemoryContextReset(readState->stripeReadContext);
-		readState->blockData = NULL;
+		readState->chunkData = NULL;
 
 		stripeMetadata = list_nth(stripeMetadataList, readState->readStripeCount);
 		StripeBuffers *stripeBuffers = LoadFilteredStripeBuffers(readState->relation,
@@ -163,44 +163,44 @@ CStoreReadNextRow(TableReadState *readState, Datum *columnValues, bool *columnNu
 		{
 			readState->stripeBuffers = stripeBuffers;
 			readState->stripeReadRowCount = 0;
-			readState->deserializedBlockIndex = -1;
+			readState->deserializedChunkIndex = -1;
 			break;
 		}
 	}
 
-	uint32 blockIndex = readState->stripeReadRowCount / stripeMetadata->blockRowCount;
-	uint32 blockRowIndex = readState->stripeReadRowCount % stripeMetadata->blockRowCount;
+	uint32 chunkIndex = readState->stripeReadRowCount / stripeMetadata->chunkRowCount;
+	uint32 chunkRowIndex = readState->stripeReadRowCount % stripeMetadata->chunkRowCount;
 
-	if (blockIndex != readState->deserializedBlockIndex)
+	if (chunkIndex != readState->deserializedChunkIndex)
 	{
-		uint32 blockRowCount = 0;
+		uint32 chunkRowCount = 0;
 
 		uint32 stripeRowCount = stripeMetadata->rowCount;
-		uint32 lastBlockIndex = stripeRowCount / stripeMetadata->blockRowCount;
-		if (blockIndex == lastBlockIndex)
+		uint32 lastChunkIndex = stripeRowCount / stripeMetadata->chunkRowCount;
+		if (chunkIndex == lastChunkIndex)
 		{
-			blockRowCount = stripeRowCount % stripeMetadata->blockRowCount;
+			chunkRowCount = stripeRowCount % stripeMetadata->chunkRowCount;
 		}
 		else
 		{
-			blockRowCount = stripeMetadata->blockRowCount;
+			chunkRowCount = stripeMetadata->chunkRowCount;
 		}
 
 		oldContext = MemoryContextSwitchTo(readState->stripeReadContext);
 
-		FreeBlockData(readState->blockData);
-		readState->blockData =
-			DeserializeBlockData(readState->stripeBuffers, blockIndex,
-								 blockRowCount, readState->tupleDescriptor,
+		FreeChunkData(readState->chunkData);
+		readState->chunkData =
+			DeserializeChunkData(readState->stripeBuffers, chunkIndex,
+								 chunkRowCount, readState->tupleDescriptor,
 								 readState->projectedColumnList);
 
 		MemoryContextSwitchTo(oldContext);
 
-		readState->deserializedBlockIndex = blockIndex;
+		readState->deserializedChunkIndex = chunkIndex;
 	}
 
 	ReadStripeNextRow(readState->stripeBuffers, readState->projectedColumnList,
-					  blockIndex, blockRowIndex, readState->blockData,
+					  chunkIndex, chunkRowIndex, readState->chunkData,
 					  columnValues, columnNulls);
 
 	/*
@@ -241,68 +241,68 @@ CStoreEndRead(TableReadState *readState)
 
 
 /*
- * CreateEmptyBlockDataArray creates data buffers to keep deserialized exist and
+ * CreateEmptyChunkDataArray creates data buffers to keep deserialized exist and
  * value arrays for requested columns in columnMask.
  */
-BlockData *
-CreateEmptyBlockData(uint32 columnCount, bool *columnMask, uint32 blockRowCount)
+ChunkData *
+CreateEmptyChunkData(uint32 columnCount, bool *columnMask, uint32 chunkRowCount)
 {
 	uint32 columnIndex = 0;
 
-	BlockData *blockData = palloc0(sizeof(BlockData));
-	blockData->existsArray = palloc0(columnCount * sizeof(bool *));
-	blockData->valueArray = palloc0(columnCount * sizeof(Datum *));
-	blockData->valueBufferArray = palloc0(columnCount * sizeof(StringInfo));
-	blockData->columnCount = columnCount;
-	blockData->rowCount = blockRowCount;
+	ChunkData *chunkData = palloc0(sizeof(ChunkData));
+	chunkData->existsArray = palloc0(columnCount * sizeof(bool *));
+	chunkData->valueArray = palloc0(columnCount * sizeof(Datum *));
+	chunkData->valueBufferArray = palloc0(columnCount * sizeof(StringInfo));
+	chunkData->columnCount = columnCount;
+	chunkData->rowCount = chunkRowCount;
 
-	/* allocate block memory for deserialized data */
+	/* allocate chunk memory for deserialized data */
 	for (columnIndex = 0; columnIndex < columnCount; columnIndex++)
 	{
 		if (columnMask[columnIndex])
 		{
-			blockData->existsArray[columnIndex] = palloc0(blockRowCount * sizeof(bool));
-			blockData->valueArray[columnIndex] = palloc0(blockRowCount * sizeof(Datum));
-			blockData->valueBufferArray[columnIndex] = NULL;
+			chunkData->existsArray[columnIndex] = palloc0(chunkRowCount * sizeof(bool));
+			chunkData->valueArray[columnIndex] = palloc0(chunkRowCount * sizeof(Datum));
+			chunkData->valueBufferArray[columnIndex] = NULL;
 		}
 	}
 
-	return blockData;
+	return chunkData;
 }
 
 
 /*
- * FreeBlockData deallocates data buffers to keep deserialized exist and
+ * FreeChunkData deallocates data buffers to keep deserialized exist and
  * value arrays for requested columns in columnMask.
- * ColumnBlockData->serializedValueBuffer lives in memory read/write context
+ * ColumnChunkData->serializedValueBuffer lives in memory read/write context
  * so it is deallocated automatically when the context is deleted.
  */
 void
-FreeBlockData(BlockData *blockData)
+FreeChunkData(ChunkData *chunkData)
 {
 	uint32 columnIndex = 0;
 
-	if (blockData == NULL)
+	if (chunkData == NULL)
 	{
 		return;
 	}
 
-	for (columnIndex = 0; columnIndex < blockData->columnCount; columnIndex++)
+	for (columnIndex = 0; columnIndex < chunkData->columnCount; columnIndex++)
 	{
-		if (blockData->existsArray[columnIndex] != NULL)
+		if (chunkData->existsArray[columnIndex] != NULL)
 		{
-			pfree(blockData->existsArray[columnIndex]);
+			pfree(chunkData->existsArray[columnIndex]);
 		}
 
-		if (blockData->valueArray[columnIndex] != NULL)
+		if (chunkData->valueArray[columnIndex] != NULL)
 		{
-			pfree(blockData->valueArray[columnIndex]);
+			pfree(chunkData->valueArray[columnIndex]);
 		}
 	}
 
-	pfree(blockData->existsArray);
-	pfree(blockData->valueArray);
-	pfree(blockData);
+	pfree(chunkData->existsArray);
+	pfree(chunkData->valueArray);
+	pfree(chunkData);
 }
 
 
@@ -326,7 +326,7 @@ CStoreTableRowCount(Relation relation)
 
 /*
  * LoadFilteredStripeBuffers reads serialized stripe data from the given file.
- * The function skips over blocks whose rows are refuted by restriction qualifiers,
+ * The function skips over chunks whose rows are refuted by restriction qualifiers,
  * and only loads columns that are projected in the query.
  */
 static StripeBuffers *
@@ -342,14 +342,14 @@ LoadFilteredStripeBuffers(Relation relation, StripeMetadata *stripeMetadata,
 	StripeSkipList *stripeSkipList = ReadStripeSkipList(relation->rd_node,
 														stripeMetadata->id,
 														tupleDescriptor,
-														stripeMetadata->blockCount);
+														stripeMetadata->chunkCount);
 
-	bool *selectedBlockMask = SelectedBlockMask(stripeSkipList, projectedColumnList,
+	bool *selectedChunkMask = SelectedChunkMask(stripeSkipList, projectedColumnList,
 												whereClauseList);
 
-	StripeSkipList *selectedBlockSkipList =
-		SelectedBlockSkipList(stripeSkipList, projectedColumnMask,
-							  selectedBlockMask);
+	StripeSkipList *selectedChunkSkipList =
+		SelectedChunkSkipList(stripeSkipList, projectedColumnMask,
+							  selectedChunkMask);
 
 	/* load column data for projected columns */
 	ColumnBuffers **columnBuffersArray = palloc0(columnCount * sizeof(ColumnBuffers *));
@@ -358,13 +358,13 @@ LoadFilteredStripeBuffers(Relation relation, StripeMetadata *stripeMetadata,
 	{
 		if (projectedColumnMask[columnIndex])
 		{
-			ColumnBlockSkipNode *blockSkipNode =
-				selectedBlockSkipList->blockSkipNodeArray[columnIndex];
+			ColumnChunkSkipNode *chunkSkipNode =
+				selectedChunkSkipList->chunkSkipNodeArray[columnIndex];
 			Form_pg_attribute attributeForm = TupleDescAttr(tupleDescriptor, columnIndex);
-			uint32 blockCount = selectedBlockSkipList->blockCount;
+			uint32 chunkCount = selectedChunkSkipList->chunkCount;
 
-			ColumnBuffers *columnBuffers = LoadColumnBuffers(relation, blockSkipNode,
-															 blockCount,
+			ColumnBuffers *columnBuffers = LoadColumnBuffers(relation, chunkSkipNode,
+															 chunkCount,
 															 stripeMetadata->fileOffset,
 															 attributeForm);
 
@@ -374,7 +374,7 @@ LoadFilteredStripeBuffers(Relation relation, StripeMetadata *stripeMetadata,
 
 	StripeBuffers *stripeBuffers = palloc0(sizeof(StripeBuffers));
 	stripeBuffers->columnCount = columnCount;
-	stripeBuffers->rowCount = StripeSkipListRowCount(selectedBlockSkipList);
+	stripeBuffers->rowCount = StripeSkipListRowCount(selectedChunkSkipList);
 	stripeBuffers->columnBuffersArray = columnBuffersArray;
 
 	return stripeBuffers;
@@ -388,8 +388,8 @@ LoadFilteredStripeBuffers(Relation relation, StripeMetadata *stripeMetadata,
  */
 static void
 ReadStripeNextRow(StripeBuffers *stripeBuffers, List *projectedColumnList,
-				  uint64 blockIndex, uint64 blockRowIndex,
-				  BlockData *blockData, Datum *columnValues,
+				  uint64 chunkIndex, uint64 chunkRowIndex,
+				  ChunkData *chunkData, Datum *columnValues,
 				  bool *columnNulls)
 {
 	ListCell *projectedColumnCell = NULL;
@@ -402,9 +402,9 @@ ReadStripeNextRow(StripeBuffers *stripeBuffers, List *projectedColumnList,
 		Var *projectedColumn = lfirst(projectedColumnCell);
 		uint32 columnIndex = projectedColumn->varattno - 1;
 
-		if (blockData->existsArray[columnIndex][blockRowIndex])
+		if (chunkData->existsArray[columnIndex][chunkRowIndex])
 		{
-			columnValues[columnIndex] = blockData->valueArray[columnIndex][blockRowIndex];
+			columnValues[columnIndex] = chunkData->valueArray[columnIndex][chunkRowIndex];
 			columnNulls[columnIndex] = false;
 		}
 	}
@@ -413,73 +413,73 @@ ReadStripeNextRow(StripeBuffers *stripeBuffers, List *projectedColumnList,
 
 /*
  * LoadColumnBuffers reads serialized column data from the given file. These
- * column data are laid out as sequential blocks in the file; and block positions
- * and lengths are retrieved from the column block skip node array.
+ * column data are laid out as sequential chunks in the file; and chunk positions
+ * and lengths are retrieved from the column chunk skip node array.
  */
 static ColumnBuffers *
-LoadColumnBuffers(Relation relation, ColumnBlockSkipNode *blockSkipNodeArray,
-				  uint32 blockCount, uint64 stripeOffset,
+LoadColumnBuffers(Relation relation, ColumnChunkSkipNode *chunkSkipNodeArray,
+				  uint32 chunkCount, uint64 stripeOffset,
 				  Form_pg_attribute attributeForm)
 {
-	uint32 blockIndex = 0;
-	ColumnBlockBuffers **blockBuffersArray =
-		palloc0(blockCount * sizeof(ColumnBlockBuffers *));
+	uint32 chunkIndex = 0;
+	ColumnChunkBuffers **chunkBuffersArray =
+		palloc0(chunkCount * sizeof(ColumnChunkBuffers *));
 
-	for (blockIndex = 0; blockIndex < blockCount; blockIndex++)
+	for (chunkIndex = 0; chunkIndex < chunkCount; chunkIndex++)
 	{
-		blockBuffersArray[blockIndex] = palloc0(sizeof(ColumnBlockBuffers));
+		chunkBuffersArray[chunkIndex] = palloc0(sizeof(ColumnChunkBuffers));
 	}
 
 	/*
-	 * We first read the "exists" blocks. We don't read "values" array here,
-	 * because "exists" blocks are stored sequentially on disk, and we want to
+	 * We first read the "exists" chunks. We don't read "values" array here,
+	 * because "exists" chunks are stored sequentially on disk, and we want to
 	 * minimize disk seeks.
 	 */
-	for (blockIndex = 0; blockIndex < blockCount; blockIndex++)
+	for (chunkIndex = 0; chunkIndex < chunkCount; chunkIndex++)
 	{
-		ColumnBlockSkipNode *blockSkipNode = &blockSkipNodeArray[blockIndex];
-		uint64 existsOffset = stripeOffset + blockSkipNode->existsBlockOffset;
+		ColumnChunkSkipNode *chunkSkipNode = &chunkSkipNodeArray[chunkIndex];
+		uint64 existsOffset = stripeOffset + chunkSkipNode->existsChunkOffset;
 		StringInfo rawExistsBuffer = ReadFromSmgr(relation, existsOffset,
-												  blockSkipNode->existsLength);
+												  chunkSkipNode->existsLength);
 
-		blockBuffersArray[blockIndex]->existsBuffer = rawExistsBuffer;
+		chunkBuffersArray[chunkIndex]->existsBuffer = rawExistsBuffer;
 	}
 
-	/* then read "values" blocks, which are also stored sequentially on disk */
-	for (blockIndex = 0; blockIndex < blockCount; blockIndex++)
+	/* then read "values" chunks, which are also stored sequentially on disk */
+	for (chunkIndex = 0; chunkIndex < chunkCount; chunkIndex++)
 	{
-		ColumnBlockSkipNode *blockSkipNode = &blockSkipNodeArray[blockIndex];
-		CompressionType compressionType = blockSkipNode->valueCompressionType;
-		uint64 valueOffset = stripeOffset + blockSkipNode->valueBlockOffset;
+		ColumnChunkSkipNode *chunkSkipNode = &chunkSkipNodeArray[chunkIndex];
+		CompressionType compressionType = chunkSkipNode->valueCompressionType;
+		uint64 valueOffset = stripeOffset + chunkSkipNode->valueChunkOffset;
 		StringInfo rawValueBuffer = ReadFromSmgr(relation, valueOffset,
-												 blockSkipNode->valueLength);
+												 chunkSkipNode->valueLength);
 
-		blockBuffersArray[blockIndex]->valueBuffer = rawValueBuffer;
-		blockBuffersArray[blockIndex]->valueCompressionType = compressionType;
+		chunkBuffersArray[chunkIndex]->valueBuffer = rawValueBuffer;
+		chunkBuffersArray[chunkIndex]->valueCompressionType = compressionType;
 	}
 
 	ColumnBuffers *columnBuffers = palloc0(sizeof(ColumnBuffers));
-	columnBuffers->blockBuffersArray = blockBuffersArray;
+	columnBuffers->chunkBuffersArray = chunkBuffersArray;
 
 	return columnBuffers;
 }
 
 
 /*
- * SelectedBlockMask walks over each column's blocks and checks if a block can
+ * SelectedChunkMask walks over each column's chunks and checks if a chunk can
  * be filtered without reading its data. The filtering happens when all rows in
- * the block can be refuted by the given qualifier conditions.
+ * the chunk can be refuted by the given qualifier conditions.
  */
 static bool *
-SelectedBlockMask(StripeSkipList *stripeSkipList, List *projectedColumnList,
+SelectedChunkMask(StripeSkipList *stripeSkipList, List *projectedColumnList,
 				  List *whereClauseList)
 {
 	ListCell *columnCell = NULL;
-	uint32 blockIndex = 0;
+	uint32 chunkIndex = 0;
 	List *restrictInfoList = BuildRestrictInfoList(whereClauseList);
 
-	bool *selectedBlockMask = palloc0(stripeSkipList->blockCount * sizeof(bool));
-	memset(selectedBlockMask, true, stripeSkipList->blockCount * sizeof(bool));
+	bool *selectedChunkMask = palloc0(stripeSkipList->chunkCount * sizeof(bool));
+	memset(selectedChunkMask, true, stripeSkipList->chunkCount * sizeof(bool));
 
 	foreach(columnCell, projectedColumnList)
 	{
@@ -496,24 +496,24 @@ SelectedBlockMask(StripeSkipList *stripeSkipList, List *projectedColumnList,
 		}
 
 		Node *baseConstraint = BuildBaseConstraint(column);
-		for (blockIndex = 0; blockIndex < stripeSkipList->blockCount; blockIndex++)
+		for (chunkIndex = 0; chunkIndex < stripeSkipList->chunkCount; chunkIndex++)
 		{
 			bool predicateRefuted = false;
-			ColumnBlockSkipNode *blockSkipNodeArray =
-				stripeSkipList->blockSkipNodeArray[columnIndex];
-			ColumnBlockSkipNode *blockSkipNode = &blockSkipNodeArray[blockIndex];
+			ColumnChunkSkipNode *chunkSkipNodeArray =
+				stripeSkipList->chunkSkipNodeArray[columnIndex];
+			ColumnChunkSkipNode *chunkSkipNode = &chunkSkipNodeArray[chunkIndex];
 
 			/*
-			 * A column block with comparable data type can miss min/max values
-			 * if all values in the block are NULL.
+			 * A column chunk with comparable data type can miss min/max values
+			 * if all values in the chunk are NULL.
 			 */
-			if (!blockSkipNode->hasMinMax)
+			if (!chunkSkipNode->hasMinMax)
 			{
 				continue;
 			}
 
-			UpdateConstraint(baseConstraint, blockSkipNode->minimumValue,
-							 blockSkipNode->maximumValue);
+			UpdateConstraint(baseConstraint, chunkSkipNode->minimumValue,
+							 chunkSkipNode->maximumValue);
 
 			List *constraintList = list_make1(baseConstraint);
 #if (PG_VERSION_NUM >= 100000)
@@ -524,12 +524,12 @@ SelectedBlockMask(StripeSkipList *stripeSkipList, List *projectedColumnList,
 #endif
 			if (predicateRefuted)
 			{
-				selectedBlockMask[blockIndex] = false;
+				selectedChunkMask[chunkIndex] = false;
 			}
 		}
 	}
 
-	return selectedBlockMask;
+	return selectedChunkMask;
 }
 
 
@@ -596,7 +596,7 @@ BuildRestrictInfoList(List *whereClauseList)
 /*
  * BuildBaseConstraint builds and returns a base constraint. This constraint
  * implements an expression in the form of (var <= max && var >= min), where
- * min and max values represent a block's min and max values. These block
+ * min and max values represent a chunk's min and max values. These chunk
  * values are filled in after the constraint is built. This function is based
  * on a similar function from CitusDB's shard pruning logic.
  */
@@ -700,83 +700,83 @@ UpdateConstraint(Node *baseConstraint, Datum minValue, Datum maxValue)
 
 
 /*
- * SelectedBlockSkipList constructs a new StripeSkipList in which the
- * non-selected blocks are removed from the given stripeSkipList.
+ * SelectedChunkSkipList constructs a new StripeSkipList in which the
+ * non-selected chunks are removed from the given stripeSkipList.
  */
 static StripeSkipList *
-SelectedBlockSkipList(StripeSkipList *stripeSkipList, bool *projectedColumnMask,
-					  bool *selectedBlockMask)
+SelectedChunkSkipList(StripeSkipList *stripeSkipList, bool *projectedColumnMask,
+					  bool *selectedChunkMask)
 {
-	uint32 selectedBlockCount = 0;
-	uint32 blockIndex = 0;
+	uint32 selectedChunkCount = 0;
+	uint32 chunkIndex = 0;
 	uint32 columnIndex = 0;
 	uint32 columnCount = stripeSkipList->columnCount;
 
-	for (blockIndex = 0; blockIndex < stripeSkipList->blockCount; blockIndex++)
+	for (chunkIndex = 0; chunkIndex < stripeSkipList->chunkCount; chunkIndex++)
 	{
-		if (selectedBlockMask[blockIndex])
+		if (selectedChunkMask[chunkIndex])
 		{
-			selectedBlockCount++;
+			selectedChunkCount++;
 		}
 	}
 
-	ColumnBlockSkipNode **selectedBlockSkipNodeArray = palloc0(columnCount *
-															   sizeof(ColumnBlockSkipNode
+	ColumnChunkSkipNode **selectedChunkSkipNodeArray = palloc0(columnCount *
+															   sizeof(ColumnChunkSkipNode
 																	  *));
 	for (columnIndex = 0; columnIndex < columnCount; columnIndex++)
 	{
-		uint32 selectedBlockIndex = 0;
+		uint32 selectedChunkIndex = 0;
 		bool firstColumn = columnIndex == 0;
 
-		/* first column's block skip node is always read */
+		/* first column's chunk skip node is always read */
 		if (!projectedColumnMask[columnIndex] && !firstColumn)
 		{
-			selectedBlockSkipNodeArray[columnIndex] = NULL;
+			selectedChunkSkipNodeArray[columnIndex] = NULL;
 			continue;
 		}
 
-		Assert(stripeSkipList->blockSkipNodeArray[columnIndex] != NULL);
+		Assert(stripeSkipList->chunkSkipNodeArray[columnIndex] != NULL);
 
-		selectedBlockSkipNodeArray[columnIndex] = palloc0(selectedBlockCount *
-														  sizeof(ColumnBlockSkipNode));
+		selectedChunkSkipNodeArray[columnIndex] = palloc0(selectedChunkCount *
+														  sizeof(ColumnChunkSkipNode));
 
-		for (blockIndex = 0; blockIndex < stripeSkipList->blockCount; blockIndex++)
+		for (chunkIndex = 0; chunkIndex < stripeSkipList->chunkCount; chunkIndex++)
 		{
-			if (selectedBlockMask[blockIndex])
+			if (selectedChunkMask[chunkIndex])
 			{
-				selectedBlockSkipNodeArray[columnIndex][selectedBlockIndex] =
-					stripeSkipList->blockSkipNodeArray[columnIndex][blockIndex];
-				selectedBlockIndex++;
+				selectedChunkSkipNodeArray[columnIndex][selectedChunkIndex] =
+					stripeSkipList->chunkSkipNodeArray[columnIndex][chunkIndex];
+				selectedChunkIndex++;
 			}
 		}
 	}
 
-	StripeSkipList *SelectedBlockSkipList = palloc0(sizeof(StripeSkipList));
-	SelectedBlockSkipList->blockSkipNodeArray = selectedBlockSkipNodeArray;
-	SelectedBlockSkipList->blockCount = selectedBlockCount;
-	SelectedBlockSkipList->columnCount = stripeSkipList->columnCount;
+	StripeSkipList *SelectedChunkSkipList = palloc0(sizeof(StripeSkipList));
+	SelectedChunkSkipList->chunkSkipNodeArray = selectedChunkSkipNodeArray;
+	SelectedChunkSkipList->chunkCount = selectedChunkCount;
+	SelectedChunkSkipList->columnCount = stripeSkipList->columnCount;
 
-	return SelectedBlockSkipList;
+	return SelectedChunkSkipList;
 }
 
 
 /*
  * StripeSkipListRowCount counts the number of rows in the given stripeSkipList.
  * To do this, the function finds the first column, and sums up row counts across
- * all blocks for that column.
+ * all chunks for that column.
  */
 static uint32
 StripeSkipListRowCount(StripeSkipList *stripeSkipList)
 {
 	uint32 stripeSkipListRowCount = 0;
-	uint32 blockIndex = 0;
-	ColumnBlockSkipNode *firstColumnSkipNodeArray =
-		stripeSkipList->blockSkipNodeArray[0];
+	uint32 chunkIndex = 0;
+	ColumnChunkSkipNode *firstColumnSkipNodeArray =
+		stripeSkipList->chunkSkipNodeArray[0];
 
-	for (blockIndex = 0; blockIndex < stripeSkipList->blockCount; blockIndex++)
+	for (chunkIndex = 0; chunkIndex < stripeSkipList->chunkCount; chunkIndex++)
 	{
-		uint32 blockRowCount = firstColumnSkipNodeArray[blockIndex].rowCount;
-		stripeSkipListRowCount += blockRowCount;
+		uint32 chunkRowCount = firstColumnSkipNodeArray[chunkIndex].rowCount;
+		stripeSkipListRowCount += chunkRowCount;
 	}
 
 	return stripeSkipListRowCount;
@@ -878,21 +878,21 @@ DeserializeDatumArray(StringInfo datumBuffer, bool *existsArray, uint32 datumCou
 
 
 /*
- * DeserializeBlockData deserializes requested data block for all columns and
- * stores in blockDataArray. It uncompresses serialized data if necessary. The
- * function also deallocates data buffers used for previous block, and compressed
- * data buffers for the current block which will not be needed again. If a column
+ * DeserializeChunkData deserializes requested data chunk for all columns and
+ * stores in chunkDataArray. It uncompresses serialized data if necessary. The
+ * function also deallocates data buffers used for previous chunk, and compressed
+ * data buffers for the current chunk which will not be needed again. If a column
  * data is not present serialized buffer, then default value (or null) is used
  * to fill value array.
  */
-static BlockData *
-DeserializeBlockData(StripeBuffers *stripeBuffers, uint64 blockIndex,
+static ChunkData *
+DeserializeChunkData(StripeBuffers *stripeBuffers, uint64 chunkIndex,
 					 uint32 rowCount, TupleDesc tupleDescriptor,
 					 List *projectedColumnList)
 {
 	int columnIndex = 0;
 	bool *columnMask = ProjectedColumnMask(tupleDescriptor->natts, projectedColumnList);
-	BlockData *blockData = CreateEmptyBlockData(tupleDescriptor->natts, columnMask,
+	ChunkData *chunkData = CreateEmptyChunkData(tupleDescriptor->natts, columnMask,
 												rowCount);
 
 	for (columnIndex = 0; columnIndex < stripeBuffers->columnCount; columnIndex++)
@@ -908,30 +908,30 @@ DeserializeBlockData(StripeBuffers *stripeBuffers, uint64 blockIndex,
 
 		if (columnBuffers != NULL)
 		{
-			ColumnBlockBuffers *blockBuffers =
-				columnBuffers->blockBuffersArray[blockIndex];
+			ColumnChunkBuffers *chunkBuffers =
+				columnBuffers->chunkBuffersArray[chunkIndex];
 
-			/* decompress and deserialize current block's data */
-			StringInfo valueBuffer = DecompressBuffer(blockBuffers->valueBuffer,
-													  blockBuffers->valueCompressionType);
+			/* decompress and deserialize current chunk's data */
+			StringInfo valueBuffer = DecompressBuffer(chunkBuffers->valueBuffer,
+													  chunkBuffers->valueCompressionType);
 
-			if (blockBuffers->valueCompressionType != COMPRESSION_NONE)
+			if (chunkBuffers->valueCompressionType != COMPRESSION_NONE)
 			{
 				/* compressed data is not needed anymore */
-				pfree(blockBuffers->valueBuffer->data);
-				pfree(blockBuffers->valueBuffer);
+				pfree(chunkBuffers->valueBuffer->data);
+				pfree(chunkBuffers->valueBuffer);
 			}
 
-			DeserializeBoolArray(blockBuffers->existsBuffer,
-								 blockData->existsArray[columnIndex],
+			DeserializeBoolArray(chunkBuffers->existsBuffer,
+								 chunkData->existsArray[columnIndex],
 								 rowCount);
-			DeserializeDatumArray(valueBuffer, blockData->existsArray[columnIndex],
+			DeserializeDatumArray(valueBuffer, chunkData->existsArray[columnIndex],
 								  rowCount, attributeForm->attbyval,
 								  attributeForm->attlen, attributeForm->attalign,
-								  blockData->valueArray[columnIndex]);
+								  chunkData->valueArray[columnIndex]);
 
-			/* store current block's data buffer to be freed at next block read */
-			blockData->valueBufferArray[columnIndex] = valueBuffer;
+			/* store current chunk's data buffer to be freed at next chunk read */
+			chunkData->valueBufferArray[columnIndex] = valueBuffer;
 		}
 		else if (columnAdded)
 		{
@@ -948,19 +948,19 @@ DeserializeBlockData(StripeBuffers *stripeBuffers, uint64 blockIndex,
 
 				for (rowIndex = 0; rowIndex < rowCount; rowIndex++)
 				{
-					blockData->existsArray[columnIndex][rowIndex] = true;
-					blockData->valueArray[columnIndex][rowIndex] = defaultValue;
+					chunkData->existsArray[columnIndex][rowIndex] = true;
+					chunkData->valueArray[columnIndex][rowIndex] = defaultValue;
 				}
 			}
 			else
 			{
-				memset(blockData->existsArray[columnIndex], false,
+				memset(chunkData->existsArray[columnIndex], false,
 					   rowCount * sizeof(bool));
 			}
 		}
 	}
 
-	return blockData;
+	return chunkData;
 }
 
 

@@ -25,11 +25,11 @@
 /* Default values for option parameters */
 #define DEFAULT_COMPRESSION_TYPE COMPRESSION_NONE
 #define DEFAULT_STRIPE_ROW_COUNT 150000
-#define DEFAULT_BLOCK_ROW_COUNT 10000
+#define DEFAULT_CHUNK_ROW_COUNT 10000
 
 int cstore_compression = DEFAULT_COMPRESSION_TYPE;
 int cstore_stripe_row_count = DEFAULT_STRIPE_ROW_COUNT;
-int cstore_block_row_count = DEFAULT_BLOCK_ROW_COUNT;
+int cstore_chunk_row_count = DEFAULT_CHUNK_ROW_COUNT;
 
 static const struct config_enum_entry cstore_compression_options[] =
 {
@@ -66,13 +66,13 @@ cstore_init()
 							NULL,
 							NULL);
 
-	DefineCustomIntVariable("cstore.block_row_count",
-							"Maximum number of rows per block.",
+	DefineCustomIntVariable("cstore.chunk_row_count",
+							"Maximum number of rows per chunk.",
 							NULL,
-							&cstore_block_row_count,
-							DEFAULT_BLOCK_ROW_COUNT,
-							BLOCK_ROW_COUNT_MINIMUM,
-							BLOCK_ROW_COUNT_MAXIMUM,
+							&cstore_chunk_row_count,
+							DEFAULT_CHUNK_ROW_COUNT,
+							CHUNK_ROW_COUNT_MINIMUM,
+							CHUNK_ROW_COUNT_MAXIMUM,
 							PGC_USERSET,
 							0,
 							NULL,

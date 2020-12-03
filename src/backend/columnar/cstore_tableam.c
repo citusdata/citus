@@ -629,7 +629,7 @@ cstore_relation_copy_for_cluster(Relation OldHeap, Relation NewHeap,
 	TableWriteState *writeState = CStoreBeginWrite(NewHeap->rd_node,
 												   cstoreOptions.compressionType,
 												   cstoreOptions.stripeRowCount,
-												   cstoreOptions.blockRowCount,
+												   cstoreOptions.chunkRowCount,
 												   targetDesc);
 
 	TableReadState *readState = CStoreBeginRead(OldHeap, sourceDesc,
@@ -691,9 +691,9 @@ LogRelationStats(Relation rel, int elevel)
 	int compressionStats[COMPRESSION_COUNT] = { 0 };
 	uint64 totalStripeLength = 0;
 	uint64 tupleCount = 0;
-	uint64 blockCount = 0;
+	uint64 chunkCount = 0;
 	TupleDesc tupdesc = RelationGetDescr(rel);
-	uint64 droppedBlocksWithData = 0;
+	uint64 droppedChunksWithData = 0;
 
 	List *stripeList = StripesForRelfilenode(relfilenode);
 	int stripeCount = list_length(stripeList);
@@ -703,24 +703,24 @@ LogRelationStats(Relation rel, int elevel)
 		StripeMetadata *stripe = lfirst(stripeMetadataCell);
 		StripeSkipList *skiplist = ReadStripeSkipList(relfilenode, stripe->id,
 													  RelationGetDescr(rel),
-													  stripe->blockCount);
+													  stripe->chunkCount);
 		for (uint32 column = 0; column < skiplist->columnCount; column++)
 		{
 			bool attrDropped = tupdesc->attrs[column].attisdropped;
-			for (uint32 block = 0; block < skiplist->blockCount; block++)
+			for (uint32 chunk = 0; chunk < skiplist->chunkCount; chunk++)
 			{
-				ColumnBlockSkipNode *skipnode =
-					&skiplist->blockSkipNodeArray[column][block];
+				ColumnChunkSkipNode *skipnode =
+					&skiplist->chunkSkipNodeArray[column][chunk];
 
-				/* ignore zero length blocks for dropped attributes */
+				/* ignore zero length chunks for dropped attributes */
 				if (skipnode->valueLength > 0)
 				{
 					compressionStats[skipnode->valueCompressionType]++;
-					blockCount++;
+					chunkCount++;
 
 					if (attrDropped)
 					{
-						droppedBlocksWithData++;
+						droppedChunksWithData++;
 					}
 				}
 			}
@@ -746,9 +746,9 @@ LogRelationStats(Relation rel, int elevel)
 					 tupleCount, stripeCount,
 					 stripeCount ? tupleCount / stripeCount : 0);
 	appendStringInfo(infoBuf,
-					 "block count: %ld"
+					 "chunk count: %ld"
 					 ", containing data for dropped columns: %ld",
-					 blockCount, droppedBlocksWithData);
+					 chunkCount, droppedChunksWithData);
 	for (int compressionType = 0; compressionType < COMPRESSION_COUNT; compressionType++)
 	{
 		appendStringInfo(infoBuf,
@@ -914,7 +914,7 @@ cstore_scan_analyze_next_tuple(TableScanDesc scan, TransactionId OldestXmin,
 	 * based access methods where it chooses random pages, and then reads
 	 * tuples from those pages.
 	 *
-	 * We could do something like that here by choosing sample stripes or blocks,
+	 * We could do something like that here by choosing sample stripes or chunks,
 	 * but getting that correct might need quite some work. Since cstore_fdw's
 	 * ANALYZE scanned all rows, as a starter we do the same here and scan all
 	 * rows.
@@ -1307,11 +1307,11 @@ CitusCreateAlterColumnarTableSet(char *qualifiedRelationName,
 
 	appendStringInfo(&buf,
 					 "SELECT alter_columnar_table_set(%s, "
-					 "block_row_count => %d, "
+					 "chunk_row_count => %d, "
 					 "stripe_row_count => %lu, "
 					 "compression => %s);",
 					 quote_literal_cstr(qualifiedRelationName),
-					 options->blockRowCount,
+					 options->chunkRowCount,
 					 options->stripeRowCount,
 					 quote_literal_cstr(CompressionTypeStr(options->compressionType)));
 
@@ -1427,7 +1427,7 @@ ColumnarGetTableOptionsDDL(Oid relationId)
  * sql syntax:
  *   pg_catalog.alter_columnar_table_set(
  *        table_name regclass,
- *        block_row_count int DEFAULT NULL,
+ *        chunk_row_count int DEFAULT NULL,
  *        stripe_row_count int DEFAULT NULL,
  *        compression name DEFAULT null)
  *
@@ -1459,12 +1459,12 @@ alter_columnar_table_set(PG_FUNCTION_ARGS)
 		ereport(ERROR, (errmsg("unable to read current options for table")));
 	}
 
-	/* block_row_count => not null */
+	/* chunk_row_count => not null */
 	if (!PG_ARGISNULL(1))
 	{
-		options.blockRowCount = PG_GETARG_INT32(1);
+		options.chunkRowCount = PG_GETARG_INT32(1);
 		ereport(DEBUG1,
-				(errmsg("updating block row count to %d", options.blockRowCount)));
+				(errmsg("updating chunk row count to %d", options.chunkRowCount)));
 	}
 
 	/* stripe_row_count => not null */
@@ -1520,7 +1520,7 @@ alter_columnar_table_set(PG_FUNCTION_ARGS)
  *   pg_catalog.alter_columnar_table_re
  *   teset(
  *        table_name regclass,
- *        block_row_count bool DEFAULT FALSE,
+ *        chunk_row_count bool DEFAULT FALSE,
  *        stripe_row_count bool DEFAULT FALSE,
  *        compression bool DEFAULT FALSE)
  *
@@ -1549,12 +1549,12 @@ alter_columnar_table_reset(PG_FUNCTION_ARGS)
 		ereport(ERROR, (errmsg("unable to read current options for table")));
 	}
 
-	/* block_row_count => true */
+	/* chunk_row_count => true */
 	if (!PG_ARGISNULL(1) && PG_GETARG_BOOL(1))
 	{
-		options.blockRowCount = cstore_block_row_count;
+		options.chunkRowCount = cstore_chunk_row_count;
 		ereport(DEBUG1,
-				(errmsg("resetting block row count to %d", options.blockRowCount)));
+				(errmsg("resetting chunk row count to %d", options.chunkRowCount)));
 	}
 
 	/* stripe_row_count => true */

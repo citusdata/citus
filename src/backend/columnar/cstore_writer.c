@@ -4,7 +4,7 @@
  *
  * This file contains function definitions for writing cstore files. This
  * includes the logic for writing file level metadata, writing row stripes,
- * and calculating block skip nodes.
+ * and calculating chunk skip nodes.
  *
  * Copyright (c) 2016, Citus Data, Inc.
  *
@@ -33,19 +33,19 @@
 #include "columnar/cstore_version_compat.h"
 
 static StripeBuffers * CreateEmptyStripeBuffers(uint32 stripeMaxRowCount,
-												uint32 blockRowCount,
+												uint32 chunkRowCount,
 												uint32 columnCount);
 static StripeSkipList * CreateEmptyStripeSkipList(uint32 stripeMaxRowCount,
-												  uint32 blockRowCount,
+												  uint32 chunkRowCount,
 												  uint32 columnCount);
 static void FlushStripe(TableWriteState *writeState);
 static StringInfo SerializeBoolArray(bool *boolArray, uint32 boolArrayLength);
 static void SerializeSingleDatum(StringInfo datumBuffer, Datum datum,
 								 bool datumTypeByValue, int datumTypeLength,
 								 char datumTypeAlign);
-static void SerializeBlockData(TableWriteState *writeState, uint32 blockIndex,
+static void SerializeChunkData(TableWriteState *writeState, uint32 chunkIndex,
 							   uint32 rowCount);
-static void UpdateBlockSkipNodeMinMax(ColumnBlockSkipNode *blockSkipNode,
+static void UpdateChunkSkipNodeMinMax(ColumnChunkSkipNode *chunkSkipNode,
 									  Datum columnValue, bool columnTypeByValue,
 									  int columnTypeLength, Oid columnCollation,
 									  FmgrInfo *comparisonFunction);
@@ -62,7 +62,7 @@ static StringInfo CopyStringInfo(StringInfo sourceString);
 TableWriteState *
 CStoreBeginWrite(RelFileNode relfilenode,
 				 CompressionType compressionType,
-				 uint64 stripeMaxRowCount, uint32 blockRowCount,
+				 uint64 stripeMaxRowCount, uint32 chunkRowCount,
 				 TupleDesc tupleDescriptor)
 {
 	/* get comparison function pointers for each of the columns */
@@ -97,20 +97,20 @@ CStoreBeginWrite(RelFileNode relfilenode,
 	bool *columnMaskArray = palloc(columnCount * sizeof(bool));
 	memset(columnMaskArray, true, columnCount);
 
-	BlockData *blockData = CreateEmptyBlockData(columnCount, columnMaskArray,
-												blockRowCount);
+	ChunkData *chunkData = CreateEmptyChunkData(columnCount, columnMaskArray,
+												chunkRowCount);
 
 	TableWriteState *writeState = palloc0(sizeof(TableWriteState));
 	writeState->relfilenode = relfilenode;
 	writeState->compressionType = compressionType;
 	writeState->stripeMaxRowCount = stripeMaxRowCount;
-	writeState->blockRowCount = blockRowCount;
+	writeState->chunkRowCount = chunkRowCount;
 	writeState->tupleDescriptor = CreateTupleDescCopy(tupleDescriptor);
 	writeState->comparisonFunctionArray = comparisonFunctionArray;
 	writeState->stripeBuffers = NULL;
 	writeState->stripeSkipList = NULL;
 	writeState->stripeWriteContext = stripeWriteContext;
-	writeState->blockData = blockData;
+	writeState->chunkData = chunkData;
 	writeState->compressionBuffer = NULL;
 	writeState->perTupleContext = AllocSetContextCreate(CurrentMemoryContext,
 														"CStore per tuple context",
@@ -124,8 +124,8 @@ CStoreBeginWrite(RelFileNode relfilenode,
  * CStoreWriteRow adds a row to the cstore file. If the stripe is not initialized,
  * we create structures to hold stripe data and skip list. Then, we serialize and
  * append data to serialized value buffer for each of the columns and update
- * corresponding skip nodes. Then, whole block data is compressed at every
- * rowBlockCount insertion. Then, if row count exceeds stripeMaxRowCount, we flush
+ * corresponding skip nodes. Then, whole chunk data is compressed at every
+ * rowChunkCount insertion. Then, if row count exceeds stripeMaxRowCount, we flush
  * the stripe, and add its metadata to the table footer.
  */
 void
@@ -135,16 +135,16 @@ CStoreWriteRow(TableWriteState *writeState, Datum *columnValues, bool *columnNul
 	StripeBuffers *stripeBuffers = writeState->stripeBuffers;
 	StripeSkipList *stripeSkipList = writeState->stripeSkipList;
 	uint32 columnCount = writeState->tupleDescriptor->natts;
-	const uint32 blockRowCount = writeState->blockRowCount;
-	BlockData *blockData = writeState->blockData;
+	const uint32 chunkRowCount = writeState->chunkRowCount;
+	ChunkData *chunkData = writeState->chunkData;
 	MemoryContext oldContext = MemoryContextSwitchTo(writeState->stripeWriteContext);
 
 	if (stripeBuffers == NULL)
 	{
 		stripeBuffers = CreateEmptyStripeBuffers(writeState->stripeMaxRowCount,
-												 blockRowCount, columnCount);
+												 chunkRowCount, columnCount);
 		stripeSkipList = CreateEmptyStripeSkipList(writeState->stripeMaxRowCount,
-												   blockRowCount, columnCount);
+												   chunkRowCount, columnCount);
 		writeState->stripeBuffers = stripeBuffers;
 		writeState->stripeSkipList = stripeSkipList;
 		writeState->compressionBuffer = makeStringInfo();
@@ -155,22 +155,22 @@ CStoreWriteRow(TableWriteState *writeState, Datum *columnValues, bool *columnNul
 		 */
 		for (columnIndex = 0; columnIndex < columnCount; columnIndex++)
 		{
-			blockData->valueBufferArray[columnIndex] = makeStringInfo();
+			chunkData->valueBufferArray[columnIndex] = makeStringInfo();
 		}
 	}
 
-	uint32 blockIndex = stripeBuffers->rowCount / blockRowCount;
-	uint32 blockRowIndex = stripeBuffers->rowCount % blockRowCount;
+	uint32 chunkIndex = stripeBuffers->rowCount / chunkRowCount;
+	uint32 chunkRowIndex = stripeBuffers->rowCount % chunkRowCount;
 
 	for (columnIndex = 0; columnIndex < columnCount; columnIndex++)
 	{
-		ColumnBlockSkipNode **blockSkipNodeArray = stripeSkipList->blockSkipNodeArray;
-		ColumnBlockSkipNode *blockSkipNode =
-			&blockSkipNodeArray[columnIndex][blockIndex];
+		ColumnChunkSkipNode **chunkSkipNodeArray = stripeSkipList->chunkSkipNodeArray;
+		ColumnChunkSkipNode *chunkSkipNode =
+			&chunkSkipNodeArray[columnIndex][chunkIndex];
 
 		if (columnNulls[columnIndex])
 		{
-			blockData->existsArray[columnIndex][blockRowIndex] = false;
+			chunkData->existsArray[columnIndex][chunkRowIndex] = false;
 		}
 		else
 		{
@@ -183,26 +183,26 @@ CStoreWriteRow(TableWriteState *writeState, Datum *columnValues, bool *columnNul
 			Oid columnCollation = attributeForm->attcollation;
 			char columnTypeAlign = attributeForm->attalign;
 
-			blockData->existsArray[columnIndex][blockRowIndex] = true;
+			chunkData->existsArray[columnIndex][chunkRowIndex] = true;
 
-			SerializeSingleDatum(blockData->valueBufferArray[columnIndex],
+			SerializeSingleDatum(chunkData->valueBufferArray[columnIndex],
 								 columnValues[columnIndex], columnTypeByValue,
 								 columnTypeLength, columnTypeAlign);
 
-			UpdateBlockSkipNodeMinMax(blockSkipNode, columnValues[columnIndex],
+			UpdateChunkSkipNodeMinMax(chunkSkipNode, columnValues[columnIndex],
 									  columnTypeByValue, columnTypeLength,
 									  columnCollation, comparisonFunction);
 		}
 
-		blockSkipNode->rowCount++;
+		chunkSkipNode->rowCount++;
 	}
 
-	stripeSkipList->blockCount = blockIndex + 1;
+	stripeSkipList->chunkCount = chunkIndex + 1;
 
-	/* last row of the block is inserted serialize the block */
-	if (blockRowIndex == blockRowCount - 1)
+	/* last row of the chunk is inserted serialize the chunk */
+	if (chunkRowIndex == chunkRowCount - 1)
 	{
-		SerializeBlockData(writeState, blockIndex, blockRowCount);
+		SerializeChunkData(writeState, chunkIndex, chunkRowCount);
 	}
 
 	stripeBuffers->rowCount++;
@@ -228,7 +228,7 @@ CStoreEndWrite(TableWriteState *writeState)
 
 	MemoryContextDelete(writeState->stripeWriteContext);
 	pfree(writeState->comparisonFunctionArray);
-	FreeBlockData(writeState->blockData);
+	FreeChunkData(writeState->chunkData);
 	pfree(writeState);
 }
 
@@ -258,29 +258,29 @@ CStoreFlushPendingWrites(TableWriteState *writeState)
  * column count.
  */
 static StripeBuffers *
-CreateEmptyStripeBuffers(uint32 stripeMaxRowCount, uint32 blockRowCount,
+CreateEmptyStripeBuffers(uint32 stripeMaxRowCount, uint32 chunkRowCount,
 						 uint32 columnCount)
 {
 	uint32 columnIndex = 0;
-	uint32 maxBlockCount = (stripeMaxRowCount / blockRowCount) + 1;
+	uint32 maxChunkCount = (stripeMaxRowCount / chunkRowCount) + 1;
 	ColumnBuffers **columnBuffersArray = palloc0(columnCount * sizeof(ColumnBuffers *));
 
 	for (columnIndex = 0; columnIndex < columnCount; columnIndex++)
 	{
-		uint32 blockIndex = 0;
-		ColumnBlockBuffers **blockBuffersArray =
-			palloc0(maxBlockCount * sizeof(ColumnBlockBuffers *));
+		uint32 chunkIndex = 0;
+		ColumnChunkBuffers **chunkBuffersArray =
+			palloc0(maxChunkCount * sizeof(ColumnChunkBuffers *));
 
-		for (blockIndex = 0; blockIndex < maxBlockCount; blockIndex++)
+		for (chunkIndex = 0; chunkIndex < maxChunkCount; chunkIndex++)
 		{
-			blockBuffersArray[blockIndex] = palloc0(sizeof(ColumnBlockBuffers));
-			blockBuffersArray[blockIndex]->existsBuffer = NULL;
-			blockBuffersArray[blockIndex]->valueBuffer = NULL;
-			blockBuffersArray[blockIndex]->valueCompressionType = COMPRESSION_NONE;
+			chunkBuffersArray[chunkIndex] = palloc0(sizeof(ColumnChunkBuffers));
+			chunkBuffersArray[chunkIndex]->existsBuffer = NULL;
+			chunkBuffersArray[chunkIndex]->valueBuffer = NULL;
+			chunkBuffersArray[chunkIndex]->valueCompressionType = COMPRESSION_NONE;
 		}
 
 		columnBuffersArray[columnIndex] = palloc0(sizeof(ColumnBuffers));
-		columnBuffersArray[columnIndex]->blockBuffersArray = blockBuffersArray;
+		columnBuffersArray[columnIndex]->chunkBuffersArray = chunkBuffersArray;
 	}
 
 	StripeBuffers *stripeBuffers = palloc0(sizeof(StripeBuffers));
@@ -294,28 +294,28 @@ CreateEmptyStripeBuffers(uint32 stripeMaxRowCount, uint32 blockRowCount,
 
 /*
  * CreateEmptyStripeSkipList allocates an empty StripeSkipList structure with
- * the given column count. This structure has enough blocks to hold statistics
+ * the given column count. This structure has enough chunks to hold statistics
  * for stripeMaxRowCount rows.
  */
 static StripeSkipList *
-CreateEmptyStripeSkipList(uint32 stripeMaxRowCount, uint32 blockRowCount,
+CreateEmptyStripeSkipList(uint32 stripeMaxRowCount, uint32 chunkRowCount,
 						  uint32 columnCount)
 {
 	uint32 columnIndex = 0;
-	uint32 maxBlockCount = (stripeMaxRowCount / blockRowCount) + 1;
+	uint32 maxChunkCount = (stripeMaxRowCount / chunkRowCount) + 1;
 
-	ColumnBlockSkipNode **blockSkipNodeArray =
-		palloc0(columnCount * sizeof(ColumnBlockSkipNode *));
+	ColumnChunkSkipNode **chunkSkipNodeArray =
+		palloc0(columnCount * sizeof(ColumnChunkSkipNode *));
 	for (columnIndex = 0; columnIndex < columnCount; columnIndex++)
 	{
-		blockSkipNodeArray[columnIndex] =
-			palloc0(maxBlockCount * sizeof(ColumnBlockSkipNode));
+		chunkSkipNodeArray[columnIndex] =
+			palloc0(maxChunkCount * sizeof(ColumnChunkSkipNode));
 	}
 
 	StripeSkipList *stripeSkipList = palloc0(sizeof(StripeSkipList));
 	stripeSkipList->columnCount = columnCount;
-	stripeSkipList->blockCount = 0;
-	stripeSkipList->blockSkipNodeArray = blockSkipNodeArray;
+	stripeSkipList->chunkCount = 0;
+	stripeSkipList->chunkSkipNodeArray = chunkSkipNodeArray;
 
 	return stripeSkipList;
 }
@@ -332,9 +332,9 @@ WriteToSmgr(Relation rel, uint64 logicalOffset, char *data, uint32 dataLength)
 		SmgrAddr addr = logical_to_smgr(logicalOffset);
 
 		RelationOpenSmgr(rel);
-		BlockNumber nblocks = smgrnblocks(rel->rd_smgr, MAIN_FORKNUM);
+		BlockNumber nblocks PG_USED_FOR_ASSERTS_ONLY =
+			smgrnblocks(rel->rd_smgr, MAIN_FORKNUM);
 		Assert(addr.blockno < nblocks);
-		(void) nblocks; /* keep compiler quiet */
 		RelationCloseSmgr(rel);
 
 		buffer = ReadBuffer(rel, addr.blockno);
@@ -397,7 +397,7 @@ WriteToSmgr(Relation rel, uint64 logicalOffset, char *data, uint32 dataLength)
 
 /*
  * FlushStripe flushes current stripe data into the file. The function first ensures
- * the last data block for each column is properly serialized and compressed. Then,
+ * the last data chunk for each column is properly serialized and compressed. Then,
  * the function creates the skip list and footer buffers. Finally, the function
  * flushes the skip list, data, and footer buffers to the file.
  */
@@ -406,16 +406,16 @@ FlushStripe(TableWriteState *writeState)
 {
 	StripeMetadata stripeMetadata = { 0 };
 	uint32 columnIndex = 0;
-	uint32 blockIndex = 0;
+	uint32 chunkIndex = 0;
 	StripeBuffers *stripeBuffers = writeState->stripeBuffers;
 	StripeSkipList *stripeSkipList = writeState->stripeSkipList;
-	ColumnBlockSkipNode **columnSkipNodeArray = stripeSkipList->blockSkipNodeArray;
+	ColumnChunkSkipNode **columnSkipNodeArray = stripeSkipList->chunkSkipNodeArray;
 	TupleDesc tupleDescriptor = writeState->tupleDescriptor;
 	uint32 columnCount = tupleDescriptor->natts;
-	uint32 blockCount = stripeSkipList->blockCount;
-	uint32 blockRowCount = writeState->blockRowCount;
-	uint32 lastBlockIndex = stripeBuffers->rowCount / blockRowCount;
-	uint32 lastBlockRowCount = stripeBuffers->rowCount % blockRowCount;
+	uint32 chunkCount = stripeSkipList->chunkCount;
+	uint32 chunkRowCount = writeState->chunkRowCount;
+	uint32 lastChunkIndex = stripeBuffers->rowCount / chunkRowCount;
+	uint32 lastChunkRowCount = stripeBuffers->rowCount % chunkRowCount;
 	uint64 stripeSize = 0;
 	uint64 stripeRowCount = 0;
 
@@ -426,64 +426,64 @@ FlushStripe(TableWriteState *writeState)
 	Relation relation = relation_open(relationId, NoLock);
 
 	/*
-	 * check if the last block needs serialization , the last block was not serialized
+	 * check if the last chunk needs serialization , the last chunk was not serialized
 	 * if it was not full yet, e.g.  (rowCount > 0)
 	 */
-	if (lastBlockRowCount > 0)
+	if (lastChunkRowCount > 0)
 	{
-		SerializeBlockData(writeState, lastBlockIndex, lastBlockRowCount);
+		SerializeChunkData(writeState, lastChunkIndex, lastChunkRowCount);
 	}
 
 	/* update buffer sizes in stripe skip list */
 	for (columnIndex = 0; columnIndex < columnCount; columnIndex++)
 	{
-		ColumnBlockSkipNode *blockSkipNodeArray = columnSkipNodeArray[columnIndex];
+		ColumnChunkSkipNode *chunkSkipNodeArray = columnSkipNodeArray[columnIndex];
 		ColumnBuffers *columnBuffers = stripeBuffers->columnBuffersArray[columnIndex];
 
-		for (blockIndex = 0; blockIndex < blockCount; blockIndex++)
+		for (chunkIndex = 0; chunkIndex < chunkCount; chunkIndex++)
 		{
-			ColumnBlockBuffers *blockBuffers =
-				columnBuffers->blockBuffersArray[blockIndex];
-			uint64 existsBufferSize = blockBuffers->existsBuffer->len;
-			ColumnBlockSkipNode *blockSkipNode = &blockSkipNodeArray[blockIndex];
+			ColumnChunkBuffers *chunkBuffers =
+				columnBuffers->chunkBuffersArray[chunkIndex];
+			uint64 existsBufferSize = chunkBuffers->existsBuffer->len;
+			ColumnChunkSkipNode *chunkSkipNode = &chunkSkipNodeArray[chunkIndex];
 
-			blockSkipNode->existsBlockOffset = stripeSize;
-			blockSkipNode->existsLength = existsBufferSize;
+			chunkSkipNode->existsChunkOffset = stripeSize;
+			chunkSkipNode->existsLength = existsBufferSize;
 			stripeSize += existsBufferSize;
 		}
 
-		for (blockIndex = 0; blockIndex < blockCount; blockIndex++)
+		for (chunkIndex = 0; chunkIndex < chunkCount; chunkIndex++)
 		{
-			ColumnBlockBuffers *blockBuffers =
-				columnBuffers->blockBuffersArray[blockIndex];
-			uint64 valueBufferSize = blockBuffers->valueBuffer->len;
-			CompressionType valueCompressionType = blockBuffers->valueCompressionType;
-			ColumnBlockSkipNode *blockSkipNode = &blockSkipNodeArray[blockIndex];
+			ColumnChunkBuffers *chunkBuffers =
+				columnBuffers->chunkBuffersArray[chunkIndex];
+			uint64 valueBufferSize = chunkBuffers->valueBuffer->len;
+			CompressionType valueCompressionType = chunkBuffers->valueCompressionType;
+			ColumnChunkSkipNode *chunkSkipNode = &chunkSkipNodeArray[chunkIndex];
 
-			blockSkipNode->valueBlockOffset = stripeSize;
-			blockSkipNode->valueLength = valueBufferSize;
-			blockSkipNode->valueCompressionType = valueCompressionType;
+			chunkSkipNode->valueChunkOffset = stripeSize;
+			chunkSkipNode->valueLength = valueBufferSize;
+			chunkSkipNode->valueCompressionType = valueCompressionType;
 
 			stripeSize += valueBufferSize;
 		}
 	}
 
-	for (blockIndex = 0; blockIndex < blockCount; blockIndex++)
+	for (chunkIndex = 0; chunkIndex < chunkCount; chunkIndex++)
 	{
 		stripeRowCount +=
-			stripeSkipList->blockSkipNodeArray[0][blockIndex].rowCount;
+			stripeSkipList->chunkSkipNodeArray[0][chunkIndex].rowCount;
 	}
 
 	stripeMetadata = ReserveStripe(relation, stripeSize,
-								   stripeRowCount, columnCount, blockCount,
-								   blockRowCount);
+								   stripeRowCount, columnCount, chunkCount,
+								   chunkRowCount);
 
 	uint64 currentFileOffset = stripeMetadata.fileOffset;
 
 	/*
 	 * Each stripe has only one section:
 	 * Data section, in which we store data for each column continuously.
-	 * We store data for each for each column in blocks. For each block, we
+	 * We store data for each for each column in chunks. For each chunk, we
 	 * store two buffers: "exists" buffer, and "value" buffer. "exists" buffer
 	 * tells which values are not NULL. "value" buffer contains values for
 	 * present values. For each column, we first store all "exists" buffers,
@@ -495,22 +495,22 @@ FlushStripe(TableWriteState *writeState)
 	{
 		ColumnBuffers *columnBuffers = stripeBuffers->columnBuffersArray[columnIndex];
 
-		for (blockIndex = 0; blockIndex < stripeSkipList->blockCount; blockIndex++)
+		for (chunkIndex = 0; chunkIndex < stripeSkipList->chunkCount; chunkIndex++)
 		{
-			ColumnBlockBuffers *blockBuffers =
-				columnBuffers->blockBuffersArray[blockIndex];
-			StringInfo existsBuffer = blockBuffers->existsBuffer;
+			ColumnChunkBuffers *chunkBuffers =
+				columnBuffers->chunkBuffersArray[chunkIndex];
+			StringInfo existsBuffer = chunkBuffers->existsBuffer;
 
 			WriteToSmgr(relation, currentFileOffset,
 						existsBuffer->data, existsBuffer->len);
 			currentFileOffset += existsBuffer->len;
 		}
 
-		for (blockIndex = 0; blockIndex < stripeSkipList->blockCount; blockIndex++)
+		for (chunkIndex = 0; chunkIndex < stripeSkipList->chunkCount; chunkIndex++)
 		{
-			ColumnBlockBuffers *blockBuffers =
-				columnBuffers->blockBuffersArray[blockIndex];
-			StringInfo valueBuffer = blockBuffers->valueBuffer;
+			ColumnChunkBuffers *chunkBuffers =
+				columnBuffers->chunkBuffersArray[chunkIndex];
+			StringInfo valueBuffer = chunkBuffers->valueBuffer;
 
 			WriteToSmgr(relation, currentFileOffset,
 						valueBuffer->data, valueBuffer->len);
@@ -596,15 +596,15 @@ SerializeSingleDatum(StringInfo datumBuffer, Datum datum, bool datumTypeByValue,
 
 
 /*
- * SerializeBlockData serializes and compresses block data at given block index with given
+ * SerializeChunkData serializes and compresses chunk data at given chunk index with given
  * compression type for every column.
  */
 static void
-SerializeBlockData(TableWriteState *writeState, uint32 blockIndex, uint32 rowCount)
+SerializeChunkData(TableWriteState *writeState, uint32 chunkIndex, uint32 rowCount)
 {
 	uint32 columnIndex = 0;
 	StripeBuffers *stripeBuffers = writeState->stripeBuffers;
-	BlockData *blockData = writeState->blockData;
+	ChunkData *chunkData = writeState->chunkData;
 	CompressionType requestedCompressionType = writeState->compressionType;
 	const uint32 columnCount = stripeBuffers->columnCount;
 	StringInfo compressionBuffer = writeState->compressionBuffer;
@@ -613,10 +613,10 @@ SerializeBlockData(TableWriteState *writeState, uint32 blockIndex, uint32 rowCou
 	for (columnIndex = 0; columnIndex < columnCount; columnIndex++)
 	{
 		ColumnBuffers *columnBuffers = stripeBuffers->columnBuffersArray[columnIndex];
-		ColumnBlockBuffers *blockBuffers = columnBuffers->blockBuffersArray[blockIndex];
+		ColumnChunkBuffers *chunkBuffers = columnBuffers->chunkBuffersArray[chunkIndex];
 
-		blockBuffers->existsBuffer =
-			SerializeBoolArray(blockData->existsArray[columnIndex], rowCount);
+		chunkBuffers->existsBuffer =
+			SerializeBoolArray(chunkData->existsArray[columnIndex], rowCount);
 	}
 
 	/*
@@ -626,10 +626,10 @@ SerializeBlockData(TableWriteState *writeState, uint32 blockIndex, uint32 rowCou
 	for (columnIndex = 0; columnIndex < columnCount; columnIndex++)
 	{
 		ColumnBuffers *columnBuffers = stripeBuffers->columnBuffersArray[columnIndex];
-		ColumnBlockBuffers *blockBuffers = columnBuffers->blockBuffersArray[blockIndex];
+		ColumnChunkBuffers *chunkBuffers = columnBuffers->chunkBuffersArray[chunkIndex];
 		CompressionType actualCompressionType = COMPRESSION_NONE;
 
-		StringInfo serializedValueBuffer = blockData->valueBufferArray[columnIndex];
+		StringInfo serializedValueBuffer = chunkData->valueBufferArray[columnIndex];
 
 		/* the only other supported compression type is pg_lz for now */
 		Assert(requestedCompressionType == COMPRESSION_NONE ||
@@ -648,29 +648,29 @@ SerializeBlockData(TableWriteState *writeState, uint32 blockIndex, uint32 rowCou
 		}
 
 		/* store (compressed) value buffer */
-		blockBuffers->valueCompressionType = actualCompressionType;
-		blockBuffers->valueBuffer = CopyStringInfo(serializedValueBuffer);
+		chunkBuffers->valueCompressionType = actualCompressionType;
+		chunkBuffers->valueBuffer = CopyStringInfo(serializedValueBuffer);
 
-		/* valueBuffer needs to be reset for next block's data */
-		resetStringInfo(blockData->valueBufferArray[columnIndex]);
+		/* valueBuffer needs to be reset for next chunk's data */
+		resetStringInfo(chunkData->valueBufferArray[columnIndex]);
 	}
 }
 
 
 /*
- * UpdateBlockSkipNodeMinMax takes the given column value, and checks if this
+ * UpdateChunkSkipNodeMinMax takes the given column value, and checks if this
  * value falls outside the range of minimum/maximum values of the given column
- * block skip node. If it does, the function updates the column block skip node
+ * chunk skip node. If it does, the function updates the column chunk skip node
  * accordingly.
  */
 static void
-UpdateBlockSkipNodeMinMax(ColumnBlockSkipNode *blockSkipNode, Datum columnValue,
+UpdateChunkSkipNodeMinMax(ColumnChunkSkipNode *chunkSkipNode, Datum columnValue,
 						  bool columnTypeByValue, int columnTypeLength,
 						  Oid columnCollation, FmgrInfo *comparisonFunction)
 {
-	bool hasMinMax = blockSkipNode->hasMinMax;
-	Datum previousMinimum = blockSkipNode->minimumValue;
-	Datum previousMaximum = blockSkipNode->maximumValue;
+	bool hasMinMax = chunkSkipNode->hasMinMax;
+	Datum previousMinimum = chunkSkipNode->minimumValue;
+	Datum previousMaximum = chunkSkipNode->maximumValue;
 	Datum currentMinimum = 0;
 	Datum currentMaximum = 0;
 
@@ -715,9 +715,9 @@ UpdateBlockSkipNodeMinMax(ColumnBlockSkipNode *blockSkipNode, Datum columnValue,
 		}
 	}
 
-	blockSkipNode->hasMinMax = true;
-	blockSkipNode->minimumValue = currentMinimum;
-	blockSkipNode->maximumValue = currentMaximum;
+	chunkSkipNode->hasMinMax = true;
+	chunkSkipNode->minimumValue = currentMinimum;
+	chunkSkipNode->maximumValue = currentMaximum;
 }
 
 

@@ -104,7 +104,7 @@ PG_FUNCTION_INFO_V1(columnar_relation_storageid);
 /* constants for cstore.options */
 #define Natts_cstore_options 4
 #define Anum_cstore_options_regclass 1
-#define Anum_cstore_options_block_row_count 2
+#define Anum_cstore_options_chunk_row_count 2
 #define Anum_cstore_options_stripe_row_count 3
 #define Anum_cstore_options_compression 4
 
@@ -115,7 +115,7 @@ PG_FUNCTION_INFO_V1(columnar_relation_storageid);
 typedef struct FormData_cstore_options
 {
 	Oid regclass;
-	int32 block_row_count;
+	int32 chunk_row_count;
 	int32 stripe_row_count;
 	NameData compression;
 
@@ -132,8 +132,8 @@ typedef FormData_cstore_options *Form_cstore_options;
 #define Anum_cstore_stripes_file_offset 3
 #define Anum_cstore_stripes_data_length 4
 #define Anum_cstore_stripes_column_count 5
-#define Anum_cstore_stripes_block_count 6
-#define Anum_cstore_stripes_block_row_count 7
+#define Anum_cstore_stripes_chunk_count 6
+#define Anum_cstore_stripes_chunk_row_count 7
 #define Anum_cstore_stripes_row_count 8
 
 /* constants for cstore_skipnodes */
@@ -141,7 +141,7 @@ typedef FormData_cstore_options *Form_cstore_options;
 #define Anum_cstore_skipnodes_storageid 1
 #define Anum_cstore_skipnodes_stripe 2
 #define Anum_cstore_skipnodes_attr 3
-#define Anum_cstore_skipnodes_block 4
+#define Anum_cstore_skipnodes_chunk 4
 #define Anum_cstore_skipnodes_row_count 5
 #define Anum_cstore_skipnodes_minimum_value 6
 #define Anum_cstore_skipnodes_maximum_value 7
@@ -169,7 +169,7 @@ InitColumnarOptions(Oid regclass)
 	}
 
 	ColumnarOptions defaultOptions = {
-		.blockRowCount = cstore_block_row_count,
+		.chunkRowCount = cstore_chunk_row_count,
 		.stripeRowCount = cstore_stripe_row_count,
 		.compressionType = cstore_compression,
 	};
@@ -212,7 +212,7 @@ WriteColumnarOptions(Oid regclass, ColumnarOptions *options, bool overwrite)
 	bool nulls[Natts_cstore_options] = { 0 };
 	Datum values[Natts_cstore_options] = {
 		ObjectIdGetDatum(regclass),
-		Int32GetDatum(options->blockRowCount),
+		Int32GetDatum(options->chunkRowCount),
 		Int32GetDatum(options->stripeRowCount),
 		0, /* to be filled below */
 	};
@@ -243,7 +243,7 @@ WriteColumnarOptions(Oid regclass, ColumnarOptions *options, bool overwrite)
 			/* TODO check if the options are actually different, skip if not changed */
 			/* update existing record */
 			bool update[Natts_cstore_options] = { 0 };
-			update[Anum_cstore_options_block_row_count - 1] = true;
+			update[Anum_cstore_options_chunk_row_count - 1] = true;
 			update[Anum_cstore_options_stripe_row_count - 1] = true;
 			update[Anum_cstore_options_compression - 1] = true;
 
@@ -360,7 +360,7 @@ ReadColumnarOptions(Oid regclass, ColumnarOptions *options)
 	{
 		Form_cstore_options tupOptions = (Form_cstore_options) GETSTRUCT(heapTuple);
 
-		options->blockRowCount = tupOptions->block_row_count;
+		options->chunkRowCount = tupOptions->chunk_row_count;
 		options->stripeRowCount = tupOptions->stripe_row_count;
 		options->compressionType = ParseCompressionType(NameStr(tupOptions->compression));
 	}
@@ -369,7 +369,7 @@ ReadColumnarOptions(Oid regclass, ColumnarOptions *options)
 		/* populate options with system defaults */
 		options->compressionType = cstore_compression;
 		options->stripeRowCount = cstore_stripe_row_count;
-		options->blockRowCount = cstore_block_row_count;
+		options->chunkRowCount = cstore_chunk_row_count;
 	}
 
 	systable_endscan_ordered(scanDescriptor);
@@ -389,7 +389,7 @@ SaveStripeSkipList(RelFileNode relfilenode, uint64 stripe, StripeSkipList *strip
 				   TupleDesc tupleDescriptor)
 {
 	uint32 columnIndex = 0;
-	uint32 blockIndex = 0;
+	uint32 chunkIndex = 0;
 	uint32 columnCount = stripeSkipList->columnCount;
 
 	ColumnarMetapage *metapage = ReadMetapage(relfilenode, false);
@@ -399,22 +399,22 @@ SaveStripeSkipList(RelFileNode relfilenode, uint64 stripe, StripeSkipList *strip
 
 	for (columnIndex = 0; columnIndex < columnCount; columnIndex++)
 	{
-		for (blockIndex = 0; blockIndex < stripeSkipList->blockCount; blockIndex++)
+		for (chunkIndex = 0; chunkIndex < stripeSkipList->chunkCount; chunkIndex++)
 		{
-			ColumnBlockSkipNode *skipNode =
-				&stripeSkipList->blockSkipNodeArray[columnIndex][blockIndex];
+			ColumnChunkSkipNode *skipNode =
+				&stripeSkipList->chunkSkipNodeArray[columnIndex][chunkIndex];
 
 			Datum values[Natts_cstore_skipnodes] = {
 				UInt64GetDatum(metapage->storageId),
 				Int64GetDatum(stripe),
 				Int32GetDatum(columnIndex + 1),
-				Int32GetDatum(blockIndex),
+				Int32GetDatum(chunkIndex),
 				Int64GetDatum(skipNode->rowCount),
 				0, /* to be filled below */
 				0, /* to be filled below */
-				Int64GetDatum(skipNode->valueBlockOffset),
+				Int64GetDatum(skipNode->valueChunkOffset),
 				Int64GetDatum(skipNode->valueLength),
-				Int64GetDatum(skipNode->existsBlockOffset),
+				Int64GetDatum(skipNode->existsChunkOffset),
 				Int64GetDatum(skipNode->existsLength),
 				Int32GetDatum(skipNode->valueCompressionType)
 			};
@@ -452,7 +452,7 @@ SaveStripeSkipList(RelFileNode relfilenode, uint64 stripe, StripeSkipList *strip
  */
 StripeSkipList *
 ReadStripeSkipList(RelFileNode relfilenode, uint64 stripe, TupleDesc tupleDescriptor,
-				   uint32 blockCount)
+				   uint32 chunkCount)
 {
 	int32 columnIndex = 0;
 	HeapTuple heapTuple = NULL;
@@ -474,13 +474,13 @@ ReadStripeSkipList(RelFileNode relfilenode, uint64 stripe, TupleDesc tupleDescri
 															2, scanKey);
 
 	StripeSkipList *skipList = palloc0(sizeof(StripeSkipList));
-	skipList->blockCount = blockCount;
+	skipList->chunkCount = chunkCount;
 	skipList->columnCount = columnCount;
-	skipList->blockSkipNodeArray = palloc0(columnCount * sizeof(ColumnBlockSkipNode *));
+	skipList->chunkSkipNodeArray = palloc0(columnCount * sizeof(ColumnChunkSkipNode *));
 	for (columnIndex = 0; columnIndex < columnCount; columnIndex++)
 	{
-		skipList->blockSkipNodeArray[columnIndex] =
-			palloc0(blockCount * sizeof(ColumnBlockSkipNode));
+		skipList->chunkSkipNodeArray[columnIndex] =
+			palloc0(chunkCount * sizeof(ColumnChunkSkipNode));
 	}
 
 	while (HeapTupleIsValid(heapTuple = systable_getnext(scanDescriptor)))
@@ -492,7 +492,7 @@ ReadStripeSkipList(RelFileNode relfilenode, uint64 stripe, TupleDesc tupleDescri
 						  isNullArray);
 
 		int32 attr = DatumGetInt32(datumArray[Anum_cstore_skipnodes_attr - 1]);
-		int32 blockIndex = DatumGetInt32(datumArray[Anum_cstore_skipnodes_block - 1]);
+		int32 chunkIndex = DatumGetInt32(datumArray[Anum_cstore_skipnodes_chunk - 1]);
 
 		if (attr <= 0 || attr > columnCount)
 		{
@@ -500,23 +500,23 @@ ReadStripeSkipList(RelFileNode relfilenode, uint64 stripe, TupleDesc tupleDescri
 							errdetail("Attribute number out of range: %d", attr)));
 		}
 
-		if (blockIndex < 0 || blockIndex >= blockCount)
+		if (chunkIndex < 0 || chunkIndex >= chunkCount)
 		{
 			ereport(ERROR, (errmsg("invalid stripe skipnode entry"),
-							errdetail("Block number out of range: %d", blockIndex)));
+							errdetail("Chunk number out of range: %d", chunkIndex)));
 		}
 
 		columnIndex = attr - 1;
 
-		ColumnBlockSkipNode *skipNode =
-			&skipList->blockSkipNodeArray[columnIndex][blockIndex];
+		ColumnChunkSkipNode *skipNode =
+			&skipList->chunkSkipNodeArray[columnIndex][chunkIndex];
 		skipNode->rowCount = DatumGetInt64(datumArray[Anum_cstore_skipnodes_row_count -
 													  1]);
-		skipNode->valueBlockOffset =
+		skipNode->valueChunkOffset =
 			DatumGetInt64(datumArray[Anum_cstore_skipnodes_value_stream_offset - 1]);
 		skipNode->valueLength =
 			DatumGetInt64(datumArray[Anum_cstore_skipnodes_value_stream_length - 1]);
-		skipNode->existsBlockOffset =
+		skipNode->existsChunkOffset =
 			DatumGetInt64(datumArray[Anum_cstore_skipnodes_exists_stream_offset - 1]);
 		skipNode->existsLength =
 			DatumGetInt64(datumArray[Anum_cstore_skipnodes_exists_stream_length - 1]);
@@ -565,8 +565,8 @@ InsertStripeMetadataRow(uint64 storageId, StripeMetadata *stripe)
 		Int64GetDatum(stripe->fileOffset),
 		Int64GetDatum(stripe->dataLength),
 		Int32GetDatum(stripe->columnCount),
-		Int32GetDatum(stripe->blockCount),
-		Int32GetDatum(stripe->blockRowCount),
+		Int32GetDatum(stripe->chunkCount),
+		Int32GetDatum(stripe->chunkRowCount),
 		Int64GetDatum(stripe->rowCount)
 	};
 
@@ -670,7 +670,7 @@ GetHighestUsedAddressAndId(uint64 storageId,
 StripeMetadata
 ReserveStripe(Relation rel, uint64 sizeBytes,
 			  uint64 rowCount, uint64 columnCount,
-			  uint64 blockCount, uint64 blockRowCount)
+			  uint64 chunkCount, uint64 chunkRowCount)
 {
 	StripeMetadata stripe = { 0 };
 	uint64 currLogicalHigh = 0;
@@ -720,8 +720,8 @@ ReserveStripe(Relation rel, uint64 sizeBytes,
 
 	stripe.fileOffset = resLogicalStart;
 	stripe.dataLength = sizeBytes;
-	stripe.blockCount = blockCount;
-	stripe.blockRowCount = blockRowCount;
+	stripe.chunkCount = chunkCount;
+	stripe.chunkRowCount = chunkRowCount;
 	stripe.columnCount = columnCount;
 	stripe.rowCount = rowCount;
 	stripe.id = highestId + 1;
@@ -773,10 +773,10 @@ ReadDataFileStripeList(uint64 storageId, Snapshot snapshot)
 			datumArray[Anum_cstore_stripes_data_length - 1]);
 		stripeMetadata->columnCount = DatumGetInt32(
 			datumArray[Anum_cstore_stripes_column_count - 1]);
-		stripeMetadata->blockCount = DatumGetInt32(
-			datumArray[Anum_cstore_stripes_block_count - 1]);
-		stripeMetadata->blockRowCount = DatumGetInt32(
-			datumArray[Anum_cstore_stripes_block_row_count - 1]);
+		stripeMetadata->chunkCount = DatumGetInt32(
+			datumArray[Anum_cstore_stripes_chunk_count - 1]);
+		stripeMetadata->chunkRowCount = DatumGetInt32(
+			datumArray[Anum_cstore_stripes_chunk_row_count - 1]);
 		stripeMetadata->rowCount = DatumGetInt64(
 			datumArray[Anum_cstore_stripes_row_count - 1]);
 

@@ -73,10 +73,10 @@ SELECT count(*) FROM t_stripes;
 
 -- VACUUM FULL doesn't reclaim dropped columns, but converts them to NULLs
 ALTER TABLE t DROP COLUMN a;
-SELECT stripe, attr, block, minimum_value IS NULL, maximum_value IS NULL
+SELECT stripe, attr, chunk, minimum_value IS NULL, maximum_value IS NULL
 FROM cstore.cstore_skipnodes a, pg_class b
 WHERE a.storageid = columnar_relation_storageid(b.oid) AND b.relname='t' ORDER BY 1, 2, 3;
- stripe | attr | block | ?column? | ?column?
+ stripe | attr | chunk | ?column? | ?column?
 ---------------------------------------------------------------------
       1 |    1 |     0 | f        | f
       1 |    2 |     0 | f        | f
@@ -87,10 +87,10 @@ WHERE a.storageid = columnar_relation_storageid(b.oid) AND b.relname='t' ORDER B
 (6 rows)
 
 VACUUM FULL t;
-SELECT stripe, attr, block, minimum_value IS NULL, maximum_value IS NULL
+SELECT stripe, attr, chunk, minimum_value IS NULL, maximum_value IS NULL
 FROM cstore.cstore_skipnodes a, pg_class b
 WHERE a.storageid = columnar_relation_storageid(b.oid) AND b.relname='t' ORDER BY 1, 2, 3;
- stripe | attr | block | ?column? | ?column?
+ stripe | attr | chunk | ?column? | ?column?
 ---------------------------------------------------------------------
       1 |    1 |     0 | t        | t
       1 |    2 |     0 | f        | f
@@ -151,7 +151,7 @@ INFO:  statistics for "t":
 storage id: xxxxx
 total file size: 122880, total data size: 10754
 total row count: 2530, stripe count: 3, average rows per stripe: 843
-block count: 3, containing data for dropped columns: 0, none compressed: 3, pglz compressed: 0
+chunk count: 3, containing data for dropped columns: 0, none compressed: 3, pglz compressed: 0
 
 INFO:  "t": truncated 15 to 5 pages
 SELECT pg_size_pretty(pg_relation_size('t'));
@@ -170,7 +170,7 @@ SELECT count(*) FROM t;
 -- then vacuum to print stats
 BEGIN;
 SELECT alter_columnar_table_set('t',
-    block_row_count => 1000,
+    chunk_row_count => 1000,
     stripe_row_count => 2000,
     compression => 'pglz');
  alter_columnar_table_set
@@ -198,7 +198,7 @@ INFO:  statistics for "t":
 storage id: xxxxx
 total file size: 57344, total data size: 18808
 total row count: 5530, stripe count: 5, average rows per stripe: 1106
-block count: 7, containing data for dropped columns: 0, none compressed: 5, pglz compressed: 2
+chunk count: 7, containing data for dropped columns: 0, none compressed: 5, pglz compressed: 2
 
 SELECT count(*) FROM t;
  count
@@ -206,7 +206,7 @@ SELECT count(*) FROM t;
   5530
 (1 row)
 
--- check that we report blocks with data for dropped columns
+-- check that we report chunks with data for dropped columns
 ALTER TABLE t ADD COLUMN c int;
 INSERT INTO t SELECT 1, i / 5 FROM generate_series(1, 1500) i;
 ALTER TABLE t DROP COLUMN c;
@@ -215,10 +215,10 @@ INFO:  statistics for "t":
 storage id: xxxxx
 total file size: 73728, total data size: 31372
 total row count: 7030, stripe count: 6, average rows per stripe: 1171
-block count: 11, containing data for dropped columns: 2, none compressed: 9, pglz compressed: 2
+chunk count: 11, containing data for dropped columns: 2, none compressed: 9, pglz compressed: 2
 
--- vacuum full should remove blocks for dropped columns
--- note that, a block will be stored in non-compressed for if compression
+-- vacuum full should remove chunks for dropped columns
+-- note that, a chunk will be stored in non-compressed for if compression
 -- doesn't reduce its size.
 SELECT alter_columnar_table_set('t', compression => 'pglz');
  alter_columnar_table_set
@@ -232,7 +232,7 @@ INFO:  statistics for "t":
 storage id: xxxxx
 total file size: 57344, total data size: 15728
 total row count: 7030, stripe count: 4, average rows per stripe: 1757
-block count: 8, containing data for dropped columns: 0, none compressed: 2, pglz compressed: 6
+chunk count: 8, containing data for dropped columns: 0, none compressed: 2, pglz compressed: 6
 
 DROP TABLE t;
 DROP VIEW t_stripes;

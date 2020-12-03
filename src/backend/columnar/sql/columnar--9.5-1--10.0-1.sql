@@ -7,7 +7,7 @@ CREATE SEQUENCE storageid_seq MINVALUE 10000000000 NO CYCLE;
 
 CREATE TABLE options (
     regclass regclass NOT NULL PRIMARY KEY,
-    block_row_count int NOT NULL,
+    chunk_row_count int NOT NULL,
     stripe_row_count int NOT NULL,
     compression name NOT NULL
 ) WITH (user_catalog_table = true);
@@ -20,8 +20,8 @@ CREATE TABLE cstore_stripes (
     file_offset bigint NOT NULL,
     data_length bigint NOT NULL,
     column_count int NOT NULL,
-    block_count int NOT NULL,
-    block_row_count int NOT NULL,
+    chunk_count int NOT NULL,
+    chunk_row_count int NOT NULL,
     row_count bigint NOT NULL,
     PRIMARY KEY (storageid, stripe)
 ) WITH (user_catalog_table = true);
@@ -32,7 +32,7 @@ CREATE TABLE cstore_skipnodes (
     storageid bigint NOT NULL,
     stripe bigint NOT NULL,
     attr int NOT NULL,
-    block int NOT NULL,
+    chunk int NOT NULL,
     row_count bigint NOT NULL,
     minimum_value bytea,
     maximum_value bytea,
@@ -41,11 +41,11 @@ CREATE TABLE cstore_skipnodes (
     exists_stream_offset bigint NOT NULL,
     exists_stream_length bigint NOT NULL,
     value_compression_type int NOT NULL,
-    PRIMARY KEY (storageid, stripe, attr, block),
+    PRIMARY KEY (storageid, stripe, attr, chunk),
     FOREIGN KEY (storageid, stripe) REFERENCES cstore_stripes(storageid, stripe) ON DELETE CASCADE
 ) WITH (user_catalog_table = true);
 
-COMMENT ON TABLE cstore_skipnodes IS 'CStore per block metadata';
+COMMENT ON TABLE cstore_skipnodes IS 'CStore per chunk metadata';
 
 DO $proc$
 BEGIN
