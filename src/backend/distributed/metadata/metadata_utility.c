@@ -67,6 +67,7 @@
 
 
 /* Local functions forward declarations */
+static uint64 NodeDatabaseSize(char *nodeName, int nodePort, char *databaseName);
 static uint64 * AllocateUint64(uint64 value);
 static void RecordDistributedRelationDependencies(Oid distributedRelationId);
 static GroupShardPlacement * TupleToGroupShardPlacement(TupleDesc tupleDesc,
@@ -81,9 +82,65 @@ static void ErrorIfNotSuitableToGetSize(Oid relationId);
 
 
 /* exports for SQL callable functions */
+PG_FUNCTION_INFO_V1(citus_database_size);
+PG_FUNCTION_INFO_V1(citus_node_database_size);
 PG_FUNCTION_INFO_V1(citus_table_size);
 PG_FUNCTION_INFO_V1(citus_total_relation_size);
 PG_FUNCTION_INFO_V1(citus_relation_size);
+
+
+/*
+ * citus_database_size is a UDF that returns the sum of the database sizes
+ * across all nodes.
+ */
+Datum
+citus_database_size(PG_FUNCTION_ARGS)
+{
+	Datum databaseNameDatum = PG_GETARG_DATUM(0);
+	Name databaseName = DatumGetName(databaseNameDatum);
+	char *databaseNameString = NameStr(*databaseName);
+
+	CheckCitusVersion(ERROR);
+
+	Datum databaseSizeDatum = DirectFunctionCall1(pg_database_size_name,
+												  databaseNameDatum);
+
+	uint64 databaseSize = Int64GetDatum(databaseSizeDatum);
+
+	/* we calculated the coordinator database size above, so only query workers */
+	List *workerNodeList = ActiveReadableNonCoordinatorNodeList();
+	WorkerNode *workerNode = NULL;
+
+	foreach_ptr(workerNode, workerNodeList)
+	{
+		databaseSize += NodeDatabaseSize(workerNode->workerName, workerNode->workerPort,
+										 databaseNameString);
+	}
+
+	PG_RETURN_UINT64(databaseSize);
+}
+
+
+/*
+ * citus_node_database_size is a UDF that returns the size of the database
+ * on a given node.
+ */
+Datum
+citus_node_database_size(PG_FUNCTION_ARGS)
+{
+	text *nodeNameText = PG_GETARG_TEXT_P(0);
+	char *nodeNameString = text_to_cstring(nodeNameText);
+	int32 nodePort = PG_GETARG_INT32(1);
+	Name databaseName = PG_GETARG_NAME(2);
+	char *databaseNameString = NameStr(*databaseName);
+
+	CheckCitusVersion(ERROR);
+
+	uint64 nodeDatabaseSize = NodeDatabaseSize(nodeNameString, nodePort,
+											   databaseNameString);
+
+	PG_RETURN_UINT64(nodeDatabaseSize);
+}
 
 
 /*
@@ -174,6 +231,41 @@ citus_relation_size(PG_FUNCTION_ARGS)
 	}
 
 	PG_RETURN_INT64(relationSize);
+}
+
+
+/*
+ * NodeDatabaseSize returns the size of a database on a given node.
+ */
+static uint64
+NodeDatabaseSize(char *nodeName, int nodePort, char *databaseName)
+{
+	uint32 connectionFlags = 0;
+	PGresult *result = NULL;
+	StringInfo sizeQuery = makeStringInfo();
+	bool raiseErrors = true;
+
+	appendStringInfo(sizeQuery, "SELECT pg_catalog.pg_database_size(%s)",
+					 quote_literal_cstr(quote_identifier(databaseName)));
+
+	MultiConnection *connection = GetNodeConnection(connectionFlags, nodeName, nodePort);
+
+	int queryResult = ExecuteOptionalRemoteCommand(connection, sizeQuery->data,
+												   &result);
+	if (queryResult != 0)
+	{
+		ereport(ERROR, (errcode(ERRCODE_CONNECTION_FAILURE),
+						errmsg("cannot get the size because of a connection error")));
+	}
+
+	List *sizeList = ReadFirstColumnAsText(result);
+	StringInfo databaseSizeStringInfo = (StringInfo) linitial(sizeList);
+	uint64 databaseSize = SafeStringToUint64(databaseSizeStringInfo->data);
+
+	PQclear(result);
+	ClearResults(connection, raiseErrors);
+
+	return databaseSize;
 }
 
 
