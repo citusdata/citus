@@ -67,6 +67,8 @@ typedef enum ExtractForeignKeyConstraintsMode
 /* cluster.c - forward declarations */
 extern List * PreprocessClusterStmt(Node *node, const char *clusterCommand);
 
+/* index.c */
+typedef void (*PGIndexProcessor)(Form_pg_index, List **);
 
 /* call.c */
 extern bool CallDistributedProcedureRemotely(CallStmt *callStmt, DestReceiver *dest);
@@ -183,6 +185,8 @@ extern List * PostprocessIndexStmt(Node *node,
 								   const char *queryString);
 extern void ErrorIfUnsupportedAlterIndexStmt(AlterTableStmt *alterTableStatement);
 extern void MarkIndexValid(IndexStmt *indexStmt);
+extern List * ExecuteFunctionOnEachTableIndex(Oid relationId, PGIndexProcessor
+											  pgIndexProcessor);
 
 /* objectaddress.c - forward declarations */
 extern ObjectAddress CreateExtensionStmtObjectAddress(Node *stmt, bool missing_ok);
