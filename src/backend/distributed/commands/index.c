@@ -32,6 +32,7 @@
 #include "distributed/multi_executor.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_partitioning_utils.h"
+#include "distributed/namespace_utils.h"
 #include "distributed/resource_lock.h"
 #include "distributed/relation_access_tracking.h"
 #include "distributed/relation_utils.h"
@@ -41,6 +42,7 @@
 #include "nodes/parsenodes.h"
 #include "storage/lmgr.h"
 #include "utils/builtins.h"
+#include "utils/fmgroids.h"
 #include "utils/inval.h"
 #include "utils/lsyscache.h"
 #include "utils/syscache.h"
@@ -245,6 +247,50 @@ CreateIndexStmtGetSchemaId(IndexStmt *createIndexStatement)
 	bool missingOk = false;
 	Oid namespaceId = get_namespace_oid(schemaName, missingOk);
 	return namespaceId;
+}
+
+
+/*
+ * ExecuteFunctionOnEachTableIndex executes the given pgIndexProcessor function on each
+ * index of the given relation.
+ * It returns a list that is filled by the pgIndexProcessor.
+ */
+List *
+ExecuteFunctionOnEachTableIndex(Oid relationId, PGIndexProcessor pgIndexProcessor)
+{
+	List *result = NIL;
+	ScanKeyData scanKey[1];
+	int scanKeyCount = 1;
+
+	PushOverrideEmptySearchPath(CurrentMemoryContext);
+
+	/* open system catalog and scan all indexes that belong to this table */
+	Relation pgIndex = table_open(IndexRelationId, AccessShareLock);
+
+	ScanKeyInit(&scanKey[0], Anum_pg_index_indrelid,
+				BTEqualStrategyNumber, F_OIDEQ, relationId);
+
+	SysScanDesc scanDescriptor = systable_beginscan(pgIndex,
+													IndexIndrelidIndexId, true, /* indexOK */
+													NULL, scanKeyCount, scanKey);
+
+	HeapTuple heapTuple = systable_getnext(scanDescriptor);
+	while (HeapTupleIsValid(heapTuple))
+	{
+		Form_pg_index indexForm = (Form_pg_index) GETSTRUCT(heapTuple);
+		pgIndexProcessor(indexForm, &result);
+
+		heapTuple = systable_getnext(scanDescriptor);
+	}
+
+	/* clean up scan and close system catalog */
+	systable_endscan(scanDescriptor);
+	table_close(pgIndex, AccessShareLock);
+
+	/* revert back to original search_path */
+	PopOverrideSearchPath();
+
+	return result;
 }
 
 
