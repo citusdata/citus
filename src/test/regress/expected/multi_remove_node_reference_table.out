@@ -28,10 +28,31 @@ SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
      1
 (1 row)
 
+-- test recovery when removing node
+CREATE TABLE recovery_test (x int, y int);
+SELECT create_distributed_table('recovery_test','x');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+DROP TABLE recovery_test;
 SELECT master_remove_node('localhost', :worker_2_port);
  master_remove_node
 ---------------------------------------------------------------------
 
+(1 row)
+
+SELECT recover_prepared_transactions();
+ recover_prepared_transactions
+---------------------------------------------------------------------
+                             0
+(1 row)
+
+SELECT count(*) FROM pg_dist_transaction;
+ count
+---------------------------------------------------------------------
+     0
 (1 row)
 
 -- verify node is removed
@@ -132,7 +153,7 @@ WHERE
     nodeport = :worker_2_port;
  shardid | shardstate | shardlength | nodename  | nodeport
 ---------------------------------------------------------------------
- 1380000 |          1 |           0 | localhost |    57638
+ 1380004 |          1 |           0 | localhost |    57638
 (1 row)
 
 SELECT shardcount, replicationfactor, distributioncolumntype
@@ -161,7 +182,7 @@ WHERE
     nodeport = :worker_2_port;
  shardid | shardstate | shardlength | nodename  | nodeport
 ---------------------------------------------------------------------
- 1380000 |          1 |           0 | localhost |    57638
+ 1380004 |          1 |           0 | localhost |    57638
 (1 row)
 
 \c - - - :master_port

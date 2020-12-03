@@ -1059,7 +1059,7 @@ SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
 --
 SET citus.replicate_reference_tables_on_activate TO off;
 SET citus.shard_replication_factor TO 1;
-select master_remove_node('localhost', :worker_2_port);
+SELECT master_remove_node('localhost', :worker_2_port);
  master_remove_node
 ---------------------------------------------------------------------
 

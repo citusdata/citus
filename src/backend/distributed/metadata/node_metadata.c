@@ -42,6 +42,7 @@
 #include "distributed/shardinterval_utils.h"
 #include "distributed/shared_connection_stats.h"
 #include "distributed/string_utils.h"
+#include "distributed/transaction_recovery.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_transaction.h"
@@ -1131,6 +1132,12 @@ RemoveNodeFromCluster(char *nodeName, int32 nodePort)
 								"To proceed, either drop the distributed tables or use "
 								"undistribute_table() function to convert them to local tables")));
 		}
+
+		/*
+		 * Secondary nodes are read-only, never 2PC is used.
+		 * Hence, no items can be inserted to pg_dist_transaction for secondary nodes.
+		 */
+		DeleteWorkerTransactions(workerNode);
 	}
 
 	DeleteNodeRow(workerNode->workerName, nodePort);

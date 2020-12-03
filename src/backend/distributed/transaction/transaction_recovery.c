@@ -319,7 +319,7 @@ RecoverWorkerTransactions(WorkerNode *workerNode)
 			 * In addition, if the transaction started after the call to
 			 * ActiveDistributedTransactionNumbers and finished just before our
 			 * pg_dist_transaction snapshot, then it may still be in the process
-			 * of comitting the prepared transactions in the post-commit callback
+			 * of committing the prepared transactions in the post-commit callback
 			 * and we should not touch the prepared transactions.
 			 *
 			 * To handle these cases, we just leave the records and prepared
@@ -510,4 +510,48 @@ RecoverPreparedTransactionOnWorker(MultiConnection *connection, char *transactio
 				  errcontext("%s", command->data)));
 
 	return true;
+}
+
+
+/*
+ * DeleteWorkerTransactions deletes the entries on pg_dist_transaction for a given
+ * worker node. It's implemented to be called at master_remove_node.
+ */
+void
+DeleteWorkerTransactions(WorkerNode *workerNode)
+{
+	if (workerNode == NULL)
+	{
+		/*
+		 * We don't expect this, but let's be defensive since crashing is much worse
+		 * than leaving pg_dist_transction entries.
+		 */
+		return;
+	}
+
+	bool indexOK = true;
+	int scanKeyCount = 1;
+	ScanKeyData scanKey[1];
+	int32 groupId = workerNode->groupId;
+	HeapTuple heapTuple = NULL;
+
+	Relation pgDistTransaction = table_open(DistTransactionRelationId(),
+											RowExclusiveLock);
+
+	ScanKeyInit(&scanKey[0], Anum_pg_dist_transaction_groupid,
+				BTEqualStrategyNumber, F_INT4EQ, Int32GetDatum(groupId));
+
+	SysScanDesc scanDescriptor = systable_beginscan(pgDistTransaction,
+													DistTransactionGroupIndexId(),
+													indexOK,
+													NULL, scanKeyCount, scanKey);
+
+	while (HeapTupleIsValid(heapTuple = systable_getnext(scanDescriptor)))
+	{
+		simple_heap_delete(pgDistTransaction, &heapTuple->t_self);
+	}
+
+	CommandCounterIncrement();
+	systable_endscan(scanDescriptor);
+	table_close(pgDistTransaction, NoLock);
 }
