@@ -82,18 +82,19 @@ FROM test.maintenance_worker();
  regression | regression       | postgres | postgres
 (1 row)
 
--- ensure no objects were created outside pg_catalog
-SELECT COUNT(*)
+-- ensure no unexpected objects were created outside pg_catalog
+SELECT pgio.type, pgio.identity
 FROM pg_depend AS pgd,
 	 pg_extension AS pge,
 	 LATERAL pg_identify_object(pgd.classid, pgd.objid, pgd.objsubid) AS pgio
 WHERE pgd.refclassid = 'pg_extension'::regclass AND
 	  pgd.refobjid   = pge.oid AND
 	  pge.extname    = 'citus' AND
-	  pgio.schema    NOT IN ('pg_catalog', 'citus', 'citus_internal', 'test', 'cstore');
- count
+	  pgio.schema    NOT IN ('pg_catalog', 'citus', 'citus_internal', 'test', 'cstore')
+ORDER BY 1, 2;
+ type |      identity
 ---------------------------------------------------------------------
-     0
+ view | public.citus_tables
 (1 row)
 
 -- DROP EXTENSION pre-created by the regression suite
@@ -483,7 +484,8 @@ SELECT * FROM print_extension_changes();
                  | table cstore.cstore_skipnodes
                  | table cstore.cstore_stripes
                  | table cstore.options
-(6 rows)
+                 | view citus_tables
+(7 rows)
 
 DROP TABLE prev_objects, extension_diff;
 -- show running version
@@ -493,18 +495,19 @@ SHOW citus.version;
  10.0devel
 (1 row)
 
--- ensure no objects were created outside pg_catalog
-SELECT COUNT(*)
+-- ensure no unexpected objects were created outside pg_catalog
+SELECT pgio.type, pgio.identity
 FROM pg_depend AS pgd,
 	 pg_extension AS pge,
 	 LATERAL pg_identify_object(pgd.classid, pgd.objid, pgd.objsubid) AS pgio
 WHERE pgd.refclassid = 'pg_extension'::regclass AND
 	  pgd.refobjid   = pge.oid AND
 	  pge.extname    = 'citus' AND
-	  pgio.schema    NOT IN ('pg_catalog', 'citus', 'citus_internal', 'test', 'cstore');
- count
+	  pgio.schema    NOT IN ('pg_catalog', 'citus', 'citus_internal', 'test', 'cstore')
+ORDER BY 1, 2;
+ type |      identity
 ---------------------------------------------------------------------
-     0
+ view | public.citus_tables
 (1 row)
 
 -- see incompatible version errors out
@@ -589,10 +592,11 @@ SET citus.enable_version_checks TO 'true';
 ALTER EXTENSION citus UPDATE;
 -- if cache is invalidated succesfull, this \d should work without any problem
 \d
-      List of relations
- Schema | Name | Type | Owner
+            List of relations
+ Schema |     Name     | Type |  Owner
 ---------------------------------------------------------------------
-(0 rows)
+ public | citus_tables | view | postgres
+(1 row)
 
 \c - - - :master_port
 -- test https://github.com/citusdata/citus/issues/3409

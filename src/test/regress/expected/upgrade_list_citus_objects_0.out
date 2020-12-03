@@ -211,7 +211,8 @@ ORDER BY 1;
  view citus_shard_indexes_on_worker
  view citus_shards_on_worker
  view citus_stat_statements
+ view citus_tables
  view citus_worker_stat_activity
  view pg_dist_shard_placement
-(197 rows)
+(198 rows)
 
