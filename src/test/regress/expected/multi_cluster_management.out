@@ -998,3 +998,57 @@ WHERE logicalrelid = 'test_dist_non_colocated'::regclass GROUP BY nodeport ORDER
 SELECT * from master_set_node_property('localhost', :worker_2_port, 'bogusproperty', false);
 ERROR:  only the 'shouldhaveshards' property can be set using this function
 DROP TABLE test_dist, test_ref, test_dist_colocated, test_dist_non_colocated;
+SELECT master_remove_node('localhost', 8887);
+ master_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT master_remove_node('localhost', 8888);
+ master_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT master_remove_node('localhost', 9992);
+ master_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT master_remove_node('localhost', 9994);
+ master_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT master_remove_node('localhost', 9995);
+ master_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT master_remove_node('localhost', 9996);
+ master_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT master_remove_node('localhost', 9997);
+ master_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT master_remove_node('localhost', 9998);
+ master_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT count(*) FROM pg_dist_node;
+ count
+---------------------------------------------------------------------
+     2
+(1 row)
+

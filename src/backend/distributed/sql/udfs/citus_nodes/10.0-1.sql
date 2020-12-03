@@ -36,6 +36,8 @@ SELECT
 FROM
   pg_dist_node n,
   citus_node_disk_space_stats(n.nodename, n.nodeport) ds
+WHERE
+  n.isactive AND nodecluster = current_setting('citus.cluster_name')
 ORDER BY
   groupid;
 
