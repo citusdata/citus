@@ -145,10 +145,6 @@ static Index RelationRestrictionPartitionKeyIndex(RelationRestriction *
 static bool AllRelationsInRestrictionContextColocated(RelationRestrictionContext *
 													  restrictionContext);
 static bool IsParam(Node *node);
-static RelationRestrictionContext * FilterRelationRestrictionContext(
-	RelationRestrictionContext *relationRestrictionContext,
-	Relids
-	queryRteIdentities);
 static JoinRestrictionContext * FilterJoinRestrictionContext(
 	JoinRestrictionContext *joinRestrictionContext, Relids
 	queryRteIdentities);
@@ -1944,7 +1940,7 @@ IsParam(Node *node)
  * in the queryRteIdentities and returns a newly allocated
  * RelationRestrictionContext.
  */
-static RelationRestrictionContext *
+RelationRestrictionContext *
 FilterRelationRestrictionContext(RelationRestrictionContext *relationRestrictionContext,
 								 Relids queryRteIdentities)
 {

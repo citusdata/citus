@@ -141,6 +141,10 @@ RecursivelyPlanLocalTableJoins(Query *query,
 		RangeTableEntryDetails *rangeTableEntryDetails =
 			GetNextRTEToConvertToSubquery(joinTree, conversionCandidates,
 										  plannerRestrictionContext);
+		if (rangeTableEntryDetails == NULL)
+		{
+			break;
+		}
 
 		RangeTblEntry *rangeTableEntry = rangeTableEntryDetails->rangeTableEntry;
 		Oid relId = rangeTableEntryDetails->rangeTableEntry->relid;
@@ -298,7 +302,8 @@ ShouldConvertLocalTableJoinsToSubqueries(Query *query, List *rangeTableList,
 		/* user doesn't want Citus to enable local table joins */
 		return false;
 	}
-	if (!ContainsTableToBeConvertedToSubquery(rangeTableList, resultRelationId))
+
+    if (!ContainsTableToBeConvertedToSubquery(rangeTableList, resultRelationId))
 	{
 		return false;
 	}
@@ -385,23 +390,22 @@ static List *
 RequiredAttrNumbersForRelation(RangeTblEntry *relationRte,
 							   PlannerRestrictionContext *plannerRestrictionContext)
 {
-	/* TODO: Get rid of this hack, find relation restriction information directly */
-	PlannerRestrictionContext *filteredPlannerRestrictionContext =
-		FilterPlannerRestrictionForQuery(plannerRestrictionContext,
-										 WrapRteRelationIntoSubquery(relationRte, NIL));
-
+	int rteIdentity = GetRTEIdentity(relationRte);
 	RelationRestrictionContext *relationRestrictionContext =
-		filteredPlannerRestrictionContext->relationRestrictionContext;
+		plannerRestrictionContext->relationRestrictionContext;
+	Relids queryRteIdentities = bms_make_singleton(rteIdentity);
+	RelationRestrictionContext *filteredRelationRestrictionContext =
+		FilterRelationRestrictionContext(relationRestrictionContext, queryRteIdentities);
 	List *filteredRelationRestrictionList =
-		relationRestrictionContext->relationRestrictionList;
+		filteredRelationRestrictionContext->relationRestrictionList;
 
-	if (list_length(filteredRelationRestrictionList) == 0)
+	if (list_length(filteredRelationRestrictionList) != 1)
 	{
 		return NIL;
 	}
+
 	RelationRestriction *relationRestriction =
 		(RelationRestriction *) linitial(filteredRelationRestrictionList);
-
 	PlannerInfo *plannerInfo = relationRestriction->plannerInfo;
 	Query *queryToProcess = plannerInfo->parse;
 	int rteIndex = relationRestriction->index;

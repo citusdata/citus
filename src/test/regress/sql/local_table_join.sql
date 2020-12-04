@@ -141,6 +141,9 @@ SELECT count(*) FROM postgres_table JOIN distributed_table_pkey ON distributed_t
 SELECT count(*) FROM postgres_table JOIN distributed_table_pkey ON postgres_table.key = 10;
 
 
+select count(*) FROM postgres_table JOIN (SELECT a.key,random() FROM distributed_table a JOIN distributed_table b USING(key)) as foo USING(key);
+select count(*) FROM (SELECT a.key, random() FROM distributed_table a JOIN distributed_table b USING(key)) as foo JOIN postgres_table  USING(key);
+
 SELECT count(*) FROM postgres_table JOIN (SELECT * FROM distributed_table) d1 USING(key);
 -- since this is already router plannable, we don't recursively plan the postgres table
 SELECT count(*) FROM postgres_table JOIN (SELECT * FROM distributed_table LIMIT 1) d1 USING(key);

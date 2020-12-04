@@ -874,14 +874,8 @@ ModifyQuerySupported(Query *queryTree, Query *originalQuery, bool multiShardQuer
 	{
 		ExtractRangeTableEntryWalker((Node *) originalQuery, &rangeTableList);
 	}
-	RangeTblEntry *resultRte = ExtractResultRelationRTE(queryTree);
-	Oid resultRelationId = InvalidOid;
-	if (resultRte)
-	{
-		resultRelationId = resultRte->relid;
-	}
-	bool containsTableToBeConvertedToSubquery =
-		ContainsTableToBeConvertedToSubquery(queryTree->rtable, resultRelationId);
+	bool containsLocalTableDistributedTableJoin =
+		ContainsLocalTableDistributedTableJoin(queryTree->rtable);
 
 	RangeTblEntry *rangeTableEntry = NULL;
 	foreach_ptr(rangeTableEntry, rangeTableList)
@@ -907,7 +901,7 @@ ModifyQuerySupported(Query *queryTree, Query *originalQuery, bool multiShardQuer
 			else
 			{
 				if (IsRelationLocalTableOrMatView(rangeTableEntry->relid) &&
-					containsTableToBeConvertedToSubquery)
+					containsLocalTableDistributedTableJoin)
 				{
 					StringInfo errorMessage = makeStringInfo();
 					char *relationName = get_rel_name(rangeTableEntry->relid);

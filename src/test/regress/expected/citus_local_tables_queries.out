@@ -704,7 +704,8 @@ UPDATE reference_table
 SET b = 6
 FROM citus_local_table
 WHERE citus_local_table.a = reference_table.a;
-NOTICE:  executing the command locally: UPDATE citus_local_table_queries.reference_table_1509002 reference_table SET b = 6 FROM citus_local_table_queries.citus_local_table_1509000 citus_local_table WHERE (citus_local_table.a OPERATOR(pg_catalog.=) reference_table.a)
+NOTICE:  executing the command locally: SELECT a, NULL::integer AS b FROM citus_local_table_queries.citus_local_table_1509000 citus_local_table WHERE true OFFSET 0
+NOTICE:  executing the command locally: UPDATE citus_local_table_queries.reference_table_1509002 reference_table SET b = 6 FROM (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) citus_local_table WHERE (citus_local_table.a OPERATOR(pg_catalog.=) reference_table.a)
 -- should not work, add HINT use CTEs
 UPDATE citus_local_table
 SET b = 6
@@ -716,7 +717,8 @@ UPDATE citus_local_table
 SET b = 6
 FROM reference_table
 WHERE citus_local_table.a = reference_table.a;
-NOTICE:  executing the command locally: UPDATE citus_local_table_queries.citus_local_table_1509000 citus_local_table SET b = 6 FROM citus_local_table_queries.reference_table_1509002 reference_table WHERE (citus_local_table.a OPERATOR(pg_catalog.=) reference_table.a)
+NOTICE:  executing the command locally: SELECT a, NULL::integer AS b FROM citus_local_table_queries.reference_table_1509002 reference_table WHERE true OFFSET 0
+NOTICE:  executing the command locally: UPDATE citus_local_table_queries.citus_local_table_1509000 citus_local_table SET b = 6 FROM (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) reference_table WHERE (citus_local_table.a OPERATOR(pg_catalog.=) reference_table.a)
 -- should not work, add HINT use CTEs
 DELETE FROM distributed_table
 USING citus_local_table
@@ -730,12 +732,14 @@ NOTICE:  executing the command locally: DELETE FROM citus_local_table_queries.ci
 DELETE FROM reference_table
 USING citus_local_table
 WHERE citus_local_table.a = reference_table.a;
-NOTICE:  executing the command locally: DELETE FROM citus_local_table_queries.reference_table_1509002 reference_table USING citus_local_table_queries.citus_local_table_1509000 citus_local_table WHERE (citus_local_table.a OPERATOR(pg_catalog.=) reference_table.a)
+NOTICE:  executing the command locally: SELECT a, NULL::integer AS b FROM citus_local_table_queries.citus_local_table_1509000 citus_local_table WHERE true OFFSET 0
+NOTICE:  executing the command locally: DELETE FROM citus_local_table_queries.reference_table_1509002 reference_table USING (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) citus_local_table WHERE (citus_local_table.a OPERATOR(pg_catalog.=) reference_table.a)
 -- should work, add HINT use CTEs
 DELETE FROM citus_local_table
 USING reference_table
 WHERE citus_local_table.a = reference_table.a;
-NOTICE:  executing the command locally: DELETE FROM citus_local_table_queries.citus_local_table_1509000 citus_local_table USING citus_local_table_queries.reference_table_1509002 reference_table WHERE (citus_local_table.a OPERATOR(pg_catalog.=) reference_table.a)
+NOTICE:  executing the command locally: SELECT a, NULL::integer AS b FROM citus_local_table_queries.reference_table_1509002 reference_table WHERE true OFFSET 0
+NOTICE:  executing the command locally: DELETE FROM citus_local_table_queries.citus_local_table_1509000 citus_local_table USING (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) reference_table WHERE (citus_local_table.a OPERATOR(pg_catalog.=) reference_table.a)
 -- just works
 DELETE FROM citus_local_table
 WHERE citus_local_table.a IN (SELECT a FROM distributed_table);
@@ -743,7 +747,8 @@ NOTICE:  executing the command locally: DELETE FROM citus_local_table_queries.ci
 -- just works
 DELETE FROM citus_local_table
 WHERE citus_local_table.a IN (SELECT a FROM reference_table);
-NOTICE:  executing the command locally: DELETE FROM citus_local_table_queries.citus_local_table_1509000 citus_local_table WHERE (a OPERATOR(pg_catalog.=) ANY (SELECT reference_table.a FROM citus_local_table_queries.reference_table_1509002 reference_table))
+NOTICE:  executing the command locally: SELECT a FROM citus_local_table_queries.reference_table_1509002 reference_table
+NOTICE:  executing the command locally: DELETE FROM citus_local_table_queries.citus_local_table_1509000 citus_local_table WHERE (a OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)))
 -- just works
 WITH distributed_table_cte AS (SELECT * FROM distributed_table)
 UPDATE citus_local_table
@@ -757,7 +762,8 @@ UPDATE citus_local_table
 SET b = 6
 FROM reference_table_cte
 WHERE citus_local_table.a = reference_table_cte.a;
-NOTICE:  executing the command locally: WITH reference_table_cte AS (SELECT reference_table.a, reference_table.b FROM citus_local_table_queries.reference_table_1509002 reference_table) UPDATE citus_local_table_queries.citus_local_table_1509000 citus_local_table SET b = 6 FROM reference_table_cte WHERE (citus_local_table.a OPERATOR(pg_catalog.=) reference_table_cte.a)
+NOTICE:  executing the command locally: SELECT a, b FROM citus_local_table_queries.reference_table_1509002 reference_table
+NOTICE:  executing the command locally: UPDATE citus_local_table_queries.citus_local_table_1509000 citus_local_table SET b = 6 FROM (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) reference_table_cte WHERE (citus_local_table.a OPERATOR(pg_catalog.=) reference_table_cte.a)
 ---------------------------------------------------------------------
 ----- VIEW QUERIES -----
 ---------------------------------------------------------------------

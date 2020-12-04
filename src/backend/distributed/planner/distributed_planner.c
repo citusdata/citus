@@ -414,7 +414,6 @@ AdjustPartitioningForDistributedPlanning(List *rangeTableList,
 		 * value before and after dropping to the standart_planner.
 		 */
 		if (rangeTableEntry->rtekind == RTE_RELATION &&
-			IsCitusTable(rangeTableEntry->relid) &&
 			PartitionedTable(rangeTableEntry->relid))
 		{
 			rangeTableEntry->inh = setPartitionedTablesInherited;

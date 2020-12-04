@@ -145,8 +145,8 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS c
 
 -- partititoned local tables should work as well
 SELECT count(*) FROM distributed_table JOIN local_partitioned_table USING(key);
-DEBUG:  Wrapping relation "local_partitioned_table" to a subquery: SELECT NULL::integer AS key, NULL::text AS value FROM local_table_join.local_partitioned_table WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT NULL::integer AS key, NULL::text AS value FROM local_table_join.local_partitioned_table WHERE true OFFSET 0
+DEBUG:  Wrapping relation "local_partitioned_table" to a subquery: SELECT key, NULL::text AS value FROM local_table_join.local_partitioned_table WHERE true OFFSET 0
+DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value FROM local_table_join.local_partitioned_table WHERE true OFFSET 0
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (local_table_join.distributed_table JOIN (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) local_partitioned_table USING (key))
  count
 ---------------------------------------------------------------------
@@ -154,8 +154,8 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS c
 (1 row)
 
 SELECT count(*) FROM reference_table JOIN local_partitioned_table USING(key);
-DEBUG:  Wrapping relation "local_partitioned_table" to a subquery: SELECT NULL::integer AS key, NULL::text AS value FROM local_table_join.local_partitioned_table WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT NULL::integer AS key, NULL::text AS value FROM local_table_join.local_partitioned_table WHERE true OFFSET 0
+DEBUG:  Wrapping relation "local_partitioned_table" to a subquery: SELECT key, NULL::text AS value FROM local_table_join.local_partitioned_table WHERE true OFFSET 0
+DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value FROM local_table_join.local_partitioned_table WHERE true OFFSET 0
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (local_table_join.reference_table JOIN (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) local_partitioned_table USING (key))
  count
 ---------------------------------------------------------------------
@@ -163,8 +163,8 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS c
 (1 row)
 
 SELECT count(*) FROM distributed_table JOIN local_partitioned_table USING(key) JOIN reference_table USING (key);
-DEBUG:  Wrapping relation "local_partitioned_table" to a subquery: SELECT NULL::integer AS key, NULL::text AS value FROM local_table_join.local_partitioned_table WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT NULL::integer AS key, NULL::text AS value FROM local_table_join.local_partitioned_table WHERE true OFFSET 0
+DEBUG:  Wrapping relation "local_partitioned_table" to a subquery: SELECT key, NULL::text AS value FROM local_table_join.local_partitioned_table WHERE true OFFSET 0
+DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value FROM local_table_join.local_partitioned_table WHERE true OFFSET 0
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((local_table_join.distributed_table JOIN (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) local_partitioned_table USING (key)) JOIN local_table_join.reference_table USING (key))
  count
 ---------------------------------------------------------------------
@@ -283,8 +283,8 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS c
 (1 row)
 
 SELECT count(*) FROM distributed_partitioned_table JOIN local_partitioned_table USING(key);
-DEBUG:  Wrapping relation "local_partitioned_table" to a subquery: SELECT NULL::integer AS key, NULL::text AS value FROM local_table_join.local_partitioned_table WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT NULL::integer AS key, NULL::text AS value FROM local_table_join.local_partitioned_table WHERE true OFFSET 0
+DEBUG:  Wrapping relation "local_partitioned_table" to a subquery: SELECT key, NULL::text AS value FROM local_table_join.local_partitioned_table WHERE true OFFSET 0
+DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value FROM local_table_join.local_partitioned_table WHERE true OFFSET 0
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (local_table_join.distributed_partitioned_table JOIN (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) local_partitioned_table USING (key))
  count
 ---------------------------------------------------------------------
@@ -292,8 +292,8 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS c
 (1 row)
 
 SELECT count(*) FROM distributed_partitioned_table JOIN local_partitioned_table USING(key) WHERE distributed_partitioned_table.key = 10;
-DEBUG:  Wrapping relation "local_partitioned_table" to a subquery: SELECT NULL::integer AS key, NULL::text AS value FROM local_table_join.local_partitioned_table WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT NULL::integer AS key, NULL::text AS value FROM local_table_join.local_partitioned_table WHERE true OFFSET 0
+DEBUG:  Wrapping relation "local_partitioned_table" to a subquery: SELECT key, NULL::text AS value FROM local_table_join.local_partitioned_table WHERE (key OPERATOR(pg_catalog.=) 10) OFFSET 0
+DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value FROM local_table_join.local_partitioned_table WHERE (key OPERATOR(pg_catalog.=) 10) OFFSET 0
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (local_table_join.distributed_partitioned_table JOIN (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) local_partitioned_table USING (key)) WHERE (distributed_partitioned_table.key OPERATOR(pg_catalog.=) 10)
  count
 ---------------------------------------------------------------------
@@ -301,8 +301,8 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS c
 (1 row)
 
 SELECT count(*) FROM distributed_partitioned_table JOIN local_partitioned_table USING(key) JOIN reference_table USING (key);
-DEBUG:  Wrapping relation "local_partitioned_table" to a subquery: SELECT NULL::integer AS key, NULL::text AS value FROM local_table_join.local_partitioned_table WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT NULL::integer AS key, NULL::text AS value FROM local_table_join.local_partitioned_table WHERE true OFFSET 0
+DEBUG:  Wrapping relation "local_partitioned_table" to a subquery: SELECT key, NULL::text AS value FROM local_table_join.local_partitioned_table WHERE true OFFSET 0
+DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value FROM local_table_join.local_partitioned_table WHERE true OFFSET 0
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((local_table_join.distributed_partitioned_table JOIN (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) local_partitioned_table USING (key)) JOIN local_table_join.reference_table USING (key))
  count
 ---------------------------------------------------------------------
@@ -313,8 +313,8 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS c
 SELECT COUNT(*) FROM postgres_table join distributed_table_pkey using(key) join local_partitioned_table using(key) join distributed_table using(key) where distributed_table_pkey.key = 5;
 DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE (key OPERATOR(pg_catalog.=) 5) OFFSET 0
 DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE (key OPERATOR(pg_catalog.=) 5) OFFSET 0
-DEBUG:  Wrapping relation "local_partitioned_table" to a subquery: SELECT NULL::integer AS key, NULL::text AS value FROM local_table_join.local_partitioned_table WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_2 for subquery SELECT NULL::integer AS key, NULL::text AS value FROM local_table_join.local_partitioned_table WHERE true OFFSET 0
+DEBUG:  Wrapping relation "local_partitioned_table" to a subquery: SELECT key, NULL::text AS value FROM local_table_join.local_partitioned_table WHERE (key OPERATOR(pg_catalog.=) 5) OFFSET 0
+DEBUG:  generating subplan XXX_2 for subquery SELECT key, NULL::text AS value FROM local_table_join.local_partitioned_table WHERE (key OPERATOR(pg_catalog.=) 5) OFFSET 0
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((((SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) postgres_table JOIN local_table_join.distributed_table_pkey USING (key)) JOIN (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) local_partitioned_table USING (key)) JOIN local_table_join.distributed_table USING (key)) WHERE (distributed_table_pkey.key OPERATOR(pg_catalog.=) 5)
  count
 ---------------------------------------------------------------------
@@ -324,8 +324,8 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS c
 SELECT COUNT(*) FROM postgres_table join local_partitioned_table using(key) join distributed_table_pkey using(key) join distributed_table using(key) where distributed_table_pkey.key = 5;
 DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE (key OPERATOR(pg_catalog.=) 5) OFFSET 0
 DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE (key OPERATOR(pg_catalog.=) 5) OFFSET 0
-DEBUG:  Wrapping relation "local_partitioned_table" to a subquery: SELECT NULL::integer AS key, NULL::text AS value FROM local_table_join.local_partitioned_table WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_2 for subquery SELECT NULL::integer AS key, NULL::text AS value FROM local_table_join.local_partitioned_table WHERE true OFFSET 0
+DEBUG:  Wrapping relation "local_partitioned_table" to a subquery: SELECT key, NULL::text AS value FROM local_table_join.local_partitioned_table WHERE (key OPERATOR(pg_catalog.=) 5) OFFSET 0
+DEBUG:  generating subplan XXX_2 for subquery SELECT key, NULL::text AS value FROM local_table_join.local_partitioned_table WHERE (key OPERATOR(pg_catalog.=) 5) OFFSET 0
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((((SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) postgres_table JOIN (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) local_partitioned_table USING (key)) JOIN local_table_join.distributed_table_pkey USING (key)) JOIN local_table_join.distributed_table USING (key)) WHERE (distributed_table_pkey.key OPERATOR(pg_catalog.=) 5)
  count
 ---------------------------------------------------------------------
@@ -335,8 +335,8 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS c
 SELECT COUNT(*) FROM postgres_table join distributed_table using(key) join local_partitioned_table using(key) join distributed_table_pkey using(key) where distributed_table_pkey.key = 5;
 DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE (key OPERATOR(pg_catalog.=) 5) OFFSET 0
 DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE (key OPERATOR(pg_catalog.=) 5) OFFSET 0
-DEBUG:  Wrapping relation "local_partitioned_table" to a subquery: SELECT NULL::integer AS key, NULL::text AS value FROM local_table_join.local_partitioned_table WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_2 for subquery SELECT NULL::integer AS key, NULL::text AS value FROM local_table_join.local_partitioned_table WHERE true OFFSET 0
+DEBUG:  Wrapping relation "local_partitioned_table" to a subquery: SELECT key, NULL::text AS value FROM local_table_join.local_partitioned_table WHERE (key OPERATOR(pg_catalog.=) 5) OFFSET 0
+DEBUG:  generating subplan XXX_2 for subquery SELECT key, NULL::text AS value FROM local_table_join.local_partitioned_table WHERE (key OPERATOR(pg_catalog.=) 5) OFFSET 0
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((((SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) postgres_table JOIN local_table_join.distributed_table USING (key)) JOIN (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) local_partitioned_table USING (key)) JOIN local_table_join.distributed_table_pkey USING (key)) WHERE (distributed_table_pkey.key OPERATOR(pg_catalog.=) 5)
  count
 ---------------------------------------------------------------------
@@ -346,8 +346,8 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS c
 SELECT COUNT(*) FROM distributed_table_pkey join distributed_table using(key) join postgres_table using(key) join local_partitioned_table using(key) where distributed_table_pkey.key = 5;
 DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE (key OPERATOR(pg_catalog.=) 5) OFFSET 0
 DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE (key OPERATOR(pg_catalog.=) 5) OFFSET 0
-DEBUG:  Wrapping relation "local_partitioned_table" to a subquery: SELECT NULL::integer AS key, NULL::text AS value FROM local_table_join.local_partitioned_table WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_2 for subquery SELECT NULL::integer AS key, NULL::text AS value FROM local_table_join.local_partitioned_table WHERE true OFFSET 0
+DEBUG:  Wrapping relation "local_partitioned_table" to a subquery: SELECT key, NULL::text AS value FROM local_table_join.local_partitioned_table WHERE (key OPERATOR(pg_catalog.=) 5) OFFSET 0
+DEBUG:  generating subplan XXX_2 for subquery SELECT key, NULL::text AS value FROM local_table_join.local_partitioned_table WHERE (key OPERATOR(pg_catalog.=) 5) OFFSET 0
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (((local_table_join.distributed_table_pkey JOIN local_table_join.distributed_table USING (key)) JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) postgres_table USING (key)) JOIN (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) local_partitioned_table USING (key)) WHERE (distributed_table_pkey.key OPERATOR(pg_catalog.=) 5)
  count
 ---------------------------------------------------------------------
@@ -935,7 +935,7 @@ SET client_min_messages to ERROR;
 SELECT master_add_node('localhost', :master_port, groupId => 0);
  master_add_node
 ---------------------------------------------------------------------
-              5
+               5
 (1 row)
 
 CREATE TABLE citus_local(key int, value text);
@@ -1090,6 +1090,9 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS c
 
 -- TODO:: we should support this?
 UPDATE reference_table SET key = 1 FROM postgres_table WHERE postgres_table.key = 10;
+DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE (key OPERATOR(pg_catalog.=) 10) OFFSET 0
+DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE (key OPERATOR(pg_catalog.=) 10) OFFSET 0
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: UPDATE local_table_join.reference_table SET key = 1 FROM (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) postgres_table WHERE (postgres_table.key OPERATOR(pg_catalog.=) 10)
 ERROR:  relation postgres_table is not distributed
 UPDATE reference_table SET key = 1 FROM (SELECT * FROM postgres_table) l WHERE l.key = 10;
 DEBUG:  generating subplan XXX_1 for subquery SELECT key, value, value_2 FROM local_table_join.postgres_table
