@@ -56,6 +56,7 @@ typedef enum
 	COMPRESSION_TYPE_INVALID = -1,
 	COMPRESSION_NONE = 0,
 	COMPRESSION_PG_LZ = 1,
+	COMPRESSION_LZ4 = 2,
 
 	COMPRESSION_COUNT
 } CompressionType;
@@ -287,8 +288,9 @@ extern void FreeChunkData(ChunkData *chunkData);
 extern uint64 CStoreTableRowCount(Relation relation);
 extern bool CompressBuffer(StringInfo inputBuffer, StringInfo outputBuffer,
 						   CompressionType compressionType);
-extern StringInfo DecompressBuffer(StringInfo buffer, CompressionType compressionType);
-extern char * CompressionTypeStr(CompressionType type);
+extern StringInfo DecompressBuffer(StringInfo buffer, CompressionType compressionType,
+								   uint64 decompressedSize);
+extern const char * CompressionTypeStr(CompressionType type);
 
 /* cstore_metadata_tables.c */
 extern void InitColumnarOptions(Oid regclass);

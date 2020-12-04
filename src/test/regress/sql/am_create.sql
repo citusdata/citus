@@ -21,7 +21,20 @@ CREATE TABLE contestant_compressed (handle TEXT, birthdate DATE, rating INT,
 ANALYZE contestant;
 SELECT count(*) FROM contestant;
 
+--
 -- Utility functions to be used throughout tests
+--
+
 CREATE FUNCTION columnar_relation_storageid(relid oid) RETURNS bigint
     LANGUAGE C STABLE STRICT
     AS 'citus', $$columnar_relation_storageid$$;
+
+CREATE FUNCTION compression_type_supported(type text) RETURNS boolean
+AS $$
+BEGIN
+   EXECUTE 'SET LOCAL columnar.compression TO ' || quote_literal(type);
+   return true;
+EXCEPTION WHEN invalid_parameter_value THEN
+   return false;
+END;
+$$ LANGUAGE plpgsql;

@@ -152,7 +152,7 @@ storage id: xxxxx
 total file size: 122880, total data size: 10754
 compression rate: 1.00x
 total row count: 2530, stripe count: 3, average rows per stripe: 843
-chunk count: 3, containing data for dropped columns: 0, none compressed: 3, pglz compressed: 0
+chunk count: 3, containing data for dropped columns: 0, none compressed: 3
 
 INFO:  "t": truncated 15 to 5 pages
 SELECT pg_size_pretty(pg_relation_size('t'));
@@ -259,6 +259,6 @@ storage id: xxxxx
 total file size: 630784, total data size: 604480
 compression rate: 33.71x
 total row count: 1000000, stripe count: 1, average rows per stripe: 1000000
-chunk count: 30, containing data for dropped columns: 0, none compressed: 0, pglz compressed: 30
+chunk count: 30, containing data for dropped columns: 0, pglz compressed: 30
 
 DROP TABLE t;

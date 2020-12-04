@@ -186,6 +186,25 @@ if test "$enable_coverage" = yes; then
 fi
 
 #
+# LZ4
+#
+PGAC_ARG_BOOL(with, lz4, no,
+              [use lz4])
+AC_SUBST(with_lz4)
+
+if test "$with_lz4" = yes; then
+  AC_CHECK_LIB(lz4, LZ4_compress_default, [],
+               [AC_MSG_ERROR([lz4 library not found
+If you have lz4 installed, see config.log for details on the
+failure.  It is possible the compiler isn't looking in the proper directory.
+Use --without-lz4 to disable zlib support.])])
+  AC_CHECK_HEADER(lz4.h, [], [AC_MSG_ERROR([lz4 header not found
+If you have lz4 already installed, see config.log for details on the
+failure.  It is possible the compiler isn't looking in the proper directory.
+Use --without-lz4 to disable lz4 support.])])
+fi
+
+#
 # libcurl
 #
 PGAC_ARG_BOOL(with, libcurl, yes,

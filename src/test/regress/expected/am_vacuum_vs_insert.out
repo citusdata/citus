@@ -15,7 +15,7 @@ storage id: xxxxx
 total file size: 24576, total data size: 26
 compression rate: 1.00x
 total row count: 3, stripe count: 1, average rows per stripe: 3
-chunk count: 2, containing data for dropped columns: 0, none compressed: 2, pglz compressed: 0
+chunk count: 2, containing data for dropped columns: 0, none compressed: 2
 
 s2: INFO:  "test_vacuum_vs_insert": stopping truncate due to conflicting lock request
 step s2-vacuum:

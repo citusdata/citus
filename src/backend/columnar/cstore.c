@@ -20,6 +20,7 @@
 #include "utils/guc.h"
 #include "utils/rel.h"
 
+#include "citus_version.h"
 #include "columnar/cstore.h"
 
 /* Default values for option parameters */
@@ -35,6 +36,9 @@ static const struct config_enum_entry cstore_compression_options[] =
 {
 	{ "none", COMPRESSION_NONE, false },
 	{ "pglz", COMPRESSION_PG_LZ, false },
+#if HAVE_LIBLZ4
+	{ "lz4", COMPRESSION_LZ4, false },
+#endif
 	{ NULL, 0, false }
 };
 
@@ -81,21 +85,50 @@ cstore_init()
 }
 
 
-/* ParseCompressionType converts a string to a compression type. */
+/*
+ * ParseCompressionType converts a string to a compression type.
+ * For compression algorithms that are invalid or not compiled, it
+ * returns COMPRESSION_TYPE_INVALID.
+ */
 CompressionType
 ParseCompressionType(const char *compressionTypeString)
 {
-	CompressionType compressionType = COMPRESSION_TYPE_INVALID;
 	Assert(compressionTypeString != NULL);
 
-	if (strncmp(compressionTypeString, COMPRESSION_STRING_NONE, NAMEDATALEN) == 0)
+	for (int compressionIndex = 0;
+		 cstore_compression_options[compressionIndex].name != NULL;
+		 compressionIndex++)
 	{
-		compressionType = COMPRESSION_NONE;
-	}
-	else if (strncmp(compressionTypeString, COMPRESSION_STRING_PG_LZ, NAMEDATALEN) == 0)
-	{
-		compressionType = COMPRESSION_PG_LZ;
+		const char *compressionName = cstore_compression_options[compressionIndex].name;
+		if (strncmp(compressionTypeString, compressionName, NAMEDATALEN) == 0)
+		{
+			return cstore_compression_options[compressionIndex].val;
+		}
 	}
 
-	return compressionType;
+	return COMPRESSION_TYPE_INVALID;
+}
+
+
+/*
+ * CompressionTypeStr returns string representation of a compression type.
+ * For compression algorithms that are invalid or not compiled, it
+ * returns NULL.
+ */
+const char *
+CompressionTypeStr(CompressionType requestedType)
+{
+	for (int compressionIndex = 0;
+		 cstore_compression_options[compressionIndex].name != NULL;
+		 compressionIndex++)
+	{
+		CompressionType compressionType =
+			cstore_compression_options[compressionIndex].val;
+		if (compressionType == requestedType)
+		{
+			return cstore_compression_options[compressionIndex].name;
+		}
+	}
+
+	return NULL;
 }
