@@ -41,6 +41,7 @@ CREATE TABLE cstore_skipnodes (
     exists_stream_offset bigint NOT NULL,
     exists_stream_length bigint NOT NULL,
     value_compression_type int NOT NULL,
+    value_decompressed_length bigint NOT NULL,
     PRIMARY KEY (storageid, stripe, attr, chunk),
     FOREIGN KEY (storageid, stripe) REFERENCES cstore_stripes(storageid, stripe) ON DELETE CASCADE
 ) WITH (user_catalog_table = true);

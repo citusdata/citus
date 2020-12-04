@@ -13,6 +13,7 @@ step s1-insert:
 s2: INFO:  statistics for "test_vacuum_vs_insert":
 storage id: xxxxx
 total file size: 24576, total data size: 26
+compression rate: 1.00x
 total row count: 3, stripe count: 1, average rows per stripe: 3
 chunk count: 2, containing data for dropped columns: 0, none compressed: 2, pglz compressed: 0
 

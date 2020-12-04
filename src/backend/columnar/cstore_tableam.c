@@ -694,6 +694,7 @@ LogRelationStats(Relation rel, int elevel)
 	uint64 chunkCount = 0;
 	TupleDesc tupdesc = RelationGetDescr(rel);
 	uint64 droppedChunksWithData = 0;
+	uint64 totalDecompressedLength = 0;
 
 	List *stripeList = StripesForRelfilenode(relfilenode);
 	int stripeCount = list_length(stripeList);
@@ -723,6 +724,13 @@ LogRelationStats(Relation rel, int elevel)
 						droppedChunksWithData++;
 					}
 				}
+
+				/*
+				 * We don't compress exists buffer, so its compressed & decompressed
+				 * lengths are the same.
+				 */
+				totalDecompressedLength += skipnode->existsLength;
+				totalDecompressedLength += skipnode->decompressedValueSize;
 			}
 		}
 
@@ -737,9 +745,14 @@ LogRelationStats(Relation rel, int elevel)
 	Datum storageId = DirectFunctionCall1(columnar_relation_storageid,
 										  ObjectIdGetDatum(RelationGetRelid(rel)));
 
+	double compressionRate = totalStripeLength ?
+							 (double) totalDecompressedLength / totalStripeLength :
+							 1.0;
+
 	appendStringInfo(infoBuf, "storage id: %ld\n", DatumGetInt64(storageId));
 	appendStringInfo(infoBuf, "total file size: %ld, total data size: %ld\n",
 					 relPages * BLCKSZ, totalStripeLength);
+	appendStringInfo(infoBuf, "compression rate: %.2fx\n", compressionRate);
 	appendStringInfo(infoBuf,
 					 "total row count: %ld, stripe count: %d, "
 					 "average rows per stripe: %ld\n",
