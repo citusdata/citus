@@ -579,6 +579,140 @@ IN
 	FROM
 		local_table);
 
+-- basic NOT IN correlated subquery
+SELECT
+  count(*)
+FROM
+  events_table e
+WHERE
+  value_2 NOT IN (SELECT value_2 FROM users_table WHERE user_id = e.user_id);
+
+-- correlated subquery with limit
+SELECT
+  count(*)
+FROM
+  events_table e
+WHERE
+  value_2 IN (SELECT value_2 FROM users_table WHERE user_id = e.user_id ORDER BY value_2 LIMIT 1);
+
+-- correlated subquery with distinct
+SELECT
+  count(*)
+FROM
+  events_table e
+WHERE
+  value_2 IN (SELECT DISTINCT (value_3) FROM users_table WHERE user_id = e.user_id);
+
+-- correlated subquery with aggregate
+SELECT
+  count(*)
+FROM
+  events_table e
+WHERE
+  value_2 = (SELECT max(value_2) FROM users_table WHERE user_id = e.user_id);
+
+-- correlated subquery with window function
+SELECT
+  count(*)
+FROM
+  events_table e
+WHERE
+  value_2 IN (SELECT row_number() OVER () FROM users_table WHERE user_id = e.user_id);
+
+-- correlated subquery with group by
+SELECT
+  count(*)
+FROM
+  events_table e
+WHERE
+  value_3 IN (SELECT min(value_3) FROM users_table WHERE user_id = e.user_id GROUP BY value_2);
+
+SELECT
+  count(*)
+FROM
+  events_table e
+WHERE
+  value_3 IN (SELECT min(value_3) FROM users_table WHERE user_id = e.user_id GROUP BY value_2);
+
+
+-- correlated subquery with group by
+SELECT
+  count(*)
+FROM
+  events_table e
+WHERE
+  value_3 IN (SELECT min(value_3) v FROM users_table WHERE user_id = e.user_id GROUP BY e.value_2);
+
+-- correlated subquery with having
+SELECT
+  count(*)
+FROM
+  events_table e
+WHERE
+  value_3 IN (SELECT min(value_3) v FROM users_table WHERE user_id = e.user_id GROUP BY e.value_2 HAVING min(value_3) > (SELECT 1));
+
+SELECT
+  count(*)
+FROM
+  events_table e
+WHERE
+  value_3 IN (SELECT min(value_3) v FROM users_table WHERE user_id = e.user_id GROUP BY e.value_2 HAVING min(value_3) > (SELECT e.value_3));
+
+-- nested correlated subquery
+SELECT
+  count(*)
+FROM
+  events_table e
+WHERE
+  value_3 IN (
+    SELECT min(r.value_3) v FROM users_reference_table r JOIN (SELECT * FROM users_table WHERE user_id = e.user_id) u USING (user_id)
+    WHERE u.value_2 > 3
+    GROUP BY e.value_2 HAVING min(r.value_3) > e.value_3);
+
+-- not co-located correlated subquery
+SELECT
+  count(*)
+FROM
+  events_table e
+WHERE
+  value_3 IN (
+    SELECT min(r.value_3) v FROM users_reference_table r JOIN (SELECT * FROM users_table WHERE value_2 = e.user_id) u USING (user_id)
+    WHERE u.value_2 > 3
+    GROUP BY e.value_2 HAVING min(r.value_3) > e.value_3);
+
+-- cartesian correlated subquery
+SELECT
+  count(*)
+FROM
+  events_table e
+WHERE
+  value_3 IN (
+    SELECT min(r.value_3) v FROM users_reference_table r JOIN users_table u USING (user_id)
+    WHERE u.value_2 > 3
+    GROUP BY e.value_2 HAVING min(r.value_3) > e.value_3);
+
+-- even more subtle cartesian correlated subquery
+SELECT
+  count(*)
+FROM
+  events_table e
+WHERE
+  value_3 IN (
+    SELECT min(r.value_3) v FROM users_reference_table r JOIN users_table u USING (user_id)
+    WHERE u.value_2 > 3
+    GROUP BY u.value_2 HAVING min(r.value_3) > e.value_3);
+
+-- not a correlated subquery, uses recursive planning
+SELECT
+  count(*)
+FROM
+  events_table e
+WHERE
+  value_3 IN (
+    SELECT min(r.value_3) v FROM users_reference_table r JOIN users_table u USING (user_id)
+    WHERE u.value_2 > 3
+    GROUP BY r.value_2 HAVING min(r.value_3) > 0);
+
 SET client_min_messages TO DEFAULT;
 
 DROP TABLE local_table;

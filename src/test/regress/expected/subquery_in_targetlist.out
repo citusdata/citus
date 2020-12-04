@@ -282,8 +282,12 @@ SELECT (SELECT value_2 FROM view_1 WHERE user_id = e.user_id GROUP BY value_2)
 FROM events_table e
 GROUP BY 1
 ORDER BY 1 LIMIT 3;
-ERROR:  cannot push down this subquery
-DETAIL:  Group by list without partition column is currently unsupported when a subquery references a column from another query
+ value_2
+---------------------------------------------------------------------
+       3
+
+(2 rows)
+
 -- without view in the outer query FROM
 SELECT (SELECT value_2 FROM view_1 WHERE user_id = e.user_id GROUP BY user_id, value_2)
 FROM view_1 e
