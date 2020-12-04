@@ -111,6 +111,7 @@ VACUUM VERBOSE test_options_1;
 INFO:  statistics for "test_options_1":
 storage id: xxxxx
 total file size: 65536, total data size: 43136
+compression rate: 1.91x
 total row count: 10000, stripe count: 2, average rows per stripe: 5000
 chunk count: 20, containing data for dropped columns: 0, none compressed: 10, pglz compressed: 10
 
@@ -130,6 +131,7 @@ VACUUM VERBOSE test_options_2;
 INFO:  statistics for "test_options_2":
 storage id: xxxxx
 total file size: 163840, total data size: 125636
+compression rate: 1.31x
 total row count: 20000, stripe count: 4, average rows per stripe: 5000
 chunk count: 30, containing data for dropped columns: 0, none compressed: 20, pglz compressed: 10
 

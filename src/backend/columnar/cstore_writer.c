@@ -463,6 +463,7 @@ FlushStripe(TableWriteState *writeState)
 			chunkSkipNode->valueChunkOffset = stripeSize;
 			chunkSkipNode->valueLength = valueBufferSize;
 			chunkSkipNode->valueCompressionType = valueCompressionType;
+			chunkSkipNode->decompressedValueSize = chunkBuffers->decompressedValueSize;
 
 			stripeSize += valueBufferSize;
 		}
@@ -631,9 +632,11 @@ SerializeChunkData(TableWriteState *writeState, uint32 chunkIndex, uint32 rowCou
 
 		StringInfo serializedValueBuffer = chunkData->valueBufferArray[columnIndex];
 
-		/* the only other supported compression type is pg_lz for now */
-		Assert(requestedCompressionType == COMPRESSION_NONE ||
-			   requestedCompressionType == COMPRESSION_PG_LZ);
+		Assert(requestedCompressionType >= 0 &&
+			   requestedCompressionType < COMPRESSION_COUNT);
+
+		chunkBuffers->decompressedValueSize =
+			chunkData->valueBufferArray[columnIndex]->len;
 
 		/*
 		 * if serializedValueBuffer is be compressed, update serializedValueBuffer
@@ -644,7 +647,7 @@ SerializeChunkData(TableWriteState *writeState, uint32 chunkIndex, uint32 rowCou
 		if (compressed)
 		{
 			serializedValueBuffer = compressionBuffer;
-			actualCompressionType = COMPRESSION_PG_LZ;
+			actualCompressionType = requestedCompressionType;
 		}
 
 		/* store (compressed) value buffer */

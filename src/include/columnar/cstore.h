@@ -117,6 +117,12 @@ typedef struct ColumnChunkSkipNode
 	uint64 existsChunkOffset;
 	uint64 existsLength;
 
+	/*
+	 * This is used for (1) determining destination size when decompressing,
+	 * (2) calculating compression rates when logging stats.
+	 */
+	uint64 decompressedValueSize;
+
 	CompressionType valueCompressionType;
 } ColumnChunkSkipNode;
 
@@ -170,6 +176,7 @@ typedef struct ColumnChunkBuffers
 	StringInfo existsBuffer;
 	StringInfo valueBuffer;
 	CompressionType valueCompressionType;
+	uint64 decompressedValueSize;
 } ColumnChunkBuffers;
 
 

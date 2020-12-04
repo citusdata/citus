@@ -111,3 +111,14 @@ DROP VIEW t_stripes;
 
 -- Make sure we cleaned the metadata for t too
 SELECT count(distinct storageid) - :columnar_table_count FROM cstore.cstore_stripes;
+
+-- A table with high compression ratio
+SET cstore.compression TO 'pglz';
+SET cstore.stripe_row_count TO 1000000;
+SET cstore.chunk_row_count TO 100000;
+CREATE TABLE t(a int, b char, c text) USING columnar;
+INSERT INTO t SELECT 1, 'a', 'xyz' FROM generate_series(1, 1000000) i;
+
+VACUUM VERBOSE t;
+
+DROP TABLE t;
