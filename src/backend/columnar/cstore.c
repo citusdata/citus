@@ -39,6 +39,9 @@ static const struct config_enum_entry cstore_compression_options[] =
 #if HAVE_LIBLZ4
 	{ "lz4", COMPRESSION_LZ4, false },
 #endif
+#if HAVE_LIBZSTD
+	{ "zstd", COMPRESSION_ZSTD, false },
+#endif
 	{ NULL, 0, false }
 };
 
