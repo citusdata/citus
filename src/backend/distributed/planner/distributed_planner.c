@@ -75,6 +75,7 @@ static uint64 NextPlanId = 1;
 int PlannerLevel = 0;
 
 static bool ListContainsDistributedTableRTE(List *rangeTableList);
+static bool IsFastPathRouterQuery(PlannerRestrictionContext *plannerRestrictionContext);
 static bool IsUpdateOrDelete(Query *query);
 static PlannedStmt * CreateDistributedPlannedStmt(
 	DistributedPlanningContext *planContext);
@@ -124,7 +125,6 @@ static PlannedStmt * PlanFastPathDistributedStmt(DistributedPlanningContext *pla
 static PlannedStmt * PlanDistributedStmt(DistributedPlanningContext *planContext,
 										 int rteIdCounter);
 static RTEListProperties * GetRTEListProperties(List *rangeTableList);
-
 
 /* Distributed planner hook */
 PlannedStmt *
@@ -959,6 +959,13 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
 		return NULL;
 	}
 
+	if (distributedPlan->planningError && IsFastPathRouterQuery(
+			plannerRestrictionContext))
+	{
+		/* we don't need to continue with fast path router query */
+		RaiseDeferredErrorInternal(distributedPlan->planningError, ERROR);
+	}
+
 	/* force evaluation of bound params */
 	boundParams = copyParamList(boundParams);
 
@@ -1072,6 +1079,22 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
 	Assert(distributedPlan && distributedPlan->planningError == NULL);
 
 	return distributedPlan;
+}
+
+
+/*
+ * IsFastPathRouterQuery returns true if we are processing a fast path router query.
+ */
+static bool
+IsFastPathRouterQuery(PlannerRestrictionContext *plannerRestrictionContext)
+{
+	if (plannerRestrictionContext &&
+		plannerRestrictionContext->fastPathRestrictionContext &&
+		plannerRestrictionContext->fastPathRestrictionContext->fastPathRouterQuery)
+	{
+		return true;
+	}
+	return false;
 }
 
 
