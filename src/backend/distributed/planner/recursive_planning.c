@@ -178,9 +178,11 @@ static Query * BuildReadIntermediateResultsQuery(List *targetEntryList,
 												 List *columnAliasList,
 												 Const *resultIdConst, Oid functionOid,
 												 bool useBinaryCopyFormat);
-static void UpdateVarNosInQualForSubquery(Query *query);
-static bool ModifiesLocalTableWithRemoteCitusLocalTable(List *rangeTableList, Oid
-														resultRelationId);
+static void
+UpdateVarNosInNode(Query *query, Index newVarNo);
+static bool ModifiesLocalTableWithRemoteCitusLocalTable(List *rangeTableList);
+static void GetRangeTableEntriesFromJoinTree(Node *joinNode, List *rangeTableList,
+											 List **joinRangeTableEntries);														
 
 /*
  * GenerateSubplansForSubqueriesAndCTEs is a wrapper around RecursivelyPlanSubqueriesAndCTEs.
@@ -336,17 +338,74 @@ RecursivelyPlanSubqueriesAndCTEs(Query *query, RecursivePlanningContext *context
 		RecursivelyPlanNonColocatedSubqueries(query, context);
 	}
 
-	/*
-	 * Logical planner cannot handle "local_table" [OUTER] JOIN "dist_table", or
-	 * a query with local table/citus local table and subquery. We convert local/citus local
-	 * tables to a subquery until they can be planned.
-	 * This is the last call in this function since we want the other calls to be finished
-	 * so that we can check if the current plan is router plannable at any step within this function.
-	 */
-	RecursivelyPlanLocalTableJoins(query, context);
+
+	PlannerRestrictionContext *plannerRestrictionContext =
+		context->plannerRestrictionContext;
+
+	List *rangeTableList = NIL;
+	GetRangeTableEntriesFromJoinTree((Node *) query->jointree, query->rtable,
+									 &rangeTableList);
+
+	if (ShouldConvertLocalTableJoinsToSubqueries(query, rangeTableList,
+													plannerRestrictionContext)) {
+		/*
+		* Logical planner cannot handle "local_table" [OUTER] JOIN "dist_table", or
+		* a query with local table/citus local table and subquery. We convert local/citus local
+		* tables to a subquery until they can be planned.
+		* This is the last call in this function since we want the other calls to be finished
+		* so that we can check if the current plan is router plannable at any step within this function.
+		*/
+		RecursivelyPlanLocalTableJoins(query, context, rangeTableList);
+	
+	}
+
 
 	return NULL;
 }
+
+/*
+ * GetRangeTableEntriesFromJoinTree gets the range table entries that are
+ * on the given join tree.
+ */
+static void
+GetRangeTableEntriesFromJoinTree(Node *joinNode, List *rangeTableList,
+								 List **joinRangeTableEntries)
+{
+	if (joinNode == NULL)
+	{
+		return;
+	}
+	else if (IsA(joinNode, FromExpr))
+	{
+		FromExpr *fromExpr = (FromExpr *) joinNode;
+		Node *fromElement;
+
+		foreach_ptr(fromElement, fromExpr->fromlist)
+		{
+			GetRangeTableEntriesFromJoinTree(fromElement, rangeTableList,
+											 joinRangeTableEntries);
+		}
+	}
+	else if (IsA(joinNode, JoinExpr))
+	{
+		JoinExpr *joinExpr = (JoinExpr *) joinNode;
+		GetRangeTableEntriesFromJoinTree(joinExpr->larg, rangeTableList,
+										 joinRangeTableEntries);
+		GetRangeTableEntriesFromJoinTree(joinExpr->rarg, rangeTableList,
+										 joinRangeTableEntries);
+	}
+	else if (IsA(joinNode, RangeTblRef))
+	{
+		int rangeTableIndex = ((RangeTblRef *) joinNode)->rtindex;
+		RangeTblEntry *rte = rt_fetch(rangeTableIndex, rangeTableList);
+		*joinRangeTableEntries = lappend(*joinRangeTableEntries, rte);
+	}
+	else
+	{
+		pg_unreachable();
+	}
+}
+
 
 
 /*
@@ -1360,6 +1419,8 @@ NodeContainsSubqueryReferencingOuterQuery(Node *node)
 /*
  * ReplaceRTERelationWithRteSubquery replaces the input rte relation target entry
  * with a subquery. The function also pushes down the filters to the subquery.
+ * 
+ * It then recursively plans the subquery.
  */
 void
 ReplaceRTERelationWithRteSubquery(RangeTblEntry *rangeTableEntry, List *restrictionList,
@@ -1369,10 +1430,7 @@ ReplaceRTERelationWithRteSubquery(RangeTblEntry *rangeTableEntry, List *restrict
 	Query *subquery = WrapRteRelationIntoSubquery(rangeTableEntry, requiredAttrNumbers);
 	Expr *andedBoundExpressions = make_ands_explicit(restrictionList);
 	subquery->jointree->quals = (Node *) andedBoundExpressions;
-	UpdateVarNosInQualForSubquery(subquery);
-
-	/* force recursively planning of the newly created subquery */
-	subquery->limitOffset = (Node *) MakeIntegerConst(0);
+	UpdateVarNosInNode(subquery, SINGLE_RTE_INDEX);
 
 	/* replace the function with the constructed subquery */
 	rangeTableEntry->rtekind = RTE_SUBQUERY;
@@ -1396,24 +1454,25 @@ ReplaceRTERelationWithRteSubquery(RangeTblEntry *rangeTableEntry, List *restrict
 								get_rel_name(rangeTableEntry->relid),
 								ApplyLogRedaction(subqueryString->data))));
 	}
+
+	/* as we created the subquery, now forcefully recursively plan it */
 	RecursivelyPlanSubquery(rangeTableEntry->subquery, context);
 }
 
 
 /*
- * UpdateVarNosInQualForSubquery iterates the Vars in the
- * given quals node and updates the varno's as 1 as there
- * will be only one RTE in rtable, which is the subquery.
+ * UpdateVarNosInNode iterates the Vars in the
+ * given node and updates the varno's as the newVarNo.
  */
 static void
-UpdateVarNosInQualForSubquery(Query *query)
+UpdateVarNosInNode(Query *query, Index newVarNo)
 {
 	List *varList = pull_var_clause(query->jointree->quals, PVC_RECURSE_AGGREGATES |
 									PVC_RECURSE_PLACEHOLDERS);
 	Var *var = NULL;
 	foreach_ptr(var, varList)
 	{
-		var->varno = SINGLE_RTE_INDEX;
+		var->varno = newVarNo;
 	}
 }
 
@@ -1423,13 +1482,13 @@ UpdateVarNosInQualForSubquery(Query *query)
  * any table that should be converted to a subquery, which otherwise is not plannable.
  */
 bool
-ContainsTableToBeConvertedToSubquery(List *rangeTableList, Oid resultRelationId)
+ContainsTableToBeConvertedToSubquery(List *rangeTableList)
 {
 	if (ContainsLocalTableDistributedTableJoin(rangeTableList))
 	{
 		return true;
 	}
-	if (ModifiesLocalTableWithRemoteCitusLocalTable(rangeTableList, resultRelationId))
+	if (ModifiesLocalTableWithRemoteCitusLocalTable(rangeTableList))
 	{
 		return true;
 	}
@@ -1443,7 +1502,7 @@ ContainsTableToBeConvertedToSubquery(List *rangeTableList, Oid resultRelationId)
  * MX structure.
  */
 static bool
-ModifiesLocalTableWithRemoteCitusLocalTable(List *rangeTableList, Oid resultRelationId)
+ModifiesLocalTableWithRemoteCitusLocalTable(List *rangeTableList)
 {
 	bool containsLocalResultRelation = false;
 	bool containsRemoteCitusLocalTable = false;

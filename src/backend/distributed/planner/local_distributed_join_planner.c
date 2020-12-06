@@ -75,10 +75,6 @@ typedef struct ConversionCandidates
 	List *localTableList; /* local or citus local table */
 }ConversionCandidates;
 
-static bool ShouldConvertLocalTableJoinsToSubqueries(Query *query, List *rangeTableList,
-													 Oid resultRelationId,
-													 PlannerRestrictionContext *
-													 plannerRestrictionContext);
 static bool HasConstantFilterOnUniqueColumn(FromExpr *joinTree,
 											RangeTblEntry *rangeTableEntry, Index
 											rteIndex);
@@ -96,8 +92,6 @@ static RangeTableEntryDetails * GetNextRTEToConvertToSubquery(FromExpr *joinTree
 															  conversionCandidates,
 															  PlannerRestrictionContext *
 															  plannerRestrictionContext);
-static void GetRangeTableEntriesFromJoinTree(Node *joinNode, List *rangeTableList,
-											 List **joinRangeTableEntries);
 static void RemoveFromConversionCandidates(ConversionCandidates *conversionCandidates, Oid
 										   relationId);
 static bool AllRangeTableEntriesHaveUniqueIndex(List *rangeTableEntryDetailsList);
@@ -109,32 +103,22 @@ static bool AllRangeTableEntriesHaveUniqueIndex(List *rangeTableEntryDetailsList
  */
 void
 RecursivelyPlanLocalTableJoins(Query *query,
-							   RecursivePlanningContext *context)
+							   RecursivePlanningContext *context, List* rangeTableList)
 {
+
 	PlannerRestrictionContext *plannerRestrictionContext =
 		context->plannerRestrictionContext;
-
-	List *rangeTableList = NIL;
-	GetRangeTableEntriesFromJoinTree((Node *) query->jointree, query->rtable,
-									 &rangeTableList);
 
 	Oid resultRelationId = InvalidOid;
 	if (IsModifyCommand(query))
 	{
 		resultRelationId = ModifyQueryResultRelationId(query);
-	}
-
-	if (!ShouldConvertLocalTableJoinsToSubqueries(query, rangeTableList, resultRelationId,
-												  plannerRestrictionContext))
-	{
-		return;
-	}
+	}		
 	ConversionCandidates *conversionCandidates =
 		CreateConversionCandidates(query->jointree, plannerRestrictionContext,
 								   rangeTableList, resultRelationId);
 
 	while (ShouldConvertLocalTableJoinsToSubqueries(query, rangeTableList,
-													resultRelationId,
 													plannerRestrictionContext))
 	{
 		FromExpr *joinTree = query->jointree;
@@ -155,51 +139,6 @@ RecursivelyPlanLocalTableJoins(Query *query,
 		RemoveFromConversionCandidates(conversionCandidates, relId);
 	}
 }
-
-
-/*
- * GetRangeTableEntriesFromJoinTree gets the range table entries that are
- * on the given join tree.
- */
-static void
-GetRangeTableEntriesFromJoinTree(Node *joinNode, List *rangeTableList,
-								 List **joinRangeTableEntries)
-{
-	if (joinNode == NULL)
-	{
-		return;
-	}
-	else if (IsA(joinNode, FromExpr))
-	{
-		FromExpr *fromExpr = (FromExpr *) joinNode;
-		Node *fromElement;
-
-		foreach_ptr(fromElement, fromExpr->fromlist)
-		{
-			GetRangeTableEntriesFromJoinTree(fromElement, rangeTableList,
-											 joinRangeTableEntries);
-		}
-	}
-	else if (IsA(joinNode, JoinExpr))
-	{
-		JoinExpr *joinExpr = (JoinExpr *) joinNode;
-		GetRangeTableEntriesFromJoinTree(joinExpr->larg, rangeTableList,
-										 joinRangeTableEntries);
-		GetRangeTableEntriesFromJoinTree(joinExpr->rarg, rangeTableList,
-										 joinRangeTableEntries);
-	}
-	else if (IsA(joinNode, RangeTblRef))
-	{
-		int rangeTableIndex = ((RangeTblRef *) joinNode)->rtindex;
-		RangeTblEntry *rte = rt_fetch(rangeTableIndex, rangeTableList);
-		*joinRangeTableEntries = lappend(*joinRangeTableEntries, rte);
-	}
-	else
-	{
-		pg_unreachable();
-	}
-}
-
 
 /*
  * GetNextRTEToConvertToSubquery returns the range table entry
@@ -291,9 +230,8 @@ RemoveFromConversionCandidates(ConversionCandidates *conversionCandidates, Oid r
  * ShouldConvertLocalTableJoinsToSubqueries returns true if we should
  * convert local-dist table joins to subqueries.
  */
-static bool
+bool
 ShouldConvertLocalTableJoinsToSubqueries(Query *query, List *rangeTableList,
-										 Oid resultRelationId,
 										 PlannerRestrictionContext *
 										 plannerRestrictionContext)
 {
@@ -303,7 +241,7 @@ ShouldConvertLocalTableJoinsToSubqueries(Query *query, List *rangeTableList,
 		return false;
 	}
 
-    if (!ContainsTableToBeConvertedToSubquery(rangeTableList, resultRelationId))
+    if (!ContainsTableToBeConvertedToSubquery(rangeTableList))
 	{
 		return false;
 	}
