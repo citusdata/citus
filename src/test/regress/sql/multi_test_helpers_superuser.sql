@@ -1,3 +1,10 @@
+CREATE OR REPLACE FUNCTION master_defer_delete_shards()
+    RETURNS int
+    LANGUAGE C STRICT
+    AS 'citus', $$master_defer_delete_shards$$;
+COMMENT ON FUNCTION master_defer_delete_shards()
+    IS 'remove orphaned shards';
+
 CREATE OR REPLACE FUNCTION wait_until_metadata_sync(timeout INTEGER DEFAULT 15000)
     RETURNS void
     LANGUAGE C STRICT

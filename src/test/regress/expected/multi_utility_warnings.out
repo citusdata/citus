@@ -25,7 +25,3 @@ ERROR:  cannot write to pg_dist_poolinfo
 DETAIL:  Citus Community Edition does not support the use of pooler options.
 HINT:  To learn more about using advanced pooling schemes with Citus, please contact us at https://citusdata.com/about/contact_us
 ROLLBACK;
-INSERT INTO pg_dist_rebalance_strategy VALUES ('should fail', false, 'citus_shard_cost_1', 'citus_node_capacity_1', 'citus_shard_allowed_on_node_true', 0, 0);
-ERROR:  cannot write to pg_dist_rebalance_strategy
-DETAIL:  Citus Community Edition does not support the use of custom rebalance strategies.
-HINT:  To learn more about using advanced rebalancing schemes with Citus, please contact us at https://citusdata.com/about/contact_us

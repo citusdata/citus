@@ -903,6 +903,46 @@ AllShardPlacementsOnNodeGroup(int32 groupId)
 
 
 /*
+ * AllShardPlacementsWithShardPlacementState finds shard placements with the given
+ * shardState from system catalogs, converts these placements to their in-memory
+ * representation, and returns the converted shard placements in a new list.
+ */
+List *
+AllShardPlacementsWithShardPlacementState(ShardState shardState)
+{
+	List *shardPlacementList = NIL;
+	ScanKeyData scanKey[1];
+	int scanKeyCount = 1;
+
+	Relation pgPlacement = table_open(DistPlacementRelationId(), AccessShareLock);
+
+	ScanKeyInit(&scanKey[0], Anum_pg_dist_placement_shardstate,
+				BTEqualStrategyNumber, F_INT4EQ, Int32GetDatum(shardState));
+
+	SysScanDesc scanDescriptor = systable_beginscan(pgPlacement, InvalidOid, false,
+													NULL, scanKeyCount, scanKey);
+
+	HeapTuple heapTuple = systable_getnext(scanDescriptor);
+	while (HeapTupleIsValid(heapTuple))
+	{
+		TupleDesc tupleDescriptor = RelationGetDescr(pgPlacement);
+
+		GroupShardPlacement *placement =
+			TupleToGroupShardPlacement(tupleDescriptor, heapTuple);
+
+		shardPlacementList = lappend(shardPlacementList, placement);
+
+		heapTuple = systable_getnext(scanDescriptor);
+	}
+
+	systable_endscan(scanDescriptor);
+	table_close(pgPlacement, NoLock);
+
+	return shardPlacementList;
+}
+
+
+/*
  * TupleToGroupShardPlacement takes in a heap tuple from pg_dist_placement,
  * and converts this tuple to in-memory struct. The function assumes the
  * caller already has locks on the tuple, and doesn't perform any locking.

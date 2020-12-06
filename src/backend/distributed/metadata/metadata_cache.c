@@ -132,6 +132,7 @@ typedef struct MetadataCacheData
 	bool extensionLoaded;
 	Oid distShardRelationId;
 	Oid distPlacementRelationId;
+	Oid distRebalanceStrategyRelationId;
 	Oid distNodeRelationId;
 	Oid distNodeNodeIdIndexId;
 	Oid distLocalGroupRelationId;
@@ -2061,6 +2062,17 @@ DistLocalGroupIdRelationId(void)
 }
 
 
+/* return oid of pg_dist_rebalance_strategy relation */
+Oid
+DistRebalanceStrategyRelationId(void)
+{
+	CachedRelationLookup("pg_dist_rebalance_strategy",
+						 &MetadataCache.distRebalanceStrategyRelationId);
+
+	return MetadataCache.distRebalanceStrategyRelationId;
+}
+
+
 /* return the oid of citus namespace */
 Oid
 CitusCatalogNamespaceId(void)
@@ -3936,6 +3948,37 @@ LookupShardRelationFromCatalog(int64 shardId, bool missingOk)
 	table_close(pgDistShard, NoLock);
 
 	return relationId;
+}
+
+
+/*
+ * ShardExists returns whether the given shard ID exists in pg_dist_shard.
+ */
+bool
+ShardExists(int64 shardId)
+{
+	ScanKeyData scanKey[1];
+	int scanKeyCount = 1;
+	Relation pgDistShard = table_open(DistShardRelationId(), AccessShareLock);
+	bool shardExists = false;
+
+	ScanKeyInit(&scanKey[0], Anum_pg_dist_shard_shardid,
+				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(shardId));
+
+	SysScanDesc scanDescriptor = systable_beginscan(pgDistShard,
+													DistShardShardidIndexId(), true,
+													NULL, scanKeyCount, scanKey);
+
+	HeapTuple heapTuple = systable_getnext(scanDescriptor);
+	if (HeapTupleIsValid(heapTuple))
+	{
+		shardExists = true;
+	}
+
+	systable_endscan(scanDescriptor);
+	table_close(pgDistShard, NoLock);
+
+	return shardExists;
 }
 
 

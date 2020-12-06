@@ -5,7 +5,7 @@
  * This file contains UDFs for getting foreign constraint relationship between
  * distributed tables.
  *
- * Copyright (c) Citus Data, Inc.
+ * Copyright (c), Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */
@@ -15,6 +15,7 @@
 #include "funcapi.h"
 
 #include "distributed/foreign_key_relationship.h"
+#include "distributed/coordinator_protocol.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/tuplestore.h"

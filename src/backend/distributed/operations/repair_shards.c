@@ -11,18 +11,21 @@
  */
 
 #include "postgres.h"
-#include "c.h"
 #include "fmgr.h"
 #include "miscadmin.h"
 
 #include <string.h>
 
+#include "access/htup_details.h"
 #include "catalog/pg_class.h"
+#include "catalog/pg_enum.h"
+#include "distributed/citus_ruleutils.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/commands.h"
 #include "distributed/connection_management.h"
 #include "distributed/distributed_planner.h"
 #include "distributed/listutils.h"
+#include "distributed/shard_cleaner.h"
 #include "distributed/coordinator_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
@@ -35,6 +38,7 @@
 #include "distributed/worker_transaction.h"
 #include "lib/stringinfo.h"
 #include "nodes/pg_list.h"
+#include "storage/lmgr.h"
 #include "storage/lock.h"
 #include "storage/lmgr.h"
 #include "utils/builtins.h"
@@ -42,6 +46,8 @@
 #include "utils/errcodes.h"
 #include "utils/lsyscache.h"
 #include "utils/palloc.h"
+#include "utils/rel.h"
+#include "utils/syscache.h"
 
 /* local function forward declarations */
 static void ErrorIfTableCannotBeReplicated(Oid relationId);
@@ -65,13 +71,25 @@ static void EnsureShardCanBeCopied(int64 shardId, const char *sourceNodeName,
 								   int32 sourceNodePort, const char *targetNodeName,
 								   int32 targetNodePort);
 static List * RecreateTableDDLCommandList(Oid relationId);
-static List * WorkerApplyShardDDLCommandList(List *ddlCommandList, int64 shardId);
 static void EnsureTableListOwner(List *tableIdList);
 static void EnsureTableListSuitableForReplication(List *tableIdList);
+
+static void DropColocatedShardPlacement(ShardInterval *shardInterval, char *nodeName,
+										int32 nodePort);
+static void MarkForDropColocatedShardPlacement(ShardInterval *shardInterval,
+											   char *nodeName, int32 nodePort);
+static void UpdateColocatedShardPlacementMetadataOnWorkers(int64 shardId,
+														   char *sourceNodeName,
+														   int32 sourceNodePort,
+														   char *targetNodeName,
+														   int32 targetNodePort);
 
 /* declarations for dynamic loading */
 PG_FUNCTION_INFO_V1(master_copy_shard_placement);
 PG_FUNCTION_INFO_V1(master_move_shard_placement);
+
+
+bool DeferShardDeleteOnMove = false;
 
 
 /*
@@ -98,16 +116,15 @@ master_copy_shard_placement(PG_FUNCTION_ARGS)
 	char *sourceNodeName = text_to_cstring(sourceNodeNameText);
 	char *targetNodeName = text_to_cstring(targetNodeNameText);
 
-	CheckCitusVersion(ERROR);
 	EnsureCoordinator();
+	CheckCitusVersion(ERROR);
 
 	char shardReplicationMode = LookupShardTransferMode(shardReplicationModeOid);
 	if (shardReplicationMode == TRANSFER_MODE_FORCE_LOGICAL)
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("using logical replication in "
-							   "master_copy_shard_placement() requires Citus "
-							   "Enterprise")));
+						errmsg("the force_logical transfer mode is currently "
+							   "unsupported")));
 	}
 
 	ShardInterval *shardInterval = LoadShardInterval(shardId);
@@ -131,19 +148,155 @@ master_copy_shard_placement(PG_FUNCTION_ARGS)
 
 /*
  * master_move_shard_placement moves given shard (and its co-located shards) from one
- * node to the other node.
+ * node to the other node. To accomplish this it entirely recreates the table structure
+ * before copying all data.
+ *
+ * After that, there are two different paths. First one is blocking shard move in the
+ * sense that during shard move all modifications are paused to the shard. The second
+ * one relies on logical replication meaning that the writes blocked only for a very
+ * short duration almost only when the metadata is actually being updated. This option
+ * is currently only available in Citus Enterprise.
+ *
+ * After successful move operation, shards in the source node gets deleted. If the move
+ * fails at any point, this function throws an error, leaving the cluster without doing
+ * any changes in source node or target node.
  */
 Datum
 master_move_shard_placement(PG_FUNCTION_ARGS)
 {
-	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-					errmsg("master_move_shard_placement() is only supported on "
-						   "Citus Enterprise")));
+	int64 shardId = PG_GETARG_INT64(0);
+	char *sourceNodeName = text_to_cstring(PG_GETARG_TEXT_P(1));
+	int32 sourceNodePort = PG_GETARG_INT32(2);
+	char *targetNodeName = text_to_cstring(PG_GETARG_TEXT_P(3));
+	int32 targetNodePort = PG_GETARG_INT32(4);
+	Oid shardReplicationModeOid = PG_GETARG_OID(5);
+
+
+	ListCell *colocatedTableCell = NULL;
+	ListCell *colocatedShardCell = NULL;
+
+
+	CheckCitusVersion(ERROR);
+	EnsureCoordinator();
+
+	Oid relationId = RelationIdForShard(shardId);
+	ErrorIfMoveCitusLocalTable(relationId);
+
+	ShardInterval *shardInterval = LoadShardInterval(shardId);
+	Oid distributedTableId = shardInterval->relationId;
+
+	List *colocatedTableList = ColocatedTableList(distributedTableId);
+	List *colocatedShardList = ColocatedShardIntervalList(shardInterval);
+
+	foreach(colocatedTableCell, colocatedTableList)
+	{
+		Oid colocatedTableId = lfirst_oid(colocatedTableCell);
+		char relationKind = '\0';
+
+		/* check that user has owner rights in all co-located tables */
+		EnsureTableOwner(colocatedTableId);
+
+		/*
+		 * Block concurrent DDL / TRUNCATE commands on the relation. Similarly,
+		 * block concurrent master_move_shard_placement() on any shard of
+		 * the same relation. This is OK for now since we're executing shard
+		 * moves sequentially anyway.
+		 */
+		LockRelationOid(colocatedTableId, ShareUpdateExclusiveLock);
+
+		relationKind = get_rel_relkind(colocatedTableId);
+		if (relationKind == RELKIND_FOREIGN_TABLE)
+		{
+			char *relationName = get_rel_name(colocatedTableId);
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("cannot repair shard"),
+							errdetail("Table %s is a foreign table. Repairing "
+									  "shards backed by foreign tables is "
+									  "not supported.", relationName)));
+		}
+	}
+
+	/* we sort colocatedShardList so that lock operations will not cause any deadlocks */
+	colocatedShardList = SortList(colocatedShardList, CompareShardIntervalsById);
+	foreach(colocatedShardCell, colocatedShardList)
+	{
+		ShardInterval *colocatedShard = (ShardInterval *) lfirst(colocatedShardCell);
+		uint64 colocatedShardId = colocatedShard->shardId;
+
+		EnsureShardCanBeCopied(colocatedShardId, sourceNodeName, sourceNodePort,
+							   targetNodeName, targetNodePort);
+	}
+
+	char shardReplicationMode = LookupShardTransferMode(shardReplicationModeOid);
+	if (shardReplicationMode == TRANSFER_MODE_FORCE_LOGICAL)
+	{
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("the force_logical transfer mode is currently "
+							   "unsupported")));
+	}
+
+	BlockWritesToShardList(colocatedShardList);
+
+	/*
+	 * CopyColocatedShardPlacement function copies given shard with its co-located
+	 * shards.
+	 */
+	CopyShardTables(colocatedShardList, sourceNodeName, sourceNodePort, targetNodeName,
+					targetNodePort);
+
+	ShardInterval *colocatedShard = NULL;
+	foreach_ptr(colocatedShard, colocatedShardList)
+	{
+		uint64 colocatedShardId = colocatedShard->shardId;
+		uint32 groupId = GroupForNode(targetNodeName, targetNodePort);
+		uint64 placementId = GetNextPlacementId();
+
+		InsertShardPlacementRow(colocatedShardId, placementId,
+								SHARD_STATE_ACTIVE, ShardLength(colocatedShardId),
+								groupId);
+	}
+
+	/* since this is move operation, we remove shards from source node after copy */
+	if (DeferShardDeleteOnMove)
+	{
+		MarkForDropColocatedShardPlacement(shardInterval, sourceNodeName, sourceNodePort);
+	}
+	else
+	{
+		DropColocatedShardPlacement(shardInterval, sourceNodeName, sourceNodePort);
+	}
+
+	UpdateColocatedShardPlacementMetadataOnWorkers(shardId, sourceNodeName,
+												   sourceNodePort, targetNodeName,
+												   targetNodePort);
+
+	PG_RETURN_VOID();
 }
 
 
 /*
- * BlockWritesToShardList blocks writes to all shards in the given shard
+ * ErrorIfMoveCitusLocalTable is a helper function for rebalance_table_shards
+ * and master_move_shard_placement udf's to error out if relation with relationId
+ * is a citus local table.
+ */
+void
+ErrorIfMoveCitusLocalTable(Oid relationId)
+{
+	if (!IsCitusTableType(relationId, CITUS_LOCAL_TABLE))
+	{
+		return;
+	}
+
+	char *qualifiedRelationName = generate_qualified_relation_name(relationId);
+	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					errmsg("table %s is a citus local table, moving shard of "
+						   "a citus local table is currently not supported",
+						   qualifiedRelationName)));
+}
+
+
+/*
+ * BlockWritesToColocatedShardList blocks writes to all shards in the given shard
  * list. The function assumes that all the shards in the list are colocated.
  */
 void
@@ -185,8 +338,11 @@ BlockWritesToShardList(List *shardList)
 
 /*
  * ErrorIfTableCannotBeReplicated function errors out if the given table is not suitable
- * for its shard being replicated. Shard replications is not allowed only for MX tables,
- * since RF=1 is a must MX tables.
+ * for its shard being replicated. There are 2 cases in which shard replication is not
+ * allowed:
+ *
+ * 1) MX tables, since RF=1 is a must MX tables
+ * 2) Reference tables, since the shard should already exist in all workers
  */
 static void
 ErrorIfTableCannotBeReplicated(Oid relationId)
@@ -336,6 +492,7 @@ RepairShardPlacement(int64 shardId, const char *sourceNodeName, int32 sourceNode
 	/* we generate necessary commands to recreate the shard in target node */
 	List *ddlCommandList =
 		CopyShardCommandList(shardInterval, sourceNodeName, sourceNodePort, includeData);
+
 	List *foreignConstraintCommandList = CopyShardForeignConstraintCommandList(
 		shardInterval);
 	ddlCommandList = list_concat(ddlCommandList, foreignConstraintCommandList);
@@ -502,15 +659,7 @@ EnsureTableListSuitableForReplication(List *tableIdList)
 			IsCitusTableType(tableId, DISTRIBUTED_TABLE))
 		{
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("cannot create foreign key constraint"),
-							errdetail("This shard has foreign constraints on it. "
-									  "Citus currently supports "
-									  "foreign key constraints only for "
-									  "\"citus.shard_replication_factor = 1\"."),
-							errhint("Please change \"citus.shard_replication_factor to "
-									"1\". To learn more about using foreign keys with "
-									"other replication factors, please contact us at "
-									"https://citusdata.com/about/contact_us.")));
+							errmsg("cannot replicate shards with foreign keys")));
 		}
 	}
 }
@@ -553,21 +702,12 @@ CopyShardTables(List *shardIntervalList, char *sourceNodeName, int32 sourceNodeP
 	 *
 	 * Iterate through the colocated shards and create the foreign constraints and
 	 * attach child tables to their parents in a partitioning hierarchy.
-	 *
-	 * Note: After implementing foreign constraints from distributed to reference
-	 * tables, we have decided to not create foreign constraints from hash
-	 * distributed to reference tables at this stage for nonblocking rebalancer.
-	 * We just create the co-located ones here. We add the foreign constraints
-	 * from hash distributed to reference tables after being completely done with
-	 * the copy procedure inside LogicallyReplicateShards. The reason is that,
-	 * the reference tables have placements in both source and target workers and
-	 * the copied shard would get updated twice because of a cascading DML coming
-	 * from both of the placements.
 	 */
 	foreach_ptr(shardInterval, shardIntervalList)
 	{
 		List *shardForeignConstraintCommandList = NIL;
 		List *referenceTableForeignConstraintList = NIL;
+
 		char *tableOwner = TableOwner(shardInterval->relationId);
 
 		CopyShardForeignConstraintCommandListGrouped(shardInterval,
@@ -989,11 +1129,108 @@ RecreateTableDDLCommandList(Oid relationId)
 
 
 /*
+ * DropColocatedShardPlacement deletes the shard placement metadata for the given shard
+ * placement from the pg_dist_placement, and then it drops the shard table
+ * from the given node. The function does this for all colocated placements.
+ */
+static void
+DropColocatedShardPlacement(ShardInterval *shardInterval, char *nodeName, int32 nodePort)
+{
+	List *colocatedShardList = ColocatedShardIntervalList(shardInterval);
+	ListCell *colocatedShardCell = NULL;
+
+	foreach(colocatedShardCell, colocatedShardList)
+	{
+		ShardInterval *colocatedShard = (ShardInterval *) lfirst(colocatedShardCell);
+		char *qualifiedTableName = ConstructQualifiedShardName(colocatedShard);
+		StringInfo dropQuery = makeStringInfo();
+		uint64 shardId = colocatedShard->shardId;
+		List *shardPlacementList = ShardPlacementList(shardId);
+		ShardPlacement *placement =
+			SearchShardPlacementInListOrError(shardPlacementList, nodeName, nodePort);
+
+		appendStringInfo(dropQuery, DROP_REGULAR_TABLE_COMMAND, qualifiedTableName);
+
+		DeleteShardPlacementRow(placement->placementId);
+		SendCommandToWorker(nodeName, nodePort, dropQuery->data);
+	}
+}
+
+
+/*
+ * MarkForDropColocatedShardPlacement marks the shard placement metadata for the given
+ * shard placement to be deleted in pg_dist_placement. The function does this for all
+ * colocated placements.
+ */
+static void
+MarkForDropColocatedShardPlacement(ShardInterval *shardInterval, char *nodeName, int32
+								   nodePort)
+{
+	List *colocatedShardList = ColocatedShardIntervalList(shardInterval);
+	ListCell *colocatedShardCell = NULL;
+
+	foreach(colocatedShardCell, colocatedShardList)
+	{
+		ShardInterval *colocatedShard = (ShardInterval *) lfirst(colocatedShardCell);
+		uint64 shardId = colocatedShard->shardId;
+		List *shardPlacementList = ShardPlacementList(shardId);
+		ShardPlacement *placement =
+			SearchShardPlacementInListOrError(shardPlacementList, nodeName, nodePort);
+
+		UpdateShardPlacementState(placement->placementId, SHARD_STATE_TO_DELETE);
+	}
+}
+
+
+/*
+ * UpdateColocatedShardPlacementMetadataOnWorkers updates the metadata about the
+ * placements of the given shard and its colocated shards by changing the nodename and
+ * nodeport of the shards from the source nodename/port to target nodename/port.
+ *
+ * Note that the function does nothing if the given shard belongs to a non-mx table.
+ */
+static void
+UpdateColocatedShardPlacementMetadataOnWorkers(int64 shardId,
+											   char *sourceNodeName, int32 sourceNodePort,
+											   char *targetNodeName, int32 targetNodePort)
+{
+	ShardInterval *shardInterval = LoadShardInterval(shardId);
+	ListCell *colocatedShardCell = NULL;
+	bool shouldSyncMetadata = ShouldSyncTableMetadata(shardInterval->relationId);
+
+	if (!shouldSyncMetadata)
+	{
+		return;
+	}
+
+	List *colocatedShardList = ColocatedShardIntervalList(shardInterval);
+
+	/* iterate through the colocated shards and copy each */
+	foreach(colocatedShardCell, colocatedShardList)
+	{
+		ShardInterval *colocatedShard = (ShardInterval *) lfirst(colocatedShardCell);
+		StringInfo updateCommand = makeStringInfo();
+
+		appendStringInfo(updateCommand, "UPDATE pg_dist_shard_placement "
+										"SET nodename=%s, nodeport=%d WHERE "
+										"shardid=%lu AND nodename=%s AND nodeport=%d",
+						 quote_literal_cstr(targetNodeName),
+						 targetNodePort,
+						 colocatedShard->shardId,
+						 quote_literal_cstr(sourceNodeName),
+						 sourceNodePort);
+
+		SendCommandToWorkersWithMetadata(updateCommand->data);
+	}
+}
+
+
+/*
  * WorkerApplyShardDDLCommandList wraps all DDL commands in ddlCommandList
  * in a call to worker_apply_shard_ddl_command to apply the DDL command to
  * the shard specified by shardId.
  */
-static List *
+List *
 WorkerApplyShardDDLCommandList(List *ddlCommandList, int64 shardId)
 {
 	List *applyDDLCommandList = NIL;

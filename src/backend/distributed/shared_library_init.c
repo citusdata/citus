@@ -60,6 +60,7 @@
 #include "distributed/reference_table_utils.h"
 #include "distributed/relation_access_tracking.h"
 #include "distributed/run_from_same_connection.h"
+#include "distributed/shard_cleaner.h"
 #include "distributed/shared_connection_stats.h"
 #include "distributed/query_pushdown_planning.h"
 #include "distributed/time_constants.h"
@@ -888,6 +889,38 @@ RegisterCitusConfigVariables(void)
 		5 * MS_PER_SECOND, 1, 7 * MS_PER_DAY,
 		PGC_SIGHUP,
 		GUC_UNIT_MS | GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		"citus.defer_drop_after_shard_move",
+		gettext_noop("When enabled a shard move will mark old shards for deletion"),
+		gettext_noop("The deletion of a shard can sometimes run into a conflict with a "
+					 "long running transactions on a the shard during the drop phase of "
+					 "the shard move. This causes some moves to be rolled back after "
+					 "resources have been spend on moving the shard. To prevent "
+					 "conflicts this feature lets you skip the actual deletion till a "
+					 "later point in time. When used one should set "
+					 "citus.defer_shard_delete_interval to make sure defered deletions "
+					 "will be executed"),
+		&DeferShardDeleteOnMove,
+		false,
+		PGC_USERSET,
+		0,
+		NULL, NULL, NULL);
+
+	DefineCustomIntVariable(
+		"citus.defer_shard_delete_interval",
+		gettext_noop("Sets the time to wait between background deletion for shards."),
+		gettext_noop("Shards that are marked for deferred deletion need to be deleted in "
+					 "the background at a later time. This is done at a regular interval "
+					 "configured here. The deletion is executed optimistically, it tries "
+					 "to take a lock on a shard to clean, if the lock can't be acquired "
+					 "the background worker moves on. When set to -1 this background "
+					 "process is skipped."),
+		&DeferShardDeleteInterval,
+		-1, -1, 7 * 24 * 3600 * 1000,
+		PGC_SIGHUP,
+		GUC_UNIT_MS,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
