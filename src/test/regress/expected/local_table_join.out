@@ -31,8 +31,8 @@ SELECT create_distributed_table('distributed_table_windex', 'key');
 
 CREATE UNIQUE INDEX key_index ON distributed_table_windex (key);
 CREATE TABLE distributed_partitioned_table(key int, value text) PARTITION BY RANGE (key);
-CREATE TABLE distributed_partitioned_table_1 PARTITION OF distributed_partitioned_table FOR VALUES FROM (0) TO (10);
-CREATE TABLE distributed_partitioned_table_2 PARTITION OF distributed_partitioned_table FOR VALUES FROM (10) TO (20);
+CREATE TABLE distributed_partitioned_table_1 PARTITION OF distributed_partitioned_table FOR VALUES FROM (0) TO (50);
+CREATE TABLE distributed_partitioned_table_2 PARTITION OF distributed_partitioned_table FOR VALUES FROM (50) TO (200);
 SELECT create_distributed_table('distributed_partitioned_table', 'key');
  create_distributed_table
 ---------------------------------------------------------------------
@@ -40,8 +40,8 @@ SELECT create_distributed_table('distributed_partitioned_table', 'key');
 (1 row)
 
 CREATE TABLE local_partitioned_table(key int, value text) PARTITION BY RANGE (key);
-CREATE TABLE local_partitioned_table_1 PARTITION OF local_partitioned_table FOR VALUES FROM (0) TO (10);
-CREATE TABLE local_partitioned_table_2 PARTITION OF local_partitioned_table FOR VALUES FROM (10) TO (20);
+CREATE TABLE local_partitioned_table_1 PARTITION OF local_partitioned_table FOR VALUES FROM (0) TO (50);
+CREATE TABLE local_partitioned_table_2 PARTITION OF local_partitioned_table FOR VALUES FROM (50) TO (200);
 CREATE TABLE distributed_table_composite (key int, value text, value_2 jsonb, primary key (key, value));
 SELECT create_distributed_table('distributed_table_composite', 'key');
  create_distributed_table
@@ -49,6 +49,14 @@ SELECT create_distributed_table('distributed_table_composite', 'key');
 
 (1 row)
 
+INSERT INTO postgres_table SELECT i, i::varchar(256) FROM generate_series(1, 100) i;
+INSERT INTO reference_table SELECT i, i::varchar(256) FROM generate_series(1, 100) i;
+INSERT INTO distributed_table_windex SELECT i, i::varchar(256) FROM generate_series(1, 100) i;
+INSERT INTO distributed_table SELECT i, i::varchar(256) FROM generate_series(1, 100) i;
+INSERT INTO distributed_table_pkey SELECT i, i::varchar(256) FROM generate_series(1, 100) i;
+INSERT INTO distributed_partitioned_table SELECT i, i::varchar(256) FROM generate_series(1, 100) i;
+INSERT INTO distributed_table_composite SELECT i, i::varchar(256) FROM generate_series(1, 100) i;
+INSERT INTO local_partitioned_table SELECT i, i::varchar(256) FROM generate_series(1, 100) i;
 CREATE FUNCTION fake_fdw_handler()
 RETURNS fdw_handler
 AS 'citus'
@@ -73,181 +81,180 @@ HINT:  Use CTE's or subqueries to select from local tables and use them in joins
 -- the user prefers local table recursively planned
 SET citus.local_table_join_policy TO 'prefer-local';
 SELECT count(*) FROM postgres_table JOIN distributed_table USING(key);
-DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true OFFSET 0
+DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true
+DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) postgres_table JOIN local_table_join.distributed_table USING (key))
  count
 ---------------------------------------------------------------------
-     0
+   100
 (1 row)
 
 SELECT count(*) FROM postgres_table JOIN reference_table USING(key);
-DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true OFFSET 0
+DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true
+DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) postgres_table JOIN local_table_join.reference_table USING (key))
  count
 ---------------------------------------------------------------------
-     0
+   100
 (1 row)
 
 -- the user prefers distributed table recursively planned
 SET citus.local_table_join_policy TO 'prefer-distributed';
 SELECT count(*) FROM postgres_table JOIN distributed_table USING(key);
-DEBUG:  Wrapping relation "distributed_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.distributed_table WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.distributed_table WHERE true OFFSET 0
+DEBUG:  Wrapping relation "distributed_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.distributed_table WHERE true
+DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.distributed_table WHERE true
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (local_table_join.postgres_table JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) distributed_table USING (key))
  count
 ---------------------------------------------------------------------
-     0
+   100
 (1 row)
 
 SELECT count(*) FROM postgres_table JOIN reference_table USING(key);
-DEBUG:  Wrapping relation "reference_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.reference_table WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.reference_table WHERE true OFFSET 0
+DEBUG:  Wrapping relation "reference_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.reference_table WHERE true
+DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.reference_table WHERE true
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (local_table_join.postgres_table JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) reference_table USING (key))
  count
 ---------------------------------------------------------------------
-     0
+   100
 (1 row)
 
--- update/delete
 -- auto tests
 -- switch back to the default policy, which is auto
 SET citus.local_table_join_policy to 'auto';
 -- on the auto mode, the local tables should be recursively planned
 -- unless a unique index exists in a column for distributed table
 SELECT count(*) FROM distributed_table JOIN postgres_table USING(key);
-DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true OFFSET 0
+DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true
+DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (local_table_join.distributed_table JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) postgres_table USING (key))
  count
 ---------------------------------------------------------------------
-     0
+   100
 (1 row)
 
 SELECT count(*) FROM reference_table JOIN postgres_table USING(key);
-DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true OFFSET 0
+DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true
+DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (local_table_join.reference_table JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) postgres_table USING (key))
  count
 ---------------------------------------------------------------------
-     0
+   100
 (1 row)
 
 SELECT count(*) FROM distributed_table JOIN postgres_table USING(key) JOIN reference_table USING (key);
-DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true OFFSET 0
+DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true
+DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((local_table_join.distributed_table JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) postgres_table USING (key)) JOIN local_table_join.reference_table USING (key))
  count
 ---------------------------------------------------------------------
-     0
+   100
 (1 row)
 
 -- partititoned local tables should work as well
 SELECT count(*) FROM distributed_table JOIN local_partitioned_table USING(key);
-DEBUG:  Wrapping relation "local_partitioned_table" to a subquery: SELECT key, NULL::text AS value FROM local_table_join.local_partitioned_table WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value FROM local_table_join.local_partitioned_table WHERE true OFFSET 0
+DEBUG:  Wrapping relation "local_partitioned_table" to a subquery: SELECT key, NULL::text AS value FROM local_table_join.local_partitioned_table WHERE true
+DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value FROM local_table_join.local_partitioned_table WHERE true
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (local_table_join.distributed_table JOIN (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) local_partitioned_table USING (key))
  count
 ---------------------------------------------------------------------
-     0
+   100
 (1 row)
 
 SELECT count(*) FROM reference_table JOIN local_partitioned_table USING(key);
-DEBUG:  Wrapping relation "local_partitioned_table" to a subquery: SELECT key, NULL::text AS value FROM local_table_join.local_partitioned_table WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value FROM local_table_join.local_partitioned_table WHERE true OFFSET 0
+DEBUG:  Wrapping relation "local_partitioned_table" to a subquery: SELECT key, NULL::text AS value FROM local_table_join.local_partitioned_table WHERE true
+DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value FROM local_table_join.local_partitioned_table WHERE true
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (local_table_join.reference_table JOIN (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) local_partitioned_table USING (key))
  count
 ---------------------------------------------------------------------
-     0
+   100
 (1 row)
 
 SELECT count(*) FROM distributed_table JOIN local_partitioned_table USING(key) JOIN reference_table USING (key);
-DEBUG:  Wrapping relation "local_partitioned_table" to a subquery: SELECT key, NULL::text AS value FROM local_table_join.local_partitioned_table WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value FROM local_table_join.local_partitioned_table WHERE true OFFSET 0
+DEBUG:  Wrapping relation "local_partitioned_table" to a subquery: SELECT key, NULL::text AS value FROM local_table_join.local_partitioned_table WHERE true
+DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value FROM local_table_join.local_partitioned_table WHERE true
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((local_table_join.distributed_table JOIN (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) local_partitioned_table USING (key)) JOIN local_table_join.reference_table USING (key))
  count
 ---------------------------------------------------------------------
-     0
+   100
 (1 row)
 
 -- materialized views should work too
 SELECT count(*) FROM distributed_table JOIN mv1 USING(key);
-DEBUG:  Wrapping relation "mv1" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.mv1 WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.mv1 WHERE true OFFSET 0
+DEBUG:  Wrapping relation "mv1" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.mv1 WHERE true
+DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.mv1 WHERE true
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (local_table_join.distributed_table JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) mv1 USING (key))
  count
 ---------------------------------------------------------------------
-     0
+   100
 (1 row)
 
 SELECT count(*) FROM (SELECT * FROM distributed_table) d1 JOIN mv1 USING(key);
-DEBUG:  Wrapping relation "mv1" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.mv1 WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.mv1 WHERE true OFFSET 0
+DEBUG:  Wrapping relation "mv1" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.mv1 WHERE true
+DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.mv1 WHERE true
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT distributed_table.key, distributed_table.value, distributed_table.value_2 FROM local_table_join.distributed_table) d1 JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) mv1 USING (key))
  count
 ---------------------------------------------------------------------
-     0
+   100
 (1 row)
 
 SELECT count(*) FROM reference_table JOIN mv1 USING(key);
-DEBUG:  Wrapping relation "mv1" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.mv1 WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.mv1 WHERE true OFFSET 0
+DEBUG:  Wrapping relation "mv1" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.mv1 WHERE true
+DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.mv1 WHERE true
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (local_table_join.reference_table JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) mv1 USING (key))
  count
 ---------------------------------------------------------------------
-     0
+   100
 (1 row)
 
 SELECT count(*) FROM distributed_table JOIN mv1 USING(key) JOIN reference_table USING (key);
-DEBUG:  Wrapping relation "mv1" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.mv1 WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.mv1 WHERE true OFFSET 0
+DEBUG:  Wrapping relation "mv1" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.mv1 WHERE true
+DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.mv1 WHERE true
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((local_table_join.distributed_table JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) mv1 USING (key)) JOIN local_table_join.reference_table USING (key))
  count
 ---------------------------------------------------------------------
-     0
+   100
 (1 row)
 
 SELECT count(*) FROM distributed_table JOIN mv2 USING(key);
-DEBUG:  Wrapping relation "mv2" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.mv2 WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.mv2 WHERE true OFFSET 0
+DEBUG:  Wrapping relation "mv2" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.mv2 WHERE true
+DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.mv2 WHERE true
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (local_table_join.distributed_table JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) mv2 USING (key))
  count
 ---------------------------------------------------------------------
-     0
+   100
 (1 row)
 
 SELECT count(*) FROM (SELECT * FROM distributed_table) d1 JOIN mv2 USING(key);
-DEBUG:  Wrapping relation "mv2" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.mv2 WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.mv2 WHERE true OFFSET 0
+DEBUG:  Wrapping relation "mv2" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.mv2 WHERE true
+DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.mv2 WHERE true
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT distributed_table.key, distributed_table.value, distributed_table.value_2 FROM local_table_join.distributed_table) d1 JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) mv2 USING (key))
  count
 ---------------------------------------------------------------------
-     0
+   100
 (1 row)
 
 SELECT count(*) FROM reference_table JOIN mv2 USING(key);
-DEBUG:  Wrapping relation "mv2" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.mv2 WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.mv2 WHERE true OFFSET 0
+DEBUG:  Wrapping relation "mv2" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.mv2 WHERE true
+DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.mv2 WHERE true
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (local_table_join.reference_table JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) mv2 USING (key))
  count
 ---------------------------------------------------------------------
-     0
+   100
 (1 row)
 
 SELECT count(*) FROM distributed_table JOIN mv2 USING(key) JOIN reference_table USING (key);
-DEBUG:  Wrapping relation "mv2" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.mv2 WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.mv2 WHERE true OFFSET 0
+DEBUG:  Wrapping relation "mv2" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.mv2 WHERE true
+DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.mv2 WHERE true
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((local_table_join.distributed_table JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) mv2 USING (key)) JOIN local_table_join.reference_table USING (key))
  count
 ---------------------------------------------------------------------
-     0
+   100
 (1 row)
 
 -- foreign tables should work too
 SELECT count(*) FROM foreign_table JOIN distributed_table USING(key);
-DEBUG:  Wrapping relation "foreign_table" to a subquery: SELECT key, NULL::text AS value FROM local_table_join.foreign_table WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value FROM local_table_join.foreign_table WHERE true OFFSET 0
+DEBUG:  Wrapping relation "foreign_table" to a subquery: SELECT key, NULL::text AS value FROM local_table_join.foreign_table WHERE true
+DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value FROM local_table_join.foreign_table WHERE true
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) foreign_table JOIN local_table_join.distributed_table USING (key))
  count
 ---------------------------------------------------------------------
@@ -256,107 +263,107 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS c
 
 -- partitioned tables should work as well
 SELECT count(*) FROM distributed_partitioned_table JOIN postgres_table USING(key);
-DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true OFFSET 0
+DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true
+DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (local_table_join.distributed_partitioned_table JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) postgres_table USING (key))
  count
 ---------------------------------------------------------------------
-     0
+   100
 (1 row)
 
 SELECT count(*) FROM distributed_partitioned_table JOIN postgres_table USING(key) WHERE distributed_partitioned_table.key = 10;
-DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE (key OPERATOR(pg_catalog.=) 10) OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE (key OPERATOR(pg_catalog.=) 10) OFFSET 0
+DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE (key OPERATOR(pg_catalog.=) 10)
+DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE (key OPERATOR(pg_catalog.=) 10)
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (local_table_join.distributed_partitioned_table JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) postgres_table USING (key)) WHERE (distributed_partitioned_table.key OPERATOR(pg_catalog.=) 10)
  count
 ---------------------------------------------------------------------
-     0
+     1
 (1 row)
 
 SELECT count(*) FROM distributed_partitioned_table JOIN postgres_table USING(key) JOIN reference_table USING (key);
-DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true OFFSET 0
+DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true
+DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((local_table_join.distributed_partitioned_table JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) postgres_table USING (key)) JOIN local_table_join.reference_table USING (key))
  count
 ---------------------------------------------------------------------
-     0
+   100
 (1 row)
 
 SELECT count(*) FROM distributed_partitioned_table JOIN local_partitioned_table USING(key);
-DEBUG:  Wrapping relation "local_partitioned_table" to a subquery: SELECT key, NULL::text AS value FROM local_table_join.local_partitioned_table WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value FROM local_table_join.local_partitioned_table WHERE true OFFSET 0
+DEBUG:  Wrapping relation "local_partitioned_table" to a subquery: SELECT key, NULL::text AS value FROM local_table_join.local_partitioned_table WHERE true
+DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value FROM local_table_join.local_partitioned_table WHERE true
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (local_table_join.distributed_partitioned_table JOIN (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) local_partitioned_table USING (key))
  count
 ---------------------------------------------------------------------
-     0
+   100
 (1 row)
 
 SELECT count(*) FROM distributed_partitioned_table JOIN local_partitioned_table USING(key) WHERE distributed_partitioned_table.key = 10;
-DEBUG:  Wrapping relation "local_partitioned_table" to a subquery: SELECT key, NULL::text AS value FROM local_table_join.local_partitioned_table WHERE (key OPERATOR(pg_catalog.=) 10) OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value FROM local_table_join.local_partitioned_table WHERE (key OPERATOR(pg_catalog.=) 10) OFFSET 0
+DEBUG:  Wrapping relation "local_partitioned_table" to a subquery: SELECT key, NULL::text AS value FROM local_table_join.local_partitioned_table WHERE (key OPERATOR(pg_catalog.=) 10)
+DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value FROM local_table_join.local_partitioned_table WHERE (key OPERATOR(pg_catalog.=) 10)
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (local_table_join.distributed_partitioned_table JOIN (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) local_partitioned_table USING (key)) WHERE (distributed_partitioned_table.key OPERATOR(pg_catalog.=) 10)
  count
 ---------------------------------------------------------------------
-     0
+     1
 (1 row)
 
 SELECT count(*) FROM distributed_partitioned_table JOIN local_partitioned_table USING(key) JOIN reference_table USING (key);
-DEBUG:  Wrapping relation "local_partitioned_table" to a subquery: SELECT key, NULL::text AS value FROM local_table_join.local_partitioned_table WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value FROM local_table_join.local_partitioned_table WHERE true OFFSET 0
+DEBUG:  Wrapping relation "local_partitioned_table" to a subquery: SELECT key, NULL::text AS value FROM local_table_join.local_partitioned_table WHERE true
+DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value FROM local_table_join.local_partitioned_table WHERE true
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((local_table_join.distributed_partitioned_table JOIN (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) local_partitioned_table USING (key)) JOIN local_table_join.reference_table USING (key))
  count
 ---------------------------------------------------------------------
-     0
+   100
 (1 row)
 
 -- the conversions should be independent from the order of table entries in the query
 SELECT COUNT(*) FROM postgres_table join distributed_table_pkey using(key) join local_partitioned_table using(key) join distributed_table using(key) where distributed_table_pkey.key = 5;
-DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE (key OPERATOR(pg_catalog.=) 5) OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE (key OPERATOR(pg_catalog.=) 5) OFFSET 0
-DEBUG:  Wrapping relation "local_partitioned_table" to a subquery: SELECT key, NULL::text AS value FROM local_table_join.local_partitioned_table WHERE (key OPERATOR(pg_catalog.=) 5) OFFSET 0
-DEBUG:  generating subplan XXX_2 for subquery SELECT key, NULL::text AS value FROM local_table_join.local_partitioned_table WHERE (key OPERATOR(pg_catalog.=) 5) OFFSET 0
+DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE (key OPERATOR(pg_catalog.=) 5)
+DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE (key OPERATOR(pg_catalog.=) 5)
+DEBUG:  Wrapping relation "local_partitioned_table" to a subquery: SELECT key, NULL::text AS value FROM local_table_join.local_partitioned_table WHERE (key OPERATOR(pg_catalog.=) 5)
+DEBUG:  generating subplan XXX_2 for subquery SELECT key, NULL::text AS value FROM local_table_join.local_partitioned_table WHERE (key OPERATOR(pg_catalog.=) 5)
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((((SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) postgres_table JOIN local_table_join.distributed_table_pkey USING (key)) JOIN (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) local_partitioned_table USING (key)) JOIN local_table_join.distributed_table USING (key)) WHERE (distributed_table_pkey.key OPERATOR(pg_catalog.=) 5)
  count
 ---------------------------------------------------------------------
-     0
+     1
 (1 row)
 
 SELECT COUNT(*) FROM postgres_table join local_partitioned_table using(key) join distributed_table_pkey using(key) join distributed_table using(key) where distributed_table_pkey.key = 5;
-DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE (key OPERATOR(pg_catalog.=) 5) OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE (key OPERATOR(pg_catalog.=) 5) OFFSET 0
-DEBUG:  Wrapping relation "local_partitioned_table" to a subquery: SELECT key, NULL::text AS value FROM local_table_join.local_partitioned_table WHERE (key OPERATOR(pg_catalog.=) 5) OFFSET 0
-DEBUG:  generating subplan XXX_2 for subquery SELECT key, NULL::text AS value FROM local_table_join.local_partitioned_table WHERE (key OPERATOR(pg_catalog.=) 5) OFFSET 0
+DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE (key OPERATOR(pg_catalog.=) 5)
+DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE (key OPERATOR(pg_catalog.=) 5)
+DEBUG:  Wrapping relation "local_partitioned_table" to a subquery: SELECT key, NULL::text AS value FROM local_table_join.local_partitioned_table WHERE (key OPERATOR(pg_catalog.=) 5)
+DEBUG:  generating subplan XXX_2 for subquery SELECT key, NULL::text AS value FROM local_table_join.local_partitioned_table WHERE (key OPERATOR(pg_catalog.=) 5)
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((((SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) postgres_table JOIN (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) local_partitioned_table USING (key)) JOIN local_table_join.distributed_table_pkey USING (key)) JOIN local_table_join.distributed_table USING (key)) WHERE (distributed_table_pkey.key OPERATOR(pg_catalog.=) 5)
  count
 ---------------------------------------------------------------------
-     0
+     1
 (1 row)
 
 SELECT COUNT(*) FROM postgres_table join distributed_table using(key) join local_partitioned_table using(key) join distributed_table_pkey using(key) where distributed_table_pkey.key = 5;
-DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE (key OPERATOR(pg_catalog.=) 5) OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE (key OPERATOR(pg_catalog.=) 5) OFFSET 0
-DEBUG:  Wrapping relation "local_partitioned_table" to a subquery: SELECT key, NULL::text AS value FROM local_table_join.local_partitioned_table WHERE (key OPERATOR(pg_catalog.=) 5) OFFSET 0
-DEBUG:  generating subplan XXX_2 for subquery SELECT key, NULL::text AS value FROM local_table_join.local_partitioned_table WHERE (key OPERATOR(pg_catalog.=) 5) OFFSET 0
+DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE (key OPERATOR(pg_catalog.=) 5)
+DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE (key OPERATOR(pg_catalog.=) 5)
+DEBUG:  Wrapping relation "local_partitioned_table" to a subquery: SELECT key, NULL::text AS value FROM local_table_join.local_partitioned_table WHERE (key OPERATOR(pg_catalog.=) 5)
+DEBUG:  generating subplan XXX_2 for subquery SELECT key, NULL::text AS value FROM local_table_join.local_partitioned_table WHERE (key OPERATOR(pg_catalog.=) 5)
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((((SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) postgres_table JOIN local_table_join.distributed_table USING (key)) JOIN (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) local_partitioned_table USING (key)) JOIN local_table_join.distributed_table_pkey USING (key)) WHERE (distributed_table_pkey.key OPERATOR(pg_catalog.=) 5)
  count
 ---------------------------------------------------------------------
-     0
+     1
 (1 row)
 
 SELECT COUNT(*) FROM distributed_table_pkey join distributed_table using(key) join postgres_table using(key) join local_partitioned_table using(key) where distributed_table_pkey.key = 5;
-DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE (key OPERATOR(pg_catalog.=) 5) OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE (key OPERATOR(pg_catalog.=) 5) OFFSET 0
-DEBUG:  Wrapping relation "local_partitioned_table" to a subquery: SELECT key, NULL::text AS value FROM local_table_join.local_partitioned_table WHERE (key OPERATOR(pg_catalog.=) 5) OFFSET 0
-DEBUG:  generating subplan XXX_2 for subquery SELECT key, NULL::text AS value FROM local_table_join.local_partitioned_table WHERE (key OPERATOR(pg_catalog.=) 5) OFFSET 0
+DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE (key OPERATOR(pg_catalog.=) 5)
+DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE (key OPERATOR(pg_catalog.=) 5)
+DEBUG:  Wrapping relation "local_partitioned_table" to a subquery: SELECT key, NULL::text AS value FROM local_table_join.local_partitioned_table WHERE (key OPERATOR(pg_catalog.=) 5)
+DEBUG:  generating subplan XXX_2 for subquery SELECT key, NULL::text AS value FROM local_table_join.local_partitioned_table WHERE (key OPERATOR(pg_catalog.=) 5)
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (((local_table_join.distributed_table_pkey JOIN local_table_join.distributed_table USING (key)) JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) postgres_table USING (key)) JOIN (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) local_partitioned_table USING (key)) WHERE (distributed_table_pkey.key OPERATOR(pg_catalog.=) 5)
  count
 ---------------------------------------------------------------------
-     0
+     1
 (1 row)
 
 SELECT count(*) FROM (SELECT *, random() FROM distributed_table) as d1  JOIN postgres_table ON (postgres_table.key = d1.key AND d1.key < postgres_table.key) WHERE d1.key = 1 AND false;
-DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE ((key OPERATOR(pg_catalog.<) key) AND false) OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE ((key OPERATOR(pg_catalog.<) key) AND false) OFFSET 0
+DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE ((key OPERATOR(pg_catalog.<) key) AND false)
+DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE ((key OPERATOR(pg_catalog.<) key) AND false)
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT distributed_table.key, distributed_table.value, distributed_table.value_2, random() AS random FROM local_table_join.distributed_table) d1 JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) postgres_table ON (((postgres_table.key OPERATOR(pg_catalog.=) d1.key) AND (d1.key OPERATOR(pg_catalog.<) postgres_table.key)))) WHERE ((d1.key OPERATOR(pg_catalog.=) 1) AND false)
  count
 ---------------------------------------------------------------------
@@ -364,8 +371,8 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS c
 (1 row)
 
 SELECT count(*) FROM (SELECT *, random() FROM distributed_table_pkey) as d1  JOIN postgres_table ON (postgres_table.key = d1.key AND d1.key < postgres_table.key) WHERE d1.key = 1 AND false;
-DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE ((key OPERATOR(pg_catalog.<) key) AND false) OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE ((key OPERATOR(pg_catalog.<) key) AND false) OFFSET 0
+DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE ((key OPERATOR(pg_catalog.<) key) AND false)
+DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE ((key OPERATOR(pg_catalog.<) key) AND false)
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT distributed_table_pkey.key, distributed_table_pkey.value, distributed_table_pkey.value_2, random() AS random FROM local_table_join.distributed_table_pkey) d1 JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) postgres_table ON (((postgres_table.key OPERATOR(pg_catalog.=) d1.key) AND (d1.key OPERATOR(pg_catalog.<) postgres_table.key)))) WHERE ((d1.key OPERATOR(pg_catalog.=) 1) AND false)
  count
 ---------------------------------------------------------------------
@@ -373,8 +380,8 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS c
 (1 row)
 
 SELECT count(*) FROM (SELECT *, random() FROM distributed_partitioned_table) as d1  JOIN postgres_table ON (postgres_table.key = d1.key AND d1.key < postgres_table.key) WHERE d1.key = 1 AND false;
-DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE ((key OPERATOR(pg_catalog.<) key) AND false) OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE ((key OPERATOR(pg_catalog.<) key) AND false) OFFSET 0
+DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE ((key OPERATOR(pg_catalog.<) key) AND false)
+DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE ((key OPERATOR(pg_catalog.<) key) AND false)
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT distributed_partitioned_table.key, distributed_partitioned_table.value, random() AS random FROM local_table_join.distributed_partitioned_table) d1 JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) postgres_table ON (((postgres_table.key OPERATOR(pg_catalog.=) d1.key) AND (d1.key OPERATOR(pg_catalog.<) postgres_table.key)))) WHERE ((d1.key OPERATOR(pg_catalog.=) 1) AND false)
  count
 ---------------------------------------------------------------------
@@ -382,8 +389,8 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS c
 (1 row)
 
 SELECT count(*) FROM (SELECT *, random() FROM distributed_partitioned_table) as d1  JOIN postgres_table ON (postgres_table.key::int = d1.key::int AND d1.key < postgres_table.key) WHERE d1.key::int = 1 AND false;
-DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE ((key OPERATOR(pg_catalog.<) key) AND false) OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE ((key OPERATOR(pg_catalog.<) key) AND false) OFFSET 0
+DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE ((key OPERATOR(pg_catalog.<) key) AND false)
+DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE ((key OPERATOR(pg_catalog.<) key) AND false)
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT distributed_partitioned_table.key, distributed_partitioned_table.value, random() AS random FROM local_table_join.distributed_partitioned_table) d1 JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) postgres_table ON (((postgres_table.key OPERATOR(pg_catalog.=) d1.key) AND (d1.key OPERATOR(pg_catalog.<) postgres_table.key)))) WHERE ((d1.key OPERATOR(pg_catalog.=) 1) AND false)
  count
 ---------------------------------------------------------------------
@@ -392,82 +399,82 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS c
 
 -- TODO:: We should probably recursively plan postgres table here because primary key is on key,value not key.
 SELECT count(*) FROM distributed_table_composite JOIN postgres_table USING(key) WHERE distributed_table_composite.key = 10;
-DEBUG:  Wrapping relation "distributed_table_composite" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.distributed_table_composite WHERE (key OPERATOR(pg_catalog.=) 10) OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.distributed_table_composite WHERE (key OPERATOR(pg_catalog.=) 10) OFFSET 0
+DEBUG:  Wrapping relation "distributed_table_composite" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.distributed_table_composite WHERE (key OPERATOR(pg_catalog.=) 10)
+DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.distributed_table_composite WHERE (key OPERATOR(pg_catalog.=) 10)
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) distributed_table_composite JOIN local_table_join.postgres_table USING (key)) WHERE (distributed_table_composite.key OPERATOR(pg_catalog.=) 10)
  count
 ---------------------------------------------------------------------
-     0
+     1
 (1 row)
 
 -- a unique index on key so dist table should be recursively planned
 SELECT count(*) FROM postgres_table JOIN distributed_table_pkey USING(key);
-DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true OFFSET 0
+DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true
+DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) postgres_table JOIN local_table_join.distributed_table_pkey USING (key))
  count
 ---------------------------------------------------------------------
-     0
+   100
 (1 row)
 
 SELECT count(*) FROM postgres_table JOIN distributed_table_pkey USING(value);
-DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT NULL::integer AS key, value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT NULL::integer AS key, value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true OFFSET 0
+DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT NULL::integer AS key, value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true
+DEBUG:  generating subplan XXX_1 for subquery SELECT NULL::integer AS key, value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) postgres_table JOIN local_table_join.distributed_table_pkey USING (value))
  count
 ---------------------------------------------------------------------
-     0
+   100
 (1 row)
 
 SELECT count(*) FROM postgres_table JOIN distributed_table_pkey ON postgres_table.key = distributed_table_pkey.key;
-DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true OFFSET 0
+DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true
+DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) postgres_table JOIN local_table_join.distributed_table_pkey ON ((postgres_table.key OPERATOR(pg_catalog.=) distributed_table_pkey.key)))
  count
 ---------------------------------------------------------------------
-     0
+   100
 (1 row)
 
 SELECT count(*) FROM postgres_table JOIN distributed_table_pkey ON distributed_table_pkey.key = 10;
-DEBUG:  Wrapping relation "distributed_table_pkey" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.distributed_table_pkey WHERE (key OPERATOR(pg_catalog.=) 10) OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.distributed_table_pkey WHERE (key OPERATOR(pg_catalog.=) 10) OFFSET 0
+DEBUG:  Wrapping relation "distributed_table_pkey" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.distributed_table_pkey WHERE (key OPERATOR(pg_catalog.=) 10)
+DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.distributed_table_pkey WHERE (key OPERATOR(pg_catalog.=) 10)
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (local_table_join.postgres_table JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) distributed_table_pkey ON ((distributed_table_pkey.key OPERATOR(pg_catalog.=) 10)))
  count
 ---------------------------------------------------------------------
-     0
+   100
 (1 row)
 
 -- it should favor distributed table only if it has equality on the unique column
 SELECT count(*) FROM postgres_table JOIN distributed_table_pkey ON distributed_table_pkey.key > 10;
-DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT NULL::integer AS key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT NULL::integer AS key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true OFFSET 0
+DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT NULL::integer AS key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true
+DEBUG:  generating subplan XXX_1 for subquery SELECT NULL::integer AS key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) postgres_table JOIN local_table_join.distributed_table_pkey ON ((distributed_table_pkey.key OPERATOR(pg_catalog.>) 10)))
  count
 ---------------------------------------------------------------------
-     0
+  9000
 (1 row)
 
 SELECT count(*) FROM postgres_table JOIN distributed_table_pkey ON distributed_table_pkey.key < 10;
-DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT NULL::integer AS key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT NULL::integer AS key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true OFFSET 0
+DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT NULL::integer AS key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true
+DEBUG:  generating subplan XXX_1 for subquery SELECT NULL::integer AS key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) postgres_table JOIN local_table_join.distributed_table_pkey ON ((distributed_table_pkey.key OPERATOR(pg_catalog.<) 10)))
  count
 ---------------------------------------------------------------------
-     0
+   900
 (1 row)
 
 SELECT count(*) FROM postgres_table JOIN distributed_table_pkey ON distributed_table_pkey.key = 10;
-DEBUG:  Wrapping relation "distributed_table_pkey" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.distributed_table_pkey WHERE (key OPERATOR(pg_catalog.=) 10) OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.distributed_table_pkey WHERE (key OPERATOR(pg_catalog.=) 10) OFFSET 0
+DEBUG:  Wrapping relation "distributed_table_pkey" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.distributed_table_pkey WHERE (key OPERATOR(pg_catalog.=) 10)
+DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.distributed_table_pkey WHERE (key OPERATOR(pg_catalog.=) 10)
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (local_table_join.postgres_table JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) distributed_table_pkey ON ((distributed_table_pkey.key OPERATOR(pg_catalog.=) 10)))
  count
 ---------------------------------------------------------------------
-     0
+   100
 (1 row)
 
 SELECT count(*) FROM postgres_table JOIN distributed_table_pkey ON distributed_table_pkey.key = 10 AND distributed_table_pkey.key > 10 ;
-DEBUG:  Wrapping relation "distributed_table_pkey" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.distributed_table_pkey WHERE ((key OPERATOR(pg_catalog.>) 10) AND (key OPERATOR(pg_catalog.=) 10)) OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.distributed_table_pkey WHERE ((key OPERATOR(pg_catalog.>) 10) AND (key OPERATOR(pg_catalog.=) 10)) OFFSET 0
+DEBUG:  Wrapping relation "distributed_table_pkey" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.distributed_table_pkey WHERE ((key OPERATOR(pg_catalog.>) 10) AND (key OPERATOR(pg_catalog.=) 10))
+DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.distributed_table_pkey WHERE ((key OPERATOR(pg_catalog.>) 10) AND (key OPERATOR(pg_catalog.=) 10))
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (local_table_join.postgres_table JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) distributed_table_pkey ON (((distributed_table_pkey.key OPERATOR(pg_catalog.=) 10) AND (distributed_table_pkey.key OPERATOR(pg_catalog.>) 10))))
  count
 ---------------------------------------------------------------------
@@ -475,8 +482,8 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS c
 (1 row)
 
 SELECT count(*) FROM postgres_table JOIN distributed_table_pkey ON distributed_table_pkey.key = 10 AND distributed_table_pkey.key > 10 ;
-DEBUG:  Wrapping relation "distributed_table_pkey" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.distributed_table_pkey WHERE ((key OPERATOR(pg_catalog.>) 10) AND (key OPERATOR(pg_catalog.=) 10)) OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.distributed_table_pkey WHERE ((key OPERATOR(pg_catalog.>) 10) AND (key OPERATOR(pg_catalog.=) 10)) OFFSET 0
+DEBUG:  Wrapping relation "distributed_table_pkey" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.distributed_table_pkey WHERE ((key OPERATOR(pg_catalog.>) 10) AND (key OPERATOR(pg_catalog.=) 10))
+DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.distributed_table_pkey WHERE ((key OPERATOR(pg_catalog.>) 10) AND (key OPERATOR(pg_catalog.=) 10))
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (local_table_join.postgres_table JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) distributed_table_pkey ON (((distributed_table_pkey.key OPERATOR(pg_catalog.=) 10) AND (distributed_table_pkey.key OPERATOR(pg_catalog.>) 10))))
  count
 ---------------------------------------------------------------------
@@ -484,8 +491,8 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS c
 (1 row)
 
 SELECT count(*) FROM postgres_table JOIN distributed_table_pkey ON distributed_table_pkey.key = 10 AND distributed_table_pkey.key > 10 AND postgres_table.key = 5;
-DEBUG:  Wrapping relation "distributed_table_pkey" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.distributed_table_pkey WHERE ((key OPERATOR(pg_catalog.>) 10) AND (key OPERATOR(pg_catalog.=) 10)) OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.distributed_table_pkey WHERE ((key OPERATOR(pg_catalog.>) 10) AND (key OPERATOR(pg_catalog.=) 10)) OFFSET 0
+DEBUG:  Wrapping relation "distributed_table_pkey" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.distributed_table_pkey WHERE ((key OPERATOR(pg_catalog.>) 10) AND (key OPERATOR(pg_catalog.=) 10))
+DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.distributed_table_pkey WHERE ((key OPERATOR(pg_catalog.>) 10) AND (key OPERATOR(pg_catalog.=) 10))
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (local_table_join.postgres_table JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) distributed_table_pkey ON (((distributed_table_pkey.key OPERATOR(pg_catalog.=) 10) AND (distributed_table_pkey.key OPERATOR(pg_catalog.>) 10) AND (postgres_table.key OPERATOR(pg_catalog.=) 5))))
  count
 ---------------------------------------------------------------------
@@ -493,96 +500,114 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS c
 (1 row)
 
 SELECT count(*) FROM postgres_table JOIN distributed_table_pkey ON distributed_table_pkey.key = 10 OR distributed_table_pkey.key > 10;
-DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT NULL::integer AS key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT NULL::integer AS key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true OFFSET 0
+DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT NULL::integer AS key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true
+DEBUG:  generating subplan XXX_1 for subquery SELECT NULL::integer AS key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) postgres_table JOIN local_table_join.distributed_table_pkey ON (((distributed_table_pkey.key OPERATOR(pg_catalog.=) 10) OR (distributed_table_pkey.key OPERATOR(pg_catalog.>) 10))))
  count
 ---------------------------------------------------------------------
-     0
+  9100
 (1 row)
 
 SELECT count(*) FROM postgres_table JOIN distributed_table_pkey ON distributed_table_pkey.key = 10 OR distributed_table_pkey.key = 20;
-DEBUG:  Wrapping relation "distributed_table_pkey" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.distributed_table_pkey WHERE ((key OPERATOR(pg_catalog.=) 10) OR (key OPERATOR(pg_catalog.=) 20)) OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.distributed_table_pkey WHERE ((key OPERATOR(pg_catalog.=) 10) OR (key OPERATOR(pg_catalog.=) 20)) OFFSET 0
+DEBUG:  Wrapping relation "distributed_table_pkey" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.distributed_table_pkey WHERE ((key OPERATOR(pg_catalog.=) 10) OR (key OPERATOR(pg_catalog.=) 20))
+DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.distributed_table_pkey WHERE ((key OPERATOR(pg_catalog.=) 10) OR (key OPERATOR(pg_catalog.=) 20))
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (local_table_join.postgres_table JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) distributed_table_pkey ON (((distributed_table_pkey.key OPERATOR(pg_catalog.=) 10) OR (distributed_table_pkey.key OPERATOR(pg_catalog.=) 20))))
  count
 ---------------------------------------------------------------------
-     0
+   200
 (1 row)
 
 SELECT count(*) FROM postgres_table JOIN distributed_table_pkey ON distributed_table_pkey.key = 10 OR distributed_table_pkey.key = 20 OR distributed_table_pkey.key = 30;
-DEBUG:  Wrapping relation "distributed_table_pkey" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.distributed_table_pkey WHERE ((key OPERATOR(pg_catalog.=) 10) OR (key OPERATOR(pg_catalog.=) 20) OR (key OPERATOR(pg_catalog.=) 30)) OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.distributed_table_pkey WHERE ((key OPERATOR(pg_catalog.=) 10) OR (key OPERATOR(pg_catalog.=) 20) OR (key OPERATOR(pg_catalog.=) 30)) OFFSET 0
+DEBUG:  Wrapping relation "distributed_table_pkey" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.distributed_table_pkey WHERE ((key OPERATOR(pg_catalog.=) 10) OR (key OPERATOR(pg_catalog.=) 20) OR (key OPERATOR(pg_catalog.=) 30))
+DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.distributed_table_pkey WHERE ((key OPERATOR(pg_catalog.=) 10) OR (key OPERATOR(pg_catalog.=) 20) OR (key OPERATOR(pg_catalog.=) 30))
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (local_table_join.postgres_table JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) distributed_table_pkey ON (((distributed_table_pkey.key OPERATOR(pg_catalog.=) 10) OR (distributed_table_pkey.key OPERATOR(pg_catalog.=) 20) OR (distributed_table_pkey.key OPERATOR(pg_catalog.=) 30))))
  count
 ---------------------------------------------------------------------
-     0
+   300
 (1 row)
 
 SELECT count(*) FROM postgres_table JOIN distributed_table_pkey ON distributed_table_pkey.key = 10 OR distributed_table_pkey.key = (
 	SELECT count(*) FROM distributed_table_pkey
 );
 DEBUG:  generating subplan XXX_1 for subquery SELECT count(*) AS count FROM local_table_join.distributed_table_pkey
-DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT NULL::integer AS key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_2 for subquery SELECT NULL::integer AS key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true OFFSET 0
+DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT NULL::integer AS key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true
+DEBUG:  generating subplan XXX_2 for subquery SELECT NULL::integer AS key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) postgres_table JOIN local_table_join.distributed_table_pkey ON (((distributed_table_pkey.key OPERATOR(pg_catalog.=) 10) OR (distributed_table_pkey.key OPERATOR(pg_catalog.=) (SELECT intermediate_result.count FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(count bigint))))))
  count
 ---------------------------------------------------------------------
-     0
+   200
 (1 row)
 
 SELECT count(*) FROM postgres_table JOIN distributed_table_pkey ON distributed_table_pkey.key = 10 OR (distributed_table_pkey.key = 5 and distributed_table_pkey.key > 15);
-DEBUG:  Wrapping relation "distributed_table_pkey" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.distributed_table_pkey WHERE ((key OPERATOR(pg_catalog.=) 10) OR ((key OPERATOR(pg_catalog.=) 5) AND (key OPERATOR(pg_catalog.>) 15))) OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.distributed_table_pkey WHERE ((key OPERATOR(pg_catalog.=) 10) OR ((key OPERATOR(pg_catalog.=) 5) AND (key OPERATOR(pg_catalog.>) 15))) OFFSET 0
+DEBUG:  Wrapping relation "distributed_table_pkey" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.distributed_table_pkey WHERE ((key OPERATOR(pg_catalog.=) 10) OR ((key OPERATOR(pg_catalog.=) 5) AND (key OPERATOR(pg_catalog.>) 15)))
+DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.distributed_table_pkey WHERE ((key OPERATOR(pg_catalog.=) 10) OR ((key OPERATOR(pg_catalog.=) 5) AND (key OPERATOR(pg_catalog.>) 15)))
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (local_table_join.postgres_table JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) distributed_table_pkey ON (((distributed_table_pkey.key OPERATOR(pg_catalog.=) 10) OR ((distributed_table_pkey.key OPERATOR(pg_catalog.=) 5) AND (distributed_table_pkey.key OPERATOR(pg_catalog.>) 15)))))
  count
 ---------------------------------------------------------------------
-     0
+   100
 (1 row)
 
 SELECT count(*) FROM postgres_table JOIN distributed_table_pkey ON distributed_table_pkey.key = 10 OR (distributed_table_pkey.key > 10 and distributed_table_pkey.key > 15);
-DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT NULL::integer AS key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT NULL::integer AS key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true OFFSET 0
+DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT NULL::integer AS key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true
+DEBUG:  generating subplan XXX_1 for subquery SELECT NULL::integer AS key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) postgres_table JOIN local_table_join.distributed_table_pkey ON (((distributed_table_pkey.key OPERATOR(pg_catalog.=) 10) OR ((distributed_table_pkey.key OPERATOR(pg_catalog.>) 10) AND (distributed_table_pkey.key OPERATOR(pg_catalog.>) 15)))))
  count
 ---------------------------------------------------------------------
-     0
+  8600
 (1 row)
 
 SELECT count(*) FROM postgres_table JOIN distributed_table_pkey ON distributed_table_pkey.key = 10 OR (distributed_table_pkey.key > 10 and distributed_table_pkey.value = 'notext');
-DEBUG:  Wrapping relation "distributed_table_pkey" to a subquery: SELECT key, value, NULL::jsonb AS value_2 FROM local_table_join.distributed_table_pkey WHERE ((key OPERATOR(pg_catalog.=) 10) OR ((key OPERATOR(pg_catalog.>) 10) AND (value OPERATOR(pg_catalog.=) 'notext'::text))) OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, value, NULL::jsonb AS value_2 FROM local_table_join.distributed_table_pkey WHERE ((key OPERATOR(pg_catalog.=) 10) OR ((key OPERATOR(pg_catalog.>) 10) AND (value OPERATOR(pg_catalog.=) 'notext'::text))) OFFSET 0
+DEBUG:  Wrapping relation "distributed_table_pkey" to a subquery: SELECT key, value, NULL::jsonb AS value_2 FROM local_table_join.distributed_table_pkey WHERE ((key OPERATOR(pg_catalog.=) 10) OR ((key OPERATOR(pg_catalog.>) 10) AND (value OPERATOR(pg_catalog.=) 'notext'::text)))
+DEBUG:  generating subplan XXX_1 for subquery SELECT key, value, NULL::jsonb AS value_2 FROM local_table_join.distributed_table_pkey WHERE ((key OPERATOR(pg_catalog.=) 10) OR ((key OPERATOR(pg_catalog.>) 10) AND (value OPERATOR(pg_catalog.=) 'notext'::text)))
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (local_table_join.postgres_table JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) distributed_table_pkey ON (((distributed_table_pkey.key OPERATOR(pg_catalog.=) 10) OR ((distributed_table_pkey.key OPERATOR(pg_catalog.>) 10) AND (distributed_table_pkey.value OPERATOR(pg_catalog.=) 'notext'::text)))))
  count
 ---------------------------------------------------------------------
-     0
+   100
 (1 row)
 
 SELECT count(*) FROM postgres_table JOIN distributed_table_pkey ON distributed_table_pkey.key = 10 OR (distributed_table_pkey.key = 10 and distributed_table_pkey.value = 'notext');
-DEBUG:  Wrapping relation "distributed_table_pkey" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.distributed_table_pkey WHERE (key OPERATOR(pg_catalog.=) 10) OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.distributed_table_pkey WHERE (key OPERATOR(pg_catalog.=) 10) OFFSET 0
+DEBUG:  Wrapping relation "distributed_table_pkey" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.distributed_table_pkey WHERE (key OPERATOR(pg_catalog.=) 10)
+DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.distributed_table_pkey WHERE (key OPERATOR(pg_catalog.=) 10)
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (local_table_join.postgres_table JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) distributed_table_pkey ON (((distributed_table_pkey.key OPERATOR(pg_catalog.=) 10) OR ((distributed_table_pkey.key OPERATOR(pg_catalog.=) 10) AND (distributed_table_pkey.value OPERATOR(pg_catalog.=) 'notext'::text)))))
  count
 ---------------------------------------------------------------------
-     0
+   100
 (1 row)
 
 SELECT count(*) FROM postgres_table JOIN distributed_table_pkey ON postgres_table.key = 10;
-DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE (key OPERATOR(pg_catalog.=) 10) OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE (key OPERATOR(pg_catalog.=) 10) OFFSET 0
+DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE (key OPERATOR(pg_catalog.=) 10)
+DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE (key OPERATOR(pg_catalog.=) 10)
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) postgres_table JOIN local_table_join.distributed_table_pkey ON ((postgres_table.key OPERATOR(pg_catalog.=) 10)))
  count
 ---------------------------------------------------------------------
-     0
+   100
+(1 row)
+
+select count(*) FROM postgres_table JOIN (SELECT a.key,random() FROM distributed_table a JOIN distributed_table b USING(key)) as foo USING(key);
+DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true
+DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) postgres_table JOIN (SELECT a.key, random() AS random FROM (local_table_join.distributed_table a JOIN local_table_join.distributed_table b USING (key))) foo USING (key))
+ count
+---------------------------------------------------------------------
+   100
+(1 row)
+
+select count(*) FROM (SELECT a.key, random() FROM distributed_table a JOIN distributed_table b USING(key)) as foo JOIN postgres_table  USING(key);
+DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true
+DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT a.key, random() AS random FROM (local_table_join.distributed_table a JOIN local_table_join.distributed_table b USING (key))) foo JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) postgres_table USING (key))
+ count
+---------------------------------------------------------------------
+   100
 (1 row)
 
 SELECT count(*) FROM postgres_table JOIN (SELECT * FROM distributed_table) d1 USING(key);
-DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true OFFSET 0
+DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true
+DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) postgres_table JOIN (SELECT distributed_table.key, distributed_table.value, distributed_table.value_2 FROM local_table_join.distributed_table) d1 USING (key))
  count
 ---------------------------------------------------------------------
-     0
+   100
 (1 row)
 
 -- since this is already router plannable, we don't recursively plan the postgres table
@@ -592,50 +617,50 @@ DEBUG:  generating subplan XXX_1 for subquery SELECT key, value, value_2 FROM lo
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (local_table_join.postgres_table JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) d1 USING (key))
  count
 ---------------------------------------------------------------------
-     0
+     1
 (1 row)
 
 -- a unique index on key so dist table should be recursively planned
 SELECT count(*) FROM postgres_table JOIN distributed_table_windex USING(key);
-DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true OFFSET 0
+DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true
+DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) postgres_table JOIN local_table_join.distributed_table_windex USING (key))
  count
 ---------------------------------------------------------------------
-     0
+   100
 (1 row)
 
 SELECT count(*) FROM postgres_table JOIN distributed_table_windex USING(value);
-DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT NULL::integer AS key, value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT NULL::integer AS key, value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true OFFSET 0
+DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT NULL::integer AS key, value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true
+DEBUG:  generating subplan XXX_1 for subquery SELECT NULL::integer AS key, value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) postgres_table JOIN local_table_join.distributed_table_windex USING (value))
  count
 ---------------------------------------------------------------------
-     0
+   100
 (1 row)
 
 SELECT count(*) FROM postgres_table JOIN distributed_table_windex ON postgres_table.key = distributed_table_windex.key;
-DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true OFFSET 0
+DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true
+DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) postgres_table JOIN local_table_join.distributed_table_windex ON ((postgres_table.key OPERATOR(pg_catalog.=) distributed_table_windex.key)))
  count
 ---------------------------------------------------------------------
-     0
+   100
 (1 row)
 
 SELECT count(*) FROM postgres_table JOIN distributed_table_windex ON distributed_table_windex.key = 10;
-DEBUG:  Wrapping relation "distributed_table_windex" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.distributed_table_windex WHERE (key OPERATOR(pg_catalog.=) 10) OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.distributed_table_windex WHERE (key OPERATOR(pg_catalog.=) 10) OFFSET 0
+DEBUG:  Wrapping relation "distributed_table_windex" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.distributed_table_windex WHERE (key OPERATOR(pg_catalog.=) 10)
+DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.distributed_table_windex WHERE (key OPERATOR(pg_catalog.=) 10)
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (local_table_join.postgres_table JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) distributed_table_windex ON ((distributed_table_windex.key OPERATOR(pg_catalog.=) 10)))
  count
 ---------------------------------------------------------------------
-     0
+   100
 (1 row)
 
 -- no unique index on value so local table should be recursively planned.
 SELECT count(*) FROM distributed_table JOIN postgres_table USING(key) WHERE distributed_table.value = 'test';
-DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true OFFSET 0
+DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true
+DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (local_table_join.distributed_table JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) postgres_table USING (key)) WHERE (distributed_table.value OPERATOR(pg_catalog.=) 'test'::text)
  count
 ---------------------------------------------------------------------
@@ -643,18 +668,18 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS c
 (1 row)
 
 SELECT count(*) FROM distributed_table JOIN postgres_table USING(key) WHERE distributed_table.key = 1;
-DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE (key OPERATOR(pg_catalog.=) 1) OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE (key OPERATOR(pg_catalog.=) 1) OFFSET 0
+DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE (key OPERATOR(pg_catalog.=) 1)
+DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE (key OPERATOR(pg_catalog.=) 1)
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (local_table_join.distributed_table JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) postgres_table USING (key)) WHERE (distributed_table.key OPERATOR(pg_catalog.=) 1)
  count
 ---------------------------------------------------------------------
-     0
+     1
 (1 row)
 
 -- if both local and distributed tables have a filter, we prefer local unless distributed table has unique indexes on any equality filter
 SELECT count(*) FROM distributed_table JOIN postgres_table USING(key) WHERE distributed_table.value = 'test' AND postgres_table.value = 'test';
-DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE (value OPERATOR(pg_catalog.=) 'test'::text) OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE (value OPERATOR(pg_catalog.=) 'test'::text) OFFSET 0
+DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE (value OPERATOR(pg_catalog.=) 'test'::text)
+DEBUG:  generating subplan XXX_1 for subquery SELECT key, value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE (value OPERATOR(pg_catalog.=) 'test'::text)
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (local_table_join.distributed_table JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) postgres_table USING (key)) WHERE ((distributed_table.value OPERATOR(pg_catalog.=) 'test'::text) AND (postgres_table.value OPERATOR(pg_catalog.=) 'test'::text))
  count
 ---------------------------------------------------------------------
@@ -662,8 +687,8 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS c
 (1 row)
 
 SELECT count(*) FROM distributed_table JOIN postgres_table USING(key) WHERE distributed_table.value = 'test' OR postgres_table.value = 'test';
-DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true OFFSET 0
+DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true
+DEBUG:  generating subplan XXX_1 for subquery SELECT key, value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (local_table_join.distributed_table JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) postgres_table USING (key)) WHERE ((distributed_table.value OPERATOR(pg_catalog.=) 'test'::text) OR (postgres_table.value OPERATOR(pg_catalog.=) 'test'::text))
  count
 ---------------------------------------------------------------------
@@ -673,14 +698,14 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS c
 -- multiple local/distributed tables
 -- only local tables are recursively planned
 SELECT count(*) FROM distributed_table d1 JOIN postgres_table p1 USING(key) JOIN distributed_table d2 USING(key) JOIN postgres_table p2 USING(key);
-DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table p1 WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table p1 WHERE true OFFSET 0
-DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table p2 WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_2 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table p2 WHERE true OFFSET 0
+DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table p1 WHERE true
+DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table p1 WHERE true
+DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table p2 WHERE true
+DEBUG:  generating subplan XXX_2 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table p2 WHERE true
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (((local_table_join.distributed_table d1 JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) p1 USING (key)) JOIN local_table_join.distributed_table d2 USING (key)) JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) p2 USING (key))
  count
 ---------------------------------------------------------------------
-     0
+   100
 (1 row)
 
 SELECT
@@ -689,14 +714,14 @@ FROM
 	distributed_table d1 JOIN postgres_table p1 USING(key) JOIN distributed_table d2 USING(key) JOIN postgres_table p2 USING(key)
 WHERE
 	d1.value = '1';
-DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table p1 WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table p1 WHERE true OFFSET 0
-DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table p2 WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_2 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table p2 WHERE true OFFSET 0
+DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table p1 WHERE true
+DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table p1 WHERE true
+DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table p2 WHERE true
+DEBUG:  generating subplan XXX_2 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table p2 WHERE true
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (((local_table_join.distributed_table d1 JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) p1 USING (key)) JOIN local_table_join.distributed_table d2 USING (key)) JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) p2 USING (key)) WHERE (d1.value OPERATOR(pg_catalog.=) '1'::text)
  count
 ---------------------------------------------------------------------
-     0
+     1
 (1 row)
 
 -- if the filter is on the JOIN key, we can recursively plan the local
@@ -707,419 +732,50 @@ FROM
 	distributed_table d1 JOIN postgres_table p1 USING(key) JOIN distributed_table d2 USING(key) JOIN postgres_table p2 USING(key)
 WHERE
 	d1.key = 1;
-DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table p1 WHERE (key OPERATOR(pg_catalog.=) 1) OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table p1 WHERE (key OPERATOR(pg_catalog.=) 1) OFFSET 0
-DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table p2 WHERE (key OPERATOR(pg_catalog.=) 1) OFFSET 0
-DEBUG:  generating subplan XXX_2 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table p2 WHERE (key OPERATOR(pg_catalog.=) 1) OFFSET 0
+DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table p1 WHERE (key OPERATOR(pg_catalog.=) 1)
+DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table p1 WHERE (key OPERATOR(pg_catalog.=) 1)
+DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table p2 WHERE (key OPERATOR(pg_catalog.=) 1)
+DEBUG:  generating subplan XXX_2 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table p2 WHERE (key OPERATOR(pg_catalog.=) 1)
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (((local_table_join.distributed_table d1 JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) p1 USING (key)) JOIN local_table_join.distributed_table d2 USING (key)) JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) p2 USING (key)) WHERE (d1.key OPERATOR(pg_catalog.=) 1)
  count
 ---------------------------------------------------------------------
-     0
+     1
 (1 row)
 
-SET citus.local_table_join_policy to 'auto';
--- we can support modification queries as well
-UPDATE
-	postgres_table
-SET
-	value = 'test'
-FROM
-	distributed_table
-WHERE
-	distributed_table.key = postgres_table.key;
-DEBUG:  Wrapping relation "distributed_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.distributed_table WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.distributed_table WHERE true OFFSET 0
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: UPDATE local_table_join.postgres_table SET value = 'test'::text FROM (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) distributed_table WHERE (distributed_table.key OPERATOR(pg_catalog.=) postgres_table.key)
-UPDATE
-	distributed_table
-SET
-	value = 'test'
-FROM
-	postgres_table
-WHERE
-	distributed_table.key = postgres_table.key;
-DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true OFFSET 0
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: UPDATE local_table_join.distributed_table SET value = 'test'::text FROM (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) postgres_table WHERE (distributed_table.key OPERATOR(pg_catalog.=) postgres_table.key)
-UPDATE
-	distributed_table_pkey
-SET
-	value = 'test'
-FROM
-	postgres_table
-WHERE
-	distributed_table_pkey.key = postgres_table.key;
-DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true OFFSET 0
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: UPDATE local_table_join.distributed_table_pkey SET value = 'test'::text FROM (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) postgres_table WHERE (distributed_table_pkey.key OPERATOR(pg_catalog.=) postgres_table.key)
-UPDATE
-	distributed_table_windex
-SET
-	value = 'test'
-FROM
-	postgres_table
-WHERE
-	distributed_table_windex.key = postgres_table.key;
-DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true OFFSET 0
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: UPDATE local_table_join.distributed_table_windex SET value = 'test'::text FROM (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) postgres_table WHERE (distributed_table_windex.key OPERATOR(pg_catalog.=) postgres_table.key)
--- in case of update/delete we always recursively plan
--- the tables other than target table no matter what the policy is
-SET citus.local_table_join_policy TO 'prefer-local';
-UPDATE
-	postgres_table
-SET
-	value = 'test'
-FROM
-	distributed_table
-WHERE
-	distributed_table.key = postgres_table.key;
-DEBUG:  Wrapping relation "distributed_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.distributed_table WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.distributed_table WHERE true OFFSET 0
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: UPDATE local_table_join.postgres_table SET value = 'test'::text FROM (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) distributed_table WHERE (distributed_table.key OPERATOR(pg_catalog.=) postgres_table.key)
-UPDATE
-	distributed_table
-SET
-	value = 'test'
-FROM
-	postgres_table
-WHERE
-	distributed_table.key = postgres_table.key;
-DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true OFFSET 0
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: UPDATE local_table_join.distributed_table SET value = 'test'::text FROM (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) postgres_table WHERE (distributed_table.key OPERATOR(pg_catalog.=) postgres_table.key)
-UPDATE
-	distributed_table_pkey
-SET
-	value = 'test'
-FROM
-	postgres_table
-WHERE
-	distributed_table_pkey.key = postgres_table.key;
-DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true OFFSET 0
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: UPDATE local_table_join.distributed_table_pkey SET value = 'test'::text FROM (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) postgres_table WHERE (distributed_table_pkey.key OPERATOR(pg_catalog.=) postgres_table.key)
-UPDATE
-	distributed_table_windex
-SET
-	value = 'test'
-FROM
-	postgres_table
-WHERE
-	distributed_table_windex.key = postgres_table.key;
-DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true OFFSET 0
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: UPDATE local_table_join.distributed_table_windex SET value = 'test'::text FROM (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) postgres_table WHERE (distributed_table_windex.key OPERATOR(pg_catalog.=) postgres_table.key)
-SET citus.local_table_join_policy TO 'prefer-distributed';
-UPDATE
-	postgres_table
-SET
-	value = 'test'
-FROM
-	distributed_table
-WHERE
-	distributed_table.key = postgres_table.key;
-DEBUG:  Wrapping relation "distributed_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.distributed_table WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.distributed_table WHERE true OFFSET 0
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: UPDATE local_table_join.postgres_table SET value = 'test'::text FROM (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) distributed_table WHERE (distributed_table.key OPERATOR(pg_catalog.=) postgres_table.key)
-UPDATE
-	distributed_table
-SET
-	value = 'test'
-FROM
-	postgres_table
-WHERE
-	distributed_table.key = postgres_table.key;
-DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true OFFSET 0
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: UPDATE local_table_join.distributed_table SET value = 'test'::text FROM (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) postgres_table WHERE (distributed_table.key OPERATOR(pg_catalog.=) postgres_table.key)
-UPDATE
-	distributed_table_pkey
-SET
-	value = 'test'
-FROM
-	postgres_table
-WHERE
-	distributed_table_pkey.key = postgres_table.key;
-DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true OFFSET 0
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: UPDATE local_table_join.distributed_table_pkey SET value = 'test'::text FROM (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) postgres_table WHERE (distributed_table_pkey.key OPERATOR(pg_catalog.=) postgres_table.key)
-UPDATE
-	distributed_table_windex
-SET
-	value = 'test'
-FROM
-	postgres_table
-WHERE
-	distributed_table_windex.key = postgres_table.key;
-DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true OFFSET 0
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: UPDATE local_table_join.distributed_table_windex SET value = 'test'::text FROM (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) postgres_table WHERE (distributed_table_windex.key OPERATOR(pg_catalog.=) postgres_table.key)
-SET citus.local_table_join_policy TO 'auto';
--- modifications with multiple tables
-UPDATE
-	distributed_table
-SET
-	value = 'test'
-FROM
-	postgres_table p1, postgres_table p2
-WHERE
-	distributed_table.key = p1.key AND p1.key = p2.key;
-DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table p1 WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table p1 WHERE true OFFSET 0
-DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table p2 WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_2 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table p2 WHERE true OFFSET 0
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: UPDATE local_table_join.distributed_table SET value = 'test'::text FROM (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) p1, (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) p2 WHERE ((distributed_table.key OPERATOR(pg_catalog.=) p1.key) AND (p1.key OPERATOR(pg_catalog.=) p2.key))
-UPDATE
-	postgres_table
-SET
-	value = 'test'
-FROM
-	(SELECT * FROM distributed_table) d1
-WHERE
-	d1.key = postgres_table.key;
-ERROR:  relation postgres_table is not distributed
-UPDATE
-	postgres_table
-SET
-	value = 'test'
-FROM
-	(SELECT * FROM distributed_table LIMIT 1) d1
-WHERE
-	d1.key = postgres_table.key;
-DEBUG:  push down of limit count: 1
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, value, value_2 FROM local_table_join.distributed_table LIMIT 1
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: UPDATE local_table_join.postgres_table SET value = 'test'::text FROM (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) d1 WHERE (d1.key OPERATOR(pg_catalog.=) postgres_table.key)
-UPDATE
-	distributed_table
-SET
-	value = 'test'
-FROM
-	postgres_table p1, distributed_table d2
-WHERE
-	distributed_table.key = p1.key AND p1.key = d2.key;
-DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table p1 WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table p1 WHERE true OFFSET 0
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: UPDATE local_table_join.distributed_table SET value = 'test'::text FROM (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) p1, local_table_join.distributed_table d2 WHERE ((distributed_table.key OPERATOR(pg_catalog.=) p1.key) AND (p1.key OPERATOR(pg_catalog.=) d2.key))
--- pretty inefficient plan as it requires
--- recursive planninng of 2 distributed tables
-UPDATE
-	postgres_table
-SET
-	value = 'test'
-FROM
-	distributed_table d1, distributed_table d2
-WHERE
-	postgres_table.key = d1.key AND d1.key = d2.key;
-DEBUG:  Wrapping relation "distributed_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.distributed_table d1 WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.distributed_table d1 WHERE true OFFSET 0
-DEBUG:  Wrapping relation "distributed_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.distributed_table d2 WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_2 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.distributed_table d2 WHERE true OFFSET 0
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: UPDATE local_table_join.postgres_table SET value = 'test'::text FROM (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) d1, (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) d2 WHERE ((postgres_table.key OPERATOR(pg_catalog.=) d1.key) AND (d1.key OPERATOR(pg_catalog.=) d2.key))
--- currently can't plan subquery-local table join
 SELECT count(*)
 FROM
 	(SELECT * FROM (SELECT * FROM distributed_table) d1) d2
 JOIN postgres_table
 USING(key);
-DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true OFFSET 0
+DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true
+DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT d1.key, d1.value, d1.value_2 FROM (SELECT distributed_table.key, distributed_table.value, distributed_table.value_2 FROM local_table_join.distributed_table) d1) d2 JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) postgres_table USING (key))
  count
 ---------------------------------------------------------------------
-     0
-(1 row)
-
----------------------------------------------------------------------
-SET client_min_messages to ERROR;
-SELECT master_add_node('localhost', :master_port, groupId => 0);
- master_add_node
----------------------------------------------------------------------
-               5
-(1 row)
-
-CREATE TABLE citus_local(key int, value text);
-SELECT create_citus_local_table('citus_local');
- create_citus_local_table
----------------------------------------------------------------------
-
-(1 row)
-
-SET client_min_messages TO DEBUG1;
--- same for citus local table - distributed table joins
--- a unique index on key so dist table should be recursively planned
-SELECT count(*) FROM citus_local JOIN distributed_table_windex USING(key);
-DEBUG:  Wrapping relation "citus_local" to a subquery: SELECT key, NULL::text AS value FROM local_table_join.citus_local WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value FROM local_table_join.citus_local WHERE true OFFSET 0
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) citus_local JOIN local_table_join.distributed_table_windex USING (key))
- count
----------------------------------------------------------------------
-     0
-(1 row)
-
-SELECT count(*) FROM citus_local JOIN distributed_table_windex USING(value);
-DEBUG:  Wrapping relation "citus_local" to a subquery: SELECT NULL::integer AS key, value FROM local_table_join.citus_local WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT NULL::integer AS key, value FROM local_table_join.citus_local WHERE true OFFSET 0
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) citus_local JOIN local_table_join.distributed_table_windex USING (value))
- count
----------------------------------------------------------------------
-     0
-(1 row)
-
-SELECT count(*) FROM citus_local JOIN distributed_table_windex ON citus_local.key = distributed_table_windex.key;
-DEBUG:  Wrapping relation "citus_local" to a subquery: SELECT key, NULL::text AS value FROM local_table_join.citus_local WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value FROM local_table_join.citus_local WHERE true OFFSET 0
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) citus_local JOIN local_table_join.distributed_table_windex ON ((citus_local.key OPERATOR(pg_catalog.=) distributed_table_windex.key)))
- count
----------------------------------------------------------------------
-     0
-(1 row)
-
-SELECT count(*) FROM citus_local JOIN distributed_table_windex ON distributed_table_windex.key = 10;
-DEBUG:  Wrapping relation "distributed_table_windex" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.distributed_table_windex WHERE (key OPERATOR(pg_catalog.=) 10) OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.distributed_table_windex WHERE (key OPERATOR(pg_catalog.=) 10) OFFSET 0
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (local_table_join.citus_local JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) distributed_table_windex ON ((distributed_table_windex.key OPERATOR(pg_catalog.=) 10)))
- count
----------------------------------------------------------------------
-     0
-(1 row)
-
--- no unique index, citus local table should be recursively planned
-SELECT count(*) FROM citus_local JOIN distributed_table USING(key);
-DEBUG:  Wrapping relation "citus_local" to a subquery: SELECT key, NULL::text AS value FROM local_table_join.citus_local WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value FROM local_table_join.citus_local WHERE true OFFSET 0
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) citus_local JOIN local_table_join.distributed_table USING (key))
- count
----------------------------------------------------------------------
-     0
-(1 row)
-
-SELECT count(*) FROM citus_local JOIN distributed_table USING(value);
-DEBUG:  Wrapping relation "citus_local" to a subquery: SELECT NULL::integer AS key, value FROM local_table_join.citus_local WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT NULL::integer AS key, value FROM local_table_join.citus_local WHERE true OFFSET 0
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) citus_local JOIN local_table_join.distributed_table USING (value))
- count
----------------------------------------------------------------------
-     0
-(1 row)
-
-SELECT count(*) FROM citus_local JOIN distributed_table ON citus_local.key = distributed_table.key;
-DEBUG:  Wrapping relation "citus_local" to a subquery: SELECT key, NULL::text AS value FROM local_table_join.citus_local WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value FROM local_table_join.citus_local WHERE true OFFSET 0
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) citus_local JOIN local_table_join.distributed_table ON ((citus_local.key OPERATOR(pg_catalog.=) distributed_table.key)))
- count
----------------------------------------------------------------------
-     0
-(1 row)
-
-SELECT count(*) FROM citus_local JOIN distributed_table ON distributed_table.key = 10;
-DEBUG:  Wrapping relation "citus_local" to a subquery: SELECT NULL::integer AS key, NULL::text AS value FROM local_table_join.citus_local WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT NULL::integer AS key, NULL::text AS value FROM local_table_join.citus_local WHERE true OFFSET 0
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) citus_local JOIN local_table_join.distributed_table ON ((distributed_table.key OPERATOR(pg_catalog.=) 10)))
- count
----------------------------------------------------------------------
-     0
-(1 row)
-
-SELECT count(*) FROM citus_local JOIN distributed_table USING(key) JOIN postgres_table USING (key) JOIN reference_table USING(key);
-DEBUG:  Wrapping relation "citus_local" to a subquery: SELECT key, NULL::text AS value FROM local_table_join.citus_local WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value FROM local_table_join.citus_local WHERE true OFFSET 0
-DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_2 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE true OFFSET 0
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((((SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) citus_local JOIN local_table_join.distributed_table USING (key)) JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) postgres_table USING (key)) JOIN local_table_join.reference_table USING (key))
- count
----------------------------------------------------------------------
-     0
-(1 row)
-
-SELECT count(*) FROM distributed_partitioned_table JOIN postgres_table USING(key) JOIN reference_table USING (key)
-	JOIN citus_local USING(key) WHERE distributed_partitioned_table.key > 10 and distributed_partitioned_table.key = 10;
-DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE (key OPERATOR(pg_catalog.=) 10) OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE (key OPERATOR(pg_catalog.=) 10) OFFSET 0
-DEBUG:  Wrapping relation "citus_local" to a subquery: SELECT key, NULL::text AS value FROM local_table_join.citus_local WHERE (key OPERATOR(pg_catalog.=) 10) OFFSET 0
-DEBUG:  generating subplan XXX_2 for subquery SELECT key, NULL::text AS value FROM local_table_join.citus_local WHERE (key OPERATOR(pg_catalog.=) 10) OFFSET 0
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (((local_table_join.distributed_partitioned_table JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) postgres_table USING (key)) JOIN local_table_join.reference_table USING (key)) JOIN (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) citus_local USING (key)) WHERE ((distributed_partitioned_table.key OPERATOR(pg_catalog.>) 10) AND (distributed_partitioned_table.key OPERATOR(pg_catalog.=) 10))
- count
----------------------------------------------------------------------
-     0
-(1 row)
-
--- update
-UPDATE
-	distributed_table_windex
-SET
-	value = 'test'
-FROM
-	citus_local
-WHERE
-	distributed_table_windex.key = citus_local.key;
-DEBUG:  Wrapping relation "citus_local" to a subquery: SELECT key, NULL::text AS value FROM local_table_join.citus_local WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value FROM local_table_join.citus_local WHERE true OFFSET 0
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: UPDATE local_table_join.distributed_table_windex SET value = 'test'::text FROM (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) citus_local WHERE (distributed_table_windex.key OPERATOR(pg_catalog.=) citus_local.key)
-UPDATE
-	citus_local
-SET
-	value = 'test'
-FROM
-	distributed_table_windex
-WHERE
-	distributed_table_windex.key = citus_local.key;
-DEBUG:  Wrapping relation "distributed_table_windex" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.distributed_table_windex WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.distributed_table_windex WHERE true OFFSET 0
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: UPDATE local_table_join.citus_local SET value = 'test'::text FROM (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) distributed_table_windex WHERE (distributed_table_windex.key OPERATOR(pg_catalog.=) citus_local.key)
--- complex queries
-SELECT count(*) FROM postgres_table JOIN (SELECT * FROM (SELECT * FROM distributed_table LIMIT 1) d1) d2 using (key) JOIN reference_table USING(key) JOIN citus_local USING (key) JOIN (SELECT * FROM citus_local) c1  USING (key) WHERE d2.key > 10 AND d2.key = 10;
-DEBUG:  push down of limit count: 1
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, value, value_2 FROM local_table_join.distributed_table LIMIT 1
-DEBUG:  generating subplan XXX_2 for subquery SELECT key, value FROM local_table_join.citus_local
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((((local_table_join.postgres_table JOIN (SELECT d1.key, d1.value, d1.value_2 FROM (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) d1) d2 USING (key)) JOIN local_table_join.reference_table USING (key)) JOIN local_table_join.citus_local USING (key)) JOIN (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) c1 USING (key)) WHERE ((d2.key OPERATOR(pg_catalog.>) 10) AND (d2.key OPERATOR(pg_catalog.=) 10))
- count
----------------------------------------------------------------------
-     0
-(1 row)
-
-SELECT count(*) FROM postgres_table JOIN (SELECT * FROM (SELECT * FROM distributed_table LIMIT 1) d1) d2 using (key) JOIN reference_table USING(key) JOIN citus_local USING (key) JOIN (SELECT * FROM citus_local) c1  USING (key) WHERE d2.key > 10 AND d2.key = 10;
-DEBUG:  push down of limit count: 1
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, value, value_2 FROM local_table_join.distributed_table LIMIT 1
-DEBUG:  generating subplan XXX_2 for subquery SELECT key, value FROM local_table_join.citus_local
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((((local_table_join.postgres_table JOIN (SELECT d1.key, d1.value, d1.value_2 FROM (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) d1) d2 USING (key)) JOIN local_table_join.reference_table USING (key)) JOIN local_table_join.citus_local USING (key)) JOIN (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) c1 USING (key)) WHERE ((d2.key OPERATOR(pg_catalog.>) 10) AND (d2.key OPERATOR(pg_catalog.=) 10))
- count
----------------------------------------------------------------------
-     0
+   100
 (1 row)
 
 -- TODO:: we should support this?
 UPDATE reference_table SET key = 1 FROM postgres_table WHERE postgres_table.key = 10;
-DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE (key OPERATOR(pg_catalog.=) 10) OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE (key OPERATOR(pg_catalog.=) 10) OFFSET 0
+DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE (key OPERATOR(pg_catalog.=) 10)
+DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE (key OPERATOR(pg_catalog.=) 10)
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: UPDATE local_table_join.reference_table SET key = 1 FROM (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) postgres_table WHERE (postgres_table.key OPERATOR(pg_catalog.=) 10)
 ERROR:  relation postgres_table is not distributed
 UPDATE reference_table SET key = 1 FROM (SELECT * FROM postgres_table) l WHERE l.key = 10;
 DEBUG:  generating subplan XXX_1 for subquery SELECT key, value, value_2 FROM local_table_join.postgres_table
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: UPDATE local_table_join.reference_table SET key = 1 FROM (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) l WHERE (l.key OPERATOR(pg_catalog.=) 10)
-UPDATE citus_local SET key = 1 FROM postgres_table WHERE citus_local.key = 10;
-UPDATE postgres_table SET key = 1 FROM citus_local WHERE citus_local.key = 10;
 -- TODO:: we should probably not wrap postgres_table here as there is a WHERE FALSE?
 -- though then the planner could give an error
 SELECT count(*) FROM postgres_table JOIN distributed_table USING(key) WHERE FALSE;
-DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE false OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE false OFFSET 0
+DEBUG:  Wrapping relation "postgres_table" to a subquery: SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE false
+DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::text AS value, NULL::jsonb AS value_2 FROM local_table_join.postgres_table WHERE false
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) postgres_table JOIN local_table_join.distributed_table USING (key)) WHERE false
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
-DROP TABLE citus_local;
-CONTEXT:  SQL statement "SELECT master_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name)"
-PL/pgSQL function citus_drop_trigger() line 15 at PERFORM
 RESET client_min_messages;
-SELECT master_remove_node('localhost', :master_port);
- master_remove_node
----------------------------------------------------------------------
-
-(1 row)
-
 \set VERBOSITY terse
 DROP SCHEMA local_table_join CASCADE;
-NOTICE:  drop cascades to 15 other objects
+NOTICE:  drop cascades to 14 other objects

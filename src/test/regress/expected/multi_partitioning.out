@@ -1430,7 +1430,7 @@ COMMIT;
 BEGIN;
 TRUNCATE partitioning_locks;
 SELECT relation::regclass, locktype, mode FROM pg_locks WHERE relation::regclass::text LIKE 'partitioning_locks%' AND pid = pg_backend_pid() ORDER BY 1, 2, 3;
-        relation         | locktype |         mode
+        relation         | locktype |        mode
 ---------------------------------------------------------------------
  partitioning_locks      | relation | AccessExclusiveLock
  partitioning_locks      | relation | AccessShareLock
@@ -1471,29 +1471,17 @@ BEGIN;
 UPDATE partitioning_locks_2009 SET time = '2009-03-01';
 -- see the locks on parent table
 SELECT * FROM lockinfo;
-      logicalrelid       |         locktype          |           mode
+      logicalrelid       | locktype |           mode
 ---------------------------------------------------------------------
- partitioning_locks      | colocated_shards_metadata | ShareLock
- partitioning_locks      | colocated_shards_metadata | ShareLock
- partitioning_locks      | colocated_shards_metadata | ShareLock
- partitioning_locks      | colocated_shards_metadata | ShareLock
- partitioning_locks      | shard                     | ShareUpdateExclusiveLock
- partitioning_locks      | shard                     | ShareUpdateExclusiveLock
- partitioning_locks      | shard                     | ShareUpdateExclusiveLock
- partitioning_locks      | shard                     | ShareUpdateExclusiveLock
- partitioning_locks_2009 | colocated_shards_metadata | ShareLock
- partitioning_locks_2009 | colocated_shards_metadata | ShareLock
- partitioning_locks_2009 | colocated_shards_metadata | ShareLock
- partitioning_locks_2009 | colocated_shards_metadata | ShareLock
- partitioning_locks_2009 | shard                     | ShareUpdateExclusiveLock
- partitioning_locks_2009 | shard                     | ShareUpdateExclusiveLock
- partitioning_locks_2009 | shard                     | ShareUpdateExclusiveLock
- partitioning_locks_2009 | shard                     | ShareUpdateExclusiveLock
- partitioning_locks_2010 | colocated_shards_metadata | ShareLock
- partitioning_locks_2010 | colocated_shards_metadata | ShareLock
- partitioning_locks_2010 | colocated_shards_metadata | ShareLock
- partitioning_locks_2010 | colocated_shards_metadata | ShareLock
-(20 rows)
+ partitioning_locks      | shard    | ShareUpdateExclusiveLock
+ partitioning_locks      | shard    | ShareUpdateExclusiveLock
+ partitioning_locks      | shard    | ShareUpdateExclusiveLock
+ partitioning_locks      | shard    | ShareUpdateExclusiveLock
+ partitioning_locks_2009 | shard    | ShareUpdateExclusiveLock
+ partitioning_locks_2009 | shard    | ShareUpdateExclusiveLock
+ partitioning_locks_2009 | shard    | ShareUpdateExclusiveLock
+ partitioning_locks_2009 | shard    | ShareUpdateExclusiveLock
+(8 rows)
 
 COMMIT;
 -- test shard resource locks with TRUNCATE

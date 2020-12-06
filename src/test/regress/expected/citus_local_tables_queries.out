@@ -154,7 +154,7 @@ SELECT count(*) FROM
 (
 	SELECT *, random() FROM (SELECT *, random() FROM citus_local_table, distributed_table) as subquery_inner
 ) as subquery_top;
-NOTICE:  executing the command locally: SELECT NULL::integer AS a, NULL::integer AS b FROM citus_local_table_queries.citus_local_table_1509000 citus_local_table WHERE true OFFSET 0
+NOTICE:  executing the command locally: SELECT NULL::integer AS a, NULL::integer AS b FROM citus_local_table_queries.citus_local_table_1509000 citus_local_table WHERE true
  count
 ---------------------------------------------------------------------
     36
@@ -167,7 +167,7 @@ SELECT count(*) FROM
 		FROM (
 				WITH cte_1 AS (SELECT *, random() FROM citus_local_table, distributed_table) SELECT * FROM cte_1) as subquery_inner
 ) as subquery_top;
-NOTICE:  executing the command locally: SELECT a, b FROM citus_local_table_queries.citus_local_table_1509000 citus_local_table WHERE true OFFSET 0
+NOTICE:  executing the command locally: SELECT a, b FROM citus_local_table_queries.citus_local_table_1509000 citus_local_table WHERE true
 NOTICE:  executing the command locally: SELECT count(*) AS count FROM (SELECT subquery_inner.a, subquery_inner.b, subquery_inner.a_1 AS a, subquery_inner.b_1 AS b, subquery_inner.random, random() AS random FROM (SELECT cte_1.a, cte_1.b, cte_1.a_1 AS a, cte_1.b_1 AS b, cte_1.random FROM (SELECT intermediate_result.a, intermediate_result.b, intermediate_result.a_1 AS a, intermediate_result.b_1 AS b, intermediate_result.random FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer, a_1 integer, b_1 integer, random double precision)) cte_1(a, b, a_1, b_1, random)) subquery_inner(a, b, a_1, b_1, random)) subquery_top(a, b, a_1, b_1, random, random_1)
  count
 ---------------------------------------------------------------------
@@ -527,7 +527,7 @@ NOTICE:  executing the command locally: SELECT a, b FROM citus_local_table_queri
 
 -- join between citus local tables and distributed tables would fail
 SELECT count(*) FROM citus_local_table, distributed_table;
-NOTICE:  executing the command locally: SELECT NULL::integer AS a, NULL::integer AS b FROM citus_local_table_queries.citus_local_table_1509000 citus_local_table WHERE true OFFSET 0
+NOTICE:  executing the command locally: SELECT NULL::integer AS a, NULL::integer AS b FROM citus_local_table_queries.citus_local_table_1509000 citus_local_table WHERE true
  count
 ---------------------------------------------------------------------
     36
@@ -654,7 +654,7 @@ NOTICE:  executing the copy locally for shard xxxxx
 INSERT INTO citus_local_table
 SELECT distributed_table.* FROM distributed_table
 JOIN citus_local_table ON (true);
-NOTICE:  executing the command locally: SELECT NULL::integer AS a, NULL::integer AS b FROM citus_local_table_queries.citus_local_table_1509000 citus_local_table WHERE true OFFSET 0
+NOTICE:  executing the command locally: SELECT NULL::integer AS a, NULL::integer AS b FROM citus_local_table_queries.citus_local_table_1509000 citus_local_table WHERE true
 NOTICE:  executing the copy locally for shard xxxxx
 -- .. but when wrapped into a CTE, join works fine
 INSERT INTO citus_local_table
@@ -699,12 +699,12 @@ UPDATE distributed_table
 SET b = 6
 FROM citus_local_table
 WHERE citus_local_table.a = distributed_table.a;
-NOTICE:  executing the command locally: SELECT a, NULL::integer AS b FROM citus_local_table_queries.citus_local_table_1509000 citus_local_table WHERE true OFFSET 0
+NOTICE:  executing the command locally: SELECT a, NULL::integer AS b FROM citus_local_table_queries.citus_local_table_1509000 citus_local_table WHERE true
 UPDATE reference_table
 SET b = 6
 FROM citus_local_table
 WHERE citus_local_table.a = reference_table.a;
-NOTICE:  executing the command locally: SELECT a, NULL::integer AS b FROM citus_local_table_queries.citus_local_table_1509000 citus_local_table WHERE true OFFSET 0
+NOTICE:  executing the command locally: SELECT a, NULL::integer AS b FROM citus_local_table_queries.citus_local_table_1509000 citus_local_table WHERE true
 NOTICE:  executing the command locally: UPDATE citus_local_table_queries.reference_table_1509002 reference_table SET b = 6 FROM (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) citus_local_table WHERE (citus_local_table.a OPERATOR(pg_catalog.=) reference_table.a)
 -- should not work, add HINT use CTEs
 UPDATE citus_local_table
@@ -717,13 +717,13 @@ UPDATE citus_local_table
 SET b = 6
 FROM reference_table
 WHERE citus_local_table.a = reference_table.a;
-NOTICE:  executing the command locally: SELECT a, NULL::integer AS b FROM citus_local_table_queries.reference_table_1509002 reference_table WHERE true OFFSET 0
+NOTICE:  executing the command locally: SELECT a, NULL::integer AS b FROM citus_local_table_queries.reference_table_1509002 reference_table WHERE true
 NOTICE:  executing the command locally: UPDATE citus_local_table_queries.citus_local_table_1509000 citus_local_table SET b = 6 FROM (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) reference_table WHERE (citus_local_table.a OPERATOR(pg_catalog.=) reference_table.a)
 -- should not work, add HINT use CTEs
 DELETE FROM distributed_table
 USING citus_local_table
 WHERE citus_local_table.a = distributed_table.a;
-NOTICE:  executing the command locally: SELECT a, NULL::integer AS b FROM citus_local_table_queries.citus_local_table_1509000 citus_local_table WHERE true OFFSET 0
+NOTICE:  executing the command locally: SELECT a, NULL::integer AS b FROM citus_local_table_queries.citus_local_table_1509000 citus_local_table WHERE true
 -- should not work, add HINT use CTEs
 DELETE FROM citus_local_table
 USING distributed_table
@@ -732,13 +732,13 @@ NOTICE:  executing the command locally: DELETE FROM citus_local_table_queries.ci
 DELETE FROM reference_table
 USING citus_local_table
 WHERE citus_local_table.a = reference_table.a;
-NOTICE:  executing the command locally: SELECT a, NULL::integer AS b FROM citus_local_table_queries.citus_local_table_1509000 citus_local_table WHERE true OFFSET 0
+NOTICE:  executing the command locally: SELECT a, NULL::integer AS b FROM citus_local_table_queries.citus_local_table_1509000 citus_local_table WHERE true
 NOTICE:  executing the command locally: DELETE FROM citus_local_table_queries.reference_table_1509002 reference_table USING (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) citus_local_table WHERE (citus_local_table.a OPERATOR(pg_catalog.=) reference_table.a)
 -- should work, add HINT use CTEs
 DELETE FROM citus_local_table
 USING reference_table
 WHERE citus_local_table.a = reference_table.a;
-NOTICE:  executing the command locally: SELECT a, NULL::integer AS b FROM citus_local_table_queries.reference_table_1509002 reference_table WHERE true OFFSET 0
+NOTICE:  executing the command locally: SELECT a, NULL::integer AS b FROM citus_local_table_queries.reference_table_1509002 reference_table WHERE true
 NOTICE:  executing the command locally: DELETE FROM citus_local_table_queries.citus_local_table_1509000 citus_local_table USING (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) reference_table WHERE (citus_local_table.a OPERATOR(pg_catalog.=) reference_table.a)
 -- just works
 DELETE FROM citus_local_table
@@ -795,8 +795,8 @@ JOIN citus_local_table_2 USING (a)
 JOIN distributed_table USING (a);
 -- should fail as view contains direct local dist join
 SELECT count(*) FROM view_2;
-NOTICE:  executing the command locally: SELECT a, NULL::integer AS b FROM citus_local_table_queries.citus_local_table_1509000 citus_local_table WHERE true OFFSET 0
-NOTICE:  executing the command locally: SELECT a, NULL::integer AS b FROM citus_local_table_queries.citus_local_table_2_1509001 citus_local_table_2 WHERE true OFFSET 0
+NOTICE:  executing the command locally: SELECT a, NULL::integer AS b FROM citus_local_table_queries.citus_local_table_1509000 citus_local_table WHERE true
+NOTICE:  executing the command locally: SELECT a, NULL::integer AS b FROM citus_local_table_queries.citus_local_table_2_1509001 citus_local_table_2 WHERE true
 NOTICE:  executing the command locally: SELECT count(*) AS count FROM (SELECT intermediate_result.count FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(count bigint)) view_2
  count
 ---------------------------------------------------------------------

@@ -326,6 +326,7 @@ CitusBeginModifyScan(CustomScanState *node, EState *estate, int eflags)
 	scanState->distributedPlan = currentPlan;
 
 	Job *workerJob = currentPlan->workerJob;
+
 	Query *jobQuery = workerJob->jobQuery;
 
 	if (ModifyJobNeedsEvaluation(workerJob))
@@ -367,6 +368,11 @@ CitusBeginModifyScan(CustomScanState *node, EState *estate, int eflags)
 		RebuildQueryStrings(workerJob);
 	}
 
+	if (workerJob->onDummyPlacement) {
+		/* if this job is on a dummy placement, then it doesn't operate on
+		   an actual shard placement */
+		return;
+	}
 	/*
 	 * Now that we know the shard ID(s) we can acquire the necessary shard metadata
 	 * locks. Once we have the locks it's safe to load the placement metadata.
@@ -374,6 +380,7 @@ CitusBeginModifyScan(CustomScanState *node, EState *estate, int eflags)
 
 	/* prevent concurrent placement changes */
 	AcquireMetadataLocks(workerJob->taskList);
+
 
 	/* modify tasks are always assigned using first-replica policy */
 	workerJob->taskList = FirstReplicaAssignTaskList(workerJob->taskList);

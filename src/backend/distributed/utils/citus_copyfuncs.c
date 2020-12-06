@@ -101,6 +101,7 @@ copyJobInfo(Job *newnode, Job *from)
 	COPY_NODE_FIELD(partitionKeyValue);
 	COPY_NODE_FIELD(localPlannedStatements);
 	COPY_SCALAR_FIELD(parametersInJobQueryResolved);
+	COPY_SCALAR_FIELD(onDummyPlacement);
 }
 
 

@@ -163,6 +163,7 @@ typedef struct Job
 	 * query.
 	 */
 	bool parametersInJobQueryResolved;
+	bool onDummyPlacement;
 } Job;
 
 

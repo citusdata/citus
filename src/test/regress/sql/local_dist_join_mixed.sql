@@ -1,5 +1,5 @@
-CREATE SCHEMA local_distributed_table_join;
-SET search_path TO local_distributed_table_join;
+CREATE SCHEMA local_dist_join_mixed;
+SET search_path TO local_dist_join_mixed;
 
 
 
@@ -20,6 +20,7 @@ INSERT INTO distributed SELECT i,  i::text, now() FROM generate_series(0,100)i;
 INSERT INTO reference SELECT i,  i::text FROM generate_series(0,100)i;
 INSERT INTO local SELECT i,  i::text FROM generate_series(0,100)i;
 
+SET client_min_messages to DEBUG1;
 
 -- very simple 1-1 Joins
 SELECT count(*) FROM distributed JOIN local USING (id);
@@ -308,11 +309,11 @@ SELECT count(*) FROM distributed CROSS JOIN local WHERE distributed.id = 1;
 SELECT count(*) FROM distributed LEFT JOIN local USING (id);
 SELECT count(*) FROM local LEFT JOIN distributed USING (id);
 
-SELECT * FROM distributed LEFT JOIN local USING (id) LIMIT 1;
-SELECT * FROM local LEFT JOIN distributed USING (id) LIMIT 1;
+SELECT id, name FROM distributed LEFT JOIN local USING (id) LIMIT 1;
+SELECT id, name FROM local LEFT JOIN distributed USING (id) LIMIT 1;
 
  SELECT
-        foo1.id, random()
+        foo1.id
     FROM
  (SELECT local.id, local.title FROM local, distributed WHERE local.id = distributed.id ) as foo9,
  (SELECT local.id, local.title FROM local, distributed WHERE local.id = distributed.id ) as foo8,
@@ -334,38 +335,41 @@ SELECT * FROM local LEFT JOIN distributed USING (id) LIMIT 1;
   foo1.id =  foo3.id AND 
   foo1.id =  foo2.id AND 
   foo1.id =  foo10.id AND 
-  foo1.id =  foo1.id  ;
+  foo1.id =  foo1.id
+ORDER BY 1;  
   
-   SELECT
-        foo1.id
-    FROM
-        (SELECT local.id FROM distributed, local WHERE local.id = distributed.id ) as foo1,
-        (SELECT local.id FROM distributed, local WHERE local.id = distributed.id ) as foo2,
-        (SELECT local.id FROM distributed, local WHERE local.id = distributed.id ) as foo3,
-        (SELECT local.id FROM distributed, local WHERE local.id = distributed.id ) as foo4,
-        (SELECT local.id FROM distributed, local WHERE local.id = distributed.id ) as foo5
-    WHERE
-        foo1.id = foo4.id AND
-        foo1.id = foo2.id AND
-        foo1.id = foo3.id AND
-        foo1.id = foo4.id AND
-        foo1.id = foo5.id;
+SELECT
+	foo1.id
+FROM
+	(SELECT local.id FROM distributed, local WHERE local.id = distributed.id ) as foo1,
+	(SELECT local.id FROM distributed, local WHERE local.id = distributed.id ) as foo2,
+	(SELECT local.id FROM distributed, local WHERE local.id = distributed.id ) as foo3,
+	(SELECT local.id FROM distributed, local WHERE local.id = distributed.id ) as foo4,
+	(SELECT local.id FROM distributed, local WHERE local.id = distributed.id ) as foo5
+WHERE
+	foo1.id = foo4.id AND
+	foo1.id = foo2.id AND
+	foo1.id = foo3.id AND
+	foo1.id = foo4.id AND
+	foo1.id = foo5.id
+ORDER BY 1;	
 
-   SELECT
-        foo1.id
-    FROM
-        (SELECT local.id FROM distributed, local WHERE local.id = distributed.id  AND distributed.id = 1) as foo1,
-        (SELECT local.id FROM distributed, local WHERE local.id = distributed.id  AND distributed.id = 2) as foo2,
-        (SELECT local.id FROM distributed, local WHERE local.id = distributed.id  AND distributed.id = 3) as foo3,
-        (SELECT local.id FROM distributed, local WHERE local.id = distributed.id  AND distributed.id = 4) as foo4,
-        (SELECT local.id FROM distributed, local WHERE local.id = distributed.id  AND distributed.id = 5) as foo5
-    WHERE
-        foo1.id = foo4.id AND
-        foo1.id = foo2.id AND
-        foo1.id = foo3.id AND
-        foo1.id = foo4.id AND
-        foo1.id = foo5.id;
+SELECT
+	foo1.id
+FROM
+	(SELECT local.id FROM distributed, local WHERE local.id = distributed.id  AND distributed.id = 1) as foo1,
+	(SELECT local.id FROM distributed, local WHERE local.id = distributed.id  AND distributed.id = 2) as foo2,
+	(SELECT local.id FROM distributed, local WHERE local.id = distributed.id  AND distributed.id = 3) as foo3,
+	(SELECT local.id FROM distributed, local WHERE local.id = distributed.id  AND distributed.id = 4) as foo4,
+	(SELECT local.id FROM distributed, local WHERE local.id = distributed.id  AND distributed.id = 5) as foo5
+WHERE
+	foo1.id = foo4.id AND
+	foo1.id = foo2.id AND
+	foo1.id = foo3.id AND
+	foo1.id = foo4.id AND
+	foo1.id = foo5.id
+ORDER BY 1;	
 
 
 
-DROP SCHEMA local_distributed_table_join CASCADE;
+DROP SCHEMA local_dist_join_mixed CASCADE;

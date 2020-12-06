@@ -186,13 +186,8 @@ extern List * PostprocessIndexStmt(Node *node,
 								   const char *queryString);
 extern void ErrorIfUnsupportedAlterIndexStmt(AlterTableStmt *alterTableStatement);
 extern void MarkIndexValid(IndexStmt *indexStmt);
-<<<<<<< HEAD
 extern List * ExecuteFunctionOnEachTableIndex(Oid relationId, PGIndexProcessor
 											  pgIndexProcessor);
-=======
-extern List * ExecuteFunctionOnEachTableIndex(Oid relationId, IndexProcesor
-											  indexProcessor);
->>>>>>> Increase readability of the current structure
 
 /* objectaddress.c - forward declarations */
 extern ObjectAddress CreateExtensionStmtObjectAddress(Node *stmt, bool missing_ok);

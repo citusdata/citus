@@ -1754,6 +1754,7 @@ RouterJob(Query *originalQuery, PlannerRestrictionContext *plannerRestrictionCon
 
 	Job *job = CreateJob(originalQuery);
 	job->partitionKeyValue = partitionKeyValue;
+	job->onDummyPlacement = replacePrunedQueryWithDummy;
 
 	if (originalQuery->resultRelation > 0)
 	{
@@ -1828,7 +1829,7 @@ GenerateSingleShardRouterTaskList(Job *job, List *relationShardList,
 														placementList);
 		}
 	}
-	else if (shardId == INVALID_SHARD_ID)
+	else if (shardId == INVALID_SHARD_ID && !job->onDummyPlacement)
 	{
 		/* modification that prunes to 0 shards */
 		job->taskList = NIL;

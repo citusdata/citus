@@ -320,8 +320,8 @@ $$);
 
 SET client_min_messages TO DEBUG1;
 SELECT COUNT(*) FROM partitioned_postgres_local_table JOIN distributed_table ON (true);
-DEBUG:  Wrapping relation "partitioned_postgres_local_table" to a subquery: SELECT NULL::integer AS a FROM mixed_relkind_tests.partitioned_postgres_local_table WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT NULL::integer AS a FROM mixed_relkind_tests.partitioned_postgres_local_table WHERE true OFFSET 0
+DEBUG:  Wrapping relation "partitioned_postgres_local_table" to a subquery: SELECT NULL::integer AS a FROM mixed_relkind_tests.partitioned_postgres_local_table WHERE true
+DEBUG:  generating subplan XXX_1 for subquery SELECT NULL::integer AS a FROM mixed_relkind_tests.partitioned_postgres_local_table WHERE true
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) partitioned_postgres_local_table JOIN mixed_relkind_tests.distributed_table ON (true))
  count
 ---------------------------------------------------------------------
@@ -329,8 +329,8 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS c
 (1 row)
 
 SELECT COUNT(*) FROM partitioned_postgres_local_table JOIN partitioned_distributed_table ON (true);
-DEBUG:  Wrapping relation "partitioned_postgres_local_table" to a subquery: SELECT NULL::integer AS a FROM mixed_relkind_tests.partitioned_postgres_local_table WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT NULL::integer AS a FROM mixed_relkind_tests.partitioned_postgres_local_table WHERE true OFFSET 0
+DEBUG:  Wrapping relation "partitioned_postgres_local_table" to a subquery: SELECT NULL::integer AS a FROM mixed_relkind_tests.partitioned_postgres_local_table WHERE true
+DEBUG:  generating subplan XXX_1 for subquery SELECT NULL::integer AS a FROM mixed_relkind_tests.partitioned_postgres_local_table WHERE true
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) partitioned_postgres_local_table JOIN mixed_relkind_tests.partitioned_distributed_table ON (true))
  count
 ---------------------------------------------------------------------
@@ -338,8 +338,8 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS c
 (1 row)
 
 SELECT COUNT(*) FROM distributed_table JOIN partitioned_postgres_local_table ON (true);
-DEBUG:  Wrapping relation "partitioned_postgres_local_table" to a subquery: SELECT NULL::integer AS a FROM mixed_relkind_tests.partitioned_postgres_local_table WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT NULL::integer AS a FROM mixed_relkind_tests.partitioned_postgres_local_table WHERE true OFFSET 0
+DEBUG:  Wrapping relation "partitioned_postgres_local_table" to a subquery: SELECT NULL::integer AS a FROM mixed_relkind_tests.partitioned_postgres_local_table WHERE true
+DEBUG:  generating subplan XXX_1 for subquery SELECT NULL::integer AS a FROM mixed_relkind_tests.partitioned_postgres_local_table WHERE true
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (mixed_relkind_tests.distributed_table JOIN (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) partitioned_postgres_local_table ON (true))
  count
 ---------------------------------------------------------------------
@@ -348,20 +348,20 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS c
 
 INSERT INTO partitioned_distributed_table SELECT foo.* FROM partitioned_distributed_table AS foo JOIN citus_local_table ON (true);
 DEBUG:  distributed INSERT ... SELECT cannot select from distributed tables and local tables at the same time
-DEBUG:  Wrapping relation "citus_local_table" to a subquery: SELECT NULL::integer AS a FROM mixed_relkind_tests.citus_local_table WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT NULL::integer AS a FROM mixed_relkind_tests.citus_local_table WHERE true OFFSET 0
+DEBUG:  Wrapping relation "citus_local_table" to a subquery: SELECT NULL::integer AS a FROM mixed_relkind_tests.citus_local_table WHERE true
+DEBUG:  generating subplan XXX_1 for subquery SELECT NULL::integer AS a FROM mixed_relkind_tests.citus_local_table WHERE true
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT foo.a, foo.b FROM (mixed_relkind_tests.partitioned_distributed_table foo JOIN (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) citus_local_table ON (true))
 DEBUG:  performing repartitioned INSERT ... SELECT
 INSERT INTO partitioned_distributed_table SELECT foo.* FROM distributed_table AS foo JOIN citus_local_table ON (true);
 DEBUG:  distributed INSERT ... SELECT cannot select from distributed tables and local tables at the same time
-DEBUG:  Wrapping relation "citus_local_table" to a subquery: SELECT NULL::integer AS a FROM mixed_relkind_tests.citus_local_table WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT NULL::integer AS a FROM mixed_relkind_tests.citus_local_table WHERE true OFFSET 0
+DEBUG:  Wrapping relation "citus_local_table" to a subquery: SELECT NULL::integer AS a FROM mixed_relkind_tests.citus_local_table WHERE true
+DEBUG:  generating subplan XXX_1 for subquery SELECT NULL::integer AS a FROM mixed_relkind_tests.citus_local_table WHERE true
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT foo.a FROM (mixed_relkind_tests.distributed_table foo JOIN (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) citus_local_table ON (true))
 DEBUG:  performing repartitioned INSERT ... SELECT
 INSERT INTO distributed_table SELECT foo.a FROM partitioned_distributed_table AS foo JOIN citus_local_table ON (true);
 DEBUG:  distributed INSERT ... SELECT cannot select from distributed tables and local tables at the same time
-DEBUG:  Wrapping relation "citus_local_table" to a subquery: SELECT NULL::integer AS a FROM mixed_relkind_tests.citus_local_table WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT NULL::integer AS a FROM mixed_relkind_tests.citus_local_table WHERE true OFFSET 0
+DEBUG:  Wrapping relation "citus_local_table" to a subquery: SELECT NULL::integer AS a FROM mixed_relkind_tests.citus_local_table WHERE true
+DEBUG:  generating subplan XXX_1 for subquery SELECT NULL::integer AS a FROM mixed_relkind_tests.citus_local_table WHERE true
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT foo.a FROM (mixed_relkind_tests.partitioned_distributed_table foo JOIN (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) citus_local_table ON (true))
 DEBUG:  performing repartitioned INSERT ... SELECT
 -- should fail
@@ -392,25 +392,25 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS c
 (1 row)
 
 UPDATE partitioned_distributed_table SET b = foo.a FROM citus_local_table AS foo;
-DEBUG:  Wrapping relation "citus_local_table" to a subquery: SELECT a FROM mixed_relkind_tests.citus_local_table foo WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT a FROM mixed_relkind_tests.citus_local_table foo WHERE true OFFSET 0
+DEBUG:  Wrapping relation "citus_local_table" to a subquery: SELECT a FROM mixed_relkind_tests.citus_local_table foo WHERE true
+DEBUG:  generating subplan XXX_1 for subquery SELECT a FROM mixed_relkind_tests.citus_local_table foo WHERE true
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: UPDATE mixed_relkind_tests.partitioned_distributed_table SET b = foo.a FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) foo
 UPDATE partitioned_distributed_table SET b = foo.a FROM postgres_local_table AS foo;
-DEBUG:  Wrapping relation "postgres_local_table" to a subquery: SELECT a FROM mixed_relkind_tests.postgres_local_table foo WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT a FROM mixed_relkind_tests.postgres_local_table foo WHERE true OFFSET 0
+DEBUG:  Wrapping relation "postgres_local_table" to a subquery: SELECT a FROM mixed_relkind_tests.postgres_local_table foo WHERE true
+DEBUG:  generating subplan XXX_1 for subquery SELECT a FROM mixed_relkind_tests.postgres_local_table foo WHERE true
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: UPDATE mixed_relkind_tests.partitioned_distributed_table SET b = foo.a FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) foo
 UPDATE partitioned_distributed_table SET a = foo.a FROM postgres_local_table AS foo WHERE foo.a = partitioned_distributed_table.a;
-DEBUG:  Wrapping relation "postgres_local_table" to a subquery: SELECT a FROM mixed_relkind_tests.postgres_local_table foo WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT a FROM mixed_relkind_tests.postgres_local_table foo WHERE true OFFSET 0
+DEBUG:  Wrapping relation "postgres_local_table" to a subquery: SELECT a FROM mixed_relkind_tests.postgres_local_table foo WHERE true
+DEBUG:  generating subplan XXX_1 for subquery SELECT a FROM mixed_relkind_tests.postgres_local_table foo WHERE true
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: UPDATE mixed_relkind_tests.partitioned_distributed_table SET a = foo.a FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) foo WHERE (foo.a OPERATOR(pg_catalog.=) partitioned_distributed_table.a)
 UPDATE partitioned_distributed_table SET a = foo.a FROM citus_local_table AS foo WHERE foo.a = partitioned_distributed_table.a;
-DEBUG:  Wrapping relation "citus_local_table" to a subquery: SELECT a FROM mixed_relkind_tests.citus_local_table foo WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT a FROM mixed_relkind_tests.citus_local_table foo WHERE true OFFSET 0
+DEBUG:  Wrapping relation "citus_local_table" to a subquery: SELECT a FROM mixed_relkind_tests.citus_local_table foo WHERE true
+DEBUG:  generating subplan XXX_1 for subquery SELECT a FROM mixed_relkind_tests.citus_local_table foo WHERE true
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: UPDATE mixed_relkind_tests.partitioned_distributed_table SET a = foo.a FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) foo WHERE (foo.a OPERATOR(pg_catalog.=) partitioned_distributed_table.a)
 -- should fail
 UPDATE partitioned_distributed_table SET a = foo.a FROM mat_view_on_part_dist AS foo WHERE foo.a = partitioned_distributed_table.a;
-DEBUG:  Wrapping relation "mat_view_on_part_dist" to a subquery: SELECT a, NULL::integer AS b FROM mixed_relkind_tests.mat_view_on_part_dist foo WHERE true OFFSET 0
-DEBUG:  generating subplan XXX_1 for subquery SELECT a, NULL::integer AS b FROM mixed_relkind_tests.mat_view_on_part_dist foo WHERE true OFFSET 0
+DEBUG:  Wrapping relation "mat_view_on_part_dist" to a subquery: SELECT a, NULL::integer AS b FROM mixed_relkind_tests.mat_view_on_part_dist foo WHERE true
+DEBUG:  generating subplan XXX_1 for subquery SELECT a, NULL::integer AS b FROM mixed_relkind_tests.mat_view_on_part_dist foo WHERE true
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: UPDATE mixed_relkind_tests.partitioned_distributed_table SET a = foo.a FROM (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) foo WHERE (foo.a OPERATOR(pg_catalog.=) partitioned_distributed_table.a)
 UPDATE partitioned_distributed_table SET a = foo.a FROM partitioned_distributed_table AS foo WHERE foo.a < partitioned_distributed_table.a;
 ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns

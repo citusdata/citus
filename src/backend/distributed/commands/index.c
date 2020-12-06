@@ -249,51 +249,6 @@ CreateIndexStmtGetSchemaId(IndexStmt *createIndexStatement)
 	return namespaceId;
 }
 
-
-/*
- * ExecuteFunctionOnEachTableIndex executes the given indexProcessor function on each
- * index of the given relation.
- * It returns a list that is filled by the indexProcessor.
- */
-List *
-ExecuteFunctionOnEachTableIndex(Oid relationId, IndexProcesor indexProcessor)
-{
-	List *result = NIL;
-	ScanKeyData scanKey[1];
-	int scanKeyCount = 1;
-
-	PushOverrideEmptySearchPath(CurrentMemoryContext);
-
-	/* open system catalog and scan all indexes that belong to this table */
-	Relation pgIndex = table_open(IndexRelationId, AccessShareLock);
-
-	ScanKeyInit(&scanKey[0], Anum_pg_index_indrelid,
-				BTEqualStrategyNumber, F_OIDEQ, relationId);
-
-	SysScanDesc scanDescriptor = systable_beginscan(pgIndex,
-													IndexIndrelidIndexId, true, /* indexOK */
-													NULL, scanKeyCount, scanKey);
-
-	HeapTuple heapTuple = systable_getnext(scanDescriptor);
-	while (HeapTupleIsValid(heapTuple))
-	{
-		Form_pg_index indexForm = (Form_pg_index) GETSTRUCT(heapTuple);
-		indexProcessor(indexForm, &result);
-
-		heapTuple = systable_getnext(scanDescriptor);
-	}
-
-	/* clean up scan and close system catalog */
-	systable_endscan(scanDescriptor);
-	table_close(pgIndex, AccessShareLock);
-
-	/* revert back to original search_path */
-	PopOverrideSearchPath();
-
-	return result;
-}
-
-
 /*
  * ExecuteFunctionOnEachTableIndex executes the given pgIndexProcessor function on each
  * index of the given relation.

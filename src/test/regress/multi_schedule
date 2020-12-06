@@ -222,7 +222,10 @@ test: multi_modifying_xacts
 test: multi_repartition_udt multi_repartitioned_subquery_udf multi_subtransactions
 test: multi_transaction_recovery
 
+test: local_dist_join_modifications 
 test: local_table_join
+test: local_dist_join_mixed
+test: citus_local_dist_joins 
 
 # ---------
 # multi_copy creates hash and range-partitioned tables and performs COPY
