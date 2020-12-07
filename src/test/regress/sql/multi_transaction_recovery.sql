@@ -200,5 +200,6 @@ SELECT pg_reload_conf();
 DROP TABLE test_recovery_ref;
 DROP TABLE test_recovery;
 DROP TABLE test_recovery_single;
+DROP TABLE test_reference_table;
 
 SELECT 1 FROM master_remove_node('localhost', :master_port);
