@@ -54,15 +54,15 @@ select count(*) from t_compressed;
 
 -- explain
 explain (costs off, summary off, timing off) select * from t_uncompressed;
-                 QUERY PLAN
+                  QUERY PLAN
 ---------------------------------------------------------------------
- Custom Scan (CStoreScan) on t_uncompressed
+ Custom Scan (ColumnarScan) on t_uncompressed
 (1 row)
 
 explain (costs off, summary off, timing off) select * from t_compressed;
-                QUERY PLAN
+                 QUERY PLAN
 ---------------------------------------------------------------------
- Custom Scan (CStoreScan) on t_compressed
+ Custom Scan (ColumnarScan) on t_compressed
 (1 row)
 
 -- vacuum
