@@ -76,17 +76,17 @@ static bool EnableCStoreCustomScan = true;
 
 
 const struct CustomPathMethods CStoreScanPathMethods = {
-	.CustomName = "CStoreScan",
+	.CustomName = "ColumnarScan",
 	.PlanCustomPath = CStoreScanPath_PlanCustomPath,
 };
 
 const struct CustomScanMethods CStoreScanScanMethods = {
-	.CustomName = "CStoreScan",
+	.CustomName = "ColumnarScan",
 	.CreateCustomScanState = CStoreScan_CreateCustomScanState,
 };
 
 const struct CustomExecMethods CStoreExecuteMethods = {
-	.CustomName = "CStoreScan",
+	.CustomName = "ColumnarScan",
 
 	.BeginCustomScan = CStoreScan_BeginCustomScan,
 	.ExecCustomScan = CStoreScan_ExecCustomScan,
@@ -303,6 +303,13 @@ CStoreAttrNeeded(ScanState *ss)
 	foreach(lc, vars)
 	{
 		Var *var = lfirst(lc);
+
+		if (var->varattno < 0)
+		{
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg(
+								"UPDATE and CTID scans not supported for ColumnarScan")));
+		}
 
 		if (var->varattno == 0)
 		{
