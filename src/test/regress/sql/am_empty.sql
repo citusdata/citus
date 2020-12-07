@@ -11,7 +11,7 @@ SELECT alter_columnar_table_set('t_compressed', compression => 'pglz');
 SELECT alter_columnar_table_set('t_compressed', stripe_row_count => 100);
 SELECT alter_columnar_table_set('t_compressed', chunk_row_count => 100);
 
-SELECT * FROM cstore.options WHERE regclass = 't_compressed'::regclass;
+SELECT * FROM columnar.options WHERE regclass = 't_compressed'::regclass;
 
 -- select
 select * from t_uncompressed;

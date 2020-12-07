@@ -10,10 +10,10 @@
  *-------------------------------------------------------------------------
  */
 
-#ifndef CSTORE_FDW_CSTORE_CUSTOMSCAN_H
-#define CSTORE_FDW_CSTORE_CUSTOMSCAN_H
+#ifndef COLUMNAR_CUSTOMSCAN_H
+#define COLUMNAR_CUSTOMSCAN_H
 
 void cstore_customscan_init(void);
 
 
-#endif /*CSTORE_FDW_CSTORE_CUSTOMSCAN_H */
+#endif /* COLUMNAR_CUSTOMSCAN_H */

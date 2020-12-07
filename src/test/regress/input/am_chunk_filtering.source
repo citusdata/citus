@@ -1,11 +1,11 @@
 --
--- Test chunk filtering in cstore_fdw using min/max values in stripe skip lists.
+-- Test chunk filtering in columnar using min/max values in stripe skip lists.
 --
 
 
 --
 -- filtered_row_count returns number of rows filtered by the WHERE clause.
--- If chunks get filtered by cstore_fdw, less rows are passed to WHERE
+-- If chunks get filtered by columnar, less rows are passed to WHERE
 -- clause, so this function should return a lower number.
 --
 CREATE OR REPLACE FUNCTION filtered_row_count (query text) RETURNS bigint AS
@@ -29,8 +29,8 @@ $$ LANGUAGE PLPGSQL;
 
 -- Create and load data
 -- chunk_row_count '1000', stripe_row_count '2000'
-set cstore.stripe_row_count = 2000;
-set cstore.chunk_row_count = 1000;
+set columnar.stripe_row_count = 2000;
+set columnar.chunk_row_count = 1000;
 CREATE TABLE test_chunk_filtering (a int)
     USING columnar;
 
@@ -58,8 +58,8 @@ SELECT filtered_row_count('SELECT count(*) FROM test_chunk_filtering WHERE a < 2
 SELECT filtered_row_count('SELECT count(*) FROM test_chunk_filtering WHERE a < 0');
 SELECT filtered_row_count('SELECT count(*) FROM test_chunk_filtering WHERE a BETWEEN 990 AND 2010');
 
-set cstore.stripe_row_count to default;
-set cstore.chunk_row_count to default;
+set columnar.stripe_row_count to default;
+set columnar.chunk_row_count to default;
 
 -- Verify that we are fine with collations which use a different alphabet order
 CREATE TABLE collation_chunk_filtering_test(A text collate "da_DK")

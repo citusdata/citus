@@ -5,7 +5,7 @@
 CREATE TABLE t(a int, b int) USING columnar;
 
 CREATE VIEW t_stripes AS
-SELECT * FROM cstore.cstore_stripes a, pg_class b
+SELECT * FROM columnar.columnar_stripes a, pg_class b
 WHERE a.storageid = columnar_relation_storageid(b.oid) AND b.relname = 't';
 
 BEGIN;

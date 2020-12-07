@@ -1,7 +1,7 @@
 /* columnar--9.5-1--10.0-1.sql */
 
-CREATE SCHEMA cstore;
-SET search_path TO cstore;
+CREATE SCHEMA columnar;
+SET search_path TO columnar;
 
 CREATE SEQUENCE storageid_seq MINVALUE 10000000000 NO CYCLE;
 
@@ -14,7 +14,7 @@ CREATE TABLE options (
 
 COMMENT ON TABLE options IS 'columnar table specific options, maintained by alter_columnar_table_set';
 
-CREATE TABLE cstore_stripes (
+CREATE TABLE columnar_stripes (
     storageid bigint NOT NULL,
     stripe bigint NOT NULL,
     file_offset bigint NOT NULL,
@@ -26,9 +26,9 @@ CREATE TABLE cstore_stripes (
     PRIMARY KEY (storageid, stripe)
 ) WITH (user_catalog_table = true);
 
-COMMENT ON TABLE cstore_stripes IS 'CStore per stripe metadata';
+COMMENT ON TABLE columnar_stripes IS 'Columnar per stripe metadata';
 
-CREATE TABLE cstore_skipnodes (
+CREATE TABLE columnar_skipnodes (
     storageid bigint NOT NULL,
     stripe bigint NOT NULL,
     attr int NOT NULL,
@@ -43,10 +43,10 @@ CREATE TABLE cstore_skipnodes (
     value_compression_type int NOT NULL,
     value_decompressed_length bigint NOT NULL,
     PRIMARY KEY (storageid, stripe, attr, chunk),
-    FOREIGN KEY (storageid, stripe) REFERENCES cstore_stripes(storageid, stripe) ON DELETE CASCADE
+    FOREIGN KEY (storageid, stripe) REFERENCES columnar_stripes(storageid, stripe) ON DELETE CASCADE
 ) WITH (user_catalog_table = true);
 
-COMMENT ON TABLE cstore_skipnodes IS 'CStore per chunk metadata';
+COMMENT ON TABLE columnar_skipnodes IS 'Columnar per chunk metadata';
 
 DO $proc$
 BEGIN
@@ -63,6 +63,6 @@ IF substring(current_Setting('server_version'), '\d+')::int >= 12 THEN
 END IF;
 END$proc$;
 
-#include "udfs/cstore_ensure_objects_exist/10.0-1.sql"
+#include "udfs/columnar_ensure_objects_exist/10.0-1.sql"
 
 RESET search_path;
