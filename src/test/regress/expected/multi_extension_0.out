@@ -90,7 +90,7 @@ FROM pg_depend AS pgd,
 WHERE pgd.refclassid = 'pg_extension'::regclass AND
 	  pgd.refobjid   = pge.oid AND
 	  pge.extname    = 'citus' AND
-	  pgio.schema    NOT IN ('pg_catalog', 'citus', 'citus_internal', 'test', 'cstore')
+	  pgio.schema    NOT IN ('pg_catalog', 'citus', 'citus_internal', 'test', 'columnar')
 ORDER BY 1, 2;
  type |      identity
 ---------------------------------------------------------------------
@@ -478,12 +478,12 @@ ALTER EXTENSION citus UPDATE TO '10.0-1';
 SELECT * FROM print_extension_changes();
  previous_object |                    current_object
 ---------------------------------------------------------------------
-                 | function citus_internal.cstore_ensure_objects_exist()
-                 | schema cstore
-                 | sequence cstore.storageid_seq
-                 | table cstore.cstore_skipnodes
-                 | table cstore.cstore_stripes
-                 | table cstore.options
+                 | function citus_internal.columnar_ensure_objects_exist()
+                 | schema columnar
+                 | sequence columnar.storageid_seq
+                 | table columnar.columnar_skipnodes
+                 | table columnar.columnar_stripes
+                 | table columnar.options
                  | view citus_tables
 (7 rows)
 
@@ -503,7 +503,7 @@ FROM pg_depend AS pgd,
 WHERE pgd.refclassid = 'pg_extension'::regclass AND
 	  pgd.refobjid   = pge.oid AND
 	  pge.extname    = 'citus' AND
-	  pgio.schema    NOT IN ('pg_catalog', 'citus', 'citus_internal', 'test', 'cstore')
+	  pgio.schema    NOT IN ('pg_catalog', 'citus', 'citus_internal', 'test', 'columnar')
 ORDER BY 1, 2;
  type |      identity
 ---------------------------------------------------------------------

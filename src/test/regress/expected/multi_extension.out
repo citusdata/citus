@@ -482,12 +482,12 @@ SELECT * FROM print_extension_changes();
                  | function alter_columnar_table_reset(regclass,boolean,boolean,boolean)
                  | function alter_columnar_table_set(regclass,integer,integer,name)
                  | function citus_internal.cstore_ensure_objects_exist()
-                 | function cstore.columnar_handler(internal)
-                 | schema cstore
-                 | sequence cstore.storageid_seq
-                 | table cstore.cstore_skipnodes
-                 | table cstore.cstore_stripes
-                 | table cstore.options
+                 | function columnar.columnar_handler(internal)
+                 | schema columnar
+                 | sequence columnar.storageid_seq
+                 | table columnar.cstore_skipnodes
+                 | table columnar.cstore_stripes
+                 | table columnar.options
                  | view citus_tables
 (11 rows)
 

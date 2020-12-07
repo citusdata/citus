@@ -36,7 +36,7 @@ ORDER BY 1;
  function citus_executor_name(integer)
  function citus_extradata_container(internal)
  function citus_finish_pg_upgrade()
- function citus_internal.cstore_ensure_objects_exist()
+ function citus_internal.columnar_ensure_objects_exist()
  function citus_internal.find_groupid_for_node(text,integer)
  function citus_internal.pg_dist_node_trigger_func()
  function citus_internal.pg_dist_rebalance_strategy_enterprise_check()
@@ -80,7 +80,7 @@ ORDER BY 1;
  function create_distributed_table(regclass,text,citus.distribution_type,text)
  function create_intermediate_result(text,text)
  function create_reference_table(regclass)
- function cstore.columnar_handler(internal)
+ function columnar.columnar_handler(internal)
  function distributed_tables_colocated(regclass,regclass)
  function dump_global_wait_edges()
  function dump_local_wait_edges()
@@ -184,17 +184,17 @@ ORDER BY 1;
  function worker_save_query_explain_analyze(text,jsonb)
  schema citus
  schema citus_internal
- schema cstore
- sequence cstore.storageid_seq
+ schema columnar
+ sequence columnar.storageid_seq
  sequence pg_dist_colocationid_seq
  sequence pg_dist_groupid_seq
  sequence pg_dist_node_nodeid_seq
  sequence pg_dist_placement_placementid_seq
  sequence pg_dist_shardid_seq
  table citus.pg_dist_object
- table cstore.cstore_skipnodes
- table cstore.cstore_stripes
- table cstore.options
+ table columnar.columnar_skipnodes
+ table columnar.columnar_stripes
+ table columnar.options
  table pg_dist_authinfo
  table pg_dist_colocation
  table pg_dist_local_group
