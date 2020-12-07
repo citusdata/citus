@@ -1,6 +1,6 @@
 /* columnar--10.0-1--9.5-1.sql */
 
-SET search_path TO cstore;
+SET search_path TO columnar;
 
 DO $proc$
 BEGIN
@@ -27,12 +27,12 @@ IF substring(current_Setting('server_version'), '\d+')::int >= 12 THEN
 END IF;
 END$proc$;
 
-DROP TABLE cstore_skipnodes;
-DROP TABLE cstore_stripes;
+DROP TABLE columnar_skipnodes;
+DROP TABLE columnar_stripes;
 DROP TABLE options;
 DROP SEQUENCE storageid_seq;
 
-DROP FUNCTION citus_internal.cstore_ensure_objects_exist();
+DROP FUNCTION citus_internal.columnar_ensure_objects_exist();
 
 RESET search_path;
-DROP SCHEMA cstore;
+DROP SCHEMA columnar;
