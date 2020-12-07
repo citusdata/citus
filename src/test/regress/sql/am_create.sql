@@ -8,6 +8,8 @@ CREATE TABLE contestant (handle TEXT, birthdate DATE, rating INT,
 	percentile FLOAT, country CHAR(3), achievements TEXT[])
 	USING columnar;
 
+-- should fail
+CREATE INDEX contestant_idx on contestant(handle);
 
 -- Create compressed table with automatically determined file path
 -- COMPRESSED
