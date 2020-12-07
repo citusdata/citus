@@ -1291,7 +1291,7 @@ CheckRemoteTransactionsHealth(void)
  *
  * citus_<source group>_<pid>_<distributed transaction number>_<connection number>
  *
- * (at most 5+1+10+1+10+20+1+10 = 58 characters, while limit is 64)
+ * (at most 5+1+10+1+10+1+20+1+10 = 59 characters, while limit is 64)
  *
  * The source group is used to distinguish 2PCs started by different
  * coordinators. A coordinator will only attempt to recover its own 2PCs.
