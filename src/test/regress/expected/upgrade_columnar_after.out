@@ -101,7 +101,7 @@ SELECT * FROM matview ORDER BY a;
 (2 rows)
 
 -- test we retained options
-SELECT * FROM cstore.options WHERE regclass = 'test_options_1'::regclass;
+SELECT * FROM columnar.options WHERE regclass = 'test_options_1'::regclass;
     regclass    | chunk_row_count | stripe_row_count | compression
 ---------------------------------------------------------------------
  test_options_1 |            1000 |             5000 | pglz
@@ -121,7 +121,7 @@ SELECT count(*), sum(a), sum(b) FROM test_options_1;
  10000 | 50005000 | 45010
 (1 row)
 
-SELECT * FROM cstore.options WHERE regclass = 'test_options_2'::regclass;
+SELECT * FROM columnar.options WHERE regclass = 'test_options_2'::regclass;
     regclass    | chunk_row_count | stripe_row_count | compression
 ---------------------------------------------------------------------
  test_options_2 |            2000 |             6000 | none
