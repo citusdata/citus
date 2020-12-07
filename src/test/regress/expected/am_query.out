@@ -39,6 +39,22 @@ SELECT * FROM contestant ORDER BY handle;
  h      | 1987-10-26 |   2112 |       95.4 | XD      | {w,a}
 (8 rows)
 
+-- all special column accesses should fail
+SELECT ctid FROM contestant;
+ERROR:  UPDATE and CTID scans not supported for ColumnarScan
+SELECT cmin FROM contestant;
+ERROR:  UPDATE and CTID scans not supported for ColumnarScan
+SELECT cmax FROM contestant;
+ERROR:  UPDATE and CTID scans not supported for ColumnarScan
+SELECT xmin FROM contestant;
+ERROR:  UPDATE and CTID scans not supported for ColumnarScan
+SELECT xmax FROM contestant;
+ERROR:  UPDATE and CTID scans not supported for ColumnarScan
+SELECT tableid FROM contestant;
+ERROR:  column "tableid" does not exist
+-- sample scans should fail
+SELECT * FROM contestant TABLESAMPLE SYSTEM(0.1);
+ERROR:  sample scans not supported on columnar tables
 -- Query compressed data
 SELECT count(*) FROM contestant_compressed;
  count
