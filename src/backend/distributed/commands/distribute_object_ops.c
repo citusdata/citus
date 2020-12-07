@@ -155,6 +155,13 @@ static DistributeObjectOps Any_CreatePolicy = {
 	.postprocess = NULL,
 	.address = NULL,
 };
+static DistributeObjectOps Any_CreateStatistics = {
+	.deparse = DeparseCreateStatisticsStmt,
+	.qualify = QualifyCreateStatisticsStmt,
+	.preprocess = PreprocessCreateStatisticsStmt,
+	.postprocess = PostprocessCreateStatisticsStmt,
+	.address = CreateStatisticsStmtObjectAddress,
+};
 static DistributeObjectOps Any_CreateTrigger = {
 	.deparse = NULL,
 	.qualify = NULL,
@@ -715,6 +722,11 @@ GetDistributeObjectOps(Node *node)
 		case T_CreatePolicyStmt:
 		{
 			return &Any_CreatePolicy;
+		}
+
+		case T_CreateStatsStmt:
+		{
+			return &Any_CreateStatistics;
 		}
 
 		case T_CreateTrigStmt:
