@@ -576,7 +576,8 @@ extern List * QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 									   RelationRestrictionContext *
 									   relationRestrictionContext,
 									   List *prunedRelationShardList, TaskType taskType,
-									   bool modifyRequiresCoordinatorEvaluation);
+									   bool modifyRequiresCoordinatorEvaluation,
+									   DeferredErrorMessage **planningError);
 
 /* function declarations for managing jobs */
 extern uint64 UniqueJobId(void);

@@ -1781,12 +1781,16 @@ RouterJob(Query *originalQuery, PlannerRestrictionContext *plannerRestrictionCon
 												 relationRestrictionContext,
 												 prunedShardIntervalListList,
 												 MODIFY_TASK,
-												 requiresCoordinatorEvaluation);
+												 requiresCoordinatorEvaluation,
+												 planningError);
+		if (*planningError) {
+			return NULL;
+		}										 
 	}
 	else
 	{
 		GenerateSingleShardRouterTaskList(job, relationShardList,
-										  placementList, shardId);
+														   placementList, shardId);
 	}
 
 	job->requiresCoordinatorEvaluation = requiresCoordinatorEvaluation;
@@ -1806,14 +1810,12 @@ GenerateSingleShardRouterTaskList(Job *job, List *relationShardList,
 {
 	Query *originalQuery = job->jobQuery;
 
-
 	if (originalQuery->commandType == CMD_SELECT)
 	{
 		job->taskList = SingleShardTaskList(originalQuery, job->jobId,
 											relationShardList, placementList,
 											shardId,
 											job->parametersInJobQueryResolved);
-
 		/*
 		 * Queries to reference tables, or distributed tables with multiple replica's have
 		 * their task placements reordered according to the configured

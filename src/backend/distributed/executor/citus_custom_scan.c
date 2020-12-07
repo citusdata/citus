@@ -546,7 +546,8 @@ RegenerateTaskForFasthPathQuery(Job *workerJob)
 
 	GenerateSingleShardRouterTaskList(workerJob,
 									  relationShardList,
-									  placementList, shardId);
+									  placementList,
+									  shardId);
 }
 
 

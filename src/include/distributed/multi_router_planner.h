@@ -83,8 +83,9 @@ extern List * TargetShardIntervalForFastPathQuery(Query *query,
 												  Const *inputDistributionKeyValue,
 												  Const **outGoingPartitionValueConst);
 extern void GenerateSingleShardRouterTaskList(Job *job,
-											  List *relationShardList,
-											  List *placementList, uint64 shardId);
+																List *relationShardList,
+																List *placementList,
+																uint64 shardId);
 extern bool IsRouterPlannable(Query *query,
 							  PlannerRestrictionContext *plannerRestrictionContext);
 
