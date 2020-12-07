@@ -1848,33 +1848,24 @@ List *
 GetRestrictInfoListForRelation(RangeTblEntry *rangeTblEntry,
 							   PlannerRestrictionContext *plannerRestrictionContext)
 {
-	int rteIdentity = GetRTEIdentity(rangeTblEntry);
-	RelationRestrictionContext *relationRestrictionContext =
-		plannerRestrictionContext->relationRestrictionContext;
-	Relids queryRteIdentities = bms_make_singleton(rteIdentity);
-	RelationRestrictionContext *filteredRelationRestrictionContext =
-		FilterRelationRestrictionContext(relationRestrictionContext, queryRteIdentities);
-	List *filteredRelationRestrictionList =
-		filteredRelationRestrictionContext->relationRestrictionList;
-
-	if (list_length(filteredRelationRestrictionList) != 1)
+	RelationRestriction *relationRestriction =
+		RelationRestrictionForRelation(rangeTblEntry, plannerRestrictionContext);
+	if (relationRestriction == NULL)
 	{
 		return NIL;
 	}
 
-	RelationRestriction *relationRestriction =
-		(RelationRestriction *) linitial(filteredRelationRestrictionList);
-
 	RelOptInfo *relOptInfo = relationRestriction->relOptInfo;
-	List *baseRestrictInfo = relOptInfo->baserestrictinfo;
 	List *joinRestrictInfo = relOptInfo->joininfo;
+	List *baseRestrictInfo = relOptInfo->baserestrictinfo;
 
-	List *joinRrestrictClauseList = get_all_actual_clauses(joinRestrictInfo);
-	if (ContainsFalseClause(joinRrestrictClauseList))
+	List *joinRestrictClauseList = get_all_actual_clauses(joinRestrictInfo);
+	if (ContainsFalseClause(joinRestrictClauseList))
 	{
 		/* found WHERE false, no need  to continue */
-		return copyObject((List *) joinRrestrictClauseList);
+		return copyObject((List *) joinRestrictClauseList);
 	}
+
 
 	List *restrictExprList = NIL;
 	RestrictInfo *restrictInfo = NULL;
@@ -1916,6 +1907,34 @@ GetRestrictInfoListForRelation(RangeTblEntry *rangeTblEntry,
 	}
 
 	return restrictExprList;
+}
+
+
+/*
+ * RelationRestrictionForRelation gets the relation restriction for the given
+ * range table entry.
+ */
+RelationRestriction *
+RelationRestrictionForRelation(RangeTblEntry *rangeTableEntry,
+							   PlannerRestrictionContext *plannerRestrictionContext)
+{
+	int rteIdentity = GetRTEIdentity(rangeTableEntry);
+	RelationRestrictionContext *relationRestrictionContext =
+		plannerRestrictionContext->relationRestrictionContext;
+	Relids queryRteIdentities = bms_make_singleton(rteIdentity);
+	RelationRestrictionContext *filteredRelationRestrictionContext =
+		FilterRelationRestrictionContext(relationRestrictionContext, queryRteIdentities);
+	List *filteredRelationRestrictionList =
+		filteredRelationRestrictionContext->relationRestrictionList;
+
+	if (list_length(filteredRelationRestrictionList) != 1)
+	{
+		return NULL;
+	}
+
+	RelationRestriction *relationRestriction =
+		(RelationRestriction *) linitial(filteredRelationRestrictionList);
+	return relationRestriction;
 }
 
 

@@ -163,7 +163,6 @@ typedef struct Job
 	 * query.
 	 */
 	bool parametersInJobQueryResolved;
-	bool onDummyPlacement;
 } Job;
 
 
@@ -329,6 +328,11 @@ typedef struct Task
 	 * ExplainTaskList().
 	 */
 	double fetchedExplainAnalyzeExecutionDuration;
+
+	/*
+	 * containsOnlyLocalTable is true if the task contains only postgres table/MV.
+	 */
+	bool containsOnlyLocalTable;
 } Task;
 
 
@@ -579,6 +583,8 @@ extern List * QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 									   bool modifyRequiresCoordinatorEvaluation,
 									   DeferredErrorMessage **planningError);
 
+extern bool OnlyLocalTableJob(Job *job);
+
 /* function declarations for managing jobs */
 extern uint64 UniqueJobId(void);
 
@@ -591,6 +597,6 @@ extern RangeTblEntry * DerivedRangeTableEntry(MultiNode *multiNode, List *column
 											  List *funcColumnTypeMods,
 											  List *funcCollations);
 
-extern List * FetchEqualityAttrNumsForRTEFromQuals(Node *quals, Index rteIndex);
+extern List * FetchEqualityAttrNumsForRTE(Node *quals);
 
 #endif   /* MULTI_PHYSICAL_PLANNER_H */

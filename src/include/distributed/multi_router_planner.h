@@ -42,7 +42,8 @@ extern DeferredErrorMessage * PlanRouterQuery(Query *originalQuery,
 											  List **prunedShardIntervalListList,
 											  bool replacePrunedQueryWithDummy,
 											  bool *multiShardModifyQuery,
-											  Const **partitionValueConst);
+											  Const **partitionValueConst,
+											  bool *containOnlyLocalTable);
 extern List * RelationShardListForShardIntervalList(List *shardIntervalList,
 													bool *shardsPresent);
 extern List * CreateTaskPlacementListForShardIntervals(List *shardIntervalList,
@@ -83,9 +84,10 @@ extern List * TargetShardIntervalForFastPathQuery(Query *query,
 												  Const *inputDistributionKeyValue,
 												  Const **outGoingPartitionValueConst);
 extern void GenerateSingleShardRouterTaskList(Job *job,
-																List *relationShardList,
-																List *placementList,
-																uint64 shardId);
+											  List *relationShardList,
+											  List *placementList,
+											  uint64 shardId,
+											  bool containsOnlyLocalTable);
 extern bool IsRouterPlannable(Query *query,
 							  PlannerRestrictionContext *plannerRestrictionContext);
 

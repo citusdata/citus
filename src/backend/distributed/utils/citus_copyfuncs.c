@@ -101,7 +101,6 @@ copyJobInfo(Job *newnode, Job *from)
 	COPY_NODE_FIELD(partitionKeyValue);
 	COPY_NODE_FIELD(localPlannedStatements);
 	COPY_SCALAR_FIELD(parametersInJobQueryResolved);
-	COPY_SCALAR_FIELD(onDummyPlacement);
 }
 
 
@@ -328,6 +327,7 @@ CopyNodeTask(COPYFUNC_ARGS)
 	COPY_SCALAR_FIELD(fetchedExplainAnalyzePlacementIndex);
 	COPY_STRING_FIELD(fetchedExplainAnalyzePlan);
 	COPY_SCALAR_FIELD(fetchedExplainAnalyzeExecutionDuration);
+	COPY_SCALAR_FIELD(containsOnlyLocalTable);
 }
 
 

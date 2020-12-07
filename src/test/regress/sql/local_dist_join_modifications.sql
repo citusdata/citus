@@ -104,7 +104,7 @@ SET
 FROM
 	postgres_table
 WHERE
-	mv1.key = postgres_table.key;  
+	mv1.key = postgres_table.key;
 ROLLBACK;
 
 BEGIN;
@@ -115,7 +115,7 @@ SET
 FROM
 	mv1
 WHERE
-	mv1.key = postgres_table.key;    
+	mv1.key = postgres_table.key;
 ROLLBACK;
 
 BEGIN;
@@ -126,7 +126,7 @@ SET
 FROM
 	mv2
 WHERE
-	mv2.key = postgres_table.key;  
+	mv2.key = postgres_table.key;
 ROLLBACK;
 
 -- in case of update/delete we always recursively plan
@@ -351,21 +351,21 @@ DELETE FROM
 USING
 	postgres_table
 WHERE
-	mv1.key = postgres_table.key;  
+	mv1.key = postgres_table.key;
 
 DELETE FROM
 	postgres_table
 USING
 	mv1
 WHERE
-	mv1.key = postgres_table.key;    
+	mv1.key = postgres_table.key;
 
 DELETE FROM
 	postgres_table
 USING
 	mv2
 WHERE
-	mv2.key = postgres_table.key;  
+	mv2.key = postgres_table.key;
 
 
 SET client_min_messages to ERROR;

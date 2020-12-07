@@ -249,6 +249,7 @@ CreateIndexStmtGetSchemaId(IndexStmt *createIndexStatement)
 	return namespaceId;
 }
 
+
 /*
  * ExecuteFunctionOnEachTableIndex executes the given pgIndexProcessor function on each
  * index of the given relation.

@@ -234,9 +234,9 @@ static StringInfo ColumnTypeArrayString(List *targetEntryList);
 static bool CoPlacedShardIntervals(ShardInterval *firstInterval,
 								   ShardInterval *secondInterval);
 
-static List * FetchEqualityAttrNumsForRTEOpExpr(OpExpr *opExpr, Index rteIndex);
-static List * FetchEqualityAttrNumsForRTEBoolExpr(BoolExpr *boolExpr, Index rteIndex);
-
+static List * FetchEqualityAttrNumsForRTEOpExpr(OpExpr *opExpr);
+static List * FetchEqualityAttrNumsForRTEBoolExpr(BoolExpr *boolExpr);
+static List * FetchEqualityAttrNumsForList(List *nodeList);
 #if PG_VERSION_NUM >= PG_VERSION_13
 static List * GetColumnOriginalIndexes(Oid relationId);
 #endif
@@ -268,6 +268,27 @@ CreatePhysicalDistributedPlan(MultiTreeRoot *multiTree,
 	distributedPlan->expectResults = true;
 
 	return distributedPlan;
+}
+
+
+/*
+ * OnlyLocalTableJob true if the given task contains
+ * only postgres tables
+ */
+bool
+OnlyLocalTableJob(Job *job)
+{
+	if (job == NULL)
+	{
+		return false;
+	}
+	List *taskList = job->taskList;
+	if (list_length(taskList) != 1)
+	{
+		return false;
+	}
+	Task *singleTask = (Task *) linitial(taskList);
+	return singleTask->containsOnlyLocalTable;
 }
 
 
@@ -2113,9 +2134,10 @@ BuildJobTreeTaskList(Job *jobTree, PlannerRestrictionContext *plannerRestriction
 												   prunedRelationShardList, READ_TASK,
 												   false,
 												   &deferredErrorMessage);
-			if (deferredErrorMessage != NULL) {
+			if (deferredErrorMessage != NULL)
+			{
 				RaiseDeferredErrorInternal(deferredErrorMessage, ERROR);
-			}									   
+			}
 		}
 		else
 		{
@@ -2209,10 +2231,10 @@ QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 	if (list_length(relationRestrictionContext->relationRestrictionList) == 0)
 	{
 		*planningError = DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-						"cannot handle complex subqueries when the "
-						"router executor is disabled",
-						NULL, NULL);
-		return NIL;				
+									   "cannot handle complex subqueries when the "
+									   "router executor is disabled",
+									   NULL, NULL);
+		return NIL;
 	}
 
 	/* defaults to be used if this is a reference table-only query */
@@ -2238,9 +2260,9 @@ QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 		if (shardCount > 0 && shardCount != cacheEntry->shardIntervalArrayLength)
 		{
 			*planningError = DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-				"shard counts of co-located tables do not "
-				"match",
-				NULL, NULL);
+										   "shard counts of co-located tables do not "
+										   "match",
+										   NULL, NULL);
 			return NIL;
 		}
 
@@ -2306,9 +2328,10 @@ QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 													 taskType,
 													 modifyRequiresCoordinatorEvaluation,
 													 planningError);
-		if (*planningError != NULL) {
+		if (*planningError != NULL)
+		{
 			return NIL;
-		}											 
+		}
 		subqueryTask->jobId = jobId;
 		sqlTaskList = lappend(sqlTaskList, subqueryTask);
 
@@ -2565,11 +2588,11 @@ QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 	if (list_length(taskPlacementList) == 0)
 	{
 		*planningError = DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-				"cannot find a worker that has active placements for all "
-				"shards in the query",
-				NULL, NULL);
+									   "cannot find a worker that has active placements for all "
+									   "shards in the query",
+									   NULL, NULL);
 
-		return NULL;					   
+		return NULL;
 	}
 
 	/*
@@ -3615,26 +3638,58 @@ NodeIsRangeTblRefReferenceTable(Node *node, List *rangeTableList)
 
 
 /*
- * FetchEqualityAttrNumsForRTEFromQuals fetches the attribute numbers from quals
+ * FetchEqualityAttrNumsForRTE fetches the attribute numbers from quals
  * which:
  * - has equality operator
  * - belongs to rangeTableEntry with rteIndex
  */
 List *
-FetchEqualityAttrNumsForRTEFromQuals(Node *quals, Index rteIndex)
+FetchEqualityAttrNumsForRTE(Node *node)
 {
-	if (quals == NULL)
+	if (node == NULL)
 	{
 		return NIL;
 	}
-
-	if (IsA(quals, OpExpr))
+	if (IsA(node, List))
 	{
-		return FetchEqualityAttrNumsForRTEOpExpr((OpExpr *) quals, rteIndex);
+		return FetchEqualityAttrNumsForList((List *) node);
 	}
-	else if (IsA(quals, BoolExpr))
+	else if (IsA(node, OpExpr))
 	{
-		return FetchEqualityAttrNumsForRTEBoolExpr((BoolExpr *) quals, rteIndex);
+		return FetchEqualityAttrNumsForRTEOpExpr((OpExpr *) node);
+	}
+	else if (IsA(node, BoolExpr))
+	{
+		return FetchEqualityAttrNumsForRTEBoolExpr((BoolExpr *) node);
+	}
+	return NIL;
+}
+
+/*
+ * FetchEqualityAttrNumsForList fetches the constant equality numbers
+ * from the given node list.
+ */
+static List *FetchEqualityAttrNumsForList(List *nodeList)
+{
+	List *attributeNums = NIL;
+	Node *node = NULL;
+	bool hasAtLeastOneEquality = false;
+	foreach_ptr(node, nodeList)
+	{
+		List *fetchedEqualityAttrNums =
+			FetchEqualityAttrNumsForRTE(node);
+		hasAtLeastOneEquality |= list_length(fetchedEqualityAttrNums) > 0;
+		attributeNums = list_concat(attributeNums, fetchedEqualityAttrNums);
+	}
+
+	/* 
+	 * the given list is in the form of AND'ed expressions
+	 * hence if we have one equality then it is enough.
+	 * E.g: dist.a = 5 AND dist.a > 10
+	 */
+	if (hasAtLeastOneEquality)
+	{
+		return attributeNums;
 	}
 	return NIL;
 }
@@ -3647,7 +3702,7 @@ FetchEqualityAttrNumsForRTEFromQuals(Node *quals, Index rteIndex)
  * - belongs to rangeTableEntry with rteIndex
  */
 static List *
-FetchEqualityAttrNumsForRTEOpExpr(OpExpr *opExpr, Index rteIndex)
+FetchEqualityAttrNumsForRTEOpExpr(OpExpr *opExpr)
 {
 	if (!OperatorImplementsEquality(opExpr->opno))
 	{
@@ -3656,7 +3711,7 @@ FetchEqualityAttrNumsForRTEOpExpr(OpExpr *opExpr, Index rteIndex)
 
 	List *attributeNums = NIL;
 	Var *var = NULL;
-	if (VarConstOpExprClause(opExpr, &var, NULL) && var->varno == rteIndex)
+	if (VarConstOpExprClause(opExpr, &var, NULL))
 	{
 		attributeNums = lappend_int(attributeNums, var->varattno);
 	}
@@ -3671,7 +3726,7 @@ FetchEqualityAttrNumsForRTEOpExpr(OpExpr *opExpr, Index rteIndex)
  * - belongs to rangeTableEntry with rteIndex
  */
 static List *
-FetchEqualityAttrNumsForRTEBoolExpr(BoolExpr *boolExpr, Index rteIndex)
+FetchEqualityAttrNumsForRTEBoolExpr(BoolExpr *boolExpr)
 {
 	if (boolExpr->boolop != AND_EXPR && boolExpr->boolop != OR_EXPR)
 	{
@@ -3683,8 +3738,7 @@ FetchEqualityAttrNumsForRTEBoolExpr(BoolExpr *boolExpr, Index rteIndex)
 	Node *arg = NULL;
 	foreach_ptr(arg, boolExpr->args)
 	{
-		List *attributeNumsInSubExpression = FetchEqualityAttrNumsForRTEFromQuals(arg,
-																				  rteIndex);
+		List *attributeNumsInSubExpression = FetchEqualityAttrNumsForRTE(arg);
 		if (boolExpr->boolop == AND_EXPR)
 		{
 			hasEquality |= list_length(attributeNumsInSubExpression) > 0;
@@ -5466,7 +5520,6 @@ ActiveShardPlacementLists(List *taskList)
 	{
 		Task *task = (Task *) lfirst(taskCell);
 		uint64 anchorShardId = task->anchorShardId;
-
 		List *shardPlacementList = ActiveShardPlacementList(anchorShardId);
 
 		/* filter out shard placements that reside in inactive nodes */

@@ -100,6 +100,20 @@
 #include "utils/guc.h"
 #include "utils/lsyscache.h"
 
+/*
+ * RecursivePlanningContext is used to recursively plan subqueries
+ * and CTEs, pull results to the coordinator, and push it back into
+ * the workers.
+ */
+struct RecursivePlanningContextInternal
+{
+	int level;
+	uint64 planId;
+	bool allDistributionKeysInQueryAreEqual; /* used for some optimizations */
+	List *subPlanList;
+	PlannerRestrictionContext *plannerRestrictionContext;
+};
+
 /* track depth of current recursive planner query */
 static int recursivePlanningDepth = 0;
 
@@ -159,7 +173,7 @@ static bool AllDistributionKeysInSubqueryAreEqual(Query *subquery,
 static bool IsTableLocallyAccessible(Oid relationId);
 static bool ShouldRecursivelyPlanSetOperation(Query *query,
 											  RecursivePlanningContext *context);
-static void RecursivelyPlanSubquery(Query *subquery,
+static bool RecursivelyPlanSubquery(Query *subquery,
 									RecursivePlanningContext *planningContext);
 static void RecursivelyPlanSetOperations(Query *query, Node *node,
 										 RecursivePlanningContext *context);
@@ -178,11 +192,10 @@ static Query * BuildReadIntermediateResultsQuery(List *targetEntryList,
 												 List *columnAliasList,
 												 Const *resultIdConst, Oid functionOid,
 												 bool useBinaryCopyFormat);
-static void
-UpdateVarNosInNode(Query *query, Index newVarNo);
+static void UpdateVarNosInNode(Query *query, Index newVarNo);
 static bool ModifiesLocalTableWithRemoteCitusLocalTable(List *rangeTableList);
 static void GetRangeTableEntriesFromJoinTree(Node *joinNode, List *rangeTableList,
-											 List **joinRangeTableEntries);														
+											 List **joinRangeTableEntries);
 
 /*
  * GenerateSubplansForSubqueriesAndCTEs is a wrapper around RecursivelyPlanSubqueriesAndCTEs.
@@ -347,21 +360,33 @@ RecursivelyPlanSubqueriesAndCTEs(Query *query, RecursivePlanningContext *context
 									 &rangeTableList);
 
 	if (ShouldConvertLocalTableJoinsToSubqueries(query, rangeTableList,
-													plannerRestrictionContext)) {
+												 plannerRestrictionContext))
+	{
 		/*
-		* Logical planner cannot handle "local_table" [OUTER] JOIN "dist_table", or
-		* a query with local table/citus local table and subquery. We convert local/citus local
-		* tables to a subquery until they can be planned.
-		* This is the last call in this function since we want the other calls to be finished
-		* so that we can check if the current plan is router plannable at any step within this function.
-		*/
+		 * Logical planner cannot handle "local_table" [OUTER] JOIN "dist_table", or
+		 * a query with local table/citus local table and subquery. We convert local/citus local
+		 * tables to a subquery until they can be planned.
+		 * This is the last call in this function since we want the other calls to be finished
+		 * so that we can check if the current plan is router plannable at any step within this function.
+		 */
 		RecursivelyPlanLocalTableJoins(query, context, rangeTableList);
-	
 	}
 
 
 	return NULL;
 }
+
+
+/*
+ * GetPlannerRestrictionContext returns the planner restriction context
+ * from the given context.
+ */
+PlannerRestrictionContext *
+GetPlannerRestrictionContext(RecursivePlanningContext *recursivePlanningContext)
+{
+	return recursivePlanningContext->plannerRestrictionContext;
+}
+
 
 /*
  * GetRangeTableEntriesFromJoinTree gets the range table entries that are
@@ -405,7 +430,6 @@ GetRangeTableEntriesFromJoinTree(Node *joinNode, List *rangeTableList,
 		pg_unreachable();
 	}
 }
-
 
 
 /*
@@ -1180,7 +1204,7 @@ IsRelationLocalTableOrMatView(Oid relationId)
  * and immediately returns. Later, the planner decides on what to do
  * with the query.
  */
-static void
+static bool
 RecursivelyPlanSubquery(Query *subquery, RecursivePlanningContext *planningContext)
 {
 	uint64 planId = planningContext->planId;
@@ -1191,7 +1215,7 @@ RecursivelyPlanSubquery(Query *subquery, RecursivePlanningContext *planningConte
 		elog(DEBUG2, "skipping recursive planning for the subquery since it "
 					 "contains references to outer queries");
 
-		return;
+		return false;
 	}
 
 	/*
@@ -1234,6 +1258,7 @@ RecursivelyPlanSubquery(Query *subquery, RecursivePlanningContext *planningConte
 
 	/* finally update the input subquery to point the result query */
 	*subquery = *resultQuery;
+	return true;
 }
 
 
@@ -1419,16 +1444,20 @@ NodeContainsSubqueryReferencingOuterQuery(Node *node)
 /*
  * ReplaceRTERelationWithRteSubquery replaces the input rte relation target entry
  * with a subquery. The function also pushes down the filters to the subquery.
- * 
+ *
  * It then recursively plans the subquery.
  */
 void
-ReplaceRTERelationWithRteSubquery(RangeTblEntry *rangeTableEntry, List *restrictionList,
+ReplaceRTERelationWithRteSubquery(RangeTblEntry *rangeTableEntry,
 								  List *requiredAttrNumbers,
 								  RecursivePlanningContext *context)
 {
 	Query *subquery = WrapRteRelationIntoSubquery(rangeTableEntry, requiredAttrNumbers);
-	Expr *andedBoundExpressions = make_ands_explicit(restrictionList);
+	List *restrictionList =
+		GetRestrictInfoListForRelation(rangeTableEntry,
+									   context->plannerRestrictionContext);
+	List *copyRestrictionList = copyObject(restrictionList);
+	Expr *andedBoundExpressions = make_ands_explicit(copyRestrictionList);
 	subquery->jointree->quals = (Node *) andedBoundExpressions;
 	UpdateVarNosInNode(subquery, SINGLE_RTE_INDEX);
 
@@ -1456,7 +1485,13 @@ ReplaceRTERelationWithRteSubquery(RangeTblEntry *rangeTableEntry, List *restrict
 	}
 
 	/* as we created the subquery, now forcefully recursively plan it */
-	RecursivelyPlanSubquery(rangeTableEntry->subquery, context);
+	bool recursivellyPlanned = RecursivelyPlanSubquery(rangeTableEntry->subquery,
+													   context);
+	if (!recursivellyPlanned)
+	{
+		ereport(ERROR, (errmsg(
+							"unexpected state: query should have been recursively planned")));
+	}
 }
 
 
@@ -1610,6 +1645,7 @@ ContainsLocalTableDistributedTableJoin(List *rangeTableList)
 	return containsLocalTable && containsDistributedTable;
 }
 
+
 /*
  * WrapFunctionsInSubqueries iterates over all the immediate Range Table Entries
  * of a query and wraps the functions inside (SELECT * FROM fnc() f)
@@ -1733,7 +1769,6 @@ TransformFunctionRTE(RangeTblEntry *rangeTblEntry)
 			subquery->targetList = lappend(subquery->targetList, targetEntry);
 		}
 	}
-
 	/*
 	 * If tupleDesc is NULL we have 2 different cases:
 	 *
@@ -1783,7 +1818,6 @@ TransformFunctionRTE(RangeTblEntry *rangeTblEntry)
 				columnType = list_nth_oid(rangeTblFunction->funccoltypes,
 										  targetColumnIndex);
 			}
-
 			/* use the types in the function definition otherwise */
 			else
 			{

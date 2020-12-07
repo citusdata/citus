@@ -22,21 +22,16 @@
 #include "nodes/relation.h"
 #endif
 
-/*
- * RecursivePlanningContext is used to recursively plan subqueries
- * and CTEs, pull results to the coordinator, and push it back into
- * the workers.
- */
-typedef struct RecursivePlanningContext
+typedef struct RecursivePlanningContextInternal RecursivePlanningContext;
+
+typedef struct RangeTblEntryIndex
 {
-	int level;
-	uint64 planId;
-	bool allDistributionKeysInQueryAreEqual; /* used for some optimizations */
-	List *subPlanList;
-	PlannerRestrictionContext *plannerRestrictionContext;
-} RecursivePlanningContext;
+	RangeTblEntry *rangeTableEntry;
+	Index rteIndex;
+}RangeTblEntryIndex;
 
-
+extern PlannerRestrictionContext * GetPlannerRestrictionContext(
+	RecursivePlanningContext *recursivePlanningContext);
 extern List * GenerateSubplansForSubqueriesAndCTEs(uint64 planId, Query *originalQuery,
 												   PlannerRestrictionContext *
 												   plannerRestrictionContext);
@@ -50,7 +45,6 @@ extern Query * BuildReadIntermediateResultsArrayQuery(List *targetEntryList,
 extern bool GeneratingSubplans(void);
 extern bool ContainsLocalTableDistributedTableJoin(List *rangeTableList);
 extern void ReplaceRTERelationWithRteSubquery(RangeTblEntry *rangeTableEntry,
-											  List *restrictionList,
 											  List *requiredAttrNumbers,
 											  RecursivePlanningContext *context);
 extern bool ContainsTableToBeConvertedToSubquery(List *rangeTableList);

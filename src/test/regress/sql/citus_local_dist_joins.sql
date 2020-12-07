@@ -128,7 +128,7 @@ SET
 FROM
 	citus_local
 WHERE
-	mv1.key = citus_local.key;  
+	mv1.key = citus_local.key;
 ROLLBACK;
 
 BEGIN;
@@ -139,7 +139,7 @@ SET
 FROM
 	mv1
 WHERE
-	mv1.key = citus_local.key;    
+	mv1.key = citus_local.key;
 ROLLBACK;
 
 BEGIN;
@@ -150,9 +150,9 @@ SET
 FROM
 	mv2
 WHERE
-	mv2.key = citus_local.key;  
+	mv2.key = citus_local.key;
 ROLLBACK;
-    
+
 -- DELETE operations
 
 BEGIN;
@@ -204,21 +204,21 @@ DELETE FROM
 USING
 	citus_local
 WHERE
-	mv1.key = citus_local.key;  
+	mv1.key = citus_local.key;
 
 DELETE FROM
 	citus_local
 USING
 	mv1
 WHERE
-	mv1.key = citus_local.key;    
+	mv1.key = citus_local.key;
 
 DELETE FROM
 	citus_local
 USING
 	mv2
 WHERE
-	mv2.key = citus_local.key;  
+	mv2.key = citus_local.key;
 
 SELECT count(*) FROM postgres_table JOIN (SELECT * FROM (SELECT * FROM distributed_table LIMIT 1) d1) d2 using (key) JOIN reference_table USING(key) JOIN citus_local USING (key) JOIN (SELECT * FROM citus_local) c1  USING (key) WHERE d2.key > 10 AND d2.key = 10;
 SELECT count(*) FROM postgres_table JOIN (SELECT * FROM (SELECT * FROM distributed_table LIMIT 1) d1) d2 using (key) JOIN reference_table USING(key) JOIN citus_local USING (key) JOIN (SELECT * FROM citus_local) c1  USING (key) WHERE d2.key > 10 AND d2.key = 10;

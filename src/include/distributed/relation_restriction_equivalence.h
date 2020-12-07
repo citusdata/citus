@@ -41,13 +41,18 @@ extern PlannerRestrictionContext * FilterPlannerRestrictionForQuery(
 extern List * GetRestrictInfoListForRelation(RangeTblEntry *rangeTblEntry,
 											 PlannerRestrictionContext *
 											 plannerRestrictionContext);
+extern RelationRestriction * RelationRestrictionForRelation(
+	RangeTblEntry *rangeTableEntry,
+	PlannerRestrictionContext *
+	plannerRestrictionContext);
 extern JoinRestrictionContext * RemoveDuplicateJoinRestrictions(JoinRestrictionContext *
 																joinRestrictionContext);
 
 extern bool EquivalenceListContainsRelationsEquality(List *attributeEquivalenceList,
 													 RelationRestrictionContext *
 													 restrictionContext);
-extern RelationRestrictionContext *
-FilterRelationRestrictionContext(RelationRestrictionContext *relationRestrictionContext,
-								 Relids queryRteIdentities);
+extern RelationRestrictionContext * FilterRelationRestrictionContext(
+	RelationRestrictionContext *relationRestrictionContext,
+	Relids
+	queryRteIdentities);
 #endif /* RELATION_RESTRICTION_EQUIVALENCE_H */

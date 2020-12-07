@@ -720,7 +720,7 @@ RegisterCitusConfigVariables(void)
 		PGC_SIGHUP,
 		GUC_SUPERUSER_ONLY,
 		NULL, NULL, LocalPoolSizeGucShowHook);
-		
+
 	DefineCustomEnumVariable(
 		"citus.local_table_join_policy",
 		gettext_noop("defines the behaviour when a distributed table "

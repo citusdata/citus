@@ -3,13 +3,13 @@ SET search_path TO local_dist_join_mixed;
 
 
 
-CREATE TABLE distributed (id bigserial PRIMARY KEY, 
-                    	  name text, 
+CREATE TABLE distributed (id bigserial PRIMARY KEY,
+                    	  name text,
                     	  created_at timestamptz DEFAULT now());
-CREATE TABLE reference (id bigserial PRIMARY KEY, 
+CREATE TABLE reference (id bigserial PRIMARY KEY,
                     	title text);
 
-CREATE TABLE local (id bigserial PRIMARY KEY, 
+CREATE TABLE local (id bigserial PRIMARY KEY,
                     title text);
 
 -- these above restrictions brought us to the following schema
@@ -100,118 +100,118 @@ SELECT sum(d1.id + local.id) OVER (PARTITION BY d1.id + local.id) FROM distribut
 
 
 -- nested subqueries
-SELECT 
-	count(*) 
-FROM 
+SELECT
+	count(*)
+FROM
 	(SELECT * FROM (SELECT * FROM distributed) as foo) as bar
-		JOIN 
+		JOIN
 	local
 		USING(id);
 
 
-SELECT 
-	count(*) 
-FROM 
+SELECT
+	count(*)
+FROM
 	(SELECT *, random() FROM (SELECT *, random() FROM distributed) as foo) as bar
-		JOIN 
+		JOIN
 	local
 		USING(id);
 
-SELECT 
-	count(*) 
-FROM 
+SELECT
+	count(*)
+FROM
 	(SELECT *, random() FROM (SELECT *, random() FROM distributed) as foo) as bar
-		JOIN 
+		JOIN
 	local
 		USING(id);
-SELECT 
-	count(*) 
-FROM 
+SELECT
+	count(*)
+FROM
 	(SELECT *, random() FROM (SELECT *, random() FROM distributed) as foo) as bar
-		JOIN 
+		JOIN
 	(SELECT *, random() FROM (SELECT *,random() FROM local) as foo2) as bar2
 		USING(id);
 
--- TODO: Unnecessary recursive planning for local 
-SELECT 
-	count(*) 
-FROM 
+-- TODO: Unnecessary recursive planning for local
+SELECT
+	count(*)
+FROM
 	(SELECT *, random() FROM (SELECT *, random() FROM distributed LIMIT 1) as foo) as bar
-		JOIN 
+		JOIN
 	(SELECT *, random() FROM (SELECT *,random() FROM local) as foo2) as bar2
 		USING(id);
 
 -- subqueries in WHERE clause
 -- is not colocated, and the JOIN inside as well.
 -- so should be recursively planned twice
-SELECT 
-	count(*) 
-FROM 
-	distributed 
-WHERE 
-	id  > (SELECT 
-				count(*) 
-			FROM 
+SELECT
+	count(*)
+FROM
+	distributed
+WHERE
+	id  > (SELECT
+				count(*)
+			FROM
 				(SELECT *, random() FROM (SELECT *, random() FROM distributed) as foo) as bar
-					JOIN 
+					JOIN
 				(SELECT *, random() FROM (SELECT *,random() FROM local) as foo2) as bar2
 					USING(id)
 			);
 
 -- two distributed tables are co-located and JOINed on distribution
--- key, so should be fine to pushdown 
-SELECT 
-	count(*) 
-FROM 
+-- key, so should be fine to pushdown
+SELECT
+	count(*)
+FROM
 	distributed d_upper
-WHERE 
-	(SELECT 
+WHERE
+	(SELECT
 				bar.id
-			FROM 
+			FROM
 				(SELECT *, random() FROM (SELECT *, random() FROM distributed WHERE distributed.id = d_upper.id) as foo) as bar
-					JOIN 
+					JOIN
 				(SELECT *, random() FROM (SELECT *,random() FROM local) as foo2) as bar2
 					USING(id)
 			) IS NOT NULL;
 
-SELECT 
-	count(*) 
-FROM 
+SELECT
+	count(*)
+FROM
 	distributed d_upper
-WHERE 
-	(SELECT 
+WHERE
+	(SELECT
 				bar.id
-			FROM 
+			FROM
 				(SELECT *, random() FROM (SELECT *, random() FROM distributed WHERE distributed.id = d_upper.id) as foo) as bar
-					JOIN 
+					JOIN
 				  local as foo
 					USING(id)
 			) IS NOT NULL;
 
-SELECT 
-	count(*) 
-FROM 
+SELECT
+	count(*)
+FROM
 	distributed d_upper
-WHERE d_upper.id > 
-	(SELECT 
+WHERE d_upper.id >
+	(SELECT
 				bar.id
-			FROM 
+			FROM
 				(SELECT *, random() FROM (SELECT *, random() FROM distributed WHERE distributed.id = d_upper.id) as foo) as bar
-					JOIN 
+					JOIN
 				  local as foo
 					USING(id)
 			);
 
-SELECT 
-	count(*) 
-FROM 
+SELECT
+	count(*)
+FROM
 	distributed d_upper
-WHERE 
-	(SELECT 
+WHERE
+	(SELECT
 				bar.id
-			FROM 
+			FROM
 				(SELECT *, random() FROM (SELECT *, random() FROM distributed WHERE distributed.id = d_upper.id) as foo) as bar
-					JOIN 
+					JOIN
 				(SELECT *, random() FROM (SELECT *,random() FROM local WHERE d_upper.id = id) as foo2) as bar2
 					USING(id)
 			) IS NOT NULL;
@@ -222,15 +222,15 @@ WHERE
 -- subqueries in the target list
 
 -- router, should work
-select (SELECT local.id) FROM local, distributed WHERE distributed.id = 1 LIMIT 1; 
+select (SELECT local.id) FROM local, distributed WHERE distributed.id = 1 LIMIT 1;
 
 -- should fail
-select (SELECT local.id) FROM local, distributed WHERE distributed.id != 1 LIMIT 1; 
+select (SELECT local.id) FROM local, distributed WHERE distributed.id != 1 LIMIT 1;
 
 -- currently not supported, but should work with https://github.com/citusdata/citus/pull/4360/files
-SELECT 
+SELECT
 	name, (SELECT id FROM local WHERE id = e.id)
-FROM 
+FROM
 	distributed e
 ORDER BY 1,2 LIMIT 1;
 
@@ -260,7 +260,7 @@ SELECT count(*) FROM
 	(SELECT * FROM (SELECT distributed.* FROM local JOIN distributed USING (id)) as ba)
 ) bar;
 
-select count(DISTINCT id) 
+select count(DISTINCT id)
 FROM
 (
 	(SELECT * FROM (SELECT distributed.* FROM local JOIN distributed USING (id)) as fo)
@@ -303,14 +303,14 @@ SELECT COUNT(*) FROM distributed JOIN LATERAL (SELECT * FROM local WHERE local.i
 
 
 SELECT count(*) FROM distributed CROSS JOIN local;
-SELECT count(*) FROM distributed CROSS JOIN local WHERE distributed.id = 1;  
+SELECT count(*) FROM distributed CROSS JOIN local WHERE distributed.id = 1;
 
 -- w count(*) it works fine as PG ignores the  inner tables
 SELECT count(*) FROM distributed LEFT JOIN local USING (id);
 SELECT count(*) FROM local LEFT JOIN distributed USING (id);
 
-SELECT id, name FROM distributed LEFT JOIN local USING (id) LIMIT 1;
-SELECT id, name FROM local LEFT JOIN distributed USING (id) LIMIT 1;
+SELECT id, name FROM distributed LEFT JOIN local USING (id) ORDER BY 1 LIMIT 1;
+SELECT id, name FROM local LEFT JOIN distributed USING (id) ORDER BY 1 LIMIT 1;
 
  SELECT
         foo1.id
@@ -326,18 +326,18 @@ SELECT id, name FROM local LEFT JOIN distributed USING (id) LIMIT 1;
  (SELECT local.id, local.title FROM local, distributed WHERE local.id = distributed.id ) as foo10,
  (SELECT local.id, local.title FROM local, distributed WHERE local.id = distributed.id ) as foo1
  WHERE
-  foo1.id =  foo9.id AND 
-  foo1.id =  foo8.id AND 
-  foo1.id =  foo7.id AND 
-  foo1.id =  foo6.id AND 
-  foo1.id =  foo5.id AND 
-  foo1.id =  foo4.id AND 
-  foo1.id =  foo3.id AND 
-  foo1.id =  foo2.id AND 
-  foo1.id =  foo10.id AND 
+  foo1.id =  foo9.id AND
+  foo1.id =  foo8.id AND
+  foo1.id =  foo7.id AND
+  foo1.id =  foo6.id AND
+  foo1.id =  foo5.id AND
+  foo1.id =  foo4.id AND
+  foo1.id =  foo3.id AND
+  foo1.id =  foo2.id AND
+  foo1.id =  foo10.id AND
   foo1.id =  foo1.id
-ORDER BY 1;  
-  
+ORDER BY 1;
+
 SELECT
 	foo1.id
 FROM
@@ -352,7 +352,7 @@ WHERE
 	foo1.id = foo3.id AND
 	foo1.id = foo4.id AND
 	foo1.id = foo5.id
-ORDER BY 1;	
+ORDER BY 1;
 
 SELECT
 	foo1.id
@@ -368,8 +368,37 @@ WHERE
 	foo1.id = foo3.id AND
 	foo1.id = foo4.id AND
 	foo1.id = foo5.id
-ORDER BY 1;	
+ORDER BY 1;
 
+SELECT
+	count(*)
+FROM
+ distributed
+JOIN LATERAL
+	(SELECT
+		*
+	FROM
+		local
+	JOIN
+		distributed d2
+	ON(true)
+		WHERE local.id = distributed.id AND d2.id = local.id) as foo
+ON (true);
 
+SELECT local.title, local.title FROM local JOIN distributed USING(id) ORDER BY 1,2 LIMIt 1;
+SELECT NULL FROM local JOIN distributed USING(id) ORDER BY 1 LIMIt 1;
+SELECT distributed.name, distributed.name,  local.title, local.title FROM local JOIN distributed USING(id) ORDER BY 1,2,3,4 LIMIT 1;
+SELECT
+	COUNT(*)
+FROM
+	local
+JOIN
+	distributed
+USING
+	(id)
+JOIN
+	(SELECT  id, NULL, NULL FROM distributed) foo
+USING
+	(id);
 
 DROP SCHEMA local_dist_join_mixed CASCADE;

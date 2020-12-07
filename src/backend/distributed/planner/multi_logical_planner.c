@@ -340,7 +340,13 @@ IsCitusTableRTE(Node *node)
 bool
 IsDistributedOrReferenceTableRTE(Node *node)
 {
-	return IsDistributedTableRTE(node) || IsReferenceTableRTE(node);
+	Oid relationId = NodeTryGetRteRelid(node);
+	if (!OidIsValid(relationId))
+	{
+		return false;
+	}
+	return IsCitusTableType(relationId, DISTRIBUTED_TABLE) ||
+		   IsCitusTableType(relationId, REFERENCE_TABLE);
 }
 
 
