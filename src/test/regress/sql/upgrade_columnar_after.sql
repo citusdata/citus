@@ -31,11 +31,11 @@ SELECT * FROM test_alter_type ORDER BY a;
 SELECT * FROM matview ORDER BY a;
 
 -- test we retained options
-SELECT * FROM cstore.options WHERE regclass = 'test_options_1'::regclass;
+SELECT * FROM columnar.options WHERE regclass = 'test_options_1'::regclass;
 VACUUM VERBOSE test_options_1;
 SELECT count(*), sum(a), sum(b) FROM test_options_1;
 
-SELECT * FROM cstore.options WHERE regclass = 'test_options_2'::regclass;
+SELECT * FROM columnar.options WHERE regclass = 'test_options_2'::regclass;
 VACUUM VERBOSE test_options_2;
 SELECT count(*), sum(a), sum(b) FROM test_options_2;
 

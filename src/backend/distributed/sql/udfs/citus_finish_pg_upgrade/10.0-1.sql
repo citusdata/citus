@@ -108,7 +108,7 @@ BEGIN
         old_records naming,
         pg_get_object_address(naming.type, naming.object_names, naming.object_args) address;
 
-    PERFORM citus_internal.cstore_ensure_objects_exist();
+    PERFORM citus_internal.columnar_ensure_objects_exist();
 END;
 $cppu$;
 

@@ -101,7 +101,7 @@ static bool WriteColumnarOptions(Oid regclass, ColumnarOptions *options, bool ov
 
 PG_FUNCTION_INFO_V1(columnar_relation_storageid);
 
-/* constants for cstore.options */
+/* constants for columnar.options */
 #define Natts_cstore_options 4
 #define Anum_cstore_options_regclass 1
 #define Anum_cstore_options_chunk_row_count 2
@@ -109,7 +109,7 @@ PG_FUNCTION_INFO_V1(columnar_relation_storageid);
 #define Anum_cstore_options_compression 4
 
 /* ----------------
- *		cstore.options definition.
+ *		columnar.options definition.
  * ----------------
  */
 typedef struct FormData_cstore_options
@@ -162,7 +162,7 @@ InitColumnarOptions(Oid regclass)
 {
 	/*
 	 * When upgrading we retain options for all columnar tables by upgrading
-	 * "cstore.options" catalog table, so we shouldn't do anything here.
+	 * "columnar.options" catalog table, so we shouldn't do anything here.
 	 */
 	if (IsBinaryUpgrade)
 	{
@@ -1041,7 +1041,7 @@ ByteaToDatum(bytea *bytes, Form_pg_attribute attrForm)
 static Oid
 CStoreStripesRelationId(void)
 {
-	return get_relname_relid("cstore_stripes", CStoreNamespaceId());
+	return get_relname_relid("columnar_stripes", CStoreNamespaceId());
 }
 
 
@@ -1052,12 +1052,12 @@ CStoreStripesRelationId(void)
 static Oid
 CStoreStripesIndexRelationId(void)
 {
-	return get_relname_relid("cstore_stripes_pkey", CStoreNamespaceId());
+	return get_relname_relid("columnar_stripes_pkey", CStoreNamespaceId());
 }
 
 
 /*
- * ColumnarOptionsRelationId returns relation id of cstore.options.
+ * ColumnarOptionsRelationId returns relation id of columnar.options.
  */
 static Oid
 ColumnarOptionsRelationId(void)
@@ -1067,7 +1067,7 @@ ColumnarOptionsRelationId(void)
 
 
 /*
- * ColumnarOptionsIndexRegclass returns relation id of cstore.options_pkey.
+ * ColumnarOptionsIndexRegclass returns relation id of columnar.options_pkey.
  */
 static Oid
 ColumnarOptionsIndexRegclass(void)
@@ -1083,7 +1083,7 @@ ColumnarOptionsIndexRegclass(void)
 static Oid
 CStoreSkipNodesRelationId(void)
 {
-	return get_relname_relid("cstore_skipnodes", CStoreNamespaceId());
+	return get_relname_relid("columnar_skipnodes", CStoreNamespaceId());
 }
 
 
@@ -1094,7 +1094,7 @@ CStoreSkipNodesRelationId(void)
 static Oid
 CStoreSkipNodesIndexRelationId(void)
 {
-	return get_relname_relid("cstore_skipnodes_pkey", CStoreNamespaceId());
+	return get_relname_relid("columnar_skipnodes_pkey", CStoreNamespaceId());
 }
 
 
@@ -1105,7 +1105,7 @@ CStoreSkipNodesIndexRelationId(void)
 static Oid
 CStoreNamespaceId(void)
 {
-	return get_namespace_oid("cstore", false);
+	return get_namespace_oid("columnar", false);
 }
 
 

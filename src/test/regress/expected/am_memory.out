@@ -13,8 +13,8 @@ CREATE FUNCTION top_memory_context_usage()
 	RETURNS BIGINT AS $$
 		SELECT TopMemoryContext FROM column_store_memory_stats();
 	$$ LANGUAGE SQL VOLATILE;
-SET cstore.stripe_row_count TO 50000;
-SET cstore.compression TO 'pglz';
+SET columnar.stripe_row_count TO 50000;
+SET columnar.compression TO 'pglz';
 CREATE TABLE t (a int, tag text, memusage bigint) USING columnar;
 -- measure memory before doing writes
 SELECT TopMemoryContext as top_pre,

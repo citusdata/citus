@@ -1,9 +1,9 @@
-CREATE OR REPLACE FUNCTION cstore.columnar_handler(internal)
+CREATE OR REPLACE FUNCTION columnar.columnar_handler(internal)
     RETURNS table_am_handler
     LANGUAGE C
 AS 'MODULE_PATHNAME', 'columnar_handler';
 
-COMMENT ON FUNCTION cstore.columnar_handler(internal)
-    IS 'internal function returning the handler for cstore tables';
+COMMENT ON FUNCTION columnar.columnar_handler(internal)
+    IS 'internal function returning the handler for columnar tables';
 
-CREATE ACCESS METHOD columnar TYPE TABLE HANDLER cstore.columnar_handler;
+CREATE ACCESS METHOD columnar TYPE TABLE HANDLER columnar.columnar_handler;

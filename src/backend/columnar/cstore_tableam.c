@@ -1462,7 +1462,7 @@ alter_columnar_table_set(PG_FUNCTION_ARGS)
 	Relation rel = table_open(relationId, AccessExclusiveLock); /* ALTER TABLE LOCK */
 	if (!IsCStoreTableAmTable(relationId))
 	{
-		ereport(ERROR, (errmsg("table %s is not a cstore table",
+		ereport(ERROR, (errmsg("table %s is not a columnar table",
 							   quote_identifier(RelationGetRelationName(rel)))));
 	}
 
@@ -1552,7 +1552,7 @@ alter_columnar_table_reset(PG_FUNCTION_ARGS)
 	Relation rel = table_open(relationId, AccessExclusiveLock); /* ALTER TABLE LOCK */
 	if (!IsCStoreTableAmTable(relationId))
 	{
-		ereport(ERROR, (errmsg("table %s is not a cstore table",
+		ereport(ERROR, (errmsg("table %s is not a columnar table",
 							   quote_identifier(RelationGetRelationName(rel)))));
 	}
 

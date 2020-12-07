@@ -45,7 +45,6 @@
 #define CSTORE_VERSION_MINOR 7
 
 /* miscellaneous defines */
-#define CSTORE_FDW_NAME "cstore_fdw"
 #define CSTORE_TUPLE_COST_MULTIPLIER 10
 #define CSTORE_POSTSCRIPT_SIZE_LENGTH 1
 #define CSTORE_POSTSCRIPT_SIZE_MAX 256
@@ -63,7 +62,7 @@ typedef enum
 
 
 /*
- * CStoreFdwOptions holds the option values to be used when reading or writing
+ * ColumnarOptions holds the option values to be used when reading or writing
  * a cstore file. To resolve these values, we first check foreign table's options,
  * and if not present, we then fall back to the default values specified above.
  */

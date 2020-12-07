@@ -109,7 +109,7 @@ cstore_customscan_init()
 
 	/* register customscan specific GUC's */
 	DefineCustomBoolVariable(
-		"cstore.enable_custom_scan",
+		"columnar.enable_custom_scan",
 		gettext_noop("Enables the use of a custom scan to push projections and quals "
 					 "into the storage layer"),
 		NULL,

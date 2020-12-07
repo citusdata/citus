@@ -1,9 +1,9 @@
-SELECT count(distinct storageid) AS columnar_table_count FROM cstore.cstore_stripes \gset
+SELECT count(distinct storageid) AS columnar_table_count FROM columnar.columnar_stripes \gset
 
 CREATE TABLE t(a int, b int) USING columnar;
 
 CREATE VIEW t_stripes AS
-SELECT * FROM cstore.cstore_stripes a, pg_class b
+SELECT * FROM columnar.columnar_stripes a, pg_class b
 WHERE a.storageid = columnar_relation_storageid(b.oid) AND b.relname='t';
 
 SELECT count(*) FROM t_stripes;
@@ -37,17 +37,17 @@ SELECT count(*) FROM t_stripes;
 ALTER TABLE t DROP COLUMN a;
 
 SELECT stripe, attr, chunk, minimum_value IS NULL, maximum_value IS NULL
-FROM cstore.cstore_skipnodes a, pg_class b
+FROM columnar.columnar_skipnodes a, pg_class b
 WHERE a.storageid = columnar_relation_storageid(b.oid) AND b.relname='t' ORDER BY 1, 2, 3;
 
 VACUUM FULL t;
 
 SELECT stripe, attr, chunk, minimum_value IS NULL, maximum_value IS NULL
-FROM cstore.cstore_skipnodes a, pg_class b
+FROM columnar.columnar_skipnodes a, pg_class b
 WHERE a.storageid = columnar_relation_storageid(b.oid) AND b.relname='t' ORDER BY 1, 2, 3;
 
 -- Make sure we cleaned-up the transient table metadata after VACUUM FULL commands
-SELECT count(distinct storageid) - :columnar_table_count FROM cstore.cstore_stripes;
+SELECT count(distinct storageid) - :columnar_table_count FROM columnar.columnar_stripes;
 
 -- do this in a transaction so concurrent autovacuum doesn't interfere with results
 BEGIN;
@@ -110,12 +110,12 @@ DROP TABLE t;
 DROP VIEW t_stripes;
 
 -- Make sure we cleaned the metadata for t too
-SELECT count(distinct storageid) - :columnar_table_count FROM cstore.cstore_stripes;
+SELECT count(distinct storageid) - :columnar_table_count FROM columnar.columnar_stripes;
 
 -- A table with high compression ratio
-SET cstore.compression TO 'pglz';
-SET cstore.stripe_row_count TO 1000000;
-SET cstore.chunk_row_count TO 100000;
+SET columnar.compression TO 'pglz';
+SET columnar.stripe_row_count TO 1000000;
+SET columnar.chunk_row_count TO 100000;
 CREATE TABLE t(a int, b char, c text) USING columnar;
 INSERT INTO t SELECT 1, 'a', 'xyz' FROM generate_series(1, 1000000) i;
 

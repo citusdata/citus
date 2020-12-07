@@ -41,7 +41,7 @@ static const struct config_enum_entry cstore_compression_options[] =
 void
 cstore_init()
 {
-	DefineCustomEnumVariable("cstore.compression",
+	DefineCustomEnumVariable("columnar.compression",
 							 "Compression type for cstore.",
 							 NULL,
 							 &cstore_compression,
@@ -53,7 +53,7 @@ cstore_init()
 							 NULL,
 							 NULL);
 
-	DefineCustomIntVariable("cstore.stripe_row_count",
+	DefineCustomIntVariable("columnar.stripe_row_count",
 							"Maximum number of tuples per stripe.",
 							NULL,
 							&cstore_stripe_row_count,
@@ -66,7 +66,7 @@ cstore_init()
 							NULL,
 							NULL);
 
-	DefineCustomIntVariable("cstore.chunk_row_count",
+	DefineCustomIntVariable("columnar.chunk_row_count",
 							"Maximum number of rows per chunk.",
 							NULL,
 							&cstore_chunk_row_count,

@@ -1,5 +1,5 @@
 --
--- Test loading data into cstore_fdw tables.
+-- Test loading data into columnar tables.
 --
 -- COPY with incorrect delimiter
 COPY contestant FROM '@abs_srcdir@/data/contestants.1.csv'
@@ -15,12 +15,12 @@ COPY contestant FROM '@abs_srcdir@/data/contestants.1.csv' WITH CSV;
 -- COPY into uncompressed table from program
 COPY contestant FROM PROGRAM 'cat @abs_srcdir@/data/contestants.2.csv' WITH CSV;
 -- COPY into compressed table
-set cstore.compression = 'pglz';
+set columnar.compression = 'pglz';
 COPY contestant_compressed FROM '@abs_srcdir@/data/contestants.1.csv' WITH CSV;
 -- COPY into uncompressed table from program
 COPY contestant_compressed FROM PROGRAM 'cat @abs_srcdir@/data/contestants.2.csv'
 	WITH CSV;
-set cstore.compression to default;
+set columnar.compression to default;
 -- Test column list
 CREATE TABLE famous_constants (id int, name text, value real)
     USING columnar;

@@ -1,5 +1,5 @@
 --
--- Test the CREATE statements related to cstore.
+-- Test the CREATE statements related to columnar.
 --
 
 

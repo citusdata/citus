@@ -115,9 +115,9 @@ SELECT :relfilenode_pre_alter <> :relfilenode_post_alter AS relfilenode_changed;
 --
 -- Test that we retain options
 --
-SET cstore.stripe_row_count TO 5000;
-SET cstore.chunk_row_count TO 1000;
-SET cstore.compression TO 'pglz';
+SET columnar.stripe_row_count TO 5000;
+SET columnar.chunk_row_count TO 1000;
+SET columnar.compression TO 'pglz';
 CREATE TABLE test_options_1(a int, b int) USING columnar;
 INSERT INTO test_options_1 SELECT i, floor(i/1000) FROM generate_series(1, 10000) i;
 CREATE TABLE test_options_2(a int, b int) USING columnar;
