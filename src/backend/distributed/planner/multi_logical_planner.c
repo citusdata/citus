@@ -833,18 +833,6 @@ DeferErrorIfQueryNotSupported(Query *queryTree)
 	const char *filterHint = "Consider using an equality filter on the distributed "
 							 "table's partition column.";
 
-	/*
-	 * There could be Sublinks in the target list as well. To produce better
-	 * error messages we're checking if that's the case.
-	 */
-	if (queryTree->hasSubLinks && TargetListContainsSubquery(queryTree))
-	{
-		preconditionsSatisfied = false;
-		errorMessage = "could not run distributed query with subquery outside the "
-					   "FROM, WHERE and HAVING clauses";
-		errorHint = filterHint;
-	}
-
 	if (queryTree->setOperations)
 	{
 		preconditionsSatisfied = false;

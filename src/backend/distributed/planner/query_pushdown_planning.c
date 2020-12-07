@@ -86,12 +86,9 @@ static bool ContainsRecurringRTE(RangeTblEntry *rangeTableEntry,
 static bool ContainsRecurringRangeTable(List *rangeTable, RecurringTuplesType *recurType);
 static bool HasRecurringTuples(Node *node, RecurringTuplesType *recurType);
 static MultiNode * SubqueryPushdownMultiNodeTree(Query *queryTree);
-static void UpdateVarMappingsForExtendedOpNode(List *columnList,
-											   List *subqueryTargetEntryList);
-static void UpdateColumnToMatchingTargetEntry(Var *column,
-											  List *targetEntryList);
 static MultiTable * MultiSubqueryPushdownTable(Query *subquery);
-static List * CreateSubqueryTargetEntryList(List *columnList);
+static List * CreateSubqueryTargetListAndAdjustVars(List *columnList);
+static AttrNumber FindResnoForVarInTargetList(List *targetList, int varno, int varattno);
 static bool RelationInfoContainsOnlyRecurringTuples(PlannerInfo *plannerInfo,
 													Relids relids);
 
@@ -124,6 +121,16 @@ ShouldUseSubqueryPushDown(Query *originalQuery, Query *rewrittenQuery,
 	{
 		return true;
 	}
+
+	/*
+	 * We check the existence of subqueries in the SELECT clause on the modified
+	 * query.
+	 */
+	if (TargetListContainsSubquery(rewrittenQuery->targetList))
+	{
+		return true;
+	}
+
 
 	/*
 	 * We check if postgres planned any semi joins, MultiNodeTree doesn't
@@ -303,9 +310,9 @@ WhereOrHavingClauseContainsSubquery(Query *query)
  * any subqueries in the WHERE clause.
  */
 bool
-TargetListContainsSubquery(Query *query)
+TargetListContainsSubquery(List *targetList)
 {
-	return FindNodeMatchingCheckFunction((Node *) query->targetList, IsNodeSubquery);
+	return FindNodeMatchingCheckFunction((Node *) targetList, IsNodeSubquery);
 }
 
 
@@ -662,38 +669,28 @@ DeferErrorIfFromClauseRecurs(Query *queryTree)
 	if (recurType == RECURRING_TUPLES_REFERENCE_TABLE)
 	{
 		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-							 "cannot pushdown the subquery",
-							 "Reference tables are not allowed in FROM "
-							 "clause when the query has subqueries in "
-							 "WHERE clause and it references a column "
-							 "from another query", NULL);
+							 "correlated subqueries are not supported when "
+							 "the FROM clause contains a reference table", NULL, NULL);
 	}
 	else if (recurType == RECURRING_TUPLES_FUNCTION)
 	{
 		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-							 "cannot pushdown the subquery",
-							 "Functions are not allowed in FROM "
-							 "clause when the query has subqueries in "
-							 "WHERE clause and it references a column "
-							 "from another query", NULL);
+							 "correlated subqueries are not supported when "
+							 "the FROM clause contains a set returning function", NULL,
+							 NULL);
 	}
 	else if (recurType == RECURRING_TUPLES_RESULT_FUNCTION)
 	{
 		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-							 "cannot pushdown the subquery",
-							 "Complex subqueries and CTEs are not allowed in "
-							 "the FROM clause when the query has subqueries in the "
-							 "WHERE clause and it references a column "
-							 "from another query", NULL);
+							 "correlated subqueries are not supported when "
+							 "the FROM clause contains a CTE or subquery", NULL, NULL);
 	}
 	else if (recurType == RECURRING_TUPLES_EMPTY_JOIN_TREE)
 	{
 		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-							 "cannot pushdown the subquery",
-							 "Subqueries without FROM are not allowed in FROM "
-							 "clause when the outer query has subqueries in "
-							 "WHERE clause and it references a column "
-							 "from another query", NULL);
+							 "correlated subqueries are not supported when "
+							 "the FROM clause contains a subquery without FROM", NULL,
+							 NULL);
 	}
 
 	/*
@@ -1058,8 +1055,7 @@ DeferErrorIfCannotPushdownSubquery(Query *subqueryTree, bool outerMostQueryHasLi
 	deferredError = DeferErrorIfFromClauseRecurs(subqueryTree);
 	if (deferredError)
 	{
-		preconditionsSatisfied = false;
-		errorDetail = (char *) deferredError->detail;
+		return deferredError;
 	}
 
 
@@ -1539,18 +1535,12 @@ SubqueryPushdownMultiNodeTree(Query *originalQuery)
 	 * columnList. Columns mentioned in multiProject node and multiExtendedOp
 	 * node are indexed with their respective position in columnList.
 	 */
-	List *targetColumnList = pull_var_clause_default((Node *) targetEntryList);
+	List *targetColumnList = pull_vars_of_level((Node *) targetEntryList, 0);
 	List *havingClauseColumnList = pull_var_clause_default(queryTree->havingQual);
 	List *columnList = list_concat(targetColumnList, havingClauseColumnList);
 
 	/* create a target entry for each unique column */
-	List *subqueryTargetEntryList = CreateSubqueryTargetEntryList(columnList);
-
-	/*
-	 * Update varno/varattno fields of columns in columnList to
-	 * point to corresponding target entry in subquery target entry list.
-	 */
-	UpdateVarMappingsForExtendedOpNode(columnList, subqueryTargetEntryList);
+	List *subqueryTargetEntryList = CreateSubqueryTargetListAndAdjustVars(columnList);
 
 	/* new query only has target entries, join tree, and rtable*/
 	Query *pushedDownQuery = makeNode(Query);
@@ -1633,33 +1623,55 @@ SubqueryPushdownMultiNodeTree(Query *originalQuery)
 
 
 /*
- * CreateSubqueryTargetEntryList creates a target entry for each unique column
- * in the column list and returns the target entry list.
+ * CreateSubqueryTargetListAndAdjustVars creates a target entry for each unique
+ * column in the column list, adjusts the columns to point into the subquery target
+ * list and returns the new subquery target list.
  */
 static List *
-CreateSubqueryTargetEntryList(List *columnList)
+CreateSubqueryTargetListAndAdjustVars(List *columnList)
 {
-	AttrNumber resNo = 1;
-	List *uniqueColumnList = NIL;
+	Var *column = NULL;
 	List *subqueryTargetEntryList = NIL;
 
-	Node *column = NULL;
 	foreach_ptr(column, columnList)
 	{
-		uniqueColumnList = list_append_unique(uniqueColumnList, column);
-	}
+		/*
+		 * To avoid adding the same column multiple times, we first check whether there
+		 * is already a target entry containing a Var with the given varno and varattno.
+		 */
+		AttrNumber resNo = FindResnoForVarInTargetList(subqueryTargetEntryList,
+													   column->varno, column->varattno);
+		if (resNo == InvalidAttrNumber)
+		{
+			/* Var is not yet on the target list, create a new entry */
+			resNo = list_length(subqueryTargetEntryList) + 1;
 
-	foreach_ptr(column, uniqueColumnList)
-	{
-		TargetEntry *newTargetEntry = makeNode(TargetEntry);
+			/*
+			 * The join tree in the subquery is an exact duplicate of the original
+			 * query. Hence, we can make a copy of the original Var. However, if the
+			 * original Var was in a sublink it would be pointing up whereas now it
+			 * will be placed directly on the target list. Hence we reset the
+			 * varlevelsup.
+			 */
+			Var *subqueryTargetListVar = (Var *) copyObject(column);
 
-		newTargetEntry->expr = (Expr *) copyObject(column);
-		newTargetEntry->resname = WorkerColumnName(resNo);
-		newTargetEntry->resjunk = false;
-		newTargetEntry->resno = resNo;
+			subqueryTargetListVar->varlevelsup = 0;
 
-		subqueryTargetEntryList = lappend(subqueryTargetEntryList, newTargetEntry);
-		resNo++;
+			TargetEntry *newTargetEntry = makeNode(TargetEntry);
+			newTargetEntry->expr = (Expr *) subqueryTargetListVar;
+			newTargetEntry->resname = WorkerColumnName(resNo);
+			newTargetEntry->resjunk = false;
+			newTargetEntry->resno = resNo;
+
+			subqueryTargetEntryList = lappend(subqueryTargetEntryList, newTargetEntry);
+		}
+
+		/*
+		 * Change the original column reference to point to the target list
+		 * entry in the subquery. There is only 1 subquery, so the varno is 1.
+		 */
+		column->varno = 1;
+		column->varattno = resNo;
 	}
 
 	return subqueryTargetEntryList;
@@ -1667,63 +1679,30 @@ CreateSubqueryTargetEntryList(List *columnList)
 
 
 /*
- * UpdateVarMappingsForExtendedOpNode updates varno/varattno fields of columns
- * in columnList to point to corresponding target in subquery target entry
- * list.
+ * FindResnoForVarInTargetList finds a Var on a target list that has the given varno
+ * (range table entry number) and varattno (column number) and returns the resno
+ * of the target list entry.
  */
-static void
-UpdateVarMappingsForExtendedOpNode(List *columnList, List *subqueryTargetEntryList)
+static AttrNumber
+FindResnoForVarInTargetList(List *targetList, int varno, int varattno)
 {
-	Var *column = NULL;
-	foreach_ptr(column, columnList)
+	TargetEntry *targetEntry = NULL;
+	foreach_ptr(targetEntry, targetList)
 	{
-		/*
-		 * As an optimization, subqueryTargetEntryList only consists of
-		 * distinct elements. In other words, any duplicate entries in the
-		 * target list consolidated into a single element to prevent pulling
-		 * unnecessary data from the worker nodes (e.g. SELECT a,a,a,b,b,b FROM x;
-		 * is turned into SELECT a,b FROM x_102008).
-		 *
-		 * Thus, at this point we should iterate on the subqueryTargetEntryList
-		 * and ensure that the column on the extended op node points to the
-		 * correct target entry.
-		 */
-		UpdateColumnToMatchingTargetEntry(column, subqueryTargetEntryList);
-	}
-}
-
-
-/*
- * UpdateColumnToMatchingTargetEntry sets the variable of given column entry to
- * the matching entry of the targetEntryList. Since data type of the column can
- * be different from the types of the elements of targetEntryList, we use flattenedExpr.
- */
-static void
-UpdateColumnToMatchingTargetEntry(Var *column, List *targetEntryList)
-{
-	ListCell *targetEntryCell = NULL;
-
-	foreach(targetEntryCell, targetEntryList)
-	{
-		TargetEntry *targetEntry = (TargetEntry *) lfirst(targetEntryCell);
-
-		if (IsA(targetEntry->expr, Var))
+		if (!IsA(targetEntry->expr, Var))
 		{
-			Var *targetEntryVar = (Var *) targetEntry->expr;
-
-			if (IsA(column, Var) && equal(column, targetEntryVar))
-			{
-				column->varno = 1;
-				column->varattno = targetEntry->resno;
-				break;
-			}
+			continue;
 		}
-		else
+
+		Var *targetEntryVar = (Var *) targetEntry->expr;
+
+		if (targetEntryVar->varno == varno && targetEntryVar->varattno == varattno)
 		{
-			elog(ERROR, "unrecognized node type on the target list: %d",
-				 nodeTag(targetEntry->expr));
+			return targetEntry->resno;
 		}
 	}
+
+	return InvalidAttrNumber;
 }
 
 

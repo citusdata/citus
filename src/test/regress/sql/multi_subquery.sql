@@ -468,8 +468,8 @@ WHERE
 	unit_price > 1000 AND
 	unit_price < 10000;
 
--- Check unsupported subqueries in target list
-SELECT (SELECT 1) FROM orders_subquery;
+-- Check subqueries in target list
+SELECT (SELECT 1) FROM orders_subquery ORDER BY 1 LIMIT 1;
 SELECT sum((SELECT 1)) FROM orders_subquery;
 
 -- Check that if subquery is pulled, we don't error and run query properly.
