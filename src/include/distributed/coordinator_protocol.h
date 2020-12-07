@@ -177,9 +177,10 @@ extern uint64 GetNextShardId(void);
 extern uint64 GetNextPlacementId(void);
 extern Oid ResolveRelationId(text *relationName, bool missingOk);
 extern List * GetFullTableCreationCommands(Oid relationId, bool includeSequenceDefaults);
-extern List * GetPostLoadTableCreationCommands(Oid relationId);
+extern List * GetPostLoadTableCreationCommands(Oid relationId, bool includeIndexes);
 extern List * GetPreLoadTableCreationCommands(Oid relationId,
-											  bool includeSequenceDefaults);
+											  bool includeSequenceDefaults,
+											  char *accessMethod);
 extern List * GetTableIndexAndConstraintCommands(Oid relationId);
 extern bool IndexImpliedByAConstraint(Form_pg_index indexForm);
 extern char ShardStorageType(Oid relationId);

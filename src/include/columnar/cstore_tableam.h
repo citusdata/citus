@@ -21,4 +21,5 @@ extern TableScanDesc cstore_beginscan_extended(Relation relation, Snapshot snaps
 
 extern bool IsCStoreTableAmTable(Oid relationId);
 extern TableDDLCommand * ColumnarGetTableOptionsDDL(Oid relationId);
+extern char * GetShardedTableDDLCommandColumnar(uint64 shardId, void *context);
 #endif

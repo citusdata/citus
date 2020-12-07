@@ -618,6 +618,166 @@ SELECT 1 AS created WHERE EXISTS(SELECT * FROM pg_indexes WHERE indexname LIKE '
        1
 (1 row)
 
+-- test alter_distributed_table UDF
+SET citus.shard_count TO 4;
+CREATE TABLE adt_table (a INT, b INT);
+CREATE TABLE adt_col (a INT UNIQUE, b INT);
+CREATE TABLE adt_ref (a INT REFERENCES adt_col(a));
+SELECT create_distributed_table('adt_table', 'a', colocate_with:='none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_table('adt_col', 'a', colocate_with:='adt_table');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_table('adt_ref', 'a', colocate_with:='adt_table');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO adt_table VALUES (1, 2), (3, 4), (5, 6);
+NOTICE:  executing the command locally: INSERT INTO coordinator_shouldhaveshards.adt_table_1503060 AS citus_table_alias (a, b) VALUES (1,2), (5,6)
+INSERT INTO adt_col VALUES (3, 4), (5, 6), (7, 8);
+NOTICE:  executing the command locally: INSERT INTO coordinator_shouldhaveshards.adt_col_1503064 AS citus_table_alias (a, b) VALUES (5,6)
+INSERT INTO adt_ref VALUES (3), (5);
+NOTICE:  executing the command locally: INSERT INTO coordinator_shouldhaveshards.adt_ref_1503068 AS citus_table_alias (a) VALUES (5)
+SELECT "Name", "Citus Table Type", "Distribution Column", "Shard Count" FROM public.citus_tables WHERE "Name"::text LIKE 'adt%';
+   Name    | Citus Table Type | Distribution Column | Shard Count
+---------------------------------------------------------------------
+ adt_col   | distributed      | a                   |           4
+ adt_ref   | distributed      | a                   |           4
+ adt_table | distributed      | a                   |           4
+(3 rows)
+
+SELECT STRING_AGG("Name"::text, ', ' ORDER BY 1) AS "Colocation Groups" FROM public.citus_tables WHERE "Name"::text LIKE 'adt%' GROUP BY "Colocation ID" ORDER BY 1;
+      Colocation Groups
+---------------------------------------------------------------------
+ adt_col, adt_ref, adt_table
+(1 row)
+
+SELECT conrelid::regclass::text AS "Referencing Table", pg_get_constraintdef(oid, true) AS "Definition" FROM  pg_constraint
+    WHERE (conrelid::regclass::text = 'adt_col' OR confrelid::regclass::text = 'adt_col') ORDER BY 1;
+ Referencing Table |              Definition
+---------------------------------------------------------------------
+ adt_col           | UNIQUE (a)
+ adt_ref           | FOREIGN KEY (a) REFERENCES adt_col(a)
+(2 rows)
+
+SET client_min_messages TO WARNING;
+SELECT alter_distributed_table('adt_table', shard_count:=6, cascade_to_colocated:=true);
+ alter_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SET client_min_messages TO DEFAULT;
+SELECT "Name", "Citus Table Type", "Distribution Column", "Shard Count" FROM public.citus_tables WHERE "Name"::text LIKE 'adt%';
+   Name    | Citus Table Type | Distribution Column | Shard Count
+---------------------------------------------------------------------
+ adt_col   | distributed      | a                   |           6
+ adt_ref   | distributed      | a                   |           6
+ adt_table | distributed      | a                   |           6
+(3 rows)
+
+SELECT STRING_AGG("Name"::text, ', ' ORDER BY 1) AS "Colocation Groups" FROM public.citus_tables WHERE "Name"::text LIKE 'adt%' GROUP BY "Colocation ID" ORDER BY 1;
+      Colocation Groups
+---------------------------------------------------------------------
+ adt_col, adt_ref, adt_table
+(1 row)
+
+SELECT conrelid::regclass::text AS "Referencing Table", pg_get_constraintdef(oid, true) AS "Definition" FROM  pg_constraint
+    WHERE (conrelid::regclass::text = 'adt_col' OR confrelid::regclass::text = 'adt_col') ORDER BY 1;
+ Referencing Table |              Definition
+---------------------------------------------------------------------
+ adt_col           | UNIQUE (a)
+ adt_ref           | FOREIGN KEY (a) REFERENCES adt_col(a)
+(2 rows)
+
+SELECT alter_distributed_table('adt_table', distribution_column:='b', colocate_with:='none');
+NOTICE:  creating a new table for coordinator_shouldhaveshards.adt_table
+NOTICE:  Moving the data of coordinator_shouldhaveshards.adt_table
+NOTICE:  Dropping the old coordinator_shouldhaveshards.adt_table
+NOTICE:  Renaming the new table to coordinator_shouldhaveshards.adt_table
+ alter_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT "Name", "Citus Table Type", "Distribution Column", "Shard Count" FROM public.citus_tables WHERE "Name"::text LIKE 'adt%';
+   Name    | Citus Table Type | Distribution Column | Shard Count
+---------------------------------------------------------------------
+ adt_col   | distributed      | a                   |           6
+ adt_ref   | distributed      | a                   |           6
+ adt_table | distributed      | b                   |           6
+(3 rows)
+
+SELECT STRING_AGG("Name"::text, ', ' ORDER BY 1) AS "Colocation Groups" FROM public.citus_tables WHERE "Name"::text LIKE 'adt%' GROUP BY "Colocation ID" ORDER BY 1;
+ Colocation Groups
+---------------------------------------------------------------------
+ adt_col, adt_ref
+ adt_table
+(2 rows)
+
+SELECT conrelid::regclass::text AS "Referencing Table", pg_get_constraintdef(oid, true) AS "Definition" FROM  pg_constraint
+    WHERE (conrelid::regclass::text = 'adt_col' OR confrelid::regclass::text = 'adt_col') ORDER BY 1;
+ Referencing Table |              Definition
+---------------------------------------------------------------------
+ adt_col           | UNIQUE (a)
+ adt_ref           | FOREIGN KEY (a) REFERENCES adt_col(a)
+(2 rows)
+
+SELECT * FROM adt_table ORDER BY 1;
+ a | b
+---------------------------------------------------------------------
+ 1 | 2
+ 3 | 4
+ 5 | 6
+(3 rows)
+
+SELECT * FROM adt_col ORDER BY 1;
+ a | b
+---------------------------------------------------------------------
+ 3 | 4
+ 5 | 6
+ 7 | 8
+(3 rows)
+
+SELECT * FROM adt_ref ORDER BY 1;
+ a
+---------------------------------------------------------------------
+ 3
+ 5
+(2 rows)
+
+SET client_min_messages TO WARNING;
+BEGIN;
+INSERT INTO adt_table SELECT x, x+1 FROM generate_series(1, 1000) x;
+SELECT alter_distributed_table('adt_table', distribution_column:='a');
+ alter_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT COUNT(*) FROM adt_table;
+ count
+---------------------------------------------------------------------
+  1003
+(1 row)
+
+END;
+SELECT "Name", "Citus Table Type", "Distribution Column", "Shard Count" FROM public.citus_tables WHERE "Name"::text = 'adt_table';
+   Name    | Citus Table Type | Distribution Column | Shard Count
+---------------------------------------------------------------------
+ adt_table | distributed      | a                   |           6
+(1 row)
+
+SET client_min_messages TO DEFAULT;
 \set VERBOSITY terse
 DROP TABLE ref_table;
 NOTICE:  executing the command locally: DROP TABLE IF EXISTS coordinator_shouldhaveshards.ref_table_xxxxx CASCADE
@@ -628,7 +788,7 @@ DROP TABLE ref;
 NOTICE:  executing the command locally: DROP TABLE IF EXISTS coordinator_shouldhaveshards.ref_xxxxx CASCADE
 DROP TABLE test_append_table;
 DROP SCHEMA coordinator_shouldhaveshards CASCADE;
-NOTICE:  drop cascades to 4 other objects
+NOTICE:  drop cascades to 13 other objects
 SELECT 1 FROM master_set_node_property('localhost', :master_port, 'shouldhaveshards', false);
  ?column?
 ---------------------------------------------------------------------

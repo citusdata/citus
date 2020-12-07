@@ -6,6 +6,8 @@
 #include "../../../columnar/sql/downgrades/columnar--10.0-1--9.5-1.sql"
 
 DROP VIEW public.citus_tables;
+DROP FUNCTION pg_catalog.alter_distributed_table(regclass, text, int, text, boolean);
+DROP FUNCTION pg_catalog.alter_table_set_access_method(regclass, text);
 DROP FUNCTION pg_catalog.citus_total_relation_size(regclass,boolean);
 DROP FUNCTION pg_catalog.undistribute_table(regclass,boolean);
 DROP FUNCTION pg_catalog.create_citus_local_table(regclass,boolean);
@@ -45,6 +47,7 @@ DROP VIEW pg_catalog.time_partitions;
 DROP FUNCTION pg_catalog.time_partition_range(regclass);
 
 DROP FUNCTION pg_catalog.citus_set_coordinator_host(text,int,noderole,name);
+DROP FUNCTION pg_catalog.worker_change_sequence_dependency(regclass, regclass, regclass);
 
 CREATE FUNCTION pg_catalog.master_modify_multiple_shards(text)
     RETURNS integer

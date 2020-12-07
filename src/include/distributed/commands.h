@@ -163,6 +163,9 @@ extern bool ColumnReferencedByAnyForeignKey(char *columnName, Oid relationId);
 extern bool ColumnAppearsInForeignKeyToReferenceTable(char *columnName, Oid
 													  relationId);
 extern List * GetReferencingForeignConstaintCommands(Oid relationOid);
+extern List * GetForeignConstraintToReferenceTablesCommands(Oid relationId);
+extern List * GetForeignConstraintToDistributedTablesCommands(Oid relationId);
+extern List * GetForeignConstraintFromDistributedTablesCommands(Oid relationId);
 extern bool HasForeignKeyToCitusLocalTable(Oid relationId);
 extern bool HasForeignKeyToReferenceTable(Oid relationOid);
 extern bool TableReferenced(Oid relationOid);
@@ -399,10 +402,10 @@ typedef enum CascadeOperationType
 	INVALID_OPERATION = 1 << 0,
 
 	/* execute UndistributeTable on each relation */
-	UNDISTRIBUTE_TABLE = 1 << 1,
+	CASCADE_FKEY_UNDISTRIBUTE_TABLE = 1 << 1,
 
 	/* execute CreateCitusLocalTable on each relation */
-	CREATE_CITUS_LOCAL_TABLE = 1 << 2,
+	CASCADE_FKEY_CREATE_CITUS_LOCAL_TABLE = 1 << 2,
 } CascadeOperationType;
 
 extern void CascadeOperationForConnectedRelations(Oid relationId, LOCKMODE relLockMode,

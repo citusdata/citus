@@ -280,7 +280,7 @@ INSERT INTO upsert_test (part_key, other_col) SELECT part_key, other_col FROM up
 COMMIT;
 -- to test citus local tables
 select undistribute_table('upsert_test');
-NOTICE:  creating a new local table for single_node.upsert_test
+NOTICE:  creating a new table for single_node.upsert_test
 NOTICE:  Moving the data of single_node.upsert_test
 NOTICE:  Dropping the old single_node.upsert_test
 NOTICE:  Renaming the new table to single_node.upsert_test
@@ -1116,7 +1116,7 @@ RESET citus.task_executor_type;
 -- make sure undistribute table works fine
 ALTER TABLE test DROP CONSTRAINT foreign_key;
 SELECT undistribute_table('test_2');
-NOTICE:  creating a new local table for single_node.test_2
+NOTICE:  creating a new table for single_node.test_2
 NOTICE:  Moving the data of single_node.test_2
 NOTICE:  Dropping the old single_node.test_2
 NOTICE:  Renaming the new table to single_node.test_2
@@ -1166,28 +1166,27 @@ ALTER TABLE distributed_table_1 ADD CONSTRAINT fkey_3 FOREIGN KEY (col_1) REFERE
 ALTER TABLE citus_local_table_1 ADD CONSTRAINT fkey_4 FOREIGN KEY (col_1) REFERENCES reference_table_1(col_2);
 ALTER TABLE partitioned_table_1 ADD CONSTRAINT fkey_5 FOREIGN KEY (col_1) REFERENCES reference_table_1(col_2);
 SELECT undistribute_table('partitioned_table_1', cascade_via_foreign_keys=>true);
-NOTICE:  undistributing the partitions of single_node.partitioned_table_1
-NOTICE:  creating a new local table for single_node.partitioned_table_1_100_200
+NOTICE:  converting the partitions of single_node.partitioned_table_1
+NOTICE:  creating a new table for single_node.partitioned_table_1_100_200
 NOTICE:  Moving the data of single_node.partitioned_table_1_100_200
 NOTICE:  Dropping the old single_node.partitioned_table_1_100_200
 NOTICE:  Renaming the new table to single_node.partitioned_table_1_100_200
-NOTICE:  creating a new local table for single_node.partitioned_table_1_200_300
+NOTICE:  creating a new table for single_node.partitioned_table_1_200_300
 NOTICE:  Moving the data of single_node.partitioned_table_1_200_300
 NOTICE:  Dropping the old single_node.partitioned_table_1_200_300
 NOTICE:  Renaming the new table to single_node.partitioned_table_1_200_300
-NOTICE:  creating a new local table for single_node.partitioned_table_1
-NOTICE:  Moving the data of single_node.partitioned_table_1
+NOTICE:  creating a new table for single_node.partitioned_table_1
 NOTICE:  Dropping the old single_node.partitioned_table_1
 NOTICE:  Renaming the new table to single_node.partitioned_table_1
-NOTICE:  creating a new local table for single_node.reference_table_1
+NOTICE:  creating a new table for single_node.reference_table_1
 NOTICE:  Moving the data of single_node.reference_table_1
 NOTICE:  Dropping the old single_node.reference_table_1
 NOTICE:  Renaming the new table to single_node.reference_table_1
-NOTICE:  creating a new local table for single_node.distributed_table_1
+NOTICE:  creating a new table for single_node.distributed_table_1
 NOTICE:  Moving the data of single_node.distributed_table_1
 NOTICE:  Dropping the old single_node.distributed_table_1
 NOTICE:  Renaming the new table to single_node.distributed_table_1
-NOTICE:  creating a new local table for single_node.citus_local_table_1
+NOTICE:  creating a new table for single_node.citus_local_table_1
 NOTICE:  Moving the data of single_node.citus_local_table_1
 NOTICE:  Dropping the old single_node.citus_local_table_1
 NOTICE:  Renaming the new table to single_node.citus_local_table_1
@@ -1287,6 +1286,154 @@ SELECT pg_reload_conf();
  pg_reload_conf
 ---------------------------------------------------------------------
  t
+(1 row)
+
+-- test alter_distributed_table UDF
+CREATE TABLE adt_table (a INT, b INT);
+CREATE TABLE adt_col (a INT UNIQUE, b INT);
+CREATE TABLE adt_ref (a INT REFERENCES adt_col(a));
+SELECT create_distributed_table('adt_table', 'a', colocate_with:='none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_table('adt_col', 'a', colocate_with:='adt_table');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_table('adt_ref', 'a', colocate_with:='adt_table');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO adt_table VALUES (1, 2), (3, 4), (5, 6);
+INSERT INTO adt_col VALUES (3, 4), (5, 6), (7, 8);
+INSERT INTO adt_ref VALUES (3), (5);
+SELECT "Name", "Citus Table Type", "Distribution Column", "Shard Count" FROM public.citus_tables WHERE "Name"::text LIKE 'adt%';
+   Name    | Citus Table Type | Distribution Column | Shard Count
+---------------------------------------------------------------------
+ adt_col   | distributed      | a                   |           4
+ adt_ref   | distributed      | a                   |           4
+ adt_table | distributed      | a                   |           4
+(3 rows)
+
+SELECT STRING_AGG("Name"::text, ', ' ORDER BY 1) AS "Colocation Groups" FROM public.citus_tables WHERE "Name"::text LIKE 'adt%' GROUP BY "Colocation ID" ORDER BY 1;
+      Colocation Groups
+---------------------------------------------------------------------
+ adt_col, adt_ref, adt_table
+(1 row)
+
+SELECT conrelid::regclass::text AS "Referencing Table", pg_get_constraintdef(oid, true) AS "Definition" FROM  pg_constraint
+    WHERE (conrelid::regclass::text = 'adt_col' OR confrelid::regclass::text = 'adt_col') ORDER BY 1;
+ Referencing Table |              Definition
+---------------------------------------------------------------------
+ adt_col           | UNIQUE (a)
+ adt_ref           | FOREIGN KEY (a) REFERENCES adt_col(a)
+(2 rows)
+
+SELECT alter_distributed_table('adt_table', shard_count:=6, cascade_to_colocated:=true);
+ alter_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT "Name", "Citus Table Type", "Distribution Column", "Shard Count" FROM public.citus_tables WHERE "Name"::text LIKE 'adt%';
+   Name    | Citus Table Type | Distribution Column | Shard Count
+---------------------------------------------------------------------
+ adt_col   | distributed      | a                   |           6
+ adt_ref   | distributed      | a                   |           6
+ adt_table | distributed      | a                   |           6
+(3 rows)
+
+SELECT STRING_AGG("Name"::text, ', ' ORDER BY 1) AS "Colocation Groups" FROM public.citus_tables WHERE "Name"::text LIKE 'adt%' GROUP BY "Colocation ID" ORDER BY 1;
+      Colocation Groups
+---------------------------------------------------------------------
+ adt_col, adt_ref, adt_table
+(1 row)
+
+SELECT conrelid::regclass::text AS "Referencing Table", pg_get_constraintdef(oid, true) AS "Definition" FROM  pg_constraint
+    WHERE (conrelid::regclass::text = 'adt_col' OR confrelid::regclass::text = 'adt_col') ORDER BY 1;
+ Referencing Table |              Definition
+---------------------------------------------------------------------
+ adt_col           | UNIQUE (a)
+ adt_ref           | FOREIGN KEY (a) REFERENCES adt_col(a)
+(2 rows)
+
+SELECT alter_distributed_table('adt_table', distribution_column:='b', colocate_with:='none');
+ alter_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT "Name", "Citus Table Type", "Distribution Column", "Shard Count" FROM public.citus_tables WHERE "Name"::text LIKE 'adt%';
+   Name    | Citus Table Type | Distribution Column | Shard Count
+---------------------------------------------------------------------
+ adt_col   | distributed      | a                   |           6
+ adt_ref   | distributed      | a                   |           6
+ adt_table | distributed      | b                   |           6
+(3 rows)
+
+SELECT STRING_AGG("Name"::text, ', ' ORDER BY 1) AS "Colocation Groups" FROM public.citus_tables WHERE "Name"::text LIKE 'adt%' GROUP BY "Colocation ID" ORDER BY 1;
+ Colocation Groups
+---------------------------------------------------------------------
+ adt_col, adt_ref
+ adt_table
+(2 rows)
+
+SELECT conrelid::regclass::text AS "Referencing Table", pg_get_constraintdef(oid, true) AS "Definition" FROM  pg_constraint
+    WHERE (conrelid::regclass::text = 'adt_col' OR confrelid::regclass::text = 'adt_col') ORDER BY 1;
+ Referencing Table |              Definition
+---------------------------------------------------------------------
+ adt_col           | UNIQUE (a)
+ adt_ref           | FOREIGN KEY (a) REFERENCES adt_col(a)
+(2 rows)
+
+SELECT * FROM adt_table ORDER BY 1;
+ a | b
+---------------------------------------------------------------------
+ 1 | 2
+ 3 | 4
+ 5 | 6
+(3 rows)
+
+SELECT * FROM adt_col ORDER BY 1;
+ a | b
+---------------------------------------------------------------------
+ 3 | 4
+ 5 | 6
+ 7 | 8
+(3 rows)
+
+SELECT * FROM adt_ref ORDER BY 1;
+ a
+---------------------------------------------------------------------
+ 3
+ 5
+(2 rows)
+
+BEGIN;
+INSERT INTO adt_table SELECT x, x+1 FROM generate_series(1, 1000) x;
+SELECT alter_distributed_table('adt_table', distribution_column:='a');
+ alter_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT COUNT(*) FROM adt_table;
+ count
+---------------------------------------------------------------------
+  1003
+(1 row)
+
+END;
+SELECT "Name", "Citus Table Type", "Distribution Column", "Shard Count" FROM public.citus_tables WHERE "Name"::text = 'adt_table';
+   Name    | Citus Table Type | Distribution Column | Shard Count
+---------------------------------------------------------------------
+ adt_table | distributed      | a                   |           6
 (1 row)
 
 \c - - - :master_port

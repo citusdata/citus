@@ -154,7 +154,7 @@ SELECT * FROM with_ties_table_2 ORDER BY a, b;
 TRUNCATE with_ties_table_2;
 -- test INSERT SELECTs into distributed table with a different distribution column
 SELECT undistribute_table('with_ties_table_2');
-NOTICE:  creating a new local table for public.with_ties_table_2
+NOTICE:  creating a new table for public.with_ties_table_2
 NOTICE:  Moving the data of public.with_ties_table_2
 NOTICE:  Dropping the old public.with_ties_table_2
 NOTICE:  Renaming the new table to public.with_ties_table_2

@@ -80,11 +80,11 @@ ALTER TABLE distributed_table_2 ADD CONSTRAINT fkey_11 FOREIGN KEY (col_1) REFER
 ALTER TABLE reference_table_1 ADD CONSTRAINT fkey_12 FOREIGN KEY (col_2) REFERENCES reference_table_1(col_1);
 -- show that all of below fails as we didn't provide cascade=true
 SELECT undistribute_table('distributed_table_1');
-ERROR:  cannot undistribute table because it has a foreign key
+ERROR:  cannot complete operation because table distributed_table_1 has a foreign key
 SELECT undistribute_table('citus_local_table_1', cascade_via_foreign_keys=>false);
-ERROR:  cannot undistribute table because it has a foreign key
+ERROR:  cannot complete operation because table citus_local_table_1 has a foreign key
 SELECT undistribute_table('reference_table_2');
-ERROR:  cannot undistribute table because it has a foreign key
+ERROR:  cannot complete operation because table reference_table_2 has a foreign key
 -- In each of below transation blocks, show that we preserve foreign keys.
 -- Also show that we don't have any citus tables in current schema after
 -- undistribute_table(cascade).
@@ -304,6 +304,17 @@ SELECT create_reference_table('reference_table_3');
 
 ALTER TABLE partitioned_table_1 ADD CONSTRAINT fkey_9 FOREIGN KEY (col_1) REFERENCES reference_table_3(col_2);
 ALTER TABLE partitioned_table_2 ADD CONSTRAINT fkey_10 FOREIGN KEY (col_1) REFERENCES reference_table_3(col_2);
+-- show that we properly handle cases where undistribute_table is not supported
+-- error out when table is a partition table
+SELECT undistribute_table('partitioned_table_2_100_200', cascade_via_foreign_keys=>true);
+ERROR:  cannot complete operation because table is a partition
+-- error if table does not exist
+SELECT undistribute_table('non_existent_table', cascade_via_foreign_keys=>true);
+ERROR:  relation "non_existent_table" does not exist at character 27
+-- error if table is a postgres table
+CREATE TABLE local_table(a int);
+SELECT undistribute_table('local_table', cascade_via_foreign_keys=>true);
+ERROR:  cannot undistribute table because the table is not distributed
 -- as pg < 12 doesn't support foreign keys between partitioned tables,
 -- define below foreign key conditionally instead of adding another
 -- test output
@@ -376,7 +387,7 @@ BEGIN;
   set citus.multi_shard_modify_mode to 'sequential';
   ALTER TABLE partitioned_table_1_100_200 ADD CONSTRAINT non_inherited_fkey FOREIGN KEY(col_1) REFERENCES partitioned_table_2_100_200(col_1);
   SELECT undistribute_table('partitioned_table_2', cascade_via_foreign_keys=>true);
-ERROR:  cannot cascade operation via foreign keys as partition table undistribute_table_cascade.partitioned_table_1_100_200 involved in a foreign key relationship that is not inherited from it's parent table
+ERROR:  cannot cascade operation via foreign keys as partition table undistribute_table_cascade.partitioned_table_2_100_200 involved in a foreign key relationship that is not inherited from it's parent table
 ROLLBACK;
 BEGIN;
   set citus.multi_shard_modify_mode to 'sequential';

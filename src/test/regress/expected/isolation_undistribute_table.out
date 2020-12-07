@@ -17,7 +17,7 @@ step s1-commit:
     COMMIT;
 
 step s2-undistribute: <... completed>
-error in steps s1-commit s2-undistribute: ERROR:  cannot undistribute table
+error in steps s1-commit s2-undistribute: ERROR:  cannot complete operation because no such table exists
 
 starting permutation: s1-begin s1-undistribute s2-select s1-commit
 step s1-begin:

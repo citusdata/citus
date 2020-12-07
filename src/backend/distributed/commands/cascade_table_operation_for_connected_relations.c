@@ -27,9 +27,6 @@
 #include "utils/lsyscache.h"
 
 
-typedef void (*CascadeOperationFunction)(Oid, bool);
-
-
 static void EnsureSequentialModeForCitusTableCascadeFunction(List *relationIdList);
 static bool RelationIdListHasReferenceTable(List *relationIdList);
 static void LockRelationsWithLockMode(List *relationIdList, LOCKMODE lockMode);
@@ -42,8 +39,6 @@ static char * GetDropFkeyCascadeCommand(Oid relationId, Oid foreignKeyId);
 static void ExecuteCascadeOperationForRelationIdList(List *relationIdList,
 													 CascadeOperationType
 													 cascadeOperationType);
-static CascadeOperationFunction GetCascadeOperationFunction(CascadeOperationType
-															cascadeOperationType);
 
 
 /*
@@ -342,45 +337,37 @@ ExecuteCascadeOperationForRelationIdList(List *relationIdList,
 	Oid relationId = InvalidOid;
 	foreach_oid(relationId, relationIdList)
 	{
-		CascadeOperationFunction cascadeOperationFunction =
-			GetCascadeOperationFunction(cascadeOperationType);
-
 		/*
 		 * Caller already passed the relations that we should operate on,
 		 * so we should not cascade here.
 		 */
 		bool cascadeViaForeignKeys = false;
-		cascadeOperationFunction(relationId, cascadeViaForeignKeys);
-	}
-}
-
-
-/*
- * GetCascadeOperationFunction returns c api for citus table operation according
- * to given CascadeOperationType.
- */
-static CascadeOperationFunction
-GetCascadeOperationFunction(CascadeOperationType cascadeOperationType)
-{
-	switch (cascadeOperationType)
-	{
-		case UNDISTRIBUTE_TABLE:
+		switch (cascadeOperationType)
 		{
-			return UndistributeTable;
-		}
+			case CASCADE_FKEY_UNDISTRIBUTE_TABLE:
+			{
+				TableConversionParameters params = {
+					.relationId = relationId,
+					.cascadeViaForeignKeys = cascadeViaForeignKeys
+				};
+				UndistributeTable(&params);
+				break;
+			}
 
-		case CREATE_CITUS_LOCAL_TABLE:
-		{
-			return CreateCitusLocalTable;
-		}
+			case CASCADE_FKEY_CREATE_CITUS_LOCAL_TABLE:
+			{
+				CreateCitusLocalTable(relationId, cascadeViaForeignKeys);
+				break;
+			}
 
-		default:
-		{
-			/*
-			 * This is not expected as other create table functions don't have
-			 * cascade option yet. To be on the safe side, error out here.
-			 */
-			ereport(ERROR, (errmsg("citus table function could not be found")));
+			default:
+			{
+				/*
+				 * This is not expected as other create table functions don't have
+				 * cascade option yet. To be on the safe side, error out here.
+				 */
+				ereport(ERROR, (errmsg("citus table function could not be found")));
+			}
 		}
 	}
 }
