@@ -3665,11 +3665,13 @@ FetchEqualityAttrNumsForRTE(Node *node)
 	return NIL;
 }
 
+
 /*
  * FetchEqualityAttrNumsForList fetches the constant equality numbers
  * from the given node list.
  */
-static List *FetchEqualityAttrNumsForList(List *nodeList)
+static List *
+FetchEqualityAttrNumsForList(List *nodeList)
 {
 	List *attributeNums = NIL;
 	Node *node = NULL;
@@ -3682,7 +3684,7 @@ static List *FetchEqualityAttrNumsForList(List *nodeList)
 		attributeNums = list_concat(attributeNums, fetchedEqualityAttrNums);
 	}
 
-	/* 
+	/*
 	 * the given list is in the form of AND'ed expressions
 	 * hence if we have one equality then it is enough.
 	 * E.g: dist.a = 5 AND dist.a > 10

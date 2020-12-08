@@ -119,8 +119,23 @@ SELECT count(*) FROM (SELECT *, random() FROM distributed_table_pkey) as d1  JOI
 SELECT count(*) FROM (SELECT *, random() FROM distributed_partitioned_table) as d1  JOIN postgres_table ON (postgres_table.key = d1.key AND d1.key < postgres_table.key) WHERE d1.key = 1 AND false;
 SELECT count(*) FROM (SELECT *, random() FROM distributed_partitioned_table) as d1  JOIN postgres_table ON (postgres_table.key::int = d1.key::int AND d1.key < postgres_table.key) WHERE d1.key::int = 1 AND false;
 
--- TODO:: We should probably recursively plan postgres table here because primary key is on key,value not key.
+-- We will plan postgres table as the index is on key,value not just key
 SELECT count(*) FROM distributed_table_composite JOIN postgres_table USING(key) WHERE distributed_table_composite.key = 10;
+SELECT count(*) FROM distributed_table_composite JOIN postgres_table USING(key) WHERE distributed_table_composite.key = 10 OR distributed_table_composite.key = 20;
+SELECT count(*) FROM distributed_table_composite JOIN postgres_table USING(key) WHERE distributed_table_composite.key > 10 AND distributed_table_composite.value = 'text';
+SELECT count(*) FROM distributed_table_composite JOIN postgres_table USING(key) WHERE distributed_table_composite.key = 10 AND distributed_table_composite.value = 'text';
+SELECT count(*) FROM distributed_table_composite JOIN postgres_table USING(key)
+	WHERE (distributed_table_composite.key > 10 OR distributed_table_composite.key = 20)
+	AND (distributed_table_composite.value = 'text' OR distributed_table_composite.value = 'text');
+SELECT count(*) FROM distributed_table_composite JOIN postgres_table USING(key)
+	WHERE (distributed_table_composite.key > 10 OR distributed_table_composite.value = 'text')
+	AND (distributed_table_composite.value = 'text' OR distributed_table_composite.key = 30);
+SELECT count(*) FROM distributed_table_composite JOIN postgres_table USING(key)
+	WHERE (distributed_table_composite.key > 10 AND distributed_table_composite.value = 'text')
+	OR (distributed_table_composite.value = 'text' AND distributed_table_composite.key = 30);
+SELECT count(*) FROM distributed_table_composite JOIN postgres_table USING(key)
+	WHERE (distributed_table_composite.key > 10 AND distributed_table_composite.key = 20)
+	OR (distributed_table_composite.value = 'text' AND distributed_table_composite.value = 'text');
 
 -- a unique index on key so dist table should be recursively planned
 SELECT count(*) FROM postgres_table JOIN distributed_table_pkey USING(key);
@@ -207,9 +222,58 @@ UPDATE reference_table SET key = 1 FROM postgres_table WHERE postgres_table.key 
 UPDATE reference_table SET key = 1 FROM (SELECT * FROM postgres_table) l WHERE l.key = 10;
 
 
--- TODO:: we should probably not wrap postgres_table here as there is a WHERE FALSE?
--- though then the planner could give an error
 SELECT count(*) FROM postgres_table JOIN distributed_table USING(key) WHERE FALSE;
+
+SELECT count(*) FROM (SELECT * FROM distributed_table JOIN postgres_table USING(key) WHERE false) foo JOIN local_partitioned_table USING(key);
+
+WITH dist_cte AS (SELECT * FROM distributed_table_pkey WHERE key = 5)
+SELECT COUNT(*) FROM dist_cte JOIN postgres_table USING(key) WHERE dist_cte.key = 5;
+
+SELECT COUNT(*) FROM postgres_table JOIN distributed_table_pkey USING(key)
+	WHERE (distributed_table_pkey.key IN (SELECT COUNT(*) AS count FROM postgres_table JOIN distributed_table USING(key)) );
+
+-- PREPARED statements
+PREPARE local_dist_table_join_select(int) AS SELECT COUNT(*) FROM distributed_table_pkey JOIN postgres_table USING(key) WHERE distributed_table_pkey.key = $1;
+
+EXECUTE local_dist_table_join_select(10);
+EXECUTE local_dist_table_join_select(10);
+EXECUTE local_dist_table_join_select(10);
+EXECUTE local_dist_table_join_select(10);
+EXECUTE local_dist_table_join_select(10);
+EXECUTE local_dist_table_join_select(10);
+
+PREPARE local_dist_table_join_update(int) AS UPDATE postgres_table SET key = 5 FROM distributed_table_pkey  WHERE distributed_table_pkey.key = $1;
+
+EXECUTE local_dist_table_join_update(20);
+EXECUTE local_dist_table_join_update(20);
+EXECUTE local_dist_table_join_update(20);
+EXECUTE local_dist_table_join_update(20);
+EXECUTE local_dist_table_join_update(20);
+EXECUTE local_dist_table_join_update(20);
+
+PREPARE local_dist_table_join_subquery(int) AS SELECT COUNT(*) FROM postgres_table JOIN (SELECT * FROM distributed_table_pkey JOIN local_partitioned_table USING(key) WHERE distributed_table_pkey.key = $1) foo USING(key);
+
+EXECUTE local_dist_table_join_subquery(5);
+EXECUTE local_dist_table_join_subquery(5);
+EXECUTE local_dist_table_join_subquery(5);
+EXECUTE local_dist_table_join_subquery(5);
+EXECUTE local_dist_table_join_subquery(5);
+EXECUTE local_dist_table_join_subquery(5);
+
+PREPARE local_dist_table_join_filters(int) AS SELECT COUNT(*) FROM local_partitioned_table JOIN distributed_table_composite USING(key) 
+	WHERE(
+		distributed_table_composite.key = $1 OR 
+		distributed_table_composite.key = 20 OR 
+		(distributed_table_composite.key = 10 AND distributed_table_composite.key > 0) OR
+		distributed_table_composite.value = 'text'
+		);
+
+EXECUTE local_dist_table_join_filters(20);
+EXECUTE local_dist_table_join_filters(20);
+EXECUTE local_dist_table_join_filters(20);
+EXECUTE local_dist_table_join_filters(20);
+EXECUTE local_dist_table_join_filters(20);
+EXECUTE local_dist_table_join_filters(20);
 
 RESET client_min_messages;
 \set VERBOSITY terse

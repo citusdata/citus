@@ -74,25 +74,29 @@ typedef struct ConversionCandidates
 	List *localTableList; /* local or citus local table */
 }ConversionCandidates;
 
+typedef struct IndexColumns
+{
+	List *indexColumnNos;
+}IndexColumns;
+
 static bool HasConstantFilterOnUniqueColumn(RangeTblEntry *rangeTableEntry,
 											RelationRestriction *relationRestriction);
 static List * RequiredAttrNumbersForRelation(RangeTblEntry *relationRte,
 											 PlannerRestrictionContext *
 											 plannerRestrictionContext);
-static ConversionCandidates * CreateConversionCandidates(FromExpr *joinTree,
-														 PlannerRestrictionContext *
+static ConversionCandidates * CreateConversionCandidates(PlannerRestrictionContext *
 														 plannerRestrictionContext,
 														 List *rangeTableList,
 														 Oid resultRelationId);
 static void GetAllUniqueIndexes(Form_pg_index indexForm, List **uniqueIndexes);
-static RangeTableEntryDetails * GetNextRTEToConvertToSubquery(FromExpr *joinTree,
-															  ConversionCandidates *
+static RangeTableEntryDetails * GetNextRTEToConvertToSubquery(ConversionCandidates *
 															  conversionCandidates,
 															  PlannerRestrictionContext *
 															  plannerRestrictionContext);
 static void RemoveFromConversionCandidates(ConversionCandidates *conversionCandidates,
 										   int rteIdentity);
 static bool AllRangeTableEntriesHaveUniqueIndex(List *rangeTableEntryDetailsList);
+static bool FirstIntListContainsSecondIntList(List *firstIntList, List *secondIntList);
 
 /*
  * RecursivelyPlanLocalTableJoins gets a query and the planner
@@ -112,15 +116,14 @@ RecursivelyPlanLocalTableJoins(Query *query,
 		resultRelationId = ModifyQueryResultRelationId(query);
 	}
 	ConversionCandidates *conversionCandidates =
-		CreateConversionCandidates(query->jointree, plannerRestrictionContext,
+		CreateConversionCandidates(plannerRestrictionContext,
 								   rangeTableList, resultRelationId);
 
 	while (ShouldConvertLocalTableJoinsToSubqueries(query, rangeTableList,
 													plannerRestrictionContext))
 	{
-		FromExpr *joinTree = query->jointree;
 		RangeTableEntryDetails *rangeTableEntryDetails =
-			GetNextRTEToConvertToSubquery(joinTree, conversionCandidates,
+			GetNextRTEToConvertToSubquery(conversionCandidates,
 										  plannerRestrictionContext);
 		if (rangeTableEntryDetails == NULL)
 		{
@@ -140,11 +143,10 @@ RecursivelyPlanLocalTableJoins(Query *query,
 /*
  * GetNextRTEToConvertToSubquery returns the range table entry
  * which should be converted to a subquery. It considers the local join policy
- * and result relation.
+ * for conversion priorities.
  */
 static RangeTableEntryDetails *
-GetNextRTEToConvertToSubquery(FromExpr *joinTree,
-							  ConversionCandidates *conversionCandidates,
+GetNextRTEToConvertToSubquery(ConversionCandidates *conversionCandidates,
 							  PlannerRestrictionContext *plannerRestrictionContext)
 {
 	RangeTableEntryDetails *localRTECandidate = NULL;
@@ -169,6 +171,11 @@ GetNextRTEToConvertToSubquery(FromExpr *joinTree,
 	}
 	else
 	{
+		/*
+		 * We want to convert distributed tables only if all the distributed tables
+		 * have a constant filter on a unique index, otherwise we would be redundantly
+		 * converting a distributed table as we will convert all the other local tables.
+		 */
 		bool allRangeTableEntriesHaveUniqueIndex = AllRangeTableEntriesHaveUniqueIndex(
 			conversionCandidates->distributedTableList);
 
@@ -284,20 +291,46 @@ HasConstantFilterOnUniqueColumn(RangeTblEntry *rangeTableEntry,
 	}
 	List *baseRestrictionList = relationRestriction->relOptInfo->baserestrictinfo;
 	List *restrictClauseList = get_all_actual_clauses(baseRestrictionList);
-	List *rteEqualityQuals =
+	if (ContainsFalseClause(restrictClauseList))
+	{
+		/* If there is a WHERE FALSE, we consider it as a constant filter. */
+		return true;
+	}
+	List *rteEqualityColumnsNos =
 		FetchEqualityAttrNumsForRTE((Node *) restrictClauseList);
 
-	List *uniqueIndexAttrNumbers = ExecuteFunctionOnEachTableIndex(rangeTableEntry->relid,
+	List *uniqueIndexColumnsList = ExecuteFunctionOnEachTableIndex(rangeTableEntry->relid,
 																   GetAllUniqueIndexes);
-	int columnNumber = 0;
-	foreach_int(columnNumber, uniqueIndexAttrNumbers)
+	IndexColumns *indexColumns = NULL;
+	foreach_ptr(indexColumns, uniqueIndexColumnsList)
 	{
-		if (list_member_int(rteEqualityQuals, columnNumber))
+		List *uniqueIndexColumnNos = indexColumns->indexColumnNos;
+		if (FirstIntListContainsSecondIntList(rteEqualityColumnsNos,
+											  uniqueIndexColumnNos))
 		{
 			return true;
 		}
 	}
 	return false;
+}
+
+
+/*
+ * FirstIntListContainsSecondIntList returns true if the first int List
+ * contains every element of the second int List.
+ */
+static bool
+FirstIntListContainsSecondIntList(List *firstIntList, List *secondIntList)
+{
+	int curInt = 0;
+	foreach_int(curInt, secondIntList)
+	{
+		if (!list_member_int(firstIntList, curInt))
+		{
+			return false;
+		}
+	}
+	return true;
 }
 
 
@@ -308,15 +341,23 @@ HasConstantFilterOnUniqueColumn(RangeTblEntry *rangeTableEntry,
  * probably return true only if all the columns in the index exist in the filter.
  */
 static void
-GetAllUniqueIndexes(Form_pg_index indexForm, List **uniqueIndexes)
+GetAllUniqueIndexes(Form_pg_index indexForm, List **uniqueIndexGroups)
 {
 	if (indexForm->indisunique || indexForm->indisprimary)
 	{
+		IndexColumns *indexColumns = palloc0(sizeof(IndexColumns));
+		List *uniqueIndexes = NIL;
 		for (int i = 0; i < indexForm->indkey.dim1; i++)
 		{
-			*uniqueIndexes = list_append_unique_int(*uniqueIndexes,
-													indexForm->indkey.values[i]);
+			uniqueIndexes = list_append_unique_int(uniqueIndexes,
+												   indexForm->indkey.values[i]);
 		}
+		if (list_length(uniqueIndexes) == 0)
+		{
+			return;
+		}
+		indexColumns->indexColumnNos = uniqueIndexes;
+		*uniqueIndexGroups = lappend(*uniqueIndexGroups, indexColumns);
 	}
 }
 
@@ -367,8 +408,7 @@ RequiredAttrNumbersForRelation(RangeTblEntry *rangeTableEntry,
  * be converted to a subquery so that citus planners can work.
  */
 static ConversionCandidates *
-CreateConversionCandidates(FromExpr *joinTree,
-						   PlannerRestrictionContext *plannerRestrictionContext,
+CreateConversionCandidates(PlannerRestrictionContext *plannerRestrictionContext,
 						   List *rangeTableList, Oid resultRelationId)
 {
 	ConversionCandidates *conversionCandidates =
