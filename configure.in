@@ -188,8 +188,8 @@ fi
 #
 # LZ4
 #
-PGAC_ARG_BOOL(with, lz4, no,
-              [use lz4])
+PGAC_ARG_BOOL(with, lz4, yes,
+              [do not use lz4])
 AC_SUBST(with_lz4)
 
 if test "$with_lz4" = yes; then
@@ -207,18 +207,20 @@ fi
 #
 # ZSTD
 #
-PGAC_ARG_BOOL(with, zstd, no,
-              [use zstd])
+PGAC_ARG_BOOL(with, zstd, yes,
+              [do not use zstd])
 AC_SUBST(with_zstd)
 
 if test "$with_zstd" = yes; then
   AC_CHECK_LIB(zstd, ZSTD_decompress, [],
                [AC_MSG_ERROR([zstd library not found
 If you have zstd installed, see config.log for details on the
-failure.  It is possible the compiler isn't looking in the proper directory.])])
+failure.  It is possible the compiler isn't looking in the proper directory.
+Use --without-zstd to disable zlib support.])])
   AC_CHECK_HEADER(zstd.h, [], [AC_MSG_ERROR([zstd header not found
-If you have lz4zstd already installed, see config.log for details on the
-failure.  It is possible the compiler isn't looking in the proper directory.])])
+If you have zstd already installed, see config.log for details on the
+failure.  It is possible the compiler isn't looking in the proper directory.
+Use --without-zstd to disable zlib support.])])
 fi
 
 #

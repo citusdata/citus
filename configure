@@ -1335,8 +1335,8 @@ Optional Packages:
   --without-PACKAGE       do not use PACKAGE (same as --with-PACKAGE=no)
   --with-extra-version=STRING
                           append STRING to version
-  --with-lz4              use lz4
-  --with-zstd             use zstd
+  --without-lz4           do not use lz4
+  --without-zstd          do not use zstd
   --without-libcurl       do not use libcurl for anonymous statistics
                           collection
   --with-reports-hostname=HOSTNAME
@@ -4383,7 +4383,7 @@ if test "${with_lz4+set}" = set; then :
   esac
 
 else
-  with_lz4=no
+  with_lz4=yes
 
 fi
 
@@ -4476,7 +4476,7 @@ if test "${with_zstd+set}" = set; then :
   esac
 
 else
-  with_zstd=no
+  with_zstd=yes
 
 fi
 
@@ -4530,7 +4530,8 @@ _ACEOF
 else
   as_fn_error $? "zstd library not found
 If you have zstd installed, see config.log for details on the
-failure.  It is possible the compiler isn't looking in the proper directory." "$LINENO" 5
+failure.  It is possible the compiler isn't looking in the proper directory.
+Use --without-zstd to disable zlib support." "$LINENO" 5
 fi
 
   ac_fn_c_check_header_mongrel "$LINENO" "zstd.h" "ac_cv_header_zstd_h" "$ac_includes_default"
@@ -4538,8 +4539,9 @@ if test "x$ac_cv_header_zstd_h" = xyes; then :
 
 else
   as_fn_error $? "zstd header not found
-If you have lz4zstd already installed, see config.log for details on the
-failure.  It is possible the compiler isn't looking in the proper directory." "$LINENO" 5
+If you have zstd already installed, see config.log for details on the
+failure.  It is possible the compiler isn't looking in the proper directory.
+Use --without-zstd to disable zlib support." "$LINENO" 5
 fi
 
 
