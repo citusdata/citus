@@ -341,24 +341,24 @@ cstore_parallelscan_reinitialize(Relation rel, ParallelTableScanDesc pscan)
 static IndexFetchTableData *
 cstore_index_fetch_begin(Relation rel)
 {
-	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED), errmsg(
-						"indexes not supported for columnar tables")));
+	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					errmsg("indexes not supported for columnar tables")));
 }
 
 
 static void
 cstore_index_fetch_reset(IndexFetchTableData *scan)
 {
-	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED), errmsg(
-						"indexes not supported for columnar tables")));
+	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					errmsg("indexes not supported for columnar tables")));
 }
 
 
 static void
 cstore_index_fetch_end(IndexFetchTableData *scan)
 {
-	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED), errmsg(
-						"indexes not supported for columnar tables")));
+	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					errmsg("indexes not supported for columnar tables")));
 }
 
 
@@ -369,8 +369,8 @@ cstore_index_fetch_tuple(struct IndexFetchTableData *scan,
 						 TupleTableSlot *slot,
 						 bool *call_again, bool *all_dead)
 {
-	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED), errmsg(
-						"indexes not supported for columnar tables")));
+	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					errmsg("indexes not supported for columnar tables")));
 }
 
 
@@ -616,8 +616,8 @@ cstore_relation_copy_for_cluster(Relation OldHeap, Relation NewHeap,
 
 	if (OldIndex != NULL || use_sort)
 	{
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED), errmsg(
-							"indexes not supported for columnar tables")));
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("indexes not supported for columnar tables")));
 	}
 
 	/*
@@ -960,8 +960,8 @@ cstore_index_build_range_scan(Relation heapRelation,
 							  void *callback_state,
 							  TableScanDesc scan)
 {
-	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED), errmsg(
-						"indexes not supported for columnar tables")));
+	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					errmsg("indexes not supported for columnar tables")));
 }
 
 
@@ -972,8 +972,8 @@ cstore_index_validate_scan(Relation heapRelation,
 						   Snapshot snapshot,
 						   ValidateIndexState *state)
 {
-	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED), errmsg(
-						"indexes not supported for columnar tables")));
+	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					errmsg("indexes not supported for columnar tables")));
 }
 
 
