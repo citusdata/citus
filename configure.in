@@ -205,6 +205,23 @@ Use --without-lz4 to disable lz4 support.])])
 fi
 
 #
+# ZSTD
+#
+PGAC_ARG_BOOL(with, zstd, no,
+              [use zstd])
+AC_SUBST(with_zstd)
+
+if test "$with_zstd" = yes; then
+  AC_CHECK_LIB(zstd, ZSTD_decompress, [],
+               [AC_MSG_ERROR([zstd library not found
+If you have zstd installed, see config.log for details on the
+failure.  It is possible the compiler isn't looking in the proper directory.])])
+  AC_CHECK_HEADER(zstd.h, [], [AC_MSG_ERROR([zstd header not found
+If you have lz4zstd already installed, see config.log for details on the
+failure.  It is possible the compiler isn't looking in the proper directory.])])
+fi
+
+#
 # libcurl
 #
 PGAC_ARG_BOOL(with, libcurl, yes,

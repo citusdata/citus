@@ -21,6 +21,10 @@
 #include <lz4.h>
 #endif
 
+#if HAVE_LIBZSTD
+#include <zstd.h>
+#endif
+
 /*
  *	The information at the start of the compressed data. This decription is taken
  *	from pg_lzcompress in pre-9.5 version of PostgreSQL.
@@ -75,6 +79,33 @@ CompressBuffer(StringInfo inputBuffer, StringInfo outputBuffer,
 
 			elog(DEBUG1, "compressed %d bytes to %d bytes", inputBuffer->len,
 				 compressedSize);
+
+			outputBuffer->len = compressedSize;
+			return true;
+		}
+#endif
+
+#if HAVE_LIBZSTD
+		case COMPRESSION_ZSTD:
+		{
+			int maximumLength = ZSTD_compressBound(inputBuffer->len);
+			int compressionLevel = 3;
+
+			resetStringInfo(outputBuffer);
+			enlargeStringInfo(outputBuffer, maximumLength);
+
+			size_t compressedSize = ZSTD_compress(outputBuffer->data,
+												  outputBuffer->maxlen,
+												  inputBuffer->data,
+												  inputBuffer->len,
+												  compressionLevel);
+
+			if (ZSTD_isError(compressedSize))
+			{
+				ereport(WARNING, (errmsg("zstd compression failed"),
+								  (errdetail("%s", ZSTD_getErrorName(compressedSize)))));
+				return false;
+			}
 
 			outputBuffer->len = compressedSize;
 			return true;
@@ -151,6 +182,36 @@ DecompressBuffer(StringInfo buffer,
 				ereport(ERROR, (errmsg("cannot decompress the buffer"),
 								errdetail("Expected %lu bytes, but received %d bytes",
 										  decompressedSize, lz4DecompressSize)));
+			}
+
+			decompressedBuffer->len = decompressedSize;
+
+			return decompressedBuffer;
+		}
+#endif
+
+#if HAVE_LIBZSTD
+		case COMPRESSION_ZSTD:
+		{
+			StringInfo decompressedBuffer = makeStringInfo();
+			enlargeStringInfo(decompressedBuffer, decompressedSize);
+
+			size_t zstdDecompressSize = ZSTD_decompress(decompressedBuffer->data,
+														decompressedSize,
+														buffer->data,
+														buffer->len);
+			if (ZSTD_isError(zstdDecompressSize))
+			{
+				ereport(ERROR, (errmsg("zstd decompression failed"),
+								(errdetail("%s", ZSTD_getErrorName(
+											   zstdDecompressSize)))));
+			}
+
+			if (zstdDecompressSize != decompressedSize)
+			{
+				ereport(ERROR, (errmsg("unexpected decompressed size"),
+								errdetail("Expected %ld, received %ld", decompressedSize,
+										  zstdDecompressSize)));
 			}
 
 			decompressedBuffer->len = decompressedSize;

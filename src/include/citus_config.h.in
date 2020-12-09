@@ -43,6 +43,9 @@
 /* Define to 1 if you have the `lz4' library (-llz4). */
 #undef HAVE_LIBLZ4
 
+/* Define to 1 if you have the `zstd' library (-lzstd). */
+#undef HAVE_LIBZSTD
+
 /* Define to 1 if you have the <memory.h> header file. */
 #undef HAVE_MEMORY_H
 
