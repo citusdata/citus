@@ -102,9 +102,9 @@ SELECT * FROM matview ORDER BY a;
 
 -- test we retained options
 SELECT * FROM columnar.options WHERE regclass = 'test_options_1'::regclass;
-    regclass    | chunk_row_count | stripe_row_count | compression
+    regclass    | chunk_row_count | stripe_row_count | compression_level | compression
 ---------------------------------------------------------------------
- test_options_1 |            1000 |             5000 | pglz
+ test_options_1 |            1000 |             5000 |                 3 | pglz
 (1 row)
 
 VACUUM VERBOSE test_options_1;
@@ -122,9 +122,9 @@ SELECT count(*), sum(a), sum(b) FROM test_options_1;
 (1 row)
 
 SELECT * FROM columnar.options WHERE regclass = 'test_options_2'::regclass;
-    regclass    | chunk_row_count | stripe_row_count | compression
+    regclass    | chunk_row_count | stripe_row_count | compression_level | compression
 ---------------------------------------------------------------------
- test_options_2 |            2000 |             6000 | none
+ test_options_2 |            2000 |             6000 |                13 | none
 (1 row)
 
 VACUUM VERBOSE test_options_2;

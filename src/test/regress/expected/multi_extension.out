@@ -479,8 +479,8 @@ SELECT * FROM print_extension_changes();
  previous_object |                            current_object
 ---------------------------------------------------------------------
                  | access method columnar
-                 | function alter_columnar_table_reset(regclass,boolean,boolean,boolean)
-                 | function alter_columnar_table_set(regclass,integer,integer,name)
+                 | function alter_columnar_table_reset(regclass,boolean,boolean,boolean,boolean)
+                 | function alter_columnar_table_set(regclass,integer,integer,name,integer)
                  | function citus_internal.columnar_ensure_objects_exist()
                  | function columnar.columnar_handler(internal)
                  | schema columnar

@@ -31,6 +31,7 @@
 int cstore_compression = DEFAULT_COMPRESSION_TYPE;
 int cstore_stripe_row_count = DEFAULT_STRIPE_ROW_COUNT;
 int cstore_chunk_row_count = DEFAULT_CHUNK_ROW_COUNT;
+int columnar_compression_level = 3;
 
 static const struct config_enum_entry cstore_compression_options[] =
 {
@@ -59,6 +60,19 @@ cstore_init()
 							 NULL,
 							 NULL,
 							 NULL);
+
+	DefineCustomIntVariable("columnar.compression_level",
+							"Compression level to be used with zstd.",
+							NULL,
+							&columnar_compression_level,
+							3,
+							COMPRESSION_LEVEL_MIN,
+							COMPRESSION_LEVEL_MAX,
+							PGC_USERSET,
+							0,
+							NULL,
+							NULL,
+							NULL);
 
 	DefineCustomIntVariable("columnar.stripe_row_count",
 							"Maximum number of tuples per stripe.",

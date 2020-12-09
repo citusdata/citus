@@ -102,11 +102,12 @@ static bool WriteColumnarOptions(Oid regclass, ColumnarOptions *options, bool ov
 PG_FUNCTION_INFO_V1(columnar_relation_storageid);
 
 /* constants for columnar.options */
-#define Natts_cstore_options 4
+#define Natts_cstore_options 5
 #define Anum_cstore_options_regclass 1
 #define Anum_cstore_options_chunk_row_count 2
 #define Anum_cstore_options_stripe_row_count 3
-#define Anum_cstore_options_compression 4
+#define Anum_cstore_options_compression_level 4
+#define Anum_cstore_options_compression 5
 
 /* ----------------
  *		columnar.options definition.
@@ -117,6 +118,7 @@ typedef struct FormData_cstore_options
 	Oid regclass;
 	int32 chunk_row_count;
 	int32 stripe_row_count;
+	int32 compressionLevel;
 	NameData compression;
 
 #ifdef CATALOG_VARLEN           /* variable-length fields start here */
@@ -137,7 +139,7 @@ typedef FormData_cstore_options *Form_cstore_options;
 #define Anum_cstore_stripes_row_count 8
 
 /* constants for cstore_skipnodes */
-#define Natts_cstore_skipnodes 13
+#define Natts_cstore_skipnodes 14
 #define Anum_cstore_skipnodes_storageid 1
 #define Anum_cstore_skipnodes_stripe 2
 #define Anum_cstore_skipnodes_attr 3
@@ -150,7 +152,8 @@ typedef FormData_cstore_options *Form_cstore_options;
 #define Anum_cstore_skipnodes_exists_stream_offset 10
 #define Anum_cstore_skipnodes_exists_stream_length 11
 #define Anum_cstore_skipnodes_value_compression_type 12
-#define Anum_cstore_skipnodes_value_decompressed_size 13
+#define Anum_cstore_skipnodes_value_compression_level 13
+#define Anum_cstore_skipnodes_value_decompressed_size 14
 
 
 /*
@@ -173,6 +176,7 @@ InitColumnarOptions(Oid regclass)
 		.chunkRowCount = cstore_chunk_row_count,
 		.stripeRowCount = cstore_stripe_row_count,
 		.compressionType = cstore_compression,
+		.compressionLevel = columnar_compression_level
 	};
 
 	WriteColumnarOptions(regclass, &defaultOptions, false);
@@ -215,6 +219,7 @@ WriteColumnarOptions(Oid regclass, ColumnarOptions *options, bool overwrite)
 		ObjectIdGetDatum(regclass),
 		Int32GetDatum(options->chunkRowCount),
 		Int32GetDatum(options->stripeRowCount),
+		Int32GetDatum(options->compressionLevel),
 		0, /* to be filled below */
 	};
 
@@ -246,6 +251,7 @@ WriteColumnarOptions(Oid regclass, ColumnarOptions *options, bool overwrite)
 			bool update[Natts_cstore_options] = { 0 };
 			update[Anum_cstore_options_chunk_row_count - 1] = true;
 			update[Anum_cstore_options_stripe_row_count - 1] = true;
+			update[Anum_cstore_options_compression_level - 1] = true;
 			update[Anum_cstore_options_compression - 1] = true;
 
 			HeapTuple tuple = heap_modify_tuple(heapTuple, tupleDescriptor,
@@ -363,6 +369,7 @@ ReadColumnarOptions(Oid regclass, ColumnarOptions *options)
 
 		options->chunkRowCount = tupOptions->chunk_row_count;
 		options->stripeRowCount = tupOptions->stripe_row_count;
+		options->compressionLevel = tupOptions->compressionLevel;
 		options->compressionType = ParseCompressionType(NameStr(tupOptions->compression));
 	}
 	else
@@ -371,6 +378,7 @@ ReadColumnarOptions(Oid regclass, ColumnarOptions *options)
 		options->compressionType = cstore_compression;
 		options->stripeRowCount = cstore_stripe_row_count;
 		options->chunkRowCount = cstore_chunk_row_count;
+		options->compressionLevel = columnar_compression_level;
 	}
 
 	systable_endscan_ordered(scanDescriptor);
@@ -418,6 +426,7 @@ SaveStripeSkipList(RelFileNode relfilenode, uint64 stripe, StripeSkipList *strip
 				Int64GetDatum(skipNode->existsChunkOffset),
 				Int64GetDatum(skipNode->existsLength),
 				Int32GetDatum(skipNode->valueCompressionType),
+				Int32GetDatum(skipNode->valueCompressionLevel),
 				Int64GetDatum(skipNode->decompressedValueSize)
 			};
 
@@ -524,6 +533,8 @@ ReadStripeSkipList(RelFileNode relfilenode, uint64 stripe, TupleDesc tupleDescri
 			DatumGetInt64(datumArray[Anum_cstore_skipnodes_exists_stream_length - 1]);
 		skipNode->valueCompressionType =
 			DatumGetInt32(datumArray[Anum_cstore_skipnodes_value_compression_type - 1]);
+		skipNode->valueCompressionLevel =
+			DatumGetInt32(datumArray[Anum_cstore_skipnodes_value_compression_level - 1]);
 		skipNode->decompressedValueSize =
 			DatumGetInt64(datumArray[Anum_cstore_skipnodes_value_decompressed_size - 1]);
 

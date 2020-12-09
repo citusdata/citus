@@ -9,6 +9,7 @@ CREATE TABLE options (
     regclass regclass NOT NULL PRIMARY KEY,
     chunk_row_count int NOT NULL,
     stripe_row_count int NOT NULL,
+    compression_level int NOT NULL,
     compression name NOT NULL
 ) WITH (user_catalog_table = true);
 
@@ -41,6 +42,7 @@ CREATE TABLE columnar_skipnodes (
     exists_stream_offset bigint NOT NULL,
     exists_stream_length bigint NOT NULL,
     value_compression_type int NOT NULL,
+    value_compression_level int NOT NULL,
     value_decompressed_length bigint NOT NULL,
     PRIMARY KEY (storageid, stripe, attr, chunk),
     FOREIGN KEY (storageid, stripe) REFERENCES columnar_stripes(storageid, stripe) ON DELETE CASCADE

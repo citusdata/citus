@@ -183,9 +183,7 @@ cstore_init_write_state(Relation relation, TupleDesc tupdesc,
 
 	SubXidWriteState *stackEntry = palloc0(sizeof(SubXidWriteState));
 	stackEntry->writeState = CStoreBeginWrite(relation->rd_node,
-											  cstoreOptions.compressionType,
-											  cstoreOptions.stripeRowCount,
-											  cstoreOptions.chunkRowCount,
+											  cstoreOptions,
 											  tupdesc);
 	stackEntry->subXid = currentSubXid;
 	stackEntry->next = hashEntry->writeStateStack;

@@ -77,7 +77,7 @@ INSERT INTO test_alter_type SELECT * FROM generate_series(1, 10);
 SELECT count(*) FROM test_alter_type;
  count
 ---------------------------------------------------------------------
-     10
+    10
 (1 row)
 
 SELECT relfilenode AS relfilenode_pre_alter
@@ -95,7 +95,7 @@ INSERT INTO test_alter_type SELECT * FROM generate_series(11, 13);
 SELECT count(*) FROM test_alter_type;
  count
 ---------------------------------------------------------------------
-     13
+    13
 (1 row)
 
 -- materialized view
@@ -135,6 +135,12 @@ SELECT alter_columnar_table_set('test_options_2', stripe_row_count => 6000);
 (1 row)
 
 SELECT alter_columnar_table_set('test_options_2', compression => 'none');
+ alter_columnar_table_set
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT alter_columnar_table_set('test_options_2', compression_level => 13);
  alter_columnar_table_set
 ---------------------------------------------------------------------
 

@@ -107,5 +107,6 @@ INSERT INTO test_options_2 SELECT i, floor(i/1000) FROM generate_series(1, 10000
 SELECT alter_columnar_table_set('test_options_2', chunk_row_count => 2000);
 SELECT alter_columnar_table_set('test_options_2', stripe_row_count => 6000);
 SELECT alter_columnar_table_set('test_options_2', compression => 'none');
+SELECT alter_columnar_table_set('test_options_2', compression_level => 13);
 INSERT INTO test_options_2 SELECT i, floor(i/2000) FROM generate_series(1, 10000) i;
 

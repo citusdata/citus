@@ -34,6 +34,8 @@
 #define STRIPE_ROW_COUNT_MAXIMUM 10000000
 #define CHUNK_ROW_COUNT_MINIMUM 1000
 #define CHUNK_ROW_COUNT_MAXIMUM 100000
+#define COMPRESSION_LEVEL_MIN 1
+#define COMPRESSION_LEVEL_MAX 19
 
 /* String representations of compression types */
 #define COMPRESSION_STRING_NONE "none"
@@ -73,6 +75,7 @@ typedef struct ColumnarOptions
 	uint64 stripeRowCount;
 	uint32 chunkRowCount;
 	CompressionType compressionType;
+	int compressionLevel;
 } ColumnarOptions;
 
 
@@ -125,6 +128,7 @@ typedef struct ColumnChunkSkipNode
 	uint64 decompressedValueSize;
 
 	CompressionType valueCompressionType;
+	int valueCompressionLevel;
 } ColumnChunkSkipNode;
 
 
@@ -228,7 +232,6 @@ typedef struct TableReadState
 /* TableWriteState represents state of a cstore file write operation. */
 typedef struct TableWriteState
 {
-	CompressionType compressionType;
 	TupleDesc tupleDescriptor;
 	FmgrInfo **comparisonFunctionArray;
 	RelFileNode relfilenode;
@@ -237,8 +240,7 @@ typedef struct TableWriteState
 	MemoryContext perTupleContext;
 	StripeBuffers *stripeBuffers;
 	StripeSkipList *stripeSkipList;
-	uint32 stripeMaxRowCount;
-	uint32 chunkRowCount;
+	ColumnarOptions options;
 	ChunkData *chunkData;
 
 	/*
@@ -253,6 +255,7 @@ typedef struct TableWriteState
 extern int cstore_compression;
 extern int cstore_stripe_row_count;
 extern int cstore_chunk_row_count;
+extern int columnar_compression_level;
 
 extern void cstore_init(void);
 
@@ -260,9 +263,7 @@ extern CompressionType ParseCompressionType(const char *compressionTypeString);
 
 /* Function declarations for writing to a cstore file */
 extern TableWriteState * CStoreBeginWrite(RelFileNode relfilenode,
-										  CompressionType compressionType,
-										  uint64 stripeMaxRowCount,
-										  uint32 chunkRowCount,
+										  ColumnarOptions options,
 										  TupleDesc tupleDescriptor);
 extern void CStoreWriteRow(TableWriteState *state, Datum *columnValues,
 						   bool *columnNulls);
@@ -287,8 +288,10 @@ extern ChunkData * CreateEmptyChunkData(uint32 columnCount, bool *columnMask,
 										uint32 chunkRowCount);
 extern void FreeChunkData(ChunkData *chunkData);
 extern uint64 CStoreTableRowCount(Relation relation);
-extern bool CompressBuffer(StringInfo inputBuffer, StringInfo outputBuffer,
-						   CompressionType compressionType);
+extern bool CompressBuffer(StringInfo inputBuffer,
+						   StringInfo outputBuffer,
+						   CompressionType compressionType,
+						   int compressionLevel);
 extern StringInfo DecompressBuffer(StringInfo buffer, CompressionType compressionType,
 								   uint64 decompressedSize);
 extern const char * CompressionTypeStr(CompressionType type);
