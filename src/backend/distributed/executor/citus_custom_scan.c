@@ -370,7 +370,7 @@ CitusBeginModifyScan(CustomScanState *node, EState *estate, int eflags)
 
 
 	/* We skip shard related things if the job contains only local tables */
-	if (!OnlyLocalTableJob(workerJob))
+	if (!ModifyLocalTableJob(workerJob))
 	{
 		/*
 		 * Now that we know the shard ID(s) we can acquire the necessary shard metadata
@@ -544,12 +544,12 @@ RegenerateTaskForFasthPathQuery(Job *workerJob)
 		shardId = GetAnchorShardId(shardIntervalList);
 	}
 
-	bool containsOnlyLocalTable = false;
+	bool isLocalTableModification = false;
 	GenerateSingleShardRouterTaskList(workerJob,
 									  relationShardList,
 									  placementList,
 									  shardId,
-									  containsOnlyLocalTable);
+									  isLocalTableModification);
 }
 
 

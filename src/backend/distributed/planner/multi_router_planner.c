@@ -171,7 +171,7 @@ static int CompareInsertValuesByShardId(const void *leftElement,
 static List * SingleShardTaskList(Query *query, uint64 jobId,
 								  List *relationShardList, List *placementList,
 								  uint64 shardId, bool parametersInQueryResolved,
-								  bool containsOnlyLocalTable);
+								  bool isLocalTableModification);
 static bool RowLocksOnRelations(Node *node, List **rtiLockList);
 static void ReorderTaskPlacementsByTaskAssignmentPolicy(Job *job,
 														TaskAssignmentPolicyType
@@ -321,8 +321,6 @@ IsRouterPlannable(Query *query, PlannerRestrictionContext *plannerRestrictionCon
 		}
 	}
 
-	/* TODO:: we might not need this copy*/
-	copyQuery = copyObject(query);
 	RouterJob(copyQuery, plannerRestrictionContext, &deferredErrorMessage);
 	return deferredErrorMessage == NULL;
 }
@@ -1044,7 +1042,8 @@ DeferErrorIfModifyView(Query *queryTree)
 			firstRangeTableElement->inFromCl == false)
 		{
 			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-								 "cannot modify views over distributed tables", NULL,
+								 "cannot modify views when the query contains citus tables",
+								 NULL,
 								 NULL);
 		}
 	}
@@ -1718,7 +1717,7 @@ RouterJob(Query *originalQuery, PlannerRestrictionContext *plannerRestrictionCon
 	/* router planner should create task even if it doesn't hit a shard at all */
 	bool replacePrunedQueryWithDummy = true;
 
-	bool containsOnlyLocalTable = false;
+	bool isLocalTableModification = false;
 
 	/* check if this query requires coordinator evaluation */
 	bool requiresCoordinatorEvaluation = RequiresCoordinatorEvaluation(originalQuery);
@@ -1748,7 +1747,7 @@ RouterJob(Query *originalQuery, PlannerRestrictionContext *plannerRestrictionCon
 										   replacePrunedQueryWithDummy,
 										   &isMultiShardModifyQuery,
 										   &partitionKeyValue,
-										   &containsOnlyLocalTable);
+										   &isLocalTableModification);
 	}
 
 	if (*planningError)
@@ -1794,7 +1793,8 @@ RouterJob(Query *originalQuery, PlannerRestrictionContext *plannerRestrictionCon
 	else
 	{
 		GenerateSingleShardRouterTaskList(job, relationShardList,
-										  placementList, shardId, containsOnlyLocalTable);
+										  placementList, shardId,
+										  isLocalTableModification);
 	}
 
 	job->requiresCoordinatorEvaluation = requiresCoordinatorEvaluation;
@@ -1811,7 +1811,7 @@ RouterJob(Query *originalQuery, PlannerRestrictionContext *plannerRestrictionCon
 void
 GenerateSingleShardRouterTaskList(Job *job, List *relationShardList,
 								  List *placementList, uint64 shardId, bool
-								  containsOnlyLocalTable)
+								  isLocalTableModification)
 {
 	Query *originalQuery = job->jobQuery;
 
@@ -1821,7 +1821,7 @@ GenerateSingleShardRouterTaskList(Job *job, List *relationShardList,
 											relationShardList, placementList,
 											shardId,
 											job->parametersInJobQueryResolved,
-											containsOnlyLocalTable);
+											isLocalTableModification);
 
 		/*
 		 * Queries to reference tables, or distributed tables with multiple replica's have
@@ -1838,7 +1838,7 @@ GenerateSingleShardRouterTaskList(Job *job, List *relationShardList,
 														placementList);
 		}
 	}
-	else if (shardId == INVALID_SHARD_ID && !containsOnlyLocalTable)
+	else if (shardId == INVALID_SHARD_ID && !isLocalTableModification)
 	{
 		/* modification that prunes to 0 shards */
 		job->taskList = NIL;
@@ -1849,7 +1849,7 @@ GenerateSingleShardRouterTaskList(Job *job, List *relationShardList,
 											relationShardList, placementList,
 											shardId,
 											job->parametersInJobQueryResolved,
-											containsOnlyLocalTable);
+											isLocalTableModification);
 	}
 }
 
@@ -1943,7 +1943,7 @@ static List *
 SingleShardTaskList(Query *query, uint64 jobId, List *relationShardList,
 					List *placementList, uint64 shardId,
 					bool parametersInQueryResolved,
-					bool containsOnlyLocalTable)
+					bool isLocalTableModification)
 {
 	TaskType taskType = READ_TASK;
 	char replicationModel = 0;
@@ -2002,7 +2002,7 @@ SingleShardTaskList(Query *query, uint64 jobId, List *relationShardList,
 	}
 
 	Task *task = CreateTask(taskType);
-	task->containsOnlyLocalTable = containsOnlyLocalTable;
+	task->isLocalTableModification = isLocalTableModification;
 	List *relationRowLockList = NIL;
 
 	RowLocksOnRelations((Node *) query, &relationRowLockList);
@@ -2144,7 +2144,7 @@ PlanRouterQuery(Query *originalQuery,
 				List **prunedShardIntervalListList,
 				bool replacePrunedQueryWithDummy, bool *multiShardModifyQuery,
 				Const **partitionValueConst,
-				bool *containsOnlyLocalTable)
+				bool *isLocalTableModification)
 {
 	bool isMultiShardQuery = false;
 	DeferredErrorMessage *planningError = NULL;
@@ -2262,7 +2262,10 @@ PlanRouterQuery(Query *originalQuery,
 	RTEListProperties *rteProperties = GetRTEListPropertiesForQuery(originalQuery);
 	if (shardId == INVALID_SHARD_ID && ContainsOnlyLocalTables(rteProperties))
 	{
-		*containsOnlyLocalTable = true;
+		if (commandType != CMD_SELECT)
+		{
+			*isLocalTableModification = true;
+		}
 	}
 	bool hasPostgresLocalRelation =
 		rteProperties->hasPostgresLocalTable || rteProperties->hasMaterializedView;

@@ -209,6 +209,8 @@ FROM
 WHERE
 	d1.key = 1;
 
+CREATE view loc_view AS SELECT * FROM postgres_table WHERE key > 0;
+UPDATE loc_view SET key = (SELECT COUNT(*) FROM distributed_table);
 
 SELECT count(*)
 FROM
@@ -260,10 +262,10 @@ EXECUTE local_dist_table_join_subquery(5);
 EXECUTE local_dist_table_join_subquery(5);
 EXECUTE local_dist_table_join_subquery(5);
 
-PREPARE local_dist_table_join_filters(int) AS SELECT COUNT(*) FROM local_partitioned_table JOIN distributed_table_composite USING(key) 
+PREPARE local_dist_table_join_filters(int) AS SELECT COUNT(*) FROM local_partitioned_table JOIN distributed_table_composite USING(key)
 	WHERE(
-		distributed_table_composite.key = $1 OR 
-		distributed_table_composite.key = 20 OR 
+		distributed_table_composite.key = $1 OR
+		distributed_table_composite.key = 20 OR
 		(distributed_table_composite.key = 10 AND distributed_table_composite.key > 0) OR
 		distributed_table_composite.value = 'text'
 		);

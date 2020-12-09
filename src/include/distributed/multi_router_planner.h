@@ -87,7 +87,7 @@ extern void GenerateSingleShardRouterTaskList(Job *job,
 											  List *relationShardList,
 											  List *placementList,
 											  uint64 shardId,
-											  bool containsOnlyLocalTable);
+											  bool isLocalTableModification);
 extern bool IsRouterPlannable(Query *query,
 							  PlannerRestrictionContext *plannerRestrictionContext);
 

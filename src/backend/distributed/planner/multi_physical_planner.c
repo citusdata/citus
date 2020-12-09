@@ -272,11 +272,11 @@ CreatePhysicalDistributedPlan(MultiTreeRoot *multiTree,
 
 
 /*
- * OnlyLocalTableJob true if the given task contains
- * only postgres tables
+ * ModifyLocalTableJob returns true if the given task contains
+ * a modification of local table.
  */
 bool
-OnlyLocalTableJob(Job *job)
+ModifyLocalTableJob(Job *job)
 {
 	if (job == NULL)
 	{
@@ -288,7 +288,7 @@ OnlyLocalTableJob(Job *job)
 		return false;
 	}
 	Task *singleTask = (Task *) linitial(taskList);
-	return singleTask->containsOnlyLocalTable;
+	return singleTask->isLocalTableModification;
 }
 
 

@@ -330,9 +330,9 @@ typedef struct Task
 	double fetchedExplainAnalyzeExecutionDuration;
 
 	/*
-	 * containsOnlyLocalTable is true if the task contains only postgres table/MV.
+	 * isLocalTableModification is true if the task is on modifying a local table.
 	 */
-	bool containsOnlyLocalTable;
+	bool isLocalTableModification;
 } Task;
 
 
@@ -583,7 +583,7 @@ extern List * QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 									   bool modifyRequiresCoordinatorEvaluation,
 									   DeferredErrorMessage **planningError);
 
-extern bool OnlyLocalTableJob(Job *job);
+extern bool ModifyLocalTableJob(Job *job);
 
 /* function declarations for managing jobs */
 extern uint64 UniqueJobId(void);
