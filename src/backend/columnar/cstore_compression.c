@@ -53,8 +53,10 @@ typedef struct CStoreCompressHeader
  * outputBuffer is valid only if the function returns true.
  */
 bool
-CompressBuffer(StringInfo inputBuffer, StringInfo outputBuffer,
-			   CompressionType compressionType)
+CompressBuffer(StringInfo inputBuffer,
+			   StringInfo outputBuffer,
+			   CompressionType compressionType,
+			   int compressionLevel)
 {
 	switch (compressionType)
 	{
@@ -89,7 +91,6 @@ CompressBuffer(StringInfo inputBuffer, StringInfo outputBuffer,
 		case COMPRESSION_ZSTD:
 		{
 			int maximumLength = ZSTD_compressBound(inputBuffer->len);
-			int compressionLevel = 3;
 
 			resetStringInfo(outputBuffer);
 			enlargeStringInfo(outputBuffer, maximumLength);

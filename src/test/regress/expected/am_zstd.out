@@ -24,7 +24,7 @@ SELECT count(*) FROM test_zstd;
 VACUUM VERBOSE test_zstd;
 INFO:  statistics for "test_zstd":
 storage id: xxxxx
-total file size: 40960, total data size: 14947
+total file size: 40960, total data size: 14945
 compression rate: 21.91x
 total row count: 20001, stripe count: 2, average rows per stripe: 10000
 chunk count: 9, containing data for dropped columns: 0, zstd compressed: 9
@@ -38,6 +38,24 @@ SELECT DISTINCT * FROM test_zstd ORDER BY a, b, c LIMIT 5;
  0 | 11 | 4
  0 | 12 | 4
 (5 rows)
+
+-- change compression level
+-- for this particular usecase, higher compression levels
+-- don't improve compression ratio
+SELECT alter_columnar_table_set('test_zstd', compression_level => 19);
+ alter_columnar_table_set
+---------------------------------------------------------------------
+
+(1 row)
+
+VACUUM FULL test_zstd;
+VACUUM VERBOSE test_zstd;
+INFO:  statistics for "test_zstd":
+storage id: xxxxx
+total file size: 32768, total data size: 15201
+compression rate: 21.55x
+total row count: 20001, stripe count: 1, average rows per stripe: 20001
+chunk count: 9, containing data for dropped columns: 0, zstd compressed: 9
 
 -- compare compression rate to pglz
 SET columnar.compression TO 'pglz';

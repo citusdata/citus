@@ -61,8 +61,7 @@ static StringInfo CopyStringInfo(StringInfo sourceString);
  */
 TableWriteState *
 CStoreBeginWrite(RelFileNode relfilenode,
-				 CompressionType compressionType,
-				 uint64 stripeMaxRowCount, uint32 chunkRowCount,
+				 ColumnarOptions options,
 				 TupleDesc tupleDescriptor)
 {
 	/* get comparison function pointers for each of the columns */
@@ -98,13 +97,11 @@ CStoreBeginWrite(RelFileNode relfilenode,
 	memset(columnMaskArray, true, columnCount);
 
 	ChunkData *chunkData = CreateEmptyChunkData(columnCount, columnMaskArray,
-												chunkRowCount);
+												options.chunkRowCount);
 
 	TableWriteState *writeState = palloc0(sizeof(TableWriteState));
 	writeState->relfilenode = relfilenode;
-	writeState->compressionType = compressionType;
-	writeState->stripeMaxRowCount = stripeMaxRowCount;
-	writeState->chunkRowCount = chunkRowCount;
+	writeState->options = options;
 	writeState->tupleDescriptor = CreateTupleDescCopy(tupleDescriptor);
 	writeState->comparisonFunctionArray = comparisonFunctionArray;
 	writeState->stripeBuffers = NULL;
@@ -135,15 +132,16 @@ CStoreWriteRow(TableWriteState *writeState, Datum *columnValues, bool *columnNul
 	StripeBuffers *stripeBuffers = writeState->stripeBuffers;
 	StripeSkipList *stripeSkipList = writeState->stripeSkipList;
 	uint32 columnCount = writeState->tupleDescriptor->natts;
-	const uint32 chunkRowCount = writeState->chunkRowCount;
+	ColumnarOptions *options = &writeState->options;
+	const uint32 chunkRowCount = options->chunkRowCount;
 	ChunkData *chunkData = writeState->chunkData;
 	MemoryContext oldContext = MemoryContextSwitchTo(writeState->stripeWriteContext);
 
 	if (stripeBuffers == NULL)
 	{
-		stripeBuffers = CreateEmptyStripeBuffers(writeState->stripeMaxRowCount,
+		stripeBuffers = CreateEmptyStripeBuffers(options->stripeRowCount,
 												 chunkRowCount, columnCount);
-		stripeSkipList = CreateEmptyStripeSkipList(writeState->stripeMaxRowCount,
+		stripeSkipList = CreateEmptyStripeSkipList(options->stripeRowCount,
 												   chunkRowCount, columnCount);
 		writeState->stripeBuffers = stripeBuffers;
 		writeState->stripeSkipList = stripeSkipList;
@@ -206,7 +204,7 @@ CStoreWriteRow(TableWriteState *writeState, Datum *columnValues, bool *columnNul
 	}
 
 	stripeBuffers->rowCount++;
-	if (stripeBuffers->rowCount >= writeState->stripeMaxRowCount)
+	if (stripeBuffers->rowCount >= options->stripeRowCount)
 	{
 		CStoreFlushPendingWrites(writeState);
 	}
@@ -413,7 +411,7 @@ FlushStripe(TableWriteState *writeState)
 	TupleDesc tupleDescriptor = writeState->tupleDescriptor;
 	uint32 columnCount = tupleDescriptor->natts;
 	uint32 chunkCount = stripeSkipList->chunkCount;
-	uint32 chunkRowCount = writeState->chunkRowCount;
+	uint32 chunkRowCount = writeState->options.chunkRowCount;
 	uint32 lastChunkIndex = stripeBuffers->rowCount / chunkRowCount;
 	uint32 lastChunkRowCount = stripeBuffers->rowCount % chunkRowCount;
 	uint64 stripeSize = 0;
@@ -463,6 +461,7 @@ FlushStripe(TableWriteState *writeState)
 			chunkSkipNode->valueChunkOffset = stripeSize;
 			chunkSkipNode->valueLength = valueBufferSize;
 			chunkSkipNode->valueCompressionType = valueCompressionType;
+			chunkSkipNode->valueCompressionLevel = writeState->options.compressionLevel;
 			chunkSkipNode->decompressedValueSize = chunkBuffers->decompressedValueSize;
 
 			stripeSize += valueBufferSize;
@@ -606,7 +605,8 @@ SerializeChunkData(TableWriteState *writeState, uint32 chunkIndex, uint32 rowCou
 	uint32 columnIndex = 0;
 	StripeBuffers *stripeBuffers = writeState->stripeBuffers;
 	ChunkData *chunkData = writeState->chunkData;
-	CompressionType requestedCompressionType = writeState->compressionType;
+	CompressionType requestedCompressionType = writeState->options.compressionType;
+	int compressionLevel = writeState->options.compressionLevel;
 	const uint32 columnCount = stripeBuffers->columnCount;
 	StringInfo compressionBuffer = writeState->compressionBuffer;
 
@@ -643,7 +643,8 @@ SerializeChunkData(TableWriteState *writeState, uint32 chunkIndex, uint32 rowCou
 		 * with compressed data and store compression type.
 		 */
 		bool compressed = CompressBuffer(serializedValueBuffer, compressionBuffer,
-										 requestedCompressionType);
+										 requestedCompressionType,
+										 compressionLevel);
 		if (compressed)
 		{
 			serializedValueBuffer = compressionBuffer;

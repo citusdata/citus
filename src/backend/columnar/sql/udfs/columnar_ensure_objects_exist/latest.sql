@@ -31,12 +31,14 @@ IF NOT EXISTS (SELECT 1 FROM pg_am WHERE amname = 'columnar') THEN
         table_name regclass,
         chunk_row_count int,
         stripe_row_count int,
-        compression name);
+        compression name,
+        compression_level int);
     ALTER EXTENSION citus ADD FUNCTION pg_catalog.alter_columnar_table_reset(
         table_name regclass,
         chunk_row_count bool,
         stripe_row_count bool,
-        compression bool);
+        compression bool,
+        compression_level bool);
 
 END IF;
 END IF;

@@ -28,6 +28,24 @@ SELECT run_command_on_placements('table_option',$cmd$
   SELECT compression FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 
+-- setting: compression_level
+-- get baseline for setting
+SELECT run_command_on_placements('table_option',$cmd$
+  SELECT compression_level FROM columnar.options WHERE regclass = '%s'::regclass;
+$cmd$);
+-- change setting
+SELECT alter_columnar_table_set('table_option', compression_level => 13);
+-- verify setting
+SELECT run_command_on_placements('table_option',$cmd$
+  SELECT compression_level FROM columnar.options WHERE regclass = '%s'::regclass;
+$cmd$);
+-- reset setting
+SELECT alter_columnar_table_reset('table_option', compression_level => true);
+-- verify setting
+SELECT run_command_on_placements('table_option',$cmd$
+  SELECT compression_level FROM columnar.options WHERE regclass = '%s'::regclass;
+$cmd$);
+
 -- setting: chunk_row_count
 -- get baseline for setting
 SELECT run_command_on_placements('table_option',$cmd$
@@ -69,12 +87,13 @@ CREATE TABLE table_option_2 (a int, b text) USING columnar;
 SELECT alter_columnar_table_set('table_option_2',
                                 chunk_row_count => 100,
                                 stripe_row_count => 1000,
-                                compression => 'pglz');
+                                compression => 'pglz',
+                                compression_level => 15);
 SELECT create_distributed_table('table_option_2', 'a');
 
 -- verify settings on placements
 SELECT run_command_on_placements('table_option_2',$cmd$
-  SELECT ROW(chunk_row_count, stripe_row_count, compression) FROM columnar.options WHERE regclass = '%s'::regclass;
+  SELECT ROW(chunk_row_count, stripe_row_count, compression, compression_level) FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 
 DROP TABLE table_option, table_option_2;
@@ -104,6 +123,24 @@ SELECT run_command_on_placements('table_option',$cmd$
   SELECT compression FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 
+-- setting: compression_level
+-- get baseline for setting
+SELECT run_command_on_placements('table_option',$cmd$
+  SELECT compression_level FROM columnar.options WHERE regclass = '%s'::regclass;
+$cmd$);
+-- change setting
+SELECT alter_columnar_table_set('table_option', compression_level => 17);
+-- verify setting
+SELECT run_command_on_placements('table_option',$cmd$
+  SELECT compression_level FROM columnar.options WHERE regclass = '%s'::regclass;
+$cmd$);
+-- reset setting
+SELECT alter_columnar_table_reset('table_option', compression_level => true);
+-- verify setting
+SELECT run_command_on_placements('table_option',$cmd$
+  SELECT compression_level FROM columnar.options WHERE regclass = '%s'::regclass;
+$cmd$);
+
 -- setting: chunk_row_count
 -- get baseline for setting
 SELECT run_command_on_placements('table_option',$cmd$
@@ -145,12 +182,13 @@ CREATE TABLE table_option_2 (a int, b text) USING columnar;
 SELECT alter_columnar_table_set('table_option_2',
                                 chunk_row_count => 100,
                                 stripe_row_count => 1000,
-                                compression => 'pglz');
+                                compression => 'pglz',
+                                compression_level => 19);
 SELECT create_distributed_table('table_option_2', 'a');
 
 -- verify settings on placements
 SELECT run_command_on_placements('table_option_2',$cmd$
-  SELECT ROW(chunk_row_count, stripe_row_count, compression) FROM columnar.options WHERE regclass = '%s'::regclass;
+  SELECT ROW(chunk_row_count, stripe_row_count, compression, compression_level) FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 
 DROP TABLE table_option, table_option_2;
@@ -175,6 +213,24 @@ SELECT alter_columnar_table_reset('table_option_reference', compression => true)
 -- verify setting
 SELECT run_command_on_placements('table_option_reference',$cmd$
   SELECT compression FROM columnar.options WHERE regclass = '%s'::regclass;
+$cmd$);
+
+-- setting: compression_level
+-- get baseline for setting
+SELECT run_command_on_placements('table_option_reference',$cmd$
+  SELECT compression_level FROM columnar.options WHERE regclass = '%s'::regclass;
+$cmd$);
+-- change setting
+SELECT alter_columnar_table_set('table_option_reference', compression_level => 11);
+-- verify setting
+SELECT run_command_on_placements('table_option_reference',$cmd$
+  SELECT compression_level FROM columnar.options WHERE regclass = '%s'::regclass;
+$cmd$);
+-- reset setting
+SELECT alter_columnar_table_reset('table_option_reference', compression_level => true);
+-- verify setting
+SELECT run_command_on_placements('table_option_reference',$cmd$
+  SELECT compression_level FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 
 -- setting: chunk_row_count
@@ -218,12 +274,13 @@ CREATE TABLE table_option_reference_2 (a int, b text) USING columnar;
 SELECT alter_columnar_table_set('table_option_reference_2',
                                 chunk_row_count => 100,
                                 stripe_row_count => 1000,
-                                compression => 'pglz');
+                                compression => 'pglz',
+                                compression_level => 9);
 SELECT create_reference_table('table_option_reference_2');
 
 -- verify settings on placements
 SELECT run_command_on_placements('table_option_reference_2',$cmd$
-  SELECT ROW(chunk_row_count, stripe_row_count, compression) FROM columnar.options WHERE regclass = '%s'::regclass;
+  SELECT ROW(chunk_row_count, stripe_row_count, compression, compression_level) FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 
 DROP TABLE table_option_reference, table_option_reference_2;

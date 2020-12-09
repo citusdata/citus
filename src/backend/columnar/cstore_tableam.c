@@ -632,9 +632,7 @@ cstore_relation_copy_for_cluster(Relation OldHeap, Relation NewHeap,
 	ReadColumnarOptions(OldHeap->rd_id, &cstoreOptions);
 
 	TableWriteState *writeState = CStoreBeginWrite(NewHeap->rd_node,
-												   cstoreOptions.compressionType,
-												   cstoreOptions.stripeRowCount,
-												   cstoreOptions.chunkRowCount,
+												   cstoreOptions,
 												   targetDesc);
 
 	TableReadState *readState = CStoreBeginRead(OldHeap, sourceDesc,
@@ -1343,10 +1341,12 @@ CitusCreateAlterColumnarTableSet(char *qualifiedRelationName,
 					 "SELECT alter_columnar_table_set(%s, "
 					 "chunk_row_count => %d, "
 					 "stripe_row_count => %lu, "
+					 "compression_level => %d, "
 					 "compression => %s);",
 					 quote_literal_cstr(qualifiedRelationName),
 					 options->chunkRowCount,
 					 options->stripeRowCount,
+					 options->compressionLevel,
 					 quote_literal_cstr(CompressionTypeStr(options->compressionType)));
 
 	return buf.data;
@@ -1524,6 +1524,23 @@ alter_columnar_table_set(PG_FUNCTION_ARGS)
 								CompressionTypeStr(options.compressionType))));
 	}
 
+	/* compression_level => not null */
+	if (!PG_ARGISNULL(4))
+	{
+		options.compressionLevel = PG_GETARG_INT32(4);
+		if (options.compressionLevel < COMPRESSION_LEVEL_MIN ||
+			options.compressionLevel > COMPRESSION_LEVEL_MAX)
+		{
+			ereport(ERROR, (errmsg("compression level out of range"),
+							errhint("compression level must be between %d and %d",
+									COMPRESSION_LEVEL_MIN,
+									COMPRESSION_LEVEL_MAX)));
+		}
+
+		ereport(DEBUG1, (errmsg("updating compression level to %d",
+								options.compressionLevel)));
+	}
+
 	if (EnableDDLPropagation && IsCitusTable(relationId))
 	{
 		/* when a columnar table is distributed update all settings on the shards */
@@ -1606,6 +1623,14 @@ alter_columnar_table_reset(PG_FUNCTION_ARGS)
 		options.compressionType = cstore_compression;
 		ereport(DEBUG1, (errmsg("resetting compression to %s",
 								CompressionTypeStr(options.compressionType))));
+	}
+
+	/* compression_level => true */
+	if (!PG_ARGISNULL(4) && PG_GETARG_BOOL(4))
+	{
+		options.compressionLevel = columnar_compression_level;
+		ereport(DEBUG1, (errmsg("reseting compression level to %d",
+								columnar_compression_level)));
 	}
 
 	if (EnableDDLPropagation && IsCitusTable(relationId))

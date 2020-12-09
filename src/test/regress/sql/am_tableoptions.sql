@@ -15,6 +15,13 @@ SELECT alter_columnar_table_set('table_options', compression => 'pglz');
 SELECT * FROM columnar.options
 WHERE regclass = 'table_options'::regclass;
 
+-- test changing the compression level
+SELECT alter_columnar_table_set('table_options', compression_level => 5);
+
+-- show table_options settings
+SELECT * FROM columnar.options
+WHERE regclass = 'table_options'::regclass;
+
 -- test changing the chunk_row_count
 SELECT alter_columnar_table_set('table_options', chunk_row_count => 10);
 
@@ -37,7 +44,7 @@ SELECT * FROM columnar.options
 WHERE regclass = 'table_options'::regclass;
 
 -- set all settings at the same time
-SELECT alter_columnar_table_set('table_options', stripe_row_count => 1000, chunk_row_count => 100, compression => 'none');
+SELECT alter_columnar_table_set('table_options', stripe_row_count => 1000, chunk_row_count => 100, compression => 'none', compression_level => 7);
 
 -- show table_options settings
 SELECT * FROM columnar.options
@@ -70,6 +77,7 @@ WHERE regclass = 'table_options'::regclass;
 SET columnar.chunk_row_count TO 1000;
 SET columnar.stripe_row_count TO 10000;
 SET columnar.compression TO 'pglz';
+SET columnar.compression_level TO 11;
 
 -- verify setting the GUC's didn't change the settings
 -- show table_options settings
@@ -93,10 +101,17 @@ SELECT alter_columnar_table_reset('table_options', compression => true);
 SELECT * FROM columnar.options
 WHERE regclass = 'table_options'::regclass;
 
+SELECT alter_columnar_table_reset('table_options', compression_level => true);
+
+-- show table_options settings
+SELECT * FROM columnar.options
+WHERE regclass = 'table_options'::regclass;
+
 -- verify resetting all settings at once work
 SET columnar.chunk_row_count TO 10000;
 SET columnar.stripe_row_count TO 100000;
 SET columnar.compression TO 'none';
+SET columnar.compression_level TO 13;
 
 -- show table_options settings
 SELECT * FROM columnar.options
@@ -106,7 +121,8 @@ SELECT alter_columnar_table_reset(
     'table_options',
     chunk_row_count => true,
     stripe_row_count => true,
-    compression => true);
+    compression => true,
+    compression_level => true);
 
 -- show table_options settings
 SELECT * FROM columnar.options
@@ -120,6 +136,10 @@ SELECT alter_columnar_table_reset('not_a_columnar_table', compression => true);
 
 -- verify you can't use a compression that is not known
 SELECT alter_columnar_table_set('table_options', compression => 'foobar');
+
+-- verify cannot set out of range compression levels
+SELECT alter_columnar_table_set('table_options', compression_level => 0);
+SELECT alter_columnar_table_set('table_options', compression_level => 20);
 
 -- verify options are removed when table is dropped
 DROP TABLE table_options;

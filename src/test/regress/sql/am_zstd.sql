@@ -20,6 +20,13 @@ VACUUM VERBOSE test_zstd;
 
 SELECT DISTINCT * FROM test_zstd ORDER BY a, b, c LIMIT 5;
 
+-- change compression level
+-- for this particular usecase, higher compression levels
+-- don't improve compression ratio
+SELECT alter_columnar_table_set('test_zstd', compression_level => 19);
+VACUUM FULL test_zstd;
+VACUUM VERBOSE test_zstd;
+
 -- compare compression rate to pglz
 SET columnar.compression TO 'pglz';
 CREATE TABLE test_pglz (LIKE test_zstd) USING columnar;

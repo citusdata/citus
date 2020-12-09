@@ -25,9 +25,9 @@ SELECT * FROM t_view a ORDER BY a;
 -- show columnar options for materialized view
 SELECT * FROM columnar.options
 WHERE regclass = 't_view'::regclass;
- regclass | chunk_row_count | stripe_row_count | compression
+ regclass | chunk_row_count | stripe_row_count | compression_level | compression
 ---------------------------------------------------------------------
- t_view   |           10000 |           150000 | none
+ t_view   |           10000 |           150000 |                 3 | none
 (1 row)
 
 -- show we can set options on a materialized view
@@ -39,18 +39,18 @@ SELECT alter_columnar_table_set('t_view', compression => 'pglz');
 
 SELECT * FROM columnar.options
 WHERE regclass = 't_view'::regclass;
- regclass | chunk_row_count | stripe_row_count | compression
+ regclass | chunk_row_count | stripe_row_count | compression_level | compression
 ---------------------------------------------------------------------
- t_view   |           10000 |           150000 | pglz
+ t_view   |           10000 |           150000 |                 3 | pglz
 (1 row)
 
 REFRESH MATERIALIZED VIEW t_view;
 -- verify options have not been changed
 SELECT * FROM columnar.options
 WHERE regclass = 't_view'::regclass;
- regclass | chunk_row_count | stripe_row_count | compression
+ regclass | chunk_row_count | stripe_row_count | compression_level | compression
 ---------------------------------------------------------------------
- t_view   |           10000 |           150000 | pglz
+ t_view   |           10000 |           150000 |                 3 | pglz
 (1 row)
 
 SELECT * FROM t_view a ORDER BY a;
