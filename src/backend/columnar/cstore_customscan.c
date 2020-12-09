@@ -164,8 +164,8 @@ CStoreSetRelPathlistHook(PlannerInfo *root, RelOptInfo *rel, Index rti,
 	{
 		if (rte->tablesample != NULL)
 		{
-			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED), errmsg(
-								"sample scans not supported on columnar tables")));
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("sample scans not supported on columnar tables")));
 		}
 
 		Path *customPath = CreateCStoreScanPath(rel, rte);
