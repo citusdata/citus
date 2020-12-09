@@ -630,6 +630,7 @@ CITUS_LDFLAGS
 CITUS_CPPFLAGS
 CITUS_CFLAGS
 GIT_BIN
+with_lz4
 EGREP
 GREP
 CPP
@@ -665,6 +666,7 @@ infodir
 docdir
 oldincludedir
 includedir
+runstatedir
 localstatedir
 sharedstatedir
 sysconfdir
@@ -689,6 +691,7 @@ ac_user_opts='
 enable_option_checking
 with_extra_version
 enable_coverage
+with_lz4
 with_libcurl
 with_reports_hostname
 '
@@ -741,6 +744,7 @@ datadir='${datarootdir}'
 sysconfdir='${prefix}/etc'
 sharedstatedir='${prefix}/com'
 localstatedir='${prefix}/var'
+runstatedir='${localstatedir}/run'
 includedir='${prefix}/include'
 oldincludedir='/usr/include'
 docdir='${datarootdir}/doc/${PACKAGE_TARNAME}'
@@ -993,6 +997,15 @@ do
   | -silent | --silent | --silen | --sile | --sil)
     silent=yes ;;
 
+  -runstatedir | --runstatedir | --runstatedi | --runstated \
+  | --runstate | --runstat | --runsta | --runst | --runs \
+  | --run | --ru | --r)
+    ac_prev=runstatedir ;;
+  -runstatedir=* | --runstatedir=* | --runstatedi=* | --runstated=* \
+  | --runstate=* | --runstat=* | --runsta=* | --runst=* | --runs=* \
+  | --run=* | --ru=* | --r=*)
+    runstatedir=$ac_optarg ;;
+
   -sbindir | --sbindir | --sbindi | --sbind | --sbin | --sbi | --sb)
     ac_prev=sbindir ;;
   -sbindir=* | --sbindir=* | --sbindi=* | --sbind=* | --sbin=* \
@@ -1130,7 +1143,7 @@ fi
 for ac_var in	exec_prefix prefix bindir sbindir libexecdir datarootdir \
 		datadir sysconfdir sharedstatedir localstatedir includedir \
 		oldincludedir docdir infodir htmldir dvidir pdfdir psdir \
-		libdir localedir mandir
+		libdir localedir mandir runstatedir
 do
   eval ac_val=\$$ac_var
   # Remove trailing slashes.
@@ -1283,6 +1296,7 @@ Fine tuning of the installation directories:
   --sysconfdir=DIR        read-only single-machine data [PREFIX/etc]
   --sharedstatedir=DIR    modifiable architecture-independent data [PREFIX/com]
   --localstatedir=DIR     modifiable single-machine data [PREFIX/var]
+  --runstatedir=DIR       modifiable per-process data [LOCALSTATEDIR/run]
   --libdir=DIR            object code libraries [EPREFIX/lib]
   --includedir=DIR        C header files [PREFIX/include]
   --oldincludedir=DIR     C header files for non-gcc [/usr/include]
@@ -1319,6 +1333,7 @@ Optional Packages:
   --without-PACKAGE       do not use PACKAGE (same as --with-PACKAGE=no)
   --with-extra-version=STRING
                           append STRING to version
+  --with-lz4              use lz4
   --without-libcurl       do not use libcurl for anonymous statistics
                           collection
   --with-reports-hostname=HOSTNAME
@@ -4341,6 +4356,99 @@ if test "$enable_coverage" = yes; then
     CITUS_CFLAGS="$CITUS_CFLAGS -O0 -g --coverage"
     CITUS_CPPFLAGS="$CITUS_CPPFLAGS -DNDEBUG"
     CITUS_LDFLAGS="$CITUS_LDFLAGS --coverage"
+fi
+
+#
+# LZ4
+#
+
+
+
+# Check whether --with-lz4 was given.
+if test "${with_lz4+set}" = set; then :
+  withval=$with_lz4;
+  case $withval in
+    yes)
+      :
+      ;;
+    no)
+      :
+      ;;
+    *)
+      as_fn_error $? "no argument expected for --with-lz4 option" "$LINENO" 5
+      ;;
+  esac
+
+else
+  with_lz4=no
+
+fi
+
+
+
+
+if test "$with_lz4" = yes; then
+  { $as_echo "$as_me:${as_lineno-$LINENO}: checking for LZ4_compress_default in -llz4" >&5
+$as_echo_n "checking for LZ4_compress_default in -llz4... " >&6; }
+if ${ac_cv_lib_lz4_LZ4_compress_default+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  ac_check_lib_save_LIBS=$LIBS
+LIBS="-llz4  $LIBS"
+cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+/* Override any GCC internal prototype to avoid an error.
+   Use char because int might match the return type of a GCC
+   builtin and then its argument prototype would still apply.  */
+#ifdef __cplusplus
+extern "C"
+#endif
+char LZ4_compress_default ();
+int
+main ()
+{
+return LZ4_compress_default ();
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_link "$LINENO"; then :
+  ac_cv_lib_lz4_LZ4_compress_default=yes
+else
+  ac_cv_lib_lz4_LZ4_compress_default=no
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+LIBS=$ac_check_lib_save_LIBS
+fi
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib_lz4_LZ4_compress_default" >&5
+$as_echo "$ac_cv_lib_lz4_LZ4_compress_default" >&6; }
+if test "x$ac_cv_lib_lz4_LZ4_compress_default" = xyes; then :
+  cat >>confdefs.h <<_ACEOF
+#define HAVE_LIBLZ4 1
+_ACEOF
+
+  LIBS="-llz4 $LIBS"
+
+else
+  as_fn_error $? "lz4 library not found
+If you have lz4 installed, see config.log for details on the
+failure.  It is possible the compiler isn't looking in the proper directory.
+Use --without-lz4 to disable zlib support." "$LINENO" 5
+fi
+
+  ac_fn_c_check_header_mongrel "$LINENO" "lz4.h" "ac_cv_header_lz4_h" "$ac_includes_default"
+if test "x$ac_cv_header_lz4_h" = xyes; then :
+
+else
+  as_fn_error $? "lz4 header not found
+If you have lz4 already installed, see config.log for details on the
+failure.  It is possible the compiler isn't looking in the proper directory.
+Use --without-lz4 to disable lz4 support." "$LINENO" 5
+fi
+
+
 fi
 
 #

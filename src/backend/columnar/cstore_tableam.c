@@ -769,9 +769,23 @@ LogRelationStats(Relation rel, int elevel)
 					 chunkCount, droppedChunksWithData);
 	for (int compressionType = 0; compressionType < COMPRESSION_COUNT; compressionType++)
 	{
+		const char *compressionName = CompressionTypeStr(compressionType);
+
+		/* skip if this compression algorithm has not been compiled */
+		if (compressionName == NULL)
+		{
+			continue;
+		}
+
+		/* skip if no chunks use this compression type */
+		if (compressionStats[compressionType] == 0)
+		{
+			continue;
+		}
+
 		appendStringInfo(infoBuf,
 						 ", %s compressed: %d",
-						 CompressionTypeStr(compressionType),
+						 compressionName,
 						 compressionStats[compressionType]);
 	}
 	appendStringInfoString(infoBuf, "\n");

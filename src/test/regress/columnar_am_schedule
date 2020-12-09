@@ -14,6 +14,7 @@ test: am_update_delete
 test: am_copyto
 test: am_alter
 test: am_alter_set_type
+test: am_lz4
 test: am_rollback
 test: am_truncate
 test: am_vacuum

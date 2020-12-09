@@ -456,6 +456,8 @@ LoadColumnBuffers(Relation relation, ColumnChunkSkipNode *chunkSkipNodeArray,
 
 		chunkBuffersArray[chunkIndex]->valueBuffer = rawValueBuffer;
 		chunkBuffersArray[chunkIndex]->valueCompressionType = compressionType;
+		chunkBuffersArray[chunkIndex]->decompressedValueSize =
+			chunkSkipNode->decompressedValueSize;
 	}
 
 	ColumnBuffers *columnBuffers = palloc0(sizeof(ColumnBuffers));
@@ -912,8 +914,10 @@ DeserializeChunkData(StripeBuffers *stripeBuffers, uint64 chunkIndex,
 				columnBuffers->chunkBuffersArray[chunkIndex];
 
 			/* decompress and deserialize current chunk's data */
-			StringInfo valueBuffer = DecompressBuffer(chunkBuffers->valueBuffer,
-													  chunkBuffers->valueCompressionType);
+			StringInfo valueBuffer =
+				DecompressBuffer(chunkBuffers->valueBuffer,
+								 chunkBuffers->valueCompressionType,
+								 chunkBuffers->decompressedValueSize);
 
 			if (chunkBuffers->valueCompressionType != COMPRESSION_NONE)
 			{
