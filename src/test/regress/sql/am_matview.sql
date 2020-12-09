@@ -2,6 +2,8 @@
 -- Testing we materialized views properly
 --
 
+SET columnar.compression TO 'none';
+
 CREATE TABLE t(a int, b int) USING columnar;
 
 INSERT INTO t SELECT floor(i / 4), 2 * i FROM generate_series(1, 10) i;

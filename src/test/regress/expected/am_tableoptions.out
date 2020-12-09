@@ -1,5 +1,6 @@
 CREATE SCHEMA am_tableoptions;
 SET search_path TO am_tableoptions;
+SET columnar.compression TO 'none';
 CREATE TABLE table_options (a int) USING columnar;
 INSERT INTO table_options SELECT generate_series(1,100);
 -- show table_options settings
