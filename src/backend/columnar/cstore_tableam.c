@@ -55,7 +55,7 @@
 #include "distributed/commands/utility_hook.h"
 #include "distributed/metadata_cache.h"
 
-#define CSTORE_TABLEAM_NAME "cstore_tableam"
+#define CSTORE_TABLEAM_NAME "columnar"
 
 /*
  * Timing parameters for truncate locking heuristics.
@@ -320,42 +320,45 @@ cstore_getnextslot(TableScanDesc sscan, ScanDirection direction, TupleTableSlot 
 static Size
 cstore_parallelscan_estimate(Relation rel)
 {
-	elog(ERROR, "cstore_parallelscan_estimate not implemented");
+	elog(ERROR, "columnar_parallelscan_estimate not implemented");
 }
 
 
 static Size
 cstore_parallelscan_initialize(Relation rel, ParallelTableScanDesc pscan)
 {
-	elog(ERROR, "cstore_parallelscan_initialize not implemented");
+	elog(ERROR, "columnar_parallelscan_initialize not implemented");
 }
 
 
 static void
 cstore_parallelscan_reinitialize(Relation rel, ParallelTableScanDesc pscan)
 {
-	elog(ERROR, "cstore_parallelscan_reinitialize not implemented");
+	elog(ERROR, "columnar_parallelscan_reinitialize not implemented");
 }
 
 
 static IndexFetchTableData *
 cstore_index_fetch_begin(Relation rel)
 {
-	elog(ERROR, "cstore_index_fetch_begin not implemented");
+	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					errmsg("indexes not supported for columnar tables")));
 }
 
 
 static void
 cstore_index_fetch_reset(IndexFetchTableData *scan)
 {
-	elog(ERROR, "cstore_index_fetch_reset not implemented");
+	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					errmsg("indexes not supported for columnar tables")));
 }
 
 
 static void
 cstore_index_fetch_end(IndexFetchTableData *scan)
 {
-	elog(ERROR, "cstore_index_fetch_end not implemented");
+	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					errmsg("indexes not supported for columnar tables")));
 }
 
 
@@ -366,7 +369,8 @@ cstore_index_fetch_tuple(struct IndexFetchTableData *scan,
 						 TupleTableSlot *slot,
 						 bool *call_again, bool *all_dead)
 {
-	elog(ERROR, "cstore_index_fetch_tuple not implemented");
+	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					errmsg("indexes not supported for columnar tables")));
 }
 
 
@@ -376,7 +380,7 @@ cstore_fetch_row_version(Relation relation,
 						 Snapshot snapshot,
 						 TupleTableSlot *slot)
 {
-	elog(ERROR, "cstore_fetch_row_version not implemented");
+	elog(ERROR, "columnar_fetch_row_version not implemented");
 }
 
 
@@ -384,14 +388,14 @@ static void
 cstore_get_latest_tid(TableScanDesc sscan,
 					  ItemPointer tid)
 {
-	elog(ERROR, "cstore_get_latest_tid not implemented");
+	elog(ERROR, "columnar_get_latest_tid not implemented");
 }
 
 
 static bool
 cstore_tuple_tid_valid(TableScanDesc scan, ItemPointer tid)
 {
-	elog(ERROR, "cstore_tuple_tid_valid not implemented");
+	elog(ERROR, "columnar_tuple_tid_valid not implemented");
 }
 
 
@@ -408,7 +412,7 @@ cstore_compute_xid_horizon_for_tuples(Relation rel,
 									  ItemPointerData *tids,
 									  int nitems)
 {
-	elog(ERROR, "cstore_compute_xid_horizon_for_tuples not implemented");
+	elog(ERROR, "columnar_compute_xid_horizon_for_tuples not implemented");
 }
 
 
@@ -450,7 +454,7 @@ cstore_tuple_insert_speculative(Relation relation, TupleTableSlot *slot,
 								CommandId cid, int options,
 								BulkInsertState bistate, uint32 specToken)
 {
-	elog(ERROR, "cstore_tuple_insert_speculative not implemented");
+	elog(ERROR, "columnar_tuple_insert_speculative not implemented");
 }
 
 
@@ -458,7 +462,7 @@ static void
 cstore_tuple_complete_speculative(Relation relation, TupleTableSlot *slot,
 								  uint32 specToken, bool succeeded)
 {
-	elog(ERROR, "cstore_tuple_complete_speculative not implemented");
+	elog(ERROR, "columnar_tuple_complete_speculative not implemented");
 }
 
 
@@ -500,7 +504,7 @@ cstore_tuple_delete(Relation relation, ItemPointer tid, CommandId cid,
 					Snapshot snapshot, Snapshot crosscheck, bool wait,
 					TM_FailureData *tmfd, bool changingPart)
 {
-	elog(ERROR, "cstore_tuple_delete not implemented");
+	elog(ERROR, "columnar_tuple_delete not implemented");
 }
 
 
@@ -510,7 +514,7 @@ cstore_tuple_update(Relation relation, ItemPointer otid, TupleTableSlot *slot,
 					bool wait, TM_FailureData *tmfd,
 					LockTupleMode *lockmode, bool *update_indexes)
 {
-	elog(ERROR, "cstore_tuple_update not implemented");
+	elog(ERROR, "columnar_tuple_update not implemented");
 }
 
 
@@ -520,7 +524,7 @@ cstore_tuple_lock(Relation relation, ItemPointer tid, Snapshot snapshot,
 				  LockWaitPolicy wait_policy, uint8 flags,
 				  TM_FailureData *tmfd)
 {
-	elog(ERROR, "cstore_tuple_lock not implemented");
+	elog(ERROR, "columnar_tuple_lock not implemented");
 }
 
 
@@ -586,7 +590,7 @@ cstore_relation_nontransactional_truncate(Relation rel)
 static void
 cstore_relation_copy_data(Relation rel, const RelFileNode *newrnode)
 {
-	elog(ERROR, "cstore_relation_copy_data not implemented");
+	elog(ERROR, "columnar_relation_copy_data not implemented");
 }
 
 
@@ -612,7 +616,8 @@ cstore_relation_copy_for_cluster(Relation OldHeap, Relation NewHeap,
 
 	if (OldIndex != NULL || use_sort)
 	{
-		ereport(ERROR, (errmsg(CSTORE_TABLEAM_NAME " doesn't support indexes")));
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("indexes not supported for columnar tables")));
 	}
 
 	/*
@@ -955,7 +960,8 @@ cstore_index_build_range_scan(Relation heapRelation,
 							  void *callback_state,
 							  TableScanDesc scan)
 {
-	elog(ERROR, "cstore_index_build_range_scan not implemented");
+	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					errmsg("indexes not supported for columnar tables")));
 }
 
 
@@ -966,7 +972,8 @@ cstore_index_validate_scan(Relation heapRelation,
 						   Snapshot snapshot,
 						   ValidateIndexState *state)
 {
-	elog(ERROR, "cstore_index_validate_scan not implemented");
+	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					errmsg("indexes not supported for columnar tables")));
 }
 
 
@@ -1024,7 +1031,7 @@ cstore_estimate_rel_size(Relation rel, int32 *attr_widths,
 static bool
 cstore_scan_sample_next_block(TableScanDesc scan, SampleScanState *scanstate)
 {
-	elog(ERROR, "cstore_scan_sample_next_block not implemented");
+	elog(ERROR, "columnar_scan_sample_next_block not implemented");
 }
 
 
@@ -1032,7 +1039,7 @@ static bool
 cstore_scan_sample_next_tuple(TableScanDesc scan, SampleScanState *scanstate,
 							  TupleTableSlot *slot)
 {
-	elog(ERROR, "cstore_scan_sample_next_tuple not implemented");
+	elog(ERROR, "columnar_scan_sample_next_tuple not implemented");
 }
 
 

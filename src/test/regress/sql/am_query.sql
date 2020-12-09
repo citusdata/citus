@@ -12,6 +12,17 @@ SELECT country, avg(rating) FROM contestant WHERE rating > 2200
 	GROUP BY country ORDER BY country;
 SELECT * FROM contestant ORDER BY handle;
 
+-- all special column accesses should fail
+SELECT ctid FROM contestant;
+SELECT cmin FROM contestant;
+SELECT cmax FROM contestant;
+SELECT xmin FROM contestant;
+SELECT xmax FROM contestant;
+SELECT tableid FROM contestant;
+
+-- sample scans should fail
+SELECT * FROM contestant TABLESAMPLE SYSTEM(0.1);
+
 -- Query compressed data
 SELECT count(*) FROM contestant_compressed;
 SELECT avg(rating), stddev_samp(rating) FROM contestant_compressed;

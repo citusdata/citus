@@ -8,7 +8,7 @@
 --
 
 -- Note that travis does not create
--- columnar extension in default database (postgres). This has caused
+-- citus extension in default database (postgres). This has caused
 -- different behavior between travis tests and local tests. Thus
 -- 'postgres' directory is excluded from comparison to have the same result.
 

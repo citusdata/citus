@@ -162,6 +162,12 @@ CStoreSetRelPathlistHook(PlannerInfo *root, RelOptInfo *rel, Index rti,
 	Relation relation = RelationIdGetRelation(rte->relid);
 	if (relation->rd_tableam == GetColumnarTableAmRoutine())
 	{
+		if (rte->tablesample != NULL)
+		{
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("sample scans not supported on columnar tables")));
+		}
+
 		Path *customPath = CreateCStoreScanPath(rel, rte);
 
 		ereport(DEBUG1, (errmsg("pathlist hook for cstore table am")));
