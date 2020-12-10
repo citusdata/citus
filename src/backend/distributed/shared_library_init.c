@@ -725,7 +725,13 @@ RegisterCitusConfigVariables(void)
 		"citus.local_table_join_policy",
 		gettext_noop("defines the behaviour when a distributed table "
 					 "is joined with a local table"),
-		gettext_noop("TODO: fill"),
+		gettext_noop(
+			"There are 4 values available. The default, 'auto' will recursively plan"
+			"distributed tables if there is a constant filter on a unique index."
+			"'prefer-local' will choose local tables if possible."
+			"'prefer-distributed' will choose distributed tables if possible"
+			"'never' will basically skip local table joins."
+			),
 		&LocalTableJoinPolicy,
 		LOCAL_JOIN_POLICY_AUTO,
 		local_table_join_policies,

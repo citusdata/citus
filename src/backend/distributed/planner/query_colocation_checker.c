@@ -37,6 +37,7 @@
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
 #include "parser/parsetree.h"
+#include "distributed/listutils.h"
 #include "parser/parse_relation.h"
 #include "optimizer/planner.h"
 #include "optimizer/prep.h"
@@ -76,7 +77,9 @@ CreateColocatedJoinChecker(Query *subquery, PlannerRestrictionContext *restricti
 		 * functions (i.e., FilterPlannerRestrictionForQuery()) rely on queries
 		 * not relations.
 		 */
-		anchorSubquery = WrapRteRelationIntoSubquery(anchorRangeTblEntry, NIL);
+		List *allTargetList = NIL;
+		anchorSubquery = WrapRteRelationIntoSubquery(anchorRangeTblEntry, NIL,
+													 &allTargetList);
 	}
 	else if (anchorRangeTblEntry->rtekind == RTE_SUBQUERY)
 	{
@@ -260,7 +263,8 @@ SubqueryColocated(Query *subquery, ColocatedJoinChecker *checker)
  * designed for generating a stub query.
  */
 Query *
-WrapRteRelationIntoSubquery(RangeTblEntry *rteRelation, List *requiredAttributes)
+WrapRteRelationIntoSubquery(RangeTblEntry *rteRelation, List *requiredAttributes,
+							List **allTargetList)
 {
 	Query *subquery = makeNode(Query);
 	RangeTblRef *newRangeTableRef = makeNode(RangeTblRef);
@@ -279,7 +283,10 @@ WrapRteRelationIntoSubquery(RangeTblEntry *rteRelation, List *requiredAttributes
 	Relation relation = relation_open(rteRelation->relid, AccessShareLock);
 	int numberOfAttributes = RelationGetNumberOfAttributes(relation);
 
+	bool shouldAssignDummyNullColumn = list_length(requiredAttributes) == 0;
+	bool assignedDummyNullColumn = false;
 	int attributeNumber = 1;
+	int resultNo = 1;
 	for (; attributeNumber <= numberOfAttributes; attributeNumber++)
 	{
 		Form_pg_attribute attributeTuple =
@@ -291,15 +298,36 @@ WrapRteRelationIntoSubquery(RangeTblEntry *rteRelation, List *requiredAttributes
 			makeTargetEntry((Expr *) targetColumn, attributeNumber,
 							strdup(attributeTuple->attname.data), false);
 
+		if (shouldAssignDummyNullColumn && !assignedDummyNullColumn)
+		{
+			subquery->targetList = lappend(subquery->targetList, targetEntry);
+			assignedDummyNullColumn = true;
+		}
+
 		if (!list_member_int(requiredAttributes, attributeNumber))
 		{
+			/*
+			 * We add a null target entry because we don't have an easy
+			 * way of changing all the references to this column and
+			 * we don't want to break postgres query.
+			 */
 			targetEntry->expr =
 				(Expr *) makeNullConst(attributeTuple->atttypid,
 									   attributeTuple->atttypmod,
 									   attributeTuple->attcollation);
+			*allTargetList = lappend(*allTargetList, targetEntry);
 		}
+		else
+		{
+			TargetEntry *copyTargetEntry = copyObject(targetEntry);
+			*allTargetList = lappend(*allTargetList, copyTargetEntry);
 
-		subquery->targetList = lappend(subquery->targetList, targetEntry);
+			/* In the subquery with only required attribute numbers, the result no
+			 * corresponds to the ordinal index of it in targetList.
+			 */
+			targetEntry->resno = resultNo++;
+			subquery->targetList = lappend(subquery->targetList, targetEntry);
+		}
 	}
 
 	relation_close(relation, NoLock);

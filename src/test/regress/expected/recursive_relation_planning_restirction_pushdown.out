@@ -31,9 +31,9 @@ SELECT count(*)
 FROM distributed_table u1
 JOIN distributed_table u2 USING(key)
 JOIN local_table USING (key);
-DEBUG:  Wrapping relation "local_table" to a subquery: SELECT key, NULL::integer AS value, NULL::timestamp with time zone AS "time" FROM push_down_filters.local_table WHERE true
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::integer AS value, NULL::timestamp with time zone AS "time" FROM push_down_filters.local_table WHERE true
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((push_down_filters.distributed_table u1 JOIN push_down_filters.distributed_table u2 USING (key)) JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result."time" FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value integer, "time" timestamp with time zone)) local_table USING (key))
+DEBUG:  Wrapping relation "local_table" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT key FROM push_down_filters.local_table WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((push_down_filters.distributed_table u1 JOIN push_down_filters.distributed_table u2 USING (key)) JOIN (SELECT local_table_1.key, NULL::integer AS value, NULL::timestamp with time zone AS "time" FROM (SELECT intermediate_result.key FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) local_table_1) local_table USING (key))
  count
 ---------------------------------------------------------------------
      0
@@ -44,9 +44,9 @@ SELECT count(*)
 FROM distributed_table u1
 JOIN local_table u2 USING (key)
 WHERE u2.key > ANY(ARRAY[2, 1, 6]);
-DEBUG:  Wrapping relation "local_table" to a subquery: SELECT key, NULL::integer AS value, NULL::timestamp with time zone AS "time" FROM push_down_filters.local_table u2 WHERE (key OPERATOR(pg_catalog.>) ANY ('{2,1,6}'::integer[]))
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, NULL::integer AS value, NULL::timestamp with time zone AS "time" FROM push_down_filters.local_table u2 WHERE (key OPERATOR(pg_catalog.>) ANY ('{2,1,6}'::integer[]))
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (push_down_filters.distributed_table u1 JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result."time" FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value integer, "time" timestamp with time zone)) u2 USING (key)) WHERE (u2.key OPERATOR(pg_catalog.>) ANY (ARRAY[2, 1, 6]))
+DEBUG:  Wrapping relation "local_table" "u2" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT key FROM push_down_filters.local_table u2 WHERE (key OPERATOR(pg_catalog.>) ANY ('{2,1,6}'::integer[]))
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (push_down_filters.distributed_table u1 JOIN (SELECT u2_1.key, NULL::integer AS value, NULL::timestamp with time zone AS "time" FROM (SELECT intermediate_result.key FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) u2_1) u2 USING (key)) WHERE (u2.key OPERATOR(pg_catalog.>) ANY (ARRAY[2, 1, 6]))
  count
 ---------------------------------------------------------------------
      0
@@ -57,9 +57,9 @@ SELECT count(*)
 FROM distributed_table u1
 JOIN local_table u2 USING(key)
 WHERE  ARRAY[u2.key, u2.value] @> (ARRAY[2, 3]);
-DEBUG:  Wrapping relation "local_table" to a subquery: SELECT key, value, NULL::timestamp with time zone AS "time" FROM push_down_filters.local_table u2 WHERE (ARRAY[key, value] OPERATOR(pg_catalog.@>) '{2,3}'::integer[])
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, value, NULL::timestamp with time zone AS "time" FROM push_down_filters.local_table u2 WHERE (ARRAY[key, value] OPERATOR(pg_catalog.@>) '{2,3}'::integer[])
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (push_down_filters.distributed_table u1 JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result."time" FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value integer, "time" timestamp with time zone)) u2 USING (key)) WHERE (ARRAY[u2.key, u2.value] OPERATOR(pg_catalog.@>) ARRAY[2, 3])
+DEBUG:  Wrapping relation "local_table" "u2" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT key, value FROM push_down_filters.local_table u2 WHERE (ARRAY[key, value] OPERATOR(pg_catalog.@>) '{2,3}'::integer[])
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (push_down_filters.distributed_table u1 JOIN (SELECT u2_1.key, u2_1.value, NULL::timestamp with time zone AS "time" FROM (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value integer)) u2_1) u2 USING (key)) WHERE (ARRAY[u2.key, u2.value] OPERATOR(pg_catalog.@>) ARRAY[2, 3])
  count
 ---------------------------------------------------------------------
      0
@@ -70,9 +70,9 @@ SELECT count(*)
 FROM distributed_table u1
 JOIN local_table u2 USING(value)
 WHERE  ARRAY[u2.value, u1.value] @> (ARRAY[2, 3]);
-DEBUG:  Wrapping relation "local_table" to a subquery: SELECT NULL::integer AS key, value, NULL::timestamp with time zone AS "time" FROM push_down_filters.local_table u2 WHERE true
-DEBUG:  generating subplan XXX_1 for subquery SELECT NULL::integer AS key, value, NULL::timestamp with time zone AS "time" FROM push_down_filters.local_table u2 WHERE true
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (push_down_filters.distributed_table u1 JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result."time" FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value integer, "time" timestamp with time zone)) u2 USING (value)) WHERE (ARRAY[u2.value, u1.value] OPERATOR(pg_catalog.@>) ARRAY[2, 3])
+DEBUG:  Wrapping relation "local_table" "u2" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT value FROM push_down_filters.local_table u2 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (push_down_filters.distributed_table u1 JOIN (SELECT NULL::integer AS key, u2_1.value, NULL::timestamp with time zone AS "time" FROM (SELECT intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(value integer)) u2_1) u2 USING (value)) WHERE (ARRAY[u2.value, u1.value] OPERATOR(pg_catalog.@>) ARRAY[2, 3])
  count
 ---------------------------------------------------------------------
      0
@@ -83,9 +83,9 @@ SELECT count(*)
 FROM distributed_table u1
 JOIN local_table u2 USING(value)
 WHERE (u2.value/2.0 > 2)::int::bool::text::bool;
-DEBUG:  Wrapping relation "local_table" to a subquery: SELECT NULL::integer AS key, value, NULL::timestamp with time zone AS "time" FROM push_down_filters.local_table u2 WHERE (((((((value)::numeric OPERATOR(pg_catalog./) 2.0) OPERATOR(pg_catalog.>) '2'::numeric))::integer)::boolean)::text)::boolean
-DEBUG:  generating subplan XXX_1 for subquery SELECT NULL::integer AS key, value, NULL::timestamp with time zone AS "time" FROM push_down_filters.local_table u2 WHERE (((((((value)::numeric OPERATOR(pg_catalog./) 2.0) OPERATOR(pg_catalog.>) '2'::numeric))::integer)::boolean)::text)::boolean
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (push_down_filters.distributed_table u1 JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result."time" FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value integer, "time" timestamp with time zone)) u2 USING (value)) WHERE (((((((u2.value)::numeric OPERATOR(pg_catalog./) 2.0) OPERATOR(pg_catalog.>) (2)::numeric))::integer)::boolean)::text)::boolean
+DEBUG:  Wrapping relation "local_table" "u2" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT value FROM push_down_filters.local_table u2 WHERE (((((((value)::numeric OPERATOR(pg_catalog./) 2.0) OPERATOR(pg_catalog.>) '2'::numeric))::integer)::boolean)::text)::boolean
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (push_down_filters.distributed_table u1 JOIN (SELECT NULL::integer AS key, u2_1.value, NULL::timestamp with time zone AS "time" FROM (SELECT intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(value integer)) u2_1) u2 USING (value)) WHERE (((((((u2.value)::numeric OPERATOR(pg_catalog./) 2.0) OPERATOR(pg_catalog.>) (2)::numeric))::integer)::boolean)::text)::boolean
  count
 ---------------------------------------------------------------------
      0
@@ -96,9 +96,9 @@ SELECT count(*)
 FROM distributed_table u1
 JOIN local_table u2 USING(value)
 WHERE (CASE WHEN u2.value > 3 THEN u2.value > 2 ELSE false END);
-DEBUG:  Wrapping relation "local_table" to a subquery: SELECT NULL::integer AS key, value, NULL::timestamp with time zone AS "time" FROM push_down_filters.local_table u2 WHERE CASE WHEN (value OPERATOR(pg_catalog.>) 3) THEN (value OPERATOR(pg_catalog.>) 2) ELSE false END
-DEBUG:  generating subplan XXX_1 for subquery SELECT NULL::integer AS key, value, NULL::timestamp with time zone AS "time" FROM push_down_filters.local_table u2 WHERE CASE WHEN (value OPERATOR(pg_catalog.>) 3) THEN (value OPERATOR(pg_catalog.>) 2) ELSE false END
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (push_down_filters.distributed_table u1 JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result."time" FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value integer, "time" timestamp with time zone)) u2 USING (value)) WHERE CASE WHEN (u2.value OPERATOR(pg_catalog.>) 3) THEN (u2.value OPERATOR(pg_catalog.>) 2) ELSE false END
+DEBUG:  Wrapping relation "local_table" "u2" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT value FROM push_down_filters.local_table u2 WHERE CASE WHEN (value OPERATOR(pg_catalog.>) 3) THEN (value OPERATOR(pg_catalog.>) 2) ELSE false END
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (push_down_filters.distributed_table u1 JOIN (SELECT NULL::integer AS key, u2_1.value, NULL::timestamp with time zone AS "time" FROM (SELECT intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(value integer)) u2_1) u2 USING (value)) WHERE CASE WHEN (u2.value OPERATOR(pg_catalog.>) 3) THEN (u2.value OPERATOR(pg_catalog.>) 2) ELSE false END
  count
 ---------------------------------------------------------------------
      0
@@ -109,9 +109,9 @@ SELECT count(*)
 FROM distributed_table u1
 JOIN local_table u2 USING(value)
 WHERE (CASE WHEN u1.value > 4000 THEN u2.value / 100 > 1 ELSE false END);
-DEBUG:  Wrapping relation "local_table" to a subquery: SELECT NULL::integer AS key, value, NULL::timestamp with time zone AS "time" FROM push_down_filters.local_table u2 WHERE true
-DEBUG:  generating subplan XXX_1 for subquery SELECT NULL::integer AS key, value, NULL::timestamp with time zone AS "time" FROM push_down_filters.local_table u2 WHERE true
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (push_down_filters.distributed_table u1 JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result."time" FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value integer, "time" timestamp with time zone)) u2 USING (value)) WHERE CASE WHEN (u1.value OPERATOR(pg_catalog.>) 4000) THEN ((u2.value OPERATOR(pg_catalog./) 100) OPERATOR(pg_catalog.>) 1) ELSE false END
+DEBUG:  Wrapping relation "local_table" "u2" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT value FROM push_down_filters.local_table u2 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (push_down_filters.distributed_table u1 JOIN (SELECT NULL::integer AS key, u2_1.value, NULL::timestamp with time zone AS "time" FROM (SELECT intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(value integer)) u2_1) u2 USING (value)) WHERE CASE WHEN (u1.value OPERATOR(pg_catalog.>) 4000) THEN ((u2.value OPERATOR(pg_catalog./) 100) OPERATOR(pg_catalog.>) 1) ELSE false END
  count
 ---------------------------------------------------------------------
      0
@@ -122,9 +122,9 @@ SELECT count(*)
 FROM distributed_table u1
 JOIN local_table u2 USING(value)
 WHERE COALESCE((u2.key/5.0)::int::bool, false);
-DEBUG:  Wrapping relation "local_table" to a subquery: SELECT key, value, NULL::timestamp with time zone AS "time" FROM push_down_filters.local_table u2 WHERE COALESCE(((((key)::numeric OPERATOR(pg_catalog./) 5.0))::integer)::boolean, false)
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, value, NULL::timestamp with time zone AS "time" FROM push_down_filters.local_table u2 WHERE COALESCE(((((key)::numeric OPERATOR(pg_catalog./) 5.0))::integer)::boolean, false)
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (push_down_filters.distributed_table u1 JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result."time" FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value integer, "time" timestamp with time zone)) u2 USING (value)) WHERE COALESCE(((((u2.key)::numeric OPERATOR(pg_catalog./) 5.0))::integer)::boolean, false)
+DEBUG:  Wrapping relation "local_table" "u2" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT key, value FROM push_down_filters.local_table u2 WHERE COALESCE(((((key)::numeric OPERATOR(pg_catalog./) 5.0))::integer)::boolean, false)
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (push_down_filters.distributed_table u1 JOIN (SELECT u2_1.key, u2_1.value, NULL::timestamp with time zone AS "time" FROM (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value integer)) u2_1) u2 USING (value)) WHERE COALESCE(((((u2.key)::numeric OPERATOR(pg_catalog./) 5.0))::integer)::boolean, false)
  count
 ---------------------------------------------------------------------
      0
@@ -135,9 +135,9 @@ SELECT count(*)
 FROM distributed_table u1
 JOIN local_table u2 USING(value)
 WHERE NULLIF((u2.value/5.0)::int::bool, false);
-DEBUG:  Wrapping relation "local_table" to a subquery: SELECT NULL::integer AS key, value, NULL::timestamp with time zone AS "time" FROM push_down_filters.local_table u2 WHERE NULLIF(((((value)::numeric OPERATOR(pg_catalog./) 5.0))::integer)::boolean, false)
-DEBUG:  generating subplan XXX_1 for subquery SELECT NULL::integer AS key, value, NULL::timestamp with time zone AS "time" FROM push_down_filters.local_table u2 WHERE NULLIF(((((value)::numeric OPERATOR(pg_catalog./) 5.0))::integer)::boolean, false)
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (push_down_filters.distributed_table u1 JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result."time" FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value integer, "time" timestamp with time zone)) u2 USING (value)) WHERE NULLIF(((((u2.value)::numeric OPERATOR(pg_catalog./) 5.0))::integer)::boolean, false)
+DEBUG:  Wrapping relation "local_table" "u2" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT value FROM push_down_filters.local_table u2 WHERE NULLIF(((((value)::numeric OPERATOR(pg_catalog./) 5.0))::integer)::boolean, false)
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (push_down_filters.distributed_table u1 JOIN (SELECT NULL::integer AS key, u2_1.value, NULL::timestamp with time zone AS "time" FROM (SELECT intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(value integer)) u2_1) u2 USING (value)) WHERE NULLIF(((((u2.value)::numeric OPERATOR(pg_catalog./) 5.0))::integer)::boolean, false)
  count
 ---------------------------------------------------------------------
      0
@@ -148,9 +148,9 @@ SELECT count(*)
 FROM distributed_table u1
 JOIN local_table u2 USING(value)
 WHERE u2.value IS NOT NULL;
-DEBUG:  Wrapping relation "local_table" to a subquery: SELECT NULL::integer AS key, value, NULL::timestamp with time zone AS "time" FROM push_down_filters.local_table u2 WHERE (value IS NOT NULL)
-DEBUG:  generating subplan XXX_1 for subquery SELECT NULL::integer AS key, value, NULL::timestamp with time zone AS "time" FROM push_down_filters.local_table u2 WHERE (value IS NOT NULL)
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (push_down_filters.distributed_table u1 JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result."time" FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value integer, "time" timestamp with time zone)) u2 USING (value)) WHERE (u2.value IS NOT NULL)
+DEBUG:  Wrapping relation "local_table" "u2" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT value FROM push_down_filters.local_table u2 WHERE (value IS NOT NULL)
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (push_down_filters.distributed_table u1 JOIN (SELECT NULL::integer AS key, u2_1.value, NULL::timestamp with time zone AS "time" FROM (SELECT intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(value integer)) u2_1) u2 USING (value)) WHERE (u2.value IS NOT NULL)
  count
 ---------------------------------------------------------------------
      0
@@ -161,9 +161,9 @@ SELECT count(*)
 FROM distributed_table u1
 JOIN local_table u2 USING(value)
 WHERE isfinite(u2.time);
-DEBUG:  Wrapping relation "local_table" to a subquery: SELECT NULL::integer AS key, value, "time" FROM push_down_filters.local_table u2 WHERE isfinite("time")
-DEBUG:  generating subplan XXX_1 for subquery SELECT NULL::integer AS key, value, "time" FROM push_down_filters.local_table u2 WHERE isfinite("time")
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (push_down_filters.distributed_table u1 JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result."time" FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value integer, "time" timestamp with time zone)) u2 USING (value)) WHERE isfinite(u2."time")
+DEBUG:  Wrapping relation "local_table" "u2" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT value, "time" FROM push_down_filters.local_table u2 WHERE isfinite("time")
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (push_down_filters.distributed_table u1 JOIN (SELECT NULL::integer AS key, u2_1.value, u2_1."time" FROM (SELECT intermediate_result.value, intermediate_result."time" FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(value integer, "time" timestamp with time zone)) u2_1) u2 USING (value)) WHERE isfinite(u2."time")
  count
 ---------------------------------------------------------------------
      0
@@ -174,9 +174,9 @@ SELECT count(*)
 FROM distributed_table u1
 JOIN local_table u2 USING(value)
 WHERE int4smaller(u2.value, u1.value) = 55;
-DEBUG:  Wrapping relation "local_table" to a subquery: SELECT NULL::integer AS key, value, NULL::timestamp with time zone AS "time" FROM push_down_filters.local_table u2 WHERE true
-DEBUG:  generating subplan XXX_1 for subquery SELECT NULL::integer AS key, value, NULL::timestamp with time zone AS "time" FROM push_down_filters.local_table u2 WHERE true
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (push_down_filters.distributed_table u1 JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result."time" FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value integer, "time" timestamp with time zone)) u2 USING (value)) WHERE (int4smaller(u2.value, u1.value) OPERATOR(pg_catalog.=) 55)
+DEBUG:  Wrapping relation "local_table" "u2" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT value FROM push_down_filters.local_table u2 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (push_down_filters.distributed_table u1 JOIN (SELECT NULL::integer AS key, u2_1.value, NULL::timestamp with time zone AS "time" FROM (SELECT intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(value integer)) u2_1) u2 USING (value)) WHERE (int4smaller(u2.value, u1.value) OPERATOR(pg_catalog.=) 55)
  count
 ---------------------------------------------------------------------
      0
@@ -187,9 +187,9 @@ SELECT count(*)
 FROM distributed_table u1
 JOIN local_table u2 USING(value)
 WHERE int4smaller(u2.key, u2.value) = u2.key;
-DEBUG:  Wrapping relation "local_table" to a subquery: SELECT key, value, NULL::timestamp with time zone AS "time" FROM push_down_filters.local_table u2 WHERE (int4smaller(key, value) OPERATOR(pg_catalog.=) key)
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, value, NULL::timestamp with time zone AS "time" FROM push_down_filters.local_table u2 WHERE (int4smaller(key, value) OPERATOR(pg_catalog.=) key)
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (push_down_filters.distributed_table u1 JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result."time" FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value integer, "time" timestamp with time zone)) u2 USING (value)) WHERE (int4smaller(u2.key, u2.value) OPERATOR(pg_catalog.=) u2.key)
+DEBUG:  Wrapping relation "local_table" "u2" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT key, value FROM push_down_filters.local_table u2 WHERE (int4smaller(key, value) OPERATOR(pg_catalog.=) key)
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (push_down_filters.distributed_table u1 JOIN (SELECT u2_1.key, u2_1.value, NULL::timestamp with time zone AS "time" FROM (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value integer)) u2_1) u2 USING (value)) WHERE (int4smaller(u2.key, u2.value) OPERATOR(pg_catalog.=) u2.key)
  count
 ---------------------------------------------------------------------
      0
@@ -200,9 +200,9 @@ SELECT count(*)
 FROM distributed_table u1
 JOIN local_table u2 USING(value)
 WHERE row(u2.value, 2, 3) > row(u2.value, 2, 3);
-DEBUG:  Wrapping relation "local_table" to a subquery: SELECT NULL::integer AS key, value, NULL::timestamp with time zone AS "time" FROM push_down_filters.local_table u2 WHERE (ROW(value, 2, 3) OPERATOR(pg_catalog.>) ROW(value, 2, 3))
-DEBUG:  generating subplan XXX_1 for subquery SELECT NULL::integer AS key, value, NULL::timestamp with time zone AS "time" FROM push_down_filters.local_table u2 WHERE (ROW(value, 2, 3) OPERATOR(pg_catalog.>) ROW(value, 2, 3))
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (push_down_filters.distributed_table u1 JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result."time" FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value integer, "time" timestamp with time zone)) u2 USING (value)) WHERE (ROW(u2.value, 2, 3) OPERATOR(pg_catalog.>) ROW(u2.value, 2, 3))
+DEBUG:  Wrapping relation "local_table" "u2" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT value FROM push_down_filters.local_table u2 WHERE (ROW(value, 2, 3) OPERATOR(pg_catalog.>) ROW(value, 2, 3))
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (push_down_filters.distributed_table u1 JOIN (SELECT NULL::integer AS key, u2_1.value, NULL::timestamp with time zone AS "time" FROM (SELECT intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(value integer)) u2_1) u2 USING (value)) WHERE (ROW(u2.value, 2, 3) OPERATOR(pg_catalog.>) ROW(u2.value, 2, 3))
  count
 ---------------------------------------------------------------------
      0
@@ -220,9 +220,9 @@ JOIN local_table u2 USING(value)
 		  isfinite(u2.time) AND
 		  u2.value IS DISTINCT FROM 50040 AND
 		  row(u2.value, 2, 3) > row(2000, 2, 3);
-DEBUG:  Wrapping relation "local_table" to a subquery: SELECT key, value, "time" FROM push_down_filters.local_table u2 WHERE (((((((key)::numeric OPERATOR(pg_catalog./) 1.0))::integer)::boolean)::text)::boolean AND CASE WHEN (key OPERATOR(pg_catalog.>) 4000) THEN ((value OPERATOR(pg_catalog./) 100) OPERATOR(pg_catalog.>) 1) ELSE false END AND COALESCE(((key OPERATOR(pg_catalog./) 50000))::boolean, false) AND NULLIF(((value OPERATOR(pg_catalog./) 50000))::boolean, false) AND isfinite("time") AND (value IS DISTINCT FROM 50040) AND (ROW(value, 2, 3) OPERATOR(pg_catalog.>) ROW(2000, 2, 3)))
+DEBUG:  Wrapping relation "local_table" "u2" to a subquery
 DEBUG:  generating subplan XXX_1 for subquery SELECT key, value, "time" FROM push_down_filters.local_table u2 WHERE (((((((key)::numeric OPERATOR(pg_catalog./) 1.0))::integer)::boolean)::text)::boolean AND CASE WHEN (key OPERATOR(pg_catalog.>) 4000) THEN ((value OPERATOR(pg_catalog./) 100) OPERATOR(pg_catalog.>) 1) ELSE false END AND COALESCE(((key OPERATOR(pg_catalog./) 50000))::boolean, false) AND NULLIF(((value OPERATOR(pg_catalog./) 50000))::boolean, false) AND isfinite("time") AND (value IS DISTINCT FROM 50040) AND (ROW(value, 2, 3) OPERATOR(pg_catalog.>) ROW(2000, 2, 3)))
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (push_down_filters.distributed_table u1 JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result."time" FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value integer, "time" timestamp with time zone)) u2 USING (value)) WHERE (((((((u2.key)::numeric OPERATOR(pg_catalog./) 1.0))::integer)::boolean)::text)::boolean AND CASE WHEN (u2.key OPERATOR(pg_catalog.>) 4000) THEN ((u2.value OPERATOR(pg_catalog./) 100) OPERATOR(pg_catalog.>) 1) ELSE false END AND COALESCE(((u2.key OPERATOR(pg_catalog./) 50000))::boolean, false) AND NULLIF(((u2.value OPERATOR(pg_catalog./) 50000))::boolean, false) AND isfinite(u2."time") AND (u2.value IS DISTINCT FROM 50040) AND (ROW(u2.value, 2, 3) OPERATOR(pg_catalog.>) ROW(2000, 2, 3)))
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (push_down_filters.distributed_table u1 JOIN (SELECT u2_1.key, u2_1.value, u2_1."time" FROM (SELECT intermediate_result.key, intermediate_result.value, intermediate_result."time" FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value integer, "time" timestamp with time zone)) u2_1) u2 USING (value)) WHERE (((((((u2.key)::numeric OPERATOR(pg_catalog./) 1.0))::integer)::boolean)::text)::boolean AND CASE WHEN (u2.key OPERATOR(pg_catalog.>) 4000) THEN ((u2.value OPERATOR(pg_catalog./) 100) OPERATOR(pg_catalog.>) 1) ELSE false END AND COALESCE(((u2.key OPERATOR(pg_catalog./) 50000))::boolean, false) AND NULLIF(((u2.value OPERATOR(pg_catalog./) 50000))::boolean, false) AND isfinite(u2."time") AND (u2.value IS DISTINCT FROM 50040) AND (ROW(u2.value, 2, 3) OPERATOR(pg_catalog.>) ROW(2000, 2, 3)))
  count
 ---------------------------------------------------------------------
      0
@@ -236,9 +236,9 @@ WHERE u2.value >
     (SELECT avg(key)
      FROM distributed_table);
 DEBUG:  generating subplan XXX_1 for subquery SELECT avg(key) AS avg FROM push_down_filters.distributed_table
-DEBUG:  Wrapping relation "local_table" to a subquery: SELECT NULL::integer AS key, value, NULL::timestamp with time zone AS "time" FROM push_down_filters.local_table u2 WHERE true
-DEBUG:  generating subplan XXX_2 for subquery SELECT NULL::integer AS key, value, NULL::timestamp with time zone AS "time" FROM push_down_filters.local_table u2 WHERE true
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (push_down_filters.distributed_table u1 JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result."time" FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value integer, "time" timestamp with time zone)) u2 USING (value)) WHERE ((u2.value)::numeric OPERATOR(pg_catalog.>) (SELECT intermediate_result.avg FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(avg numeric)))
+DEBUG:  Wrapping relation "local_table" "u2" to a subquery
+DEBUG:  generating subplan XXX_2 for subquery SELECT value FROM push_down_filters.local_table u2 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (push_down_filters.distributed_table u1 JOIN (SELECT NULL::integer AS key, u2_1.value, NULL::timestamp with time zone AS "time" FROM (SELECT intermediate_result.value FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(value integer)) u2_1) u2 USING (value)) WHERE ((u2.value)::numeric OPERATOR(pg_catalog.>) (SELECT intermediate_result.avg FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(avg numeric)))
  count
 ---------------------------------------------------------------------
      0
@@ -249,9 +249,9 @@ SELECT count(*)
 FROM distributed_table u1
 JOIN local_table u2 USING(value)
 WHERE u2.value > (SELECT 5);
-DEBUG:  Wrapping relation "local_table" to a subquery: SELECT NULL::integer AS key, value, NULL::timestamp with time zone AS "time" FROM push_down_filters.local_table u2 WHERE true
-DEBUG:  generating subplan XXX_1 for subquery SELECT NULL::integer AS key, value, NULL::timestamp with time zone AS "time" FROM push_down_filters.local_table u2 WHERE true
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (push_down_filters.distributed_table u1 JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result."time" FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value integer, "time" timestamp with time zone)) u2 USING (value)) WHERE (u2.value OPERATOR(pg_catalog.>) (SELECT 5))
+DEBUG:  Wrapping relation "local_table" "u2" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT value FROM push_down_filters.local_table u2 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (push_down_filters.distributed_table u1 JOIN (SELECT NULL::integer AS key, u2_1.value, NULL::timestamp with time zone AS "time" FROM (SELECT intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(value integer)) u2_1) u2 USING (value)) WHERE (u2.value OPERATOR(pg_catalog.>) (SELECT 5))
  count
 ---------------------------------------------------------------------
      0
@@ -262,9 +262,9 @@ SELECT count(*)
 FROM distributed_table u1
 JOIN local_table u2 USING(value)
 WHERE  u2.value *  u1.key > 25;
-DEBUG:  Wrapping relation "local_table" to a subquery: SELECT NULL::integer AS key, value, NULL::timestamp with time zone AS "time" FROM push_down_filters.local_table u2 WHERE true
-DEBUG:  generating subplan XXX_1 for subquery SELECT NULL::integer AS key, value, NULL::timestamp with time zone AS "time" FROM push_down_filters.local_table u2 WHERE true
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (push_down_filters.distributed_table u1 JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result."time" FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value integer, "time" timestamp with time zone)) u2 USING (value)) WHERE ((u2.value OPERATOR(pg_catalog.*) u1.key) OPERATOR(pg_catalog.>) 25)
+DEBUG:  Wrapping relation "local_table" "u2" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT value FROM push_down_filters.local_table u2 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (push_down_filters.distributed_table u1 JOIN (SELECT NULL::integer AS key, u2_1.value, NULL::timestamp with time zone AS "time" FROM (SELECT intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(value integer)) u2_1) u2 USING (value)) WHERE ((u2.value OPERATOR(pg_catalog.*) u1.key) OPERATOR(pg_catalog.>) 25)
  count
 ---------------------------------------------------------------------
      0
@@ -277,9 +277,9 @@ SELECT count(*)
 FROM distributed_table u1
 JOIN local_table u2 USING(value)
 WHERE  u1.value = 3;
-DEBUG:  Wrapping relation "local_table" to a subquery: SELECT NULL::integer AS key, value, NULL::timestamp with time zone AS "time" FROM push_down_filters.local_table u2 WHERE (value OPERATOR(pg_catalog.=) 3)
-DEBUG:  generating subplan XXX_1 for subquery SELECT NULL::integer AS key, value, NULL::timestamp with time zone AS "time" FROM push_down_filters.local_table u2 WHERE (value OPERATOR(pg_catalog.=) 3)
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (push_down_filters.distributed_table u1 JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result."time" FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value integer, "time" timestamp with time zone)) u2 USING (value)) WHERE (u1.value OPERATOR(pg_catalog.=) 3)
+DEBUG:  Wrapping relation "local_table" "u2" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT value FROM push_down_filters.local_table u2 WHERE (value OPERATOR(pg_catalog.=) 3)
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (push_down_filters.distributed_table u1 JOIN (SELECT NULL::integer AS key, u2_1.value, NULL::timestamp with time zone AS "time" FROM (SELECT intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(value integer)) u2_1) u2 USING (value)) WHERE (u1.value OPERATOR(pg_catalog.=) 3)
  count
 ---------------------------------------------------------------------
      0
@@ -290,9 +290,9 @@ SELECT count(*)
 FROM distributed_table u1
 JOIN local_table u2 USING(value)
 WHERE  u1.value > 3;
-DEBUG:  Wrapping relation "local_table" to a subquery: SELECT NULL::integer AS key, value, NULL::timestamp with time zone AS "time" FROM push_down_filters.local_table u2 WHERE true
-DEBUG:  generating subplan XXX_1 for subquery SELECT NULL::integer AS key, value, NULL::timestamp with time zone AS "time" FROM push_down_filters.local_table u2 WHERE true
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (push_down_filters.distributed_table u1 JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result."time" FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value integer, "time" timestamp with time zone)) u2 USING (value)) WHERE (u1.value OPERATOR(pg_catalog.>) 3)
+DEBUG:  Wrapping relation "local_table" "u2" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT value FROM push_down_filters.local_table u2 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (push_down_filters.distributed_table u1 JOIN (SELECT NULL::integer AS key, u2_1.value, NULL::timestamp with time zone AS "time" FROM (SELECT intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(value integer)) u2_1) u2 USING (value)) WHERE (u1.value OPERATOR(pg_catalog.>) 3)
  count
 ---------------------------------------------------------------------
      0
@@ -304,9 +304,9 @@ SELECT count(*)
 FROM distributed_table u1
 JOIN local_table u2 USING(value)
 WHERE  u1.key = 3;
-DEBUG:  Wrapping relation "local_table" to a subquery: SELECT NULL::integer AS key, value, NULL::timestamp with time zone AS "time" FROM push_down_filters.local_table u2 WHERE true
-DEBUG:  generating subplan XXX_1 for subquery SELECT NULL::integer AS key, value, NULL::timestamp with time zone AS "time" FROM push_down_filters.local_table u2 WHERE true
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (push_down_filters.distributed_table u1 JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result."time" FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value integer, "time" timestamp with time zone)) u2 USING (value)) WHERE (u1.key OPERATOR(pg_catalog.=) 3)
+DEBUG:  Wrapping relation "local_table" "u2" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT value FROM push_down_filters.local_table u2 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (push_down_filters.distributed_table u1 JOIN (SELECT NULL::integer AS key, u2_1.value, NULL::timestamp with time zone AS "time" FROM (SELECT intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(value integer)) u2_1) u2 USING (value)) WHERE (u1.key OPERATOR(pg_catalog.=) 3)
  count
 ---------------------------------------------------------------------
      0
@@ -317,9 +317,9 @@ SELECT count(*)
 FROM distributed_table u1
 JOIN local_table u2 USING(value)
 WHERE u2.value > 4 OR u2.value = 4;
-DEBUG:  Wrapping relation "local_table" to a subquery: SELECT NULL::integer AS key, value, NULL::timestamp with time zone AS "time" FROM push_down_filters.local_table u2 WHERE ((value OPERATOR(pg_catalog.>) 4) OR (value OPERATOR(pg_catalog.=) 4))
-DEBUG:  generating subplan XXX_1 for subquery SELECT NULL::integer AS key, value, NULL::timestamp with time zone AS "time" FROM push_down_filters.local_table u2 WHERE ((value OPERATOR(pg_catalog.>) 4) OR (value OPERATOR(pg_catalog.=) 4))
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (push_down_filters.distributed_table u1 JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result."time" FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value integer, "time" timestamp with time zone)) u2 USING (value)) WHERE ((u2.value OPERATOR(pg_catalog.>) 4) OR (u2.value OPERATOR(pg_catalog.=) 4))
+DEBUG:  Wrapping relation "local_table" "u2" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT value FROM push_down_filters.local_table u2 WHERE ((value OPERATOR(pg_catalog.>) 4) OR (value OPERATOR(pg_catalog.=) 4))
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (push_down_filters.distributed_table u1 JOIN (SELECT NULL::integer AS key, u2_1.value, NULL::timestamp with time zone AS "time" FROM (SELECT intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(value integer)) u2_1) u2 USING (value)) WHERE ((u2.value OPERATOR(pg_catalog.>) 4) OR (u2.value OPERATOR(pg_catalog.=) 4))
  count
 ---------------------------------------------------------------------
      0
@@ -330,9 +330,9 @@ SELECT count(*)
 FROM distributed_table u1
 JOIN local_table u2 USING(value)
 WHERE u2.value > 2 and u2.time IS NULL;
-DEBUG:  Wrapping relation "local_table" to a subquery: SELECT NULL::integer AS key, value, "time" FROM push_down_filters.local_table u2 WHERE ((value OPERATOR(pg_catalog.>) 2) AND ("time" IS NULL))
-DEBUG:  generating subplan XXX_1 for subquery SELECT NULL::integer AS key, value, "time" FROM push_down_filters.local_table u2 WHERE ((value OPERATOR(pg_catalog.>) 2) AND ("time" IS NULL))
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (push_down_filters.distributed_table u1 JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result."time" FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value integer, "time" timestamp with time zone)) u2 USING (value)) WHERE ((u2.value OPERATOR(pg_catalog.>) 2) AND (u2."time" IS NULL))
+DEBUG:  Wrapping relation "local_table" "u2" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT value, "time" FROM push_down_filters.local_table u2 WHERE ((value OPERATOR(pg_catalog.>) 2) AND ("time" IS NULL))
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (push_down_filters.distributed_table u1 JOIN (SELECT NULL::integer AS key, u2_1.value, u2_1."time" FROM (SELECT intermediate_result.value, intermediate_result."time" FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(value integer, "time" timestamp with time zone)) u2_1) u2 USING (value)) WHERE ((u2.value OPERATOR(pg_catalog.>) 2) AND (u2."time" IS NULL))
  count
 ---------------------------------------------------------------------
      0
@@ -344,9 +344,9 @@ SELECT count(*)
 FROM distributed_table u1
 JOIN local_table u2 USING(value)
 WHERE (u2.value > 2 OR u2.value IS NULL) AND (u2.key > 4 OR u1.key > 3);
-DEBUG:  Wrapping relation "local_table" to a subquery: SELECT key, value, NULL::timestamp with time zone AS "time" FROM push_down_filters.local_table u2 WHERE ((value OPERATOR(pg_catalog.>) 2) OR (value IS NULL))
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, value, NULL::timestamp with time zone AS "time" FROM push_down_filters.local_table u2 WHERE ((value OPERATOR(pg_catalog.>) 2) OR (value IS NULL))
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (push_down_filters.distributed_table u1 JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result."time" FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value integer, "time" timestamp with time zone)) u2 USING (value)) WHERE (((u2.value OPERATOR(pg_catalog.>) 2) OR (u2.value IS NULL)) AND ((u2.key OPERATOR(pg_catalog.>) 4) OR (u1.key OPERATOR(pg_catalog.>) 3)))
+DEBUG:  Wrapping relation "local_table" "u2" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT key, value FROM push_down_filters.local_table u2 WHERE ((value OPERATOR(pg_catalog.>) 2) OR (value IS NULL))
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (push_down_filters.distributed_table u1 JOIN (SELECT u2_1.key, u2_1.value, NULL::timestamp with time zone AS "time" FROM (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value integer)) u2_1) u2 USING (value)) WHERE (((u2.value OPERATOR(pg_catalog.>) 2) OR (u2.value IS NULL)) AND ((u2.key OPERATOR(pg_catalog.>) 4) OR (u1.key OPERATOR(pg_catalog.>) 3)))
  count
 ---------------------------------------------------------------------
      0
@@ -358,9 +358,9 @@ SELECT count(*)
 FROM distributed_table u1
 JOIN local_table u2 USING(value)
 WHERE (u2.value > 2 OR u2.value IS NULL) OR (u2.key > 4 OR u1.key > 3);
-DEBUG:  Wrapping relation "local_table" to a subquery: SELECT key, value, NULL::timestamp with time zone AS "time" FROM push_down_filters.local_table u2 WHERE true
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, value, NULL::timestamp with time zone AS "time" FROM push_down_filters.local_table u2 WHERE true
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (push_down_filters.distributed_table u1 JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result."time" FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value integer, "time" timestamp with time zone)) u2 USING (value)) WHERE ((u2.value OPERATOR(pg_catalog.>) 2) OR (u2.value IS NULL) OR ((u2.key OPERATOR(pg_catalog.>) 4) OR (u1.key OPERATOR(pg_catalog.>) 3)))
+DEBUG:  Wrapping relation "local_table" "u2" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT key, value FROM push_down_filters.local_table u2 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (push_down_filters.distributed_table u1 JOIN (SELECT u2_1.key, u2_1.value, NULL::timestamp with time zone AS "time" FROM (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value integer)) u2_1) u2 USING (value)) WHERE ((u2.value OPERATOR(pg_catalog.>) 2) OR (u2.value IS NULL) OR ((u2.key OPERATOR(pg_catalog.>) 4) OR (u1.key OPERATOR(pg_catalog.>) 3)))
  count
 ---------------------------------------------------------------------
      0
@@ -372,9 +372,9 @@ SELECT count(*)
 FROM distributed_table u1
 JOIN local_table u2 USING(value)
 WHERE (u2.value > 2 OR u2.value IS NULL) AND (u2.key > 4 OR u1.key > 3);
-DEBUG:  Wrapping relation "local_table" to a subquery: SELECT key, value, NULL::timestamp with time zone AS "time" FROM push_down_filters.local_table u2 WHERE ((value OPERATOR(pg_catalog.>) 2) OR (value IS NULL))
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, value, NULL::timestamp with time zone AS "time" FROM push_down_filters.local_table u2 WHERE ((value OPERATOR(pg_catalog.>) 2) OR (value IS NULL))
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (push_down_filters.distributed_table u1 JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result."time" FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value integer, "time" timestamp with time zone)) u2 USING (value)) WHERE (((u2.value OPERATOR(pg_catalog.>) 2) OR (u2.value IS NULL)) AND ((u2.key OPERATOR(pg_catalog.>) 4) OR (u1.key OPERATOR(pg_catalog.>) 3)))
+DEBUG:  Wrapping relation "local_table" "u2" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT key, value FROM push_down_filters.local_table u2 WHERE ((value OPERATOR(pg_catalog.>) 2) OR (value IS NULL))
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (push_down_filters.distributed_table u1 JOIN (SELECT u2_1.key, u2_1.value, NULL::timestamp with time zone AS "time" FROM (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value integer)) u2_1) u2 USING (value)) WHERE (((u2.value OPERATOR(pg_catalog.>) 2) OR (u2.value IS NULL)) AND ((u2.key OPERATOR(pg_catalog.>) 4) OR (u1.key OPERATOR(pg_catalog.>) 3)))
  count
 ---------------------------------------------------------------------
      0
@@ -385,9 +385,9 @@ SELECT count(*)
 FROM distributed_table u1
 JOIN local_table u2 USING(value)
 WHERE (u2.value > 2 OR u1.value IS NULL) AND (u2.key = 10000 * random() OR u1.key > 3);
-DEBUG:  Wrapping relation "local_table" to a subquery: SELECT key, value, NULL::timestamp with time zone AS "time" FROM push_down_filters.local_table u2 WHERE true
-DEBUG:  generating subplan XXX_1 for subquery SELECT key, value, NULL::timestamp with time zone AS "time" FROM push_down_filters.local_table u2 WHERE true
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (push_down_filters.distributed_table u1 JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result."time" FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value integer, "time" timestamp with time zone)) u2 USING (value)) WHERE (((u2.value OPERATOR(pg_catalog.>) 2) OR (u1.value IS NULL)) AND (((u2.key)::double precision OPERATOR(pg_catalog.=) ((10000)::double precision OPERATOR(pg_catalog.*) random())) OR (u1.key OPERATOR(pg_catalog.>) 3)))
+DEBUG:  Wrapping relation "local_table" "u2" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT key, value FROM push_down_filters.local_table u2 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (push_down_filters.distributed_table u1 JOIN (SELECT u2_1.key, u2_1.value, NULL::timestamp with time zone AS "time" FROM (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value integer)) u2_1) u2 USING (value)) WHERE (((u2.value OPERATOR(pg_catalog.>) 2) OR (u1.value IS NULL)) AND (((u2.key)::double precision OPERATOR(pg_catalog.=) ((10000)::double precision OPERATOR(pg_catalog.*) random())) OR (u1.key OPERATOR(pg_catalog.>) 3)))
  count
 ---------------------------------------------------------------------
      0
@@ -398,9 +398,9 @@ SELECT count(*)
 FROM distributed_table u1
 JOIN local_table u2 USING(value)
 WHERE (u2.value > 2 AND false);
-DEBUG:  Wrapping relation "local_table" to a subquery: SELECT NULL::integer AS key, value, NULL::timestamp with time zone AS "time" FROM push_down_filters.local_table u2 WHERE false
-DEBUG:  generating subplan XXX_1 for subquery SELECT NULL::integer AS key, value, NULL::timestamp with time zone AS "time" FROM push_down_filters.local_table u2 WHERE false
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (push_down_filters.distributed_table u1 JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result."time" FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value integer, "time" timestamp with time zone)) u2 USING (value)) WHERE ((u2.value OPERATOR(pg_catalog.>) 2) AND false)
+DEBUG:  Wrapping relation "local_table" "u2" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT value FROM push_down_filters.local_table u2 WHERE false
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (push_down_filters.distributed_table u1 JOIN (SELECT NULL::integer AS key, u2_1.value, NULL::timestamp with time zone AS "time" FROM (SELECT intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(value integer)) u2_1) u2 USING (value)) WHERE ((u2.value OPERATOR(pg_catalog.>) 2) AND false)
  count
 ---------------------------------------------------------------------
      0
@@ -418,9 +418,9 @@ JOIN LATERAL
    WHERE u2.value = 15) AS u3 USING (value)
 WHERE (u2.value > 2
        AND FALSE);
-DEBUG:  Wrapping relation "local_table" to a subquery: SELECT NULL::integer AS key, value, NULL::timestamp with time zone AS "time" FROM push_down_filters.local_table u2 WHERE false
-DEBUG:  generating subplan XXX_1 for subquery SELECT NULL::integer AS key, value, NULL::timestamp with time zone AS "time" FROM push_down_filters.local_table u2 WHERE false
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((push_down_filters.distributed_table u1 JOIN (SELECT intermediate_result.key, intermediate_result.value, intermediate_result."time" FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value integer, "time" timestamp with time zone)) u2 USING (value)) JOIN LATERAL (SELECT distributed_table.value, random() AS random FROM push_down_filters.distributed_table WHERE (u2.value OPERATOR(pg_catalog.=) 15)) u3 USING (value)) WHERE ((u2.value OPERATOR(pg_catalog.>) 2) AND false)
+DEBUG:  Wrapping relation "local_table" "u2" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT value FROM push_down_filters.local_table u2 WHERE false
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((push_down_filters.distributed_table u1 JOIN (SELECT NULL::integer AS key, u2_1.value, NULL::timestamp with time zone AS "time" FROM (SELECT intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(value integer)) u2_1) u2 USING (value)) JOIN LATERAL (SELECT distributed_table.value, random() AS random FROM push_down_filters.distributed_table WHERE (u2.value OPERATOR(pg_catalog.=) 15)) u3 USING (value)) WHERE ((u2.value OPERATOR(pg_catalog.>) 2) AND false)
 ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 \set VERBOSITY terse
 RESET client_min_messages;

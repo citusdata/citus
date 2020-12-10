@@ -196,6 +196,11 @@ static void UpdateVarNosInNode(Query *query, Index newVarNo);
 static bool ModifiesLocalTableWithRemoteCitusLocalTable(List *rangeTableList);
 static void GetRangeTableEntriesFromJoinTree(Node *joinNode, List *rangeTableList,
 											 List **joinRangeTableEntries);
+static Query * CreateOuterSubquery(RangeTblEntry *rangeTableEntry,
+								   List *allTargetList, List *requiredAttrNumbers);
+static void MakeVarAttNosSequential(List *targetList);
+static List * GenerateRequiredColNamesFromTargetList(List *targetList);
+static char * GetRelationNameAndAliasName(RangeTblEntry *rangeTablentry);
 
 /*
  * GenerateSubplansForSubqueriesAndCTEs is a wrapper around RecursivelyPlanSubqueriesAndCTEs.
@@ -1445,14 +1450,21 @@ NodeContainsSubqueryReferencingOuterQuery(Node *node)
  * ReplaceRTERelationWithRteSubquery replaces the input rte relation target entry
  * with a subquery. The function also pushes down the filters to the subquery.
  *
- * It then recursively plans the subquery.
+ * It then recursively plans the subquery. This subquery is wrapped with another subquery
+ * as a trick to reduce network cost, because we currently don't have an easy way to
+ * skip generating NULL's for non-required columns, and if we create (SELECT a, NULL, NULL FROM table)
+ * then this will be sent over network and NULL's also occupy some space. Instead of this we generate:
+ * (SELECT t.a, NULL, NULL FROM (SELECT a FROM table) t). The inner subquery will be recursively planned
+ * but the outer part will not be yet it will still have the NULL columns so that the query is correct.
  */
 void
 ReplaceRTERelationWithRteSubquery(RangeTblEntry *rangeTableEntry,
 								  List *requiredAttrNumbers,
 								  RecursivePlanningContext *context)
 {
-	Query *subquery = WrapRteRelationIntoSubquery(rangeTableEntry, requiredAttrNumbers);
+	List *allTargetList = NIL;
+	Query *subquery = WrapRteRelationIntoSubquery(rangeTableEntry, requiredAttrNumbers,
+												  &allTargetList);
 	List *restrictionList =
 		GetRestrictInfoListForRelation(rangeTableEntry,
 									   context->plannerRestrictionContext);
@@ -1474,24 +1486,127 @@ ReplaceRTERelationWithRteSubquery(RangeTblEntry *rangeTableEntry,
 
 	if (IsLoggableLevel(DEBUG1))
 	{
-		StringInfo subqueryString = makeStringInfo();
-
-		pg_get_query_def(subquery,
-						 subqueryString);
-
-		ereport(DEBUG1, (errmsg("Wrapping relation \"%s\" to a subquery: %s ",
-								get_rel_name(rangeTableEntry->relid),
-								ApplyLogRedaction(subqueryString->data))));
+		char *relationAndAliasName = GetRelationNameAndAliasName(rangeTableEntry);
+		ereport(DEBUG1, (errmsg("Wrapping relation %s to a subquery",
+								relationAndAliasName)));
 	}
 
 	/* as we created the subquery, now forcefully recursively plan it */
-	bool recursivellyPlanned = RecursivelyPlanSubquery(rangeTableEntry->subquery,
-													   context);
-	if (!recursivellyPlanned)
+	bool recursivelyPlanned = RecursivelyPlanSubquery(subquery, context);
+	if (!recursivelyPlanned)
 	{
 		ereport(ERROR, (errmsg(
 							"unexpected state: query should have been recursively planned")));
 	}
+
+	Query *outerSubquery = CreateOuterSubquery(rangeTableEntry, allTargetList,
+											   requiredAttrNumbers);
+	rangeTableEntry->subquery = outerSubquery;
+}
+
+
+/*
+ * GetRelationNameAndAliasName returns the relname + alias name if
+ * alias name exists otherwise only the relname is returned.
+ */
+static char *
+GetRelationNameAndAliasName(RangeTblEntry *rangeTableEntry)
+{
+	StringInfo str = makeStringInfo();
+	appendStringInfo(str, "\"%s\"", get_rel_name(rangeTableEntry->relid));
+
+	char *aliasName = NULL;
+	if (rangeTableEntry->alias)
+	{
+		aliasName = rangeTableEntry->alias->aliasname;
+	}
+
+	if (aliasName)
+	{
+		appendStringInfo(str, " \"%s\"", aliasName);
+	}
+	return str->data;
+}
+
+
+/*
+ * CreateOuterSubquery creates outer subquery which contains
+ * the given range table entry in its rtable.
+ */
+static Query *
+CreateOuterSubquery(RangeTblEntry *rangeTableEntry, List *allTargetList,
+					List *requiredAttrNumbers)
+{
+	MakeVarAttNosSequential(allTargetList);
+	List *innerSubqueryColNames = GenerateRequiredColNamesFromTargetList(allTargetList);
+
+	Query *outerSubquery = makeNode(Query);
+	outerSubquery->commandType = CMD_SELECT;
+
+	/* we copy the input rteRelation to preserve the rteIdentity */
+	RangeTblEntry *innerSubqueryRTE = copyObject(rangeTableEntry);
+
+	innerSubqueryRTE->eref->colnames = innerSubqueryColNames;
+	outerSubquery->rtable = list_make1(innerSubqueryRTE);
+
+	/* set the FROM expression to the subquery */
+	RangeTblRef *newRangeTableRef = makeNode(RangeTblRef);
+	newRangeTableRef->rtindex = 1;
+	outerSubquery->jointree = makeFromExpr(list_make1(newRangeTableRef), NULL);
+
+	outerSubquery->targetList = allTargetList;
+	return outerSubquery;
+}
+
+
+/*
+ * MakeVarAttNosSequential changes the attribute numbers of the given targetList
+ * to sequential numbers, [1, 2, 3] ...
+ */
+static void
+MakeVarAttNosSequential(List *targetList)
+{
+	TargetEntry *entry = NULL;
+	int attrNo = 1;
+	foreach_ptr(entry, targetList)
+	{
+		if (IsA(entry->expr, Var))
+		{
+			Var *var = (Var *) entry->expr;
+
+			/*
+			 * the inner subquery is an intermediate result hence
+			 * the attribute no's should be in ordinal order. [1, 2, 3...]
+			 */
+			var->varattno = attrNo++;
+		}
+	}
+}
+
+
+/*
+ * GenerateRequiredColNamesFromTargetList generates the required colnames
+ * from the given target list.
+ */
+static List *
+GenerateRequiredColNamesFromTargetList(List *targetList)
+{
+	TargetEntry *entry = NULL;
+	List *innerSubqueryColNames = NIL;
+	foreach_ptr(entry, targetList)
+	{
+		if (IsA(entry->expr, Var))
+		{
+			/*
+			 * column names of the inner subquery should only contain the
+			 * required columns, as in if we choose 'b' from ('a','b') colnames
+			 * should be 'a' not ('a','b')
+			 */
+			innerSubqueryColNames = lappend(innerSubqueryColNames, makeString(
+												entry->resname));
+		}
+	}
+	return innerSubqueryColNames;
 }
 
 

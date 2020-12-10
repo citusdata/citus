@@ -35,7 +35,8 @@ extern ColocatedJoinChecker CreateColocatedJoinChecker(Query *subquery,
 													   restrictionContext);
 extern bool SubqueryColocated(Query *subquery, ColocatedJoinChecker *context);
 extern Query * WrapRteRelationIntoSubquery(RangeTblEntry *rteRelation,
-										   List *requiredAttributes);
+										   List *requiredAttributes,
+										   List **allTargetList);
 
 
 #endif /* QUERY_COLOCATION_CHECKER_H */

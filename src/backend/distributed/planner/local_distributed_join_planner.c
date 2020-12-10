@@ -1,3 +1,74 @@
+/*-------------------------------------------------------------------------
+ *
+ * local_distributed_join_planner.c
+ *
+ * This file contains functions to convert convert local-distributed
+ * tables to subqueries so that they can be planned by the router planner.
+ *
+ *
+ * The current algorithm checks if there is any table in the `jointree` that
+ * should be converted, if so it creates conversion candidates.
+ * With conversion candidates, it will convert either a distributed table or a local table to a
+ * subquery until it is plannable by router planner. It will choose a distributed table if we
+ * expect it to return few rows, such as a constant equality filter on a unique column.
+ *
+ * ```sql
+ * -- assuming dist.a is a unique column, this will convert distributed table
+ * SELECT * FROM dist join local ON(a) where dist.a = 5;
+ * ```
+ *
+ * If the uniqueness is defined on multiple columns such as `dist.a, dist.b`
+ * then distributed table will only be chosen if there is a constant equality in all of the columns such as:
+ *
+ * ```sql
+ * SELECT * FROM dist join local ON(a) where dist.a = 5 AND dist.b =10; -- this will choose distributed table
+ * SELECT * FROM dist join local ON(a) where dist.a = 5 AND dist.b >10; -- this won't since no equality on dist.b
+ * SELECT * FROM dist join local ON(a) where dist.a = 5; -- this won't since no equality on dist.b
+ * ```
+ *
+ * The algorithm will also not favor distributed tables if there exists a
+ * distributed table which is expected to return many rows, because in that
+ * case we will already plan local tables hence there is no point in converting some distributed tables.
+ *
+ * ```sql
+ * -- here only the local table will be chosen
+ * SELECT * FROM dist_without_unique JOIN dist_with_unique USING(a) join local USING (a);
+ * ```
+ *
+ * this also makes the algorithm consistent.
+ *
+ * The algorithm can understand `OR` and `AND` expressions in the filters.
+ *
+ * There is a GUC called `local_table_join_policy` consisting of 4 modes:
+ * `none`: don't do any conversion
+ * `prefer-local`: prefer converting local tables if there is
+ * `prefer-distributed`: prefer converting distributed tables if there is
+ * `auto`: use the above mechanism to decide (constant equality on unique column)
+ *
+ * `auto` mode is the default.
+ *
+ * While converting to a subquery, we use a trick to avoid unnecessary network bandwidth,
+ * if there are columns that are not required in a table that will be converted to a subquery, We do:
+ *
+ * ```sql
+ * SELECT t.a, NULL, NULL (SELECT a FROM table) t
+ * ```
+ *
+ * instead of
+ *
+ * ```sql
+ * SELECT a, NULL, NULL FROM table
+ * ```
+ *
+ * There are NULLs in the query because we currently don't have an easy way to update the Vars
+ * that reference the non-required ones and we don't want to break the postgres query.
+ *
+ *
+ * Copyright (c) Citus Data, Inc.
+ *
+ *-------------------------------------------------------------------------
+ */
+
 #include "postgres.h"
 
 #include "distributed/pg_version_constants.h"
