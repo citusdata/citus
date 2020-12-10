@@ -316,6 +316,147 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS c
    100
 (1 row)
 
+-- similar tests in transaction block should work fine
+BEGIN;
+-- materialized views should work too
+SELECT count(*) FROM distributed_table JOIN mv1 USING(key);
+DEBUG:  Wrapping relation "mv1" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT key FROM local_table_join.mv1 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (local_table_join.distributed_table JOIN (SELECT mv1_1.key, NULL::text AS value, NULL::jsonb AS value_2 FROM (SELECT intermediate_result.key FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) mv1_1) mv1 USING (key))
+ count
+---------------------------------------------------------------------
+   100
+(1 row)
+
+SELECT count(*) FROM (SELECT * FROM distributed_table) d1 JOIN mv1 USING(key);
+DEBUG:  Wrapping relation "mv1" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT key FROM local_table_join.mv1 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT distributed_table.key, distributed_table.value, distributed_table.value_2 FROM local_table_join.distributed_table) d1 JOIN (SELECT mv1_1.key, NULL::text AS value, NULL::jsonb AS value_2 FROM (SELECT intermediate_result.key FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) mv1_1) mv1 USING (key))
+ count
+---------------------------------------------------------------------
+   100
+(1 row)
+
+SELECT count(*) FROM reference_table JOIN mv1 USING(key);
+DEBUG:  Wrapping relation "mv1" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT key FROM local_table_join.mv1 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (local_table_join.reference_table JOIN (SELECT mv1_1.key, NULL::text AS value, NULL::jsonb AS value_2 FROM (SELECT intermediate_result.key FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) mv1_1) mv1 USING (key))
+ count
+---------------------------------------------------------------------
+   100
+(1 row)
+
+SELECT count(*) FROM distributed_table JOIN mv1 USING(key) JOIN reference_table USING (key);
+DEBUG:  Wrapping relation "mv1" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT key FROM local_table_join.mv1 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((local_table_join.distributed_table JOIN (SELECT mv1_1.key, NULL::text AS value, NULL::jsonb AS value_2 FROM (SELECT intermediate_result.key FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) mv1_1) mv1 USING (key)) JOIN local_table_join.reference_table USING (key))
+ count
+---------------------------------------------------------------------
+   100
+(1 row)
+
+SELECT count(*) FROM distributed_table JOIN mv2 USING(key);
+DEBUG:  Wrapping relation "mv2" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT key FROM local_table_join.mv2 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (local_table_join.distributed_table JOIN (SELECT mv2_1.key, NULL::text AS value, NULL::jsonb AS value_2 FROM (SELECT intermediate_result.key FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) mv2_1) mv2 USING (key))
+ count
+---------------------------------------------------------------------
+   100
+(1 row)
+
+SELECT count(*) FROM (SELECT * FROM distributed_table) d1 JOIN mv2 USING(key);
+DEBUG:  Wrapping relation "mv2" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT key FROM local_table_join.mv2 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT distributed_table.key, distributed_table.value, distributed_table.value_2 FROM local_table_join.distributed_table) d1 JOIN (SELECT mv2_1.key, NULL::text AS value, NULL::jsonb AS value_2 FROM (SELECT intermediate_result.key FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) mv2_1) mv2 USING (key))
+ count
+---------------------------------------------------------------------
+   100
+(1 row)
+
+SELECT count(*) FROM reference_table JOIN mv2 USING(key);
+DEBUG:  Wrapping relation "mv2" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT key FROM local_table_join.mv2 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (local_table_join.reference_table JOIN (SELECT mv2_1.key, NULL::text AS value, NULL::jsonb AS value_2 FROM (SELECT intermediate_result.key FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) mv2_1) mv2 USING (key))
+ count
+---------------------------------------------------------------------
+   100
+(1 row)
+
+SELECT count(*) FROM distributed_table JOIN mv2 USING(key) JOIN reference_table USING (key);
+DEBUG:  Wrapping relation "mv2" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT key FROM local_table_join.mv2 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((local_table_join.distributed_table JOIN (SELECT mv2_1.key, NULL::text AS value, NULL::jsonb AS value_2 FROM (SELECT intermediate_result.key FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) mv2_1) mv2 USING (key)) JOIN local_table_join.reference_table USING (key))
+ count
+---------------------------------------------------------------------
+   100
+(1 row)
+
+-- foreign tables should work too
+SELECT count(*) FROM foreign_table JOIN distributed_table USING(key);
+DEBUG:  Wrapping relation "foreign_table" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT key FROM local_table_join.foreign_table WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT foreign_table_1.key, NULL::text AS value FROM (SELECT intermediate_result.key FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) foreign_table_1) foreign_table JOIN local_table_join.distributed_table USING (key))
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+-- partitioned tables should work as well
+SELECT count(*) FROM distributed_partitioned_table JOIN postgres_table USING(key);
+DEBUG:  Wrapping relation "postgres_table" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT key FROM local_table_join.postgres_table WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (local_table_join.distributed_partitioned_table JOIN (SELECT postgres_table_1.key, NULL::text AS value, NULL::jsonb AS value_2 FROM (SELECT intermediate_result.key FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) postgres_table_1) postgres_table USING (key))
+ count
+---------------------------------------------------------------------
+   100
+(1 row)
+
+SELECT count(*) FROM distributed_partitioned_table JOIN postgres_table USING(key) WHERE distributed_partitioned_table.key = 10;
+DEBUG:  Wrapping relation "postgres_table" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT key FROM local_table_join.postgres_table WHERE (key OPERATOR(pg_catalog.=) 10)
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (local_table_join.distributed_partitioned_table JOIN (SELECT postgres_table_1.key, NULL::text AS value, NULL::jsonb AS value_2 FROM (SELECT intermediate_result.key FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) postgres_table_1) postgres_table USING (key)) WHERE (distributed_partitioned_table.key OPERATOR(pg_catalog.=) 10)
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+SELECT count(*) FROM distributed_partitioned_table JOIN postgres_table USING(key) JOIN reference_table USING (key);
+DEBUG:  Wrapping relation "postgres_table" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT key FROM local_table_join.postgres_table WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((local_table_join.distributed_partitioned_table JOIN (SELECT postgres_table_1.key, NULL::text AS value, NULL::jsonb AS value_2 FROM (SELECT intermediate_result.key FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) postgres_table_1) postgres_table USING (key)) JOIN local_table_join.reference_table USING (key))
+ count
+---------------------------------------------------------------------
+   100
+(1 row)
+
+SELECT count(*) FROM distributed_partitioned_table JOIN local_partitioned_table USING(key);
+DEBUG:  Wrapping relation "local_partitioned_table" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT key FROM local_table_join.local_partitioned_table WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (local_table_join.distributed_partitioned_table JOIN (SELECT local_partitioned_table_1.key, NULL::text AS value FROM (SELECT intermediate_result.key FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) local_partitioned_table_1) local_partitioned_table USING (key))
+ count
+---------------------------------------------------------------------
+   100
+(1 row)
+
+SELECT count(*) FROM distributed_partitioned_table JOIN local_partitioned_table USING(key) WHERE distributed_partitioned_table.key = 10;
+DEBUG:  Wrapping relation "local_partitioned_table" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT key FROM local_table_join.local_partitioned_table WHERE (key OPERATOR(pg_catalog.=) 10)
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (local_table_join.distributed_partitioned_table JOIN (SELECT local_partitioned_table_1.key, NULL::text AS value FROM (SELECT intermediate_result.key FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) local_partitioned_table_1) local_partitioned_table USING (key)) WHERE (distributed_partitioned_table.key OPERATOR(pg_catalog.=) 10)
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+SELECT count(*) FROM distributed_partitioned_table JOIN local_partitioned_table USING(key) JOIN reference_table USING (key);
+DEBUG:  Wrapping relation "local_partitioned_table" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT key FROM local_table_join.local_partitioned_table WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((local_table_join.distributed_partitioned_table JOIN (SELECT local_partitioned_table_1.key, NULL::text AS value FROM (SELECT intermediate_result.key FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) local_partitioned_table_1) local_partitioned_table USING (key)) JOIN local_table_join.reference_table USING (key))
+ count
+---------------------------------------------------------------------
+   100
+(1 row)
+
+ROLLBACK;
 -- the conversions should be independent from the order of table entries in the query
 SELECT COUNT(*) FROM postgres_table join distributed_table_pkey using(key) join local_partitioned_table using(key) join distributed_table using(key) where distributed_table_pkey.key = 5;
 DEBUG:  Wrapping relation "postgres_table" to a subquery
@@ -395,6 +536,17 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS c
  count
 ---------------------------------------------------------------------
      0
+(1 row)
+
+-- different column names
+SELECT a FROM postgres_table foo (a,b,c) JOIN distributed_table ON (distributed_table.key = foo.a) ORDER BY 1 LIMIT 1;
+DEBUG:  Wrapping relation "postgres_table" "foo" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT a AS key FROM local_table_join.postgres_table foo(a, b, c) WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT foo.a FROM ((SELECT foo_1.a AS key, NULL::text AS value, NULL::jsonb AS value_2 FROM (SELECT intermediate_result.key FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) foo_1(a)) foo(a, b, c) JOIN local_table_join.distributed_table ON ((distributed_table.key OPERATOR(pg_catalog.=) foo.a))) ORDER BY foo.a LIMIT 1
+DEBUG:  push down of limit count: 1
+ a
+---------------------------------------------------------------------
+ 1
 (1 row)
 
 -- We will plan postgres table as the index is on key,value not just key
@@ -478,6 +630,15 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS c
      1
 (1 row)
 
+-- Known bug: #4269
+SELECT count(*) FROM distributed_table_composite foo(a,b,c) JOIN postgres_table ON(foo.a > 1)
+	WHERE foo.a IN (SELECT COUNT(*) FROM local_partitioned_table) AND (foo.a = 10 OR foo.b ='text');
+DEBUG:  generating subplan XXX_1 for subquery SELECT count(*) AS count FROM local_table_join.local_partitioned_table
+DEBUG:  Wrapping relation "distributed_table_composite" "foo" to a subquery
+DEBUG:  generating subplan XXX_2 for subquery SELECT a AS key, b AS value FROM local_table_join.distributed_table_composite foo(a, b, c) WHERE ((a OPERATOR(pg_catalog.>) 1) AND ((a OPERATOR(pg_catalog.=) 10) OR (b OPERATOR(pg_catalog.=) 'text'::text)))
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT foo_1.a AS key, foo_1.b AS value, NULL::jsonb AS value_2 FROM (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) foo_1(a, b)) foo(a, b, c) JOIN local_table_join.postgres_table ON ((foo.a OPERATOR(pg_catalog.>) 1))) WHERE ((foo.a OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.count FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(count bigint))) AND ((foo.a OPERATOR(pg_catalog.=) 10) OR (foo.b OPERATOR(pg_catalog.=) 'text'::text)))
+ERROR:  column "a" does not exist
+CONTEXT:  while executing command on localhost:xxxxx
 -- a unique index on key so dist table should be recursively planned
 SELECT count(*) FROM postgres_table JOIN distributed_table_pkey USING(key);
 DEBUG:  Wrapping relation "postgres_table" to a subquery

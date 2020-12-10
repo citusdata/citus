@@ -3639,9 +3639,7 @@ NodeIsRangeTblRefReferenceTable(Node *node, List *rangeTableList)
 
 /*
  * FetchEqualityAttrNumsForRTE fetches the attribute numbers from quals
- * which:
- * - has equality operator
- * - belongs to rangeTableEntry with rteIndex
+ * which has equality operator
  */
 List *
 FetchEqualityAttrNumsForRTE(Node *node)
@@ -3699,9 +3697,7 @@ FetchEqualityAttrNumsForList(List *nodeList)
 
 /*
  * FetchEqualityAttrNumsForRTEOpExpr fetches the attribute numbers from opExpr
- * which:
- * - has equality operator
- * - belongs to rangeTableEntry with rteIndex
+ * which has equality operator.
  */
 static List *
 FetchEqualityAttrNumsForRTEOpExpr(OpExpr *opExpr)
@@ -3723,9 +3719,7 @@ FetchEqualityAttrNumsForRTEOpExpr(OpExpr *opExpr)
 
 /*
  * FetchEqualityAttrNumsForRTEBoolExpr fetches the attribute numbers from boolExpr
- * which:
- * - has equality operator
- * - belongs to rangeTableEntry with rteIndex
+ * which has equality operator
  */
 static List *
 FetchEqualityAttrNumsForRTEBoolExpr(BoolExpr *boolExpr)

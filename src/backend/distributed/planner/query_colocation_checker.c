@@ -47,6 +47,7 @@
 static RangeTblEntry * AnchorRte(Query *subquery);
 static List * UnionRelationRestrictionLists(List *firstRelationList,
 											List *secondRelationList);
+static void MakeVarAttNosSequential(List *targetList);
 
 
 /*
@@ -261,6 +262,9 @@ SubqueryColocated(Query *subquery, ColocatedJoinChecker *checker)
  * Note that the query returned by this function does not contain any filters or
  * projections. The returned query should be used cautiosly and it is mostly
  * designed for generating a stub query.
+ * 
+ * allTargetList will contain all columns for the given rteRelation but for the ones
+ * that are not required, it will have NULL entries.
  */
 Query *
 WrapRteRelationIntoSubquery(RangeTblEntry *rteRelation, List *requiredAttributes,
@@ -300,6 +304,11 @@ WrapRteRelationIntoSubquery(RangeTblEntry *rteRelation, List *requiredAttributes
 
 		if (shouldAssignDummyNullColumn && !assignedDummyNullColumn)
 		{
+			/* 
+			 * in case there is no required column, we assign one dummy NULL target entry
+			 * to the subquery targetList so that it has at least one target. 
+			 * (targetlist should have at least one element)
+			 */
 			subquery->targetList = lappend(subquery->targetList, targetEntry);
 			assignedDummyNullColumn = true;
 		}
@@ -329,11 +338,37 @@ WrapRteRelationIntoSubquery(RangeTblEntry *rteRelation, List *requiredAttributes
 			subquery->targetList = lappend(subquery->targetList, targetEntry);
 		}
 	}
+	MakeVarAttNosSequential(*allTargetList);
 
 	relation_close(relation, NoLock);
 
 	return subquery;
 }
+
+/*
+ * MakeVarAttNosSequential changes the attribute numbers of the given targetList
+ * to sequential numbers, [1, 2, 3] ...
+ */
+static void
+MakeVarAttNosSequential(List *targetList)
+{
+	TargetEntry *entry = NULL;
+	int attrNo = 1;
+	foreach_ptr(entry, targetList)
+	{
+		if (IsA(entry->expr, Var))
+		{
+			Var *var = (Var *) entry->expr;
+
+			/*
+			 * the inner subquery is an intermediate result hence
+			 * the attribute no's should be in ordinal order. [1, 2, 3...]
+			 */
+			var->varattno = attrNo++;
+		}
+	}
+}
+
 
 
 /*

@@ -197,8 +197,7 @@ static bool ModifiesLocalTableWithRemoteCitusLocalTable(List *rangeTableList);
 static void GetRangeTableEntriesFromJoinTree(Node *joinNode, List *rangeTableList,
 											 List **joinRangeTableEntries);
 static Query * CreateOuterSubquery(RangeTblEntry *rangeTableEntry,
-								   List *allTargetList, List *requiredAttrNumbers);
-static void MakeVarAttNosSequential(List *targetList);
+								   List *outerSubqueryTargetList);
 static List * GenerateRequiredColNamesFromTargetList(List *targetList);
 static char * GetRelationNameAndAliasName(RangeTblEntry *rangeTablentry);
 
@@ -371,8 +370,6 @@ RecursivelyPlanSubqueriesAndCTEs(Query *query, RecursivePlanningContext *context
 		 * Logical planner cannot handle "local_table" [OUTER] JOIN "dist_table", or
 		 * a query with local table/citus local table and subquery. We convert local/citus local
 		 * tables to a subquery until they can be planned.
-		 * This is the last call in this function since we want the other calls to be finished
-		 * so that we can check if the current plan is router plannable at any step within this function.
 		 */
 		RecursivelyPlanLocalTableJoins(query, context, rangeTableList);
 	}
@@ -1462,15 +1459,24 @@ ReplaceRTERelationWithRteSubquery(RangeTblEntry *rangeTableEntry,
 								  List *requiredAttrNumbers,
 								  RecursivePlanningContext *context)
 {
-	List *allTargetList = NIL;
+	List *outerQueryTargetList = NIL;
 	Query *subquery = WrapRteRelationIntoSubquery(rangeTableEntry, requiredAttrNumbers,
-												  &allTargetList);
+												  &outerQueryTargetList);
 	List *restrictionList =
 		GetRestrictInfoListForRelation(rangeTableEntry,
 									   context->plannerRestrictionContext);
 	List *copyRestrictionList = copyObject(restrictionList);
 	Expr *andedBoundExpressions = make_ands_explicit(copyRestrictionList);
 	subquery->jointree->quals = (Node *) andedBoundExpressions;
+	/*
+	 * Originally the quals were pointing to the RTE and its varno
+	 * was pointing to its index in rtable. However now we converted the RTE
+	 * to a subquery and the quals should be pointing to that subquery, which 
+	 * is the only RTE in its rtable, hence we update the varnos so that they 
+	 * point to the subquery RTE. 
+	 * Originally: rtable: [rte1, current_rte, rte3...]
+	 * Now: rtable: [rte1, subquery[current_rte], rte3...] --subquery[current_rte] refers to its rtable.
+	 */
 	UpdateVarNosInNode(subquery, SINGLE_RTE_INDEX);
 
 	/* replace the function with the constructed subquery */
@@ -1499,8 +1505,7 @@ ReplaceRTERelationWithRteSubquery(RangeTblEntry *rangeTableEntry,
 							"unexpected state: query should have been recursively planned")));
 	}
 
-	Query *outerSubquery = CreateOuterSubquery(rangeTableEntry, allTargetList,
-											   requiredAttrNumbers);
+	Query *outerSubquery = CreateOuterSubquery(rangeTableEntry, outerQueryTargetList);
 	rangeTableEntry->subquery = outerSubquery;
 }
 
@@ -1534,11 +1539,9 @@ GetRelationNameAndAliasName(RangeTblEntry *rangeTableEntry)
  * the given range table entry in its rtable.
  */
 static Query *
-CreateOuterSubquery(RangeTblEntry *rangeTableEntry, List *allTargetList,
-					List *requiredAttrNumbers)
+CreateOuterSubquery(RangeTblEntry *rangeTableEntry, List *outerSubqueryTargetList)
 {
-	MakeVarAttNosSequential(allTargetList);
-	List *innerSubqueryColNames = GenerateRequiredColNamesFromTargetList(allTargetList);
+	List *innerSubqueryColNames = GenerateRequiredColNamesFromTargetList(outerSubqueryTargetList);
 
 	Query *outerSubquery = makeNode(Query);
 	outerSubquery->commandType = CMD_SELECT;
@@ -1554,33 +1557,8 @@ CreateOuterSubquery(RangeTblEntry *rangeTableEntry, List *allTargetList,
 	newRangeTableRef->rtindex = 1;
 	outerSubquery->jointree = makeFromExpr(list_make1(newRangeTableRef), NULL);
 
-	outerSubquery->targetList = allTargetList;
+	outerSubquery->targetList = outerSubqueryTargetList;
 	return outerSubquery;
-}
-
-
-/*
- * MakeVarAttNosSequential changes the attribute numbers of the given targetList
- * to sequential numbers, [1, 2, 3] ...
- */
-static void
-MakeVarAttNosSequential(List *targetList)
-{
-	TargetEntry *entry = NULL;
-	int attrNo = 1;
-	foreach_ptr(entry, targetList)
-	{
-		if (IsA(entry->expr, Var))
-		{
-			Var *var = (Var *) entry->expr;
-
-			/*
-			 * the inner subquery is an intermediate result hence
-			 * the attribute no's should be in ordinal order. [1, 2, 3...]
-			 */
-			var->varattno = attrNo++;
-		}
-	}
 }
 
 
@@ -1612,7 +1590,7 @@ GenerateRequiredColNamesFromTargetList(List *targetList)
 
 /*
  * UpdateVarNosInNode iterates the Vars in the
- * given node and updates the varno's as the newVarNo.
+ * given node's join tree quals and updates the varno's as the newVarNo.
  */
 static void
 UpdateVarNosInNode(Query *query, Index newVarNo)

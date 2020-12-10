@@ -108,6 +108,32 @@ SELECT count(*) FROM distributed_partitioned_table JOIN local_partitioned_table 
 SELECT count(*) FROM distributed_partitioned_table JOIN local_partitioned_table USING(key) WHERE distributed_partitioned_table.key = 10;
 SELECT count(*) FROM distributed_partitioned_table JOIN local_partitioned_table USING(key) JOIN reference_table USING (key);
 
+-- similar tests in transaction block should work fine
+
+BEGIN;
+-- materialized views should work too
+SELECT count(*) FROM distributed_table JOIN mv1 USING(key);
+SELECT count(*) FROM (SELECT * FROM distributed_table) d1 JOIN mv1 USING(key);
+SELECT count(*) FROM reference_table JOIN mv1 USING(key);
+SELECT count(*) FROM distributed_table JOIN mv1 USING(key) JOIN reference_table USING (key);
+SELECT count(*) FROM distributed_table JOIN mv2 USING(key);
+SELECT count(*) FROM (SELECT * FROM distributed_table) d1 JOIN mv2 USING(key);
+SELECT count(*) FROM reference_table JOIN mv2 USING(key);
+SELECT count(*) FROM distributed_table JOIN mv2 USING(key) JOIN reference_table USING (key);
+
+-- foreign tables should work too
+SELECT count(*) FROM foreign_table JOIN distributed_table USING(key);
+
+-- partitioned tables should work as well
+SELECT count(*) FROM distributed_partitioned_table JOIN postgres_table USING(key);
+SELECT count(*) FROM distributed_partitioned_table JOIN postgres_table USING(key) WHERE distributed_partitioned_table.key = 10;
+SELECT count(*) FROM distributed_partitioned_table JOIN postgres_table USING(key) JOIN reference_table USING (key);
+
+SELECT count(*) FROM distributed_partitioned_table JOIN local_partitioned_table USING(key);
+SELECT count(*) FROM distributed_partitioned_table JOIN local_partitioned_table USING(key) WHERE distributed_partitioned_table.key = 10;
+SELECT count(*) FROM distributed_partitioned_table JOIN local_partitioned_table USING(key) JOIN reference_table USING (key);
+ROLLBACK;
+
 -- the conversions should be independent from the order of table entries in the query
 SELECT COUNT(*) FROM postgres_table join distributed_table_pkey using(key) join local_partitioned_table using(key) join distributed_table using(key) where distributed_table_pkey.key = 5;
 SELECT COUNT(*) FROM postgres_table join local_partitioned_table using(key) join distributed_table_pkey using(key) join distributed_table using(key) where distributed_table_pkey.key = 5;
@@ -118,6 +144,10 @@ SELECT count(*) FROM (SELECT *, random() FROM distributed_table) as d1  JOIN pos
 SELECT count(*) FROM (SELECT *, random() FROM distributed_table_pkey) as d1  JOIN postgres_table ON (postgres_table.key = d1.key AND d1.key < postgres_table.key) WHERE d1.key = 1 AND false;
 SELECT count(*) FROM (SELECT *, random() FROM distributed_partitioned_table) as d1  JOIN postgres_table ON (postgres_table.key = d1.key AND d1.key < postgres_table.key) WHERE d1.key = 1 AND false;
 SELECT count(*) FROM (SELECT *, random() FROM distributed_partitioned_table) as d1  JOIN postgres_table ON (postgres_table.key::int = d1.key::int AND d1.key < postgres_table.key) WHERE d1.key::int = 1 AND false;
+
+-- different column names
+SELECT a FROM postgres_table foo (a,b,c) JOIN distributed_table ON (distributed_table.key = foo.a) ORDER BY 1 LIMIT 1;
+
 
 -- We will plan postgres table as the index is on key,value not just key
 SELECT count(*) FROM distributed_table_composite JOIN postgres_table USING(key) WHERE distributed_table_composite.key = 10;
@@ -136,6 +166,10 @@ SELECT count(*) FROM distributed_table_composite JOIN postgres_table USING(key)
 SELECT count(*) FROM distributed_table_composite JOIN postgres_table USING(key)
 	WHERE (distributed_table_composite.key > 10 AND distributed_table_composite.key = 20)
 	OR (distributed_table_composite.value = 'text' AND distributed_table_composite.value = 'text');
+
+-- Known bug: #4269
+SELECT count(*) FROM distributed_table_composite foo(a,b,c) JOIN postgres_table ON(foo.a > 1)
+	WHERE foo.a IN (SELECT COUNT(*) FROM local_partitioned_table) AND (foo.a = 10 OR foo.b ='text');
 
 -- a unique index on key so dist table should be recursively planned
 SELECT count(*) FROM postgres_table JOIN distributed_table_pkey USING(key);

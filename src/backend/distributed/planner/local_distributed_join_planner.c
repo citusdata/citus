@@ -125,6 +125,7 @@
 #include "utils/guc.h"
 #include "utils/lsyscache.h"
 
+#define INVALID_RTE_IDENTITY -1
 
 /*
  * Managed via a GUC
@@ -158,8 +159,8 @@ static List * RequiredAttrNumbersForRelation(RangeTblEntry *relationRte,
 static ConversionCandidates * CreateConversionCandidates(PlannerRestrictionContext *
 														 plannerRestrictionContext,
 														 List *rangeTableList,
-														 Oid resultRelationId);
-static void GetAllUniqueIndexes(Form_pg_index indexForm, List **uniqueIndexes);
+														 int resultRTEIdentity);
+static void AppendUniqueIndexColumnsToList(Form_pg_index indexForm, List **uniqueIndexes);
 static RangeTableEntryDetails * GetNextRTEToConvertToSubquery(ConversionCandidates *
 															  conversionCandidates,
 															  PlannerRestrictionContext *
@@ -167,7 +168,7 @@ static RangeTableEntryDetails * GetNextRTEToConvertToSubquery(ConversionCandidat
 static void RemoveFromConversionCandidates(ConversionCandidates *conversionCandidates,
 										   int rteIdentity);
 static bool AllRangeTableEntriesHaveUniqueIndex(List *rangeTableEntryDetailsList);
-static bool FirstIntListContainsSecondIntList(List *firstIntList, List *secondIntList);
+static bool FirstIsSuperSetOfSecond(List *firstIntList, List *secondIntList);
 
 /*
  * RecursivelyPlanLocalTableJoins gets a query and the planner
@@ -181,14 +182,15 @@ RecursivelyPlanLocalTableJoins(Query *query,
 	PlannerRestrictionContext *plannerRestrictionContext =
 		GetPlannerRestrictionContext(context);
 
-	Oid resultRelationId = InvalidOid;
+	int resultRTEIdentity = INVALID_RTE_IDENTITY;
 	if (IsModifyCommand(query))
 	{
-		resultRelationId = ModifyQueryResultRelationId(query);
+		RangeTblEntry *resultRTE = ExtractResultRelationRTE(query);
+		resultRTEIdentity = GetRTEIdentity(resultRTE);
 	}
 	ConversionCandidates *conversionCandidates =
 		CreateConversionCandidates(plannerRestrictionContext,
-								   rangeTableList, resultRelationId);
+								   rangeTableList, resultRTEIdentity);
 
 	while (ShouldConvertLocalTableJoinsToSubqueries(query, rangeTableList,
 													plannerRestrictionContext))
@@ -362,12 +364,12 @@ HasConstantFilterOnUniqueColumn(RangeTblEntry *rangeTableEntry,
 		FetchEqualityAttrNumsForRTE((Node *) restrictClauseList);
 
 	List *uniqueIndexColumnsList = ExecuteFunctionOnEachTableIndex(rangeTableEntry->relid,
-																   GetAllUniqueIndexes);
+																   AppendUniqueIndexColumnsToList);
 	IndexColumns *indexColumns = NULL;
 	foreach_ptr(indexColumns, uniqueIndexColumnsList)
 	{
 		List *uniqueIndexColumnNos = indexColumns->indexColumnNos;
-		if (FirstIntListContainsSecondIntList(rteEqualityColumnsNos,
+		if (FirstIsSuperSetOfSecond(rteEqualityColumnsNos,
 											  uniqueIndexColumnNos))
 		{
 			return true;
@@ -378,11 +380,11 @@ HasConstantFilterOnUniqueColumn(RangeTblEntry *rangeTableEntry,
 
 
 /*
- * FirstIntListContainsSecondIntList returns true if the first int List
+ * FirstIsSuperSetOfSecond returns true if the first int List
  * contains every element of the second int List.
  */
 static bool
-FirstIntListContainsSecondIntList(List *firstIntList, List *secondIntList)
+FirstIsSuperSetOfSecond(List *firstIntList, List *secondIntList)
 {
 	int curInt = 0;
 	foreach_int(curInt, secondIntList)
@@ -397,13 +399,11 @@ FirstIntListContainsSecondIntList(List *firstIntList, List *secondIntList)
 
 
 /*
- * GetAllUniqueIndexes adds the given index's column numbers if it is a
+ * AppendUniqueIndexColumnsToList adds the given index's column numbers if it is a
  * unique index.
- * TODO:: if there is a unique index on a multiple column, then we should
- * probably return true only if all the columns in the index exist in the filter.
  */
 static void
-GetAllUniqueIndexes(Form_pg_index indexForm, List **uniqueIndexGroups)
+AppendUniqueIndexColumnsToList(Form_pg_index indexForm, List **uniqueIndexGroups)
 {
 	if (indexForm->indisunique || indexForm->indisprimary)
 	{
@@ -471,22 +471,25 @@ RequiredAttrNumbersForRelation(RangeTblEntry *rangeTableEntry,
  */
 static ConversionCandidates *
 CreateConversionCandidates(PlannerRestrictionContext *plannerRestrictionContext,
-						   List *rangeTableList, Oid resultRelationId)
+						   List *rangeTableList, int resultRTEIdentity)
 {
 	ConversionCandidates *conversionCandidates =
 		palloc0(sizeof(ConversionCandidates));
 
+
 	RangeTblEntry *rangeTableEntry = NULL;
 	foreach_ptr(rangeTableEntry, rangeTableList)
 	{
+
 		/* we're only interested in tables */
 		if (!IsRecursivelyPlannableRelation(rangeTableEntry))
 		{
 			continue;
 		}
 
+		int rteIdentity = GetRTEIdentity(rangeTableEntry);
 		/* result relation cannot converted to a subquery */
-		if (resultRelationId == rangeTableEntry->relid)
+		if (resultRTEIdentity == rteIdentity)
 		{
 			continue;
 		}
@@ -497,7 +500,7 @@ CreateConversionCandidates(PlannerRestrictionContext *plannerRestrictionContext,
 		{
 			continue;
 		}
-		int rteIdentity = GetRTEIdentity(rangeTableEntry);
+		
 
 		RangeTableEntryDetails *rangeTableEntryDetails =
 			palloc0(sizeof(RangeTableEntryDetails));

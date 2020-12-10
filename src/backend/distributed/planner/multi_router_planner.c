@@ -520,18 +520,7 @@ ModifyPartialQuerySupported(Query *queryTree, bool multiShardQuery,
 	{
 		return deferredError;
 	}
-	uint32 rangeTableId = 1;
 	CmdType commandType = queryTree->commandType;
-
-	Oid resultRelationId = ModifyQueryResultRelationId(queryTree);
-	*distributedTableIdOutput = resultRelationId;
-
-	Var *partitionColumn = NULL;
-
-	if (IsCitusTable(resultRelationId))
-	{
-		partitionColumn = PartitionColumn(resultRelationId, rangeTableId);
-	}
 
 	deferredError = DeferErrorIfModifyView(queryTree);
 	if (deferredError != NULL)
@@ -624,9 +613,13 @@ ModifyPartialQuerySupported(Query *queryTree, bool multiShardQuery,
 		}
 	}
 
-	resultRelationId = ModifyQueryResultRelationId(queryTree);
-	rangeTableId = 1;
 
+
+	Oid resultRelationId = ModifyQueryResultRelationId(queryTree);
+	*distributedTableIdOutput = resultRelationId;
+	uint32 rangeTableId = 1;
+
+	Var *partitionColumn = NULL;
 	if (IsCitusTable(resultRelationId))
 	{
 		partitionColumn = PartitionColumn(resultRelationId, rangeTableId);
@@ -2265,6 +2258,10 @@ PlanRouterQuery(Query *originalQuery,
 }
 
 
+/*
+ * ContainsOnlyLocalTables returns true if there is only
+ * local tables and not any distributed or reference table.
+ */
 static bool
 ContainsOnlyLocalTables(RTEListProperties *rteProperties)
 {

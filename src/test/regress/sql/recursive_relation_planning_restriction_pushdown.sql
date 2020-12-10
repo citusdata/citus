@@ -21,6 +21,12 @@ CREATE TABLE local_table (key int, value int, time timestamptz);
 CREATE TABLE distributed_table (key int, value int, metadata jsonb);
 SELECT create_distributed_table('distributed_table', 'key');
 
+CREATE TYPE new_type AS (n int, m text);
+CREATE TABLE local_table_type (key int, value new_type, value_2 jsonb);
+
+CREATE TABLE distributed_table_type (key int, value new_type, value_2 jsonb);
+SELECT create_distributed_table('distributed_table_type', 'key');
+
 -- Setting the debug level so that filters can be observed
 SET client_min_messages TO DEBUG1;
 
@@ -34,6 +40,24 @@ SELECT count(*)
 FROM distributed_table u1
 JOIN distributed_table u2 USING(key)
 JOIN local_table USING (key);
+
+-- composite types can be pushed down
+SELECT count(*)
+FROM distributed_table d1
+JOIN local_table_type d2 using(key)
+WHERE d2.value =  (83, 'citus8.3')::new_type;
+
+-- composite types can be pushed down
+SELECT count(*)
+FROM distributed_table d1
+JOIN local_table_type d2 using(key)
+WHERE d2.value =  (83, 'citus8.3')::new_type
+AND d2.key = 10;
+
+-- join on a composite type works
+SELECT count(*)
+FROM distributed_table_type d1
+JOIN local_table_type d2 USING(value);
 
 -- scalar array expressions can be pushed down
 SELECT count(*)

@@ -21,6 +21,15 @@ SELECT create_distributed_table('distributed_table', 'key');
 
 (1 row)
 
+CREATE TYPE new_type AS (n int, m text);
+CREATE TABLE local_table_type (key int, value new_type, value_2 jsonb);
+CREATE TABLE distributed_table_type (key int, value new_type, value_2 jsonb);
+SELECT create_distributed_table('distributed_table_type', 'key');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
 -- Setting the debug level so that filters can be observed
 SET client_min_messages TO DEBUG1;
 -- for the purposes of these tests, we always want to recursively
@@ -34,6 +43,45 @@ JOIN local_table USING (key);
 DEBUG:  Wrapping relation "local_table" to a subquery
 DEBUG:  generating subplan XXX_1 for subquery SELECT key FROM push_down_filters.local_table WHERE true
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((push_down_filters.distributed_table u1 JOIN push_down_filters.distributed_table u2 USING (key)) JOIN (SELECT local_table_1.key, NULL::integer AS value, NULL::timestamp with time zone AS "time" FROM (SELECT intermediate_result.key FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) local_table_1) local_table USING (key))
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+-- composite types can be pushed down
+SELECT count(*)
+FROM distributed_table d1
+JOIN local_table_type d2 using(key)
+WHERE d2.value =  (83, 'citus8.3')::new_type;
+DEBUG:  Wrapping relation "local_table_type" "d2" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT key, value FROM push_down_filters.local_table_type d2 WHERE (value OPERATOR(pg_catalog.=) '(83,citus8.3)'::push_down_filters.new_type)
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (push_down_filters.distributed_table d1 JOIN (SELECT d2_1.key, d2_1.value, NULL::jsonb AS value_2 FROM (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'text'::citus_copy_format) intermediate_result(key integer, value push_down_filters.new_type)) d2_1) d2 USING (key)) WHERE (d2.value OPERATOR(pg_catalog.=) ROW(83, 'citus8.3'::text)::push_down_filters.new_type)
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+-- composite types can be pushed down
+SELECT count(*)
+FROM distributed_table d1
+JOIN local_table_type d2 using(key)
+WHERE d2.value =  (83, 'citus8.3')::new_type
+AND d2.key = 10;
+DEBUG:  Wrapping relation "local_table_type" "d2" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT key, value FROM push_down_filters.local_table_type d2 WHERE ((key OPERATOR(pg_catalog.=) 10) AND (value OPERATOR(pg_catalog.=) '(83,citus8.3)'::push_down_filters.new_type))
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (push_down_filters.distributed_table d1 JOIN (SELECT d2_1.key, d2_1.value, NULL::jsonb AS value_2 FROM (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'text'::citus_copy_format) intermediate_result(key integer, value push_down_filters.new_type)) d2_1) d2 USING (key)) WHERE ((d2.value OPERATOR(pg_catalog.=) ROW(83, 'citus8.3'::text)::push_down_filters.new_type) AND (d2.key OPERATOR(pg_catalog.=) 10))
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+-- join on a composite type works
+SELECT count(*)
+FROM distributed_table_type d1
+JOIN local_table_type d2 USING(value);
+DEBUG:  Wrapping relation "local_table_type" "d2" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT value FROM push_down_filters.local_table_type d2 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (push_down_filters.distributed_table_type d1 JOIN (SELECT NULL::integer AS key, d2_1.value, NULL::jsonb AS value_2 FROM (SELECT intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'text'::citus_copy_format) intermediate_result(value push_down_filters.new_type)) d2_1) d2 USING (value))
  count
 ---------------------------------------------------------------------
      0
@@ -425,4 +473,4 @@ ERROR:  complex joins are only supported when all distributed tables are co-loca
 \set VERBOSITY terse
 RESET client_min_messages;
 DROP SCHEMA push_down_filters CASCADE;
-NOTICE:  drop cascades to 2 other objects
+NOTICE:  drop cascades to 5 other objects
