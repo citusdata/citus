@@ -1,3 +1,5 @@
+SET columnar.compression TO 'none';
+
 SELECT count(distinct storageid) AS columnar_table_count FROM columnar.columnar_stripes \gset
 
 CREATE TABLE t(a int, b int) USING columnar;
