@@ -424,6 +424,21 @@ FROM
 	  ) as foo
 ORDER BY time DESC LIMIT 5;
 
+CREATE TABLE reference_table (text_col text, int_col int);
+SELECT create_reference_table('reference_table');
+
+EXPLAIN (COSTS OFF) WITH cte AS (
+  SELECT application_name AS text_col
+  FROM pg_stat_activity
+) SELECT * FROM reference_table JOIN cte USING (text_col);
+
+CREATE OR REPLACE VIEW view_on_views AS SELECT pg_stat_activity.application_name, pg_locks.pid FROM pg_stat_activity, pg_locks;
+
+EXPLAIN (COSTS OFF) WITH cte AS (
+  SELECT application_name AS text_col
+  FROM view_on_views
+) SELECT * FROM reference_table JOIN cte USING (text_col);
+
 SET client_min_messages TO DEFAULT;
 
 DROP SCHEMA subquery_view CASCADE;
