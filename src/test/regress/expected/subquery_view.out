@@ -3,6 +3,7 @@
 -- ===================================================================
 CREATE SCHEMA subquery_view;
 SET search_path TO subquery_view, public;
+SET citus.next_shard_id TO 1512000;
 CREATE TABLE users_table_local AS SELECT * FROM users_table;
 CREATE TABLE events_table_local AS SELECT * FROM events_table;
 SET client_min_messages TO DEBUG1;
@@ -605,7 +606,7 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT reference_tab
                      ->  Function Scan on read_intermediate_result intermediate_result
                ->  Sort
                      Sort Key: reference_table.text_col
-                     ->  Seq Scan on reference_table_360132 reference_table
+                     ->  Seq Scan on reference_table_1512000 reference_table
 (30 rows)
 
 CREATE OR REPLACE VIEW view_on_views AS SELECT pg_stat_activity.application_name, pg_locks.pid FROM pg_stat_activity, pg_locks;
@@ -633,7 +634,7 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT reference_tab
                      ->  Function Scan on read_intermediate_result intermediate_result
                ->  Sort
                      Sort Key: reference_table.text_col
-                     ->  Seq Scan on reference_table_360132 reference_table
+                     ->  Seq Scan on reference_table_1512000 reference_table
 (17 rows)
 
 SET client_min_messages TO DEFAULT;

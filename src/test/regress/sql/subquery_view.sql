@@ -5,6 +5,7 @@
 CREATE SCHEMA subquery_view;
 SET search_path TO subquery_view, public;
 
+SET citus.next_shard_id TO 1512000;
 
 CREATE TABLE users_table_local AS SELECT * FROM users_table;
 CREATE TABLE events_table_local AS SELECT * FROM events_table;
