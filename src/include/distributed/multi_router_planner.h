@@ -88,8 +88,6 @@ extern void GenerateSingleShardRouterTaskList(Job *job,
 											  List *placementList,
 											  uint64 shardId,
 											  bool isLocalTableModification);
-extern bool IsRouterPlannable(Query *query,
-							  PlannerRestrictionContext *plannerRestrictionContext);
 
 /*
  * FastPathPlanner is a subset of router planner, that's why we prefer to

@@ -292,41 +292,6 @@ CreateSingleTaskRouterSelectPlan(DistributedPlan *distributedPlan, Query *origin
 
 
 /*
- * IsRouterPlannable returns true if the given query can be planned by
- * router planner.
- */
-bool
-IsRouterPlannable(Query *query, PlannerRestrictionContext *plannerRestrictionContext)
-{
-	/* copy the query as the following methods can change the underlying query */
-	Query *copyQuery = copyObject(query);
-	DeferredErrorMessage *deferredErrorMessage = NULL;
-	if (copyQuery->commandType == CMD_SELECT)
-	{
-		deferredErrorMessage = DeferErrorIfUnsupportedRouterPlannableSelectQuery(
-			copyQuery);
-	}
-	if (deferredErrorMessage)
-	{
-		return false;
-	}
-
-	if (IsModifyCommand(query))
-	{
-		deferredErrorMessage = ModifyQuerySupported(copyQuery, copyQuery, false,
-													plannerRestrictionContext);
-		if (deferredErrorMessage)
-		{
-			return false;
-		}
-	}
-
-	RouterJob(copyQuery, plannerRestrictionContext, &deferredErrorMessage);
-	return deferredErrorMessage == NULL;
-}
-
-
-/*
  * ShardIntervalOpExpressions returns a list of OpExprs with exactly two
  * items in it. The list consists of shard interval ranges with partition columns
  * such as (partitionColumn >= shardMinValue) and (partitionColumn <= shardMaxValue).

@@ -335,15 +335,6 @@ ShouldConvertLocalTableJoinsToSubqueries(Query *query, List *rangeTableList,
 	{
 		return false;
 	}
-
-	plannerRestrictionContext = FilterPlannerRestrictionForQuery(
-		plannerRestrictionContext, query);
-	if (IsRouterPlannable(query, plannerRestrictionContext))
-	{
-		ereport(DEBUG1, (errmsg("local-distributed table joins will not be converted, "
-								"as the query is router plannable")));
-		return false;
-	}
 	return true;
 }
 
