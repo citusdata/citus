@@ -81,6 +81,12 @@ typedef struct CStoreScanDescData
 	MemoryContext scanContext;
 	Bitmapset *attr_needed;
 	List *scanQual;
+
+	/*
+	 * ANALYZE requires an item pointer for sorting. We keep track of row
+	 * number so we can construct an item pointer based on that.
+	 */
+	int rowNumber;
 } CStoreScanDescData;
 
 typedef struct CStoreScanDescData *CStoreScanDesc;
@@ -114,7 +120,10 @@ static bool ConditionalLockRelationWithTimeout(Relation rel, LOCKMODE lockMode,
 											   int timeout, int retryInterval);
 static void LogRelationStats(Relation rel, int elevel);
 static void TruncateCStore(Relation rel, int elevel);
+static HeapTuple ColumnarSlotCopyHeapTuple(TupleTableSlot *slot);
 
+/* Custom tuple slot ops used for columnar. Initialized in cstore_tableam_init(). */
+TupleTableSlotOps TTSOpsColumnar;
 
 static List *
 RelationColumnList(Relation rel)
@@ -148,7 +157,7 @@ RelationColumnList(Relation rel)
 static const TupleTableSlotOps *
 cstore_slot_callbacks(Relation relation)
 {
-	return &TTSOpsVirtual;
+	return &TTSOpsColumnar;
 }
 
 
@@ -313,6 +322,20 @@ cstore_getnextslot(TableScanDesc sscan, ScanDirection direction, TupleTableSlot 
 	}
 
 	ExecStoreVirtualTuple(slot);
+
+	/*
+	 * Set slot's item pointer block & offset to non-zero. These are
+	 * used just for sorting in acquire_sample_rows(), so rowNumber
+	 * is good enough. See ColumnarSlotCopyHeapTuple for more info.
+	 *
+	 * offset is 16-bits, so use the first 15 bits for offset and
+	 * rest as block number.
+	 */
+	ItemPointerSetBlockNumber(&(slot->tts_tid), scan->rowNumber / (32 * 1024) + 1);
+	ItemPointerSetOffsetNumber(&(slot->tts_tid), scan->rowNumber % (32 * 1024) + 1);
+
+	scan->rowNumber++;
+
 	return true;
 }
 
@@ -1172,6 +1195,9 @@ cstore_tableam_init()
 	object_access_hook = CStoreTableAMObjectAccessHook;
 
 	cstore_customscan_init();
+
+	TTSOpsColumnar = TTSOpsVirtual;
+	TTSOpsColumnar.copy_heap_tuple = ColumnarSlotCopyHeapTuple;
 }
 
 
@@ -1179,6 +1205,31 @@ void
 cstore_tableam_finish()
 {
 	object_access_hook = PrevObjectAccessHook;
+}
+
+
+/*
+ * Implementation of TupleTableSlotOps.copy_heap_tuple for TTSOpsColumnar.
+ */
+static HeapTuple
+ColumnarSlotCopyHeapTuple(TupleTableSlot *slot)
+{
+	Assert(!TTS_EMPTY(slot));
+
+	HeapTuple tuple = heap_form_tuple(slot->tts_tupleDescriptor,
+									  slot->tts_values,
+									  slot->tts_isnull);
+
+	/*
+	 * We need to set item pointer, since implementation of ANALYZE
+	 * requires it. See the qsort in acquire_sample_rows() and
+	 * also compare_rows in backend/commands/analyze.c.
+	 *
+	 * slot->tts_tid is filled in cstore_getnextslot.
+	 */
+	tuple->t_self = slot->tts_tid;
+
+	return tuple;
 }
 
 
