@@ -170,7 +170,6 @@ static bool ShouldRecursivelyPlanSubquery(Query *subquery,
 static bool AllDistributionKeysInSubqueryAreEqual(Query *subquery,
 												  PlannerRestrictionContext *
 												  restrictionContext);
-static bool IsTableLocallyAccessible(Oid relationId);
 static bool ShouldRecursivelyPlanSetOperation(Query *query,
 											  RecursivePlanningContext *context);
 static bool RecursivelyPlanSubquery(Query *subquery,
@@ -193,7 +192,6 @@ static Query * BuildReadIntermediateResultsQuery(List *targetEntryList,
 												 Const *resultIdConst, Oid functionOid,
 												 bool useBinaryCopyFormat);
 static void UpdateVarNosInNode(Query *query, Index newVarNo);
-static bool ModifiesLocalTableWithRemoteCitusLocalTable(List *rangeTableList);
 static void GetRangeTableEntriesFromJoinTree(Node *joinNode, List *rangeTableList,
 											 List **joinRangeTableEntries);
 static Query * CreateOuterSubquery(RangeTblEntry *rangeTableEntry,
@@ -1468,12 +1466,13 @@ ReplaceRTERelationWithRteSubquery(RangeTblEntry *rangeTableEntry,
 	List *copyRestrictionList = copyObject(restrictionList);
 	Expr *andedBoundExpressions = make_ands_explicit(copyRestrictionList);
 	subquery->jointree->quals = (Node *) andedBoundExpressions;
+
 	/*
 	 * Originally the quals were pointing to the RTE and its varno
 	 * was pointing to its index in rtable. However now we converted the RTE
-	 * to a subquery and the quals should be pointing to that subquery, which 
-	 * is the only RTE in its rtable, hence we update the varnos so that they 
-	 * point to the subquery RTE. 
+	 * to a subquery and the quals should be pointing to that subquery, which
+	 * is the only RTE in its rtable, hence we update the varnos so that they
+	 * point to the subquery RTE.
 	 * Originally: rtable: [rte1, current_rte, rte3...]
 	 * Now: rtable: [rte1, subquery[current_rte], rte3...] --subquery[current_rte] refers to its rtable.
 	 */
@@ -1541,7 +1540,8 @@ GetRelationNameAndAliasName(RangeTblEntry *rangeTableEntry)
 static Query *
 CreateOuterSubquery(RangeTblEntry *rangeTableEntry, List *outerSubqueryTargetList)
 {
-	List *innerSubqueryColNames = GenerateRequiredColNamesFromTargetList(outerSubqueryTargetList);
+	List *innerSubqueryColNames = GenerateRequiredColNamesFromTargetList(
+		outerSubqueryTargetList);
 
 	Query *outerSubquery = makeNode(Query);
 	outerSubquery->commandType = CMD_SELECT;
@@ -1616,76 +1616,7 @@ ContainsTableToBeConvertedToSubquery(List *rangeTableList)
 	{
 		return true;
 	}
-	if (ModifiesLocalTableWithRemoteCitusLocalTable(rangeTableList))
-	{
-		return true;
-	}
-	return false;
-}
 
-
-/*
- * ModifiesLocalTableWithRemoteCitusLocalTable returns true if a local
- * table is modified with a remote citus local table. This could be a case with
- * MX structure.
- */
-static bool
-ModifiesLocalTableWithRemoteCitusLocalTable(List *rangeTableList)
-{
-	bool containsLocalResultRelation = false;
-	bool containsRemoteCitusLocalTable = false;
-
-	RangeTblEntry *rangeTableEntry = NULL;
-	foreach_ptr(rangeTableEntry, rangeTableList)
-	{
-		if (!IsRecursivelyPlannableRelation(rangeTableEntry))
-		{
-			continue;
-		}
-		if (IsCitusTableType(rangeTableEntry->relid, CITUS_LOCAL_TABLE))
-		{
-			if (!IsTableLocallyAccessible(rangeTableEntry->relid))
-			{
-				containsRemoteCitusLocalTable = true;
-			}
-		}
-		else if (!IsCitusTable(rangeTableEntry->relid))
-		{
-			containsLocalResultRelation = true;
-		}
-	}
-	return containsLocalResultRelation && containsRemoteCitusLocalTable;
-}
-
-
-/*
- * IsTableLocallyAccessible returns true if the given table
- * can be accessed in local.
- */
-static bool
-IsTableLocallyAccessible(Oid relationId)
-{
-	if (!IsCitusTable(relationId))
-	{
-		/* local tables are locally accessible */
-		return true;
-	}
-
-	List *shardIntervalList = LoadShardIntervalList(relationId);
-	if (list_length(shardIntervalList) != 1)
-	{
-		return false;
-	}
-
-	ShardInterval *shardInterval = linitial(shardIntervalList);
-	uint64 shardId = shardInterval->shardId;
-	ShardPlacement *localShardPlacement =
-		ShardPlacementOnGroup(shardId, GetLocalGroupId());
-	if (localShardPlacement != NULL)
-	{
-		/* the table has a placement on this node */
-		return true;
-	}
 	return false;
 }
 
@@ -1862,7 +1793,6 @@ TransformFunctionRTE(RangeTblEntry *rangeTblEntry)
 			subquery->targetList = lappend(subquery->targetList, targetEntry);
 		}
 	}
-
 	/*
 	 * If tupleDesc is NULL we have 2 different cases:
 	 *
@@ -1912,7 +1842,6 @@ TransformFunctionRTE(RangeTblEntry *rangeTblEntry)
 				columnType = list_nth_oid(rangeTblFunction->funccoltypes,
 										  targetColumnIndex);
 			}
-
 			/* use the types in the function definition otherwise */
 			else
 			{

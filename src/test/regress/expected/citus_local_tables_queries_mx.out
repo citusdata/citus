@@ -148,11 +148,7 @@ SELECT count(*) FROM
 (
 	SELECT * FROM (SELECT count(*) FROM citus_local_table, postgres_local_table) as subquery_inner
 ) as subquery_top;
- count
----------------------------------------------------------------------
-     1
-(1 row)
-
+ERROR:  direct joins between distributed and local tables are not supported
 -- should fail as we don't support direct joins between distributed/local tables
 SELECT count(*) FROM
 (
@@ -486,11 +482,7 @@ ERROR:  could not run distributed query with FOR UPDATE/SHARE commands
 SELECT count(citus_local_table.b), count(postgres_local_table.a)
 FROM citus_local_table, postgres_local_table
 WHERE citus_local_table.a = postgres_local_table.b;
- count | count
----------------------------------------------------------------------
-     6 |     6
-(1 row)
-
+ERROR:  direct joins between distributed and local tables are not supported
 -- select for update is just OK
 SELECT * FROM citus_local_table ORDER BY 1,2 FOR UPDATE;
  a | b
@@ -599,17 +591,21 @@ SELECT clear_and_init_test_tables();
 DELETE FROM citus_local_table
 USING postgres_local_table
 WHERE citus_local_table.b = postgres_local_table.b;
+ERROR:  Modifying local tables with citus local tables is supported only from the coordinator.
 UPDATE citus_local_table
 SET b = 5
 FROM postgres_local_table
 WHERE citus_local_table.a = 3 AND citus_local_table.b = postgres_local_table.b;
+ERROR:  Modifying local tables with citus local tables is supported only from the coordinator.
 DELETE FROM postgres_local_table
 USING citus_local_table
 WHERE citus_local_table.b = postgres_local_table.b;
+ERROR:  Modifying local tables with citus local tables is supported only from the coordinator.
 UPDATE postgres_local_table
 SET b = 5
 FROM citus_local_table
 WHERE citus_local_table.a = 3 AND citus_local_table.b = postgres_local_table.b;
+ERROR:  Modifying local tables with citus local tables is supported only from the coordinator.
 -- no direct joins supported
 UPDATE distributed_table
 SET b = 6
@@ -682,7 +678,7 @@ SELECT count(*) FROM distributed_table WHERE b in
 (SELECT count FROM mat_view_4);
  count
 ---------------------------------------------------------------------
-     1
+     0
 (1 row)
 
 CREATE VIEW view_2 AS
@@ -713,7 +709,7 @@ SELECT count(*) FROM view_3;
 SELECT count(*) FROM view_3, distributed_table;
  count
 ---------------------------------------------------------------------
-     6
+     0
 (1 row)
 
 ---------------------------------------------------------------------

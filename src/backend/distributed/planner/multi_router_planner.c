@@ -177,6 +177,10 @@ static void ReorderTaskPlacementsByTaskAssignmentPolicy(Job *job,
 														TaskAssignmentPolicyType
 														taskAssignmentPolicy,
 														List *placementList);
+static bool ModifiesLocalTableWithRemoteCitusLocalTable(List *rangeTableList);
+static DeferredErrorMessage * DeferErrorIfUnsupportedLocalTableJoin(List *rangeTableList);
+static bool IsTableLocallyAccessible(Oid relationId);
+
 
 /*
  * CreateRouterPlan attempts to create a router executor plan for the given
@@ -522,7 +526,7 @@ ModifyPartialQuerySupported(Query *queryTree, bool multiShardQuery,
 	}
 	CmdType commandType = queryTree->commandType;
 
-	deferredError = DeferErrorIfModifyView(queryTree);
+	deferredError = DeferErrorIfUnsupportedLocalTableJoin(queryTree->rtable);
 	if (deferredError != NULL)
 	{
 		return deferredError;
@@ -612,7 +616,6 @@ ModifyPartialQuerySupported(Query *queryTree, bool multiShardQuery,
 			}
 		}
 	}
-
 
 
 	Oid resultRelationId = ModifyQueryResultRelationId(queryTree);
@@ -755,6 +758,91 @@ ModifyPartialQuerySupported(Query *queryTree, bool multiShardQuery,
 	*distributedTableIdOutput = resultRelationId;
 
 	return NULL;
+}
+
+
+/*
+ * DeferErrorIfUnsupportedLocalTableJoin returns an error message
+ * if there is an unsupported join in the given range table list.
+ */
+static DeferredErrorMessage *
+DeferErrorIfUnsupportedLocalTableJoin(List *rangeTableList)
+{
+	if (ModifiesLocalTableWithRemoteCitusLocalTable(rangeTableList))
+	{
+		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+							 "Modifying local tables with citus local tables is "
+							 "supported only from the coordinator.",
+							 NULL,
+							 "Consider wrapping citus local table to a CTE, or subquery");
+	}
+	return NULL;
+}
+
+
+/*
+ * ModifiesLocalTableWithRemoteCitusLocalTable returns true if a local
+ * table is modified with a remote citus local table. This could be a case with
+ * MX structure.
+ */
+static bool
+ModifiesLocalTableWithRemoteCitusLocalTable(List *rangeTableList)
+{
+	bool containsLocalResultRelation = false;
+	bool containsRemoteCitusLocalTable = false;
+
+	RangeTblEntry *rangeTableEntry = NULL;
+	foreach_ptr(rangeTableEntry, rangeTableList)
+	{
+		if (!IsRecursivelyPlannableRelation(rangeTableEntry))
+		{
+			continue;
+		}
+		if (IsCitusTableType(rangeTableEntry->relid, CITUS_LOCAL_TABLE))
+		{
+			if (!IsTableLocallyAccessible(rangeTableEntry->relid))
+			{
+				containsRemoteCitusLocalTable = true;
+			}
+		}
+		else if (!IsCitusTable(rangeTableEntry->relid))
+		{
+			containsLocalResultRelation = true;
+		}
+	}
+	return containsLocalResultRelation && containsRemoteCitusLocalTable;
+}
+
+
+/*
+ * IsTableLocallyAccessible returns true if the given table
+ * can be accessed in local.
+ */
+static bool
+IsTableLocallyAccessible(Oid relationId)
+{
+	if (!IsCitusTable(relationId))
+	{
+		/* local tables are locally accessible */
+		return true;
+	}
+
+	List *shardIntervalList = LoadShardIntervalList(relationId);
+	if (list_length(shardIntervalList) != 1)
+	{
+		return false;
+	}
+
+	ShardInterval *shardInterval = linitial(shardIntervalList);
+	uint64 shardId = shardInterval->shardId;
+	ShardPlacement *localShardPlacement =
+		ShardPlacementOnGroup(shardId, GetLocalGroupId());
+	if (localShardPlacement != NULL)
+	{
+		/* the table has a placement on this node */
+		return true;
+	}
+	return false;
 }
 
 

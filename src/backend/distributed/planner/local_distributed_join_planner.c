@@ -370,7 +370,7 @@ HasConstantFilterOnUniqueColumn(RangeTblEntry *rangeTableEntry,
 	{
 		List *uniqueIndexColumnNos = indexColumns->indexColumnNos;
 		if (FirstIsSuperSetOfSecond(rteEqualityColumnsNos,
-											  uniqueIndexColumnNos))
+									uniqueIndexColumnNos))
 		{
 			return true;
 		}
@@ -480,7 +480,6 @@ CreateConversionCandidates(PlannerRestrictionContext *plannerRestrictionContext,
 	RangeTblEntry *rangeTableEntry = NULL;
 	foreach_ptr(rangeTableEntry, rangeTableList)
 	{
-
 		/* we're only interested in tables */
 		if (!IsRecursivelyPlannableRelation(rangeTableEntry))
 		{
@@ -488,6 +487,7 @@ CreateConversionCandidates(PlannerRestrictionContext *plannerRestrictionContext,
 		}
 
 		int rteIdentity = GetRTEIdentity(rangeTableEntry);
+
 		/* result relation cannot converted to a subquery */
 		if (resultRTEIdentity == rteIdentity)
 		{
@@ -500,7 +500,7 @@ CreateConversionCandidates(PlannerRestrictionContext *plannerRestrictionContext,
 		{
 			continue;
 		}
-		
+
 
 		RangeTableEntryDetails *rangeTableEntryDetails =
 			palloc0(sizeof(RangeTableEntryDetails));

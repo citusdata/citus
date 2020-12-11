@@ -262,7 +262,7 @@ SubqueryColocated(Query *subquery, ColocatedJoinChecker *checker)
  * Note that the query returned by this function does not contain any filters or
  * projections. The returned query should be used cautiosly and it is mostly
  * designed for generating a stub query.
- * 
+ *
  * allTargetList will contain all columns for the given rteRelation but for the ones
  * that are not required, it will have NULL entries.
  */
@@ -304,9 +304,9 @@ WrapRteRelationIntoSubquery(RangeTblEntry *rteRelation, List *requiredAttributes
 
 		if (shouldAssignDummyNullColumn && !assignedDummyNullColumn)
 		{
-			/* 
+			/*
 			 * in case there is no required column, we assign one dummy NULL target entry
-			 * to the subquery targetList so that it has at least one target. 
+			 * to the subquery targetList so that it has at least one target.
 			 * (targetlist should have at least one element)
 			 */
 			subquery->targetList = lappend(subquery->targetList, targetEntry);
@@ -345,6 +345,7 @@ WrapRteRelationIntoSubquery(RangeTblEntry *rteRelation, List *requiredAttributes
 	return subquery;
 }
 
+
 /*
  * MakeVarAttNosSequential changes the attribute numbers of the given targetList
  * to sequential numbers, [1, 2, 3] ...
@@ -368,7 +369,6 @@ MakeVarAttNosSequential(List *targetList)
 		}
 	}
 }
-
 
 
 /*
