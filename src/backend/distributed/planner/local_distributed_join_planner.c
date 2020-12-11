@@ -135,7 +135,6 @@ int LocalTableJoinPolicy = LOCAL_JOIN_POLICY_AUTO;
 typedef struct RangeTableEntryDetails
 {
 	RangeTblEntry *rangeTableEntry;
-	int rteIdentity;
 	List *requiredAttributeNumbers;
 	bool hasConstantFilterOnUniqueColumn;
 } RangeTableEntryDetails;
@@ -151,6 +150,12 @@ typedef struct IndexColumns
 	List *indexColumnNos;
 }IndexColumns;
 
+typedef enum ConversionChoice
+{
+	CONVERT_LOCAL_TABLES = 1,
+	CONVERT_DISTRIBUTED_TABLES = 2
+}ConversionChoice;
+
 static bool HasConstantFilterOnUniqueColumn(RangeTblEntry *rangeTableEntry,
 											RelationRestriction *relationRestriction);
 static List * RequiredAttrNumbersForRelation(RangeTblEntry *relationRte,
@@ -161,14 +166,14 @@ static ConversionCandidates * CreateConversionCandidates(PlannerRestrictionConte
 														 List *rangeTableList,
 														 int resultRTEIdentity);
 static void AppendUniqueIndexColumnsToList(Form_pg_index indexForm, List **uniqueIndexes);
-static RangeTableEntryDetails * GetNextRTEToConvertToSubquery(ConversionCandidates *
-															  conversionCandidates,
-															  PlannerRestrictionContext *
-															  plannerRestrictionContext);
-static void RemoveFromConversionCandidates(ConversionCandidates *conversionCandidates,
-										   int rteIdentity);
+static ConversionChoice GetConversionChoice(ConversionCandidates *
+											conversionCandidates,
+											PlannerRestrictionContext *
+											plannerRestrictionContext);
 static bool AllRangeTableEntriesHaveUniqueIndex(List *rangeTableEntryDetailsList);
 static bool FirstIsSuperSetOfSecond(List *firstIntList, List *secondIntList);
+static void ConvertRTEsToSubquery(List *rangeTableEntryDetailsList,
+								  RecursivePlanningContext *context);
 
 /*
  * RecursivelyPlanLocalTableJoins gets a query and the planner
@@ -192,35 +197,27 @@ RecursivelyPlanLocalTableJoins(Query *query,
 		CreateConversionCandidates(plannerRestrictionContext,
 								   rangeTableList, resultRTEIdentity);
 
-	while (ShouldConvertLocalTableJoinsToSubqueries(query, rangeTableList,
-													plannerRestrictionContext))
-	{
-		RangeTableEntryDetails *rangeTableEntryDetails =
-			GetNextRTEToConvertToSubquery(conversionCandidates,
-										  plannerRestrictionContext);
-		if (rangeTableEntryDetails == NULL)
-		{
-			break;
-		}
+	ConversionChoice conversionChoise =
+		GetConversionChoice(conversionCandidates, plannerRestrictionContext);
 
-		RangeTblEntry *rangeTableEntry = rangeTableEntryDetails->rangeTableEntry;
-		List *requiredAttributeNumbers = rangeTableEntryDetails->requiredAttributeNumbers;
-		ReplaceRTERelationWithRteSubquery(rangeTableEntry,
-										  requiredAttributeNumbers, context);
-		int rteIdentity = rangeTableEntryDetails->rteIdentity;
-		RemoveFromConversionCandidates(conversionCandidates, rteIdentity);
+	if (conversionChoise == CONVERT_LOCAL_TABLES)
+	{
+		ConvertRTEsToSubquery(conversionCandidates->localTableList, context);
+	}
+	else
+	{
+		ConvertRTEsToSubquery(conversionCandidates->distributedTableList, context);
 	}
 }
 
 
 /*
- * GetNextRTEToConvertToSubquery returns the range table entry
- * which should be converted to a subquery. It considers the local join policy
- * for conversion priorities.
+ * GetConversionChoice returns the conversion choice considering the local table
+ * join policy.
  */
-static RangeTableEntryDetails *
-GetNextRTEToConvertToSubquery(ConversionCandidates *conversionCandidates,
-							  PlannerRestrictionContext *plannerRestrictionContext)
+static ConversionChoice
+GetConversionChoice(ConversionCandidates *conversionCandidates,
+					PlannerRestrictionContext *plannerRestrictionContext)
 {
 	RangeTableEntryDetails *localRTECandidate = NULL;
 	RangeTableEntryDetails *distributedRTECandidate = NULL;
@@ -236,11 +233,12 @@ GetNextRTEToConvertToSubquery(ConversionCandidates *conversionCandidates,
 
 	if (LocalTableJoinPolicy == LOCAL_JOIN_POLICY_PREFER_LOCAL)
 	{
-		return localRTECandidate ? localRTECandidate : distributedRTECandidate;
+		return localRTECandidate ? CONVERT_LOCAL_TABLES : CONVERT_DISTRIBUTED_TABLES;
 	}
 	else if (LocalTableJoinPolicy == LOCAL_JOIN_POLICY_PREFER_DISTRIBUTED)
 	{
-		return distributedRTECandidate ? distributedRTECandidate : localRTECandidate;
+		return distributedRTECandidate ? CONVERT_DISTRIBUTED_TABLES :
+			   CONVERT_LOCAL_TABLES;
 	}
 	else
 	{
@@ -254,12 +252,31 @@ GetNextRTEToConvertToSubquery(ConversionCandidates *conversionCandidates,
 
 		if (allRangeTableEntriesHaveUniqueIndex)
 		{
-			return distributedRTECandidate ? distributedRTECandidate : localRTECandidate;
+			return distributedRTECandidate ? CONVERT_DISTRIBUTED_TABLES :
+				   CONVERT_LOCAL_TABLES;
 		}
 		else
 		{
-			return localRTECandidate ? localRTECandidate : distributedRTECandidate;
+			return localRTECandidate ? CONVERT_LOCAL_TABLES : CONVERT_DISTRIBUTED_TABLES;
 		}
+	}
+}
+
+
+/*
+ * ConvertRTEsToSubquery converts all the given range table entries
+ * to a subquery.
+ */
+static void
+ConvertRTEsToSubquery(List *rangeTableEntryDetailsList, RecursivePlanningContext *context)
+{
+	RangeTableEntryDetails *rangeTableEntryDetails = NULL;
+	foreach_ptr(rangeTableEntryDetails, rangeTableEntryDetailsList)
+	{
+		RangeTblEntry *rangeTableEntry = rangeTableEntryDetails->rangeTableEntry;
+		List *requiredAttributeNumbers = rangeTableEntryDetails->requiredAttributeNumbers;
+		ReplaceRTERelationWithRteSubquery(rangeTableEntry,
+										  requiredAttributeNumbers, context);
 	}
 }
 
@@ -280,41 +297,6 @@ AllRangeTableEntriesHaveUniqueIndex(List *rangeTableEntryDetailsList)
 		}
 	}
 	return true;
-}
-
-
-/*
- * RemoveFromConversionCandidates removes an element from
- * the relevant list based on the relation id.
- */
-static void
-RemoveFromConversionCandidates(ConversionCandidates *conversionCandidates, int
-							   rteIdentity)
-{
-	RangeTableEntryDetails *rangeTableEntryDetails = NULL;
-	foreach_ptr(rangeTableEntryDetails, conversionCandidates->localTableList)
-	{
-		if (rangeTableEntryDetails->rteIdentity == rteIdentity)
-		{
-			conversionCandidates->localTableList =
-				list_delete_ptr(conversionCandidates->localTableList,
-								rangeTableEntryDetails);
-			return;
-		}
-	}
-
-	foreach_ptr(rangeTableEntryDetails, conversionCandidates->distributedTableList)
-	{
-		if (rangeTableEntryDetails->rteIdentity == rteIdentity)
-		{
-			conversionCandidates->distributedTableList =
-				list_delete_ptr(conversionCandidates->distributedTableList,
-								rangeTableEntryDetails);
-			return;
-		}
-	}
-
-	ereport(ERROR, (errmsg("invalid rte index is given :%d", rteIdentity)));
 }
 
 
@@ -506,7 +488,6 @@ CreateConversionCandidates(PlannerRestrictionContext *plannerRestrictionContext,
 			palloc0(sizeof(RangeTableEntryDetails));
 
 		rangeTableEntryDetails->rangeTableEntry = rangeTableEntry;
-		rangeTableEntryDetails->rteIdentity = rteIdentity;
 		rangeTableEntryDetails->requiredAttributeNumbers =
 			RequiredAttrNumbersForRelation(rangeTableEntry, plannerRestrictionContext);
 		rangeTableEntryDetails->hasConstantFilterOnUniqueColumn =
