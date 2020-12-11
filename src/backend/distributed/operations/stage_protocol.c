@@ -411,6 +411,14 @@ CreateAppendDistributedShardPlacements(Oid relationId, int64 shardId,
 	{
 		int workerNodeIndex = attemptNumber % workerNodeCount;
 		WorkerNode *workerNode = (WorkerNode *) list_nth(workerNodeList, workerNodeIndex);
+
+		if (NodeIsCoordinator(workerNode))
+		{
+			ereport(NOTICE, (errmsg(
+								 "Creating placements for the append partitioned tables on the coordinator is not allowed.")));
+			continue;
+		}
+
 		uint32 nodeGroupId = workerNode->groupId;
 		char *nodeName = workerNode->workerName;
 		uint32 nodePort = workerNode->workerPort;
