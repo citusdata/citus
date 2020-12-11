@@ -500,6 +500,19 @@ DistributedTablePlacementNodeList(LOCKMODE lockMode)
 
 
 /*
+ * AppendDistributedTablePlacementNodeList returns a list of all active, primary
+ * worker nodes that can store new data, i.e shouldstoreshards is 'true', and are
+ * not the coordinator
+ */
+List *
+AppendDistributedTablePlacementNodeList(LOCKMODE lockMode)
+{
+	EnsureModificationsCanRun();
+	return FilterActiveNodeListFunc(lockMode, NodeCanHaveAppendDistTablePlacements);
+}
+
+
+/*
  * NodeCanHaveDistTablePlacements returns true if the given node can have
  * shards of a distributed table.
  */
@@ -512,6 +525,22 @@ NodeCanHaveDistTablePlacements(WorkerNode *node)
 	}
 
 	return node->shouldHaveShards;
+}
+
+
+/*
+ * NodeCanHaveAppendDistTablePlacements returns true if the given node can have
+ * shards of a distributed table, and is not the coordinator
+ */
+bool
+NodeCanHaveAppendDistTablePlacements(WorkerNode *node)
+{
+	if (!NodeIsPrimary(node))
+	{
+		return false;
+	}
+
+	return node->shouldHaveShards && (node->groupId != 0);
 }
 
 
