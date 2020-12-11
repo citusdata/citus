@@ -165,16 +165,28 @@ master_create_empty_shard(PG_FUNCTION_ARGS)
 	/* generate new and unique shardId from sequence */
 	uint64 shardId = GetNextShardId();
 
-	/* if enough live groups, add an extra candidate node as backup */
 	List *workerNodeList = AppendDistributedTablePlacementNodeList(NoLock);
+	int workerNodeListLength = list_length(workerNodeList);
 
-	if (list_length(workerNodeList) > ShardReplicationFactor)
+	/* if enough live groups, add an extra candidate node as backup */
+	if (workerNodeListLength > ShardReplicationFactor)
 	{
 		attemptableNodeCount = ShardReplicationFactor + 1;
 	}
 	else
 	{
 		attemptableNodeCount = ShardReplicationFactor;
+	}
+
+	/* check if we are trying to create an empty placement on the coordinator */
+	if(workerNodeListLength + 1 == ShardReplicationFactor)
+	{
+		List *fullWorkerNodeList = DistributedTablePlacementNodeList(NoLock);
+		if(list_length(fullWorkerNodeList) == ShardReplicationFactor)
+		{
+			ereport(ERROR, (errmsg("Cannot create an empty placement on the coordinator."),
+							errhint("Reduce shard replication factor or add a worker node.")));
+		}
 	}
 
 	/* first retrieve a list of random nodes for shard placements */

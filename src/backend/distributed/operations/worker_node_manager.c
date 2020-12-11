@@ -267,7 +267,8 @@ ClientHostAddress(StringInfo clientHostStringInfo)
 
 /*
  * WorkerGetNodeWithName finds and returns a node from the membership list that
- * has the given hostname. The function returns null if no such node exists.
+ * has the given hostname. The node cannot be the coordinator. 
+ * The function returns null if no such node exists.
  */
 static WorkerNode *
 WorkerGetNodeWithName(const char *hostname)
@@ -281,7 +282,7 @@ WorkerGetNodeWithName(const char *hostname)
 	while ((workerNode = hash_seq_search(&status)) != NULL)
 	{
 		int nameCompare = strncmp(workerNode->workerName, hostname, WORKER_LENGTH);
-		if (nameCompare == 0)
+		if (nameCompare == 0 && (workerNode->groupId != 0))
 		{
 			/* we need to terminate the scan since we break */
 			hash_seq_term(&status);
@@ -579,8 +580,8 @@ NodeIsReadableWorker(WorkerNode *node)
 
 /*
  * PrimaryNodesNotInList scans through the worker node hash and returns a list of all
- * primary nodes which are not in currentList. It runs in O(n*m) but currentList is
- * quite small.
+ * primary nodes which are not in currentList and are not the coordinator.
+ * It runs in O(n*m) but currentList is quite small.
  */
 static List *
 PrimaryNodesNotInList(List *currentList)
@@ -599,7 +600,7 @@ PrimaryNodesNotInList(List *currentList)
 			continue;
 		}
 
-		if (NodeIsPrimary(workerNode))
+		if (NodeIsPrimary(workerNode) && (workerNode->groupId != 0))
 		{
 			workerNodeList = lappend(workerNodeList, workerNode);
 		}
