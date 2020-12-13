@@ -62,19 +62,21 @@ SELECT user_id FROM (
   SELECT user_id FROM cte WHERE value_2 > 0
 ) a ORDER BY 1 LIMIT 3;
 
--- CTE outside of FROM/WHERE errors out
+-- CTE outside of FROM/WHERE errors
 WITH cte AS (
 	SELECT user_id FROM users_table WHERE value_2 IN (1, 2)
 )
 SELECT (SELECT * FROM cte);
 
 WITH cte_basic AS (
-	SELECT user_id FROM users_table WHERE user_id = 1
+	SELECT user_id FROM users_table WHERE user_id = 1 LIMIT 1
 )
 SELECT
   (SELECT user_id FROM cte_basic), user_id
 FROM
-  users_table;
+  users_table
+ORDER BY 1,2
+LIMIT 1;
 
 -- single-row sublink is acceptable when there is no FROM
 WITH cte AS (

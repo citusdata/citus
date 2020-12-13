@@ -280,8 +280,7 @@ ORDER BY articles.id;
 -- subqueries are not supported in SELECT clause
 SELECT a.title AS name, (SELECT a2.id FROM articles_single_shard a2 WHERE a.id = a2.id  LIMIT 1)
 						 AS special_price FROM articles a;
-ERROR:  could not run distributed query with subquery outside the FROM, WHERE and HAVING clauses
-HINT:  Consider using an equality filter on the distributed table's partition column.
+ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 -- joins are not supported between local and distributed tables
 SELECT title, authors.name FROM authors, articles WHERE authors.id = articles.author_id;
 ERROR:  direct joins between distributed and local tables are not supported

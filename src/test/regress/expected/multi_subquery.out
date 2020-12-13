@@ -702,11 +702,19 @@ WHERE
  4968.4946466804019323
 (1 row)
 
--- Check unsupported subqueries in target list
-SELECT (SELECT 1) FROM orders_subquery;
-ERROR:  could not run distributed query with subquery outside the FROM, WHERE and HAVING clauses
+-- Check subqueries in target list
+SELECT (SELECT 1) FROM orders_subquery ORDER BY 1 LIMIT 1;
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
 SELECT sum((SELECT 1)) FROM orders_subquery;
-ERROR:  could not run distributed query with subquery outside the FROM, WHERE and HAVING clauses
+ sum
+---------------------------------------------------------------------
+ 2985
+(1 row)
+
 -- Check that if subquery is pulled, we don't error and run query properly.
 SELECT count(*) FROM
 (

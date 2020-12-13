@@ -39,12 +39,12 @@
 #include "distributed/multi_logical_planner.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/pg_dist_partition.h"
+#include "distributed/query_pushdown_planning.h"
 #include "distributed/tdigest_extension.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/version_compat.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
-#include "nodes/print.h"
 #include "optimizer/clauses.h"
 #include "optimizer/tlist.h"
 #if PG_VERSION_NUM >= PG_VERSION_12
@@ -481,6 +481,15 @@ MultiLogicalPlanOptimize(MultiTreeRoot *multiLogicalPlan)
 		ereport(ERROR, (errmsg("cannot approximate count(distinct) and order by it"),
 						errhint("You might need to disable approximations for either "
 								"count(distinct) or limit through configuration.")));
+	}
+
+	if (TargetListContainsSubquery(masterExtendedOpNode->targetList))
+	{
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("cannot push down subquery on the target list"),
+						errdetail("Subqueries in the SELECT part of the query can only "
+								  "be pushed down if they happen before aggregates and "
+								  "window functions")));
 	}
 }
 
