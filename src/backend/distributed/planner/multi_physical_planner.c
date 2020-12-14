@@ -3639,7 +3639,7 @@ NodeIsRangeTblRefReferenceTable(Node *node, List *rangeTableList)
 
 /*
  * FetchEqualityAttrNumsForRTE fetches the attribute numbers from quals
- * which has equality operator
+ * which have an equality operator
  */
 List *
 FetchEqualityAttrNumsForRTE(Node *node)
@@ -3665,8 +3665,8 @@ FetchEqualityAttrNumsForRTE(Node *node)
 
 
 /*
- * FetchEqualityAttrNumsForList fetches the constant equality numbers
- * from the given node list.
+ * FetchEqualityAttrNumsForList fetches the attribute numbers of expression
+ * of the form "= constant" from the given node list.
  */
 static List *
 FetchEqualityAttrNumsForList(List *nodeList)
@@ -3696,8 +3696,8 @@ FetchEqualityAttrNumsForList(List *nodeList)
 
 
 /*
- * FetchEqualityAttrNumsForRTEOpExpr fetches the attribute numbers from opExpr
- * which has equality operator.
+ * FetchEqualityAttrNumsForRTEOpExpr fetches the attribute numbers of expression
+ * of the form "= constant" from the given opExpr.
  */
 static List *
 FetchEqualityAttrNumsForRTEOpExpr(OpExpr *opExpr)
@@ -3718,8 +3718,8 @@ FetchEqualityAttrNumsForRTEOpExpr(OpExpr *opExpr)
 
 
 /*
- * FetchEqualityAttrNumsForRTEBoolExpr fetches the attribute numbers from boolExpr
- * which has equality operator
+ * FetchEqualityAttrNumsForRTEBoolExpr fetches the attribute numbers of expression
+ * of the form "= constant" from the given boolExpr.
  */
 static List *
 FetchEqualityAttrNumsForRTEBoolExpr(BoolExpr *boolExpr)

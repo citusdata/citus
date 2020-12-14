@@ -47,7 +47,6 @@ extern bool ContainsLocalTableDistributedTableJoin(List *rangeTableList);
 extern void ReplaceRTERelationWithRteSubquery(RangeTblEntry *rangeTableEntry,
 											  List *requiredAttrNumbers,
 											  RecursivePlanningContext *context);
-extern bool ContainsTableToBeConvertedToSubquery(List *rangeTableList);
 extern bool IsRecursivelyPlannableRelation(RangeTblEntry *rangeTableEntry);
 extern bool IsRelationLocalTableOrMatView(Oid relationId);
 #endif /* RECURSIVE_PLANNING_H */

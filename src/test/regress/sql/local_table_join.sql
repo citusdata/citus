@@ -252,8 +252,12 @@ FROM
 JOIN postgres_table
 USING(key);
 
+-- will error as we don't support complex joins
+SELECT COUNT(*) FROM postgres_table, distributed_table d1, distributed_table d2 WHERE d1.value = d2.value;
 
--- TODO:: we should support this?
+-- This will error because router planner will think that since reference tables have a single
+-- shard, it contains only a single task for modify. However, updating a reference tables
+-- will require multiple tasks. So requires some rewrite in router planner.
 UPDATE reference_table SET key = 1 FROM postgres_table WHERE postgres_table.key = 10;
 UPDATE reference_table SET key = 1 FROM (SELECT * FROM postgres_table) l WHERE l.key = 10;
 

@@ -174,6 +174,10 @@ static bool AllRangeTableEntriesHaveUniqueIndex(List *rangeTableEntryDetailsList
 static bool FirstIsSuperSetOfSecond(List *firstIntList, List *secondIntList);
 static void ConvertRTEsToSubquery(List *rangeTableEntryDetailsList,
 								  RecursivePlanningContext *context);
+static int ResultRTEIdentity(Query *query);
+static List * RTEListToConvert(ConversionCandidates *conversionCandidates,
+							   ConversionChoice conversionChoice);
+
 
 /*
  * RecursivelyPlanLocalTableJoins gets a query and the planner
@@ -182,17 +186,13 @@ static void ConvertRTEsToSubquery(List *rangeTableEntryDetailsList,
  */
 void
 RecursivelyPlanLocalTableJoins(Query *query,
-							   RecursivePlanningContext *context, List *rangeTableList)
+							   RecursivePlanningContext *context)
 {
 	PlannerRestrictionContext *plannerRestrictionContext =
 		GetPlannerRestrictionContext(context);
 
-	int resultRTEIdentity = INVALID_RTE_IDENTITY;
-	if (IsModifyCommand(query))
-	{
-		RangeTblEntry *resultRTE = ExtractResultRelationRTE(query);
-		resultRTEIdentity = GetRTEIdentity(resultRTE);
-	}
+	List *rangeTableList = query->rtable;
+	int resultRTEIdentity = ResultRTEIdentity(query);
 	ConversionCandidates *conversionCandidates =
 		CreateConversionCandidates(plannerRestrictionContext,
 								   rangeTableList, resultRTEIdentity);
@@ -200,14 +200,48 @@ RecursivelyPlanLocalTableJoins(Query *query,
 	ConversionChoice conversionChoise =
 		GetConversionChoice(conversionCandidates, plannerRestrictionContext);
 
-	if (conversionChoise == CONVERT_LOCAL_TABLES)
+
+	List *rteListToConvert = RTEListToConvert(conversionCandidates, conversionChoise);
+	ConvertRTEsToSubquery(rteListToConvert, context);
+}
+
+
+/*
+ * ResultRTEIdentity returns the result RTE's identity if it exists,
+ * otherwise it returns INVALID_RTE_INDENTITY
+ */
+static int
+ResultRTEIdentity(Query *query)
+{
+	int resultRTEIdentity = INVALID_RTE_IDENTITY;
+	if (IsModifyCommand(query))
 	{
-		ConvertRTEsToSubquery(conversionCandidates->localTableList, context);
+		RangeTblEntry *resultRTE = ExtractResultRelationRTE(query);
+		resultRTEIdentity = GetRTEIdentity(resultRTE);
+	}
+	return resultRTEIdentity;
+}
+
+
+/*
+ * RTEListToConvert to converts returns a list of RTEs that should
+ * be converted to a subquery.
+ */
+static List *
+RTEListToConvert(ConversionCandidates *conversionCandidates, ConversionChoice
+				 conversionChoice)
+{
+	List *rtesToConvert = NIL;
+	if (conversionChoice == CONVERT_LOCAL_TABLES)
+	{
+		rtesToConvert = list_concat(rtesToConvert, conversionCandidates->localTableList);
 	}
 	else
 	{
-		ConvertRTEsToSubquery(conversionCandidates->distributedTableList, context);
+		rtesToConvert = list_concat(rtesToConvert,
+									conversionCandidates->distributedTableList);
 	}
+	return rtesToConvert;
 }
 
 
@@ -305,9 +339,7 @@ AllRangeTableEntriesHaveUniqueIndex(List *rangeTableEntryDetailsList)
  * convert local-dist table joins to subqueries.
  */
 bool
-ShouldConvertLocalTableJoinsToSubqueries(Query *query, List *rangeTableList,
-										 PlannerRestrictionContext *
-										 plannerRestrictionContext)
+ShouldConvertLocalTableJoinsToSubqueries(List *rangeTableList)
 {
 	if (LocalTableJoinPolicy == LOCAL_JOIN_POLICY_NEVER)
 	{
@@ -315,7 +347,7 @@ ShouldConvertLocalTableJoinsToSubqueries(Query *query, List *rangeTableList,
 		return false;
 	}
 
-	if (!ContainsTableToBeConvertedToSubquery(rangeTableList))
+	if (!ContainsLocalTableDistributedTableJoin(rangeTableList))
 	{
 		return false;
 	}

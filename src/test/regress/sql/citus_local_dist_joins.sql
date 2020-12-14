@@ -224,6 +224,32 @@ SELECT count(*) FROM postgres_table JOIN (SELECT * FROM (SELECT * FROM distribut
 SELECT count(*) FROM postgres_table JOIN (SELECT * FROM (SELECT * FROM distributed_table LIMIT 1) d1) d2 using (key) JOIN reference_table USING(key) JOIN citus_local USING (key) JOIN (SELECT * FROM citus_local) c1  USING (key) WHERE d2.key > 10 AND d2.key = 10;
 
 
+SELECT 
+	COUNT(*) 
+FROM 
+	postgres_table p1
+JOIN 
+	distributed_partitioned_table dp1
+USING (key)
+JOIN
+	distributed_table d1 
+USING (key)
+JOIN 
+	citus_local c1 
+USING (key)	
+JOIN 
+	postgres_table p2
+USING (key)
+JOIN
+	reference_table r1
+USING (key)
+JOIN 
+	distributed_table d2
+USING (key)
+JOIN
+	citus_local c2 
+USING (key);
+
 
 SET client_min_messages to ERROR;
 DROP TABLE citus_local;

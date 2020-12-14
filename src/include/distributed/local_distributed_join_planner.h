@@ -27,12 +27,8 @@ typedef enum
 
 extern int LocalTableJoinPolicy;
 
-extern bool ShouldConvertLocalTableJoinsToSubqueries(Query *query,
-													 List *rangeTableList,
-													 PlannerRestrictionContext *
-													 plannerRestrictionContext);
+extern bool ShouldConvertLocalTableJoinsToSubqueries(List *rangeTableList);
 extern void RecursivelyPlanLocalTableJoins(Query *query,
-										   RecursivePlanningContext *context,
-										   List *rangeTableList);
+										   RecursivePlanningContext *context);
 
 #endif /* LOCAL_DISTRIBUTED_JOIN_PLANNER_H */

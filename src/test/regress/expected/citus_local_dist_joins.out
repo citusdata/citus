@@ -458,6 +458,45 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS c
      0
 (1 row)
 
+SELECT
+	COUNT(*)
+FROM
+	postgres_table p1
+JOIN
+	distributed_partitioned_table dp1
+USING (key)
+JOIN
+	distributed_table d1
+USING (key)
+JOIN
+	citus_local c1
+USING (key)	
+JOIN
+	postgres_table p2
+USING (key)
+JOIN
+	reference_table r1
+USING (key)
+JOIN
+	distributed_table d2
+USING (key)
+JOIN
+	citus_local c2
+USING (key);
+DEBUG:  Wrapping relation "postgres_table" "p1" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT key FROM citus_local_dist_joins.postgres_table p1 WHERE true
+DEBUG:  Wrapping relation "citus_local" "c1" to a subquery
+DEBUG:  generating subplan XXX_2 for subquery SELECT key FROM citus_local_dist_joins.citus_local c1 WHERE true
+DEBUG:  Wrapping relation "postgres_table" "p2" to a subquery
+DEBUG:  generating subplan XXX_3 for subquery SELECT key FROM citus_local_dist_joins.postgres_table p2 WHERE true
+DEBUG:  Wrapping relation "citus_local" "c2" to a subquery
+DEBUG:  generating subplan XXX_4 for subquery SELECT key FROM citus_local_dist_joins.citus_local c2 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((((((((SELECT p1_1.key, NULL::text AS value, NULL::jsonb AS value_2 FROM (SELECT intermediate_result.key FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) p1_1) p1 JOIN citus_local_dist_joins.distributed_partitioned_table dp1 USING (key)) JOIN citus_local_dist_joins.distributed_table d1 USING (key)) JOIN (SELECT c1_1.key, NULL::text AS value FROM (SELECT intermediate_result.key FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) c1_1) c1 USING (key)) JOIN (SELECT p2_1.key, NULL::text AS value, NULL::jsonb AS value_2 FROM (SELECT intermediate_result.key FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) p2_1) p2 USING (key)) JOIN citus_local_dist_joins.reference_table r1 USING (key)) JOIN citus_local_dist_joins.distributed_table d2 USING (key)) JOIN (SELECT c2_1.key, NULL::text AS value FROM (SELECT intermediate_result.key FROM read_intermediate_result('XXX_4'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) c2_1) c2 USING (key))
+ count
+---------------------------------------------------------------------
+   100
+(1 row)
+
 SET client_min_messages to ERROR;
 DROP TABLE citus_local;
 SELECT master_remove_node('localhost', :master_port);

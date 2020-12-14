@@ -191,9 +191,7 @@ static Query * BuildReadIntermediateResultsQuery(List *targetEntryList,
 												 List *columnAliasList,
 												 Const *resultIdConst, Oid functionOid,
 												 bool useBinaryCopyFormat);
-static void UpdateVarNosInNode(Query *query, Index newVarNo);
-static void GetRangeTableEntriesFromJoinTree(Node *joinNode, List *rangeTableList,
-											 List **joinRangeTableEntries);
+static void UpdateVarNosInNode(Node *node, Index newVarNo);
 static Query * CreateOuterSubquery(RangeTblEntry *rangeTableEntry,
 								   List *outerSubqueryTargetList);
 static List * GenerateRequiredColNamesFromTargetList(List *targetList);
@@ -354,22 +352,14 @@ RecursivelyPlanSubqueriesAndCTEs(Query *query, RecursivePlanningContext *context
 	}
 
 
-	PlannerRestrictionContext *plannerRestrictionContext =
-		context->plannerRestrictionContext;
-
-	List *rangeTableList = NIL;
-	GetRangeTableEntriesFromJoinTree((Node *) query->jointree, query->rtable,
-									 &rangeTableList);
-
-	if (ShouldConvertLocalTableJoinsToSubqueries(query, rangeTableList,
-												 plannerRestrictionContext))
+	if (ShouldConvertLocalTableJoinsToSubqueries(query->rtable))
 	{
 		/*
 		 * Logical planner cannot handle "local_table" [OUTER] JOIN "dist_table", or
 		 * a query with local table/citus local table and subquery. We convert local/citus local
 		 * tables to a subquery until they can be planned.
 		 */
-		RecursivelyPlanLocalTableJoins(query, context, rangeTableList);
+		RecursivelyPlanLocalTableJoins(query, context);
 	}
 
 
@@ -385,50 +375,6 @@ PlannerRestrictionContext *
 GetPlannerRestrictionContext(RecursivePlanningContext *recursivePlanningContext)
 {
 	return recursivePlanningContext->plannerRestrictionContext;
-}
-
-
-/*
- * GetRangeTableEntriesFromJoinTree gets the range table entries that are
- * on the given join tree.
- */
-static void
-GetRangeTableEntriesFromJoinTree(Node *joinNode, List *rangeTableList,
-								 List **joinRangeTableEntries)
-{
-	if (joinNode == NULL)
-	{
-		return;
-	}
-	else if (IsA(joinNode, FromExpr))
-	{
-		FromExpr *fromExpr = (FromExpr *) joinNode;
-		Node *fromElement;
-
-		foreach_ptr(fromElement, fromExpr->fromlist)
-		{
-			GetRangeTableEntriesFromJoinTree(fromElement, rangeTableList,
-											 joinRangeTableEntries);
-		}
-	}
-	else if (IsA(joinNode, JoinExpr))
-	{
-		JoinExpr *joinExpr = (JoinExpr *) joinNode;
-		GetRangeTableEntriesFromJoinTree(joinExpr->larg, rangeTableList,
-										 joinRangeTableEntries);
-		GetRangeTableEntriesFromJoinTree(joinExpr->rarg, rangeTableList,
-										 joinRangeTableEntries);
-	}
-	else if (IsA(joinNode, RangeTblRef))
-	{
-		int rangeTableIndex = ((RangeTblRef *) joinNode)->rtindex;
-		RangeTblEntry *rte = rt_fetch(rangeTableIndex, rangeTableList);
-		*joinRangeTableEntries = lappend(*joinRangeTableEntries, rte);
-	}
-	else
-	{
-		pg_unreachable();
-	}
 }
 
 
@@ -1476,7 +1422,8 @@ ReplaceRTERelationWithRteSubquery(RangeTblEntry *rangeTableEntry,
 	 * Originally: rtable: [rte1, current_rte, rte3...]
 	 * Now: rtable: [rte1, subquery[current_rte], rte3...] --subquery[current_rte] refers to its rtable.
 	 */
-	UpdateVarNosInNode(subquery, SINGLE_RTE_INDEX);
+	Node *quals = subquery->jointree->quals;
+	UpdateVarNosInNode(quals, SINGLE_RTE_INDEX);
 
 	/* replace the function with the constructed subquery */
 	rangeTableEntry->rtekind = RTE_SUBQUERY;
@@ -1590,34 +1537,18 @@ GenerateRequiredColNamesFromTargetList(List *targetList)
 
 /*
  * UpdateVarNosInNode iterates the Vars in the
- * given node's join tree quals and updates the varno's as the newVarNo.
+ * given node and updates the varno's as the newVarNo.
  */
 static void
-UpdateVarNosInNode(Query *query, Index newVarNo)
+UpdateVarNosInNode(Node *node, Index newVarNo)
 {
-	List *varList = pull_var_clause(query->jointree->quals, PVC_RECURSE_AGGREGATES |
+	List *varList = pull_var_clause(node, PVC_RECURSE_AGGREGATES |
 									PVC_RECURSE_PLACEHOLDERS);
 	Var *var = NULL;
 	foreach_ptr(var, varList)
 	{
 		var->varno = newVarNo;
 	}
-}
-
-
-/*
- * ContainsTableToBeConvertedToSubquery checks if the given range table list contains
- * any table that should be converted to a subquery, which otherwise is not plannable.
- */
-bool
-ContainsTableToBeConvertedToSubquery(List *rangeTableList)
-{
-	if (ContainsLocalTableDistributedTableJoin(rangeTableList))
-	{
-		return true;
-	}
-
-	return false;
 }
 
 
