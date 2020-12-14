@@ -47,7 +47,14 @@
 static RangeTblEntry * AnchorRte(Query *subquery);
 static List * UnionRelationRestrictionLists(List *firstRelationList,
 											List *secondRelationList);
-static void MakeVarAttNosSequential(List *targetList);
+static List * CreateFilteredTargetListForRelation(Oid relationId,
+												  List *requiredAttributes);
+static List * CreateDummyTargetList(Oid relationId, List *requiredAttributes);
+static TargetEntry * CreateTargetEntryForColumn(Form_pg_attribute attributeTuple, Index
+												rteIndex,
+												int attributeNumber, int resno);
+static TargetEntry * CreateTargetEntryForNullCol(Form_pg_attribute attributeTuple, int
+												 resno);
 
 
 /*
@@ -78,9 +85,7 @@ CreateColocatedJoinChecker(Query *subquery, PlannerRestrictionContext *restricti
 		 * functions (i.e., FilterPlannerRestrictionForQuery()) rely on queries
 		 * not relations.
 		 */
-		List *allTargetList = NIL;
-		anchorSubquery = WrapRteRelationIntoSubquery(anchorRangeTblEntry, NIL,
-													 &allTargetList);
+		anchorSubquery = WrapRteRelationIntoSubquery(anchorRangeTblEntry, NIL);
 	}
 	else if (anchorRangeTblEntry->rtekind == RTE_SUBQUERY)
 	{
@@ -262,13 +267,9 @@ SubqueryColocated(Query *subquery, ColocatedJoinChecker *checker)
  * Note that the query returned by this function does not contain any filters or
  * projections. The returned query should be used cautiosly and it is mostly
  * designed for generating a stub query.
- *
- * allTargetList will contain all columns for the given rteRelation but for the ones
- * that are not required, it will have NULL entries.
  */
 Query *
-WrapRteRelationIntoSubquery(RangeTblEntry *rteRelation, List *requiredAttributes,
-							List **allTargetList)
+WrapRteRelationIntoSubquery(RangeTblEntry *rteRelation, List *requiredAttributes)
 {
 	Query *subquery = makeNode(Query);
 	RangeTblRef *newRangeTableRef = makeNode(RangeTblRef);
@@ -281,93 +282,150 @@ WrapRteRelationIntoSubquery(RangeTblEntry *rteRelation, List *requiredAttributes
 
 	/* set the FROM expression to the subquery */
 	newRangeTableRef = makeNode(RangeTblRef);
-	newRangeTableRef->rtindex = 1;
+	newRangeTableRef->rtindex = SINGLE_RTE_INDEX;
 	subquery->jointree = makeFromExpr(list_make1(newRangeTableRef), NULL);
 
-	Relation relation = relation_open(rteRelation->relid, AccessShareLock);
-	int numberOfAttributes = RelationGetNumberOfAttributes(relation);
+	subquery->targetList =
+		CreateFilteredTargetListForRelation(rteRelation->relid, requiredAttributes);
 
-	bool shouldAssignDummyNullColumn = list_length(requiredAttributes) == 0;
-	bool assignedDummyNullColumn = false;
-	int attributeNumber = 1;
-	int resultNo = 1;
-	for (; attributeNumber <= numberOfAttributes; attributeNumber++)
+	if (list_length(subquery->targetList) == 0)
 	{
-		Form_pg_attribute attributeTuple =
-			TupleDescAttr(relation->rd_att, attributeNumber - 1);
-		Var *targetColumn =
-			makeVar(newRangeTableRef->rtindex, attributeNumber, attributeTuple->atttypid,
-					attributeTuple->atttypmod, attributeTuple->attcollation, 0);
-		TargetEntry *targetEntry =
-			makeTargetEntry((Expr *) targetColumn, attributeNumber,
-							strdup(attributeTuple->attname.data), false);
-
-		if (shouldAssignDummyNullColumn && !assignedDummyNullColumn)
-		{
-			/*
-			 * in case there is no required column, we assign one dummy NULL target entry
-			 * to the subquery targetList so that it has at least one target.
-			 * (targetlist should have at least one element)
-			 */
-			subquery->targetList = lappend(subquery->targetList, targetEntry);
-			assignedDummyNullColumn = true;
-		}
-
-		if (!list_member_int(requiredAttributes, attributeNumber))
-		{
-			/*
-			 * We add a null target entry because we don't have an easy
-			 * way of changing all the references to this column and
-			 * we don't want to break postgres query.
-			 */
-			targetEntry->expr =
-				(Expr *) makeNullConst(attributeTuple->atttypid,
-									   attributeTuple->atttypmod,
-									   attributeTuple->attcollation);
-			*allTargetList = lappend(*allTargetList, targetEntry);
-		}
-		else
-		{
-			TargetEntry *copyTargetEntry = copyObject(targetEntry);
-			*allTargetList = lappend(*allTargetList, copyTargetEntry);
-
-			/* In the subquery with only required attribute numbers, the result no
-			 * corresponds to the ordinal index of it in targetList.
-			 */
-			targetEntry->resno = resultNo++;
-			subquery->targetList = lappend(subquery->targetList, targetEntry);
-		}
+		/*
+		 * in case there is no required column, we assign one dummy NULL target entry
+		 * to the subquery targetList so that it has at least one target.
+		 * (targetlist should have at least one element)
+		 */
+		subquery->targetList = CreateDummyTargetList(rteRelation->relid,
+													 requiredAttributes);
 	}
-	MakeVarAttNosSequential(*allTargetList);
-
-	relation_close(relation, NoLock);
 
 	return subquery;
 }
 
 
 /*
- * MakeVarAttNosSequential changes the attribute numbers of the given targetList
- * to sequential numbers, [1, 2, 3] ...
+ * CreateAllTargetListForRelation creates a target list which contains all the columns
+ * of the given relation. If the column is not in required columns, then it is added
+ * as a NULL column.
  */
-static void
-MakeVarAttNosSequential(List *targetList)
+List *
+CreateAllTargetListForRelation(Oid relationId, List *requiredAttributes)
 {
-	TargetEntry *entry = NULL;
-	int attrNo = 1;
-	foreach_ptr(entry, targetList)
-	{
-		if (IsA(entry->expr, Var))
-		{
-			Var *var = (Var *) entry->expr;
+	Relation relation = relation_open(relationId, AccessShareLock);
+	int numberOfAttributes = RelationGetNumberOfAttributes(relation);
 
-			/*
-			 * the inner subquery is an intermediate result hence
-			 * the attribute no's should be in ordinal order. [1, 2, 3...]
-			 */
-			var->varattno = attrNo++;
+	List *targetList = NIL;
+	int varAttrNo = 1;
+	for (int attrNum = 1; attrNum <= numberOfAttributes; attrNum++)
+	{
+		Form_pg_attribute attributeTuple =
+			TupleDescAttr(relation->rd_att, attrNum - 1);
+
+		int resNo = attrNum;
+		if (!list_member_int(requiredAttributes, attrNum))
+		{
+			TargetEntry *nullTargetEntry =
+				CreateTargetEntryForNullCol(attributeTuple, resNo);
+			targetList = lappend(targetList, nullTargetEntry);
+		}
+		else
+		{
+			TargetEntry *targetEntry =
+				CreateTargetEntryForColumn(attributeTuple, SINGLE_RTE_INDEX, varAttrNo++,
+										   resNo);
+			targetList = lappend(targetList, targetEntry);
 		}
 	}
+
+	relation_close(relation, NoLock);
+	return targetList;
+}
+
+
+/*
+ * CreateFilteredTargetListForRelation creates a target list which contains
+ * only the required columns of the given relation. If there is not required
+ * columns then a dummy NULL column is put as the only entry.
+ */
+static List *
+CreateFilteredTargetListForRelation(Oid relationId, List *requiredAttributes)
+{
+	Relation relation = relation_open(relationId, AccessShareLock);
+	int numberOfAttributes = RelationGetNumberOfAttributes(relation);
+
+	List *targetList = NIL;
+	int resultNo = 1;
+	for (int attrNum = 1; attrNum <= numberOfAttributes; attrNum++)
+	{
+		Form_pg_attribute attributeTuple =
+			TupleDescAttr(relation->rd_att, attrNum - 1);
+
+		if (list_member_int(requiredAttributes, attrNum))
+		{
+			/* In the subquery with only required attribute numbers, the result no
+			 * corresponds to the ordinal index of it in targetList.
+			 */
+			TargetEntry *targetEntry =
+				CreateTargetEntryForColumn(attributeTuple, SINGLE_RTE_INDEX, attrNum,
+										   resultNo++);
+			targetList = lappend(targetList, targetEntry);
+		}
+	}
+	relation_close(relation, NoLock);
+	return targetList;
+}
+
+
+/*
+ * CreateDummyTargetList creates a target list which contains only a
+ * NULL entry.
+ */
+static List *
+CreateDummyTargetList(Oid relationId, List *requiredAttributes)
+{
+	Relation relation = relation_open(relationId, AccessShareLock);
+
+	Form_pg_attribute attributeTuple =
+		TupleDescAttr(relation->rd_att, 0);
+	TargetEntry *nullTargetEntry =
+		CreateTargetEntryForNullCol(attributeTuple, 1);
+
+	relation_close(relation, NoLock);
+	return list_make1(nullTargetEntry);
+}
+
+
+/*
+ * CreateTargetEntryForColumn creates a target entry for the given
+ * column.
+ */
+static TargetEntry *
+CreateTargetEntryForColumn(Form_pg_attribute attributeTuple, Index rteIndex,
+						   int attributeNumber, int resno)
+{
+	Var *targetColumn =
+		makeVar(rteIndex, attributeNumber, attributeTuple->atttypid,
+				attributeTuple->atttypmod, attributeTuple->attcollation, 0);
+	TargetEntry *targetEntry =
+		makeTargetEntry((Expr *) targetColumn, resno,
+						strdup(attributeTuple->attname.data), false);
+	return targetEntry;
+}
+
+
+/*
+ * CreateTargetEntryForNullCol creates a target entry that has a NULL expression.
+ */
+static TargetEntry *
+CreateTargetEntryForNullCol(Form_pg_attribute attributeTuple, int resno)
+{
+	Expr *nullExpr = (Expr *) makeNullConst(attributeTuple->atttypid,
+											attributeTuple->atttypmod,
+											attributeTuple->attcollation);
+	TargetEntry *targetEntry =
+		makeTargetEntry(nullExpr, resno,
+						strdup(attributeTuple->attname.data), false);
+	return targetEntry;
 }
 
 

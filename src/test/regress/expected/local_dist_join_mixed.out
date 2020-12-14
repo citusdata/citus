@@ -665,16 +665,20 @@ select (SELECT local.id) FROM local, distributed WHERE distributed.id != 1 LIMIT
 DEBUG:  Wrapping relation "local" to a subquery
 DEBUG:  generating subplan XXX_1 for subquery SELECT id FROM local_dist_join_mixed.local WHERE true
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT (SELECT local.id) AS id FROM (SELECT local_1.id, NULL::text AS title FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) local_1) local, local_dist_join_mixed.distributed WHERE (distributed.id OPERATOR(pg_catalog.<>) 1) LIMIT 1
-ERROR:  could not run distributed query with subquery outside the FROM, WHERE and HAVING clauses
-HINT:  Consider using an equality filter on the distributed table's partition column.
+DEBUG:  push down of limit count: 1
+ id
+---------------------------------------------------------------------
+  0
+(1 row)
+
 -- currently not supported, but should work with https://github.com/citusdata/citus/pull/4360/files
 SELECT
 	name, (SELECT id FROM local WHERE id = e.id)
 FROM
 	distributed e
 ORDER BY 1,2 LIMIT 1;
-ERROR:  could not run distributed query with subquery outside the FROM, WHERE and HAVING clauses
-HINT:  Consider using an equality filter on the distributed table's partition column.
+ERROR:  direct joins between distributed and local tables are not supported
+HINT:  Use CTE's or subqueries to select from local tables and use them in joins
 -- set operations
 SELECT local.* FROM distributed JOIN local USING (id)
 	EXCEPT

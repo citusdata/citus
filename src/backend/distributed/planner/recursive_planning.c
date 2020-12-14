@@ -1403,9 +1403,10 @@ ReplaceRTERelationWithRteSubquery(RangeTblEntry *rangeTableEntry,
 								  List *requiredAttrNumbers,
 								  RecursivePlanningContext *context)
 {
-	List *outerQueryTargetList = NIL;
-	Query *subquery = WrapRteRelationIntoSubquery(rangeTableEntry, requiredAttrNumbers,
-												  &outerQueryTargetList);
+	Query *subquery = WrapRteRelationIntoSubquery(rangeTableEntry, requiredAttrNumbers);
+	List *outerQueryTargetList = CreateAllTargetListForRelation(rangeTableEntry->relid,
+																requiredAttrNumbers);
+
 	List *restrictionList =
 		GetRestrictInfoListForRelation(rangeTableEntry,
 									   context->plannerRestrictionContext);
