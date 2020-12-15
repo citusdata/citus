@@ -1,0 +1,198 @@
+Parsed test spec with 3 sessions
+
+starting permutation: enable-deadlock-detection reload-conf s2-start-session-level-connection s1-begin s1-update-1 s2-begin-on-worker s2-update-2-on-worker s2-truncate-on-worker s3-invalidate-metadata s3-resync s2-update-1-on-worker s1-update-2 s1-commit s2-commit-on-worker disable-deadlock-detection reload-conf s2-stop-connection
+create_distributed_table
+
+
+step enable-deadlock-detection:
+  ALTER SYSTEM SET citus.distributed_deadlock_detection_factor TO 1.1;
+
+step reload-conf:
+    SELECT pg_reload_conf();
+
+pg_reload_conf
+
+t
+step s2-start-session-level-connection:
+ SELECT start_session_level_connection_to_node('localhost', 57638);
+
+start_session_level_connection_to_node
+
+
+step s1-begin:
+  BEGIN;
+
+step s1-update-1:
+  UPDATE deadlock_detection_test SET some_val = 1 WHERE user_id = 1;
+
+step s2-begin-on-worker:
+ SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+
+run_commands_on_session_level_connection_to_node
+
+
+step s2-update-2-on-worker:
+  SELECT run_commands_on_session_level_connection_to_node('UPDATE deadlock_detection_test SET some_val = 2 WHERE user_id = 2');
+
+run_commands_on_session_level_connection_to_node
+
+
+step s2-truncate-on-worker:
+    SELECT run_commands_on_session_level_connection_to_node('TRUNCATE t2');
+
+run_commands_on_session_level_connection_to_node
+
+
+step s3-invalidate-metadata:
+    update pg_dist_node SET metadatasynced = false;
+
+step s3-resync:
+  SELECT trigger_metadata_sync();
+  SELECT pg_sleep(2);
+
+trigger_metadata_sync
+
+
+pg_sleep
+
+
+step s2-update-1-on-worker:
+  SELECT run_commands_on_session_level_connection_to_node('UPDATE deadlock_detection_test SET some_val = 2 WHERE user_id = 1');
+ <waiting ...>
+step s1-update-2:
+  UPDATE deadlock_detection_test SET some_val = 1 WHERE user_id = 2;
+ <waiting ...>
+step s1-update-2: <... completed>
+step s2-update-1-on-worker: <... completed>
+run_commands_on_session_level_connection_to_node
+
+
+error in steps s1-update-2 s2-update-1-on-worker: ERROR:  canceling the transaction since it was involved in a distributed deadlock
+step s1-commit:
+  COMMIT;
+
+step s2-commit-on-worker:
+  SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+
+run_commands_on_session_level_connection_to_node
+
+
+step disable-deadlock-detection:
+  ALTER SYSTEM SET citus.distributed_deadlock_detection_factor TO -1;
+
+step reload-conf:
+    SELECT pg_reload_conf();
+
+pg_reload_conf
+
+t
+step s2-stop-connection:
+ SELECT stop_session_level_connection_to_node();
+
+stop_session_level_connection_to_node
+
+
+restore_isolation_tester_func
+
+
+
+starting permutation: increase-retry-interval reload-conf s2-start-session-level-connection s2-begin-on-worker s2-truncate-on-worker s3-invalidate-metadata s3-resync s1-count-daemons s1-cancel-metadata-sync s1-count-daemons reset-retry-interval reload-conf s2-commit-on-worker s2-stop-connection s3-resync
+create_distributed_table
+
+
+step increase-retry-interval:
+  ALTER SYSTEM SET citus.metadata_sync_retry_interval TO 20000;
+
+step reload-conf:
+    SELECT pg_reload_conf();
+
+pg_reload_conf
+
+t
+step s2-start-session-level-connection:
+ SELECT start_session_level_connection_to_node('localhost', 57638);
+
+start_session_level_connection_to_node
+
+
+step s2-begin-on-worker:
+ SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+
+run_commands_on_session_level_connection_to_node
+
+
+step s2-truncate-on-worker:
+    SELECT run_commands_on_session_level_connection_to_node('TRUNCATE t2');
+
+run_commands_on_session_level_connection_to_node
+
+
+step s3-invalidate-metadata:
+    update pg_dist_node SET metadatasynced = false;
+
+step s3-resync:
+  SELECT trigger_metadata_sync();
+  SELECT pg_sleep(2);
+
+trigger_metadata_sync
+
+
+pg_sleep
+
+
+step s1-count-daemons:
+  SELECT count(*) FROM pg_stat_activity WHERE application_name LIKE 'Citus Met%';
+
+count
+
+1
+step s1-cancel-metadata-sync:
+  SELECT pg_cancel_backend(pid) FROM pg_stat_activity WHERE application_name LIKE 'Citus Met%';
+  SELECT pg_sleep(2);
+
+pg_cancel_backend
+
+t
+pg_sleep
+
+
+step s1-count-daemons:
+  SELECT count(*) FROM pg_stat_activity WHERE application_name LIKE 'Citus Met%';
+
+count
+
+0
+step reset-retry-interval:
+  ALTER SYSTEM RESET citus.metadata_sync_retry_interval;
+
+step reload-conf:
+    SELECT pg_reload_conf();
+
+pg_reload_conf
+
+t
+step s2-commit-on-worker:
+  SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+
+run_commands_on_session_level_connection_to_node
+
+
+step s2-stop-connection:
+ SELECT stop_session_level_connection_to_node();
+
+stop_session_level_connection_to_node
+
+
+step s3-resync:
+  SELECT trigger_metadata_sync();
+  SELECT pg_sleep(2);
+
+trigger_metadata_sync
+
+
+pg_sleep
+
+
+restore_isolation_tester_func
+
+
