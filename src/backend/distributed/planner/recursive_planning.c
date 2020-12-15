@@ -171,7 +171,6 @@ static void RecursivelyPlanSubquery(Query *subquery,
 static DistributedSubPlan * CreateDistributedSubPlan(uint32 subPlanId,
 													 Query *subPlanQuery);
 static bool CteReferenceListWalker(Node *node, CteReferenceWalkerContext *context);
-static bool ContainsReferencesToOuterQuery(Query *query);
 static bool ContainsReferencesToOuterQueryWalker(Node *node,
 												 VarLevelsUpWalkerContext *context);
 static bool NodeContainsSubqueryReferencingOuterQuery(Node *node);
@@ -1238,7 +1237,7 @@ CteReferenceListWalker(Node *node, CteReferenceWalkerContext *context)
  * anything that points outside of the query itself. Such queries cannot be
  * planned recursively.
  */
-static bool
+bool
 ContainsReferencesToOuterQuery(Query *query)
 {
 	VarLevelsUpWalkerContext context = { 0 };

@@ -934,7 +934,8 @@ DeferErrorIfCannotPushdownSubquery(Query *subqueryTree, bool outerMostQueryHasLi
 	 * push down SQL features within such a function, as long as co-located join
 	 * checks are applied.
 	 */
-	if (!contain_vars_of_level((Node *) subqueryTree, 1))
+#include "distributed/recursive_planning.h"
+	if (!ContainsReferencesToOuterQuery(subqueryTree))
 	{
 		if (subqueryTree->limitOffset)
 		{

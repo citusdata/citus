@@ -22,6 +22,8 @@
 #include "nodes/relation.h"
 #endif
 
+extern bool ContainsReferencesToOuterQuery(Query *query);
+
 extern List * GenerateSubplansForSubqueriesAndCTEs(uint64 planId, Query *originalQuery,
 												   PlannerRestrictionContext *
 												   plannerRestrictionContext);
