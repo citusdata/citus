@@ -17,5 +17,10 @@ extern bool EnableCTEInlining;
 
 extern void RecursivelyInlineCtesInQueryTree(Query *query);
 extern bool QueryTreeContainsInlinableCTE(Query *queryTree);
+/* copy & paste from Postgres source, moved into a function for readability */
+extern bool PostgreSQLCTEInlineCondition(CommonTableExpr *cte, CmdType cmdType);
+
+/* the following utility functions are copy & paste from PostgreSQL code */
+extern void inline_cte(Query *mainQuery, CommonTableExpr *cte);
 
 #endif /* CTE_INLINE_H */

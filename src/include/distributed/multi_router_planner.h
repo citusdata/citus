@@ -65,8 +65,6 @@ extern DeferredErrorMessage * ModifyQuerySupported(Query *queryTree, Query *orig
 												   plannerRestrictionContext);
 extern DeferredErrorMessage * ErrorIfOnConflictNotSupported(Query *queryTree);
 extern List * ShardIntervalOpExpressions(ShardInterval *shardInterval, Index rteIndex);
-extern RelationRestrictionContext * CopyRelationRestrictionContext(
-	RelationRestrictionContext *oldContext);
 
 extern Oid ExtractFirstCitusTableId(Query *query);
 extern RangeTblEntry * ExtractSelectRangeTableEntry(Query *query);

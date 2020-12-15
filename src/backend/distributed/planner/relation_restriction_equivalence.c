@@ -152,7 +152,6 @@ static bool RangeTableArrayContainsAnyRTEIdentities(RangeTblEntry **rangeTableEn
 													rangeTableArrayLength, Relids
 													queryRteIdentities);
 static int RangeTableOffsetCompat(PlannerInfo *root, AppendRelInfo *appendRelInfo);
-static Relids QueryRteIdentities(Query *queryTree);
 
 
 /*
@@ -169,7 +168,7 @@ AllDistributionKeysInQueryAreEqual(Query *originalQuery,
 	/* we don't support distribution key equality checks for CTEs yet */
 	if (originalQuery->cteList != NIL)
 	{
-		return false;
+		//return false;
 	}
 
 	/* we don't support distribution key equality checks for local tables */
@@ -2091,7 +2090,7 @@ RangeTableArrayContainsAnyRTEIdentities(RangeTblEntry **rangeTableEntries, int
  * QueryRteIdentities gets a queryTree, find get all the rte identities assigned by
  * us.
  */
-static Relids
+Relids
 QueryRteIdentities(Query *queryTree)
 {
 	List *rangeTableList = NULL;

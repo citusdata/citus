@@ -229,6 +229,7 @@ extern MultiExtendedOp * MultiExtendedOpNode(Query *queryTree, Query *originalQu
 extern DeferredErrorMessage * DeferErrorIfUnsupportedSubqueryRepartition(Query *
 																		 subqueryTree);
 extern MultiNode * MultiNodeTree(Query *queryTree);
+extern bool HasTablesample(Query *queryTree);
 
 
 #endif   /* MULTI_LOGICAL_PLANNER_H */

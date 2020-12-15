@@ -51,11 +51,6 @@ typedef struct inline_cte_walker_context
 	List *aliascolnames;  /* citus addition to Postgres' inline_cte_walker_context */
 } inline_cte_walker_context;
 
-/* copy & paste from Postgres source, moved into a function for readability */
-static bool PostgreSQLCTEInlineCondition(CommonTableExpr *cte, CmdType cmdType);
-
-/* the following utility functions are copy & paste from PostgreSQL code */
-static void inline_cte(Query *mainQuery, CommonTableExpr *cte);
 static bool inline_cte_walker(Node *node, inline_cte_walker_context *context);
 static bool contain_dml(Node *node);
 static bool contain_dml_walker(Node *node, void *context);
@@ -80,6 +75,11 @@ bool EnableCTEInlining = true;
 void
 RecursivelyInlineCtesInQueryTree(Query *query)
 {
+	if (!EnableCTEInlining)
+	{
+		return;
+	}
+
 	InlineCTEsInQueryTree(query);
 
 	query_tree_walker(query, RecursivelyInlineCteWalker, NULL, 0);
@@ -205,7 +205,7 @@ QueryTreeContainsInlinableCteWalker(Node *node)
  * PostgreSQLCTEInlineCondition returns true if the CTE is considered
  * safe to inline by Postgres.
  */
-static bool
+bool
 PostgreSQLCTEInlineCondition(CommonTableExpr *cte, CmdType cmdType)
 {
 	/*
@@ -261,7 +261,7 @@ PostgreSQLCTEInlineCondition(CommonTableExpr *cte, CmdType cmdType)
 /*
  * inline_cte: convert RTE_CTE references to given CTE into RTE_SUBQUERYs
  */
-static void
+void
 inline_cte(Query *mainQuery, CommonTableExpr *cte)
 {
 	struct inline_cte_walker_context context;

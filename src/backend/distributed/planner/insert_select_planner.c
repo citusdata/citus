@@ -383,9 +383,9 @@ CreateInsertSelectIntoLocalTablePlan(uint64 planId, Query *originalQuery, ParamL
 	Query *selectQuery = BuildSelectForInsertSelect(originalQuery);
 	originalQuery->cteList = NIL;
 	DistributedPlan *distPlan = CreateDistributedPlan(planId, selectQuery,
-													  copyObject(selectQuery),
-													  boundParams, hasUnresolvedParams,
-													  plannerRestrictionContext);
+														 copyObject(selectQuery),
+														 boundParams, hasUnresolvedParams,
+														 plannerRestrictionContext);
 
 	/*
 	 * We don't expect distPlan to be NULL here because hasUnresolvedParams is

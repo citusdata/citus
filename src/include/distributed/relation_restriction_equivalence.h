@@ -16,6 +16,7 @@
 #include "distributed/metadata_cache.h"
 
 #define SINGLE_RTE_INDEX 1
+extern Relids QueryRteIdentities(Query *queryTree);
 
 extern bool AllDistributionKeysInQueryAreEqual(Query *originalQuery,
 											   PlannerRestrictionContext *
@@ -55,4 +56,6 @@ extern RelationRestrictionContext * FilterRelationRestrictionContext(
 	RelationRestrictionContext *relationRestrictionContext,
 	Relids
 	queryRteIdentities);
+extern RelationRestrictionContext *
+CopyRelationRestrictionContext(RelationRestrictionContext *relationRestrictionContext);
 #endif /* RELATION_RESTRICTION_EQUIVALENCE_H */

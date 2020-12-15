@@ -57,6 +57,7 @@
 #include "distributed/citus_nodes.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/commands/multi_copy.h"
+#include "distributed/cte_inline.h"
 #include "distributed/distributed_planner.h"
 #include "distributed/errormessage.h"
 #include "distributed/local_distributed_join_planner.h"
@@ -327,7 +328,7 @@ RecursivelyPlanSubqueriesAndCTEs(Query *query, RecursivePlanningContext *context
 	if (ShouldRecursivelyPlanAllSubqueriesInWhere(query))
 	{
 		/* replace all subqueries in the WHERE clause */
-		RecursivelyPlanAllSubqueries((Node *) query->jointree->quals, context);
+		RecursivelyPlanAllSubqueries((Node *) (query)->jointree->quals, context);
 	}
 
 	if (query->havingQual != NULL)
@@ -712,6 +713,14 @@ RecursivelyPlanAllSubqueries(Node *node, RecursivePlanningContext *planningConte
 	return expression_tree_walker(node, RecursivelyPlanAllSubqueries, planningContext);
 }
 
+/*
+ * IsGroupingFunc returns whether node is a GroupingFunc.
+ */
+static bool
+IsGroupingFunc(Node *node)
+{
+	return IsA(node, GroupingFunc);
+}
 
 /*
  * RecursivelyPlanCTEs plans all CTEs in the query by recursively calling the planner
@@ -733,20 +742,15 @@ RecursivelyPlanCTEs(Query *query, RecursivePlanningContext *planningContext)
 		return NULL;
 	}
 
-	if (query->hasRecursive)
-	{
-		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-							 "recursive CTEs are not supported in distributed "
-							 "queries",
-							 NULL, NULL);
-	}
 
 	/* get all RTE_CTEs that point to CTEs from cteList */
 	CteReferenceListWalker((Node *) query, &context);
 
-	foreach(cteCell, query->cteList)
+	List *copyOfCteList = list_copy(query->cteList);
+	foreach(cteCell, copyOfCteList)
 	{
 		CommonTableExpr *cte = (CommonTableExpr *) lfirst(cteCell);
+
 		char *cteName = cte->ctename;
 		Query *subquery = (Query *) cte->ctequery;
 		uint64 planId = planningContext->planId;
@@ -754,13 +758,7 @@ RecursivelyPlanCTEs(Query *query, RecursivePlanningContext *planningContext)
 		ListCell *rteCell = NULL;
 		int replacedCtesCount = 0;
 
-		if (ContainsReferencesToOuterQuery(subquery))
-		{
-			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-								 "CTEs that refer to other subqueries are not "
-								 "supported in multi-shard queries",
-								 NULL, NULL);
-		}
+
 
 		if (cte->cterefcount == 0 && subquery->commandType == CMD_SELECT)
 		{
@@ -770,6 +768,64 @@ RecursivelyPlanCTEs(Query *query, RecursivePlanningContext *planningContext)
 			 * of this iteration off.
 			 */
 			continue;
+		}
+
+		/*
+		 * First, make sure that Postgres is OK to inline the CTE. Later, check for
+		 * distributed query planning constraints that might prevent inlining.
+		 */
+		if (EnableCTEInlining &&
+				PostgreSQLCTEInlineCondition(cte, query->commandType) &&
+				planningContext->allDistributionKeysInQueryAreEqual &&
+				query->groupingSets == NIL && !query->hasForUpdate &&
+				!FindNodeMatchingCheckFunction((Node *) query, IsGroupingFunc) &&
+				!HasTablesample(query))
+		{
+
+			Query *copyQuery = copyObject(query);
+			CommonTableExpr *copyCte = copyObject(cte);
+
+
+			/* do the hard work of cte inlining */
+			inline_cte(copyQuery, copyCte);
+			/* clean-up the necessary fields for distributed planning */
+			copyCte->cterefcount = 0;
+			copyQuery->cteList = list_delete_ptr(copyQuery->cteList, copyCte);
+			DeferredErrorMessage *df  = DeferErrorIfUnsupportedSubqueryPushdown(copyQuery, planningContext->plannerRestrictionContext);
+			if (df == NULL)
+			{
+				elog(DEBUG1, "CTE %s is going to be inlined via "
+									 "distributed planning", cte->ctename);
+
+				inline_cte(query, cte);
+
+				/* clean-up the necessary fields for distributed planning */
+				cte->cterefcount = 0;
+				query->cteList = list_delete_ptr(query->cteList, cte);
+
+				continue;
+
+			}
+			//else
+			//	elog(DEBUG1, "Reason: %s:%s", df->message, df->detail);
+
+		}
+
+		if (ContainsReferencesToOuterQuery(subquery))
+		{
+			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+								 "CTEs that refer to other subqueries are not "
+								 "supported in multi-shard queries",
+								 NULL, NULL);
+		}
+
+
+		if (query->hasRecursive)
+		{
+			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+								 "recursive CTEs are not supported in distributed "
+								 "queries",
+								 NULL, NULL);
 		}
 
 		uint32 subPlanId = list_length(planningContext->subPlanList) + 1;
@@ -971,7 +1027,7 @@ AllDistributionKeysInSubqueryAreEqual(Query *subquery,
 	/* we don't support distribution eq. checks for CTEs yet */
 	if (subquery->cteList != NIL)
 	{
-		return false;
+		/*return false; */
 	}
 
 	PlannerRestrictionContext *filteredRestrictionContext =

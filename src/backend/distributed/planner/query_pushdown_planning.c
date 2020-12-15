@@ -971,8 +971,8 @@ DeferErrorIfCannotPushdownSubquery(Query *subqueryTree, bool outerMostQueryHasLi
 
 	if (subqueryTree->cteList)
 	{
-		preconditionsSatisfied = false;
-		errorDetail = "Common Table Expressions are currently unsupported";
+		//preconditionsSatisfied = false;
+		//errorDetail = "Common Table Expressions are currently unsupported";
 	}
 
 	if (subqueryTree->hasForUpdate)
@@ -1145,9 +1145,9 @@ DeferErrorIfUnsupportedTableCombination(Query *queryTree)
 		}
 		else if (rangeTableEntry->rtekind == RTE_CTE)
 		{
-			unsupportedTableCombination = true;
-			errorDetail = "CTEs in subqueries are currently unsupported";
-			break;
+			//unsupportedTableCombination = true;
+			//errorDetail = "CTEs in subqueries are currently unsupported";
+			//break;
 		}
 		else if (rangeTableEntry->rtekind == RTE_VALUES)
 		{

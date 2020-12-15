@@ -80,7 +80,6 @@ static Oid NodeTryGetRteRelid(Node *node);
 static bool FullCompositeFieldList(List *compositeFieldList);
 static bool HasUnsupportedJoinWalker(Node *node, void *context);
 static bool ErrorHintRequired(const char *errorHint, Query *queryTree);
-static bool HasTablesample(Query *queryTree);
 static bool HasComplexRangeTableType(Query *queryTree);
 static bool IsReadIntermediateResultFunction(Node *node);
 static bool IsReadIntermediateResultArrayFunction(Node *node);
@@ -956,7 +955,7 @@ DeferErrorIfQueryNotSupported(Query *queryTree)
 
 
 /* HasTablesample returns tree if the query contains tablesample */
-static bool
+bool
 HasTablesample(Query *queryTree)
 {
 	List *rangeTableList = queryTree->rtable;
