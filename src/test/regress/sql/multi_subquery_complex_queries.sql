@@ -1119,7 +1119,7 @@ FROM
       WHERE
         "users"."user_id" = "some_recent_users"."user_id" AND
         users.value_2 > 1 and users.value_2 < 3
-      LIMIT 1) "some_users_data"
+      ORDER BY 1 LIMIT 1) "some_users_data"
      ON TRUE
 ORDER BY
   user_id
@@ -1128,9 +1128,7 @@ limit 50;
 -- reset subquery_pushdown
 SET citus.subquery_pushdown to OFF;
 
--- we recursively plan recent_events_1
--- but not some_users_data since it has a reference
--- from an outer query which is not recursively planned
+-- mixture of recursively planned subqueries and correlated subqueries
 SELECT "some_users_data".user_id, lastseen
 FROM
      (SELECT user_id, max(time) AS lastseen
@@ -1158,15 +1156,12 @@ FROM
       WHERE
         "users"."value_1" = "some_recent_users"."user_id" AND
         users.value_2 > 1 and users.value_2 < 3
-      LIMIT 1) "some_users_data"
+      ORDER BY 1 LIMIT 1) "some_users_data"
      ON TRUE
 ORDER BY
   user_id
 limit 50;
 
--- we recursively plan some queries but fail in the end
--- since some_users_data since it has a reference
--- from an outer query which is not recursively planned
 SELECT "some_users_data".user_id, lastseen
 FROM
      (SELECT 2 * user_id as user_id, max(time) AS lastseen
@@ -1194,7 +1189,7 @@ FROM
       WHERE
         "users"."user_id" = "some_recent_users"."user_id" AND
         users.value_2 > 1 and users.value_2 < 3
-      LIMIT 1) "some_users_data"
+      ORDER BY 1 LIMIT 1) "some_users_data"
      ON TRUE
 ORDER BY
   user_id
@@ -1251,7 +1246,7 @@ FROM
       WHERE
         "users"."user_id" = "some_recent_users"."user_id" AND
         "users"."value_2" > 4
-      LIMIT 1) "some_users_data"
+      ORDER BY 1 LIMIT 1) "some_users_data"
     ON TRUE
    ORDER BY
       lastseen DESC
@@ -1306,7 +1301,7 @@ SELECT "some_users_data".user_id, MAX(lastseen), count(*)
       WHERE
         "users"."user_id" = "some_recent_users"."user_id" AND
         "users"."value_2" > 4
-      LIMIT 1) "some_users_data" ON true
+      ORDER BY 1 LIMIT 1) "some_users_data" ON true
 GROUP BY 1
 ORDER BY 2, 1 DESC
 LIMIT 10;
@@ -1360,7 +1355,7 @@ FROM
       WHERE
         "users"."user_id" = "some_recent_users"."user_id" AND
         "users"."value_2" > 4
-      LIMIT 1) "some_users_data" ON true
+      ORDER BY 1 LIMIT 1) "some_users_data" ON true
    ORDER BY
     lastseen DESC
    LIMIT 10) "some_users"
@@ -1418,7 +1413,7 @@ FROM
       WHERE
         "users"."user_id" = "some_recent_users"."user_id" AND
         "users"."value_2" > 4
-      LIMIT 1) "some_users_data" ON true
+      ORDER BY 1 LIMIT 1) "some_users_data" ON true
    ORDER BY
     lastseen DESC
    LIMIT 10) "some_users"
@@ -1484,9 +1479,7 @@ ORDER BY
   user_id DESC, lastseen DESC
 LIMIT 10;
 
--- not pushdownable since lower LATERAL JOIN is not on the partition key
--- not recursively plannable due to LATERAL join where there is a reference
--- from an outer query
+-- complex lateral join between inner join and correlated subquery
 SELECT user_id, lastseen
 FROM
   (SELECT
@@ -1532,7 +1525,7 @@ FROM
       WHERE
         "users"."value_1" = "some_recent_users"."user_id" AND
         "users"."value_2" > 4
-      LIMIT 1) "some_users_data" ON true
+      ORDER BY 1 LIMIT 1) "some_users_data" ON true
    ORDER BY
     lastseen DESC
    LIMIT 10) "some_users"
@@ -2033,9 +2026,7 @@ ORDER BY
 LIMIT 10;
 SET citus.subquery_pushdown to OFF;
 
--- not pushdownable since lower LATERAL JOIN is not on the partition key
--- not recursively plannable due to LATERAL join where there is a reference
--- from an outer query
+-- on side of the lateral join can be recursively plannen, then pushed down
 SELECT *
 FROM
   (SELECT
@@ -2066,7 +2057,7 @@ FROM
       WHERE
         "users"."value_2" = "some_recent_users"."user_id" AND
         value_2 > 4
-      LIMIT 1) "some_users_data" ON true
+      ORDER BY 1 LIMIT 1) "some_users_data" ON true
    ORDER BY
     value_2 DESC
    LIMIT 10) "some_users"

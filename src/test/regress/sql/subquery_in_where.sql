@@ -713,6 +713,143 @@ WHERE
     WHERE u.value_2 > 3
     GROUP BY r.value_2 HAVING min(r.value_3) > 0);
 
+-- two levels of correlation should also allow
+-- merge step in the subquery
+SELECT sum(value_1)
+FROM users_table u
+WHERE EXISTS
+    (SELECT 1
+     FROM events_table e
+     WHERE u.user_id = e.user_id AND
+        EXISTS
+         (SELECT 1
+          FROM users_table u2
+          WHERE u2.user_id = u.user_id AND u2.value_1 = 5
+          LIMIT 1));
+
+-- correlated subquery in WHERE, with a slightly
+-- different syntax that the result of the subquery
+-- is compared with a constant
+SELECT sum(value_1)
+FROM users_table u1
+WHERE (SELECT COUNT(DISTINCT e1.value_2)
+     FROM events_table e1
+     WHERE e1.user_id = u1.user_id
+          ) > 115;
+
+
+-- a correlated subquery which requires merge step
+-- can be pushed down on UPDATE/DELETE queries as well
+-- rollback to keep the rest of the tests unchanged
+BEGIN;
+UPDATE users_table u1
+ SET value_1 = (SELECT count(DISTINCT value_2)
+             	 	 FROM events_table e1
+               		WHERE e1.user_id = u1.user_id);
+
+DELETE FROM users_table u1 WHERE (SELECT count(DISTINCT value_2)
+             	 	 FROM events_table e1
+               		WHERE e1.user_id = u1.user_id) > 10;
+
+ROLLBACK;
+
+-- a correlated anti-join can also be pushed down even if the subquery
+-- has a LIMIT
+SELECT avg(value_1)
+FROM users_table u
+WHERE NOT EXISTS
+    (SELECT 'XXX'
+     FROM events_table e
+     WHERE u.user_id = e.user_id and e.value_2 > 10000 LIMIT 1);
+
+-- a [correlated] lateral join can also be pushed down even if the subquery
+-- has an aggregate wout a GROUP BY
+SELECT
+	max(min_of_val_2), max(u1.value_1)
+FROM
+	users_table u1
+		LEFT JOIN LATERAL
+	(SELECT min(e1.value_2) as min_of_val_2 FROM events_table e1 WHERE e1.user_id = u1.user_id)  as foo ON (true);
+
+
+-- a self join is followed by a correlated subquery
+EXPLAIN (COSTS OFF)
+SELECT
+	*
+FROM
+	users_table u1 JOIN users_table u2 USING (user_id)
+WHERE
+	u1.value_1 < u2.value_1 AND
+	(SELECT
+		count(*)
+	FROM
+		events_table e1
+	WHERE
+		e1.user_id = u2.user_id) > 10;
+
+-- when the colocated join of the FROM clause
+-- entries happen on WHERE clause, Citus cannot
+-- pushdown
+-- Likely that the colocation checks should be
+-- improved
+SELECT
+	u1.user_id, u2.user_id
+FROM
+	users_table u1, users_table u2
+WHERE
+	u1.value_1 < u2.value_1 AND
+	(SELECT
+		count(*)
+	FROM
+		events_table e1
+	WHERE
+		e1.user_id = u2.user_id AND
+		u1.user_id = u2.user_id) > 10
+ORDER BY 1,2;
+
+
+-- create a view that contains correlated subquery
+CREATE TEMPORARY VIEW correlated_subquery_view AS
+	SELECT u1.user_id
+	FROM users_table u1
+	WHERE (SELECT COUNT(DISTINCT e1.value_2)
+	     FROM events_table e1
+	     WHERE e1.user_id = u1.user_id
+	          ) > 0;
+
+SELECT sum(user_id) FROM correlated_subquery_view;
+
+-- now, join the view with another correlated subquery
+SELECT
+	sum(mx)
+FROM
+	correlated_subquery_view
+		LEFT JOIN LATERAL
+	(SELECT max(value_2) as mx FROM events_table WHERE correlated_subquery_view.user_id = events_table.user_id) as foo ON (true);
+
+-- as an edge case, JOIN is on false
+SELECT
+	sum(mx)
+FROM
+	correlated_subquery_view
+		LEFT JOIN LATERAL
+	(SELECT max(value_2) as mx FROM events_table WHERE correlated_subquery_view.user_id = events_table.user_id) as foo ON (false);
+
+
+SELECT sum(value_1)
+FROM users_table u1
+WHERE (SELECT COUNT(DISTINCT e1.value_2)
+     FROM events_table e1
+     WHERE e1.user_id = u1.user_id AND false
+          ) > 115;
+
+SELECT sum(value_1)
+FROM users_table u1
+WHERE (SELECT COUNT(DISTINCT e1.value_2)
+     FROM events_table e1
+     WHERE e1.user_id = u1.user_id
+          ) > 115 AND false;
+
 SET client_min_messages TO DEFAULT;
 
 DROP TABLE local_table;

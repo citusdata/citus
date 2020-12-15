@@ -484,7 +484,7 @@ DEBUG:  query has a single distribution column value: 1
  41 |      11814
 (5 rows)
 
--- subqueries are not supported in SELECT clause
+-- subqueries in SELECT clause
 SELECT a.title AS name, (SELECT a2.id FROM articles_single_shard_hash_mx a2 WHERE a.id = a2.id  LIMIT 1)
 						 AS special_price FROM articles_hash_mx a;
 DEBUG:  Router planner cannot handle multi-shard select queries

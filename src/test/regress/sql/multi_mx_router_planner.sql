@@ -235,7 +235,7 @@ FROM articles_hash_mx, (SELECT id, word_count FROM articles_hash_mx) AS test
 WHERE test.id = articles_hash_mx.id and articles_hash_mx.author_id = 1
 ORDER BY articles_hash_mx.id;
 
--- subqueries are not supported in SELECT clause
+-- subqueries in SELECT clause
 SELECT a.title AS name, (SELECT a2.id FROM articles_single_shard_hash_mx a2 WHERE a.id = a2.id  LIMIT 1)
 						 AS special_price FROM articles_hash_mx a;
 
