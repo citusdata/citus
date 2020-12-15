@@ -195,6 +195,7 @@ extern bool TargetListOnPartitionColumn(Query *query, List *targetEntryList);
 extern bool FindNodeMatchingCheckFunctionInRangeTableList(List *rtable, bool (*check)(
 															  Node *));
 extern bool IsCitusTableRTE(Node *node);
+extern bool IsDistributedOrReferenceTableRTE(Node *node);
 extern bool IsDistributedTableRTE(Node *node);
 extern bool IsReferenceTableRTE(Node *node);
 extern bool QueryContainsDistributedTableRTE(Query *query);

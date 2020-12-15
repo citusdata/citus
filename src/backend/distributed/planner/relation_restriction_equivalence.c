@@ -21,14 +21,19 @@
 #include "distributed/pg_dist_partition.h"
 #include "distributed/query_utils.h"
 #include "distributed/relation_restriction_equivalence.h"
+#include "distributed/shard_pruning.h"
 #include "nodes/nodeFuncs.h"
 #include "nodes/pg_list.h"
 #include "nodes/primnodes.h"
 #if PG_VERSION_NUM >= PG_VERSION_12
 #include "nodes/pathnodes.h"
+#include "optimizer/optimizer.h"
 #else
+#include "optimizer/cost.h"
 #include "nodes/relation.h"
+#include "optimizer/var.h"
 #endif
+#include "optimizer/paths.h"
 #include "parser/parsetree.h"
 #include "optimizer/pathnode.h"
 
@@ -139,10 +144,7 @@ static Index RelationRestrictionPartitionKeyIndex(RelationRestriction *
 												  relationRestriction);
 static bool AllRelationsInRestrictionContextColocated(RelationRestrictionContext *
 													  restrictionContext);
-static RelationRestrictionContext * FilterRelationRestrictionContext(
-	RelationRestrictionContext *relationRestrictionContext,
-	Relids
-	queryRteIdentities);
+static bool IsParam(Node *node);
 static JoinRestrictionContext * FilterJoinRestrictionContext(
 	JoinRestrictionContext *joinRestrictionContext, Relids
 	queryRteIdentities);
@@ -483,9 +485,13 @@ FindUnionAllVar(PlannerInfo *root, List *appendRelList, Oid relationOid,
 bool
 RestrictionEquivalenceForPartitionKeys(PlannerRestrictionContext *restrictionContext)
 {
-	/* there is a single distributed relation, no need to continue */
-	if (!ContainsMultipleDistributedRelations(restrictionContext))
+	if (ContextContainsLocalRelation(restrictionContext->relationRestrictionContext))
 	{
+		return false;
+	}
+	else if (!ContainsMultipleDistributedRelations(restrictionContext))
+	{
+		/* there is a single distributed relation, no need to continue */
 		return true;
 	}
 
@@ -1808,8 +1814,8 @@ FilterPlannerRestrictionForQuery(PlannerRestrictionContext *plannerRestrictionCo
 	/* allocate the filtered planner restriction context and set all the fields */
 	PlannerRestrictionContext *filteredPlannerRestrictionContext = palloc0(
 		sizeof(PlannerRestrictionContext));
-	filteredPlannerRestrictionContext->fastPathRestrictionContext =
-		palloc0(sizeof(FastPathRestrictionContext));
+	filteredPlannerRestrictionContext->fastPathRestrictionContext = palloc0(
+		sizeof(FastPathRestrictionContext));
 
 	filteredPlannerRestrictionContext->memoryContext =
 		plannerRestrictionContext->memoryContext;
@@ -1833,12 +1839,127 @@ FilterPlannerRestrictionForQuery(PlannerRestrictionContext *plannerRestrictionCo
 
 
 /*
+ * GetRestrictInfoListForRelation gets a range table entry and planner
+ * restriction context. The function returns a list of expressions that
+ * appear in the restriction context for only the given relation. And,
+ * all the varnos are set to 1.
+ */
+List *
+GetRestrictInfoListForRelation(RangeTblEntry *rangeTblEntry,
+							   PlannerRestrictionContext *plannerRestrictionContext)
+{
+	RelationRestriction *relationRestriction =
+		RelationRestrictionForRelation(rangeTblEntry, plannerRestrictionContext);
+	if (relationRestriction == NULL)
+	{
+		return NIL;
+	}
+
+	RelOptInfo *relOptInfo = relationRestriction->relOptInfo;
+	List *joinRestrictInfo = relOptInfo->joininfo;
+	List *baseRestrictInfo = relOptInfo->baserestrictinfo;
+
+	List *joinRestrictClauseList = get_all_actual_clauses(joinRestrictInfo);
+	if (ContainsFalseClause(joinRestrictClauseList))
+	{
+		/* found WHERE false, no need  to continue */
+		return copyObject((List *) joinRestrictClauseList);
+	}
+
+
+	List *restrictExprList = NIL;
+	RestrictInfo *restrictInfo = NULL;
+	foreach_ptr(restrictInfo, baseRestrictInfo)
+	{
+		Expr *restrictionClause = restrictInfo->clause;
+
+		/* we cannot process Params beacuse they are not known at this point */
+		if (FindNodeMatchingCheckFunction((Node *) restrictionClause, IsParam))
+		{
+			continue;
+		}
+
+		/*
+		 * If the restriction involves multiple tables, we cannot add it to
+		 * input relation's expression list.
+		 */
+		Relids varnos = pull_varnos((Node *) restrictionClause);
+		if (bms_num_members(varnos) != 1)
+		{
+			continue;
+		}
+
+		/*
+		 * We're going to add this restriction expression to a subquery
+		 * which consists of only one relation in its jointree. Thus,
+		 * simply set the varnos accordingly.
+		 */
+		Expr *copyOfRestrictClause = (Expr *) copyObject((Node *) restrictionClause);
+		List *varClauses = pull_var_clause_default((Node *) copyOfRestrictClause);
+		Var *column = NULL;
+		foreach_ptr(column, varClauses)
+		{
+			column->varno = SINGLE_RTE_INDEX;
+			column->varnosyn = SINGLE_RTE_INDEX;
+		}
+
+		restrictExprList = lappend(restrictExprList, copyOfRestrictClause);
+	}
+
+	return restrictExprList;
+}
+
+
+/*
+ * RelationRestrictionForRelation gets the relation restriction for the given
+ * range table entry.
+ */
+RelationRestriction *
+RelationRestrictionForRelation(RangeTblEntry *rangeTableEntry,
+							   PlannerRestrictionContext *plannerRestrictionContext)
+{
+	int rteIdentity = GetRTEIdentity(rangeTableEntry);
+	RelationRestrictionContext *relationRestrictionContext =
+		plannerRestrictionContext->relationRestrictionContext;
+	Relids queryRteIdentities = bms_make_singleton(rteIdentity);
+	RelationRestrictionContext *filteredRelationRestrictionContext =
+		FilterRelationRestrictionContext(relationRestrictionContext, queryRteIdentities);
+	List *filteredRelationRestrictionList =
+		filteredRelationRestrictionContext->relationRestrictionList;
+
+	if (list_length(filteredRelationRestrictionList) != 1)
+	{
+		return NULL;
+	}
+
+	RelationRestriction *relationRestriction =
+		(RelationRestriction *) linitial(filteredRelationRestrictionList);
+	return relationRestriction;
+}
+
+
+/*
+ * IsParam determines whether the given node is a param.
+ */
+static bool
+IsParam(Node *node)
+{
+	if (IsA(node, Param))
+	{
+		return true;
+	}
+
+	return false;
+}
+
+
+/*
  * FilterRelationRestrictionContext gets a relation restriction context and
  * set of rte identities. It returns the relation restrictions that that appear
  * in the queryRteIdentities and returns a newly allocated
  * RelationRestrictionContext.
  */
-static RelationRestrictionContext *
+RelationRestrictionContext *
 FilterRelationRestrictionContext(RelationRestrictionContext *relationRestrictionContext,
 								 Relids queryRteIdentities)
 {

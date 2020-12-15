@@ -920,11 +920,11 @@ CREATE VIEW small_view AS SELECT * from small where id < 100;
 \copy large FROM STDIN DELIMITER ','
 -- running modify statements "on" views is still not supported, hence below two statements will fail
 UPDATE small_view SET id = 1;
-ERROR:  cannot modify views over distributed tables
+ERROR:  cannot modify views when the query contains citus tables
 DELETE FROM small_view;
-ERROR:  cannot modify views over distributed tables
+ERROR:  cannot modify views when the query contains citus tables
 INSERT INTO small_view VALUES(8, 5) ON CONFLICT(tenant_id) DO UPDATE SET tenant_id=99;
-ERROR:  cannot modify views over distributed tables
+ERROR:  cannot modify views when the query contains citus tables
 -- using views in modify statements' FROM / WHERE clauses is still valid
 UPDATE large SET id=20 FROM small_view WHERE small_view.id=large.id;
 SELECT * FROM large order by 1, 2;
@@ -1054,7 +1054,7 @@ SELECT * FROM large ORDER BY 1, 2;
 
 -- INSERT INTO views is still not supported
 INSERT INTO small_view VALUES(3, 3);
-ERROR:  cannot modify views over distributed tables
+ERROR:  cannot modify views when the query contains citus tables
 DROP TABLE large;
 DROP TABLE small CASCADE;
 NOTICE:  drop cascades to view small_view
@@ -1081,9 +1081,9 @@ CREATE VIEW small_view AS SELECT * from small where id < 100;
 \copy large_partitioned FROM STDIN DELIMITER ','
 -- running modify statements "on" views is still not supported, hence below two statements will fail
 UPDATE small_view SET id = 1;
-ERROR:  cannot modify views over distributed tables
+ERROR:  cannot modify views when the query contains citus tables
 DELETE FROM small_view;
-ERROR:  cannot modify views over distributed tables
+ERROR:  cannot modify views when the query contains citus tables
 UPDATE large_partitioned SET id=27 FROM small_view WHERE small_view.tenant_id=large_partitioned.tenant_id;
 SELECT * FROM large_partitioned ORDER BY 1, 2;
  id | tenant_id

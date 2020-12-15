@@ -145,7 +145,7 @@ SELECT test_reference_local_join_func();
 
 -- CTEs are allowed
 WITH ins AS (INSERT INTO numbers VALUES (1) RETURNING *)
-SELECT * FROM numbers, local_table;
+SELECT * FROM numbers, local_table ORDER BY 1,2;
 
 WITH t AS (SELECT *, my_volatile_fn() x FROM numbers FOR UPDATE)
 SELECT * FROM numbers, local_table

@@ -120,7 +120,7 @@ NOTICE:  executing the command locally: SELECT a, b FROM citus_local_table_queri
 
 -- should fail as we don't support direct joins between distributed/local tables
 SELECT count(*) FROM distributed_table d1, distributed_table d2, citus_local_table;
-ERROR:  direct joins between distributed and local tables are not supported
+ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 -- local table inside subquery should just work
 SELECT count(*) FROM
 (
@@ -154,7 +154,12 @@ SELECT count(*) FROM
 (
 	SELECT *, random() FROM (SELECT *, random() FROM citus_local_table, distributed_table) as subquery_inner
 ) as subquery_top;
-ERROR:  direct joins between distributed and local tables are not supported
+NOTICE:  executing the command locally: SELECT NULL::integer AS a FROM citus_local_table_queries.citus_local_table_1509000 citus_local_table WHERE true
+ count
+---------------------------------------------------------------------
+    36
+(1 row)
+
 -- should fail as we don't support direct joins between distributed/local tables
 SELECT count(*) FROM
 (
@@ -162,7 +167,13 @@ SELECT count(*) FROM
 		FROM (
 				WITH cte_1 AS (SELECT *, random() FROM citus_local_table, distributed_table) SELECT * FROM cte_1) as subquery_inner
 ) as subquery_top;
-ERROR:  direct joins between distributed and local tables are not supported
+NOTICE:  executing the command locally: SELECT a, b FROM citus_local_table_queries.citus_local_table_1509000 citus_local_table WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM (SELECT subquery_inner.a, subquery_inner.b, subquery_inner.a_1 AS a, subquery_inner.b_1 AS b, subquery_inner.random, random() AS random FROM (SELECT cte_1.a, cte_1.b, cte_1.a_1 AS a, cte_1.b_1 AS b, cte_1.random FROM (SELECT intermediate_result.a, intermediate_result.b, intermediate_result.a_1 AS a, intermediate_result.b_1 AS b, intermediate_result.random FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer, a_1 integer, b_1 integer, random double precision)) cte_1(a, b, a_1, b_1, random)) subquery_inner(a, b, a_1, b_1, random)) subquery_top(a, b, a_1, b_1, random, random_1)
+ count
+---------------------------------------------------------------------
+    36
+(1 row)
+
 -- should be  fine
 SELECT count(*) FROM
 (
@@ -474,7 +485,7 @@ NOTICE:  executing the command locally: SELECT count(*) AS count FROM (((citus_l
 
 -- not supported direct outer join
 SELECT count(*) FROM citus_local_table LEFT JOIN distributed_table ON (true);
-ERROR:  direct joins between distributed and local tables are not supported
+ERROR:  cannot pushdown the subquery
 -- distinct in subquery on CTE
 WITH one_row AS (
 	SELECT a from citus_local_table WHERE b = 1
@@ -516,9 +527,14 @@ NOTICE:  executing the command locally: SELECT a, b FROM citus_local_table_queri
 
 -- join between citus local tables and distributed tables would fail
 SELECT count(*) FROM citus_local_table, distributed_table;
-ERROR:  direct joins between distributed and local tables are not supported
+NOTICE:  executing the command locally: SELECT NULL::integer AS a FROM citus_local_table_queries.citus_local_table_1509000 citus_local_table WHERE true
+ count
+---------------------------------------------------------------------
+    36
+(1 row)
+
 SELECT * FROM citus_local_table, distributed_table ORDER BY 1,2,3,4 FOR UPDATE;
-ERROR:  direct joins between distributed and local tables are not supported
+ERROR:  could not run distributed query with FOR UPDATE/SHARE commands
 -- join between citus local tables and postgres local tables are okey
 SELECT count(citus_local_table.b), count(postgres_local_table.a)
 FROM citus_local_table, postgres_local_table
@@ -638,7 +654,8 @@ NOTICE:  executing the copy locally for shard xxxxx
 INSERT INTO citus_local_table
 SELECT distributed_table.* FROM distributed_table
 JOIN citus_local_table ON (true);
-ERROR:  direct joins between distributed and local tables are not supported
+NOTICE:  executing the command locally: SELECT NULL::integer AS a FROM citus_local_table_queries.citus_local_table_1509000 citus_local_table WHERE true
+NOTICE:  executing the copy locally for shard xxxxx
 -- .. but when wrapped into a CTE, join works fine
 INSERT INTO citus_local_table
 SELECT distributed_table.* FROM distributed_table
@@ -662,63 +679,67 @@ SELECT clear_and_init_test_tables();
 DELETE FROM citus_local_table
 USING postgres_local_table
 WHERE citus_local_table.b = postgres_local_table.b;
-ERROR:  cannot plan modifications with local tables involving citus tables
+NOTICE:  executing the command locally: DELETE FROM citus_local_table_queries.citus_local_table_1509000 citus_local_table USING citus_local_table_queries.postgres_local_table WHERE (citus_local_table.b OPERATOR(pg_catalog.=) postgres_local_table.b)
 UPDATE citus_local_table
 SET b = 5
 FROM postgres_local_table
 WHERE citus_local_table.a = 3 AND citus_local_table.b = postgres_local_table.b;
-ERROR:  cannot plan modifications with local tables involving citus tables
+NOTICE:  executing the command locally: UPDATE citus_local_table_queries.citus_local_table_1509000 citus_local_table SET b = 5 FROM citus_local_table_queries.postgres_local_table WHERE ((citus_local_table.a OPERATOR(pg_catalog.=) 3) AND (citus_local_table.b OPERATOR(pg_catalog.=) postgres_local_table.b))
 DELETE FROM postgres_local_table
 USING citus_local_table
 WHERE citus_local_table.b = postgres_local_table.b;
-ERROR:  cannot plan modifications with local tables involving citus tables
+NOTICE:  executing the command locally: DELETE FROM citus_local_table_queries.postgres_local_table USING citus_local_table_queries.citus_local_table_1509000 citus_local_table WHERE (citus_local_table.b OPERATOR(pg_catalog.=) postgres_local_table.b)
 UPDATE postgres_local_table
 SET b = 5
 FROM citus_local_table
 WHERE citus_local_table.a = 3 AND citus_local_table.b = postgres_local_table.b;
-ERROR:  cannot plan modifications with local tables involving citus tables
+NOTICE:  executing the command locally: UPDATE citus_local_table_queries.postgres_local_table SET b = 5 FROM citus_local_table_queries.citus_local_table_1509000 citus_local_table WHERE ((citus_local_table.a OPERATOR(pg_catalog.=) 3) AND (citus_local_table.b OPERATOR(pg_catalog.=) postgres_local_table.b))
 -- no direct joins supported
 UPDATE distributed_table
 SET b = 6
 FROM citus_local_table
 WHERE citus_local_table.a = distributed_table.a;
-ERROR:  cannot plan modifications with citus local tables and distributed tables
+NOTICE:  executing the command locally: SELECT a FROM citus_local_table_queries.citus_local_table_1509000 citus_local_table WHERE true
 UPDATE reference_table
 SET b = 6
 FROM citus_local_table
 WHERE citus_local_table.a = reference_table.a;
-ERROR:  cannot plan modifications of reference tables with citus local tables
+NOTICE:  executing the command locally: SELECT a FROM citus_local_table_queries.citus_local_table_1509000 citus_local_table WHERE true
+NOTICE:  executing the command locally: UPDATE citus_local_table_queries.reference_table_1509002 reference_table SET b = 6 FROM (SELECT citus_local_table_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) citus_local_table_1) citus_local_table WHERE (citus_local_table.a OPERATOR(pg_catalog.=) reference_table.a)
 -- should not work, add HINT use CTEs
 UPDATE citus_local_table
 SET b = 6
 FROM distributed_table
 WHERE citus_local_table.a = distributed_table.a;
-ERROR:  cannot plan modifications with citus local tables and distributed tables
+NOTICE:  executing the command locally: UPDATE citus_local_table_queries.citus_local_table_1509000 citus_local_table SET b = 6 FROM (SELECT distributed_table_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) distributed_table_1) distributed_table WHERE (citus_local_table.a OPERATOR(pg_catalog.=) distributed_table.a)
 -- should work, add HINT use CTEs
 UPDATE citus_local_table
 SET b = 6
 FROM reference_table
 WHERE citus_local_table.a = reference_table.a;
-NOTICE:  executing the command locally: UPDATE citus_local_table_queries.citus_local_table_1509000 citus_local_table SET b = 6 FROM citus_local_table_queries.reference_table_1509002 reference_table WHERE (citus_local_table.a OPERATOR(pg_catalog.=) reference_table.a)
+NOTICE:  executing the command locally: SELECT a FROM citus_local_table_queries.reference_table_1509002 reference_table WHERE true
+NOTICE:  executing the command locally: UPDATE citus_local_table_queries.citus_local_table_1509000 citus_local_table SET b = 6 FROM (SELECT reference_table_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) reference_table_1) reference_table WHERE (citus_local_table.a OPERATOR(pg_catalog.=) reference_table.a)
 -- should not work, add HINT use CTEs
 DELETE FROM distributed_table
 USING citus_local_table
 WHERE citus_local_table.a = distributed_table.a;
-ERROR:  cannot plan modifications with citus local tables and distributed tables
+NOTICE:  executing the command locally: SELECT a FROM citus_local_table_queries.citus_local_table_1509000 citus_local_table WHERE true
 -- should not work, add HINT use CTEs
 DELETE FROM citus_local_table
 USING distributed_table
 WHERE citus_local_table.a = distributed_table.a;
-ERROR:  cannot plan modifications with citus local tables and distributed tables
+NOTICE:  executing the command locally: DELETE FROM citus_local_table_queries.citus_local_table_1509000 citus_local_table USING (SELECT distributed_table_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) distributed_table_1) distributed_table WHERE (citus_local_table.a OPERATOR(pg_catalog.=) distributed_table.a)
 DELETE FROM reference_table
 USING citus_local_table
 WHERE citus_local_table.a = reference_table.a;
-ERROR:  cannot plan modifications of reference tables with citus local tables
+NOTICE:  executing the command locally: SELECT a FROM citus_local_table_queries.citus_local_table_1509000 citus_local_table WHERE true
+NOTICE:  executing the command locally: DELETE FROM citus_local_table_queries.reference_table_1509002 reference_table USING (SELECT citus_local_table_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) citus_local_table_1) citus_local_table WHERE (citus_local_table.a OPERATOR(pg_catalog.=) reference_table.a)
 -- should work, add HINT use CTEs
 DELETE FROM citus_local_table
 USING reference_table
 WHERE citus_local_table.a = reference_table.a;
-NOTICE:  executing the command locally: DELETE FROM citus_local_table_queries.citus_local_table_1509000 citus_local_table USING citus_local_table_queries.reference_table_1509002 reference_table WHERE (citus_local_table.a OPERATOR(pg_catalog.=) reference_table.a)
+NOTICE:  executing the command locally: SELECT a FROM citus_local_table_queries.reference_table_1509002 reference_table WHERE true
+NOTICE:  executing the command locally: DELETE FROM citus_local_table_queries.citus_local_table_1509000 citus_local_table USING (SELECT reference_table_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) reference_table_1) reference_table WHERE (citus_local_table.a OPERATOR(pg_catalog.=) reference_table.a)
 -- just works
 DELETE FROM citus_local_table
 WHERE citus_local_table.a IN (SELECT a FROM distributed_table);
@@ -726,7 +747,8 @@ NOTICE:  executing the command locally: DELETE FROM citus_local_table_queries.ci
 -- just works
 DELETE FROM citus_local_table
 WHERE citus_local_table.a IN (SELECT a FROM reference_table);
-NOTICE:  executing the command locally: DELETE FROM citus_local_table_queries.citus_local_table_1509000 citus_local_table WHERE (a OPERATOR(pg_catalog.=) ANY (SELECT reference_table.a FROM citus_local_table_queries.reference_table_1509002 reference_table))
+NOTICE:  executing the command locally: SELECT a FROM citus_local_table_queries.reference_table_1509002 reference_table
+NOTICE:  executing the command locally: DELETE FROM citus_local_table_queries.citus_local_table_1509000 citus_local_table WHERE (a OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)))
 -- just works
 WITH distributed_table_cte AS (SELECT * FROM distributed_table)
 UPDATE citus_local_table
@@ -734,13 +756,14 @@ SET b = 6
 FROM distributed_table_cte
 WHERE citus_local_table.a = distributed_table_cte.a;
 NOTICE:  executing the command locally: UPDATE citus_local_table_queries.citus_local_table_1509000 citus_local_table SET b = 6 FROM (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) distributed_table_cte WHERE (citus_local_table.a OPERATOR(pg_catalog.=) distributed_table_cte.a)
+SET citus.log_local_commands to off;
 -- just works
 WITH reference_table_cte AS (SELECT * FROM reference_table)
 UPDATE citus_local_table
 SET b = 6
 FROM reference_table_cte
 WHERE citus_local_table.a = reference_table_cte.a;
-NOTICE:  executing the command locally: WITH reference_table_cte AS (SELECT reference_table.a, reference_table.b FROM citus_local_table_queries.reference_table_1509002 reference_table) UPDATE citus_local_table_queries.citus_local_table_1509000 citus_local_table SET b = 6 FROM reference_table_cte WHERE (citus_local_table.a OPERATOR(pg_catalog.=) reference_table_cte.a)
+set citus.log_local_commands to on;
 ---------------------------------------------------------------------
 ----- VIEW QUERIES -----
 ---------------------------------------------------------------------
@@ -772,7 +795,14 @@ JOIN citus_local_table_2 USING (a)
 JOIN distributed_table USING (a);
 -- should fail as view contains direct local dist join
 SELECT count(*) FROM view_2;
-ERROR:  direct joins between distributed and local tables are not supported
+NOTICE:  executing the command locally: SELECT a FROM citus_local_table_queries.citus_local_table_1509000 citus_local_table WHERE true
+NOTICE:  executing the command locally: SELECT a FROM citus_local_table_queries.citus_local_table_2_1509001 citus_local_table_2 WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM (SELECT intermediate_result.count FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(count bigint)) view_2
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
 CREATE VIEW view_3
 AS SELECT count(*)
 FROM citus_local_table_2
@@ -788,7 +818,8 @@ NOTICE:  executing the command locally: SELECT count(*) AS count FROM (SELECT co
 
 -- view treated as subquery, so should work
 SELECT count(*) FROM view_3, distributed_table;
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM (citus_local_table_queries.citus_local_table_2_1509001 citus_local_table_2(a, b) JOIN citus_local_table_queries.reference_table_1509002 reference_table(a, b) USING (a))
+NOTICE:  executing the command locally: SELECT a FROM citus_local_table_queries.citus_local_table_2_1509001 citus_local_table_2 WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM ((SELECT citus_local_table_2_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) citus_local_table_2_1) citus_local_table_2 JOIN citus_local_table_queries.reference_table_1509002 reference_table(a, b) USING (a))
  count
 ---------------------------------------------------------------------
      6
@@ -826,7 +857,17 @@ UPDATE citus_local_table lt SET a = mt.a
 FROM distributed_table mt WHERE mt.b = lt.b
 RETURNING lt.b, lt.a
 ) SELECT * FROM cte JOIN distributed_table mt ON mt.b = cte.b ORDER BY 1,2,3,4;
-ERROR:  cannot plan modifications with citus local tables and distributed tables
+NOTICE:  executing the command locally: UPDATE citus_local_table_queries.citus_local_table_1509000 lt SET a = mt.a FROM (SELECT mt_1.a, mt_1.b FROM (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) mt_1) mt WHERE (mt.b OPERATOR(pg_catalog.=) lt.b) RETURNING lt.b, lt.a
+ b | a | a | b
+---------------------------------------------------------------------
+ 0 | 0 | 0 | 0
+ 1 | 1 | 1 | 1
+ 2 | 2 | 2 | 2
+ 3 | 3 | 3 | 3
+ 4 | 4 | 4 | 4
+ 5 | 5 | 5 | 5
+(6 rows)
+
 -- join with CTE just works
 UPDATE citus_local_table
 SET a=5
@@ -852,7 +893,7 @@ UPDATE citus_local_table
 SET a=5
 FROM (SELECT b FROM distributed_table) AS foo
 WHERE foo.b = citus_local_table.b;
-ERROR:  cannot plan modifications with citus local tables and distributed tables
+ERROR:  citus local table citus_local_table cannot be joined with these distributed tables
 ---------------------------------------------------------------------
 -- test different execution paths --
 ---------------------------------------------------------------------

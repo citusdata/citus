@@ -171,7 +171,8 @@ static Task * QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 									  RelationRestrictionContext *restrictionContext,
 									  uint32 taskId,
 									  TaskType taskType,
-									  bool modifyRequiresCoordinatorEvaluation);
+									  bool modifyRequiresCoordinatorEvaluation,
+									  DeferredErrorMessage **planningError);
 static bool ShardIntervalsEqual(FmgrInfo *comparisonFunction,
 								Oid collation,
 								ShardInterval *firstInterval,
@@ -233,6 +234,9 @@ static StringInfo ColumnTypeArrayString(List *targetEntryList);
 static bool CoPlacedShardIntervals(ShardInterval *firstInterval,
 								   ShardInterval *secondInterval);
 
+static List * FetchEqualityAttrNumsForRTEOpExpr(OpExpr *opExpr);
+static List * FetchEqualityAttrNumsForRTEBoolExpr(BoolExpr *boolExpr);
+static List * FetchEqualityAttrNumsForList(List *nodeList);
 #if PG_VERSION_NUM >= PG_VERSION_13
 static List * GetColumnOriginalIndexes(Oid relationId);
 #endif
@@ -264,6 +268,27 @@ CreatePhysicalDistributedPlan(MultiTreeRoot *multiTree,
 	distributedPlan->expectResults = true;
 
 	return distributedPlan;
+}
+
+
+/*
+ * ModifyLocalTableJob returns true if the given task contains
+ * a modification of local table.
+ */
+bool
+ModifyLocalTableJob(Job *job)
+{
+	if (job == NULL)
+	{
+		return false;
+	}
+	List *taskList = job->taskList;
+	if (list_length(taskList) != 1)
+	{
+		return false;
+	}
+	Task *singleTask = (Task *) linitial(taskList);
+	return singleTask->isLocalTableModification;
 }
 
 
@@ -2102,11 +2127,17 @@ BuildJobTreeTaskList(Job *jobTree, PlannerRestrictionContext *plannerRestriction
 													relationRestrictionContext,
 													&isMultiShardQuery, NULL);
 
+			DeferredErrorMessage *deferredErrorMessage = NULL;
 			sqlTaskList = QueryPushdownSqlTaskList(job->jobQuery, job->jobId,
 												   plannerRestrictionContext->
 												   relationRestrictionContext,
 												   prunedRelationShardList, READ_TASK,
-												   false);
+												   false,
+												   &deferredErrorMessage);
+			if (deferredErrorMessage != NULL)
+			{
+				RaiseDeferredErrorInternal(deferredErrorMessage, ERROR);
+			}
 		}
 		else
 		{
@@ -2184,7 +2215,8 @@ List *
 QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 						 RelationRestrictionContext *relationRestrictionContext,
 						 List *prunedRelationShardList, TaskType taskType, bool
-						 modifyRequiresCoordinatorEvaluation)
+						 modifyRequiresCoordinatorEvaluation,
+						 DeferredErrorMessage **planningError)
 {
 	List *sqlTaskList = NIL;
 	ListCell *restrictionCell = NULL;
@@ -2198,8 +2230,11 @@ QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 
 	if (list_length(relationRestrictionContext->relationRestrictionList) == 0)
 	{
-		ereport(ERROR, (errmsg("cannot handle complex subqueries when the "
-							   "router executor is disabled")));
+		*planningError = DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+									   "cannot handle complex subqueries when the "
+									   "router executor is disabled",
+									   NULL, NULL);
+		return NIL;
 	}
 
 	/* defaults to be used if this is a reference table-only query */
@@ -2224,8 +2259,11 @@ QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 		/* we expect distributed tables to have the same shard count */
 		if (shardCount > 0 && shardCount != cacheEntry->shardIntervalArrayLength)
 		{
-			ereport(ERROR, (errmsg("shard counts of co-located tables do not "
-								   "match")));
+			*planningError = DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+										   "shard counts of co-located tables do not "
+										   "match",
+										   NULL, NULL);
+			return NIL;
 		}
 
 		if (taskRequiredForShardIndex == NULL)
@@ -2288,7 +2326,12 @@ QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 													 relationRestrictionContext,
 													 taskIdIndex,
 													 taskType,
-													 modifyRequiresCoordinatorEvaluation);
+													 modifyRequiresCoordinatorEvaluation,
+													 planningError);
+		if (*planningError != NULL)
+		{
+			return NIL;
+		}
 		subqueryTask->jobId = jobId;
 		sqlTaskList = lappend(sqlTaskList, subqueryTask);
 
@@ -2464,7 +2507,8 @@ ErrorIfUnsupportedShardDistribution(Query *query)
 static Task *
 QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 						RelationRestrictionContext *restrictionContext, uint32 taskId,
-						TaskType taskType, bool modifyRequiresCoordinatorEvaluation)
+						TaskType taskType, bool modifyRequiresCoordinatorEvaluation,
+						DeferredErrorMessage **planningError)
 {
 	Query *taskQuery = copyObject(originalQuery);
 
@@ -2543,8 +2587,12 @@ QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 	List *taskPlacementList = PlacementsForWorkersContainingAllShards(taskShardList);
 	if (list_length(taskPlacementList) == 0)
 	{
-		ereport(ERROR, (errmsg("cannot find a worker that has active placements for all "
-							   "shards in the query")));
+		*planningError = DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+									   "cannot find a worker that has active placements for all "
+									   "shards in the query",
+									   NULL, NULL);
+
+		return NULL;
 	}
 
 	/*
@@ -3586,6 +3634,122 @@ NodeIsRangeTblRefReferenceTable(Node *node, List *rangeTableList)
 		return false;
 	}
 	return IsCitusTableType(rangeTableEntry->relid, REFERENCE_TABLE);
+}
+
+
+/*
+ * FetchEqualityAttrNumsForRTE fetches the attribute numbers from quals
+ * which have an equality operator
+ */
+List *
+FetchEqualityAttrNumsForRTE(Node *node)
+{
+	if (node == NULL)
+	{
+		return NIL;
+	}
+	if (IsA(node, List))
+	{
+		return FetchEqualityAttrNumsForList((List *) node);
+	}
+	else if (IsA(node, OpExpr))
+	{
+		return FetchEqualityAttrNumsForRTEOpExpr((OpExpr *) node);
+	}
+	else if (IsA(node, BoolExpr))
+	{
+		return FetchEqualityAttrNumsForRTEBoolExpr((BoolExpr *) node);
+	}
+	return NIL;
+}
+
+
+/*
+ * FetchEqualityAttrNumsForList fetches the attribute numbers of expression
+ * of the form "= constant" from the given node list.
+ */
+static List *
+FetchEqualityAttrNumsForList(List *nodeList)
+{
+	List *attributeNums = NIL;
+	Node *node = NULL;
+	bool hasAtLeastOneEquality = false;
+	foreach_ptr(node, nodeList)
+	{
+		List *fetchedEqualityAttrNums =
+			FetchEqualityAttrNumsForRTE(node);
+		hasAtLeastOneEquality |= list_length(fetchedEqualityAttrNums) > 0;
+		attributeNums = list_concat(attributeNums, fetchedEqualityAttrNums);
+	}
+
+	/*
+	 * the given list is in the form of AND'ed expressions
+	 * hence if we have one equality then it is enough.
+	 * E.g: dist.a = 5 AND dist.a > 10
+	 */
+	if (hasAtLeastOneEquality)
+	{
+		return attributeNums;
+	}
+	return NIL;
+}
+
+
+/*
+ * FetchEqualityAttrNumsForRTEOpExpr fetches the attribute numbers of expression
+ * of the form "= constant" from the given opExpr.
+ */
+static List *
+FetchEqualityAttrNumsForRTEOpExpr(OpExpr *opExpr)
+{
+	if (!OperatorImplementsEquality(opExpr->opno))
+	{
+		return NIL;
+	}
+
+	List *attributeNums = NIL;
+	Var *var = NULL;
+	if (VarConstOpExprClause(opExpr, &var, NULL))
+	{
+		attributeNums = lappend_int(attributeNums, var->varattno);
+	}
+	return attributeNums;
+}
+
+
+/*
+ * FetchEqualityAttrNumsForRTEBoolExpr fetches the attribute numbers of expression
+ * of the form "= constant" from the given boolExpr.
+ */
+static List *
+FetchEqualityAttrNumsForRTEBoolExpr(BoolExpr *boolExpr)
+{
+	if (boolExpr->boolop != AND_EXPR && boolExpr->boolop != OR_EXPR)
+	{
+		return NIL;
+	}
+
+	List *attributeNums = NIL;
+	bool hasEquality = true;
+	Node *arg = NULL;
+	foreach_ptr(arg, boolExpr->args)
+	{
+		List *attributeNumsInSubExpression = FetchEqualityAttrNumsForRTE(arg);
+		if (boolExpr->boolop == AND_EXPR)
+		{
+			hasEquality |= list_length(attributeNumsInSubExpression) > 0;
+		}
+		else if (boolExpr->boolop == OR_EXPR)
+		{
+			hasEquality &= list_length(attributeNumsInSubExpression) > 0;
+		}
+		attributeNums = list_concat(attributeNums, attributeNumsInSubExpression);
+	}
+	if (hasEquality)
+	{
+		return attributeNums;
+	}
+	return NIL;
 }
 
 
@@ -5352,7 +5516,6 @@ ActiveShardPlacementLists(List *taskList)
 	{
 		Task *task = (Task *) lfirst(taskCell);
 		uint64 anchorShardId = task->anchorShardId;
-
 		List *shardPlacementList = ActiveShardPlacementList(anchorShardId);
 
 		/* filter out shard placements that reside in inactive nodes */

@@ -334,6 +334,23 @@ IsCitusTableRTE(Node *node)
 
 
 /*
+ * IsDistributedOrReferenceTableRTE returns true if the given node
+ * is eeither a distributed(hash/range/append) or reference table.
+ */
+bool
+IsDistributedOrReferenceTableRTE(Node *node)
+{
+	Oid relationId = NodeTryGetRteRelid(node);
+	if (!OidIsValid(relationId))
+	{
+		return false;
+	}
+	return IsCitusTableType(relationId, DISTRIBUTED_TABLE) ||
+		   IsCitusTableType(relationId, REFERENCE_TABLE);
+}
+
+
+/*
  * IsDistributedTableRTE gets a node and returns true if the node
  * is a range table relation entry that points to a distributed relation,
  * returning false still if the relation is a reference table.

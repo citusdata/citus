@@ -410,11 +410,10 @@ AdjustPartitioningForDistributedPlanning(List *rangeTableList,
 		/*
 		 * We want Postgres to behave partitioned tables as regular relations
 		 * (i.e. we do not want to expand them to their partitions). To do this
-		 * we set each distributed partitioned table's inh flag to appropriate
+		 * we set each partitioned table's inh flag to appropriate
 		 * value before and after dropping to the standart_planner.
 		 */
 		if (rangeTableEntry->rtekind == RTE_RELATION &&
-			IsCitusTable(rangeTableEntry->relid) &&
 			PartitionedTable(rangeTableEntry->relid))
 		{
 			rangeTableEntry->inh = setPartitionedTablesInherited;

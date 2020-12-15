@@ -49,7 +49,11 @@ SELECT * FROM mode_counts WHERE l_shipmode = 'AIR' ORDER BY 2 DESC, 1 LIMIT 10;
 
 -- materialized views are local, cannot join with distributed tables
 SELECT count(*) FROM mode_counts JOIN temp_lineitem USING (l_shipmode);
-ERROR:  relation mode_counts is not distributed
+ count
+---------------------------------------------------------------------
+  1706
+(1 row)
+
 -- new data is not immediately reflected in the view
 INSERT INTO temp_lineitem SELECT * FROM air_shipped_lineitems;
 SELECT * FROM mode_counts WHERE l_shipmode = 'AIR' ORDER BY 2 DESC, 1 LIMIT 10;
@@ -240,26 +244,24 @@ UPDATE small_view SET id = 1;
 ERROR:  cannot change materialized view "small_view"
 -- for now, using materialized views in modify statements' FROM / WHERE clauses is not supported
 UPDATE large SET id=20 FROM small_view WHERE small_view.id=large.id;
-ERROR:  materialized views in modify queries are not supported
 SELECT * FROM large ORDER BY 1, 2;
  id | tenant_id
 ---------------------------------------------------------------------
-  1 |         2
   2 |         3
   5 |         4
-  6 |         5
+ 20 |         2
+ 20 |         5
 (4 rows)
 
 -- test on a router executable update statement, this will also fail
 UPDATE large SET id=28 FROM small_view WHERE small_view.id=large.id and small_view.tenant_id=2 and large.tenant_id=2;
-ERROR:  materialized views in modify queries are not supported
 SELECT * FROM large ORDER BY 1, 2;
  id | tenant_id
 ---------------------------------------------------------------------
-  1 |         2
   2 |         3
   5 |         4
-  6 |         5
+ 20 |         2
+ 20 |         5
 (4 rows)
 
 -- delete statement on large with subquery, this should succeed
@@ -267,7 +269,7 @@ DELETE FROM large WHERE tenant_id in (SELECT tenant_id FROM small_view);
 SELECT * FROM large ORDER BY 1, 2;
  id | tenant_id
 ---------------------------------------------------------------------
-  6 |         5
+ 20 |         5
 (1 row)
 
 -- INSERT INTO views is already not supported by PostgreSQL
@@ -304,14 +306,13 @@ DELETE FROM small_view;
 ERROR:  cannot change materialized view "small_view"
 -- using mat. view in modify statements' FROM / WHERE clauses is not valid yet
 UPDATE large_partitioned SET id=20 FROM small_view WHERE small_view.id=large_partitioned.id;
-ERROR:  materialized views in modify queries are not supported
 SELECT * FROM large_partitioned ORDER BY 1, 2;
  id | tenant_id
 ---------------------------------------------------------------------
-  1 |         2
   2 |         3
   5 |         4
-  6 |         5
+ 20 |         2
+ 20 |         5
  26 |        32
  29 |        15
  60 |        51
@@ -324,10 +325,12 @@ SELECT * FROM large_partitioned ORDER BY 1, 2;
 ---------------------------------------------------------------------
   2 |         3
   5 |         4
+ 20 |         2
+ 20 |         5
  26 |        32
  29 |        15
  60 |        51
-(5 rows)
+(7 rows)
 
 -- we should still have identical rows for next test statement, then insert new rows to both tables
 INSERT INTO large_partitioned VALUES(14, 14);

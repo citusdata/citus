@@ -319,28 +319,55 @@ $$);
 (1 row)
 
 SET client_min_messages TO DEBUG1;
--- should fail
-SELECT * FROM partitioned_postgres_local_table JOIN distributed_table ON (true);
-ERROR:  direct joins between distributed and local tables are not supported
-HINT:  Use CTE's or subqueries to select from local tables and use them in joins
-SELECT * FROM partitioned_postgres_local_table JOIN partitioned_distributed_table ON (true);
-ERROR:  direct joins between distributed and local tables are not supported
-HINT:  Use CTE's or subqueries to select from local tables and use them in joins
-SELECT * FROM distributed_table JOIN partitioned_postgres_local_table ON (true);
-ERROR:  direct joins between distributed and local tables are not supported
-HINT:  Use CTE's or subqueries to select from local tables and use them in joins
-SELECT * FROM reference_table LEFT JOIN partitioned_distributed_table ON true;
-ERROR:  cannot pushdown the subquery
-DETAIL:  There exist a reference table in the outer part of the outer join
+SELECT COUNT(*) FROM partitioned_postgres_local_table JOIN distributed_table ON (true);
+DEBUG:  Wrapping relation "partitioned_postgres_local_table" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT NULL::integer AS a FROM mixed_relkind_tests.partitioned_postgres_local_table WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT NULL::integer AS a FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) partitioned_postgres_local_table_1) partitioned_postgres_local_table JOIN mixed_relkind_tests.distributed_table ON (true))
+ count
+---------------------------------------------------------------------
+    36
+(1 row)
+
+SELECT COUNT(*) FROM partitioned_postgres_local_table JOIN partitioned_distributed_table ON (true);
+DEBUG:  Wrapping relation "partitioned_postgres_local_table" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT NULL::integer AS a FROM mixed_relkind_tests.partitioned_postgres_local_table WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT NULL::integer AS a FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) partitioned_postgres_local_table_1) partitioned_postgres_local_table JOIN mixed_relkind_tests.partitioned_distributed_table ON (true))
+ count
+---------------------------------------------------------------------
+    36
+(1 row)
+
+SELECT COUNT(*) FROM distributed_table JOIN partitioned_postgres_local_table ON (true);
+DEBUG:  Wrapping relation "partitioned_postgres_local_table" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT NULL::integer AS a FROM mixed_relkind_tests.partitioned_postgres_local_table WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (mixed_relkind_tests.distributed_table JOIN (SELECT NULL::integer AS a FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) partitioned_postgres_local_table_1) partitioned_postgres_local_table ON (true))
+ count
+---------------------------------------------------------------------
+    36
+(1 row)
+
 INSERT INTO partitioned_distributed_table SELECT foo.* FROM partitioned_distributed_table AS foo JOIN citus_local_table ON (true);
 DEBUG:  distributed INSERT ... SELECT cannot select from distributed tables and local tables at the same time
-ERROR:  direct joins between distributed and local tables are not supported
+DEBUG:  Wrapping relation "citus_local_table" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT NULL::integer AS a FROM mixed_relkind_tests.citus_local_table WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT foo.a, foo.b FROM (mixed_relkind_tests.partitioned_distributed_table foo JOIN (SELECT NULL::integer AS a FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) citus_local_table_1) citus_local_table ON (true))
+DEBUG:  performing repartitioned INSERT ... SELECT
 INSERT INTO partitioned_distributed_table SELECT foo.* FROM distributed_table AS foo JOIN citus_local_table ON (true);
 DEBUG:  distributed INSERT ... SELECT cannot select from distributed tables and local tables at the same time
-ERROR:  direct joins between distributed and local tables are not supported
+DEBUG:  Wrapping relation "citus_local_table" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT NULL::integer AS a FROM mixed_relkind_tests.citus_local_table WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT foo.a FROM (mixed_relkind_tests.distributed_table foo JOIN (SELECT NULL::integer AS a FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) citus_local_table_1) citus_local_table ON (true))
+DEBUG:  performing repartitioned INSERT ... SELECT
 INSERT INTO distributed_table SELECT foo.a FROM partitioned_distributed_table AS foo JOIN citus_local_table ON (true);
 DEBUG:  distributed INSERT ... SELECT cannot select from distributed tables and local tables at the same time
-ERROR:  direct joins between distributed and local tables are not supported
+DEBUG:  Wrapping relation "citus_local_table" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT NULL::integer AS a FROM mixed_relkind_tests.citus_local_table WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT foo.a FROM (mixed_relkind_tests.partitioned_distributed_table foo JOIN (SELECT NULL::integer AS a FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) citus_local_table_1) citus_local_table ON (true))
+DEBUG:  performing repartitioned INSERT ... SELECT
+-- should fail
+SELECT COUNT(*) FROM reference_table LEFT JOIN partitioned_distributed_table ON true;
+ERROR:  cannot pushdown the subquery
+DETAIL:  There exist a reference table in the outer part of the outer join
 -- non-colocated subquery should work
 SELECT COUNT(*) FROM
   (SELECT *, random() FROM partitioned_distributed_table) AS foo,
@@ -350,7 +377,7 @@ DEBUG:  generating subplan XXX_1 for subquery SELECT a, b, random() AS random FR
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT partitioned_distributed_table.a, partitioned_distributed_table.b, random() AS random FROM mixed_relkind_tests.partitioned_distributed_table) foo, (SELECT intermediate_result.a, intermediate_result.b, intermediate_result.random FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer, random double precision)) bar WHERE (foo.a OPERATOR(pg_catalog.=) bar.b)
  count
 ---------------------------------------------------------------------
-     5
+   455
 (1 row)
 
 SELECT COUNT(*) FROM
@@ -364,21 +391,27 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS c
      0
 (1 row)
 
--- should fail
 UPDATE partitioned_distributed_table SET b = foo.a FROM citus_local_table AS foo;
-ERROR:  cannot plan modifications with citus local tables and distributed tables
-HINT:  Use CTE's or subqueries to select from local tables and use them in joins
+DEBUG:  Wrapping relation "citus_local_table" "foo" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT a FROM mixed_relkind_tests.citus_local_table foo WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: UPDATE mixed_relkind_tests.partitioned_distributed_table SET b = foo.a FROM (SELECT foo_1.a FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) foo_1) foo
 UPDATE partitioned_distributed_table SET b = foo.a FROM postgres_local_table AS foo;
-ERROR:  cannot plan modifications with local tables involving citus tables
-HINT:  Use CTE's or subqueries to select from local tables and use them in joins
+DEBUG:  Wrapping relation "postgres_local_table" "foo" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT a FROM mixed_relkind_tests.postgres_local_table foo WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: UPDATE mixed_relkind_tests.partitioned_distributed_table SET b = foo.a FROM (SELECT foo_1.a FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) foo_1) foo
 UPDATE partitioned_distributed_table SET a = foo.a FROM postgres_local_table AS foo WHERE foo.a = partitioned_distributed_table.a;
-ERROR:  cannot plan modifications with local tables involving citus tables
-HINT:  Use CTE's or subqueries to select from local tables and use them in joins
+DEBUG:  Wrapping relation "postgres_local_table" "foo" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT a FROM mixed_relkind_tests.postgres_local_table foo WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: UPDATE mixed_relkind_tests.partitioned_distributed_table SET a = foo.a FROM (SELECT foo_1.a FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) foo_1) foo WHERE (foo.a OPERATOR(pg_catalog.=) partitioned_distributed_table.a)
 UPDATE partitioned_distributed_table SET a = foo.a FROM citus_local_table AS foo WHERE foo.a = partitioned_distributed_table.a;
-ERROR:  cannot plan modifications with citus local tables and distributed tables
-HINT:  Use CTE's or subqueries to select from local tables and use them in joins
+DEBUG:  Wrapping relation "citus_local_table" "foo" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT a FROM mixed_relkind_tests.citus_local_table foo WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: UPDATE mixed_relkind_tests.partitioned_distributed_table SET a = foo.a FROM (SELECT foo_1.a FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) foo_1) foo WHERE (foo.a OPERATOR(pg_catalog.=) partitioned_distributed_table.a)
+-- should fail
 UPDATE partitioned_distributed_table SET a = foo.a FROM mat_view_on_part_dist AS foo WHERE foo.a = partitioned_distributed_table.a;
-ERROR:  materialized views in modify queries are not supported
+DEBUG:  Wrapping relation "mat_view_on_part_dist" "foo" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT a FROM mixed_relkind_tests.mat_view_on_part_dist foo WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: UPDATE mixed_relkind_tests.partitioned_distributed_table SET a = foo.a FROM (SELECT foo_1.a, NULL::integer AS b FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) foo_1) foo WHERE (foo.a OPERATOR(pg_catalog.=) partitioned_distributed_table.a)
 UPDATE partitioned_distributed_table SET a = foo.a FROM partitioned_distributed_table AS foo WHERE foo.a < partitioned_distributed_table.a;
 ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 UPDATE partitioned_distributed_table SET a = foo.a FROM distributed_table AS foo WHERE foo.a < partitioned_distributed_table.a;
@@ -392,33 +425,33 @@ UPDATE partitioned_distributed_table SET a = foo.a FROM view_on_ref AS foo WHERE
 SELECT COUNT(*) FROM partitioned_distributed_table p1 JOIN partitioned_distributed_table p2 USING (a);
  count
 ---------------------------------------------------------------------
-     6
+  1014
 (1 row)
 
 SELECT COUNT(*) FROM unlogged_distributed_table u1 JOIN partitioned_distributed_table p2 USING (a);
  count
 ---------------------------------------------------------------------
-     6
+    78
 (1 row)
 
 SELECT COUNT(*) FROM partitioned_distributed_table p1 LEFT JOIN partitioned_distributed_table p2 USING (a);
  count
 ---------------------------------------------------------------------
-     6
+  1014
 (1 row)
 
 -- lateral JOIN
 SELECT COUNT(*) FROM partitioned_distributed_table p1 JOIN LATERAL (SELECT * FROM partitioned_distributed_table p2 WHERE p1.a = p2.a) AS foo ON (true);
  count
 ---------------------------------------------------------------------
-     6
+  1014
 (1 row)
 
 -- router query
 SELECT COUNT(*) FROM partitioned_distributed_table p1 JOIN partitioned_distributed_table p2 USING (a) WHERE a = 1;
  count
 ---------------------------------------------------------------------
-     1
+   169
 (1 row)
 
 -- repartition query
@@ -426,13 +459,13 @@ SET citus.enable_repartition_joins TO ON;
 SELECT COUNT(*) FROM partitioned_distributed_table p1 JOIN partitioned_distributed_table p2 USING (b) WHERE b = 1;
  count
 ---------------------------------------------------------------------
-     1
+     0
 (1 row)
 
 SELECT COUNT(*) FROM unlogged_distributed_table u1 JOIN partitioned_distributed_table p2 USING (b) WHERE b = 1;
  count
 ---------------------------------------------------------------------
-     1
+     0
 (1 row)
 
 RESET citus.enable_repartition_joins;
@@ -443,7 +476,7 @@ DEBUG:  generating subplan XXX_1 for CTE cte_1: SELECT a, b FROM mixed_relkind_t
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) cte_1
  count
 ---------------------------------------------------------------------
-     6
+    78
 (1 row)
 
 WITH cte_1 AS (SELECT * FROM partitioned_distributed_table)
@@ -452,7 +485,7 @@ DEBUG:  generating subplan XXX_1 for CTE cte_1: SELECT a, b FROM mixed_relkind_t
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) cte_1 JOIN mixed_relkind_tests.partitioned_distributed_table USING (a))
  count
 ---------------------------------------------------------------------
-     6
+  1014
 (1 row)
 
 WITH cte_1 AS (SELECT * FROM foreign_distributed_table)
@@ -470,7 +503,7 @@ DEBUG:  generating subplan XXX_1 for CTE cte_1: SELECT a, b FROM mixed_relkind_t
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) cte_1 JOIN mixed_relkind_tests.partitioned_distributed_table USING (b))
  count
 ---------------------------------------------------------------------
-     6
+  6084
 (1 row)
 
 -- multi shard colocated update
@@ -599,13 +632,13 @@ SET client_min_messages TO DEBUG1;
 SELECT sum(a) FROM partitioned_distributed_table;
  sum
 ---------------------------------------------------------------------
-  15
+ 195
 (1 row)
 
 SELECT ceil(regr_syy(a, b)) FROM partitioned_distributed_table;
  ceil
 ---------------------------------------------------------------------
-   18
+  228
 (1 row)
 
 SELECT ceil(regr_syy(a, b)) FROM unlogged_distributed_table;
@@ -674,8 +707,20 @@ $Q$);
 SELECT * FROM partitioned_distributed_table WHERE a = 1 ORDER BY 1,2 FOR UPDATE;
  a | b
 ---------------------------------------------------------------------
- 1 | 2
-(1 row)
+ 1 | 0
+ 1 | 0
+ 1 | 0
+ 1 | 0
+ 1 | 0
+ 1 | 0
+ 1 | 0
+ 1 | 0
+ 1 | 0
+ 1 | 0
+ 1 | 0
+ 1 | 0
+ 1 | 0
+(13 rows)
 
 SELECT * FROM unlogged_distributed_table WHERE a = 1 ORDER BY 1,2 FOR UPDATE;
  a | b

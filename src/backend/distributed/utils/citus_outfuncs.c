@@ -540,6 +540,7 @@ OutTask(OUTFUNC_ARGS)
 	WRITE_INT_FIELD(fetchedExplainAnalyzePlacementIndex);
 	WRITE_STRING_FIELD(fetchedExplainAnalyzePlan);
 	WRITE_FLOAT_FIELD(fetchedExplainAnalyzeExecutionDuration, "%.2f");
+	WRITE_BOOL_FIELD(isLocalTableModification);
 }
 
 

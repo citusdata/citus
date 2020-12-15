@@ -281,8 +281,10 @@ SET dept = 5
 FROM cte_1
 WHERE distributed_table.tenant_id < cte_1.tenant_id;
 
--- we don't support updating local table with a join with
--- distributed tables
+-- we support updating local table with a join with
+-- distributed tables, though as the local table
+-- is target here, distributed table is recursively
+-- planned
 UPDATE
 	local_table
 SET

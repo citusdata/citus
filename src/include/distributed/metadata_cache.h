@@ -134,6 +134,7 @@ typedef enum
 	ANY_CITUS_TABLE_TYPE
 } CitusTableType;
 
+
 extern bool IsCitusTableType(Oid relationId, CitusTableType tableType);
 extern bool IsCitusTableTypeCacheEntry(CitusTableCacheEntry *tableEtnry,
 									   CitusTableType tableType);

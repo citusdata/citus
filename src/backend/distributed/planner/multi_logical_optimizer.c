@@ -291,8 +291,9 @@ static SortGroupClause * CreateSortGroupClause(Var *column);
 /* Local functions forward declarations for count(distinct) approximations */
 static const char * CountDistinctHashFunctionName(Oid argumentType);
 static int CountDistinctStorageSize(double approximationErrorRate);
-static Const * MakeIntegerConst(int32 integerValue);
 static Const * MakeIntegerConstInt64(int64 integerValue);
+static Const * MakeIntegerConst(int32 integerValue);
+
 
 /* Local functions forward declarations for aggregate expression checks */
 static bool HasNonDistributableAggregates(MultiNode *logicalPlanNode);

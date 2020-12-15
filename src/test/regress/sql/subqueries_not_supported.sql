@@ -9,21 +9,9 @@ SET client_min_messages TO DEBUG1;
 
 CREATE TABLE users_table_local AS SELECT * FROM users_table;
 
--- we don't support subqueries with local tables when they are not leaf queries
-SELECT
-	*
-FROM
-	(
-		SELECT
-			users_table_local.user_id
-		FROM
-			users_table_local, (SELECT user_id FROM events_table) as evs
-		WHERE users_table_local.user_id = evs.user_id
-	) as foo;
-
 RESET client_min_messages;
 -- we don't support subqueries with local tables when they are not leaf queries
-SELECT user_id FROM users_table WHERE user_id IN
+SELECT COUNT(user_id) FROM users_table WHERE user_id IN
 	(SELECT
 		user_id
 	 FROM

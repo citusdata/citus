@@ -413,13 +413,14 @@ SET b = 6
 FROM distributed_table_cte
 WHERE citus_local_table.a = distributed_table_cte.a;
 
+SET citus.log_local_commands to off;
 -- just works
 WITH reference_table_cte AS (SELECT * FROM reference_table)
 UPDATE citus_local_table
 SET b = 6
 FROM reference_table_cte
 WHERE citus_local_table.a = reference_table_cte.a;
-
+set citus.log_local_commands to on;
 ------------------------
 ----- VIEW QUERIES -----
 ------------------------
