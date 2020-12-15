@@ -315,6 +315,14 @@ EXECUTE local_dist_table_join_filters(20);
 EXECUTE local_dist_table_join_filters(20);
 EXECUTE local_dist_table_join_filters(20);
 
+CREATE TABLE local (key1 int, key2 int, key3 int);
+INSERT INTO local VALUES (1,2,3);
+ALTER TABLE local DROP column key2;
+-- verify we ignore dropped columns
+SELECT COUNT(*) FROM local JOIN distributed_table ON(key1 = key);
+SELECT * FROM local JOIN distributed_table ON(key1 = key) ORDER BY 1 LIMIT 1;
+
+
 RESET client_min_messages;
 \set VERBOSITY terse
 DROP SCHEMA local_table_join CASCADE;

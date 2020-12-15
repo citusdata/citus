@@ -132,6 +132,11 @@
  */
 int LocalTableJoinPolicy = LOCAL_JOIN_POLICY_AUTO;
 
+/*
+ * RangeTableEntryDetails contains some information about
+ * a range table entry so that we don't need to calculate
+ * them over and over.
+ */
 typedef struct RangeTableEntryDetails
 {
 	RangeTblEntry *rangeTableEntry;
@@ -139,17 +144,33 @@ typedef struct RangeTableEntryDetails
 	bool hasConstantFilterOnUniqueColumn;
 } RangeTableEntryDetails;
 
+/*
+ * ConversionCandidates contains candidates that could
+ * be converted to a subquery. This is used as a convenience to
+ * first generate all the candidates and then choose which ones to convert.
+ */
 typedef struct ConversionCandidates
 {
 	List *distributedTableList; /* reference or distributed table */
 	List *localTableList; /* local or citus local table */
 }ConversionCandidates;
 
+
+/*
+ * IndexColumns contains the column numbers for an index.
+ * For example if there is an index on (a, b) then it will contain
+ * their column numbers (1,2).
+ */
 typedef struct IndexColumns
 {
 	List *indexColumnNos;
 }IndexColumns;
 
+/*
+ * ConversionChoice represents which conversion group
+ * to convert to a subquery. Currently we either convert all
+ * local tables, or distributed tables.
+ */
 typedef enum ConversionChoice
 {
 	CONVERT_LOCAL_TABLES = 1,
@@ -458,6 +479,13 @@ RequiredAttrNumbersForRelation(RangeTblEntry *rangeTableEntry,
 	}
 
 	PlannerInfo *plannerInfo = relationRestriction->plannerInfo;
+
+	/*
+	 * Here we used the query from plannerInfo because it has the optimizations
+	 * so that it doesn't have unnecessary columns. The original query doesn't have
+	 * some of these optimizations hence if we use it here, we don't get the
+	 * 'required' attributes.
+	 */
 	Query *queryToProcess = plannerInfo->parse;
 	int rteIndex = relationRestriction->index;
 

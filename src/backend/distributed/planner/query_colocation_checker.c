@@ -321,6 +321,11 @@ CreateAllTargetListForRelation(Oid relationId, List *requiredAttributes)
 		Form_pg_attribute attributeTuple =
 			TupleDescAttr(relation->rd_att, attrNum - 1);
 
+		if (attributeTuple->attisdropped)
+		{
+			continue;
+		}
+
 		int resNo = attrNum;
 		if (!list_member_int(requiredAttributes, attrNum))
 		{

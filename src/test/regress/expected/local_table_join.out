@@ -1256,7 +1256,30 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS c
      2
 (1 row)
 
+CREATE TABLE local (key1 int, key2 int, key3 int);
+INSERT INTO local VALUES (1,2,3);
+ALTER TABLE local DROP column key2;
+-- verify we ignore dropped columns
+SELECT COUNT(*) FROM local JOIN distributed_table ON(key1 = key);
+DEBUG:  Wrapping relation "local" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT key1 FROM local_table_join.local WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT local_1.key1, NULL::integer AS key3 FROM (SELECT intermediate_result.key1 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key1 integer)) local_1) local JOIN local_table_join.distributed_table ON ((local.key1 OPERATOR(pg_catalog.=) distributed_table.key)))
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+SELECT * FROM local JOIN distributed_table ON(key1 = key) ORDER BY 1 LIMIT 1;
+DEBUG:  Wrapping relation "local" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT key1, key3 FROM local_table_join.local WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT local.key1, local.key3, distributed_table.key, distributed_table.value, distributed_table.value_2 FROM ((SELECT local_1.key1, local_1.key3 FROM (SELECT intermediate_result.key1, intermediate_result.key3 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key1 integer, key3 integer)) local_1) local JOIN local_table_join.distributed_table ON ((local.key1 OPERATOR(pg_catalog.=) distributed_table.key))) ORDER BY local.key1 LIMIT 1
+DEBUG:  push down of limit count: 1
+ key1 | key3 | key | value | value_2
+---------------------------------------------------------------------
+    1 |    3 |   1 | 1     |
+(1 row)
+
 RESET client_min_messages;
 \set VERBOSITY terse
 DROP SCHEMA local_table_join CASCADE;
-NOTICE:  drop cascades to 15 other objects
+NOTICE:  drop cascades to 16 other objects
