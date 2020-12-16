@@ -1545,6 +1545,71 @@ DEBUG:  query has a single distribution column value: 1
 ---------------------------------------------------------------------
 (0 rows)
 
+-- if these queries get routed, they would fail since number1() does not exist
+-- on workers. This tests an exceptional case in which some local tables bypass
+-- checks.
+CREATE OR REPLACE FUNCTION number1(OUT datid int)
+RETURNS SETOF int
+AS $$
+DECLARE
+BEGIN
+    RETURN QUERY SELECT 1;
+END;
+$$ LANGUAGE plpgsql;
+SELECT 1 FROM authors_reference  r JOIN (
+  SELECT s.datid FROM number1() s LEFT JOIN pg_database d ON s.datid = d.oid
+) num_db ON (r.id = num_db.datid) LIMIT 1;
+DEBUG:  found no worker with all shard placements
+DEBUG:  generating subplan XXX_1 for subquery SELECT datid FROM public.number1() s(datid)
+DEBUG:  Creating router plan
+DEBUG:  generating subplan XXX_2 for subquery SELECT s.datid FROM ((SELECT intermediate_result.datid FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(datid integer)) s LEFT JOIN pg_database d ON (((s.datid)::oid OPERATOR(pg_catalog.=) d.oid)))
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT 1 FROM (public.authors_reference r JOIN (SELECT intermediate_result.datid FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(datid integer)) num_db ON ((r.id OPERATOR(pg_catalog.=) num_db.datid))) LIMIT 1
+DEBUG:  Creating router plan
+ ?column?
+---------------------------------------------------------------------
+(0 rows)
+
+-- same scenario with a view
+CREATE VIEW num_db AS
+SELECT s.datid FROM number1() s LEFT JOIN pg_database d ON s.datid = d.oid;
+SELECT 1 FROM authors_reference r JOIN num_db ON (r.id = num_db.datid) LIMIT 1;
+DEBUG:  found no worker with all shard placements
+DEBUG:  generating subplan XXX_1 for subquery SELECT datid FROM public.number1() s(datid)
+DEBUG:  Creating router plan
+DEBUG:  generating subplan XXX_2 for subquery SELECT s.datid FROM ((SELECT intermediate_result.datid FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(datid integer)) s LEFT JOIN pg_database d ON (((s.datid)::oid OPERATOR(pg_catalog.=) d.oid)))
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT 1 FROM (public.authors_reference r JOIN (SELECT intermediate_result.datid FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(datid integer)) num_db ON ((r.id OPERATOR(pg_catalog.=) num_db.datid))) LIMIT 1
+DEBUG:  Creating router plan
+ ?column?
+---------------------------------------------------------------------
+(0 rows)
+
+-- with a CTE in a view
+WITH cte AS (SELECT * FROM num_db)
+SELECT 1 FROM authors_reference r JOIN cte ON (r.id = cte.datid) LIMIT 1;
+DEBUG:  found no worker with all shard placements
+DEBUG:  generating subplan XXX_1 for CTE cte: SELECT datid FROM (SELECT s.datid FROM (public.number1() s(datid) LEFT JOIN pg_database d ON (((s.datid)::oid OPERATOR(pg_catalog.=) d.oid)))) num_db
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT 1 FROM (public.authors_reference r JOIN (SELECT intermediate_result.datid FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(datid integer)) cte ON ((r.id OPERATOR(pg_catalog.=) cte.datid))) LIMIT 1
+DEBUG:  Creating router plan
+ ?column?
+---------------------------------------------------------------------
+(0 rows)
+
+-- hide changes between major versions
+RESET client_min_messages;
+-- with pg_stat_activity view
+WITH pg_stat_activity AS (
+  SELECT
+    pg_stat_activity.datid,
+    pg_stat_activity.application_name,
+    pg_stat_activity.query
+  FROM pg_catalog.pg_stat_activity
+)
+SELECT 1 FROM authors_reference  r LEFT JOIN pg_stat_activity ON (r.id = pg_stat_activity.datid) LIMIT 1;
+ ?column?
+---------------------------------------------------------------------
+(0 rows)
+
+SET client_min_messages TO DEBUG2;
 -- CTEs with where false
 -- terse because distribution column inference varies between pg11 & pg12
 \set VERBOSITY terse
@@ -2386,6 +2451,8 @@ DROP FUNCTION author_articles_max_id();
 DROP FUNCTION author_articles_id_word_count();
 DROP MATERIALIZED VIEW mv_articles_hash_empty;
 DROP MATERIALIZED VIEW mv_articles_hash_data;
+DROP VIEW num_db;
+DROP FUNCTION number1();
 DROP TABLE articles_hash;
 DROP TABLE articles_single_shard_hash;
 DROP TABLE authors_hash;
