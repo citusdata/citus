@@ -167,6 +167,7 @@ extern int ShardMaxSize;
 extern int ShardPlacementPolicy;
 extern int NextShardId;
 extern int NextPlacementId;
+extern bool AddCoordinatorOnEmptyCluster;
 
 
 extern bool IsCoordinator(void);

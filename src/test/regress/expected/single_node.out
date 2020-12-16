@@ -9,7 +9,7 @@ SELECT 1 FROM master_add_inactive_node('localhost', :master_port, groupid => 0);
 ERROR:  coordinator node cannot be added as inactive node
 -- idempotently add node to allow this test to run without add_coordinator
 SET client_min_messages TO WARNING;
-SELECT 1 FROM master_add_node('localhost', :master_port, groupid => 0);
+SELECT 1 FROM citus_set_coordinator_host('localhost', :master_port);
  ?column?
 ---------------------------------------------------------------------
         1
@@ -20,17 +20,18 @@ SELECT 1 FROM master_disable_node('localhost', :master_port);
 ERROR:  Disabling localhost:xxxxx failed
 DETAIL:  cannot change "isactive" field of the coordinator node
 RESET client_min_messages;
-SELECT 1 FROM master_set_node_property('localhost', :master_port, 'shouldhaveshards', true);
- ?column?
----------------------------------------------------------------------
-        1
-(1 row)
-
 CREATE TABLE test(x int, y int);
 SELECT create_distributed_table('test','x');
  create_distributed_table
 ---------------------------------------------------------------------
 
+(1 row)
+
+-- should have shards setting should not matter for a single node
+SELECT 1 FROM master_set_node_property('localhost', :master_port, 'shouldhaveshards', true);
+ ?column?
+---------------------------------------------------------------------
+        1
 (1 row)
 
 CREATE TYPE new_type AS (n int, m text);

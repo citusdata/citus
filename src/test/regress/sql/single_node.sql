@@ -10,17 +10,18 @@ SELECT 1 FROM master_add_inactive_node('localhost', :master_port, groupid => 0);
 
 -- idempotently add node to allow this test to run without add_coordinator
 SET client_min_messages TO WARNING;
-SELECT 1 FROM master_add_node('localhost', :master_port, groupid => 0);
+SELECT 1 FROM citus_set_coordinator_host('localhost', :master_port);
 
 -- coordinator cannot be disabled
 SELECT 1 FROM master_disable_node('localhost', :master_port);
 
 RESET client_min_messages;
 
-SELECT 1 FROM master_set_node_property('localhost', :master_port, 'shouldhaveshards', true);
-
 CREATE TABLE test(x int, y int);
 SELECT create_distributed_table('test','x');
+
+-- should have shards setting should not matter for a single node
+SELECT 1 FROM master_set_node_property('localhost', :master_port, 'shouldhaveshards', true);
 
 CREATE TYPE new_type AS (n int, m text);
 CREATE TABLE test_2(x int, y int, z new_type);

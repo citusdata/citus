@@ -47,6 +47,7 @@
 #include "distributed/worker_manager.h"
 #include "distributed/worker_transaction.h"
 #include "lib/stringinfo.h"
+#include "postmaster/postmaster.h"
 #include "storage/bufmgr.h"
 #include "storage/lmgr.h"
 #include "storage/lock.h"
@@ -110,7 +111,9 @@ static void ErrorIfCoordinatorMetadataSetFalse(WorkerNode *workerNode, Datum val
 											   char *field);
 static WorkerNode * SetShouldHaveShards(WorkerNode *workerNode, bool shouldHaveShards);
 
+
 /* declarations for dynamic loading */
+PG_FUNCTION_INFO_V1(citus_set_coordinator_host);
 PG_FUNCTION_INFO_V1(master_add_node);
 PG_FUNCTION_INFO_V1(master_add_inactive_node);
 PG_FUNCTION_INFO_V1(master_add_secondary_node);
@@ -138,6 +141,50 @@ DefaultNodeMetadata()
 	nodeMetadata.groupId = INVALID_GROUP_ID;
 
 	return nodeMetadata;
+}
+
+
+/*
+ * citus_set_coordinator_host configures the hostname and port through which worker
+ * nodes can connect to the coordinator.
+ */
+Datum
+citus_set_coordinator_host(PG_FUNCTION_ARGS)
+{
+	text *nodeName = PG_GETARG_TEXT_P(0);
+	int32 nodePort = PG_GETARG_INT32(1);
+	char *nodeNameString = text_to_cstring(nodeName);
+
+	NodeMetadata nodeMetadata = DefaultNodeMetadata();
+	nodeMetadata.groupId = 0;
+	nodeMetadata.shouldHaveShards = false;
+	nodeMetadata.nodeRole = PG_GETARG_OID(2);
+
+	Name nodeClusterName = PG_GETARG_NAME(3);
+	nodeMetadata.nodeCluster = NameStr(*nodeClusterName);
+
+	bool nodeAlreadyExists = false;
+
+	CheckCitusVersion(ERROR);
+
+	/* add the coordinator to pg_dist_node if it was not already added */
+	int nodeId = AddNodeMetadata(nodeNameString, nodePort, &nodeMetadata,
+								 &nodeAlreadyExists);
+	if (nodeAlreadyExists)
+	{
+		/*
+		 * since AddNodeMetadata takes an exclusive lock on pg_dist_node, we
+		 * do not need to worry about concurrent changes (e.g. deletion) and
+		 * can proceed to update immediately.
+		 */
+
+		UpdateNodeLocation(nodeId, nodeNameString, nodePort);
+
+		/* clear cached plans that have the old host/port */
+		ResetPlanCache();
+	}
+
+	PG_RETURN_VOID();
 }
 
 

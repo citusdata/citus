@@ -434,14 +434,8 @@ SELECT * FROM print_extension_changes();
 -- Test downgrade to 9.5-1 from 10.0-1
 ALTER EXTENSION citus UPDATE TO '10.0-1';
 ALTER EXTENSION citus UPDATE TO '9.5-1';
+ERROR:  syntax error at or near ">>>>>>>"
 -- Should be empty result since upgrade+downgrade should be a no-op
-SELECT * FROM print_extension_changes();
- previous_object | current_object
----------------------------------------------------------------------
-(0 rows)
-
--- Snapshot of state at 10.0-1
-ALTER EXTENSION citus UPDATE TO '10.0-1';
 SELECT * FROM print_extension_changes();
                 previous_object                |                                current_object
 ---------------------------------------------------------------------
@@ -453,6 +447,7 @@ SELECT * FROM print_extension_changes();
                                                | function alter_columnar_table_reset(regclass,boolean,boolean,boolean,boolean)
                                                | function alter_columnar_table_set(regclass,integer,integer,name,integer)
                                                | function citus_internal.columnar_ensure_objects_exist()
+                                               | function citus_set_coordinator_host(text,integer,noderole,name)
                                                | function citus_total_relation_size(regclass,boolean)
                                                | function columnar.columnar_handler(internal)
                                                | function create_citus_local_table(regclass,boolean)
@@ -465,7 +460,15 @@ SELECT * FROM print_extension_changes();
                                                | table columnar.options
                                                | view citus_tables
                                                | view time_partitions
-(20 rows)
+(21 rows)
+
+-- Snapshot of state at 10.0-1
+ALTER EXTENSION citus UPDATE TO '10.0-1';
+NOTICE:  version "10.0-1" of extension "citus" is already installed
+SELECT * FROM print_extension_changes();
+ previous_object | current_object
+---------------------------------------------------------------------
+(0 rows)
 
 DROP TABLE prev_objects, extension_diff;
 -- show running version

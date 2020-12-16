@@ -56,6 +56,7 @@ ORDER BY 1;
  function citus_relation_size(regclass)
  function citus_remote_connection_stats()
  function citus_server_id()
+ function citus_set_coordinator_host(text,integer,noderole,name)
  function citus_set_default_rebalance_strategy(text)
  function citus_shard_allowed_on_node_true(bigint,integer)
  function citus_shard_cost_1(bigint)
@@ -219,5 +220,5 @@ ORDER BY 1;
  view citus_worker_stat_activity
  view pg_dist_shard_placement
  view time_partitions
-(203 rows)
+(204 rows)
 
