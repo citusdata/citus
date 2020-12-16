@@ -691,6 +691,48 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS c
    101
 (1 row)
 
+-- correlated subquery with aggregate in WHERE
+SELECT
+    *
+FROM
+    users_table
+WHERE
+    user_id IN
+    (
+        SELECT
+            SUM(events_table.user_id)
+        FROM
+            events_table
+        WHERE
+            users_table.user_id = events_table.user_id
+    )
+;
+ user_id | time | value_1 | value_2 | value_3 | value_4
+---------------------------------------------------------------------
+(0 rows)
+
+-- correlated subquery with aggregate in HAVING
+SELECT
+    *
+FROM
+    users_table
+WHERE
+    user_id IN
+    (
+        SELECT
+            SUM(events_table.user_id)
+        FROM
+            events_table
+        WHERE
+            events_table.user_id = users_table.user_id
+        HAVING
+            MIN(value_2) > 2
+    )
+;
+ user_id | time | value_1 | value_2 | value_3 | value_4
+---------------------------------------------------------------------
+(0 rows)
+
 -- Local tables also planned recursively, so using it as part of the FROM clause
 -- make the clause recurring
 CREATE TABLE local_table(id int, value_1 int);
@@ -744,6 +786,365 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS c
  count
 ---------------------------------------------------------------------
     10
+(1 row)
+
+-- basic NOT IN correlated subquery
+SELECT
+  count(*)
+FROM
+  events_table e
+WHERE
+  value_2 NOT IN (SELECT value_2 FROM users_table WHERE user_id = e.user_id);
+ count
+---------------------------------------------------------------------
+     7
+(1 row)
+
+-- correlated subquery with limit
+SELECT
+  count(*)
+FROM
+  events_table e
+WHERE
+  value_2 IN (SELECT value_2 FROM users_table WHERE user_id = e.user_id ORDER BY value_2 LIMIT 1);
+ count
+---------------------------------------------------------------------
+    10
+(1 row)
+
+-- correlated subquery with distinct
+SELECT
+  count(*)
+FROM
+  events_table e
+WHERE
+  value_2 IN (SELECT DISTINCT (value_3) FROM users_table WHERE user_id = e.user_id);
+ count
+---------------------------------------------------------------------
+    90
+(1 row)
+
+-- correlated subquery with aggregate
+SELECT
+  count(*)
+FROM
+  events_table e
+WHERE
+  value_2 = (SELECT max(value_2) FROM users_table WHERE user_id = e.user_id);
+ count
+---------------------------------------------------------------------
+    11
+(1 row)
+
+-- correlated subquery with window function
+SELECT
+  count(*)
+FROM
+  events_table e
+WHERE
+  value_2 IN (SELECT row_number() OVER () FROM users_table WHERE user_id = e.user_id);
+ count
+---------------------------------------------------------------------
+    94
+(1 row)
+
+-- correlated subquery with group by
+SELECT
+  count(*)
+FROM
+  events_table e
+WHERE
+  value_3 IN (SELECT min(value_3) FROM users_table WHERE user_id = e.user_id GROUP BY value_2);
+ count
+---------------------------------------------------------------------
+    72
+(1 row)
+
+SELECT
+  count(*)
+FROM
+  events_table e
+WHERE
+  value_3 IN (SELECT min(value_3) FROM users_table WHERE user_id = e.user_id GROUP BY value_2);
+ count
+---------------------------------------------------------------------
+    72
+(1 row)
+
+-- correlated subquery with group by
+SELECT
+  count(*)
+FROM
+  events_table e
+WHERE
+  value_3 IN (SELECT min(value_3) v FROM users_table WHERE user_id = e.user_id GROUP BY e.value_2);
+ count
+---------------------------------------------------------------------
+    10
+(1 row)
+
+-- correlated subquery with having
+SELECT
+  count(*)
+FROM
+  events_table e
+WHERE
+  value_3 IN (SELECT min(value_3) v FROM users_table WHERE user_id = e.user_id GROUP BY e.value_2 HAVING min(value_3) > (SELECT 1));
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+SELECT
+  count(*)
+FROM
+  events_table e
+WHERE
+  value_3 IN (SELECT min(value_3) v FROM users_table WHERE user_id = e.user_id GROUP BY e.value_2 HAVING min(value_3) > (SELECT e.value_3));
+ERROR:  Subqueries in HAVING cannot refer to outer query
+-- nested correlated subquery
+SELECT
+  count(*)
+FROM
+  events_table e
+WHERE
+  value_3 IN (
+    SELECT min(r.value_3) v FROM users_reference_table r JOIN (SELECT * FROM users_table WHERE user_id = e.user_id) u USING (user_id)
+    WHERE u.value_2 > 3
+    GROUP BY e.value_2 HAVING min(r.value_3) > e.value_3);
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+-- not co-located correlated subquery
+SELECT
+  count(*)
+FROM
+  events_table e
+WHERE
+  value_3 IN (
+    SELECT min(r.value_3) v FROM users_reference_table r JOIN (SELECT * FROM users_table WHERE value_2 = e.user_id) u USING (user_id)
+    WHERE u.value_2 > 3
+    GROUP BY e.value_2 HAVING min(r.value_3) > e.value_3);
+ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
+-- cartesian correlated subquery
+SELECT
+  count(*)
+FROM
+  events_table e
+WHERE
+  value_3 IN (
+    SELECT min(r.value_3) v FROM users_reference_table r JOIN users_table u USING (user_id)
+    WHERE u.value_2 > 3
+    GROUP BY e.value_2 HAVING min(r.value_3) > e.value_3);
+ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
+-- even more subtle cartesian correlated subquery
+SELECT
+  count(*)
+FROM
+  events_table e
+WHERE
+  value_3 IN (
+    SELECT min(r.value_3) v FROM users_reference_table r JOIN users_table u USING (user_id)
+    WHERE u.value_2 > 3
+    GROUP BY u.value_2 HAVING min(r.value_3) > e.value_3);
+ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
+-- not a correlated subquery, uses recursive planning
+SELECT
+  count(*)
+FROM
+  events_table e
+WHERE
+  value_3 IN (
+    SELECT min(r.value_3) v FROM users_reference_table r JOIN users_table u USING (user_id)
+    WHERE u.value_2 > 3
+    GROUP BY r.value_2 HAVING min(r.value_3) > 0);
+DEBUG:  generating subplan XXX_1 for subquery SELECT min(r.value_3) AS v FROM (public.users_reference_table r JOIN public.users_table u USING (user_id)) WHERE (u.value_2 OPERATOR(pg_catalog.>) 3) GROUP BY r.value_2 HAVING (min(r.value_3) OPERATOR(pg_catalog.>) (0)::double precision)
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM public.events_table e WHERE (value_3 OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.v FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(v double precision)))
+ count
+---------------------------------------------------------------------
+    24
+(1 row)
+
+-- two levels of correlation should also allow
+-- merge step in the subquery
+SELECT sum(value_1)
+FROM users_table u
+WHERE EXISTS
+    (SELECT 1
+     FROM events_table e
+     WHERE u.user_id = e.user_id AND
+        EXISTS
+         (SELECT 1
+          FROM users_table u2
+          WHERE u2.user_id = u.user_id AND u2.value_1 = 5
+          LIMIT 1));
+ sum
+---------------------------------------------------------------------
+ 216
+(1 row)
+
+-- correlated subquery in WHERE, with a slightly
+-- different syntax that the result of the subquery
+-- is compared with a constant
+SELECT sum(value_1)
+FROM users_table u1
+WHERE (SELECT COUNT(DISTINCT e1.value_2)
+     FROM events_table e1
+     WHERE e1.user_id = u1.user_id
+          ) > 115;
+ sum
+---------------------------------------------------------------------
+
+(1 row)
+
+-- a correlated subquery which requires merge step
+-- can be pushed down on UPDATE/DELETE queries as well
+-- rollback to keep the rest of the tests unchanged
+BEGIN;
+UPDATE users_table u1
+ SET value_1 = (SELECT count(DISTINCT value_2)
+             	 	 FROM events_table e1
+               		WHERE e1.user_id = u1.user_id);
+DELETE FROM users_table u1 WHERE (SELECT count(DISTINCT value_2)
+             	 	 FROM events_table e1
+               		WHERE e1.user_id = u1.user_id) > 10;
+ROLLBACK;
+-- a correlated anti-join can also be pushed down even if the subquery
+-- has a LIMIT
+SELECT avg(value_1)
+FROM users_table u
+WHERE NOT EXISTS
+    (SELECT 'XXX'
+     FROM events_table e
+     WHERE u.user_id = e.user_id and e.value_2 > 10000 LIMIT 1);
+        avg
+---------------------------------------------------------------------
+ 2.5544554455445545
+(1 row)
+
+-- a [correlated] lateral join can also be pushed down even if the subquery
+-- has an aggregate wout a GROUP BY
+SELECT
+	max(min_of_val_2), max(u1.value_1)
+FROM
+	users_table u1
+		LEFT JOIN LATERAL
+	(SELECT min(e1.value_2) as min_of_val_2 FROM events_table e1 WHERE e1.user_id = u1.user_id)  as foo ON (true);
+ max | max
+---------------------------------------------------------------------
+   1 |   5
+(1 row)
+
+-- a self join is followed by a correlated subquery
+EXPLAIN (COSTS OFF)
+SELECT
+	*
+FROM
+	users_table u1 JOIN users_table u2 USING (user_id)
+WHERE
+	u1.value_1 < u2.value_1 AND
+	(SELECT
+		count(*)
+	FROM
+		events_table e1
+	WHERE
+		e1.user_id = u2.user_id) > 10;
+                             QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive)
+   Task Count: 4
+   Tasks Shown: One of 4
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  Hash Join
+               Hash Cond: (u2.user_id = u1.user_id)
+               Join Filter: (u1.value_1 < u2.value_1)
+               ->  Seq Scan on users_table_1400256 u2
+                     Filter: ((SubPlan 1) > 10)
+                     SubPlan 1
+                       ->  Aggregate
+                             ->  Seq Scan on events_table_1400260 e1
+                                   Filter: (user_id = u2.user_id)
+               ->  Hash
+                     ->  Seq Scan on users_table_1400256 u1
+(16 rows)
+
+-- when the colocated join of the FROM clause
+-- entries happen on WHERE clause, Citus cannot
+-- pushdown
+-- Likely that the colocation checks should be
+-- improved
+SELECT
+	u1.user_id, u2.user_id
+FROM
+	users_table u1, users_table u2
+WHERE
+	u1.value_1 < u2.value_1 AND
+	(SELECT
+		count(*)
+	FROM
+		events_table e1
+	WHERE
+		e1.user_id = u2.user_id AND
+		u1.user_id = u2.user_id) > 10
+ORDER BY 1,2;
+ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
+-- create a view that contains correlated subquery
+CREATE TEMPORARY VIEW correlated_subquery_view AS
+	SELECT u1.user_id
+	FROM users_table u1
+	WHERE (SELECT COUNT(DISTINCT e1.value_2)
+	     FROM events_table e1
+	     WHERE e1.user_id = u1.user_id
+	          ) > 0;
+SELECT sum(user_id) FROM correlated_subquery_view;
+ sum
+---------------------------------------------------------------------
+ 376
+(1 row)
+
+-- now, join the view with another correlated subquery
+SELECT
+	sum(mx)
+FROM
+	correlated_subquery_view
+		LEFT JOIN LATERAL
+	(SELECT max(value_2) as mx FROM events_table WHERE correlated_subquery_view.user_id = events_table.user_id) as foo ON (true);
+ sum
+---------------------------------------------------------------------
+ 459
+(1 row)
+
+-- as an edge case, JOIN is on false
+SELECT
+	sum(mx)
+FROM
+	correlated_subquery_view
+		LEFT JOIN LATERAL
+	(SELECT max(value_2) as mx FROM events_table WHERE correlated_subquery_view.user_id = events_table.user_id) as foo ON (false);
+ sum
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT sum(value_1)
+FROM users_table u1
+WHERE (SELECT COUNT(DISTINCT e1.value_2)
+     FROM events_table e1
+     WHERE e1.user_id = u1.user_id AND false
+          ) > 115;
+ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
+SELECT sum(value_1)
+FROM users_table u1
+WHERE (SELECT COUNT(DISTINCT e1.value_2)
+     FROM events_table e1
+     WHERE e1.user_id = u1.user_id
+          ) > 115 AND false;
+ sum
+---------------------------------------------------------------------
+
 (1 row)
 
 SET client_min_messages TO DEFAULT;

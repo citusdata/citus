@@ -1227,7 +1227,7 @@ FROM
       WHERE
         "users"."user_id" = "some_recent_users"."user_id" AND
         users.value_2 > 1 and users.value_2 < 3
-      LIMIT 1) "some_users_data"
+      ORDER BY 1 LIMIT 1) "some_users_data"
      ON TRUE
 ORDER BY
   user_id
@@ -1240,9 +1240,7 @@ limit 50;
 
 -- reset subquery_pushdown
 SET citus.subquery_pushdown to OFF;
--- we recursively plan recent_events_1
--- but not some_users_data since it has a reference
--- from an outer query which is not recursively planned
+-- mixture of recursively planned subqueries and correlated subqueries
 SELECT "some_users_data".user_id, lastseen
 FROM
      (SELECT user_id, max(time) AS lastseen
@@ -1270,16 +1268,21 @@ FROM
       WHERE
         "users"."value_1" = "some_recent_users"."user_id" AND
         users.value_2 > 1 and users.value_2 < 3
-      LIMIT 1) "some_users_data"
+      ORDER BY 1 LIMIT 1) "some_users_data"
      ON TRUE
 ORDER BY
   user_id
 limit 50;
-ERROR:  cannot push down this subquery
-DETAIL:  Limit in subquery is currently unsupported when a subquery references a column from another query
--- we recursively plan some queries but fail in the end
--- since some_users_data since it has a reference
--- from an outer query which is not recursively planned
+ user_id |            lastseen
+---------------------------------------------------------------------
+       1 | Thu Nov 23 18:08:26.550729 2017
+       2 | Thu Nov 23 17:26:14.563216 2017
+       3 | Thu Nov 23 18:08:26.550729 2017
+       3 | Thu Nov 23 17:26:14.563216 2017
+       5 | Thu Nov 23 17:26:14.563216 2017
+       6 | Thu Nov 23 18:08:26.550729 2017
+(6 rows)
+
 SELECT "some_users_data".user_id, lastseen
 FROM
      (SELECT 2 * user_id as user_id, max(time) AS lastseen
@@ -1307,13 +1310,17 @@ FROM
       WHERE
         "users"."user_id" = "some_recent_users"."user_id" AND
         users.value_2 > 1 and users.value_2 < 3
-      LIMIT 1) "some_users_data"
+      ORDER BY 1 LIMIT 1) "some_users_data"
      ON TRUE
 ORDER BY
   user_id
 limit 50;
-ERROR:  cannot push down this subquery
-DETAIL:  Limit in subquery is currently unsupported when a subquery references a column from another query
+ user_id |            lastseen
+---------------------------------------------------------------------
+       4 | Thu Nov 23 17:26:14.563216 2017
+       6 | Thu Nov 23 18:08:26.550729 2017
+(2 rows)
+
 -- LATERAL JOINs used with INNER JOINs
 SET citus.subquery_pushdown to ON;
 NOTICE:  Setting citus.subquery_pushdown flag is discouraged becuase it forces the planner to pushdown certain queries, skipping relevant correctness checks.
@@ -1367,7 +1374,7 @@ FROM
       WHERE
         "users"."user_id" = "some_recent_users"."user_id" AND
         "users"."value_2" > 4
-      LIMIT 1) "some_users_data"
+      ORDER BY 1 LIMIT 1) "some_users_data"
     ON TRUE
    ORDER BY
       lastseen DESC
@@ -1435,7 +1442,7 @@ SELECT "some_users_data".user_id, MAX(lastseen), count(*)
       WHERE
         "users"."user_id" = "some_recent_users"."user_id" AND
         "users"."value_2" > 4
-      LIMIT 1) "some_users_data" ON true
+      ORDER BY 1 LIMIT 1) "some_users_data" ON true
 GROUP BY 1
 ORDER BY 2, 1 DESC
 LIMIT 10;
@@ -1492,7 +1499,7 @@ FROM
       WHERE
         "users"."user_id" = "some_recent_users"."user_id" AND
         "users"."value_2" > 4
-      LIMIT 1) "some_users_data" ON true
+      ORDER BY 1 LIMIT 1) "some_users_data" ON true
    ORDER BY
     lastseen DESC
    LIMIT 10) "some_users"
@@ -1502,11 +1509,28 @@ LIMIT 10;
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  generating subplan XXX_1 for subquery SELECT user_id FROM public.users_table users WHERE ((user_id OPERATOR(pg_catalog.>) 1) AND (user_id OPERATOR(pg_catalog.<) 4) AND (value_2 OPERATOR(pg_catalog.>) 3))
-DEBUG:  skipping recursive planning for the subquery since it contains references to outer queries
 DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  skipping recursive planning for the subquery since it contains references to outer queries
-ERROR:  cannot push down this subquery
-DETAIL:  Limit in subquery is currently unsupported when a subquery references a column from another query
+DEBUG:  push down of limit count: 10
+DEBUG:  generating subplan XXX_2 for subquery SELECT filter_users_1.user_id, last_events_1."time" AS lastseen FROM ((SELECT user_where_1_1.user_id FROM ((SELECT users.user_id FROM public.users_table users WHERE ((users.user_id OPERATOR(pg_catalog.>) 1) AND (users.user_id OPERATOR(pg_catalog.<) 4) AND (users.value_1 OPERATOR(pg_catalog.>) 2))) user_where_1_1 JOIN (SELECT intermediate_result.user_id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) user_where_1_join_1 ON ((user_where_1_1.user_id OPERATOR(pg_catalog.<>) user_where_1_join_1.user_id)))) filter_users_1 JOIN LATERAL (SELECT events.user_id, events."time" FROM public.events_table events WHERE ((events.user_id OPERATOR(pg_catalog.>) 1) AND (events.user_id OPERATOR(pg_catalog.<) 4) AND (events.user_id OPERATOR(pg_catalog.=) filter_users_1.user_id)) ORDER BY events."time" DESC LIMIT 1) last_events_1 ON (true)) ORDER BY last_events_1."time" DESC LIMIT 10
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  push down of limit count: 10
+DEBUG:  generating subplan XXX_3 for subquery SELECT some_users_data.user_id, some_recent_users.lastseen FROM ((SELECT intermediate_result.user_id, intermediate_result.lastseen FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, lastseen timestamp without time zone)) some_recent_users JOIN LATERAL (SELECT users.user_id FROM public.users_table users WHERE ((users.user_id OPERATOR(pg_catalog.=) some_recent_users.user_id) AND (users.value_2 OPERATOR(pg_catalog.>) 4)) ORDER BY users.user_id LIMIT 1) some_users_data ON (true)) ORDER BY some_recent_users.lastseen DESC LIMIT 10
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT user_id, lastseen FROM (SELECT intermediate_result.user_id, intermediate_result.lastseen FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, lastseen timestamp without time zone)) some_users ORDER BY user_id DESC, lastseen DESC LIMIT 10
+DEBUG:  Creating router plan
+ user_id |            lastseen
+---------------------------------------------------------------------
+       3 | Thu Nov 23 18:08:26.550729 2017
+       3 | Thu Nov 23 18:08:26.550729 2017
+       3 | Thu Nov 23 18:08:26.550729 2017
+       3 | Thu Nov 23 18:08:26.550729 2017
+       3 | Thu Nov 23 18:08:26.550729 2017
+       3 | Thu Nov 23 18:08:26.550729 2017
+       3 | Thu Nov 23 18:08:26.550729 2017
+       3 | Thu Nov 23 18:08:26.550729 2017
+       3 | Thu Nov 23 18:08:26.550729 2017
+       3 | Thu Nov 23 18:08:26.550729 2017
+(10 rows)
+
 SET citus.enable_repartition_joins to ON;
 SET client_min_messages TO DEBUG1;
 -- recursively planner since the inner JOIN is not on the partition key
@@ -1555,7 +1579,7 @@ FROM
       WHERE
         "users"."user_id" = "some_recent_users"."user_id" AND
         "users"."value_2" > 4
-      LIMIT 1) "some_users_data" ON true
+      ORDER BY 1 LIMIT 1) "some_users_data" ON true
    ORDER BY
     lastseen DESC
    LIMIT 10) "some_users"
@@ -1563,8 +1587,25 @@ ORDER BY
   user_id DESC, lastseen DESC
 LIMIT 10;
 DEBUG:  generating subplan XXX_1 for subquery SELECT user_id, value_1 FROM public.users_table users WHERE ((user_id OPERATOR(pg_catalog.>) 1) AND (user_id OPERATOR(pg_catalog.<) 4) AND (value_2 OPERATOR(pg_catalog.>) 3))
-ERROR:  cannot push down this subquery
-DETAIL:  Limit in subquery is currently unsupported when a subquery references a column from another query
+DEBUG:  push down of limit count: 10
+DEBUG:  generating subplan XXX_2 for subquery SELECT filter_users_1.user_id, last_events_1."time" AS lastseen FROM ((SELECT user_where_1_1.user_id FROM ((SELECT users.user_id FROM public.users_table users WHERE ((users.user_id OPERATOR(pg_catalog.>) 1) AND (users.user_id OPERATOR(pg_catalog.<) 4) AND (users.value_1 OPERATOR(pg_catalog.>) 2))) user_where_1_1 JOIN (SELECT intermediate_result.user_id, intermediate_result.value_1 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, value_1 integer)) user_where_1_join_1 ON ((user_where_1_1.user_id OPERATOR(pg_catalog.=) user_where_1_join_1.value_1)))) filter_users_1 JOIN LATERAL (SELECT events.user_id, events."time" FROM public.events_table events WHERE ((events.user_id OPERATOR(pg_catalog.>) 1) AND (events.user_id OPERATOR(pg_catalog.<) 4) AND (events.user_id OPERATOR(pg_catalog.=) filter_users_1.user_id)) ORDER BY events."time" DESC LIMIT 1) last_events_1 ON (true)) ORDER BY last_events_1."time" DESC LIMIT 10
+DEBUG:  push down of limit count: 10
+DEBUG:  generating subplan XXX_3 for subquery SELECT some_users_data.user_id, some_recent_users.lastseen FROM ((SELECT intermediate_result.user_id, intermediate_result.lastseen FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, lastseen timestamp without time zone)) some_recent_users JOIN LATERAL (SELECT users.user_id FROM public.users_table users WHERE ((users.user_id OPERATOR(pg_catalog.=) some_recent_users.user_id) AND (users.value_2 OPERATOR(pg_catalog.>) 4)) ORDER BY users.user_id LIMIT 1) some_users_data ON (true)) ORDER BY some_recent_users.lastseen DESC LIMIT 10
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT user_id, lastseen FROM (SELECT intermediate_result.user_id, intermediate_result.lastseen FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, lastseen timestamp without time zone)) some_users ORDER BY user_id DESC, lastseen DESC LIMIT 10
+ user_id |            lastseen
+---------------------------------------------------------------------
+       3 | Thu Nov 23 18:08:26.550729 2017
+       3 | Thu Nov 23 18:08:26.550729 2017
+       3 | Thu Nov 23 18:08:26.550729 2017
+       3 | Thu Nov 23 18:08:26.550729 2017
+       3 | Thu Nov 23 18:08:26.550729 2017
+       3 | Thu Nov 23 18:08:26.550729 2017
+       3 | Thu Nov 23 18:08:26.550729 2017
+       3 | Thu Nov 23 18:08:26.550729 2017
+       3 | Thu Nov 23 18:08:26.550729 2017
+       3 | Thu Nov 23 18:08:26.550729 2017
+(10 rows)
+
 SET citus.enable_repartition_joins to OFF;
 RESET client_min_messages;
 -- not supported since upper LATERAL JOIN is not equi join
@@ -1621,9 +1662,7 @@ ORDER BY
   user_id DESC, lastseen DESC
 LIMIT 10;
 ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
--- not pushdownable since lower LATERAL JOIN is not on the partition key
--- not recursively plannable due to LATERAL join where there is a reference
--- from an outer query
+-- complex lateral join between inner join and correlated subquery
 SELECT user_id, lastseen
 FROM
   (SELECT
@@ -1669,15 +1708,27 @@ FROM
       WHERE
         "users"."value_1" = "some_recent_users"."user_id" AND
         "users"."value_2" > 4
-      LIMIT 1) "some_users_data" ON true
+      ORDER BY 1 LIMIT 1) "some_users_data" ON true
    ORDER BY
     lastseen DESC
    LIMIT 10) "some_users"
 ORDER BY
   user_id DESC, lastseen DESC
 LIMIT 10;
-ERROR:  cannot push down this subquery
-DETAIL:  Limit in subquery is currently unsupported when a subquery references a column from another query
+ user_id |            lastseen
+---------------------------------------------------------------------
+       5 | Thu Nov 23 17:26:14.563216 2017
+       5 | Thu Nov 23 17:26:14.563216 2017
+       5 | Thu Nov 23 17:26:14.563216 2017
+       5 | Thu Nov 23 17:26:14.563216 2017
+       5 | Thu Nov 23 17:26:14.563216 2017
+       5 | Thu Nov 23 17:26:14.563216 2017
+       5 | Thu Nov 23 17:26:14.563216 2017
+       5 | Thu Nov 23 17:26:14.563216 2017
+       5 | Thu Nov 23 17:26:14.563216 2017
+       5 | Thu Nov 23 17:26:14.563216 2017
+(10 rows)
+
 -- NESTED INNER JOINs
 SELECT
  count(*) AS value, "generated_group_field"
@@ -2281,9 +2332,7 @@ LIMIT 10;
 (1 row)
 
 SET citus.subquery_pushdown to OFF;
--- not pushdownable since lower LATERAL JOIN is not on the partition key
--- not recursively plannable due to LATERAL join where there is a reference
--- from an outer query
+-- on side of the lateral join can be recursively plannen, then pushed down
 SELECT *
 FROM
   (SELECT
@@ -2314,15 +2363,17 @@ FROM
       WHERE
         "users"."value_2" = "some_recent_users"."user_id" AND
         value_2 > 4
-      LIMIT 1) "some_users_data" ON true
+      ORDER BY 1 LIMIT 1) "some_users_data" ON true
    ORDER BY
     value_2 DESC
    LIMIT 10) "some_users"
 ORDER BY
     value_2 DESC, user_id DESC
 LIMIT 10;
-ERROR:  cannot push down this subquery
-DETAIL:  Limit in subquery is currently unsupported when a subquery references a column from another query
+ user_id | value_2
+---------------------------------------------------------------------
+(0 rows)
+
 -- lets test some unsupported set operations
 -- not supported since we use INTERSECT
 SELECT ("final_query"."event_types") as types, count(*) AS sumOfEventType

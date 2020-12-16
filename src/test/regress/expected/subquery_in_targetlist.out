@@ -31,14 +31,20 @@ ORDER BY 1,2 LIMIT 1;
 SELECT event_type, (SELECT max(time) FROM users_table WHERE user_id = e.user_id)
 FROM events_table e
 ORDER BY 1,2 LIMIT 1;
-ERROR:  cannot push down this subquery
-DETAIL:  Aggregates without group by are currently unsupported when a subquery references a column from another query
+ event_type |              max
+---------------------------------------------------------------------
+          0 | Thu Nov 23 13:52:54.83829 2017
+(1 row)
+
 -- correlated subquery wtth limit
 SELECT event_type, (SELECT time FROM users_table WHERE user_id = e.user_id ORDER BY time LIMIT 1)
 FROM events_table e
 ORDER BY 1,2 LIMIT 1;
-ERROR:  cannot push down this subquery
-DETAIL:  Limit in subquery is currently unsupported when a subquery references a column from another query
+ event_type |              time
+---------------------------------------------------------------------
+          0 | Wed Nov 22 18:19:49.944985 2017
+(1 row)
+
 -- correlated subquery with group by distribution column
 SELECT event_type, (SELECT max(time) FROM users_table WHERE user_id = e.user_id GROUP BY user_id)
 FROM events_table e
@@ -52,8 +58,11 @@ ORDER BY 1,2 LIMIT 1;
 SELECT event_type, (SELECT max(time) FROM users_table WHERE user_id = e.user_id GROUP BY e.user_id)
 FROM events_table e
 ORDER BY 1,2 LIMIT 1;
-ERROR:  cannot push down this subquery
-DETAIL:  Group by list without partition column is currently unsupported when a subquery references a column from another query
+ event_type |              max
+---------------------------------------------------------------------
+          0 | Thu Nov 23 13:52:54.83829 2017
+(1 row)
+
 -- correlated subquery co-located join in outer query
 SELECT event_type, (SELECT max(time) FROM users_table WHERE user_id = e.user_id GROUP BY user_id)
 FROM users_table u JOIN events_table e USING (user_id)
@@ -81,8 +90,11 @@ ERROR:  complex joins are only supported when all distributed tables are co-loca
 SELECT event_type, (SELECT max(time) FROM users_reference_table WHERE user_id = e.value_2)
 FROM events_table e
 ORDER BY 1,2 LIMIT 1;
-ERROR:  cannot push down this subquery
-DETAIL:  Aggregates without group by are currently unsupported when a subquery references a column from another query
+ event_type |              max
+---------------------------------------------------------------------
+          0 | Thu Nov 23 13:52:54.83829 2017
+(1 row)
+
 -- correlated subquery with reference table and group by
 SELECT event_type, (SELECT max(time) FROM users_reference_table WHERE user_id = e.value_2 GROUP BY user_id)
 FROM events_table e
@@ -270,8 +282,12 @@ SELECT (SELECT value_2 FROM view_1 WHERE user_id = e.user_id GROUP BY value_2)
 FROM events_table e
 GROUP BY 1
 ORDER BY 1 LIMIT 3;
-ERROR:  cannot push down this subquery
-DETAIL:  Group by list without partition column is currently unsupported when a subquery references a column from another query
+ value_2
+---------------------------------------------------------------------
+       3
+
+(2 rows)
+
 -- without view in the outer query FROM
 SELECT (SELECT value_2 FROM view_1 WHERE user_id = e.user_id GROUP BY user_id, value_2)
 FROM view_1 e
