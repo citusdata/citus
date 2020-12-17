@@ -1947,6 +1947,17 @@ ALTER TABLE partitioning_test ATTACH PARTITION partitioning_test_2010
 -- Attach a table which has a different constraint
 ALTER TABLE partitioning_test ATTACH PARTITION partitioning_test_2011
       FOR VALUES FROM ('2011-01-01') TO ('2012-01-01');
+SELECT parent_table, partition_column, partition, from_value, to_value FROM time_partitions;
+               parent_table               | partition_column |                 partition                  | from_value |  to_value
+---------------------------------------------------------------------
+ "schema-test"                            | time             | "schema-test_2009"                         | 01-01-2009 | 01-01-2010
+ partitioning_test                        | time             | partitioning_test_2008                     | 01-01-2008 | 01-01-2009
+ partitioning_test                        | time             | partitioning_test_2009                     | 01-01-2009 | 01-01-2010
+ partitioning_test                        | time             | partitioning_test_2010                     | 01-01-2010 | 01-01-2011
+ partitioning_test                        | time             | partitioning_test_2011                     | 01-01-2011 | 01-01-2012
+ public.non_distributed_partitioned_table | a                | public.non_distributed_partitioned_table_1 | 0          | 10
+(6 rows)
+
 ALTER TABLE partitioning_test DETACH PARTITION partitioning_test_2008;
 ALTER TABLE partitioning_test DETACH PARTITION partitioning_test_2009;
 ALTER TABLE partitioning_test DETACH PARTITION partitioning_test_2010;
@@ -1954,9 +1965,57 @@ ALTER TABLE partitioning_test DETACH PARTITION partitioning_test_2011;
 DROP TABLE partitioning_test, partitioning_test_2008, partitioning_test_2009,
            partitioning_test_2010, partitioning_test_2011,
            reference_table, reference_table_2;
-DROP SCHEMA partitioning_schema CASCADE;
-NOTICE:  drop cascades to table "schema-test"
 RESET SEARCH_PATH;
+-- not timestamp partitioned
+CREATE TABLE not_time_partitioned (x int, y int) PARTITION BY RANGE (x);
+CREATE TABLE not_time_partitioned_p0 PARTITION OF not_time_partitioned DEFAULT;
+CREATE TABLE not_time_partitioned_p1 PARTITION OF not_time_partitioned FOR VALUES FROM (1) TO (2);
+SELECT parent_table, partition_column, partition, from_value, to_value FROM time_partitions;
+           parent_table            | partition_column |               partition                | from_value |  to_value
+---------------------------------------------------------------------
+ non_distributed_partitioned_table | a                | non_distributed_partitioned_table_1    | 0          | 10
+ not_time_partitioned              | x                | not_time_partitioned_p1                | 1          | 2
+ not_time_partitioned              | x                | not_time_partitioned_p0                |            |
+ partitioning_schema."schema-test" | time             | partitioning_schema."schema-test_2009" | 01-01-2009 | 01-01-2010
+(4 rows)
+
+SELECT * FROM time_partition_range('not_time_partitioned_p1');
+ lower_bound | upper_bound
+---------------------------------------------------------------------
+ 1           | 2
+(1 row)
+
+DROP TABLE not_time_partitioned;
+-- multi-column partitioned
+CREATE TABLE multi_column_partitioned (x date, y date) PARTITION BY RANGE (x, y);
+CREATE TABLE multi_column_partitioned_p1 PARTITION OF multi_column_partitioned  FOR VALUES FROM ('2020-01-01', '2020-01-01') TO ('2020-12-31','2020-12-31');
+SELECT parent_table, partition_column, partition, from_value, to_value FROM time_partitions;
+           parent_table            | partition_column |               partition                | from_value |  to_value
+---------------------------------------------------------------------
+ non_distributed_partitioned_table | a                | non_distributed_partitioned_table_1    | 0          | 10
+ partitioning_schema."schema-test" | time             | partitioning_schema."schema-test_2009" | 01-01-2009 | 01-01-2010
+(2 rows)
+
+SELECT * FROM time_partition_range('multi_column_partitioned_p1');
+ERROR:  relation "multi_column_partitioned_p1" is a partition with multiple partition columns
+DETAIL:  time_partition_range can only be used for partitions of range-partitioned tables with a single partition column
+DROP TABLE multi_column_partitioned;
+-- not-range-partitioned
+CREATE TABLE list_partitioned (x date, y date) PARTITION BY LIST (x);
+CREATE TABLE list_partitioned_p1 PARTITION OF list_partitioned FOR VALUES IN ('2020-01-01');
+SELECT parent_table, partition_column, partition, from_value, to_value FROM time_partitions;
+           parent_table            | partition_column |               partition                | from_value |  to_value
+---------------------------------------------------------------------
+ non_distributed_partitioned_table | a                | non_distributed_partitioned_table_1    | 0          | 10
+ partitioning_schema."schema-test" | time             | partitioning_schema."schema-test_2009" | 01-01-2009 | 01-01-2010
+(2 rows)
+
+SELECT * FROM time_partition_range('list_partitioned_p1');
+ERROR:  relation "list_partitioned_p1" is not a range partition
+DETAIL:  time_partition_range can only be used for partitions of range-partitioned tables with a single partition column
+DROP TABLE list_partitioned;
+DROP SCHEMA partitioning_schema CASCADE;
+NOTICE:  drop cascades to table partitioning_schema."schema-test"
 DROP TABLE IF EXISTS
 	partitioning_hash_test,
 	partitioning_hash_join_test,

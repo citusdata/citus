@@ -152,6 +152,7 @@ ORDER BY 1;
  function shard_name(regclass,bigint)
  function start_metadata_sync_to_node(text,integer)
  function stop_metadata_sync_to_node(text,integer)
+ function time_partition_range(regclass)
  function truncate_local_data_after_distributing_table(regclass)
  function undistribute_table(regclass,boolean)
  function update_distributed_table_colocation(regclass,text)
@@ -217,5 +218,6 @@ ORDER BY 1;
  view citus_tables
  view citus_worker_stat_activity
  view pg_dist_shard_placement
-(201 rows)
+ view time_partitions
+(203 rows)
 
