@@ -45,6 +45,7 @@
 #include "distributed/citus_ruleutils.h"
 #include "distributed/query_pushdown_planning.h"
 #include "distributed/query_utils.h"
+#include "distributed/recursive_planning.h"
 #include "distributed/reference_table_utils.h"
 #include "distributed/relation_restriction_equivalence.h"
 #include "distributed/relay_utility.h"
@@ -2057,8 +2058,6 @@ PlanRouterQuery(Query *originalQuery,
 				bool replacePrunedQueryWithDummy, bool *multiShardModifyQuery,
 				Const **partitionValueConst)
 {
-	RelationRestrictionContext *relationRestrictionContext =
-		plannerRestrictionContext->relationRestrictionContext;
 	bool isMultiShardQuery = false;
 	DeferredErrorMessage *planningError = NULL;
 	bool shardsPresent = false;
@@ -2171,7 +2170,12 @@ PlanRouterQuery(Query *originalQuery,
 	/* we need anchor shard id for select queries with router planner */
 	uint64 shardId = GetAnchorShardId(*prunedShardIntervalListList);
 
-	bool hasLocalRelation = relationRestrictionContext->hasLocalRelation;
+	/*
+	 * We keep track of hasLocalRelation in plannerRestrictionContext->
+	 * relationRestrictionContext, but in rare cases tables are excluded from
+	 * there (e.g. catalog table on inside of an inner join). So we recheck.
+	 */
+	bool hasLocalRelation = FindNodeCheck((Node *) originalQuery, IsLocalTableRTE);
 
 	List *taskPlacementList =
 		CreateTaskPlacementListForShardIntervals(*prunedShardIntervalListList,

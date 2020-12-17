@@ -33,5 +33,6 @@ extern Query * BuildReadIntermediateResultsArrayQuery(List *targetEntryList,
 													  List *resultIdList,
 													  bool useBinaryCopyFormat);
 extern bool GeneratingSubplans(void);
+extern bool IsLocalTableRTE(Node *node);
 
 #endif /* RECURSIVE_PLANNING_H */

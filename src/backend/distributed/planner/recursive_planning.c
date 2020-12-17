@@ -168,7 +168,6 @@ static bool ShouldRecursivelyPlanSetOperation(Query *query,
 											  RecursivePlanningContext *context);
 static void RecursivelyPlanSetOperations(Query *query, Node *node,
 										 RecursivePlanningContext *context);
-static bool IsLocalTableRTE(Node *node);
 static void RecursivelyPlanSubquery(Query *subquery,
 									RecursivePlanningContext *planningContext);
 static DistributedSubPlan * CreateDistributedSubPlan(uint32 subPlanId,
@@ -1060,7 +1059,7 @@ RecursivelyPlanSetOperations(Query *query, Node *node,
  * is a range table relation entry that points to a local
  * relation (i.e., not a distributed relation).
  */
-static bool
+bool
 IsLocalTableRTE(Node *node)
 {
 	if (node == NULL)
