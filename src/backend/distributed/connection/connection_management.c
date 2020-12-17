@@ -599,6 +599,43 @@ CloseConnection(MultiConnection *connection)
 
 
 /*
+ * Close a previously established connection.
+ */
+void
+MarkCloseConnection(MultiConnection *connection)
+{
+	ConnectionHashKey key;
+	bool found;
+
+	/* close connection */
+	CitusPQFinish(connection);
+
+	strlcpy(key.hostname, connection->hostname, MAX_NODE_LENGTH);
+	key.port = connection->port;
+	strlcpy(key.user, connection->user, NAMEDATALEN);
+	strlcpy(key.database, connection->database, NAMEDATALEN);
+
+	hash_search(ConnectionHash, &key, HASH_FIND, &found);
+
+	if (found)
+	{
+		/* unlink from list of open connections */
+		dlist_delete(&connection->connectionNode);
+
+		/* same for transaction state and shard/placement machinery */
+		CloseRemoteTransaction(connection);
+		CloseShardPlacementAssociation(connection);
+
+		/* we leave the per-host entry alive */
+		pfree(connection);
+	}
+	else
+	{
+		ereport(ERROR, (errmsg("closing untracked connection")));
+	}
+}
+
+/*
  * ShutdownAllConnections shutdowns all the MultiConnections in the
  * ConnectionHash.
  *

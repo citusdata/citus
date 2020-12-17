@@ -133,8 +133,9 @@ typedef struct MultiConnection
 	/* is the connection currently in use, and shouldn't be used by anything else */
 	bool claimedExclusively;
 
-	/* time connection establishment was started, for timeout */
+	/* time connection establishment was started & ended, for executor stats */
 	TimestampTz connectionStart;
+	TimestampTz connectionEnd;
 
 	/* membership in list of list of connections in ConnectionHashEntry */
 	dlist_node connectionNode;

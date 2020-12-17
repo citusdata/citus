@@ -413,6 +413,10 @@ typedef struct WorkerPool
 	 * use it anymore.
 	 */
 	WorkerPoolFailureState failureState;
+
+
+	double totalTaskExecutionTime;
+	int totalExecutedTasks;
 } WorkerPool;
 
 struct TaskPlacementExecution;
@@ -586,6 +590,10 @@ typedef struct TaskPlacementExecution
 
 	/* index in array of placement executions in a ShardCommandExecution */
 	int placementExecutionIndex;
+
+	TimestampTz executionStartTime;
+	TimestampTz executionEndTime;
+
 } TaskPlacementExecution;
 
 
@@ -630,6 +638,8 @@ static WorkerSession * FindOrCreateWorkerSession(WorkerPool *workerPool,
 static void ManageWorkerPool(WorkerPool *workerPool);
 static bool ShouldWaitForSlowStart(WorkerPool *workerPool);
 static int CalculateNewConnectionCount(WorkerPool *workerPool);
+static double AvgConnectionEstTimes(WorkerPool *workerPool);
+static double AvgTaskExecutionTimes(WorkerPool *workerPool);
 static void OpenNewConnections(WorkerPool *workerPool, int newConnectionCount,
 							   TransactionProperties *transactionProperties);
 static void CheckConnectionTimeout(WorkerPool *workerPool);
@@ -1649,6 +1659,8 @@ CleanUpSessions(DistributedExecution *execution)
 								session->sessionId, session->commandsSent)));
 
 		UnclaimConnection(connection);
+		if (connection->connectionState == MULTI_CONNECTION_CONNECTING)
+			elog(INFO, "connectting: %ld", session->sessionId);
 
 		if (connection->connectionState == MULTI_CONNECTION_CONNECTING ||
 			connection->connectionState == MULTI_CONNECTION_FAILED ||
@@ -2248,8 +2260,7 @@ RunDistributedExecution(DistributedExecution *execution)
 		 * irrespective of the current status of the tasks or the connections.
 		 */
 		while (!cancellationReceived &&
-			   (execution->unfinishedTaskCount > 0 ||
-				HasIncompleteConnectionEstablishment(execution)))
+			   execution->unfinishedTaskCount > 0)
 		{
 			WorkerPool *workerPool = NULL;
 			foreach_ptr(workerPool, execution->workerList)
@@ -2640,6 +2651,20 @@ CalculateNewConnectionCount(WorkerPool *workerPool)
 		newConnectionCount = Min(newConnectionsForReadyTasks, maxNewConnectionCount);
 		if (newConnectionCount > 0)
 		{
+			double avgConnTime = AvgConnectionEstTimes(workerPool);
+			double avgTaskExecutionTime = AvgTaskExecutionTimes(workerPool);
+
+			double expectedRemainingTaskExecutionTime =
+					(readyTaskCount * avgTaskExecutionTime) / (initiatedConnectionCount == 0 ? 1 : initiatedConnectionCount);
+
+			elog(INFO, "%f = %f - %f", avgConnTime, avgTaskExecutionTime, expectedRemainingTaskExecutionTime);
+			if (expectedRemainingTaskExecutionTime < avgConnTime)
+			{
+
+				elog(INFO, "yay");
+				return 0;
+			}
+
 			/* increase the open rate every cycle (like TCP slow start) */
 			workerPool->maxNewConnectionsPerCycle += 1;
 		}
@@ -2647,6 +2672,49 @@ CalculateNewConnectionCount(WorkerPool *workerPool)
 	return newConnectionCount;
 }
 
+
+static double
+AvgTaskExecutionTimes(WorkerPool *workerPool)
+{
+
+	if (workerPool->totalExecutedTasks == 0)
+		return 10000;
+
+	return workerPool->totalTaskExecutionTime / workerPool->totalExecutedTasks;
+}
+
+
+static
+double AvgConnectionEstTimes(WorkerPool *workerPool)
+{
+	double totalTimeUsec = 0;
+	int sessionCount = 0;
+
+
+	WorkerSession *session = NULL;
+	foreach_ptr(session, workerPool->sessionList)
+	{
+		MultiConnection *connection = session->connection;
+
+		if (connection->connectionState == MULTI_CONNECTION_CONNECTED)
+		{
+			long	 secs = 0;
+			int usecs = 0;
+
+			TimestampDifference(connection->connectionStart,
+								connection->connectionEnd,
+								&secs, &usecs);
+
+			totalTimeUsec += usecs;
+			++sessionCount;
+		}
+	}
+
+	if (sessionCount > 0)
+		return totalTimeUsec / sessionCount;
+
+	return 0;
+}
 
 /*
  * OpenNewConnections opens the given amount of connections for the given workerPool.
@@ -3244,6 +3312,27 @@ HandleMultiConnectionSuccess(WorkerSession *session)
 
 	workerPool->activeConnectionCount++;
 	workerPool->idleConnectionCount++;
+
+	if (connection->connectionEnd == 0)
+	{
+		connection->connectionEnd = GetCurrentTimestamp();
+
+		if (IsLoggableLevel(DEBUG4))
+		{
+			/* this code-block is inspired from log_disconnections() */
+			long	 secs = 0;
+			int usecs = 0;
+
+			TimestampDifference(connection->connectionStart,
+								connection->connectionEnd,
+								&secs, &usecs);
+			int msecs = usecs / 1000;
+
+			ereport(DEBUG4,
+					(errmsg("Connection establishment time for session %ld: "
+							"%03d msecs", session->sessionId, msecs)));
+		}
+	}
 }
 
 
@@ -3771,6 +3860,8 @@ StartPlacementExecutionOnSession(TaskPlacementExecution *placementExecution,
 			 */
 			SetLocalExecutionStatus(LOCAL_EXECUTION_DISABLED);
 		}
+
+		placementExecution->executionStartTime = GetCurrentTimestamp();
 	}
 
 	return querySent;
@@ -4349,6 +4440,29 @@ PlacementExecutionDone(TaskPlacementExecution *placementExecution, bool succeede
 	{
 		/* mark the placement execution as finished */
 		placementExecution->executionState = PLACEMENT_EXECUTION_FINISHED;
+
+		placementExecution->executionEndTime = GetCurrentTimestamp();
+
+		if (true)
+		{
+			/* this code-block is inspired from log_disconnections() */
+			long	 secs = 0;
+			int usecs = 0;
+
+			TimestampDifference(placementExecution->executionStartTime,
+					placementExecution->executionEndTime,
+								&secs, &usecs);
+			int msecs = usecs / 1000;
+
+			if(IsLoggableLevel(DEBUG4))
+			ereport(DEBUG4,
+					(errmsg("Task execution time for task %d: "
+							"%03d msecs", placementExecution->shardCommandExecution->task->taskId, msecs)));
+
+			workerPool->totalTaskExecutionTime += usecs;
+			workerPool->totalExecutedTasks += 1;
+		}
+
 	}
 	else if (CanFailoverPlacementExecutionToLocalExecution(placementExecution))
 	{
