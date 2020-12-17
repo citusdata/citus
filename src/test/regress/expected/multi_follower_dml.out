@@ -269,7 +269,7 @@ ERROR:  writing to worker nodes is not currently allowed
 DETAIL:  citus.use_secondary_nodes is set to 'always'
 SELECT * FROM citus_local_table ORDER BY a;
 ERROR:  there is a shard placement in node group 0 but there are no nodes in that group
-\c - - - :master_port
+\c -reuse-previous=off regression - - :master_port
 DROP TABLE the_table;
 DROP TABLE reference_table;
 DROP TABLE citus_local_table;
