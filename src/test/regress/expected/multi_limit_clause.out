@@ -482,6 +482,7 @@ SELECT
 	GROUP BY l_orderkey
 	ORDER BY l_orderkey , 3, 2
 	LIMIT 5;
+DEBUG:  push down of limit count: 5
  l_orderkey | count | rank
 ---------------------------------------------------------------------
           1 |     6 |    1
