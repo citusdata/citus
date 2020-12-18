@@ -2,8 +2,9 @@
  *
  * deparse_schema_stmts.c
  *	  All routines to deparse schema statements.
- *	  This file contains all entry points specific for type statement deparsing as well as
- *	  functions that are currently only used for deparsing of the schema statements.
+ *	  This file contains all entry points specific for schema statement deparsing
+ *	  as well as functions that are currently only used for deparsing of the
+ *	  schema statements.
  *
  * Copyright (c) Citus Data, Inc.
  *

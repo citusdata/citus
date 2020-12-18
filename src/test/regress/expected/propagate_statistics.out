@@ -1,0 +1,147 @@
+CREATE SCHEMA "statistics'Test";
+SET search_path TO "statistics'Test";
+SET citus.next_shard_id TO 980000;
+SET client_min_messages TO WARNING;
+SET citus.shard_count TO 32;
+SET citus.shard_replication_factor TO 1;
+-- test create statistics propagation
+CREATE TABLE test_stats (
+    a   int,
+    b   int
+);
+SELECT create_distributed_table('test_stats', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE STATISTICS s1 (dependencies) ON a, b FROM test_stats;
+-- test for distributing an already existing statistics
+CREATE TABLE "test'stats2" (
+    a   int,
+    b   int
+);
+CREATE STATISTICS s2 (dependencies) ON a, b FROM "test'stats2";
+SELECT create_distributed_table('test''stats2', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- test when stats is on a different schema
+CREATE SCHEMA sc1;
+CREATE TABLE tbl (a int, "B" text);
+SELECT create_distributed_table ('tbl', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE STATISTICS sc1.st1 ON a, "B" FROM tbl;
+-- test distributing table with already created stats on a new schema
+CREATE TABLE test_stats3 (
+    a int,
+    b int
+);
+CREATE SCHEMA sc2;
+CREATE STATISTICS sc2."neW'Stat" ON a,b FROM test_stats3;
+SELECT create_distributed_table ('test_stats3','a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+\c - - - :worker_1_port
+SELECT stxname
+FROM pg_statistic_ext
+WHERE stxnamespace IN (
+	SELECT oid
+	FROM pg_namespace
+	WHERE nspname IN ('public', 'statistics''Test', 'sc1', 'sc2')
+)
+ORDER BY stxname ASC;
+     stxname
+---------------------------------------------------------------------
+ neW'Stat_980096
+ neW'Stat_980098
+ neW'Stat_980100
+ neW'Stat_980102
+ neW'Stat_980104
+ neW'Stat_980106
+ neW'Stat_980108
+ neW'Stat_980110
+ neW'Stat_980112
+ neW'Stat_980114
+ neW'Stat_980116
+ neW'Stat_980118
+ neW'Stat_980120
+ neW'Stat_980122
+ neW'Stat_980124
+ neW'Stat_980126
+ s1_980000
+ s1_980002
+ s1_980004
+ s1_980006
+ s1_980008
+ s1_980010
+ s1_980012
+ s1_980014
+ s1_980016
+ s1_980018
+ s1_980020
+ s1_980022
+ s1_980024
+ s1_980026
+ s1_980028
+ s1_980030
+ s2_980032
+ s2_980034
+ s2_980036
+ s2_980038
+ s2_980040
+ s2_980042
+ s2_980044
+ s2_980046
+ s2_980048
+ s2_980050
+ s2_980052
+ s2_980054
+ s2_980056
+ s2_980058
+ s2_980060
+ s2_980062
+ st1_980064
+ st1_980066
+ st1_980068
+ st1_980070
+ st1_980072
+ st1_980074
+ st1_980076
+ st1_980078
+ st1_980080
+ st1_980082
+ st1_980084
+ st1_980086
+ st1_980088
+ st1_980090
+ st1_980092
+ st1_980094
+(64 rows)
+
+SELECT count(DISTINCT stxnamespace)
+FROM pg_statistic_ext
+WHERE stxnamespace IN (
+	SELECT oid
+	FROM pg_namespace
+	WHERE nspname IN ('public', 'statistics''Test', 'sc1', 'sc2')
+);
+ count
+---------------------------------------------------------------------
+     3
+(1 row)
+
+\c - - - :master_port
+SET client_min_messages TO WARNING;
+DROP SCHEMA "statistics'Test" CASCADE;
+DROP SCHEMA sc1 CASCADE;
+DROP SCHEMA sc2 CASCADE;

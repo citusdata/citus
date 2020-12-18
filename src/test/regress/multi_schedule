@@ -92,6 +92,11 @@ test: pg13 pg12
 test: tableam
 
 # ----------
+# Tests for statistics propagation
+# ----------
+test: propagate_statistics
+
+# ----------
 # Miscellaneous tests to check our query planning behavior
 # ----------
 test: multi_deparse_shard_query multi_distributed_transaction_id intermediate_results limit_intermediate_size rollback_to_savepoint
