@@ -108,7 +108,7 @@ typedef struct ListCellAndListWrapper
 	for (int var ## PositionDoNotUse = 0; \
 		 (var ## PositionDoNotUse) < list_length(l) && \
 		 (((var) = list_nth(l, var ## PositionDoNotUse)) || true); \
-		 var ## PositionDoNotUse ++)
+		 var ## PositionDoNotUse++)
 #else
 #define foreach_ptr_append(var, l) foreach_ptr(var, l)
 #endif

@@ -313,10 +313,10 @@ GetRangeTblKind(RangeTblEntry *rte)
 #if PG_VERSION_NUM >= PG_VERSION_12
 		case RTE_RESULT:
 #endif
-			{
-				rteKind = (CitusRTEKind) rte->rtekind;
-				break;
-			}
+		{
+			rteKind = (CitusRTEKind) rte->rtekind;
+			break;
+		}
 
 		case RTE_FUNCTION:
 		{

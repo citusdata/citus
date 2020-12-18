@@ -37,10 +37,10 @@
  */
 typedef struct DistributeObjectOps
 {
-	char * (*deparse)(Node *);
+	char *(*deparse)(Node *);
 	void (*qualify)(Node *);
-	List * (*preprocess)(Node *, const char *);
-	List * (*postprocess)(Node *, const char *);
+	List *(*preprocess)(Node *, const char *);
+	List *(*postprocess)(Node *, const char *);
 	ObjectAddress (*address)(Node *, bool);
 } DistributeObjectOps;
 

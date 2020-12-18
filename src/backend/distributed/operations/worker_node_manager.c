@@ -232,9 +232,9 @@ ClientHostAddress(StringInfo clientHostStringInfo)
 #ifdef HAVE_IPV6
 		case AF_INET6:
 #endif
-			{
-				break;
-			}
+		{
+			break;
+		}
 
 		default:
 		{
