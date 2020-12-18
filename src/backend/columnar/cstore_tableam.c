@@ -23,6 +23,7 @@
 #include "catalog/index.h"
 #include "catalog/objectaccess.h"
 #include "catalog/pg_am.h"
+#include "catalog/pg_publication.h"
 #include "catalog/pg_trigger.h"
 #include "catalog/storage.h"
 #include "catalog/storage_xlog.h"
@@ -44,6 +45,7 @@
 #include "utils/memutils.h"
 #include "utils/pg_rusage.h"
 #include "utils/rel.h"
+#include "utils/relcache.h"
 #include "utils/lsyscache.h"
 #include "utils/syscache.h"
 
@@ -121,6 +123,7 @@ static bool ConditionalLockRelationWithTimeout(Relation rel, LOCKMODE lockMode,
 static void LogRelationStats(Relation rel, int elevel);
 static void TruncateCStore(Relation rel, int elevel);
 static HeapTuple ColumnarSlotCopyHeapTuple(TupleTableSlot *slot);
+static void ColumnarCheckLogicalReplication(Relation rel);
 
 /* Custom tuple slot ops used for columnar. Initialized in cstore_tableam_init(). */
 TupleTableSlotOps TTSOpsColumnar;
@@ -454,6 +457,8 @@ cstore_tuple_insert(Relation relation, TupleTableSlot *slot, CommandId cid,
 	MemoryContext oldContext = MemoryContextSwitchTo(writeState->perTupleContext);
 
 	HeapTuple heapTuple = ExecCopySlotHeapTuple(slot);
+
+	ColumnarCheckLogicalReplication(relation);
 	if (HeapTupleHasExternal(heapTuple))
 	{
 		/* detoast any toasted attributes */
@@ -497,6 +502,7 @@ cstore_multi_insert(Relation relation, TupleTableSlot **slots, int ntuples,
 														  RelationGetDescr(relation),
 														  GetCurrentSubTransactionId());
 
+	ColumnarCheckLogicalReplication(relation);
 	for (int i = 0; i < ntuples; i++)
 	{
 		TupleTableSlot *tupleSlot = slots[i];
@@ -1375,6 +1381,36 @@ Datum
 columnar_handler(PG_FUNCTION_ARGS)
 {
 	PG_RETURN_POINTER(&cstore_am_methods);
+}
+
+
+/*
+ * ColumnarCheckLogicalReplication throws an error if the relation is
+ * part of any publication. This should be called before any write to
+ * a columnar table, because columnar changes are not replicated with
+ * logical replication (similar to a row table without a replica
+ * identity).
+ */
+static void
+ColumnarCheckLogicalReplication(Relation rel)
+{
+	if (!is_publishable_relation(rel))
+	{
+		return;
+	}
+
+	if (rel->rd_pubactions == NULL)
+	{
+		GetRelationPublicationActions(rel);
+		Assert(rel->rd_pubactions != NULL);
+	}
+
+	if (rel->rd_pubactions->pubinsert)
+	{
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg(
+							"cannot insert into columnar table that is a part of a publication")));
+	}
 }
 
 
