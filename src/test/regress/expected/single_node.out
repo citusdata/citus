@@ -20,6 +20,61 @@ SELECT 1 FROM master_disable_node('localhost', :master_port);
 ERROR:  Disabling localhost:xxxxx failed
 DETAIL:  cannot change "isactive" field of the coordinator node
 RESET client_min_messages;
+SELECT 1 FROM master_remove_node('localhost', :master_port);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+SELECT count(*) FROM pg_dist_node;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+-- there are no workers now, but we should still be able to create Citus tables
+CREATE TABLE ref(x int, y int);
+SELECT create_reference_table('ref');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT groupid, nodename, nodeport, isactive, shouldhaveshards, hasmetadata, metadatasynced FROM pg_dist_node;
+ groupid | nodename  | nodeport | isactive | shouldhaveshards | hasmetadata | metadatasynced
+---------------------------------------------------------------------
+       0 | localhost |    57636 | t        | t                | t           | t
+(1 row)
+
+DROP TABLE ref;
+-- remove the coordinator to try again with create_reference_table
+SELECT master_remove_node(nodename, nodeport) FROM pg_dist_node WHERE groupid = 0;
+ master_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE loc(x int, y int);
+SELECT create_citus_local_table('loc');
+ create_citus_local_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT groupid, nodename, nodeport, isactive, shouldhaveshards, hasmetadata, metadatasynced FROM pg_dist_node;
+ groupid | nodename  | nodeport | isactive | shouldhaveshards | hasmetadata | metadatasynced
+---------------------------------------------------------------------
+       0 | localhost |    57636 | t        | t                | t           | t
+(1 row)
+
+DROP TABLE loc;
+-- remove the coordinator to try again with create_distributed_table
+SELECT master_remove_node(nodename, nodeport) FROM pg_dist_node WHERE groupid = 0;
+ master_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
 CREATE TABLE test(x int, y int);
 SELECT create_distributed_table('test','x');
  create_distributed_table
@@ -27,7 +82,62 @@ SELECT create_distributed_table('test','x');
 
 (1 row)
 
--- should have shards setting should not matter for a single node
+SELECT groupid, nodename, nodeport, isactive, shouldhaveshards, hasmetadata, metadatasynced FROM pg_dist_node;
+ groupid | nodename  | nodeport | isactive | shouldhaveshards | hasmetadata | metadatasynced
+---------------------------------------------------------------------
+       0 | localhost |    57636 | t        | t                | t           | t
+(1 row)
+
+-- cannot add workers with specific IP as long as I have a placeholder coordinator record
+SELECT 1 FROM master_add_node('127.0.0.1', :worker_1_port);
+ERROR:  cannot add a worker node when the coordinator hostname is set to localhost
+DETAIL:  Worker nodes need to be able to connect to the coordinator to transfer data.
+HINT:  Use SELECT citus_set_coordinator_host('<hostname>') to configure the coordinator hostname
+-- adding localhost workers is ok
+SELECT 1 FROM master_add_node('localhost', :worker_1_port);
+NOTICE:  shards are still on the coordinator after adding the new node
+HINT:  Use SELECT rebalance_table_shards(); to balance shards data between workers and coordinator or SELECT citus_drain_node('localhost',57636); to permanently move shards away from the coordinator.
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+SELECT 1 FROM master_remove_node('localhost', :worker_1_port);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+-- set the coordinator host to something different than localhost
+SELECT 1 FROM citus_set_coordinator_host('127.0.0.1');
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+-- adding workers with specific IP is ok now
+SELECT 1 FROM master_add_node('127.0.0.1', :worker_1_port);
+NOTICE:  shards are still on the coordinator after adding the new node
+HINT:  Use SELECT rebalance_table_shards(); to balance shards data between workers and coordinator or SELECT citus_drain_node('127.0.0.1',57636); to permanently move shards away from the coordinator.
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+SELECT 1 FROM master_remove_node('127.0.0.1', :worker_1_port);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+-- set the coordinator host back to localhost for the remainder of tests
+SELECT 1 FROM citus_set_coordinator_host('localhost');
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+-- should have shards setting should not really matter for a single node
 SELECT 1 FROM master_set_node_property('localhost', :master_port, 'shouldhaveshards', true);
  ?column?
 ---------------------------------------------------------------------
@@ -126,21 +236,21 @@ INSERT INTO upsert_test (part_key, other_col) VALUES (1, 1), (2, 2) RETURNING *;
 SET citus.log_remote_commands to true;
 -- observe that there is a conflict and the following query does nothing
 INSERT INTO upsert_test (part_key, other_col) VALUES (1, 1) ON CONFLICT DO NOTHING RETURNING *;
-NOTICE:  executing the command locally: INSERT INTO single_node.upsert_test_90630513 AS citus_table_alias (part_key, other_col) VALUES (1, 1) ON CONFLICT DO NOTHING RETURNING part_key, other_col, third_col
+NOTICE:  executing the command locally: INSERT INTO single_node.upsert_test_90630515 AS citus_table_alias (part_key, other_col) VALUES (1, 1) ON CONFLICT DO NOTHING RETURNING part_key, other_col, third_col
  part_key | other_col | third_col
 ---------------------------------------------------------------------
 (0 rows)
 
 -- same as the above with different syntax
 INSERT INTO upsert_test (part_key, other_col) VALUES (1, 1) ON CONFLICT (part_key) DO NOTHING RETURNING *;
-NOTICE:  executing the command locally: INSERT INTO single_node.upsert_test_90630513 AS citus_table_alias (part_key, other_col) VALUES (1, 1) ON CONFLICT(part_key) DO NOTHING RETURNING part_key, other_col, third_col
+NOTICE:  executing the command locally: INSERT INTO single_node.upsert_test_90630515 AS citus_table_alias (part_key, other_col) VALUES (1, 1) ON CONFLICT(part_key) DO NOTHING RETURNING part_key, other_col, third_col
  part_key | other_col | third_col
 ---------------------------------------------------------------------
 (0 rows)
 
 -- again the same query with another syntax
 INSERT INTO upsert_test (part_key, other_col) VALUES (1, 1) ON CONFLICT ON CONSTRAINT upsert_test_part_key_key DO NOTHING RETURNING *;
-NOTICE:  executing the command locally: INSERT INTO single_node.upsert_test_90630513 AS citus_table_alias (part_key, other_col) VALUES (1, 1) ON CONFLICT ON CONSTRAINT upsert_test_part_key_key_90630513 DO NOTHING RETURNING part_key, other_col, third_col
+NOTICE:  executing the command locally: INSERT INTO single_node.upsert_test_90630515 AS citus_table_alias (part_key, other_col) VALUES (1, 1) ON CONFLICT ON CONSTRAINT upsert_test_part_key_key_90630515 DO NOTHING RETURNING part_key, other_col, third_col
  part_key | other_col | third_col
 ---------------------------------------------------------------------
 (0 rows)
@@ -148,7 +258,7 @@ NOTICE:  executing the command locally: INSERT INTO single_node.upsert_test_9063
 BEGIN;
 -- force local execution
 SELECT count(*) FROM upsert_test WHERE part_key = 1;
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM single_node.upsert_test_90630513 upsert_test WHERE (part_key OPERATOR(pg_catalog.=) 1)
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM single_node.upsert_test_90630515 upsert_test WHERE (part_key OPERATOR(pg_catalog.=) 1)
  count
 ---------------------------------------------------------------------
      1
@@ -234,10 +344,10 @@ SET search_path TO single_node;
 DROP SCHEMA  "Quoed.Schema" CASCADE;
 NOTICE:  drop cascades to 5 other objects
 DETAIL:  drop cascades to table "Quoed.Schema".simple_table_name
-drop cascades to table "Quoed.Schema".simple_table_name_90630518
-drop cascades to table "Quoed.Schema".simple_table_name_90630519
 drop cascades to table "Quoed.Schema".simple_table_name_90630520
 drop cascades to table "Quoed.Schema".simple_table_name_90630521
+drop cascades to table "Quoed.Schema".simple_table_name_90630522
+drop cascades to table "Quoed.Schema".simple_table_name_90630523
 -- test partitioned index creation with long name
 CREATE TABLE test_index_creation1
 (
@@ -424,7 +534,7 @@ EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE)
    ->  Task
          Tuple data received from node: 4 bytes
          Node: host=localhost port=xxxxx dbname=regression
-         ->  Seq Scan on test_90630500 test (actual rows=2 loops=1)
+         ->  Seq Scan on test_90630502 test (actual rows=2 loops=1)
 (8 rows)
 
 -- common utility command
@@ -1105,7 +1215,7 @@ END;$$;
 SELECT * FROM pg_dist_node;
  nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive | noderole | nodecluster | metadatasynced | shouldhaveshards
 ---------------------------------------------------------------------
-      1 |       0 | localhost |    57636 | default  | t           | t        | primary  | default     | t              | t
+      4 |       0 | localhost |    57636 | default  | t           | t        | primary  | default     | t              | t
 (1 row)
 
 SELECT create_distributed_function('call_delegation(int)', '$1', 'test');
@@ -1252,56 +1362,56 @@ SELECT pg_sleep(0.1);
 
 SET citus.executor_slow_start_interval TO 10;
 SELECT count(*) from another_schema_table;
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM single_node.another_schema_table_90630509 another_schema_table WHERE true
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM single_node.another_schema_table_90630510 another_schema_table WHERE true
 NOTICE:  executing the command locally: SELECT count(*) AS count FROM single_node.another_schema_table_90630511 another_schema_table WHERE true
 NOTICE:  executing the command locally: SELECT count(*) AS count FROM single_node.another_schema_table_90630512 another_schema_table WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM single_node.another_schema_table_90630513 another_schema_table WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM single_node.another_schema_table_90630514 another_schema_table WHERE true
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 UPDATE another_schema_table SET b = b;
-NOTICE:  executing the command locally: UPDATE single_node.another_schema_table_90630509 another_schema_table SET b = b
-NOTICE:  executing the command locally: UPDATE single_node.another_schema_table_90630510 another_schema_table SET b = b
 NOTICE:  executing the command locally: UPDATE single_node.another_schema_table_90630511 another_schema_table SET b = b
 NOTICE:  executing the command locally: UPDATE single_node.another_schema_table_90630512 another_schema_table SET b = b
+NOTICE:  executing the command locally: UPDATE single_node.another_schema_table_90630513 another_schema_table SET b = b
+NOTICE:  executing the command locally: UPDATE single_node.another_schema_table_90630514 another_schema_table SET b = b
 -- INSERT .. SELECT pushdown and INSERT .. SELECT via repartitioning
 -- not that we ignore INSERT .. SELECT via coordinator as it relies on
 -- COPY command
 INSERT INTO another_schema_table SELECT * FROM another_schema_table;
-NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630509 AS citus_table_alias (a, b) SELECT a, b FROM single_node.another_schema_table_90630509 another_schema_table WHERE (a IS NOT NULL)
-NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630510 AS citus_table_alias (a, b) SELECT a, b FROM single_node.another_schema_table_90630510 another_schema_table WHERE (a IS NOT NULL)
 NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630511 AS citus_table_alias (a, b) SELECT a, b FROM single_node.another_schema_table_90630511 another_schema_table WHERE (a IS NOT NULL)
 NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630512 AS citus_table_alias (a, b) SELECT a, b FROM single_node.another_schema_table_90630512 another_schema_table WHERE (a IS NOT NULL)
+NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630513 AS citus_table_alias (a, b) SELECT a, b FROM single_node.another_schema_table_90630513 another_schema_table WHERE (a IS NOT NULL)
+NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630514 AS citus_table_alias (a, b) SELECT a, b FROM single_node.another_schema_table_90630514 another_schema_table WHERE (a IS NOT NULL)
 INSERT INTO another_schema_table SELECT b::int, a::int FROM another_schema_table;
-NOTICE:  executing the command locally: SELECT partition_index, 'repartitioned_results_xxxxx_from_90630509_to' || '_' || partition_index::text , rows_written FROM worker_partition_query_result('repartitioned_results_xxxxx_from_90630509_to','SELECT b AS a, a AS b FROM single_node.another_schema_table_90630509 another_schema_table WHERE true',0,'hash','{-2147483648,-1073741824,0,1073741824}'::text[],'{-1073741825,-1,1073741823,2147483647}'::text[],true) WHERE rows_written > 0
-NOTICE:  executing the command locally: SELECT partition_index, 'repartitioned_results_xxxxx_from_90630510_to' || '_' || partition_index::text , rows_written FROM worker_partition_query_result('repartitioned_results_xxxxx_from_90630510_to','SELECT b AS a, a AS b FROM single_node.another_schema_table_90630510 another_schema_table WHERE true',0,'hash','{-2147483648,-1073741824,0,1073741824}'::text[],'{-1073741825,-1,1073741823,2147483647}'::text[],true) WHERE rows_written > 0
 NOTICE:  executing the command locally: SELECT partition_index, 'repartitioned_results_xxxxx_from_90630511_to' || '_' || partition_index::text , rows_written FROM worker_partition_query_result('repartitioned_results_xxxxx_from_90630511_to','SELECT b AS a, a AS b FROM single_node.another_schema_table_90630511 another_schema_table WHERE true',0,'hash','{-2147483648,-1073741824,0,1073741824}'::text[],'{-1073741825,-1,1073741823,2147483647}'::text[],true) WHERE rows_written > 0
 NOTICE:  executing the command locally: SELECT partition_index, 'repartitioned_results_xxxxx_from_90630512_to' || '_' || partition_index::text , rows_written FROM worker_partition_query_result('repartitioned_results_xxxxx_from_90630512_to','SELECT b AS a, a AS b FROM single_node.another_schema_table_90630512 another_schema_table WHERE true',0,'hash','{-2147483648,-1073741824,0,1073741824}'::text[],'{-1073741825,-1,1073741823,2147483647}'::text[],true) WHERE rows_written > 0
+NOTICE:  executing the command locally: SELECT partition_index, 'repartitioned_results_xxxxx_from_90630513_to' || '_' || partition_index::text , rows_written FROM worker_partition_query_result('repartitioned_results_xxxxx_from_90630513_to','SELECT b AS a, a AS b FROM single_node.another_schema_table_90630513 another_schema_table WHERE true',0,'hash','{-2147483648,-1073741824,0,1073741824}'::text[],'{-1073741825,-1,1073741823,2147483647}'::text[],true) WHERE rows_written > 0
+NOTICE:  executing the command locally: SELECT partition_index, 'repartitioned_results_xxxxx_from_90630514_to' || '_' || partition_index::text , rows_written FROM worker_partition_query_result('repartitioned_results_xxxxx_from_90630514_to','SELECT b AS a, a AS b FROM single_node.another_schema_table_90630514 another_schema_table WHERE true',0,'hash','{-2147483648,-1073741824,0,1073741824}'::text[],'{-1073741825,-1,1073741823,2147483647}'::text[],true) WHERE rows_written > 0
 -- multi-row INSERTs
 INSERT INTO another_schema_table VALUES (1,1), (2,2), (3,3), (4,4), (5,5),(6,6),(7,7);
-NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630509 AS citus_table_alias (a, b) VALUES (1,1), (5,5)
-NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630510 AS citus_table_alias (a, b) VALUES (3,3), (4,4), (7,7)
-NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630511 AS citus_table_alias (a, b) VALUES (6,6)
-NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630512 AS citus_table_alias (a, b) VALUES (2,2)
+NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630511 AS citus_table_alias (a, b) VALUES (1,1), (5,5)
+NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630512 AS citus_table_alias (a, b) VALUES (3,3), (4,4), (7,7)
+NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630513 AS citus_table_alias (a, b) VALUES (6,6)
+NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630514 AS citus_table_alias (a, b) VALUES (2,2)
 -- INSERT..SELECT with re-partitioning when using local execution
 BEGIN;
 INSERT INTO another_schema_table VALUES (1,100);
-NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630509 (a, b) VALUES (1, 100)
+NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630511 (a, b) VALUES (1, 100)
 INSERT INTO another_schema_table VALUES (2,100);
-NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630512 (a, b) VALUES (2, 100)
+NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630514 (a, b) VALUES (2, 100)
 INSERT INTO another_schema_table SELECT b::int, a::int FROM another_schema_table;
-NOTICE:  executing the command locally: SELECT partition_index, 'repartitioned_results_xxxxx_from_90630509_to' || '_' || partition_index::text , rows_written FROM worker_partition_query_result('repartitioned_results_xxxxx_from_90630509_to','SELECT b AS a, a AS b FROM single_node.another_schema_table_90630509 another_schema_table WHERE true',0,'hash','{-2147483648,-1073741824,0,1073741824}'::text[],'{-1073741825,-1,1073741823,2147483647}'::text[],true) WHERE rows_written > 0
-NOTICE:  executing the command locally: SELECT partition_index, 'repartitioned_results_xxxxx_from_90630510_to' || '_' || partition_index::text , rows_written FROM worker_partition_query_result('repartitioned_results_xxxxx_from_90630510_to','SELECT b AS a, a AS b FROM single_node.another_schema_table_90630510 another_schema_table WHERE true',0,'hash','{-2147483648,-1073741824,0,1073741824}'::text[],'{-1073741825,-1,1073741823,2147483647}'::text[],true) WHERE rows_written > 0
 NOTICE:  executing the command locally: SELECT partition_index, 'repartitioned_results_xxxxx_from_90630511_to' || '_' || partition_index::text , rows_written FROM worker_partition_query_result('repartitioned_results_xxxxx_from_90630511_to','SELECT b AS a, a AS b FROM single_node.another_schema_table_90630511 another_schema_table WHERE true',0,'hash','{-2147483648,-1073741824,0,1073741824}'::text[],'{-1073741825,-1,1073741823,2147483647}'::text[],true) WHERE rows_written > 0
 NOTICE:  executing the command locally: SELECT partition_index, 'repartitioned_results_xxxxx_from_90630512_to' || '_' || partition_index::text , rows_written FROM worker_partition_query_result('repartitioned_results_xxxxx_from_90630512_to','SELECT b AS a, a AS b FROM single_node.another_schema_table_90630512 another_schema_table WHERE true',0,'hash','{-2147483648,-1073741824,0,1073741824}'::text[],'{-1073741825,-1,1073741823,2147483647}'::text[],true) WHERE rows_written > 0
-NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630509 AS citus_table_alias (a, b) SELECT a, b FROM read_intermediate_results('{repartitioned_results_xxxxx_from_90630509_to_0}'::text[], 'binary'::citus_copy_format) intermediate_result(a integer, b integer)
-NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630510 AS citus_table_alias (a, b) SELECT a, b FROM read_intermediate_results('{repartitioned_results_xxxxx_from_90630510_to_1}'::text[], 'binary'::citus_copy_format) intermediate_result(a integer, b integer)
-NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630511 AS citus_table_alias (a, b) SELECT a, b FROM read_intermediate_results('{repartitioned_results_xxxxx_from_90630509_to_2,repartitioned_results_xxxxx_from_90630511_to_2,repartitioned_results_xxxxx_from_90630512_to_2}'::text[], 'binary'::citus_copy_format) intermediate_result(a integer, b integer)
-NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630512 AS citus_table_alias (a, b) SELECT a, b FROM read_intermediate_results('{repartitioned_results_xxxxx_from_90630512_to_3}'::text[], 'binary'::citus_copy_format) intermediate_result(a integer, b integer)
+NOTICE:  executing the command locally: SELECT partition_index, 'repartitioned_results_xxxxx_from_90630513_to' || '_' || partition_index::text , rows_written FROM worker_partition_query_result('repartitioned_results_xxxxx_from_90630513_to','SELECT b AS a, a AS b FROM single_node.another_schema_table_90630513 another_schema_table WHERE true',0,'hash','{-2147483648,-1073741824,0,1073741824}'::text[],'{-1073741825,-1,1073741823,2147483647}'::text[],true) WHERE rows_written > 0
+NOTICE:  executing the command locally: SELECT partition_index, 'repartitioned_results_xxxxx_from_90630514_to' || '_' || partition_index::text , rows_written FROM worker_partition_query_result('repartitioned_results_xxxxx_from_90630514_to','SELECT b AS a, a AS b FROM single_node.another_schema_table_90630514 another_schema_table WHERE true',0,'hash','{-2147483648,-1073741824,0,1073741824}'::text[],'{-1073741825,-1,1073741823,2147483647}'::text[],true) WHERE rows_written > 0
+NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630511 AS citus_table_alias (a, b) SELECT a, b FROM read_intermediate_results('{repartitioned_results_xxxxx_from_90630511_to_0}'::text[], 'binary'::citus_copy_format) intermediate_result(a integer, b integer)
+NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630512 AS citus_table_alias (a, b) SELECT a, b FROM read_intermediate_results('{repartitioned_results_xxxxx_from_90630512_to_1}'::text[], 'binary'::citus_copy_format) intermediate_result(a integer, b integer)
+NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630513 AS citus_table_alias (a, b) SELECT a, b FROM read_intermediate_results('{repartitioned_results_xxxxx_from_90630511_to_2,repartitioned_results_xxxxx_from_90630513_to_2,repartitioned_results_xxxxx_from_90630514_to_2}'::text[], 'binary'::citus_copy_format) intermediate_result(a integer, b integer)
+NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630514 AS citus_table_alias (a, b) SELECT a, b FROM read_intermediate_results('{repartitioned_results_xxxxx_from_90630514_to_3}'::text[], 'binary'::citus_copy_format) intermediate_result(a integer, b integer)
 SELECT * FROM another_schema_table WHERE a = 100 ORDER BY b;
-NOTICE:  executing the command locally: SELECT a, b FROM single_node.another_schema_table_90630511 another_schema_table WHERE (a OPERATOR(pg_catalog.=) 100) ORDER BY b
+NOTICE:  executing the command locally: SELECT a, b FROM single_node.another_schema_table_90630513 another_schema_table WHERE (a OPERATOR(pg_catalog.=) 100) ORDER BY b
   a  | b
 ---------------------------------------------------------------------
  100 | 1
@@ -1312,10 +1422,10 @@ ROLLBACK;
 -- intermediate results
 WITH cte_1 AS (SELECT * FROM another_schema_table LIMIT 1000)
 	SELECT count(*) FROM cte_1;
-NOTICE:  executing the command locally: SELECT a, b FROM single_node.another_schema_table_90630509 another_schema_table WHERE true LIMIT '1000'::bigint
-NOTICE:  executing the command locally: SELECT a, b FROM single_node.another_schema_table_90630510 another_schema_table WHERE true LIMIT '1000'::bigint
 NOTICE:  executing the command locally: SELECT a, b FROM single_node.another_schema_table_90630511 another_schema_table WHERE true LIMIT '1000'::bigint
 NOTICE:  executing the command locally: SELECT a, b FROM single_node.another_schema_table_90630512 another_schema_table WHERE true LIMIT '1000'::bigint
+NOTICE:  executing the command locally: SELECT a, b FROM single_node.another_schema_table_90630513 another_schema_table WHERE true LIMIT '1000'::bigint
+NOTICE:  executing the command locally: SELECT a, b FROM single_node.another_schema_table_90630514 another_schema_table WHERE true LIMIT '1000'::bigint
 NOTICE:  executing the command locally: SELECT count(*) AS count FROM (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) cte_1
  count
 ---------------------------------------------------------------------

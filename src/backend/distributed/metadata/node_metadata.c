@@ -97,6 +97,7 @@ static WorkerNode * SetNodeState(char *nodeName, int32 nodePort, bool isActive);
 static HeapTuple GetNodeTuple(const char *nodeName, int32 nodePort);
 static int32 GetNextGroupId(void);
 static int GetNextNodeId(void);
+static void InsertPlaceholderCoordinatorRecord(void);
 static void InsertNodeRow(int nodeid, char *nodename, int32 nodeport, NodeMetadata
 						  *nodeMetadata);
 static void DeleteNodeRow(char *nodename, int32 nodeport);
@@ -163,14 +164,26 @@ citus_set_coordinator_host(PG_FUNCTION_ARGS)
 	Name nodeClusterName = PG_GETARG_NAME(3);
 	nodeMetadata.nodeCluster = NameStr(*nodeClusterName);
 
-	bool nodeAlreadyExists = false;
-
 	CheckCitusVersion(ERROR);
 
-	/* add the coordinator to pg_dist_node if it was not already added */
-	int nodeId = AddNodeMetadata(nodeNameString, nodePort, &nodeMetadata,
-								 &nodeAlreadyExists);
-	if (nodeAlreadyExists)
+	/* prevent concurrent modification */
+	LockRelationOid(DistNodeRelationId(), RowShareLock);
+
+	bool isCoordinatorInMetadata = false;
+	WorkerNode *coordinatorNode = PrimaryNodeForGroup(COORDINATOR_GROUP_ID,
+													  &isCoordinatorInMetadata);
+	if (!isCoordinatorInMetadata)
+	{
+		bool nodeAlreadyExists = false;
+
+		/* add the coordinator to pg_dist_node if it was not already added */
+		AddNodeMetadata(nodeNameString, nodePort, &nodeMetadata,
+						&nodeAlreadyExists);
+
+		/* we just checked */
+		Assert(!nodeAlreadyExists);
+	}
+	else
 	{
 		/*
 		 * since AddNodeMetadata takes an exclusive lock on pg_dist_node, we
@@ -178,11 +191,13 @@ citus_set_coordinator_host(PG_FUNCTION_ARGS)
 		 * can proceed to update immediately.
 		 */
 
-		UpdateNodeLocation(nodeId, nodeNameString, nodePort);
+		UpdateNodeLocation(coordinatorNode->nodeId, nodeNameString, nodePort);
 
 		/* clear cached plans that have the old host/port */
 		ResetPlanCache();
 	}
+
+	TransactionModifiedNodeMetadata = true;
 
 	PG_RETURN_VOID();
 }
@@ -220,6 +235,12 @@ master_add_node(PG_FUNCTION_ARGS)
 		nodeMetadata.nodeCluster = NameStr(*nodeClusterName);
 
 		nodeMetadata.nodeRole = PG_GETARG_OID(3);
+	}
+
+	if (nodeMetadata.groupId == COORDINATOR_GROUP_ID)
+	{
+		/* by default, we add the coordinator without shards */
+		nodeMetadata.shouldHaveShards = false;
 	}
 
 	int nodeId = AddNodeMetadata(nodeNameString, nodePort, &nodeMetadata,
@@ -1268,17 +1289,57 @@ AddNodeMetadata(char *nodeName, int32 nodePort,
 		return workerNode->nodeId;
 	}
 
+	if (nodeMetadata->groupId != COORDINATOR_GROUP_ID &&
+		strcmp(nodeName, "localhost") != 0)
+	{
+		/*
+		 * User tries to add a worker with a non-localhost address. If the coordinator
+		 * is added with "localhost" as well, the worker won't be able to connect.
+		 */
+
+		bool isCoordinatorInMetadata = false;
+		WorkerNode *coordinatorNode = PrimaryNodeForGroup(COORDINATOR_GROUP_ID,
+														  &isCoordinatorInMetadata);
+		if (isCoordinatorInMetadata &&
+			strcmp(coordinatorNode->workerName, "localhost") == 0)
+		{
+			ereport(ERROR, (errmsg("cannot add a worker node when the coordinator "
+								   "hostname is set to localhost"),
+							errdetail("Worker nodes need to be able to connect to the "
+									  "coordinator to transfer data."),
+							errhint("Use SELECT citus_set_coordinator_host('<hostname>') "
+									"to configure the coordinator hostname")));
+		}
+	}
+
+	/*
+	 * When adding the first worker when the coordinator has shard placements,
+	 * print a notice on how to drain the coordinator.
+	 */
+	if (nodeMetadata->groupId != COORDINATOR_GROUP_ID && CoordinatorAddedAsWorkerNode() &&
+		ActivePrimaryNonCoordinatorNodeCount() == 0 &&
+		NodeGroupHasShardPlacements(COORDINATOR_GROUP_ID, true))
+	{
+		WorkerNode *coordinator = CoordinatorNodeIfAddedAsWorkerOrError();
+
+		ereport(NOTICE, (errmsg("shards are still on the coordinator after adding the "
+								"new node"),
+						 errhint("Use SELECT rebalance_table_shards(); to balance "
+								 "shards data between workers and coordinator or "
+								 "SELECT citus_drain_node(%s,%d); to permanently "
+								 "move shards away from the coordinator.",
+								 quote_literal_cstr(coordinator->workerName),
+								 coordinator->workerPort)));
+	}
+
 	/* user lets Citus to decide on the group that the newly added node should be in */
 	if (nodeMetadata->groupId == INVALID_GROUP_ID)
 	{
 		nodeMetadata->groupId = GetNextGroupId();
 	}
 
-	/* if this is a coordinator, we shouldn't place shards on it */
 	if (nodeMetadata->groupId == COORDINATOR_GROUP_ID)
 	{
-		nodeMetadata->shouldHaveShards = false;
-
 		/*
 		 * Coordinator has always the authoritative metadata, reflect this
 		 * fact in the pg_dist_node.
@@ -1583,6 +1644,53 @@ EnsureCoordinator(void)
 		ereport(ERROR, (errmsg("operation is not allowed on this node"),
 						errhint("Connect to the coordinator and run it again.")));
 	}
+}
+
+
+/*
+ * InsertCoordinatorIfClusterEmpty can be used to ensure Citus tables can be
+ * created even on a node that has just performed CREATE EXTENSION citus;
+ */
+void
+InsertCoordinatorIfClusterEmpty(void)
+{
+	/* prevent concurrent node additions */
+	Relation pgDistNode = table_open(DistNodeRelationId(), RowShareLock);
+
+	if (!HasAnyNodes())
+	{
+		/*
+		 * create_distributed_table being called for the first time and there are
+		 * no pg_dist_node records. Add a record for the coordinator.
+		 */
+		InsertPlaceholderCoordinatorRecord();
+	}
+
+	/*
+	 * We release the lock, if InsertPlaceholderCoordinatorRecord was called
+	 * we already have a strong (RowExclusive) lock.
+	 */
+	table_close(pgDistNode, RowShareLock);
+}
+
+
+/*
+ * InsertPlaceholderCoordinatorRecord inserts a placeholder record for the coordinator
+ * to be able to create distributed tables on a single node.
+ */
+static void
+InsertPlaceholderCoordinatorRecord(void)
+{
+	NodeMetadata nodeMetadata = DefaultNodeMetadata();
+	nodeMetadata.groupId = 0;
+	nodeMetadata.shouldHaveShards = true;
+	nodeMetadata.nodeRole = PrimaryNodeRoleId();
+	nodeMetadata.nodeCluster = "default";
+
+	bool nodeAlreadyExists = false;
+
+	/* as long as there is a single node, localhost should be ok */
+	AddNodeMetadata("localhost", PostPortNumber, &nodeMetadata, &nodeAlreadyExists);
 }
 
 

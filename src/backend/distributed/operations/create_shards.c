@@ -173,20 +173,7 @@ CreateShardsWithRoundRobinPolicy(Oid distributedTableId, int32 shardCount,
 
 	/* load and sort the worker node list for deterministic placement */
 	List *workerNodeList = DistributedTablePlacementNodeList(NoLock);
-
-	if (list_length(workerNodeList) == 0)
-	{
-		/* fall back to using coordinator, if it is in the metadata */
-		WorkerNode *coordinatorNode = PrimaryNodeForGroup(COORDINATOR_GROUP_ID, NULL);
-		if (coordinatorNode != NULL)
-		{
-			workerNodeList = list_make1(coordinatorNode);
-		}
-	}
-	else
-	{
-		workerNodeList = SortList(workerNodeList, CompareWorkerNodes);
-	}
+	workerNodeList = SortList(workerNodeList, CompareWorkerNodes);
 
 	int32 workerNodeCount = list_length(workerNodeList);
 	if (replicationFactor > workerNodeCount)

@@ -670,6 +670,18 @@ ResolveGroupShardPlacement(GroupShardPlacement *groupShardPlacement,
 
 
 /*
+ * HasAnyNodes returns whether there are any nodes in pg_dist_node.
+ */
+bool
+HasAnyNodes(void)
+{
+	PrepareWorkerNodeCache();
+
+	return WorkerNodeCount > 0;
+}
+
+
+/*
  * LookupNodeByNodeId returns a worker node by nodeId or NULL if the node
  * cannot be found.
  */
