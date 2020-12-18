@@ -1,3 +1,7 @@
+SHOW server_version \gset
+SELECT substring(:'server_version', '\d+')::int >= 12 AS have_table_am
+\gset
+
 \c - - - :master_port
 CREATE SCHEMA single_node;
 SET search_path TO single_node;
@@ -136,6 +140,34 @@ SET citus.task_assignment_policy TO 'round-robin';
 SELECT count(*) FROM test WHERE false;
 SELECT count(*) FROM test WHERE false GROUP BY GROUPING SETS (x,y);
 RESET citus.task_assignment_policy;
+
+-- Simple columnar follower test
+\c -reuse-previous=off regression - - :master_port
+
+\if :have_table_am
+CREATE TABLE columnar_test (a int, b int) USING columnar;
+\else
+CREATE TABLE columnar_test (a int, b int);
+\endif
+
+INSERT INTO columnar_test(a, b) VALUES (1, 1);
+INSERT INTO columnar_test(a, b) VALUES (1, 2);
+TRUNCATE columnar_test;
+INSERT INTO columnar_test(a, b) VALUES (1, 3);
+INSERT INTO columnar_test(a, b) VALUES (1, 4);
+BEGIN;
+INSERT INTO columnar_test SELECT g, g*10
+  FROM generate_series(10001,20000) g;
+ROLLBACK;
+VACUUM columnar_test;
+INSERT INTO columnar_test(a, b) VALUES (1, 5);
+INSERT INTO columnar_test(a, b) VALUES (1, 6);
+VACUUM FULL columnar_test;
+INSERT INTO columnar_test(a, b) VALUES (1, 7);
+INSERT INTO columnar_test(a, b) VALUES (1, 8);
+
+\c - - - :follower_master_port
+SELECT * FROM columnar_test ORDER BY 1,2;
 
 -- Cleanup
 \c -reuse-previous=off regression - - :master_port
