@@ -897,10 +897,8 @@ GetForeignKeyOids(Oid relationId, int flags)
 {
 	AttrNumber pgConstraintTargetAttrNumber = InvalidAttrNumber;
 
-	bool extractReferencing PG_USED_FOR_ASSERTS_ONLY =
-		(flags & INCLUDE_REFERENCING_CONSTRAINTS);
-	bool extractReferenced PG_USED_FOR_ASSERTS_ONLY =
-		(flags & INCLUDE_REFERENCED_CONSTRAINTS);
+	bool extractReferencing = (flags & INCLUDE_REFERENCING_CONSTRAINTS);
+	bool extractReferenced = (flags & INCLUDE_REFERENCED_CONSTRAINTS);
 
 	/*
 	 * Only one of them should be passed at a time since the way we scan
@@ -913,14 +911,14 @@ GetForeignKeyOids(Oid relationId, int flags)
 	bool useIndex = false;
 	Oid indexOid = InvalidOid;
 
-	if (flags & INCLUDE_REFERENCING_CONSTRAINTS)
+	if (extractReferencing)
 	{
 		pgConstraintTargetAttrNumber = Anum_pg_constraint_conrelid;
 
 		useIndex = true;
 		indexOid = ConstraintRelidTypidNameIndexId;
 	}
-	else if (flags & INCLUDE_REFERENCED_CONSTRAINTS)
+	else if (extractReferenced)
 	{
 		pgConstraintTargetAttrNumber = Anum_pg_constraint_confrelid;
 	}
