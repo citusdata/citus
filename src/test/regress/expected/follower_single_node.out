@@ -233,7 +233,7 @@ SELECT * FROM test WHERE x = 1;
 ERROR:  node group 0 does not have a secondary node
 -- add the the follower as secondary nodes and try again, the SELECT statement
 -- should work this time
-\c - - - :master_port
+\c -reuse-previous=off regression - - :master_port
 SET search_path TO single_node;
 SELECT 1 FROM master_add_node('localhost', :follower_master_port, groupid => 0, noderole => 'secondary');
  ?column?
@@ -350,7 +350,7 @@ SELECT count(*) FROM test WHERE false GROUP BY GROUPING SETS (x,y);
 
 RESET citus.task_assignment_policy;
 -- Cleanup
-\c - - - :master_port
+\c -reuse-previous=off regression - - :master_port
 SET search_path TO single_node;
 SET client_min_messages TO WARNING;
 DROP SCHEMA single_node CASCADE;

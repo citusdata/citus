@@ -151,7 +151,7 @@ SELECT * FROM reference_table ORDER BY a;
 INSERT INTO citus_local_table (a, b, z) VALUES (1, 2, 3);
 SELECT * FROM citus_local_table ORDER BY a;
 
-\c - - - :master_port
+\c -reuse-previous=off regression - - :master_port
 DROP TABLE the_table;
 DROP TABLE reference_table;
 DROP TABLE citus_local_table;
