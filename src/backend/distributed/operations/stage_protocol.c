@@ -415,7 +415,7 @@ CreateAppendDistributedShardPlacements(Oid relationId, int64 shardId,
 		if (NodeIsCoordinator(workerNode))
 		{
 			ereport(NOTICE, (errmsg(
-								 "Creating placements for the append partitioned tables on the coordinator is not allowed.")));
+								 "Creating placements for the append partitioned tables on the coordinator is not supported, skipping coordinator ...")));
 			continue;
 		}
 
