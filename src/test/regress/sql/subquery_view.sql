@@ -425,10 +425,10 @@ FROM
 	  ) as foo
 ORDER BY time DESC LIMIT 5;
 
+SET client_min_messages TO DEFAULT;
+
 CREATE TABLE reference_table (text_col text, int_col int);
 SELECT create_reference_table('reference_table');
-
-SET client_min_messages TO DEFAULT;
 
 EXPLAIN (COSTS OFF) WITH cte AS (
   SELECT application_name AS text_col

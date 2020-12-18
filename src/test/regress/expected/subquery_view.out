@@ -560,6 +560,7 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT user_id, user
        3 |       6 | Thu Nov 23 14:00:13.20013 2017  |          3 |       3 |       3 |
 (5 rows)
 
+SET client_min_messages TO DEFAULT;
 CREATE TABLE reference_table (text_col text, int_col int);
 SELECT create_reference_table('reference_table');
  create_reference_table
@@ -567,7 +568,6 @@ SELECT create_reference_table('reference_table');
 
 (1 row)
 
-SET client_min_messages TO DEFAULT;
 EXPLAIN (COSTS OFF) WITH cte AS (
   SELECT application_name AS text_col
   FROM pg_stat_activity
