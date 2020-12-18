@@ -34,6 +34,8 @@
 #include "distributed/relation_restriction_equivalence.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_logical_planner.h" /* only to access utility functions */
+
+#include "catalog/pg_type.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
 #include "parser/parsetree.h"
@@ -55,7 +57,7 @@ static TargetEntry * CreateTargetEntryForColumn(Form_pg_attribute attributeTuple
 												int attributeNumber, int resno);
 static TargetEntry * CreateTargetEntryForNullCol(Form_pg_attribute attributeTuple, int
 												 resno);
-
+static TargetEntry * CreateUnusedTargetEntry(int resno);
 
 /*
  * CreateColocatedJoinChecker is a helper function that simply calculates
@@ -316,17 +318,27 @@ CreateAllTargetListForRelation(Oid relationId, List *requiredAttributes)
 
 	List *targetList = NIL;
 	int varAttrNo = 1;
+
 	for (int attrNum = 1; attrNum <= numberOfAttributes; attrNum++)
 	{
 		Form_pg_attribute attributeTuple =
 			TupleDescAttr(relation->rd_att, attrNum - 1);
 
+		int resNo = attrNum;
+
 		if (attributeTuple->attisdropped)
 		{
+			/*
+			 * For dropped columns, we generate a dummy null column because
+			 * varattno in relation and subquery are different things, however if
+			 * we put the NULL columns to the subquery for the droppped columns,
+			 * they will point to the same variable.
+			 */
+			TargetEntry *nullTargetEntry = CreateUnusedTargetEntry(resNo);
+			targetList = lappend(targetList, nullTargetEntry);
 			continue;
 		}
 
-		int resNo = attrNum;
 		if (!list_member_int(requiredAttributes, attrNum))
 		{
 			TargetEntry *nullTargetEntry =
@@ -388,15 +400,9 @@ CreateFilteredTargetListForRelation(Oid relationId, List *requiredAttributes)
 static List *
 CreateDummyTargetList(Oid relationId, List *requiredAttributes)
 {
-	Relation relation = relation_open(relationId, AccessShareLock);
-
-	Form_pg_attribute attributeTuple =
-		TupleDescAttr(relation->rd_att, 0);
-	TargetEntry *nullTargetEntry =
-		CreateTargetEntryForNullCol(attributeTuple, 1);
-
-	relation_close(relation, NoLock);
-	return list_make1(nullTargetEntry);
+	int resno = 1;
+	TargetEntry *dummyTargetEntry = CreateUnusedTargetEntry(resno);
+	return list_make1(dummyTargetEntry);
 }
 
 
@@ -427,9 +433,27 @@ CreateTargetEntryForNullCol(Form_pg_attribute attributeTuple, int resno)
 	Expr *nullExpr = (Expr *) makeNullConst(attributeTuple->atttypid,
 											attributeTuple->atttypmod,
 											attributeTuple->attcollation);
+	char *resName = attributeTuple->attname.data;
 	TargetEntry *targetEntry =
-		makeTargetEntry(nullExpr, resno,
-						strdup(attributeTuple->attname.data), false);
+		makeTargetEntry(nullExpr, resno, strdup(resName), false);
+	return targetEntry;
+}
+
+
+/*
+ * CreateUnusedTargetEntry creates a dummy target entry which is not used
+ * in postgres query.
+ */
+static TargetEntry *
+CreateUnusedTargetEntry(int resno)
+{
+	StringInfo colname = makeStringInfo();
+	appendStringInfo(colname, "dummy-%d", resno);
+	Expr *nullExpr = (Expr *) makeNullConst(INT4OID,
+											0,
+											InvalidOid);
+	TargetEntry *targetEntry =
+		makeTargetEntry(nullExpr, resno, colname->data, false);
 	return targetEntry;
 }
 

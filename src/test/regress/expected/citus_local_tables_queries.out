@@ -154,7 +154,7 @@ SELECT count(*) FROM
 (
 	SELECT *, random() FROM (SELECT *, random() FROM citus_local_table, distributed_table) as subquery_inner
 ) as subquery_top;
-NOTICE:  executing the command locally: SELECT NULL::integer AS a FROM citus_local_table_queries.citus_local_table_1509000 citus_local_table WHERE true
+NOTICE:  executing the command locally: SELECT NULL::integer AS "dummy-1" FROM citus_local_table_queries.citus_local_table_1509000 citus_local_table WHERE true
  count
 ---------------------------------------------------------------------
     36
@@ -527,7 +527,7 @@ NOTICE:  executing the command locally: SELECT a, b FROM citus_local_table_queri
 
 -- join between citus local tables and distributed tables would fail
 SELECT count(*) FROM citus_local_table, distributed_table;
-NOTICE:  executing the command locally: SELECT NULL::integer AS a FROM citus_local_table_queries.citus_local_table_1509000 citus_local_table WHERE true
+NOTICE:  executing the command locally: SELECT NULL::integer AS "dummy-1" FROM citus_local_table_queries.citus_local_table_1509000 citus_local_table WHERE true
  count
 ---------------------------------------------------------------------
     36
@@ -654,7 +654,7 @@ NOTICE:  executing the copy locally for shard xxxxx
 INSERT INTO citus_local_table
 SELECT distributed_table.* FROM distributed_table
 JOIN citus_local_table ON (true);
-NOTICE:  executing the command locally: SELECT NULL::integer AS a FROM citus_local_table_queries.citus_local_table_1509000 citus_local_table WHERE true
+NOTICE:  executing the command locally: SELECT NULL::integer AS "dummy-1" FROM citus_local_table_queries.citus_local_table_1509000 citus_local_table WHERE true
 NOTICE:  executing the copy locally for shard xxxxx
 -- .. but when wrapped into a CTE, join works fine
 INSERT INTO citus_local_table

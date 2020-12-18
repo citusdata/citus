@@ -3,14 +3,21 @@ SET search_path TO local_dist_join_mixed;
 
 
 
-CREATE TABLE distributed (id bigserial PRIMARY KEY,
+CREATE TABLE distributed (key int, id bigserial PRIMARY KEY,
                     	  name text,
                     	  created_at timestamptz DEFAULT now());
 CREATE TABLE reference (id bigserial PRIMARY KEY,
                     	title text);
 
-CREATE TABLE local (id bigserial PRIMARY KEY,
-                    title text);
+CREATE TABLE local (key int, id bigserial PRIMARY KEY, key2 int,
+                    title text, key3 int);
+
+-- drop columns so that we test the correctness in different scenarios.
+ALTER TABLE local DROP column key;
+ALTER TABLE local DROP column key2;
+ALTER TABLE local DROP column key3;
+
+ALTER TABLE distributed DROP column key;
 
 -- these above restrictions brought us to the following schema
 SELECT create_reference_table('reference');

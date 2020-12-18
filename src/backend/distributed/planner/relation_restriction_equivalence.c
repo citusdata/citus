@@ -22,6 +22,8 @@
 #include "distributed/query_utils.h"
 #include "distributed/relation_restriction_equivalence.h"
 #include "distributed/shard_pruning.h"
+
+#include "catalog/pg_type.h"
 #include "nodes/nodeFuncs.h"
 #include "nodes/pg_list.h"
 #include "nodes/primnodes.h"
@@ -33,9 +35,11 @@
 #include "nodes/relation.h"
 #include "optimizer/var.h"
 #endif
+#include "nodes/makefuncs.h"
 #include "optimizer/paths.h"
 #include "parser/parsetree.h"
 #include "optimizer/pathnode.h"
+
 
 static uint32 attributeEquivalenceId = 1;
 
@@ -153,7 +157,6 @@ static bool RangeTableArrayContainsAnyRTEIdentities(RangeTblEntry **rangeTableEn
 													queryRteIdentities);
 static int RangeTableOffsetCompat(PlannerInfo *root, AppendRelInfo *appendRelInfo);
 static Relids QueryRteIdentities(Query *queryTree);
-
 
 /*
  * AllDistributionKeysInQueryAreEqual returns true if either
@@ -1862,8 +1865,11 @@ GetRestrictInfoListForRelation(RangeTblEntry *rangeTblEntry,
 	List *joinRestrictClauseList = get_all_actual_clauses(joinRestrictInfo);
 	if (ContainsFalseClause(joinRestrictClauseList))
 	{
-		/* found WHERE false, no need  to continue */
-		return copyObject((List *) joinRestrictClauseList);
+		/* found WHERE false, no need  to continue, we just return a false clause */
+		bool value = false;
+		bool isNull = false;
+		Node *falseClause = makeBoolConst(value, isNull);
+		return list_make1(falseClause);
 	}
 
 
