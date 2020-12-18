@@ -68,10 +68,6 @@ static List * GetForeignKeyIdsForColumn(char *columnName, Oid relationId,
 										int searchForeignKeyColumnFlags);
 static List * GetForeignConstraintCommandsInternal(Oid relationId, int flags);
 static Oid get_relation_constraint_oid_compat(HeapTuple heapTuple);
-static List * GetForeignKeyOidsToCitusLocalTables(Oid relationId);
-static List * GetForeignKeyOidsToReferenceTables(Oid relationId);
-static List * FilterFKeyOidListByReferencedTableType(List *foreignKeyOidList,
-													 CitusTableType citusTableType);
 
 /*
  * ConstraintIsAForeignKeyToReferenceTable checks if the given constraint is a
@@ -80,7 +76,8 @@ static List * FilterFKeyOidListByReferencedTableType(List *foreignKeyOidList,
 bool
 ConstraintIsAForeignKeyToReferenceTable(char *inputConstaintName, Oid relationId)
 {
-	List *foreignKeyOids = GetForeignKeyOidsToReferenceTables(relationId);
+	int flags = INCLUDE_REFERENCING_CONSTRAINTS | ONLY_REFERENCE_TABLES;
+	List *foreignKeyOids = GetForeignKeyOids(relationId, flags);
 
 	Oid foreignKeyOid = FindForeignKeyOidWithName(foreignKeyOids, inputConstaintName);
 
@@ -661,23 +658,9 @@ get_relation_constraint_oid_compat(HeapTuple heapTuple)
 bool
 HasForeignKeyToCitusLocalTable(Oid relationId)
 {
-	List *foreignKeyOidList = GetForeignKeyOidsToCitusLocalTables(relationId);
-	return list_length(foreignKeyOidList) > 0;
-}
-
-
-/*
- * GetForeignKeyOidsToCitusLocalTables returns list of OIDs for the foreign key
- * constraints on the given relationId that are referencing to citus local tables.
- */
-static List *
-GetForeignKeyOidsToCitusLocalTables(Oid relationId)
-{
-	int flags = INCLUDE_REFERENCING_CONSTRAINTS;
+	int flags = INCLUDE_REFERENCING_CONSTRAINTS | ONLY_CITUS_LOCAL_TABLES;
 	List *foreignKeyOidList = GetForeignKeyOids(relationId, flags);
-	List *fKeyOidsToCitusLocalTables =
-		FilterFKeyOidListByReferencedTableType(foreignKeyOidList, CITUS_LOCAL_TABLE);
-	return fKeyOidsToCitusLocalTables;
+	return list_length(foreignKeyOidList) > 0;
 }
 
 
@@ -689,54 +672,10 @@ GetForeignKeyOidsToCitusLocalTables(Oid relationId)
 bool
 HasForeignKeyToReferenceTable(Oid relationId)
 {
-	List *foreignKeyOids = GetForeignKeyOidsToReferenceTables(relationId);
+	int flags = INCLUDE_REFERENCING_CONSTRAINTS | ONLY_REFERENCE_TABLES;
+	List *foreignKeyOids = GetForeignKeyOids(relationId, flags);
 
 	return list_length(foreignKeyOids) > 0;
-}
-
-
-/*
- * GetForeignKeyOidsToReferenceTables returns list of OIDs for the foreign key
- * constraints on the given relationId that are referencing to reference tables.
- */
-static List *
-GetForeignKeyOidsToReferenceTables(Oid relationId)
-{
-	int flags = INCLUDE_REFERENCING_CONSTRAINTS;
-	List *foreignKeyOidList = GetForeignKeyOids(relationId, flags);
-	List *fKeyOidsToReferenceTables =
-		FilterFKeyOidListByReferencedTableType(foreignKeyOidList, REFERENCE_TABLE);
-	return fKeyOidsToReferenceTables;
-}
-
-
-/*
- * FilterFKeyOidListByReferencedTableType takes a list of foreign key OIDs and
- * CitusTableType to filter the foreign key OIDs that CitusTableType matches
- * referenced relation's type.
- */
-static List *
-FilterFKeyOidListByReferencedTableType(List *foreignKeyOidList,
-									   CitusTableType citusTableType)
-{
-	List *filteredFKeyOidList = NIL;
-
-	Oid foreignKeyOid = InvalidOid;
-	foreach_oid(foreignKeyOid, foreignKeyOidList)
-	{
-		HeapTuple heapTuple = SearchSysCache1(CONSTROID, ObjectIdGetDatum(foreignKeyOid));
-		Form_pg_constraint constraintForm = (Form_pg_constraint) GETSTRUCT(heapTuple);
-
-		Oid referencedTableOid = constraintForm->confrelid;
-		if (IsCitusTableType(referencedTableOid, citusTableType))
-		{
-			filteredFKeyOidList = lappend_oid(filteredFKeyOidList, foreignKeyOid);
-		}
-
-		ReleaseSysCache(heapTuple);
-	}
-
-	return filteredFKeyOidList;
 }
 
 
@@ -908,6 +847,14 @@ GetForeignKeyOids(Oid relationId, int flags)
 	Assert(!(extractReferencing && extractReferenced));
 	Assert(extractReferencing || extractReferenced);
 
+	bool extractDistributed = (flags & ONLY_DISTRIBUTED_TABLES);
+	bool extractReference = (flags & ONLY_REFERENCE_TABLES);
+	bool extractCitusLocal = (flags & ONLY_CITUS_LOCAL_TABLES);
+
+	Assert(!(extractDistributed && extractReference));
+	Assert(!(extractDistributed && extractCitusLocal));
+	Assert(!(extractReference && extractCitusLocal));
+
 	bool useIndex = false;
 	Oid indexOid = InvalidOid;
 
@@ -963,6 +910,24 @@ GetForeignKeyOids(Oid relationId, int flags)
 
 		bool isSelfReference = (constraintForm->conrelid == constraintForm->confrelid);
 		if (excludeSelfReference && isSelfReference)
+		{
+			heapTuple = systable_getnext(scanDescriptor);
+			continue;
+		}
+
+		Oid otherTableId = InvalidOid;
+		if (extractReferencing)
+		{
+			otherTableId = constraintForm->confrelid;
+		}
+		else if (extractReferenced)
+		{
+			otherTableId = constraintForm->conrelid;
+		}
+
+		if ((extractDistributed && !IsCitusTableType(otherTableId, DISTRIBUTED_TABLE)) ||
+			(extractReference && !IsCitusTableType(otherTableId, REFERENCE_TABLE)) ||
+			(extractCitusLocal && !IsCitusTableType(otherTableId, CITUS_LOCAL_TABLE)))
 		{
 			heapTuple = systable_getnext(scanDescriptor);
 			continue;

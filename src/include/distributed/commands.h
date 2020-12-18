@@ -61,7 +61,16 @@ typedef enum ExtractForeignKeyConstraintsMode
 	INCLUDE_REFERENCED_CONSTRAINTS = 1 << 1,
 
 	/* exclude the self-referencing foreign keys */
-	EXCLUDE_SELF_REFERENCES = 1 << 2
+	EXCLUDE_SELF_REFERENCES = 1 << 2,
+
+	/* include foreign keys only when the other table is a distributed table*/
+	ONLY_DISTRIBUTED_TABLES = 1 << 3,
+
+	/* include foreign keys only when the other table is a reference table*/
+	ONLY_REFERENCE_TABLES = 1 << 4,
+
+	/* include foreign keys only when the other table is a citus local table*/
+	ONLY_CITUS_LOCAL_TABLES = 1 << 5
 } ExtractForeignKeyConstraintMode;
 
 
