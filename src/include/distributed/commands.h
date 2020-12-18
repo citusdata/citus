@@ -244,6 +244,7 @@ extern List * PreprocessCreateStatisticsStmt(Node *node, const char *queryString
 extern List * PostprocessCreateStatisticsStmt(Node *node, const char *queryString);
 extern ObjectAddress CreateStatisticsStmtObjectAddress(Node *node, bool missingOk);
 extern List * GetExplicitStatisticsCommandList(Oid relationId);
+extern List * GetExplicitStatisticsSchemaIdList(Oid relationId);
 
 /* subscription.c - forward declarations */
 extern Node * ProcessCreateSubscriptionStmt(CreateSubscriptionStmt *createSubStmt);

@@ -21,6 +21,7 @@
 #include "catalog/indexing.h"
 #include "catalog/pg_class.h"
 #include "catalog/pg_depend.h"
+#include "catalog/pg_namespace.h"
 #include "catalog/pg_proc_d.h"
 #include "catalog/pg_rewrite.h"
 #include "catalog/pg_rewrite_d.h"
@@ -119,6 +120,7 @@ typedef struct ViewDependencyNode
 
 
 static List * GetRelationTriggerFunctionDepencyList(Oid relationId);
+static List * GetRelationStatsSchemaDependencyList(Oid relationId);
 static DependencyDefinition * CreateObjectAddressDependencyDef(Oid classId, Oid objectId);
 static ObjectAddress DependencyDefinitionObjectAddress(DependencyDefinition *definition);
 
@@ -926,6 +928,17 @@ ExpandCitusSupportedTypes(ObjectAddressCollector *collector, ObjectAddress targe
 			List *triggerFunctionDepencyList =
 				GetRelationTriggerFunctionDepencyList(relationId);
 			result = list_concat(result, triggerFunctionDepencyList);
+
+			/*
+			 * Statistics' both depend to the relations and to the schemas they belong
+			 * to. Also, pg_depend records dependencies from statistics to their schemas
+			 * but not from relations to their statistics' schemas. Given above two,
+			 * we directly expand dependencies for the relations to schemas of
+			 * statistics.
+			 */
+			List *statisticsSchemaDependencyList =
+				GetRelationStatsSchemaDependencyList(relationId);
+			result = list_concat(result, statisticsSchemaDependencyList);
 		}
 
 		default:
@@ -935,6 +948,28 @@ ExpandCitusSupportedTypes(ObjectAddressCollector *collector, ObjectAddress targe
 		}
 	}
 	return result;
+}
+
+
+/*
+ * GetRelationStatsSchemaDependencyList returns a list of DependencyDefinition
+ * objects for the schemas that statistics' of the relation with relationId depends.
+ */
+static List *
+GetRelationStatsSchemaDependencyList(Oid relationId)
+{
+	List *dependencyList = NIL;
+
+	List *schemaIds = GetExplicitStatisticsSchemaIdList(relationId);
+	Oid schemaId = InvalidOid;
+	foreach_oid(schemaId, schemaIds)
+	{
+		DependencyDefinition *dependency =
+			CreateObjectAddressDependencyDef(NamespaceRelationId, schemaId);
+		dependencyList = lappend(dependencyList, dependency);
+	}
+
+	return dependencyList;
 }
 
 

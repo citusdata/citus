@@ -258,7 +258,7 @@ PreprocessCreateEnumStmt(Node *node, const char *queryString)
 	QualifyTreeNode(node);
 
 	/* reconstruct creation statement in a portable fashion */
-	const char *createEnumStmtSql = DeparseTreeNode((Node *) node);
+	const char *createEnumStmtSql = DeparseCreateEnumStmt(node);
 	createEnumStmtSql = WrapCreateOrReplace(createEnumStmtSql);
 
 	/*

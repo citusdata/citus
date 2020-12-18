@@ -144,10 +144,6 @@ GetExplicitStatisticsCommandList(Oid relationId)
 	Oid statisticsId = InvalidOid;
 	foreach_oid(statisticsId, statisticsIdList)
 	{
-		ObjectAddress address = { 0 };
-		ObjectAddressSet(address, StatisticExtRelationId, statisticsId);
-		EnsureDependenciesExistOnAllNodes(&address);
-
 		char *createStatisticsCommand = pg_get_statisticsobj_worker(statisticsId, false);
 
 		createStatisticsCommandList = lappend(
@@ -159,6 +155,51 @@ GetExplicitStatisticsCommandList(Oid relationId)
 	PopOverrideSearchPath();
 
 	return createStatisticsCommandList;
+}
+
+
+/*
+ * GetExplicitStatisticsSchemaIdList returns the list of schema ids of statistics'
+ * which are created on relation with given relation id.
+ */
+List *
+GetExplicitStatisticsSchemaIdList(Oid relationId)
+{
+	List *schemaIdList = NIL;
+
+	Relation pgStatistics = table_open(StatisticExtRelationId, AccessShareLock);
+
+	int scanKeyCount = 1;
+	ScanKeyData scanKey[1];
+
+	ScanKeyInit(&scanKey[0], Anum_pg_statistic_ext_stxrelid,
+				BTEqualStrategyNumber, F_OIDEQ, relationId);
+
+	bool useIndex = true;
+	SysScanDesc scanDescriptor = systable_beginscan(pgStatistics,
+													StatisticExtRelidIndexId,
+													useIndex, NULL, scanKeyCount,
+													scanKey);
+
+	HeapTuple heapTuple = systable_getnext(scanDescriptor);
+	while (HeapTupleIsValid(heapTuple))
+	{
+		FormData_pg_statistic_ext *statisticsForm =
+			(FormData_pg_statistic_ext *) GETSTRUCT(heapTuple);
+
+		Oid schemaId = statisticsForm->stxnamespace;
+		if (!list_member_oid(schemaIdList, schemaId))
+		{
+			schemaIdList = lappend_oid(schemaIdList, schemaId);
+		}
+
+		heapTuple = systable_getnext(scanDescriptor);
+	}
+
+	systable_endscan(scanDescriptor);
+	table_close(pgStatistics, NoLock);
+
+	return schemaIdList;
 }
 
 
