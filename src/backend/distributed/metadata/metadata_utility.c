@@ -70,6 +70,8 @@
 /* Local functions forward declarations */
 static bool GetNodeDiskSpaceStats(char *nodeName, int nodePort, uint64 *availableBytes,
 								  uint64 *totalBytes);
+static HeapTuple CreateDiskSpaceTuple(TupleDesc tupleDesc, uint64 availableBytes,
+									  uint64 totalBytes);
 static bool GetLocalDiskSpaceStats(uint64 *availableBytes, uint64 *totalBytes);
 static uint64 NodeDatabaseSize(char *nodeName, int nodePort, char *databaseName);
 static uint64 * AllocateUint64(uint64 value);
@@ -96,7 +98,7 @@ PG_FUNCTION_INFO_V1(citus_relation_size);
 
 
 /*
- * citus_node_database_size is a UDF that returns the size of the database
+ * citus_node_database_size is a UDF that returns the disk space statistics
  * on a given node.
  */
 Datum
@@ -114,8 +116,6 @@ citus_node_disk_space_stats(PG_FUNCTION_ARGS)
 	GetNodeDiskSpaceStats(nodeNameString, nodePort, &availableBytes, &totalBytes);
 
 	TupleDesc tupleDescriptor = NULL;
-	Datum values[TABLE_METADATA_FIELDS];
-	bool isNulls[TABLE_METADATA_FIELDS];
 
 	TypeFuncClass resultTypeClass = get_call_result_type(fcinfo, NULL,
 														 &tupleDescriptor);
@@ -124,14 +124,8 @@ citus_node_disk_space_stats(PG_FUNCTION_ARGS)
 		ereport(ERROR, (errmsg("return type must be a row type")));
 	}
 
-	/* form heap tuple for remote disk space statistics */
-	memset(values, 0, sizeof(values));
-	memset(isNulls, false, sizeof(isNulls));
-
-	values[0] = UInt64GetDatum(availableBytes);
-	values[1] = UInt64GetDatum(totalBytes);
-
-	HeapTuple diskSpaceTuple = heap_form_tuple(tupleDescriptor, values, isNulls);
+	HeapTuple diskSpaceTuple = CreateDiskSpaceTuple(tupleDescriptor, availableBytes,
+													totalBytes);
 
 	PG_RETURN_UINT64(HeapTupleGetDatum(diskSpaceTuple));
 }
@@ -155,15 +149,7 @@ GetNodeDiskSpaceStats(char *nodeName, int nodePort, uint64 *availableBytes,
 	MultiConnection *connection = GetNodeConnection(connectionFlags, nodeName, nodePort);
 
 	int queryResult = ExecuteOptionalRemoteCommand(connection, sizeQuery, &result);
-	if (queryResult != 0)
-	{
-		ereport(WARNING, (errcode(ERRCODE_CONNECTION_FAILURE),
-						  errmsg("cannot get the disk space statistics for node %s:%d",
-								 nodeName, nodePort)));
-		return false;
-	}
-
-	if (!IsResponseOK(result) || PQntuples(result) != 1)
+	if (queryResult != 0 || !IsResponseOK(result) || PQntuples(result) != 1)
 	{
 		ereport(WARNING, (errcode(ERRCODE_CONNECTION_FAILURE),
 						  errmsg("cannot get the disk space statistics for node %s:%d",
@@ -189,6 +175,29 @@ GetNodeDiskSpaceStats(char *nodeName, int nodePort, uint64 *availableBytes,
 
 
 /*
+ * CreateDiskSpaceTuple creates a tuple that is used as the return value
+ * for citus_node_disk_space_stats and citus_local_disk_space_stats.
+ */
+static HeapTuple
+CreateDiskSpaceTuple(TupleDesc tupleDescriptor, uint64 availableBytes, uint64 totalBytes)
+{
+	Datum values[TABLE_METADATA_FIELDS];
+	bool isNulls[TABLE_METADATA_FIELDS];
+
+	/* form heap tuple for remote disk space statistics */
+	memset(values, 0, sizeof(values));
+	memset(isNulls, false, sizeof(isNulls));
+
+	values[0] = UInt64GetDatum(availableBytes);
+	values[1] = UInt64GetDatum(totalBytes);
+
+	HeapTuple diskSpaceTuple = heap_form_tuple(tupleDescriptor, values, isNulls);
+
+	return diskSpaceTuple;
+}
+
+
+/*
  * citus_local_disk_space_stats returns total disk space and available disk
  * space for the disk that contains PGDATA.
  */
@@ -204,8 +213,6 @@ citus_local_disk_space_stats(PG_FUNCTION_ARGS)
 	}
 
 	TupleDesc tupleDescriptor = NULL;
-	Datum values[TABLE_METADATA_FIELDS];
-	bool isNulls[TABLE_METADATA_FIELDS];
 
 	TypeFuncClass resultTypeClass = get_call_result_type(fcinfo, NULL,
 														 &tupleDescriptor);
@@ -214,14 +221,8 @@ citus_local_disk_space_stats(PG_FUNCTION_ARGS)
 		ereport(ERROR, (errmsg("return type must be a row type")));
 	}
 
-	/* form heap tuple for local disk space statistics */
-	memset(values, 0, sizeof(values));
-	memset(isNulls, false, sizeof(isNulls));
-
-	values[0] = UInt64GetDatum(availableBytes);
-	values[1] = UInt64GetDatum(totalBytes);
-
-	HeapTuple diskSpaceTuple = heap_form_tuple(tupleDescriptor, values, isNulls);
+	HeapTuple diskSpaceTuple = CreateDiskSpaceTuple(tupleDescriptor, availableBytes,
+													totalBytes);
 
 	PG_RETURN_DATUM(HeapTupleGetDatum(diskSpaceTuple));
 }
@@ -267,8 +268,8 @@ citus_database_size(PG_FUNCTION_ARGS)
 
 	/* we calculated the coordinator database size above, so only query workers */
 	List *workerNodeList = ActiveReadableNonCoordinatorNodeList();
-	WorkerNode *workerNode = NULL;
 
+	WorkerNode *workerNode = NULL;
 	foreach_ptr(workerNode, workerNodeList)
 	{
 		databaseSize += NodeDatabaseSize(workerNode->workerName, workerNode->workerPort,
@@ -410,15 +411,7 @@ NodeDatabaseSize(char *nodeName, int nodePort, char *databaseName)
 	MultiConnection *connection = GetNodeConnection(connectionFlags, nodeName, nodePort);
 
 	int queryResult = ExecuteOptionalRemoteCommand(connection, sizeQuery->data, &result);
-	if (queryResult != 0)
-	{
-		ereport(WARNING, (errcode(ERRCODE_CONNECTION_FAILURE),
-						  errmsg("cannot get the database size for node %s:%d",
-								 nodeName, nodePort)));
-		return 0;
-	}
-
-	if (!IsResponseOK(result) || PQntuples(result) != 1)
+	if (queryResult != 0 || !IsResponseOK(result) || PQntuples(result) != 1)
 	{
 		ereport(WARNING, (errcode(ERRCODE_CONNECTION_FAILURE),
 						  errmsg("cannot get the disk space statistics for node %s:%d",
@@ -427,7 +420,7 @@ NodeDatabaseSize(char *nodeName, int nodePort, char *databaseName)
 		PQclear(result);
 		ClearResults(connection, raiseErrors);
 
-		return false;
+		return 0;
 	}
 
 	char *databaseSizeString = PQgetvalue(result, 0, 0);
