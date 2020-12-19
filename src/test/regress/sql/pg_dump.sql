@@ -1,3 +1,7 @@
+SHOW server_version \gset
+SELECT substring(:'server_version', '\d+')::int >= 12 AS have_table_am
+\gset
+
 CREATE TEMPORARY TABLE output (line text);
 
 CREATE SCHEMA dumper;
@@ -24,6 +28,24 @@ COPY data FROM STDIN WITH (format csv, delimiter '|', escape '\');
 
 -- data should now appear twice
 COPY data TO STDOUT;
+
+\if :have_table_am
+CREATE TABLE simple_columnar(i INT, t TEXT) USING columnar;
+\else
+CREATE TABLE simple_columnar(i INT, t TEXT);
+\endif
+
+INSERT INTO simple_columnar VALUES (1, 'one'), (2, 'two');
+
+\if :have_table_am
+CREATE TABLE dist_columnar(i INT, t TEXT) USING columnar;
+\else
+CREATE TABLE dist_columnar(i INT, t TEXT);
+\endif
+
+SELECT create_distributed_table('dist_columnar', 'i');
+
+INSERT INTO dist_columnar VALUES (1000, 'one thousand'), (2000, 'two thousand');
 
 -- go crazy with names
 CREATE TABLE "weird.table" (
@@ -54,10 +76,27 @@ DROP SCHEMA dumper CASCADE;
 -- redistribute the schema
 SELECT create_distributed_table('data', 'key');
 SELECT create_distributed_table('"weird.table"', 'key,');
+SELECT create_distributed_table('dist_columnar', 'i');
 
 -- check the table contents
 COPY data (value) TO STDOUT WITH (format csv, force_quote *);
 COPY dumper."weird.table" ("data.jsonb", "?empty(") TO STDOUT WITH (format csv, force_quote ("?empty("), null 'null', header true);
+
+-- If server supports table access methods, check to be sure that the
+-- recreated table is still columnar. Otherwise, just return true.
+\if :have_table_am
+\set is_columnar '(SELECT amname=''columnar'' from pg_am where relam=oid)'
+\else
+\set is_columnar TRUE
+\endif
+
+SELECT :is_columnar AS check_columnar FROM pg_class WHERE oid='simple_columnar'::regclass;
+
+COPY simple_columnar TO STDOUT;
+
+SELECT :is_columnar AS check_columnar FROM pg_class WHERE oid='dist_columnar'::regclass;
+
+COPY dist_columnar TO STDOUT;
 
 SELECT indexname FROM pg_indexes WHERE tablename = 'weird.table' ORDER BY indexname;
 
