@@ -515,6 +515,16 @@ ORDER BY "Name"::text;
  supplier_mx                                            | reference        | <none>              |           1 | postgres
 (23 rows)
 
+-- test the citus nodes view
+SELECT "Host", "Port", "Node Type", "Distributed Table Shards", "Reference Tables"
+FROM citus_nodes
+ORDER BY 1,2;
+   Host    | Port  | Node Type | Distributed Table Shards | Reference Tables
+---------------------------------------------------------------------
+ localhost | 57637 | worker    |                       55 |                4
+ localhost | 57638 | worker    |                       52 |                4
+(2 rows)
+
 \c - - - :worker_1_port
 SELECT "Name", "Citus Table Type", "Distribution Column", "Shard Count", "Owner"
 FROM citus_tables
@@ -545,4 +555,13 @@ ORDER BY "Name"::text;
  researchers_mx                                         | distributed      | lab_id              |           2 | postgres
  supplier_mx                                            | reference        | <none>              |           1 | postgres
 (23 rows)
+
+SELECT "Host", "Port", "Node Type", "Distributed Table Shards", "Reference Tables"
+FROM citus_nodes
+ORDER BY 1,2;
+   Host    | Port  | Node Type | Distributed Table Shards | Reference Tables
+---------------------------------------------------------------------
+ localhost | 57637 | worker    |                       55 |                4
+ localhost | 57638 | worker    |                       52 |                4
+(2 rows)
 

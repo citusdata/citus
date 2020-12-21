@@ -415,3 +415,13 @@ WHERE logicalrelid = 'test_dist_non_colocated'::regclass GROUP BY nodeport ORDER
 SELECT * from master_set_node_property('localhost', :worker_2_port, 'bogusproperty', false);
 
 DROP TABLE test_dist, test_ref, test_dist_colocated, test_dist_non_colocated;
+
+SELECT master_remove_node('localhost', 8887);
+SELECT master_remove_node('localhost', 8888);
+SELECT master_remove_node('localhost', 9992);
+SELECT master_remove_node('localhost', 9994);
+SELECT master_remove_node('localhost', 9995);
+SELECT master_remove_node('localhost', 9996);
+SELECT master_remove_node('localhost', 9997);
+SELECT master_remove_node('localhost', 9998);
+SELECT count(*) FROM pg_dist_node;

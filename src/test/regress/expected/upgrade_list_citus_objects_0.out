@@ -28,6 +28,7 @@ ORDER BY 1;
  function citus_add_rebalance_strategy(name,regproc,regproc,regproc,real,real)
  function citus_blocking_pids(integer)
  function citus_create_restore_point(text)
+ function citus_database_size(name)
  function citus_dist_stat_activity()
  function citus_drop_trigger()
  function citus_executor_name(integer)
@@ -47,7 +48,10 @@ ORDER BY 1;
  function citus_json_concatenate_final(json)
  function citus_jsonb_concatenate(jsonb,jsonb)
  function citus_jsonb_concatenate_final(jsonb)
+ function citus_local_disk_space_stats()
  function citus_node_capacity_1(integer)
+ function citus_node_database_size(text,integer,name)
+ function citus_node_disk_space_stats(text,integer)
  function citus_prepare_pg_upgrade()
  function citus_query_stats()
  function citus_relation_size(regclass)
@@ -208,11 +212,12 @@ ORDER BY 1;
  type noderole
  view citus_dist_stat_activity
  view citus_lock_waits
+ view citus_nodes
  view citus_shard_indexes_on_worker
  view citus_shards_on_worker
  view citus_stat_statements
  view citus_tables
  view citus_worker_stat_activity
  view pg_dist_shard_placement
-(198 rows)
+(203 rows)
 

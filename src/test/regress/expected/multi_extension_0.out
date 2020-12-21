@@ -479,15 +479,20 @@ SELECT * FROM print_extension_changes();
                previous_object                |                     current_object
 ---------------------------------------------------------------------
  function citus_total_relation_size(regclass) |
+                                              | function citus_database_size(name)
                                               | function citus_internal.columnar_ensure_objects_exist()
+                                              | function citus_local_disk_space_stats()
+                                              | function citus_node_database_size(text,integer,name)
+                                              | function citus_node_disk_space_stats(text,integer)
                                               | function citus_total_relation_size(regclass,boolean)
                                               | schema columnar
                                               | sequence columnar.storageid_seq
                                               | table columnar.columnar_skipnodes
                                               | table columnar.columnar_stripes
                                               | table columnar.options
+                                              | view citus_nodes
                                               | view citus_tables
-(9 rows)
+(14 rows)
 
 DROP TABLE prev_objects, extension_diff;
 -- show running version

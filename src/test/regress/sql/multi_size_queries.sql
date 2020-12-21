@@ -60,6 +60,9 @@ SELECT citus_table_size('supplier');
 SELECT citus_relation_size('supplier');
 SELECT citus_total_relation_size('supplier');
 
+-- mainly to get line coverage
+SELECT citus_database_size() > 0;
+
 -- Test inside the transaction
 BEGIN;
 ALTER TABLE supplier ALTER COLUMN s_suppkey SET NOT NULL;

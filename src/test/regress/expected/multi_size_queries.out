@@ -131,6 +131,13 @@ SELECT citus_total_relation_size('supplier');
                     458752
 (1 row)
 
+-- mainly to get line coverage
+SELECT citus_database_size() > 0;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
 -- Test inside the transaction
 BEGIN;
 ALTER TABLE supplier ALTER COLUMN s_suppkey SET NOT NULL;

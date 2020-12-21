@@ -433,10 +433,17 @@ SELECT "Name", "Citus Table Type", "Distribution Column", "Shard Count", "Owner"
 FROM citus_tables
 ORDER BY "Name"::text;
 
+-- test the citus nodes view
+SELECT "Host", "Port", "Node Type", "Distributed Table Shards", "Reference Tables"
+FROM citus_nodes
+ORDER BY 1,2;
+
 \c - - - :worker_1_port
 
 SELECT "Name", "Citus Table Type", "Distribution Column", "Shard Count", "Owner"
 FROM citus_tables
 ORDER BY "Name"::text;
 
-
+SELECT "Host", "Port", "Node Type", "Distributed Table Shards", "Reference Tables"
+FROM citus_nodes
+ORDER BY 1,2;
