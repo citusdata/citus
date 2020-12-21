@@ -122,18 +122,18 @@ GroupedByPartitionColumn(MultiNode *node, MultiExtendedOp *opNode)
 
 		Oid relationId = tableNode->relationId;
 
-		if (relationId == SUBQUERY_RELATION_ID ||
-			relationId == SUBQUERY_PUSHDOWN_RELATION_ID)
+		if (relationId == SUBQUERY_RELATION_ID)
 		{
 			/* ignore subqueries for now */
 			return false;
 		}
-
-		if (!IsCitusTableType(relationId, RANGE_DISTRIBUTED) &&
-			!IsCitusTableType(relationId, HASH_DISTRIBUTED))
+		else if (relationId != SUBQUERY_PUSHDOWN_RELATION_ID)
 		{
-			/* only range- and hash-distributed tables are strictly partitioned  */
-			return false;
+			if (!IsCitusTableType(relationId, STRICTLY_PARTITIONED_DISTRIBUTED_TABLE))
+			{
+				/* only range- and hash-distributed tables are strictly partitioned */
+				return false;
+			}
 		}
 
 		if (GroupedByColumn(opNode->groupClauseList, opNode->targetList,
@@ -295,8 +295,6 @@ PartitionColumnInTableList(Var *column, List *tableNodeList)
 			partitionColumn->varno == column->varno &&
 			partitionColumn->varattno == column->varattno)
 		{
-			Assert(partitionColumn->varno == tableNode->rangeTableId);
-
 			if (!IsCitusTableType(tableNode->relationId, APPEND_DISTRIBUTED))
 			{
 				return true;

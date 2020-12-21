@@ -254,8 +254,6 @@ static bool IsValidPartitionKeyRestriction(OpExpr *opClause);
 static void AddPartitionKeyRestrictionToInstance(ClauseWalkerContext *context,
 												 OpExpr *opClause, Var *varClause,
 												 Const *constantClause);
-static bool VarConstOpExprClause(OpExpr *opClause, Var **varClause,
-								 Const **constantClause);
 static void AddSAOPartitionKeyRestrictionToInstance(ClauseWalkerContext *context,
 													ScalarArrayOpExpr *
 													arrayOperatorExpression);
@@ -896,7 +894,7 @@ PrunableExpressionsWalker(PruningTreeNode *node, ClauseWalkerContext *context)
  * VarConstOpExprClause check whether an expression is a valid comparison of a Var to a Const.
  * Also obtaining the var with constant when valid.
  */
-static bool
+bool
 VarConstOpExprClause(OpExpr *opClause, Var **varClause, Const **constantClause)
 {
 	Var *foundVarClause = NULL;

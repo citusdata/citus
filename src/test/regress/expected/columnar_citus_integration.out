@@ -1,3 +1,4 @@
+SET columnar.compression TO 'none';
 CREATE SCHEMA columnar_citus_integration;
 SET search_path TO columnar_citus_integration;
 SET citus.next_shard_id TO 20090000;

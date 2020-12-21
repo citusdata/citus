@@ -24,9 +24,16 @@
 #include "columnar/cstore.h"
 
 /* Default values for option parameters */
-#define DEFAULT_COMPRESSION_TYPE COMPRESSION_NONE
 #define DEFAULT_STRIPE_ROW_COUNT 150000
 #define DEFAULT_CHUNK_ROW_COUNT 10000
+
+#if HAVE_LIBZSTD
+#define DEFAULT_COMPRESSION_TYPE COMPRESSION_ZSTD
+#elif HAVE_LIBLZ4
+#define DEFAULT_COMPRESSION_TYPE COMPRESSION_LZ4
+#else
+#define DEFAULT_COMPRESSION_TYPE COMPRESSION_PG_LZ
+#endif
 
 int cstore_compression = DEFAULT_COMPRESSION_TYPE;
 int cstore_stripe_row_count = DEFAULT_STRIPE_ROW_COUNT;

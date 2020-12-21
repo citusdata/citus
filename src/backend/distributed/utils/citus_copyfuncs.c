@@ -327,6 +327,7 @@ CopyNodeTask(COPYFUNC_ARGS)
 	COPY_SCALAR_FIELD(fetchedExplainAnalyzePlacementIndex);
 	COPY_STRING_FIELD(fetchedExplainAnalyzePlan);
 	COPY_SCALAR_FIELD(fetchedExplainAnalyzeExecutionDuration);
+	COPY_SCALAR_FIELD(isLocalTableModification);
 }
 
 

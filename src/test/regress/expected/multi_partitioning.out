@@ -1430,7 +1430,7 @@ COMMIT;
 BEGIN;
 TRUNCATE partitioning_locks;
 SELECT relation::regclass, locktype, mode FROM pg_locks WHERE relation::regclass::text LIKE 'partitioning_locks%' AND pid = pg_backend_pid() ORDER BY 1, 2, 3;
-        relation         | locktype |         mode
+        relation         | locktype |        mode
 ---------------------------------------------------------------------
  partitioning_locks      | relation | AccessExclusiveLock
  partitioning_locks      | relation | AccessShareLock

@@ -571,6 +571,9 @@ GetPostLoadTableCreationCommands(Oid relationId)
 	List *triggerCommands = GetExplicitTriggerCommandList(relationId);
 	tableDDLEventList = list_concat(tableDDLEventList, triggerCommands);
 
+	List *statisticsCommands = GetExplicitStatisticsCommandList(relationId);
+	tableDDLEventList = list_concat(tableDDLEventList, statisticsCommands);
+
 	return tableDDLEventList;
 }
 

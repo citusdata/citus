@@ -22,6 +22,16 @@
 #include "nodes/relation.h"
 #endif
 
+typedef struct RecursivePlanningContextInternal RecursivePlanningContext;
+
+typedef struct RangeTblEntryIndex
+{
+	RangeTblEntry *rangeTableEntry;
+	Index rteIndex;
+}RangeTblEntryIndex;
+
+extern PlannerRestrictionContext * GetPlannerRestrictionContext(
+	RecursivePlanningContext *recursivePlanningContext);
 extern List * GenerateSubplansForSubqueriesAndCTEs(uint64 planId, Query *originalQuery,
 												   PlannerRestrictionContext *
 												   plannerRestrictionContext);
@@ -33,5 +43,13 @@ extern Query * BuildReadIntermediateResultsArrayQuery(List *targetEntryList,
 													  List *resultIdList,
 													  bool useBinaryCopyFormat);
 extern bool GeneratingSubplans(void);
+extern bool ContainsLocalTableDistributedTableJoin(List *rangeTableList);
+extern void ReplaceRTERelationWithRteSubquery(RangeTblEntry *rangeTableEntry,
+											  List *requiredAttrNumbers,
+											  RecursivePlanningContext *context);
+extern bool IsRecursivelyPlannableRelation(RangeTblEntry *rangeTableEntry);
+extern bool IsRelationLocalTableOrMatView(Oid relationId);
+extern bool ContainsReferencesToOuterQuery(Query *query);
+
 
 #endif /* RECURSIVE_PLANNING_H */

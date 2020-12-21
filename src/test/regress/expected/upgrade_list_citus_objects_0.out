@@ -62,7 +62,7 @@ ORDER BY 1;
  function citus_table_is_visible(oid)
  function citus_table_size(regclass)
  function citus_text_send_as_jsonb(text)
- function citus_total_relation_size(regclass)
+ function citus_total_relation_size(regclass,boolean)
  function citus_truncate_trigger()
  function citus_validate_rebalance_strategy_functions(regproc,regproc,regproc)
  function citus_version()

@@ -328,6 +328,11 @@ typedef struct Task
 	 * ExplainTaskList().
 	 */
 	double fetchedExplainAnalyzeExecutionDuration;
+
+	/*
+	 * isLocalTableModification is true if the task is on modifying a local table.
+	 */
+	bool isLocalTableModification;
 } Task;
 
 
@@ -575,7 +580,10 @@ extern List * QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 									   RelationRestrictionContext *
 									   relationRestrictionContext,
 									   List *prunedRelationShardList, TaskType taskType,
-									   bool modifyRequiresCoordinatorEvaluation);
+									   bool modifyRequiresCoordinatorEvaluation,
+									   DeferredErrorMessage **planningError);
+
+extern bool ModifyLocalTableJob(Job *job);
 
 /* function declarations for managing jobs */
 extern uint64 UniqueJobId(void);
@@ -589,5 +597,6 @@ extern RangeTblEntry * DerivedRangeTableEntry(MultiNode *multiNode, List *column
 											  List *funcColumnTypeMods,
 											  List *funcCollations);
 
+extern List * FetchEqualityAttrNumsForRTE(Node *quals);
 
 #endif   /* MULTI_PHYSICAL_PLANNER_H */

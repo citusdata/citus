@@ -101,14 +101,16 @@ INSERT INTO partitioned_distributed_table SELECT * FROM partitioned_distributed_
 $$);
 SET client_min_messages TO DEBUG1;
 
--- should fail
-SELECT * FROM partitioned_postgres_local_table JOIN distributed_table ON (true);
-SELECT * FROM partitioned_postgres_local_table JOIN partitioned_distributed_table ON (true);
-SELECT * FROM distributed_table JOIN partitioned_postgres_local_table ON (true);
-SELECT * FROM reference_table LEFT JOIN partitioned_distributed_table ON true;
+SELECT COUNT(*) FROM partitioned_postgres_local_table JOIN distributed_table ON (true);
+SELECT COUNT(*) FROM partitioned_postgres_local_table JOIN partitioned_distributed_table ON (true);
+SELECT COUNT(*) FROM distributed_table JOIN partitioned_postgres_local_table ON (true);
 INSERT INTO partitioned_distributed_table SELECT foo.* FROM partitioned_distributed_table AS foo JOIN citus_local_table ON (true);
 INSERT INTO partitioned_distributed_table SELECT foo.* FROM distributed_table AS foo JOIN citus_local_table ON (true);
 INSERT INTO distributed_table SELECT foo.a FROM partitioned_distributed_table AS foo JOIN citus_local_table ON (true);
+
+-- should fail
+SELECT COUNT(*) FROM reference_table LEFT JOIN partitioned_distributed_table ON true;
+
 
 -- non-colocated subquery should work
 SELECT COUNT(*) FROM
@@ -121,11 +123,11 @@ SELECT COUNT(*) FROM
   (SELECT *, random() FROM foreign_distributed_table) AS bar
 WHERE foo.a = bar.b;
 
--- should fail
 UPDATE partitioned_distributed_table SET b = foo.a FROM citus_local_table AS foo;
 UPDATE partitioned_distributed_table SET b = foo.a FROM postgres_local_table AS foo;
 UPDATE partitioned_distributed_table SET a = foo.a FROM postgres_local_table AS foo WHERE foo.a = partitioned_distributed_table.a;
 UPDATE partitioned_distributed_table SET a = foo.a FROM citus_local_table AS foo WHERE foo.a = partitioned_distributed_table.a;
+-- should fail
 UPDATE partitioned_distributed_table SET a = foo.a FROM mat_view_on_part_dist AS foo WHERE foo.a = partitioned_distributed_table.a;
 UPDATE partitioned_distributed_table SET a = foo.a FROM partitioned_distributed_table AS foo WHERE foo.a < partitioned_distributed_table.a;
 UPDATE partitioned_distributed_table SET a = foo.a FROM distributed_table AS foo WHERE foo.a < partitioned_distributed_table.a;

@@ -6,22 +6,9 @@ SET search_path TO not_supported, public;
 SET citus.coordinator_aggregation_strategy TO 'disabled';
 SET client_min_messages TO DEBUG1;
 CREATE TABLE users_table_local AS SELECT * FROM users_table;
--- we don't support subqueries with local tables when they are not leaf queries
-SELECT
-	*
-FROM
-	(
-		SELECT
-			users_table_local.user_id
-		FROM
-			users_table_local, (SELECT user_id FROM events_table) as evs
-		WHERE users_table_local.user_id = evs.user_id
-	) as foo;
-ERROR:  direct joins between distributed and local tables are not supported
-HINT:  Use CTE's or subqueries to select from local tables and use them in joins
 RESET client_min_messages;
 -- we don't support subqueries with local tables when they are not leaf queries
-SELECT user_id FROM users_table WHERE user_id IN
+SELECT COUNT(user_id) FROM users_table WHERE user_id IN
 	(SELECT
 		user_id
 	 FROM
@@ -96,46 +83,6 @@ DEBUG:  generating subplan XXX_1 for subquery SELECT users_table.value_2 FROM pu
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT foo.value_2 FROM ((SELECT intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer)) foo LEFT JOIN (SELECT users_table.value_2 FROM public.users_table, public.events_table WHERE ((users_table.user_id OPERATOR(pg_catalog.=) events_table.user_id) AND (events_table.event_type OPERATOR(pg_catalog.=) ANY (ARRAY[5, 6, 7, 8])))) bar ON ((foo.value_2 OPERATOR(pg_catalog.=) bar.value_2)))
 ERROR:  cannot pushdown the subquery
 DETAIL:  Complex subqueries and CTEs cannot be in the outer part of the outer join
--- Aggregates in subquery without partition column can be planned recursively
--- unless there is a reference to an outer query
-SELECT
-    *
-FROM
-    users_table
-WHERE
-    user_id IN
-    (
-        SELECT
-            SUM(events_table.user_id)
-        FROM
-            events_table
-        WHERE
-            users_table.user_id = events_table.user_id
-    )
-;
-ERROR:  cannot push down this subquery
-DETAIL:  Aggregates without group by are currently unsupported when a subquery references a column from another query
--- Having qual without group by on partition column can be planned recursively
--- unless there is a reference to an outer query
-SELECT
-    *
-FROM
-    users_table
-WHERE
-    user_id IN
-    (
-        SELECT
-            SUM(events_table.user_id)
-        FROM
-            events_table
-        WHERE
-            events_table.user_id = users_table.user_id
-        HAVING
-            MIN(value_2) > 2
-    )
-;
-ERROR:  cannot push down this subquery
-DETAIL:  Having qual without group by on partition column is currently unsupported when a subquery references a column from another query
 -- We do not support GROUPING SETS in subqueries
 -- This also includes ROLLUP or CUBE clauses
 SELECT * FROM (SELECT user_id, value_1 FROM users_table GROUP BY GROUPING SETS ((user_id), (value_1))) s;

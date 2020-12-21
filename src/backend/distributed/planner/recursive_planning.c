@@ -59,10 +59,12 @@
 #include "distributed/commands/multi_copy.h"
 #include "distributed/distributed_planner.h"
 #include "distributed/errormessage.h"
+#include "distributed/local_distributed_join_planner.h"
 #include "distributed/listutils.h"
 #include "distributed/log_utils.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_logical_planner.h"
+#include "distributed/multi_logical_optimizer.h"
 #include "distributed/multi_router_planner.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_server_executor.h"
@@ -71,14 +73,22 @@
 #include "distributed/recursive_planning.h"
 #include "distributed/relation_restriction_equivalence.h"
 #include "distributed/log_utils.h"
+#include "distributed/shard_pruning.h"
 #include "distributed/version_compat.h"
 #include "lib/stringinfo.h"
+#include "optimizer/clauses.h"
+#if PG_VERSION_NUM >= PG_VERSION_12
+#include "optimizer/optimizer.h"
+#else
+#include "optimizer/var.h"
+#endif
 #include "optimizer/planner.h"
 #include "optimizer/prep.h"
 #include "parser/parsetree.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
 #include "nodes/nodes.h"
+#include "nodes/nodeFuncs.h"
 #include "nodes/pg_list.h"
 #include "nodes/primnodes.h"
 #if PG_VERSION_NUM >= PG_VERSION_12
@@ -88,25 +98,24 @@
 #endif
 #include "utils/builtins.h"
 #include "utils/guc.h"
-
-
-/* track depth of current recursive planner query */
-static int recursivePlanningDepth = 0;
+#include "utils/lsyscache.h"
 
 /*
  * RecursivePlanningContext is used to recursively plan subqueries
  * and CTEs, pull results to the coordinator, and push it back into
  * the workers.
  */
-typedef struct RecursivePlanningContext
+struct RecursivePlanningContextInternal
 {
 	int level;
 	uint64 planId;
 	bool allDistributionKeysInQueryAreEqual; /* used for some optimizations */
 	List *subPlanList;
 	PlannerRestrictionContext *plannerRestrictionContext;
-} RecursivePlanningContext;
+};
 
+/* track depth of current recursive planner query */
+static int recursivePlanningDepth = 0;
 
 /*
  * CteReferenceWalkerContext is used to collect CTE references in
@@ -163,15 +172,14 @@ static bool AllDistributionKeysInSubqueryAreEqual(Query *subquery,
 												  restrictionContext);
 static bool ShouldRecursivelyPlanSetOperation(Query *query,
 											  RecursivePlanningContext *context);
+static bool RecursivelyPlanSubquery(Query *subquery,
+									RecursivePlanningContext *planningContext);
 static void RecursivelyPlanSetOperations(Query *query, Node *node,
 										 RecursivePlanningContext *context);
 static bool IsLocalTableRteOrMatView(Node *node);
-static void RecursivelyPlanSubquery(Query *subquery,
-									RecursivePlanningContext *planningContext);
 static DistributedSubPlan * CreateDistributedSubPlan(uint32 subPlanId,
 													 Query *subPlanQuery);
 static bool CteReferenceListWalker(Node *node, CteReferenceWalkerContext *context);
-static bool ContainsReferencesToOuterQuery(Query *query);
 static bool ContainsReferencesToOuterQueryWalker(Node *node,
 												 VarLevelsUpWalkerContext *context);
 static bool NodeContainsSubqueryReferencingOuterQuery(Node *node);
@@ -182,6 +190,11 @@ static Query * BuildReadIntermediateResultsQuery(List *targetEntryList,
 												 List *columnAliasList,
 												 Const *resultIdConst, Oid functionOid,
 												 bool useBinaryCopyFormat);
+static void UpdateVarNosInNode(Node *node, Index newVarNo);
+static Query * CreateOuterSubquery(RangeTblEntry *rangeTableEntry,
+								   List *outerSubqueryTargetList);
+static List * GenerateRequiredColNamesFromTargetList(List *targetList);
+static char * GetRelationNameAndAliasName(RangeTblEntry *rangeTablentry);
 
 /*
  * GenerateSubplansForSubqueriesAndCTEs is a wrapper around RecursivelyPlanSubqueriesAndCTEs.
@@ -337,7 +350,30 @@ RecursivelyPlanSubqueriesAndCTEs(Query *query, RecursivePlanningContext *context
 		RecursivelyPlanNonColocatedSubqueries(query, context);
 	}
 
+
+	if (ShouldConvertLocalTableJoinsToSubqueries(query->rtable))
+	{
+		/*
+		 * Logical planner cannot handle "local_table" [OUTER] JOIN "dist_table", or
+		 * a query with local table/citus local table and subquery. We convert local/citus local
+		 * tables to a subquery until they can be planned.
+		 */
+		RecursivelyPlanLocalTableJoins(query, context);
+	}
+
+
 	return NULL;
+}
+
+
+/*
+ * GetPlannerRestrictionContext returns the planner restriction context
+ * from the given context.
+ */
+PlannerRestrictionContext *
+GetPlannerRestrictionContext(RecursivePlanningContext *recursivePlanningContext)
+{
+	return recursivePlanningContext->plannerRestrictionContext;
 }
 
 
@@ -1076,6 +1112,17 @@ IsLocalTableRteOrMatView(Node *node)
 	}
 
 	Oid relationId = rangeTableEntry->relid;
+	return IsRelationLocalTableOrMatView(relationId);
+}
+
+
+/*
+ * IsRelationLocalTableOrMatView returns true if the given relation
+ * is a citus local, local, or materialized view.
+ */
+bool
+IsRelationLocalTableOrMatView(Oid relationId)
+{
 	if (!IsCitusTable(relationId))
 	{
 		/* postgres local table or a materialized view */
@@ -1102,7 +1149,7 @@ IsLocalTableRteOrMatView(Node *node)
  * and immediately returns. Later, the planner decides on what to do
  * with the query.
  */
-static void
+static bool
 RecursivelyPlanSubquery(Query *subquery, RecursivePlanningContext *planningContext)
 {
 	uint64 planId = planningContext->planId;
@@ -1113,7 +1160,7 @@ RecursivelyPlanSubquery(Query *subquery, RecursivePlanningContext *planningConte
 		elog(DEBUG2, "skipping recursive planning for the subquery since it "
 					 "contains references to outer queries");
 
-		return;
+		return false;
 	}
 
 	/*
@@ -1124,6 +1171,7 @@ RecursivelyPlanSubquery(Query *subquery, RecursivePlanningContext *planningConte
 	{
 		debugQuery = copyObject(subquery);
 	}
+
 
 	/*
 	 * Create the subplan and append it to the list in the planning context.
@@ -1155,6 +1203,7 @@ RecursivelyPlanSubquery(Query *subquery, RecursivePlanningContext *planningConte
 
 	/* finally update the input subquery to point the result query */
 	*subquery = *resultQuery;
+	return true;
 }
 
 
@@ -1238,7 +1287,7 @@ CteReferenceListWalker(Node *node, CteReferenceWalkerContext *context)
  * anything that points outside of the query itself. Such queries cannot be
  * planned recursively.
  */
-static bool
+bool
 ContainsReferencesToOuterQuery(Query *query)
 {
 	VarLevelsUpWalkerContext context = { 0 };
@@ -1334,6 +1383,221 @@ NodeContainsSubqueryReferencingOuterQuery(Node *node)
 	}
 
 	return false;
+}
+
+
+/*
+ * ReplaceRTERelationWithRteSubquery replaces the input rte relation target entry
+ * with a subquery. The function also pushes down the filters to the subquery.
+ *
+ * It then recursively plans the subquery. This subquery is wrapped with another subquery
+ * as a trick to reduce network cost, because we currently don't have an easy way to
+ * skip generating NULL's for non-required columns, and if we create (SELECT a, NULL, NULL FROM table)
+ * then this will be sent over network and NULL's also occupy some space. Instead of this we generate:
+ * (SELECT t.a, NULL, NULL FROM (SELECT a FROM table) t). The inner subquery will be recursively planned
+ * but the outer part will not be yet it will still have the NULL columns so that the query is correct.
+ */
+void
+ReplaceRTERelationWithRteSubquery(RangeTblEntry *rangeTableEntry,
+								  List *requiredAttrNumbers,
+								  RecursivePlanningContext *context)
+{
+	Query *subquery = WrapRteRelationIntoSubquery(rangeTableEntry, requiredAttrNumbers);
+	List *outerQueryTargetList = CreateAllTargetListForRelation(rangeTableEntry->relid,
+																requiredAttrNumbers);
+
+	List *restrictionList =
+		GetRestrictInfoListForRelation(rangeTableEntry,
+									   context->plannerRestrictionContext);
+	List *copyRestrictionList = copyObject(restrictionList);
+	Expr *andedBoundExpressions = make_ands_explicit(copyRestrictionList);
+	subquery->jointree->quals = (Node *) andedBoundExpressions;
+
+	/*
+	 * Originally the quals were pointing to the RTE and its varno
+	 * was pointing to its index in rtable. However now we converted the RTE
+	 * to a subquery and the quals should be pointing to that subquery, which
+	 * is the only RTE in its rtable, hence we update the varnos so that they
+	 * point to the subquery RTE.
+	 * Originally: rtable: [rte1, current_rte, rte3...]
+	 * Now: rtable: [rte1, subquery[current_rte], rte3...] --subquery[current_rte] refers to its rtable.
+	 */
+	Node *quals = subquery->jointree->quals;
+	UpdateVarNosInNode(quals, SINGLE_RTE_INDEX);
+
+	/* replace the function with the constructed subquery */
+	rangeTableEntry->rtekind = RTE_SUBQUERY;
+	rangeTableEntry->subquery = subquery;
+
+	/*
+	 * If the relation is inherited, it'll still be inherited as
+	 * we've copied it earlier. This is to prevent the newly created
+	 * subquery being treated as inherited.
+	 */
+	rangeTableEntry->inh = false;
+
+	if (IsLoggableLevel(DEBUG1))
+	{
+		char *relationAndAliasName = GetRelationNameAndAliasName(rangeTableEntry);
+		ereport(DEBUG1, (errmsg("Wrapping relation %s to a subquery",
+								relationAndAliasName)));
+	}
+
+	/* as we created the subquery, now forcefully recursively plan it */
+	bool recursivelyPlanned = RecursivelyPlanSubquery(subquery, context);
+	if (!recursivelyPlanned)
+	{
+		ereport(ERROR, (errmsg(
+							"unexpected state: query should have been recursively planned")));
+	}
+
+	Query *outerSubquery = CreateOuterSubquery(rangeTableEntry, outerQueryTargetList);
+	rangeTableEntry->subquery = outerSubquery;
+}
+
+
+/*
+ * GetRelationNameAndAliasName returns the relname + alias name if
+ * alias name exists otherwise only the relname is returned.
+ */
+static char *
+GetRelationNameAndAliasName(RangeTblEntry *rangeTableEntry)
+{
+	StringInfo str = makeStringInfo();
+	appendStringInfo(str, "\"%s\"", get_rel_name(rangeTableEntry->relid));
+
+	char *aliasName = NULL;
+	if (rangeTableEntry->alias)
+	{
+		aliasName = rangeTableEntry->alias->aliasname;
+	}
+
+	if (aliasName)
+	{
+		appendStringInfo(str, " \"%s\"", aliasName);
+	}
+	return str->data;
+}
+
+
+/*
+ * CreateOuterSubquery creates outer subquery which contains
+ * the given range table entry in its rtable.
+ */
+static Query *
+CreateOuterSubquery(RangeTblEntry *rangeTableEntry, List *outerSubqueryTargetList)
+{
+	List *innerSubqueryColNames = GenerateRequiredColNamesFromTargetList(
+		outerSubqueryTargetList);
+
+	Query *outerSubquery = makeNode(Query);
+	outerSubquery->commandType = CMD_SELECT;
+
+	/* we copy the input rteRelation to preserve the rteIdentity */
+	RangeTblEntry *innerSubqueryRTE = copyObject(rangeTableEntry);
+
+	innerSubqueryRTE->eref->colnames = innerSubqueryColNames;
+	outerSubquery->rtable = list_make1(innerSubqueryRTE);
+
+	/* set the FROM expression to the subquery */
+	RangeTblRef *newRangeTableRef = makeNode(RangeTblRef);
+	newRangeTableRef->rtindex = 1;
+	outerSubquery->jointree = makeFromExpr(list_make1(newRangeTableRef), NULL);
+
+	outerSubquery->targetList = outerSubqueryTargetList;
+	return outerSubquery;
+}
+
+
+/*
+ * GenerateRequiredColNamesFromTargetList generates the required colnames
+ * from the given target list.
+ */
+static List *
+GenerateRequiredColNamesFromTargetList(List *targetList)
+{
+	TargetEntry *entry = NULL;
+	List *innerSubqueryColNames = NIL;
+	foreach_ptr(entry, targetList)
+	{
+		if (IsA(entry->expr, Var))
+		{
+			/*
+			 * column names of the inner subquery should only contain the
+			 * required columns, as in if we choose 'b' from ('a','b') colnames
+			 * should be 'a' not ('a','b')
+			 */
+			innerSubqueryColNames = lappend(innerSubqueryColNames, makeString(
+												entry->resname));
+		}
+	}
+	return innerSubqueryColNames;
+}
+
+
+/*
+ * UpdateVarNosInNode iterates the Vars in the
+ * given node and updates the varno's as the newVarNo.
+ */
+static void
+UpdateVarNosInNode(Node *node, Index newVarNo)
+{
+	List *varList = pull_var_clause(node, PVC_RECURSE_AGGREGATES |
+									PVC_RECURSE_PLACEHOLDERS);
+	Var *var = NULL;
+	foreach_ptr(var, varList)
+	{
+		var->varno = newVarNo;
+	}
+}
+
+
+/*
+ * IsRecursivelyPlannableRelation returns true if the given range table entry
+ * is a relation type that can be converted to a subquery.
+ */
+bool
+IsRecursivelyPlannableRelation(RangeTblEntry *rangeTableEntry)
+{
+	if (rangeTableEntry->rtekind != RTE_RELATION)
+	{
+		return false;
+	}
+	return rangeTableEntry->relkind == RELKIND_PARTITIONED_TABLE ||
+		   rangeTableEntry->relkind == RELKIND_RELATION ||
+		   rangeTableEntry->relkind == RELKIND_MATVIEW ||
+		   rangeTableEntry->relkind == RELKIND_FOREIGN_TABLE;
+}
+
+
+/*
+ * ContainsLocalTableDistributedTableJoin returns true if the input range table list
+ * contains a direct join between local RTE and an RTE that contains a distributed
+ * or reference table.
+ */
+bool
+ContainsLocalTableDistributedTableJoin(List *rangeTableList)
+{
+	bool containsLocalTable = false;
+	bool containsDistributedTable = false;
+
+	RangeTblEntry *rangeTableEntry = NULL;
+	foreach_ptr(rangeTableEntry, rangeTableList)
+	{
+		if (FindNodeMatchingCheckFunctionInRangeTableList(list_make1(rangeTableEntry),
+														  IsDistributedOrReferenceTableRTE))
+		{
+			containsDistributedTable = true;
+		}
+		else if (IsRecursivelyPlannableRelation(rangeTableEntry) &&
+				 IsLocalTableRteOrMatView((Node *) rangeTableEntry))
+		{
+			/* we consider citus local tables as local table */
+			containsLocalTable = true;
+		}
+	}
+
+	return containsLocalTable && containsDistributedTable;
 }
 
 

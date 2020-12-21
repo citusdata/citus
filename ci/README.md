@@ -46,6 +46,16 @@ following:
    requires also adding a comment before explaining why this specific use of the
    function is safe.
 
+## `build-citus.sh`
+
+This is the script used during the build phase of the extension. Historically this script
+was embedded in the docker images. This made maintenance a hassle. Now it lives in tree
+with the rest of the source code.
+
+When this script fails you most likely have a build error on the postgres version it was
+building at the time of the failure. Fix the compile error and push a new version of your
+code to fix.
+
 ## `check_enterprise_merge.sh`
 
 This check exists to make sure that we can always merge the `master` branch of

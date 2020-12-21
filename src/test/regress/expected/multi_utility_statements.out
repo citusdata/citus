@@ -290,9 +290,7 @@ RETURNS void AS $$
 	DECLARE c4 CURSOR WITH HOLD FOR SELECT *, (SELECT 1) FROM cursor_me WHERE x = $1;
 $$ LANGUAGE SQL;
 SELECT declares_cursor_4(19);
-ERROR:  could not run distributed query with subquery outside the FROM, WHERE and HAVING clauses
-HINT:  Consider using an equality filter on the distributed table's partition column.
-CONTEXT:  SQL function "declares_cursor_4" statement 1
+ERROR:  Cursors for queries on distributed tables with parameters are currently unsupported
 CREATE OR REPLACE FUNCTION cursor_plpgsql(p int)
 RETURNS SETOF int AS $$
 DECLARE

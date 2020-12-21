@@ -1368,7 +1368,7 @@ FROM
 GROUP BY user_id, value_2
 ORDER BY user_id, avg(value_1) DESC
 LIMIT 5;
-                                                         QUERY PLAN
+                                                               QUERY PLAN
 ---------------------------------------------------------------------
  Limit
    ->  Sort
@@ -1378,13 +1378,17 @@ LIMIT 5;
                Tasks Shown: One of 4
                ->  Task
                      Node: host=localhost port=xxxxx dbname=regression
-                     ->  WindowAgg
-                           ->  Sort
-                                 Sort Key: users_table.user_id, (('1'::numeric / ('1'::numeric + avg(users_table.value_1))))
-                                 ->  HashAggregate
-                                       Group Key: users_table.user_id, users_table.value_2
-                                       ->  Seq Scan on users_table_1400256 users_table
-(14 rows)
+                     ->  Limit
+                           ->  Incremental Sort
+                                 Sort Key: users_table.user_id, (avg(users_table.value_1)) DESC
+                                 Presorted Key: users_table.user_id
+                                 ->  WindowAgg
+                                       ->  Sort
+                                             Sort Key: users_table.user_id, (('1'::numeric / ('1'::numeric + avg(users_table.value_1))))
+                                             ->  HashAggregate
+                                                   Group Key: users_table.user_id, users_table.value_2
+                                                   ->  Seq Scan on users_table_1400256 users_table
+(18 rows)
 
 EXPLAIN (COSTS FALSE)
 SELECT
@@ -1396,7 +1400,7 @@ FROM
 GROUP BY user_id, value_2
 ORDER BY user_id, avg(value_1) DESC
 LIMIT 5;
-                                                         QUERY PLAN
+                                                               QUERY PLAN
 ---------------------------------------------------------------------
  Limit
    ->  Sort
@@ -1406,19 +1410,55 @@ LIMIT 5;
                Tasks Shown: One of 4
                ->  Task
                      Node: host=localhost port=xxxxx dbname=regression
-                     ->  WindowAgg
-                           ->  Sort
-                                 Sort Key: users_table.user_id, (('1'::numeric / ('1'::numeric + avg(users_table.value_1))))
-                                 ->  HashAggregate
-                                       Group Key: users_table.user_id, users_table.value_2
-                                       ->  Seq Scan on users_table_1400256 users_table
-(14 rows)
+                     ->  Limit
+                           ->  Incremental Sort
+                                 Sort Key: users_table.user_id, (avg(users_table.value_1)) DESC
+                                 Presorted Key: users_table.user_id
+                                 ->  WindowAgg
+                                       ->  Sort
+                                             Sort Key: users_table.user_id, (('1'::numeric / ('1'::numeric + avg(users_table.value_1))))
+                                             ->  HashAggregate
+                                                   Group Key: users_table.user_id, users_table.value_2
+                                                   ->  Seq Scan on users_table_1400256 users_table
+(18 rows)
 
 EXPLAIN (COSTS FALSE)
 SELECT
 	user_id,
 	avg(value_1),
 	RANK() OVER (partition by user_id order by 1 / (1 + sum(value_2)))
+FROM
+	users_table
+GROUP BY user_id, value_2
+ORDER BY user_id, avg(value_1) DESC
+LIMIT 5;
+                                                    QUERY PLAN
+---------------------------------------------------------------------
+ Limit
+   ->  Sort
+         Sort Key: remote_scan.user_id, remote_scan.avg DESC
+         ->  Custom Scan (Citus Adaptive)
+               Task Count: 4
+               Tasks Shown: One of 4
+               ->  Task
+                     Node: host=localhost port=xxxxx dbname=regression
+                     ->  Limit
+                           ->  Incremental Sort
+                                 Sort Key: users_table.user_id, (avg(users_table.value_1)) DESC
+                                 Presorted Key: users_table.user_id
+                                 ->  WindowAgg
+                                       ->  Sort
+                                             Sort Key: users_table.user_id, ((1 / (1 + sum(users_table.value_2))))
+                                             ->  HashAggregate
+                                                   Group Key: users_table.user_id, users_table.value_2
+                                                   ->  Seq Scan on users_table_1400256 users_table
+(18 rows)
+
+EXPLAIN (COSTS FALSE)
+SELECT
+	user_id,
+	avg(value_1),
+	RANK() OVER (partition by user_id order by sum(value_2))
 FROM
 	users_table
 GROUP BY user_id, value_2
@@ -1434,41 +1474,17 @@ LIMIT 5;
                Tasks Shown: One of 4
                ->  Task
                      Node: host=localhost port=xxxxx dbname=regression
-                     ->  WindowAgg
-                           ->  Sort
-                                 Sort Key: users_table.user_id, ((1 / (1 + sum(users_table.value_2))))
-                                 ->  HashAggregate
-                                       Group Key: users_table.user_id, users_table.value_2
-                                       ->  Seq Scan on users_table_1400256 users_table
-(14 rows)
-
-EXPLAIN (COSTS FALSE)
-SELECT
-	user_id,
-	avg(value_1),
-	RANK() OVER (partition by user_id order by sum(value_2))
-FROM
-	users_table
-GROUP BY user_id, value_2
-ORDER BY user_id, avg(value_1) DESC
-LIMIT 5;
-                                        QUERY PLAN
----------------------------------------------------------------------
- Limit
-   ->  Sort
-         Sort Key: remote_scan.user_id, remote_scan.avg DESC
-         ->  Custom Scan (Citus Adaptive)
-               Task Count: 4
-               Tasks Shown: One of 4
-               ->  Task
-                     Node: host=localhost port=xxxxx dbname=regression
-                     ->  WindowAgg
-                           ->  Sort
-                                 Sort Key: users_table.user_id, (sum(users_table.value_2))
-                                 ->  HashAggregate
-                                       Group Key: users_table.user_id, users_table.value_2
-                                       ->  Seq Scan on users_table_1400256 users_table
-(14 rows)
+                     ->  Limit
+                           ->  Incremental Sort
+                                 Sort Key: users_table.user_id, (avg(users_table.value_1)) DESC
+                                 Presorted Key: users_table.user_id
+                                 ->  WindowAgg
+                                       ->  Sort
+                                             Sort Key: users_table.user_id, (sum(users_table.value_2))
+                                             ->  HashAggregate
+                                                   Group Key: users_table.user_id, users_table.value_2
+                                                   ->  Seq Scan on users_table_1400256 users_table
+(18 rows)
 
 -- Grouping can be pushed down with aggregates even when window function can't
 EXPLAIN (COSTS FALSE)
@@ -1530,7 +1546,7 @@ HAVING
   sum(value_2) > 0
 ORDER BY commits DESC
 LIMIT 10;
-                                             QUERY PLAN
+                                                   QUERY PLAN
 ---------------------------------------------------------------------
  Limit
    ->  Sort
@@ -1540,14 +1556,17 @@ LIMIT 10;
                Tasks Shown: One of 4
                ->  Task
                      Node: host=localhost port=xxxxx dbname=regression
-                     ->  WindowAgg
+                     ->  Limit
                            ->  Sort
-                                 Sort Key: daily_uniques.user_id, (sum(daily_uniques.value_2)) DESC
-                                 ->  HashAggregate
-                                       Group Key: daily_uniques.user_id
-                                       Filter: (sum(daily_uniques.value_2) > '0'::double precision)
-                                       ->  Seq Scan on daily_uniques_xxxxxxx daily_uniques
-(15 rows)
+                                 Sort Key: (sum(daily_uniques.value_2)) DESC
+                                 ->  WindowAgg
+                                       ->  Sort
+                                             Sort Key: daily_uniques.user_id, (sum(daily_uniques.value_2)) DESC
+                                             ->  HashAggregate
+                                                   Group Key: daily_uniques.user_id
+                                                   Filter: (sum(daily_uniques.value_2) > '0'::double precision)
+                                                   ->  Seq Scan on daily_uniques_xxxxxxx daily_uniques
+(18 rows)
 
 DROP TABLE daily_uniques;
 -- Partition by reference table column joined to distribution column

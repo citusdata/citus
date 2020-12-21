@@ -1,5 +1,6 @@
 setup
 {
+    SET columnar.compression TO 'none';
     CREATE TABLE test_vacuum_vs_insert (a int, b int) USING columnar;
 }
 

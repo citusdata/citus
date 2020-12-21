@@ -29,7 +29,7 @@ extern bool JoinTreeContainsSubquery(Query *query);
 extern bool IsNodeSubquery(Node *node);
 extern bool HasEmptyJoinTree(Query *query);
 extern bool WhereOrHavingClauseContainsSubquery(Query *query);
-extern bool TargetListContainsSubquery(Query *query);
+extern bool TargetListContainsSubquery(List *targetList);
 extern bool SafeToPushdownWindowFunction(Query *query, StringInfo *errorDetail);
 extern MultiNode * SubqueryMultiNodeTree(Query *originalQuery,
 										 Query *queryTree,

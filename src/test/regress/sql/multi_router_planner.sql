@@ -709,6 +709,47 @@ ORDER BY id;
 INTERSECT
 (SELECT * FROM articles_hash WHERE author_id = 2 and 1=0);
 
+-- if these queries get routed, they would fail since number1() does not exist
+-- on workers. This tests an exceptional case in which some local tables bypass
+-- checks.
+CREATE OR REPLACE FUNCTION number1(OUT datid int)
+RETURNS SETOF int
+AS $$
+DECLARE
+BEGIN
+    RETURN QUERY SELECT 1;
+END;
+$$ LANGUAGE plpgsql;
+
+SELECT 1 FROM authors_reference  r JOIN (
+  SELECT s.datid FROM number1() s LEFT JOIN pg_database d ON s.datid = d.oid
+) num_db ON (r.id = num_db.datid) LIMIT 1;
+
+-- same scenario with a view
+CREATE VIEW num_db AS
+SELECT s.datid FROM number1() s LEFT JOIN pg_database d ON s.datid = d.oid;
+
+SELECT 1 FROM authors_reference r JOIN num_db ON (r.id = num_db.datid) LIMIT 1;
+
+-- with a CTE in a view
+WITH cte AS (SELECT * FROM num_db)
+SELECT 1 FROM authors_reference r JOIN cte ON (r.id = cte.datid) LIMIT 1;
+
+-- hide changes between major versions
+RESET client_min_messages;
+
+-- with pg_stat_activity view
+WITH pg_stat_activity AS (
+  SELECT
+    pg_stat_activity.datid,
+    pg_stat_activity.application_name,
+    pg_stat_activity.query
+  FROM pg_catalog.pg_stat_activity
+)
+SELECT 1 FROM authors_reference  r LEFT JOIN pg_stat_activity ON (r.id = pg_stat_activity.datid) LIMIT 1;
+
+SET client_min_messages TO DEBUG2;
+
 -- CTEs with where false
 -- terse because distribution column inference varies between pg11 & pg12
 \set VERBOSITY terse
@@ -1172,6 +1213,9 @@ DROP FUNCTION author_articles_id_word_count();
 
 DROP MATERIALIZED VIEW mv_articles_hash_empty;
 DROP MATERIALIZED VIEW mv_articles_hash_data;
+
+DROP VIEW num_db;
+DROP FUNCTION number1();
 
 DROP TABLE articles_hash;
 DROP TABLE articles_single_shard_hash;

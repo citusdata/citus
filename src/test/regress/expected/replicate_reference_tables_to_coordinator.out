@@ -281,11 +281,15 @@ SELECT test_reference_local_join_func();
 
 -- CTEs are allowed
 WITH ins AS (INSERT INTO numbers VALUES (1) RETURNING *)
-SELECT * FROM numbers, local_table;
+SELECT * FROM numbers, local_table ORDER BY 1,2;
 NOTICE:  executing the command locally: INSERT INTO replicate_ref_to_coordinator.numbers_8000001 (a) VALUES (1) RETURNING a
-NOTICE:  executing the command locally: SELECT numbers.a, local_table.a FROM replicate_ref_to_coordinator.numbers_8000001 numbers, replicate_ref_to_coordinator.local_table
+NOTICE:  executing the command locally: SELECT numbers.a, local_table.a FROM replicate_ref_to_coordinator.numbers_8000001 numbers, (SELECT local_table_1.a FROM (SELECT intermediate_result.a FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) local_table_1) local_table ORDER BY numbers.a, local_table.a
  a  | a
 ---------------------------------------------------------------------
+  2 |  2
+  2 |  4
+  2 |  7
+  2 | 20
  20 |  2
  20 |  4
  20 |  7
@@ -294,10 +298,6 @@ NOTICE:  executing the command locally: SELECT numbers.a, local_table.a FROM rep
  21 |  4
  21 |  7
  21 | 20
-  2 |  2
-  2 |  4
-  2 |  7
-  2 | 20
 (12 rows)
 
 WITH t AS (SELECT *, my_volatile_fn() x FROM numbers FOR UPDATE)

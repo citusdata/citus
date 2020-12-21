@@ -39,6 +39,15 @@ SELECT
 count(*)
 FROM
 table_2
+GROUP BY value
+HAVING max(value) > (SELECT max FROM cte_1);
+
+-- in this case, the HAVING Is also pushed down
+WITH cte_1 AS (SELECT max(value) FROM table_1)
+SELECT
+count(*)
+FROM
+table_2
 GROUP BY key
 HAVING max(value) > (SELECT max FROM cte_1);
 
@@ -88,9 +97,18 @@ SELECT
 count(*)
 FROM
 table_2
-GROUP BY key
+GROUP BY value
 HAVING max(value) > (SELECT max FROM cte_1 JOIN cte_2 USING (max));
 
+-- same as above, but HAVING pushed down to workers
+WITH cte_1 AS (SELECT max(value) FROM table_1),
+cte_2 AS (SELECT max(value) FROM table_1)
+SELECT
+count(*)
+FROM
+table_2
+GROUP BY key
+HAVING max(value) > (SELECT max FROM cte_1 JOIN cte_2 USING (max));
 
 -- multiple CTEs are joined inside HAVING, so written to file
 -- locally, also the join tree contains only another CTE, so should be
@@ -113,9 +131,17 @@ SELECT
 count(*)
 FROM
 table_2
-GROUP BY key
+GROUP BY value
 HAVING max(value) > (SELECT max(max) FROM cte_1);
 
+-- same as above, but with HAVING pushed down
+WITH cte_1 AS (SELECT max(value) FROM table_1)
+SELECT
+count(*)
+FROM
+table_2
+GROUP BY key
+HAVING max(value) > (SELECT max(max) FROM cte_1);
 
 -- two ctes are going to be written locally and executed locally
 WITH cte_1 AS (SELECT max(value) FROM table_1),
@@ -224,17 +250,24 @@ SELECT * FROM
 WITH cte_1 AS (SELECT max(value) FROM table_1),
      cte_2 AS (SELECT max(value) FROM table_2)
 SELECT * FROM
+  (SELECT value AS key FROM table_1 GROUP BY value HAVING max(value) > (SELECT * FROM cte_1)) as foo,
+  (SELECT value AS key FROM table_2 GROUP BY value HAVING max(value) > (SELECT * FROM cte_2)) as bar
+  WHERE foo.key != bar.key;
+
+-- similar to above, but having pushed down
+WITH cte_1 AS (SELECT max(value) FROM table_1),
+     cte_2 AS (SELECT max(value) FROM table_2)
+SELECT * FROM
   (SELECT key FROM table_1 GROUP BY key HAVING max(value) > (SELECT * FROM cte_1)) as foo,
   (SELECT key FROM table_2 GROUP BY key HAVING max(value) > (SELECT * FROM cte_2)) as bar
   WHERE foo.key != bar.key;
-
 
 -- now, forcing all subqueries to be on the local node
 WITH cte_1 AS (SELECT max(value) FROM table_1),
      cte_2 AS (SELECT max(value) FROM table_2)
 SELECT * FROM
-  (SELECT key FROM table_1 GROUP BY key HAVING max(value) > (SELECT * FROM cte_1) LIMIT 1) as foo,
-  (SELECT key FROM table_2 GROUP BY key HAVING max(value) > (SELECT * FROM cte_2) LIMIT 1) as bar
+  (SELECT value AS key FROM table_1 GROUP BY value HAVING max(value) > (SELECT * FROM cte_1) LIMIT 1) as foo,
+  (SELECT value AS key FROM table_2 GROUP BY value HAVING max(value) > (SELECT * FROM cte_2) LIMIT 1) as bar
   WHERE foo.key != bar.key;
 
 -- queries in which the last step has only CTEs can use local tables
@@ -277,7 +310,7 @@ SELECT
 count(*)
 FROM
 table_2
-GROUP BY key
+GROUP BY value
 HAVING max(value) > (SELECT max FROM cte_1);
 
 -- On non-mx case the subquery in the WHERE part of the query can be executed locally
@@ -290,7 +323,7 @@ FROM
 table_2
 WHERE
 key > (SELECT key FROM cte_2 ORDER BY 1 LIMIT 1)
-GROUP BY key
+GROUP BY value
 HAVING max(value) > (SELECT max FROM cte_1);
 
 -- subquery in the WHERE part of the query should not be executed locally
@@ -328,7 +361,7 @@ SELECT
 count(*)
 FROM
 table_2
-GROUP BY key
+GROUP BY value
 HAVING max(value) > (SELECT max FROM cte_1 JOIN cte_2 USING (max));
 
 
@@ -354,7 +387,7 @@ SELECT
 count(*)
 FROM
 table_2
-GROUP BY key
+GROUP BY value
 HAVING max(value) > (SELECT max(max) FROM cte_1);
 
 
@@ -477,8 +510,8 @@ SELECT * FROM
 WITH cte_1 AS (SELECT max(value) FROM table_1),
      cte_2 AS (SELECT max(value) FROM table_2)
 SELECT * FROM
-  (SELECT key FROM table_1 GROUP BY key HAVING max(value) > (SELECT * FROM cte_1)) as foo,
-  (SELECT key FROM table_2 GROUP BY key HAVING max(value) > (SELECT * FROM cte_2)) as bar
+  (SELECT value AS key FROM table_1 GROUP BY value HAVING max(value) > (SELECT * FROM cte_1)) as foo,
+  (SELECT value AS key FROM table_2 GROUP BY value HAVING max(value) > (SELECT * FROM cte_2)) as bar
   WHERE foo.key != bar.key;
 
 
@@ -486,8 +519,8 @@ SELECT * FROM
 WITH cte_1 AS (SELECT max(value) FROM table_1),
      cte_2 AS (SELECT max(value) FROM table_2)
 SELECT * FROM
-  (SELECT key FROM table_1 GROUP BY key HAVING max(value) > (SELECT * FROM cte_1) LIMIT 1) as foo,
-  (SELECT key FROM table_2 GROUP BY key HAVING max(value) > (SELECT * FROM cte_2) LIMIT 1) as bar
+  (SELECT value AS key FROM table_1 GROUP BY value HAVING max(value) > (SELECT * FROM cte_1) LIMIT 1) as foo,
+  (SELECT value AS key FROM table_2 GROUP BY value HAVING max(value) > (SELECT * FROM cte_2) LIMIT 1) as bar
   WHERE foo.key != bar.key;
 
 -- finally, use round-robin policy on the workers with same set of queries
@@ -499,7 +532,7 @@ SELECT
 count(*)
 FROM
 table_2
-GROUP BY key
+GROUP BY value
 HAVING max(value) > (SELECT max FROM cte_1);
 
 -- On non-mx case the subquery in the WHERE part of the query can be executed locally
@@ -564,7 +597,7 @@ SELECT
 count(*)
 FROM
 cte_3
-GROUP BY key
+GROUP BY value
 HAVING max(value) > (SELECT max FROM cte_1 JOIN cte_2 USING (max));
 
 -- now, the CTE is going to be written locally,
@@ -576,7 +609,7 @@ SELECT
 count(*)
 FROM
 table_2
-GROUP BY key
+GROUP BY value
 HAVING max(value) > (SELECT max(max) FROM cte_1);
 
 
@@ -712,8 +745,8 @@ SELECT * FROM
 WITH cte_1 AS (SELECT max(value) FROM table_1),
      cte_2 AS (SELECT max(value) FROM table_2)
 SELECT * FROM
-  (SELECT key FROM table_1 GROUP BY key HAVING max(value) > (SELECT * FROM cte_1)) as foo,
-  (SELECT key FROM table_2 GROUP BY key HAVING max(value) > (SELECT * FROM cte_2)) as bar
+  (SELECT value AS key FROM table_1 GROUP BY value HAVING max(value) > (SELECT * FROM cte_1)) as foo,
+  (SELECT value AS key FROM table_2 GROUP BY value HAVING max(value) > (SELECT * FROM cte_2)) as bar
   WHERE foo.key != bar.key;
 
 
@@ -721,8 +754,8 @@ SELECT * FROM
 WITH cte_1 AS (SELECT max(value) FROM table_1),
      cte_2 AS (SELECT max(value) FROM table_2)
 SELECT * FROM
-  (SELECT key FROM table_1 GROUP BY key HAVING max(value) > (SELECT * FROM cte_1) LIMIT 1) as foo,
-  (SELECT key FROM table_2 GROUP BY key HAVING max(value) > (SELECT * FROM cte_2) LIMIT 1) as bar
+  (SELECT value AS key FROM table_1 GROUP BY value HAVING max(value) > (SELECT * FROM cte_1) LIMIT 1) as foo,
+  (SELECT value AS key FROM table_2 GROUP BY value HAVING max(value) > (SELECT * FROM cte_2) LIMIT 1) as bar
   WHERE foo.key != bar.key;
 
 \c - - - :master_port

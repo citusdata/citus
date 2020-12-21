@@ -4,7 +4,7 @@ SELECT
   CASE WHEN partkey IS NOT NULL THEN 'distributed' ELSE 'reference' END AS "Citus Table Type",
   coalesce(column_to_column_name(logicalrelid, partkey), '<none>') AS "Distribution Column",
   colocationid AS "Colocation ID",
-  pg_size_pretty(citus_total_relation_size(logicalrelid)) AS "Size",
+  pg_size_pretty(citus_total_relation_size(logicalrelid, fail_on_error := false)) AS "Size",
   (select count(*) from pg_dist_shard where logicalrelid = p.logicalrelid) AS "Shard Count",
   pg_get_userbyid(relowner) AS "Owner",
   amname AS "Access Method"
