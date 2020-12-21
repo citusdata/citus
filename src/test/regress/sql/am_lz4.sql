@@ -16,7 +16,7 @@ SELECT count(*) FROM test_lz4;
 INSERT INTO test_lz4 SELECT floor(i / 2), floor(i / 10)::text, 5 FROM generate_series(1000, 11000) i;
 SELECT count(*) FROM test_lz4;
 
-VACUUM VERBOSE test_lz4;
+SELECT pg_relation_size('test_lz4') AS size_lz4 \gset
 
 SELECT DISTINCT * FROM test_lz4 ORDER BY a, b, c LIMIT 5;
 
@@ -25,7 +25,10 @@ SET columnar.compression TO 'pglz';
 CREATE TABLE test_pglz (LIKE test_lz4) USING columnar;
 INSERT INTO test_pglz SELECT * FROM test_lz4;
 
-VACUUM VERBOSE test_pglz;
+SELECT pg_relation_size('test_pglz') AS size_pglz \gset
+
+-- verify that pglz & lz4 resulted in different compression ratios
+SELECT :size_pglz <> :size_lz4;
 
 -- Other operations
 VACUUM FULL test_lz4;
