@@ -312,9 +312,6 @@ ERROR:  permission denied for table test
 ABORT;
 SELECT * FROM citus_stat_statements_reset();
 ERROR:  permission denied for function citus_stat_statements_reset
--- should not be allowed to upgrade to reference table
-SELECT upgrade_to_reference_table('singleshard');
-ERROR:  must be owner of table singleshard
 -- should not be allowed to co-located tables
 SELECT mark_tables_colocated('test', ARRAY['test_coloc'::regclass]);
 ERROR:  must be owner of table test
@@ -572,66 +569,6 @@ SELECT create_distributed_table('full_access_user_schema.t2', 'id');
 (1 row)
 
 RESET ROLE;
--- a user with all privileges on a schema should be able to upgrade a distributed table to
--- a reference table
-SET ROLE full_access;
-BEGIN;
-CREATE TABLE full_access_user_schema.r1(id int);
-SET LOCAL citus.shard_count TO 1;
-SELECT create_distributed_table('full_access_user_schema.r1', 'id');
- create_distributed_table
----------------------------------------------------------------------
-
-(1 row)
-
-SELECT upgrade_to_reference_table('full_access_user_schema.r1');
- upgrade_to_reference_table
----------------------------------------------------------------------
-
-(1 row)
-
-COMMIT;
-RESET ROLE;
--- the super user should be able to upgrade a distributed table to a reference table, even
--- if it is owned by another user
-SET ROLE full_access;
-BEGIN;
-CREATE TABLE full_access_user_schema.r2(id int);
-SET LOCAL citus.shard_count TO 1;
-SELECT create_distributed_table('full_access_user_schema.r2', 'id');
- create_distributed_table
----------------------------------------------------------------------
-
-(1 row)
-
-COMMIT;
-RESET ROLE;
--- the usage_access should not be able to upgrade the table
-SET ROLE usage_access;
-SELECT upgrade_to_reference_table('full_access_user_schema.r2');
-ERROR:  must be owner of table r2
-RESET ROLE;
--- the super user should be able
-SELECT upgrade_to_reference_table('full_access_user_schema.r2');
- upgrade_to_reference_table
----------------------------------------------------------------------
-
-(1 row)
-
--- verify the owner of the shards for the reference table
-SELECT result FROM run_command_on_workers($cmd$
-  SELECT tableowner FROM pg_tables WHERE
-    true
-    AND schemaname = 'full_access_user_schema'
-    AND tablename LIKE 'r2_%'
-  LIMIT 1;
-$cmd$);
-   result
----------------------------------------------------------------------
- full_access
- full_access
-(2 rows)
-
 -- super user should be the only one being able to call worker_cleanup_job_schema_cache
 SELECT worker_cleanup_job_schema_cache();
  worker_cleanup_job_schema_cache
@@ -756,11 +693,9 @@ SELECT citus_rm_job_directory(42::bigint);
 
 \c - - - :master_port
 DROP SCHEMA full_access_user_schema CASCADE;
-NOTICE:  drop cascades to 4 other objects
+NOTICE:  drop cascades to 2 other objects
 DETAIL:  drop cascades to table full_access_user_schema.t1
 drop cascades to table full_access_user_schema.t2
-drop cascades to table full_access_user_schema.r1
-drop cascades to table full_access_user_schema.r2
 DROP TABLE
     my_table,
     my_table_with_data,

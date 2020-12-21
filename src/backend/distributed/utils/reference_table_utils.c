@@ -45,11 +45,8 @@ static StringInfo CopyShardPlacementToWorkerNodeQuery(
 	ShardPlacement *sourceShardPlacement,
 	WorkerNode *workerNode,
 	char transferMode);
-static void ReplicateSingleShardTableToAllNodes(Oid relationId);
-static void ReplicateShardToAllNodes(ShardInterval *shardInterval);
 static void ReplicateShardToNode(ShardInterval *shardInterval, char *nodeName,
 								 int nodePort);
-static void ConvertToReferenceTableMetadata(Oid relationId, uint64 shardId);
 static bool AnyRelationsModifiedInTransaction(List *relationIdList);
 
 /* exports for SQL callable functions */
@@ -134,9 +131,8 @@ EnsureReferenceTablesExistOnAllNodesExtended(char transferMode)
 
 	/*
 	 * We only take an access share lock, otherwise we'll hold up master_add_node.
-	 * In case of create_reference_table() and upgrade_to_reference_table(), where
-	 * we don't want concurrent writes to pg_dist_node, we have already acquired
-	 * ShareLock on pg_dist_node.
+	 * In case of create_reference_table() where we don't want concurrent writes
+	 * to pg_dist_node, we have already acquired ShareLock on pg_dist_node.
 	 */
 	List *newWorkersList = WorkersWithoutReferenceTablePlacement(shardId,
 																 AccessShareLock);
@@ -318,157 +314,14 @@ CopyShardPlacementToWorkerNodeQuery(ShardPlacement *sourceShardPlacement,
 
 
 /*
- * upgrade_to_reference_table accepts a broadcast table which has only one shard and
- * replicates it across all nodes to create a reference table. It also modifies related
- * metadata to mark the table as reference.
+ * upgrade_to_reference_table was removed, but we maintain a dummy implementation
+ * to support downgrades.
  */
 Datum
 upgrade_to_reference_table(PG_FUNCTION_ARGS)
 {
-	Oid relationId = PG_GETARG_OID(0);
-
-	CheckCitusVersion(ERROR);
-	EnsureCoordinator();
-	EnsureTableOwner(relationId);
-
-	if (!IsCitusTable(relationId))
-	{
-		char *relationName = get_rel_name(relationId);
-		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-						errmsg("cannot upgrade to reference table"),
-						errdetail("Relation \"%s\" is not distributed.", relationName),
-						errhint("Instead, you can use; "
-								"create_reference_table('%s');", relationName)));
-	}
-
-	CitusTableCacheEntry *tableEntry = GetCitusTableCacheEntry(relationId);
-
-	if (IsCitusTableTypeCacheEntry(tableEntry, REFERENCE_TABLE))
-	{
-		char *relationName = get_rel_name(relationId);
-		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-						errmsg("cannot upgrade to reference table"),
-						errdetail("Relation \"%s\" is already a reference table",
-								  relationName)));
-	}
-	else if (IsCitusTableTypeCacheEntry(tableEntry, CITUS_LOCAL_TABLE))
-	{
-		char *relationName = get_rel_name(relationId);
-		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-						errmsg("cannot upgrade to reference table"),
-						errdetail("Relation \"%s\" is a citus local table and "
-								  "currently it is not supported to upgrade "
-								  "a citus local table to a reference table ",
-								  relationName)));
-	}
-
-	if (tableEntry->replicationModel == REPLICATION_MODEL_STREAMING)
-	{
-		char *relationName = get_rel_name(relationId);
-		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-						errmsg("cannot upgrade to reference table"),
-						errdetail("Upgrade is only supported for statement-based "
-								  "replicated tables but \"%s\" is streaming replicated",
-								  relationName)));
-	}
-
-	LockRelationOid(relationId, AccessExclusiveLock);
-
-	List *shardIntervalList = LoadShardIntervalList(relationId);
-	if (list_length(shardIntervalList) != 1)
-	{
-		char *relationName = get_rel_name(relationId);
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("cannot upgrade to reference table"),
-						errdetail("Relation \"%s\" shard count is not one. Only "
-								  "relations with one shard can be upgraded to "
-								  "reference tables.", relationName)));
-	}
-
-	EnsureReferenceTablesExistOnAllNodes();
-	ReplicateSingleShardTableToAllNodes(relationId);
-
-	PG_RETURN_VOID();
-}
-
-
-/*
- * ReplicateSingleShardTableToAllNodes accepts a broadcast table and replicates
- * it to all worker nodes, and the coordinator if it has been added by the user
- * to pg_dist_node. It assumes that caller of this function ensures that given
- * broadcast table has only one shard.
- */
-static void
-ReplicateSingleShardTableToAllNodes(Oid relationId)
-{
-	List *shardIntervalList = LoadShardIntervalList(relationId);
-	ShardInterval *shardInterval = (ShardInterval *) linitial(shardIntervalList);
-	uint64 shardId = shardInterval->shardId;
-
-	List *foreignConstraintCommandList = CopyShardForeignConstraintCommandList(
-		shardInterval);
-
-	if (foreignConstraintCommandList != NIL || TableReferenced(relationId))
-	{
-		char *relationName = get_rel_name(relationId);
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("cannot upgrade to reference table"),
-						errdetail("Relation \"%s\" is part of a foreign constraint. "
-								  "Foreign key constraints are not allowed "
-								  "from or to reference tables.", relationName)));
-	}
-
-	/*
-	 * ReplicateShardToAllNodes function opens separate transactions (i.e., not part
-	 * of any coordinated transactions) to each worker and replicates given shard to all
-	 * workers. If a worker already has a healthy replica of given shard, it skips that
-	 * worker to prevent copying unnecessary data.
-	 */
-	ReplicateShardToAllNodes(shardInterval);
-
-	/*
-	 * We need to update metadata tables to mark this table as reference table. We modify
-	 * pg_dist_partition, pg_dist_colocation and pg_dist_shard tables in
-	 * ConvertToReferenceTableMetadata function.
-	 */
-	ConvertToReferenceTableMetadata(relationId, shardId);
-
-	/*
-	 * After the table has been officially marked as a reference table, we need to create
-	 * the reference table itself and insert its pg_dist_partition, pg_dist_shard and
-	 * existing pg_dist_placement rows.
-	 */
-	CreateTableMetadataOnWorkers(relationId);
-}
-
-
-/*
- * ReplicateShardToAllNodes function replicates given shard to all nodes
- * in separate transactions. While replicating, it only replicates the shard to the
- * nodes which does not have a healthy replica of the shard. However, this function
- * does not obtain any lock on shard resource and shard metadata. It is caller's
- * responsibility to take those locks.
- */
-static void
-ReplicateShardToAllNodes(ShardInterval *shardInterval)
-{
-	/* prevent concurrent pg_dist_node changes */
-	List *workerNodeList = ReferenceTablePlacementNodeList(ShareLock);
-
-	/*
-	 * We will iterate over all worker nodes and if a healthy placement does not exist
-	 * at given node we will copy the shard to that node. Then we will also modify
-	 * the metadata to reflect newly copied shard.
-	 */
-	workerNodeList = SortList(workerNodeList, CompareWorkerNodes);
-	WorkerNode *workerNode = NULL;
-	foreach_ptr(workerNode, workerNodeList)
-	{
-		char *nodeName = workerNode->workerName;
-		uint32 nodePort = workerNode->workerPort;
-
-		ReplicateShardToNode(shardInterval, nodeName, nodePort);
-	}
+	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					errmsg("this function is deprecated and no longer used")));
 }
 
 
@@ -545,34 +398,6 @@ ReplicateShardToNode(ShardInterval *shardInterval, char *nodeName, int nodePort)
 			SendCommandToWorkersWithMetadata(placementCommand);
 		}
 	}
-}
-
-
-/*
- * ConvertToReferenceTableMetadata accepts a broadcast table and modifies its metadata to
- * reference table metadata. To do this, this function updates pg_dist_partition,
- * pg_dist_colocation and pg_dist_shard. This function assumes that caller ensures that
- * given broadcast table has only one shard.
- */
-static void
-ConvertToReferenceTableMetadata(Oid relationId, uint64 shardId)
-{
-	uint32 currentColocationId = TableColocationId(relationId);
-	uint32 newColocationId = CreateReferenceTableColocationId();
-	Var *distributionColumn = NULL;
-	char shardStorageType = ShardStorageType(relationId);
-	text *shardMinValue = NULL;
-	text *shardMaxValue = NULL;
-
-	/* delete old metadata rows */
-	DeletePartitionRow(relationId);
-	DeleteColocationGroupIfNoTablesBelong(currentColocationId);
-	DeleteShardRow(shardId);
-
-	/* insert new metadata rows */
-	InsertIntoPgDistPartition(relationId, DISTRIBUTE_BY_NONE, distributionColumn,
-							  newColocationId, REPLICATION_MODEL_2PC);
-	InsertShardRow(relationId, shardId, shardStorageType, shardMinValue, shardMaxValue);
 }
 
 

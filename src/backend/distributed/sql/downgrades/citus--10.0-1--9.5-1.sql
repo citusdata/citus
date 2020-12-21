@@ -9,3 +9,4 @@ DROP VIEW public.citus_tables;
 DROP FUNCTION pg_catalog.citus_total_relation_size(regclass,boolean);
 
 #include "../udfs/citus_total_relation_size/7.0-1.sql"
+#include "../udfs/upgrade_to_reference_table/8.0-1.sql"
