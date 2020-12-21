@@ -35,6 +35,9 @@
 #include "common/hashfn.h"
 #endif
 #include "utils/memutils.h"
+#if PG_VERSION_NUM < PG_VERSION_12
+#include "utils/rel.h"
+#endif
 
 
 /*
@@ -78,6 +81,9 @@ typedef struct ForeignConstraintRelationshipEdge
 
 static ForeignConstraintRelationshipGraph *fConstraintRelationshipGraph = NULL;
 
+static List * GetRelationshipNodesForFKeyConnectedRelations(
+	ForeignConstraintRelationshipNode *relationshipNode);
+static List * GetAllNeighboursList(ForeignConstraintRelationshipNode *relationshipNode);
 static ForeignConstraintRelationshipNode * GetRelationshipNodeForRelationId(Oid
 																			relationId,
 																			bool *isFound);
@@ -96,6 +102,103 @@ static void GetConnectedListHelper(ForeignConstraintRelationshipNode *node,
 								   List **adjacentNodeList, bool
 								   isReferencing);
 static List * GetForeignConstraintRelationshipHelper(Oid relationId, bool isReferencing);
+
+
+/*
+ * GetForeignKeyConnectedRelationIdList returns a list of relation id's for
+ * relations that are connected to relation with relationId via a foreign
+ * key graph.
+ */
+List *
+GetForeignKeyConnectedRelationIdList(Oid relationId)
+{
+	/* use ShareRowExclusiveLock to prevent concurent foreign key creation */
+	LOCKMODE lockMode = ShareRowExclusiveLock;
+	Relation relation = try_relation_open(relationId, lockMode);
+	if (!RelationIsValid(relation))
+	{
+		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+						errmsg("relation with OID %d does not exist",
+							   relationId)));
+	}
+
+	relation_close(relation, NoLock);
+
+	bool foundInFKeyGraph = false;
+	ForeignConstraintRelationshipNode *relationshipNode =
+		GetRelationshipNodeForRelationId(relationId, &foundInFKeyGraph);
+	if (!foundInFKeyGraph)
+	{
+		/*
+		 * Relation could not be found in foreign key graph, then it has no
+		 * foreign key relationships.
+		 */
+		return NIL;
+	}
+
+	List *fKeyConnectedRelationshipNodeList =
+		GetRelationshipNodesForFKeyConnectedRelations(relationshipNode);
+	List *fKeyConnectedRelationIdList = GetRelationIdsFromRelationshipNodeList(
+		fKeyConnectedRelationshipNodeList);
+	return fKeyConnectedRelationIdList;
+}
+
+
+/*
+ * GetRelationshipNodesForFKeyConnectedRelations performs depth-first search
+ * starting from input ForeignConstraintRelationshipNode and returns a list
+ * of ForeignConstraintRelationshipNode objects for relations that are connected
+ * to given relation node via a foreign key relationhip graph.
+ */
+static List *
+GetRelationshipNodesForFKeyConnectedRelations(
+	ForeignConstraintRelationshipNode *relationshipNode)
+{
+	relationshipNode->visited = true;
+	List *relationshipNodeList = list_make1(relationshipNode);
+
+	ForeignConstraintRelationshipNode *currentNode = NULL;
+	foreach_ptr_append(currentNode, relationshipNodeList)
+	{
+		List *allNeighboursList = GetAllNeighboursList(currentNode);
+		ForeignConstraintRelationshipNode *neighborNode = NULL;
+		foreach_ptr(neighborNode, allNeighboursList)
+		{
+			if (neighborNode->visited)
+			{
+				continue;
+			}
+
+			neighborNode->visited = true;
+			relationshipNodeList = lappend(relationshipNodeList, neighborNode);
+		}
+	}
+
+	/* reset visited flags in foreign key graph */
+	SetRelationNodeListNotVisited(relationshipNodeList);
+
+	return relationshipNodeList;
+}
+
+
+/*
+ * GetAllNeighboursList returns a list of ForeignConstraintRelationshipNode
+ * objects by concatenating both (referencing & referenced) adjacency lists
+ * of given relationship node.
+ */
+static List *
+GetAllNeighboursList(ForeignConstraintRelationshipNode *relationshipNode)
+{
+	bool isReferencing = false;
+	List *referencedNeighboursList = GetNeighbourList(relationshipNode, isReferencing);
+
+	isReferencing = true;
+	List *referencingNeighboursList = GetNeighbourList(relationshipNode, isReferencing);
+
+	List *allNeighboursList = list_concat_unique_ptr(referencedNeighboursList,
+													 referencingNeighboursList);
+	return allNeighboursList;
+}
 
 
 /*
