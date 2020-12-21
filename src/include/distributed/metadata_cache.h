@@ -125,6 +125,9 @@ typedef enum
 	/* hash, range or append distributed table */
 	DISTRIBUTED_TABLE,
 
+	/* hash- or range-distributed table */
+	STRICTLY_PARTITIONED_DISTRIBUTED_TABLE,
+
 	REFERENCE_TABLE,
 	CITUS_LOCAL_TABLE,
 

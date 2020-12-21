@@ -123,6 +123,12 @@ FROM events_table e
 GROUP BY e.user_id
 ORDER BY 1 LIMIT 3;
 
+-- correlated subquery outside of a non-pushdownable aggregate
+SELECT sum(e.user_id) + (SELECT max(value_3) FROM users_reference_table WHERE value_2 = e.value_2 GROUP BY user_id)
+FROM events_table e
+GROUP BY e.value_2
+ORDER BY 1 LIMIT 3;
+
 -- subquery outside of an aggregate
 SELECT sum(e.user_id) + (SELECT user_id FROM users_reference_table WHERE user_id = 1 AND value_1 = 1)
 FROM events_table e;

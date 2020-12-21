@@ -261,7 +261,7 @@ ReplicateAllDependenciesToNode(const char *nodeName, int nodePort)
 	/*
 	 * Depending on changes in the environment, such as the enable_object_propagation guc
 	 * there might be objects in the distributed object address list that should currently
-	 * not be propagated by citus as the are 'not supported'.
+	 * not be propagated by citus as they are 'not supported'.
 	 */
 	dependencies = FilterObjectAddressListByPredicate(dependencies,
 													  &SupportedDependencyByCitus);

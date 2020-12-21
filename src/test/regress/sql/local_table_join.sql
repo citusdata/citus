@@ -318,9 +318,22 @@ EXECUTE local_dist_table_join_filters(20);
 CREATE TABLE local (key1 int, key2 int, key3 int);
 INSERT INTO local VALUES (1,2,3);
 ALTER TABLE local DROP column key2;
--- verify we ignore dropped columns
+-- make sure dropped columns work
 SELECT COUNT(*) FROM local JOIN distributed_table ON(key1 = key);
 SELECT * FROM local JOIN distributed_table ON(key1 = key) ORDER BY 1 LIMIT 1;
+SELECT * FROM (SELECT local.key1, local.key3 FROM local JOIN distributed_table
+ ON(local.key1 = distributed_table.key) GROUP BY local.key1, local.key3) a ORDER BY 1,2;
+
+SELECT * FROM (SELECT local.key3 FROM local JOIN distributed_table
+ ON(local.key1 = distributed_table.key) GROUP BY local.key3) a ORDER BY 1;
+
+SELECT a.key3 FROM (SELECT local.key3 FROM local JOIN distributed_table
+ ON(local.key1 = distributed_table.key) GROUP BY local.key3) a ORDER BY 1;
+
+-- drop all the remaining columns
+ALTER TABLE local DROP column key3;
+ALTER TABLE local DROP column key1;
+SELECT COUNT(*) FROM distributed_table JOIN local ON distributed_table.value = 'text';
 
 
 RESET client_min_messages;

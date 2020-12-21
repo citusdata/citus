@@ -1436,7 +1436,7 @@ SELECT  master_append_table_to_shard(:a_shard_id, 'append_reference_tmp_table', 
 ERROR:  cannot append to shardId 1250019
 DETAIL:  We currently don't support appending to shards in hash-partitioned, reference and citus local tables
 SELECT master_get_table_ddl_events('reference_schema.reference_table_ddl');
-                                                                           master_get_table_ddl_events
+                                                                                master_get_table_ddl_events
 ---------------------------------------------------------------------
  CREATE TABLE reference_schema.reference_table_ddl (value_2 double precision DEFAULT 25.0, value_3 text NOT NULL, value_4 timestamp without time zone, value_5 double precision)
  ALTER TABLE reference_schema.reference_table_ddl OWNER TO postgres
@@ -1611,34 +1611,31 @@ ROLLBACK;
 EXPLAIN (COSTS OFF) SELECT value_1, count(*) FROM colocated_table_test GROUP BY value_1
 HAVING (SELECT rt.value_2 FROM reference_table_test rt where rt.value_2 = 2) > 0
 ORDER BY 1;
-                                            QUERY PLAN
+                                         QUERY PLAN
 ---------------------------------------------------------------------
  Sort
    Sort Key: remote_scan.value_1
-   InitPlan 1 (returns $0)
-     ->  Function Scan on read_intermediate_result intermediate_result
-   ->  HashAggregate
-         Group Key: remote_scan.value_1
-         ->  Result
-               One-Time Filter: ($0 > '0'::double precision)
+   ->  Custom Scan (Citus Adaptive)
+         ->  Distributed Subplan XXX_1
                ->  Custom Scan (Citus Adaptive)
-                     Filter: ($0 > '0'::double precision)
-                     ->  Distributed Subplan XXX_1
-                           ->  Custom Scan (Citus Adaptive)
-                                 Task Count: 1
-                                 Tasks Shown: All
-                                 ->  Task
-                                       Node: host=localhost port=xxxxx dbname=regression
-                                       ->  Seq Scan on reference_table_test_1250000 rt
-                                             Filter: (value_2 = '2'::double precision)
-                     Task Count: 6
-                     Tasks Shown: One of 6
+                     Task Count: 1
+                     Tasks Shown: All
                      ->  Task
                            Node: host=localhost port=xxxxx dbname=regression
-                           ->  HashAggregate
-                                 Group Key: colocated_table_test.value_1
-                                 ->  Seq Scan on colocated_table_test_1250005 colocated_table_test
-(25 rows)
+                           ->  Seq Scan on reference_table_test_1250000 rt
+                                 Filter: (value_2 = '2'::double precision)
+         Task Count: 6
+         Tasks Shown: One of 6
+         ->  Task
+               Node: host=localhost port=xxxxx dbname=regression
+               ->  HashAggregate
+                     Group Key: colocated_table_test.value_1
+                     InitPlan 1 (returns $0)
+                       ->  Function Scan on read_intermediate_result intermediate_result
+                     ->  Result
+                           One-Time Filter: ($0 > '0'::double precision)
+                           ->  Seq Scan on colocated_table_test_1250005 colocated_table_test
+(22 rows)
 
 WITH a as (SELECT rt.value_2 FROM reference_table_test rt where rt.value_2 = 2)
 SELECT ct.value_1, count(*) FROM colocated_table_test ct join a on ct.value_1 = a.value_2

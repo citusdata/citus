@@ -434,6 +434,7 @@ static void get_from_clause_coldeflist(RangeTblFunction *rtfunc,
 						   deparse_context *context);
 static void get_tablesample_def(TableSampleClause *tablesample,
 					deparse_context *context);
+char *pg_get_statisticsobj_worker(Oid statextid, bool missing_ok);
 static char *pg_get_triggerdef_worker(Oid trigid, bool pretty);
 static void set_simple_column_names(deparse_namespace *dpns);
 static void get_opclass_name(Oid opclass, Oid actual_datatype,
@@ -7545,6 +7546,128 @@ pg_get_triggerdef_command(Oid triggerId)
 	bool prettyOutput = false;
 	return pg_get_triggerdef_worker(triggerId, prettyOutput);
 }
+
+
+char *
+pg_get_statisticsobj_worker(Oid statextid, bool missing_ok)
+{
+	StringInfoData buf;
+	int colno;
+	bool isnull;
+	int i;
+
+	HeapTuple statexttup = SearchSysCache1(STATEXTOID, ObjectIdGetDatum(statextid));
+
+	if (!HeapTupleIsValid(statexttup))
+	{
+		if (missing_ok)
+		{
+			return NULL;
+		}
+		elog(ERROR, "cache lookup failed for statistics object %u", statextid);
+	}
+
+	Form_pg_statistic_ext statextrec = (Form_pg_statistic_ext) GETSTRUCT(statexttup);
+
+	initStringInfo(&buf);
+
+	char *nsp = get_namespace_name(statextrec->stxnamespace);
+	appendStringInfo(&buf, "CREATE STATISTICS %s",
+					 quote_qualified_identifier(nsp,
+												NameStr(statextrec->stxname)));
+
+	/*
+	 * Decode the stxkind column so that we know which stats types to print.
+	 */
+	Datum datum = SysCacheGetAttr(STATEXTOID, statexttup,
+								  Anum_pg_statistic_ext_stxkind, &isnull);
+	Assert(!isnull);
+	ArrayType *arr = DatumGetArrayTypeP(datum);
+	if (ARR_NDIM(arr) != 1 ||
+		ARR_HASNULL(arr) ||
+		ARR_ELEMTYPE(arr) != CHAROID)
+	{
+		elog(ERROR, "stxkind is not a 1-D char array");
+	}
+	char *enabled = (char *) ARR_DATA_PTR(arr);
+
+	bool ndistinct_enabled = false;
+	bool dependencies_enabled = false;
+	bool mcv_enabled = false;
+
+	for (i = 0; i < ARR_DIMS(arr)[0]; i++)
+	{
+		if (enabled[i] == STATS_EXT_NDISTINCT)
+		{
+			ndistinct_enabled = true;
+		}
+		if (enabled[i] == STATS_EXT_DEPENDENCIES)
+		{
+			dependencies_enabled = true;
+		}
+		if (enabled[i] == STATS_EXT_MCV)
+		{
+			mcv_enabled = true;
+		}
+	}
+
+	/*
+	 * If any option is disabled, then we'll need to append the types clause
+	 * to show which options are enabled.  We omit the types clause on purpose
+	 * when all options are enabled, so a pg_dump/pg_restore will create all
+	 * statistics types on a newer postgres version, if the statistics had all
+	 * options enabled on the original version.
+	 */
+	if (!ndistinct_enabled || !dependencies_enabled || !mcv_enabled)
+	{
+		bool gotone = false;
+
+		appendStringInfoString(&buf, " (");
+
+		if (ndistinct_enabled)
+		{
+			appendStringInfoString(&buf, "ndistinct");
+			gotone = true;
+		}
+
+		if (dependencies_enabled)
+		{
+			appendStringInfo(&buf, "%sdependencies", gotone ? ", " : "");
+			gotone = true;
+		}
+
+		if (mcv_enabled)
+		{
+			appendStringInfo(&buf, "%smcv", gotone ? ", " : "");
+		}
+
+		appendStringInfoChar(&buf, ')');
+	}
+
+	appendStringInfoString(&buf, " ON ");
+
+	for (colno = 0; colno < statextrec->stxkeys.dim1; colno++)
+	{
+		AttrNumber attnum = statextrec->stxkeys.values[colno];
+
+		if (colno > 0)
+		{
+			appendStringInfoString(&buf, ", ");
+		}
+
+		char *attname = get_attname(statextrec->stxrelid, attnum, false);
+
+		appendStringInfoString(&buf, quote_identifier(attname));
+	}
+
+	appendStringInfo(&buf, " FROM %s",
+					 generate_relation_name(statextrec->stxrelid, NIL));
+
+	ReleaseSysCache(statexttup);
+
+	return buf.data;
+}
+
 
 static char *
 pg_get_triggerdef_worker(Oid trigid, bool pretty)

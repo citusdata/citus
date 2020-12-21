@@ -679,17 +679,15 @@ SELECT user_id, event_type FROM events_table
 WHERE user_id NOT IN (SELECT user_id from events_table WHERE event_type > 500 and event_type < 505)
 GROUP BY user_id, event_type;
 $Q$);
-                        coordinator_plan
+                coordinator_plan
 ---------------------------------------------------------------------
  Custom Scan (Citus INSERT ... SELECT)
-   INSERT/SELECT method: pull to coordinator
-   ->  HashAggregate
-         Group Key: remote_scan.user_id, remote_scan.value_1_agg
-         ->  Custom Scan (Citus Adaptive)
-               ->  Distributed Subplan XXX_1
-                     ->  Custom Scan (Citus Adaptive)
-                           Task Count: 4
-(8 rows)
+   INSERT/SELECT method: repartition
+   ->  Custom Scan (Citus Adaptive)
+         ->  Distributed Subplan XXX_1
+               ->  Custom Scan (Citus Adaptive)
+                     Task Count: 4
+(6 rows)
 
 -- not pushable due to not selecting the partition key. Use pull to coordinator.
 SELECT coordinator_plan($Q$
@@ -699,17 +697,15 @@ SELECT user_id, event_type FROM events_table
 WHERE user_id IN (SELECT value_2 from events_table WHERE event_type > 500 and event_type < 505)
 GROUP BY user_id, event_type;
 $Q$);
-                        coordinator_plan
+                coordinator_plan
 ---------------------------------------------------------------------
  Custom Scan (Citus INSERT ... SELECT)
-   INSERT/SELECT method: pull to coordinator
-   ->  HashAggregate
-         Group Key: remote_scan.user_id, remote_scan.value_1_agg
-         ->  Custom Scan (Citus Adaptive)
-               ->  Distributed Subplan XXX_1
-                     ->  Custom Scan (Citus Adaptive)
-                           Task Count: 4
-(8 rows)
+   INSERT/SELECT method: repartition
+   ->  Custom Scan (Citus Adaptive)
+         ->  Distributed Subplan XXX_1
+               ->  Custom Scan (Citus Adaptive)
+                     Task Count: 4
+(6 rows)
 
 -- not pushable due to not comparing user id from the events table.
 -- Use pull to coordinator.
@@ -720,17 +716,15 @@ SELECT user_id, event_type FROM events_table
 WHERE event_type IN (SELECT user_id from events_table WHERE event_type > 500 and event_type < 505)
 GROUP BY user_id, event_type;
 $Q$);
-                        coordinator_plan
+                coordinator_plan
 ---------------------------------------------------------------------
  Custom Scan (Citus INSERT ... SELECT)
-   INSERT/SELECT method: pull to coordinator
-   ->  HashAggregate
-         Group Key: remote_scan.user_id, remote_scan.value_1_agg
-         ->  Custom Scan (Citus Adaptive)
-               ->  Distributed Subplan XXX_1
-                     ->  Custom Scan (Citus Adaptive)
-                           Task Count: 4
-(8 rows)
+   INSERT/SELECT method: repartition
+   ->  Custom Scan (Citus Adaptive)
+         ->  Distributed Subplan XXX_1
+               ->  Custom Scan (Citus Adaptive)
+                     Task Count: 4
+(6 rows)
 
 ---------------------------------------------------------------------
 ---------------------------------------------------------------------

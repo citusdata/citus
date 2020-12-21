@@ -522,6 +522,27 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 			break;
 		}
 
+		case T_CreateStatsStmt:
+		{
+			CreateStatsStmt *createStatsStmt = (CreateStatsStmt *) parseTree;
+
+			/* because CREATE STATISTICS statements can only have one relation */
+			RangeVar *relation = linitial(createStatsStmt->relations);
+
+			char **relationName = &(relation->relname);
+			char **objectSchemaName = &(relation->schemaname);
+
+			SetSchemaNameIfNotExist(objectSchemaName, schemaName);
+			AppendShardIdToName(relationName, shardId);
+
+			RangeVar *stat = makeRangeVarFromNameList(createStatsStmt->defnames);
+			AppendShardIdToName(&stat->relname, shardId);
+
+			createStatsStmt->defnames = MakeNameListFromRangeVar(stat);
+
+			break;
+		}
+
 		case T_TruncateStmt:
 		{
 			/*

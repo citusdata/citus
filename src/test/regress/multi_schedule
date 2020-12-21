@@ -92,6 +92,11 @@ test: pg13 pg12
 test: tableam
 
 # ----------
+# Tests for statistics propagation
+# ----------
+test: propagate_statistics
+
+# ----------
 # Miscellaneous tests to check our query planning behavior
 # ----------
 test: multi_deparse_shard_query multi_distributed_transaction_id intermediate_results limit_intermediate_size rollback_to_savepoint
@@ -101,7 +106,7 @@ test: multi_subquery_complex_reference_clause multi_subquery_window_functions mu
 test: sql_procedure multi_function_in_join row_types materialized_view undistribute_table
 test: multi_subquery_in_where_reference_clause adaptive_executor propagate_set_commands geqo
 # this should be run alone as it gets too many clients
-test: join
+test: join_pushdown
 test: multi_subquery_union multi_subquery_in_where_clause multi_subquery_misc statement_cancel_error_message
 test: multi_agg_distinct multi_agg_approximate_distinct multi_limit_clause_approximate multi_outer_join_reference multi_single_relation_subquery multi_prepare_plsql set_role_in_transaction
 test: multi_reference_table multi_select_for_update relation_access_tracking pg13_with_ties
