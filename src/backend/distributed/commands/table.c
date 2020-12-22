@@ -101,8 +101,8 @@ PreprocessDropTableStmt(Node *node, const char *queryString)
 
 		Oid relationId = RangeVarGetRelid(tableRangeVar, AccessShareLock, missingOK);
 
-		/* we're not interested in non-valid, non-distributed relations */
-		if (relationId == InvalidOid || !IsCitusTable(relationId))
+		/* we're not interested in non-valid relations */
+		if (relationId == InvalidOid)
 		{
 			continue;
 		}
@@ -118,6 +118,12 @@ PreprocessDropTableStmt(Node *node, const char *queryString)
 		if ((TableReferenced(relationId) || TableReferencing(relationId)))
 		{
 			MarkInvalidateForeignKeyGraph();
+		}
+
+		/* we're not interested in non-distributed relations */
+		if (!IsCitusTable(relationId))
+		{
+			continue;
 		}
 
 		/* we're only interested in partitioned and mx tables */
