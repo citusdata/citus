@@ -1,3 +1,6 @@
+SHOW server_version \gset
+SELECT substring(:'server_version', '\d+')::int >= 12 AS have_table_am
+\gset
 CREATE TEMPORARY TABLE output (line text);
 CREATE SCHEMA dumper;
 SET search_path TO 'dumper';
@@ -26,6 +29,24 @@ COPY data TO STDOUT;
 4	{}
 2	{$":9}
 2	{$":9}
+\if :have_table_am
+CREATE TABLE simple_columnar(i INT, t TEXT) USING columnar;
+\else
+CREATE TABLE simple_columnar(i INT, t TEXT);
+\endif
+INSERT INTO simple_columnar VALUES (1, 'one'), (2, 'two');
+\if :have_table_am
+CREATE TABLE dist_columnar(i INT, t TEXT) USING columnar;
+\else
+CREATE TABLE dist_columnar(i INT, t TEXT);
+\endif
+SELECT create_distributed_table('dist_columnar', 'i');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO dist_columnar VALUES (1000, 'one thousand'), (2000, 'two thousand');
 -- go crazy with names
 CREATE TABLE "weird.table" (
 	"key," int primary key,
@@ -49,8 +70,10 @@ _{"?\"": []}_?__
 \COPY output FROM PROGRAM 'pg_dump -f results/pg_dump.tmp -h localhost -p 57636 -U postgres -d regression -n dumper --quote-all-identifiers' WITH (format csv, delimiter '|', escape '^', quote '^')
 -- drop the schema
 DROP SCHEMA dumper CASCADE;
-NOTICE:  drop cascades to 2 other objects
+NOTICE:  drop cascades to 4 other objects
 DETAIL:  drop cascades to table data
+drop cascades to table simple_columnar
+drop cascades to table dist_columnar
 drop cascades to table "weird.table"
 -- recreate the schema
 \COPY (SELECT line FROM output WHERE line IS NOT NULL) TO PROGRAM 'psql -qtAX -h localhost -p 57636 -U postgres -d regression -f results/pg_dump.tmp' WITH (format csv, delimiter '|', escape '^', quote '^')
@@ -76,6 +99,16 @@ HINT:  To remove the local data, run: SELECT truncate_local_data_after_distribut
 
 (1 row)
 
+SELECT create_distributed_table('dist_columnar', 'i');
+NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$dumper.dist_columnar$$)
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
 -- check the table contents
 COPY data (value) TO STDOUT WITH (format csv, force_quote *);
 "{this:is,json:1}"
@@ -90,6 +123,31 @@ COPY dumper."weird.table" ("data.jsonb", "?empty(") TO STDOUT WITH (format csv, 
 data.jsonb,?empty(
 "{""weird"": {""table"": ""{:""}}",""
 "{""?\"""": []}",""
+-- If server supports table access methods, check to be sure that the
+-- recreated table is still columnar. Otherwise, just return true.
+\if :have_table_am
+\set is_columnar '(SELECT amname=''columnar'' from pg_am where relam=oid)'
+\else
+\set is_columnar TRUE
+\endif
+SELECT :is_columnar AS check_columnar FROM pg_class WHERE oid='simple_columnar'::regclass;
+ check_columnar
+---------------------------------------------------------------------
+ t
+(1 row)
+
+COPY simple_columnar TO STDOUT;
+1	one
+2	two
+SELECT :is_columnar AS check_columnar FROM pg_class WHERE oid='dist_columnar'::regclass;
+ check_columnar
+---------------------------------------------------------------------
+ t
+(1 row)
+
+COPY dist_columnar TO STDOUT;
+1000	one thousand
+2000	two thousand
 SELECT indexname FROM pg_indexes WHERE tablename = 'weird.table' ORDER BY indexname;
     indexname
 ---------------------------------------------------------------------
@@ -98,6 +156,8 @@ SELECT indexname FROM pg_indexes WHERE tablename = 'weird.table' ORDER BY indexn
 (2 rows)
 
 DROP SCHEMA dumper CASCADE;
-NOTICE:  drop cascades to 2 other objects
+NOTICE:  drop cascades to 4 other objects
 DETAIL:  drop cascades to table data
+drop cascades to table dist_columnar
+drop cascades to table simple_columnar
 drop cascades to table "weird.table"
