@@ -161,21 +161,21 @@ GetRelationshipNodesForFKeyConnectedRelations(
 	foreach_ptr_append(currentNode, relationshipNodeList)
 	{
 		List *allNeighboursList = GetAllNeighboursList(currentNode);
-		ForeignConstraintRelationshipNode *neighborNode = NULL;
-		foreach_ptr(neighborNode, allNeighboursList)
+		ForeignConstraintRelationshipNode *neighbourNode = NULL;
+		foreach_ptr(neighbourNode, allNeighboursList)
 		{
-			if (neighborNode->visited)
+			if (neighbourNode->visited)
 			{
 				continue;
 			}
 
-			neighborNode->visited = true;
-			relationshipNodeList = lappend(relationshipNodeList, neighborNode);
+			neighbourNode->visited = true;
+			relationshipNodeList = lappend(relationshipNodeList, neighbourNode);
 		}
 	}
 
 	/* reset visited flags in foreign key graph */
-	SetRelationNodeListNotVisited(relationshipNodeList);
+	SetRelationshipNodeListNotVisited(relationshipNodeList);
 
 	return relationshipNodeList;
 }
