@@ -249,15 +249,16 @@ SELECT create_reference_table('reference_table_2');
 --                               ^                                          |
 --                               |                                          v
 -- distributed_table_1 <- distributed_table_2 -> reference_table_1 <- reference_table_2
---                               ^
---                               |
---                        distributed_table_3
+--            |                   ^
+--            |                   |
+--            ----------> distributed_table_3
 
 ALTER TABLE distributed_table_2 ADD CONSTRAINT fkey_1 FOREIGN KEY (col) REFERENCES distributed_table_1(col);
 ALTER TABLE distributed_table_2 ADD CONSTRAINT fkey_2 FOREIGN KEY (col) REFERENCES reference_table_1(col);
 ALTER TABLE reference_table_2 ADD CONSTRAINT fkey_3 FOREIGN KEY (col) REFERENCES reference_table_1(col);
 ALTER TABLE distributed_table_3 ADD CONSTRAINT fkey_4 FOREIGN KEY (col) REFERENCES distributed_table_2(col);
 ALTER TABLE distributed_table_2 ADD CONSTRAINT fkey_5 FOREIGN KEY (col) REFERENCES reference_table_2(col);
+ALTER TABLE distributed_table_1 ADD CONSTRAINT fkey_6 FOREIGN KEY (col) REFERENCES distributed_table_3(col);
 
 -- below queries should print all 5 tables mentioned in above graph
 
