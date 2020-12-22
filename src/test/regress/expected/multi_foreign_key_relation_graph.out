@@ -713,27 +713,6 @@ ORDER BY tablename;
 ---------------------------------------------------------------------
 (0 rows)
 
+set client_min_messages to error;
 SET search_path TO public;
 DROP SCHEMA fkey_graph CASCADE;
-NOTICE:  drop cascades to 21 other objects
-DETAIL:  drop cascades to function fkey_graph.get_referencing_relation_id_list(oid)
-drop cascades to function fkey_graph.get_referenced_relation_id_list(oid)
-drop cascades to table fkey_graph.dtt1
-drop cascades to table fkey_graph.dtt2
-drop cascades to table fkey_graph.dtt3
-drop cascades to table fkey_graph.dtt4
-drop cascades to view fkey_graph.referential_integrity_summary
-drop cascades to table fkey_graph.test_1
-drop cascades to table fkey_graph.test_2
-drop cascades to table fkey_graph.test_3
-drop cascades to table fkey_graph.test_4
-drop cascades to table fkey_graph.test_5
-drop cascades to function fkey_graph.get_foreign_key_connected_relations(regclass)
-drop cascades to table fkey_graph.distributed_table_1
-drop cascades to table fkey_graph.distributed_table_2
-drop cascades to table fkey_graph.distributed_table_3
-drop cascades to table fkey_graph.distributed_table_4
-drop cascades to table fkey_graph.reference_table_1
-drop cascades to table fkey_graph.reference_table_2
-drop cascades to table fkey_graph.local_table_1
-drop cascades to table fkey_graph.local_table_2

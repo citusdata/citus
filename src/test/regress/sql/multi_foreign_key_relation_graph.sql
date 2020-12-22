@@ -294,5 +294,7 @@ SELECT oid::regclass::text AS tablename
 FROM get_foreign_key_connected_relations('local_table_1') AS f(oid oid)
 ORDER BY tablename;
 
+set client_min_messages to error;
+
 SET search_path TO public;
 DROP SCHEMA fkey_graph CASCADE;
