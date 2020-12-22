@@ -84,7 +84,7 @@ static ForeignConstraintRelationshipNode * GetRelationshipNodeForRelationId(Oid
 static void CreateForeignConstraintRelationshipGraph(void);
 static List * GetNeighbourList(ForeignConstraintRelationshipNode *relationshipNode,
 							   bool isReferencing);
-static void SetRelationNodeListNotVisited(List *relationshipNodeList);
+static void SetRelationshipNodeListNotVisited(List *relationshipNodeList);
 static List * GetRelationIdsFromRelationshipNodeList(List *fKeyRelationshipNodeList);
 static void PopulateAdjacencyLists(void);
 static int CompareForeignConstraintRelationshipEdges(const void *leftElement,
@@ -153,7 +153,7 @@ GetForeignConstraintRelationshipHelper(Oid relationId, bool isReferencing)
 	GetConnectedListHelper(relationshipNode, &foreignNodeList, isReferencing);
 
 	/* reset visited flags in foreign key graph */
-	SetRelationNodeListNotVisited(foreignNodeList);
+	SetRelationshipNodeListNotVisited(foreignNodeList);
 
 	/* set to false separately, since we don't add itself to foreign node list */
 	relationshipNode->visited = false;
@@ -276,14 +276,14 @@ GetConnectedListHelper(ForeignConstraintRelationshipNode *node, List **adjacentN
 {
 	node->visited = true;
 
-	ForeignConstraintRelationshipNode *neighborNode = NULL;
+	ForeignConstraintRelationshipNode *neighbourNode = NULL;
 	List *neighbourList = GetNeighbourList(node, isReferencing);
-	foreach_ptr(neighborNode, neighbourList)
+	foreach_ptr(neighbourNode, neighbourList)
 	{
-		if (neighborNode->visited == false)
+		if (neighbourNode->visited == false)
 		{
-			*adjacentNodeList = lappend(*adjacentNodeList, neighborNode);
-			GetConnectedListHelper(neighborNode, adjacentNodeList, isReferencing);
+			*adjacentNodeList = lappend(*adjacentNodeList, neighbourNode);
+			GetConnectedListHelper(neighbourNode, adjacentNodeList, isReferencing);
 		}
 	}
 }
@@ -299,21 +299,21 @@ GetNeighbourList(ForeignConstraintRelationshipNode *relationshipNode, bool isRef
 {
 	if (isReferencing)
 	{
-		return list_copy(relationshipNode->backAdjacencyList);
+		return relationshipNode->backAdjacencyList;
 	}
 	else
 	{
-		return list_copy(relationshipNode->adjacencyList);
+		return relationshipNode->adjacencyList;
 	}
 }
 
 
 /*
- * SetRelationNodeListNotVisited takes a list of ForeignConstraintRelationshipNode
+ * SetRelationshipNodeListNotVisited takes a list of ForeignConstraintRelationshipNode
  * objects and sets their visited flags to false.
  */
 static void
-SetRelationNodeListNotVisited(List *relationshipNodeList)
+SetRelationshipNodeListNotVisited(List *relationshipNodeList)
 {
 	ForeignConstraintRelationshipNode *relationshipNode = NULL;
 	foreach_ptr(relationshipNode, relationshipNodeList)
