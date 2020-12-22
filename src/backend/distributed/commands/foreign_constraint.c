@@ -65,7 +65,7 @@ static void ForeignConstraintFindDistKeys(HeapTuple pgConstraintTuple,
 										  int *referencingAttrIndex,
 										  int *referencedAttrIndex);
 static List * GetForeignKeyOidsColumnAppeared(char *columnName, Oid relationId,
-										    int searchForeignKeyColumnMode);
+											  int searchForeignKeyColumnMode);
 static List * GetForeignConstraintCommandsInternal(Oid relationId, int flags);
 static Oid get_relation_constraint_oid_compat(HeapTuple heapTuple);
 static List * GetForeignKeyOidsToCitusLocalTables(Oid relationId);
@@ -492,8 +492,11 @@ ForeignConstraintFindDistKeys(HeapTuple pgConstraintTuple,
 bool
 ColumnAppearsInForeignKeyToReferenceTable(char *columnName, Oid relationId)
 {
-	int searchForeignKeyColumnMode = SEARCH_REFERENCING_RELATION | SEARCH_REFERENCED_RELATION;
-	List *foreignKeyIdsColumnAppeared = GetForeignKeyOidsColumnAppeared(columnName, relationId, searchForeignKeyColumnMode);
+	int searchForeignKeyColumnMode = SEARCH_REFERENCING_RELATION |
+									 SEARCH_REFERENCED_RELATION;
+	List *foreignKeyIdsColumnAppeared =
+		GetForeignKeyOidsColumnAppeared(columnName, relationId,
+										searchForeignKeyColumnMode);
 
 	Oid foreignKeyId = InvalidOid;
 	foreach_oid(foreignKeyId, foreignKeyIdsColumnAppeared)
@@ -516,7 +519,8 @@ ColumnAppearsInForeignKeyToReferenceTable(char *columnName, Oid relationId)
  * See SearchForeignKeyColumnMode enum definition for usage.
  */
 static List *
-GetForeignKeyOidsColumnAppeared(char *columnName, Oid relationId, int searchForeignKeyColumnMode)
+GetForeignKeyOidsColumnAppeared(char *columnName, Oid relationId,
+								int searchForeignKeyColumnMode)
 {
 	bool searchReferencing = searchForeignKeyColumnMode & SEARCH_REFERENCING_RELATION;
 	bool searchReferenced = searchForeignKeyColumnMode & SEARCH_REFERENCED_RELATION;
@@ -568,7 +572,8 @@ GetForeignKeyOidsColumnAppeared(char *columnName, Oid relationId, int searchFore
 													   pgConstraintKey, columnName))
 		{
 			Oid foreignKeyOid = get_relation_constraint_oid_compat(heapTuple);
-			foreignKeyIdsColumnAppeared = lappend_oid(foreignKeyIdsColumnAppeared, foreignKeyOid);
+			foreignKeyIdsColumnAppeared = lappend_oid(foreignKeyIdsColumnAppeared,
+													  foreignKeyOid);
 		}
 
 		heapTuple = systable_getnext(scanDescriptor);
