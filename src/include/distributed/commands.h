@@ -72,7 +72,7 @@ typedef enum ExtractForeignKeyConstraintsMode
  *   - referenced relation,
  *  or we are searching for both sides.
  */
-typedef enum SearchForeignKeyColumnMode
+typedef enum SearchForeignKeyColumnFlags
 {
 	/* relationId argument should match referencing relation */
 	SEARCH_REFERENCING_RELATION = 1 << 0,
@@ -81,7 +81,7 @@ typedef enum SearchForeignKeyColumnMode
 	SEARCH_REFERENCED_RELATION = 1 << 1,
 
 	/* callers can also pass union of above flags */
-} SearchForeignKeyColumnMode;
+} SearchForeignKeyColumnFlags;
 
 
 /* cluster.c - forward declarations */

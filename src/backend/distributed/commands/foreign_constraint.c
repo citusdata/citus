@@ -65,7 +65,7 @@ static void ForeignConstraintFindDistKeys(HeapTuple pgConstraintTuple,
 										  int *referencingAttrIndex,
 										  int *referencedAttrIndex);
 static List * GetForeignKeyOidsColumnAppeared(char *columnName, Oid relationId,
-											  int searchForeignKeyColumnMode);
+											  int searchForeignKeyColumnFlags);
 static List * GetForeignConstraintCommandsInternal(Oid relationId, int flags);
 static Oid get_relation_constraint_oid_compat(HeapTuple heapTuple);
 static List * GetForeignKeyOidsToCitusLocalTables(Oid relationId);
@@ -492,11 +492,11 @@ ForeignConstraintFindDistKeys(HeapTuple pgConstraintTuple,
 bool
 ColumnAppearsInForeignKeyToReferenceTable(char *columnName, Oid relationId)
 {
-	int searchForeignKeyColumnMode = SEARCH_REFERENCING_RELATION |
-									 SEARCH_REFERENCED_RELATION;
+	int searchForeignKeyColumnFlags = SEARCH_REFERENCING_RELATION |
+									  SEARCH_REFERENCED_RELATION;
 	List *foreignKeyIdsColumnAppeared =
 		GetForeignKeyOidsColumnAppeared(columnName, relationId,
-										searchForeignKeyColumnMode);
+										searchForeignKeyColumnFlags);
 
 	Oid foreignKeyId = InvalidOid;
 	foreach_oid(foreignKeyId, foreignKeyIdsColumnAppeared)
@@ -515,15 +515,15 @@ ColumnAppearsInForeignKeyToReferenceTable(char *columnName, Oid relationId)
 /*
  * GetForeignKeyOidsColumnAppeared takes columnName and relationId for the owning
  * relation, and returns a list of OIDs for foreign constraints that the column
- * with columnName is involved according to "searchForeignKeyColumnMode" argument.
- * See SearchForeignKeyColumnMode enum definition for usage.
+ * with columnName is involved according to "searchForeignKeyColumnFlags" argument.
+ * See SearchForeignKeyColumnFlags enum definition for usage.
  */
 static List *
 GetForeignKeyOidsColumnAppeared(char *columnName, Oid relationId,
-								int searchForeignKeyColumnMode)
+								int searchForeignKeyColumnFlags)
 {
-	bool searchReferencing = searchForeignKeyColumnMode & SEARCH_REFERENCING_RELATION;
-	bool searchReferenced = searchForeignKeyColumnMode & SEARCH_REFERENCED_RELATION;
+	bool searchReferencing = searchForeignKeyColumnFlags & SEARCH_REFERENCING_RELATION;
+	bool searchReferenced = searchForeignKeyColumnFlags & SEARCH_REFERENCED_RELATION;
 
 	/* at least one of them should be true */
 	Assert(searchReferencing || searchReferenced);
