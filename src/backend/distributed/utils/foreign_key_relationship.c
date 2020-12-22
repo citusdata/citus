@@ -195,8 +195,13 @@ GetAllNeighboursList(ForeignConstraintRelationshipNode *relationshipNode)
 	isReferencing = true;
 	List *referencingNeighboursList = GetNeighbourList(relationshipNode, isReferencing);
 
-	List *allNeighboursList = list_concat_unique_ptr(referencedNeighboursList,
-													 referencingNeighboursList);
+	/*
+	 * GetNeighbourList returns list from graph as is, so first copy it as
+	 * list_concat might invalidate it.
+	 */
+	List *allNeighboursList = list_copy(referencedNeighboursList);
+	allNeighboursList = list_concat_unique_ptr(allNeighboursList,
+											   referencingNeighboursList);
 	return allNeighboursList;
 }
 
