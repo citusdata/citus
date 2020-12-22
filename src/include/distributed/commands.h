@@ -63,14 +63,22 @@ typedef enum ExtractForeignKeyConstraintsMode
 	/* exclude the self-referencing foreign keys */
 	EXCLUDE_SELF_REFERENCES = 1 << 2,
 
-	/* include foreign keys only when the other table is a distributed table*/
-	ONLY_DISTRIBUTED_TABLES = 1 << 3,
+	/* any combination of the 4 flags below is supported */
+	/* include foreign keys when the other table is a distributed table*/
+	INCLUDE_DISTRIBUTED_TABLES = 1 << 3,
 
-	/* include foreign keys only when the other table is a reference table*/
-	ONLY_REFERENCE_TABLES = 1 << 4,
+	/* include foreign keys when the other table is a reference table*/
+	INCLUDE_REFERENCE_TABLES = 1 << 4,
 
-	/* include foreign keys only when the other table is a citus local table*/
-	ONLY_CITUS_LOCAL_TABLES = 1 << 5
+	/* include foreign keys when the other table is a citus local table*/
+	INCLUDE_CITUS_LOCAL_TABLES = 1 << 5,
+
+	/* include foreign keys when the other table is a Postgres local table*/
+	INCLUDE_LOCAL_TABLES = 1 << 6,
+
+	/* include foreign keys regardless of the other table's type */
+	INCLUDE_ALL_TABLE_TYPES = INCLUDE_DISTRIBUTED_TABLES | INCLUDE_REFERENCE_TABLES |
+							  INCLUDE_CITUS_LOCAL_TABLES | INCLUDE_LOCAL_TABLES
 } ExtractForeignKeyConstraintMode;
 
 

@@ -68,6 +68,7 @@ static List * GetForeignKeyIdsForColumn(char *columnName, Oid relationId,
 										int searchForeignKeyColumnFlags);
 static List * GetForeignConstraintCommandsInternal(Oid relationId, int flags);
 static Oid get_relation_constraint_oid_compat(HeapTuple heapTuple);
+static bool IsTableTypeIncluded(Oid relationId, int flags);
 
 /*
  * ConstraintIsAForeignKeyToReferenceTable checks if the given constraint is a
@@ -76,7 +77,7 @@ static Oid get_relation_constraint_oid_compat(HeapTuple heapTuple);
 bool
 ConstraintIsAForeignKeyToReferenceTable(char *inputConstaintName, Oid relationId)
 {
-	int flags = INCLUDE_REFERENCING_CONSTRAINTS | ONLY_REFERENCE_TABLES;
+	int flags = INCLUDE_REFERENCING_CONSTRAINTS | INCLUDE_REFERENCE_TABLES;
 	List *foreignKeyOids = GetForeignKeyOids(relationId, flags);
 
 	Oid foreignKeyOid = FindForeignKeyOidWithName(foreignKeyOids, inputConstaintName);
@@ -119,7 +120,7 @@ ErrorIfUnsupportedForeignConstraintExists(Relation relation, char referencingDis
 {
 	Oid referencingTableId = relation->rd_id;
 
-	int flags = INCLUDE_REFERENCING_CONSTRAINTS;
+	int flags = INCLUDE_REFERENCING_CONSTRAINTS | INCLUDE_ALL_TABLE_TYPES;
 	List *foreignKeyOids = GetForeignKeyOids(referencingTableId, flags);
 
 	Oid foreignKeyOid = InvalidOid;
@@ -592,7 +593,7 @@ GetForeignKeyIdsForColumn(char *columnName, Oid relationId,
 List *
 GetReferencingForeignConstaintCommands(Oid relationId)
 {
-	int flags = INCLUDE_REFERENCING_CONSTRAINTS;
+	int flags = INCLUDE_REFERENCING_CONSTRAINTS | INCLUDE_ALL_TABLE_TYPES;
 	return GetForeignConstraintCommandsInternal(relationId, flags);
 }
 
@@ -658,7 +659,7 @@ get_relation_constraint_oid_compat(HeapTuple heapTuple)
 bool
 HasForeignKeyToCitusLocalTable(Oid relationId)
 {
-	int flags = INCLUDE_REFERENCING_CONSTRAINTS | ONLY_CITUS_LOCAL_TABLES;
+	int flags = INCLUDE_REFERENCING_CONSTRAINTS | INCLUDE_CITUS_LOCAL_TABLES;
 	List *foreignKeyOidList = GetForeignKeyOids(relationId, flags);
 	return list_length(foreignKeyOidList) > 0;
 }
@@ -672,7 +673,7 @@ HasForeignKeyToCitusLocalTable(Oid relationId)
 bool
 HasForeignKeyToReferenceTable(Oid relationId)
 {
-	int flags = INCLUDE_REFERENCING_CONSTRAINTS | ONLY_REFERENCE_TABLES;
+	int flags = INCLUDE_REFERENCING_CONSTRAINTS | INCLUDE_REFERENCE_TABLES;
 	List *foreignKeyOids = GetForeignKeyOids(relationId, flags);
 
 	return list_length(foreignKeyOids) > 0;
@@ -686,7 +687,7 @@ HasForeignKeyToReferenceTable(Oid relationId)
 bool
 TableReferenced(Oid relationId)
 {
-	int flags = INCLUDE_REFERENCED_CONSTRAINTS;
+	int flags = INCLUDE_REFERENCED_CONSTRAINTS | INCLUDE_ALL_TABLE_TYPES;
 	List *foreignKeyOids = GetForeignKeyOids(relationId, flags);
 
 	return list_length(foreignKeyOids) > 0;
@@ -732,7 +733,7 @@ HeapTupleOfForeignConstraintIncludesColumn(HeapTuple heapTuple, Oid relationId,
 bool
 TableReferencing(Oid relationId)
 {
-	int flags = INCLUDE_REFERENCING_CONSTRAINTS;
+	int flags = INCLUDE_REFERENCING_CONSTRAINTS | INCLUDE_ALL_TABLE_TYPES;
 	List *foreignKeyOids = GetForeignKeyOids(relationId, flags);
 
 	return list_length(foreignKeyOids) > 0;
@@ -760,7 +761,7 @@ ConstraintIsAForeignKey(char *inputConstaintName, Oid relationId)
 Oid
 GetForeignKeyOidByName(char *inputConstaintName, Oid relationId)
 {
-	int flags = INCLUDE_REFERENCING_CONSTRAINTS;
+	int flags = INCLUDE_REFERENCING_CONSTRAINTS | INCLUDE_ALL_TABLE_TYPES;
 	List *foreignKeyOids = GetForeignKeyOids(relationId, flags);
 
 	Oid foreignKeyId = FindForeignKeyOidWithName(foreignKeyOids, inputConstaintName);
@@ -801,10 +802,12 @@ FindForeignKeyOidWithName(List *foreignKeyOids, const char *inputConstraintName)
 void
 ErrorIfTableHasExternalForeignKeys(Oid relationId)
 {
-	int flags = (INCLUDE_REFERENCING_CONSTRAINTS | EXCLUDE_SELF_REFERENCES);
+	int flags = (INCLUDE_REFERENCING_CONSTRAINTS | EXCLUDE_SELF_REFERENCES |
+				 INCLUDE_ALL_TABLE_TYPES);
 	List *foreignKeyIdsTableReferencing = GetForeignKeyOids(relationId, flags);
 
-	flags = (INCLUDE_REFERENCED_CONSTRAINTS | EXCLUDE_SELF_REFERENCES);
+	flags = (INCLUDE_REFERENCED_CONSTRAINTS | EXCLUDE_SELF_REFERENCES |
+			 INCLUDE_ALL_TABLE_TYPES);
 	List *foreignKeyIdsTableReferenced = GetForeignKeyOids(relationId, flags);
 
 	List *foreignKeysWithOtherTables = list_concat(foreignKeyIdsTableReferencing,
@@ -846,14 +849,6 @@ GetForeignKeyOids(Oid relationId, int flags)
 	 */
 	Assert(!(extractReferencing && extractReferenced));
 	Assert(extractReferencing || extractReferenced);
-
-	bool extractDistributed = (flags & ONLY_DISTRIBUTED_TABLES);
-	bool extractReference = (flags & ONLY_REFERENCE_TABLES);
-	bool extractCitusLocal = (flags & ONLY_CITUS_LOCAL_TABLES);
-
-	Assert(!(extractDistributed && extractReference));
-	Assert(!(extractDistributed && extractCitusLocal));
-	Assert(!(extractReference && extractCitusLocal));
 
 	bool useIndex = false;
 	Oid indexOid = InvalidOid;
@@ -925,9 +920,7 @@ GetForeignKeyOids(Oid relationId, int flags)
 			otherTableId = constraintForm->conrelid;
 		}
 
-		if ((extractDistributed && !IsCitusTableType(otherTableId, DISTRIBUTED_TABLE)) ||
-			(extractReference && !IsCitusTableType(otherTableId, REFERENCE_TABLE)) ||
-			(extractCitusLocal && !IsCitusTableType(otherTableId, CITUS_LOCAL_TABLE)))
+		if (!IsTableTypeIncluded(otherTableId, flags))
 		{
 			heapTuple = systable_getnext(scanDescriptor);
 			continue;
@@ -972,4 +965,31 @@ GetReferencedTableId(Oid foreignKeyId)
 	ReleaseSysCache(heapTuple);
 
 	return referencedTableId;
+}
+
+
+/*
+ * IsTableTypeIncluded returns true if type of the table with relationId (distributed,
+ * reference, Citus local or Postgres local) is included in the flags, false if not
+ */
+static bool
+IsTableTypeIncluded(Oid relationId, int flags)
+{
+	if (!IsCitusTable(relationId))
+	{
+		return (flags & INCLUDE_LOCAL_TABLES) != 0;
+	}
+	else if (IsCitusTableType(relationId, DISTRIBUTED_TABLE))
+	{
+		return (flags & INCLUDE_DISTRIBUTED_TABLES) != 0;
+	}
+	else if (IsCitusTableType(relationId, REFERENCE_TABLE))
+	{
+		return (flags & INCLUDE_REFERENCE_TABLES) != 0;
+	}
+	else if (IsCitusTableType(relationId, CITUS_LOCAL_TABLE))
+	{
+		return (flags & INCLUDE_CITUS_LOCAL_TABLES) != 0;
+	}
+	return false;
 }
