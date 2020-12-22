@@ -21,14 +21,7 @@ SELECT count(*) FROM test_lz4;
  20001
 (1 row)
 
-VACUUM VERBOSE test_lz4;
-INFO:  statistics for "test_lz4":
-storage id: xxxxx
-total file size: 73728, total data size: 45729
-compression rate: 7.16x
-total row count: 20001, stripe count: 2, average rows per stripe: 10000
-chunk count: 9, containing data for dropped columns: 0, lz4 compressed: 9
-
+SELECT pg_relation_size('test_lz4') AS size_lz4 \gset
 SELECT DISTINCT * FROM test_lz4 ORDER BY a, b, c LIMIT 5;
  a | b  | c
 ---------------------------------------------------------------------
@@ -43,13 +36,13 @@ SELECT DISTINCT * FROM test_lz4 ORDER BY a, b, c LIMIT 5;
 SET columnar.compression TO 'pglz';
 CREATE TABLE test_pglz (LIKE test_lz4) USING columnar;
 INSERT INTO test_pglz SELECT * FROM test_lz4;
-VACUUM VERBOSE test_pglz;
-INFO:  statistics for "test_pglz":
-storage id: xxxxx
-total file size: 57344, total data size: 35986
-compression rate: 9.10x
-total row count: 20001, stripe count: 1, average rows per stripe: 20001
-chunk count: 9, containing data for dropped columns: 0, none compressed: 3, pglz compressed: 6
+SELECT pg_relation_size('test_pglz') AS size_pglz \gset
+-- verify that pglz & lz4 resulted in different compression ratios
+SELECT :size_pglz <> :size_lz4;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
 
 -- Other operations
 VACUUM FULL test_lz4;

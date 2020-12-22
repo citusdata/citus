@@ -692,10 +692,10 @@ ac_user_opts='
 enable_option_checking
 with_extra_version
 enable_coverage
-with_lz4
-with_zstd
 with_libcurl
 with_reports_hostname
+with_lz4
+with_zstd
 '
       ac_precious_vars='build_alias
 host_alias
@@ -1335,13 +1335,13 @@ Optional Packages:
   --without-PACKAGE       do not use PACKAGE (same as --with-PACKAGE=no)
   --with-extra-version=STRING
                           append STRING to version
-  --with-lz4              use lz4
-  --with-zstd             use zstd
   --without-libcurl       do not use libcurl for anonymous statistics
                           collection
   --with-reports-hostname=HOSTNAME
                           Use HOSTNAME as hostname for statistics collection
                           and update checks
+  --without-lz4           do not use lz4
+  --without-zstd          do not use zstd
 
 Some influential environment variables:
   PG_CONFIG   Location to find pg_config for target PostgreSQL instalation
@@ -4362,190 +4362,6 @@ if test "$enable_coverage" = yes; then
 fi
 
 #
-# LZ4
-#
-
-
-
-# Check whether --with-lz4 was given.
-if test "${with_lz4+set}" = set; then :
-  withval=$with_lz4;
-  case $withval in
-    yes)
-      :
-      ;;
-    no)
-      :
-      ;;
-    *)
-      as_fn_error $? "no argument expected for --with-lz4 option" "$LINENO" 5
-      ;;
-  esac
-
-else
-  with_lz4=no
-
-fi
-
-
-
-
-if test "$with_lz4" = yes; then
-  { $as_echo "$as_me:${as_lineno-$LINENO}: checking for LZ4_compress_default in -llz4" >&5
-$as_echo_n "checking for LZ4_compress_default in -llz4... " >&6; }
-if ${ac_cv_lib_lz4_LZ4_compress_default+:} false; then :
-  $as_echo_n "(cached) " >&6
-else
-  ac_check_lib_save_LIBS=$LIBS
-LIBS="-llz4  $LIBS"
-cat confdefs.h - <<_ACEOF >conftest.$ac_ext
-/* end confdefs.h.  */
-
-/* Override any GCC internal prototype to avoid an error.
-   Use char because int might match the return type of a GCC
-   builtin and then its argument prototype would still apply.  */
-#ifdef __cplusplus
-extern "C"
-#endif
-char LZ4_compress_default ();
-int
-main ()
-{
-return LZ4_compress_default ();
-  ;
-  return 0;
-}
-_ACEOF
-if ac_fn_c_try_link "$LINENO"; then :
-  ac_cv_lib_lz4_LZ4_compress_default=yes
-else
-  ac_cv_lib_lz4_LZ4_compress_default=no
-fi
-rm -f core conftest.err conftest.$ac_objext \
-    conftest$ac_exeext conftest.$ac_ext
-LIBS=$ac_check_lib_save_LIBS
-fi
-{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib_lz4_LZ4_compress_default" >&5
-$as_echo "$ac_cv_lib_lz4_LZ4_compress_default" >&6; }
-if test "x$ac_cv_lib_lz4_LZ4_compress_default" = xyes; then :
-  cat >>confdefs.h <<_ACEOF
-#define HAVE_LIBLZ4 1
-_ACEOF
-
-  LIBS="-llz4 $LIBS"
-
-else
-  as_fn_error $? "lz4 library not found
-If you have lz4 installed, see config.log for details on the
-failure.  It is possible the compiler isn't looking in the proper directory.
-Use --without-lz4 to disable zlib support." "$LINENO" 5
-fi
-
-  ac_fn_c_check_header_mongrel "$LINENO" "lz4.h" "ac_cv_header_lz4_h" "$ac_includes_default"
-if test "x$ac_cv_header_lz4_h" = xyes; then :
-
-else
-  as_fn_error $? "lz4 header not found
-If you have lz4 already installed, see config.log for details on the
-failure.  It is possible the compiler isn't looking in the proper directory.
-Use --without-lz4 to disable lz4 support." "$LINENO" 5
-fi
-
-
-fi
-
-#
-# ZSTD
-#
-
-
-
-# Check whether --with-zstd was given.
-if test "${with_zstd+set}" = set; then :
-  withval=$with_zstd;
-  case $withval in
-    yes)
-      :
-      ;;
-    no)
-      :
-      ;;
-    *)
-      as_fn_error $? "no argument expected for --with-zstd option" "$LINENO" 5
-      ;;
-  esac
-
-else
-  with_zstd=no
-
-fi
-
-
-
-
-if test "$with_zstd" = yes; then
-  { $as_echo "$as_me:${as_lineno-$LINENO}: checking for ZSTD_decompress in -lzstd" >&5
-$as_echo_n "checking for ZSTD_decompress in -lzstd... " >&6; }
-if ${ac_cv_lib_zstd_ZSTD_decompress+:} false; then :
-  $as_echo_n "(cached) " >&6
-else
-  ac_check_lib_save_LIBS=$LIBS
-LIBS="-lzstd  $LIBS"
-cat confdefs.h - <<_ACEOF >conftest.$ac_ext
-/* end confdefs.h.  */
-
-/* Override any GCC internal prototype to avoid an error.
-   Use char because int might match the return type of a GCC
-   builtin and then its argument prototype would still apply.  */
-#ifdef __cplusplus
-extern "C"
-#endif
-char ZSTD_decompress ();
-int
-main ()
-{
-return ZSTD_decompress ();
-  ;
-  return 0;
-}
-_ACEOF
-if ac_fn_c_try_link "$LINENO"; then :
-  ac_cv_lib_zstd_ZSTD_decompress=yes
-else
-  ac_cv_lib_zstd_ZSTD_decompress=no
-fi
-rm -f core conftest.err conftest.$ac_objext \
-    conftest$ac_exeext conftest.$ac_ext
-LIBS=$ac_check_lib_save_LIBS
-fi
-{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib_zstd_ZSTD_decompress" >&5
-$as_echo "$ac_cv_lib_zstd_ZSTD_decompress" >&6; }
-if test "x$ac_cv_lib_zstd_ZSTD_decompress" = xyes; then :
-  cat >>confdefs.h <<_ACEOF
-#define HAVE_LIBZSTD 1
-_ACEOF
-
-  LIBS="-lzstd $LIBS"
-
-else
-  as_fn_error $? "zstd library not found
-If you have zstd installed, see config.log for details on the
-failure.  It is possible the compiler isn't looking in the proper directory." "$LINENO" 5
-fi
-
-  ac_fn_c_check_header_mongrel "$LINENO" "zstd.h" "ac_cv_header_zstd_h" "$ac_includes_default"
-if test "x$ac_cv_header_zstd_h" = xyes; then :
-
-else
-  as_fn_error $? "zstd header not found
-If you have lz4zstd already installed, see config.log for details on the
-failure.  It is possible the compiler isn't looking in the proper directory." "$LINENO" 5
-fi
-
-
-fi
-
-#
 # libcurl
 #
 
@@ -4680,6 +4496,196 @@ else
    { $as_echo "$as_me:${as_lineno-$LINENO}: postgres version does not support table access methodds" >&5
 $as_echo "$as_me: postgres version does not support table access methodds" >&6;}
 fi;
+
+# Require lz4 & zstd only if we are compiling columnar
+if test "$HAS_TABLEAM" == 'yes'; then
+  #
+  # LZ4
+  #
+
+
+
+# Check whether --with-lz4 was given.
+if test "${with_lz4+set}" = set; then :
+  withval=$with_lz4;
+  case $withval in
+    yes)
+      :
+      ;;
+    no)
+      :
+      ;;
+    *)
+      as_fn_error $? "no argument expected for --with-lz4 option" "$LINENO" 5
+      ;;
+  esac
+
+else
+  with_lz4=yes
+
+fi
+
+
+
+
+  if test "$with_lz4" = yes; then
+    { $as_echo "$as_me:${as_lineno-$LINENO}: checking for LZ4_compress_default in -llz4" >&5
+$as_echo_n "checking for LZ4_compress_default in -llz4... " >&6; }
+if ${ac_cv_lib_lz4_LZ4_compress_default+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  ac_check_lib_save_LIBS=$LIBS
+LIBS="-llz4  $LIBS"
+cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+/* Override any GCC internal prototype to avoid an error.
+   Use char because int might match the return type of a GCC
+   builtin and then its argument prototype would still apply.  */
+#ifdef __cplusplus
+extern "C"
+#endif
+char LZ4_compress_default ();
+int
+main ()
+{
+return LZ4_compress_default ();
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_link "$LINENO"; then :
+  ac_cv_lib_lz4_LZ4_compress_default=yes
+else
+  ac_cv_lib_lz4_LZ4_compress_default=no
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+LIBS=$ac_check_lib_save_LIBS
+fi
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib_lz4_LZ4_compress_default" >&5
+$as_echo "$ac_cv_lib_lz4_LZ4_compress_default" >&6; }
+if test "x$ac_cv_lib_lz4_LZ4_compress_default" = xyes; then :
+  cat >>confdefs.h <<_ACEOF
+#define HAVE_LIBLZ4 1
+_ACEOF
+
+  LIBS="-llz4 $LIBS"
+
+else
+  as_fn_error $? "lz4 library not found
+  If you have lz4 installed, see config.log for details on the
+  failure.  It is possible the compiler isn't looking in the proper directory.
+  Use --without-lz4 to disable zlib support." "$LINENO" 5
+fi
+
+    ac_fn_c_check_header_mongrel "$LINENO" "lz4.h" "ac_cv_header_lz4_h" "$ac_includes_default"
+if test "x$ac_cv_header_lz4_h" = xyes; then :
+
+else
+  as_fn_error $? "lz4 header not found
+  If you have lz4 already installed, see config.log for details on the
+  failure.  It is possible the compiler isn't looking in the proper directory.
+  Use --without-lz4 to disable lz4 support." "$LINENO" 5
+fi
+
+
+  fi
+
+  #
+  # ZSTD
+  #
+
+
+
+# Check whether --with-zstd was given.
+if test "${with_zstd+set}" = set; then :
+  withval=$with_zstd;
+  case $withval in
+    yes)
+      :
+      ;;
+    no)
+      :
+      ;;
+    *)
+      as_fn_error $? "no argument expected for --with-zstd option" "$LINENO" 5
+      ;;
+  esac
+
+else
+  with_zstd=yes
+
+fi
+
+
+
+
+  if test "$with_zstd" = yes; then
+    { $as_echo "$as_me:${as_lineno-$LINENO}: checking for ZSTD_decompress in -lzstd" >&5
+$as_echo_n "checking for ZSTD_decompress in -lzstd... " >&6; }
+if ${ac_cv_lib_zstd_ZSTD_decompress+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  ac_check_lib_save_LIBS=$LIBS
+LIBS="-lzstd  $LIBS"
+cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+/* Override any GCC internal prototype to avoid an error.
+   Use char because int might match the return type of a GCC
+   builtin and then its argument prototype would still apply.  */
+#ifdef __cplusplus
+extern "C"
+#endif
+char ZSTD_decompress ();
+int
+main ()
+{
+return ZSTD_decompress ();
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_link "$LINENO"; then :
+  ac_cv_lib_zstd_ZSTD_decompress=yes
+else
+  ac_cv_lib_zstd_ZSTD_decompress=no
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+LIBS=$ac_check_lib_save_LIBS
+fi
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib_zstd_ZSTD_decompress" >&5
+$as_echo "$ac_cv_lib_zstd_ZSTD_decompress" >&6; }
+if test "x$ac_cv_lib_zstd_ZSTD_decompress" = xyes; then :
+  cat >>confdefs.h <<_ACEOF
+#define HAVE_LIBZSTD 1
+_ACEOF
+
+  LIBS="-lzstd $LIBS"
+
+else
+  as_fn_error $? "zstd library not found
+  If you have zstd installed, see config.log for details on the
+  failure.  It is possible the compiler isn't looking in the proper directory.
+  Use --without-zstd to disable zlib support." "$LINENO" 5
+fi
+
+    ac_fn_c_check_header_mongrel "$LINENO" "zstd.h" "ac_cv_header_zstd_h" "$ac_includes_default"
+if test "x$ac_cv_header_zstd_h" = xyes; then :
+
+else
+  as_fn_error $? "zstd header not found
+  If you have zstd already installed, see config.log for details on the
+  failure.  It is possible the compiler isn't looking in the proper directory.
+  Use --without-zstd to disable zlib support." "$LINENO" 5
+fi
+
+
+  fi
+
+fi # test "$HAS_TABLEAM" == 'yes'
 
 # Check if git is installed, when installed the gitref of the checkout will be baked in the application
 # Extract the first word of "git", so it can be a program name with args.
