@@ -8,6 +8,10 @@
  *
  *    CREATE STATISTICS ... queries.
  *
+ *    We also support dropping statistics from all the worker nodes in form of
+ *
+ *    DROP STATISTICS ... queries.
+ *
  * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
@@ -40,6 +44,7 @@
 #include "utils/syscache.h"
 
 static List * GetExplicitStatisticsIdList(Oid relationId);
+static Oid GetRelIdByStatsOid(Oid statsOid);
 
 
 /*
@@ -124,6 +129,64 @@ CreateStatisticsStmtObjectAddress(Node *node, bool missingOk)
 	ObjectAddressSet(address, StatisticExtRelationId, statsOid);
 
 	return address;
+}
+
+
+/*
+ * PreprocessDropStatisticsStmt is called during the planning phase for
+ * DROP STATISTICS.
+ */
+List *
+PreprocessDropStatisticsStmt(Node *node, const char *queryString)
+{
+	DropStmt *dropStatisticsStmt = castNode(DropStmt, node);
+	Assert(dropStatisticsStmt->removeType == OBJECT_STATISTIC_EXT);
+
+	if (!ShouldPropagate())
+	{
+		return NIL;
+	}
+
+	QualifyTreeNode((Node *) dropStatisticsStmt);
+
+	List *ddlJobs = NIL;
+	List *processedStatsOids = NIL;
+	List *objectNameList = NULL;
+	foreach_ptr(objectNameList, dropStatisticsStmt->objects)
+	{
+		Oid statsOid = get_statistics_object_oid(objectNameList,
+												 dropStatisticsStmt->missing_ok);
+
+		if (list_member_oid(processedStatsOids, statsOid))
+		{
+			/* skip duplicate entries in DROP STATISTICS */
+			continue;
+		}
+
+		processedStatsOids = lappend_oid(processedStatsOids, statsOid);
+
+		Oid relationId = GetRelIdByStatsOid(statsOid);
+
+		if (!OidIsValid(relationId) || !IsCitusTable(relationId))
+		{
+			continue;
+		}
+
+		char *ddlCommand = DeparseDropStatisticsStmt(objectNameList,
+													 dropStatisticsStmt->missing_ok);
+
+		DDLJob *ddlJob = palloc0(sizeof(DDLJob));
+
+		ddlJob->targetRelationId = relationId;
+		ddlJob->concurrentIndexCmd = false;
+		ddlJob->startNewTransaction = false;
+		ddlJob->commandString = ddlCommand;
+		ddlJob->taskList = DDLTaskList(relationId, ddlCommand);
+
+		ddlJobs = lappend(ddlJobs, ddlJob);
+	}
+
+	return ddlJobs;
 }
 
 
@@ -247,4 +310,25 @@ GetExplicitStatisticsIdList(Oid relationId)
 	table_close(pgStatistics, NoLock);
 
 	return statisticsIdList;
+}
+
+
+/*
+ * GetRelIdByStatsOid returns the relation id for given statistics oid.
+ * If statistics doesn't exist, returns InvalidOid.
+ */
+static Oid
+GetRelIdByStatsOid(Oid statsOid)
+{
+	HeapTuple tup = SearchSysCache1(STATEXTOID, ObjectIdGetDatum(statsOid));
+
+	if (!HeapTupleIsValid(tup))
+	{
+		return InvalidOid;
+	}
+
+	Form_pg_statistic_ext statisticsForm = (Form_pg_statistic_ext) GETSTRUCT(tup);
+	ReleaseSysCache(tup);
+
+	return statisticsForm->stxrelid;
 }
