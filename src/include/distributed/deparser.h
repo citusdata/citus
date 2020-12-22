@@ -57,8 +57,10 @@ extern char * DeparseAlterSchemaRenameStmt(Node *stmt);
 
 /* forward declarations for deparse_statistics_stmts.c */
 extern char * DeparseCreateStatisticsStmt(Node *node);
+extern char * DeparseDropStatisticsStmt(List *nameList, bool ifExists);
 
 extern void QualifyCreateStatisticsStmt(Node *node);
+extern void QualifyDropStatisticsStmt(Node *node);
 
 /* forward declarations for deparse_type_stmts.c */
 extern char * DeparseCompositeTypeStmt(Node *stmt);

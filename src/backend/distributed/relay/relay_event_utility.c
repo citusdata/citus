@@ -349,6 +349,23 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 			{
 				DropTriggerEventExtendNames(dropStmt, schemaName, shardId);
 			}
+			else if (objectType == OBJECT_STATISTIC_EXT)
+			{
+				List *shardStatisticsList = NIL;
+				List *objectNameList = NULL;
+				foreach_ptr(objectNameList, dropStmt->objects)
+				{
+					RangeVar *stat = makeRangeVarFromNameList(objectNameList);
+
+					SetSchemaNameIfNotExist(&stat->schemaname, schemaName);
+
+					AppendShardIdToName(&stat->relname, shardId);
+					shardStatisticsList = lappend(shardStatisticsList,
+												  MakeNameListFromRangeVar(stat));
+				}
+
+				dropStmt->objects = shardStatisticsList;
+			}
 			else
 			{
 				ereport(WARNING, (errmsg("unsafe object type in drop statement"),
