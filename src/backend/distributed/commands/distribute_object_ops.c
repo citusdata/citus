@@ -14,6 +14,7 @@
 
 #include "distributed/commands.h"
 #include "distributed/deparser.h"
+#include "distributed/pg_version_constants.h"
 
 static DistributeObjectOps NoDistributeOps = {
 	.deparse = NULL,
@@ -414,6 +415,15 @@ static DistributeObjectOps Schema_Rename = {
 	.postprocess = NULL,
 	.address = AlterSchemaRenameStmtObjectAddress,
 };
+#if PG_VERSION_NUM >= PG_VERSION_13
+static DistributeObjectOps Statistics_Alter = {
+	.deparse = DeparseAlterStatisticsStmt,
+	.qualify = QualifyAlterStatisticsStmt,
+	.preprocess = PreprocessAlterStatisticsStmt,
+	.postprocess = NULL,
+	.address = NULL,
+};
+#endif
 static DistributeObjectOps Statistics_AlterObjectSchema = {
 	.deparse = DeparseAlterStatisticsSchemaStmt,
 	.qualify = QualifyAlterStatisticsSchemaStmt,
@@ -683,6 +693,13 @@ GetDistributeObjectOps(Node *node)
 			return &Any_AlterRoleSet;
 		}
 
+#if PG_VERSION_NUM >= PG_VERSION_13
+		case T_AlterStatsStmt:
+		{
+			return &Statistics_Alter;
+		}
+
+#endif
 		case T_AlterTableStmt:
 		{
 			AlterTableStmt *stmt = castNode(AlterTableStmt, node);

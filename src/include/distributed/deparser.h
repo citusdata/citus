@@ -60,11 +60,13 @@ extern char * DeparseCreateStatisticsStmt(Node *node);
 extern char * DeparseDropStatisticsStmt(List *nameList, bool ifExists);
 extern char * DeparseAlterStatisticsRenameStmt(Node *node);
 extern char * DeparseAlterStatisticsSchemaStmt(Node *node);
+extern char * DeparseAlterStatisticsStmt(Node *node);
 
 extern void QualifyCreateStatisticsStmt(Node *node);
 extern void QualifyDropStatisticsStmt(Node *node);
 extern void QualifyAlterStatisticsRenameStmt(Node *node);
 extern void QualifyAlterStatisticsSchemaStmt(Node *node);
+extern void QualifyAlterStatisticsStmt(Node *node);
 
 /* forward declarations for deparse_type_stmts.c */
 extern char * DeparseCompositeTypeStmt(Node *stmt);

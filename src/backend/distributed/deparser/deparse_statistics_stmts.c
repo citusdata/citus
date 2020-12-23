@@ -24,6 +24,9 @@ static void AppendCreateStatisticsStmt(StringInfo buf, CreateStatsStmt *stmt);
 static void AppendDropStatisticsStmt(StringInfo buf, List *nameList, bool ifExists);
 static void AppendAlterStatisticsRenameStmt(StringInfo buf, RenameStmt *stmt);
 static void AppendAlterStatisticsSchemaStmt(StringInfo buf, AlterObjectSchemaStmt *stmt);
+#if PG_VERSION_NUM >= PG_VERSION_13
+static void AppendAlterStatisticsStmt(StringInfo buf, AlterStatsStmt *stmt);
+#endif
 static void AppendStatisticsName(StringInfo buf, CreateStatsStmt *stmt);
 static void AppendStatTypes(StringInfo buf, CreateStatsStmt *stmt);
 static void AppendColumnNames(StringInfo buf, CreateStatsStmt *stmt);
@@ -83,6 +86,24 @@ DeparseAlterStatisticsSchemaStmt(Node *node)
 }
 
 
+#if PG_VERSION_NUM >= PG_VERSION_13
+char *
+DeparseAlterStatisticsStmt(Node *node)
+{
+	AlterStatsStmt *stmt = castNode(AlterStatsStmt, node);
+
+	StringInfoData str;
+	initStringInfo(&str);
+
+	AppendAlterStatisticsStmt(&str, stmt);
+
+	return str.data;
+}
+
+
+#endif
+
+
 static void
 AppendCreateStatisticsStmt(StringInfo buf, CreateStatsStmt *stmt)
 {
@@ -137,6 +158,18 @@ AppendAlterStatisticsSchemaStmt(StringInfo buf, AlterObjectSchemaStmt *stmt)
 					 NameListToQuotedString((List *) stmt->object), quote_identifier(
 						 stmt->newschema));
 }
+
+
+#if PG_VERSION_NUM >= PG_VERSION_13
+static void
+AppendAlterStatisticsStmt(StringInfo buf, AlterStatsStmt *stmt)
+{
+	appendStringInfo(buf, "ALTER STATISTICS %s SET STATISTICS %d", NameListToQuotedString(
+						 stmt->defnames), stmt->stxstattarget);
+}
+
+
+#endif
 
 
 static void

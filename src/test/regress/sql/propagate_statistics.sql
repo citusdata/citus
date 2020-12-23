@@ -67,6 +67,11 @@ CREATE SCHEMA test_alter_schema;
 ALTER STATISTICS s7 SET SCHEMA test_alter_schema;
 DROP STATISTICS test_alter_schema.s7;
 
+-- test altering stats target
+ALTER STATISTICS s1 SET STATISTICS 3;
+-- since max value for target is 10000, this will automatically be lowered
+ALTER STATISTICS s2 SET STATISTICS 999999;
+
 \c - - - :worker_1_port
 SELECT stxname
 FROM pg_statistic_ext
@@ -84,6 +89,15 @@ WHERE stxnamespace IN (
 	FROM pg_namespace
 	WHERE nspname IN ('public', 'statistics''Test', 'sc1', 'sc2')
 );
+
+SELECT stxstattarget
+FROM pg_statistic_ext
+WHERE stxnamespace IN (
+	SELECT oid
+	FROM pg_namespace
+	WHERE nspname IN ('public', 'statistics''Test', 'sc1', 'sc2')
+)
+ORDER BY stxstattarget ASC;
 
 \c - - - :master_port
 SET client_min_messages TO WARNING;

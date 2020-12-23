@@ -120,3 +120,27 @@ QualifyAlterStatisticsSchemaStmt(Node *node)
 		stmt->object = (Node *) MakeNameListFromRangeVar(stat);
 	}
 }
+
+
+#if PG_VERSION_NUM >= PG_VERSION_13
+
+/*
+ * QualifyAlterStatisticsStmt qualifies AlterObjectSchemaStmt's with schema name for
+ * ALTER STATISTICS .. SET STATISTICS statements.
+ */
+void
+QualifyAlterStatisticsStmt(Node *node)
+{
+	AlterStatsStmt *stmt = castNode(AlterStatsStmt, node);
+
+	if (list_length(stmt->defnames) == 1)
+	{
+		RangeVar *stat = makeRangeVarFromNameList(stmt->defnames);
+		Oid schemaOid = RangeVarGetCreationNamespace(stat);
+		stat->schemaname = get_namespace_name(schemaOid);
+		stmt->defnames = MakeNameListFromRangeVar(stat);
+	}
+}
+
+
+#endif

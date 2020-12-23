@@ -318,6 +318,49 @@ AlterStatisticsSchemaStmtObjectAddress(Node *node, bool missingOk)
 }
 
 
+#if PG_VERSION_NUM >= PG_VERSION_13
+
+/*
+ * PreprocessAlterStatisticsStmt is called during the planning phase for
+ * ALTER STATISTICS .. SET STATISTICS command has been executed
+ * by standard process utility.
+ */
+List *
+PreprocessAlterStatisticsStmt(Node *node, const char *queryString)
+{
+	AlterStatsStmt *stmt = castNode(AlterStatsStmt, node);
+
+	Oid statsOid = get_statistics_object_oid(stmt->defnames, false);
+	Oid relationId = GetRelIdByStatsOid(statsOid);
+
+	if (!IsCitusTable(relationId) || !ShouldPropagate())
+	{
+		return NIL;
+	}
+
+	EnsureCoordinator();
+
+	QualifyTreeNode((Node *) stmt);
+
+	char *ddlCommand = DeparseTreeNode((Node *) stmt);
+
+	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
+
+	ddlJob->targetRelationId = relationId;
+	ddlJob->concurrentIndexCmd = false;
+	ddlJob->startNewTransaction = false;
+	ddlJob->commandString = ddlCommand;
+	ddlJob->taskList = DDLTaskList(relationId, ddlCommand);
+
+	List *ddlJobs = list_make1(ddlJob);
+
+	return ddlJobs;
+}
+
+
+#endif
+
+
 /*
  * GetExplicitStatisticsCommandList returns the list of DDL commands to create
  * statistics that are explicitly created for the table with relationId. See
