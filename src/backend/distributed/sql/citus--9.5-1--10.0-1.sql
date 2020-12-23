@@ -1,5 +1,6 @@
 -- citus--9.5-1--10.0-1
 
+DROP FUNCTION pg_catalog.upgrade_to_reference_table(regclass);
 DROP FUNCTION IF EXISTS pg_catalog.citus_total_relation_size(regclass);
 
 #include "udfs/citus_total_relation_size/10.0-1.sql"

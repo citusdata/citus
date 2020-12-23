@@ -230,8 +230,6 @@ SELECT mark_tables_colocated('reference_table', ARRAY['citus_local_table_1']);
 SELECT mark_tables_colocated('citus_local_table_1', ARRAY['distributed_table']);
 SELECT mark_tables_colocated('distributed_table', ARRAY['citus_local_table_1']);
 
--- upgrade_to_reference_table is not supported
-SELECT upgrade_to_reference_table('citus_local_table_1');
 -- master_create_empty_shard is not supported
 SELECT master_create_empty_shard('citus_local_table_1');
 -- get_shard_id_for_distribution_column is supported
@@ -421,7 +419,6 @@ ROLLBACK;
 
 -- should fail --
 
-SELECT upgrade_to_reference_table('citus_local_table_4');
 SELECT update_distributed_table_colocation('citus_local_table_4', colocate_with => 'none');
 
 SELECT master_create_worker_shards('citus_local_table_4', 10, 1);

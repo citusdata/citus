@@ -155,7 +155,6 @@ ORDER BY 1;
  function truncate_local_data_after_distributing_table(regclass)
  function undistribute_table(regclass)
  function update_distributed_table_colocation(regclass,text)
- function upgrade_to_reference_table(regclass)
  function worker_append_table_to_shard(text,text,text,integer)
  function worker_apply_inter_shard_ddl_command(bigint,text,bigint,text,text)
  function worker_apply_sequence_command(text)
@@ -218,5 +217,5 @@ ORDER BY 1;
  view citus_tables
  view citus_worker_stat_activity
  view pg_dist_shard_placement
-(202 rows)
+(201 rows)
 
