@@ -49,6 +49,7 @@
 
 
 /* Local functions forward declarations for helper functions */
+static void ErrorIfCannotGenerateDefaultIndexName(IndexStmt *createIndexStatement);
 static bool CanGenerateDefaultIndexName(IndexStmt *createIndexStatement);
 static int GetNumberOfIndexParameters(IndexStmt *createIndexStatement);
 static bool IndexAlreadyExists(IndexStmt *createIndexStatement);
@@ -178,16 +179,12 @@ PreprocessIndexStmt(Node *node, const char *createIndexCommand)
 
 	if (createIndexStatement->idxname == NULL)
 	{
-		if (!CanGenerateDefaultIndexName(createIndexStatement))
-		{
-			/*
-			 * Logic that CanGenerateDefaultIndexName follows is aligned with
-			 * postgres function DefineIndex and we return NIL here to let
-			 * standart_processUtility error out if we cannot generate a default
-			 * name for index.
-			 */
-			return NIL;
-		}
+		/*
+		 * Logic that we follow to assing a default index name is aligned with
+		 * postgres function DefineIndex. Even if postgres would error out for
+		 * such cases, we error out here to be on the safe side.
+		 */
+		ErrorIfCannotGenerateDefaultIndexName(createIndexStatement);
 
 		createIndexStatement->idxname = GenerateDefaultIndexName(createIndexStatement);
 	}
@@ -223,6 +220,23 @@ PreprocessIndexStmt(Node *node, const char *createIndexCommand)
 
 	DDLJob *ddlJob = GenerateCreateIndexDDLJob(createIndexStatement, createIndexCommand);
 	return list_make1(ddlJob);
+}
+
+
+/*
+ * ErrorIfCannotGenerateDefaultIndexName errors out if we cannot generate a
+ * default index name for given CREATE INDEX command.
+ */
+static void
+ErrorIfCannotGenerateDefaultIndexName(IndexStmt *createIndexStatement)
+{
+	if (CanGenerateDefaultIndexName(createIndexStatement))
+	{
+		return;
+	}
+
+	ereport(ERROR, (errmsg("Cannot assign a default index name for CREATE INDEX command"),
+					errhint("consider specifying index name in CREATE INDEX command")));
 }
 
 
