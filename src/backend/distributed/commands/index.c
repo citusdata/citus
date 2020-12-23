@@ -239,8 +239,9 @@ ErrorIfCannotGenerateDefaultIndexName(IndexStmt *createIndexStatement)
 		return;
 	}
 
-	ereport(ERROR, (errmsg("Cannot assign a default index name for CREATE INDEX command"),
-					errhint("consider specifying index name in CREATE INDEX command")));
+	ereport(ERROR, (errcode(ERRCODE_TOO_MANY_COLUMNS),
+					errmsg("cannot use more than %d columns in an index",
+						   INDEX_MAX_KEYS)));
 }
 
 
