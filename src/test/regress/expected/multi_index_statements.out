@@ -454,6 +454,48 @@ SELECT indexrelid::regclass FROM pg_index WHERE indrelid='distributed_table'::re
  distributed_table_last_column_idx1
 (2 rows)
 
+-- test CREATE INDEX in plpgsql to verify that we don't break parse tree
+CREATE OR REPLACE FUNCTION create_index_in_plpgsql()
+RETURNS VOID AS
+$BODY$
+BEGIN
+    CREATE INDEX ON distributed_table(last_column);
+END;
+$BODY$ LANGUAGE plpgsql;
+SELECT create_index_in_plpgsql();
+CONTEXT:  SQL statement "CREATE INDEX ON distributed_table(last_column)"
+PL/pgSQL function create_index_in_plpgsql() line 3 at SQL statement
+ create_index_in_plpgsql
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_index_in_plpgsql();
+CONTEXT:  SQL statement "CREATE INDEX ON distributed_table(last_column)"
+PL/pgSQL function create_index_in_plpgsql() line 3 at SQL statement
+ create_index_in_plpgsql
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_index_in_plpgsql();
+CONTEXT:  SQL statement "CREATE INDEX ON distributed_table(last_column)"
+PL/pgSQL function create_index_in_plpgsql() line 3 at SQL statement
+ create_index_in_plpgsql
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT indexrelid::regclass FROM pg_index WHERE indrelid='distributed_table'::regclass ORDER BY indexrelid;
+             indexrelid
+---------------------------------------------------------------------
+ distributed_table_last_column_idx
+ distributed_table_last_column_idx1
+ distributed_table_last_column_idx2
+ distributed_table_last_column_idx3
+ distributed_table_last_column_idx4
+(5 rows)
+
 SET citus.force_max_query_parallelization TO OFF;
 SET client_min_messages TO ERROR;
 \set VERBOSITY terse

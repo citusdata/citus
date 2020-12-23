@@ -300,6 +300,20 @@ CREATE INDEX ON distributed_table(last_column);
 CREATE INDEX ON distributed_table(last_column);
 SELECT indexrelid::regclass FROM pg_index WHERE indrelid='distributed_table'::regclass ORDER BY indexrelid;
 
+-- test CREATE INDEX in plpgsql to verify that we don't break parse tree
+CREATE OR REPLACE FUNCTION create_index_in_plpgsql()
+RETURNS VOID AS
+$BODY$
+BEGIN
+    CREATE INDEX ON distributed_table(last_column);
+END;
+$BODY$ LANGUAGE plpgsql;
+
+SELECT create_index_in_plpgsql();
+SELECT create_index_in_plpgsql();
+SELECT create_index_in_plpgsql();
+SELECT indexrelid::regclass FROM pg_index WHERE indrelid='distributed_table'::regclass ORDER BY indexrelid;
+
 SET citus.force_max_query_parallelization TO OFF;
 
 SET client_min_messages TO ERROR;
