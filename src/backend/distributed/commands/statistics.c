@@ -322,8 +322,7 @@ AlterStatisticsSchemaStmtObjectAddress(Node *node, bool missingOk)
 
 /*
  * PreprocessAlterStatisticsStmt is called during the planning phase for
- * ALTER STATISTICS .. SET STATISTICS command has been executed
- * by standard process utility.
+ * ALTER STATISTICS .. SET STATISTICS.
  */
 List *
 PreprocessAlterStatisticsStmt(Node *node, const char *queryString)
@@ -359,6 +358,43 @@ PreprocessAlterStatisticsStmt(Node *node, const char *queryString)
 
 
 #endif
+
+/*
+ * PreprocessAlterStatisticsOwnerStmt is called during the planning phase for
+ * ALTER STATISTICS .. OWNER TO.
+ */
+List *
+PreprocessAlterStatisticsOwnerStmt(Node *node, const char *queryString)
+{
+	AlterOwnerStmt *stmt = castNode(AlterOwnerStmt, node);
+	Assert(stmt->objectType == OBJECT_STATISTIC_EXT);
+
+	Oid statsOid = get_statistics_object_oid((List *) stmt->object, false);
+	Oid relationId = GetRelIdByStatsOid(statsOid);
+
+	if (!IsCitusTable(relationId) || !ShouldPropagate())
+	{
+		return NIL;
+	}
+
+	EnsureCoordinator();
+
+	QualifyTreeNode((Node *) stmt);
+
+	char *ddlCommand = DeparseTreeNode((Node *) stmt);
+
+	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
+
+	ddlJob->targetRelationId = relationId;
+	ddlJob->concurrentIndexCmd = false;
+	ddlJob->startNewTransaction = false;
+	ddlJob->commandString = ddlCommand;
+	ddlJob->taskList = DDLTaskList(relationId, ddlCommand);
+
+	List *ddlJobs = list_make1(ddlJob);
+
+	return ddlJobs;
+}
 
 
 /*

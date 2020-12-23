@@ -27,6 +27,7 @@ static void AppendAlterStatisticsSchemaStmt(StringInfo buf, AlterObjectSchemaStm
 #if PG_VERSION_NUM >= PG_VERSION_13
 static void AppendAlterStatisticsStmt(StringInfo buf, AlterStatsStmt *stmt);
 #endif
+static void AppendAlterStatisticsOwnerStmt(StringInfo buf, AlterOwnerStmt *stmt);
 static void AppendStatisticsName(StringInfo buf, CreateStatsStmt *stmt);
 static void AppendStatTypes(StringInfo buf, CreateStatsStmt *stmt);
 static void AppendColumnNames(StringInfo buf, CreateStatsStmt *stmt);
@@ -102,6 +103,19 @@ DeparseAlterStatisticsStmt(Node *node)
 
 
 #endif
+char *
+DeparseAlterStatisticsOwnerStmt(Node *node)
+{
+	AlterOwnerStmt *stmt = castNode(AlterOwnerStmt, node);
+	Assert(stmt->objectType == OBJECT_STATISTIC_EXT);
+
+	StringInfoData str;
+	initStringInfo(&str);
+
+	AppendAlterStatisticsOwnerStmt(&str, stmt);
+
+	return str.data;
+}
 
 
 static void
@@ -170,6 +184,14 @@ AppendAlterStatisticsStmt(StringInfo buf, AlterStatsStmt *stmt)
 
 
 #endif
+static void
+AppendAlterStatisticsOwnerStmt(StringInfo buf, AlterOwnerStmt *stmt)
+{
+	List *names = (List *) stmt->object;
+	appendStringInfo(buf, "ALTER STATISTICS %s OWNER TO %s;", NameListToQuotedString(
+						 names),
+					 RoleSpecString(stmt->newowner, true));
+}
 
 
 static void

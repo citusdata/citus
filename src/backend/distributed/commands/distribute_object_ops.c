@@ -431,6 +431,13 @@ static DistributeObjectOps Statistics_AlterObjectSchema = {
 	.postprocess = PostprocessAlterStatisticsSchemaStmt,
 	.address = AlterStatisticsSchemaStmtObjectAddress,
 };
+static DistributeObjectOps Statistics_AlterOwner = {
+	.deparse = DeparseAlterStatisticsOwnerStmt,
+	.qualify = QualifyAlterStatisticsOwnerStmt,
+	.preprocess = PreprocessAlterStatisticsOwnerStmt,
+	.postprocess = NULL,
+	.address = NULL,
+};
 static DistributeObjectOps Statistics_Drop = {
 	.deparse = NULL,
 	.qualify = QualifyDropStatisticsStmt,
@@ -664,6 +671,11 @@ GetDistributeObjectOps(Node *node)
 				case OBJECT_ROUTINE:
 				{
 					return &Routine_AlterOwner;
+				}
+
+				case OBJECT_STATISTIC_EXT:
+				{
+					return &Statistics_AlterOwner;
 				}
 
 				case OBJECT_TYPE:

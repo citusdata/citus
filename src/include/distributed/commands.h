@@ -287,6 +287,7 @@ extern List * PreprocessAlterStatisticsSchemaStmt(Node *node, const char *queryS
 extern List * PostprocessAlterStatisticsSchemaStmt(Node *node, const char *queryString);
 extern ObjectAddress AlterStatisticsSchemaStmtObjectAddress(Node *node, bool missingOk);
 extern List * PreprocessAlterStatisticsStmt(Node *node, const char *queryString);
+extern List * PreprocessAlterStatisticsOwnerStmt(Node *node, const char *queryString);
 extern List * GetExplicitStatisticsCommandList(Oid relationId);
 extern List * GetExplicitStatisticsSchemaIdList(Oid relationId);
 

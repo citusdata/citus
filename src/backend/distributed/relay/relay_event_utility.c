@@ -213,6 +213,23 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 			break;
 		}
 
+		case T_AlterOwnerStmt:
+		{
+			AlterOwnerStmt *alterOwnerStmt = castNode(AlterOwnerStmt, parseTree);
+
+			/* we currently extend names in alter owner statements only for statistics */
+			Assert(alterOwnerStmt->objectType == OBJECT_STATISTIC_EXT);
+
+			RangeVar *stat = makeRangeVarFromNameList((List *) alterOwnerStmt->object);
+
+			AppendShardIdToName(&stat->relname, shardId);
+			SetSchemaNameIfNotExist(&stat->schemaname, schemaName);
+
+			alterOwnerStmt->object = (Node *) MakeNameListFromRangeVar(stat);
+
+			break;
+		}
+
 		case T_ClusterStmt:
 		{
 			ClusterStmt *clusterStmt = (ClusterStmt *) parseTree;
