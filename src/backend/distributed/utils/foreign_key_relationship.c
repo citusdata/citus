@@ -138,8 +138,8 @@ GetForeignKeyConnectedRelationIdList(Oid relationId)
 
 	List *fKeyConnectedRelationshipNodeList =
 		GetRelationshipNodesForFKeyConnectedRelations(relationshipNode);
-	List *fKeyConnectedRelationIdList = GetRelationIdsFromRelationshipNodeList(
-		fKeyConnectedRelationshipNodeList);
+	List *fKeyConnectedRelationIdList =
+		GetRelationIdsFromRelationshipNodeList(fKeyConnectedRelationshipNodeList);
 	return fKeyConnectedRelationIdList;
 }
 
