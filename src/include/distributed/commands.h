@@ -66,7 +66,7 @@ typedef enum ExtractForeignKeyConstraintsMode
 
 
 /*
- * Flags that can be passed to GetForeignKeyOidsColumnAppeared to
+ * Flags that can be passed to GetForeignKeyIdsForColumn to
  * indicate whether relationId argument should match:
  *   - referencing relation or,
  *   - referenced relation,

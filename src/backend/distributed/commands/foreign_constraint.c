@@ -64,8 +64,8 @@ static void ForeignConstraintFindDistKeys(HeapTuple pgConstraintTuple,
 										  Var *referencedDistColumn,
 										  int *referencingAttrIndex,
 										  int *referencedAttrIndex);
-static List * GetForeignKeyOidsColumnAppeared(char *columnName, Oid relationId,
-											  int searchForeignKeyColumnFlags);
+static List * GetForeignKeyIdsForColumn(char *columnName, Oid relationId,
+										int searchForeignKeyColumnFlags);
 static List * GetForeignConstraintCommandsInternal(Oid relationId, int flags);
 static Oid get_relation_constraint_oid_compat(HeapTuple heapTuple);
 static List * GetForeignKeyOidsToCitusLocalTables(Oid relationId);
@@ -495,8 +495,7 @@ ColumnAppearsInForeignKeyToReferenceTable(char *columnName, Oid relationId)
 	int searchForeignKeyColumnFlags = SEARCH_REFERENCING_RELATION |
 									  SEARCH_REFERENCED_RELATION;
 	List *foreignKeyIdsColumnAppeared =
-		GetForeignKeyOidsColumnAppeared(columnName, relationId,
-										searchForeignKeyColumnFlags);
+		GetForeignKeyIdsForColumn(columnName, relationId, searchForeignKeyColumnFlags);
 
 	Oid foreignKeyId = InvalidOid;
 	foreach_oid(foreignKeyId, foreignKeyIdsColumnAppeared)
@@ -513,14 +512,14 @@ ColumnAppearsInForeignKeyToReferenceTable(char *columnName, Oid relationId)
 
 
 /*
- * GetForeignKeyOidsColumnAppeared takes columnName and relationId for the owning
+ * GetForeignKeyIdsForColumn takes columnName and relationId for the owning
  * relation, and returns a list of OIDs for foreign constraints that the column
  * with columnName is involved according to "searchForeignKeyColumnFlags" argument.
  * See SearchForeignKeyColumnFlags enum definition for usage.
  */
 static List *
-GetForeignKeyOidsColumnAppeared(char *columnName, Oid relationId,
-								int searchForeignKeyColumnFlags)
+GetForeignKeyIdsForColumn(char *columnName, Oid relationId,
+						  int searchForeignKeyColumnFlags)
 {
 	bool searchReferencing = searchForeignKeyColumnFlags & SEARCH_REFERENCING_RELATION;
 	bool searchReferenced = searchForeignKeyColumnFlags & SEARCH_REFERENCED_RELATION;
