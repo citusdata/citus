@@ -179,8 +179,8 @@ PreprocessIndexStmt(Node *node, const char *createIndexCommand)
 	if (createIndexStatement->idxname == NULL)
 	{
 		/*
-		 * Postgres does not support indexes with over 32 columns and we should
-		 * not attempt to generate an index name for such cases.
+		 * Postgres does not support indexes with over INDEX_MAX_KEYS columns
+		 * and we should not attempt to generate an index name for such cases.
 		 */
 		ErrorIfCreateIndexHasTooManyColumns(createIndexStatement);
 
