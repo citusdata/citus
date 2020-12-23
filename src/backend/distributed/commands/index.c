@@ -186,7 +186,11 @@ PreprocessIndexStmt(Node *node, const char *createIndexCommand)
 		 */
 		ErrorIfCannotGenerateDefaultIndexName(createIndexStatement);
 
-		createIndexStatement->idxname = GenerateDefaultIndexName(createIndexStatement);
+		/* ensure we copy string into proper context */
+		MemoryContext relationContext = GetMemoryChunkContext(relationRangeVar);
+		char *defaultIndexName = GenerateDefaultIndexName(createIndexStatement);
+		createIndexStatement->idxname = MemoryContextStrdup(relationContext,
+															defaultIndexName);
 	}
 
 	if (IndexAlreadyExists(createIndexStatement))
