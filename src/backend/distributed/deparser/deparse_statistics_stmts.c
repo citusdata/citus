@@ -26,6 +26,7 @@ static void AppendStatisticsName(StringInfo buf, CreateStatsStmt *stmt);
 static void AppendStatTypes(StringInfo buf, CreateStatsStmt *stmt);
 static void AppendColumnNames(StringInfo buf, CreateStatsStmt *stmt);
 static void AppendTableName(StringInfo buf, CreateStatsStmt *stmt);
+static void AppendAlterStatisticsRenameStmt(StringInfo buf, RenameStmt *stmt);
 
 char *
 DeparseCreateStatisticsStmt(Node *node)
@@ -53,6 +54,20 @@ DeparseDropStatisticsStmt(List *nameList, bool ifExists)
 }
 
 
+char *
+DeparseAlterStatisticsRenameStmt(Node *node)
+{
+	RenameStmt *stmt = castNode(RenameStmt, node);
+
+	StringInfoData str;
+	initStringInfo(&str);
+
+	AppendAlterStatisticsRenameStmt(&str, stmt);
+
+	return str.data;
+}
+
+
 static void
 AppendCreateStatisticsStmt(StringInfo buf, CreateStatsStmt *stmt)
 {
@@ -74,8 +89,6 @@ AppendCreateStatisticsStmt(StringInfo buf, CreateStatsStmt *stmt)
 	appendStringInfoString(buf, " FROM ");
 
 	AppendTableName(buf, stmt);
-
-	appendStringInfoString(buf, ";");
 }
 
 
@@ -90,6 +103,14 @@ AppendDropStatisticsStmt(StringInfo buf, List *nameList, bool ifExists)
 	}
 
 	appendStringInfo(buf, "%s", NameListToQuotedString(nameList));
+}
+
+
+static void
+AppendAlterStatisticsRenameStmt(StringInfo buf, RenameStmt *stmt)
+{
+	appendStringInfo(buf, "ALTER STATISTICS %s RENAME TO %s",
+					 NameListToQuotedString((List *) stmt->object), stmt->newname);
 }
 
 

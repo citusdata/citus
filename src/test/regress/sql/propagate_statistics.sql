@@ -57,6 +57,12 @@ DROP STATISTICS IF EXISTS s3, sc2.s4, s6;
 DROP STATISTICS s5,s6;
 DROP STATISTICS IF EXISTS s5,s5,s6,s6;
 
+-- test renaming statistics
+CREATE STATISTICS s6 ON a,b FROM test_stats4;
+DROP STATISTICS s7;
+ALTER STATISTICS s6 RENAME TO s7;
+DROP STATISTICS s7;
+
 \c - - - :worker_1_port
 SELECT stxname
 FROM pg_statistic_ext

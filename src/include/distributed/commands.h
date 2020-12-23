@@ -282,6 +282,7 @@ extern List * PreprocessCreateStatisticsStmt(Node *node, const char *queryString
 extern List * PostprocessCreateStatisticsStmt(Node *node, const char *queryString);
 extern ObjectAddress CreateStatisticsStmtObjectAddress(Node *node, bool missingOk);
 extern List * PreprocessDropStatisticsStmt(Node *node, const char *queryString);
+extern List * PreprocessAlterStatisticsRenameStmt(Node *node, const char *queryString);
 extern List * GetExplicitStatisticsCommandList(Oid relationId);
 extern List * GetExplicitStatisticsSchemaIdList(Oid relationId);
 

@@ -530,6 +530,17 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 			{
 				RenamePolicyEventExtendNames(renameStmt, schemaName, shardId);
 			}
+			else if (objectType == OBJECT_STATISTIC_EXT)
+			{
+				RangeVar *stat = makeRangeVarFromNameList((List *) renameStmt->object);
+
+				AppendShardIdToName(&stat->relname, shardId);
+				AppendShardIdToName(&renameStmt->newname, shardId);
+
+				SetSchemaNameIfNotExist(&stat->schemaname, schemaName);
+
+				renameStmt->object = (Node *) MakeNameListFromRangeVar(stat);
+			}
 			else
 			{
 				ereport(WARNING, (errmsg("unsafe object type in rename statement"),

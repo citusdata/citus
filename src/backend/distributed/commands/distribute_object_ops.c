@@ -414,6 +414,13 @@ static DistributeObjectOps Schema_Rename = {
 	.postprocess = NULL,
 	.address = AlterSchemaRenameStmtObjectAddress,
 };
+static DistributeObjectOps Statistics_Rename = {
+	.deparse = DeparseAlterStatisticsRenameStmt,
+	.qualify = QualifyAlterStatisticsRenameStmt,
+	.preprocess = PreprocessAlterStatisticsRenameStmt,
+	.postprocess = NULL,
+	.address = NULL,
+};
 static DistributeObjectOps Statistics_Drop = {
 	.deparse = NULL,
 	.qualify = QualifyDropStatisticsStmt,
@@ -905,6 +912,11 @@ GetDistributeObjectOps(Node *node)
 				case OBJECT_SCHEMA:
 				{
 					return &Schema_Rename;
+				}
+
+				case OBJECT_STATISTIC_EXT:
+				{
+					return &Statistics_Rename;
 				}
 
 				case OBJECT_TYPE:

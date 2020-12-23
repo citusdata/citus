@@ -191,6 +191,44 @@ PreprocessDropStatisticsStmt(Node *node, const char *queryString)
 
 
 /*
+ * PreprocessAlterStatisticsRenameStmt is called during the planning phase for
+ * ALTER STATISTICS RENAME.
+ */
+List *
+PreprocessAlterStatisticsRenameStmt(Node *node, const char *queryString)
+{
+	RenameStmt *renameStmt = castNode(RenameStmt, node);
+	Assert(renameStmt->renameType == OBJECT_STATISTIC_EXT);
+
+	Oid statsOid = get_statistics_object_oid((List *) renameStmt->object, false);
+	Oid relationId = GetRelIdByStatsOid(statsOid);
+
+	if (!IsCitusTable(relationId) || !ShouldPropagate())
+	{
+		return NIL;
+	}
+
+	EnsureCoordinator();
+
+	QualifyTreeNode((Node *) renameStmt);
+
+	char *ddlCommand = DeparseTreeNode((Node *) renameStmt);
+
+	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
+
+	ddlJob->targetRelationId = relationId;
+	ddlJob->concurrentIndexCmd = false;
+	ddlJob->startNewTransaction = false;
+	ddlJob->commandString = ddlCommand;
+	ddlJob->taskList = DDLTaskList(relationId, ddlCommand);
+
+	List *ddlJobs = list_make1(ddlJob);
+
+	return ddlJobs;
+}
+
+
+/*
  * GetExplicitStatisticsCommandList returns the list of DDL commands to create
  * statistics that are explicitly created for the table with relationId. See
  * comment of GetExplicitStatisticsIdList function.
@@ -207,7 +245,8 @@ GetExplicitStatisticsCommandList(Oid relationId)
 	Oid statisticsId = InvalidOid;
 	foreach_oid(statisticsId, statisticsIdList)
 	{
-		char *createStatisticsCommand = pg_get_statisticsobj_worker(statisticsId, false);
+		char *createStatisticsCommand = pg_get_statisticsobj_worker(statisticsId,
+																	false);
 
 		createStatisticsCommandList = lappend(
 			createStatisticsCommandList,

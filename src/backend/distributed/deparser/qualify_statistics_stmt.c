@@ -78,3 +78,24 @@ QualifyDropStatisticsStmt(Node *node)
 
 	dropStatisticsStmt->objects = objectNameListWithSchema;
 }
+
+
+/*
+ * QualifyAlterStatisticsRenameStmt qualifies RenameStmt's with schema name for
+ * ALTER STATISTICS RENAME statements.
+ */
+void
+QualifyAlterStatisticsRenameStmt(Node *node)
+{
+	RenameStmt *renameStmt = castNode(RenameStmt, node);
+	Assert(renameStmt->renameType == OBJECT_STATISTIC_EXT);
+
+	List *nameList = (List *) renameStmt->object;
+	if (list_length(nameList) == 1)
+	{
+		RangeVar *stat = makeRangeVarFromNameList(nameList);
+		Oid schemaOid = RangeVarGetCreationNamespace(stat);
+		stat->schemaname = get_namespace_name(schemaOid);
+		renameStmt->object = (Node *) MakeNameListFromRangeVar(stat);
+	}
+}
