@@ -196,6 +196,12 @@ PreprocessAlterRoleSetStmt(Node *node, const char *queryString)
 	AlterRoleSetStmt *stmt = castNode(AlterRoleSetStmt, node);
 	ObjectAddress address = GetObjectAddressFromParseTree(node, false);
 
+	/* don't propagate if the statement is scoped to another database */
+	if (stmt->database != NULL && strcmp(stmt->database, get_database_name(MyDatabaseId)) != 0)
+	{
+		return NIL;
+	}
+
 	/*
 	 * stmt->role could be NULL when the statement is on 'ALL' roles, we do propagate for
 	 * ALL roles. If it is not NULL the role is for a specific role. If that role is not

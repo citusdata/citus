@@ -223,6 +223,28 @@ SELECT run_command_on_workers('SHOW enable_hashagg');
  (localhost,57638,t,on)
 (2 rows)
 
+-- check that ALTER ROLE SET is not propagated when scoped to a different database
+-- also test case sensitivity
+CREATE DATABASE "REGRESSION";
+NOTICE:  Citus partially supports CREATE DATABASE for distributed databases
+DETAIL:  Citus does not propagate CREATE DATABASE command to workers
+HINT:  You can manually create a database and its extensions on workers.
+ALTER ROLE CURRENT_USER IN DATABASE "REGRESSION" SET public.myguc TO "Hello from coordinator only";
+SELECT * from pg_db_role_setting;
+ setdatabase | setrole |                              setconfig
+---------------------------------------------------------------------
+           0 |      10 | {"search_path=\",CitUs,.TeeN!?\", alter_role, public",lc_messages=C}
+       21732 |      10 | {"public.myguc=Hello from coordinator only"}
+(2 rows)
+
+SELECT run_command_on_workers($$SELECT json_agg(pg_db_role_setting) from pg_db_role_setting$$);
+                                                                     run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,"[{""setdatabase"":""0"",""setrole"":""10"",""setconfig"":[""search_path=\\"",CitUs,.TeeN!?\\"", alter_role, public"",""lc_messages=C""]}]")
+ (localhost,57638,t,"[{""setdatabase"":""0"",""setrole"":""10"",""setconfig"":[""search_path=\\"",CitUs,.TeeN!?\\"", alter_role, public"",""lc_messages=C""]}]")
+(2 rows)
+
+DROP DATABASE "REGRESSION";
 -- make sure alter role set is not propagated when the feature is deliberately turned off
 SET citus.enable_alter_role_set_propagation TO off;
 -- remove 1 node to verify settings are NOT copied when the node gets added back

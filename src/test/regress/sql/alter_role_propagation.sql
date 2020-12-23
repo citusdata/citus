@@ -72,6 +72,14 @@ SELECT run_command_on_workers('SHOW enable_hashjoin');
 SELECT run_command_on_workers('SHOW enable_indexonlyscan');
 SELECT run_command_on_workers('SHOW enable_hashagg');
 
+-- check that ALTER ROLE SET is not propagated when scoped to a different database
+-- also test case sensitivity
+CREATE DATABASE "REGRESSION";
+ALTER ROLE CURRENT_USER IN DATABASE "REGRESSION" SET public.myguc TO "Hello from coordinator only";
+SELECT * from pg_db_role_setting;
+SELECT run_command_on_workers($$SELECT json_agg(pg_db_role_setting) from pg_db_role_setting$$);
+DROP DATABASE "REGRESSION";
+
 -- make sure alter role set is not propagated when the feature is deliberately turned off
 SET citus.enable_alter_role_set_propagation TO off;
 -- remove 1 node to verify settings are NOT copied when the node gets added back
