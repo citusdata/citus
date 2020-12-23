@@ -22,11 +22,12 @@
 
 static void AppendCreateStatisticsStmt(StringInfo buf, CreateStatsStmt *stmt);
 static void AppendDropStatisticsStmt(StringInfo buf, List *nameList, bool ifExists);
+static void AppendAlterStatisticsRenameStmt(StringInfo buf, RenameStmt *stmt);
+static void AppendAlterStatisticsSchemaStmt(StringInfo buf, AlterObjectSchemaStmt *stmt);
 static void AppendStatisticsName(StringInfo buf, CreateStatsStmt *stmt);
 static void AppendStatTypes(StringInfo buf, CreateStatsStmt *stmt);
 static void AppendColumnNames(StringInfo buf, CreateStatsStmt *stmt);
 static void AppendTableName(StringInfo buf, CreateStatsStmt *stmt);
-static void AppendAlterStatisticsRenameStmt(StringInfo buf, RenameStmt *stmt);
 
 char *
 DeparseCreateStatisticsStmt(Node *node)
@@ -63,6 +64,20 @@ DeparseAlterStatisticsRenameStmt(Node *node)
 	initStringInfo(&str);
 
 	AppendAlterStatisticsRenameStmt(&str, stmt);
+
+	return str.data;
+}
+
+
+char *
+DeparseAlterStatisticsSchemaStmt(Node *node)
+{
+	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
+
+	StringInfoData str;
+	initStringInfo(&str);
+
+	AppendAlterStatisticsSchemaStmt(&str, stmt);
 
 	return str.data;
 }
@@ -110,7 +125,17 @@ static void
 AppendAlterStatisticsRenameStmt(StringInfo buf, RenameStmt *stmt)
 {
 	appendStringInfo(buf, "ALTER STATISTICS %s RENAME TO %s",
-					 NameListToQuotedString((List *) stmt->object), stmt->newname);
+					 NameListToQuotedString((List *) stmt->object), quote_identifier(
+						 stmt->newname));
+}
+
+
+static void
+AppendAlterStatisticsSchemaStmt(StringInfo buf, AlterObjectSchemaStmt *stmt)
+{
+	appendStringInfo(buf, "ALTER STATISTICS %s SET SCHEMA %s",
+					 NameListToQuotedString((List *) stmt->object), quote_identifier(
+						 stmt->newschema));
 }
 
 

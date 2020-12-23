@@ -229,6 +229,96 @@ PreprocessAlterStatisticsRenameStmt(Node *node, const char *queryString)
 
 
 /*
+ * PreprocessAlterStatisticsSchemaStmt is called during the planning phase for
+ * ALTER STATISTICS SET SCHEMA.
+ */
+List *
+PreprocessAlterStatisticsSchemaStmt(Node *node, const char *queryString)
+{
+	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
+	Assert(stmt->objectType == OBJECT_STATISTIC_EXT);
+
+	Oid statsOid = get_statistics_object_oid((List *) stmt->object, false);
+	Oid relationId = GetRelIdByStatsOid(statsOid);
+
+	if (!IsCitusTable(relationId) || !ShouldPropagate())
+	{
+		return NIL;
+	}
+
+	EnsureCoordinator();
+
+	QualifyTreeNode((Node *) stmt);
+
+	char *ddlCommand = DeparseTreeNode((Node *) stmt);
+
+	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
+
+	ddlJob->targetRelationId = relationId;
+	ddlJob->concurrentIndexCmd = false;
+	ddlJob->startNewTransaction = false;
+	ddlJob->commandString = ddlCommand;
+	ddlJob->taskList = DDLTaskList(relationId, ddlCommand);
+
+	List *ddlJobs = list_make1(ddlJob);
+
+	return ddlJobs;
+}
+
+
+/*
+ * PostprocessAlterStatisticsSchemaStmt is called after a ALTER STATISTICS SCHEMA
+ * command has been executed by standard process utility.
+ */
+List *
+PostprocessAlterStatisticsSchemaStmt(Node *node, const char *queryString)
+{
+	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
+	Assert(stmt->objectType == OBJECT_STATISTIC_EXT);
+
+	Value *statName = llast((List *) stmt->object);
+	Oid statsOid = get_statistics_object_oid(list_make2(makeString(stmt->newschema),
+														statName), false);
+	Oid relationId = GetRelIdByStatsOid(statsOid);
+
+	if (!IsCitusTable(relationId) || !ShouldPropagate())
+	{
+		return NIL;
+	}
+
+	bool missingOk = false;
+	ObjectAddress objectAddress = GetObjectAddressFromParseTree((Node *) stmt, missingOk);
+
+	EnsureDependenciesExistOnAllNodes(&objectAddress);
+
+	return NIL;
+}
+
+
+/*
+ * AlterStatisticsSchemaStmtObjectAddress finds the ObjectAddress for the statistics
+ * that is altered by given AlterObjectSchemaStmt. If missingOk is false and if
+ * the statistics does not exist, then it errors out.
+ *
+ * Never returns NULL, but the objid in the address can be invalid if missingOk
+ * was set to true.
+ */
+ObjectAddress
+AlterStatisticsSchemaStmtObjectAddress(Node *node, bool missingOk)
+{
+	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
+
+	ObjectAddress address = { 0 };
+	Value *statName = llast((List *) stmt->object);
+	Oid statsOid = get_statistics_object_oid(list_make2(makeString(stmt->newschema),
+														statName), false);
+	ObjectAddressSet(address, StatisticExtRelationId, statsOid);
+
+	return address;
+}
+
+
+/*
  * GetExplicitStatisticsCommandList returns the list of DDL commands to create
  * statistics that are explicitly created for the table with relationId. See
  * comment of GetExplicitStatisticsIdList function.

@@ -414,17 +414,24 @@ static DistributeObjectOps Schema_Rename = {
 	.postprocess = NULL,
 	.address = AlterSchemaRenameStmtObjectAddress,
 };
-static DistributeObjectOps Statistics_Rename = {
-	.deparse = DeparseAlterStatisticsRenameStmt,
-	.qualify = QualifyAlterStatisticsRenameStmt,
-	.preprocess = PreprocessAlterStatisticsRenameStmt,
-	.postprocess = NULL,
-	.address = NULL,
+static DistributeObjectOps Statistics_AlterObjectSchema = {
+	.deparse = DeparseAlterStatisticsSchemaStmt,
+	.qualify = QualifyAlterStatisticsSchemaStmt,
+	.preprocess = PreprocessAlterStatisticsSchemaStmt,
+	.postprocess = PostprocessAlterStatisticsSchemaStmt,
+	.address = AlterStatisticsSchemaStmtObjectAddress,
 };
 static DistributeObjectOps Statistics_Drop = {
 	.deparse = NULL,
 	.qualify = QualifyDropStatisticsStmt,
 	.preprocess = PreprocessDropStatisticsStmt,
+	.postprocess = NULL,
+	.address = NULL,
+};
+static DistributeObjectOps Statistics_Rename = {
+	.deparse = DeparseAlterStatisticsRenameStmt,
+	.qualify = QualifyAlterStatisticsRenameStmt,
+	.preprocess = PreprocessAlterStatisticsRenameStmt,
 	.postprocess = NULL,
 	.address = NULL,
 };
@@ -595,6 +602,11 @@ GetDistributeObjectOps(Node *node)
 				case OBJECT_ROUTINE:
 				{
 					return &Routine_AlterObjectSchema;
+				}
+
+				case OBJECT_STATISTIC_EXT:
+				{
+					return &Statistics_AlterObjectSchema;
 				}
 
 				case OBJECT_TABLE:

@@ -82,14 +82,32 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 		{
 			AlterObjectSchemaStmt *alterObjectSchemaStmt =
 				(AlterObjectSchemaStmt *) parseTree;
-			char **relationName = &(alterObjectSchemaStmt->relation->relname);
-			char **relationSchemaName = &(alterObjectSchemaStmt->relation->schemaname);
+			ObjectType objectType = alterObjectSchemaStmt->objectType;
 
-			/* prefix with schema name if it is not added already */
-			SetSchemaNameIfNotExist(relationSchemaName, schemaName);
+			if (objectType == OBJECT_STATISTIC_EXT)
+			{
+				RangeVar *stat = makeRangeVarFromNameList(
+					(List *) alterObjectSchemaStmt->object);
 
-			/* append shardId to base relation name */
-			AppendShardIdToName(relationName, shardId);
+				/* set schema name and append shard id */
+				SetSchemaNameIfNotExist(&stat->schemaname, schemaName);
+				AppendShardIdToName(&stat->relname, shardId);
+
+				alterObjectSchemaStmt->object = (Node *) MakeNameListFromRangeVar(stat);
+			}
+			else
+			{
+				char **relationName = &(alterObjectSchemaStmt->relation->relname);
+				char **relationSchemaName =
+					&(alterObjectSchemaStmt->relation->schemaname);
+
+				/* prefix with schema name if it is not added already */
+				SetSchemaNameIfNotExist(relationSchemaName, schemaName);
+
+				/* append shardId to base relation name */
+				AppendShardIdToName(relationName, shardId);
+			}
+
 			break;
 		}
 

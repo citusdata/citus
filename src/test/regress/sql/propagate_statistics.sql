@@ -61,7 +61,11 @@ DROP STATISTICS IF EXISTS s5,s5,s6,s6;
 CREATE STATISTICS s6 ON a,b FROM test_stats4;
 DROP STATISTICS s7;
 ALTER STATISTICS s6 RENAME TO s7;
-DROP STATISTICS s7;
+
+-- test altering stats schema
+CREATE SCHEMA test_alter_schema;
+ALTER STATISTICS s7 SET SCHEMA test_alter_schema;
+DROP STATISTICS test_alter_schema.s7;
 
 \c - - - :worker_1_port
 SELECT stxname
@@ -84,5 +88,6 @@ WHERE stxnamespace IN (
 \c - - - :master_port
 SET client_min_messages TO WARNING;
 DROP SCHEMA "statistics'Test" CASCADE;
+DROP SCHEMA test_alter_schema CASCADE;
 DROP SCHEMA sc1 CASCADE;
 DROP SCHEMA sc2 CASCADE;
