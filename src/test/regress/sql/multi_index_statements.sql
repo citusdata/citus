@@ -285,7 +285,7 @@ generate_Series(1, 32) x;
 SELECT create_distributed_table('distributed_table', 'last_column');
 
 -- try to use all 33 columns to create the index
--- show that we let postgres to error out properly
+-- show that we error out as postgres would do
 SELECT
 'CREATE INDEX ON distributed_table(' ||
 string_Agg('col' || x::text || ',', ' ') ||
