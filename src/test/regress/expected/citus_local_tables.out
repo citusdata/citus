@@ -307,9 +307,6 @@ SELECT mark_tables_colocated('citus_local_table_1', ARRAY['distributed_table']);
 ERROR:  citus local tables cannot be colocated with other tables
 SELECT mark_tables_colocated('distributed_table', ARRAY['citus_local_table_1']);
 ERROR:  citus local tables cannot be colocated with other tables
--- upgrade_to_reference_table is not supported
-SELECT upgrade_to_reference_table('citus_local_table_1');
-ERROR:  cannot upgrade to reference table
 -- master_create_empty_shard is not supported
 SELECT master_create_empty_shard('citus_local_table_1');
 ERROR:  relation "citus_local_table_1" is a citus local table
@@ -559,7 +556,7 @@ FROM pg_dist_partition WHERE logicalrelid = 'citus_local_table_4'::regclass;
 (1 row)
 
 SELECT column_name_to_column('citus_local_table_4', 'a');
-                                                  column_name_to_column
+                                                 column_name_to_column
 ---------------------------------------------------------------------
  {VAR :varno 1 :varattno 1 :vartype 23 :vartypmod -1 :varcollid 0 :varlevelsup 0 :varnoold 1 :varoattno 1 :location -1}
 (1 row)
@@ -618,8 +615,6 @@ BEGIN;
 
 ROLLBACK;
 -- should fail --
-SELECT upgrade_to_reference_table('citus_local_table_4');
-ERROR:  cannot upgrade to reference table
 SELECT update_distributed_table_colocation('citus_local_table_4', colocate_with => 'none');
 ERROR:  relation citus_local_table_4 should be a hash distributed table
 SELECT master_create_worker_shards('citus_local_table_4', 10, 1);
