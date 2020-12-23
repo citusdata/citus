@@ -21,6 +21,7 @@
 #include "utils/builtins.h"
 
 static void AppendCreateStatisticsStmt(StringInfo buf, CreateStatsStmt *stmt);
+static void AppendDropStatisticsStmt(StringInfo buf, List *nameList, bool ifExists);
 static void AppendStatisticsName(StringInfo buf, CreateStatsStmt *stmt);
 static void AppendStatTypes(StringInfo buf, CreateStatsStmt *stmt);
 static void AppendColumnNames(StringInfo buf, CreateStatsStmt *stmt);
@@ -35,6 +36,18 @@ DeparseCreateStatisticsStmt(Node *node)
 	initStringInfo(&str);
 
 	AppendCreateStatisticsStmt(&str, stmt);
+
+	return str.data;
+}
+
+
+char *
+DeparseDropStatisticsStmt(List *nameList, bool ifExists)
+{
+	StringInfoData str;
+	initStringInfo(&str);
+
+	AppendDropStatisticsStmt(&str, nameList, ifExists);
 
 	return str.data;
 }
@@ -63,6 +76,20 @@ AppendCreateStatisticsStmt(StringInfo buf, CreateStatsStmt *stmt)
 	AppendTableName(buf, stmt);
 
 	appendStringInfoString(buf, ";");
+}
+
+
+static void
+AppendDropStatisticsStmt(StringInfo buf, List *nameList, bool ifExists)
+{
+	appendStringInfoString(buf, "DROP STATISTICS ");
+
+	if (ifExists)
+	{
+		appendStringInfoString(buf, "IF EXISTS ");
+	}
+
+	appendStringInfo(buf, "%s", NameListToQuotedString(nameList));
 }
 
 

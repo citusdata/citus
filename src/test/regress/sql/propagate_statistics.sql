@@ -42,6 +42,21 @@ CREATE SCHEMA sc2;
 CREATE STATISTICS sc2."neW'Stat" ON a,b FROM test_stats3;
 SELECT create_distributed_table ('test_stats3','a');
 
+-- test dropping statistics
+CREATE TABLE test_stats4 (
+    a int,
+    b int
+);
+SELECT create_reference_table ('test_stats4');
+
+CREATE STATISTICS s3 ON a,b FROM test_stats3;
+CREATE STATISTICS sc2.s4 ON a,b FROM test_stats3;
+CREATE STATISTICS s5 ON a,b FROM test_stats4;
+-- s6 doesn't exist
+DROP STATISTICS IF EXISTS s3, sc2.s4, s6;
+DROP STATISTICS s5,s6;
+DROP STATISTICS IF EXISTS s5,s5,s6,s6;
+
 \c - - - :worker_1_port
 SELECT stxname
 FROM pg_statistic_ext

@@ -48,3 +48,33 @@ QualifyCreateStatisticsStmt(Node *node)
 		stmt->defnames = MakeNameListFromRangeVar(stat);
 	}
 }
+
+
+/*
+ * QualifyDropStatisticsStmt qualifies DropStmt's with schema name for
+ * DROP STATISTICS statements.
+ */
+void
+QualifyDropStatisticsStmt(Node *node)
+{
+	DropStmt *dropStatisticsStmt = castNode(DropStmt, node);
+	Assert(dropStatisticsStmt->removeType == OBJECT_STATISTIC_EXT);
+
+	List *objectNameListWithSchema = NIL;
+	List *objectNameList = NULL;
+	foreach_ptr(objectNameList, dropStatisticsStmt->objects)
+	{
+		RangeVar *stat = makeRangeVarFromNameList(objectNameList);
+
+		if (stat->schemaname == NULL)
+		{
+			Oid schemaOid = RangeVarGetCreationNamespace(stat);
+			stat->schemaname = get_namespace_name(schemaOid);
+		}
+
+		objectNameListWithSchema = lappend(objectNameListWithSchema,
+										   MakeNameListFromRangeVar(stat));
+	}
+
+	dropStatisticsStmt->objects = objectNameListWithSchema;
+}
