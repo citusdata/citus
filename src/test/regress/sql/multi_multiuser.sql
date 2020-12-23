@@ -192,9 +192,6 @@ ABORT;
 
 SELECT * FROM citus_stat_statements_reset();
 
--- should not be allowed to upgrade to reference table
-SELECT upgrade_to_reference_table('singleshard');
-
 -- should not be allowed to co-located tables
 SELECT mark_tables_colocated('test', ARRAY['test_coloc'::regclass]);
 
@@ -338,44 +335,6 @@ SET ROLE full_access;
 CREATE TABLE full_access_user_schema.t2(id int);
 SELECT create_distributed_table('full_access_user_schema.t2', 'id');
 RESET ROLE;
-
--- a user with all privileges on a schema should be able to upgrade a distributed table to
--- a reference table
-SET ROLE full_access;
-BEGIN;
-CREATE TABLE full_access_user_schema.r1(id int);
-SET LOCAL citus.shard_count TO 1;
-SELECT create_distributed_table('full_access_user_schema.r1', 'id');
-SELECT upgrade_to_reference_table('full_access_user_schema.r1');
-COMMIT;
-RESET ROLE;
-
--- the super user should be able to upgrade a distributed table to a reference table, even
--- if it is owned by another user
-SET ROLE full_access;
-BEGIN;
-CREATE TABLE full_access_user_schema.r2(id int);
-SET LOCAL citus.shard_count TO 1;
-SELECT create_distributed_table('full_access_user_schema.r2', 'id');
-COMMIT;
-RESET ROLE;
-
--- the usage_access should not be able to upgrade the table
-SET ROLE usage_access;
-SELECT upgrade_to_reference_table('full_access_user_schema.r2');
-RESET ROLE;
-
--- the super user should be able
-SELECT upgrade_to_reference_table('full_access_user_schema.r2');
-
--- verify the owner of the shards for the reference table
-SELECT result FROM run_command_on_workers($cmd$
-  SELECT tableowner FROM pg_tables WHERE
-    true
-    AND schemaname = 'full_access_user_schema'
-    AND tablename LIKE 'r2_%'
-  LIMIT 1;
-$cmd$);
 
 -- super user should be the only one being able to call worker_cleanup_job_schema_cache
 SELECT worker_cleanup_job_schema_cache();
