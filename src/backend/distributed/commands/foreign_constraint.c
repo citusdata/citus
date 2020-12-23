@@ -64,6 +64,8 @@ static void ForeignConstraintFindDistKeys(HeapTuple pgConstraintTuple,
 										  Var *referencedDistColumn,
 										  int *referencingAttrIndex,
 										  int *referencedAttrIndex);
+static List * GetForeignKeyIdsForColumn(char *columnName, Oid relationId,
+										int searchForeignKeyColumnFlags);
 static List * GetForeignConstraintCommandsInternal(Oid relationId, int flags);
 static Oid get_relation_constraint_oid_compat(HeapTuple heapTuple);
 static List * GetForeignKeyOidsToCitusLocalTables(Oid relationId);
@@ -490,9 +492,45 @@ ForeignConstraintFindDistKeys(HeapTuple pgConstraintTuple,
 bool
 ColumnAppearsInForeignKeyToReferenceTable(char *columnName, Oid relationId)
 {
+	int searchForeignKeyColumnFlags = SEARCH_REFERENCING_RELATION |
+									  SEARCH_REFERENCED_RELATION;
+	List *foreignKeyIdsColumnAppeared =
+		GetForeignKeyIdsForColumn(columnName, relationId, searchForeignKeyColumnFlags);
+
+	Oid foreignKeyId = InvalidOid;
+	foreach_oid(foreignKeyId, foreignKeyIdsColumnAppeared)
+	{
+		Oid referencedTableId = GetReferencedTableId(foreignKeyId);
+		if (IsCitusTableType(referencedTableId, REFERENCE_TABLE))
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
+
+/*
+ * GetForeignKeyIdsForColumn takes columnName and relationId for the owning
+ * relation, and returns a list of OIDs for foreign constraints that the column
+ * with columnName is involved according to "searchForeignKeyColumnFlags" argument.
+ * See SearchForeignKeyColumnFlags enum definition for usage.
+ */
+static List *
+GetForeignKeyIdsForColumn(char *columnName, Oid relationId,
+						  int searchForeignKeyColumnFlags)
+{
+	bool searchReferencing = searchForeignKeyColumnFlags & SEARCH_REFERENCING_RELATION;
+	bool searchReferenced = searchForeignKeyColumnFlags & SEARCH_REFERENCED_RELATION;
+
+	/* at least one of them should be true */
+	Assert(searchReferencing || searchReferenced);
+
+	List *foreignKeyIdsColumnAppeared = NIL;
+
 	ScanKeyData scanKey[1];
 	int scanKeyCount = 1;
-	bool foreignKeyToReferenceTableIncludesGivenColumn = false;
 
 	Relation pgConstraint = table_open(ConstraintRelationId, AccessShareLock);
 
@@ -511,11 +549,11 @@ ColumnAppearsInForeignKeyToReferenceTable(char *columnName, Oid relationId)
 		Oid referencedTableId = constraintForm->confrelid;
 		Oid referencingTableId = constraintForm->conrelid;
 
-		if (referencedTableId == relationId)
+		if (referencedTableId == relationId && searchReferenced)
 		{
 			pgConstraintKey = Anum_pg_constraint_confkey;
 		}
-		else if (referencingTableId == relationId)
+		else if (referencingTableId == relationId && searchReferencing)
 		{
 			pgConstraintKey = Anum_pg_constraint_conkey;
 		}
@@ -529,22 +567,12 @@ ColumnAppearsInForeignKeyToReferenceTable(char *columnName, Oid relationId)
 			continue;
 		}
 
-		/*
-		 * We check if the referenced table is a reference table. There cannot be
-		 * any foreign constraint from a distributed table to a local table.
-		 */
-		Assert(IsCitusTable(referencedTableId));
-		if (!IsCitusTableType(referencedTableId, REFERENCE_TABLE))
-		{
-			heapTuple = systable_getnext(scanDescriptor);
-			continue;
-		}
-
 		if (HeapTupleOfForeignConstraintIncludesColumn(heapTuple, relationId,
 													   pgConstraintKey, columnName))
 		{
-			foreignKeyToReferenceTableIncludesGivenColumn = true;
-			break;
+			Oid foreignKeyOid = get_relation_constraint_oid_compat(heapTuple);
+			foreignKeyIdsColumnAppeared = lappend_oid(foreignKeyIdsColumnAppeared,
+													  foreignKeyOid);
 		}
 
 		heapTuple = systable_getnext(scanDescriptor);
@@ -554,7 +582,7 @@ ColumnAppearsInForeignKeyToReferenceTable(char *columnName, Oid relationId)
 	systable_endscan(scanDescriptor);
 	table_close(pgConstraint, NoLock);
 
-	return foreignKeyToReferenceTableIncludesGivenColumn;
+	return foreignKeyIdsColumnAppeared;
 }
 
 
