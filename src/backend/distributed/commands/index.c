@@ -179,9 +179,8 @@ PreprocessIndexStmt(Node *node, const char *createIndexCommand)
 	if (createIndexStatement->idxname == NULL)
 	{
 		/*
-		 * Logic that we follow to assing a default index name is aligned with
-		 * postgres function DefineIndex. Even if postgres would error out for
-		 * such cases, we error out here to be on the safe side.
+		 * Postgres does not support indexes with over 32 columns and we should
+		 * not attempt to generate an index name for such cases.
 		 */
 		ErrorIfCreateIndexHasTooManyColumns(createIndexStatement);
 
