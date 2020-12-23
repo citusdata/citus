@@ -49,6 +49,8 @@
 
 
 /* Local functions forward declarations for helper functions */
+static void ErrorIfCreateIndexHasTooManyColumns(IndexStmt *createIndexStatement);
+static int GetNumberOfIndexParameters(IndexStmt *createIndexStatement);
 static bool IndexAlreadyExists(IndexStmt *createIndexStatement);
 static Oid CreateIndexStmtGetIndexId(IndexStmt *createIndexStatement);
 static Oid CreateIndexStmtGetSchemaId(IndexStmt *createIndexStatement);
@@ -174,7 +176,20 @@ PreprocessIndexStmt(Node *node, const char *createIndexCommand)
 		return NIL;
 	}
 
-	ErrorIfUnsupportedIndexStmt(createIndexStatement);
+	if (createIndexStatement->idxname == NULL)
+	{
+		/*
+		 * Postgres does not support indexes with over INDEX_MAX_KEYS columns
+		 * and we should not attempt to generate an index name for such cases.
+		 */
+		ErrorIfCreateIndexHasTooManyColumns(createIndexStatement);
+
+		/* ensure we copy string into proper context */
+		MemoryContext relationContext = GetMemoryChunkContext(relationRangeVar);
+		char *defaultIndexName = GenerateDefaultIndexName(createIndexStatement);
+		createIndexStatement->idxname = MemoryContextStrdup(relationContext,
+															defaultIndexName);
+	}
 
 	if (IndexAlreadyExists(createIndexStatement))
 	{
@@ -184,6 +199,8 @@ PreprocessIndexStmt(Node *node, const char *createIndexCommand)
 		 */
 		return NIL;
 	}
+
+	ErrorIfUnsupportedIndexStmt(createIndexStatement);
 
 	/*
 	 * Citus has the logic to truncate the long shard names to prevent
@@ -205,6 +222,38 @@ PreprocessIndexStmt(Node *node, const char *createIndexCommand)
 
 	DDLJob *ddlJob = GenerateCreateIndexDDLJob(createIndexStatement, createIndexCommand);
 	return list_make1(ddlJob);
+}
+
+
+/*
+ * ErrorIfCreateIndexHasTooManyColumns errors out if given CREATE INDEX command
+ * would use more than INDEX_MAX_KEYS columns.
+ */
+static void
+ErrorIfCreateIndexHasTooManyColumns(IndexStmt *createIndexStatement)
+{
+	int numberOfIndexParameters = GetNumberOfIndexParameters(createIndexStatement);
+	if (numberOfIndexParameters <= INDEX_MAX_KEYS)
+	{
+		return;
+	}
+
+	ereport(ERROR, (errcode(ERRCODE_TOO_MANY_COLUMNS),
+					errmsg("cannot use more than %d columns in an index",
+						   INDEX_MAX_KEYS)));
+}
+
+
+/*
+ * GetNumberOfIndexParameters returns number of parameters to be used when
+ * creating the index to be defined by given CREATE INDEX command.
+ */
+static int
+GetNumberOfIndexParameters(IndexStmt *createIndexStatement)
+{
+	List *indexParams = createIndexStatement->indexParams;
+	List *indexIncludingParams = createIndexStatement->indexIncludingParams;
+	return list_length(indexParams) + list_length(indexIncludingParams);
 }
 
 
@@ -1043,14 +1092,6 @@ RangeVarCallbackForReindexIndex(const RangeVar *relation, Oid relId, Oid oldRelI
 static void
 ErrorIfUnsupportedIndexStmt(IndexStmt *createIndexStatement)
 {
-	char *indexRelationName = createIndexStatement->idxname;
-	if (indexRelationName == NULL)
-	{
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("creating index without a name on a distributed table is "
-							   "currently unsupported")));
-	}
-
 	if (createIndexStatement->tableSpace != NULL)
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),

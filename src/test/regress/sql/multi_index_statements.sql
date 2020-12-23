@@ -110,7 +110,11 @@ CREATE UNIQUE INDEX try_unique_append_index_a_b ON index_test_append(a,b);
 CREATE INDEX lineitem_orderkey_index ON lineitem (l_orderkey);
 CREATE INDEX try_index ON lineitem USING gist (l_orderkey);
 CREATE INDEX try_index ON lineitem (non_existent_column);
+
+-- show that we support indexes without names
 CREATE INDEX ON lineitem (l_orderkey);
+CREATE UNIQUE INDEX ON index_test_hash(a);
+CREATE INDEX CONCURRENTLY ON lineitem USING hash (l_shipdate);
 
 -- Verify that none of failed indexes got created on the master node
 SELECT * FROM pg_indexes WHERE tablename = 'lineitem' or tablename like 'index_test_%' ORDER BY indexname;
@@ -159,10 +163,10 @@ DROP INDEX CONCURRENTLY lineitem_concurrently_index;
 
 -- Verify that all the indexes are dropped from the master and one worker node.
 -- As there's a primary key, so exclude those from this check.
-SELECT indrelid::regclass, indexrelid::regclass FROM pg_index WHERE indrelid = (SELECT relname FROM pg_class WHERE relname LIKE 'lineitem%' ORDER BY relname LIMIT 1)::regclass AND NOT indisprimary AND indexrelid::regclass::text NOT LIKE 'lineitem_time_index%';
+SELECT indrelid::regclass, indexrelid::regclass FROM pg_index WHERE indrelid = (SELECT relname FROM pg_class WHERE relname LIKE 'lineitem%' ORDER BY relname LIMIT 1)::regclass AND NOT indisprimary AND indexrelid::regclass::text NOT LIKE 'lineitem_time_index%' ORDER BY 1,2;
 SELECT * FROM pg_indexes WHERE tablename LIKE 'index_test_%' ORDER BY indexname;
 \c - - - :worker_1_port
-SELECT indrelid::regclass, indexrelid::regclass FROM pg_index WHERE indrelid = (SELECT relname FROM pg_class WHERE relname LIKE 'lineitem%' ORDER BY relname LIMIT 1)::regclass AND NOT indisprimary AND indexrelid::regclass::text NOT LIKE 'lineitem_time_index%';
+SELECT indrelid::regclass, indexrelid::regclass FROM pg_index WHERE indrelid = (SELECT relname FROM pg_class WHERE relname LIKE 'lineitem%' ORDER BY relname LIMIT 1)::regclass AND NOT indisprimary AND indexrelid::regclass::text NOT LIKE 'lineitem_time_index%' ORDER BY 1,2;
 SELECT * FROM pg_indexes WHERE tablename LIKE 'index_test_%' ORDER BY indexname;
 
 -- create index that will conflict with master operations
@@ -270,10 +274,52 @@ CREATE INDEX f1
     ON test_index_creation1 USING btree
     (field1);
 
+SELECT
+'CREATE TABLE distributed_table(' ||
+string_Agg('col' || x::text || ' int,', ' ') ||
+' last_column int)'
+FROM
+generate_Series(1, 32) x;
+\gexec
+
+SELECT create_distributed_table('distributed_table', 'last_column');
+
+-- try to use all 33 columns to create the index
+-- show that we error out as postgres would do
+SELECT
+'CREATE INDEX ON distributed_table(' ||
+string_Agg('col' || x::text || ',', ' ') ||
+' last_column)'
+FROM
+generate_Series(1, 32) x;
+\gexec
+
+-- show that we generate different default index names
+-- for the indexes with same parameters on the same relation
+CREATE INDEX ON distributed_table(last_column);
+CREATE INDEX ON distributed_table(last_column);
+SELECT indexrelid::regclass FROM pg_index WHERE indrelid='distributed_table'::regclass ORDER BY indexrelid;
+
+-- test CREATE INDEX in plpgsql to verify that we don't break parse tree
+CREATE OR REPLACE FUNCTION create_index_in_plpgsql()
+RETURNS VOID AS
+$BODY$
+BEGIN
+    CREATE INDEX ON distributed_table(last_column);
+END;
+$BODY$ LANGUAGE plpgsql;
+
+-- hide plpgsql messages as they differ across pg versions
+\set VERBOSITY terse
+
+SELECT create_index_in_plpgsql();
+SELECT create_index_in_plpgsql();
+SELECT create_index_in_plpgsql();
+SELECT indexrelid::regclass FROM pg_index WHERE indrelid='distributed_table'::regclass ORDER BY indexrelid;
+
 SET citus.force_max_query_parallelization TO OFF;
 
 SET client_min_messages TO ERROR;
-\set VERBOSITY terse
 DROP INDEX f1;
 DROP INDEX ix_test_index_creation2;
 DROP INDEX ix_test_index_creation1_ix_test_index_creation1_ix_test_index_creation1_ix_test_index_creation1_ix_test_index_creation1;

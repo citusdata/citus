@@ -177,12 +177,15 @@ ERROR:  data type bigint has no default operator class for access method "gist"
 HINT:  You must specify an operator class for the index or define a default operator class for the data type.
 CREATE INDEX try_index ON lineitem (non_existent_column);
 ERROR:  column "non_existent_column" does not exist
+-- show that we support indexes without names
 CREATE INDEX ON lineitem (l_orderkey);
-ERROR:  creating index without a name on a distributed table is currently unsupported
+CREATE UNIQUE INDEX ON index_test_hash(a);
+CREATE INDEX CONCURRENTLY ON lineitem USING hash (l_shipdate);
 -- Verify that none of failed indexes got created on the master node
 SELECT * FROM pg_indexes WHERE tablename = 'lineitem' or tablename like 'index_test_%' ORDER BY indexname;
        schemaname       |    tablename     |             indexname              | tablespace |                                                                  indexdef
 ---------------------------------------------------------------------
+ multi_index_statements | index_test_hash  | index_test_hash_a_idx              |            | CREATE UNIQUE INDEX index_test_hash_a_idx ON multi_index_statements.index_test_hash USING btree (a)
  multi_index_statements | index_test_hash  | index_test_hash_index_a            |            | CREATE UNIQUE INDEX index_test_hash_index_a ON multi_index_statements.index_test_hash USING btree (a)
  multi_index_statements | index_test_hash  | index_test_hash_index_a_b          |            | CREATE UNIQUE INDEX index_test_hash_index_a_b ON multi_index_statements.index_test_hash USING btree (a, b)
  multi_index_statements | index_test_hash  | index_test_hash_index_a_b_c        |            | CREATE UNIQUE INDEX index_test_hash_index_a_b_c ON multi_index_statements.index_test_hash USING btree (a) INCLUDE (b, c)
@@ -192,6 +195,8 @@ SELECT * FROM pg_indexes WHERE tablename = 'lineitem' or tablename like 'index_t
  multi_index_statements | index_test_range | index_test_range_index_a_b_partial |            | CREATE UNIQUE INDEX index_test_range_index_a_b_partial ON multi_index_statements.index_test_range USING btree (a, b) WHERE (c IS NOT NULL)
  public                 | lineitem         | lineitem_colref_index              |            | CREATE INDEX lineitem_colref_index ON public.lineitem USING btree (record_ne(lineitem.*, NULL::record))
  public                 | lineitem         | lineitem_concurrently_index        |            | CREATE INDEX lineitem_concurrently_index ON public.lineitem USING btree (l_orderkey)
+ public                 | lineitem         | lineitem_l_orderkey_idx            |            | CREATE INDEX lineitem_l_orderkey_idx ON public.lineitem USING btree (l_orderkey)
+ public                 | lineitem         | lineitem_l_shipdate_idx            |            | CREATE INDEX lineitem_l_shipdate_idx ON public.lineitem USING hash (l_shipdate)
  public                 | lineitem         | lineitem_orderkey_hash_index       |            | CREATE INDEX lineitem_orderkey_hash_index ON public.lineitem USING hash (l_partkey)
  public                 | lineitem         | lineitem_orderkey_index            |            | CREATE INDEX lineitem_orderkey_index ON public.lineitem USING btree (l_orderkey)
  public                 | lineitem         | lineitem_orderkey_index_new        |            | CREATE INDEX lineitem_orderkey_index_new ON public.lineitem USING btree (l_orderkey)
@@ -199,7 +204,7 @@ SELECT * FROM pg_indexes WHERE tablename = 'lineitem' or tablename like 'index_t
  public                 | lineitem         | lineitem_partkey_desc_index        |            | CREATE INDEX lineitem_partkey_desc_index ON public.lineitem USING btree (l_partkey DESC)
  public                 | lineitem         | lineitem_pkey                      |            | CREATE UNIQUE INDEX lineitem_pkey ON public.lineitem USING btree (l_orderkey, l_linenumber)
  public                 | lineitem         | lineitem_time_index                |            | CREATE INDEX lineitem_time_index ON public.lineitem USING btree (l_shipdate)
-(16 rows)
+(19 rows)
 
 --
 -- REINDEX
@@ -240,26 +245,39 @@ DROP INDEX index_test_hash_index_a_b_partial;
 DROP INDEX CONCURRENTLY lineitem_concurrently_index;
 -- Verify that all the indexes are dropped from the master and one worker node.
 -- As there's a primary key, so exclude those from this check.
-SELECT indrelid::regclass, indexrelid::regclass FROM pg_index WHERE indrelid = (SELECT relname FROM pg_class WHERE relname LIKE 'lineitem%' ORDER BY relname LIMIT 1)::regclass AND NOT indisprimary AND indexrelid::regclass::text NOT LIKE 'lineitem_time_index%';
- indrelid | indexrelid
+SELECT indrelid::regclass, indexrelid::regclass FROM pg_index WHERE indrelid = (SELECT relname FROM pg_class WHERE relname LIKE 'lineitem%' ORDER BY relname LIMIT 1)::regclass AND NOT indisprimary AND indexrelid::regclass::text NOT LIKE 'lineitem_time_index%' ORDER BY 1,2;
+ indrelid |       indexrelid
 ---------------------------------------------------------------------
-(0 rows)
+ lineitem | lineitem_l_orderkey_idx
+ lineitem | lineitem_l_shipdate_idx
+(2 rows)
 
 SELECT * FROM pg_indexes WHERE tablename LIKE 'index_test_%' ORDER BY indexname;
        schemaname       |    tablename    |          indexname          | tablespace |                                                         indexdef
 ---------------------------------------------------------------------
+ multi_index_statements | index_test_hash | index_test_hash_a_idx       |            | CREATE UNIQUE INDEX index_test_hash_a_idx ON multi_index_statements.index_test_hash USING btree (a)
  multi_index_statements | index_test_hash | index_test_hash_index_a_b_c |            | CREATE UNIQUE INDEX index_test_hash_index_a_b_c ON multi_index_statements.index_test_hash USING btree (a) INCLUDE (b, c)
-(1 row)
+(2 rows)
 
 \c - - - :worker_1_port
-SELECT indrelid::regclass, indexrelid::regclass FROM pg_index WHERE indrelid = (SELECT relname FROM pg_class WHERE relname LIKE 'lineitem%' ORDER BY relname LIMIT 1)::regclass AND NOT indisprimary AND indexrelid::regclass::text NOT LIKE 'lineitem_time_index%';
- indrelid | indexrelid
+SELECT indrelid::regclass, indexrelid::regclass FROM pg_index WHERE indrelid = (SELECT relname FROM pg_class WHERE relname LIKE 'lineitem%' ORDER BY relname LIMIT 1)::regclass AND NOT indisprimary AND indexrelid::regclass::text NOT LIKE 'lineitem_time_index%' ORDER BY 1,2;
+    indrelid     |           indexrelid
 ---------------------------------------------------------------------
-(0 rows)
+ lineitem_290000 | lineitem_l_orderkey_idx_290000
+ lineitem_290000 | lineitem_l_shipdate_idx_290000
+(2 rows)
 
 SELECT * FROM pg_indexes WHERE tablename LIKE 'index_test_%' ORDER BY indexname;
        schemaname       |       tablename        |             indexname              | tablespace |                                                                indexdef
 ---------------------------------------------------------------------
+ multi_index_statements | index_test_hash_102082 | index_test_hash_a_idx_102082       |            | CREATE UNIQUE INDEX index_test_hash_a_idx_102082 ON multi_index_statements.index_test_hash_102082 USING btree (a)
+ multi_index_statements | index_test_hash_102083 | index_test_hash_a_idx_102083       |            | CREATE UNIQUE INDEX index_test_hash_a_idx_102083 ON multi_index_statements.index_test_hash_102083 USING btree (a)
+ multi_index_statements | index_test_hash_102084 | index_test_hash_a_idx_102084       |            | CREATE UNIQUE INDEX index_test_hash_a_idx_102084 ON multi_index_statements.index_test_hash_102084 USING btree (a)
+ multi_index_statements | index_test_hash_102085 | index_test_hash_a_idx_102085       |            | CREATE UNIQUE INDEX index_test_hash_a_idx_102085 ON multi_index_statements.index_test_hash_102085 USING btree (a)
+ multi_index_statements | index_test_hash_102086 | index_test_hash_a_idx_102086       |            | CREATE UNIQUE INDEX index_test_hash_a_idx_102086 ON multi_index_statements.index_test_hash_102086 USING btree (a)
+ multi_index_statements | index_test_hash_102087 | index_test_hash_a_idx_102087       |            | CREATE UNIQUE INDEX index_test_hash_a_idx_102087 ON multi_index_statements.index_test_hash_102087 USING btree (a)
+ multi_index_statements | index_test_hash_102088 | index_test_hash_a_idx_102088       |            | CREATE UNIQUE INDEX index_test_hash_a_idx_102088 ON multi_index_statements.index_test_hash_102088 USING btree (a)
+ multi_index_statements | index_test_hash_102089 | index_test_hash_a_idx_102089       |            | CREATE UNIQUE INDEX index_test_hash_a_idx_102089 ON multi_index_statements.index_test_hash_102089 USING btree (a)
  multi_index_statements | index_test_hash_102082 | index_test_hash_index_a_b_c_102082 |            | CREATE UNIQUE INDEX index_test_hash_index_a_b_c_102082 ON multi_index_statements.index_test_hash_102082 USING btree (a) INCLUDE (b, c)
  multi_index_statements | index_test_hash_102083 | index_test_hash_index_a_b_c_102083 |            | CREATE UNIQUE INDEX index_test_hash_index_a_b_c_102083 ON multi_index_statements.index_test_hash_102083 USING btree (a) INCLUDE (b, c)
  multi_index_statements | index_test_hash_102084 | index_test_hash_index_a_b_c_102084 |            | CREATE UNIQUE INDEX index_test_hash_index_a_b_c_102084 ON multi_index_statements.index_test_hash_102084 USING btree (a) INCLUDE (b, c)
@@ -268,7 +286,7 @@ SELECT * FROM pg_indexes WHERE tablename LIKE 'index_test_%' ORDER BY indexname;
  multi_index_statements | index_test_hash_102087 | index_test_hash_index_a_b_c_102087 |            | CREATE UNIQUE INDEX index_test_hash_index_a_b_c_102087 ON multi_index_statements.index_test_hash_102087 USING btree (a) INCLUDE (b, c)
  multi_index_statements | index_test_hash_102088 | index_test_hash_index_a_b_c_102088 |            | CREATE UNIQUE INDEX index_test_hash_index_a_b_c_102088 ON multi_index_statements.index_test_hash_102088 USING btree (a) INCLUDE (b, c)
  multi_index_statements | index_test_hash_102089 | index_test_hash_index_a_b_c_102089 |            | CREATE UNIQUE INDEX index_test_hash_index_a_b_c_102089 ON multi_index_statements.index_test_hash_102089 USING btree (a) INCLUDE (b, c)
-(8 rows)
+(16 rows)
 
 -- create index that will conflict with master operations
 CREATE INDEX CONCURRENTLY ith_b_idx_102089 ON multi_index_statements.index_test_hash_102089(b);
@@ -389,9 +407,92 @@ DEBUG:  the index name on the shards of the partition is too long, switching to 
 CREATE INDEX f1
     ON test_index_creation1 USING btree
     (field1);
+SELECT
+'CREATE TABLE distributed_table(' ||
+string_Agg('col' || x::text || ' int,', ' ') ||
+' last_column int)'
+FROM
+generate_Series(1, 32) x;
+                                                                                                                                                                                                ?column?
+---------------------------------------------------------------------
+ CREATE TABLE distributed_table(col1 int, col2 int, col3 int, col4 int, col5 int, col6 int, col7 int, col8 int, col9 int, col10 int, col11 int, col12 int, col13 int, col14 int, col15 int, col16 int, col17 int, col18 int, col19 int, col20 int, col21 int, col22 int, col23 int, col24 int, col25 int, col26 int, col27 int, col28 int, col29 int, col30 int, col31 int, col32 int, last_column int)
+(1 row)
+
+\gexec
+CREATE TABLE distributed_table(col1 int, col2 int, col3 int, col4 int, col5 int, col6 int, col7 int, col8 int, col9 int, col10 int, col11 int, col12 int, col13 int, col14 int, col15 int, col16 int, col17 int, col18 int, col19 int, col20 int, col21 int, col22 int, col23 int, col24 int, col25 int, col26 int, col27 int, col28 int, col29 int, col30 int, col31 int, col32 int, last_column int)
+SELECT create_distributed_table('distributed_table', 'last_column');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- try to use all 33 columns to create the index
+-- show that we error out as postgres would do
+SELECT
+'CREATE INDEX ON distributed_table(' ||
+string_Agg('col' || x::text || ',', ' ') ||
+' last_column)'
+FROM
+generate_Series(1, 32) x;
+                                                                                                                               ?column?
+---------------------------------------------------------------------
+ CREATE INDEX ON distributed_table(col1, col2, col3, col4, col5, col6, col7, col8, col9, col10, col11, col12, col13, col14, col15, col16, col17, col18, col19, col20, col21, col22, col23, col24, col25, col26, col27, col28, col29, col30, col31, col32, last_column)
+(1 row)
+
+\gexec
+CREATE INDEX ON distributed_table(col1, col2, col3, col4, col5, col6, col7, col8, col9, col10, col11, col12, col13, col14, col15, col16, col17, col18, col19, col20, col21, col22, col23, col24, col25, col26, col27, col28, col29, col30, col31, col32, last_column)
+ERROR:  cannot use more than 32 columns in an index
+-- show that we generate different default index names
+-- for the indexes with same parameters on the same relation
+CREATE INDEX ON distributed_table(last_column);
+CREATE INDEX ON distributed_table(last_column);
+SELECT indexrelid::regclass FROM pg_index WHERE indrelid='distributed_table'::regclass ORDER BY indexrelid;
+             indexrelid
+---------------------------------------------------------------------
+ distributed_table_last_column_idx
+ distributed_table_last_column_idx1
+(2 rows)
+
+-- test CREATE INDEX in plpgsql to verify that we don't break parse tree
+CREATE OR REPLACE FUNCTION create_index_in_plpgsql()
+RETURNS VOID AS
+$BODY$
+BEGIN
+    CREATE INDEX ON distributed_table(last_column);
+END;
+$BODY$ LANGUAGE plpgsql;
+-- hide plpgsql messages as they differ across pg versions
+\set VERBOSITY terse
+SELECT create_index_in_plpgsql();
+ create_index_in_plpgsql
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_index_in_plpgsql();
+ create_index_in_plpgsql
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_index_in_plpgsql();
+ create_index_in_plpgsql
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT indexrelid::regclass FROM pg_index WHERE indrelid='distributed_table'::regclass ORDER BY indexrelid;
+             indexrelid
+---------------------------------------------------------------------
+ distributed_table_last_column_idx
+ distributed_table_last_column_idx1
+ distributed_table_last_column_idx2
+ distributed_table_last_column_idx3
+ distributed_table_last_column_idx4
+(5 rows)
+
 SET citus.force_max_query_parallelization TO OFF;
 SET client_min_messages TO ERROR;
-\set VERBOSITY terse
 DROP INDEX f1;
 DROP INDEX ix_test_index_creation2;
 DROP INDEX ix_test_index_creation1_ix_test_index_creation1_ix_test_index_creation1_ix_test_index_creation1_ix_test_index_creation1;
