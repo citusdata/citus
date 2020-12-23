@@ -309,6 +309,9 @@ BEGIN
 END;
 $BODY$ LANGUAGE plpgsql;
 
+-- hide plpgsql messages as they differ across pg versions
+\set VERBOSITY terse
+
 SELECT create_index_in_plpgsql();
 SELECT create_index_in_plpgsql();
 SELECT create_index_in_plpgsql();
@@ -317,7 +320,6 @@ SELECT indexrelid::regclass FROM pg_index WHERE indrelid='distributed_table'::re
 SET citus.force_max_query_parallelization TO OFF;
 
 SET client_min_messages TO ERROR;
-\set VERBOSITY terse
 DROP INDEX f1;
 DROP INDEX ix_test_index_creation2;
 DROP INDEX ix_test_index_creation1_ix_test_index_creation1_ix_test_index_creation1_ix_test_index_creation1_ix_test_index_creation1;
