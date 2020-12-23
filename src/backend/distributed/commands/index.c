@@ -49,8 +49,7 @@
 
 
 /* Local functions forward declarations for helper functions */
-static void ErrorIfCannotGenerateDefaultIndexName(IndexStmt *createIndexStatement);
-static bool CanGenerateDefaultIndexName(IndexStmt *createIndexStatement);
+static void ErrorIfCreateIndexHasTooManyColumns(IndexStmt *createIndexStatement);
 static int GetNumberOfIndexParameters(IndexStmt *createIndexStatement);
 static bool IndexAlreadyExists(IndexStmt *createIndexStatement);
 static Oid CreateIndexStmtGetIndexId(IndexStmt *createIndexStatement);
@@ -184,7 +183,7 @@ PreprocessIndexStmt(Node *node, const char *createIndexCommand)
 		 * postgres function DefineIndex. Even if postgres would error out for
 		 * such cases, we error out here to be on the safe side.
 		 */
-		ErrorIfCannotGenerateDefaultIndexName(createIndexStatement);
+		ErrorIfCreateIndexHasTooManyColumns(createIndexStatement);
 
 		/* ensure we copy string into proper context */
 		MemoryContext relationContext = GetMemoryChunkContext(relationRangeVar);
@@ -228,13 +227,14 @@ PreprocessIndexStmt(Node *node, const char *createIndexCommand)
 
 
 /*
- * ErrorIfCannotGenerateDefaultIndexName errors out if we cannot generate a
- * default index name for given CREATE INDEX command.
+ * ErrorIfCreateIndexHasTooManyColumns errors out if given CREATE INDEX command
+ * would use more than INDEX_MAX_KEYS columns.
  */
 static void
-ErrorIfCannotGenerateDefaultIndexName(IndexStmt *createIndexStatement)
+ErrorIfCreateIndexHasTooManyColumns(IndexStmt *createIndexStatement)
 {
-	if (CanGenerateDefaultIndexName(createIndexStatement))
+	int numberOfIndexParameters = GetNumberOfIndexParameters(createIndexStatement);
+	if (numberOfIndexParameters <= INDEX_MAX_KEYS)
 	{
 		return;
 	}
@@ -242,27 +242,6 @@ ErrorIfCannotGenerateDefaultIndexName(IndexStmt *createIndexStatement)
 	ereport(ERROR, (errcode(ERRCODE_TOO_MANY_COLUMNS),
 					errmsg("cannot use more than %d columns in an index",
 						   INDEX_MAX_KEYS)));
-}
-
-
-/*
- * CanGenerateDefaultIndexName returns true if we can assign a default name for
- * the index to be defined by given CREATE INDEX command.
- */
-static bool
-CanGenerateDefaultIndexName(IndexStmt *createIndexStatement)
-{
-	int numberOfAttributes = GetNumberOfIndexParameters(createIndexStatement);
-	if (numberOfAttributes == 0 || numberOfAttributes > INDEX_MAX_KEYS)
-	{
-		/*
-		 * Postgres function DefineIndex also wouldn't be able to generate a
-		 * default name for that index and would error out.
-		 */
-		return false;
-	}
-
-	return true;
 }
 
 
