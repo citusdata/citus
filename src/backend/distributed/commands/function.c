@@ -1147,7 +1147,7 @@ TriggerSyncMetadataToPrimaryNodes(void)
 	/* let the maintanince deamon know about the metadata sync */
 	if (triggerMetadataSync)
 	{
-		TriggerMetadataSync(MyDatabaseId);
+		TriggerMetadataSyncOnCommit();
 	}
 }
 

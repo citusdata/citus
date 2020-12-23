@@ -135,7 +135,7 @@ wait_until_metadata_sync(PG_FUNCTION_ARGS)
 Datum
 trigger_metadata_sync(PG_FUNCTION_ARGS)
 {
-	TriggerMetadataSync(MyDatabaseId);
+	TriggerMetadataSyncOnCommit();
 	PG_RETURN_VOID();
 }
 
