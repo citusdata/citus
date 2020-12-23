@@ -17,8 +17,8 @@ CREATE FUNCTION top_memory_context_usage()
 		SELECT TopMemoryContext FROM column_store_memory_stats();
 	$$ LANGUAGE SQL VOLATILE;
 
-SET cstore.stripe_row_count TO 50000;
-SET cstore.compression TO 'pglz';
+SET columnar.stripe_row_count TO 50000;
+SET columnar.compression TO 'pglz';
 CREATE TABLE t (a int, tag text, memusage bigint) USING columnar;
 
 -- measure memory before doing writes
@@ -85,7 +85,7 @@ INSERT INTO t
  SELECT i, 'last batch', 0 /* no need to record memusage per row */
  FROM generate_series(1, 50000) i;
 
-SELECT 1.0 * TopMemoryContext / :top_post BETWEEN 0.99 AND 1.01 AS top_growth_ok
+SELECT 1.0 * TopMemoryContext / :top_post BETWEEN 0.98 AND 1.02 AS top_growth_ok
 FROM column_store_memory_stats();
 
 -- before this change, max mem usage while executing inserts was 28MB and

@@ -1,0 +1,509 @@
+CREATE SCHEMA citus_local_dist_joins;
+SET search_path TO citus_local_dist_joins;
+SET client_min_messages to ERROR;
+SELECT master_add_node('localhost', :master_port, groupId => 0) AS coordinator_nodeid \gset
+CREATE TABLE citus_local(key int, value text);
+SELECT create_citus_local_table('citus_local');
+ create_citus_local_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE postgres_table (key int, value text, value_2 jsonb);
+CREATE TABLE reference_table (key int, value text, value_2 jsonb);
+SELECT create_reference_table('reference_table');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE distributed_table (key int, value text, value_2 jsonb);
+SELECT create_distributed_table('distributed_table', 'key');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE distributed_table_pkey (key int primary key, value text, value_2 jsonb);
+SELECT create_distributed_table('distributed_table_pkey', 'key');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE distributed_table_windex (key int primary key, value text, value_2 jsonb);
+SELECT create_distributed_table('distributed_table_windex', 'key');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE UNIQUE INDEX key_index ON distributed_table_windex (key);
+CREATE TABLE distributed_partitioned_table(key int, value text) PARTITION BY RANGE (key);
+CREATE TABLE distributed_partitioned_table_1 PARTITION OF distributed_partitioned_table FOR VALUES FROM (0) TO (50);
+CREATE TABLE distributed_partitioned_table_2 PARTITION OF distributed_partitioned_table FOR VALUES FROM (50) TO (200);
+SELECT create_distributed_table('distributed_partitioned_table', 'key');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE local_partitioned_table(key int, value text) PARTITION BY RANGE (key);
+CREATE TABLE local_partitioned_table_1 PARTITION OF local_partitioned_table FOR VALUES FROM (0) TO (50);
+CREATE TABLE local_partitioned_table_2 PARTITION OF local_partitioned_table FOR VALUES FROM (50) TO (200);
+CREATE TABLE distributed_table_composite (key int, value text, value_2 jsonb, primary key (key, value));
+SELECT create_distributed_table('distributed_table_composite', 'key');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE MATERIALIZED VIEW mv1 AS SELECT * FROM postgres_table;
+CREATE MATERIALIZED VIEW mv2 AS SELECT * FROM distributed_table;
+-- set log messages to debug1 so that we can see which tables are recursively planned.
+SET client_min_messages TO DEBUG1;
+INSERT INTO postgres_table SELECT i, i::varchar(256) FROM generate_series(1, 100) i;
+INSERT INTO reference_table SELECT i, i::varchar(256) FROM generate_series(1, 100) i;
+DEBUG:  distributed INSERT ... SELECT can only select from distributed tables
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
+INSERT INTO distributed_table_windex SELECT i, i::varchar(256) FROM generate_series(1, 100) i;
+DEBUG:  distributed INSERT ... SELECT can only select from distributed tables
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
+INSERT INTO distributed_table SELECT i, i::varchar(256) FROM generate_series(1, 100) i;
+DEBUG:  distributed INSERT ... SELECT can only select from distributed tables
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
+INSERT INTO distributed_table_pkey SELECT i, i::varchar(256) FROM generate_series(1, 100) i;
+DEBUG:  distributed INSERT ... SELECT can only select from distributed tables
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
+INSERT INTO distributed_partitioned_table SELECT i, i::varchar(256) FROM generate_series(1, 100) i;
+DEBUG:  distributed INSERT ... SELECT can only select from distributed tables
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
+INSERT INTO distributed_table_composite SELECT i, i::varchar(256) FROM generate_series(1, 100) i;
+DEBUG:  distributed INSERT ... SELECT can only select from distributed tables
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
+INSERT INTO local_partitioned_table SELECT i, i::varchar(256) FROM generate_series(1, 100) i;
+INSERT INTO citus_local SELECT i, i::varchar(256) FROM generate_series(1, 100) i;
+DEBUG:  distributed INSERT ... SELECT can only select from distributed tables
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
+-- a unique index on key so dist table should be recursively planned
+SELECT count(*) FROM citus_local JOIN distributed_table_windex USING(key);
+DEBUG:  Wrapping relation "citus_local" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT key FROM citus_local_dist_joins.citus_local WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT citus_local_1.key, NULL::text AS value FROM (SELECT intermediate_result.key FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) citus_local_1) citus_local JOIN citus_local_dist_joins.distributed_table_windex USING (key))
+ count
+---------------------------------------------------------------------
+   100
+(1 row)
+
+SELECT count(*) FROM citus_local JOIN distributed_table_windex USING(value);
+DEBUG:  Wrapping relation "citus_local" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT value FROM citus_local_dist_joins.citus_local WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT NULL::integer AS key, citus_local_1.value FROM (SELECT intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(value text)) citus_local_1) citus_local JOIN citus_local_dist_joins.distributed_table_windex USING (value))
+ count
+---------------------------------------------------------------------
+   100
+(1 row)
+
+SELECT count(*) FROM citus_local JOIN distributed_table_windex ON citus_local.key = distributed_table_windex.key;
+DEBUG:  Wrapping relation "citus_local" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT key FROM citus_local_dist_joins.citus_local WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT citus_local_1.key, NULL::text AS value FROM (SELECT intermediate_result.key FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) citus_local_1) citus_local JOIN citus_local_dist_joins.distributed_table_windex ON ((citus_local.key OPERATOR(pg_catalog.=) distributed_table_windex.key)))
+ count
+---------------------------------------------------------------------
+   100
+(1 row)
+
+SELECT count(*) FROM citus_local JOIN distributed_table_windex ON distributed_table_windex.key = 10;
+DEBUG:  Wrapping relation "distributed_table_windex" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT key FROM citus_local_dist_joins.distributed_table_windex WHERE (key OPERATOR(pg_catalog.=) 10)
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (citus_local_dist_joins.citus_local JOIN (SELECT distributed_table_windex_1.key, NULL::text AS value, NULL::jsonb AS value_2 FROM (SELECT intermediate_result.key FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) distributed_table_windex_1) distributed_table_windex ON ((distributed_table_windex.key OPERATOR(pg_catalog.=) 10)))
+ count
+---------------------------------------------------------------------
+   100
+(1 row)
+
+-- no unique index, citus local table should be recursively planned
+SELECT count(*) FROM citus_local JOIN distributed_table USING(key);
+DEBUG:  Wrapping relation "citus_local" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT key FROM citus_local_dist_joins.citus_local WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT citus_local_1.key, NULL::text AS value FROM (SELECT intermediate_result.key FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) citus_local_1) citus_local JOIN citus_local_dist_joins.distributed_table USING (key))
+ count
+---------------------------------------------------------------------
+   100
+(1 row)
+
+SELECT count(*) FROM citus_local JOIN distributed_table USING(value);
+DEBUG:  Wrapping relation "citus_local" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT value FROM citus_local_dist_joins.citus_local WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT NULL::integer AS key, citus_local_1.value FROM (SELECT intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(value text)) citus_local_1) citus_local JOIN citus_local_dist_joins.distributed_table USING (value))
+ count
+---------------------------------------------------------------------
+   100
+(1 row)
+
+SELECT count(*) FROM citus_local JOIN distributed_table ON citus_local.key = distributed_table.key;
+DEBUG:  Wrapping relation "citus_local" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT key FROM citus_local_dist_joins.citus_local WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT citus_local_1.key, NULL::text AS value FROM (SELECT intermediate_result.key FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) citus_local_1) citus_local JOIN citus_local_dist_joins.distributed_table ON ((citus_local.key OPERATOR(pg_catalog.=) distributed_table.key)))
+ count
+---------------------------------------------------------------------
+   100
+(1 row)
+
+SELECT count(*) FROM citus_local JOIN distributed_table ON distributed_table.key = 10;
+DEBUG:  Wrapping relation "citus_local" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT NULL::integer AS "dummy-1" FROM citus_local_dist_joins.citus_local WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT NULL::integer AS key, NULL::text AS value FROM (SELECT intermediate_result."dummy-1" FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result("dummy-1" integer)) citus_local_1) citus_local JOIN citus_local_dist_joins.distributed_table ON ((distributed_table.key OPERATOR(pg_catalog.=) 10)))
+ count
+---------------------------------------------------------------------
+   100
+(1 row)
+
+SELECT count(*) FROM citus_local JOIN distributed_table USING(key) JOIN postgres_table USING (key) JOIN reference_table USING(key);
+DEBUG:  Wrapping relation "citus_local" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT key FROM citus_local_dist_joins.citus_local WHERE true
+DEBUG:  Wrapping relation "postgres_table" to a subquery
+DEBUG:  generating subplan XXX_2 for subquery SELECT key FROM citus_local_dist_joins.postgres_table WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((((SELECT citus_local_1.key, NULL::text AS value FROM (SELECT intermediate_result.key FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) citus_local_1) citus_local JOIN citus_local_dist_joins.distributed_table USING (key)) JOIN (SELECT postgres_table_1.key, NULL::text AS value, NULL::jsonb AS value_2 FROM (SELECT intermediate_result.key FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) postgres_table_1) postgres_table USING (key)) JOIN citus_local_dist_joins.reference_table USING (key))
+ count
+---------------------------------------------------------------------
+   100
+(1 row)
+
+SELECT count(*) FROM distributed_partitioned_table JOIN postgres_table USING(key) JOIN reference_table USING (key)
+	JOIN citus_local USING(key) WHERE distributed_partitioned_table.key > 10 and distributed_partitioned_table.key = 10;
+DEBUG:  Wrapping relation "postgres_table" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT key FROM citus_local_dist_joins.postgres_table WHERE (key OPERATOR(pg_catalog.=) 10)
+DEBUG:  Wrapping relation "citus_local" to a subquery
+DEBUG:  generating subplan XXX_2 for subquery SELECT key FROM citus_local_dist_joins.citus_local WHERE (key OPERATOR(pg_catalog.=) 10)
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (((citus_local_dist_joins.distributed_partitioned_table JOIN (SELECT postgres_table_1.key, NULL::text AS value, NULL::jsonb AS value_2 FROM (SELECT intermediate_result.key FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) postgres_table_1) postgres_table USING (key)) JOIN citus_local_dist_joins.reference_table USING (key)) JOIN (SELECT citus_local_1.key, NULL::text AS value FROM (SELECT intermediate_result.key FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) citus_local_1) citus_local USING (key)) WHERE ((distributed_partitioned_table.key OPERATOR(pg_catalog.>) 10) AND (distributed_partitioned_table.key OPERATOR(pg_catalog.=) 10))
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+-- update
+BEGIN;
+SELECT COUNT(DISTINCT value) FROM citus_local;
+ count
+---------------------------------------------------------------------
+   100
+(1 row)
+
+UPDATE
+	citus_local
+SET
+	value = 'test'
+FROM
+	distributed_table
+WHERE
+	distributed_table.key = citus_local.key;
+DEBUG:  Wrapping relation "distributed_table" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT key FROM citus_local_dist_joins.distributed_table WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: UPDATE citus_local_dist_joins.citus_local SET value = 'test'::text FROM (SELECT distributed_table_1.key, NULL::text AS value, NULL::jsonb AS value_2 FROM (SELECT intermediate_result.key FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) distributed_table_1) distributed_table WHERE (distributed_table.key OPERATOR(pg_catalog.=) citus_local.key)
+SELECT COUNT(DISTINCT value) FROM citus_local;
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+ROLLBACK;
+BEGIN;
+SELECT COUNT(DISTINCT value) FROM distributed_table;
+ count
+---------------------------------------------------------------------
+   100
+(1 row)
+
+UPDATE
+	distributed_table
+SET
+	value = 'test'
+FROM
+	citus_local
+WHERE
+	distributed_table.key = citus_local.key;
+DEBUG:  Wrapping relation "citus_local" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT key FROM citus_local_dist_joins.citus_local WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: UPDATE citus_local_dist_joins.distributed_table SET value = 'test'::text FROM (SELECT citus_local_1.key, NULL::text AS value FROM (SELECT intermediate_result.key FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) citus_local_1) citus_local WHERE (distributed_table.key OPERATOR(pg_catalog.=) citus_local.key)
+SELECT COUNT(DISTINCT value) FROM distributed_table;
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+ROLLBACK;
+BEGIN;
+SELECT COUNT(DISTINCT value) FROM distributed_table_pkey;
+ count
+---------------------------------------------------------------------
+   100
+(1 row)
+
+UPDATE
+	distributed_table_pkey
+SET
+	value = 'test'
+FROM
+	citus_local
+WHERE
+	distributed_table_pkey.key = citus_local.key;
+DEBUG:  Wrapping relation "citus_local" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT key FROM citus_local_dist_joins.citus_local WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: UPDATE citus_local_dist_joins.distributed_table_pkey SET value = 'test'::text FROM (SELECT citus_local_1.key, NULL::text AS value FROM (SELECT intermediate_result.key FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) citus_local_1) citus_local WHERE (distributed_table_pkey.key OPERATOR(pg_catalog.=) citus_local.key)
+SELECT COUNT(DISTINCT value) FROM distributed_table_pkey;
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+ROLLBACK;
+BEGIN;
+SELECT COUNT(DISTINCT value) FROM distributed_table_windex;
+ count
+---------------------------------------------------------------------
+   100
+(1 row)
+
+UPDATE
+	distributed_table_windex
+SET
+	value = 'test'
+FROM
+	citus_local
+WHERE
+	distributed_table_windex.key = citus_local.key;
+DEBUG:  Wrapping relation "citus_local" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT key FROM citus_local_dist_joins.citus_local WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: UPDATE citus_local_dist_joins.distributed_table_windex SET value = 'test'::text FROM (SELECT citus_local_1.key, NULL::text AS value FROM (SELECT intermediate_result.key FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) citus_local_1) citus_local WHERE (distributed_table_windex.key OPERATOR(pg_catalog.=) citus_local.key)
+SELECT COUNT(DISTINCT value) FROM distributed_table_windex;
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+ROLLBACK;
+BEGIN;
+UPDATE
+	mv1
+SET
+	value = 'test'
+FROM
+	citus_local
+WHERE
+	mv1.key = citus_local.key;
+ERROR:  materialized views in modify queries are not supported
+ROLLBACK;
+BEGIN;
+UPDATE
+	citus_local
+SET
+	value = 'test'
+FROM
+	mv1
+WHERE
+	mv1.key = citus_local.key;
+ERROR:  materialized views in modify queries are not supported
+ROLLBACK;
+BEGIN;
+UPDATE
+	citus_local
+SET
+	value = 'test'
+FROM
+	mv2
+WHERE
+	mv2.key = citus_local.key;
+ERROR:  materialized views in modify queries are not supported
+ROLLBACK;
+-- DELETE operations
+BEGIN;
+SELECT COUNT(DISTINCT value) FROM citus_local;
+ count
+---------------------------------------------------------------------
+   100
+(1 row)
+
+DELETE FROM
+	citus_local
+USING
+	distributed_table
+WHERE
+	distributed_table.key = citus_local.key;
+DEBUG:  Wrapping relation "distributed_table" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT key FROM citus_local_dist_joins.distributed_table WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: DELETE FROM citus_local_dist_joins.citus_local USING (SELECT distributed_table_1.key, NULL::text AS value, NULL::jsonb AS value_2 FROM (SELECT intermediate_result.key FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) distributed_table_1) distributed_table WHERE (distributed_table.key OPERATOR(pg_catalog.=) citus_local.key)
+SELECT COUNT(DISTINCT value) FROM citus_local;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+ROLLBACK;
+BEGIN;
+SELECT COUNT(DISTINCT value) FROM distributed_table;
+ count
+---------------------------------------------------------------------
+   100
+(1 row)
+
+DELETE FROM
+	distributed_table
+USING
+	citus_local
+WHERE
+	distributed_table.key = citus_local.key;
+DEBUG:  Wrapping relation "citus_local" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT key FROM citus_local_dist_joins.citus_local WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: DELETE FROM citus_local_dist_joins.distributed_table USING (SELECT citus_local_1.key, NULL::text AS value FROM (SELECT intermediate_result.key FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) citus_local_1) citus_local WHERE (distributed_table.key OPERATOR(pg_catalog.=) citus_local.key)
+SELECT COUNT(DISTINCT value) FROM distributed_table;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+ROLLBACK;
+BEGIN;
+SELECT COUNT(DISTINCT value) FROM distributed_table_pkey;
+ count
+---------------------------------------------------------------------
+   100
+(1 row)
+
+DELETE FROM
+	distributed_table_pkey
+USING
+	citus_local
+WHERE
+	distributed_table_pkey.key = citus_local.key;
+DEBUG:  Wrapping relation "citus_local" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT key FROM citus_local_dist_joins.citus_local WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: DELETE FROM citus_local_dist_joins.distributed_table_pkey USING (SELECT citus_local_1.key, NULL::text AS value FROM (SELECT intermediate_result.key FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) citus_local_1) citus_local WHERE (distributed_table_pkey.key OPERATOR(pg_catalog.=) citus_local.key)
+SELECT COUNT(DISTINCT value) FROM distributed_table_pkey;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+ROLLBACK;
+BEGIN;
+SELECT COUNT(DISTINCT value) FROM distributed_table_windex;
+ count
+---------------------------------------------------------------------
+   100
+(1 row)
+
+DELETE FROM
+	distributed_table_windex
+USING
+	citus_local
+WHERE
+	distributed_table_windex.key = citus_local.key;
+DEBUG:  Wrapping relation "citus_local" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT key FROM citus_local_dist_joins.citus_local WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: DELETE FROM citus_local_dist_joins.distributed_table_windex USING (SELECT citus_local_1.key, NULL::text AS value FROM (SELECT intermediate_result.key FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) citus_local_1) citus_local WHERE (distributed_table_windex.key OPERATOR(pg_catalog.=) citus_local.key)
+SELECT COUNT(DISTINCT value) FROM distributed_table_windex;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+ROLLBACK;
+DELETE FROM
+	mv1
+USING
+	citus_local
+WHERE
+	mv1.key = citus_local.key;
+ERROR:  materialized views in modify queries are not supported
+DELETE FROM
+	citus_local
+USING
+	mv1
+WHERE
+	mv1.key = citus_local.key;
+ERROR:  materialized views in modify queries are not supported
+DELETE FROM
+	citus_local
+USING
+	mv2
+WHERE
+	mv2.key = citus_local.key;
+ERROR:  materialized views in modify queries are not supported
+SELECT count(*) FROM postgres_table JOIN (SELECT * FROM (SELECT * FROM distributed_table LIMIT 1) d1) d2 using (key) JOIN reference_table USING(key) JOIN citus_local USING (key) JOIN (SELECT * FROM citus_local) c1  USING (key) WHERE d2.key > 10 AND d2.key = 10;
+DEBUG:  push down of limit count: 1
+DEBUG:  generating subplan XXX_1 for subquery SELECT key, value, value_2 FROM citus_local_dist_joins.distributed_table LIMIT 1
+DEBUG:  generating subplan XXX_2 for subquery SELECT key, value FROM citus_local_dist_joins.citus_local
+DEBUG:  Wrapping relation "postgres_table" to a subquery
+DEBUG:  generating subplan XXX_3 for subquery SELECT key FROM citus_local_dist_joins.postgres_table WHERE (key OPERATOR(pg_catalog.=) 10)
+DEBUG:  Wrapping relation "citus_local" to a subquery
+DEBUG:  generating subplan XXX_4 for subquery SELECT key FROM citus_local_dist_joins.citus_local WHERE (key OPERATOR(pg_catalog.=) 10)
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (((((SELECT postgres_table_1.key, NULL::text AS value, NULL::jsonb AS value_2 FROM (SELECT intermediate_result.key FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) postgres_table_1) postgres_table JOIN (SELECT d1.key, d1.value, d1.value_2 FROM (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) d1) d2 USING (key)) JOIN citus_local_dist_joins.reference_table USING (key)) JOIN (SELECT citus_local_1.key, NULL::text AS value FROM (SELECT intermediate_result.key FROM read_intermediate_result('XXX_4'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) citus_local_1) citus_local USING (key)) JOIN (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) c1 USING (key)) WHERE ((d2.key OPERATOR(pg_catalog.>) 10) AND (d2.key OPERATOR(pg_catalog.=) 10))
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+SELECT count(*) FROM postgres_table JOIN (SELECT * FROM (SELECT * FROM distributed_table LIMIT 1) d1) d2 using (key) JOIN reference_table USING(key) JOIN citus_local USING (key) JOIN (SELECT * FROM citus_local) c1  USING (key) WHERE d2.key > 10 AND d2.key = 10;
+DEBUG:  push down of limit count: 1
+DEBUG:  generating subplan XXX_1 for subquery SELECT key, value, value_2 FROM citus_local_dist_joins.distributed_table LIMIT 1
+DEBUG:  generating subplan XXX_2 for subquery SELECT key, value FROM citus_local_dist_joins.citus_local
+DEBUG:  Wrapping relation "postgres_table" to a subquery
+DEBUG:  generating subplan XXX_3 for subquery SELECT key FROM citus_local_dist_joins.postgres_table WHERE (key OPERATOR(pg_catalog.=) 10)
+DEBUG:  Wrapping relation "citus_local" to a subquery
+DEBUG:  generating subplan XXX_4 for subquery SELECT key FROM citus_local_dist_joins.citus_local WHERE (key OPERATOR(pg_catalog.=) 10)
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (((((SELECT postgres_table_1.key, NULL::text AS value, NULL::jsonb AS value_2 FROM (SELECT intermediate_result.key FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) postgres_table_1) postgres_table JOIN (SELECT d1.key, d1.value, d1.value_2 FROM (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) d1) d2 USING (key)) JOIN citus_local_dist_joins.reference_table USING (key)) JOIN (SELECT citus_local_1.key, NULL::text AS value FROM (SELECT intermediate_result.key FROM read_intermediate_result('XXX_4'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) citus_local_1) citus_local USING (key)) JOIN (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) c1 USING (key)) WHERE ((d2.key OPERATOR(pg_catalog.>) 10) AND (d2.key OPERATOR(pg_catalog.=) 10))
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+SELECT
+	COUNT(*)
+FROM
+	postgres_table p1
+JOIN
+	distributed_partitioned_table dp1
+USING (key)
+JOIN
+	distributed_table d1
+USING (key)
+JOIN
+	citus_local c1
+USING (key)
+JOIN
+	postgres_table p2
+USING (key)
+JOIN
+	reference_table r1
+USING (key)
+JOIN
+	distributed_table d2
+USING (key)
+JOIN
+	citus_local c2
+USING (key);
+DEBUG:  Wrapping relation "postgres_table" "p1" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT key FROM citus_local_dist_joins.postgres_table p1 WHERE true
+DEBUG:  Wrapping relation "citus_local" "c1" to a subquery
+DEBUG:  generating subplan XXX_2 for subquery SELECT key FROM citus_local_dist_joins.citus_local c1 WHERE true
+DEBUG:  Wrapping relation "postgres_table" "p2" to a subquery
+DEBUG:  generating subplan XXX_3 for subquery SELECT key FROM citus_local_dist_joins.postgres_table p2 WHERE true
+DEBUG:  Wrapping relation "citus_local" "c2" to a subquery
+DEBUG:  generating subplan XXX_4 for subquery SELECT key FROM citus_local_dist_joins.citus_local c2 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((((((((SELECT p1_1.key, NULL::text AS value, NULL::jsonb AS value_2 FROM (SELECT intermediate_result.key FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) p1_1) p1 JOIN citus_local_dist_joins.distributed_partitioned_table dp1 USING (key)) JOIN citus_local_dist_joins.distributed_table d1 USING (key)) JOIN (SELECT c1_1.key, NULL::text AS value FROM (SELECT intermediate_result.key FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) c1_1) c1 USING (key)) JOIN (SELECT p2_1.key, NULL::text AS value, NULL::jsonb AS value_2 FROM (SELECT intermediate_result.key FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) p2_1) p2 USING (key)) JOIN citus_local_dist_joins.reference_table r1 USING (key)) JOIN citus_local_dist_joins.distributed_table d2 USING (key)) JOIN (SELECT c2_1.key, NULL::text AS value FROM (SELECT intermediate_result.key FROM read_intermediate_result('XXX_4'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) c2_1) c2 USING (key))
+ count
+---------------------------------------------------------------------
+   100
+(1 row)
+
+SET client_min_messages to ERROR;
+DROP TABLE citus_local;
+SELECT master_remove_node('localhost', :master_port);
+ master_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+\set VERBOSITY terse
+DROP SCHEMA citus_local_dist_joins CASCADE;

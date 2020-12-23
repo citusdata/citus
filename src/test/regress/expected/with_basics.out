@@ -95,21 +95,26 @@ SELECT user_id FROM (
        2
 (3 rows)
 
--- CTE outside of FROM/WHERE errors out
+-- CTE outside of FROM/WHERE errors
 WITH cte AS (
 	SELECT user_id FROM users_table WHERE value_2 IN (1, 2)
 )
 SELECT (SELECT * FROM cte);
 ERROR:  more than one row returned by a subquery used as an expression
 WITH cte_basic AS (
-	SELECT user_id FROM users_table WHERE user_id = 1
+	SELECT user_id FROM users_table WHERE user_id = 1 LIMIT 1
 )
 SELECT
   (SELECT user_id FROM cte_basic), user_id
 FROM
-  users_table;
-ERROR:  could not run distributed query with subquery outside the FROM, WHERE and HAVING clauses
-HINT:  Consider using an equality filter on the distributed table's partition column.
+  users_table
+ORDER BY 1,2
+LIMIT 1;
+ user_id | user_id
+---------------------------------------------------------------------
+       1 |       1
+(1 row)
+
 -- single-row sublink is acceptable when there is no FROM
 WITH cte AS (
 	SELECT user_id FROM users_table WHERE value_2 IN (1, 2)

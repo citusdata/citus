@@ -20,9 +20,8 @@
 /multi_behavioral_analytics_create_table.sql
 /multi_insert_select_behavioral_analytics_create_table.sql
 /hyperscale_tutorial.sql
-/am_block_filtering.sql
+/am_chunk_filtering.sql
 /am_copyto.sql
-/am_create.sql
 /am_data_types.sql
 /am_load.sql
 /fdw_block_filtering.sql

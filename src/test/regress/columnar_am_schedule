@@ -1,18 +1,25 @@
+test: multi_cluster_management
+test: multi_test_helpers multi_test_helpers_superuser
+test: multi_test_catalog_views
+
 test: am_create
 test: am_load
 test: am_query
 test: am_analyze
 test: am_data_types
 test: am_drop
+test: am_empty
 test: am_insert
+test: am_update_delete
 test: am_copyto
 test: am_alter
 test: am_alter_set_type
+test: am_lz4 am_zstd
 test: am_rollback
 test: am_truncate
 test: am_vacuum
 test: am_clean
-test: am_block_filtering
+test: am_chunk_filtering
 test: am_join
 test: am_trigger
 test: am_tableoptions
@@ -20,3 +27,4 @@ test: am_recursive
 test: am_transactions
 test: am_matview
 test: am_memory
+test: columnar_citus_integration

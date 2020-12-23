@@ -1,0 +1,99 @@
+--
+-- Test different operations on empty columnar tables.
+--
+SET citus.compression to 'none';
+create table t_uncompressed(a int) using columnar;
+create table t_compressed(a int) using columnar;
+-- set options
+SELECT alter_columnar_table_set('t_compressed', compression => 'pglz');
+ alter_columnar_table_set
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT alter_columnar_table_set('t_compressed', stripe_row_count => 100);
+ alter_columnar_table_set
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT alter_columnar_table_set('t_compressed', chunk_row_count => 100);
+ alter_columnar_table_set
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT * FROM columnar.options WHERE regclass = 't_compressed'::regclass;
+   regclass   | chunk_row_count | stripe_row_count | compression_level | compression
+---------------------------------------------------------------------
+ t_compressed |             100 |              100 |                 3 | pglz
+(1 row)
+
+-- select
+select * from t_uncompressed;
+ a
+---------------------------------------------------------------------
+(0 rows)
+
+select count(*) from t_uncompressed;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+select * from t_compressed;
+ a
+---------------------------------------------------------------------
+(0 rows)
+
+select count(*) from t_compressed;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+-- explain
+explain (costs off, summary off, timing off) select * from t_uncompressed;
+                  QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (ColumnarScan) on t_uncompressed
+(1 row)
+
+explain (costs off, summary off, timing off) select * from t_compressed;
+                 QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (ColumnarScan) on t_compressed
+(1 row)
+
+-- vacuum
+vacuum verbose t_compressed;
+INFO:  statistics for "t_compressed":
+storage id: -1
+total file size: 0, total data size: 0
+compression rate: 1.00x
+total row count: 0, stripe count: 0, average rows per stripe: 0
+chunk count: 0, containing data for dropped columns: 0
+
+vacuum verbose t_uncompressed;
+INFO:  statistics for "t_uncompressed":
+storage id: -1
+total file size: 0, total data size: 0
+compression rate: 1.00x
+total row count: 0, stripe count: 0, average rows per stripe: 0
+chunk count: 0, containing data for dropped columns: 0
+
+-- vacuum full
+vacuum full t_compressed;
+vacuum full t_uncompressed;
+-- analyze
+analyze t_uncompressed;
+analyze t_compressed;
+-- truncate
+truncate t_uncompressed;
+truncate t_compressed;
+-- alter type
+alter table t_uncompressed alter column a type text;
+alter table t_compressed alter column a type text;
+-- drop
+drop table t_compressed;
+drop table t_uncompressed;

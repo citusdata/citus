@@ -38,6 +38,7 @@
 #include "distributed/insert_select_executor.h"
 #include "distributed/intermediate_result_pruning.h"
 #include "distributed/local_executor.h"
+#include "distributed/local_distributed_join_planner.h"
 #include "distributed/locally_reserved_shared_connections.h"
 #include "distributed/maintenanced.h"
 #include "distributed/metadata_utility.h"
@@ -55,6 +56,7 @@
 #include "distributed/multi_server_executor.h"
 #include "distributed/pg_dist_partition.h"
 #include "distributed/placement_connection.h"
+#include "distributed/recursive_planning.h"
 #include "distributed/reference_table_utils.h"
 #include "distributed/relation_access_tracking.h"
 #include "distributed/run_from_same_connection.h"
@@ -74,6 +76,7 @@
 #include "distributed/worker_protocol.h"
 #include "distributed/worker_shard_visibility.h"
 #include "distributed/adaptive_executor.h"
+#include "libpq/auth.h"
 #include "port/atomics.h"
 #include "postmaster/postmaster.h"
 #include "storage/ipc.h"
@@ -100,7 +103,9 @@ static void DoInitialCleanup(void);
 static void ResizeStackToMaximumDepth(void);
 static void multi_log_hook(ErrorData *edata);
 static void RegisterConnectionCleanup(void);
+static void RegisterClientBackendCounterDecrement(void);
 static void CitusCleanupConnectionsAtExit(int code, Datum arg);
+static void DecrementClientBackendCounterAtExit(int code, Datum arg);
 static void CreateRequiredDirectories(void);
 static void RegisterCitusConfigVariables(void);
 static bool ErrorIfNotASuitableDeadlockFactor(double *newval, void **extra,
@@ -110,12 +115,17 @@ static bool NoticeIfSubqueryPushdownEnabled(bool *newval, void **extra, GucSourc
 static bool NodeConninfoGucCheckHook(char **newval, void **extra, GucSource source);
 static void NodeConninfoGucAssignHook(const char *newval, void *extra);
 static const char * MaxSharedPoolSizeGucShowHook(void);
+static const char * LocalPoolSizeGucShowHook(void);
 static bool StatisticsCollectionGucCheckHook(bool *newval, void **extra, GucSource
 											 source);
+static void CitusAuthHook(Port *port, int status);
+
 
 /* static variable to hold value of deprecated GUC variable */
 static bool DeprecatedBool = false;
 static int DeprecatedInt = 0;
+
+static ClientAuthentication_hook_type original_client_auth_hook = NULL;
 
 
 /* *INDENT-OFF* */
@@ -187,6 +197,16 @@ static const struct config_enum_entry log_level_options[] = {
 	{ "error", ERROR, false},
 	{ NULL, 0, false}
 };
+
+
+static const struct config_enum_entry local_table_join_policies[] = {
+	{ "never", LOCAL_JOIN_POLICY_NEVER, false},
+	{ "prefer-local", LOCAL_JOIN_POLICY_PREFER_LOCAL, false},
+	{ "prefer-distributed", LOCAL_JOIN_POLICY_PREFER_DISTRIBUTED, false},
+	{ "auto", LOCAL_JOIN_POLICY_AUTO, false},
+	{ NULL, 0, false}
+};
+
 
 static const struct config_enum_entry multi_shard_modify_connection_options[] = {
 	{ "parallel", PARALLEL_CONNECTION, false },
@@ -285,6 +305,14 @@ _PG_init(void)
 
 	/* register hook for error messages */
 	emit_log_hook = multi_log_hook;
+
+
+	/*
+	 * Register hook for counting client backends that
+	 * are successfully authenticated.
+	 */
+	original_client_auth_hook = ClientAuthentication_hook;
+	ClientAuthentication_hook = CitusAuthHook;
 
 	InitializeMaintenanceDaemon();
 
@@ -448,6 +476,23 @@ RegisterConnectionCleanup(void)
 
 
 /*
+ * RegisterClientBackendCounterDecrement is called when the backend terminates.
+ * For all client backends, we register a callback that will undo
+ */
+static void
+RegisterClientBackendCounterDecrement(void)
+{
+	static bool registeredCleanup = false;
+	if (registeredCleanup == false)
+	{
+		before_shmem_exit(DecrementClientBackendCounterAtExit, 0);
+
+		registeredCleanup = true;
+	}
+}
+
+
+/*
  * CitusCleanupConnectionsAtExit is called before_shmem_exit() of the
  * backend for the purposes of any clean-up needed.
  */
@@ -463,6 +508,17 @@ CitusCleanupConnectionsAtExit(int code, Datum arg)
 	 * are already given away.
 	 */
 	DeallocateReservedConnections();
+}
+
+
+/*
+ * DecrementClientBackendCounterAtExit is called before_shmem_exit() of the
+ * backend for the purposes decrementing
+ */
+static void
+DecrementClientBackendCounterAtExit(int code, Datum arg)
+{
+	DecrementClientBackendCounter();
 }
 
 
@@ -649,6 +705,39 @@ RegisterCitusConfigVariables(void)
 		PGC_USERSET,
 		GUC_NO_SHOW_ALL,
 		NoticeIfSubqueryPushdownEnabled, NULL, NULL);
+
+	DefineCustomIntVariable(
+		"citus.local_shared_pool_size",
+		gettext_noop(
+			"Sets the maximum number of connections allowed for the shards on the "
+			"local node across all the backends from this node. Setting to -1 disables "
+			"connections throttling. Setting to 0 makes it auto-adjust, meaning "
+			"equal to the half of max_connections on the coordinator."),
+		gettext_noop("As a rule of thumb, the value should be at most equal to the "
+					 "max_connections on the local node."),
+		&LocalSharedPoolSize,
+		0, -1, INT_MAX,
+		PGC_SIGHUP,
+		GUC_SUPERUSER_ONLY,
+		NULL, NULL, LocalPoolSizeGucShowHook);
+
+	DefineCustomEnumVariable(
+		"citus.local_table_join_policy",
+		gettext_noop("defines the behaviour when a distributed table "
+					 "is joined with a local table"),
+		gettext_noop(
+			"There are 4 values available. The default, 'auto' will recursively plan"
+			"distributed tables if there is a constant filter on a unique index."
+			"'prefer-local' will choose local tables if possible."
+			"'prefer-distributed' will choose distributed tables if possible"
+			"'never' will basically skip local table joins."
+			),
+		&LocalTableJoinPolicy,
+		LOCAL_JOIN_POLICY_AUTO,
+		local_table_join_policies,
+		PGC_USERSET,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
 		"citus.log_multi_join_order",
@@ -1721,6 +1810,21 @@ MaxSharedPoolSizeGucShowHook(void)
 }
 
 
+/*
+ * LocalPoolSizeGucShowHook overrides the value that is shown to the
+ * user when the default value has not been set.
+ */
+static const char *
+LocalPoolSizeGucShowHook(void)
+{
+	StringInfo newvalue = makeStringInfo();
+
+	appendStringInfo(newvalue, "%d", GetLocalSharedPoolSize());
+
+	return (const char *) newvalue->data;
+}
+
+
 static bool
 StatisticsCollectionGucCheckHook(bool *newval, void **extra, GucSource source)
 {
@@ -1740,4 +1844,22 @@ StatisticsCollectionGucCheckHook(bool *newval, void **extra, GucSource source)
 		return true;
 	}
 #endif
+}
+
+
+/*
+ * CitusAuthHook is a callback for client authentication that Postgres provides.
+ * Citus uses this hook to count the number of active backends.
+ */
+static void
+CitusAuthHook(Port *port, int status)
+{
+	/* let other authentication hooks to kick in first */
+	if (original_client_auth_hook)
+	{
+		original_client_auth_hook(port, status);
+	}
+
+	RegisterClientBackendCounterDecrement();
+	IncrementClientBackendCounter();
 }

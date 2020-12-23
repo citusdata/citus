@@ -684,15 +684,12 @@ INSERT INTO agg_events
 DEBUG:  CTE sub_cte is going to be inlined via distributed planning
 DEBUG:  Subqueries without relations are not allowed in distributed INSERT ... SELECT queries
 DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  Subqueries without relations are not allowed in distributed INSERT ... SELECT queries
-DEBUG:  CTE sub_cte is going to be inlined via distributed planning
-DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  generating subplan XXX_1 for CTE sub_cte: SELECT 1
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT user_id, (SELECT sub_cte."?column?" FROM (SELECT intermediate_result."?column?" FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result("?column?" integer)) sub_cte("?column?")) AS value_1_agg FROM public.raw_events_first
-DEBUG:  Router planner cannot handle multi-shard select queries
-ERROR:  could not run distributed query with subquery outside the FROM, WHERE and HAVING clauses
-HINT:  Consider using an equality filter on the distributed table's partition column.
+DEBUG:  performing repartitioned INSERT ... SELECT
+DEBUG:  partitioning SELECT query by column index 0 with name 'user_id'
+DEBUG:  distributed statement: INSERT INTO public.agg_events_13300008 AS citus_table_alias (user_id, value_1_agg) SELECT user_id, value_1_agg FROM read_intermediate_results('{repartitioned_results_xxxxx_from_13300000_to_0}'::text[], 'binary'::citus_copy_format) intermediate_result(user_id integer, value_1_agg integer)
+DEBUG:  distributed statement: INSERT INTO public.agg_events_13300009 AS citus_table_alias (user_id, value_1_agg) SELECT user_id, value_1_agg FROM read_intermediate_results('{repartitioned_results_xxxxx_from_13300001_to_1}'::text[], 'binary'::citus_copy_format) intermediate_result(user_id integer, value_1_agg integer)
+DEBUG:  distributed statement: INSERT INTO public.agg_events_13300010 AS citus_table_alias (user_id, value_1_agg) SELECT user_id, value_1_agg FROM read_intermediate_results('{repartitioned_results_xxxxx_from_13300002_to_2}'::text[], 'binary'::citus_copy_format) intermediate_result(user_id integer, value_1_agg integer)
+DEBUG:  distributed statement: INSERT INTO public.agg_events_13300011 AS citus_table_alias (user_id, value_1_agg) SELECT user_id, value_1_agg FROM read_intermediate_results('{repartitioned_results_xxxxx_from_13300003_to_3}'::text[], 'binary'::citus_copy_format) intermediate_result(user_id integer, value_1_agg integer)
 -- We support set operations via the coordinator
 BEGIN;
 INSERT INTO

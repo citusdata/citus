@@ -1,6 +1,10 @@
-SELECT count(*) AS columnar_table_count FROM cstore.cstore_data_files \gset
+SET columnar.compression TO 'none';
+SELECT count(distinct storageid) AS columnar_table_count FROM columnar.columnar_stripes \gset
 CREATE TABLE t(a int, b int) USING columnar;
-SELECT count(*) FROM cstore.cstore_stripes a, pg_class b WHERE a.relfilenode=b.relfilenode AND b.relname='t';
+CREATE VIEW t_stripes AS
+SELECT * FROM columnar.columnar_stripes a, pg_class b
+WHERE a.storageid = columnar_relation_storageid(b.oid) AND b.relname='t';
+SELECT count(*) FROM t_stripes;
  count
 ---------------------------------------------------------------------
      0
@@ -15,7 +19,7 @@ SELECT sum(a), sum(b) FROM t;
  465 | 9455
 (1 row)
 
-SELECT count(*) FROM cstore.cstore_stripes a, pg_class b WHERE a.relfilenode=b.relfilenode AND b.relname='t';
+SELECT count(*) FROM t_stripes;
  count
 ---------------------------------------------------------------------
      3
@@ -29,7 +33,7 @@ SELECT sum(a), sum(b) FROM t;
  465 | 9455
 (1 row)
 
-SELECT count(*) FROM cstore.cstore_stripes a, pg_class b WHERE a.relfilenode=b.relfilenode AND b.relname='t';
+SELECT count(*) FROM t_stripes;
  count
 ---------------------------------------------------------------------
      1
@@ -49,7 +53,7 @@ SELECT sum(a), sum(b) FROM t;
  3126715 | 6261955
 (1 row)
 
-SELECT count(*) FROM cstore.cstore_stripes a, pg_class b WHERE a.relfilenode=b.relfilenode AND b.relname='t';
+SELECT count(*) FROM t_stripes;
  count
 ---------------------------------------------------------------------
      4
@@ -62,7 +66,7 @@ SELECT sum(a), sum(b) FROM t;
  3126715 | 6261955
 (1 row)
 
-SELECT count(*) FROM cstore.cstore_stripes a, pg_class b WHERE a.relfilenode=b.relfilenode AND b.relname='t';
+SELECT count(*) FROM t_stripes;
  count
 ---------------------------------------------------------------------
      3
@@ -70,8 +74,10 @@ SELECT count(*) FROM cstore.cstore_stripes a, pg_class b WHERE a.relfilenode=b.r
 
 -- VACUUM FULL doesn't reclaim dropped columns, but converts them to NULLs
 ALTER TABLE t DROP COLUMN a;
-SELECT stripe, attr, block, minimum_value IS NULL, maximum_value IS NULL FROM cstore.cstore_skipnodes a, pg_class b WHERE a.relfilenode=b.relfilenode AND b.relname='t' ORDER BY 1, 2, 3;
- stripe | attr | block | ?column? | ?column?
+SELECT stripe, attr, chunk, minimum_value IS NULL, maximum_value IS NULL
+FROM columnar.columnar_skipnodes a, pg_class b
+WHERE a.storageid = columnar_relation_storageid(b.oid) AND b.relname='t' ORDER BY 1, 2, 3;
+ stripe | attr | chunk | ?column? | ?column?
 ---------------------------------------------------------------------
       1 |    1 |     0 | f        | f
       1 |    2 |     0 | f        | f
@@ -82,8 +88,10 @@ SELECT stripe, attr, block, minimum_value IS NULL, maximum_value IS NULL FROM cs
 (6 rows)
 
 VACUUM FULL t;
-SELECT stripe, attr, block, minimum_value IS NULL, maximum_value IS NULL FROM cstore.cstore_skipnodes a, pg_class b WHERE a.relfilenode=b.relfilenode AND b.relname='t' ORDER BY 1, 2, 3;
- stripe | attr | block | ?column? | ?column?
+SELECT stripe, attr, chunk, minimum_value IS NULL, maximum_value IS NULL
+FROM columnar.columnar_skipnodes a, pg_class b
+WHERE a.storageid = columnar_relation_storageid(b.oid) AND b.relname='t' ORDER BY 1, 2, 3;
+ stripe | attr | chunk | ?column? | ?column?
 ---------------------------------------------------------------------
       1 |    1 |     0 | t        | t
       1 |    2 |     0 | f        | f
@@ -94,7 +102,7 @@ SELECT stripe, attr, block, minimum_value IS NULL, maximum_value IS NULL FROM cs
 (6 rows)
 
 -- Make sure we cleaned-up the transient table metadata after VACUUM FULL commands
-SELECT count(*) - :columnar_table_count FROM cstore.cstore_data_files;
+SELECT count(distinct storageid) - :columnar_table_count FROM columnar.columnar_stripes;
  ?column?
 ---------------------------------------------------------------------
         1
@@ -112,14 +120,14 @@ SELECT count(*) FROM t;
 SELECT pg_size_pretty(pg_relation_size('t'));
  pg_size_pretty
 ---------------------------------------------------------------------
- 32 kB
+ 40 kB
 (1 row)
 
 INSERT INTO t SELECT i FROM generate_series(1, 10000) i;
 SELECT pg_size_pretty(pg_relation_size('t'));
  pg_size_pretty
 ---------------------------------------------------------------------
- 112 kB
+ 120 kB
 (1 row)
 
 SELECT count(*) FROM t;
@@ -134,23 +142,24 @@ ROLLBACK TO SAVEPOINT s1;
 SELECT pg_size_pretty(pg_relation_size('t'));
  pg_size_pretty
 ---------------------------------------------------------------------
- 112 kB
+ 120 kB
 (1 row)
 
 COMMIT;
 -- vacuum should truncate the relation to the usable space
 VACUUM VERBOSE t;
 INFO:  statistics for "t":
-total file size: 114688, total data size: 10754
+storage id: xxxxx
+total file size: 122880, total data size: 10754
+compression rate: 1.00x
 total row count: 2530, stripe count: 3, average rows per stripe: 843
-block count: 3, containing data for dropped columns: 0, none compressed: 3, pglz compressed: 0
+chunk count: 3, containing data for dropped columns: 0, none compressed: 3
 
-INFO:  "t": truncated 14 to 4 pages
-DETAIL:  CPU: user: 0.00 s, system: 0.00 s, elapsed: 0.00 s
+INFO:  "t": truncated 15 to 5 pages
 SELECT pg_size_pretty(pg_relation_size('t'));
  pg_size_pretty
 ---------------------------------------------------------------------
- 32 kB
+ 40 kB
 (1 row)
 
 SELECT count(*) FROM t;
@@ -163,7 +172,7 @@ SELECT count(*) FROM t;
 -- then vacuum to print stats
 BEGIN;
 SELECT alter_columnar_table_set('t',
-    block_row_count => 1000,
+    chunk_row_count => 1000,
     stripe_row_count => 2000,
     compression => 'pglz');
  alter_columnar_table_set
@@ -188,9 +197,11 @@ INSERT INTO t SELECT i / 5 FROM generate_series(1, 1500) i;
 COMMIT;
 VACUUM VERBOSE t;
 INFO:  statistics for "t":
-total file size: 49152, total data size: 18808
+storage id: xxxxx
+total file size: 57344, total data size: 18808
+compression rate: 1.25x
 total row count: 5530, stripe count: 5, average rows per stripe: 1106
-block count: 7, containing data for dropped columns: 0, none compressed: 5, pglz compressed: 2
+chunk count: 7, containing data for dropped columns: 0, none compressed: 5, pglz compressed: 2
 
 SELECT count(*) FROM t;
  count
@@ -198,18 +209,20 @@ SELECT count(*) FROM t;
   5530
 (1 row)
 
--- check that we report blocks with data for dropped columns
+-- check that we report chunks with data for dropped columns
 ALTER TABLE t ADD COLUMN c int;
 INSERT INTO t SELECT 1, i / 5 FROM generate_series(1, 1500) i;
 ALTER TABLE t DROP COLUMN c;
 VACUUM VERBOSE t;
 INFO:  statistics for "t":
-total file size: 65536, total data size: 31372
+storage id: xxxxx
+total file size: 73728, total data size: 31372
+compression rate: 1.15x
 total row count: 7030, stripe count: 6, average rows per stripe: 1171
-block count: 11, containing data for dropped columns: 2, none compressed: 9, pglz compressed: 2
+chunk count: 11, containing data for dropped columns: 2, none compressed: 9, pglz compressed: 2
 
--- vacuum full should remove blocks for dropped columns
--- note that, a block will be stored in non-compressed for if compression
+-- vacuum full should remove chunks for dropped columns
+-- note that, a chunk will be stored in non-compressed for if compression
 -- doesn't reduce its size.
 SELECT alter_columnar_table_set('t', compression => 'pglz');
  alter_columnar_table_set
@@ -220,15 +233,33 @@ SELECT alter_columnar_table_set('t', compression => 'pglz');
 VACUUM FULL t;
 VACUUM VERBOSE t;
 INFO:  statistics for "t":
-total file size: 49152, total data size: 15728
+storage id: xxxxx
+total file size: 57344, total data size: 15728
+compression rate: 1.96x
 total row count: 7030, stripe count: 4, average rows per stripe: 1757
-block count: 8, containing data for dropped columns: 0, none compressed: 2, pglz compressed: 6
+chunk count: 8, containing data for dropped columns: 0, none compressed: 2, pglz compressed: 6
 
 DROP TABLE t;
+DROP VIEW t_stripes;
 -- Make sure we cleaned the metadata for t too
-SELECT count(*) - :columnar_table_count FROM cstore.cstore_data_files;
+SELECT count(distinct storageid) - :columnar_table_count FROM columnar.columnar_stripes;
  ?column?
 ---------------------------------------------------------------------
         0
 (1 row)
 
+-- A table with high compression ratio
+SET columnar.compression TO 'pglz';
+SET columnar.stripe_row_count TO 1000000;
+SET columnar.chunk_row_count TO 100000;
+CREATE TABLE t(a int, b char, c text) USING columnar;
+INSERT INTO t SELECT 1, 'a', 'xyz' FROM generate_series(1, 1000000) i;
+VACUUM VERBOSE t;
+INFO:  statistics for "t":
+storage id: xxxxx
+total file size: 630784, total data size: 604480
+compression rate: 33.71x
+total row count: 1000000, stripe count: 1, average rows per stripe: 1000000
+chunk count: 30, containing data for dropped columns: 0, pglz compressed: 30
+
+DROP TABLE t;

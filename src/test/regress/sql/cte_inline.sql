@@ -17,17 +17,17 @@ SET client_min_messages TO DEBUG;
 -- plan the query
 WITH cte_1 AS (SELECT * FROM test_table)
 SELECT
-	*, (SELECT 1)
+	*
 FROM
-	cte_1
+	test_table LEFT JOIN cte_1 USING (value)
 ORDER BY 1 DESC LIMIT 3;
 
 -- Should still not be inlined even if NOT MATERIALIZED is passed
 WITH cte_1 AS NOT MATERIALIZED (SELECT * FROM test_table)
 SELECT
-	*, (SELECT 1)
+	*
 FROM
-	cte_1
+	test_table LEFT JOIN cte_1 USING (value)
 ORDER BY 2 DESC LIMIT 1;
 
 -- the cte can be inlined because the unsupported
@@ -494,9 +494,9 @@ PREPARE inlined_cte_without_params AS
 PREPARE non_inlined_cte_without_params AS
     WITH cte_1 AS (SELECT * FROM test_table)
     SELECT
-        *, (SELECT 1)
+        *
     FROM
-        cte_1 ORDER BY 1 DESC, 2 DESC, 3 DESC LIMIT 3;
+        test_table LEFT JOIN cte_1 USING (value) ORDER BY 1 DESC, 2 DESC, 3 DESC LIMIT 3;
 PREPARE inlined_cte_has_parameter_on_non_dist_key(text) AS
 	WITH cte_1 AS (SELECT count(*) FROM test_table WHERE value = $1 GROUP BY key)
 	SELECT * FROM cte_1 ORDER BY 1 DESC LIMIT 3;
@@ -506,9 +506,9 @@ PREPARE inlined_cte_has_parameter_on_dist_key(int) AS
 PREPARE non_inlined_cte_has_parameter_on_dist_key(int) AS
     WITH cte_1 AS (SELECT * FROM test_table where key > $1)
     SELECT
-        *, (SELECT 1)
+        *
     FROM
-        cte_1 ORDER BY 1 DESC, 2 DESC, 3 DESC LIMIT 3;
+        test_table LEFT JOIN cte_1 USING (value) ORDER BY 1 DESC, 2 DESC, 3 DESC LIMIT 3;
 PREPARE retry_planning(int) AS
 	 WITH cte_1 AS (SELECT * FROM test_table WHERE key > $1)
 	 SELECT json_object_agg(DISTINCT key, value)  FROM cte_1 ORDER BY max(key), min(value) DESC LIMIT 3;

@@ -39,12 +39,12 @@
 #include "distributed/multi_logical_planner.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/pg_dist_partition.h"
+#include "distributed/query_pushdown_planning.h"
 #include "distributed/tdigest_extension.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/version_compat.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
-#include "nodes/print.h"
 #include "optimizer/clauses.h"
 #include "optimizer/tlist.h"
 #if PG_VERSION_NUM >= PG_VERSION_12
@@ -291,8 +291,9 @@ static SortGroupClause * CreateSortGroupClause(Var *column);
 /* Local functions forward declarations for count(distinct) approximations */
 static const char * CountDistinctHashFunctionName(Oid argumentType);
 static int CountDistinctStorageSize(double approximationErrorRate);
-static Const * MakeIntegerConst(int32 integerValue);
 static Const * MakeIntegerConstInt64(int64 integerValue);
+static Const * MakeIntegerConst(int32 integerValue);
+
 
 /* Local functions forward declarations for aggregate expression checks */
 static bool HasNonDistributableAggregates(MultiNode *logicalPlanNode);
@@ -481,6 +482,15 @@ MultiLogicalPlanOptimize(MultiTreeRoot *multiLogicalPlan)
 		ereport(ERROR, (errmsg("cannot approximate count(distinct) and order by it"),
 						errhint("You might need to disable approximations for either "
 								"count(distinct) or limit through configuration.")));
+	}
+
+	if (TargetListContainsSubquery(masterExtendedOpNode->targetList))
+	{
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("cannot push down subquery on the target list"),
+						errdetail("Subqueries in the SELECT part of the query can only "
+								  "be pushed down if they happen before aggregates and "
+								  "window functions")));
 	}
 }
 
@@ -4336,6 +4346,11 @@ GroupedByColumn(List *groupClauseList, List *targetList, Var *column)
 {
 	bool groupedByColumn = false;
 
+	if (column == NULL)
+	{
+		return false;
+	}
+
 	SortGroupClause *groupClause = NULL;
 	foreach_ptr(groupClause, groupClauseList)
 	{
@@ -4490,7 +4505,16 @@ FindReferencedTableColumn(Expr *columnExpression, List *parentQueryList, Query *
 		return;
 	}
 
-	Index rangeTableEntryIndex = candidateColumn->varno - 1;
+	if (candidateColumn->varattno == InvalidAttrNumber)
+	{
+		/*
+		 * varattno can be 0 in case of SELECT table FROM table, but that Var
+		 * definitely does not correspond to a specific column.
+		 */
+		return;
+	}
+
+	int rangeTableEntryIndex = candidateColumn->varno - 1;
 	RangeTblEntry *rangeTableEntry = list_nth(rangetableList, rangeTableEntryIndex);
 
 	if (rangeTableEntry->rtekind == RTE_RELATION)

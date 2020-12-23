@@ -24,6 +24,7 @@
 
 #include "distributed/citus_nodefuncs.h"
 #include "distributed/citus_nodes.h"
+#include "distributed/coordinator_protocol.h"
 #include "distributed/errormessage.h"
 #include "distributed/log_utils.h"
 #include "distributed/multi_logical_planner.h"
@@ -113,6 +114,10 @@
 #define WRITE_BITMAPSET_FIELD(fldname) \
 	(appendStringInfo(str, " :" CppAsString(fldname) " "), \
 	 _outBitmapset(str, node->fldname))
+
+#define WRITE_CUSTOM_FIELD(fldname, fldvalue) \
+	(appendStringInfo(str, " :" CppAsString(fldname) " "), \
+	appendStringInfoString(str, (fldvalue)))
 
 
 /* Write an integer array (anything written as ":fldname (%d, %d") */
@@ -535,6 +540,7 @@ OutTask(OUTFUNC_ARGS)
 	WRITE_INT_FIELD(fetchedExplainAnalyzePlacementIndex);
 	WRITE_STRING_FIELD(fetchedExplainAnalyzePlan);
 	WRITE_FLOAT_FIELD(fetchedExplainAnalyzeExecutionDuration, "%.2f");
+	WRITE_BOOL_FIELD(isLocalTableModification);
 }
 
 
@@ -563,4 +569,28 @@ OutDeferredErrorMessage(OUTFUNC_ARGS)
 	WRITE_STRING_FIELD(filename);
 	WRITE_INT_FIELD(linenumber);
 	WRITE_STRING_FIELD(functionname);
+}
+
+
+void
+OutTableDDLCommand(OUTFUNC_ARGS)
+{
+	WRITE_LOCALS(TableDDLCommand);
+	WRITE_NODE_TYPE("TableDDLCommand");
+
+	switch (node->type)
+	{
+		case TABLE_DDL_COMMAND_STRING:
+		{
+			WRITE_STRING_FIELD(commandStr);
+			break;
+		}
+
+		case TABLE_DDL_COMMAND_FUNCTION:
+		{
+			char *example = node->function.function(node->function.context);
+			WRITE_CUSTOM_FIELD(function, example);
+			break;
+		}
+	}
 }

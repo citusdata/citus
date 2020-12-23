@@ -1,0 +1,143 @@
+SHOW server_version \gset
+SELECT substring(:'server_version', '\d+')::int > 12 AS server_version_above_eleven
+\gset
+\if :server_version_above_eleven
+\else
+\q
+\endif
+SET search_path TO upgrade_columnar, public;
+-- test we retained data
+SELECT * FROM test_retains_data ORDER BY a;
+ a |   b   |    c    |      d
+---------------------------------------------------------------------
+ 1 | abc   | (1,4)   | {1,2,3,4}
+ 2 | pi    | (3,192) | {3,1,4,1,5}
+ 3 | earth | (4,22)  | {1,2,7,5,6}
+(3 rows)
+
+SELECT count(*) FROM test_retains_data;
+ count
+---------------------------------------------------------------------
+     3
+(1 row)
+
+SELECT a,c FROM test_retains_data ORDER BY a;
+ a |    c
+---------------------------------------------------------------------
+ 1 | (1,4)
+ 2 | (3,192)
+ 3 | (4,22)
+(3 rows)
+
+SELECT b,d FROM test_retains_data ORDER BY a;
+   b   |      d
+---------------------------------------------------------------------
+ abc   | {1,2,3,4}
+ pi    | {3,1,4,1,5}
+ earth | {1,2,7,5,6}
+(3 rows)
+
+SELECT * FROM test_retains_data ORDER BY a;
+ a |   b   |    c    |      d
+---------------------------------------------------------------------
+ 1 | abc   | (1,4)   | {1,2,3,4}
+ 2 | pi    | (3,192) | {3,1,4,1,5}
+ 3 | earth | (4,22)  | {1,2,7,5,6}
+(3 rows)
+
+-- test we retained data with a once truncated table
+SELECT * FROM test_truncated ORDER BY a;
+ a
+---------------------------------------------------------------------
+ 11
+ 12
+ 13
+(3 rows)
+
+-- test we retained data with a once vacuum fulled table
+SELECT * FROM test_vacuum_full ORDER BY a;
+ a
+---------------------------------------------------------------------
+  1
+  2
+  3
+  4
+  5
+  6
+  7
+  8
+  9
+ 10
+ 11
+ 12
+ 13
+(13 rows)
+
+-- test we retained data with a once alter typed table
+SELECT * FROM test_alter_type ORDER BY a;
+ a
+---------------------------------------------------------------------
+ 1
+ 10
+ 11
+ 12
+ 13
+ 2
+ 3
+ 4
+ 5
+ 6
+ 7
+ 8
+ 9
+(13 rows)
+
+-- test we retained data with a once refreshed materialized view
+SELECT * FROM matview ORDER BY a;
+ a |    b
+---------------------------------------------------------------------
+ 0 | {abc,pi}
+ 1 | {earth}
+(2 rows)
+
+-- test we retained options
+SELECT * FROM columnar.options WHERE regclass = 'test_options_1'::regclass;
+    regclass    | chunk_row_count | stripe_row_count | compression_level | compression
+---------------------------------------------------------------------
+ test_options_1 |            1000 |             5000 |                 3 | pglz
+(1 row)
+
+VACUUM VERBOSE test_options_1;
+INFO:  statistics for "test_options_1":
+storage id: xxxxx
+total file size: 65536, total data size: 43136
+compression rate: 1.91x
+total row count: 10000, stripe count: 2, average rows per stripe: 5000
+chunk count: 20, containing data for dropped columns: 0, none compressed: 10, pglz compressed: 10
+
+SELECT count(*), sum(a), sum(b) FROM test_options_1;
+ count |   sum    |  sum
+---------------------------------------------------------------------
+ 10000 | 50005000 | 45010
+(1 row)
+
+SELECT * FROM columnar.options WHERE regclass = 'test_options_2'::regclass;
+    regclass    | chunk_row_count | stripe_row_count | compression_level | compression
+---------------------------------------------------------------------
+ test_options_2 |            2000 |             6000 |                13 | none
+(1 row)
+
+VACUUM VERBOSE test_options_2;
+INFO:  statistics for "test_options_2":
+storage id: xxxxx
+total file size: 163840, total data size: 125636
+compression rate: 1.31x
+total row count: 20000, stripe count: 4, average rows per stripe: 5000
+chunk count: 30, containing data for dropped columns: 0, none compressed: 20, pglz compressed: 10
+
+SELECT count(*), sum(a), sum(b) FROM test_options_2;
+ count |    sum    |  sum
+---------------------------------------------------------------------
+ 20000 | 100010000 | 65015
+(1 row)
+

@@ -23,6 +23,7 @@
 #include "catalog/index.h"
 #include "catalog/objectaccess.h"
 #include "catalog/pg_am.h"
+#include "catalog/pg_publication.h"
 #include "catalog/pg_trigger.h"
 #include "catalog/storage.h"
 #include "catalog/storage_xlog.h"
@@ -44,14 +45,19 @@
 #include "utils/memutils.h"
 #include "utils/pg_rusage.h"
 #include "utils/rel.h"
+#include "utils/relcache.h"
+#include "utils/lsyscache.h"
 #include "utils/syscache.h"
 
 #include "columnar/cstore.h"
 #include "columnar/cstore_customscan.h"
 #include "columnar/cstore_tableam.h"
 #include "columnar/cstore_version_compat.h"
+#include "distributed/commands.h"
+#include "distributed/commands/utility_hook.h"
+#include "distributed/metadata_cache.h"
 
-#define CSTORE_TABLEAM_NAME "cstore_tableam"
+#define CSTORE_TABLEAM_NAME "columnar"
 
 /*
  * Timing parameters for truncate locking heuristics.
@@ -77,6 +83,12 @@ typedef struct CStoreScanDescData
 	MemoryContext scanContext;
 	Bitmapset *attr_needed;
 	List *scanQual;
+
+	/*
+	 * ANALYZE requires an item pointer for sorting. We keep track of row
+	 * number so we can construct an item pointer based on that.
+	 */
+	int rowNumber;
 } CStoreScanDescData;
 
 typedef struct CStoreScanDescData *CStoreScanDesc;
@@ -106,45 +118,15 @@ static void CStoreTableAMProcessUtility(PlannedStmt *plannedStatement,
 										char *completionTag);
 #endif
 
-static bool IsCStoreTableAmTable(Oid relationId);
 static bool ConditionalLockRelationWithTimeout(Relation rel, LOCKMODE lockMode,
 											   int timeout, int retryInterval);
 static void LogRelationStats(Relation rel, int elevel);
 static void TruncateCStore(Relation rel, int elevel);
+static HeapTuple ColumnarSlotCopyHeapTuple(TupleTableSlot *slot);
+static void ColumnarCheckLogicalReplication(Relation rel);
 
-
-/*
- * CStoreTableAMDefaultOptions returns the default options for a cstore table am table.
- * These options are based on the GUC's controlling the defaults.
- */
-static CStoreOptions *
-CStoreTableAMDefaultOptions()
-{
-	CStoreOptions *cstoreOptions = palloc0(sizeof(CStoreOptions));
-	cstoreOptions->compressionType = cstore_compression;
-	cstoreOptions->stripeRowCount = cstore_stripe_row_count;
-	cstoreOptions->blockRowCount = cstore_block_row_count;
-	return cstoreOptions;
-}
-
-
-/*
- * CStoreTableAMGetOptions returns the options based on a relation. It is advised the
- * relation is a cstore table am table, if not it will raise an error
- */
-CStoreOptions *
-CStoreTableAMGetOptions(Oid relfilenode)
-{
-	Assert(OidIsValid(relfilenode));
-
-	CStoreOptions *cstoreOptions = palloc0(sizeof(CStoreOptions));
-	DataFileMetadata *metadata = ReadDataFileMetadata(relfilenode, false);
-	cstoreOptions->compressionType = metadata->compression;
-	cstoreOptions->stripeRowCount = metadata->stripeRowCount;
-	cstoreOptions->blockRowCount = metadata->blockRowCount;
-	return cstoreOptions;
-}
-
+/* Custom tuple slot ops used for columnar. Initialized in cstore_tableam_init(). */
+TupleTableSlotOps TTSOpsColumnar;
 
 static List *
 RelationColumnList(Relation rel)
@@ -178,7 +160,7 @@ RelationColumnList(Relation rel)
 static const TupleTableSlotOps *
 cstore_slot_callbacks(Relation relation)
 {
-	return &TTSOpsVirtual;
+	return &TTSOpsColumnar;
 }
 
 
@@ -343,6 +325,20 @@ cstore_getnextslot(TableScanDesc sscan, ScanDirection direction, TupleTableSlot 
 	}
 
 	ExecStoreVirtualTuple(slot);
+
+	/*
+	 * Set slot's item pointer block & offset to non-zero. These are
+	 * used just for sorting in acquire_sample_rows(), so rowNumber
+	 * is good enough. See ColumnarSlotCopyHeapTuple for more info.
+	 *
+	 * offset is 16-bits, so use the first 15 bits for offset and
+	 * rest as block number.
+	 */
+	ItemPointerSetBlockNumber(&(slot->tts_tid), scan->rowNumber / (32 * 1024) + 1);
+	ItemPointerSetOffsetNumber(&(slot->tts_tid), scan->rowNumber % (32 * 1024) + 1);
+
+	scan->rowNumber++;
+
 	return true;
 }
 
@@ -350,42 +346,45 @@ cstore_getnextslot(TableScanDesc sscan, ScanDirection direction, TupleTableSlot 
 static Size
 cstore_parallelscan_estimate(Relation rel)
 {
-	elog(ERROR, "cstore_parallelscan_estimate not implemented");
+	elog(ERROR, "columnar_parallelscan_estimate not implemented");
 }
 
 
 static Size
 cstore_parallelscan_initialize(Relation rel, ParallelTableScanDesc pscan)
 {
-	elog(ERROR, "cstore_parallelscan_initialize not implemented");
+	elog(ERROR, "columnar_parallelscan_initialize not implemented");
 }
 
 
 static void
 cstore_parallelscan_reinitialize(Relation rel, ParallelTableScanDesc pscan)
 {
-	elog(ERROR, "cstore_parallelscan_reinitialize not implemented");
+	elog(ERROR, "columnar_parallelscan_reinitialize not implemented");
 }
 
 
 static IndexFetchTableData *
 cstore_index_fetch_begin(Relation rel)
 {
-	elog(ERROR, "cstore_index_fetch_begin not implemented");
+	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					errmsg("indexes not supported for columnar tables")));
 }
 
 
 static void
 cstore_index_fetch_reset(IndexFetchTableData *scan)
 {
-	elog(ERROR, "cstore_index_fetch_reset not implemented");
+	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					errmsg("indexes not supported for columnar tables")));
 }
 
 
 static void
 cstore_index_fetch_end(IndexFetchTableData *scan)
 {
-	elog(ERROR, "cstore_index_fetch_end not implemented");
+	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					errmsg("indexes not supported for columnar tables")));
 }
 
 
@@ -396,7 +395,8 @@ cstore_index_fetch_tuple(struct IndexFetchTableData *scan,
 						 TupleTableSlot *slot,
 						 bool *call_again, bool *all_dead)
 {
-	elog(ERROR, "cstore_index_fetch_tuple not implemented");
+	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					errmsg("indexes not supported for columnar tables")));
 }
 
 
@@ -406,7 +406,7 @@ cstore_fetch_row_version(Relation relation,
 						 Snapshot snapshot,
 						 TupleTableSlot *slot)
 {
-	elog(ERROR, "cstore_fetch_row_version not implemented");
+	elog(ERROR, "columnar_fetch_row_version not implemented");
 }
 
 
@@ -414,14 +414,14 @@ static void
 cstore_get_latest_tid(TableScanDesc sscan,
 					  ItemPointer tid)
 {
-	elog(ERROR, "cstore_get_latest_tid not implemented");
+	elog(ERROR, "columnar_get_latest_tid not implemented");
 }
 
 
 static bool
 cstore_tuple_tid_valid(TableScanDesc scan, ItemPointer tid)
 {
-	elog(ERROR, "cstore_tuple_tid_valid not implemented");
+	elog(ERROR, "columnar_tuple_tid_valid not implemented");
 }
 
 
@@ -438,7 +438,7 @@ cstore_compute_xid_horizon_for_tuples(Relation rel,
 									  ItemPointerData *tids,
 									  int nitems)
 {
-	elog(ERROR, "cstore_compute_xid_horizon_for_tuples not implemented");
+	elog(ERROR, "columnar_compute_xid_horizon_for_tuples not implemented");
 }
 
 
@@ -450,13 +450,15 @@ cstore_tuple_insert(Relation relation, TupleTableSlot *slot, CommandId cid,
 	 * cstore_init_write_state allocates the write state in a longer
 	 * lasting context, so no need to worry about it.
 	 */
-	TableWriteState *writeState = cstore_init_write_state(relation->rd_node,
+	TableWriteState *writeState = cstore_init_write_state(relation,
 														  RelationGetDescr(relation),
 														  GetCurrentSubTransactionId());
 
 	MemoryContext oldContext = MemoryContextSwitchTo(writeState->perTupleContext);
 
 	HeapTuple heapTuple = ExecCopySlotHeapTuple(slot);
+
+	ColumnarCheckLogicalReplication(relation);
 	if (HeapTupleHasExternal(heapTuple))
 	{
 		/* detoast any toasted attributes */
@@ -480,7 +482,7 @@ cstore_tuple_insert_speculative(Relation relation, TupleTableSlot *slot,
 								CommandId cid, int options,
 								BulkInsertState bistate, uint32 specToken)
 {
-	elog(ERROR, "cstore_tuple_insert_speculative not implemented");
+	elog(ERROR, "columnar_tuple_insert_speculative not implemented");
 }
 
 
@@ -488,7 +490,7 @@ static void
 cstore_tuple_complete_speculative(Relation relation, TupleTableSlot *slot,
 								  uint32 specToken, bool succeeded)
 {
-	elog(ERROR, "cstore_tuple_complete_speculative not implemented");
+	elog(ERROR, "columnar_tuple_complete_speculative not implemented");
 }
 
 
@@ -496,10 +498,11 @@ static void
 cstore_multi_insert(Relation relation, TupleTableSlot **slots, int ntuples,
 					CommandId cid, int options, BulkInsertState bistate)
 {
-	TableWriteState *writeState = cstore_init_write_state(relation->rd_node,
+	TableWriteState *writeState = cstore_init_write_state(relation,
 														  RelationGetDescr(relation),
 														  GetCurrentSubTransactionId());
 
+	ColumnarCheckLogicalReplication(relation);
 	for (int i = 0; i < ntuples; i++)
 	{
 		TupleTableSlot *tupleSlot = slots[i];
@@ -530,7 +533,7 @@ cstore_tuple_delete(Relation relation, ItemPointer tid, CommandId cid,
 					Snapshot snapshot, Snapshot crosscheck, bool wait,
 					TM_FailureData *tmfd, bool changingPart)
 {
-	elog(ERROR, "cstore_tuple_delete not implemented");
+	elog(ERROR, "columnar_tuple_delete not implemented");
 }
 
 
@@ -540,7 +543,7 @@ cstore_tuple_update(Relation relation, ItemPointer otid, TupleTableSlot *slot,
 					bool wait, TM_FailureData *tmfd,
 					LockTupleMode *lockmode, bool *update_indexes)
 {
-	elog(ERROR, "cstore_tuple_update not implemented");
+	elog(ERROR, "columnar_tuple_update not implemented");
 }
 
 
@@ -550,7 +553,7 @@ cstore_tuple_lock(Relation relation, ItemPointer tid, Snapshot snapshot,
 				  LockWaitPolicy wait_policy, uint8 flags,
 				  TM_FailureData *tmfd)
 {
-	elog(ERROR, "cstore_tuple_lock not implemented");
+	elog(ERROR, "columnar_tuple_lock not implemented");
 }
 
 
@@ -570,50 +573,35 @@ cstore_relation_set_new_filenode(Relation rel,
 								 TransactionId *freezeXid,
 								 MultiXactId *minmulti)
 {
-	DataFileMetadata *metadata = ReadDataFileMetadata(rel->rd_node.relNode, true);
-	uint64 blockRowCount = 0;
-	uint64 stripeRowCount = 0;
-	CompressionType compression = 0;
 	Oid oldRelfilenode = rel->rd_node.relNode;
 
 	MarkRelfilenodeDropped(oldRelfilenode, GetCurrentSubTransactionId());
 
-	if (metadata != NULL)
-	{
-		/* existing table (e.g. TRUNCATE), use existing blockRowCount */
-		blockRowCount = metadata->blockRowCount;
-		stripeRowCount = metadata->stripeRowCount;
-		compression = metadata->compression;
-	}
-	else
-	{
-		/* new table, use options */
-		CStoreOptions *options = CStoreTableAMDefaultOptions();
-		blockRowCount = options->blockRowCount;
-		stripeRowCount = options->stripeRowCount;
-		compression = options->compressionType;
-	}
-
 	/* delete old relfilenode metadata */
-	DeleteDataFileMetadataRowIfExists(rel->rd_node.relNode);
+	DeleteMetadataRows(rel->rd_node);
 
 	Assert(persistence == RELPERSISTENCE_PERMANENT);
 	*freezeXid = RecentXmin;
 	*minmulti = GetOldestMultiXactId();
 	SMgrRelation srel = RelationCreateStorage(*newrnode, persistence);
-	InitCStoreDataFileMetadata(newrnode->relNode, blockRowCount, stripeRowCount,
-							   compression);
+
+	InitColumnarOptions(rel->rd_id);
+
 	smgrclose(srel);
+
+	/* we will lazily initialize metadata in first stripe reservation */
 }
 
 
 static void
 cstore_relation_nontransactional_truncate(Relation rel)
 {
-	Oid relfilenode = rel->rd_node.relNode;
-	DataFileMetadata *metadata = ReadDataFileMetadata(relfilenode, false);
+	RelFileNode relfilenode = rel->rd_node;
 
-	NonTransactionDropWriteState(relfilenode);
+	NonTransactionDropWriteState(relfilenode.relNode);
+
+	/* Delete old relfilenode metadata */
+	DeleteMetadataRows(relfilenode);
 
 	/*
 	 * No need to set new relfilenode, since the table was created in this
@@ -624,17 +612,14 @@ cstore_relation_nontransactional_truncate(Relation rel)
 	 */
 	RelationTruncate(rel, 0);
 
-	/* Delete old relfilenode metadata and recreate it */
-	DeleteDataFileMetadataRowIfExists(rel->rd_node.relNode);
-	InitCStoreDataFileMetadata(rel->rd_node.relNode, metadata->blockRowCount,
-							   metadata->stripeRowCount, metadata->compression);
+	/* we will lazily initialize new metadata in first stripe reservation */
 }
 
 
 static void
 cstore_relation_copy_data(Relation rel, const RelFileNode *newrnode)
 {
-	elog(ERROR, "cstore_relation_copy_data not implemented");
+	elog(ERROR, "columnar_relation_copy_data not implemented");
 }
 
 
@@ -660,7 +645,8 @@ cstore_relation_copy_for_cluster(Relation OldHeap, Relation NewHeap,
 
 	if (OldIndex != NULL || use_sort)
 	{
-		ereport(ERROR, (errmsg(CSTORE_TABLEAM_NAME " doesn't support indexes")));
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("indexes not supported for columnar tables")));
 	}
 
 	/*
@@ -670,24 +656,12 @@ cstore_relation_copy_for_cluster(Relation OldHeap, Relation NewHeap,
 	 */
 	Assert(sourceDesc->natts == targetDesc->natts);
 
-	/*
-	 * Since we are copying into a new relation we need to copy the settings from the old
-	 * relation first.
-	 */
-
-	CStoreOptions *cstoreOptions = CStoreTableAMGetOptions(OldHeap->rd_node.relNode);
-
-	UpdateCStoreDataFileMetadata(NewHeap->rd_node.relNode,
-								 cstoreOptions->blockRowCount,
-								 cstoreOptions->stripeRowCount,
-								 cstoreOptions->compressionType);
-
-	cstoreOptions = CStoreTableAMGetOptions(NewHeap->rd_node.relNode);
+	/* read settings from old heap, relfilenode will be swapped at the end */
+	ColumnarOptions cstoreOptions = { 0 };
+	ReadColumnarOptions(OldHeap->rd_id, &cstoreOptions);
 
 	TableWriteState *writeState = CStoreBeginWrite(NewHeap->rd_node,
-												   cstoreOptions->compressionType,
-												   cstoreOptions->stripeRowCount,
-												   cstoreOptions->blockRowCount,
+												   cstoreOptions,
 												   targetDesc);
 
 	TableReadState *readState = CStoreBeginRead(OldHeap, sourceDesc,
@@ -736,48 +710,59 @@ cstore_vacuum_rel(Relation rel, VacuumParams *params,
 }
 
 
+/*
+ * LogRelationStats logs statistics as the output of the VACUUM VERBOSE.
+ */
 static void
 LogRelationStats(Relation rel, int elevel)
 {
 	ListCell *stripeMetadataCell = NULL;
-	Oid relfilenode = rel->rd_node.relNode;
+	RelFileNode relfilenode = rel->rd_node;
 	StringInfo infoBuf = makeStringInfo();
 
 	int compressionStats[COMPRESSION_COUNT] = { 0 };
 	uint64 totalStripeLength = 0;
 	uint64 tupleCount = 0;
-	uint64 blockCount = 0;
+	uint64 chunkCount = 0;
 	TupleDesc tupdesc = RelationGetDescr(rel);
-	uint64 droppedBlocksWithData = 0;
+	uint64 droppedChunksWithData = 0;
+	uint64 totalDecompressedLength = 0;
 
-	DataFileMetadata *datafileMetadata = ReadDataFileMetadata(relfilenode, false);
-	int stripeCount = list_length(datafileMetadata->stripeMetadataList);
+	List *stripeList = StripesForRelfilenode(relfilenode);
+	int stripeCount = list_length(stripeList);
 
-	foreach(stripeMetadataCell, datafileMetadata->stripeMetadataList)
+	foreach(stripeMetadataCell, stripeList)
 	{
 		StripeMetadata *stripe = lfirst(stripeMetadataCell);
 		StripeSkipList *skiplist = ReadStripeSkipList(relfilenode, stripe->id,
 													  RelationGetDescr(rel),
-													  stripe->blockCount);
+													  stripe->chunkCount);
 		for (uint32 column = 0; column < skiplist->columnCount; column++)
 		{
 			bool attrDropped = tupdesc->attrs[column].attisdropped;
-			for (uint32 block = 0; block < skiplist->blockCount; block++)
+			for (uint32 chunk = 0; chunk < skiplist->chunkCount; chunk++)
 			{
-				ColumnBlockSkipNode *skipnode =
-					&skiplist->blockSkipNodeArray[column][block];
+				ColumnChunkSkipNode *skipnode =
+					&skiplist->chunkSkipNodeArray[column][chunk];
 
-				/* ignore zero length blocks for dropped attributes */
+				/* ignore zero length chunks for dropped attributes */
 				if (skipnode->valueLength > 0)
 				{
 					compressionStats[skipnode->valueCompressionType]++;
-					blockCount++;
+					chunkCount++;
 
 					if (attrDropped)
 					{
-						droppedBlocksWithData++;
+						droppedChunksWithData++;
 					}
 				}
+
+				/*
+				 * We don't compress exists buffer, so its compressed & decompressed
+				 * lengths are the same.
+				 */
+				totalDecompressedLength += skipnode->existsLength;
+				totalDecompressedLength += skipnode->decompressedValueSize;
 			}
 		}
 
@@ -789,21 +774,45 @@ LogRelationStats(Relation rel, int elevel)
 	uint64 relPages = smgrnblocks(rel->rd_smgr, MAIN_FORKNUM);
 	RelationCloseSmgr(rel);
 
+	Datum storageId = DirectFunctionCall1(columnar_relation_storageid,
+										  ObjectIdGetDatum(RelationGetRelid(rel)));
+
+	double compressionRate = totalStripeLength ?
+							 (double) totalDecompressedLength / totalStripeLength :
+							 1.0;
+
+	appendStringInfo(infoBuf, "storage id: %ld\n", DatumGetInt64(storageId));
 	appendStringInfo(infoBuf, "total file size: %ld, total data size: %ld\n",
 					 relPages * BLCKSZ, totalStripeLength);
+	appendStringInfo(infoBuf, "compression rate: %.2fx\n", compressionRate);
 	appendStringInfo(infoBuf,
 					 "total row count: %ld, stripe count: %d, "
 					 "average rows per stripe: %ld\n",
-					 tupleCount, stripeCount, tupleCount / stripeCount);
+					 tupleCount, stripeCount,
+					 stripeCount ? tupleCount / stripeCount : 0);
 	appendStringInfo(infoBuf,
-					 "block count: %ld"
+					 "chunk count: %ld"
 					 ", containing data for dropped columns: %ld",
-					 blockCount, droppedBlocksWithData);
+					 chunkCount, droppedChunksWithData);
 	for (int compressionType = 0; compressionType < COMPRESSION_COUNT; compressionType++)
 	{
+		const char *compressionName = CompressionTypeStr(compressionType);
+
+		/* skip if this compression algorithm has not been compiled */
+		if (compressionName == NULL)
+		{
+			continue;
+		}
+
+		/* skip if no chunks use this compression type */
+		if (compressionStats[compressionType] == 0)
+		{
+			continue;
+		}
+
 		appendStringInfo(infoBuf,
 						 ", %s compressed: %d",
-						 CompressionTypeStr(compressionType),
+						 compressionName,
 						 compressionStats[compressionType]);
 	}
 	appendStringInfoString(infoBuf, "\n");
@@ -866,9 +875,13 @@ TruncateCStore(Relation rel, int elevel)
 	 * we're truncating.
 	 */
 	SmgrAddr highestPhysicalAddress =
-		logical_to_smgr(GetHighestUsedAddress(rel->rd_node.relNode));
+		logical_to_smgr(GetHighestUsedAddress(rel->rd_node));
 
-	BlockNumber new_rel_pages = highestPhysicalAddress.blockno + 1;
+	/*
+	 * Unlock and return if truncation won't reduce data file's size.
+	 */
+	BlockNumber new_rel_pages = Min(old_rel_pages,
+									highestPhysicalAddress.blockno + 1);
 	if (new_rel_pages == old_rel_pages)
 	{
 		UnlockRelation(rel, AccessExclusiveLock);
@@ -960,7 +973,7 @@ cstore_scan_analyze_next_tuple(TableScanDesc scan, TransactionId OldestXmin,
 	 * based access methods where it chooses random pages, and then reads
 	 * tuples from those pages.
 	 *
-	 * We could do something like that here by choosing sample stripes or blocks,
+	 * We could do something like that here by choosing sample stripes or chunks,
 	 * but getting that correct might need quite some work. Since cstore_fdw's
 	 * ANALYZE scanned all rows, as a starter we do the same here and scan all
 	 * rows.
@@ -988,7 +1001,8 @@ cstore_index_build_range_scan(Relation heapRelation,
 							  void *callback_state,
 							  TableScanDesc scan)
 {
-	elog(ERROR, "cstore_index_build_range_scan not implemented");
+	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					errmsg("indexes not supported for columnar tables")));
 }
 
 
@@ -999,7 +1013,8 @@ cstore_index_validate_scan(Relation heapRelation,
 						   Snapshot snapshot,
 						   ValidateIndexState *state)
 {
-	elog(ERROR, "cstore_index_validate_scan not implemented");
+	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					errmsg("indexes not supported for columnar tables")));
 }
 
 
@@ -1057,7 +1072,7 @@ cstore_estimate_rel_size(Relation rel, int32 *attr_widths,
 static bool
 cstore_scan_sample_next_block(TableScanDesc scan, SampleScanState *scanstate)
 {
-	elog(ERROR, "cstore_scan_sample_next_block not implemented");
+	elog(ERROR, "columnar_scan_sample_next_block not implemented");
 }
 
 
@@ -1065,7 +1080,7 @@ static bool
 cstore_scan_sample_next_tuple(TableScanDesc scan, SampleScanState *scanstate,
 							  TupleTableSlot *slot)
 {
-	elog(ERROR, "cstore_scan_sample_next_tuple not implemented");
+	elog(ERROR, "columnar_scan_sample_next_tuple not implemented");
 }
 
 
@@ -1186,6 +1201,9 @@ cstore_tableam_init()
 	object_access_hook = CStoreTableAMObjectAccessHook;
 
 	cstore_customscan_init();
+
+	TTSOpsColumnar = TTSOpsVirtual;
+	TTSOpsColumnar.copy_heap_tuple = ColumnarSlotCopyHeapTuple;
 }
 
 
@@ -1193,6 +1211,31 @@ void
 cstore_tableam_finish()
 {
 	object_access_hook = PrevObjectAccessHook;
+}
+
+
+/*
+ * Implementation of TupleTableSlotOps.copy_heap_tuple for TTSOpsColumnar.
+ */
+static HeapTuple
+ColumnarSlotCopyHeapTuple(TupleTableSlot *slot)
+{
+	Assert(!TTS_EMPTY(slot));
+
+	HeapTuple tuple = heap_form_tuple(slot->tts_tupleDescriptor,
+									  slot->tts_values,
+									  slot->tts_isnull);
+
+	/*
+	 * We need to set item pointer, since implementation of ANALYZE
+	 * requires it. See the qsort in acquire_sample_rows() and
+	 * also compare_rows in backend/commands/analyze.c.
+	 *
+	 * slot->tts_tid is filled in cstore_getnextslot.
+	 */
+	tuple->t_self = slot->tts_tid;
+
+	return tuple;
 }
 
 
@@ -1234,10 +1277,11 @@ CStoreTableAMObjectAccessHook(ObjectAccessType access, Oid classId, Oid objectId
 		 * tableam tables storage is managed by postgres.
 		 */
 		Relation rel = table_open(objectId, AccessExclusiveLock);
-		Oid relfilenode = rel->rd_node.relNode;
-		DeleteDataFileMetadataRowIfExists(relfilenode);
+		RelFileNode relfilenode = rel->rd_node;
+		DeleteMetadataRows(relfilenode);
+		DeleteColumnarTableOptions(rel->rd_id, true);
 
-		MarkRelfilenodeDropped(relfilenode, GetCurrentSubTransactionId());
+		MarkRelfilenodeDropped(relfilenode.relNode, GetCurrentSubTransactionId());
 
 		/* keep the lock since we did physical changes to the relation */
 		table_close(rel, NoLock);
@@ -1249,7 +1293,7 @@ CStoreTableAMObjectAccessHook(ObjectAccessType access, Oid classId, Oid objectId
  * IsCStoreTableAmTable returns true if relation has cstore_tableam
  * access method. This can be called before extension creation.
  */
-static bool
+bool
 IsCStoreTableAmTable(Oid relationId)
 {
 	if (!OidIsValid(relationId))
@@ -1341,13 +1385,170 @@ columnar_handler(PG_FUNCTION_ARGS)
 
 
 /*
+ * ColumnarCheckLogicalReplication throws an error if the relation is
+ * part of any publication. This should be called before any write to
+ * a columnar table, because columnar changes are not replicated with
+ * logical replication (similar to a row table without a replica
+ * identity).
+ */
+static void
+ColumnarCheckLogicalReplication(Relation rel)
+{
+	if (!is_publishable_relation(rel))
+	{
+		return;
+	}
+
+	if (rel->rd_pubactions == NULL)
+	{
+		GetRelationPublicationActions(rel);
+		Assert(rel->rd_pubactions != NULL);
+	}
+
+	if (rel->rd_pubactions->pubinsert)
+	{
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg(
+							"cannot insert into columnar table that is a part of a publication")));
+	}
+}
+
+
+/*
+ * CitusCreateAlterColumnarTableSet generates a portable
+ */
+static char *
+CitusCreateAlterColumnarTableSet(char *qualifiedRelationName,
+								 const ColumnarOptions *options)
+{
+	StringInfoData buf = { 0 };
+	initStringInfo(&buf);
+
+	appendStringInfo(&buf,
+					 "SELECT alter_columnar_table_set(%s, "
+					 "chunk_row_count => %d, "
+					 "stripe_row_count => %lu, "
+					 "compression_level => %d, "
+					 "compression => %s);",
+					 quote_literal_cstr(qualifiedRelationName),
+					 options->chunkRowCount,
+					 options->stripeRowCount,
+					 options->compressionLevel,
+					 quote_literal_cstr(CompressionTypeStr(options->compressionType)));
+
+	return buf.data;
+}
+
+
+/*
+ * ColumnarTableDDLContext holds the instance variable for the TableDDLCommandFunction
+ * instance described below.
+ */
+typedef struct ColumnarTableDDLContext
+{
+	char *schemaName;
+	char *relationName;
+	ColumnarOptions options;
+} ColumnarTableDDLContext;
+
+
+/*
+ * GetTableDDLCommandColumnar is an internal function used to turn a
+ * ColumnarTableDDLContext stored on the context of a TableDDLCommandFunction into a sql
+ * command that will be executed against a table. The resulting command will set the
+ * options of the table to the same options as the relation on the coordinator.
+ */
+static char *
+GetTableDDLCommandColumnar(void *context)
+{
+	ColumnarTableDDLContext *tableDDLContext = (ColumnarTableDDLContext *) context;
+
+	char *qualifiedShardName = quote_qualified_identifier(tableDDLContext->schemaName,
+														  tableDDLContext->relationName);
+
+	return CitusCreateAlterColumnarTableSet(qualifiedShardName,
+											&tableDDLContext->options);
+}
+
+
+/*
+ * GetShardedTableDDLCommandColumnar is an internal function used to turn a
+ * ColumnarTableDDLContext stored on the context of a TableDDLCommandFunction into a sql
+ * command that will be executed against a shard. The resulting command will set the
+ * options of the shard to the same options as the relation the shard is based on.
+ */
+static char *
+GetShardedTableDDLCommandColumnar(uint64 shardId, void *context)
+{
+	ColumnarTableDDLContext *tableDDLContext = (ColumnarTableDDLContext *) context;
+
+	/*
+	 * AppendShardId is destructive of the original cahr *, given we want to serialize
+	 * more than once we copy it before appending the shard id.
+	 */
+	char *relationName = pstrdup(tableDDLContext->relationName);
+	AppendShardIdToName(&relationName, shardId);
+
+	char *qualifiedShardName = quote_qualified_identifier(tableDDLContext->schemaName,
+														  relationName);
+
+	return CitusCreateAlterColumnarTableSet(qualifiedShardName,
+											&tableDDLContext->options);
+}
+
+
+/*
+ * ColumnarGetCustomTableOptionsDDL returns a TableDDLCommand representing a command that
+ * will apply the passed columnar options to the relation identified by relationId on a
+ * new table or shard.
+ */
+static TableDDLCommand *
+ColumnarGetCustomTableOptionsDDL(char *schemaName, char *relationName,
+								 ColumnarOptions options)
+{
+	ColumnarTableDDLContext *context = (ColumnarTableDDLContext *) palloc0(
+		sizeof(ColumnarTableDDLContext));
+
+	/* build the context */
+	context->schemaName = schemaName;
+	context->relationName = relationName;
+	context->options = options;
+
+	/* create TableDDLCommand based on the context build above */
+	return makeTableDDLCommandFunction(
+		GetTableDDLCommandColumnar,
+		GetShardedTableDDLCommandColumnar,
+		context);
+}
+
+
+/*
+ * ColumnarGetTableOptionsDDL returns a TableDDLCommand representing a command that will
+ * apply the columnar options currently applicable to the relation identified by
+ * relationId on a new table or shard.
+ */
+TableDDLCommand *
+ColumnarGetTableOptionsDDL(Oid relationId)
+{
+	Oid namespaceId = get_rel_namespace(relationId);
+	char *schemaName = get_namespace_name(namespaceId);
+	char *relationName = get_rel_name(relationId);
+
+	ColumnarOptions options = { 0 };
+	ReadColumnarOptions(relationId, &options);
+
+	return ColumnarGetCustomTableOptionsDDL(schemaName, relationName, options);
+}
+
+
+/*
  * alter_columnar_table_set is a UDF exposed in postgres to change settings on a columnar
  * table. Calling this function on a non-columnar table gives an error.
  *
  * sql syntax:
  *   pg_catalog.alter_columnar_table_set(
  *        table_name regclass,
- *        block_row_count int DEFAULT NULL,
+ *        chunk_row_count int DEFAULT NULL,
  *        stripe_row_count int DEFAULT NULL,
  *        compression name DEFAULT null)
  *
@@ -1367,47 +1568,81 @@ alter_columnar_table_set(PG_FUNCTION_ARGS)
 	Oid relationId = PG_GETARG_OID(0);
 
 	Relation rel = table_open(relationId, AccessExclusiveLock); /* ALTER TABLE LOCK */
-	DataFileMetadata *metadata = ReadDataFileMetadata(rel->rd_node.relNode, true);
-	if (!metadata)
+	if (!IsCStoreTableAmTable(relationId))
 	{
-		ereport(ERROR, (errmsg("table %s is not a cstore table",
+		ereport(ERROR, (errmsg("table %s is not a columnar table",
 							   quote_identifier(RelationGetRelationName(rel)))));
 	}
 
-	int blockRowCount = metadata->blockRowCount;
-	int stripeRowCount = metadata->stripeRowCount;
-	CompressionType compression = metadata->compression;
+	ColumnarOptions options = { 0 };
+	if (!ReadColumnarOptions(relationId, &options))
+	{
+		ereport(ERROR, (errmsg("unable to read current options for table")));
+	}
 
-	/* block_row_count => not null */
+	/* chunk_row_count => not null */
 	if (!PG_ARGISNULL(1))
 	{
-		blockRowCount = PG_GETARG_INT32(1);
-		ereport(DEBUG1, (errmsg("updating block row count to %d", blockRowCount)));
+		options.chunkRowCount = PG_GETARG_INT32(1);
+		ereport(DEBUG1,
+				(errmsg("updating chunk row count to %d", options.chunkRowCount)));
 	}
 
 	/* stripe_row_count => not null */
 	if (!PG_ARGISNULL(2))
 	{
-		stripeRowCount = PG_GETARG_INT32(2);
-		ereport(DEBUG1, (errmsg("updating stripe row count to %d", stripeRowCount)));
+		options.stripeRowCount = PG_GETARG_INT32(2);
+		ereport(DEBUG1, (errmsg(
+							 "updating stripe row count to " UINT64_FORMAT,
+							 options.stripeRowCount)));
 	}
 
 	/* compression => not null */
 	if (!PG_ARGISNULL(3))
 	{
 		Name compressionName = PG_GETARG_NAME(3);
-		compression = ParseCompressionType(NameStr(*compressionName));
-		if (compression == COMPRESSION_TYPE_INVALID)
+		options.compressionType = ParseCompressionType(NameStr(*compressionName));
+		if (options.compressionType == COMPRESSION_TYPE_INVALID)
 		{
 			ereport(ERROR, (errmsg("unknown compression type for cstore table: %s",
 								   quote_identifier(NameStr(*compressionName)))));
 		}
 		ereport(DEBUG1, (errmsg("updating compression to %s",
-								CompressionTypeStr(compression))));
+								CompressionTypeStr(options.compressionType))));
 	}
 
-	UpdateCStoreDataFileMetadata(rel->rd_node.relNode, blockRowCount, stripeRowCount,
-								 compression);
+	/* compression_level => not null */
+	if (!PG_ARGISNULL(4))
+	{
+		options.compressionLevel = PG_GETARG_INT32(4);
+		if (options.compressionLevel < COMPRESSION_LEVEL_MIN ||
+			options.compressionLevel > COMPRESSION_LEVEL_MAX)
+		{
+			ereport(ERROR, (errmsg("compression level out of range"),
+							errhint("compression level must be between %d and %d",
+									COMPRESSION_LEVEL_MIN,
+									COMPRESSION_LEVEL_MAX)));
+		}
+
+		ereport(DEBUG1, (errmsg("updating compression level to %d",
+								options.compressionLevel)));
+	}
+
+	if (EnableDDLPropagation && IsCitusTable(relationId))
+	{
+		/* when a columnar table is distributed update all settings on the shards */
+		Oid namespaceId = get_rel_namespace(relationId);
+		char *schemaName = get_namespace_name(namespaceId);
+		char *relationName = get_rel_name(relationId);
+		TableDDLCommand *command = ColumnarGetCustomTableOptionsDDL(schemaName,
+																	relationName,
+																	options);
+		DDLJob *ddljob = CreateCustomDDLTaskList(relationId, command);
+
+		ExecuteDistributedDDLJob(ddljob);
+	}
+
+	SetColumnarOptions(relationId, &options);
 
 	table_close(rel, NoLock);
 
@@ -1415,6 +1650,24 @@ alter_columnar_table_set(PG_FUNCTION_ARGS)
 }
 
 
+/*
+ * alter_columnar_table_reset is a UDF exposed in postgres to reset the settings on a
+ * columnar table. Calling this function on a non-columnar table gives an error.
+ *
+ * sql syntax:
+ *   pg_catalog.alter_columnar_table_re
+ *   teset(
+ *        table_name regclass,
+ *        chunk_row_count bool DEFAULT FALSE,
+ *        stripe_row_count bool DEFAULT FALSE,
+ *        compression bool DEFAULT FALSE)
+ *
+ * All arguments except the table name are optional. The UDF is supposed to be called
+ * like:
+ *   SELECT alter_columnar_table_set('table', compression => true);
+ *
+ * All options set to true will be reset to the default system value.
+ */
 PG_FUNCTION_INFO_V1(alter_columnar_table_reset);
 Datum
 alter_columnar_table_reset(PG_FUNCTION_ARGS)
@@ -1422,41 +1675,66 @@ alter_columnar_table_reset(PG_FUNCTION_ARGS)
 	Oid relationId = PG_GETARG_OID(0);
 
 	Relation rel = table_open(relationId, AccessExclusiveLock); /* ALTER TABLE LOCK */
-	DataFileMetadata *metadata = ReadDataFileMetadata(rel->rd_node.relNode, true);
-	if (!metadata)
+	if (!IsCStoreTableAmTable(relationId))
 	{
-		ereport(ERROR, (errmsg("table %s is not a cstore table",
+		ereport(ERROR, (errmsg("table %s is not a columnar table",
 							   quote_identifier(RelationGetRelationName(rel)))));
 	}
 
-	int blockRowCount = metadata->blockRowCount;
-	int stripeRowCount = metadata->stripeRowCount;
-	CompressionType compression = metadata->compression;
+	ColumnarOptions options = { 0 };
+	if (!ReadColumnarOptions(relationId, &options))
+	{
+		ereport(ERROR, (errmsg("unable to read current options for table")));
+	}
 
-	/* block_row_count => true */
+	/* chunk_row_count => true */
 	if (!PG_ARGISNULL(1) && PG_GETARG_BOOL(1))
 	{
-		blockRowCount = cstore_block_row_count;
-		ereport(DEBUG1, (errmsg("resetting block row count to %d", blockRowCount)));
+		options.chunkRowCount = cstore_chunk_row_count;
+		ereport(DEBUG1,
+				(errmsg("resetting chunk row count to %d", options.chunkRowCount)));
 	}
 
 	/* stripe_row_count => true */
 	if (!PG_ARGISNULL(2) && PG_GETARG_BOOL(2))
 	{
-		stripeRowCount = cstore_stripe_row_count;
-		ereport(DEBUG1, (errmsg("resetting stripe row count to %d", stripeRowCount)));
+		options.stripeRowCount = cstore_stripe_row_count;
+		ereport(DEBUG1,
+				(errmsg("resetting stripe row count to " UINT64_FORMAT,
+						options.stripeRowCount)));
 	}
 
 	/* compression => true */
 	if (!PG_ARGISNULL(3) && PG_GETARG_BOOL(3))
 	{
-		compression = cstore_compression;
+		options.compressionType = cstore_compression;
 		ereport(DEBUG1, (errmsg("resetting compression to %s",
-								CompressionTypeStr(compression))));
+								CompressionTypeStr(options.compressionType))));
 	}
 
-	UpdateCStoreDataFileMetadata(rel->rd_node.relNode, blockRowCount, stripeRowCount,
-								 compression);
+	/* compression_level => true */
+	if (!PG_ARGISNULL(4) && PG_GETARG_BOOL(4))
+	{
+		options.compressionLevel = columnar_compression_level;
+		ereport(DEBUG1, (errmsg("reseting compression level to %d",
+								columnar_compression_level)));
+	}
+
+	if (EnableDDLPropagation && IsCitusTable(relationId))
+	{
+		/* when a columnar table is distributed update all settings on the shards */
+		Oid namespaceId = get_rel_namespace(relationId);
+		char *schemaName = get_namespace_name(namespaceId);
+		char *relationName = get_rel_name(relationId);
+		TableDDLCommand *command = ColumnarGetCustomTableOptionsDDL(schemaName,
+																	relationName,
+																	options);
+		DDLJob *ddljob = CreateCustomDDLTaskList(relationId, command);
+
+		ExecuteDistributedDDLJob(ddljob);
+	}
+
+	SetColumnarOptions(relationId, &options);
 
 	table_close(rel, NoLock);
 

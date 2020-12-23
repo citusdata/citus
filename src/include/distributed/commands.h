@@ -64,8 +64,31 @@ typedef enum ExtractForeignKeyConstraintsMode
 	EXCLUDE_SELF_REFERENCES = 1 << 2
 } ExtractForeignKeyConstraintMode;
 
+
+/*
+ * Flags that can be passed to GetForeignKeyIdsForColumn to
+ * indicate whether relationId argument should match:
+ *   - referencing relation or,
+ *   - referenced relation,
+ *  or we are searching for both sides.
+ */
+typedef enum SearchForeignKeyColumnFlags
+{
+	/* relationId argument should match referencing relation */
+	SEARCH_REFERENCING_RELATION = 1 << 0,
+
+	/* relationId argument should match referenced relation */
+	SEARCH_REFERENCED_RELATION = 1 << 1,
+
+	/* callers can also pass union of above flags */
+} SearchForeignKeyColumnFlags;
+
+
 /* cluster.c - forward declarations */
 extern List * PreprocessClusterStmt(Node *node, const char *clusterCommand);
+
+/* index.c */
+typedef void (*PGIndexProcessor)(Form_pg_index, List **);
 
 
 /* call.c */
@@ -119,6 +142,7 @@ extern void ErrorIfUnsupportedForeignConstraintExists(Relation relation,
 													  Var *distributionColumn,
 													  uint32 colocationId);
 extern void ErrorOutForFKeyBetweenPostgresAndCitusLocalTable(Oid localTableId);
+extern bool ColumnReferencedByAnyForeignKey(char *columnName, Oid relationId);
 extern bool ColumnAppearsInForeignKeyToReferenceTable(char *columnName, Oid
 													  relationId);
 extern List * GetReferencingForeignConstaintCommands(Oid relationOid);
@@ -183,6 +207,8 @@ extern List * PostprocessIndexStmt(Node *node,
 								   const char *queryString);
 extern void ErrorIfUnsupportedAlterIndexStmt(AlterTableStmt *alterTableStatement);
 extern void MarkIndexValid(IndexStmt *indexStmt);
+extern List * ExecuteFunctionOnEachTableIndex(Oid relationId, PGIndexProcessor
+											  pgIndexProcessor);
 
 /* objectaddress.c - forward declarations */
 extern ObjectAddress CreateExtensionStmtObjectAddress(Node *stmt, bool missing_ok);
@@ -227,12 +253,20 @@ extern List * PreprocessDropSchemaStmt(Node *dropSchemaStatement,
 extern List * PreprocessAlterObjectSchemaStmt(Node *alterObjectSchemaStmt,
 											  const char *alterObjectSchemaCommand);
 extern List * PreprocessGrantOnSchemaStmt(Node *node, const char *queryString);
-
+extern List * PreprocessAlterSchemaRenameStmt(Node *node, const char *queryString);
+extern ObjectAddress AlterSchemaRenameStmtObjectAddress(Node *node, bool missing_ok);
 
 /* sequence.c - forward declarations */
 extern void ErrorIfUnsupportedSeqStmt(CreateSeqStmt *createSeqStmt);
 extern void ErrorIfDistributedAlterSeqOwnedBy(AlterSeqStmt *alterSeqStmt);
 
+/* statistics.c - forward declarations */
+extern List * PreprocessCreateStatisticsStmt(Node *node, const char *queryString);
+extern List * PostprocessCreateStatisticsStmt(Node *node, const char *queryString);
+extern ObjectAddress CreateStatisticsStmtObjectAddress(Node *node, bool missingOk);
+extern List * PreprocessDropStatisticsStmt(Node *node, const char *queryString);
+extern List * GetExplicitStatisticsCommandList(Oid relationId);
+extern List * GetExplicitStatisticsSchemaIdList(Oid relationId);
 
 /* subscription.c - forward declarations */
 extern Node * ProcessCreateSubscriptionStmt(CreateSubscriptionStmt *createSubStmt);

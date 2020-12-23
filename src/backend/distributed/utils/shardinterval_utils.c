@@ -465,7 +465,7 @@ SingleReplicatedTable(Oid relationId)
 	List *shardPlacementList = NIL;
 
 	/* we could have append/range distributed tables without shards */
-	if (list_length(shardList) <= 1)
+	if (list_length(shardList) == 0)
 	{
 		return false;
 	}

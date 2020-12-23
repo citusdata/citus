@@ -831,6 +831,8 @@ INSERT INTO user_info_data (user_id, u_data) VALUES
 (3, '(''test3'', 3)'), (4, '(''test4'', 4)'), (7, '(''test7'', 7)'),
 (9, '(''test9'', 9)'), (11, '(''test11'', 11)'), (12, '(''test12'', 12)'),
 (14, '(''test14'', 14)'), (16, '(''test16'', 16)');
+NOTICE:  executing the command locally: INSERT INTO coordinator_evaluation_combinations_modify.user_info_data_1180001 AS citus_table_alias (user_id, u_data) VALUES (3,'(''test3'',3)'::coordinator_evaluation_combinations_modify.user_data), (4,'(''test4'',4)'::coordinator_evaluation_combinations_modify.user_data), (7,'(''test7'',7)'::coordinator_evaluation_combinations_modify.user_data), (14,'(''test14'',14)'::coordinator_evaluation_combinations_modify.user_data), (16,'(''test16'',16)'::coordinator_evaluation_combinations_modify.user_data)
+NOTICE:  executing the command locally: INSERT INTO coordinator_evaluation_combinations_modify.user_info_data_1180003 AS citus_table_alias (user_id, u_data) VALUES (9,'(''test9'',9)'::coordinator_evaluation_combinations_modify.user_data), (11,'(''test11'',11)'::coordinator_evaluation_combinations_modify.user_data), (12,'(''test12'',12)'::coordinator_evaluation_combinations_modify.user_data)
 -- make sure that it is also true for  fast-path router queries with paramaters
 PREPARE fast_path_router_with_param(int) AS DELETE FROM user_info_data WHERE user_id  = $1 RETURNING user_id, u_data;
 execute fast_path_router_with_param(3);
@@ -893,6 +895,8 @@ INSERT INTO user_info_data (user_id, u_data) VALUES
 (3, '(''test'', 2)'), (4, '(''test'', 2)'), (7, '(''test'', 2)'),
 (9, '(''test'', 9)'), (11, '(''test'', 2)'), (12, '(''test'', 2)'),
 (14, '(''test'', 2)'), (16, '(''test'', 2)');
+NOTICE:  executing the command locally: INSERT INTO coordinator_evaluation_combinations_modify.user_info_data_1180001 AS citus_table_alias (user_id, u_data) VALUES (3,'(''test'',2)'::coordinator_evaluation_combinations_modify.user_data), (4,'(''test'',2)'::coordinator_evaluation_combinations_modify.user_data), (7,'(''test'',2)'::coordinator_evaluation_combinations_modify.user_data), (14,'(''test'',2)'::coordinator_evaluation_combinations_modify.user_data), (16,'(''test'',2)'::coordinator_evaluation_combinations_modify.user_data)
+NOTICE:  executing the command locally: INSERT INTO coordinator_evaluation_combinations_modify.user_info_data_1180003 AS citus_table_alias (user_id, u_data) VALUES (9,'(''test'',9)'::coordinator_evaluation_combinations_modify.user_data), (11,'(''test'',2)'::coordinator_evaluation_combinations_modify.user_data), (12,'(''test'',2)'::coordinator_evaluation_combinations_modify.user_data)
 -- make sure that it is also true for  fast-path router queries with paramaters
 PREPARE fast_path_router_with_param_and_func(int) AS DELETE FROM user_info_data WHERE u_data = ('''test''', get_constant_stable())::user_data AND user_id  = $1 RETURNING user_id, u_data;
 execute fast_path_router_with_param_and_func(3);
@@ -1142,6 +1146,8 @@ INSERT INTO user_info_data (user_id, u_data) VALUES
 (3, ('test', 2)), (4, ('test', 2)), (7, ('test', 2)),
 (9, ('test', 2)), (11, ('test', 2)), (12, ('test', 2)),
 (14, ('test', 2)), (16, ('test', 2));
+NOTICE:  executing the command locally: INSERT INTO coordinator_evaluation_combinations_modify.user_info_data_1180001 AS citus_table_alias (user_id, u_data) VALUES (3,'(test,2)'::coordinator_evaluation_combinations_modify.user_data), (4,'(test,2)'::coordinator_evaluation_combinations_modify.user_data), (7,'(test,2)'::coordinator_evaluation_combinations_modify.user_data), (14,'(test,2)'::coordinator_evaluation_combinations_modify.user_data), (16,'(test,2)'::coordinator_evaluation_combinations_modify.user_data)
+NOTICE:  executing the command locally: INSERT INTO coordinator_evaluation_combinations_modify.user_info_data_1180003 AS citus_table_alias (user_id, u_data) VALUES (9,'(test,2)'::coordinator_evaluation_combinations_modify.user_data), (11,'(test,2)'::coordinator_evaluation_combinations_modify.user_data), (12,'(test,2)'::coordinator_evaluation_combinations_modify.user_data)
 PREPARE fast_path_router_with_two_params(user_data, int) AS DELETE FROM user_info_data WHERE u_data = $1 AND user_id  = $2 RETURNING user_id, u_data;
 EXECUTE fast_path_router_with_two_params(('test', 2)::user_data, 3);
 NOTICE:  executing the command locally: DELETE FROM coordinator_evaluation_combinations_modify.user_info_data_1180001 user_info_data WHERE ((u_data OPERATOR(pg_catalog.=) '(test,2)'::coordinator_evaluation_combinations_modify.user_data) AND (user_id OPERATOR(pg_catalog.=) 3)) RETURNING user_id, u_data
@@ -1319,6 +1325,8 @@ INSERT INTO user_info_data (user_id, u_data) VALUES
 (3, '(''test3'', 3)'), (4, '(''test4'', 4)'), (7, '(''test7'', 7)'),
 (9, '(''test9'', 9)'), (11, '(''test11'', 11)'), (12, '(''test12'', 12)'),
 (14, '(''test14'', 14)'), (16, '(''test16'', 16)');
+NOTICE:  executing the command locally: INSERT INTO coordinator_evaluation_combinations_modify.user_info_data_1180001 AS citus_table_alias (user_id, u_data) VALUES (3,'(''test3'',3)'::coordinator_evaluation_combinations_modify.user_data), (4,'(''test4'',4)'::coordinator_evaluation_combinations_modify.user_data), (7,'(''test7'',7)'::coordinator_evaluation_combinations_modify.user_data), (14,'(''test14'',14)'::coordinator_evaluation_combinations_modify.user_data), (16,'(''test16'',16)'::coordinator_evaluation_combinations_modify.user_data)
+NOTICE:  executing the command locally: INSERT INTO coordinator_evaluation_combinations_modify.user_info_data_1180003 AS citus_table_alias (user_id, u_data) VALUES (9,'(''test9'',9)'::coordinator_evaluation_combinations_modify.user_data), (11,'(''test11'',11)'::coordinator_evaluation_combinations_modify.user_data), (12,'(''test12'',12)'::coordinator_evaluation_combinations_modify.user_data)
 -- make sure that it is also true for  fast-path router queries with paramaters
 PREPARE router_with_param(int) AS DELETE FROM user_info_data WHERE user_id  = $1 AND user_id = $1 RETURNING user_id, u_data;
 execute router_with_param(3);
@@ -1381,6 +1389,8 @@ INSERT INTO user_info_data (user_id, u_data) VALUES
 (3, '(''test'', 2)'), (4, '(''test'', 2)'), (7, '(''test'', 2)'),
 (9, '(''test'', 9)'), (11, '(''test'', 2)'), (12, '(''test'', 2)'),
 (14, '(''test'', 2)'), (16, '(''test'', 2)');
+NOTICE:  executing the command locally: INSERT INTO coordinator_evaluation_combinations_modify.user_info_data_1180001 AS citus_table_alias (user_id, u_data) VALUES (3,'(''test'',2)'::coordinator_evaluation_combinations_modify.user_data), (4,'(''test'',2)'::coordinator_evaluation_combinations_modify.user_data), (7,'(''test'',2)'::coordinator_evaluation_combinations_modify.user_data), (14,'(''test'',2)'::coordinator_evaluation_combinations_modify.user_data), (16,'(''test'',2)'::coordinator_evaluation_combinations_modify.user_data)
+NOTICE:  executing the command locally: INSERT INTO coordinator_evaluation_combinations_modify.user_info_data_1180003 AS citus_table_alias (user_id, u_data) VALUES (9,'(''test'',9)'::coordinator_evaluation_combinations_modify.user_data), (11,'(''test'',2)'::coordinator_evaluation_combinations_modify.user_data), (12,'(''test'',2)'::coordinator_evaluation_combinations_modify.user_data)
 -- make sure that it is also true for  fast-path router queries with paramaters
 PREPARE router_with_param_and_func(int) AS DELETE FROM user_info_data WHERE u_data = ('''test''', get_constant_stable())::user_data AND user_id  = $1 AND user_id  = $1 RETURNING user_id, u_data;
 execute router_with_param_and_func(3);
@@ -1630,6 +1640,8 @@ INSERT INTO user_info_data (user_id, u_data) VALUES
 (3, ('test', 2)), (4, ('test', 2)), (7, ('test', 2)),
 (9, ('test', 2)), (11, ('test', 2)), (12, ('test', 2)),
 (14, ('test', 2)), (16, ('test', 2));
+NOTICE:  executing the command locally: INSERT INTO coordinator_evaluation_combinations_modify.user_info_data_1180001 AS citus_table_alias (user_id, u_data) VALUES (3,'(test,2)'::coordinator_evaluation_combinations_modify.user_data), (4,'(test,2)'::coordinator_evaluation_combinations_modify.user_data), (7,'(test,2)'::coordinator_evaluation_combinations_modify.user_data), (14,'(test,2)'::coordinator_evaluation_combinations_modify.user_data), (16,'(test,2)'::coordinator_evaluation_combinations_modify.user_data)
+NOTICE:  executing the command locally: INSERT INTO coordinator_evaluation_combinations_modify.user_info_data_1180003 AS citus_table_alias (user_id, u_data) VALUES (9,'(test,2)'::coordinator_evaluation_combinations_modify.user_data), (11,'(test,2)'::coordinator_evaluation_combinations_modify.user_data), (12,'(test,2)'::coordinator_evaluation_combinations_modify.user_data)
 PREPARE router_with_two_params(user_data, int) AS DELETE FROM user_info_data WHERE u_data = $1 AND user_id  = $2 AND user_id  = $2 RETURNING user_id, u_data;
 EXECUTE router_with_two_params(('test', 2)::user_data, 3);
 NOTICE:  executing the command locally: DELETE FROM coordinator_evaluation_combinations_modify.user_info_data_1180001 user_info_data WHERE ((u_data OPERATOR(pg_catalog.=) $1::coordinator_evaluation_combinations_modify.user_data) AND (user_id OPERATOR(pg_catalog.=) $2) AND (user_id OPERATOR(pg_catalog.=) $2)) RETURNING user_id, u_data

@@ -1,0 +1,82 @@
+SELECT compression_type_supported('zstd') AS zstd_supported \gset
+\if :zstd_supported
+\else
+\q
+\endif
+CREATE SCHEMA am_zstd;
+SET search_path TO am_zstd;
+SET columnar.compression TO 'zstd';
+CREATE TABLE test_zstd (a int, b text, c int) USING columnar;
+INSERT INTO test_zstd SELECT i % 1000, (i % 10)::text, 4 FROM generate_series(1, 10000) i;
+SELECT count(*) FROM test_zstd;
+ count
+---------------------------------------------------------------------
+ 10000
+(1 row)
+
+INSERT INTO test_zstd SELECT floor(i / 2), floor(i / 10)::text, 5 FROM generate_series(1000, 11000) i;
+SELECT count(*) FROM test_zstd;
+ count
+---------------------------------------------------------------------
+ 20001
+(1 row)
+
+CREATE TABLE test_none (LIKE test_zstd) USING columnar;
+INSERT INTO test_none SELECT * FROM test_zstd;
+SELECT DISTINCT * FROM test_zstd ORDER BY a, b, c LIMIT 5;
+ a | b | c
+---------------------------------------------------------------------
+ 0 | 0 | 4
+ 1 | 1 | 4
+ 2 | 2 | 4
+ 3 | 3 | 4
+ 4 | 4 | 4
+(5 rows)
+
+VACUUM FULL test_zstd;
+SELECT pg_relation_size('test_zstd') AS size_comp_level_default \gset
+-- change compression level
+SELECT alter_columnar_table_set('test_zstd', compression_level => 19);
+ alter_columnar_table_set
+---------------------------------------------------------------------
+
+(1 row)
+
+VACUUM FULL test_zstd;
+SELECT pg_relation_size('test_zstd') AS size_comp_level_19 \gset
+-- verify that higher compression level compressed better
+SELECT :size_comp_level_default > :size_comp_level_19 AS size_changed;
+ size_changed
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- compare compression rate to pglz
+SET columnar.compression TO 'pglz';
+CREATE TABLE test_pglz (LIKE test_zstd) USING columnar;
+INSERT INTO test_pglz SELECT * FROM test_zstd;
+SELECT pg_relation_size('test_pglz') AS size_pglz \gset
+-- verify that zstd compressed better than pglz
+SELECT :size_pglz > :size_comp_level_default;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- Other operations
+ANALYZE test_zstd;
+SELECT count(DISTINCT test_zstd.*) FROM test_zstd;
+ count
+---------------------------------------------------------------------
+  6001
+(1 row)
+
+TRUNCATE test_zstd;
+SELECT count(DISTINCT test_zstd.*) FROM test_zstd;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+SET client_min_messages TO WARNING;
+DROP SCHEMA am_zstd CASCADE;

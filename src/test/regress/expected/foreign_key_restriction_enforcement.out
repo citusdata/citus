@@ -900,7 +900,7 @@ HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_m
 ROLLBACK;
 BEGIN;
 	WITH cte AS (UPDATE on_update_fkey_table SET value_1 = 16 WHERE value_1 = 15 RETURNING *)
-    SELECT * FROM cte;
+    SELECT * FROM cte ORDER BY 1, 2;
  id  | value_1
 ---------------------------------------------------------------------
   15 |      16
@@ -921,7 +921,7 @@ HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_m
 ROLLBACK;
 BEGIN;
 	WITH cte AS (UPDATE on_update_fkey_table SET value_1 = 16 WHERE value_1 = 15 RETURNING *)
-    SELECT * FROM cte;
+    SELECT * FROM cte ORDER BY 1, 2;
  id  | value_1
 ---------------------------------------------------------------------
   15 |      16

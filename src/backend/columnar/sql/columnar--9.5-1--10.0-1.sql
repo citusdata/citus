@@ -1,40 +1,39 @@
 /* columnar--9.5-1--10.0-1.sql */
 
-CREATE SCHEMA cstore;
-SET search_path TO cstore;
+CREATE SCHEMA columnar;
+SET search_path TO columnar;
 
-CREATE TABLE cstore_data_files (
-    relfilenode oid NOT NULL,
-    block_row_count int NOT NULL,
+CREATE SEQUENCE storageid_seq MINVALUE 10000000000 NO CYCLE;
+
+CREATE TABLE options (
+    regclass regclass NOT NULL PRIMARY KEY,
+    chunk_row_count int NOT NULL,
     stripe_row_count int NOT NULL,
-    compression name NOT NULL,
-    version_major bigint NOT NULL,
-    version_minor bigint NOT NULL,
-    PRIMARY KEY (relfilenode)
+    compression_level int NOT NULL,
+    compression name NOT NULL
 ) WITH (user_catalog_table = true);
 
-COMMENT ON TABLE cstore_data_files IS 'CStore data file wide metadata';
+COMMENT ON TABLE options IS 'columnar table specific options, maintained by alter_columnar_table_set';
 
-CREATE TABLE cstore_stripes (
-    relfilenode oid NOT NULL,
+CREATE TABLE columnar_stripes (
+    storageid bigint NOT NULL,
     stripe bigint NOT NULL,
     file_offset bigint NOT NULL,
     data_length bigint NOT NULL,
     column_count int NOT NULL,
-    block_count int NOT NULL,
-    block_row_count int NOT NULL,
+    chunk_count int NOT NULL,
+    chunk_row_count int NOT NULL,
     row_count bigint NOT NULL,
-    PRIMARY KEY (relfilenode, stripe),
-    FOREIGN KEY (relfilenode) REFERENCES cstore_data_files(relfilenode) ON DELETE CASCADE INITIALLY DEFERRED
+    PRIMARY KEY (storageid, stripe)
 ) WITH (user_catalog_table = true);
 
-COMMENT ON TABLE cstore_stripes IS 'CStore per stripe metadata';
+COMMENT ON TABLE columnar_stripes IS 'Columnar per stripe metadata';
 
-CREATE TABLE cstore_skipnodes (
-    relfilenode oid NOT NULL,
+CREATE TABLE columnar_skipnodes (
+    storageid bigint NOT NULL,
     stripe bigint NOT NULL,
     attr int NOT NULL,
-    block int NOT NULL,
+    chunk int NOT NULL,
     row_count bigint NOT NULL,
     minimum_value bytea,
     maximum_value bytea,
@@ -43,21 +42,13 @@ CREATE TABLE cstore_skipnodes (
     exists_stream_offset bigint NOT NULL,
     exists_stream_length bigint NOT NULL,
     value_compression_type int NOT NULL,
-    PRIMARY KEY (relfilenode, stripe, attr, block),
-    FOREIGN KEY (relfilenode, stripe) REFERENCES cstore_stripes(relfilenode, stripe) ON DELETE CASCADE INITIALLY DEFERRED
+    value_compression_level int NOT NULL,
+    value_decompressed_length bigint NOT NULL,
+    PRIMARY KEY (storageid, stripe, attr, chunk),
+    FOREIGN KEY (storageid, stripe) REFERENCES columnar_stripes(storageid, stripe) ON DELETE CASCADE
 ) WITH (user_catalog_table = true);
 
-COMMENT ON TABLE cstore_skipnodes IS 'CStore per block metadata';
-
-CREATE VIEW columnar_options AS
-SELECT c.oid::regclass regclass,
-       d.block_row_count,
-       d.stripe_row_count,
-       d.compression
-FROM pg_class c
-JOIN cstore.cstore_data_files d USING(relfilenode);
-
-COMMENT ON VIEW columnar_options IS 'CStore per table settings';
+COMMENT ON TABLE columnar_skipnodes IS 'Columnar per chunk metadata';
 
 DO $proc$
 BEGIN
@@ -74,6 +65,6 @@ IF substring(current_Setting('server_version'), '\d+')::int >= 12 THEN
 END IF;
 END$proc$;
 
-#include "udfs/cstore_ensure_objects_exist/10.0-1.sql"
+#include "udfs/columnar_ensure_objects_exist/10.0-1.sql"
 
 RESET search_path;

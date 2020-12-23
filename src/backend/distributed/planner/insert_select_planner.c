@@ -789,7 +789,8 @@ RouterModifyTaskForShardInterval(Query *originalQuery,
 														  &relationShardList,
 														  &prunedShardIntervalListList,
 														  replacePrunedQueryWithDummy,
-														  &multiShardModifyQuery, NULL);
+														  &multiShardModifyQuery, NULL,
+														  false);
 
 	Assert(!multiShardModifyQuery);
 

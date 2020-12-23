@@ -71,12 +71,13 @@ static uint64 * AllocateUint64(uint64 value);
 static void RecordDistributedRelationDependencies(Oid distributedRelationId);
 static GroupShardPlacement * TupleToGroupShardPlacement(TupleDesc tupleDesc,
 														HeapTuple heapTuple);
-static uint64 DistributedTableSize(Oid relationId, char *sizeQuery);
-static uint64 DistributedTableSizeOnWorker(WorkerNode *workerNode, Oid relationId,
-										   char *sizeQuery);
+static bool DistributedTableSize(Oid relationId, char *sizeQuery, bool failOnError,
+								 uint64 *tableSize);
+static bool DistributedTableSizeOnWorker(WorkerNode *workerNode, Oid relationId,
+										 char *sizeQuery, bool failOnError,
+										 uint64 *tableSize);
 static List * ShardIntervalsOnWorkerGroup(WorkerNode *workerNode, Oid relationId);
 static void ErrorIfNotSuitableToGetSize(Oid relationId);
-static ShardPlacement * ShardPlacementOnGroup(uint64 shardId, int groupId);
 
 
 /* exports for SQL callable functions */
@@ -93,6 +94,8 @@ Datum
 citus_total_relation_size(PG_FUNCTION_ARGS)
 {
 	Oid relationId = PG_GETARG_OID(0);
+	bool failOnError = PG_GETARG_BOOL(1);
+
 	char *tableSizeFunction = PG_TOTAL_RELATION_SIZE_FUNCTION;
 
 	CheckCitusVersion(ERROR);
@@ -102,9 +105,15 @@ citus_total_relation_size(PG_FUNCTION_ARGS)
 		tableSizeFunction = CSTORE_TABLE_SIZE_FUNCTION;
 	}
 
-	uint64 totalRelationSize = DistributedTableSize(relationId, tableSizeFunction);
+	uint64 tableSize = 0;
 
-	PG_RETURN_INT64(totalRelationSize);
+	if (!DistributedTableSize(relationId, tableSizeFunction, failOnError, &tableSize))
+	{
+		Assert(!failOnError);
+		PG_RETURN_NULL();
+	}
+
+	PG_RETURN_INT64(tableSize);
 }
 
 
@@ -116,6 +125,7 @@ Datum
 citus_table_size(PG_FUNCTION_ARGS)
 {
 	Oid relationId = PG_GETARG_OID(0);
+	bool failOnError = true;
 	char *tableSizeFunction = PG_TABLE_SIZE_FUNCTION;
 
 	CheckCitusVersion(ERROR);
@@ -125,7 +135,13 @@ citus_table_size(PG_FUNCTION_ARGS)
 		tableSizeFunction = CSTORE_TABLE_SIZE_FUNCTION;
 	}
 
-	uint64 tableSize = DistributedTableSize(relationId, tableSizeFunction);
+	uint64 tableSize = 0;
+
+	if (!DistributedTableSize(relationId, tableSizeFunction, failOnError, &tableSize))
+	{
+		Assert(!failOnError);
+		PG_RETURN_NULL();
+	}
 
 	PG_RETURN_INT64(tableSize);
 }
@@ -139,6 +155,7 @@ Datum
 citus_relation_size(PG_FUNCTION_ARGS)
 {
 	Oid relationId = PG_GETARG_OID(0);
+	bool failOnError = true;
 	char *tableSizeFunction = PG_RELATION_SIZE_FUNCTION;
 
 	CheckCitusVersion(ERROR);
@@ -148,7 +165,13 @@ citus_relation_size(PG_FUNCTION_ARGS)
 		tableSizeFunction = CSTORE_TABLE_SIZE_FUNCTION;
 	}
 
-	uint64 relationSize = DistributedTableSize(relationId, tableSizeFunction);
+	uint64 relationSize = 0;
+
+	if (!DistributedTableSize(relationId, tableSizeFunction, failOnError, &relationSize))
+	{
+		Assert(!failOnError);
+		PG_RETURN_NULL();
+	}
 
 	PG_RETURN_INT64(relationSize);
 }
@@ -159,40 +182,61 @@ citus_relation_size(PG_FUNCTION_ARGS)
  * It first checks whether the table is distributed and size query can be run on
  * it. Connection to each node has to be established to get the size of the table.
  */
-static uint64
-DistributedTableSize(Oid relationId, char *sizeQuery)
+static bool
+DistributedTableSize(Oid relationId, char *sizeQuery, bool failOnError, uint64 *tableSize)
 {
-	uint64 totalRelationSize = 0;
+	int logLevel = WARNING;
+
+	if (failOnError)
+	{
+		logLevel = ERROR;
+	}
+
+	uint64 sumOfSizes = 0;
 
 	if (XactModificationLevel == XACT_MODIFICATION_DATA)
 	{
-		ereport(ERROR, (errcode(ERRCODE_ACTIVE_SQL_TRANSACTION),
-						errmsg("citus size functions cannot be called in transaction"
-							   " blocks which contain multi-shard data modifications")));
+		ereport(logLevel, (errcode(ERRCODE_ACTIVE_SQL_TRANSACTION),
+						   errmsg("citus size functions cannot be called in transaction "
+								  "blocks which contain multi-shard data "
+								  "modifications")));
+
+		return false;
 	}
 
 	Relation relation = try_relation_open(relationId, AccessShareLock);
 
 	if (relation == NULL)
 	{
-		ereport(ERROR,
+		ereport(logLevel,
 				(errmsg("could not compute table size: relation does not exist")));
+
+		return false;
 	}
 
 	ErrorIfNotSuitableToGetSize(relationId);
+
+	table_close(relation, AccessShareLock);
 
 	List *workerNodeList = ActiveReadableNodeList();
 	WorkerNode *workerNode = NULL;
 	foreach_ptr(workerNode, workerNodeList)
 	{
-		uint64 relationSizeOnNode = DistributedTableSizeOnWorker(workerNode, relationId,
-																 sizeQuery);
-		totalRelationSize += relationSizeOnNode;
+		uint64 relationSizeOnNode = 0;
+
+		bool gotSize = DistributedTableSizeOnWorker(workerNode, relationId, sizeQuery,
+													failOnError, &relationSizeOnNode);
+		if (!gotSize)
+		{
+			return false;
+		}
+
+		sumOfSizes += relationSizeOnNode;
 	}
 
-	table_close(relation, AccessShareLock);
+	*tableSize = sumOfSizes;
 
-	return totalRelationSize;
+	return true;
 }
 
 
@@ -201,14 +245,21 @@ DistributedTableSize(Oid relationId, char *sizeQuery)
  * size of that relation on the given workerNode by summing up the size of each
  * shard placement.
  */
-static uint64
-DistributedTableSizeOnWorker(WorkerNode *workerNode, Oid relationId, char *sizeQuery)
+static bool
+DistributedTableSizeOnWorker(WorkerNode *workerNode, Oid relationId, char *sizeQuery,
+							 bool failOnError, uint64 *tableSize)
 {
+	int logLevel = WARNING;
+
+	if (failOnError)
+	{
+		logLevel = ERROR;
+	}
+
 	char *workerNodeName = workerNode->workerName;
 	uint32 workerNodePort = workerNode->workerPort;
 	uint32 connectionFlag = 0;
 	PGresult *result = NULL;
-	bool raiseErrors = true;
 
 	List *shardIntervalsOnNode = ShardIntervalsOnWorkerGroup(workerNode, relationId);
 
@@ -223,19 +274,38 @@ DistributedTableSizeOnWorker(WorkerNode *workerNode, Oid relationId, char *sizeQ
 
 	if (queryResult != 0)
 	{
-		ereport(ERROR, (errcode(ERRCODE_CONNECTION_FAILURE),
-						errmsg("cannot get the size because of a connection error")));
+		ereport(logLevel, (errcode(ERRCODE_CONNECTION_FAILURE),
+						   errmsg("could not connect to %s:%d to get size of "
+								  "table \"%s\"",
+								  workerNodeName, workerNodePort,
+								  get_rel_name(relationId))));
+
+		return false;
 	}
 
 	List *sizeList = ReadFirstColumnAsText(result);
+	if (list_length(sizeList) != 1)
+	{
+		PQclear(result);
+		ClearResults(connection, failOnError);
+
+		ereport(logLevel, (errcode(ERRCODE_CONNECTION_FAILURE),
+						   errmsg("cannot parse size of table \"%s\" from %s:%d",
+								  get_rel_name(relationId), workerNodeName,
+								  workerNodePort)));
+
+		return false;
+	}
+
 	StringInfo tableSizeStringInfo = (StringInfo) linitial(sizeList);
 	char *tableSizeString = tableSizeStringInfo->data;
-	uint64 tableSize = SafeStringToUint64(tableSizeString);
+
+	*tableSize = SafeStringToUint64(tableSizeString);
 
 	PQclear(result);
-	ClearResults(connection, raiseErrors);
+	ClearResults(connection, failOnError);
 
-	return tableSize;
+	return true;
 }
 
 
@@ -366,14 +436,6 @@ ErrorIfNotSuitableToGetSize(Oid relationId)
 		ereport(ERROR, (errcode(ERRCODE_INVALID_TABLE_DEFINITION),
 						errmsg("cannot calculate the size because relation %s is not "
 							   "distributed", escapedQueryString)));
-	}
-
-	if (IsCitusTableType(relationId, HASH_DISTRIBUTED) &&
-		!SingleReplicatedTable(relationId))
-	{
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("cannot calculate the size because replication factor "
-							   "is greater than 1")));
 	}
 }
 
@@ -1232,7 +1294,7 @@ UpdatePartitionShardPlacementStates(ShardPlacement *parentShardPlacement, char s
  * of the shard on the given group. If no such placement exists, the function
  * return NULL.
  */
-static ShardPlacement *
+ShardPlacement *
 ShardPlacementOnGroup(uint64 shardId, int groupId)
 {
 	List *placementList = ShardPlacementList(shardId);

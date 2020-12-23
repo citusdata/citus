@@ -76,17 +76,17 @@ static bool EnableCStoreCustomScan = true;
 
 
 const struct CustomPathMethods CStoreScanPathMethods = {
-	.CustomName = "CStoreScan",
+	.CustomName = "ColumnarScan",
 	.PlanCustomPath = CStoreScanPath_PlanCustomPath,
 };
 
 const struct CustomScanMethods CStoreScanScanMethods = {
-	.CustomName = "CStoreScan",
+	.CustomName = "ColumnarScan",
 	.CreateCustomScanState = CStoreScan_CreateCustomScanState,
 };
 
 const struct CustomExecMethods CStoreExecuteMethods = {
-	.CustomName = "CStoreScan",
+	.CustomName = "ColumnarScan",
 
 	.BeginCustomScan = CStoreScan_BeginCustomScan,
 	.ExecCustomScan = CStoreScan_ExecCustomScan,
@@ -109,7 +109,7 @@ cstore_customscan_init()
 
 	/* register customscan specific GUC's */
 	DefineCustomBoolVariable(
-		"cstore.enable_custom_scan",
+		"columnar.enable_custom_scan",
 		gettext_noop("Enables the use of a custom scan to push projections and quals "
 					 "into the storage layer"),
 		NULL,
@@ -162,6 +162,12 @@ CStoreSetRelPathlistHook(PlannerInfo *root, RelOptInfo *rel, Index rti,
 	Relation relation = RelationIdGetRelation(rte->relid);
 	if (relation->rd_tableam == GetColumnarTableAmRoutine())
 	{
+		if (rte->tablesample != NULL)
+		{
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("sample scans not supported on columnar tables")));
+		}
+
 		Path *customPath = CreateCStoreScanPath(rel, rte);
 
 		ereport(DEBUG1, (errmsg("pathlist hook for cstore table am")));
@@ -215,15 +221,15 @@ static Cost
 CStoreScanCost(RangeTblEntry *rte)
 {
 	Relation rel = RelationIdGetRelation(rte->relid);
-	DataFileMetadata *metadata = ReadDataFileMetadata(rel->rd_node.relNode, false);
+	List *stripeList = StripesForRelfilenode(rel->rd_node);
+	RelationClose(rel);
+
 	uint32 maxColumnCount = 0;
 	uint64 totalStripeSize = 0;
 	ListCell *stripeMetadataCell = NULL;
-
-	RelationClose(rel);
 	rel = NULL;
 
-	foreach(stripeMetadataCell, metadata->stripeMetadataList)
+	foreach(stripeMetadataCell, stripeList)
 	{
 		StripeMetadata *stripeMetadata = (StripeMetadata *) lfirst(stripeMetadataCell);
 		totalStripeSize += stripeMetadata->dataLength;
@@ -303,6 +309,13 @@ CStoreAttrNeeded(ScanState *ss)
 	foreach(lc, vars)
 	{
 		Var *var = lfirst(lc);
+
+		if (var->varattno < 0)
+		{
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg(
+								"UPDATE and CTID scans not supported for ColumnarScan")));
+		}
 
 		if (var->varattno == 0)
 		{

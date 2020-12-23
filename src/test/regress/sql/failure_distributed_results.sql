@@ -50,6 +50,7 @@ ROLLBACk;
 -- with failure, results from 100802 should be retried and succeed on 57637
 SELECT citus.mitmproxy('conn.onQuery(query="worker_partition_query_result.*test_from_100802").kill()');
 BEGIN;
+SET LOCAL client_min_messages TO DEBUG1;
 CREATE TABLE distributed_result_info AS
   SELECT resultId, nodeport, rowcount, targetShardId, targetShardIndex
   FROM partition_task_list_results('test', $$ SELECT * FROM source_table $$, 'target_table')

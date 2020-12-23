@@ -349,6 +349,23 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 			{
 				DropTriggerEventExtendNames(dropStmt, schemaName, shardId);
 			}
+			else if (objectType == OBJECT_STATISTIC_EXT)
+			{
+				List *shardStatisticsList = NIL;
+				List *objectNameList = NULL;
+				foreach_ptr(objectNameList, dropStmt->objects)
+				{
+					RangeVar *stat = makeRangeVarFromNameList(objectNameList);
+
+					SetSchemaNameIfNotExist(&stat->schemaname, schemaName);
+
+					AppendShardIdToName(&stat->relname, shardId);
+					shardStatisticsList = lappend(shardStatisticsList,
+												  MakeNameListFromRangeVar(stat));
+				}
+
+				dropStmt->objects = shardStatisticsList;
+			}
 			else
 			{
 				ereport(WARNING, (errmsg("unsafe object type in drop statement"),
@@ -518,6 +535,27 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 				ereport(WARNING, (errmsg("unsafe object type in rename statement"),
 								  errdetail("Object type: %u", (uint32) objectType)));
 			}
+
+			break;
+		}
+
+		case T_CreateStatsStmt:
+		{
+			CreateStatsStmt *createStatsStmt = (CreateStatsStmt *) parseTree;
+
+			/* because CREATE STATISTICS statements can only have one relation */
+			RangeVar *relation = linitial(createStatsStmt->relations);
+
+			char **relationName = &(relation->relname);
+			char **objectSchemaName = &(relation->schemaname);
+
+			SetSchemaNameIfNotExist(objectSchemaName, schemaName);
+			AppendShardIdToName(relationName, shardId);
+
+			RangeVar *stat = makeRangeVarFromNameList(createStatsStmt->defnames);
+			AppendShardIdToName(&stat->relname, shardId);
+
+			createStatsStmt->defnames = MakeNameListFromRangeVar(stat);
 
 			break;
 		}

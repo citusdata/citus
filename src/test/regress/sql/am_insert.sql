@@ -54,3 +54,15 @@ WHERE a.int_val = c.int_val AND a.hash = md5(c.text_val);
 
 DROP TABLE test_long_text_hash;
 DROP TABLE test_cstore_long_text;
+
+CREATE TABLE test_logical_replication(i int) USING columnar;
+-- should succeed
+INSERT INTO test_logical_replication VALUES (1);
+CREATE PUBLICATION test_columnar_publication
+  FOR TABLE test_logical_replication;
+-- should fail; columnar does not support logical replication
+INSERT INTO test_logical_replication VALUES (2);
+DROP PUBLICATION test_columnar_publication;
+-- should succeed
+INSERT INTO test_logical_replication VALUES (3);
+DROP TABLE test_logical_replication;

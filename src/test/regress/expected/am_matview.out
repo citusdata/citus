@@ -1,6 +1,7 @@
 --
 -- Testing we materialized views properly
 --
+SET columnar.compression TO 'none';
 CREATE TABLE t(a int, b int) USING columnar;
 INSERT INTO t SELECT floor(i / 4), 2 * i FROM generate_series(1, 10) i;
 CREATE MATERIALIZED VIEW t_view(a, bsum, cnt) USING columnar AS
@@ -22,7 +23,37 @@ SELECT * FROM t_view a ORDER BY a;
  2 |   54 |   3
 (3 rows)
 
+-- show columnar options for materialized view
+SELECT * FROM columnar.options
+WHERE regclass = 't_view'::regclass;
+ regclass | chunk_row_count | stripe_row_count | compression_level | compression
+---------------------------------------------------------------------
+ t_view   |           10000 |           150000 |                 3 | none
+(1 row)
+
+-- show we can set options on a materialized view
+SELECT alter_columnar_table_set('t_view', compression => 'pglz');
+ alter_columnar_table_set
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT * FROM columnar.options
+WHERE regclass = 't_view'::regclass;
+ regclass | chunk_row_count | stripe_row_count | compression_level | compression
+---------------------------------------------------------------------
+ t_view   |           10000 |           150000 |                 3 | pglz
+(1 row)
+
 REFRESH MATERIALIZED VIEW t_view;
+-- verify options have not been changed
+SELECT * FROM columnar.options
+WHERE regclass = 't_view'::regclass;
+ regclass | chunk_row_count | stripe_row_count | compression_level | compression
+---------------------------------------------------------------------
+ t_view   |           10000 |           150000 |                 3 | pglz
+(1 row)
+
 SELECT * FROM t_view a ORDER BY a;
  a | bsum | cnt
 ---------------------------------------------------------------------
@@ -35,20 +66,15 @@ SELECT * FROM t_view a ORDER BY a;
 (6 rows)
 
 -- verify that we have created metadata entries for the materialized view
-SELECT relfilenode FROM pg_class WHERE relname='t_view' \gset
-SELECT count(*) FROM cstore.cstore_data_files WHERE relfilenode=:relfilenode;
+SELECT columnar_relation_storageid(oid) AS storageid
+FROM pg_class WHERE relname='t_view' \gset
+SELECT count(*) FROM columnar.columnar_stripes WHERE storageid=:storageid;
  count
 ---------------------------------------------------------------------
      1
 (1 row)
 
-SELECT count(*) FROM cstore.cstore_stripes WHERE relfilenode=:relfilenode;
- count
----------------------------------------------------------------------
-     1
-(1 row)
-
-SELECT count(*) FROM cstore.cstore_skipnodes WHERE relfilenode=:relfilenode;
+SELECT count(*) FROM columnar.columnar_skipnodes WHERE storageid=:storageid;
  count
 ---------------------------------------------------------------------
      3
@@ -57,19 +83,13 @@ SELECT count(*) FROM cstore.cstore_skipnodes WHERE relfilenode=:relfilenode;
 DROP TABLE t CASCADE;
 NOTICE:  drop cascades to materialized view t_view
 -- dropping must remove metadata
-SELECT count(*) FROM cstore.cstore_data_files WHERE relfilenode=:relfilenode;
+SELECT count(*) FROM columnar.columnar_stripes WHERE storageid=:storageid;
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
-SELECT count(*) FROM cstore.cstore_stripes WHERE relfilenode=:relfilenode;
- count
----------------------------------------------------------------------
-     0
-(1 row)
-
-SELECT count(*) FROM cstore.cstore_skipnodes WHERE relfilenode=:relfilenode;
+SELECT count(*) FROM columnar.columnar_skipnodes WHERE storageid=:storageid;
  count
 ---------------------------------------------------------------------
      0

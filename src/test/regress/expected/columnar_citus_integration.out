@@ -1,0 +1,766 @@
+SET columnar.compression TO 'none';
+CREATE SCHEMA columnar_citus_integration;
+SET search_path TO columnar_citus_integration;
+SET citus.next_shard_id TO 20090000;
+SET citus.shard_replication_factor TO 1;
+SET citus.shard_count TO 4;
+-- table options integration testing
+-- distributed table 1 placement
+CREATE TABLE table_option (a int, b text) USING columnar;
+SELECT create_distributed_table('table_option', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- setting: compression
+-- get baseline for setting
+SELECT run_command_on_placements('table_option',$cmd$
+  SELECT compression FROM columnar.options WHERE regclass = '%s'::regclass;
+$cmd$);
+     run_command_on_placements
+---------------------------------------------------------------------
+ (localhost,57637,20090000,t,none)
+ (localhost,57638,20090001,t,none)
+ (localhost,57637,20090002,t,none)
+ (localhost,57638,20090003,t,none)
+(4 rows)
+
+-- change setting
+SELECT alter_columnar_table_set('table_option', compression => 'pglz');
+ alter_columnar_table_set
+---------------------------------------------------------------------
+
+(1 row)
+
+-- verify setting
+SELECT run_command_on_placements('table_option',$cmd$
+  SELECT compression FROM columnar.options WHERE regclass = '%s'::regclass;
+$cmd$);
+     run_command_on_placements
+---------------------------------------------------------------------
+ (localhost,57637,20090000,t,pglz)
+ (localhost,57638,20090001,t,pglz)
+ (localhost,57637,20090002,t,pglz)
+ (localhost,57638,20090003,t,pglz)
+(4 rows)
+
+-- reset setting
+SELECT alter_columnar_table_reset('table_option', compression => true);
+ alter_columnar_table_reset
+---------------------------------------------------------------------
+
+(1 row)
+
+-- verify setting
+SELECT run_command_on_placements('table_option',$cmd$
+  SELECT compression FROM columnar.options WHERE regclass = '%s'::regclass;
+$cmd$);
+     run_command_on_placements
+---------------------------------------------------------------------
+ (localhost,57637,20090000,t,none)
+ (localhost,57638,20090001,t,none)
+ (localhost,57637,20090002,t,none)
+ (localhost,57638,20090003,t,none)
+(4 rows)
+
+-- setting: compression_level
+-- get baseline for setting
+SELECT run_command_on_placements('table_option',$cmd$
+  SELECT compression_level FROM columnar.options WHERE regclass = '%s'::regclass;
+$cmd$);
+   run_command_on_placements
+---------------------------------------------------------------------
+ (localhost,57637,20090000,t,3)
+ (localhost,57638,20090001,t,3)
+ (localhost,57637,20090002,t,3)
+ (localhost,57638,20090003,t,3)
+(4 rows)
+
+-- change setting
+SELECT alter_columnar_table_set('table_option', compression_level => 13);
+ alter_columnar_table_set
+---------------------------------------------------------------------
+
+(1 row)
+
+-- verify setting
+SELECT run_command_on_placements('table_option',$cmd$
+  SELECT compression_level FROM columnar.options WHERE regclass = '%s'::regclass;
+$cmd$);
+    run_command_on_placements
+---------------------------------------------------------------------
+ (localhost,57637,20090000,t,13)
+ (localhost,57638,20090001,t,13)
+ (localhost,57637,20090002,t,13)
+ (localhost,57638,20090003,t,13)
+(4 rows)
+
+-- reset setting
+SELECT alter_columnar_table_reset('table_option', compression_level => true);
+ alter_columnar_table_reset
+---------------------------------------------------------------------
+
+(1 row)
+
+-- verify setting
+SELECT run_command_on_placements('table_option',$cmd$
+  SELECT compression_level FROM columnar.options WHERE regclass = '%s'::regclass;
+$cmd$);
+   run_command_on_placements
+---------------------------------------------------------------------
+ (localhost,57637,20090000,t,3)
+ (localhost,57638,20090001,t,3)
+ (localhost,57637,20090002,t,3)
+ (localhost,57638,20090003,t,3)
+(4 rows)
+
+-- setting: chunk_row_count
+-- get baseline for setting
+SELECT run_command_on_placements('table_option',$cmd$
+  SELECT chunk_row_count FROM columnar.options WHERE regclass = '%s'::regclass;
+$cmd$);
+     run_command_on_placements
+---------------------------------------------------------------------
+ (localhost,57637,20090000,t,10000)
+ (localhost,57638,20090001,t,10000)
+ (localhost,57637,20090002,t,10000)
+ (localhost,57638,20090003,t,10000)
+(4 rows)
+
+-- change setting
+SELECT alter_columnar_table_set('table_option', chunk_row_count => 100);
+ alter_columnar_table_set
+---------------------------------------------------------------------
+
+(1 row)
+
+-- verify setting
+SELECT run_command_on_placements('table_option',$cmd$
+  SELECT chunk_row_count FROM columnar.options WHERE regclass = '%s'::regclass;
+$cmd$);
+    run_command_on_placements
+---------------------------------------------------------------------
+ (localhost,57637,20090000,t,100)
+ (localhost,57638,20090001,t,100)
+ (localhost,57637,20090002,t,100)
+ (localhost,57638,20090003,t,100)
+(4 rows)
+
+-- reset setting
+SELECT alter_columnar_table_reset('table_option', chunk_row_count => true);
+ alter_columnar_table_reset
+---------------------------------------------------------------------
+
+(1 row)
+
+-- verify setting
+SELECT run_command_on_placements('table_option',$cmd$
+  SELECT chunk_row_count FROM columnar.options WHERE regclass = '%s'::regclass;
+$cmd$);
+     run_command_on_placements
+---------------------------------------------------------------------
+ (localhost,57637,20090000,t,10000)
+ (localhost,57638,20090001,t,10000)
+ (localhost,57637,20090002,t,10000)
+ (localhost,57638,20090003,t,10000)
+(4 rows)
+
+-- setting: stripe_row_count
+-- get baseline for setting
+SELECT run_command_on_placements('table_option',$cmd$
+  SELECT stripe_row_count FROM columnar.options WHERE regclass = '%s'::regclass;
+$cmd$);
+      run_command_on_placements
+---------------------------------------------------------------------
+ (localhost,57637,20090000,t,150000)
+ (localhost,57638,20090001,t,150000)
+ (localhost,57637,20090002,t,150000)
+ (localhost,57638,20090003,t,150000)
+(4 rows)
+
+-- change setting
+SELECT alter_columnar_table_set('table_option', stripe_row_count => 100);
+ alter_columnar_table_set
+---------------------------------------------------------------------
+
+(1 row)
+
+-- verify setting
+SELECT run_command_on_placements('table_option',$cmd$
+  SELECT stripe_row_count FROM columnar.options WHERE regclass = '%s'::regclass;
+$cmd$);
+    run_command_on_placements
+---------------------------------------------------------------------
+ (localhost,57637,20090000,t,100)
+ (localhost,57638,20090001,t,100)
+ (localhost,57637,20090002,t,100)
+ (localhost,57638,20090003,t,100)
+(4 rows)
+
+-- reset setting
+SELECT alter_columnar_table_reset('table_option', stripe_row_count => true);
+ alter_columnar_table_reset
+---------------------------------------------------------------------
+
+(1 row)
+
+-- verify setting
+SELECT run_command_on_placements('table_option',$cmd$
+  SELECT stripe_row_count FROM columnar.options WHERE regclass = '%s'::regclass;
+$cmd$);
+      run_command_on_placements
+---------------------------------------------------------------------
+ (localhost,57637,20090000,t,150000)
+ (localhost,57638,20090001,t,150000)
+ (localhost,57637,20090002,t,150000)
+ (localhost,57638,20090003,t,150000)
+(4 rows)
+
+-- verify settings are propagated when creating a table
+CREATE TABLE table_option_2 (a int, b text) USING columnar;
+SELECT alter_columnar_table_set('table_option_2',
+                                chunk_row_count => 100,
+                                stripe_row_count => 1000,
+                                compression => 'pglz',
+                                compression_level => 15);
+ alter_columnar_table_set
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_table('table_option_2', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- verify settings on placements
+SELECT run_command_on_placements('table_option_2',$cmd$
+  SELECT ROW(chunk_row_count, stripe_row_count, compression, compression_level) FROM columnar.options WHERE regclass = '%s'::regclass;
+$cmd$);
+             run_command_on_placements
+---------------------------------------------------------------------
+ (localhost,57637,20090004,t,"(100,1000,pglz,15)")
+ (localhost,57638,20090005,t,"(100,1000,pglz,15)")
+ (localhost,57637,20090006,t,"(100,1000,pglz,15)")
+ (localhost,57638,20090007,t,"(100,1000,pglz,15)")
+(4 rows)
+
+DROP TABLE table_option, table_option_2;
+-- verify settings get to all placements when there are multiple replica's
+SET citus.shard_replication_factor TO 2;
+-- table options integration testing
+CREATE TABLE table_option (a int, b text) USING columnar;
+SELECT create_distributed_table('table_option', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- setting: compression
+-- get baseline for setting
+SELECT run_command_on_placements('table_option',$cmd$
+  SELECT compression FROM columnar.options WHERE regclass = '%s'::regclass;
+$cmd$);
+     run_command_on_placements
+---------------------------------------------------------------------
+ (localhost,57637,20090008,t,none)
+ (localhost,57638,20090008,t,none)
+ (localhost,57637,20090009,t,none)
+ (localhost,57638,20090009,t,none)
+ (localhost,57637,20090010,t,none)
+ (localhost,57638,20090010,t,none)
+ (localhost,57637,20090011,t,none)
+ (localhost,57638,20090011,t,none)
+(8 rows)
+
+-- change setting
+SELECT alter_columnar_table_set('table_option', compression => 'pglz');
+ alter_columnar_table_set
+---------------------------------------------------------------------
+
+(1 row)
+
+-- verify setting
+SELECT run_command_on_placements('table_option',$cmd$
+  SELECT compression FROM columnar.options WHERE regclass = '%s'::regclass;
+$cmd$);
+     run_command_on_placements
+---------------------------------------------------------------------
+ (localhost,57637,20090008,t,pglz)
+ (localhost,57638,20090008,t,pglz)
+ (localhost,57637,20090009,t,pglz)
+ (localhost,57638,20090009,t,pglz)
+ (localhost,57637,20090010,t,pglz)
+ (localhost,57638,20090010,t,pglz)
+ (localhost,57637,20090011,t,pglz)
+ (localhost,57638,20090011,t,pglz)
+(8 rows)
+
+-- reset setting
+SELECT alter_columnar_table_reset('table_option', compression => true);
+ alter_columnar_table_reset
+---------------------------------------------------------------------
+
+(1 row)
+
+-- verify setting
+SELECT run_command_on_placements('table_option',$cmd$
+  SELECT compression FROM columnar.options WHERE regclass = '%s'::regclass;
+$cmd$);
+     run_command_on_placements
+---------------------------------------------------------------------
+ (localhost,57637,20090008,t,none)
+ (localhost,57638,20090008,t,none)
+ (localhost,57637,20090009,t,none)
+ (localhost,57638,20090009,t,none)
+ (localhost,57637,20090010,t,none)
+ (localhost,57638,20090010,t,none)
+ (localhost,57637,20090011,t,none)
+ (localhost,57638,20090011,t,none)
+(8 rows)
+
+-- setting: compression_level
+-- get baseline for setting
+SELECT run_command_on_placements('table_option',$cmd$
+  SELECT compression_level FROM columnar.options WHERE regclass = '%s'::regclass;
+$cmd$);
+   run_command_on_placements
+---------------------------------------------------------------------
+ (localhost,57637,20090008,t,3)
+ (localhost,57638,20090008,t,3)
+ (localhost,57637,20090009,t,3)
+ (localhost,57638,20090009,t,3)
+ (localhost,57637,20090010,t,3)
+ (localhost,57638,20090010,t,3)
+ (localhost,57637,20090011,t,3)
+ (localhost,57638,20090011,t,3)
+(8 rows)
+
+-- change setting
+SELECT alter_columnar_table_set('table_option', compression_level => 17);
+ alter_columnar_table_set
+---------------------------------------------------------------------
+
+(1 row)
+
+-- verify setting
+SELECT run_command_on_placements('table_option',$cmd$
+  SELECT compression_level FROM columnar.options WHERE regclass = '%s'::regclass;
+$cmd$);
+    run_command_on_placements
+---------------------------------------------------------------------
+ (localhost,57637,20090008,t,17)
+ (localhost,57638,20090008,t,17)
+ (localhost,57637,20090009,t,17)
+ (localhost,57638,20090009,t,17)
+ (localhost,57637,20090010,t,17)
+ (localhost,57638,20090010,t,17)
+ (localhost,57637,20090011,t,17)
+ (localhost,57638,20090011,t,17)
+(8 rows)
+
+-- reset setting
+SELECT alter_columnar_table_reset('table_option', compression_level => true);
+ alter_columnar_table_reset
+---------------------------------------------------------------------
+
+(1 row)
+
+-- verify setting
+SELECT run_command_on_placements('table_option',$cmd$
+  SELECT compression_level FROM columnar.options WHERE regclass = '%s'::regclass;
+$cmd$);
+   run_command_on_placements
+---------------------------------------------------------------------
+ (localhost,57637,20090008,t,3)
+ (localhost,57638,20090008,t,3)
+ (localhost,57637,20090009,t,3)
+ (localhost,57638,20090009,t,3)
+ (localhost,57637,20090010,t,3)
+ (localhost,57638,20090010,t,3)
+ (localhost,57637,20090011,t,3)
+ (localhost,57638,20090011,t,3)
+(8 rows)
+
+-- setting: chunk_row_count
+-- get baseline for setting
+SELECT run_command_on_placements('table_option',$cmd$
+  SELECT chunk_row_count FROM columnar.options WHERE regclass = '%s'::regclass;
+$cmd$);
+     run_command_on_placements
+---------------------------------------------------------------------
+ (localhost,57637,20090008,t,10000)
+ (localhost,57638,20090008,t,10000)
+ (localhost,57637,20090009,t,10000)
+ (localhost,57638,20090009,t,10000)
+ (localhost,57637,20090010,t,10000)
+ (localhost,57638,20090010,t,10000)
+ (localhost,57637,20090011,t,10000)
+ (localhost,57638,20090011,t,10000)
+(8 rows)
+
+-- change setting
+SELECT alter_columnar_table_set('table_option', chunk_row_count => 100);
+ alter_columnar_table_set
+---------------------------------------------------------------------
+
+(1 row)
+
+-- verify setting
+SELECT run_command_on_placements('table_option',$cmd$
+  SELECT chunk_row_count FROM columnar.options WHERE regclass = '%s'::regclass;
+$cmd$);
+    run_command_on_placements
+---------------------------------------------------------------------
+ (localhost,57637,20090008,t,100)
+ (localhost,57638,20090008,t,100)
+ (localhost,57637,20090009,t,100)
+ (localhost,57638,20090009,t,100)
+ (localhost,57637,20090010,t,100)
+ (localhost,57638,20090010,t,100)
+ (localhost,57637,20090011,t,100)
+ (localhost,57638,20090011,t,100)
+(8 rows)
+
+-- reset setting
+SELECT alter_columnar_table_reset('table_option', chunk_row_count => true);
+ alter_columnar_table_reset
+---------------------------------------------------------------------
+
+(1 row)
+
+-- verify setting
+SELECT run_command_on_placements('table_option',$cmd$
+  SELECT chunk_row_count FROM columnar.options WHERE regclass = '%s'::regclass;
+$cmd$);
+     run_command_on_placements
+---------------------------------------------------------------------
+ (localhost,57637,20090008,t,10000)
+ (localhost,57638,20090008,t,10000)
+ (localhost,57637,20090009,t,10000)
+ (localhost,57638,20090009,t,10000)
+ (localhost,57637,20090010,t,10000)
+ (localhost,57638,20090010,t,10000)
+ (localhost,57637,20090011,t,10000)
+ (localhost,57638,20090011,t,10000)
+(8 rows)
+
+-- setting: stripe_row_count
+-- get baseline for setting
+SELECT run_command_on_placements('table_option',$cmd$
+  SELECT stripe_row_count FROM columnar.options WHERE regclass = '%s'::regclass;
+$cmd$);
+      run_command_on_placements
+---------------------------------------------------------------------
+ (localhost,57637,20090008,t,150000)
+ (localhost,57638,20090008,t,150000)
+ (localhost,57637,20090009,t,150000)
+ (localhost,57638,20090009,t,150000)
+ (localhost,57637,20090010,t,150000)
+ (localhost,57638,20090010,t,150000)
+ (localhost,57637,20090011,t,150000)
+ (localhost,57638,20090011,t,150000)
+(8 rows)
+
+-- change setting
+SELECT alter_columnar_table_set('table_option', stripe_row_count => 100);
+ alter_columnar_table_set
+---------------------------------------------------------------------
+
+(1 row)
+
+-- verify setting
+SELECT run_command_on_placements('table_option',$cmd$
+  SELECT stripe_row_count FROM columnar.options WHERE regclass = '%s'::regclass;
+$cmd$);
+    run_command_on_placements
+---------------------------------------------------------------------
+ (localhost,57637,20090008,t,100)
+ (localhost,57638,20090008,t,100)
+ (localhost,57637,20090009,t,100)
+ (localhost,57638,20090009,t,100)
+ (localhost,57637,20090010,t,100)
+ (localhost,57638,20090010,t,100)
+ (localhost,57637,20090011,t,100)
+ (localhost,57638,20090011,t,100)
+(8 rows)
+
+-- reset setting
+SELECT alter_columnar_table_reset('table_option', stripe_row_count => true);
+ alter_columnar_table_reset
+---------------------------------------------------------------------
+
+(1 row)
+
+-- verify setting
+SELECT run_command_on_placements('table_option',$cmd$
+  SELECT stripe_row_count FROM columnar.options WHERE regclass = '%s'::regclass;
+$cmd$);
+      run_command_on_placements
+---------------------------------------------------------------------
+ (localhost,57637,20090008,t,150000)
+ (localhost,57638,20090008,t,150000)
+ (localhost,57637,20090009,t,150000)
+ (localhost,57638,20090009,t,150000)
+ (localhost,57637,20090010,t,150000)
+ (localhost,57638,20090010,t,150000)
+ (localhost,57637,20090011,t,150000)
+ (localhost,57638,20090011,t,150000)
+(8 rows)
+
+-- verify settings are propagated when creating a table
+CREATE TABLE table_option_2 (a int, b text) USING columnar;
+SELECT alter_columnar_table_set('table_option_2',
+                                chunk_row_count => 100,
+                                stripe_row_count => 1000,
+                                compression => 'pglz',
+                                compression_level => 19);
+ alter_columnar_table_set
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_table('table_option_2', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- verify settings on placements
+SELECT run_command_on_placements('table_option_2',$cmd$
+  SELECT ROW(chunk_row_count, stripe_row_count, compression, compression_level) FROM columnar.options WHERE regclass = '%s'::regclass;
+$cmd$);
+             run_command_on_placements
+---------------------------------------------------------------------
+ (localhost,57637,20090012,t,"(100,1000,pglz,19)")
+ (localhost,57638,20090012,t,"(100,1000,pglz,19)")
+ (localhost,57637,20090013,t,"(100,1000,pglz,19)")
+ (localhost,57638,20090013,t,"(100,1000,pglz,19)")
+ (localhost,57637,20090014,t,"(100,1000,pglz,19)")
+ (localhost,57638,20090014,t,"(100,1000,pglz,19)")
+ (localhost,57637,20090015,t,"(100,1000,pglz,19)")
+ (localhost,57638,20090015,t,"(100,1000,pglz,19)")
+(8 rows)
+
+DROP TABLE table_option, table_option_2;
+-- test options on a reference table
+CREATE TABLE table_option_reference (a int, b text) USING columnar;
+SELECT create_reference_table('table_option_reference');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- setting: compression
+-- get baseline for setting
+SELECT run_command_on_placements('table_option_reference',$cmd$
+  SELECT compression FROM columnar.options WHERE regclass = '%s'::regclass;
+$cmd$);
+     run_command_on_placements
+---------------------------------------------------------------------
+ (localhost,57637,20090016,t,none)
+ (localhost,57638,20090016,t,none)
+(2 rows)
+
+-- change setting
+SELECT alter_columnar_table_set('table_option_reference', compression => 'pglz');
+ alter_columnar_table_set
+---------------------------------------------------------------------
+
+(1 row)
+
+-- verify setting
+SELECT run_command_on_placements('table_option_reference',$cmd$
+  SELECT compression FROM columnar.options WHERE regclass = '%s'::regclass;
+$cmd$);
+     run_command_on_placements
+---------------------------------------------------------------------
+ (localhost,57637,20090016,t,pglz)
+ (localhost,57638,20090016,t,pglz)
+(2 rows)
+
+-- reset setting
+SELECT alter_columnar_table_reset('table_option_reference', compression => true);
+ alter_columnar_table_reset
+---------------------------------------------------------------------
+
+(1 row)
+
+-- verify setting
+SELECT run_command_on_placements('table_option_reference',$cmd$
+  SELECT compression FROM columnar.options WHERE regclass = '%s'::regclass;
+$cmd$);
+     run_command_on_placements
+---------------------------------------------------------------------
+ (localhost,57637,20090016,t,none)
+ (localhost,57638,20090016,t,none)
+(2 rows)
+
+-- setting: compression_level
+-- get baseline for setting
+SELECT run_command_on_placements('table_option_reference',$cmd$
+  SELECT compression_level FROM columnar.options WHERE regclass = '%s'::regclass;
+$cmd$);
+   run_command_on_placements
+---------------------------------------------------------------------
+ (localhost,57637,20090016,t,3)
+ (localhost,57638,20090016,t,3)
+(2 rows)
+
+-- change setting
+SELECT alter_columnar_table_set('table_option_reference', compression_level => 11);
+ alter_columnar_table_set
+---------------------------------------------------------------------
+
+(1 row)
+
+-- verify setting
+SELECT run_command_on_placements('table_option_reference',$cmd$
+  SELECT compression_level FROM columnar.options WHERE regclass = '%s'::regclass;
+$cmd$);
+    run_command_on_placements
+---------------------------------------------------------------------
+ (localhost,57637,20090016,t,11)
+ (localhost,57638,20090016,t,11)
+(2 rows)
+
+-- reset setting
+SELECT alter_columnar_table_reset('table_option_reference', compression_level => true);
+ alter_columnar_table_reset
+---------------------------------------------------------------------
+
+(1 row)
+
+-- verify setting
+SELECT run_command_on_placements('table_option_reference',$cmd$
+  SELECT compression_level FROM columnar.options WHERE regclass = '%s'::regclass;
+$cmd$);
+   run_command_on_placements
+---------------------------------------------------------------------
+ (localhost,57637,20090016,t,3)
+ (localhost,57638,20090016,t,3)
+(2 rows)
+
+-- setting: chunk_row_count
+-- get baseline for setting
+SELECT run_command_on_placements('table_option_reference',$cmd$
+  SELECT chunk_row_count FROM columnar.options WHERE regclass = '%s'::regclass;
+$cmd$);
+     run_command_on_placements
+---------------------------------------------------------------------
+ (localhost,57637,20090016,t,10000)
+ (localhost,57638,20090016,t,10000)
+(2 rows)
+
+-- change setting
+SELECT alter_columnar_table_set('table_option_reference', chunk_row_count => 100);
+ alter_columnar_table_set
+---------------------------------------------------------------------
+
+(1 row)
+
+-- verify setting
+SELECT run_command_on_placements('table_option_reference',$cmd$
+  SELECT chunk_row_count FROM columnar.options WHERE regclass = '%s'::regclass;
+$cmd$);
+    run_command_on_placements
+---------------------------------------------------------------------
+ (localhost,57637,20090016,t,100)
+ (localhost,57638,20090016,t,100)
+(2 rows)
+
+-- reset setting
+SELECT alter_columnar_table_reset('table_option_reference', chunk_row_count => true);
+ alter_columnar_table_reset
+---------------------------------------------------------------------
+
+(1 row)
+
+-- verify setting
+SELECT run_command_on_placements('table_option_reference',$cmd$
+  SELECT chunk_row_count FROM columnar.options WHERE regclass = '%s'::regclass;
+$cmd$);
+     run_command_on_placements
+---------------------------------------------------------------------
+ (localhost,57637,20090016,t,10000)
+ (localhost,57638,20090016,t,10000)
+(2 rows)
+
+-- setting: stripe_row_count
+-- get baseline for setting
+SELECT run_command_on_placements('table_option_reference',$cmd$
+  SELECT stripe_row_count FROM columnar.options WHERE regclass = '%s'::regclass;
+$cmd$);
+      run_command_on_placements
+---------------------------------------------------------------------
+ (localhost,57637,20090016,t,150000)
+ (localhost,57638,20090016,t,150000)
+(2 rows)
+
+-- change setting
+SELECT alter_columnar_table_set('table_option_reference', stripe_row_count => 100);
+ alter_columnar_table_set
+---------------------------------------------------------------------
+
+(1 row)
+
+-- verify setting
+SELECT run_command_on_placements('table_option_reference',$cmd$
+  SELECT stripe_row_count FROM columnar.options WHERE regclass = '%s'::regclass;
+$cmd$);
+    run_command_on_placements
+---------------------------------------------------------------------
+ (localhost,57637,20090016,t,100)
+ (localhost,57638,20090016,t,100)
+(2 rows)
+
+-- reset setting
+SELECT alter_columnar_table_reset('table_option_reference', stripe_row_count => true);
+ alter_columnar_table_reset
+---------------------------------------------------------------------
+
+(1 row)
+
+-- verify setting
+SELECT run_command_on_placements('table_option_reference',$cmd$
+  SELECT stripe_row_count FROM columnar.options WHERE regclass = '%s'::regclass;
+$cmd$);
+      run_command_on_placements
+---------------------------------------------------------------------
+ (localhost,57637,20090016,t,150000)
+ (localhost,57638,20090016,t,150000)
+(2 rows)
+
+-- verify settings are propagated when creating a table
+CREATE TABLE table_option_reference_2 (a int, b text) USING columnar;
+SELECT alter_columnar_table_set('table_option_reference_2',
+                                chunk_row_count => 100,
+                                stripe_row_count => 1000,
+                                compression => 'pglz',
+                                compression_level => 9);
+ alter_columnar_table_set
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_reference_table('table_option_reference_2');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- verify settings on placements
+SELECT run_command_on_placements('table_option_reference_2',$cmd$
+  SELECT ROW(chunk_row_count, stripe_row_count, compression, compression_level) FROM columnar.options WHERE regclass = '%s'::regclass;
+$cmd$);
+            run_command_on_placements
+---------------------------------------------------------------------
+ (localhost,57637,20090017,t,"(100,1000,pglz,9)")
+ (localhost,57638,20090017,t,"(100,1000,pglz,9)")
+(2 rows)
+
+DROP TABLE table_option_reference, table_option_reference_2;
+SET client_min_messages TO WARNING;
+DROP SCHEMA columnar_citus_integration CASCADE;

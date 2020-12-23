@@ -1639,7 +1639,7 @@ UndistributeTable(Oid relationId)
 				ereport(ERROR, (errmsg("could not run SPI query")));
 			}
 			preLoadCommands = lappend(preLoadCommands,
-									  attachPartitionCommand);
+									  makeTableDDLCommandString(attachPartitionCommand));
 			UndistributeTable(partitionRelationId);
 		}
 	}
@@ -1648,26 +1648,31 @@ UndistributeTable(Oid relationId)
 	uint32 hashOfName = hash_any((unsigned char *) tempName, strlen(tempName));
 	AppendShardIdToName(&tempName, hashOfName);
 
-	char *tableCreationCommand = NULL;
 
 	ereport(NOTICE, (errmsg("creating a new local table for %s",
 							quote_qualified_identifier(schemaName, relationName))));
 
+	TableDDLCommand *tableCreationCommand = NULL;
 	foreach_ptr(tableCreationCommand, preLoadCommands)
 	{
-		Node *parseTree = ParseTreeNode(tableCreationCommand);
+		Assert(CitusIsA(tableCreationCommand, TableDDLCommand));
+
+		char *tableCreationSql = GetTableDDLCommand(tableCreationCommand);
+		Node *parseTree = ParseTreeNode(tableCreationSql);
 
 		RelayEventExtendNames(parseTree, schemaName, hashOfName);
-		CitusProcessUtility(parseTree, tableCreationCommand, PROCESS_UTILITY_TOPLEVEL,
+		CitusProcessUtility(parseTree, tableCreationSql, PROCESS_UTILITY_TOPLEVEL,
 							NULL, None_Receiver, NULL);
 	}
 
 	ReplaceTable(relationId, get_relname_relid(tempName, schemaId));
 
-	char *tableConstructionCommand = NULL;
+	TableDDLCommand *tableConstructionCommand = NULL;
 	foreach_ptr(tableConstructionCommand, postLoadCommands)
 	{
-		spiResult = SPI_execute(tableConstructionCommand, false, 0);
+		Assert(CitusIsA(tableConstructionCommand, TableDDLCommand));
+		char *tableConstructionSQL = GetTableDDLCommand(tableConstructionCommand);
+		spiResult = SPI_execute(tableConstructionSQL, false, 0);
 		if (spiResult != SPI_OK_UTILITY)
 		{
 			ereport(ERROR, (errmsg("could not run SPI query")));
@@ -1707,7 +1712,7 @@ GetViewCreationCommandsOfTable(Oid relationId)
 						 "CREATE VIEW %s AS %s",
 						 qualifiedViewName,
 						 viewDefinition);
-		commands = lappend(commands, query->data);
+		commands = lappend(commands, makeTableDDLCommandString(query->data));
 	}
 	return commands;
 }

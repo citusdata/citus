@@ -1442,6 +1442,58 @@ ALTER TABLE "CiTuS.TeeN"."TeeNTabLE.1!?!" ADD COLUMN "NEW_TeeN:COl" text;
 DELETE FROM "CiTuS.TeeN"."TeeNTabLE.1!?!" WHERE "TeNANt_Id"=1;
 -- Some more DDL
 ALTER TABLE "CiTuS.TeeN"."TeeNTabLE.1!?!" ADD CONSTRAINT "ConsNAmE<>" PRIMARY KEY ("TeNANt_Id");
+-- test schema rename propagation
+CREATE SCHEMA foo;
+CREATE TABLE foo.test (x int, y int);
+SELECT create_distributed_table('foo.test', 'x');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO foo.test VALUES (1, 1), (2, 2);
+ALTER SCHEMA foo rename to bar;
+SELECT COUNT(*) FROM bar.test;
+ count
+---------------------------------------------------------------------
+     2
+(1 row)
+
+-- test propagation with weird name
+ALTER SCHEMA "CiTuS.TeeN" RENAME TO "Citus'Teen123";
+SELECT * FROM "Citus'Teen123"."TeeNTabLE.1!?!" ORDER BY id;
+ id | TeNANt_Id | NEW_TeeN:COl
+---------------------------------------------------------------------
+  1 |         0 |
+  2 |         3 |
+  3 |         2 |
+  4 |         4 |
+(4 rows)
+
+-- test error
+INSERT INTO bar.test VALUES (3,3), (4,4), (5,5), (6,6), (7,7), (8,8), (9,9);
+BEGIN;
+    SELECT COUNT(*) FROM bar.test;
+ count
+---------------------------------------------------------------------
+     9
+(1 row)
+
+    ALTER SCHEMA bar RENAME TO foo;
+ERROR:  cannot create or modify schema because there was a parallel operation on a distributed table in the transaction
+DETAIL:  When creating or altering a schema, Citus needs to perform all operations over a single connection per node to ensure consistency.
+HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
+ROLLBACK;
+BEGIN;
+    SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
+    SELECT COUNT(*) FROM bar.test;
+ count
+---------------------------------------------------------------------
+     9
+(1 row)
+
+    ALTER SCHEMA bar RENAME TO foo;
+ROLLBACK;
 -- Clean up the created schema
 DROP SCHEMA run_test_schema CASCADE;
 NOTICE:  drop cascades to table run_test_schema.test_table
@@ -1451,7 +1503,9 @@ DETAIL:  drop cascades to table test_schema_support_join_1.nation_hash
 drop cascades to table test_schema_support_join_1.nation_hash_2
 DROP SCHEMA test_schema_support_join_2 CASCADE;
 NOTICE:  drop cascades to table test_schema_support_join_2.nation_hash
-DROP SCHEMA "CiTuS.TeeN" CASCADE;
-NOTICE:  drop cascades to table "CiTuS.TeeN"."TeeNTabLE.1!?!"
+DROP SCHEMA "Citus'Teen123" CASCADE;
+NOTICE:  drop cascades to table "Citus'Teen123"."TeeNTabLE.1!?!"
 DROP SCHEMA "CiTUS.TEEN2" CASCADE;
 NOTICE:  drop cascades to table "CiTUS.TEEN2"."CAPITAL_TABLE"
+DROP SCHEMA bar CASCADE;
+NOTICE:  drop cascades to table bar.test

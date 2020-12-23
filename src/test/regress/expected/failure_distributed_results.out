@@ -81,11 +81,12 @@ SELECT citus.mitmproxy('conn.onQuery(query="worker_partition_query_result.*test_
 (1 row)
 
 BEGIN;
+SET LOCAL client_min_messages TO DEBUG1;
 CREATE TABLE distributed_result_info AS
   SELECT resultId, nodeport, rowcount, targetShardId, targetShardIndex
   FROM partition_task_list_results('test', $$ SELECT * FROM source_table $$, 'target_table')
           NATURAL JOIN pg_dist_node;
-WARNING:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
+DEBUG:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
 SELECT * FROM distributed_result_info ORDER BY resultId;

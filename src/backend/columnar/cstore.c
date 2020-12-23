@@ -20,28 +20,43 @@
 #include "utils/guc.h"
 #include "utils/rel.h"
 
+#include "citus_version.h"
 #include "columnar/cstore.h"
 
 /* Default values for option parameters */
-#define DEFAULT_COMPRESSION_TYPE COMPRESSION_NONE
 #define DEFAULT_STRIPE_ROW_COUNT 150000
-#define DEFAULT_BLOCK_ROW_COUNT 10000
+#define DEFAULT_CHUNK_ROW_COUNT 10000
+
+#if HAVE_LIBZSTD
+#define DEFAULT_COMPRESSION_TYPE COMPRESSION_ZSTD
+#elif HAVE_LIBLZ4
+#define DEFAULT_COMPRESSION_TYPE COMPRESSION_LZ4
+#else
+#define DEFAULT_COMPRESSION_TYPE COMPRESSION_PG_LZ
+#endif
 
 int cstore_compression = DEFAULT_COMPRESSION_TYPE;
 int cstore_stripe_row_count = DEFAULT_STRIPE_ROW_COUNT;
-int cstore_block_row_count = DEFAULT_BLOCK_ROW_COUNT;
+int cstore_chunk_row_count = DEFAULT_CHUNK_ROW_COUNT;
+int columnar_compression_level = 3;
 
 static const struct config_enum_entry cstore_compression_options[] =
 {
 	{ "none", COMPRESSION_NONE, false },
 	{ "pglz", COMPRESSION_PG_LZ, false },
+#if HAVE_LIBLZ4
+	{ "lz4", COMPRESSION_LZ4, false },
+#endif
+#if HAVE_LIBZSTD
+	{ "zstd", COMPRESSION_ZSTD, false },
+#endif
 	{ NULL, 0, false }
 };
 
 void
 cstore_init()
 {
-	DefineCustomEnumVariable("cstore.compression",
+	DefineCustomEnumVariable("columnar.compression",
 							 "Compression type for cstore.",
 							 NULL,
 							 &cstore_compression,
@@ -53,7 +68,20 @@ cstore_init()
 							 NULL,
 							 NULL);
 
-	DefineCustomIntVariable("cstore.stripe_row_count",
+	DefineCustomIntVariable("columnar.compression_level",
+							"Compression level to be used with zstd.",
+							NULL,
+							&columnar_compression_level,
+							3,
+							COMPRESSION_LEVEL_MIN,
+							COMPRESSION_LEVEL_MAX,
+							PGC_USERSET,
+							0,
+							NULL,
+							NULL,
+							NULL);
+
+	DefineCustomIntVariable("columnar.stripe_row_count",
 							"Maximum number of tuples per stripe.",
 							NULL,
 							&cstore_stripe_row_count,
@@ -66,13 +94,13 @@ cstore_init()
 							NULL,
 							NULL);
 
-	DefineCustomIntVariable("cstore.block_row_count",
-							"Maximum number of rows per block.",
+	DefineCustomIntVariable("columnar.chunk_row_count",
+							"Maximum number of rows per chunk.",
 							NULL,
-							&cstore_block_row_count,
-							DEFAULT_BLOCK_ROW_COUNT,
-							BLOCK_ROW_COUNT_MINIMUM,
-							BLOCK_ROW_COUNT_MAXIMUM,
+							&cstore_chunk_row_count,
+							DEFAULT_CHUNK_ROW_COUNT,
+							CHUNK_ROW_COUNT_MINIMUM,
+							CHUNK_ROW_COUNT_MAXIMUM,
 							PGC_USERSET,
 							0,
 							NULL,
@@ -81,21 +109,50 @@ cstore_init()
 }
 
 
-/* ParseCompressionType converts a string to a compression type. */
+/*
+ * ParseCompressionType converts a string to a compression type.
+ * For compression algorithms that are invalid or not compiled, it
+ * returns COMPRESSION_TYPE_INVALID.
+ */
 CompressionType
 ParseCompressionType(const char *compressionTypeString)
 {
-	CompressionType compressionType = COMPRESSION_TYPE_INVALID;
 	Assert(compressionTypeString != NULL);
 
-	if (strncmp(compressionTypeString, COMPRESSION_STRING_NONE, NAMEDATALEN) == 0)
+	for (int compressionIndex = 0;
+		 cstore_compression_options[compressionIndex].name != NULL;
+		 compressionIndex++)
 	{
-		compressionType = COMPRESSION_NONE;
-	}
-	else if (strncmp(compressionTypeString, COMPRESSION_STRING_PG_LZ, NAMEDATALEN) == 0)
-	{
-		compressionType = COMPRESSION_PG_LZ;
+		const char *compressionName = cstore_compression_options[compressionIndex].name;
+		if (strncmp(compressionTypeString, compressionName, NAMEDATALEN) == 0)
+		{
+			return cstore_compression_options[compressionIndex].val;
+		}
 	}
 
-	return compressionType;
+	return COMPRESSION_TYPE_INVALID;
+}
+
+
+/*
+ * CompressionTypeStr returns string representation of a compression type.
+ * For compression algorithms that are invalid or not compiled, it
+ * returns NULL.
+ */
+const char *
+CompressionTypeStr(CompressionType requestedType)
+{
+	for (int compressionIndex = 0;
+		 cstore_compression_options[compressionIndex].name != NULL;
+		 compressionIndex++)
+	{
+		CompressionType compressionType =
+			cstore_compression_options[compressionIndex].val;
+		if (compressionType == requestedType)
+		{
+			return cstore_compression_options[compressionIndex].name;
+		}
+	}
+
+	return NULL;
 }

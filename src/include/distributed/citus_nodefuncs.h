@@ -62,6 +62,7 @@ extern void OutMultiJoin(OUTFUNC_ARGS);
 extern void OutMultiPartition(OUTFUNC_ARGS);
 extern void OutMultiCartesianProduct(OUTFUNC_ARGS);
 extern void OutMultiExtendedOp(OUTFUNC_ARGS);
+extern void OutTableDDLCommand(OUTFUNC_ARGS);
 
 extern void CopyNodeJob(COPYFUNC_ARGS);
 extern void CopyNodeDistributedPlan(COPYFUNC_ARGS);

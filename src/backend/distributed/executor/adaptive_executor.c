@@ -299,6 +299,25 @@ typedef struct DistributedExecution
 
 
 /*
+ * WorkerPoolFailureState indicates the current state of the
+ * pool.
+ */
+typedef enum WorkerPoolFailureState
+{
+	/* safe to continue execution*/
+	WORKER_POOL_NOT_FAILED,
+
+	/* if a pool fails, the execution fails */
+	WORKER_POOL_FAILED,
+
+	/*
+	 * The remote execution over the pool failed, but we failed over
+	 * to the local execution and still finish the execution.
+	 */
+	WORKER_POOL_FAILED_OVER_TO_LOCAL
+} WorkerPoolFailureState;
+
+/*
  * WorkerPool represents a pool of sessions on the same worker.
  *
  * A WorkerPool has two queues containing the TaskPlacementExecutions that need
@@ -384,10 +403,16 @@ typedef struct WorkerPool
 	uint32 maxNewConnectionsPerCycle;
 
 	/*
+	 * Set to true if the pool is to local node. We use this value to
+	 * avoid re-calculating often.
+	 */
+	bool poolToLocalNode;
+
+	/*
 	 * This is only set in WorkerPoolFailed() function. Once a pool fails, we do not
 	 * use it anymore.
 	 */
-	bool failed;
+	WorkerPoolFailureState failureState;
 } WorkerPool;
 
 struct TaskPlacementExecution;
@@ -457,7 +482,8 @@ typedef enum TaskExecutionState
 {
 	TASK_EXECUTION_NOT_FINISHED,
 	TASK_EXECUTION_FINISHED,
-	TASK_EXECUTION_FAILED
+	TASK_EXECUTION_FAILED,
+	TASK_EXECUTION_FAILOVER_TO_LOCAL_EXECUTION
 } TaskExecutionState;
 
 /*
@@ -515,6 +541,7 @@ typedef enum TaskPlacementExecutionState
 	PLACEMENT_EXECUTION_READY,
 	PLACEMENT_EXECUTION_RUNNING,
 	PLACEMENT_EXECUTION_FINISHED,
+	PLACEMENT_EXECUTION_FAILOVER_TO_LOCAL_EXECUTION,
 	PLACEMENT_EXECUTION_FAILED
 } TaskPlacementExecutionState;
 
@@ -581,9 +608,7 @@ static TransactionProperties DecideTransactionPropertiesForTaskList(RowModifyLev
 static void StartDistributedExecution(DistributedExecution *execution);
 static void RunLocalExecution(CitusScanState *scanState, DistributedExecution *execution);
 static void RunDistributedExecution(DistributedExecution *execution);
-static bool ShouldRunTasksSequentially(List *taskList);
 static void SequentialRunDistributedExecution(DistributedExecution *execution);
-
 static void FinishDistributedExecution(DistributedExecution *execution);
 static void CleanUpSessions(DistributedExecution *execution);
 
@@ -635,6 +660,8 @@ static void PlacementExecutionDone(TaskPlacementExecution *placementExecution,
 								   bool succeeded);
 static void ScheduleNextPlacementExecution(TaskPlacementExecution *placementExecution,
 										   bool succeeded);
+static bool CanFailoverPlacementExecutionToLocalExecution(TaskPlacementExecution *
+														  placementExecution);
 static bool ShouldMarkPlacementsInvalidOnFailure(DistributedExecution *execution);
 static void PlacementExecutionReady(TaskPlacementExecution *placementExecution);
 static TaskExecutionState TaskExecutionStateMachine(ShardCommandExecution *
@@ -1081,7 +1108,11 @@ CreateDistributedExecution(RowModifyLevel modLevel, List *taskList,
 	}
 	else
 	{
-		execution->remoteTaskList = execution->remoteAndLocalTaskList;
+		/*
+		 * Get a shallow copy of the list as we rely on remoteAndLocalTaskList
+		 * across the execution.
+		 */
+		execution->remoteTaskList = list_copy(execution->remoteAndLocalTaskList);
 	}
 
 	execution->totalTaskCount = list_length(execution->remoteTaskList);
@@ -1631,7 +1662,6 @@ CleanUpSessions(DistributedExecution *execution)
 			 * changing any states in the ConnectionStateMachine.
 			 *
 			 */
-
 			CloseConnection(connection);
 		}
 		else if (connection->connectionState == MULTI_CONNECTION_CONNECTED)
@@ -1708,8 +1738,6 @@ AssignTasksToConnectionsOrWorkerPool(DistributedExecution *execution)
 {
 	RowModifyLevel modLevel = execution->modLevel;
 	List *taskList = execution->remoteTaskList;
-
-	int32 localGroupId = GetLocalGroupId();
 
 	Task *task = NULL;
 	foreach_ptr(task, taskList)
@@ -1849,11 +1877,6 @@ AssignTasksToConnectionsOrWorkerPool(DistributedExecution *execution)
 				 * placements.
 				 */
 				placementExecutionReady = false;
-			}
-
-			if (taskPlacement->groupId == localGroupId)
-			{
-				SetLocalExecutionStatus(LOCAL_EXECUTION_DISABLED);
 			}
 		}
 	}
@@ -2021,6 +2044,13 @@ FindOrCreateWorkerPool(DistributedExecution *execution, char *nodeName, int node
 	workerPool->nodeName = pstrdup(nodeName);
 	workerPool->nodePort = nodePort;
 
+	WorkerNode *workerNode = FindWorkerNode(nodeName, nodePort);
+	if (workerNode)
+	{
+		workerPool->poolToLocalNode =
+			workerNode->groupId == GetLocalGroupId();
+	}
+
 	/* "open" connections aggressively when there are cached connections */
 	int nodeConnectionCount = MaxCachedConnectionsPerWorker;
 	workerPool->maxNewConnectionsPerCycle = Max(1, nodeConnectionCount);
@@ -2105,7 +2135,7 @@ FindOrCreateWorkerSession(WorkerPool *workerPool, MultiConnection *connection)
  * true sequential execution, concurrent multi-row upserts could easily form
  * a distributed deadlock when the upserts touch the same rows.
  */
-static bool
+bool
 ShouldRunTasksSequentially(List *taskList)
 {
 	if (list_length(taskList) < 2)
@@ -2143,13 +2173,11 @@ SequentialRunDistributedExecution(DistributedExecution *execution)
 	 * executions, so make sure to set it.
 	 */
 	MultiShardConnectionType = SEQUENTIAL_CONNECTION;
-
 	Task *taskToExecute = NULL;
 	foreach_ptr(taskToExecute, taskList)
 	{
-		/* execute each task one by one */
 		execution->remoteAndLocalTaskList = list_make1(taskToExecute);
-		execution->remoteTaskList = execution->remoteAndLocalTaskList;
+		execution->remoteTaskList = list_make1(taskToExecute);
 		execution->totalTaskCount = 1;
 		execution->unfinishedTaskCount = 1;
 
@@ -2202,15 +2230,21 @@ RunDistributedExecution(DistributedExecution *execution)
 
 		while (execution->unfinishedTaskCount > 0 && !cancellationReceived)
 		{
-			long timeout = NextEventTimeout(execution);
-
 			WorkerPool *workerPool = NULL;
 			foreach_ptr(workerPool, execution->workerList)
 			{
 				ManageWorkerPool(workerPool);
 			}
 
-			if (execution->rebuildWaitEventSet)
+			if (execution->remoteTaskList == NIL)
+			{
+				/*
+				 * All the tasks are failed over to the local execution, no need
+				 * to wait for any connection activity.
+				 */
+				continue;
+			}
+			else if (execution->rebuildWaitEventSet)
 			{
 				if (events != NULL)
 				{
@@ -2222,7 +2256,6 @@ RunDistributedExecution(DistributedExecution *execution)
 					events = NULL;
 				}
 				eventSetSize = RebuildWaitEventSet(execution);
-
 				events = palloc0(eventSetSize * sizeof(WaitEvent));
 			}
 			else if (execution->waitFlagsChanged)
@@ -2232,6 +2265,7 @@ RunDistributedExecution(DistributedExecution *execution)
 			}
 
 			/* wait for I/O events */
+			long timeout = NextEventTimeout(execution);
 			int eventCount = WaitEventSetWait(execution->waitEventSet, timeout, events,
 											  eventSetSize, WAIT_EVENT_CLIENT_READ);
 			ProcessWaitEvents(execution, events, eventCount, &cancellationReceived);
@@ -2370,13 +2404,52 @@ ManageWorkerPool(WorkerPool *workerPool)
 	}
 
 	int newConnectionCount = CalculateNewConnectionCount(workerPool);
-
 	if (newConnectionCount <= 0)
 	{
 		return;
 	}
 
 	OpenNewConnections(workerPool, newConnectionCount, execution->transactionProperties);
+
+	/*
+	 * Cannot establish new connections to the local host, most probably because the
+	 * local node cannot accept new connections (e.g., hit max_connections). Switch
+	 * the tasks to the local execution.
+	 *
+	 * We prefer initiatedConnectionCount over the new connection establishments happen
+	 * in this iteration via OpenNewConnections(). The reason is that it is expected for
+	 * OpenNewConnections() to not open any new connections as long as the connections
+	 * are optional (e.g., the second or later connections in the pool). But, for
+	 * initiatedConnectionCount to be zero, the connection to the local pool should have
+	 * been failed.
+	 */
+	int initiatedConnectionCount = list_length(workerPool->sessionList);
+	if (initiatedConnectionCount == 0)
+	{
+		/*
+		 * Only the pools to the local node are allowed to have optional
+		 * connections for the first connection. Hence, initiatedConnectionCount
+		 * could only be zero for poolToLocalNode. For other pools, the connection
+		 * manager would wait until it gets at least one connection.
+		 */
+		Assert(workerPool->poolToLocalNode);
+
+		WorkerPoolFailed(workerPool);
+
+		if (execution->failed)
+		{
+			ereport(ERROR, (errcode(ERRCODE_CONNECTION_FAILURE),
+							errmsg(
+								"could not establish any connections to the node %s:%d "
+								"when local execution is also disabled.",
+								workerPool->nodeName,
+								workerPool->nodePort),
+							errhint("Enable local execution via SET "
+									"citus.enable_local_execution TO true;")));
+		}
+
+		return;
+	}
 
 	INSTR_TIME_SET_CURRENT(workerPool->lastConnectionOpenTime);
 	execution->rebuildWaitEventSet = true;
@@ -2390,7 +2463,8 @@ ManageWorkerPool(WorkerPool *workerPool)
 static bool
 HasAnyConnectionFailure(WorkerPool *workerPool)
 {
-	if (workerPool->failed)
+	if (workerPool->failureState == WORKER_POOL_FAILED ||
+		workerPool->failureState == WORKER_POOL_FAILED_OVER_TO_LOCAL)
 	{
 		/* connection pool failed */
 		return true;
@@ -2521,7 +2595,6 @@ CalculateNewConnectionCount(WorkerPool *workerPool)
 		 * than the target pool size.
 		 */
 		newConnectionCount = Min(newConnectionsForReadyTasks, maxNewConnectionCount);
-
 		if (newConnectionCount > 0)
 		{
 			/* increase the open rate every cycle (like TCP slow start) */
@@ -2558,7 +2631,8 @@ OpenNewConnections(WorkerPool *workerPool, int newConnectionCount,
 		 * throttle connections if citus.max_shared_pool_size reached)
 		 */
 		int adaptiveConnectionManagementFlag =
-			AdaptiveConnectionManagementFlag(list_length(workerPool->sessionList));
+			AdaptiveConnectionManagementFlag(workerPool->poolToLocalNode,
+											 list_length(workerPool->sessionList));
 		connectionFlags |= adaptiveConnectionManagementFlag;
 
 		/* open a new connection to the worker */
@@ -2661,13 +2735,24 @@ CheckConnectionTimeout(WorkerPool *workerPool)
 			 */
 			WorkerPoolFailed(workerPool);
 
-			/*
-			 * The enforcement is not always erroring out. For example, if a SELECT task
-			 * has two different placements, we'd warn the user, fail the pool and continue
-			 * with the next placement.
-			 */
-			if (execution->transactionProperties->errorOnAnyFailure || execution->failed)
+			if (workerPool->failureState == WORKER_POOL_FAILED_OVER_TO_LOCAL)
 			{
+				/*
+				 *
+				 * When the pool is failed over to local execution, warning
+				 * the user just creates chatter as the executor is capable of
+				 * finishing the execution.
+				 */
+				logLevel = DEBUG1;
+			}
+			else if (execution->transactionProperties->errorOnAnyFailure ||
+					 execution->failed)
+			{
+				/*
+				 * The enforcement is not always erroring out. For example, if a SELECT task
+				 * has two different placements, we'd warn the user, fail the pool and continue
+				 * with the next placement.
+				 */
 				logLevel = ERROR;
 			}
 
@@ -2759,7 +2844,7 @@ NextEventTimeout(DistributedExecution *execution)
 	WorkerPool *workerPool = NULL;
 	foreach_ptr(workerPool, execution->workerList)
 	{
-		if (workerPool->failed)
+		if (workerPool->failureState == WORKER_POOL_FAILED)
 		{
 			/* worker pool may have already timed out */
 			continue;
@@ -2975,14 +3060,28 @@ ConnectionStateMachine(WorkerSession *session)
 				 * or WorkerPoolFailed.
 				 */
 				if (execution->failed ||
-					execution->transactionProperties->errorOnAnyFailure)
+					(execution->transactionProperties->errorOnAnyFailure &&
+					 workerPool->failureState != WORKER_POOL_FAILED_OVER_TO_LOCAL))
 				{
 					/* a task has failed due to this connection failure */
 					ReportConnectionError(connection, ERROR);
 				}
+				else if (workerPool->activeConnectionCount > 0 ||
+						 workerPool->failureState == WORKER_POOL_FAILED_OVER_TO_LOCAL)
+				{
+					/*
+					 * We already have active connection(s) to the node, and the
+					 * executor is capable of using those connections to successfully
+					 * finish the execution. So, there is not much value in warning
+					 * the user.
+					 *
+					 * Similarly when the pool is failed over to local execution, warning
+					 * the user just creates chatter.
+					 */
+					ReportConnectionError(connection, DEBUG1);
+				}
 				else
 				{
-					/* can continue with the remaining nodes */
 					ReportConnectionError(connection, WARNING);
 				}
 
@@ -3559,6 +3658,17 @@ StartPlacementExecutionOnSession(TaskPlacementExecution *placementExecution,
 	if (querySent)
 	{
 		session->commandsSent++;
+
+		if (workerPool->poolToLocalNode)
+		{
+			/*
+			 * As we started remote execution to the local node,
+			 * we cannot switch back to local execution as that
+			 * would cause self-deadlocks and breaking
+			 * read-your-own-writes consistency.
+			 */
+			SetLocalExecutionStatus(LOCAL_EXECUTION_DISABLED);
+		}
 	}
 
 	return querySent;
@@ -4005,7 +4115,8 @@ WorkerPoolFailed(WorkerPool *workerPool)
 	 * A pool cannot fail multiple times, the necessary actions
 	 * has already be taken, so bail out.
 	 */
-	if (workerPool->failed)
+	if (workerPool->failureState == WORKER_POOL_FAILED ||
+		workerPool->failureState == WORKER_POOL_FAILED_OVER_TO_LOCAL)
 	{
 		return;
 	}
@@ -4034,7 +4145,11 @@ WorkerPoolFailed(WorkerPool *workerPool)
 
 	/* we do not want more connections in this pool */
 	workerPool->readyTaskCount = 0;
-	workerPool->failed = true;
+	if (workerPool->failureState != WORKER_POOL_FAILED_OVER_TO_LOCAL)
+	{
+		/* we prefer not to override WORKER_POOL_FAILED_OVER_TO_LOCAL */
+		workerPool->failureState = WORKER_POOL_FAILED;
+	}
 
 	/*
 	 * The reason is that when replication factor is > 1 and we are performing
@@ -4051,7 +4166,8 @@ WorkerPoolFailed(WorkerPool *workerPool)
 		foreach_ptr(pool, workerList)
 		{
 			/* failed pools or pools without any connection attempts ignored */
-			if (pool->failed || INSTR_TIME_IS_ZERO(pool->poolStartTime))
+			if (pool->failureState == WORKER_POOL_FAILED ||
+				INSTR_TIME_IS_ZERO(pool->poolStartTime))
 			{
 				continue;
 			}
@@ -4127,10 +4243,19 @@ PlacementExecutionDone(TaskPlacementExecution *placementExecution, bool succeede
 		return;
 	}
 
-	/* mark the placement execution as finished */
 	if (succeeded)
 	{
+		/* mark the placement execution as finished */
 		placementExecution->executionState = PLACEMENT_EXECUTION_FINISHED;
+	}
+	else if (CanFailoverPlacementExecutionToLocalExecution(placementExecution))
+	{
+		/*
+		 * The placement execution can be done over local execution, so it is a soft
+		 * failure for now.
+		 */
+		placementExecution->executionState =
+			PLACEMENT_EXECUTION_FAILOVER_TO_LOCAL_EXECUTION;
 	}
 	else
 	{
@@ -4175,11 +4300,34 @@ PlacementExecutionDone(TaskPlacementExecution *placementExecution, bool succeede
 	 * Update unfinishedTaskCount only when state changes from not finished to
 	 * finished or failed state.
 	 */
-	TaskExecutionState newExecutionState = TaskExecutionStateMachine(
-		shardCommandExecution);
+	TaskExecutionState newExecutionState =
+		TaskExecutionStateMachine(shardCommandExecution);
 	if (newExecutionState == TASK_EXECUTION_FINISHED)
 	{
 		execution->unfinishedTaskCount--;
+		return;
+	}
+	else if (newExecutionState == TASK_EXECUTION_FAILOVER_TO_LOCAL_EXECUTION)
+	{
+		execution->unfinishedTaskCount--;
+
+		/* move the task to the local execution */
+		Task *task = shardCommandExecution->task;
+		execution->localTaskList = lappend(execution->localTaskList, task);
+
+		/* remove the task from the remote execution list */
+		execution->remoteTaskList = list_delete_ptr(execution->remoteTaskList, task);
+
+		/*
+		 * As we decided to failover this task to local execution, we cannot
+		 * allow remote execution to this pool during this distributedExecution.
+		 */
+		SetLocalExecutionStatus(LOCAL_EXECUTION_REQUIRED);
+		workerPool->failureState = WORKER_POOL_FAILED_OVER_TO_LOCAL;
+
+		ereport(DEBUG4, (errmsg("Task %d execution is failed over to local execution",
+								task->taskId)));
+
 		return;
 	}
 	else if (newExecutionState == TASK_EXECUTION_FAILED)
@@ -4197,6 +4345,60 @@ PlacementExecutionDone(TaskPlacementExecution *placementExecution, bool succeede
 	{
 		ScheduleNextPlacementExecution(placementExecution, succeeded);
 	}
+}
+
+
+/*
+ * CanFailoverPlacementExecutionToLocalExecution returns true if the input
+ * TaskPlacementExecution can be fail overed to local execution. In other words,
+ * the execution can be deferred to local execution.
+ */
+static bool
+CanFailoverPlacementExecutionToLocalExecution(TaskPlacementExecution *placementExecution)
+{
+	if (!EnableLocalExecution)
+	{
+		/* the user explicitly disabled local execution */
+		return false;
+	}
+
+	if (GetCurrentLocalExecutionStatus() == LOCAL_EXECUTION_DISABLED)
+	{
+		/*
+		 * If the current transaction accessed the local node over a connection
+		 * then we can't use local execution because of visibility issues.
+		 */
+		return false;
+	}
+
+	WorkerPool *workerPool = placementExecution->workerPool;
+	if (!workerPool->poolToLocalNode)
+	{
+		/* we can only fail over tasks to local execution for local pools */
+		return false;
+	}
+
+	if (workerPool->activeConnectionCount > 0)
+	{
+		/*
+		 * The pool has already active connections, the executor is capable
+		 * of using those active connections. So, no need to failover
+		 * to the local execution.
+		 */
+		return false;
+	}
+
+	if (placementExecution->assignedSession != NULL)
+	{
+		/*
+		 * If the placement execution has been assigned to a specific session,
+		 * it has to be executed over that session. Otherwise, it would cause
+		 * self-deadlocks and break read-your-own-writes consistency.
+		 */
+		return false;
+	}
+
+	return true;
 }
 
 
@@ -4362,6 +4564,7 @@ TaskExecutionStateMachine(ShardCommandExecution *shardCommandExecution)
 	PlacementExecutionOrder executionOrder = shardCommandExecution->executionOrder;
 	int donePlacementCount = 0;
 	int failedPlacementCount = 0;
+	int failedOverPlacementCount = 0;
 	int placementCount = 0;
 	int placementExecutionIndex = 0;
 	int placementExecutionCount = shardCommandExecution->placementExecutionCount;
@@ -4387,6 +4590,10 @@ TaskExecutionStateMachine(ShardCommandExecution *shardCommandExecution)
 		{
 			failedPlacementCount++;
 		}
+		else if (executionState == PLACEMENT_EXECUTION_FAILOVER_TO_LOCAL_EXECUTION)
+		{
+			failedOverPlacementCount++;
+		}
 
 		placementCount++;
 	}
@@ -4402,6 +4609,21 @@ TaskExecutionStateMachine(ShardCommandExecution *shardCommandExecution)
 	else if (donePlacementCount + failedPlacementCount == placementCount)
 	{
 		currentTaskExecutionState = TASK_EXECUTION_FINISHED;
+	}
+	else if (failedOverPlacementCount + donePlacementCount + failedPlacementCount ==
+			 placementCount)
+	{
+		/*
+		 * For any given task, we could have 3 end states:
+		 *  - "donePlacementCount" indicates the successful placement executions
+		 *  - "failedPlacementCount" indicates the failed placement executions
+		 *  - "failedOverPlacementCount" indicates the placement executions that
+		 *     are failed when using remote execution due to connection errors,
+		 *     but there is still a possibility of being successful via
+		 *     local execution. So, for now they are considered as soft
+		 *     errors.
+		 */
+		currentTaskExecutionState = TASK_EXECUTION_FAILOVER_TO_LOCAL_EXECUTION;
 	}
 	else
 	{

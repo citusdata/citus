@@ -62,8 +62,7 @@ WHERE
           users_reference_table.user_id = events_table.user_id
       )
 LIMIT 3;
-ERROR:  cannot pushdown the subquery
-DETAIL:  Reference tables are not allowed in FROM clause when the query has subqueries in WHERE clause and it references a column from another query
+ERROR:  correlated subqueries are not supported when the FROM clause contains a reference table
 -- immutable functions are also treated as reference tables, query should not
 -- work since there is a correlated subquery in the WHERE clause
 SELECT
@@ -80,8 +79,7 @@ WHERE
           users_reference_table.user_id = events_table.user_id
       )
 LIMIT 3;
-ERROR:  cannot pushdown the subquery
-DETAIL:  Functions are not allowed in FROM clause when the query has subqueries in WHERE clause and it references a column from another query
+ERROR:  correlated subqueries are not supported when the FROM clause contains a set returning function
 -- subqueries without FROM are also treated as reference tables, query should not
 -- work since there is a correlated subquery in the WHERE clause
 SELECT
@@ -98,8 +96,7 @@ WHERE
           users_reference_table.user_id = events_table.user_id
       )
 LIMIT 3;
-ERROR:  cannot pushdown the subquery
-DETAIL:  Complex subqueries and CTEs are not allowed in the FROM clause when the query has subqueries in the WHERE clause and it references a column from another query
+ERROR:  correlated subqueries are not supported when the FROM clause contains a CTE or subquery
 -- join with distributed table prevents FROM from recurring
 SELECT
   DISTINCT user_id
@@ -528,8 +525,7 @@ HAVING count(*) > 3
 ORDER BY 2 DESC,
          1 DESC
 LIMIT 5;
-ERROR:  cannot pushdown the subquery
-DETAIL:  Reference tables are not allowed in FROM clause when the query has subqueries in WHERE clause and it references a column from another query
+ERROR:  correlated subqueries are not supported when the FROM clause contains a reference table
 -- query will be planned as a SEMI JOIN
 SELECT *
 FROM users_table

@@ -80,15 +80,16 @@ SELECT datname, current_database(),
     usename, (SELECT extowner::regrole::text FROM pg_extension WHERE extname = 'citus')
 FROM test.maintenance_worker();
 
--- ensure no objects were created outside pg_catalog
-SELECT COUNT(*)
+-- ensure no unexpected objects were created outside pg_catalog
+SELECT pgio.type, pgio.identity
 FROM pg_depend AS pgd,
 	 pg_extension AS pge,
 	 LATERAL pg_identify_object(pgd.classid, pgd.objid, pgd.objsubid) AS pgio
 WHERE pgd.refclassid = 'pg_extension'::regclass AND
 	  pgd.refobjid   = pge.oid AND
 	  pge.extname    = 'citus' AND
-	  pgio.schema    NOT IN ('pg_catalog', 'citus', 'citus_internal', 'test', 'cstore');
+	  pgio.schema    NOT IN ('pg_catalog', 'citus', 'citus_internal', 'test', 'columnar')
+ORDER BY 1, 2;
 
 
 -- DROP EXTENSION pre-created by the regression suite
@@ -100,40 +101,7 @@ SET citus.enable_object_propagation TO 'false';
 
 SET citus.enable_version_checks TO 'false';
 
-CREATE EXTENSION citus VERSION '7.0-1';
-ALTER EXTENSION citus UPDATE TO '7.0-2';
-ALTER EXTENSION citus UPDATE TO '7.0-3';
-ALTER EXTENSION citus UPDATE TO '7.0-4';
-ALTER EXTENSION citus UPDATE TO '7.0-5';
-ALTER EXTENSION citus UPDATE TO '7.0-6';
-ALTER EXTENSION citus UPDATE TO '7.0-7';
-ALTER EXTENSION citus UPDATE TO '7.0-8';
-ALTER EXTENSION citus UPDATE TO '7.0-9';
-ALTER EXTENSION citus UPDATE TO '7.0-10';
-ALTER EXTENSION citus UPDATE TO '7.0-11';
-ALTER EXTENSION citus UPDATE TO '7.0-12';
-ALTER EXTENSION citus UPDATE TO '7.0-13';
-ALTER EXTENSION citus UPDATE TO '7.0-14';
-ALTER EXTENSION citus UPDATE TO '7.0-15';
-ALTER EXTENSION citus UPDATE TO '7.1-1';
-ALTER EXTENSION citus UPDATE TO '7.1-2';
-ALTER EXTENSION citus UPDATE TO '7.1-3';
-ALTER EXTENSION citus UPDATE TO '7.1-4';
-ALTER EXTENSION citus UPDATE TO '7.2-1';
-ALTER EXTENSION citus UPDATE TO '7.2-2';
-ALTER EXTENSION citus UPDATE TO '7.2-3';
-ALTER EXTENSION citus UPDATE TO '7.3-3';
-ALTER EXTENSION citus UPDATE TO '7.4-1';
-ALTER EXTENSION citus UPDATE TO '7.4-2';
-ALTER EXTENSION citus UPDATE TO '7.4-3';
-ALTER EXTENSION citus UPDATE TO '7.5-1';
-ALTER EXTENSION citus UPDATE TO '7.5-2';
-ALTER EXTENSION citus UPDATE TO '7.5-3';
-ALTER EXTENSION citus UPDATE TO '7.5-4';
-ALTER EXTENSION citus UPDATE TO '7.5-5';
-ALTER EXTENSION citus UPDATE TO '7.5-6';
-ALTER EXTENSION citus UPDATE TO '7.5-7';
-ALTER EXTENSION citus UPDATE TO '8.0-1';
+CREATE EXTENSION citus VERSION '8.0-1';
 ALTER EXTENSION citus UPDATE TO '8.0-2';
 ALTER EXTENSION citus UPDATE TO '8.0-3';
 ALTER EXTENSION citus UPDATE TO '8.0-4';
@@ -235,24 +203,25 @@ DROP TABLE prev_objects, extension_diff;
 -- show running version
 SHOW citus.version;
 
--- ensure no objects were created outside pg_catalog
-SELECT COUNT(*)
+-- ensure no unexpected objects were created outside pg_catalog
+SELECT pgio.type, pgio.identity
 FROM pg_depend AS pgd,
 	 pg_extension AS pge,
 	 LATERAL pg_identify_object(pgd.classid, pgd.objid, pgd.objsubid) AS pgio
 WHERE pgd.refclassid = 'pg_extension'::regclass AND
 	  pgd.refobjid   = pge.oid AND
 	  pge.extname    = 'citus' AND
-	  pgio.schema    NOT IN ('pg_catalog', 'citus', 'citus_internal', 'test', 'cstore');
+	  pgio.schema    NOT IN ('pg_catalog', 'citus', 'citus_internal', 'test', 'columnar')
+ORDER BY 1, 2;
 
 -- see incompatible version errors out
 RESET citus.enable_version_checks;
 DROP EXTENSION citus;
-CREATE EXTENSION citus VERSION '7.0-1';
+CREATE EXTENSION citus VERSION '8.0-1';
 
 -- Test non-distributed queries work even in version mismatch
 SET citus.enable_version_checks TO 'false';
-CREATE EXTENSION citus VERSION '7.1-1';
+CREATE EXTENSION citus VERSION '8.1-1';
 SET citus.enable_version_checks TO 'true';
 
 -- Test CREATE TABLE
@@ -284,7 +253,7 @@ ORDER BY 1;
 SELECT create_distributed_table('version_mismatch_table', 'column1');
 
 -- This function will cause fail in next ALTER EXTENSION
-CREATE OR REPLACE FUNCTION pg_catalog.master_dist_authinfo_cache_invalidate()
+CREATE OR REPLACE FUNCTION pg_catalog.relation_is_a_known_shard(regclass)
 RETURNS void LANGUAGE plpgsql
 AS $function$
 BEGIN
@@ -297,7 +266,7 @@ ALTER EXTENSION citus UPDATE TO '8.1-1';
 
 -- We can DROP problematic function and continue ALTER EXTENSION even when version checks are on
 SET citus.enable_version_checks TO 'true';
-DROP FUNCTION pg_catalog.master_dist_authinfo_cache_invalidate();
+DROP FUNCTION pg_catalog.relation_is_a_known_shard(regclass);
 
 SET citus.enable_version_checks TO 'false';
 ALTER EXTENSION citus UPDATE TO '8.1-1';
@@ -315,7 +284,7 @@ CREATE EXTENSION citus;
 
 DROP EXTENSION citus;
 SET citus.enable_version_checks TO 'false';
-CREATE EXTENSION citus VERSION '7.0-1';
+CREATE EXTENSION citus VERSION '8.0-1';
 SET citus.enable_version_checks TO 'true';
 -- during ALTER EXTENSION, we should invalidate the cache
 ALTER EXTENSION citus UPDATE;

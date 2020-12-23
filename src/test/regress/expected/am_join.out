@@ -28,9 +28,9 @@ WHERE things.id > 299990;
  Aggregate
    ->  Nested Loop
          Join Filter: (users.id = things.user_id)
-         ->  Custom Scan (CStoreScan) on things
+         ->  Custom Scan (ColumnarScan) on things
                Filter: (id > 299990)
-         ->  Custom Scan (CStoreScan) on users
+         ->  Custom Scan (ColumnarScan) on users
 (6 rows)
 
 SET client_min_messages TO warning;

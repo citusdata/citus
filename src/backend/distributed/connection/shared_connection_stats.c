@@ -23,6 +23,7 @@
 #include "access/htup_details.h"
 #include "catalog/pg_authid.h"
 #include "commands/dbcommands.h"
+#include "distributed/backend_data.h"
 #include "distributed/cancel_utils.h"
 #include "distributed/connection_management.h"
 #include "distributed/listutils.h"
@@ -96,6 +97,14 @@ typedef struct SharedConnStatsHashEntry
  * Anything else means use that number
  */
 int MaxSharedPoolSize = 0;
+
+/*
+ * Controlled via a GUC, never access directly, use GetLocalSharedPoolSize().
+ *  "0" means adjust LocalSharedPoolSize automatically by using MaxConnections.
+ * "-1" means do not use any remote connections for local tasks
+ * Anything else means use that number
+ */
+int LocalSharedPoolSize = 0;
 
 
 /* the following two structs are used for accessing shared memory */
@@ -206,6 +215,25 @@ GetMaxSharedPoolSize(void)
 
 
 /*
+ * GetLocalSharedPoolSize is a wrapper around LocalSharedPoolSize which is
+ * controlled via a GUC.
+ *  "0" means adjust MaxSharedPoolSize automatically by using MaxConnections
+ * "-1" means do not use any remote connections for local tasks
+ * Anything else means use that number
+ */
+int
+GetLocalSharedPoolSize(void)
+{
+	if (LocalSharedPoolSize == ADJUST_POOLSIZE_AUTOMATICALLY)
+	{
+		return MaxConnections * 0.5;
+	}
+
+	return LocalSharedPoolSize;
+}
+
+
+/*
  * WaitLoopForSharedConnection tries to increment the shared connection
  * counter for the given hostname/port and the current database in
  * SharedConnStatsHash.
@@ -270,6 +298,32 @@ TryToIncrementSharedConnectionCounter(const char *hostname, int port)
 	connKey.port = port;
 	connKey.databaseOid = MyDatabaseId;
 
+	/*
+	 * Handle adaptive connection management for the local node slightly different
+	 * as local node can failover to local execution.
+	 */
+	bool connectionToLocalNode = false;
+	int activeBackendCount = 0;
+	WorkerNode *workerNode = FindWorkerNode(hostname, port);
+	if (workerNode)
+	{
+		connectionToLocalNode = (workerNode->groupId == GetLocalGroupId());
+		if (connectionToLocalNode &&
+			GetLocalSharedPoolSize() == DISABLE_REMOTE_CONNECTIONS_FOR_LOCAL_QUERIES)
+		{
+			/*
+			 * This early return is required as LocalNodeParallelExecutionFactor
+			 * is ignored for the first connection below. This check makes the
+			 * user experience is more accurate and also makes it easy for
+			 * having regression tests which emulates the local node adaptive
+			 * connection management.
+			 */
+			return false;
+		}
+
+		activeBackendCount = GetAllActiveClientBackendCount();
+	}
+
 	LockConnectionSharedMemory(LW_EXCLUSIVE);
 
 	/*
@@ -299,6 +353,34 @@ TryToIncrementSharedConnectionCounter(const char *hostname, int port)
 		connectionEntry->connectionCount = 1;
 
 		counterIncremented = true;
+	}
+	else if (connectionToLocalNode)
+	{
+		/*
+		 * For local nodes, solely relying on citus.max_shared_pool_size or
+		 * max_connections might not be sufficient. The former gives us
+		 * a preview of the future (e.g., we let the new connections to establish,
+		 * but they are not established yet). The latter gives us the close to
+		 * precise view of the past (e.g., the active number of client backends).
+		 *
+		 * Overall, we want to limit both of the metrics. The former limit typically
+		 * kicks in under regular loads, where the load of the database increases in
+		 * a reasonable pace. The latter limit typically kicks in when the database
+		 * is issued lots of concurrent sessions at the same time, such as benchmarks.
+		 */
+		if (activeBackendCount + 1 > GetLocalSharedPoolSize())
+		{
+			counterIncremented = false;
+		}
+		else if (connectionEntry->connectionCount + 1 > GetLocalSharedPoolSize())
+		{
+			counterIncremented = false;
+		}
+		else
+		{
+			connectionEntry->connectionCount++;
+			counterIncremented = true;
+		}
 	}
 	else if (connectionEntry->connectionCount + 1 > GetMaxSharedPoolSize())
 	{
@@ -618,7 +700,7 @@ SharedConnectionStatsShmemInit(void)
  * optional connections.
  */
 int
-AdaptiveConnectionManagementFlag(int activeConnectionCount)
+AdaptiveConnectionManagementFlag(bool connectToLocalNode, int activeConnectionCount)
 {
 	if (UseConnectionPerPlacement())
 	{
@@ -632,6 +714,14 @@ AdaptiveConnectionManagementFlag(int activeConnectionCount)
 		 * in the shared connection counters.
 		 */
 		return 0;
+	}
+	else if (connectToLocalNode)
+	{
+		/*
+		 * Connection to local node is always optional because the executor is capable
+		 * of falling back to local execution.
+		 */
+		return OPTIONAL_CONNECTION;
 	}
 	else if (ShouldWaitForConnection(activeConnectionCount))
 	{

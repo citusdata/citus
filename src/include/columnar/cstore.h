@@ -27,13 +27,15 @@
 /* Defines for valid option names */
 #define OPTION_NAME_COMPRESSION_TYPE "compression"
 #define OPTION_NAME_STRIPE_ROW_COUNT "stripe_row_count"
-#define OPTION_NAME_BLOCK_ROW_COUNT "block_row_count"
+#define OPTION_NAME_CHUNK_ROW_COUNT "chunk_row_count"
 
 /* Limits for option parameters */
 #define STRIPE_ROW_COUNT_MINIMUM 1000
 #define STRIPE_ROW_COUNT_MAXIMUM 10000000
-#define BLOCK_ROW_COUNT_MINIMUM 1000
-#define BLOCK_ROW_COUNT_MAXIMUM 100000
+#define CHUNK_ROW_COUNT_MINIMUM 1000
+#define CHUNK_ROW_COUNT_MAXIMUM 100000
+#define COMPRESSION_LEVEL_MIN 1
+#define COMPRESSION_LEVEL_MAX 19
 
 /* String representations of compression types */
 #define COMPRESSION_STRING_NONE "none"
@@ -45,10 +47,10 @@
 #define CSTORE_VERSION_MINOR 7
 
 /* miscellaneous defines */
-#define CSTORE_FDW_NAME "cstore_fdw"
 #define CSTORE_TUPLE_COST_MULTIPLIER 10
 #define CSTORE_POSTSCRIPT_SIZE_LENGTH 1
 #define CSTORE_POSTSCRIPT_SIZE_MAX 256
+#define CSTORE_BYTES_PER_PAGE (BLCKSZ - SizeOfPageHeaderData)
 
 /* Enumaration for cstore file's compression method */
 typedef enum
@@ -56,22 +58,25 @@ typedef enum
 	COMPRESSION_TYPE_INVALID = -1,
 	COMPRESSION_NONE = 0,
 	COMPRESSION_PG_LZ = 1,
+	COMPRESSION_LZ4 = 2,
+	COMPRESSION_ZSTD = 3,
 
 	COMPRESSION_COUNT
 } CompressionType;
 
 
 /*
- * CStoreFdwOptions holds the option values to be used when reading or writing
+ * ColumnarOptions holds the option values to be used when reading or writing
  * a cstore file. To resolve these values, we first check foreign table's options,
  * and if not present, we then fall back to the default values specified above.
  */
-typedef struct CStoreOptions
+typedef struct ColumnarOptions
 {
-	CompressionType compressionType;
 	uint64 stripeRowCount;
-	uint32 blockRowCount;
-} CStoreOptions;
+	uint32 chunkRowCount;
+	CompressionType compressionType;
+	int compressionLevel;
+} ColumnarOptions;
 
 
 /*
@@ -83,8 +88,8 @@ typedef struct StripeMetadata
 	uint64 fileOffset;
 	uint64 dataLength;
 	uint32 columnCount;
-	uint32 blockCount;
-	uint32 blockRowCount;
+	uint32 chunkCount;
+	uint32 chunkRowCount;
 	uint64 rowCount;
 	uint64 id;
 } StripeMetadata;
@@ -94,16 +99,13 @@ typedef struct StripeMetadata
 typedef struct DataFileMetadata
 {
 	List *stripeMetadataList;
-	uint64 blockRowCount;
-	uint64 stripeRowCount;
-	CompressionType compression;
 } DataFileMetadata;
 
 
-/* ColumnBlockSkipNode contains statistics for a ColumnBlockData. */
-typedef struct ColumnBlockSkipNode
+/* ColumnChunkSkipNode contains statistics for a ColumnChunkData. */
+typedef struct ColumnChunkSkipNode
 {
-	/* statistics about values of a column block */
+	/* statistics about values of a column chunk */
 	bool hasMinMax;
 	Datum minimumValue;
 	Datum maximumValue;
@@ -111,39 +113,46 @@ typedef struct ColumnBlockSkipNode
 
 	/*
 	 * Offsets and sizes of value and exists streams in the column data.
-	 * These enable us to skip reading suppressed row blocks, and start reading
-	 * a block without reading previous blocks.
+	 * These enable us to skip reading suppressed row chunks, and start reading
+	 * a chunk without reading previous chunks.
 	 */
-	uint64 valueBlockOffset;
+	uint64 valueChunkOffset;
 	uint64 valueLength;
-	uint64 existsBlockOffset;
+	uint64 existsChunkOffset;
 	uint64 existsLength;
 
+	/*
+	 * This is used for (1) determining destination size when decompressing,
+	 * (2) calculating compression rates when logging stats.
+	 */
+	uint64 decompressedValueSize;
+
 	CompressionType valueCompressionType;
-} ColumnBlockSkipNode;
+	int valueCompressionLevel;
+} ColumnChunkSkipNode;
 
 
 /*
- * StripeSkipList can be used for skipping row blocks. It contains a column block
- * skip node for each block of each column. blockSkipNodeArray[column][block]
- * is the entry for the specified column block.
+ * StripeSkipList can be used for skipping row chunks. It contains a column chunk
+ * skip node for each chunk of each column. chunkSkipNodeArray[column][chunk]
+ * is the entry for the specified column chunk.
  */
 typedef struct StripeSkipList
 {
-	ColumnBlockSkipNode **blockSkipNodeArray;
+	ColumnChunkSkipNode **chunkSkipNodeArray;
 	uint32 columnCount;
-	uint32 blockCount;
+	uint32 chunkCount;
 } StripeSkipList;
 
 
 /*
- * BlockData represents a block of data for multiple columns. valueArray stores
+ * ChunkData represents a chunk of data for multiple columns. valueArray stores
  * the values of data, and existsArray stores whether a value is present.
  * valueBuffer is used to store (uncompressed) serialized values
  * referenced by Datum's in valueArray. It is only used for by-reference Datum's.
  * There is a one-to-one correspondence between valueArray and existsArray.
  */
-typedef struct BlockData
+typedef struct ChunkData
 {
 	uint32 rowCount;
 	uint32 columnCount;
@@ -157,31 +166,32 @@ typedef struct BlockData
 
 	/* valueBuffer keeps actual data for type-by-reference datums from valueArray. */
 	StringInfo *valueBufferArray;
-} BlockData;
+} ChunkData;
 
 
 /*
- * ColumnBlockBuffers represents a block of serialized data in a column.
+ * ColumnChunkBuffers represents a chunk of serialized data in a column.
  * valueBuffer stores the serialized values of data, and existsBuffer stores
  * serialized value of presence information. valueCompressionType contains
  * compression type if valueBuffer is compressed. Finally rowCount has
- * the number of rows in this block.
+ * the number of rows in this chunk.
  */
-typedef struct ColumnBlockBuffers
+typedef struct ColumnChunkBuffers
 {
 	StringInfo existsBuffer;
 	StringInfo valueBuffer;
 	CompressionType valueCompressionType;
-} ColumnBlockBuffers;
+	uint64 decompressedValueSize;
+} ColumnChunkBuffers;
 
 
 /*
  * ColumnBuffers represents data buffers for a column in a row stripe. Each
- * column is made of multiple column blocks.
+ * column is made of multiple column chunks.
  */
 typedef struct ColumnBuffers
 {
-	ColumnBlockBuffers **blockBuffersArray;
+	ColumnChunkBuffers **chunkBuffersArray;
 } ColumnBuffers;
 
 
@@ -197,7 +207,7 @@ typedef struct StripeBuffers
 /* TableReadState represents state of a cstore file read operation. */
 typedef struct TableReadState
 {
-	DataFileMetadata *datafileMetadata;
+	List *stripeList;
 	StripeMetadata *currentStripeMetadata;
 	TupleDesc tupleDescriptor;
 	Relation relation;
@@ -205,7 +215,7 @@ typedef struct TableReadState
 	/*
 	 * List of Var pointers for columns in the query. We use this both for
 	 * getting vector of projected columns, and also when we want to build
-	 * base constraint to find selected row blocks.
+	 * base constraint to find selected row chunks.
 	 */
 	List *projectedColumnList;
 
@@ -214,15 +224,14 @@ typedef struct TableReadState
 	StripeBuffers *stripeBuffers;
 	uint32 readStripeCount;
 	uint64 stripeReadRowCount;
-	BlockData *blockData;
-	int32 deserializedBlockIndex;
+	ChunkData *chunkData;
+	int32 deserializedChunkIndex;
 } TableReadState;
 
 
 /* TableWriteState represents state of a cstore file write operation. */
 typedef struct TableWriteState
 {
-	CompressionType compressionType;
 	TupleDesc tupleDescriptor;
 	FmgrInfo **comparisonFunctionArray;
 	RelFileNode relfilenode;
@@ -231,9 +240,8 @@ typedef struct TableWriteState
 	MemoryContext perTupleContext;
 	StripeBuffers *stripeBuffers;
 	StripeSkipList *stripeSkipList;
-	uint32 stripeMaxRowCount;
-	uint32 blockRowCount;
-	BlockData *blockData;
+	ColumnarOptions options;
+	ChunkData *chunkData;
 
 	/*
 	 * compressionBuffer buffer is used as temporary storage during
@@ -246,7 +254,8 @@ typedef struct TableWriteState
 
 extern int cstore_compression;
 extern int cstore_stripe_row_count;
-extern int cstore_block_row_count;
+extern int cstore_chunk_row_count;
+extern int columnar_compression_level;
 
 extern void cstore_init(void);
 
@@ -254,9 +263,7 @@ extern CompressionType ParseCompressionType(const char *compressionTypeString);
 
 /* Function declarations for writing to a cstore file */
 extern TableWriteState * CStoreBeginWrite(RelFileNode relfilenode,
-										  CompressionType compressionType,
-										  uint64 stripeMaxRowCount,
-										  uint32 blockRowCount,
+										  ColumnarOptions options,
 										  TupleDesc tupleDescriptor);
 extern void CStoreWriteRow(TableWriteState *state, Datum *columnValues,
 						   bool *columnNulls);
@@ -277,37 +284,46 @@ extern void CStoreEndRead(TableReadState *state);
 /* Function declarations for common functions */
 extern FmgrInfo * GetFunctionInfoOrNull(Oid typeId, Oid accessMethodId,
 										int16 procedureId);
-extern BlockData * CreateEmptyBlockData(uint32 columnCount, bool *columnMask,
-										uint32 blockRowCount);
-extern void FreeBlockData(BlockData *blockData);
+extern ChunkData * CreateEmptyChunkData(uint32 columnCount, bool *columnMask,
+										uint32 chunkRowCount);
+extern void FreeChunkData(ChunkData *chunkData);
 extern uint64 CStoreTableRowCount(Relation relation);
-extern bool CompressBuffer(StringInfo inputBuffer, StringInfo outputBuffer,
-						   CompressionType compressionType);
-extern StringInfo DecompressBuffer(StringInfo buffer, CompressionType compressionType);
-extern char * CompressionTypeStr(CompressionType type);
-extern CStoreOptions * CStoreTableAMGetOptions(Oid relfilenode);
+extern bool CompressBuffer(StringInfo inputBuffer,
+						   StringInfo outputBuffer,
+						   CompressionType compressionType,
+						   int compressionLevel);
+extern StringInfo DecompressBuffer(StringInfo buffer, CompressionType compressionType,
+								   uint64 decompressedSize);
+extern const char * CompressionTypeStr(CompressionType type);
 
 /* cstore_metadata_tables.c */
-extern void DeleteDataFileMetadataRowIfExists(Oid relfilenode);
-extern void InitCStoreDataFileMetadata(Oid relfilenode, int blockRowCount, int
-									   stripeRowCount, CompressionType compression);
-extern void UpdateCStoreDataFileMetadata(Oid relfilenode, int blockRowCount, int
-										 stripeRowCount, CompressionType compression);
-extern DataFileMetadata * ReadDataFileMetadata(Oid relfilenode, bool missingOk);
-extern uint64 GetHighestUsedAddress(Oid relfilenode);
+extern void InitColumnarOptions(Oid regclass);
+extern void SetColumnarOptions(Oid regclass, ColumnarOptions *options);
+extern bool DeleteColumnarTableOptions(Oid regclass, bool missingOk);
+extern bool ReadColumnarOptions(Oid regclass, ColumnarOptions *options);
+extern void WriteToSmgr(Relation relation, uint64 logicalOffset,
+						char *data, uint32 dataLength);
+extern StringInfo ReadFromSmgr(Relation rel, uint64 offset, uint32 size);
+extern bool IsCStoreTableAmTable(Oid relationId);
+
+/* cstore_metadata_tables.c */
+extern void DeleteMetadataRows(RelFileNode relfilenode);
+extern List * StripesForRelfilenode(RelFileNode relfilenode);
+extern uint64 GetHighestUsedAddress(RelFileNode relfilenode);
 extern StripeMetadata ReserveStripe(Relation rel, uint64 size,
 									uint64 rowCount, uint64 columnCount,
-									uint64 blockCount, uint64 blockRowCount);
-extern void SaveStripeSkipList(Oid relfilenode, uint64 stripe,
+									uint64 chunkCount, uint64 chunkRowCount);
+extern void SaveStripeSkipList(RelFileNode relfilenode, uint64 stripe,
 							   StripeSkipList *stripeSkipList,
 							   TupleDesc tupleDescriptor);
-extern StripeSkipList * ReadStripeSkipList(Oid relfilenode, uint64 stripe,
+extern StripeSkipList * ReadStripeSkipList(RelFileNode relfilenode, uint64 stripe,
 										   TupleDesc tupleDescriptor,
-										   uint32 blockCount);
+										   uint32 chunkCount);
+extern Datum columnar_relation_storageid(PG_FUNCTION_ARGS);
 
 
 /* write_state_management.c */
-extern TableWriteState * cstore_init_write_state(RelFileNode relfilenode, TupleDesc
+extern TableWriteState * cstore_init_write_state(Relation relation, TupleDesc
 												 tupdesc,
 												 SubTransactionId currentSubXid);
 extern void FlushWriteStateForRelfilenode(Oid relfilenode, SubTransactionId
@@ -335,11 +351,10 @@ typedef struct SmgrAddr
 static inline SmgrAddr
 logical_to_smgr(uint64 logicalOffset)
 {
-	uint64 bytes_per_page = BLCKSZ - SizeOfPageHeaderData;
 	SmgrAddr addr;
 
-	addr.blockno = logicalOffset / bytes_per_page;
-	addr.offset = SizeOfPageHeaderData + (logicalOffset % bytes_per_page);
+	addr.blockno = logicalOffset / CSTORE_BYTES_PER_PAGE;
+	addr.offset = SizeOfPageHeaderData + (logicalOffset % CSTORE_BYTES_PER_PAGE);
 
 	return addr;
 }
@@ -351,8 +366,7 @@ logical_to_smgr(uint64 logicalOffset)
 static inline uint64
 smgr_to_logical(SmgrAddr addr)
 {
-	uint64 bytes_per_page = BLCKSZ - SizeOfPageHeaderData;
-	return bytes_per_page * addr.blockno + addr.offset - SizeOfPageHeaderData;
+	return CSTORE_BYTES_PER_PAGE * addr.blockno + addr.offset - SizeOfPageHeaderData;
 }
 
 

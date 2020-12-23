@@ -155,6 +155,13 @@ static DistributeObjectOps Any_CreatePolicy = {
 	.postprocess = NULL,
 	.address = NULL,
 };
+static DistributeObjectOps Any_CreateStatistics = {
+	.deparse = DeparseCreateStatisticsStmt,
+	.qualify = QualifyCreateStatisticsStmt,
+	.preprocess = PreprocessCreateStatisticsStmt,
+	.postprocess = PostprocessCreateStatisticsStmt,
+	.address = CreateStatisticsStmtObjectAddress,
+};
 static DistributeObjectOps Any_CreateTrigger = {
 	.deparse = NULL,
 	.qualify = NULL,
@@ -397,6 +404,20 @@ static DistributeObjectOps Schema_Grant = {
 	.deparse = DeparseGrantOnSchemaStmt,
 	.qualify = NULL,
 	.preprocess = PreprocessGrantOnSchemaStmt,
+	.postprocess = NULL,
+	.address = NULL,
+};
+static DistributeObjectOps Schema_Rename = {
+	.deparse = DeparseAlterSchemaRenameStmt,
+	.qualify = NULL,
+	.preprocess = PreprocessAlterSchemaRenameStmt,
+	.postprocess = NULL,
+	.address = AlterSchemaRenameStmtObjectAddress,
+};
+static DistributeObjectOps Statistics_Drop = {
+	.deparse = NULL,
+	.qualify = QualifyDropStatisticsStmt,
+	.preprocess = PreprocessDropStatisticsStmt,
 	.postprocess = NULL,
 	.address = NULL,
 };
@@ -710,6 +731,11 @@ GetDistributeObjectOps(Node *node)
 			return &Any_CreatePolicy;
 		}
 
+		case T_CreateStatsStmt:
+		{
+			return &Any_CreateStatistics;
+		}
+
 		case T_CreateTrigStmt:
 		{
 			return &Any_CreateTrigger;
@@ -785,6 +811,11 @@ GetDistributeObjectOps(Node *node)
 				case OBJECT_SCHEMA:
 				{
 					return &Schema_Drop;
+				}
+
+				case OBJECT_STATISTIC_EXT:
+				{
+					return &Statistics_Drop;
 				}
 
 				case OBJECT_TABLE:
@@ -869,6 +900,11 @@ GetDistributeObjectOps(Node *node)
 				case OBJECT_ROUTINE:
 				{
 					return &Routine_Rename;
+				}
+
+				case OBJECT_SCHEMA:
+				{
+					return &Schema_Rename;
 				}
 
 				case OBJECT_TYPE:

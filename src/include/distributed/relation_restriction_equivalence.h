@@ -15,6 +15,8 @@
 #include "distributed/distributed_planner.h"
 #include "distributed/metadata_cache.h"
 
+#define SINGLE_RTE_INDEX 1
+
 extern bool AllDistributionKeysInQueryAreEqual(Query *originalQuery,
 											   PlannerRestrictionContext *
 											   plannerRestrictionContext);
@@ -36,8 +38,21 @@ extern List * DistributedRelationIdList(Query *query);
 extern PlannerRestrictionContext * FilterPlannerRestrictionForQuery(
 	PlannerRestrictionContext *plannerRestrictionContext,
 	Query *query);
+extern List * GetRestrictInfoListForRelation(RangeTblEntry *rangeTblEntry,
+											 PlannerRestrictionContext *
+											 plannerRestrictionContext);
+extern RelationRestriction * RelationRestrictionForRelation(
+	RangeTblEntry *rangeTableEntry,
+	PlannerRestrictionContext *
+	plannerRestrictionContext);
+extern JoinRestrictionContext * RemoveDuplicateJoinRestrictions(JoinRestrictionContext *
+																joinRestrictionContext);
+
 extern bool EquivalenceListContainsRelationsEquality(List *attributeEquivalenceList,
 													 RelationRestrictionContext *
 													 restrictionContext);
-
+extern RelationRestrictionContext * FilterRelationRestrictionContext(
+	RelationRestrictionContext *relationRestrictionContext,
+	Relids
+	queryRteIdentities);
 #endif /* RELATION_RESTRICTION_EQUIVALENCE_H */

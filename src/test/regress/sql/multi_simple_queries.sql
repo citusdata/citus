@@ -146,10 +146,10 @@ ORDER BY articles.id;
 SELECT a.title AS name, (SELECT a2.id FROM articles_single_shard a2 WHERE a.id = a2.id  LIMIT 1)
 						 AS special_price FROM articles a;
 
--- joins are not supported between local and distributed tables
+-- joins are supported between local and distributed tables
 SELECT title, authors.name FROM authors, articles WHERE authors.id = articles.author_id;
 
--- inner joins are not supported (I think)
+-- inner joins are supported
 SELECT * FROM  (articles INNER JOIN authors ON articles.id = authors.id);
 
 -- test use of EXECUTE statements within plpgsql

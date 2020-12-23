@@ -413,8 +413,16 @@ MetadataCreateCommands(void)
 
 		metadataSnapshotCommandList = list_concat(metadataSnapshotCommandList,
 												  workerSequenceDDLCommands);
-		metadataSnapshotCommandList = list_concat(metadataSnapshotCommandList,
-												  ddlCommandList);
+
+		/* ddlCommandList contains TableDDLCommand information, need to materialize */
+		TableDDLCommand *tableDDLCommand = NULL;
+		foreach_ptr(tableDDLCommand, ddlCommandList)
+		{
+			Assert(CitusIsA(tableDDLCommand, TableDDLCommand));
+			metadataSnapshotCommandList = lappend(metadataSnapshotCommandList,
+												  GetTableDDLCommand(tableDDLCommand));
+		}
+
 		metadataSnapshotCommandList = lappend(metadataSnapshotCommandList,
 											  tableOwnerResetCommand);
 		metadataSnapshotCommandList = list_concat(metadataSnapshotCommandList,
@@ -510,10 +518,18 @@ GetDistributedTableDDLEvents(Oid relationId)
 		List *sequenceDDLCommands = SequenceDDLCommandsForTable(relationId);
 		commandList = list_concat(commandList, sequenceDDLCommands);
 
-		/* commands to create the table */
+		/*
+		 * Commands to create the table, these commands are TableDDLCommands so lets
+		 * materialize to the non-sharded version
+		 */
 		List *tableDDLCommands = GetFullTableCreationCommands(relationId,
 															  includeSequenceDefaults);
-		commandList = list_concat(commandList, tableDDLCommands);
+		TableDDLCommand *tableDDLCommand = NULL;
+		foreach_ptr(tableDDLCommand, tableDDLCommands)
+		{
+			Assert(CitusIsA(tableDDLCommand, TableDDLCommand));
+			commandList = lappend(commandList, GetTableDDLCommand(tableDDLCommand));
+		}
 
 		/* command to associate sequences with table */
 		List *sequenceDependencyCommandList = SequenceDependencyCommandList(relationId);

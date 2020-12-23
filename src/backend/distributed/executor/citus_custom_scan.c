@@ -326,6 +326,7 @@ CitusBeginModifyScan(CustomScanState *node, EState *estate, int eflags)
 	scanState->distributedPlan = currentPlan;
 
 	Job *workerJob = currentPlan->workerJob;
+
 	Query *jobQuery = workerJob->jobQuery;
 
 	if (ModifyJobNeedsEvaluation(workerJob))
@@ -367,16 +368,22 @@ CitusBeginModifyScan(CustomScanState *node, EState *estate, int eflags)
 		RebuildQueryStrings(workerJob);
 	}
 
-	/*
-	 * Now that we know the shard ID(s) we can acquire the necessary shard metadata
-	 * locks. Once we have the locks it's safe to load the placement metadata.
-	 */
 
-	/* prevent concurrent placement changes */
-	AcquireMetadataLocks(workerJob->taskList);
+	/* We skip shard related things if the job contains only local tables */
+	if (!ModifyLocalTableJob(workerJob))
+	{
+		/*
+		 * Now that we know the shard ID(s) we can acquire the necessary shard metadata
+		 * locks. Once we have the locks it's safe to load the placement metadata.
+		 */
 
-	/* modify tasks are always assigned using first-replica policy */
-	workerJob->taskList = FirstReplicaAssignTaskList(workerJob->taskList);
+		/* prevent concurrent placement changes */
+		AcquireMetadataLocks(workerJob->taskList);
+
+		/* modify tasks are always assigned using first-replica policy */
+		workerJob->taskList = FirstReplicaAssignTaskList(workerJob->taskList);
+	}
+
 
 	/*
 	 * Now that we have populated the task placements we can determine whether
@@ -537,9 +544,12 @@ RegenerateTaskForFasthPathQuery(Job *workerJob)
 		shardId = GetAnchorShardId(shardIntervalList);
 	}
 
+	bool isLocalTableModification = false;
 	GenerateSingleShardRouterTaskList(workerJob,
 									  relationShardList,
-									  placementList, shardId);
+									  placementList,
+									  shardId,
+									  isLocalTableModification);
 }
 
 

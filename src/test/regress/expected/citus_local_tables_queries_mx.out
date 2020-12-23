@@ -126,7 +126,7 @@ WHERE  cte_citus_local_table.a = 1 AND cte_distributed_table.a = 1;
 
 -- should fail as we don't support direct joins between distributed/local tables
 SELECT count(*) FROM distributed_table d1, distributed_table d2, citus_local_table;
-ERROR:  direct joins between distributed and local tables are not supported
+ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 -- local table inside subquery should just work
 SELECT count(*) FROM
 (
@@ -154,7 +154,11 @@ SELECT count(*) FROM
 (
 	SELECT *, random() FROM (SELECT *, random() FROM citus_local_table, distributed_table) as subquery_inner
 ) as subquery_top;
-ERROR:  direct joins between distributed and local tables are not supported
+ count
+---------------------------------------------------------------------
+    36
+(1 row)
+
 -- should fail as we don't support direct joins between distributed/local tables
 SELECT count(*) FROM
 (
@@ -162,7 +166,11 @@ SELECT count(*) FROM
 		FROM (
 				WITH cte_1 AS (SELECT *, random() FROM citus_local_table, distributed_table) SELECT * FROM cte_1) as subquery_inner
 ) as subquery_top;
-ERROR:  direct joins between distributed and local tables are not supported
+ count
+---------------------------------------------------------------------
+    36
+(1 row)
+
 -- should be  fine
 SELECT count(*) FROM
 (
@@ -415,10 +423,14 @@ SELECT count(*) FROM reference_table
   LEFT JOIN citus_local_table ON (true)
   LEFT JOIN postgres_local_table ON (true)
   LEFT JOIN reference_table r2 ON (true);
-ERROR:  direct joins between distributed and local tables are not supported
+ count
+---------------------------------------------------------------------
+  1296
+(1 row)
+
 -- not supported direct outer join
 SELECT count(*) FROM citus_local_table LEFT JOIN distributed_table ON (true);
-ERROR:  direct joins between distributed and local tables are not supported
+ERROR:  cannot pushdown the subquery
 -- distinct in subquery on CTE
 WITH one_row AS (
 	SELECT a from citus_local_table WHERE b = 1
@@ -458,9 +470,13 @@ LIMIT
 
 -- join between citus local tables and distributed tables would fail
 SELECT count(*) FROM citus_local_table, distributed_table;
-ERROR:  direct joins between distributed and local tables are not supported
+ count
+---------------------------------------------------------------------
+    36
+(1 row)
+
 SELECT * FROM citus_local_table, distributed_table ORDER BY 1,2,3,4 FOR UPDATE;
-ERROR:  direct joins between distributed and local tables are not supported
+ERROR:  could not run distributed query with FOR UPDATE/SHARE commands
 -- join between citus local table and postgres local table would fail
 -- as citus local table is on the coordinator
 SELECT count(citus_local_table.b), count(postgres_local_table.a)
@@ -523,7 +539,6 @@ JOIN citus_local_table ON (true);
 INSERT INTO reference_table
 SELECT reference_table.* FROM reference_table, postgres_local_table
 JOIN citus_local_table ON (true);
-ERROR:  direct joins between distributed and local tables are not supported
 SELECT clear_and_init_test_tables();
  clear_and_init_test_tables
 ---------------------------------------------------------------------
@@ -536,7 +551,6 @@ JOIN citus_local_table ON (true);
 INSERT INTO distributed_table
 SELECT reference_table.* FROM reference_table, postgres_local_table
 JOIN citus_local_table ON (true);
-ERROR:  direct joins between distributed and local tables are not supported
 INSERT INTO postgres_local_table
 SELECT reference_table.* FROM reference_table
 JOIN citus_local_table ON (true);
@@ -557,7 +571,6 @@ FROM reference_table, distributed_table;
 INSERT INTO citus_local_table
 SELECT distributed_table.* FROM distributed_table
 JOIN citus_local_table ON (true);
-ERROR:  direct joins between distributed and local tables are not supported
 -- .. but when wrapped into a CTE, join works fine
 INSERT INTO citus_local_table
 SELECT distributed_table.* FROM distributed_table
@@ -578,38 +591,35 @@ SELECT clear_and_init_test_tables();
 DELETE FROM citus_local_table
 USING postgres_local_table
 WHERE citus_local_table.b = postgres_local_table.b;
-ERROR:  cannot plan modifications with local tables involving citus tables
+ERROR:  Modifying local tables with citus local tables is supported only from the coordinator.
 UPDATE citus_local_table
 SET b = 5
 FROM postgres_local_table
 WHERE citus_local_table.a = 3 AND citus_local_table.b = postgres_local_table.b;
-ERROR:  cannot plan modifications with local tables involving citus tables
+ERROR:  Modifying local tables with citus local tables is supported only from the coordinator.
 DELETE FROM postgres_local_table
 USING citus_local_table
 WHERE citus_local_table.b = postgres_local_table.b;
-ERROR:  cannot plan modifications with local tables involving citus tables
+ERROR:  Modifying local tables with citus local tables is supported only from the coordinator.
 UPDATE postgres_local_table
 SET b = 5
 FROM citus_local_table
 WHERE citus_local_table.a = 3 AND citus_local_table.b = postgres_local_table.b;
-ERROR:  cannot plan modifications with local tables involving citus tables
+ERROR:  Modifying local tables with citus local tables is supported only from the coordinator.
 -- no direct joins supported
 UPDATE distributed_table
 SET b = 6
 FROM citus_local_table
 WHERE citus_local_table.a = distributed_table.a;
-ERROR:  cannot plan modifications with citus local tables and distributed tables
 UPDATE reference_table
 SET b = 6
 FROM citus_local_table
 WHERE citus_local_table.a = reference_table.a;
-ERROR:  cannot plan modifications of reference tables with citus local tables
 -- should not work, add HINT use CTEs
 UPDATE citus_local_table
 SET b = 6
 FROM distributed_table
 WHERE citus_local_table.a = distributed_table.a;
-ERROR:  cannot plan modifications with citus local tables and distributed tables
 -- should work, add HINT use CTEs
 UPDATE citus_local_table
 SET b = 6
@@ -619,16 +629,13 @@ WHERE citus_local_table.a = reference_table.a;
 DELETE FROM distributed_table
 USING citus_local_table
 WHERE citus_local_table.a = distributed_table.a;
-ERROR:  cannot plan modifications with citus local tables and distributed tables
 -- should not work, add HINT use CTEs
 DELETE FROM citus_local_table
 USING distributed_table
 WHERE citus_local_table.a = distributed_table.a;
-ERROR:  cannot plan modifications with citus local tables and distributed tables
 DELETE FROM reference_table
 USING citus_local_table
 WHERE citus_local_table.a = reference_table.a;
-ERROR:  cannot plan modifications of reference tables with citus local tables
 -- should work, add HINT use CTEs
 DELETE FROM citus_local_table
 USING reference_table
@@ -671,7 +678,7 @@ SELECT count(*) FROM distributed_table WHERE b in
 (SELECT count FROM mat_view_4);
  count
 ---------------------------------------------------------------------
-     1
+     0
 (1 row)
 
 CREATE VIEW view_2 AS
@@ -681,7 +688,11 @@ JOIN citus_local_table_2 USING (a)
 JOIN distributed_table USING (a);
 -- should fail as view contains direct local dist join
 SELECT count(*) FROM view_2;
-ERROR:  direct joins between distributed and local tables are not supported
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
 CREATE VIEW view_3
 AS SELECT count(*)
 FROM citus_local_table_2
@@ -698,7 +709,7 @@ SELECT count(*) FROM view_3;
 SELECT count(*) FROM view_3, distributed_table;
  count
 ---------------------------------------------------------------------
-     6
+     0
 (1 row)
 
 ---------------------------------------------------------------------
@@ -732,7 +743,16 @@ UPDATE citus_local_table lt SET a = mt.a
 FROM distributed_table mt WHERE mt.b = lt.b
 RETURNING lt.b, lt.a
 ) SELECT * FROM cte JOIN distributed_table mt ON mt.b = cte.b ORDER BY 1,2,3,4;
-ERROR:  cannot plan modifications with citus local tables and distributed tables
+ b | a | a | b
+---------------------------------------------------------------------
+ 0 | 0 | 0 | 0
+ 1 | 1 | 1 | 1
+ 2 | 2 | 2 | 2
+ 3 | 3 | 3 | 3
+ 4 | 4 | 4 | 4
+ 5 | 5 | 5 | 5
+(6 rows)
+
 -- join with CTE just works
 UPDATE citus_local_table
 SET a=5
@@ -756,7 +776,7 @@ UPDATE citus_local_table
 SET a=5
 FROM (SELECT b FROM distributed_table) AS foo
 WHERE foo.b = citus_local_table.b;
-ERROR:  cannot plan modifications with citus local tables and distributed tables
+ERROR:  citus local table citus_local_table cannot be joined with these distributed tables
 ---------------------------------------------------------------------
 -- test different execution paths --
 ---------------------------------------------------------------------

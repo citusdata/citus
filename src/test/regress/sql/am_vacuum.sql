@@ -1,45 +1,55 @@
-SELECT count(*) AS columnar_table_count FROM cstore.cstore_data_files \gset
+SET columnar.compression TO 'none';
+
+SELECT count(distinct storageid) AS columnar_table_count FROM columnar.columnar_stripes \gset
 
 CREATE TABLE t(a int, b int) USING columnar;
 
-SELECT count(*) FROM cstore.cstore_stripes a, pg_class b WHERE a.relfilenode=b.relfilenode AND b.relname='t';
+CREATE VIEW t_stripes AS
+SELECT * FROM columnar.columnar_stripes a, pg_class b
+WHERE a.storageid = columnar_relation_storageid(b.oid) AND b.relname='t';
+
+SELECT count(*) FROM t_stripes;
 
 INSERT INTO t SELECT i, i * i FROM generate_series(1, 10) i;
 INSERT INTO t SELECT i, i * i FROM generate_series(11, 20) i;
 INSERT INTO t SELECT i, i * i FROM generate_series(21, 30) i;
 
 SELECT sum(a), sum(b) FROM t;
-SELECT count(*) FROM cstore.cstore_stripes a, pg_class b WHERE a.relfilenode=b.relfilenode AND b.relname='t';
+SELECT count(*) FROM t_stripes;
 
 -- vacuum full should merge stripes together
 VACUUM FULL t;
 
 SELECT sum(a), sum(b) FROM t;
-SELECT count(*) FROM cstore.cstore_stripes a, pg_class b WHERE a.relfilenode=b.relfilenode AND b.relname='t';
+SELECT count(*) FROM t_stripes;
 
 -- test the case when all data cannot fit into a single stripe
 SELECT alter_columnar_table_set('t', stripe_row_count => 1000);
 INSERT INTO t SELECT i, 2 * i FROM generate_series(1,2500) i;
 
 SELECT sum(a), sum(b) FROM t;
-SELECT count(*) FROM cstore.cstore_stripes a, pg_class b WHERE a.relfilenode=b.relfilenode AND b.relname='t';
+SELECT count(*) FROM t_stripes;
 
 VACUUM FULL t;
 
 SELECT sum(a), sum(b) FROM t;
-SELECT count(*) FROM cstore.cstore_stripes a, pg_class b WHERE a.relfilenode=b.relfilenode AND b.relname='t';
+SELECT count(*) FROM t_stripes;
 
 -- VACUUM FULL doesn't reclaim dropped columns, but converts them to NULLs
 ALTER TABLE t DROP COLUMN a;
 
-SELECT stripe, attr, block, minimum_value IS NULL, maximum_value IS NULL FROM cstore.cstore_skipnodes a, pg_class b WHERE a.relfilenode=b.relfilenode AND b.relname='t' ORDER BY 1, 2, 3;
+SELECT stripe, attr, chunk, minimum_value IS NULL, maximum_value IS NULL
+FROM columnar.columnar_skipnodes a, pg_class b
+WHERE a.storageid = columnar_relation_storageid(b.oid) AND b.relname='t' ORDER BY 1, 2, 3;
 
 VACUUM FULL t;
 
-SELECT stripe, attr, block, minimum_value IS NULL, maximum_value IS NULL FROM cstore.cstore_skipnodes a, pg_class b WHERE a.relfilenode=b.relfilenode AND b.relname='t' ORDER BY 1, 2, 3;
+SELECT stripe, attr, chunk, minimum_value IS NULL, maximum_value IS NULL
+FROM columnar.columnar_skipnodes a, pg_class b
+WHERE a.storageid = columnar_relation_storageid(b.oid) AND b.relname='t' ORDER BY 1, 2, 3;
 
 -- Make sure we cleaned-up the transient table metadata after VACUUM FULL commands
-SELECT count(*) - :columnar_table_count FROM cstore.cstore_data_files;
+SELECT count(distinct storageid) - :columnar_table_count FROM columnar.columnar_stripes;
 
 -- do this in a transaction so concurrent autovacuum doesn't interfere with results
 BEGIN;
@@ -66,7 +76,7 @@ SELECT count(*) FROM t;
 
 BEGIN;
 SELECT alter_columnar_table_set('t',
-    block_row_count => 1000,
+    chunk_row_count => 1000,
     stripe_row_count => 2000,
     compression => 'pglz');
 SAVEPOINT s1;
@@ -84,21 +94,33 @@ VACUUM VERBOSE t;
 
 SELECT count(*) FROM t;
 
--- check that we report blocks with data for dropped columns
+-- check that we report chunks with data for dropped columns
 ALTER TABLE t ADD COLUMN c int;
 INSERT INTO t SELECT 1, i / 5 FROM generate_series(1, 1500) i;
 ALTER TABLE t DROP COLUMN c;
 
 VACUUM VERBOSE t;
 
--- vacuum full should remove blocks for dropped columns
--- note that, a block will be stored in non-compressed for if compression
+-- vacuum full should remove chunks for dropped columns
+-- note that, a chunk will be stored in non-compressed for if compression
 -- doesn't reduce its size.
 SELECT alter_columnar_table_set('t', compression => 'pglz');
 VACUUM FULL t;
 VACUUM VERBOSE t;
 
 DROP TABLE t;
+DROP VIEW t_stripes;
 
 -- Make sure we cleaned the metadata for t too
-SELECT count(*) - :columnar_table_count FROM cstore.cstore_data_files;
+SELECT count(distinct storageid) - :columnar_table_count FROM columnar.columnar_stripes;
+
+-- A table with high compression ratio
+SET columnar.compression TO 'pglz';
+SET columnar.stripe_row_count TO 1000000;
+SET columnar.chunk_row_count TO 100000;
+CREATE TABLE t(a int, b char, c text) USING columnar;
+INSERT INTO t SELECT 1, 'a', 'xyz' FROM generate_series(1, 1000000) i;
+
+VACUUM VERBOSE t;
+
+DROP TABLE t;

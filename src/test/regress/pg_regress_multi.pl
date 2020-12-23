@@ -415,11 +415,15 @@ push(@pgOptions, "shared_preload_libraries='${sharedPreloadLibraries}'");
 # Avoid parallelism to stabilize explain plans
 push(@pgOptions, "max_parallel_workers_per_gather=0");
 
+# Help with debugging
+push(@pgOptions, "log_error_verbosity = 'verbose'");
+
 # Allow CREATE SUBSCRIPTION to work
 push(@pgOptions, "wal_level='logical'");
 
 # Citus options set for the tests
 push(@pgOptions, "citus.shard_count=4");
+push(@pgOptions, "citus.max_adaptive_executor_pool_size=4");
 push(@pgOptions, "citus.shard_max_size=1500kB");
 push(@pgOptions, "citus.repartition_join_bucket_count_per_node=2");
 push(@pgOptions, "citus.sort_returning='on'");

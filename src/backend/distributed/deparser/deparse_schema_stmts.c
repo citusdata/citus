@@ -2,8 +2,9 @@
  *
  * deparse_schema_stmts.c
  *	  All routines to deparse schema statements.
- *	  This file contains all entry points specific for type statement deparsing as well as
- *	  functions that are currently only used for deparsing of the schema statements.
+ *	  This file contains all entry points specific for schema statement deparsing
+ *	  as well as functions that are currently only used for deparsing of the
+ *	  schema statements.
  *
  * Copyright (c) Citus Data, Inc.
  *
@@ -21,6 +22,7 @@ static void AppendGrantOnSchemaStmt(StringInfo buf, GrantStmt *stmt);
 static void AppendGrantOnSchemaPrivileges(StringInfo buf, GrantStmt *stmt);
 static void AppendGrantOnSchemaSchemas(StringInfo buf, GrantStmt *stmt);
 static void AppendGrantOnSchemaGrantees(StringInfo buf, GrantStmt *stmt);
+static void AppendAlterSchemaRenameStmt(StringInfo buf, RenameStmt *stmt);
 
 char *
 DeparseGrantOnSchemaStmt(Node *node)
@@ -32,6 +34,20 @@ DeparseGrantOnSchemaStmt(Node *node)
 	initStringInfo(&str);
 
 	AppendGrantOnSchemaStmt(&str, stmt);
+
+	return str.data;
+}
+
+
+char *
+DeparseAlterSchemaRenameStmt(Node *node)
+{
+	RenameStmt *stmt = castNode(RenameStmt, node);
+
+	StringInfoData str = { 0 };
+	initStringInfo(&str);
+
+	AppendAlterSchemaRenameStmt(&str, stmt);
 
 	return str.data;
 }
@@ -130,4 +146,14 @@ AppendGrantOnSchemaGrantees(StringInfo buf, GrantStmt *stmt)
 			appendStringInfo(buf, ", ");
 		}
 	}
+}
+
+
+static void
+AppendAlterSchemaRenameStmt(StringInfo buf, RenameStmt *stmt)
+{
+	Assert(stmt->renameType == OBJECT_SCHEMA);
+
+	appendStringInfo(buf, "ALTER SCHEMA %s RENAME TO %s;",
+					 quote_identifier(stmt->subname), quote_identifier(stmt->newname));
 }
