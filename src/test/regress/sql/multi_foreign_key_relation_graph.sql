@@ -287,7 +287,7 @@ ORDER BY tablename;
 CREATE TABLE local_table_1 (col int unique);
 CREATE TABLE local_table_2 (col int unique);
 
--- show that we do not trigger updating foreign key graph when
+-- show that we trigger updating foreign key graph when
 -- defining/dropping foreign keys between postgres tables
 
 ALTER TABLE local_table_1 ADD CONSTRAINT fkey_1 FOREIGN KEY (col) REFERENCES local_table_2(col);
@@ -306,6 +306,122 @@ ORDER BY tablename;
 SELECT oid::regclass::text AS tablename
 FROM get_foreign_key_connected_relations('non_existent_table') AS f(oid oid)
 ORDER BY tablename;
+
+\set VERBOSITY TERSE
+SET client_min_messages TO DEBUG1;
+
+BEGIN;
+  ALTER TABLE distributed_table_2 DROP CONSTRAINT distributed_table_2_col_key CASCADE;
+  ALTER TABLE distributed_table_3 DROP CONSTRAINT distributed_table_3_col_key CASCADE;
+  -- show that we process drop constraint commands that are dropping uniquness
+  -- constraints and then invalidate fkey graph. So we shouldn't see
+  -- distributed_table_3 as it was split via above drop constraint commands
+  SELECT oid::regclass::text AS tablename
+  FROM get_foreign_key_connected_relations('distributed_table_2') AS f(oid oid)
+  ORDER BY tablename;
+ROLLBACK;
+
+
+-- Below two commands normally would invalidate foreign key graph.
+-- But as they fail due to lacking of CASCADE, we don't invalidate
+-- foreign key graph.
+ALTER TABLE distributed_table_2 DROP CONSTRAINT distributed_table_2_col_key;
+ALTER TABLE reference_table_2 DROP COLUMN col;
+
+-- but we invalidate foreign key graph in below two transaction blocks
+BEGIN;
+  ALTER TABLE distributed_table_2 DROP CONSTRAINT distributed_table_2_col_key CASCADE;
+ROLLBACK;
+
+BEGIN;
+  ALTER TABLE reference_table_2 DROP COLUMN col CASCADE;
+ROLLBACK;
+
+-- now we should see distributed_table_2 as well since we rollback'ed
+SELECT oid::regclass::text AS tablename
+FROM get_foreign_key_connected_relations('distributed_table_2') AS f(oid oid)
+ORDER BY tablename;
+
+BEGIN;
+  DROP TABLE distributed_table_2 CASCADE;
+  -- should only see reference_table_1 & reference_table_2
+  SELECT oid::regclass::text AS tablename
+  FROM get_foreign_key_connected_relations('reference_table_1') AS f(oid oid)
+  ORDER BY tablename;
+ROLLBACK;
+
+BEGIN;
+  ALTER TABLE distributed_table_2 ADD CONSTRAINT fkey_55 FOREIGN KEY (col) REFERENCES reference_table_2(col);
+  ALTER TABLE distributed_table_1 ADD CONSTRAINT fkey_66 FOREIGN KEY (col) REFERENCES distributed_table_3(col);
+  -- show that we handle multiple edges between nodes in foreign key graph
+  SELECT oid::regclass::text AS tablename
+  FROM get_foreign_key_connected_relations('reference_table_1') AS f(oid oid)
+  ORDER BY tablename;
+ROLLBACK;
+
+BEGIN;
+  -- hide "verifying table" log because the order we print it changes
+  -- in different pg versions
+  set client_min_messages to error;
+  ALTER TABLE distributed_table_2 ADD CONSTRAINT pkey PRIMARY KEY (col);
+  set client_min_messages to debug1;
+
+  -- show that droping a constraint not involved in any foreign key
+  -- constraint doesn't invalidate foreign key graph
+  ALTER TABLE distributed_table_2 DROP CONSTRAINT pkey;
+ROLLBACK;
+
+BEGIN;
+  CREATE TABLE local_table_3 (col int PRIMARY KEY);
+  ALTER TABLE local_table_1 ADD COLUMN another_col int REFERENCES local_table_3(col);
+
+  CREATE TABLE local_table_4 (col int PRIMARY KEY REFERENCES local_table_3 (col));
+
+  -- we invalidate foreign key graph for add column & create table
+  -- commands defining foreign keys too
+  SELECT oid::regclass::text AS tablename
+  FROM get_foreign_key_connected_relations('local_table_3') AS f(oid oid)
+  ORDER BY tablename;
+ROLLBACK;
+
+BEGIN;
+  CREATE TABLE local_table_3 (col int PRIMARY KEY);
+  ALTER TABLE local_table_1 ADD COLUMN another_col int REFERENCES local_table_3(col);
+
+  ALTER TABLE local_table_1 DROP COLUMN another_col;
+
+  -- we invalidate foreign key graph for drop column commands dropping
+  -- referencing columns, should not print anything
+  SELECT oid::regclass::text AS tablename
+  FROM get_foreign_key_connected_relations('local_table_1') AS f(oid oid)
+  ORDER BY tablename;
+ROLLBACK;
+
+BEGIN;
+  CREATE TABLE local_table_3 (col int PRIMARY KEY);
+  ALTER TABLE local_table_1 ADD COLUMN another_col int REFERENCES local_table_3(col);
+
+  ALTER TABLE local_table_3 DROP COLUMN col CASCADE;
+
+  -- we invalidate foreign key graph for drop column commands dropping
+  -- referenced columns, should not print anything
+  SELECT oid::regclass::text AS tablename
+  FROM get_foreign_key_connected_relations('local_table_1') AS f(oid oid)
+  ORDER BY tablename;
+ROLLBACK;
+
+CREATE TABLE local_table_4 (col int);
+-- Normally, we would decide to invalidate foreign key graph for below
+-- ddl. But as it fails, we won't invalidate foreign key graph.
+ALTER TABLE local_table_1 ADD COLUMN another_col int REFERENCES local_table_4(col);
+-- When ddl command fails, we reset flag that we use to invalidate
+-- foreign key graph so that next command doesn't invalidate foreign
+-- key graph.
+ALTER TABLE local_table_1 ADD COLUMN unrelated_column int;
+
+-- show that droping a table not referenced and not referencing to any table
+-- does not invalidate foreign key graph
+DROP TABLE local_table_4;
 
 set client_min_messages to error;
 

@@ -176,6 +176,11 @@ s/(->.*Scan on\ +)(.*)(_[0-9]+)(_[0-9]+) \2(_[0-9]+|_xxx)?/\1\2\3\4 \2_xxx/g
 s/(partitioning_hash_join_test)(_[0-9]|_xxx)?(\.[a-zA-Z]+)/\1_xxx\3/g
 s/(partitioning_hash_test)(_[0-9]|_xxx)?(\.[a-zA-Z]+)/\1_xxx\3/g
 
+# multi_foreign_key_relation_graph.out
+# suppress shardId's in drop constraint logs as the order of cascaded objects might be flaky
+# e.g: drop cascades to constraint fkey_6_3000081 on table fkey_graph.distributed_table_1_3000081
+s/(drop cascades to constraint fkey_[0-9]+_)([0-9]+)( on table fkey_graph\..+_)\2/\1xxx\3xxx/g
+
 # Errors with binary decoding where OIDs should be normalized
 s/wrong data type: [0-9]+, expected [0-9]+/wrong data type: XXXX, expected XXXX/g
 

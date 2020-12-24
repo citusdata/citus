@@ -306,6 +306,7 @@ BEGIN;
 (1 row)
 
 	ALTER TABLE on_update_fkey_table ADD COLUMN X INT;
+DEBUG:  DDL command invalidates foreign key graph
 ERROR:  cannot execute parallel DDL on table "on_update_fkey_table" after SELECT command on reference table "reference_table" because there is a foreign key between them and "reference_table" has been accessed in this transaction
 DETAIL:  When there is a foreign key to a reference table, Citus needs to perform all operations over a single connection per node to ensure consistency.
 HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
@@ -1399,6 +1400,7 @@ ADD CONSTRAINT
 	fkey_delete FOREIGN KEY(value_1)
 REFERENCES
 	reference_table(id) ON DELETE CASCADE;
+DEBUG:  DDL command invalidates foreign key graph
 INSERT INTO reference_table SELECT i FROM generate_series(0, 10) i;
 DEBUG:  distributed INSERT ... SELECT can only select from distributed tables
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
