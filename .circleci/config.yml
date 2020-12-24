@@ -102,7 +102,7 @@ jobs:
       image_tag:
         description: 'docker image tag to use'
         type: string
-        default: latest
+        default: 11-12-13
     docker:
       - image: '<< parameters.image >>:<< parameters.image_tag >>'
     working_directory: /home/circleci/project
@@ -537,14 +537,14 @@ workflows:
           name: 'test-11-12_check-pg-upgrade'
           old_pg_major: 11
           new_pg_major: 12
-          image_tag: latest
+          image_tag: 11-12-13
           requires: [build-11,build-12]
 
       - test-pg-upgrade:
           name: 'test-12-13_check-pg-upgrade'
           old_pg_major: 12
           new_pg_major: 13
-          image_tag: latest
+          image_tag: 11-12-13
           requires: [build-12,build-13]
 
       - test-citus-upgrade:
