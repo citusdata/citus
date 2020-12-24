@@ -1125,7 +1125,7 @@ GetPgDependTuplesForDependingObjects(Oid targetObjectClassId, Oid targetObjectId
 	}
 
 	systable_endscan(depScan);
-	relation_close(pgDepend, AccessShareLock);
+	relation_close(pgDepend, NoLock);
 
 	return dependencyTupleList;
 }
