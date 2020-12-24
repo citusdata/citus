@@ -61,8 +61,45 @@ typedef enum ExtractForeignKeyConstraintsMode
 	INCLUDE_REFERENCED_CONSTRAINTS = 1 << 1,
 
 	/* exclude the self-referencing foreign keys */
-	EXCLUDE_SELF_REFERENCES = 1 << 2
+	EXCLUDE_SELF_REFERENCES = 1 << 2,
+
+	/* any combination of the 4 flags below is supported */
+	/* include foreign keys when the other table is a distributed table*/
+	INCLUDE_DISTRIBUTED_TABLES = 1 << 3,
+
+	/* include foreign keys when the other table is a reference table*/
+	INCLUDE_REFERENCE_TABLES = 1 << 4,
+
+	/* include foreign keys when the other table is a citus local table*/
+	INCLUDE_CITUS_LOCAL_TABLES = 1 << 5,
+
+	/* include foreign keys when the other table is a Postgres local table*/
+	INCLUDE_LOCAL_TABLES = 1 << 6,
+
+	/* include foreign keys regardless of the other table's type */
+	INCLUDE_ALL_TABLE_TYPES = INCLUDE_DISTRIBUTED_TABLES | INCLUDE_REFERENCE_TABLES |
+							  INCLUDE_CITUS_LOCAL_TABLES | INCLUDE_LOCAL_TABLES
 } ExtractForeignKeyConstraintMode;
+
+
+/*
+ * Flags that can be passed to GetForeignKeyIdsForColumn to
+ * indicate whether relationId argument should match:
+ *   - referencing relation or,
+ *   - referenced relation,
+ *  or we are searching for both sides.
+ */
+typedef enum SearchForeignKeyColumnFlags
+{
+	/* relationId argument should match referencing relation */
+	SEARCH_REFERENCING_RELATION = 1 << 0,
+
+	/* relationId argument should match referenced relation */
+	SEARCH_REFERENCED_RELATION = 1 << 1,
+
+	/* callers can also pass union of above flags */
+} SearchForeignKeyColumnFlags;
+
 
 /* cluster.c - forward declarations */
 extern List * PreprocessClusterStmt(Node *node, const char *clusterCommand);
@@ -122,6 +159,7 @@ extern void ErrorIfUnsupportedForeignConstraintExists(Relation relation,
 													  Var *distributionColumn,
 													  uint32 colocationId);
 extern void ErrorOutForFKeyBetweenPostgresAndCitusLocalTable(Oid localTableId);
+extern bool ColumnReferencedByAnyForeignKey(char *columnName, Oid relationId);
 extern bool ColumnAppearsInForeignKeyToReferenceTable(char *columnName, Oid
 													  relationId);
 extern List * GetReferencingForeignConstaintCommands(Oid relationOid);

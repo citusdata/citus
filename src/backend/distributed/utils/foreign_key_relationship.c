@@ -35,6 +35,9 @@
 #include "common/hashfn.h"
 #endif
 #include "utils/memutils.h"
+#if PG_VERSION_NUM < PG_VERSION_12
+#include "utils/rel.h"
+#endif
 
 
 /*
@@ -58,7 +61,6 @@ typedef struct ForeignConstraintRelationshipGraph
 typedef struct ForeignConstraintRelationshipNode
 {
 	Oid relationId;
-	bool visited;
 	List *adjacencyList;
 	List *backAdjacencyList;
 }ForeignConstraintRelationshipNode;
@@ -78,13 +80,15 @@ typedef struct ForeignConstraintRelationshipEdge
 
 static ForeignConstraintRelationshipGraph *fConstraintRelationshipGraph = NULL;
 
+static List * GetRelationshipNodesForFKeyConnectedRelations(
+	ForeignConstraintRelationshipNode *relationshipNode);
+static List * GetAllNeighboursList(ForeignConstraintRelationshipNode *relationshipNode);
 static ForeignConstraintRelationshipNode * GetRelationshipNodeForRelationId(Oid
 																			relationId,
 																			bool *isFound);
 static void CreateForeignConstraintRelationshipGraph(void);
 static List * GetNeighbourList(ForeignConstraintRelationshipNode *relationshipNode,
 							   bool isReferencing);
-static void SetRelationshipNodeListNotVisited(List *relationshipNodeList);
 static List * GetRelationIdsFromRelationshipNodeList(List *fKeyRelationshipNodeList);
 static void PopulateAdjacencyLists(void);
 static int CompareForeignConstraintRelationshipEdges(const void *leftElement,
@@ -92,10 +96,114 @@ static int CompareForeignConstraintRelationshipEdges(const void *leftElement,
 static void AddForeignConstraintRelationshipEdge(Oid referencingOid, Oid referencedOid);
 static ForeignConstraintRelationshipNode * CreateOrFindNode(HTAB *adjacencyLists, Oid
 															relid);
-static void GetConnectedListHelper(ForeignConstraintRelationshipNode *node,
-								   List **adjacentNodeList, bool
-								   isReferencing);
+static List * GetConnectedListHelper(ForeignConstraintRelationshipNode *node,
+									 bool isReferencing);
+static HTAB * CreateOidVisitedHashSet(void);
+static bool OidVisited(HTAB *oidVisitedMap, Oid oid);
+static void VisitOid(HTAB *oidVisitedMap, Oid oid);
 static List * GetForeignConstraintRelationshipHelper(Oid relationId, bool isReferencing);
+
+
+/*
+ * GetForeignKeyConnectedRelationIdList returns a list of relation id's for
+ * relations that are connected to relation with relationId via a foreign
+ * key graph.
+ */
+List *
+GetForeignKeyConnectedRelationIdList(Oid relationId)
+{
+	/* use ShareRowExclusiveLock to prevent concurent foreign key creation */
+	LOCKMODE lockMode = ShareRowExclusiveLock;
+	Relation relation = try_relation_open(relationId, lockMode);
+	if (!RelationIsValid(relation))
+	{
+		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+						errmsg("relation with OID %d does not exist",
+							   relationId)));
+	}
+
+	relation_close(relation, NoLock);
+
+	bool foundInFKeyGraph = false;
+	ForeignConstraintRelationshipNode *relationshipNode =
+		GetRelationshipNodeForRelationId(relationId, &foundInFKeyGraph);
+	if (!foundInFKeyGraph)
+	{
+		/*
+		 * Relation could not be found in foreign key graph, then it has no
+		 * foreign key relationships.
+		 */
+		return NIL;
+	}
+
+	List *fKeyConnectedRelationshipNodeList =
+		GetRelationshipNodesForFKeyConnectedRelations(relationshipNode);
+	List *fKeyConnectedRelationIdList =
+		GetRelationIdsFromRelationshipNodeList(fKeyConnectedRelationshipNodeList);
+	return fKeyConnectedRelationIdList;
+}
+
+
+/*
+ * GetRelationshipNodesForFKeyConnectedRelations performs breadth-first search
+ * starting from input ForeignConstraintRelationshipNode and returns a list
+ * of ForeignConstraintRelationshipNode objects for relations that are connected
+ * to given relation node via a foreign key relationhip graph.
+ */
+static List *
+GetRelationshipNodesForFKeyConnectedRelations(
+	ForeignConstraintRelationshipNode *relationshipNode)
+{
+	HTAB *oidVisitedMap = CreateOidVisitedHashSet();
+
+	VisitOid(oidVisitedMap, relationshipNode->relationId);
+	List *relationshipNodeList = list_make1(relationshipNode);
+
+	ForeignConstraintRelationshipNode *currentNode = NULL;
+	foreach_ptr_append(currentNode, relationshipNodeList)
+	{
+		List *allNeighboursList = GetAllNeighboursList(currentNode);
+		ForeignConstraintRelationshipNode *neighbourNode = NULL;
+		foreach_ptr(neighbourNode, allNeighboursList)
+		{
+			Oid neighbourRelationId = neighbourNode->relationId;
+			if (OidVisited(oidVisitedMap, neighbourRelationId))
+			{
+				continue;
+			}
+
+			VisitOid(oidVisitedMap, neighbourRelationId);
+			relationshipNodeList = lappend(relationshipNodeList, neighbourNode);
+		}
+	}
+
+	return relationshipNodeList;
+}
+
+
+/*
+ * GetAllNeighboursList returns a list of ForeignConstraintRelationshipNode
+ * objects by concatenating both (referencing & referenced) adjacency lists
+ * of given relationship node.
+ */
+static List *
+GetAllNeighboursList(ForeignConstraintRelationshipNode *relationshipNode)
+{
+	bool isReferencing = false;
+	List *referencedNeighboursList = GetNeighbourList(relationshipNode, isReferencing);
+
+	isReferencing = true;
+	List *referencingNeighboursList = GetNeighbourList(relationshipNode, isReferencing);
+
+	/*
+	 * GetNeighbourList returns list from graph as is, so first copy it as
+	 * list_concat might invalidate it.
+	 */
+	List *allNeighboursList = list_copy(referencedNeighboursList);
+	allNeighboursList = list_concat_unique_ptr(allNeighboursList,
+											   referencingNeighboursList);
+	return allNeighboursList;
+}
 
 
 /*
@@ -149,16 +257,8 @@ GetForeignConstraintRelationshipHelper(Oid relationId, bool isReferencing)
 		return NIL;
 	}
 
-	List *foreignNodeList = NIL;
-	GetConnectedListHelper(relationshipNode, &foreignNodeList, isReferencing);
-
-	/* reset visited flags in foreign key graph */
-	SetRelationshipNodeListNotVisited(foreignNodeList);
-
-	/* set to false separately, since we don't add itself to foreign node list */
-	relationshipNode->visited = false;
-
-	List *relationIdList = GetRelationIdsFromRelationshipNodeList(foreignNodeList);
+	List *connectedNodeList = GetConnectedListHelper(relationshipNode, isReferencing);
+	List *relationIdList = GetRelationIdsFromRelationshipNodeList(connectedNodeList);
 	return relationIdList;
 }
 
@@ -264,28 +364,103 @@ SetForeignConstraintRelationshipGraphInvalid()
 
 
 /*
- * GetConnectedListHelper is the function for getting nodes connected (or connecting) to
- * the given relation. adjacentNodeList holds the result for recursive calls and
- * by changing isReferencing caller function can select connected or connecting
- * adjacency list.
+ * GetConnectedListHelper returns list of ForeignConstraintRelationshipNode
+ * objects for relations referenced by or referencing to given relation
+ * according to isReferencing flag.
  *
  */
-static void
-GetConnectedListHelper(ForeignConstraintRelationshipNode *node, List **adjacentNodeList,
-					   bool isReferencing)
+static List *
+GetConnectedListHelper(ForeignConstraintRelationshipNode *node, bool isReferencing)
 {
-	node->visited = true;
+	HTAB *oidVisitedMap = CreateOidVisitedHashSet();
 
-	ForeignConstraintRelationshipNode *neighbourNode = NULL;
-	List *neighbourList = GetNeighbourList(node, isReferencing);
-	foreach_ptr(neighbourNode, neighbourList)
+	List *connectedNodeList = NIL;
+
+	List *relationshipNodeStack = list_make1(node);
+	while (list_length(relationshipNodeStack) != 0)
 	{
-		if (neighbourNode->visited == false)
+		/*
+		 * Note that this loop considers leftmost element of
+		 * relationshipNodeStack as top of the stack.
+		 */
+
+		/* pop top element from stack */
+		ForeignConstraintRelationshipNode *currentNode = linitial(relationshipNodeStack);
+		relationshipNodeStack = list_delete_first(relationshipNodeStack);
+
+		Oid currentRelationId = currentNode->relationId;
+		if (!OidVisited(oidVisitedMap, currentRelationId))
 		{
-			*adjacentNodeList = lappend(*adjacentNodeList, neighbourNode);
-			GetConnectedListHelper(neighbourNode, adjacentNodeList, isReferencing);
+			connectedNodeList = lappend(connectedNodeList, currentNode);
+			VisitOid(oidVisitedMap, currentRelationId);
+		}
+
+		List *neighbourList = GetNeighbourList(currentNode, isReferencing);
+		ForeignConstraintRelationshipNode *neighbourNode = NULL;
+		foreach_ptr(neighbourNode, neighbourList)
+		{
+			Oid neighbourRelationId = neighbourNode->relationId;
+			if (!OidVisited(oidVisitedMap, neighbourRelationId))
+			{
+				/* push to stack */
+				relationshipNodeStack = lcons(neighbourNode, relationshipNodeStack);
+			}
 		}
 	}
+
+	hash_destroy(oidVisitedMap);
+
+	/* finally remove yourself from list */
+	connectedNodeList = list_delete_first(connectedNodeList);
+	return connectedNodeList;
+}
+
+
+/*
+ * CreateOidVisitedHashSet creates and returns an hash-set object in
+ * CurrentMemoryContext to store visited oid's.
+ * As hash_create allocates memory in heap, callers are responsible to call
+ * hash_destroy when appropriate.
+ */
+static HTAB *
+CreateOidVisitedHashSet(void)
+{
+	HASHCTL info = { 0 };
+
+	info.keysize = sizeof(Oid);
+	info.hash = oid_hash;
+	info.hcxt = CurrentMemoryContext;
+
+	/* we don't have value field as it's a set */
+	info.entrysize = info.keysize;
+
+	uint32 hashFlags = (HASH_ELEM | HASH_FUNCTION | HASH_CONTEXT);
+
+	HTAB *oidVisitedMap = hash_create("oid visited hash map", 32, &info, hashFlags);
+	return oidVisitedMap;
+}
+
+
+/*
+ * OidVisited returns true if given oid is visited according to given oid hash-set.
+ */
+static bool
+OidVisited(HTAB *oidVisitedMap, Oid oid)
+{
+	bool found = false;
+	hash_search(oidVisitedMap, &oid, HASH_FIND, &found);
+	return found;
+}
+
+
+/*
+ * VisitOid sets given oid as visited in given hash-set.
+ */
+static void
+VisitOid(HTAB *oidVisitedMap, Oid oid)
+{
+	bool found = false;
+	hash_search(oidVisitedMap, &oid, HASH_ENTER, &found);
 }
 
 
@@ -304,21 +479,6 @@ GetNeighbourList(ForeignConstraintRelationshipNode *relationshipNode, bool isRef
 	else
 	{
 		return relationshipNode->adjacencyList;
-	}
-}
-
-
-/*
- * SetRelationshipNodeListNotVisited takes a list of ForeignConstraintRelationshipNode
- * objects and sets their visited flags to false.
- */
-static void
-SetRelationshipNodeListNotVisited(List *relationshipNodeList)
-{
-	ForeignConstraintRelationshipNode *relationshipNode = NULL;
-	foreach_ptr(relationshipNode, relationshipNodeList)
-	{
-		relationshipNode->visited = false;
 	}
 }
 
@@ -474,7 +634,6 @@ CreateOrFindNode(HTAB *adjacencyLists, Oid relid)
 	{
 		node->adjacencyList = NIL;
 		node->backAdjacencyList = NIL;
-		node->visited = false;
 	}
 
 	return node;

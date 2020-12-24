@@ -64,12 +64,11 @@ static void ForeignConstraintFindDistKeys(HeapTuple pgConstraintTuple,
 										  Var *referencedDistColumn,
 										  int *referencingAttrIndex,
 										  int *referencedAttrIndex);
+static List * GetForeignKeyIdsForColumn(char *columnName, Oid relationId,
+										int searchForeignKeyColumnFlags);
 static List * GetForeignConstraintCommandsInternal(Oid relationId, int flags);
 static Oid get_relation_constraint_oid_compat(HeapTuple heapTuple);
-static List * GetForeignKeyOidsToCitusLocalTables(Oid relationId);
-static List * GetForeignKeyOidsToReferenceTables(Oid relationId);
-static List * FilterFKeyOidListByReferencedTableType(List *foreignKeyOidList,
-													 CitusTableType citusTableType);
+static bool IsTableTypeIncluded(Oid relationId, int flags);
 
 /*
  * ConstraintIsAForeignKeyToReferenceTable checks if the given constraint is a
@@ -78,7 +77,8 @@ static List * FilterFKeyOidListByReferencedTableType(List *foreignKeyOidList,
 bool
 ConstraintIsAForeignKeyToReferenceTable(char *inputConstaintName, Oid relationId)
 {
-	List *foreignKeyOids = GetForeignKeyOidsToReferenceTables(relationId);
+	int flags = INCLUDE_REFERENCING_CONSTRAINTS | INCLUDE_REFERENCE_TABLES;
+	List *foreignKeyOids = GetForeignKeyOids(relationId, flags);
 
 	Oid foreignKeyOid = FindForeignKeyOidWithName(foreignKeyOids, inputConstaintName);
 
@@ -120,7 +120,7 @@ ErrorIfUnsupportedForeignConstraintExists(Relation relation, char referencingDis
 {
 	Oid referencingTableId = relation->rd_id;
 
-	int flags = INCLUDE_REFERENCING_CONSTRAINTS;
+	int flags = INCLUDE_REFERENCING_CONSTRAINTS | INCLUDE_ALL_TABLE_TYPES;
 	List *foreignKeyOids = GetForeignKeyOids(referencingTableId, flags);
 
 	Oid foreignKeyOid = InvalidOid;
@@ -490,9 +490,45 @@ ForeignConstraintFindDistKeys(HeapTuple pgConstraintTuple,
 bool
 ColumnAppearsInForeignKeyToReferenceTable(char *columnName, Oid relationId)
 {
+	int searchForeignKeyColumnFlags = SEARCH_REFERENCING_RELATION |
+									  SEARCH_REFERENCED_RELATION;
+	List *foreignKeyIdsColumnAppeared =
+		GetForeignKeyIdsForColumn(columnName, relationId, searchForeignKeyColumnFlags);
+
+	Oid foreignKeyId = InvalidOid;
+	foreach_oid(foreignKeyId, foreignKeyIdsColumnAppeared)
+	{
+		Oid referencedTableId = GetReferencedTableId(foreignKeyId);
+		if (IsCitusTableType(referencedTableId, REFERENCE_TABLE))
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
+
+/*
+ * GetForeignKeyIdsForColumn takes columnName and relationId for the owning
+ * relation, and returns a list of OIDs for foreign constraints that the column
+ * with columnName is involved according to "searchForeignKeyColumnFlags" argument.
+ * See SearchForeignKeyColumnFlags enum definition for usage.
+ */
+static List *
+GetForeignKeyIdsForColumn(char *columnName, Oid relationId,
+						  int searchForeignKeyColumnFlags)
+{
+	bool searchReferencing = searchForeignKeyColumnFlags & SEARCH_REFERENCING_RELATION;
+	bool searchReferenced = searchForeignKeyColumnFlags & SEARCH_REFERENCED_RELATION;
+
+	/* at least one of them should be true */
+	Assert(searchReferencing || searchReferenced);
+
+	List *foreignKeyIdsColumnAppeared = NIL;
+
 	ScanKeyData scanKey[1];
 	int scanKeyCount = 1;
-	bool foreignKeyToReferenceTableIncludesGivenColumn = false;
 
 	Relation pgConstraint = table_open(ConstraintRelationId, AccessShareLock);
 
@@ -511,11 +547,11 @@ ColumnAppearsInForeignKeyToReferenceTable(char *columnName, Oid relationId)
 		Oid referencedTableId = constraintForm->confrelid;
 		Oid referencingTableId = constraintForm->conrelid;
 
-		if (referencedTableId == relationId)
+		if (referencedTableId == relationId && searchReferenced)
 		{
 			pgConstraintKey = Anum_pg_constraint_confkey;
 		}
-		else if (referencingTableId == relationId)
+		else if (referencingTableId == relationId && searchReferencing)
 		{
 			pgConstraintKey = Anum_pg_constraint_conkey;
 		}
@@ -529,22 +565,12 @@ ColumnAppearsInForeignKeyToReferenceTable(char *columnName, Oid relationId)
 			continue;
 		}
 
-		/*
-		 * We check if the referenced table is a reference table. There cannot be
-		 * any foreign constraint from a distributed table to a local table.
-		 */
-		Assert(IsCitusTable(referencedTableId));
-		if (!IsCitusTableType(referencedTableId, REFERENCE_TABLE))
-		{
-			heapTuple = systable_getnext(scanDescriptor);
-			continue;
-		}
-
 		if (HeapTupleOfForeignConstraintIncludesColumn(heapTuple, relationId,
 													   pgConstraintKey, columnName))
 		{
-			foreignKeyToReferenceTableIncludesGivenColumn = true;
-			break;
+			Oid foreignKeyOid = get_relation_constraint_oid_compat(heapTuple);
+			foreignKeyIdsColumnAppeared = lappend_oid(foreignKeyIdsColumnAppeared,
+													  foreignKeyOid);
 		}
 
 		heapTuple = systable_getnext(scanDescriptor);
@@ -554,7 +580,7 @@ ColumnAppearsInForeignKeyToReferenceTable(char *columnName, Oid relationId)
 	systable_endscan(scanDescriptor);
 	table_close(pgConstraint, NoLock);
 
-	return foreignKeyToReferenceTableIncludesGivenColumn;
+	return foreignKeyIdsColumnAppeared;
 }
 
 
@@ -567,7 +593,7 @@ ColumnAppearsInForeignKeyToReferenceTable(char *columnName, Oid relationId)
 List *
 GetReferencingForeignConstaintCommands(Oid relationId)
 {
-	int flags = INCLUDE_REFERENCING_CONSTRAINTS;
+	int flags = INCLUDE_REFERENCING_CONSTRAINTS | INCLUDE_ALL_TABLE_TYPES;
 	return GetForeignConstraintCommandsInternal(relationId, flags);
 }
 
@@ -633,23 +659,9 @@ get_relation_constraint_oid_compat(HeapTuple heapTuple)
 bool
 HasForeignKeyToCitusLocalTable(Oid relationId)
 {
-	List *foreignKeyOidList = GetForeignKeyOidsToCitusLocalTables(relationId);
-	return list_length(foreignKeyOidList) > 0;
-}
-
-
-/*
- * GetForeignKeyOidsToCitusLocalTables returns list of OIDs for the foreign key
- * constraints on the given relationId that are referencing to citus local tables.
- */
-static List *
-GetForeignKeyOidsToCitusLocalTables(Oid relationId)
-{
-	int flags = INCLUDE_REFERENCING_CONSTRAINTS;
+	int flags = INCLUDE_REFERENCING_CONSTRAINTS | INCLUDE_CITUS_LOCAL_TABLES;
 	List *foreignKeyOidList = GetForeignKeyOids(relationId, flags);
-	List *fKeyOidsToCitusLocalTables =
-		FilterFKeyOidListByReferencedTableType(foreignKeyOidList, CITUS_LOCAL_TABLE);
-	return fKeyOidsToCitusLocalTables;
+	return list_length(foreignKeyOidList) > 0;
 }
 
 
@@ -661,54 +673,10 @@ GetForeignKeyOidsToCitusLocalTables(Oid relationId)
 bool
 HasForeignKeyToReferenceTable(Oid relationId)
 {
-	List *foreignKeyOids = GetForeignKeyOidsToReferenceTables(relationId);
+	int flags = INCLUDE_REFERENCING_CONSTRAINTS | INCLUDE_REFERENCE_TABLES;
+	List *foreignKeyOids = GetForeignKeyOids(relationId, flags);
 
 	return list_length(foreignKeyOids) > 0;
-}
-
-
-/*
- * GetForeignKeyOidsToReferenceTables returns list of OIDs for the foreign key
- * constraints on the given relationId that are referencing to reference tables.
- */
-static List *
-GetForeignKeyOidsToReferenceTables(Oid relationId)
-{
-	int flags = INCLUDE_REFERENCING_CONSTRAINTS;
-	List *foreignKeyOidList = GetForeignKeyOids(relationId, flags);
-	List *fKeyOidsToReferenceTables =
-		FilterFKeyOidListByReferencedTableType(foreignKeyOidList, REFERENCE_TABLE);
-	return fKeyOidsToReferenceTables;
-}
-
-
-/*
- * FilterFKeyOidListByReferencedTableType takes a list of foreign key OIDs and
- * CitusTableType to filter the foreign key OIDs that CitusTableType matches
- * referenced relation's type.
- */
-static List *
-FilterFKeyOidListByReferencedTableType(List *foreignKeyOidList,
-									   CitusTableType citusTableType)
-{
-	List *filteredFKeyOidList = NIL;
-
-	Oid foreignKeyOid = InvalidOid;
-	foreach_oid(foreignKeyOid, foreignKeyOidList)
-	{
-		HeapTuple heapTuple = SearchSysCache1(CONSTROID, ObjectIdGetDatum(foreignKeyOid));
-		Form_pg_constraint constraintForm = (Form_pg_constraint) GETSTRUCT(heapTuple);
-
-		Oid referencedTableOid = constraintForm->confrelid;
-		if (IsCitusTableType(referencedTableOid, citusTableType))
-		{
-			filteredFKeyOidList = lappend_oid(filteredFKeyOidList, foreignKeyOid);
-		}
-
-		ReleaseSysCache(heapTuple);
-	}
-
-	return filteredFKeyOidList;
 }
 
 
@@ -719,7 +687,7 @@ FilterFKeyOidListByReferencedTableType(List *foreignKeyOidList,
 bool
 TableReferenced(Oid relationId)
 {
-	int flags = INCLUDE_REFERENCED_CONSTRAINTS;
+	int flags = INCLUDE_REFERENCED_CONSTRAINTS | INCLUDE_ALL_TABLE_TYPES;
 	List *foreignKeyOids = GetForeignKeyOids(relationId, flags);
 
 	return list_length(foreignKeyOids) > 0;
@@ -765,7 +733,7 @@ HeapTupleOfForeignConstraintIncludesColumn(HeapTuple heapTuple, Oid relationId,
 bool
 TableReferencing(Oid relationId)
 {
-	int flags = INCLUDE_REFERENCING_CONSTRAINTS;
+	int flags = INCLUDE_REFERENCING_CONSTRAINTS | INCLUDE_ALL_TABLE_TYPES;
 	List *foreignKeyOids = GetForeignKeyOids(relationId, flags);
 
 	return list_length(foreignKeyOids) > 0;
@@ -793,7 +761,7 @@ ConstraintIsAForeignKey(char *inputConstaintName, Oid relationId)
 Oid
 GetForeignKeyOidByName(char *inputConstaintName, Oid relationId)
 {
-	int flags = INCLUDE_REFERENCING_CONSTRAINTS;
+	int flags = INCLUDE_REFERENCING_CONSTRAINTS | INCLUDE_ALL_TABLE_TYPES;
 	List *foreignKeyOids = GetForeignKeyOids(relationId, flags);
 
 	Oid foreignKeyId = FindForeignKeyOidWithName(foreignKeyOids, inputConstaintName);
@@ -834,10 +802,12 @@ FindForeignKeyOidWithName(List *foreignKeyOids, const char *inputConstraintName)
 void
 ErrorIfTableHasExternalForeignKeys(Oid relationId)
 {
-	int flags = (INCLUDE_REFERENCING_CONSTRAINTS | EXCLUDE_SELF_REFERENCES);
+	int flags = (INCLUDE_REFERENCING_CONSTRAINTS | EXCLUDE_SELF_REFERENCES |
+				 INCLUDE_ALL_TABLE_TYPES);
 	List *foreignKeyIdsTableReferencing = GetForeignKeyOids(relationId, flags);
 
-	flags = (INCLUDE_REFERENCED_CONSTRAINTS | EXCLUDE_SELF_REFERENCES);
+	flags = (INCLUDE_REFERENCED_CONSTRAINTS | EXCLUDE_SELF_REFERENCES |
+			 INCLUDE_ALL_TABLE_TYPES);
 	List *foreignKeyIdsTableReferenced = GetForeignKeyOids(relationId, flags);
 
 	List *foreignKeysWithOtherTables = list_concat(foreignKeyIdsTableReferencing,
@@ -869,10 +839,8 @@ GetForeignKeyOids(Oid relationId, int flags)
 {
 	AttrNumber pgConstraintTargetAttrNumber = InvalidAttrNumber;
 
-	bool extractReferencing PG_USED_FOR_ASSERTS_ONLY =
-		(flags & INCLUDE_REFERENCING_CONSTRAINTS);
-	bool extractReferenced PG_USED_FOR_ASSERTS_ONLY =
-		(flags & INCLUDE_REFERENCED_CONSTRAINTS);
+	bool extractReferencing = (flags & INCLUDE_REFERENCING_CONSTRAINTS);
+	bool extractReferenced = (flags & INCLUDE_REFERENCED_CONSTRAINTS);
 
 	/*
 	 * Only one of them should be passed at a time since the way we scan
@@ -885,14 +853,14 @@ GetForeignKeyOids(Oid relationId, int flags)
 	bool useIndex = false;
 	Oid indexOid = InvalidOid;
 
-	if (flags & INCLUDE_REFERENCING_CONSTRAINTS)
+	if (extractReferencing)
 	{
 		pgConstraintTargetAttrNumber = Anum_pg_constraint_conrelid;
 
 		useIndex = true;
 		indexOid = ConstraintRelidTypidNameIndexId;
 	}
-	else if (flags & INCLUDE_REFERENCED_CONSTRAINTS)
+	else if (extractReferenced)
 	{
 		pgConstraintTargetAttrNumber = Anum_pg_constraint_confrelid;
 	}
@@ -942,6 +910,22 @@ GetForeignKeyOids(Oid relationId, int flags)
 			continue;
 		}
 
+		Oid otherTableId = InvalidOid;
+		if (extractReferencing)
+		{
+			otherTableId = constraintForm->confrelid;
+		}
+		else if (extractReferenced)
+		{
+			otherTableId = constraintForm->conrelid;
+		}
+
+		if (!IsTableTypeIncluded(otherTableId, flags))
+		{
+			heapTuple = systable_getnext(scanDescriptor);
+			continue;
+		}
+
 		foreignKeyOids = lappend_oid(foreignKeyOids, constraintId);
 
 		heapTuple = systable_getnext(scanDescriptor);
@@ -981,4 +965,31 @@ GetReferencedTableId(Oid foreignKeyId)
 	ReleaseSysCache(heapTuple);
 
 	return referencedTableId;
+}
+
+
+/*
+ * IsTableTypeIncluded returns true if type of the table with relationId (distributed,
+ * reference, Citus local or Postgres local) is included in the flags, false if not
+ */
+static bool
+IsTableTypeIncluded(Oid relationId, int flags)
+{
+	if (!IsCitusTable(relationId))
+	{
+		return (flags & INCLUDE_LOCAL_TABLES) != 0;
+	}
+	else if (IsCitusTableType(relationId, DISTRIBUTED_TABLE))
+	{
+		return (flags & INCLUDE_DISTRIBUTED_TABLES) != 0;
+	}
+	else if (IsCitusTableType(relationId, REFERENCE_TABLE))
+	{
+		return (flags & INCLUDE_REFERENCE_TABLES) != 0;
+	}
+	else if (IsCitusTableType(relationId, CITUS_LOCAL_TABLE))
+	{
+		return (flags & INCLUDE_CITUS_LOCAL_TABLES) != 0;
+	}
+	return false;
 }
