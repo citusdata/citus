@@ -517,6 +517,17 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 	{
 		PostStandardProcessUtility(parsetree);
 
+		/*
+		 * We call MarkInvalidateForeignKeyGraph in preprocess without knowing
+		 * that if command would fail or not. However, we don't want to invalidate
+		 * foreign key graph for failed DDL commands, so here we don't call
+		 * InvalidateForeignKeyGraphForDDL.
+		 * On the other hand, we should still reset shouldInvalidateForeignKeyGraph
+		 * flag as next DDL command still relies on this flag to invalidate foreign
+		 * key graph.
+		 */
+		shouldInvalidateForeignKeyGraph = false;
+
 		PG_RE_THROW();
 	}
 	PG_END_TRY();
