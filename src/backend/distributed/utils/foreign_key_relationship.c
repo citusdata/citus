@@ -145,7 +145,7 @@ GetForeignKeyConnectedRelationIdList(Oid relationId)
 
 
 /*
- * GetRelationshipNodesForFKeyConnectedRelations performs depth-first search
+ * GetRelationshipNodesForFKeyConnectedRelations performs breadth-first search
  * starting from input ForeignConstraintRelationshipNode and returns a list
  * of ForeignConstraintRelationshipNode objects for relations that are connected
  * to given relation node via a foreign key relationhip graph.
