@@ -1,0 +1,112 @@
+SHOW server_version \gset
+SELECT substring(:'server_version', '\d+')::int > 12 AS server_version_above_twelve
+\gset
+\if :server_version_above_twelve
+\else
+\q
+\endif
+CREATE SCHEMA "statistics'TestTarget";
+SET search_path TO "statistics'TestTarget";
+SET citus.next_shard_id TO 980000;
+SET client_min_messages TO WARNING;
+SET citus.shard_count TO 32;
+SET citus.shard_replication_factor TO 1;
+CREATE TABLE t1 (a int, b int);
+CREATE STATISTICS s1 ON a,b FROM t1;
+CREATE STATISTICS s2 ON a,b FROM t1;
+CREATE STATISTICS s3 ON a,b FROM t1;
+CREATE STATISTICS s4 ON a,b FROM t1;
+-- test altering stats target
+-- test alter target before distribution
+ALTER STATISTICS s1 SET STATISTICS 3;
+-- since max value for target is 10000, this will automatically be lowered
+ALTER STATISTICS s2 SET STATISTICS 999999;
+WARNING:  lowering statistics target to 10000
+SELECT create_distributed_table('t1', 'b');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- test alter target before distribution
+ALTER STATISTICS s3 SET STATISTICS 46;
+\c - - - :worker_1_port
+SELECT stxstattarget, stxrelid::regclass
+FROM pg_statistic_ext
+WHERE stxnamespace IN (
+	SELECT oid
+	FROM pg_namespace
+	WHERE nspname IN ('statistics''TestTarget')
+)
+ORDER BY stxstattarget, stxrelid::regclass ASC;
+ stxstattarget |             stxrelid
+---------------------------------------------------------------------
+            -1 | "statistics'TestTarget".t1_980000
+            -1 | "statistics'TestTarget".t1_980002
+            -1 | "statistics'TestTarget".t1_980004
+            -1 | "statistics'TestTarget".t1_980006
+            -1 | "statistics'TestTarget".t1_980008
+            -1 | "statistics'TestTarget".t1_980010
+            -1 | "statistics'TestTarget".t1_980012
+            -1 | "statistics'TestTarget".t1_980014
+            -1 | "statistics'TestTarget".t1_980016
+            -1 | "statistics'TestTarget".t1_980018
+            -1 | "statistics'TestTarget".t1_980020
+            -1 | "statistics'TestTarget".t1_980022
+            -1 | "statistics'TestTarget".t1_980024
+            -1 | "statistics'TestTarget".t1_980026
+            -1 | "statistics'TestTarget".t1_980028
+            -1 | "statistics'TestTarget".t1_980030
+             3 | "statistics'TestTarget".t1_980000
+             3 | "statistics'TestTarget".t1_980002
+             3 | "statistics'TestTarget".t1_980004
+             3 | "statistics'TestTarget".t1_980006
+             3 | "statistics'TestTarget".t1_980008
+             3 | "statistics'TestTarget".t1_980010
+             3 | "statistics'TestTarget".t1_980012
+             3 | "statistics'TestTarget".t1_980014
+             3 | "statistics'TestTarget".t1_980016
+             3 | "statistics'TestTarget".t1_980018
+             3 | "statistics'TestTarget".t1_980020
+             3 | "statistics'TestTarget".t1_980022
+             3 | "statistics'TestTarget".t1_980024
+             3 | "statistics'TestTarget".t1_980026
+             3 | "statistics'TestTarget".t1_980028
+             3 | "statistics'TestTarget".t1_980030
+            46 | "statistics'TestTarget".t1_980000
+            46 | "statistics'TestTarget".t1_980002
+            46 | "statistics'TestTarget".t1_980004
+            46 | "statistics'TestTarget".t1_980006
+            46 | "statistics'TestTarget".t1_980008
+            46 | "statistics'TestTarget".t1_980010
+            46 | "statistics'TestTarget".t1_980012
+            46 | "statistics'TestTarget".t1_980014
+            46 | "statistics'TestTarget".t1_980016
+            46 | "statistics'TestTarget".t1_980018
+            46 | "statistics'TestTarget".t1_980020
+            46 | "statistics'TestTarget".t1_980022
+            46 | "statistics'TestTarget".t1_980024
+            46 | "statistics'TestTarget".t1_980026
+            46 | "statistics'TestTarget".t1_980028
+            46 | "statistics'TestTarget".t1_980030
+         10000 | "statistics'TestTarget".t1_980000
+         10000 | "statistics'TestTarget".t1_980002
+         10000 | "statistics'TestTarget".t1_980004
+         10000 | "statistics'TestTarget".t1_980006
+         10000 | "statistics'TestTarget".t1_980008
+         10000 | "statistics'TestTarget".t1_980010
+         10000 | "statistics'TestTarget".t1_980012
+         10000 | "statistics'TestTarget".t1_980014
+         10000 | "statistics'TestTarget".t1_980016
+         10000 | "statistics'TestTarget".t1_980018
+         10000 | "statistics'TestTarget".t1_980020
+         10000 | "statistics'TestTarget".t1_980022
+         10000 | "statistics'TestTarget".t1_980024
+         10000 | "statistics'TestTarget".t1_980026
+         10000 | "statistics'TestTarget".t1_980028
+         10000 | "statistics'TestTarget".t1_980030
+(64 rows)
+
+\c - - - :master_port
+SET client_min_messages TO WARNING;
+DROP SCHEMA "statistics'TestTarget" CASCADE;

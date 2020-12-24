@@ -57,6 +57,24 @@ DROP STATISTICS IF EXISTS s3, sc2.s4, s6;
 DROP STATISTICS s5,s6;
 DROP STATISTICS IF EXISTS s5,s5,s6,s6;
 
+-- test renaming statistics
+CREATE STATISTICS s6 ON a,b FROM test_stats4;
+DROP STATISTICS s7;
+ALTER STATISTICS s6 RENAME TO s7;
+ALTER STATISTICS sc1.st1 RENAME TO st1_new;
+
+-- test altering stats schema
+CREATE SCHEMA test_alter_schema;
+ALTER STATISTICS s7 SET SCHEMA test_alter_schema;
+
+-- test alter owner
+ALTER STATISTICS sc2."neW'Stat" OWNER TO pg_monitor;
+-- test alter owner before distribution
+CREATE TABLE ownertest(a int, b int);
+CREATE STATISTICS sc1.s9 ON a,b FROM ownertest;
+ALTER STATISTICS sc1.s9 OWNER TO pg_signal_backend;
+SELECT create_distributed_table('ownertest','a');
+
 \c - - - :worker_1_port
 SELECT stxname
 FROM pg_statistic_ext
@@ -75,8 +93,17 @@ WHERE stxnamespace IN (
 	WHERE nspname IN ('public', 'statistics''Test', 'sc1', 'sc2')
 );
 
+SELECT COUNT(DISTINCT stxowner)
+FROM pg_statistic_ext
+WHERE stxnamespace IN (
+	SELECT oid
+	FROM pg_namespace
+	WHERE nspname IN ('public', 'statistics''Test', 'sc1', 'sc2')
+);
+
 \c - - - :master_port
 SET client_min_messages TO WARNING;
 DROP SCHEMA "statistics'Test" CASCADE;
+DROP SCHEMA test_alter_schema CASCADE;
 DROP SCHEMA sc1 CASCADE;
 DROP SCHEMA sc2 CASCADE;

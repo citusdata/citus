@@ -14,6 +14,7 @@
 
 #include "distributed/commands.h"
 #include "distributed/deparser.h"
+#include "distributed/pg_version_constants.h"
 
 static DistributeObjectOps NoDistributeOps = {
 	.deparse = NULL,
@@ -414,10 +415,40 @@ static DistributeObjectOps Schema_Rename = {
 	.postprocess = NULL,
 	.address = AlterSchemaRenameStmtObjectAddress,
 };
+#if PG_VERSION_NUM >= PG_VERSION_13
+static DistributeObjectOps Statistics_Alter = {
+	.deparse = DeparseAlterStatisticsStmt,
+	.qualify = QualifyAlterStatisticsStmt,
+	.preprocess = PreprocessAlterStatisticsStmt,
+	.postprocess = NULL,
+	.address = NULL,
+};
+#endif
+static DistributeObjectOps Statistics_AlterObjectSchema = {
+	.deparse = DeparseAlterStatisticsSchemaStmt,
+	.qualify = QualifyAlterStatisticsSchemaStmt,
+	.preprocess = PreprocessAlterStatisticsSchemaStmt,
+	.postprocess = PostprocessAlterStatisticsSchemaStmt,
+	.address = AlterStatisticsSchemaStmtObjectAddress,
+};
+static DistributeObjectOps Statistics_AlterOwner = {
+	.deparse = DeparseAlterStatisticsOwnerStmt,
+	.qualify = QualifyAlterStatisticsOwnerStmt,
+	.preprocess = PreprocessAlterStatisticsOwnerStmt,
+	.postprocess = NULL,
+	.address = NULL,
+};
 static DistributeObjectOps Statistics_Drop = {
 	.deparse = NULL,
 	.qualify = QualifyDropStatisticsStmt,
 	.preprocess = PreprocessDropStatisticsStmt,
+	.postprocess = NULL,
+	.address = NULL,
+};
+static DistributeObjectOps Statistics_Rename = {
+	.deparse = DeparseAlterStatisticsRenameStmt,
+	.qualify = QualifyAlterStatisticsRenameStmt,
+	.preprocess = PreprocessAlterStatisticsRenameStmt,
 	.postprocess = NULL,
 	.address = NULL,
 };
@@ -590,6 +621,11 @@ GetDistributeObjectOps(Node *node)
 					return &Routine_AlterObjectSchema;
 				}
 
+				case OBJECT_STATISTIC_EXT:
+				{
+					return &Statistics_AlterObjectSchema;
+				}
+
 				case OBJECT_TABLE:
 				{
 					return &Table_AlterObjectSchema;
@@ -637,6 +673,11 @@ GetDistributeObjectOps(Node *node)
 					return &Routine_AlterOwner;
 				}
 
+				case OBJECT_STATISTIC_EXT:
+				{
+					return &Statistics_AlterOwner;
+				}
+
 				case OBJECT_TYPE:
 				{
 					return &Type_AlterOwner;
@@ -664,6 +705,13 @@ GetDistributeObjectOps(Node *node)
 			return &Any_AlterRoleSet;
 		}
 
+#if PG_VERSION_NUM >= PG_VERSION_13
+		case T_AlterStatsStmt:
+		{
+			return &Statistics_Alter;
+		}
+
+#endif
 		case T_AlterTableStmt:
 		{
 			AlterTableStmt *stmt = castNode(AlterTableStmt, node);
@@ -905,6 +953,11 @@ GetDistributeObjectOps(Node *node)
 				case OBJECT_SCHEMA:
 				{
 					return &Schema_Rename;
+				}
+
+				case OBJECT_STATISTIC_EXT:
+				{
+					return &Statistics_Rename;
 				}
 
 				case OBJECT_TYPE:

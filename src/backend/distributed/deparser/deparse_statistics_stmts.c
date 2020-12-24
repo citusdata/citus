@@ -22,6 +22,12 @@
 
 static void AppendCreateStatisticsStmt(StringInfo buf, CreateStatsStmt *stmt);
 static void AppendDropStatisticsStmt(StringInfo buf, List *nameList, bool ifExists);
+static void AppendAlterStatisticsRenameStmt(StringInfo buf, RenameStmt *stmt);
+static void AppendAlterStatisticsSchemaStmt(StringInfo buf, AlterObjectSchemaStmt *stmt);
+#if PG_VERSION_NUM >= PG_VERSION_13
+static void AppendAlterStatisticsStmt(StringInfo buf, AlterStatsStmt *stmt);
+#endif
+static void AppendAlterStatisticsOwnerStmt(StringInfo buf, AlterOwnerStmt *stmt);
 static void AppendStatisticsName(StringInfo buf, CreateStatsStmt *stmt);
 static void AppendStatTypes(StringInfo buf, CreateStatsStmt *stmt);
 static void AppendColumnNames(StringInfo buf, CreateStatsStmt *stmt);
@@ -53,6 +59,65 @@ DeparseDropStatisticsStmt(List *nameList, bool ifExists)
 }
 
 
+char *
+DeparseAlterStatisticsRenameStmt(Node *node)
+{
+	RenameStmt *stmt = castNode(RenameStmt, node);
+
+	StringInfoData str;
+	initStringInfo(&str);
+
+	AppendAlterStatisticsRenameStmt(&str, stmt);
+
+	return str.data;
+}
+
+
+char *
+DeparseAlterStatisticsSchemaStmt(Node *node)
+{
+	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
+
+	StringInfoData str;
+	initStringInfo(&str);
+
+	AppendAlterStatisticsSchemaStmt(&str, stmt);
+
+	return str.data;
+}
+
+
+#if PG_VERSION_NUM >= PG_VERSION_13
+char *
+DeparseAlterStatisticsStmt(Node *node)
+{
+	AlterStatsStmt *stmt = castNode(AlterStatsStmt, node);
+
+	StringInfoData str;
+	initStringInfo(&str);
+
+	AppendAlterStatisticsStmt(&str, stmt);
+
+	return str.data;
+}
+
+
+#endif
+char *
+DeparseAlterStatisticsOwnerStmt(Node *node)
+{
+	AlterOwnerStmt *stmt = castNode(AlterOwnerStmt, node);
+	Assert(stmt->objectType == OBJECT_STATISTIC_EXT);
+
+	StringInfoData str;
+	initStringInfo(&str);
+
+	AppendAlterStatisticsOwnerStmt(&str, stmt);
+
+	return str.data;
+}
+
+
 static void
 AppendCreateStatisticsStmt(StringInfo buf, CreateStatsStmt *stmt)
 {
@@ -74,8 +139,6 @@ AppendCreateStatisticsStmt(StringInfo buf, CreateStatsStmt *stmt)
 	appendStringInfoString(buf, " FROM ");
 
 	AppendTableName(buf, stmt);
-
-	appendStringInfoString(buf, ";");
 }
 
 
@@ -90,6 +153,44 @@ AppendDropStatisticsStmt(StringInfo buf, List *nameList, bool ifExists)
 	}
 
 	appendStringInfo(buf, "%s", NameListToQuotedString(nameList));
+}
+
+
+static void
+AppendAlterStatisticsRenameStmt(StringInfo buf, RenameStmt *stmt)
+{
+	appendStringInfo(buf, "ALTER STATISTICS %s RENAME TO %s",
+					 NameListToQuotedString((List *) stmt->object), quote_identifier(
+						 stmt->newname));
+}
+
+
+static void
+AppendAlterStatisticsSchemaStmt(StringInfo buf, AlterObjectSchemaStmt *stmt)
+{
+	appendStringInfo(buf, "ALTER STATISTICS %s SET SCHEMA %s",
+					 NameListToQuotedString((List *) stmt->object), quote_identifier(
+						 stmt->newschema));
+}
+
+
+#if PG_VERSION_NUM >= PG_VERSION_13
+static void
+AppendAlterStatisticsStmt(StringInfo buf, AlterStatsStmt *stmt)
+{
+	appendStringInfo(buf, "ALTER STATISTICS %s SET STATISTICS %d", NameListToQuotedString(
+						 stmt->defnames), stmt->stxstattarget);
+}
+
+
+#endif
+static void
+AppendAlterStatisticsOwnerStmt(StringInfo buf, AlterOwnerStmt *stmt)
+{
+	List *names = (List *) stmt->object;
+	appendStringInfo(buf, "ALTER STATISTICS %s OWNER TO %s",
+					 NameListToQuotedString(names),
+					 RoleSpecString(stmt->newowner, true));
 }
 
 

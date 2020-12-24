@@ -78,3 +78,89 @@ QualifyDropStatisticsStmt(Node *node)
 
 	dropStatisticsStmt->objects = objectNameListWithSchema;
 }
+
+
+/*
+ * QualifyAlterStatisticsRenameStmt qualifies RenameStmt's with schema name for
+ * ALTER STATISTICS RENAME statements.
+ */
+void
+QualifyAlterStatisticsRenameStmt(Node *node)
+{
+	RenameStmt *renameStmt = castNode(RenameStmt, node);
+	Assert(renameStmt->renameType == OBJECT_STATISTIC_EXT);
+
+	List *nameList = (List *) renameStmt->object;
+	if (list_length(nameList) == 1)
+	{
+		RangeVar *stat = makeRangeVarFromNameList(nameList);
+		Oid schemaOid = RangeVarGetCreationNamespace(stat);
+		stat->schemaname = get_namespace_name(schemaOid);
+		renameStmt->object = (Node *) MakeNameListFromRangeVar(stat);
+	}
+}
+
+
+/*
+ * QualifyAlterStatisticsSchemaStmt qualifies AlterObjectSchemaStmt's with schema name for
+ * ALTER STATISTICS RENAME statements.
+ */
+void
+QualifyAlterStatisticsSchemaStmt(Node *node)
+{
+	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
+	Assert(stmt->objectType == OBJECT_STATISTIC_EXT);
+
+	List *nameList = (List *) stmt->object;
+	if (list_length(nameList) == 1)
+	{
+		RangeVar *stat = makeRangeVarFromNameList(nameList);
+		Oid schemaOid = RangeVarGetCreationNamespace(stat);
+		stat->schemaname = get_namespace_name(schemaOid);
+		stmt->object = (Node *) MakeNameListFromRangeVar(stat);
+	}
+}
+
+
+#if PG_VERSION_NUM >= PG_VERSION_13
+
+/*
+ * QualifyAlterStatisticsStmt qualifies AlterStatsStmt's with schema name for
+ * ALTER STATISTICS .. SET STATISTICS statements.
+ */
+void
+QualifyAlterStatisticsStmt(Node *node)
+{
+	AlterStatsStmt *stmt = castNode(AlterStatsStmt, node);
+
+	if (list_length(stmt->defnames) == 1)
+	{
+		RangeVar *stat = makeRangeVarFromNameList(stmt->defnames);
+		Oid schemaOid = RangeVarGetCreationNamespace(stat);
+		stat->schemaname = get_namespace_name(schemaOid);
+		stmt->defnames = MakeNameListFromRangeVar(stat);
+	}
+}
+
+
+#endif
+
+/*
+ * QualifyAlterStatisticsStmt qualifies AlterOwnerStmt's with schema name for
+ * ALTER STATISTICS .. OWNER TO statements.
+ */
+void
+QualifyAlterStatisticsOwnerStmt(Node *node)
+{
+	AlterOwnerStmt *stmt = castNode(AlterOwnerStmt, node);
+	Assert(stmt->objectType == OBJECT_STATISTIC_EXT);
+
+	List *nameList = (List *) stmt->object;
+	if (list_length(nameList) == 1)
+	{
+		RangeVar *stat = makeRangeVarFromNameList(nameList);
+		Oid schemaOid = RangeVarGetCreationNamespace(stat);
+		stat->schemaname = get_namespace_name(schemaOid);
+		stmt->object = (Node *) MakeNameListFromRangeVar(stat);
+	}
+}
