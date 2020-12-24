@@ -45,7 +45,9 @@
 
 static List * GetExplicitStatisticsIdList(Oid relationId);
 static Oid GetRelIdByStatsOid(Oid statsOid);
-
+#if PG_VERSION_NUM >= PG_VERSION_13
+static char * CreateAlterCommandIfTargetNotDefault(Oid statsOid);
+#endif
 
 /*
  * PreprocessCreateStatisticsStmt is called during the planning phase for
@@ -311,7 +313,7 @@ AlterStatisticsSchemaStmtObjectAddress(Node *node, bool missingOk)
 	ObjectAddress address = { 0 };
 	Value *statName = llast((List *) stmt->object);
 	Oid statsOid = get_statistics_object_oid(list_make2(makeString(stmt->newschema),
-														statName), false);
+														statName), missingOk);
 	ObjectAddressSet(address, StatisticExtRelationId, statsOid);
 
 	return address;
@@ -406,6 +408,7 @@ List *
 GetExplicitStatisticsCommandList(Oid relationId)
 {
 	List *createStatisticsCommandList = NIL;
+	List *alterStatisticsCommandList = NIL;
 
 	PushOverrideEmptySearchPath(CurrentMemoryContext);
 
@@ -420,10 +423,24 @@ GetExplicitStatisticsCommandList(Oid relationId)
 		createStatisticsCommandList = lappend(
 			createStatisticsCommandList,
 			makeTableDDLCommandString(createStatisticsCommand));
+#if PG_VERSION_NUM >= PG_VERSION_13
+		char *alterStatisticsTargetCommand = CreateAlterCommandIfTargetNotDefault(
+			statisticsId);
+
+		if (alterStatisticsTargetCommand != NULL)
+		{
+			alterStatisticsCommandList = lappend(alterStatisticsCommandList,
+												 makeTableDDLCommandString(
+													 alterStatisticsTargetCommand));
+		}
+#endif
 	}
 
 	/* revert back to original search_path */
 	PopOverrideSearchPath();
+
+	createStatisticsCommandList = list_concat(createStatisticsCommandList,
+											  alterStatisticsCommandList);
 
 	return createStatisticsCommandList;
 }
@@ -540,3 +557,45 @@ GetRelIdByStatsOid(Oid statsOid)
 
 	return statisticsForm->stxrelid;
 }
+
+
+#if PG_VERSION_NUM >= PG_VERSION_13
+
+/*
+ * CreateAlterCommandIfTargetNotDefault returns an ALTER STATISTICS .. SET STATISTICS
+ * command if the stats object with given id has a target different than the default one.
+ * Returns NULL otherwise.
+ */
+static char *
+CreateAlterCommandIfTargetNotDefault(Oid statsOid)
+{
+	HeapTuple tup = SearchSysCache1(STATEXTOID, ObjectIdGetDatum(statsOid));
+
+	if (!HeapTupleIsValid(tup))
+	{
+		ereport(WARNING, (errmsg("No stats object found with id: %u", statsOid)));
+		return NULL;
+	}
+
+	Form_pg_statistic_ext statisticsForm = (Form_pg_statistic_ext) GETSTRUCT(tup);
+	ReleaseSysCache(tup);
+
+	if (statisticsForm->stxstattarget == -1)
+	{
+		return NULL;
+	}
+
+	AlterStatsStmt *alterStatsStmt = palloc0(sizeof(AlterStatsStmt));
+
+	char *schemaName = get_namespace_name(statisticsForm->stxnamespace);
+	char *statName = NameStr(statisticsForm->stxname);
+
+	alterStatsStmt->type = T_AlterStatsStmt;
+	alterStatsStmt->stxstattarget = statisticsForm->stxstattarget;
+	alterStatsStmt->defnames = list_make2(makeString(schemaName), makeString(statName));
+
+	return DeparseAlterStatisticsStmt((Node *) alterStatsStmt);
+}
+
+
+#endif

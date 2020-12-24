@@ -75,15 +75,27 @@ CREATE STATISTICS s6 ON a,b FROM test_stats4;
 DROP STATISTICS s7;
 ERROR:  statistics object "statistics'Test.s7" does not exist
 ALTER STATISTICS s6 RENAME TO s7;
+ALTER STATISTICS sc1.st1 RENAME TO st1_new;
 -- test altering stats schema
 CREATE SCHEMA test_alter_schema;
 ALTER STATISTICS s7 SET SCHEMA test_alter_schema;
-DROP STATISTICS test_alter_schema.s7;
 -- test altering stats target
 ALTER STATISTICS s1 SET STATISTICS 3;
 -- since max value for target is 10000, this will automatically be lowered
 ALTER STATISTICS s2 SET STATISTICS 999999;
 WARNING:  lowering statistics target to 10000
+-- test alter target before distribution
+CREATE TABLE targettable(a int, b int);
+CREATE STATISTICS s8 ON a,b FROM targettable;
+ALTER STATISTICS s8 SET STATISTICS 46;
+SELECT create_distributed_table('targettable', 'b');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- test alter owner
+ALTER STATISTICS s8 OWNER TO pg_monitor;
 \c - - - :worker_1_port
 SELECT stxname
 FROM pg_statistic_ext
@@ -143,23 +155,39 @@ ORDER BY stxname ASC;
  s2_980058
  s2_980060
  s2_980062
- st1_980064
- st1_980066
- st1_980068
- st1_980070
- st1_980072
- st1_980074
- st1_980076
- st1_980078
- st1_980080
- st1_980082
- st1_980084
- st1_980086
- st1_980088
- st1_980090
- st1_980092
- st1_980094
-(64 rows)
+ s8_980129
+ s8_980131
+ s8_980133
+ s8_980135
+ s8_980137
+ s8_980139
+ s8_980141
+ s8_980143
+ s8_980145
+ s8_980147
+ s8_980149
+ s8_980151
+ s8_980153
+ s8_980155
+ s8_980157
+ s8_980159
+ st1_new_980064
+ st1_new_980066
+ st1_new_980068
+ st1_new_980070
+ st1_new_980072
+ st1_new_980074
+ st1_new_980076
+ st1_new_980078
+ st1_new_980080
+ st1_new_980082
+ st1_new_980084
+ st1_new_980086
+ st1_new_980088
+ st1_new_980090
+ st1_new_980092
+ st1_new_980094
+(80 rows)
 
 SELECT count(DISTINCT stxnamespace)
 FROM pg_statistic_ext
@@ -231,6 +259,22 @@ ORDER BY stxstattarget ASC;
              3
              3
              3
+            46
+            46
+            46
+            46
+            46
+            46
+            46
+            46
+            46
+            46
+            46
+            46
+            46
+            46
+            46
+            46
          10000
          10000
          10000
@@ -247,7 +291,13 @@ ORDER BY stxstattarget ASC;
          10000
          10000
          10000
-(64 rows)
+(80 rows)
+
+SELECT COUNT(DISTINCT stxowner) FROM pg_statistic_ext;
+ count
+---------------------------------------------------------------------
+     2
+(1 row)
 
 \c - - - :master_port
 SET client_min_messages TO WARNING;

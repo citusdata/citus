@@ -188,7 +188,7 @@ static void
 AppendAlterStatisticsOwnerStmt(StringInfo buf, AlterOwnerStmt *stmt)
 {
 	List *names = (List *) stmt->object;
-	appendStringInfo(buf, "ALTER STATISTICS %s OWNER TO %s;", NameListToQuotedString(
+	appendStringInfo(buf, "ALTER STATISTICS %s OWNER TO %s", NameListToQuotedString(
 						 names),
 					 RoleSpecString(stmt->newowner, true));
 }

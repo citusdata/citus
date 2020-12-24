@@ -223,7 +223,6 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 			RangeVar *stat = makeRangeVarFromNameList((List *) alterOwnerStmt->object);
 
 			AppendShardIdToName(&stat->relname, shardId);
-			SetSchemaNameIfNotExist(&stat->schemaname, schemaName);
 
 			alterOwnerStmt->object = (Node *) MakeNameListFromRangeVar(stat);
 
