@@ -154,7 +154,9 @@ static List *
 GetRelationshipNodesForFKeyConnectedRelations(
 	ForeignConstraintRelationshipNode *relationshipNode)
 {
-	relationshipNode->visited = true;
+	HTAB *oidVisitedMap = CreateOidVisitedHashSet();
+
+	VisitOid(oidVisitedMap, relationshipNode->relationId);
 	List *relationshipNodeList = list_make1(relationshipNode);
 
 	ForeignConstraintRelationshipNode *currentNode = NULL;
@@ -164,12 +166,13 @@ GetRelationshipNodesForFKeyConnectedRelations(
 		ForeignConstraintRelationshipNode *neighbourNode = NULL;
 		foreach_ptr(neighbourNode, allNeighboursList)
 		{
-			if (neighbourNode->visited)
+			Oid neighbourRelationId = neighbourNode->relationId;
+			if (OidVisited(oidVisitedMap, neighbourRelationId))
 			{
 				continue;
 			}
 
-			neighbourNode->visited = true;
+			VisitOid(oidVisitedMap, neighbourRelationId);
 			relationshipNodeList = lappend(relationshipNodeList, neighbourNode);
 		}
 	}
