@@ -326,7 +326,6 @@ CreateOidVisitedHashSet(void)
 	/* we don't have value field as it's a set */
 	info.entrysize = info.keysize;
 
-	/* TODO: HASH_FUNCTION needed ? */
 	uint32 hashFlags = (HASH_ELEM | HASH_FUNCTION | HASH_CONTEXT);
 
 	HTAB *oidVisitedMap = hash_create("oid visited hash map", 32, &info, hashFlags);
