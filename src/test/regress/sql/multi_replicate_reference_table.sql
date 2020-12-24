@@ -235,11 +235,6 @@ SELECT create_reference_table('replicate_reference_table_reference_one');
 SET citus.shard_count TO 1;
 SET citus.shard_replication_factor TO 1;
 SET citus.replication_model TO 'streaming';
-CREATE TABLE replicate_reference_table_hash(column1 int);
-SELECT create_distributed_table('replicate_reference_table_hash', 'column1');
-
--- update replication model to statement-based replication since streaming replicated tables cannot be upgraded to reference tables
-UPDATE pg_dist_partition SET repmodel='c' WHERE logicalrelid='replicate_reference_table_hash'::regclass;
 
 CREATE TABLE replicate_reference_table_reference_two(column1 int);
 
@@ -264,12 +259,11 @@ SELECT
 FROM
     pg_dist_partition
 WHERE
-    logicalrelid IN ('replicate_reference_table_reference_one', 'replicate_reference_table_hash', 'replicate_reference_table_reference_two')
+    logicalrelid IN ('replicate_reference_table_reference_one', 'replicate_reference_table_reference_two')
 ORDER BY logicalrelid;
 
 SET client_min_messages TO WARNING;
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
-SELECT upgrade_to_reference_table('replicate_reference_table_hash');
 SELECT create_reference_table('replicate_reference_table_reference_two');
 RESET client_min_messages;
 
@@ -293,12 +287,11 @@ SELECT
 FROM
     pg_dist_partition
 WHERE
-    logicalrelid IN ('replicate_reference_table_reference_one', 'replicate_reference_table_hash', 'replicate_reference_table_reference_two')
+    logicalrelid IN ('replicate_reference_table_reference_one', 'replicate_reference_table_reference_two')
 ORDER BY
 	logicalrelid;
 
 DROP TABLE replicate_reference_table_reference_one;
-DROP TABLE replicate_reference_table_hash;
 DROP TABLE replicate_reference_table_reference_two;
 
 
