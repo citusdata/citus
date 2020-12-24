@@ -177,9 +177,6 @@ GetRelationshipNodesForFKeyConnectedRelations(
 		}
 	}
 
-	/* reset visited flags in foreign key graph */
-	SetRelationshipNodeListNotVisited(relationshipNodeList);
-
 	return relationshipNodeList;
 }
 
