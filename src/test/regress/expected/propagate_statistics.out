@@ -79,23 +79,18 @@ ALTER STATISTICS sc1.st1 RENAME TO st1_new;
 -- test altering stats schema
 CREATE SCHEMA test_alter_schema;
 ALTER STATISTICS s7 SET SCHEMA test_alter_schema;
--- test altering stats target
-ALTER STATISTICS s1 SET STATISTICS 3;
--- since max value for target is 10000, this will automatically be lowered
-ALTER STATISTICS s2 SET STATISTICS 999999;
-WARNING:  lowering statistics target to 10000
--- test alter target before distribution
-CREATE TABLE targettable(a int, b int);
-CREATE STATISTICS s8 ON a,b FROM targettable;
-ALTER STATISTICS s8 SET STATISTICS 46;
-SELECT create_distributed_table('targettable', 'b');
+-- test alter owner
+ALTER STATISTICS sc2."neW'Stat" OWNER TO pg_monitor;
+-- test alter owner before distribution
+CREATE TABLE ownertest(a int, b int);
+CREATE STATISTICS sc1.s9 ON a,b FROM ownertest;
+ALTER STATISTICS sc1.s9 OWNER TO pg_signal_backend;
+SELECT create_distributed_table('ownertest','a');
  create_distributed_table
 ---------------------------------------------------------------------
 
 (1 row)
 
--- test alter owner
-ALTER STATISTICS s8 OWNER TO pg_monitor;
 \c - - - :worker_1_port
 SELECT stxname
 FROM pg_statistic_ext
@@ -155,22 +150,22 @@ ORDER BY stxname ASC;
  s2_980058
  s2_980060
  s2_980062
- s8_980129
- s8_980131
- s8_980133
- s8_980135
- s8_980137
- s8_980139
- s8_980141
- s8_980143
- s8_980145
- s8_980147
- s8_980149
- s8_980151
- s8_980153
- s8_980155
- s8_980157
- s8_980159
+ s9_980129
+ s9_980131
+ s9_980133
+ s9_980135
+ s9_980137
+ s9_980139
+ s9_980141
+ s9_980143
+ s9_980145
+ s9_980147
+ s9_980149
+ s9_980151
+ s9_980153
+ s9_980155
+ s9_980157
+ s9_980159
  st1_new_980064
  st1_new_980066
  st1_new_980068
@@ -201,102 +196,16 @@ WHERE stxnamespace IN (
      3
 (1 row)
 
-SELECT stxstattarget
+SELECT COUNT(DISTINCT stxowner)
 FROM pg_statistic_ext
 WHERE stxnamespace IN (
 	SELECT oid
 	FROM pg_namespace
 	WHERE nspname IN ('public', 'statistics''Test', 'sc1', 'sc2')
-)
-ORDER BY stxstattarget ASC;
- stxstattarget
----------------------------------------------------------------------
-            -1
-            -1
-            -1
-            -1
-            -1
-            -1
-            -1
-            -1
-            -1
-            -1
-            -1
-            -1
-            -1
-            -1
-            -1
-            -1
-            -1
-            -1
-            -1
-            -1
-            -1
-            -1
-            -1
-            -1
-            -1
-            -1
-            -1
-            -1
-            -1
-            -1
-            -1
-            -1
-             3
-             3
-             3
-             3
-             3
-             3
-             3
-             3
-             3
-             3
-             3
-             3
-             3
-             3
-             3
-             3
-            46
-            46
-            46
-            46
-            46
-            46
-            46
-            46
-            46
-            46
-            46
-            46
-            46
-            46
-            46
-            46
-         10000
-         10000
-         10000
-         10000
-         10000
-         10000
-         10000
-         10000
-         10000
-         10000
-         10000
-         10000
-         10000
-         10000
-         10000
-         10000
-(80 rows)
-
-SELECT COUNT(DISTINCT stxowner) FROM pg_statistic_ext;
+);
  count
 ---------------------------------------------------------------------
-     2
+     3
 (1 row)
 
 \c - - - :master_port

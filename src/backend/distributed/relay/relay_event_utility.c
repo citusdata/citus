@@ -89,8 +89,7 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 				RangeVar *stat = makeRangeVarFromNameList(
 					(List *) alterObjectSchemaStmt->object);
 
-				/* set schema name and append shard id */
-				SetSchemaNameIfNotExist(&stat->schemaname, schemaName);
+				/* append shard id */
 				AppendShardIdToName(&stat->relname, shardId);
 
 				alterObjectSchemaStmt->object = (Node *) MakeNameListFromRangeVar(stat);
@@ -118,7 +117,6 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 			RangeVar *stat = makeRangeVarFromNameList(alterStatsStmt->defnames);
 
 			AppendShardIdToName(&stat->relname, shardId);
-			SetSchemaNameIfNotExist(&stat->schemaname, schemaName);
 
 			alterStatsStmt->defnames = MakeNameListFromRangeVar(stat);
 

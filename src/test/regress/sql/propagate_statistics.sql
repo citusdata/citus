@@ -67,18 +67,13 @@ ALTER STATISTICS sc1.st1 RENAME TO st1_new;
 CREATE SCHEMA test_alter_schema;
 ALTER STATISTICS s7 SET SCHEMA test_alter_schema;
 
--- test altering stats target
-ALTER STATISTICS s1 SET STATISTICS 3;
--- since max value for target is 10000, this will automatically be lowered
-ALTER STATISTICS s2 SET STATISTICS 999999;
--- test alter target before distribution
-CREATE TABLE targettable(a int, b int);
-CREATE STATISTICS s8 ON a,b FROM targettable;
-ALTER STATISTICS s8 SET STATISTICS 46;
-SELECT create_distributed_table('targettable', 'b');
-
 -- test alter owner
-ALTER STATISTICS s8 OWNER TO pg_monitor;
+ALTER STATISTICS sc2."neW'Stat" OWNER TO pg_monitor;
+-- test alter owner before distribution
+CREATE TABLE ownertest(a int, b int);
+CREATE STATISTICS sc1.s9 ON a,b FROM ownertest;
+ALTER STATISTICS sc1.s9 OWNER TO pg_signal_backend;
+SELECT create_distributed_table('ownertest','a');
 
 \c - - - :worker_1_port
 SELECT stxname
@@ -98,16 +93,13 @@ WHERE stxnamespace IN (
 	WHERE nspname IN ('public', 'statistics''Test', 'sc1', 'sc2')
 );
 
-SELECT stxstattarget
+SELECT COUNT(DISTINCT stxowner)
 FROM pg_statistic_ext
 WHERE stxnamespace IN (
 	SELECT oid
 	FROM pg_namespace
 	WHERE nspname IN ('public', 'statistics''Test', 'sc1', 'sc2')
-)
-ORDER BY stxstattarget ASC;
-
-SELECT COUNT(DISTINCT stxowner) FROM pg_statistic_ext;
+);
 
 \c - - - :master_port
 SET client_min_messages TO WARNING;

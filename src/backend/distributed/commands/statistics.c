@@ -37,6 +37,7 @@
 #include "distributed/relation_access_tracking.h"
 #include "distributed/resource_lock.h"
 #include "distributed/worker_transaction.h"
+#include "miscadmin.h"
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
@@ -45,6 +46,7 @@
 
 static List * GetExplicitStatisticsIdList(Oid relationId);
 static Oid GetRelIdByStatsOid(Oid statsOid);
+static char * CreateAlterCommandIfOwnerNotDefault(Oid statsOid);
 #if PG_VERSION_NUM >= PG_VERSION_13
 static char * CreateAlterCommandIfTargetNotDefault(Oid statsOid);
 #endif
@@ -420,20 +422,33 @@ GetExplicitStatisticsCommandList(Oid relationId)
 		char *createStatisticsCommand = pg_get_statisticsobj_worker(statisticsId,
 																	false);
 
-		createStatisticsCommandList = lappend(
-			createStatisticsCommandList,
-			makeTableDDLCommandString(createStatisticsCommand));
+		createStatisticsCommandList =
+			lappend(createStatisticsCommandList,
+					makeTableDDLCommandString(createStatisticsCommand));
 #if PG_VERSION_NUM >= PG_VERSION_13
-		char *alterStatisticsTargetCommand = CreateAlterCommandIfTargetNotDefault(
-			statisticsId);
+
+		/* we need to alter stats' target if it's getting distributed after creation */
+		char *alterStatisticsTargetCommand =
+			CreateAlterCommandIfTargetNotDefault(statisticsId);
 
 		if (alterStatisticsTargetCommand != NULL)
 		{
-			alterStatisticsCommandList = lappend(alterStatisticsCommandList,
-												 makeTableDDLCommandString(
-													 alterStatisticsTargetCommand));
+			alterStatisticsCommandList =
+				lappend(alterStatisticsCommandList,
+						makeTableDDLCommandString(alterStatisticsTargetCommand));
 		}
 #endif
+
+		/* we need to alter stats' owner if it's getting distributed after creation */
+		char *alterStatisticsOwnerCommand =
+			CreateAlterCommandIfOwnerNotDefault(statisticsId);
+
+		if (alterStatisticsOwnerCommand != NULL)
+		{
+			alterStatisticsCommandList =
+				lappend(alterStatisticsCommandList,
+						makeTableDDLCommandString(alterStatisticsOwnerCommand));
+		}
 	}
 
 	/* revert back to original search_path */
@@ -559,6 +574,46 @@ GetRelIdByStatsOid(Oid statsOid)
 }
 
 
+/*
+ * CreateAlterCommandIfOwnerNotDefault returns an ALTER STATISTICS .. OWNER TO
+ * command if the stats object with given id has an owner different than the default one.
+ * Returns NULL otherwise.
+ */
+static char *
+CreateAlterCommandIfOwnerNotDefault(Oid statsOid)
+{
+	HeapTuple tup = SearchSysCache1(STATEXTOID, ObjectIdGetDatum(statsOid));
+
+	if (!HeapTupleIsValid(tup))
+	{
+		ereport(WARNING, (errmsg("No stats object found with id: %u", statsOid)));
+		return NULL;
+	}
+
+	Form_pg_statistic_ext statisticsForm = (Form_pg_statistic_ext) GETSTRUCT(tup);
+	ReleaseSysCache(tup);
+
+	if (statisticsForm->stxowner == GetUserId())
+	{
+		return NULL;
+	}
+
+	char *schemaName = get_namespace_name(statisticsForm->stxnamespace);
+	char *statName = NameStr(statisticsForm->stxname);
+	char *ownerName = GetUserNameFromId(statisticsForm->stxowner, false);
+
+	StringInfoData str;
+	initStringInfo(&str);
+
+	appendStringInfo(&str, "ALTER STATISTICS %s OWNER TO %s",
+					 NameListToQuotedString(list_make2(makeString(schemaName),
+													   makeString(statName))),
+					 quote_identifier(ownerName));
+
+	return str.data;
+}
+
+
 #if PG_VERSION_NUM >= PG_VERSION_13
 
 /*
@@ -585,12 +640,11 @@ CreateAlterCommandIfTargetNotDefault(Oid statsOid)
 		return NULL;
 	}
 
-	AlterStatsStmt *alterStatsStmt = palloc0(sizeof(AlterStatsStmt));
+	AlterStatsStmt *alterStatsStmt = makeNode(AlterStatsStmt);
 
 	char *schemaName = get_namespace_name(statisticsForm->stxnamespace);
 	char *statName = NameStr(statisticsForm->stxname);
 
-	alterStatsStmt->type = T_AlterStatsStmt;
 	alterStatsStmt->stxstattarget = statisticsForm->stxstattarget;
 	alterStatsStmt->defnames = list_make2(makeString(schemaName), makeString(statName));
 
