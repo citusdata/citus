@@ -524,6 +524,24 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 	/*
 	 * Post process for ddl statements
 	 */
+
+	if (IsA(parsetree, CreateStmt))
+	{
+		CreateStmt *createStatement = (CreateStmt *) parsetree;
+
+		PostprocessCreateTableStmt(createStatement, queryString);
+	}
+
+	/*
+	 * Re-forming the foreign key graph relies on the command being executed
+	 * on the local table first. However, in order to decide whether the
+	 * command leads to an invalidation, we need to check before the command
+	 * is being executed since we read pg_constraint table. Thus, we maintain a
+	 * local flag and do the invalidation after multi_ProcessUtility,
+	 * before ExecuteDistributedDDLJob().
+	 */
+	InvalidateForeignKeyGraphForDDL();
+
 	if (EnableDDLPropagation)
 	{
 		if (ops && ops->postprocess)
@@ -545,13 +563,6 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 							 errhint("Connect to worker nodes directly to manually "
 									 "rename the role")));
 		}
-	}
-
-	if (IsA(parsetree, CreateStmt))
-	{
-		CreateStmt *createStatement = (CreateStmt *) parsetree;
-
-		PostprocessCreateTableStmt(createStatement, queryString);
 	}
 
 	/*
@@ -890,16 +901,6 @@ static void
 PostStandardProcessUtility(Node *parsetree)
 {
 	DecrementUtilityHookCountersIfNecessary(parsetree);
-
-	/*
-	 * Re-forming the foreign key graph relies on the command being executed
-	 * on the local table first. However, in order to decide whether the
-	 * command leads to an invalidation, we need to check before the command
-	 * is being executed since we read pg_constraint table. Thus, we maintain a
-	 * local flag and do the invalidation after multi_ProcessUtility,
-	 * before ExecuteDistributedDDLJob().
-	 */
-	InvalidateForeignKeyGraphForDDL();
 }
 
 
