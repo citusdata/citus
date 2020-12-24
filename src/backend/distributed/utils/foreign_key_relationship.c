@@ -35,6 +35,9 @@
 #include "common/hashfn.h"
 #endif
 #include "utils/memutils.h"
+#if PG_VERSION_NUM < PG_VERSION_12
+#include "utils/rel.h"
+#endif
 
 
 /*
@@ -77,6 +80,9 @@ typedef struct ForeignConstraintRelationshipEdge
 
 static ForeignConstraintRelationshipGraph *fConstraintRelationshipGraph = NULL;
 
+static List * GetRelationshipNodesForFKeyConnectedRelations(
+	ForeignConstraintRelationshipNode *relationshipNode);
+static List * GetAllNeighboursList(ForeignConstraintRelationshipNode *relationshipNode);
 static ForeignConstraintRelationshipNode * GetRelationshipNodeForRelationId(Oid
 																			relationId,
 																			bool *isFound);
@@ -96,6 +102,108 @@ static HTAB * CreateOidVisitedHashSet(void);
 static bool OidVisited(HTAB *oidVisitedMap, Oid oid);
 static void VisitOid(HTAB *oidVisitedMap, Oid oid);
 static List * GetForeignConstraintRelationshipHelper(Oid relationId, bool isReferencing);
+
+
+/*
+ * GetForeignKeyConnectedRelationIdList returns a list of relation id's for
+ * relations that are connected to relation with relationId via a foreign
+ * key graph.
+ */
+List *
+GetForeignKeyConnectedRelationIdList(Oid relationId)
+{
+	/* use ShareRowExclusiveLock to prevent concurent foreign key creation */
+	LOCKMODE lockMode = ShareRowExclusiveLock;
+	Relation relation = try_relation_open(relationId, lockMode);
+	if (!RelationIsValid(relation))
+	{
+		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+						errmsg("relation with OID %d does not exist",
+							   relationId)));
+	}
+
+	relation_close(relation, NoLock);
+
+	bool foundInFKeyGraph = false;
+	ForeignConstraintRelationshipNode *relationshipNode =
+		GetRelationshipNodeForRelationId(relationId, &foundInFKeyGraph);
+	if (!foundInFKeyGraph)
+	{
+		/*
+		 * Relation could not be found in foreign key graph, then it has no
+		 * foreign key relationships.
+		 */
+		return NIL;
+	}
+
+	List *fKeyConnectedRelationshipNodeList =
+		GetRelationshipNodesForFKeyConnectedRelations(relationshipNode);
+	List *fKeyConnectedRelationIdList =
+		GetRelationIdsFromRelationshipNodeList(fKeyConnectedRelationshipNodeList);
+	return fKeyConnectedRelationIdList;
+}
+
+
+/*
+ * GetRelationshipNodesForFKeyConnectedRelations performs breadth-first search
+ * starting from input ForeignConstraintRelationshipNode and returns a list
+ * of ForeignConstraintRelationshipNode objects for relations that are connected
+ * to given relation node via a foreign key relationhip graph.
+ */
+static List *
+GetRelationshipNodesForFKeyConnectedRelations(
+	ForeignConstraintRelationshipNode *relationshipNode)
+{
+	HTAB *oidVisitedMap = CreateOidVisitedHashSet();
+
+	VisitOid(oidVisitedMap, relationshipNode->relationId);
+	List *relationshipNodeList = list_make1(relationshipNode);
+
+	ForeignConstraintRelationshipNode *currentNode = NULL;
+	foreach_ptr_append(currentNode, relationshipNodeList)
+	{
+		List *allNeighboursList = GetAllNeighboursList(currentNode);
+		ForeignConstraintRelationshipNode *neighbourNode = NULL;
+		foreach_ptr(neighbourNode, allNeighboursList)
+		{
+			Oid neighbourRelationId = neighbourNode->relationId;
+			if (OidVisited(oidVisitedMap, neighbourRelationId))
+			{
+				continue;
+			}
+
+			VisitOid(oidVisitedMap, neighbourRelationId);
+			relationshipNodeList = lappend(relationshipNodeList, neighbourNode);
+		}
+	}
+
+	return relationshipNodeList;
+}
+
+
+/*
+ * GetAllNeighboursList returns a list of ForeignConstraintRelationshipNode
+ * objects by concatenating both (referencing & referenced) adjacency lists
+ * of given relationship node.
+ */
+static List *
+GetAllNeighboursList(ForeignConstraintRelationshipNode *relationshipNode)
+{
+	bool isReferencing = false;
+	List *referencedNeighboursList = GetNeighbourList(relationshipNode, isReferencing);
+
+	isReferencing = true;
+	List *referencingNeighboursList = GetNeighbourList(relationshipNode, isReferencing);
+
+	/*
+	 * GetNeighbourList returns list from graph as is, so first copy it as
+	 * list_concat might invalidate it.
+	 */
+	List *allNeighboursList = list_copy(referencedNeighboursList);
+	allNeighboursList = list_concat_unique_ptr(allNeighboursList,
+											   referencingNeighboursList);
+	return allNeighboursList;
+}
 
 
 /*
