@@ -27,6 +27,30 @@ CREATE FUNCTION mark_node_readonly(hostname TEXT, port INTEGER, isreadonly BOOLE
                              ARRAY['SELECT pg_reload_conf()'], false);
 $$;
 
+CREATE OR REPLACE FUNCTION trigger_metadata_sync()
+    RETURNS void
+    LANGUAGE C STRICT
+    AS 'citus';
+
+CREATE OR REPLACE FUNCTION raise_error_in_metadata_sync()
+    RETURNS void
+    LANGUAGE C STRICT
+    AS 'citus';
+
+CREATE PROCEDURE wait_until_process_count(appname text, target_count int) AS $$
+declare
+   counter integer := -1;
+begin
+ while counter != target_count loop
+  -- pg_stat_activity is cached at xact level and there is no easy way to clear it.
+  -- Look it up in a new connection to get latest updates.
+  SELECT result::int into counter FROM
+   master_run_on_worker(ARRAY['localhost'], ARRAY[57636], ARRAY[
+      'SELECT count(*) FROM pg_stat_activity WHERE application_name = ' || quote_literal(appname) || ';'], false);
+  PERFORM pg_sleep(0.1);
+ end loop;
+end$$ LANGUAGE plpgsql;
+
 -- add a node to the cluster
 SELECT master_add_node('localhost', :worker_1_port) As nodeid_1 \gset
 SELECT nodeid, nodename, nodeport, hasmetadata, metadatasynced FROM pg_dist_node;
@@ -78,6 +102,54 @@ END;
 -- maintenace daemon metadata sync should fail, because node is still unwriteable.
 SELECT wait_until_metadata_sync(30000);
 SELECT nodeid, hasmetadata, metadatasynced FROM pg_dist_node;
+
+-- verify that metadata sync daemon has started
+SELECT count(*) FROM pg_stat_activity WHERE application_name = 'Citus Metadata Sync Daemon';
+
+--
+-- terminate maintenance daemon, and verify that we don't spawn multiple
+-- metadata sync daemons
+--
+SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE application_name = 'Citus Maintenance Daemon';
+CALL wait_until_process_count('Citus Maintenance Daemon', 1);
+select trigger_metadata_sync();
+select wait_until_metadata_sync();
+SELECT count(*) FROM pg_stat_activity WHERE application_name = 'Citus Metadata Sync Daemon';
+
+--
+-- cancel metadata sync daemon, and verify that it exits and restarts.
+--
+select pid as pid_before_cancel from pg_stat_activity where application_name like 'Citus Met%' \gset
+select pg_cancel_backend(pid) from pg_stat_activity where application_name = 'Citus Metadata Sync Daemon';
+select wait_until_metadata_sync();
+select pid as pid_after_cancel from pg_stat_activity where application_name like 'Citus Met%' \gset
+select :pid_before_cancel != :pid_after_cancel AS metadata_sync_restarted;
+
+--
+-- cancel metadata sync daemon so it exits and restarts, but at the
+-- same time tell maintenanced to trigger a new metadata sync. One
+-- of these should exit to avoid multiple metadata syncs.
+--
+select pg_cancel_backend(pid) from pg_stat_activity where application_name = 'Citus Metadata Sync Daemon';
+select trigger_metadata_sync();
+select wait_until_metadata_sync();
+-- we assume citus.metadata_sync_retry_interval is 500ms. Change amount we sleep to ceiling + 0.2 if it changes.
+select pg_sleep(1.2);
+SELECT count(*) FROM pg_stat_activity WHERE application_name = 'Citus Metadata Sync Daemon';
+
+--
+-- error in metadata sync daemon, and verify it exits and restarts.
+--
+select pid as pid_before_error from pg_stat_activity where application_name like 'Citus Met%' \gset
+select raise_error_in_metadata_sync();
+select wait_until_metadata_sync(30000);
+select pid as pid_after_error from pg_stat_activity where application_name like 'Citus Met%' \gset
+select :pid_before_error != :pid_after_error AS metadata_sync_restarted;
+
+
+SELECT trigger_metadata_sync();
+SELECT wait_until_metadata_sync(30000);
+SELECT count(*) FROM pg_stat_activity WHERE application_name = 'Citus Metadata Sync Daemon';
 
 -- update it back to :worker_1_port, now metadata should be synced
 SELECT 1 FROM master_update_node(:nodeid_1, 'localhost', :worker_1_port);
@@ -248,6 +320,39 @@ SELECT wait_until_metadata_sync(30000);
 SELECT 1 FROM master_activate_node('localhost', :worker_2_port);
 
 SELECT verify_metadata('localhost', :worker_1_port);
+
+-- verify that metadata sync daemon exits
+call wait_until_process_count('Citus Metadata Sync Daemon', 0);
+
+-- verify that DROP DATABASE terminates metadata sync
+SELECT current_database() datname \gset
+CREATE DATABASE db_to_drop;
+SELECT run_command_on_workers('CREATE DATABASE db_to_drop');
+
+\c db_to_drop - - :worker_1_port
+CREATE EXTENSION citus;
+
+\c db_to_drop - - :master_port
+CREATE EXTENSION citus;
+SELECT master_add_node('localhost', :worker_1_port);
+UPDATE pg_dist_node SET hasmetadata = true;
+
+SELECT master_update_node(nodeid, 'localhost', 12345) FROM pg_dist_node;
+
+CREATE OR REPLACE FUNCTION trigger_metadata_sync()
+    RETURNS void
+    LANGUAGE C STRICT
+    AS 'citus';
+
+SELECT trigger_metadata_sync();
+
+\c :datname - - :master_port
+
+SELECT datname FROM pg_stat_activity WHERE application_name LIKE 'Citus Met%';
+
+DROP DATABASE db_to_drop;
+
+SELECT datname FROM pg_stat_activity WHERE application_name LIKE 'Citus Met%';
 
 -- cleanup
 DROP TABLE ref_table;
