@@ -28,6 +28,7 @@
 #include "distributed/listutils.h"
 #include "distributed/coordinator_protocol.h"
 #include "distributed/metadata_sync.h"
+#include "distributed/metadata/dependency.h"
 #include "distributed/multi_executor.h"
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/reference_table_utils.h"
@@ -42,6 +43,9 @@
 #include "utils/syscache.h"
 
 
+typedef bool (*AlterTableCommandFunc)(AlterTableCmd *, Oid);
+
+
 /* Local functions forward declarations for unsupported command checks */
 static void PostprocessCreateTableStmtPartitionOf(CreateStmt *createStatement,
 												  const char *queryString);
@@ -50,6 +54,9 @@ static void ErrorIfAlterTableDefinesFKeyFromPostgresToCitusLocalTable(
 static List * GetAlterTableStmtFKeyConstraintList(AlterTableStmt *alterTableStatement);
 static List * GetAlterTableCommandFKeyConstraintList(AlterTableCmd *command);
 static bool AlterTableCommandTypeIsTrigger(AlterTableType alterTableType);
+static bool AlterTableHasCommandByFunc(AlterTableStmt *alterTableStatement,
+									   AlterTableCommandFunc alterTableCommandFunc);
+static bool AlterTableCmdAddsFKey(AlterTableCmd *command, Oid relationId);
 static void ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement);
 static void ErrorIfCitusLocalTablePartitionCommand(AlterTableCmd *alterTableCmd,
 												   Oid parentRelationId);
@@ -396,6 +403,11 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand)
 	 * tables to citus local tables here.
 	 */
 	ErrorIfAlterTableDefinesFKeyFromPostgresToCitusLocalTable(alterTableStatement);
+
+	if (AlterTableHasCommandByFunc(alterTableStatement, AlterTableCmdAddsFKey))
+	{
+		MarkInvalidateForeignKeyGraph();
+	}
 
 	bool referencingIsLocalTable = !IsCitusTable(leftRelationId);
 	if (referencingIsLocalTable)
@@ -948,17 +960,6 @@ PostprocessAlterTableStmt(AlterTableStmt *alterTableStatement)
 			Assert(list_length(commandList) == 1);
 
 			ErrorIfUnsupportedAlterAddConstraintStmt(alterTableStatement);
-
-			if (!OidIsValid(relationId))
-			{
-				continue;
-			}
-
-			Constraint *constraint = (Constraint *) command->def;
-			if (constraint->contype == CONSTR_FOREIGN)
-			{
-				InvalidateForeignKeyGraph();
-			}
 		}
 		else if (alterTableType == AT_AddColumn)
 		{
@@ -989,6 +990,51 @@ PostprocessAlterTableStmt(AlterTableStmt *alterTableStatement)
 			}
 		}
 	}
+}
+
+
+/*
+ * AlterTableHasCommandByFunc returns true if given alterTableCommandFunc returns
+ * true for any subcommand of alterTableStatement.
+ */
+static bool
+AlterTableHasCommandByFunc(AlterTableStmt *alterTableStatement,
+						   AlterTableCommandFunc alterTableCommandFunc)
+{
+	List *commandList = alterTableStatement->cmds;
+	AlterTableCmd *command = NULL;
+	foreach_ptr(command, commandList)
+	{
+		LOCKMODE lockmode = AlterTableGetLockLevel(alterTableStatement->cmds);
+		Oid relationId = AlterTableLookupRelation(alterTableStatement, lockmode);
+		if (alterTableCommandFunc(command, relationId))
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
+
+/*
+ * AlterTableCmdAddsFKey
+ */
+static bool
+AlterTableCmdAddsFKey(AlterTableCmd *command, Oid relationId)
+{
+	AlterTableType alterTableType = command->subtype;
+
+	if (alterTableType == AT_AddConstraint)
+	{
+		Constraint *constraint = (Constraint *) command->def;
+		if (constraint->contype == CONSTR_FOREIGN)
+		{
+			return true;
+		}
+	}
+
+	return false;
 }
 
 
