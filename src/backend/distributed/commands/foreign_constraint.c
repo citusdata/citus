@@ -484,6 +484,21 @@ ForeignConstraintFindDistKeys(HeapTuple pgConstraintTuple,
 
 
 /*
+ * ColumnAppearsInForeignKey returns true if there is a foreign key constraint
+ * from/to given column.
+ */
+bool
+ColumnAppearsInForeignKey(char *columnName, Oid relationId)
+{
+	int searchForeignKeyColumnFlags = SEARCH_REFERENCING_RELATION |
+									  SEARCH_REFERENCED_RELATION;
+	List *foreignKeyIdsColumnAppeared =
+		GetForeignKeyIdsForColumn(columnName, relationId, searchForeignKeyColumnFlags);
+	return list_length(foreignKeyIdsColumnAppeared) > 0;
+}
+
+
+/*
  * ColumnAppearsInForeignKeyToReferenceTable checks if there is a foreign key
  * constraint from/to any reference table on the given column.
  */

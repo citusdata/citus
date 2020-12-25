@@ -1099,6 +1099,17 @@ AlterTableCmdDropsFkey(AlterTableCmd *command, Oid relationId)
 			}
 		}
 	}
+	else if (alterTableType == AT_DropColumn)
+	{
+		char *columnName = command->name;
+		if (ColumnAppearsInForeignKey(columnName, relationId))
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
 
 
 /*

@@ -159,7 +159,7 @@ extern void ErrorIfUnsupportedForeignConstraintExists(Relation relation,
 													  Var *distributionColumn,
 													  uint32 colocationId);
 extern void ErrorOutForFKeyBetweenPostgresAndCitusLocalTable(Oid localTableId);
-extern bool ColumnReferencedByAnyForeignKey(char *columnName, Oid relationId);
+extern bool ColumnAppearsInForeignKey(char *columnName, Oid relationId);
 extern bool ColumnAppearsInForeignKeyToReferenceTable(char *columnName, Oid
 													  relationId);
 extern List * GetReferencingForeignConstaintCommands(Oid relationOid);
