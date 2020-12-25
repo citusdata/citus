@@ -281,7 +281,7 @@ PostprocessAlterTableStmtAttachPartition(AlterTableStmt *alterTableStatement,
 			if (!IsCitusTable(relationId) &&
 				IsCitusTable(partitionRelationId))
 			{
-				char *parentRelationName = get_rel_name(partitionRelationId);
+				char *parentRelationName = get_rel_name(relationId);
 
 				ereport(ERROR, (errmsg("non-distributed tables cannot have "
 									   "distributed partitions"),
