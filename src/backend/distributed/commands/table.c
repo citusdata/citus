@@ -18,6 +18,7 @@
 #include "catalog/index.h"
 #include "catalog/pg_class.h"
 #include "catalog/pg_constraint.h"
+#include "catalog/pg_depend.h"
 #include "commands/tablecmds.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/colocation_utils.h"
@@ -59,6 +60,7 @@ static bool AlterTableHasCommandByFunc(AlterTableStmt *alterTableStatement,
 static bool AlterTableCmdAddsOrDropsFkey(AlterTableCmd *command, Oid relationId);
 static bool AlterTableCmdAddsFKey(AlterTableCmd *command, Oid relationId);
 static bool AlterTableCmdDropsFkey(AlterTableCmd *command, Oid relationId);
+static bool AnyForeignKeyDependsOnIndex(Oid constraintId);
 static void ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement);
 static void ErrorIfCitusLocalTablePartitionCommand(AlterTableCmd *alterTableCmd,
 												   Oid parentRelationId);
@@ -1082,6 +1084,47 @@ AlterTableCmdDropsFkey(AlterTableCmd *command, Oid relationId)
 	{
 		char *constraintName = command->name;
 		if (ConstraintIsAForeignKey(constraintName, relationId))
+		{
+			return true;
+		}
+		else if (ConstraintIsAUniquenessConstraint(constraintName, relationId))
+		{
+			bool missingOk = false;
+			Oid uniquenessConstraintId =
+				get_relation_constraint_oid(relationId, constraintName, missingOk);
+			Oid indexId = get_constraint_index(uniquenessConstraintId);
+			if (AnyForeignKeyDependsOnIndex(indexId))
+			{
+				return true;
+			}
+		}
+	}
+
+
+/*
+ * AnyForeignKeyDependsOnIndex scans pg_depend and returns true if given index
+ * is valid and any foreign key depends on it.
+ */
+static bool
+AnyForeignKeyDependsOnIndex(Oid indexId)
+{
+	Oid dependentObjectClassId = RelationRelationId;
+	Oid dependentObjectId = indexId;
+	List *dependencyTupleList =
+		GetPgDependTuplesForDependingObjects(dependentObjectClassId, dependentObjectId);
+
+	HeapTuple dependencyTuple = NULL;
+	foreach_ptr(dependencyTuple, dependencyTupleList)
+	{
+		Form_pg_depend dependencyForm = (Form_pg_depend) GETSTRUCT(dependencyTuple);
+		Oid dependingClassId = dependencyForm->classid;
+		if (dependingClassId != ConstraintRelationId)
+		{
+			continue;
+		}
+
+		Oid dependingObjectId = dependencyForm->objid;
+		if (ConstraintWithIdIsOfType(dependingObjectId, CONSTRAINT_FOREIGN))
 		{
 			return true;
 		}

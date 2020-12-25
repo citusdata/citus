@@ -741,6 +741,23 @@ TableReferencing(Oid relationId)
 
 
 /*
+ * ConstraintWithNameIsOfType is a wrapper around ConstraintWithNameIsOfType that returns true
+ * if given constraint name identifies a uniqueness constraint, i.e:
+ *   - primary key constraint, or
+ *   - unique constraint
+ */
+bool
+ConstraintIsAUniquenessConstraint(char *inputConstaintName, Oid relationId)
+{
+	bool isUniqueConstraint = ConstraintWithNameIsOfType(inputConstaintName, relationId,
+														 CONSTRAINT_UNIQUE);
+	bool isPrimaryConstraint = ConstraintWithNameIsOfType(inputConstaintName, relationId,
+														  CONSTRAINT_PRIMARY);
+	return isUniqueConstraint || isPrimaryConstraint;
+}
+
+
+/*
  * ConstraintIsAForeignKey is a wrapper around ConstraintWithNameIsOfType that returns true
  * if given constraint name identifies a foreign key constraint.
  */

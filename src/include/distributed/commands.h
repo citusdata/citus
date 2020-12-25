@@ -167,6 +167,7 @@ extern bool HasForeignKeyToCitusLocalTable(Oid relationId);
 extern bool HasForeignKeyToReferenceTable(Oid relationOid);
 extern bool TableReferenced(Oid relationOid);
 extern bool TableReferencing(Oid relationOid);
+extern bool ConstraintIsAUniquenessConstraint(char *inputConstaintName, Oid relationId);
 extern bool ConstraintIsAForeignKey(char *inputConstaintName, Oid relationOid);
 extern bool ConstraintWithNameIsOfType(char *inputConstaintName, Oid relationId,
 									   char targetConstraintType);
