@@ -41,10 +41,20 @@
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
+#include "utils/relcache.h"
 #include "utils/ruleutils.h"
 #include "utils/syscache.h"
 
+#define DEFAULT_STATISTIC_TARGET -1
+#define ALTER_INDEX_COLUMN_SET_STATS_COMMAND \
+	"ALTER INDEX %s ALTER COLUMN %d SET STATISTICS %d"
+
+static List * GetAlterIndexStatisticsCommands(Oid indexOid);
 static List * GetExplicitStatisticsIdList(Oid relationId);
+static char * GetAttNameWithExprCount(int exprCount);
+static char * GenerateAlterIndexColumnSetStatsCommand(char *indexNameWithSchema,
+													  int16 attnum,
+													  int32 attstattarget);
 static Oid GetRelIdByStatsOid(Oid statsOid);
 static char * CreateAlterCommandIfOwnerNotDefault(Oid statsOid);
 #if PG_VERSION_NUM >= PG_VERSION_13
@@ -403,14 +413,14 @@ PreprocessAlterStatisticsOwnerStmt(Node *node, const char *queryString)
 
 /*
  * GetExplicitStatisticsCommandList returns the list of DDL commands to create
- * statistics that are explicitly created for the table with relationId. See
- * comment of GetExplicitStatisticsIdList function.
+ * or alter statistics that are explicitly created for the table with relationId.
+ * This function gets called when distributing the table with relationId.
+ * See comment of GetExplicitStatisticsIdList function.
  */
 List *
 GetExplicitStatisticsCommandList(Oid relationId)
 {
-	List *createStatisticsCommandList = NIL;
-	List *alterStatisticsCommandList = NIL;
+	List *explicitStatisticsCommandList = NIL;
 
 	PushOverrideEmptySearchPath(CurrentMemoryContext);
 
@@ -419,11 +429,12 @@ GetExplicitStatisticsCommandList(Oid relationId)
 	Oid statisticsId = InvalidOid;
 	foreach_oid(statisticsId, statisticsIdList)
 	{
+		/* we need create commands for already created stats before distribution */
 		char *createStatisticsCommand = pg_get_statisticsobj_worker(statisticsId,
 																	false);
 
-		createStatisticsCommandList =
-			lappend(createStatisticsCommandList,
+		explicitStatisticsCommandList =
+			lappend(explicitStatisticsCommandList,
 					makeTableDDLCommandString(createStatisticsCommand));
 #if PG_VERSION_NUM >= PG_VERSION_13
 
@@ -433,8 +444,8 @@ GetExplicitStatisticsCommandList(Oid relationId)
 
 		if (alterStatisticsTargetCommand != NULL)
 		{
-			alterStatisticsCommandList =
-				lappend(alterStatisticsCommandList,
+			explicitStatisticsCommandList =
+				lappend(explicitStatisticsCommandList,
 						makeTableDDLCommandString(alterStatisticsTargetCommand));
 		}
 #endif
@@ -445,19 +456,32 @@ GetExplicitStatisticsCommandList(Oid relationId)
 
 		if (alterStatisticsOwnerCommand != NULL)
 		{
-			alterStatisticsCommandList =
-				lappend(alterStatisticsCommandList,
+			explicitStatisticsCommandList =
+				lappend(explicitStatisticsCommandList,
 						makeTableDDLCommandString(alterStatisticsOwnerCommand));
 		}
 	}
 
+	/* find indexes on current relation, in case of modified stats target */
+	Relation relation = relation_open(relationId, AccessShareLock);
+	List *indexOidList = RelationGetIndexList(relation);
+
+	Oid indexId = InvalidOid;
+	foreach_oid(indexId, indexOidList)
+	{
+		/* we need alter index commands for altered targets on expression indexes */
+		List *alterIndexStatisticsCommands = GetAlterIndexStatisticsCommands(indexId);
+
+		explicitStatisticsCommandList =
+			list_concat(explicitStatisticsCommandList, alterIndexStatisticsCommands);
+	}
+
+	relation_close(relation, AccessShareLock);
+
 	/* revert back to original search_path */
 	PopOverrideSearchPath();
 
-	createStatisticsCommandList = list_concat(createStatisticsCommandList,
-											  alterStatisticsCommandList);
-
-	return createStatisticsCommandList;
+	return explicitStatisticsCommandList;
 }
 
 
@@ -507,6 +531,51 @@ GetExplicitStatisticsSchemaIdList(Oid relationId)
 
 
 /*
+ * GetAlterIndexStatisticsCommands returns the list of ALTER INDEX .. ALTER COLUMN ..
+ * SET STATISTICS commands, based on non default targets of the index with given id.
+ * Note that this function only looks for expression indexes, since this command is
+ * valid for only expression indexes.
+ */
+static List *
+GetAlterIndexStatisticsCommands(Oid indexOid)
+{
+	List *alterIndexStatisticsCommandList = NIL;
+	int exprCount = 0;
+	while (true)
+	{
+		char *attName = GetAttNameWithExprCount(exprCount);
+
+		HeapTuple attTuple = SearchSysCacheAttName(indexOid, attName);
+
+		if (!HeapTupleIsValid(attTuple))
+		{
+			break;
+		}
+
+		Form_pg_attribute targetAttr = (Form_pg_attribute) GETSTRUCT(attTuple);
+		if (targetAttr->attstattarget != DEFAULT_STATISTIC_TARGET)
+		{
+			char *indexNameWithSchema = generate_qualified_relation_name(indexOid);
+
+			char *command =
+				GenerateAlterIndexColumnSetStatsCommand(indexNameWithSchema,
+														targetAttr->attnum,
+														targetAttr->attstattarget);
+
+			alterIndexStatisticsCommandList =
+				lappend(alterIndexStatisticsCommandList,
+						makeTableDDLCommandString(command));
+		}
+
+		ReleaseSysCache(attTuple);
+		exprCount++;
+	}
+
+	return alterIndexStatisticsCommandList;
+}
+
+
+/*
  * GetExplicitStatisticsIdList returns a list of OIDs corresponding to the statistics
  * that are explicitly created on the relation with relationId. That means,
  * this function discards internal statistics implicitly created by postgres.
@@ -550,6 +619,51 @@ GetExplicitStatisticsIdList(Oid relationId)
 	table_close(pgStatistics, NoLock);
 
 	return statisticsIdList;
+}
+
+
+/*
+ * GetAttNameWithExprCount returns a string in form of 'expr<exprcount>'.
+ * This string will be used to find expression indexes in pg_attribute table,
+ * since they are named expr, expr1, expr2.... automatically by postgres.
+ */
+static char *
+GetAttNameWithExprCount(int exprCount)
+{
+	StringInfoData attName;
+	initStringInfo(&attName);
+
+	/* statistics can be set for an index only if it's an expressional index */
+	appendStringInfoString(&attName, "expr");
+
+	if (exprCount > 0)
+	{
+		appendStringInfo(&attName, "%d", exprCount);
+	}
+
+	return attName.data;
+}
+
+
+/*
+ * GenerateAlterIndexColumnSetStatsCommand returns a string in form of 'ALTER INDEX ..
+ * ALTER COLUMN .. SET STATISTICS ..' which will be used to create a DDL command to
+ * send to workers.
+ */
+static char *
+GenerateAlterIndexColumnSetStatsCommand(char *indexNameWithSchema,
+										int16 attnum,
+										int32 attstattarget)
+{
+	StringInfoData command;
+	initStringInfo(&command);
+	appendStringInfo(&command,
+					 ALTER_INDEX_COLUMN_SET_STATS_COMMAND,
+					 indexNameWithSchema,
+					 attnum,
+					 attstattarget);
+
+	return command.data;
 }
 
 

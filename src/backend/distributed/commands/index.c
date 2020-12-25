@@ -801,6 +801,7 @@ ErrorIfUnsupportedAlterIndexStmt(AlterTableStmt *alterTableStatement)
 			case AT_SetRelOptions:  /* SET (...) */
 			case AT_ResetRelOptions:    /* RESET (...) */
 			case AT_ReplaceRelOptions:  /* replace entire option list */
+			case AT_SetStatistics:  /* SET STATISTICS */
 			{
 				/* this command is supported by Citus */
 				break;
