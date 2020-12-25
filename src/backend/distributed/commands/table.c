@@ -1033,6 +1033,19 @@ AlterTableCmdAddsFKey(AlterTableCmd *command, Oid relationId)
 			return true;
 		}
 	}
+	else if (alterTableType == AT_AddColumn)
+	{
+		ColumnDef *columnDef = (ColumnDef *) command->def;
+		List *constraints = columnDef->constraints;
+		Constraint *constraint = NULL;
+		foreach_ptr(constraint, constraints)
+		{
+			if (constraint->contype == CONSTR_FOREIGN)
+			{
+				return true;
+			}
+		}
+	}
 
 	return false;
 }
