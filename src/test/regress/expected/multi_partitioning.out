@@ -295,7 +295,7 @@ SELECT create_distributed_table('partitioning_test_failure_2009', 'id');
 
 ALTER TABLE partitioning_test_failure ATTACH PARTITION partitioning_test_failure_2009 FOR VALUES FROM ('2009-01-01') TO ('2010-01-01');
 ERROR:  non-distributed tables cannot have distributed partitions
-HINT:  Distribute the partitioned table "partitioning_test_failure_2009" instead
+HINT:  Distribute the partitioned table "partitioning_test_failure" instead
 -- multi-level partitioning is not allowed
 DROP TABLE partitioning_test_failure_2009;
 CREATE TABLE partitioning_test_failure_2009 PARTITION OF partitioning_test_failure FOR VALUES FROM ('2009-01-01') TO ('2010-01-01') PARTITION BY RANGE (time);
