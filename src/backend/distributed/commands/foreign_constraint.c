@@ -741,7 +741,7 @@ TableReferencing(Oid relationId)
 
 
 /*
- * ConstraintWithNameIsOfType is a wrapper around ConstraintWithNameIsOfType that returns true
+ * ConstraintIsAForeignKey is a wrapper around ConstraintWithNameIsOfType that returns true
  * if given constraint name identifies a foreign key constraint.
  */
 bool
@@ -758,21 +758,21 @@ ConstraintIsAForeignKey(char *inputConstaintName, Oid relationId)
  */
 bool
 ConstraintWithNameIsOfType(char *inputConstaintName, Oid relationId,
-						   char inputConstraintType)
+						   char targetConstraintType)
 {
 	bool missingOk = true;
 	Oid constraintId =
 		get_relation_constraint_oid(relationId, inputConstaintName, missingOk);
-	return ConstraintWithIdIsOfType(constraintId, inputConstraintType);
+	return ConstraintWithIdIsOfType(constraintId, targetConstraintType);
 }
 
 
 /*
- * ConstraintWithIdIsOfType returns true constraint with constraintId exists
- * and is of type inputConstraintType.
+ * ConstraintWithIdIsOfType returns true if constraint with constraintId exists
+ * and is of type targetConstraintType.
  */
 bool
-ConstraintWithIdIsOfType(Oid constraintId, char inputConstraintType)
+ConstraintWithIdIsOfType(Oid constraintId, char targetConstraintType)
 {
 	HeapTuple heapTuple = SearchSysCache1(CONSTROID, ObjectIdGetDatum(constraintId));
 	if (!HeapTupleIsValid(heapTuple))
@@ -783,7 +783,7 @@ ConstraintWithIdIsOfType(Oid constraintId, char inputConstraintType)
 
 	Form_pg_constraint constraintForm = (Form_pg_constraint) GETSTRUCT(heapTuple);
 	char constraintType = constraintForm->contype;
-	bool constraintTypeMatches = (constraintType == inputConstraintType);
+	bool constraintTypeMatches = (constraintType == targetConstraintType);
 
 	ReleaseSysCache(heapTuple);
 

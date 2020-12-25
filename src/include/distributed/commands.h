@@ -169,8 +169,8 @@ extern bool TableReferenced(Oid relationOid);
 extern bool TableReferencing(Oid relationOid);
 extern bool ConstraintIsAForeignKey(char *inputConstaintName, Oid relationOid);
 extern bool ConstraintWithNameIsOfType(char *inputConstaintName, Oid relationId,
-									   char inputConstraintType);
-extern bool ConstraintWithIdIsOfType(Oid constraintId, char inputConstraintType);
+									   char targetConstraintType);
+extern bool ConstraintWithIdIsOfType(Oid constraintId, char targetConstraintType);
 extern void ErrorIfTableHasExternalForeignKeys(Oid relationId);
 extern List * GetForeignKeyOids(Oid relationId, int flags);
 extern Oid GetReferencedTableId(Oid foreignKeyId);
