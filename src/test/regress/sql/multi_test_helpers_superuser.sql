@@ -23,7 +23,7 @@ WITH dist_node_summary AS (
                             ARRAY[dist_node_summary.query, dist_node_summary.query],
                             false)
 ), dist_placement_summary AS (
-    SELECT 'SELECT jsonb_agg(pg_dist_placement ORDER BY shardid) FROM pg_dist_placement)' AS query
+    SELECT 'SELECT jsonb_agg(pg_dist_placement ORDER BY shardid) FROM pg_dist_placement' AS query
 ), dist_placement_check AS (
     SELECT count(distinct result) = 1 AS matches
     FROM dist_placement_summary CROSS JOIN LATERAL

@@ -80,3 +80,4 @@ test: isolation_insert_select_vs_all_on_mx
 test: isolation_ref_select_for_update_vs_all_on_mx
 test: isolation_ref_update_delete_upsert_vs_all_on_mx
 test: isolation_dis2ref_foreign_keys_on_mx
+test: isolation_metadata_sync_deadlock

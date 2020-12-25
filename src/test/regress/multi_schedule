@@ -94,6 +94,7 @@ test: tableam
 # Tests for statistics propagation
 # ----------
 test: propagate_statistics
+test: pg13_propagate_statistics
 
 # ----------
 # Miscellaneous tests to check our query planning behavior
