@@ -56,7 +56,9 @@ static List * GetAlterTableCommandFKeyConstraintList(AlterTableCmd *command);
 static bool AlterTableCommandTypeIsTrigger(AlterTableType alterTableType);
 static bool AlterTableHasCommandByFunc(AlterTableStmt *alterTableStatement,
 									   AlterTableCommandFunc alterTableCommandFunc);
+static bool AlterTableCmdAddsOrDropsFkey(AlterTableCmd *command, Oid relationId);
 static bool AlterTableCmdAddsFKey(AlterTableCmd *command, Oid relationId);
+static bool AlterTableCmdDropsFkey(AlterTableCmd *command, Oid relationId);
 static void ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement);
 static void ErrorIfCitusLocalTablePartitionCommand(AlterTableCmd *alterTableCmd,
 												   Oid parentRelationId);
@@ -404,7 +406,7 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand)
 	 */
 	ErrorIfAlterTableDefinesFKeyFromPostgresToCitusLocalTable(alterTableStatement);
 
-	if (AlterTableHasCommandByFunc(alterTableStatement, AlterTableCmdAddsFKey))
+	if (AlterTableHasCommandByFunc(alterTableStatement, AlterTableCmdAddsOrDropsFkey))
 	{
 		MarkInvalidateForeignKeyGraph();
 	}
@@ -1018,7 +1020,20 @@ AlterTableHasCommandByFunc(AlterTableStmt *alterTableStatement,
 
 
 /*
- * AlterTableCmdAddsFKey
+ * AlterTableCmdAddsOrDropsFkey returns true if given alter table subcommand
+ * might add or drop a foreign key constraint.
+ */
+static bool
+AlterTableCmdAddsOrDropsFkey(AlterTableCmd *command, Oid relationId)
+{
+	return AlterTableCmdAddsFKey(command, relationId) ||
+		   AlterTableCmdDropsFkey(command, relationId);
+}
+
+
+/*
+ * AlterTableCmdAddsFKey returns true if given alter table subcommand might
+ * define a foreign key.
  */
 static bool
 AlterTableCmdAddsFKey(AlterTableCmd *command, Oid relationId)
@@ -1044,6 +1059,31 @@ AlterTableCmdAddsFKey(AlterTableCmd *command, Oid relationId)
 			{
 				return true;
 			}
+		}
+	}
+
+	return false;
+}
+
+
+/*
+ * AlterTableCmdDropsFkey returns true if given alter table subcommand might drop:
+ *   - a foreign key or,
+ *   - a uniqueness constraint that a foreign key depends on or,
+ *   - a referencing column of a foreign key or,
+ *   - a referenced column of a foreign key.
+ */
+static bool
+AlterTableCmdDropsFkey(AlterTableCmd *command, Oid relationId)
+{
+	AlterTableType alterTableType = command->subtype;
+
+	if (alterTableType == AT_DropConstraint)
+	{
+		char *constraintName = command->name;
+		if (ConstraintIsAForeignKey(constraintName, relationId))
+		{
+			return true;
 		}
 	}
 
@@ -1418,11 +1458,6 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 				if (!OidIsValid(relationId))
 				{
 					return;
-				}
-
-				if (ConstraintIsAForeignKey(command->name, relationId))
-				{
-					MarkInvalidateForeignKeyGraph();
 				}
 
 				break;
