@@ -235,6 +235,7 @@ CREATE TABLE distributed_table_4(col int unique);
 SELECT create_distributed_table('distributed_table_1', 'col');
 SELECT create_distributed_table('distributed_table_2', 'col');
 SELECT create_distributed_table('distributed_table_3', 'col');
+SELECT create_distributed_table('distributed_table_4', 'col');
 
 CREATE TABLE reference_table_1(col int unique);
 CREATE TABLE reference_table_2(col int unique);
@@ -278,9 +279,7 @@ ORDER BY tablename;
 
 ALTER TABLE distributed_table_4 ADD CONSTRAINT fkey_1 FOREIGN KEY (col) REFERENCES distributed_table_4(col);
 
--- even if distributed_table_4 has a self referencing foreign key,
--- we don't print anything as we only consider foreign key relationships
--- with other tables
+-- show that we print table itself as it has a self reference
 SELECT oid::regclass::text AS tablename
 FROM get_foreign_key_connected_relations('distributed_table_4') AS f(oid oid)
 ORDER BY tablename;
