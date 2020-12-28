@@ -1,3 +1,13 @@
+### citus v9.4.4 (December 28, 2020) ###
+
+* Fixes a bug that could cause router queries with local tables to be pushed
+  down
+
+* Fixes a segfault in connection management due to invalid connection hash
+  entries
+
+* Fixes possible issues that might occur with single shard distributed tables
+
 ### citus v9.4.3 (November 24, 2020) ###
 
 * Enables PostgreSQL's parallel queries on EXPLAIN ANALYZE
