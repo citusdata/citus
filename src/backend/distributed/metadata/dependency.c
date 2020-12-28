@@ -1068,25 +1068,13 @@ BuildViewDependencyGraph(Oid relationId, HTAB *nodeMap)
 	node->remainingDependencyCount = 0;
 	node->dependingNodes = NIL;
 
-	ObjectAddress target = { 0 };
-	ObjectAddressSet(target, RelationRelationId, relationId);
+	Oid targetObjectClassId = RelationRelationId;
+	Oid targetObjectId = relationId;
+	List *dependencyTupleList = GetPgDependTuplesForDependingObjects(targetObjectClassId,
+																	 targetObjectId);
 
-	ScanKeyData key[2];
 	HeapTuple depTup = NULL;
-
-	/*
-	 * iterate the actual pg_depend catalog
-	 */
-	Relation depRel = table_open(DependRelationId, AccessShareLock);
-
-	ScanKeyInit(&key[0], Anum_pg_depend_refclassid, BTEqualStrategyNumber, F_OIDEQ,
-				ObjectIdGetDatum(target.classId));
-	ScanKeyInit(&key[1], Anum_pg_depend_refobjid, BTEqualStrategyNumber, F_OIDEQ,
-				ObjectIdGetDatum(target.objectId));
-	SysScanDesc depScan = systable_beginscan(depRel, DependReferenceIndexId,
-											 true, NULL, 2, key);
-
-	while (HeapTupleIsValid(depTup = systable_getnext(depScan)))
+	foreach_ptr(depTup, dependencyTupleList)
 	{
 		Form_pg_depend pg_depend = (Form_pg_depend) GETSTRUCT(depTup);
 
@@ -1101,10 +1089,45 @@ BuildViewDependencyGraph(Oid relationId, HTAB *nodeMap)
 		}
 	}
 
-	systable_endscan(depScan);
-	relation_close(depRel, AccessShareLock);
-
 	return node;
+}
+
+
+/*
+ * GetPgDependTuplesForDependingObjects scans pg_depend for given object and
+ * returns a list of heap tuples for the objects depending on it.
+ */
+List *
+GetPgDependTuplesForDependingObjects(Oid targetObjectClassId, Oid targetObjectId)
+{
+	List *dependencyTupleList = NIL;
+
+	Relation pgDepend = table_open(DependRelationId, AccessShareLock);
+
+	ScanKeyData key[2];
+	int scanKeyCount = 2;
+
+	ScanKeyInit(&key[0], Anum_pg_depend_refclassid, BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(targetObjectClassId));
+	ScanKeyInit(&key[1], Anum_pg_depend_refobjid, BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(targetObjectId));
+
+	bool useIndex = true;
+	SysScanDesc depScan = systable_beginscan(pgDepend, DependReferenceIndexId,
+											 useIndex, NULL, scanKeyCount, key);
+
+	HeapTuple dependencyTuple = NULL;
+	while (HeapTupleIsValid(dependencyTuple = systable_getnext(depScan)))
+	{
+		/* copy the tuple first */
+		dependencyTuple = heap_copytuple(dependencyTuple);
+		dependencyTupleList = lappend(dependencyTupleList, dependencyTuple);
+	}
+
+	systable_endscan(depScan);
+	relation_close(pgDepend, NoLock);
+
+	return dependencyTupleList;
 }
 
 
