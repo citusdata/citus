@@ -387,6 +387,23 @@ extern List * CitusLocalTableTriggerCommandDDLJob(Oid relationId, char *triggerN
 												  const char *queryString);
 extern Oid GetTriggerFunctionId(Oid triggerId);
 
+/* cascade_citus_table_function.c */
+
+/*
+ * Flags that can be passed to CascadeOperationForConnectedRelations to specify
+ * citus table function to be executed in cascading mode.
+ */
+typedef enum CascadeOperationType
+{
+	INVALID_OPERATION = 1 << 0,
+} CascadeOperationType;
+
+extern void CascadeOperationForConnectedRelations(Oid relationId, LOCKMODE relLockMode,
+												  CascadeOperationType
+												  cascadeOperationType);
+extern void ExecuteAndLogDDLCommandList(List *ddlCommandList);
+extern void ExecuteAndLogDDLCommand(const char *commandString);
+
 extern bool ShouldPropagateSetCommand(VariableSetStmt *setStmt);
 extern void PostprocessVariableSetStmt(VariableSetStmt *setStmt, const char *setCommand);
 
