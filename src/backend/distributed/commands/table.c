@@ -17,6 +17,7 @@
 #include "access/xact.h"
 #include "catalog/index.h"
 #include "catalog/pg_class.h"
+#include "catalog/pg_constraint.h"
 #include "commands/tablecmds.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/colocation_utils.h"
@@ -461,7 +462,9 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand)
 				 */
 				Assert(list_length(commandList) == 1);
 
-				Oid foreignKeyId = GetForeignKeyOidByName(constraintName, leftRelationId);
+				bool missingOk = false;
+				Oid foreignKeyId = get_relation_constraint_oid(leftRelationId,
+															   constraintName, missingOk);
 				rightRelationId = GetReferencedTableId(foreignKeyId);
 			}
 		}
