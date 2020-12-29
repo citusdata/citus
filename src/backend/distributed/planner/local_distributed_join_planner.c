@@ -356,27 +356,6 @@ AllRangeTableEntriesHaveUniqueIndex(List *rangeTableEntryDetailsList)
 
 
 /*
- * ShouldConvertLocalTableJoinsToSubqueries returns true if we should
- * convert local-dist table joins to subqueries.
- */
-bool
-ShouldConvertLocalTableJoinsToSubqueries(List *rangeTableList)
-{
-	if (LocalTableJoinPolicy == LOCAL_JOIN_POLICY_NEVER)
-	{
-		/* user doesn't want Citus to enable local table joins */
-		return false;
-	}
-
-	if (!ContainsLocalTableDistributedTableJoin(rangeTableList))
-	{
-		return false;
-	}
-	return true;
-}
-
-
-/*
  * HasConstantFilterOnUniqueColumn returns true if the given rangeTableEntry has a constant
  * filter on a unique column.
  */

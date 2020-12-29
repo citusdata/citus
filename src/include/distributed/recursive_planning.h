@@ -43,7 +43,9 @@ extern Query * BuildReadIntermediateResultsArrayQuery(List *targetEntryList,
 													  List *resultIdList,
 													  bool useBinaryCopyFormat);
 extern bool GeneratingSubplans(void);
-extern bool ContainsLocalTableDistributedTableJoin(List *rangeTableList);
+extern bool ContainsLocalTableDistributedTableJoin(List *rangeTableList,
+												   bool *containsLocalTableOut,
+												   bool *containsDistributedTableOut);
 extern void ReplaceRTERelationWithRteSubquery(RangeTblEntry *rangeTableEntry,
 											  List *requiredAttrNumbers,
 											  RecursivePlanningContext *context);

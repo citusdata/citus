@@ -920,7 +920,7 @@ ModifyQuerySupported(Query *queryTree, Query *originalQuery, bool multiShardQuer
 		ExtractRangeTableEntryWalker((Node *) originalQuery, &rangeTableList);
 	}
 	bool containsLocalTableDistributedTableJoin =
-		ContainsLocalTableDistributedTableJoin(queryTree->rtable);
+		ContainsLocalTableDistributedTableJoin(queryTree->rtable, NULL, NULL);
 
 	RangeTblEntry *rangeTableEntry = NULL;
 	foreach_ptr(rangeTableEntry, rangeTableList)
