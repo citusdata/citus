@@ -121,6 +121,31 @@ ALTER TABLE simple_table_name RENAME CONSTRAINT "looo oooo ooooo ooooooooooooooo
 SET search_path TO single_node;
 DROP SCHEMA  "Quoed.Schema" CASCADE;
 
+-- test partitioned index creation with long name
+CREATE TABLE test_index_creation1
+(
+    tenant_id integer NOT NULL,
+    timeperiod timestamp without time zone NOT NULL,
+    field1 integer NOT NULL,
+    inserted_utc timestamp without time zone NOT NULL DEFAULT now(),
+    PRIMARY KEY(tenant_id, timeperiod)
+) PARTITION BY RANGE (timeperiod);
+
+CREATE TABLE test_index_creation1_p2020_09_26
+PARTITION OF test_index_creation1 FOR VALUES FROM ('2020-09-26 00:00:00') TO ('2020-09-27 00:00:00');
+CREATE TABLE test_index_creation1_p2020_09_27
+PARTITION OF test_index_creation1 FOR VALUES FROM ('2020-09-27 00:00:00') TO ('2020-09-28 00:00:00');
+
+select create_distributed_table('test_index_creation1', 'tenant_id');
+
+-- should be able to create indexes with INCLUDE/WHERE
+CREATE INDEX ix_test_index_creation5 ON test_index_creation1
+	USING btree(tenant_id, timeperiod)
+	INCLUDE (field1) WHERE (tenant_id = 100);
+
+-- test if indexes are created
+SELECT 1 AS created WHERE EXISTS(SELECT * FROM pg_indexes WHERE indexname LIKE '%test_index_creation%');
+
 -- test citus size functions in transaction with modification
 CREATE TABLE test_citus_size_func (a int);
 SELECT create_distributed_table('test_citus_size_func', 'a');
