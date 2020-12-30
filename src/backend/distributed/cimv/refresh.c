@@ -50,13 +50,6 @@ RefreshCimv(Form_pg_cimv formCimv, bool skipData, bool isCreate)
 		elog(ERROR, "SPI_connect failed");
 	}
 
-	Oid savedUserId = InvalidOid;
-	int savedSecurityContext = 0;
-
-	/* make sure we have write access */
-	GetUserIdAndSecContext(&savedUserId, &savedSecurityContext);
-	SetUserIdAndSecContext(CitusExtensionOwner(), SECURITY_LOCAL_USERID_CHANGE);
-
 	const char *matTableSchemaName = get_namespace_name(get_rel_namespace(
 															formCimv->mattable));
 	const char *matTableName = get_rel_name(formCimv->mattable);
@@ -155,8 +148,6 @@ RefreshCimv(Form_pg_cimv formCimv, bool skipData, bool isCreate)
 			}
 		}
 	}
-
-	SetUserIdAndSecContext(savedUserId, savedSecurityContext);
 
 	/* Close SPI context. */
 	if (SPI_finish() != SPI_OK_FINISH)

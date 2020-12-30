@@ -149,13 +149,6 @@ CreateCimv(CimvCreate *cimvCreate)
 		elog(ERROR, "SPI_connect failed");
 	}
 
-	Oid savedUserId = InvalidOid;
-	int savedSecurityContext = 0;
-
-	/* make sure we have write access */
-	GetUserIdAndSecContext(&savedUserId, &savedSecurityContext);
-	SetUserIdAndSecContext(CitusExtensionOwner(), SECURITY_LOCAL_USERID_CHANGE);
-
 	CreateMatTable(cimvCreate, false);
 
 	if (cimvCreate->createOptions->schedule != NULL)
@@ -180,7 +173,6 @@ CreateCimv(CimvCreate *cimvCreate)
 		RefreshCimv(cimvCreate->formCimv, cimvCreate->stmt->into->skipData, true);
 	}
 
-	SetUserIdAndSecContext(savedUserId, savedSecurityContext);
 }
 
 

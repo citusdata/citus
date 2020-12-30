@@ -56,6 +56,7 @@
 #include "distributed/multi_explain.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/resource_lock.h"
+#include "distributed/security_utils.h"
 #include "distributed/transmit.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_transaction.h"
@@ -460,29 +461,27 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 	bool continueProcessing = true;
 	if (IsA(parsetree, CreateTableAsStmt))
 	{
-		Oid savedUserId = InvalidOid;
-		int savedSecurityContext = 0;
-
-		/* make sure we have write access */
-		GetUserIdAndSecContext(&savedUserId, &savedSecurityContext);
-		SetUserIdAndSecContext(CitusExtensionOwner(), SECURITY_LOCAL_USERID_CHANGE);
+		PushCitusSecurityContext();
 		continueProcessing = !ProcessCreateMaterializedViewStmt((const
 																 CreateTableAsStmt *)
 																parsetree, queryString,
 																pstmt);
-		SetUserIdAndSecContext(savedUserId, savedSecurityContext);														
+		PopCitusSecurityContext();														
 	}
 
 	if (IsA(parsetree, RefreshMatViewStmt))
 	{
+		PushCitusSecurityContext();
 		continueProcessing = !ProcessRefreshMaterializedViewStmt(
 			(RefreshMatViewStmt *) parsetree);
+		PopCitusSecurityContext();	
 	}
 
 	if (IsA(parsetree, DropStmt))
 	{
 		DropStmt *dropStatement = (DropStmt *) parsetree;
 
+		PushCitusSecurityContext();
 		if (dropStatement->removeType == OBJECT_MATVIEW)
 		{
 			ProcessDropMaterializedViewStmt(dropStatement);
@@ -491,6 +490,8 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		{
 			ProcessDropViewStmt(dropStatement);
 		}
+		PopCitusSecurityContext();
+
 	}
 
 	if (IsDropCitusExtensionStmt(parsetree))
