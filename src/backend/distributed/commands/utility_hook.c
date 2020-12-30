@@ -460,10 +460,17 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 	bool continueProcessing = true;
 	if (IsA(parsetree, CreateTableAsStmt))
 	{
+		Oid savedUserId = InvalidOid;
+		int savedSecurityContext = 0;
+
+		/* make sure we have write access */
+		GetUserIdAndSecContext(&savedUserId, &savedSecurityContext);
+		SetUserIdAndSecContext(CitusExtensionOwner(), SECURITY_LOCAL_USERID_CHANGE);
 		continueProcessing = !ProcessCreateMaterializedViewStmt((const
 																 CreateTableAsStmt *)
 																parsetree, queryString,
 																pstmt);
+		SetUserIdAndSecContext(savedUserId, savedSecurityContext);														
 	}
 
 	if (IsA(parsetree, RefreshMatViewStmt))
