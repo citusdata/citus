@@ -16,7 +16,7 @@ ALTER INDEX test_idx ALTER COLUMN 3 SET STATISTICS 4646;
 
 -- test alter index set statistics before distribution
 CREATE TABLE t2 (a int, b int);
-CREATE INDEX test_idx2 on t1 ((a+b), (a-b), (a*b));
+CREATE INDEX test_idx2 on t2 ((a+b), (a-b), (a*b));
 ALTER INDEX test_idx2 ALTER COLUMN 2 SET STATISTICS 3737;
 ALTER INDEX test_idx2 ALTER COLUMN 3 SET STATISTICS 3737;
 ALTER INDEX test_idx2 ALTER COLUMN 2 SET STATISTICS 99999;
@@ -25,13 +25,13 @@ SELECT create_distributed_table('t2','a');
 -- verify statistics is set
 SELECT c.relname, a.attstattarget
 FROM pg_attribute a
-JOIN pg_class c ON a.attrelid = c.oid AND c.relname LIKE 'test_idx%'
+JOIN pg_class c ON a.attrelid = c.oid AND c.relname LIKE 'test\_idx%'
 ORDER BY c.relname, a.attnum;
 
 \c - - - :worker_1_port
 SELECT c.relname, a.attstattarget
 FROM pg_attribute a
-JOIN pg_class c ON a.attrelid = c.oid AND c.relname LIKE 'test_idx%'
+JOIN pg_class c ON a.attrelid = c.oid AND c.relname LIKE 'test\_idx%'
 ORDER BY c.relname, a.attnum;
 \c - - - :master_port
 

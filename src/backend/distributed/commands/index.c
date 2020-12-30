@@ -785,6 +785,7 @@ PostprocessIndexStmt(Node *node, const char *queryString)
  *
  * ALTER INDEX SET ()
  * ALTER INDEX RESET ()
+ * ALTER INDEX ALTER COLUMN SET STATISTICS
  */
 void
 ErrorIfUnsupportedAlterIndexStmt(AlterTableStmt *alterTableStatement)
@@ -815,8 +816,8 @@ ErrorIfUnsupportedAlterIndexStmt(AlterTableStmt *alterTableStatement)
 						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						 errmsg("alter index ... set tablespace ... "
 								"is currently unsupported"),
-						 errdetail("Only RENAME TO, SET (), and RESET () "
-								   "are supported.")));
+						 errdetail("Only RENAME TO, SET (), RESET () "
+								   "and SET STATISTICS are supported.")));
 				return; /* keep compiler happy */
 			}
 		}

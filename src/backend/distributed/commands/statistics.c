@@ -45,13 +45,12 @@
 #include "utils/ruleutils.h"
 #include "utils/syscache.h"
 
-#define DEFAULT_STATISTIC_TARGET -1
+#define DEFAULT_STATISTICS_TARGET -1
 #define ALTER_INDEX_COLUMN_SET_STATS_COMMAND \
 	"ALTER INDEX %s ALTER COLUMN %d SET STATISTICS %d"
 
 static List * GetAlterIndexStatisticsCommands(Oid indexOid);
 static List * GetExplicitStatisticsIdList(Oid relationId);
-static char * GetAttNameWithExprCount(int exprCount);
 static char * GenerateAlterIndexColumnSetStatsCommand(char *indexNameWithSchema,
 													  int16 attnum,
 													  int32 attstattarget);
@@ -465,6 +464,7 @@ GetExplicitStatisticsCommandList(Oid relationId)
 	/* find indexes on current relation, in case of modified stats target */
 	Relation relation = relation_open(relationId, AccessShareLock);
 	List *indexOidList = RelationGetIndexList(relation);
+	relation_close(relation, NoLock);
 
 	Oid indexId = InvalidOid;
 	foreach_oid(indexId, indexOidList)
@@ -475,8 +475,6 @@ GetExplicitStatisticsCommandList(Oid relationId)
 		explicitStatisticsCommandList =
 			list_concat(explicitStatisticsCommandList, alterIndexStatisticsCommands);
 	}
-
-	relation_close(relation, AccessShareLock);
 
 	/* revert back to original search_path */
 	PopOverrideSearchPath();
@@ -540,12 +538,10 @@ static List *
 GetAlterIndexStatisticsCommands(Oid indexOid)
 {
 	List *alterIndexStatisticsCommandList = NIL;
-	int exprCount = 0;
+	int16 exprCount = 1;
 	while (true)
 	{
-		char *attName = GetAttNameWithExprCount(exprCount);
-
-		HeapTuple attTuple = SearchSysCacheAttName(indexOid, attName);
+		HeapTuple attTuple = SearchSysCacheAttNum(indexOid, exprCount);
 
 		if (!HeapTupleIsValid(attTuple))
 		{
@@ -553,7 +549,7 @@ GetAlterIndexStatisticsCommands(Oid indexOid)
 		}
 
 		Form_pg_attribute targetAttr = (Form_pg_attribute) GETSTRUCT(attTuple);
-		if (targetAttr->attstattarget != DEFAULT_STATISTIC_TARGET)
+		if (targetAttr->attstattarget != DEFAULT_STATISTICS_TARGET)
 		{
 			char *indexNameWithSchema = generate_qualified_relation_name(indexOid);
 
@@ -619,29 +615,6 @@ GetExplicitStatisticsIdList(Oid relationId)
 	table_close(pgStatistics, NoLock);
 
 	return statisticsIdList;
-}
-
-
-/*
- * GetAttNameWithExprCount returns a string in form of 'expr<exprcount>'.
- * This string will be used to find expression indexes in pg_attribute table,
- * since they are named expr, expr1, expr2.... automatically by postgres.
- */
-static char *
-GetAttNameWithExprCount(int exprCount)
-{
-	StringInfoData attName;
-	initStringInfo(&attName);
-
-	/* statistics can be set for an index only if it's an expressional index */
-	appendStringInfoString(&attName, "expr");
-
-	if (exprCount > 0)
-	{
-		appendStringInfo(&attName, "%d", exprCount);
-	}
-
-	return attName.data;
 }
 
 
