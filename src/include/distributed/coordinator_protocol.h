@@ -56,6 +56,7 @@
 
 #define SHARDID_SEQUENCE_NAME "pg_dist_shardid_seq"
 #define PLACEMENTID_SEQUENCE_NAME "pg_dist_placement_placementid_seq"
+#define CITUS_UNIQUE_ID_SEQUENCE_NAME "citus_unique_id"
 
 /* Remote call definitions to help with data staging and deletion */
 #define WORKER_APPLY_SHARD_DDL_COMMAND \

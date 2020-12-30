@@ -17,6 +17,9 @@
 #include "distributed/pg_cimv.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/security_utils.h"
+#include "distributed/sequence_utils.h"
+#include "distributed/coordinator_protocol.h"
 #include "executor/spi.h"
 #include "miscadmin.h"
 #include "nodes/makefuncs.h"
@@ -64,6 +67,8 @@ typedef struct
 	CitusTableCacheEntry *citusTable;
 	TargetEntry *partitionColumn;
 	bool supportsDelete;
+	char* prefix;
+	int prefixId;
 } CimvCreate;
 
 static void CreateCimv(CimvCreate *cimvCreate);
@@ -97,6 +102,8 @@ static Oid PartialAggOid(void);
 static void AppendQuotedLiteral(StringInfo buf, const char *val);
 static void AppendStringInfoFunction(StringInfo buf, Oid fnoid);
 static Oid AggregateFunctionOid(const char *functionName, Oid inputType);
+static char* CIMVTriggerFuncName(int prefixId, const char* relname);
+static char* CIMVInternalPrefix(const RangeVar* baseTable, int prefixId);
 
 bool
 ProcessCreateMaterializedViewStmt(const CreateTableAsStmt *stmt, const char *query_string,
@@ -864,28 +871,33 @@ InitializeCimvCreate(const CreateTableAsStmt *stmt, MatViewCreateOptions *create
 	cimvCreate->formCimv->jobid = 0;
 	cimvCreate->formCimv->landingtable = InvalidOid;
 
-	namestrcpy(&cimvCreate->formCimv->triggerfnnamespace, CITUS_INTERNAL_SCHEMA);
-	namestrcpy(&cimvCreate->formCimv->triggerfnname, stmt->into->rel->relname);
-
-	StringInfo mat = makeStringInfo();
-	appendStringInfo(mat, "%s_cimv_%s", stmt->into->rel->relname,
-					 MATERIALIZATION_TABLE_SUFFIX);
-
-	StringInfo rv = makeStringInfo();
-	appendStringInfo(rv, "%s_cimv_%s", stmt->into->rel->relname, REFRESH_VIEW_SUFFIX);
-
-	StringInfo ld = makeStringInfo();
-	appendStringInfo(ld, "%s_cimv_%s", stmt->into->rel->relname, LANDING_TABLE_SUFFIX);
 
 	Query *query = (Query *) stmt->query;
 	RangeTblEntry *baseRte = (RangeTblEntry *) linitial(query->rtable);
 
+	cimvCreate->baseTableName = makeRangeVar(get_namespace_name(get_rel_namespace(
+																baseRte->relid)),
+											get_rel_name(baseRte->relid), -1);
+
 	cimvCreate->stmt = stmt;
 	cimvCreate->createOptions = createOptions;
-	cimvCreate->baseTableName = makeRangeVar(get_namespace_name(get_rel_namespace(
-																	baseRte->relid)),
-											 get_rel_name(baseRte->relid), -1);
+
 	cimvCreate->formCimv->basetable = baseRte->relid;
+
+	cimvCreate->prefixId = UniqueId();
+	cimvCreate->prefix = CIMVInternalPrefix(cimvCreate->baseTableName, cimvCreate->prefixId);
+	namestrcpy(&cimvCreate->formCimv->triggerfnnamespace, CITUS_INTERNAL_SCHEMA);
+	char* funcName = CIMVTriggerFuncName(cimvCreate->prefixId, stmt->into->rel->relname);
+	namestrcpy(&cimvCreate->formCimv->triggerfnname, funcName);
+	StringInfo mat = makeStringInfo();
+	appendStringInfo(mat, "%s_cimv_%s", cimvCreate->prefix, MATERIALIZATION_TABLE_SUFFIX);
+
+	StringInfo rv = makeStringInfo();
+	appendStringInfo(rv, "%s_cimv_%s", cimvCreate->prefix, REFRESH_VIEW_SUFFIX);
+
+	StringInfo ld = makeStringInfo();
+	appendStringInfo(ld, "%s_cimv_%s", cimvCreate->prefix, LANDING_TABLE_SUFFIX);
+
 	cimvCreate->matTableName = makeRangeVar(CITUS_INTERNAL_SCHEMA, mat->data, -1);
 	cimvCreate->userViewName = stmt->into->rel;
 	cimvCreate->refreshViewName = makeRangeVar(CITUS_INTERNAL_SCHEMA, rv->data, -1);
@@ -916,6 +928,24 @@ InitializeCimvCreate(const CreateTableAsStmt *stmt, MatViewCreateOptions *create
 		(char *) quote_identifier(cimvCreate->landingTableName->relname), -1);
 
 	return cimvCreate;
+}
+
+static char* CIMVTriggerFuncName(int prefixId, const char* relname) {
+	StringInfo funcName = makeStringInfo();
+	appendStringInfo(funcName, "%s_%d",quote_identifier(relname), prefixId);
+	return funcName->data;
+}
+
+static char* CIMVInternalPrefix(const RangeVar* baseTable, int prefixId) {
+
+	if (baseTable->schemaname == NULL || baseTable->relname == NULL) {
+		ereport(ERROR, (errmsg("unexpected state: schema name or relname not found.")));
+	}
+
+	StringInfo prefix = makeStringInfo();
+	appendStringInfo(prefix, "%s_%s_%d",quote_identifier(baseTable->schemaname), 
+		quote_identifier(baseTable->relname), prefixId);
+	return prefix->data;
 }
 
 

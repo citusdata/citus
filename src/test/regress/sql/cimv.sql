@@ -354,6 +354,29 @@ GROUP BY a, d_hour WITH NO DATA;
 
 SELECT * FROM mv;
 
+-- make sure same mv can be created in different schemas without overlap
+CREATE SCHEMA another_schema;
+SET search_path to another_schema;
+SET citus.shard_count TO 4;
+
+CREATE TABLE events (a int, b int, c double precision, d timestamp, e bigint);
+
+CREATE MATERIALIZED VIEW mv WITH (citus.cimv) AS
+SELECT a,
+       date_trunc('hour', d) AS d_hour,
+       min(b) AS min_b,
+       max(b) AS max_b,
+       avg(b) AS avg_b,
+       min(c) AS min_c,
+       max(c) AS max_c,
+       avg(c) AS avg_c,
+       min(e) AS min_e,
+       max(e) AS max_e,
+       avg(e) AS avg_e
+FROM events
+WHERE b > 10
+GROUP BY a, d_hour;
+
 DROP MATERIALIZED VIEW mv;
 
 SET client_min_messages TO WARNING; -- suppress cascade messages
