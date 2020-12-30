@@ -39,6 +39,7 @@
 #include "distributed/reference_table_utils.h"
 #include "distributed/remote_commands.h"
 #include "distributed/resource_lock.h"
+#include "distributed/security_utils.h"
 #include "distributed/shardinterval_utils.h"
 #include "distributed/shared_connection_stats.h"
 #include "distributed/string_utils.h"
@@ -1473,16 +1474,14 @@ GetNextGroupId()
 	text *sequenceName = cstring_to_text(GROUPID_SEQUENCE_NAME);
 	Oid sequenceId = ResolveRelationId(sequenceName, false);
 	Datum sequenceIdDatum = ObjectIdGetDatum(sequenceId);
-	Oid savedUserId = InvalidOid;
-	int savedSecurityContext = 0;
 
-	GetUserIdAndSecContext(&savedUserId, &savedSecurityContext);
-	SetUserIdAndSecContext(CitusExtensionOwner(), SECURITY_LOCAL_USERID_CHANGE);
+
+	PushCitusSecurityContext();
 
 	/* generate new and unique shardId from sequence */
 	Datum groupIdDatum = DirectFunctionCall1(nextval_oid, sequenceIdDatum);
 
-	SetUserIdAndSecContext(savedUserId, savedSecurityContext);
+	PopCitusSecurityContext();
 
 	int32 groupId = DatumGetInt32(groupIdDatum);
 
@@ -1505,16 +1504,13 @@ GetNextNodeId()
 	text *sequenceName = cstring_to_text(NODEID_SEQUENCE_NAME);
 	Oid sequenceId = ResolveRelationId(sequenceName, false);
 	Datum sequenceIdDatum = ObjectIdGetDatum(sequenceId);
-	Oid savedUserId = InvalidOid;
-	int savedSecurityContext = 0;
 
-	GetUserIdAndSecContext(&savedUserId, &savedSecurityContext);
-	SetUserIdAndSecContext(CitusExtensionOwner(), SECURITY_LOCAL_USERID_CHANGE);
+	PushCitusSecurityContext();
 
 	/* generate new and unique shardId from sequence */
 	Datum nextNodeIdDatum = DirectFunctionCall1(nextval_oid, sequenceIdDatum);
 
-	SetUserIdAndSecContext(savedUserId, savedSecurityContext);
+	PopCitusSecurityContext();
 
 	int nextNodeId = DatumGetUInt32(nextNodeIdDatum);
 

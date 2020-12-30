@@ -41,6 +41,7 @@
 #include "distributed/relay_utility.h"
 #include "distributed/remote_commands.h"
 #include "distributed/resource_lock.h"
+#include "distributed/security_utils.h"
 
 #include "distributed/worker_protocol.h"
 #include "distributed/version_compat.h"
@@ -594,9 +595,6 @@ worker_append_table_to_shard(PG_FUNCTION_ARGS)
 	char *sourceSchemaName = NULL;
 	char *sourceTableName = NULL;
 
-	Oid savedUserId = InvalidOid;
-	int savedSecurityContext = 0;
-
 	CheckCitusVersion(ERROR);
 
 	/* We extract schema names and table names from qualified names */
@@ -665,13 +663,12 @@ worker_append_table_to_shard(PG_FUNCTION_ARGS)
 	CheckCopyPermissions(localCopyCommand);
 
 	/* need superuser to copy from files */
-	GetUserIdAndSecContext(&savedUserId, &savedSecurityContext);
-	SetUserIdAndSecContext(CitusExtensionOwner(), SECURITY_LOCAL_USERID_CHANGE);
+	PushCitusSecurityContext();
 
 	CitusProcessUtility((Node *) localCopyCommand, queryString->data,
 						PROCESS_UTILITY_TOPLEVEL, NULL, None_Receiver, NULL);
 
-	SetUserIdAndSecContext(savedUserId, savedSecurityContext);
+	PopCitusSecurityContext();
 
 	/* finally delete the temporary file we created */
 	CitusDeleteFile(localFilePath->data);

@@ -28,6 +28,7 @@
 #include "distributed/multi_logical_planner.h"
 #include "distributed/pg_dist_colocation.h"
 #include "distributed/resource_lock.h"
+#include "distributed/security_utils.h"
 #include "distributed/shardinterval_utils.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_protocol.h"
@@ -614,16 +615,13 @@ GetNextColocationId()
 	text *sequenceName = cstring_to_text(COLOCATIONID_SEQUENCE_NAME);
 	Oid sequenceId = ResolveRelationId(sequenceName, false);
 	Datum sequenceIdDatum = ObjectIdGetDatum(sequenceId);
-	Oid savedUserId = InvalidOid;
-	int savedSecurityContext = 0;
 
-	GetUserIdAndSecContext(&savedUserId, &savedSecurityContext);
-	SetUserIdAndSecContext(CitusExtensionOwner(), SECURITY_LOCAL_USERID_CHANGE);
+	PushCitusSecurityContext();
 
 	/* generate new and unique colocation id from sequence */
 	Datum colocationIdDatum = DirectFunctionCall1(nextval_oid, sequenceIdDatum);
 
-	SetUserIdAndSecContext(savedUserId, savedSecurityContext);
+	PopCitusSecurityContext();
 
 	uint32 colocationId = DatumGetUInt32(colocationIdDatum);
 

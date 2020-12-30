@@ -48,6 +48,7 @@
 #include "distributed/metadata_sync.h"
 #include "distributed/namespace_utils.h"
 #include "distributed/pg_dist_shard.h"
+#include "distributed/security_utils.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_manager.h"
 #include "foreign/foreign.h"
@@ -293,8 +294,6 @@ master_get_new_shardid(PG_FUNCTION_ARGS)
 uint64
 GetNextShardId()
 {
-	Oid savedUserId = InvalidOid;
-	int savedSecurityContext = 0;
 	uint64 shardId = 0;
 
 	/*
@@ -316,13 +315,11 @@ GetNextShardId()
 	Oid sequenceId = ResolveRelationId(sequenceName, false);
 	Datum sequenceIdDatum = ObjectIdGetDatum(sequenceId);
 
-	GetUserIdAndSecContext(&savedUserId, &savedSecurityContext);
-	SetUserIdAndSecContext(CitusExtensionOwner(), SECURITY_LOCAL_USERID_CHANGE);
+	PushCitusSecurityContext();
 
 	/* generate new and unique shardId from sequence */
 	Datum shardIdDatum = DirectFunctionCall1(nextval_oid, sequenceIdDatum);
-
-	SetUserIdAndSecContext(savedUserId, savedSecurityContext);
+	PopCitusSecurityContext();
 
 	shardId = DatumGetInt64(shardIdDatum);
 
@@ -365,8 +362,6 @@ master_get_new_placementid(PG_FUNCTION_ARGS)
 uint64
 GetNextPlacementId(void)
 {
-	Oid savedUserId = InvalidOid;
-	int savedSecurityContext = 0;
 	uint64 placementId = 0;
 
 	/*
@@ -388,13 +383,12 @@ GetNextPlacementId(void)
 	Oid sequenceId = ResolveRelationId(sequenceName, false);
 	Datum sequenceIdDatum = ObjectIdGetDatum(sequenceId);
 
-	GetUserIdAndSecContext(&savedUserId, &savedSecurityContext);
-	SetUserIdAndSecContext(CitusExtensionOwner(), SECURITY_LOCAL_USERID_CHANGE);
+	PushCitusSecurityContext();
 
 	/* generate new and unique placement id from sequence */
 	Datum placementIdDatum = DirectFunctionCall1(nextval_oid, sequenceIdDatum);
 
-	SetUserIdAndSecContext(savedUserId, savedSecurityContext);
+	PopCitusSecurityContext();
 
 	placementId = DatumGetInt64(placementIdDatum);
 

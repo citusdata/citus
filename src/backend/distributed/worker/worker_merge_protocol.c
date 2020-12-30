@@ -32,6 +32,7 @@
 #include "commands/tablecmds.h"
 #include "common/string.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/security_utils.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/version_compat.h"
 
@@ -183,8 +184,6 @@ worker_merge_files_into_table(PG_FUNCTION_ARGS)
 	StringInfo jobSchemaName = JobSchemaName(jobId);
 	StringInfo taskTableName = TaskTableName(taskId);
 	StringInfo taskDirectoryName = TaskDirectoryName(jobId, taskId);
-	Oid savedUserId = InvalidOid;
-	int savedSecurityContext = 0;
 	Oid userId = GetUserId();
 
 	/* we should have the same number of column names and types */
@@ -234,13 +233,11 @@ worker_merge_files_into_table(PG_FUNCTION_ARGS)
 	CreateTaskTable(jobSchemaName, taskTableName, columnNameList, columnTypeList);
 
 	/* need superuser to copy from files */
-	GetUserIdAndSecContext(&savedUserId, &savedSecurityContext);
-	SetUserIdAndSecContext(CitusExtensionOwner(), SECURITY_LOCAL_USERID_CHANGE);
-
+	PushCitusSecurityContext();
 	CopyTaskFilesFromDirectory(jobSchemaName, taskTableName, taskDirectoryName,
 							   userId);
 
-	SetUserIdAndSecContext(savedUserId, savedSecurityContext);
+	PopCitusSecurityContext();
 	PG_RETURN_VOID();
 }
 

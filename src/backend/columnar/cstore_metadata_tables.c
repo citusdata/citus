@@ -29,6 +29,7 @@
 #include "commands/defrem.h"
 #include "commands/trigger.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/security_utils.h"
 #include "executor/executor.h"
 #include "executor/spi.h"
 #include "miscadmin.h"
@@ -1199,8 +1200,6 @@ InitMetapage(Relation relation)
 static uint64
 GetNextStorageId(void)
 {
-	Oid savedUserId = InvalidOid;
-	int savedSecurityContext = 0;
 	Oid sequenceId = get_relname_relid("storageid_seq", CStoreNamespaceId());
 	Datum sequenceIdDatum = ObjectIdGetDatum(sequenceId);
 
@@ -1208,15 +1207,14 @@ GetNextStorageId(void)
 	 * Not all users have update access to the sequence, so switch
 	 * security context.
 	 */
-	GetUserIdAndSecContext(&savedUserId, &savedSecurityContext);
-	SetUserIdAndSecContext(CitusExtensionOwner(), SECURITY_LOCAL_USERID_CHANGE);
+	PushCitusSecurityContext();
 
 	/*
 	 * Generate new and unique storage id from sequence.
 	 */
 	Datum storageIdDatum = DirectFunctionCall1(nextval_oid, sequenceIdDatum);
 
-	SetUserIdAndSecContext(savedUserId, savedSecurityContext);
+	PopCitusSecurityContext();
 
 	uint64 storageId = DatumGetInt64(storageIdDatum);
 

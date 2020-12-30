@@ -31,6 +31,7 @@
 #include "distributed/metadata/distobject.h"
 #include "distributed/metadata/pg_dist_object.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/security_utils.h"
 #include "distributed/version_compat.h"
 #include "executor/spi.h"
 #include "nodes/makefuncs.h"
@@ -189,9 +190,6 @@ static int
 ExecuteCommandAsSuperuser(char *query, int paramCount, Oid *paramTypes,
 						  Datum *paramValues)
 {
-	Oid savedUserId = InvalidOid;
-	int savedSecurityContext = 0;
-
 	int spiConnected = SPI_connect();
 	if (spiConnected != SPI_OK_CONNECT)
 	{
@@ -199,13 +197,11 @@ ExecuteCommandAsSuperuser(char *query, int paramCount, Oid *paramTypes,
 	}
 
 	/* make sure we have write access */
-	GetUserIdAndSecContext(&savedUserId, &savedSecurityContext);
-	SetUserIdAndSecContext(CitusExtensionOwner(), SECURITY_LOCAL_USERID_CHANGE);
-
+	PushCitusSecurityContext();
 	int spiStatus = SPI_execute_with_args(query, paramCount, paramTypes, paramValues,
 										  NULL, false, 0);
 
-	SetUserIdAndSecContext(savedUserId, savedSecurityContext);
+	PopCitusSecurityContext();
 
 	int spiFinished = SPI_finish();
 	if (spiFinished != SPI_OK_FINISH)
