@@ -6,6 +6,7 @@
 #include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/pg_cimv.h"
+#include "distributed/security_utils.h"
 #include "executor/spi.h"
 #include "nodes/parsenodes.h"
 #include "utils/builtins.h"
@@ -122,6 +123,9 @@ ProcessDropViewStmt(DropStmt *stmt)
 static void
 DropCimv(Form_pg_cimv formCimv, DropBehavior behavior)
 {
+
+	PushCitusSecurityContext();
+
 	ObjectAddress matTableAddress;
 	matTableAddress.classId = RelationRelationId;
 	matTableAddress.objectId = formCimv->mattable;
@@ -191,6 +195,7 @@ DropCimv(Form_pg_cimv formCimv, DropBehavior behavior)
 
 	DeletePgCimvRow(userViewAddress.objectId);
 
+	PopCitusSecurityContext();
 	/* Close SPI context. */
 	if (SPI_finish() != SPI_OK_FINISH)
 	{

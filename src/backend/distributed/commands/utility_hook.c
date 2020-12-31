@@ -461,27 +461,25 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 	bool continueProcessing = true;
 	if (IsA(parsetree, CreateTableAsStmt))
 	{
-		PushCitusSecurityContext();
 		continueProcessing = !ProcessCreateMaterializedViewStmt((const
 																 CreateTableAsStmt *)
 																parsetree, queryString,
 																pstmt);
-		PopCitusSecurityContext();														
 	}
 
 	if (IsA(parsetree, RefreshMatViewStmt))
 	{
-		PushCitusSecurityContext();
+		// PushCitusSecurityContext();
 		continueProcessing = !ProcessRefreshMaterializedViewStmt(
 			(RefreshMatViewStmt *) parsetree);
-		PopCitusSecurityContext();	
+		// PopCitusSecurityContext();	
 	}
 
 	if (IsA(parsetree, DropStmt))
 	{
 		DropStmt *dropStatement = (DropStmt *) parsetree;
 
-		PushCitusSecurityContext();
+		// PushCitusSecurityContext();
 		if (dropStatement->removeType == OBJECT_MATVIEW)
 		{
 			ProcessDropMaterializedViewStmt(dropStatement);
@@ -490,7 +488,7 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		{
 			ProcessDropViewStmt(dropStatement);
 		}
-		PopCitusSecurityContext();
+		// PopCitusSecurityContext();
 
 	}
 

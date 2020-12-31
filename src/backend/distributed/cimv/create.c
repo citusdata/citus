@@ -149,6 +149,8 @@ CreateCimv(CimvCreate *cimvCreate)
 		elog(ERROR, "SPI_connect failed");
 	}
 
+	PushCitusSecurityContext();
+
 	CreateMatTable(cimvCreate, false);
 
 	if (cimvCreate->createOptions->schedule != NULL)
@@ -162,6 +164,8 @@ CreateCimv(CimvCreate *cimvCreate)
 	CreateDataChangeTriggerFunction(cimvCreate);
 	CreateDataChangeTriggers(cimvCreate);
 	InsertIntoPgCimv(cimvCreate->formCimv);
+
+	PopCitusSecurityContext();
 
 	if (SPI_finish() != SPI_OK_FINISH)
 	{

@@ -5,6 +5,7 @@
 #include "catalog/pg_class.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/security_utils.h"
 #include "distributed/pg_cimv.h"
 #include "executor/spi.h"
 #include "nodes/parsenodes.h"
@@ -109,10 +110,12 @@ RefreshCimv(Form_pg_cimv formCimv, bool skipData, bool isCreate)
 							 matTableName,
 							 refreshViewSchemaName,
 							 refreshViewName);
+			PushCitusSecurityContext();				 
 			if (SPI_execute(querybuf.data, false, 0) != SPI_OK_INSERT)
 			{
 				elog(ERROR, "SPI_exec failed: %s", querybuf.data);
 			}
+			PopCitusSecurityContext();
 		}
 		else
 		{
@@ -133,6 +136,7 @@ RefreshCimv(Form_pg_cimv formCimv, bool skipData, bool isCreate)
 							 matTableName,
 							 refreshViewSchemaName,
 							 refreshViewName);
+			PushCitusSecurityContext();				 
 			SpiExecuteSnapshot(&querybuf, snapshot, SPI_OK_INSERT);
 			resetStringInfo(&querybuf);
 
@@ -146,6 +150,7 @@ RefreshCimv(Form_pg_cimv formCimv, bool skipData, bool isCreate)
 				SpiExecuteSnapshot(&querybuf, snapshot, SPI_OK_DELETE);
 				resetStringInfo(&querybuf);
 			}
+			PopCitusSecurityContext();
 		}
 	}
 
