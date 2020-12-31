@@ -56,7 +56,7 @@ static int GetNumberOfIndexParameters(IndexStmt *createIndexStatement);
 static bool IndexAlreadyExists(IndexStmt *createIndexStatement);
 static Oid CreateIndexStmtGetIndexId(IndexStmt *createIndexStatement);
 static Oid CreateIndexStmtGetSchemaId(IndexStmt *createIndexStatement);
-static void SwitchToSequentialOrLocalExecutionIfIndexNameTooLong(
+static void SwitchToSequentialAndLocalExecutionIfIndexNameTooLong(
 	IndexStmt *createIndexStatement);
 static char * GenerateLongestShardPartitionIndexName(IndexStmt *createIndexStatement);
 static char * GenerateDefaultIndexName(IndexStmt *createIndexStatement);
@@ -220,7 +220,7 @@ PreprocessIndexStmt(Node *node, const char *createIndexCommand)
 	 * the same, and thus forming a self-deadlock as these tables/
 	 * indexes are inserted into postgres' metadata tables, like pg_class.
 	 */
-	SwitchToSequentialOrLocalExecutionIfIndexNameTooLong(createIndexStatement);
+	SwitchToSequentialAndLocalExecutionIfIndexNameTooLong(createIndexStatement);
 
 	DDLJob *ddlJob = GenerateCreateIndexDDLJob(createIndexStatement, createIndexCommand);
 	return list_make1(ddlJob);
@@ -347,12 +347,11 @@ ExecuteFunctionOnEachTableIndex(Oid relationId, PGIndexProcessor pgIndexProcesso
 
 /*
  * SwitchToSequentialOrLocalExecutionIfIndexNameTooLong generates the longest index name
- * on the shards of the partitions, and if exceeds the limit switches to the
- * sequential execution to prevent self-deadlocks. For single node, switches to local
- * execution to prevent a distributed deadlock.
+ * on the shards of the partitions, and if exceeds the limit switches to sequential and
+ * local execution to prevent self-deadlocks.
  */
 static void
-SwitchToSequentialOrLocalExecutionIfIndexNameTooLong(IndexStmt *createIndexStatement)
+SwitchToSequentialAndLocalExecutionIfIndexNameTooLong(IndexStmt *createIndexStatement)
 {
 	Oid relationId = CreateIndexStmtGetRelationId(createIndexStatement);
 	if (!PartitionedTable(relationId))
@@ -374,16 +373,7 @@ SwitchToSequentialOrLocalExecutionIfIndexNameTooLong(IndexStmt *createIndexState
 	if (indexName &&
 		strnlen(indexName, NAMEDATALEN) >= NAMEDATALEN - 1)
 	{
-		if (IsSingleNodeCluster())
-		{
-			/* switch to local execution in case of single node, to prevent deadlock */
-			elog(DEBUG1, "the index name on the shards of the partition "
-						 "is too long, switching to local execution "
-						 "mode to prevent self deadlocks: %s", indexName);
-
-			SetLocalExecutionStatus(LOCAL_EXECUTION_REQUIRED);
-		}
-		else if (ParallelQueryExecutedInTransaction())
+		if (ParallelQueryExecutedInTransaction())
 		{
 			/*
 			 * If there has already been a parallel query executed, the sequential mode
@@ -401,10 +391,11 @@ SwitchToSequentialOrLocalExecutionIfIndexNameTooLong(IndexStmt *createIndexState
 		else
 		{
 			elog(DEBUG1, "the index name on the shards of the partition "
-						 "is too long, switching to sequential execution "
+						 "is too long, switching to sequential and local execution "
 						 "mode to prevent self deadlocks: %s", indexName);
 
 			SetLocalMultiShardModifyModeToSequential();
+			SetLocalExecutionStatus(LOCAL_EXECUTION_REQUIRED);
 		}
 	}
 }

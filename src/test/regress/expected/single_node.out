@@ -256,16 +256,10 @@ select create_distributed_table('test_index_creation1', 'tenant_id');
 
 (1 row)
 
-SET citus.log_remote_commands TO true;
 -- should be able to create indexes with INCLUDE/WHERE
 CREATE INDEX ix_test_index_creation5 ON test_index_creation1
 	USING btree(tenant_id, timeperiod)
 	INCLUDE (field1) WHERE (tenant_id = 100);
-NOTICE:  executing the command locally: CREATE  INDEX   ix_test_index_creation5_90630522 ON single_node.test_index_creation1_90630522 USING btree (tenant_id ,timeperiod ) INCLUDE (field1 )WHERE (tenant_id = 100)
-NOTICE:  executing the command locally: CREATE  INDEX   ix_test_index_creation5_90630523 ON single_node.test_index_creation1_90630523 USING btree (tenant_id ,timeperiod ) INCLUDE (field1 )WHERE (tenant_id = 100)
-NOTICE:  executing the command locally: CREATE  INDEX   ix_test_index_creation5_90630524 ON single_node.test_index_creation1_90630524 USING btree (tenant_id ,timeperiod ) INCLUDE (field1 )WHERE (tenant_id = 100)
-NOTICE:  executing the command locally: CREATE  INDEX   ix_test_index_creation5_90630525 ON single_node.test_index_creation1_90630525 USING btree (tenant_id ,timeperiod ) INCLUDE (field1 )WHERE (tenant_id = 100)
-RESET citus.log_remote_commands;
 -- test if indexes are created
 SELECT 1 AS created WHERE EXISTS(SELECT * FROM pg_indexes WHERE indexname LIKE '%test_index_creation%');
  created
