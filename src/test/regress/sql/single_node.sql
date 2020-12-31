@@ -138,10 +138,14 @@ PARTITION OF test_index_creation1 FOR VALUES FROM ('2020-09-27 00:00:00') TO ('2
 
 select create_distributed_table('test_index_creation1', 'tenant_id');
 
+SET citus.log_remote_commands TO true;
+
 -- should be able to create indexes with INCLUDE/WHERE
 CREATE INDEX ix_test_index_creation5 ON test_index_creation1
 	USING btree(tenant_id, timeperiod)
 	INCLUDE (field1) WHERE (tenant_id = 100);
+
+RESET citus.log_remote_commands;
 
 -- test if indexes are created
 SELECT 1 AS created WHERE EXISTS(SELECT * FROM pg_indexes WHERE indexname LIKE '%test_index_creation%');

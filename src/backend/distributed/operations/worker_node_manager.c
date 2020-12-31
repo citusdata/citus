@@ -500,6 +500,21 @@ DistributedTablePlacementNodeList(LOCKMODE lockMode)
 
 
 /*
+ * IsSingleNodeCluster returns true if it's a single node cluster, false otherwise.
+ */
+bool
+IsSingleNodeCluster(void)
+{
+	if (list_length(DistributedTablePlacementNodeList(NoLock)) == 1)
+	{
+		return true;
+	}
+
+	return false;
+}
+
+
+/*
  * NodeCanHaveDistTablePlacements returns true if the given node can have
  * shards of a distributed table.
  */

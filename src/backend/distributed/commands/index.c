@@ -374,10 +374,7 @@ SwitchToSequentialOrLocalExecutionIfIndexNameTooLong(IndexStmt *createIndexState
 	if (indexName &&
 		strnlen(indexName, NAMEDATALEN) >= NAMEDATALEN - 1)
 	{
-		/* to check whether it's a single node cluster or not */
-		int workerCount = list_length(DistributedTablePlacementNodeList(NoLock));
-
-		if (workerCount < 2)
+		if (IsSingleNodeCluster())
 		{
 			/* switch to local execution in case of single node, to prevent deadlock */
 			elog(DEBUG1, "the index name on the shards of the partition "
