@@ -151,7 +151,7 @@ CreateDistributedUnionPlan(PlannerInfo *root,
 		initStringInfo(&buf);
 		pg_get_query_def(qc, &buf);
 
-		Task *sqlTask = CreateBasicTask(workerJob->jobId, i, SELECT_TASK, buf.data);
+		Task *sqlTask = CreateBasicTask(workerJob->jobId, i, READ_TASK, buf.data);
 		sqlTask->anchorShardId = shardInterval->shardId;
 		sqlTask->taskPlacementList = ActiveShardPlacementList(shardInterval->shardId);
 		workerJob->taskList = lappend(workerJob->taskList, sqlTask);
@@ -163,7 +163,7 @@ CreateDistributedUnionPlan(PlannerInfo *root,
 	distributedPlan->workerJob = workerJob;
 	distributedPlan->modLevel = ROW_MODIFY_READONLY;
 	distributedPlan->relationIdList = list_make1_oid(distUnion->sampleRelid);
-	distributedPlan->hasReturning = true;
+	distributedPlan->expectResults = true;
 
 	Plan *subPlan = NULL;
 	int subPlanCount = 0;
@@ -302,12 +302,13 @@ PathBasedPlannerRelationHook(PlannerInfo *root,
 	foreach(pathCell, relOptInfo->pathlist)
 	{
 		Path *originalPath = lfirst(pathCell);
-		pathCell->data.ptr_value =
-			WrapTableAccessWithDistributedUnion(originalPath,
-												TableColocationId(rte->relid),
-												partitionValue,
-												rte->relid,
-												NIL);
+		CustomPath *wrappedPath = WrapTableAccessWithDistributedUnion(
+			originalPath,
+			TableColocationId(rte->relid),
+			partitionValue,
+			rte->relid,
+			NIL);
+		SetListCellPtr(pathCell, wrappedPath);
 	}
 }
 
@@ -923,8 +924,9 @@ PathBasedPlannerGroupAgg(PlannerInfo *root,
 	ListCell *pathCell = NULL;
 	foreach(pathCell, output_rel->pathlist)
 	{
-		Path *originalPath = pathCell->data.ptr_value;
-		pathCell->data.ptr_value = OptimizeGroupAgg(root, originalPath);
+		Path *originalPath = lfirst(pathCell);
+		Path *optimizedGroupAdd = OptimizeGroupAgg(root, originalPath);
+		SetListCellPtr(pathCell, optimizedGroupAdd);
 	}
 }
 
