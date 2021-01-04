@@ -731,12 +731,12 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 		}
 		PG_CATCH();
 		{
-			ereport(ERROR,
-					(errmsg("CONCURRENTLY-enabled index command failed"),
-					 errdetail("CONCURRENTLY-enabled index commands can fail partially, "
-							   "leaving behind an INVALID index."),
+			ereport(NOTICE,
+					(errmsg("CONCURRENTLY-enabled index commands can fail partially, "
+							"leaving behind an INVALID index."),
 					 errhint("Use DROP INDEX CONCURRENTLY IF EXISTS to remove the "
-							 "invalid index, then retry the original command.")));
+							 "invalid index.")));
+			PG_RE_THROW();
 		}
 		PG_END_TRY();
 	}
