@@ -26,9 +26,11 @@ SELECT citus.mitmproxy('conn.onQuery(query="CREATE").kill()');
 (1 row)
 
 CREATE INDEX CONCURRENTLY idx_index_test ON index_test(id, value_1);
-ERROR:  CONCURRENTLY-enabled index command failed
-DETAIL:  CONCURRENTLY-enabled index commands can fail partially, leaving behind an INVALID index.
-HINT:  Use DROP INDEX CONCURRENTLY IF EXISTS to remove the invalid index, then retry the original command.
+NOTICE:  CONCURRENTLY-enabled index commands can fail partially, leaving behind an INVALID index.
+HINT:  Use DROP INDEX CONCURRENTLY IF EXISTS to remove the invalid index.
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
+	   This probably means the server terminated abnormally
+	   before or while processing the request.
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
 ---------------------------------------------------------------------
@@ -59,9 +61,11 @@ SELECT citus.mitmproxy('conn.onQuery(query="CREATE").kill()');
 (1 row)
 
 CREATE INDEX CONCURRENTLY idx_index_test ON index_test(id, value_1);
-ERROR:  CONCURRENTLY-enabled index command failed
-DETAIL:  CONCURRENTLY-enabled index commands can fail partially, leaving behind an INVALID index.
-HINT:  Use DROP INDEX CONCURRENTLY IF EXISTS to remove the invalid index, then retry the original command.
+NOTICE:  CONCURRENTLY-enabled index commands can fail partially, leaving behind an INVALID index.
+HINT:  Use DROP INDEX CONCURRENTLY IF EXISTS to remove the invalid index.
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
+	   This probably means the server terminated abnormally
+	   before or while processing the request.
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
 ---------------------------------------------------------------------
@@ -86,9 +90,9 @@ SELECT citus.mitmproxy('conn.onQuery(query="CREATE").cancel(' || pg_backend_pid(
 (1 row)
 
 CREATE INDEX CONCURRENTLY idx_index_test ON index_test(id, value_1);
-ERROR:  CONCURRENTLY-enabled index command failed
-DETAIL:  CONCURRENTLY-enabled index commands can fail partially, leaving behind an INVALID index.
-HINT:  Use DROP INDEX CONCURRENTLY IF EXISTS to remove the invalid index, then retry the original command.
+NOTICE:  CONCURRENTLY-enabled index commands can fail partially, leaving behind an INVALID index.
+HINT:  Use DROP INDEX CONCURRENTLY IF EXISTS to remove the invalid index.
+ERROR:  canceling statement due to user request
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
 ---------------------------------------------------------------------
@@ -111,9 +115,9 @@ SELECT citus.mitmproxy('conn.onQuery(query="CREATE").cancel(' || pg_backend_pid(
 (1 row)
 
 CREATE INDEX CONCURRENTLY idx_index_test ON index_test(id, value_1);
-ERROR:  CONCURRENTLY-enabled index command failed
-DETAIL:  CONCURRENTLY-enabled index commands can fail partially, leaving behind an INVALID index.
-HINT:  Use DROP INDEX CONCURRENTLY IF EXISTS to remove the invalid index, then retry the original command.
+NOTICE:  CONCURRENTLY-enabled index commands can fail partially, leaving behind an INVALID index.
+HINT:  Use DROP INDEX CONCURRENTLY IF EXISTS to remove the invalid index.
+ERROR:  canceling statement due to user request
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
 ---------------------------------------------------------------------
@@ -137,9 +141,11 @@ SELECT citus.mitmproxy('conn.onQuery(query="DROP INDEX CONCURRENTLY").kill()');
 (1 row)
 
 DROP INDEX CONCURRENTLY IF EXISTS idx_index_test;
-ERROR:  CONCURRENTLY-enabled index command failed
-DETAIL:  CONCURRENTLY-enabled index commands can fail partially, leaving behind an INVALID index.
-HINT:  Use DROP INDEX CONCURRENTLY IF EXISTS to remove the invalid index, then retry the original command.
+NOTICE:  CONCURRENTLY-enabled index commands can fail partially, leaving behind an INVALID index.
+HINT:  Use DROP INDEX CONCURRENTLY IF EXISTS to remove the invalid index.
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
+	   This probably means the server terminated abnormally
+	   before or while processing the request.
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
 ---------------------------------------------------------------------
@@ -154,9 +160,27 @@ WHERE nodeport = :worker_2_proxy_port;
  localhost |     9060 | t       | 4
 (1 row)
 
+-- test unique concurrent index creation failure when there are duplicates
+CREATE TABLE index_test_2 (a int, b int);
+SELECT create_distributed_table('index_test_2', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO index_test_2 VALUES (1, 1), (1, 2);
+CREATE UNIQUE INDEX CONCURRENTLY index_test_2_a_idx ON index_test_2(a);
+NOTICE:  CONCURRENTLY-enabled index commands can fail partially, leaving behind an INVALID index.
+HINT:  Use DROP INDEX CONCURRENTLY IF EXISTS to remove the invalid index.
+ERROR:  could not create unique index "index_test_2_a_idx_1880019"
+DETAIL:  Key (a)=(1) is duplicated.
+CONTEXT:  while executing command on localhost:xxxxx
+DROP INDEX CONCURRENTLY IF EXISTS index_test_2_a_idx;
 RESET SEARCH_PATH;
 DROP SCHEMA index_schema CASCADE;
-NOTICE:  drop cascades to table index_schema.index_test
+NOTICE:  drop cascades to 2 other objects
+DETAIL:  drop cascades to table index_schema.index_test
+drop cascades to table index_schema.index_test_2
 -- verify index is not at worker 2 upon cleanup
 SELECT * FROM run_command_on_workers($$SELECT count(*) FROM pg_indexes WHERE indexname LIKE 'idx_index_test%' $$)
 WHERE nodeport = :worker_2_proxy_port;
