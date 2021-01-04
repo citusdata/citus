@@ -133,15 +133,20 @@ static List * TranslatedVars(PlannerInfo *root, int relationIndex);
 /* Distributed planner hook */
 PlannedStmt *
 distributed_planner(Query *parse,
-	#if PG_VERSION_NUM >= PG_VERSION_13
+#if PG_VERSION_NUM >= PG_VERSION_13
 					const char *query_string,
-	#endif
+#endif
 					int cursorOptions,
 					ParamListInfo boundParams)
 {
 	if (UseCustomPath)
 	{
-		return standard_planner(parse, cursorOptions, boundParams);
+		return standard_planner(parse,
+#if PG_VERSION_NUM >= PG_VERSION_13
+								query_string,
+#endif
+								cursorOptions,
+								boundParams);
 	}
 
 	bool needsDistributedPlanning = false;
