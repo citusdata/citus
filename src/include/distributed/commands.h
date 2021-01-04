@@ -484,4 +484,8 @@ extern void CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys);
 extern bool ShouldPropagateSetCommand(VariableSetStmt *setStmt);
 extern void PostprocessVariableSetStmt(VariableSetStmt *setStmt, const char *setCommand);
 
+/* create_citus_local_table.c */
+
+extern void CreateCitusLocalTable(Oid relationId, bool cascade);
+
 #endif /*CITUS_COMMANDS_H */

@@ -327,6 +327,7 @@ test: citus_local_tables
 test: multi_row_router_insert mixed_relkind_tests create_ref_dist_from_citus_local
 test: undistribute_table_cascade
 test: create_citus_local_table_cascade
+test: fkeys_between_local_ref
 
 test: remove_coordinator
 
