@@ -55,8 +55,9 @@ static void ErrorIfAlterTableDefinesFKeyFromPostgresToCitusLocalTable(
 static List * GetAlterTableStmtFKeyConstraintList(AlterTableStmt *alterTableStatement);
 static List * GetAlterTableCommandFKeyConstraintList(AlterTableCmd *command);
 static bool AlterTableCommandTypeIsTrigger(AlterTableType alterTableType);
-static bool AlterTableHasCommandByFunc(AlterTableStmt *alterTableStatement,
-									   AlterTableCommandFunc alterTableCommandFunc);
+static bool FindAlterTableCmdMatchingCheckFunction(AlterTableStmt *alterTableStatement,
+												   AlterTableCommandFunc
+												   alterTableCommandFunc);
 static bool AlterTableCmdAddsOrDropsFkey(AlterTableCmd *command, Oid relationId);
 static bool AlterTableCmdAddsFKey(AlterTableCmd *command, Oid relationId);
 static bool AlterTableCmdDropsFkey(AlterTableCmd *command, Oid relationId);
@@ -408,7 +409,8 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand)
 	 */
 	ErrorIfAlterTableDefinesFKeyFromPostgresToCitusLocalTable(alterTableStatement);
 
-	if (AlterTableHasCommandByFunc(alterTableStatement, AlterTableCmdAddsOrDropsFkey))
+	if (FindAlterTableCmdMatchingCheckFunction(alterTableStatement,
+											   AlterTableCmdAddsOrDropsFkey))
 	{
 		MarkInvalidateForeignKeyGraph();
 	}
@@ -998,12 +1000,12 @@ PostprocessAlterTableStmt(AlterTableStmt *alterTableStatement)
 
 
 /*
- * AlterTableHasCommandByFunc returns true if given alterTableCommandFunc returns
- * true for any subcommand of alterTableStatement.
+ * FindAlterTableCmdMatchingCheckFunction returns true if given alterTableCommandFunc
+ * returns true for any subcommand of alterTableStatement.
  */
 static bool
-AlterTableHasCommandByFunc(AlterTableStmt *alterTableStatement,
-						   AlterTableCommandFunc alterTableCommandFunc)
+FindAlterTableCmdMatchingCheckFunction(AlterTableStmt *alterTableStatement,
+									   AlterTableCommandFunc alterTableCommandFunc)
 {
 	List *commandList = alterTableStatement->cmds;
 	AlterTableCmd *command = NULL;
