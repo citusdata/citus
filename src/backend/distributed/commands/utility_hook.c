@@ -705,6 +705,7 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 		Assert(SavedMultiShardCommitProtocol == COMMIT_PROTOCOL_BARE);
 		SavedMultiShardCommitProtocol = MultiShardCommitProtocol;
 		MultiShardCommitProtocol = COMMIT_PROTOCOL_BARE;
+		MemoryContext savedContext = CurrentMemoryContext;
 
 		PG_TRY();
 		{
@@ -731,12 +732,32 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 		}
 		PG_CATCH();
 		{
-			ereport(NOTICE,
-					(errmsg("CONCURRENTLY-enabled index commands can fail partially, "
-							"leaving behind an INVALID index."),
-					 errhint("Use DROP INDEX CONCURRENTLY IF EXISTS to remove the "
-							 "invalid index.")));
-			PG_RE_THROW();
+			MemoryContextSwitchTo(savedContext);
+			ErrorData *edata = CopyErrorData();
+
+			/*
+			 * In concurrent index creation, if a worker index with the same name already
+			 * exists, prompt to DROP the current index and retry the original command
+			 */
+			if (edata->sqlerrcode == ERRCODE_DUPLICATE_TABLE)
+			{
+				ereport(ERROR,
+						(errmsg("CONCURRENTLY-enabled index command failed"),
+						 errdetail(
+							 "CONCURRENTLY-enabled index commands can fail partially, "
+							 "leaving behind an INVALID index."),
+						 errhint("Use DROP INDEX CONCURRENTLY IF EXISTS to remove the "
+								 "invalid index, then retry the original command.")));
+			}
+			else
+			{
+				ereport(WARNING,
+						(errmsg(
+							 "CONCURRENTLY-enabled index commands can fail partially, "
+							 "leaving behind an INVALID index.\n Use DROP INDEX "
+							 "CONCURRENTLY IF EXISTS to remove the invalid index.")));
+				PG_RE_THROW();
+			}
 		}
 		PG_END_TRY();
 	}
