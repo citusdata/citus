@@ -251,6 +251,19 @@ PostprocessCreateTableStmtPartitionOf(CreateStmt *createStatement, const
 		CreateDistributedTable(relationId, parentDistributionColumn,
 							   parentDistributionMethod, parentRelationName,
 							   viaDeprecatedAPI);
+		return;
+	}
+
+	/*
+	 * If parent is a postgres local table, then invalidate foreign key cache
+	 * if the parent table is involved in any foreign key relationship. This is
+	 * because, partition tables inherit foreign keys from parent tables.
+	 * Note that if parent table is a citus table, then CreateDistributedTable
+	 * already invalidates foreign key cache and we handle that case above.
+	 */
+	if ((TableReferenced(parentRelationId) || TableReferencing(parentRelationId)))
+	{
+		MarkInvalidateForeignKeyGraph();
 	}
 }
 
@@ -325,6 +338,23 @@ PostprocessAlterTableStmtAttachPartition(AlterTableStmt *alterTableStatement,
 				CreateDistributedTable(partitionRelationId, distributionColumn,
 									   distributionMethod, parentRelationName,
 									   viaDeprecatedAPI);
+			}
+
+			if (!IsCitusTable(relationId) &&
+				!IsCitusTable(partitionRelationId))
+			{
+				/*
+				 * If parent and child tables are postgres local tables, then invalidate
+				 * foreign key cache if the parent table is involved in any foreign key
+				 * relationship. This is because, partition tables inherit foreign keys
+				 * from parent tables.
+				 * Note that if parent table is a citus table, then CreateDistributedTable
+				 * already invalidates foreign key cache and we handle that case above.
+				 */
+				if ((TableReferenced(relationId) || TableReferencing(relationId)))
+				{
+					MarkInvalidateForeignKeyGraph();
+				}
 			}
 		}
 	}
