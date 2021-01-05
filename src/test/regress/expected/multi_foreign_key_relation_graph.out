@@ -925,6 +925,48 @@ ALTER TABLE local_table_1 ADD COLUMN unrelated_column int;
 -- show that droping a table not referenced and not referencing to any table
 -- does not invalidate foreign key graph
 DROP TABLE local_table_4;
+CREATE TABLE partitioned_table_1 (col_1 INT UNIQUE, col_2 INT) PARTITION BY RANGE (col_1);
+DEBUG:  CREATE TABLE / UNIQUE will create implicit index "partitioned_table_1_col_1_key" for table "partitioned_table_1"
+CREATE TABLE partitioned_table_1_100_200 PARTITION OF partitioned_table_1 FOR VALUES FROM (100) TO (200);
+DEBUG:  CREATE TABLE / UNIQUE will create implicit index "partitioned_table_1_100_200_col_1_key" for table "partitioned_table_1_100_200"
+CREATE TABLE partitioned_table_1_200_300 PARTITION OF partitioned_table_1 FOR VALUES FROM (200) TO (300);
+DEBUG:  CREATE TABLE / UNIQUE will create implicit index "partitioned_table_1_200_300_col_1_key" for table "partitioned_table_1_200_300"
+SELECT create_distributed_table('partitioned_table_1', 'col_1');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE partitioned_table_2 (col_1 INT UNIQUE, col_2 INT) PARTITION BY RANGE (col_1);
+DEBUG:  CREATE TABLE / UNIQUE will create implicit index "partitioned_table_2_col_1_key" for table "partitioned_table_2"
+CREATE TABLE partitioned_table_2_100_200 PARTITION OF partitioned_table_2 FOR VALUES FROM (100) TO (200);
+DEBUG:  CREATE TABLE / UNIQUE will create implicit index "partitioned_table_2_100_200_col_1_key" for table "partitioned_table_2_100_200"
+CREATE TABLE partitioned_table_2_200_300 PARTITION OF partitioned_table_2 FOR VALUES FROM (200) TO (300);
+DEBUG:  CREATE TABLE / UNIQUE will create implicit index "partitioned_table_2_200_300_col_1_key" for table "partitioned_table_2_200_300"
+SELECT create_distributed_table('partitioned_table_2', 'col_1');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE reference_table_4 (col_1 INT UNIQUE, col_2 INT UNIQUE);
+DEBUG:  CREATE TABLE / UNIQUE will create implicit index "reference_table_4_col_1_key" for table "reference_table_4"
+DEBUG:  CREATE TABLE / UNIQUE will create implicit index "reference_table_4_col_2_key" for table "reference_table_4"
+SELECT create_reference_table('reference_table_4');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- observe foreign key graph invalidation with partitioned tables
+ALTER TABLE partitioned_table_1 ADD CONSTRAINT fkey_8 FOREIGN KEY (col_1) REFERENCES reference_table_4(col_2);
+DEBUG:  DDL command invalidates foreign key graph
+ALTER TABLE partitioned_table_2 ADD CONSTRAINT fkey_9 FOREIGN KEY (col_1) REFERENCES reference_table_4(col_2);
+DEBUG:  DDL command invalidates foreign key graph
+-- show that we don't invalidate foreign key graph for attach partition commands
+CREATE TABLE partitioned_table_1_300_400 PARTITION OF partitioned_table_1 FOR VALUES FROM (300) TO (400);
+DEBUG:  CREATE TABLE / UNIQUE will create implicit index "partitioned_table_1_300_400_col_1_key" for table "partitioned_table_1_300_400"
+DEBUG:  switching to sequential query execution mode
 set client_min_messages to error;
 SET search_path TO public;
 DROP SCHEMA fkey_graph CASCADE;

@@ -423,6 +423,26 @@ ALTER TABLE local_table_1 ADD COLUMN unrelated_column int;
 -- does not invalidate foreign key graph
 DROP TABLE local_table_4;
 
+CREATE TABLE partitioned_table_1 (col_1 INT UNIQUE, col_2 INT) PARTITION BY RANGE (col_1);
+CREATE TABLE partitioned_table_1_100_200 PARTITION OF partitioned_table_1 FOR VALUES FROM (100) TO (200);
+CREATE TABLE partitioned_table_1_200_300 PARTITION OF partitioned_table_1 FOR VALUES FROM (200) TO (300);
+SELECT create_distributed_table('partitioned_table_1', 'col_1');
+
+CREATE TABLE partitioned_table_2 (col_1 INT UNIQUE, col_2 INT) PARTITION BY RANGE (col_1);
+CREATE TABLE partitioned_table_2_100_200 PARTITION OF partitioned_table_2 FOR VALUES FROM (100) TO (200);
+CREATE TABLE partitioned_table_2_200_300 PARTITION OF partitioned_table_2 FOR VALUES FROM (200) TO (300);
+SELECT create_distributed_table('partitioned_table_2', 'col_1');
+
+CREATE TABLE reference_table_4 (col_1 INT UNIQUE, col_2 INT UNIQUE);
+SELECT create_reference_table('reference_table_4');
+
+-- observe foreign key graph invalidation with partitioned tables
+ALTER TABLE partitioned_table_1 ADD CONSTRAINT fkey_8 FOREIGN KEY (col_1) REFERENCES reference_table_4(col_2);
+ALTER TABLE partitioned_table_2 ADD CONSTRAINT fkey_9 FOREIGN KEY (col_1) REFERENCES reference_table_4(col_2);
+
+-- show that we don't invalidate foreign key graph for attach partition commands
+CREATE TABLE partitioned_table_1_300_400 PARTITION OF partitioned_table_1 FOR VALUES FROM (300) TO (400);
+
 set client_min_messages to error;
 
 SET search_path TO public;
