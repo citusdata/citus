@@ -118,23 +118,23 @@ PreprocessDropTableStmt(Node *node, const char *queryString)
 			continue;
 		}
 
-		if (IsCitusTableType(relationId, REFERENCE_TABLE))
-		{
-			/* prevent concurrent EnsureReferenceTablesExistOnAllNodes */
-			int colocationId = CreateReferenceTableColocationId();
-			LockColocationId(colocationId, ExclusiveLock);
-		}
-
 		/* invalidate foreign key cache if the table involved in any foreign key */
 		if ((TableReferenced(relationId) || TableReferencing(relationId)))
 		{
 			MarkInvalidateForeignKeyGraph();
 		}
 
-		/* we're not interested in non-distributed relations */
+		/* we're not interested in non-distributed relations for the rest */
 		if (!IsCitusTable(relationId))
 		{
 			continue;
+		}
+
+		if (IsCitusTableType(relationId, REFERENCE_TABLE))
+		{
+			/* prevent concurrent EnsureReferenceTablesExistOnAllNodes */
+			int colocationId = CreateReferenceTableColocationId();
+			LockColocationId(colocationId, ExclusiveLock);
 		}
 
 		/* we're only interested in partitioned and mx tables */
