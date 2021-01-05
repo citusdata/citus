@@ -440,8 +440,12 @@ SELECT create_reference_table('reference_table_4');
 ALTER TABLE partitioned_table_1 ADD CONSTRAINT fkey_8 FOREIGN KEY (col_1) REFERENCES reference_table_4(col_2);
 ALTER TABLE partitioned_table_2 ADD CONSTRAINT fkey_9 FOREIGN KEY (col_1) REFERENCES reference_table_4(col_2);
 
--- show that we don't invalidate foreign key graph for attach partition commands
 CREATE TABLE partitioned_table_1_300_400 PARTITION OF partitioned_table_1 FOR VALUES FROM (300) TO (400);
+
+-- we invalidate foreign key graph as attach partition creates a new distributed table
+SELECT oid::regclass::text AS tablename
+FROM get_foreign_key_connected_relations('partitioned_table_1_300_400') AS f(oid oid)
+ORDER BY tablename;
 
 set client_min_messages to error;
 

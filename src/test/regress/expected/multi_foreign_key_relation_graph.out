@@ -963,10 +963,25 @@ ALTER TABLE partitioned_table_1 ADD CONSTRAINT fkey_8 FOREIGN KEY (col_1) REFERE
 DEBUG:  DDL command invalidates foreign key graph
 ALTER TABLE partitioned_table_2 ADD CONSTRAINT fkey_9 FOREIGN KEY (col_1) REFERENCES reference_table_4(col_2);
 DEBUG:  DDL command invalidates foreign key graph
--- show that we don't invalidate foreign key graph for attach partition commands
 CREATE TABLE partitioned_table_1_300_400 PARTITION OF partitioned_table_1 FOR VALUES FROM (300) TO (400);
 DEBUG:  CREATE TABLE / UNIQUE will create implicit index "partitioned_table_1_300_400_col_1_key" for table "partitioned_table_1_300_400"
 DEBUG:  switching to sequential query execution mode
+-- we invalidate foreign key graph as attach partition creates a new distributed table
+SELECT oid::regclass::text AS tablename
+FROM get_foreign_key_connected_relations('partitioned_table_1_300_400') AS f(oid oid)
+ORDER BY tablename;
+          tablename
+---------------------------------------------------------------------
+ partitioned_table_1
+ partitioned_table_1_100_200
+ partitioned_table_1_200_300
+ partitioned_table_1_300_400
+ partitioned_table_2
+ partitioned_table_2_100_200
+ partitioned_table_2_200_300
+ reference_table_4
+(8 rows)
+
 set client_min_messages to error;
 SET search_path TO public;
 DROP SCHEMA fkey_graph CASCADE;
