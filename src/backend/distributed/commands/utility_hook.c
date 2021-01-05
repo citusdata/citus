@@ -536,13 +536,6 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 	 * Post process for ddl statements
 	 */
 
-	if (IsA(parsetree, CreateStmt))
-	{
-		CreateStmt *createStatement = (CreateStmt *) parsetree;
-
-		PostprocessCreateTableStmt(createStatement, queryString);
-	}
-
 	if (EnableDDLPropagation)
 	{
 		if (ops && ops->postprocess)
@@ -564,6 +557,13 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 							 errhint("Connect to worker nodes directly to manually "
 									 "rename the role")));
 		}
+	}
+
+	if (IsA(parsetree, CreateStmt))
+	{
+		CreateStmt *createStatement = (CreateStmt *) parsetree;
+
+		PostprocessCreateTableStmt(createStatement, queryString);
 	}
 
 	/*
