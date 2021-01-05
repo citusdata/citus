@@ -192,7 +192,6 @@ BEGIN;
 
 	ALTER TABLE on_update_fkey_table ALTER COLUMN value_1 SET DATA TYPE bigint;
 DEBUG:  rewriting table "on_update_fkey_table"
-DEBUG:  validating foreign key constraint "fkey"
 ROLLBACK;
 BEGIN;
 	SELECT count(*) FROM transitive_reference_table;
@@ -203,7 +202,6 @@ BEGIN;
 
 	ALTER TABLE on_update_fkey_table ALTER COLUMN value_1 SET DATA TYPE bigint;
 DEBUG:  rewriting table "on_update_fkey_table"
-DEBUG:  validating foreign key constraint "fkey"
 ROLLBACK;
 -- case 1.6: SELECT to a reference table is followed by an unrelated DDL
 BEGIN;
@@ -487,7 +485,6 @@ DEBUG:  switching to sequential query execution mode
 DETAIL:  Table "reference_table" is modified, which might lead to data inconsistencies or distributed deadlocks via parallel accesses to hash distributed tables due to foreign keys. Any parallel modification to those hash distributed tables in the same transaction can only be executed in sequential query execution mode
 	ALTER TABLE on_update_fkey_table ALTER COLUMN value_1 SET DATA TYPE bigint;
 DEBUG:  rewriting table "on_update_fkey_table"
-DEBUG:  validating foreign key constraint "fkey"
 ROLLBACK;
 BEGIN;
 	UPDATE transitive_reference_table SET id = 101 WHERE id = 99;
@@ -495,7 +492,6 @@ DEBUG:  switching to sequential query execution mode
 DETAIL:  Table "transitive_reference_table" is modified, which might lead to data inconsistencies or distributed deadlocks via parallel accesses to hash distributed tables due to foreign keys. Any parallel modification to those hash distributed tables in the same transaction can only be executed in sequential query execution mode
 	ALTER TABLE on_update_fkey_table ALTER COLUMN value_1 SET DATA TYPE bigint;
 DEBUG:  rewriting table "on_update_fkey_table"
-DEBUG:  validating foreign key constraint "fkey"
 ROLLBACK;
 -- case 2.6: UPDATE to a reference table is followed by an unrelated DDL
 BEGIN;
@@ -616,31 +612,25 @@ ROLLBACK;
 BEGIN;
 	ALTER TABLE reference_table ALTER COLUMN id SET DATA TYPE smallint;
 DEBUG:  rewriting table "reference_table"
-DEBUG:  validating foreign key constraint "fkey"
 	CREATE INDEX fkey_test_index_1 ON on_update_fkey_table(value_1);
 ROLLBACK;
 BEGIN;
 	ALTER TABLE transitive_reference_table ALTER COLUMN id SET DATA TYPE smallint;
 DEBUG:  rewriting table "transitive_reference_table"
-DEBUG:  validating foreign key constraint "fkey"
 	CREATE INDEX fkey_test_index_1 ON on_update_fkey_table(value_1);
 ROLLBACK;
 -- case 4.6: DDL to reference table followed by a DDL to dist table, both touching fkey columns
 BEGIN;
 	ALTER TABLE reference_table ALTER COLUMN id SET DATA TYPE smallint;
 DEBUG:  rewriting table "reference_table"
-DEBUG:  validating foreign key constraint "fkey"
 	ALTER TABLE on_update_fkey_table ALTER COLUMN value_1 SET DATA TYPE smallint;
 DEBUG:  rewriting table "on_update_fkey_table"
-DEBUG:  validating foreign key constraint "fkey"
 ROLLBACK;
 BEGIN;
 	ALTER TABLE transitive_reference_table ALTER COLUMN id SET DATA TYPE smallint;
 DEBUG:  rewriting table "transitive_reference_table"
-DEBUG:  validating foreign key constraint "fkey"
 	ALTER TABLE on_update_fkey_table ALTER COLUMN value_1 SET DATA TYPE smallint;
 DEBUG:  rewriting table "on_update_fkey_table"
-DEBUG:  validating foreign key constraint "fkey"
 ROLLBACK;
 -- case 3.7: DDL to a reference table is followed by COPY
 BEGIN;
@@ -672,13 +662,11 @@ ROLLBACK;
 BEGIN;
 	ALTER TABLE reference_table ALTER COLUMN id SET DATA TYPE smallint;
 DEBUG:  rewriting table "reference_table"
-DEBUG:  validating foreign key constraint "fkey"
 	TRUNCATE on_update_fkey_table;
 ROLLBACK;
 BEGIN;
 	ALTER TABLE transitive_reference_table ALTER COLUMN id SET DATA TYPE smallint;
 DEBUG:  rewriting table "transitive_reference_table"
-DEBUG:  validating foreign key constraint "fkey"
 	TRUNCATE on_update_fkey_table;
 ROLLBACK;
 ---------------------------------------------------------------------
@@ -771,7 +759,6 @@ BEGIN;
 
 	ALTER TABLE reference_table ALTER COLUMN id SET DATA TYPE smallint;
 DEBUG:  rewriting table "reference_table"
-DEBUG:  validating foreign key constraint "fkey"
 ERROR:  cannot execute DDL on table "reference_table" because there was a parallel SELECT access to distributed table "on_update_fkey_table" in the same transaction
 HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
 ROLLBACK;
@@ -784,7 +771,6 @@ BEGIN;
 
 	ALTER TABLE transitive_reference_table ALTER COLUMN id SET DATA TYPE smallint;
 DEBUG:  rewriting table "transitive_reference_table"
-DEBUG:  validating foreign key constraint "fkey"
 ERROR:  cannot execute DDL on table "transitive_reference_table" because there was a parallel SELECT access to distributed table "on_update_fkey_table" in the same transaction
 HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
 ROLLBACK;
