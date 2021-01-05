@@ -17,7 +17,8 @@
 
 /* placeholder for PreprocessClusterStmt */
 List *
-PreprocessClusterStmt(Node *node, const char *clusterCommand)
+PreprocessClusterStmt(Node *node, const char *clusterCommand,
+					  ProcessUtilityContext processUtilityContext)
 {
 	ClusterStmt *clusterStmt = castNode(ClusterStmt, node);
 	bool showPropagationWarning = false;

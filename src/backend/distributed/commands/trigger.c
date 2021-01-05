@@ -483,7 +483,8 @@ GetAlterTriggerDependsTriggerNameValue(AlterObjectDependsStmt *alterTriggerDepen
  * standard process utility.
  */
 List *
-PreprocessDropTriggerStmt(Node *node, const char *queryString)
+PreprocessDropTriggerStmt(Node *node, const char *queryString,
+						  ProcessUtilityContext processUtilityContext)
 {
 	DropStmt *dropTriggerStmt = castNode(DropStmt, node);
 	Assert(dropTriggerStmt->removeType == OBJECT_TRIGGER);

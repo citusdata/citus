@@ -26,7 +26,8 @@
  * tributed table is involved, this function returns NIL.
  */
 List *
-PreprocessRenameStmt(Node *node, const char *renameCommand)
+PreprocessRenameStmt(Node *node, const char *renameCommand,
+					 ProcessUtilityContext processUtilityContext)
 {
 	RenameStmt *renameStmt = castNode(RenameStmt, node);
 	Oid objectRelationId = InvalidOid; /* SQL Object OID */
@@ -144,7 +145,8 @@ ErrorIfUnsupportedRenameStmt(RenameStmt *renameStmt)
  * a specialized implementation if present, otherwise return an empty list for its DDLJobs
  */
 List *
-PreprocessRenameAttributeStmt(Node *node, const char *queryString)
+PreprocessRenameAttributeStmt(Node *node, const char *queryString,
+							  ProcessUtilityContext processUtilityContext)
 {
 	RenameStmt *stmt = castNode(RenameStmt, node);
 	Assert(stmt->renameType == OBJECT_ATTRIBUTE);
@@ -153,7 +155,8 @@ PreprocessRenameAttributeStmt(Node *node, const char *queryString)
 	{
 		case OBJECT_TYPE:
 		{
-			return PreprocessRenameTypeAttributeStmt(node, queryString);
+			return PreprocessRenameTypeAttributeStmt(node, queryString,
+													 processUtilityContext);
 		}
 
 		default:

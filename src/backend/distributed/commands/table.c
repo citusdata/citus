@@ -87,7 +87,8 @@ static bool SetupExecutionModeForAlterTable(Oid relationId, AlterTableCmd *comma
  * about not processing same DROP command twice.
  */
 List *
-PreprocessDropTableStmt(Node *node, const char *queryString)
+PreprocessDropTableStmt(Node *node, const char *queryString,
+						ProcessUtilityContext processUtilityContext)
 {
 	DropStmt *dropTableStatement = castNode(DropStmt, node);
 
@@ -346,7 +347,8 @@ PostprocessAlterTableSchemaStmt(Node *node, const char *queryString)
  * function returns NIL.
  */
 List *
-PreprocessAlterTableStmt(Node *node, const char *alterTableCommand)
+PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
+						 ProcessUtilityContext processUtilityContext)
 {
 	AlterTableStmt *alterTableStatement = castNode(AlterTableStmt, node);
 
@@ -724,7 +726,8 @@ AlterTableCommandTypeIsTrigger(AlterTableType alterTableType)
  * the distributed environment. We warn out here.
  */
 List *
-PreprocessAlterTableMoveAllStmt(Node *node, const char *queryString)
+PreprocessAlterTableMoveAllStmt(Node *node, const char *queryString,
+								ProcessUtilityContext processUtilityContext)
 {
 	ereport(WARNING, (errmsg("not propagating ALTER TABLE ALL IN TABLESPACE "
 							 "commands to worker nodes"),
@@ -743,7 +746,8 @@ PreprocessAlterTableMoveAllStmt(Node *node, const char *queryString)
  * shards.
  */
 List *
-PreprocessAlterTableSchemaStmt(Node *node, const char *queryString)
+PreprocessAlterTableSchemaStmt(Node *node, const char *queryString,
+							   ProcessUtilityContext processUtilityContext)
 {
 	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
 	Assert(stmt->objectType == OBJECT_TABLE);

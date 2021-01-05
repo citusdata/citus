@@ -13,7 +13,8 @@
 
 /* placeholder for PreprocessGrantStmt */
 List *
-PreprocessGrantStmt(Node *node, const char *queryString)
+PreprocessGrantStmt(Node *node, const char *queryString,
+					ProcessUtilityContext processUtilityContext)
 {
 	return NIL;
 }

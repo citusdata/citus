@@ -130,7 +130,8 @@ IsIndexRenameStmt(RenameStmt *renameStmt)
  * in a List. If no distributed table is involved, this function returns NIL.
  */
 List *
-PreprocessIndexStmt(Node *node, const char *createIndexCommand)
+PreprocessIndexStmt(Node *node, const char *createIndexCommand,
+					ProcessUtilityContext processUtilityContext)
 {
 	IndexStmt *createIndexStatement = castNode(IndexStmt, node);
 
@@ -528,7 +529,8 @@ GetCreateIndexRelationLockMode(IndexStmt *createIndexStatement)
  * in a List. If no distributed table is involved, this function returns NIL.
  */
 List *
-PreprocessReindexStmt(Node *node, const char *reindexCommand)
+PreprocessReindexStmt(Node *node, const char *reindexCommand,
+					  ProcessUtilityContext processUtilityContext)
 {
 	ReindexStmt *reindexStatement = castNode(ReindexStmt, node);
 	List *ddlJobs = NIL;
@@ -637,7 +639,8 @@ PreprocessReindexStmt(Node *node, const char *reindexCommand)
  * in a List. If no distributed table is involved, this function returns NIL.
  */
 List *
-PreprocessDropIndexStmt(Node *node, const char *dropIndexCommand)
+PreprocessDropIndexStmt(Node *node, const char *dropIndexCommand,
+						ProcessUtilityContext processUtilityContext)
 {
 	DropStmt *dropIndexStatement = castNode(DropStmt, node);
 	List *ddlJobs = NIL;
