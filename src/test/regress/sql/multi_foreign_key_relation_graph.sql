@@ -447,6 +447,29 @@ SELECT oid::regclass::text AS tablename
 FROM get_foreign_key_connected_relations('partitioned_table_1_300_400') AS f(oid oid)
 ORDER BY tablename;
 
+CREATE TABLE local_partitioned_table_1 (col_1 INT UNIQUE, col_2 INT) PARTITION BY RANGE (col_1);
+CREATE TABLE local_partitioned_table_2 (col_1 INT UNIQUE, col_2 INT) PARTITION BY RANGE (col_1);
+
+-- in below two show that attaching a partition doesn't invalidate
+-- foreign key cache as parent table isn't involved in any foreign
+-- key relationship
+
+CREATE TABLE local_partitioned_table_1_100_200 PARTITION OF local_partitioned_table_1 FOR VALUES FROM (100) TO (200);
+
+CREATE TABLE local_partitioned_table_2_100_200 (col_1 INT UNIQUE, col_2 INT);
+ALTER TABLE local_partitioned_table_2 ATTACH PARTITION local_partitioned_table_2_100_200 FOR VALUES FROM (100) TO (200);
+
+-- define foreign key between parent tables
+ALTER TABLE local_partitioned_table_1 ADD CONSTRAINT fkey_10 FOREIGN KEY (col_1) REFERENCES local_partitioned_table_2(col_1);
+
+-- in below two show that attaching partition invalidates foreign
+-- key cache as parent table is involved in a foreign key relationship
+
+CREATE TABLE local_partitioned_table_2_200_300 PARTITION OF local_partitioned_table_2 FOR VALUES FROM (200) TO (300);
+
+CREATE TABLE local_partitioned_table_1_300_400 (col_1 INT UNIQUE, col_2 INT);
+ALTER TABLE local_partitioned_table_1 ATTACH PARTITION local_partitioned_table_1_300_400 FOR VALUES FROM (300) TO (400);
+
 set client_min_messages to error;
 
 SET search_path TO public;
