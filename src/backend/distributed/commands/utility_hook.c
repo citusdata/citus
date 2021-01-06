@@ -732,6 +732,7 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 		}
 		PG_CATCH();
 		{
+			/* CopyErrorData() requires (CurrentMemoryContext != ErrorContext) */
 			MemoryContextSwitchTo(savedContext);
 			ErrorData *edata = CopyErrorData();
 
