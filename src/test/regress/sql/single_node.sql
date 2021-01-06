@@ -675,6 +675,14 @@ INSERT INTO another_schema_table SELECT b::int, a::int FROM another_schema_table
 -- multi-row INSERTs
 INSERT INTO another_schema_table VALUES (1,1), (2,2), (3,3), (4,4), (5,5),(6,6),(7,7);
 
+-- INSERT..SELECT with re-partitioning when using local execution
+BEGIN;
+INSERT INTO another_schema_table VALUES (1,100);
+INSERT INTO another_schema_table VALUES (2,100);
+INSERT INTO another_schema_table SELECT b::int, a::int FROM another_schema_table;
+SELECT * FROM another_schema_table WHERE a = 100 ORDER BY b;
+ROLLBACK;
+
 -- intermediate results
 WITH cte_1 AS (SELECT * FROM another_schema_table LIMIT 1000)
 	SELECT count(*) FROM cte_1;

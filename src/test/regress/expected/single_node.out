@@ -1206,6 +1206,30 @@ NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_t
 NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630510 AS citus_table_alias (a, b) VALUES (3,3), (4,4), (7,7)
 NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630511 AS citus_table_alias (a, b) VALUES (6,6)
 NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630512 AS citus_table_alias (a, b) VALUES (2,2)
+-- INSERT..SELECT with re-partitioning when using local execution
+BEGIN;
+INSERT INTO another_schema_table VALUES (1,100);
+NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630509 (a, b) VALUES (1, 100)
+INSERT INTO another_schema_table VALUES (2,100);
+NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630512 (a, b) VALUES (2, 100)
+INSERT INTO another_schema_table SELECT b::int, a::int FROM another_schema_table;
+NOTICE:  executing the command locally: SELECT partition_index, 'repartitioned_results_xxxxx_from_90630509_to' || '_' || partition_index::text , rows_written FROM worker_partition_query_result('repartitioned_results_xxxxx_from_90630509_to','SELECT b AS a, a AS b FROM single_node.another_schema_table_90630509 another_schema_table WHERE true',0,'hash','{-2147483648,-1073741824,0,1073741824}'::text[],'{-1073741825,-1,1073741823,2147483647}'::text[],true) WHERE rows_written > 0
+NOTICE:  executing the command locally: SELECT partition_index, 'repartitioned_results_xxxxx_from_90630510_to' || '_' || partition_index::text , rows_written FROM worker_partition_query_result('repartitioned_results_xxxxx_from_90630510_to','SELECT b AS a, a AS b FROM single_node.another_schema_table_90630510 another_schema_table WHERE true',0,'hash','{-2147483648,-1073741824,0,1073741824}'::text[],'{-1073741825,-1,1073741823,2147483647}'::text[],true) WHERE rows_written > 0
+NOTICE:  executing the command locally: SELECT partition_index, 'repartitioned_results_xxxxx_from_90630511_to' || '_' || partition_index::text , rows_written FROM worker_partition_query_result('repartitioned_results_xxxxx_from_90630511_to','SELECT b AS a, a AS b FROM single_node.another_schema_table_90630511 another_schema_table WHERE true',0,'hash','{-2147483648,-1073741824,0,1073741824}'::text[],'{-1073741825,-1,1073741823,2147483647}'::text[],true) WHERE rows_written > 0
+NOTICE:  executing the command locally: SELECT partition_index, 'repartitioned_results_xxxxx_from_90630512_to' || '_' || partition_index::text , rows_written FROM worker_partition_query_result('repartitioned_results_xxxxx_from_90630512_to','SELECT b AS a, a AS b FROM single_node.another_schema_table_90630512 another_schema_table WHERE true',0,'hash','{-2147483648,-1073741824,0,1073741824}'::text[],'{-1073741825,-1,1073741823,2147483647}'::text[],true) WHERE rows_written > 0
+NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630509 AS citus_table_alias (a, b) SELECT a, b FROM read_intermediate_results('{repartitioned_results_xxxxx_from_90630509_to_0}'::text[], 'binary'::citus_copy_format) intermediate_result(a integer, b integer)
+NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630510 AS citus_table_alias (a, b) SELECT a, b FROM read_intermediate_results('{repartitioned_results_xxxxx_from_90630510_to_1}'::text[], 'binary'::citus_copy_format) intermediate_result(a integer, b integer)
+NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630511 AS citus_table_alias (a, b) SELECT a, b FROM read_intermediate_results('{repartitioned_results_xxxxx_from_90630509_to_2,repartitioned_results_xxxxx_from_90630511_to_2,repartitioned_results_xxxxx_from_90630512_to_2}'::text[], 'binary'::citus_copy_format) intermediate_result(a integer, b integer)
+NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630512 AS citus_table_alias (a, b) SELECT a, b FROM read_intermediate_results('{repartitioned_results_xxxxx_from_90630512_to_3}'::text[], 'binary'::citus_copy_format) intermediate_result(a integer, b integer)
+SELECT * FROM another_schema_table WHERE a = 100 ORDER BY b;
+NOTICE:  executing the command locally: SELECT a, b FROM single_node.another_schema_table_90630511 another_schema_table WHERE (a OPERATOR(pg_catalog.=) 100) ORDER BY b
+  a  | b
+---------------------------------------------------------------------
+ 100 | 1
+ 100 | 2
+(2 rows)
+
+ROLLBACK;
 -- intermediate results
 WITH cte_1 AS (SELECT * FROM another_schema_table LIMIT 1000)
 	SELECT count(*) FROM cte_1;

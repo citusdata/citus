@@ -550,7 +550,8 @@ SplitLocalAndRemotePlacements(List *taskPlacementList, List **localTaskPlacement
 /*
  * ExecuteLocalTaskPlan gets a planned statement which can be executed locally.
  * The function simply follows the steps to have a local execution, sets the
- * tupleStore if necessary. The function returns the
+ * tupleStore if necessary. The function returns the number of rows affected in
+ * case of DML.
  */
 static uint64
 ExecuteLocalTaskPlan(PlannedStmt *taskPlan, char *queryString,
@@ -565,6 +566,13 @@ ExecuteLocalTaskPlan(PlannedStmt *taskPlan, char *queryString,
 	RecordNonDistTableAccessesForTask(task);
 
 	/*
+	 * Some tuple destinations look at task->taskPlacementList to determine
+	 * where the result came from using the placement index. Since a local
+	 * task can only ever have 1 placement, we set the index to 0.
+	 */
+	int localPlacementIndex = 0;
+
+	/*
 	 * Use the tupleStore provided by the scanState because it is shared accross
 	 * the other task executions and the adaptive executor.
 	 *
@@ -574,7 +582,7 @@ ExecuteLocalTaskPlan(PlannedStmt *taskPlan, char *queryString,
 	 */
 	DestReceiver *destReceiver = tupleDest ?
 								 CreateTupleDestDestReceiver(tupleDest, task,
-															 LOCAL_PLACEMENT_INDEX) :
+															 localPlacementIndex) :
 								 CreateDestReceiver(DestNone);
 
 	/* Create a QueryDesc for the query */
@@ -615,12 +623,12 @@ RecordNonDistTableAccessesForTask(Task *task)
 	if (list_length(taskPlacementList) == 0)
 	{
 		/*
-		 * We need at least one task placement to record relation access.
-		 * FIXME: Unfortunately, it is possible due to
-		 * https://github.com/citusdata/citus/issues/4104.
-		 * We can safely remove this check when above bug is fixed.
+		 * We should never get here, but prefer to throw an error over crashing
+		 * if we're wrong.
 		 */
-		return;
+		ereport(ERROR, (errmsg("shard " UINT64_FORMAT " does not have any shard "
+													  "placements",
+							   task->anchorShardId)));
 	}
 
 	/*

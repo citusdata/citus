@@ -14,11 +14,6 @@
 #include "distributed/citus_custom_scan.h"
 #include "distributed/tuple_destination.h"
 
-/*
- * Used as TupleDestination->putTuple's placementIndex when executing
- * local tasks.
- */
-#define LOCAL_PLACEMENT_INDEX -1
 
 /* enabled with GUCs*/
 extern bool EnableLocalExecution;

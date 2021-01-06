@@ -43,12 +43,10 @@ INSERT INTO target_table SELECT a, max(b) FROM source_table GROUP BY a;
 
 SET citus.log_local_commands to on;
 
--- INSERT .. SELECT via repartitioning is not  yet support after a local execution,
--- hence below two blocks should fail
-
+-- INSERT .. SELECT via repartitioning with local execution
 BEGIN;
     select count(*) from source_table WHERE a = 1;
-    insert into target_table SELECT a*2 FROM source_table;
+    insert into target_table SELECT a*2 FROM source_table RETURNING a;
 ROLLBACK;
 
 BEGIN;

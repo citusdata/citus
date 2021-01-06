@@ -23,7 +23,6 @@ WHERE logicalrelid = 'test'::regclass AND groupid = 0;
 SET client_min_messages TO LOG;
 SET citus.log_local_commands TO ON;
 
-
 -- INSERT..SELECT with COPY under the covers
 INSERT INTO test SELECT s,s FROM generate_series(2,100) s;
 
@@ -46,6 +45,25 @@ SELECT y FROM test WHERE x = 1;
 SELECT count(*) FROM test;
 END;
 
+-- INSERT..SELECT with re-partitioning after local execution
+BEGIN;
+INSERT INTO test VALUES (0,1000);
+CREATE TABLE repart_test (x int primary key, y int);
+SELECT create_distributed_table('repart_test','x', colocate_with := 'none');
+
+INSERT INTO repart_test (x, y) SELECT y, x FROM test;
+
+SELECT y FROM repart_test WHERE x = 1000;
+INSERT INTO repart_test (x, y) SELECT y, x FROM test ON CONFLICT (x) DO UPDATE SET y = -1;
+SELECT y FROM repart_test WHERE x = 1000;
+ROLLBACK;
+
+-- INSERT..SELECT with re-partitioning in EXPLAIN ANALYZE after local execution
+BEGIN;
+INSERT INTO test VALUES (0,1000);
+EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE) INSERT INTO test (x, y) SELECT y, x FROM test;
+ROLLBACK;
+
 -- DDL connects to locahost
 ALTER TABLE test ADD COLUMN z int;
 
@@ -59,7 +77,6 @@ BEGIN;
 ALTER TABLE test DROP COLUMN z;
 SELECT y FROM test WHERE x = 1;
 END;
-
 
 SET citus.shard_count TO 6;
 SET citus.log_remote_commands TO OFF;
@@ -77,6 +94,7 @@ SELECT count(*) FROM dist_table;
 ROLLBACK;
 
 CREATE TABLE dist_table (a int);
+
 INSERT INTO dist_table SELECT * FROM generate_series(1, 100);
 
 BEGIN;
