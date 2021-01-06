@@ -308,7 +308,7 @@ FROM get_foreign_key_connected_relations('non_existent_table') AS f(oid oid)
 ORDER BY tablename;
 
 \set VERBOSITY TERSE
-SET client_min_messages TO DEBUG1;
+SET client_min_messages TO ERROR;
 
 BEGIN;
   ALTER TABLE distributed_table_2 DROP CONSTRAINT distributed_table_2_col_key CASCADE;
@@ -331,10 +331,18 @@ ALTER TABLE reference_table_2 DROP COLUMN col;
 -- but we invalidate foreign key graph in below two transaction blocks
 BEGIN;
   ALTER TABLE distributed_table_2 DROP CONSTRAINT distributed_table_2_col_key CASCADE;
+
+  SELECT oid::regclass::text AS tablename
+  FROM get_foreign_key_connected_relations('distributed_table_2') AS f(oid oid)
+  ORDER BY tablename;
 ROLLBACK;
 
 BEGIN;
   ALTER TABLE reference_table_2 DROP COLUMN col CASCADE;
+
+  SELECT oid::regclass::text AS tablename
+  FROM get_foreign_key_connected_relations('reference_table_2') AS f(oid oid)
+  ORDER BY tablename;
 ROLLBACK;
 
 -- now we should see distributed_table_2 as well since we rollback'ed
@@ -360,15 +368,15 @@ BEGIN;
 ROLLBACK;
 
 BEGIN;
-  -- hide "verifying table" log because the order we print it changes
-  -- in different pg versions
-  set client_min_messages to error;
   ALTER TABLE distributed_table_2 ADD CONSTRAINT pkey PRIMARY KEY (col);
-  set client_min_messages to debug1;
 
   -- show that droping a constraint not involved in any foreign key
   -- constraint doesn't invalidate foreign key graph
   ALTER TABLE distributed_table_2 DROP CONSTRAINT pkey;
+
+  SELECT oid::regclass::text AS tablename
+  FROM get_foreign_key_connected_relations('distributed_table_2') AS f(oid oid)
+  ORDER BY tablename;
 ROLLBACK;
 
 BEGIN;

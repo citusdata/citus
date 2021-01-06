@@ -955,7 +955,7 @@ InvalidateForeignKeyGraphForDDL(void)
 {
 	if (shouldInvalidateForeignKeyGraph)
 	{
-		ereport(DEBUG1, (errmsg("DDL command invalidates foreign key graph")));
+		ereport(DEBUG4, (errmsg("DDL command invalidates foreign key graph")));
 
 		InvalidateForeignKeyGraph();
 

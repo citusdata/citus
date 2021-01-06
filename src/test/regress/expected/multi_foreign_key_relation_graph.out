@@ -737,22 +737,10 @@ FROM get_foreign_key_connected_relations('non_existent_table') AS f(oid oid)
 ORDER BY tablename;
 ERROR:  relation "non_existent_table" does not exist
 \set VERBOSITY TERSE
-SET client_min_messages TO DEBUG1;
+SET client_min_messages TO ERROR;
 BEGIN;
   ALTER TABLE distributed_table_2 DROP CONSTRAINT distributed_table_2_col_key CASCADE;
-NOTICE:  drop cascades to constraint fkey_4 on table distributed_table_3
-DEBUG:  DDL command invalidates foreign key graph
-DEBUG:  drop cascades to constraint fkey_4_xxx on table fkey_graph.distributed_table_3_xxx
-DEBUG:  drop cascades to constraint fkey_4_xxx on table fkey_graph.distributed_table_3_xxx
-DEBUG:  drop cascades to constraint fkey_4_xxx on table fkey_graph.distributed_table_3_xxx
-DEBUG:  drop cascades to constraint fkey_4_xxx on table fkey_graph.distributed_table_3_xxx
   ALTER TABLE distributed_table_3 DROP CONSTRAINT distributed_table_3_col_key CASCADE;
-NOTICE:  drop cascades to constraint fkey_6 on table distributed_table_1
-DEBUG:  DDL command invalidates foreign key graph
-DEBUG:  drop cascades to constraint fkey_6_xxx on table fkey_graph.distributed_table_1_xxx
-DEBUG:  drop cascades to constraint fkey_6_xxx on table fkey_graph.distributed_table_1_xxx
-DEBUG:  drop cascades to constraint fkey_6_xxx on table fkey_graph.distributed_table_1_xxx
-DEBUG:  drop cascades to constraint fkey_6_xxx on table fkey_graph.distributed_table_1_xxx
   -- show that we process drop constraint commands that are dropping uniquness
   -- constraints and then invalidate fkey graph. So we shouldn't see
   -- distributed_table_3 as it was split via above drop constraint commands
@@ -778,23 +766,28 @@ ERROR:  cannot drop column col of table reference_table_2 because other objects 
 -- but we invalidate foreign key graph in below two transaction blocks
 BEGIN;
   ALTER TABLE distributed_table_2 DROP CONSTRAINT distributed_table_2_col_key CASCADE;
-NOTICE:  drop cascades to constraint fkey_4 on table distributed_table_3
-DEBUG:  DDL command invalidates foreign key graph
-DEBUG:  drop cascades to constraint fkey_4_xxx on table fkey_graph.distributed_table_3_xxx
-DEBUG:  drop cascades to constraint fkey_4_xxx on table fkey_graph.distributed_table_3_xxx
-DEBUG:  drop cascades to constraint fkey_4_xxx on table fkey_graph.distributed_table_3_xxx
-DEBUG:  drop cascades to constraint fkey_4_xxx on table fkey_graph.distributed_table_3_xxx
+  SELECT oid::regclass::text AS tablename
+  FROM get_foreign_key_connected_relations('distributed_table_2') AS f(oid oid)
+  ORDER BY tablename;
+      tablename
+---------------------------------------------------------------------
+ distributed_table_1
+ distributed_table_2
+ distributed_table_3
+ reference_table_1
+ reference_table_2
+(5 rows)
+
 ROLLBACK;
 BEGIN;
   ALTER TABLE reference_table_2 DROP COLUMN col CASCADE;
-NOTICE:  drop cascades to constraint fkey_5 on table distributed_table_2
-DEBUG:  DDL command invalidates foreign key graph
-DEBUG:  drop cascades to 2 other objects
-DETAIL:  drop cascades to constraint fkey_5_xxx on table fkey_graph.distributed_table_2_xxx
-drop cascades to constraint fkey_5_xxx on table fkey_graph.distributed_table_2_xxx
-DEBUG:  drop cascades to 2 other objects
-DETAIL:  drop cascades to constraint fkey_5_xxx on table fkey_graph.distributed_table_2_xxx
-drop cascades to constraint fkey_5_xxx on table fkey_graph.distributed_table_2_xxx
+  SELECT oid::regclass::text AS tablename
+  FROM get_foreign_key_connected_relations('reference_table_2') AS f(oid oid)
+  ORDER BY tablename;
+ tablename
+---------------------------------------------------------------------
+(0 rows)
+
 ROLLBACK;
 -- now we should see distributed_table_2 as well since we rollback'ed
 SELECT oid::regclass::text AS tablename
@@ -811,12 +804,6 @@ ORDER BY tablename;
 
 BEGIN;
   DROP TABLE distributed_table_2 CASCADE;
-NOTICE:  drop cascades to constraint fkey_4 on table distributed_table_3
-DEBUG:  drop cascades to constraint fkey_4_xxx on table fkey_graph.distributed_table_3_xxx
-DEBUG:  drop cascades to constraint fkey_4_xxx on table fkey_graph.distributed_table_3_xxx
-DEBUG:  drop cascades to constraint fkey_4_xxx on table fkey_graph.distributed_table_3_xxx
-DEBUG:  drop cascades to constraint fkey_4_xxx on table fkey_graph.distributed_table_3_xxx
-DEBUG:  DDL command invalidates foreign key graph
   -- should only see reference_table_1 & reference_table_2
   SELECT oid::regclass::text AS tablename
   FROM get_foreign_key_connected_relations('reference_table_1') AS f(oid oid)
@@ -830,9 +817,7 @@ DEBUG:  DDL command invalidates foreign key graph
 ROLLBACK;
 BEGIN;
   ALTER TABLE distributed_table_2 ADD CONSTRAINT fkey_55 FOREIGN KEY (col) REFERENCES reference_table_2(col);
-DEBUG:  DDL command invalidates foreign key graph
   ALTER TABLE distributed_table_1 ADD CONSTRAINT fkey_66 FOREIGN KEY (col) REFERENCES distributed_table_3(col);
-DEBUG:  DDL command invalidates foreign key graph
   -- show that we handle multiple edges between nodes in foreign key graph
   SELECT oid::regclass::text AS tablename
   FROM get_foreign_key_connected_relations('reference_table_1') AS f(oid oid)
@@ -848,22 +833,27 @@ DEBUG:  DDL command invalidates foreign key graph
 
 ROLLBACK;
 BEGIN;
-  -- hide "verifying table" log because the order we print it changes
-  -- in different pg versions
-  set client_min_messages to error;
   ALTER TABLE distributed_table_2 ADD CONSTRAINT pkey PRIMARY KEY (col);
-  set client_min_messages to debug1;
   -- show that droping a constraint not involved in any foreign key
   -- constraint doesn't invalidate foreign key graph
   ALTER TABLE distributed_table_2 DROP CONSTRAINT pkey;
+  SELECT oid::regclass::text AS tablename
+  FROM get_foreign_key_connected_relations('distributed_table_2') AS f(oid oid)
+  ORDER BY tablename;
+      tablename
+---------------------------------------------------------------------
+ distributed_table_1
+ distributed_table_2
+ distributed_table_3
+ reference_table_1
+ reference_table_2
+(5 rows)
+
 ROLLBACK;
 BEGIN;
   CREATE TABLE local_table_3 (col int PRIMARY KEY);
-DEBUG:  CREATE TABLE / PRIMARY KEY will create implicit index "local_table_3_pkey" for table "local_table_3"
   ALTER TABLE local_table_1 ADD COLUMN another_col int REFERENCES local_table_3(col);
-DEBUG:  DDL command invalidates foreign key graph
   CREATE TABLE local_table_4 (col int PRIMARY KEY REFERENCES local_table_3 (col));
-DEBUG:  CREATE TABLE / PRIMARY KEY will create implicit index "local_table_4_pkey" for table "local_table_4"
   -- we invalidate foreign key graph for add column & create table
   -- commands defining foreign keys too
   SELECT oid::regclass::text AS tablename
@@ -879,11 +869,8 @@ DEBUG:  CREATE TABLE / PRIMARY KEY will create implicit index "local_table_4_pke
 ROLLBACK;
 BEGIN;
   CREATE TABLE local_table_3 (col int PRIMARY KEY);
-DEBUG:  CREATE TABLE / PRIMARY KEY will create implicit index "local_table_3_pkey" for table "local_table_3"
   ALTER TABLE local_table_1 ADD COLUMN another_col int REFERENCES local_table_3(col);
-DEBUG:  DDL command invalidates foreign key graph
   ALTER TABLE local_table_1 DROP COLUMN another_col;
-DEBUG:  DDL command invalidates foreign key graph
   -- we invalidate foreign key graph for drop column commands dropping
   -- referencing columns, should not print anything
   SELECT oid::regclass::text AS tablename
@@ -896,12 +883,8 @@ DEBUG:  DDL command invalidates foreign key graph
 ROLLBACK;
 BEGIN;
   CREATE TABLE local_table_3 (col int PRIMARY KEY);
-DEBUG:  CREATE TABLE / PRIMARY KEY will create implicit index "local_table_3_pkey" for table "local_table_3"
   ALTER TABLE local_table_1 ADD COLUMN another_col int REFERENCES local_table_3(col);
-DEBUG:  DDL command invalidates foreign key graph
   ALTER TABLE local_table_3 DROP COLUMN col CASCADE;
-NOTICE:  drop cascades to constraint local_table_1_another_col_fkey on table local_table_1
-DEBUG:  DDL command invalidates foreign key graph
   -- we invalidate foreign key graph for drop column commands dropping
   -- referenced columns, should not print anything
   SELECT oid::regclass::text AS tablename
@@ -925,11 +908,8 @@ ALTER TABLE local_table_1 ADD COLUMN unrelated_column int;
 -- does not invalidate foreign key graph
 DROP TABLE local_table_4;
 CREATE TABLE partitioned_table_1 (col_1 INT UNIQUE, col_2 INT) PARTITION BY RANGE (col_1);
-DEBUG:  CREATE TABLE / UNIQUE will create implicit index "partitioned_table_1_col_1_key" for table "partitioned_table_1"
 CREATE TABLE partitioned_table_1_100_200 PARTITION OF partitioned_table_1 FOR VALUES FROM (100) TO (200);
-DEBUG:  CREATE TABLE / UNIQUE will create implicit index "partitioned_table_1_100_200_col_1_key" for table "partitioned_table_1_100_200"
 CREATE TABLE partitioned_table_1_200_300 PARTITION OF partitioned_table_1 FOR VALUES FROM (200) TO (300);
-DEBUG:  CREATE TABLE / UNIQUE will create implicit index "partitioned_table_1_200_300_col_1_key" for table "partitioned_table_1_200_300"
 SELECT create_distributed_table('partitioned_table_1', 'col_1');
  create_distributed_table
 ---------------------------------------------------------------------
@@ -937,11 +917,8 @@ SELECT create_distributed_table('partitioned_table_1', 'col_1');
 (1 row)
 
 CREATE TABLE partitioned_table_2 (col_1 INT UNIQUE, col_2 INT) PARTITION BY RANGE (col_1);
-DEBUG:  CREATE TABLE / UNIQUE will create implicit index "partitioned_table_2_col_1_key" for table "partitioned_table_2"
 CREATE TABLE partitioned_table_2_100_200 PARTITION OF partitioned_table_2 FOR VALUES FROM (100) TO (200);
-DEBUG:  CREATE TABLE / UNIQUE will create implicit index "partitioned_table_2_100_200_col_1_key" for table "partitioned_table_2_100_200"
 CREATE TABLE partitioned_table_2_200_300 PARTITION OF partitioned_table_2 FOR VALUES FROM (200) TO (300);
-DEBUG:  CREATE TABLE / UNIQUE will create implicit index "partitioned_table_2_200_300_col_1_key" for table "partitioned_table_2_200_300"
 SELECT create_distributed_table('partitioned_table_2', 'col_1');
  create_distributed_table
 ---------------------------------------------------------------------
@@ -949,8 +926,6 @@ SELECT create_distributed_table('partitioned_table_2', 'col_1');
 (1 row)
 
 CREATE TABLE reference_table_4 (col_1 INT UNIQUE, col_2 INT UNIQUE);
-DEBUG:  CREATE TABLE / UNIQUE will create implicit index "reference_table_4_col_1_key" for table "reference_table_4"
-DEBUG:  CREATE TABLE / UNIQUE will create implicit index "reference_table_4_col_2_key" for table "reference_table_4"
 SELECT create_reference_table('reference_table_4');
  create_reference_table
 ---------------------------------------------------------------------
@@ -959,12 +934,8 @@ SELECT create_reference_table('reference_table_4');
 
 -- observe foreign key graph invalidation with partitioned tables
 ALTER TABLE partitioned_table_1 ADD CONSTRAINT fkey_8 FOREIGN KEY (col_1) REFERENCES reference_table_4(col_2);
-DEBUG:  DDL command invalidates foreign key graph
 ALTER TABLE partitioned_table_2 ADD CONSTRAINT fkey_9 FOREIGN KEY (col_1) REFERENCES reference_table_4(col_2);
-DEBUG:  DDL command invalidates foreign key graph
 CREATE TABLE partitioned_table_1_300_400 PARTITION OF partitioned_table_1 FOR VALUES FROM (300) TO (400);
-DEBUG:  CREATE TABLE / UNIQUE will create implicit index "partitioned_table_1_300_400_col_1_key" for table "partitioned_table_1_300_400"
-DEBUG:  switching to sequential query execution mode
 -- we invalidate foreign key graph as attach partition creates a new distributed table
 SELECT oid::regclass::text AS tablename
 FROM get_foreign_key_connected_relations('partitioned_table_1_300_400') AS f(oid oid)
@@ -982,25 +953,18 @@ ORDER BY tablename;
 (8 rows)
 
 CREATE TABLE local_partitioned_table_1 (col_1 INT UNIQUE, col_2 INT) PARTITION BY RANGE (col_1);
-DEBUG:  CREATE TABLE / UNIQUE will create implicit index "local_partitioned_table_1_col_1_key" for table "local_partitioned_table_1"
 CREATE TABLE local_table_5 (col_1 INT UNIQUE, col_2 INT);
-DEBUG:  CREATE TABLE / UNIQUE will create implicit index "local_table_5_col_1_key" for table "local_table_5"
 -- in below two show that attaching a partition doesn't invalidate
 -- foreign key cache as parent table isn't involved in any foreign
 -- key relationship
 CREATE TABLE local_partitioned_table_1_100_200 PARTITION OF local_partitioned_table_1 FOR VALUES FROM (100) TO (200);
-DEBUG:  CREATE TABLE / UNIQUE will create implicit index "local_partitioned_table_1_100_200_col_1_key" for table "local_partitioned_table_1_100_200"
 CREATE TABLE local_partitioned_table_1_200_300 (col_1 INT UNIQUE, col_2 INT);
-DEBUG:  CREATE TABLE / UNIQUE will create implicit index "local_partitioned_table_1_200_300_col_1_key" for table "local_partitioned_table_1_200_300"
 ALTER TABLE local_partitioned_table_1 ATTACH PARTITION local_partitioned_table_1_200_300 FOR VALUES FROM (200) TO (300);
-DEBUG:  verifying table "local_partitioned_table_1_200_300"
 -- define a foreign key from partitioned table
 ALTER TABLE local_partitioned_table_1 ADD CONSTRAINT fkey_10 FOREIGN KEY (col_1) REFERENCES local_table_5(col_1);
-DEBUG:  DDL command invalidates foreign key graph
 -- in below two show that attaching partition invalidates foreign
 -- key cache as parent table is involved in a foreign key relationship
 CREATE TABLE local_partitioned_table_1_300_400 PARTITION OF local_partitioned_table_1 FOR VALUES FROM (300) TO (400);
-DEBUG:  CREATE TABLE / UNIQUE will create implicit index "local_partitioned_table_1_300_400_col_1_key" for table "local_partitioned_table_1_300_400"
 SELECT oid::regclass::text AS tablename
 FROM get_foreign_key_connected_relations('local_partitioned_table_1_300_400') AS f(oid oid)
 ORDER BY tablename;
@@ -1014,9 +978,7 @@ ORDER BY tablename;
 (5 rows)
 
 CREATE TABLE local_partitioned_table_1_500_600 (col_1 INT UNIQUE, col_2 INT);
-DEBUG:  CREATE TABLE / UNIQUE will create implicit index "local_partitioned_table_1_500_600_col_1_key" for table "local_partitioned_table_1_500_600"
 ALTER TABLE local_partitioned_table_1 ATTACH PARTITION local_partitioned_table_1_500_600 FOR VALUES FROM (500) TO (600);
-DEBUG:  verifying table "local_partitioned_table_1_500_600"
 SELECT oid::regclass::text AS tablename
 FROM get_foreign_key_connected_relations('local_table_5') AS f(oid oid)
 ORDER BY tablename;
