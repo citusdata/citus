@@ -147,7 +147,8 @@ static bool ShouldRecursivelyPlanNonColocatedSubqueries(Query *subquery,
 														RecursivePlanningContext *
 														context);
 static bool ShouldConvertLocalTableJoinsToSubqueries(List *rangeTableList,
-													 List *tableList, List *rtableList);
+													 List *referencedRteList,
+													 List *rtableList);
 
 static bool ContainsSubquery(Query *query);
 static void RecursivelyPlanNonColocatedSubqueries(Query *subquery,
@@ -200,9 +201,7 @@ static Query * CreateOuterSubquery(RangeTblEntry *rangeTableEntry,
 								   List *outerSubqueryTargetList);
 static List * GenerateRequiredColNamesFromTargetList(List *targetList);
 static char * GetRelationNameAndAliasName(RangeTblEntry *rangeTablentry);
-static void ContainsLocalTableDistributedTableVars(List *tableList, List *rtableList,
-												   bool *containsLocalTable,
-												   bool *containsDistributedTable);
+static bool ContainsDistributedTable(List *rteList);
 
 /*
  * GenerateSubplansForSubqueriesAndCTEs is a wrapper around RecursivelyPlanSubqueriesAndCTEs.
@@ -361,8 +360,8 @@ RecursivelyPlanSubqueriesAndCTEs(Query *query, RecursivePlanningContext *context
 		RecursivelyPlanNonColocatedSubqueries(query, context);
 	}
 
-	List *tableList = PullAllRangeTablesEntries(query, context->rtableList);
-	if (ShouldConvertLocalTableJoinsToSubqueries(query->rtable, tableList,
+	List *rteList = PullAllRangeTablesEntries(query, context->rtableList);
+	if (ShouldConvertLocalTableJoinsToSubqueries(query->rtable, rteList,
 												 context->rtableList))
 	{
 		/*
@@ -383,7 +382,7 @@ RecursivelyPlanSubqueriesAndCTEs(Query *query, RecursivePlanningContext *context
  * convert local-dist table joins to subqueries.
  */
 static bool
-ShouldConvertLocalTableJoinsToSubqueries(List *rangeTableList, List *tableList,
+ShouldConvertLocalTableJoinsToSubqueries(List *rangeTableList, List *referencedRteList,
 										 List *rtableList)
 {
 	if (LocalTableJoinPolicy == LOCAL_JOIN_POLICY_NEVER)
@@ -401,33 +400,41 @@ ShouldConvertLocalTableJoinsToSubqueries(List *rangeTableList, List *tableList,
 		return true;
 	}
 
-	/* if we have vars that references local or distributed tables, it means we need to do subquery-conversion */
-	ContainsLocalTableDistributedTableVars(tableList, rtableList, &containsLocalTable,
-										   &containsDistributedTable);
+	if (!containsLocalTable)
+	{
+		/* if there is no local table, we don't need to do any conversion */
+		return false;
+	}
 
-	return containsDistributedTable && containsLocalTable;
+	/*
+	 * if referenced table list of this query contains a distributed table
+	 * we need to do a convertion
+	 */
+	if (ContainsDistributedTable(referencedRteList))
+	{
+		return true;
+	}
+
+	return false;
 }
 
 
-static void
-ContainsLocalTableDistributedTableVars(List *tableList, List *rtableList,
-									   bool *containsLocalTable,
-									   bool *containsDistributedTable)
+/*
+ * ContainsDistributedTable returns true if the given rteList contains
+ * a distributed table rte.
+ */
+static bool
+ContainsDistributedTable(List *rteList)
 {
 	RangeTblEntry *rte = NULL;
-	foreach_ptr(rte, tableList)
+	foreach_ptr(rte, rteList)
 	{
 		if (IsDistributedOrReferenceTableRTE((Node *) rte))
 		{
-			*containsDistributedTable = true;
-		}
-		else if (IsRecursivelyPlannableRelation(rte) &&
-				 IsLocalTableRteOrMatView((Node *) rte))
-		{
-			/* we consider citus local tables as local table */
-			*containsLocalTable = true;
+			return true;
 		}
 	}
+	return false;
 }
 
 
@@ -1797,7 +1804,6 @@ TransformFunctionRTE(RangeTblEntry *rangeTblEntry)
 			subquery->targetList = lappend(subquery->targetList, targetEntry);
 		}
 	}
-
 	/*
 	 * If tupleDesc is NULL we have 2 different cases:
 	 *
@@ -1847,7 +1853,6 @@ TransformFunctionRTE(RangeTblEntry *rangeTblEntry)
 				columnType = list_nth_oid(rangeTblFunction->funccoltypes,
 										  targetColumnIndex);
 			}
-
 			/* use the types in the function definition otherwise */
 			else
 			{

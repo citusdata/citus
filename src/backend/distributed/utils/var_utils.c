@@ -31,8 +31,8 @@
 
 typedef struct PullTableContext
 {
-	List *rteList;
-	List *rtableList;
+	List *referencedRteList; /* stores all the RTEs that are referenced by a var */
+	List *rtableList; /* contains rtable's of upper queries, including the current query */
 }PullTableContext;
 
 
@@ -51,14 +51,14 @@ PullAllRangeTablesEntries(Query *query, List *rtableList)
 {
 	PullTableContext p;
 	p.rtableList = rtableList;
-	p.rteList = NIL;
+	p.referencedRteList = NIL;
 
 	query_or_expression_tree_walker((Node *) query,
 									PullAllRangeTablesEntriesWalker,
 									(void *) &p,
 									0);
 
-	return p.rteList;
+	return p.referencedRteList;
 }
 
 
@@ -73,7 +73,7 @@ PullAllRangeTablesEntriesWalker(Node *node, PullTableContext *pullTableContext)
 	{
 		return false;
 	}
-	if (IsA(node, Var))
+	else if (IsA(node, Var))
 	{
 		Var *var = (Var *) node;
 
@@ -86,17 +86,18 @@ PullAllRangeTablesEntriesWalker(Node *node, PullTableContext *pullTableContext)
 		}
 		List *rtable = (List *) list_nth(rtableList, index);
 		RangeTblEntry *rte = (RangeTblEntry *) list_nth(rtable, var->varno - 1);
-		pullTableContext->rteList = lappend(pullTableContext->rteList, rte);
+		pullTableContext->referencedRteList = lappend(pullTableContext->referencedRteList,
+													  rte);
 		return false;
 	}
-	if (IsA(node, PlaceHolderVar))
+	else if (IsA(node, PlaceHolderVar))
 	{
 		/* PlaceHolderVar *phv = (PlaceHolderVar *) node; */
 
 		/* we don't want to look into the contained expression */
 		return false;
 	}
-	if (IsA(node, Query))
+	else if (IsA(node, Query))
 	{
 		/* Recurse into RTE subquery or not-yet-planned sublink subquery */
 
@@ -107,6 +108,9 @@ PullAllRangeTablesEntriesWalker(Node *node, PullTableContext *pullTableContext)
 		pullTableContext->rtableList = list_delete_first(pullTableContext->rtableList);
 		return result;
 	}
-	return expression_tree_walker(node, PullAllRangeTablesEntriesWalker,
-								  (void *) pullTableContext);
+	else
+	{
+		return expression_tree_walker(node, PullAllRangeTablesEntriesWalker,
+									  (void *) pullTableContext);
+	}
 }
