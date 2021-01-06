@@ -208,6 +208,11 @@ NonPushableInsertSelectExecScan(CustomScanState *node)
 															   hasReturning);
 
 			executorState->es_processed = rowsInserted;
+
+			if (SortReturning && hasReturning)
+			{
+				SortTupleStore(scanState);
+			}
 		}
 		else if (insertSelectQuery->onConflict || hasReturning)
 		{

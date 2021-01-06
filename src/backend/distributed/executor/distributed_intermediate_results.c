@@ -48,6 +48,9 @@ typedef struct PartitioningTupleDest
 
 	CitusTableCacheEntry *targetRelation;
 
+	/* MemoryContext in which we add new fragments */
+	MemoryContext fragmentContext;
+
 	/* list of DistributedResultFragment pointer */
 	List *fragmentList;
 
@@ -236,7 +239,6 @@ WrapTasksForPartitioning(const char *resultIdPrefix, List *selectTaskList,
 		char *partitionMethodString = targetRelation->partitionMethod == 'h' ?
 									  "hash" : "range";
 		const char *binaryFormatString = binaryFormat ? "true" : "false";
-		List *perPlacementQueries = NIL;
 
 		Task *wrappedSelectTask = copyObject(selectTask);
 
@@ -254,7 +256,6 @@ WrapTasksForPartitioning(const char *resultIdPrefix, List *selectTaskList,
 						 quote_literal_cstr(partitionMethodString),
 						 minValuesString->data, maxValuesString->data,
 						 binaryFormatString);
-		perPlacementQueries = lappend(perPlacementQueries, wrappedQuery->data);
 
 		SetTaskQueryString(wrappedSelectTask, wrappedQuery->data);
 		wrappedTaskList = lappend(wrappedTaskList, wrappedSelectTask);
@@ -291,6 +292,7 @@ CreatePartitioningTupleDest(CitusTableCacheEntry *targetRelation)
 	PartitioningTupleDest *tupleDest = palloc0(sizeof(PartitioningTupleDest));
 	tupleDest->targetRelation = targetRelation;
 	tupleDest->tupleDesc = tupleDescriptor;
+	tupleDest->fragmentContext = CurrentMemoryContext;
 	tupleDest->pub.putTuple = PartitioningTupleDestPutTuple;
 	tupleDest->pub.tupleDescForQuery =
 		PartitioningTupleDestTupleDescForQuery;
@@ -309,13 +311,23 @@ PartitioningTupleDestPutTuple(TupleDestination *self, Task *task,
 							  HeapTuple heapTuple, uint64 tupleLibpqSize)
 {
 	PartitioningTupleDest *tupleDest = (PartitioningTupleDest *) self;
+
 	ShardPlacement *placement = list_nth(task->taskPlacementList, placementIndex);
+
+	/*
+	 * We may be deep inside a nested execution, make sure we can use the
+	 * fragment list at the top.
+	 */
+	MemoryContext oldContext = MemoryContextSwitchTo(tupleDest->fragmentContext);
 
 	DistributedResultFragment *fragment =
 		TupleToDistributedResultFragment(heapTuple, tupleDest->tupleDesc,
 										 tupleDest->targetRelation,
 										 placement->nodeId);
+
 	tupleDest->fragmentList = lappend(tupleDest->fragmentList, fragment);
+
+	MemoryContextSwitchTo(oldContext);
 }
 
 
@@ -477,13 +489,7 @@ ExecuteSelectTasksIntoTupleDest(List *taskList, TupleDestination *tupleDestinati
 		.requires2PC = false
 	};
 
-	/*
-	 * Local execution is not supported because here we use perPlacementQueryStrings.
-	 * Local execution does not know how to handle it. One solution is to extract and set
-	 * queryStringLazy from perPlacementQueryStrings. The extracted one should be the
-	 * query string for the local placement.
-	 */
-	bool localExecutionSupported = false;
+	bool localExecutionSupported = true;
 	ExecutionParams *executionParams = CreateBasicExecutionParams(
 		ROW_MODIFY_READONLY, taskList, targetPoolSize, localExecutionSupported
 		);
