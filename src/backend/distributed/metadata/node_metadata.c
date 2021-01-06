@@ -122,7 +122,7 @@ PG_FUNCTION_INFO_V1(master_add_secondary_node);
 PG_FUNCTION_INFO_V1(master_set_node_property);
 PG_FUNCTION_INFO_V1(master_remove_node);
 PG_FUNCTION_INFO_V1(master_disable_node);
-PG_FUNCTION_INFO_V1(master_activate_node);
+PG_FUNCTION_INFO_V1(citus_activate_node);
 PG_FUNCTION_INFO_V1(master_update_node);
 PG_FUNCTION_INFO_V1(get_shard_id_for_distribution_column);
 
@@ -581,11 +581,11 @@ ModifiableWorkerNode(const char *nodeName, int32 nodePort)
 
 
 /*
- * master_activate_node UDF activates the given node. It sets the node's isactive
+ * citus_activate_node UDF activates the given node. It sets the node's isactive
  * value to active and replicates all reference tables to that node.
  */
 Datum
-master_activate_node(PG_FUNCTION_ARGS)
+citus_activate_node(PG_FUNCTION_ARGS)
 {
 	text *nodeNameText = PG_GETARG_TEXT_P(0);
 	int32 nodePort = PG_GETARG_INT32(1);

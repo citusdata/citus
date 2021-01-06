@@ -10,6 +10,7 @@ DROP FUNCTION pg_catalog.citus_total_relation_size(regclass,boolean);
 DROP FUNCTION pg_catalog.undistribute_table(regclass,boolean);
 DROP FUNCTION pg_catalog.create_citus_local_table(regclass,boolean);
 DROP FUNCTION pg_catalog.citus_add_node(text, integer, integer, noderole, name);
+DROP FUNCTION pg_catalog.citus_activate_node(text, integer);
 
 DROP VIEW pg_catalog.time_partitions;
 DROP FUNCTION pg_catalog.time_partition_range(regclass);

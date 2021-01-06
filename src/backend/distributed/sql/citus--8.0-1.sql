@@ -1357,7 +1357,7 @@ CREATE FUNCTION master_activate_node(nodename text,
                                      OUT nodecluster name)
     RETURNS record
     LANGUAGE C STRICT
-    AS 'MODULE_PATHNAME',$$master_activate_node$$;
+    AS 'MODULE_PATHNAME',$$citus_activate_node$$;
 COMMENT ON FUNCTION master_activate_node(nodename text, nodeport integer)
     IS 'activate a node which is in the cluster';
 
