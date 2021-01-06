@@ -1317,7 +1317,7 @@ CREATE FUNCTION master_add_node(nodename text,
                                 OUT nodecluster name)
   RETURNS record
   LANGUAGE C STRICT
-  AS 'MODULE_PATHNAME', $$master_add_node$$;
+  AS 'MODULE_PATHNAME', $$citus_add_node$$;
 COMMENT ON FUNCTION master_add_node(nodename text, nodeport integer,
                                     groupid integer, noderole noderole, nodecluster name)
   IS 'add node to the cluster';
