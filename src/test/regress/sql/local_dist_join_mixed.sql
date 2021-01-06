@@ -298,7 +298,7 @@ generate_Series(1,25)x;
 
 -- lateral joins
 
-SELECT COUNT(*) FROM (VALUES (1), (2), (3))  as f(x) LATERAL JOIN (SELECT * FROM local WHERE id  =  x) as bar;
+SELECT COUNT(*) FROM (VALUES (1), (2), (3))  as f(x) JOIN LATERAL (SELECT * FROM local WHERE id  =  x) as bar ON TRUE;
 
 SELECT COUNT(*) FROM local JOIN LATERAL (SELECT * FROM distributed WHERE local.id = distributed.id) as foo ON (true);
 SELECT COUNT(*) FROM local JOIN LATERAL (SELECT * FROM distributed WHERE local.id > distributed.id) as foo ON (true);

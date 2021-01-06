@@ -79,6 +79,8 @@ SELECT COUNT(*) FROM distributed_table WHERE key in (SELECT key FROM citus_local
 SELECT (SELECT (SELECT COUNT(*) FROM postgres_table WHERE postgres_table.key = distributed_table.key) FROM postgres_table p2) FROM distributed_table;
 
 
-RESET client_min_messages;
+SET client_min_messages to ERROR;
+DROP TABLE citus_local;
+SELECT master_remove_node('localhost', :master_port);
 \set VERBOSITY terse
 DROP SCHEMA local_table_join_vars CASCADE;

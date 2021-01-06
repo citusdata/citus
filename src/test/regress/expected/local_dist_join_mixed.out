@@ -652,8 +652,14 @@ WHERE
 				(SELECT *, random() FROM (SELECT *,random() FROM local WHERE d_upper.id = id) as foo2) as bar2
 					USING(id)
 			) IS NOT NULL;
-ERROR:  direct joins between distributed and local tables are not supported
-HINT:  Use CTE's or subqueries to select from local tables and use them in joins
+DEBUG:  Wrapping relation "local" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT id FROM local_dist_join_mixed.local WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM local_dist_join_mixed.distributed d_upper WHERE ((SELECT bar.id FROM ((SELECT foo.id, foo.name, foo.created_at, foo.random, random() AS random FROM (SELECT distributed.id, distributed.name, distributed.created_at, random() AS random FROM local_dist_join_mixed.distributed WHERE (distributed.id OPERATOR(pg_catalog.=) d_upper.id)) foo) bar(id, name, created_at, random, random_1) JOIN (SELECT foo2.id, foo2.title, foo2.random, random() AS random FROM (SELECT local.id, local.title, random() AS random FROM (SELECT NULL::integer AS "dummy-1", local_1.id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) local_1) local WHERE (d_upper.id OPERATOR(pg_catalog.=) local.id)) foo2) bar2(id, title, random, random_1) USING (id))) IS NOT NULL)
+ count
+---------------------------------------------------------------------
+   101
+(1 row)
+
 -- subqueries in the target list
 -- router, should work
 select (SELECT local.id) FROM local, distributed WHERE distributed.id = 1 LIMIT 1;
@@ -682,8 +688,15 @@ SELECT
 FROM
 	distributed e
 ORDER BY 1,2 LIMIT 1;
-ERROR:  direct joins between distributed and local tables are not supported
-HINT:  Use CTE's or subqueries to select from local tables and use them in joins
+DEBUG:  Wrapping relation "local" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT id FROM local_dist_join_mixed.local WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT name, (SELECT local.id FROM (SELECT NULL::integer AS "dummy-1", local_1.id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) local_1) local WHERE (local.id OPERATOR(pg_catalog.=) e.id)) AS id FROM local_dist_join_mixed.distributed e ORDER BY name, (SELECT local.id FROM (SELECT NULL::integer AS "dummy-1", local_1.id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) local_1) local WHERE (local.id OPERATOR(pg_catalog.=) e.id)) LIMIT 1
+DEBUG:  push down of limit count: 1
+ name | id
+---------------------------------------------------------------------
+ 0    |  0
+(1 row)
+
 -- set operations
 SELECT local.* FROM distributed JOIN local USING (id)
 	EXCEPT
@@ -1136,32 +1149,48 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS c
 (1 row)
 
 -- lateral joins
-SELECT COUNT(*) FROM (VALUES (1), (2), (3))  as f(x) LATERAL JOIN (SELECT * FROM local WHERE id  =  x) as bar;
-ERROR:  syntax error at or near "LATERAL"
+SELECT COUNT(*) FROM (VALUES (1), (2), (3))  as f(x) JOIN LATERAL (SELECT * FROM local WHERE id  =  x) as bar ON TRUE;
+ count
+---------------------------------------------------------------------
+     3
+(1 row)
+
 SELECT COUNT(*) FROM local JOIN LATERAL (SELECT * FROM distributed WHERE local.id = distributed.id) as foo ON (true);
-DEBUG:  Wrapping relation "local" to a subquery
-DEBUG:  generating subplan XXX_1 for subquery SELECT id FROM local_dist_join_mixed.local WHERE true
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT NULL::integer AS "dummy-1", local_1.id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) local_1) local JOIN LATERAL (SELECT distributed.id, distributed.name, distributed.created_at FROM local_dist_join_mixed.distributed WHERE (local.id OPERATOR(pg_catalog.=) distributed.id)) foo ON (true))
+DEBUG:  Wrapping relation "distributed" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT id FROM local_dist_join_mixed.distributed WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (local_dist_join_mixed.local JOIN LATERAL (SELECT distributed.id, distributed.name, distributed.created_at FROM (SELECT NULL::integer AS "dummy-1", distributed_1.id, NULL::text AS name, NULL::timestamp with time zone AS created_at FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) distributed_1) distributed WHERE (local.id OPERATOR(pg_catalog.=) distributed.id)) foo ON (true))
  count
 ---------------------------------------------------------------------
    101
 (1 row)
 
 SELECT COUNT(*) FROM local JOIN LATERAL (SELECT * FROM distributed WHERE local.id > distributed.id) as foo ON (true);
-DEBUG:  Wrapping relation "local" to a subquery
-DEBUG:  generating subplan XXX_1 for subquery SELECT id FROM local_dist_join_mixed.local WHERE true
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT NULL::integer AS "dummy-1", local_1.id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) local_1) local JOIN LATERAL (SELECT distributed.id, distributed.name, distributed.created_at FROM local_dist_join_mixed.distributed WHERE (local.id OPERATOR(pg_catalog.>) distributed.id)) foo ON (true))
+DEBUG:  Wrapping relation "distributed" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT id FROM local_dist_join_mixed.distributed WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (local_dist_join_mixed.local JOIN LATERAL (SELECT distributed.id, distributed.name, distributed.created_at FROM (SELECT NULL::integer AS "dummy-1", distributed_1.id, NULL::text AS name, NULL::timestamp with time zone AS created_at FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) distributed_1) distributed WHERE (local.id OPERATOR(pg_catalog.>) distributed.id)) foo ON (true))
  count
 ---------------------------------------------------------------------
   5050
 (1 row)
 
 SELECT COUNT(*) FROM distributed JOIN LATERAL (SELECT * FROM local WHERE local.id = distributed.id) as foo ON (true);
-ERROR:  direct joins between distributed and local tables are not supported
-HINT:  Use CTE's or subqueries to select from local tables and use them in joins
+DEBUG:  Wrapping relation "local" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT id FROM local_dist_join_mixed.local WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (local_dist_join_mixed.distributed JOIN LATERAL (SELECT local.id, local.title FROM (SELECT NULL::integer AS "dummy-1", local_1.id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) local_1) local WHERE (local.id OPERATOR(pg_catalog.=) distributed.id)) foo ON (true))
+ count
+---------------------------------------------------------------------
+   101
+(1 row)
+
 SELECT COUNT(*) FROM distributed JOIN LATERAL (SELECT * FROM local WHERE local.id > distributed.id) as foo ON (true);
-ERROR:  direct joins between distributed and local tables are not supported
-HINT:  Use CTE's or subqueries to select from local tables and use them in joins
+DEBUG:  Wrapping relation "local" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT id FROM local_dist_join_mixed.local WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (local_dist_join_mixed.distributed JOIN LATERAL (SELECT local.id, local.title FROM (SELECT NULL::integer AS "dummy-1", local_1.id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) local_1) local WHERE (local.id OPERATOR(pg_catalog.>) distributed.id)) foo ON (true))
+ count
+---------------------------------------------------------------------
+  5050
+(1 row)
+
 SELECT count(*) FROM distributed CROSS JOIN local;
 DEBUG:  Wrapping relation "local" to a subquery
 DEBUG:  generating subplan XXX_1 for subquery SELECT NULL::integer AS "dummy-1" FROM local_dist_join_mixed.local WHERE true
