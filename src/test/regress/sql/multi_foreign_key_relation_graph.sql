@@ -467,8 +467,16 @@ ALTER TABLE local_partitioned_table_1 ADD CONSTRAINT fkey_10 FOREIGN KEY (col_1)
 
 CREATE TABLE local_partitioned_table_1_300_400 PARTITION OF local_partitioned_table_1 FOR VALUES FROM (300) TO (400);
 
+SELECT oid::regclass::text AS tablename
+FROM get_foreign_key_connected_relations('local_partitioned_table_1_300_400') AS f(oid oid)
+ORDER BY tablename;
+
 CREATE TABLE local_partitioned_table_1_500_600 (col_1 INT UNIQUE, col_2 INT);
 ALTER TABLE local_partitioned_table_1 ATTACH PARTITION local_partitioned_table_1_500_600 FOR VALUES FROM (500) TO (600);
+
+SELECT oid::regclass::text AS tablename
+FROM get_foreign_key_connected_relations('local_table_5') AS f(oid oid)
+ORDER BY tablename;
 
 set client_min_messages to error;
 

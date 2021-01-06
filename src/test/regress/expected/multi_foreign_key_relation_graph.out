@@ -864,7 +864,6 @@ DEBUG:  CREATE TABLE / PRIMARY KEY will create implicit index "local_table_3_pke
 DEBUG:  DDL command invalidates foreign key graph
   CREATE TABLE local_table_4 (col int PRIMARY KEY REFERENCES local_table_3 (col));
 DEBUG:  CREATE TABLE / PRIMARY KEY will create implicit index "local_table_4_pkey" for table "local_table_4"
-DEBUG:  DDL command invalidates foreign key graph
   -- we invalidate foreign key graph for add column & create table
   -- commands defining foreign keys too
   SELECT oid::regclass::text AS tablename
@@ -1002,12 +1001,35 @@ DEBUG:  DDL command invalidates foreign key graph
 -- key cache as parent table is involved in a foreign key relationship
 CREATE TABLE local_partitioned_table_1_300_400 PARTITION OF local_partitioned_table_1 FOR VALUES FROM (300) TO (400);
 DEBUG:  CREATE TABLE / UNIQUE will create implicit index "local_partitioned_table_1_300_400_col_1_key" for table "local_partitioned_table_1_300_400"
-DEBUG:  DDL command invalidates foreign key graph
+SELECT oid::regclass::text AS tablename
+FROM get_foreign_key_connected_relations('local_partitioned_table_1_300_400') AS f(oid oid)
+ORDER BY tablename;
+             tablename
+---------------------------------------------------------------------
+ local_partitioned_table_1
+ local_partitioned_table_1_100_200
+ local_partitioned_table_1_200_300
+ local_partitioned_table_1_300_400
+ local_table_5
+(5 rows)
+
 CREATE TABLE local_partitioned_table_1_500_600 (col_1 INT UNIQUE, col_2 INT);
 DEBUG:  CREATE TABLE / UNIQUE will create implicit index "local_partitioned_table_1_500_600_col_1_key" for table "local_partitioned_table_1_500_600"
 ALTER TABLE local_partitioned_table_1 ATTACH PARTITION local_partitioned_table_1_500_600 FOR VALUES FROM (500) TO (600);
 DEBUG:  verifying table "local_partitioned_table_1_500_600"
-DEBUG:  DDL command invalidates foreign key graph
+SELECT oid::regclass::text AS tablename
+FROM get_foreign_key_connected_relations('local_table_5') AS f(oid oid)
+ORDER BY tablename;
+             tablename
+---------------------------------------------------------------------
+ local_partitioned_table_1
+ local_partitioned_table_1_100_200
+ local_partitioned_table_1_200_300
+ local_partitioned_table_1_300_400
+ local_partitioned_table_1_500_600
+ local_table_5
+(6 rows)
+
 set client_min_messages to error;
 SET search_path TO public;
 DROP SCHEMA fkey_graph CASCADE;
