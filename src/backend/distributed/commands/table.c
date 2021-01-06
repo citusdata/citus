@@ -200,12 +200,6 @@ PostprocessCreateTableStmt(CreateStmt *createStatement, const char *queryString)
 	{
 		ErrorOutForFKeyBetweenPostgresAndCitusLocalTable(relationId);
 	}
-
-	/* invalidate foreign key cache if the table involved in any foreign key */
-	if ((TableReferenced(relationId) || TableReferencing(relationId)))
-	{
-		InvalidateForeignKeyGraph();
-	}
 #endif
 
 	if (createStatement->inhRelations != NIL && createStatement->partbound != NULL)
