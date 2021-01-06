@@ -515,8 +515,6 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 	}
 	PG_CATCH();
 	{
-		PostStandardProcessUtility(parsetree);
-
 		/*
 		 * We call MarkInvalidateForeignKeyGraph in preprocess without knowing
 		 * that if command would fail or not. However, we don't want to invalidate
@@ -527,6 +525,8 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		 * key graph.
 		 */
 		shouldInvalidateForeignKeyGraph = false;
+
+		PostStandardProcessUtility(parsetree);
 
 		PG_RE_THROW();
 	}
@@ -576,16 +576,6 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 
 		PostprocessAlterTableStmtAttachPartition(alterTableStatement, queryString);
 	}
-
-	/*
-	 * Re-forming the foreign key graph relies on the command being executed
-	 * on the local table first. However, in order to decide whether the
-	 * command leads to an invalidation, we need to check before the command
-	 * is being executed since we read pg_constraint table. Thus, we maintain a
-	 * local flag and do the invalidation after multi_ProcessUtility,
-	 * before ExecuteDistributedDDLJob().
-	 */
-	InvalidateForeignKeyGraphForDDL();
 
 	/* after local command has completed, finish by executing worker DDLJobs, if any */
 	if (ddlJobs != NIL)
@@ -912,6 +902,16 @@ static void
 PostStandardProcessUtility(Node *parsetree)
 {
 	DecrementUtilityHookCountersIfNecessary(parsetree);
+
+	/*
+	 * Re-forming the foreign key graph relies on the command being executed
+	 * on the local table first. However, in order to decide whether the
+	 * command leads to an invalidation, we need to check before the command
+	 * is being executed since we read pg_constraint table. Thus, we maintain a
+	 * local flag and do the invalidation after multi_ProcessUtility,
+	 * before ExecuteDistributedDDLJob().
+	 */
+	InvalidateForeignKeyGraphForDDL();
 }
 
 

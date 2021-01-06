@@ -204,7 +204,7 @@ PostprocessCreateTableStmt(CreateStmt *createStatement, const char *queryString)
 	/* invalidate foreign key cache if the table involved in any foreign key */
 	if ((TableReferenced(relationId) || TableReferencing(relationId)))
 	{
-		MarkInvalidateForeignKeyGraph();
+		InvalidateForeignKeyGraph();
 	}
 #endif
 
@@ -263,7 +263,7 @@ PostprocessCreateTableStmtPartitionOf(CreateStmt *createStatement, const
 	 */
 	if ((TableReferenced(parentRelationId) || TableReferencing(parentRelationId)))
 	{
-		MarkInvalidateForeignKeyGraph();
+		InvalidateForeignKeyGraph();
 	}
 }
 
@@ -353,7 +353,7 @@ PostprocessAlterTableStmtAttachPartition(AlterTableStmt *alterTableStatement,
 				 */
 				if ((TableReferenced(relationId) || TableReferencing(relationId)))
 				{
-					MarkInvalidateForeignKeyGraph();
+					InvalidateForeignKeyGraph();
 				}
 			}
 		}
