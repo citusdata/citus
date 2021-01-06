@@ -852,10 +852,19 @@ BEGIN;
 ROLLBACK;
 BEGIN;
   CREATE TABLE local_table_3 (col int PRIMARY KEY);
-  ALTER TABLE local_table_1 ADD COLUMN another_col int REFERENCES local_table_3(col);
   CREATE TABLE local_table_4 (col int PRIMARY KEY REFERENCES local_table_3 (col));
-  -- we invalidate foreign key graph for add column & create table
-  -- commands defining foreign keys too
+  -- show that we don't invalidate foreign key graph for create table
+  -- commands defining foreign keys, should not print anything
+  SELECT oid::regclass::text AS tablename
+  FROM get_foreign_key_connected_relations('local_table_3') AS f(oid oid)
+  ORDER BY tablename;
+ tablename
+---------------------------------------------------------------------
+(0 rows)
+
+  ALTER TABLE local_table_1 ADD COLUMN another_col int REFERENCES local_table_3(col);
+  -- we invalidate foreign key graph for add column
+  -- commands defining foreign keys
   SELECT oid::regclass::text AS tablename
   FROM get_foreign_key_connected_relations('local_table_3') AS f(oid oid)
   ORDER BY tablename;
@@ -988,9 +997,8 @@ ORDER BY tablename;
  local_partitioned_table_1_100_200
  local_partitioned_table_1_200_300
  local_partitioned_table_1_300_400
- local_partitioned_table_1_500_600
  local_table_5
-(6 rows)
+(5 rows)
 
 set client_min_messages to error;
 SET search_path TO public;

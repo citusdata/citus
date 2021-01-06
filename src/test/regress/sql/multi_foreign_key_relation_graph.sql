@@ -381,12 +381,18 @@ ROLLBACK;
 
 BEGIN;
   CREATE TABLE local_table_3 (col int PRIMARY KEY);
-  ALTER TABLE local_table_1 ADD COLUMN another_col int REFERENCES local_table_3(col);
 
   CREATE TABLE local_table_4 (col int PRIMARY KEY REFERENCES local_table_3 (col));
+  -- show that we don't invalidate foreign key graph for create table
+  -- commands defining foreign keys, should not print anything
+  SELECT oid::regclass::text AS tablename
+  FROM get_foreign_key_connected_relations('local_table_3') AS f(oid oid)
+  ORDER BY tablename;
 
-  -- we invalidate foreign key graph for add column & create table
-  -- commands defining foreign keys too
+  ALTER TABLE local_table_1 ADD COLUMN another_col int REFERENCES local_table_3(col);
+
+  -- we invalidate foreign key graph for add column
+  -- commands defining foreign keys
   SELECT oid::regclass::text AS tablename
   FROM get_foreign_key_connected_relations('local_table_3') AS f(oid oid)
   ORDER BY tablename;
