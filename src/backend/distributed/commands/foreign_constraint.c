@@ -492,9 +492,9 @@ ColumnAppearsInForeignKey(char *columnName, Oid relationId)
 {
 	int searchForeignKeyColumnFlags = SEARCH_REFERENCING_RELATION |
 									  SEARCH_REFERENCED_RELATION;
-	List *foreignKeyIdsColumnAppeared =
+	List *foreignKeysColumnAppeared =
 		GetForeignKeyIdsForColumn(columnName, relationId, searchForeignKeyColumnFlags);
-	return list_length(foreignKeyIdsColumnAppeared) > 0;
+	return list_length(foreignKeysColumnAppeared) > 0;
 }
 
 
