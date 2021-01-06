@@ -117,7 +117,7 @@ static WorkerNode * SetShouldHaveShards(WorkerNode *workerNode, bool shouldHaveS
 PG_FUNCTION_INFO_V1(citus_set_coordinator_host);
 PG_FUNCTION_INFO_V1(master_add_node);
 PG_FUNCTION_INFO_V1(citus_add_node);
-PG_FUNCTION_INFO_V1(master_add_inactive_node);
+PG_FUNCTION_INFO_V1(citus_add_inactive_node);
 PG_FUNCTION_INFO_V1(master_add_secondary_node);
 PG_FUNCTION_INFO_V1(master_set_node_property);
 PG_FUNCTION_INFO_V1(master_remove_node);
@@ -264,12 +264,12 @@ citus_add_node(PG_FUNCTION_ARGS)
 
 
 /*
- * master_add_inactive_node function adds a new node to the cluster as inactive node
+ * citus_add_inactive_node function adds a new node to the cluster as inactive node
  * and returns id of the newly added node. It does not replicate reference
  * tables to the new node, it only adds new node to the pg_dist_node table.
  */
 Datum
-master_add_inactive_node(PG_FUNCTION_ARGS)
+citus_add_inactive_node(PG_FUNCTION_ARGS)
 {
 	text *nodeName = PG_GETARG_TEXT_P(0);
 	int32 nodePort = PG_GETARG_INT32(1);

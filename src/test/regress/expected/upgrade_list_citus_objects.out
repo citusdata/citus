@@ -29,6 +29,7 @@ ORDER BY 1;
  function broadcast_intermediate_result(text,text)
  function check_distributed_deadlocks()
  function citus_activate_node(text,integer)
+ function citus_add_inactive_node(text,integer,integer,noderole,name)
  function citus_add_node(text,integer,integer,noderole,name)
  function citus_add_rebalance_strategy(name,regproc,regproc,regproc,real,real)
  function citus_blocking_pids(integer)

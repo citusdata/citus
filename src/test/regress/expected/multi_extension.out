@@ -453,6 +453,7 @@ SELECT * FROM print_extension_changes();
                                                | function alter_columnar_table_reset(regclass,boolean,boolean,boolean,boolean)
                                                | function alter_columnar_table_set(regclass,integer,integer,name,integer)
                                                | function citus_activate_node(text,integer)
+                                               | function citus_add_inactive_node(text,integer,integer,noderole,name)
                                                | function citus_add_node(text,integer,integer,noderole,name)
                                                | function citus_internal.columnar_ensure_objects_exist()
                                                | function citus_set_coordinator_host(text,integer,noderole,name)
