@@ -984,29 +984,29 @@ ORDER BY tablename;
 
 CREATE TABLE local_partitioned_table_1 (col_1 INT UNIQUE, col_2 INT) PARTITION BY RANGE (col_1);
 DEBUG:  CREATE TABLE / UNIQUE will create implicit index "local_partitioned_table_1_col_1_key" for table "local_partitioned_table_1"
-CREATE TABLE local_partitioned_table_2 (col_1 INT UNIQUE, col_2 INT) PARTITION BY RANGE (col_1);
-DEBUG:  CREATE TABLE / UNIQUE will create implicit index "local_partitioned_table_2_col_1_key" for table "local_partitioned_table_2"
+CREATE TABLE local_table_5 (col_1 INT UNIQUE, col_2 INT);
+DEBUG:  CREATE TABLE / UNIQUE will create implicit index "local_table_5_col_1_key" for table "local_table_5"
 -- in below two show that attaching a partition doesn't invalidate
 -- foreign key cache as parent table isn't involved in any foreign
 -- key relationship
 CREATE TABLE local_partitioned_table_1_100_200 PARTITION OF local_partitioned_table_1 FOR VALUES FROM (100) TO (200);
 DEBUG:  CREATE TABLE / UNIQUE will create implicit index "local_partitioned_table_1_100_200_col_1_key" for table "local_partitioned_table_1_100_200"
-CREATE TABLE local_partitioned_table_2_100_200 (col_1 INT UNIQUE, col_2 INT);
-DEBUG:  CREATE TABLE / UNIQUE will create implicit index "local_partitioned_table_2_100_200_col_1_key" for table "local_partitioned_table_2_100_200"
-ALTER TABLE local_partitioned_table_2 ATTACH PARTITION local_partitioned_table_2_100_200 FOR VALUES FROM (100) TO (200);
-DEBUG:  verifying table "local_partitioned_table_2_100_200"
--- define foreign key between parent tables
-ALTER TABLE local_partitioned_table_1 ADD CONSTRAINT fkey_10 FOREIGN KEY (col_1) REFERENCES local_partitioned_table_2(col_1);
+CREATE TABLE local_partitioned_table_1_200_300 (col_1 INT UNIQUE, col_2 INT);
+DEBUG:  CREATE TABLE / UNIQUE will create implicit index "local_partitioned_table_1_200_300_col_1_key" for table "local_partitioned_table_1_200_300"
+ALTER TABLE local_partitioned_table_1 ATTACH PARTITION local_partitioned_table_1_200_300 FOR VALUES FROM (200) TO (300);
+DEBUG:  verifying table "local_partitioned_table_1_200_300"
+-- define a foreign key from partitioned table
+ALTER TABLE local_partitioned_table_1 ADD CONSTRAINT fkey_10 FOREIGN KEY (col_1) REFERENCES local_table_5(col_1);
 DEBUG:  DDL command invalidates foreign key graph
 -- in below two show that attaching partition invalidates foreign
 -- key cache as parent table is involved in a foreign key relationship
-CREATE TABLE local_partitioned_table_2_200_300 PARTITION OF local_partitioned_table_2 FOR VALUES FROM (200) TO (300);
-DEBUG:  CREATE TABLE / UNIQUE will create implicit index "local_partitioned_table_2_200_300_col_1_key" for table "local_partitioned_table_2_200_300"
-DEBUG:  DDL command invalidates foreign key graph
-CREATE TABLE local_partitioned_table_1_300_400 (col_1 INT UNIQUE, col_2 INT);
+CREATE TABLE local_partitioned_table_1_300_400 PARTITION OF local_partitioned_table_1 FOR VALUES FROM (300) TO (400);
 DEBUG:  CREATE TABLE / UNIQUE will create implicit index "local_partitioned_table_1_300_400_col_1_key" for table "local_partitioned_table_1_300_400"
-ALTER TABLE local_partitioned_table_1 ATTACH PARTITION local_partitioned_table_1_300_400 FOR VALUES FROM (300) TO (400);
-DEBUG:  verifying table "local_partitioned_table_1_300_400"
+DEBUG:  DDL command invalidates foreign key graph
+CREATE TABLE local_partitioned_table_1_500_600 (col_1 INT UNIQUE, col_2 INT);
+DEBUG:  CREATE TABLE / UNIQUE will create implicit index "local_partitioned_table_1_500_600_col_1_key" for table "local_partitioned_table_1_500_600"
+ALTER TABLE local_partitioned_table_1 ATTACH PARTITION local_partitioned_table_1_500_600 FOR VALUES FROM (500) TO (600);
+DEBUG:  verifying table "local_partitioned_table_1_500_600"
 DEBUG:  DDL command invalidates foreign key graph
 set client_min_messages to error;
 SET search_path TO public;
