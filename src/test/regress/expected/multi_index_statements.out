@@ -497,7 +497,7 @@ DROP INDEX f1;
 DROP INDEX ix_test_index_creation2;
 DROP INDEX ix_test_index_creation1_ix_test_index_creation1_ix_test_index_creation1_ix_test_index_creation1_ix_test_index_creation1;
 DROP INDEX CONCURRENTLY ith_b_idx;
-ERROR:  CONCURRENTLY-enabled index command failed
+ERROR:  index "ith_b_idx_102089" does not exist
 -- the failure results in an INVALID index
 SELECT indisvalid AS "Index Valid?" FROM pg_index WHERE indexrelid='ith_b_idx'::regclass;
  Index Valid?
