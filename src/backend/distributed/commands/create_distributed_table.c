@@ -291,9 +291,6 @@ undistribute_table(PG_FUNCTION_ARGS)
 	Oid relationId = PG_GETARG_OID(0);
 
 	CheckCitusVersion(ERROR);
-	EnsureCoordinator();
-	EnsureRelationExists(relationId);
-	EnsureTableOwner(relationId);
 
 	UndistributeTable(relationId);
 
@@ -1557,7 +1554,12 @@ DistributionColumnUsesGeneratedStoredColumn(TupleDesc relationDesc,
 void
 UndistributeTable(Oid relationId)
 {
-	Relation relation = try_relation_open(relationId, ExclusiveLock);
+	EnsureCoordinator();
+	EnsureRelationExists(relationId);
+	EnsureTableOwner(relationId);
+
+	LOCKMODE lockMode = ExclusiveLock;
+	Relation relation = try_relation_open(relationId, lockMode);
 	if (relation == NULL)
 	{
 		ereport(ERROR, (errmsg("cannot undistribute table"),
