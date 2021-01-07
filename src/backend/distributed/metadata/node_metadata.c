@@ -120,6 +120,7 @@ PG_FUNCTION_INFO_V1(citus_add_node);
 PG_FUNCTION_INFO_V1(master_add_node);
 PG_FUNCTION_INFO_V1(citus_add_inactive_node);
 PG_FUNCTION_INFO_V1(master_add_inactive_node);
+PG_FUNCTION_INFO_V1(citus_add_secondary_node);
 PG_FUNCTION_INFO_V1(master_add_secondary_node);
 PG_FUNCTION_INFO_V1(master_set_node_property);
 PG_FUNCTION_INFO_V1(master_remove_node);
@@ -272,7 +273,7 @@ citus_add_node(PG_FUNCTION_ARGS)
 Datum
 master_add_node(PG_FUNCTION_ARGS)
 {
-    return citus_add_node(fcinfo);
+	return citus_add_node(fcinfo);
 }
 
 
@@ -316,16 +317,16 @@ citus_add_inactive_node(PG_FUNCTION_ARGS)
 Datum
 master_add_inactive_node(PG_FUNCTION_ARGS)
 {
-    return citus_add_inactive_node(fcinfo);
+	return citus_add_inactive_node(fcinfo);
 }
 
 
 /*
- * master_add_secondary_node adds a new secondary node to the cluster. It accepts as
+ * citus_add_secondary_node adds a new secondary node to the cluster. It accepts as
  * arguments the primary node it should share a group with.
  */
 Datum
-master_add_secondary_node(PG_FUNCTION_ARGS)
+citus_add_secondary_node(PG_FUNCTION_ARGS)
 {
 	text *nodeName = PG_GETARG_TEXT_P(0);
 	int32 nodePort = PG_GETARG_INT32(1);
@@ -351,6 +352,16 @@ master_add_secondary_node(PG_FUNCTION_ARGS)
 	TransactionModifiedNodeMetadata = true;
 
 	PG_RETURN_INT32(nodeId);
+}
+
+
+/*
+ * master_add_secondary_node is a wrapper function for old UDF name.
+ */
+Datum
+master_add_secondary_node(PG_FUNCTION_ARGS)
+{
+	return citus_add_secondary_node(fcinfo);
 }
 
 
@@ -629,7 +640,7 @@ citus_activate_node(PG_FUNCTION_ARGS)
 Datum
 master_activate_node(PG_FUNCTION_ARGS)
 {
-    return citus_activate_node(fcinfo);
+	return citus_activate_node(fcinfo);
 }
 
 
