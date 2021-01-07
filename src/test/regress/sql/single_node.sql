@@ -576,6 +576,28 @@ ALTER TABLE test DROP CONSTRAINT foreign_key;
 SELECT undistribute_table('test_2');
 SELECT * FROM pg_dist_partition WHERE logicalrelid = 'test_2'::regclass;
 
+CREATE TABLE reference_table_1 (col_1 INT UNIQUE, col_2 INT UNIQUE, UNIQUE (col_2, col_1));
+SELECT create_reference_table('reference_table_1');
+
+CREATE TABLE distributed_table_1 (col_1 INT UNIQUE);
+SELECT create_distributed_table('distributed_table_1', 'col_1');
+
+CREATE TABLE citus_local_table_1 (col_1 INT UNIQUE);
+SELECT create_citus_local_table('citus_local_table_1');
+
+CREATE TABLE partitioned_table_1 (col_1 INT UNIQUE, col_2 INT) PARTITION BY RANGE (col_1);
+CREATE TABLE partitioned_table_1_100_200 PARTITION OF partitioned_table_1 FOR VALUES FROM (100) TO (200);
+CREATE TABLE partitioned_table_1_200_300 PARTITION OF partitioned_table_1 FOR VALUES FROM (200) TO (300);
+SELECT create_distributed_table('partitioned_table_1', 'col_1');
+
+ALTER TABLE citus_local_table_1 ADD CONSTRAINT fkey_1 FOREIGN KEY (col_1) REFERENCES reference_table_1(col_2);
+ALTER TABLE reference_table_1 ADD CONSTRAINT fkey_2 FOREIGN KEY (col_2) REFERENCES reference_table_1(col_1);
+ALTER TABLE distributed_table_1 ADD CONSTRAINT fkey_3 FOREIGN KEY (col_1) REFERENCES reference_table_1(col_1);
+ALTER TABLE citus_local_table_1 ADD CONSTRAINT fkey_4 FOREIGN KEY (col_1) REFERENCES reference_table_1(col_2);
+ALTER TABLE partitioned_table_1 ADD CONSTRAINT fkey_5 FOREIGN KEY (col_1) REFERENCES reference_table_1(col_2);
+
+SELECT undistribute_table('partitioned_table_1', cascade_via_foreign_keys=>true);
+
 CREATE PROCEDURE call_delegation(x int) LANGUAGE plpgsql AS $$
 BEGIN
 	 INSERT INTO test (x) VALUES ($1);

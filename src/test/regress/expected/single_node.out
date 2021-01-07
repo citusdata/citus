@@ -1019,6 +1019,72 @@ SELECT * FROM pg_dist_partition WHERE logicalrelid = 'test_2'::regclass;
 ---------------------------------------------------------------------
 (0 rows)
 
+CREATE TABLE reference_table_1 (col_1 INT UNIQUE, col_2 INT UNIQUE, UNIQUE (col_2, col_1));
+SELECT create_reference_table('reference_table_1');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE distributed_table_1 (col_1 INT UNIQUE);
+SELECT create_distributed_table('distributed_table_1', 'col_1');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE citus_local_table_1 (col_1 INT UNIQUE);
+SELECT create_citus_local_table('citus_local_table_1');
+ create_citus_local_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE partitioned_table_1 (col_1 INT UNIQUE, col_2 INT) PARTITION BY RANGE (col_1);
+CREATE TABLE partitioned_table_1_100_200 PARTITION OF partitioned_table_1 FOR VALUES FROM (100) TO (200);
+CREATE TABLE partitioned_table_1_200_300 PARTITION OF partitioned_table_1 FOR VALUES FROM (200) TO (300);
+SELECT create_distributed_table('partitioned_table_1', 'col_1');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+ALTER TABLE citus_local_table_1 ADD CONSTRAINT fkey_1 FOREIGN KEY (col_1) REFERENCES reference_table_1(col_2);
+ALTER TABLE reference_table_1 ADD CONSTRAINT fkey_2 FOREIGN KEY (col_2) REFERENCES reference_table_1(col_1);
+ALTER TABLE distributed_table_1 ADD CONSTRAINT fkey_3 FOREIGN KEY (col_1) REFERENCES reference_table_1(col_1);
+ALTER TABLE citus_local_table_1 ADD CONSTRAINT fkey_4 FOREIGN KEY (col_1) REFERENCES reference_table_1(col_2);
+ALTER TABLE partitioned_table_1 ADD CONSTRAINT fkey_5 FOREIGN KEY (col_1) REFERENCES reference_table_1(col_2);
+SELECT undistribute_table('partitioned_table_1', cascade_via_foreign_keys=>true);
+NOTICE:  undistributing the partitions of single_node.partitioned_table_1
+NOTICE:  creating a new local table for single_node.partitioned_table_1_100_200
+NOTICE:  Moving the data of single_node.partitioned_table_1_100_200
+NOTICE:  Dropping the old single_node.partitioned_table_1_100_200
+NOTICE:  Renaming the new table to single_node.partitioned_table_1_100_200
+NOTICE:  creating a new local table for single_node.partitioned_table_1_200_300
+NOTICE:  Moving the data of single_node.partitioned_table_1_200_300
+NOTICE:  Dropping the old single_node.partitioned_table_1_200_300
+NOTICE:  Renaming the new table to single_node.partitioned_table_1_200_300
+NOTICE:  creating a new local table for single_node.partitioned_table_1
+NOTICE:  Moving the data of single_node.partitioned_table_1
+NOTICE:  Dropping the old single_node.partitioned_table_1
+NOTICE:  Renaming the new table to single_node.partitioned_table_1
+NOTICE:  creating a new local table for single_node.reference_table_1
+NOTICE:  Moving the data of single_node.reference_table_1
+NOTICE:  Dropping the old single_node.reference_table_1
+NOTICE:  Renaming the new table to single_node.reference_table_1
+NOTICE:  creating a new local table for single_node.distributed_table_1
+NOTICE:  Moving the data of single_node.distributed_table_1
+NOTICE:  Dropping the old single_node.distributed_table_1
+NOTICE:  Renaming the new table to single_node.distributed_table_1
+NOTICE:  creating a new local table for single_node.citus_local_table_1
+NOTICE:  Moving the data of single_node.citus_local_table_1
+NOTICE:  Dropping the old single_node.citus_local_table_1
+NOTICE:  Renaming the new table to single_node.citus_local_table_1
+ undistribute_table
+---------------------------------------------------------------------
+
+(1 row)
+
 CREATE PROCEDURE call_delegation(x int) LANGUAGE plpgsql AS $$
 BEGIN
 	 INSERT INTO test (x) VALUES ($1);

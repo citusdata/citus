@@ -54,8 +54,6 @@ static char * GetRenameShardIndexCommand(char *indexName, uint64 shardId);
 static void RenameShardRelationNonTruncateTriggers(Oid shardRelationId, uint64 shardId);
 static char * GetRenameShardTriggerCommand(Oid shardRelationId, char *triggerName,
 										   uint64 shardId);
-static void ExecuteAndLogDDLCommandList(List *ddlCommandList);
-static void ExecuteAndLogDDLCommand(const char *commandString);
 static void DropRelationTruncateTriggers(Oid relationId);
 static char * GetDropTriggerCommand(Oid relationId, char *triggerName);
 static List * GetExplicitIndexNameList(Oid relationId);
@@ -550,36 +548,6 @@ GetRenameShardTriggerCommand(Oid shardRelationId, char *triggerName, uint64 shar
 					 quotedShardTriggerName);
 
 	return renameCommand->data;
-}
-
-
-/*
- * ExecuteAndLogDDLCommandList takes a list of ddl commands and calls
- * ExecuteAndLogDDLCommand function for each of them.
- */
-static void
-ExecuteAndLogDDLCommandList(List *ddlCommandList)
-{
-	char *ddlCommand = NULL;
-	foreach_ptr(ddlCommand, ddlCommandList)
-	{
-		ExecuteAndLogDDLCommand(ddlCommand);
-	}
-}
-
-
-/*
- * ExecuteAndLogDDLCommand takes a ddl command and logs it in DEBUG4 log level.
- * Then, parses and executes it via CitusProcessUtility.
- */
-static void
-ExecuteAndLogDDLCommand(const char *commandString)
-{
-	ereport(DEBUG4, (errmsg("executing \"%s\"", commandString)));
-
-	Node *parseTree = ParseTreeNode(commandString);
-	CitusProcessUtility(parseTree, commandString, PROCESS_UTILITY_TOPLEVEL,
-						NULL, None_Receiver, NULL);
 }
 
 

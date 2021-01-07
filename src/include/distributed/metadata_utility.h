@@ -138,6 +138,7 @@ extern void CreateDistributedTable(Oid relationId, Var *distributionColumn,
 								   char distributionMethod, char *colocateWithTableName,
 								   bool viaDeprecatedAPI);
 extern void CreateTruncateTrigger(Oid relationId);
+extern void UndistributeTable(Oid relationId, bool cascadeViaForeignKeys);
 
 extern void EnsureDependenciesExistOnAllNodes(const ObjectAddress *target);
 extern List * GetDistributableDependenciesForObject(const ObjectAddress *target);
