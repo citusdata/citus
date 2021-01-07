@@ -164,7 +164,6 @@ CreateCimv(CimvCreate *cimvCreate)
 	CreateDataChangeTriggerFunction(cimvCreate);
 	CreateDataChangeTriggers(cimvCreate);
 	InsertIntoPgCimv(cimvCreate->formCimv);
-
 	PopCitusSecurityContext();
 
 	if (SPI_finish() != SPI_OK_FINISH)

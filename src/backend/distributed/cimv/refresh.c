@@ -101,7 +101,6 @@ RefreshCimv(Form_pg_cimv formCimv, bool skipData, bool isCreate)
 			/* better: SPI_commit_and_chain(); */
 			SPI_commit();
 			SPI_start_transaction();
-
 			/* TODO: cleanup if this fails */
 			appendStringInfo(&querybuf,
 							 "INSERT INTO %s.%s "

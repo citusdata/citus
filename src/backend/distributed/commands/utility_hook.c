@@ -479,7 +479,6 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 	{
 		DropStmt *dropStatement = (DropStmt *) parsetree;
 
-		// PushCitusSecurityContext();
 		if (dropStatement->removeType == OBJECT_MATVIEW)
 		{
 			ProcessDropMaterializedViewStmt(dropStatement);
@@ -488,7 +487,6 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		{
 			ProcessDropViewStmt(dropStatement);
 		}
-		// PopCitusSecurityContext();
 
 	}
 
