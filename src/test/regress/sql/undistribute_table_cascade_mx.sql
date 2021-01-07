@@ -44,5 +44,16 @@ $$
 SELECT count(*) FROM pg_catalog.pg_tables WHERE schemaname='undistribute_table_cascade_mx'
 $$);
 
+-- drop parititoned table as create_citus_local_table doesn't support partitioned tables
+DROP TABLE partitioned_table_1;
+SELECT create_citus_local_table('citus_local_table_1', cascade_via_foreign_keys=>true);
+
+-- both workers should print 3 as we converted all tables except
+-- partitioned table in this schema to a citus local table
+SELECT run_command_on_workers(
+$$
+SELECT count(*) FROM pg_catalog.pg_tables WHERE schemaname='undistribute_table_cascade_mx'
+$$);
+
 -- cleanup at exit
 DROP SCHEMA undistribute_table_cascade_mx CASCADE;

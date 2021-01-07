@@ -349,9 +349,9 @@ CREATE TABLE local_table_3 (a int primary key, b int references local_table_3(a)
 -- below two should fail as we do not allow foreign keys between
 -- postgres local tables and citus local tables
 SELECT create_citus_local_table('local_table_1');
-ERROR:  relation "local_table_1" is involved in a foreign key relationship with another table
+ERROR:  relation citus_local_tables_test_schema.local_table_1 is involved in a foreign key relationship with another table
 SELECT create_citus_local_table('local_table_2');
-ERROR:  relation "local_table_2" is involved in a foreign key relationship with another table
+ERROR:  relation citus_local_tables_test_schema.local_table_2 is involved in a foreign key relationship with another table
 -- below should work as we allow initial self references in citus local tables
 SELECT create_citus_local_table('local_table_3');
  create_citus_local_table

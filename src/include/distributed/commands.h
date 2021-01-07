@@ -171,7 +171,7 @@ extern bool ConstraintIsAForeignKey(char *inputConstaintName, Oid relationOid);
 extern bool ConstraintWithNameIsOfType(char *inputConstaintName, Oid relationId,
 									   char targetConstraintType);
 extern bool ConstraintWithIdIsOfType(Oid constraintId, char targetConstraintType);
-extern void ErrorIfTableHasExternalForeignKeys(Oid relationId);
+extern bool TableHasExternalForeignKeys(Oid relationId);
 extern List * GetForeignKeyOids(Oid relationId, int flags);
 extern Oid GetReferencedTableId(Oid foreignKeyId);
 
@@ -387,7 +387,7 @@ extern List * CitusLocalTableTriggerCommandDDLJob(Oid relationId, char *triggerN
 												  const char *queryString);
 extern Oid GetTriggerFunctionId(Oid triggerId);
 
-/* cascade_citus_table_function.c */
+/* cascade_table_operation_for_connected_relations.c */
 
 /*
  * Flags that can be passed to CascadeOperationForConnectedRelations to specify
@@ -399,6 +399,9 @@ typedef enum CascadeOperationType
 
 	/* execute UndistributeTable on each relation */
 	UNDISTRIBUTE_TABLE = 1 << 1,
+
+	/* execute CreateCitusLocalTable on each relation */
+	CREATE_CITUS_LOCAL_TABLE = 1 << 2,
 } CascadeOperationType;
 
 extern void CascadeOperationForConnectedRelations(Oid relationId, LOCKMODE relLockMode,
@@ -406,6 +409,10 @@ extern void CascadeOperationForConnectedRelations(Oid relationId, LOCKMODE relLo
 												  cascadeOperationType);
 extern void ExecuteAndLogDDLCommandList(List *ddlCommandList);
 extern void ExecuteAndLogDDLCommand(const char *commandString);
+
+/* create_citus_local_table.c */
+
+extern void CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys);
 
 extern bool ShouldPropagateSetCommand(VariableSetStmt *setStmt);
 extern void PostprocessVariableSetStmt(VariableSetStmt *setStmt, const char *setCommand);

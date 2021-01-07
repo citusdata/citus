@@ -326,6 +326,11 @@ GetCascadeOperationFunction(CascadeOperationType cascadeOperationType)
 			return UndistributeTable;
 		}
 
+		case CREATE_CITUS_LOCAL_TABLE:
+		{
+			return CreateCitusLocalTable;
+		}
+
 		default:
 		{
 			/*

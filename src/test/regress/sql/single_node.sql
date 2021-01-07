@@ -598,6 +598,16 @@ ALTER TABLE partitioned_table_1 ADD CONSTRAINT fkey_5 FOREIGN KEY (col_1) REFERE
 
 SELECT undistribute_table('partitioned_table_1', cascade_via_foreign_keys=>true);
 
+CREATE TABLE local_table_1 (col_1 INT UNIQUE);
+CREATE TABLE local_table_2 (col_1 INT UNIQUE);
+CREATE TABLE local_table_3 (col_1 INT UNIQUE);
+
+ALTER TABLE local_table_2 ADD CONSTRAINT fkey_6 FOREIGN KEY (col_1) REFERENCES local_table_1(col_1);
+ALTER TABLE local_table_3 ADD CONSTRAINT fkey_7 FOREIGN KEY (col_1) REFERENCES local_table_1(col_1);
+ALTER TABLE local_table_1 ADD CONSTRAINT fkey_8 FOREIGN KEY (col_1) REFERENCES local_table_1(col_1);
+
+SELECT create_citus_local_table('local_table_2', cascade_via_foreign_keys=>true);
+
 CREATE PROCEDURE call_delegation(x int) LANGUAGE plpgsql AS $$
 BEGIN
 	 INSERT INTO test (x) VALUES ($1);
