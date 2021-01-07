@@ -32,3 +32,18 @@ hash_delete_all(HTAB *htab)
 		Assert(found);
 	}
 }
+
+
+/*
+ * foreach_htab_cleanup cleans up the hash iteration state after the iteration
+ * is done. This is only needed when break statements are present in the
+ * foreach block.
+ */
+void
+foreach_htab_cleanup(void *var, HASH_SEQ_STATUS *status)
+{
+	if ((var) != NULL)
+	{
+		hash_seq_term(status);
+	}
+}

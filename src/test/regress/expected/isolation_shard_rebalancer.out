@@ -1,0 +1,449 @@
+Parsed test spec with 2 sessions
+
+starting permutation: s1-rebalance-nc s2-rebalance-nc s1-commit
+create_distributed_table
+
+
+step s1-rebalance-nc:
+ BEGIN;
+ select rebalance_table_shards('non_colocated');
+
+rebalance_table_shards
+
+
+step s2-rebalance-nc:
+ select rebalance_table_shards('non_colocated');
+
+ERROR:  could not acquire the lock required to rebalance public.non_colocated
+step s1-commit:
+ COMMIT;
+
+master_set_node_property
+
+
+
+starting permutation: s1-rebalance-nc s2-replicate-nc s1-commit
+create_distributed_table
+
+
+step s1-rebalance-nc:
+ BEGIN;
+ select rebalance_table_shards('non_colocated');
+
+rebalance_table_shards
+
+
+step s2-replicate-nc:
+ select replicate_table_shards('non_colocated');
+
+ERROR:  could not acquire the lock required to replicate public.non_colocated
+step s1-commit:
+ COMMIT;
+
+master_set_node_property
+
+
+
+starting permutation: s1-replicate-nc s2-rebalance-nc s1-commit
+create_distributed_table
+
+
+step s1-replicate-nc:
+ BEGIN;
+ select replicate_table_shards('non_colocated');
+
+replicate_table_shards
+
+
+step s2-rebalance-nc:
+ select rebalance_table_shards('non_colocated');
+
+ERROR:  could not acquire the lock required to rebalance public.non_colocated
+step s1-commit:
+ COMMIT;
+
+master_set_node_property
+
+
+
+starting permutation: s1-replicate-nc s2-replicate-nc s1-commit
+create_distributed_table
+
+
+step s1-replicate-nc:
+ BEGIN;
+ select replicate_table_shards('non_colocated');
+
+replicate_table_shards
+
+
+step s2-replicate-nc:
+ select replicate_table_shards('non_colocated');
+
+ERROR:  could not acquire the lock required to replicate public.non_colocated
+step s1-commit:
+ COMMIT;
+
+master_set_node_property
+
+
+
+starting permutation: s1-rebalance-c1 s2-rebalance-c2 s1-commit
+create_distributed_table
+
+
+step s1-rebalance-c1:
+ BEGIN;
+ select rebalance_table_shards('colocated1');
+
+rebalance_table_shards
+
+
+step s2-rebalance-c2:
+ select rebalance_table_shards('colocated2');
+
+ERROR:  could not acquire the lock required to rebalance public.colocated2
+step s1-commit:
+ COMMIT;
+
+master_set_node_property
+
+
+
+starting permutation: s1-rebalance-c1 s2-replicate-c2 s1-commit
+create_distributed_table
+
+
+step s1-rebalance-c1:
+ BEGIN;
+ select rebalance_table_shards('colocated1');
+
+rebalance_table_shards
+
+
+step s2-replicate-c2:
+ select replicate_table_shards('colocated2');
+
+ERROR:  could not acquire the lock required to replicate public.colocated2
+step s1-commit:
+ COMMIT;
+
+master_set_node_property
+
+
+
+starting permutation: s1-replicate-c1 s2-rebalance-c2 s1-commit
+create_distributed_table
+
+
+step s1-replicate-c1:
+ BEGIN;
+ select replicate_table_shards('colocated1');
+
+replicate_table_shards
+
+
+step s2-rebalance-c2:
+ select rebalance_table_shards('colocated2');
+
+ERROR:  could not acquire the lock required to rebalance public.colocated2
+step s1-commit:
+ COMMIT;
+
+master_set_node_property
+
+
+
+starting permutation: s1-replicate-c1 s2-replicate-c2 s1-commit
+create_distributed_table
+
+
+step s1-replicate-c1:
+ BEGIN;
+ select replicate_table_shards('colocated1');
+
+replicate_table_shards
+
+
+step s2-replicate-c2:
+ select replicate_table_shards('colocated2');
+
+ERROR:  could not acquire the lock required to replicate public.colocated2
+step s1-commit:
+ COMMIT;
+
+master_set_node_property
+
+
+
+starting permutation: s1-rebalance-c1 s2-rebalance-nc s1-commit
+create_distributed_table
+
+
+step s1-rebalance-c1:
+ BEGIN;
+ select rebalance_table_shards('colocated1');
+
+rebalance_table_shards
+
+
+step s2-rebalance-nc:
+ select rebalance_table_shards('non_colocated');
+
+rebalance_table_shards
+
+
+step s1-commit:
+ COMMIT;
+
+master_set_node_property
+
+
+
+starting permutation: s1-rebalance-c1 s2-replicate-nc s1-commit
+create_distributed_table
+
+
+step s1-rebalance-c1:
+ BEGIN;
+ select rebalance_table_shards('colocated1');
+
+rebalance_table_shards
+
+
+step s2-replicate-nc:
+ select replicate_table_shards('non_colocated');
+
+replicate_table_shards
+
+
+step s1-commit:
+ COMMIT;
+
+master_set_node_property
+
+
+
+starting permutation: s1-replicate-c1 s2-rebalance-nc s1-commit
+create_distributed_table
+
+
+step s1-replicate-c1:
+ BEGIN;
+ select replicate_table_shards('colocated1');
+
+replicate_table_shards
+
+
+step s2-rebalance-nc:
+ select rebalance_table_shards('non_colocated');
+
+rebalance_table_shards
+
+
+step s1-commit:
+ COMMIT;
+
+master_set_node_property
+
+
+
+starting permutation: s1-replicate-c1 s2-replicate-nc s1-commit
+create_distributed_table
+
+
+step s1-replicate-c1:
+ BEGIN;
+ select replicate_table_shards('colocated1');
+
+replicate_table_shards
+
+
+step s2-replicate-nc:
+ select replicate_table_shards('non_colocated');
+
+replicate_table_shards
+
+
+step s1-commit:
+ COMMIT;
+
+master_set_node_property
+
+
+
+starting permutation: s1-rebalance-c1 s2-rebalance-all s1-commit
+create_distributed_table
+
+
+step s1-rebalance-c1:
+ BEGIN;
+ select rebalance_table_shards('colocated1');
+
+rebalance_table_shards
+
+
+step s2-rebalance-all:
+ select rebalance_table_shards();
+
+ERROR:  could not acquire the lock required to rebalance public.distributed_transaction_id_table
+step s1-commit:
+ COMMIT;
+
+master_set_node_property
+
+
+
+starting permutation: s1-replicate-c1 s2-rebalance-all s1-commit
+create_distributed_table
+
+
+step s1-replicate-c1:
+ BEGIN;
+ select replicate_table_shards('colocated1');
+
+replicate_table_shards
+
+
+step s2-rebalance-all:
+ select rebalance_table_shards();
+
+ERROR:  could not acquire the lock required to rebalance public.distributed_transaction_id_table
+step s1-commit:
+ COMMIT;
+
+master_set_node_property
+
+
+
+starting permutation: s1-rebalance-nc s2-rebalance-all s1-commit
+create_distributed_table
+
+
+step s1-rebalance-nc:
+ BEGIN;
+ select rebalance_table_shards('non_colocated');
+
+rebalance_table_shards
+
+
+step s2-rebalance-all:
+ select rebalance_table_shards();
+
+ERROR:  could not acquire the lock required to rebalance public.non_colocated
+step s1-commit:
+ COMMIT;
+
+master_set_node_property
+
+
+
+starting permutation: s1-replicate-nc s2-rebalance-all s1-commit
+create_distributed_table
+
+
+step s1-replicate-nc:
+ BEGIN;
+ select replicate_table_shards('non_colocated');
+
+replicate_table_shards
+
+
+step s2-rebalance-all:
+ select rebalance_table_shards();
+
+ERROR:  could not acquire the lock required to rebalance public.non_colocated
+step s1-commit:
+ COMMIT;
+
+master_set_node_property
+
+
+
+starting permutation: s1-rebalance-c1 s2-drain s1-commit
+create_distributed_table
+
+
+step s1-rebalance-c1:
+ BEGIN;
+ select rebalance_table_shards('colocated1');
+
+rebalance_table_shards
+
+
+step s2-drain:
+ select master_drain_node('localhost', 57638);
+
+ERROR:  could not acquire the lock required to move public.distributed_transaction_id_table
+step s1-commit:
+ COMMIT;
+
+master_set_node_property
+
+
+
+starting permutation: s1-replicate-c1 s2-drain s1-commit
+create_distributed_table
+
+
+step s1-replicate-c1:
+ BEGIN;
+ select replicate_table_shards('colocated1');
+
+replicate_table_shards
+
+
+step s2-drain:
+ select master_drain_node('localhost', 57638);
+
+ERROR:  could not acquire the lock required to move public.distributed_transaction_id_table
+step s1-commit:
+ COMMIT;
+
+master_set_node_property
+
+
+
+starting permutation: s1-rebalance-nc s2-drain s1-commit
+create_distributed_table
+
+
+step s1-rebalance-nc:
+ BEGIN;
+ select rebalance_table_shards('non_colocated');
+
+rebalance_table_shards
+
+
+step s2-drain:
+ select master_drain_node('localhost', 57638);
+
+ERROR:  could not acquire the lock required to move public.non_colocated
+step s1-commit:
+ COMMIT;
+
+master_set_node_property
+
+
+
+starting permutation: s1-replicate-nc s2-drain s1-commit
+create_distributed_table
+
+
+step s1-replicate-nc:
+ BEGIN;
+ select replicate_table_shards('non_colocated');
+
+replicate_table_shards
+
+
+step s2-drain:
+ select master_drain_node('localhost', 57638);
+
+ERROR:  could not acquire the lock required to move public.non_colocated
+step s1-commit:
+ COMMIT;
+
+master_set_node_property
+
+

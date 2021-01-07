@@ -36,21 +36,24 @@ SELECT master_copy_shard_placement(
            get_shard_id_for_distribution_column('data', 'key-1'),
            'localhost', :worker_1_port,
            'localhost', :worker_2_port,
-           do_repair := false);
+           do_repair := false,
+           transfer_mode := 'block_writes');
 
 -- verify we error out if source and destination are the same
 SELECT master_copy_shard_placement(
            get_shard_id_for_distribution_column('data', 'key-1'),
            'localhost', :worker_2_port,
            'localhost', :worker_2_port,
-           do_repair := false);
+           do_repair := false,
+           transfer_mode := 'block_writes');
 
 -- verify we error out if target already contains a healthy placement
 SELECT master_copy_shard_placement(
            (SELECT shardid FROM pg_dist_shard WHERE logicalrelid='ref_table'::regclass::oid),
            'localhost', :worker_1_port,
            'localhost', :worker_2_port,
-           do_repair := false);
+           do_repair := false,
+           transfer_mode := 'block_writes');
 
 -- verify we error out if table has foreign key constraints
 INSERT INTO ref_table SELECT 1, value FROM data;
@@ -69,7 +72,8 @@ SELECT master_copy_shard_placement(
            get_shard_id_for_distribution_column('data', 'key-1'),
            'localhost', :worker_2_port,
            'localhost', :worker_1_port,
-           do_repair := false);
+           do_repair := false,
+           transfer_mode := 'block_writes');
 
 -- forcefully mark the old replica as inactive
 UPDATE pg_dist_shard_placement SET shardstate = 3
@@ -95,7 +99,8 @@ SELECT master_copy_shard_placement(
            get_shard_id_for_distribution_column('mx_table', '1'),
            'localhost', :worker_1_port,
            'localhost', :worker_2_port,
-           do_repair := false);
+           do_repair := false,
+           transfer_mode := 'block_writes');
 
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
 
