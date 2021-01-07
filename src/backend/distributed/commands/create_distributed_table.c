@@ -86,6 +86,11 @@
  */
 #define LOG_PER_TUPLE_AMOUNT 1000000
 
+#define UNDISTRIBUTE_TABLE_CASCADE_HINT \
+	"Use cascade option to undistribute all the relations involved in " \
+	"a foreign key relationship with %s by executing SELECT " \
+	"undistribute_table($$%s$$, cascade_via_foreign_keys=>true)"
+
 /* Replication model to use when creating distributed tables */
 int ReplicationModel = REPLICATION_MODEL_COORDINATOR;
 
@@ -124,7 +129,6 @@ static void DoCopyFromLocalTableIntoShards(Relation distributedRelation,
 										   DestReceiver *copyDest,
 										   TupleTableSlot *slot,
 										   EState *estate);
-static void UndistributeTable(Oid relationId);
 static List * GetViewCreationCommandsOfTable(Oid relationId);
 static void ReplaceTable(Oid sourceId, Oid targetId);
 
@@ -289,10 +293,11 @@ Datum
 undistribute_table(PG_FUNCTION_ARGS)
 {
 	Oid relationId = PG_GETARG_OID(0);
+	bool cascadeViaForeignKeys = PG_GETARG_BOOL(1);
 
 	CheckCitusVersion(ERROR);
 
-	UndistributeTable(relationId);
+	UndistributeTable(relationId, cascadeViaForeignKeys);
 
 	PG_RETURN_VOID();
 }
@@ -1552,7 +1557,7 @@ DistributionColumnUsesGeneratedStoredColumn(TupleDesc relationDesc,
  * be dropped.
  */
 void
-UndistributeTable(Oid relationId)
+UndistributeTable(Oid relationId, bool cascadeViaForeignKeys)
 {
 	EnsureCoordinator();
 	EnsureRelationExists(relationId);
@@ -1574,16 +1579,37 @@ UndistributeTable(Oid relationId)
 						errdetail("because the table is not distributed")));
 	}
 
-	if (TableReferencing(relationId))
+	bool tableReferencing = TableReferencing(relationId);
+	bool tableReferenced = TableReferenced(relationId);
+	if (cascadeViaForeignKeys && (tableReferencing || tableReferenced))
 	{
-		ereport(ERROR, (errmsg("cannot undistribute table "
-							   "because it has a foreign key")));
+		CascadeOperationForConnectedRelations(relationId, lockMode, UNDISTRIBUTE_TABLE);
+
+		/*
+		 * Undistributed every foreign key connected relation in our foreign key
+		 * subgraph including itself, so return here.
+		 */
+		return;
 	}
 
-	if (TableReferenced(relationId))
+	if (tableReferencing)
 	{
+		char *qualifiedRelationName = generate_qualified_relation_name(relationId);
 		ereport(ERROR, (errmsg("cannot undistribute table "
-							   "because a foreign key references to it")));
+							   "because it has a foreign key"),
+						errhint(UNDISTRIBUTE_TABLE_CASCADE_HINT,
+								qualifiedRelationName,
+								qualifiedRelationName)));
+	}
+
+	if (tableReferenced)
+	{
+		char *qualifiedRelationName = generate_qualified_relation_name(relationId);
+		ereport(ERROR, (errmsg("cannot undistribute table "
+							   "because a foreign key references to it"),
+						errhint(UNDISTRIBUTE_TABLE_CASCADE_HINT,
+								qualifiedRelationName,
+								qualifiedRelationName)));
 	}
 
 	char relationKind = get_rel_relkind(relationId);
@@ -1642,7 +1668,15 @@ UndistributeTable(Oid relationId)
 			}
 			preLoadCommands = lappend(preLoadCommands,
 									  makeTableDDLCommandString(attachPartitionCommand));
-			UndistributeTable(partitionRelationId);
+
+			/*
+			 * Even if we called UndistributeTable with cascade option, we
+			 * shouldn't cascade via foreign keys on partitions. Otherwise,
+			 * we might try to undistribute partitions of other tables in
+			 * our foreign key subgraph more than once.
+			 */
+			bool cascadeOnPartitionsViaForeignKeys = false;
+			UndistributeTable(partitionRelationId, cascadeOnPartitionsViaForeignKeys);
 		}
 	}
 

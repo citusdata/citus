@@ -123,8 +123,10 @@ SELECT create_distributed_table('referencing_table', 'id');
 INSERT INTO referencing_table VALUES (4, 6, 'cba'), (1, 1, 'dcba'), (2, 3, 'aaa');
 SELECT undistribute_table('referenced_table');
 ERROR:  cannot undistribute table because a foreign key references to it
+HINT:  Use cascade option to undistribute all the relations involved in a foreign key relationship with undistribute_table.referenced_table by executing SELECT undistribute_table($$undistribute_table.referenced_table$$, cascade_via_foreign_keys=>true)
 SELECT undistribute_table('referencing_table');
 ERROR:  cannot undistribute table because it has a foreign key
+HINT:  Use cascade option to undistribute all the relations involved in a foreign key relationship with undistribute_table.referencing_table by executing SELECT undistribute_table($$undistribute_table.referencing_table$$, cascade_via_foreign_keys=>true)
 DROP TABLE referenced_table, referencing_table;
 -- test distributed foreign tables
 -- we expect errors

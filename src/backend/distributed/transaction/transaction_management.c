@@ -28,7 +28,6 @@
 #include "distributed/listutils.h"
 #include "distributed/local_executor.h"
 #include "distributed/locally_reserved_shared_connections.h"
-#include "distributed/maintenanced.h"
 #include "distributed/multi_executor.h"
 #include "distributed/multi_explain.h"
 #include "distributed/repartition_join_execution.h"
@@ -102,9 +101,6 @@ bool CoordinatedTransactionUses2PC = false;
 
 /* if disabled, distributed statements in a function may run as separate transactions */
 bool FunctionOpensTransactionBlock = true;
-
-/* if true, we should trigger metadata sync on commit */
-bool MetadataSyncOnCommit = false;
 
 
 /* transaction management functions */
@@ -264,15 +260,6 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			{
 				ResetPlacementConnectionManagement();
 				AfterXactConnectionHandling(true);
-			}
-
-			/*
-			 * Changes to catalog tables are now visible to the metadata sync
-			 * daemon, so we can trigger metadata sync if necessary.
-			 */
-			if (MetadataSyncOnCommit)
-			{
-				TriggerMetadataSync(MyDatabaseId);
 			}
 
 			ResetGlobalVariables();
@@ -487,7 +474,6 @@ ResetGlobalVariables()
 	activeSetStmts = NULL;
 	CoordinatedTransactionUses2PC = false;
 	TransactionModifiedNodeMetadata = false;
-	MetadataSyncOnCommit = false;
 	ResetWorkerErrorIndication();
 }
 
@@ -741,16 +727,4 @@ static bool
 MaybeExecutingUDF(void)
 {
 	return ExecutorLevel > 1 || (ExecutorLevel == 1 && PlannerLevel > 0);
-}
-
-
-/*
- * TriggerMetadataSyncOnCommit sets a flag to do metadata sync on commit.
- * This is because new metadata only becomes visible to the metadata sync
- * daemon after commit happens.
- */
-void
-TriggerMetadataSyncOnCommit(void)
-{
-	MetadataSyncOnCommit = true;
 }
