@@ -453,6 +453,7 @@ SELECT * FROM print_extension_changes();
                                                | function citus_add_inactive_node(text,integer,integer,noderole,name)
                                                | function citus_add_node(text,integer,integer,noderole,name)
                                                | function citus_add_secondary_node(text,integer,text,integer,name)
+                                               | function citus_disable_node(text, integer)
                                                | function citus_internal.columnar_ensure_objects_exist()
                                                | function citus_set_coordinator_host(text,integer,noderole,name)
                                                | function citus_total_relation_size(regclass,boolean)
@@ -467,6 +468,9 @@ SELECT * FROM print_extension_changes();
                                                | view citus_tables
                                                | view time_partitions
 (17 rows)
+(16 rows)
+=======
+(15 rows)
 
 DROP TABLE prev_objects, extension_diff;
 -- show running version

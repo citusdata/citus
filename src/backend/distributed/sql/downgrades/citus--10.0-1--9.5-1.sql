@@ -13,6 +13,7 @@ DROP FUNCTION pg_catalog.citus_add_node(text, integer, integer, noderole, name);
 DROP FUNCTION pg_catalog.citus_activate_node(text, integer);
 DROP FUNCTION pg_catalog.citus_add_inactive_node(text, integer, integer, noderole, name);
 DROP FUNCTION pg_catalog.citus_add_secondary_node(text, integer, text, integer, name);
+DROP FUNCTION pg_catalog.citus_disable_node(text, integer);
 
 DROP VIEW pg_catalog.time_partitions;
 DROP FUNCTION pg_catalog.time_partition_range(regclass);

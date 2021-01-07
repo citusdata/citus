@@ -124,6 +124,7 @@ PG_FUNCTION_INFO_V1(citus_add_secondary_node);
 PG_FUNCTION_INFO_V1(master_add_secondary_node);
 PG_FUNCTION_INFO_V1(master_set_node_property);
 PG_FUNCTION_INFO_V1(master_remove_node);
+PG_FUNCTION_INFO_V1(citus_disable_node);
 PG_FUNCTION_INFO_V1(master_disable_node);
 PG_FUNCTION_INFO_V1(citus_activate_node);
 PG_FUNCTION_INFO_V1(master_activate_node);
@@ -390,19 +391,19 @@ master_remove_node(PG_FUNCTION_ARGS)
 
 
 /*
- * master_disable_node function sets isactive value of the provided node as inactive at
- * master node and all nodes with metadata regardless of the node having an active shard
+ * citus_disable_node function sets isactive value of the provided node as inactive at
+ * coordinator and all nodes with metadata regardless of the node having an active shard
  * placement.
  *
- * The call to the master_disable_node must be done by the super user.
+ * The call to the citus_disable_node must be done by the super user.
  *
  * This function also deletes all reference table placements belong to the given node
  * from pg_dist_placement, but it does not drop actual placement at the node. In the case
- * of re-activating the node, master_add_node first drops and re-creates the reference
+ * of re-activating the node, citus_add_node first drops and re-creates the reference
  * tables.
  */
 Datum
-master_disable_node(PG_FUNCTION_ARGS)
+citus_disable_node(PG_FUNCTION_ARGS)
 {
 	text *nodeNameText = PG_GETARG_TEXT_P(0);
 	int32 nodePort = PG_GETARG_INT32(1);
@@ -466,6 +467,16 @@ master_disable_node(PG_FUNCTION_ARGS)
 	PG_END_TRY();
 
 	PG_RETURN_VOID();
+}
+
+
+/*
+ * master_disable_node is a wrapper function for old UDF name.
+ */
+Datum
+master_disable_node(PG_FUNCTION_ARGS)
+{
+	return citus_disable_node(fcinfo);
 }
 
 
