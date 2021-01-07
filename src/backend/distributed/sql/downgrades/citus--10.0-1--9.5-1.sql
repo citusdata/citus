@@ -14,6 +14,7 @@ DROP FUNCTION pg_catalog.citus_activate_node(text, integer);
 DROP FUNCTION pg_catalog.citus_add_inactive_node(text, integer, integer, noderole, name);
 DROP FUNCTION pg_catalog.citus_add_secondary_node(text, integer, text, integer, name);
 DROP FUNCTION pg_catalog.citus_disable_node(text, integer);
+DROP FUNCTION pg_catalog.citus_drain_node(text, integer, citus.shard_transfer_mode, name);
 
 DROP VIEW pg_catalog.time_partitions;
 DROP FUNCTION pg_catalog.time_partition_range(regclass);
@@ -24,3 +25,4 @@ DROP FUNCTION pg_catalog.citus_set_coordinator_host(text,int,noderole,name);
 #include "../udfs/upgrade_to_reference_table/8.0-1.sql"
 #include "../udfs/undistribute_table/9.5-1.sql"
 #include "../udfs/create_citus_local_table/9.5-1.sql"
+#include "../udfs/master_drain_node/9.2-1.sql"

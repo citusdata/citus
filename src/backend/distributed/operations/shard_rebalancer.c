@@ -151,6 +151,7 @@ static void EnsureShardCostUDF(Oid functionOid);
 static void EnsureNodeCapacityUDF(Oid functionOid);
 static void EnsureShardAllowedOnNodeUDF(Oid functionOid);
 
+<<<<<<< 8987c9b38386d8887718a12ef075c68591ec7b51
 
 /* declarations for dynamic loading */
 PG_FUNCTION_INFO_V1(rebalance_table_shards);
@@ -159,6 +160,16 @@ PG_FUNCTION_INFO_V1(get_rebalance_table_shards_plan);
 PG_FUNCTION_INFO_V1(get_rebalance_progress);
 PG_FUNCTION_INFO_V1(master_drain_node);
 PG_FUNCTION_INFO_V1(citus_shard_cost_by_disk_size);
+=======
+NOT_SUPPORTED_IN_COMMUNITY(rebalance_table_shards);
+NOT_SUPPORTED_IN_COMMUNITY(replicate_table_shards);
+NOT_SUPPORTED_IN_COMMUNITY(get_rebalance_table_shards_plan);
+NOT_SUPPORTED_IN_COMMUNITY(get_rebalance_progress);
+NOT_SUPPORTED_IN_COMMUNITY(citus_drain_node);
+NOT_SUPPORTED_IN_COMMUNITY(master_drain_node);
+NOT_SUPPORTED_IN_COMMUNITY(citus_shard_cost_by_disk_size);
+PG_FUNCTION_INFO_V1(pg_dist_rebalance_strategy_enterprise_check);
+>>>>>>> Replace master_drain_node with citus_drain_node
 PG_FUNCTION_INFO_V1(citus_validate_rebalance_strategy_functions);
 PG_FUNCTION_INFO_V1(pg_dist_rebalance_strategy_enterprise_check);
 
