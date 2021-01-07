@@ -396,6 +396,9 @@ extern Oid GetTriggerFunctionId(Oid triggerId);
 typedef enum CascadeOperationType
 {
 	INVALID_OPERATION = 1 << 0,
+
+	/* execute UndistributeTable on each relation */
+	UNDISTRIBUTE_TABLE = 1 << 1,
 } CascadeOperationType;
 
 extern void CascadeOperationForConnectedRelations(Oid relationId, LOCKMODE relLockMode,

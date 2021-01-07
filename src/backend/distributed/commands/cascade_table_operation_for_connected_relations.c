@@ -321,6 +321,11 @@ GetCascadeOperationFunction(CascadeOperationType cascadeOperationType)
 {
 	switch (cascadeOperationType)
 	{
+		case UNDISTRIBUTE_TABLE:
+		{
+			return UndistributeTable;
+		}
+
 		default:
 		{
 			/*

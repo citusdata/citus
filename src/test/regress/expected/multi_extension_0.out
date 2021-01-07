@@ -446,16 +446,18 @@ SELECT * FROM print_extension_changes();
                 previous_object                |                     current_object
 ---------------------------------------------------------------------
  function citus_total_relation_size(regclass)  |
+ function undistribute_table(regclass)         |
  function upgrade_to_reference_table(regclass) |
                                                | function citus_internal.columnar_ensure_objects_exist()
                                                | function citus_total_relation_size(regclass,boolean)
+                                               | function undistribute_table(regclass,boolean)
                                                | schema columnar
                                                | sequence columnar.storageid_seq
                                                | table columnar.columnar_skipnodes
                                                | table columnar.columnar_stripes
                                                | table columnar.options
                                                | view citus_tables
-(10 rows)
+(12 rows)
 
 DROP TABLE prev_objects, extension_diff;
 -- show running version

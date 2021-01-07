@@ -149,7 +149,7 @@ ORDER BY 1;
  function start_metadata_sync_to_node(text,integer)
  function stop_metadata_sync_to_node(text,integer)
  function truncate_local_data_after_distributing_table(regclass)
- function undistribute_table(regclass)
+ function undistribute_table(regclass,boolean)
  function update_distributed_table_colocation(regclass,text)
  function worker_append_table_to_shard(text,text,text,integer)
  function worker_apply_inter_shard_ddl_command(bigint,text,bigint,text,text)

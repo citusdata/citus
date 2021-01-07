@@ -322,7 +322,7 @@ test: replicate_reference_tables_to_coordinator
 test: coordinator_shouldhaveshards
 test: local_shard_utility_command_execution
 test: citus_local_tables
-test: multi_row_router_insert mixed_relkind_tests
+test: multi_row_router_insert mixed_relkind_tests undistribute_table_cascade
 
 test: remove_coordinator
 
