@@ -117,12 +117,15 @@ static WorkerNode * SetShouldHaveShards(WorkerNode *workerNode, bool shouldHaveS
 PG_FUNCTION_INFO_V1(citus_set_coordinator_host);
 PG_FUNCTION_INFO_V1(master_add_node);
 PG_FUNCTION_INFO_V1(citus_add_node);
+PG_FUNCTION_INFO_V1(master_add_node);
 PG_FUNCTION_INFO_V1(citus_add_inactive_node);
+PG_FUNCTION_INFO_V1(master_add_inactive_node);
 PG_FUNCTION_INFO_V1(master_add_secondary_node);
 PG_FUNCTION_INFO_V1(master_set_node_property);
 PG_FUNCTION_INFO_V1(master_remove_node);
 PG_FUNCTION_INFO_V1(master_disable_node);
 PG_FUNCTION_INFO_V1(citus_activate_node);
+PG_FUNCTION_INFO_V1(master_activate_node);
 PG_FUNCTION_INFO_V1(master_update_node);
 PG_FUNCTION_INFO_V1(get_shard_id_for_distribution_column);
 
@@ -264,6 +267,16 @@ citus_add_node(PG_FUNCTION_ARGS)
 
 
 /*
+ * master_add_node is a wrapper function for old UDF name.
+ */
+Datum
+master_add_node(PG_FUNCTION_ARGS)
+{
+    return citus_add_node(fcinfo);
+}
+
+
+/*
  * citus_add_inactive_node function adds a new node to the cluster as inactive node
  * and returns id of the newly added node. It does not replicate reference
  * tables to the new node, it only adds new node to the pg_dist_node table.
@@ -294,6 +307,16 @@ citus_add_inactive_node(PG_FUNCTION_ARGS)
 	TransactionModifiedNodeMetadata = true;
 
 	PG_RETURN_INT32(nodeId);
+}
+
+
+/*
+ * master_add_inactive_node is a wrapper function for old UDF name.
+ */
+Datum
+master_add_inactive_node(PG_FUNCTION_ARGS)
+{
+    return citus_add_inactive_node(fcinfo);
 }
 
 
@@ -597,6 +620,16 @@ citus_activate_node(PG_FUNCTION_ARGS)
 	TransactionModifiedNodeMetadata = true;
 
 	PG_RETURN_INT32(workerNode->nodeId);
+}
+
+
+/*
+ * master_activate_node is a wrapper function for old UDF name.
+ */
+Datum
+master_activate_node(PG_FUNCTION_ARGS)
+{
+    return citus_activate_node(fcinfo);
 }
 
 

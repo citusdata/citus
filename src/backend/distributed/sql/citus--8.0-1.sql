@@ -1317,7 +1317,7 @@ CREATE FUNCTION master_add_node(nodename text,
                                 OUT nodecluster name)
   RETURNS record
   LANGUAGE C STRICT
-  AS 'MODULE_PATHNAME', $$citus_add_node$$;
+  AS 'MODULE_PATHNAME', $$master_add_node$$;
 COMMENT ON FUNCTION master_add_node(nodename text, nodeport integer,
                                     groupid integer, noderole noderole, nodecluster name)
   IS 'add node to the cluster';
@@ -1338,7 +1338,7 @@ CREATE FUNCTION master_add_inactive_node(nodename text,
                                          OUT nodecluster name)
   RETURNS record
   LANGUAGE C STRICT
-  AS 'MODULE_PATHNAME',$$citus_add_inactive_node$$;
+  AS 'MODULE_PATHNAME',$$master_add_inactive_node$$;
 COMMENT ON FUNCTION master_add_inactive_node(nodename text,nodeport integer,
                                              groupid integer, noderole noderole,
                                              nodecluster name)
@@ -1357,7 +1357,7 @@ CREATE FUNCTION master_activate_node(nodename text,
                                      OUT nodecluster name)
     RETURNS record
     LANGUAGE C STRICT
-    AS 'MODULE_PATHNAME',$$citus_activate_node$$;
+    AS 'MODULE_PATHNAME',$$master_activate_node$$;
 COMMENT ON FUNCTION master_activate_node(nodename text, nodeport integer)
     IS 'activate a node which is in the cluster';
 
