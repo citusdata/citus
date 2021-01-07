@@ -16,7 +16,6 @@
 #include "catalog/pg_type.h"
 #include "distributed/connection_management.h"
 #include "distributed/listutils.h"
-#include "distributed/maintenanced.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/remote_commands.h"
 #include "postmaster/postmaster.h"
@@ -29,8 +28,6 @@
 /* declarations for dynamic loading */
 PG_FUNCTION_INFO_V1(master_metadata_snapshot);
 PG_FUNCTION_INFO_V1(wait_until_metadata_sync);
-PG_FUNCTION_INFO_V1(trigger_metadata_sync);
-PG_FUNCTION_INFO_V1(raise_error_in_metadata_sync);
 
 
 /*
@@ -125,28 +122,5 @@ wait_until_metadata_sync(PG_FUNCTION_ARGS)
 
 	CloseConnection(connection);
 
-	PG_RETURN_VOID();
-}
-
-
-/*
- * trigger_metadata_sync triggers metadata sync for testing.
- */
-Datum
-trigger_metadata_sync(PG_FUNCTION_ARGS)
-{
-	TriggerMetadataSync(MyDatabaseId);
-	PG_RETURN_VOID();
-}
-
-
-/*
- * raise_error_in_metadata_sync causes metadata sync to raise an error.
- */
-Datum
-raise_error_in_metadata_sync(PG_FUNCTION_ARGS)
-{
-	/* metadata sync uses SIGALRM to test errors */
-	SignalMetadataSyncDaemon(MyDatabaseId, SIGALRM);
 	PG_RETURN_VOID();
 }
