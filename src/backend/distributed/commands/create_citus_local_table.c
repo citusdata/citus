@@ -110,6 +110,9 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys)
 	EnsureCoordinator();
 	EnsureTableOwner(relationId);
 
+	/* enable create_citus_local_table on an empty node */
+	InsertCoordinatorIfClusterEmpty();
+
 	/*
 	 * Lock target relation with an AccessExclusiveLock as we don't want
 	 * multiple backends manipulating this relation. We could actually simply

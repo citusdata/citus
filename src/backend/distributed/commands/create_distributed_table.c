@@ -207,6 +207,9 @@ create_distributed_table(PG_FUNCTION_ARGS)
 
 	EnsureCitusTableCanBeCreated(relationId);
 
+	/* enable create_distributed_table on an empty node */
+	InsertCoordinatorIfClusterEmpty();
+
 	/*
 	 * Lock target relation with an exclusive lock - there's no way to make
 	 * sense of this table until we've committed, and we don't want multiple
@@ -255,6 +258,9 @@ create_reference_table(PG_FUNCTION_ARGS)
 	CheckCitusVersion(ERROR);
 
 	EnsureCitusTableCanBeCreated(relationId);
+
+	/* enable create_reference_table on an empty node */
+	InsertCoordinatorIfClusterEmpty();
 
 	/*
 	 * Lock target relation with an exclusive lock - there's no way to make
