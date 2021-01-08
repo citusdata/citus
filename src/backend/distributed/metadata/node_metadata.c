@@ -122,6 +122,7 @@ PG_FUNCTION_INFO_V1(citus_add_inactive_node);
 PG_FUNCTION_INFO_V1(master_add_inactive_node);
 PG_FUNCTION_INFO_V1(citus_add_secondary_node);
 PG_FUNCTION_INFO_V1(master_add_secondary_node);
+PG_FUNCTION_INFO_V1(citus_set_node_property);
 PG_FUNCTION_INFO_V1(master_set_node_property);
 PG_FUNCTION_INFO_V1(citus_remove_node);
 PG_FUNCTION_INFO_V1(master_remove_node);
@@ -492,10 +493,10 @@ master_disable_node(PG_FUNCTION_ARGS)
 
 
 /*
- * master_set_node_property sets a property of the node
+ * citus_set_node_property sets a property of the node
  */
 Datum
-master_set_node_property(PG_FUNCTION_ARGS)
+citus_set_node_property(PG_FUNCTION_ARGS)
 {
 	text *nodeNameText = PG_GETARG_TEXT_P(0);
 	int32 nodePort = PG_GETARG_INT32(1);
@@ -519,6 +520,16 @@ master_set_node_property(PG_FUNCTION_ARGS)
 	TransactionModifiedNodeMetadata = true;
 
 	PG_RETURN_VOID();
+}
+
+
+/*
+ * master_set_node_property is a wrapper function for old UDF name.
+ */
+Datum
+master_set_node_property(PG_FUNCTION_ARGS)
+{
+	return citus_set_node_property(fcinfo);
 }
 
 

@@ -458,6 +458,7 @@ SELECT * FROM print_extension_changes();
                                                | function citus_internal.columnar_ensure_objects_exist()
                                                | function citus_set_coordinator_host(text,integer,noderole,name)
                                                | function citus_remove_node(text, integer)
+                                               | function citus_set_node_property(text, integer, text, boolean)
                                                | function citus_total_relation_size(regclass,boolean)
                                                | function create_citus_local_table(regclass,boolean)
                                                | function time_partition_range(regclass)
@@ -469,7 +470,11 @@ SELECT * FROM print_extension_changes();
                                                | table columnar.options
                                                | view citus_tables
                                                | view time_partitions
+<<<<<<< 7470b06828cd7bec00ed94d46fdf3c6ff378f919
 (24 rows)
+=======
+(16 rows)
+>>>>>>> Replace master_set_node_property with citus_set_node_property
 
 DROP TABLE prev_objects, extension_diff;
 -- show running version
