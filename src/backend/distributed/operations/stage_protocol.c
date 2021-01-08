@@ -69,6 +69,7 @@ static bool WorkerShardStats(ShardPlacement *placement, Oid relationId,
 /* exports for SQL callable functions */
 PG_FUNCTION_INFO_V1(master_create_empty_shard);
 PG_FUNCTION_INFO_V1(master_append_table_to_shard);
+PG_FUNCTION_INFO_V1(citus_update_shard_statistics);
 PG_FUNCTION_INFO_V1(master_update_shard_statistics);
 
 
@@ -345,11 +346,11 @@ master_append_table_to_shard(PG_FUNCTION_ARGS)
 
 
 /*
- * master_update_shard_statistics updates metadata (shard size and shard min/max
+ * citus_update_shard_statistics updates metadata (shard size and shard min/max
  * values) of the given shard and returns the updated shard size.
  */
 Datum
-master_update_shard_statistics(PG_FUNCTION_ARGS)
+citus_update_shard_statistics(PG_FUNCTION_ARGS)
 {
 	int64 shardId = PG_GETARG_INT64(0);
 
@@ -358,6 +359,16 @@ master_update_shard_statistics(PG_FUNCTION_ARGS)
 	uint64 shardSize = UpdateShardStatistics(shardId);
 
 	PG_RETURN_INT64(shardSize);
+}
+
+
+/*
+ * master_update_shard_statistics is a wrapper function for old UDF name.
+ */
+Datum
+master_update_shard_statistics(PG_FUNCTION_ARGS)
+{
+	return citus_update_shard_statistics(fcinfo);
 }
 
 

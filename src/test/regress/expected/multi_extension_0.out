@@ -462,6 +462,7 @@ SELECT * FROM print_extension_changes();
                                                | function citus_total_relation_size(regclass,boolean)
                                                | function citus_unmark_object_distributed(oid, oid, integer)
                                                | function citus_update_node(integer,text,integer,boolean,integer)
+                                               | function citus_update_shard_statistics(bigint)
                                                | function create_citus_local_table(regclass,boolean)
                                                | function time_partition_range(regclass)
                                                | function undistribute_table(regclass,boolean)
@@ -472,7 +473,7 @@ SELECT * FROM print_extension_changes();
                                                | table columnar.options
                                                | view citus_tables
                                                | view time_partitions
-(26 rows)
+(27 rows)
 
 DROP TABLE prev_objects, extension_diff;
 -- show running version
