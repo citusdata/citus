@@ -364,6 +364,10 @@ jobs:
             fi
           when: on_fail
       - store_artifacts:
+          name: 'Save tap logs'
+          path: /home/circleci/project/src/test/recovery/tmp_check/log
+          when: on_fail
+      - store_artifacts:
           name: 'Save core dumps'
           path: /tmp/core_dumps
           when: on_fail
