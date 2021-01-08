@@ -38,7 +38,6 @@
 #include "utils/syscache.h"
 
 
-static void CreateCitusLocalTable(Oid relationId);
 static void ErrorIfUnsupportedCreateCitusLocalTable(Relation relation);
 static void ErrorIfUnsupportedCitusLocalTableKind(Oid relationId);
 static List * GetShellTableDDLEventsForCitusLocalTable(Oid relationId);
@@ -80,8 +79,9 @@ create_citus_local_table(PG_FUNCTION_ARGS)
 	CheckCitusVersion(ERROR);
 
 	Oid relationId = PG_GETARG_OID(0);
+	bool cascadeViaForeignKeys = PG_GETARG_BOOL(1);
 
-	CreateCitusLocalTable(relationId);
+	CreateCitusLocalTable(relationId, cascadeViaForeignKeys);
 
 	PG_RETURN_VOID();
 }
@@ -98,8 +98,8 @@ create_citus_local_table(PG_FUNCTION_ARGS)
  * Similar to reference tables, it has only 1 placement. In addition to that, that
  * single placement is only allowed to be on the coordinator.
  */
-static void
-CreateCitusLocalTable(Oid relationId)
+void
+CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys)
 {
 	/*
 	 * These checks should be done before acquiring any locks on relation.
@@ -118,7 +118,8 @@ CreateCitusLocalTable(Oid relationId)
 	 * we open the relation with try_relation_open instead of relation_open
 	 * to give a nice error in case the table is dropped by another backend.
 	 */
-	Relation relation = try_relation_open(relationId, AccessExclusiveLock);
+	LOCKMODE lockMode = AccessExclusiveLock;
+	Relation relation = try_relation_open(relationId, lockMode);
 
 	ErrorIfUnsupportedCreateCitusLocalTable(relation);
 
@@ -131,6 +132,36 @@ CreateCitusLocalTable(Oid relationId)
 	 */
 	relation_close(relation, NoLock);
 
+	bool tableHasExternalForeignKeys = TableHasExternalForeignKeys(relationId);
+	if (tableHasExternalForeignKeys && cascadeViaForeignKeys)
+	{
+		CascadeOperationForConnectedRelations(relationId, lockMode,
+											  CREATE_CITUS_LOCAL_TABLE);
+
+		/*
+		 * We converted every foreign key connected table in our subgraph
+		 * including itself to a citus local table, so return here.
+		 */
+		return;
+	}
+	else if (tableHasExternalForeignKeys)
+	{
+		/*
+		 * We do not allow creating citus local table if the table is involved in a
+		 * foreign key relationship with "any other table". Note that we allow self
+		 * references.
+		 */
+		char *qualifiedRelationName = generate_qualified_relation_name(relationId);
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("relation %s is involved in a foreign key "
+							   "relationship with another table", qualifiedRelationName),
+						errhint("Use cascade_via_foreign_keys option to convert "
+								"all the relations involved in a foreign key "
+								"relationship with %s to a citus local table by "
+								"executing SELECT create_citus_local_table($$%s$$, "
+								"cascade_via_foreign_keys=>true)",
+								qualifiedRelationName, qualifiedRelationName)));
+	}
 
 	ObjectAddress tableAddress = { 0 };
 	ObjectAddressSet(tableAddress, RelationRelationId, relationId);
@@ -216,13 +247,6 @@ ErrorIfUnsupportedCreateCitusLocalTable(Relation relation)
 	 * Hence we need to error out for shard relations too.
 	 */
 	ErrorIfRelationIsAKnownShard(relationId);
-
-	/*
-	 * We do not allow creating citus local table if the table is involved in a
-	 * foreign key relationship with "any other table". Note that we allow self
-	 * references.
-	 */
-	ErrorIfTableHasExternalForeignKeys(relationId);
 
 	/* we do not support policies in citus community */
 	ErrorIfUnsupportedPolicy(relation);

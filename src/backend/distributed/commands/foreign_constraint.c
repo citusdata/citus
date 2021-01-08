@@ -825,11 +825,11 @@ FindForeignKeyOidWithName(List *foreignKeyOids, const char *inputConstraintName)
 
 
 /*
- * ErrorIfTableHasExternalForeignKeys errors out if the relation with relationId
- * is involved in a foreign key relationship other than the self-referencing ones.
+ * TableHasExternalForeignKeys returns true if the relation with relationId is
+ * involved in a foreign key relationship other than the self-referencing ones.
  */
-void
-ErrorIfTableHasExternalForeignKeys(Oid relationId)
+bool
+TableHasExternalForeignKeys(Oid relationId)
 {
 	int flags = (INCLUDE_REFERENCING_CONSTRAINTS | EXCLUDE_SELF_REFERENCES |
 				 INCLUDE_ALL_TABLE_TYPES);
@@ -844,16 +844,10 @@ ErrorIfTableHasExternalForeignKeys(Oid relationId)
 
 	if (list_length(foreignKeysWithOtherTables) == 0)
 	{
-		return;
+		return false;
 	}
 
-	const char *relationName = get_rel_name(relationId);
-	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-					errmsg("relation \"%s\" is involved in a foreign key relationship "
-						   "with another table", relationName),
-					errhint("Drop foreign keys with other tables and re-define them "
-							"with ALTER TABLE commands after the current operation "
-							"is done.")));
+	return true;
 }
 
 

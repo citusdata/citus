@@ -76,7 +76,7 @@ ORDER BY 1;
  function coord_combine_agg(oid,cstring,anyelement)
  function coord_combine_agg_ffunc(internal,oid,cstring,anyelement)
  function coord_combine_agg_sfunc(internal,oid,cstring,anyelement)
- function create_citus_local_table(regclass)
+ function create_citus_local_table(regclass,boolean)
  function create_distributed_function(regprocedure,text,text)
  function create_distributed_table(regclass,text,citus.distribution_type,text)
  function create_intermediate_result(text,text)
