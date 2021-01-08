@@ -456,6 +456,7 @@ SELECT * FROM print_extension_changes();
                                                | function citus_total_relation_size(regclass,boolean)
                                                | function columnar.columnar_handler(internal)
                                                | function create_citus_local_table(regclass,boolean)
+                                               | function time_partition_range(regclass)
                                                | function undistribute_table(regclass,boolean)
                                                | schema columnar
                                                | sequence columnar.storageid_seq
@@ -463,7 +464,8 @@ SELECT * FROM print_extension_changes();
                                                | table columnar.columnar_stripes
                                                | table columnar.options
                                                | view citus_tables
-(18 rows)
+                                               | view time_partitions
+(20 rows)
 
 DROP TABLE prev_objects, extension_diff;
 -- show running version

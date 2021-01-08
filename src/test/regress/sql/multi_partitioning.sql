@@ -1153,6 +1153,8 @@ ALTER TABLE partitioning_test ATTACH PARTITION partitioning_test_2010
 ALTER TABLE partitioning_test ATTACH PARTITION partitioning_test_2011
       FOR VALUES FROM ('2011-01-01') TO ('2012-01-01');
 
+SELECT parent_table, partition_column, partition, from_value, to_value FROM time_partitions;
+
 ALTER TABLE partitioning_test DETACH PARTITION partitioning_test_2008;
 ALTER TABLE partitioning_test DETACH PARTITION partitioning_test_2009;
 ALTER TABLE partitioning_test DETACH PARTITION partitioning_test_2010;
@@ -1162,8 +1164,31 @@ DROP TABLE partitioning_test, partitioning_test_2008, partitioning_test_2009,
            partitioning_test_2010, partitioning_test_2011,
            reference_table, reference_table_2;
 
-DROP SCHEMA partitioning_schema CASCADE;
 RESET SEARCH_PATH;
+
+-- not timestamp partitioned
+CREATE TABLE not_time_partitioned (x int, y int) PARTITION BY RANGE (x);
+CREATE TABLE not_time_partitioned_p0 PARTITION OF not_time_partitioned DEFAULT;
+CREATE TABLE not_time_partitioned_p1 PARTITION OF not_time_partitioned FOR VALUES FROM (1) TO (2);
+SELECT parent_table, partition_column, partition, from_value, to_value FROM time_partitions;
+SELECT * FROM time_partition_range('not_time_partitioned_p1');
+DROP TABLE not_time_partitioned;
+
+-- multi-column partitioned
+CREATE TABLE multi_column_partitioned (x date, y date) PARTITION BY RANGE (x, y);
+CREATE TABLE multi_column_partitioned_p1 PARTITION OF multi_column_partitioned  FOR VALUES FROM ('2020-01-01', '2020-01-01') TO ('2020-12-31','2020-12-31');
+SELECT parent_table, partition_column, partition, from_value, to_value FROM time_partitions;
+SELECT * FROM time_partition_range('multi_column_partitioned_p1');
+DROP TABLE multi_column_partitioned;
+
+-- not-range-partitioned
+CREATE TABLE list_partitioned (x date, y date) PARTITION BY LIST (x);
+CREATE TABLE list_partitioned_p1 PARTITION OF list_partitioned FOR VALUES IN ('2020-01-01');
+SELECT parent_table, partition_column, partition, from_value, to_value FROM time_partitions;
+SELECT * FROM time_partition_range('list_partitioned_p1');
+DROP TABLE list_partitioned;
+
+DROP SCHEMA partitioning_schema CASCADE;
 DROP TABLE IF EXISTS
 	partitioning_hash_test,
 	partitioning_hash_join_test,
