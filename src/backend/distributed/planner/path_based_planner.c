@@ -3,6 +3,7 @@
 //
 #include "postgres.h"
 
+#include "catalog/pg_proc.h"
 #include "catalog/pg_type_d.h"
 #include "distributed/citus_custom_scan.h"
 #include "distributed/citus_ruleutils.h"
@@ -23,41 +24,9 @@
 #include "optimizer/pathnode.h"
 #include "optimizer/restrictinfo.h"
 #include "utils/builtins.h"
+#include "utils/syscache.h"
 
-typedef List * (*optimizeFn)(Path *originalPath);
-
-static Plan * CreateDistributedUnionPlan(PlannerInfo *root, RelOptInfo *rel, struct CustomPath *best_path, List *tlist, List *clauses, List *custom_plans);
-static List * ReparameterizeDistributedUnion(PlannerInfo *root, List *custom_private, RelOptInfo *child_rel);
-static CustomPath * WrapTableAccessWithDistributedUnion(Path *originalPath, uint32 colocationId, Expr *partitionValue, Oid sampleRelid, List *subPaths);
-static Query * GetQueryFromPath(PlannerInfo *root, Path *path, List *tlist, List *clauses);
-static List * ShardIntervalListToRelationShardList(List *shardIntervalList);
-static List * OptimizeJoinPath(Path *originalPath);
-static List * BroadcastOuterJoinPath(Path *originalPath);
-static List * BroadcastInnerJoinPath(Path *originalPath);
-static Path * CreateReadIntermediateResultPath(const Path *originalPath);
-static bool CanOptimizeJoinPath(const JoinPath *jpath);
-static bool IsDistributedUnion(Path *path);
-static Expr * ExtractPartitionValue(List *restrictionList, Var *partitionKey);
-static List * ShardIntervalListForRelationPartitionValue(Oid relationId, Expr *partitionValue);
-static void PathBasedPlannerGroupAgg(PlannerInfo *root, RelOptInfo *input_rel, RelOptInfo *output_rel, void *extra);
-static Path * OptimizeGroupAgg(PlannerInfo *root, Path *originalPath);
-static bool CanOptimizeAggPath(PlannerInfo *root, AggPath *apath);
-
-
-/*
- * TODO some optimizations are useless if others are already provided. This might cause
- * excessive path creation causing performance problems. Depending on the amount of
- * optimizations to be added we can keep a bitmask indicating for every entry to skip if
- * the index of a preceding successful optimization is in the bitmap.
- */
-bool EnableBroadcastJoin = true;
-
-/* list of functions that will be called to optimized in the joinhook*/
-static optimizeFn joinOptimizations[] = {
-	OptimizeJoinPath,
-	BroadcastOuterJoinPath,
-	BroadcastInnerJoinPath,
-};
+typedef List * (*optimizeFn)(PlannerInfo *root, Path *originalPath);
 
 typedef struct DistributedUnionPath
 {
@@ -76,6 +45,41 @@ typedef struct DistributedUnionPath
 	 */
 	Oid sampleRelid;
 } DistributedUnionPath;
+
+static Plan * CreateDistributedUnionPlan(PlannerInfo *root, RelOptInfo *rel, struct CustomPath *best_path, List *tlist, List *clauses, List *custom_plans);
+static List * ReparameterizeDistributedUnion(PlannerInfo *root, List *custom_private, RelOptInfo *child_rel);
+static CustomPath * WrapTableAccessWithDistributedUnion(Path *originalPath, uint32 colocationId, Expr *partitionValue, Oid sampleRelid, List *subPaths);
+static Query * GetQueryFromPath(PlannerInfo *root, Path *path, List *tlist, List *clauses);
+static List * ShardIntervalListToRelationShardList(List *shardIntervalList);
+static List * OptimizeJoinPath(PlannerInfo *root, Path *originalPath);
+static List * BroadcastOuterJoinPath(PlannerInfo *root, Path *originalPath);
+static List * BroadcastInnerJoinPath(PlannerInfo *root, Path *originalPath);
+static List * GeoOverlapJoin(PlannerInfo *root, Path *originalPath);
+static Path * CreateReadIntermediateResultPath(const Path *originalPath);
+static bool CanOptimizeJoinPath(const JoinPath *jpath);
+static bool IsDistributedUnion(Path *path, bool recurseTransparent, DistributedUnionPath **out);
+static Expr * ExtractPartitionValue(List *restrictionList, Var *partitionKey);
+static List * ShardIntervalListForRelationPartitionValue(Oid relationId, Expr *partitionValue);
+static void PathBasedPlannerGroupAgg(PlannerInfo *root, RelOptInfo *input_rel, RelOptInfo *output_rel, void *extra);
+static Path * OptimizeGroupAgg(PlannerInfo *root, Path *originalPath);
+static bool CanOptimizeAggPath(PlannerInfo *root, AggPath *apath);
+
+
+/*
+ * TODO some optimizations are useless if others are already provided. This might cause
+ * excessive path creation causing performance problems. Depending on the amount of
+ * optimizations to be added we can keep a bitmask indicating for every entry to skip if
+ * the index of a preceding successful optimization is in the bitmap.
+ */
+bool EnableBroadcastJoin = true;
+
+/* list of functions that will be called to optimized in the joinhook*/
+static optimizeFn joinOptimizations[] = {
+	OptimizeJoinPath,
+//	BroadcastOuterJoinPath,
+//	BroadcastInnerJoinPath,
+	GeoOverlapJoin,
+};
 
 const CustomPathMethods distributedUnionMethods = {
 	.CustomName = "Distributed Union",
@@ -258,17 +262,48 @@ ReparameterizeDistributedUnion(PlannerInfo *root,
 
 /*
  * IsDistributedUnion returns if the pathnode is a distributed union
+ *
+ * If recurseTransparent is set it will recurse into transparant nodes like Materialize
+ *
+ * If out is set to not NULL it will write the pointer to the union at the location
+ * specified
  */
 static bool
-IsDistributedUnion(Path *path)
+IsDistributedUnion(Path *path, bool recurseTransparent, DistributedUnionPath **out)
 {
+	if (recurseTransparent)
+	{
+		switch (nodeTag(path))
+		{
+			case T_MaterialPath:
+			{
+				MaterialPath *materialPath = castNode(MaterialPath, path);
+				return IsDistributedUnion(materialPath->subpath, recurseTransparent, out);
+			}
+
+			default:
+			{
+				break;
+			}
+		}
+	}
+
 	if (!IsA(path, CustomPath))
 	{
 		return false;
 	}
 
 	CustomPath *cpath = castNode(CustomPath, path);
-	return cpath->methods == &distributedUnionMethods;
+	if (cpath->methods != &distributedUnionMethods) {
+		return false;
+	}
+
+	if (out != NULL)
+	{
+		*out = (DistributedUnionPath *) cpath;
+	}
+
+	return true;
 }
 
 
@@ -359,8 +394,8 @@ ExtractPartitionValue(List *restrictionList, Var *partitionKey)
 static bool
 CanOptimizeJoinPath(const JoinPath *jpath)
 {
-	if (!(IsDistributedUnion(jpath->innerjoinpath) &&
-		  IsDistributedUnion(jpath->outerjoinpath)))
+	if (!(IsDistributedUnion(jpath->innerjoinpath, false, NULL) &&
+		  IsDistributedUnion(jpath->outerjoinpath, false, NULL)))
 	{
 		/* can only optimize joins when both inner and outer are a distributed union */
 		return false;
@@ -384,9 +419,130 @@ CanOptimizeJoinPath(const JoinPath *jpath)
 	return true;
 }
 
+static NameData
+GetFunctionNameData(Oid funcid)
+{
+	HeapTuple	proctup = NULL;
+	Form_pg_proc procform = NULL;
+
+	proctup = SearchSysCache1(PROCOID, ObjectIdGetDatum(funcid));
+	if (!HeapTupleIsValid(proctup))
+		elog(ERROR, "cache lookup failed for function %u", funcid);
+	procform = (Form_pg_proc) GETSTRUCT(proctup);
+
+	/* copy name by value */
+	NameData result = procform->proname;
+
+	ReleaseSysCache(proctup);
+
+	return result;
+}
+
+
+static bool
+IsSTExpandExpression(Expr *expr, float8 *distance)
+{
+	if (!IsA(expr, FuncExpr))
+	{
+		return false;
+	}
+
+	FuncExpr *funcexpr = castNode(FuncExpr, expr);
+
+	NameData funcNameData = GetFunctionNameData(funcexpr->funcid);
+	if (strcmp(NameStr(funcNameData), "st_expand") != 0)
+	{
+		/* expected an expansion of the geometry */
+		return false;
+	}
+
+	if (list_length(funcexpr->args) != 2)
+	{
+		/* expected 2 arguments */
+		return false;
+	}
+
+	if (distance)
+	{
+		Const *distanceConst = lsecond_node(Const, funcexpr->args);
+		Assert(distanceConst->consttype == FLOAT8OID);
+
+		*distance = DatumGetFloat8(distanceConst->constvalue);
+	}
+
+
+	return true;
+}
+
+
+static bool
+IsGeoOverlapJoin(Expr *expr)
+{
+	/* find a geometry_overlaps expression */
+	if (!IsA(expr, OpExpr))
+	{
+		return false;
+	}
+
+	OpExpr *opexpr = castNode(OpExpr, expr);
+	if (!OidIsValid(opexpr->opfuncid))
+	{
+		return false;
+	}
+
+	/* check the name of the operation */
+	NameData opname = GetFunctionNameData(opexpr->opfuncid);
+	if (strcmp(NameStr(opname), "geometry_overlaps") != 0)
+	{
+		return false;
+	}
+
+	/* we expect exactly 2 arguments */
+	if (list_length(opexpr->args) != 2)
+	{
+		return false;
+	}
+
+	Expr *leftArg = linitial(opexpr->args);
+	Expr *rightArg = lsecond(opexpr->args);
+
+	if (IsA(rightArg, Var) && IsA(leftArg, FuncExpr))
+	{
+		/* swap the args around to work on them in expected fashion */
+		Expr *tmp = leftArg;
+		leftArg = rightArg;
+		rightArg = tmp;
+	}
+
+	float8 distance = 0;
+	if (IsA(leftArg, Var) && IsSTExpandExpression(rightArg, &distance))
+	{
+		return false;
+	}
+
+	return true;
+}
 
 static List *
-OptimizeJoinPath(Path *originalPath)
+GeoOverlapJoin(PlannerInfo *root, Path *originalPath)
+{
+	JoinPath *joinPath = (JoinPath *) originalPath;
+
+	RestrictInfo *rinfo = NULL;
+	foreach_ptr(rinfo, joinPath->joinrestrictinfo)
+	{
+		if (IsGeoOverlapJoin(rinfo->clause))
+		{
+
+		}
+	}
+
+	return NIL;
+}
+
+
+static List *
+OptimizeJoinPath(PlannerInfo *root, Path *originalPath)
 {
 	switch (originalPath->pathtype)
 	{
@@ -435,7 +591,7 @@ OptimizeJoinPath(Path *originalPath)
 
 
 static List *
-BroadcastOuterJoinPath(Path *originalPath)
+BroadcastOuterJoinPath(PlannerInfo *root, Path *originalPath)
 {
 	if (!EnableBroadcastJoin)
 	{
@@ -450,7 +606,7 @@ BroadcastOuterJoinPath(Path *originalPath)
 			const JoinPath *jpath = (JoinPath *) originalPath;
 			List *newPaths = NIL;
 
-			if (IsDistributedUnion(jpath->outerjoinpath))
+			if (IsDistributedUnion(jpath->outerjoinpath, false, NULL))
 			{
 				/* broadcast inner join path */
 				DistributedUnionPath *baseDistUnion = (DistributedUnionPath *) jpath->outerjoinpath;
@@ -493,7 +649,7 @@ BroadcastOuterJoinPath(Path *originalPath)
 
 
 static List *
-BroadcastInnerJoinPath(Path *originalPath)
+BroadcastInnerJoinPath(PlannerInfo *root, Path *originalPath)
 {
 	if (!EnableBroadcastJoin)
 	{
@@ -508,7 +664,7 @@ BroadcastInnerJoinPath(Path *originalPath)
 			const JoinPath *jpath = (JoinPath *) originalPath;
 			List *newPaths = NIL;
 
-			if (IsDistributedUnion(jpath->innerjoinpath))
+			if (IsDistributedUnion(jpath->innerjoinpath, false, NULL))
 			{
 				/* broadcast inner join path */
 				DistributedUnionPath *baseDistUnion = (DistributedUnionPath *) jpath->innerjoinpath;
@@ -588,7 +744,7 @@ PathBasedPlannerJoinHook(PlannerInfo *root,
 		Path *originalPath = lfirst(pathCell);
 		for (int i=0; i < sizeof(joinOptimizations)/sizeof(joinOptimizations[1]); i++)
 		{
-			List *alternativePaths = joinOptimizations[i](originalPath);
+			List *alternativePaths = joinOptimizations[i](root, originalPath);
 			newPaths = list_concat(newPaths, alternativePaths);
 		}
 	}
@@ -974,7 +1130,7 @@ CanOptimizeAggPath(PlannerInfo *root, AggPath *apath)
 		return false;
 	}
 
-	if (!IsDistributedUnion(apath->subpath))
+	if (!IsDistributedUnion(apath->subpath, false, NULL))
 	{
 		/*
 		 * we only can optimize if the path below is a distributed union that we can pull

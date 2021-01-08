@@ -24,3 +24,6 @@ BEGIN
 	END IF;
 END;
 $$;
+
+-- add a catchall shardcontainer - eg. geobbox
+ALTER TABLE pg_catalog.pg_dist_shard ADD COLUMN shardcontainer text;

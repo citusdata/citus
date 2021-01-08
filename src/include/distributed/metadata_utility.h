@@ -56,6 +56,12 @@ typedef struct ShardInterval
 	Datum maxValue;     /* a shard's typed max value datum */
 	uint64 shardId;
 	int shardIndex;
+
+	/* stuff for the shard container thingy, mostly geometry now */
+	bool containerByVal;
+	int16 containerTypeLen;
+	Oid containerTypeId;
+	Datum containerValue;
 } ShardInterval;
 
 

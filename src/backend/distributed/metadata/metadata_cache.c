@@ -4410,6 +4410,7 @@ DeformedDistShardTupleToShardInterval(Datum *datumArray, bool *isNullArray,
 	Oid typeIoParam = InvalidOid;
 	Datum minValue = 0;
 	Datum maxValue = 0;
+	Datum containerValue = 0;
 	bool minValueExists = false;
 	bool maxValueExists = false;
 	int16 intervalTypeLen = 0;
@@ -4417,15 +4418,24 @@ DeformedDistShardTupleToShardInterval(Datum *datumArray, bool *isNullArray,
 	char intervalAlign = '0';
 	char intervalDelim = '0';
 
+	Oid containerTypeId = 0;
+	int16 containerTypeLen = 0;
+	bool containerByVal = false;
+	char containerAlign = '0';
+	char containerDelim = '0';
+	int32 containerTypeMod = 0;
+
 	Oid relationId =
 		DatumGetObjectId(datumArray[Anum_pg_dist_shard_logicalrelid - 1]);
 	int64 shardId = DatumGetInt64(datumArray[Anum_pg_dist_shard_shardid - 1]);
 	char storageType = DatumGetChar(datumArray[Anum_pg_dist_shard_shardstorage - 1]);
 	Datum minValueTextDatum = datumArray[Anum_pg_dist_shard_shardminvalue - 1];
 	Datum maxValueTextDatum = datumArray[Anum_pg_dist_shard_shardmaxvalue - 1];
+	Datum containerValueTextDatum = datumArray[Anum_pg_dist_shard_shardcontainer - 1];
 
 	bool minValueNull = isNullArray[Anum_pg_dist_shard_shardminvalue - 1];
 	bool maxValueNull = isNullArray[Anum_pg_dist_shard_shardmaxvalue - 1];
+	bool containerValueNull = isNullArray[Anum_pg_dist_shard_shardcontainer - 1];
 
 	if (!minValueNull && !maxValueNull)
 	{
@@ -4448,6 +4458,22 @@ DeformedDistShardTupleToShardInterval(Datum *datumArray, bool *isNullArray,
 		maxValueExists = true;
 	}
 
+	if (!containerValueNull)
+	{
+		/* geo */
+		TypeName *geometryTypeName = makeTypeNameFromNameList(
+			list_make2(makeString("public"), makeString("geometry")));
+		containerTypeId = typenameTypeId(NULL, geometryTypeName);
+		get_type_io_data(containerTypeId, IOFunc_input, &containerTypeLen,
+						 &containerByVal,
+						 &containerAlign, &containerDelim, &typeIoParam,
+						 &inputFunctionId);
+
+		char *containerValueString = TextDatumGetCString(containerValueTextDatum);
+		containerValue = OidInputFunctionCall(inputFunctionId, containerValueString,
+											  typeIoParam, containerTypeMod);
+	}
+
 	ShardInterval *shardInterval = CitusMakeNode(ShardInterval);
 	shardInterval->relationId = relationId;
 	shardInterval->storageType = storageType;
@@ -4459,6 +4485,11 @@ DeformedDistShardTupleToShardInterval(Datum *datumArray, bool *isNullArray,
 	shardInterval->minValue = minValue;
 	shardInterval->maxValue = maxValue;
 	shardInterval->shardId = shardId;
+
+	shardInterval->containerTypeId = containerTypeId;
+	shardInterval->containerTypeLen = containerTypeLen;
+	shardInterval->containerByVal = containerByVal;
+	shardInterval->containerValue = containerValue;
 
 	return shardInterval;
 }
