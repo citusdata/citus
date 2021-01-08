@@ -1580,19 +1580,7 @@ UndistributeTable(Oid relationId, bool cascadeViaForeignKeys)
 	}
 
 	bool tableReferencing = TableReferencing(relationId);
-	bool tableReferenced = TableReferenced(relationId);
-	if (cascadeViaForeignKeys && (tableReferencing || tableReferenced))
-	{
-		CascadeOperationForConnectedRelations(relationId, lockMode, UNDISTRIBUTE_TABLE);
-
-		/*
-		 * Undistributed every foreign key connected relation in our foreign key
-		 * subgraph including itself, so return here.
-		 */
-		return;
-	}
-
-	if (tableReferencing)
+	if (tableReferencing && !cascadeViaForeignKeys)
 	{
 		char *qualifiedRelationName = generate_qualified_relation_name(relationId);
 		ereport(ERROR, (errmsg("cannot undistribute table "
@@ -1602,7 +1590,8 @@ UndistributeTable(Oid relationId, bool cascadeViaForeignKeys)
 								qualifiedRelationName)));
 	}
 
-	if (tableReferenced)
+	bool tableReferenced = TableReferenced(relationId);
+	if (tableReferenced && !cascadeViaForeignKeys)
 	{
 		char *qualifiedRelationName = generate_qualified_relation_name(relationId);
 		ereport(ERROR, (errmsg("cannot undistribute table "
@@ -1627,6 +1616,17 @@ UndistributeTable(Oid relationId, bool cascadeViaForeignKeys)
 							   "because it is a partition"),
 						errhint("undistribute the partitioned table \"%s\" instead",
 								parentRelationName)));
+	}
+
+	if (cascadeViaForeignKeys && (tableReferencing || tableReferenced))
+	{
+		CascadeOperationForConnectedRelations(relationId, lockMode, UNDISTRIBUTE_TABLE);
+
+		/*
+		 * Undistributed every foreign key connected relation in our foreign key
+		 * subgraph including itself, so return here.
+		 */
+		return;
 	}
 
 	List *preLoadCommands = GetPreLoadTableCreationCommands(relationId, true);

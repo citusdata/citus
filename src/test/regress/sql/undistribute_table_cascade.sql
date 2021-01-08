@@ -171,6 +171,15 @@ BEGIN;
   ORDER BY 1,2,3;
 ROLLBACK;
 
+-- show that we properly handle cases where undistribute_table is not supported
+-- error out when table is a partition table
+SELECT undistribute_table('partitioned_table_2_100_200', cascade_via_foreign_keys=>true);
+-- error if table does not exist
+SELECT undistribute_table('non_existent_table', cascade_via_foreign_keys=>true);
+-- error if table is a postgres table
+CREATE TABLE local_table(a int);
+SELECT undistribute_table('local_table', cascade_via_foreign_keys=>true);
+
 -- as pg < 12 doesn't support foreign keys between partitioned tables,
 -- define below foreign key conditionally instead of adding another
 -- test output
