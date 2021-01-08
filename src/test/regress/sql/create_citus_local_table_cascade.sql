@@ -40,14 +40,22 @@ SELECT create_citus_local_table('local_table_4', cascade_via_foreign_keys=>false
 -- So in each transaction, both selects should return true.
 
 BEGIN;
+  SELECT conname, conrelid::regclass::text, confrelid::regclass::text
+  FROM pg_constraint
+  WHERE connamespace = (SELECT oid FROM pg_namespace WHERE nspname='create_citus_local_table_cascade') AND
+        conname ~ '^fkey\_\d+$'
+  ORDER BY 1,2,3;
+
   SELECT create_citus_local_table('local_table_1', cascade_via_foreign_keys=>true);
 
   -- show that we do parallel execution
   show citus.multi_shard_modify_mode;
 
-  SELECT COUNT(*)=6 FROM pg_constraint
+  SELECT conname, conrelid::regclass::text, confrelid::regclass::text
+  FROM pg_constraint
   WHERE connamespace = (SELECT oid FROM pg_namespace WHERE nspname='create_citus_local_table_cascade') AND
-        conname ~ '^fkey\_\d+$';
+        conname ~ '^fkey\_\d+$'
+  ORDER BY 1,2,3;
 
   SELECT COUNT(*)=4 FROM pg_dist_partition, pg_tables
   WHERE tablename=logicalrelid::regclass::text AND
@@ -84,9 +92,36 @@ ROLLBACK;
 BEGIN;
   -- split local_table_2 from foreign key subgraph
   ALTER TABLE local_table_1 DROP CONSTRAINT local_table_1_col_1_key CASCADE;
+
   -- now that local_table_2 does not have any foreign keys, cascade_via_foreign_keys=true
   -- is not needed but show that it still works fine
   SELECT create_citus_local_table('local_table_2', cascade_via_foreign_keys=>true);
+
+  -- show citus tables in current schema
+  SELECT tablename FROM pg_dist_partition, pg_tables
+  WHERE tablename=logicalrelid::regclass::text AND
+        schemaname='create_citus_local_table_cascade'
+  ORDER BY 1;
+ROLLBACK;
+
+BEGIN;
+  -- split local_table_2 from foreign key subgraph
+  ALTER TABLE local_table_1 DROP CONSTRAINT local_table_1_col_1_key CASCADE;
+
+  -- add a self reference on local_table_2
+  ALTER TABLE local_table_2 ADD CONSTRAINT fkey_self FOREIGN KEY(col_1) REFERENCES local_table_2(col_1);
+
+  -- now that local_table_2 does not have any
+  -- foreign key relationships with other tables but a self
+  -- referencing foreign key, cascade_via_foreign_keys=true
+  -- is not needed but show that it still works fine
+  SELECT create_citus_local_table('local_table_2', cascade_via_foreign_keys=>true);
+
+  -- show citus tables in current schema
+  SELECT tablename FROM pg_dist_partition, pg_tables
+  WHERE tablename=logicalrelid::regclass::text AND
+        schemaname='create_citus_local_table_cascade'
+  ORDER BY 1;
 ROLLBACK;
 
 CREATE TABLE distributed_table(col INT);

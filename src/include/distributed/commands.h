@@ -411,7 +411,6 @@ extern void ExecuteAndLogDDLCommandList(List *ddlCommandList);
 extern void ExecuteAndLogDDLCommand(const char *commandString);
 
 /* create_citus_local_table.c */
-
 extern void CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys);
 
 extern bool ShouldPropagateSetCommand(VariableSetStmt *setStmt);

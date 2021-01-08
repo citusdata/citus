@@ -144,8 +144,7 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys)
 		 */
 		return;
 	}
-
-	if (tableHasExternalForeignKeys)
+	else if (tableHasExternalForeignKeys)
 	{
 		/*
 		 * We do not allow creating citus local table if the table is involved in a
