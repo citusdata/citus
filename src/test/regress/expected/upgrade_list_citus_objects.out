@@ -76,6 +76,7 @@ ORDER BY 1;
  function citus_text_send_as_jsonb(text)
  function citus_total_relation_size(regclass,boolean)
  function citus_truncate_trigger()
+ function citus_unmark_object_distributed(oid, oid, integer)
  function citus_validate_rebalance_strategy_functions(regproc,regproc,regproc)
  function citus_version()
  function citus_worker_stat_activity()
@@ -229,3 +230,4 @@ ORDER BY 1;
  view pg_dist_shard_placement
  view time_partitions
 (212 rows)
+
