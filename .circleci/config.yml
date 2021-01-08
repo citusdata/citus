@@ -408,6 +408,12 @@ workflows:
           make: check-worker
           requires: [build-11]
       - test-citus:
+          name: 'test-11_check-operations'
+          pg_major: 11
+          image_tag: '11.9'
+          make: check-operations
+          requires: [build-11]
+      - test-citus:
           name: 'test-11_check-follower-cluster'
           pg_major: 11
           image_tag: '11.9'
@@ -450,6 +456,12 @@ workflows:
           pg_major: 12
           image_tag: '12.4'
           make: check-worker
+          requires: [build-12]
+      - test-citus:
+          name: 'test-12_check-operations'
+          pg_major: 12
+          image_tag: '12.4'
+          make: check-operations
           requires: [build-12]
       - test-citus:
           name: 'test-12_check-follower-cluster'
@@ -506,6 +518,12 @@ workflows:
           pg_major: 13
           image_tag: '13.0'
           make: check-worker
+          requires: [build-13]
+      - test-citus:
+          name: 'test-13_check-operations'
+          pg_major: 13
+          image_tag: '13.0'
+          make: check-operations
           requires: [build-13]
       - test-citus:
           name: 'test-13_check-follower-cluster'

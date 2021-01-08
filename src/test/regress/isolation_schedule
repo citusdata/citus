@@ -66,6 +66,13 @@ test: shared_connection_waits
 test: isolation_cancellation
 test: isolation_undistribute_table
 
+# Rebalancer
+test: isolation_blocking_move_single_shard_commands
+test: isolation_blocking_move_multi_shard_commands
+test: isolation_blocking_move_single_shard_commands_on_mx
+test: isolation_blocking_move_multi_shard_commands_on_mx
+test: isolation_shard_rebalancer
+
 # MX tests
 test: isolation_reference_on_mx
 test: isolation_ref2ref_foreign_keys_on_mx

@@ -38,6 +38,7 @@
 #include "distributed/coordinator_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
+#include "distributed/shard_cleaner.h"
 #include "distributed/statistics_collection.h"
 #include "distributed/transaction_recovery.h"
 #include "distributed/version_compat.h"
@@ -92,6 +93,7 @@ typedef struct MaintenanceDaemonDBData
 /* config variable for distributed deadlock detection timeout */
 double DistributedDeadlockDetectionTimeoutFactor = 2.0;
 int Recover2PCInterval = 60000;
+int DeferShardDeleteInterval = 60000;
 
 /* config variables for metadata sync timeout */
 int MetadataSyncInterval = 60000;
@@ -289,6 +291,7 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 	bool retryStatsCollection USED_WITH_LIBCURL_ONLY = false;
 	ErrorContextCallback errorCallback;
 	TimestampTz lastRecoveryTime = 0;
+	TimestampTz lastShardCleanTime = 0;
 	TimestampTz nextMetadataSyncTime = 0;
 
 	/*
@@ -585,6 +588,45 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 			/* make sure we don't wait too long */
 			timeout = Min(timeout, deadlockTimeout);
 		}
+
+		if (!RecoveryInProgress() && DeferShardDeleteInterval > 0 &&
+			TimestampDifferenceExceeds(lastShardCleanTime, GetCurrentTimestamp(),
+									   DeferShardDeleteInterval))
+		{
+			int numberOfDroppedShards = 0;
+
+			InvalidateMetadataSystemCache();
+			StartTransactionCommand();
+
+			if (!LockCitusExtension())
+			{
+				ereport(DEBUG1, (errmsg(
+									 "could not lock the citus extension, skipping shard cleaning")));
+			}
+			else if (CheckCitusVersion(DEBUG1) && CitusHasBeenLoaded())
+			{
+				/*
+				 * Record last shard clean time at start to ensure we run once per
+				 * DeferShardDeleteInterval.
+				 */
+				lastShardCleanTime = GetCurrentTimestamp();
+
+				numberOfDroppedShards = TryDropMarkedShards();
+			}
+
+			CommitTransactionCommand();
+
+			if (numberOfDroppedShards > 0)
+			{
+				ereport(LOG, (errmsg("maintenance daemon dropped %d distributed "
+									 "shards previously marked to be removed",
+									 numberOfDroppedShards)));
+			}
+
+			/* make sure we don't wait too long */
+			timeout = Min(timeout, DeferShardDeleteInterval);
+		}
+
 
 		/*
 		 * Wait until timeout, or until somebody wakes us up. Also cast the timeout to
