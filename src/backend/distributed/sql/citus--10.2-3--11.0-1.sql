@@ -17,3 +17,6 @@ UPDATE pg_catalog.pg_dist_partition SET autoconverted = TRUE WHERE partmethod = 
 
 REVOKE ALL ON FUNCTION start_metadata_sync_to_node(text, integer) FROM PUBLIC;
 REVOKE ALL ON FUNCTION stop_metadata_sync_to_node(text, integer,bool) FROM PUBLIC;
+
+-- add a catchall shardcontainer - eg. geobbox
+ALTER TABLE pg_catalog.pg_dist_shard ADD COLUMN shardcontainer text;
