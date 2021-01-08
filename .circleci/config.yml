@@ -546,6 +546,12 @@ workflows:
           image_tag: '12.4'
           make: check-columnar-isolation
           requires: [build-12]
+      - tap-test-citus:
+          name: 'test_12_tap-recovery'
+          pg_major: 12
+          image_tag: '12.4-dev202101081507'
+          suite: recovery
+          requires: [build-12]
       - test-citus:
           name: 'test-12_check-failure'
           pg_major: 12
@@ -611,7 +617,7 @@ workflows:
       - tap-test-citus:
           name: 'test_13_tap-recovery'
           pg_major: 13
-          image_tag: '13.0-dev202101081449'
+          image_tag: '13.0-dev202101081507'
           suite: recovery
           requires: [build-13]
       - test-citus:
