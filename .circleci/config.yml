@@ -607,7 +607,7 @@ workflows:
       - tap-test-citus:
           name: 'test_13_tap-recovery'
           pg_major: 13
-          image_tag: '13.0'
+          image_tag: '13.0-dev202101081449'
           suite: recovery
           requires: [build-13]
       - test-citus:
