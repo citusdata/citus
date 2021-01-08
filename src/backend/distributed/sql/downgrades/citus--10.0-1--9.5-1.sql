@@ -18,6 +18,7 @@ DROP FUNCTION pg_catalog.citus_drain_node(text, integer, citus.shard_transfer_mo
 DROP FUNCTION pg_catalog.citus_remove_node(text, integer);
 DROP FUNCTION pg_catalog.citus_set_node_property(text, integer, text, boolean);
 DROP FUNCTION pg_catalog.citus_unmark_object_distributed(oid, oid, int);
+DROP FUNCTION pg_catalog.citus_update_node(int, text, int, bool, int);
 
 DROP VIEW pg_catalog.time_partitions;
 DROP FUNCTION pg_catalog.time_partition_range(regclass);

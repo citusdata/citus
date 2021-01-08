@@ -130,6 +130,7 @@ PG_FUNCTION_INFO_V1(citus_disable_node);
 PG_FUNCTION_INFO_V1(master_disable_node);
 PG_FUNCTION_INFO_V1(citus_activate_node);
 PG_FUNCTION_INFO_V1(master_activate_node);
+PG_FUNCTION_INFO_V1(citus_update_node);
 PG_FUNCTION_INFO_V1(master_update_node);
 PG_FUNCTION_INFO_V1(get_shard_id_for_distribution_column);
 
@@ -815,12 +816,12 @@ ActivateNode(char *nodeName, int nodePort)
 
 
 /*
- * master_update_node moves the requested node to a different nodename and nodeport. It
+ * citus_update_node moves the requested node to a different nodename and nodeport. It
  * locks to ensure no queries are running concurrently; and is intended for customers who
  * are running their own failover solution.
  */
 Datum
-master_update_node(PG_FUNCTION_ARGS)
+citus_update_node(PG_FUNCTION_ARGS)
 {
 	int32 nodeId = PG_GETARG_INT32(0);
 
@@ -891,7 +892,7 @@ master_update_node(PG_FUNCTION_ARGS)
 	 *   In case of node failure said long-running queries will fail in the end
 	 *   anyway as they will be unable to commit successfully on the failed
 	 *   machine. To cause quick failure of these queries use force => true
-	 *   during the invocation of master_update_node to terminate conflicting
+	 *   during the invocation of citus_update_node to terminate conflicting
 	 *   backends proactively.
 	 *
 	 * It might be worth blocking reads to a secondary for the same reasons,
@@ -912,7 +913,7 @@ master_update_node(PG_FUNCTION_ARGS)
 				/*
 				 * We failed to start a background worker, which probably means that we exceeded
 				 * max_worker_processes, and this is unlikely to be resolved by retrying. We do not want
-				 * to repeatedly throw an error because if master_update_node is called to complete a
+				 * to repeatedly throw an error because if citus_update_node is called to complete a
 				 * failover then finishing is the only way to bring the cluster back up. Therefore we
 				 * give up on killing other backends and simply wait for the lock. We do set
 				 * lock_timeout to lock_cooldown, because we don't want to wait forever to get a lock.
@@ -945,7 +946,7 @@ master_update_node(PG_FUNCTION_ARGS)
 
 	/*
 	 * Propagate the updated pg_dist_node entry to all metadata workers.
-	 * citus-ha uses master_update_node() in a prepared transaction, and
+	 * citus-ha uses citus_update_node() in a prepared transaction, and
 	 * we don't support coordinated prepared transactions, so we cannot
 	 * propagate the changes to the worker nodes here. Instead we mark
 	 * all metadata nodes as not-synced and ask maintenanced to do the
@@ -972,6 +973,16 @@ master_update_node(PG_FUNCTION_ARGS)
 	TransactionModifiedNodeMetadata = true;
 
 	PG_RETURN_VOID();
+}
+
+
+/*
+ * master_update_node is a wrapper function for old UDF name.
+ */
+Datum
+master_update_node(PG_FUNCTION_ARGS)
+{
+	return citus_update_node(fcinfo);
 }
 
 
@@ -1984,7 +1995,7 @@ UnsetMetadataSyncedForAll(void)
 	bool indexOK = false;
 
 	/*
-	 * Concurrent master_update_node() calls might iterate and try to update
+	 * Concurrent citus_update_node() calls might iterate and try to update
 	 * pg_dist_node in different orders. To protect against deadlock, we
 	 * get an exclusive lock here.
 	 */

@@ -464,6 +464,7 @@ SELECT * FROM print_extension_changes();
                                                | function citus_set_node_property(text, integer, text, boolean)
                                                | function citus_total_relation_size(regclass,boolean)
                                                | function citus_unmark_object_distributed(oid, oid, integer)
+                                               | function citus_update_node(integer,text,integer,boolean,integer)
                                                | function columnar.columnar_handler(internal)
                                                | function create_citus_local_table(regclass,boolean)
                                                | function time_partition_range(regclass)
