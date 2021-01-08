@@ -27,8 +27,7 @@ TESTDIR='$(CURDIR)' \
 PATH="$(bindir):$$PATH" \
 PGPORT='6$(DEF_PGPORT)' \
 top_builddir='$(CURDIR)/$(top_builddir)' \
-PG_REGRESS='$(postgres_abs_builddir)/src/test/regress/pg_regress' \
-REGRESS_SHLIB='$(abs_top_builddir)/src/test/regress/regress$(DLSUFFIX)' \
+PG_REGRESS='$(pgxsdir)/src/test/regress/pg_regress' \
 TEMP_CONFIG='$(CURDIR)'/postgresql.conf \
 $(PROVE) $(PG_PROVE_FLAGS) $(PROVE_FLAGS) $(if $(PROVE_TESTS),$(PROVE_TESTS),t/*.pl)
 endef
