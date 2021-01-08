@@ -123,6 +123,7 @@ PG_FUNCTION_INFO_V1(master_add_inactive_node);
 PG_FUNCTION_INFO_V1(citus_add_secondary_node);
 PG_FUNCTION_INFO_V1(master_add_secondary_node);
 PG_FUNCTION_INFO_V1(master_set_node_property);
+PG_FUNCTION_INFO_V1(citus_remove_node);
 PG_FUNCTION_INFO_V1(master_remove_node);
 PG_FUNCTION_INFO_V1(citus_disable_node);
 PG_FUNCTION_INFO_V1(master_disable_node);
@@ -367,16 +368,16 @@ master_add_secondary_node(PG_FUNCTION_ARGS)
 
 
 /*
- * master_remove_node function removes the provided node from the pg_dist_node table of
+ * citus_remove_node function removes the provided node from the pg_dist_node table of
  * the master node and all nodes with metadata.
- * The call to the master_remove_node should be done by the super user and the specified
+ * The call to the citus_remove_node should be done by the super user and the specified
  * node should not have any active placements.
  * This function also deletes all reference table placements belong to the given node from
  * pg_dist_placement, but it does not drop actual placement at the node. In the case of
  * re-adding the node, master_add_node first drops and re-creates the reference tables.
  */
 Datum
-master_remove_node(PG_FUNCTION_ARGS)
+citus_remove_node(PG_FUNCTION_ARGS)
 {
 	text *nodeNameText = PG_GETARG_TEXT_P(0);
 	int32 nodePort = PG_GETARG_INT32(1);
@@ -387,6 +388,16 @@ master_remove_node(PG_FUNCTION_ARGS)
 	TransactionModifiedNodeMetadata = true;
 
 	PG_RETURN_VOID();
+}
+
+
+/*
+ * master_remove_node is a wrapper function for old UDF name.
+ */
+Datum
+master_remove_node(PG_FUNCTION_ARGS)
+{
+	return citus_remove_node(fcinfo);
 }
 
 

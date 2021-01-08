@@ -1,4 +1,4 @@
-DROP FUNCTION IF EXISTS pg_catalog.master_drain_node;
+DROP FUNCTION pg_catalog.master_drain_node;
 CREATE FUNCTION pg_catalog.master_drain_node(
     nodename text,
     nodeport integer,

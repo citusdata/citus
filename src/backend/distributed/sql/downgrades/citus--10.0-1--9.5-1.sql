@@ -15,6 +15,7 @@ DROP FUNCTION pg_catalog.citus_add_inactive_node(text, integer, integer, noderol
 DROP FUNCTION pg_catalog.citus_add_secondary_node(text, integer, text, integer, name);
 DROP FUNCTION pg_catalog.citus_disable_node(text, integer);
 DROP FUNCTION pg_catalog.citus_drain_node(text, integer, citus.shard_transfer_mode, name);
+DROP FUNCTION pg_catalog.citus_remove_node(text, integer);
 
 DROP VIEW pg_catalog.time_partitions;
 DROP FUNCTION pg_catalog.time_partition_range(regclass);

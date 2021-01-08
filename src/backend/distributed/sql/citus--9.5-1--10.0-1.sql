@@ -15,6 +15,7 @@ DROP FUNCTION IF EXISTS pg_catalog.citus_total_relation_size(regclass);
 #include "udfs/citus_add_secondary_node/10.0-1.sql"
 #include "udfs/citus_disable_node/10.0-1.sql"
 #include "udfs/citus_drain_node/10.0-1.sql"
+#include "udfs/citus_remove_node/10.0-1.sql"
 
 #include "../../columnar/sql/columnar--9.5-1--10.0-1.sql"
 
