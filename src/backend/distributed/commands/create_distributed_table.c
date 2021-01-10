@@ -1656,6 +1656,16 @@ UndistributeTable(Oid relationId, bool cascadeViaForeignKeys)
 		ereport(NOTICE, (errmsg("undistributing the partitions of %s",
 								quote_qualified_identifier(schemaName, relationName))));
 		List *partitionList = PartitionList(relationId);
+
+		/*
+		 * This is a less common pattern where foreing key is directly from/to
+		 * the partition relation as we already handled inherited foreign keys
+		 * on partitions either by erroring out or cascading via foreign keys.
+		 * It seems an acceptable limitation for now to ask users to drop such
+		 * foreign keys manually.
+		 */
+		ErrorIfAnyPartitionRelationInvolvedInNonInheritedFKey(partitionList);
+
 		Oid partitionRelationId = InvalidOid;
 		foreach_oid(partitionRelationId, partitionList)
 		{

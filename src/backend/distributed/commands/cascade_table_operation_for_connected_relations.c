@@ -69,6 +69,15 @@ CascadeOperationForConnectedRelations(Oid relationId, LOCKMODE lockMode,
 	LockRelationsWithLockMode(fKeyConnectedRelationIdList, lockMode);
 
 	/*
+	 * Before removing any partition relations, we should error out here if any
+	 * of connected relations is a partition table involved in a foreign key that
+	 * is not inherited from its parent table.
+	 * We should handle this case here as we remove partition relations in this
+	 * function	before ExecuteCascadeOperationForRelationIdList.
+	 */
+	ErrorIfAnyPartitionRelationInvolvedInNonInheritedFKey(fKeyConnectedRelationIdList);
+
+	/*
 	 * We shouldn't cascade through foreign keys on partition tables as citus
 	 * table functions already have their own logics to handle partition relations.
 	 */
@@ -112,6 +121,40 @@ LockRelationsWithLockMode(List *relationIdList, LOCKMODE lockMode)
 	foreach_oid(relationId, relationIdList)
 	{
 		LockRelationOid(relationId, lockMode);
+	}
+}
+
+
+/*
+ * ErrorIfAnyPartitionRelationInvolvedInNonInheritedFKey searches given
+ * relationIdList for a partition relation involved in a foreign key relationship
+ * that is not inherited from its parent and errors out if such a partition
+ * relation exists.
+ */
+void
+ErrorIfAnyPartitionRelationInvolvedInNonInheritedFKey(List *relationIdList)
+{
+	Oid relationId = InvalidOid;
+	foreach_oid(relationId, relationIdList)
+	{
+		if (!PartitionTable(relationId))
+		{
+			continue;
+		}
+
+		if (!RelationInvolvedInAnyNonInheritedForeignKeys(relationId))
+		{
+			continue;
+		}
+
+		char *partitionRelationQualifiedName =
+			generate_qualified_relation_name(relationId);
+		ereport(ERROR, (errmsg("cannot cascade operation via foreign keys as "
+							   "partition table %s involved in a foreign key "
+							   "relationship that is not inherited from it's "
+							   "parent table", partitionRelationQualifiedName),
+						errhint("Remove non-inherited foreign keys from %s and "
+								"try operation again", partitionRelationQualifiedName)));
 	}
 }
 

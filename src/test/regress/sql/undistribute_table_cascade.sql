@@ -160,6 +160,23 @@ SELECT create_reference_table('reference_table_3');
 ALTER TABLE partitioned_table_1 ADD CONSTRAINT fkey_9 FOREIGN KEY (col_1) REFERENCES reference_table_3(col_2);
 ALTER TABLE partitioned_table_2 ADD CONSTRAINT fkey_10 FOREIGN KEY (col_1) REFERENCES reference_table_3(col_2);
 
+-- as pg < 12 doesn't support foreign keys between partitioned tables,
+-- define below foreign key conditionally instead of adding another
+-- test output
+DO $proc$
+BEGIN
+IF substring(current_Setting('server_version'), '\d+')::int >= 12 THEN
+  EXECUTE
+  $$
+  ALTER TABLE partitioned_table_1 ADD CONSTRAINT fkey_15 FOREIGN KEY (col_1) REFERENCES partitioned_table_1(col_1);
+  $$;
+END IF;
+END$proc$;
+
+BEGIN;
+  SELECT undistribute_table('partitioned_table_1', cascade_via_foreign_keys=>true);
+ROLLBACK;
+
 BEGIN;
   SELECT undistribute_table('partitioned_table_2', cascade_via_foreign_keys=>true);
 
@@ -169,6 +186,99 @@ BEGIN;
   WHERE connamespace = (SELECT oid FROM pg_namespace WHERE nspname='undistribute_table_cascade') AND
         conname = 'fkey_9' OR conname = 'fkey_10'
   ORDER BY 1,2,3;
+ROLLBACK;
+
+BEGIN;
+  set citus.multi_shard_modify_mode to 'sequential';
+  ALTER TABLE partitioned_table_1_100_200 ADD CONSTRAINT non_inherited_fkey FOREIGN KEY(col_1) REFERENCES reference_table_3(col_1);
+  SELECT undistribute_table('partitioned_table_2', cascade_via_foreign_keys=>true);
+ROLLBACK;
+
+BEGIN;
+  set citus.multi_shard_modify_mode to 'sequential';
+  ALTER TABLE partitioned_table_1_100_200 ADD CONSTRAINT non_inherited_fkey FOREIGN KEY(col_1) REFERENCES reference_table_3(col_1);
+  SELECT undistribute_table('partitioned_table_1', cascade_via_foreign_keys=>true);
+ROLLBACK;
+
+BEGIN;
+  set citus.multi_shard_modify_mode to 'sequential';
+  ALTER TABLE partitioned_table_1_100_200 ADD CONSTRAINT non_inherited_fkey FOREIGN KEY(col_1) REFERENCES reference_table_3(col_1);
+  SELECT undistribute_table('partitioned_table_2', cascade_via_foreign_keys=>true);
+ROLLBACK;
+
+BEGIN;
+  set citus.multi_shard_modify_mode to 'sequential';
+  ALTER TABLE partitioned_table_1_100_200 ADD CONSTRAINT non_inherited_fkey FOREIGN KEY(col_1) REFERENCES partitioned_table_2_100_200(col_1);
+  SELECT undistribute_table('partitioned_table_1', cascade_via_foreign_keys=>true);
+ROLLBACK;
+
+BEGIN;
+  set citus.multi_shard_modify_mode to 'sequential';
+  ALTER TABLE partitioned_table_1_100_200 ADD CONSTRAINT non_inherited_fkey FOREIGN KEY(col_1) REFERENCES partitioned_table_2_100_200(col_1);
+  SELECT undistribute_table('partitioned_table_2', cascade_via_foreign_keys=>true);
+ROLLBACK;
+
+CREATE TABLE distributed_table_4 (col_1 INT UNIQUE, col_2 INT);
+SELECT create_distributed_table('distributed_table_4', 'col_1');
+
+BEGIN;
+  set citus.multi_shard_modify_mode to 'sequential';
+  ALTER TABLE distributed_table_4 ADD CONSTRAINT non_inherited_fkey FOREIGN KEY (col_1) REFERENCES partitioned_table_2_100_200(col_1);
+  SELECT undistribute_table('distributed_table_4', cascade_via_foreign_keys=>true);
+ROLLBACK;
+
+BEGIN;
+  set citus.multi_shard_modify_mode to 'sequential';
+  ALTER TABLE distributed_table_4 ADD CONSTRAINT non_inherited_fkey FOREIGN KEY (col_1) REFERENCES partitioned_table_1_100_200(col_1);
+  SELECT undistribute_table('partitioned_table_1', cascade_via_foreign_keys=>true);
+ROLLBACK;
+
+BEGIN;
+  set citus.multi_shard_modify_mode to 'sequential';
+  ALTER TABLE distributed_table_4 ADD CONSTRAINT non_inherited_fkey FOREIGN KEY (col_1) REFERENCES partitioned_table_1_100_200(col_1);
+  SELECT undistribute_table('partitioned_table_2', cascade_via_foreign_keys=>true);
+ROLLBACK;
+
+BEGIN;
+  set citus.multi_shard_modify_mode to 'sequential';
+  ALTER TABLE partitioned_table_1_100_200 ADD CONSTRAINT fkey FOREIGN KEY(col_1) REFERENCES distributed_table_4(col_1);
+  SELECT undistribute_table('partitioned_table_1', cascade_via_foreign_keys=>true);
+ROLLBACK;
+
+BEGIN;
+  set citus.multi_shard_modify_mode to 'sequential';
+  ALTER TABLE partitioned_table_1_100_200 ADD CONSTRAINT fkey FOREIGN KEY(col_1) REFERENCES distributed_table_4(col_1);
+  SELECT undistribute_table('partitioned_table_2', cascade_via_foreign_keys=>true);
+ROLLBACK;
+
+BEGIN;
+  set citus.multi_shard_modify_mode to 'sequential';
+  ALTER TABLE partitioned_table_1_100_200 ADD CONSTRAINT fkey FOREIGN KEY(col_1) REFERENCES distributed_table_4(col_1);
+  SELECT undistribute_table('distributed_table_4', cascade_via_foreign_keys=>true);
+ROLLBACK;
+
+BEGIN;
+  set citus.multi_shard_modify_mode to 'sequential';
+  ALTER TABLE partitioned_table_2 ADD CONSTRAINT fkey FOREIGN KEY (col_1) REFERENCES partitioned_table_1_100_200(col_1);
+  SELECT undistribute_table('partitioned_table_2', cascade_via_foreign_keys=>true);
+ROLLBACK;
+
+BEGIN;
+  set citus.multi_shard_modify_mode to 'sequential';
+  ALTER TABLE partitioned_table_2_100_200 ADD CONSTRAINT non_inherited_fkey FOREIGN KEY (col_1) REFERENCES partitioned_table_2_100_200(col_1);
+  SELECT undistribute_table('reference_table_3', cascade_via_foreign_keys=>true);
+ROLLBACK;
+
+BEGIN;
+  set citus.multi_shard_modify_mode to 'sequential';
+  ALTER TABLE partitioned_table_2_100_200 ADD CONSTRAINT non_inherited_fkey FOREIGN KEY (col_1) REFERENCES partitioned_table_2_100_200(col_1);
+  SELECT undistribute_table('partitioned_table_2', cascade_via_foreign_keys=>true);
+ROLLBACK;
+
+BEGIN;
+  set citus.multi_shard_modify_mode to 'sequential';
+  ALTER TABLE partitioned_table_2_100_200 ADD CONSTRAINT non_inherited_fkey FOREIGN KEY (col_1) REFERENCES partitioned_table_2_100_200(col_1);
+  SELECT undistribute_table('partitioned_table_1', cascade_via_foreign_keys=>true);
 ROLLBACK;
 
 -- as pg < 12 doesn't support foreign keys between partitioned tables,

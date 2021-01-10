@@ -285,6 +285,26 @@ SELECT create_reference_table('reference_table_3');
 
 ALTER TABLE partitioned_table_1 ADD CONSTRAINT fkey_9 FOREIGN KEY (col_1) REFERENCES reference_table_3(col_2);
 ALTER TABLE partitioned_table_2 ADD CONSTRAINT fkey_10 FOREIGN KEY (col_1) REFERENCES reference_table_3(col_2);
+-- as pg < 12 doesn't support foreign keys between partitioned tables,
+-- define below foreign key conditionally instead of adding another
+-- test output
+DO $proc$
+BEGIN
+IF substring(current_Setting('server_version'), '\d+')::int >= 12 THEN
+  EXECUTE
+  $$
+  ALTER TABLE partitioned_table_1 ADD CONSTRAINT fkey_15 FOREIGN KEY (col_1) REFERENCES partitioned_table_1(col_1);
+  $$;
+END IF;
+END$proc$;
+BEGIN;
+  SELECT undistribute_table('partitioned_table_1', cascade_via_foreign_keys=>true);
+ undistribute_table
+---------------------------------------------------------------------
+
+(1 row)
+
+ROLLBACK;
 BEGIN;
   SELECT undistribute_table('partitioned_table_2', cascade_via_foreign_keys=>true);
  undistribute_table
@@ -308,6 +328,103 @@ BEGIN;
  fkey_9  | partitioned_table_1         | reference_table_3
 (6 rows)
 
+ROLLBACK;
+BEGIN;
+  set citus.multi_shard_modify_mode to 'sequential';
+  ALTER TABLE partitioned_table_1_100_200 ADD CONSTRAINT non_inherited_fkey FOREIGN KEY(col_1) REFERENCES reference_table_3(col_1);
+  SELECT undistribute_table('partitioned_table_2', cascade_via_foreign_keys=>true);
+ERROR:  cannot cascade operation via foreign keys as partition table undistribute_table_cascade.partitioned_table_1_100_200 involved in a foreign key relationship that is not inherited from it's parent table
+ROLLBACK;
+BEGIN;
+  set citus.multi_shard_modify_mode to 'sequential';
+  ALTER TABLE partitioned_table_1_100_200 ADD CONSTRAINT non_inherited_fkey FOREIGN KEY(col_1) REFERENCES reference_table_3(col_1);
+  SELECT undistribute_table('partitioned_table_1', cascade_via_foreign_keys=>true);
+ERROR:  cannot cascade operation via foreign keys as partition table undistribute_table_cascade.partitioned_table_1_100_200 involved in a foreign key relationship that is not inherited from it's parent table
+ROLLBACK;
+BEGIN;
+  set citus.multi_shard_modify_mode to 'sequential';
+  ALTER TABLE partitioned_table_1_100_200 ADD CONSTRAINT non_inherited_fkey FOREIGN KEY(col_1) REFERENCES reference_table_3(col_1);
+  SELECT undistribute_table('partitioned_table_2', cascade_via_foreign_keys=>true);
+ERROR:  cannot cascade operation via foreign keys as partition table undistribute_table_cascade.partitioned_table_1_100_200 involved in a foreign key relationship that is not inherited from it's parent table
+ROLLBACK;
+BEGIN;
+  set citus.multi_shard_modify_mode to 'sequential';
+  ALTER TABLE partitioned_table_1_100_200 ADD CONSTRAINT non_inherited_fkey FOREIGN KEY(col_1) REFERENCES partitioned_table_2_100_200(col_1);
+  SELECT undistribute_table('partitioned_table_1', cascade_via_foreign_keys=>true);
+ERROR:  cannot cascade operation via foreign keys as partition table undistribute_table_cascade.partitioned_table_1_100_200 involved in a foreign key relationship that is not inherited from it's parent table
+ROLLBACK;
+BEGIN;
+  set citus.multi_shard_modify_mode to 'sequential';
+  ALTER TABLE partitioned_table_1_100_200 ADD CONSTRAINT non_inherited_fkey FOREIGN KEY(col_1) REFERENCES partitioned_table_2_100_200(col_1);
+  SELECT undistribute_table('partitioned_table_2', cascade_via_foreign_keys=>true);
+ERROR:  cannot cascade operation via foreign keys as partition table undistribute_table_cascade.partitioned_table_1_100_200 involved in a foreign key relationship that is not inherited from it's parent table
+ROLLBACK;
+CREATE TABLE distributed_table_4 (col_1 INT UNIQUE, col_2 INT);
+SELECT create_distributed_table('distributed_table_4', 'col_1');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+BEGIN;
+  set citus.multi_shard_modify_mode to 'sequential';
+  ALTER TABLE distributed_table_4 ADD CONSTRAINT non_inherited_fkey FOREIGN KEY (col_1) REFERENCES partitioned_table_2_100_200(col_1);
+  SELECT undistribute_table('distributed_table_4', cascade_via_foreign_keys=>true);
+ERROR:  cannot cascade operation via foreign keys as partition table undistribute_table_cascade.partitioned_table_2_100_200 involved in a foreign key relationship that is not inherited from it's parent table
+ROLLBACK;
+BEGIN;
+  set citus.multi_shard_modify_mode to 'sequential';
+  ALTER TABLE distributed_table_4 ADD CONSTRAINT non_inherited_fkey FOREIGN KEY (col_1) REFERENCES partitioned_table_1_100_200(col_1);
+  SELECT undistribute_table('partitioned_table_1', cascade_via_foreign_keys=>true);
+ERROR:  cannot cascade operation via foreign keys as partition table undistribute_table_cascade.partitioned_table_1_100_200 involved in a foreign key relationship that is not inherited from it's parent table
+ROLLBACK;
+BEGIN;
+  set citus.multi_shard_modify_mode to 'sequential';
+  ALTER TABLE distributed_table_4 ADD CONSTRAINT non_inherited_fkey FOREIGN KEY (col_1) REFERENCES partitioned_table_1_100_200(col_1);
+  SELECT undistribute_table('partitioned_table_2', cascade_via_foreign_keys=>true);
+ERROR:  cannot cascade operation via foreign keys as partition table undistribute_table_cascade.partitioned_table_1_100_200 involved in a foreign key relationship that is not inherited from it's parent table
+ROLLBACK;
+BEGIN;
+  set citus.multi_shard_modify_mode to 'sequential';
+  ALTER TABLE partitioned_table_1_100_200 ADD CONSTRAINT fkey FOREIGN KEY(col_1) REFERENCES distributed_table_4(col_1);
+  SELECT undistribute_table('partitioned_table_1', cascade_via_foreign_keys=>true);
+ERROR:  cannot cascade operation via foreign keys as partition table undistribute_table_cascade.partitioned_table_1_100_200 involved in a foreign key relationship that is not inherited from it's parent table
+ROLLBACK;
+BEGIN;
+  set citus.multi_shard_modify_mode to 'sequential';
+  ALTER TABLE partitioned_table_1_100_200 ADD CONSTRAINT fkey FOREIGN KEY(col_1) REFERENCES distributed_table_4(col_1);
+  SELECT undistribute_table('partitioned_table_2', cascade_via_foreign_keys=>true);
+ERROR:  cannot cascade operation via foreign keys as partition table undistribute_table_cascade.partitioned_table_1_100_200 involved in a foreign key relationship that is not inherited from it's parent table
+ROLLBACK;
+BEGIN;
+  set citus.multi_shard_modify_mode to 'sequential';
+  ALTER TABLE partitioned_table_1_100_200 ADD CONSTRAINT fkey FOREIGN KEY(col_1) REFERENCES distributed_table_4(col_1);
+  SELECT undistribute_table('distributed_table_4', cascade_via_foreign_keys=>true);
+ERROR:  cannot cascade operation via foreign keys as partition table undistribute_table_cascade.partitioned_table_1_100_200 involved in a foreign key relationship that is not inherited from it's parent table
+ROLLBACK;
+BEGIN;
+  set citus.multi_shard_modify_mode to 'sequential';
+  ALTER TABLE partitioned_table_2 ADD CONSTRAINT fkey FOREIGN KEY (col_1) REFERENCES partitioned_table_1_100_200(col_1);
+  SELECT undistribute_table('partitioned_table_2', cascade_via_foreign_keys=>true);
+ERROR:  cannot cascade operation via foreign keys as partition table undistribute_table_cascade.partitioned_table_1_100_200 involved in a foreign key relationship that is not inherited from it's parent table
+ROLLBACK;
+BEGIN;
+  set citus.multi_shard_modify_mode to 'sequential';
+  ALTER TABLE partitioned_table_2_100_200 ADD CONSTRAINT non_inherited_fkey FOREIGN KEY (col_1) REFERENCES partitioned_table_2_100_200(col_1);
+  SELECT undistribute_table('reference_table_3', cascade_via_foreign_keys=>true);
+ERROR:  cannot cascade operation via foreign keys as partition table undistribute_table_cascade.partitioned_table_2_100_200 involved in a foreign key relationship that is not inherited from it's parent table
+ROLLBACK;
+BEGIN;
+  set citus.multi_shard_modify_mode to 'sequential';
+  ALTER TABLE partitioned_table_2_100_200 ADD CONSTRAINT non_inherited_fkey FOREIGN KEY (col_1) REFERENCES partitioned_table_2_100_200(col_1);
+  SELECT undistribute_table('partitioned_table_2', cascade_via_foreign_keys=>true);
+ERROR:  cannot cascade operation via foreign keys as partition table undistribute_table_cascade.partitioned_table_2_100_200 involved in a foreign key relationship that is not inherited from it's parent table
+ROLLBACK;
+BEGIN;
+  set citus.multi_shard_modify_mode to 'sequential';
+  ALTER TABLE partitioned_table_2_100_200 ADD CONSTRAINT non_inherited_fkey FOREIGN KEY (col_1) REFERENCES partitioned_table_2_100_200(col_1);
+  SELECT undistribute_table('partitioned_table_1', cascade_via_foreign_keys=>true);
+ERROR:  cannot cascade operation via foreign keys as partition table undistribute_table_cascade.partitioned_table_2_100_200 involved in a foreign key relationship that is not inherited from it's parent table
 ROLLBACK;
 -- as pg < 12 doesn't support foreign keys between partitioned tables,
 -- define below foreign key conditionally instead of adding another
