@@ -10,4 +10,5 @@ DROP FUNCTION IF EXISTS pg_catalog.citus_total_relation_size(regclass);
 
 #include "../../columnar/sql/columnar--9.5-1--10.0-1.sql"
 
-GRANT USAGE ON SCHEMA citus_internal TO public;
+CREATE SCHEMA cimv_internal;
+GRANT ALL ON SCHEMA cimv_internal to public;

@@ -150,14 +150,6 @@ CreateCimv(CimvCreate *cimvCreate)
 		elog(ERROR, "SPI_connect failed");
 	}
 
-	Oid savedUserId = InvalidOid;
-	int savedSecurityContext = 0;
-
-	char* currentUserName = CurrentUserName();
-
-	GetUserIdAndSecContext(&savedUserId, &savedSecurityContext);
-	SetUserIdAndSecContext(CitusExtensionOwner(), SECURITY_LOCAL_USERID_CHANGE);
-
 	CreateMatTable(cimvCreate, false);
 
 	if (cimvCreate->createOptions->schedule != NULL)
@@ -171,14 +163,6 @@ CreateCimv(CimvCreate *cimvCreate)
 	CreateDataChangeTriggerFunction(cimvCreate);
 	CreateDataChangeTriggers(cimvCreate);
 	InsertIntoPgCimv(cimvCreate->formCimv);
-
-	AlterTableOwner(cimvCreate->matTableName, currentUserName);
-	AlterTableOwner(cimvCreate->refreshViewName, currentUserName);
-	AlterTableOwner(cimvCreate->userViewName, currentUserName);
-
-	SetUserIdAndSecContext(savedUserId, savedSecurityContext);
-
-
 
 	if (SPI_finish() != SPI_OK_FINISH)
 	{
@@ -921,7 +905,7 @@ InitializeCimvCreate(const CreateTableAsStmt *stmt, MatViewCreateOptions *create
 
 	cimvCreate->prefixId = UniqueId();
 	cimvCreate->prefix = CIMVInternalPrefix(cimvCreate->baseTableName, cimvCreate->prefixId);
-	namestrcpy(&cimvCreate->formCimv->triggerfnnamespace, CITUS_INTERNAL_SCHEMA);
+	namestrcpy(&cimvCreate->formCimv->triggerfnnamespace, CIMV_INTERNAL_SCHEMA);
 	char* funcName = CIMVTriggerFuncName(cimvCreate->prefixId, stmt->into->rel->relname);
 	namestrcpy(&cimvCreate->formCimv->triggerfnname, funcName);
 	StringInfo mat = makeStringInfo();
@@ -933,10 +917,10 @@ InitializeCimvCreate(const CreateTableAsStmt *stmt, MatViewCreateOptions *create
 	StringInfo ld = makeStringInfo();
 	appendStringInfo(ld, "%s_cimv_%s", cimvCreate->prefix, LANDING_TABLE_SUFFIX);
 
-	cimvCreate->matTableName = makeRangeVar(CITUS_INTERNAL_SCHEMA, mat->data, -1);
+	cimvCreate->matTableName = makeRangeVar(CIMV_INTERNAL_SCHEMA, mat->data, -1);
 	cimvCreate->userViewName = stmt->into->rel;
-	cimvCreate->refreshViewName = makeRangeVar(CITUS_INTERNAL_SCHEMA, rv->data, -1);
-	cimvCreate->landingTableName = makeRangeVar(CITUS_INTERNAL_SCHEMA, ld->data, -1);
+	cimvCreate->refreshViewName = makeRangeVar(CIMV_INTERNAL_SCHEMA, rv->data, -1);
+	cimvCreate->landingTableName = makeRangeVar(CIMV_INTERNAL_SCHEMA, ld->data, -1);
 	cimvCreate->targetListEntries = NIL;
 	cimvCreate->groupTargetListEntries = NIL;
 	cimvCreate->aggTargetListEntries = NIL;

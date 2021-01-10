@@ -57,9 +57,6 @@ RefreshCimv(Form_pg_cimv formCimv, bool skipData, bool isCreate)
 	matTableSchemaName = quote_identifier(matTableSchemaName);
 	matTableName = quote_identifier(matTableName);
 
-	Oid savedUserId = InvalidOid;
-	int savedSecurityContext = 0;
-
 	const char *landingTableSchemaName = NULL;
 	const char *landingTableName = NULL;
 	
@@ -74,8 +71,6 @@ RefreshCimv(Form_pg_cimv formCimv, bool skipData, bool isCreate)
 
 	if (skipData)
 	{
-		// GetUserIdAndSecContext(&savedUserId, &savedSecurityContext);
-		// SetUserIdAndSecContext(CitusExtensionOwner(), SECURITY_LOCAL_USERID_CHANGE);
 		if (formCimv->landingtable)
 		{
 			appendStringInfo(&querybuf,
@@ -108,9 +103,6 @@ RefreshCimv(Form_pg_cimv formCimv, bool skipData, bool isCreate)
 			SPI_commit();
 			SPI_start_transaction();
 
-			// GetUserIdAndSecContext(&savedUserId, &savedSecurityContext);
-			// SetUserIdAndSecContext(CitusExtensionOwner(), SECURITY_LOCAL_USERID_CHANGE);
-
 			/* TODO: cleanup if this fails */
 			appendStringInfo(&querybuf,
 							 "INSERT INTO %s.%s "
@@ -129,8 +121,6 @@ RefreshCimv(Form_pg_cimv formCimv, bool skipData, bool isCreate)
 		{
 			Snapshot snapshot = GetLatestSnapshot();
 
-			// GetUserIdAndSecContext(&savedUserId, &savedSecurityContext);
-			// SetUserIdAndSecContext(CitusExtensionOwner(), SECURITY_LOCAL_USERID_CHANGE);
 			/* TODO: DELETE only if !isCreate */
 			appendStringInfo(&querybuf,
 							 "DELETE FROM  %s.%s",
@@ -161,8 +151,6 @@ RefreshCimv(Form_pg_cimv formCimv, bool skipData, bool isCreate)
 			}
 		}
 	}
-
-    // SetUserIdAndSecContext(savedUserId, savedSecurityContext);
 
 	/* Close SPI context. */
 	if (SPI_finish() != SPI_OK_FINISH)

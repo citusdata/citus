@@ -124,12 +124,6 @@ static void
 DropCimv(Form_pg_cimv formCimv, DropBehavior behavior)
 {
 
-	Oid savedUserId = InvalidOid;
-	int savedSecurityContext = 0;
-
-	// GetUserIdAndSecContext(&savedUserId, &savedSecurityContext);
-	// SetUserIdAndSecContext(CitusExtensionOwner(), SECURITY_LOCAL_USERID_CHANGE);
-
 	ObjectAddress matTableAddress;
 	matTableAddress.classId = RelationRelationId;
 	matTableAddress.objectId = formCimv->mattable;
@@ -198,8 +192,6 @@ DropCimv(Form_pg_cimv formCimv, DropBehavior behavior)
 	}
 
 	DeletePgCimvRow(userViewAddress.objectId);
-
-	// SetUserIdAndSecContext(savedUserId, savedSecurityContext);
 
 	/* Close SPI context. */
 	if (SPI_finish() != SPI_OK_FINISH)

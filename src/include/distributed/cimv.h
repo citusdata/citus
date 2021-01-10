@@ -4,7 +4,7 @@
 #include "postgres.h"
 #include "nodes/plannodes.h"
 
-#define CITUS_INTERNAL_SCHEMA "citus_internal"
+#define CIMV_INTERNAL_SCHEMA "cimv_internal"
 #define CITUS_NAMESPACE "citus"
 #define MATERIALIZATION_TABLE_SUFFIX "mt"
 #define LANDING_TABLE_SUFFIX "ld"
