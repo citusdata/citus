@@ -154,6 +154,21 @@ CREATE TABLE partitioned_table_2_100_200 PARTITION OF partitioned_table_2 FOR VA
 CREATE TABLE partitioned_table_2_200_300 PARTITION OF partitioned_table_2 FOR VALUES FROM (200) TO (300);
 SELECT create_distributed_table('partitioned_table_2', 'col_1');
 
+BEGIN;
+  set citus.multi_shard_modify_mode to 'sequential';
+  ALTER TABLE partitioned_table_1_100_200 ADD CONSTRAINT fkey FOREIGN KEY(col_1) REFERENCES partitioned_table_1_100_200(col_1);
+  SELECT undistribute_table('partitioned_table_1', true);
+ROLLBACK;
+
+CREATE TABLE distributed_table_4 (col_1 INT UNIQUE, col_2 INT);
+SELECT create_distributed_table('distributed_table_4', 'col_1');
+
+BEGIN;
+  set citus.multi_shard_modify_mode to 'sequential';
+  ALTER TABLE distributed_table_4 ADD CONSTRAINT fkey FOREIGN KEY(col_1) REFERENCES partitioned_table_1_100_200(col_1);
+  SELECT undistribute_table('partitioned_table_1', true);
+ROLLBACK;
+
 CREATE TABLE reference_table_3 (col_1 INT UNIQUE, col_2 INT UNIQUE);
 SELECT create_reference_table('reference_table_3');
 
@@ -217,9 +232,6 @@ BEGIN;
   ALTER TABLE partitioned_table_1_100_200 ADD CONSTRAINT non_inherited_fkey FOREIGN KEY(col_1) REFERENCES partitioned_table_2_100_200(col_1);
   SELECT undistribute_table('partitioned_table_2', cascade_via_foreign_keys=>true);
 ROLLBACK;
-
-CREATE TABLE distributed_table_4 (col_1 INT UNIQUE, col_2 INT);
-SELECT create_distributed_table('distributed_table_4', 'col_1');
 
 BEGIN;
   set citus.multi_shard_modify_mode to 'sequential';
