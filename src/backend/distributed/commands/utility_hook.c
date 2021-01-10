@@ -473,8 +473,6 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 			(RefreshMatViewStmt *) parsetree);
 	}
 
-	bool switchToExtensionOwner = false;
-
 	if (IsA(parsetree, DropStmt))
 	{
 		DropStmt *dropStatement = (DropStmt *) parsetree;

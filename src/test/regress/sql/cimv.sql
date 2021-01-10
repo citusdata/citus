@@ -379,5 +379,31 @@ GROUP BY a, d_hour;
 
 DROP MATERIALIZED VIEW mv;
 
+-- test that another user can create CIMV as well
+CREATE USER new_user;
+CREATE SCHEMA another_schema2;
+SET search_path to another_schema2;
+
+CREATE TABLE events (a int, b int, c double precision, d timestamp, e bigint);
+
+CREATE MATERIALIZED VIEW mv WITH (citus.cimv) AS
+SELECT a,
+       date_trunc('hour', d) AS d_hour,
+       min(b) AS min_b,
+       max(b) AS max_b,
+       avg(b) AS avg_b,
+       min(c) AS min_c,
+       max(c) AS max_c,
+       avg(c) AS avg_c,
+       min(e) AS min_e,
+       max(e) AS max_e,
+       avg(e) AS avg_e
+FROM events
+WHERE b > 10
+GROUP BY a, d_hour;
+
+REFRESH MATERIALIZED VIEW mv;
+DROP MATERIALIZED VIEW mv CASCADE;
+
 SET client_min_messages TO WARNING; -- suppress cascade messages
 DROP SCHEMA cimv CASCADE;
