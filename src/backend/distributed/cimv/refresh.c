@@ -57,8 +57,12 @@ RefreshCimv(Form_pg_cimv formCimv, bool skipData, bool isCreate)
 	matTableSchemaName = quote_identifier(matTableSchemaName);
 	matTableName = quote_identifier(matTableName);
 
+	Oid savedUserId = InvalidOid;
+	int savedSecurityContext = 0;
+
 	const char *landingTableSchemaName = NULL;
 	const char *landingTableName = NULL;
+	
 	if (formCimv->landingtable)
 	{
 		landingTableSchemaName = get_namespace_name(get_rel_namespace(
@@ -70,6 +74,8 @@ RefreshCimv(Form_pg_cimv formCimv, bool skipData, bool isCreate)
 
 	if (skipData)
 	{
+		// GetUserIdAndSecContext(&savedUserId, &savedSecurityContext);
+		// SetUserIdAndSecContext(CitusExtensionOwner(), SECURITY_LOCAL_USERID_CHANGE);
 		if (formCimv->landingtable)
 		{
 			appendStringInfo(&querybuf,
@@ -101,6 +107,10 @@ RefreshCimv(Form_pg_cimv formCimv, bool skipData, bool isCreate)
 			/* better: SPI_commit_and_chain(); */
 			SPI_commit();
 			SPI_start_transaction();
+
+			// GetUserIdAndSecContext(&savedUserId, &savedSecurityContext);
+			// SetUserIdAndSecContext(CitusExtensionOwner(), SECURITY_LOCAL_USERID_CHANGE);
+
 			/* TODO: cleanup if this fails */
 			appendStringInfo(&querybuf,
 							 "INSERT INTO %s.%s "
@@ -109,17 +119,18 @@ RefreshCimv(Form_pg_cimv formCimv, bool skipData, bool isCreate)
 							 matTableName,
 							 refreshViewSchemaName,
 							 refreshViewName);
-			PushCitusSecurityContext();				 
+
 			if (SPI_execute(querybuf.data, false, 0) != SPI_OK_INSERT)
 			{
 				elog(ERROR, "SPI_exec failed: %s", querybuf.data);
 			}
-			PopCitusSecurityContext();
 		}
 		else
 		{
 			Snapshot snapshot = GetLatestSnapshot();
 
+			// GetUserIdAndSecContext(&savedUserId, &savedSecurityContext);
+			// SetUserIdAndSecContext(CitusExtensionOwner(), SECURITY_LOCAL_USERID_CHANGE);
 			/* TODO: DELETE only if !isCreate */
 			appendStringInfo(&querybuf,
 							 "DELETE FROM  %s.%s",
@@ -135,7 +146,6 @@ RefreshCimv(Form_pg_cimv formCimv, bool skipData, bool isCreate)
 							 matTableName,
 							 refreshViewSchemaName,
 							 refreshViewName);
-			PushCitusSecurityContext();				 
 			SpiExecuteSnapshot(&querybuf, snapshot, SPI_OK_INSERT);
 			resetStringInfo(&querybuf);
 
@@ -149,9 +159,10 @@ RefreshCimv(Form_pg_cimv formCimv, bool skipData, bool isCreate)
 				SpiExecuteSnapshot(&querybuf, snapshot, SPI_OK_DELETE);
 				resetStringInfo(&querybuf);
 			}
-			PopCitusSecurityContext();
 		}
 	}
+
+    // SetUserIdAndSecContext(savedUserId, savedSecurityContext);
 
 	/* Close SPI context. */
 	if (SPI_finish() != SPI_OK_FINISH)

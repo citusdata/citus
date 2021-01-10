@@ -104,6 +104,7 @@ static void AppendStringInfoFunction(StringInfo buf, Oid fnoid);
 static Oid AggregateFunctionOid(const char *functionName, Oid inputType);
 static char* CIMVTriggerFuncName(int prefixId, const char* relname);
 static char* CIMVInternalPrefix(const RangeVar* baseTable, int prefixId);
+static void AlterTableOwner(RangeVar* tableName, char* ownerName);
 
 bool
 ProcessCreateMaterializedViewStmt(const CreateTableAsStmt *stmt, const char *query_string,
@@ -149,7 +150,13 @@ CreateCimv(CimvCreate *cimvCreate)
 		elog(ERROR, "SPI_connect failed");
 	}
 
-	PushCitusSecurityContext();
+	Oid savedUserId = InvalidOid;
+	int savedSecurityContext = 0;
+
+	char* currentUserName = CurrentUserName();
+
+	GetUserIdAndSecContext(&savedUserId, &savedSecurityContext);
+	SetUserIdAndSecContext(CitusExtensionOwner(), SECURITY_LOCAL_USERID_CHANGE);
 
 	CreateMatTable(cimvCreate, false);
 
@@ -164,7 +171,14 @@ CreateCimv(CimvCreate *cimvCreate)
 	CreateDataChangeTriggerFunction(cimvCreate);
 	CreateDataChangeTriggers(cimvCreate);
 	InsertIntoPgCimv(cimvCreate->formCimv);
-	PopCitusSecurityContext();
+
+	AlterTableOwner(cimvCreate->matTableName, currentUserName);
+	AlterTableOwner(cimvCreate->refreshViewName, currentUserName);
+	AlterTableOwner(cimvCreate->userViewName, currentUserName);
+
+	SetUserIdAndSecContext(savedUserId, savedSecurityContext);
+
+
 
 	if (SPI_finish() != SPI_OK_FINISH)
 	{
@@ -349,6 +363,24 @@ DistributeTable(CimvCreate *cimvCreate, RangeVar *tableName)
 	pfree(querybuf.data);
 }
 
+static void AlterTableOwner(RangeVar* tableName, char* ownerName) {
+	StringInfoData querybuf;
+	initStringInfo(&querybuf);
+
+	appendStringInfo(&querybuf,
+					 "ALTER TABLE %s.%s OWNER TO %s;",
+					 tableName->schemaname ? tableName->schemaname : "public",
+					 tableName->relname,
+					 ownerName);
+
+	if (SPI_execute(querybuf.data, false, 0) != SPI_OK_UTILITY)
+	{
+		elog(ERROR, "SPI_exec failed: %s", querybuf.data);
+	}
+
+	pfree(querybuf.data);
+}
+
 
 static void
 CreateUserView(CimvCreate *cimvCreate)
@@ -433,7 +465,6 @@ CreateUserView(CimvCreate *cimvCreate)
 	cimvCreate->formCimv->userview = DefineVirtualRelation(cimvCreate->userViewName,
 														   query->targetList,
 														   query).objectId;
-
 	pfree(queryText.data);
 }
 

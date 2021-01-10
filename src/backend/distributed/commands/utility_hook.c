@@ -469,11 +469,11 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 
 	if (IsA(parsetree, RefreshMatViewStmt))
 	{
-		// PushCitusSecurityContext();
 		continueProcessing = !ProcessRefreshMaterializedViewStmt(
 			(RefreshMatViewStmt *) parsetree);
-		// PopCitusSecurityContext();	
 	}
+
+	bool switchToExtensionOwner = false;
 
 	if (IsA(parsetree, DropStmt))
 	{

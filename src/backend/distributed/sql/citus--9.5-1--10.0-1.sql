@@ -9,3 +9,5 @@ DROP FUNCTION IF EXISTS pg_catalog.citus_total_relation_size(regclass);
 #include "udfs/citus_unique_id/10.0-1.sql"
 
 #include "../../columnar/sql/columnar--9.5-1--10.0-1.sql"
+
+GRANT USAGE ON SCHEMA citus_internal TO public;
