@@ -453,6 +453,7 @@ SELECT * FROM print_extension_changes();
  function master_dist_object_cache_invalidate()      |
  function master_dist_partition_cache_invalidate()   |
  function master_dist_placement_cache_invalidate()   |
+ function master_dist_shard_cache_invalidate()        |
  function undistribute_table(regclass)               |
  function upgrade_to_reference_table(regclass)       |
                                                      | function citus_activate_node(text,integer)
@@ -467,6 +468,7 @@ SELECT * FROM print_extension_changes();
                                                      | function citus_dist_object_cache_invalidate()
                                                      | function citus_dist_partition_cache_invalidate()
                                                      | function citus_dist_placement_cache_invalidate()
+                                                     | function citus_dist_shard_cache_invalidate()
                                                      | function citus_drain_node(text,integer,citus.shard_transfer_mode,name)
                                                      | function citus_internal.columnar_ensure_objects_exist()
                                                      | function citus_move_shard_placement(bigint,text,integer,text,integer,citus.shard_transfer_mode)
@@ -488,7 +490,7 @@ SELECT * FROM print_extension_changes();
                                                      | table columnar.options
                                                      | view citus_tables
                                                      | view time_partitions
-(43 rows)
+(45 rows)
 
 DROP TABLE prev_objects, extension_diff;
 -- show running version
