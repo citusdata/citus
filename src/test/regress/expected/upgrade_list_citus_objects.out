@@ -140,7 +140,6 @@ ORDER BY 1;
  function master_get_new_shardid()
  function master_get_table_ddl_events(text)
  function master_get_table_metadata(text)
- function master_modify_multiple_shards(text)
  function master_move_shard_placement(bigint,text,integer,text,integer,citus.shard_transfer_mode)
  function master_remove_distributed_table_metadata_from_workers(regclass,text,text)
  function master_remove_node(text,integer)
@@ -234,5 +233,5 @@ ORDER BY 1;
  view citus_worker_stat_activity
  view pg_dist_shard_placement
  view time_partitions
-(218 rows)
+(217 rows)
 

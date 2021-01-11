@@ -167,7 +167,6 @@ test: with_executors with_join with_partitioning with_transactions with_dml
 # ----------
 test: multi_load_large_records
 test: multi_master_delete_protocol
-test: multi_shard_modify
 
 # ----------
 # Tests around DDL statements run on distributed tables

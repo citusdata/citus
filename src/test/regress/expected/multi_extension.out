@@ -454,6 +454,7 @@ SELECT * FROM print_extension_changes();
  function master_dist_partition_cache_invalidate()   |
  function master_dist_placement_cache_invalidate()   |
  function master_dist_shard_cache_invalidate()       |
+ function master_modify_multiple_shards(text)        |
  function undistribute_table(regclass)               |
  function upgrade_to_reference_table(regclass)       |
                                                      | access method columnar
@@ -494,7 +495,7 @@ SELECT * FROM print_extension_changes();
                                                      | table columnar.options
                                                      | view citus_tables
                                                      | view time_partitions
-(49 rows)
+(50 rows)
 
 DROP TABLE prev_objects, extension_diff;
 -- show running version

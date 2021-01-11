@@ -44,6 +44,13 @@ DROP FUNCTION pg_catalog.time_partition_range(regclass);
 
 DROP FUNCTION pg_catalog.citus_set_coordinator_host(text,int,noderole,name);
 
+CREATE FUNCTION pg_catalog.master_modify_multiple_shards(text)
+    RETURNS integer
+    LANGUAGE C STRICT
+    AS 'MODULE_PATHNAME', $$master_modify_multiple_shards$$;
+COMMENT ON FUNCTION master_modify_multiple_shards(text)
+    IS 'push delete and update queries to shards';
+
 #include "../udfs/citus_total_relation_size/7.0-1.sql"
 #include "../udfs/upgrade_to_reference_table/8.0-1.sql"
 #include "../udfs/undistribute_table/9.5-1.sql"
