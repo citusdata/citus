@@ -58,7 +58,7 @@ CREATE TABLE citus.pg_dist_object (
 CREATE FUNCTION master_dist_object_cache_invalidate()
     RETURNS trigger
     LANGUAGE C
-    AS 'MODULE_PATHNAME', $$master_dist_object_cache_invalidate$$;
+    AS 'MODULE_PATHNAME', $$citus_dist_object_cache_invalidate$$;
 COMMENT ON FUNCTION master_dist_object_cache_invalidate()
     IS 'register relcache invalidation for changed rows';
 CREATE TRIGGER dist_object_cache_invalidate

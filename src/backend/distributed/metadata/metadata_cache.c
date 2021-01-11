@@ -267,7 +267,7 @@ PG_FUNCTION_INFO_V1(master_dist_placement_cache_invalidate);
 PG_FUNCTION_INFO_V1(citus_dist_node_cache_invalidate);
 PG_FUNCTION_INFO_V1(citus_dist_local_group_cache_invalidate);
 PG_FUNCTION_INFO_V1(master_dist_authinfo_cache_invalidate);
-PG_FUNCTION_INFO_V1(master_dist_object_cache_invalidate);
+PG_FUNCTION_INFO_V1(citus_dist_object_cache_invalidate);
 PG_FUNCTION_INFO_V1(role_exists);
 PG_FUNCTION_INFO_V1(authinfo_valid);
 PG_FUNCTION_INFO_V1(poolinfo_valid);
@@ -2917,7 +2917,7 @@ citus_dist_local_group_cache_invalidate(PG_FUNCTION_ARGS)
 
 
 /*
- * master_dist_object_cache_invalidate is a trigger function that performs relcache
+ * citus_dist_object_cache_invalidate is a trigger function that performs relcache
  * invalidation when the contents of pg_dist_object are changed on the SQL
  * level.
  *
@@ -2925,7 +2925,7 @@ citus_dist_local_group_cache_invalidate(PG_FUNCTION_ARGS)
  * are much easier ways to waste CPU than causing cache invalidations.
  */
 Datum
-master_dist_object_cache_invalidate(PG_FUNCTION_ARGS)
+citus_dist_object_cache_invalidate(PG_FUNCTION_ARGS)
 {
 	if (!CALLED_AS_TRIGGER(fcinfo))
 	{
