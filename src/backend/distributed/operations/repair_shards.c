@@ -85,6 +85,7 @@ static void UpdateColocatedShardPlacementMetadataOnWorkers(int64 shardId,
 														   int32 targetNodePort);
 
 /* declarations for dynamic loading */
+PG_FUNCTION_INFO_V1(citus_copy_shard_placement);
 PG_FUNCTION_INFO_V1(master_copy_shard_placement);
 PG_FUNCTION_INFO_V1(master_move_shard_placement);
 
@@ -93,17 +94,17 @@ bool DeferShardDeleteOnMove = false;
 
 
 /*
- * master_copy_shard_placement implements a user-facing UDF to repair data from
+ * citus_copy_shard_placement implements a user-facing UDF to repair data from
  * a healthy (source) node to an inactive (target) node. To accomplish this it
  * entirely recreates the table structure before copying all data. During this
  * time all modifications are paused to the shard. After successful repair, the
  * inactive placement is marked healthy and modifications may continue. If the
  * repair fails at any point, this function throws an error, leaving the node
- * in an unhealthy state. Please note that master_copy_shard_placement copies
+ * in an unhealthy state. Please note that citus_copy_shard_placement copies
  * given shard along with its co-located shards.
  */
 Datum
-master_copy_shard_placement(PG_FUNCTION_ARGS)
+citus_copy_shard_placement(PG_FUNCTION_ARGS)
 {
 	int64 shardId = PG_GETARG_INT64(0);
 	text *sourceNodeNameText = PG_GETARG_TEXT_P(1);
@@ -143,6 +144,16 @@ master_copy_shard_placement(PG_FUNCTION_ARGS)
 	}
 
 	PG_RETURN_VOID();
+}
+
+
+/*
+ * master_copy_shard_placement is a wrapper function for old UDF name.
+ */
+Datum
+master_copy_shard_placement(PG_FUNCTION_ARGS)
+{
+	return citus_copy_shard_placement(fcinfo);
 }
 
 
