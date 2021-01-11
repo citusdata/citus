@@ -32,6 +32,8 @@ ALTER FUNCTION citus_dist_node_cache_invalidate()
 RENAME TO master_dist_node_cache_invalidate;
 ALTER FUNCTION citus_dist_object_cache_invalidate()
 RENAME TO master_dist_object_cache_invalidate;
+ALTER FUNCTION citus_dist_partition_cache_invalidate()
+RENAME TO master_dist_partition_cache_invalidate;
 
 DROP VIEW pg_catalog.time_partitions;
 DROP FUNCTION pg_catalog.time_partition_range(regclass);

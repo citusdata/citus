@@ -261,7 +261,7 @@ static bool RefreshTableCacheEntryIfInvalid(ShardIdCacheEntry *shardEntry);
 
 
 /* exports for SQL callable functions */
-PG_FUNCTION_INFO_V1(master_dist_partition_cache_invalidate);
+PG_FUNCTION_INFO_V1(citus_dist_partition_cache_invalidate);
 PG_FUNCTION_INFO_V1(master_dist_shard_cache_invalidate);
 PG_FUNCTION_INFO_V1(master_dist_placement_cache_invalidate);
 PG_FUNCTION_INFO_V1(citus_dist_node_cache_invalidate);
@@ -2629,7 +2629,7 @@ SecondaryNodeRoleId(void)
 
 
 /*
- * master_dist_partition_cache_invalidate is a trigger function that performs
+ * citus_dist_partition_cache_invalidate is a trigger function that performs
  * relcache invalidations when the contents of pg_dist_partition are changed
  * on the SQL level.
  *
@@ -2637,7 +2637,7 @@ SecondaryNodeRoleId(void)
  * are much easier ways to waste CPU than causing cache invalidations.
  */
 Datum
-master_dist_partition_cache_invalidate(PG_FUNCTION_ARGS)
+citus_dist_partition_cache_invalidate(PG_FUNCTION_ARGS)
 {
 	TriggerData *triggerData = (TriggerData *) fcinfo->context;
 	Oid oldLogicalRelationId = InvalidOid;
