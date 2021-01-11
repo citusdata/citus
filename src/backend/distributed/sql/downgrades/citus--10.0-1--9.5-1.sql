@@ -22,6 +22,7 @@ DROP FUNCTION pg_catalog.citus_update_node(int, text, int, bool, int);
 DROP FUNCTION pg_catalog.citus_update_shard_statistics(bigint);
 DROP FUNCTION pg_catalog.citus_update_table_statistics(regclass);
 DROP FUNCTION pg_catalog.citus_copy_shard_placement(bigint, text, integer, text, integer, bool, citus.shard_transfer_mode);
+DROP FUNCTION pg_catalog.citus_move_shard_placement(bigint, text, integer, text, integer, citus.shard_transfer_mode);
 
 ALTER FUNCTION citus_conninfo_cache_invalidate()
 RENAME TO master_conninfo_cache_invalidate;

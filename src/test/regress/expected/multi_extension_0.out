@@ -456,16 +456,17 @@ SELECT * FROM print_extension_changes();
                                                      | function citus_add_node(text,integer,integer,noderole,name)
                                                      | function citus_add_secondary_node(text,integer,text,integer,name)
                                                      | function citus_conninfo_cache_invalidate()
-                                                     | function citus_copy_shard_placement(bigint, text, integer, text, integer, boolean, citus.shard_transfer_mode)
+                                                     | function citus_copy_shard_placement(bigint,text,integer,text,integer,boolean,citus.shard_transfer_mode)
                                                      | function citus_disable_node(text, integer)
                                                      | function citus_dist_local_group_cache_invalidate()
-                                                     | function citus_drain_node(text, integer, citus.shard_transfer_mode, name)
+                                                     | function citus_drain_node(text,integer,citus.shard_transfer_mode,name)
                                                      | function citus_internal.columnar_ensure_objects_exist()
-                                                     | function citus_remove_node(text, integer)
+                                                     | function citus_move_shard_placement(bigint,text,integer,text,integer,citus.shard_transfer_mode)
+                                                     | function citus_remove_node(text,integer)
                                                      | function citus_set_coordinator_host(text,integer,noderole,name)
-                                                     | function citus_set_node_property(text, integer, text, boolean)
+                                                     | function citus_set_node_property(text,integer,text,boolean)
                                                      | function citus_total_relation_size(regclass,boolean)
-                                                     | function citus_unmark_object_distributed(oid, oid, integer)
+                                                     | function citus_unmark_object_distributed(oid,oid,integer)
                                                      | function citus_update_node(integer,text,integer,boolean,integer)
                                                      | function citus_update_shard_statistics(bigint)
                                                      | function citus_update_table_statistics(regclass)
@@ -479,7 +480,7 @@ SELECT * FROM print_extension_changes();
                                                      | table columnar.options
                                                      | view citus_tables
                                                      | view time_partitions
-(34 rows)
+(35 rows)
 
 DROP TABLE prev_objects, extension_diff;
 -- show running version

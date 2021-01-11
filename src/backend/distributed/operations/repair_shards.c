@@ -87,6 +87,7 @@ static void UpdateColocatedShardPlacementMetadataOnWorkers(int64 shardId,
 /* declarations for dynamic loading */
 PG_FUNCTION_INFO_V1(citus_copy_shard_placement);
 PG_FUNCTION_INFO_V1(master_copy_shard_placement);
+PG_FUNCTION_INFO_V1(citus_move_shard_placement);
 PG_FUNCTION_INFO_V1(master_move_shard_placement);
 
 
@@ -158,7 +159,7 @@ master_copy_shard_placement(PG_FUNCTION_ARGS)
 
 
 /*
- * master_move_shard_placement moves given shard (and its co-located shards) from one
+ * citus_move_shard_placement moves given shard (and its co-located shards) from one
  * node to the other node. To accomplish this it entirely recreates the table structure
  * before copying all data.
  *
@@ -173,7 +174,7 @@ master_copy_shard_placement(PG_FUNCTION_ARGS)
  * any changes in source node or target node.
  */
 Datum
-master_move_shard_placement(PG_FUNCTION_ARGS)
+citus_move_shard_placement(PG_FUNCTION_ARGS)
 {
 	int64 shardId = PG_GETARG_INT64(0);
 	char *sourceNodeName = text_to_cstring(PG_GETARG_TEXT_P(1));
@@ -209,7 +210,7 @@ master_move_shard_placement(PG_FUNCTION_ARGS)
 
 		/*
 		 * Block concurrent DDL / TRUNCATE commands on the relation. Similarly,
-		 * block concurrent master_move_shard_placement() on any shard of
+		 * block concurrent citus_move_shard_placement() on any shard of
 		 * the same relation. This is OK for now since we're executing shard
 		 * moves sequentially anyway.
 		 */
@@ -286,8 +287,18 @@ master_move_shard_placement(PG_FUNCTION_ARGS)
 
 
 /*
+ * master_move_shard_placement is a wrapper function for old UDF name.
+ */
+Datum
+master_move_shard_placement(PG_FUNCTION_ARGS)
+{
+	return citus_move_shard_placement(fcinfo);
+}
+
+
+/*
  * ErrorIfMoveCitusLocalTable is a helper function for rebalance_table_shards
- * and master_move_shard_placement udf's to error out if relation with relationId
+ * and citus_move_shard_placement udf's to error out if relation with relationId
  * is a citus local table.
  */
 void

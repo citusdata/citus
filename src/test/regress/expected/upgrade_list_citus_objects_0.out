@@ -56,6 +56,7 @@ ORDER BY 1;
  function citus_json_concatenate_final(json)
  function citus_jsonb_concatenate(jsonb,jsonb)
  function citus_jsonb_concatenate_final(jsonb)
+ function citus_move_shard_placement(bigint,text,integer,text,integer,citus.shard_transfer_mode)
  function citus_node_capacity_1(integer)
  function citus_prepare_pg_upgrade()
  function citus_query_stats()
@@ -229,5 +230,5 @@ ORDER BY 1;
  view citus_worker_stat_activity
  view pg_dist_shard_placement
  view time_partitions
-(213 rows)
+(214 rows)
 
