@@ -39,3 +39,5 @@ ALTER FUNCTION master_dist_object_cache_invalidate()
 RENAME TO citus_dist_object_cache_invalidate;
 ALTER FUNCTION master_dist_partition_cache_invalidate()
 RENAME TO citus_dist_partition_cache_invalidate;
+ALTER FUNCTION master_dist_placement_cache_invalidate()
+RENAME TO citus_dist_placement_cache_invalidate;

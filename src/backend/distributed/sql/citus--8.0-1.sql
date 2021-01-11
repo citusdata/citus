@@ -520,7 +520,7 @@ COMMENT ON FUNCTION pg_catalog.worker_apply_inter_shard_ddl_command(referencing_
 CREATE FUNCTION pg_catalog.master_dist_placement_cache_invalidate()
     RETURNS trigger
     LANGUAGE C
-    AS 'MODULE_PATHNAME', $$master_dist_placement_cache_invalidate$$;
+    AS 'MODULE_PATHNAME', $$citus_dist_placement_cache_invalidate$$;
 COMMENT ON FUNCTION master_dist_placement_cache_invalidate()
     IS 'register relcache invalidation for changed placements';
 
