@@ -216,10 +216,11 @@ ErrorIfUnsupportedForeignConstraintExists(Relation relation, char referencingDis
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 							errmsg("cannot create foreign key constraint "
 								   "since foreign keys from reference tables "
-								   "to distributed tables are not supported"),
-							errdetail("A reference table can only have foreign "
-									  "keys to other reference tables or citus "
-									  "local tables")));
+								   "and citus local tables to distributed tables "
+								   "are not supported"),
+							errdetail("Reference tables and citus local tables "
+									  "can only have foreign keys to reference "
+									  "tables and citus local tables")));
 		}
 
 		/*
