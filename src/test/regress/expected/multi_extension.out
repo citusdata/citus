@@ -449,6 +449,7 @@ SELECT * FROM print_extension_changes();
  function create_citus_local_table(regclass)         |
  function master_conninfo_cache_invalidate()         |
  function master_dist_local_group_cache_invalidate() |
+ function master_dist_node_group_cache_invalidate()  |
  function undistribute_table(regclass)               |
  function upgrade_to_reference_table(regclass)       |
                                                      | access method columnar
@@ -462,6 +463,7 @@ SELECT * FROM print_extension_changes();
                                                      | function citus_copy_shard_placement(bigint,text,integer,text,integer,boolean,citus.shard_transfer_mode)
                                                      | function citus_disable_node(text,integer)
                                                      | function citus_dist_local_group_cache_invalidate()
+                                                     | function citus_dist_node_group_cache_invalidate()
                                                      | function citus_drain_node(text,integer,citus.shard_transfer_mode,name)
                                                      | function citus_internal.columnar_ensure_objects_exist()
                                                      | function citus_move_shard_placement(bigint,text,integer,text,integer,citus.shard_transfer_mode)

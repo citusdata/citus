@@ -33,3 +33,5 @@ ALTER FUNCTION master_conninfo_cache_invalidate()
 RENAME TO citus_conninfo_cache_invalidate;
 ALTER FUNCTION master_dist_local_group_cache_invalidate()
 RENAME TO citus_dist_local_group_cache_invalidate;
+ALTER FUNCTION master_dist_node_cache_invalidate()
+RENAME TO citus_dist_node_cache_invalidate;

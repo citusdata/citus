@@ -402,7 +402,7 @@ ALTER TABLE citus.pg_dist_node SET SCHEMA pg_catalog;
 CREATE FUNCTION master_dist_node_cache_invalidate()
 	RETURNS trigger
 	LANGUAGE C
-	AS 'MODULE_PATHNAME', $$master_dist_node_cache_invalidate$$;
+	AS 'MODULE_PATHNAME', $$citus_dist_node_cache_invalidate$$;
 COMMENT ON FUNCTION master_dist_node_cache_invalidate()
 	IS 'invalidate internal cache of nodes when pg_dist_nodes changes';
 CREATE TRIGGER dist_node_cache_invalidate
