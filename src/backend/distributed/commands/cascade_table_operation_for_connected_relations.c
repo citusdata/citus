@@ -12,6 +12,11 @@
 
 #include "postgres.h"
 
+#include "distributed/pg_version_constants.h"
+
+#if (PG_VERSION_NUM < PG_VERSION_12)
+#include "access/htup_details.h"
+#endif
 #include "access/xact.h"
 #include "catalog/pg_constraint.h"
 #include "distributed/commands/utility_hook.h"
@@ -25,6 +30,7 @@
 #include "distributed/worker_protocol.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
+#include "utils/syscache.h"
 
 
 static void EnsureSequentialModeForCitusTableCascadeFunction(List *relationIdList);
@@ -32,10 +38,9 @@ static bool RelationIdListHasReferenceTable(List *relationIdList);
 static void LockRelationsWithLockMode(List *relationIdList, LOCKMODE lockMode);
 static List * RemovePartitionRelationIds(List *relationIdList);
 static List * GetFKeyCreationCommandsForRelationIdList(List *relationIdList);
-static void DropRelationIdListForeignKeys(List *relationIdList);
-static void DropRelationForeignKeys(Oid relationId);
-static List * GetRelationDropFkeyCommands(Oid relationId);
-static char * GetDropFkeyCascadeCommand(Oid relationId, Oid foreignKeyId);
+static void DropRelationIdListForeignKeys(List *relationIdList, int fKeyFlags);
+static List * GetRelationDropFkeyCommands(Oid relationId, int fKeyFlags);
+static char * GetDropFkeyCascadeCommand(Oid foreignKeyId);
 static void ExecuteCascadeOperationForRelationIdList(List *relationIdList,
 													 CascadeOperationType
 													 cascadeOperationType);
@@ -95,7 +100,8 @@ CascadeOperationForConnectedRelations(Oid relationId, LOCKMODE lockMode,
 	 * This is because referenced foreign keys are already captured as other
 	 * relations' referencing foreign keys.
 	 */
-	DropRelationIdListForeignKeys(nonPartitionRelationIdList);
+	int fKeyFlags = INCLUDE_REFERENCING_CONSTRAINTS | INCLUDE_ALL_TABLE_TYPES;
+	DropRelationIdListForeignKeys(nonPartitionRelationIdList, fKeyFlags);
 	ExecuteCascadeOperationForRelationIdList(nonPartitionRelationIdList,
 											 cascadeOperationType);
 
@@ -257,12 +263,12 @@ GetFKeyCreationCommandsForRelationIdList(List *relationIdList)
  * relation id list.
  */
 static void
-DropRelationIdListForeignKeys(List *relationIdList)
+DropRelationIdListForeignKeys(List *relationIdList, int fKeyFlags)
 {
 	Oid relationId = InvalidOid;
 	foreach_oid(relationId, relationIdList)
 	{
-		DropRelationForeignKeys(relationId);
+		DropRelationForeignKeys(relationId, fKeyFlags);
 	}
 }
 
@@ -271,10 +277,10 @@ DropRelationIdListForeignKeys(List *relationIdList)
  * DropRelationForeignKeys drops foreign keys where the relation with
  * relationId is the referencing relation.
  */
-static void
-DropRelationForeignKeys(Oid relationId)
+void
+DropRelationForeignKeys(Oid relationId, int fKeyFlags)
 {
-	List *dropFkeyCascadeCommandList = GetRelationDropFkeyCommands(relationId);
+	List *dropFkeyCascadeCommandList = GetRelationDropFkeyCommands(relationId, fKeyFlags);
 	ExecuteAndLogDDLCommandList(dropFkeyCascadeCommandList);
 }
 
@@ -284,18 +290,16 @@ DropRelationForeignKeys(Oid relationId)
  * keys where the relation with relationId is the referencing relation.
  */
 static List *
-GetRelationDropFkeyCommands(Oid relationId)
+GetRelationDropFkeyCommands(Oid relationId, int fKeyFlags)
 {
 	List *dropFkeyCascadeCommandList = NIL;
 
-	int flag = INCLUDE_REFERENCING_CONSTRAINTS | INCLUDE_ALL_TABLE_TYPES;
-	List *relationFKeyIdList = GetForeignKeyOids(relationId, flag);
+	List *relationFKeyIdList = GetForeignKeyOids(relationId, fKeyFlags);
 
 	Oid foreignKeyId;
 	foreach_oid(foreignKeyId, relationFKeyIdList)
 	{
-		char *dropFkeyCascadeCommand = GetDropFkeyCascadeCommand(relationId,
-																 foreignKeyId);
+		char *dropFkeyCascadeCommand = GetDropFkeyCascadeCommand(foreignKeyId);
 		dropFkeyCascadeCommandList = lappend(dropFkeyCascadeCommandList,
 											 dropFkeyCascadeCommand);
 	}
@@ -309,9 +313,18 @@ GetRelationDropFkeyCommands(Oid relationId)
  * foreignKeyId.
  */
 static char *
-GetDropFkeyCascadeCommand(Oid relationId, Oid foreignKeyId)
+GetDropFkeyCascadeCommand(Oid foreignKeyId)
 {
+	/*
+	 * As we need to execute ALTER TABLE DROP CONSTRAINT command on
+	 * referencing relation, resolve it here.
+	 */
+	HeapTuple heapTuple = SearchSysCache1(CONSTROID, ObjectIdGetDatum(foreignKeyId));
+	Form_pg_constraint constraintForm = (Form_pg_constraint) GETSTRUCT(heapTuple);
+	Oid relationId = constraintForm->conrelid;
 	char *qualifiedRelationName = generate_qualified_relation_name(relationId);
+
+	ReleaseSysCache(heapTuple);
 
 	char *constraintName = get_constraint_name(foreignKeyId);
 	const char *quotedConstraintName = quote_identifier(constraintName);

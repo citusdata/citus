@@ -166,6 +166,7 @@ extern List * GetReferencingForeignConstaintCommands(Oid relationOid);
 extern List * GetForeignConstraintToReferenceTablesCommands(Oid relationId);
 extern List * GetForeignConstraintToDistributedTablesCommands(Oid relationId);
 extern List * GetForeignConstraintFromDistributedTablesCommands(Oid relationId);
+extern List * GetForeignConstraintCommandsInternal(Oid relationId, int flags);
 extern bool HasForeignKeyToCitusLocalTable(Oid relationId);
 extern bool HasForeignKeyToReferenceTable(Oid relationOid);
 extern bool TableReferenced(Oid relationOid);
@@ -412,6 +413,7 @@ extern void CascadeOperationForConnectedRelations(Oid relationId, LOCKMODE relLo
 												  CascadeOperationType
 												  cascadeOperationType);
 extern void ErrorIfAnyPartitionRelationInvolvedInNonInheritedFKey(List *relationIdList);
+extern void DropRelationForeignKeys(Oid relationId, int flags);
 extern void ExecuteAndLogDDLCommandList(List *ddlCommandList);
 extern void ExecuteAndLogDDLCommand(const char *commandString);
 

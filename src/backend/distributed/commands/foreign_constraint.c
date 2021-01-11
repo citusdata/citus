@@ -77,7 +77,6 @@ static void ForeignConstraintFindDistKeys(HeapTuple pgConstraintTuple,
 										  int *referencedAttrIndex);
 static List * GetForeignKeyIdsForColumn(char *columnName, Oid relationId,
 										int searchForeignKeyColumnFlags);
-static List * GetForeignConstraintCommandsInternal(Oid relationId, int flags);
 static Oid get_relation_constraint_oid_compat(HeapTuple heapTuple);
 static bool IsTableTypeIncluded(Oid relationId, int flags);
 static void UpdateConstraintIsValid(Oid constraintId, bool isValid);
@@ -663,7 +662,7 @@ GetForeignConstraintFromDistributedTablesCommands(Oid relationId)
  * DDL commands to recreate the foreign key constraints returned by
  * GetForeignKeyOids. See more details at the underlying function.
  */
-static List *
+List *
 GetForeignConstraintCommandsInternal(Oid relationId, int flags)
 {
 	List *foreignKeyOids = GetForeignKeyOids(relationId, flags);
