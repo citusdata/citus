@@ -548,6 +548,27 @@ END;
 SELECT relname FROM pg_class WHERE relname LIKE 'test_table_1%';
 \c - - - :master_port
 
+-- verify logged info is propagated to workers when distributing the table
+CREATE TABLE logged_test(id int);
+ALTER TABLE logged_test SET UNLOGGED;
+SELECT create_distributed_table('logged_test', 'id');
+\c - - - :worker_1_port
+SELECT relname, CASE relpersistence WHEN 'u' THEN 'unlogged' WHEN 'p' then 'logged' ELSE 'unknown' END AS logged_info FROM pg_class WHERE relname ~ 'logged_test*' ORDER BY relname;
+\c - - - :master_port
+
+-- verify SET LOGGED/UNLOGGED works after distributing the table
+ALTER TABLE logged_test SET LOGGED;
+SELECT relname, CASE relpersistence WHEN 'u' THEN 'unlogged' WHEN 'p' then 'logged' ELSE 'unknown' END AS logged_info FROM pg_class WHERE relname ~ 'logged_test*' ORDER BY relname;
+\c - - - :worker_1_port
+SELECT relname, CASE relpersistence WHEN 'u' THEN 'unlogged' WHEN 'p' then 'logged' ELSE 'unknown' END AS logged_info FROM pg_class WHERE relname ~ 'logged_test*' ORDER BY relname;
+\c - - - :master_port
+ALTER TABLE logged_test SET UNLOGGED;
+SELECT relname, CASE relpersistence WHEN 'u' THEN 'unlogged' WHEN 'p' then 'logged' ELSE 'unknown' END AS logged_info FROM pg_class WHERE relname ~ 'logged_test*' ORDER BY relname;
+\c - - - :worker_1_port
+SELECT relname, CASE relpersistence WHEN 'u' THEN 'unlogged' WHEN 'p' then 'logged' ELSE 'unknown' END AS logged_info FROM pg_class WHERE relname ~ 'logged_test*' ORDER BY relname;
+\c - - - :master_port
+DROP TABLE logged_test;
+
 -- Test WITH options on a normal simple hash-distributed table
 CREATE TABLE hash_dist(id bigint primary key, f1 text) WITH (fillfactor=40);
 SELECT create_distributed_table('hash_dist','id');
