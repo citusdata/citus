@@ -26,3 +26,8 @@ DROP FUNCTION IF EXISTS pg_catalog.citus_total_relation_size(regclass);
 
 #include "udfs/time_partition_range/10.0-1.sql"
 #include "udfs/time_partitions/10.0-1.sql"
+
+ALTER FUNCTION master_conninfo_cache_invalidate()
+RENAME TO citus_conninfo_cache_invalidate;
+ALTER FUNCTION master_dist_local_group_cache_invalidate()
+RENAME TO citus_dist_local_group_cache_invalidate;

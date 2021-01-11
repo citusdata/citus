@@ -34,8 +34,10 @@ ORDER BY 1;
  function citus_add_rebalance_strategy(name,regproc,regproc,regproc,real,real)
  function citus_add_secondary_node(text,integer,text,integer,name)
  function citus_blocking_pids(integer)
+ function citus_conninfo_cache_invalidate()
  function citus_create_restore_point(text)
  function citus_disable_node(text, integer)
+ function citus_dist_local_group_cache_invalidate()
  function citus_dist_stat_activity()
  function citus_drain_node(text, integer, citus.shard_transfer_mode, name)
  function citus_drop_trigger()
@@ -119,13 +121,11 @@ ORDER BY 1;
  function master_add_secondary_node(text,integer,text,integer,name)
  function master_append_table_to_shard(bigint,text,text,integer)
  function master_apply_delete_command(text)
- function master_conninfo_cache_invalidate()
  function master_copy_shard_placement(bigint,text,integer,text,integer,boolean,citus.shard_transfer_mode)
  function master_create_distributed_table(regclass,text,citus.distribution_type)
  function master_create_empty_shard(text)
  function master_create_worker_shards(text,integer,integer)
  function master_disable_node(text,integer)
- function master_dist_local_group_cache_invalidate()
  function master_dist_node_cache_invalidate()
  function master_dist_object_cache_invalidate()
  function master_dist_partition_cache_invalidate()
@@ -232,5 +232,5 @@ ORDER BY 1;
  view citus_worker_stat_activity
  view pg_dist_shard_placement
  view time_partitions
-(215 rows)
+(216 rows)
 

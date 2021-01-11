@@ -115,7 +115,6 @@ static WorkerNode * SetShouldHaveShards(WorkerNode *workerNode, bool shouldHaveS
 
 /* declarations for dynamic loading */
 PG_FUNCTION_INFO_V1(citus_set_coordinator_host);
-PG_FUNCTION_INFO_V1(master_add_node);
 PG_FUNCTION_INFO_V1(citus_add_node);
 PG_FUNCTION_INFO_V1(master_add_node);
 PG_FUNCTION_INFO_V1(citus_add_inactive_node);
@@ -213,7 +212,6 @@ citus_set_coordinator_host(PG_FUNCTION_ARGS)
 
 
 /*
- * master_add_node function adds a new node to the cluster and returns its id. It also
  * citus_add_node function adds a new node to the cluster and returns its id. It also
  * replicates all reference tables to the new node.
  */

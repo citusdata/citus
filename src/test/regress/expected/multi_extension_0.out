@@ -443,38 +443,42 @@ SELECT * FROM print_extension_changes();
 -- Snapshot of state at 10.0-1
 ALTER EXTENSION citus UPDATE TO '10.0-1';
 SELECT * FROM print_extension_changes();
-                previous_object                |                         current_object
+                   previous_object                   |                                current_object
 ---------------------------------------------------------------------
- function citus_total_relation_size(regclass)  |
- function create_citus_local_table(regclass)   |
- function undistribute_table(regclass)         |
- function upgrade_to_reference_table(regclass) |
-                                               | function citus_activate_node(text,integer)
-                                               | function citus_add_inactive_node(text,integer,integer,noderole,name)
-                                               | function citus_add_node(text,integer,integer,noderole,name)
-                                               | function citus_add_secondary_node(text,integer,text,integer,name)
-                                               | function citus_disable_node(text, integer)
-                                               | function citus_drain_node(text, integer, citus.shard_transfer_mode, name)
-                                               | function citus_internal.columnar_ensure_objects_exist()
-                                               | function citus_set_coordinator_host(text,integer,noderole,name)
-                                               | function citus_remove_node(text, integer)
-                                               | function citus_set_node_property(text, integer, text, boolean)
-                                               | function citus_total_relation_size(regclass,boolean)
-                                               | function citus_unmark_object_distributed(oid, oid, integer)
-                                               | function citus_update_node(integer,text,integer,boolean,integer)
-                                               | function citus_update_shard_statistics(bigint)
-                                               | function citus_update_table_statistics(regclass)
-                                               | function create_citus_local_table(regclass,boolean)
-                                               | function time_partition_range(regclass)
-                                               | function undistribute_table(regclass,boolean)
-                                               | schema columnar
-                                               | sequence columnar.storageid_seq
-                                               | table columnar.columnar_skipnodes
-                                               | table columnar.columnar_stripes
-                                               | table columnar.options
-                                               | view citus_tables
-                                               | view time_partitions
-(28 rows)
+ function citus_total_relation_size(regclass)        |
+ function create_citus_local_table(regclass)         |
+ function master_conninfo_cache_invalidate()         |
+ function master_dist_local_group_cache_invalidate() |
+ function undistribute_table(regclass)               |
+ function upgrade_to_reference_table(regclass)       |
+                                                     | function citus_activate_node(text,integer)
+                                                     | function citus_add_inactive_node(text,integer,integer,noderole,name)
+                                                     | function citus_add_node(text,integer,integer,noderole,name)
+                                                     | function citus_add_secondary_node(text,integer,text,integer,name)
+                                                     | function citus_conninfo_cache_invalidate()
+                                                     | function citus_disable_node(text, integer)
+                                                     | function citus_dist_local_group_cache_invalidate()
+                                                     | function citus_drain_node(text, integer, citus.shard_transfer_mode, name)
+                                                     | function citus_internal.columnar_ensure_objects_exist()
+                                                     | function citus_remove_node(text, integer)
+                                                     | function citus_set_coordinator_host(text,integer,noderole,name)
+                                                     | function citus_set_node_property(text, integer, text, boolean)
+                                                     | function citus_total_relation_size(regclass,boolean)
+                                                     | function citus_unmark_object_distributed(oid, oid, integer)
+                                                     | function citus_update_node(integer,text,integer,boolean,integer)
+                                                     | function citus_update_shard_statistics(bigint)
+                                                     | function citus_update_table_statistics(regclass)
+                                                     | function create_citus_local_table(regclass,boolean)
+                                                     | function time_partition_range(regclass)
+                                                     | function undistribute_table(regclass,boolean)
+                                                     | schema columnar
+                                                     | sequence columnar.storageid_seq
+                                                     | table columnar.columnar_skipnodes
+                                                     | table columnar.columnar_stripes
+                                                     | table columnar.options
+                                                     | view citus_tables
+                                                     | view time_partitions
+(33 rows)
 
 DROP TABLE prev_objects, extension_diff;
 -- show running version
