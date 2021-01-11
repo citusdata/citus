@@ -1212,3 +1212,46 @@ UpdateConstraintIsValid(Oid constraintId, bool isValid)
 	systable_endscan(scanDescriptor);
 	table_close(pgConstraint, NoLock);
 }
+
+
+/*
+ * RelationInvolvedInAnyNonInheritedForeignKeys returns true if relation involved
+ * in a foreign key that is not inherited from its parent relation.
+ */
+bool
+RelationInvolvedInAnyNonInheritedForeignKeys(Oid relationId)
+{
+	List *referencingForeignKeys = GetForeignKeyOids(relationId,
+													 INCLUDE_REFERENCING_CONSTRAINTS |
+													 INCLUDE_ALL_TABLE_TYPES);
+
+	/*
+	 * We already capture self-referencing foreign keys above, so use
+	 * EXCLUDE_SELF_REFERENCES here
+	 */
+	List *referencedForeignKeys = GetForeignKeyOids(relationId,
+													INCLUDE_REFERENCED_CONSTRAINTS |
+													EXCLUDE_SELF_REFERENCES |
+													INCLUDE_ALL_TABLE_TYPES);
+	List *foreignKeysRelationInvolved = list_concat(referencingForeignKeys,
+													referencedForeignKeys);
+	Oid foreignKeyId = InvalidOid;
+	foreach_oid(foreignKeyId, foreignKeysRelationInvolved)
+	{
+		HeapTuple heapTuple = SearchSysCache1(CONSTROID, ObjectIdGetDatum(foreignKeyId));
+		if (!HeapTupleIsValid(heapTuple))
+		{
+			/* not possible but be on the safe side */
+			continue;
+		}
+
+		Form_pg_constraint constraintForm = (Form_pg_constraint) GETSTRUCT(heapTuple);
+		Oid parentConstraintId = constraintForm->conparentid;
+		if (!OidIsValid(parentConstraintId))
+		{
+			return true;
+		}
+	}
+
+	return false;
+}

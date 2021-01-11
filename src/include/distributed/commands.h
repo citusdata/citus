@@ -174,6 +174,7 @@ extern bool ConstraintWithIdIsOfType(Oid constraintId, char targetConstraintType
 extern bool TableHasExternalForeignKeys(Oid relationId);
 extern List * GetForeignKeyOids(Oid relationId, int flags);
 extern Oid GetReferencedTableId(Oid foreignKeyId);
+extern bool RelationInvolvedInAnyNonInheritedForeignKeys(Oid relationId);
 
 
 /* function.c - forward declarations */
@@ -407,6 +408,7 @@ typedef enum CascadeOperationType
 extern void CascadeOperationForConnectedRelations(Oid relationId, LOCKMODE relLockMode,
 												  CascadeOperationType
 												  cascadeOperationType);
+extern void ErrorIfAnyPartitionRelationInvolvedInNonInheritedFKey(List *relationIdList);
 extern void ExecuteAndLogDDLCommandList(List *ddlCommandList);
 extern void ExecuteAndLogDDLCommand(const char *commandString);
 
