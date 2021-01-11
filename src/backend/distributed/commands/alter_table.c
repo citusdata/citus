@@ -738,6 +738,9 @@ ConvertTable(TableConversionState *con)
 		}
 	}
 
+	/* increment command counter so that next command can see the new table */
+	CommandCounterIncrement();
+
 	return ret;
 }
 
