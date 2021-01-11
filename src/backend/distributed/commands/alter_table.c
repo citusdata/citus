@@ -29,6 +29,7 @@
 #include "fmgr.h"
 
 #include "access/hash.h"
+#include "access/xact.h"
 #include "catalog/dependency.h"
 #include "catalog/pg_am.h"
 #include "columnar/cstore.h"
