@@ -33,7 +33,17 @@ INSERT INTO r SELECT * FROM generate_series(1, 5);
 CREATE TABLE tr(pk int, a int REFERENCES r(a) ON DELETE CASCADE ON UPDATE CASCADE);
 SELECT create_distributed_table('tr', 'pk');
 INSERT INTO tr SELECT c, c FROM generate_series(1, 5) as c;
-
+-- this function is dropped in Citus10, added here for tests
+CREATE OR REPLACE FUNCTION pg_catalog.master_create_distributed_table(table_name regclass,
+                                                                      distribution_column text,
+                                                                      distribution_method citus.distribution_type)
+    RETURNS void
+    LANGUAGE C STRICT
+    AS 'citus', $$master_create_distributed_table$$;
+COMMENT ON FUNCTION pg_catalog.master_create_distributed_table(table_name regclass,
+                                                               distribution_column text,
+                                                               distribution_method citus.distribution_type)
+    IS 'define the table distribution functions';
 CREATE TABLE t_append(id int, value_1 int);
 SELECT master_create_distributed_table('t_append', 'id', 'append');
 

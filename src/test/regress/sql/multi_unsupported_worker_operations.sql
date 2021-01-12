@@ -53,6 +53,18 @@ SELECT * FROM mx_table ORDER BY col_1;
 -- Try commands from metadata worker
 \c - - - :worker_1_port
 
+-- this function is dropped in Citus10, added here for tests
+CREATE OR REPLACE FUNCTION pg_catalog.master_create_distributed_table(table_name regclass,
+                                                                      distribution_column text,
+                                                                      distribution_method citus.distribution_type)
+    RETURNS void
+    LANGUAGE C STRICT
+    AS 'citus', $$master_create_distributed_table$$;
+COMMENT ON FUNCTION pg_catalog.master_create_distributed_table(table_name regclass,
+                                                               distribution_column text,
+                                                               distribution_method citus.distribution_type)
+    IS 'define the table distribution functions';
+
 CREATE TABLE mx_table_worker(col_1 text);
 
 -- master_create_distributed_table

@@ -53,6 +53,17 @@ CREATE FUNCTION pg_catalog.master_modify_multiple_shards(text)
 COMMENT ON FUNCTION master_modify_multiple_shards(text)
     IS 'push delete and update queries to shards';
 
+CREATE FUNCTION pg_catalog.master_create_distributed_table(table_name regclass,
+                                                           distribution_column text,
+                                                           distribution_method citus.distribution_type)
+    RETURNS void
+    LANGUAGE C STRICT
+    AS 'MODULE_PATHNAME', $$master_create_distributed_table$$;
+COMMENT ON FUNCTION pg_catalog.master_create_distributed_table(table_name regclass,
+                                                               distribution_column text,
+                                                               distribution_method citus.distribution_type)
+    IS 'define the table distribution functions';
+
 #include "../udfs/citus_drop_trigger/9.5-1.sql"
 #include "../udfs/citus_total_relation_size/7.0-1.sql"
 #include "../udfs/upgrade_to_reference_table/8.0-1.sql"

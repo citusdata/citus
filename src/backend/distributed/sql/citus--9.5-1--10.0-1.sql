@@ -48,3 +48,4 @@ ALTER FUNCTION master_drop_all_shards(regclass, text, text)
 RENAME TO citus_drop_all_shards;
 
 DROP FUNCTION pg_catalog.master_modify_multiple_shards(text);
+DROP FUNCTION master_create_distributed_table(regclass, text, citus.distribution_type);
