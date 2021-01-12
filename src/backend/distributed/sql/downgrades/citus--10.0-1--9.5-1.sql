@@ -75,4 +75,3 @@ CREATE FUNCTION pg_catalog.master_create_worker_shards(table_name text, shard_co
 #include "../udfs/upgrade_to_reference_table/8.0-1.sql"
 #include "../udfs/undistribute_table/9.5-1.sql"
 #include "../udfs/create_citus_local_table/9.5-1.sql"
-#include "../udfs/master_drain_node/9.2-1.sql"

@@ -1170,7 +1170,7 @@ UpdateShardPlacement(PlacementUpdateEvent *placementUpdateEvent,
 	if (updateType == PLACEMENT_UPDATE_MOVE)
 	{
 		appendStringInfo(placementUpdateCommand,
-						 "SELECT master_move_shard_placement(%ld,%s,%u,%s,%u,%s)",
+						 "SELECT citus_move_shard_placement(%ld,%s,%u,%s,%u,%s)",
 						 shardId,
 						 quote_literal_cstr(sourceNode->workerName),
 						 sourceNode->workerPort,
@@ -1181,7 +1181,7 @@ UpdateShardPlacement(PlacementUpdateEvent *placementUpdateEvent,
 	else if (updateType == PLACEMENT_UPDATE_COPY)
 	{
 		appendStringInfo(placementUpdateCommand,
-						 "SELECT master_copy_shard_placement(%ld,%s,%u,%s,%u,%s,%s)",
+						 "SELECT citus_copy_shard_placement(%ld,%s,%u,%s,%u,%s,%s)",
 						 shardId,
 						 quote_literal_cstr(sourceNode->workerName),
 						 sourceNode->workerPort,

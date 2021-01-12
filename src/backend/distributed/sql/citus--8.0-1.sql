@@ -284,14 +284,14 @@ COMMENT ON FUNCTION master_drop_sequences(text[])
 CREATE FUNCTION master_dist_partition_cache_invalidate()
     RETURNS trigger
     LANGUAGE C
-    AS 'MODULE_PATHNAME', $$citus_dist_partition_cache_invalidate$$;
+    AS 'MODULE_PATHNAME', $$master_dist_partition_cache_invalidate$$;
 COMMENT ON FUNCTION master_dist_partition_cache_invalidate()
     IS 'register relcache invalidation for changed rows';
 
 CREATE FUNCTION master_dist_shard_cache_invalidate()
     RETURNS trigger
     LANGUAGE C
-    AS 'MODULE_PATHNAME', $$citus_dist_shard_cache_invalidate$$;
+    AS 'MODULE_PATHNAME', $$master_dist_shard_cache_invalidate$$;
 COMMENT ON FUNCTION master_dist_shard_cache_invalidate()
     IS 'register relcache invalidation for changed rows';
 
@@ -402,7 +402,7 @@ ALTER TABLE citus.pg_dist_node SET SCHEMA pg_catalog;
 CREATE FUNCTION master_dist_node_cache_invalidate()
 	RETURNS trigger
 	LANGUAGE C
-	AS 'MODULE_PATHNAME', $$citus_dist_node_cache_invalidate$$;
+	AS 'MODULE_PATHNAME', $$master_dist_node_cache_invalidate$$;
 COMMENT ON FUNCTION master_dist_node_cache_invalidate()
 	IS 'invalidate internal cache of nodes when pg_dist_nodes changes';
 CREATE TRIGGER dist_node_cache_invalidate
@@ -520,7 +520,7 @@ COMMENT ON FUNCTION pg_catalog.worker_apply_inter_shard_ddl_command(referencing_
 CREATE FUNCTION pg_catalog.master_dist_placement_cache_invalidate()
     RETURNS trigger
     LANGUAGE C
-    AS 'MODULE_PATHNAME', $$citus_dist_placement_cache_invalidate$$;
+    AS 'MODULE_PATHNAME', $$master_dist_placement_cache_invalidate$$;
 COMMENT ON FUNCTION master_dist_placement_cache_invalidate()
     IS 'register relcache invalidation for changed placements';
 
@@ -924,7 +924,7 @@ $function$;
 CREATE FUNCTION master_dist_local_group_cache_invalidate()
     RETURNS trigger
     LANGUAGE C
-    AS 'MODULE_PATHNAME', $$citus_dist_local_group_cache_invalidate$$;
+    AS 'MODULE_PATHNAME', $$master_dist_local_group_cache_invalidate$$;
 COMMENT ON FUNCTION master_dist_local_group_cache_invalidate()
     IS 'register node cache invalidation for changed rows';
 
