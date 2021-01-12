@@ -307,10 +307,10 @@ step s1-initialize:
 
 step s1-begin: BEGIN;
 step s1-insert-select: INSERT INTO insert_of_insert_select_hash SELECT * FROM select_of_insert_select_hash ORDER BY 1, 2 LIMIT 5;;
-step s2-master-drop-all-shards-on-inserted: SELECT master_drop_all_shards('insert_of_insert_select_hash'::regclass, 'public', 'insert_of_insert_select_hash'); <waiting ...>
+step s2-master-drop-all-shards-on-inserted: SELECT citus_drop_all_shards('insert_of_insert_select_hash'::regclass, 'public', 'insert_of_insert_select_hash'); <waiting ...>
 step s1-commit: COMMIT;
 step s2-master-drop-all-shards-on-inserted: <... completed>
-master_drop_all_shards
+citus_drop_all_shards
 
 4
 step s1-select-count: SELECT COUNT(*) FROM select_of_insert_select_hash;
@@ -623,10 +623,10 @@ step s1-initialize:
 
 step s1-begin: BEGIN;
 step s1-insert-select: INSERT INTO insert_of_insert_select_hash SELECT * FROM select_of_insert_select_hash ORDER BY 1, 2 LIMIT 5;;
-step s2-master-drop-all-shards-on-selected: SELECT master_drop_all_shards('select_of_insert_select_hash'::regclass, 'public', 'select_of_insert_select_hash'); <waiting ...>
+step s2-master-drop-all-shards-on-selected: SELECT citus_drop_all_shards('select_of_insert_select_hash'::regclass, 'public', 'select_of_insert_select_hash'); <waiting ...>
 step s1-commit: COMMIT;
 step s2-master-drop-all-shards-on-selected: <... completed>
-master_drop_all_shards
+citus_drop_all_shards
 
 4
 step s1-select-count: SELECT COUNT(*) FROM select_of_insert_select_hash;
@@ -916,8 +916,8 @@ step s1-initialize:
 	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
-step s1-master-drop-all-shards-on-inserted: SELECT master_drop_all_shards('insert_of_insert_select_hash'::regclass, 'public', 'insert_of_insert_select_hash');
-master_drop_all_shards
+step s1-master-drop-all-shards-on-inserted: SELECT citus_drop_all_shards('insert_of_insert_select_hash'::regclass, 'public', 'insert_of_insert_select_hash');
+citus_drop_all_shards
 
 4
 step s2-insert-select: INSERT INTO insert_of_insert_select_hash SELECT * FROM select_of_insert_select_hash ORDER BY 1, 2 LIMIT 5; <waiting ...>
@@ -1210,8 +1210,8 @@ step s1-initialize:
 	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
-step s1-master-drop-all-shards-on-selected: SELECT master_drop_all_shards('select_of_insert_select_hash'::regclass, 'public', 'select_of_insert_select_hash');
-master_drop_all_shards
+step s1-master-drop-all-shards-on-selected: SELECT citus_drop_all_shards('select_of_insert_select_hash'::regclass, 'public', 'select_of_insert_select_hash');
+citus_drop_all_shards
 
 4
 step s2-insert-select: INSERT INTO insert_of_insert_select_hash SELECT * FROM select_of_insert_select_hash ORDER BY 1, 2 LIMIT 5; <waiting ...>

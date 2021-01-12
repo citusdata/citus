@@ -327,8 +327,8 @@ SELECT * FROM test_local_truncate;
 (1 row)
 
 -- Undistribute table
-SELECT master_drop_all_shards('test_local_truncate', 'public', 'test_local_truncate');
- master_drop_all_shards
+SELECT citus_drop_all_shards('test_local_truncate', 'public', 'test_local_truncate');
+ citus_drop_all_shards
 ---------------------------------------------------------------------
                       4
 (1 row)
@@ -366,8 +366,8 @@ SELECT * FROM test_local_truncate;
 (1 row)
 
 -- Undistribute table
-SELECT master_drop_all_shards('test_local_truncate', 'public', 'test_local_truncate');
- master_drop_all_shards
+SELECT citus_drop_all_shards('test_local_truncate', 'public', 'test_local_truncate');
+ citus_drop_all_shards
 ---------------------------------------------------------------------
                       4
 (1 row)

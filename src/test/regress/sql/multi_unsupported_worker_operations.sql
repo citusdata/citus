@@ -96,8 +96,8 @@ ALTER TABLE mx_table_2 ADD CONSTRAINT mx_fk_constraint FOREIGN KEY(col_1) REFERE
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.mx_table'::regclass;
 \d mx_test_index
 
--- master_drop_all_shards
-SELECT master_drop_all_shards('mx_table'::regclass, 'public', 'mx_table');
+-- citus_drop_all_shards
+SELECT citus_drop_all_shards('mx_table'::regclass, 'public', 'mx_table');
 SELECT count(*) FROM pg_dist_shard NATURAL JOIN pg_dist_shard_placement WHERE logicalrelid='mx_table'::regclass;
 
 -- master_apply_delete_command

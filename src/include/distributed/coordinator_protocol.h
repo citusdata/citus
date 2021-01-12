@@ -228,6 +228,7 @@ extern Datum master_apply_delete_command(PG_FUNCTION_ARGS);
 extern Datum master_drop_sequences(PG_FUNCTION_ARGS);
 extern Datum master_modify_multiple_shards(PG_FUNCTION_ARGS);
 extern Datum lock_relation_if_exists(PG_FUNCTION_ARGS);
+extern Datum citus_drop_all_shards(PG_FUNCTION_ARGS);
 extern Datum master_drop_all_shards(PG_FUNCTION_ARGS);
 extern int MasterDropAllShards(Oid relationId, char *schemaName, char *relationName);
 

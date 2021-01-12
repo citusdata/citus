@@ -38,6 +38,8 @@ ALTER FUNCTION citus_dist_placement_cache_invalidate()
 RENAME TO master_dist_placement_cache_invalidate;
 ALTER FUNCTION citus_dist_shard_cache_invalidate()
 RENAME TO master_dist_shard_cache_invalidate;
+ALTER FUNCTION citus_drop_all_shards(regclass, text, text)
+RENAME TO master_drop_all_shards;
 
 DROP VIEW pg_catalog.time_partitions;
 DROP FUNCTION pg_catalog.time_partition_range(regclass);
@@ -51,6 +53,7 @@ CREATE FUNCTION pg_catalog.master_modify_multiple_shards(text)
 COMMENT ON FUNCTION master_modify_multiple_shards(text)
     IS 'push delete and update queries to shards';
 
+#include "../udfs/citus_drop_trigger/9.5-1.sql"
 #include "../udfs/citus_total_relation_size/7.0-1.sql"
 #include "../udfs/upgrade_to_reference_table/8.0-1.sql"
 #include "../udfs/undistribute_table/9.5-1.sql"

@@ -23,6 +23,7 @@ DROP FUNCTION IF EXISTS pg_catalog.citus_total_relation_size(regclass);
 #include "udfs/citus_update_table_statistics/10.0-1.sql"
 #include "udfs/citus_copy_shard_placement/10.0-1.sql"
 #include "udfs/citus_move_shard_placement/10.0-1.sql"
+#include "udfs/citus_drop_trigger/10.0-1.sql"
 
 #include "../../columnar/sql/columnar--9.5-1--10.0-1.sql"
 
@@ -43,5 +44,7 @@ ALTER FUNCTION master_dist_placement_cache_invalidate()
 RENAME TO citus_dist_placement_cache_invalidate;
 ALTER FUNCTION master_dist_shard_cache_invalidate()
 RENAME TO citus_dist_shard_cache_invalidate;
+ALTER FUNCTION master_drop_all_shards(regclass, text, text)
+RENAME TO citus_drop_all_shards;
 
 DROP FUNCTION pg_catalog.master_modify_multiple_shards(text);

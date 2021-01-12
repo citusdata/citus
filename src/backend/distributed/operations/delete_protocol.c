@@ -95,6 +95,7 @@ static char * CreateDropShardPlacementCommand(const char *schemaName,
 
 /* exports for SQL callable functions */
 PG_FUNCTION_INFO_V1(master_apply_delete_command);
+PG_FUNCTION_INFO_V1(citus_drop_all_shards);
 PG_FUNCTION_INFO_V1(master_drop_all_shards);
 PG_FUNCTION_INFO_V1(master_drop_sequences);
 
@@ -207,12 +208,12 @@ master_apply_delete_command(PG_FUNCTION_ARGS)
 
 
 /*
- * master_drop_all_shards attempts to drop all shards for a given relation.
+ * citus_drop_all_shards attempts to drop all shards for a given relation.
  * Unlike master_apply_delete_command, this function can be called even
  * if the table has already been dropped.
  */
 Datum
-master_drop_all_shards(PG_FUNCTION_ARGS)
+citus_drop_all_shards(PG_FUNCTION_ARGS)
 {
 	Oid relationId = PG_GETARG_OID(0);
 	text *schemaNameText = PG_GETARG_TEXT_P(1);
@@ -236,7 +237,7 @@ master_drop_all_shards(PG_FUNCTION_ARGS)
 	CheckTableSchemaNameForDrop(relationId, &schemaName, &relationName);
 
 	/*
-	 * master_drop_all_shards is typically called from the DROP TABLE trigger,
+	 * citus_drop_all_shards is typically called from the DROP TABLE trigger,
 	 * but could be called by a user directly. Make sure we have an
 	 * AccessExclusiveLock to prevent any other commands from running on this table
 	 * concurrently.
@@ -248,6 +249,16 @@ master_drop_all_shards(PG_FUNCTION_ARGS)
 									   shardIntervalList);
 
 	PG_RETURN_INT32(droppedShardCount);
+}
+
+
+/*
+ * master_drop_all_shards is a wrapper function for old UDF name.
+ */
+Datum
+master_drop_all_shards(PG_FUNCTION_ARGS)
+{
+	return citus_drop_all_shards(fcinfo);
 }
 
 
