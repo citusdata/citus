@@ -96,6 +96,13 @@ COMMENT ON FUNCTION pg_catalog.master_create_distributed_table(table_name regcla
                                                                distribution_method citus.distribution_type)
     IS 'define the table distribution functions';
 
+-- this function is dropped in Citus10, added here for tests
+CREATE OR REPLACE FUNCTION pg_catalog.master_create_worker_shards(table_name text, shard_count integer,
+                                                                  replication_factor integer DEFAULT 2)
+    RETURNS void
+    AS 'citus', $$master_create_worker_shards$$
+    LANGUAGE C STRICT;
+
 SET citus.next_shard_id TO 123000;
 
 SELECT worker_node_responsive(node_name, node_port::int)

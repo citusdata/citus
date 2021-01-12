@@ -127,7 +127,6 @@ ORDER BY 1;
  function master_apply_delete_command(text)
  function master_copy_shard_placement(bigint,text,integer,text,integer,boolean,citus.shard_transfer_mode)
  function master_create_empty_shard(text)
- function master_create_worker_shards(text,integer,integer)
  function master_disable_node(text,integer)
  function master_drain_node(text,integer,citus.shard_transfer_mode,name)
  function master_get_active_worker_nodes()
@@ -228,5 +227,5 @@ ORDER BY 1;
  view citus_worker_stat_activity
  view pg_dist_shard_placement
  view time_partitions
-(212 rows)
+(211 rows)
 
