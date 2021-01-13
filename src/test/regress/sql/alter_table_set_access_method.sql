@@ -93,22 +93,11 @@ SELECT "Name", "Citus Table Type", "Distribution Column", "Shard Count", "Access
 SELECT c.relname, a.amname FROM pg_class c, pg_am a where c.relname SIMILAR TO 'table_type\D*' AND c.relnamespace = 'alter_table_set_access_method'::regnamespace AND c.relam = a.oid;
 
 -- test when the parent of a partition has foreign key to a reference table
-CREATE TABLE ref_table (a INT UNIQUE);
-SELECT create_reference_table('ref_table');
-INSERT INTO ref_table VALUES (2), (12);
-ALTER TABLE partitioned_table ADD CONSTRAINT fkey_to_ref FOREIGN KEY (a) REFERENCES ref_table(a);
-
-SELECT inhrelid::regclass::text FROM pg_catalog.pg_inherits WHERE inhparent = 'partitioned_table'::regclass ORDER BY 1;
-SELECT "Name", "Access Method" FROM public.citus_tables WHERE "Name"::text = 'partitioned_table_6_10';
-SELECT conrelid::regclass::text AS "Referencing Table", pg_get_constraintdef(oid, true) AS "Definition" FROM  pg_constraint
-    WHERE (conrelid::regclass::text = 'partitioned_table_6_10') ORDER BY 1, 2;
-
-SELECT alter_table_set_access_method('partitioned_table_6_10', 'columnar');
-
-SELECT inhrelid::regclass::text FROM pg_catalog.pg_inherits WHERE inhparent = 'partitioned_table'::regclass ORDER BY 1;
-SELECT "Name", "Access Method" FROM public.citus_tables WHERE "Name"::text = 'partitioned_table_6_10';
-SELECT conrelid::regclass::text AS "Referencing Table", pg_get_constraintdef(oid, true) AS "Definition" FROM  pg_constraint
-    WHERE (conrelid::regclass::text = 'partitioned_table_6_10') ORDER BY 1, 2;
+create table test_pk(n int primary key);
+create table test_fk_p(i int references test_pk(n)) partition by range(i);
+create table test_fk_p0 partition of test_fk_p for values from (0) to (10);
+create table test_fk_p1 partition of test_fk_p for values from (10) to (20);
+select alter_table_set_access_method('test_fk_p1', 'columnar');
 
 SET client_min_messages TO WARNING;
 DROP SCHEMA alter_table_set_access_method CASCADE;

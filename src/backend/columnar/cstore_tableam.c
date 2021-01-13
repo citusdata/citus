@@ -42,6 +42,7 @@
 #include "storage/smgr.h"
 #include "tcop/utility.h"
 #include "utils/builtins.h"
+#include "utils/fmgroids.h"
 #include "utils/memutils.h"
 #include "utils/pg_rusage.h"
 #include "utils/rel.h"
@@ -94,30 +95,13 @@ typedef struct CStoreScanDescData
 typedef struct CStoreScanDescData *CStoreScanDesc;
 
 static object_access_hook_type PrevObjectAccessHook = NULL;
-static ProcessUtility_hook_type PreviousProcessUtilityHook = NULL;
 
 /* forward declaration for static functions */
-static void CStoreTableAMObjectAccessHook(ObjectAccessType access, Oid classId, Oid
-										  objectId, int subId,
+static void CStoreTableDropHook(Oid tgid);
+static void CStoreTriggerCreateHook(Oid tgid);
+static void CStoreTableAMObjectAccessHook(ObjectAccessType access, Oid classId,
+										  Oid objectId, int subId,
 										  void *arg);
-#if PG_VERSION_NUM >= 130000
-static void CStoreTableAMProcessUtility(PlannedStmt *plannedStatement,
-										const char *queryString,
-										ProcessUtilityContext context,
-										ParamListInfo paramListInfo,
-										QueryEnvironment *queryEnvironment,
-										DestReceiver *destReceiver,
-										QueryCompletion *qc);
-#else
-static void CStoreTableAMProcessUtility(PlannedStmt *plannedStatement,
-										const char *queryString,
-										ProcessUtilityContext context,
-										ParamListInfo paramListInfo,
-										QueryEnvironment *queryEnvironment,
-										DestReceiver *destReceiver,
-										char *completionTag);
-#endif
-
 static bool ConditionalLockRelationWithTimeout(Relation rel, LOCKMODE lockMode,
 											   int timeout, int retryInterval);
 static void LogRelationStats(Relation rel, int elevel);
@@ -1143,60 +1127,12 @@ CStoreSubXactCallback(SubXactEvent event, SubTransactionId mySubid,
 }
 
 
-#if PG_VERSION_NUM >= 130000
-static void
-CStoreTableAMProcessUtility(PlannedStmt *plannedStatement,
-							const char *queryString,
-							ProcessUtilityContext context,
-							ParamListInfo paramListInfo,
-							QueryEnvironment *queryEnvironment,
-							DestReceiver *destReceiver,
-							QueryCompletion *queryCompletion)
-#else
-static void
-CStoreTableAMProcessUtility(PlannedStmt * plannedStatement,
-							const char * queryString,
-							ProcessUtilityContext context,
-							ParamListInfo paramListInfo,
-							QueryEnvironment * queryEnvironment,
-							DestReceiver * destReceiver,
-							char * completionTag)
-#endif
-{
-	Node *parseTree = plannedStatement->utilityStmt;
-
-	if (nodeTag(parseTree) == T_CreateTrigStmt)
-	{
-		CreateTrigStmt *createTrigStmt = (CreateTrigStmt *) parseTree;
-
-		Relation rel = relation_openrv(createTrigStmt->relation, AccessShareLock);
-		bool isCStore = rel->rd_tableam == GetColumnarTableAmRoutine();
-		relation_close(rel, AccessShareLock);
-
-		if (isCStore &&
-			createTrigStmt->row &&
-			createTrigStmt->timing == TRIGGER_TYPE_AFTER)
-		{
-			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg(
-								"AFTER ROW triggers are not supported for columnstore access method"),
-							errhint("Consider an AFTER STATEMENT trigger instead.")));
-		}
-	}
-
-	CALL_PREVIOUS_UTILITY();
-}
-
-
 void
 cstore_tableam_init()
 {
 	RegisterXactCallback(CStoreXactCallback, NULL);
 	RegisterSubXactCallback(CStoreSubXactCallback, NULL);
 
-	PreviousProcessUtilityHook = (ProcessUtility_hook != NULL) ?
-								 ProcessUtility_hook : standard_ProcessUtility;
-	ProcessUtility_hook = CStoreTableAMProcessUtility;
 	PrevObjectAccessHook = object_access_hook;
 	object_access_hook = CStoreTableAMObjectAccessHook;
 
@@ -1240,44 +1176,28 @@ ColumnarSlotCopyHeapTuple(TupleTableSlot *slot)
 
 
 /*
- * Implements object_access_hook. One of the places this is called is just
- * before dropping an object, which allows us to clean-up resources for
- * cstore tables.
+ * CStoreTableDropHook
  *
- * See the comments for CStoreFdwObjectAccessHook for more details.
+ * Clean-up resources for columnar tables.
  */
 static void
-CStoreTableAMObjectAccessHook(ObjectAccessType access, Oid classId, Oid objectId, int
-							  subId,
-							  void *arg)
+CStoreTableDropHook(Oid relid)
 {
-	if (PrevObjectAccessHook)
-	{
-		PrevObjectAccessHook(access, classId, objectId, subId, arg);
-	}
-
-	/*
-	 * Do nothing if this is not a DROP relation command.
-	 */
-	if (access != OAT_DROP || classId != RelationRelationId || OidIsValid(subId))
-	{
-		return;
-	}
-
 	/*
 	 * Lock relation to prevent it from being dropped and to avoid
 	 * race conditions in the next if block.
 	 */
-	LockRelationOid(objectId, AccessShareLock);
+	LockRelationOid(relid, AccessShareLock);
 
-	if (IsCStoreTableAmTable(objectId))
+	if (IsCStoreTableAmTable(relid))
 	{
 		/*
 		 * Drop metadata. No need to drop storage here since for
 		 * tableam tables storage is managed by postgres.
 		 */
-		Relation rel = table_open(objectId, AccessExclusiveLock);
+		Relation rel = table_open(relid, AccessExclusiveLock);
 		RelFileNode relfilenode = rel->rd_node;
+
 		DeleteMetadataRows(relfilenode);
 		DeleteColumnarTableOptions(rel->rd_id, true);
 
@@ -1285,6 +1205,77 @@ CStoreTableAMObjectAccessHook(ObjectAccessType access, Oid classId, Oid objectId
 
 		/* keep the lock since we did physical changes to the relation */
 		table_close(rel, NoLock);
+	}
+}
+
+
+/*
+ * Reject AFTER ... FOR EACH ROW triggers on columnar tables.
+ */
+static void
+CStoreTriggerCreateHook(Oid tgid)
+{
+	/*
+	 * Fetch the pg_trigger tuple by the Oid of the trigger
+	 */
+	ScanKeyData skey[1];
+	Relation tgrel = table_open(TriggerRelationId, AccessShareLock);
+
+	ScanKeyInit(&skey[0],
+				Anum_pg_trigger_oid,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(tgid));
+
+	SysScanDesc tgscan = systable_beginscan(tgrel, TriggerOidIndexId, true,
+											SnapshotSelf, 1, skey);
+
+	HeapTuple tgtup = systable_getnext(tgscan);
+
+	if (!HeapTupleIsValid(tgtup))
+	{
+		table_close(tgrel, AccessShareLock);
+		return;
+	}
+
+	Form_pg_trigger tgrec = (Form_pg_trigger) GETSTRUCT(tgtup);
+
+	Oid tgrelid = tgrec->tgrelid;
+	int16 tgtype = tgrec->tgtype;
+
+	systable_endscan(tgscan);
+	table_close(tgrel, AccessShareLock);
+
+	if (TRIGGER_FOR_ROW(tgtype) && TRIGGER_FOR_AFTER(tgtype) &&
+		IsCStoreTableAmTable(tgrelid))
+	{
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg(
+							"Foreign keys and AFTER ROW triggers are not supported for columnar tables"),
+						errhint("Consider an AFTER STATEMENT trigger instead.")));
+	}
+}
+
+
+/*
+ * Capture create/drop events and dispatch to the proper action.
+ */
+static void
+CStoreTableAMObjectAccessHook(ObjectAccessType access, Oid classId, Oid objectId,
+							  int subId, void *arg)
+{
+	if (PrevObjectAccessHook)
+	{
+		PrevObjectAccessHook(access, classId, objectId, subId, arg);
+	}
+
+	/* dispatch to the proper action */
+	if (access == OAT_DROP && classId == RelationRelationId && !OidIsValid(subId))
+	{
+		CStoreTableDropHook(objectId);
+	}
+	else if (access == OAT_POST_CREATE && classId == TriggerRelationId)
+	{
+		CStoreTriggerCreateHook(objectId);
 	}
 }
 

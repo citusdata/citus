@@ -32,20 +32,6 @@
 	ExplainPropertyInteger(qlabel, NULL, value, es)
 #endif
 
-#if PG_VERSION_NUM >= 130000
-#define CALL_PREVIOUS_UTILITY() \
-	PreviousProcessUtilityHook(plannedStatement, queryString, context, paramListInfo, \
-							   queryEnvironment, destReceiver, queryCompletion)
-#elif PG_VERSION_NUM >= 100000
-#define CALL_PREVIOUS_UTILITY() \
-	PreviousProcessUtilityHook(plannedStatement, queryString, context, paramListInfo, \
-							   queryEnvironment, destReceiver, completionTag)
-#else
-#define CALL_PREVIOUS_UTILITY() \
-	PreviousProcessUtilityHook(parseTree, queryString, context, paramListInfo, \
-							   destReceiver, completionTag)
-#endif
-
 #if PG_VERSION_NUM < 120000
 #define TTS_EMPTY(slot) ((slot)->tts_isempty)
 #define ExecForceStoreHeapTuple(tuple, slot, shouldFree) \
