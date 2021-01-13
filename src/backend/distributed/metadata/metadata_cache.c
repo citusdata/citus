@@ -3778,6 +3778,16 @@ InvalidateMetadataSystemCache(void)
 
 
 /*
+ * AllCitusTableIds returns all citus table ids.
+ */
+List *
+AllCitusTableIds(void)
+{
+	return CitusTableTypeIdList(ANY_CITUS_TABLE_TYPE);
+}
+
+
+/*
  * CitusTableTypeIdList function scans pg_dist_partition and returns a
  * list of OID's for the tables matching given citusTableType.
  * To create the list, it performs sequential scan. Since it is not expected

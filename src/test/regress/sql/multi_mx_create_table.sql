@@ -440,3 +440,4 @@ FROM citus_tables
 ORDER BY "Name"::text;
 
 
+SELECT shard_name, table_name, citus_table_type, shard_size FROM citus_shards ORDER BY shard_name::text;
