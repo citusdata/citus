@@ -36,16 +36,11 @@
 #define TTS_EMPTY(slot) ((slot)->tts_isempty)
 #define ExecForceStoreHeapTuple(tuple, slot, shouldFree) \
 	ExecStoreTuple(newTuple, tupleSlot, InvalidBuffer, shouldFree);
+#define table_open(r, l) heap_open(r, l)
+#define table_close(r, l) heap_close(r, l)
 #define TableScanDesc HeapScanDesc
 #define table_beginscan heap_beginscan
 #define table_endscan heap_endscan
-
-#endif
-
-#if PG_VERSION_NUM >= 130000
-#define heap_open table_open
-#define heap_openrv table_openrv
-#define heap_close table_close
 #endif
 
 #endif /* CSTORE_COMPAT_H */
