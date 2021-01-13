@@ -115,13 +115,21 @@ static WorkerNode * SetShouldHaveShards(WorkerNode *workerNode, bool shouldHaveS
 
 /* declarations for dynamic loading */
 PG_FUNCTION_INFO_V1(citus_set_coordinator_host);
+PG_FUNCTION_INFO_V1(citus_add_node);
 PG_FUNCTION_INFO_V1(master_add_node);
+PG_FUNCTION_INFO_V1(citus_add_inactive_node);
 PG_FUNCTION_INFO_V1(master_add_inactive_node);
+PG_FUNCTION_INFO_V1(citus_add_secondary_node);
 PG_FUNCTION_INFO_V1(master_add_secondary_node);
+PG_FUNCTION_INFO_V1(citus_set_node_property);
 PG_FUNCTION_INFO_V1(master_set_node_property);
+PG_FUNCTION_INFO_V1(citus_remove_node);
 PG_FUNCTION_INFO_V1(master_remove_node);
+PG_FUNCTION_INFO_V1(citus_disable_node);
 PG_FUNCTION_INFO_V1(master_disable_node);
+PG_FUNCTION_INFO_V1(citus_activate_node);
 PG_FUNCTION_INFO_V1(master_activate_node);
+PG_FUNCTION_INFO_V1(citus_update_node);
 PG_FUNCTION_INFO_V1(master_update_node);
 PG_FUNCTION_INFO_V1(get_shard_id_for_distribution_column);
 
@@ -204,11 +212,11 @@ citus_set_coordinator_host(PG_FUNCTION_ARGS)
 
 
 /*
- * master_add_node function adds a new node to the cluster and returns its id. It also
+ * citus_add_node function adds a new node to the cluster and returns its id. It also
  * replicates all reference tables to the new node.
  */
 Datum
-master_add_node(PG_FUNCTION_ARGS)
+citus_add_node(PG_FUNCTION_ARGS)
 {
 	text *nodeName = PG_GETARG_TEXT_P(0);
 	int32 nodePort = PG_GETARG_INT32(1);
@@ -262,12 +270,22 @@ master_add_node(PG_FUNCTION_ARGS)
 
 
 /*
- * master_add_inactive_node function adds a new node to the cluster as inactive node
+ * master_add_node is a wrapper function for old UDF name.
+ */
+Datum
+master_add_node(PG_FUNCTION_ARGS)
+{
+	return citus_add_node(fcinfo);
+}
+
+
+/*
+ * citus_add_inactive_node function adds a new node to the cluster as inactive node
  * and returns id of the newly added node. It does not replicate reference
  * tables to the new node, it only adds new node to the pg_dist_node table.
  */
 Datum
-master_add_inactive_node(PG_FUNCTION_ARGS)
+citus_add_inactive_node(PG_FUNCTION_ARGS)
 {
 	text *nodeName = PG_GETARG_TEXT_P(0);
 	int32 nodePort = PG_GETARG_INT32(1);
@@ -296,11 +314,21 @@ master_add_inactive_node(PG_FUNCTION_ARGS)
 
 
 /*
- * master_add_secondary_node adds a new secondary node to the cluster. It accepts as
+ * master_add_inactive_node is a wrapper function for old UDF name.
+ */
+Datum
+master_add_inactive_node(PG_FUNCTION_ARGS)
+{
+	return citus_add_inactive_node(fcinfo);
+}
+
+
+/*
+ * citus_add_secondary_node adds a new secondary node to the cluster. It accepts as
  * arguments the primary node it should share a group with.
  */
 Datum
-master_add_secondary_node(PG_FUNCTION_ARGS)
+citus_add_secondary_node(PG_FUNCTION_ARGS)
 {
 	text *nodeName = PG_GETARG_TEXT_P(0);
 	int32 nodePort = PG_GETARG_INT32(1);
@@ -330,16 +358,26 @@ master_add_secondary_node(PG_FUNCTION_ARGS)
 
 
 /*
- * master_remove_node function removes the provided node from the pg_dist_node table of
+ * master_add_secondary_node is a wrapper function for old UDF name.
+ */
+Datum
+master_add_secondary_node(PG_FUNCTION_ARGS)
+{
+	return citus_add_secondary_node(fcinfo);
+}
+
+
+/*
+ * citus_remove_node function removes the provided node from the pg_dist_node table of
  * the master node and all nodes with metadata.
- * The call to the master_remove_node should be done by the super user and the specified
+ * The call to the citus_remove_node should be done by the super user and the specified
  * node should not have any active placements.
  * This function also deletes all reference table placements belong to the given node from
  * pg_dist_placement, but it does not drop actual placement at the node. In the case of
  * re-adding the node, master_add_node first drops and re-creates the reference tables.
  */
 Datum
-master_remove_node(PG_FUNCTION_ARGS)
+citus_remove_node(PG_FUNCTION_ARGS)
 {
 	text *nodeNameText = PG_GETARG_TEXT_P(0);
 	int32 nodePort = PG_GETARG_INT32(1);
@@ -354,19 +392,29 @@ master_remove_node(PG_FUNCTION_ARGS)
 
 
 /*
- * master_disable_node function sets isactive value of the provided node as inactive at
- * master node and all nodes with metadata regardless of the node having an active shard
+ * master_remove_node is a wrapper function for old UDF name.
+ */
+Datum
+master_remove_node(PG_FUNCTION_ARGS)
+{
+	return citus_remove_node(fcinfo);
+}
+
+
+/*
+ * citus_disable_node function sets isactive value of the provided node as inactive at
+ * coordinator and all nodes with metadata regardless of the node having an active shard
  * placement.
  *
- * The call to the master_disable_node must be done by the super user.
+ * The call to the citus_disable_node must be done by the super user.
  *
  * This function also deletes all reference table placements belong to the given node
  * from pg_dist_placement, but it does not drop actual placement at the node. In the case
- * of re-activating the node, master_add_node first drops and re-creates the reference
+ * of re-activating the node, citus_add_node first drops and re-creates the reference
  * tables.
  */
 Datum
-master_disable_node(PG_FUNCTION_ARGS)
+citus_disable_node(PG_FUNCTION_ARGS)
 {
 	text *nodeNameText = PG_GETARG_TEXT_P(0);
 	int32 nodePort = PG_GETARG_INT32(1);
@@ -434,10 +482,20 @@ master_disable_node(PG_FUNCTION_ARGS)
 
 
 /*
- * master_set_node_property sets a property of the node
+ * master_disable_node is a wrapper function for old UDF name.
  */
 Datum
-master_set_node_property(PG_FUNCTION_ARGS)
+master_disable_node(PG_FUNCTION_ARGS)
+{
+	return citus_disable_node(fcinfo);
+}
+
+
+/*
+ * citus_set_node_property sets a property of the node
+ */
+Datum
+citus_set_node_property(PG_FUNCTION_ARGS)
 {
 	text *nodeNameText = PG_GETARG_TEXT_P(0);
 	int32 nodePort = PG_GETARG_INT32(1);
@@ -461,6 +519,16 @@ master_set_node_property(PG_FUNCTION_ARGS)
 	TransactionModifiedNodeMetadata = true;
 
 	PG_RETURN_VOID();
+}
+
+
+/*
+ * master_set_node_property is a wrapper function for old UDF name.
+ */
+Datum
+master_set_node_property(PG_FUNCTION_ARGS)
+{
+	return citus_set_node_property(fcinfo);
 }
 
 
@@ -579,11 +647,11 @@ ModifiableWorkerNode(const char *nodeName, int32 nodePort)
 
 
 /*
- * master_activate_node UDF activates the given node. It sets the node's isactive
+ * citus_activate_node UDF activates the given node. It sets the node's isactive
  * value to active and replicates all reference tables to that node.
  */
 Datum
-master_activate_node(PG_FUNCTION_ARGS)
+citus_activate_node(PG_FUNCTION_ARGS)
 {
 	text *nodeNameText = PG_GETARG_TEXT_P(0);
 	int32 nodePort = PG_GETARG_INT32(1);
@@ -595,6 +663,16 @@ master_activate_node(PG_FUNCTION_ARGS)
 	TransactionModifiedNodeMetadata = true;
 
 	PG_RETURN_INT32(workerNode->nodeId);
+}
+
+
+/*
+ * master_activate_node is a wrapper function for old UDF name.
+ */
+Datum
+master_activate_node(PG_FUNCTION_ARGS)
+{
+	return citus_activate_node(fcinfo);
 }
 
 
@@ -736,12 +814,12 @@ ActivateNode(char *nodeName, int nodePort)
 
 
 /*
- * master_update_node moves the requested node to a different nodename and nodeport. It
+ * citus_update_node moves the requested node to a different nodename and nodeport. It
  * locks to ensure no queries are running concurrently; and is intended for customers who
  * are running their own failover solution.
  */
 Datum
-master_update_node(PG_FUNCTION_ARGS)
+citus_update_node(PG_FUNCTION_ARGS)
 {
 	int32 nodeId = PG_GETARG_INT32(0);
 
@@ -812,7 +890,7 @@ master_update_node(PG_FUNCTION_ARGS)
 	 *   In case of node failure said long-running queries will fail in the end
 	 *   anyway as they will be unable to commit successfully on the failed
 	 *   machine. To cause quick failure of these queries use force => true
-	 *   during the invocation of master_update_node to terminate conflicting
+	 *   during the invocation of citus_update_node to terminate conflicting
 	 *   backends proactively.
 	 *
 	 * It might be worth blocking reads to a secondary for the same reasons,
@@ -833,7 +911,7 @@ master_update_node(PG_FUNCTION_ARGS)
 				/*
 				 * We failed to start a background worker, which probably means that we exceeded
 				 * max_worker_processes, and this is unlikely to be resolved by retrying. We do not want
-				 * to repeatedly throw an error because if master_update_node is called to complete a
+				 * to repeatedly throw an error because if citus_update_node is called to complete a
 				 * failover then finishing is the only way to bring the cluster back up. Therefore we
 				 * give up on killing other backends and simply wait for the lock. We do set
 				 * lock_timeout to lock_cooldown, because we don't want to wait forever to get a lock.
@@ -866,7 +944,7 @@ master_update_node(PG_FUNCTION_ARGS)
 
 	/*
 	 * Propagate the updated pg_dist_node entry to all metadata workers.
-	 * citus-ha uses master_update_node() in a prepared transaction, and
+	 * citus-ha uses citus_update_node() in a prepared transaction, and
 	 * we don't support coordinated prepared transactions, so we cannot
 	 * propagate the changes to the worker nodes here. Instead we mark
 	 * all metadata nodes as not-synced and ask maintenanced to do the
@@ -893,6 +971,16 @@ master_update_node(PG_FUNCTION_ARGS)
 	TransactionModifiedNodeMetadata = true;
 
 	PG_RETURN_VOID();
+}
+
+
+/*
+ * master_update_node is a wrapper function for old UDF name.
+ */
+Datum
+master_update_node(PG_FUNCTION_ARGS)
+{
+	return citus_update_node(fcinfo);
 }
 
 
@@ -1905,7 +1993,7 @@ UnsetMetadataSyncedForAll(void)
 	bool indexOK = false;
 
 	/*
-	 * Concurrent master_update_node() calls might iterate and try to update
+	 * Concurrent citus_update_node() calls might iterate and try to update
 	 * pg_dist_node in different orders. To protect against deadlock, we
 	 * get an exclusive lock here.
 	 */

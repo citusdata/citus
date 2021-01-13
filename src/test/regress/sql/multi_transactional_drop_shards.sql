@@ -9,7 +9,7 @@ ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1410000;
 SET citus.shard_count TO 4;
 SET client_min_messages TO WARNING;
 
--- test DROP TABLE(ergo master_drop_all_shards) in transaction, then ROLLBACK
+-- test DROP TABLE(ergo citus_drop_all_shards) in transaction, then ROLLBACK
 CREATE TABLE transactional_drop_shards(column1 int);
 SELECT create_distributed_table('transactional_drop_shards', 'column1');
 
@@ -37,7 +37,7 @@ ORDER BY
 \c - - - :master_port
 
 
--- test DROP TABLE(ergo master_drop_all_shards) in transaction, then COMMIT
+-- test DROP TABLE(ergo citus_drop_all_shards) in transaction, then COMMIT
 BEGIN;
 DROP TABLE transactional_drop_shards;
 COMMIT;
@@ -251,7 +251,7 @@ SET citus.shard_count TO 8;
 CREATE TABLE transactional_drop_serial(column1 int, column2 SERIAL);
 SELECT create_distributed_table('transactional_drop_serial', 'column1');
 
--- test DROP TABLE(ergo master_drop_all_shards) in transaction, then ROLLBACK
+-- test DROP TABLE(ergo citus_drop_all_shards) in transaction, then ROLLBACK
 BEGIN;
 DROP TABLE transactional_drop_serial;
 ROLLBACK;
@@ -277,7 +277,7 @@ ORDER BY
 \c - - - :master_port
 
 
--- test DROP TABLE(ergo master_drop_all_shards) in transaction, then COMMIT
+-- test DROP TABLE(ergo citus_drop_all_shards) in transaction, then COMMIT
 BEGIN;
 DROP TABLE transactional_drop_serial;
 COMMIT;

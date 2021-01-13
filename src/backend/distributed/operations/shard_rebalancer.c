@@ -151,12 +151,12 @@ static void EnsureShardCostUDF(Oid functionOid);
 static void EnsureNodeCapacityUDF(Oid functionOid);
 static void EnsureShardAllowedOnNodeUDF(Oid functionOid);
 
-
 /* declarations for dynamic loading */
 PG_FUNCTION_INFO_V1(rebalance_table_shards);
 PG_FUNCTION_INFO_V1(replicate_table_shards);
 PG_FUNCTION_INFO_V1(get_rebalance_table_shards_plan);
 PG_FUNCTION_INFO_V1(get_rebalance_progress);
+PG_FUNCTION_INFO_V1(citus_drain_node);
 PG_FUNCTION_INFO_V1(master_drain_node);
 PG_FUNCTION_INFO_V1(citus_shard_cost_by_disk_size);
 PG_FUNCTION_INFO_V1(citus_validate_rebalance_strategy_functions);
@@ -788,11 +788,11 @@ GetRebalanceStrategy(Name name)
 
 
 /*
- * master_drain_node drains a node by setting shouldhaveshards to false and
+ * citus_drain_node drains a node by setting shouldhaveshards to false and
  * running the rebalancer after in drain_only mode.
  */
 Datum
-master_drain_node(PG_FUNCTION_ARGS)
+citus_drain_node(PG_FUNCTION_ARGS)
 {
 	PG_ENSURE_ARGNOTNULL(0, "nodename");
 	PG_ENSURE_ARGNOTNULL(1, "nodeport");
@@ -860,6 +860,16 @@ replicate_table_shards(PG_FUNCTION_ARGS)
 	ExecutePlacementUpdates(placementUpdateList, shardReplicationModeOid, "Copying");
 
 	PG_RETURN_VOID();
+}
+
+
+/*
+ * master_drain_node is a wrapper function for old UDF name.
+ */
+Datum
+master_drain_node(PG_FUNCTION_ARGS)
+{
+	return citus_drain_node(fcinfo);
 }
 
 
@@ -1160,7 +1170,7 @@ UpdateShardPlacement(PlacementUpdateEvent *placementUpdateEvent,
 	if (updateType == PLACEMENT_UPDATE_MOVE)
 	{
 		appendStringInfo(placementUpdateCommand,
-						 "SELECT master_move_shard_placement(%ld,%s,%u,%s,%u,%s)",
+						 "SELECT citus_move_shard_placement(%ld,%s,%u,%s,%u,%s)",
 						 shardId,
 						 quote_literal_cstr(sourceNode->workerName),
 						 sourceNode->workerPort,
@@ -1171,7 +1181,7 @@ UpdateShardPlacement(PlacementUpdateEvent *placementUpdateEvent,
 	else if (updateType == PLACEMENT_UPDATE_COPY)
 	{
 		appendStringInfo(placementUpdateCommand,
-						 "SELECT master_copy_shard_placement(%ld,%s,%u,%s,%u,%s,%s)",
+						 "SELECT citus_copy_shard_placement(%ld,%s,%u,%s,%u,%s,%s)",
 						 shardId,
 						 quote_literal_cstr(sourceNode->workerName),
 						 sourceNode->workerPort,

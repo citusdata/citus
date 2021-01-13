@@ -33,7 +33,7 @@ SELECT master_get_active_worker_nodes();
 SET citus.shard_count TO 16;
 SET citus.shard_replication_factor TO 1;
 
-SELECT * FROM master_activate_node('localhost', :worker_2_port);
+SELECT * FROM citus_activate_node('localhost', :worker_2_port);
 CREATE TABLE cluster_management_test (col_1 text, col_2 int);
 SELECT create_distributed_table('cluster_management_test', 'col_1', 'hash');
 

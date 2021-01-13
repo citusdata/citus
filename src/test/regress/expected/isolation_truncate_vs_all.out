@@ -282,10 +282,10 @@ step s1-initialize: COPY truncate_append FROM PROGRAM 'echo 0, a && echo 1, b &&
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
 step s1-truncate: TRUNCATE truncate_append;
-step s2-master-drop-all-shards: SELECT master_drop_all_shards('truncate_append'::regclass, 'public', 'truncate_append'); <waiting ...>
+step s2-master-drop-all-shards: SELECT citus_drop_all_shards('truncate_append'::regclass, 'public', 'truncate_append'); <waiting ...>
 step s1-commit: COMMIT;
 step s2-master-drop-all-shards: <... completed>
-master_drop_all_shards
+citus_drop_all_shards
 
 0
 step s2-commit: COMMIT;
@@ -559,8 +559,8 @@ create_distributed_table
 step s1-initialize: COPY truncate_append FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
-step s1-master-drop-all-shards: SELECT master_drop_all_shards('truncate_append'::regclass, 'public', 'truncate_append');
-master_drop_all_shards
+step s1-master-drop-all-shards: SELECT citus_drop_all_shards('truncate_append'::regclass, 'public', 'truncate_append');
+citus_drop_all_shards
 
 1
 step s2-truncate: TRUNCATE truncate_append; <waiting ...>
