@@ -2,19 +2,15 @@
 #
 # Makefile for src/test/recovery
 #
-# Portions Copyright (c) 1996-2020, PostgreSQL Global Development Group
-# Portions Copyright (c) 1994, Regents of the University of California
-#
-# src/test/recovery/Makefile
+# Losely based on the makefile found in postgres' src/test/recovery.
+# We need to define our own invocation of prove to pass the correct path
+# to pg_regress and include citus in the shared preload libraries.
 #
 #-------------------------------------------------------------------------
-
-#EXTRA_INSTALL=contrib/test_decoding
 
 subdir = src/test/recovery
 top_builddir = ../../..
 include $(top_builddir)/Makefile.global
-
 
 # copied from pgxs/Makefile.global to use postgres' abs build dir for pg_regress
 ifeq ($(enable_tap_tests),yes)
