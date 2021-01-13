@@ -21,6 +21,12 @@ CREATE TABLE contestant_compressed (handle TEXT, birthdate DATE, rating INT,
 ANALYZE contestant;
 SELECT count(*) FROM contestant;
 
+-- Should fail: unlogged tables not supported
+CREATE UNLOGGED TABLE columnar_unlogged(i int) USING columnar;
+
+-- Should fail: temporary tables not supported
+CREATE TEMPORARY TABLE columnar_temp(i int) USING columnar;
+
 --
 -- Utility functions to be used throughout tests
 --
