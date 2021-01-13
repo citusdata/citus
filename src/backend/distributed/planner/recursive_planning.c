@@ -159,7 +159,7 @@ static void RecursivelyPlanNonColocatedSubqueriesInWhere(Query *query,
 														 recursivePlanningContext);
 static List * SublinkListFromWhere(Query *originalQuery);
 static bool ExtractSublinkWalker(Node *node, List **sublinkList);
-static bool ShouldRecursivelyPlanAllSubqueriesInWhere(Query *query);
+static bool ShouldRecursivelyPlanSublinks(Query *query);
 static bool RecursivelyPlanAllSubqueries(Node *node,
 										 RecursivePlanningContext *planningContext);
 static DeferredErrorMessage * RecursivelyPlanCTEs(Query *query,
@@ -321,12 +321,18 @@ RecursivelyPlanSubqueriesAndCTEs(Query *query, RecursivePlanningContext *context
 	/*
 	 * If the FROM clause is recurring (does not contain a distributed table),
 	 * then we cannot have any distributed tables appearing in subqueries in
-	 * the WHERE clause.
+	 * the SELECT and WHERE clauses.
 	 */
-	if (ShouldRecursivelyPlanAllSubqueriesInWhere(query))
+	if (ShouldRecursivelyPlanSublinks(query))
 	{
 		/* replace all subqueries in the WHERE clause */
-		RecursivelyPlanAllSubqueries((Node *) query->jointree->quals, context);
+		if (query->jointree && query->jointree->quals)
+		{
+			RecursivelyPlanAllSubqueries((Node *) query->jointree->quals, context);
+		}
+
+		/* replace all subqueries in the SELECT clause */
+		RecursivelyPlanAllSubqueries((Node *) query->targetList, context);
 	}
 
 	if (query->havingQual != NULL)
@@ -652,27 +658,12 @@ ExtractSublinkWalker(Node *node, List **sublinkList)
 
 
 /*
- * ShouldRecursivelyPlanAllSubqueriesInWhere returns true if the query has
- * a WHERE clause and a recurring FROM clause (does not contain a distributed
- * table).
+ * ShouldRecursivelyPlanSublinks returns true if the query has a recurring
+ * FROM clause.
  */
 static bool
-ShouldRecursivelyPlanAllSubqueriesInWhere(Query *query)
+ShouldRecursivelyPlanSublinks(Query *query)
 {
-	FromExpr *joinTree = query->jointree;
-	if (joinTree == NULL)
-	{
-		/* there is no FROM clause */
-		return false;
-	}
-
-	Node *whereClause = joinTree->quals;
-	if (whereClause == NULL)
-	{
-		/* there is no WHERE clause */
-		return false;
-	}
-
 	if (FindNodeMatchingCheckFunctionInRangeTableList(query->rtable,
 													  IsDistributedTableRTE))
 	{
