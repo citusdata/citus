@@ -295,9 +295,12 @@ PostprocessCreateTableStmtPartitionOf(CreateStmt *createStatement, const
 		char *parentRelationName = generate_qualified_relation_name(parentRelationId);
 		bool viaDeprecatedAPI = false;
 
-		CreateDistributedTable(relationId, parentDistributionColumn,
-							   parentDistributionMethod, ShardCount,
-							   parentRelationName, viaDeprecatedAPI);
+		if (!(IsCitusTable(relationId) && (createStatement->if_not_exists)))
+		{
+			CreateDistributedTable(relationId, parentDistributionColumn,
+								   parentDistributionMethod, ShardCount,
+								   parentRelationName, viaDeprecatedAPI);
+		}
 	}
 }
 

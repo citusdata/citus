@@ -102,6 +102,10 @@ GROUP BY
 ORDER BY
 	1,2;
 
+-- create the same partition to verify it behaves like in plain PG
+CREATE TABLE partitioning_test_2011 PARTITION OF partitioning_test FOR VALUES FROM ('2011-01-01') TO ('2012-01-01');
+CREATE TABLE IF NOT EXISTS partitioning_test_2011 PARTITION OF partitioning_test FOR VALUES FROM ('2011-01-01') TO ('2012-01-01');
+
 -- 3-) Attaching non distributed table to a distributed table
 CREATE TABLE partitioning_test_2012(id int, time date);
 

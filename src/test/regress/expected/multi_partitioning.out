@@ -163,6 +163,11 @@ ORDER BY
  partitioning_test_2011 |     4
 (2 rows)
 
+-- create the same partition to verify it behaves like in plain PG
+CREATE TABLE partitioning_test_2011 PARTITION OF partitioning_test FOR VALUES FROM ('2011-01-01') TO ('2012-01-01');
+ERROR:  relation "partitioning_test_2011" already exists
+CREATE TABLE IF NOT EXISTS partitioning_test_2011 PARTITION OF partitioning_test FOR VALUES FROM ('2011-01-01') TO ('2012-01-01');
+NOTICE:  relation "partitioning_test_2011" already exists, skipping
 -- 3-) Attaching non distributed table to a distributed table
 CREATE TABLE partitioning_test_2012(id int, time date);
 -- load some data
