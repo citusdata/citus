@@ -55,6 +55,11 @@ WHERE a.int_val = c.int_val AND a.hash = md5(c.text_val);
 DROP TABLE test_long_text_hash;
 DROP TABLE test_cstore_long_text;
 
+CREATE TEMPORARY TABLE test_temp(i int, t text) USING columnar;
+INSERT INTO test_temp SELECT generate_series(1,10000);
+SELECT COUNT(*),AVG(i) FROM test_temp;
+DROP TABLE test_temp;
+
 CREATE TABLE test_logical_replication(i int) USING columnar;
 -- should succeed
 INSERT INTO test_logical_replication VALUES (1);
