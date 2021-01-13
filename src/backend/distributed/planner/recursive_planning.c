@@ -917,6 +917,7 @@ ShouldRecursivelyPlanSubquery(Query *subquery, RecursivePlanningContext *context
 		 * when the local tables are on the leaf queries and the upper level queries
 		 * do not contain any other local tables.
 		 */
+		return false;
 	}
 	else if (CanPushdownSubquery(subquery, false))
 	{
