@@ -24,5 +24,6 @@ void DisableWorkerMessagePropagation(void);
 void ErrorIfWorkerErrorIndicationReceived(void);
 void ResetWorkerErrorIndication(void);
 
+extern const char * LogLevelToLogLevelName(int logLevel);
 
 #endif /* WORKER_LOG_MESSAGES_H */

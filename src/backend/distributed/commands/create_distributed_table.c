@@ -58,6 +58,7 @@
 #include "distributed/reference_table_utils.h"
 #include "distributed/relation_access_tracking.h"
 #include "distributed/remote_commands.h"
+#include "distributed/worker_log_messages.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/worker_transaction.h"
 #include "distributed/version_compat.h"
@@ -117,6 +118,7 @@ static void EnsureCitusTableCanBeCreated(Oid relationOid);
 static List * GetFKeyCreationCommandsRelationInvolved(Oid relationId);
 static Oid DropFKeysAndUndistributeTable(Oid relationId);
 static void DropFKeysRelationInvolved(Oid relationId);
+static void SetLocalClientMinMessages(const char *logLevel);
 static bool LocalTableEmpty(Oid tableId);
 static void CopyLocalDataIntoShards(Oid relationId);
 static List * TupleDescColumnNameList(TupleDesc tupleDescriptor);
@@ -514,7 +516,16 @@ DropFKeysAndUndistributeTable(Oid relationId)
 		.relationId = relationId,
 		.cascadeViaForeignKeys = false
 	};
+
+	/* temporarily suppress messages from UndistributeTable */
+	int oldClientMinMessagesLevel = client_min_messages;
+	SetLocalClientMinMessages("WARNING");
+
 	UndistributeTable(&params);
+
+	const char *oldClientMinMessagesLevelName =
+		LogLevelToLogLevelName(oldClientMinMessagesLevel);
+	SetLocalClientMinMessages(oldClientMinMessagesLevelName);
 
 	Oid newRelationId = get_relname_relid(relationName, schemaId);
 
@@ -544,6 +555,20 @@ DropFKeysRelationInvolved(Oid relationId)
 							  EXCLUDE_SELF_REFERENCES |
 							  INCLUDE_ALL_TABLE_TYPES;
 	DropRelationForeignKeys(relationId, referencedFKeysFlag);
+}
+
+
+/*
+ * SetLocalClientMinMessages is simply a C interface for setting
+ * the following:
+ *      SET LOCAL client_min_messages = <log_level>;
+ */
+static void
+SetLocalClientMinMessages(const char *logLevel)
+{
+	set_config_option("client_min_messages", logLevel,
+					  (superuser() ? PGC_SUSET : PGC_USERSET), PGC_S_SESSION,
+					  GUC_ACTION_LOCAL, true, 0, false);
 }
 
 

@@ -239,6 +239,30 @@ LogLevelNameToLogLevel(char *levelName)
 
 
 /*
+ * LogLevelToLogLevelName translates native log level
+ * back to Postgres log messages.
+ */
+const char *
+LogLevelToLogLevelName(int logLevel)
+{
+	int levelIndex = 0;
+
+	while (LogLevelNames[levelIndex] != NULL)
+	{
+		if (logLevel == LogLevels[levelIndex])
+		{
+			return LogLevelNames[levelIndex];
+		}
+
+		levelIndex++;
+	}
+
+	/* be on the safe in case of an unexpected log level */
+	return "DEBUG1";
+}
+
+
+/*
  * ErrorIfWorkerErrorIndicationReceived throws the deferred error in
  * WorkerErrorIndication, if any.
  *
