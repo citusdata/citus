@@ -33,26 +33,35 @@ DROP FUNCTION IF EXISTS pg_catalog.citus_total_relation_size(regclass);
 #include "udfs/time_partition_range/10.0-1.sql"
 #include "udfs/time_partitions/10.0-1.sql"
 
-ALTER FUNCTION master_conninfo_cache_invalidate()
+ALTER FUNCTION pg_catalog.master_conninfo_cache_invalidate()
 RENAME TO citus_conninfo_cache_invalidate;
-ALTER FUNCTION master_dist_local_group_cache_invalidate()
+ALTER FUNCTION pg_catalog.master_dist_local_group_cache_invalidate()
 RENAME TO citus_dist_local_group_cache_invalidate;
-ALTER FUNCTION master_dist_node_cache_invalidate()
+ALTER FUNCTION pg_catalog.master_dist_node_cache_invalidate()
 RENAME TO citus_dist_node_cache_invalidate;
-ALTER FUNCTION master_dist_object_cache_invalidate()
+ALTER FUNCTION pg_catalog.master_dist_object_cache_invalidate()
 RENAME TO citus_dist_object_cache_invalidate;
-ALTER FUNCTION master_dist_partition_cache_invalidate()
+ALTER FUNCTION pg_catalog.master_dist_partition_cache_invalidate()
 RENAME TO citus_dist_partition_cache_invalidate;
-ALTER FUNCTION master_dist_placement_cache_invalidate()
+ALTER FUNCTION pg_catalog.master_dist_placement_cache_invalidate()
 RENAME TO citus_dist_placement_cache_invalidate;
-ALTER FUNCTION master_dist_shard_cache_invalidate()
+ALTER FUNCTION pg_catalog.master_dist_shard_cache_invalidate()
 RENAME TO citus_dist_shard_cache_invalidate;
-ALTER FUNCTION master_drop_all_shards(regclass, text, text)
+
+#include "udfs/citus_conninfo_cache_invalidate/10.0-1.sql"
+#include "udfs/citus_dist_local_group_cache_invalidate/10.0-1.sql"
+#include "udfs/citus_dist_node_cache_invalidate/10.0-1.sql"
+#include "udfs/citus_dist_object_cache_invalidate/10.0-1.sql"
+#include "udfs/citus_dist_partition_cache_invalidate/10.0-1.sql"
+#include "udfs/citus_dist_placement_cache_invalidate/10.0-1.sql"
+#include "udfs/citus_dist_shard_cache_invalidate/10.0-1.sql"
+
+ALTER FUNCTION pg_catalog.master_drop_all_shards(regclass, text, text)
 RENAME TO citus_drop_all_shards;
 
 DROP FUNCTION pg_catalog.master_modify_multiple_shards(text);
-DROP FUNCTION master_create_distributed_table(regclass, text, citus.distribution_type);
-DROP FUNCTION master_create_worker_shards(text, integer, integer);
+DROP FUNCTION pg_catalog.master_create_distributed_table(regclass, text, citus.distribution_type);
+DROP FUNCTION pg_catalog.master_create_worker_shards(text, integer, integer);
 #include "udfs/citus_shard_sizes/10.0-1.sql"
 #include "udfs/citus_shards/10.0-1.sql"
 

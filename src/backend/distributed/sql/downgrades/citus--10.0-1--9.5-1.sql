@@ -26,22 +26,30 @@ DROP FUNCTION pg_catalog.citus_update_table_statistics(regclass);
 DROP FUNCTION pg_catalog.citus_copy_shard_placement(bigint, text, integer, text, integer, bool, citus.shard_transfer_mode);
 DROP FUNCTION pg_catalog.citus_move_shard_placement(bigint, text, integer, text, integer, citus.shard_transfer_mode);
 
-ALTER FUNCTION citus_conninfo_cache_invalidate()
+ALTER FUNCTION pg_catalog.citus_conninfo_cache_invalidate()
 RENAME TO master_conninfo_cache_invalidate;
-ALTER FUNCTION citus_dist_local_group_cache_invalidate()
+ALTER FUNCTION pg_catalog.citus_dist_local_group_cache_invalidate()
 RENAME TO master_dist_local_group_cache_invalidate;
-ALTER FUNCTION citus_dist_node_cache_invalidate()
+ALTER FUNCTION pg_catalog.citus_dist_node_cache_invalidate()
 RENAME TO master_dist_node_cache_invalidate;
-ALTER FUNCTION citus_dist_object_cache_invalidate()
+ALTER FUNCTION pg_catalog.citus_dist_object_cache_invalidate()
 RENAME TO master_dist_object_cache_invalidate;
-ALTER FUNCTION citus_dist_partition_cache_invalidate()
+ALTER FUNCTION pg_catalog.citus_dist_partition_cache_invalidate()
 RENAME TO master_dist_partition_cache_invalidate;
-ALTER FUNCTION citus_dist_placement_cache_invalidate()
+ALTER FUNCTION pg_catalog.citus_dist_placement_cache_invalidate()
 RENAME TO master_dist_placement_cache_invalidate;
-ALTER FUNCTION citus_dist_shard_cache_invalidate()
+ALTER FUNCTION pg_catalog.citus_dist_shard_cache_invalidate()
 RENAME TO master_dist_shard_cache_invalidate;
-ALTER FUNCTION citus_drop_all_shards(regclass, text, text)
+ALTER FUNCTION pg_catalog.citus_drop_all_shards(regclass, text, text)
 RENAME TO master_drop_all_shards;
+
+#include "../udfs/citus_conninfo_cache_invalidate/9.5-1.sql"
+#include "../udfs/citus_dist_local_group_cache_invalidate/9.5-1.sql"
+#include "../udfs/citus_dist_node_cache_invalidate/9.5-1.sql"
+#include "../udfs/citus_dist_object_cache_invalidate/9.5-1.sql"
+#include "../udfs/citus_dist_partition_cache_invalidate/9.5-1.sql"
+#include "../udfs/citus_dist_placement_cache_invalidate/9.5-1.sql"
+#include "../udfs/citus_dist_shard_cache_invalidate/9.5-1.sql"
 
 DROP VIEW pg_catalog.time_partitions;
 DROP FUNCTION pg_catalog.time_partition_range(regclass);
