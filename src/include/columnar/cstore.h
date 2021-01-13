@@ -80,6 +80,18 @@ typedef struct ColumnarOptions
 
 
 /*
+ * ColumnarTableDDLContext holds the instance variable for the TableDDLCommandFunction
+ * instance described below.
+ */
+typedef struct ColumnarTableDDLContext
+{
+	char *schemaName;
+	char *relationName;
+	ColumnarOptions options;
+} ColumnarTableDDLContext;
+
+
+/*
  * StripeMetadata represents information about a stripe. This information is
  * stored in the cstore file's footer.
  */

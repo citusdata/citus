@@ -330,7 +330,7 @@ ERROR:  Table 'citus_local_table_1' is a citus local table. Replicating shard of
 -- undistribute_table is supported
 BEGIN;
   SELECT undistribute_table('citus_local_table_1');
-NOTICE:  creating a new local table for citus_local_tables_test_schema.citus_local_table_1
+NOTICE:  creating a new table for citus_local_tables_test_schema.citus_local_table_1
 NOTICE:  Moving the data of citus_local_tables_test_schema.citus_local_table_1
 NOTICE:  executing the command locally: SELECT a FROM citus_local_tables_test_schema.citus_local_table_1_1504027 citus_local_table_1
 NOTICE:  Dropping the old citus_local_tables_test_schema.citus_local_table_1

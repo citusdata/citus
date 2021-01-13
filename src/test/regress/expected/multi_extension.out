@@ -463,6 +463,8 @@ SELECT * FROM print_extension_changes();
                                                                                  | access method columnar
                                                                                  | function alter_columnar_table_reset(regclass,boolean,boolean,boolean,boolean)
                                                                                  | function alter_columnar_table_set(regclass,integer,integer,name,integer)
+                                                                                 | function alter_distributed_table(regclass,text,integer,text,boolean)
+                                                                                 | function alter_table_set_access_method(regclass,text)
                                                                                  | function citus_activate_node(text,integer)
                                                                                  | function citus_add_inactive_node(text,integer,integer,noderole,name)
                                                                                  | function citus_add_node(text,integer,integer,noderole,name)
@@ -493,6 +495,7 @@ SELECT * FROM print_extension_changes();
                                                                                  | function create_citus_local_table(regclass,boolean)
                                                                                  | function time_partition_range(regclass)
                                                                                  | function undistribute_table(regclass,boolean)
+                                                                                 | function worker_change_sequence_dependency(regclass,regclass,regclass)
                                                                                  | schema columnar
                                                                                  | sequence columnar.storageid_seq
                                                                                  | table columnar.columnar_skipnodes
@@ -501,7 +504,7 @@ SELECT * FROM print_extension_changes();
                                                                                  | view citus_shards
                                                                                  | view citus_tables
                                                                                  | view time_partitions
-(56 rows)
+(59 rows)
 
 DROP TABLE prev_objects, extension_diff;
 -- show running version

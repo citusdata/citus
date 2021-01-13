@@ -20,7 +20,9 @@ ORDER BY 1;
  event trigger citus_cascade_to_partition
  function alter_columnar_table_reset(regclass,boolean,boolean,boolean,boolean)
  function alter_columnar_table_set(regclass,integer,integer,name,integer)
+ function alter_distributed_table(regclass,text,integer,text,boolean)
  function alter_role_if_exists(text,text)
+ function alter_table_set_access_method(regclass,text)
  function any_value(anyelement)
  function any_value_agg(anyelement,anyelement)
  function array_cat_agg(anyarray)
@@ -175,6 +177,7 @@ ORDER BY 1;
  function worker_apply_sequence_command(text,regtype)
  function worker_apply_shard_ddl_command(bigint,text)
  function worker_apply_shard_ddl_command(bigint,text,text)
+ function worker_change_sequence_dependency(regclass,regclass,regclass)
  function worker_cleanup_job_schema_cache()
  function worker_create_or_alter_role(text,text,text)
  function worker_create_or_replace_object(text)
@@ -233,5 +236,5 @@ ORDER BY 1;
  view citus_worker_stat_activity
  view pg_dist_shard_placement
  view time_partitions
-(217 rows)
+(220 rows)
 

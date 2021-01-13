@@ -139,7 +139,7 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys)
 	if (tableHasExternalForeignKeys && cascadeViaForeignKeys)
 	{
 		CascadeOperationForConnectedRelations(relationId, lockMode,
-											  CREATE_CITUS_LOCAL_TABLE);
+											  CASCADE_FKEY_CREATE_CITUS_LOCAL_TABLE);
 
 		/*
 		 * We converted every foreign key connected table in our subgraph

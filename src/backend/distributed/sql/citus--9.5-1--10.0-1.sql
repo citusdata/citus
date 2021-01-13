@@ -6,6 +6,8 @@ DROP FUNCTION IF EXISTS pg_catalog.citus_total_relation_size(regclass);
 #include "udfs/citus_total_relation_size/10.0-1.sql"
 #include "udfs/citus_tables/10.0-1.sql"
 #include "udfs/citus_finish_pg_upgrade/10.0-1.sql"
+#include "udfs/alter_distributed_table/10.0-1.sql"
+#include "udfs/alter_table_set_access_method/10.0-1.sql"
 #include "udfs/undistribute_table/10.0-1.sql"
 #include "udfs/create_citus_local_table/10.0-1.sql"
 #include "udfs/citus_set_coordinator_host/10.0-1.sql"
@@ -24,6 +26,7 @@ DROP FUNCTION IF EXISTS pg_catalog.citus_total_relation_size(regclass);
 #include "udfs/citus_copy_shard_placement/10.0-1.sql"
 #include "udfs/citus_move_shard_placement/10.0-1.sql"
 #include "udfs/citus_drop_trigger/10.0-1.sql"
+#include "udfs/worker_change_sequence_dependency/10.0-1.sql"
 
 #include "../../columnar/sql/columnar--9.5-1--10.0-1.sql"
 

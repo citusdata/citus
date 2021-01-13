@@ -617,6 +617,48 @@ GetReferencingForeignConstaintCommands(Oid relationId)
 
 
 /*
+ * GetForeignConstraintToReferenceTablesCommands takes in a relationId, and
+ * returns the list of foreign constraint commands needed to reconstruct
+ * foreign key constraints that the table is involved in as the "referencing"
+ * one and the "referenced" table is a reference table.
+ */
+List *
+GetForeignConstraintToReferenceTablesCommands(Oid relationId)
+{
+	int flags = INCLUDE_REFERENCING_CONSTRAINTS | INCLUDE_REFERENCE_TABLES;
+	return GetForeignConstraintCommandsInternal(relationId, flags);
+}
+
+
+/*
+ * GetForeignConstraintToDistributedTablesCommands takes in a relationId, and
+ * returns the list of foreign constraint commands needed to reconstruct
+ * foreign key constraints that the table is involved in as the "referencing"
+ * one and the "referenced" table is a distributed table.
+ */
+List *
+GetForeignConstraintToDistributedTablesCommands(Oid relationId)
+{
+	int flags = INCLUDE_REFERENCING_CONSTRAINTS | INCLUDE_DISTRIBUTED_TABLES;
+	return GetForeignConstraintCommandsInternal(relationId, flags);
+}
+
+
+/*
+ * GetForeignConstraintFromDistributedTablesCommands takes in a relationId, and
+ * returns the list of foreign constraint commands needed to reconstruct
+ * foreign key constraints that the table is involved in as the "referenced"
+ * one and the "referencing" table is a distributed table.
+ */
+List *
+GetForeignConstraintFromDistributedTablesCommands(Oid relationId)
+{
+	int flags = INCLUDE_REFERENCED_CONSTRAINTS | INCLUDE_DISTRIBUTED_TABLES;
+	return GetForeignConstraintCommandsInternal(relationId, flags);
+}
+
+
+/*
  * GetForeignConstraintCommandsInternal is a wrapper function to get the
  * DDL commands to recreate the foreign key constraints returned by
  * GetForeignKeyOids. See more details at the underlying function.

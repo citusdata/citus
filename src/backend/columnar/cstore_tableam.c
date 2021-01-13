@@ -1441,18 +1441,6 @@ CitusCreateAlterColumnarTableSet(char *qualifiedRelationName,
 
 
 /*
- * ColumnarTableDDLContext holds the instance variable for the TableDDLCommandFunction
- * instance described below.
- */
-typedef struct ColumnarTableDDLContext
-{
-	char *schemaName;
-	char *relationName;
-	ColumnarOptions options;
-} ColumnarTableDDLContext;
-
-
-/*
  * GetTableDDLCommandColumnar is an internal function used to turn a
  * ColumnarTableDDLContext stored on the context of a TableDDLCommandFunction into a sql
  * command that will be executed against a table. The resulting command will set the
@@ -1477,7 +1465,7 @@ GetTableDDLCommandColumnar(void *context)
  * command that will be executed against a shard. The resulting command will set the
  * options of the shard to the same options as the relation the shard is based on.
  */
-static char *
+char *
 GetShardedTableDDLCommandColumnar(uint64 shardId, void *context)
 {
 	ColumnarTableDDLContext *tableDDLContext = (ColumnarTableDDLContext *) context;

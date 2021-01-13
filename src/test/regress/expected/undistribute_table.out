@@ -34,13 +34,13 @@ SELECT * FROM dist_table ORDER BY 1, 2, 3;
 -- we cannot immediately convert in the same statement, because
 -- the name->OID conversion happens at parse time.
 SELECT undistribute_table('dist_table'), create_distributed_table('dist_table', 'a');
-NOTICE:  creating a new local table for undistribute_table.dist_table
+NOTICE:  creating a new table for undistribute_table.dist_table
 NOTICE:  Moving the data of undistribute_table.dist_table
 NOTICE:  Dropping the old undistribute_table.dist_table
 NOTICE:  Renaming the new table to undistribute_table.dist_table
 ERROR:  relation with OID XXXX does not exist
 SELECT undistribute_table('dist_table');
-NOTICE:  creating a new local table for undistribute_table.dist_table
+NOTICE:  creating a new table for undistribute_table.dist_table
 NOTICE:  Moving the data of undistribute_table.dist_table
 NOTICE:  Dropping the old undistribute_table.dist_table
 NOTICE:  Renaming the new table to undistribute_table.dist_table
@@ -87,7 +87,7 @@ SELECT * FROM pg_indexes WHERE tablename = 'dist_table';
 (1 row)
 
 SELECT undistribute_table('dist_table');
-NOTICE:  creating a new local table for undistribute_table.dist_table
+NOTICE:  creating a new table for undistribute_table.dist_table
 NOTICE:  Moving the data of undistribute_table.dist_table
 NOTICE:  Dropping the old undistribute_table.dist_table
 NOTICE:  Renaming the new table to undistribute_table.dist_table
@@ -122,10 +122,10 @@ SELECT create_distributed_table('referencing_table', 'id');
 
 INSERT INTO referencing_table VALUES (4, 6, 'cba'), (1, 1, 'dcba'), (2, 3, 'aaa');
 SELECT undistribute_table('referenced_table');
-ERROR:  cannot undistribute table because a foreign key references to it
+ERROR:  cannot complete operation because table referenced_table is referenced by a foreign key
 HINT:  Use cascade option to undistribute all the relations involved in a foreign key relationship with undistribute_table.referenced_table by executing SELECT undistribute_table($$undistribute_table.referenced_table$$, cascade_via_foreign_keys=>true)
 SELECT undistribute_table('referencing_table');
-ERROR:  cannot undistribute table because it has a foreign key
+ERROR:  cannot complete operation because table referencing_table has a foreign key
 HINT:  Use cascade option to undistribute all the relations involved in a foreign key relationship with undistribute_table.referencing_table by executing SELECT undistribute_table($$undistribute_table.referencing_table$$, cascade_via_foreign_keys=>true)
 DROP TABLE referenced_table, referencing_table;
 -- test distributed foreign tables
@@ -142,7 +142,7 @@ NOTICE:  foreign-data wrapper "fake_fdw" does not have an extension defined
 (1 row)
 
 SELECT undistribute_table('foreign_table');
-ERROR:  cannot undistribute table because it is a foreign table
+ERROR:  cannot complete operation because it is a foreign table
 DROP FOREIGN TABLE foreign_table;
 -- test partitioned tables
 CREATE TABLE partitioned_table (id INT, a INT) PARTITION BY RANGE (id);
@@ -198,21 +198,20 @@ SELECT * FROM partitioned_table_6_10 ORDER BY 1, 2;
 
 -- undistributing partitions are not supported
 SELECT undistribute_table('partitioned_table_1_5');
-ERROR:  cannot undistribute table because it is a partition
-HINT:  undistribute the partitioned table "partitioned_table" instead
+ERROR:  cannot complete operation because table is a partition
+HINT:  the parent table is "partitioned_table"
 -- we can undistribute partitioned parent tables
 SELECT undistribute_table('partitioned_table');
-NOTICE:  undistributing the partitions of undistribute_table.partitioned_table
-NOTICE:  creating a new local table for undistribute_table.partitioned_table_1_5
+NOTICE:  converting the partitions of undistribute_table.partitioned_table
+NOTICE:  creating a new table for undistribute_table.partitioned_table_1_5
 NOTICE:  Moving the data of undistribute_table.partitioned_table_1_5
 NOTICE:  Dropping the old undistribute_table.partitioned_table_1_5
 NOTICE:  Renaming the new table to undistribute_table.partitioned_table_1_5
-NOTICE:  creating a new local table for undistribute_table.partitioned_table_6_10
+NOTICE:  creating a new table for undistribute_table.partitioned_table_6_10
 NOTICE:  Moving the data of undistribute_table.partitioned_table_6_10
 NOTICE:  Dropping the old undistribute_table.partitioned_table_6_10
 NOTICE:  Renaming the new table to undistribute_table.partitioned_table_6_10
-NOTICE:  creating a new local table for undistribute_table.partitioned_table
-NOTICE:  Moving the data of undistribute_table.partitioned_table
+NOTICE:  creating a new table for undistribute_table.partitioned_table
 NOTICE:  Dropping the old undistribute_table.partitioned_table
 NOTICE:  Renaming the new table to undistribute_table.partitioned_table
  undistribute_table
@@ -283,7 +282,7 @@ SELECT * FROM seq_table ORDER BY a;
 (3 rows)
 
 SELECT undistribute_table('seq_table');
-NOTICE:  creating a new local table for undistribute_table.seq_table
+NOTICE:  creating a new table for undistribute_table.seq_table
 NOTICE:  Moving the data of undistribute_table.seq_table
 NOTICE:  Dropping the old undistribute_table.seq_table
 NOTICE:  Renaming the new table to undistribute_table.seq_table
@@ -348,7 +347,7 @@ SELECT * FROM another_schema.undis_view3 ORDER BY 1, 2;
 (3 rows)
 
 SELECT undistribute_table('view_table');
-NOTICE:  creating a new local table for undistribute_table.view_table
+NOTICE:  creating a new table for undistribute_table.view_table
 NOTICE:  Moving the data of undistribute_table.view_table
 NOTICE:  Dropping the old undistribute_table.view_table
 NOTICE:  drop cascades to 3 other objects
