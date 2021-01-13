@@ -353,7 +353,7 @@ ReadColumnarOptions(Oid regclass, ColumnarOptions *options)
 	Relation index = try_relation_open(ColumnarOptionsIndexRegclass(), AccessShareLock);
 	if (index == NULL)
 	{
-		heap_close(columnarOptions, NoLock);
+		table_close(columnarOptions, NoLock);
 
 		/* extension has been dropped */
 		return false;
@@ -403,7 +403,7 @@ SaveStripeSkipList(RelFileNode relfilenode, uint64 stripe, StripeSkipList *strip
 
 	ColumnarMetapage *metapage = ReadMetapage(relfilenode, false);
 	Oid cstoreSkipNodesOid = CStoreSkipNodesRelationId();
-	Relation cstoreSkipNodes = heap_open(cstoreSkipNodesOid, RowExclusiveLock);
+	Relation cstoreSkipNodes = table_open(cstoreSkipNodesOid, RowExclusiveLock);
 	ModifyState *modifyState = StartModifyRelation(cstoreSkipNodes);
 
 	for (columnIndex = 0; columnIndex < columnCount; columnIndex++)
@@ -452,7 +452,7 @@ SaveStripeSkipList(RelFileNode relfilenode, uint64 stripe, StripeSkipList *strip
 	}
 
 	FinishModifyRelation(modifyState);
-	heap_close(cstoreSkipNodes, NoLock);
+	table_close(cstoreSkipNodes, NoLock);
 
 	CommandCounterIncrement();
 }
@@ -473,7 +473,7 @@ ReadStripeSkipList(RelFileNode relfilenode, uint64 stripe, TupleDesc tupleDescri
 	ColumnarMetapage *metapage = ReadMetapage(relfilenode, false);
 
 	Oid cstoreSkipNodesOid = CStoreSkipNodesRelationId();
-	Relation cstoreSkipNodes = heap_open(cstoreSkipNodesOid, AccessShareLock);
+	Relation cstoreSkipNodes = table_open(cstoreSkipNodesOid, AccessShareLock);
 	Relation index = index_open(CStoreSkipNodesIndexRelationId(), AccessShareLock);
 
 	ScanKeyInit(&scanKey[0], Anum_cstore_skipnodes_storageid,
@@ -561,7 +561,7 @@ ReadStripeSkipList(RelFileNode relfilenode, uint64 stripe, TupleDesc tupleDescri
 
 	systable_endscan_ordered(scanDescriptor);
 	index_close(index, NoLock);
-	heap_close(cstoreSkipNodes, NoLock);
+	table_close(cstoreSkipNodes, NoLock);
 
 	return skipList;
 }
@@ -586,7 +586,7 @@ InsertStripeMetadataRow(uint64 storageId, StripeMetadata *stripe)
 	};
 
 	Oid cstoreStripesOid = CStoreStripesRelationId();
-	Relation cstoreStripes = heap_open(cstoreStripesOid, RowExclusiveLock);
+	Relation cstoreStripes = table_open(cstoreStripesOid, RowExclusiveLock);
 
 	ModifyState *modifyState = StartModifyRelation(cstoreStripes);
 
@@ -596,7 +596,7 @@ InsertStripeMetadataRow(uint64 storageId, StripeMetadata *stripe)
 
 	CommandCounterIncrement();
 
-	heap_close(cstoreStripes, NoLock);
+	table_close(cstoreStripes, NoLock);
 }
 
 
@@ -765,7 +765,7 @@ ReadDataFileStripeList(uint64 storageId, Snapshot snapshot)
 
 	Oid cstoreStripesOid = CStoreStripesRelationId();
 
-	Relation cstoreStripes = heap_open(cstoreStripesOid, AccessShareLock);
+	Relation cstoreStripes = table_open(cstoreStripesOid, AccessShareLock);
 	Relation index = index_open(CStoreStripesIndexRelationId(), AccessShareLock);
 	TupleDesc tupleDescriptor = RelationGetDescr(cstoreStripes);
 
@@ -800,7 +800,7 @@ ReadDataFileStripeList(uint64 storageId, Snapshot snapshot)
 
 	systable_endscan_ordered(scanDescriptor);
 	index_close(index, NoLock);
-	heap_close(cstoreStripes, NoLock);
+	table_close(cstoreStripes, NoLock);
 
 	return stripeMetadataList;
 }
@@ -862,7 +862,7 @@ DeleteMetadataRows(RelFileNode relfilenode)
 
 	systable_endscan_ordered(scanDescriptor);
 	index_close(index, NoLock);
-	heap_close(cstoreStripes, NoLock);
+	table_close(cstoreStripes, NoLock);
 }
 
 
