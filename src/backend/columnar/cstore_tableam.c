@@ -557,6 +557,12 @@ cstore_relation_set_new_filenode(Relation rel,
 								 TransactionId *freezeXid,
 								 MultiXactId *minmulti)
 {
+	if (persistence != RELPERSISTENCE_PERMANENT)
+	{
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("only permanent columnar tables are supported")));
+	}
+
 	Oid oldRelfilenode = rel->rd_node.relNode;
 
 	MarkRelfilenodeDropped(oldRelfilenode, GetCurrentSubTransactionId());

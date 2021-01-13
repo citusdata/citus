@@ -21,6 +21,12 @@ SELECT count(*) FROM contestant;
      0
 (1 row)
 
+-- Should fail: unlogged tables not supported
+CREATE UNLOGGED TABLE columnar_unlogged(i int) USING columnar;
+ERROR:  only permanent columnar tables are supported
+-- Should fail: temporary tables not supported
+CREATE TEMPORARY TABLE columnar_temp(i int) USING columnar;
+ERROR:  only permanent columnar tables are supported
 --
 -- Utility functions to be used throughout tests
 --
