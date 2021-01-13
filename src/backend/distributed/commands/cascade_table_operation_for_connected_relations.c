@@ -369,7 +369,19 @@ ExecuteCascadeOperationForRelationIdList(List *relationIdList,
 
 			case CASCADE_FKEY_CREATE_CITUS_LOCAL_TABLE:
 			{
-				CreateCitusLocalTable(relationId, cascadeViaForeignKeys);
+				if (!IsCitusTable(relationId))
+				{
+					/*
+					 * Normally, we wouldn't expect a postgres table connected
+					 * to a citus local table via a foreign keys graph. But now
+					 * this is possible as we allow foreign keys from postgres
+					 * tables to reference tables when coordinator is not added
+					 * to metadata. So instead of erroring out, we skip citus
+					 * tables here.
+					 */
+					CreateCitusLocalTable(relationId, cascadeViaForeignKeys);
+				}
+
 				break;
 			}
 
