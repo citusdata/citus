@@ -417,7 +417,7 @@ SET search_path TO citus_local_tables_test_schema;
 -- more tests at ref_citus_local_fkeys.sql
 -- between citus local tables and distributed tables
 ALTER TABLE citus_local_table_1 ADD CONSTRAINT fkey_c_to_dist FOREIGN KEY(a) references distributed_table(a);
-ERROR:  cannot create foreign key constraint since foreign keys from reference tables to distributed tables are not supported
+ERROR:  cannot create foreign key constraint since foreign keys from reference tables and citus local tables to distributed tables are not supported
 ALTER TABLE distributed_table ADD CONSTRAINT fkey_dist_to_c FOREIGN KEY(a) references citus_local_table_1(a);
 ERROR:  cannot create foreign key constraint since relations are not colocated or not referencing a reference table
 -- between citus local tables and local tables
