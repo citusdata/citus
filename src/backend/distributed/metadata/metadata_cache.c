@@ -271,6 +271,7 @@ PG_FUNCTION_INFO_V1(citus_dist_node_cache_invalidate);
 PG_FUNCTION_INFO_V1(master_dist_node_cache_invalidate);
 PG_FUNCTION_INFO_V1(citus_dist_local_group_cache_invalidate);
 PG_FUNCTION_INFO_V1(master_dist_local_group_cache_invalidate);
+PG_FUNCTION_INFO_V1(citus_conninfo_cache_invalidate);
 PG_FUNCTION_INFO_V1(master_dist_authinfo_cache_invalidate);
 PG_FUNCTION_INFO_V1(citus_dist_object_cache_invalidate);
 PG_FUNCTION_INFO_V1(master_dist_object_cache_invalidate);
@@ -2913,7 +2914,7 @@ master_dist_node_cache_invalidate(PG_FUNCTION_ARGS)
 
 
 /*
- * master_dist_authinfo_cache_invalidate is a trigger function that performs
+ * citus_conninfo_cache_invalidate is a trigger function that performs
  * relcache invalidations when the contents of pg_dist_authinfo are changed
  * on the SQL level.
  *
@@ -2921,7 +2922,7 @@ master_dist_node_cache_invalidate(PG_FUNCTION_ARGS)
  * are much easier ways to waste CPU than causing cache invalidations.
  */
 Datum
-master_dist_authinfo_cache_invalidate(PG_FUNCTION_ARGS)
+citus_conninfo_cache_invalidate(PG_FUNCTION_ARGS)
 {
 	if (!CALLED_AS_TRIGGER(fcinfo))
 	{
@@ -2934,6 +2935,16 @@ master_dist_authinfo_cache_invalidate(PG_FUNCTION_ARGS)
 	/* no-op in community edition */
 
 	PG_RETURN_DATUM(PointerGetDatum(NULL));
+}
+
+
+/*
+ * master_dist_authinfo_cache_invalidate is a wrapper function for old UDF name.
+ */
+Datum
+master_dist_authinfo_cache_invalidate(PG_FUNCTION_ARGS)
+{
+	return citus_conninfo_cache_invalidate(fcinfo);
 }
 
 
