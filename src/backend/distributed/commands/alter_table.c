@@ -29,6 +29,7 @@
 #include "fmgr.h"
 
 #include "access/hash.h"
+#include "access/xact.h"
 #include "catalog/dependency.h"
 #include "catalog/pg_am.h"
 #include "columnar/cstore.h"
@@ -737,6 +738,9 @@ ConvertTable(TableConversionState *con)
 			ret->foreignKeyCommands = foreignKeyCommands;
 		}
 	}
+
+	/* increment command counter so that next command can see the new table */
+	CommandCounterIncrement();
 
 	return ret;
 }
