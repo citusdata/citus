@@ -45,8 +45,13 @@ DeferredErrorMessage *WorkerErrorIndication = NULL;
 
 /* list of log level names we might see from the worker */
 static const char *LogLevelNames[] = {
-	"DEBUG",
+	"DEBUG5",
+	"DEBUG4",
+	"DEBUG3",
+	"DEBUG2",
+	"DEBUG1",
 	"NOTICE",
+	"LOG",
 	"INFO",
 	"WARNING",
 	"ERROR",
@@ -57,8 +62,13 @@ static const char *LogLevelNames[] = {
 
 /* postgres log level values corresponding to LogLevelNames */
 static const int LogLevels[] = {
+	DEBUG5,
+	DEBUG4,
+	DEBUG3,
+	DEBUG2,
 	DEBUG1,
 	NOTICE,
+	LOG,
 	INFO,
 	WARNING,
 	ERROR,
@@ -206,7 +216,7 @@ TrimLogLevel(const char *message)
 
 
 /*
- * LogLevelNameToLogLevel translates the prefix of Postgres log messages
+ * LogLevelNameToLogLevel translates Postgres log messages
  * back to a native log level.
  */
 static int
