@@ -43,6 +43,7 @@
 
 
 /* Local functions forward declarations for unsupported command checks */
+static void PostprocessCreateTableStmtForeignKeys(CreateStmt *createStatement);
 static void PostprocessCreateTableStmtPartitionOf(CreateStmt *createStatement,
 												  const char *queryString);
 static bool AlterTableDefinesFKeyBetweenPostgresAndNonDistTable(
@@ -165,9 +166,9 @@ PreprocessDropTableStmt(Node *node, const char *queryString,
 
 
 /*
- * PostprocessCreateTableStmt takes CreateStmt object as a parameter and errors
- * out if it creates a table with a foreign key that references to a citus local
- * table.
+ * PostprocessCreateTableStmt takes CreateStmt object as a parameter and
+ * processes foreign keys on relation via PostprocessCreateTableStmtForeignKeys
+ * function.
  *
  * This function also processes CREATE TABLE ... PARTITION OF statements via
  * PostprocessCreateTableStmtPartitionOf function.
@@ -175,21 +176,53 @@ PreprocessDropTableStmt(Node *node, const char *queryString,
 void
 PostprocessCreateTableStmt(CreateStmt *createStatement, const char *queryString)
 {
+	PostprocessCreateTableStmtForeignKeys(createStatement);
+
+	if (createStatement->inhRelations != NIL && createStatement->partbound != NULL)
+	{
+		/* process CREATE TABLE ... PARTITION OF command */
+		PostprocessCreateTableStmtPartitionOf(createStatement, queryString);
+	}
+}
+
+
+/*
+ * PostprocessCreateTableStmtForeignKeys drops ands re-defines foreign keys
+ * defined by given CREATE TABLE command if command defined any foreign to
+ * reference or citus local tables.
+ */
+static void
+PostprocessCreateTableStmtForeignKeys(CreateStmt *createStatement)
+{
 	/*
 	 * Relation must exist and it is already locked as standard process utility
 	 * is already executed.
 	 */
 	bool missingOk = false;
 	Oid relationId = RangeVarGetRelid(createStatement->relation, NoLock, missingOk);
-	if (HasForeignKeyToCitusLocalTable(relationId))
-	{
-		ErrorOutForFKeyBetweenPostgresAndCitusLocalTable(relationId);
-	}
 
-	if (createStatement->inhRelations != NIL && createStatement->partbound != NULL)
+	/*
+	 * As we are just creating the table, we cannot have foreign keys that our
+	 * relation is referenced. So we use INCLUDE_REFERENCING_CONSTRAINTS here.
+	 * Reason behind using other two flags is explained below.
+	 */
+	int nonDistTableFKeysFlag = INCLUDE_REFERENCING_CONSTRAINTS |
+								INCLUDE_CITUS_LOCAL_TABLES |
+								INCLUDE_REFERENCE_TABLES;
+	List *nonDistTableForeignKeyIdList =
+		GetForeignKeyOids(relationId, nonDistTableFKeysFlag);
+	bool hasForeignKeyToNonDistTable = list_length(nonDistTableForeignKeyIdList) != 0;
+	if (hasForeignKeyToNonDistTable)
 	{
-		/* process CREATE TABLE ... PARTITION OF command */
-		PostprocessCreateTableStmtPartitionOf(createStatement, queryString);
+		/*
+		 * To support foreign keys from postgres tables to reference or citus
+		 * local tables, we drop and re-define foreign keys so that our ALTER
+		 * TABLE hook does the necessary job.
+		 */
+		List *relationFKeyCreationCommands =
+			GetForeignConstraintCommandsInternal(relationId, nonDistTableFKeysFlag);
+		DropRelationForeignKeys(relationId, nonDistTableFKeysFlag);
+		ExecuteAndLogDDLCommandList(relationFKeyCreationCommands);
 	}
 }
 
