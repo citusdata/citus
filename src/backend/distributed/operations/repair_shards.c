@@ -85,7 +85,9 @@ static void UpdateColocatedShardPlacementMetadataOnWorkers(int64 shardId,
 														   int32 targetNodePort);
 
 /* declarations for dynamic loading */
+PG_FUNCTION_INFO_V1(citus_copy_shard_placement);
 PG_FUNCTION_INFO_V1(master_copy_shard_placement);
+PG_FUNCTION_INFO_V1(citus_move_shard_placement);
 PG_FUNCTION_INFO_V1(master_move_shard_placement);
 
 
@@ -93,17 +95,17 @@ bool DeferShardDeleteOnMove = false;
 
 
 /*
- * master_copy_shard_placement implements a user-facing UDF to repair data from
+ * citus_copy_shard_placement implements a user-facing UDF to repair data from
  * a healthy (source) node to an inactive (target) node. To accomplish this it
  * entirely recreates the table structure before copying all data. During this
  * time all modifications are paused to the shard. After successful repair, the
  * inactive placement is marked healthy and modifications may continue. If the
  * repair fails at any point, this function throws an error, leaving the node
- * in an unhealthy state. Please note that master_copy_shard_placement copies
+ * in an unhealthy state. Please note that citus_copy_shard_placement copies
  * given shard along with its co-located shards.
  */
 Datum
-master_copy_shard_placement(PG_FUNCTION_ARGS)
+citus_copy_shard_placement(PG_FUNCTION_ARGS)
 {
 	int64 shardId = PG_GETARG_INT64(0);
 	text *sourceNodeNameText = PG_GETARG_TEXT_P(1);
@@ -147,7 +149,17 @@ master_copy_shard_placement(PG_FUNCTION_ARGS)
 
 
 /*
- * master_move_shard_placement moves given shard (and its co-located shards) from one
+ * master_copy_shard_placement is a wrapper function for old UDF name.
+ */
+Datum
+master_copy_shard_placement(PG_FUNCTION_ARGS)
+{
+	return citus_copy_shard_placement(fcinfo);
+}
+
+
+/*
+ * citus_move_shard_placement moves given shard (and its co-located shards) from one
  * node to the other node. To accomplish this it entirely recreates the table structure
  * before copying all data.
  *
@@ -162,7 +174,7 @@ master_copy_shard_placement(PG_FUNCTION_ARGS)
  * any changes in source node or target node.
  */
 Datum
-master_move_shard_placement(PG_FUNCTION_ARGS)
+citus_move_shard_placement(PG_FUNCTION_ARGS)
 {
 	int64 shardId = PG_GETARG_INT64(0);
 	char *sourceNodeName = text_to_cstring(PG_GETARG_TEXT_P(1));
@@ -198,7 +210,7 @@ master_move_shard_placement(PG_FUNCTION_ARGS)
 
 		/*
 		 * Block concurrent DDL / TRUNCATE commands on the relation. Similarly,
-		 * block concurrent master_move_shard_placement() on any shard of
+		 * block concurrent citus_move_shard_placement() on any shard of
 		 * the same relation. This is OK for now since we're executing shard
 		 * moves sequentially anyway.
 		 */
@@ -275,8 +287,18 @@ master_move_shard_placement(PG_FUNCTION_ARGS)
 
 
 /*
+ * master_move_shard_placement is a wrapper function for old UDF name.
+ */
+Datum
+master_move_shard_placement(PG_FUNCTION_ARGS)
+{
+	return citus_move_shard_placement(fcinfo);
+}
+
+
+/*
  * ErrorIfMoveCitusLocalTable is a helper function for rebalance_table_shards
- * and master_move_shard_placement udf's to error out if relation with relationId
+ * and citus_move_shard_placement udf's to error out if relation with relationId
  * is a citus local table.
  */
 void

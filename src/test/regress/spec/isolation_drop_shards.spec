@@ -32,7 +32,7 @@ step "s1-apply-delete-command"
 
 step "s1-drop-all-shards"
 {
-	SELECT master_drop_all_shards('append_table', 'public', 'append_table');
+	SELECT citus_drop_all_shards('append_table', 'public', 'append_table');
 }
 
 step "s1-commit"
@@ -54,7 +54,7 @@ step "s2-apply-delete-command"
 
 step "s2-drop-all-shards"
 {
-	SELECT master_drop_all_shards('append_table', 'public', 'append_table');
+	SELECT citus_drop_all_shards('append_table', 'public', 'append_table');
 }
 
 step "s2-select"

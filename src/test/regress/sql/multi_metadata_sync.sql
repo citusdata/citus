@@ -32,6 +32,25 @@ SELECT * FROM pg_dist_partition WHERE partmethod='h' AND repmodel='s';
 -- pg_dist_node entries and reference tables
 SELECT unnest(master_metadata_snapshot()) order by 1;
 
+-- this function is dropped in Citus10, added here for tests
+CREATE OR REPLACE FUNCTION pg_catalog.master_create_distributed_table(table_name regclass,
+                                                                      distribution_column text,
+                                                                      distribution_method citus.distribution_type)
+    RETURNS void
+    LANGUAGE C STRICT
+    AS 'citus', $$master_create_distributed_table$$;
+COMMENT ON FUNCTION pg_catalog.master_create_distributed_table(table_name regclass,
+                                                               distribution_column text,
+                                                               distribution_method citus.distribution_type)
+    IS 'define the table distribution functions';
+
+-- this function is dropped in Citus10, added here for tests
+CREATE OR REPLACE FUNCTION pg_catalog.master_create_worker_shards(table_name text, shard_count integer,
+                                                                  replication_factor integer DEFAULT 2)
+    RETURNS void
+    AS 'citus', $$master_create_worker_shards$$
+    LANGUAGE C STRICT;
+
 -- Create a test table with constraints and SERIAL
 CREATE TABLE mx_test_table (col_1 int UNIQUE, col_2 text NOT NULL, col_3 BIGSERIAL);
 SELECT master_create_distributed_table('mx_test_table', 'col_1', 'hash');
