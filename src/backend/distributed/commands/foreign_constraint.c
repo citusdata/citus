@@ -46,6 +46,11 @@
 	((x) == FKCONSTR_ACTION_NOACTION || (x) == FKCONSTR_ACTION_RESTRICT)
 
 
+#define USE_CREATE_REFERENCE_TABLE_HINT \
+	"You could use SELECT create_reference_table('%s') " \
+	"to replicate the referenced table to all nodes"
+
+
 typedef bool (*CheckRelationFunc)(Oid);
 
 
@@ -57,7 +62,8 @@ static void EnsureSupportedFKeyBetweenCitusLocalAndRefTable(Form_pg_constraint
 															char
 															referencingReplicationModel,
 															char
-															referencedReplicationModel);
+															referencedReplicationModel,
+															Oid referencedTableId);
 static bool HeapTupleOfForeignConstraintIncludesColumn(HeapTuple heapTuple,
 													   Oid relationId,
 													   int pgConstraintKey,
@@ -167,8 +173,7 @@ ErrorIfUnsupportedForeignConstraintExists(Relation relation, char referencingDis
 							errdetail("To enforce foreign keys, the referencing and "
 									  "referenced rows need to be stored on the same "
 									  "node."),
-							errhint("You could use SELECT create_reference_table('%s') "
-									"to replicate the referenced table to all nodes",
+							errhint(USE_CREATE_REFERENCE_TABLE_HINT,
 									referencedTableName)));
 		}
 
@@ -201,7 +206,8 @@ ErrorIfUnsupportedForeignConstraintExists(Relation relation, char referencingDis
 		{
 			EnsureSupportedFKeyBetweenCitusLocalAndRefTable(constraintForm,
 															referencingReplicationModel,
-															referencedReplicationModel);
+															referencedReplicationModel,
+															referencedTableId);
 
 			ReleaseSysCache(heapTuple);
 			continue;
@@ -304,7 +310,8 @@ ErrorIfUnsupportedForeignConstraintExists(Relation relation, char referencingDis
 static void
 EnsureSupportedFKeyBetweenCitusLocalAndRefTable(Form_pg_constraint fKeyConstraintForm,
 												char referencingReplicationModel,
-												char referencedReplicationModel)
+												char referencedReplicationModel,
+												Oid referencedTableId)
 {
 	bool referencingIsReferenceTable =
 		(referencingReplicationModel == REPLICATION_MODEL_2PC);
@@ -324,11 +331,14 @@ EnsureSupportedFKeyBetweenCitusLocalAndRefTable(Form_pg_constraint fKeyConstrain
 		if (!(BehaviorIsRestrictOrNoAction(fKeyConstraintForm->confdeltype) &&
 			  BehaviorIsRestrictOrNoAction(fKeyConstraintForm->confupdtype)))
 		{
+			char *referencedTableName = get_rel_name(referencedTableId);
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 							errmsg("cannot define foreign key constraint, "
 								   "foreign keys from reference tables to "
 								   "citus local tables can only be defined "
-								   "with NO ACTION or RESTRICT behaviors")));
+								   "with NO ACTION or RESTRICT behaviors"),
+							errhint(USE_CREATE_REFERENCE_TABLE_HINT,
+									referencedTableName)));
 		}
 	}
 }
