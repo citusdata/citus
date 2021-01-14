@@ -323,6 +323,50 @@ SELECT table_name, citus_table_type, distribution_column, shard_count FROM publi
 SET client_min_messages TO DEFAULT;
 
 
+-- issue 4508 table_1 and table_2 are used to test
+-- some edge cases around intermediate result pruning
+CREATE TABLE table_1 (key int, value text);
+SELECT create_distributed_table('table_1', 'key');
+
+CREATE TABLE table_2 (key int, value text);
+SELECT create_distributed_table('table_2', 'key');
+
+INSERT INTO table_1    VALUES (1, '1'), (2, '2'), (3, '3'), (4, '4');
+INSERT INTO table_2    VALUES (1, '1'), (2, '2'), (3, '3'), (4, '4'), (5, '5'), (6, '6');
+
+SET citus.log_intermediate_results TO ON;
+SET client_min_messages to debug1;
+WITH a AS (SELECT * FROM table_1 ORDER BY 1,2 DESC LIMIT 1)
+SELECT count(*),
+key
+FROM a JOIN table_2 USING (key)
+GROUP BY key
+HAVING (max(table_2.value) >= (SELECT value FROM a));
+
+WITH a AS (SELECT * FROM table_1 ORDER BY 1,2 DESC LIMIT 1)
+INSERT INTO table_1 SELECT count(*),
+key
+FROM a JOIN table_2 USING (key)
+GROUP BY key
+HAVING (max(table_2.value) >= (SELECT value FROM a));
+
+WITH stats AS (
+  SELECT count(key) m FROM table_1
+),
+inserts AS (
+  INSERT INTO table_2
+  SELECT key, count(*)
+  FROM table_1
+  WHERE key >= (SELECT m FROM stats)
+  GROUP BY key
+  HAVING count(*) <= (SELECT m FROM stats)
+  LIMIT 1
+  RETURNING *
+) SELECT count(*) FROM inserts;
+
+RESET client_min_messages;
+
+
 \set VERBOSITY terse
 DROP TABLE ref_table;
 

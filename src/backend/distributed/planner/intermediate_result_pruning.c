@@ -154,7 +154,7 @@ RecordSubplanExecutionsOnNodes(HTAB *intermediateResultsHash,
 	List *usedSubPlanNodeList = distributedPlan->usedSubPlanNodeList;
 	List *subPlanList = distributedPlan->subPlanList;
 	ListCell *subPlanCell = NULL;
-	int workerNodeCount = ActiveReadableNonCoordinatorNodeCount();
+	int workerNodeCount = list_length(ActiveReadableNodeList());
 
 	foreach(subPlanCell, usedSubPlanNodeList)
 	{
@@ -272,7 +272,7 @@ AppendAllAccessedWorkerNodes(IntermediateResultsHashEntry *entry,
 static void
 AppendAllWorkerNodes(IntermediateResultsHashEntry *entry)
 {
-	List *workerNodeList = ActiveReadableNonCoordinatorNodeList();
+	List *workerNodeList = ActiveReadableNodeList();
 
 	WorkerNode *workerNode = NULL;
 	foreach_ptr(workerNode, workerNodeList)
