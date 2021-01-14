@@ -236,7 +236,10 @@ PostprocessCreateTableStmtForeignKeys(CreateStmt *createStatement)
 		List *relationFKeyCreationCommands =
 			GetForeignConstraintCommandsInternal(relationId, nonDistTableFKeysFlag);
 		DropRelationForeignKeys(relationId, nonDistTableFKeysFlag);
-		ExecuteAndLogDDLCommandList(relationFKeyCreationCommands);
+
+		bool skip_validation = true;
+		ExecuteForeignKeyCreateCommandList(relationFKeyCreationCommands,
+										   skip_validation);
 	}
 }
 
@@ -1103,7 +1106,8 @@ PreprocessAlterTableSchemaStmt(Node *node, const char *queryString,
  * ALTER TABLE ... ADD FOREIGN KEY command to skip the validation step.
  */
 Node *
-SkipForeignKeyValidationIfConstraintIsFkey(AlterTableStmt *alterTableStatement)
+SkipForeignKeyValidationIfConstraintIsFkey(AlterTableStmt *alterTableStatement,
+										   bool processLocalRelation)
 {
 	/* first check whether a distributed relation is affected */
 	if (alterTableStatement->relation == NULL)
@@ -1118,8 +1122,7 @@ SkipForeignKeyValidationIfConstraintIsFkey(AlterTableStmt *alterTableStatement)
 		return (Node *) alterTableStatement;
 	}
 
-	bool isCitusRelation = IsCitusTable(leftRelationId);
-	if (!isCitusRelation)
+	if (!IsCitusTable(leftRelationId) && !processLocalRelation)
 	{
 		return (Node *) alterTableStatement;
 	}

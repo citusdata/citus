@@ -416,7 +416,8 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 				 * Note validation is done on the shard level when DDL propagation
 				 * is enabled. The following eagerly executes some tasks on workers.
 				 */
-				parsetree = SkipForeignKeyValidationIfConstraintIsFkey(alterTableStmt);
+				parsetree =
+					SkipForeignKeyValidationIfConstraintIsFkey(alterTableStmt, false);
 			}
 		}
 	}
