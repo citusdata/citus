@@ -209,12 +209,6 @@ CREATE TABLE wide_table
 
 SELECT create_distributed_table('wide_table', 'long_column_001');
 
-
-SHOW citus.max_task_string_size;
-
--- setting can not be changed on runtime
-SET citus.max_task_string_size TO 20000;
-
 -- error message may vary between executions
 -- hiding warning and error message
 -- no output means the query has failed

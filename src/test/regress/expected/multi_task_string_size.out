@@ -211,15 +211,6 @@ SELECT create_distributed_table('wide_table', 'long_column_001');
 
 (1 row)
 
-SHOW citus.max_task_string_size;
- citus.max_task_string_size
----------------------------------------------------------------------
- 12288
-(1 row)
-
--- setting can not be changed on runtime
-SET citus.max_task_string_size TO 20000;
-ERROR:  parameter "citus.max_task_string_size" cannot be changed without restarting the server
 -- error message may vary between executions
 -- hiding warning and error message
 -- no output means the query has failed

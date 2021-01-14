@@ -122,10 +122,6 @@ static bool StatisticsCollectionGucCheckHook(bool *newval, void **extra, GucSour
 static void CitusAuthHook(Port *port, int status);
 
 
-/* static variable to hold value of deprecated GUC variable */
-static bool DeprecatedBool = false;
-static int DeprecatedInt = 0;
-
 static ClientAuthentication_hook_type original_client_auth_hook = NULL;
 
 
@@ -566,27 +562,6 @@ RegisterCitusConfigVariables(void)
 		GUC_UNIT_MS | GUC_STANDARD,
 		NULL, NULL, NULL);
 
-	DefineCustomIntVariable(
-		"citus.sslmode",
-		gettext_noop("This variable has been deprecated. Use the citus.node_conninfo "
-					 "GUC instead."),
-		NULL,
-		&DeprecatedInt,
-		0, 0, 32,
-		PGC_POSTMASTER,
-		GUC_SUPERUSER_ONLY | GUC_NO_SHOW_ALL,
-		NULL, NULL, NULL);
-
-	DefineCustomBoolVariable(
-		"citus.binary_master_copy_format",
-		gettext_noop("This GUC variable has been deprecated."),
-		NULL,
-		&DeprecatedBool,
-		false,
-		PGC_USERSET,
-		GUC_STANDARD | GUC_NO_SHOW_ALL,
-		NULL, NULL, NULL);
-
 	DefineCustomBoolVariable(
 		"citus.binary_worker_copy_format",
 		gettext_noop("Use the binary worker copy format."),
@@ -597,16 +572,6 @@ RegisterCitusConfigVariables(void)
 		false,
 		PGC_SIGHUP,
 		GUC_STANDARD,
-		NULL, NULL, NULL);
-
-	DefineCustomBoolVariable(
-		"citus.expire_cached_shards",
-		gettext_noop("This GUC variable has been deprecated."),
-		NULL,
-		&DeprecatedBool,
-		false,
-		PGC_SIGHUP,
-		GUC_STANDARD | GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -1221,16 +1186,6 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
-		"citus.task_tracker_delay",
-		gettext_noop("This GUC variable has been deprecated."),
-		NULL,
-		&DeprecatedInt,
-		200 * MS, 1, 100 * MS_PER_SECOND,
-		PGC_SIGHUP,
-		GUC_UNIT_MS | GUC_STANDARD | GUC_NO_SHOW_ALL,
-		NULL, NULL, NULL);
-
-	DefineCustomIntVariable(
 		"citus.max_cached_conns_per_worker",
 		gettext_noop("Sets the maximum number of connections to cache per worker."),
 		gettext_noop("Each backend opens connections to the workers to query the "
@@ -1245,42 +1200,12 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
-		"citus.max_assign_task_batch_size",
-		gettext_noop("This GUC variable has been deprecated."),
-		NULL,
-		&DeprecatedInt,
-		64, 1, INT_MAX,
-		PGC_USERSET,
-		GUC_STANDARD | GUC_NO_SHOW_ALL,
-		NULL, NULL, NULL);
-
-	DefineCustomIntVariable(
-		"citus.max_tracked_tasks_per_node",
-		gettext_noop("This GUC variable has been deprecated."),
-		NULL,
-		&DeprecatedInt,
-		1024, 8, INT_MAX,
-		PGC_POSTMASTER,
-		GUC_STANDARD | GUC_NO_SHOW_ALL,
-		NULL, NULL, NULL);
-
-	DefineCustomIntVariable(
 		"citus.repartition_join_bucket_count_per_node",
 		gettext_noop("Sets the bucket size for repartition joins per node"),
 		gettext_noop("Repartition joins create buckets in each node and "
 					 "uses those to shuffle data around nodes. "),
 		&RepartitionJoinBucketCountPerNode,
 		4, 1, INT_MAX,
-		PGC_SIGHUP,
-		GUC_STANDARD | GUC_NO_SHOW_ALL,
-		NULL, NULL, NULL);
-
-	DefineCustomIntVariable(
-		"citus.max_running_tasks_per_node",
-		gettext_noop("This GUC variable has been deprecated."),
-		NULL,
-		&DeprecatedInt,
-		8, 1, INT_MAX,
 		PGC_SIGHUP,
 		GUC_STANDARD | GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
@@ -1297,16 +1222,6 @@ RegisterCitusConfigVariables(void)
 		8192, 0, (INT_MAX / 1024), /* result stored in int variable */
 		PGC_USERSET,
 		GUC_UNIT_KB | GUC_STANDARD,
-		NULL, NULL, NULL);
-
-	DefineCustomIntVariable(
-		"citus.large_table_shard_count",
-		gettext_noop("This variable has been deprecated."),
-		gettext_noop("Consider reference tables instead"),
-		&DeprecatedInt,
-		4, 1, 10000,
-		PGC_USERSET,
-		GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
@@ -1560,16 +1475,6 @@ RegisterCitusConfigVariables(void)
 		0, 0, INT_MAX,
 		PGC_USERSET,
 		GUC_NO_SHOW_ALL,
-		NULL, NULL, NULL);
-
-	DefineCustomIntVariable(
-		"citus.max_task_string_size",
-		gettext_noop("This GUC variable has been deprecated."),
-		NULL,
-		&DeprecatedInt,
-		12288, 8192, 65536,
-		PGC_POSTMASTER,
-		GUC_STANDARD | GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
