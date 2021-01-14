@@ -283,24 +283,48 @@ PostprocessCreateTableStmtPartitionOf(CreateStmt *createStatement, const
 
 	Assert(parentRelationId != InvalidOid);
 
+	Oid relationId = RangeVarGetRelid(createStatement->relation, NoLock, missingOk);
+
+	/*
+	 * In case of an IF NOT EXISTS statement, Postgres lets it pass through the
+	 * standardProcess_Utility, and gets into this Post-process hook by
+	 * ignoring the statement if the table already exists. Thus, we need to make
+	 * sure Citus behaves like plain PG in case the relation already exists.
+	 */
+	if (createStatement->if_not_exists)
+	{
+		if (IsCitusTable(relationId))
+		{
+			/*
+			 * Ignore if the relation is already distributed.
+			 */
+			return;
+		}
+		else if (!PartitionTable(relationId) ||
+				 PartitionParentOid(relationId) != parentRelationId)
+		{
+			/*
+			 * Ignore if the relation is not a partition, or if that
+			 * partition's parent is not the current parent from parentRelationId
+			 */
+			return;
+		}
+	}
+
 	/*
 	 * If a partition is being created and if its parent is a distributed
 	 * table, we will distribute this table as well.
 	 */
 	if (IsCitusTable(parentRelationId))
 	{
-		Oid relationId = RangeVarGetRelid(createStatement->relation, NoLock, missingOk);
 		Var *parentDistributionColumn = DistPartitionKeyOrError(parentRelationId);
 		char parentDistributionMethod = DISTRIBUTE_BY_HASH;
 		char *parentRelationName = generate_qualified_relation_name(parentRelationId);
 		bool viaDeprecatedAPI = false;
 
-		if (!(IsCitusTable(relationId) && (createStatement->if_not_exists)))
-		{
-			CreateDistributedTable(relationId, parentDistributionColumn,
-								   parentDistributionMethod, ShardCount,
-								   parentRelationName, viaDeprecatedAPI);
-		}
+		CreateDistributedTable(relationId, parentDistributionColumn,
+							   parentDistributionMethod, ShardCount,
+							   parentRelationName, viaDeprecatedAPI);
 	}
 }
 
