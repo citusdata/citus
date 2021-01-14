@@ -155,7 +155,19 @@ typedef struct TableConversionParameters
 	bool cascadeViaForeignKeys;
 } TableConversionParameters;
 
-typedef struct TableConversionReturn TableConversionReturn;
+typedef struct TableConversionReturn
+{
+	/*
+	 * commands to create foreign keys for the table
+	 *
+	 * When the table conversion is cascaded we can recreate
+	 * some of the foreign keys of the cascaded tables. So with this
+	 * list we can return it to the initial conversion operation so
+	 * foreign keys can be created after every colocated table is
+	 * converted.
+	 */
+	List *foreignKeyCommands;
+}TableConversionReturn;
 
 
 /* Config variable managed via guc.c */
