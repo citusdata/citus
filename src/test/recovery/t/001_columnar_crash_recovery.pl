@@ -3,7 +3,7 @@ use strict;
 use warnings;
 use PostgresNode;
 use TestLib;
-use Test::More tests => 5;
+use Test::More tests => 6;
 
 # Initialize single node
 my $node_one = get_new_node('node_one');
@@ -79,3 +79,20 @@ COMMIT PREPARED 'prepared_xact_crash';
 $result = $node_one->safe_psql('postgres', "SELECT count(*) FROM t1;");
 print "node one count: $result\n";
 is($result, qq(1004), 'columnar crash during prepared transaction (after commit)');
+
+# test crash recovery with copied data
+$node_one->safe_psql('postgres', "
+\\copy t1 FROM stdin delimiter ','
+1,a
+2,b
+3,c
+\\.
+");
+
+# simulate crash
+$node_one->stop('immediate');
+$node_one->start;
+
+$result = $node_one->safe_psql('postgres', "SELECT count(*) FROM t1;");
+print "node one count: $result\n";
+is($result, qq(1007), 'columnar crash after copy command');
