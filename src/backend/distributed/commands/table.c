@@ -1098,13 +1098,12 @@ PreprocessAlterTableSchemaStmt(Node *node, const char *queryString,
 
 
 /*
- * WorkerProcessAlterTableStmt checks and processes the alter table statement to be
- * worked on the distributed table of the worker node. Currently, it only processes
+ * SkipForeignKeyValidationIfConstraintIsFkey checks and processes the alter table
+ * statement to be worked on the distributed table. Currently, it only processes
  * ALTER TABLE ... ADD FOREIGN KEY command to skip the validation step.
  */
 Node *
-WorkerProcessAlterTableStmt(AlterTableStmt *alterTableStatement,
-							const char *alterTableCommand)
+SkipForeignKeyValidationIfConstraintIsFkey(AlterTableStmt *alterTableStatement)
 {
 	/* first check whether a distributed relation is affected */
 	if (alterTableStatement->relation == NULL)
