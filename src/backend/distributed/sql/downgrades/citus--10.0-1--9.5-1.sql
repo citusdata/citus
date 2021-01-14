@@ -53,6 +53,7 @@ RENAME TO master_drop_all_shards;
 
 DROP VIEW pg_catalog.time_partitions;
 DROP FUNCTION pg_catalog.time_partition_range(regclass);
+DROP PROCEDURE pg_catalog.alter_old_partitions_set_access_method(regclass,timestamptz,name);
 
 DROP FUNCTION pg_catalog.citus_set_coordinator_host(text,int,noderole,name);
 DROP FUNCTION pg_catalog.worker_change_sequence_dependency(regclass, regclass, regclass);

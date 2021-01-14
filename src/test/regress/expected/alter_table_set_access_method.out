@@ -176,6 +176,120 @@ SELECT * FROM partitioned_table_6_10 ORDER BY 1, 2;
   7 | 2
 (1 row)
 
+-- try to compress partitions with an integer partition column
+CALL alter_old_partitions_set_access_method('partitioned_table', '2021-01-01', 'columnar');
+ERROR:  partition column of partitioned_table cannot be cast to a timestamptz
+CONTEXT:  PL/pgSQL function alter_old_partitions_set_access_method(regclass,timestamp with time zone,name) line 13 at RAISE
+CREATE TABLE time_partitioned (event_time timestamp, event int) partition by range (event_time);
+SELECT create_distributed_table('time_partitioned', 'event_time');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE time_partitioned_d00 PARTITION OF time_partitioned FOR VALUES FROM ('2000-01-01') TO ('2009-12-31');
+CREATE TABLE time_partitioned_d10 PARTITION OF time_partitioned FOR VALUES FROM ('2010-01-01') TO ('2019-12-31');
+CREATE TABLE time_partitioned_d20 PARTITION OF time_partitioned FOR VALUES FROM ('2020-01-01') TO ('2029-12-31');
+INSERT INTO time_partitioned VALUES ('2005-01-01', 1);
+INSERT INTO time_partitioned VALUES ('2015-01-01', 2);
+INSERT INTO time_partitioned VALUES ('2025-01-01', 3);
+\set VERBOSITY terse
+-- compress no partitions
+CALL alter_old_partitions_set_access_method('time_partitioned', '1999-01-01', 'columnar');
+SELECT partition, access_method FROM time_partitions WHERE parent_table = 'time_partitioned'::regclass ORDER BY partition::text;
+      partition       | access_method
+---------------------------------------------------------------------
+ time_partitioned_d00 | heap
+ time_partitioned_d10 | heap
+ time_partitioned_d20 | heap
+(3 rows)
+
+SELECT event FROM time_partitioned ORDER BY 1;
+ event
+---------------------------------------------------------------------
+     1
+     2
+     3
+(3 rows)
+
+-- compress 2 old partitions
+CALL alter_old_partitions_set_access_method('time_partitioned', '2021-01-01', 'columnar');
+NOTICE:  converting time_partitioned_d00 with start time Sat Jan 01 00:00:00 2000 and end time Thu Dec 31 00:00:00 2009
+NOTICE:  any index will be dropped, because columnar tables cannot have indexes
+NOTICE:  creating a new table for alter_table_set_access_method.time_partitioned_d00
+NOTICE:  Moving the data of alter_table_set_access_method.time_partitioned_d00
+NOTICE:  Dropping the old alter_table_set_access_method.time_partitioned_d00
+NOTICE:  Renaming the new table to alter_table_set_access_method.time_partitioned_d00
+NOTICE:  converting time_partitioned_d10 with start time Fri Jan 01 00:00:00 2010 and end time Tue Dec 31 00:00:00 2019
+NOTICE:  any index will be dropped, because columnar tables cannot have indexes
+NOTICE:  creating a new table for alter_table_set_access_method.time_partitioned_d10
+NOTICE:  Moving the data of alter_table_set_access_method.time_partitioned_d10
+NOTICE:  Dropping the old alter_table_set_access_method.time_partitioned_d10
+NOTICE:  Renaming the new table to alter_table_set_access_method.time_partitioned_d10
+SELECT partition, access_method FROM time_partitions WHERE parent_table = 'time_partitioned'::regclass ORDER BY partition::text;
+      partition       | access_method
+---------------------------------------------------------------------
+ time_partitioned_d00 | columnar
+ time_partitioned_d10 | columnar
+ time_partitioned_d20 | heap
+(3 rows)
+
+SELECT event FROM time_partitioned ORDER BY 1;
+ event
+---------------------------------------------------------------------
+     1
+     2
+     3
+(3 rows)
+
+-- will not be compressed again
+CALL alter_old_partitions_set_access_method('time_partitioned', '2021-01-01', 'columnar');
+SELECT partition, access_method FROM time_partitions WHERE parent_table = 'time_partitioned'::regclass ORDER BY partition::text;
+      partition       | access_method
+---------------------------------------------------------------------
+ time_partitioned_d00 | columnar
+ time_partitioned_d10 | columnar
+ time_partitioned_d20 | heap
+(3 rows)
+
+SELECT event FROM time_partitioned ORDER BY 1;
+ event
+---------------------------------------------------------------------
+     1
+     2
+     3
+(3 rows)
+
+-- back to heap
+CALL alter_old_partitions_set_access_method('time_partitioned', '2021-01-01', 'heap');
+NOTICE:  converting time_partitioned_d00 with start time Sat Jan 01 00:00:00 2000 and end time Thu Dec 31 00:00:00 2009
+NOTICE:  creating a new table for alter_table_set_access_method.time_partitioned_d00
+NOTICE:  Moving the data of alter_table_set_access_method.time_partitioned_d00
+NOTICE:  Dropping the old alter_table_set_access_method.time_partitioned_d00
+NOTICE:  Renaming the new table to alter_table_set_access_method.time_partitioned_d00
+NOTICE:  converting time_partitioned_d10 with start time Fri Jan 01 00:00:00 2010 and end time Tue Dec 31 00:00:00 2019
+NOTICE:  creating a new table for alter_table_set_access_method.time_partitioned_d10
+NOTICE:  Moving the data of alter_table_set_access_method.time_partitioned_d10
+NOTICE:  Dropping the old alter_table_set_access_method.time_partitioned_d10
+NOTICE:  Renaming the new table to alter_table_set_access_method.time_partitioned_d10
+SELECT partition, access_method FROM time_partitions WHERE parent_table = 'time_partitioned'::regclass ORDER BY partition::text;
+      partition       | access_method
+---------------------------------------------------------------------
+ time_partitioned_d00 | heap
+ time_partitioned_d10 | heap
+ time_partitioned_d20 | heap
+(3 rows)
+
+SELECT event FROM time_partitioned ORDER BY 1;
+ event
+---------------------------------------------------------------------
+     1
+     2
+     3
+(3 rows)
+
+\set VERBOSITY default
+DROP TABLE time_partitioned;
 -- test altering a table with index to columnar
 -- the index will be dropped
 CREATE TABLE index_table (a INT) ;

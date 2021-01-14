@@ -57,6 +57,43 @@ SELECT * FROM partitioned_table ORDER BY 1, 2;
 SELECT * FROM partitioned_table_1_5 ORDER BY 1, 2;
 SELECT * FROM partitioned_table_6_10 ORDER BY 1, 2;
 
+-- try to compress partitions with an integer partition column
+CALL alter_old_partitions_set_access_method('partitioned_table', '2021-01-01', 'columnar');
+
+CREATE TABLE time_partitioned (event_time timestamp, event int) partition by range (event_time);
+SELECT create_distributed_table('time_partitioned', 'event_time');
+CREATE TABLE time_partitioned_d00 PARTITION OF time_partitioned FOR VALUES FROM ('2000-01-01') TO ('2009-12-31');
+CREATE TABLE time_partitioned_d10 PARTITION OF time_partitioned FOR VALUES FROM ('2010-01-01') TO ('2019-12-31');
+CREATE TABLE time_partitioned_d20 PARTITION OF time_partitioned FOR VALUES FROM ('2020-01-01') TO ('2029-12-31');
+INSERT INTO time_partitioned VALUES ('2005-01-01', 1);
+INSERT INTO time_partitioned VALUES ('2015-01-01', 2);
+INSERT INTO time_partitioned VALUES ('2025-01-01', 3);
+
+\set VERBOSITY terse
+
+-- compress no partitions
+CALL alter_old_partitions_set_access_method('time_partitioned', '1999-01-01', 'columnar');
+SELECT partition, access_method FROM time_partitions WHERE parent_table = 'time_partitioned'::regclass ORDER BY partition::text;
+SELECT event FROM time_partitioned ORDER BY 1;
+
+-- compress 2 old partitions
+CALL alter_old_partitions_set_access_method('time_partitioned', '2021-01-01', 'columnar');
+SELECT partition, access_method FROM time_partitions WHERE parent_table = 'time_partitioned'::regclass ORDER BY partition::text;
+SELECT event FROM time_partitioned ORDER BY 1;
+
+-- will not be compressed again
+CALL alter_old_partitions_set_access_method('time_partitioned', '2021-01-01', 'columnar');
+SELECT partition, access_method FROM time_partitions WHERE parent_table = 'time_partitioned'::regclass ORDER BY partition::text;
+SELECT event FROM time_partitioned ORDER BY 1;
+
+-- back to heap
+CALL alter_old_partitions_set_access_method('time_partitioned', '2021-01-01', 'heap');
+SELECT partition, access_method FROM time_partitions WHERE parent_table = 'time_partitioned'::regclass ORDER BY partition::text;
+SELECT event FROM time_partitioned ORDER BY 1;
+
+\set VERBOSITY default
+
+DROP TABLE time_partitioned;
 
 -- test altering a table with index to columnar
 -- the index will be dropped

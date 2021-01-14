@@ -461,6 +461,7 @@ SELECT * FROM print_extension_changes();
  function undistribute_table(regclass)                                           |
  function upgrade_to_reference_table(regclass)                                   |
                                                                                  | function alter_distributed_table(regclass,text,integer,text,boolean)
+                                                                                 | function alter_old_partitions_set_access_method(regclass,timestamp with time zone,name)
                                                                                  | function alter_table_set_access_method(regclass,text)
                                                                                  | function citus_activate_node(text,integer)
                                                                                  | function citus_add_inactive_node(text,integer,integer,noderole,name)
@@ -500,7 +501,7 @@ SELECT * FROM print_extension_changes();
                                                                                  | view citus_shards
                                                                                  | view citus_tables
                                                                                  | view time_partitions
-(55 rows)
+(56 rows)
 
 DROP TABLE prev_objects, extension_diff;
 -- show running version

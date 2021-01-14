@@ -21,6 +21,7 @@ ORDER BY 1;
  function alter_columnar_table_reset(regclass,boolean,boolean,boolean,boolean)
  function alter_columnar_table_set(regclass,integer,integer,name,integer)
  function alter_distributed_table(regclass,text,integer,text,boolean)
+ function alter_old_partitions_set_access_method(regclass,timestamp with time zone,name)
  function alter_role_if_exists(text,text)
  function alter_table_set_access_method(regclass,text)
  function any_value(anyelement)
@@ -236,5 +237,5 @@ ORDER BY 1;
  view citus_worker_stat_activity
  view pg_dist_shard_placement
  view time_partitions
-(220 rows)
+(221 rows)
 
