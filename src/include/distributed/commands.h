@@ -20,6 +20,11 @@
 #include "tcop/dest.h"
 #include "tcop/utility.h"
 
+
+/* controlled via GUC, should be accessed via EnableLocalReferenceForeignKeys() */
+extern bool EnableLocalReferenceForeignKeys;
+
+
 /*
  * DistributeObjectOps specifies handlers for node/object type pairs.
  * Instances of this type should all be declared in deparse.c.

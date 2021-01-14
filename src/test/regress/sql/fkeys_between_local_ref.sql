@@ -285,6 +285,26 @@ BEGIN;
   ORDER BY tablename;
 ROLLBACK;
 
+BEGIN;
+  -- disable foreign keys to reference tables
+  SET LOCAL citus.enable_local_reference_table_foreign_keys TO false;
+  CREATE TABLE local_table_6 (col_1 INT PRIMARY KEY);
+
+  ALTER TABLE local_table_2 ADD CONSTRAINT fkey_11 FOREIGN KEY (col_1) REFERENCES reference_table_1(col_1) ON DELETE CASCADE;
+
+  CREATE TABLE local_table_5 (
+    col_1 INT UNIQUE REFERENCES local_table_6(col_1),
+    col_2 INT REFERENCES local_table_3(col_1),
+    FOREIGN KEY (col_1) REFERENCES local_table_5(col_1),
+    FOREIGN KEY (col_1) REFERENCES reference_table_1(col_1));
+
+  -- Now show none of local_table_5 & 6 to should be converted to citus local tables
+  -- as it is disabled
+  SELECT logicalrelid::text AS tablename, partmethod, repmodel FROM pg_dist_partition
+  WHERE logicalrelid::text IN (SELECT tablename FROM pg_tables WHERE schemaname='fkeys_between_local_ref')
+  ORDER BY tablename;
+ROLLBACK;
+
 -- this errors out as we don't support creating citus local
 -- tables from partitioned tables
 CREATE TABLE part_local_table (col_1 INT REFERENCES reference_table_1(col_1)) PARTITION BY RANGE (col_1);

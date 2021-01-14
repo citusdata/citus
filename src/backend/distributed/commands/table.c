@@ -42,8 +42,13 @@
 #include "utils/syscache.h"
 
 
+/* controlled via GUC, should be accessed via GetEnableLocalReferenceForeignKeys() */
+bool EnableLocalReferenceForeignKeys = true;
+
+
 /* Local functions forward declarations for unsupported command checks */
 static void PostprocessCreateTableStmtForeignKeys(CreateStmt *createStatement);
+static bool ShouldEnableLocalReferenceForeignKeys(void);
 static void PostprocessCreateTableStmtPartitionOf(CreateStmt *createStatement,
 												  const char *queryString);
 static bool AlterTableDefinesFKeyBetweenPostgresAndNonDistTable(
@@ -83,6 +88,7 @@ static void SetInterShardDDLTaskPlacementList(Task *task,
 static void SetInterShardDDLTaskRelationShardList(Task *task,
 												  ShardInterval *leftShardInterval,
 												  ShardInterval *rightShardInterval);
+
 
 /*
  * We need to run some of the commands sequentially if there is a foreign constraint
@@ -194,6 +200,14 @@ PostprocessCreateTableStmt(CreateStmt *createStatement, const char *queryString)
 static void
 PostprocessCreateTableStmtForeignKeys(CreateStmt *createStatement)
 {
+	if (!ShouldEnableLocalReferenceForeignKeys())
+	{
+		/*
+		 * Either the user disabled foreign keys from/to local/reference tables
+		 * or the coordinator is not in the metadata */
+		return;
+	}
+
 	/*
 	 * Relation must exist and it is already locked as standard process utility
 	 * is already executed.
@@ -224,6 +238,25 @@ PostprocessCreateTableStmtForeignKeys(CreateStmt *createStatement)
 		DropRelationForeignKeys(relationId, nonDistTableFKeysFlag);
 		ExecuteAndLogDDLCommandList(relationFKeyCreationCommands);
 	}
+}
+
+
+/*
+ * ShouldEnableLocalReferenceForeignKeys is a wrapper around getting the GUC
+ * EnableLocalReferenceForeignKeys. If the coordinator is not added
+ * to the metadata, the function returns false. Else, the function returns
+ * the value set by the user
+ *
+ */
+static bool
+ShouldEnableLocalReferenceForeignKeys(void)
+{
+	if (!EnableLocalReferenceForeignKeys)
+	{
+		return false;
+	}
+
+	return CoordinatorAddedAsWorkerNode();
 }
 
 
@@ -412,8 +445,8 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 		leftRelationId = IndexGetRelation(leftRelationId, missingOk);
 	}
 
-	if (processUtilityContext != PROCESS_UTILITY_SUBCOMMAND &&
-		CoordinatorAddedAsWorkerNode() &&
+	if (ShouldEnableLocalReferenceForeignKeys() &&
+		processUtilityContext != PROCESS_UTILITY_SUBCOMMAND &&
 		AlterTableDefinesFKeyBetweenPostgresAndNonDistTable(alterTableStatement))
 	{
 		/*
