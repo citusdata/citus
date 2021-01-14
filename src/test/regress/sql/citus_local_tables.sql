@@ -313,9 +313,6 @@ CREATE UNIQUE INDEX uniqueIndex2 ON "LocalTabLE.1!?!"(id);
 
 SET search_path TO citus_local_tables_test_schema;
 
--- any foreign key between citus local tables and other tables except reference tables cannot be set
--- more tests at ref_citus_local_fkeys.sql
-
 -- between citus local tables and distributed tables
 ALTER TABLE citus_local_table_1 ADD CONSTRAINT fkey_c_to_dist FOREIGN KEY(a) references distributed_table(a);
 ALTER TABLE distributed_table ADD CONSTRAINT fkey_dist_to_c FOREIGN KEY(a) references citus_local_table_1(a);

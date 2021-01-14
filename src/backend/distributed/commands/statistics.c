@@ -65,7 +65,8 @@ static char * CreateAlterCommandIfTargetNotDefault(Oid statsOid);
  * CREATE STATISTICS.
  */
 List *
-PreprocessCreateStatisticsStmt(Node *node, const char *queryString)
+PreprocessCreateStatisticsStmt(Node *node, const char *queryString,
+							   ProcessUtilityContext processUtilityContext)
 {
 	CreateStatsStmt *stmt = castNode(CreateStatsStmt, node);
 
@@ -150,7 +151,8 @@ CreateStatisticsStmtObjectAddress(Node *node, bool missingOk)
  * DROP STATISTICS.
  */
 List *
-PreprocessDropStatisticsStmt(Node *node, const char *queryString)
+PreprocessDropStatisticsStmt(Node *node, const char *queryString,
+							 ProcessUtilityContext processUtilityContext)
 {
 	DropStmt *dropStatisticsStmt = castNode(DropStmt, node);
 	Assert(dropStatisticsStmt->removeType == OBJECT_STATISTIC_EXT);
@@ -208,7 +210,8 @@ PreprocessDropStatisticsStmt(Node *node, const char *queryString)
  * ALTER STATISTICS RENAME.
  */
 List *
-PreprocessAlterStatisticsRenameStmt(Node *node, const char *queryString)
+PreprocessAlterStatisticsRenameStmt(Node *node, const char *queryString,
+									ProcessUtilityContext processUtilityContext)
 {
 	RenameStmt *renameStmt = castNode(RenameStmt, node);
 	Assert(renameStmt->renameType == OBJECT_STATISTIC_EXT);
@@ -246,7 +249,8 @@ PreprocessAlterStatisticsRenameStmt(Node *node, const char *queryString)
  * ALTER STATISTICS SET SCHEMA.
  */
 List *
-PreprocessAlterStatisticsSchemaStmt(Node *node, const char *queryString)
+PreprocessAlterStatisticsSchemaStmt(Node *node, const char *queryString,
+									ProcessUtilityContext processUtilityContext)
 {
 	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
 	Assert(stmt->objectType == OBJECT_STATISTIC_EXT);
@@ -338,7 +342,8 @@ AlterStatisticsSchemaStmtObjectAddress(Node *node, bool missingOk)
  * ALTER STATISTICS .. SET STATISTICS.
  */
 List *
-PreprocessAlterStatisticsStmt(Node *node, const char *queryString)
+PreprocessAlterStatisticsStmt(Node *node, const char *queryString,
+							  ProcessUtilityContext processUtilityContext)
 {
 	AlterStatsStmt *stmt = castNode(AlterStatsStmt, node);
 
@@ -377,7 +382,8 @@ PreprocessAlterStatisticsStmt(Node *node, const char *queryString)
  * ALTER STATISTICS .. OWNER TO.
  */
 List *
-PreprocessAlterStatisticsOwnerStmt(Node *node, const char *queryString)
+PreprocessAlterStatisticsOwnerStmt(Node *node, const char *queryString,
+								   ProcessUtilityContext processUtilityContext)
 {
 	AlterOwnerStmt *stmt = castNode(AlterOwnerStmt, node);
 	Assert(stmt->objectType == OBJECT_STATISTIC_EXT);

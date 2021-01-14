@@ -1244,7 +1244,8 @@ ShouldPropagateAlterFunction(const ObjectAddress *address)
  * can propagate the function in sequential mode.
  */
 List *
-PreprocessCreateFunctionStmt(Node *node, const char *queryString)
+PreprocessCreateFunctionStmt(Node *node, const char *queryString,
+							 ProcessUtilityContext processUtilityContext)
 {
 	CreateFunctionStmt *stmt = castNode(CreateFunctionStmt, node);
 
@@ -1356,7 +1357,8 @@ DefineAggregateStmtObjectAddress(Node *node, bool missing_ok)
  * the cluster.
  */
 List *
-PreprocessAlterFunctionStmt(Node *node, const char *queryString)
+PreprocessAlterFunctionStmt(Node *node, const char *queryString,
+							ProcessUtilityContext processUtilityContext)
 {
 	AlterFunctionStmt *stmt = castNode(AlterFunctionStmt, node);
 	AssertObjectTypeIsFunctional(stmt->objtype);
@@ -1390,7 +1392,8 @@ PreprocessAlterFunctionStmt(Node *node, const char *queryString)
  * types in sync across the cluster.
  */
 List *
-PreprocessRenameFunctionStmt(Node *node, const char *queryString)
+PreprocessRenameFunctionStmt(Node *node, const char *queryString,
+							 ProcessUtilityContext processUtilityContext)
 {
 	RenameStmt *stmt = castNode(RenameStmt, node);
 	AssertObjectTypeIsFunctional(stmt->renameType);
@@ -1421,7 +1424,8 @@ PreprocessRenameFunctionStmt(Node *node, const char *queryString)
  * In this stage we can prepare the commands that need to be run on all workers.
  */
 List *
-PreprocessAlterFunctionSchemaStmt(Node *node, const char *queryString)
+PreprocessAlterFunctionSchemaStmt(Node *node, const char *queryString,
+								  ProcessUtilityContext processUtilityContext)
 {
 	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
 	AssertObjectTypeIsFunctional(stmt->objectType);
@@ -1453,7 +1457,8 @@ PreprocessAlterFunctionSchemaStmt(Node *node, const char *queryString)
  * all the workers to keep the type in sync across the cluster.
  */
 List *
-PreprocessAlterFunctionOwnerStmt(Node *node, const char *queryString)
+PreprocessAlterFunctionOwnerStmt(Node *node, const char *queryString,
+								 ProcessUtilityContext processUtilityContext)
 {
 	AlterOwnerStmt *stmt = castNode(AlterOwnerStmt, node);
 	AssertObjectTypeIsFunctional(stmt->objectType);
@@ -1487,7 +1492,8 @@ PreprocessAlterFunctionOwnerStmt(Node *node, const char *queryString)
  * functions will still be dropped locally but not on the workers.
  */
 List *
-PreprocessDropFunctionStmt(Node *node, const char *queryString)
+PreprocessDropFunctionStmt(Node *node, const char *queryString,
+						   ProcessUtilityContext processUtilityContext)
 {
 	DropStmt *stmt = castNode(DropStmt, node);
 	List *deletingObjectWithArgsList = stmt->objects;
@@ -1591,7 +1597,8 @@ PreprocessDropFunctionStmt(Node *node, const char *queryString)
  * don't allow this dependency to be created.
  */
 List *
-PreprocessAlterFunctionDependsStmt(Node *node, const char *queryString)
+PreprocessAlterFunctionDependsStmt(Node *node, const char *queryString,
+								   ProcessUtilityContext processUtilityContext)
 {
 	AlterObjectDependsStmt *stmt = castNode(AlterObjectDependsStmt, node);
 	AssertObjectTypeIsFunctional(stmt->objectType);

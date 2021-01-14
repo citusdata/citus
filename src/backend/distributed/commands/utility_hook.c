@@ -384,7 +384,7 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 
 		if (ops && ops->preprocess)
 		{
-			ddlJobs = ops->preprocess(parsetree, queryString);
+			ddlJobs = ops->preprocess(parsetree, queryString, context);
 		}
 	}
 	else
