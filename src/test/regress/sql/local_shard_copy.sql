@@ -5,7 +5,7 @@ SET client_min_messages TO DEBUG;
 SET citus.next_shard_id TO 1570000;
 SET citus.replicate_reference_tables_on_activate TO off;
 
-SELECT * FROM master_add_node('localhost', :master_port, groupid := 0);
+SELECT 1 FROM master_add_node('localhost', :master_port, groupid := 0);
 
 SET citus.shard_count TO 4;
 SET citus.shard_replication_factor TO 1;
