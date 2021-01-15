@@ -91,6 +91,20 @@ SELECT create_distributed_table('ownertest','a');
 
 (1 row)
 
+-- test invalid column expressions
+CREATE TABLE test (x int, y int);
+SELECT create_distributed_table('test','x');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE STATISTICS stats_xy ON (x, y) FROM test;
+ERROR:  only simple column references are allowed in CREATE STATISTICS
+CREATE STATISTICS stats_xy ON x+y FROM test;
+ERROR:  only simple column references are allowed in CREATE STATISTICS
+CREATE STATISTICS stats_xy ON x,y FROM test;
+CREATE STATISTICS IF NOT EXISTS stats_xy ON x+y FROM test;
 \c - - - :worker_1_port
 SELECT stxname
 FROM pg_statistic_ext
@@ -182,7 +196,23 @@ ORDER BY stxname ASC;
  st1_new_980090
  st1_new_980092
  st1_new_980094
-(80 rows)
+ stats_xy_980161
+ stats_xy_980163
+ stats_xy_980165
+ stats_xy_980167
+ stats_xy_980169
+ stats_xy_980171
+ stats_xy_980173
+ stats_xy_980175
+ stats_xy_980177
+ stats_xy_980179
+ stats_xy_980181
+ stats_xy_980183
+ stats_xy_980185
+ stats_xy_980187
+ stats_xy_980189
+ stats_xy_980191
+(96 rows)
 
 SELECT count(DISTINCT stxnamespace)
 FROM pg_statistic_ext

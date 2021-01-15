@@ -236,9 +236,16 @@ static void
 AppendColumnNames(StringInfo buf, CreateStatsStmt *stmt)
 {
 	ColumnRef *column = NULL;
+
 	foreach_ptr(column, stmt->exprs)
 	{
-		Assert(IsA(column, ColumnRef));
+		if (!IsA(column, ColumnRef) || list_length(column->fields) != 1)
+		{
+			ereport(ERROR,
+					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					 errmsg(
+						 "only simple column references are allowed in CREATE STATISTICS")));
+		}
 
 		char *columnName = NameListToQuotedString(column->fields);
 

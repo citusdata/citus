@@ -75,6 +75,15 @@ CREATE STATISTICS sc1.s9 ON a,b FROM ownertest;
 ALTER STATISTICS sc1.s9 OWNER TO pg_signal_backend;
 SELECT create_distributed_table('ownertest','a');
 
+-- test invalid column expressions
+CREATE TABLE test (x int, y int);
+SELECT create_distributed_table('test','x');
+
+CREATE STATISTICS stats_xy ON (x, y) FROM test;
+CREATE STATISTICS stats_xy ON x+y FROM test;
+CREATE STATISTICS stats_xy ON x,y FROM test;
+CREATE STATISTICS IF NOT EXISTS stats_xy ON x+y FROM test;
+
 \c - - - :worker_1_port
 SELECT stxname
 FROM pg_statistic_ext
