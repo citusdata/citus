@@ -3596,6 +3596,15 @@ InvalidateForeignRelationGraphCacheCallback(Datum argument, Oid relationId)
 void
 InvalidateForeignKeyGraph(void)
 {
+	if (!CitusHasBeenLoaded())
+	{
+		/*
+		 * We should not try to invalidate foreign key graph
+		 * if citus is not loaded.
+		 */
+		return;
+	}
+
 	CitusInvalidateRelcacheByRelid(DistColocationRelationId());
 
 	/* bump command counter to force invalidation to take effect */
