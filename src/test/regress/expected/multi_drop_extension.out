@@ -22,27 +22,26 @@ BEGIN;
   SET client_min_messages TO ERROR;
   SET search_path TO public;
   CREATE EXTENSION citus;
-  -- not wait for replicating reference tables from other test files
   SET citus.replicate_reference_tables_on_activate TO OFF;
   SELECT 1 FROM master_add_node('localhost', :master_port, groupId => 0);
- ?column? 
-----------
+ ?column?
+---------------------------------------------------------------------
         1
 (1 row)
 
   create table l1 (a int unique);
   SELECT create_reference_table('l1');
- create_reference_table 
-------------------------
- 
+ create_reference_table
+---------------------------------------------------------------------
+
 (1 row)
 
   create schema other_schema;
   create table other_schema.l3 (a int);
   select create_reference_table ('other_schema.l3');
- create_reference_table 
-------------------------
- 
+ create_reference_table
+---------------------------------------------------------------------
+
 (1 row)
 
   alter table other_schema.l3 add constraint fkey foreign key (a) references l1(a);
