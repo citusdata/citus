@@ -586,6 +586,18 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
+		"citus.enable_local_reference_table_foreign_keys",
+		gettext_noop("Enables foreign keys from/to local tables"),
+		gettext_noop("When enabled, foreign keys between local tables and reference "
+					 "tables supported."),
+		&EnableLocalReferenceForeignKeys,
+		true,
+		PGC_USERSET,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
+
+
+	DefineCustomBoolVariable(
 		"citus.enable_single_hash_repartition_joins",
 		gettext_noop("Enables single hash repartitioning between hash "
 					 "distributed tables"),

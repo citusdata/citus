@@ -351,14 +351,14 @@ WHERE indrelid::regclass::text LIKE 'citus_local_table_1%' AND indexrelid::regcl
 ORDER BY 1;
 
 -- execute truncate & drop commands for multiple relations to see that we don't break local execution
-TRUNCATE citus_local_table_1, citus_local_table_2, distributed_table, local_table, reference_table;
+TRUNCATE citus_local_table_1, citus_local_table_2, distributed_table, local_table, reference_table, local_table_4;
 
 -- test vacuum
 VACUUM citus_local_table_1;
 VACUUM citus_local_table_1, distributed_table, local_table, reference_table;
 
 -- test drop
-DROP TABLE citus_local_table_1, citus_local_table_2, distributed_table, local_table, reference_table;
+DROP TABLE citus_local_table_1, citus_local_table_2, distributed_table, local_table, reference_table, local_table_4;
 
 -- test some other udf's with citus local tables
 
@@ -418,7 +418,6 @@ ROLLBACK;
 
 SELECT update_distributed_table_colocation('citus_local_table_4', colocate_with => 'none');
 
-SELECT master_create_worker_shards('citus_local_table_4', 10, 1);
 SELECT master_create_empty_shard('citus_local_table_4');
 SELECT master_apply_delete_command('DELETE FROM citus_local_table_4');
 

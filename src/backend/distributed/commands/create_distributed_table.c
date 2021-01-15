@@ -466,8 +466,14 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 		}
 	}
 
-	/* now recreate foreign keys that we dropped beforehand */
-	ExecuteAndLogDDLCommandList(fKeyCreationCommandsRelationInvolved);
+	/*
+	 * Now recreate foreign keys that we dropped beforehand. As modifications are not
+	 * allowed on the relations that are involved in the foreign key relationship,
+	 * we can skip the validation of the foreign keys.
+	 */
+	bool skip_validation = true;
+	ExecuteForeignKeyCreateCommandList(fKeyCreationCommandsRelationInvolved,
+									   skip_validation);
 }
 
 

@@ -418,16 +418,12 @@ NodeIsPrimaryWorker(WorkerNode *node)
 
 /*
  * CoordinatorAddedAsWorkerNode returns true if coordinator is added to the
- * pg_dist_node. This function also acquires ShareLock on pg_dist_node
- * and does not release it to ensure that existency of the coordinator in
- * metadata won't be changed until the end of transaction.
+ * pg_dist_node.
  */
 bool
 CoordinatorAddedAsWorkerNode()
 {
 	bool groupContainsNodes = false;
-
-	LockRelationOid(DistNodeRelationId(), ShareLock);
 
 	PrimaryNodeForGroup(COORDINATOR_GROUP_ID, &groupContainsNodes);
 

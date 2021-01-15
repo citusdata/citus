@@ -175,5 +175,146 @@ BEGIN;
   ALTER TABLE local_table_2 ADD CONSTRAINT fkey_11 FOREIGN KEY (col_1) REFERENCES reference_table_2(col_1) ON UPDATE CASCADE;
 ROLLBACK;
 
+--
+-- create table tests
+--
+
+BEGIN;
+  CREATE TABLE local_table_6 (col_1 INT PRIMARY KEY);
+
+  -- create a table that references to
+  --  * local table graph
+  --  * reference table
+  --  * another local table
+  --  * itself
+  CREATE TABLE local_table_5 (
+    col_1 INT UNIQUE REFERENCES local_table_1(col_1),
+    col_2 INT,
+    FOREIGN KEY (col_1) REFERENCES reference_table_1(col_1),
+    -- not specify column for this foreign key
+    FOREIGN KEY (col_2) REFERENCES local_table_6,
+    -- also have a self reference
+    FOREIGN KEY (col_2) REFERENCES local_table_5(col_1));
+
+  -- now print metadata to show that all local tables are converted
+  -- to citus local tables
+  SELECT logicalrelid::text AS tablename, partmethod, repmodel FROM pg_dist_partition
+  WHERE logicalrelid::text IN (SELECT tablename FROM pg_tables WHERE schemaname='fkeys_between_local_ref')
+  ORDER BY tablename;
+ROLLBACK;
+
+CREATE TABLE distributed_table (col_1 INT PRIMARY KEY);
+SELECT create_distributed_table('distributed_table', 'col_1');
+
+-- Creating a table that both references to a reference table and a
+-- distributed table fails.
+-- This is because, we convert local table to a citus local table
+-- due to its foreign key to reference table.
+-- But citus local tables can't have foreign keys to distributed tables.
+CREATE TABLE local_table_5 (
+  col_1 INT UNIQUE REFERENCES distributed_table(col_1),
+  FOREIGN KEY (col_1) REFERENCES reference_table_1(col_1));
+
+BEGIN;
+  ALTER TABLE distributed_table ADD CONSTRAINT fkey_11 FOREIGN KEY (col_1) REFERENCES reference_table_1(col_1);
+
+  CREATE TABLE local_table_5 (
+    col_1 INT UNIQUE REFERENCES reference_table_1(col_1),
+    FOREIGN KEY (col_1) REFERENCES local_table_1(col_1));
+
+  INSERT INTO local_table_5 SELECT i FROM generate_series(195, 205) i;
+
+  -- Now show that when converting local table to a citus local table,
+  -- distributed table (that is referenced by reference table) stays as is.
+  SELECT logicalrelid::text AS tablename, partmethod, repmodel FROM pg_dist_partition
+  WHERE logicalrelid::text IN (SELECT tablename FROM pg_tables WHERE schemaname='fkeys_between_local_ref')
+  ORDER BY tablename;
+
+  -- show that we validate foreign key constraints, errors out
+  INSERT INTO local_table_5 VALUES (300);
+ROLLBACK;
+
+BEGIN;
+  CREATE SCHEMA another_schema_fkeys_between_local_ref;
+  CREATE TABLE another_schema_fkeys_between_local_ref.local_table_6 (col_1 INT PRIMARY KEY);
+
+  -- first convert local tables to citus local tables in graph
+  ALTER TABLE local_table_2 ADD CONSTRAINT fkey_11 FOREIGN KEY (col_1) REFERENCES reference_table_1(col_1) ON DELETE CASCADE;
+
+  CREATE TABLE local_table_5 (
+    col_1 INT UNIQUE REFERENCES another_schema_fkeys_between_local_ref.local_table_6(col_1) CHECK (col_1 > 0),
+    col_2 INT REFERENCES local_table_3(col_1),
+    FOREIGN KEY (col_1) REFERENCES local_table_5(col_1));
+
+  -- Now show that we converted local_table_5 & 6 to citus local tables
+  -- as local_table_5 has foreign key to a citus local table too
+  SELECT logicalrelid::text AS tablename, partmethod, repmodel FROM pg_dist_partition
+  WHERE logicalrelid::text IN (SELECT tablename FROM pg_tables WHERE schemaname='fkeys_between_local_ref' UNION
+                               SELECT 'another_schema_fkeys_between_local_ref.local_table_6')
+  ORDER BY tablename;
+ROLLBACK;
+
+BEGIN;
+  CREATE TABLE local_table_6 (col_1 INT PRIMARY KEY);
+  -- first convert local tables to citus local tables in graph
+  ALTER TABLE local_table_2 ADD CONSTRAINT fkey_11 FOREIGN KEY (col_1) REFERENCES reference_table_1(col_1) ON DELETE CASCADE;
+
+  -- create a table that references to
+  --  * citus local table graph (via local_table_1)
+  --  * another local table (local_table_6)
+  --  * itself
+  CREATE TABLE local_table_5 (
+    col_1 INT UNIQUE REFERENCES local_table_1(col_1),
+    col_2 INT CHECK (col_2 > 0),
+    -- not specify column for this foreign key
+    FOREIGN KEY (col_2) REFERENCES local_table_6,
+    FOREIGN KEY (col_2) REFERENCES local_table_5(col_1));
+
+  -- now print metadata to show that all local tables are converted
+  -- to citus local tables
+  SELECT logicalrelid::text AS tablename, partmethod, repmodel FROM pg_dist_partition
+  WHERE logicalrelid::text IN (SELECT tablename FROM pg_tables WHERE schemaname='fkeys_between_local_ref')
+  ORDER BY tablename;
+
+  -- now make some of them reference tables
+  SELECT create_reference_table('local_table_2');
+  SELECT create_reference_table('local_table_6');
+
+  SELECT logicalrelid::text AS tablename, partmethod, repmodel FROM pg_dist_partition
+  WHERE logicalrelid::text IN (SELECT tablename FROM pg_tables WHERE schemaname='fkeys_between_local_ref')
+  ORDER BY tablename;
+ROLLBACK;
+
+BEGIN;
+  -- disable foreign keys to reference tables
+  SET LOCAL citus.enable_local_reference_table_foreign_keys TO false;
+  CREATE TABLE local_table_6 (col_1 INT PRIMARY KEY);
+
+  ALTER TABLE local_table_2 ADD CONSTRAINT fkey_11 FOREIGN KEY (col_1) REFERENCES reference_table_1(col_1) ON DELETE CASCADE;
+
+  CREATE TABLE local_table_5 (
+    col_1 INT UNIQUE REFERENCES local_table_6(col_1),
+    col_2 INT REFERENCES local_table_3(col_1),
+    FOREIGN KEY (col_1) REFERENCES local_table_5(col_1),
+    FOREIGN KEY (col_1) REFERENCES reference_table_1(col_1));
+
+  -- Now show none of local_table_5 & 6 to should be converted to citus local tables
+  -- as it is disabled
+  SELECT logicalrelid::text AS tablename, partmethod, repmodel FROM pg_dist_partition
+  WHERE logicalrelid::text IN (SELECT tablename FROM pg_tables WHERE schemaname='fkeys_between_local_ref')
+  ORDER BY tablename;
+ROLLBACK;
+
+-- this errors out as we don't support creating citus local
+-- tables from partitioned tables
+CREATE TABLE part_local_table (col_1 INT REFERENCES reference_table_1(col_1)) PARTITION BY RANGE (col_1);
+
+-- they fail as col_99 does not exist
+CREATE TABLE local_table_5 (col_1 INT, FOREIGN KEY (col_99) REFERENCES reference_table_1(col_1));
+CREATE TABLE local_table_5 (col_1 INT, FOREIGN KEY (col_1) REFERENCES reference_table_1(col_99));
+
+-- fails as referenced table does not exist
+CREATE TABLE local_table_5 (col_1 INT, FOREIGN KEY (col_1) REFERENCES table_does_not_exist(dummy));
+
 -- cleanup at exit
 DROP SCHEMA fkeys_between_local_ref CASCADE;

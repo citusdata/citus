@@ -138,6 +138,10 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys)
 	bool tableHasExternalForeignKeys = TableHasExternalForeignKeys(relationId);
 	if (tableHasExternalForeignKeys && cascadeViaForeignKeys)
 	{
+		/*
+		 * By acquiring AccessExclusiveLock, make sure that no modifications happen
+		 * on the relations.
+		 */
 		CascadeOperationForConnectedRelations(relationId, lockMode,
 											  CASCADE_FKEY_CREATE_CITUS_LOCAL_TABLE);
 
