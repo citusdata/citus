@@ -74,7 +74,6 @@ test: multi_jsonb_agg multi_jsonb_object_agg multi_json_agg multi_json_object_ag
 test: multi_agg_type_conversion multi_count_type_conversion
 test: multi_cross_shard
 test: multi_dropped_column_aliases foreign_key_restriction_enforcement
-test: multi_binary_master_copy_format
 
 # ----------
 # Parallel TPC-H tests to check our distributed execution behavior
