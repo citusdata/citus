@@ -493,7 +493,8 @@ AlterTableSetAccessMethod(TableConversionParameters *params)
 TableConversionReturn *
 ConvertTable(TableConversionState *con)
 {
-	if (con->conversionType == UNDISTRIBUTE_TABLE && con->cascadeViaForeignKeys)
+	if (con->conversionType == UNDISTRIBUTE_TABLE && con->cascadeViaForeignKeys &&
+		(TableReferencing(con->relationId) || TableReferenced(con->relationId)))
 	{
 		CascadeOperationForConnectedRelations(con->relationId, ExclusiveLock,
 											  CASCADE_FKEY_UNDISTRIBUTE_TABLE);
