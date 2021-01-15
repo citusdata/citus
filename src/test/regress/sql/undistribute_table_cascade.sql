@@ -337,6 +337,19 @@ BEGIN;
         tablename LIKE 'partitioned_table_%';
 ROLLBACK;
 
+BEGIN;
+  ALTER TABLE reference_table_2 DROP CONSTRAINT fkey_7;
+
+  -- since now citus_local_table_2 has no foreign keys, show that
+  -- cascade_via_foreign_keys option still works fine
+  SELECT undistribute_table('citus_local_table_2', cascade_via_foreign_keys=>true);
+
+  SELECT COUNT(*)=0 FROM pg_dist_partition, pg_tables
+  WHERE tablename=logicalrelid::regclass::text AND
+        schemaname='undistribute_table_cascade' AND
+        tablename='citus_local_table_2';
+ROLLBACK;
+
 CREATE SCHEMA "bad!schemaName";
 
 CREATE TABLE "bad!schemaName"."LocalTabLE.1!?!"(col_1 INT UNIQUE);
