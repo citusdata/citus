@@ -443,7 +443,7 @@ SetUpDistributedTableDependencies(WorkerNode *newWorkerNode)
 		{
 			MarkNodeHasMetadata(newWorkerNode->workerName, newWorkerNode->workerPort,
 								true);
-			TriggerMetadataSync(MyDatabaseId);
+			TriggerMetadataSyncOnCommit();
 		}
 	}
 }
@@ -809,7 +809,7 @@ master_update_node(PG_FUNCTION_ARGS)
 	 */
 	if (UnsetMetadataSyncedForAll())
 	{
-		TriggerMetadataSync(MyDatabaseId);
+		TriggerMetadataSyncOnCommit();
 	}
 
 	if (handle != NULL)
