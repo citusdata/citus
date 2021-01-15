@@ -82,6 +82,13 @@ PreprocessCreateStatisticsStmt(Node *node, const char *queryString,
 
 	QualifyTreeNode((Node *) stmt);
 
+	Oid statsOid = get_statistics_object_oid(stmt->defnames, true);
+	if (statsOid != InvalidOid)
+	{
+		/* if stats object already exists, don't create DDLJobs */
+		return NIL;
+	}
+
 	char *ddlCommand = DeparseTreeNode((Node *) stmt);
 
 	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
