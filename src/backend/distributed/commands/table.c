@@ -42,7 +42,13 @@
 #include "utils/syscache.h"
 
 
+/* controlled via GUC, should be accessed via GetEnableLocalReferenceForeignKeys() */
+bool EnableLocalReferenceForeignKeys = true;
+
+
 /* Local functions forward declarations for unsupported command checks */
+static void PostprocessCreateTableStmtForeignKeys(CreateStmt *createStatement);
+static bool ShouldEnableLocalReferenceForeignKeys(void);
 static void PostprocessCreateTableStmtPartitionOf(CreateStmt *createStatement,
 												  const char *queryString);
 static bool AlterTableDefinesFKeyBetweenPostgresAndNonDistTable(
@@ -82,6 +88,7 @@ static void SetInterShardDDLTaskPlacementList(Task *task,
 static void SetInterShardDDLTaskRelationShardList(Task *task,
 												  ShardInterval *leftShardInterval,
 												  ShardInterval *rightShardInterval);
+
 
 /*
  * We need to run some of the commands sequentially if there is a foreign constraint
@@ -165,9 +172,9 @@ PreprocessDropTableStmt(Node *node, const char *queryString,
 
 
 /*
- * PostprocessCreateTableStmt takes CreateStmt object as a parameter and errors
- * out if it creates a table with a foreign key that references to a citus local
- * table.
+ * PostprocessCreateTableStmt takes CreateStmt object as a parameter and
+ * processes foreign keys on relation via PostprocessCreateTableStmtForeignKeys
+ * function.
  *
  * This function also processes CREATE TABLE ... PARTITION OF statements via
  * PostprocessCreateTableStmtPartitionOf function.
@@ -175,22 +182,84 @@ PreprocessDropTableStmt(Node *node, const char *queryString,
 void
 PostprocessCreateTableStmt(CreateStmt *createStatement, const char *queryString)
 {
-	/*
-	 * Relation must exist and it is already locked as standard process utility
-	 * is already executed.
-	 */
-	bool missingOk = false;
-	Oid relationId = RangeVarGetRelid(createStatement->relation, NoLock, missingOk);
-	if (HasForeignKeyToCitusLocalTable(relationId))
-	{
-		ErrorOutForFKeyBetweenPostgresAndCitusLocalTable(relationId);
-	}
+	PostprocessCreateTableStmtForeignKeys(createStatement);
 
 	if (createStatement->inhRelations != NIL && createStatement->partbound != NULL)
 	{
 		/* process CREATE TABLE ... PARTITION OF command */
 		PostprocessCreateTableStmtPartitionOf(createStatement, queryString);
 	}
+}
+
+
+/*
+ * PostprocessCreateTableStmtForeignKeys drops ands re-defines foreign keys
+ * defined by given CREATE TABLE command if command defined any foreign to
+ * reference or citus local tables.
+ */
+static void
+PostprocessCreateTableStmtForeignKeys(CreateStmt *createStatement)
+{
+	if (!ShouldEnableLocalReferenceForeignKeys())
+	{
+		/*
+		 * Either the user disabled foreign keys from/to local/reference tables
+		 * or the coordinator is not in the metadata */
+		return;
+	}
+
+	/*
+	 * Relation must exist and it is already locked as standard process utility
+	 * is already executed.
+	 */
+	bool missingOk = false;
+	Oid relationId = RangeVarGetRelid(createStatement->relation, NoLock, missingOk);
+
+	/*
+	 * As we are just creating the table, we cannot have foreign keys that our
+	 * relation is referenced. So we use INCLUDE_REFERENCING_CONSTRAINTS here.
+	 * Reason behind using other two flags is explained below.
+	 */
+	int nonDistTableFKeysFlag = INCLUDE_REFERENCING_CONSTRAINTS |
+								INCLUDE_CITUS_LOCAL_TABLES |
+								INCLUDE_REFERENCE_TABLES;
+	List *nonDistTableForeignKeyIdList =
+		GetForeignKeyOids(relationId, nonDistTableFKeysFlag);
+	bool hasForeignKeyToNonDistTable = list_length(nonDistTableForeignKeyIdList) != 0;
+	if (hasForeignKeyToNonDistTable)
+	{
+		/*
+		 * To support foreign keys from postgres tables to reference or citus
+		 * local tables, we drop and re-define foreign keys so that our ALTER
+		 * TABLE hook does the necessary job.
+		 */
+		List *relationFKeyCreationCommands =
+			GetForeignConstraintCommandsInternal(relationId, nonDistTableFKeysFlag);
+		DropRelationForeignKeys(relationId, nonDistTableFKeysFlag);
+
+		bool skip_validation = true;
+		ExecuteForeignKeyCreateCommandList(relationFKeyCreationCommands,
+										   skip_validation);
+	}
+}
+
+
+/*
+ * ShouldEnableLocalReferenceForeignKeys is a wrapper around getting the GUC
+ * EnableLocalReferenceForeignKeys. If the coordinator is not added
+ * to the metadata, the function returns false. Else, the function returns
+ * the value set by the user
+ *
+ */
+static bool
+ShouldEnableLocalReferenceForeignKeys(void)
+{
+	if (!EnableLocalReferenceForeignKeys)
+	{
+		return false;
+	}
+
+	return CoordinatorAddedAsWorkerNode();
 }
 
 
@@ -379,9 +448,9 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 		leftRelationId = IndexGetRelation(leftRelationId, missingOk);
 	}
 
-	if (processUtilityContext != PROCESS_UTILITY_SUBCOMMAND &&
-		AlterTableDefinesFKeyBetweenPostgresAndNonDistTable(alterTableStatement) &&
-		CoordinatorAddedAsWorkerNode())
+	if (ShouldEnableLocalReferenceForeignKeys() &&
+		processUtilityContext != PROCESS_UTILITY_SUBCOMMAND &&
+		AlterTableDefinesFKeyBetweenPostgresAndNonDistTable(alterTableStatement))
 	{
 		/*
 		 * We don't process subcommands generated by postgres.
@@ -1032,13 +1101,13 @@ PreprocessAlterTableSchemaStmt(Node *node, const char *queryString,
 
 
 /*
- * WorkerProcessAlterTableStmt checks and processes the alter table statement to be
- * worked on the distributed table of the worker node. Currently, it only processes
+ * SkipForeignKeyValidationIfConstraintIsFkey checks and processes the alter table
+ * statement to be worked on the distributed table. Currently, it only processes
  * ALTER TABLE ... ADD FOREIGN KEY command to skip the validation step.
  */
 Node *
-WorkerProcessAlterTableStmt(AlterTableStmt *alterTableStatement,
-							const char *alterTableCommand)
+SkipForeignKeyValidationIfConstraintIsFkey(AlterTableStmt *alterTableStatement,
+										   bool processLocalRelation)
 {
 	/* first check whether a distributed relation is affected */
 	if (alterTableStatement->relation == NULL)
@@ -1053,8 +1122,7 @@ WorkerProcessAlterTableStmt(AlterTableStmt *alterTableStatement,
 		return (Node *) alterTableStatement;
 	}
 
-	bool isCitusRelation = IsCitusTable(leftRelationId);
-	if (!isCitusRelation)
+	if (!IsCitusTable(leftRelationId) && !processLocalRelation)
 	{
 		return (Node *) alterTableStatement;
 	}

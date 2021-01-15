@@ -20,6 +20,11 @@
 #include "tcop/dest.h"
 #include "tcop/utility.h"
 
+
+/* controlled via GUC, should be accessed via EnableLocalReferenceForeignKeys() */
+extern bool EnableLocalReferenceForeignKeys;
+
+
 /*
  * DistributeObjectOps specifies handlers for node/object type pairs.
  * Instances of this type should all be declared in deparse.c.
@@ -363,8 +368,8 @@ extern List * PreprocessAlterTableMoveAllStmt(Node *node, const char *queryStrin
 											  ProcessUtilityContext processUtilityContext);
 extern List * PreprocessAlterTableSchemaStmt(Node *node, const char *queryString,
 											 ProcessUtilityContext processUtilityContext);
-extern Node * WorkerProcessAlterTableStmt(AlterTableStmt *alterTableStatement,
-										  const char *alterTableCommand);
+extern Node * SkipForeignKeyValidationIfConstraintIsFkey(AlterTableStmt *alterTableStmt,
+														 bool processLocalRelation);
 extern bool IsAlterTableRenameStmt(RenameStmt *renameStmt);
 extern void ErrorIfAlterDropsPartitionColumn(AlterTableStmt *alterTableStatement);
 extern void PostprocessAlterTableStmt(AlterTableStmt *pStmt);
@@ -477,6 +482,8 @@ extern void ErrorIfAnyPartitionRelationInvolvedInNonInheritedFKey(List *relation
 extern void DropRelationForeignKeys(Oid relationId, int flags);
 extern void ExecuteAndLogDDLCommandList(List *ddlCommandList);
 extern void ExecuteAndLogDDLCommand(const char *commandString);
+extern void ExecuteForeignKeyCreateCommandList(List *ddlCommandList,
+											   bool skip_validation);
 
 /* create_citus_local_table.c */
 extern void CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys);

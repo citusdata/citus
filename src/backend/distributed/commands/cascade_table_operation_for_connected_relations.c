@@ -44,7 +44,8 @@ static char * GetDropFkeyCascadeCommand(Oid foreignKeyId);
 static void ExecuteCascadeOperationForRelationIdList(List *relationIdList,
 													 CascadeOperationType
 													 cascadeOperationType);
-
+static void ExecuteForeignKeyCreateCommand(const char *commandString,
+										   bool skip_validation);
 
 /*
  * CascadeOperationForConnectedRelations executes citus table function specified
@@ -106,7 +107,8 @@ CascadeOperationForConnectedRelations(Oid relationId, LOCKMODE lockMode,
 											 cascadeOperationType);
 
 	/* now recreate foreign keys on tables */
-	ExecuteAndLogDDLCommandList(fKeyCreationCommands);
+	bool skip_validation = true;
+	ExecuteForeignKeyCreateCommandList(fKeyCreationCommands, skip_validation);
 }
 
 
@@ -423,6 +425,58 @@ ExecuteAndLogDDLCommand(const char *commandString)
 	ereport(DEBUG4, (errmsg("executing \"%s\"", commandString)));
 
 	Node *parseTree = ParseTreeNode(commandString);
+	CitusProcessUtility(parseTree, commandString, PROCESS_UTILITY_TOPLEVEL,
+						NULL, None_Receiver, NULL);
+}
+
+
+/*
+ * ExecuteForeignKeyCreateCommandList takes a list of foreign key creation ddl commands
+ * and calls ExecuteAndLogForeignKeyCreateCommand function for each of them.
+ */
+void
+ExecuteForeignKeyCreateCommandList(List *ddlCommandList, bool skip_validation)
+{
+	char *ddlCommand = NULL;
+	foreach_ptr(ddlCommand, ddlCommandList)
+	{
+		ExecuteForeignKeyCreateCommand(ddlCommand, skip_validation);
+	}
+}
+
+
+/*
+ * ExecuteForeignKeyCreateCommand takes a foreign key creation command
+ * and logs it in DEBUG4 log level.
+ *
+ * Then, parses, sets skip_validation flag to considering the input and
+ * executes the command via CitusProcessUtility.
+ */
+static void
+ExecuteForeignKeyCreateCommand(const char *commandString, bool skip_validation)
+{
+	ereport(DEBUG4, (errmsg("executing foreign key create command \"%s\"",
+							commandString)));
+
+	Node *parseTree = ParseTreeNode(commandString);
+
+	/*
+	 * We might have thrown an error if IsA(parseTree, AlterTableStmt),
+	 * but that doesn't seem to provide any benefits, so assertion is
+	 * fine for this case.
+	 */
+	Assert(IsA(parseTree, AlterTableStmt));
+
+	if (skip_validation && IsA(parseTree, AlterTableStmt))
+	{
+		parseTree =
+			SkipForeignKeyValidationIfConstraintIsFkey((AlterTableStmt *) parseTree,
+													   true);
+
+		ereport(DEBUG4, (errmsg("skipping validation for foreign key create "
+								"command \"%s\"", commandString)));
+	}
+
 	CitusProcessUtility(parseTree, commandString, PROCESS_UTILITY_TOPLEVEL,
 						NULL, None_Receiver, NULL);
 }

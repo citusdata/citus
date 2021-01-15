@@ -7,6 +7,7 @@ SET citus.shard_replication_factor TO 1;
 SET citus.shard_count TO 8;
 SET citus.next_shard_id TO 7000000;
 SET citus.next_placement_id TO 7000000;
+SET client_min_messages TO ERROR;
 CREATE TYPE foreign_details AS (name text, relid text, refd_relid text);
 CREATE VIEW table_fkeys_in_workers AS
 SELECT
@@ -143,18 +144,11 @@ SELECT create_distributed_table('referencing_table', 'ref_id');
 (1 row)
 
 ALTER TABLE referencing_table ADD CONSTRAINT fkey_ref FOREIGN KEY(id) REFERENCES referenced_table(id) ON DELETE SET NULL;
-SELECT * FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%' ORDER BY 1,2,3;
-       name       |                     relid                      |                  refd_relid
+SELECT COUNT(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
+ count
 ---------------------------------------------------------------------
- fkey_ref_7000043 | fkey_reference_table.referencing_table_7000043 | fkey_reference_table.referenced_table_7000042
- fkey_ref_7000044 | fkey_reference_table.referencing_table_7000044 | fkey_reference_table.referenced_table_7000042
- fkey_ref_7000045 | fkey_reference_table.referencing_table_7000045 | fkey_reference_table.referenced_table_7000042
- fkey_ref_7000046 | fkey_reference_table.referencing_table_7000046 | fkey_reference_table.referenced_table_7000042
- fkey_ref_7000047 | fkey_reference_table.referencing_table_7000047 | fkey_reference_table.referenced_table_7000042
- fkey_ref_7000048 | fkey_reference_table.referencing_table_7000048 | fkey_reference_table.referenced_table_7000042
- fkey_ref_7000049 | fkey_reference_table.referencing_table_7000049 | fkey_reference_table.referenced_table_7000042
- fkey_ref_7000050 | fkey_reference_table.referencing_table_7000050 | fkey_reference_table.referenced_table_7000042
-(8 rows)
+     8
+(1 row)
 
 DROP TABLE referencing_table;
 CREATE TABLE referencing_table(id int, ref_id int, FOREIGN KEY(id) REFERENCES referenced_table(id) ON DELETE SET NULL);
@@ -164,18 +158,11 @@ SELECT create_distributed_table('referencing_table', 'ref_id');
 
 (1 row)
 
-SELECT * FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%' ORDER BY 1,2,3;
-               name                |                     relid                      |                  refd_relid
+SELECT COUNT(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
+ count
 ---------------------------------------------------------------------
- referencing_table_id_fkey_7000051 | fkey_reference_table.referencing_table_7000051 | fkey_reference_table.referenced_table_7000042
- referencing_table_id_fkey_7000052 | fkey_reference_table.referencing_table_7000052 | fkey_reference_table.referenced_table_7000042
- referencing_table_id_fkey_7000053 | fkey_reference_table.referencing_table_7000053 | fkey_reference_table.referenced_table_7000042
- referencing_table_id_fkey_7000054 | fkey_reference_table.referencing_table_7000054 | fkey_reference_table.referenced_table_7000042
- referencing_table_id_fkey_7000055 | fkey_reference_table.referencing_table_7000055 | fkey_reference_table.referenced_table_7000042
- referencing_table_id_fkey_7000056 | fkey_reference_table.referencing_table_7000056 | fkey_reference_table.referenced_table_7000042
- referencing_table_id_fkey_7000057 | fkey_reference_table.referencing_table_7000057 | fkey_reference_table.referenced_table_7000042
- referencing_table_id_fkey_7000058 | fkey_reference_table.referencing_table_7000058 | fkey_reference_table.referenced_table_7000042
-(8 rows)
+     8
+(1 row)
 
 DROP TABLE referencing_table;
 CREATE TABLE referencing_table(id int, ref_id int);
@@ -186,18 +173,11 @@ SELECT create_distributed_table('referencing_table', 'ref_id');
 (1 row)
 
 ALTER TABLE referencing_table ADD CONSTRAINT fkey_ref FOREIGN KEY(id) REFERENCES referenced_table(id) ON DELETE SET DEFAULT;
-SELECT * FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%' ORDER BY 1,2,3;
-       name       |                     relid                      |                  refd_relid
+SELECT COUNT(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
+ count
 ---------------------------------------------------------------------
- fkey_ref_7000059 | fkey_reference_table.referencing_table_7000059 | fkey_reference_table.referenced_table_7000042
- fkey_ref_7000060 | fkey_reference_table.referencing_table_7000060 | fkey_reference_table.referenced_table_7000042
- fkey_ref_7000061 | fkey_reference_table.referencing_table_7000061 | fkey_reference_table.referenced_table_7000042
- fkey_ref_7000062 | fkey_reference_table.referencing_table_7000062 | fkey_reference_table.referenced_table_7000042
- fkey_ref_7000063 | fkey_reference_table.referencing_table_7000063 | fkey_reference_table.referenced_table_7000042
- fkey_ref_7000064 | fkey_reference_table.referencing_table_7000064 | fkey_reference_table.referenced_table_7000042
- fkey_ref_7000065 | fkey_reference_table.referencing_table_7000065 | fkey_reference_table.referenced_table_7000042
- fkey_ref_7000066 | fkey_reference_table.referencing_table_7000066 | fkey_reference_table.referenced_table_7000042
-(8 rows)
+     8
+(1 row)
 
 DROP TABLE referencing_table;
 BEGIN;
@@ -209,18 +189,11 @@ BEGIN;
 (1 row)
 
 COMMIT;
-SELECT * FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%' ORDER BY 1,2,3;
-               name                |                     relid                      |                  refd_relid
+SELECT COUNT(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
+ count
 ---------------------------------------------------------------------
- referencing_table_id_fkey_7000067 | fkey_reference_table.referencing_table_7000067 | fkey_reference_table.referenced_table_7000042
- referencing_table_id_fkey_7000068 | fkey_reference_table.referencing_table_7000068 | fkey_reference_table.referenced_table_7000042
- referencing_table_id_fkey_7000069 | fkey_reference_table.referencing_table_7000069 | fkey_reference_table.referenced_table_7000042
- referencing_table_id_fkey_7000070 | fkey_reference_table.referencing_table_7000070 | fkey_reference_table.referenced_table_7000042
- referencing_table_id_fkey_7000071 | fkey_reference_table.referencing_table_7000071 | fkey_reference_table.referenced_table_7000042
- referencing_table_id_fkey_7000072 | fkey_reference_table.referencing_table_7000072 | fkey_reference_table.referenced_table_7000042
- referencing_table_id_fkey_7000073 | fkey_reference_table.referencing_table_7000073 | fkey_reference_table.referenced_table_7000042
- referencing_table_id_fkey_7000074 | fkey_reference_table.referencing_table_7000074 | fkey_reference_table.referenced_table_7000042
-(8 rows)
+     8
+(1 row)
 
 DROP TABLE referencing_table;
 CREATE TABLE referencing_table(id int, ref_id int);
@@ -231,18 +204,11 @@ SELECT create_distributed_table('referencing_table', 'ref_id');
 (1 row)
 
 ALTER TABLE referencing_table ADD CONSTRAINT fkey_ref FOREIGN KEY(id) REFERENCES referenced_table(id) ON UPDATE SET NULL;
-SELECT * FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%' ORDER BY 1,2,3;
-       name       |                     relid                      |                  refd_relid
+SELECT COUNT(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
+ count
 ---------------------------------------------------------------------
- fkey_ref_7000075 | fkey_reference_table.referencing_table_7000075 | fkey_reference_table.referenced_table_7000042
- fkey_ref_7000076 | fkey_reference_table.referencing_table_7000076 | fkey_reference_table.referenced_table_7000042
- fkey_ref_7000077 | fkey_reference_table.referencing_table_7000077 | fkey_reference_table.referenced_table_7000042
- fkey_ref_7000078 | fkey_reference_table.referencing_table_7000078 | fkey_reference_table.referenced_table_7000042
- fkey_ref_7000079 | fkey_reference_table.referencing_table_7000079 | fkey_reference_table.referenced_table_7000042
- fkey_ref_7000080 | fkey_reference_table.referencing_table_7000080 | fkey_reference_table.referenced_table_7000042
- fkey_ref_7000081 | fkey_reference_table.referencing_table_7000081 | fkey_reference_table.referenced_table_7000042
- fkey_ref_7000082 | fkey_reference_table.referencing_table_7000082 | fkey_reference_table.referenced_table_7000042
-(8 rows)
+     8
+(1 row)
 
 DROP TABLE referencing_table;
 CREATE TABLE referencing_table(id int, ref_id int);
@@ -253,18 +219,11 @@ SELECT create_distributed_table('referencing_table', 'ref_id');
 (1 row)
 
 ALTER TABLE referencing_table ADD CONSTRAINT fkey_ref FOREIGN KEY(id) REFERENCES referenced_table(id) ON UPDATE SET DEFAULT;
-SELECT * FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%' ORDER BY 1,2,3;
-       name       |                     relid                      |                  refd_relid
+SELECT COUNT(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
+ count
 ---------------------------------------------------------------------
- fkey_ref_7000083 | fkey_reference_table.referencing_table_7000083 | fkey_reference_table.referenced_table_7000042
- fkey_ref_7000084 | fkey_reference_table.referencing_table_7000084 | fkey_reference_table.referenced_table_7000042
- fkey_ref_7000085 | fkey_reference_table.referencing_table_7000085 | fkey_reference_table.referenced_table_7000042
- fkey_ref_7000086 | fkey_reference_table.referencing_table_7000086 | fkey_reference_table.referenced_table_7000042
- fkey_ref_7000087 | fkey_reference_table.referencing_table_7000087 | fkey_reference_table.referenced_table_7000042
- fkey_ref_7000088 | fkey_reference_table.referencing_table_7000088 | fkey_reference_table.referenced_table_7000042
- fkey_ref_7000089 | fkey_reference_table.referencing_table_7000089 | fkey_reference_table.referenced_table_7000042
- fkey_ref_7000090 | fkey_reference_table.referencing_table_7000090 | fkey_reference_table.referenced_table_7000042
-(8 rows)
+     8
+(1 row)
 
 DROP TABLE referencing_table;
 CREATE TABLE referencing_table(id int, ref_id int);
@@ -275,18 +234,11 @@ SELECT create_distributed_table('referencing_table', 'ref_id');
 (1 row)
 
 ALTER TABLE referencing_table ADD CONSTRAINT fkey_ref FOREIGN KEY(id) REFERENCES referenced_table(id) ON UPDATE CASCADE;
-SELECT * FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%' ORDER BY 1,2,3;
-       name       |                     relid                      |                  refd_relid
+SELECT COUNT(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
+ count
 ---------------------------------------------------------------------
- fkey_ref_7000091 | fkey_reference_table.referencing_table_7000091 | fkey_reference_table.referenced_table_7000042
- fkey_ref_7000092 | fkey_reference_table.referencing_table_7000092 | fkey_reference_table.referenced_table_7000042
- fkey_ref_7000093 | fkey_reference_table.referencing_table_7000093 | fkey_reference_table.referenced_table_7000042
- fkey_ref_7000094 | fkey_reference_table.referencing_table_7000094 | fkey_reference_table.referenced_table_7000042
- fkey_ref_7000095 | fkey_reference_table.referencing_table_7000095 | fkey_reference_table.referenced_table_7000042
- fkey_ref_7000096 | fkey_reference_table.referencing_table_7000096 | fkey_reference_table.referenced_table_7000042
- fkey_ref_7000097 | fkey_reference_table.referencing_table_7000097 | fkey_reference_table.referenced_table_7000042
- fkey_ref_7000098 | fkey_reference_table.referencing_table_7000098 | fkey_reference_table.referenced_table_7000042
-(8 rows)
+     8
+(1 row)
 
 DROP TABLE referencing_table;
 -- check if we can add the foreign key while adding the column
@@ -301,10 +253,11 @@ ALTER TABLE referencing_table ADD COLUMN referencing int REFERENCES referenced_t
 ERROR:  cannot execute ADD COLUMN command with PRIMARY KEY, UNIQUE, FOREIGN and CHECK constraints
 DETAIL:  Adding a column with a constraint in one command is not supported because all constraints in Citus must have explicit names
 HINT:  You can issue each command separately such as ALTER TABLE referencing_table ADD COLUMN referencing data_type; ALTER TABLE referencing_table ADD CONSTRAINT constraint_name FOREIGN KEY (referencing) REFERENCES referenced_table(id) ON UPDATE CASCADE;
-SELECT * FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%' ORDER BY 1,2,3;
- name | relid | refd_relid
+SELECT COUNT(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
+ count
 ---------------------------------------------------------------------
-(0 rows)
+     0
+(1 row)
 
 DROP TABLE referencing_table;
 -- foreign keys are only supported when the replication factor = 1
@@ -320,10 +273,11 @@ ALTER TABLE referencing_table ADD CONSTRAINT fkey_ref FOREIGN KEY (id) REFERENCE
 ERROR:  cannot create foreign key constraint
 DETAIL:  Citus currently supports foreign key constraints only for "citus.shard_replication_factor = 1".
 HINT:  Please change "citus.shard_replication_factor to 1". To learn more about using foreign keys with other replication factors, please contact us at https://citusdata.com/about/contact_us.
-SELECT * FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%' ORDER BY 1,2,3;
- name | relid | refd_relid
+SELECT COUNT(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
+ count
 ---------------------------------------------------------------------
-(0 rows)
+     0
+(1 row)
 
 DROP TABLE referencing_table;
 -- should fail when we add the column as well
@@ -338,10 +292,11 @@ ALTER TABLE referencing_table ADD COLUMN referencing_col int REFERENCES referenc
 ERROR:  cannot create foreign key constraint
 DETAIL:  Citus currently supports foreign key constraints only for "citus.shard_replication_factor = 1".
 HINT:  Please change "citus.shard_replication_factor to 1". To learn more about using foreign keys with other replication factors, please contact us at https://citusdata.com/about/contact_us.
-SELECT * FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%' ORDER BY 1,2,3;
- name | relid | refd_relid
+SELECT COUNT(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
+ count
 ---------------------------------------------------------------------
-(0 rows)
+     0
+(1 row)
 
 DROP TABLE referencing_table;
 SET citus.shard_replication_factor TO 1;
@@ -353,18 +308,11 @@ SELECT create_distributed_table('referencing_table', 'ref_id');
 
 (1 row)
 
-SELECT * FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%' ORDER BY 1,2,3;
-               name                |                     relid                      |                  refd_relid
+SELECT COUNT(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
+ count
 ---------------------------------------------------------------------
- referencing_table_id_fkey_7000123 | fkey_reference_table.referencing_table_7000123 | fkey_reference_table.referenced_table_7000042
- referencing_table_id_fkey_7000124 | fkey_reference_table.referencing_table_7000124 | fkey_reference_table.referenced_table_7000042
- referencing_table_id_fkey_7000125 | fkey_reference_table.referencing_table_7000125 | fkey_reference_table.referenced_table_7000042
- referencing_table_id_fkey_7000126 | fkey_reference_table.referencing_table_7000126 | fkey_reference_table.referenced_table_7000042
- referencing_table_id_fkey_7000127 | fkey_reference_table.referencing_table_7000127 | fkey_reference_table.referenced_table_7000042
- referencing_table_id_fkey_7000128 | fkey_reference_table.referencing_table_7000128 | fkey_reference_table.referenced_table_7000042
- referencing_table_id_fkey_7000129 | fkey_reference_table.referencing_table_7000129 | fkey_reference_table.referenced_table_7000042
- referencing_table_id_fkey_7000130 | fkey_reference_table.referencing_table_7000130 | fkey_reference_table.referenced_table_7000042
-(8 rows)
+     8
+(1 row)
 
 DROP TABLE referencing_table;
 DROP TABLE referenced_table;
@@ -384,18 +332,11 @@ BEGIN;
 (1 row)
 
 COMMIT;
-SELECT * FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%' ORDER BY 1,2,3;
-               name                |                     relid                      |                  refd_relid
+SELECT COUNT(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
+ count
 ---------------------------------------------------------------------
- referencing_table_id_fkey_7000132 | fkey_reference_table.referencing_table_7000132 | fkey_reference_table.referenced_table_7000131
- referencing_table_id_fkey_7000133 | fkey_reference_table.referencing_table_7000133 | fkey_reference_table.referenced_table_7000131
- referencing_table_id_fkey_7000134 | fkey_reference_table.referencing_table_7000134 | fkey_reference_table.referenced_table_7000131
- referencing_table_id_fkey_7000135 | fkey_reference_table.referencing_table_7000135 | fkey_reference_table.referenced_table_7000131
- referencing_table_id_fkey_7000136 | fkey_reference_table.referencing_table_7000136 | fkey_reference_table.referenced_table_7000131
- referencing_table_id_fkey_7000137 | fkey_reference_table.referencing_table_7000137 | fkey_reference_table.referenced_table_7000131
- referencing_table_id_fkey_7000138 | fkey_reference_table.referencing_table_7000138 | fkey_reference_table.referenced_table_7000131
- referencing_table_id_fkey_7000139 | fkey_reference_table.referencing_table_7000139 | fkey_reference_table.referenced_table_7000131
-(8 rows)
+     8
+(1 row)
 
 DROP TABLE referencing_table;
 -- foreign keys are supported either in between distributed tables including the
@@ -468,7 +409,6 @@ CONTEXT:  while executing command on localhost:xxxxx
 DELETE FROM referenced_table WHERE id = 501;
 -- test cascading truncate
 TRUNCATE referenced_table CASCADE;
-NOTICE:  truncate cascades to table "referencing_table"
 SELECT count(*) FROM referencing_table;
  count
 ---------------------------------------------------------------------
@@ -795,26 +735,11 @@ SELECT create_distributed_table('referencing_table', 'id');
 
 ALTER TABLE referencing_table ADD CONSTRAINT fkey_ref FOREIGN KEY (id) REFERENCES referenced_table(test_column) ON DELETE CASCADE;
 ALTER TABLE referencing_table ADD CONSTRAINT foreign_key_2 FOREIGN KEY (id) REFERENCES referenced_table2(test_column2) ON DELETE CASCADE;
-SELECT * FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%' ORDER BY 1,2,3;
-         name          |                     relid                      |                   refd_relid
+SELECT COUNT(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
+ count
 ---------------------------------------------------------------------
- fkey_ref_7000226      | fkey_reference_table.referencing_table_7000226 | fkey_reference_table.referenced_table_7000224
- fkey_ref_7000227      | fkey_reference_table.referencing_table_7000227 | fkey_reference_table.referenced_table_7000224
- fkey_ref_7000228      | fkey_reference_table.referencing_table_7000228 | fkey_reference_table.referenced_table_7000224
- fkey_ref_7000229      | fkey_reference_table.referencing_table_7000229 | fkey_reference_table.referenced_table_7000224
- fkey_ref_7000230      | fkey_reference_table.referencing_table_7000230 | fkey_reference_table.referenced_table_7000224
- fkey_ref_7000231      | fkey_reference_table.referencing_table_7000231 | fkey_reference_table.referenced_table_7000224
- fkey_ref_7000232      | fkey_reference_table.referencing_table_7000232 | fkey_reference_table.referenced_table_7000224
- fkey_ref_7000233      | fkey_reference_table.referencing_table_7000233 | fkey_reference_table.referenced_table_7000224
- foreign_key_2_7000226 | fkey_reference_table.referencing_table_7000226 | fkey_reference_table.referenced_table2_7000225
- foreign_key_2_7000227 | fkey_reference_table.referencing_table_7000227 | fkey_reference_table.referenced_table2_7000225
- foreign_key_2_7000228 | fkey_reference_table.referencing_table_7000228 | fkey_reference_table.referenced_table2_7000225
- foreign_key_2_7000229 | fkey_reference_table.referencing_table_7000229 | fkey_reference_table.referenced_table2_7000225
- foreign_key_2_7000230 | fkey_reference_table.referencing_table_7000230 | fkey_reference_table.referenced_table2_7000225
- foreign_key_2_7000231 | fkey_reference_table.referencing_table_7000231 | fkey_reference_table.referenced_table2_7000225
- foreign_key_2_7000232 | fkey_reference_table.referencing_table_7000232 | fkey_reference_table.referenced_table2_7000225
- foreign_key_2_7000233 | fkey_reference_table.referencing_table_7000233 | fkey_reference_table.referenced_table2_7000225
-(16 rows)
+    16
+(1 row)
 
 INSERT INTO referenced_table SELECT x, x+1 FROM generate_series(0,1000) AS f(x);
 INSERT INTO referenced_table2 SELECT x, x+1 FROM generate_series(500,1500) AS f(x);
@@ -923,26 +848,11 @@ BEGIN;
   ALTER TABLE referencing_table ADD CONSTRAINT fkey_ref FOREIGN KEY (id) REFERENCES referenced_table(test_column) ON DELETE CASCADE;
   ALTER TABLE referencing_table ADD CONSTRAINT foreign_key_2 FOREIGN KEY (ref_id) REFERENCES referenced_table2(test_column2) ON DELETE CASCADE;
 COMMIT;
-SELECT * FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%' ORDER BY 1,2,3;
-         name          |                     relid                      |                   refd_relid
+SELECT COUNT(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
+ count
 ---------------------------------------------------------------------
- fkey_ref_7000246      | fkey_reference_table.referencing_table_7000246 | fkey_reference_table.referenced_table_7000244
- fkey_ref_7000247      | fkey_reference_table.referencing_table_7000247 | fkey_reference_table.referenced_table_7000244
- fkey_ref_7000248      | fkey_reference_table.referencing_table_7000248 | fkey_reference_table.referenced_table_7000244
- fkey_ref_7000249      | fkey_reference_table.referencing_table_7000249 | fkey_reference_table.referenced_table_7000244
- fkey_ref_7000250      | fkey_reference_table.referencing_table_7000250 | fkey_reference_table.referenced_table_7000244
- fkey_ref_7000251      | fkey_reference_table.referencing_table_7000251 | fkey_reference_table.referenced_table_7000244
- fkey_ref_7000252      | fkey_reference_table.referencing_table_7000252 | fkey_reference_table.referenced_table_7000244
- fkey_ref_7000253      | fkey_reference_table.referencing_table_7000253 | fkey_reference_table.referenced_table_7000244
- foreign_key_2_7000246 | fkey_reference_table.referencing_table_7000246 | fkey_reference_table.referenced_table2_7000245
- foreign_key_2_7000247 | fkey_reference_table.referencing_table_7000247 | fkey_reference_table.referenced_table2_7000245
- foreign_key_2_7000248 | fkey_reference_table.referencing_table_7000248 | fkey_reference_table.referenced_table2_7000245
- foreign_key_2_7000249 | fkey_reference_table.referencing_table_7000249 | fkey_reference_table.referenced_table2_7000245
- foreign_key_2_7000250 | fkey_reference_table.referencing_table_7000250 | fkey_reference_table.referenced_table2_7000245
- foreign_key_2_7000251 | fkey_reference_table.referencing_table_7000251 | fkey_reference_table.referenced_table2_7000245
- foreign_key_2_7000252 | fkey_reference_table.referencing_table_7000252 | fkey_reference_table.referenced_table2_7000245
- foreign_key_2_7000253 | fkey_reference_table.referencing_table_7000253 | fkey_reference_table.referenced_table2_7000245
-(16 rows)
+    16
+(1 row)
 
 INSERT INTO referenced_table SELECT x, x+1 FROM generate_series(0,1000) AS f(x);
 INSERT INTO referenced_table2 SELECT x, x+1 FROM generate_series(500,1500) AS f(x);
@@ -1054,34 +964,11 @@ ALTER TABLE referencing_table ADD CONSTRAINT fkey_ref FOREIGN KEY (id) REFERENCE
 ALTER TABLE referencing_table2 ADD CONSTRAINT fkey_ref FOREIGN KEY (ref_id) REFERENCES referenced_table(test_column2) ON DELETE CASCADE;
 ALTER TABLE referencing_table2 ADD CONSTRAINT fkey_ref_to_dist FOREIGN KEY (id) REFERENCES referencing_table(id) ON DELETE CASCADE;
 COMMIT;
-SELECT * FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%' ORDER BY 1,2,3;
-           name           |                      relid                      |                   refd_relid
+SELECT COUNT(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
+ count
 ---------------------------------------------------------------------
- fkey_ref_7000265         | fkey_reference_table.referencing_table_7000265  | fkey_reference_table.referenced_table_7000264
- fkey_ref_7000266         | fkey_reference_table.referencing_table_7000266  | fkey_reference_table.referenced_table_7000264
- fkey_ref_7000267         | fkey_reference_table.referencing_table_7000267  | fkey_reference_table.referenced_table_7000264
- fkey_ref_7000268         | fkey_reference_table.referencing_table_7000268  | fkey_reference_table.referenced_table_7000264
- fkey_ref_7000269         | fkey_reference_table.referencing_table_7000269  | fkey_reference_table.referenced_table_7000264
- fkey_ref_7000270         | fkey_reference_table.referencing_table_7000270  | fkey_reference_table.referenced_table_7000264
- fkey_ref_7000271         | fkey_reference_table.referencing_table_7000271  | fkey_reference_table.referenced_table_7000264
- fkey_ref_7000272         | fkey_reference_table.referencing_table_7000272  | fkey_reference_table.referenced_table_7000264
- fkey_ref_7000273         | fkey_reference_table.referencing_table2_7000273 | fkey_reference_table.referenced_table_7000264
- fkey_ref_7000274         | fkey_reference_table.referencing_table2_7000274 | fkey_reference_table.referenced_table_7000264
- fkey_ref_7000275         | fkey_reference_table.referencing_table2_7000275 | fkey_reference_table.referenced_table_7000264
- fkey_ref_7000276         | fkey_reference_table.referencing_table2_7000276 | fkey_reference_table.referenced_table_7000264
- fkey_ref_7000277         | fkey_reference_table.referencing_table2_7000277 | fkey_reference_table.referenced_table_7000264
- fkey_ref_7000278         | fkey_reference_table.referencing_table2_7000278 | fkey_reference_table.referenced_table_7000264
- fkey_ref_7000279         | fkey_reference_table.referencing_table2_7000279 | fkey_reference_table.referenced_table_7000264
- fkey_ref_7000280         | fkey_reference_table.referencing_table2_7000280 | fkey_reference_table.referenced_table_7000264
- fkey_ref_to_dist_7000273 | fkey_reference_table.referencing_table2_7000273 | fkey_reference_table.referencing_table_7000265
- fkey_ref_to_dist_7000274 | fkey_reference_table.referencing_table2_7000274 | fkey_reference_table.referencing_table_7000266
- fkey_ref_to_dist_7000275 | fkey_reference_table.referencing_table2_7000275 | fkey_reference_table.referencing_table_7000267
- fkey_ref_to_dist_7000276 | fkey_reference_table.referencing_table2_7000276 | fkey_reference_table.referencing_table_7000268
- fkey_ref_to_dist_7000277 | fkey_reference_table.referencing_table2_7000277 | fkey_reference_table.referencing_table_7000269
- fkey_ref_to_dist_7000278 | fkey_reference_table.referencing_table2_7000278 | fkey_reference_table.referencing_table_7000270
- fkey_ref_to_dist_7000279 | fkey_reference_table.referencing_table2_7000279 | fkey_reference_table.referencing_table_7000271
- fkey_ref_to_dist_7000280 | fkey_reference_table.referencing_table2_7000280 | fkey_reference_table.referencing_table_7000272
-(24 rows)
+    24
+(1 row)
 
 INSERT INTO referenced_table SELECT x, x+1 FROM generate_series(0,1000) AS f(x);
 -- should fail
@@ -1188,26 +1075,11 @@ SELECT create_distributed_table('referencing_referencing_table', 'id');
 (1 row)
 
 ALTER TABLE referencing_table ADD CONSTRAINT fkey_ref FOREIGN KEY (ref_id, ref_id2) REFERENCES referenced_table(test_column, test_column2) ON DELETE CASCADE;
-SELECT * FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.referencing%' ORDER BY 1,2,3;
-                         name                         |                           relid                            |                   refd_relid
+SELECT COUNT(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.referencing%';
+ count
 ---------------------------------------------------------------------
- fkey_ref_7000299                                     | fkey_reference_table.referencing_table_7000299             | fkey_reference_table.referenced_table_7000298
- fkey_ref_7000300                                     | fkey_reference_table.referencing_table_7000300             | fkey_reference_table.referenced_table_7000298
- fkey_ref_7000301                                     | fkey_reference_table.referencing_table_7000301             | fkey_reference_table.referenced_table_7000298
- fkey_ref_7000302                                     | fkey_reference_table.referencing_table_7000302             | fkey_reference_table.referenced_table_7000298
- fkey_ref_7000303                                     | fkey_reference_table.referencing_table_7000303             | fkey_reference_table.referenced_table_7000298
- fkey_ref_7000304                                     | fkey_reference_table.referencing_table_7000304             | fkey_reference_table.referenced_table_7000298
- fkey_ref_7000305                                     | fkey_reference_table.referencing_table_7000305             | fkey_reference_table.referenced_table_7000298
- fkey_ref_7000306                                     | fkey_reference_table.referencing_table_7000306             | fkey_reference_table.referenced_table_7000298
- referencing_referencing_table_id_fkey_7000307 | fkey_reference_table.referencing_referencing_table_7000307 | fkey_reference_table.referencing_table_7000299
- referencing_referencing_table_id_fkey_7000308 | fkey_reference_table.referencing_referencing_table_7000308 | fkey_reference_table.referencing_table_7000300
- referencing_referencing_table_id_fkey_7000309 | fkey_reference_table.referencing_referencing_table_7000309 | fkey_reference_table.referencing_table_7000301
- referencing_referencing_table_id_fkey_7000310 | fkey_reference_table.referencing_referencing_table_7000310 | fkey_reference_table.referencing_table_7000302
- referencing_referencing_table_id_fkey_7000311 | fkey_reference_table.referencing_referencing_table_7000311 | fkey_reference_table.referencing_table_7000303
- referencing_referencing_table_id_fkey_7000312 | fkey_reference_table.referencing_referencing_table_7000312 | fkey_reference_table.referencing_table_7000304
- referencing_referencing_table_id_fkey_7000313 | fkey_reference_table.referencing_referencing_table_7000313 | fkey_reference_table.referencing_table_7000305
- referencing_referencing_table_id_fkey_7000314 | fkey_reference_table.referencing_referencing_table_7000314 | fkey_reference_table.referencing_table_7000306
-(16 rows)
+    16
+(1 row)
 
 INSERT INTO referenced_table SELECT x, x+1 FROM generate_series(1,1000) AS f(x);
 INSERT INTO referencing_table SELECT x, x+1, x+2 FROM generate_series(1,999) AS f(x);
@@ -1224,36 +1096,6 @@ NOTICE:  drop cascades to constraint fkey_ref on table referencing_table
 DROP TABLE referencing_table CASCADE;
 NOTICE:  drop cascades to constraint referencing_referencing_table_id_fkey on table referencing_referencing_table
 DROP TABLE referencing_referencing_table;
--- test if create_distributed_table works in transactions with some edge cases
--- the following checks if create_distributed_table works on foreign keys when
--- one of them is a self-referencing table of multiple distributed tables
-BEGIN;
-  CREATE TABLE test_table_1(id int PRIMARY KEY);
-  SELECT create_reference_table('test_table_1');
- create_reference_table
----------------------------------------------------------------------
-
-(1 row)
-
-  CREATE TABLE test_table_2(id int PRIMARY KEY, value_1 int, FOREIGN KEY(id) REFERENCES test_table_1(id));
-  SELECT create_distributed_table('test_table_2', 'id');
- create_distributed_table
----------------------------------------------------------------------
-
-(1 row)
-
-  CREATE TABLE test_table_3(id int PRIMARY KEY, value_1 int, FOREIGN KEY(value_1) REFERENCES test_table_1(id), FOREIGN KEY(id) REFERENCES test_table_2(id));
-  SELECT create_distributed_table('test_table_3', 'id');
- create_distributed_table
----------------------------------------------------------------------
-
-(1 row)
-
-  DROP TABLE test_table_1 CASCADE;
-NOTICE:  drop cascades to 2 other objects
-DETAIL:  drop cascades to constraint test_table_2_id_fkey on table test_table_2
-drop cascades to constraint test_table_3_value_1_fkey on table test_table_3
-ROLLBACK;
 -- create_reference_table, create_distributed_table and ALTER TABLE in the same transaction
 BEGIN;
   CREATE TABLE test_table_1(id int PRIMARY KEY);
@@ -1820,7 +1662,7 @@ ALTER TABLE referencing_table_4 ADD CONSTRAINT fkey FOREIGN KEY (id) REFERENCES 
 ALTER TABLE referencing_table_4 ADD CONSTRAINT fkey_to_ref FOREIGN KEY (value_1) REFERENCES referenced_table;
 -- should fail since the data will flow to partitioning_test_4 and it has a foreign constraint to partitioning_test_0 on id column
 INSERT INTO referencing_table VALUES (0, 5);
-ERROR:  insert or update on table "referencing_table_4_7000540" violates foreign key constraint "fkey_xxxxxxx"
+ERROR:  insert or update on table "referencing_table_4_xxxxxxx" violates foreign key constraint "fkey_xxxxxxx"
 DETAIL:  Key (id)=(X) is not present in table "referencing_table_0_xxxxxxx".
 CONTEXT:  while executing command on localhost:xxxxx
 -- should succeed on partitioning_test_0
@@ -1833,7 +1675,7 @@ SELECT * FROM referencing_table;
 
 -- should fail since partitioning_test_4 has foreign constraint to referenced_table on value_1 column
 INSERT INTO referencing_table VALUES (0, 5);
-ERROR:  insert or update on table "referencing_table_4_7000540" violates foreign key constraint "fkey_to_ref_7000540"
+ERROR:  insert or update on table "referencing_table_4_xxxxxxx" violates foreign key constraint "fkey_to_ref_xxxxxxx"
 DETAIL:  Key (value_1)=(5) is not present in table "referenced_table_xxxxxxx".
 CONTEXT:  while executing command on localhost:xxxxx
 INSERT INTO referenced_table VALUES(5,5);
