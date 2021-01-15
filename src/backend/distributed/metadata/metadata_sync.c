@@ -14,6 +14,7 @@
 #include "postgres.h"
 #include "miscadmin.h"
 
+#include <signal.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -28,6 +29,7 @@
 #include "catalog/pg_foreign_server.h"
 #include "catalog/pg_namespace.h"
 #include "catalog/pg_type.h"
+#include "commands/async.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/commands.h"
 #include "distributed/deparser.h"
@@ -35,6 +37,7 @@
 #include "distributed/listutils.h"
 #include "distributed/metadata_utility.h"
 #include "distributed/coordinator_protocol.h"
+#include "distributed/maintenanced.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/metadata/distobject.h"
@@ -48,11 +51,15 @@
 #include "foreign/foreign.h"
 #include "miscadmin.h"
 #include "nodes/pg_list.h"
+#include "pgstat.h"
+#include "postmaster/bgworker.h"
+#include "postmaster/postmaster.h"
 #include "storage/lmgr.h"
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
+#include "utils/snapmgr.h"
 #include "utils/syscache.h"
 
 
@@ -76,10 +83,17 @@ static GrantStmt * GenerateGrantOnSchemaStmtForRights(Oid roleOid,
 													  char *permission,
 													  bool withGrantOption);
 static char * GenerateSetRoleQuery(Oid roleOid);
+static void MetadataSyncSigTermHandler(SIGNAL_ARGS);
+static void MetadataSyncSigAlrmHandler(SIGNAL_ARGS);
 
 PG_FUNCTION_INFO_V1(start_metadata_sync_to_node);
 PG_FUNCTION_INFO_V1(stop_metadata_sync_to_node);
 PG_FUNCTION_INFO_V1(worker_record_sequence_dependency);
+
+static bool got_SIGTERM = false;
+static bool got_SIGALRM = false;
+
+#define METADATA_SYNC_APP_NAME "Citus Metadata Sync Daemon"
 
 
 /*
@@ -1497,7 +1511,7 @@ DetachPartitionCommandList(void)
  * metadata workers that are out of sync. Returns the result of
  * synchronization.
  */
-MetadataSyncResult
+static MetadataSyncResult
 SyncMetadataToNodes(void)
 {
 	MetadataSyncResult result = METADATA_SYNC_SUCCESS;
@@ -1527,6 +1541,9 @@ SyncMetadataToNodes(void)
 
 			if (!SyncMetadataSnapshotToNode(workerNode, raiseInterrupts))
 			{
+				ereport(WARNING, (errmsg("failed to sync metadata to %s:%d",
+										 workerNode->workerName,
+										 workerNode->workerPort)));
 				result = METADATA_SYNC_FAILED_SYNC;
 			}
 			else
@@ -1538,4 +1555,245 @@ SyncMetadataToNodes(void)
 	}
 
 	return result;
+}
+
+
+/*
+ * SyncMetadataToNodesMain is the main function for syncing metadata to
+ * MX nodes. It retries until success and then exits.
+ */
+void
+SyncMetadataToNodesMain(Datum main_arg)
+{
+	Oid databaseOid = DatumGetObjectId(main_arg);
+
+	/* extension owner is passed via bgw_extra */
+	Oid extensionOwner = InvalidOid;
+	memcpy_s(&extensionOwner, sizeof(extensionOwner),
+			 MyBgworkerEntry->bgw_extra, sizeof(Oid));
+
+	pqsignal(SIGTERM, MetadataSyncSigTermHandler);
+	pqsignal(SIGALRM, MetadataSyncSigAlrmHandler);
+	BackgroundWorkerUnblockSignals();
+
+	/* connect to database, after that we can actually access catalogs */
+	BackgroundWorkerInitializeConnectionByOid(databaseOid, extensionOwner, 0);
+
+	/* make worker recognizable in pg_stat_activity */
+	pgstat_report_appname(METADATA_SYNC_APP_NAME);
+
+	bool syncedAllNodes = false;
+
+	while (!syncedAllNodes)
+	{
+		InvalidateMetadataSystemCache();
+		StartTransactionCommand();
+
+		/*
+		 * Some functions in ruleutils.c, which we use to get the DDL for
+		 * metadata propagation, require an active snapshot.
+		 */
+		PushActiveSnapshot(GetTransactionSnapshot());
+
+		if (!LockCitusExtension())
+		{
+			ereport(DEBUG1, (errmsg("could not lock the citus extension, "
+									"skipping metadata sync")));
+		}
+		else if (CheckCitusVersion(DEBUG1) && CitusHasBeenLoaded())
+		{
+			UseCoordinatedTransaction();
+			MetadataSyncResult result = SyncMetadataToNodes();
+
+			syncedAllNodes = (result == METADATA_SYNC_SUCCESS);
+
+			/* we use LISTEN/NOTIFY to wait for metadata syncing in tests */
+			if (result != METADATA_SYNC_FAILED_LOCK)
+			{
+				Async_Notify(METADATA_SYNC_CHANNEL, NULL);
+			}
+		}
+
+		PopActiveSnapshot();
+		CommitTransactionCommand();
+		ProcessCompletedNotifies();
+
+		if (syncedAllNodes)
+		{
+			break;
+		}
+
+		/*
+		 * If backend is cancelled (e.g. bacause of distributed deadlock),
+		 * CHECK_FOR_INTERRUPTS() will raise a cancellation error which will
+		 * result in exit(1).
+		 */
+		CHECK_FOR_INTERRUPTS();
+
+		/*
+		 * SIGTERM is used for when maintenance daemon tries to clean-up
+		 * metadata sync daemons spawned by terminated maintenance daemons.
+		 */
+		if (got_SIGTERM)
+		{
+			exit(0);
+		}
+
+		/*
+		 * SIGALRM is used for testing purposes and it simulates an error in metadata
+		 * sync daemon.
+		 */
+		if (got_SIGALRM)
+		{
+			elog(ERROR, "Error in metadata sync daemon");
+		}
+
+		pg_usleep(MetadataSyncRetryInterval * 1000);
+	}
+}
+
+
+/*
+ * MetadataSyncSigTermHandler set a flag to request termination of metadata
+ * sync daemon.
+ */
+static void
+MetadataSyncSigTermHandler(SIGNAL_ARGS)
+{
+	int save_errno = errno;
+
+	got_SIGTERM = true;
+	if (MyProc != NULL)
+	{
+		SetLatch(&MyProc->procLatch);
+	}
+
+	errno = save_errno;
+}
+
+
+/*
+ * MetadataSyncSigAlrmHandler set a flag to request error at metadata
+ * sync daemon. This is used for testing purposes.
+ */
+static void
+MetadataSyncSigAlrmHandler(SIGNAL_ARGS)
+{
+	int save_errno = errno;
+
+	got_SIGALRM = true;
+	if (MyProc != NULL)
+	{
+		SetLatch(&MyProc->procLatch);
+	}
+
+	errno = save_errno;
+}
+
+
+/*
+ * SpawnSyncMetadataToNodes starts a background worker which runs metadata
+ * sync. On success it returns workers' handle. Otherwise it returns NULL.
+ */
+BackgroundWorkerHandle *
+SpawnSyncMetadataToNodes(Oid database, Oid extensionOwner)
+{
+	BackgroundWorker worker;
+	BackgroundWorkerHandle *handle = NULL;
+
+	/* Configure a worker. */
+	memset(&worker, 0, sizeof(worker));
+	SafeSnprintf(worker.bgw_name, BGW_MAXLEN,
+				 "Citus Metadata Sync: %u/%u",
+				 database, extensionOwner);
+	worker.bgw_flags =
+		BGWORKER_SHMEM_ACCESS | BGWORKER_BACKEND_DATABASE_CONNECTION;
+	worker.bgw_start_time = BgWorkerStart_ConsistentState;
+
+	/* don't restart, we manage restarts from maintenance daemon */
+	worker.bgw_restart_time = BGW_NEVER_RESTART;
+	strcpy_s(worker.bgw_library_name, sizeof(worker.bgw_library_name), "citus");
+	strcpy_s(worker.bgw_function_name, sizeof(worker.bgw_library_name),
+			 "SyncMetadataToNodesMain");
+	worker.bgw_main_arg = ObjectIdGetDatum(MyDatabaseId);
+	memcpy_s(worker.bgw_extra, sizeof(worker.bgw_extra), &extensionOwner,
+			 sizeof(Oid));
+	worker.bgw_notify_pid = MyProcPid;
+
+	if (!RegisterDynamicBackgroundWorker(&worker, &handle))
+	{
+		return NULL;
+	}
+
+	pid_t pid;
+	WaitForBackgroundWorkerStartup(handle, &pid);
+
+	return handle;
+}
+
+
+/*
+ * SignalMetadataSyncDaemon signals metadata sync daemons belonging to
+ * the given database.
+ */
+void
+SignalMetadataSyncDaemon(Oid database, int sig)
+{
+	int backendCount = pgstat_fetch_stat_numbackends();
+	for (int backend = 1; backend <= backendCount; backend++)
+	{
+		LocalPgBackendStatus *localBeEntry = pgstat_fetch_stat_local_beentry(backend);
+		if (!localBeEntry)
+		{
+			continue;
+		}
+
+		PgBackendStatus *beStatus = &localBeEntry->backendStatus;
+		if (beStatus->st_databaseid == database &&
+			strncmp(beStatus->st_appname, METADATA_SYNC_APP_NAME, BGW_MAXLEN) == 0)
+		{
+			kill(beStatus->st_procpid, sig);
+		}
+	}
+}
+
+
+/*
+ * ShouldInitiateMetadataSync returns if metadata sync daemon should be initiated.
+ * It sets lockFailure to true if pg_dist_node lock couldn't be acquired for the
+ * check.
+ */
+bool
+ShouldInitiateMetadataSync(bool *lockFailure)
+{
+	if (!IsCoordinator())
+	{
+		*lockFailure = false;
+		return false;
+	}
+
+	Oid distNodeOid = DistNodeRelationId();
+	if (!ConditionalLockRelationOid(distNodeOid, AccessShareLock))
+	{
+		*lockFailure = true;
+		return false;
+	}
+
+	bool shouldSyncMetadata = false;
+
+	List *workerList = ActivePrimaryNonCoordinatorNodeList(NoLock);
+	WorkerNode *workerNode = NULL;
+	foreach_ptr(workerNode, workerList)
+	{
+		if (workerNode->hasMetadata && !workerNode->metadataSynced)
+		{
+			shouldSyncMetadata = true;
+			break;
+		}
+	}
+
+	UnlockRelationOid(distNodeOid, AccessShareLock);
+
+	*lockFailure = false;
+	return shouldSyncMetadata;
 }
