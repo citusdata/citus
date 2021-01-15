@@ -67,20 +67,6 @@
 	"a foreign key relationship with %s by executing SELECT " \
 	"undistribute_table($$%s$$, cascade_via_foreign_keys=>true)"
 
-typedef struct TableConversionReturn
-{
-	/*
-	 * commands to create foreign keys for the table
-	 *
-	 * When the table conversion is cascaded we can recreate
-	 * some of the foreign keys of the cascaded tables. So with this
-	 * list we can return it to the initial conversion operation so
-	 * foreign keys can be created after every colocated table is
-	 * converted.
-	 */
-	List *foreignKeyCommands;
-}TableConversionReturn;
-
 
 typedef TableConversionReturn *(*TableConversionFunction)(struct
 														  TableConversionParameters *);
