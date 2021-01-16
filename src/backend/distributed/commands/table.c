@@ -2049,8 +2049,9 @@ SetInterShardDDLTaskPlacementList(Task *task, ShardInterval *leftShardInterval,
 		 * to a citus local table, then we will execute ADD/DROP constraint
 		 * command only for coordinator placement of reference table.
 		 */
-		task->taskPlacementList = GroupShardPlacementsForTableOnGroup(leftRelationId,
-																	  COORDINATOR_GROUP_ID);
+		uint64 leftShardId = leftShardInterval->shardId;
+		task->taskPlacementList = ActiveShardPlacementListOnGroup(leftShardId,
+																  COORDINATOR_GROUP_ID);
 	}
 	else
 	{

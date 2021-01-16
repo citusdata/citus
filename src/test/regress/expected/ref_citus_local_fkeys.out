@@ -169,6 +169,12 @@ ROLLBACK;
 -- .. and we allow such foreign keys with NO ACTION behavior
 ALTER TABLE reference_table ADD CONSTRAINT fkey_ref_to_local FOREIGN KEY(r1) REFERENCES citus_local_table(l1) ON DELETE NO ACTION;
 NOTICE:  executing the command locally: SELECT worker_apply_inter_shard_ddl_command (1506003, 'ref_citus_local_fkeys', 1506002, 'ref_citus_local_fkeys', 'ALTER TABLE reference_table ADD CONSTRAINT fkey_ref_to_local FOREIGN KEY(r1) REFERENCES citus_local_table(l1) ON DELETE NO ACTION;')
+-- show that adding/dropping foreign keys from reference to citus local
+-- tables works fine with remote execution too
+SET citus.enable_local_execution TO OFF;
+ALTER TABLE reference_table DROP CONSTRAINT fkey_ref_to_local;
+ALTER TABLE reference_table ADD CONSTRAINT fkey_ref_to_local FOREIGN KEY(r1) REFERENCES citus_local_table(l1) ON DELETE NO ACTION;
+SET citus.enable_local_execution TO ON;
 -- show that we are checking for foreign key constraint after defining, this should fail
 INSERT INTO reference_table VALUES (4);
 NOTICE:  executing the command locally: INSERT INTO ref_citus_local_fkeys.reference_table_1506003 (r1) VALUES (4)

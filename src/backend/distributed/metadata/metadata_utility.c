@@ -964,6 +964,30 @@ NodeGroupHasShardPlacements(int32 groupId, bool onlyConsiderActivePlacements)
 
 
 /*
+ * ActiveShardPlacementListOnGroup returns a list of active shard placements
+ * that are sitting on group with groupId for given shardId.
+ */
+List *
+ActiveShardPlacementListOnGroup(uint64 shardId, int32 groupId)
+{
+	List *activeShardPlacementListOnGroup = NIL;
+
+	List *activePlacementList = ActiveShardPlacementList(shardId);
+	ShardPlacement *shardPlacement = NULL;
+	foreach_ptr(shardPlacement, activePlacementList)
+	{
+		if (shardPlacement->groupId == groupId)
+		{
+			activeShardPlacementListOnGroup = lappend(activeShardPlacementListOnGroup,
+													  shardPlacement);
+		}
+	}
+
+	return activeShardPlacementListOnGroup;
+}
+
+
+/*
  * ActiveShardPlacementList finds shard placements for the given shardId from
  * system catalogs, chooses placements that are in active state, and returns
  * these shard placements in a new list.
