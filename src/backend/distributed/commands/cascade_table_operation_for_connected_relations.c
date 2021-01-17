@@ -353,19 +353,28 @@ ExecuteCascadeOperationForRelationIdList(List *relationIdList,
 	foreach_oid(relationId, relationIdList)
 	{
 		/*
-		 * Caller already passed the relations that we should operate on,
-		 * so we should not cascade here.
+		 * The reason behind skipping certain table types in below loop is
+		 * that we support some sort of foreign keys between postgres tables
+		 * and citus tables when enable_local_reference_table_foreign_keys is
+		 * false or when coordinator is not added to metadata.
+		 *
+		 * Also, as caller already passed the relations that we should operate
+		 * on, we don't cascade via foreign keys here.
 		 */
 		bool cascadeViaForeignKeys = false;
 		switch (cascadeOperationType)
 		{
 			case CASCADE_FKEY_UNDISTRIBUTE_TABLE:
 			{
-				TableConversionParameters params = {
-					.relationId = relationId,
-					.cascadeViaForeignKeys = cascadeViaForeignKeys
-				};
-				UndistributeTable(&params);
+				if (IsCitusTable(relationId))
+				{
+					TableConversionParameters params = {
+						.relationId = relationId,
+						.cascadeViaForeignKeys = cascadeViaForeignKeys
+					};
+					UndistributeTable(&params);
+				}
+
 				break;
 			}
 
@@ -373,14 +382,6 @@ ExecuteCascadeOperationForRelationIdList(List *relationIdList,
 			{
 				if (!IsCitusTable(relationId))
 				{
-					/*
-					 * Normally, we wouldn't expect a postgres table connected
-					 * to a citus local table via a foreign keys graph. But now
-					 * this is possible as we allow foreign keys from postgres
-					 * tables to reference tables when coordinator is not added
-					 * to metadata. So instead of erroring out, we skip citus
-					 * tables here.
-					 */
 					CreateCitusLocalTable(relationId, cascadeViaForeignKeys);
 				}
 

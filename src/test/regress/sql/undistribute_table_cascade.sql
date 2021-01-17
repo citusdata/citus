@@ -8,6 +8,22 @@ SET search_path TO undistribute_table_cascade;
 
 SET client_min_messages to ERROR;
 
+-- remove coordinator if it is added to pg_dist_node
+SELECT COUNT(master_remove_node(nodename, nodeport)) < 2
+FROM pg_dist_node WHERE nodename='localhost' AND nodeport=:master_port;
+
+BEGIN;
+  CREATE TABLE reference_table(col_1 INT UNIQUE);
+  CREATE TABLE distributed_table(col_1 INT UNIQUE);
+  CREATE TABLE local_table (col_1 INT REFERENCES reference_table(col_1), FOREIGN KEY (col_1) REFERENCES distributed_table(col_1));
+
+  SELECT create_reference_table('reference_table');
+  SELECT create_distributed_table('distributed_table', 'col_1');
+
+  -- show that we skip postgres tables when undistributing citus tables
+  SELECT undistribute_table('reference_table', cascade_via_foreign_keys=>true);
+ROLLBACK;
+
 -- ensure that coordinator is added to pg_dist_node
 SELECT 1 FROM master_add_node('localhost', :master_port, groupId => 0);
 
