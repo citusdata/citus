@@ -49,7 +49,6 @@
 #define ALTER_INDEX_COLUMN_SET_STATS_COMMAND \
 	"ALTER INDEX %s ALTER COLUMN %d SET STATISTICS %d"
 
-static List * GetAlterIndexStatisticsCommands(Oid indexOid);
 static List * GetExplicitStatisticsIdList(Oid relationId);
 static char * GenerateAlterIndexColumnSetStatsCommand(char *indexNameWithSchema,
 													  int16 attnum,
@@ -474,21 +473,6 @@ GetExplicitStatisticsCommandList(Oid relationId)
 		}
 	}
 
-	/* find indexes on current relation, in case of modified stats target */
-	Relation relation = relation_open(relationId, AccessShareLock);
-	List *indexOidList = RelationGetIndexList(relation);
-	relation_close(relation, NoLock);
-
-	Oid indexId = InvalidOid;
-	foreach_oid(indexId, indexOidList)
-	{
-		/* we need alter index commands for altered targets on expression indexes */
-		List *alterIndexStatisticsCommands = GetAlterIndexStatisticsCommands(indexId);
-
-		explicitStatisticsCommandList =
-			list_concat(explicitStatisticsCommandList, alterIndexStatisticsCommands);
-	}
-
 	/* revert back to original search_path */
 	PopOverrideSearchPath();
 
@@ -547,7 +531,7 @@ GetExplicitStatisticsSchemaIdList(Oid relationId)
  * Note that this function only looks for expression indexes, since this command is
  * valid for only expression indexes.
  */
-static List *
+List *
 GetAlterIndexStatisticsCommands(Oid indexOid)
 {
 	List *alterIndexStatisticsCommandList = NIL;

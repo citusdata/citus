@@ -736,6 +736,10 @@ GatherIndexAndConstraintDefinitionList(Form_pg_index indexForm, List **indexDDLE
 		*indexDDLEventList = lappend(*indexDDLEventList, makeTableDDLCommandString(
 										 clusteredDef));
 	}
+
+	/* we need alter index commands for altered targets on expression indexes */
+	List *alterIndexStatisticsCommands = GetAlterIndexStatisticsCommands(indexId);
+	*indexDDLEventList = list_concat(*indexDDLEventList, alterIndexStatisticsCommands);
 }
 
 
