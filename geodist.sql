@@ -97,3 +97,6 @@ UPDATE pg_dist_partition t
    AND t.logicalrelid = 'belgium_planet_osm_roads_geo'::regclass;
 DROP TABLE foo;
 COMMIT;
+
+ALTER SYSTEM SET citus.use_custom_path TO on;
+SELECT pg_reload_conf();

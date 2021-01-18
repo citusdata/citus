@@ -1003,6 +1003,16 @@ ColocatedShardIntervalList(ShardInterval *shardInterval)
 		return colocatedShardList;
 	}
 
+	if (IsCitusTableTypeCacheEntry(cacheEntry, GEO_DISTRIBUTED))
+	{
+		/* TODO actual lookup colocated geo tables, since we experiment with selfjoins this hack works */
+		ShardInterval *copyShardInterval = CopyShardInterval(shardInterval);
+
+		colocatedShardList = lappend(colocatedShardList, copyShardInterval);
+
+		return colocatedShardList;
+	}
+
 	int shardIntervalIndex = ShardIndex(shardInterval);
 	List *colocatedTableList = ColocatedTableList(distributedTableId);
 

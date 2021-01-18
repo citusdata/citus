@@ -1143,6 +1143,36 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
+		"citus.use_geo_partitioning",
+		gettext_noop("Enable planning with geo partitins"),
+		NULL,
+		&UseGeoPartitioning,
+		true,
+		PGC_USERSET,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		"citus.use_only_geo_partitioning",
+		gettext_noop("Force the planner to use only the geo partitioning"),
+		NULL,
+		&OnlyGeoPartitioning,
+		false,
+		PGC_USERSET,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		"citus.use_geo_partitioning_grouping",
+		gettext_noop("Enable geo partitioning grouping"),
+		NULL,
+		&EnableGeoPartitioningGrouping,
+		true,
+		PGC_USERSET,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
 		"citus.use_custom_path_broadcast_join",
 		gettext_noop("Allow broadcast joins to be used during path based planning"),
 		NULL,

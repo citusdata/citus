@@ -33,6 +33,9 @@
 /* level of planner calls */
 extern int PlannerLevel;
 extern bool UseCustomPath;
+extern bool OnlyGeoPartitioning;
+extern bool UseGeoPartitioning;
+extern bool EnableGeoPartitioningGrouping;
 
 typedef struct RelationRestrictionContext
 {
