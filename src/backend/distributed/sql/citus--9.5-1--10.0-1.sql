@@ -63,6 +63,7 @@ RENAME TO citus_drop_all_shards;
 DROP FUNCTION pg_catalog.master_modify_multiple_shards(text);
 DROP FUNCTION pg_catalog.master_create_distributed_table(regclass, text, citus.distribution_type);
 DROP FUNCTION pg_catalog.master_create_worker_shards(text, integer, integer);
+DROP FUNCTION pg_catalog.mark_tables_colocated(regclass, regclass[]);
 #include "udfs/citus_shard_sizes/10.0-1.sql"
 #include "udfs/citus_shards/10.0-1.sql"
 

@@ -764,6 +764,12 @@ WHERE
 
 RESET client_min_messages;
 
+-- this function is dropped in Citus10, added here for tests
+CREATE OR REPLACE FUNCTION pg_catalog.mark_tables_colocated(source_table_name regclass, target_table_names regclass[])
+	RETURNS void
+	LANGUAGE C STRICT
+	AS 'citus', $$mark_tables_colocated$$;
+
 -- some tests for mark_tables_colocated
 -- should error out
 SELECT mark_tables_colocated('colocated_table_test_2', ARRAY['reference_table_test']);
