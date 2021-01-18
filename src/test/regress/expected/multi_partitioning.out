@@ -1958,12 +1958,43 @@ SELECT parent_table, partition_column, partition, from_value, to_value FROM time
  public.non_distributed_partitioned_table | a                | public.non_distributed_partitioned_table_1 | 0          | 10
 (6 rows)
 
+-- create the same partition to verify it behaves like in plain PG
+CREATE TABLE partitioning_test_2011 PARTITION OF partitioning_test FOR VALUES FROM ('2011-01-01') TO ('2012-01-01');
+ERROR:  relation "partitioning_test_2011" already exists
+CREATE TABLE IF NOT EXISTS partitioning_test_2011 PARTITION OF partitioning_test FOR VALUES FROM ('2011-01-01') TO ('2012-01-01');
+NOTICE:  relation "partitioning_test_2011" already exists, skipping
+-- verify we can create a partition that doesn't already exist with IF NOT EXISTS
+CREATE TABLE IF NOT EXISTS partitioning_test_2013 PARTITION OF partitioning_test FOR VALUES FROM ('2013-01-01') TO ('2014-01-01');
+SELECT logicalrelid FROM pg_dist_partition WHERE logicalrelid IN ('partitioning_test', 'partitioning_test_2013') ORDER BY 1;
+      logicalrelid
+---------------------------------------------------------------------
+ partitioning_test
+ partitioning_test_2013
+(2 rows)
+
+-- create the same table but that is not a partition and verify it behaves like in plain PG
+CREATE TABLE not_partition(time date);
+CREATE TABLE not_partition PARTITION OF partitioning_test FOR VALUES FROM ('2011-01-01') TO ('2012-01-01');
+ERROR:  relation "not_partition" already exists
+CREATE TABLE IF NOT EXISTS not_partition PARTITION OF partitioning_test FOR VALUES FROM ('2011-01-01') TO ('2012-01-01');
+NOTICE:  relation "not_partition" already exists, skipping
+DROP TABLE not_partition;
+-- verify it skips when the partition with the same name belongs to another table
+CREATE TABLE another_table(id int, time date) PARTITION BY RANGE (time);
+CREATE TABLE partition_of_other_table PARTITION OF another_table FOR VALUES FROM ('2014-01-01') TO ('2015-01-01');
+CREATE TABLE partition_of_other_table PARTITION OF partitioning_test FOR VALUES FROM ('2014-01-01') TO ('2015-01-01');
+ERROR:  relation "partition_of_other_table" already exists
+CREATE TABLE IF NOT EXISTS partition_of_other_table PARTITION OF partitioning_test FOR VALUES FROM ('2014-01-01') TO ('2015-01-01');
+NOTICE:  relation "partition_of_other_table" already exists, skipping
+ALTER TABLE another_table DETACH PARTITION partition_of_other_table;
+DROP TABLE another_table, partition_of_other_table;
 ALTER TABLE partitioning_test DETACH PARTITION partitioning_test_2008;
 ALTER TABLE partitioning_test DETACH PARTITION partitioning_test_2009;
 ALTER TABLE partitioning_test DETACH PARTITION partitioning_test_2010;
 ALTER TABLE partitioning_test DETACH PARTITION partitioning_test_2011;
+ALTER TABLE partitioning_test DETACH PARTITION partitioning_test_2013;
 DROP TABLE partitioning_test, partitioning_test_2008, partitioning_test_2009,
-           partitioning_test_2010, partitioning_test_2011,
+           partitioning_test_2010, partitioning_test_2011, partitioning_test_2013,
            reference_table, reference_table_2;
 RESET SEARCH_PATH;
 -- not timestamp partitioned
