@@ -125,6 +125,7 @@ SELECT create_citus_local_table('child_table');
 CREATE UNLOGGED TABLE unlogged_table (a int primary key);
 SELECT create_citus_local_table('unlogged_table');
 
+
 -- show that we allow triggers --
 
 BEGIN;
@@ -445,6 +446,13 @@ CREATE TABLE referenced_table(a int UNIQUE);
 SELECT create_citus_local_table('referenced_table');
 
 ALTER TABLE referencing_table ADD CONSTRAINT fkey_cl_to_cl FOREIGN KEY (a) REFERENCES referenced_table(a);
+
+-- verify creating citus local table with extended statistics
+CREATE TABLE test_citus_local_table_with_stats(a int, b int);
+CREATE STATISTICS stx1 ON a, b FROM test_citus_local_table_with_stats;
+SELECT create_citus_local_table('test_citus_local_table_with_stats');
+CREATE STATISTICS "CiTUS!LocalTables"."Bad\'StatName" ON a, b FROM test_citus_local_table_with_stats;
+SELECT stxname FROM pg_statistic_ext ORDER BY stxname;
 
 -- observe the debug messages telling that we switch to sequential
 -- execution when truncating a citus local table that is referenced

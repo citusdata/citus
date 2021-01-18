@@ -49,7 +49,6 @@
 #define ALTER_INDEX_COLUMN_SET_STATS_COMMAND \
 	"ALTER INDEX %s ALTER COLUMN %d SET STATISTICS %d"
 
-static List * GetExplicitStatisticsIdList(Oid relationId);
 static char * GenerateAlterIndexColumnSetStatsCommand(char *indexNameWithSchema,
 													  int16 attnum,
 													  int32 attstattarget);
@@ -573,7 +572,7 @@ GetAlterIndexStatisticsCommands(Oid indexOid)
  * that are explicitly created on the relation with relationId. That means,
  * this function discards internal statistics implicitly created by postgres.
  */
-static List *
+List *
 GetExplicitStatisticsIdList(Oid relationId)
 {
 	List *statisticsIdList = NIL;
