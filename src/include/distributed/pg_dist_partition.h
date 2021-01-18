@@ -57,7 +57,7 @@ typedef FormData_pg_dist_partition *Form_pg_dist_partition;
 #define DISTRIBUTE_BY_NONE 'n'
 #define REDISTRIBUTE_BY_HASH 'x'
 #define DISTRIBUTE_BY_INVALID '\0'
-#define REDISTRIBUTE_BY_GEO 'g'
+#define DISTRIBUTE_BY_GEO 'g'
 
 /*
  * Valid values for repmodel are 'c' for coordinator, 's' for streaming

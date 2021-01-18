@@ -74,6 +74,9 @@ static uint64 NextPlanId = 1;
 /* keep track of planner call stack levels */
 int PlannerLevel = 0;
 bool UseCustomPath = false;
+bool OnlyGeoPartitioning = false;
+bool UseGeoPartitioning = true;
+bool EnableGeoPartitioningGrouping = true;
 
 static bool ListContainsDistributedTableRTE(List *rangeTableList);
 static bool IsUpdateOrDelete(Query *query);

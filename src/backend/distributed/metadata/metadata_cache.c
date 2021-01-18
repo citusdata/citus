@@ -451,6 +451,11 @@ IsCitusTableTypeInternal(char partitionMethod, char replicationModel,
 			return true;
 		}
 
+		case GEO_DISTRIBUTED:
+		{
+			return partitionMethod == DISTRIBUTE_BY_GEO;
+		}
+
 		default:
 		{
 			ereport(ERROR, (errmsg("Unknown table type %d", tableType)));
@@ -4308,6 +4313,7 @@ GetPartitionTypeInputInfo(char *partitionKeyString, char partitionMethod,
 		case DISTRIBUTE_BY_APPEND:
 		case DISTRIBUTE_BY_RANGE:
 		case DISTRIBUTE_BY_HASH:
+		case DISTRIBUTE_BY_GEO:
 		{
 			Node *partitionNode = stringToNode(partitionKeyString);
 			Var *partitionColumn = (Var *) partitionNode;
@@ -4350,6 +4356,7 @@ GetIntervalTypeInfo(char partitionMethod, Var *partitionColumn,
 
 	switch (partitionMethod)
 	{
+		case DISTRIBUTE_BY_GEO:
 		case DISTRIBUTE_BY_APPEND:
 		case DISTRIBUTE_BY_RANGE:
 		{

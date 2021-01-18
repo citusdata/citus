@@ -122,6 +122,7 @@ typedef enum
 	HASH_DISTRIBUTED,
 	APPEND_DISTRIBUTED,
 	RANGE_DISTRIBUTED,
+	GEO_DISTRIBUTED,
 
 	/* hash, range or append distributed table */
 	DISTRIBUTED_TABLE,
