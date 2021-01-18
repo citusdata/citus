@@ -114,9 +114,10 @@ static void EnsureLocalTableEmptyIfNecessary(Oid relationId, char distributionMe
 static bool ShouldLocalTableBeEmpty(Oid relationId, char distributionMethod, bool
 									viaDeprecatedAPI);
 static void EnsureCitusTableCanBeCreated(Oid relationOid);
-static List * GetFKeyCreationCommandsRelationInvolved(Oid relationId);
+static List * GetFKeyCreationCommandsRelationInvolvedWithTableType(Oid relationId,
+																   int tableTypeFlag);
 static Oid DropFKeysAndUndistributeTable(Oid relationId);
-static void DropFKeysRelationInvolved(Oid relationId);
+static void DropFKeysRelationInvolvedWithTableType(Oid relationId, int tableTypeFlag);
 static bool LocalTableEmpty(Oid tableId);
 static void CopyLocalDataIntoShards(Oid relationId);
 static List * TupleDescColumnNameList(TupleDesc tupleDescriptor);
@@ -354,12 +355,13 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 	 * given relation is involved, then we undistribute the relation and finally
 	 * we re-create dropped foreign keys at the end of this function.
 	 */
-	List *fKeyCreationCommandsRelationInvolved = NIL;
+	List *originalForeignKeyRecreationCommands = NIL;
 	if (IsCitusTableType(relationId, CITUS_LOCAL_TABLE))
 	{
 		/* store foreign key creation commands that relation is involved */
-		fKeyCreationCommandsRelationInvolved =
-			GetFKeyCreationCommandsRelationInvolved(relationId);
+		originalForeignKeyRecreationCommands =
+			GetFKeyCreationCommandsRelationInvolvedWithTableType(relationId,
+																 INCLUDE_ALL_TABLE_TYPES);
 		relationId = DropFKeysAndUndistributeTable(relationId);
 	}
 
@@ -472,27 +474,27 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 	 * we can skip the validation of the foreign keys.
 	 */
 	bool skip_validation = true;
-	ExecuteForeignKeyCreateCommandList(fKeyCreationCommandsRelationInvolved,
-									   skip_validation);
+	ExecuteForeignKeyCreateCommandList(droppedFKeyCreationCommands, skip_validation);
 }
 
 
 /*
- * GetFKeyCreationCommandsRelationInvolved returns a list of DDL commands to
- * recreate the foreign keys that relation with relationId is involved.
+ * GetFKeyCreationCommandsRelationInvolvedWithTableType returns a list of DDL
+ * commands to recreate the foreign keys that relation with relationId is involved
+ * with given table type.
  */
 static List *
-GetFKeyCreationCommandsRelationInvolved(Oid relationId)
+GetFKeyCreationCommandsRelationInvolvedWithTableType(Oid relationId, int tableTypeFlag)
 {
 	int referencingFKeysFlag = INCLUDE_REFERENCING_CONSTRAINTS |
-							   INCLUDE_ALL_TABLE_TYPES;
+							   tableTypeFlag;
 	List *referencingFKeyCreationCommands =
 		GetForeignConstraintCommandsInternal(relationId, referencingFKeysFlag);
 
 	/* already captured self referencing foreign keys, so use EXCLUDE_SELF_REFERENCES */
 	int referencedFKeysFlag = INCLUDE_REFERENCED_CONSTRAINTS |
 							  EXCLUDE_SELF_REFERENCES |
-							  INCLUDE_ALL_TABLE_TYPES;
+							  tableTypeFlag;
 	List *referencedFKeyCreationCommands =
 		GetForeignConstraintCommandsInternal(relationId, referencedFKeysFlag);
 	return list_concat(referencingFKeyCreationCommands, referencedFKeyCreationCommands);
@@ -510,7 +512,7 @@ GetFKeyCreationCommandsRelationInvolved(Oid relationId)
 static Oid
 DropFKeysAndUndistributeTable(Oid relationId)
 {
-	DropFKeysRelationInvolved(relationId);
+	DropFKeysRelationInvolvedWithTableType(relationId, INCLUDE_ALL_TABLE_TYPES);
 
 	/* store them before calling UndistributeTable as it changes relationId */
 	char *relationName = get_rel_name(relationId);
@@ -535,20 +537,20 @@ DropFKeysAndUndistributeTable(Oid relationId)
 
 
 /*
- * DropFKeysRelationInvolved drops all foreign keys that relation with
- * relationId is involved.
+ * DropFKeysRelationInvolvedWithTableType drops foreign keys that relation
+ * with relationId is involved with given table type.
  */
 static void
-DropFKeysRelationInvolved(Oid relationId)
+DropFKeysRelationInvolvedWithTableType(Oid relationId, int tableTypeFlag)
 {
 	int referencingFKeysFlag = INCLUDE_REFERENCING_CONSTRAINTS |
-							   INCLUDE_ALL_TABLE_TYPES;
+							   tableTypeFlag;
 	DropRelationForeignKeys(relationId, referencingFKeysFlag);
 
 	/* already captured self referencing foreign keys, so use EXCLUDE_SELF_REFERENCES */
 	int referencedFKeysFlag = INCLUDE_REFERENCED_CONSTRAINTS |
 							  EXCLUDE_SELF_REFERENCES |
-							  INCLUDE_ALL_TABLE_TYPES;
+							  tableTypeFlag;
 	DropRelationForeignKeys(relationId, referencedFKeysFlag);
 }
 
