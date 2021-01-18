@@ -356,6 +356,11 @@ SELECT "Constraint", "Definition" FROM table_fkeys WHERE relid='mx_test_schema_1
 
 -- Check that mark_tables_colocated call propagates the changes to the workers
 \c - - - :master_port
+-- this function is dropped in Citus10, added here for tests
+CREATE OR REPLACE FUNCTION pg_catalog.mark_tables_colocated(source_table_name regclass, target_table_names regclass[])
+	RETURNS void
+	LANGUAGE C STRICT
+	AS 'citus', $$mark_tables_colocated$$;
 SELECT nextval('pg_catalog.pg_dist_colocationid_seq') AS last_colocation_id \gset
 ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 10000;
 SET citus.shard_count TO 7;
