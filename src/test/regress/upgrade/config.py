@@ -6,6 +6,8 @@ AFTER_PG_UPGRADE_SCHEDULE = './after_pg_upgrade_schedule'
 
 AFTER_CITUS_UPGRADE_COORD_SCHEDULE = './after_citus_upgrade_coord_schedule'
 BEFORE_CITUS_UPGRADE_COORD_SCHEDULE = './before_citus_upgrade_coord_schedule'
+MIXED_BEFORE_CITUS_UPGRADE_SCHEDULE = './mixed_before_citus_upgrade_schedule'
+MIXED_AFTER_CITUS_UPGRADE_SCHEDULE = './mixed_after_citus_upgrade_schedule'
 
 MASTER = 'master'
 # This should be updated when citus version changes

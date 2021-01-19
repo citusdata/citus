@@ -9,7 +9,7 @@ Options:
     --citus-pre-tar=<citus-pre-tar>         Tarball with the citus artifacts to use as the base version to upgrade from
     --citus-post-tar=<citus-post-tar>       Tarball with the citus artifacts to use as the new version to upgrade to
     --pgxsdir=<pgxsdir>           	        Path to the PGXS directory(ex: ~/.pgenv/src/postgresql-11.3)
-    --citus-old-version=<citus-old-version> Citus old version for local execution(ex v8.0.0)
+    --citus-old-version=<citus-old-version> Citus old version for local run(ex v8.0.0)
     --mixed                                 Run the verification phase with one node not upgraded.
 """
 
@@ -26,7 +26,8 @@ from docopt import docopt
 from config import (
     CitusUpgradeConfig, NODE_PORTS, COORDINATOR_NAME, CITUS_VERSION_SQL, MASTER_VERSION,
     NODE_NAMES, USER, WORKER1PORT, MASTER, HOME,
-    AFTER_CITUS_UPGRADE_COORD_SCHEDULE, BEFORE_CITUS_UPGRADE_COORD_SCHEDULE
+    AFTER_CITUS_UPGRADE_COORD_SCHEDULE, BEFORE_CITUS_UPGRADE_COORD_SCHEDULE,
+    MIXED_AFTER_CITUS_UPGRADE_SCHEDULE, MIXED_BEFORE_CITUS_UPGRADE_SCHEDULE
 )
 
 import upgrade_common as common
@@ -39,7 +40,8 @@ def main(config):
         config.bindir, config.datadir, config.settings)
 
     report_initial_version(config)
-    run_test_on_coordinator(config, BEFORE_CITUS_UPGRADE_COORD_SCHEDULE)
+    before_upgrade_schedule = get_before_upgrade_schedule(config.mixed_mode)
+    run_test_on_coordinator(config, before_upgrade_schedule)
     remove_citus(config.pre_tar_path)
     install_citus(config.post_tar_path)
 
@@ -47,7 +49,8 @@ def main(config):
     run_alter_citus(config.bindir, config.mixed_mode)
     verify_upgrade(config, config.mixed_mode)
 
-    run_test_on_coordinator(config, AFTER_CITUS_UPGRADE_COORD_SCHEDULE)
+    after_upgrade_schedule = get_after_upgrade_schedule(config.mixed_mode)
+    run_test_on_coordinator(config, after_upgrade_schedule)
     remove_citus(config.post_tar_path)
 
 
@@ -126,8 +129,22 @@ def verify_upgrade(config, mixed_mode):
         else:
             print("port:{} citus version {}".format(port, actual_citus_version))
 
+def get_before_upgrade_schedule(mixed_mode):
+    if mixed_mode:
+        return MIXED_BEFORE_CITUS_UPGRADE_SCHEDULE
+    else:
+        return BEFORE_CITUS_UPGRADE_COORD_SCHEDULE
 
-def isLocalExecution(arguments):
+def get_after_upgrade_schedule(mixed_mode):
+    if mixed_mode:
+        return MIXED_AFTER_CITUS_UPGRADE_SCHEDULE
+    else:
+        return AFTER_CITUS_UPGRADE_COORD_SCHEDULE
+
+# IsRunningOnLocalMachine returns true if the upgrade test is run on
+# local machine, in which case the old citus version will be installed
+# and it will be upgraded to the current code.
+def IsRunningOnLocalMachine(arguments):
     return arguments['--citus-old-version']
 
 
@@ -148,7 +165,7 @@ def generate_citus_tarballs(citus_version):
 
 if __name__ == '__main__':
     args = docopt(__doc__, version='citus_upgrade_test')
-    if isLocalExecution(args):
+    if IsRunningOnLocalMachine(args):
         citus_tarball_paths = generate_citus_tarballs(
             args['--citus-old-version'])
         args['--citus-pre-tar'] = citus_tarball_paths[0]
