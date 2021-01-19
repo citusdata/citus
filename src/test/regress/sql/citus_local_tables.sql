@@ -404,7 +404,7 @@ BEGIN;
 ROLLBACK;
 
 -- should return a single element array that only includes its own shard id
-SELECT shardid, get_colocated_shard_array(shardid)
+SELECT shardid=unnest(get_colocated_shard_array(shardid))
 FROM (SELECT shardid FROM pg_dist_shard WHERE logicalrelid='citus_local_table_4'::regclass) as shardid;
 
 BEGIN;

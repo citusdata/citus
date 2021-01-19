@@ -193,3 +193,10 @@ s/relation with OID [0-9]+ does not exist/relation with OID XXXX does not exist/
 
 # normalize storage id of columnar tables
 s/^storage id: [0-9]+$/storage id: xxxxx/g
+
+# normalize notice messages in citus_local_tables
+s/(NOTICE:  executing.*)citus_local_tables_test_schema.citus_local_table_4_[0-9]+(.*)/\1citus_local_tables_test_schema.citus_local_table_4_xxxx\2/g
+s/(NOTICE:  executing.*)\([0-9]+, 'citus_local_tables_test_schema', [0-9]+(.*)/\1\(xxxxx, 'citus_local_tables_test_schema', xxxxx\2/g
+s/citus_local_table_4_idx_[0-9]+/citus_local_table_4_idx_xxxxxx/g
+s/citus_local_table_4_[0-9]+/citus_local_table_4_xxxxxx/g
+s/ERROR:  cannot append to shardId [0-9]+/ERROR:  cannot append to shardId xxxxxx/g
