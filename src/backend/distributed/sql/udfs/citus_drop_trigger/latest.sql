@@ -1,9 +1,15 @@
+CREATE OR REPLACE FUNCTION pg_catalog.notify_constraint_dropped()
+    RETURNS void
+    LANGUAGE C STRICT
+    AS 'MODULE_PATHNAME', $$notify_constraint_dropped$$;
+
 CREATE OR REPLACE FUNCTION pg_catalog.citus_drop_trigger()
     RETURNS event_trigger
     LANGUAGE plpgsql
     SET search_path = pg_catalog
     AS $cdbdt$
 DECLARE
+    constraint_event_count INTEGER;
     v_obj record;
     sequence_names text[] := '{}';
     table_colocation_id integer;
@@ -25,6 +31,18 @@ BEGIN
     LOOP
         PERFORM master_unmark_object_distributed(v_obj.classid, v_obj.objid, v_obj.objsubid);
     END LOOP;
+
+    SELECT COUNT(*) INTO constraint_event_count
+    FROM pg_event_trigger_dropped_objects()
+    WHERE object_type IN ('table constraint');
+
+    IF constraint_event_count > 0
+    THEN
+        -- Tell utility hook that a table constraint is dropped so we might
+        -- need to undistribute some of the citus local tables that are not
+        -- connected to any reference tables.
+        PERFORM notify_constraint_dropped();
+    END IF;
 END;
 $cdbdt$;
 COMMENT ON FUNCTION pg_catalog.citus_drop_trigger()

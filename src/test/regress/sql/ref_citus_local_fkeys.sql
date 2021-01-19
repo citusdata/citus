@@ -120,6 +120,8 @@ ALTER TABLE reference_table DROP CONSTRAINT fkey_ref_to_local;
 ALTER TABLE reference_table ADD CONSTRAINT fkey_ref_to_local FOREIGN KEY(r1) REFERENCES citus_local_table(l1) ON DELETE NO ACTION;
 SET citus.enable_local_execution TO ON;
 
+ALTER TABLE reference_table ADD CONSTRAINT fkey_ref_to_local FOREIGN KEY(r1) REFERENCES citus_local_table(l1) ON DELETE NO ACTION;
+
 -- show that we are checking for foreign key constraint after defining, this should fail
 INSERT INTO reference_table VALUES (4);
 

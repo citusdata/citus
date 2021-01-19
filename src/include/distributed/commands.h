@@ -360,6 +360,7 @@ extern List * PreprocessDropTableStmt(Node *stmt, const char *queryString,
 									  ProcessUtilityContext processUtilityContext);
 extern void PostprocessCreateTableStmt(CreateStmt *createStatement,
 									   const char *queryString);
+extern bool ShouldEnableLocalReferenceForeignKeys(void);
 extern List * PostprocessAlterTableStmtAttachPartition(
 	AlterTableStmt *alterTableStatement,
 	const char *queryString);
@@ -481,7 +482,9 @@ extern void CascadeOperationForConnectedRelations(Oid relationId, LOCKMODE relLo
 												  CascadeOperationType
 												  cascadeOperationType);
 extern void ErrorIfAnyPartitionRelationInvolvedInNonInheritedFKey(List *relationIdList);
+extern bool RelationIdListHasReferenceTable(List *relationIdList);
 extern void DropRelationForeignKeys(Oid relationId, int flags);
+extern void SetLocalEnableLocalReferenceForeignKeys(bool state);
 extern void ExecuteAndLogDDLCommandList(List *ddlCommandList);
 extern void ExecuteAndLogDDLCommand(const char *commandString);
 extern void ExecuteForeignKeyCreateCommandList(List *ddlCommandList,

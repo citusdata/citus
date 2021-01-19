@@ -201,6 +201,8 @@ CREATE FOREIGN TABLE foreign_table (
 -- & shell relation points to the same same server object
 SELECT create_citus_local_table('foreign_table');
 
+DROP FOREIGN TABLE foreign_table;
+
 -- drop them for next tests
 DROP TABLE citus_local_table_1, citus_local_table_2, distributed_table;
 
@@ -313,6 +315,41 @@ CREATE UNIQUE INDEX uniqueIndex2 ON "LocalTabLE.1!?!"(id);
 -----------------------------------
 
 SET search_path TO citus_local_tables_test_schema;
+
+CREATE TABLE dummy_reference_table (a INT PRIMARY KEY);
+SELECT create_reference_table('dummy_reference_table');
+
+BEGIN;
+  SET client_min_messages TO ERROR;
+  SELECT remove_local_tables_from_metadata();
+
+  -- should not see any citus local tables
+  SELECT logicalrelid::regclass::text FROM pg_dist_partition, pg_tables
+  WHERE tablename=logicalrelid::regclass::text AND
+        schemaname='citus_local_tables_test_schema' AND
+        partmethod = 'n' AND repmodel = 'c'
+  ORDER BY 1;
+ROLLBACK;
+
+-- define foreign keys between dummy_reference_table and citus local tables
+-- not to undistribute them automatically
+ALTER TABLE citus_local_table_1 ADD CONSTRAINT fkey_to_dummy_ref FOREIGN KEY (a) REFERENCES dummy_reference_table(a);
+ALTER TABLE citus_local_table_2 ADD CONSTRAINT fkey_to_dummy_ref FOREIGN KEY (a) REFERENCES dummy_reference_table(a);
+ALTER TABLE unlogged_table ADD CONSTRAINT fkey_to_dummy_ref FOREIGN KEY (a) REFERENCES dummy_reference_table(a);
+ALTER TABLE local_table_3 ADD CONSTRAINT fkey_to_dummy_ref FOREIGN KEY (a) REFERENCES dummy_reference_table(a);
+ALTER TABLE dummy_reference_table ADD CONSTRAINT fkey_from_dummy_ref FOREIGN KEY (a) REFERENCES "CiTUS!LocalTables"."LocalTabLE.1!?!"(id);
+
+BEGIN;
+  SET client_min_messages TO ERROR;
+  SELECT remove_local_tables_from_metadata();
+
+  -- now we defined foreign keys with above citus local tables, we should still see them
+  SELECT logicalrelid::regclass::text FROM pg_dist_partition, pg_tables
+  WHERE tablename=logicalrelid::regclass::text AND
+        schemaname='citus_local_tables_test_schema' AND
+        partmethod = 'n' AND repmodel = 'c'
+  ORDER BY 1;
+ROLLBACK;
 
 -- between citus local tables and distributed tables
 ALTER TABLE citus_local_table_1 ADD CONSTRAINT fkey_c_to_dist FOREIGN KEY(a) references distributed_table(a);

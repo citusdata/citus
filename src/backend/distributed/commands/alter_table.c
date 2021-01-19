@@ -41,6 +41,7 @@
 #include "distributed/deparser.h"
 #include "distributed/distribution_column.h"
 #include "distributed/listutils.h"
+#include "distributed/local_executor.h"
 #include "distributed/metadata/dependency.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
@@ -487,6 +488,15 @@ AlterTableSetAccessMethod(TableConversionParameters *params)
 TableConversionReturn *
 ConvertTable(TableConversionState *con)
 {
+	/*
+	 * We undistribute citus local tables that are not chained with any reference
+	 * tables via foreign keys at the end of the utility hook.
+	 * Here we temporarily set the related GUC to off to disable the logic for
+	 * internally executed DDL's that might invoke this mechanism unnecessarily.
+	 */
+	bool oldEnableLocalReferenceForeignKeys = EnableLocalReferenceForeignKeys;
+	SetLocalEnableLocalReferenceForeignKeys(false);
+
 	if (con->conversionType == UNDISTRIBUTE_TABLE && con->cascadeViaForeignKeys &&
 		(TableReferencing(con->relationId) || TableReferenced(con->relationId)))
 	{
@@ -501,6 +511,7 @@ ConvertTable(TableConversionState *con)
 		 * Undistributed every foreign key connected relation in our foreign key
 		 * subgraph including itself, so return here.
 		 */
+		SetLocalEnableLocalReferenceForeignKeys(oldEnableLocalReferenceForeignKeys);
 		return NULL;
 	}
 	char *newAccessMethod = con->accessMethod ? con->accessMethod :
@@ -741,6 +752,8 @@ ConvertTable(TableConversionState *con)
 
 	/* increment command counter so that next command can see the new table */
 	CommandCounterIncrement();
+
+	SetLocalEnableLocalReferenceForeignKeys(oldEnableLocalReferenceForeignKeys);
 
 	return ret;
 }

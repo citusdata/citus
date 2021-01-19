@@ -491,6 +491,8 @@ SELECT * FROM print_extension_changes();
                                                                                  | function citus_update_shard_statistics(bigint)
                                                                                  | function citus_update_table_statistics(regclass)
                                                                                  | function create_citus_local_table(regclass,boolean)
+                                                                                 | function notify_constraint_dropped()
+                                                                                 | function remove_local_tables_from_metadata()
                                                                                  | function time_partition_range(regclass)
                                                                                  | function undistribute_table(regclass,boolean)
                                                                                  | function worker_change_sequence_dependency(regclass,regclass,regclass)
@@ -502,7 +504,7 @@ SELECT * FROM print_extension_changes();
                                                                                  | view citus_shards
                                                                                  | view citus_tables
                                                                                  | view time_partitions
-(57 rows)
+(59 rows)
 
 DROP TABLE prev_objects, extension_diff;
 -- show running version

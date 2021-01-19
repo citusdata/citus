@@ -319,7 +319,8 @@ test: multi_remove_node_reference_table
 # --------
 test: add_coordinator
 test: multi_reference_table citus_local_tables_queries
-test: foreign_key_to_reference_table citus_local_table_triggers
+test: foreign_key_to_reference_table
+test: citus_local_table_triggers
 test: replicate_reference_tables_to_coordinator
 test: coordinator_shouldhaveshards
 test: local_shard_utility_command_execution
@@ -328,6 +329,7 @@ test: multi_row_router_insert mixed_relkind_tests create_ref_dist_from_citus_loc
 test: undistribute_table_cascade
 test: create_citus_local_table_cascade
 test: fkeys_between_local_ref
+test: auto_undist_citus_local
 
 test: remove_coordinator
 

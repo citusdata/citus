@@ -114,6 +114,14 @@ BEGIN;
  t
 (1 row)
 
+  -- dropping that column would undistribute those 4 citus local tables
+  ALTER TABLE local_table_1 DROP COLUMN col_1 CASCADE;
+  SELECT COUNT(*)=0 FROM citus_local_tables_in_schema;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
 ROLLBACK;
 -- this actually attempts to convert local tables to citus local tables but errors out
 -- as citus doesn't support defining foreign keys via add column commands
@@ -127,6 +135,25 @@ BEGIN;
   ALTER TABLE local_table_5 ADD CONSTRAINT fkey_12 FOREIGN KEY (col_1) REFERENCES local_table_2(col_1);
   -- now we have 5 citus local tables in this schema
   SELECT COUNT(*)=5 FROM citus_local_tables_in_schema;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+  -- dropping foreign key from local_table_2 would only undistribute local_table_2 & local_table_5
+  ALTER TABLE local_table_2 DROP CONSTRAINT fkey_1;
+  SELECT logicalrelid::regclass::text FROM citus_local_tables_in_schema ORDER BY logicalrelid;
+ logicalrelid
+---------------------------------------------------------------------
+ local_table_1
+ local_table_3
+ local_table_4
+(3 rows)
+
+    -- dropping local_table_1 would undistribute last two citus local tables as local_table_1
+    -- was the bridge to reference table
+  DROP TABLE local_table_1 CASCADE;
+  SELECT COUNT(*)=0 FROM citus_local_tables_in_schema;
  ?column?
 ---------------------------------------------------------------------
  t
@@ -330,6 +357,21 @@ BEGIN;
  local_table_5                                        | n          | c
  reference_table_1                                    | n          | t
 (8 rows)
+
+  DROP TABLE local_table_3 CASCADE;
+  DROP SCHEMA another_schema_fkeys_between_local_ref CASCADE;
+  -- now we shouldn't see local_table_5 since now it is not connected to any reference tables
+  SELECT logicalrelid::text AS tablename, partmethod, repmodel FROM pg_dist_partition
+  WHERE logicalrelid::text IN (SELECT tablename FROM pg_tables WHERE schemaname='fkeys_between_local_ref')
+  ORDER BY tablename;
+     tablename     | partmethod | repmodel
+---------------------------------------------------------------------
+ distributed_table | h          | c
+ local_table_1     | n          | c
+ local_table_2     | n          | c
+ local_table_4     | n          | c
+ reference_table_1 | n          | t
+(5 rows)
 
 ROLLBACK;
 BEGIN;
