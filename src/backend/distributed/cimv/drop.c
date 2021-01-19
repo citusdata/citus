@@ -151,7 +151,7 @@ DropCimv(Form_pg_cimv formCimv, DropBehavior behavior)
 	}
 
 	DropCronJob(formCimv);
-	DropDmlTriggers(formCimv);
+	// DropDmlTriggers(formCimv);
 
 	/* Lock */
 	if (OidIsValid(matTableAddress.objectId))
