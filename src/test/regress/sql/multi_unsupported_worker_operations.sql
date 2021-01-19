@@ -142,15 +142,9 @@ SELECT master_remove_node('localhost', 5432);
 
 \c - - - :worker_1_port
 
--- mark_tables_colocated
--- this function is dropped in Citus10, added here for tests
-CREATE OR REPLACE FUNCTION pg_catalog.mark_tables_colocated(source_table_name regclass, target_table_names regclass[])
-	RETURNS void
-	LANGUAGE C STRICT
-	AS 'citus', $$mark_tables_colocated$$;
 UPDATE pg_dist_partition SET colocationid = 0 WHERE logicalrelid='mx_table_2'::regclass;
 
-SELECT mark_tables_colocated('mx_table', ARRAY['mx_table_2']);
+SELECT update_distributed_table_colocation('mx_table', colocate_with => 'mx_table_2');
 SELECT colocationid FROM pg_dist_partition WHERE logicalrelid='mx_table_2'::regclass;
 
 SELECT colocationid AS old_colocation_id

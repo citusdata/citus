@@ -1196,23 +1196,6 @@ DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition 
 DETAIL:  The target table's partition column should correspond to a partition column in the subquery.
 DEBUG:  performing repartitioned INSERT ... SELECT
 RESET client_min_messages;
--- this function is dropped in Citus10, added here for tests
-CREATE OR REPLACE FUNCTION pg_catalog.mark_tables_colocated(source_table_name regclass, target_table_names regclass[])
-	RETURNS void
-	LANGUAGE C STRICT
-	AS 'citus', $$mark_tables_colocated$$;
--- some tests for mark_tables_colocated
--- should error out
-SELECT mark_tables_colocated('colocated_table_test_2', ARRAY['reference_table_test']);
-ERROR:  cannot colocate tables colocated_table_test_2 and reference_table_test
-DETAIL:  Replication models don't match for colocated_table_test_2 and reference_table_test.
--- should work sliently
-SELECT mark_tables_colocated('reference_table_test', ARRAY['reference_table_test_fifth']);
- mark_tables_colocated
----------------------------------------------------------------------
-
-(1 row)
-
 -- ensure that reference tables on
 -- different queries works as expected
 CREATE SCHEMA reference_schema;
