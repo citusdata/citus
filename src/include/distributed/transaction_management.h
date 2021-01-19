@@ -121,6 +121,7 @@ extern void InitializeTransactionManagement(void);
 /* other functions */
 extern List * ActiveSubXactContexts(void);
 extern StringInfo BeginAndSetDistributedTransactionIdCommand(void);
+extern void TriggerMetadataSyncOnCommit(void);
 
 
 #endif /*  TRANSACTION_MANAGMENT_H */

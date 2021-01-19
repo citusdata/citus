@@ -1138,12 +1138,16 @@ TriggerSyncMetadataToPrimaryNodes(void)
 
 			triggerMetadataSync = true;
 		}
+		else if (!workerNode->metadataSynced)
+		{
+			triggerMetadataSync = true;
+		}
 	}
 
 	/* let the maintanince deamon know about the metadata sync */
 	if (triggerMetadataSync)
 	{
-		TriggerMetadataSync(MyDatabaseId);
+		TriggerMetadataSyncOnCommit();
 	}
 }
 
