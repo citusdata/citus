@@ -295,17 +295,17 @@ SELECT create_reference_table('reference_table');
 
 -- show that colociation of citus local tables are not supported for now
 -- between citus local tables
-SELECT mark_tables_colocated('citus_local_table_1', ARRAY['citus_local_table_2']);
+SELECT update_distributed_table_colocation('citus_local_table_1', colocate_with => 'citus_local_table_2');
 ERROR:  citus local tables cannot be colocated with other tables
 -- between citus local tables and reference tables
-SELECT mark_tables_colocated('citus_local_table_1', ARRAY['reference_table']);
+SELECT update_distributed_table_colocation('citus_local_table_1', colocate_with => 'reference_table');
 ERROR:  citus local tables cannot be colocated with other tables
-SELECT mark_tables_colocated('reference_table', ARRAY['citus_local_table_1']);
+SELECT update_distributed_table_colocation('reference_table', colocate_with => 'citus_local_table_1');
 ERROR:  citus local tables cannot be colocated with other tables
 -- between citus local tables and distributed tables
-SELECT mark_tables_colocated('citus_local_table_1', ARRAY['distributed_table']);
+SELECT update_distributed_table_colocation('citus_local_table_1', colocate_with => 'distributed_table');
 ERROR:  citus local tables cannot be colocated with other tables
-SELECT mark_tables_colocated('distributed_table', ARRAY['citus_local_table_1']);
+SELECT update_distributed_table_colocation('distributed_table', colocate_with => 'citus_local_table_1');
 ERROR:  citus local tables cannot be colocated with other tables
 -- master_create_empty_shard is not supported
 SELECT master_create_empty_shard('citus_local_table_1');

@@ -764,18 +764,11 @@ WHERE
 
 RESET client_min_messages;
 
--- this function is dropped in Citus10, added here for tests
-CREATE OR REPLACE FUNCTION pg_catalog.mark_tables_colocated(source_table_name regclass, target_table_names regclass[])
-	RETURNS void
-	LANGUAGE C STRICT
-	AS 'citus', $$mark_tables_colocated$$;
-
 -- some tests for mark_tables_colocated
 -- should error out
-SELECT mark_tables_colocated('colocated_table_test_2', ARRAY['reference_table_test']);
+SELECT update_distributed_table_colocation('colocated_table_test_2', colocate_with => 'reference_table_test');
 
--- should work sliently
-SELECT mark_tables_colocated('reference_table_test', ARRAY['reference_table_test_fifth']);
+SELECT update_distributed_table_colocation('reference_table_test', colocate_with => 'reference_table_test_fifth');
 
 -- ensure that reference tables on
 -- different queries works as expected

@@ -193,7 +193,7 @@ ABORT;
 SELECT * FROM citus_stat_statements_reset();
 
 -- should not be allowed to co-located tables
-SELECT mark_tables_colocated('test', ARRAY['test_coloc'::regclass]);
+SELECT update_distributed_table_colocation('test', colocate_with => 'test_coloc');
 
 -- should not be allowed to take any locks
 BEGIN;

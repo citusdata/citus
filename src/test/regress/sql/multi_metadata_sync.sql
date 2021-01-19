@@ -354,13 +354,8 @@ NOT VALID;
 \c - - - :worker_1_port
 SELECT "Constraint", "Definition" FROM table_fkeys WHERE relid='mx_test_schema_1.mx_table_1'::regclass;
 
--- Check that mark_tables_colocated call propagates the changes to the workers
+-- Check that update_distributed_table_colocation call propagates the changes to the workers
 \c - - - :master_port
--- this function is dropped in Citus10, added here for tests
-CREATE OR REPLACE FUNCTION pg_catalog.mark_tables_colocated(source_table_name regclass, target_table_names regclass[])
-	RETURNS void
-	LANGUAGE C STRICT
-	AS 'citus', $$mark_tables_colocated$$;
 SELECT nextval('pg_catalog.pg_dist_colocationid_seq') AS last_colocation_id \gset
 ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 10000;
 SET citus.shard_count TO 7;
@@ -400,8 +395,8 @@ WHERE
 	logicalrelid = 'mx_colocation_test_1'::regclass
 	OR logicalrelid = 'mx_colocation_test_2'::regclass;
 
--- Mark tables colocated and see the changes on the master and the worker
-SELECT mark_tables_colocated('mx_colocation_test_1', ARRAY['mx_colocation_test_2']);
+-- Update colocation and see the changes on the master and the worker
+SELECT update_distributed_table_colocation('mx_colocation_test_1', colocate_with => 'mx_colocation_test_2');
 SELECT
 	logicalrelid, colocationid
 FROM
