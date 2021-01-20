@@ -84,13 +84,14 @@ static bool IsDropSchemaOrDB(Node *parsetree);
 
 
 /*
- * CitusProcessUtility is a convenience method to create a PlannedStmt out of pieces of a
- * utility statement before invoking ProcessUtility.
+ * ProcessUtilityForParseTree is a convenience method to create a PlannedStmt out of
+ * pieces of a utility statement before invoking ProcessUtility.
  */
 void
-CitusProcessUtility(Node *node, const char *queryString, ProcessUtilityContext context,
-					ParamListInfo params, DestReceiver *dest,
-					QueryCompletionCompat *completionTag)
+ProcessUtilityParseTree(Node *node, const char *queryString, ProcessUtilityContext
+						context,
+						ParamListInfo params, DestReceiver *dest,
+						QueryCompletionCompat *completionTag)
 {
 	PlannedStmt *plannedStmt = makeNode(PlannedStmt);
 	plannedStmt->commandType = CMD_UTILITY;

@@ -110,14 +110,14 @@ worker_create_or_replace_object(PG_FUNCTION_ARGS)
 
 		RenameStmt *renameStmt = CreateRenameStatement(&address, newName);
 		const char *sqlRenameStmt = DeparseTreeNode((Node *) renameStmt);
-		CitusProcessUtility((Node *) renameStmt, sqlRenameStmt,
-							PROCESS_UTILITY_TOPLEVEL,
-							NULL, None_Receiver, NULL);
+		ProcessUtilityParseTree((Node *) renameStmt, sqlRenameStmt,
+								PROCESS_UTILITY_TOPLEVEL,
+								NULL, None_Receiver, NULL);
 	}
 
 	/* apply create statement locally */
-	CitusProcessUtility(parseTree, sqlStatement, PROCESS_UTILITY_TOPLEVEL, NULL,
-						None_Receiver, NULL);
+	ProcessUtilityParseTree(parseTree, sqlStatement, PROCESS_UTILITY_TOPLEVEL, NULL,
+							None_Receiver, NULL);
 
 	/* type has been created */
 	PG_RETURN_BOOL(true);

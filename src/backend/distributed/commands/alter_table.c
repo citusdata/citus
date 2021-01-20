@@ -629,8 +629,8 @@ ConvertTable(TableConversionState *con)
 		Node *parseTree = ParseTreeNode(tableCreationSql);
 
 		RelayEventExtendNames(parseTree, con->schemaName, con->hashOfName);
-		CitusProcessUtility(parseTree, tableCreationSql, PROCESS_UTILITY_TOPLEVEL,
-							NULL, None_Receiver, NULL);
+		ProcessUtilityParseTree(parseTree, tableCreationSql, PROCESS_UTILITY_TOPLEVEL,
+								NULL, None_Receiver, NULL);
 	}
 
 	/* set columnar options */
@@ -682,8 +682,9 @@ ConvertTable(TableConversionState *con)
 	{
 		Node *parseTree = ParseTreeNode(attachPartitionCommand);
 
-		CitusProcessUtility(parseTree, attachPartitionCommand, PROCESS_UTILITY_TOPLEVEL,
-							NULL, None_Receiver, NULL);
+		ProcessUtilityParseTree(parseTree, attachPartitionCommand,
+								PROCESS_UTILITY_TOPLEVEL,
+								NULL, None_Receiver, NULL);
 	}
 
 	if (isPartitionTable)
