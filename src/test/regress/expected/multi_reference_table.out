@@ -1433,7 +1433,7 @@ SELECT master_update_shard_statistics(:a_shard_id);
 
 CREATE TABLE append_reference_tmp_table (id INT);
 SELECT  master_append_table_to_shard(:a_shard_id, 'append_reference_tmp_table', 'localhost', :master_port);
-ERROR:  cannot append to shardId 1250019
+ERROR:  cannot append to shardId xxxxxx
 DETAIL:  We currently don't support appending to shards in hash-partitioned, reference and citus local tables
 SELECT master_get_table_ddl_events('reference_schema.reference_table_ddl');
                                                                                 master_get_table_ddl_events
