@@ -719,6 +719,7 @@ CreateRefreshView(CimvCreate *cimvCreate)
 	query->targetList = (List *) PartializeAggs((Node *) query->targetList, &inverse);
 	AddCountAgg(query, true);
 
+	/* TODO:: we probably don't need this part until parse_analyze */
 	StringInfoData querybuf;
 	initStringInfo(&querybuf);
 

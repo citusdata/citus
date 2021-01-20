@@ -461,6 +461,9 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 	bool continueProcessing = true;
 	if (IsA(parsetree, CreateTableAsStmt))
 	{
+		StringInfo buf = makeStringInfo();
+		pg_get_query_def(parsetree, buf);
+		elog(WARNING, "%s", buf->data);
 		continueProcessing = !ProcessCreateMaterializedViewStmt((const
 																 CreateTableAsStmt *)
 																parsetree, queryString,
