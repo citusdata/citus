@@ -447,6 +447,7 @@ CREATE TABLE none(a int, b int);
 CREATE TABLE ref(a int);
 CREATE TABLE local_table(a int);
 
+SELECT * FROM pg_dist_colocation;
 SELECT create_distributed_table('d1', 'a');
 SELECT create_distributed_table('d2', 'a', colocate_with => 'd1');
 SELECT create_distributed_table('d3', 'a', colocate_with => 'd2');
@@ -459,7 +460,7 @@ SELECT create_distributed_table('range_table', 'a', 'range');
 
 SELECT create_reference_table('ref');
 
-
+SELECT * FROM pg_dist_colocation;
 -- check d1, d2, d3 and d4 has the same colocation id => they are colocated.
 SELECT get_table_colocation_id('d1');
 SELECT get_table_colocation_id('d2');
