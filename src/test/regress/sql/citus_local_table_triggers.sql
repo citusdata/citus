@@ -13,8 +13,13 @@ SET client_min_messages to ERROR;
 SELECT 1 FROM master_add_node('localhost', :master_port, groupId => 0);
 RESET client_min_messages;
 
+CREATE TABLE dummy_reference_table(a int unique, b int);
+INSERT INTO dummy_reference_table SELECT i FROM generate_series(-1, 5) i;
+INSERT INTO dummy_reference_table VALUES (99),(100),(599),(600);
+SELECT create_reference_table('dummy_reference_table');
+
 CREATE TABLE citus_local_table (value int);
-SELECT create_citus_local_table('citus_local_table');
+ALTER TABLE citus_local_table ADD CONSTRAINT fkey_to_dummy_1 FOREIGN KEY (value) REFERENCES dummy_reference_table(a);
 
 --------------------
 -- DELETE trigger --
@@ -141,14 +146,15 @@ BEGIN;
     AFTER TRUNCATE ON "interesting!schema"."citus_local!_table"
     FOR EACH STATEMENT EXECUTE FUNCTION dummy_function();
 
-    SELECT create_citus_local_table('"interesting!schema"."citus_local!_table"');
+    ALTER TABLE "interesting!schema"."citus_local!_table" ADD CONSTRAINT fkey_to_dummy_2 FOREIGN KEY (value) REFERENCES dummy_reference_table(a);
 
     -- we shouldn't see truncate trigger on shard relation as we drop it
-    SELECT * FROM citus_local_table_triggers;
+    SELECT * FROM citus_local_table_triggers
+    WHERE tgname NOT LIKE 'RI_ConstraintTrigger%';
 ROLLBACK;
 
 CREATE TABLE "interesting!schema"."citus_local!_table"(value int);
-SELECT create_citus_local_table('"interesting!schema"."citus_local!_table"');
+ALTER TABLE "interesting!schema"."citus_local!_table" ADD CONSTRAINT fkey_to_dummy_2 FOREIGN KEY (value) REFERENCES dummy_reference_table(a);
 
 CREATE TRIGGER "trigger\'name"
 BEFORE INSERT ON "interesting!schema"."citus_local!_table"
@@ -168,21 +174,25 @@ BEGIN;
     DROP EXTENSION seg;
 
     -- show that dropping extension drops the triggers automatically
-    SELECT * FROM citus_local_table_triggers;
+    SELECT * FROM citus_local_table_triggers
+    WHERE tgname NOT LIKE 'RI_ConstraintTrigger%';
 ROLLBACK;
 
 -- ALTER TRIGGER RENAME
 ALTER TRIGGER "trigger\'name" ON "interesting!schema"."citus_local!_table" RENAME TO "trigger\'name22";
 -- show that triggers on both shell relation and shard relation are renamed
-SELECT * FROM citus_local_table_triggers;
+SELECT * FROM citus_local_table_triggers
+    WHERE tgname NOT LIKE 'RI_ConstraintTrigger%';
 
 -- ALTER TABLE DISABLE trigger
 ALTER TABLE "interesting!schema"."citus_local!_table" DISABLE TRIGGER "trigger\'name22";
-SELECT * FROM citus_local_table_triggers;
+SELECT * FROM citus_local_table_triggers
+    WHERE tgname NOT LIKE 'RI_ConstraintTrigger%';
 
 -- ALTER TABLE ENABLE trigger
 ALTER TABLE "interesting!schema"."citus_local!_table" ENABLE TRIGGER "trigger\'name22";
-SELECT * FROM citus_local_table_triggers;
+SELECT * FROM citus_local_table_triggers
+    WHERE tgname NOT LIKE 'RI_ConstraintTrigger%';
 
 CREATE TRIGGER another_trigger
 AFTER DELETE ON "interesting!schema"."citus_local!_table"
@@ -190,24 +200,29 @@ FOR EACH STATEMENT EXECUTE FUNCTION dummy_function();
 
 ALTER TABLE "interesting!schema"."citus_local!_table" DISABLE TRIGGER USER;
 -- show that all triggers except the internal ones are disabled
-SELECT * FROM citus_local_table_triggers;
+SELECT * FROM citus_local_table_triggers
+    WHERE tgname NOT LIKE 'RI_ConstraintTrigger%';
 
 ALTER TABLE "interesting!schema"."citus_local!_table" ENABLE TRIGGER USER;
 -- show that all triggers except the internal ones are enabled again
-SELECT * FROM citus_local_table_triggers;
+SELECT * FROM citus_local_table_triggers
+    WHERE tgname NOT LIKE 'RI_ConstraintTrigger%';
 
 ALTER TABLE "interesting!schema"."citus_local!_table" DISABLE TRIGGER ALL;
 -- show that all triggers including internal triggers are disabled
-SELECT * FROM citus_local_table_triggers;
+SELECT * FROM citus_local_table_triggers
+    WHERE tgname NOT LIKE 'RI_ConstraintTrigger%';
 
 ALTER TABLE "interesting!schema"."citus_local!_table" ENABLE TRIGGER ALL;
 -- show that all triggers including internal triggers are enabled again
-SELECT * FROM citus_local_table_triggers;
+SELECT * FROM citus_local_table_triggers
+    WHERE tgname NOT LIKE 'RI_ConstraintTrigger%';
 
 DROP TRIGGER another_trigger ON "interesting!schema"."citus_local!_table";
 DROP TRIGGER "trigger\'name22" ON "interesting!schema"."citus_local!_table";
 -- show that drop trigger works as expected
-SELECT * FROM citus_local_table_triggers;
+SELECT * FROM citus_local_table_triggers
+    WHERE tgname NOT LIKE 'RI_ConstraintTrigger%';
 
 BEGIN;
     CREATE TRIGGER "another_trigger\'name"
@@ -216,11 +231,13 @@ BEGIN;
 
     ALTER TABLE "interesting!schema"."citus_local!_table" DISABLE TRIGGER "another_trigger\'name";
     -- show that our truncate trigger is disabled ..
-    SELECT * FROM citus_local_table_triggers;
+    SELECT * FROM citus_local_table_triggers
+    WHERE tgname NOT LIKE 'RI_ConstraintTrigger%';
 
     ALTER TABLE "interesting!schema"."citus_local!_table" ENABLE TRIGGER ALL;
     -- .. and now it is enabled back
-    SELECT * FROM citus_local_table_triggers;
+    SELECT * FROM citus_local_table_triggers
+    WHERE tgname NOT LIKE 'RI_ConstraintTrigger%';
 ROLLBACK;
 
 -- as we create ddl jobs for DROP TRIGGER before standard process utility,
