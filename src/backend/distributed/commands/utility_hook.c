@@ -75,6 +75,13 @@ static int activeDropSchemaOrDBs = 0;
 
 
 /* Local functions forward declarations for helper functions */
+static void ProcessUtilityInternal(PlannedStmt *pstmt,
+								   const char *queryString,
+								   ProcessUtilityContext context,
+								   ParamListInfo params,
+								   struct QueryEnvironment *queryEnv,
+								   DestReceiver *dest,
+								   QueryCompletionCompat *completionTag);
 static char * SetSearchPathToCurrentSearchPathCommand(void);
 static char * CurrentSearchPath(void);
 static void IncrementUtilityHookCountersIfNecessary(Node *parsetree);
@@ -121,7 +128,6 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 					 QueryCompletionCompat *completionTag)
 {
 	Node *parsetree = pstmt->utilityStmt;
-	List *ddlJobs = NIL;
 
 	if (IsA(parsetree, TransactionStmt) ||
 		IsA(parsetree, LockStmt) ||
@@ -165,6 +171,96 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 
 		return;
 	}
+	else if (IsA(parsetree, CallStmt))
+	{
+		CallStmt *callStmt = (CallStmt *) parsetree;
+
+		/*
+		 * If the procedure is distributed and we are using MX then we have the
+		 * possibility of calling it on the worker. If the data is located on
+		 * the worker this can avoid making many network round trips.
+		 */
+		if (context == PROCESS_UTILITY_TOPLEVEL &&
+			CallDistributedProcedureRemotely(callStmt, dest))
+		{
+			return;
+		}
+
+		/*
+		 * Stored procedures are a bit strange in the sense that some statements
+		 * are not in a transaction block, but can be rolled back. We need to
+		 * make sure we send all statements in a transaction block. The
+		 * StoredProcedureLevel variable signals this to the router executor
+		 * and indicates how deep in the call stack we are in case of nested
+		 * stored procedures.
+		 */
+		StoredProcedureLevel += 1;
+
+		PG_TRY();
+		{
+			standard_ProcessUtility(pstmt, queryString, context,
+									params, queryEnv, dest, completionTag);
+
+			StoredProcedureLevel -= 1;
+		}
+		PG_CATCH();
+		{
+			StoredProcedureLevel -= 1;
+			PG_RE_THROW();
+		}
+		PG_END_TRY();
+
+		return;
+	}
+	else if (IsA(parsetree, DoStmt))
+	{
+		/*
+		 * All statements in a DO block are executed in a single transaciton,
+		 * so we need to keep track of whether we are inside a DO block.
+		 */
+		DoBlockLevel += 1;
+
+		PG_TRY();
+		{
+			standard_ProcessUtility(pstmt, queryString, context,
+									params, queryEnv, dest, completionTag);
+
+			DoBlockLevel -= 1;
+		}
+		PG_CATCH();
+		{
+			DoBlockLevel -= 1;
+			PG_RE_THROW();
+		}
+		PG_END_TRY();
+
+		return;
+	}
+
+	ProcessUtilityInternal(pstmt, queryString, context,
+						   params, queryEnv, dest, completionTag);
+}
+
+
+/*
+ * ProcessUtilityInternal is a helper function for multi_ProcessUtility where majority
+ * of the Citus specific utility statements are handled here. The distinction between
+ * both functions is that Citus_ProcessUtility does not handle CALL and DO statements.
+ * The reason for the distinction is implemented to be able to find the "top-level" DDL
+ * commands (not internal/cascading ones). UtilityHookLevel variable is used to achieve
+ * this goal.
+ */
+static void
+ProcessUtilityInternal(PlannedStmt *pstmt,
+					   const char *queryString,
+					   ProcessUtilityContext context,
+					   ParamListInfo params,
+					   struct QueryEnvironment *queryEnv,
+					   DestReceiver *dest,
+					   QueryCompletionCompat *completionTag)
+{
+	Node *parsetree = pstmt->utilityStmt;
+	List *ddlJobs = NIL;
 
 	if (IsA(parsetree, ExplainStmt) &&
 		IsA(((ExplainStmt *) parsetree)->query, Query))
@@ -212,73 +308,6 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		CreateSubscriptionStmt *createSubStmt = (CreateSubscriptionStmt *) parsetree;
 
 		parsetree = ProcessCreateSubscriptionStmt(createSubStmt);
-	}
-
-	if (IsA(parsetree, CallStmt))
-	{
-		CallStmt *callStmt = (CallStmt *) parsetree;
-
-		/*
-		 * If the procedure is distributed and we are using MX then we have the
-		 * possibility of calling it on the worker. If the data is located on
-		 * the worker this can avoid making many network round trips.
-		 */
-		if (context == PROCESS_UTILITY_TOPLEVEL &&
-			CallDistributedProcedureRemotely(callStmt, dest))
-		{
-			return;
-		}
-
-		/*
-		 * Stored procedures are a bit strange in the sense that some statements
-		 * are not in a transaction block, but can be rolled back. We need to
-		 * make sure we send all statements in a transaction block. The
-		 * StoredProcedureLevel variable signals this to the router executor
-		 * and indicates how deep in the call stack we are in case of nested
-		 * stored procedures.
-		 */
-		StoredProcedureLevel += 1;
-
-		PG_TRY();
-		{
-			standard_ProcessUtility(pstmt, queryString, context,
-									params, queryEnv, dest, completionTag);
-
-			StoredProcedureLevel -= 1;
-		}
-		PG_CATCH();
-		{
-			StoredProcedureLevel -= 1;
-			PG_RE_THROW();
-		}
-		PG_END_TRY();
-
-		return;
-	}
-
-	if (IsA(parsetree, DoStmt))
-	{
-		/*
-		 * All statements in a DO block are executed in a single transaciton,
-		 * so we need to keep track of whether we are inside a DO block.
-		 */
-		DoBlockLevel += 1;
-
-		PG_TRY();
-		{
-			standard_ProcessUtility(pstmt, queryString, context,
-									params, queryEnv, dest, completionTag);
-
-			DoBlockLevel -= 1;
-		}
-		PG_CATCH();
-		{
-			DoBlockLevel -= 1;
-			PG_RE_THROW();
-		}
-		PG_END_TRY();
-
-		return;
 	}
 
 	/* process SET LOCAL stmts of allowed GUCs in multi-stmt xacts */
@@ -474,6 +503,8 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		 * the available version is different than the current version of Citus. In this case,
 		 * ALTER EXTENSION citus UPDATE command can actually update Citus to a new version.
 		 */
+		bool isCreateAlterExtensionUpdateCitusStmt =
+			IsCreateAlterExtensionUpdateCitusStmt(parsetree);
 		bool isAlterExtensionUpdateCitusStmt = isCreateAlterExtensionUpdateCitusStmt &&
 											   IsA(parsetree, AlterExtensionStmt);
 
