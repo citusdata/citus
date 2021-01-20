@@ -426,8 +426,8 @@ ExecuteAndLogDDLCommand(const char *commandString)
 	ereport(DEBUG4, (errmsg("executing \"%s\"", commandString)));
 
 	Node *parseTree = ParseTreeNode(commandString);
-	CitusProcessUtility(parseTree, commandString, PROCESS_UTILITY_TOPLEVEL,
-						NULL, None_Receiver, NULL);
+	ProcessUtilityParseTree(parseTree, commandString, PROCESS_UTILITY_TOPLEVEL,
+							NULL, None_Receiver, NULL);
 }
 
 
@@ -478,6 +478,6 @@ ExecuteForeignKeyCreateCommand(const char *commandString, bool skip_validation)
 								"command \"%s\"", commandString)));
 	}
 
-	CitusProcessUtility(parseTree, commandString, PROCESS_UTILITY_TOPLEVEL,
-						NULL, None_Receiver, NULL);
+	ProcessUtilityParseTree(parseTree, commandString, PROCESS_UTILITY_TOPLEVEL,
+							NULL, None_Receiver, NULL);
 }

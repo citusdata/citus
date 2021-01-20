@@ -409,8 +409,9 @@ LocallyExecuteUtilityTask(const char *localTaskQueryCommand)
 			 * It is a regular utility command we should execute it locally via
 			 * process utility.
 			 */
-			CitusProcessUtility(localTaskRawParseTree, localTaskQueryCommand,
-								PROCESS_UTILITY_TOPLEVEL, NULL, None_Receiver, NULL);
+			ProcessUtilityParseTree(localTaskRawParseTree, localTaskQueryCommand,
+									PROCESS_UTILITY_TOPLEVEL, NULL, None_Receiver,
+									NULL);
 		}
 	}
 }

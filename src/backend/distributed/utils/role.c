@@ -41,8 +41,8 @@ alter_role_if_exists(PG_FUNCTION_ARGS)
 
 	Node *parseTree = ParseTreeNode(utilityQuery);
 
-	CitusProcessUtility(parseTree, utilityQuery, PROCESS_UTILITY_TOPLEVEL, NULL,
-						None_Receiver, NULL);
+	ProcessUtilityParseTree(parseTree, utilityQuery, PROCESS_UTILITY_TOPLEVEL, NULL,
+							None_Receiver, NULL);
 
 	PG_RETURN_BOOL(true);
 }
@@ -96,11 +96,11 @@ worker_create_or_alter_role(PG_FUNCTION_ARGS)
 									  quote_literal_cstr(createRoleUtilityQuery))));
 		}
 
-		CitusProcessUtility(parseTree,
-							createRoleUtilityQuery,
-							PROCESS_UTILITY_TOPLEVEL,
-							NULL,
-							None_Receiver, NULL);
+		ProcessUtilityParseTree(parseTree,
+								createRoleUtilityQuery,
+								PROCESS_UTILITY_TOPLEVEL,
+								NULL,
+								None_Receiver, NULL);
 
 		PG_RETURN_BOOL(true);
 	}
@@ -124,11 +124,11 @@ worker_create_or_alter_role(PG_FUNCTION_ARGS)
 									  quote_literal_cstr(alterRoleUtilityQuery))));
 		}
 
-		CitusProcessUtility(parseTree,
-							alterRoleUtilityQuery,
-							PROCESS_UTILITY_TOPLEVEL,
-							NULL,
-							None_Receiver, NULL);
+		ProcessUtilityParseTree(parseTree,
+								alterRoleUtilityQuery,
+								PROCESS_UTILITY_TOPLEVEL,
+								NULL,
+								None_Receiver, NULL);
 
 		PG_RETURN_BOOL(true);
 	}
