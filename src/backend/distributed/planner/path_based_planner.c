@@ -406,59 +406,87 @@ PathBasedPlannerRelationHook(PlannerInfo *root,
 
 			/* creating the target list */
 			PathTarget *groupPathTarget = create_empty_pathtarget();
-			add_column_to_pathtarget(groupPathTarget, (Expr *) makeVar(1,1,23,-1, 0,0), 0);
-
-			/* any_value on osm_id */
-			Aggref *aggref = makeNode(Aggref);
-			aggref->aggfnoid = 18333; /* any_value */
-			aggref->aggtype = 20;
-			aggref->aggtranstype = 20;
-			aggref->aggfilter = NULL;
-			aggref->aggstar = false;
-			aggref->aggvariadic = false;
-			aggref->aggkind = AGGKIND_NORMAL;
-			aggref->aggsplit = AGGSPLIT_SIMPLE;
-			aggref->location = 0;
-
-			aggref->args = list_make1(
-				makeTargetEntry(
-					(Expr *) makeVar(1, 2, 20, -1, 0, 0),
-					1, NULL, false)); /* osm_id */
-			struct TargetEntry *argTLE = NULL;
-			foreach_ptr(argTLE, aggref->args)
+			int numAggs = 0;
+			Expr *expr = NULL;
+			foreach_ptr(expr, relOptInfo->reltarget->exprs)
 			{
-				aggref->aggargtypes = lappend_oid(aggref->aggargtypes,
-												  exprType((Node *) argTLE->expr));
-			}
-			add_column_to_pathtarget(groupPathTarget, (Expr *) aggref, 0);
+				if (!IsA(expr, Var))
+				{
+					continue;
+				}
+				Var *var = castNode(Var, expr);
 
-			/* ST_Union(way) */
-			Aggref *aggref2 = makeNode(Aggref);
-			aggref2->aggfnoid = 16861; /* ST_Union */
-			aggref2->aggtype = 16390;
-			aggref2->aggtranstype = 2281;
-			aggref2->aggfilter = NULL;
-			aggref2->aggstar = false;
-			aggref2->aggvariadic = false;
-			aggref2->aggkind = AGGKIND_NORMAL;
-			aggref2->aggsplit = AGGSPLIT_SIMPLE;
-			aggref2->location = 0;
+				switch (var->varattno)
+				{
+					case 1: /* k */
+					{
+						/* transparently add grouping keys */
+						add_column_to_pathtarget(groupPathTarget, expr, 0);
 
-			aggref2->args = list_make1(
-				makeTargetEntry(
-					(Expr *) makeVar(1, 3, 16390, -1, 0, 0),
-					1, NULL, false)); /* way */
-			argTLE = NULL;
-			foreach_ptr(argTLE, aggref2->args)
-			{
-				aggref2->aggargtypes = lappend_oid(aggref2->aggargtypes,
-												  exprType((Node *) argTLE->expr));
+						break;
+					}
+
+					case 2: /* osm_id */
+					{
+						/* wrapping non partitioned columns and non-primary keys in any_value */
+						Aggref *aggref = makeNode(Aggref);
+						aggref->aggfnoid = 18333; /* any_value */
+						aggref->aggtype = var->vartype;
+						aggref->aggtranstype = var->vartype;
+						aggref->aggfilter = NULL;
+						aggref->aggstar = false;
+						aggref->aggvariadic = false;
+						aggref->aggkind = AGGKIND_NORMAL;
+						aggref->aggsplit = AGGSPLIT_SIMPLE;
+						aggref->location = 0;
+
+						aggref->args = list_make1(
+							makeTargetEntry((Expr *) var, 1, NULL, false));
+						TargetEntry *argTLE = NULL;
+						foreach_ptr(argTLE, aggref->args)
+						{
+							aggref->aggargtypes =
+								lappend_oid(aggref->aggargtypes,
+											exprType((Node *) argTLE->expr));
+						}
+						add_column_to_pathtarget(groupPathTarget, (Expr *) aggref, 0);
+						numAggs++;
+
+						break;
+					}
+
+					case 3: /* way */
+					{
+						/* reconstruct partitioned values via ST_Union() */
+
+						Aggref *aggref = makeNode(Aggref);
+						aggref->aggfnoid = 16861; /* ST_Union */
+						aggref->aggtype = 16390;
+						aggref->aggtranstype = 2281;
+						aggref->aggfilter = NULL;
+						aggref->aggstar = false;
+						aggref->aggvariadic = false;
+						aggref->aggkind = AGGKIND_NORMAL;
+						aggref->aggsplit = AGGSPLIT_SIMPLE;
+						aggref->location = 0;
+
+						aggref->args = list_make1(makeTargetEntry(expr, 1, NULL, false));
+						TargetEntry *argTLE = NULL;
+						foreach_ptr(argTLE, aggref->args)
+						{
+							aggref->aggargtypes =
+								lappend_oid(aggref->aggargtypes,
+											exprType((Node *) argTLE->expr));
+						}
+						add_column_to_pathtarget(groupPathTarget, (Expr *) aggref, 0);
+						numAggs++;
+					}
+				}
 			}
-			add_column_to_pathtarget(groupPathTarget, (Expr *) aggref2, 0);
 
 			/* TODO figure out costing for our grouping */
 			AggClauseCosts costs = {
-				.numAggs = 2,
+				.numAggs = numAggs,
 				.numOrderedAggs = 0,
 				.hasNonPartial = false,
 				.hasNonSerial = false,
@@ -502,9 +530,25 @@ makeGeoScanPath(Relation rel, RelOptInfo *parent, PathTarget *pathtarget, double
 	path->parent = parent;
 
 	PathTarget *targetCopy = create_empty_pathtarget();
-	add_column_to_pathtarget(targetCopy, list_nth(pathtarget->exprs, 0), 1);
-	add_column_to_pathtarget(targetCopy, list_nth(pathtarget->exprs, 1), 0);
-	add_column_to_pathtarget(targetCopy, list_nth(pathtarget->exprs, 2), 0);
+	Expr *expr = NULL;
+	foreach_ptr(expr, pathtarget->exprs)
+	{
+		bool isPrimaryKey = false;
+		if (IsA(expr, Var))
+		{
+			/* TODO assume the first attribute of a relation as its PK */
+			Var *var = (Var *)expr;
+			isPrimaryKey = var->varattno == 1;
+		}
+
+		/*
+		 * Geo partitioning cuts the geometry of the distibution column into pieces, they
+		 * need to be reconstructed by grouping on the primary key. Add the primary keys
+		 * to a grouping set with reference 1
+		 */
+		add_column_to_pathtarget(targetCopy, expr,
+								 isPrimaryKey ? 1 : 0);
+	}
 
 	path->pathtarget = targetCopy;
 	path->param_info = NULL;
@@ -671,7 +715,7 @@ GetFunctionNameData(Oid funcid)
 
 
 static bool
-IsSTExpandExpression(Expr *expr, float8 *distance)
+MatchSTExpandExpression(Expr *expr, float8 *distance)
 {
 	if (!IsA(expr, FuncExpr))
 	{
@@ -746,7 +790,7 @@ IsGeoOverlapJoin(Expr *expr)
 	}
 
 	float8 distance = 0;
-	if (IsA(leftArg, Var) && IsSTExpandExpression(rightArg, &distance))
+	if (IsA(leftArg, Var) && MatchSTExpandExpression(rightArg, &distance))
 	{
 		return false;
 	}
@@ -754,19 +798,263 @@ IsGeoOverlapJoin(Expr *expr)
 	return true;
 }
 
+
+typedef struct GeoJoinPathMatch
+{
+	RestrictInfo *stdwithRestrictInfo;
+	Const *stdwithinDistanceConst;
+	double stdwithinDistance;
+
+	AggPath *innerGrouping;
+	DistributedUnionPath *innerDistUnion;
+	GeoScanPath *innerPath;
+
+	AggPath *outerGrouping;
+	DistributedUnionPath *outerDistUnion;
+	GeoScanPath *outerPath;
+} GeoJoinPathMatch;
+
+
+static Path *
+SkipTransparentPaths(Path *path)
+{
+	switch (path->type)
+	{
+		case T_MaterialPath:
+		{
+			return SkipTransparentPaths(castNode(MaterialPath, path)->subpath);
+		}
+
+		default:
+		{
+			return path;
+		}
+	}
+}
+
+
+static bool
+MatchGeoScan(Path *path,
+			 AggPath **matchedGrouping,
+			 DistributedUnionPath **matchedDistUnion,
+			 GeoScanPath **matchedPath)
+{
+	/* skip transparent paths */
+	path = SkipTransparentPaths(path);
+
+	if (EnableGeoPartitioningGrouping)
+	{
+		if (!IsA(path, AggPath))
+		{
+			return false;
+		}
+
+		AggPath *aggPath = castNode(AggPath, path);
+		if (matchedGrouping)
+		{
+			*matchedGrouping = aggPath;
+		}
+
+		path = aggPath->subpath;
+	}
+
+	DistributedUnionPath *distUnion = NULL;
+	if (!IsDistributedUnion(path, true, &distUnion))
+	{
+		return false;
+	}
+	if (matchedDistUnion)
+	{
+		*matchedDistUnion = distUnion;
+	}
+
+	path = distUnion->worker_path;
+	if (!IsGeoScanPath(castNode(CustomPath, path)))
+	{
+		return false;
+	}
+
+	GeoScanPath *geoPath = (GeoScanPath *) path;
+
+	if (matchedPath)
+	{
+		/* capture the matched path */
+		*matchedPath = geoPath;
+	}
+
+	return true;
+}
+
+
+static bool
+MatchSTDWithinRestrictInfo(RestrictInfo *restrictInfo,
+						   RestrictInfo **stdwithinQual,
+						   double *stdwithinDistance)
+{
+	if (!IsA(restrictInfo->clause, OpExpr))
+	{
+		return false;
+	}
+	OpExpr *opexpr = castNode(OpExpr, restrictInfo->clause);
+
+	/* match for a (geometry && geometry) expression */
+	if (list_length(opexpr->args) != 2)
+	{
+		/* not exactly 2 arguments, no need for further checks */
+		return false;
+	}
+
+	NameData opexprNameData = GetFunctionNameData(opexpr->opfuncid);
+	if (strcmp(NameStr(opexprNameData), "geometry_overlaps") != 0)
+	{
+		return false;
+	}
+
+	Expr *arg1 = linitial(opexpr->args);
+	Expr *arg2 = lsecond(opexpr->args);
+
+	/* match (geometry && st_expand(geometry, distance)) or (st_expand(geometry, distance) && var)*/
+	if (!(
+		(IsA(arg1, Var) && MatchSTExpandExpression(arg2, stdwithinDistance)) ||
+		(MatchSTExpandExpression(arg1, stdwithinDistance) && IsA(arg2, Var))
+	))
+	{
+		return false;
+	}
+
+	/* matched */
+	if (stdwithinQual)
+	{
+		*stdwithinQual = restrictInfo;
+	}
+	return true;
+}
+
+
+static bool
+MatchSTDWithinJoin(List *restrictionInfos, RestrictInfo **stdwithinQual,
+				   double *stdwithinDistance)
+{
+	RestrictInfo *restrictInfo = NULL;
+	foreach_ptr(restrictInfo, restrictionInfos)
+	{
+		Assert(IsA(restrictInfo, RestrictInfo));
+		if (MatchSTDWithinRestrictInfo(restrictInfo, stdwithinQual, stdwithinDistance))
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
+static bool
+MathGeoJoinPath(JoinPath *path, GeoJoinPathMatch *match)
+{
+	/*
+	 * Tests are performed in fastest test to slowest test to have quick escapes when we
+	 * don't match.
+	 */
+
+	if (!MatchGeoScan(path->innerjoinpath,
+					  match ? &match->innerGrouping : NULL,
+					  match ? &match->innerDistUnion : NULL,
+					  match ? &match->innerPath : NULL))
+	{
+		/* innerjoinpath is not a geo scan */
+		return false;
+	}
+
+	if (!MatchGeoScan(path->outerjoinpath,
+					  match ? &match->outerGrouping : NULL,
+					  match ? &match->outerDistUnion : NULL,
+					  match ? &match->outerPath : NULL))
+	{
+		/* outerjoinpath is not a geo scan */
+		return false;
+	}
+
+	/* verify this is an innerjoin on ST_DWithin */
+	if (path->jointype == JOIN_INNER
+		&& !MatchSTDWithinJoin(path->joinrestrictinfo,
+							   match ? &match->stdwithRestrictInfo : NULL,
+							   match ? &match->stdwithinDistance : NULL))
+	{
+		/* not a distance join */
+		return false;
+	}
+
+	/* all tests matched and if `match` was not NULL the value's have been captured */
+	return true;
+}
+
+#include "distributed/planner/pattern_match.h"
 static List *
 GeoOverlapJoin(PlannerInfo *root, Path *originalPath)
 {
 	JoinPath *joinPath = (JoinPath *) originalPath;
+	GeoJoinPathMatch match = { 0 };
+	GeoJoinPathMatch match2 = { 0 };
 
-	RestrictInfo *rinfo = NULL;
-	foreach_ptr(rinfo, joinPath->joinrestrictinfo)
+	if (!MathGeoJoinPath(joinPath, &match))
 	{
-		if (IsGeoOverlapJoin(rinfo->clause))
-		{
-
-		}
+		/* no match */
+		return NIL;
 	}
+
+	ereport(DEBUG1, (errmsg("matched pattern for geooverlap")));
+	IfPathMatch(
+		joinPath,
+		MatchJoin(
+			JOIN_INNER,
+			MatchJoinRestrictions(
+				MatchExprNamedOperation(
+					geometry_overlaps,
+					MatchVar(),
+					MatchExprNamedFunction(
+						st_expand,
+						MatchVar(),
+						CaptureMatch(
+							&match2.stdwithinDistanceConst,
+							MatchConst(MatchConstType(FLOAT8OID))
+						))
+				)),
+			SkipReadthrough(
+				CaptureMatch(
+					&match2.innerGrouping,
+					MatchGrouping(
+						CaptureMatch(
+							&match2.innerDistUnion,
+							MatchDistributedUnion(
+								CaptureMatch(
+									&match2.innerPath,
+									MatchGeoScan
+								)))
+					))
+			),
+			SkipReadthrough(
+				CaptureMatch(
+					&match2.outerGrouping,
+					MatchGrouping(
+						CaptureMatch(
+							&match2.outerDistUnion,
+							MatchDistributedUnion(
+								CaptureMatch(
+									&match2.innerPath,
+									MatchGeoScan
+								)))
+					))
+			)
+		)
+	)
+	{
+		ereport(DEBUG1, (errmsg("my custom code %p: %f",
+								match2.innerGrouping,
+								DatumGetFloat8(match2.stdwithinDistanceConst->constvalue)
+		)));
+	}
+
+	/* have a match on the geo join pattern, all fields are stored in `match` */
 
 	return NIL;
 }
