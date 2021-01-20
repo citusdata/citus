@@ -455,6 +455,14 @@ AlterTableSetAccessMethod(TableConversionParameters *params)
 	params->conversionType = ALTER_TABLE_SET_ACCESS_METHOD;
 	params->shardCountIsNull = true;
 	TableConversionState *con = CreateTableConversion(params);
+
+	if (strcmp(con->originalAccessMethod, con->accessMethod) == 0)
+	{
+		ereport(ERROR, (errmsg("the access method of %s is already %s",
+							   generate_qualified_relation_name(con->relationId),
+							   con->accessMethod)));
+	}
+
 	return ConvertTable(con);
 }
 

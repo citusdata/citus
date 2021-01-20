@@ -139,6 +139,10 @@ create table test_fk_p0 partition of test_fk_p for values from (0) to (10);
 create table test_fk_p1 partition of test_fk_p for values from (10) to (20);
 select alter_table_set_access_method('test_fk_p1', 'columnar');
 
+-- test changing into same access method
+CREATE TABLE same_access_method (a INT);
+SELECT alter_table_set_access_method('same_access_method', 'heap');
+
 SET client_min_messages TO WARNING;
 DROP SCHEMA alter_table_set_access_method CASCADE;
 SELECT 1 FROM master_remove_node('localhost', :master_port);
