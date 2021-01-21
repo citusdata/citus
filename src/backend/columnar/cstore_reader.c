@@ -44,7 +44,8 @@ static StripeBuffers * LoadFilteredStripeBuffers(Relation relation,
 												 StripeMetadata *stripeMetadata,
 												 TupleDesc tupleDescriptor,
 												 List *projectedColumnList,
-												 List *whereClauseList);
+												 List *whereClauseList,
+												 int64 *chunksFiltered);
 static void ReadStripeNextRow(StripeBuffers *stripeBuffers, List *projectedColumnList,
 							  uint64 chunkIndex, uint64 chunkRowIndex,
 							  ChunkData *chunkData, Datum *columnValues,
@@ -54,7 +55,8 @@ static ColumnBuffers * LoadColumnBuffers(Relation relation,
 										 uint32 chunkCount, uint64 stripeOffset,
 										 Form_pg_attribute attributeForm);
 static bool * SelectedChunkMask(StripeSkipList *stripeSkipList,
-								List *projectedColumnList, List *whereClauseList);
+								List *projectedColumnList, List *whereClauseList,
+								int64 *chunksFiltered);
 static List * BuildRestrictInfoList(List *whereClauseList);
 static Node * BuildBaseConstraint(Var *variable);
 static OpExpr * MakeOpExpression(Var *variable, int16 strategyNumber);
@@ -104,6 +106,7 @@ CStoreBeginRead(Relation relation, TupleDesc tupleDescriptor,
 	readState->stripeBuffers = NULL;
 	readState->readStripeCount = 0;
 	readState->stripeReadRowCount = 0;
+	readState->chunksFiltered = 0;
 	readState->tupleDescriptor = tupleDescriptor;
 	readState->stripeReadContext = stripeReadContext;
 	readState->chunkData = NULL;
@@ -153,7 +156,9 @@ CStoreReadNextRow(TableReadState *readState, Datum *columnValues, bool *columnNu
 																 readState->
 																 projectedColumnList,
 																 readState->
-																 whereClauseList);
+																 whereClauseList,
+																 &readState->
+																 chunksFiltered);
 		readState->readStripeCount++;
 		readState->currentStripeMetadata = stripeMetadata;
 
@@ -332,7 +337,7 @@ CStoreTableRowCount(Relation relation)
 static StripeBuffers *
 LoadFilteredStripeBuffers(Relation relation, StripeMetadata *stripeMetadata,
 						  TupleDesc tupleDescriptor, List *projectedColumnList,
-						  List *whereClauseList)
+						  List *whereClauseList, int64 *chunksFiltered)
 {
 	uint32 columnIndex = 0;
 	uint32 columnCount = tupleDescriptor->natts;
@@ -345,7 +350,7 @@ LoadFilteredStripeBuffers(Relation relation, StripeMetadata *stripeMetadata,
 														stripeMetadata->chunkCount);
 
 	bool *selectedChunkMask = SelectedChunkMask(stripeSkipList, projectedColumnList,
-												whereClauseList);
+												whereClauseList, chunksFiltered);
 
 	StripeSkipList *selectedChunkSkipList =
 		SelectedChunkSkipList(stripeSkipList, projectedColumnMask,
@@ -474,7 +479,7 @@ LoadColumnBuffers(Relation relation, ColumnChunkSkipNode *chunkSkipNodeArray,
  */
 static bool *
 SelectedChunkMask(StripeSkipList *stripeSkipList, List *projectedColumnList,
-				  List *whereClauseList)
+				  List *whereClauseList, int64 *chunksFiltered)
 {
 	ListCell *columnCell = NULL;
 	uint32 chunkIndex = 0;
@@ -527,6 +532,7 @@ SelectedChunkMask(StripeSkipList *stripeSkipList, List *projectedColumnList,
 			if (predicateRefuted)
 			{
 				selectedChunkMask[chunkIndex] = false;
+				*chunksFiltered += 1;
 			}
 		}
 	}
