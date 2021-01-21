@@ -421,6 +421,15 @@ push(@pgOptions, "log_error_verbosity = 'verbose'");
 # Allow CREATE SUBSCRIPTION to work
 push(@pgOptions, "wal_level='logical'");
 
+# Faster logical replication status update so tests with logical replication
+# run faster
+push(@pgOptions, "wal_receiver_status_interval=1");
+
+# Faster logical replication apply worker launch so tests with logical
+# replication run faster. This is used in ApplyLauncherMain in
+# src/backend/replication/logical/launcher.c.
+push(@pgOptions, "wal_retrieve_retry_interval=1000");
+
 # Citus options set for the tests
 push(@pgOptions, "citus.shard_count=4");
 push(@pgOptions, "citus.max_adaptive_executor_pool_size=4");

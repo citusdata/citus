@@ -455,6 +455,14 @@ AlterTableSetAccessMethod(TableConversionParameters *params)
 	params->conversionType = ALTER_TABLE_SET_ACCESS_METHOD;
 	params->shardCountIsNull = true;
 	TableConversionState *con = CreateTableConversion(params);
+
+	if (strcmp(con->originalAccessMethod, con->accessMethod) == 0)
+	{
+		ereport(ERROR, (errmsg("the access method of %s is already %s",
+							   generate_qualified_relation_name(con->relationId),
+							   con->accessMethod)));
+	}
+
 	return ConvertTable(con);
 }
 
@@ -621,8 +629,8 @@ ConvertTable(TableConversionState *con)
 		Node *parseTree = ParseTreeNode(tableCreationSql);
 
 		RelayEventExtendNames(parseTree, con->schemaName, con->hashOfName);
-		CitusProcessUtility(parseTree, tableCreationSql, PROCESS_UTILITY_TOPLEVEL,
-							NULL, None_Receiver, NULL);
+		ProcessUtilityParseTree(parseTree, tableCreationSql, PROCESS_UTILITY_TOPLEVEL,
+								NULL, None_Receiver, NULL);
 	}
 
 	/* set columnar options */
@@ -674,8 +682,9 @@ ConvertTable(TableConversionState *con)
 	{
 		Node *parseTree = ParseTreeNode(attachPartitionCommand);
 
-		CitusProcessUtility(parseTree, attachPartitionCommand, PROCESS_UTILITY_TOPLEVEL,
-							NULL, None_Receiver, NULL);
+		ProcessUtilityParseTree(parseTree, attachPartitionCommand,
+								PROCESS_UTILITY_TOPLEVEL,
+								NULL, None_Receiver, NULL);
 	}
 
 	if (isPartitionTable)
