@@ -301,17 +301,17 @@ if (matched)
 }
 
 
-#define MatchVarValuesInternal(index, check) \
+#define MatchFieldsInternal(index, check) \
 { \
-	if (!(castNode(Var, clause)->check)) \
+	if (!(typedClause->check)) \
 	{ \
 		MatchFailed; \
 	} \
 }
 
 
-#define MatchVarFields(...) \
-	FOR_EACH(MatchVarValuesInternal, __VA_ARGS__);
+#define MatchFields(...) \
+	FOR_EACH(MatchFieldsInternal, __VA_ARGS__);
 
 
 #define MatchVar(capture, ...) \
@@ -320,22 +320,11 @@ if (matched)
 	{ \
     	MatchFailed; \
 	} \
+	Var *typedClause = castNode(Var, clause); \
+	(void) typedClause; \
 	__VA_ARGS__; \
 	DoCapture(capture, Var *, clause); \
 }
-
-
-#define MatchConstValuesInternal(index, check) \
-{ \
-	if (!(castNode(Const, clause)->check)) \
-	{ \
-		MatchFailed; \
-	} \
-}
-
-
-#define MatchConstFields(...) \
-	FOR_EACH(MatchConstValuesInternal, __VA_ARGS__);
 
 
 #define MatchConst(capture, ...) \
@@ -344,6 +333,8 @@ if (matched)
 	{ \
     	MatchFailed; \
 	} \
+	Const *typedClause = castNode(Const, clause); \
+	(void) typedClause; \
 	__VA_ARGS__; \
 	DoCapture(capture, Const *, clause); \
 }

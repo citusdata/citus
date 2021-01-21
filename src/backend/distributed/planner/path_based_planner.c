@@ -749,24 +749,6 @@ typedef struct GeoJoinPathMatch
 } GeoJoinPathMatch;
 
 
-static Path *
-SkipTransparentPaths(Path *path)
-{
-	switch (path->type)
-	{
-		case T_MaterialPath:
-		{
-			return SkipTransparentPaths(castNode(MaterialPath, path)->subpath);
-		}
-
-		default:
-		{
-			return path;
-		}
-	}
-}
-
-
 #include "distributed/planner/pattern_match.h"
 static List *
 GeoOverlapJoin(PlannerInfo *root, Path *originalPath)
@@ -791,7 +773,7 @@ GeoOverlapJoin(PlannerInfo *root, Path *originalPath)
 						MatchVar(NoCapture),
 						MatchConst(
 							&match.stdwithinDistanceConst,
-							MatchConstFields(consttype == FLOAT8OID))))),
+							MatchFields(consttype == FLOAT8OID))))),
 			/* match inner path in join */
 			SkipReadThrough(
 				NoCapture,
