@@ -66,3 +66,8 @@ CREATE TABLE test_null_values (a int, b int[], c composite_type)
 COPY test_null_values FROM '@abs_srcdir@/data/null_values.csv' WITH CSV;
 
 SELECT * FROM test_null_values;
+
+CREATE TABLE test_json(j json) USING columnar;
+INSERT INTO test_json SELECT ('{"att": ' || g::text || '}')::json from generate_series(1,1000000) g;
+SELECT * FROM test_json WHERE (j->'att')::text::int8 > 999990;
+DROP TABLE test_json;
