@@ -26,15 +26,15 @@ SELECT create_distributed_table('adt_ref', 'a', colocate_with:='adt_table');
 INSERT INTO adt_table VALUES (1, 2), (3, 4), (5, 6);
 INSERT INTO adt_col VALUES (3, 4), (5, 6), (7, 8);
 INSERT INTO adt_ref VALUES (3), (5);
-SELECT "Name", "Citus Table Type", "Distribution Column", "Shard Count" FROM public.citus_tables WHERE "Name"::text LIKE 'adt%';
-   Name    | Citus Table Type | Distribution Column | Shard Count
+SELECT table_name, citus_table_type, distribution_column, shard_count FROM public.citus_tables WHERE table_name::text LIKE 'adt%';
+ table_name | citus_table_type | distribution_column | shard_count
 ---------------------------------------------------------------------
- adt_col   | distributed      | a                   |           4
- adt_ref   | distributed      | a                   |           4
- adt_table | distributed      | a                   |           4
+ adt_col    | distributed      | a                   |           4
+ adt_ref    | distributed      | a                   |           4
+ adt_table  | distributed      | a                   |           4
 (3 rows)
 
-SELECT STRING_AGG("Name"::text, ', ' ORDER BY 1) AS "Colocation Groups" FROM public.citus_tables WHERE "Name"::text LIKE 'adt%' GROUP BY "Colocation ID" ORDER BY 1;
+SELECT STRING_AGG(table_name::text, ', ' ORDER BY 1) AS "Colocation Groups" FROM public.citus_tables WHERE table_name::text LIKE 'adt%' GROUP BY colocation_id ORDER BY 1;
       Colocation Groups
 ---------------------------------------------------------------------
  adt_col, adt_ref, adt_table
@@ -56,15 +56,15 @@ SELECT alter_distributed_table('adt_table', shard_count:=6, cascade_to_colocated
 (1 row)
 
 SET client_min_messages TO DEFAULT;
-SELECT "Name", "Citus Table Type", "Distribution Column", "Shard Count" FROM public.citus_tables WHERE "Name"::text LIKE 'adt%';
-   Name    | Citus Table Type | Distribution Column | Shard Count
+SELECT table_name, citus_table_type, distribution_column, shard_count FROM public.citus_tables WHERE table_name::text LIKE 'adt%';
+ table_name | citus_table_type | distribution_column | shard_count
 ---------------------------------------------------------------------
- adt_col   | distributed      | a                   |           6
- adt_ref   | distributed      | a                   |           6
- adt_table | distributed      | a                   |           6
+ adt_col    | distributed      | a                   |           6
+ adt_ref    | distributed      | a                   |           6
+ adt_table  | distributed      | a                   |           6
 (3 rows)
 
-SELECT STRING_AGG("Name"::text, ', ' ORDER BY 1) AS "Colocation Groups" FROM public.citus_tables WHERE "Name"::text LIKE 'adt%' GROUP BY "Colocation ID" ORDER BY 1;
+SELECT STRING_AGG(table_name::text, ', ' ORDER BY 1) AS "Colocation Groups" FROM public.citus_tables WHERE table_name::text LIKE 'adt%' GROUP BY colocation_id ORDER BY 1;
       Colocation Groups
 ---------------------------------------------------------------------
  adt_col, adt_ref, adt_table
@@ -88,15 +88,15 @@ NOTICE:  Renaming the new table to mx_alter_distributed_table.adt_table
 
 (1 row)
 
-SELECT "Name", "Citus Table Type", "Distribution Column", "Shard Count" FROM public.citus_tables WHERE "Name"::text LIKE 'adt%';
-   Name    | Citus Table Type | Distribution Column | Shard Count
+SELECT table_name, citus_table_type, distribution_column, shard_count FROM public.citus_tables WHERE table_name::text LIKE 'adt%';
+ table_name | citus_table_type | distribution_column | shard_count
 ---------------------------------------------------------------------
- adt_col   | distributed      | a                   |           6
- adt_ref   | distributed      | a                   |           6
- adt_table | distributed      | b                   |           6
+ adt_col    | distributed      | a                   |           6
+ adt_ref    | distributed      | a                   |           6
+ adt_table  | distributed      | b                   |           6
 (3 rows)
 
-SELECT STRING_AGG("Name"::text, ', ' ORDER BY 1) AS "Colocation Groups" FROM public.citus_tables WHERE "Name"::text LIKE 'adt%' GROUP BY "Colocation ID" ORDER BY 1;
+SELECT STRING_AGG(table_name::text, ', ' ORDER BY 1) AS "Colocation Groups" FROM public.citus_tables WHERE table_name::text LIKE 'adt%' GROUP BY colocation_id ORDER BY 1;
  Colocation Groups
 ---------------------------------------------------------------------
  adt_col, adt_ref
@@ -153,10 +153,10 @@ SELECT COUNT(*) FROM adt_table;
 (1 row)
 
 END;
-SELECT "Name", "Citus Table Type", "Distribution Column", "Shard Count" FROM public.citus_tables WHERE "Name"::text = 'adt_table';
-   Name    | Citus Table Type | Distribution Column | Shard Count
+SELECT table_name, citus_table_type, distribution_column, shard_count FROM public.citus_tables WHERE table_name::text = 'adt_table';
+ table_name | citus_table_type | distribution_column | shard_count
 ---------------------------------------------------------------------
- adt_table | distributed      | a                   |           6
+ adt_table  | distributed      | a                   |           6
 (1 row)
 
 SET client_min_messages TO WARNING;

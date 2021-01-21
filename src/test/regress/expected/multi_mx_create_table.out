@@ -485,10 +485,10 @@ ORDER BY colocationid, logicalrelid;
 (23 rows)
 
 -- check the citus_tables view
-SELECT "Name", "Citus Table Type", "Distribution Column", "Shard Count", "Owner"
+SELECT table_name, citus_table_type, distribution_column, shard_count, table_owner
 FROM citus_tables
-ORDER BY "Name"::text;
-                          Name                          | Citus Table Type | Distribution Column | Shard Count |  Owner
+ORDER BY table_name::text;
+                       table_name                       | citus_table_type | distribution_column | shard_count | table_owner
 ---------------------------------------------------------------------
  app_analytics_events_mx                                | distributed      | app_id              |           4 | postgres
  articles_hash_mx                                       | distributed      | author_id           |           2 | postgres
@@ -516,10 +516,10 @@ ORDER BY "Name"::text;
 (23 rows)
 
 \c - - - :worker_1_port
-SELECT "Name", "Citus Table Type", "Distribution Column", "Shard Count", "Owner"
+SELECT table_name, citus_table_type, distribution_column, shard_count, table_owner
 FROM citus_tables
-ORDER BY "Name"::text;
-                          Name                          | Citus Table Type | Distribution Column | Shard Count |  Owner
+ORDER BY table_name::text;
+                       table_name                       | citus_table_type | distribution_column | shard_count | table_owner
 ---------------------------------------------------------------------
  app_analytics_events_mx                                | distributed      | app_id              |           4 | postgres
  articles_hash_mx                                       | distributed      | author_id           |           2 | postgres
