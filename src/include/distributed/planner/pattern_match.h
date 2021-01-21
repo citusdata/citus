@@ -14,8 +14,8 @@
 #define CONCATENATE1(arg1, arg2)  CONCATENATE2(arg1, arg2)
 #define CONCATENATE2(arg1, arg2)  arg1##arg2
 
-#define FOR_EACH_0(what, index) (void);
-#define FOR_EACH_1(what, index, x)      what((index), x);
+#define FOR_EACH_0(what, index, x) ;
+#define FOR_EACH_1(what, index, x)      what((index), x); FOR_EACH_0(what, index+1,  __VA_ARGS__);
 #define FOR_EACH_2(what, index, x, ...) what((index), x); FOR_EACH_1(what, index+1,  __VA_ARGS__);
 #define FOR_EACH_3(what, index, x, ...) what((index), x); FOR_EACH_2(what, index+1,  __VA_ARGS__);
 #define FOR_EACH_4(what, index, x, ...) what((index), x); FOR_EACH_3(what, index+1,  __VA_ARGS__);
@@ -71,7 +71,6 @@
 \
     { \
         bool skipped = true; \
-        int skipCount = 0; \
         while (skipped) { \
             switch(pathToMatch->type) \
             { \
@@ -87,12 +86,7 @@
                     break; \
                 } \
             } \
-			if (skipped) \
-			{ \
-            	skipCount++; \
-			} \
         } \
-		ereport(DEBUG1, (errmsg("skipped %d read through nodes", skipCount))); \
 	} \
 \
 	matcher; \
@@ -102,7 +96,6 @@
 
 #define MatchJoin(capture, joinType, conditionMatcher, innerMatcher, outerMatcher) \
 { \
-	ereport(DEBUG1, (errmsg("initiate join matcher"))); \
     { \
         bool m = false; \
         switch (pathToMatch->type) \
@@ -196,11 +189,9 @@ do \
     MakeStack(Path, pathToMatch, path); \
 	InitializeCapture; \
 \
-	ereport(DEBUG1, (errmsg("initiate matcher DSL"))); \
     matcher; \
 \
 	VerifyStack(pathToMatch); \
-	ereport(DEBUG1, (errmsg("pattern matched"))); \
 	matched = true; \
 	break; \
 } \
@@ -310,6 +301,19 @@ if (matched)
 }
 
 
+#define MatchVarValuesInternal(index, check) \
+{ \
+	if (!(castNode(Var, clause)->check)) \
+	{ \
+		MatchFailed; \
+	} \
+}
+
+
+#define MatchVarFields(...) \
+	FOR_EACH(MatchVarValuesInternal, __VA_ARGS__);
+
+
 #define MatchVar(capture, ...) \
 { \
 	if (!IsA(clause, Var)) \
@@ -321,11 +325,17 @@ if (matched)
 }
 
 
-#define MatchConstType(constType) \
-if (!(castNode(Const, clause)->consttype == constType)) \
+#define MatchConstValuesInternal(index, check) \
 { \
-	MatchFailed; \
+	if (!(castNode(Const, clause)->check)) \
+	{ \
+		MatchFailed; \
+	} \
 }
+
+
+#define MatchConstFields(...) \
+	FOR_EACH(MatchConstValuesInternal, __VA_ARGS__);
 
 
 #define MatchConst(capture, ...) \
