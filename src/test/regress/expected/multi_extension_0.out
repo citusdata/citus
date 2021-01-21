@@ -495,9 +495,9 @@ SELECT * FROM print_extension_changes();
                                                                                  | function worker_change_sequence_dependency(regclass,regclass,regclass)
                                                                                  | schema columnar
                                                                                  | sequence columnar.storageid_seq
-                                                                                 | table columnar.columnar_skipnodes
-                                                                                 | table columnar.columnar_stripes
+                                                                                 | table columnar.chunk
                                                                                  | table columnar.options
+                                                                                 | table columnar.stripe
                                                                                  | view citus_shards
                                                                                  | view citus_tables
                                                                                  | view time_partitions
