@@ -178,7 +178,6 @@ static bool ShardIntervalsEqual(FmgrInfo *comparisonFunction,
 								ShardInterval *firstInterval,
 								ShardInterval *secondInterval);
 static List * SqlTaskList(Job *job);
-static Node * RelabelTypeMutator(Node *originalNode);
 static bool DependsOnHashPartitionJob(Job *job);
 static uint32 AnchorRangeTableId(List *rangeTableList);
 static List * BaseRangeTableIdList(List *rangeTableList);
@@ -2841,9 +2840,6 @@ SqlTaskList(Job *job)
 	List *whereClauseList = (List *) jobQuery->jointree->quals;
 	List *dependentJobList = job->dependentJobList;
 
-	jobQuery = query_tree_mutator(jobQuery, RelabelTypeMutator,
-								  (void *) NULL, 0);
-
 	/*
 	 * If we don't depend on a hash partition, then we determine the largest
 	 * table around which we build our queries. This reduces data fetching.
@@ -2943,7 +2939,7 @@ SqlTaskList(Job *job)
  * RelabelTypeMutator walks over the tree and converts RelabelType's
  * into CollationExpr's. With that, we will be able to pushdown COLLATE's.
  */
-static Node *
+Node *
 RelabelTypeMutator(Node *originalNode)
 {
 	if (originalNode == NULL)

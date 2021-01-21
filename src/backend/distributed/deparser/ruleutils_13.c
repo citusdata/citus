@@ -4874,6 +4874,8 @@ get_rule_expr(Node *node, deparse_context *context,
 {
 	StringInfo	buf = context->buf;
 
+	node = RelabelTypeMutator(node);
+
 	if (node == NULL)
 		return;
 

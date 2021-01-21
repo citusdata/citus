@@ -540,6 +540,7 @@ extern Node *  WrapUngroupedVarsInAnyValueAggregate(Node *expression,
 													List *groupClauseList,
 													List *targetList,
 													bool checkExpressionEquality);
+extern Node * RelabelTypeMutator(Node *originalNode);
 
 /*
  * Function declarations for building, updating constraints and simple operator
