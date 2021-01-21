@@ -791,7 +791,7 @@ GeoOverlapJoin(PlannerInfo *root, Path *originalPath)
 						MatchVar(NoCapture),
 						MatchConst(
 							&match.stdwithinDistanceConst,
-							MatchConstType(FLOAT8OID))))),
+							MatchConstFields(consttype == FLOAT8OID))))),
 			/* match inner path in join */
 			SkipReadThrough(
 				NoCapture,
