@@ -776,34 +776,39 @@ GeoOverlapJoin(PlannerInfo *root, Path *originalPath)
 	IfPathMatch(
 		originalPath,
 		MatchJoin(
+			NoCapture,
 			JOIN_INNER,
 			/* match on join restriction info */
 			MatchJoinRestrictions(
+				NoCapture,
 				MatchExprNamedOperation(
+					NoCapture,
 					geometry_overlaps,
-					MatchVar(),
+					MatchVar(NoCapture),
 					MatchExprNamedFunction(
+						NoCapture,
 						st_expand,
-						MatchVar(),
-						CaptureMatch(
+						MatchVar(NoCapture),
+						MatchConst(
 							&match.stdwithinDistanceConst,
-							MatchConst(MatchConstType(FLOAT8OID)))))),
+							MatchConstType(FLOAT8OID))))),
 			/* match inner path in join */
-			SkipReadthrough(CaptureMatch(
-				&match.innerGrouping,
-				MatchGrouping(CaptureMatch(
-					&match.innerDistUnion,
-					MatchDistributedUnion(CaptureMatch(
-						&match.innerPath,
-						MatchGeoScan)))))),
+			SkipReadThrough(
+				NoCapture,
+				MatchGrouping(
+					&match.innerGrouping,
+					MatchDistributedUnion(
+						&match.innerDistUnion,
+						MatchGeoScan(
+							&match.innerPath)))),
 			/* match outer path in join */
-			SkipReadthrough(CaptureMatch(
-				&match.outerGrouping,
-				MatchGrouping(CaptureMatch(
-					&match.outerDistUnion,
-					MatchDistributedUnion(CaptureMatch(
-						&match.outerPath,
-						MatchGeoScan))))))))
+			SkipReadThrough(
+				NoCapture,
+				MatchGrouping(
+					&match.outerGrouping,
+					MatchDistributedUnion(&match.outerDistUnion,
+						MatchGeoScan(
+							&match.outerPath))))))
 	{
 		/* have a match on the geo join pattern, all fields are stored in `match` */
 		ereport(DEBUG1, (errmsg("my custom code %p: %f",

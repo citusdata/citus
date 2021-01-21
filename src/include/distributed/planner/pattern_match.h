@@ -35,13 +35,6 @@
 #define MatchAny { }
 #define MatchFailed { break; }
 
-#define CaptureMatch(capture, matcher) \
-matcher; \
-if (capture) \
-{ \
-	*(capture) = (typeof(*(capture))) lastMatch; \
-}
-
 
 #define MakeStack(type, stackName, value) \
 	type *stackName = (type *) value; \
@@ -62,8 +55,17 @@ if (capture) \
 #define VerifyStack(stackName) \
 	Assert(list_length(stackName##Stack) == 0)
 
+#define InitializeCapture \
+	void *ignoreCaptureValue = NULL; \
+	(void) ignoreCaptureValue \
 
-#define SkipReadthrough(matcher) \
+#define NoCapture \
+	&ignoreCaptureValue
+
+#define DoCapture(capture, type, toCapture) \
+	*(capture) = (type) toCapture
+
+#define SkipReadThrough(capture, matcher) \
 { \
 	PushStack(pathToMatch); \
 \
@@ -95,10 +97,10 @@ if (capture) \
 \
 	matcher; \
 	PopStack(pathToMatch); \
-	lastMatch = pathToMatch; \
+	DoCapture(capture, Path *, pathToMatch); \
 }
 
-#define MatchJoin(joinType, conditionMatcher, innerMatcher, outerMatcher) \
+#define MatchJoin(capture, joinType, conditionMatcher, innerMatcher, outerMatcher) \
 { \
 	ereport(DEBUG1, (errmsg("initiate join matcher"))); \
     { \
@@ -140,10 +142,10 @@ if (capture) \
 \
 	PopStack(pathToMatch); \
 	conditionMatcher; \
-	lastMatch = pathToMatch; \
+	DoCapture(capture, JoinPath *, pathToMatch); \
 }
 
-#define MatchGrouping(matcher) \
+#define MatchGrouping(capture, matcher) \
 {                              \
 	if (!IsA(pathToMatch, AggPath)) \
 	{ \
@@ -156,10 +158,10 @@ if (capture) \
 	matcher;\
 \
 	PopStack(pathToMatch); \
-	lastMatch = pathToMatch; \
+    DoCapture(capture, AggPath *, pathToMatch); \
 }
 
-#define MatchDistributedUnion(matcher) \
+#define MatchDistributedUnion(capture, matcher) \
 { \
 	if (!IsDistributedUnion(pathToMatch, false, NULL))    \
 	{ \
@@ -169,10 +171,10 @@ if (capture) \
 	PushStack(pathToMatch); \
 	pathToMatch = ((DistributedUnionPath *) pathToMatch)->worker_path; \
 	PopStack(pathToMatch); \
-	lastMatch = pathToMatch; \
+	DoCapture(capture, DistributedUnionPath *, pathToMatch); \
 }
 
-#define MatchGeoScan \
+#define MatchGeoScan(capture) \
 { \
 	if (!IsA(pathToMatch, CustomPath)) \
 	{ \
@@ -184,7 +186,7 @@ if (capture) \
 		MatchFailed; \
 	} \
 \
-	lastMatch = pathToMatch; \
+	DoCapture(capture, GeoScanPath *, pathToMatch); \
 }
 
 #define IfPathMatch(path, matcher) \
@@ -192,8 +194,7 @@ bool matched = false; \
 do \
 { \
     MakeStack(Path, pathToMatch, path); \
-	void *lastMatch = NULL; \
-	(void) lastMatch; \
+	InitializeCapture; \
 \
 	ereport(DEBUG1, (errmsg("initiate matcher DSL"))); \
     matcher; \
@@ -207,7 +208,7 @@ while (false); \
 if (matched)
 
 
-#define MatchJoinRestrictions(matcher) \
+#define MatchJoinRestrictions(capture, matcher) \
 { \
     Assert(IsA(pathToMatch, NestPath) \
 	    || IsA(pathToMatch, MergePath) \
@@ -224,7 +225,7 @@ if (matched)
 \
 			restrictionMatched = true; \
 			VerifyStack(clause); \
-			lastMatch = restrictInfo; \
+        	DoCapture(capture, RestrictInfo *, restrictInfo); \
 		} while(false); \
 		if (restrictionMatched) \
 		{ \
@@ -243,11 +244,10 @@ if (matched)
 { \
     clause = (Expr *) list_nth(((FuncExpr *) PeekStack(clause))->args, index); \
     matcher; \
-	lastMatch = clause; \
 }
 
 
-#define MatchExprNamedFunction(name, ...) \
+#define MatchExprNamedFunction(capture, name, ...) \
 { \
 	if (!IsA(clause, FuncExpr)) \
 	{ \
@@ -271,7 +271,7 @@ if (matched)
 	PushStack(clause); \
 	FOR_EACH(InternalFunctionDispatch, __VA_ARGS__); \
     PopStack(clause); \
-	lastMatch = clause; \
+	DoCapture(capture, FuncExpr *, clause); \
 }
 
 
@@ -279,11 +279,10 @@ if (matched)
 { \
     clause = (Expr *) list_nth(((OpExpr *) PeekStack(clause))->args, index); \
     matcher; \
-	lastMatch = clause; \
 }
 
 
-#define MatchExprNamedOperation(name, ...) \
+#define MatchExprNamedOperation(capture, name, ...) \
 { \
 	if (!IsA(clause, OpExpr)) \
 	{ \
@@ -307,18 +306,18 @@ if (matched)
 	PushStack(clause); \
 	FOR_EACH(InternalOperationDispatch, __VA_ARGS__); \
 	PopStack(clause); \
-	lastMatch = clause; \
+    DoCapture(capture, OpExpr *, clause); \
 }
 
 
-#define MatchVar(...) \
+#define MatchVar(capture, ...) \
 { \
 	if (!IsA(clause, Var)) \
 	{ \
     	MatchFailed; \
 	} \
 	__VA_ARGS__; \
-	lastMatch = clause; \
+	DoCapture(capture, Var *, clause); \
 }
 
 
@@ -329,14 +328,14 @@ if (!(castNode(Const, clause)->consttype == constType)) \
 }
 
 
-#define MatchConst(...) \
+#define MatchConst(capture, ...) \
 { \
 	if (!IsA(clause, Const)) \
 	{ \
     	MatchFailed; \
 	} \
 	__VA_ARGS__; \
-	lastMatch = clause; \
+	DoCapture(capture, Const *, clause); \
 }
 
 
