@@ -236,6 +236,7 @@ typedef struct TableReadState
 	StripeBuffers *stripeBuffers;
 	uint32 readStripeCount;
 	uint64 stripeReadRowCount;
+	int64 chunksFiltered;
 	ChunkData *chunkData;
 	int32 deserializedChunkIndex;
 } TableReadState;

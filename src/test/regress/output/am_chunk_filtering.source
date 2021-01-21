@@ -118,3 +118,16 @@ SELECT * FROM collation_chunk_filtering_test WHERE A > 'B';
  Å
 (1 row)
 
+CREATE TABLE simple_chunk_filtering(i int) USING COLUMNAR;
+INSERT INTO simple_chunk_filtering SELECT generate_series(0,234567);
+EXPLAIN (analyze on, costs off, timing off, summary off)
+  SELECT * FROM simple_chunk_filtering WHERE i > 123456;
+                                    QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (ColumnarScan) on simple_chunk_filtering (actual rows=111111 loops=1)
+   Filter: (i > 123456)
+   Rows Removed by Filter: 3457
+   Columnar Chunks Removed by Filter: 12
+(4 rows)
+
+DROP TABLE simple_chunk_filtering;

@@ -1157,6 +1157,26 @@ cstore_tableam_finish()
 
 
 /*
+ * Get the number of chunks filtered out during the given scan.
+ */
+int64
+ColumnarGetChunksFiltered(TableScanDesc scanDesc)
+{
+	CStoreScanDesc cstoreScanDesc = (CStoreScanDesc) scanDesc;
+	TableReadState *readState = cstoreScanDesc->cs_readState;
+
+	if (readState != NULL)
+	{
+		return readState->chunksFiltered;
+	}
+	else
+	{
+		return 0;
+	}
+}
+
+
+/*
  * Implementation of TupleTableSlotOps.copy_heap_tuple for TTSOpsColumnar.
  */
 static HeapTuple

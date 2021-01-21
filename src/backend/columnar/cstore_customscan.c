@@ -68,6 +68,8 @@ static void CStoreScan_BeginCustomScan(CustomScanState *node, EState *estate, in
 static TupleTableSlot * CStoreScan_ExecCustomScan(CustomScanState *node);
 static void CStoreScan_EndCustomScan(CustomScanState *node);
 static void CStoreScan_ReScanCustomScan(CustomScanState *node);
+static void CStoreScan_ExplainCustomScan(CustomScanState *node, List *ancestors,
+										 ExplainState *es);
 
 /* saved hook value in case of unload */
 static set_rel_pathlist_hook_type PreviousSetRelPathlistHook = NULL;
@@ -93,7 +95,7 @@ const struct CustomExecMethods CStoreExecuteMethods = {
 	.EndCustomScan = CStoreScan_EndCustomScan,
 	.ReScanCustomScan = CStoreScan_ReScanCustomScan,
 
-	.ExplainCustomScan = NULL,
+	.ExplainCustomScan = CStoreScan_ExplainCustomScan,
 };
 
 
@@ -435,6 +437,21 @@ CStoreScan_ReScanCustomScan(CustomScanState *node)
 	if (scanDesc != NULL)
 	{
 		table_rescan(node->ss.ss_currentScanDesc, NULL);
+	}
+}
+
+
+static void
+CStoreScan_ExplainCustomScan(CustomScanState *node, List *ancestors,
+							 ExplainState *es)
+{
+	TableScanDesc scanDesc = node->ss.ss_currentScanDesc;
+
+	if (scanDesc != NULL)
+	{
+		int64 chunksFiltered = ColumnarGetChunksFiltered(scanDesc);
+		ExplainPropertyInteger("Columnar Chunks Removed by Filter", NULL,
+							   chunksFiltered, es);
 	}
 }
 
