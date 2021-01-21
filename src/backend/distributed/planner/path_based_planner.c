@@ -777,6 +777,7 @@ GeoOverlapJoin(PlannerInfo *root, Path *originalPath)
 		originalPath,
 		MatchJoin(
 			JOIN_INNER,
+			/* match on join restriction info */
 			MatchJoinRestrictions(
 				MatchExprNamedOperation(
 					geometry_overlaps,
@@ -786,31 +787,23 @@ GeoOverlapJoin(PlannerInfo *root, Path *originalPath)
 						MatchVar(),
 						CaptureMatch(
 							&match.stdwithinDistanceConst,
-							MatchConst(MatchConstType(FLOAT8OID))
-						))
-				)),
+							MatchConst(MatchConstType(FLOAT8OID)))))),
+			/* match inner path in join */
 			SkipReadthrough(CaptureMatch(
 				&match.innerGrouping,
 				MatchGrouping(CaptureMatch(
 					&match.innerDistUnion,
 					MatchDistributedUnion(CaptureMatch(
 						&match.innerPath,
-						MatchGeoScan
-					)))
-				))
-			),
+						MatchGeoScan)))))),
+			/* match outer path in join */
 			SkipReadthrough(CaptureMatch(
 				&match.outerGrouping,
 				MatchGrouping(CaptureMatch(
 					&match.outerDistUnion,
 					MatchDistributedUnion(CaptureMatch(
 						&match.outerPath,
-						MatchGeoScan
-					)))
-				))
-			)
-		)
-	)
+						MatchGeoScan))))))))
 	{
 		/* have a match on the geo join pattern, all fields are stored in `match` */
 		ereport(DEBUG1, (errmsg("my custom code %p: %f",
