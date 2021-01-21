@@ -11,8 +11,12 @@
 
 #include "postgres.h"
 
+#include "utils/builtins.h"
+
+#include "distributed/listutils.h"
 #include "distributed/relay_utility.h"
 #include "distributed/string_utils.h"
+
 
 /*
  * ConvertIntToString returns the string version of given integer.
@@ -25,4 +29,20 @@ ConvertIntToString(int val)
 	appendStringInfo(str, "%d", val);
 
 	return str->data;
+}
+
+char* ConcatenateStringListWithDelimiter(List* stringList, char delimiter) {
+	StringInfo result = makeStringInfo();
+	
+	bool isFirst = true;
+	char* string = NULL;
+	foreach_ptr(string, stringList) {
+		if (!isFirst) {
+			appendStringInfoChar(result, delimiter);
+		}else {
+			isFirst = false;
+		}
+		appendStringInfoString(result, quote_literal_cstr(string));
+	}
+	return result->data;
 }

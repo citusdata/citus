@@ -14,5 +14,6 @@
 #include "postgres.h"
 
 extern char * ConvertIntToString(int val);
+extern char* ConcatenateStringListWithDelimiter(List* stringList, char delimiter);
 
 #endif /* CITUS_STRING_UTILS_H */

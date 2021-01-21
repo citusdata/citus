@@ -186,11 +186,10 @@ ORDER BY a, d_hour;
 (60 rows)
 
 DELETE FROM events WHERE b < 100;
-ERROR:  MATERIALIZED VIEW 'mv' on table 'events' does not support UPDATE/DELETE
+ERROR:  MATERIALIZED VIEW mv on table events does not support UPDATE/DELETE
 DROP VIEW mv;
 ERROR:  DROP VIEW not supported for mv
 DROP MATERIALIZED VIEW mv;
-NOTICE:  drop cascades to 4 other objects
 CREATE MATERIALIZED VIEW mv WITH (citus.cimv) AS
 SELECT a,
        date_trunc('hour', d) AS d_hour,
@@ -408,7 +407,6 @@ ORDER BY a, d_hour;
 (60 rows)
 
 DROP MATERIALIZED VIEW mv;
-NOTICE:  drop cascades to 4 other objects
 CREATE MATERIALIZED VIEW mv WITH (citus.cimv, citus.insertonlycapture) AS
 SELECT a,
        date_trunc('hour', d) AS d_hour,
@@ -780,7 +778,6 @@ ORDER BY a, d_hour;
 (60 rows)
 
 DROP MATERIALIZED VIEW mv;
-NOTICE:  drop cascades to trigger mv_3_INSERT on table events
 CREATE MATERIALIZED VIEW mv WITH (citus.cimv, citus.insertonlycapture) AS
 SELECT a,
        date_trunc('hour', d) AS d_hour,
@@ -794,7 +791,6 @@ SELECT * FROM mv;
 (0 rows)
 
 DROP MATERIALIZED VIEW mv;
-NOTICE:  drop cascades to trigger mv_4_INSERT on table events
 SELECT create_distributed_table('events', 'a');
 NOTICE:  Copying data from local table...
 NOTICE:  copying the data has completed
@@ -992,7 +988,7 @@ ORDER BY a, d_hour;
 (70 rows)
 
 DELETE FROM events WHERE b < 100;
-ERROR:  MATERIALIZED VIEW 'mv' on table 'events' does not support UPDATE/DELETE
+ERROR:  MATERIALIZED VIEW mv on table events_400000 does not support UPDATE/DELETE
 DROP VIEW mv;
 ERROR:  DROP VIEW not supported for mv
 DROP MATERIALIZED VIEW mv;
@@ -1697,7 +1693,6 @@ FROM events
 WHERE b > 10
 GROUP BY a, d_hour;
 DROP MATERIALIZED VIEW mv;
-NOTICE:  drop cascades to 4 other objects
 -- test that another user can create CIMV as well
 CREATE USER new_user;
 NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
@@ -1721,6 +1716,5 @@ WHERE b > 10
 GROUP BY a, d_hour;
 REFRESH MATERIALIZED VIEW mv;
 DROP MATERIALIZED VIEW mv CASCADE;
-NOTICE:  drop cascades to 4 other objects
 SET client_min_messages TO WARNING; -- suppress cascade messages
 DROP SCHEMA cimv CASCADE;
