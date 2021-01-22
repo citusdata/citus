@@ -433,6 +433,31 @@ BEGIN;
  reference_table_1 | n          | t
 (8 rows)
 
+  CREATE SCHEMA another_schema_fkeys_between_local_ref;
+  CREATE TABLE another_schema_fkeys_between_local_ref.reference_table_3 (col_1 INT UNIQUE);
+  SELECT create_reference_table('another_schema_fkeys_between_local_ref.reference_table_3');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+  TRUNCATE local_table_4 CASCADE;
+  ALTER TABLE local_table_4 ADD CONSTRAINT fkey_12 FOREIGN KEY (col_1) REFERENCES another_schema_fkeys_between_local_ref.reference_table_3(col_1);
+  DROP TABLE local_table_5 CASCADE;
+  ALTER TABLE local_table_2 DROP CONSTRAINT fkey_1;
+  DROP SCHEMA another_schema_fkeys_between_local_ref CASCADE;
+  -- now we shouldn't see any citus local tables
+  SELECT logicalrelid::text AS tablename, partmethod, repmodel FROM pg_dist_partition
+  WHERE logicalrelid::text IN (SELECT tablename FROM pg_tables WHERE schemaname='fkeys_between_local_ref')
+  ORDER BY tablename;
+     tablename     | partmethod | repmodel
+---------------------------------------------------------------------
+ distributed_table | h          | c
+ local_table_2     | n          | t
+ local_table_6     | n          | t
+ reference_table_1 | n          | t
+(4 rows)
+
 ROLLBACK;
 BEGIN;
   -- disable foreign keys to reference tables

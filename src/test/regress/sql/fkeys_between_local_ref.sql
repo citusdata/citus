@@ -304,6 +304,21 @@ BEGIN;
   SELECT logicalrelid::text AS tablename, partmethod, repmodel FROM pg_dist_partition
   WHERE logicalrelid::text IN (SELECT tablename FROM pg_tables WHERE schemaname='fkeys_between_local_ref')
   ORDER BY tablename;
+
+  CREATE SCHEMA another_schema_fkeys_between_local_ref;
+  CREATE TABLE another_schema_fkeys_between_local_ref.reference_table_3 (col_1 INT UNIQUE);
+  SELECT create_reference_table('another_schema_fkeys_between_local_ref.reference_table_3');
+  TRUNCATE local_table_4 CASCADE;
+  ALTER TABLE local_table_4 ADD CONSTRAINT fkey_12 FOREIGN KEY (col_1) REFERENCES another_schema_fkeys_between_local_ref.reference_table_3(col_1);
+
+  DROP TABLE local_table_5 CASCADE;
+  ALTER TABLE local_table_2 DROP CONSTRAINT fkey_1;
+  DROP SCHEMA another_schema_fkeys_between_local_ref CASCADE;
+
+  -- now we shouldn't see any citus local tables
+  SELECT logicalrelid::text AS tablename, partmethod, repmodel FROM pg_dist_partition
+  WHERE logicalrelid::text IN (SELECT tablename FROM pg_tables WHERE schemaname='fkeys_between_local_ref')
+  ORDER BY tablename;
 ROLLBACK;
 
 BEGIN;
