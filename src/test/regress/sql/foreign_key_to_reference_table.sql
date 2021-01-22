@@ -251,10 +251,8 @@ INSERT INTO referencing_schema.referencing_table SELECT x, x from generate_serie
 DELETE FROM referenced_schema.referenced_table WHERE id > 800;
 SELECT count(*) FROM referencing_schema.referencing_table;
 
-SET client_min_messages TO ERROR;
 DROP SCHEMA referenced_schema CASCADE;
 DROP SCHEMA referencing_schema CASCADE;
-RESET client_min_messages;
 
 -- on delete set update cascades properly
 CREATE TABLE referenced_table(test_column int, test_column2 int, PRIMARY KEY(test_column));
@@ -393,11 +391,6 @@ CREATE TABLE referencing_table(id int, ref_id int DEFAULT -1, FOREIGN KEY (ref_i
 INSERT INTO referenced_table VALUES (1,1), (2,2), (3,3);
 INSERT INTO referencing_table VALUES (1,1), (2,2), (3,3);
 SELECT create_reference_table('referenced_table');
-SELECT create_distributed_table('referencing_table', 'id');
-
-BEGIN;
-  SELECT create_distributed_table('referencing_table', 'id');
-COMMIT;
 
 DROP TABLE referenced_table CASCADE;
 DROP TABLE referencing_table CASCADE;
@@ -565,21 +558,12 @@ DROP TABLE referencing_table2 CASCADE;
 
 -- Check if the above fkeys are created with create_distributed_table
 CREATE TABLE referenced_table(test_column int, test_column2 int UNIQUE, PRIMARY KEY(test_column));
-CREATE TABLE referencing_table(id int PRIMARY KEY, ref_id int, FOREIGN KEY (id) REFERENCES referenced_table(test_column) ON DELETE CASCADE);
-CREATE TABLE referencing_table2(id int, ref_id int, FOREIGN KEY (ref_id) REFERENCES referenced_table(test_column2) ON DELETE CASCADE, FOREIGN KEY (id) REFERENCES referencing_table(id) ON DELETE CASCADE);
 SELECT create_reference_table('referenced_table');
-BEGIN;
-  SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
-  SELECT create_distributed_table('referencing_table', 'id');
-  SELECT create_distributed_table('referencing_table2', 'id');
-COMMIT;
 
 SELECT count(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
 
 \set VERBOSITY terse
 DROP TABLE referenced_table CASCADE;
-DROP TABLE referencing_table CASCADE;
-DROP TABLE referencing_table2 CASCADE;
 \set VERBOSITY default
 
 -- In this test we have a chained relationship in form of
@@ -608,23 +592,19 @@ DROP TABLE referenced_table CASCADE;
 DROP TABLE referencing_table CASCADE;
 DROP TABLE referencing_referencing_table;
 
--- create_reference_table, create_distributed_table and ALTER TABLE in the same transaction
 BEGIN;
   CREATE TABLE test_table_1(id int PRIMARY KEY);
   SELECT create_reference_table('test_table_1');
 
   CREATE TABLE test_table_2(id int PRIMARY KEY, value_1 int);
-  SELECT create_distributed_table('test_table_2', 'id');
 
   ALTER TABLE test_table_2 ADD CONSTRAINT c_check FOREIGN KEY (value_1) REFERENCES test_table_1(id);
 
   DROP TABLE test_table_1, test_table_2;
 COMMIT;
 
--- the order of create_reference_table and create_distributed_table is changed
 BEGIN;
   CREATE TABLE test_table_1(id int PRIMARY KEY, value_1 int);
-  SELECT create_distributed_table('test_table_1', 'id');
 
   CREATE TABLE test_table_2(id int PRIMARY KEY);
   SELECT create_reference_table('test_table_2');
@@ -634,7 +614,6 @@ BEGIN;
   DROP TABLE test_table_2 CASCADE;
 ROLLBACK;
 
--- make sure that we fail if we need parallel data load
 BEGIN;
 
   CREATE TABLE test_table_1(id int PRIMARY KEY);
@@ -644,7 +623,6 @@ BEGIN;
   INSERT INTO test_table_2 SELECT i, i FROM generate_series(0,100) i;
 
   SELECT create_reference_table('test_table_1');
-  SELECT create_distributed_table('test_table_2', 'id');
   DROP TABLE test_table_2, test_table_1;
 COMMIT;
 
@@ -940,7 +918,6 @@ ROLLBACK;
 DROP TABLE referenced_table CASCADE;
 DROP TABLE referencing_table;
 
-SET client_min_messages TO ERROR;
 DROP SCHEMA fkey_reference_table CASCADE;
 SET search_path TO DEFAULT;
 RESET client_min_messages;
