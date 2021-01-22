@@ -451,9 +451,38 @@ ExecuteAndLogDDLCommand(const char *commandString)
 {
 	ereport(DEBUG4, (errmsg("executing \"%s\"", commandString)));
 
-	Node *parseTree = ParseTreeNode(commandString);
-	ProcessUtilityParseTree(parseTree, commandString, PROCESS_UTILITY_TOPLEVEL,
-							NULL, None_Receiver, NULL);
+	List *parseTreeList = pg_parse_query(commandString);
+	RawStmt *taskRawStmt = NULL;
+
+	foreach_ptr(taskRawStmt, parseTreeList)
+	{
+		Node *taskRawParseTree = taskRawStmt->stmt;
+
+		/*
+		 * The query passed to this function would mostly be a utility
+		 * command. However, some utility commands trigger udf calls
+		 * (e.g alter_columnar_table_set()). In that case, we execute
+		 * the query with the udf call in below conditional block.
+		 */
+		if (IsA(taskRawParseTree, SelectStmt))
+		{
+			/* we have no external parameters to rewrite the UDF call RawStmt */
+			Query *udfTaskQuery =
+				RewriteRawQueryStmt(taskRawStmt, commandString, NULL, 0);
+
+			ExecuteQueryIntoDestReceiver(udfTaskQuery, NULL, None_Receiver);
+		}
+		else
+		{
+			/*
+			 * It is a regular utility command, we should execute it via
+			 * process utility.
+			 */
+			ProcessUtilityParseTree(taskRawParseTree, commandString,
+									PROCESS_UTILITY_TOPLEVEL, NULL, None_Receiver,
+									NULL);
+		}
+	}
 }
 
 
