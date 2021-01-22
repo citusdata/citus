@@ -771,7 +771,7 @@ ShouldUndistributeCitusLocalTables(void)
 		return false;
 	}
 
-	if (IsCitusInitiatedBackend())
+	if (IsCitusInitiatedRemoteBackend())
 	{
 		/* connection from the coordinator operating on a shard */
 		return false;
