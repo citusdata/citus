@@ -15,25 +15,25 @@ CREATE TABLE options (
 
 COMMENT ON TABLE options IS 'columnar table specific options, maintained by alter_columnar_table_set';
 
-CREATE TABLE columnar_stripes (
+CREATE TABLE stripe (
     storageid bigint NOT NULL,
-    stripe bigint NOT NULL,
+    stripeid bigint NOT NULL,
     file_offset bigint NOT NULL,
     data_length bigint NOT NULL,
     column_count int NOT NULL,
     chunk_count int NOT NULL,
     chunk_row_count int NOT NULL,
     row_count bigint NOT NULL,
-    PRIMARY KEY (storageid, stripe)
+    PRIMARY KEY (storageid, stripeid)
 ) WITH (user_catalog_table = true);
 
-COMMENT ON TABLE columnar_stripes IS 'Columnar per stripe metadata';
+COMMENT ON TABLE stripe IS 'Columnar per stripe metadata';
 
-CREATE TABLE columnar_skipnodes (
+CREATE TABLE chunk (
     storageid bigint NOT NULL,
-    stripe bigint NOT NULL,
-    attr int NOT NULL,
-    chunk int NOT NULL,
+    stripeid bigint NOT NULL,
+    attnum int NOT NULL,
+    chunkid int NOT NULL,
     row_count bigint NOT NULL,
     minimum_value bytea,
     maximum_value bytea,
@@ -44,11 +44,11 @@ CREATE TABLE columnar_skipnodes (
     value_compression_type int NOT NULL,
     value_compression_level int NOT NULL,
     value_decompressed_length bigint NOT NULL,
-    PRIMARY KEY (storageid, stripe, attr, chunk),
-    FOREIGN KEY (storageid, stripe) REFERENCES columnar_stripes(storageid, stripe) ON DELETE CASCADE
+    PRIMARY KEY (storageid, stripeid, attnum, chunkid),
+    FOREIGN KEY (storageid, stripeid) REFERENCES stripe(storageid, stripeid) ON DELETE CASCADE
 ) WITH (user_catalog_table = true);
 
-COMMENT ON TABLE columnar_skipnodes IS 'Columnar per chunk metadata';
+COMMENT ON TABLE chunk IS 'Columnar per chunk metadata';
 
 DO $proc$
 BEGIN

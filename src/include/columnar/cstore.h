@@ -2,7 +2,7 @@
  *
  * cstore.h
  *
- * Type and function declarations for CStore
+ * Type and function declarations for Columnar
  *
  * Copyright (c) 2016, Citus Data, Inc.
  *
@@ -41,7 +41,7 @@
 #define COMPRESSION_STRING_NONE "none"
 #define COMPRESSION_STRING_PG_LZ "pglz"
 
-/* CStore file signature */
+/* Columnar file signature */
 #define CSTORE_MAGIC_NUMBER "citus_cstore"
 #define CSTORE_VERSION_MAJOR 1
 #define CSTORE_VERSION_MINOR 7
@@ -236,6 +236,7 @@ typedef struct TableReadState
 	StripeBuffers *stripeBuffers;
 	uint32 readStripeCount;
 	uint64 stripeReadRowCount;
+	int64 chunksFiltered;
 	ChunkData *chunkData;
 	int32 deserializedChunkIndex;
 } TableReadState;
@@ -264,34 +265,34 @@ typedef struct TableWriteState
 	StringInfo compressionBuffer;
 } TableWriteState;
 
-extern int cstore_compression;
-extern int cstore_stripe_row_count;
-extern int cstore_chunk_row_count;
+extern int columnar_compression;
+extern int columnar_stripe_row_count;
+extern int columnar_chunk_row_count;
 extern int columnar_compression_level;
 
-extern void cstore_init(void);
+extern void columnar_init_gucs(void);
 
 extern CompressionType ParseCompressionType(const char *compressionTypeString);
 
 /* Function declarations for writing to a cstore file */
-extern TableWriteState * CStoreBeginWrite(RelFileNode relfilenode,
-										  ColumnarOptions options,
-										  TupleDesc tupleDescriptor);
-extern void CStoreWriteRow(TableWriteState *state, Datum *columnValues,
-						   bool *columnNulls);
-extern void CStoreFlushPendingWrites(TableWriteState *state);
-extern void CStoreEndWrite(TableWriteState *state);
+extern TableWriteState * ColumnarBeginWrite(RelFileNode relfilenode,
+											ColumnarOptions options,
+											TupleDesc tupleDescriptor);
+extern void ColumnarWriteRow(TableWriteState *state, Datum *columnValues,
+							 bool *columnNulls);
+extern void ColumnarFlushPendingWrites(TableWriteState *state);
+extern void ColumnarEndWrite(TableWriteState *state);
 extern bool ContainsPendingWrites(TableWriteState *state);
 
 /* Function declarations for reading from a cstore file */
-extern TableReadState * CStoreBeginRead(Relation relation,
-										TupleDesc tupleDescriptor,
-										List *projectedColumnList, List *qualConditions);
-extern bool CStoreReadFinished(TableReadState *state);
-extern bool CStoreReadNextRow(TableReadState *state, Datum *columnValues,
-							  bool *columnNulls);
-extern void CStoreRescan(TableReadState *readState);
-extern void CStoreEndRead(TableReadState *state);
+extern TableReadState * ColumnarBeginRead(Relation relation,
+										  TupleDesc tupleDescriptor,
+										  List *projectedColumnList,
+										  List *qualConditions);
+extern bool ColumnarReadNextRow(TableReadState *state, Datum *columnValues,
+								bool *columnNulls);
+extern void ColumnarRescan(TableReadState *readState);
+extern void ColumnarEndRead(TableReadState *state);
 
 /* Function declarations for common functions */
 extern FmgrInfo * GetFunctionInfoOrNull(Oid typeId, Oid accessMethodId,
@@ -299,7 +300,7 @@ extern FmgrInfo * GetFunctionInfoOrNull(Oid typeId, Oid accessMethodId,
 extern ChunkData * CreateEmptyChunkData(uint32 columnCount, bool *columnMask,
 										uint32 chunkRowCount);
 extern void FreeChunkData(ChunkData *chunkData);
-extern uint64 CStoreTableRowCount(Relation relation);
+extern uint64 ColumnarTableRowCount(Relation relation);
 extern bool CompressBuffer(StringInfo inputBuffer,
 						   StringInfo outputBuffer,
 						   CompressionType compressionType,
@@ -308,7 +309,7 @@ extern StringInfo DecompressBuffer(StringInfo buffer, CompressionType compressio
 								   uint64 decompressedSize);
 extern const char * CompressionTypeStr(CompressionType type);
 
-/* cstore_metadata_tables.c */
+/* columnar_metadata_tables.c */
 extern void InitColumnarOptions(Oid regclass);
 extern void SetColumnarOptions(Oid regclass, ColumnarOptions *options);
 extern bool DeleteColumnarTableOptions(Oid regclass, bool missingOk);
@@ -316,9 +317,9 @@ extern bool ReadColumnarOptions(Oid regclass, ColumnarOptions *options);
 extern void WriteToSmgr(Relation relation, uint64 logicalOffset,
 						char *data, uint32 dataLength);
 extern StringInfo ReadFromSmgr(Relation rel, uint64 offset, uint32 size);
-extern bool IsCStoreTableAmTable(Oid relationId);
+extern bool IsColumnarTableAmTable(Oid relationId);
 
-/* cstore_metadata_tables.c */
+/* columnar_metadata_tables.c */
 extern void DeleteMetadataRows(RelFileNode relfilenode);
 extern List * StripesForRelfilenode(RelFileNode relfilenode);
 extern uint64 GetHighestUsedAddress(RelFileNode relfilenode);
@@ -335,9 +336,9 @@ extern Datum columnar_relation_storageid(PG_FUNCTION_ARGS);
 
 
 /* write_state_management.c */
-extern TableWriteState * cstore_init_write_state(Relation relation, TupleDesc
-												 tupdesc,
-												 SubTransactionId currentSubXid);
+extern TableWriteState * columnar_init_write_state(Relation relation, TupleDesc
+												   tupdesc,
+												   SubTransactionId currentSubXid);
 extern void FlushWriteStateForRelfilenode(Oid relfilenode, SubTransactionId
 										  currentSubXid);
 extern void FlushWriteStateForAllRels(SubTransactionId currentSubXid, SubTransactionId

@@ -13,7 +13,7 @@
 #ifndef COLUMNAR_CUSTOMSCAN_H
 #define COLUMNAR_CUSTOMSCAN_H
 
-void cstore_customscan_init(void);
+void columnar_customscan_init(void);
 
 
 #endif /* COLUMNAR_CUSTOMSCAN_H */

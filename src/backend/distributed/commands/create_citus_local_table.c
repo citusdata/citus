@@ -26,6 +26,7 @@
 #include "distributed/commands/sequence.h"
 #include "distributed/commands/utility_hook.h"
 #include "distributed/listutils.h"
+#include "distributed/local_executor.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/namespace_utils.h"
@@ -117,6 +118,14 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys)
 
 	/* enable create_citus_local_table on an empty node */
 	InsertCoordinatorIfClusterEmpty();
+
+	/*
+	 * Creating Citus local tables relies on functions that accesses
+	 * shards locally (e.g., ExecuteAndLogDDLCommand()). As long as
+	 * we don't teach those functions to access shards remotely, we
+	 * cannot relax this check.
+	 */
+	SetLocalExecutionStatus(LOCAL_EXECUTION_REQUIRED);
 
 	/*
 	 * Lock target relation with an AccessExclusiveLock as we don't want

@@ -1,6 +1,6 @@
 /*-------------------------------------------------------------------------
  *
- * cstore_customscan.c
+ * columnar_customscan.c
  *
  * This file contains the implementation of a postgres custom scan that
  * we use to push down the projections into the table access methods.
@@ -29,83 +29,86 @@
 #include "columnar/cstore_customscan.h"
 #include "columnar/cstore_tableam.h"
 
-typedef struct CStoreScanPath
+typedef struct ColumnarScanPath
 {
 	CustomPath custom_path;
 
 	/* place for local state during planning */
-} CStoreScanPath;
+} ColumnarScanPath;
 
-typedef struct CStoreScanScan
+typedef struct ColumnarScanScan
 {
 	CustomScan custom_scan;
 
 	/* place for local state during execution */
-} CStoreScanScan;
+} ColumnarScanScan;
 
-typedef struct CStoreScanState
+typedef struct ColumnarScanState
 {
 	CustomScanState custom_scanstate;
 
 	List *qual;
-} CStoreScanState;
+} ColumnarScanState;
 
 
-static void CStoreSetRelPathlistHook(PlannerInfo *root, RelOptInfo *rel, Index rti,
-									 RangeTblEntry *rte);
-static Path * CreateCStoreScanPath(RelOptInfo *rel, RangeTblEntry *rte);
-static Cost CStoreScanCost(RangeTblEntry *rte);
-static Plan * CStoreScanPath_PlanCustomPath(PlannerInfo *root,
-											RelOptInfo *rel,
-											struct CustomPath *best_path,
-											List *tlist,
-											List *clauses,
-											List *custom_plans);
+static void ColumnarSetRelPathlistHook(PlannerInfo *root, RelOptInfo *rel, Index rti,
+									   RangeTblEntry *rte);
+static Path * CreateColumnarScanPath(RelOptInfo *rel, RangeTblEntry *rte);
+static Cost ColumnarScanCost(RangeTblEntry *rte);
+static Plan * ColumnarScanPath_PlanCustomPath(PlannerInfo *root,
+											  RelOptInfo *rel,
+											  struct CustomPath *best_path,
+											  List *tlist,
+											  List *clauses,
+											  List *custom_plans);
 
-static Node * CStoreScan_CreateCustomScanState(CustomScan *cscan);
+static Node * ColumnarScan_CreateCustomScanState(CustomScan *cscan);
 
-static void CStoreScan_BeginCustomScan(CustomScanState *node, EState *estate, int eflags);
-static TupleTableSlot * CStoreScan_ExecCustomScan(CustomScanState *node);
-static void CStoreScan_EndCustomScan(CustomScanState *node);
-static void CStoreScan_ReScanCustomScan(CustomScanState *node);
+static void ColumnarScan_BeginCustomScan(CustomScanState *node, EState *estate, int
+										 eflags);
+static TupleTableSlot * ColumnarScan_ExecCustomScan(CustomScanState *node);
+static void ColumnarScan_EndCustomScan(CustomScanState *node);
+static void ColumnarScan_ReScanCustomScan(CustomScanState *node);
+static void ColumnarScan_ExplainCustomScan(CustomScanState *node, List *ancestors,
+										   ExplainState *es);
 
 /* saved hook value in case of unload */
 static set_rel_pathlist_hook_type PreviousSetRelPathlistHook = NULL;
 
-static bool EnableCStoreCustomScan = true;
+static bool EnableColumnarCustomScan = true;
 
 
-const struct CustomPathMethods CStoreScanPathMethods = {
+const struct CustomPathMethods ColumnarScanPathMethods = {
 	.CustomName = "ColumnarScan",
-	.PlanCustomPath = CStoreScanPath_PlanCustomPath,
+	.PlanCustomPath = ColumnarScanPath_PlanCustomPath,
 };
 
-const struct CustomScanMethods CStoreScanScanMethods = {
+const struct CustomScanMethods ColumnarScanScanMethods = {
 	.CustomName = "ColumnarScan",
-	.CreateCustomScanState = CStoreScan_CreateCustomScanState,
+	.CreateCustomScanState = ColumnarScan_CreateCustomScanState,
 };
 
-const struct CustomExecMethods CStoreExecuteMethods = {
+const struct CustomExecMethods ColumnarExecuteMethods = {
 	.CustomName = "ColumnarScan",
 
-	.BeginCustomScan = CStoreScan_BeginCustomScan,
-	.ExecCustomScan = CStoreScan_ExecCustomScan,
-	.EndCustomScan = CStoreScan_EndCustomScan,
-	.ReScanCustomScan = CStoreScan_ReScanCustomScan,
+	.BeginCustomScan = ColumnarScan_BeginCustomScan,
+	.ExecCustomScan = ColumnarScan_ExecCustomScan,
+	.EndCustomScan = ColumnarScan_EndCustomScan,
+	.ReScanCustomScan = ColumnarScan_ReScanCustomScan,
 
-	.ExplainCustomScan = NULL,
+	.ExplainCustomScan = ColumnarScan_ExplainCustomScan,
 };
 
 
 /*
- * cstore_customscan_init installs the hook required to intercept the postgres planner and
+ * columnar_customscan_init installs the hook required to intercept the postgres planner and
  * provide extra paths for cstore tables
  */
 void
-cstore_customscan_init()
+columnar_customscan_init()
 {
 	PreviousSetRelPathlistHook = set_rel_pathlist_hook;
-	set_rel_pathlist_hook = CStoreSetRelPathlistHook;
+	set_rel_pathlist_hook = ColumnarSetRelPathlistHook;
 
 	/* register customscan specific GUC's */
 	DefineCustomBoolVariable(
@@ -113,7 +116,7 @@ cstore_customscan_init()
 		gettext_noop("Enables the use of a custom scan to push projections and quals "
 					 "into the storage layer"),
 		NULL,
-		&EnableCStoreCustomScan,
+		&EnableColumnarCustomScan,
 		true,
 		PGC_USERSET,
 		GUC_NO_SHOW_ALL,
@@ -133,8 +136,8 @@ clear_paths(RelOptInfo *rel)
 
 
 static void
-CStoreSetRelPathlistHook(PlannerInfo *root, RelOptInfo *rel, Index rti,
-						 RangeTblEntry *rte)
+ColumnarSetRelPathlistHook(PlannerInfo *root, RelOptInfo *rel, Index rti,
+						   RangeTblEntry *rte)
 {
 	/* call into previous hook if assigned */
 	if (PreviousSetRelPathlistHook)
@@ -142,7 +145,7 @@ CStoreSetRelPathlistHook(PlannerInfo *root, RelOptInfo *rel, Index rti,
 		PreviousSetRelPathlistHook(root, rel, rti, rte);
 	}
 
-	if (!EnableCStoreCustomScan)
+	if (!EnableColumnarCustomScan)
 	{
 		/* custon scans are disabled, use normal table access method api instead */
 		return;
@@ -168,7 +171,7 @@ CStoreSetRelPathlistHook(PlannerInfo *root, RelOptInfo *rel, Index rti,
 							errmsg("sample scans not supported on columnar tables")));
 		}
 
-		Path *customPath = CreateCStoreScanPath(rel, rte);
+		Path *customPath = CreateColumnarScanPath(rel, rte);
 
 		ereport(DEBUG1, (errmsg("pathlist hook for cstore table am")));
 
@@ -181,16 +184,16 @@ CStoreSetRelPathlistHook(PlannerInfo *root, RelOptInfo *rel, Index rti,
 
 
 static Path *
-CreateCStoreScanPath(RelOptInfo *rel, RangeTblEntry *rte)
+CreateColumnarScanPath(RelOptInfo *rel, RangeTblEntry *rte)
 {
-	CStoreScanPath *cspath = (CStoreScanPath *) newNode(sizeof(CStoreScanPath),
-														T_CustomPath);
+	ColumnarScanPath *cspath = (ColumnarScanPath *) newNode(sizeof(ColumnarScanPath),
+															T_CustomPath);
 
 	/*
 	 * popuate custom path information
 	 */
 	CustomPath *cpath = &cspath->custom_path;
-	cpath->methods = &CStoreScanPathMethods;
+	cpath->methods = &ColumnarScanPathMethods;
 
 	/*
 	 * populate generic path information
@@ -206,19 +209,19 @@ CreateCStoreScanPath(RelOptInfo *rel, RangeTblEntry *rte)
 	 */
 	path->rows = rel->rows;
 	path->startup_cost = 0;
-	path->total_cost = path->startup_cost + CStoreScanCost(rte);
+	path->total_cost = path->startup_cost + ColumnarScanCost(rte);
 
 	return (Path *) cspath;
 }
 
 
 /*
- * CStoreScanCost calculates the cost of scanning the cstore table. The cost is estimated
+ * ColumnarScanCost calculates the cost of scanning the cstore table. The cost is estimated
  * by using all stripe metadata to estimate based on the columns to read how many pages
  * need to be read.
  */
 static Cost
-CStoreScanCost(RangeTblEntry *rte)
+ColumnarScanCost(RangeTblEntry *rte)
 {
 	Relation rel = RelationIdGetRelation(rte->relid);
 	List *stripeList = StripesForRelfilenode(rel->rd_node);
@@ -247,18 +250,18 @@ CStoreScanCost(RangeTblEntry *rte)
 
 
 static Plan *
-CStoreScanPath_PlanCustomPath(PlannerInfo *root,
-							  RelOptInfo *rel,
-							  struct CustomPath *best_path,
-							  List *tlist,
-							  List *clauses,
-							  List *custom_plans)
+ColumnarScanPath_PlanCustomPath(PlannerInfo *root,
+								RelOptInfo *rel,
+								struct CustomPath *best_path,
+								List *tlist,
+								List *clauses,
+								List *custom_plans)
 {
-	CStoreScanScan *plan = (CStoreScanScan *) newNode(sizeof(CStoreScanScan),
-													  T_CustomScan);
+	ColumnarScanScan *plan = (ColumnarScanScan *) newNode(sizeof(ColumnarScanScan),
+														  T_CustomScan);
 
 	CustomScan *cscan = &plan->custom_scan;
-	cscan->methods = &CStoreScanScanMethods;
+	cscan->methods = &ColumnarScanScanMethods;
 
 	/* Reduce RestrictInfo list to bare expressions; ignore pseudoconstants */
 	clauses = extract_actual_clauses(clauses, false);
@@ -272,13 +275,13 @@ CStoreScanPath_PlanCustomPath(PlannerInfo *root,
 
 
 static Node *
-CStoreScan_CreateCustomScanState(CustomScan *cscan)
+ColumnarScan_CreateCustomScanState(CustomScan *cscan)
 {
-	CStoreScanState *cstorescanstate = (CStoreScanState *) newNode(
-		sizeof(CStoreScanState), T_CustomScanState);
+	ColumnarScanState *cstorescanstate = (ColumnarScanState *) newNode(
+		sizeof(ColumnarScanState), T_CustomScanState);
 
 	CustomScanState *cscanstate = &cstorescanstate->custom_scanstate;
-	cscanstate->methods = &CStoreExecuteMethods;
+	cscanstate->methods = &ColumnarExecuteMethods;
 
 	cstorescanstate->qual = cscan->scan.plan.qual;
 
@@ -287,14 +290,14 @@ CStoreScan_CreateCustomScanState(CustomScan *cscan)
 
 
 static void
-CStoreScan_BeginCustomScan(CustomScanState *cscanstate, EState *estate, int eflags)
+ColumnarScan_BeginCustomScan(CustomScanState *cscanstate, EState *estate, int eflags)
 {
 	/* scan slot is already initialized */
 }
 
 
 static Bitmapset *
-CStoreAttrNeeded(ScanState *ss)
+ColumnarAttrNeeded(ScanState *ss)
 {
 	TupleTableSlot *slot = ss->ss_ScanTupleSlot;
 	int natts = slot->tts_tupleDescriptor->natts;
@@ -335,7 +338,7 @@ CStoreAttrNeeded(ScanState *ss)
 
 
 static TupleTableSlot *
-CStoreScanNext(CStoreScanState *cstorescanstate)
+ColumnarScanNext(ColumnarScanState *cstorescanstate)
 {
 	CustomScanState *node = (CustomScanState *) cstorescanstate;
 
@@ -351,16 +354,16 @@ CStoreScanNext(CStoreScanState *cstorescanstate)
 	{
 		/* the cstore access method does not use the flags, they are specific to heap */
 		uint32 flags = 0;
-		Bitmapset *attr_needed = CStoreAttrNeeded(&node->ss);
+		Bitmapset *attr_needed = ColumnarAttrNeeded(&node->ss);
 
 		/*
 		 * We reach here if the scan is not parallel, or if we're serially
 		 * executing a scan that was planned to be parallel.
 		 */
-		scandesc = cstore_beginscan_extended(node->ss.ss_currentRelation,
-											 estate->es_snapshot,
-											 0, NULL, NULL, flags, attr_needed,
-											 cstorescanstate->qual);
+		scandesc = columnar_beginscan_extended(node->ss.ss_currentRelation,
+											   estate->es_snapshot,
+											   0, NULL, NULL, flags, attr_needed,
+											   cstorescanstate->qual);
 		bms_free(attr_needed);
 
 		node->ss.ss_currentScanDesc = scandesc;
@@ -381,23 +384,23 @@ CStoreScanNext(CStoreScanState *cstorescanstate)
  * SeqRecheck -- access method routine to recheck a tuple in EvalPlanQual
  */
 static bool
-CStoreScanRecheck(CStoreScanState *node, TupleTableSlot *slot)
+ColumnarScanRecheck(ColumnarScanState *node, TupleTableSlot *slot)
 {
 	return true;
 }
 
 
 static TupleTableSlot *
-CStoreScan_ExecCustomScan(CustomScanState *node)
+ColumnarScan_ExecCustomScan(CustomScanState *node)
 {
 	return ExecScan(&node->ss,
-					(ExecScanAccessMtd) CStoreScanNext,
-					(ExecScanRecheckMtd) CStoreScanRecheck);
+					(ExecScanAccessMtd) ColumnarScanNext,
+					(ExecScanRecheckMtd) ColumnarScanRecheck);
 }
 
 
 static void
-CStoreScan_EndCustomScan(CustomScanState *node)
+ColumnarScan_EndCustomScan(CustomScanState *node)
 {
 	/*
 	 * get information from node
@@ -429,12 +432,27 @@ CStoreScan_EndCustomScan(CustomScanState *node)
 
 
 static void
-CStoreScan_ReScanCustomScan(CustomScanState *node)
+ColumnarScan_ReScanCustomScan(CustomScanState *node)
 {
 	TableScanDesc scanDesc = node->ss.ss_currentScanDesc;
 	if (scanDesc != NULL)
 	{
 		table_rescan(node->ss.ss_currentScanDesc, NULL);
+	}
+}
+
+
+static void
+ColumnarScan_ExplainCustomScan(CustomScanState *node, List *ancestors,
+							   ExplainState *es)
+{
+	TableScanDesc scanDesc = node->ss.ss_currentScanDesc;
+
+	if (scanDesc != NULL)
+	{
+		int64 chunksFiltered = ColumnarGetChunksFiltered(scanDesc);
+		ExplainPropertyInteger("Columnar Chunks Removed by Filter", NULL,
+							   chunksFiltered, es);
 	}
 }
 

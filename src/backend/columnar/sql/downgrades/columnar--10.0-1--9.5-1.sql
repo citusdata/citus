@@ -29,8 +29,8 @@ IF substring(current_Setting('server_version'), '\d+')::int >= 12 THEN
 END IF;
 END$proc$;
 
-DROP TABLE columnar_skipnodes;
-DROP TABLE columnar_stripes;
+DROP TABLE chunk;
+DROP TABLE stripe;
 DROP TABLE options;
 DROP SEQUENCE storageid_seq;
 

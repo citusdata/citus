@@ -660,7 +660,7 @@ GetPreLoadTableCreationCommands(Oid relationId, bool includeSequenceDefaults,
 #if PG_VERSION_NUM >= 120000
 
 	/* add columnar options for cstore tables */
-	if (accessMethod == NULL && IsCStoreTableAmTable(relationId))
+	if (accessMethod == NULL && IsColumnarTableAmTable(relationId))
 	{
 		TableDDLCommand *cstoreOptionsDDL = ColumnarGetTableOptionsDDL(relationId);
 		if (cstoreOptionsDDL != NULL)

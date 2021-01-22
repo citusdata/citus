@@ -1,11 +1,11 @@
 SET columnar.compression TO 'none';
 
-SELECT count(distinct storageid) AS columnar_table_count FROM columnar.columnar_stripes \gset
+SELECT count(distinct storageid) AS columnar_table_count FROM columnar.stripe \gset
 
 CREATE TABLE t(a int, b int) USING columnar;
 
 CREATE VIEW t_stripes AS
-SELECT * FROM columnar.columnar_stripes a, pg_class b
+SELECT * FROM columnar.stripe a, pg_class b
 WHERE a.storageid = columnar_relation_storageid(b.oid) AND b.relname='t';
 
 SELECT count(*) FROM t_stripes;
@@ -38,18 +38,18 @@ SELECT count(*) FROM t_stripes;
 -- VACUUM FULL doesn't reclaim dropped columns, but converts them to NULLs
 ALTER TABLE t DROP COLUMN a;
 
-SELECT stripe, attr, chunk, minimum_value IS NULL, maximum_value IS NULL
-FROM columnar.columnar_skipnodes a, pg_class b
+SELECT stripeid, attnum, chunkid, minimum_value IS NULL, maximum_value IS NULL
+FROM columnar.chunk a, pg_class b
 WHERE a.storageid = columnar_relation_storageid(b.oid) AND b.relname='t' ORDER BY 1, 2, 3;
 
 VACUUM FULL t;
 
-SELECT stripe, attr, chunk, minimum_value IS NULL, maximum_value IS NULL
-FROM columnar.columnar_skipnodes a, pg_class b
+SELECT stripeid, attnum, chunkid, minimum_value IS NULL, maximum_value IS NULL
+FROM columnar.chunk a, pg_class b
 WHERE a.storageid = columnar_relation_storageid(b.oid) AND b.relname='t' ORDER BY 1, 2, 3;
 
 -- Make sure we cleaned-up the transient table metadata after VACUUM FULL commands
-SELECT count(distinct storageid) - :columnar_table_count FROM columnar.columnar_stripes;
+SELECT count(distinct storageid) - :columnar_table_count FROM columnar.stripe;
 
 -- do this in a transaction so concurrent autovacuum doesn't interfere with results
 BEGIN;
@@ -112,7 +112,7 @@ DROP TABLE t;
 DROP VIEW t_stripes;
 
 -- Make sure we cleaned the metadata for t too
-SELECT count(distinct storageid) - :columnar_table_count FROM columnar.columnar_stripes;
+SELECT count(distinct storageid) - :columnar_table_count FROM columnar.stripe;
 
 -- A table with high compression ratio
 SET columnar.compression TO 'pglz';
