@@ -187,6 +187,7 @@ extern List * GetForeignConstraintToReferenceTablesCommands(Oid relationId);
 extern List * GetForeignConstraintToDistributedTablesCommands(Oid relationId);
 extern List * GetForeignConstraintFromDistributedTablesCommands(Oid relationId);
 extern List * GetForeignConstraintCommandsInternal(Oid relationId, int flags);
+extern bool HasForeignKeyWithLocalTable(Oid relationId);
 extern bool HasForeignKeyToCitusLocalTable(Oid relationId);
 extern bool HasForeignKeyToReferenceTable(Oid relationOid);
 extern bool TableReferenced(Oid relationOid);

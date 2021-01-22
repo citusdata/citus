@@ -44,6 +44,7 @@
 #include "distributed/deparser.h"
 #include "distributed/distribution_column.h"
 #include "distributed/listutils.h"
+#include "distributed/local_executor.h"
 #include "distributed/metadata_utility.h"
 #include "distributed/coordinator_protocol.h"
 #include "distributed/metadata/dependency.h"
@@ -366,6 +367,40 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 	}
 
 	/*
+	 * To support foreign keys between reference tables and local tables,
+	 * we drop & re-define foreign keys at the end of this function so
+	 * that ALTER TABLE hook does the necessary job, which means converting
+	 * local tables to citus local tables to properly support such foreign
+	 * keys.
+	 *
+	 * This function does not expect to create Citus local table, so we blindly
+	 * create reference table when the method is DISTRIBUTE_BY_NONE.
+	 */
+	else if (distributionMethod == DISTRIBUTE_BY_NONE &&
+			 ShouldEnableLocalReferenceForeignKeys() &&
+			 HasForeignKeyWithLocalTable(relationId))
+	{
+		/*
+		 * Store foreign key creation commands for foreign key relationships
+		 * that relation has with postgres tables.
+		 */
+		originalForeignKeyRecreationCommands =
+			GetFKeyCreationCommandsRelationInvolvedWithTableType(relationId,
+																 INCLUDE_LOCAL_TABLES);
+
+		/*
+		 * Soon we will convert local tables to citus local tables. As
+		 * CreateCitusLocalTable needs to use local execution, now we
+		 * switch to local execution beforehand so that reference table
+		 * creation doesn't use remote execution and we don't error out
+		 * in CreateCitusLocalTable.
+		 */
+		SetLocalExecutionStatus(LOCAL_EXECUTION_REQUIRED);
+
+		DropFKeysRelationInvolvedWithTableType(relationId, INCLUDE_LOCAL_TABLES);
+	}
+
+	/*
 	 * distributed tables might have dependencies on different objects, since we create
 	 * shards for a distributed table via multiple sessions these objects will be created
 	 * via their own connection and committed immediately so they become visible to all
@@ -428,6 +463,10 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 	}
 	else if (distributionMethod == DISTRIBUTE_BY_NONE)
 	{
+		/*
+		 * This function does not expect to create Citus local table, so we blindly
+		 * create reference table when the method is DISTRIBUTE_BY_NONE.
+		 */
 		CreateReferenceTableShard(relationId);
 	}
 
@@ -474,7 +513,8 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 	 * we can skip the validation of the foreign keys.
 	 */
 	bool skip_validation = true;
-	ExecuteForeignKeyCreateCommandList(droppedFKeyCreationCommands, skip_validation);
+	ExecuteForeignKeyCreateCommandList(originalForeignKeyRecreationCommands,
+									   skip_validation);
 }
 
 
