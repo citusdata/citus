@@ -183,9 +183,6 @@ InitializeMaintenanceDaemonBackend(void)
 		 * itself. In that case, we clearly don't need to start another maintenance
 		 * daemon.
 		 */
-		Assert(found);
-		Assert(dbData->workerPid == MyProcPid);
-
 		LWLockRelease(&MaintenanceDaemonControl->lock);
 		return;
 	}
