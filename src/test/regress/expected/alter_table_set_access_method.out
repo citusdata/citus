@@ -29,8 +29,8 @@ SELECT create_distributed_table ('dist_table', 'a');
 (1 row)
 
 INSERT INTO dist_table VALUES (1, 1), (2, 2), (3, 3);
-SELECT "Name", "Access Method" FROM public.citus_tables WHERE "Name"::text = 'dist_table' ORDER BY 1;
-    Name    | Access Method
+SELECT table_name, access_method FROM public.citus_tables WHERE table_name::text = 'dist_table' ORDER BY 1;
+ table_name | access_method
 ---------------------------------------------------------------------
  dist_table | heap
 (1 row)
@@ -46,8 +46,8 @@ NOTICE:  Renaming the new table to alter_table_set_access_method.dist_table
 
 (1 row)
 
-SELECT "Name", "Access Method" FROM public.citus_tables WHERE "Name"::text = 'dist_table' ORDER BY 1;
-    Name    | Access Method
+SELECT table_name, access_method FROM public.citus_tables WHERE table_name::text = 'dist_table' ORDER BY 1;
+ table_name | access_method
 ---------------------------------------------------------------------
  dist_table | columnar
 (1 row)
@@ -85,8 +85,8 @@ SELECT inhrelid::regclass::text FROM pg_catalog.pg_inherits WHERE inhparent = 'p
  partitioned_table_6_10
 (2 rows)
 
-SELECT "Name"::text, "Access Method" FROM public.citus_tables WHERE "Name"::text LIKE 'partitioned\_table%' ORDER BY 1;
-          Name          | Access Method
+SELECT table_name::text, access_method FROM public.citus_tables WHERE table_name::text LIKE 'partitioned\_table%' ORDER BY 1;
+       table_name       | access_method
 ---------------------------------------------------------------------
  partitioned_table      |
  partitioned_table_1_5  | heap
@@ -149,8 +149,8 @@ SELECT inhrelid::regclass::text FROM pg_catalog.pg_inherits WHERE inhparent = 'p
  partitioned_table_6_10
 (2 rows)
 
-SELECT "Name"::text, "Access Method" FROM public.citus_tables WHERE "Name"::text LIKE 'partitioned\_table%' ORDER BY 1;
-          Name          | Access Method
+SELECT table_name::text, access_method FROM public.citus_tables WHERE table_name::text LIKE 'partitioned\_table%' ORDER BY 1;
+       table_name       | access_method
 ---------------------------------------------------------------------
  partitioned_table      |
  partitioned_table_1_5  | columnar
@@ -363,8 +363,8 @@ SELECT create_citus_local_table('table_type_citus_local');
 (1 row)
 
 CREATE TABLE table_type_pg_local (a INT);
-SELECT "Name", "Citus Table Type", "Distribution Column", "Shard Count", "Access Method" FROM public.citus_tables WHERE "Name"::text LIKE 'table\_type%' ORDER BY 1;
-      Name       | Citus Table Type | Distribution Column | Shard Count | Access Method
+SELECT table_name, citus_table_type, distribution_column, shard_count, access_method FROM public.citus_tables WHERE table_name::text LIKE 'table\_type%' ORDER BY 1;
+   table_name    | citus_table_type | distribution_column | shard_count | access_method
 ---------------------------------------------------------------------
  table_type_dist | distributed      | a                   |           4 | heap
  table_type_ref  | reference        | <none>              |           1 | heap
@@ -425,8 +425,8 @@ NOTICE:  Renaming the new table to alter_table_set_access_method.table_type_citu
 
 (1 row)
 
-SELECT "Name", "Citus Table Type", "Distribution Column", "Shard Count", "Access Method" FROM public.citus_tables WHERE "Name"::text LIKE 'table\_type%' ORDER BY 1;
-      Name       | Citus Table Type | Distribution Column | Shard Count | Access Method
+SELECT table_name, citus_table_type, distribution_column, shard_count, access_method FROM public.citus_tables WHERE table_name::text LIKE 'table\_type%' ORDER BY 1;
+   table_name    | citus_table_type | distribution_column | shard_count | access_method
 ---------------------------------------------------------------------
  table_type_dist | distributed      | a                   |           4 | fake_am
  table_type_ref  | reference        | <none>              |           1 | fake_am

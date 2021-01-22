@@ -18,45 +18,45 @@ CREATE TABLE colocation_table_2 (a INT, b INT);
 SELECT create_distributed_table ('colocation_table_2', 'a', colocate_with := 'none');
 
 
-SELECT "Name", "Citus Table Type", "Distribution Column", "Shard Count" FROM public.citus_tables
-    WHERE "Name" IN ('dist_table', 'colocation_table', 'colocation_table_2');
-SELECT STRING_AGG("Name"::text, ', ' ORDER BY 1) AS "Colocation Groups" FROM public.citus_tables
-    WHERE "Name" IN ('dist_table', 'colocation_table', 'colocation_table_2') GROUP BY "Colocation ID" ORDER BY 1;
+SELECT table_name, citus_table_type, distribution_column, shard_count FROM public.citus_tables
+    WHERE table_name IN ('dist_table', 'colocation_table', 'colocation_table_2');
+SELECT STRING_AGG(table_name::text, ', ' ORDER BY 1) AS "Colocation Groups" FROM public.citus_tables
+    WHERE table_name IN ('dist_table', 'colocation_table', 'colocation_table_2') GROUP BY colocation_id ORDER BY 1;
 
 -- test altering distribution column
 SELECT alter_distributed_table('dist_table', distribution_column := 'b');
-SELECT "Name", "Citus Table Type", "Distribution Column", "Shard Count" FROM public.citus_tables
-    WHERE "Name" IN ('dist_table', 'colocation_table', 'colocation_table_2');
-SELECT STRING_AGG("Name"::text, ', ' ORDER BY 1) AS "Colocation Groups" FROM public.citus_tables
-    WHERE "Name" IN ('dist_table', 'colocation_table', 'colocation_table_2') GROUP BY "Colocation ID" ORDER BY 1;
+SELECT table_name, citus_table_type, distribution_column, shard_count FROM public.citus_tables
+    WHERE table_name IN ('dist_table', 'colocation_table', 'colocation_table_2');
+SELECT STRING_AGG(table_name::text, ', ' ORDER BY 1) AS "Colocation Groups" FROM public.citus_tables
+    WHERE table_name IN ('dist_table', 'colocation_table', 'colocation_table_2') GROUP BY colocation_id ORDER BY 1;
 
 -- test altering shard count
 SELECT alter_distributed_table('dist_table', shard_count := 6);
-SELECT "Name", "Citus Table Type", "Distribution Column", "Shard Count" FROM public.citus_tables
-    WHERE "Name" IN ('dist_table', 'colocation_table', 'colocation_table_2');
-SELECT STRING_AGG("Name"::text, ', ' ORDER BY 1) AS "Colocation Groups" FROM public.citus_tables
-    WHERE "Name" IN ('dist_table', 'colocation_table', 'colocation_table_2') GROUP BY "Colocation ID" ORDER BY 1;
+SELECT table_name, citus_table_type, distribution_column, shard_count FROM public.citus_tables
+    WHERE table_name IN ('dist_table', 'colocation_table', 'colocation_table_2');
+SELECT STRING_AGG(table_name::text, ', ' ORDER BY 1) AS "Colocation Groups" FROM public.citus_tables
+    WHERE table_name IN ('dist_table', 'colocation_table', 'colocation_table_2') GROUP BY colocation_id ORDER BY 1;
 
 -- test altering colocation, note that shard count will also change
 SELECT alter_distributed_table('dist_table', colocate_with := 'alter_distributed_table.colocation_table');
-SELECT "Name", "Citus Table Type", "Distribution Column", "Shard Count" FROM public.citus_tables
-    WHERE "Name" IN ('dist_table', 'colocation_table', 'colocation_table_2');
-SELECT STRING_AGG("Name"::text, ', ' ORDER BY 1) AS "Colocation Groups" FROM public.citus_tables
-    WHERE "Name" IN ('dist_table', 'colocation_table', 'colocation_table_2') GROUP BY "Colocation ID" ORDER BY 1;
+SELECT table_name, citus_table_type, distribution_column, shard_count FROM public.citus_tables
+    WHERE table_name IN ('dist_table', 'colocation_table', 'colocation_table_2');
+SELECT STRING_AGG(table_name::text, ', ' ORDER BY 1) AS "Colocation Groups" FROM public.citus_tables
+    WHERE table_name IN ('dist_table', 'colocation_table', 'colocation_table_2') GROUP BY colocation_id ORDER BY 1;
 
 -- test altering shard count with cascading, note that the colocation will be kept
 SELECT alter_distributed_table('dist_table', shard_count := 8, cascade_to_colocated := true);
-SELECT "Name", "Citus Table Type", "Distribution Column", "Shard Count" FROM public.citus_tables
-    WHERE "Name" IN ('dist_table', 'colocation_table', 'colocation_table_2');
-SELECT STRING_AGG("Name"::text, ', ' ORDER BY 1) AS "Colocation Groups" FROM public.citus_tables
-    WHERE "Name" IN ('dist_table', 'colocation_table', 'colocation_table_2') GROUP BY "Colocation ID" ORDER BY 1;
+SELECT table_name, citus_table_type, distribution_column, shard_count FROM public.citus_tables
+    WHERE table_name IN ('dist_table', 'colocation_table', 'colocation_table_2');
+SELECT STRING_AGG(table_name::text, ', ' ORDER BY 1) AS "Colocation Groups" FROM public.citus_tables
+    WHERE table_name IN ('dist_table', 'colocation_table', 'colocation_table_2') GROUP BY colocation_id ORDER BY 1;
 
 -- test altering shard count without cascading, note that the colocation will be broken
 SELECT alter_distributed_table('dist_table', shard_count := 10, cascade_to_colocated := false);
-SELECT "Name", "Citus Table Type", "Distribution Column", "Shard Count" FROM public.citus_tables
-    WHERE "Name" IN ('dist_table', 'colocation_table', 'colocation_table_2');
-SELECT STRING_AGG("Name"::text, ', ' ORDER BY 1) AS "Colocation Groups" FROM public.citus_tables
-    WHERE "Name" IN ('dist_table', 'colocation_table', 'colocation_table_2') GROUP BY "Colocation ID" ORDER BY 1;
+SELECT table_name, citus_table_type, distribution_column, shard_count FROM public.citus_tables
+    WHERE table_name IN ('dist_table', 'colocation_table', 'colocation_table_2');
+SELECT STRING_AGG(table_name::text, ', ' ORDER BY 1) AS "Colocation Groups" FROM public.citus_tables
+    WHERE table_name IN ('dist_table', 'colocation_table', 'colocation_table_2') GROUP BY colocation_id ORDER BY 1;
 
 
 -- test partitions
@@ -69,7 +69,7 @@ INSERT INTO partitioned_table VALUES (2, 12), (7, 2);
 SELECT logicalrelid::text FROM pg_dist_partition WHERE logicalrelid::regclass::text LIKE 'partitioned\_table%' ORDER BY 1;
 SELECT run_command_on_workers($$SELECT COUNT(*) FROM pg_catalog.pg_class WHERE relname LIKE 'partitioned\_table%'$$);
 SELECT inhrelid::regclass::text FROM pg_catalog.pg_inherits WHERE inhparent = 'partitioned_table'::regclass ORDER BY 1;
-SELECT "Name"::text, "Distribution Column", "Shard Count" FROM public.citus_tables WHERE "Name"::text LIKE 'partitioned\_table%' ORDER BY 1;
+SELECT table_name::text, distribution_column, shard_count FROM public.citus_tables WHERE table_name::text LIKE 'partitioned\_table%' ORDER BY 1;
 SELECT * FROM partitioned_table ORDER BY 1, 2;
 SELECT * FROM partitioned_table_1_5 ORDER BY 1, 2;
 SELECT * FROM partitioned_table_6_10 ORDER BY 1, 2;
@@ -83,7 +83,7 @@ SELECT alter_distributed_table('partitioned_table_1_5', shard_count := 10, distr
 SELECT logicalrelid::text FROM pg_dist_partition WHERE logicalrelid::regclass::text LIKE 'partitioned\_table%' ORDER BY 1;
 SELECT run_command_on_workers($$SELECT COUNT(*) FROM pg_catalog.pg_class WHERE relname LIKE 'partitioned\_table%'$$);
 SELECT inhrelid::regclass::text FROM pg_catalog.pg_inherits WHERE inhparent = 'partitioned_table'::regclass ORDER BY 1;
-SELECT "Name"::text, "Distribution Column", "Shard Count" FROM public.citus_tables WHERE "Name"::text LIKE 'partitioned\_table%' ORDER BY 1;
+SELECT table_name::text, distribution_column, shard_count FROM public.citus_tables WHERE table_name::text LIKE 'partitioned\_table%' ORDER BY 1;
 SELECT * FROM partitioned_table ORDER BY 1, 2;
 SELECT * FROM partitioned_table_1_5 ORDER BY 1, 2;
 SELECT * FROM partitioned_table_6_10 ORDER BY 1, 2;
@@ -141,9 +141,9 @@ SELECT alter_distributed_table('col_with_ref_to_dist', shard_count:=6, cascade_t
 -- test altering columnar table
 CREATE TABLE columnar_table (a INT) USING columnar;
 SELECT create_distributed_table('columnar_table', 'a', colocate_with:='none');
-SELECT "Name"::text, "Shard Count", "Access Method" FROM public.citus_tables WHERE "Name"::text = 'columnar_table';
+SELECT table_name::text, shard_count, access_method FROM public.citus_tables WHERE table_name::text = 'columnar_table';
 SELECT alter_distributed_table('columnar_table', shard_count:=6);
-SELECT "Name"::text, "Shard Count", "Access Method" FROM public.citus_tables WHERE "Name"::text = 'columnar_table';
+SELECT table_name::text, shard_count, access_method FROM public.citus_tables WHERE table_name::text = 'columnar_table';
 \endif
 
 
@@ -157,7 +157,7 @@ SELECT create_distributed_table('metadata_sync_table', 'a', colocate_with:='none
 SELECT alter_distributed_table('metadata_sync_table', shard_count:=6);
 SELECT alter_distributed_table('metadata_sync_table', shard_count:=8);
 
-SELECT "Name", "Shard Count" FROM public.citus_tables WHERE "Name"::text = 'metadata_sync_table';
+SELECT table_name, shard_count FROM public.citus_tables WHERE table_name::text = 'metadata_sync_table';
 
 SET citus.replication_model TO DEFAULT;
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
