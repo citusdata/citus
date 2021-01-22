@@ -1,9 +1,9 @@
 /*-------------------------------------------------------------------------
  *
- * cstore_compression.c
+ * columnar_compression.c
  *
  * This file contains compression/decompression functions definitions
- * used in cstore_fdw.
+ * used for columnar.
  *
  * Copyright (c) 2016, Citus Data, Inc.
  *
@@ -14,7 +14,7 @@
 #include "postgres.h"
 
 #include "citus_version.h"
-#include "columnar/cstore.h"
+#include "columnar/columnar.h"
 #include "common/pg_lzcompress.h"
 
 #if HAVE_LIBLZ4
@@ -29,21 +29,22 @@
  *	The information at the start of the compressed data. This decription is taken
  *	from pg_lzcompress in pre-9.5 version of PostgreSQL.
  */
-typedef struct CStoreCompressHeader
+typedef struct ColumnarCompressHeader
 {
 	int32 vl_len_;              /* varlena header (do not touch directly!) */
 	int32 rawsize;
-} CStoreCompressHeader;
+} ColumnarCompressHeader;
 
 /*
  * Utilities for manipulation of header information for compressed data
  */
 
-#define CSTORE_COMPRESS_HDRSZ ((int32) sizeof(CStoreCompressHeader))
-#define CSTORE_COMPRESS_RAWSIZE(ptr) (((CStoreCompressHeader *) (ptr))->rawsize)
-#define CSTORE_COMPRESS_RAWDATA(ptr) (((char *) (ptr)) + CSTORE_COMPRESS_HDRSZ)
-#define CSTORE_COMPRESS_SET_RAWSIZE(ptr, len) (((CStoreCompressHeader *) (ptr))->rawsize = \
-												   (len))
+#define COLUMNAR_COMPRESS_HDRSZ ((int32) sizeof(ColumnarCompressHeader))
+#define COLUMNAR_COMPRESS_RAWSIZE(ptr) (((ColumnarCompressHeader *) (ptr))->rawsize)
+#define COLUMNAR_COMPRESS_RAWDATA(ptr) (((char *) (ptr)) + COLUMNAR_COMPRESS_HDRSZ)
+#define COLUMNAR_COMPRESS_SET_RAWSIZE(ptr, \
+									  len) (((ColumnarCompressHeader *) (ptr))->rawsize = \
+												(len))
 
 
 /*
@@ -116,7 +117,7 @@ CompressBuffer(StringInfo inputBuffer,
 		case COMPRESSION_PG_LZ:
 		{
 			uint64 maximumLength = PGLZ_MAX_OUTPUT(inputBuffer->len) +
-								   CSTORE_COMPRESS_HDRSZ;
+								   COLUMNAR_COMPRESS_HDRSZ;
 			bool compressionResult = false;
 
 			resetStringInfo(outputBuffer);
@@ -124,14 +125,14 @@ CompressBuffer(StringInfo inputBuffer,
 
 			int32 compressedByteCount = pglz_compress((const char *) inputBuffer->data,
 													  inputBuffer->len,
-													  CSTORE_COMPRESS_RAWDATA(
+													  COLUMNAR_COMPRESS_RAWDATA(
 														  outputBuffer->data),
 													  PGLZ_strategy_always);
 			if (compressedByteCount >= 0)
 			{
-				CSTORE_COMPRESS_SET_RAWSIZE(outputBuffer->data, inputBuffer->len);
+				COLUMNAR_COMPRESS_SET_RAWSIZE(outputBuffer->data, inputBuffer->len);
 				SET_VARSIZE_COMPRESSED(outputBuffer->data,
-									   compressedByteCount + CSTORE_COMPRESS_HDRSZ);
+									   compressedByteCount + COLUMNAR_COMPRESS_HDRSZ);
 				compressionResult = true;
 			}
 
@@ -224,11 +225,11 @@ DecompressBuffer(StringInfo buffer,
 		case COMPRESSION_PG_LZ:
 		{
 			StringInfo decompressedBuffer = NULL;
-			uint32 compressedDataSize = VARSIZE(buffer->data) - CSTORE_COMPRESS_HDRSZ;
-			uint32 decompressedDataSize = CSTORE_COMPRESS_RAWSIZE(buffer->data);
+			uint32 compressedDataSize = VARSIZE(buffer->data) - COLUMNAR_COMPRESS_HDRSZ;
+			uint32 decompressedDataSize = COLUMNAR_COMPRESS_RAWSIZE(buffer->data);
 			int32 decompressedByteCount = 0;
 
-			if (compressedDataSize + CSTORE_COMPRESS_HDRSZ != buffer->len)
+			if (compressedDataSize + COLUMNAR_COMPRESS_HDRSZ != buffer->len)
 			{
 				ereport(ERROR, (errmsg("cannot decompress the buffer"),
 								errdetail("Expected %u bytes, but received %u bytes",
@@ -238,11 +239,13 @@ DecompressBuffer(StringInfo buffer,
 			char *decompressedData = palloc0(decompressedDataSize);
 
 	#if PG_VERSION_NUM >= 120000
-			decompressedByteCount = pglz_decompress(CSTORE_COMPRESS_RAWDATA(buffer->data),
+			decompressedByteCount = pglz_decompress(COLUMNAR_COMPRESS_RAWDATA(
+														buffer->data),
 													compressedDataSize, decompressedData,
 													decompressedDataSize, true);
 	#else
-			decompressedByteCount = pglz_decompress(CSTORE_COMPRESS_RAWDATA(buffer->data),
+			decompressedByteCount = pglz_decompress(COLUMNAR_COMPRESS_RAWDATA(
+														buffer->data),
 													compressedDataSize, decompressedData,
 													decompressedDataSize);
 	#endif

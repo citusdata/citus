@@ -13,8 +13,8 @@
 #include "safe_lib.h"
 
 #include "citus_version.h"
-#include "columnar/cstore.h"
-#include "columnar/cstore_version_compat.h"
+#include "columnar/columnar.h"
+#include "columnar/columnar_version_compat.h"
 
 #include <sys/stat.h>
 #include "access/heapam.h"
@@ -668,7 +668,7 @@ GetHighestUsedAddressAndId(uint64 storageId,
 	*highestUsedId = 0;
 
 	/* file starts with metapage */
-	*highestUsedAddress = CSTORE_BYTES_PER_PAGE;
+	*highestUsedAddress = COLUMNAR_BYTES_PER_PAGE;
 
 	foreach(stripeMetadataCell, stripeMetadataList)
 	{
@@ -1182,8 +1182,8 @@ InitMetapage(Relation relation)
 
 	ColumnarMetapage *metapage = palloc0(sizeof(ColumnarMetapage));
 	metapage->storageId = GetNextStorageId();
-	metapage->versionMajor = CSTORE_VERSION_MAJOR;
-	metapage->versionMinor = CSTORE_VERSION_MINOR;
+	metapage->versionMajor = COLUMNAR_VERSION_MAJOR;
+	metapage->versionMinor = COLUMNAR_VERSION_MINOR;
 
 	/* create the first block */
 	Buffer newBuffer = ReadBuffer(relation, P_NEW);
