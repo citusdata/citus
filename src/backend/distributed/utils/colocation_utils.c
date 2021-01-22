@@ -113,17 +113,17 @@ update_distributed_table_colocation(PG_FUNCTION_ARGS)
 	CheckCitusVersion(ERROR);
 	EnsureCoordinator();
 	EnsureTableOwner(targetRelationId);
-	EnsureHashDistributedTable(targetRelationId);
 
 	char *colocateWithTableName = text_to_cstring(colocateWithTableNameText);
 	if (IsColocateWithNone(colocateWithTableName))
 	{
+		EnsureHashDistributedTable(targetRelationId);
 		BreakColocation(targetRelationId);
 	}
 	else
 	{
 		Oid colocateWithTableId = ResolveRelationId(colocateWithTableNameText, false);
-		EnsureHashDistributedTable(colocateWithTableId);
+		EnsureTableOwner(colocateWithTableId);
 		MarkTablesColocated(colocateWithTableId, targetRelationId);
 	}
 	PG_RETURN_VOID();
@@ -248,6 +248,8 @@ MarkTablesColocated(Oid sourceRelationId, Oid targetRelationId)
 							   "other tables")));
 	}
 
+	EnsureHashDistributedTable(sourceRelationId);
+	EnsureHashDistributedTable(targetRelationId);
 	CheckReplicationModel(sourceRelationId, targetRelationId);
 	CheckDistributionColumnType(sourceRelationId, targetRelationId);
 

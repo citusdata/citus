@@ -447,6 +447,7 @@ SELECT * FROM print_extension_changes();
 ---------------------------------------------------------------------
  function citus_total_relation_size(regclass)                                    |
  function create_citus_local_table(regclass)                                     |
+ function mark_tables_colocated(regclass, regclass[])                            |
  function master_conninfo_cache_invalidate()                                     |
  function master_create_distributed_table(regclass,text,citus.distribution_type) |
  function master_create_worker_shards(text,integer,integer)                      |
@@ -501,7 +502,7 @@ SELECT * FROM print_extension_changes();
                                                                                  | view citus_shards
                                                                                  | view citus_tables
                                                                                  | view time_partitions
-(56 rows)
+(57 rows)
 
 DROP TABLE prev_objects, extension_diff;
 -- show running version

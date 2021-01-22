@@ -1196,18 +1196,12 @@ DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition 
 DETAIL:  The target table's partition column should correspond to a partition column in the subquery.
 DEBUG:  performing repartitioned INSERT ... SELECT
 RESET client_min_messages;
--- some tests for mark_tables_colocated
--- should error out
-SELECT mark_tables_colocated('colocated_table_test_2', ARRAY['reference_table_test']);
-ERROR:  cannot colocate tables colocated_table_test_2 and reference_table_test
-DETAIL:  Replication models don't match for colocated_table_test_2 and reference_table_test.
--- should work sliently
-SELECT mark_tables_colocated('reference_table_test', ARRAY['reference_table_test_fifth']);
- mark_tables_colocated
----------------------------------------------------------------------
-
-(1 row)
-
+-- some tests for mark_tables_colocated	
+-- should error out	
+SELECT update_distributed_table_colocation('colocated_table_test_2', colocate_with => 'reference_table_test');
+ERROR:  relation reference_table_test should be a hash distributed table
+SELECT update_distributed_table_colocation('reference_table_test', colocate_with => 'reference_table_test_fifth');
+ERROR:  relation reference_table_test_fifth should be a hash distributed table
 -- ensure that reference tables on
 -- different queries works as expected
 CREATE SCHEMA reference_schema;

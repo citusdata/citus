@@ -15,7 +15,7 @@ SELECT create_distributed_table('testtableddl', 'distributecol', 'append');
 -- change this test every time the previous tests change the set of tables they leave
 -- around.
 SET client_min_messages TO 'WARNING';
-DROP FUNCTION pg_catalog.master_create_worker_shards;
+DROP FUNCTION pg_catalog.master_create_worker_shards(text, integer, integer);
 DROP EXTENSION citus CASCADE;
 RESET client_min_messages;
 

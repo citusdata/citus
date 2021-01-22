@@ -58,6 +58,13 @@ DROP PROCEDURE pg_catalog.alter_old_partitions_set_access_method(regclass,timest
 DROP FUNCTION pg_catalog.citus_set_coordinator_host(text,int,noderole,name);
 DROP FUNCTION pg_catalog.worker_change_sequence_dependency(regclass, regclass, regclass);
 
+CREATE FUNCTION pg_catalog.mark_tables_colocated(source_table_name regclass, target_table_names regclass[])
+	RETURNS void
+	LANGUAGE C STRICT
+	AS 'MODULE_PATHNAME', $$mark_tables_colocated$$;
+COMMENT ON FUNCTION pg_catalog.mark_tables_colocated(source_table_name regclass, target_table_names regclass[])
+	IS 'mark target distributed tables as colocated with the source table';
+
 CREATE FUNCTION pg_catalog.master_modify_multiple_shards(text)
     RETURNS integer
     LANGUAGE C STRICT

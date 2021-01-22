@@ -344,7 +344,7 @@ ORDER BY
     shardid,
     nodeport;
 
--- reset colocation ids to test mark_tables_colocated
+-- reset colocation ids to test update_distributed_table_colocation
 ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 1;
 DELETE FROM pg_dist_colocation
     WHERE colocationid >= 1 AND colocationid < 1000;
@@ -361,11 +361,11 @@ SELECT logicalrelid, colocationid FROM pg_dist_partition
     ORDER BY colocationid, logicalrelid;
 
 -- first check failing cases
-SELECT mark_tables_colocated('table1_groupB', ARRAY['table1_groupC']);
-SELECT mark_tables_colocated('table1_groupB', ARRAY['table1_groupD']);
-SELECT mark_tables_colocated('table1_groupB', ARRAY['table1_groupE']);
-SELECT mark_tables_colocated('table1_groupB', ARRAY['table1_groupF']);
-SELECT mark_tables_colocated('table1_groupB', ARRAY['table2_groupB', 'table1_groupD']);
+SELECT update_distributed_table_colocation('table1_groupB', colocate_with => 'table1_groupC');
+SELECT update_distributed_table_colocation('table1_groupB', colocate_with => 'table1_groupD');
+SELECT update_distributed_table_colocation('table1_groupB', colocate_with => 'table1_groupE');
+SELECT update_distributed_table_colocation('table1_groupB', colocate_with => 'table1_groupF');
+SELECT update_distributed_table_colocation('table1_groupB', colocate_with => 'table1_groupD');
 
 -- check metadata to see failing calls didn't have any side effects
 SELECT * FROM pg_dist_colocation
@@ -377,14 +377,14 @@ SELECT logicalrelid, colocationid FROM pg_dist_partition
     ORDER BY colocationid, logicalrelid;
 
 -- check successfully cololated tables
-SELECT mark_tables_colocated('table1_groupB', ARRAY['table2_groupB']);
-SELECT mark_tables_colocated('table1_groupC', ARRAY['table2_groupC']);
-SELECT mark_tables_colocated('table1_groupD', ARRAY['table2_groupD']);
-SELECT mark_tables_colocated('table1_groupE', ARRAY['table2_groupE', 'table3_groupE']);
-SELECT mark_tables_colocated('table1_groupF', ARRAY['table2_groupF']);
+SELECT update_distributed_table_colocation('table1_groupB', colocate_with => 'table2_groupB');
+SELECT update_distributed_table_colocation('table1_groupC', colocate_with => 'table2_groupC');
+SELECT update_distributed_table_colocation('table1_groupD', colocate_with => 'table2_groupD');
+SELECT update_distributed_table_colocation('table1_groupE', colocate_with => 'table2_groupE');
+SELECT update_distributed_table_colocation('table1_groupE', colocate_with => 'table3_groupE');
 
 -- check to colocate with itself
-SELECT mark_tables_colocated('table1_groupB', ARRAY['table1_groupB']);
+SELECT update_distributed_table_colocation('table1_groupB', colocate_with => 'table1_groupB');
 
 SET citus.shard_count = 2;
 
@@ -404,10 +404,12 @@ SELECT logicalrelid, colocationid FROM pg_dist_partition
     ORDER BY colocationid, logicalrelid;
 
 -- move the all tables in colocation group 5 to colocation group 7
-SELECT mark_tables_colocated('table1_group_none', ARRAY['table1_groupE', 'table2_groupE', 'table3_groupE']);
+SELECT update_distributed_table_colocation('table1_group_none', colocate_with => 'table1_groupE');
+SELECT update_distributed_table_colocation('table1_group_none', colocate_with => 'table2_groupE');
+SELECT update_distributed_table_colocation('table1_group_none', colocate_with => 'table3_groupE');
 
 -- move a table with a colocation id which is already not in pg_dist_colocation
-SELECT mark_tables_colocated('table1_group_none', ARRAY['table2_group_none']);
+SELECT update_distributed_table_colocation('table1_group_none', colocate_with => 'table2_group_none');
 
 -- check metadata to see that unused colocation group is deleted
 SELECT * FROM pg_dist_colocation
@@ -431,7 +433,7 @@ SELECT create_distributed_table('table2_groupG', 'id', colocate_with => 'table1_
 CREATE TABLE table2_groupG ( id int );
 SELECT create_distributed_table('table2_groupG', 'id', colocate_with => 'NONE');
 
-SELECT mark_tables_colocated('table1_groupG', ARRAY['table2_groupG']);
+SELECT update_distributed_table_colocation('table1_groupG', colocate_with => 'table2_groupG');
 
 CREATE TABLE d1(a int, b int);
 CREATE TABLE d2(a int, b int);
@@ -457,14 +459,6 @@ SELECT create_distributed_table('range_table', 'a', 'range');
 
 SELECT create_reference_table('ref');
 
-
--- check d1, d2, d3 and d4 has the same colocation id => they are colocated.
-SELECT get_table_colocation_id('d1');
-SELECT get_table_colocation_id('d2');
-SELECT get_table_colocation_id('d3');
-SELECT get_table_colocation_id('d4');
-
-
 SELECT tables_colocated('d1', 'd2');
 SELECT tables_colocated('d2', 'd3');
 SELECT tables_colocated('d2', 'd4');
@@ -475,12 +469,6 @@ SELECT tables_colocated('d1', 'd4');
 -- break colocation of d2
 SELECT update_distributed_table_colocation('d2', colocate_with => 'none');
 
--- d1 and d3 and d4 should be colocated, d2 should have a new colocation id.
-SELECT get_table_colocation_id('d1');
-SELECT get_table_colocation_id('d2');
-SELECT get_table_colocation_id('d3');
-SELECT get_table_colocation_id('d4');
-
 SELECT tables_colocated('d1', 'd2');
 SELECT tables_colocated('d2', 'd3');
 SELECT tables_colocated('d1', 'd3');
@@ -490,24 +478,12 @@ SELECT tables_colocated('d1', 'd4');
 -- update colocation should not error if d2 doesn't have any colocated table.
 SELECT update_distributed_table_colocation('d2', colocate_with => 'none');
 
--- d1 and d3 and d4 should be colocated, d2 should have a new colocation id.
-SELECT get_table_colocation_id('d1');
-SELECT get_table_colocation_id('d2');
-SELECT get_table_colocation_id('d3');
-SELECT get_table_colocation_id('d4');
-
 SELECT tables_colocated('d1', 'd2');
 SELECT tables_colocated('d2', 'd3');
 SELECT tables_colocated('d1', 'd3');
 SELECT tables_colocated('d1', 'd4');
 
 SELECT update_distributed_table_colocation('d3', colocate_with => 'd2');
-
--- d1 and d4 should be colocated, d2 and d3 should be colocated.
-SELECT get_table_colocation_id('d1');
-SELECT get_table_colocation_id('d2');
-SELECT get_table_colocation_id('d3');
-SELECT get_table_colocation_id('d4');
 
 SELECT tables_colocated('d1', 'd2');
 SELECT tables_colocated('d2', 'd3');
@@ -516,12 +492,6 @@ SELECT tables_colocated('d1', 'd4');
 
 -- special case, colocate with a table named "none".
 SELECT update_distributed_table_colocation('d3', colocate_with => '"none"');
--- d1, d4, d3 and "none" should be colocated;
-SELECT get_table_colocation_id('d1');
-SELECT get_table_colocation_id('d2');
-SELECT get_table_colocation_id('d3');
-SELECT get_table_colocation_id('d4');
-SELECT get_table_colocation_id('none');
 
 SELECT tables_colocated('d1', 'd2');
 SELECT tables_colocated('d2', 'd3');
