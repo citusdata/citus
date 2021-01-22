@@ -2,7 +2,7 @@
 #include "citus_version.h"
 
 #include "postgres.h"
-#include "columnar/cstore.h"
+#include "columnar/columnar.h"
 
 #if HAS_TABLEAM
 
@@ -47,9 +47,9 @@
 #include "utils/rel.h"
 #include "utils/syscache.h"
 
-#include "columnar/cstore_customscan.h"
-#include "columnar/cstore_tableam.h"
-#include "columnar/cstore_version_compat.h"
+#include "columnar/columnar_customscan.h"
+#include "columnar/columnar_tableam.h"
+#include "columnar/columnar_version_compat.h"
 
 
 /*
@@ -178,12 +178,12 @@ columnar_init_write_state(Relation relation, TupleDesc tupdesc,
 	 */
 	MemoryContext oldContext = MemoryContextSwitchTo(WriteStateContext);
 
-	ColumnarOptions cstoreOptions = { 0 };
-	ReadColumnarOptions(relation->rd_id, &cstoreOptions);
+	ColumnarOptions columnarOptions = { 0 };
+	ReadColumnarOptions(relation->rd_id, &columnarOptions);
 
 	SubXidWriteState *stackEntry = palloc0(sizeof(SubXidWriteState));
 	stackEntry->writeState = ColumnarBeginWrite(relation->rd_node,
-												cstoreOptions,
+												columnarOptions,
 												tupdesc);
 	stackEntry->subXid = currentSubXid;
 	stackEntry->next = hashEntry->writeStateStack;

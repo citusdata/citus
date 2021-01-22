@@ -25,9 +25,9 @@
 #include "optimizer/restrictinfo.h"
 #include "utils/relcache.h"
 
-#include "columnar/cstore.h"
-#include "columnar/cstore_customscan.h"
-#include "columnar/cstore_tableam.h"
+#include "columnar/columnar.h"
+#include "columnar/columnar_customscan.h"
+#include "columnar/columnar_tableam.h"
 
 typedef struct ColumnarScanPath
 {
@@ -102,7 +102,7 @@ const struct CustomExecMethods ColumnarExecuteMethods = {
 
 /*
  * columnar_customscan_init installs the hook required to intercept the postgres planner and
- * provide extra paths for cstore tables
+ * provide extra paths for columnar tables
  */
 void
 columnar_customscan_init()
@@ -158,7 +158,7 @@ ColumnarSetRelPathlistHook(PlannerInfo *root, RelOptInfo *rel, Index rti,
 	}
 
 	/*
-	 * Here we want to inspect if this relation pathlist hook is accessing a cstore table.
+	 * Here we want to inspect if this relation pathlist hook is accessing a columnar table.
 	 * If that is the case we want to insert an extra path that pushes down the projection
 	 * into the scan of the table to minimize the data read.
 	 */
@@ -173,7 +173,7 @@ ColumnarSetRelPathlistHook(PlannerInfo *root, RelOptInfo *rel, Index rti,
 
 		Path *customPath = CreateColumnarScanPath(rel, rte);
 
-		ereport(DEBUG1, (errmsg("pathlist hook for cstore table am")));
+		ereport(DEBUG1, (errmsg("pathlist hook for columnar table am")));
 
 		/* we propose a new path that will be the only path for scanning this relation */
 		clear_paths(rel);
@@ -204,7 +204,7 @@ CreateColumnarScanPath(RelOptInfo *rel, RangeTblEntry *rte)
 	path->pathtarget = rel->reltarget;
 
 	/*
-	 * Add cost estimates for a cstore table scan, row count is the rows estimated by
+	 * Add cost estimates for a columnar table scan, row count is the rows estimated by
 	 * postgres' planner.
 	 */
 	path->rows = rel->rows;
@@ -216,7 +216,7 @@ CreateColumnarScanPath(RelOptInfo *rel, RangeTblEntry *rte)
 
 
 /*
- * ColumnarScanCost calculates the cost of scanning the cstore table. The cost is estimated
+ * ColumnarScanCost calculates the cost of scanning the columnar table. The cost is estimated
  * by using all stripe metadata to estimate based on the columns to read how many pages
  * need to be read.
  */
@@ -277,13 +277,13 @@ ColumnarScanPath_PlanCustomPath(PlannerInfo *root,
 static Node *
 ColumnarScan_CreateCustomScanState(CustomScan *cscan)
 {
-	ColumnarScanState *cstorescanstate = (ColumnarScanState *) newNode(
+	ColumnarScanState *columnarScanState = (ColumnarScanState *) newNode(
 		sizeof(ColumnarScanState), T_CustomScanState);
 
-	CustomScanState *cscanstate = &cstorescanstate->custom_scanstate;
+	CustomScanState *cscanstate = &columnarScanState->custom_scanstate;
 	cscanstate->methods = &ColumnarExecuteMethods;
 
-	cstorescanstate->qual = cscan->scan.plan.qual;
+	columnarScanState->qual = cscan->scan.plan.qual;
 
 	return (Node *) cscanstate;
 }
@@ -338,9 +338,9 @@ ColumnarAttrNeeded(ScanState *ss)
 
 
 static TupleTableSlot *
-ColumnarScanNext(ColumnarScanState *cstorescanstate)
+ColumnarScanNext(ColumnarScanState *columnarScanState)
 {
-	CustomScanState *node = (CustomScanState *) cstorescanstate;
+	CustomScanState *node = (CustomScanState *) columnarScanState;
 
 	/*
 	 * get information from the estate and scan state
@@ -352,7 +352,7 @@ ColumnarScanNext(ColumnarScanState *cstorescanstate)
 
 	if (scandesc == NULL)
 	{
-		/* the cstore access method does not use the flags, they are specific to heap */
+		/* the columnar access method does not use the flags, they are specific to heap */
 		uint32 flags = 0;
 		Bitmapset *attr_needed = ColumnarAttrNeeded(&node->ss);
 
@@ -363,7 +363,7 @@ ColumnarScanNext(ColumnarScanState *cstorescanstate)
 		scandesc = columnar_beginscan_extended(node->ss.ss_currentRelation,
 											   estate->es_snapshot,
 											   0, NULL, NULL, flags, attr_needed,
-											   cstorescanstate->qual);
+											   columnarScanState->qual);
 		bms_free(attr_needed);
 
 		node->ss.ss_currentScanDesc = scandesc;

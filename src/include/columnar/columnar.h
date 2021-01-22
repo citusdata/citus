@@ -1,6 +1,6 @@
 /*-------------------------------------------------------------------------
  *
- * cstore.h
+ * columnar.h
  *
  * Type and function declarations for Columnar
  *
@@ -11,8 +11,8 @@
  *-------------------------------------------------------------------------
  */
 
-#ifndef CSTORE_H
-#define CSTORE_H
+#ifndef COLUMNAR_H
+#define COLUMNAR_H
 #include "postgres.h"
 
 #include "fmgr.h"
@@ -37,22 +37,17 @@
 #define COMPRESSION_LEVEL_MIN 1
 #define COMPRESSION_LEVEL_MAX 19
 
-/* String representations of compression types */
-#define COMPRESSION_STRING_NONE "none"
-#define COMPRESSION_STRING_PG_LZ "pglz"
-
 /* Columnar file signature */
-#define CSTORE_MAGIC_NUMBER "citus_cstore"
-#define CSTORE_VERSION_MAJOR 1
-#define CSTORE_VERSION_MINOR 7
+#define COLUMNAR_VERSION_MAJOR 1
+#define COLUMNAR_VERSION_MINOR 7
 
 /* miscellaneous defines */
-#define CSTORE_TUPLE_COST_MULTIPLIER 10
-#define CSTORE_POSTSCRIPT_SIZE_LENGTH 1
-#define CSTORE_POSTSCRIPT_SIZE_MAX 256
-#define CSTORE_BYTES_PER_PAGE (BLCKSZ - SizeOfPageHeaderData)
+#define COLUMNAR_TUPLE_COST_MULTIPLIER 10
+#define COLUMNAR_POSTSCRIPT_SIZE_LENGTH 1
+#define COLUMNAR_POSTSCRIPT_SIZE_MAX 256
+#define COLUMNAR_BYTES_PER_PAGE (BLCKSZ - SizeOfPageHeaderData)
 
-/* Enumaration for cstore file's compression method */
+/* Enumaration for columnar table's compression method */
 typedef enum
 {
 	COMPRESSION_TYPE_INVALID = -1,
@@ -67,7 +62,7 @@ typedef enum
 
 /*
  * ColumnarOptions holds the option values to be used when reading or writing
- * a cstore file. To resolve these values, we first check foreign table's options,
+ * a columnar table. To resolve these values, we first check foreign table's options,
  * and if not present, we then fall back to the default values specified above.
  */
 typedef struct ColumnarOptions
@@ -93,7 +88,7 @@ typedef struct ColumnarTableDDLContext
 
 /*
  * StripeMetadata represents information about a stripe. This information is
- * stored in the cstore file's footer.
+ * stored in the metadata table "columnar.stripe".
  */
 typedef struct StripeMetadata
 {
@@ -105,13 +100,6 @@ typedef struct StripeMetadata
 	uint64 rowCount;
 	uint64 id;
 } StripeMetadata;
-
-
-/* DataFileMetadata represents the metadata of a cstore file. */
-typedef struct DataFileMetadata
-{
-	List *stripeMetadataList;
-} DataFileMetadata;
 
 
 /* ColumnChunkSkipNode contains statistics for a ColumnChunkData. */
@@ -207,7 +195,7 @@ typedef struct ColumnBuffers
 } ColumnBuffers;
 
 
-/* StripeBuffers represents data for a row stripe in a cstore file. */
+/* StripeBuffers represents data for a row stripe. */
 typedef struct StripeBuffers
 {
 	uint32 columnCount;
@@ -216,7 +204,7 @@ typedef struct StripeBuffers
 } StripeBuffers;
 
 
-/* TableReadState represents state of a cstore file read operation. */
+/* TableReadState represents state of a columnar scan. */
 typedef struct TableReadState
 {
 	List *stripeList;
@@ -242,7 +230,7 @@ typedef struct TableReadState
 } TableReadState;
 
 
-/* TableWriteState represents state of a cstore file write operation. */
+/* TableWriteState represents state of a columnar write operation. */
 typedef struct TableWriteState
 {
 	TupleDesc tupleDescriptor;
@@ -274,7 +262,7 @@ extern void columnar_init_gucs(void);
 
 extern CompressionType ParseCompressionType(const char *compressionTypeString);
 
-/* Function declarations for writing to a cstore file */
+/* Function declarations for writing to a columnar table */
 extern TableWriteState * ColumnarBeginWrite(RelFileNode relfilenode,
 											ColumnarOptions options,
 											TupleDesc tupleDescriptor);
@@ -284,7 +272,7 @@ extern void ColumnarFlushPendingWrites(TableWriteState *state);
 extern void ColumnarEndWrite(TableWriteState *state);
 extern bool ContainsPendingWrites(TableWriteState *state);
 
-/* Function declarations for reading from a cstore file */
+/* Function declarations for reading from columnar table */
 extern TableReadState * ColumnarBeginRead(Relation relation,
 										  TupleDesc tupleDescriptor,
 										  List *projectedColumnList,
@@ -366,8 +354,8 @@ logical_to_smgr(uint64 logicalOffset)
 {
 	SmgrAddr addr;
 
-	addr.blockno = logicalOffset / CSTORE_BYTES_PER_PAGE;
-	addr.offset = SizeOfPageHeaderData + (logicalOffset % CSTORE_BYTES_PER_PAGE);
+	addr.blockno = logicalOffset / COLUMNAR_BYTES_PER_PAGE;
+	addr.offset = SizeOfPageHeaderData + (logicalOffset % COLUMNAR_BYTES_PER_PAGE);
 
 	return addr;
 }
@@ -379,7 +367,7 @@ logical_to_smgr(uint64 logicalOffset)
 static inline uint64
 smgr_to_logical(SmgrAddr addr)
 {
-	return CSTORE_BYTES_PER_PAGE * addr.blockno + addr.offset - SizeOfPageHeaderData;
+	return COLUMNAR_BYTES_PER_PAGE * addr.blockno + addr.offset - SizeOfPageHeaderData;
 }
 
 
@@ -398,4 +386,4 @@ next_block_start(SmgrAddr addr)
 }
 
 
-#endif /* CSTORE_H */
+#endif /* COLUMNAR_H */

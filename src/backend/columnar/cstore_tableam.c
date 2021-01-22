@@ -50,15 +50,13 @@
 #include "utils/lsyscache.h"
 #include "utils/syscache.h"
 
-#include "columnar/cstore.h"
-#include "columnar/cstore_customscan.h"
-#include "columnar/cstore_tableam.h"
-#include "columnar/cstore_version_compat.h"
+#include "columnar/columnar.h"
+#include "columnar/columnar_customscan.h"
+#include "columnar/columnar_tableam.h"
+#include "columnar/columnar_version_compat.h"
 #include "distributed/commands.h"
 #include "distributed/commands/utility_hook.h"
 #include "distributed/metadata_cache.h"
-
-#define CSTORE_TABLEAM_NAME "columnar"
 
 /*
  * Timing parameters for truncate locking heuristics.
@@ -159,7 +157,7 @@ columnar_beginscan(Relation relation, Snapshot snapshot,
 
 	attr_needed = bms_add_range(attr_needed, 0, natts - 1);
 
-	/* the cstore access method does not use the flags, they are specific to heap */
+	/* the columnar access method does not use the flags, they are specific to heap */
 	flags = 0;
 
 	TableScanDesc scandesc = columnar_beginscan_extended(relation, snapshot, nkeys, key,
@@ -618,7 +616,7 @@ columnar_relation_copy_data(Relation rel, const RelFileNode *newrnode)
  * we should copy data from OldHeap to NewHeap.
  *
  * In general TableAM case this can also be called for the CLUSTER command
- * which is not applicable for cstore since it doesn't support indexes.
+ * which is not applicable for columnar since it doesn't support indexes.
  */
 static void
 columnar_relation_copy_for_cluster(Relation OldHeap, Relation NewHeap,
@@ -647,11 +645,11 @@ columnar_relation_copy_for_cluster(Relation OldHeap, Relation NewHeap,
 	Assert(sourceDesc->natts == targetDesc->natts);
 
 	/* read settings from old heap, relfilenode will be swapped at the end */
-	ColumnarOptions cstoreOptions = { 0 };
-	ReadColumnarOptions(OldHeap->rd_id, &cstoreOptions);
+	ColumnarOptions columnarOptions = { 0 };
+	ReadColumnarOptions(OldHeap->rd_id, &columnarOptions);
 
 	TableWriteState *writeState = ColumnarBeginWrite(NewHeap->rd_node,
-													 cstoreOptions,
+													 columnarOptions,
 													 targetDesc);
 
 	TableReadState *readState = ColumnarBeginRead(OldHeap, sourceDesc,
@@ -814,7 +812,7 @@ LogRelationStats(Relation rel, int elevel)
 
 /*
  * TruncateColumnar truncates the unused space at the end of main fork for
- * a cstore table. This unused space can be created by aborted transactions.
+ * a columnar table. This unused space can be created by aborted transactions.
  *
  * This implementation is based on heap_vacuum_rel in vacuumlazy.c with some
  * changes so it suits columnar store relations.
@@ -1162,9 +1160,10 @@ columnar_tableam_finish()
 int64
 ColumnarGetChunksFiltered(TableScanDesc scanDesc)
 {
-	ColumnarScanDesc cstoreScanDesc = (ColumnarScanDesc) scanDesc;
-	TableReadState *readState = cstoreScanDesc->cs_readState;
+	ColumnarScanDesc columnarScanDesc = (ColumnarScanDesc) scanDesc;
+	TableReadState *readState = columnarScanDesc->cs_readState;
 
+	/* readState is initialized lazily */
 	if (readState != NULL)
 	{
 		return readState->chunksFiltered;
@@ -1609,7 +1608,7 @@ alter_columnar_table_set(PG_FUNCTION_ARGS)
 		options.compressionType = ParseCompressionType(NameStr(*compressionName));
 		if (options.compressionType == COMPRESSION_TYPE_INVALID)
 		{
-			ereport(ERROR, (errmsg("unknown compression type for cstore table: %s",
+			ereport(ERROR, (errmsg("unknown compression type for columnar table: %s",
 								   quote_identifier(NameStr(*compressionName)))));
 		}
 		ereport(DEBUG1, (errmsg("updating compression to %s",

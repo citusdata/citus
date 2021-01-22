@@ -1,9 +1,9 @@
 /*-------------------------------------------------------------------------
  *
- * cstore_customscan.h
+ * columnar_customscan.h
  *
  * Forward declarations of functions to hookup the custom scan feature of
- * cstore.
+ * columnar.
  *
  * $Id$
  *
