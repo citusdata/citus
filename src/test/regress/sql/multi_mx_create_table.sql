@@ -429,15 +429,15 @@ FROM pg_dist_partition NATURAL JOIN shard_counts
 ORDER BY colocationid, logicalrelid;
 
 -- check the citus_tables view
-SELECT "Name", "Citus Table Type", "Distribution Column", "Shard Count", "Owner"
+SELECT table_name, citus_table_type, distribution_column, shard_count, table_owner
 FROM citus_tables
-ORDER BY "Name"::text;
+ORDER BY table_name::text;
 
 \c - - - :worker_1_port
 
-SELECT "Name", "Citus Table Type", "Distribution Column", "Shard Count", "Owner"
+SELECT table_name, citus_table_type, distribution_column, shard_count, table_owner
 FROM citus_tables
-ORDER BY "Name"::text;
+ORDER BY table_name::text;
 
 
 SELECT shard_name, table_name, citus_table_type, shard_size FROM citus_shards ORDER BY shard_name::text;

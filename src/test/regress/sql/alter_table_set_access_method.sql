@@ -24,9 +24,9 @@ CREATE TABLE dist_table (a INT, b INT);
 SELECT create_distributed_table ('dist_table', 'a');
 INSERT INTO dist_table VALUES (1, 1), (2, 2), (3, 3);
 
-SELECT "Name", "Access Method" FROM public.citus_tables WHERE "Name"::text = 'dist_table' ORDER BY 1;
+SELECT table_name, access_method FROM public.citus_tables WHERE table_name::text = 'dist_table' ORDER BY 1;
 SELECT alter_table_set_access_method('dist_table', 'columnar');
-SELECT "Name", "Access Method" FROM public.citus_tables WHERE "Name"::text = 'dist_table' ORDER BY 1;
+SELECT table_name, access_method FROM public.citus_tables WHERE table_name::text = 'dist_table' ORDER BY 1;
 
 
 -- test partitions
@@ -39,7 +39,7 @@ INSERT INTO partitioned_table VALUES (2, 12), (7, 2);
 SELECT logicalrelid::text FROM pg_dist_partition WHERE logicalrelid::regclass::text LIKE 'partitioned\_table%' ORDER BY 1;
 SELECT run_command_on_workers($$SELECT COUNT(*) FROM pg_catalog.pg_class WHERE relname LIKE 'partitioned\_table%'$$);
 SELECT inhrelid::regclass::text FROM pg_catalog.pg_inherits WHERE inhparent = 'partitioned_table'::regclass ORDER BY 1;
-SELECT "Name"::text, "Access Method" FROM public.citus_tables WHERE "Name"::text LIKE 'partitioned\_table%' ORDER BY 1;
+SELECT table_name::text, access_method FROM public.citus_tables WHERE table_name::text LIKE 'partitioned\_table%' ORDER BY 1;
 SELECT * FROM partitioned_table ORDER BY 1, 2;
 SELECT * FROM partitioned_table_1_5 ORDER BY 1, 2;
 SELECT * FROM partitioned_table_6_10 ORDER BY 1, 2;
@@ -52,7 +52,7 @@ SELECT alter_table_set_access_method('partitioned_table_1_5', 'columnar');
 SELECT logicalrelid::text FROM pg_dist_partition WHERE logicalrelid::regclass::text LIKE 'partitioned\_table%' ORDER BY 1;
 SELECT run_command_on_workers($$SELECT COUNT(*) FROM pg_catalog.pg_class WHERE relname LIKE 'partitioned\_table%'$$);
 SELECT inhrelid::regclass::text FROM pg_catalog.pg_inherits WHERE inhparent = 'partitioned_table'::regclass ORDER BY 1;
-SELECT "Name"::text, "Access Method" FROM public.citus_tables WHERE "Name"::text LIKE 'partitioned\_table%' ORDER BY 1;
+SELECT table_name::text, access_method FROM public.citus_tables WHERE table_name::text LIKE 'partitioned\_table%' ORDER BY 1;
 SELECT * FROM partitioned_table ORDER BY 1, 2;
 SELECT * FROM partitioned_table_1_5 ORDER BY 1, 2;
 SELECT * FROM partitioned_table_6_10 ORDER BY 1, 2;
@@ -121,7 +121,7 @@ CREATE TABLE table_type_citus_local(a INT);
 SELECT create_citus_local_table('table_type_citus_local');
 CREATE TABLE table_type_pg_local (a INT);
 
-SELECT "Name", "Citus Table Type", "Distribution Column", "Shard Count", "Access Method" FROM public.citus_tables WHERE "Name"::text LIKE 'table\_type%' ORDER BY 1;
+SELECT table_name, citus_table_type, distribution_column, shard_count, access_method FROM public.citus_tables WHERE table_name::text LIKE 'table\_type%' ORDER BY 1;
 SELECT c.relname, a.amname FROM pg_class c, pg_am a where c.relname SIMILAR TO 'table_type\D*' AND c.relnamespace = 'alter_table_set_access_method'::regnamespace AND c.relam = a.oid;
 
 SELECT alter_table_set_access_method('table_type_dist', 'fake_am');
@@ -129,7 +129,7 @@ SELECT alter_table_set_access_method('table_type_ref', 'fake_am');
 SELECT alter_table_set_access_method('table_type_pg_local', 'fake_am');
 SELECT alter_table_set_access_method('table_type_citus_local', 'fake_am');
 
-SELECT "Name", "Citus Table Type", "Distribution Column", "Shard Count", "Access Method" FROM public.citus_tables WHERE "Name"::text LIKE 'table\_type%' ORDER BY 1;
+SELECT table_name, citus_table_type, distribution_column, shard_count, access_method FROM public.citus_tables WHERE table_name::text LIKE 'table\_type%' ORDER BY 1;
 SELECT c.relname, a.amname FROM pg_class c, pg_am a where c.relname SIMILAR TO 'table_type\D*' AND c.relnamespace = 'alter_table_set_access_method'::regnamespace AND c.relam = a.oid;
 
 -- test when the parent of a partition has foreign key to a reference table
