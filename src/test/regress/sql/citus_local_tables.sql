@@ -487,7 +487,7 @@ ALTER TABLE referencing_table ADD CONSTRAINT fkey_cl_to_cl FOREIGN KEY (a) REFER
 -- verify creating citus local table with extended statistics
 CREATE TABLE test_citus_local_table_with_stats(a int, b int);
 CREATE STATISTICS stx1 ON a, b FROM test_citus_local_table_with_stats;
-SELECT create_citus_local_table('test_citus_local_table_with_stats');
+ALTER TABLE test_citus_local_table_with_stats ADD CONSTRAINT fkey_to_dummy_ref FOREIGN KEY (a) REFERENCES dummy_reference_table(a);
 CREATE STATISTICS "CiTUS!LocalTables"."Bad\'StatName" ON a, b FROM test_citus_local_table_with_stats;
 SELECT stxname FROM pg_statistic_ext ORDER BY stxname;
 
