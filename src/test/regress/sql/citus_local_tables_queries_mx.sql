@@ -17,11 +17,14 @@ RESET client_min_messages;
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 SET citus.replication_model TO streaming;
 
+CREATE TABLE dummy_reference_table(a int unique, b int);
+SELECT create_reference_table('dummy_reference_table');
+
 CREATE TABLE citus_local_table(a int, b int);
-SELECT create_citus_local_table('citus_local_table');
+ALTER TABLE citus_local_table ADD CONSTRAINT fkey_to_dummy_1 FOREIGN KEY (a) REFERENCES dummy_reference_table(a);
 
 CREATE TABLE citus_local_table_2(a int, b int);
-SELECT create_citus_local_table('citus_local_table_2');
+ALTER TABLE citus_local_table_2 ADD CONSTRAINT fkey_to_dummy_2 FOREIGN KEY (a) REFERENCES dummy_reference_table(a);
 
 CREATE TABLE reference_table(a int, b int);
 SELECT create_reference_table('reference_table');
@@ -44,8 +47,9 @@ CREATE FUNCTION clear_and_init_test_tables() RETURNS void AS $$
     BEGIN
 		SET client_min_messages to ERROR;
 
-		TRUNCATE postgres_local_table, citus_local_table, reference_table, distributed_table;
+		TRUNCATE postgres_local_table, citus_local_table, reference_table, distributed_table, dummy_reference_table, citus_local_table_2;
 
+		INSERT INTO dummy_reference_table SELECT i, i FROM generate_series(0, 5) i;
 		INSERT INTO citus_local_table SELECT i, i FROM generate_series(0, 5) i;
 		INSERT INTO citus_local_table_2 SELECT i, i FROM generate_series(0, 5) i;
 		INSERT INTO postgres_local_table SELECT i, i FROM generate_series(0, 5) i;
@@ -638,16 +642,16 @@ BEGIN;
 	SELECT * FROM citus_local_table ORDER BY 1,2;
 
 	SAVEPOINT sp2;
-	INSERT INTO citus_local_table VALUES (5), (6);
-	INSERT INTO distributed_table VALUES (5), (6);
+	INSERT INTO citus_local_table VALUES (3), (4);
+	INSERT INTO distributed_table VALUES (3), (4);
 
 	ROLLBACK TO SAVEPOINT sp2;
 	SELECT * FROM citus_local_table ORDER BY 1,2;
 	SELECT * FROM distributed_table ORDER BY 1,2;
 
 	SAVEPOINT sp3;
-	INSERT INTO citus_local_table VALUES (7), (8);
-	INSERT INTO reference_table VALUES (7), (8);
+	INSERT INTO citus_local_table VALUES (3), (2);
+	INSERT INTO reference_table VALUES (3), (2);
 
 	ROLLBACK TO SAVEPOINT sp3;
 	SELECT * FROM citus_local_table ORDER BY 1,2;

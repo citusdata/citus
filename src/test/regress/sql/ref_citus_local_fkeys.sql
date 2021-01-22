@@ -148,5 +148,13 @@ BEGIN;
   ALTER TABLE citus_local_table_1 ADD CONSTRAINT multi_fkey FOREIGN KEY (a, b) REFERENCES citus_local_table_2(a, b);
 COMMIT;
 
+-- when local execution is disabled, citus local table cannot be created
+BEGIN;
+	SET citus.enable_local_execution TO false;
+	CREATE TABLE referenced_table(id int primary key);
+	SELECT create_reference_table('referenced_table');
+	CREATE TABLE referencing_table(id int, ref_id int, FOREIGN KEY(ref_id) REFERENCES referenced_table(id) ON DELETE SET DEFAULT);
+ROLLBACK;
+
 -- cleanup at exit
 DROP SCHEMA ref_citus_local_fkeys CASCADE;

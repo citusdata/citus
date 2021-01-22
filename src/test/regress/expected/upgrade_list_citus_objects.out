@@ -208,9 +208,9 @@ ORDER BY 1;
  sequence pg_dist_placement_placementid_seq
  sequence pg_dist_shardid_seq
  table citus.pg_dist_object
- table columnar.columnar_skipnodes
- table columnar.columnar_stripes
+ table columnar.chunk
  table columnar.options
+ table columnar.stripe
  table pg_dist_authinfo
  table pg_dist_colocation
  table pg_dist_local_group

@@ -22,20 +22,19 @@ SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 (1 row)
 
 SET citus.replication_model TO streaming;
+CREATE TABLE dummy_reference_table(a int unique, b int);
+SELECT create_reference_table('dummy_reference_table');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
 CREATE TABLE citus_local_table(a int, b int);
-SELECT create_citus_local_table('citus_local_table');
- create_citus_local_table
----------------------------------------------------------------------
-
-(1 row)
-
+ALTER TABLE citus_local_table ADD CONSTRAINT fkey_to_dummy_1 FOREIGN KEY (a) REFERENCES dummy_reference_table(a);
+NOTICE:  executing the command locally: SELECT worker_apply_inter_shard_ddl_command (1510001, 'citus_local_table_queries_mx', 1510000, 'citus_local_table_queries_mx', 'ALTER TABLE citus_local_table ADD CONSTRAINT fkey_to_dummy_1 FOREIGN KEY (a) REFERENCES dummy_reference_table(a);')
 CREATE TABLE citus_local_table_2(a int, b int);
-SELECT create_citus_local_table('citus_local_table_2');
- create_citus_local_table
----------------------------------------------------------------------
-
-(1 row)
-
+ALTER TABLE citus_local_table_2 ADD CONSTRAINT fkey_to_dummy_2 FOREIGN KEY (a) REFERENCES dummy_reference_table(a);
+NOTICE:  executing the command locally: SELECT worker_apply_inter_shard_ddl_command (1510002, 'citus_local_table_queries_mx', 1510000, 'citus_local_table_queries_mx', 'ALTER TABLE citus_local_table_2 ADD CONSTRAINT fkey_to_dummy_2 FOREIGN KEY (a) REFERENCES dummy_reference_table(a);')
 CREATE TABLE reference_table(a int, b int);
 SELECT create_reference_table('reference_table');
  create_reference_table
@@ -63,8 +62,9 @@ CREATE FUNCTION clear_and_init_test_tables() RETURNS void AS $$
     BEGIN
 		SET client_min_messages to ERROR;
 
-		TRUNCATE postgres_local_table, citus_local_table, reference_table, distributed_table;
+		TRUNCATE postgres_local_table, citus_local_table, reference_table, distributed_table, dummy_reference_table, citus_local_table_2;
 
+		INSERT INTO dummy_reference_table SELECT i, i FROM generate_series(0, 5) i;
 		INSERT INTO citus_local_table SELECT i, i FROM generate_series(0, 5) i;
 		INSERT INTO citus_local_table_2 SELECT i, i FROM generate_series(0, 5) i;
 		INSERT INTO postgres_local_table SELECT i, i FROM generate_series(0, 5) i;
@@ -734,7 +734,7 @@ JOIN (SELECT count(*) as a, count(*) as b
 USING (a);
  a | b
 ---------------------------------------------------------------------
- 0 | 0
+ 1 | 1
 (1 row)
 
 -- direct join inside CTE not supported
@@ -801,7 +801,7 @@ LIMIT 10;
                            ->  Limit
                                  ->  Sort
                                        Sort Key: distributed_table.*
-                                       ->  Seq Scan on distributed_table_1510003 distributed_table
+                                       ->  Seq Scan on distributed_table_1510004 distributed_table
 (14 rows)
 
 -- show that we do not pull to coordinator
@@ -815,8 +815,8 @@ SELECT * FROM citus_local_table;
    Tasks Shown: All
    ->  Task
          Node: host=localhost port=xxxxx dbname=regression
-         ->  Insert on citus_local_table_1510000 citus_table_alias
-               ->  Seq Scan on citus_local_table_1510000 citus_local_table
+         ->  Insert on citus_local_table_1510001 citus_table_alias
+               ->  Seq Scan on citus_local_table_1510001 citus_local_table
 (7 rows)
 
 EXPLAIN (COSTS FALSE)
@@ -829,8 +829,8 @@ SELECT reference_table.* FROM reference_table;
    Tasks Shown: All
    ->  Task
          Node: host=localhost port=xxxxx dbname=regression
-         ->  Insert on citus_local_table_1510000 citus_table_alias
-               ->  Seq Scan on reference_table_1510002 reference_table
+         ->  Insert on citus_local_table_1510001 citus_table_alias
+               ->  Seq Scan on reference_table_1510003 reference_table
 (7 rows)
 
 EXPLAIN (COSTS FALSE)
@@ -846,7 +846,7 @@ SELECT reference_table.* FROM reference_table, postgres_local_table;
          ->  Task
                Node: host=localhost port=xxxxx dbname=regression
                ->  Nested Loop
-                     ->  Seq Scan on reference_table_1510002 reference_table
+                     ->  Seq Scan on reference_table_1510003 reference_table
                      ->  Materialize
                            ->  Seq Scan on postgres_local_table
 (11 rows)
@@ -865,9 +865,9 @@ SELECT reference_table.* FROM reference_table, distributed_table;
          ->  Task
                Node: host=localhost port=xxxxx dbname=regression
                ->  Nested Loop
-                     ->  Seq Scan on distributed_table_1510003 distributed_table
+                     ->  Seq Scan on distributed_table_1510004 distributed_table
                      ->  Materialize
-                           ->  Seq Scan on reference_table_1510002 reference_table
+                           ->  Seq Scan on reference_table_1510003 reference_table
 (11 rows)
 
 -- truncate tables & add unique constraints to be able to define foreign keys
@@ -983,8 +983,8 @@ BEGIN;
 (2 rows)
 
 	SAVEPOINT sp2;
-	INSERT INTO citus_local_table VALUES (5), (6);
-	INSERT INTO distributed_table VALUES (5), (6);
+	INSERT INTO citus_local_table VALUES (3), (4);
+	INSERT INTO distributed_table VALUES (3), (4);
 	ROLLBACK TO SAVEPOINT sp2;
 	SELECT * FROM citus_local_table ORDER BY 1,2;
  a | b
@@ -999,8 +999,8 @@ BEGIN;
 (0 rows)
 
 	SAVEPOINT sp3;
-	INSERT INTO citus_local_table VALUES (7), (8);
-	INSERT INTO reference_table VALUES (7), (8);
+	INSERT INTO citus_local_table VALUES (3), (2);
+	INSERT INTO reference_table VALUES (3), (2);
 	ROLLBACK TO SAVEPOINT sp3;
 	SELECT * FROM citus_local_table ORDER BY 1,2;
  a | b
@@ -1018,4 +1018,4 @@ COMMIT;
 \c - - - :master_port
 -- cleanup at exit
 DROP SCHEMA citus_local_table_queries_mx CASCADE;
-NOTICE:  drop cascades to 7 other objects
+NOTICE:  drop cascades to 9 other objects
