@@ -543,12 +543,22 @@ ColocationId(int shardCount, int replicationFactor, Oid distributionColumnType, 
 													indexOK, NULL, scanKeyCount, scanKey);
 
 	HeapTuple colocationTuple = systable_getnext(scanDescriptor);
-	if (HeapTupleIsValid(colocationTuple))
+
+	while (HeapTupleIsValid(colocationTuple))
 	{
 		Form_pg_dist_colocation colocationForm =
 			(Form_pg_dist_colocation) GETSTRUCT(colocationTuple);
 
-		colocationId = colocationForm->colocationid;
+		if (colocationId == INVALID_COLOCATION_ID || colocationId >
+			colocationForm->colocationid)
+		{
+			/*
+			 * We assign the smallest colocation id among all the matches so that we
+			 * assign the same colocation group for similar distributed tables
+			 */
+			colocationId = colocationForm->colocationid;
+		}
+		colocationTuple = systable_getnext(scanDescriptor);
 	}
 
 	systable_endscan(scanDescriptor);
