@@ -238,5 +238,5 @@ ORDER BY 1;
  view citus_worker_stat_activity
  view pg_dist_shard_placement
  view time_partitions
-(224 rows)
+(222 rows)
 

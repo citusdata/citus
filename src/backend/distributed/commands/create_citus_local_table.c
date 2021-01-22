@@ -97,9 +97,9 @@ create_citus_local_table(PG_FUNCTION_ARGS)
 								 "reference tables via foreign keys might be "
 								 "automatically converted back to postgres tables"),
 						  errhint("Consider setting "
-						  		  "citus.enable_local_reference_table_foreign_keys "
-							  	  "to 'off' to disable automatically undistributing "
-							      "citus local tables")));
+								  "citus.enable_local_reference_table_foreign_keys "
+								  "to 'off' to disable automatically undistributing "
+								  "citus local tables")));
 	}
 
 	Oid relationId = PG_GETARG_OID(0);
