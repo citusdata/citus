@@ -1,8 +1,8 @@
 /*-------------------------------------------------------------------------
  *
- * cstore_writer.c
+ * columnar_writer.c
  *
- * This file contains function definitions for writing cstore files. This
+ * This file contains function definitions for writing columnar tables. This
  * includes the logic for writing file level metadata, writing row stripes,
  * and calculating chunk skip nodes.
  *
@@ -29,8 +29,8 @@
 #include "utils/rel.h"
 #include "utils/relfilenodemap.h"
 
-#include "columnar/cstore.h"
-#include "columnar/cstore_version_compat.h"
+#include "columnar/columnar.h"
+#include "columnar/columnar_version_compat.h"
 
 static StripeBuffers * CreateEmptyStripeBuffers(uint32 stripeMaxRowCount,
 												uint32 chunkRowCount,
@@ -53,11 +53,9 @@ static Datum DatumCopy(Datum datum, bool datumTypeByValue, int datumTypeLength);
 static StringInfo CopyStringInfo(StringInfo sourceString);
 
 /*
- * ColumnarBeginWrite initializes a cstore data load operation and returns a table
+ * ColumnarBeginWrite initializes a columnar data load operation and returns a table
  * handle. This handle should be used for adding the row values and finishing the
- * data load operation. If the cstore footer file already exists, we read the
- * footer and then seek to right after the last stripe  where the new stripes
- * will be added.
+ * data load operation.
  */
 TableWriteState *
 ColumnarBeginWrite(RelFileNode relfilenode,
@@ -118,7 +116,7 @@ ColumnarBeginWrite(RelFileNode relfilenode,
 
 
 /*
- * ColumnarWriteRow adds a row to the cstore file. If the stripe is not initialized,
+ * ColumnarWriteRow adds a row to the columnar table. If the stripe is not initialized,
  * we create structures to hold stripe data and skip list. Then, we serialize and
  * append data to serialized value buffer for each of the columns and update
  * corresponding skip nodes. Then, whole chunk data is compressed at every
@@ -214,10 +212,8 @@ ColumnarWriteRow(TableWriteState *writeState, Datum *columnValues, bool *columnN
 
 
 /*
- * ColumnarEndWrite finishes a cstore data load operation. If we have an unflushed
- * stripe, we flush it. Then, we sync and close the cstore data file. Last, we
- * flush the footer to a temporary file, and atomically rename this temporary
- * file to the original footer file.
+ * ColumnarEndWrite finishes a columnar data load operation. If we have an unflushed
+ * stripe, we flush it.
  */
 void
 ColumnarEndWrite(TableWriteState *writeState)
@@ -373,7 +369,7 @@ WriteToSmgr(Relation rel, uint64 logicalOffset, char *data, uint32 dataLength)
 			XLogBeginInsert();
 
 			/*
-			 * Since cstore will mostly write whole pages we force the transmission of the
+			 * Since columnar will mostly write whole pages we force the transmission of the
 			 * whole image in the buffer
 			 */
 			XLogRegisterBuffer(0, buffer, REGBUF_FORCE_IMAGE);

@@ -1,6 +1,6 @@
 /*-------------------------------------------------------------------------
  *
- * cstore.c
+ * columnar.c
  *
  * This file contains...
  *
@@ -21,7 +21,7 @@
 #include "utils/rel.h"
 
 #include "citus_version.h"
-#include "columnar/cstore.h"
+#include "columnar/columnar.h"
 
 /* Default values for option parameters */
 #define DEFAULT_STRIPE_ROW_COUNT 150000
@@ -57,7 +57,7 @@ void
 columnar_init_gucs()
 {
 	DefineCustomEnumVariable("columnar.compression",
-							 "Compression type for cstore.",
+							 "Compression type for columnar.",
 							 NULL,
 							 &columnar_compression,
 							 DEFAULT_COMPRESSION_TYPE,

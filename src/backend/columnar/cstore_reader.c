@@ -1,8 +1,8 @@
 /*-------------------------------------------------------------------------
  *
- * cstore_reader.c
+ * columnar_reader.c
  *
- * This file contains function definitions for reading cstore files. This
+ * This file contains function definitions for reading columnar tables. This
  * includes the logic for reading file level metadata, reading row stripes,
  * and skipping unrelated row chunks and columns.
  *
@@ -36,8 +36,8 @@
 #include "utils/lsyscache.h"
 #include "utils/rel.h"
 
-#include "columnar/cstore.h"
-#include "columnar/cstore_version_compat.h"
+#include "columnar/columnar.h"
+#include "columnar/columnar_version_compat.h"
 
 /* static function declarations */
 static StripeBuffers * LoadFilteredStripeBuffers(Relation relation,
@@ -80,7 +80,7 @@ static Datum ColumnDefaultValue(TupleConstr *tupleConstraints,
 								Form_pg_attribute attributeForm);
 
 /*
- * ColumnarBeginRead initializes a cstore read operation. This function returns a
+ * ColumnarBeginRead initializes a columnar read operation. This function returns a
  * read handle that's used during reading rows and finishing the read operation.
  */
 TableReadState *
@@ -117,7 +117,7 @@ ColumnarBeginRead(Relation relation, TupleDesc tupleDescriptor,
 
 
 /*
- * ColumnarReadNextRow tries to read a row from the cstore file. On success, it sets
+ * ColumnarReadNextRow tries to read a row from the columnar table. On success, it sets
  * column values and nulls, and returns true. If there are no more rows to read,
  * the function returns false.
  */
@@ -235,7 +235,7 @@ ColumnarRescan(TableReadState *readState)
 }
 
 
-/* Finishes a cstore read operation. */
+/* Finishes a columnar read operation. */
 void
 ColumnarEndRead(TableReadState *readState)
 {

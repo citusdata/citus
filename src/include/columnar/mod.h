@@ -2,7 +2,7 @@
  *
  * mod.h
  *
- * Type and function declarations for CStore
+ * Type and function declarations for columnar
  *
  * Copyright (c) 2016, Citus Data, Inc.
  *

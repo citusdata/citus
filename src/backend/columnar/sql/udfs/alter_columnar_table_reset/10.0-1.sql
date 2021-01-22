@@ -14,4 +14,4 @@ COMMENT ON FUNCTION pg_catalog.alter_columnar_table_reset(
     stripe_row_count bool,
     compression bool,
     compression_level bool)
-IS 'reset on or more options on a cstore table to the system defaults';
+IS 'reset on or more options on a columnar table to the system defaults';

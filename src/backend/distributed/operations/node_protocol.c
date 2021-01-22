@@ -64,7 +64,7 @@
 #include "utils/ruleutils.h"
 #include "utils/varlena.h"
 
-#include "columnar/cstore_tableam.h"
+#include "columnar/columnar_tableam.h"
 
 /* Shard related configuration */
 int ShardCount = 32;
