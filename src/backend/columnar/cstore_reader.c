@@ -80,12 +80,12 @@ static Datum ColumnDefaultValue(TupleConstr *tupleConstraints,
 								Form_pg_attribute attributeForm);
 
 /*
- * CStoreBeginRead initializes a cstore read operation. This function returns a
+ * ColumnarBeginRead initializes a cstore read operation. This function returns a
  * read handle that's used during reading rows and finishing the read operation.
  */
 TableReadState *
-CStoreBeginRead(Relation relation, TupleDesc tupleDescriptor,
-				List *projectedColumnList, List *whereClauseList)
+ColumnarBeginRead(Relation relation, TupleDesc tupleDescriptor,
+				  List *projectedColumnList, List *whereClauseList)
 {
 	List *stripeList = StripesForRelfilenode(relation->rd_node);
 
@@ -117,12 +117,12 @@ CStoreBeginRead(Relation relation, TupleDesc tupleDescriptor,
 
 
 /*
- * CStoreReadNextRow tries to read a row from the cstore file. On success, it sets
+ * ColumnarReadNextRow tries to read a row from the cstore file. On success, it sets
  * column values and nulls, and returns true. If there are no more rows to read,
  * the function returns false.
  */
 bool
-CStoreReadNextRow(TableReadState *readState, Datum *columnValues, bool *columnNulls)
+ColumnarReadNextRow(TableReadState *readState, Datum *columnValues, bool *columnNulls)
 {
 	StripeMetadata *stripeMetadata = readState->currentStripeMetadata;
 	MemoryContext oldContext = NULL;
@@ -223,11 +223,11 @@ CStoreReadNextRow(TableReadState *readState, Datum *columnValues, bool *columnNu
 
 
 /*
- * CStoreRescan clears the position where we were scanning so that the next read starts at
+ * ColumnarRescan clears the position where we were scanning so that the next read starts at
  * the beginning again
  */
 void
-CStoreRescan(TableReadState *readState)
+ColumnarRescan(TableReadState *readState)
 {
 	readState->stripeBuffers = NULL;
 	readState->readStripeCount = 0;
@@ -237,7 +237,7 @@ CStoreRescan(TableReadState *readState)
 
 /* Finishes a cstore read operation. */
 void
-CStoreEndRead(TableReadState *readState)
+ColumnarEndRead(TableReadState *readState)
 {
 	MemoryContextDelete(readState->stripeReadContext);
 	list_free_deep(readState->stripeList);
@@ -311,9 +311,9 @@ FreeChunkData(ChunkData *chunkData)
 }
 
 
-/* CStoreTableRowCount returns the exact row count of a table using skiplists */
+/* ColumnarTableRowCount returns the exact row count of a table using skiplists */
 uint64
-CStoreTableRowCount(Relation relation)
+ColumnarTableRowCount(Relation relation)
 {
 	ListCell *stripeMetadataCell = NULL;
 	uint64 totalRowCount = 0;

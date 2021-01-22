@@ -1,6 +1,6 @@
 /*-------------------------------------------------------------------------
  *
- * cstore_metadata_tables.c
+ * columnar_metadata_tables.c
  *
  * Copyright (c), Citus Data, Inc.
  *
@@ -79,13 +79,13 @@ static void GetHighestUsedAddressAndId(uint64 storageId,
 									   uint64 *highestUsedAddress,
 									   uint64 *highestUsedId);
 static List * ReadDataFileStripeList(uint64 storageId, Snapshot snapshot);
-static Oid CStoreStripesRelationId(void);
-static Oid CStoreStripesIndexRelationId(void);
+static Oid ColumnarStripesRelationId(void);
+static Oid ColumnarStripesIndexRelationId(void);
 static Oid ColumnarOptionsRelationId(void);
 static Oid ColumnarOptionsIndexRegclass(void);
-static Oid CStoreSkipNodesRelationId(void);
-static Oid CStoreSkipNodesIndexRelationId(void);
-static Oid CStoreNamespaceId(void);
+static Oid ColumnarSkipNodesRelationId(void);
+static Oid ColumnarSkipNodesIndexRelationId(void);
+static Oid ColumnarNamespaceId(void);
 static ModifyState * StartModifyRelation(Relation rel);
 static void InsertTupleAndEnforceConstraints(ModifyState *state, Datum *values,
 											 bool *nulls);
@@ -102,18 +102,18 @@ static bool WriteColumnarOptions(Oid regclass, ColumnarOptions *options, bool ov
 PG_FUNCTION_INFO_V1(columnar_relation_storageid);
 
 /* constants for columnar.options */
-#define Natts_cstore_options 5
-#define Anum_cstore_options_regclass 1
-#define Anum_cstore_options_chunk_row_count 2
-#define Anum_cstore_options_stripe_row_count 3
-#define Anum_cstore_options_compression_level 4
-#define Anum_cstore_options_compression 5
+#define Natts_columnar_options 5
+#define Anum_columnar_options_regclass 1
+#define Anum_columnar_options_chunk_row_count 2
+#define Anum_columnar_options_stripe_row_count 3
+#define Anum_columnar_options_compression_level 4
+#define Anum_columnar_options_compression 5
 
 /* ----------------
  *		columnar.options definition.
  * ----------------
  */
-typedef struct FormData_cstore_options
+typedef struct FormData_columnar_options
 {
 	Oid regclass;
 	int32 chunk_row_count;
@@ -123,37 +123,37 @@ typedef struct FormData_cstore_options
 
 #ifdef CATALOG_VARLEN           /* variable-length fields start here */
 #endif
-} FormData_cstore_options;
-typedef FormData_cstore_options *Form_cstore_options;
+} FormData_columnar_options;
+typedef FormData_columnar_options *Form_columnar_options;
 
 
-/* constants for cstore_stripe */
-#define Natts_cstore_stripes 8
-#define Anum_cstore_stripes_storageid 1
-#define Anum_cstore_stripes_stripe 2
-#define Anum_cstore_stripes_file_offset 3
-#define Anum_cstore_stripes_data_length 4
-#define Anum_cstore_stripes_column_count 5
-#define Anum_cstore_stripes_chunk_count 6
-#define Anum_cstore_stripes_chunk_row_count 7
-#define Anum_cstore_stripes_row_count 8
+/* constants for columnar_stripe */
+#define Natts_columnar_stripes 8
+#define Anum_columnar_stripes_storageid 1
+#define Anum_columnar_stripes_stripe 2
+#define Anum_columnar_stripes_file_offset 3
+#define Anum_columnar_stripes_data_length 4
+#define Anum_columnar_stripes_column_count 5
+#define Anum_columnar_stripes_chunk_count 6
+#define Anum_columnar_stripes_chunk_row_count 7
+#define Anum_columnar_stripes_row_count 8
 
-/* constants for cstore_skipnodes */
-#define Natts_cstore_skipnodes 14
-#define Anum_cstore_skipnodes_storageid 1
-#define Anum_cstore_skipnodes_stripe 2
-#define Anum_cstore_skipnodes_attr 3
-#define Anum_cstore_skipnodes_chunk 4
-#define Anum_cstore_skipnodes_row_count 5
-#define Anum_cstore_skipnodes_minimum_value 6
-#define Anum_cstore_skipnodes_maximum_value 7
-#define Anum_cstore_skipnodes_value_stream_offset 8
-#define Anum_cstore_skipnodes_value_stream_length 9
-#define Anum_cstore_skipnodes_exists_stream_offset 10
-#define Anum_cstore_skipnodes_exists_stream_length 11
-#define Anum_cstore_skipnodes_value_compression_type 12
-#define Anum_cstore_skipnodes_value_compression_level 13
-#define Anum_cstore_skipnodes_value_decompressed_size 14
+/* constants for columnar_skipnodes */
+#define Natts_columnar_skipnodes 14
+#define Anum_columnar_skipnodes_storageid 1
+#define Anum_columnar_skipnodes_stripe 2
+#define Anum_columnar_skipnodes_attr 3
+#define Anum_columnar_skipnodes_chunk 4
+#define Anum_columnar_skipnodes_row_count 5
+#define Anum_columnar_skipnodes_minimum_value 6
+#define Anum_columnar_skipnodes_maximum_value 7
+#define Anum_columnar_skipnodes_value_stream_offset 8
+#define Anum_columnar_skipnodes_value_stream_length 9
+#define Anum_columnar_skipnodes_exists_stream_offset 10
+#define Anum_columnar_skipnodes_exists_stream_length 11
+#define Anum_columnar_skipnodes_value_compression_type 12
+#define Anum_columnar_skipnodes_value_compression_level 13
+#define Anum_columnar_skipnodes_value_decompressed_size 14
 
 
 /*
@@ -173,9 +173,9 @@ InitColumnarOptions(Oid regclass)
 	}
 
 	ColumnarOptions defaultOptions = {
-		.chunkRowCount = cstore_chunk_row_count,
-		.stripeRowCount = cstore_stripe_row_count,
-		.compressionType = cstore_compression,
+		.chunkRowCount = columnar_chunk_row_count,
+		.stripeRowCount = columnar_stripe_row_count,
+		.compressionType = columnar_compression,
 		.compressionLevel = columnar_compression_level
 	};
 
@@ -214,8 +214,8 @@ WriteColumnarOptions(Oid regclass, ColumnarOptions *options, bool overwrite)
 
 	bool written = false;
 
-	bool nulls[Natts_cstore_options] = { 0 };
-	Datum values[Natts_cstore_options] = {
+	bool nulls[Natts_columnar_options] = { 0 };
+	Datum values[Natts_columnar_options] = {
 		ObjectIdGetDatum(regclass),
 		Int32GetDatum(options->chunkRowCount),
 		Int32GetDatum(options->stripeRowCount),
@@ -225,7 +225,7 @@ WriteColumnarOptions(Oid regclass, ColumnarOptions *options, bool overwrite)
 
 	NameData compressionName = { 0 };
 	namestrcpy(&compressionName, CompressionTypeStr(options->compressionType));
-	values[Anum_cstore_options_compression - 1] = NameGetDatum(&compressionName);
+	values[Anum_columnar_options_compression - 1] = NameGetDatum(&compressionName);
 
 	/* create heap tuple and insert into catalog table */
 	Relation columnarOptions = relation_open(ColumnarOptionsRelationId(),
@@ -234,7 +234,8 @@ WriteColumnarOptions(Oid regclass, ColumnarOptions *options, bool overwrite)
 
 	/* find existing item to perform update if exist */
 	ScanKeyData scanKey[1] = { 0 };
-	ScanKeyInit(&scanKey[0], Anum_cstore_options_regclass, BTEqualStrategyNumber, F_OIDEQ,
+	ScanKeyInit(&scanKey[0], Anum_columnar_options_regclass, BTEqualStrategyNumber,
+				F_OIDEQ,
 				ObjectIdGetDatum(regclass));
 
 	Relation index = index_open(ColumnarOptionsIndexRegclass(), AccessShareLock);
@@ -248,11 +249,11 @@ WriteColumnarOptions(Oid regclass, ColumnarOptions *options, bool overwrite)
 		{
 			/* TODO check if the options are actually different, skip if not changed */
 			/* update existing record */
-			bool update[Natts_cstore_options] = { 0 };
-			update[Anum_cstore_options_chunk_row_count - 1] = true;
-			update[Anum_cstore_options_stripe_row_count - 1] = true;
-			update[Anum_cstore_options_compression_level - 1] = true;
-			update[Anum_cstore_options_compression - 1] = true;
+			bool update[Natts_columnar_options] = { 0 };
+			update[Anum_columnar_options_chunk_row_count - 1] = true;
+			update[Anum_columnar_options_stripe_row_count - 1] = true;
+			update[Anum_columnar_options_compression_level - 1] = true;
+			update[Anum_columnar_options_compression - 1] = true;
 
 			HeapTuple tuple = heap_modify_tuple(heapTuple, tupleDescriptor,
 												values, nulls, update);
@@ -303,7 +304,8 @@ DeleteColumnarTableOptions(Oid regclass, bool missingOk)
 
 	/* find existing item to remove */
 	ScanKeyData scanKey[1] = { 0 };
-	ScanKeyInit(&scanKey[0], Anum_cstore_options_regclass, BTEqualStrategyNumber, F_OIDEQ,
+	ScanKeyInit(&scanKey[0], Anum_columnar_options_regclass, BTEqualStrategyNumber,
+				F_OIDEQ,
 				ObjectIdGetDatum(regclass));
 
 	Relation index = index_open(ColumnarOptionsIndexRegclass(), AccessShareLock);
@@ -336,7 +338,8 @@ ReadColumnarOptions(Oid regclass, ColumnarOptions *options)
 {
 	ScanKeyData scanKey[1];
 
-	ScanKeyInit(&scanKey[0], Anum_cstore_options_regclass, BTEqualStrategyNumber, F_OIDEQ,
+	ScanKeyInit(&scanKey[0], Anum_columnar_options_regclass, BTEqualStrategyNumber,
+				F_OIDEQ,
 				ObjectIdGetDatum(regclass));
 
 	Oid columnarOptionsOid = ColumnarOptionsRelationId();
@@ -365,7 +368,7 @@ ReadColumnarOptions(Oid regclass, ColumnarOptions *options)
 	HeapTuple heapTuple = systable_getnext(scanDescriptor);
 	if (HeapTupleIsValid(heapTuple))
 	{
-		Form_cstore_options tupOptions = (Form_cstore_options) GETSTRUCT(heapTuple);
+		Form_columnar_options tupOptions = (Form_columnar_options) GETSTRUCT(heapTuple);
 
 		options->chunkRowCount = tupOptions->chunk_row_count;
 		options->stripeRowCount = tupOptions->stripe_row_count;
@@ -375,9 +378,9 @@ ReadColumnarOptions(Oid regclass, ColumnarOptions *options)
 	else
 	{
 		/* populate options with system defaults */
-		options->compressionType = cstore_compression;
-		options->stripeRowCount = cstore_stripe_row_count;
-		options->chunkRowCount = cstore_chunk_row_count;
+		options->compressionType = columnar_compression;
+		options->stripeRowCount = columnar_stripe_row_count;
+		options->chunkRowCount = columnar_chunk_row_count;
 		options->compressionLevel = columnar_compression_level;
 	}
 
@@ -391,7 +394,7 @@ ReadColumnarOptions(Oid regclass, ColumnarOptions *options)
 
 /*
  * SaveStripeSkipList saves StripeSkipList for a given stripe as rows
- * of cstore_skipnodes.
+ * of columnar_skipnodes.
  */
 void
 SaveStripeSkipList(RelFileNode relfilenode, uint64 stripe, StripeSkipList *stripeSkipList,
@@ -402,7 +405,7 @@ SaveStripeSkipList(RelFileNode relfilenode, uint64 stripe, StripeSkipList *strip
 	uint32 columnCount = stripeSkipList->columnCount;
 
 	ColumnarMetapage *metapage = ReadMetapage(relfilenode, false);
-	Oid cstoreSkipNodesOid = CStoreSkipNodesRelationId();
+	Oid cstoreSkipNodesOid = ColumnarSkipNodesRelationId();
 	Relation cstoreSkipNodes = table_open(cstoreSkipNodesOid, RowExclusiveLock);
 	ModifyState *modifyState = StartModifyRelation(cstoreSkipNodes);
 
@@ -413,7 +416,7 @@ SaveStripeSkipList(RelFileNode relfilenode, uint64 stripe, StripeSkipList *strip
 			ColumnChunkSkipNode *skipNode =
 				&stripeSkipList->chunkSkipNodeArray[columnIndex][chunkIndex];
 
-			Datum values[Natts_cstore_skipnodes] = {
+			Datum values[Natts_columnar_skipnodes] = {
 				UInt64GetDatum(metapage->storageId),
 				Int64GetDatum(stripe),
 				Int32GetDatum(columnIndex + 1),
@@ -430,21 +433,21 @@ SaveStripeSkipList(RelFileNode relfilenode, uint64 stripe, StripeSkipList *strip
 				Int64GetDatum(skipNode->decompressedValueSize)
 			};
 
-			bool nulls[Natts_cstore_skipnodes] = { false };
+			bool nulls[Natts_columnar_skipnodes] = { false };
 
 			if (skipNode->hasMinMax)
 			{
-				values[Anum_cstore_skipnodes_minimum_value - 1] =
+				values[Anum_columnar_skipnodes_minimum_value - 1] =
 					PointerGetDatum(DatumToBytea(skipNode->minimumValue,
 												 &tupleDescriptor->attrs[columnIndex]));
-				values[Anum_cstore_skipnodes_maximum_value - 1] =
+				values[Anum_columnar_skipnodes_maximum_value - 1] =
 					PointerGetDatum(DatumToBytea(skipNode->maximumValue,
 												 &tupleDescriptor->attrs[columnIndex]));
 			}
 			else
 			{
-				nulls[Anum_cstore_skipnodes_minimum_value - 1] = true;
-				nulls[Anum_cstore_skipnodes_maximum_value - 1] = true;
+				nulls[Anum_columnar_skipnodes_minimum_value - 1] = true;
+				nulls[Anum_columnar_skipnodes_maximum_value - 1] = true;
 			}
 
 			InsertTupleAndEnforceConstraints(modifyState, values, nulls);
@@ -472,13 +475,13 @@ ReadStripeSkipList(RelFileNode relfilenode, uint64 stripe, TupleDesc tupleDescri
 
 	ColumnarMetapage *metapage = ReadMetapage(relfilenode, false);
 
-	Oid cstoreSkipNodesOid = CStoreSkipNodesRelationId();
+	Oid cstoreSkipNodesOid = ColumnarSkipNodesRelationId();
 	Relation cstoreSkipNodes = table_open(cstoreSkipNodesOid, AccessShareLock);
-	Relation index = index_open(CStoreSkipNodesIndexRelationId(), AccessShareLock);
+	Relation index = index_open(ColumnarSkipNodesIndexRelationId(), AccessShareLock);
 
-	ScanKeyInit(&scanKey[0], Anum_cstore_skipnodes_storageid,
+	ScanKeyInit(&scanKey[0], Anum_columnar_skipnodes_storageid,
 				BTEqualStrategyNumber, F_OIDEQ, UInt64GetDatum(metapage->storageId));
-	ScanKeyInit(&scanKey[1], Anum_cstore_skipnodes_stripe,
+	ScanKeyInit(&scanKey[1], Anum_columnar_skipnodes_stripe,
 				BTEqualStrategyNumber, F_OIDEQ, Int32GetDatum(stripe));
 
 	SysScanDesc scanDescriptor = systable_beginscan_ordered(cstoreSkipNodes, index, NULL,
@@ -496,14 +499,14 @@ ReadStripeSkipList(RelFileNode relfilenode, uint64 stripe, TupleDesc tupleDescri
 
 	while (HeapTupleIsValid(heapTuple = systable_getnext(scanDescriptor)))
 	{
-		Datum datumArray[Natts_cstore_skipnodes];
-		bool isNullArray[Natts_cstore_skipnodes];
+		Datum datumArray[Natts_columnar_skipnodes];
+		bool isNullArray[Natts_columnar_skipnodes];
 
 		heap_deform_tuple(heapTuple, RelationGetDescr(cstoreSkipNodes), datumArray,
 						  isNullArray);
 
-		int32 attr = DatumGetInt32(datumArray[Anum_cstore_skipnodes_attr - 1]);
-		int32 chunkIndex = DatumGetInt32(datumArray[Anum_cstore_skipnodes_chunk - 1]);
+		int32 attr = DatumGetInt32(datumArray[Anum_columnar_skipnodes_attr - 1]);
+		int32 chunkIndex = DatumGetInt32(datumArray[Anum_columnar_skipnodes_chunk - 1]);
 
 		if (attr <= 0 || attr > columnCount)
 		{
@@ -521,34 +524,36 @@ ReadStripeSkipList(RelFileNode relfilenode, uint64 stripe, TupleDesc tupleDescri
 
 		ColumnChunkSkipNode *skipNode =
 			&skipList->chunkSkipNodeArray[columnIndex][chunkIndex];
-		skipNode->rowCount = DatumGetInt64(datumArray[Anum_cstore_skipnodes_row_count -
+		skipNode->rowCount = DatumGetInt64(datumArray[Anum_columnar_skipnodes_row_count -
 													  1]);
 		skipNode->valueChunkOffset =
-			DatumGetInt64(datumArray[Anum_cstore_skipnodes_value_stream_offset - 1]);
+			DatumGetInt64(datumArray[Anum_columnar_skipnodes_value_stream_offset - 1]);
 		skipNode->valueLength =
-			DatumGetInt64(datumArray[Anum_cstore_skipnodes_value_stream_length - 1]);
+			DatumGetInt64(datumArray[Anum_columnar_skipnodes_value_stream_length - 1]);
 		skipNode->existsChunkOffset =
-			DatumGetInt64(datumArray[Anum_cstore_skipnodes_exists_stream_offset - 1]);
+			DatumGetInt64(datumArray[Anum_columnar_skipnodes_exists_stream_offset - 1]);
 		skipNode->existsLength =
-			DatumGetInt64(datumArray[Anum_cstore_skipnodes_exists_stream_length - 1]);
+			DatumGetInt64(datumArray[Anum_columnar_skipnodes_exists_stream_length - 1]);
 		skipNode->valueCompressionType =
-			DatumGetInt32(datumArray[Anum_cstore_skipnodes_value_compression_type - 1]);
+			DatumGetInt32(datumArray[Anum_columnar_skipnodes_value_compression_type - 1]);
 		skipNode->valueCompressionLevel =
-			DatumGetInt32(datumArray[Anum_cstore_skipnodes_value_compression_level - 1]);
+			DatumGetInt32(datumArray[Anum_columnar_skipnodes_value_compression_level -
+									 1]);
 		skipNode->decompressedValueSize =
-			DatumGetInt64(datumArray[Anum_cstore_skipnodes_value_decompressed_size - 1]);
+			DatumGetInt64(datumArray[Anum_columnar_skipnodes_value_decompressed_size -
+									 1]);
 
-		if (isNullArray[Anum_cstore_skipnodes_minimum_value - 1] ||
-			isNullArray[Anum_cstore_skipnodes_maximum_value - 1])
+		if (isNullArray[Anum_columnar_skipnodes_minimum_value - 1] ||
+			isNullArray[Anum_columnar_skipnodes_maximum_value - 1])
 		{
 			skipNode->hasMinMax = false;
 		}
 		else
 		{
 			bytea *minValue = DatumGetByteaP(
-				datumArray[Anum_cstore_skipnodes_minimum_value - 1]);
+				datumArray[Anum_columnar_skipnodes_minimum_value - 1]);
 			bytea *maxValue = DatumGetByteaP(
-				datumArray[Anum_cstore_skipnodes_maximum_value - 1]);
+				datumArray[Anum_columnar_skipnodes_maximum_value - 1]);
 
 			skipNode->minimumValue =
 				ByteaToDatum(minValue, &tupleDescriptor->attrs[columnIndex]);
@@ -568,13 +573,13 @@ ReadStripeSkipList(RelFileNode relfilenode, uint64 stripe, TupleDesc tupleDescri
 
 
 /*
- * InsertStripeMetadataRow adds a row to cstore_stripes.
+ * InsertStripeMetadataRow adds a row to columnar_stripes.
  */
 static void
 InsertStripeMetadataRow(uint64 storageId, StripeMetadata *stripe)
 {
-	bool nulls[Natts_cstore_stripes] = { 0 };
-	Datum values[Natts_cstore_stripes] = {
+	bool nulls[Natts_columnar_stripes] = { 0 };
+	Datum values[Natts_columnar_stripes] = {
 		UInt64GetDatum(storageId),
 		Int64GetDatum(stripe->id),
 		Int64GetDatum(stripe->fileOffset),
@@ -585,7 +590,7 @@ InsertStripeMetadataRow(uint64 storageId, StripeMetadata *stripe)
 		Int64GetDatum(stripe->rowCount)
 	};
 
-	Oid cstoreStripesOid = CStoreStripesRelationId();
+	Oid cstoreStripesOid = ColumnarStripesRelationId();
 	Relation cstoreStripes = table_open(cstoreStripesOid, RowExclusiveLock);
 
 	ModifyState *modifyState = StartModifyRelation(cstoreStripes);
@@ -679,7 +684,7 @@ GetHighestUsedAddressAndId(uint64 storageId,
 
 /*
  * ReserveStripe reserves and stripe of given size for the given relation,
- * and inserts it into cstore_stripes. It is guaranteed that concurrent
+ * and inserts it into columnar_stripes. It is guaranteed that concurrent
  * writes won't overwrite the returned stripe.
  */
 StripeMetadata
@@ -760,13 +765,13 @@ ReadDataFileStripeList(uint64 storageId, Snapshot snapshot)
 	ScanKeyData scanKey[1];
 	HeapTuple heapTuple;
 
-	ScanKeyInit(&scanKey[0], Anum_cstore_stripes_storageid,
+	ScanKeyInit(&scanKey[0], Anum_columnar_stripes_storageid,
 				BTEqualStrategyNumber, F_OIDEQ, Int32GetDatum(storageId));
 
-	Oid cstoreStripesOid = CStoreStripesRelationId();
+	Oid cstoreStripesOid = ColumnarStripesRelationId();
 
 	Relation cstoreStripes = table_open(cstoreStripesOid, AccessShareLock);
-	Relation index = index_open(CStoreStripesIndexRelationId(), AccessShareLock);
+	Relation index = index_open(ColumnarStripesIndexRelationId(), AccessShareLock);
 	TupleDesc tupleDescriptor = RelationGetDescr(cstoreStripes);
 
 	SysScanDesc scanDescriptor = systable_beginscan_ordered(cstoreStripes, index,
@@ -775,25 +780,25 @@ ReadDataFileStripeList(uint64 storageId, Snapshot snapshot)
 
 	while (HeapTupleIsValid(heapTuple = systable_getnext(scanDescriptor)))
 	{
-		Datum datumArray[Natts_cstore_stripes];
-		bool isNullArray[Natts_cstore_stripes];
+		Datum datumArray[Natts_columnar_stripes];
+		bool isNullArray[Natts_columnar_stripes];
 
 		heap_deform_tuple(heapTuple, tupleDescriptor, datumArray, isNullArray);
 
 		StripeMetadata *stripeMetadata = palloc0(sizeof(StripeMetadata));
-		stripeMetadata->id = DatumGetInt64(datumArray[Anum_cstore_stripes_stripe - 1]);
+		stripeMetadata->id = DatumGetInt64(datumArray[Anum_columnar_stripes_stripe - 1]);
 		stripeMetadata->fileOffset = DatumGetInt64(
-			datumArray[Anum_cstore_stripes_file_offset - 1]);
+			datumArray[Anum_columnar_stripes_file_offset - 1]);
 		stripeMetadata->dataLength = DatumGetInt64(
-			datumArray[Anum_cstore_stripes_data_length - 1]);
+			datumArray[Anum_columnar_stripes_data_length - 1]);
 		stripeMetadata->columnCount = DatumGetInt32(
-			datumArray[Anum_cstore_stripes_column_count - 1]);
+			datumArray[Anum_columnar_stripes_column_count - 1]);
 		stripeMetadata->chunkCount = DatumGetInt32(
-			datumArray[Anum_cstore_stripes_chunk_count - 1]);
+			datumArray[Anum_columnar_stripes_chunk_count - 1]);
 		stripeMetadata->chunkRowCount = DatumGetInt32(
-			datumArray[Anum_cstore_stripes_chunk_row_count - 1]);
+			datumArray[Anum_columnar_stripes_chunk_row_count - 1]);
 		stripeMetadata->rowCount = DatumGetInt64(
-			datumArray[Anum_cstore_stripes_row_count - 1]);
+			datumArray[Anum_columnar_stripes_row_count - 1]);
 
 		stripeMetadataList = lappend(stripeMetadataList, stripeMetadata);
 	}
@@ -807,7 +812,7 @@ ReadDataFileStripeList(uint64 storageId, Snapshot snapshot)
 
 
 /*
- * DeleteMetadataRows removes the rows with given relfilenode from cstore_stripes.
+ * DeleteMetadataRows removes the rows with given relfilenode from columnar_stripes.
  */
 void
 DeleteMetadataRows(RelFileNode relfilenode)
@@ -833,10 +838,10 @@ DeleteMetadataRows(RelFileNode relfilenode)
 		return;
 	}
 
-	ScanKeyInit(&scanKey[0], Anum_cstore_stripes_storageid,
+	ScanKeyInit(&scanKey[0], Anum_columnar_stripes_storageid,
 				BTEqualStrategyNumber, F_INT8EQ, UInt64GetDatum(metapage->storageId));
 
-	Oid cstoreStripesOid = CStoreStripesRelationId();
+	Oid cstoreStripesOid = ColumnarStripesRelationId();
 	Relation cstoreStripes = try_relation_open(cstoreStripesOid, AccessShareLock);
 	if (cstoreStripes == NULL)
 	{
@@ -844,7 +849,7 @@ DeleteMetadataRows(RelFileNode relfilenode)
 		return;
 	}
 
-	Relation index = index_open(CStoreStripesIndexRelationId(), AccessShareLock);
+	Relation index = index_open(ColumnarStripesIndexRelationId(), AccessShareLock);
 
 	SysScanDesc scanDescriptor = systable_beginscan_ordered(cstoreStripes, index, NULL,
 															1, scanKey);
@@ -1046,24 +1051,24 @@ ByteaToDatum(bytea *bytes, Form_pg_attribute attrForm)
 
 
 /*
- * CStoreStripesRelationId returns relation id of cstore_stripes.
+ * ColumnarStripesRelationId returns relation id of columnar_stripes.
  * TODO: should we cache this similar to citus?
  */
 static Oid
-CStoreStripesRelationId(void)
+ColumnarStripesRelationId(void)
 {
-	return get_relname_relid("columnar_stripes", CStoreNamespaceId());
+	return get_relname_relid("columnar_stripes", ColumnarNamespaceId());
 }
 
 
 /*
- * CStoreStripesIndexRelationId returns relation id of cstore_stripes_idx.
+ * ColumnarStripesIndexRelationId returns relation id of columnar_stripes_idx.
  * TODO: should we cache this similar to citus?
  */
 static Oid
-CStoreStripesIndexRelationId(void)
+ColumnarStripesIndexRelationId(void)
 {
-	return get_relname_relid("columnar_stripes_pkey", CStoreNamespaceId());
+	return get_relname_relid("columnar_stripes_pkey", ColumnarNamespaceId());
 }
 
 
@@ -1073,7 +1078,7 @@ CStoreStripesIndexRelationId(void)
 static Oid
 ColumnarOptionsRelationId(void)
 {
-	return get_relname_relid("options", CStoreNamespaceId());
+	return get_relname_relid("options", ColumnarNamespaceId());
 }
 
 
@@ -1083,38 +1088,38 @@ ColumnarOptionsRelationId(void)
 static Oid
 ColumnarOptionsIndexRegclass(void)
 {
-	return get_relname_relid("options_pkey", CStoreNamespaceId());
+	return get_relname_relid("options_pkey", ColumnarNamespaceId());
 }
 
 
 /*
- * CStoreSkipNodesRelationId returns relation id of cstore_skipnodes.
+ * ColumnarSkipNodesRelationId returns relation id of columnar_skipnodes.
  * TODO: should we cache this similar to citus?
  */
 static Oid
-CStoreSkipNodesRelationId(void)
+ColumnarSkipNodesRelationId(void)
 {
-	return get_relname_relid("columnar_skipnodes", CStoreNamespaceId());
+	return get_relname_relid("columnar_skipnodes", ColumnarNamespaceId());
 }
 
 
 /*
- * CStoreSkipNodesIndexRelationId returns relation id of cstore_skipnodes_pkey.
+ * ColumnarSkipNodesIndexRelationId returns relation id of columnar_skipnodes_pkey.
  * TODO: should we cache this similar to citus?
  */
 static Oid
-CStoreSkipNodesIndexRelationId(void)
+ColumnarSkipNodesIndexRelationId(void)
 {
-	return get_relname_relid("columnar_skipnodes_pkey", CStoreNamespaceId());
+	return get_relname_relid("columnar_skipnodes_pkey", ColumnarNamespaceId());
 }
 
 
 /*
- * CStoreNamespaceId returns namespace id of the schema we store cstore
+ * ColumnarNamespaceId returns namespace id of the schema we store cstore
  * related tables.
  */
 static Oid
-CStoreNamespaceId(void)
+ColumnarNamespaceId(void)
 {
 	return get_namespace_oid("columnar", false);
 }
@@ -1201,7 +1206,7 @@ GetNextStorageId(void)
 {
 	Oid savedUserId = InvalidOid;
 	int savedSecurityContext = 0;
-	Oid sequenceId = get_relname_relid("storageid_seq", CStoreNamespaceId());
+	Oid sequenceId = get_relname_relid("storageid_seq", ColumnarNamespaceId());
 	Datum sequenceIdDatum = ObjectIdGetDatum(sequenceId);
 
 	/*
@@ -1236,7 +1241,7 @@ columnar_relation_storageid(PG_FUNCTION_ARGS)
 #if HAS_TABLEAM
 	Oid relationId = PG_GETARG_OID(0);
 	Relation relation = relation_open(relationId, AccessShareLock);
-	if (IsCStoreTableAmTable(relationId))
+	if (IsColumnarTableAmTable(relationId))
 	{
 		ColumnarMetapage *metadata = ReadMetapage(relation->rd_node, true);
 		if (metadata != NULL)

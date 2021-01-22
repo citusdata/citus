@@ -116,8 +116,8 @@ CleanupWriteStateMap(void *arg)
 
 
 TableWriteState *
-cstore_init_write_state(Relation relation, TupleDesc tupdesc,
-						SubTransactionId currentSubXid)
+columnar_init_write_state(Relation relation, TupleDesc tupdesc,
+						  SubTransactionId currentSubXid)
 {
 	bool found;
 
@@ -182,9 +182,9 @@ cstore_init_write_state(Relation relation, TupleDesc tupdesc,
 	ReadColumnarOptions(relation->rd_id, &cstoreOptions);
 
 	SubXidWriteState *stackEntry = palloc0(sizeof(SubXidWriteState));
-	stackEntry->writeState = CStoreBeginWrite(relation->rd_node,
-											  cstoreOptions,
-											  tupdesc);
+	stackEntry->writeState = ColumnarBeginWrite(relation->rd_node,
+												cstoreOptions,
+												tupdesc);
 	stackEntry->subXid = currentSubXid;
 	stackEntry->next = hashEntry->writeStateStack;
 	hashEntry->writeStateStack = stackEntry;
@@ -215,7 +215,7 @@ FlushWriteStateForRelfilenode(Oid relfilenode, SubTransactionId currentSubXid)
 		SubXidWriteState *stackEntry = entry->writeStateStack;
 		if (stackEntry->subXid == currentSubXid)
 		{
-			CStoreFlushPendingWrites(stackEntry->writeState);
+			ColumnarFlushPendingWrites(stackEntry->writeState);
 		}
 	}
 }
@@ -279,7 +279,7 @@ PopWriteStateForAllRels(SubTransactionId currentSubXid, SubTransactionId parentS
 			{
 				if (commit)
 				{
-					CStoreEndWrite(stackHead->writeState);
+					ColumnarEndWrite(stackHead->writeState);
 				}
 
 				entry->writeStateStack = stackHead->next;
