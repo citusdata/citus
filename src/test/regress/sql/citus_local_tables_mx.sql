@@ -91,6 +91,18 @@ SELECT create_citus_local_table('citus_local_table_4');
 
 ALTER TABLE citus_local_table_3 ADD CONSTRAINT fkey_local_to_local FOREIGN KEY(l1) REFERENCES citus_local_table_4(l1) ON UPDATE SET NULL;
 
+-- check stats creation
+CREATE TABLE citus_local_table_stats(a int, b int);
+CREATE STATISTICS stx1 ON a, b FROM citus_local_table_stats;
+SELECT create_citus_local_table('citus_local_table_stats');
+CREATE STATISTICS stx2 ON a, b FROM citus_local_table_stats;
+CREATE STATISTICS stx3 ON a, b FROM citus_local_table_stats;
+CREATE STATISTICS stx4 ON a, b FROM citus_local_table_stats;
+ALTER STATISTICS stx3 RENAME TO stx5;
+DROP STATISTICS stx4;
+
+SELECT stxname FROM pg_statistic_ext ORDER BY stxname;
+
 -- and switch to worker1
 \c - - - :worker_1_port
 SET search_path TO citus_local_tables_mx;
@@ -142,6 +154,16 @@ SELECT * FROM citus_local_table_3;
 
 -- finally show that we do not allow defining foreign key in mx nodes
 ALTER TABLE citus_local_table_3 ADD CONSTRAINT fkey_local_to_local_2 FOREIGN KEY(l1) REFERENCES citus_local_table_4(l1);
+
+-- check stats creation
+CREATE TABLE citus_local_table_stats2(a int, b int);
+CREATE STATISTICS stx8 ON a, b FROM citus_local_table_stats2;
+SELECT create_citus_local_table('citus_local_table_stats2');
+CREATE STATISTICS stx9 ON a, b FROM citus_local_table_stats2;
+DROP STATISTICS stx8;
+DROP STATISTICS stx4;
+
+SELECT stxname FROM pg_statistic_ext ORDER BY stxname;
 
 \c - - - :master_port
 SET search_path TO citus_local_tables_mx;

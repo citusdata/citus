@@ -17,6 +17,7 @@
 #include "access/genam.h"
 #include "access/htup_details.h"
 #include "catalog/pg_constraint.h"
+#include "catalog/pg_statistic_ext.h"
 #include "catalog/pg_trigger.h"
 #include "distributed/coordinator_protocol.h"
 #include "distributed/citus_ruleutils.h"
@@ -49,14 +50,18 @@ static List * GetConstraintNameList(Oid relationId);
 static char * GetRenameShardConstraintCommand(Oid relationId, char *constraintName,
 											  uint64 shardId);
 static void RenameShardRelationIndexes(Oid shardRelationId, uint64 shardId);
+static void RenameShardRelationStatistics(Oid shardRelationId, uint64 shardId);
 static char * GetDropTriggerCommand(Oid relationId, char *triggerName);
 static char * GetRenameShardIndexCommand(char *indexName, uint64 shardId);
+static char * GetRenameShardStatsCommand(char *statSchema, char *statsName,
+										 char *statsNameWithShardId);
 static void RenameShardRelationNonTruncateTriggers(Oid shardRelationId, uint64 shardId);
 static char * GetRenameShardTriggerCommand(Oid shardRelationId, char *triggerName,
 										   uint64 shardId);
 static void DropRelationTruncateTriggers(Oid relationId);
 static char * GetDropTriggerCommand(Oid relationId, char *triggerName);
 static List * GetExplicitIndexNameList(Oid relationId);
+static List * GetRenameStatsCommandList(List *statsOidList, uint64 shardId);
 static void DropAndMoveDefaultSequenceOwnerships(Oid sourceRelationId,
 												 Oid targetRelationId);
 static void DropDefaultColumnDefinition(Oid relationId, char *columnName);
@@ -358,6 +363,7 @@ ConvertLocalTableToShard(Oid relationId)
 	RenameRelationToShardRelation(relationId, shardId);
 	RenameShardRelationConstraints(relationId, shardId);
 	RenameShardRelationIndexes(relationId, shardId);
+	RenameShardRelationStatistics(relationId, shardId);
 
 	/*
 	 * We do not create truncate triggers on shard relation. This is
@@ -538,6 +544,43 @@ GetRenameShardIndexCommand(char *indexName, uint64 shardId)
 
 
 /*
+ * RenameShardRelationStatistics appends given shardId to the end of the names
+ * of shard relation statistics. This function utilizes GetExplicitStatsNameList
+ * to pick the statistics to be renamed, see more details in function's comment.
+ */
+static void
+RenameShardRelationStatistics(Oid shardRelationId, uint64 shardId)
+{
+	List *statsOidList = GetExplicitStatisticsIdList(shardRelationId);
+	List *statsCommandList = GetRenameStatsCommandList(statsOidList, shardId);
+
+	char *command = NULL;
+	foreach_ptr(command, statsCommandList)
+	{
+		ExecuteAndLogDDLCommand(command);
+	}
+}
+
+
+/*
+ * GetRenameShardStatsCommand returns DDL command to append given shardId to
+ * the statistics with statName.
+ */
+static char *
+GetRenameShardStatsCommand(char *statSchema, char *statsName, char *statsNameWithShardId)
+{
+	const char *quotedStatsNameWithShardId = quote_identifier(statsNameWithShardId);
+	char *qualifiedStatsName = quote_qualified_identifier(statSchema, statsName);
+
+	StringInfo renameCommand = makeStringInfo();
+	appendStringInfo(renameCommand, "ALTER STATISTICS %s RENAME TO %s;",
+					 qualifiedStatsName, quotedStatsNameWithShardId);
+
+	return renameCommand->data;
+}
+
+
+/*
  * RenameShardRelationNonTruncateTriggers appends given shardId to the end of
  * the names of shard relation INSERT/DELETE/UPDATE triggers that are explicitly
  * created.
@@ -705,6 +748,44 @@ GetExplicitIndexNameList(Oid relationId)
 	PopOverrideSearchPath();
 
 	return indexNameList;
+}
+
+
+/*
+ * GetRenameStatsCommandList returns a list of "ALTER STATISTICS ...
+ * RENAME TO ..._shardId" commands for given statistics oid list.
+ */
+static List *
+GetRenameStatsCommandList(List *statsOidList, uint64 shardId)
+{
+	List *statsCommandList = NIL;
+	Oid statsOid;
+	foreach_oid(statsOid, statsOidList)
+	{
+		HeapTuple tup = SearchSysCache1(STATEXTOID, ObjectIdGetDatum(statsOid));
+
+		if (!HeapTupleIsValid(tup))
+		{
+			ereport(WARNING, (errmsg("No stats object found with id: %u", statsOid)));
+			continue;
+		}
+
+		Form_pg_statistic_ext statisticsForm = (Form_pg_statistic_ext) GETSTRUCT(tup);
+
+		char *statsName = statisticsForm->stxname.data;
+		Oid statsSchemaOid = statisticsForm->stxnamespace;
+		char *statsSchema = get_namespace_name(statsSchemaOid);
+
+		char *statsNameWithShardId = pstrdup(statsName);
+		AppendShardIdToName(&statsNameWithShardId, shardId);
+
+		char *renameShardStatsCommand = GetRenameShardStatsCommand(statsSchema, statsName,
+																   statsNameWithShardId);
+		statsCommandList = lappend(statsCommandList, renameShardStatsCommand);
+		ReleaseSysCache(tup);
+	}
+
+	return statsCommandList;
 }
 
 

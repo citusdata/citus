@@ -672,6 +672,26 @@ SELECT create_citus_local_table('referenced_table');
 
 ALTER TABLE referencing_table ADD CONSTRAINT fkey_cl_to_cl FOREIGN KEY (a) REFERENCES referenced_table(a);
 NOTICE:  executing the command locally: SELECT worker_apply_inter_shard_ddl_command (xxxxx, 'citus_local_tables_test_schema', xxxxx, 'citus_local_tables_test_schema', 'ALTER TABLE referencing_table ADD CONSTRAINT fkey_cl_to_cl FOREIGN KEY (a) REFERENCES referenced_table(a);')
+-- verify creating citus local table with extended statistics
+CREATE TABLE test_citus_local_table_with_stats(a int, b int);
+CREATE STATISTICS stx1 ON a, b FROM test_citus_local_table_with_stats;
+SELECT create_citus_local_table('test_citus_local_table_with_stats');
+ create_citus_local_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE STATISTICS "CiTUS!LocalTables"."Bad\'StatName" ON a, b FROM test_citus_local_table_with_stats;
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1504042, 'citus_local_tables_test_schema', E'CREATE STATISTICS "CiTUS!LocalTables"."Bad\\''StatName" ON a, b FROM citus_local_tables_test_schema.test_citus_local_table_with_stats')
+SELECT stxname FROM pg_statistic_ext ORDER BY stxname;
+        stxname
+---------------------------------------------------------------------
+ Bad\'StatName
+ Bad\'StatName_1504042
+ stx1
+ stx1_1504042
+(4 rows)
+
 -- observe the debug messages telling that we switch to sequential
 -- execution when truncating a citus local table that is referenced
 -- by another table
@@ -688,4 +708,4 @@ RESET client_min_messages;
 \set VERBOSITY terse
 -- cleanup at exit
 DROP SCHEMA citus_local_tables_test_schema, "CiTUS!LocalTables" CASCADE;
-NOTICE:  drop cascades to 22 other objects
+NOTICE:  drop cascades to 24 other objects
