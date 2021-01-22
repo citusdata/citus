@@ -48,7 +48,6 @@ bool EnableLocalReferenceForeignKeys = true;
 
 /* Local functions forward declarations for unsupported command checks */
 static void PostprocessCreateTableStmtForeignKeys(CreateStmt *createStatement);
-static bool ShouldEnableLocalReferenceForeignKeys(void);
 static void PostprocessCreateTableStmtPartitionOf(CreateStmt *createStatement,
 												  const char *queryString);
 static bool AlterTableDefinesFKeyBetweenPostgresAndNonDistTable(
@@ -251,7 +250,7 @@ PostprocessCreateTableStmtForeignKeys(CreateStmt *createStatement)
  * the value set by the user
  *
  */
-static bool
+bool
 ShouldEnableLocalReferenceForeignKeys(void)
 {
 	if (!EnableLocalReferenceForeignKeys)

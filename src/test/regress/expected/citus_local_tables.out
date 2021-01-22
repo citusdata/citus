@@ -259,6 +259,8 @@ NOTICE:  foreign-data wrapper "fake_fdw" does not have an extension defined
 
 (1 row)
 
+DROP FOREIGN TABLE foreign_table;
+NOTICE:  executing the command locally: DROP FOREIGN TABLE IF EXISTS citus_local_tables_test_schema.foreign_table_xxxxx CASCADE
 -- drop them for next tests
 DROP TABLE citus_local_table_1, citus_local_table_2, distributed_table;
 NOTICE:  executing the command locally: DROP TABLE IF EXISTS citus_local_tables_test_schema.citus_local_table_2_xxxxx CASCADE
@@ -413,6 +415,67 @@ NOTICE:  executing the command locally: CREATE UNIQUE INDEX   uniqueindex2_15040
 ---- utility command execution ----
 ---------------------------------------------------------------------
 SET search_path TO citus_local_tables_test_schema;
+CREATE TABLE dummy_reference_table (a INT PRIMARY KEY);
+SELECT create_reference_table('dummy_reference_table');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+BEGIN;
+  SET client_min_messages TO ERROR;
+  SELECT remove_local_tables_from_metadata();
+ remove_local_tables_from_metadata
+---------------------------------------------------------------------
+
+(1 row)
+
+  -- should not see any citus local tables
+  SELECT logicalrelid::regclass::text FROM pg_dist_partition, pg_tables
+  WHERE tablename=logicalrelid::regclass::text AND
+        schemaname='citus_local_tables_test_schema' AND
+        partmethod = 'n' AND repmodel = 'c'
+  ORDER BY 1;
+ logicalrelid
+---------------------------------------------------------------------
+(0 rows)
+
+ROLLBACK;
+-- define foreign keys between dummy_reference_table and citus local tables
+-- not to undistribute them automatically
+ALTER TABLE citus_local_table_1 ADD CONSTRAINT fkey_to_dummy_ref FOREIGN KEY (a) REFERENCES dummy_reference_table(a);
+NOTICE:  executing the command locally: SELECT worker_apply_inter_shard_ddl_command (xxxxx, 'citus_local_tables_test_schema', xxxxx, 'citus_local_tables_test_schema', 'ALTER TABLE citus_local_table_1 ADD CONSTRAINT fkey_to_dummy_ref FOREIGN KEY (a) REFERENCES dummy_reference_table(a);')
+ALTER TABLE citus_local_table_2 ADD CONSTRAINT fkey_to_dummy_ref FOREIGN KEY (a) REFERENCES dummy_reference_table(a);
+NOTICE:  executing the command locally: SELECT worker_apply_inter_shard_ddl_command (xxxxx, 'citus_local_tables_test_schema', xxxxx, 'citus_local_tables_test_schema', 'ALTER TABLE citus_local_table_2 ADD CONSTRAINT fkey_to_dummy_ref FOREIGN KEY (a) REFERENCES dummy_reference_table(a);')
+ALTER TABLE unlogged_table ADD CONSTRAINT fkey_to_dummy_ref FOREIGN KEY (a) REFERENCES dummy_reference_table(a);
+NOTICE:  executing the command locally: SELECT worker_apply_inter_shard_ddl_command (xxxxx, 'citus_local_tables_test_schema', xxxxx, 'citus_local_tables_test_schema', 'ALTER TABLE unlogged_table ADD CONSTRAINT fkey_to_dummy_ref FOREIGN KEY (a) REFERENCES dummy_reference_table(a);')
+ALTER TABLE local_table_3 ADD CONSTRAINT fkey_to_dummy_ref FOREIGN KEY (a) REFERENCES dummy_reference_table(a);
+NOTICE:  executing the command locally: SELECT worker_apply_inter_shard_ddl_command (xxxxx, 'citus_local_tables_test_schema', xxxxx, 'citus_local_tables_test_schema', 'ALTER TABLE local_table_3 ADD CONSTRAINT fkey_to_dummy_ref FOREIGN KEY (a) REFERENCES dummy_reference_table(a);')
+ALTER TABLE dummy_reference_table ADD CONSTRAINT fkey_from_dummy_ref FOREIGN KEY (a) REFERENCES "CiTUS!LocalTables"."LocalTabLE.1!?!"(id);
+NOTICE:  executing the command locally: SELECT worker_apply_inter_shard_ddl_command (xxxxx, 'citus_local_tables_test_schema', xxxxx, 'CiTUS!LocalTables', 'ALTER TABLE dummy_reference_table ADD CONSTRAINT fkey_from_dummy_ref FOREIGN KEY (a) REFERENCES "CiTUS!LocalTables"."LocalTabLE.1!?!"(id);')
+BEGIN;
+  SET client_min_messages TO ERROR;
+  SELECT remove_local_tables_from_metadata();
+ remove_local_tables_from_metadata
+---------------------------------------------------------------------
+
+(1 row)
+
+  -- now we defined foreign keys with above citus local tables, we should still see them
+  SELECT logicalrelid::regclass::text FROM pg_dist_partition, pg_tables
+  WHERE tablename=logicalrelid::regclass::text AND
+        schemaname='citus_local_tables_test_schema' AND
+        partmethod = 'n' AND repmodel = 'c'
+  ORDER BY 1;
+    logicalrelid
+---------------------------------------------------------------------
+ citus_local_table_1
+ citus_local_table_2
+ local_table_3
+ unlogged_table
+(4 rows)
+
+ROLLBACK;
 -- between citus local tables and distributed tables
 ALTER TABLE citus_local_table_1 ADD CONSTRAINT fkey_c_to_dist FOREIGN KEY(a) references distributed_table(a);
 ERROR:  cannot create foreign key constraint since foreign keys from reference tables and citus local tables to distributed tables are not supported
@@ -675,21 +738,17 @@ NOTICE:  executing the command locally: SELECT worker_apply_inter_shard_ddl_comm
 -- verify creating citus local table with extended statistics
 CREATE TABLE test_citus_local_table_with_stats(a int, b int);
 CREATE STATISTICS stx1 ON a, b FROM test_citus_local_table_with_stats;
-SELECT create_citus_local_table('test_citus_local_table_with_stats');
- create_citus_local_table
----------------------------------------------------------------------
-
-(1 row)
-
+ALTER TABLE test_citus_local_table_with_stats ADD CONSTRAINT fkey_to_dummy_ref FOREIGN KEY (a) REFERENCES dummy_reference_table(a);
+NOTICE:  executing the command locally: SELECT worker_apply_inter_shard_ddl_command (xxxxx, 'citus_local_tables_test_schema', xxxxx, 'citus_local_tables_test_schema', 'ALTER TABLE test_citus_local_table_with_stats ADD CONSTRAINT fkey_to_dummy_ref FOREIGN KEY (a) REFERENCES dummy_reference_table(a);')
 CREATE STATISTICS "CiTUS!LocalTables"."Bad\'StatName" ON a, b FROM test_citus_local_table_with_stats;
-NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1504042, 'citus_local_tables_test_schema', E'CREATE STATISTICS "CiTUS!LocalTables"."Bad\\''StatName" ON a, b FROM citus_local_tables_test_schema.test_citus_local_table_with_stats')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1504043, 'citus_local_tables_test_schema', E'CREATE STATISTICS "CiTUS!LocalTables"."Bad\\''StatName" ON a, b FROM citus_local_tables_test_schema.test_citus_local_table_with_stats')
 SELECT stxname FROM pg_statistic_ext ORDER BY stxname;
         stxname
 ---------------------------------------------------------------------
  Bad\'StatName
- Bad\'StatName_1504042
+ Bad\'StatName_1504043
  stx1
- stx1_1504042
+ stx1_1504043
 (4 rows)
 
 -- observe the debug messages telling that we switch to sequential

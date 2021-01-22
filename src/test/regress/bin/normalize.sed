@@ -200,3 +200,7 @@ s/(NOTICE:  executing.*)\([0-9]+, 'citus_local_tables_test_schema', [0-9]+(.*)/\
 s/citus_local_table_4_idx_[0-9]+/citus_local_table_4_idx_xxxxxx/g
 s/citus_local_table_4_[0-9]+/citus_local_table_4_xxxxxx/g
 s/ERROR:  cannot append to shardId [0-9]+/ERROR:  cannot append to shardId xxxxxx/g
+
+# hide warning/hint message that we get when executing create_citus_local_table
+/citus local tables that are not chained with reference tables via foreign keys might be automatically converted back to postgres tables$/d
+/Consider setting citus.enable_local_reference_table_foreign_keys to 'off' to disable automatically undistributing citus local tables$/d
