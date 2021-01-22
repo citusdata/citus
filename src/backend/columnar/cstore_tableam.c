@@ -14,7 +14,7 @@
 #include "access/tableam.h"
 #include "access/tsmapi.h"
 #if PG_VERSION_NUM >= 130000
-#include "access/heaptoast.h"
+#include "access/detoast.h"
 #else
 #include "access/tuptoaster.h"
 #endif
@@ -106,9 +106,10 @@ static void LogRelationStats(Relation rel, int elevel);
 static void TruncateColumnar(Relation rel, int elevel);
 static HeapTuple ColumnarSlotCopyHeapTuple(TupleTableSlot *slot);
 static void ColumnarCheckLogicalReplication(Relation rel);
+static Datum * detoast_values(TupleDesc tupleDesc, Datum *orig_values, bool *isnull);
 
 /* Custom tuple slot ops used for columnar. Initialized in columnar_tableam_init(). */
-TupleTableSlotOps TTSOpsColumnar;
+static TupleTableSlotOps TTSOpsColumnar;
 
 static List *
 RelationColumnList(Relation rel)
@@ -435,24 +436,16 @@ columnar_tuple_insert(Relation relation, TupleTableSlot *slot, CommandId cid,
 	TableWriteState *writeState = columnar_init_write_state(relation,
 															RelationGetDescr(relation),
 															GetCurrentSubTransactionId());
-
 	MemoryContext oldContext = MemoryContextSwitchTo(writeState->perTupleContext);
 
-	HeapTuple heapTuple = ExecCopySlotHeapTuple(slot);
-
 	ColumnarCheckLogicalReplication(relation);
-	if (HeapTupleHasExternal(heapTuple))
-	{
-		/* detoast any toasted attributes */
-		HeapTuple newTuple = toast_flatten_tuple(heapTuple,
-												 slot->tts_tupleDescriptor);
-
-		ExecForceStoreHeapTuple(newTuple, slot, true);
-	}
 
 	slot_getallattrs(slot);
 
-	ColumnarWriteRow(writeState, slot->tts_values, slot->tts_isnull);
+	Datum *values = detoast_values(slot->tts_tupleDescriptor,
+								   slot->tts_values, slot->tts_isnull);
+
+	ColumnarWriteRow(writeState, values, slot->tts_isnull);
 
 	MemoryContextSwitchTo(oldContext);
 	MemoryContextReset(writeState->perTupleContext);
@@ -485,28 +478,23 @@ columnar_multi_insert(Relation relation, TupleTableSlot **slots, int ntuples,
 															GetCurrentSubTransactionId());
 
 	ColumnarCheckLogicalReplication(relation);
+
+	MemoryContext oldContext = MemoryContextSwitchTo(writeState->perTupleContext);
+
 	for (int i = 0; i < ntuples; i++)
 	{
 		TupleTableSlot *tupleSlot = slots[i];
-		MemoryContext oldContext = MemoryContextSwitchTo(writeState->perTupleContext);
-		HeapTuple heapTuple = ExecCopySlotHeapTuple(tupleSlot);
-
-		if (HeapTupleHasExternal(heapTuple))
-		{
-			/* detoast any toasted attributes */
-			HeapTuple newTuple = toast_flatten_tuple(heapTuple,
-													 tupleSlot->tts_tupleDescriptor);
-
-			ExecForceStoreHeapTuple(newTuple, tupleSlot, true);
-		}
 
 		slot_getallattrs(tupleSlot);
 
-		ColumnarWriteRow(writeState, tupleSlot->tts_values, tupleSlot->tts_isnull);
-		MemoryContextSwitchTo(oldContext);
+		Datum *values = detoast_values(tupleSlot->tts_tupleDescriptor,
+									   tupleSlot->tts_values, tupleSlot->tts_isnull);
+
+		ColumnarWriteRow(writeState, values, tupleSlot->tts_isnull);
+		MemoryContextReset(writeState->perTupleContext);
 	}
 
-	MemoryContextReset(writeState->perTupleContext);
+	MemoryContextSwitchTo(oldContext);
 }
 
 
@@ -1397,6 +1385,45 @@ Datum
 columnar_handler(PG_FUNCTION_ARGS)
 {
 	PG_RETURN_POINTER(&columnar_am_methods);
+}
+
+
+/*
+ * detoast_values
+ *
+ * Detoast and decompress all values. If there's no work to do, return
+ * original pointer; otherwise return a newly-allocated values array. Should
+ * be called in per-tuple context.
+ */
+static Datum *
+detoast_values(TupleDesc tupleDesc, Datum *orig_values, bool *isnull)
+{
+	int natts = tupleDesc->natts;
+
+	/* copy on write to optimize for case where nothing is toasted */
+	Datum *values = orig_values;
+
+	for (int i = 0; i < tupleDesc->natts; i++)
+	{
+		if (!isnull[i] && tupleDesc->attrs[i].attlen == -1 &&
+			VARATT_IS_EXTENDED(values[i]))
+		{
+			/* make a copy */
+			if (values == orig_values)
+			{
+				values = palloc(sizeof(Datum) * natts);
+				memcpy_s(values, sizeof(Datum) * natts,
+						 orig_values, sizeof(Datum) * natts);
+			}
+
+			/* will be freed when per-tuple context is reset */
+			struct varlena *new_value = (struct varlena *) DatumGetPointer(values[i]);
+			new_value = detoast_attr(new_value);
+			values[i] = PointerGetDatum(new_value);
+		}
+	}
+
+	return values;
 }
 
 
