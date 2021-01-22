@@ -35,12 +35,12 @@
 #define DEFAULT_COMPRESSION_TYPE COMPRESSION_PG_LZ
 #endif
 
-int cstore_compression = DEFAULT_COMPRESSION_TYPE;
-int cstore_stripe_row_count = DEFAULT_STRIPE_ROW_COUNT;
-int cstore_chunk_row_count = DEFAULT_CHUNK_ROW_COUNT;
+int columnar_compression = DEFAULT_COMPRESSION_TYPE;
+int columnar_stripe_row_count = DEFAULT_STRIPE_ROW_COUNT;
+int columnar_chunk_row_count = DEFAULT_CHUNK_ROW_COUNT;
 int columnar_compression_level = 3;
 
-static const struct config_enum_entry cstore_compression_options[] =
+static const struct config_enum_entry columnar_compression_options[] =
 {
 	{ "none", COMPRESSION_NONE, false },
 	{ "pglz", COMPRESSION_PG_LZ, false },
@@ -54,14 +54,14 @@ static const struct config_enum_entry cstore_compression_options[] =
 };
 
 void
-cstore_init()
+columnar_init_gucs()
 {
 	DefineCustomEnumVariable("columnar.compression",
 							 "Compression type for cstore.",
 							 NULL,
-							 &cstore_compression,
+							 &columnar_compression,
 							 DEFAULT_COMPRESSION_TYPE,
-							 cstore_compression_options,
+							 columnar_compression_options,
 							 PGC_USERSET,
 							 0,
 							 NULL,
@@ -84,7 +84,7 @@ cstore_init()
 	DefineCustomIntVariable("columnar.stripe_row_count",
 							"Maximum number of tuples per stripe.",
 							NULL,
-							&cstore_stripe_row_count,
+							&columnar_stripe_row_count,
 							DEFAULT_STRIPE_ROW_COUNT,
 							STRIPE_ROW_COUNT_MINIMUM,
 							STRIPE_ROW_COUNT_MAXIMUM,
@@ -97,7 +97,7 @@ cstore_init()
 	DefineCustomIntVariable("columnar.chunk_row_count",
 							"Maximum number of rows per chunk.",
 							NULL,
-							&cstore_chunk_row_count,
+							&columnar_chunk_row_count,
 							DEFAULT_CHUNK_ROW_COUNT,
 							CHUNK_ROW_COUNT_MINIMUM,
 							CHUNK_ROW_COUNT_MAXIMUM,
@@ -120,13 +120,13 @@ ParseCompressionType(const char *compressionTypeString)
 	Assert(compressionTypeString != NULL);
 
 	for (int compressionIndex = 0;
-		 cstore_compression_options[compressionIndex].name != NULL;
+		 columnar_compression_options[compressionIndex].name != NULL;
 		 compressionIndex++)
 	{
-		const char *compressionName = cstore_compression_options[compressionIndex].name;
+		const char *compressionName = columnar_compression_options[compressionIndex].name;
 		if (strncmp(compressionTypeString, compressionName, NAMEDATALEN) == 0)
 		{
-			return cstore_compression_options[compressionIndex].val;
+			return columnar_compression_options[compressionIndex].val;
 		}
 	}
 
@@ -143,14 +143,14 @@ const char *
 CompressionTypeStr(CompressionType requestedType)
 {
 	for (int compressionIndex = 0;
-		 cstore_compression_options[compressionIndex].name != NULL;
+		 columnar_compression_options[compressionIndex].name != NULL;
 		 compressionIndex++)
 	{
 		CompressionType compressionType =
-			cstore_compression_options[compressionIndex].val;
+			columnar_compression_options[compressionIndex].val;
 		if (compressionType == requestedType)
 		{
-			return cstore_compression_options[compressionIndex].name;
+			return columnar_compression_options[compressionIndex].name;
 		}
 	}
 

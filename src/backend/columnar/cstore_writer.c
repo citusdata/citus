@@ -53,16 +53,16 @@ static Datum DatumCopy(Datum datum, bool datumTypeByValue, int datumTypeLength);
 static StringInfo CopyStringInfo(StringInfo sourceString);
 
 /*
- * CStoreBeginWrite initializes a cstore data load operation and returns a table
+ * ColumnarBeginWrite initializes a cstore data load operation and returns a table
  * handle. This handle should be used for adding the row values and finishing the
  * data load operation. If the cstore footer file already exists, we read the
  * footer and then seek to right after the last stripe  where the new stripes
  * will be added.
  */
 TableWriteState *
-CStoreBeginWrite(RelFileNode relfilenode,
-				 ColumnarOptions options,
-				 TupleDesc tupleDescriptor)
+ColumnarBeginWrite(RelFileNode relfilenode,
+				   ColumnarOptions options,
+				   TupleDesc tupleDescriptor)
 {
 	/* get comparison function pointers for each of the columns */
 	uint32 columnCount = tupleDescriptor->natts;
@@ -110,7 +110,7 @@ CStoreBeginWrite(RelFileNode relfilenode,
 	writeState->chunkData = chunkData;
 	writeState->compressionBuffer = NULL;
 	writeState->perTupleContext = AllocSetContextCreate(CurrentMemoryContext,
-														"CStore per tuple context",
+														"Columnar per tuple context",
 														ALLOCSET_DEFAULT_SIZES);
 
 	return writeState;
@@ -118,7 +118,7 @@ CStoreBeginWrite(RelFileNode relfilenode,
 
 
 /*
- * CStoreWriteRow adds a row to the cstore file. If the stripe is not initialized,
+ * ColumnarWriteRow adds a row to the cstore file. If the stripe is not initialized,
  * we create structures to hold stripe data and skip list. Then, we serialize and
  * append data to serialized value buffer for each of the columns and update
  * corresponding skip nodes. Then, whole chunk data is compressed at every
@@ -126,7 +126,7 @@ CStoreBeginWrite(RelFileNode relfilenode,
  * the stripe, and add its metadata to the table footer.
  */
 void
-CStoreWriteRow(TableWriteState *writeState, Datum *columnValues, bool *columnNulls)
+ColumnarWriteRow(TableWriteState *writeState, Datum *columnValues, bool *columnNulls)
 {
 	uint32 columnIndex = 0;
 	StripeBuffers *stripeBuffers = writeState->stripeBuffers;
@@ -206,7 +206,7 @@ CStoreWriteRow(TableWriteState *writeState, Datum *columnValues, bool *columnNul
 	stripeBuffers->rowCount++;
 	if (stripeBuffers->rowCount >= options->stripeRowCount)
 	{
-		CStoreFlushPendingWrites(writeState);
+		ColumnarFlushPendingWrites(writeState);
 	}
 
 	MemoryContextSwitchTo(oldContext);
@@ -214,15 +214,15 @@ CStoreWriteRow(TableWriteState *writeState, Datum *columnValues, bool *columnNul
 
 
 /*
- * CStoreEndWrite finishes a cstore data load operation. If we have an unflushed
+ * ColumnarEndWrite finishes a cstore data load operation. If we have an unflushed
  * stripe, we flush it. Then, we sync and close the cstore data file. Last, we
  * flush the footer to a temporary file, and atomically rename this temporary
  * file to the original footer file.
  */
 void
-CStoreEndWrite(TableWriteState *writeState)
+ColumnarEndWrite(TableWriteState *writeState)
 {
-	CStoreFlushPendingWrites(writeState);
+	ColumnarFlushPendingWrites(writeState);
 
 	MemoryContextDelete(writeState->stripeWriteContext);
 	pfree(writeState->comparisonFunctionArray);
@@ -232,7 +232,7 @@ CStoreEndWrite(TableWriteState *writeState)
 
 
 void
-CStoreFlushPendingWrites(TableWriteState *writeState)
+ColumnarFlushPendingWrites(TableWriteState *writeState)
 {
 	StripeBuffers *stripeBuffers = writeState->stripeBuffers;
 	if (stripeBuffers != NULL)
