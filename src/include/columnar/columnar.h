@@ -201,6 +201,14 @@ typedef struct StripeBuffers
 	uint32 columnCount;
 	uint32 rowCount;
 	ColumnBuffers **columnBuffersArray;
+
+	/*
+	 * We might skip reading some chunks because they're refuted by the
+	 * WHERE clause. We keep number of selected chunks and number of rows
+	 * in each of them.
+	 */
+	uint32 selectedChunks;
+	uint32 *selectedChunkRowCount;
 } StripeBuffers;
 
 
