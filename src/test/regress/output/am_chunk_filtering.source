@@ -130,4 +130,18 @@ EXPLAIN (analyze on, costs off, timing off, summary off)
    Columnar Chunks Removed by Filter: 12
 (4 rows)
 
+-- https://github.com/citusdata/citus/issues/4555
+TRUNCATE simple_chunk_filtering;
+INSERT INTO simple_chunk_filtering SELECT generate_series(0,200000);
+COPY (SELECT * FROM simple_chunk_filtering WHERE i > 180000) TO '/dev/null';
+EXPLAIN (analyze on, costs off, timing off, summary off)
+  SELECT * FROM simple_chunk_filtering WHERE i > 180000;
+                                    QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (ColumnarScan) on simple_chunk_filtering (actual rows=20000 loops=1)
+   Filter: (i > 180000)
+   Rows Removed by Filter: 1
+   Columnar Chunks Removed by Filter: 18
+(4 rows)
+
 DROP TABLE simple_chunk_filtering;

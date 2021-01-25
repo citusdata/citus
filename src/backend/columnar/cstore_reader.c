@@ -178,18 +178,8 @@ ColumnarReadNextRow(TableReadState *readState, Datum *columnValues, bool *column
 
 	if (chunkIndex != readState->deserializedChunkIndex)
 	{
-		uint32 chunkRowCount = 0;
-
-		uint32 stripeRowCount = stripeMetadata->rowCount;
-		uint32 lastChunkIndex = stripeRowCount / stripeMetadata->chunkRowCount;
-		if (chunkIndex == lastChunkIndex)
-		{
-			chunkRowCount = stripeRowCount % stripeMetadata->chunkRowCount;
-		}
-		else
-		{
-			chunkRowCount = stripeMetadata->chunkRowCount;
-		}
+		uint32 chunkRowCount =
+			readState->stripeBuffers->selectedChunkRowCount[chunkIndex];
 
 		oldContext = MemoryContextSwitchTo(readState->stripeReadContext);
 
@@ -356,6 +346,14 @@ LoadFilteredStripeBuffers(Relation relation, StripeMetadata *stripeMetadata,
 		SelectedChunkSkipList(stripeSkipList, projectedColumnMask,
 							  selectedChunkMask);
 
+	uint32 selectedChunkCount = selectedChunkSkipList->chunkCount;
+	uint32 *selectedChunkRowCount = palloc0(selectedChunkCount * sizeof(uint32));
+	for (int chunkIndex = 0; chunkIndex < selectedChunkCount; chunkIndex++)
+	{
+		selectedChunkRowCount[chunkIndex] =
+			selectedChunkSkipList->chunkSkipNodeArray[0][chunkIndex].rowCount;
+	}
+
 	/* load column data for projected columns */
 	ColumnBuffers **columnBuffersArray = palloc0(columnCount * sizeof(ColumnBuffers *));
 
@@ -381,6 +379,8 @@ LoadFilteredStripeBuffers(Relation relation, StripeMetadata *stripeMetadata,
 	stripeBuffers->columnCount = columnCount;
 	stripeBuffers->rowCount = StripeSkipListRowCount(selectedChunkSkipList);
 	stripeBuffers->columnBuffersArray = columnBuffersArray;
+	stripeBuffers->selectedChunks = selectedChunkCount;
+	stripeBuffers->selectedChunkRowCount = selectedChunkRowCount;
 
 	return stripeBuffers;
 }
