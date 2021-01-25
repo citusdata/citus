@@ -139,7 +139,7 @@
 }
 
 #define MatchGrouping(capture, matcher) \
-{                              \
+{ \
 	if (!IsA(pathToMatch, AggPath)) \
 	{ \
 		MatchFailed; \
@@ -163,6 +163,7 @@
 \
 	PushStack(pathToMatch); \
 	pathToMatch = ((DistributedUnionPath *) pathToMatch)->worker_path; \
+    matcher; \
 	PopStack(pathToMatch); \
 	DoCapture(capture, DistributedUnionPath *, pathToMatch); \
 }

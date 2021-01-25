@@ -739,11 +739,11 @@ typedef struct GeoJoinPathMatch
 {
 	Const *stdwithinDistanceConst;
 
-	AggPath *innerGrouping;
+//	AggPath *innerGrouping;
 	DistributedUnionPath *innerDistUnion;
 	GeoScanPath *innerPath;
 
-	AggPath *outerGrouping;
+//	AggPath *outerGrouping;
 	DistributedUnionPath *outerDistUnion;
 	GeoScanPath *outerPath;
 } GeoJoinPathMatch;
@@ -755,51 +755,132 @@ GeoOverlapJoin(PlannerInfo *root, Path *originalPath)
 {
 	GeoJoinPathMatch match = { 0 };
 
-	IfPathMatch(
-		originalPath,
-		MatchJoin(
-			NoCapture,
-			JOIN_INNER,
-			/* match on join restriction info */
-			MatchJoinRestrictions(
+	bool didMatch = false;
+
+	/*
+	 * temporary nest the matcher till we figure out the final grouping, for now we need
+	 * to be able to toggle between
+	 */
+	if (EnableGeoPartitioningGrouping)
+	{
+		IfPathMatch(
+			originalPath,
+			MatchJoin(
 				NoCapture,
-				MatchExprNamedOperation(
+				JOIN_INNER,
+				/* match on join restriction info */
+				MatchJoinRestrictions(
 					NoCapture,
-					geometry_overlaps,
-					MatchVar(NoCapture),
-					MatchExprNamedFunction(
+					MatchExprNamedOperation(
 						NoCapture,
-						st_expand,
+						geometry_overlaps,
 						MatchVar(NoCapture),
-						MatchConst(
-							&match.stdwithinDistanceConst,
-							MatchFields(consttype == FLOAT8OID))))),
-			/* match inner path in join */
-			SkipReadThrough(
+						MatchExprNamedFunction(
+							NoCapture,
+							st_expand,
+							MatchVar(NoCapture),
+							MatchConst(
+								&match.stdwithinDistanceConst,
+								MatchFields(consttype == FLOAT8OID))))),
+				/* match inner path in join */
+				SkipReadThrough(
+					NoCapture,
+					MatchGrouping(
+						NoCapture, /*&match.innerGrouping,*/
+						MatchDistributedUnion(
+							&match.innerDistUnion,
+							MatchGeoScan(
+								&match.innerPath)))),
+				/* match outer path in join */
+				SkipReadThrough(
+					NoCapture,
+					MatchGrouping(
+						NoCapture, /*&match.outerGrouping,*/
+						MatchDistributedUnion(&match.outerDistUnion,
+							MatchGeoScan(
+								&match.outerPath))))))
+		{
+			didMatch = true;
+		}
+	}
+	else
+	{
+		IfPathMatch(
+			originalPath,
+			MatchJoin(
 				NoCapture,
-				MatchGrouping(
-					&match.innerGrouping,
+				JOIN_INNER,
+				/* match on join restriction info */
+				MatchJoinRestrictions(
+					NoCapture,
+					MatchExprNamedOperation(
+						NoCapture,
+						geometry_overlaps,
+						MatchVar(NoCapture),
+						MatchExprNamedFunction(
+							NoCapture,
+							st_expand,
+							MatchVar(NoCapture),
+							MatchConst(
+								&match.stdwithinDistanceConst,
+								MatchFields(consttype == FLOAT8OID))))),
+				/* match inner path in join */
+				SkipReadThrough(
+					NoCapture,
 					MatchDistributedUnion(
 						&match.innerDistUnion,
 						MatchGeoScan(
-							&match.innerPath)))),
-			/* match outer path in join */
-			SkipReadThrough(
-				NoCapture,
-				MatchGrouping(
-					&match.outerGrouping,
+							&match.innerPath))),
+				/* match outer path in join */
+				SkipReadThrough(
+					NoCapture,
 					MatchDistributedUnion(&match.outerDistUnion,
-						MatchGeoScan(
-							&match.outerPath))))))
-	{
-		/* have a match on the geo join pattern, all fields are stored in `match` */
-		ereport(DEBUG1, (errmsg("my custom code %p: %f",
-								match.innerGrouping,
-								DatumGetFloat8(match.stdwithinDistanceConst->constvalue)
-								)));
+										  MatchGeoScan(
+											  &match.outerPath)))))
+		{
+			didMatch = true;
+		}
 	}
 
-	(void) &match;
+	if (didMatch)
+	{
+		/* have a match on the geo join pattern, all fields are stored in `match` */
+		ereport(DEBUG1, (errmsg("distance join with distance: %f",
+								DatumGetFloat8(match.stdwithinDistanceConst->constvalue)
+								)));
+
+		JoinPath *jpath = makeNode(NestPath);
+		*jpath = *((JoinPath *) originalPath); /* copy basic join settings */
+		jpath->path.type = T_NestPath;
+
+		jpath->innerjoinpath = (Path *) match.innerPath;
+		jpath->outerjoinpath = (Path *) match.outerPath;
+//			(Path *) create_append_path(
+//			root,
+//			match.outerPath->custom_path.path.parent,
+//			list_make1(match.outerPath), /* TODO add the result of the shuffled job */
+//			NIL,
+//			NIL,
+//			NULL,
+//			0,
+//			false,
+//			NIL,
+//			match.outerPath->custom_path.path.rows + 0);
+
+		jpath->path.startup_cost -= 2000; /* remove the double dist union cost */
+		jpath->path.total_cost -= 2000; /* remove the double dist union cost */
+
+		/* TODO add grouping */
+
+		Path *newPath = (Path *) WrapTableAccessWithDistributedUnion(
+			(Path *) jpath,
+			match.innerDistUnion->colocationId,
+			match.innerDistUnion->partitionValue,
+			match.innerDistUnion->sampleRelid,
+			NIL); /* TODO is this ok? */
+
+		return list_make1(newPath);
+	}
 
 	return NIL;
 }
