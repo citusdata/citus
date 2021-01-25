@@ -68,3 +68,5 @@ DROP FUNCTION pg_catalog.mark_tables_colocated(regclass, regclass[]);
 #include "udfs/citus_shard_sizes/10.0-1.sql"
 #include "udfs/citus_shards/10.0-1.sql"
 
+#include "udfs/worker_hash_partition_table/10.0-1.sql"
+#include "udfs/worker_range_partition_table/10.0-1.sql"

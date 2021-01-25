@@ -225,8 +225,7 @@ static void AssignDataFetchDependencies(List *taskList);
 static uint32 TaskListHighestTaskId(List *taskList);
 static List * MapTaskList(MapMergeJob *mapMergeJob, List *filterTaskList);
 static StringInfo CreateMapQueryString(MapMergeJob *mapMergeJob, Task *filterTask,
-									   char *partitionColumnName);
-static char * ColumnName(Var *column, List *rangeTableList);
+									   uint32 partitionColumnIndex);
 static List * MergeTaskList(MapMergeJob *mapMergeJob, List *mapTaskList,
 							uint32 taskIdIndex);
 static StringInfo ColumnNameArrayString(uint32 columnCount, uint64 generatingJobId);
@@ -237,6 +236,7 @@ static bool CoPlacedShardIntervals(ShardInterval *firstInterval,
 static List * FetchEqualityAttrNumsForRTEOpExpr(OpExpr *opExpr);
 static List * FetchEqualityAttrNumsForRTEBoolExpr(BoolExpr *boolExpr);
 static List * FetchEqualityAttrNumsForList(List *nodeList);
+static int FindResultNoFromTargetList(Var *targetVar, List *targetList);
 #if PG_VERSION_NUM >= PG_VERSION_13
 static List * GetColumnOriginalIndexes(Oid relationId);
 #endif
@@ -4477,11 +4477,10 @@ MapTaskList(MapMergeJob *mapMergeJob, List *filterTaskList)
 {
 	List *mapTaskList = NIL;
 	Query *filterQuery = mapMergeJob->job.jobQuery;
-	List *rangeTableList = filterQuery->rtable;
 	ListCell *filterTaskCell = NULL;
 	Var *partitionColumn = mapMergeJob->partitionColumn;
-	char *partitionColumnName = NULL;
 
+	uint32 partitionColumnResNo = 0;
 	List *groupClauseList = filterQuery->groupClause;
 	if (groupClauseList != NIL)
 	{
@@ -4490,29 +4489,19 @@ MapTaskList(MapMergeJob *mapMergeJob, List *filterTaskList)
 														  targetEntryList);
 		TargetEntry *groupByTargetEntry = (TargetEntry *) linitial(groupTargetEntryList);
 
-		partitionColumnName = groupByTargetEntry->resname;
+		partitionColumnResNo = groupByTargetEntry->resno;
 	}
 	else
 	{
-		TargetEntry *targetEntry = tlist_member((Expr *) partitionColumn,
-												filterQuery->targetList);
-		if (targetEntry != NULL)
-		{
-			/* targetEntry->resname may be NULL */
-			partitionColumnName = targetEntry->resname;
-		}
-
-		if (partitionColumnName == NULL)
-		{
-			partitionColumnName = ColumnName(partitionColumn, rangeTableList);
-		}
+		partitionColumnResNo = FindResultNoFromTargetList(partitionColumn,
+														  filterQuery->targetList);
 	}
 
 	foreach(filterTaskCell, filterTaskList)
 	{
 		Task *filterTask = (Task *) lfirst(filterTaskCell);
 		StringInfo mapQueryString = CreateMapQueryString(mapMergeJob, filterTask,
-														 partitionColumnName);
+														 partitionColumnResNo);
 
 		/* convert filter query task into map task */
 		Task *mapTask = filterTask;
@@ -4526,12 +4515,36 @@ MapTaskList(MapMergeJob *mapMergeJob, List *filterTaskList)
 }
 
 
+static int
+FindResultNoFromTargetList(Var *targetVar, List *targetList)
+{
+	TargetEntry *targetEntry = NULL;
+	int resNo = 1;
+	foreach_ptr(targetEntry, targetList)
+	{
+		if (IsA(targetEntry->expr, Var))
+		{
+			Var *candidateVar = (Var *) targetEntry->expr;
+			if (candidateVar->varattno == targetVar->varattno &&
+				candidateVar->varno == targetVar->varno)
+			{
+				return resNo;
+			}
+			resNo++;
+		}
+	}
+	ereport(ERROR, (errmsg("unexpected state: %d varno %d varattno couldn't be found",
+						   targetVar->varno, targetVar->varattno)));
+	return resNo;
+}
+
+
 /*
  * CreateMapQueryString creates and returns the map query string for the given filterTask.
  */
 static StringInfo
 CreateMapQueryString(MapMergeJob *mapMergeJob, Task *filterTask,
-					 char *partitionColumnName)
+					 uint32 partitionColumnIndex)
 {
 	uint64 jobId = filterTask->jobId;
 	uint32 taskId = filterTask->taskId;
@@ -4578,7 +4591,7 @@ CreateMapQueryString(MapMergeJob *mapMergeJob, Task *filterTask,
 	}
 
 	appendStringInfo(mapQueryString, partitionCommand, jobId, taskId,
-					 filterQueryEscapedText, partitionColumnName,
+					 filterQueryEscapedText, partitionColumnIndex,
 					 partitionColumnTypeFullName, splitPointString->data);
 	return mapQueryString;
 }
@@ -4671,40 +4684,6 @@ RowModifyLevelForQuery(Query *query)
 	}
 
 	return ROW_MODIFY_NONE;
-}
-
-
-/*
- * ColumnName resolves the given column's name. The given column could belong to
- * a regular table or to an intermediate table formed to execute a distributed
- * query.
- */
-static char *
-ColumnName(Var *column, List *rangeTableList)
-{
-	char *columnName = NULL;
-	Index tableId = column->varno;
-	AttrNumber columnNumber = column->varattno;
-	RangeTblEntry *rangeTableEntry = rt_fetch(tableId, rangeTableList);
-
-	CitusRTEKind rangeTableKind = GetRangeTblKind(rangeTableEntry);
-	if (rangeTableKind == CITUS_RTE_REMOTE_QUERY)
-	{
-		Alias *referenceNames = rangeTableEntry->eref;
-		List *columnNameList = referenceNames->colnames;
-		int columnIndex = columnNumber - 1;
-
-		Value *columnValue = (Value *) list_nth(columnNameList, columnIndex);
-		columnName = strVal(columnValue);
-	}
-	else if (rangeTableKind == CITUS_RTE_RELATION)
-	{
-		Oid relationId = rangeTableEntry->relid;
-		columnName = get_attname(relationId, columnNumber, false);
-	}
-
-	Assert(columnName != NULL);
-	return columnName;
 }
 
 

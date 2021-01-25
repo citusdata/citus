@@ -70,7 +70,8 @@ static void RenameDirectory(StringInfo oldDirectoryName, StringInfo newDirectory
 static void FileOutputStreamWrite(FileOutputStream *file, StringInfo dataToWrite);
 static void FileOutputStreamFlush(FileOutputStream *file);
 static void FilterAndPartitionTable(const char *filterQuery,
-									const char *columnName, Oid columnType,
+									char *partitionColumnName,
+									int partitionColumnIndex, Oid columnType,
 									PartitionIdFunction partitionIdFunction,
 									const void *partitionIdContext,
 									FileOutputStream *partitionFileArray,
@@ -88,13 +89,18 @@ static StringInfo UserPartitionFilename(StringInfo directoryName, uint32 partiti
 static bool FileIsLink(const char *filename, struct stat filestat);
 
 
+static void WorkerHashPartitionTable(PG_FUNCTION_ARGS, bool viaOldAPI);
+static void WorkerRangePartitionTable(PG_FUNCTION_ARGS, bool viaOldAPI);
+
 /* exports for SQL callable functions */
+PG_FUNCTION_INFO_V1(worker_range_partition_table_v2);
 PG_FUNCTION_INFO_V1(worker_range_partition_table);
+PG_FUNCTION_INFO_V1(worker_hash_partition_table_v2);
 PG_FUNCTION_INFO_V1(worker_hash_partition_table);
 
 
 /*
- * worker_range_partition_table executes the given filter query, repartitions
+ * worker_range_partition_table variants executes the given filter query, repartitions
  * the filter query's results on a partitioning column, and writes the resulting
  * rows to a set of text files on local disk. The function then atomically
  * renames the directory in which the text files live to ensure deterministic
@@ -104,18 +110,77 @@ PG_FUNCTION_INFO_V1(worker_hash_partition_table);
  * pointer and a range context object; for details, see RangePartitionId().
  */
 Datum
+worker_range_partition_table_v2(PG_FUNCTION_ARGS)
+{
+	bool viaOldAPI = false;
+	WorkerRangePartitionTable(fcinfo, viaOldAPI);
+
+	PG_RETURN_VOID();
+}
+
+
+Datum
 worker_range_partition_table(PG_FUNCTION_ARGS)
+{
+	bool viaOldAPI = true;
+	WorkerRangePartitionTable(fcinfo, viaOldAPI);
+
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * worker_hash_partition_table variants executes the given filter query, repartitions the
+ * filter query's results on a partitioning column, and writes the resulting
+ * rows to a set of text files on local disk. The function then atomically
+ * renames the directory in which the text files live to ensure deterministic
+ * behavior.
+ *
+ * This function applies hash partitioning through the use of a function pointer
+ * and a hash context object; for details, see HashPartitionId().
+ */
+Datum
+worker_hash_partition_table_v2(PG_FUNCTION_ARGS)
+{
+	bool viaOldAPI = false;
+	WorkerHashPartitionTable(fcinfo, viaOldAPI);
+
+	PG_RETURN_VOID();
+}
+
+
+Datum
+worker_hash_partition_table(PG_FUNCTION_ARGS)
+{
+	bool viaOldAPI = true;
+	WorkerHashPartitionTable(fcinfo, viaOldAPI);
+
+	PG_RETURN_VOID();
+}
+
+
+static void
+WorkerRangePartitionTable(PG_FUNCTION_ARGS, bool viaOldAPI)
 {
 	uint64 jobId = PG_GETARG_INT64(0);
 	uint32 taskId = PG_GETARG_UINT32(1);
 	text *filterQueryText = PG_GETARG_TEXT_P(2);
-	text *partitionColumnText = PG_GETARG_TEXT_P(3);
+	uint32 partitionColumnIndex = 0;
+	char *partitionColumnName = NULL;
+	if (viaOldAPI)
+	{
+		text *partitionColumnText = PG_GETARG_TEXT_P(3);
+		partitionColumnName = text_to_cstring(partitionColumnText);
+	}
+	else
+	{
+		partitionColumnIndex = PG_GETARG_UINT32(3);
+	}
 	Oid partitionColumnType = PG_GETARG_OID(4);
 	ArrayType *splitPointObject = PG_GETARG_ARRAYTYPE_P(5);
 
-	const char *filterQuery = text_to_cstring(filterQueryText);
-	const char *partitionColumn = text_to_cstring(partitionColumnText);
 
+	const char *filterQuery = text_to_cstring(filterQueryText);
 
 	/* first check that array element's and partition column's types match */
 	Oid splitPointType = ARR_ELEMTYPE(splitPointObject);
@@ -152,7 +217,8 @@ worker_range_partition_table(PG_FUNCTION_ARGS)
 	FileBufferSizeInBytes = FileBufferSize(PartitionBufferSize, fileCount);
 
 	/* call the partitioning function that does the actual work */
-	FilterAndPartitionTable(filterQuery, partitionColumn, partitionColumnType,
+	FilterAndPartitionTable(filterQuery, partitionColumnName, partitionColumnIndex,
+							partitionColumnType,
 							&RangePartitionId, (const void *) partitionContext,
 							partitionFileArray, fileCount);
 
@@ -160,33 +226,31 @@ worker_range_partition_table(PG_FUNCTION_ARGS)
 	ClosePartitionFiles(partitionFileArray, fileCount);
 	CitusRemoveDirectory(taskDirectory->data);
 	RenameDirectory(taskAttemptDirectory, taskDirectory);
-
-	PG_RETURN_VOID();
 }
 
 
-/*
- * worker_hash_partition_table executes the given filter query, repartitions the
- * filter query's results on a partitioning column, and writes the resulting
- * rows to a set of text files on local disk. The function then atomically
- * renames the directory in which the text files live to ensure deterministic
- * behavior.
- *
- * This function applies hash partitioning through the use of a function pointer
- * and a hash context object; for details, see HashPartitionId().
- */
-Datum
-worker_hash_partition_table(PG_FUNCTION_ARGS)
+static void
+WorkerHashPartitionTable(PG_FUNCTION_ARGS, bool viaOldAPI)
 {
 	uint64 jobId = PG_GETARG_INT64(0);
 	uint32 taskId = PG_GETARG_UINT32(1);
 	text *filterQueryText = PG_GETARG_TEXT_P(2);
-	text *partitionColumnText = PG_GETARG_TEXT_P(3);
+	uint32 partitionColumnIndex = 0;
+	char *partitionColumnName = NULL;
+	if (viaOldAPI)
+	{
+		text *partitionColumnText = PG_GETARG_TEXT_P(3);
+		partitionColumnName = text_to_cstring(partitionColumnText);
+	}
+	else
+	{
+		partitionColumnIndex = PG_GETARG_UINT32(3);
+	}
 	Oid partitionColumnType = PG_GETARG_OID(4);
 	ArrayType *hashRangeObject = PG_GETARG_ARRAYTYPE_P(5);
 
+
 	const char *filterQuery = text_to_cstring(filterQueryText);
-	const char *partitionColumn = text_to_cstring(partitionColumnText);
 
 	Datum *hashRangeArray = DeconstructArrayObject(hashRangeObject);
 	int32 partitionCount = ArrayObjectCount(hashRangeObject);
@@ -226,7 +290,8 @@ worker_hash_partition_table(PG_FUNCTION_ARGS)
 	FileBufferSizeInBytes = FileBufferSize(PartitionBufferSize, fileCount);
 
 	/* call the partitioning function that does the actual work */
-	FilterAndPartitionTable(filterQuery, partitionColumn, partitionColumnType,
+	FilterAndPartitionTable(filterQuery, partitionColumnName, partitionColumnIndex,
+							partitionColumnType,
 							&HashPartitionId, (const void *) partitionContext,
 							partitionFileArray, fileCount);
 
@@ -234,8 +299,6 @@ worker_hash_partition_table(PG_FUNCTION_ARGS)
 	ClosePartitionFiles(partitionFileArray, fileCount);
 	CitusRemoveDirectory(taskDirectory->data);
 	RenameDirectory(taskAttemptDirectory, taskDirectory);
-
-	PG_RETURN_VOID();
 }
 
 
@@ -845,14 +908,14 @@ FileOutputStreamFlush(FileOutputStream *file)
  */
 static void
 FilterAndPartitionTable(const char *filterQuery,
-						const char *partitionColumnName, Oid partitionColumnType,
+						char *partitionColumnName,
+						int partitionColumnIndex, Oid partitionColumnType,
 						PartitionIdFunction partitionIdFunction,
 						const void *partitionIdContext,
 						FileOutputStream *partitionFileArray,
 						uint32 fileCount)
 {
 	FmgrInfo *columnOutputFunctions = NULL;
-	int partitionColumnIndex = 0;
 	Oid partitionColumnTypeId = InvalidOid;
 	Oid partitionColumnCollation = InvalidOid;
 
@@ -888,8 +951,14 @@ FilterAndPartitionTable(const char *filterQuery,
 		{
 			ereport(ERROR, (errmsg("no partition to read into")));
 		}
-
-		partitionColumnIndex = ColumnIndex(rowDescriptor, partitionColumnName);
+		if (partitionColumnName != NULL)
+		{
+			/*
+			 * in old API, the partition column name is used
+			 * to determine partitionColumnIndex
+			 */
+			partitionColumnIndex = ColumnIndex(rowDescriptor, partitionColumnName);
+		}
 		partitionColumnTypeId = SPI_gettypeid(rowDescriptor, partitionColumnIndex);
 		partitionColumnCollation = TupleDescAttr(rowDescriptor, partitionColumnIndex -
 												 1)->attcollation;

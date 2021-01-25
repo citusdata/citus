@@ -501,6 +501,8 @@ SELECT * FROM print_extension_changes();
                                                                                  | function time_partition_range(regclass)
                                                                                  | function undistribute_table(regclass,boolean)
                                                                                  | function worker_change_sequence_dependency(regclass,regclass,regclass)
+                                                                                 | function worker_hash_partition_table_v2(bigint,integer,text,integer,oid,anyarray)
+                                                                                 | function worker_range_partition_table_v2(bigint,integer,text,integer,oid,anyarray)
                                                                                  | schema columnar
                                                                                  | sequence columnar.storageid_seq
                                                                                  | table columnar.chunk
@@ -509,7 +511,11 @@ SELECT * FROM print_extension_changes();
                                                                                  | view citus_shards
                                                                                  | view citus_tables
                                                                                  | view time_partitions
+<<<<<<< HEAD
 (63 rows)
+=======
+(62 rows)
+>>>>>>> Fix partition column index issue
 
 DROP TABLE prev_objects, extension_diff;
 -- show running version
