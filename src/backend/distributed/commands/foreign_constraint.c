@@ -436,7 +436,7 @@ ErrorOutForFKeyBetweenPostgresAndCitusLocalTable(Oid localTableId)
 					errmsg("cannot create foreign key constraint as \"%s\" is "
 						   "a postgres local table", localTableName),
 					errhint("first add local table to citus metadata "
-							"by using SELECT create_citus_local_table('%s') "
+							"by using SELECT citus_add_local_table_to_metadata('%s') "
 							"and execute the ALTER TABLE command to create the "
 							"foreign key to local table", localTableName)));
 }

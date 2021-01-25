@@ -33,6 +33,7 @@ ORDER BY 1;
  function check_distributed_deadlocks()
  function citus_activate_node(text,integer)
  function citus_add_inactive_node(text,integer,integer,noderole,name)
+ function citus_add_local_table_to_metadata(regclass,boolean)
  function citus_add_node(text,integer,integer,noderole,name)
  function citus_add_rebalance_strategy(name,regproc,regproc,regproc,real,real)
  function citus_add_secondary_node(text,integer,text,integer,name)
@@ -238,5 +239,5 @@ ORDER BY 1;
  view citus_worker_stat_activity
  view pg_dist_shard_placement
  view time_partitions
-(222 rows)
+(223 rows)
 

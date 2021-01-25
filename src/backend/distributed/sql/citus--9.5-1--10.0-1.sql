@@ -10,6 +10,7 @@ DROP FUNCTION IF EXISTS pg_catalog.citus_total_relation_size(regclass);
 #include "udfs/alter_table_set_access_method/10.0-1.sql"
 #include "udfs/undistribute_table/10.0-1.sql"
 #include "udfs/create_citus_local_table/10.0-1.sql"
+#include "udfs/citus_add_local_table_to_metadata/10.0-1.sql"
 #include "udfs/citus_set_coordinator_host/10.0-1.sql"
 #include "udfs/citus_add_node/10.0-1.sql"
 #include "udfs/citus_activate_node/10.0-1.sql"
