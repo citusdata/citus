@@ -558,9 +558,11 @@ DropFKeysAndUndistributeTable(Oid relationId)
 	char *relationName = get_rel_name(relationId);
 	Oid schemaId = get_rel_namespace(relationId);
 
+	/* suppress notices messages not to be too verbose */
 	TableConversionParameters params = {
 		.relationId = relationId,
-		.cascadeViaForeignKeys = false
+		.cascadeViaForeignKeys = false,
+		.suppressNoticeMessages = true
 	};
 	UndistributeTable(&params);
 
