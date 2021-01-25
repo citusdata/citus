@@ -200,6 +200,10 @@ s/relation with OID [0-9]+ does not exist/relation with OID XXXX does not exist/
 # normalize storage id of columnar tables
 s/^storage id: [0-9]+$/storage id: xxxxx/g
 
+# normalize PREPARE TRANSACTION and COMMIT PREPARED
+s/NOTICE:  issuing PREPARE TRANSACTION '(.*)'/NOTICE:  issuing PREPARE TRANSACTION 'citus_x_yyyyyy_zzz_w'/g
+s/NOTICE:  issuing COMMIT PREPARED '(.*)'/NOTICE:  issuing COMMIT PREPARED 'citus_x_yyyyyy_zzz_w'/g
+
 # normalize notice messages in citus_local_tables
 s/(NOTICE:  executing.*)citus_local_tables_test_schema.citus_local_table_4_[0-9]+(.*)/\1citus_local_tables_test_schema.citus_local_table_4_xxxx\2/g
 s/(NOTICE:  executing.*)\([0-9]+, 'citus_local_tables_test_schema', [0-9]+(.*)/\1\(xxxxx, 'citus_local_tables_test_schema', xxxxx\2/g

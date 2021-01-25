@@ -1,0 +1,127 @@
+--
+-- MULTI_TRANSACTION_2PC
+--
+-- Tests that check 2PC is used only for connections that perform a write
+SET citus.next_shard_id TO 1410000;
+SET citus.force_max_query_parallelization TO ON;
+CREATE SCHEMA multi_transaction_2pc;
+SET search_path = 'multi_transaction_2pc';
+SET citus.shard_replication_factor to 1;
+-- check that read-only participants skip prepare
+-- only two of the connections will perform a write (INSERT)
+CREATE TABLE test (a int);
+SELECT create_distributed_table('test', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO test SELECT i FROM generate_series(0, 5)i;
+SET citus.log_remote_commands TO ON;
+BEGIN;
+INSERT INTO test VALUES (1);
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing INSERT INTO multi_transaction_2pc.test_1410000 (a) VALUES (1)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+INSERT INTO test VALUES (2);
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing INSERT INTO multi_transaction_2pc.test_1410003 (a) VALUES (2)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+SELECT count(*) FROM test;
+NOTICE:  issuing SELECT count(*) AS count FROM multi_transaction_2pc.test_1410000 test WHERE true
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT count(*) AS count FROM multi_transaction_2pc.test_1410003 test WHERE true
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT count(*) AS count FROM multi_transaction_2pc.test_1410002 test WHERE true
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT count(*) AS count FROM multi_transaction_2pc.test_1410001 test WHERE true
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+ count
+---------------------------------------------------------------------
+     8
+(1 row)
+
+COMMIT;
+NOTICE:  issuing PREPARE TRANSACTION 'citus_x_yyyyyy_zzz_w'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing PREPARE TRANSACTION 'citus_x_yyyyyy_zzz_w'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT PREPARED 'citus_x_yyyyyy_zzz_w'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT PREPARED 'citus_x_yyyyyy_zzz_w'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+SET citus.log_remote_commands TO OFF;
+-- check that reads from a reference table don't trigger 2PC
+-- despite repmodel being 2PC
+CREATE TABLE test_reference (b int);
+SELECT create_reference_table('test_reference');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SET citus.log_remote_commands TO ON;
+INSERT INTO test_reference VALUES(1);
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing INSERT INTO multi_transaction_2pc.test_reference_1410004 (b) VALUES (1)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing INSERT INTO multi_transaction_2pc.test_reference_1410004 (b) VALUES (1)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing PREPARE TRANSACTION 'citus_x_yyyyyy_zzz_w'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing PREPARE TRANSACTION 'citus_x_yyyyyy_zzz_w'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT PREPARED 'citus_x_yyyyyy_zzz_w'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT PREPARED 'citus_x_yyyyyy_zzz_w'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+INSERT INTO test_reference VALUES(2);
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing INSERT INTO multi_transaction_2pc.test_reference_1410004 (b) VALUES (2)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing INSERT INTO multi_transaction_2pc.test_reference_1410004 (b) VALUES (2)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing PREPARE TRANSACTION 'citus_x_yyyyyy_zzz_w'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing PREPARE TRANSACTION 'citus_x_yyyyyy_zzz_w'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT PREPARED 'citus_x_yyyyyy_zzz_w'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT PREPARED 'citus_x_yyyyyy_zzz_w'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+BEGIN;
+SELECT * FROM test_reference;
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT b FROM multi_transaction_2pc.test_reference_1410004 test_reference
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+ b
+---------------------------------------------------------------------
+ 1
+ 2
+(2 rows)
+
+COMMIT;
+NOTICE:  issuing COMMIT
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+SET citus.log_remote_commands TO OFF;
+DROP SCHEMA multi_transaction_2pc CASCADE;
+NOTICE:  drop cascades to 2 other objects
+DETAIL:  drop cascades to table test
+drop cascades to table test_reference

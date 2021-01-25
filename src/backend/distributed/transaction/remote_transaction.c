@@ -20,6 +20,7 @@
 #include "distributed/connection_management.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/placement_connection.h"
 #include "distributed/remote_commands.h"
 #include "distributed/remote_transaction.h"
 #include "distributed/transaction_identifier.h"
@@ -782,8 +783,24 @@ CoordinatedRemoteTransactionsPrepare(void)
 			continue;
 		}
 
-		StartRemoteTransactionPrepare(connection);
-		connectionList = lappend(connectionList, connection);
+		/*
+		 * Check if any DML or DDL is executed over the connection on any
+		 * placement/table. If yes, we start preparing the transaction, otherwise
+		 * we skip prepare since the connection didn't perform any write (read-only)
+		 */
+		dlist_iter placementIter;
+		dlist_foreach(placementIter, &connection->referencedPlacements)
+		{
+			ConnectionReference *connectionReference =
+				dlist_container(ConnectionReference, connectionNode, placementIter.cur);
+
+			if (connectionReference->hadDDL || connectionReference->hadDML)
+			{
+				StartRemoteTransactionPrepare(connection);
+				connectionList = lappend(connectionList, connection);
+				break;
+			}
+		}
 	}
 
 	bool raiseInterrupts = true;
@@ -801,7 +818,23 @@ CoordinatedRemoteTransactionsPrepare(void)
 			continue;
 		}
 
-		FinishRemoteTransactionPrepare(connection);
+		/*
+		 * Check if any DML or DDL is executed over the connection on any
+		 * placement/table. If yes, we finish preparing the transaction, otherwise
+		 * we skip prepare since the connection didn't perform any write (read-only)
+		 */
+		dlist_iter placementIter;
+		dlist_foreach(placementIter, &connection->referencedPlacements)
+		{
+			ConnectionReference *connectionReference =
+				dlist_container(ConnectionReference, connectionNode, placementIter.cur);
+
+			if (connectionReference->hadDDL || connectionReference->hadDML)
+			{
+				FinishRemoteTransactionPrepare(connection);
+				break;
+			}
+		}
 	}
 
 	CurrentCoordinatedTransactionState = COORD_TRANS_PREPARED;
