@@ -3393,11 +3393,7 @@ TransactionStateMachine(WorkerSession *session)
 					 */
 					ereport(ERROR, (errmsg(
 										"unable to recover from inconsistent state in "
-										"the connection state machine on coordinator"),
-									errhint(
-										"it is advised to close the current session and "
-										"start a new sessions to make sure a full reset "
-										"of the internal state can be performed")));
+										"the connection state machine on coordinator")));
 				}
 
 				ShardCommandExecution *shardCommandExecution =
