@@ -43,4 +43,8 @@
 #define table_endscan heap_endscan
 #endif
 
+#if PG_VERSION_NUM < 130000
+#define detoast_attr(X) heap_tuple_untoast_attr(X)
+#endif
+
 #endif /* COLUMNAR_COMPAT_H */
