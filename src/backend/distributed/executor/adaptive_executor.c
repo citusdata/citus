@@ -3377,6 +3377,25 @@ TransactionStateMachine(WorkerSession *session)
 			case REMOTE_TRANS_SENT_COMMAND:
 			{
 				TaskPlacementExecution *placementExecution = session->currentTask;
+				if (placementExecution == NULL)
+				{
+					/*
+					 * We have seen accounts in production where the placementExecution
+					 * could inadvertently be not set. Investigation documented on
+					 * https://github.com/citusdata/citus-enterprise/issues/493
+					 * (due to sensitive data in the initial report it is not discussed
+					 * in our community repository)
+					 *
+					 * Currently we don't have a reliable way of reproducing this issue.
+					 * Erroring here seems to be a more desirable approach compared to a
+					 * SEGFAULT on the dereference of placementExecution, with a possible
+					 * crash recovery as a result.
+					 */
+					ereport(ERROR, (errmsg(
+										"unable to recover from inconsistent state in "
+										"the connection state machine on coordinator")));
+				}
+
 				ShardCommandExecution *shardCommandExecution =
 					placementExecution->shardCommandExecution;
 				Task *task = shardCommandExecution->task;
