@@ -535,6 +535,18 @@ ORDER BY 1;
  unique_a_b_1504027 | citus_local_table_1_1504027 | 1 2
 (2 rows)
 
+-- test creating citus local table with an index from non-default schema
+CREATE SCHEMA "test_\'index_schema";
+CREATE TABLE "test_\'index_schema".testindex (a int, b int);
+CREATE INDEX ind ON "test_\'index_schema".testindex (a);
+ALTER TABLE "test_\'index_schema".testindex ADD CONSTRAINT fkey_to_dummy_ref FOREIGN KEY (a) REFERENCES dummy_reference_table(a);
+NOTICE:  executing the command locally: SELECT worker_apply_inter_shard_ddl_command (1504040, E'test_\\''index_schema', 1504037, 'citus_local_tables_test_schema', E'ALTER TABLE "test_\\''index_schema".testindex ADD CONSTRAINT fkey_to_dummy_ref FOREIGN KEY (a) REFERENCES dummy_reference_table(a);')
+SELECT COUNT(*)=2 FROM pg_indexes WHERE tablename LIKE 'testindex%' AND indexname LIKE 'ind%';
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
 -- execute truncate & drop commands for multiple relations to see that we don't break local execution
 TRUNCATE citus_local_table_1, citus_local_table_2, distributed_table, local_table, reference_table, local_table_4;
 NOTICE:  executing the command locally: TRUNCATE TABLE citus_local_tables_test_schema.citus_local_table_1_xxxxx CASCADE
@@ -741,15 +753,12 @@ CREATE STATISTICS stx1 ON a, b FROM test_citus_local_table_with_stats;
 ALTER TABLE test_citus_local_table_with_stats ADD CONSTRAINT fkey_to_dummy_ref FOREIGN KEY (a) REFERENCES dummy_reference_table(a);
 NOTICE:  executing the command locally: SELECT worker_apply_inter_shard_ddl_command (xxxxx, 'citus_local_tables_test_schema', xxxxx, 'citus_local_tables_test_schema', 'ALTER TABLE test_citus_local_table_with_stats ADD CONSTRAINT fkey_to_dummy_ref FOREIGN KEY (a) REFERENCES dummy_reference_table(a);')
 CREATE STATISTICS "CiTUS!LocalTables"."Bad\'StatName" ON a, b FROM test_citus_local_table_with_stats;
-NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1504043, 'citus_local_tables_test_schema', E'CREATE STATISTICS "CiTUS!LocalTables"."Bad\\''StatName" ON a, b FROM citus_local_tables_test_schema.test_citus_local_table_with_stats')
-SELECT stxname FROM pg_statistic_ext ORDER BY stxname;
-        stxname
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1504044, 'citus_local_tables_test_schema', E'CREATE STATISTICS "CiTUS!LocalTables"."Bad\\''StatName" ON a, b FROM citus_local_tables_test_schema.test_citus_local_table_with_stats')
+SELECT COUNT(*)=4 FROM pg_statistic_ext WHERE stxname LIKE 'stx1%' or stxname LIKE 'Bad\\''StatName%' ;
+ ?column?
 ---------------------------------------------------------------------
- Bad\'StatName
- Bad\'StatName_1504043
- stx1
- stx1_1504043
-(4 rows)
+ t
+(1 row)
 
 -- observe the debug messages telling that we switch to sequential
 -- execution when truncating a citus local table that is referenced
@@ -766,5 +775,5 @@ NOTICE:  executing the command locally: TRUNCATE TABLE citus_local_tables_test_s
 RESET client_min_messages;
 \set VERBOSITY terse
 -- cleanup at exit
-DROP SCHEMA citus_local_tables_test_schema, "CiTUS!LocalTables" CASCADE;
-NOTICE:  drop cascades to 24 other objects
+DROP SCHEMA citus_local_tables_test_schema, "CiTUS!LocalTables", "test_\'index_schema" CASCADE;
+NOTICE:  drop cascades to 26 other objects
