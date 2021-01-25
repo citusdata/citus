@@ -1,5 +1,4 @@
 -- citus--10.0-1--9.5-1
--- this is an empty downgrade path since citus--9.5-1--10.0-1.sql is empty for now
 
 -- In Citus 10.0, we added another internal udf (notify_constraint_dropped)
 -- to be called by citus_drop_trigger. Since this script is executed when
