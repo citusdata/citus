@@ -154,7 +154,7 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys)
 
 	/*
 	 * Creating Citus local tables relies on functions that accesses
-	 * shards locally (e.g., ExecuteAndLogDDLCommand()). As long as
+	 * shards locally (e.g., ExecuteAndLogUtilityCommand()). As long as
 	 * we don't teach those functions to access shards remotely, we
 	 * cannot relax this check.
 	 */
@@ -246,7 +246,7 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys)
 	 * from scratch, below we simply recreate the shell table executing them
 	 * via process utility.
 	 */
-	ExecuteAndLogDDLCommandList(shellTableDDLEvents);
+	ExecuteAndLogUtilityCommandList(shellTableDDLEvents);
 
 	/*
 	 * Set shellRelationId as the relation with relationId now points
@@ -436,7 +436,7 @@ RenameRelationToShardRelation(Oid shellRelationId, uint64 shardId)
 	appendStringInfo(renameCommand, "ALTER TABLE %s RENAME TO %s;",
 					 qualifiedShellRelationName, quotedShardRelationName);
 
-	ExecuteAndLogDDLCommand(renameCommand->data);
+	ExecuteAndLogUtilityCommand(renameCommand->data);
 }
 
 
@@ -456,7 +456,7 @@ RenameShardRelationConstraints(Oid shardRelationId, uint64 shardId)
 	{
 		const char *commandString =
 			GetRenameShardConstraintCommand(shardRelationId, constraintName, shardId);
-		ExecuteAndLogDDLCommand(commandString);
+		ExecuteAndLogUtilityCommand(commandString);
 	}
 }
 
@@ -550,7 +550,7 @@ RenameShardRelationIndexes(Oid shardRelationId, uint64 shardId)
 	foreach_oid(indexOid, indexOidList)
 	{
 		const char *commandString = GetRenameShardIndexCommand(indexOid, shardId);
-		ExecuteAndLogDDLCommand(commandString);
+		ExecuteAndLogUtilityCommand(commandString);
 	}
 }
 
@@ -591,7 +591,7 @@ RenameShardRelationStatistics(Oid shardRelationId, uint64 shardId)
 	char *command = NULL;
 	foreach_ptr(command, statsCommandList)
 	{
-		ExecuteAndLogDDLCommand(command);
+		ExecuteAndLogUtilityCommand(command);
 	}
 }
 
@@ -636,7 +636,7 @@ RenameShardRelationNonTruncateTriggers(Oid shardRelationId, uint64 shardId)
 			char *triggerName = NameStr(triggerForm->tgname);
 			char *commandString =
 				GetRenameShardTriggerCommand(shardRelationId, triggerName, shardId);
-			ExecuteAndLogDDLCommand(commandString);
+			ExecuteAndLogUtilityCommand(commandString);
 		}
 
 		heap_freetuple(triggerTuple);
@@ -688,7 +688,7 @@ DropRelationTruncateTriggers(Oid relationId)
 		{
 			char *triggerName = NameStr(triggerForm->tgname);
 			char *commandString = GetDropTriggerCommand(relationId, triggerName);
-			ExecuteAndLogDDLCommand(commandString);
+			ExecuteAndLogUtilityCommand(commandString);
 		}
 
 		heap_freetuple(triggerTuple);
@@ -868,7 +868,7 @@ DropDefaultColumnDefinition(Oid relationId, char *columnName)
 					 "ALTER TABLE %s ALTER COLUMN %s DROP DEFAULT",
 					 qualifiedRelationName, quotedColumnName);
 
-	ExecuteAndLogDDLCommand(sequenceDropCommand->data);
+	ExecuteAndLogUtilityCommand(sequenceDropCommand->data);
 }
 
 
@@ -891,7 +891,7 @@ TransferSequenceOwnership(Oid sequenceId, Oid targetRelationId, char *targetColu
 					 qualifiedSequenceName, qualifiedTargetRelationName,
 					 quotedTargetColumnName);
 
-	ExecuteAndLogDDLCommand(sequenceOwnershipCommand->data);
+	ExecuteAndLogUtilityCommand(sequenceOwnershipCommand->data);
 }
 
 

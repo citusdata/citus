@@ -128,7 +128,6 @@ static uint64 LocallyPlanAndExecuteMultipleQueries(List *queryStrings,
 static void ExtractParametersForLocalExecution(ParamListInfo paramListInfo,
 											   Oid **parameterTypes,
 											   const char ***parameterValues);
-static void LocallyExecuteUtilityTask(const char *utilityCommand);
 static void LocallyExecuteUdfTaskQuery(Query *localUdfCommandQuery);
 static void EnsureTransitionPossible(LocalExecutionStatus from,
 									 LocalExecutionStatus to);
@@ -241,7 +240,7 @@ ExecuteLocalTaskListExtended(List *taskList,
 
 		if (isUtilityCommand)
 		{
-			LocallyExecuteUtilityTask(TaskQueryString(task));
+			ExecuteUtilityCommand(TaskQueryString(task));
 			continue;
 		}
 
@@ -373,11 +372,11 @@ ExtractParametersForLocalExecution(ParamListInfo paramListInfo, Oid **parameterT
 
 
 /*
- * LocallyExecuteUtilityTask executes the given local task query in the current
+ * ExecuteUtilityCommand executes the given local task query in the current
  * session.
  */
-static void
-LocallyExecuteUtilityTask(const char *localTaskQueryCommand)
+void
+ExecuteUtilityCommand(const char *localTaskQueryCommand)
 {
 	List *parseTreeList = pg_parse_query(localTaskQueryCommand);
 	RawStmt *localTaskRawStmt = NULL;
