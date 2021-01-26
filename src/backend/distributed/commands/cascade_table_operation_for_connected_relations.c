@@ -23,6 +23,7 @@
 #include "distributed/commands.h"
 #include "distributed/foreign_key_relationship.h"
 #include "distributed/listutils.h"
+#include "distributed/local_executor.h"
 #include "distributed/multi_executor.h"
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/reference_table_utils.h"
@@ -292,7 +293,7 @@ DropRelationForeignKeys(Oid relationId, int fKeyFlags)
 	SetLocalEnableLocalReferenceForeignKeys(false);
 
 	List *dropFkeyCascadeCommandList = GetRelationDropFkeyCommands(relationId, fKeyFlags);
-	ExecuteAndLogDDLCommandList(dropFkeyCascadeCommandList);
+	ExecuteAndLogUtilityCommandList(dropFkeyCascadeCommandList);
 
 	SetLocalEnableLocalReferenceForeignKeys(oldEnableLocalReferenceForeignKeys);
 }
@@ -428,32 +429,30 @@ ExecuteCascadeOperationForRelationIdList(List *relationIdList,
 
 
 /*
- * ExecuteAndLogDDLCommandList takes a list of ddl commands and calls
- * ExecuteAndLogDDLCommand function for each of them.
+ * ExecuteAndLogUtilityCommandList takes a list of utility commands and calls
+ * ExecuteAndLogUtilityCommand function for each of them.
  */
 void
-ExecuteAndLogDDLCommandList(List *ddlCommandList)
+ExecuteAndLogUtilityCommandList(List *utilityCommandList)
 {
-	char *ddlCommand = NULL;
-	foreach_ptr(ddlCommand, ddlCommandList)
+	char *utilityCommand = NULL;
+	foreach_ptr(utilityCommand, utilityCommandList)
 	{
-		ExecuteAndLogDDLCommand(ddlCommand);
+		ExecuteAndLogUtilityCommand(utilityCommand);
 	}
 }
 
 
 /*
- * ExecuteAndLogDDLCommand takes a ddl command and logs it in DEBUG4 log level.
+ * ExecuteAndLogUtilityCommand takes a utility command and logs it in DEBUG4 log level.
  * Then, parses and executes it via CitusProcessUtility.
  */
 void
-ExecuteAndLogDDLCommand(const char *commandString)
+ExecuteAndLogUtilityCommand(const char *commandString)
 {
 	ereport(DEBUG4, (errmsg("executing \"%s\"", commandString)));
 
-	Node *parseTree = ParseTreeNode(commandString);
-	ProcessUtilityParseTree(parseTree, commandString, PROCESS_UTILITY_TOPLEVEL,
-							NULL, None_Receiver, NULL);
+	ExecuteUtilityCommand(commandString);
 }
 
 

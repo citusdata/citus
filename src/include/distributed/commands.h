@@ -486,8 +486,8 @@ extern void ErrorIfAnyPartitionRelationInvolvedInNonInheritedFKey(List *relation
 extern bool RelationIdListHasReferenceTable(List *relationIdList);
 extern void DropRelationForeignKeys(Oid relationId, int flags);
 extern void SetLocalEnableLocalReferenceForeignKeys(bool state);
-extern void ExecuteAndLogDDLCommandList(List *ddlCommandList);
-extern void ExecuteAndLogDDLCommand(const char *commandString);
+extern void ExecuteAndLogUtilityCommandList(List *ddlCommandList);
+extern void ExecuteAndLogUtilityCommand(const char *commandString);
 extern void ExecuteForeignKeyCreateCommandList(List *ddlCommandList,
 											   bool skip_validation);
 
