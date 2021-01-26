@@ -36,7 +36,6 @@ SELECT table_name, access_method FROM public.citus_tables WHERE table_name::text
 (1 row)
 
 SELECT alter_table_set_access_method('dist_table', 'columnar');
-NOTICE:  any index will be dropped, because columnar tables cannot have indexes
 NOTICE:  creating a new table for alter_table_set_access_method.dist_table
 NOTICE:  Moving the data of alter_table_set_access_method.dist_table
 NOTICE:  Dropping the old alter_table_set_access_method.dist_table
@@ -117,7 +116,6 @@ SELECT alter_table_set_access_method('partitioned_table', 'columnar');
 ERROR:  you cannot alter access method of a partitioned table
 -- test altering the partition's access method
 SELECT alter_table_set_access_method('partitioned_table_1_5', 'columnar');
-NOTICE:  any index will be dropped, because columnar tables cannot have indexes
 NOTICE:  creating a new table for alter_table_set_access_method.partitioned_table_1_5
 NOTICE:  Moving the data of alter_table_set_access_method.partitioned_table_1_5
 NOTICE:  Dropping the old alter_table_set_access_method.partitioned_table_1_5
@@ -215,13 +213,11 @@ SELECT event FROM time_partitioned ORDER BY 1;
 -- compress 2 old partitions
 CALL alter_old_partitions_set_access_method('time_partitioned', '2021-01-01', 'columnar');
 NOTICE:  converting time_partitioned_d00 with start time Sat Jan 01 00:00:00 2000 and end time Thu Dec 31 00:00:00 2009
-NOTICE:  any index will be dropped, because columnar tables cannot have indexes
 NOTICE:  creating a new table for alter_table_set_access_method.time_partitioned_d00
 NOTICE:  Moving the data of alter_table_set_access_method.time_partitioned_d00
 NOTICE:  Dropping the old alter_table_set_access_method.time_partitioned_d00
 NOTICE:  Renaming the new table to alter_table_set_access_method.time_partitioned_d00
 NOTICE:  converting time_partitioned_d10 with start time Fri Jan 01 00:00:00 2010 and end time Tue Dec 31 00:00:00 2019
-NOTICE:  any index will be dropped, because columnar tables cannot have indexes
 NOTICE:  creating a new table for alter_table_set_access_method.time_partitioned_d10
 NOTICE:  Moving the data of alter_table_set_access_method.time_partitioned_d10
 NOTICE:  Dropping the old alter_table_set_access_method.time_partitioned_d10
@@ -311,7 +307,8 @@ SELECT a.amname FROM pg_class c, pg_am a where c.relname = 'index_table' AND c.r
 (1 row)
 
 SELECT alter_table_set_access_method('index_table', 'columnar');
-NOTICE:  any index will be dropped, because columnar tables cannot have indexes
+NOTICE:  the index idx1 on table alter_table_set_access_method.index_table will be dropped, because columnar tables cannot have indexes
+NOTICE:  the index idx2 on table alter_table_set_access_method.index_table will be dropped, because columnar tables cannot have indexes
 NOTICE:  creating a new table for alter_table_set_access_method.index_table
 NOTICE:  Moving the data of alter_table_set_access_method.index_table
 NOTICE:  Dropping the old alter_table_set_access_method.index_table
@@ -447,7 +444,6 @@ create table test_fk_p(i int references test_pk(n)) partition by range(i);
 create table test_fk_p0 partition of test_fk_p for values from (0) to (10);
 create table test_fk_p1 partition of test_fk_p for values from (10) to (20);
 select alter_table_set_access_method('test_fk_p1', 'columnar');
-NOTICE:  any index will be dropped, because columnar tables cannot have indexes
 NOTICE:  creating a new table for alter_table_set_access_method.test_fk_p1
 NOTICE:  Moving the data of alter_table_set_access_method.test_fk_p1
 NOTICE:  Dropping the old alter_table_set_access_method.test_fk_p1

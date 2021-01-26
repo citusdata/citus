@@ -60,7 +60,6 @@ static char * GetRenameShardTriggerCommand(Oid shardRelationId, char *triggerNam
 										   uint64 shardId);
 static void DropRelationTruncateTriggers(Oid relationId);
 static char * GetDropTriggerCommand(Oid relationId, char *triggerName);
-static List * GetExplicitIndexOidList(Oid relationId);
 static List * GetRenameStatsCommandList(List *statsOidList, uint64 shardId);
 static void DropAndMoveDefaultSequenceOwnerships(Oid sourceRelationId,
 												 Oid targetRelationId);
@@ -733,7 +732,7 @@ GetDropTriggerCommand(Oid relationId, char *triggerName)
  *  - exclusion indexes
  * that are actually applied by the related constraints.
  */
-static List *
+List *
 GetExplicitIndexOidList(Oid relationId)
 {
 	int scanKeyCount = 1;

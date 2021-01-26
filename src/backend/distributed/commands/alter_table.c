@@ -522,8 +522,17 @@ ConvertTable(TableConversionState *con)
 	bool includeIndexes = true;
 	if (con->accessMethod && strcmp(con->accessMethod, "columnar") == 0)
 	{
-		ereport(NOTICE, (errmsg("any index will be dropped, because "
-								"columnar tables cannot have indexes")));
+		List *explicitIndexesOnTable = GetExplicitIndexOidList(con->relationId);
+		Oid indexOid = InvalidOid;
+		foreach_oid(indexOid, explicitIndexesOnTable)
+		{
+			ereport(NOTICE, (errmsg("the index %s on table %s will be dropped, "
+									"because columnar tables cannot have indexes",
+									get_rel_name(indexOid),
+									quote_qualified_identifier(con->schemaName,
+															   con->relationName))));
+		}
+
 		includeIndexes = false;
 	}
 	List *postLoadCommands = GetPostLoadTableCreationCommands(con->relationId,
