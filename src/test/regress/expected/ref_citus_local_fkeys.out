@@ -16,8 +16,8 @@ SELECT 1 FROM master_add_node('localhost', :master_port, groupId => 0);
 RESET client_min_messages;
 -- create test tables
 CREATE TABLE citus_local_table(l1 int);
-SELECT create_citus_local_table('citus_local_table');
- create_citus_local_table
+SELECT citus_add_local_table_to_metadata('citus_local_table');
+ citus_add_local_table_to_metadata
 ---------------------------------------------------------------------
 
 (1 row)
@@ -138,8 +138,8 @@ SELECT 1 FROM master_remove_node('localhost', :worker_2_port);
 
 -- create test tables
 CREATE TABLE citus_local_table(l1 int primary key);
-SELECT create_citus_local_table('citus_local_table');
- create_citus_local_table
+SELECT citus_add_local_table_to_metadata('citus_local_table');
+ citus_add_local_table_to_metadata
 ---------------------------------------------------------------------
 
 (1 row)
@@ -223,14 +223,14 @@ NOTICE:  drop cascades to constraint fkey_ref_to_local_1506007 on table ref_citu
 BEGIN;
   CREATE TABLE citus_local_table_1(a int, b int, unique (a,b));
   CREATE TABLE citus_local_table_2(a int, b int, unique (a,b));
-  SELECT create_citus_local_table('citus_local_table_1');
- create_citus_local_table
+  SELECT citus_add_local_table_to_metadata('citus_local_table_1');
+ citus_add_local_table_to_metadata
 ---------------------------------------------------------------------
 
 (1 row)
 
-  SELECT create_citus_local_table('citus_local_table_2');
- create_citus_local_table
+  SELECT citus_add_local_table_to_metadata('citus_local_table_2');
+ citus_add_local_table_to_metadata
 ---------------------------------------------------------------------
 
 (1 row)

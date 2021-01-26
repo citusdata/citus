@@ -21,8 +21,8 @@ ALTER TABLE citus_local_table_1 ADD CONSTRAINT fkey_3 FOREIGN KEY (col_1) REFERE
 ALTER TABLE citus_local_table_1 ADD CONSTRAINT fkey_4 FOREIGN KEY (col_1) REFERENCES citus_local_table_4(col_1);
 ALTER TABLE citus_local_table_4 ADD CONSTRAINT fkey_5 FOREIGN KEY (col_1) REFERENCES citus_local_table_3(col_1);
 ALTER TABLE citus_local_table_4 ADD CONSTRAINT fkey_6 FOREIGN KEY (col_1) REFERENCES citus_local_table_4(col_1);
-SELECT create_citus_local_table('citus_local_table_1', cascade_via_foreign_keys=>true);
- create_citus_local_table
+SELECT citus_add_local_table_to_metadata('citus_local_table_1', cascade_via_foreign_keys=>true);
+ citus_add_local_table_to_metadata
 ---------------------------------------------------------------------
 
 (1 row)
@@ -158,8 +158,8 @@ ERROR:  table "citus_local_table_2" is already distributed
 ROLLBACK;
 -- test with a standalone table
 CREATE TABLE citus_local_table_5 (col_1 INT UNIQUE);
-SELECT create_citus_local_table('citus_local_table_5');
- create_citus_local_table
+SELECT citus_add_local_table_to_metadata('citus_local_table_5');
+ citus_add_local_table_to_metadata
 ---------------------------------------------------------------------
 
 (1 row)
@@ -293,8 +293,8 @@ BEGIN;
 
 ROLLBACK;
 CREATE TABLE citus_local_table_6 (col_1 INT UNIQUE);
-SELECT create_citus_local_table('citus_local_table_6');
- create_citus_local_table
+SELECT citus_add_local_table_to_metadata('citus_local_table_6');
+ citus_add_local_table_to_metadata
 ---------------------------------------------------------------------
 
 (1 row)

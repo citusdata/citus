@@ -395,6 +395,7 @@ BEGIN;
 
   CREATE TABLE citus_local_table (a int);
   SELECT create_citus_local_table('citus_local_table');
+NOTICE:  create_citus_local_table is deprecated in favour of citus_add_local_table_to_metadata
  create_citus_local_table
 ---------------------------------------------------------------------
 

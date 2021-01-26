@@ -40,15 +40,15 @@ SELECT create_distributed_table('distributed_table_1', 'col_1');
 (1 row)
 
 CREATE TABLE citus_local_table_1 (col_1 INT UNIQUE);
-SELECT create_citus_local_table('citus_local_table_1');
- create_citus_local_table
+SELECT citus_add_local_table_to_metadata('citus_local_table_1');
+ citus_add_local_table_to_metadata
 ---------------------------------------------------------------------
 
 (1 row)
 
 CREATE TABLE citus_local_table_2 (col_1 INT UNIQUE);
-SELECT create_citus_local_table('citus_local_table_2');
- create_citus_local_table
+SELECT citus_add_local_table_to_metadata('citus_local_table_2');
+ citus_add_local_table_to_metadata
 ---------------------------------------------------------------------
 
 (1 row)
@@ -85,10 +85,10 @@ $$);
  (localhost,57638,t,0)
 (2 rows)
 
--- drop parititoned table as create_citus_local_table doesn't support partitioned tables
+-- drop parititoned table as citus_add_local_table_to_metadata doesn't support partitioned tables
 DROP TABLE partitioned_table_1;
-SELECT create_citus_local_table('citus_local_table_1', cascade_via_foreign_keys=>true);
- create_citus_local_table
+SELECT citus_add_local_table_to_metadata('citus_local_table_1', cascade_via_foreign_keys=>true);
+ citus_add_local_table_to_metadata
 ---------------------------------------------------------------------
 
 (1 row)

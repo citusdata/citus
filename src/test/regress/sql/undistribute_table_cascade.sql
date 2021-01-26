@@ -41,8 +41,8 @@ SELECT create_distributed_table('distributed_table_3', 'col_1');
 
 CREATE TABLE citus_local_table_1 (col_1 INT UNIQUE);
 CREATE TABLE citus_local_table_2 (col_1 INT UNIQUE);
-SELECT create_citus_local_table('citus_local_table_1');
-SELECT create_citus_local_table('citus_local_table_2');
+SELECT citus_add_local_table_to_metadata('citus_local_table_1');
+SELECT citus_add_local_table_to_metadata('citus_local_table_2');
 
 --        ---                                            ---
 --        | |                                            | |
@@ -372,8 +372,8 @@ CREATE SCHEMA "bad!schemaName";
 CREATE TABLE "bad!schemaName"."LocalTabLE.1!?!"(col_1 INT UNIQUE);
 CREATE TABLE "bad!schemaName"."LocalTabLE.2!?!"(col_1 INT UNIQUE);
 
-SELECT create_citus_local_table('"bad!schemaName"."LocalTabLE.1!?!"');
-SELECT create_citus_local_table('"bad!schemaName"."LocalTabLE.2!?!"');
+SELECT citus_add_local_table_to_metadata('"bad!schemaName"."LocalTabLE.1!?!"');
+SELECT citus_add_local_table_to_metadata('"bad!schemaName"."LocalTabLE.2!?!"');
 
 ALTER TABLE "bad!schemaName"."LocalTabLE.1!?!" ADD CONSTRAINT "bad!constraintName" FOREIGN KEY (col_1) REFERENCES "bad!schemaName"."LocalTabLE.2!?!"(col_1);
 

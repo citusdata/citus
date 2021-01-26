@@ -353,8 +353,8 @@ SELECT create_reference_table('table_type_ref');
 (1 row)
 
 CREATE TABLE table_type_citus_local(a INT);
-SELECT create_citus_local_table('table_type_citus_local');
- create_citus_local_table
+SELECT citus_add_local_table_to_metadata('table_type_citus_local');
+ citus_add_local_table_to_metadata
 ---------------------------------------------------------------------
 
 (1 row)

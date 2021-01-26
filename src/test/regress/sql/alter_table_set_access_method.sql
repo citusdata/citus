@@ -118,7 +118,7 @@ SELECT create_distributed_table('table_type_dist', 'a');
 CREATE TABLE table_type_ref (a INT);
 SELECT create_reference_table('table_type_ref');
 CREATE TABLE table_type_citus_local(a INT);
-SELECT create_citus_local_table('table_type_citus_local');
+SELECT citus_add_local_table_to_metadata('table_type_citus_local');
 CREATE TABLE table_type_pg_local (a INT);
 
 SELECT table_name, citus_table_type, distribution_column, shard_count, access_method FROM public.citus_tables WHERE table_name::text LIKE 'table\_type%' ORDER BY 1;

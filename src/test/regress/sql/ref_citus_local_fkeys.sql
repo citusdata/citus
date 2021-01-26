@@ -15,7 +15,7 @@ RESET client_min_messages;
 
 -- create test tables
 CREATE TABLE citus_local_table(l1 int);
-SELECT create_citus_local_table('citus_local_table');
+SELECT citus_add_local_table_to_metadata('citus_local_table');
 CREATE TABLE reference_table(r1 int primary key);
 SELECT create_reference_table('reference_table');
 
@@ -89,7 +89,7 @@ SELECT 1 FROM master_remove_node('localhost', :worker_2_port);
 
 -- create test tables
 CREATE TABLE citus_local_table(l1 int primary key);
-SELECT create_citus_local_table('citus_local_table');
+SELECT citus_add_local_table_to_metadata('citus_local_table');
 CREATE TABLE reference_table(r1 int);
 SELECT create_reference_table('reference_table');
 
@@ -143,8 +143,8 @@ DROP TABLE citus_local_table CASCADE;
 BEGIN;
   CREATE TABLE citus_local_table_1(a int, b int, unique (a,b));
   CREATE TABLE citus_local_table_2(a int, b int, unique (a,b));
-  SELECT create_citus_local_table('citus_local_table_1');
-  SELECT create_citus_local_table('citus_local_table_2');
+  SELECT citus_add_local_table_to_metadata('citus_local_table_1');
+  SELECT citus_add_local_table_to_metadata('citus_local_table_2');
 
   -- show that we properly handle multi column foreign keys
   ALTER TABLE citus_local_table_1 ADD CONSTRAINT multi_fkey FOREIGN KEY (a, b) REFERENCES citus_local_table_2(a, b);

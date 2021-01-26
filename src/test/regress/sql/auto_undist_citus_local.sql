@@ -10,7 +10,7 @@ SELECT 1 FROM master_add_node('localhost', :master_port, groupId => 0);
 
 -- show that DROP CONSTRAINT cascades to undistributing citus_local_table
 CREATE TABLE citus_local_table(l1 int);
-SELECT create_citus_local_table('citus_local_table');
+SELECT citus_add_local_table_to_metadata('citus_local_table');
 CREATE TABLE reference_table(r1 int primary key);
 SELECT create_reference_table('reference_table');
 ALTER TABLE citus_local_table ADD CONSTRAINT fkey_local_to_ref FOREIGN KEY(l1) REFERENCES reference_table(r1) ON DELETE CASCADE;
