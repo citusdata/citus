@@ -388,6 +388,13 @@ FROM pg_index
 WHERE indrelid::regclass::text LIKE 'citus_local_table_1%' AND indexrelid::regclass::text LIKE 'unique_a_b%'
 ORDER BY 1;
 
+-- test creating citus local table with an index from non-default schema
+CREATE SCHEMA "test_\'index_schema";
+CREATE TABLE "test_\'index_schema".testindex (a int, b int);
+CREATE INDEX ind ON "test_\'index_schema".testindex (a);
+ALTER TABLE "test_\'index_schema".testindex ADD CONSTRAINT fkey_to_dummy_ref FOREIGN KEY (a) REFERENCES dummy_reference_table(a);
+SELECT COUNT(*)=2 FROM pg_indexes WHERE tablename LIKE 'testindex%' AND indexname LIKE 'ind%';
+
 -- execute truncate & drop commands for multiple relations to see that we don't break local execution
 TRUNCATE citus_local_table_1, citus_local_table_2, distributed_table, local_table, reference_table, local_table_4;
 
@@ -489,7 +496,7 @@ CREATE TABLE test_citus_local_table_with_stats(a int, b int);
 CREATE STATISTICS stx1 ON a, b FROM test_citus_local_table_with_stats;
 ALTER TABLE test_citus_local_table_with_stats ADD CONSTRAINT fkey_to_dummy_ref FOREIGN KEY (a) REFERENCES dummy_reference_table(a);
 CREATE STATISTICS "CiTUS!LocalTables"."Bad\'StatName" ON a, b FROM test_citus_local_table_with_stats;
-SELECT stxname FROM pg_statistic_ext ORDER BY stxname;
+SELECT COUNT(*)=4 FROM pg_statistic_ext WHERE stxname LIKE 'stx1%' or stxname LIKE 'Bad\\''StatName%' ;
 
 -- observe the debug messages telling that we switch to sequential
 -- execution when truncating a citus local table that is referenced
@@ -503,4 +510,4 @@ RESET client_min_messages;
 \set VERBOSITY terse
 
 -- cleanup at exit
-DROP SCHEMA citus_local_tables_test_schema, "CiTUS!LocalTables" CASCADE;
+DROP SCHEMA citus_local_tables_test_schema, "CiTUS!LocalTables", "test_\'index_schema" CASCADE;

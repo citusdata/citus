@@ -52,7 +52,7 @@ static char * GetRenameShardConstraintCommand(Oid relationId, char *constraintNa
 static void RenameShardRelationIndexes(Oid shardRelationId, uint64 shardId);
 static void RenameShardRelationStatistics(Oid shardRelationId, uint64 shardId);
 static char * GetDropTriggerCommand(Oid relationId, char *triggerName);
-static char * GetRenameShardIndexCommand(char *indexName, uint64 shardId);
+static char * GetRenameShardIndexCommand(Oid indexOid, uint64 shardId);
 static char * GetRenameShardStatsCommand(char *statSchema, char *statsName,
 										 char *statsNameWithShardId);
 static void RenameShardRelationNonTruncateTriggers(Oid shardRelationId, uint64 shardId);
@@ -60,7 +60,7 @@ static char * GetRenameShardTriggerCommand(Oid shardRelationId, char *triggerNam
 										   uint64 shardId);
 static void DropRelationTruncateTriggers(Oid relationId);
 static char * GetDropTriggerCommand(Oid relationId, char *triggerName);
-static List * GetExplicitIndexNameList(Oid relationId);
+static List * GetExplicitIndexOidList(Oid relationId);
 static List * GetRenameStatsCommandList(List *statsOidList, uint64 shardId);
 static void DropAndMoveDefaultSequenceOwnerships(Oid sourceRelationId,
 												 Oid targetRelationId);
@@ -539,18 +539,18 @@ GetRenameShardConstraintCommand(Oid relationId, char *constraintName, uint64 sha
  * RenameShardRelationIndexes appends given shardId to the end of the names
  * of shard relation indexes except the ones that are already renamed via
  * RenameShardRelationConstraints. This function utilizes
- * GetExplicitIndexNameList to pick the indexes to be renamed, see more
+ * GetExplicitIndexOidList to pick the indexes to be renamed, see more
  * details in function's comment.
  */
 static void
 RenameShardRelationIndexes(Oid shardRelationId, uint64 shardId)
 {
-	List *indexNameList = GetExplicitIndexNameList(shardRelationId);
+	List *indexOidList = GetExplicitIndexOidList(shardRelationId);
 
-	char *indexName = NULL;
-	foreach_ptr(indexName, indexNameList)
+	Oid indexOid = InvalidOid;
+	foreach_oid(indexOid, indexOidList)
 	{
-		const char *commandString = GetRenameShardIndexCommand(indexName, shardId);
+		const char *commandString = GetRenameShardIndexCommand(indexOid, shardId);
 		ExecuteAndLogDDLCommand(commandString);
 	}
 }
@@ -561,13 +561,14 @@ RenameShardRelationIndexes(Oid shardRelationId, uint64 shardId)
  * the index with indexName.
  */
 static char *
-GetRenameShardIndexCommand(char *indexName, uint64 shardId)
+GetRenameShardIndexCommand(Oid indexOid, uint64 shardId)
 {
+	char *indexName = get_rel_name(indexOid);
 	char *shardIndexName = pstrdup(indexName);
 	AppendShardIdToName(&shardIndexName, shardId);
 	const char *quotedShardIndexName = quote_identifier(shardIndexName);
 
-	const char *quotedIndexName = quote_identifier(indexName);
+	const char *quotedIndexName = generate_qualified_relation_name(indexOid);
 
 	StringInfo renameCommand = makeStringInfo();
 	appendStringInfo(renameCommand, "ALTER INDEX %s RENAME TO %s;",
@@ -724,7 +725,7 @@ GetDropTriggerCommand(Oid relationId, char *triggerName)
 
 
 /*
- * GetExplicitIndexNameList returns a list of index names defined "explicitly"
+ * GetExplicitIndexOidList returns a list of index oids defined "explicitly"
  * on the relation with relationId by the "CREATE INDEX" commands. That means,
  * all the constraints defined on the relation except:
  *  - primary indexes,
@@ -733,7 +734,7 @@ GetDropTriggerCommand(Oid relationId, char *triggerName)
  * that are actually applied by the related constraints.
  */
 static List *
-GetExplicitIndexNameList(Oid relationId)
+GetExplicitIndexOidList(Oid relationId)
 {
 	int scanKeyCount = 1;
 	ScanKeyData scanKey[1];
@@ -750,7 +751,7 @@ GetExplicitIndexNameList(Oid relationId)
 													useIndex, NULL, scanKeyCount,
 													scanKey);
 
-	List *indexNameList = NIL;
+	List *indexOidList = NIL;
 
 	HeapTuple heapTuple = systable_getnext(scanDescriptor);
 	while (HeapTupleIsValid(heapTuple))
@@ -767,9 +768,7 @@ GetExplicitIndexNameList(Oid relationId)
 		 */
 		if (!indexImpliedByConstraint)
 		{
-			char *indexName = get_rel_name(indexId);
-
-			indexNameList = lappend(indexNameList, pstrdup(indexName));
+			indexOidList = lappend_oid(indexOidList, indexId);
 		}
 
 		heapTuple = systable_getnext(scanDescriptor);
@@ -781,7 +780,7 @@ GetExplicitIndexNameList(Oid relationId)
 	/* revert back to original search_path */
 	PopOverrideSearchPath();
 
-	return indexNameList;
+	return indexOidList;
 }
 
 
