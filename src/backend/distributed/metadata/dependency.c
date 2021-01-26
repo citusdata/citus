@@ -1172,12 +1172,13 @@ GetDependingView(Form_pg_depend pg_depend)
 	Form_pg_rewrite pg_rewrite = (Form_pg_rewrite) GETSTRUCT(rewriteTup);
 
 	bool isView = get_rel_relkind(pg_rewrite->ev_class) == RELKIND_VIEW;
+	bool isMatView = get_rel_relkind(pg_rewrite->ev_class) == RELKIND_MATVIEW;
 	bool isDifferentThanRef = pg_rewrite->ev_class != pg_depend->refobjid;
 
 	systable_endscan(rscan);
 	relation_close(rewriteRel, AccessShareLock);
 
-	if (isView && isDifferentThanRef)
+	if ((isView || isMatView) && isDifferentThanRef)
 	{
 		return pg_rewrite->ev_class;
 	}
