@@ -1,6 +1,6 @@
 /*-------------------------------------------------------------------------
  *
- * cstore_debug.c
+ * columnar_debug.c
  *
  * Helper functions to debug column store.
  *
@@ -24,8 +24,8 @@
 #include "utils/rel.h"
 #include "utils/tuplestore.h"
 
-#include "columnar/cstore.h"
-#include "columnar/cstore_version_compat.h"
+#include "columnar/columnar.h"
+#include "columnar/columnar_version_compat.h"
 
 static void MemoryContextTotals(MemoryContext context, MemoryContextCounters *counters);
 

@@ -72,6 +72,7 @@ static void FinalizeCitusLocalTableCreation(Oid relationId);
 
 
 PG_FUNCTION_INFO_V1(create_citus_local_table);
+PG_FUNCTION_INFO_V1(remove_local_tables_from_metadata);
 
 
 /*
@@ -84,10 +85,43 @@ create_citus_local_table(PG_FUNCTION_ARGS)
 {
 	CheckCitusVersion(ERROR);
 
+	if (ShouldEnableLocalReferenceForeignKeys())
+	{
+		/*
+		 * When foreign keys between reference tables and postgres tables are
+		 * enabled, we automatically undistribute citus local tables that are
+		 * not chained with any reference tables back to postgres tables.
+		 * So give a warning to user for that.
+		 */
+		ereport(WARNING, (errmsg("citus local tables that are not chained with "
+								 "reference tables via foreign keys might be "
+								 "automatically converted back to postgres tables"),
+						  errhint("Consider setting "
+								  "citus.enable_local_reference_table_foreign_keys "
+								  "to 'off' to disable automatically undistributing "
+								  "citus local tables")));
+	}
+
 	Oid relationId = PG_GETARG_OID(0);
 	bool cascadeViaForeignKeys = PG_GETARG_BOOL(1);
 
 	CreateCitusLocalTable(relationId, cascadeViaForeignKeys);
+
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * remove_local_tables_from_metadata undistributes citus local
+ * tables that are not chained with any reference tables via foreign keys.
+ */
+Datum
+remove_local_tables_from_metadata(PG_FUNCTION_ARGS)
+{
+	CheckCitusVersion(ERROR);
+	EnsureCoordinator();
+
+	UndistributeDisconnectedCitusLocalTables();
 
 	PG_RETURN_VOID();
 }

@@ -17,11 +17,11 @@
 
 #include "citus_version.h"
 
-#include "columnar/cstore.h"
+#include "columnar/columnar.h"
 #include "columnar/mod.h"
 
 #ifdef HAS_TABLEAM
-#include "columnar/cstore_tableam.h"
+#include "columnar/columnar_tableam.h"
 #endif
 
 void

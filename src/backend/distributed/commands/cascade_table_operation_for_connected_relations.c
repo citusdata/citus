@@ -28,13 +28,13 @@
 #include "distributed/reference_table_utils.h"
 #include "distributed/relation_access_tracking.h"
 #include "distributed/worker_protocol.h"
+#include "miscadmin.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
 #include "utils/syscache.h"
 
 
 static void EnsureSequentialModeForCitusTableCascadeFunction(List *relationIdList);
-static bool RelationIdListHasReferenceTable(List *relationIdList);
 static void LockRelationsWithLockMode(List *relationIdList, LOCKMODE lockMode);
 static List * RemovePartitionRelationIds(List *relationIdList);
 static List * GetFKeyCreationCommandsForRelationIdList(List *relationIdList);
@@ -222,7 +222,7 @@ EnsureSequentialModeForCitusTableCascadeFunction(List *relationIdList)
  * RelationIdListHasReferenceTable returns true if relationIdList has a relation
  * id that belongs to a reference table.
  */
-static bool
+bool
 RelationIdListHasReferenceTable(List *relationIdList)
 {
 	Oid relationId = InvalidOid;
@@ -282,8 +282,34 @@ DropRelationIdListForeignKeys(List *relationIdList, int fKeyFlags)
 void
 DropRelationForeignKeys(Oid relationId, int fKeyFlags)
 {
+	/*
+	 * We undistribute citus local tables that are not chained with any reference
+	 * tables via foreign keys at the end of the utility hook.
+	 * Here we temporarily set the related GUC to off to disable the logic for
+	 * internally executed DDL's that might invoke this mechanism unnecessarily.
+	 */
+	bool oldEnableLocalReferenceForeignKeys = EnableLocalReferenceForeignKeys;
+	SetLocalEnableLocalReferenceForeignKeys(false);
+
 	List *dropFkeyCascadeCommandList = GetRelationDropFkeyCommands(relationId, fKeyFlags);
 	ExecuteAndLogDDLCommandList(dropFkeyCascadeCommandList);
+
+	SetLocalEnableLocalReferenceForeignKeys(oldEnableLocalReferenceForeignKeys);
+}
+
+
+/*
+ * SetLocalEnableLocalReferenceForeignKeys is simply a C interface for setting
+ * the following:
+ *      SET LOCAL citus.enable_local_reference_table_foreign_keys = 'on'|'off';
+ */
+void
+SetLocalEnableLocalReferenceForeignKeys(bool state)
+{
+	char *stateStr = state ? "on" : "off";
+	set_config_option("citus.enable_local_reference_table_foreign_keys", stateStr,
+					  (superuser() ? PGC_SUSET : PGC_USERSET), PGC_S_SESSION,
+					  GUC_ACTION_LOCAL, true, 0, false);
 }
 
 

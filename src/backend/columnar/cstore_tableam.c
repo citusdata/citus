@@ -14,7 +14,7 @@
 #include "access/tableam.h"
 #include "access/tsmapi.h"
 #if PG_VERSION_NUM >= 130000
-#include "access/heaptoast.h"
+#include "access/detoast.h"
 #else
 #include "access/tuptoaster.h"
 #endif
@@ -50,15 +50,13 @@
 #include "utils/lsyscache.h"
 #include "utils/syscache.h"
 
-#include "columnar/cstore.h"
-#include "columnar/cstore_customscan.h"
-#include "columnar/cstore_tableam.h"
-#include "columnar/cstore_version_compat.h"
+#include "columnar/columnar.h"
+#include "columnar/columnar_customscan.h"
+#include "columnar/columnar_tableam.h"
+#include "columnar/columnar_version_compat.h"
 #include "distributed/commands.h"
 #include "distributed/commands/utility_hook.h"
 #include "distributed/metadata_cache.h"
-
-#define CSTORE_TABLEAM_NAME "columnar"
 
 /*
  * Timing parameters for truncate locking heuristics.
@@ -108,9 +106,10 @@ static void LogRelationStats(Relation rel, int elevel);
 static void TruncateColumnar(Relation rel, int elevel);
 static HeapTuple ColumnarSlotCopyHeapTuple(TupleTableSlot *slot);
 static void ColumnarCheckLogicalReplication(Relation rel);
+static Datum * detoast_values(TupleDesc tupleDesc, Datum *orig_values, bool *isnull);
 
 /* Custom tuple slot ops used for columnar. Initialized in columnar_tableam_init(). */
-TupleTableSlotOps TTSOpsColumnar;
+static TupleTableSlotOps TTSOpsColumnar;
 
 static List *
 RelationColumnList(Relation rel)
@@ -159,7 +158,7 @@ columnar_beginscan(Relation relation, Snapshot snapshot,
 
 	attr_needed = bms_add_range(attr_needed, 0, natts - 1);
 
-	/* the cstore access method does not use the flags, they are specific to heap */
+	/* the columnar access method does not use the flags, they are specific to heap */
 	flags = 0;
 
 	TableScanDesc scandesc = columnar_beginscan_extended(relation, snapshot, nkeys, key,
@@ -437,24 +436,16 @@ columnar_tuple_insert(Relation relation, TupleTableSlot *slot, CommandId cid,
 	TableWriteState *writeState = columnar_init_write_state(relation,
 															RelationGetDescr(relation),
 															GetCurrentSubTransactionId());
-
 	MemoryContext oldContext = MemoryContextSwitchTo(writeState->perTupleContext);
 
-	HeapTuple heapTuple = ExecCopySlotHeapTuple(slot);
-
 	ColumnarCheckLogicalReplication(relation);
-	if (HeapTupleHasExternal(heapTuple))
-	{
-		/* detoast any toasted attributes */
-		HeapTuple newTuple = toast_flatten_tuple(heapTuple,
-												 slot->tts_tupleDescriptor);
-
-		ExecForceStoreHeapTuple(newTuple, slot, true);
-	}
 
 	slot_getallattrs(slot);
 
-	ColumnarWriteRow(writeState, slot->tts_values, slot->tts_isnull);
+	Datum *values = detoast_values(slot->tts_tupleDescriptor,
+								   slot->tts_values, slot->tts_isnull);
+
+	ColumnarWriteRow(writeState, values, slot->tts_isnull);
 
 	MemoryContextSwitchTo(oldContext);
 	MemoryContextReset(writeState->perTupleContext);
@@ -487,28 +478,23 @@ columnar_multi_insert(Relation relation, TupleTableSlot **slots, int ntuples,
 															GetCurrentSubTransactionId());
 
 	ColumnarCheckLogicalReplication(relation);
+
+	MemoryContext oldContext = MemoryContextSwitchTo(writeState->perTupleContext);
+
 	for (int i = 0; i < ntuples; i++)
 	{
 		TupleTableSlot *tupleSlot = slots[i];
-		MemoryContext oldContext = MemoryContextSwitchTo(writeState->perTupleContext);
-		HeapTuple heapTuple = ExecCopySlotHeapTuple(tupleSlot);
-
-		if (HeapTupleHasExternal(heapTuple))
-		{
-			/* detoast any toasted attributes */
-			HeapTuple newTuple = toast_flatten_tuple(heapTuple,
-													 tupleSlot->tts_tupleDescriptor);
-
-			ExecForceStoreHeapTuple(newTuple, tupleSlot, true);
-		}
 
 		slot_getallattrs(tupleSlot);
 
-		ColumnarWriteRow(writeState, tupleSlot->tts_values, tupleSlot->tts_isnull);
-		MemoryContextSwitchTo(oldContext);
+		Datum *values = detoast_values(tupleSlot->tts_tupleDescriptor,
+									   tupleSlot->tts_values, tupleSlot->tts_isnull);
+
+		ColumnarWriteRow(writeState, values, tupleSlot->tts_isnull);
+		MemoryContextReset(writeState->perTupleContext);
 	}
 
-	MemoryContextReset(writeState->perTupleContext);
+	MemoryContextSwitchTo(oldContext);
 }
 
 
@@ -618,7 +604,7 @@ columnar_relation_copy_data(Relation rel, const RelFileNode *newrnode)
  * we should copy data from OldHeap to NewHeap.
  *
  * In general TableAM case this can also be called for the CLUSTER command
- * which is not applicable for cstore since it doesn't support indexes.
+ * which is not applicable for columnar since it doesn't support indexes.
  */
 static void
 columnar_relation_copy_for_cluster(Relation OldHeap, Relation NewHeap,
@@ -647,11 +633,11 @@ columnar_relation_copy_for_cluster(Relation OldHeap, Relation NewHeap,
 	Assert(sourceDesc->natts == targetDesc->natts);
 
 	/* read settings from old heap, relfilenode will be swapped at the end */
-	ColumnarOptions cstoreOptions = { 0 };
-	ReadColumnarOptions(OldHeap->rd_id, &cstoreOptions);
+	ColumnarOptions columnarOptions = { 0 };
+	ReadColumnarOptions(OldHeap->rd_id, &columnarOptions);
 
 	TableWriteState *writeState = ColumnarBeginWrite(NewHeap->rd_node,
-													 cstoreOptions,
+													 columnarOptions,
 													 targetDesc);
 
 	TableReadState *readState = ColumnarBeginRead(OldHeap, sourceDesc,
@@ -814,7 +800,7 @@ LogRelationStats(Relation rel, int elevel)
 
 /*
  * TruncateColumnar truncates the unused space at the end of main fork for
- * a cstore table. This unused space can be created by aborted transactions.
+ * a columnar table. This unused space can be created by aborted transactions.
  *
  * This implementation is based on heap_vacuum_rel in vacuumlazy.c with some
  * changes so it suits columnar store relations.
@@ -1162,9 +1148,10 @@ columnar_tableam_finish()
 int64
 ColumnarGetChunksFiltered(TableScanDesc scanDesc)
 {
-	ColumnarScanDesc cstoreScanDesc = (ColumnarScanDesc) scanDesc;
-	TableReadState *readState = cstoreScanDesc->cs_readState;
+	ColumnarScanDesc columnarScanDesc = (ColumnarScanDesc) scanDesc;
+	TableReadState *readState = columnarScanDesc->cs_readState;
 
+	/* readState is initialized lazily */
 	if (readState != NULL)
 	{
 		return readState->chunksFiltered;
@@ -1402,6 +1389,45 @@ columnar_handler(PG_FUNCTION_ARGS)
 
 
 /*
+ * detoast_values
+ *
+ * Detoast and decompress all values. If there's no work to do, return
+ * original pointer; otherwise return a newly-allocated values array. Should
+ * be called in per-tuple context.
+ */
+static Datum *
+detoast_values(TupleDesc tupleDesc, Datum *orig_values, bool *isnull)
+{
+	int natts = tupleDesc->natts;
+
+	/* copy on write to optimize for case where nothing is toasted */
+	Datum *values = orig_values;
+
+	for (int i = 0; i < tupleDesc->natts; i++)
+	{
+		if (!isnull[i] && tupleDesc->attrs[i].attlen == -1 &&
+			VARATT_IS_EXTENDED(values[i]))
+		{
+			/* make a copy */
+			if (values == orig_values)
+			{
+				values = palloc(sizeof(Datum) * natts);
+				memcpy_s(values, sizeof(Datum) * natts,
+						 orig_values, sizeof(Datum) * natts);
+			}
+
+			/* will be freed when per-tuple context is reset */
+			struct varlena *new_value = (struct varlena *) DatumGetPointer(values[i]);
+			new_value = detoast_attr(new_value);
+			values[i] = PointerGetDatum(new_value);
+		}
+	}
+
+	return values;
+}
+
+
+/*
  * ColumnarCheckLogicalReplication throws an error if the relation is
  * part of any publication. This should be called before any write to
  * a columnar table, because columnar changes are not replicated with
@@ -1609,7 +1635,7 @@ alter_columnar_table_set(PG_FUNCTION_ARGS)
 		options.compressionType = ParseCompressionType(NameStr(*compressionName));
 		if (options.compressionType == COMPRESSION_TYPE_INVALID)
 		{
-			ereport(ERROR, (errmsg("unknown compression type for cstore table: %s",
+			ereport(ERROR, (errmsg("unknown compression type for columnar table: %s",
 								   quote_identifier(NameStr(*compressionName)))));
 		}
 		ereport(DEBUG1, (errmsg("updating compression to %s",

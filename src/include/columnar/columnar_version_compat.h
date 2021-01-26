@@ -1,6 +1,6 @@
 /*-------------------------------------------------------------------------
  *
- * cstore_version_compat.h
+ * columnar_version_compat.h
  *
  *  Compatibility macros for writing code agnostic to PostgreSQL versions
  *
@@ -11,8 +11,8 @@
  *-------------------------------------------------------------------------
  */
 
-#ifndef CSTORE_COMPAT_H
-#define CSTORE_COMPAT_H
+#ifndef COLUMNAR_COMPAT_H
+#define COLUMNAR_COMPAT_H
 
 #if PG_VERSION_NUM < 100000
 
@@ -43,4 +43,8 @@
 #define table_endscan heap_endscan
 #endif
 
-#endif /* CSTORE_COMPAT_H */
+#if PG_VERSION_NUM < 130000
+#define detoast_attr(X) heap_tuple_untoast_attr(X)
+#endif
+
+#endif /* COLUMNAR_COMPAT_H */

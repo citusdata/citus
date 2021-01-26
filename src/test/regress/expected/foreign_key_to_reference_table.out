@@ -467,10 +467,8 @@ SELECT count(*) FROM referencing_schema.referencing_table;
    800
 (1 row)
 
-SET client_min_messages TO ERROR;
 DROP SCHEMA referenced_schema CASCADE;
 DROP SCHEMA referencing_schema CASCADE;
-RESET client_min_messages;
 -- on delete set update cascades properly
 CREATE TABLE referenced_table(test_column int, test_column2 int, PRIMARY KEY(test_column));
 CREATE TABLE referencing_table(id int, ref_id int DEFAULT 1);
@@ -525,7 +523,6 @@ SELECT count(*) FROM referencing_table;
 (1 row)
 
 DROP TABLE referenced_table CASCADE;
-NOTICE:  drop cascades to constraint fkey_ref on table referencing_table
 DROP TABLE referencing_table CASCADE;
 -- In the following test, we'll use a SERIAL column as the referenced column
 -- in the foreign constraint. We'll first show that and insert on non-serial
@@ -557,7 +554,6 @@ SELECT count(*) FROM referencing_table;
 (1 row)
 
 DROP TABLE referenced_table CASCADE;
-NOTICE:  drop cascades to constraint fkey_ref on table referencing_table
 DROP TABLE referencing_table CASCADE;
 -- In the following test, we'll use a SERIAL column as the referencing column
 -- in the foreign constraint. We'll first show that the values that exist
@@ -587,7 +583,6 @@ INSERT INTO referencing_table(id) SELECT x FROM generate_series(1,10) AS f(x);
 ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "fkey_ref_xxxxxxx"
 DETAIL:  Key (ref_id)=(X) is not present in table "referenced_table_xxxxxxx".
 DROP TABLE referenced_table CASCADE;
-NOTICE:  drop cascades to constraint fkey_ref on table referencing_table
 DROP TABLE referencing_table CASCADE;
 -- In the following test, we'll use a SERIAL column as the referencing column
 -- and referenced columns in a foreign constraint. We'll first show that the
@@ -618,7 +613,6 @@ INSERT INTO referencing_table(id) SELECT x FROM generate_series(1,10) AS f(x);
 ERROR:  insert or update on table "referencing_table_xxxxxxx" violates foreign key constraint "fkey_ref_xxxxxxx"
 DETAIL:  Key (ref_id)=(X) is not present in table "referenced_table_xxxxxxx".
 DROP TABLE referenced_table CASCADE;
-NOTICE:  drop cascades to constraint fkey_ref on table referencing_table
 DROP TABLE referencing_table CASCADE;
 -- In the following test, we use a volatile function in the referencing
 -- column in a foreign constraint. We show that if the data exists in the
@@ -642,7 +636,6 @@ ALTER TABLE referencing_table ADD CONSTRAINT fkey_ref FOREIGN KEY (ref_id) REFER
 INSERT INTO referenced_table SELECT x, x FROM generate_series(0,1000) AS f(x);
 INSERT INTO referencing_table SELECT x,(random()*1000)::int FROM generate_series(0,1000) AS f(x);
 DROP TABLE referenced_table CASCADE;
-NOTICE:  drop cascades to constraint fkey_ref on table referencing_table
 DROP TABLE referencing_table CASCADE;
 -- In the following tests, we create a foreign constraint with
 -- ON UPDATE CASCADE and see if it works properly with cascading upsert
@@ -677,7 +670,6 @@ SELECT * FROM referencing_table WHERE ref_id < 0 ORDER BY 1;
 (4 rows)
 
 DROP TABLE referenced_table CASCADE;
-NOTICE:  drop cascades to constraint fkey_ref on table referencing_table
 DROP TABLE referencing_table CASCADE;
 -- create_distributed_table should fail for tables with data if fkey exists to reference table
 CREATE TABLE referenced_table(test_column int, test_column2 int, PRIMARY KEY(test_column));
@@ -685,25 +677,12 @@ CREATE TABLE referencing_table(id int, ref_id int DEFAULT -1, FOREIGN KEY (ref_i
 INSERT INTO referenced_table VALUES (1,1), (2,2), (3,3);
 INSERT INTO referencing_table VALUES (1,1), (2,2), (3,3);
 SELECT create_reference_table('referenced_table');
-NOTICE:  Copying data from local table...
-NOTICE:  copying the data has completed
-DETAIL:  The local data in the table is no longer visible, but is still on disk.
-HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$fkey_reference_table.referenced_table$$)
  create_reference_table
 ---------------------------------------------------------------------
 
 (1 row)
 
-SELECT create_distributed_table('referencing_table', 'id');
-ERROR:  cannot distribute "referencing_table" in sequential mode because it is not empty
-HINT:  If you have manually set citus.multi_shard_modify_mode to 'sequential', try with 'parallel' option. If that is not the case, try distributing local tables when they are empty.
-BEGIN;
-  SELECT create_distributed_table('referencing_table', 'id');
-ERROR:  cannot distribute "referencing_table" in sequential mode because it is not empty
-HINT:  If you have manually set citus.multi_shard_modify_mode to 'sequential', try with 'parallel' option. If that is not the case, try distributing local tables when they are empty.
-COMMIT;
 DROP TABLE referenced_table CASCADE;
-NOTICE:  drop cascades to constraint referencing_table_ref_id_fkey on table referencing_table
 DROP TABLE referencing_table CASCADE;
 -- Chained references
 -- In the following test, we create foreign keys from one column in a distributed
@@ -778,9 +757,7 @@ SELECT count(*) FROM referencing_table;
 (1 row)
 
 DROP TABLE referenced_table CASCADE;
-NOTICE:  drop cascades to constraint fkey_ref on table referencing_table
 DROP TABLE referenced_table2 CASCADE;
-NOTICE:  drop cascades to constraint foreign_key_2 on table referencing_table
 DROP TABLE referencing_table CASCADE;
 -- check if the above fkeys are created with create_distributed_table
 CREATE TABLE referenced_table(test_column int, test_column2 int, PRIMARY KEY(test_column));
@@ -812,9 +789,7 @@ SELECT count(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_tab
 
 \set VERBOSITY terse
 DROP TABLE referenced_table CASCADE;
-NOTICE:  drop cascades to constraint referencing_table_id_fkey on table referencing_table
 DROP TABLE referenced_table2 CASCADE;
-NOTICE:  drop cascades to constraint referencing_table_id_fkey1 on table referencing_table
 DROP TABLE referencing_table CASCADE;
 -- In the following test, we create foreign keys from two columns in a distributed
 -- table to two reference tables separately. We expect to see that even if a data
@@ -888,9 +863,7 @@ SELECT count(*) FROM referencing_table;
 (1 row)
 
 DROP TABLE referenced_table CASCADE;
-NOTICE:  drop cascades to constraint fkey_ref on table referencing_table
 DROP TABLE referenced_table2 CASCADE;
-NOTICE:  drop cascades to constraint foreign_key_2 on table referencing_table
 DROP TABLE referencing_table CASCADE;
 -- check if the above fkeys are created when create_distributed_table is used for 1 foreign key and alter table for the other
 CREATE TABLE referenced_table(test_column int, test_column2 int, PRIMARY KEY(test_column));
@@ -924,9 +897,7 @@ SELECT count(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_tab
 (1 row)
 
 DROP TABLE referenced_table CASCADE;
-NOTICE:  drop cascades to constraint referencing_table_id_fkey on table referencing_table
 DROP TABLE referenced_table2 CASCADE;
-NOTICE:  drop cascades to constraint foreign_key_2 on table referencing_table
 DROP TABLE referencing_table CASCADE;
 \set VERBOSITY default
 -- two distributed tables are referencing to one reference table and
@@ -1005,48 +976,25 @@ SELECT count(*) FROM referencing_table2;
 
 \set VERBOSITY terse
 DROP TABLE referenced_table CASCADE;
-NOTICE:  drop cascades to 2 other objects
 DROP TABLE referencing_table CASCADE;
-NOTICE:  drop cascades to constraint fkey_ref_to_dist on table referencing_table2
 DROP TABLE referencing_table2 CASCADE;
 \set VERBOSITY default
 -- Check if the above fkeys are created with create_distributed_table
 CREATE TABLE referenced_table(test_column int, test_column2 int UNIQUE, PRIMARY KEY(test_column));
-CREATE TABLE referencing_table(id int PRIMARY KEY, ref_id int, FOREIGN KEY (id) REFERENCES referenced_table(test_column) ON DELETE CASCADE);
-CREATE TABLE referencing_table2(id int, ref_id int, FOREIGN KEY (ref_id) REFERENCES referenced_table(test_column2) ON DELETE CASCADE, FOREIGN KEY (id) REFERENCES referencing_table(id) ON DELETE CASCADE);
 SELECT create_reference_table('referenced_table');
  create_reference_table
 ---------------------------------------------------------------------
 
 (1 row)
 
-BEGIN;
-  SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
-  SELECT create_distributed_table('referencing_table', 'id');
- create_distributed_table
----------------------------------------------------------------------
-
-(1 row)
-
-  SELECT create_distributed_table('referencing_table2', 'id');
- create_distributed_table
----------------------------------------------------------------------
-
-(1 row)
-
-COMMIT;
 SELECT count(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
  count
 ---------------------------------------------------------------------
-    24
+     0
 (1 row)
 
 \set VERBOSITY terse
 DROP TABLE referenced_table CASCADE;
-NOTICE:  drop cascades to 2 other objects
-DROP TABLE referencing_table CASCADE;
-NOTICE:  drop cascades to constraint referencing_table2_id_fkey on table referencing_table2
-DROP TABLE referencing_table2 CASCADE;
 \set VERBOSITY default
 -- In this test we have a chained relationship in form of
 -- distributed table (referencing_referencing_table) has a foreign key with two columns
@@ -1092,11 +1040,8 @@ SELECT max(ref_id) FROM referencing_referencing_table;
 (1 row)
 
 DROP TABLE referenced_table CASCADE;
-NOTICE:  drop cascades to constraint fkey_ref on table referencing_table
 DROP TABLE referencing_table CASCADE;
-NOTICE:  drop cascades to constraint referencing_referencing_table_id_fkey on table referencing_referencing_table
 DROP TABLE referencing_referencing_table;
--- create_reference_table, create_distributed_table and ALTER TABLE in the same transaction
 BEGIN;
   CREATE TABLE test_table_1(id int PRIMARY KEY);
   SELECT create_reference_table('test_table_1');
@@ -1106,28 +1051,11 @@ BEGIN;
 (1 row)
 
   CREATE TABLE test_table_2(id int PRIMARY KEY, value_1 int);
-  SELECT create_distributed_table('test_table_2', 'id');
- create_distributed_table
----------------------------------------------------------------------
-
-(1 row)
-
   ALTER TABLE test_table_2 ADD CONSTRAINT c_check FOREIGN KEY (value_1) REFERENCES test_table_1(id);
-ERROR:  cannot modify table "test_table_2" because there was a parallel operation on a distributed table in the transaction
-DETAIL:  When there is a foreign key to a reference table, Citus needs to perform all operations over a single connection per node to ensure consistency.
-HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
   DROP TABLE test_table_1, test_table_2;
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
 COMMIT;
--- the order of create_reference_table and create_distributed_table is changed
 BEGIN;
   CREATE TABLE test_table_1(id int PRIMARY KEY, value_1 int);
-  SELECT create_distributed_table('test_table_1', 'id');
- create_distributed_table
----------------------------------------------------------------------
-
-(1 row)
-
   CREATE TABLE test_table_2(id int PRIMARY KEY);
   SELECT create_reference_table('test_table_2');
  create_reference_table
@@ -1136,33 +1064,20 @@ BEGIN;
 (1 row)
 
   ALTER TABLE test_table_1 ADD CONSTRAINT c_check FOREIGN KEY (value_1) REFERENCES test_table_2(id);
-ERROR:  cannot modify table "test_table_1" because there was a parallel operation on a distributed table in the transaction
-DETAIL:  When there is a foreign key to a reference table, Citus needs to perform all operations over a single connection per node to ensure consistency.
-HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
   DROP TABLE test_table_2 CASCADE;
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
 ROLLBACK;
--- make sure that we fail if we need parallel data load
 BEGIN;
   CREATE TABLE test_table_1(id int PRIMARY KEY);
   INSERT INTO test_table_1 SELECT i FROM generate_series(0,100) i;
   CREATE TABLE test_table_2(id int PRIMARY KEY, value_1 int, FOREIGN KEY(value_1) REFERENCES test_table_1(id));
   INSERT INTO test_table_2 SELECT i, i FROM generate_series(0,100) i;
   SELECT create_reference_table('test_table_1');
-NOTICE:  Copying data from local table...
-NOTICE:  copying the data has completed
-DETAIL:  The local data in the table is no longer visible, but is still on disk.
-HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$fkey_reference_table.test_table_1$$)
  create_reference_table
 ---------------------------------------------------------------------
 
 (1 row)
 
-  SELECT create_distributed_table('test_table_2', 'id');
-ERROR:  cannot distribute "test_table_2" in sequential mode because it is not empty
-HINT:  If you have manually set citus.multi_shard_modify_mode to 'sequential', try with 'parallel' option. If that is not the case, try distributing local tables when they are empty.
   DROP TABLE test_table_2, test_table_1;
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
 COMMIT;
 -- make sure that other DDLs/DMLs also work fine
 BEGIN;
@@ -1261,7 +1176,6 @@ SELECT create_distributed_table('test_table_2', 'id');
 (1 row)
 
 ALTER TABLE test_table_1 DROP CONSTRAINT test_table_1_pkey CASCADE;
-NOTICE:  drop cascades to constraint test_table_2_value_1_fkey on table test_table_2
 SELECT count(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
  count
 ---------------------------------------------------------------------
@@ -1286,7 +1200,6 @@ BEGIN;
 (1 row)
 
   ALTER TABLE test_table_1 DROP CONSTRAINT test_table_1_pkey CASCADE;
-NOTICE:  drop cascades to constraint test_table_2_value_1_fkey on table test_table_2
 COMMIT;
 SELECT count(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
  count
@@ -1359,7 +1272,6 @@ SELECT create_distributed_table('test_table_2', 'id');
 (1 row)
 
 ALTER TABLE test_table_1 DROP COLUMN id CASCADE;
-NOTICE:  drop cascades to constraint test_table_2_value_1_fkey on table test_table_2
 SELECT count(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
  count
 ---------------------------------------------------------------------
@@ -1384,7 +1296,6 @@ BEGIN;
 (1 row)
 
   ALTER TABLE test_table_1 DROP COLUMN id CASCADE;
-NOTICE:  drop cascades to constraint test_table_2_value_1_fkey on table test_table_2
 COMMIT;
 SELECT count(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
  count
@@ -1426,7 +1337,6 @@ SELECT count(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_tab
 (1 row)
 
 DROP TABLE test_table_1 CASCADE;
-NOTICE:  drop cascades to constraint test_table_2_value_1_fkey on table test_table_2
 DROP TABLE test_table_2;
 -- check if we can alter the column type and drop it which foreign key is referencing to in a transaction block
 CREATE TABLE test_table_1(id int PRIMARY KEY);
@@ -1446,7 +1356,6 @@ BEGIN;
 
   ALTER TABLE test_table_2 ALTER COLUMN value_1 SET DATA TYPE bigint;
   ALTER TABLE test_table_1 DROP COLUMN id CASCADE;
-NOTICE:  drop cascades to constraint test_table_2_value_1_fkey on table test_table_2
 COMMIT;
 SELECT count(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
  count
@@ -1473,7 +1382,6 @@ SELECT create_distributed_table('test_table_2', 'id');
 INSERT INTO test_table_1 VALUES (1),(2),(3);
 INSERT INTO test_table_2 VALUES (1,1),(2,2),(3,3);
 TRUNCATE test_table_1 CASCADE;
-NOTICE:  truncate cascades to table "test_table_2"
 SELECT * FROM test_table_2;
  id | value_1
 ---------------------------------------------------------------------
@@ -1499,7 +1407,6 @@ INSERT INTO test_table_1 VALUES (1),(2),(3);
 INSERT INTO test_table_2 VALUES (1,1),(2,2),(3,3);
 BEGIN;
   TRUNCATE test_table_1 CASCADE;
-NOTICE:  truncate cascades to table "test_table_2"
 COMMIT;
 SELECT * FROM test_table_2;
  id | value_1
@@ -1526,7 +1433,6 @@ BEGIN;
   INSERT INTO test_table_1 VALUES (1),(2),(3);
   INSERT INTO test_table_2 VALUES (1,1),(2,2),(3,3);
   TRUNCATE test_table_1 CASCADE;
-NOTICE:  truncate cascades to table "test_table_2"
 COMMIT;
 SELECT * FROM test_table_2;
  id | value_1
@@ -1627,7 +1533,6 @@ BEGIN;
   ALTER TABLE test_table_2 ADD CONSTRAINT fkey FOREIGN KEY (value_1) REFERENCES test_table_1(id);
   ALTER TABLE test_table_3 ADD COLUMN test_column int;
   ALTER TABLE test_table_1 DROP COLUMN id CASCADE;
-NOTICE:  drop cascades to constraint fkey on table test_table_2
   ALTER TABLE test_table_1 ADD COLUMN id int;
 COMMIT;
 DROP TABLE test_table_1, test_table_2, test_table_3;
@@ -1703,9 +1608,7 @@ BEGIN;
 
 ROLLBACK;
 DROP TABLE referenced_table CASCADE;
-NOTICE:  drop cascades to constraint fkey_to_ref on table referencing_table_4
 DROP TABLE referencing_table;
-SET client_min_messages TO ERROR;
 DROP SCHEMA fkey_reference_table CASCADE;
 SET search_path TO DEFAULT;
 RESET client_min_messages;

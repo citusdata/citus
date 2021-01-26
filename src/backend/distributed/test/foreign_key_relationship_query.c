@@ -14,12 +14,15 @@
 #include "fmgr.h"
 #include "funcapi.h"
 
+#include "catalog/dependency.h"
+#include "catalog/pg_constraint.h"
 #include "distributed/foreign_key_relationship.h"
 #include "distributed/coordinator_protocol.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/tuplestore.h"
 #include "distributed/version_compat.h"
+#include "utils/builtins.h"
 
 
 #define GET_FKEY_CONNECTED_RELATIONS_COLUMNS 1
@@ -29,6 +32,42 @@
 PG_FUNCTION_INFO_V1(get_referencing_relation_id_list);
 PG_FUNCTION_INFO_V1(get_referenced_relation_id_list);
 PG_FUNCTION_INFO_V1(get_foreign_key_connected_relations);
+PG_FUNCTION_INFO_V1(drop_constraint_cascade_via_perform_deletion);
+
+
+/*
+ * drop_constraint_cascade_via_perform_deletion simply drops constraint on
+ * relation via performDeletion.
+ */
+Datum
+drop_constraint_cascade_via_perform_deletion(PG_FUNCTION_ARGS)
+{
+	Oid relationId = PG_GETARG_OID(0);
+
+	if (PG_ARGISNULL(1))
+	{
+		/* avoid unexpected crashes in regression tests */
+		ereport(ERROR, (errmsg("cannot perform operation without constraint "
+							   "name argument")));
+	}
+
+	text *constraintNameText = PG_GETARG_TEXT_P(1);
+	char *constraintName = text_to_cstring(constraintNameText);
+
+	/* error if constraint does not exist */
+	bool missingOk = false;
+	Oid constraintId = get_relation_constraint_oid(relationId, constraintName, missingOk);
+
+	ObjectAddress constraintObjectAddress;
+	constraintObjectAddress.classId = ConstraintRelationId;
+	constraintObjectAddress.objectId = constraintId;
+	constraintObjectAddress.objectSubId = 0;
+
+	performDeletion(&constraintObjectAddress, DROP_CASCADE, 0);
+
+	PG_RETURN_VOID();
+}
+
 
 /*
  * get_referencing_relation_id_list returns the list of table oids that is referencing

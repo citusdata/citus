@@ -78,6 +78,7 @@ static void ForeignConstraintFindDistKeys(HeapTuple pgConstraintTuple,
 static List * GetForeignKeyIdsForColumn(char *columnName, Oid relationId,
 										int searchForeignKeyColumnFlags);
 static Oid get_relation_constraint_oid_compat(HeapTuple heapTuple);
+static List * GetForeignKeysWithLocalTables(Oid relationId);
 static bool IsTableTypeIncluded(Oid relationId, int flags);
 static void UpdateConstraintIsValid(Oid constraintId, bool isValid);
 
@@ -708,6 +709,38 @@ get_relation_constraint_oid_compat(HeapTuple heapTuple)
 #endif
 
 	return constraintOid;
+}
+
+
+/*
+ * HasForeignKeyToLocalTable returns true if relation has foreign key
+ * relationship with a local table.
+ */
+bool
+HasForeignKeyWithLocalTable(Oid relationId)
+{
+	List *foreignKeysWithLocalTables = GetForeignKeysWithLocalTables(relationId);
+	return list_length(foreignKeysWithLocalTables) > 0;
+}
+
+
+/*
+ * GetForeignKeysWithLocalTables returns a list foreign keys for foreign key
+ * relationaships that relation has with local tables.
+ */
+static List *
+GetForeignKeysWithLocalTables(Oid relationId)
+{
+	int referencingFKeysFlag = INCLUDE_REFERENCING_CONSTRAINTS |
+							   INCLUDE_LOCAL_TABLES;
+	List *referencingFKeyList = GetForeignKeyOids(relationId, referencingFKeysFlag);
+
+	/* already captured self referencing foreign keys, so use EXCLUDE_SELF_REFERENCES */
+	int referencedFKeysFlag = INCLUDE_REFERENCED_CONSTRAINTS |
+							  EXCLUDE_SELF_REFERENCES |
+							  INCLUDE_LOCAL_TABLES;
+	List *referencedFKeyList = GetForeignKeyOids(relationId, referencedFKeysFlag);
+	return list_concat(referencingFKeyList, referencedFKeyList);
 }
 
 

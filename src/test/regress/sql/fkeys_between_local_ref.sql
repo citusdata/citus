@@ -95,6 +95,10 @@ BEGIN;
 
   -- show that we converted all 4 local tables in this schema to citus local tables
   SELECT COUNT(*)=4 FROM citus_local_tables_in_schema;
+
+  -- dropping that column would undistribute those 4 citus local tables
+  ALTER TABLE local_table_1 DROP COLUMN col_1 CASCADE;
+  SELECT COUNT(*)=0 FROM citus_local_tables_in_schema;
 ROLLBACK;
 
 -- this actually attempts to convert local tables to citus local tables but errors out
@@ -111,6 +115,15 @@ BEGIN;
 
   -- now we have 5 citus local tables in this schema
   SELECT COUNT(*)=5 FROM citus_local_tables_in_schema;
+
+  -- dropping foreign key from local_table_2 would only undistribute local_table_2 & local_table_5
+  ALTER TABLE local_table_2 DROP CONSTRAINT fkey_1;
+  SELECT logicalrelid::regclass::text FROM citus_local_tables_in_schema ORDER BY logicalrelid;
+
+    -- dropping local_table_1 would undistribute last two citus local tables as local_table_1
+    -- was the bridge to reference table
+  DROP TABLE local_table_1 CASCADE;
+  SELECT COUNT(*)=0 FROM citus_local_tables_in_schema;
 ROLLBACK;
 
 -- they fail as local_table_99 does not exist
@@ -252,6 +265,14 @@ BEGIN;
   WHERE logicalrelid::text IN (SELECT tablename FROM pg_tables WHERE schemaname='fkeys_between_local_ref' UNION
                                SELECT 'another_schema_fkeys_between_local_ref.local_table_6')
   ORDER BY tablename;
+
+  DROP TABLE local_table_3 CASCADE;
+  DROP SCHEMA another_schema_fkeys_between_local_ref CASCADE;
+
+  -- now we shouldn't see local_table_5 since now it is not connected to any reference tables
+  SELECT logicalrelid::text AS tablename, partmethod, repmodel FROM pg_dist_partition
+  WHERE logicalrelid::text IN (SELECT tablename FROM pg_tables WHERE schemaname='fkeys_between_local_ref')
+  ORDER BY tablename;
 ROLLBACK;
 
 BEGIN;
@@ -283,6 +304,21 @@ BEGIN;
   SELECT logicalrelid::text AS tablename, partmethod, repmodel FROM pg_dist_partition
   WHERE logicalrelid::text IN (SELECT tablename FROM pg_tables WHERE schemaname='fkeys_between_local_ref')
   ORDER BY tablename;
+
+  CREATE SCHEMA another_schema_fkeys_between_local_ref;
+  CREATE TABLE another_schema_fkeys_between_local_ref.reference_table_3 (col_1 INT UNIQUE);
+  SELECT create_reference_table('another_schema_fkeys_between_local_ref.reference_table_3');
+  TRUNCATE local_table_4 CASCADE;
+  ALTER TABLE local_table_4 ADD CONSTRAINT fkey_12 FOREIGN KEY (col_1) REFERENCES another_schema_fkeys_between_local_ref.reference_table_3(col_1);
+
+  DROP TABLE local_table_5 CASCADE;
+  ALTER TABLE local_table_2 DROP CONSTRAINT fkey_1;
+  DROP SCHEMA another_schema_fkeys_between_local_ref CASCADE;
+
+  -- now we shouldn't see any citus local tables
+  SELECT logicalrelid::text AS tablename, partmethod, repmodel FROM pg_dist_partition
+  WHERE logicalrelid::text IN (SELECT tablename FROM pg_tables WHERE schemaname='fkeys_between_local_ref')
+  ORDER BY tablename;
 ROLLBACK;
 
 BEGIN;
@@ -305,6 +341,70 @@ BEGIN;
   ORDER BY tablename;
 ROLLBACK;
 
+-- converting any local table to a citus local table in graph converts
+-- other tables to citus local tables, test this in below xact blocks
+
+BEGIN;
+  SELECT create_reference_table('local_table_1');
+
+  SELECT create_distributed_table('local_table_2', 'col_1');
+
+  SELECT logicalrelid::text AS tablename, partmethod, repmodel FROM pg_dist_partition
+  WHERE logicalrelid::text IN (SELECT tablename FROM pg_tables WHERE schemaname='fkeys_between_local_ref')
+  ORDER BY tablename;
+ROLLBACK;
+
+BEGIN;
+  SELECT create_reference_table('local_table_4');
+
+  SELECT create_reference_table('local_table_3');
+
+  SELECT logicalrelid::text AS tablename, partmethod, repmodel FROM pg_dist_partition
+  WHERE logicalrelid::text IN (SELECT tablename FROM pg_tables WHERE schemaname='fkeys_between_local_ref')
+  ORDER BY tablename;
+ROLLBACK;
+
+BEGIN;
+  CREATE TABLE local_table_5 (col_1 INT REFERENCES local_table_1(col_1));
+
+  SELECT create_reference_table('local_table_1');
+
+  SELECT create_distributed_table('local_table_2', 'col_1');
+  SELECT create_distributed_table('local_table_5', 'col_1');
+
+  SELECT logicalrelid::text AS tablename, partmethod, repmodel FROM pg_dist_partition
+  WHERE logicalrelid::text IN (SELECT tablename FROM pg_tables WHERE schemaname='fkeys_between_local_ref')
+  ORDER BY tablename;
+ROLLBACK;
+
+BEGIN;
+  ALTER TABLE local_table_1 ADD CONSTRAINT fkey_13 FOREIGN KEY (col_1) REFERENCES local_table_2(col_1) ON DELETE CASCADE;
+
+  -- errors out as foreign keys from reference tables to citus local tables
+  -- cannot have CASCADE behavior
+  SELECT create_reference_table('local_table_1');
+ROLLBACK;
+
+SET citus.enable_local_execution TO OFF;
+-- show that this errors out as it tries to convert connected relations to citus
+-- local tables and creating citus local table requires local execution but local
+-- execution is disabled
+SELECT create_reference_table('local_table_1');
+SET citus.enable_local_execution TO ON;
+
+-- test behavior when outside of the xact block
+
+CREATE TABLE local_table_6 (col_1 INT REFERENCES local_table_1(col_1));
+
+SELECT create_reference_table('local_table_1');
+
+SELECT create_distributed_table('local_table_2', 'col_1');
+SELECT create_distributed_table('local_table_6', 'col_1');
+
+SELECT logicalrelid::text AS tablename, partmethod, repmodel FROM pg_dist_partition
+WHERE logicalrelid::text IN (SELECT tablename FROM pg_tables WHERE schemaname='fkeys_between_local_ref')
+ORDER BY tablename;
+
 -- this errors out as we don't support creating citus local
 -- tables from partitioned tables
 CREATE TABLE part_local_table (col_1 INT REFERENCES reference_table_1(col_1)) PARTITION BY RANGE (col_1);
@@ -315,6 +415,99 @@ CREATE TABLE local_table_5 (col_1 INT, FOREIGN KEY (col_1) REFERENCES reference_
 
 -- fails as referenced table does not exist
 CREATE TABLE local_table_5 (col_1 INT, FOREIGN KEY (col_1) REFERENCES table_does_not_exist(dummy));
+
+-- drop & recreate schema to prevent noise in next test outputs
+DROP SCHEMA fkeys_between_local_ref CASCADE;
+CREATE SCHEMA fkeys_between_local_ref;
+SET search_path TO fkeys_between_local_ref;
+
+-- now have some tests to test behavior before/after enabling foreign keys
+-- between local tables & reference tables
+
+BEGIN;
+  SET citus.enable_local_reference_table_foreign_keys TO OFF;
+
+  CREATE TABLE ref_1(a int PRIMARY KEY);
+  CREATE TABLE pg_local_1(a int PRIMARY KEY REFERENCES ref_1(a));
+  SELECT create_reference_table('ref_1');
+
+  SET citus.enable_local_reference_table_foreign_keys TO ON;
+
+  CREATE TABLE ref_2(a int PRIMARY KEY);
+  SELECT create_reference_table('ref_2');
+  ALTER TABLE pg_local_1 ADD CONSTRAINT c1 FOREIGN KEY(a) REFERENCES ref_2(a);
+
+  SELECT logicalrelid::text AS tablename, partmethod, repmodel FROM pg_dist_partition
+  WHERE logicalrelid::text IN (SELECT tablename FROM pg_tables WHERE schemaname='fkeys_between_local_ref')
+  ORDER BY tablename;
+ROLLBACK;
+
+BEGIN;
+  SET citus.enable_local_reference_table_foreign_keys TO OFF;
+
+  CREATE TABLE ref_1(a int PRIMARY KEY);
+  CREATE TABLE pg_local_1(a int PRIMARY KEY REFERENCES ref_1(a));
+  SELECT create_reference_table('ref_1');
+
+  SET citus.enable_local_reference_table_foreign_keys TO ON;
+
+  CREATE TABLE ref_2(a int PRIMARY KEY REFERENCES pg_local_1(a));
+  SELECT create_reference_table('ref_2');
+
+  SELECT logicalrelid::text AS tablename, partmethod, repmodel FROM pg_dist_partition
+  WHERE logicalrelid::text IN (SELECT tablename FROM pg_tables WHERE schemaname='fkeys_between_local_ref')
+  ORDER BY tablename;
+ROLLBACK;
+
+BEGIN;
+  SET citus.enable_local_reference_table_foreign_keys TO OFF;
+
+  CREATE TABLE ref_1(a int PRIMARY KEY);
+  CREATE TABLE pg_local_1(a int PRIMARY KEY REFERENCES ref_1(a));
+  SELECT create_reference_table('ref_1');
+
+  SET citus.enable_local_reference_table_foreign_keys TO ON;
+
+  CREATE TABLE ref_2(a int PRIMARY KEY REFERENCES pg_local_1(a));
+  SELECT create_reference_table('ref_2');
+
+  SELECT logicalrelid::text AS tablename, partmethod, repmodel FROM pg_dist_partition
+  WHERE logicalrelid::text IN (SELECT tablename FROM pg_tables WHERE schemaname='fkeys_between_local_ref')
+  ORDER BY tablename;
+ROLLBACK;
+
+BEGIN;
+  SET citus.enable_local_reference_table_foreign_keys TO OFF;
+
+  CREATE TABLE ref_1(a int PRIMARY KEY);
+  CREATE TABLE pg_local_1(a int PRIMARY KEY REFERENCES ref_1(a));
+  SELECT create_reference_table('ref_1');
+
+  SET citus.enable_local_reference_table_foreign_keys TO ON;
+
+  CREATE TABLE pg_local_2(a int PRIMARY KEY REFERENCES pg_local_1(a));
+
+  -- we still didn't convert local tables to citus local tables
+  SELECT logicalrelid::text AS tablename, partmethod, repmodel FROM pg_dist_partition
+  WHERE logicalrelid::text IN (SELECT tablename FROM pg_tables WHERE schemaname='fkeys_between_local_ref')
+  ORDER BY tablename;
+
+  CREATE TABLE pg_local_3(a int PRIMARY KEY REFERENCES ref_1(a));
+
+  -- pg_local_3 is not connected to other local tables, so we will just
+  -- convert pg_local_3 to a citus local table
+  SELECT logicalrelid::text AS tablename, partmethod, repmodel FROM pg_dist_partition
+  WHERE logicalrelid::text IN (SELECT tablename FROM pg_tables WHERE schemaname='fkeys_between_local_ref')
+  ORDER BY tablename;
+
+  CREATE TABLE pg_local_4(a int PRIMARY KEY REFERENCES ref_1(a), FOREIGN KEY (a) REFERENCES pg_local_2(a));
+
+  -- pg_local_4 is connected to ref_1, pg_local_1 and pg_local_2,
+  -- so we will convert those two local tables to citus local tables too
+  SELECT logicalrelid::text AS tablename, partmethod, repmodel FROM pg_dist_partition
+  WHERE logicalrelid::text IN (SELECT tablename FROM pg_tables WHERE schemaname='fkeys_between_local_ref')
+  ORDER BY tablename;
+ROLLBACK;
 
 -- cleanup at exit
 DROP SCHEMA fkeys_between_local_ref CASCADE;

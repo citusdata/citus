@@ -35,6 +35,8 @@ extern bool EnableDependencyCreation;
 extern bool EnableCreateTypePropagation;
 extern bool EnableAlterRolePropagation;
 extern bool EnableAlterRoleSetPropagation;
+extern int UtilityHookLevel;
+
 
 /*
  * A DDLJob encapsulates the remote tasks and commands needed to process all or
@@ -77,6 +79,9 @@ extern List * DDLTaskList(Oid relationId, const char *commandString);
 extern List * NodeDDLTaskList(TargetWorkerSet targets, List *commands);
 extern bool AlterTableInProgress(void);
 extern bool DropSchemaOrDBInProgress(void);
+extern void UndistributeDisconnectedCitusLocalTables(void);
+extern void NotifyUtilityHookConstraintDropped(void);
+extern void ResetConstraintDropped(void);
 extern void ExecuteDistributedDDLJob(DDLJob *ddlJob);
 
 /* forward declarations for sending custom commands to a distributed table */

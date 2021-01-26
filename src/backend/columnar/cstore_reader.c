@@ -1,8 +1,8 @@
 /*-------------------------------------------------------------------------
  *
- * cstore_reader.c
+ * columnar_reader.c
  *
- * This file contains function definitions for reading cstore files. This
+ * This file contains function definitions for reading columnar tables. This
  * includes the logic for reading file level metadata, reading row stripes,
  * and skipping unrelated row chunks and columns.
  *
@@ -36,8 +36,8 @@
 #include "utils/lsyscache.h"
 #include "utils/rel.h"
 
-#include "columnar/cstore.h"
-#include "columnar/cstore_version_compat.h"
+#include "columnar/columnar.h"
+#include "columnar/columnar_version_compat.h"
 
 /* static function declarations */
 static StripeBuffers * LoadFilteredStripeBuffers(Relation relation,
@@ -80,7 +80,7 @@ static Datum ColumnDefaultValue(TupleConstr *tupleConstraints,
 								Form_pg_attribute attributeForm);
 
 /*
- * ColumnarBeginRead initializes a cstore read operation. This function returns a
+ * ColumnarBeginRead initializes a columnar read operation. This function returns a
  * read handle that's used during reading rows and finishing the read operation.
  */
 TableReadState *
@@ -117,7 +117,7 @@ ColumnarBeginRead(Relation relation, TupleDesc tupleDescriptor,
 
 
 /*
- * ColumnarReadNextRow tries to read a row from the cstore file. On success, it sets
+ * ColumnarReadNextRow tries to read a row from the columnar table. On success, it sets
  * column values and nulls, and returns true. If there are no more rows to read,
  * the function returns false.
  */
@@ -178,18 +178,8 @@ ColumnarReadNextRow(TableReadState *readState, Datum *columnValues, bool *column
 
 	if (chunkIndex != readState->deserializedChunkIndex)
 	{
-		uint32 chunkRowCount = 0;
-
-		uint32 stripeRowCount = stripeMetadata->rowCount;
-		uint32 lastChunkIndex = stripeRowCount / stripeMetadata->chunkRowCount;
-		if (chunkIndex == lastChunkIndex)
-		{
-			chunkRowCount = stripeRowCount % stripeMetadata->chunkRowCount;
-		}
-		else
-		{
-			chunkRowCount = stripeMetadata->chunkRowCount;
-		}
+		uint32 chunkRowCount =
+			readState->stripeBuffers->selectedChunkRowCount[chunkIndex];
 
 		oldContext = MemoryContextSwitchTo(readState->stripeReadContext);
 
@@ -235,7 +225,7 @@ ColumnarRescan(TableReadState *readState)
 }
 
 
-/* Finishes a cstore read operation. */
+/* Finishes a columnar read operation. */
 void
 ColumnarEndRead(TableReadState *readState)
 {
@@ -356,6 +346,14 @@ LoadFilteredStripeBuffers(Relation relation, StripeMetadata *stripeMetadata,
 		SelectedChunkSkipList(stripeSkipList, projectedColumnMask,
 							  selectedChunkMask);
 
+	uint32 selectedChunkCount = selectedChunkSkipList->chunkCount;
+	uint32 *selectedChunkRowCount = palloc0(selectedChunkCount * sizeof(uint32));
+	for (int chunkIndex = 0; chunkIndex < selectedChunkCount; chunkIndex++)
+	{
+		selectedChunkRowCount[chunkIndex] =
+			selectedChunkSkipList->chunkSkipNodeArray[0][chunkIndex].rowCount;
+	}
+
 	/* load column data for projected columns */
 	ColumnBuffers **columnBuffersArray = palloc0(columnCount * sizeof(ColumnBuffers *));
 
@@ -381,6 +379,8 @@ LoadFilteredStripeBuffers(Relation relation, StripeMetadata *stripeMetadata,
 	stripeBuffers->columnCount = columnCount;
 	stripeBuffers->rowCount = StripeSkipListRowCount(selectedChunkSkipList);
 	stripeBuffers->columnBuffersArray = columnBuffersArray;
+	stripeBuffers->selectedChunks = selectedChunkCount;
+	stripeBuffers->selectedChunkRowCount = selectedChunkRowCount;
 
 	return stripeBuffers;
 }

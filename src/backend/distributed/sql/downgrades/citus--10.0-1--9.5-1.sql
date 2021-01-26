@@ -1,5 +1,18 @@
 -- citus--10.0-1--9.5-1
--- this is an empty downgrade path since citus--9.5-1--10.0-1.sql is empty for now
+
+-- In Citus 10.0, we added another internal udf (notify_constraint_dropped)
+-- to be called by citus_drop_trigger. Since this script is executed when
+-- downgrading Citus, we don't have notify_constraint_dropped in citus.so.
+-- For this reason, we first need to downgrade citus_drop_trigger so it doesn't
+-- call notify_constraint_dropped.
+-- To downgrade citus_drop_trigger, we first need to have the old version of
+-- citus_drop_all_shards as we renamed it in Citus 10.0.
+ALTER FUNCTION pg_catalog.citus_drop_all_shards(regclass, text, text)
+RENAME TO master_drop_all_shards;
+#include "../udfs/citus_drop_trigger/9.5-1.sql"
+
+-- Now we can safely drop notify_constraint_dropped as we downgraded citus_drop_trigger.
+DROP FUNCTION pg_catalog.notify_constraint_dropped();
 
 #include "../udfs/citus_finish_pg_upgrade/9.5-1.sql"
 
@@ -40,8 +53,6 @@ ALTER FUNCTION pg_catalog.citus_dist_placement_cache_invalidate()
 RENAME TO master_dist_placement_cache_invalidate;
 ALTER FUNCTION pg_catalog.citus_dist_shard_cache_invalidate()
 RENAME TO master_dist_shard_cache_invalidate;
-ALTER FUNCTION pg_catalog.citus_drop_all_shards(regclass, text, text)
-RENAME TO master_drop_all_shards;
 
 #include "../udfs/citus_conninfo_cache_invalidate/9.5-1.sql"
 #include "../udfs/citus_dist_local_group_cache_invalidate/9.5-1.sql"
@@ -89,7 +100,8 @@ CREATE FUNCTION pg_catalog.master_create_worker_shards(table_name text, shard_co
     AS 'MODULE_PATHNAME'
     LANGUAGE C STRICT;
 
-#include "../udfs/citus_drop_trigger/9.5-1.sql"
+DROP FUNCTION pg_catalog.remove_local_tables_from_metadata();
+
 #include "../udfs/citus_total_relation_size/7.0-1.sql"
 #include "../udfs/upgrade_to_reference_table/8.0-1.sql"
 #include "../udfs/undistribute_table/9.5-1.sql"

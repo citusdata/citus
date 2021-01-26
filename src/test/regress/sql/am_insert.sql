@@ -66,3 +66,34 @@ DROP PUBLICATION test_columnar_publication;
 -- should succeed
 INSERT INTO test_logical_replication VALUES (3);
 DROP TABLE test_logical_replication;
+
+--
+-- test toast interactions
+--
+
+-- row table with data in different storage formats
+CREATE TABLE test_toast_row(plain TEXT, main TEXT, external TEXT, extended TEXT);
+ALTER TABLE test_toast_row ALTER COLUMN plain SET STORAGE plain; -- inline, uncompressed
+ALTER TABLE test_toast_row ALTER COLUMN main SET STORAGE main; -- inline, compressed
+ALTER TABLE test_toast_row ALTER COLUMN external SET STORAGE external; -- out-of-line, uncompressed
+ALTER TABLE test_toast_row ALTER COLUMN extended SET STORAGE extended; -- out-of-line, compressed
+
+INSERT INTO test_toast_row VALUES(
+       repeat('w', 5000), repeat('x', 5000), repeat('y', 5000), repeat('z', 5000));
+
+SELECT
+  pg_column_size(plain), pg_column_size(main),
+  pg_column_size(external), pg_column_size(extended)
+FROM test_toast_row;
+
+CREATE TABLE test_toast_columnar(plain TEXT, main TEXT, external TEXT, extended TEXT)
+  USING columnar;
+INSERT INTO test_toast_columnar SELECT plain, main, external, extended
+  FROM test_toast_row;
+SELECT
+  pg_column_size(plain), pg_column_size(main),
+  pg_column_size(external), pg_column_size(extended)
+FROM test_toast_columnar;
+
+DROP TABLE test_toast_row;
+DROP TABLE test_toast_columnar;

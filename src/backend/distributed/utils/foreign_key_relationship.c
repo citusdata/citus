@@ -23,9 +23,11 @@
 #include "access/table.h"
 #endif
 #include "catalog/pg_constraint.h"
+#include "distributed/commands.h"
 #include "distributed/foreign_key_relationship.h"
 #include "distributed/hash_helpers.h"
 #include "distributed/listutils.h"
+#include "distributed/metadata_cache.h"
 #include "distributed/version_compat.h"
 #include "nodes/pg_list.h"
 #include "storage/lockdefs.h"
@@ -141,6 +143,24 @@ GetForeignKeyConnectedRelationIdList(Oid relationId)
 	List *fKeyConnectedRelationIdList =
 		GetRelationIdsFromRelationshipNodeList(fKeyConnectedRelationshipNodeList);
 	return fKeyConnectedRelationIdList;
+}
+
+
+/*
+ * ConnectedToReferenceTableViaFKey returns true if given relationId is
+ * connected to a reference table via its foreign key subgraph.
+ */
+bool
+ConnectedToReferenceTableViaFKey(Oid relationId)
+{
+	/*
+	 * As we will operate on foreign key connected relations, here we
+	 * invalidate foreign key graph so that we act on fresh graph.
+	 */
+	InvalidateForeignKeyGraph();
+
+	List *fkeyConnectedRelations = GetForeignKeyConnectedRelationIdList(relationId);
+	return RelationIdListHasReferenceTable(fkeyConnectedRelations);
 }
 
 
