@@ -23,7 +23,6 @@ DROP FUNCTION pg_catalog.alter_distributed_table(regclass, text, int, text, bool
 DROP FUNCTION pg_catalog.alter_table_set_access_method(regclass, text);
 DROP FUNCTION pg_catalog.citus_total_relation_size(regclass,boolean);
 DROP FUNCTION pg_catalog.undistribute_table(regclass,boolean);
-DROP FUNCTION pg_catalog.create_citus_local_table(regclass,boolean);
 DROP FUNCTION pg_catalog.citus_add_local_table_to_metadata(regclass,boolean);
 DROP FUNCTION pg_catalog.citus_add_node(text, integer, integer, noderole, name);
 DROP FUNCTION pg_catalog.citus_activate_node(text, integer);
