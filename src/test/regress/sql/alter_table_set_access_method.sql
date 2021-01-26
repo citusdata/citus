@@ -143,6 +143,65 @@ select alter_table_set_access_method('test_fk_p1', 'columnar');
 CREATE TABLE same_access_method (a INT);
 SELECT alter_table_set_access_method('same_access_method', 'heap');
 
+-- test keeping dependent materialized views
+CREATE TABLE mat_view_test (a int);
+INSERT INTO mat_view_test VALUES (1), (2);
+CREATE MATERIALIZED VIEW mat_view AS SELECT * FROM mat_view_test;
+SELECT alter_table_set_access_method('mat_view_test','columnar');
+SELECT * FROM mat_view ORDER BY a;
+
+CREATE TABLE local(a int);
+INSERT INTO local VALUES (3);
+create materialized view m_local as select * from local;
+create view v_local as select * from local;
+
+
+CREATE TABLE ref(a int);
+SELECT create_Reference_table('ref');
+INSERT INTO ref VALUES (4),(5);
+create materialized view m_ref as select * from ref;
+create view v_ref as select * from ref;
+
+
+CREATE TABLE dist(a int);
+SELECT create_distributed_table('dist', 'a');
+INSERT INTO dist VALUES (7),(9);
+create materialized view m_dist as select * from dist;
+create view v_dist as select * from dist;
+
+
+select alter_table_set_access_method('local','columnar');
+select alter_table_set_access_method('ref','columnar');
+select alter_table_set_access_method('dist','columnar');
+
+
+SELECT alter_distributed_table('dist', shard_count:=1, cascade_to_colocated:=false);
+
+select alter_table_set_access_method('local','heap');
+select alter_table_set_access_method('ref','heap');
+select alter_table_set_access_method('dist','heap');
+
+SELECT * FROM m_local;
+SELECT * FROM m_ref;
+SELECT * FROM m_dist;
+
+
+SELECT * FROM v_local;
+SELECT * FROM v_ref;
+SELECT * FROM v_dist;
+
+SELECT relname, relkind
+	FROM pg_class
+	WHERE relname IN (
+		'v_dist',
+		'v_ref',
+		'v_local',
+		'm_dist',
+		'm_ref',
+		'm_local'
+	)
+	ORDER BY relname ASC;
+
 SET client_min_messages TO WARNING;
 DROP SCHEMA alter_table_set_access_method CASCADE;
 SELECT 1 FROM master_remove_node('localhost', :master_port);

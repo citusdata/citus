@@ -808,5 +808,34 @@ SELECT create_distributed_table('append_table', 'a', 'append');
 
 SELECT alter_distributed_table('append_table', shard_count:=6);
 ERROR:  relation append_table should be a hash distributed table
+-- test keeping dependent materialized views
+CREATE TABLE mat_view_test (a int, b int);
+SELECT create_distributed_table('mat_view_test', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO mat_view_test VALUES (1,1), (2,2);
+CREATE MATERIALIZED VIEW mat_view AS SELECT * FROM mat_view_test;
+SELECT alter_distributed_table('mat_view_test', shard_count := 5, cascade_to_colocated := false);
+NOTICE:  creating a new table for alter_distributed_table.mat_view_test
+NOTICE:  Moving the data of alter_distributed_table.mat_view_test
+NOTICE:  Dropping the old alter_distributed_table.mat_view_test
+NOTICE:  drop cascades to materialized view mat_view
+CONTEXT:  SQL statement "DROP TABLE alter_distributed_table.mat_view_test CASCADE"
+NOTICE:  Renaming the new table to alter_distributed_table.mat_view_test
+ alter_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT * FROM mat_view ORDER BY a;
+ a | b
+---------------------------------------------------------------------
+ 1 | 1
+ 2 | 2
+(2 rows)
+
 SET client_min_messages TO WARNING;
 DROP SCHEMA alter_distributed_table CASCADE;
