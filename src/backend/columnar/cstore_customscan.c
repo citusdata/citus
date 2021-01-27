@@ -242,7 +242,18 @@ ColumnarScanCost(RangeTblEntry *rte)
 	{
 		Bitmapset *attr_needed = rte->selectedCols;
 		double numberOfColumnsRead = bms_num_members(attr_needed);
-		double selectionRatio = numberOfColumnsRead / (double) maxColumnCount;
+		double selectionRatio = 0;
+
+		/*
+		 * When no stripes are in the table we don't have a count in maxColumnCount. To
+		 * prevent a division by zero turning into a NaN we keep the ratio on zero.
+		 * This will result in a cost of 0 for scanning the table which is a reasonable
+		 * cost on an empty table.
+		 */
+		if (maxColumnCount != 0)
+		{
+			selectionRatio = numberOfColumnsRead / (double) maxColumnCount;
+		}
 		Cost scanCost = (double) totalStripeSize / BLCKSZ * selectionRatio;
 		return scanCost;
 	}
