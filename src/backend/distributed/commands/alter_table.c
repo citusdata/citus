@@ -1077,8 +1077,11 @@ GetViewCreationCommandsOfTable(Oid relationId)
 		char *viewName = get_rel_name(viewOid);
 		char *schemaName = get_namespace_name(get_rel_namespace(viewOid));
 		char *qualifiedViewName = quote_qualified_identifier(schemaName, viewName);
+		bool isMatView = get_rel_relkind(viewOid) == RELKIND_MATVIEW;
+
 		appendStringInfo(query,
-						 "CREATE VIEW %s AS %s",
+						 "CREATE %s VIEW %s AS %s",
+						 isMatView ? "MATERIALIZED" : "",
 						 qualifiedViewName,
 						 viewDefinition);
 		commands = lappend(commands, makeTableDDLCommandString(query->data));

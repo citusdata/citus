@@ -272,5 +272,13 @@ CREATE TABLE append_table (a INT);
 SELECT create_distributed_table('append_table', 'a', 'append');
 SELECT alter_distributed_table('append_table', shard_count:=6);
 
+-- test keeping dependent materialized views
+CREATE TABLE mat_view_test (a int, b int);
+SELECT create_distributed_table('mat_view_test', 'a');
+INSERT INTO mat_view_test VALUES (1,1), (2,2);
+CREATE MATERIALIZED VIEW mat_view AS SELECT * FROM mat_view_test;
+SELECT alter_distributed_table('mat_view_test', shard_count := 5, cascade_to_colocated := false);
+SELECT * FROM mat_view ORDER BY a;
+
 SET client_min_messages TO WARNING;
 DROP SCHEMA alter_distributed_table CASCADE;
