@@ -3,8 +3,8 @@
 SET citus.next_shard_id TO 1516000;
 SET citus.shard_replication_factor TO 1;
 
-CREATE SCHEMA create_citus_local_table_cascade;
-SET search_path TO create_citus_local_table_cascade;
+CREATE SCHEMA citus_add_local_table_to_metadata_cascade;
+SET search_path TO citus_add_local_table_to_metadata_cascade;
 
 SET client_min_messages to ERROR;
 
@@ -31,62 +31,62 @@ ALTER TABLE local_table_4 ADD CONSTRAINT fkey_5 FOREIGN KEY (col_1) REFERENCES l
 ALTER TABLE local_table_4 ADD CONSTRAINT fkey_6 FOREIGN KEY (col_1) REFERENCES local_table_4(col_1);
 
 -- show that all of below fails as we didn't provide cascade_via_foreign_keys=true
-SELECT create_citus_local_table('local_table_1');
-SELECT create_citus_local_table('local_table_4', cascade_via_foreign_keys=>false);
+SELECT citus_add_local_table_to_metadata('local_table_1');
+SELECT citus_add_local_table_to_metadata('local_table_4', cascade_via_foreign_keys=>false);
 
 -- In each of below two transaction blocks, show that we preserve foreign keys.
 -- Also show that we converted all local_table_xxx tables in current schema
--- to citus local tables after create_citus_local_table (cascade).
+-- to citus local tables after citus_add_local_table_to_metadata (cascade).
 -- So in each transaction, both selects should return true.
 
 BEGIN;
   SELECT conname, conrelid::regclass::text, confrelid::regclass::text
   FROM pg_constraint
-  WHERE connamespace = (SELECT oid FROM pg_namespace WHERE nspname='create_citus_local_table_cascade') AND
+  WHERE connamespace = (SELECT oid FROM pg_namespace WHERE nspname='citus_add_local_table_to_metadata_cascade') AND
         conname ~ '^fkey\_\d+$'
   ORDER BY 1,2,3;
 
-  SELECT create_citus_local_table('local_table_1', cascade_via_foreign_keys=>true);
+  SELECT citus_add_local_table_to_metadata('local_table_1', cascade_via_foreign_keys=>true);
 
   -- show that we do parallel execution
   show citus.multi_shard_modify_mode;
 
   SELECT conname, conrelid::regclass::text, confrelid::regclass::text
   FROM pg_constraint
-  WHERE connamespace = (SELECT oid FROM pg_namespace WHERE nspname='create_citus_local_table_cascade') AND
+  WHERE connamespace = (SELECT oid FROM pg_namespace WHERE nspname='citus_add_local_table_to_metadata_cascade') AND
         conname ~ '^fkey\_\d+$'
   ORDER BY 1,2,3;
 
   SELECT COUNT(*)=4 FROM pg_dist_partition, pg_tables
   WHERE tablename=logicalrelid::regclass::text AND
-        schemaname='create_citus_local_table_cascade';
+        schemaname='citus_add_local_table_to_metadata_cascade';
 ROLLBACK;
 
 BEGIN;
-  SELECT create_citus_local_table('local_table_4', cascade_via_foreign_keys=>true);
+  SELECT citus_add_local_table_to_metadata('local_table_4', cascade_via_foreign_keys=>true);
 
   SELECT COUNT(*)=6 FROM pg_constraint
-  WHERE connamespace = (SELECT oid FROM pg_namespace WHERE nspname='create_citus_local_table_cascade') AND
+  WHERE connamespace = (SELECT oid FROM pg_namespace WHERE nspname='citus_add_local_table_to_metadata_cascade') AND
         conname ~ '^fkey\_\d+$';
 
   SELECT COUNT(*)=4 FROM pg_dist_partition, pg_tables
   WHERE tablename=logicalrelid::regclass::text AND
-        schemaname='create_citus_local_table_cascade';
+        schemaname='citus_add_local_table_to_metadata_cascade';
 ROLLBACK;
 
 BEGIN;
   CREATE TABLE partitioned_table (col_1 INT REFERENCES local_table_1 (col_1)) PARTITION BY RANGE (col_1);
   -- now that we introduced a partitioned table into our foreign key subgraph,
-  -- create_citus_local_table(cascade_via_foreign_keys) would fail for
-  -- partitioned_table as create_citus_local_table doesn't support partitioned tables
-  SELECT create_citus_local_table('local_table_2', cascade_via_foreign_keys=>true);
+  -- citus_add_local_table_to_metadata(cascade_via_foreign_keys) would fail for
+  -- partitioned_table as citus_add_local_table_to_metadata doesn't support partitioned tables
+  SELECT citus_add_local_table_to_metadata('local_table_2', cascade_via_foreign_keys=>true);
 ROLLBACK;
 
 BEGIN;
   DROP TABLE local_table_2;
-  -- show that create_citus_local_table(cascade_via_foreign_keys) works fine after
+  -- show that citus_add_local_table_to_metadata(cascade_via_foreign_keys) works fine after
   -- dropping one of the relations from foreign key graph
-  SELECT create_citus_local_table('local_table_1', cascade_via_foreign_keys=>true);
+  SELECT citus_add_local_table_to_metadata('local_table_1', cascade_via_foreign_keys=>true);
 ROLLBACK;
 
 BEGIN;
@@ -95,12 +95,12 @@ BEGIN;
 
   -- now that local_table_2 does not have any foreign keys, cascade_via_foreign_keys=true
   -- is not needed but show that it still works fine
-  SELECT create_citus_local_table('local_table_2', cascade_via_foreign_keys=>true);
+  SELECT citus_add_local_table_to_metadata('local_table_2', cascade_via_foreign_keys=>true);
 
   -- show citus tables in current schema
   SELECT tablename FROM pg_dist_partition, pg_tables
   WHERE tablename=logicalrelid::regclass::text AND
-        schemaname='create_citus_local_table_cascade'
+        schemaname='citus_add_local_table_to_metadata_cascade'
   ORDER BY 1;
 ROLLBACK;
 
@@ -115,12 +115,12 @@ BEGIN;
   -- foreign key relationships with other tables but a self
   -- referencing foreign key, cascade_via_foreign_keys=true
   -- is not needed but show that it still works fine
-  SELECT create_citus_local_table('local_table_2', cascade_via_foreign_keys=>true);
+  SELECT citus_add_local_table_to_metadata('local_table_2', cascade_via_foreign_keys=>true);
 
   -- show citus tables in current schema
   SELECT tablename FROM pg_dist_partition, pg_tables
   WHERE tablename=logicalrelid::regclass::text AND
-        schemaname='create_citus_local_table_cascade'
+        schemaname='citus_add_local_table_to_metadata_cascade'
   ORDER BY 1;
 ROLLBACK;
 
@@ -129,19 +129,19 @@ SELECT create_distributed_Table('distributed_table', 'col');
 
 BEGIN;
   SELECT * FROM distributed_table;
-  -- succeeds as create_citus_local_table would also prefer parallel
+  -- succeeds as citus_add_local_table_to_metadata would also prefer parallel
   -- execution like above select
-  SELECT create_citus_local_table('local_table_4', cascade_via_foreign_keys=>true);
+  SELECT citus_add_local_table_to_metadata('local_table_4', cascade_via_foreign_keys=>true);
 ROLLBACK;
 
 BEGIN;
   set citus.multi_shard_modify_mode to 'sequential';
   -- sequetial execution also works fine
-  SELECT create_citus_local_table('local_table_4', cascade_via_foreign_keys=>true);
+  SELECT citus_add_local_table_to_metadata('local_table_4', cascade_via_foreign_keys=>true);
 ROLLBACK;
 
 -- test behaviour when outside of transaction block
-SELECT create_citus_local_table('local_table_4', cascade_via_foreign_keys=>true);
+SELECT citus_add_local_table_to_metadata('local_table_4', cascade_via_foreign_keys=>true);
 
 -- cleanup at exit
-DROP SCHEMA create_citus_local_table_cascade CASCADE;
+DROP SCHEMA citus_add_local_table_to_metadata_cascade CASCADE;

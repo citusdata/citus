@@ -18,7 +18,7 @@ RESET client_min_messages;
 --------------
 
 CREATE TABLE citus_local_table (value int);
-SELECT create_citus_local_table('citus_local_table');
+SELECT citus_add_local_table_to_metadata('citus_local_table');
 
 -- first stop metadata sync to worker_1
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
@@ -71,30 +71,30 @@ FOR EACH STATEMENT EXECUTE FUNCTION another_dummy_function();
 -- and define some foreign keys between them
 
 CREATE TABLE citus_local_table_1(l1 int);
-SELECT create_citus_local_table('citus_local_table_1');
+SELECT citus_add_local_table_to_metadata('citus_local_table_1');
 CREATE TABLE reference_table_1(r1 int primary key);
 SELECT create_reference_table('reference_table_1');
 
 ALTER TABLE citus_local_table_1 ADD CONSTRAINT fkey_local_to_ref FOREIGN KEY(l1) REFERENCES reference_table_1(r1) ON DELETE CASCADE;
 
 CREATE TABLE citus_local_table_2(l1 int primary key);
-SELECT create_citus_local_table('citus_local_table_2');
+SELECT citus_add_local_table_to_metadata('citus_local_table_2');
 CREATE TABLE reference_table_2(r1 int);
 SELECT create_reference_table('reference_table_2');
 
 ALTER TABLE reference_table_2 ADD CONSTRAINT fkey_ref_to_local FOREIGN KEY(r1) REFERENCES citus_local_table_2(l1) ON DELETE RESTRICT;
 
 CREATE TABLE citus_local_table_3(l1 int);
-SELECT create_citus_local_table('citus_local_table_3');
+SELECT citus_add_local_table_to_metadata('citus_local_table_3');
 CREATE TABLE citus_local_table_4(l1 int primary key);
-SELECT create_citus_local_table('citus_local_table_4');
+SELECT citus_add_local_table_to_metadata('citus_local_table_4');
 
 ALTER TABLE citus_local_table_3 ADD CONSTRAINT fkey_local_to_local FOREIGN KEY(l1) REFERENCES citus_local_table_4(l1) ON UPDATE SET NULL;
 
 -- check stats creation
 CREATE TABLE citus_local_table_stats(a int, b int);
 CREATE STATISTICS stx1 ON a, b FROM citus_local_table_stats;
-SELECT create_citus_local_table('citus_local_table_stats');
+SELECT citus_add_local_table_to_metadata('citus_local_table_stats');
 CREATE STATISTICS stx2 ON a, b FROM citus_local_table_stats;
 CREATE STATISTICS stx3 ON a, b FROM citus_local_table_stats;
 CREATE STATISTICS stx4 ON a, b FROM citus_local_table_stats;
@@ -158,7 +158,7 @@ ALTER TABLE citus_local_table_3 ADD CONSTRAINT fkey_local_to_local_2 FOREIGN KEY
 -- check stats creation
 CREATE TABLE citus_local_table_stats2(a int, b int);
 CREATE STATISTICS stx8 ON a, b FROM citus_local_table_stats2;
-SELECT create_citus_local_table('citus_local_table_stats2');
+SELECT citus_add_local_table_to_metadata('citus_local_table_stats2');
 CREATE STATISTICS stx9 ON a, b FROM citus_local_table_stats2;
 DROP STATISTICS stx8;
 DROP STATISTICS stx4;

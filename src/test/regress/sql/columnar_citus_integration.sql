@@ -307,7 +307,7 @@ SET citus.shard_replication_factor TO 1;
 -- test options on a citus local table
 SELECT 1 FROM master_add_node('localhost', :master_port, groupId => 0);
 CREATE TABLE table_option_citus_local (a int, b text) USING columnar;
-SELECT create_citus_local_table('table_option_citus_local');
+SELECT citus_add_local_table_to_metadata('table_option_citus_local');
 
 -- setting: compression
 -- get baseline for setting
@@ -388,7 +388,7 @@ SELECT alter_columnar_table_set('table_option_citus_local_2',
                                 stripe_row_count => 1000,
                                 compression => 'pglz',
                                 compression_level => 9);
-SELECT create_citus_local_table('table_option_citus_local_2');
+SELECT citus_add_local_table_to_metadata('table_option_citus_local_2');
 
 -- verify settings on placements
 SELECT run_command_on_placements('table_option_citus_local_2',$cmd$

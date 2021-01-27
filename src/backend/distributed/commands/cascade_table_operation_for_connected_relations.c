@@ -405,7 +405,7 @@ ExecuteCascadeOperationForRelationIdList(List *relationIdList,
 				break;
 			}
 
-			case CASCADE_FKEY_CREATE_CITUS_LOCAL_TABLE:
+			case CASCADE_FKEY_ADD_LOCAL_TABLE_TO_METADATA:
 			{
 				if (!IsCitusTable(relationId))
 				{
