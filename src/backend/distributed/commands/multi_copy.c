@@ -3585,6 +3585,12 @@ CopyGetPlacementConnection(HTAB *connectionStateHash, ShardPlacement *placement,
 		 */
 		Assert(connection != NULL);
 
+		/*
+		 * Make sure that the connection management remembers that Citus
+		 * accesses this placement over the connection.
+		 */
+		AssignPlacementListToConnection(list_make1(placementAccess), connection);
+
 		return connection;
 	}
 
