@@ -108,7 +108,3 @@ DROP FUNCTION pg_catalog.remove_local_tables_from_metadata();
 #include "../udfs/create_citus_local_table/9.5-1.sql"
 DROP VIEW pg_catalog.citus_shards CASCADE;
 DROP FUNCTION pg_catalog.citus_shard_sizes(OUT table_name text, OUT size bigint);
-
-DROP FUNCTION pg_catalog.worker_hash_partition_table_v2(bigint, integer, text, integer, oid, anyarray);
-DROP FUNCTION pg_catalog.worker_range_partition_table_v2(bigint, integer, text, integer, oid, anyarray);
-

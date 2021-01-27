@@ -87,20 +87,17 @@ static uint32 HashPartitionId(Datum partitionValue, Oid partitionCollation,
 							  const void *context);
 static StringInfo UserPartitionFilename(StringInfo directoryName, uint32 partitionId);
 static bool FileIsLink(const char *filename, struct stat filestat);
-
-
-static void WorkerHashPartitionTable(PG_FUNCTION_ARGS, bool viaOldAPI);
-static void WorkerRangePartitionTable(PG_FUNCTION_ARGS, bool viaOldAPI);
+static void PartitionColumnIndexOrPartitionColumnName(char *partitionColumnNameCandidate,
+													  char **partitionColumnName,
+													  uint32 *partitionColumnIndex);
 
 /* exports for SQL callable functions */
-PG_FUNCTION_INFO_V1(worker_range_partition_table_v2);
 PG_FUNCTION_INFO_V1(worker_range_partition_table);
-PG_FUNCTION_INFO_V1(worker_hash_partition_table_v2);
 PG_FUNCTION_INFO_V1(worker_hash_partition_table);
 
 
 /*
- * worker_range_partition_table variants executes the given filter query, repartitions
+ * worker_range_partition_table executes the given filter query, repartitions
  * the filter query's results on a partitioning column, and writes the resulting
  * rows to a set of text files on local disk. The function then atomically
  * renames the directory in which the text files live to ensure deterministic
@@ -110,72 +107,20 @@ PG_FUNCTION_INFO_V1(worker_hash_partition_table);
  * pointer and a range context object; for details, see RangePartitionId().
  */
 Datum
-worker_range_partition_table_v2(PG_FUNCTION_ARGS)
-{
-	bool viaOldAPI = false;
-	WorkerRangePartitionTable(fcinfo, viaOldAPI);
-
-	PG_RETURN_VOID();
-}
-
-
-Datum
 worker_range_partition_table(PG_FUNCTION_ARGS)
-{
-	bool viaOldAPI = true;
-	WorkerRangePartitionTable(fcinfo, viaOldAPI);
-
-	PG_RETURN_VOID();
-}
-
-
-/*
- * worker_hash_partition_table variants executes the given filter query, repartitions the
- * filter query's results on a partitioning column, and writes the resulting
- * rows to a set of text files on local disk. The function then atomically
- * renames the directory in which the text files live to ensure deterministic
- * behavior.
- *
- * This function applies hash partitioning through the use of a function pointer
- * and a hash context object; for details, see HashPartitionId().
- */
-Datum
-worker_hash_partition_table_v2(PG_FUNCTION_ARGS)
-{
-	bool viaOldAPI = false;
-	WorkerHashPartitionTable(fcinfo, viaOldAPI);
-
-	PG_RETURN_VOID();
-}
-
-
-Datum
-worker_hash_partition_table(PG_FUNCTION_ARGS)
-{
-	bool viaOldAPI = true;
-	WorkerHashPartitionTable(fcinfo, viaOldAPI);
-
-	PG_RETURN_VOID();
-}
-
-
-static void
-WorkerRangePartitionTable(PG_FUNCTION_ARGS, bool viaOldAPI)
 {
 	uint64 jobId = PG_GETARG_INT64(0);
 	uint32 taskId = PG_GETARG_UINT32(1);
 	text *filterQueryText = PG_GETARG_TEXT_P(2);
-	uint32 partitionColumnIndex = 0;
+	text *partitionColumnText = PG_GETARG_TEXT_P(3);
+	char *partitionColumnNameCandidate = text_to_cstring(partitionColumnText);
+
 	char *partitionColumnName = NULL;
-	if (viaOldAPI)
-	{
-		text *partitionColumnText = PG_GETARG_TEXT_P(3);
-		partitionColumnName = text_to_cstring(partitionColumnText);
-	}
-	else
-	{
-		partitionColumnIndex = PG_GETARG_UINT32(3);
-	}
+	uint32 partitionColumnIndex = 0;
+	PartitionColumnIndexOrPartitionColumnName(partitionColumnNameCandidate,
+											  &partitionColumnName,
+											  &partitionColumnIndex);
+
 	Oid partitionColumnType = PG_GETARG_OID(4);
 	ArrayType *splitPointObject = PG_GETARG_ARRAYTYPE_P(5);
 
@@ -226,26 +171,35 @@ WorkerRangePartitionTable(PG_FUNCTION_ARGS, bool viaOldAPI)
 	ClosePartitionFiles(partitionFileArray, fileCount);
 	CitusRemoveDirectory(taskDirectory->data);
 	RenameDirectory(taskAttemptDirectory, taskDirectory);
+	PG_RETURN_VOID();
 }
 
 
-static void
-WorkerHashPartitionTable(PG_FUNCTION_ARGS, bool viaOldAPI)
+/*
+ * worker_hash_partition_table executes the given filter query, repartitions the
+ * filter query's results on a partitioning column, and writes the resulting
+ * rows to a set of text files on local disk. The function then atomically
+ * renames the directory in which the text files live to ensure deterministic
+ * behavior.
+ *
+ * This function applies hash partitioning through the use of a function pointer
+ * and a hash context object; for details, see HashPartitionId().
+ */
+Datum
+worker_hash_partition_table(PG_FUNCTION_ARGS)
 {
 	uint64 jobId = PG_GETARG_INT64(0);
 	uint32 taskId = PG_GETARG_UINT32(1);
 	text *filterQueryText = PG_GETARG_TEXT_P(2);
-	uint32 partitionColumnIndex = 0;
+	text *partitionColumnText = PG_GETARG_TEXT_P(3);
+	char *partitionColumnNameCandidate = text_to_cstring(partitionColumnText);
+
 	char *partitionColumnName = NULL;
-	if (viaOldAPI)
-	{
-		text *partitionColumnText = PG_GETARG_TEXT_P(3);
-		partitionColumnName = text_to_cstring(partitionColumnText);
-	}
-	else
-	{
-		partitionColumnIndex = PG_GETARG_UINT32(3);
-	}
+	uint32 partitionColumnIndex = 0;
+	PartitionColumnIndexOrPartitionColumnName(partitionColumnNameCandidate,
+											  &partitionColumnName,
+											  &partitionColumnIndex);
+
 	Oid partitionColumnType = PG_GETARG_OID(4);
 	ArrayType *hashRangeObject = PG_GETARG_ARRAYTYPE_P(5);
 
@@ -299,6 +253,40 @@ WorkerHashPartitionTable(PG_FUNCTION_ARGS, bool viaOldAPI)
 	ClosePartitionFiles(partitionFileArray, fileCount);
 	CitusRemoveDirectory(taskDirectory->data);
 	RenameDirectory(taskAttemptDirectory, taskDirectory);
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * PartitionColumnIndexOrPartitionColumnName either sets partitionColumnName or
+ * partitionColumnIndex. See below for more.
+ */
+static void
+PartitionColumnIndexOrPartitionColumnName(char *partitionColumnNameCandidate,
+										  char **partitionColumnName,
+										  uint32 *partitionColumnIndex)
+{
+	char *endptr = NULL;
+	uint32 partitionColumnIndexCandidate =
+		strtoul(partitionColumnNameCandidate, &endptr, 10 /*base*/);
+	if (endptr == partitionColumnNameCandidate)
+	{
+		/*
+		 * There was a bug around using the column name in worker_[hash|range]_partition_table
+		 * APIs and one of the solutions was to send partition column index directly to these APIs.
+		 * However, this would mean change in API signature and would introduce difficulties
+		 * in upgrade paths. Instead of changing the API signature, we send the partition column index
+		 * as text. In case of rolling upgrades, when a worker is upgraded and coordinator is not, it
+		 * is possible that the text still has the column name, not the column index. So
+		 * we rely on detecting that with a parse error here.
+		 *
+		 */
+		*partitionColumnName = partitionColumnNameCandidate;
+	}
+	else
+	{
+		*partitionColumnIndex = partitionColumnIndexCandidate;
+	}
 }
 
 

@@ -39,10 +39,10 @@
 #define MERGE_COLUMN_FORMAT "merge_column_%u"
 #define MAP_OUTPUT_FETCH_COMMAND "SELECT worker_fetch_partition_file \
  (" UINT64_FORMAT ", %u, %u, %u, '%s', %u)"
-#define RANGE_PARTITION_COMMAND "SELECT worker_range_partition_table_v2 \
- (" UINT64_FORMAT ", %d, %s, %u, '%s'::regtype, %s)"
-#define HASH_PARTITION_COMMAND "SELECT worker_hash_partition_table_v2 \
- (" UINT64_FORMAT ", %d, %s, %u, '%s'::regtype, %s)"
+#define RANGE_PARTITION_COMMAND "SELECT worker_range_partition_table \
+ (" UINT64_FORMAT ", %d, %s, '%s', '%s'::regtype, %s)"
+#define HASH_PARTITION_COMMAND "SELECT worker_hash_partition_table \
+ (" UINT64_FORMAT ", %d, %s, '%s', '%s'::regtype, %s)"
 #define MERGE_FILES_INTO_TABLE_COMMAND "SELECT worker_merge_files_into_table \
  (" UINT64_FORMAT ", %d, '%s', '%s')"
 

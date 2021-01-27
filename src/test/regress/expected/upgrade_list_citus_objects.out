@@ -1,8 +1,8 @@
 -- print version above 11 (eg. 12 and above)
 SHOW server_version \gset
 SELECT substring(:'server_version', '\d+')::int > 11 AS version_above_eleven;
- version_above_eleven 
-----------------------
+ version_above_eleven
+---------------------------------------------------------------------
  t
 (1 row)
 
@@ -14,8 +14,8 @@ WHERE refclassid = 'pg_catalog.pg_extension'::pg_catalog.regclass
   AND deptype = 'e'
   AND e.extname='citus'
 ORDER BY 1;
-                                               description                                                
-----------------------------------------------------------------------------------------------------------
+                                               description
+---------------------------------------------------------------------
  access method columnar
  event trigger citus_cascade_to_partition
  function alter_columnar_table_reset(regclass,boolean,boolean,boolean,boolean)
@@ -190,7 +190,6 @@ ORDER BY 1;
  function worker_fetch_partition_file(bigint,integer,integer,integer,text,integer)
  function worker_hash("any")
  function worker_hash_partition_table(bigint,integer,text,text,oid,anyarray)
- function worker_hash_partition_table_v2(bigint,integer,text,integer,oid,anyarray)
  function worker_last_saved_explain_analyze()
  function worker_merge_files_into_table(bigint,integer,text[],text[])
  function worker_partial_agg(oid,anyelement)
@@ -198,7 +197,6 @@ ORDER BY 1;
  function worker_partial_agg_sfunc(internal,oid,anyelement)
  function worker_partition_query_result(text,text,integer,citus.distribution_type,text[],text[],boolean)
  function worker_range_partition_table(bigint,integer,text,text,oid,anyarray)
- function worker_range_partition_table_v2(bigint,integer,text,integer,oid,anyarray)
  function worker_record_sequence_dependency(regclass,regclass,name)
  function worker_repartition_cleanup(bigint)
  function worker_save_query_explain_analyze(text,jsonb)

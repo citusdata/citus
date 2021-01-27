@@ -50,8 +50,10 @@
 #include "distributed/pg_dist_partition.h"
 #include "distributed/pg_dist_shard.h"
 #include "distributed/query_pushdown_planning.h"
+#include "distributed/query_utils.h"
 #include "distributed/shardinterval_utils.h"
 #include "distributed/shard_pruning.h"
+#include "distributed/string_utils.h"
 
 #include "distributed/worker_manager.h"
 #include "distributed/worker_protocol.h"
@@ -236,7 +238,7 @@ static bool CoPlacedShardIntervals(ShardInterval *firstInterval,
 static List * FetchEqualityAttrNumsForRTEOpExpr(OpExpr *opExpr);
 static List * FetchEqualityAttrNumsForRTEBoolExpr(BoolExpr *boolExpr);
 static List * FetchEqualityAttrNumsForList(List *nodeList);
-static int FindResultNoFromTargetList(Var *targetVar, List *targetList);
+static int PartitionColumnIndex(Var *targetVar, List *targetList);
 #if PG_VERSION_NUM >= PG_VERSION_13
 static List * GetColumnOriginalIndexes(Oid relationId);
 #endif
@@ -4493,8 +4495,8 @@ MapTaskList(MapMergeJob *mapMergeJob, List *filterTaskList)
 	}
 	else
 	{
-		partitionColumnResNo = FindResultNoFromTargetList(partitionColumn,
-														  filterQuery->targetList);
+		partitionColumnResNo = PartitionColumnIndex(partitionColumn,
+													filterQuery->targetList);
 	}
 
 	foreach(filterTaskCell, filterTaskList)
@@ -4515,8 +4517,11 @@ MapTaskList(MapMergeJob *mapMergeJob, List *filterTaskList)
 }
 
 
+/*
+ * PartitionColumnIndex finds the index of the given target var.
+ */
 static int
-FindResultNoFromTargetList(Var *targetVar, List *targetList)
+PartitionColumnIndex(Var *targetVar, List *targetList)
 {
 	TargetEntry *targetEntry = NULL;
 	int resNo = 1;
@@ -4533,6 +4538,7 @@ FindResultNoFromTargetList(Var *targetVar, List *targetList)
 			resNo++;
 		}
 	}
+
 	ereport(ERROR, (errmsg("unexpected state: %d varno %d varattno couldn't be found",
 						   targetVar->varno, targetVar->varattno)));
 	return resNo;
@@ -4590,8 +4596,9 @@ CreateMapQueryString(MapMergeJob *mapMergeJob, Task *filterTask,
 		partitionCommand = HASH_PARTITION_COMMAND;
 	}
 
+	char *partitionColumnIndextText = ConvertIntToString(partitionColumnIndex);
 	appendStringInfo(mapQueryString, partitionCommand, jobId, taskId,
-					 filterQueryEscapedText, partitionColumnIndex,
+					 filterQueryEscapedText, partitionColumnIndextText,
 					 partitionColumnTypeFullName, splitPointString->data);
 	return mapQueryString;
 }
