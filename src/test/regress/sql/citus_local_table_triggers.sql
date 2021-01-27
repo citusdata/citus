@@ -253,7 +253,7 @@ DROP TRIGGER no_such_trigger ON no_such_relation;
 -- create test tables and some foreign key relationships between them to see
 -- that triggers are properly handled when ddl cascades to referencing table
 CREATE TABLE another_citus_local_table (value int unique);
-SELECT create_citus_local_table('another_citus_local_table');
+SELECT citus_add_local_table_to_metadata('another_citus_local_table');
 
 ALTER TABLE another_citus_local_table ADD CONSTRAINT fkey_self FOREIGN KEY(value) REFERENCES another_citus_local_table(value);
 ALTER TABLE citus_local_table ADD CONSTRAINT fkey_c_to_c FOREIGN KEY(value) REFERENCES another_citus_local_table(value) ON UPDATE CASCADE;

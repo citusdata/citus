@@ -22,7 +22,7 @@ ALTER TABLE citus_local_table_1 ADD CONSTRAINT fkey_4 FOREIGN KEY (col_1) REFERE
 ALTER TABLE citus_local_table_4 ADD CONSTRAINT fkey_5 FOREIGN KEY (col_1) REFERENCES citus_local_table_3(col_1);
 ALTER TABLE citus_local_table_4 ADD CONSTRAINT fkey_6 FOREIGN KEY (col_1) REFERENCES citus_local_table_4(col_1);
 
-SELECT create_citus_local_table('citus_local_table_1', cascade_via_foreign_keys=>true);
+SELECT citus_add_local_table_to_metadata('citus_local_table_1', cascade_via_foreign_keys=>true);
 
 CREATE TABLE reference_table_1(col_1 INT UNIQUE, col_2 INT UNIQUE);
 CREATE TABLE reference_table_2(col_1 INT UNIQUE, col_2 INT UNIQUE);
@@ -99,7 +99,7 @@ ROLLBACK;
 
 -- test with a standalone table
 CREATE TABLE citus_local_table_5 (col_1 INT UNIQUE);
-SELECT create_citus_local_table('citus_local_table_5');
+SELECT citus_add_local_table_to_metadata('citus_local_table_5');
 
 BEGIN;
   SELECT create_distributed_table('citus_local_table_5', 'col_1');
@@ -158,7 +158,7 @@ BEGIN;
 ROLLBACK;
 
 CREATE TABLE citus_local_table_6 (col_1 INT UNIQUE);
-SELECT create_citus_local_table('citus_local_table_6');
+SELECT citus_add_local_table_to_metadata('citus_local_table_6');
 
 BEGIN;
   ALTER TABLE citus_local_table_5 ADD CONSTRAINT fkey_12 FOREIGN KEY (col_1) REFERENCES citus_local_table_6(col_1);

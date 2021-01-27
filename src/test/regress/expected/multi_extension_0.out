@@ -395,6 +395,7 @@ BEGIN;
 
   CREATE TABLE citus_local_table (a int);
   SELECT create_citus_local_table('citus_local_table');
+NOTICE:  create_citus_local_table is deprecated in favour of citus_add_local_table_to_metadata
  create_citus_local_table
 ---------------------------------------------------------------------
 
@@ -466,6 +467,7 @@ SELECT * FROM print_extension_changes();
                                                                                  | function alter_table_set_access_method(regclass,text)
                                                                                  | function citus_activate_node(text,integer)
                                                                                  | function citus_add_inactive_node(text,integer,integer,noderole,name)
+                                                                                 | function citus_add_local_table_to_metadata(regclass,boolean)
                                                                                  | function citus_add_node(text,integer,integer,noderole,name)
                                                                                  | function citus_add_secondary_node(text,integer,text,integer,name)
                                                                                  | function citus_conninfo_cache_invalidate()
@@ -490,7 +492,6 @@ SELECT * FROM print_extension_changes();
                                                                                  | function citus_update_node(integer,text,integer,boolean,integer)
                                                                                  | function citus_update_shard_statistics(bigint)
                                                                                  | function citus_update_table_statistics(regclass)
-                                                                                 | function create_citus_local_table(regclass,boolean)
                                                                                  | function notify_constraint_dropped()
                                                                                  | function remove_local_tables_from_metadata()
                                                                                  | function time_partition_range(regclass)

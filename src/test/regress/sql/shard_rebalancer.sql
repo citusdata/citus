@@ -18,7 +18,7 @@ SELECT rebalance_table_shards();
 -- test that calling rebalance_table_shards without specifying relation
 -- wouldn't move shard of the citus local table.
 CREATE TABLE citus_local_table(a int, b int);
-SELECT create_citus_local_table('citus_local_table');
+SELECT citus_add_local_table_to_metadata('citus_local_table');
 INSERT INTO citus_local_table VALUES (1, 2);
 
 SELECT rebalance_table_shards();

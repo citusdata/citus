@@ -789,7 +789,7 @@ ShouldUndistributeCitusLocalTables(void)
 	{
 		/*
 		 * If foreign keys between reference tables and local tables are
-		 * disabled, then user might be using create_citus_local_table for
+		 * disabled, then user might be using citus_add_local_table_to_metadata for
 		 * their own purposes. In that case, we should not undistribute
 		 * citus local tables.
 		 */

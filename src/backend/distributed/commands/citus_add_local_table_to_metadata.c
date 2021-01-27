@@ -1,11 +1,16 @@
 /*-------------------------------------------------------------------------
  *
- * create_citus_local_table.c
+ * citus_add_local_table_to_metadata.c
  *
- * This file contains functions to create citus local tables.
+ * This file contains functions to add local table to citus metadata.
  *
- * A citus local table is composed of a shell relation to wrap the
+ * A local table added to metadata is composed of a shell relation to wrap the
  * the regular postgres relation as its coordinator local shard.
+ *
+ * As we want to hide "citus local table" concept from users, we renamed
+ * udf and re-branded that concept as "local tables added to metadata".
+ * Note that we might still call this local table concept as "citus local" in
+ * many places of the code base.
  *
  * Copyright (c) Citus Data, Inc.
  *
@@ -70,17 +75,18 @@ static void InsertMetadataForCitusLocalTable(Oid citusLocalTableId, uint64 shard
 static void FinalizeCitusLocalTableCreation(Oid relationId);
 
 
+PG_FUNCTION_INFO_V1(citus_add_local_table_to_metadata);
 PG_FUNCTION_INFO_V1(create_citus_local_table);
 PG_FUNCTION_INFO_V1(remove_local_tables_from_metadata);
 
 
 /*
- * create_citus_local_table creates a citus local table from the table with
+ * citus_add_local_table_to_metadata creates a citus local table from the table with
  * relationId by executing the internal method CreateCitusLocalTable.
  * (See CreateCitusLocalTable function's comment.)
  */
 Datum
-create_citus_local_table(PG_FUNCTION_ARGS)
+citus_add_local_table_to_metadata(PG_FUNCTION_ARGS)
 {
 	CheckCitusVersion(ERROR);
 
@@ -106,6 +112,23 @@ create_citus_local_table(PG_FUNCTION_ARGS)
 	CreateCitusLocalTable(relationId, cascadeViaForeignKeys);
 
 	PG_RETURN_VOID();
+}
+
+
+/*
+ * create_citus_local_table is a wrapper function for old name of
+ * of citus_add_local_table_to_metadata.
+ *
+ * The only reason for having this udf in citus binary is to make
+ * multi_extension test happy as it uses this udf when testing the
+ * downgrade scenario from 9.5 to 9.4.
+ */
+Datum
+create_citus_local_table(PG_FUNCTION_ARGS)
+{
+	ereport(NOTICE, (errmsg("create_citus_local_table is deprecated in favour of "
+							"citus_add_local_table_to_metadata")));
+	return citus_add_local_table_to_metadata(fcinfo);
 }
 
 
@@ -148,7 +171,7 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys)
 	EnsureCoordinator();
 	EnsureTableOwner(relationId);
 
-	/* enable create_citus_local_table on an empty node */
+	/* enable citus_add_local_table_to_metadata on an empty node */
 	InsertCoordinatorIfClusterEmpty();
 
 	/*
@@ -189,7 +212,7 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys)
 		 * on the relations.
 		 */
 		CascadeOperationForConnectedRelations(relationId, lockMode,
-											  CASCADE_FKEY_CREATE_CITUS_LOCAL_TABLE);
+											  CASCADE_FKEY_ADD_LOCAL_TABLE_TO_METADATA);
 
 		/*
 		 * We converted every foreign key connected table in our subgraph
@@ -211,7 +234,7 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys)
 						errhint("Use cascade_via_foreign_keys option to add "
 								"all the relations involved in a foreign key "
 								"relationship with %s to citus metadata by "
-								"executing SELECT create_citus_local_table($$%s$$, "
+								"executing SELECT citus_add_local_table_to_metadata($$%s$$, "
 								"cascade_via_foreign_keys=>true)",
 								qualifiedRelationName, qualifiedRelationName)));
 	}
@@ -296,7 +319,7 @@ ErrorIfUnsupportedCreateCitusLocalTable(Relation relation)
 	 * EnsureTableNotDistributed already errors out if the given relation implies
 	 * a citus table. However, as we don't mark the relation as citus table, i.e we
 	 * do not use the relation with relationId as the shell relation, parallel
-	 * create_citus_local_table executions would not error out for that relation.
+	 * citus_add_local_table_to_metadata executions would not error out for that relation.
 	 * Hence we need to error out for shard relations too.
 	 */
 	ErrorIfRelationIsAKnownShard(relationId);

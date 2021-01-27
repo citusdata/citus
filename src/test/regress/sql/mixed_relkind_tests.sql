@@ -27,7 +27,7 @@ SELECT create_reference_table('reference_table');
 CREATE VIEW view_on_ref AS SELECT * FROM reference_table;
 
 CREATE TABLE citus_local_table(a int);
-SELECT create_citus_local_table('citus_local_table');
+SELECT citus_add_local_table_to_metadata('citus_local_table');
 
 CREATE VIEW view_on_citus_local AS SELECT * FROM citus_local_table;
 

@@ -476,7 +476,7 @@ typedef enum CascadeOperationType
 	CASCADE_FKEY_UNDISTRIBUTE_TABLE = 1 << 1,
 
 	/* execute CreateCitusLocalTable on each relation */
-	CASCADE_FKEY_CREATE_CITUS_LOCAL_TABLE = 1 << 2,
+	CASCADE_FKEY_ADD_LOCAL_TABLE_TO_METADATA = 1 << 2,
 } CascadeOperationType;
 
 extern void CascadeOperationForConnectedRelations(Oid relationId, LOCKMODE relLockMode,

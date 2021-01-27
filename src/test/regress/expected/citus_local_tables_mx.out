@@ -18,8 +18,8 @@ RESET client_min_messages;
 -- triggers --
 ---------------------------------------------------------------------
 CREATE TABLE citus_local_table (value int);
-SELECT create_citus_local_table('citus_local_table');
- create_citus_local_table
+SELECT citus_add_local_table_to_metadata('citus_local_table');
+ citus_add_local_table_to_metadata
 ---------------------------------------------------------------------
 
 (1 row)
@@ -90,8 +90,8 @@ FOR EACH STATEMENT EXECUTE FUNCTION another_dummy_function();
 -- create some test tables before next three sections
 -- and define some foreign keys between them
 CREATE TABLE citus_local_table_1(l1 int);
-SELECT create_citus_local_table('citus_local_table_1');
- create_citus_local_table
+SELECT citus_add_local_table_to_metadata('citus_local_table_1');
+ citus_add_local_table_to_metadata
 ---------------------------------------------------------------------
 
 (1 row)
@@ -106,8 +106,8 @@ SELECT create_reference_table('reference_table_1');
 ALTER TABLE citus_local_table_1 ADD CONSTRAINT fkey_local_to_ref FOREIGN KEY(l1) REFERENCES reference_table_1(r1) ON DELETE CASCADE;
 NOTICE:  executing the command locally: SELECT worker_apply_inter_shard_ddl_command (1508001, 'citus_local_tables_mx', 1508002, 'citus_local_tables_mx', 'ALTER TABLE citus_local_table_1 ADD CONSTRAINT fkey_local_to_ref FOREIGN KEY(l1) REFERENCES reference_table_1(r1) ON DELETE CASCADE;')
 CREATE TABLE citus_local_table_2(l1 int primary key);
-SELECT create_citus_local_table('citus_local_table_2');
- create_citus_local_table
+SELECT citus_add_local_table_to_metadata('citus_local_table_2');
+ citus_add_local_table_to_metadata
 ---------------------------------------------------------------------
 
 (1 row)
@@ -122,15 +122,15 @@ SELECT create_reference_table('reference_table_2');
 ALTER TABLE reference_table_2 ADD CONSTRAINT fkey_ref_to_local FOREIGN KEY(r1) REFERENCES citus_local_table_2(l1) ON DELETE RESTRICT;
 NOTICE:  executing the command locally: SELECT worker_apply_inter_shard_ddl_command (1508004, 'citus_local_tables_mx', 1508003, 'citus_local_tables_mx', 'ALTER TABLE reference_table_2 ADD CONSTRAINT fkey_ref_to_local FOREIGN KEY(r1) REFERENCES citus_local_table_2(l1) ON DELETE RESTRICT;')
 CREATE TABLE citus_local_table_3(l1 int);
-SELECT create_citus_local_table('citus_local_table_3');
- create_citus_local_table
+SELECT citus_add_local_table_to_metadata('citus_local_table_3');
+ citus_add_local_table_to_metadata
 ---------------------------------------------------------------------
 
 (1 row)
 
 CREATE TABLE citus_local_table_4(l1 int primary key);
-SELECT create_citus_local_table('citus_local_table_4');
- create_citus_local_table
+SELECT citus_add_local_table_to_metadata('citus_local_table_4');
+ citus_add_local_table_to_metadata
 ---------------------------------------------------------------------
 
 (1 row)
@@ -140,8 +140,8 @@ NOTICE:  executing the command locally: SELECT worker_apply_inter_shard_ddl_comm
 -- check stats creation
 CREATE TABLE citus_local_table_stats(a int, b int);
 CREATE STATISTICS stx1 ON a, b FROM citus_local_table_stats;
-SELECT create_citus_local_table('citus_local_table_stats');
- create_citus_local_table
+SELECT citus_add_local_table_to_metadata('citus_local_table_stats');
+ citus_add_local_table_to_metadata
 ---------------------------------------------------------------------
 
 (1 row)
@@ -221,7 +221,7 @@ ERROR:  operation is not allowed on this node
 -- check stats creation
 CREATE TABLE citus_local_table_stats2(a int, b int);
 CREATE STATISTICS stx8 ON a, b FROM citus_local_table_stats2;
-SELECT create_citus_local_table('citus_local_table_stats2');
+SELECT citus_add_local_table_to_metadata('citus_local_table_stats2');
 ERROR:  operation is not allowed on this node
 CREATE STATISTICS stx9 ON a, b FROM citus_local_table_stats2;
 DROP STATISTICS stx8;

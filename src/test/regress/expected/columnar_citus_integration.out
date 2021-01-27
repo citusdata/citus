@@ -837,8 +837,8 @@ SELECT 1 FROM master_add_node('localhost', :master_port, groupId => 0);
 (1 row)
 
 CREATE TABLE table_option_citus_local (a int, b text) USING columnar;
-SELECT create_citus_local_table('table_option_citus_local');
- create_citus_local_table
+SELECT citus_add_local_table_to_metadata('table_option_citus_local');
+ citus_add_local_table_to_metadata
 ---------------------------------------------------------------------
 
 (1 row)
@@ -1023,8 +1023,8 @@ SELECT alter_columnar_table_set('table_option_citus_local_2',
 
 (1 row)
 
-SELECT create_citus_local_table('table_option_citus_local_2');
- create_citus_local_table
+SELECT citus_add_local_table_to_metadata('table_option_citus_local_2');
+ citus_add_local_table_to_metadata
 ---------------------------------------------------------------------
 
 (1 row)

@@ -61,7 +61,7 @@ CREATE TYPE order_side_mx AS ENUM ('buy', 'sell');
 
 -- show that we do not support creating citus local tables from mx workers for now
 CREATE TABLE citus_local_table(a int);
-SELECT create_citus_local_table('citus_local_table');
+SELECT citus_add_local_table_to_metadata('citus_local_table');
 
 -- create schema to test schema support
 CREATE SCHEMA citus_mx_test_schema_join_1;

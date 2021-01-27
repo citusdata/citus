@@ -34,7 +34,7 @@ DROP TABLE ref;
 SELECT master_remove_node(nodename, nodeport) FROM pg_dist_node WHERE groupid = 0;
 
 CREATE TABLE loc(x int, y int);
-SELECT create_citus_local_table('loc');
+SELECT citus_add_local_table_to_metadata('loc');
 
 SELECT groupid, nodename, nodeport, isactive, shouldhaveshards, hasmetadata, metadatasynced FROM pg_dist_node;
 
@@ -131,7 +131,7 @@ COMMIT;
 -- to test citus local tables
 select undistribute_table('upsert_test');
 -- create citus local table
-select create_citus_local_table('upsert_test');
+select citus_add_local_table_to_metadata('upsert_test');
 -- test the constraint with local execution
 INSERT INTO upsert_test (part_key, other_col) VALUES (1, 1) ON CONFLICT ON CONSTRAINT upsert_test_part_key_key DO NOTHING RETURNING *;
 
@@ -629,7 +629,7 @@ CREATE TABLE distributed_table_1 (col_1 INT UNIQUE);
 SELECT create_distributed_table('distributed_table_1', 'col_1');
 
 CREATE TABLE citus_local_table_1 (col_1 INT UNIQUE);
-SELECT create_citus_local_table('citus_local_table_1');
+SELECT citus_add_local_table_to_metadata('citus_local_table_1');
 
 CREATE TABLE partitioned_table_1 (col_1 INT UNIQUE, col_2 INT) PARTITION BY RANGE (col_1);
 CREATE TABLE partitioned_table_1_100_200 PARTITION OF partitioned_table_1 FOR VALUES FROM (100) TO (200);
@@ -652,7 +652,7 @@ ALTER TABLE local_table_2 ADD CONSTRAINT fkey_6 FOREIGN KEY (col_1) REFERENCES l
 ALTER TABLE local_table_3 ADD CONSTRAINT fkey_7 FOREIGN KEY (col_1) REFERENCES local_table_1(col_1);
 ALTER TABLE local_table_1 ADD CONSTRAINT fkey_8 FOREIGN KEY (col_1) REFERENCES local_table_1(col_1);
 
-SELECT create_citus_local_table('local_table_2', cascade_via_foreign_keys=>true);
+SELECT citus_add_local_table_to_metadata('local_table_2', cascade_via_foreign_keys=>true);
 
 CREATE PROCEDURE call_delegation(x int) LANGUAGE plpgsql AS $$
 BEGIN

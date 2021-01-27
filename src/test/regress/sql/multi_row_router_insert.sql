@@ -39,7 +39,7 @@ BEGIN
 END; $$ LANGUAGE PLPGSQL STABLE;
 
 CREATE TABLE citus_local_table(a int, b int DEFAULT square(10));
-SELECT create_citus_local_table('citus_local_table');
+SELECT citus_add_local_table_to_metadata('citus_local_table');
 
 INSERT INTO citus_local_table VALUES (10), (11);
 INSERT INTO citus_local_table (a) VALUES (12), (13);

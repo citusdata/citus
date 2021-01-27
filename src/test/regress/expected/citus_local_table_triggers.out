@@ -369,8 +369,8 @@ ERROR:  relation "no_such_relation" does not exist
 -- create test tables and some foreign key relationships between them to see
 -- that triggers are properly handled when ddl cascades to referencing table
 CREATE TABLE another_citus_local_table (value int unique);
-SELECT create_citus_local_table('another_citus_local_table');
- create_citus_local_table
+SELECT citus_add_local_table_to_metadata('another_citus_local_table');
+ citus_add_local_table_to_metadata
 ---------------------------------------------------------------------
 
 (1 row)
