@@ -553,7 +553,8 @@ ErrorOutForTriggerIfNotCitusLocalTable(Oid relationId)
 		return;
 	}
 
-	ereport(ERROR, (errmsg("triggers are only supported for citus local tables")));
+	ereport(ERROR, (errmsg("triggers are only supported for local tables added "
+						   "to metadata")));
 }
 
 

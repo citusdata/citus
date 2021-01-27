@@ -92,13 +92,12 @@ create_citus_local_table(PG_FUNCTION_ARGS)
 		 * not chained with any reference tables back to postgres tables.
 		 * So give a warning to user for that.
 		 */
-		ereport(WARNING, (errmsg("citus local tables that are not chained with "
-								 "reference tables via foreign keys might be "
-								 "automatically converted back to postgres tables"),
+		ereport(WARNING, (errmsg("local tables that are added to metadata but not "
+								 "chained with reference tables via foreign keys might "
+								 "be automatically converted back to postgres tables"),
 						  errhint("Consider setting "
 								  "citus.enable_local_reference_table_foreign_keys "
-								  "to 'off' to disable automatically undistributing "
-								  "citus local tables")));
+								  "to 'off' to disable this behavior")));
 	}
 
 	Oid relationId = PG_GETARG_OID(0);
@@ -209,9 +208,9 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys)
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						errmsg("relation %s is involved in a foreign key "
 							   "relationship with another table", qualifiedRelationName),
-						errhint("Use cascade_via_foreign_keys option to convert "
+						errhint("Use cascade_via_foreign_keys option to add "
 								"all the relations involved in a foreign key "
-								"relationship with %s to a citus local table by "
+								"relationship with %s to citus metadata by "
 								"executing SELECT create_citus_local_table($$%s$$, "
 								"cascade_via_foreign_keys=>true)",
 								qualifiedRelationName, qualifiedRelationName)));
@@ -280,7 +279,7 @@ ErrorIfUnsupportedCreateCitusLocalTable(Relation relation)
 {
 	if (!RelationIsValid(relation))
 	{
-		ereport(ERROR, (errmsg("cannot create citus local table, relation does "
+		ereport(ERROR, (errmsg("cannot add local table to metadata, relation does "
 							   "not exist")));
 	}
 
@@ -319,16 +318,16 @@ ErrorIfUnsupportedCitusLocalTableKind(Oid relationId)
 	if (IsChildTable(relationId) || IsParentTable(relationId))
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("cannot create citus local table \"%s\", citus local "
-							   "tables cannot be involved in inheritance relationships",
-							   relationName)));
+						errmsg("cannot add local table \"%s\" to metadata, local tables "
+							   "added to metadata cannot be involved in inheritance "
+							   "relationships", relationName)));
 	}
 
 	if (PartitionTable(relationId))
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("cannot create citus local table \"%s\", citus local "
-							   "tables cannot be partition of other tables",
+						errmsg("cannot add local table \"%s\" to metadata, local tables "
+							   "added to metadata cannot be partition of other tables ",
 							   relationName)));
 	}
 
@@ -336,9 +335,9 @@ ErrorIfUnsupportedCitusLocalTableKind(Oid relationId)
 	if (!(relationKind == RELKIND_RELATION || relationKind == RELKIND_FOREIGN_TABLE))
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("cannot create citus local table \"%s\", only regular "
-							   "tables and foreign tables are supported for citus local "
-							   "table creation", relationName)));
+						errmsg("cannot add local table \"%s\" to metadata, only regular "
+							   "tables and foreign tables can be added to citus metadata ",
+							   relationName)));
 	}
 }
 

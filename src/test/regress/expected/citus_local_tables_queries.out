@@ -893,7 +893,7 @@ UPDATE citus_local_table
 SET a=5
 FROM (SELECT b FROM distributed_table) AS foo
 WHERE foo.b = citus_local_table.b;
-ERROR:  citus local table citus_local_table cannot be joined with these distributed tables
+ERROR:  local table citus_local_table cannot be joined with these distributed tables
 ---------------------------------------------------------------------
 -- test different execution paths --
 ---------------------------------------------------------------------

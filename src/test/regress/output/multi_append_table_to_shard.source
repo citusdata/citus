@@ -82,7 +82,7 @@ FROM
 		pg_dist_shard
 WHERE	'multi_append_table_to_shard_right_reference_hash'::regclass::oid = logicalrelid;
 ERROR:  cannot append to shardId 230001
-DETAIL:  We currently don't support appending to shards in hash-partitioned, reference and citus local tables
+DETAIL:  We currently don't support appending to shards in hash-partitioned, reference and local tables
 -- Clean up after test
 SELECT master_apply_delete_command('DELETE FROM multi_append_table_to_shard_left');
  master_apply_delete_command 

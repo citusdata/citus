@@ -1799,8 +1799,8 @@ ErrorIfCitusLocalTablePartitionCommand(AlterTableCmd *alterTableCmd, Oid parentR
 
 	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 					errmsg("cannot execute ATTACH/DETACH PARTITION command as "
-						   "citus local tables cannot be involved in partition "
-						   "relationships with other tables")));
+						   "local tables added to metadata cannot be involved in "
+						   "partition relationships with other tables")));
 }
 
 
