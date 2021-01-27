@@ -48,7 +48,8 @@
 
 #define USE_CREATE_REFERENCE_TABLE_HINT \
 	"You could use SELECT create_reference_table('%s') " \
-	"to replicate the referenced table to all nodes"
+	"to replicate the referenced table to all nodes or " \
+	"consider dropping the foreign key"
 
 
 typedef bool (*CheckRelationFunc)(Oid);
