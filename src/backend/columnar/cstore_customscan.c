@@ -76,6 +76,7 @@ static void ColumnarScan_ExplainCustomScan(CustomScanState *node, List *ancestor
 static set_rel_pathlist_hook_type PreviousSetRelPathlistHook = NULL;
 
 static bool EnableColumnarCustomScan = true;
+static bool EnableColumnarQualPushdown = true;
 
 
 const struct CustomPathMethods ColumnarScanPathMethods = {
@@ -114,9 +115,19 @@ columnar_customscan_init()
 	DefineCustomBoolVariable(
 		"columnar.enable_custom_scan",
 		gettext_noop("Enables the use of a custom scan to push projections and quals "
-					 "into the storage layer"),
+					 "into the storage layer."),
 		NULL,
 		&EnableColumnarCustomScan,
+		true,
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+	DefineCustomBoolVariable(
+		"columnar.enable_qual_pushdown",
+		gettext_noop("Enables qual pushdown into columnar. This has no effect unless "
+					 "columnar.enable_custom_scan is true."),
+		NULL,
+		&EnableColumnarQualPushdown,
 		true,
 		PGC_USERSET,
 		GUC_NO_SHOW_ALL,
@@ -242,7 +253,18 @@ ColumnarScanCost(RangeTblEntry *rte)
 	{
 		Bitmapset *attr_needed = rte->selectedCols;
 		double numberOfColumnsRead = bms_num_members(attr_needed);
-		double selectionRatio = numberOfColumnsRead / (double) maxColumnCount;
+		double selectionRatio = 0;
+
+		/*
+		 * When no stripes are in the table we don't have a count in maxColumnCount. To
+		 * prevent a division by zero turning into a NaN we keep the ratio on zero.
+		 * This will result in a cost of 0 for scanning the table which is a reasonable
+		 * cost on an empty table.
+		 */
+		if (maxColumnCount != 0)
+		{
+			selectionRatio = numberOfColumnsRead / (double) maxColumnCount;
+		}
 		Cost scanCost = (double) totalStripeSize / BLCKSZ * selectionRatio;
 		return scanCost;
 	}
@@ -283,7 +305,10 @@ ColumnarScan_CreateCustomScanState(CustomScan *cscan)
 	CustomScanState *cscanstate = &columnarScanState->custom_scanstate;
 	cscanstate->methods = &ColumnarExecuteMethods;
 
-	columnarScanState->qual = cscan->scan.plan.qual;
+	if (EnableColumnarQualPushdown)
+	{
+		columnarScanState->qual = cscan->scan.plan.qual;
+	}
 
 	return (Node *) cscanstate;
 }

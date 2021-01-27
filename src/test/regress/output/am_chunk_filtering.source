@@ -130,6 +130,18 @@ EXPLAIN (analyze on, costs off, timing off, summary off)
    Columnar Chunks Removed by Filter: 12
 (4 rows)
 
+SET columnar.enable_qual_pushdown = false;
+EXPLAIN (analyze on, costs off, timing off, summary off)
+  SELECT * FROM simple_chunk_filtering WHERE i > 123456;
+                                    QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (ColumnarScan) on simple_chunk_filtering (actual rows=111111 loops=1)
+   Filter: (i > 123456)
+   Rows Removed by Filter: 123457
+   Columnar Chunks Removed by Filter: 0
+(4 rows)
+
+SET columnar.enable_qual_pushdown TO DEFAULT;
 -- https://github.com/citusdata/citus/issues/4555
 TRUNCATE simple_chunk_filtering;
 INSERT INTO simple_chunk_filtering SELECT generate_series(0,200000);
