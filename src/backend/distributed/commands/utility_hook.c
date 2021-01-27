@@ -729,10 +729,18 @@ UndistributeDisconnectedCitusLocalTables(void)
 		 * undistribute it via cascade. Here, instead of first dropping foreing
 		 * keys then undistributing the table, we just set cascadeViaForeignKeys
 		 * to true for simplicity.
+		 *
+		 * We suppress notices messages not to be too verbose. On the other hand,
+		 * as UndistributeTable moves data to a new table, we want to inform user
+		 * as it might take some time.
 		 */
+		ereport(NOTICE, (errmsg("removing table %s from metadata as it is not "
+								"connected to any reference tables via foreign keys",
+								generate_qualified_relation_name(citusLocalTableId))));
 		TableConversionParameters params = {
 			.relationId = citusLocalTableId,
-			.cascadeViaForeignKeys = true
+			.cascadeViaForeignKeys = true,
+			.suppressNoticeMessages = true
 		};
 		UndistributeTable(&params);
 	}

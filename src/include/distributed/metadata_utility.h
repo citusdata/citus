@@ -153,6 +153,12 @@ typedef struct TableConversionParameters
 	 * to the table
 	 */
 	bool cascadeViaForeignKeys;
+
+	/*
+	 * suppressNoticeMessages determines if we want to suppress NOTICE
+	 * messages that we explicitly issue
+	 */
+	bool suppressNoticeMessages;
 } TableConversionParameters;
 
 typedef struct TableConversionReturn
