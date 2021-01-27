@@ -722,7 +722,7 @@ BEGIN;
 
 	UPDATE reference_table SET id = 101 WHERE id = 99;
 ERROR:  cannot modify table "reference_table" because there was a parallel operation on a distributed table
-DETAIL:  When there is a foreign key to a reference table or to a citus local table, Citus needs to perform all operations over a single connection per node to ensure consistency.
+DETAIL: When there is a foreign key to a reference table or to a local table, Citus needs to perform all operations over a single connection per node to ensure consistency.
 HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
 ROLLBACK;
 BEGIN;
@@ -734,7 +734,7 @@ BEGIN;
 
 	UPDATE transitive_reference_table SET id = 101 WHERE id = 99;
 ERROR:  cannot modify table "transitive_reference_table" because there was a parallel operation on a distributed table
-DETAIL:  When there is a foreign key to a reference table or to a citus local table, Citus needs to perform all operations over a single connection per node to ensure consistency.
+DETAIL: When there is a foreign key to a reference table or to a local table, Citus needs to perform all operations over a single connection per node to ensure consistency.
 HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
 ROLLBACK;
 -- case 4.3: SELECT to a dist table is follwed by an unrelated DDL to a reference table
@@ -1074,7 +1074,7 @@ BEGIN;
 	UPDATE unrelated_dist_table SET value_1 = 15;
 	UPDATE reference_table SET id = 101 WHERE id = 99;
 ERROR:  cannot modify table "reference_table" because there was a parallel operation on a distributed table
-DETAIL:  When there is a foreign key to a reference table or to a citus local table, Citus needs to perform all operations over a single connection per node to ensure consistency.
+DETAIL: When there is a foreign key to a reference table or to a local table, Citus needs to perform all operations over a single connection per node to ensure consistency.
 HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
 	UPDATE on_update_fkey_table SET value_1 = 5 WHERE id != 11;
 ERROR:  current transaction is aborted, commands ignored until end of transaction block

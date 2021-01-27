@@ -111,12 +111,12 @@ CREATE TABLE partitioned_table_1 PARTITION OF partitioned_table FOR VALUES FROM 
 CREATE TABLE partitioned_table_2 PARTITION OF partitioned_table FOR VALUES FROM (10) TO (20);
 -- cannot create partitioned citus local tables
 SELECT create_citus_local_table('partitioned_table');
-ERROR:  cannot create citus local table "partitioned_table", only regular tables and foreign tables are supported for citus local table creation
+ERROR:  cannot add local table "partitioned_table" to metadata, only regular tables and foreign tables can be added to citus metadata
 BEGIN;
   CREATE TABLE citus_local_table PARTITION OF partitioned_table FOR VALUES FROM (20) TO (30);
   -- cannot create citus local table as a partition of a local table
   SELECT create_citus_local_table('citus_local_table');
-ERROR:  cannot create citus local table "citus_local_table", citus local tables cannot be partition of other tables
+ERROR:  cannot add local table "citus_local_table" to metadata, local tables added to metadata cannot be partition of other tables
 ROLLBACK;
 BEGIN;
   CREATE TABLE citus_local_table (a int, b int);
@@ -147,16 +147,16 @@ BEGIN;
 
   -- cannot attach citus local table to a partitioned distributed table
   ALTER TABLE partitioned_table ATTACH PARTITION citus_local_table FOR VALUES FROM (20) TO (30);
-ERROR:  cannot execute ATTACH/DETACH PARTITION command as citus local tables cannot be involved in partition relationships with other tables
+ERROR:  cannot execute ATTACH/DETACH PARTITION command as local tables added to metadata cannot be involved in partition relationships with other tables
 ROLLBACK;
 -- show that we do not support inheritance relationships --
 CREATE TABLE parent_table (a int, b text);
 CREATE TABLE child_table () INHERITS (parent_table);
 -- both of below should error out
 SELECT create_citus_local_table('parent_table');
-ERROR:  cannot create citus local table "parent_table", citus local tables cannot be involved in inheritance relationships
+ERROR:  cannot add local table "parent_table" to metadata, local tables added to metadata cannot be involved in inheritance relationships
 SELECT create_citus_local_table('child_table');
-ERROR:  cannot create citus local table "child_table", citus local tables cannot be involved in inheritance relationships
+ERROR:  cannot add local table "child_table" to metadata, local tables added to metadata cannot be involved in inheritance relationships
 -- show that we support UNLOGGED tables --
 CREATE UNLOGGED TABLE unlogged_table (a int primary key);
 SELECT create_citus_local_table('unlogged_table');
@@ -298,20 +298,20 @@ SELECT create_reference_table('reference_table');
 -- show that colociation of citus local tables are not supported for now
 -- between citus local tables
 SELECT update_distributed_table_colocation('citus_local_table_1', colocate_with => 'citus_local_table_2');
-ERROR:  citus local tables cannot be colocated with other tables
+ERROR:  local tables cannot be colocated with other tables
 -- between citus local tables and reference tables
 SELECT update_distributed_table_colocation('citus_local_table_1', colocate_with => 'reference_table');
-ERROR:  citus local tables cannot be colocated with other tables
+ERROR:  local tables cannot be colocated with other tables
 SELECT update_distributed_table_colocation('reference_table', colocate_with => 'citus_local_table_1');
-ERROR:  citus local tables cannot be colocated with other tables
+ERROR:  local tables cannot be colocated with other tables
 -- between citus local tables and distributed tables
 SELECT update_distributed_table_colocation('citus_local_table_1', colocate_with => 'distributed_table');
-ERROR:  citus local tables cannot be colocated with other tables
+ERROR:  local tables cannot be colocated with other tables
 SELECT update_distributed_table_colocation('distributed_table', colocate_with => 'citus_local_table_1');
-ERROR:  citus local tables cannot be colocated with other tables
+ERROR:  local tables cannot be colocated with other tables
 -- master_create_empty_shard is not supported
 SELECT master_create_empty_shard('citus_local_table_1');
-ERROR:  relation "citus_local_table_1" is a citus local table
+ERROR:  relation "citus_local_table_1" is a local table
 -- get_shard_id_for_distribution_column is supported
 SELECT get_shard_id_for_distribution_column('citus_local_table_1', 'not_checking_this_arg_for_non_dist_tables');
  get_shard_id_for_distribution_column
@@ -328,7 +328,7 @@ SELECT get_shard_id_for_distribution_column('citus_local_table_1');
 -- master_copy_shard_placement is not supported
 SELECT master_copy_shard_placement(shardid, 'localhost', :master_port, 'localhost', :worker_1_port, true)
 FROM (SELECT shardid FROM pg_dist_shard WHERE logicalrelid='citus_local_table_1'::regclass) as shardid;
-ERROR:  Table 'citus_local_table_1' is a citus local table. Replicating shard of a citus local table currently is not supported
+ERROR:  Table 'citus_local_table_1' is a local table. Replicating shard of a local table added to metadata currently is not supported
 -- undistribute_table is supported
 BEGIN;
   SELECT undistribute_table('citus_local_table_1');
@@ -478,7 +478,7 @@ BEGIN;
 ROLLBACK;
 -- between citus local tables and distributed tables
 ALTER TABLE citus_local_table_1 ADD CONSTRAINT fkey_c_to_dist FOREIGN KEY(a) references distributed_table(a);
-ERROR:  cannot create foreign key constraint since foreign keys from reference tables and citus local tables to distributed tables are not supported
+ERROR:  cannot create foreign key constraint since foreign keys from reference tables and local tables to distributed tables are not supported
 ALTER TABLE distributed_table ADD CONSTRAINT fkey_dist_to_c FOREIGN KEY(a) references citus_local_table_1(a);
 ERROR:  cannot create foreign key constraint since relations are not colocated or not referencing a reference table
 -- between citus local tables and local tables
@@ -699,7 +699,7 @@ ROLLBACK;
 SELECT update_distributed_table_colocation('citus_local_table_4', colocate_with => 'none');
 ERROR:  relation citus_local_table_4 should be a hash distributed table
 SELECT master_create_empty_shard('citus_local_table_4');
-ERROR:  relation "citus_local_table_4" is a citus local table
+ERROR:  relation "citus_local_table_4" is a local table
 SELECT master_apply_delete_command('DELETE FROM citus_local_table_4');
 ERROR:  cannot delete from table
 CREATE TABLE postgres_local_table (a int);

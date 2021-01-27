@@ -153,10 +153,10 @@ master_create_empty_shard(PG_FUNCTION_ARGS)
 	}
 	else if (IsCitusTableType(relationId, CITUS_LOCAL_TABLE))
 	{
-		ereport(ERROR, (errmsg("relation \"%s\" is a citus local table",
+		ereport(ERROR, (errmsg("relation \"%s\" is a local table",
 							   relationName),
 						errdetail("We currently don't support creating shards "
-								  "on citus local tables")));
+								  "on local tables")));
 	}
 
 	char replicationModel = TableReplicationModel(relationId);
@@ -265,8 +265,7 @@ master_append_table_to_shard(PG_FUNCTION_ARGS)
 	{
 		ereport(ERROR, (errmsg("cannot append to shardId " UINT64_FORMAT, shardId),
 						errdetail("We currently don't support appending to shards "
-								  "in hash-partitioned, reference and citus local "
-								  "tables")));
+								  "in hash-partitioned, reference and local tables")));
 	}
 
 	/* ensure that the shard placement metadata does not change during the append */

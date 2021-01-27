@@ -102,7 +102,7 @@ ALTER TABLE partitioned_table_1 ADD CONSTRAINT fkey_8 FOREIGN KEY (col_1) REFERE
 -- now that we attached partitioned table to graph below errors out
 -- since we cannot create citus local table from partitioned tables
 ALTER TABLE reference_table_1 ADD CONSTRAINT fkey_9 FOREIGN KEY (col_1) REFERENCES local_table_1(col_1);
-ERROR:  cannot create citus local table "partitioned_table_1", only regular tables and foreign tables are supported for citus local table creation
+ERROR:  cannot add local table "partitioned_table_1" to metadata, only regular tables and foreign tables can be added to citus metadata
 ALTER TABLE partitioned_table_1 DROP CONSTRAINT fkey_8;
 BEGIN;
   -- now that we detached partitioned table from graph, succeeds
@@ -214,7 +214,7 @@ BEGIN;
 (1 row)
 
   ALTER TABLE reference_table_2 ADD CONSTRAINT fkey_11 FOREIGN KEY (col_1) REFERENCES local_table_2(col_1) ON DELETE CASCADE;
-ERROR:  cannot define foreign key constraint, foreign keys from reference tables to citus local tables can only be defined with NO ACTION or RESTRICT behaviors
+ERROR:  cannot define foreign key constraint, foreign keys from reference tables to local tables can only be defined with NO ACTION or RESTRICT behaviors
 ROLLBACK;
 BEGIN;
   SELECT create_reference_table('reference_table_2');
@@ -224,7 +224,7 @@ BEGIN;
 (1 row)
 
   ALTER TABLE reference_table_2 ADD CONSTRAINT fkey_local_to_ref FOREIGN KEY (col_1) REFERENCES local_table_2(col_1) ON UPDATE CASCADE;
-ERROR:  cannot define foreign key constraint, foreign keys from reference tables to citus local tables can only be defined with NO ACTION or RESTRICT behaviors
+ERROR:  cannot define foreign key constraint, foreign keys from reference tables to local tables can only be defined with NO ACTION or RESTRICT behaviors
 ROLLBACK;
 -- but we support such foreign key behaviors when foreign key is from
 -- citus local to reference table
@@ -304,7 +304,7 @@ SELECT create_distributed_table('distributed_table', 'col_1');
 CREATE TABLE local_table_5 (
   col_1 INT UNIQUE REFERENCES distributed_table(col_1),
   FOREIGN KEY (col_1) REFERENCES reference_table_1(col_1));
-ERROR:  cannot create foreign key constraint since foreign keys from reference tables and citus local tables to distributed tables are not supported
+ERROR:  cannot create foreign key constraint since foreign keys from reference tables and local tables to distributed tables are not supported
 BEGIN;
   ALTER TABLE distributed_table ADD CONSTRAINT fkey_11 FOREIGN KEY (col_1) REFERENCES reference_table_1(col_1);
   CREATE TABLE local_table_5 (
@@ -577,7 +577,7 @@ BEGIN;
   -- errors out as foreign keys from reference tables to citus local tables
   -- cannot have CASCADE behavior
   SELECT create_reference_table('local_table_1');
-ERROR:  cannot define foreign key constraint, foreign keys from reference tables to citus local tables can only be defined with NO ACTION or RESTRICT behaviors
+ERROR:  cannot define foreign key constraint, foreign keys from reference tables to local tables can only be defined with NO ACTION or RESTRICT behaviors
 ROLLBACK;
 SET citus.enable_local_execution TO OFF;
 -- show that this errors out as it tries to convert connected relations to citus
@@ -623,7 +623,7 @@ ORDER BY tablename;
 -- this errors out as we don't support creating citus local
 -- tables from partitioned tables
 CREATE TABLE part_local_table (col_1 INT REFERENCES reference_table_1(col_1)) PARTITION BY RANGE (col_1);
-ERROR:  cannot create citus local table "part_local_table", only regular tables and foreign tables are supported for citus local table creation
+ERROR:  cannot add local table "part_local_table" to metadata, only regular tables and foreign tables can be added to citus metadata
 -- they fail as col_99 does not exist
 CREATE TABLE local_table_5 (col_1 INT, FOREIGN KEY (col_99) REFERENCES reference_table_1(col_1));
 ERROR:  column "col_99" referenced in foreign key constraint does not exist

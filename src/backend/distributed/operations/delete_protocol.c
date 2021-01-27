@@ -177,7 +177,7 @@ master_apply_delete_command(PG_FUNCTION_ARGS)
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						errmsg("cannot delete from table"),
-						errdetail("Delete statements on reference and citus "
+						errdetail("Delete statements on reference and "
 								  "local tables are not supported.")));
 	}
 
