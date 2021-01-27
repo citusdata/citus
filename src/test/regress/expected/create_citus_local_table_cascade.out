@@ -120,7 +120,7 @@ BEGIN;
   -- create_citus_local_table(cascade_via_foreign_keys) would fail for
   -- partitioned_table as create_citus_local_table doesn't support partitioned tables
   SELECT create_citus_local_table('local_table_2', cascade_via_foreign_keys=>true);
-ERROR:  cannot create citus local table "partitioned_table", only regular tables and foreign tables are supported for citus local table creation
+ERROR:  cannot add local table "partitioned_table" to metadata, only regular tables and foreign tables can be added to citus metadata
 ROLLBACK;
 BEGIN;
   DROP TABLE local_table_2;

@@ -311,7 +311,7 @@ BEGIN;
   -- tables are not supported
   ALTER TABLE citus_local_table_5 ADD CONSTRAINT fkey_12 FOREIGN KEY (col_1) REFERENCES citus_local_table_6(col_1);
   SELECT create_distributed_table('citus_local_table_6', 'col_1');
-ERROR:  cannot create foreign key constraint since foreign keys from reference tables and citus local tables to distributed tables are not supported
+ERROR:  cannot create foreign key constraint since foreign keys from reference tables and local tables to distributed tables are not supported
 ROLLBACK;
 -- have some more tests with foreign keys between citus local
 -- and reference tables

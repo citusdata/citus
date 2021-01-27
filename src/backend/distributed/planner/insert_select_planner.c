@@ -572,7 +572,7 @@ DistributedInsertSelectSupported(Query *queryTree, RangeTblEntry *insertRte,
 	{
 		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 							 "distributed INSERT ... SELECT cannot insert into a "
-							 "citus local table",
+							 "local table that is added to metadata",
 							 NULL, NULL);
 	}
 

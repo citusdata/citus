@@ -162,6 +162,12 @@ typedef struct TableConversionState
 	 * ALTER_TABLE_SET_ACCESS_METHOD -> AlterTableSetAccessMethod
 	 */
 	TableConversionFunction function;
+
+	/*
+	 * suppressNoticeMessages determines if we want to suppress NOTICE
+	 * messages that we explicitly issue
+	 */
+	bool suppressNoticeMessages;
 } TableConversionState;
 
 
@@ -177,7 +183,8 @@ static TableConversionState * CreateTableConversion(TableConversionParameters *p
 static void CreateDistributedTableLike(TableConversionState *con);
 static void CreateCitusTableLike(TableConversionState *con);
 static List * GetViewCreationCommandsOfTable(Oid relationId);
-static void ReplaceTable(Oid sourceId, Oid targetId, List *justBeforeDropCommands);
+static void ReplaceTable(Oid sourceId, Oid targetId, List *justBeforeDropCommands,
+						 bool suppressNoticeMessages);
 static void CheckAlterDistributedTableConversionParameters(TableConversionState *con);
 static char * CreateWorkerChangeSequenceDependencyCommand(char *sequenceSchemaName,
 														  char *sequenceName,
@@ -522,15 +529,18 @@ ConvertTable(TableConversionState *con)
 	bool includeIndexes = true;
 	if (con->accessMethod && strcmp(con->accessMethod, "columnar") == 0)
 	{
-		List *explicitIndexesOnTable = GetExplicitIndexOidList(con->relationId);
-		Oid indexOid = InvalidOid;
-		foreach_oid(indexOid, explicitIndexesOnTable)
+		if (!con->suppressNoticeMessages)
 		{
-			ereport(NOTICE, (errmsg("the index %s on table %s will be dropped, "
-									"because columnar tables cannot have indexes",
-									get_rel_name(indexOid),
-									quote_qualified_identifier(con->schemaName,
-															   con->relationName))));
+			List *explicitIndexesOnTable = GetExplicitIndexOidList(con->relationId);
+			Oid indexOid = InvalidOid;
+			foreach_oid(indexOid, explicitIndexesOnTable)
+			{
+				ereport(NOTICE, (errmsg("the index %s on table %s will be dropped, "
+										"because columnar tables cannot have indexes",
+										get_rel_name(indexOid),
+										quote_qualified_identifier(con->schemaName,
+																   con->relationName))));
+			}
 		}
 
 		includeIndexes = false;
@@ -580,9 +590,12 @@ ConvertTable(TableConversionState *con)
 
 	if (PartitionedTable(con->relationId))
 	{
-		ereport(NOTICE, (errmsg("converting the partitions of %s",
-								quote_qualified_identifier(con->schemaName,
-														   con->relationName))));
+		if (!con->suppressNoticeMessages)
+		{
+			ereport(NOTICE, (errmsg("converting the partitions of %s",
+									quote_qualified_identifier(con->schemaName,
+															   con->relationName))));
+		}
 
 		List *partitionList = PartitionList(con->relationId);
 
@@ -617,6 +630,7 @@ ConvertTable(TableConversionState *con)
 				.shardCount = con->shardCount,
 				.cascadeToColocated = cascadeOption,
 				.colocateWith = con->colocateWith,
+				.suppressNoticeMessages = con->suppressNoticeMessages,
 
 				/*
 				 * Even if we called UndistributeTable with cascade option, we
@@ -636,9 +650,12 @@ ConvertTable(TableConversionState *con)
 		}
 	}
 
-	ereport(NOTICE, (errmsg("creating a new table for %s",
-							quote_qualified_identifier(con->schemaName,
-													   con->relationName))));
+	if (!con->suppressNoticeMessages)
+	{
+		ereport(NOTICE, (errmsg("creating a new table for %s",
+								quote_qualified_identifier(con->schemaName,
+														   con->relationName))));
+	}
 
 	TableDDLCommand *tableCreationCommand = NULL;
 	foreach_ptr(tableCreationCommand, preLoadCommands)
@@ -687,7 +704,8 @@ ConvertTable(TableConversionState *con)
 		CreateCitusTableLike(con);
 	}
 
-	ReplaceTable(con->relationId, con->newRelationId, justBeforeDropCommands);
+	ReplaceTable(con->relationId, con->newRelationId, justBeforeDropCommands,
+				 con->suppressNoticeMessages);
 
 	TableDDLCommand *tableConstructionCommand = NULL;
 	foreach_ptr(tableConstructionCommand, postLoadCommands)
@@ -732,7 +750,8 @@ ConvertTable(TableConversionState *con)
 				.shardCountIsNull = con->shardCountIsNull,
 				.shardCount = con->shardCount,
 				.colocateWith = qualifiedRelationName,
-				.cascadeToColocated = CASCADE_TO_COLOCATED_NO_ALREADY_CASCADED
+				.cascadeToColocated = CASCADE_TO_COLOCATED_NO_ALREADY_CASCADED,
+				.suppressNoticeMessages = con->suppressNoticeMessages
 			};
 			TableConversionReturn *colocatedReturn = con->function(&cascadeParam);
 			foreignKeyCommands = list_concat(foreignKeyCommands,
@@ -875,6 +894,7 @@ CreateTableConversion(TableConversionParameters *params)
 	con->accessMethod = params->accessMethod;
 	con->cascadeToColocated = params->cascadeToColocated;
 	con->cascadeViaForeignKeys = params->cascadeViaForeignKeys;
+	con->suppressNoticeMessages = params->suppressNoticeMessages;
 
 	Relation relation = try_relation_open(con->relationId, ExclusiveLock);
 	if (relation == NULL)
@@ -1079,7 +1099,8 @@ GetViewCreationCommandsOfTable(Oid relationId)
  * Source and target tables need to be in the same schema and have the same columns.
  */
 void
-ReplaceTable(Oid sourceId, Oid targetId, List *justBeforeDropCommands)
+ReplaceTable(Oid sourceId, Oid targetId, List *justBeforeDropCommands,
+			 bool suppressNoticeMessages)
 {
 	char *sourceName = get_rel_name(sourceId);
 	char *targetName = get_rel_name(targetId);
@@ -1090,8 +1111,11 @@ ReplaceTable(Oid sourceId, Oid targetId, List *justBeforeDropCommands)
 
 	if (!PartitionedTable(sourceId))
 	{
-		ereport(NOTICE, (errmsg("Moving the data of %s",
-								quote_qualified_identifier(schemaName, sourceName))));
+		if (!suppressNoticeMessages)
+		{
+			ereport(NOTICE, (errmsg("Moving the data of %s",
+									quote_qualified_identifier(schemaName, sourceName))));
+		}
 
 		appendStringInfo(query, "INSERT INTO %s SELECT * FROM %s",
 						 quote_qualified_identifier(schemaName, targetName),
@@ -1129,16 +1153,22 @@ ReplaceTable(Oid sourceId, Oid targetId, List *justBeforeDropCommands)
 		ExecuteQueryViaSPI(justBeforeDropCommand, SPI_OK_UTILITY);
 	}
 
-	ereport(NOTICE, (errmsg("Dropping the old %s",
-							quote_qualified_identifier(schemaName, sourceName))));
+	if (!suppressNoticeMessages)
+	{
+		ereport(NOTICE, (errmsg("Dropping the old %s",
+								quote_qualified_identifier(schemaName, sourceName))));
+	}
 
 	resetStringInfo(query);
 	appendStringInfo(query, "DROP TABLE %s CASCADE",
 					 quote_qualified_identifier(schemaName, sourceName));
 	ExecuteQueryViaSPI(query->data, SPI_OK_UTILITY);
 
-	ereport(NOTICE, (errmsg("Renaming the new table to %s",
-							quote_qualified_identifier(schemaName, sourceName))));
+	if (!suppressNoticeMessages)
+	{
+		ereport(NOTICE, (errmsg("Renaming the new table to %s",
+								quote_qualified_identifier(schemaName, sourceName))));
+	}
 
 	resetStringInfo(query);
 	appendStringInfo(query, "ALTER TABLE %s RENAME TO %s",
@@ -1312,23 +1342,26 @@ CheckAlterDistributedTableConversionParameters(TableConversionState *con)
 		}
 	}
 
-	/* Notices for no operation UDF calls */
-	if (sameDistColumn)
+	if (!con->suppressNoticeMessages)
 	{
-		ereport(NOTICE, (errmsg("table is already distributed by %s",
-								con->distributionColumn)));
-	}
+		/* Notices for no operation UDF calls */
+		if (sameDistColumn)
+		{
+			ereport(NOTICE, (errmsg("table is already distributed by %s",
+									con->distributionColumn)));
+		}
 
-	if (sameShardCount)
-	{
-		ereport(NOTICE, (errmsg("shard count of the table is already %d",
-								con->shardCount)));
-	}
+		if (sameShardCount)
+		{
+			ereport(NOTICE, (errmsg("shard count of the table is already %d",
+									con->shardCount)));
+		}
 
-	if (sameColocateWith)
-	{
-		ereport(NOTICE, (errmsg("table is already colocated with %s",
-								con->colocateWith)));
+		if (sameColocateWith)
+		{
+			ereport(NOTICE, (errmsg("table is already colocated with %s",
+									con->colocateWith)));
+		}
 	}
 }
 

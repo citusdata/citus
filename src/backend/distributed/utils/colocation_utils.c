@@ -244,7 +244,7 @@ MarkTablesColocated(Oid sourceRelationId, Oid targetRelationId)
 	if (IsCitusTableType(sourceRelationId, CITUS_LOCAL_TABLE) ||
 		IsCitusTableType(targetRelationId, CITUS_LOCAL_TABLE))
 	{
-		ereport(ERROR, (errmsg("citus local tables cannot be colocated with "
+		ereport(ERROR, (errmsg("local tables cannot be colocated with "
 							   "other tables")));
 	}
 

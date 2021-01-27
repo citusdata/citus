@@ -311,9 +311,9 @@ ErrorIfMoveCitusLocalTable(Oid relationId)
 
 	char *qualifiedRelationName = generate_qualified_relation_name(relationId);
 	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-					errmsg("table %s is a citus local table, moving shard of "
-						   "a citus local table is currently not supported",
-						   qualifiedRelationName)));
+					errmsg("table %s is a local table, moving shard of "
+						   "a local table added to metadata is currently "
+						   "not supported", qualifiedRelationName)));
 }
 
 
@@ -385,9 +385,10 @@ ErrorIfTableCannotBeReplicated(Oid relationId)
 	if (IsCitusTableTypeCacheEntry(tableEntry, CITUS_LOCAL_TABLE))
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						(errmsg("Table %s is a citus local table. Replicating "
-								"shard of a citus local table currently is not "
-								"supported", quote_literal_cstr(relationName)))));
+						(errmsg("Table %s is a local table. Replicating "
+								"shard of a local table added to metadata "
+								"currently is not supported",
+								quote_literal_cstr(relationName)))));
 	}
 
 	/*

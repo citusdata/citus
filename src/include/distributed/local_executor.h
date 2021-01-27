@@ -37,6 +37,7 @@ extern uint64 ExecuteLocalTaskListExtended(List *taskList, ParamListInfo
 										   bool isUtilityCommand);
 extern void ExtractLocalAndRemoteTasks(bool readOnlyPlan, List *taskList,
 									   List **localTaskList, List **remoteTaskList);
+extern void ExecuteUtilityCommand(const char *utilityCommand);
 extern bool ShouldExecuteTasksLocally(List *taskList);
 extern bool AnyTaskAccessesLocalNode(List *taskList);
 extern bool TaskAccessesLocalNode(Task *task);

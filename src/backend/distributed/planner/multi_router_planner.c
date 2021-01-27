@@ -771,10 +771,10 @@ DeferErrorIfUnsupportedLocalTableJoin(List *rangeTableList)
 	if (ModifiesLocalTableWithRemoteCitusLocalTable(rangeTableList))
 	{
 		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-							 "Modifying local tables with citus local tables is "
-							 "supported only from the coordinator.",
+							 "Modifying local tables with remote local tables is "
+							 "not supported.",
 							 NULL,
-							 "Consider wrapping citus local table to a CTE, or subquery");
+							 "Consider wrapping remote local table to a CTE, or subquery");
 	}
 	return NULL;
 }
@@ -953,7 +953,7 @@ ModifyQuerySupported(Query *queryTree, Query *originalQuery, bool multiShardQuer
 					if (IsCitusTable(rangeTableEntry->relid))
 					{
 						appendStringInfo(errorMessage,
-										 "citus local table %s cannot be joined with these distributed tables",
+										 "local table %s cannot be joined with these distributed tables",
 										 relationName);
 					}
 					else
@@ -2879,7 +2879,7 @@ BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError)
 			}
 			else if (IsCitusTableTypeCacheEntry(cacheEntry, CITUS_LOCAL_TABLE))
 			{
-				ereport(ERROR, (errmsg("citus local table cannot have %d shards",
+				ereport(ERROR, (errmsg("local table cannot have %d shards",
 									   shardCount)));
 			}
 		}
@@ -3545,7 +3545,7 @@ DeferErrorIfUnsupportedRouterPlannableSelectQuery(Query *query)
 			else if (IsCitusTableType(distributedTableId, CITUS_LOCAL_TABLE))
 			{
 				hasPostgresOrCitusLocalTable = true;
-				elog(DEBUG4, "Router planner finds a citus local table");
+				elog(DEBUG4, "Router planner finds a local table added to metadata");
 				continue;
 			}
 

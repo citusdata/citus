@@ -92,13 +92,12 @@ create_citus_local_table(PG_FUNCTION_ARGS)
 		 * not chained with any reference tables back to postgres tables.
 		 * So give a warning to user for that.
 		 */
-		ereport(WARNING, (errmsg("citus local tables that are not chained with "
-								 "reference tables via foreign keys might be "
-								 "automatically converted back to postgres tables"),
+		ereport(WARNING, (errmsg("local tables that are added to metadata but not "
+								 "chained with reference tables via foreign keys might "
+								 "be automatically converted back to postgres tables"),
 						  errhint("Consider setting "
 								  "citus.enable_local_reference_table_foreign_keys "
-								  "to 'off' to disable automatically undistributing "
-								  "citus local tables")));
+								  "to 'off' to disable this behavior")));
 	}
 
 	Oid relationId = PG_GETARG_OID(0);
@@ -154,7 +153,7 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys)
 
 	/*
 	 * Creating Citus local tables relies on functions that accesses
-	 * shards locally (e.g., ExecuteAndLogDDLCommand()). As long as
+	 * shards locally (e.g., ExecuteAndLogUtilityCommand()). As long as
 	 * we don't teach those functions to access shards remotely, we
 	 * cannot relax this check.
 	 */
@@ -209,9 +208,9 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys)
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						errmsg("relation %s is involved in a foreign key "
 							   "relationship with another table", qualifiedRelationName),
-						errhint("Use cascade_via_foreign_keys option to convert "
+						errhint("Use cascade_via_foreign_keys option to add "
 								"all the relations involved in a foreign key "
-								"relationship with %s to a citus local table by "
+								"relationship with %s to citus metadata by "
 								"executing SELECT create_citus_local_table($$%s$$, "
 								"cascade_via_foreign_keys=>true)",
 								qualifiedRelationName, qualifiedRelationName)));
@@ -246,7 +245,7 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys)
 	 * from scratch, below we simply recreate the shell table executing them
 	 * via process utility.
 	 */
-	ExecuteAndLogDDLCommandList(shellTableDDLEvents);
+	ExecuteAndLogUtilityCommandList(shellTableDDLEvents);
 
 	/*
 	 * Set shellRelationId as the relation with relationId now points
@@ -280,7 +279,7 @@ ErrorIfUnsupportedCreateCitusLocalTable(Relation relation)
 {
 	if (!RelationIsValid(relation))
 	{
-		ereport(ERROR, (errmsg("cannot create citus local table, relation does "
+		ereport(ERROR, (errmsg("cannot add local table to metadata, relation does "
 							   "not exist")));
 	}
 
@@ -319,16 +318,16 @@ ErrorIfUnsupportedCitusLocalTableKind(Oid relationId)
 	if (IsChildTable(relationId) || IsParentTable(relationId))
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("cannot create citus local table \"%s\", citus local "
-							   "tables cannot be involved in inheritance relationships",
-							   relationName)));
+						errmsg("cannot add local table \"%s\" to metadata, local tables "
+							   "added to metadata cannot be involved in inheritance "
+							   "relationships", relationName)));
 	}
 
 	if (PartitionTable(relationId))
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("cannot create citus local table \"%s\", citus local "
-							   "tables cannot be partition of other tables",
+						errmsg("cannot add local table \"%s\" to metadata, local tables "
+							   "added to metadata cannot be partition of other tables ",
 							   relationName)));
 	}
 
@@ -336,9 +335,9 @@ ErrorIfUnsupportedCitusLocalTableKind(Oid relationId)
 	if (!(relationKind == RELKIND_RELATION || relationKind == RELKIND_FOREIGN_TABLE))
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("cannot create citus local table \"%s\", only regular "
-							   "tables and foreign tables are supported for citus local "
-							   "table creation", relationName)));
+						errmsg("cannot add local table \"%s\" to metadata, only regular "
+							   "tables and foreign tables can be added to citus metadata ",
+							   relationName)));
 	}
 }
 
@@ -436,7 +435,7 @@ RenameRelationToShardRelation(Oid shellRelationId, uint64 shardId)
 	appendStringInfo(renameCommand, "ALTER TABLE %s RENAME TO %s;",
 					 qualifiedShellRelationName, quotedShardRelationName);
 
-	ExecuteAndLogDDLCommand(renameCommand->data);
+	ExecuteAndLogUtilityCommand(renameCommand->data);
 }
 
 
@@ -456,7 +455,7 @@ RenameShardRelationConstraints(Oid shardRelationId, uint64 shardId)
 	{
 		const char *commandString =
 			GetRenameShardConstraintCommand(shardRelationId, constraintName, shardId);
-		ExecuteAndLogDDLCommand(commandString);
+		ExecuteAndLogUtilityCommand(commandString);
 	}
 }
 
@@ -550,7 +549,7 @@ RenameShardRelationIndexes(Oid shardRelationId, uint64 shardId)
 	foreach_oid(indexOid, indexOidList)
 	{
 		const char *commandString = GetRenameShardIndexCommand(indexOid, shardId);
-		ExecuteAndLogDDLCommand(commandString);
+		ExecuteAndLogUtilityCommand(commandString);
 	}
 }
 
@@ -591,7 +590,7 @@ RenameShardRelationStatistics(Oid shardRelationId, uint64 shardId)
 	char *command = NULL;
 	foreach_ptr(command, statsCommandList)
 	{
-		ExecuteAndLogDDLCommand(command);
+		ExecuteAndLogUtilityCommand(command);
 	}
 }
 
@@ -636,7 +635,7 @@ RenameShardRelationNonTruncateTriggers(Oid shardRelationId, uint64 shardId)
 			char *triggerName = NameStr(triggerForm->tgname);
 			char *commandString =
 				GetRenameShardTriggerCommand(shardRelationId, triggerName, shardId);
-			ExecuteAndLogDDLCommand(commandString);
+			ExecuteAndLogUtilityCommand(commandString);
 		}
 
 		heap_freetuple(triggerTuple);
@@ -688,7 +687,7 @@ DropRelationTruncateTriggers(Oid relationId)
 		{
 			char *triggerName = NameStr(triggerForm->tgname);
 			char *commandString = GetDropTriggerCommand(relationId, triggerName);
-			ExecuteAndLogDDLCommand(commandString);
+			ExecuteAndLogUtilityCommand(commandString);
 		}
 
 		heap_freetuple(triggerTuple);
@@ -868,7 +867,7 @@ DropDefaultColumnDefinition(Oid relationId, char *columnName)
 					 "ALTER TABLE %s ALTER COLUMN %s DROP DEFAULT",
 					 qualifiedRelationName, quotedColumnName);
 
-	ExecuteAndLogDDLCommand(sequenceDropCommand->data);
+	ExecuteAndLogUtilityCommand(sequenceDropCommand->data);
 }
 
 
@@ -891,7 +890,7 @@ TransferSequenceOwnership(Oid sequenceId, Oid targetRelationId, char *targetColu
 					 qualifiedSequenceName, qualifiedTargetRelationName,
 					 quotedTargetColumnName);
 
-	ExecuteAndLogDDLCommand(sequenceOwnershipCommand->data);
+	ExecuteAndLogUtilityCommand(sequenceOwnershipCommand->data);
 }
 
 

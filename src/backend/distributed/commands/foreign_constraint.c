@@ -222,11 +222,11 @@ ErrorIfUnsupportedForeignConstraintExists(Relation relation, char referencingDis
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 							errmsg("cannot create foreign key constraint "
 								   "since foreign keys from reference tables "
-								   "and citus local tables to distributed tables "
+								   "and local tables to distributed tables "
 								   "are not supported"),
-							errdetail("Reference tables and citus local tables "
+							errdetail("Reference tables and local tables "
 									  "can only have foreign keys to reference "
-									  "tables and citus local tables")));
+									  "tables and local tables")));
 		}
 
 		/*
@@ -335,7 +335,7 @@ EnsureSupportedFKeyBetweenCitusLocalAndRefTable(Form_pg_constraint fKeyConstrain
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 							errmsg("cannot define foreign key constraint, "
 								   "foreign keys from reference tables to "
-								   "citus local tables can only be defined "
+								   "local tables can only be defined "
 								   "with NO ACTION or RESTRICT behaviors"),
 							errhint(USE_CREATE_REFERENCE_TABLE_HINT,
 									referencedTableName)));
@@ -435,10 +435,10 @@ ErrorOutForFKeyBetweenPostgresAndCitusLocalTable(Oid localTableId)
 	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 					errmsg("cannot create foreign key constraint as \"%s\" is "
 						   "a postgres local table", localTableName),
-					errhint("first create a citus local table from the postgres "
-							"local table using SELECT create_citus_local_table('%s') "
+					errhint("first add local table to citus metadata "
+							"by using SELECT create_citus_local_table('%s') "
 							"and execute the ALTER TABLE command to create the "
-							"foreign key to citus local table", localTableName)));
+							"foreign key to local table", localTableName)));
 }
 
 
