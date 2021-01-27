@@ -362,6 +362,13 @@ ErrorIfUnsupportedCitusLocalTableKind(Oid relationId)
 							   "tables and foreign tables can be added to citus metadata ",
 							   relationName)));
 	}
+
+	if (get_rel_persistence(relationId) == RELPERSISTENCE_TEMP)
+	{
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("cannot add temporary table \"%s\" to citus metadata",
+							   relationName)));
+	}
 }
 
 

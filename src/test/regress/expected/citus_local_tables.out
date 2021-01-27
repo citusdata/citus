@@ -50,6 +50,12 @@ SELECT 1 FROM master_add_node('localhost', :master_port, groupId => 0);
 (1 row)
 
 RESET client_min_messages;
+BEGIN;
+  CREATE TEMPORARY TABLE temp_table (a int);
+  -- errors out as we don't support creating citus local table from a temp table
+  SELECT citus_add_local_table_to_metadata('temp_table');
+ERROR:  cannot add temporary table "temp_table" to citus metadata
+ROLLBACK;
 -- creating citus local table having no data initially would work
 SELECT citus_add_local_table_to_metadata('citus_local_table_1');
  citus_add_local_table_to_metadata
