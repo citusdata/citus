@@ -67,3 +67,6 @@ DROP FUNCTION pg_catalog.master_create_worker_shards(text, integer, integer);
 DROP FUNCTION pg_catalog.mark_tables_colocated(regclass, regclass[]);
 #include "udfs/citus_shard_sizes/10.0-1.sql"
 #include "udfs/citus_shards/10.0-1.sql"
+
+#include "udfs/fix_pre_citus10_partitioned_table_constraint_names/10.0-1.sql"
+#include "udfs/worker_fix_pre_citus10_partitioned_table_constraint_names/10.0-1.sql"

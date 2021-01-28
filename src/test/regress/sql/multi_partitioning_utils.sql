@@ -183,7 +183,7 @@ SELECT public.generate_alter_table_attach_partition_command('parent_table');
 SELECT public.generate_partition_information('partition_child_1_schema.child_1');
 SELECT public.print_partitions('partition_child_1_schema.child_1');
 
--- now pring the partitions
+-- now print the partitions
 SELECT public.print_partitions('parent_table');
 
 SET search_path = 'public';

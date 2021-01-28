@@ -1177,6 +1177,14 @@ CREATE TABLE IF NOT EXISTS partition_of_other_table PARTITION OF partitioning_te
 ALTER TABLE another_table DETACH PARTITION partition_of_other_table;
 DROP TABLE another_table, partition_of_other_table;
 
+-- test fix_pre_citus10_partitioned_table_constraint_names udf
+SELECT fix_pre_citus10_partitioned_table_constraint_names('partitioning_test');
+SELECT fix_pre_citus10_partitioned_table_constraint_names();
+
+-- the following should fail
+SELECT fix_pre_citus10_partitioned_table_constraint_names('public.non_distributed_partitioned_table');
+SELECT fix_pre_citus10_partitioned_table_constraint_names('reference_table');
+
 ALTER TABLE partitioning_test DETACH PARTITION partitioning_test_2008;
 ALTER TABLE partitioning_test DETACH PARTITION partitioning_test_2009;
 ALTER TABLE partitioning_test DETACH PARTITION partitioning_test_2010;

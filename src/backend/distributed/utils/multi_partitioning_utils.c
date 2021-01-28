@@ -14,13 +14,22 @@
 #include "catalog/indexing.h"
 #include "catalog/partition.h"
 #include "catalog/pg_class.h"
+#include "catalog/pg_constraint.h"
 #include "catalog/pg_inherits.h"
+#include "common/string.h"
+#include "distributed/citus_nodes.h"
+#include "distributed/adaptive_executor.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/colocation_utils.h"
+#include "distributed/commands.h"
+#include "distributed/coordinator_protocol.h"
+#include "distributed/deparse_shard_query.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata_utility.h"
-#include "distributed/coordinator_protocol.h"
 #include "distributed/multi_partitioning_utils.h"
+#include "distributed/multi_physical_planner.h"
+#include "distributed/relay_utility.h"
+#include "distributed/resource_lock.h"
 #include "distributed/shardinterval_utils.h"
 #include "distributed/version_compat.h"
 #include "lib/stringinfo.h"
@@ -37,6 +46,267 @@
 
 static char * PartitionBound(Oid partitionId);
 static Relation try_relation_open_nolock(Oid relationId);
+static List * CreateFixPartitionConstraintsTaskList(Oid relationId);
+static List * WorkerFixPartitionConstraintCommandList(Oid relationId, uint64 shardId,
+													  List *checkConstraintList);
+static List * CheckConstraintNameListForRelation(Oid relationId);
+static bool RelationHasConstraint(Oid relationId, char *constraintName);
+static char * RenameConstraintCommand(Oid relationId, char *constraintName,
+									  char *newConstraintName);
+
+
+PG_FUNCTION_INFO_V1(fix_pre_citus10_partitioned_table_constraint_names);
+PG_FUNCTION_INFO_V1(worker_fix_pre_citus10_partitioned_table_constraint_names);
+
+
+/*
+ * fix_pre_citus10_partitioned_table_constraint_names fixes the constraint names of
+ * partitioned table shards on workers.
+ *
+ * Constraint names for partitioned table shards should have shardId suffixes if and only
+ * if they are unique or foreign key constraints. We mistakenly appended shardIds to
+ * constraint names on ALTER TABLE dist_part_table ADD CONSTRAINT .. queries prior to
+ * Citus 10. fix_pre_citus10_partitioned_table_constraint_names determines if this is the
+ * case, and renames constraints back to their original names on shards.
+ */
+Datum
+fix_pre_citus10_partitioned_table_constraint_names(PG_FUNCTION_ARGS)
+{
+	Oid relationId = PG_GETARG_OID(0);
+	EnsureCoordinator();
+
+	if (!PartitionedTable(relationId))
+	{
+		ereport(ERROR, (errmsg("could not fix partition constraints: "
+							   "relation does not exist or is not partitioned")));
+	}
+	if (!IsCitusTable(relationId))
+	{
+		ereport(ERROR, (errmsg("fix_pre_citus10_partitioned_table_constraint_names can "
+							   "only be called for distributed partitioned tables")));
+	}
+
+	List *taskList = CreateFixPartitionConstraintsTaskList(relationId);
+	bool localExecutionSupported = true;
+	ExecuteUtilityTaskList(taskList, localExecutionSupported);
+
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * worker_fix_pre_citus10_partitioned_table_constraint_names fixes the constraint names on a worker given a shell
+ * table name and shard id.
+ */
+Datum
+worker_fix_pre_citus10_partitioned_table_constraint_names(PG_FUNCTION_ARGS)
+{
+	Oid relationId = PG_GETARG_OID(0);
+	int64 shardId = PG_GETARG_INT32(1);
+	text *constraintNameText = PG_GETARG_TEXT_P(2);
+
+	if (!PartitionedTable(relationId))
+	{
+		ereport(ERROR, (errmsg("could not fix partition constraints: "
+							   "relation does not exist or is not partitioned")));
+	}
+
+	char *constraintName = text_to_cstring(constraintNameText);
+	char *shardIdAppendedConstraintName = pstrdup(constraintName);
+	AppendShardIdToName(&shardIdAppendedConstraintName, shardId);
+
+	/* if shardId was appended to the constraint name, rename back to original */
+	if (RelationHasConstraint(relationId, shardIdAppendedConstraintName))
+	{
+		char *renameConstraintDDLCommand =
+			RenameConstraintCommand(relationId, shardIdAppendedConstraintName,
+									constraintName);
+		ExecuteAndLogUtilityCommand(renameConstraintDDLCommand);
+	}
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * CreateFixPartitionConstraintsTaskList goes over all the partitions of a distributed
+ * partitioned table, and creates the list of tasks to execute
+ * worker_fix_pre_citus10_partitioned_table_constraint_names UDF on worker nodes.
+ */
+static List *
+CreateFixPartitionConstraintsTaskList(Oid relationId)
+{
+	List *taskList = NIL;
+
+	/* enumerate the tasks when putting them to the taskList */
+	int taskId = 1;
+	List *checkConstraintList = CheckConstraintNameListForRelation(relationId);
+
+	/* early exit if the relation does not have any check constraints */
+	if (checkConstraintList == NIL)
+	{
+		return NIL;
+	}
+
+	List *shardIntervalList = LoadShardIntervalList(relationId);
+
+	/* lock metadata before getting placement lists */
+	LockShardListMetadata(shardIntervalList, ShareLock);
+
+	ShardInterval *shardInterval = NULL;
+	foreach_ptr(shardInterval, shardIntervalList)
+	{
+		uint64 shardId = shardInterval->shardId;
+
+		List *queryStringList = WorkerFixPartitionConstraintCommandList(relationId,
+																		shardId,
+																		checkConstraintList);
+
+		Task *task = CitusMakeNode(Task);
+		task->jobId = INVALID_JOB_ID;
+		task->taskId = taskId++;
+
+		task->taskType = DDL_TASK;
+		SetTaskQueryStringList(task, queryStringList);
+		task->dependentTaskList = NULL;
+		task->replicationModel = REPLICATION_MODEL_INVALID;
+		task->anchorShardId = shardId;
+		task->taskPlacementList = ActiveShardPlacementList(shardId);
+
+		taskList = lappend(taskList, task);
+	}
+
+	return taskList;
+}
+
+
+/*
+ * CheckConstraintNameListForRelation returns a list of names of CHECK constraints
+ * for a relation.
+ */
+static List *
+CheckConstraintNameListForRelation(Oid relationId)
+{
+	List *constraintNameList = NIL;
+
+	int scanKeyCount = 2;
+	ScanKeyData scanKey[2];
+
+	Relation pgConstraint = table_open(ConstraintRelationId, AccessShareLock);
+
+	ScanKeyInit(&scanKey[0], Anum_pg_constraint_conrelid,
+				BTEqualStrategyNumber, F_OIDEQ, relationId);
+	ScanKeyInit(&scanKey[1], Anum_pg_constraint_contype,
+				BTEqualStrategyNumber, F_CHAREQ, CONSTRAINT_CHECK);
+
+	bool useIndex = false;
+	SysScanDesc scanDescriptor = systable_beginscan(pgConstraint, InvalidOid, useIndex,
+													NULL, scanKeyCount, scanKey);
+
+	HeapTuple heapTuple = systable_getnext(scanDescriptor);
+	while (HeapTupleIsValid(heapTuple))
+	{
+		Form_pg_constraint constraintForm = (Form_pg_constraint) GETSTRUCT(heapTuple);
+		char *constraintName = NameStr(constraintForm->conname);
+		constraintNameList = lappend(constraintNameList, pstrdup(constraintName));
+
+		heapTuple = systable_getnext(scanDescriptor);
+	}
+
+	systable_endscan(scanDescriptor);
+	table_close(pgConstraint, NoLock);
+
+	return constraintNameList;
+}
+
+
+/*
+ * WorkerFixPartitionConstraintCommandList creates a list of queries that will fix
+ * all check constraint names of a shard.
+ */
+static List *
+WorkerFixPartitionConstraintCommandList(Oid relationId, uint64 shardId,
+										List *checkConstraintList)
+{
+	List *commandList = NIL;
+	Oid schemaId = get_rel_namespace(relationId);
+	char *schemaName = get_namespace_name(schemaId);
+	char *relationName = get_rel_name(relationId);
+	char *shardRelationName = pstrdup(relationName);
+
+	/* build shard relation name */
+	AppendShardIdToName(&shardRelationName, shardId);
+
+	char *quotedShardName = quote_qualified_identifier(schemaName, shardRelationName);
+
+	char *constraintName = NULL;
+	foreach_ptr(constraintName, checkConstraintList)
+	{
+		StringInfo shardQueryString = makeStringInfo();
+		appendStringInfo(shardQueryString,
+						 "SELECT worker_fix_pre_citus10_partitioned_table_constraint_names(%s::regclass, "
+						 UINT64_FORMAT ", %s::text)",
+						 quote_literal_cstr(quotedShardName), shardId,
+						 quote_literal_cstr(constraintName));
+		commandList = lappend(commandList, shardQueryString->data);
+	}
+
+	return commandList;
+}
+
+
+/*
+ * RelationHasConstraint checks if a relation has a constraint with a given name.
+ */
+static bool
+RelationHasConstraint(Oid relationId, char *constraintName)
+{
+	bool found = false;
+
+	int scanKeyCount = 2;
+	ScanKeyData scanKey[2];
+
+	Relation pgConstraint = table_open(ConstraintRelationId, AccessShareLock);
+
+	ScanKeyInit(&scanKey[0], Anum_pg_constraint_conrelid,
+				BTEqualStrategyNumber, F_OIDEQ, ObjectIdGetDatum(relationId));
+	ScanKeyInit(&scanKey[1], Anum_pg_constraint_conname,
+				BTEqualStrategyNumber, F_NAMEEQ, CStringGetDatum(constraintName));
+
+	bool useIndex = false;
+	SysScanDesc scanDescriptor = systable_beginscan(pgConstraint, InvalidOid, useIndex,
+													NULL, scanKeyCount, scanKey);
+
+	HeapTuple heapTuple = systable_getnext(scanDescriptor);
+	if (HeapTupleIsValid(heapTuple))
+	{
+		found = true;
+	}
+
+	systable_endscan(scanDescriptor);
+	table_close(pgConstraint, NoLock);
+
+	return found;
+}
+
+
+/*
+ * RenameConstraintCommand creates the query string that will rename a constraint
+ */
+static char *
+RenameConstraintCommand(Oid relationId, char *constraintName, char *newConstraintName)
+{
+	char *qualifiedRelationName = generate_qualified_relation_name(relationId);
+	const char *quotedConstraintName = quote_identifier(constraintName);
+	const char *quotedNewConstraintName = quote_identifier(newConstraintName);
+
+	StringInfo renameCommand = makeStringInfo();
+	appendStringInfo(renameCommand, "ALTER TABLE %s RENAME CONSTRAINT %s TO %s",
+					 qualifiedRelationName, quotedConstraintName,
+					 quotedNewConstraintName);
+
+	return renameCommand->data;
+}
+
 
 /*
  * Returns true if the given relation is a partitioned table.
