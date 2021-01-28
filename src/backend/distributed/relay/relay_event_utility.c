@@ -33,6 +33,7 @@
 #include "distributed/commands.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/multi_partitioning_utils.h"
 #include "distributed/relay_utility.h"
 #include "distributed/version_compat.h"
 #include "lib/stringinfo.h"
@@ -151,6 +152,10 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 				{
 					Constraint *constraint = (Constraint *) command->def;
 					char **constraintName = &(constraint->conname);
+					const bool missingOk = false;
+					relationId = RangeVarGetRelid(alterTableStmt->relation,
+												  AccessShareLock,
+												  missingOk);
 
 					if (constraint->contype == CONSTR_PRIMARY && constraint->indexname)
 					{
@@ -158,7 +163,24 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 						AppendShardIdToName(indexName, shardId);
 					}
 
-					AppendShardIdToName(constraintName, shardId);
+					/*
+					 * Append shardId to constraint names if
+					 *  - table is not partitioned or
+					 *  - constraint is not a CHECK constraint
+					 *
+					 * We do not want to append shardId to partitioned table shards because
+					 * the names of constraints will be inherited, and the shardId will no
+					 * longer be valid for the child table.
+					 *
+					 * See MergeConstraintsIntoExisting function in Postgres that requires
+					 * inherited check constraints in child tables to have the same name
+					 * with those in parent tables.
+					 */
+					if (!PartitionedTable(relationId) ||
+						constraint->contype != CONSTR_CHECK)
+					{
+						AppendShardIdToName(constraintName, shardId);
+					}
 				}
 				else if (command->subtype == AT_DropConstraint ||
 						 command->subtype == AT_ValidateConstraint)
