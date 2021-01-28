@@ -737,6 +737,14 @@ SELECT * FROM adt_table ORDER BY 1;
 SELECT * FROM adt_col ORDER BY 1;
 SELECT * FROM adt_ref ORDER BY 1;
 
+-- make sure that COPY (e.g., INSERT .. SELECT) and
+-- alter_distributed_table works in the same TX
+BEGIN;
+SET LOCAL citus.enable_local_execution=OFF;
+INSERT INTO adt_table SELECT x, x+1 FROM generate_series(1, 1000) x;
+SELECT alter_distributed_table('adt_table', distribution_column:='a');
+ROLLBACK;
+
 BEGIN;
 INSERT INTO adt_table SELECT x, x+1 FROM generate_series(1, 1000) x;
 SELECT alter_distributed_table('adt_table', distribution_column:='a');
