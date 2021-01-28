@@ -40,6 +40,12 @@ set client_min_messages to ERROR;
 SELECT 1 FROM master_add_node('localhost', :master_port, groupId => 0);
 RESET client_min_messages;
 
+BEGIN;
+  CREATE TEMPORARY TABLE temp_table (a int);
+  -- errors out as we don't support creating citus local table from a temp table
+  SELECT citus_add_local_table_to_metadata('temp_table');
+ROLLBACK;
+
 -- creating citus local table having no data initially would work
 SELECT citus_add_local_table_to_metadata('citus_local_table_1');
 
