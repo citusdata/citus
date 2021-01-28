@@ -658,6 +658,33 @@ BEGIN;
 	SELECT * FROM reference_table ORDER BY 1,2;
 COMMIT;
 
+-- users are not allowed to use
+-- citus local tables in prepared statements
+-- from the worker nodes
+BEGIN;
+	INSERT INTO citus_local_table VALUES (3), (4);
+PREPARE TRANSACTION 'citus_local_tx_on_mx';
+BEGIN;
+	SELECT count(*) FROM citus_local_table;
+PREPARE TRANSACTION 'citus_local_tx_on_mx';
+BEGIN;
+	SELECT count(*) FROM reference_table;
+	SELECT count(*) FROM citus_local_table;
+PREPARE TRANSACTION 'citus_local_tx_on_mx';
+BEGIN;
+	SELECT count(*) FROM citus_local_table;
+	SELECT count(*) FROM reference_table;
+PREPARE TRANSACTION 'citus_local_tx_on_mx';
+BEGIN;
+	SELECT count(*) FROM citus_local_table;
+	SELECT count(*) FROM distributed_table;
+PREPARE TRANSACTION 'citus_local_tx_on_mx';
+BEGIN;
+	SELECT count(*) FROM distributed_table;
+	SELECT count(*) FROM citus_local_table;
+PREPARE TRANSACTION 'citus_local_tx_on_mx';
+
+
 \c - - - :master_port
 -- cleanup at exit
 DROP SCHEMA citus_local_table_queries_mx CASCADE;

@@ -1015,6 +1015,82 @@ BEGIN;
 (0 rows)
 
 COMMIT;
+-- users are not allowed to use
+-- citus local tables in prepared statements
+-- from the worker nodes
+BEGIN;
+	INSERT INTO citus_local_table VALUES (3), (4);
+PREPARE TRANSACTION 'citus_local_tx_on_mx';
+ERROR:  cannot use 2PC in transactions involving multiple servers
+BEGIN;
+	SELECT count(*) FROM citus_local_table;
+ count
+---------------------------------------------------------------------
+     2
+(1 row)
+
+PREPARE TRANSACTION 'citus_local_tx_on_mx';
+ERROR:  cannot use 2PC in transactions involving multiple servers
+BEGIN;
+	SELECT count(*) FROM reference_table;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+	SELECT count(*) FROM citus_local_table;
+ count
+---------------------------------------------------------------------
+     2
+(1 row)
+
+PREPARE TRANSACTION 'citus_local_tx_on_mx';
+ERROR:  cannot use 2PC in transactions involving multiple servers
+BEGIN;
+	SELECT count(*) FROM citus_local_table;
+ count
+---------------------------------------------------------------------
+     2
+(1 row)
+
+	SELECT count(*) FROM reference_table;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+PREPARE TRANSACTION 'citus_local_tx_on_mx';
+ERROR:  cannot use 2PC in transactions involving multiple servers
+BEGIN;
+	SELECT count(*) FROM citus_local_table;
+ count
+---------------------------------------------------------------------
+     2
+(1 row)
+
+	SELECT count(*) FROM distributed_table;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+PREPARE TRANSACTION 'citus_local_tx_on_mx';
+ERROR:  cannot use 2PC in transactions involving multiple servers
+BEGIN;
+	SELECT count(*) FROM distributed_table;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+	SELECT count(*) FROM citus_local_table;
+ count
+---------------------------------------------------------------------
+     2
+(1 row)
+
+PREPARE TRANSACTION 'citus_local_tx_on_mx';
+ERROR:  cannot use 2PC in transactions involving multiple servers
 \c - - - :master_port
 -- cleanup at exit
 DROP SCHEMA citus_local_table_queries_mx CASCADE;

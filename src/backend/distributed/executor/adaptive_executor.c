@@ -618,6 +618,7 @@ static bool DistributedExecutionModifiesDatabase(DistributedExecution *execution
 static bool IsMultiShardModification(RowModifyLevel modLevel, List *taskList);
 static bool TaskListModifiesDatabase(RowModifyLevel modLevel, List *taskList);
 static bool DistributedExecutionRequiresRollback(List *taskList);
+static bool TaskAccessesOnlyCitusLocalTables(Task *task);
 static bool TaskListRequires2PC(List *taskList);
 static bool SelectForUpdateOnReferenceTable(List *taskList);
 static void AssignTasksToConnectionsOrWorkerPool(DistributedExecution *execution);
@@ -1165,23 +1166,6 @@ DecideTransactionPropertiesForTaskList(RowModifyLevel modLevel, List *taskList, 
 		return xactProperties;
 	}
 
-	if (GetCurrentLocalExecutionStatus() == LOCAL_EXECUTION_REQUIRED)
-	{
-		/*
-		 * In case localExecutionHappened, we force the executor to use 2PC.
-		 * The primary motivation is that at this point we're definitely expanding
-		 * the nodes participated in the transaction. And, by re-generating the
-		 * remote task lists during local query execution, we might prevent the adaptive
-		 * executor to kick-in 2PC (or even start coordinated transaction, that's why
-		 * we prefer adding this check here instead of
-		 * Activate2PCIfModifyingTransactionExpandsToNewNode()).
-		 */
-		xactProperties.errorOnAnyFailure = true;
-		xactProperties.useRemoteTransactionBlocks = TRANSACTION_BLOCKS_REQUIRED;
-		xactProperties.requires2PC = true;
-		return xactProperties;
-	}
-
 	if (DistributedExecutionRequiresRollback(taskList))
 	{
 		/* transaction blocks are required if the task list needs to roll back */
@@ -1361,6 +1345,25 @@ DistributedExecutionRequiresRollback(List *taskList)
 
 	Task *task = (Task *) linitial(taskList);
 
+	if (taskCount == 1 && TaskAccessesOnlyCitusLocalTables(task) &&
+		ShouldExecuteTasksLocally(taskList))
+	{
+		/*
+		 * If the execution accesses Citus local tables via local execution,
+		 * there is no need to start a coordinated transaction. This is
+		 * especially important regarding the limitations of coordinated
+		 * transactions such as a coordinated transaction cannot be part of
+		 * a 2PC transaction.
+		 *
+		 * NB: It is not precisely accurate to rely on ShouldExecuteTasksLocally()
+		 * at this point as remote execution may failover some tasks to local
+		 * execution. However, we prefer this approach because it provides a more
+		 * predictable user experience.
+		 */
+		return false;
+	}
+
+
 	bool selectForUpdate = task->relationRowLockList != NIL;
 	if (selectForUpdate)
 	{
@@ -1420,6 +1423,27 @@ DistributedExecutionRequiresRollback(List *taskList)
 	}
 
 	return false;
+}
+
+
+/*
+ * TaskAccessesOnlyCitusLocalTable returns true if the input task
+ * has only accesses Citus local tables.
+ */
+static bool
+TaskAccessesOnlyCitusLocalTables(Task *task)
+{
+	List *relationShardList = task->relationShardList;
+	RelationShard *relationShard = NULL;
+	foreach_ptr(relationShard, relationShardList)
+	{
+		if (!IsCitusTableType(relationShard->relationId, CITUS_LOCAL_TABLE))
+		{
+			return false;
+		}
+	}
+
+	return true;
 }
 
 
@@ -3197,6 +3221,11 @@ Activate2PCIfModifyingTransactionExpandsToNewNode(WorkerSession *session)
 		 * just opened, which means we're now going to make modifications
 		 * over multiple connections. Activate 2PC!
 		 */
+		CoordinatedTransactionUse2PC();
+	}
+	else if (GetCurrentLocalExecutionStatus() == LOCAL_EXECUTION_REQUIRED)
+	{
+		/* we did local execution and are expanding to an additional node */
 		CoordinatedTransactionUse2PC();
 	}
 }

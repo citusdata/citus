@@ -654,6 +654,81 @@ ALTER TABLE local_table_1 ADD CONSTRAINT fkey_8 FOREIGN KEY (col_1) REFERENCES l
 
 SELECT citus_add_local_table_to_metadata('local_table_2', cascade_via_foreign_keys=>true);
 
+
+CREATE TABLE distributed_table_tx_blck (col_1 INT UNIQUE);
+SELECT create_distributed_table('distributed_table_tx_blck', 'col_1');
+CREATE TABLE ref_table_tx_blck (col_1 INT UNIQUE);
+SELECT create_reference_table('ref_table_tx_blck');
+
+-- make sure that we can do 2PC with a citus local table
+BEGIN;
+	INSERT INTO local_table_1 VALUES (1);
+ PREPARE TRANSACTION 'citus_local_tx';
+ ROLLBACK PREPARED 'citus_local_tx';
+
+-- make sure that we can do 2PC with citus local tables
+-- multiple statements
+BEGIN;
+	INSERT INTO local_table_1 VALUES (1);
+	INSERT INTO local_table_1 VALUES (2);
+ PREPARE TRANSACTION 'citus_local_tx';
+ ROLLBACK PREPARED 'citus_local_tx';
+
+-- make sure that we cannot do 2PC with citus local tables
+-- when local execution is disabled
+BEGIN;
+	SET citus.enable_local_execution TO false;
+	INSERT INTO local_table_1 VALUES (1);
+	INSERT INTO local_table_1 VALUES (2);
+ PREPARE TRANSACTION 'citus_local_tx';
+
+-- make sure that we cannot do 2PC with citus local tables
+-- when it is used with distributed tables on the tx block
+BEGIN;
+	SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
+	INSERT INTO local_table_1 VALUES (1);
+	SELECT count(*) FROM distributed_table_tx_blck;
+ PREPARE TRANSACTION 'citus_local_tx';
+
+-- make sure that we cannot do 2PC with citus local tables
+-- when it is used with distributed tables on the tx block
+BEGIN;
+	SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
+	SELECT count(*) FROM distributed_table_tx_blck;
+	INSERT INTO local_table_1 VALUES (1);
+ PREPARE TRANSACTION 'citus_local_tx';
+
+-- make sure that we cannot do 2PC with citus local tables
+-- when it is used with distributed tables on the tx block
+-- even if local execution is disabled
+BEGIN;
+	SET citus.enable_local_execution TO false;
+	SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
+	SELECT count(*) FROM distributed_table_tx_blck;
+	INSERT INTO local_table_1 VALUES (1);
+ PREPARE TRANSACTION 'citus_local_tx';
+
+
+ -- make sure that we cannot do 2PC with citus local
+ -- tables and reference tables
+ BEGIN;
+	SELECT count(*) FROM ref_table_tx_blck;
+	INSERT INTO local_table_1 VALUES (1);
+ PREPARE TRANSACTION 'citus_local_tx';
+ BEGIN;
+	INSERT INTO local_table_1 VALUES (1);
+	SELECT count(*) FROM ref_table_tx_blck;
+ PREPARE TRANSACTION 'citus_local_tx';
+ BEGIN;
+	SELECT count(*) FROM local_table_1;
+	SELECT count(*) FROM ref_table_tx_blck;
+ PREPARE TRANSACTION 'citus_local_tx';
+ BEGIN;
+	INSERT INTO ref_table_tx_blck VALUES (1000);
+	SELECT count(*) FROM local_table_1;
+ PREPARE TRANSACTION 'citus_local_tx';
+
+
 CREATE PROCEDURE call_delegation(x int) LANGUAGE plpgsql AS $$
 BEGIN
 	 INSERT INTO test (x) VALUES ($1);
