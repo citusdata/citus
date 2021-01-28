@@ -365,9 +365,17 @@ ErrorIfUnsupportedCitusLocalTableKind(Oid relationId)
 
 	if (get_rel_persistence(relationId) == RELPERSISTENCE_TEMP)
 	{
+		/*
+		 * Currently, we use citus local tables only to support foreign keys
+		 * between local tables and reference tables. Citus already doesn't
+		 * support creating reference tables from temp tables.
+		 * So now we are creating a citus local table from a temp table that
+		 * has a foreign key from/to a reference table with persistent storage.
+		 * In that case, we want to give the same error as postgres would do.
+		 */
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("cannot add temporary table \"%s\" to citus metadata",
-							   relationName)));
+						errmsg("constraints on temporary tables may reference only "
+							   "temporary tables")));
 	}
 }
 

@@ -54,7 +54,7 @@ BEGIN;
   CREATE TEMPORARY TABLE temp_table (a int);
   -- errors out as we don't support creating citus local table from a temp table
   SELECT citus_add_local_table_to_metadata('temp_table');
-ERROR:  cannot add temporary table "temp_table" to citus metadata
+ERROR:  constraints on temporary tables may reference only temporary tables
 ROLLBACK;
 -- creating citus local table having no data initially would work
 SELECT citus_add_local_table_to_metadata('citus_local_table_1');
