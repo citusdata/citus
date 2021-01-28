@@ -428,6 +428,11 @@ AlterDistributedTable(TableConversionParameters *params)
 TableConversionReturn *
 AlterTableSetAccessMethod(TableConversionParameters *params)
 {
+#if PG_VERSION_NUM < PG_VERSION_12
+	ereport(ERROR, (errmsg("table access methods are not supported "
+						   "for Postgres versions earlier than 12")));
+#endif
+
 	EnsureRelationExists(params->relationId);
 	EnsureTableOwner(params->relationId);
 
