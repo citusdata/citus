@@ -198,7 +198,7 @@ PreprocessAlterRoleSetStmt(Node *node, const char *queryString,
 
 	/* don't propagate if the statement is scoped to another database */
 	if (stmt->database != NULL &&
-	    strcmp(stmt->database, get_database_name(MyDatabaseId)) != 0)
+		strcmp(stmt->database, get_database_name(MyDatabaseId)) != 0)
 	{
 		return NIL;
 	}
