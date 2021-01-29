@@ -22,6 +22,25 @@ SET search_path TO public;
 \COPY orders_mx FROM '@abs_srcdir@/data/orders.1.data' with delimiter '|'
 \COPY orders_mx FROM '@abs_srcdir@/data/orders.2.data' with delimiter '|'
 
+-- get ready for the next test
+TRUNCATE orders_mx;
+
+\c - - - :worker_2_port
+SET citus.log_local_commands TO ON;
+-- simulate the case where there is no connection slots available
+ALTER SYSTEM SET citus.local_shared_pool_size TO -1;
+SELECT pg_reload_conf();
+SELECT pg_sleep(0.1);
+show citus.local_shared_pool_size;
+\COPY orders_mx FROM '@abs_srcdir@/data/orders.1.data' with delimiter '|'
+\COPY orders_mx FROM '@abs_srcdir@/data/orders.2.data' with delimiter '|'
+
+-- set it back
+ALTER SYSTEM RESET citus.local_shared_pool_size;
+SELECT pg_reload_conf();
+SELECT pg_sleep(0.1);
+show citus.local_shared_pool_size;
+
 -- These copies were intended to test copying data to single sharded table from
 -- worker nodes, yet in order to remove broadcast logic related codes we change
 -- the table to reference table and copy data from master. Should be updated

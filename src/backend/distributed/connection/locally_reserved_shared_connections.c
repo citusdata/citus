@@ -89,12 +89,15 @@ typedef struct ReservedConnectionHashEntry
 
 static void StoreAllReservedConnections(Tuplestorestate *tupleStore,
 										TupleDesc tupleDescriptor);
-static ReservedConnectionHashEntry * AllocateOrGetReservedConectionEntry(char *hostName,
-																		 int nodePort, Oid
-																		 userId, Oid
-																		 databaseOid,
-																		 bool *found);
+static ReservedConnectionHashEntry * AllocateOrGetReservedConnectionEntry(char *hostName,
+																		  int nodePort,
+																		  Oid
+																		  userId, Oid
+																		  databaseOid,
+																		  bool *found);
 static void EnsureConnectionPossibilityForNodeList(List *nodeList);
+static bool EnsureConnectionPossibilityForNode(WorkerNode *workerNode,
+											   bool waitForConnection);
 static uint32 LocalConnectionReserveHashHash(const void *key, Size keysize);
 static int LocalConnectionReserveHashCompare(const void *a, const void *b, Size keysize);
 
@@ -294,11 +297,11 @@ MarkReservedConnectionUsed(const char *hostName, int nodePort, Oid userId,
 
 
 /*
- * EnsureConnectionPossibilityForPrimaryNodes is a wrapper around
+ * EnsureConnectionPossibilityForRemotePrimaryNodes is a wrapper around
  * EnsureConnectionPossibilityForNodeList.
  */
 void
-EnsureConnectionPossibilityForPrimaryNodes(void)
+EnsureConnectionPossibilityForRemotePrimaryNodes(void)
 {
 	/*
 	 * By using NoLock there is a tiny risk of that we miss to reserve a
@@ -306,17 +309,42 @@ EnsureConnectionPossibilityForPrimaryNodes(void)
 	 * seem to cause any problems as none of the placements that we are
 	 * going to access would be on the new node.
 	 */
-	List *primaryNodeList = ActivePrimaryNodeList(NoLock);
-
+	List *primaryNodeList = ActivePrimaryRemoteNodeList(NoLock);
 	EnsureConnectionPossibilityForNodeList(primaryNodeList);
+}
+
+
+/*
+ * TryConnectionPossibilityForLocalPrimaryNode returns true if the primary
+ * local node is in the metadata an we can reserve a connection for the node.
+ * If not, the function returns false.
+ */
+bool
+TryConnectionPossibilityForLocalPrimaryNode(void)
+{
+	bool nodeIsInMetadata = false;
+	WorkerNode *localNode =
+		PrimaryNodeForGroup(GetLocalGroupId(), &nodeIsInMetadata);
+
+	if (localNode == NULL)
+	{
+		/*
+		 * If the local node is not a primary node, we should not try to
+		 * reserve a connection as there cannot be any shards.
+		 */
+		return false;
+	}
+
+	bool waitForConnection = false;
+	return EnsureConnectionPossibilityForNode(localNode, waitForConnection);
 }
 
 
 /*
  * EnsureConnectionPossibilityForNodeList reserves a shared connection
  * counter per node in the nodeList unless:
- *  - Reservation is needed (see IsReservationPossible())
- *  - there is at least one connection to the node so that we are guranteed
+ *  - Reservation is possible/allowed (see IsReservationPossible())
+ *  - there is at least one connection to the node so that we are guaranteed
  *    to get a connection
  *  - An earlier call already reserved a connection (e.g., we allow only a
  *    single reservation per backend)
@@ -324,11 +352,6 @@ EnsureConnectionPossibilityForPrimaryNodes(void)
 static void
 EnsureConnectionPossibilityForNodeList(List *nodeList)
 {
-	if (!IsReservationPossible())
-	{
-		return;
-	}
-
 	/*
 	 * We sort the workerList because adaptive connection management
 	 * (e.g., OPTIONAL_CONNECTION) requires any concurrent executions
@@ -342,62 +365,114 @@ EnsureConnectionPossibilityForNodeList(List *nodeList)
 	 */
 	nodeList = SortList(nodeList, CompareWorkerNodes);
 
+	WorkerNode *workerNode = NULL;
+	foreach_ptr(workerNode, nodeList)
+	{
+		bool waitForConnection = true;
+		EnsureConnectionPossibilityForNode(workerNode, waitForConnection);
+	}
+}
+
+
+/*
+ * EnsureConnectionPossibilityForNode reserves a shared connection
+ * counter per node in the nodeList unless:
+ *  - Reservation is possible/allowed (see IsReservationPossible())
+ *  - there is at least one connection to the node so that we are guranteed
+ *    to get a connection
+ *  - An earlier call already reserved a connection (e.g., we allow only a
+ *    single reservation per backend)
+ * - waitForConnection is false. When this is false, the function still tries
+ *   to ensure connection possibility. If it fails (e.g., we
+ *   reached max_shared_pool_size), it doesn't wait to get the connection. Instead,
+ *   return false.
+ */
+static bool
+EnsureConnectionPossibilityForNode(WorkerNode *workerNode, bool waitForConnection)
+{
+	if (!IsReservationPossible())
+	{
+		return false;
+	}
+
 	char *databaseName = get_database_name(MyDatabaseId);
 	Oid userId = GetUserId();
 	char *userName = GetUserNameFromId(userId, false);
 
-	WorkerNode *workerNode = NULL;
-	foreach_ptr(workerNode, nodeList)
+	if (ConnectionAvailableToNode(workerNode->workerName, workerNode->workerPort,
+								  userName, databaseName) != NULL)
 	{
-		if (ConnectionAvailableToNode(workerNode->workerName, workerNode->workerPort,
-									  userName, databaseName) != NULL)
-		{
-			/*
-			 * The same user has already an active connection for the node. It
-			 * means that the execution can use the same connection, so reservation
-			 * is not necessary.
-			 */
-			continue;
-		}
-
 		/*
-		 * We are trying to be defensive here by ensuring that the required hash
-		 * table entry can be allocated. The main goal is that we don't want to be
-		 * in a situation where shared connection counter is incremented but not
-		 * the local reserved counter due to out-of-memory.
-		 *
-		 * Note that shared connection stats operate on the shared memory, and we
-		 * pre-allocate all the necessary memory. In other words, it would never
-		 * throw out of memory error.
+		 * The same user has already an active connection for the node. It
+		 * means that the execution can use the same connection, so reservation
+		 * is not necessary.
 		 */
-		bool found = false;
-		ReservedConnectionHashEntry *hashEntry =
-			AllocateOrGetReservedConectionEntry(workerNode->workerName,
-												workerNode->workerPort,
-												userId, MyDatabaseId, &found);
+		return true;
+	}
 
-		if (found)
-		{
-			/*
-			 * We have already reserved a connection for this user and database
-			 * on the worker. We only allow a single reservation per
-			 * transaction block. The reason is that the earlier command (either in
-			 * a transaction block or a function call triggered by a single command)
-			 * was able to reserve or establish a connection. That connection is
-			 * guranteed to be avaliable for us.
-			 */
-			continue;
-		}
+	/*
+	 * We are trying to be defensive here by ensuring that the required hash
+	 * table entry can be allocated. The main goal is that we don't want to be
+	 * in a situation where shared connection counter is incremented but not
+	 * the local reserved counter due to out-of-memory.
+	 *
+	 * Note that shared connection stats operate on the shared memory, and we
+	 * pre-allocate all the necessary memory. In other words, it would never
+	 * throw out of memory error.
+	 */
+	bool found = false;
+	ReservedConnectionHashEntry *hashEntry =
+		AllocateOrGetReservedConnectionEntry(workerNode->workerName,
+											 workerNode->workerPort,
+											 userId, MyDatabaseId, &found);
 
+	if (found)
+	{
+		/*
+		 * We have already reserved a connection for this user and database
+		 * on the worker. We only allow a single reservation per
+		 * transaction block. The reason is that the earlier command (either in
+		 * a transaction block or a function call triggered by a single command)
+		 * was able to reserve or establish a connection. That connection is
+		 * guranteed to be available for us.
+		 */
+		return true;
+	}
+
+	if (waitForConnection)
+	{
 		/*
 		 * Increment the shared counter, we may need to wait if there are
 		 * no space left.
 		 */
 		WaitLoopForSharedConnection(workerNode->workerName, workerNode->workerPort);
-
-		/* locally mark that we have one connection reserved */
-		hashEntry->usedReservation = false;
 	}
+	else
+	{
+		bool incremented =
+			TryToIncrementSharedConnectionCounter(workerNode->workerName,
+												  workerNode->workerPort);
+		if (!incremented)
+		{
+			/*
+			 * We could not reserve a connection. First, remove the entry from the
+			 * hash. The reason is that we allow single reservation per transaction
+			 * block and leaving the entry in the hash would be qualified as there is a
+			 * reserved connection to the node.
+			 */
+			bool foundForRemove = false;
+			hash_search(SessionLocalReservedConnections, hashEntry, HASH_REMOVE,
+						&foundForRemove);
+			Assert(foundForRemove);
+
+			return false;
+		}
+	}
+
+	/* locally mark that we have one connection reserved */
+	hashEntry->usedReservation = false;
+
+	return true;
 }
 
 
@@ -442,8 +517,8 @@ IsReservationPossible(void)
  * the entry.
  */
 static ReservedConnectionHashEntry *
-AllocateOrGetReservedConectionEntry(char *hostName, int nodePort, Oid userId,
-									Oid databaseOid, bool *found)
+AllocateOrGetReservedConnectionEntry(char *hostName, int nodePort, Oid userId,
+									 Oid databaseOid, bool *found)
 {
 	ReservedConnectionHashKey key;
 

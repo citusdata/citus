@@ -393,6 +393,18 @@ ActivePrimaryNodeList(LOCKMODE lockMode)
 
 
 /*
+ * ActivePrimaryRemoteNodeList returns a list of all active primary nodes in
+ * workerNodeHash.
+ */
+List *
+ActivePrimaryRemoteNodeList(LOCKMODE lockMode)
+{
+	EnsureModificationsCanRun();
+	return FilterActiveNodeListFunc(lockMode, NodeIsPrimaryAndRemote);
+}
+
+
+/*
  * NodeIsPrimaryWorker returns true if the node is a primary worker node.
  */
 static bool

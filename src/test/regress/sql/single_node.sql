@@ -817,6 +817,9 @@ ROLLBACK;
 WITH cte_1 AS (SELECT * FROM another_schema_table LIMIT 1000)
 	SELECT count(*) FROM cte_1;
 
+-- copy can use local execution even if there is no connection available
+COPY another_schema_table(a) FROM PROGRAM 'seq 32';
+
 -- if the local execution is disabled, we cannot failover to
 -- local execution and the queries would fail
 SET citus.enable_local_execution TO  false;
@@ -828,6 +831,9 @@ WITH cte_1 AS (SELECT * FROM another_schema_table LIMIT 1000)
 	SELECT count(*) FROM cte_1;
 
 INSERT INTO another_schema_table VALUES (1,1), (2,2), (3,3), (4,4), (5,5),(6,6),(7,7);
+
+-- copy fails if local execution is disabled and there is no connection slot
+COPY another_schema_table(a) FROM PROGRAM 'seq 32';
 
 -- set the values to originals back
 ALTER SYSTEM RESET citus.max_cached_conns_per_worker;

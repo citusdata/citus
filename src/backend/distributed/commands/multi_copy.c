@@ -79,6 +79,7 @@
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_router_planner.h"
 #include "distributed/multi_executor.h"
+#include "distributed/listutils.h"
 #include "distributed/locally_reserved_shared_connections.h"
 #include "distributed/placement_connection.h"
 #include "distributed/relation_access_tracking.h"
@@ -214,6 +215,18 @@ typedef struct ShardConnections
 } ShardConnections;
 
 
+/*
+ * Represents the state for allowing copy via local
+ * execution.
+ */
+typedef enum LocalCopyStatus
+{
+	LOCAL_COPY_REQUIRED,
+	LOCAL_COPY_OPTIONAL,
+	LOCAL_COPY_DISABLED
+} LocalCopyStatus;
+
+
 /* Local functions forward declarations */
 static void CopyToExistingShards(CopyStmt *copyStatement,
 								 QueryCompletionCompat *completionTag);
@@ -323,7 +336,9 @@ static void CompleteCopyQueryTagCompat(QueryCompletionCompat *completionTag, uin
 									   processedRowCount);
 static void FinishLocalCopy(CitusCopyDestReceiver *copyDest);
 static void CloneCopyOutStateForLocalCopy(CopyOutState from, CopyOutState to);
-static bool ShouldExecuteCopyLocally(bool isIntermediateResult);
+static LocalCopyStatus GetLocalCopyStatus(List *shardIntervalList, bool
+										  isIntermediateResult);
+static bool ShardIntervalListHasLocalPlacements(List *shardIntervalList);
 static void LogLocalCopyExecution(uint64 shardId);
 
 
@@ -2076,28 +2091,29 @@ CreateCitusCopyDestReceiver(Oid tableId, List *columnNameList, int partitionColu
 
 
 /*
- * ShouldExecuteCopyLocally returns true if the current copy
- * operation should be done locally for local placements.
+ * GetLocalCopyStatus returns the status for executing copy locally.
+ * If LOCAL_COPY_DISABLED or LOCAL_COPY_REQUIRED, the caller has to
+ * follow that. Else, the caller may decide to use local or remote
+ * execution depending on other information.
  */
-static bool
-ShouldExecuteCopyLocally(bool isIntermediateResult)
+static LocalCopyStatus
+GetLocalCopyStatus(List *shardIntervalList, bool isIntermediateResult)
 {
-	if (!EnableLocalExecution)
+	if (!EnableLocalExecution ||
+		GetCurrentLocalExecutionStatus() == LOCAL_EXECUTION_DISABLED)
 	{
-		return false;
+		return LOCAL_COPY_DISABLED;
 	}
-
-	/*
-	 * Intermediate files are written to a file, and files are visible to all
-	 * transactions, and we use a custom copy format for copy therefore we will
-	 * use the existing logic for that.
-	 */
-	if (isIntermediateResult)
+	else if (isIntermediateResult)
 	{
-		return false;
+		/*
+		 * Intermediate files are written to a file, and files are visible to all
+		 * transactions, and we use a custom copy format for copy therefore we will
+		 * use the existing logic for that.
+		 */
+		return LOCAL_COPY_DISABLED;
 	}
-
-	if (GetCurrentLocalExecutionStatus() == LOCAL_EXECUTION_REQUIRED)
+	else if (GetCurrentLocalExecutionStatus() == LOCAL_EXECUTION_REQUIRED)
 	{
 		/*
 		 * For various reasons, including the transaction visibility
@@ -2116,12 +2132,35 @@ ShouldExecuteCopyLocally(bool isIntermediateResult)
 		 * those placements. That'd help to benefit more from parallelism.
 		 */
 
-		return true;
+		return LOCAL_COPY_REQUIRED;
+	}
+	else if (IsMultiStatementTransaction())
+	{
+		return LOCAL_COPY_REQUIRED;
 	}
 
-	/* if we connected to the localhost via a connection, we might not be able to see some previous changes that are done via the connection */
-	return GetCurrentLocalExecutionStatus() != LOCAL_EXECUTION_DISABLED &&
-		   IsMultiStatementTransaction();
+	return LOCAL_COPY_OPTIONAL;
+}
+
+
+/*
+ * ShardIntervalListHasLocalPlacements returns true if any of the input
+ * shard placement has a local placement;
+ */
+static bool
+ShardIntervalListHasLocalPlacements(List *shardIntervalList)
+{
+	int32 localGroupId = GetLocalGroupId();
+	ShardInterval *shardInterval = NULL;
+	foreach_ptr(shardInterval, shardIntervalList)
+	{
+		if (FindShardPlacementOnGroup(localGroupId, shardInterval->shardId) != NULL)
+		{
+			return true;
+		}
+	}
+
+	return false;
 }
 
 
@@ -2136,8 +2175,6 @@ CitusCopyDestReceiverStartup(DestReceiver *dest, int operation,
 {
 	CitusCopyDestReceiver *copyDest = (CitusCopyDestReceiver *) dest;
 
-	bool isIntermediateResult = copyDest->intermediateResultIdPrefix != NULL;
-	copyDest->shouldUseLocalCopy = ShouldExecuteCopyLocally(isIntermediateResult);
 	Oid tableId = copyDest->distributedRelationId;
 
 	char *relationName = get_rel_name(tableId);
@@ -2291,13 +2328,53 @@ CitusCopyDestReceiverStartup(DestReceiver *dest, int operation,
 	RecordRelationAccessIfNonDistTable(tableId, PLACEMENT_ACCESS_DML);
 
 	/*
-	 * For all the primary (e.g., writable) nodes, reserve a shared connection.
-	 * We do this upfront because we cannot know which nodes are going to be
-	 * accessed. Since the order of the reservation is important, we need to
-	 * do it right here. For the details on why the order important, see
-	 * the function.
+	 * For all the primary (e.g., writable) remote nodes, reserve a shared
+	 * connection. We do this upfront because we cannot know which nodes
+	 * are going to be accessed. Since the order of the reservation is
+	 * important, we need to do it right here. For the details on why the
+	 * order important, see EnsureConnectionPossibilityForNodeList().
+	 *
+	 * We don't need to care about local node because we either get a
+	 * connection or use local connection, so it cannot be part of
+	 * the starvation. As an edge case, if it cannot get a connection
+	 * and cannot switch to local execution (e.g., disabled by user),
+	 * COPY would fail hinting the user to change the relevant settiing.
 	 */
-	EnsureConnectionPossibilityForPrimaryNodes();
+	EnsureConnectionPossibilityForRemotePrimaryNodes();
+
+	bool isIntermediateResult = copyDest->intermediateResultIdPrefix != NULL;
+	LocalCopyStatus localCopyStatus =
+		GetLocalCopyStatus(shardIntervalList, isIntermediateResult);
+	if (localCopyStatus == LOCAL_COPY_DISABLED)
+	{
+		copyDest->shouldUseLocalCopy = false;
+	}
+	else if (localCopyStatus == LOCAL_COPY_REQUIRED)
+	{
+		copyDest->shouldUseLocalCopy = true;
+	}
+	else if (localCopyStatus == LOCAL_COPY_OPTIONAL)
+	{
+		/*
+		 * At this point, there is no requirements for doing the copy locally.
+		 * However, if there are local placements, we can try to reserve
+		 * a connection to local node. If we cannot reserve, we can still use
+		 * local execution.
+		 *
+		 * NB: It is not advantageous to use remote execution just with a
+		 * single remote connection. In other words, a single remote connection
+		 * would not perform better than local execution. However, we prefer to
+		 * do this because it is likely that the COPY would get more connections
+		 * to parallelize the operation. In the future, we might relax this
+		 * requirement and failover to local execution as on connection attempt
+		 * failures as the executor does.
+		 */
+		if (ShardIntervalListHasLocalPlacements(shardIntervalList))
+		{
+			bool reservedConnection = TryConnectionPossibilityForLocalPrimaryNode();
+			copyDest->shouldUseLocalCopy = !reservedConnection;
+		}
+	}
 }
 
 
@@ -3424,6 +3501,7 @@ InitializeCopyShardState(CopyShardState *shardState,
 			continue;
 		}
 
+
 		if (placement->groupId == GetLocalGroupId())
 		{
 			/*
@@ -3444,7 +3522,6 @@ InitializeCopyShardState(CopyShardState *shardState,
 			failedPlacementCount++;
 			continue;
 		}
-
 
 		CopyConnectionState *connectionState = GetConnectionState(connectionStateHash,
 																  connection);
