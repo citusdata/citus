@@ -112,10 +112,9 @@ static Datum * detoast_values(TupleDesc tupleDesc, Datum *orig_values, bool *isn
 static TupleTableSlotOps TTSOpsColumnar;
 
 static List *
-RelationColumnList(Relation rel)
+RelationColumnList(TupleDesc tupdesc)
 {
 	List *columnList = NIL;
-	TupleDesc tupdesc = RelationGetDescr(rel);
 
 	for (int i = 0; i < tupdesc->natts; i++)
 	{
@@ -234,7 +233,7 @@ static TableReadState *
 init_columnar_read_state(Relation relation, TupleDesc tupdesc, Bitmapset *attr_needed,
 						 List *scanQual)
 {
-	List *columnList = RelationColumnList(relation);
+	List *columnList = RelationColumnList(tupdesc);
 	ListCell *columnCell = NULL;
 
 	List *neededColumnList = NIL;
@@ -641,7 +640,7 @@ columnar_relation_copy_for_cluster(Relation OldHeap, Relation NewHeap,
 													 targetDesc);
 
 	TableReadState *readState = ColumnarBeginRead(OldHeap, sourceDesc,
-												  RelationColumnList(OldHeap), NULL);
+												  RelationColumnList(sourceDesc), NULL);
 
 	Datum *values = palloc0(sourceDesc->natts * sizeof(Datum));
 	bool *nulls = palloc0(sourceDesc->natts * sizeof(bool));
