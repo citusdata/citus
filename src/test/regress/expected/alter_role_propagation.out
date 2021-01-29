@@ -230,18 +230,17 @@ NOTICE:  Citus partially supports CREATE DATABASE for distributed databases
 DETAIL:  Citus does not propagate CREATE DATABASE command to workers
 HINT:  You can manually create a database and its extensions on workers.
 ALTER ROLE CURRENT_USER IN DATABASE "REGRESSION" SET public.myguc TO "Hello from coordinator only";
-SELECT * from pg_db_role_setting;
- setdatabase | setrole |                              setconfig
+SELECT d.datname, r.setconfig FROM pg_db_role_setting r LEFT JOIN pg_database d ON r.setdatabase=d.oid WHERE r.setconfig::text LIKE '%Hello from coordinator only%';
+  datname   |                  setconfig
 ---------------------------------------------------------------------
-           0 |      10 | {"search_path=\",CitUs,.TeeN!?\", alter_role, public",lc_messages=C}
-       21732 |      10 | {"public.myguc=Hello from coordinator only"}
-(2 rows)
+ REGRESSION | {"public.myguc=Hello from coordinator only"}
+(1 row)
 
-SELECT run_command_on_workers($$SELECT json_agg(pg_db_role_setting) from pg_db_role_setting$$);
-                                                                     run_command_on_workers
+SELECT run_command_on_workers($$SELECT json_agg((d.datname, r.setconfig)) FROM pg_db_role_setting r LEFT JOIN pg_database d ON r.setdatabase=d.oid WHERE r.setconfig::text LIKE '%Hello from coordinator only%'$$);
+ run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,"[{""setdatabase"":""0"",""setrole"":""10"",""setconfig"":[""search_path=\\"",CitUs,.TeeN!?\\"", alter_role, public"",""lc_messages=C""]}]")
- (localhost,57638,t,"[{""setdatabase"":""0"",""setrole"":""10"",""setconfig"":[""search_path=\\"",CitUs,.TeeN!?\\"", alter_role, public"",""lc_messages=C""]}]")
+ (localhost,57637,t,"")
+ (localhost,57638,t,"")
 (2 rows)
 
 DROP DATABASE "REGRESSION";

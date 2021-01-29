@@ -76,8 +76,8 @@ SELECT run_command_on_workers('SHOW enable_hashagg');
 -- also test case sensitivity
 CREATE DATABASE "REGRESSION";
 ALTER ROLE CURRENT_USER IN DATABASE "REGRESSION" SET public.myguc TO "Hello from coordinator only";
-SELECT * from pg_db_role_setting;
-SELECT run_command_on_workers($$SELECT json_agg(pg_db_role_setting) from pg_db_role_setting$$);
+SELECT d.datname, r.setconfig FROM pg_db_role_setting r LEFT JOIN pg_database d ON r.setdatabase=d.oid WHERE r.setconfig::text LIKE '%Hello from coordinator only%';
+SELECT run_command_on_workers($$SELECT json_agg((d.datname, r.setconfig)) FROM pg_db_role_setting r LEFT JOIN pg_database d ON r.setdatabase=d.oid WHERE r.setconfig::text LIKE '%Hello from coordinator only%'$$);
 DROP DATABASE "REGRESSION";
 
 -- make sure alter role set is not propagated when the feature is deliberately turned off
