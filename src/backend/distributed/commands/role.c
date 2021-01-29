@@ -181,7 +181,8 @@ PostprocessAlterRoleStmt(Node *node, const char *queryString)
  * role set statement.
  */
 List *
-PreprocessAlterRoleSetStmt(Node *node, const char *queryString)
+PreprocessAlterRoleSetStmt(Node *node, const char *queryString,
+						   ProcessUtilityContext processUtilityContext)
 {
 	if (!ShouldPropagate())
 	{

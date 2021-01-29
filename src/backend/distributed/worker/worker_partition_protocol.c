@@ -70,7 +70,8 @@ static void RenameDirectory(StringInfo oldDirectoryName, StringInfo newDirectory
 static void FileOutputStreamWrite(FileOutputStream *file, StringInfo dataToWrite);
 static void FileOutputStreamFlush(FileOutputStream *file);
 static void FilterAndPartitionTable(const char *filterQuery,
-									const char *columnName, Oid columnType,
+									char *partitionColumnName,
+									int partitionColumnIndex, Oid columnType,
 									PartitionIdFunction partitionIdFunction,
 									const void *partitionIdContext,
 									FileOutputStream *partitionFileArray,
@@ -86,7 +87,9 @@ static uint32 HashPartitionId(Datum partitionValue, Oid partitionCollation,
 							  const void *context);
 static StringInfo UserPartitionFilename(StringInfo directoryName, uint32 partitionId);
 static bool FileIsLink(const char *filename, struct stat filestat);
-
+static void PartitionColumnIndexOrPartitionColumnName(char *partitionColumnNameCandidate,
+													  char **partitionColumnName,
+													  uint32 *partitionColumnIndex);
 
 /* exports for SQL callable functions */
 PG_FUNCTION_INFO_V1(worker_range_partition_table);
@@ -110,12 +113,19 @@ worker_range_partition_table(PG_FUNCTION_ARGS)
 	uint32 taskId = PG_GETARG_UINT32(1);
 	text *filterQueryText = PG_GETARG_TEXT_P(2);
 	text *partitionColumnText = PG_GETARG_TEXT_P(3);
+	char *partitionColumnNameCandidate = text_to_cstring(partitionColumnText);
+
+	char *partitionColumnName = NULL;
+	uint32 partitionColumnIndex = 0;
+	PartitionColumnIndexOrPartitionColumnName(partitionColumnNameCandidate,
+											  &partitionColumnName,
+											  &partitionColumnIndex);
+
 	Oid partitionColumnType = PG_GETARG_OID(4);
 	ArrayType *splitPointObject = PG_GETARG_ARRAYTYPE_P(5);
 
-	const char *filterQuery = text_to_cstring(filterQueryText);
-	const char *partitionColumn = text_to_cstring(partitionColumnText);
 
+	const char *filterQuery = text_to_cstring(filterQueryText);
 
 	/* first check that array element's and partition column's types match */
 	Oid splitPointType = ARR_ELEMTYPE(splitPointObject);
@@ -152,7 +162,8 @@ worker_range_partition_table(PG_FUNCTION_ARGS)
 	FileBufferSizeInBytes = FileBufferSize(PartitionBufferSize, fileCount);
 
 	/* call the partitioning function that does the actual work */
-	FilterAndPartitionTable(filterQuery, partitionColumn, partitionColumnType,
+	FilterAndPartitionTable(filterQuery, partitionColumnName, partitionColumnIndex,
+							partitionColumnType,
 							&RangePartitionId, (const void *) partitionContext,
 							partitionFileArray, fileCount);
 
@@ -160,7 +171,6 @@ worker_range_partition_table(PG_FUNCTION_ARGS)
 	ClosePartitionFiles(partitionFileArray, fileCount);
 	CitusRemoveDirectory(taskDirectory->data);
 	RenameDirectory(taskAttemptDirectory, taskDirectory);
-
 	PG_RETURN_VOID();
 }
 
@@ -182,11 +192,19 @@ worker_hash_partition_table(PG_FUNCTION_ARGS)
 	uint32 taskId = PG_GETARG_UINT32(1);
 	text *filterQueryText = PG_GETARG_TEXT_P(2);
 	text *partitionColumnText = PG_GETARG_TEXT_P(3);
+	char *partitionColumnNameCandidate = text_to_cstring(partitionColumnText);
+
+	char *partitionColumnName = NULL;
+	uint32 partitionColumnIndex = 0;
+	PartitionColumnIndexOrPartitionColumnName(partitionColumnNameCandidate,
+											  &partitionColumnName,
+											  &partitionColumnIndex);
+
 	Oid partitionColumnType = PG_GETARG_OID(4);
 	ArrayType *hashRangeObject = PG_GETARG_ARRAYTYPE_P(5);
 
+
 	const char *filterQuery = text_to_cstring(filterQueryText);
-	const char *partitionColumn = text_to_cstring(partitionColumnText);
 
 	Datum *hashRangeArray = DeconstructArrayObject(hashRangeObject);
 	int32 partitionCount = ArrayObjectCount(hashRangeObject);
@@ -226,7 +244,8 @@ worker_hash_partition_table(PG_FUNCTION_ARGS)
 	FileBufferSizeInBytes = FileBufferSize(PartitionBufferSize, fileCount);
 
 	/* call the partitioning function that does the actual work */
-	FilterAndPartitionTable(filterQuery, partitionColumn, partitionColumnType,
+	FilterAndPartitionTable(filterQuery, partitionColumnName, partitionColumnIndex,
+							partitionColumnType,
 							&HashPartitionId, (const void *) partitionContext,
 							partitionFileArray, fileCount);
 
@@ -234,8 +253,40 @@ worker_hash_partition_table(PG_FUNCTION_ARGS)
 	ClosePartitionFiles(partitionFileArray, fileCount);
 	CitusRemoveDirectory(taskDirectory->data);
 	RenameDirectory(taskAttemptDirectory, taskDirectory);
-
 	PG_RETURN_VOID();
+}
+
+
+/*
+ * PartitionColumnIndexOrPartitionColumnName either sets partitionColumnName or
+ * partitionColumnIndex. See below for more.
+ */
+static void
+PartitionColumnIndexOrPartitionColumnName(char *partitionColumnNameCandidate,
+										  char **partitionColumnName,
+										  uint32 *partitionColumnIndex)
+{
+	char *endptr = NULL;
+	uint32 partitionColumnIndexCandidate =
+		strtoul(partitionColumnNameCandidate, &endptr, 10 /*base*/);
+	if (endptr == partitionColumnNameCandidate)
+	{
+		/*
+		 * There was a bug around using the column name in worker_[hash|range]_partition_table
+		 * APIs and one of the solutions was to send partition column index directly to these APIs.
+		 * However, this would mean change in API signature and would introduce difficulties
+		 * in upgrade paths. Instead of changing the API signature, we send the partition column index
+		 * as text. In case of rolling upgrades, when a worker is upgraded and coordinator is not, it
+		 * is possible that the text still has the column name, not the column index. So
+		 * we rely on detecting that with a parse error here.
+		 *
+		 */
+		*partitionColumnName = partitionColumnNameCandidate;
+	}
+	else
+	{
+		*partitionColumnIndex = partitionColumnIndexCandidate;
+	}
 }
 
 
@@ -845,14 +896,14 @@ FileOutputStreamFlush(FileOutputStream *file)
  */
 static void
 FilterAndPartitionTable(const char *filterQuery,
-						const char *partitionColumnName, Oid partitionColumnType,
+						char *partitionColumnName,
+						int partitionColumnIndex, Oid partitionColumnType,
 						PartitionIdFunction partitionIdFunction,
 						const void *partitionIdContext,
 						FileOutputStream *partitionFileArray,
 						uint32 fileCount)
 {
 	FmgrInfo *columnOutputFunctions = NULL;
-	int partitionColumnIndex = 0;
 	Oid partitionColumnTypeId = InvalidOid;
 	Oid partitionColumnCollation = InvalidOid;
 
@@ -888,8 +939,14 @@ FilterAndPartitionTable(const char *filterQuery,
 		{
 			ereport(ERROR, (errmsg("no partition to read into")));
 		}
-
-		partitionColumnIndex = ColumnIndex(rowDescriptor, partitionColumnName);
+		if (partitionColumnName != NULL)
+		{
+			/*
+			 * in old API, the partition column name is used
+			 * to determine partitionColumnIndex
+			 */
+			partitionColumnIndex = ColumnIndex(rowDescriptor, partitionColumnName);
+		}
 		partitionColumnTypeId = SPI_gettypeid(rowDescriptor, partitionColumnIndex);
 		partitionColumnCollation = TupleDescAttr(rowDescriptor, partitionColumnIndex -
 												 1)->attcollation;

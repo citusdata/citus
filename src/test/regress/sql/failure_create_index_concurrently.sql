@@ -81,6 +81,18 @@ SELECT citus.mitmproxy('conn.allow()');
 SELECT * FROM run_command_on_workers($$SELECT count(*) FROM pg_indexes WHERE indexname LIKE 'idx_index_test%' $$)
 WHERE nodeport = :worker_2_proxy_port;
 
+-- test unique concurrent index creation failure when there are duplicates
+CREATE TABLE index_test_2 (a int, b int);
+SELECT create_distributed_table('index_test_2', 'a');
+INSERT INTO index_test_2 VALUES (1, 1), (1, 2);
+CREATE UNIQUE INDEX CONCURRENTLY index_test_2_a_idx ON index_test_2(a);
+DROP INDEX CONCURRENTLY IF EXISTS index_test_2_a_idx;
+
+-- verify that index creation doesn't fail when duplicates are removed
+DELETE FROM index_test_2 WHERE a = 1 AND b = 2;
+CREATE UNIQUE INDEX CONCURRENTLY index_test_2_a_idx ON index_test_2(a);
+DROP INDEX CONCURRENTLY IF EXISTS index_test_2_a_idx;
+
 RESET SEARCH_PATH;
 DROP SCHEMA index_schema CASCADE;
 

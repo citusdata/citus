@@ -128,8 +128,7 @@ static uint64 LocallyPlanAndExecuteMultipleQueries(List *queryStrings,
 static void ExtractParametersForLocalExecution(ParamListInfo paramListInfo,
 											   Oid **parameterTypes,
 											   const char ***parameterValues);
-static void LocallyExecuteUtilityTask(const char *utilityCommand);
-static void LocallyExecuteUdfTaskQuery(Query *localUdfCommandQuery);
+static void ExecuteUdfTaskQuery(Query *localUdfCommandQuery);
 static void EnsureTransitionPossible(LocalExecutionStatus from,
 									 LocalExecutionStatus to);
 
@@ -241,7 +240,7 @@ ExecuteLocalTaskListExtended(List *taskList,
 
 		if (isUtilityCommand)
 		{
-			LocallyExecuteUtilityTask(TaskQueryString(task));
+			ExecuteUtilityCommand(TaskQueryString(task));
 			continue;
 		}
 
@@ -373,59 +372,57 @@ ExtractParametersForLocalExecution(ParamListInfo paramListInfo, Oid **parameterT
 
 
 /*
- * LocallyExecuteUtilityTask executes the given local task query in the current
+ * ExecuteUtilityCommand executes the given task query in the current
  * session.
  */
-static void
-LocallyExecuteUtilityTask(const char *localTaskQueryCommand)
+void
+ExecuteUtilityCommand(const char *taskQueryCommand)
 {
-	List *parseTreeList = pg_parse_query(localTaskQueryCommand);
-	RawStmt *localTaskRawStmt = NULL;
+	List *parseTreeList = pg_parse_query(taskQueryCommand);
+	RawStmt *taskRawStmt = NULL;
 
-	foreach_ptr(localTaskRawStmt, parseTreeList)
+	foreach_ptr(taskRawStmt, parseTreeList)
 	{
-		Node *localTaskRawParseTree = localTaskRawStmt->stmt;
+		Node *taskRawParseTree = taskRawStmt->stmt;
 
 		/*
-		 * Actually, the query passed to this function would mostly be a
-		 * utility command to be executed locally. However, some utility
-		 * commands do trigger udf calls (e.g worker_apply_shard_ddl_command)
-		 * to execute commands in a generic way. But as we support local
-		 * execution of utility commands, we should also process those udf
-		 * calls locally as well. In that case, we simply execute the query
-		 * implying the udf call in below conditional block.
+		 * The query passed to this function would mostly be a utility
+		 * command. However, some utility commands trigger udf calls
+		 * (e.g alter_columnar_table_set()). In that case, we execute
+		 * the query with the udf call in below conditional block.
 		 */
-		if (IsA(localTaskRawParseTree, SelectStmt))
+		if (IsA(taskRawParseTree, SelectStmt))
 		{
 			/* we have no external parameters to rewrite the UDF call RawStmt */
-			Query *localUdfTaskQuery =
-				RewriteRawQueryStmt(localTaskRawStmt, localTaskQueryCommand, NULL, 0);
+			Query *udfTaskQuery =
+				RewriteRawQueryStmt(taskRawStmt, taskQueryCommand, NULL, 0);
 
-			LocallyExecuteUdfTaskQuery(localUdfTaskQuery);
+			ExecuteUdfTaskQuery(udfTaskQuery);
 		}
 		else
 		{
 			/*
-			 * It is a regular utility command we should execute it locally via
+			 * It is a regular utility command we should execute it via
 			 * process utility.
 			 */
-			CitusProcessUtility(localTaskRawParseTree, localTaskQueryCommand,
-								PROCESS_UTILITY_TOPLEVEL, NULL, None_Receiver, NULL);
+			ProcessUtilityParseTree(taskRawParseTree, taskQueryCommand,
+									PROCESS_UTILITY_TOPLEVEL, NULL, None_Receiver,
+									NULL);
 		}
 	}
 }
 
 
 /*
- * LocallyExecuteUdfTaskQuery executes the given udf command locally. Local udf
- * command is simply a "SELECT udf_call()" query and so it cannot be executed
+ * ExecuteUdfTaskQuery executes the given udf command. A udf command
+ * is simply a "SELECT udf_call()" query and so it cannot be executed
  * via process utility.
  */
 static void
-LocallyExecuteUdfTaskQuery(Query *localUdfTaskQuery)
+ExecuteUdfTaskQuery(Query *udfTaskQuery)
 {
 	/* we do not expect any results */
-	ExecuteQueryIntoDestReceiver(localUdfTaskQuery, NULL, None_Receiver);
+	ExecuteQueryIntoDestReceiver(udfTaskQuery, NULL, None_Receiver);
 }
 
 
@@ -550,7 +547,8 @@ SplitLocalAndRemotePlacements(List *taskPlacementList, List **localTaskPlacement
 /*
  * ExecuteLocalTaskPlan gets a planned statement which can be executed locally.
  * The function simply follows the steps to have a local execution, sets the
- * tupleStore if necessary. The function returns the
+ * tupleStore if necessary. The function returns the number of rows affected in
+ * case of DML.
  */
 static uint64
 ExecuteLocalTaskPlan(PlannedStmt *taskPlan, char *queryString,
@@ -565,6 +563,13 @@ ExecuteLocalTaskPlan(PlannedStmt *taskPlan, char *queryString,
 	RecordNonDistTableAccessesForTask(task);
 
 	/*
+	 * Some tuple destinations look at task->taskPlacementList to determine
+	 * where the result came from using the placement index. Since a local
+	 * task can only ever have 1 placement, we set the index to 0.
+	 */
+	int localPlacementIndex = 0;
+
+	/*
 	 * Use the tupleStore provided by the scanState because it is shared accross
 	 * the other task executions and the adaptive executor.
 	 *
@@ -574,7 +579,7 @@ ExecuteLocalTaskPlan(PlannedStmt *taskPlan, char *queryString,
 	 */
 	DestReceiver *destReceiver = tupleDest ?
 								 CreateTupleDestDestReceiver(tupleDest, task,
-															 LOCAL_PLACEMENT_INDEX) :
+															 localPlacementIndex) :
 								 CreateDestReceiver(DestNone);
 
 	/* Create a QueryDesc for the query */
@@ -615,12 +620,12 @@ RecordNonDistTableAccessesForTask(Task *task)
 	if (list_length(taskPlacementList) == 0)
 	{
 		/*
-		 * We need at least one task placement to record relation access.
-		 * FIXME: Unfortunately, it is possible due to
-		 * https://github.com/citusdata/citus/issues/4104.
-		 * We can safely remove this check when above bug is fixed.
+		 * We should never get here, but prefer to throw an error over crashing
+		 * if we're wrong.
 		 */
-		return;
+		ereport(ERROR, (errmsg("shard " UINT64_FORMAT " does not have any shard "
+													  "placements",
+							   task->anchorShardId)));
 	}
 
 	/*

@@ -10,17 +10,63 @@ SELECT 1 FROM master_add_inactive_node('localhost', :master_port, groupid => 0);
 
 -- idempotently add node to allow this test to run without add_coordinator
 SET client_min_messages TO WARNING;
-SELECT 1 FROM master_add_node('localhost', :master_port, groupid => 0);
+SELECT 1 FROM citus_set_coordinator_host('localhost', :master_port);
 
 -- coordinator cannot be disabled
 SELECT 1 FROM master_disable_node('localhost', :master_port);
 
 RESET client_min_messages;
 
-SELECT 1 FROM master_set_node_property('localhost', :master_port, 'shouldhaveshards', true);
+SELECT 1 FROM master_remove_node('localhost', :master_port);
+
+SELECT count(*) FROM pg_dist_node;
+
+-- there are no workers now, but we should still be able to create Citus tables
+
+CREATE TABLE ref(x int, y int);
+SELECT create_reference_table('ref');
+
+SELECT groupid, nodename, nodeport, isactive, shouldhaveshards, hasmetadata, metadatasynced FROM pg_dist_node;
+
+DROP TABLE ref;
+
+-- remove the coordinator to try again with create_reference_table
+SELECT master_remove_node(nodename, nodeport) FROM pg_dist_node WHERE groupid = 0;
+
+CREATE TABLE loc(x int, y int);
+SELECT citus_add_local_table_to_metadata('loc');
+
+SELECT groupid, nodename, nodeport, isactive, shouldhaveshards, hasmetadata, metadatasynced FROM pg_dist_node;
+
+DROP TABLE loc;
+
+-- remove the coordinator to try again with create_distributed_table
+SELECT master_remove_node(nodename, nodeport) FROM pg_dist_node WHERE groupid = 0;
 
 CREATE TABLE test(x int, y int);
 SELECT create_distributed_table('test','x');
+
+SELECT groupid, nodename, nodeport, isactive, shouldhaveshards, hasmetadata, metadatasynced FROM pg_dist_node;
+
+-- cannot add workers with specific IP as long as I have a placeholder coordinator record
+SELECT 1 FROM master_add_node('127.0.0.1', :worker_1_port);
+
+-- adding localhost workers is ok
+SELECT 1 FROM master_add_node('localhost', :worker_1_port);
+SELECT 1 FROM master_remove_node('localhost', :worker_1_port);
+
+-- set the coordinator host to something different than localhost
+SELECT 1 FROM citus_set_coordinator_host('127.0.0.1');
+
+-- adding workers with specific IP is ok now
+SELECT 1 FROM master_add_node('127.0.0.1', :worker_1_port);
+SELECT 1 FROM master_remove_node('127.0.0.1', :worker_1_port);
+
+-- set the coordinator host back to localhost for the remainder of tests
+SELECT 1 FROM citus_set_coordinator_host('localhost');
+
+-- should have shards setting should not really matter for a single node
+SELECT 1 FROM master_set_node_property('localhost', :master_port, 'shouldhaveshards', true);
 
 CREATE TYPE new_type AS (n int, m text);
 CREATE TABLE test_2(x int, y int, z new_type);
@@ -85,7 +131,7 @@ COMMIT;
 -- to test citus local tables
 select undistribute_table('upsert_test');
 -- create citus local table
-select create_citus_local_table('upsert_test');
+select citus_add_local_table_to_metadata('upsert_test');
 -- test the constraint with local execution
 INSERT INTO upsert_test (part_key, other_col) VALUES (1, 1) ON CONFLICT ON CONSTRAINT upsert_test_part_key_key DO NOTHING RETURNING *;
 
@@ -120,6 +166,31 @@ ALTER TABLE simple_table_name RENAME CONSTRAINT "looo oooo ooooo ooooooooooooooo
 
 SET search_path TO single_node;
 DROP SCHEMA  "Quoed.Schema" CASCADE;
+
+-- test partitioned index creation with long name
+CREATE TABLE test_index_creation1
+(
+    tenant_id integer NOT NULL,
+    timeperiod timestamp without time zone NOT NULL,
+    field1 integer NOT NULL,
+    inserted_utc timestamp without time zone NOT NULL DEFAULT now(),
+    PRIMARY KEY(tenant_id, timeperiod)
+) PARTITION BY RANGE (timeperiod);
+
+CREATE TABLE test_index_creation1_p2020_09_26
+PARTITION OF test_index_creation1 FOR VALUES FROM ('2020-09-26 00:00:00') TO ('2020-09-27 00:00:00');
+CREATE TABLE test_index_creation1_p2020_09_27
+PARTITION OF test_index_creation1 FOR VALUES FROM ('2020-09-27 00:00:00') TO ('2020-09-28 00:00:00');
+
+select create_distributed_table('test_index_creation1', 'tenant_id');
+
+-- should be able to create indexes with INCLUDE/WHERE
+CREATE INDEX ix_test_index_creation5 ON test_index_creation1
+	USING btree(tenant_id, timeperiod)
+	INCLUDE (field1) WHERE (tenant_id = 100);
+
+-- test if indexes are created
+SELECT 1 AS created WHERE EXISTS(SELECT * FROM pg_indexes WHERE indexname LIKE '%test_index_creation%');
 
 -- test citus size functions in transaction with modification
 CREATE TABLE test_citus_size_func (a int);
@@ -551,6 +622,38 @@ ALTER TABLE test DROP CONSTRAINT foreign_key;
 SELECT undistribute_table('test_2');
 SELECT * FROM pg_dist_partition WHERE logicalrelid = 'test_2'::regclass;
 
+CREATE TABLE reference_table_1 (col_1 INT UNIQUE, col_2 INT UNIQUE, UNIQUE (col_2, col_1));
+SELECT create_reference_table('reference_table_1');
+
+CREATE TABLE distributed_table_1 (col_1 INT UNIQUE);
+SELECT create_distributed_table('distributed_table_1', 'col_1');
+
+CREATE TABLE citus_local_table_1 (col_1 INT UNIQUE);
+SELECT citus_add_local_table_to_metadata('citus_local_table_1');
+
+CREATE TABLE partitioned_table_1 (col_1 INT UNIQUE, col_2 INT) PARTITION BY RANGE (col_1);
+CREATE TABLE partitioned_table_1_100_200 PARTITION OF partitioned_table_1 FOR VALUES FROM (100) TO (200);
+CREATE TABLE partitioned_table_1_200_300 PARTITION OF partitioned_table_1 FOR VALUES FROM (200) TO (300);
+SELECT create_distributed_table('partitioned_table_1', 'col_1');
+
+ALTER TABLE citus_local_table_1 ADD CONSTRAINT fkey_1 FOREIGN KEY (col_1) REFERENCES reference_table_1(col_2);
+ALTER TABLE reference_table_1 ADD CONSTRAINT fkey_2 FOREIGN KEY (col_2) REFERENCES reference_table_1(col_1);
+ALTER TABLE distributed_table_1 ADD CONSTRAINT fkey_3 FOREIGN KEY (col_1) REFERENCES reference_table_1(col_1);
+ALTER TABLE citus_local_table_1 ADD CONSTRAINT fkey_4 FOREIGN KEY (col_1) REFERENCES reference_table_1(col_2);
+ALTER TABLE partitioned_table_1 ADD CONSTRAINT fkey_5 FOREIGN KEY (col_1) REFERENCES reference_table_1(col_2);
+
+SELECT undistribute_table('partitioned_table_1', cascade_via_foreign_keys=>true);
+
+CREATE TABLE local_table_1 (col_1 INT UNIQUE);
+CREATE TABLE local_table_2 (col_1 INT UNIQUE);
+CREATE TABLE local_table_3 (col_1 INT UNIQUE);
+
+ALTER TABLE local_table_2 ADD CONSTRAINT fkey_6 FOREIGN KEY (col_1) REFERENCES local_table_1(col_1);
+ALTER TABLE local_table_3 ADD CONSTRAINT fkey_7 FOREIGN KEY (col_1) REFERENCES local_table_1(col_1);
+ALTER TABLE local_table_1 ADD CONSTRAINT fkey_8 FOREIGN KEY (col_1) REFERENCES local_table_1(col_1);
+
+SELECT citus_add_local_table_to_metadata('local_table_2', cascade_via_foreign_keys=>true);
+
 CREATE PROCEDURE call_delegation(x int) LANGUAGE plpgsql AS $$
 BEGIN
 	 INSERT INTO test (x) VALUES ($1);
@@ -597,6 +700,58 @@ SELECT pg_sleep(0.1);
 -- now that last 2PC recovery is done, we're good to disable it
 ALTER SYSTEM SET citus.recover_2pc_interval TO '-1';
 SELECT pg_reload_conf();
+
+-- test alter_distributed_table UDF
+CREATE TABLE adt_table (a INT, b INT);
+CREATE TABLE adt_col (a INT UNIQUE, b INT);
+CREATE TABLE adt_ref (a INT REFERENCES adt_col(a));
+
+SELECT create_distributed_table('adt_table', 'a', colocate_with:='none');
+SELECT create_distributed_table('adt_col', 'a', colocate_with:='adt_table');
+SELECT create_distributed_table('adt_ref', 'a', colocate_with:='adt_table');
+
+INSERT INTO adt_table VALUES (1, 2), (3, 4), (5, 6);
+INSERT INTO adt_col VALUES (3, 4), (5, 6), (7, 8);
+INSERT INTO adt_ref VALUES (3), (5);
+
+SELECT table_name, citus_table_type, distribution_column, shard_count FROM public.citus_tables WHERE table_name::text LIKE 'adt%';
+SELECT STRING_AGG(table_name::text, ', ' ORDER BY 1) AS "Colocation Groups" FROM public.citus_tables WHERE table_name::text LIKE 'adt%' GROUP BY colocation_id ORDER BY 1;
+SELECT conrelid::regclass::text AS "Referencing Table", pg_get_constraintdef(oid, true) AS "Definition" FROM  pg_constraint
+    WHERE (conrelid::regclass::text = 'adt_col' OR confrelid::regclass::text = 'adt_col') ORDER BY 1;
+
+SELECT alter_distributed_table('adt_table', shard_count:=6, cascade_to_colocated:=true);
+
+SELECT table_name, citus_table_type, distribution_column, shard_count FROM public.citus_tables WHERE table_name::text LIKE 'adt%';
+SELECT STRING_AGG(table_name::text, ', ' ORDER BY 1) AS "Colocation Groups" FROM public.citus_tables WHERE table_name::text LIKE 'adt%' GROUP BY colocation_id ORDER BY 1;
+SELECT conrelid::regclass::text AS "Referencing Table", pg_get_constraintdef(oid, true) AS "Definition" FROM  pg_constraint
+    WHERE (conrelid::regclass::text = 'adt_col' OR confrelid::regclass::text = 'adt_col') ORDER BY 1;
+
+SELECT alter_distributed_table('adt_table', distribution_column:='b', colocate_with:='none');
+
+SELECT table_name, citus_table_type, distribution_column, shard_count FROM public.citus_tables WHERE table_name::text LIKE 'adt%';
+SELECT STRING_AGG(table_name::text, ', ' ORDER BY 1) AS "Colocation Groups" FROM public.citus_tables WHERE table_name::text LIKE 'adt%' GROUP BY colocation_id ORDER BY 1;
+SELECT conrelid::regclass::text AS "Referencing Table", pg_get_constraintdef(oid, true) AS "Definition" FROM  pg_constraint
+    WHERE (conrelid::regclass::text = 'adt_col' OR confrelid::regclass::text = 'adt_col') ORDER BY 1;
+
+SELECT * FROM adt_table ORDER BY 1;
+SELECT * FROM adt_col ORDER BY 1;
+SELECT * FROM adt_ref ORDER BY 1;
+
+-- make sure that COPY (e.g., INSERT .. SELECT) and
+-- alter_distributed_table works in the same TX
+BEGIN;
+SET LOCAL citus.enable_local_execution=OFF;
+INSERT INTO adt_table SELECT x, x+1 FROM generate_series(1, 1000) x;
+SELECT alter_distributed_table('adt_table', distribution_column:='a');
+ROLLBACK;
+
+BEGIN;
+INSERT INTO adt_table SELECT x, x+1 FROM generate_series(1, 1000) x;
+SELECT alter_distributed_table('adt_table', distribution_column:='a');
+SELECT COUNT(*) FROM adt_table;
+END;
+
+SELECT table_name, citus_table_type, distribution_column, shard_count FROM public.citus_tables WHERE table_name::text = 'adt_table';
 
 
 \c - - - :master_port
@@ -649,6 +804,14 @@ INSERT INTO another_schema_table SELECT b::int, a::int FROM another_schema_table
 
 -- multi-row INSERTs
 INSERT INTO another_schema_table VALUES (1,1), (2,2), (3,3), (4,4), (5,5),(6,6),(7,7);
+
+-- INSERT..SELECT with re-partitioning when using local execution
+BEGIN;
+INSERT INTO another_schema_table VALUES (1,100);
+INSERT INTO another_schema_table VALUES (2,100);
+INSERT INTO another_schema_table SELECT b::int, a::int FROM another_schema_table;
+SELECT * FROM another_schema_table WHERE a = 100 ORDER BY b;
+ROLLBACK;
 
 -- intermediate results
 WITH cte_1 AS (SELECT * FROM another_schema_table LIMIT 1000)

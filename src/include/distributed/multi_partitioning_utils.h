@@ -25,6 +25,8 @@ extern char * GenerateDetachPartitionCommand(Oid partitionTableId);
 extern char * GenerateAttachShardPartitionCommand(ShardInterval *shardInterval);
 extern char * GenerateAlterTableAttachPartitionCommand(Oid partitionTableId);
 extern char * GeneratePartitioningInformation(Oid tableId);
+extern void FixPartitionConstraintsOnWorkers(Oid relationId);
+extern void FixLocalPartitionConstraints(Oid relationId, int64 shardId);
 
 
 #endif /* MULTI_PARTITIONING_UTILS_H_ */

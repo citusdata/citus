@@ -1,8 +1,8 @@
 /*-------------------------------------------------------------------------
  *
- * cstore_writer.c
+ * columnar_writer.c
  *
- * This file contains function definitions for writing cstore files. This
+ * This file contains function definitions for writing columnar tables. This
  * includes the logic for writing file level metadata, writing row stripes,
  * and calculating chunk skip nodes.
  *
@@ -29,8 +29,8 @@
 #include "utils/rel.h"
 #include "utils/relfilenodemap.h"
 
-#include "columnar/cstore.h"
-#include "columnar/cstore_version_compat.h"
+#include "columnar/columnar.h"
+#include "columnar/columnar_version_compat.h"
 
 static StripeBuffers * CreateEmptyStripeBuffers(uint32 stripeMaxRowCount,
 												uint32 chunkRowCount,
@@ -53,16 +53,14 @@ static Datum DatumCopy(Datum datum, bool datumTypeByValue, int datumTypeLength);
 static StringInfo CopyStringInfo(StringInfo sourceString);
 
 /*
- * CStoreBeginWrite initializes a cstore data load operation and returns a table
+ * ColumnarBeginWrite initializes a columnar data load operation and returns a table
  * handle. This handle should be used for adding the row values and finishing the
- * data load operation. If the cstore footer file already exists, we read the
- * footer and then seek to right after the last stripe  where the new stripes
- * will be added.
+ * data load operation.
  */
 TableWriteState *
-CStoreBeginWrite(RelFileNode relfilenode,
-				 ColumnarOptions options,
-				 TupleDesc tupleDescriptor)
+ColumnarBeginWrite(RelFileNode relfilenode,
+				   ColumnarOptions options,
+				   TupleDesc tupleDescriptor)
 {
 	/* get comparison function pointers for each of the columns */
 	uint32 columnCount = tupleDescriptor->natts;
@@ -110,7 +108,7 @@ CStoreBeginWrite(RelFileNode relfilenode,
 	writeState->chunkData = chunkData;
 	writeState->compressionBuffer = NULL;
 	writeState->perTupleContext = AllocSetContextCreate(CurrentMemoryContext,
-														"CStore per tuple context",
+														"Columnar per tuple context",
 														ALLOCSET_DEFAULT_SIZES);
 
 	return writeState;
@@ -118,7 +116,7 @@ CStoreBeginWrite(RelFileNode relfilenode,
 
 
 /*
- * CStoreWriteRow adds a row to the cstore file. If the stripe is not initialized,
+ * ColumnarWriteRow adds a row to the columnar table. If the stripe is not initialized,
  * we create structures to hold stripe data and skip list. Then, we serialize and
  * append data to serialized value buffer for each of the columns and update
  * corresponding skip nodes. Then, whole chunk data is compressed at every
@@ -126,7 +124,7 @@ CStoreBeginWrite(RelFileNode relfilenode,
  * the stripe, and add its metadata to the table footer.
  */
 void
-CStoreWriteRow(TableWriteState *writeState, Datum *columnValues, bool *columnNulls)
+ColumnarWriteRow(TableWriteState *writeState, Datum *columnValues, bool *columnNulls)
 {
 	uint32 columnIndex = 0;
 	StripeBuffers *stripeBuffers = writeState->stripeBuffers;
@@ -206,7 +204,7 @@ CStoreWriteRow(TableWriteState *writeState, Datum *columnValues, bool *columnNul
 	stripeBuffers->rowCount++;
 	if (stripeBuffers->rowCount >= options->stripeRowCount)
 	{
-		CStoreFlushPendingWrites(writeState);
+		ColumnarFlushPendingWrites(writeState);
 	}
 
 	MemoryContextSwitchTo(oldContext);
@@ -214,15 +212,13 @@ CStoreWriteRow(TableWriteState *writeState, Datum *columnValues, bool *columnNul
 
 
 /*
- * CStoreEndWrite finishes a cstore data load operation. If we have an unflushed
- * stripe, we flush it. Then, we sync and close the cstore data file. Last, we
- * flush the footer to a temporary file, and atomically rename this temporary
- * file to the original footer file.
+ * ColumnarEndWrite finishes a columnar data load operation. If we have an unflushed
+ * stripe, we flush it.
  */
 void
-CStoreEndWrite(TableWriteState *writeState)
+ColumnarEndWrite(TableWriteState *writeState)
 {
-	CStoreFlushPendingWrites(writeState);
+	ColumnarFlushPendingWrites(writeState);
 
 	MemoryContextDelete(writeState->stripeWriteContext);
 	pfree(writeState->comparisonFunctionArray);
@@ -232,7 +228,7 @@ CStoreEndWrite(TableWriteState *writeState)
 
 
 void
-CStoreFlushPendingWrites(TableWriteState *writeState)
+ColumnarFlushPendingWrites(TableWriteState *writeState)
 {
 	StripeBuffers *stripeBuffers = writeState->stripeBuffers;
 	if (stripeBuffers != NULL)
@@ -373,7 +369,7 @@ WriteToSmgr(Relation rel, uint64 logicalOffset, char *data, uint32 dataLength)
 			XLogBeginInsert();
 
 			/*
-			 * Since cstore will mostly write whole pages we force the transmission of the
+			 * Since columnar will mostly write whole pages we force the transmission of the
 			 * whole image in the buffer
 			 */
 			XLogRegisterBuffer(0, buffer, REGBUF_FORCE_IMAGE);

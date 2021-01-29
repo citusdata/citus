@@ -1,13 +1,9 @@
 SET citus.next_shard_id TO 1220000;
 ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 1390000;
+ALTER SEQUENCE pg_catalog.pg_dist_groupid_seq RESTART 1;
 SET citus.enable_object_propagation TO off; -- prevent object propagation on add node during setup
 
 -- Tests functions related to cluster membership
-
--- before starting the test, lets try to create reference table and see a
--- meaningful error
-CREATE TABLE test_reference_table (y int primary key, name text);
-SELECT create_reference_table('test_reference_table');
 
 -- add the nodes to the cluster
 SELECT 1 FROM master_add_node('localhost', :worker_1_port);
@@ -37,7 +33,7 @@ SELECT master_get_active_worker_nodes();
 SET citus.shard_count TO 16;
 SET citus.shard_replication_factor TO 1;
 
-SELECT * FROM master_activate_node('localhost', :worker_2_port);
+SELECT * FROM citus_activate_node('localhost', :worker_2_port);
 CREATE TABLE cluster_management_test (col_1 text, col_2 int);
 SELECT create_distributed_table('cluster_management_test', 'col_1', 'hash');
 
@@ -49,6 +45,8 @@ SELECT master_remove_node('localhost', :worker_2_port);
 SELECT master_get_active_worker_nodes();
 
 -- insert a row so that master_disable_node() exercises closing connections
+CREATE TABLE test_reference_table (y int primary key, name text);
+SELECT create_reference_table('test_reference_table');
 INSERT INTO test_reference_table VALUES (1, '1');
 
 -- try to disable a node with active placements see that node is removed
@@ -58,6 +56,11 @@ SELECT master_get_active_worker_nodes();
 
 -- try to disable a node which does not exist and see that an error is thrown
 SELECT master_disable_node('localhost.noexist', 2345);
+
+-- drop the table without leaving a shard placement behind (messes up other tests)
+SELECT master_activate_node('localhost', :worker_2_port);
+DROP TABLE test_reference_table;
+SELECT master_disable_node('localhost', :worker_2_port);
 
 CREATE USER non_super_user;
 CREATE USER node_metadata_user;

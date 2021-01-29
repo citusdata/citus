@@ -833,7 +833,7 @@ ORDER BY
  table2_groupf                   | 1300081 | t            |    57638 |               |
 (108 rows)
 
--- reset colocation ids to test mark_tables_colocated
+-- reset colocation ids to test update_distributed_table_colocation
 ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 1;
 DELETE FROM pg_dist_colocation
     WHERE colocationid >= 1 AND colocationid < 1000;
@@ -855,21 +855,20 @@ SELECT logicalrelid, colocationid FROM pg_dist_partition
 (0 rows)
 
 -- first check failing cases
-SELECT mark_tables_colocated('table1_groupB', ARRAY['table1_groupC']);
-ERROR:  cannot colocate tables table1_groupb and table1_groupc
-DETAIL:  Distribution column types don't match for table1_groupb and table1_groupc.
-SELECT mark_tables_colocated('table1_groupB', ARRAY['table1_groupD']);
-ERROR:  cannot colocate tables table1_groupb and table1_groupd
-DETAIL:  Shard counts don't match for table1_groupb and table1_groupd.
-SELECT mark_tables_colocated('table1_groupB', ARRAY['table1_groupE']);
-ERROR:  cannot colocate tables table1_groupb and table1_groupe
-DETAIL:  Shard 1300026 of table1_groupb and shard xxxxx of table1_groupe have different number of shard placements.
-SELECT mark_tables_colocated('table1_groupB', ARRAY['table1_groupF']);
-ERROR:  cannot colocate tables table1_groupb and table1_groupf
-DETAIL:  Replication models don't match for table1_groupb and table1_groupf.
-SELECT mark_tables_colocated('table1_groupB', ARRAY['table2_groupB', 'table1_groupD']);
-ERROR:  cannot colocate tables table1_groupb and table1_groupd
-DETAIL:  Shard counts don't match for table1_groupb and table1_groupd.
+SELECT update_distributed_table_colocation('table1_groupB', colocate_with => 'table1_groupC');
+ERROR:  cannot colocate tables table1_groupc and table1_groupb
+DETAIL:  Distribution column types don't match for table1_groupc and table1_groupb.
+SELECT update_distributed_table_colocation('table1_groupB', colocate_with => 'table1_groupD');
+ERROR:  cannot colocate tables table1_groupd and table1_groupb
+DETAIL:  Shard counts don't match for table1_groupd and table1_groupb.
+SELECT update_distributed_table_colocation('table1_groupB', colocate_with => 'table1_groupE');
+ERROR:  cannot colocate tables table1_groupe and table1_groupb
+DETAIL:  Shard 1300058 of table1_groupe and shard xxxxx of table1_groupb have different number of shard placements.
+SELECT update_distributed_table_colocation('table1_groupB', colocate_with => 'table1_groupF');
+ERROR:  relation table1_groupf should be a hash distributed table
+SELECT update_distributed_table_colocation('table1_groupB', colocate_with => 'table1_groupD');
+ERROR:  cannot colocate tables table1_groupd and table1_groupb
+DETAIL:  Shard counts don't match for table1_groupd and table1_groupb.
 -- check metadata to see failing calls didn't have any side effects
 SELECT * FROM pg_dist_colocation
     WHERE colocationid >= 1 AND colocationid < 1000
@@ -886,39 +885,39 @@ SELECT logicalrelid, colocationid FROM pg_dist_partition
 (0 rows)
 
 -- check successfully cololated tables
-SELECT mark_tables_colocated('table1_groupB', ARRAY['table2_groupB']);
- mark_tables_colocated
+SELECT update_distributed_table_colocation('table1_groupB', colocate_with => 'table2_groupB');
+ update_distributed_table_colocation
 ---------------------------------------------------------------------
 
 (1 row)
 
-SELECT mark_tables_colocated('table1_groupC', ARRAY['table2_groupC']);
- mark_tables_colocated
+SELECT update_distributed_table_colocation('table1_groupC', colocate_with => 'table2_groupC');
+ update_distributed_table_colocation
 ---------------------------------------------------------------------
 
 (1 row)
 
-SELECT mark_tables_colocated('table1_groupD', ARRAY['table2_groupD']);
- mark_tables_colocated
+SELECT update_distributed_table_colocation('table1_groupD', colocate_with => 'table2_groupD');
+ update_distributed_table_colocation
 ---------------------------------------------------------------------
 
 (1 row)
 
-SELECT mark_tables_colocated('table1_groupE', ARRAY['table2_groupE', 'table3_groupE']);
- mark_tables_colocated
+SELECT update_distributed_table_colocation('table1_groupE', colocate_with => 'table2_groupE');
+ update_distributed_table_colocation
 ---------------------------------------------------------------------
 
 (1 row)
 
-SELECT mark_tables_colocated('table1_groupF', ARRAY['table2_groupF']);
- mark_tables_colocated
+SELECT update_distributed_table_colocation('table1_groupE', colocate_with => 'table3_groupE');
+ update_distributed_table_colocation
 ---------------------------------------------------------------------
 
 (1 row)
 
 -- check to colocate with itself
-SELECT mark_tables_colocated('table1_groupB', ARRAY['table1_groupB']);
- mark_tables_colocated
+SELECT update_distributed_table_colocation('table1_groupB', colocate_with => 'table1_groupB');
+ update_distributed_table_colocation
 ---------------------------------------------------------------------
 
 (1 row)
@@ -944,40 +943,53 @@ SELECT * FROM pg_dist_colocation
     ORDER BY colocationid;
  colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation
 ---------------------------------------------------------------------
-            2 |          2 |                 1 |                     23 |                           0
-            3 |          2 |                 2 |                     25 |                         100
-            4 |          8 |                 2 |                     23 |                           0
+            1 |          2 |                 1 |                     23 |                           0
+            2 |          2 |                 2 |                     25 |                         100
+            3 |          8 |                 2 |                     23 |                           0
+            4 |          2 |                 2 |                     23 |                           0
             5 |          2 |                 2 |                     23 |                           0
-(4 rows)
+(5 rows)
 
 SELECT logicalrelid, colocationid FROM pg_dist_partition
     WHERE colocationid >= 1 AND colocationid < 1000
     ORDER BY colocationid, logicalrelid;
    logicalrelid    | colocationid
 ---------------------------------------------------------------------
- table1_groupb     |            2
- table2_groupb     |            2
- table1_groupc     |            3
- table2_groupc     |            3
- table1_groupd     |            4
- table2_groupd     |            4
+ table1_groupb     |            1
+ table2_groupb     |            1
+ table1_groupc     |            2
+ table2_groupc     |            2
+ table1_groupd     |            3
+ table2_groupd     |            3
+ table2_groupe     |            4
  table1_groupe     |            5
- table2_groupe     |            5
  table3_groupe     |            5
  table1_group_none |            6
  table2_group_none |            7
 (11 rows)
 
 -- move the all tables in colocation group 5 to colocation group 7
-SELECT mark_tables_colocated('table1_group_none', ARRAY['table1_groupE', 'table2_groupE', 'table3_groupE']);
- mark_tables_colocated
+SELECT update_distributed_table_colocation('table1_group_none', colocate_with => 'table1_groupE');
+ update_distributed_table_colocation
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT update_distributed_table_colocation('table1_group_none', colocate_with => 'table2_groupE');
+ update_distributed_table_colocation
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT update_distributed_table_colocation('table1_group_none', colocate_with => 'table3_groupE');
+ update_distributed_table_colocation
 ---------------------------------------------------------------------
 
 (1 row)
 
 -- move a table with a colocation id which is already not in pg_dist_colocation
-SELECT mark_tables_colocated('table1_group_none', ARRAY['table2_group_none']);
- mark_tables_colocated
+SELECT update_distributed_table_colocation('table1_group_none', colocate_with => 'table2_group_none');
+ update_distributed_table_colocation
 ---------------------------------------------------------------------
 
 (1 row)
@@ -988,27 +1000,29 @@ SELECT * FROM pg_dist_colocation
     ORDER BY colocationid;
  colocationid | shardcount | replicationfactor | distributioncolumntype | distributioncolumncollation
 ---------------------------------------------------------------------
-            2 |          2 |                 1 |                     23 |                           0
-            3 |          2 |                 2 |                     25 |                         100
-            4 |          8 |                 2 |                     23 |                           0
-(3 rows)
+            1 |          2 |                 1 |                     23 |                           0
+            2 |          2 |                 2 |                     25 |                         100
+            3 |          8 |                 2 |                     23 |                           0
+            4 |          2 |                 2 |                     23 |                           0
+            5 |          2 |                 2 |                     23 |                           0
+(5 rows)
 
 SELECT logicalrelid, colocationid FROM pg_dist_partition
     WHERE colocationid >= 1 AND colocationid < 1000
     ORDER BY colocationid, logicalrelid;
    logicalrelid    | colocationid
 ---------------------------------------------------------------------
- table1_groupb     |            2
- table2_groupb     |            2
- table1_groupc     |            3
- table2_groupc     |            3
- table1_groupd     |            4
- table2_groupd     |            4
- table1_groupe     |            6
- table2_groupe     |            6
- table3_groupe     |            6
- table1_group_none |            6
- table2_group_none |            6
+ table1_groupb     |            1
+ table2_groupb     |            1
+ table1_groupc     |            2
+ table2_groupc     |            2
+ table1_groupd     |            3
+ table2_groupd     |            3
+ table2_groupe     |            4
+ table1_groupe     |            5
+ table3_groupe     |            5
+ table1_group_none |            7
+ table2_group_none |            7
 (11 rows)
 
 -- try to colocate different replication models
@@ -1033,9 +1047,9 @@ SELECT create_distributed_table('table2_groupG', 'id', colocate_with => 'NONE');
 
 (1 row)
 
-SELECT mark_tables_colocated('table1_groupG', ARRAY['table2_groupG']);
-ERROR:  cannot colocate tables table1_groupg and table2_groupg
-DETAIL:  Replication models don't match for table1_groupg and table2_groupg.
+SELECT update_distributed_table_colocation('table1_groupG', colocate_with => 'table2_groupG');
+ERROR:  cannot colocate tables table2_groupg and table1_groupg
+DETAIL:  Replication models don't match for table2_groupg and table1_groupg.
 CREATE TABLE d1(a int, b int);
 CREATE TABLE d2(a int, b int);
 CREATE TABLE d3(a int, b int);
@@ -1101,31 +1115,6 @@ SELECT create_reference_table('ref');
 
 (1 row)
 
--- check d1, d2, d3 and d4 has the same colocation id => they are colocated.
-SELECT get_table_colocation_id('d1');
- get_table_colocation_id
----------------------------------------------------------------------
-                       8
-(1 row)
-
-SELECT get_table_colocation_id('d2');
- get_table_colocation_id
----------------------------------------------------------------------
-                       8
-(1 row)
-
-SELECT get_table_colocation_id('d3');
- get_table_colocation_id
----------------------------------------------------------------------
-                       8
-(1 row)
-
-SELECT get_table_colocation_id('d4');
- get_table_colocation_id
----------------------------------------------------------------------
-                       8
-(1 row)
-
 SELECT tables_colocated('d1', 'd2');
  tables_colocated
 ---------------------------------------------------------------------
@@ -1169,31 +1158,6 @@ SELECT update_distributed_table_colocation('d2', colocate_with => 'none');
 
 (1 row)
 
--- d1 and d3 and d4 should be colocated, d2 should have a new colocation id.
-SELECT get_table_colocation_id('d1');
- get_table_colocation_id
----------------------------------------------------------------------
-                       8
-(1 row)
-
-SELECT get_table_colocation_id('d2');
- get_table_colocation_id
----------------------------------------------------------------------
-                      11
-(1 row)
-
-SELECT get_table_colocation_id('d3');
- get_table_colocation_id
----------------------------------------------------------------------
-                       8
-(1 row)
-
-SELECT get_table_colocation_id('d4');
- get_table_colocation_id
----------------------------------------------------------------------
-                       8
-(1 row)
-
 SELECT tables_colocated('d1', 'd2');
  tables_colocated
 ---------------------------------------------------------------------
@@ -1226,31 +1190,6 @@ SELECT update_distributed_table_colocation('d2', colocate_with => 'none');
 
 (1 row)
 
--- d1 and d3 and d4 should be colocated, d2 should have a new colocation id.
-SELECT get_table_colocation_id('d1');
- get_table_colocation_id
----------------------------------------------------------------------
-                       8
-(1 row)
-
-SELECT get_table_colocation_id('d2');
- get_table_colocation_id
----------------------------------------------------------------------
-                      12
-(1 row)
-
-SELECT get_table_colocation_id('d3');
- get_table_colocation_id
----------------------------------------------------------------------
-                       8
-(1 row)
-
-SELECT get_table_colocation_id('d4');
- get_table_colocation_id
----------------------------------------------------------------------
-                       8
-(1 row)
-
 SELECT tables_colocated('d1', 'd2');
  tables_colocated
 ---------------------------------------------------------------------
@@ -1279,31 +1218,6 @@ SELECT update_distributed_table_colocation('d3', colocate_with => 'd2');
  update_distributed_table_colocation
 ---------------------------------------------------------------------
 
-(1 row)
-
--- d1 and d4 should be colocated, d2 and d3 should be colocated.
-SELECT get_table_colocation_id('d1');
- get_table_colocation_id
----------------------------------------------------------------------
-                       8
-(1 row)
-
-SELECT get_table_colocation_id('d2');
- get_table_colocation_id
----------------------------------------------------------------------
-                      12
-(1 row)
-
-SELECT get_table_colocation_id('d3');
- get_table_colocation_id
----------------------------------------------------------------------
-                      12
-(1 row)
-
-SELECT get_table_colocation_id('d4');
- get_table_colocation_id
----------------------------------------------------------------------
-                       8
 (1 row)
 
 SELECT tables_colocated('d1', 'd2');
@@ -1335,37 +1249,6 @@ SELECT update_distributed_table_colocation('d3', colocate_with => '"none"');
  update_distributed_table_colocation
 ---------------------------------------------------------------------
 
-(1 row)
-
--- d1, d4, d3 and "none" should be colocated;
-SELECT get_table_colocation_id('d1');
- get_table_colocation_id
----------------------------------------------------------------------
-                       8
-(1 row)
-
-SELECT get_table_colocation_id('d2');
- get_table_colocation_id
----------------------------------------------------------------------
-                      12
-(1 row)
-
-SELECT get_table_colocation_id('d3');
- get_table_colocation_id
----------------------------------------------------------------------
-                       8
-(1 row)
-
-SELECT get_table_colocation_id('d4');
- get_table_colocation_id
----------------------------------------------------------------------
-                       8
-(1 row)
-
-SELECT get_table_colocation_id('none');
- get_table_colocation_id
----------------------------------------------------------------------
-                       8
 (1 row)
 
 SELECT tables_colocated('d1', 'd2');

@@ -248,7 +248,8 @@ pg_get_sequencedef(Oid sequenceRelationId)
  * DEFAULT clauses for columns getting their default values from a sequence.
  */
 char *
-pg_get_tableschemadef_string(Oid tableRelationId, bool includeSequenceDefaults)
+pg_get_tableschemadef_string(Oid tableRelationId, bool includeSequenceDefaults,
+							 char *accessMethod)
 {
 	char relationKind = 0;
 	bool firstAttributePrinted = false;
@@ -457,7 +458,11 @@ pg_get_tableschemadef_string(Oid tableRelationId, bool includeSequenceDefaults)
 	 * Add table access methods for pg12 and higher when the table is configured with an
 	 * access method
 	 */
-	if (OidIsValid(relation->rd_rel->relam))
+	if (accessMethod)
+	{
+		appendStringInfo(&buffer, " USING %s", quote_identifier(accessMethod));
+	}
+	else if (OidIsValid(relation->rd_rel->relam))
 	{
 		HeapTuple amTup = SearchSysCache1(AMOID, ObjectIdGetDatum(
 											  relation->rd_rel->relam));

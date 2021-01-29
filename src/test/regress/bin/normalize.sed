@@ -22,9 +22,9 @@ s/^-[+-]{2,}$/------------------------------------------------------------------
 
 # In foreign_key_to_reference_table, normalize shard table names, etc in
 # the generated plan
-s/"(foreign_key_2_|fkey_ref_to_dist_|fkey_ref_)[0-9]+"/"\1xxxxxxx"/g
+s/"(foreign_key_2_|fkey_ref_to_dist_|fkey_ref_|fkey_to_ref_)[0-9]+"/"\1xxxxxxx"/g
 s/"(referenced_table_|referencing_table_|referencing_table2_)[0-9]+"/"\1xxxxxxx"/g
-s/"(referencing_table_0_|referenced_table2_)[0-9]+"/"\1xxxxxxx"/g
+s/"(referencing_table_0_|referencing_table_4_|referenced_table2_)[0-9]+"/"\1xxxxxxx"/g
 s/\(id\)=\([0-9]+\)/(id)=(X)/g
 s/\(ref_id\)=\([0-9]+\)/(ref_id)=(X)/g
 
@@ -193,3 +193,17 @@ s/relation with OID [0-9]+ does not exist/relation with OID XXXX does not exist/
 
 # normalize storage id of columnar tables
 s/^storage id: [0-9]+$/storage id: xxxxx/g
+
+# normalize notice messages in citus_local_tables
+s/(NOTICE:  executing.*)citus_local_tables_test_schema.citus_local_table_4_[0-9]+(.*)/\1citus_local_tables_test_schema.citus_local_table_4_xxxx\2/g
+s/(NOTICE:  executing.*)\([0-9]+, 'citus_local_tables_test_schema', [0-9]+(.*)/\1\(xxxxx, 'citus_local_tables_test_schema', xxxxx\2/g
+s/citus_local_table_4_idx_[0-9]+/citus_local_table_4_idx_xxxxxx/g
+s/citus_local_table_4_[0-9]+/citus_local_table_4_xxxxxx/g
+s/ERROR:  cannot append to shardId [0-9]+/ERROR:  cannot append to shardId xxxxxx/g
+
+# hide warning/hint message that we get when executing create_citus_local_table
+/local tables that are added to metadata but not chained with reference tables via foreign keys might be automatically converted back to postgres tables$/d
+/Consider setting citus.enable_local_reference_table_foreign_keys to 'off' to disable this behavior$/d
+
+# normalize partitioned table shard constraint name errors for upgrade_partition_constraints_(before|after)
+s/^(ERROR:  child table is missing constraint "\w+)_([0-9])+"/\1_xxxxxx"/g

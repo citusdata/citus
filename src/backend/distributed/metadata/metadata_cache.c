@@ -132,6 +132,7 @@ typedef struct MetadataCacheData
 	bool extensionLoaded;
 	Oid distShardRelationId;
 	Oid distPlacementRelationId;
+	Oid distRebalanceStrategyRelationId;
 	Oid distNodeRelationId;
 	Oid distNodeNodeIdIndexId;
 	Oid distLocalGroupRelationId;
@@ -260,12 +261,19 @@ static bool RefreshTableCacheEntryIfInvalid(ShardIdCacheEntry *shardEntry);
 
 
 /* exports for SQL callable functions */
+PG_FUNCTION_INFO_V1(citus_dist_partition_cache_invalidate);
 PG_FUNCTION_INFO_V1(master_dist_partition_cache_invalidate);
+PG_FUNCTION_INFO_V1(citus_dist_shard_cache_invalidate);
 PG_FUNCTION_INFO_V1(master_dist_shard_cache_invalidate);
+PG_FUNCTION_INFO_V1(citus_dist_placement_cache_invalidate);
 PG_FUNCTION_INFO_V1(master_dist_placement_cache_invalidate);
+PG_FUNCTION_INFO_V1(citus_dist_node_cache_invalidate);
 PG_FUNCTION_INFO_V1(master_dist_node_cache_invalidate);
+PG_FUNCTION_INFO_V1(citus_dist_local_group_cache_invalidate);
 PG_FUNCTION_INFO_V1(master_dist_local_group_cache_invalidate);
+PG_FUNCTION_INFO_V1(citus_conninfo_cache_invalidate);
 PG_FUNCTION_INFO_V1(master_dist_authinfo_cache_invalidate);
+PG_FUNCTION_INFO_V1(citus_dist_object_cache_invalidate);
 PG_FUNCTION_INFO_V1(master_dist_object_cache_invalidate);
 PG_FUNCTION_INFO_V1(role_exists);
 PG_FUNCTION_INFO_V1(authinfo_valid);
@@ -665,6 +673,18 @@ ResolveGroupShardPlacement(GroupShardPlacement *groupShardPlacement,
 	}
 
 	return shardPlacement;
+}
+
+
+/*
+ * HasAnyNodes returns whether there are any nodes in pg_dist_node.
+ */
+bool
+HasAnyNodes(void)
+{
+	PrepareWorkerNodeCache();
+
+	return WorkerNodeCount > 0;
 }
 
 
@@ -2061,6 +2081,17 @@ DistLocalGroupIdRelationId(void)
 }
 
 
+/* return oid of pg_dist_rebalance_strategy relation */
+Oid
+DistRebalanceStrategyRelationId(void)
+{
+	CachedRelationLookup("pg_dist_rebalance_strategy",
+						 &MetadataCache.distRebalanceStrategyRelationId);
+
+	return MetadataCache.distRebalanceStrategyRelationId;
+}
+
+
 /* return the oid of citus namespace */
 Oid
 CitusCatalogNamespaceId(void)
@@ -2605,7 +2636,7 @@ SecondaryNodeRoleId(void)
 
 
 /*
- * master_dist_partition_cache_invalidate is a trigger function that performs
+ * citus_dist_partition_cache_invalidate is a trigger function that performs
  * relcache invalidations when the contents of pg_dist_partition are changed
  * on the SQL level.
  *
@@ -2613,7 +2644,7 @@ SecondaryNodeRoleId(void)
  * are much easier ways to waste CPU than causing cache invalidations.
  */
 Datum
-master_dist_partition_cache_invalidate(PG_FUNCTION_ARGS)
+citus_dist_partition_cache_invalidate(PG_FUNCTION_ARGS)
 {
 	TriggerData *triggerData = (TriggerData *) fcinfo->context;
 	Oid oldLogicalRelationId = InvalidOid;
@@ -2672,7 +2703,17 @@ master_dist_partition_cache_invalidate(PG_FUNCTION_ARGS)
 
 
 /*
- * master_dist_shard_cache_invalidate is a trigger function that performs
+ * master_dist_partition_cache_invalidate is a wrapper function for old UDF name.
+ */
+Datum
+master_dist_partition_cache_invalidate(PG_FUNCTION_ARGS)
+{
+	return citus_dist_partition_cache_invalidate(fcinfo);
+}
+
+
+/*
+ * citus_dist_shard_cache_invalidate is a trigger function that performs
  * relcache invalidations when the contents of pg_dist_shard are changed
  * on the SQL level.
  *
@@ -2680,7 +2721,7 @@ master_dist_partition_cache_invalidate(PG_FUNCTION_ARGS)
  * are much easier ways to waste CPU than causing cache invalidations.
  */
 Datum
-master_dist_shard_cache_invalidate(PG_FUNCTION_ARGS)
+citus_dist_shard_cache_invalidate(PG_FUNCTION_ARGS)
 {
 	TriggerData *triggerData = (TriggerData *) fcinfo->context;
 	Oid oldLogicalRelationId = InvalidOid;
@@ -2739,7 +2780,17 @@ master_dist_shard_cache_invalidate(PG_FUNCTION_ARGS)
 
 
 /*
- * master_dist_placement_cache_invalidate is a trigger function that performs
+ * master_dist_shard_cache_invalidate is a wrapper function for old UDF name.
+ */
+Datum
+master_dist_shard_cache_invalidate(PG_FUNCTION_ARGS)
+{
+	return citus_dist_shard_cache_invalidate(fcinfo);
+}
+
+
+/*
+ * citus_dist_placement_cache_invalidate is a trigger function that performs
  * relcache invalidations when the contents of pg_dist_placement are
  * changed on the SQL level.
  *
@@ -2747,7 +2798,7 @@ master_dist_shard_cache_invalidate(PG_FUNCTION_ARGS)
  * are much easier ways to waste CPU than causing cache invalidations.
  */
 Datum
-master_dist_placement_cache_invalidate(PG_FUNCTION_ARGS)
+citus_dist_placement_cache_invalidate(PG_FUNCTION_ARGS)
 {
 	TriggerData *triggerData = (TriggerData *) fcinfo->context;
 	Oid oldShardId = InvalidOid;
@@ -2818,7 +2869,17 @@ master_dist_placement_cache_invalidate(PG_FUNCTION_ARGS)
 
 
 /*
- * master_dist_node_cache_invalidate is a trigger function that performs
+ * master_dist_placement_cache_invalidate is a wrapper function for old UDF name.
+ */
+Datum
+master_dist_placement_cache_invalidate(PG_FUNCTION_ARGS)
+{
+	return citus_dist_placement_cache_invalidate(fcinfo);
+}
+
+
+/*
+ * citus_dist_node_cache_invalidate is a trigger function that performs
  * relcache invalidations when the contents of pg_dist_node are changed
  * on the SQL level.
  *
@@ -2826,7 +2887,7 @@ master_dist_placement_cache_invalidate(PG_FUNCTION_ARGS)
  * are much easier ways to waste CPU than causing cache invalidations.
  */
 Datum
-master_dist_node_cache_invalidate(PG_FUNCTION_ARGS)
+citus_dist_node_cache_invalidate(PG_FUNCTION_ARGS)
 {
 	if (!CALLED_AS_TRIGGER(fcinfo))
 	{
@@ -2843,7 +2904,17 @@ master_dist_node_cache_invalidate(PG_FUNCTION_ARGS)
 
 
 /*
- * master_dist_authinfo_cache_invalidate is a trigger function that performs
+ * master_dist_node_cache_invalidate is a wrapper function for old UDF name.
+ */
+Datum
+master_dist_node_cache_invalidate(PG_FUNCTION_ARGS)
+{
+	return citus_dist_node_cache_invalidate(fcinfo);
+}
+
+
+/*
+ * citus_conninfo_cache_invalidate is a trigger function that performs
  * relcache invalidations when the contents of pg_dist_authinfo are changed
  * on the SQL level.
  *
@@ -2851,7 +2922,7 @@ master_dist_node_cache_invalidate(PG_FUNCTION_ARGS)
  * are much easier ways to waste CPU than causing cache invalidations.
  */
 Datum
-master_dist_authinfo_cache_invalidate(PG_FUNCTION_ARGS)
+citus_conninfo_cache_invalidate(PG_FUNCTION_ARGS)
 {
 	if (!CALLED_AS_TRIGGER(fcinfo))
 	{
@@ -2868,7 +2939,17 @@ master_dist_authinfo_cache_invalidate(PG_FUNCTION_ARGS)
 
 
 /*
- * master_dist_local_group_cache_invalidate is a trigger function that performs
+ * master_dist_authinfo_cache_invalidate is a wrapper function for old UDF name.
+ */
+Datum
+master_dist_authinfo_cache_invalidate(PG_FUNCTION_ARGS)
+{
+	return citus_conninfo_cache_invalidate(fcinfo);
+}
+
+
+/*
+ * citus_dist_local_group_cache_invalidate is a trigger function that performs
  * relcache invalidations when the contents of pg_dist_local_group are changed
  * on the SQL level.
  *
@@ -2876,7 +2957,7 @@ master_dist_authinfo_cache_invalidate(PG_FUNCTION_ARGS)
  * are much easier ways to waste CPU than causing cache invalidations.
  */
 Datum
-master_dist_local_group_cache_invalidate(PG_FUNCTION_ARGS)
+citus_dist_local_group_cache_invalidate(PG_FUNCTION_ARGS)
 {
 	if (!CALLED_AS_TRIGGER(fcinfo))
 	{
@@ -2893,7 +2974,17 @@ master_dist_local_group_cache_invalidate(PG_FUNCTION_ARGS)
 
 
 /*
- * master_dist_object_cache_invalidate is a trigger function that performs relcache
+ * master_dist_local_group_cache_invalidate is a wrapper function for old UDF name.
+ */
+Datum
+master_dist_local_group_cache_invalidate(PG_FUNCTION_ARGS)
+{
+	return citus_dist_local_group_cache_invalidate(fcinfo);
+}
+
+
+/*
+ * citus_dist_object_cache_invalidate is a trigger function that performs relcache
  * invalidation when the contents of pg_dist_object are changed on the SQL
  * level.
  *
@@ -2901,7 +2992,7 @@ master_dist_local_group_cache_invalidate(PG_FUNCTION_ARGS)
  * are much easier ways to waste CPU than causing cache invalidations.
  */
 Datum
-master_dist_object_cache_invalidate(PG_FUNCTION_ARGS)
+citus_dist_object_cache_invalidate(PG_FUNCTION_ARGS)
 {
 	if (!CALLED_AS_TRIGGER(fcinfo))
 	{
@@ -2914,6 +3005,16 @@ master_dist_object_cache_invalidate(PG_FUNCTION_ARGS)
 	CitusInvalidateRelcacheByRelid(DistObjectRelationId());
 
 	PG_RETURN_DATUM(PointerGetDatum(NULL));
+}
+
+
+/*
+ * master_dist_object_cache_invalidate is a wrapper function for old UDF name.
+ */
+Datum
+master_dist_object_cache_invalidate(PG_FUNCTION_ARGS)
+{
+	return citus_dist_object_cache_invalidate(fcinfo);
 }
 
 
@@ -3495,6 +3596,15 @@ InvalidateForeignRelationGraphCacheCallback(Datum argument, Oid relationId)
 void
 InvalidateForeignKeyGraph(void)
 {
+	if (!CitusHasBeenLoaded())
+	{
+		/*
+		 * We should not try to invalidate foreign key graph
+		 * if citus is not loaded.
+		 */
+		return;
+	}
+
 	CitusInvalidateRelcacheByRelid(DistColocationRelationId());
 
 	/* bump command counter to force invalidation to take effect */
@@ -3684,6 +3794,16 @@ InvalidateMetadataSystemCache(void)
 	memset(&MetadataCache, 0, sizeof(MetadataCache));
 	workerNodeHashValid = false;
 	LocalGroupId = -1;
+}
+
+
+/*
+ * AllCitusTableIds returns all citus table ids.
+ */
+List *
+AllCitusTableIds(void)
+{
+	return CitusTableTypeIdList(ANY_CITUS_TABLE_TYPE);
 }
 
 
@@ -3936,6 +4056,37 @@ LookupShardRelationFromCatalog(int64 shardId, bool missingOk)
 	table_close(pgDistShard, NoLock);
 
 	return relationId;
+}
+
+
+/*
+ * ShardExists returns whether the given shard ID exists in pg_dist_shard.
+ */
+bool
+ShardExists(int64 shardId)
+{
+	ScanKeyData scanKey[1];
+	int scanKeyCount = 1;
+	Relation pgDistShard = table_open(DistShardRelationId(), AccessShareLock);
+	bool shardExists = false;
+
+	ScanKeyInit(&scanKey[0], Anum_pg_dist_shard_shardid,
+				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(shardId));
+
+	SysScanDesc scanDescriptor = systable_beginscan(pgDistShard,
+													DistShardShardidIndexId(), true,
+													NULL, scanKeyCount, scanKey);
+
+	HeapTuple heapTuple = systable_getnext(scanDescriptor);
+	if (HeapTupleIsValid(heapTuple))
+	{
+		shardExists = true;
+	}
+
+	systable_endscan(scanDescriptor);
+	table_close(pgDistShard, NoLock);
+
+	return shardExists;
 }
 
 

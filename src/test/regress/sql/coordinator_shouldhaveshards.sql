@@ -23,7 +23,6 @@ WHERE logicalrelid = 'test'::regclass AND groupid = 0;
 SET client_min_messages TO LOG;
 SET citus.log_local_commands TO ON;
 
-
 -- INSERT..SELECT with COPY under the covers
 INSERT INTO test SELECT s,s FROM generate_series(2,100) s;
 
@@ -46,6 +45,25 @@ SELECT y FROM test WHERE x = 1;
 SELECT count(*) FROM test;
 END;
 
+-- INSERT..SELECT with re-partitioning after local execution
+BEGIN;
+INSERT INTO test VALUES (0,1000);
+CREATE TABLE repart_test (x int primary key, y int);
+SELECT create_distributed_table('repart_test','x', colocate_with := 'none');
+
+INSERT INTO repart_test (x, y) SELECT y, x FROM test;
+
+SELECT y FROM repart_test WHERE x = 1000;
+INSERT INTO repart_test (x, y) SELECT y, x FROM test ON CONFLICT (x) DO UPDATE SET y = -1;
+SELECT y FROM repart_test WHERE x = 1000;
+ROLLBACK;
+
+-- INSERT..SELECT with re-partitioning in EXPLAIN ANALYZE after local execution
+BEGIN;
+INSERT INTO test VALUES (0,1000);
+EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE) INSERT INTO test (x, y) SELECT y, x FROM test;
+ROLLBACK;
+
 -- DDL connects to locahost
 ALTER TABLE test ADD COLUMN z int;
 
@@ -60,9 +78,9 @@ ALTER TABLE test DROP COLUMN z;
 SELECT y FROM test WHERE x = 1;
 END;
 
-
 SET citus.shard_count TO 6;
 SET citus.log_remote_commands TO OFF;
+
 
 BEGIN;
 SET citus.log_local_commands TO ON;
@@ -76,6 +94,7 @@ SELECT count(*) FROM dist_table;
 ROLLBACK;
 
 CREATE TABLE dist_table (a int);
+
 INSERT INTO dist_table SELECT * FROM generate_series(1, 100);
 
 BEGIN;
@@ -214,6 +233,96 @@ INSERT INTO ref_table SELECT *, * FROM generate_series(1, 100);
 SELECT COUNT(*) FROM test JOIN ref_table USING(x);
 ROLLBACK;
 
+-- issue #4237: preventing empty placement creation on coordinator
+CREATE TABLE test_append_table(a int);
+SELECT create_distributed_table('test_append_table', 'a', 'append');
+-- this will fail since it will try to create an empty placement in the
+-- coordinator as well
+SET citus.shard_replication_factor TO 3;
+SELECT master_create_empty_shard('test_append_table');
+-- this will create an empty shard with replicas in the two worker nodes
+SET citus.shard_replication_factor TO 2;
+SELECT 1 FROM master_create_empty_shard('test_append_table');
+-- verify groupid is not 0 for each placement
+SELECT COUNT(*) FROM pg_dist_placement p, pg_dist_shard s WHERE p.shardid = s.shardid AND s.logicalrelid = 'test_append_table'::regclass AND p.groupid > 0;
+SET citus.shard_replication_factor TO 1;
+
+-- test partitioned index creation with long name
+CREATE TABLE test_index_creation1
+(
+    tenant_id integer NOT NULL,
+    timeperiod timestamp without time zone NOT NULL,
+    field1 integer NOT NULL,
+    inserted_utc timestamp without time zone NOT NULL DEFAULT now(),
+    PRIMARY KEY(tenant_id, timeperiod)
+) PARTITION BY RANGE (timeperiod);
+
+CREATE TABLE test_index_creation1_p2020_09_26
+PARTITION OF test_index_creation1 FOR VALUES FROM ('2020-09-26 00:00:00') TO ('2020-09-27 00:00:00');
+CREATE TABLE test_index_creation1_p2020_09_27
+PARTITION OF test_index_creation1 FOR VALUES FROM ('2020-09-27 00:00:00') TO ('2020-09-28 00:00:00');
+
+select create_distributed_table('test_index_creation1', 'tenant_id');
+
+-- should be able to create indexes with INCLUDE/WHERE
+CREATE INDEX ix_test_index_creation5 ON test_index_creation1
+	USING btree(tenant_id, timeperiod)
+	INCLUDE (field1) WHERE (tenant_id = 100);
+
+-- test if indexes are created
+SELECT 1 AS created WHERE EXISTS(SELECT * FROM pg_indexes WHERE indexname LIKE '%test_index_creation%');
+
+
+-- test alter_distributed_table UDF
+SET citus.shard_count TO 4;
+CREATE TABLE adt_table (a INT, b INT);
+CREATE TABLE adt_col (a INT UNIQUE, b INT);
+CREATE TABLE adt_ref (a INT REFERENCES adt_col(a));
+
+SELECT create_distributed_table('adt_table', 'a', colocate_with:='none');
+SELECT create_distributed_table('adt_col', 'a', colocate_with:='adt_table');
+SELECT create_distributed_table('adt_ref', 'a', colocate_with:='adt_table');
+
+INSERT INTO adt_table VALUES (1, 2), (3, 4), (5, 6);
+INSERT INTO adt_col VALUES (3, 4), (5, 6), (7, 8);
+INSERT INTO adt_ref VALUES (3), (5);
+
+SELECT table_name, citus_table_type, distribution_column, shard_count FROM public.citus_tables WHERE table_name::text LIKE 'adt%';
+SELECT STRING_AGG(table_name::text, ', ' ORDER BY 1) AS "Colocation Groups" FROM public.citus_tables WHERE table_name::text LIKE 'adt%' GROUP BY colocation_id ORDER BY 1;
+SELECT conrelid::regclass::text AS "Referencing Table", pg_get_constraintdef(oid, true) AS "Definition" FROM  pg_constraint
+    WHERE (conrelid::regclass::text = 'adt_col' OR confrelid::regclass::text = 'adt_col') ORDER BY 1;
+
+SET client_min_messages TO WARNING;
+SELECT alter_distributed_table('adt_table', shard_count:=6, cascade_to_colocated:=true);
+SET client_min_messages TO DEFAULT;
+
+SELECT table_name, citus_table_type, distribution_column, shard_count FROM public.citus_tables WHERE table_name::text LIKE 'adt%';
+SELECT STRING_AGG(table_name::text, ', ' ORDER BY 1) AS "Colocation Groups" FROM public.citus_tables WHERE table_name::text LIKE 'adt%' GROUP BY colocation_id ORDER BY 1;
+SELECT conrelid::regclass::text AS "Referencing Table", pg_get_constraintdef(oid, true) AS "Definition" FROM  pg_constraint
+    WHERE (conrelid::regclass::text = 'adt_col' OR confrelid::regclass::text = 'adt_col') ORDER BY 1;
+
+SELECT alter_distributed_table('adt_table', distribution_column:='b', colocate_with:='none');
+
+SELECT table_name, citus_table_type, distribution_column, shard_count FROM public.citus_tables WHERE table_name::text LIKE 'adt%';
+SELECT STRING_AGG(table_name::text, ', ' ORDER BY 1) AS "Colocation Groups" FROM public.citus_tables WHERE table_name::text LIKE 'adt%' GROUP BY colocation_id ORDER BY 1;
+SELECT conrelid::regclass::text AS "Referencing Table", pg_get_constraintdef(oid, true) AS "Definition" FROM  pg_constraint
+    WHERE (conrelid::regclass::text = 'adt_col' OR confrelid::regclass::text = 'adt_col') ORDER BY 1;
+
+SELECT * FROM adt_table ORDER BY 1;
+SELECT * FROM adt_col ORDER BY 1;
+SELECT * FROM adt_ref ORDER BY 1;
+
+SET client_min_messages TO WARNING;
+BEGIN;
+INSERT INTO adt_table SELECT x, x+1 FROM generate_series(1, 1000) x;
+SELECT alter_distributed_table('adt_table', distribution_column:='a');
+SELECT COUNT(*) FROM adt_table;
+END;
+
+SELECT table_name, citus_table_type, distribution_column, shard_count FROM public.citus_tables WHERE table_name::text = 'adt_table';
+SET client_min_messages TO DEFAULT;
+
+
 \set VERBOSITY terse
 DROP TABLE ref_table;
 
@@ -221,6 +330,7 @@ DELETE FROM test;
 DROP TABLE test;
 DROP TABLE dist_table;
 DROP TABLE ref;
+DROP TABLE test_append_table;
 
 DROP SCHEMA coordinator_shouldhaveshards CASCADE;
 

@@ -177,9 +177,10 @@ extern uint64 GetNextShardId(void);
 extern uint64 GetNextPlacementId(void);
 extern Oid ResolveRelationId(text *relationName, bool missingOk);
 extern List * GetFullTableCreationCommands(Oid relationId, bool includeSequenceDefaults);
-extern List * GetPostLoadTableCreationCommands(Oid relationId);
+extern List * GetPostLoadTableCreationCommands(Oid relationId, bool includeIndexes);
 extern List * GetPreLoadTableCreationCommands(Oid relationId,
-											  bool includeSequenceDefaults);
+											  bool includeSequenceDefaults,
+											  char *accessMethod);
 extern List * GetTableIndexAndConstraintCommands(Oid relationId);
 extern bool IndexImpliedByAConstraint(Form_pg_index indexForm);
 extern char ShardStorageType(Oid relationId);
@@ -228,6 +229,7 @@ extern Datum master_apply_delete_command(PG_FUNCTION_ARGS);
 extern Datum master_drop_sequences(PG_FUNCTION_ARGS);
 extern Datum master_modify_multiple_shards(PG_FUNCTION_ARGS);
 extern Datum lock_relation_if_exists(PG_FUNCTION_ARGS);
+extern Datum citus_drop_all_shards(PG_FUNCTION_ARGS);
 extern Datum master_drop_all_shards(PG_FUNCTION_ARGS);
 extern int MasterDropAllShards(Oid relationId, char *schemaName, char *relationName);
 
@@ -253,6 +255,11 @@ extern ShardPlacement * SearchShardPlacementInList(List *shardPlacementList,
 extern ShardPlacement * SearchShardPlacementInListOrError(List *shardPlacementList,
 														  const char *nodeName,
 														  uint32 nodePort);
+extern void ErrorIfMoveCitusLocalTable(Oid relationId);
 extern char LookupShardTransferMode(Oid shardReplicationModeOid);
+extern void BlockWritesToShardList(List *shardList);
+extern List * WorkerApplyShardDDLCommandList(List *ddlCommandList, int64 shardId);
+extern List * GetForeignConstraintCommandsToReferenceTable(ShardInterval *shardInterval);
+
 
 #endif   /* COORDINATOR_PROTOCOL_H */

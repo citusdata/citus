@@ -154,8 +154,8 @@ SELECT count(*) FROM pg_tables WHERE tablename = 'objects_for_xacts2' and schema
 -- shard also does not exist since we create shards in a transaction
 SELECT count(*) FROM pg_tables WHERE tablename LIKE 'objects_for_xacts2_%' and schemaname = 'citus_mx_schema_for_xacts';
 
--- make sure that master_drop_all_shards does not work from the worker nodes
-SELECT master_drop_all_shards('citus_mx_schema_for_xacts.objects_for_xacts'::regclass, 'citus_mx_schema_for_xacts', 'objects_for_xacts');
+-- make sure that citus_drop_all_shards does not work from the worker nodes
+SELECT citus_drop_all_shards('citus_mx_schema_for_xacts.objects_for_xacts'::regclass, 'citus_mx_schema_for_xacts', 'objects_for_xacts');
 
 -- Ensure pg_dist_transaction is empty for test
 SELECT recover_prepared_transactions();
@@ -205,7 +205,7 @@ SELECT raise_failed_aclcheck($$
  $$);
 
 SELECT raise_failed_aclcheck($$
-    SELECT master_drop_all_shards('distributed_mx_table'::regclass, 'public', 'distributed_mx_table');
+    SELECT citus_drop_all_shards('distributed_mx_table'::regclass, 'public', 'distributed_mx_table');
 $$);
 SELECT raise_failed_aclcheck($$
     SELECT master_remove_partition_metadata('distributed_mx_table'::regclass, 'public', 'distributed_mx_table');
@@ -245,7 +245,7 @@ SELECT raise_failed_aclcheck($$
     SELECT master_drop_sequences(ARRAY['public.distributed_mx_table_some_val_seq']);
 $$);
 
-SELECT master_drop_all_shards('distributed_mx_table'::regclass, 'public', 'distributed_mx_table');
+SELECT citus_drop_all_shards('distributed_mx_table'::regclass, 'public', 'distributed_mx_table');
 SELECT master_remove_partition_metadata('distributed_mx_table'::regclass, 'public', 'distributed_mx_table');
 
 -- make sure that we can drop unrelated tables/sequences

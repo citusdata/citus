@@ -38,11 +38,11 @@ SELECT * FROM t_view a ORDER BY a;
 SELECT columnar_relation_storageid(oid) AS storageid
 FROM pg_class WHERE relname='t_view' \gset
 
-SELECT count(*) FROM columnar.columnar_stripes WHERE storageid=:storageid;
-SELECT count(*) FROM columnar.columnar_skipnodes WHERE storageid=:storageid;
+SELECT count(*) FROM columnar.stripe WHERE storageid=:storageid;
+SELECT count(*) FROM columnar.chunk WHERE storageid=:storageid;
 
 DROP TABLE t CASCADE;
 
 -- dropping must remove metadata
-SELECT count(*) FROM columnar.columnar_stripes WHERE storageid=:storageid;
-SELECT count(*) FROM columnar.columnar_skipnodes WHERE storageid=:storageid;
+SELECT count(*) FROM columnar.stripe WHERE storageid=:storageid;
+SELECT count(*) FROM columnar.chunk WHERE storageid=:storageid;

@@ -1,3 +1,10 @@
+CREATE OR REPLACE FUNCTION master_defer_delete_shards()
+    RETURNS int
+    LANGUAGE C STRICT
+    AS 'citus', $$master_defer_delete_shards$$;
+COMMENT ON FUNCTION master_defer_delete_shards()
+    IS 'remove orphaned shards';
+
 CREATE OR REPLACE FUNCTION wait_until_metadata_sync(timeout INTEGER DEFAULT 15000)
     RETURNS void
     LANGUAGE C STRICT
@@ -23,7 +30,7 @@ WITH dist_node_summary AS (
                             ARRAY[dist_node_summary.query, dist_node_summary.query],
                             false)
 ), dist_placement_summary AS (
-    SELECT 'SELECT jsonb_agg(pg_dist_placement ORDER BY shardid) FROM pg_dist_placement)' AS query
+    SELECT 'SELECT jsonb_agg(pg_dist_placement ORDER BY shardid) FROM pg_dist_placement' AS query
 ), dist_placement_check AS (
     SELECT count(distinct result) = 1 AS matches
     FROM dist_placement_summary CROSS JOIN LATERAL

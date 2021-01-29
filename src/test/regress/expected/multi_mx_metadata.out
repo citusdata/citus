@@ -249,8 +249,8 @@ SELECT count(*) FROM pg_tables WHERE tablename LIKE 'objects_for_xacts2_%' and s
      0
 (1 row)
 
--- make sure that master_drop_all_shards does not work from the worker nodes
-SELECT master_drop_all_shards('citus_mx_schema_for_xacts.objects_for_xacts'::regclass, 'citus_mx_schema_for_xacts', 'objects_for_xacts');
+-- make sure that citus_drop_all_shards does not work from the worker nodes
+SELECT citus_drop_all_shards('citus_mx_schema_for_xacts.objects_for_xacts'::regclass, 'citus_mx_schema_for_xacts', 'objects_for_xacts');
 ERROR:  operation is not allowed on this node
 HINT:  Connect to the coordinator and run it again.
 -- Ensure pg_dist_transaction is empty for test
@@ -325,7 +325,7 @@ SELECT raise_failed_aclcheck($$
 ERROR:  must be owner of the object
 CONTEXT:  PL/pgSQL function raise_failed_aclcheck(text) line 6 at RAISE
 SELECT raise_failed_aclcheck($$
-    SELECT master_drop_all_shards('distributed_mx_table'::regclass, 'public', 'distributed_mx_table');
+    SELECT citus_drop_all_shards('distributed_mx_table'::regclass, 'public', 'distributed_mx_table');
 $$);
 ERROR:  must be owner of the object
 CONTEXT:  PL/pgSQL function raise_failed_aclcheck(text) line 6 at RAISE
@@ -376,7 +376,7 @@ $$);
 
 (1 row)
 
-SELECT master_drop_all_shards('distributed_mx_table'::regclass, 'public', 'distributed_mx_table');
+SELECT citus_drop_all_shards('distributed_mx_table'::regclass, 'public', 'distributed_mx_table');
 ERROR:  operation is not allowed on this node
 HINT:  Connect to the coordinator and run it again.
 SELECT master_remove_partition_metadata('distributed_mx_table'::regclass, 'public', 'distributed_mx_table');

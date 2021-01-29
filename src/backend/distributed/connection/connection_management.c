@@ -1292,25 +1292,29 @@ AfterXactHostConnectionHandling(ConnectionHashEntry *entry, bool isCommit)
 static bool
 ShouldShutdownConnection(MultiConnection *connection, const int cachedConnectionCount)
 {
-	bool isCitusInitiatedBackend = false;
-
 	/*
 	 * When we are in a backend that was created to serve an internal connection
 	 * from the coordinator or another worker, we disable connection caching to avoid
 	 * escalating the number of cached connections. We can recognize such backends
 	 * from their application name.
 	 */
-	if (application_name != NULL && strcmp(application_name, CITUS_APPLICATION_NAME) == 0)
-	{
-		isCitusInitiatedBackend = true;
-	}
-
-	return isCitusInitiatedBackend ||
+	return IsCitusInitiatedRemoteBackend() ||
 		   connection->initilizationState != POOL_STATE_INITIALIZED ||
 		   cachedConnectionCount >= MaxCachedConnectionsPerWorker ||
 		   connection->forceCloseAtTransactionEnd ||
 		   PQstatus(connection->pgConn) != CONNECTION_OK ||
 		   !RemoteTransactionIdle(connection);
+}
+
+
+/*
+ * IsCitusInitiatedRemoteBackend returns true if we are in a backend that citus
+ * initiated via remote connection.
+ */
+bool
+IsCitusInitiatedRemoteBackend(void)
+{
+	return application_name && strcmp(application_name, CITUS_APPLICATION_NAME) == 0;
 }
 
 

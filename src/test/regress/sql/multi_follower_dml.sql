@@ -9,7 +9,7 @@ CREATE TABLE reference_table (a int, b int, z bigserial);
 SELECT create_reference_table('reference_table');
 
 CREATE TABLE citus_local_table (a int, b int, z bigserial);
-SELECT create_citus_local_table('citus_local_table');
+SELECT citus_add_local_table_to_metadata('citus_local_table');
 
 CREATE TABLE local (a int, b int);
 

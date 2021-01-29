@@ -137,7 +137,7 @@ typedef enum
 	ANY_CITUS_TABLE_TYPE
 } CitusTableType;
 
-
+extern List * AllCitusTableIds(void);
 extern bool IsCitusTableType(Oid relationId, CitusTableType tableType);
 extern bool IsCitusTableTypeCacheEntry(CitusTableCacheEntry *tableEtnry,
 									   CitusTableType tableType);
@@ -159,6 +159,7 @@ extern int32 GetLocalGroupId(void);
 extern void CitusTableCacheFlushInvalidatedEntries(void);
 extern Oid LookupShardRelationFromCatalog(int64 shardId, bool missing_ok);
 extern List * ShardPlacementList(uint64 shardId);
+extern bool ShardExists(int64 shardId);
 extern void CitusInvalidateRelcacheByRelid(Oid relationId);
 extern void CitusInvalidateRelcacheByShardId(int64 shardId);
 extern void InvalidateForeignKeyGraph(void);
@@ -195,6 +196,7 @@ extern char LookupDistributionMethod(Oid distributionMethodOid);
 extern bool RelationExists(Oid relationId);
 
 /* access WorkerNodeHash */
+extern bool HasAnyNodes(void);
 extern HTAB * GetWorkerNodeHash(void);
 extern WorkerNode * LookupNodeByNodeId(uint32 nodeId);
 extern WorkerNode * LookupNodeByNodeIdOrError(uint32 nodeId);
@@ -210,6 +212,7 @@ extern Oid DistPartitionRelationId(void);
 extern Oid DistShardRelationId(void);
 extern Oid DistPlacementRelationId(void);
 extern Oid DistNodeRelationId(void);
+extern Oid DistRebalanceStrategyRelationId(void);
 extern Oid DistLocalGroupIdRelationId(void);
 extern Oid DistObjectRelationId(void);
 extern Oid DistEnabledCustomAggregatesId(void);

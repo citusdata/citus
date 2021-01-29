@@ -205,7 +205,7 @@ COMMIT;
 SELECT * FROM test_local_truncate;
 
 -- Undistribute table
-SELECT master_drop_all_shards('test_local_truncate', 'public', 'test_local_truncate');
+SELECT citus_drop_all_shards('test_local_truncate', 'public', 'test_local_truncate');
 DELETE FROM pg_dist_partition WHERE logicalrelid = 'test_local_truncate'::regclass;
 
 -- Ensure local data is truncated
@@ -227,7 +227,7 @@ ROLLBACK;
 SELECT * FROM test_local_truncate;
 
 -- Undistribute table
-SELECT master_drop_all_shards('test_local_truncate', 'public', 'test_local_truncate');
+SELECT citus_drop_all_shards('test_local_truncate', 'public', 'test_local_truncate');
 DELETE FROM pg_dist_partition WHERE logicalrelid = 'test_local_truncate'::regclass;
 
 -- Ensure local data is not truncated

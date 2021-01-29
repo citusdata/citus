@@ -11,7 +11,7 @@ $$ LANGUAGE SQL;
 INSERT INTO t2 SELECT i, f(i) FROM generate_series(1, 5) i;
 -- there are no subtransactions, so above statement should batch
 -- INSERTs inside the UDF and create on stripe per table.
-SELECT relname, count(*) FROM columnar.columnar_stripes a, pg_class b
+SELECT relname, count(*) FROM columnar.stripe a, pg_class b
 WHERE columnar_relation_storageid(b.oid)=a.storageid AND relname IN ('t1', 't2')
 GROUP BY relname
 ORDER BY relname;

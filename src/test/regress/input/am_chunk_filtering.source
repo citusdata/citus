@@ -71,3 +71,21 @@ B
 \.
 
 SELECT * FROM collation_chunk_filtering_test WHERE A > 'B';
+
+CREATE TABLE simple_chunk_filtering(i int) USING COLUMNAR;
+INSERT INTO simple_chunk_filtering SELECT generate_series(0,234567);
+EXPLAIN (analyze on, costs off, timing off, summary off)
+  SELECT * FROM simple_chunk_filtering WHERE i > 123456;
+SET columnar.enable_qual_pushdown = false;
+EXPLAIN (analyze on, costs off, timing off, summary off)
+  SELECT * FROM simple_chunk_filtering WHERE i > 123456;
+SET columnar.enable_qual_pushdown TO DEFAULT;
+
+-- https://github.com/citusdata/citus/issues/4555
+TRUNCATE simple_chunk_filtering;
+INSERT INTO simple_chunk_filtering SELECT generate_series(0,200000);
+COPY (SELECT * FROM simple_chunk_filtering WHERE i > 180000) TO '/dev/null';
+EXPLAIN (analyze on, costs off, timing off, summary off)
+  SELECT * FROM simple_chunk_filtering WHERE i > 180000;
+
+DROP TABLE simple_chunk_filtering;

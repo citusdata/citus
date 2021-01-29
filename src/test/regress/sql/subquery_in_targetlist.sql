@@ -288,8 +288,63 @@ GROUP BY user_id
 					FROM users_table u1
 					GROUP BY user_id) as foo) ORDER BY 1 DESC;
 
--- make sure that we don't pushdown subqueries in the target list if no FROM clause
+-- FROM is empty join tree, sublink can be recursively planned
 SELECT (SELECT DISTINCT user_id FROM users_table WHERE user_id = (SELECT max(user_id) FROM users_table ));
+
+-- FROM is subquery with empty join tree, sublink can be recursively planned
+SELECT (SELECT DISTINCT user_id FROM users_table WHERE user_id = (SELECT max(user_id) FROM users_table ))
+FROM (SELECT 1) a;
+
+-- correlated subquery with recurring from clause (prevents recursive planning of outer sublink)
+SELECT (SELECT DISTINCT user_id FROM users_table WHERE user_id = (SELECT max(user_id) FROM users_table) AND value_2 = a)
+FROM (SELECT 1 AS a) r;
+
+SELECT (SELECT DISTINCT user_id FROM users_table WHERE user_id = (SELECT max(user_id) FROM users_table) AND value_2 = r.user_id)
+FROM users_reference_table r;
+
+-- correlated subquery with recurring from clause (prevents recursive planning of inner sublink)
+SELECT (SELECT DISTINCT user_id FROM users_table WHERE user_id = (SELECT max(user_id) FROM users_table WHERE user_id = a))
+FROM (SELECT 1 AS a) r;
+
+-- recurring from clause containing a subquery with sublink on distributed table, recursive planning saves the day
+SELECT (SELECT DISTINCT user_id FROM users_table WHERE user_id = (SELECT max(user_id) FROM users_table ))
+FROM (SELECT * FROM users_reference_table WHERE user_id IN (SELECT user_id FROM events_table)) r
+ORDER BY 1 LIMIT 3;
+
+-- recurring from clause containing a subquery with correlated sublink on distributed table
+SELECT (SELECT DISTINCT user_id FROM users_table WHERE user_id = (SELECT max(user_id) FROM users_table ))
+FROM (SELECT * FROM users_reference_table WHERE value_2 IN (SELECT value_2 FROM events_table WHERE events_table.user_id = users_reference_table.user_id)) r
+ORDER BY 1 LIMIT 3;
+
+-- recurring from clause with sublink with distributed table in sublink in where
+SELECT (SELECT DISTINCT user_id FROM users_reference_table WHERE user_id IN (SELECT user_id FROM users_table) AND user_id < 2), (SELECT 2), 3
+FROM users_reference_table r
+ORDER BY 1 LIMIT 3;
+
+-- recurring from clause with sublink with distributed table in sublink in target list
+SELECT (SELECT 1), (SELECT (SELECT user_id FROM users_table WHERE user_id < 2 GROUP BY user_id)
+        FROM users_reference_table WHERE user_id < 2 GROUP BY user_id)
+FROM users_reference_table r
+ORDER BY 1 LIMIT 3;
+
+-- recurring from clause with correlated sublink with distributed table in sublink in target list
+SELECT (SELECT (SELECT user_id FROM users_table WHERE user_id = users_reference_table.user_id GROUP BY user_id)
+        FROM users_reference_table WHERE user_id < 2 GROUP BY user_id)
+FROM users_reference_table r
+ORDER BY 1 LIMIT 3;
+
+-- recurring from clause with correlated sublink with a recurring from clause and a distributed table in sublink
+SELECT (SELECT DISTINCT user_id FROM users_reference_table WHERE user_id IN (SELECT user_id FROM users_reference_table) AND value_2 = r.value_2 AND user_id < 2)
+FROM users_reference_table r
+ORDER BY 1 LIMIT 3;
+
+-- correlated subquery with recursively planned subquery in FROM (outer sublink)
+SELECT (SELECT DISTINCT user_id FROM users_table WHERE user_id = (SELECT max(user_id) FROM users_table WHERE user_id = r.user_id))
+FROM (SELECT user_id FROM users_table ORDER BY 1 LIMIT 3) r;
+
+-- correlated subquery with recursively planned subquery in FROM (inner sublink)
+SELECT (SELECT (SELECT max(user_id) FROM users_table) FROM users_table WHERE user_id = r.user_id)
+FROM (SELECT user_id FROM users_table ORDER BY 1 LIMIT 3) r;
 
 -- not meaningful SELECT FOR UPDATE query that should fail
 SELECT count(*) FROM (SELECT

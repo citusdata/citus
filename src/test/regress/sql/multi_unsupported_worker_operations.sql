@@ -53,6 +53,25 @@ SELECT * FROM mx_table ORDER BY col_1;
 -- Try commands from metadata worker
 \c - - - :worker_1_port
 
+-- this function is dropped in Citus10, added here for tests
+CREATE OR REPLACE FUNCTION pg_catalog.master_create_distributed_table(table_name regclass,
+                                                                      distribution_column text,
+                                                                      distribution_method citus.distribution_type)
+    RETURNS void
+    LANGUAGE C STRICT
+    AS 'citus', $$master_create_distributed_table$$;
+COMMENT ON FUNCTION pg_catalog.master_create_distributed_table(table_name regclass,
+                                                               distribution_column text,
+                                                               distribution_method citus.distribution_type)
+    IS 'define the table distribution functions';
+
+-- this function is dropped in Citus10, added here for tests
+CREATE OR REPLACE FUNCTION pg_catalog.master_create_worker_shards(table_name text, shard_count integer,
+                                                                  replication_factor integer DEFAULT 2)
+    RETURNS void
+    AS 'citus', $$master_create_worker_shards$$
+    LANGUAGE C STRICT;
+
 CREATE TABLE mx_table_worker(col_1 text);
 
 -- master_create_distributed_table
@@ -96,8 +115,8 @@ ALTER TABLE mx_table_2 ADD CONSTRAINT mx_fk_constraint FOREIGN KEY(col_1) REFERE
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.mx_table'::regclass;
 \d mx_test_index
 
--- master_drop_all_shards
-SELECT master_drop_all_shards('mx_table'::regclass, 'public', 'mx_table');
+-- citus_drop_all_shards
+SELECT citus_drop_all_shards('mx_table'::regclass, 'public', 'mx_table');
 SELECT count(*) FROM pg_dist_shard NATURAL JOIN pg_dist_shard_placement WHERE logicalrelid='mx_table'::regclass;
 
 -- master_apply_delete_command
@@ -123,10 +142,9 @@ SELECT master_remove_node('localhost', 5432);
 
 \c - - - :worker_1_port
 
--- mark_tables_colocated
 UPDATE pg_dist_partition SET colocationid = 0 WHERE logicalrelid='mx_table_2'::regclass;
 
-SELECT mark_tables_colocated('mx_table', ARRAY['mx_table_2']);
+SELECT update_distributed_table_colocation('mx_table', colocate_with => 'mx_table_2');
 SELECT colocationid FROM pg_dist_partition WHERE logicalrelid='mx_table_2'::regclass;
 
 SELECT colocationid AS old_colocation_id

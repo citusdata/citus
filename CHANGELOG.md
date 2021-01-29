@@ -1,3 +1,22 @@
+### citus v9.5.2 (January 26, 2021) ###
+
+* Fixes distributed deadlock detection being blocked by metadata sync
+
+* Prevents segfaults when SAVEPOINT handling cannot recover from connection
+  failures
+
+* Fixes possible issues that might occur with single shard distributed tables
+
+### citus v9.4.4 (December 28, 2020) ###
+
+* Fixes a bug that could cause router queries with local tables to be pushed
+  down
+
+* Fixes a segfault in connection management due to invalid connection hash
+  entries
+
+* Fixes possible issues that might occur with single shard distributed tables
+
 ### citus v9.5.1 (December 1, 2020) ###
 
 * Enables PostgreSQL's parallel queries on EXPLAIN ANALYZE

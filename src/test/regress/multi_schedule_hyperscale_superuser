@@ -81,7 +81,6 @@ test: multi_join_pruning multi_hash_pruning intermediate_result_pruning
 test: multi_query_directory_cleanup
 test: multi_cross_shard
 test: multi_dropped_column_aliases foreign_key_restriction_enforcement
-test: multi_binary_master_copy_format
 
 # ----------
 # Parallel TPC-H tests to check our distributed execution behavior

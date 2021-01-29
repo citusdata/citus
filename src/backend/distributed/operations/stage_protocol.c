@@ -69,6 +69,7 @@ static bool WorkerShardStats(ShardPlacement *placement, Oid relationId,
 /* exports for SQL callable functions */
 PG_FUNCTION_INFO_V1(master_create_empty_shard);
 PG_FUNCTION_INFO_V1(master_append_table_to_shard);
+PG_FUNCTION_INFO_V1(citus_update_shard_statistics);
 PG_FUNCTION_INFO_V1(master_update_shard_statistics);
 
 
@@ -152,10 +153,10 @@ master_create_empty_shard(PG_FUNCTION_ARGS)
 	}
 	else if (IsCitusTableType(relationId, CITUS_LOCAL_TABLE))
 	{
-		ereport(ERROR, (errmsg("relation \"%s\" is a citus local table",
+		ereport(ERROR, (errmsg("relation \"%s\" is a local table",
 							   relationName),
 						errdetail("We currently don't support creating shards "
-								  "on citus local tables")));
+								  "on local tables")));
 	}
 
 	char replicationModel = TableReplicationModel(relationId);
@@ -264,8 +265,7 @@ master_append_table_to_shard(PG_FUNCTION_ARGS)
 	{
 		ereport(ERROR, (errmsg("cannot append to shardId " UINT64_FORMAT, shardId),
 						errdetail("We currently don't support appending to shards "
-								  "in hash-partitioned, reference and citus local "
-								  "tables")));
+								  "in hash-partitioned, reference and local tables")));
 	}
 
 	/* ensure that the shard placement metadata does not change during the append */
@@ -345,11 +345,11 @@ master_append_table_to_shard(PG_FUNCTION_ARGS)
 
 
 /*
- * master_update_shard_statistics updates metadata (shard size and shard min/max
+ * citus_update_shard_statistics updates metadata (shard size and shard min/max
  * values) of the given shard and returns the updated shard size.
  */
 Datum
-master_update_shard_statistics(PG_FUNCTION_ARGS)
+citus_update_shard_statistics(PG_FUNCTION_ARGS)
 {
 	int64 shardId = PG_GETARG_INT64(0);
 
@@ -358,6 +358,16 @@ master_update_shard_statistics(PG_FUNCTION_ARGS)
 	uint64 shardSize = UpdateShardStatistics(shardId);
 
 	PG_RETURN_INT64(shardSize);
+}
+
+
+/*
+ * master_update_shard_statistics is a wrapper function for old UDF name.
+ */
+Datum
+master_update_shard_statistics(PG_FUNCTION_ARGS)
+{
+	return citus_update_shard_statistics(fcinfo);
 }
 
 
@@ -411,6 +421,14 @@ CreateAppendDistributedShardPlacements(Oid relationId, int64 shardId,
 	{
 		int workerNodeIndex = attemptNumber % workerNodeCount;
 		WorkerNode *workerNode = (WorkerNode *) list_nth(workerNodeList, workerNodeIndex);
+
+		if (NodeIsCoordinator(workerNode))
+		{
+			ereport(NOTICE, (errmsg(
+								 "Creating placements for the append partitioned tables on the coordinator is not supported, skipping coordinator ...")));
+			continue;
+		}
+
 		uint32 nodeGroupId = workerNode->groupId;
 		char *nodeName = workerNode->workerName;
 		uint32 nodePort = workerNode->workerPort;

@@ -116,7 +116,8 @@ static bool ShouldPropagateTypeCreate(void);
  * access to the ObjectAddress of the new type.
  */
 List *
-PreprocessCompositeTypeStmt(Node *node, const char *queryString)
+PreprocessCompositeTypeStmt(Node *node, const char *queryString,
+							ProcessUtilityContext processUtilityContext)
 {
 	if (!ShouldPropagateTypeCreate())
 	{
@@ -201,7 +202,8 @@ PostprocessCompositeTypeStmt(Node *node, const char *queryString)
  * this is already implemented by the post processing for adding columns to tables.
  */
 List *
-PreprocessAlterTypeStmt(Node *node, const char *queryString)
+PreprocessAlterTypeStmt(Node *node, const char *queryString,
+						ProcessUtilityContext processUtilityContext)
 {
 	AlterTableStmt *stmt = castNode(AlterTableStmt, node);
 	Assert(stmt->relkind == OBJECT_TYPE);
@@ -244,7 +246,8 @@ PreprocessAlterTypeStmt(Node *node, const char *queryString)
  * ObjectAddress for the new type just yet.
  */
 List *
-PreprocessCreateEnumStmt(Node *node, const char *queryString)
+PreprocessCreateEnumStmt(Node *node, const char *queryString,
+						 ProcessUtilityContext processUtilityContext)
 {
 	if (!ShouldPropagateTypeCreate())
 	{
@@ -316,7 +319,8 @@ PostprocessCreateEnumStmt(Node *node, const char *queryString)
  * workers directly to keep the types in sync accross the cluster.
  */
 List *
-PreprocessAlterEnumStmt(Node *node, const char *queryString)
+PreprocessAlterEnumStmt(Node *node, const char *queryString,
+						ProcessUtilityContext processUtilityContext)
 {
 	List *commands = NIL;
 
@@ -446,7 +450,8 @@ PostprocessAlterEnumStmt(Node *node, const char *queryString)
  * no types in the drop list are distributed no calls will be made to the workers.
  */
 List *
-PreprocessDropTypeStmt(Node *node, const char *queryString)
+PreprocessDropTypeStmt(Node *node, const char *queryString,
+					   ProcessUtilityContext processUtilityContext)
 {
 	DropStmt *stmt = castNode(DropStmt, node);
 
@@ -514,7 +519,8 @@ PreprocessDropTypeStmt(Node *node, const char *queryString)
  * executed on all the workers to keep the types in sync across the cluster.
  */
 List *
-PreprocessRenameTypeStmt(Node *node, const char *queryString)
+PreprocessRenameTypeStmt(Node *node, const char *queryString,
+						 ProcessUtilityContext processUtilityContext)
 {
 	ObjectAddress typeAddress = GetObjectAddressFromParseTree(node, false);
 	if (!ShouldPropagateObject(&typeAddress))
@@ -547,7 +553,8 @@ PreprocessRenameTypeStmt(Node *node, const char *queryString)
  * keep the type in sync across the cluster.
  */
 List *
-PreprocessRenameTypeAttributeStmt(Node *node, const char *queryString)
+PreprocessRenameTypeAttributeStmt(Node *node, const char *queryString,
+								  ProcessUtilityContext processUtilityContext)
 {
 	RenameStmt *stmt = castNode(RenameStmt, node);
 	Assert(stmt->renameType == OBJECT_ATTRIBUTE);
@@ -579,7 +586,8 @@ PreprocessRenameTypeAttributeStmt(Node *node, const char *queryString)
  * In this stage we can prepare the commands that need to be run on all workers.
  */
 List *
-PreprocessAlterTypeSchemaStmt(Node *node, const char *queryString)
+PreprocessAlterTypeSchemaStmt(Node *node, const char *queryString,
+							  ProcessUtilityContext processUtilityContext)
 {
 	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
 	Assert(stmt->objectType == OBJECT_TYPE);
@@ -637,7 +645,8 @@ PostprocessAlterTypeSchemaStmt(Node *node, const char *queryString)
  * the workers to keep the type in sync across the cluster.
  */
 List *
-PreprocessAlterTypeOwnerStmt(Node *node, const char *queryString)
+PreprocessAlterTypeOwnerStmt(Node *node, const char *queryString,
+							 ProcessUtilityContext processUtilityContext)
 {
 	AlterOwnerStmt *stmt = castNode(AlterOwnerStmt, node);
 	Assert(stmt->objectType == OBJECT_TYPE);

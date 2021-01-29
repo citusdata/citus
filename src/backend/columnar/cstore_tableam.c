@@ -14,7 +14,7 @@
 #include "access/tableam.h"
 #include "access/tsmapi.h"
 #if PG_VERSION_NUM >= 130000
-#include "access/heaptoast.h"
+#include "access/detoast.h"
 #else
 #include "access/tuptoaster.h"
 #endif
@@ -42,6 +42,7 @@
 #include "storage/smgr.h"
 #include "tcop/utility.h"
 #include "utils/builtins.h"
+#include "utils/fmgroids.h"
 #include "utils/memutils.h"
 #include "utils/pg_rusage.h"
 #include "utils/rel.h"
@@ -49,15 +50,13 @@
 #include "utils/lsyscache.h"
 #include "utils/syscache.h"
 
-#include "columnar/cstore.h"
-#include "columnar/cstore_customscan.h"
-#include "columnar/cstore_tableam.h"
-#include "columnar/cstore_version_compat.h"
+#include "columnar/columnar.h"
+#include "columnar/columnar_customscan.h"
+#include "columnar/columnar_tableam.h"
+#include "columnar/columnar_version_compat.h"
 #include "distributed/commands.h"
 #include "distributed/commands/utility_hook.h"
 #include "distributed/metadata_cache.h"
-
-#define CSTORE_TABLEAM_NAME "columnar"
 
 /*
  * Timing parameters for truncate locking heuristics.
@@ -68,10 +67,10 @@
 #define VACUUM_TRUNCATE_LOCK_TIMEOUT 4500               /* ms */
 
 /*
- * CStoreScanDescData is the scan state passed between beginscan(),
+ * ColumnarScanDescData is the scan state passed between beginscan(),
  * getnextslot(), rescan(), and endscan() calls.
  */
-typedef struct CStoreScanDescData
+typedef struct ColumnarScanDescData
 {
 	TableScanDescData cs_base;
 	TableReadState *cs_readState;
@@ -89,44 +88,28 @@ typedef struct CStoreScanDescData
 	 * number so we can construct an item pointer based on that.
 	 */
 	int rowNumber;
-} CStoreScanDescData;
+} ColumnarScanDescData;
 
-typedef struct CStoreScanDescData *CStoreScanDesc;
+typedef struct ColumnarScanDescData *ColumnarScanDesc;
 
 static object_access_hook_type PrevObjectAccessHook = NULL;
-static ProcessUtility_hook_type PreviousProcessUtilityHook = NULL;
 
 /* forward declaration for static functions */
-static void CStoreTableAMObjectAccessHook(ObjectAccessType access, Oid classId, Oid
-										  objectId, int subId,
-										  void *arg);
-#if PG_VERSION_NUM >= 130000
-static void CStoreTableAMProcessUtility(PlannedStmt *plannedStatement,
-										const char *queryString,
-										ProcessUtilityContext context,
-										ParamListInfo paramListInfo,
-										QueryEnvironment *queryEnvironment,
-										DestReceiver *destReceiver,
-										QueryCompletion *qc);
-#else
-static void CStoreTableAMProcessUtility(PlannedStmt *plannedStatement,
-										const char *queryString,
-										ProcessUtilityContext context,
-										ParamListInfo paramListInfo,
-										QueryEnvironment *queryEnvironment,
-										DestReceiver *destReceiver,
-										char *completionTag);
-#endif
-
+static void ColumnarTableDropHook(Oid tgid);
+static void ColumnarTriggerCreateHook(Oid tgid);
+static void ColumnarTableAMObjectAccessHook(ObjectAccessType access, Oid classId,
+											Oid objectId, int subId,
+											void *arg);
 static bool ConditionalLockRelationWithTimeout(Relation rel, LOCKMODE lockMode,
 											   int timeout, int retryInterval);
 static void LogRelationStats(Relation rel, int elevel);
-static void TruncateCStore(Relation rel, int elevel);
+static void TruncateColumnar(Relation rel, int elevel);
 static HeapTuple ColumnarSlotCopyHeapTuple(TupleTableSlot *slot);
 static void ColumnarCheckLogicalReplication(Relation rel);
+static Datum * detoast_values(TupleDesc tupleDesc, Datum *orig_values, bool *isnull);
 
-/* Custom tuple slot ops used for columnar. Initialized in cstore_tableam_init(). */
-TupleTableSlotOps TTSOpsColumnar;
+/* Custom tuple slot ops used for columnar. Initialized in columnar_tableam_init(). */
+static TupleTableSlotOps TTSOpsColumnar;
 
 static List *
 RelationColumnList(Relation rel)
@@ -158,29 +141,29 @@ RelationColumnList(Relation rel)
 
 
 static const TupleTableSlotOps *
-cstore_slot_callbacks(Relation relation)
+columnar_slot_callbacks(Relation relation)
 {
 	return &TTSOpsColumnar;
 }
 
 
 static TableScanDesc
-cstore_beginscan(Relation relation, Snapshot snapshot,
-				 int nkeys, ScanKey key,
-				 ParallelTableScanDesc parallel_scan,
-				 uint32 flags)
+columnar_beginscan(Relation relation, Snapshot snapshot,
+				   int nkeys, ScanKey key,
+				   ParallelTableScanDesc parallel_scan,
+				   uint32 flags)
 {
 	int natts = relation->rd_att->natts;
 	Bitmapset *attr_needed = NULL;
 
 	attr_needed = bms_add_range(attr_needed, 0, natts - 1);
 
-	/* the cstore access method does not use the flags, they are specific to heap */
+	/* the columnar access method does not use the flags, they are specific to heap */
 	flags = 0;
 
-	TableScanDesc scandesc = cstore_beginscan_extended(relation, snapshot, nkeys, key,
-													   parallel_scan,
-													   flags, attr_needed, NULL);
+	TableScanDesc scandesc = columnar_beginscan_extended(relation, snapshot, nkeys, key,
+														 parallel_scan,
+														 flags, attr_needed, NULL);
 
 	pfree(attr_needed);
 
@@ -189,10 +172,10 @@ cstore_beginscan(Relation relation, Snapshot snapshot,
 
 
 TableScanDesc
-cstore_beginscan_extended(Relation relation, Snapshot snapshot,
-						  int nkeys, ScanKey key,
-						  ParallelTableScanDesc parallel_scan,
-						  uint32 flags, Bitmapset *attr_needed, List *scanQual)
+columnar_beginscan_extended(Relation relation, Snapshot snapshot,
+							int nkeys, ScanKey key,
+							ParallelTableScanDesc parallel_scan,
+							uint32 flags, Bitmapset *attr_needed, List *scanQual)
 {
 	Oid relfilenode = relation->rd_node.relNode;
 
@@ -209,7 +192,7 @@ cstore_beginscan_extended(Relation relation, Snapshot snapshot,
 
 	MemoryContext oldContext = MemoryContextSwitchTo(scanContext);
 
-	CStoreScanDesc scan = palloc(sizeof(CStoreScanDescData));
+	ColumnarScanDesc scan = palloc(sizeof(ColumnarScanDescData));
 	scan->cs_base.rs_rd = relation;
 	scan->cs_base.rs_snapshot = snapshot;
 	scan->cs_base.rs_nkeys = nkeys;
@@ -244,12 +227,12 @@ cstore_beginscan_extended(Relation relation, Snapshot snapshot,
 
 
 /*
- * init_cstore_read_state initializes a column store table read and returns the
+ * init_columnar_read_state initializes a column store table read and returns the
  * state.
  */
 static TableReadState *
-init_cstore_read_state(Relation relation, TupleDesc tupdesc, Bitmapset *attr_needed,
-					   List *scanQual)
+init_columnar_read_state(Relation relation, TupleDesc tupdesc, Bitmapset *attr_needed,
+						 List *scanQual)
 {
 	List *columnList = RelationColumnList(relation);
 	ListCell *columnCell = NULL;
@@ -266,41 +249,41 @@ init_cstore_read_state(Relation relation, TupleDesc tupdesc, Bitmapset *attr_nee
 		}
 	}
 
-	TableReadState *readState = CStoreBeginRead(relation, tupdesc, neededColumnList,
-												scanQual);
+	TableReadState *readState = ColumnarBeginRead(relation, tupdesc, neededColumnList,
+												  scanQual);
 
 	return readState;
 }
 
 
 static void
-cstore_endscan(TableScanDesc sscan)
+columnar_endscan(TableScanDesc sscan)
 {
-	CStoreScanDesc scan = (CStoreScanDesc) sscan;
+	ColumnarScanDesc scan = (ColumnarScanDesc) sscan;
 	if (scan->cs_readState != NULL)
 	{
-		CStoreEndRead(scan->cs_readState);
+		ColumnarEndRead(scan->cs_readState);
 		scan->cs_readState = NULL;
 	}
 }
 
 
 static void
-cstore_rescan(TableScanDesc sscan, ScanKey key, bool set_params,
-			  bool allow_strat, bool allow_sync, bool allow_pagemode)
+columnar_rescan(TableScanDesc sscan, ScanKey key, bool set_params,
+				bool allow_strat, bool allow_sync, bool allow_pagemode)
 {
-	CStoreScanDesc scan = (CStoreScanDesc) sscan;
+	ColumnarScanDesc scan = (ColumnarScanDesc) sscan;
 	if (scan->cs_readState != NULL)
 	{
-		CStoreRescan(scan->cs_readState);
+		ColumnarRescan(scan->cs_readState);
 	}
 }
 
 
 static bool
-cstore_getnextslot(TableScanDesc sscan, ScanDirection direction, TupleTableSlot *slot)
+columnar_getnextslot(TableScanDesc sscan, ScanDirection direction, TupleTableSlot *slot)
 {
-	CStoreScanDesc scan = (CStoreScanDesc) sscan;
+	ColumnarScanDesc scan = (ColumnarScanDesc) sscan;
 
 	/*
 	 * if this is the first row, initialize read state.
@@ -309,15 +292,15 @@ cstore_getnextslot(TableScanDesc sscan, ScanDirection direction, TupleTableSlot 
 	{
 		MemoryContext oldContext = MemoryContextSwitchTo(scan->scanContext);
 		scan->cs_readState =
-			init_cstore_read_state(scan->cs_base.rs_rd, slot->tts_tupleDescriptor,
-								   scan->attr_needed, scan->scanQual);
+			init_columnar_read_state(scan->cs_base.rs_rd, slot->tts_tupleDescriptor,
+									 scan->attr_needed, scan->scanQual);
 		MemoryContextSwitchTo(oldContext);
 	}
 
 	ExecClearTuple(slot);
 
-	bool nextRowFound = CStoreReadNextRow(scan->cs_readState, slot->tts_values,
-										  slot->tts_isnull);
+	bool nextRowFound = ColumnarReadNextRow(scan->cs_readState, slot->tts_values,
+											slot->tts_isnull);
 
 	if (!nextRowFound)
 	{
@@ -344,28 +327,28 @@ cstore_getnextslot(TableScanDesc sscan, ScanDirection direction, TupleTableSlot 
 
 
 static Size
-cstore_parallelscan_estimate(Relation rel)
+columnar_parallelscan_estimate(Relation rel)
 {
 	elog(ERROR, "columnar_parallelscan_estimate not implemented");
 }
 
 
 static Size
-cstore_parallelscan_initialize(Relation rel, ParallelTableScanDesc pscan)
+columnar_parallelscan_initialize(Relation rel, ParallelTableScanDesc pscan)
 {
 	elog(ERROR, "columnar_parallelscan_initialize not implemented");
 }
 
 
 static void
-cstore_parallelscan_reinitialize(Relation rel, ParallelTableScanDesc pscan)
+columnar_parallelscan_reinitialize(Relation rel, ParallelTableScanDesc pscan)
 {
 	elog(ERROR, "columnar_parallelscan_reinitialize not implemented");
 }
 
 
 static IndexFetchTableData *
-cstore_index_fetch_begin(Relation rel)
+columnar_index_fetch_begin(Relation rel)
 {
 	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 					errmsg("indexes not supported for columnar tables")));
@@ -373,7 +356,7 @@ cstore_index_fetch_begin(Relation rel)
 
 
 static void
-cstore_index_fetch_reset(IndexFetchTableData *scan)
+columnar_index_fetch_reset(IndexFetchTableData *scan)
 {
 	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 					errmsg("indexes not supported for columnar tables")));
@@ -381,7 +364,7 @@ cstore_index_fetch_reset(IndexFetchTableData *scan)
 
 
 static void
-cstore_index_fetch_end(IndexFetchTableData *scan)
+columnar_index_fetch_end(IndexFetchTableData *scan)
 {
 	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 					errmsg("indexes not supported for columnar tables")));
@@ -389,11 +372,11 @@ cstore_index_fetch_end(IndexFetchTableData *scan)
 
 
 static bool
-cstore_index_fetch_tuple(struct IndexFetchTableData *scan,
-						 ItemPointer tid,
-						 Snapshot snapshot,
-						 TupleTableSlot *slot,
-						 bool *call_again, bool *all_dead)
+columnar_index_fetch_tuple(struct IndexFetchTableData *scan,
+						   ItemPointer tid,
+						   Snapshot snapshot,
+						   TupleTableSlot *slot,
+						   bool *call_again, bool *all_dead)
 {
 	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 					errmsg("indexes not supported for columnar tables")));
@@ -401,76 +384,68 @@ cstore_index_fetch_tuple(struct IndexFetchTableData *scan,
 
 
 static bool
-cstore_fetch_row_version(Relation relation,
-						 ItemPointer tid,
-						 Snapshot snapshot,
-						 TupleTableSlot *slot)
+columnar_fetch_row_version(Relation relation,
+						   ItemPointer tid,
+						   Snapshot snapshot,
+						   TupleTableSlot *slot)
 {
 	elog(ERROR, "columnar_fetch_row_version not implemented");
 }
 
 
 static void
-cstore_get_latest_tid(TableScanDesc sscan,
-					  ItemPointer tid)
+columnar_get_latest_tid(TableScanDesc sscan,
+						ItemPointer tid)
 {
 	elog(ERROR, "columnar_get_latest_tid not implemented");
 }
 
 
 static bool
-cstore_tuple_tid_valid(TableScanDesc scan, ItemPointer tid)
+columnar_tuple_tid_valid(TableScanDesc scan, ItemPointer tid)
 {
 	elog(ERROR, "columnar_tuple_tid_valid not implemented");
 }
 
 
 static bool
-cstore_tuple_satisfies_snapshot(Relation rel, TupleTableSlot *slot,
-								Snapshot snapshot)
+columnar_tuple_satisfies_snapshot(Relation rel, TupleTableSlot *slot,
+								  Snapshot snapshot)
 {
 	return true;
 }
 
 
 static TransactionId
-cstore_compute_xid_horizon_for_tuples(Relation rel,
-									  ItemPointerData *tids,
-									  int nitems)
+columnar_compute_xid_horizon_for_tuples(Relation rel,
+										ItemPointerData *tids,
+										int nitems)
 {
 	elog(ERROR, "columnar_compute_xid_horizon_for_tuples not implemented");
 }
 
 
 static void
-cstore_tuple_insert(Relation relation, TupleTableSlot *slot, CommandId cid,
-					int options, BulkInsertState bistate)
+columnar_tuple_insert(Relation relation, TupleTableSlot *slot, CommandId cid,
+					  int options, BulkInsertState bistate)
 {
 	/*
-	 * cstore_init_write_state allocates the write state in a longer
+	 * columnar_init_write_state allocates the write state in a longer
 	 * lasting context, so no need to worry about it.
 	 */
-	TableWriteState *writeState = cstore_init_write_state(relation,
-														  RelationGetDescr(relation),
-														  GetCurrentSubTransactionId());
-
+	TableWriteState *writeState = columnar_init_write_state(relation,
+															RelationGetDescr(relation),
+															GetCurrentSubTransactionId());
 	MemoryContext oldContext = MemoryContextSwitchTo(writeState->perTupleContext);
 
-	HeapTuple heapTuple = ExecCopySlotHeapTuple(slot);
-
 	ColumnarCheckLogicalReplication(relation);
-	if (HeapTupleHasExternal(heapTuple))
-	{
-		/* detoast any toasted attributes */
-		HeapTuple newTuple = toast_flatten_tuple(heapTuple,
-												 slot->tts_tupleDescriptor);
-
-		ExecForceStoreHeapTuple(newTuple, slot, true);
-	}
 
 	slot_getallattrs(slot);
 
-	CStoreWriteRow(writeState, slot->tts_values, slot->tts_isnull);
+	Datum *values = detoast_values(slot->tts_tupleDescriptor,
+								   slot->tts_values, slot->tts_isnull);
+
+	ColumnarWriteRow(writeState, values, slot->tts_isnull);
 
 	MemoryContextSwitchTo(oldContext);
 	MemoryContextReset(writeState->perTupleContext);
@@ -478,87 +453,82 @@ cstore_tuple_insert(Relation relation, TupleTableSlot *slot, CommandId cid,
 
 
 static void
-cstore_tuple_insert_speculative(Relation relation, TupleTableSlot *slot,
-								CommandId cid, int options,
-								BulkInsertState bistate, uint32 specToken)
+columnar_tuple_insert_speculative(Relation relation, TupleTableSlot *slot,
+								  CommandId cid, int options,
+								  BulkInsertState bistate, uint32 specToken)
 {
 	elog(ERROR, "columnar_tuple_insert_speculative not implemented");
 }
 
 
 static void
-cstore_tuple_complete_speculative(Relation relation, TupleTableSlot *slot,
-								  uint32 specToken, bool succeeded)
+columnar_tuple_complete_speculative(Relation relation, TupleTableSlot *slot,
+									uint32 specToken, bool succeeded)
 {
 	elog(ERROR, "columnar_tuple_complete_speculative not implemented");
 }
 
 
 static void
-cstore_multi_insert(Relation relation, TupleTableSlot **slots, int ntuples,
-					CommandId cid, int options, BulkInsertState bistate)
+columnar_multi_insert(Relation relation, TupleTableSlot **slots, int ntuples,
+					  CommandId cid, int options, BulkInsertState bistate)
 {
-	TableWriteState *writeState = cstore_init_write_state(relation,
-														  RelationGetDescr(relation),
-														  GetCurrentSubTransactionId());
+	TableWriteState *writeState = columnar_init_write_state(relation,
+															RelationGetDescr(relation),
+															GetCurrentSubTransactionId());
 
 	ColumnarCheckLogicalReplication(relation);
+
+	MemoryContext oldContext = MemoryContextSwitchTo(writeState->perTupleContext);
+
 	for (int i = 0; i < ntuples; i++)
 	{
 		TupleTableSlot *tupleSlot = slots[i];
-		MemoryContext oldContext = MemoryContextSwitchTo(writeState->perTupleContext);
-		HeapTuple heapTuple = ExecCopySlotHeapTuple(tupleSlot);
-
-		if (HeapTupleHasExternal(heapTuple))
-		{
-			/* detoast any toasted attributes */
-			HeapTuple newTuple = toast_flatten_tuple(heapTuple,
-													 tupleSlot->tts_tupleDescriptor);
-
-			ExecForceStoreHeapTuple(newTuple, tupleSlot, true);
-		}
 
 		slot_getallattrs(tupleSlot);
 
-		CStoreWriteRow(writeState, tupleSlot->tts_values, tupleSlot->tts_isnull);
-		MemoryContextSwitchTo(oldContext);
+		Datum *values = detoast_values(tupleSlot->tts_tupleDescriptor,
+									   tupleSlot->tts_values, tupleSlot->tts_isnull);
+
+		ColumnarWriteRow(writeState, values, tupleSlot->tts_isnull);
+		MemoryContextReset(writeState->perTupleContext);
 	}
 
-	MemoryContextReset(writeState->perTupleContext);
+	MemoryContextSwitchTo(oldContext);
 }
 
 
 static TM_Result
-cstore_tuple_delete(Relation relation, ItemPointer tid, CommandId cid,
-					Snapshot snapshot, Snapshot crosscheck, bool wait,
-					TM_FailureData *tmfd, bool changingPart)
+columnar_tuple_delete(Relation relation, ItemPointer tid, CommandId cid,
+					  Snapshot snapshot, Snapshot crosscheck, bool wait,
+					  TM_FailureData *tmfd, bool changingPart)
 {
 	elog(ERROR, "columnar_tuple_delete not implemented");
 }
 
 
 static TM_Result
-cstore_tuple_update(Relation relation, ItemPointer otid, TupleTableSlot *slot,
-					CommandId cid, Snapshot snapshot, Snapshot crosscheck,
-					bool wait, TM_FailureData *tmfd,
-					LockTupleMode *lockmode, bool *update_indexes)
+columnar_tuple_update(Relation relation, ItemPointer otid, TupleTableSlot *slot,
+					  CommandId cid, Snapshot snapshot, Snapshot crosscheck,
+					  bool wait, TM_FailureData *tmfd,
+					  LockTupleMode *lockmode, bool *update_indexes)
 {
 	elog(ERROR, "columnar_tuple_update not implemented");
 }
 
 
 static TM_Result
-cstore_tuple_lock(Relation relation, ItemPointer tid, Snapshot snapshot,
-				  TupleTableSlot *slot, CommandId cid, LockTupleMode mode,
-				  LockWaitPolicy wait_policy, uint8 flags,
-				  TM_FailureData *tmfd)
+columnar_tuple_lock(Relation relation, ItemPointer tid, Snapshot snapshot,
+					TupleTableSlot *slot, CommandId cid, LockTupleMode mode,
+					LockWaitPolicy wait_policy, uint8 flags,
+					TM_FailureData *tmfd)
 {
 	elog(ERROR, "columnar_tuple_lock not implemented");
 }
 
 
 static void
-cstore_finish_bulk_insert(Relation relation, int options)
+columnar_finish_bulk_insert(Relation relation, int options)
 {
 	/*
 	 * Nothing to do here. We keep write states live until transaction end.
@@ -567,12 +537,18 @@ cstore_finish_bulk_insert(Relation relation, int options)
 
 
 static void
-cstore_relation_set_new_filenode(Relation rel,
-								 const RelFileNode *newrnode,
-								 char persistence,
-								 TransactionId *freezeXid,
-								 MultiXactId *minmulti)
+columnar_relation_set_new_filenode(Relation rel,
+								   const RelFileNode *newrnode,
+								   char persistence,
+								   TransactionId *freezeXid,
+								   MultiXactId *minmulti)
 {
+	if (persistence != RELPERSISTENCE_PERMANENT)
+	{
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("only permanent columnar tables are supported")));
+	}
+
 	Oid oldRelfilenode = rel->rd_node.relNode;
 
 	MarkRelfilenodeDropped(oldRelfilenode, GetCurrentSubTransactionId());
@@ -594,7 +570,7 @@ cstore_relation_set_new_filenode(Relation rel,
 
 
 static void
-cstore_relation_nontransactional_truncate(Relation rel)
+columnar_relation_nontransactional_truncate(Relation rel)
 {
 	RelFileNode relfilenode = rel->rd_node;
 
@@ -617,28 +593,28 @@ cstore_relation_nontransactional_truncate(Relation rel)
 
 
 static void
-cstore_relation_copy_data(Relation rel, const RelFileNode *newrnode)
+columnar_relation_copy_data(Relation rel, const RelFileNode *newrnode)
 {
 	elog(ERROR, "columnar_relation_copy_data not implemented");
 }
 
 
 /*
- * cstore_relation_copy_for_cluster is called on VACUUM FULL, at which
+ * columnar_relation_copy_for_cluster is called on VACUUM FULL, at which
  * we should copy data from OldHeap to NewHeap.
  *
  * In general TableAM case this can also be called for the CLUSTER command
- * which is not applicable for cstore since it doesn't support indexes.
+ * which is not applicable for columnar since it doesn't support indexes.
  */
 static void
-cstore_relation_copy_for_cluster(Relation OldHeap, Relation NewHeap,
-								 Relation OldIndex, bool use_sort,
-								 TransactionId OldestXmin,
-								 TransactionId *xid_cutoff,
-								 MultiXactId *multi_cutoff,
-								 double *num_tuples,
-								 double *tups_vacuumed,
-								 double *tups_recently_dead)
+columnar_relation_copy_for_cluster(Relation OldHeap, Relation NewHeap,
+								   Relation OldIndex, bool use_sort,
+								   TransactionId OldestXmin,
+								   TransactionId *xid_cutoff,
+								   MultiXactId *multi_cutoff,
+								   double *num_tuples,
+								   double *tups_vacuumed,
+								   double *tups_recently_dead)
 {
 	TupleDesc sourceDesc = RelationGetDescr(OldHeap);
 	TupleDesc targetDesc = RelationGetDescr(NewHeap);
@@ -657,40 +633,40 @@ cstore_relation_copy_for_cluster(Relation OldHeap, Relation NewHeap,
 	Assert(sourceDesc->natts == targetDesc->natts);
 
 	/* read settings from old heap, relfilenode will be swapped at the end */
-	ColumnarOptions cstoreOptions = { 0 };
-	ReadColumnarOptions(OldHeap->rd_id, &cstoreOptions);
+	ColumnarOptions columnarOptions = { 0 };
+	ReadColumnarOptions(OldHeap->rd_id, &columnarOptions);
 
-	TableWriteState *writeState = CStoreBeginWrite(NewHeap->rd_node,
-												   cstoreOptions,
-												   targetDesc);
+	TableWriteState *writeState = ColumnarBeginWrite(NewHeap->rd_node,
+													 columnarOptions,
+													 targetDesc);
 
-	TableReadState *readState = CStoreBeginRead(OldHeap, sourceDesc,
-												RelationColumnList(OldHeap), NULL);
+	TableReadState *readState = ColumnarBeginRead(OldHeap, sourceDesc,
+												  RelationColumnList(OldHeap), NULL);
 
 	Datum *values = palloc0(sourceDesc->natts * sizeof(Datum));
 	bool *nulls = palloc0(sourceDesc->natts * sizeof(bool));
 
 	*num_tuples = 0;
 
-	while (CStoreReadNextRow(readState, values, nulls))
+	while (ColumnarReadNextRow(readState, values, nulls))
 	{
-		CStoreWriteRow(writeState, values, nulls);
+		ColumnarWriteRow(writeState, values, nulls);
 		(*num_tuples)++;
 	}
 
 	*tups_vacuumed = 0;
 
-	CStoreEndWrite(writeState);
-	CStoreEndRead(readState);
+	ColumnarEndWrite(writeState);
+	ColumnarEndRead(readState);
 }
 
 
 /*
- * cstore_vacuum_rel implements VACUUM without FULL option.
+ * columnar_vacuum_rel implements VACUUM without FULL option.
  */
 static void
-cstore_vacuum_rel(Relation rel, VacuumParams *params,
-				  BufferAccessStrategy bstrategy)
+columnar_vacuum_rel(Relation rel, VacuumParams *params,
+					BufferAccessStrategy bstrategy)
 {
 	int elevel = (params->options & VACOPT_VERBOSE) ? INFO : DEBUG2;
 
@@ -705,7 +681,7 @@ cstore_vacuum_rel(Relation rel, VacuumParams *params,
 	 */
 	if (params->truncate == VACOPT_TERNARY_ENABLED)
 	{
-		TruncateCStore(rel, elevel);
+		TruncateColumnar(rel, elevel);
 	}
 }
 
@@ -823,14 +799,14 @@ LogRelationStats(Relation rel, int elevel)
 
 
 /*
- * TruncateCStore truncates the unused space at the end of main fork for
- * a cstore table. This unused space can be created by aborted transactions.
+ * TruncateColumnar truncates the unused space at the end of main fork for
+ * a columnar table. This unused space can be created by aborted transactions.
  *
  * This implementation is based on heap_vacuum_rel in vacuumlazy.c with some
  * changes so it suits columnar store relations.
  */
 static void
-TruncateCStore(Relation rel, int elevel)
+TruncateColumnar(Relation rel, int elevel)
 {
 	PGRUsage ru0;
 
@@ -949,23 +925,23 @@ ConditionalLockRelationWithTimeout(Relation rel, LOCKMODE lockMode, int timeout,
 
 
 static bool
-cstore_scan_analyze_next_block(TableScanDesc scan, BlockNumber blockno,
-							   BufferAccessStrategy bstrategy)
+columnar_scan_analyze_next_block(TableScanDesc scan, BlockNumber blockno,
+								 BufferAccessStrategy bstrategy)
 {
 	/*
 	 * Our access method is not pages based, i.e. tuples are not confined
 	 * to pages boundaries. So not much to do here. We return true anyway
 	 * so acquire_sample_rows() in analyze.c would call our
-	 * cstore_scan_analyze_next_tuple() callback.
+	 * columnar_scan_analyze_next_tuple() callback.
 	 */
 	return true;
 }
 
 
 static bool
-cstore_scan_analyze_next_tuple(TableScanDesc scan, TransactionId OldestXmin,
-							   double *liverows, double *deadrows,
-							   TupleTableSlot *slot)
+columnar_scan_analyze_next_tuple(TableScanDesc scan, TransactionId OldestXmin,
+								 double *liverows, double *deadrows,
+								 TupleTableSlot *slot)
 {
 	/*
 	 * Currently we don't do anything smart to reduce number of rows returned
@@ -974,11 +950,11 @@ cstore_scan_analyze_next_tuple(TableScanDesc scan, TransactionId OldestXmin,
 	 * tuples from those pages.
 	 *
 	 * We could do something like that here by choosing sample stripes or chunks,
-	 * but getting that correct might need quite some work. Since cstore_fdw's
+	 * but getting that correct might need quite some work. Since columnar_fdw's
 	 * ANALYZE scanned all rows, as a starter we do the same here and scan all
 	 * rows.
 	 */
-	if (cstore_getnextslot(scan, ForwardScanDirection, slot))
+	if (columnar_getnextslot(scan, ForwardScanDirection, slot))
 	{
 		(*liverows)++;
 		return true;
@@ -989,17 +965,17 @@ cstore_scan_analyze_next_tuple(TableScanDesc scan, TransactionId OldestXmin,
 
 
 static double
-cstore_index_build_range_scan(Relation heapRelation,
-							  Relation indexRelation,
-							  IndexInfo *indexInfo,
-							  bool allow_sync,
-							  bool anyvisible,
-							  bool progress,
-							  BlockNumber start_blockno,
-							  BlockNumber numblocks,
-							  IndexBuildCallback callback,
-							  void *callback_state,
-							  TableScanDesc scan)
+columnar_index_build_range_scan(Relation heapRelation,
+								Relation indexRelation,
+								IndexInfo *indexInfo,
+								bool allow_sync,
+								bool anyvisible,
+								bool progress,
+								BlockNumber start_blockno,
+								BlockNumber numblocks,
+								IndexBuildCallback callback,
+								void *callback_state,
+								TableScanDesc scan)
 {
 	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 					errmsg("indexes not supported for columnar tables")));
@@ -1007,11 +983,11 @@ cstore_index_build_range_scan(Relation heapRelation,
 
 
 static void
-cstore_index_validate_scan(Relation heapRelation,
-						   Relation indexRelation,
-						   IndexInfo *indexInfo,
-						   Snapshot snapshot,
-						   ValidateIndexState *state)
+columnar_index_validate_scan(Relation heapRelation,
+							 Relation indexRelation,
+							 IndexInfo *indexInfo,
+							 Snapshot snapshot,
+							 ValidateIndexState *state)
 {
 	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 					errmsg("indexes not supported for columnar tables")));
@@ -1019,7 +995,7 @@ cstore_index_validate_scan(Relation heapRelation,
 
 
 static uint64
-cstore_relation_size(Relation rel, ForkNumber forkNumber)
+columnar_relation_size(Relation rel, ForkNumber forkNumber)
 {
 	uint64 nblocks = 0;
 
@@ -1044,20 +1020,20 @@ cstore_relation_size(Relation rel, ForkNumber forkNumber)
 
 
 static bool
-cstore_relation_needs_toast_table(Relation rel)
+columnar_relation_needs_toast_table(Relation rel)
 {
 	return false;
 }
 
 
 static void
-cstore_estimate_rel_size(Relation rel, int32 *attr_widths,
-						 BlockNumber *pages, double *tuples,
-						 double *allvisfrac)
+columnar_estimate_rel_size(Relation rel, int32 *attr_widths,
+						   BlockNumber *pages, double *tuples,
+						   double *allvisfrac)
 {
 	RelationOpenSmgr(rel);
 	*pages = smgrnblocks(rel->rd_smgr, MAIN_FORKNUM);
-	*tuples = CStoreTableRowCount(rel);
+	*tuples = ColumnarTableRowCount(rel);
 
 	/*
 	 * Append-only, so everything is visible except in-progress or rolled-back
@@ -1070,22 +1046,22 @@ cstore_estimate_rel_size(Relation rel, int32 *attr_widths,
 
 
 static bool
-cstore_scan_sample_next_block(TableScanDesc scan, SampleScanState *scanstate)
+columnar_scan_sample_next_block(TableScanDesc scan, SampleScanState *scanstate)
 {
 	elog(ERROR, "columnar_scan_sample_next_block not implemented");
 }
 
 
 static bool
-cstore_scan_sample_next_tuple(TableScanDesc scan, SampleScanState *scanstate,
-							  TupleTableSlot *slot)
+columnar_scan_sample_next_tuple(TableScanDesc scan, SampleScanState *scanstate,
+								TupleTableSlot *slot)
 {
 	elog(ERROR, "columnar_scan_sample_next_tuple not implemented");
 }
 
 
 static void
-CStoreXactCallback(XactEvent event, void *arg)
+ColumnarXactCallback(XactEvent event, void *arg)
 {
 	switch (event)
 	{
@@ -1116,8 +1092,8 @@ CStoreXactCallback(XactEvent event, void *arg)
 
 
 static void
-CStoreSubXactCallback(SubXactEvent event, SubTransactionId mySubid,
-					  SubTransactionId parentSubid, void *arg)
+ColumnarSubXactCallback(SubXactEvent event, SubTransactionId mySubid,
+						SubTransactionId parentSubid, void *arg)
 {
 	switch (event)
 	{
@@ -1143,64 +1119,16 @@ CStoreSubXactCallback(SubXactEvent event, SubTransactionId mySubid,
 }
 
 
-#if PG_VERSION_NUM >= 130000
-static void
-CStoreTableAMProcessUtility(PlannedStmt *plannedStatement,
-							const char *queryString,
-							ProcessUtilityContext context,
-							ParamListInfo paramListInfo,
-							QueryEnvironment *queryEnvironment,
-							DestReceiver *destReceiver,
-							QueryCompletion *queryCompletion)
-#else
-static void
-CStoreTableAMProcessUtility(PlannedStmt * plannedStatement,
-							const char * queryString,
-							ProcessUtilityContext context,
-							ParamListInfo paramListInfo,
-							QueryEnvironment * queryEnvironment,
-							DestReceiver * destReceiver,
-							char * completionTag)
-#endif
-{
-	Node *parseTree = plannedStatement->utilityStmt;
-
-	if (nodeTag(parseTree) == T_CreateTrigStmt)
-	{
-		CreateTrigStmt *createTrigStmt = (CreateTrigStmt *) parseTree;
-
-		Relation rel = relation_openrv(createTrigStmt->relation, AccessShareLock);
-		bool isCStore = rel->rd_tableam == GetColumnarTableAmRoutine();
-		relation_close(rel, AccessShareLock);
-
-		if (isCStore &&
-			createTrigStmt->row &&
-			createTrigStmt->timing == TRIGGER_TYPE_AFTER)
-		{
-			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg(
-								"AFTER ROW triggers are not supported for columnstore access method"),
-							errhint("Consider an AFTER STATEMENT trigger instead.")));
-		}
-	}
-
-	CALL_PREVIOUS_UTILITY();
-}
-
-
 void
-cstore_tableam_init()
+columnar_tableam_init()
 {
-	RegisterXactCallback(CStoreXactCallback, NULL);
-	RegisterSubXactCallback(CStoreSubXactCallback, NULL);
+	RegisterXactCallback(ColumnarXactCallback, NULL);
+	RegisterSubXactCallback(ColumnarSubXactCallback, NULL);
 
-	PreviousProcessUtilityHook = (ProcessUtility_hook != NULL) ?
-								 ProcessUtility_hook : standard_ProcessUtility;
-	ProcessUtility_hook = CStoreTableAMProcessUtility;
 	PrevObjectAccessHook = object_access_hook;
-	object_access_hook = CStoreTableAMObjectAccessHook;
+	object_access_hook = ColumnarTableAMObjectAccessHook;
 
-	cstore_customscan_init();
+	columnar_customscan_init();
 
 	TTSOpsColumnar = TTSOpsVirtual;
 	TTSOpsColumnar.copy_heap_tuple = ColumnarSlotCopyHeapTuple;
@@ -1208,9 +1136,30 @@ cstore_tableam_init()
 
 
 void
-cstore_tableam_finish()
+columnar_tableam_finish()
 {
 	object_access_hook = PrevObjectAccessHook;
+}
+
+
+/*
+ * Get the number of chunks filtered out during the given scan.
+ */
+int64
+ColumnarGetChunksFiltered(TableScanDesc scanDesc)
+{
+	ColumnarScanDesc columnarScanDesc = (ColumnarScanDesc) scanDesc;
+	TableReadState *readState = columnarScanDesc->cs_readState;
+
+	/* readState is initialized lazily */
+	if (readState != NULL)
+	{
+		return readState->chunksFiltered;
+	}
+	else
+	{
+		return 0;
+	}
 }
 
 
@@ -1231,7 +1180,7 @@ ColumnarSlotCopyHeapTuple(TupleTableSlot *slot)
 	 * requires it. See the qsort in acquire_sample_rows() and
 	 * also compare_rows in backend/commands/analyze.c.
 	 *
-	 * slot->tts_tid is filled in cstore_getnextslot.
+	 * slot->tts_tid is filled in columnar_getnextslot.
 	 */
 	tuple->t_self = slot->tts_tid;
 
@@ -1240,44 +1189,28 @@ ColumnarSlotCopyHeapTuple(TupleTableSlot *slot)
 
 
 /*
- * Implements object_access_hook. One of the places this is called is just
- * before dropping an object, which allows us to clean-up resources for
- * cstore tables.
+ * ColumnarTableDropHook
  *
- * See the comments for CStoreFdwObjectAccessHook for more details.
+ * Clean-up resources for columnar tables.
  */
 static void
-CStoreTableAMObjectAccessHook(ObjectAccessType access, Oid classId, Oid objectId, int
-							  subId,
-							  void *arg)
+ColumnarTableDropHook(Oid relid)
 {
-	if (PrevObjectAccessHook)
-	{
-		PrevObjectAccessHook(access, classId, objectId, subId, arg);
-	}
-
-	/*
-	 * Do nothing if this is not a DROP relation command.
-	 */
-	if (access != OAT_DROP || classId != RelationRelationId || OidIsValid(subId))
-	{
-		return;
-	}
-
 	/*
 	 * Lock relation to prevent it from being dropped and to avoid
 	 * race conditions in the next if block.
 	 */
-	LockRelationOid(objectId, AccessShareLock);
+	LockRelationOid(relid, AccessShareLock);
 
-	if (IsCStoreTableAmTable(objectId))
+	if (IsColumnarTableAmTable(relid))
 	{
 		/*
 		 * Drop metadata. No need to drop storage here since for
 		 * tableam tables storage is managed by postgres.
 		 */
-		Relation rel = table_open(objectId, AccessExclusiveLock);
+		Relation rel = table_open(relid, AccessExclusiveLock);
 		RelFileNode relfilenode = rel->rd_node;
+
 		DeleteMetadataRows(relfilenode);
 		DeleteColumnarTableOptions(rel->rd_id, true);
 
@@ -1290,11 +1223,82 @@ CStoreTableAMObjectAccessHook(ObjectAccessType access, Oid classId, Oid objectId
 
 
 /*
- * IsCStoreTableAmTable returns true if relation has cstore_tableam
+ * Reject AFTER ... FOR EACH ROW triggers on columnar tables.
+ */
+static void
+ColumnarTriggerCreateHook(Oid tgid)
+{
+	/*
+	 * Fetch the pg_trigger tuple by the Oid of the trigger
+	 */
+	ScanKeyData skey[1];
+	Relation tgrel = table_open(TriggerRelationId, AccessShareLock);
+
+	ScanKeyInit(&skey[0],
+				Anum_pg_trigger_oid,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(tgid));
+
+	SysScanDesc tgscan = systable_beginscan(tgrel, TriggerOidIndexId, true,
+											SnapshotSelf, 1, skey);
+
+	HeapTuple tgtup = systable_getnext(tgscan);
+
+	if (!HeapTupleIsValid(tgtup))
+	{
+		table_close(tgrel, AccessShareLock);
+		return;
+	}
+
+	Form_pg_trigger tgrec = (Form_pg_trigger) GETSTRUCT(tgtup);
+
+	Oid tgrelid = tgrec->tgrelid;
+	int16 tgtype = tgrec->tgtype;
+
+	systable_endscan(tgscan);
+	table_close(tgrel, AccessShareLock);
+
+	if (TRIGGER_FOR_ROW(tgtype) && TRIGGER_FOR_AFTER(tgtype) &&
+		IsColumnarTableAmTable(tgrelid))
+	{
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg(
+							"Foreign keys and AFTER ROW triggers are not supported for columnar tables"),
+						errhint("Consider an AFTER STATEMENT trigger instead.")));
+	}
+}
+
+
+/*
+ * Capture create/drop events and dispatch to the proper action.
+ */
+static void
+ColumnarTableAMObjectAccessHook(ObjectAccessType access, Oid classId, Oid objectId,
+								int subId, void *arg)
+{
+	if (PrevObjectAccessHook)
+	{
+		PrevObjectAccessHook(access, classId, objectId, subId, arg);
+	}
+
+	/* dispatch to the proper action */
+	if (access == OAT_DROP && classId == RelationRelationId && !OidIsValid(subId))
+	{
+		ColumnarTableDropHook(objectId);
+	}
+	else if (access == OAT_POST_CREATE && classId == TriggerRelationId)
+	{
+		ColumnarTriggerCreateHook(objectId);
+	}
+}
+
+
+/*
+ * IsColumnarTableAmTable returns true if relation has columnar_tableam
  * access method. This can be called before extension creation.
  */
 bool
-IsCStoreTableAmTable(Oid relationId)
+IsColumnarTableAmTable(Oid relationId)
 {
 	if (!OidIsValid(relationId))
 	{
@@ -1313,66 +1317,66 @@ IsCStoreTableAmTable(Oid relationId)
 }
 
 
-static const TableAmRoutine cstore_am_methods = {
+static const TableAmRoutine columnar_am_methods = {
 	.type = T_TableAmRoutine,
 
-	.slot_callbacks = cstore_slot_callbacks,
+	.slot_callbacks = columnar_slot_callbacks,
 
-	.scan_begin = cstore_beginscan,
-	.scan_end = cstore_endscan,
-	.scan_rescan = cstore_rescan,
-	.scan_getnextslot = cstore_getnextslot,
+	.scan_begin = columnar_beginscan,
+	.scan_end = columnar_endscan,
+	.scan_rescan = columnar_rescan,
+	.scan_getnextslot = columnar_getnextslot,
 
-	.parallelscan_estimate = cstore_parallelscan_estimate,
-	.parallelscan_initialize = cstore_parallelscan_initialize,
-	.parallelscan_reinitialize = cstore_parallelscan_reinitialize,
+	.parallelscan_estimate = columnar_parallelscan_estimate,
+	.parallelscan_initialize = columnar_parallelscan_initialize,
+	.parallelscan_reinitialize = columnar_parallelscan_reinitialize,
 
-	.index_fetch_begin = cstore_index_fetch_begin,
-	.index_fetch_reset = cstore_index_fetch_reset,
-	.index_fetch_end = cstore_index_fetch_end,
-	.index_fetch_tuple = cstore_index_fetch_tuple,
+	.index_fetch_begin = columnar_index_fetch_begin,
+	.index_fetch_reset = columnar_index_fetch_reset,
+	.index_fetch_end = columnar_index_fetch_end,
+	.index_fetch_tuple = columnar_index_fetch_tuple,
 
-	.tuple_fetch_row_version = cstore_fetch_row_version,
-	.tuple_get_latest_tid = cstore_get_latest_tid,
-	.tuple_tid_valid = cstore_tuple_tid_valid,
-	.tuple_satisfies_snapshot = cstore_tuple_satisfies_snapshot,
-	.compute_xid_horizon_for_tuples = cstore_compute_xid_horizon_for_tuples,
+	.tuple_fetch_row_version = columnar_fetch_row_version,
+	.tuple_get_latest_tid = columnar_get_latest_tid,
+	.tuple_tid_valid = columnar_tuple_tid_valid,
+	.tuple_satisfies_snapshot = columnar_tuple_satisfies_snapshot,
+	.compute_xid_horizon_for_tuples = columnar_compute_xid_horizon_for_tuples,
 
-	.tuple_insert = cstore_tuple_insert,
-	.tuple_insert_speculative = cstore_tuple_insert_speculative,
-	.tuple_complete_speculative = cstore_tuple_complete_speculative,
-	.multi_insert = cstore_multi_insert,
-	.tuple_delete = cstore_tuple_delete,
-	.tuple_update = cstore_tuple_update,
-	.tuple_lock = cstore_tuple_lock,
-	.finish_bulk_insert = cstore_finish_bulk_insert,
+	.tuple_insert = columnar_tuple_insert,
+	.tuple_insert_speculative = columnar_tuple_insert_speculative,
+	.tuple_complete_speculative = columnar_tuple_complete_speculative,
+	.multi_insert = columnar_multi_insert,
+	.tuple_delete = columnar_tuple_delete,
+	.tuple_update = columnar_tuple_update,
+	.tuple_lock = columnar_tuple_lock,
+	.finish_bulk_insert = columnar_finish_bulk_insert,
 
-	.relation_set_new_filenode = cstore_relation_set_new_filenode,
-	.relation_nontransactional_truncate = cstore_relation_nontransactional_truncate,
-	.relation_copy_data = cstore_relation_copy_data,
-	.relation_copy_for_cluster = cstore_relation_copy_for_cluster,
-	.relation_vacuum = cstore_vacuum_rel,
-	.scan_analyze_next_block = cstore_scan_analyze_next_block,
-	.scan_analyze_next_tuple = cstore_scan_analyze_next_tuple,
-	.index_build_range_scan = cstore_index_build_range_scan,
-	.index_validate_scan = cstore_index_validate_scan,
+	.relation_set_new_filenode = columnar_relation_set_new_filenode,
+	.relation_nontransactional_truncate = columnar_relation_nontransactional_truncate,
+	.relation_copy_data = columnar_relation_copy_data,
+	.relation_copy_for_cluster = columnar_relation_copy_for_cluster,
+	.relation_vacuum = columnar_vacuum_rel,
+	.scan_analyze_next_block = columnar_scan_analyze_next_block,
+	.scan_analyze_next_tuple = columnar_scan_analyze_next_tuple,
+	.index_build_range_scan = columnar_index_build_range_scan,
+	.index_validate_scan = columnar_index_validate_scan,
 
-	.relation_size = cstore_relation_size,
-	.relation_needs_toast_table = cstore_relation_needs_toast_table,
+	.relation_size = columnar_relation_size,
+	.relation_needs_toast_table = columnar_relation_needs_toast_table,
 
-	.relation_estimate_size = cstore_estimate_rel_size,
+	.relation_estimate_size = columnar_estimate_rel_size,
 
 	.scan_bitmap_next_block = NULL,
 	.scan_bitmap_next_tuple = NULL,
-	.scan_sample_next_block = cstore_scan_sample_next_block,
-	.scan_sample_next_tuple = cstore_scan_sample_next_tuple
+	.scan_sample_next_block = columnar_scan_sample_next_block,
+	.scan_sample_next_tuple = columnar_scan_sample_next_tuple
 };
 
 
 const TableAmRoutine *
 GetColumnarTableAmRoutine(void)
 {
-	return &cstore_am_methods;
+	return &columnar_am_methods;
 }
 
 
@@ -1380,7 +1384,46 @@ PG_FUNCTION_INFO_V1(columnar_handler);
 Datum
 columnar_handler(PG_FUNCTION_ARGS)
 {
-	PG_RETURN_POINTER(&cstore_am_methods);
+	PG_RETURN_POINTER(&columnar_am_methods);
+}
+
+
+/*
+ * detoast_values
+ *
+ * Detoast and decompress all values. If there's no work to do, return
+ * original pointer; otherwise return a newly-allocated values array. Should
+ * be called in per-tuple context.
+ */
+static Datum *
+detoast_values(TupleDesc tupleDesc, Datum *orig_values, bool *isnull)
+{
+	int natts = tupleDesc->natts;
+
+	/* copy on write to optimize for case where nothing is toasted */
+	Datum *values = orig_values;
+
+	for (int i = 0; i < tupleDesc->natts; i++)
+	{
+		if (!isnull[i] && tupleDesc->attrs[i].attlen == -1 &&
+			VARATT_IS_EXTENDED(values[i]))
+		{
+			/* make a copy */
+			if (values == orig_values)
+			{
+				values = palloc(sizeof(Datum) * natts);
+				memcpy_s(values, sizeof(Datum) * natts,
+						 orig_values, sizeof(Datum) * natts);
+			}
+
+			/* will be freed when per-tuple context is reset */
+			struct varlena *new_value = (struct varlena *) DatumGetPointer(values[i]);
+			new_value = detoast_attr(new_value);
+			values[i] = PointerGetDatum(new_value);
+		}
+	}
+
+	return values;
 }
 
 
@@ -1441,18 +1484,6 @@ CitusCreateAlterColumnarTableSet(char *qualifiedRelationName,
 
 
 /*
- * ColumnarTableDDLContext holds the instance variable for the TableDDLCommandFunction
- * instance described below.
- */
-typedef struct ColumnarTableDDLContext
-{
-	char *schemaName;
-	char *relationName;
-	ColumnarOptions options;
-} ColumnarTableDDLContext;
-
-
-/*
  * GetTableDDLCommandColumnar is an internal function used to turn a
  * ColumnarTableDDLContext stored on the context of a TableDDLCommandFunction into a sql
  * command that will be executed against a table. The resulting command will set the
@@ -1477,7 +1508,7 @@ GetTableDDLCommandColumnar(void *context)
  * command that will be executed against a shard. The resulting command will set the
  * options of the shard to the same options as the relation the shard is based on.
  */
-static char *
+char *
 GetShardedTableDDLCommandColumnar(uint64 shardId, void *context)
 {
 	ColumnarTableDDLContext *tableDDLContext = (ColumnarTableDDLContext *) context;
@@ -1568,7 +1599,7 @@ alter_columnar_table_set(PG_FUNCTION_ARGS)
 	Oid relationId = PG_GETARG_OID(0);
 
 	Relation rel = table_open(relationId, AccessExclusiveLock); /* ALTER TABLE LOCK */
-	if (!IsCStoreTableAmTable(relationId))
+	if (!IsColumnarTableAmTable(relationId))
 	{
 		ereport(ERROR, (errmsg("table %s is not a columnar table",
 							   quote_identifier(RelationGetRelationName(rel)))));
@@ -1604,7 +1635,7 @@ alter_columnar_table_set(PG_FUNCTION_ARGS)
 		options.compressionType = ParseCompressionType(NameStr(*compressionName));
 		if (options.compressionType == COMPRESSION_TYPE_INVALID)
 		{
-			ereport(ERROR, (errmsg("unknown compression type for cstore table: %s",
+			ereport(ERROR, (errmsg("unknown compression type for columnar table: %s",
 								   quote_identifier(NameStr(*compressionName)))));
 		}
 		ereport(DEBUG1, (errmsg("updating compression to %s",
@@ -1675,7 +1706,7 @@ alter_columnar_table_reset(PG_FUNCTION_ARGS)
 	Oid relationId = PG_GETARG_OID(0);
 
 	Relation rel = table_open(relationId, AccessExclusiveLock); /* ALTER TABLE LOCK */
-	if (!IsCStoreTableAmTable(relationId))
+	if (!IsColumnarTableAmTable(relationId))
 	{
 		ereport(ERROR, (errmsg("table %s is not a columnar table",
 							   quote_identifier(RelationGetRelationName(rel)))));
@@ -1690,7 +1721,7 @@ alter_columnar_table_reset(PG_FUNCTION_ARGS)
 	/* chunk_row_count => true */
 	if (!PG_ARGISNULL(1) && PG_GETARG_BOOL(1))
 	{
-		options.chunkRowCount = cstore_chunk_row_count;
+		options.chunkRowCount = columnar_chunk_row_count;
 		ereport(DEBUG1,
 				(errmsg("resetting chunk row count to %d", options.chunkRowCount)));
 	}
@@ -1698,7 +1729,7 @@ alter_columnar_table_reset(PG_FUNCTION_ARGS)
 	/* stripe_row_count => true */
 	if (!PG_ARGISNULL(2) && PG_GETARG_BOOL(2))
 	{
-		options.stripeRowCount = cstore_stripe_row_count;
+		options.stripeRowCount = columnar_stripe_row_count;
 		ereport(DEBUG1,
 				(errmsg("resetting stripe row count to " UINT64_FORMAT,
 						options.stripeRowCount)));
@@ -1707,7 +1738,7 @@ alter_columnar_table_reset(PG_FUNCTION_ARGS)
 	/* compression => true */
 	if (!PG_ARGISNULL(3) && PG_GETARG_BOOL(3))
 	{
-		options.compressionType = cstore_compression;
+		options.compressionType = columnar_compression;
 		ereport(DEBUG1, (errmsg("resetting compression to %s",
 								CompressionTypeStr(options.compressionType))));
 	}

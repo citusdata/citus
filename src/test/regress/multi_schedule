@@ -47,7 +47,7 @@ test: multi_behavioral_analytics_basics multi_behavioral_analytics_single_shard_
 test: multi_shard_update_delete recursive_dml_with_different_planners_executors
 test: insert_select_repartition window_functions dml_recursive multi_insert_select_window
 test: multi_insert_select_conflict citus_table_triggers
-test: multi_row_insert insert_select_into_local_table multi_create_table_new_features
+test: multi_row_insert insert_select_into_local_table multi_create_table_new_features alter_index
 
 # following should not run in parallel because it relies on connection counts to workers
 test: insert_select_connection_leak
@@ -62,7 +62,7 @@ test: ensure_no_intermediate_data_leak
 # ----------
 # Tests for partitioning support
 # ----------
-test: multi_partitioning_utils multi_partitioning replicated_partitioned_table
+test: multi_partitioning_utils multi_partitioning partitioning_issue_3970 replicated_partitioned_table
 
 # ----------
 # Tests for foreign data wrapper support
@@ -94,6 +94,7 @@ test: tableam
 # Tests for statistics propagation
 # ----------
 test: propagate_statistics
+test: pg13_propagate_statistics
 
 # ----------
 # Miscellaneous tests to check our query planning behavior
@@ -122,7 +123,9 @@ test: multi_query_directory_cleanup
 test: multi_task_assignment_policy multi_cross_shard
 test: multi_utility_statements
 test: multi_dropped_column_aliases foreign_key_restriction_enforcement
-test: multi_binary_master_copy_format binary_protocol
+test: binary_protocol
+test: alter_table_set_access_method
+test: alter_distributed_table
 
 # ----------
 # Parallel TPC-H tests to check our distributed execution behavior
@@ -166,7 +169,6 @@ test: with_executors with_join with_partitioning with_transactions with_dml
 # ----------
 test: multi_load_large_records
 test: multi_master_delete_protocol
-test: multi_shard_modify
 
 # ----------
 # Tests around DDL statements run on distributed tables
@@ -301,7 +303,8 @@ test: node_conninfo_reload
 # ----------
 # multi_foreign_key tests foreign key push down on distributed tables
 # ----------
-test: multi_foreign_key multi_foreign_key_relation_graph
+test: multi_foreign_key
+test: multi_foreign_key_relation_graph
 
 # ----------
 # multi_replicate_reference_table tests replicating reference tables to new nodes after we add new nodes
@@ -316,12 +319,17 @@ test: multi_remove_node_reference_table
 # --------
 test: add_coordinator
 test: multi_reference_table citus_local_tables_queries
-test: foreign_key_to_reference_table citus_local_table_triggers
+test: foreign_key_to_reference_table
+test: citus_local_table_triggers
 test: replicate_reference_tables_to_coordinator
 test: coordinator_shouldhaveshards
 test: local_shard_utility_command_execution
 test: citus_local_tables
-test: multi_row_router_insert mixed_relkind_tests
+test: multi_row_router_insert mixed_relkind_tests create_ref_dist_from_citus_local
+test: undistribute_table_cascade
+test: create_citus_local_table_cascade
+test: fkeys_between_local_ref
+test: auto_undist_citus_local
 
 test: remove_coordinator
 

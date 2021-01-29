@@ -47,7 +47,6 @@ static void FinishRemoteTransactionSavepointRollback(MultiConnection *connection
 													 SubTransactionId subId);
 
 static void Assign2PCIdentifier(MultiConnection *connection);
-static void WarnAboutLeakedPreparedTransaction(MultiConnection *connection, bool commit);
 
 
 /*
@@ -215,7 +214,6 @@ StartRemoteTransactionCommit(MultiConnection *connection)
 {
 	RemoteTransaction *transaction = &connection->remoteTransaction;
 	const bool raiseErrors = false;
-	const bool isCommit = true;
 
 	/* can only commit if transaction is in progress */
 	Assert(transaction->transactionState != REMOTE_TRANS_NOT_STARTED);
@@ -253,8 +251,6 @@ StartRemoteTransactionCommit(MultiConnection *connection)
 		if (!SendRemoteCommand(connection, command.data))
 		{
 			HandleRemoteTransactionConnectionError(connection, raiseErrors);
-
-			WarnAboutLeakedPreparedTransaction(connection, isCommit);
 		}
 	}
 	else
@@ -286,7 +282,6 @@ FinishRemoteTransactionCommit(MultiConnection *connection)
 {
 	RemoteTransaction *transaction = &connection->remoteTransaction;
 	const bool raiseErrors = false;
-	const bool isCommit = true;
 
 	Assert(transaction->transactionState == REMOTE_TRANS_1PC_ABORTING ||
 		   transaction->transactionState == REMOTE_TRANS_1PC_COMMITTING ||
@@ -318,7 +313,6 @@ FinishRemoteTransactionCommit(MultiConnection *connection)
 		{
 			ereport(WARNING, (errmsg("failed to commit transaction on %s:%d",
 									 connection->hostname, connection->port)));
-			WarnAboutLeakedPreparedTransaction(connection, isCommit);
 		}
 	}
 	else if (transaction->transactionState == REMOTE_TRANS_1PC_ABORTING ||
@@ -358,7 +352,6 @@ StartRemoteTransactionAbort(MultiConnection *connection)
 {
 	RemoteTransaction *transaction = &connection->remoteTransaction;
 	const bool raiseErrors = false;
-	const bool isNotCommit = false;
 
 	Assert(transaction->transactionState != REMOTE_TRANS_NOT_STARTED);
 
@@ -385,8 +378,6 @@ StartRemoteTransactionAbort(MultiConnection *connection)
 		if (!SendRemoteCommand(connection, command.data))
 		{
 			HandleRemoteTransactionConnectionError(connection, raiseErrors);
-
-			WarnAboutLeakedPreparedTransaction(connection, isNotCommit);
 		}
 		else
 		{
@@ -438,11 +429,7 @@ FinishRemoteTransactionAbort(MultiConnection *connection)
 		PGresult *result = GetRemoteCommandResult(connection, raiseErrors);
 		if (!IsResponseOK(result))
 		{
-			const bool isCommit = false;
-
 			HandleRemoteTransactionResultError(connection, result, raiseErrors);
-
-			WarnAboutLeakedPreparedTransaction(connection, isCommit);
 		}
 
 		PQclear(result);
@@ -1402,36 +1389,4 @@ ParsePreparedTransactionName(char *preparedTransactionName,
 	}
 
 	return true;
-}
-
-
-/*
- * WarnAboutLeakedPreparedTransaction issues a WARNING explaining that a
- * prepared transaction could not be committed or rolled back, and explains
- * how to perform cleanup.
- */
-static void
-WarnAboutLeakedPreparedTransaction(MultiConnection *connection, bool commit)
-{
-	StringInfoData command;
-	RemoteTransaction *transaction = &connection->remoteTransaction;
-
-	initStringInfo(&command);
-
-	if (commit)
-	{
-		appendStringInfo(&command, "COMMIT PREPARED %s",
-						 quote_literal_cstr(transaction->preparedName));
-	}
-	else
-	{
-		appendStringInfo(&command, "ROLLBACK PREPARED %s",
-						 quote_literal_cstr(transaction->preparedName));
-	}
-
-	/* log a warning so the user may abort the transaction later */
-	ereport(WARNING, (errmsg("failed to roll back prepared transaction '%s'",
-							 transaction->preparedName),
-					  errhint("Run \"%s\" on %s:%u",
-							  command.data, connection->hostname, connection->port)));
 }

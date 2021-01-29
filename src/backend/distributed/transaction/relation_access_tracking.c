@@ -772,7 +772,7 @@ CheckConflictingRelationAccesses(Oid relationId, ShardPlacementAccessType access
 								   "a parallel operation on a distributed table",
 								   relationName),
 							errdetail("When there is a foreign key to a reference "
-									  "table or to a citus local table, Citus needs "
+									  "table or to a local table, Citus needs "
 									  "to perform all operations over a single "
 									  "connection per node to ensure consistency."),
 							errhint("Try re-running the transaction with "

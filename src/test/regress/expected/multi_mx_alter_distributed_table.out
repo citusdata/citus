@@ -1,0 +1,163 @@
+CREATE SCHEMA mx_alter_distributed_table;
+SET search_path TO mx_alter_distributed_table;
+SET citus.shard_replication_factor TO 1;
+-- test alter_distributed_table UDF
+CREATE TABLE adt_table (a INT, b INT);
+CREATE TABLE adt_col (a INT UNIQUE, b INT);
+CREATE TABLE adt_ref (a INT REFERENCES adt_col(a));
+SELECT create_distributed_table('adt_table', 'a', colocate_with:='none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_table('adt_col', 'a', colocate_with:='adt_table');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_table('adt_ref', 'a', colocate_with:='adt_table');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO adt_table VALUES (1, 2), (3, 4), (5, 6);
+INSERT INTO adt_col VALUES (3, 4), (5, 6), (7, 8);
+INSERT INTO adt_ref VALUES (3), (5);
+SELECT table_name, citus_table_type, distribution_column, shard_count FROM public.citus_tables WHERE table_name::text LIKE 'adt%';
+ table_name | citus_table_type | distribution_column | shard_count
+---------------------------------------------------------------------
+ adt_col    | distributed      | a                   |           4
+ adt_ref    | distributed      | a                   |           4
+ adt_table  | distributed      | a                   |           4
+(3 rows)
+
+SELECT STRING_AGG(table_name::text, ', ' ORDER BY 1) AS "Colocation Groups" FROM public.citus_tables WHERE table_name::text LIKE 'adt%' GROUP BY colocation_id ORDER BY 1;
+      Colocation Groups
+---------------------------------------------------------------------
+ adt_col, adt_ref, adt_table
+(1 row)
+
+SELECT conrelid::regclass::text AS "Referencing Table", pg_get_constraintdef(oid, true) AS "Definition" FROM  pg_constraint
+    WHERE (conrelid::regclass::text = 'adt_col' OR confrelid::regclass::text = 'adt_col') ORDER BY 1;
+ Referencing Table |              Definition
+---------------------------------------------------------------------
+ adt_col           | UNIQUE (a)
+ adt_ref           | FOREIGN KEY (a) REFERENCES adt_col(a)
+(2 rows)
+
+SET client_min_messages TO WARNING;
+SELECT alter_distributed_table('adt_table', shard_count:=6, cascade_to_colocated:=true);
+ alter_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SET client_min_messages TO DEFAULT;
+SELECT table_name, citus_table_type, distribution_column, shard_count FROM public.citus_tables WHERE table_name::text LIKE 'adt%';
+ table_name | citus_table_type | distribution_column | shard_count
+---------------------------------------------------------------------
+ adt_col    | distributed      | a                   |           6
+ adt_ref    | distributed      | a                   |           6
+ adt_table  | distributed      | a                   |           6
+(3 rows)
+
+SELECT STRING_AGG(table_name::text, ', ' ORDER BY 1) AS "Colocation Groups" FROM public.citus_tables WHERE table_name::text LIKE 'adt%' GROUP BY colocation_id ORDER BY 1;
+      Colocation Groups
+---------------------------------------------------------------------
+ adt_col, adt_ref, adt_table
+(1 row)
+
+SELECT conrelid::regclass::text AS "Referencing Table", pg_get_constraintdef(oid, true) AS "Definition" FROM  pg_constraint
+    WHERE (conrelid::regclass::text = 'adt_col' OR confrelid::regclass::text = 'adt_col') ORDER BY 1;
+ Referencing Table |              Definition
+---------------------------------------------------------------------
+ adt_col           | UNIQUE (a)
+ adt_ref           | FOREIGN KEY (a) REFERENCES adt_col(a)
+(2 rows)
+
+SELECT alter_distributed_table('adt_table', distribution_column:='b', colocate_with:='none');
+NOTICE:  creating a new table for mx_alter_distributed_table.adt_table
+NOTICE:  Moving the data of mx_alter_distributed_table.adt_table
+NOTICE:  Dropping the old mx_alter_distributed_table.adt_table
+NOTICE:  Renaming the new table to mx_alter_distributed_table.adt_table
+ alter_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT table_name, citus_table_type, distribution_column, shard_count FROM public.citus_tables WHERE table_name::text LIKE 'adt%';
+ table_name | citus_table_type | distribution_column | shard_count
+---------------------------------------------------------------------
+ adt_col    | distributed      | a                   |           6
+ adt_ref    | distributed      | a                   |           6
+ adt_table  | distributed      | b                   |           6
+(3 rows)
+
+SELECT STRING_AGG(table_name::text, ', ' ORDER BY 1) AS "Colocation Groups" FROM public.citus_tables WHERE table_name::text LIKE 'adt%' GROUP BY colocation_id ORDER BY 1;
+ Colocation Groups
+---------------------------------------------------------------------
+ adt_col, adt_ref
+ adt_table
+(2 rows)
+
+SELECT conrelid::regclass::text AS "Referencing Table", pg_get_constraintdef(oid, true) AS "Definition" FROM  pg_constraint
+    WHERE (conrelid::regclass::text = 'adt_col' OR confrelid::regclass::text = 'adt_col') ORDER BY 1;
+ Referencing Table |              Definition
+---------------------------------------------------------------------
+ adt_col           | UNIQUE (a)
+ adt_ref           | FOREIGN KEY (a) REFERENCES adt_col(a)
+(2 rows)
+
+SELECT * FROM adt_table ORDER BY 1;
+ a | b
+---------------------------------------------------------------------
+ 1 | 2
+ 3 | 4
+ 5 | 6
+(3 rows)
+
+SELECT * FROM adt_col ORDER BY 1;
+ a | b
+---------------------------------------------------------------------
+ 3 | 4
+ 5 | 6
+ 7 | 8
+(3 rows)
+
+SELECT * FROM adt_ref ORDER BY 1;
+ a
+---------------------------------------------------------------------
+ 3
+ 5
+(2 rows)
+
+BEGIN;
+INSERT INTO adt_table SELECT x, x+1 FROM generate_series(1, 1000) x;
+SELECT alter_distributed_table('adt_table', distribution_column:='a');
+NOTICE:  creating a new table for mx_alter_distributed_table.adt_table
+NOTICE:  Moving the data of mx_alter_distributed_table.adt_table
+NOTICE:  Dropping the old mx_alter_distributed_table.adt_table
+NOTICE:  Renaming the new table to mx_alter_distributed_table.adt_table
+ alter_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT COUNT(*) FROM adt_table;
+ count
+---------------------------------------------------------------------
+  1003
+(1 row)
+
+END;
+SELECT table_name, citus_table_type, distribution_column, shard_count FROM public.citus_tables WHERE table_name::text = 'adt_table';
+ table_name | citus_table_type | distribution_column | shard_count
+---------------------------------------------------------------------
+ adt_table  | distributed      | a                   |           6
+(1 row)
+
+SET client_min_messages TO WARNING;
+DROP SCHEMA mx_alter_distributed_table CASCADE;

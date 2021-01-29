@@ -1,8 +1,8 @@
 SET columnar.compression TO 'none';
-SELECT count(distinct storageid) AS columnar_table_count FROM columnar.columnar_stripes \gset
+SELECT count(distinct storageid) AS columnar_table_count FROM columnar.stripe \gset
 CREATE TABLE t(a int, b int) USING columnar;
 CREATE VIEW t_stripes AS
-SELECT * FROM columnar.columnar_stripes a, pg_class b
+SELECT * FROM columnar.stripe a, pg_class b
 WHERE a.storageid = columnar_relation_storageid(b.oid) AND b.relname='t';
 SELECT count(*) FROM t_stripes;
  count
@@ -74,35 +74,35 @@ SELECT count(*) FROM t_stripes;
 
 -- VACUUM FULL doesn't reclaim dropped columns, but converts them to NULLs
 ALTER TABLE t DROP COLUMN a;
-SELECT stripe, attr, chunk, minimum_value IS NULL, maximum_value IS NULL
-FROM columnar.columnar_skipnodes a, pg_class b
+SELECT stripeid, attnum, chunkid, minimum_value IS NULL, maximum_value IS NULL
+FROM columnar.chunk a, pg_class b
 WHERE a.storageid = columnar_relation_storageid(b.oid) AND b.relname='t' ORDER BY 1, 2, 3;
- stripe | attr | chunk | ?column? | ?column?
+ stripeid | attnum | chunkid | ?column? | ?column?
 ---------------------------------------------------------------------
-      1 |    1 |     0 | f        | f
-      1 |    2 |     0 | f        | f
-      2 |    1 |     0 | f        | f
-      2 |    2 |     0 | f        | f
-      3 |    1 |     0 | f        | f
-      3 |    2 |     0 | f        | f
+        1 |      1 |       0 | f        | f
+        1 |      2 |       0 | f        | f
+        2 |      1 |       0 | f        | f
+        2 |      2 |       0 | f        | f
+        3 |      1 |       0 | f        | f
+        3 |      2 |       0 | f        | f
 (6 rows)
 
 VACUUM FULL t;
-SELECT stripe, attr, chunk, minimum_value IS NULL, maximum_value IS NULL
-FROM columnar.columnar_skipnodes a, pg_class b
+SELECT stripeid, attnum, chunkid, minimum_value IS NULL, maximum_value IS NULL
+FROM columnar.chunk a, pg_class b
 WHERE a.storageid = columnar_relation_storageid(b.oid) AND b.relname='t' ORDER BY 1, 2, 3;
- stripe | attr | chunk | ?column? | ?column?
+ stripeid | attnum | chunkid | ?column? | ?column?
 ---------------------------------------------------------------------
-      1 |    1 |     0 | t        | t
-      1 |    2 |     0 | f        | f
-      2 |    1 |     0 | t        | t
-      2 |    2 |     0 | f        | f
-      3 |    1 |     0 | t        | t
-      3 |    2 |     0 | f        | f
+        1 |      1 |       0 | t        | t
+        1 |      2 |       0 | f        | f
+        2 |      1 |       0 | t        | t
+        2 |      2 |       0 | f        | f
+        3 |      1 |       0 | t        | t
+        3 |      2 |       0 | f        | f
 (6 rows)
 
 -- Make sure we cleaned-up the transient table metadata after VACUUM FULL commands
-SELECT count(distinct storageid) - :columnar_table_count FROM columnar.columnar_stripes;
+SELECT count(distinct storageid) - :columnar_table_count FROM columnar.stripe;
  ?column?
 ---------------------------------------------------------------------
         1
@@ -242,7 +242,7 @@ chunk count: 8, containing data for dropped columns: 0, none compressed: 2, pglz
 DROP TABLE t;
 DROP VIEW t_stripes;
 -- Make sure we cleaned the metadata for t too
-SELECT count(distinct storageid) - :columnar_table_count FROM columnar.columnar_stripes;
+SELECT count(distinct storageid) - :columnar_table_count FROM columnar.stripe;
  ?column?
 ---------------------------------------------------------------------
         0

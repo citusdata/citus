@@ -42,6 +42,7 @@ test: multi_mx_function_call_delegation
 test: multi_mx_modifications local_shard_execution
 test: multi_mx_repartition_udt_w1 multi_mx_repartition_udt_w2
 test: local_shard_copy
+test: undistribute_table_cascade_mx
 test: citus_local_tables_mx
 test: citus_local_tables_queries_mx
 test: multi_mx_transaction_recovery
@@ -50,6 +51,7 @@ test: multi_mx_explain
 test: multi_mx_reference_table
 test: multi_mx_insert_select_repartition
 test: locally_execute_intermediate_results
+test: multi_mx_alter_distributed_table
 
 # test that no tests leaked intermediate results. This should always be last
 test: ensure_no_intermediate_data_leak

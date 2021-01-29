@@ -247,6 +247,28 @@ $cmd$);
  (localhost,57638,20090007,t,"(100,1000,pglz,15)")
 (4 rows)
 
+-- verify undistribute works
+SELECT undistribute_table('table_option');
+NOTICE:  creating a new table for columnar_citus_integration.table_option
+NOTICE:  Moving the data of columnar_citus_integration.table_option
+NOTICE:  Dropping the old columnar_citus_integration.table_option
+NOTICE:  Renaming the new table to columnar_citus_integration.table_option
+ undistribute_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT * FROM pg_dist_partition WHERE logicalrelid = 'table_option'::regclass;
+ logicalrelid | partmethod | partkey | colocationid | repmodel
+---------------------------------------------------------------------
+(0 rows)
+
+SELECT compression FROM columnar.options WHERE regclass = 'table_option'::regclass;
+ compression
+---------------------------------------------------------------------
+ none
+(1 row)
+
 DROP TABLE table_option, table_option_2;
 -- verify settings get to all placements when there are multiple replica's
 SET citus.shard_replication_factor TO 2;
@@ -544,6 +566,28 @@ $cmd$);
  (localhost,57638,20090015,t,"(100,1000,pglz,19)")
 (8 rows)
 
+-- verify undistribute works
+SELECT undistribute_table('table_option');
+NOTICE:  creating a new table for columnar_citus_integration.table_option
+NOTICE:  Moving the data of columnar_citus_integration.table_option
+NOTICE:  Dropping the old columnar_citus_integration.table_option
+NOTICE:  Renaming the new table to columnar_citus_integration.table_option
+ undistribute_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT * FROM pg_dist_partition WHERE logicalrelid = 'table_option'::regclass;
+ logicalrelid | partmethod | partkey | colocationid | repmodel
+---------------------------------------------------------------------
+(0 rows)
+
+SELECT compression FROM columnar.options WHERE regclass = 'table_option'::regclass;
+ compression
+---------------------------------------------------------------------
+ none
+(1 row)
+
 DROP TABLE table_option, table_option_2;
 -- test options on a reference table
 CREATE TABLE table_option_reference (a int, b text) USING columnar;
@@ -761,6 +805,267 @@ $cmd$);
  (localhost,57638,20090017,t,"(100,1000,pglz,9)")
 (2 rows)
 
+-- verify undistribute works
+SELECT undistribute_table('table_option_reference');
+NOTICE:  creating a new table for columnar_citus_integration.table_option_reference
+NOTICE:  Moving the data of columnar_citus_integration.table_option_reference
+NOTICE:  Dropping the old columnar_citus_integration.table_option_reference
+NOTICE:  Renaming the new table to columnar_citus_integration.table_option_reference
+ undistribute_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT * FROM pg_dist_partition WHERE logicalrelid = 'table_option_reference'::regclass;
+ logicalrelid | partmethod | partkey | colocationid | repmodel
+---------------------------------------------------------------------
+(0 rows)
+
+SELECT compression FROM columnar.options WHERE regclass = 'table_option_reference'::regclass;
+ compression
+---------------------------------------------------------------------
+ none
+(1 row)
+
 DROP TABLE table_option_reference, table_option_reference_2;
+SET citus.shard_replication_factor TO 1;
+-- test options on a citus local table
+SELECT 1 FROM master_add_node('localhost', :master_port, groupId => 0);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+CREATE TABLE table_option_citus_local (a int, b text) USING columnar;
+SELECT citus_add_local_table_to_metadata('table_option_citus_local');
+ citus_add_local_table_to_metadata
+---------------------------------------------------------------------
+
+(1 row)
+
+-- setting: compression
+-- get baseline for setting
+SELECT run_command_on_placements('table_option_citus_local',$cmd$
+  SELECT compression FROM columnar.options WHERE regclass = '%s'::regclass;
+$cmd$);
+     run_command_on_placements
+---------------------------------------------------------------------
+ (localhost,57636,20090018,t,none)
+(1 row)
+
+-- change setting
+SELECT alter_columnar_table_set('table_option_citus_local', compression => 'pglz');
+ alter_columnar_table_set
+---------------------------------------------------------------------
+
+(1 row)
+
+-- verify setting
+SELECT run_command_on_placements('table_option_citus_local',$cmd$
+  SELECT compression FROM columnar.options WHERE regclass = '%s'::regclass;
+$cmd$);
+     run_command_on_placements
+---------------------------------------------------------------------
+ (localhost,57636,20090018,t,pglz)
+(1 row)
+
+-- reset setting
+SELECT alter_columnar_table_reset('table_option_citus_local', compression => true);
+ alter_columnar_table_reset
+---------------------------------------------------------------------
+
+(1 row)
+
+-- verify setting
+SELECT run_command_on_placements('table_option_citus_local',$cmd$
+  SELECT compression FROM columnar.options WHERE regclass = '%s'::regclass;
+$cmd$);
+     run_command_on_placements
+---------------------------------------------------------------------
+ (localhost,57636,20090018,t,none)
+(1 row)
+
+-- setting: compression_level
+-- get baseline for setting
+SELECT run_command_on_placements('table_option_citus_local',$cmd$
+  SELECT compression_level FROM columnar.options WHERE regclass = '%s'::regclass;
+$cmd$);
+   run_command_on_placements
+---------------------------------------------------------------------
+ (localhost,57636,20090018,t,3)
+(1 row)
+
+-- change setting
+SELECT alter_columnar_table_set('table_option_citus_local', compression_level => 11);
+ alter_columnar_table_set
+---------------------------------------------------------------------
+
+(1 row)
+
+-- verify setting
+SELECT run_command_on_placements('table_option_citus_local',$cmd$
+  SELECT compression_level FROM columnar.options WHERE regclass = '%s'::regclass;
+$cmd$);
+    run_command_on_placements
+---------------------------------------------------------------------
+ (localhost,57636,20090018,t,11)
+(1 row)
+
+-- reset setting
+SELECT alter_columnar_table_reset('table_option_citus_local', compression_level => true);
+ alter_columnar_table_reset
+---------------------------------------------------------------------
+
+(1 row)
+
+-- verify setting
+SELECT run_command_on_placements('table_option_citus_local',$cmd$
+  SELECT compression_level FROM columnar.options WHERE regclass = '%s'::regclass;
+$cmd$);
+   run_command_on_placements
+---------------------------------------------------------------------
+ (localhost,57636,20090018,t,3)
+(1 row)
+
+-- setting: chunk_row_count
+-- get baseline for setting
+SELECT run_command_on_placements('table_option_citus_local',$cmd$
+  SELECT chunk_row_count FROM columnar.options WHERE regclass = '%s'::regclass;
+$cmd$);
+     run_command_on_placements
+---------------------------------------------------------------------
+ (localhost,57636,20090018,t,10000)
+(1 row)
+
+-- change setting
+SELECT alter_columnar_table_set('table_option_citus_local', chunk_row_count => 100);
+ alter_columnar_table_set
+---------------------------------------------------------------------
+
+(1 row)
+
+-- verify setting
+SELECT run_command_on_placements('table_option_citus_local',$cmd$
+  SELECT chunk_row_count FROM columnar.options WHERE regclass = '%s'::regclass;
+$cmd$);
+    run_command_on_placements
+---------------------------------------------------------------------
+ (localhost,57636,20090018,t,100)
+(1 row)
+
+-- reset setting
+SELECT alter_columnar_table_reset('table_option_citus_local', chunk_row_count => true);
+ alter_columnar_table_reset
+---------------------------------------------------------------------
+
+(1 row)
+
+-- verify setting
+SELECT run_command_on_placements('table_option_citus_local',$cmd$
+  SELECT chunk_row_count FROM columnar.options WHERE regclass = '%s'::regclass;
+$cmd$);
+     run_command_on_placements
+---------------------------------------------------------------------
+ (localhost,57636,20090018,t,10000)
+(1 row)
+
+-- setting: stripe_row_count
+-- get baseline for setting
+SELECT run_command_on_placements('table_option_citus_local',$cmd$
+  SELECT stripe_row_count FROM columnar.options WHERE regclass = '%s'::regclass;
+$cmd$);
+      run_command_on_placements
+---------------------------------------------------------------------
+ (localhost,57636,20090018,t,150000)
+(1 row)
+
+-- change setting
+SELECT alter_columnar_table_set('table_option_citus_local', stripe_row_count => 100);
+ alter_columnar_table_set
+---------------------------------------------------------------------
+
+(1 row)
+
+-- verify setting
+SELECT run_command_on_placements('table_option_citus_local',$cmd$
+  SELECT stripe_row_count FROM columnar.options WHERE regclass = '%s'::regclass;
+$cmd$);
+    run_command_on_placements
+---------------------------------------------------------------------
+ (localhost,57636,20090018,t,100)
+(1 row)
+
+-- reset setting
+SELECT alter_columnar_table_reset('table_option_citus_local', stripe_row_count => true);
+ alter_columnar_table_reset
+---------------------------------------------------------------------
+
+(1 row)
+
+-- verify setting
+SELECT run_command_on_placements('table_option_citus_local',$cmd$
+  SELECT stripe_row_count FROM columnar.options WHERE regclass = '%s'::regclass;
+$cmd$);
+      run_command_on_placements
+---------------------------------------------------------------------
+ (localhost,57636,20090018,t,150000)
+(1 row)
+
+-- verify settings are propagated when creating a table
+CREATE TABLE table_option_citus_local_2 (a int, b text) USING columnar;
+SELECT alter_columnar_table_set('table_option_citus_local_2',
+                                chunk_row_count => 100,
+                                stripe_row_count => 1000,
+                                compression => 'pglz',
+                                compression_level => 9);
+ alter_columnar_table_set
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT citus_add_local_table_to_metadata('table_option_citus_local_2');
+ citus_add_local_table_to_metadata
+---------------------------------------------------------------------
+
+(1 row)
+
+-- verify settings on placements
+SELECT run_command_on_placements('table_option_citus_local_2',$cmd$
+  SELECT ROW(chunk_row_count, stripe_row_count, compression, compression_level) FROM columnar.options WHERE regclass = '%s'::regclass;
+$cmd$);
+            run_command_on_placements
+---------------------------------------------------------------------
+ (localhost,57636,20090019,t,"(100,1000,pglz,9)")
+(1 row)
+
+-- verify undistribute works
+SELECT undistribute_table('table_option_citus_local');
+NOTICE:  creating a new table for columnar_citus_integration.table_option_citus_local
+NOTICE:  Moving the data of columnar_citus_integration.table_option_citus_local
+NOTICE:  Dropping the old columnar_citus_integration.table_option_citus_local
+NOTICE:  Renaming the new table to columnar_citus_integration.table_option_citus_local
+ undistribute_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT * FROM pg_dist_partition WHERE logicalrelid = 'table_option_citus_local'::regclass;
+ logicalrelid | partmethod | partkey | colocationid | repmodel
+---------------------------------------------------------------------
+(0 rows)
+
+SELECT compression FROM columnar.options WHERE regclass = 'table_option_citus_local'::regclass;
+ compression
+---------------------------------------------------------------------
+ none
+(1 row)
+
+DROP TABLE table_option_citus_local, table_option_citus_local_2;
+SELECT 1 FROM master_remove_node('localhost', :master_port);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
 SET client_min_messages TO WARNING;
 DROP SCHEMA columnar_citus_integration CASCADE;

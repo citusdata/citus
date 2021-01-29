@@ -15,11 +15,39 @@ SELECT create_distributed_table('testtableddl', 'distributecol', 'append');
 -- change this test every time the previous tests change the set of tables they leave
 -- around.
 SET client_min_messages TO 'WARNING';
+DROP FUNCTION pg_catalog.master_create_worker_shards(text, integer, integer);
 DROP EXTENSION citus CASCADE;
 RESET client_min_messages;
 
-CREATE EXTENSION citus;
+BEGIN;
+  SET client_min_messages TO ERROR;
+  SET search_path TO public;
+  CREATE EXTENSION citus;
 
+  -- not wait for replicating reference tables from other test files
+  SET citus.replicate_reference_tables_on_activate TO OFF;
+  SELECT 1 FROM master_add_node('localhost', :master_port, groupId => 0);
+
+  create table l1 (a int unique);
+  SELECT create_reference_table('l1');
+
+  create schema other_schema;
+  create table other_schema.l3 (a int);
+  select create_reference_table ('other_schema.l3');
+
+  alter table other_schema.l3 add constraint fkey foreign key (a) references l1(a);
+
+  -- show that works fine
+  drop schema public cascade;
+ROLLBACK;
+
+CREATE EXTENSION citus;
+-- this function is dropped in Citus10, added here for tests
+CREATE OR REPLACE FUNCTION pg_catalog.master_create_worker_shards(table_name text, shard_count integer,
+                                                                  replication_factor integer DEFAULT 2)
+    RETURNS void
+    AS 'citus', $$master_create_worker_shards$$
+    LANGUAGE C STRICT;
 -- re-add the nodes to the cluster
 SELECT 1 FROM master_add_node('localhost', :worker_1_port);
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);

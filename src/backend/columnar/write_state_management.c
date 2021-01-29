@@ -2,7 +2,7 @@
 #include "citus_version.h"
 
 #include "postgres.h"
-#include "columnar/cstore.h"
+#include "columnar/columnar.h"
 
 #if HAS_TABLEAM
 
@@ -47,9 +47,9 @@
 #include "utils/rel.h"
 #include "utils/syscache.h"
 
-#include "columnar/cstore_customscan.h"
-#include "columnar/cstore_tableam.h"
-#include "columnar/cstore_version_compat.h"
+#include "columnar/columnar_customscan.h"
+#include "columnar/columnar_tableam.h"
+#include "columnar/columnar_version_compat.h"
 
 
 /*
@@ -116,8 +116,8 @@ CleanupWriteStateMap(void *arg)
 
 
 TableWriteState *
-cstore_init_write_state(Relation relation, TupleDesc tupdesc,
-						SubTransactionId currentSubXid)
+columnar_init_write_state(Relation relation, TupleDesc tupdesc,
+						  SubTransactionId currentSubXid)
 {
 	bool found;
 
@@ -178,13 +178,13 @@ cstore_init_write_state(Relation relation, TupleDesc tupdesc,
 	 */
 	MemoryContext oldContext = MemoryContextSwitchTo(WriteStateContext);
 
-	ColumnarOptions cstoreOptions = { 0 };
-	ReadColumnarOptions(relation->rd_id, &cstoreOptions);
+	ColumnarOptions columnarOptions = { 0 };
+	ReadColumnarOptions(relation->rd_id, &columnarOptions);
 
 	SubXidWriteState *stackEntry = palloc0(sizeof(SubXidWriteState));
-	stackEntry->writeState = CStoreBeginWrite(relation->rd_node,
-											  cstoreOptions,
-											  tupdesc);
+	stackEntry->writeState = ColumnarBeginWrite(relation->rd_node,
+												columnarOptions,
+												tupdesc);
 	stackEntry->subXid = currentSubXid;
 	stackEntry->next = hashEntry->writeStateStack;
 	hashEntry->writeStateStack = stackEntry;
@@ -215,7 +215,7 @@ FlushWriteStateForRelfilenode(Oid relfilenode, SubTransactionId currentSubXid)
 		SubXidWriteState *stackEntry = entry->writeStateStack;
 		if (stackEntry->subXid == currentSubXid)
 		{
-			CStoreFlushPendingWrites(stackEntry->writeState);
+			ColumnarFlushPendingWrites(stackEntry->writeState);
 		}
 	}
 }
@@ -279,7 +279,7 @@ PopWriteStateForAllRels(SubTransactionId currentSubXid, SubTransactionId parentS
 			{
 				if (commit)
 				{
-					CStoreEndWrite(stackHead->writeState);
+					ColumnarEndWrite(stackHead->writeState);
 				}
 
 				entry->writeStateStack = stackHead->next;

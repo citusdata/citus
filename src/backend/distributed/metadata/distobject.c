@@ -45,17 +45,18 @@
 static int ExecuteCommandAsSuperuser(char *query, int paramCount, Oid *paramTypes,
 									 Datum *paramValues);
 
+PG_FUNCTION_INFO_V1(citus_unmark_object_distributed);
 PG_FUNCTION_INFO_V1(master_unmark_object_distributed);
 
 
 /*
- * master_unmark_object_distributed(classid oid, objid oid, objsubid int)
+ * citus_unmark_object_distributed(classid oid, objid oid, objsubid int)
  *
  * removes the entry for an object address from pg_dist_object. Only removes the entry if
  * the object does not exist anymore.
  */
 Datum
-master_unmark_object_distributed(PG_FUNCTION_ARGS)
+citus_unmark_object_distributed(PG_FUNCTION_ARGS)
 {
 	Oid classid = PG_GETARG_OID(0);
 	Oid objid = PG_GETARG_OID(1);
@@ -82,6 +83,16 @@ master_unmark_object_distributed(PG_FUNCTION_ARGS)
 	UnmarkObjectDistributed(&address);
 
 	PG_RETURN_VOID();
+}
+
+
+/*
+ * master_unmark_object_distributed is a wrapper function for old UDF name.
+ */
+Datum
+master_unmark_object_distributed(PG_FUNCTION_ARGS)
+{
+	return citus_unmark_object_distributed(fcinfo);
 }
 
 

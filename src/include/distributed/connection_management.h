@@ -252,6 +252,7 @@ extern void FinishConnectionListEstablishment(List *multiConnectionList);
 extern void FinishConnectionEstablishment(MultiConnection *connection);
 extern void ClaimConnectionExclusively(MultiConnection *connection);
 extern void UnclaimConnection(MultiConnection *connection);
+extern bool IsCitusInitiatedRemoteBackend(void);
 
 /* time utilities */
 extern double MillisecondsPassedSince(instr_time moment);

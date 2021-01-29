@@ -351,6 +351,37 @@ SELECT count(*) FROM (SELECT *, random() FROM small_view) as subquery JOIN small
      4
 (1 row)
 
+CREATE MATERIALIZED VIEW only_intermedate_result AS
+	WITH cte_1 AS (SELECT * FROM small OFFSET 0) SELECT * FROM cte_1 ORDER BY 1,2;
+SELECT * FROM only_intermedate_result ORDER BY 1,2;
+ id  | tenant_id
+---------------------------------------------------------------------
+   1 |         2
+   6 |         3
+   7 |         4
+   8 |         2
+  14 |        14
+ 250 |        25
+ 470 |        13
+(7 rows)
+
+INSERT INTO small VALUES (1000000,1000000);
+REFRESH MATERIALIZED VIEW only_intermedate_result;
+SELECT * FROM only_intermedate_result ORDER BY 1,2;
+   id    | tenant_id
+---------------------------------------------------------------------
+       1 |         2
+       6 |         3
+       7 |         4
+       8 |         2
+      14 |        14
+     250 |        25
+     470 |        13
+ 1000000 |   1000000
+(8 rows)
+
 DROP TABLE large_partitioned;
 DROP TABLE small CASCADE;
-NOTICE:  drop cascades to materialized view small_view
+NOTICE:  drop cascades to 2 other objects
+DETAIL:  drop cascades to materialized view small_view
+drop cascades to materialized view only_intermedate_result

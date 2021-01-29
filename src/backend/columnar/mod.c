@@ -17,19 +17,19 @@
 
 #include "citus_version.h"
 
-#include "columnar/cstore.h"
+#include "columnar/columnar.h"
 #include "columnar/mod.h"
 
 #ifdef HAS_TABLEAM
-#include "columnar/cstore_tableam.h"
+#include "columnar/columnar_tableam.h"
 #endif
 
 void
 columnar_init(void)
 {
-	cstore_init();
+	columnar_init_gucs();
 #ifdef HAS_TABLEAM
-	cstore_tableam_init();
+	columnar_tableam_init();
 #endif
 }
 
@@ -38,6 +38,6 @@ void
 columnar_fini(void)
 {
 #if HAS_TABLEAM
-	cstore_tableam_finish();
+	columnar_tableam_finish();
 #endif
 }

@@ -60,6 +60,7 @@
 #include "distributed/reference_table_utils.h"
 #include "distributed/relation_access_tracking.h"
 #include "distributed/run_from_same_connection.h"
+#include "distributed/shard_cleaner.h"
 #include "distributed/shared_connection_stats.h"
 #include "distributed/query_pushdown_planning.h"
 #include "distributed/time_constants.h"
@@ -120,10 +121,6 @@ static bool StatisticsCollectionGucCheckHook(bool *newval, void **extra, GucSour
 											 source);
 static void CitusAuthHook(Port *port, int status);
 
-
-/* static variable to hold value of deprecated GUC variable */
-static bool DeprecatedBool = false;
-static int DeprecatedInt = 0;
 
 static ClientAuthentication_hook_type original_client_auth_hook = NULL;
 
@@ -565,27 +562,6 @@ RegisterCitusConfigVariables(void)
 		GUC_UNIT_MS | GUC_STANDARD,
 		NULL, NULL, NULL);
 
-	DefineCustomIntVariable(
-		"citus.sslmode",
-		gettext_noop("This variable has been deprecated. Use the citus.node_conninfo "
-					 "GUC instead."),
-		NULL,
-		&DeprecatedInt,
-		0, 0, 32,
-		PGC_POSTMASTER,
-		GUC_SUPERUSER_ONLY | GUC_NO_SHOW_ALL,
-		NULL, NULL, NULL);
-
-	DefineCustomBoolVariable(
-		"citus.binary_master_copy_format",
-		gettext_noop("This GUC variable has been deprecated."),
-		NULL,
-		&DeprecatedBool,
-		false,
-		PGC_USERSET,
-		GUC_STANDARD | GUC_NO_SHOW_ALL,
-		NULL, NULL, NULL);
-
 	DefineCustomBoolVariable(
 		"citus.binary_worker_copy_format",
 		gettext_noop("Use the binary worker copy format."),
@@ -599,16 +575,6 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
-		"citus.expire_cached_shards",
-		gettext_noop("This GUC variable has been deprecated."),
-		NULL,
-		&DeprecatedBool,
-		false,
-		PGC_SIGHUP,
-		GUC_STANDARD | GUC_NO_SHOW_ALL,
-		NULL, NULL, NULL);
-
-	DefineCustomBoolVariable(
 		"citus.enable_local_execution",
 		gettext_noop("Enables queries on shards that are local to the current node "
 					 "to be planned and executed locally."),
@@ -618,6 +584,18 @@ RegisterCitusConfigVariables(void)
 		PGC_USERSET,
 		GUC_STANDARD,
 		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		"citus.enable_local_reference_table_foreign_keys",
+		gettext_noop("Enables foreign keys from/to local tables"),
+		gettext_noop("When enabled, foreign keys between local tables and reference "
+					 "tables supported."),
+		&EnableLocalReferenceForeignKeys,
+		true,
+		PGC_USERSET,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
+
 
 	DefineCustomBoolVariable(
 		"citus.enable_single_hash_repartition_joins",
@@ -888,6 +866,38 @@ RegisterCitusConfigVariables(void)
 		5 * MS_PER_SECOND, 1, 7 * MS_PER_DAY,
 		PGC_SIGHUP,
 		GUC_UNIT_MS | GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		"citus.defer_drop_after_shard_move",
+		gettext_noop("When enabled a shard move will mark old shards for deletion"),
+		gettext_noop("The deletion of a shard can sometimes run into a conflict with a "
+					 "long running transactions on a the shard during the drop phase of "
+					 "the shard move. This causes some moves to be rolled back after "
+					 "resources have been spend on moving the shard. To prevent "
+					 "conflicts this feature lets you skip the actual deletion till a "
+					 "later point in time. When used one should set "
+					 "citus.defer_shard_delete_interval to make sure defered deletions "
+					 "will be executed"),
+		&DeferShardDeleteOnMove,
+		false,
+		PGC_USERSET,
+		0,
+		NULL, NULL, NULL);
+
+	DefineCustomIntVariable(
+		"citus.defer_shard_delete_interval",
+		gettext_noop("Sets the time to wait between background deletion for shards."),
+		gettext_noop("Shards that are marked for deferred deletion need to be deleted in "
+					 "the background at a later time. This is done at a regular interval "
+					 "configured here. The deletion is executed optimistically, it tries "
+					 "to take a lock on a shard to clean, if the lock can't be acquired "
+					 "the background worker moves on. When set to -1 this background "
+					 "process is skipped."),
+		&DeferShardDeleteInterval,
+		-1, -1, 7 * 24 * 3600 * 1000,
+		PGC_SIGHUP,
+		GUC_UNIT_MS,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -1188,16 +1198,6 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
-		"citus.task_tracker_delay",
-		gettext_noop("This GUC variable has been deprecated."),
-		NULL,
-		&DeprecatedInt,
-		200 * MS, 1, 100 * MS_PER_SECOND,
-		PGC_SIGHUP,
-		GUC_UNIT_MS | GUC_STANDARD | GUC_NO_SHOW_ALL,
-		NULL, NULL, NULL);
-
-	DefineCustomIntVariable(
 		"citus.max_cached_conns_per_worker",
 		gettext_noop("Sets the maximum number of connections to cache per worker."),
 		gettext_noop("Each backend opens connections to the workers to query the "
@@ -1212,42 +1212,12 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
-		"citus.max_assign_task_batch_size",
-		gettext_noop("This GUC variable has been deprecated."),
-		NULL,
-		&DeprecatedInt,
-		64, 1, INT_MAX,
-		PGC_USERSET,
-		GUC_STANDARD | GUC_NO_SHOW_ALL,
-		NULL, NULL, NULL);
-
-	DefineCustomIntVariable(
-		"citus.max_tracked_tasks_per_node",
-		gettext_noop("This GUC variable has been deprecated."),
-		NULL,
-		&DeprecatedInt,
-		1024, 8, INT_MAX,
-		PGC_POSTMASTER,
-		GUC_STANDARD | GUC_NO_SHOW_ALL,
-		NULL, NULL, NULL);
-
-	DefineCustomIntVariable(
 		"citus.repartition_join_bucket_count_per_node",
 		gettext_noop("Sets the bucket size for repartition joins per node"),
 		gettext_noop("Repartition joins create buckets in each node and "
 					 "uses those to shuffle data around nodes. "),
 		&RepartitionJoinBucketCountPerNode,
 		4, 1, INT_MAX,
-		PGC_SIGHUP,
-		GUC_STANDARD | GUC_NO_SHOW_ALL,
-		NULL, NULL, NULL);
-
-	DefineCustomIntVariable(
-		"citus.max_running_tasks_per_node",
-		gettext_noop("This GUC variable has been deprecated."),
-		NULL,
-		&DeprecatedInt,
-		8, 1, INT_MAX,
 		PGC_SIGHUP,
 		GUC_STANDARD | GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
@@ -1264,16 +1234,6 @@ RegisterCitusConfigVariables(void)
 		8192, 0, (INT_MAX / 1024), /* result stored in int variable */
 		PGC_USERSET,
 		GUC_UNIT_KB | GUC_STANDARD,
-		NULL, NULL, NULL);
-
-	DefineCustomIntVariable(
-		"citus.large_table_shard_count",
-		gettext_noop("This variable has been deprecated."),
-		gettext_noop("Consider reference tables instead"),
-		&DeprecatedInt,
-		4, 1, 10000,
-		PGC_USERSET,
-		GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
@@ -1527,16 +1487,6 @@ RegisterCitusConfigVariables(void)
 		0, 0, INT_MAX,
 		PGC_USERSET,
 		GUC_NO_SHOW_ALL,
-		NULL, NULL, NULL);
-
-	DefineCustomIntVariable(
-		"citus.max_task_string_size",
-		gettext_noop("This GUC variable has been deprecated."),
-		NULL,
-		&DeprecatedInt,
-		12288, 8192, 65536,
-		PGC_POSTMASTER,
-		GUC_STANDARD | GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(

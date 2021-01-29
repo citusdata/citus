@@ -1,0 +1,126 @@
+-- test cases for #3970
+SET citus.next_shard_id TO 1690000;
+SET citus.shard_count TO 4;
+SET citus.shard_replication_factor TO 1;
+CREATE SCHEMA test_3970;
+SET search_path = test_3970;
+--1. create a partitioned table, and a vanilla table that will be colocated with this table
+CREATE TABLE part_table (
+    work_ymdt timestamp without time zone NOT NULL,
+    seq bigint NOT NULL,
+    my_seq bigint NOT NULL,
+    work_memo character varying(150),
+    CONSTRAINT work_memo_check CHECK ((octet_length((work_memo)::text) <= 150)),
+    PRIMARY KEY(seq, work_ymdt)
+)
+PARTITION BY RANGE (work_ymdt);
+CREATE TABLE dist(seq bigint UNIQUE);
+--2. perform create_distributed_table
+SELECT create_distributed_table('part_table', 'seq');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_table('dist','seq');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+--3. add a partition
+CREATE TABLE part_table_p202008 PARTITION OF part_table FOR VALUES FROM ('2020-08-01 00:00:00') TO ('2020-09-01 00:00:00');
+--4. add constraints on the parrtitioned table
+ALTER TABLE part_table ADD CONSTRAINT my_seq CHECK (my_seq > 0);
+ALTER TABLE part_table ADD CONSTRAINT uniq UNIQUE (seq, work_ymdt); --uniq
+ALTER TABLE part_table ADD CONSTRAINT dist_fk FOREIGN KEY (seq) REFERENCES dist (seq);
+ALTER TABLE part_table ADD CONSTRAINT ck_012345678901234567890123456789012345678901234567890123456789 CHECK (my_seq > 10);
+--5. add a partition
+CREATE TABLE part_table_p202009 PARTITION OF part_table FOR VALUES FROM ('2020-09-01 00:00:00') TO ('2020-10-01 00:00:00');
+-- check the constraint names on the coordinator node
+SELECT relname, conname, pg_catalog.pg_get_constraintdef(con.oid, true)
+FROM pg_constraint con JOIN pg_class rel ON (rel.oid=con.conrelid)
+WHERE relname LIKE 'part_table%'
+ORDER BY 1,2,3;
+      relname       |                             conname                             |             pg_get_constraintdef
+---------------------------------------------------------------------
+ part_table         | ck_012345678901234567890123456789012345678901234567890123456789 | CHECK (my_seq > 10)
+ part_table         | dist_fk                                                         | FOREIGN KEY (seq) REFERENCES dist(seq)
+ part_table         | my_seq                                                          | CHECK (my_seq > 0)
+ part_table         | part_table_pkey                                                 | PRIMARY KEY (seq, work_ymdt)
+ part_table         | uniq                                                            | UNIQUE (seq, work_ymdt)
+ part_table         | work_memo_check                                                 | CHECK (octet_length(work_memo::text) <= 150)
+ part_table_p202008 | ck_012345678901234567890123456789012345678901234567890123456789 | CHECK (my_seq > 10)
+ part_table_p202008 | dist_fk                                                         | FOREIGN KEY (seq) REFERENCES dist(seq)
+ part_table_p202008 | my_seq                                                          | CHECK (my_seq > 0)
+ part_table_p202008 | part_table_p202008_pkey                                         | PRIMARY KEY (seq, work_ymdt)
+ part_table_p202008 | part_table_p202008_seq_work_ymdt_key                            | UNIQUE (seq, work_ymdt)
+ part_table_p202008 | work_memo_check                                                 | CHECK (octet_length(work_memo::text) <= 150)
+ part_table_p202009 | ck_012345678901234567890123456789012345678901234567890123456789 | CHECK (my_seq > 10)
+ part_table_p202009 | dist_fk                                                         | FOREIGN KEY (seq) REFERENCES dist(seq)
+ part_table_p202009 | my_seq                                                          | CHECK (my_seq > 0)
+ part_table_p202009 | part_table_p202009_pkey                                         | PRIMARY KEY (seq, work_ymdt)
+ part_table_p202009 | part_table_p202009_seq_work_ymdt_key                            | UNIQUE (seq, work_ymdt)
+ part_table_p202009 | work_memo_check                                                 | CHECK (octet_length(work_memo::text) <= 150)
+(18 rows)
+
+-- check the constraint names on the worker node
+-- verify that check constraınts do not have a shardId suffix
+\c - - - :worker_1_port
+SELECT relname, conname, pg_catalog.pg_get_constraintdef(con.oid, true)
+FROM pg_constraint con JOIN pg_class rel ON (rel.oid=con.conrelid)
+WHERE relname LIKE 'part_table%'
+ORDER BY 1,2,3;
+          relname           |                             conname                             |                   pg_get_constraintdef
+---------------------------------------------------------------------
+ part_table_1690000         | ck_012345678901234567890123456789012345678901234567890123456789 | CHECK (my_seq > 10)
+ part_table_1690000         | dist_fk_1690000                                                 | FOREIGN KEY (seq) REFERENCES test_3970.dist_1690004(seq)
+ part_table_1690000         | my_seq                                                          | CHECK (my_seq > 0)
+ part_table_1690000         | part_table_pkey_1690000                                         | PRIMARY KEY (seq, work_ymdt)
+ part_table_1690000         | uniq_1690000                                                    | UNIQUE (seq, work_ymdt)
+ part_table_1690000         | work_memo_check                                                 | CHECK (octet_length(work_memo::text) <= 150)
+ part_table_1690002         | ck_012345678901234567890123456789012345678901234567890123456789 | CHECK (my_seq > 10)
+ part_table_1690002         | dist_fk_1690002                                                 | FOREIGN KEY (seq) REFERENCES test_3970.dist_1690006(seq)
+ part_table_1690002         | my_seq                                                          | CHECK (my_seq > 0)
+ part_table_1690002         | part_table_pkey_1690002                                         | PRIMARY KEY (seq, work_ymdt)
+ part_table_1690002         | uniq_1690002                                                    | UNIQUE (seq, work_ymdt)
+ part_table_1690002         | work_memo_check                                                 | CHECK (octet_length(work_memo::text) <= 150)
+ part_table_p202008_1690008 | ck_012345678901234567890123456789012345678901234567890123456789 | CHECK (my_seq > 10)
+ part_table_p202008_1690008 | dist_fk_1690000                                                 | FOREIGN KEY (seq) REFERENCES test_3970.dist_1690004(seq)
+ part_table_p202008_1690008 | my_seq                                                          | CHECK (my_seq > 0)
+ part_table_p202008_1690008 | part_table_p202008_1690008_seq_work_ymdt_key                    | UNIQUE (seq, work_ymdt)
+ part_table_p202008_1690008 | part_table_p202008_pkey_1690008                                 | PRIMARY KEY (seq, work_ymdt)
+ part_table_p202008_1690008 | work_memo_check                                                 | CHECK (octet_length(work_memo::text) <= 150)
+ part_table_p202008_1690010 | ck_012345678901234567890123456789012345678901234567890123456789 | CHECK (my_seq > 10)
+ part_table_p202008_1690010 | dist_fk_1690002                                                 | FOREIGN KEY (seq) REFERENCES test_3970.dist_1690006(seq)
+ part_table_p202008_1690010 | my_seq                                                          | CHECK (my_seq > 0)
+ part_table_p202008_1690010 | part_table_p202008_1690010_seq_work_ymdt_key                    | UNIQUE (seq, work_ymdt)
+ part_table_p202008_1690010 | part_table_p202008_pkey_1690010                                 | PRIMARY KEY (seq, work_ymdt)
+ part_table_p202008_1690010 | work_memo_check                                                 | CHECK (octet_length(work_memo::text) <= 150)
+ part_table_p202009_1690012 | ck_012345678901234567890123456789012345678901234567890123456789 | CHECK (my_seq > 10)
+ part_table_p202009_1690012 | dist_fk_1690000                                                 | FOREIGN KEY (seq) REFERENCES test_3970.dist_1690004(seq)
+ part_table_p202009_1690012 | my_seq                                                          | CHECK (my_seq > 0)
+ part_table_p202009_1690012 | part_table_p202009_pkey_1690012                                 | PRIMARY KEY (seq, work_ymdt)
+ part_table_p202009_1690012 | part_table_p202009_seq_work_ymdt_key_1690012                    | UNIQUE (seq, work_ymdt)
+ part_table_p202009_1690012 | work_memo_check                                                 | CHECK (octet_length(work_memo::text) <= 150)
+ part_table_p202009_1690014 | ck_012345678901234567890123456789012345678901234567890123456789 | CHECK (my_seq > 10)
+ part_table_p202009_1690014 | dist_fk_1690002                                                 | FOREIGN KEY (seq) REFERENCES test_3970.dist_1690006(seq)
+ part_table_p202009_1690014 | my_seq                                                          | CHECK (my_seq > 0)
+ part_table_p202009_1690014 | part_table_p202009_pkey_1690014                                 | PRIMARY KEY (seq, work_ymdt)
+ part_table_p202009_1690014 | part_table_p202009_seq_work_ymdt_key_1690014                    | UNIQUE (seq, work_ymdt)
+ part_table_p202009_1690014 | work_memo_check                                                 | CHECK (octet_length(work_memo::text) <= 150)
+(36 rows)
+
+\c - - - :master_port
+SET search_path = test_3970;
+-- Add tests for curently unsupported DROP/RENAME commands so that we do not forget about
+-- this edge case when we increase our SQL coverage.
+ALTER TABLE part_table RENAME CONSTRAINT my_seq TO my_seq_check;
+ERROR:  renaming constraints belonging to distributed tables is currently unsupported
+ALTER TABLE part_table ALTER CONSTRAINT my_seq DEFERRABLE;
+ERROR:  alter table command is currently unsupported
+DETAIL:  Only ADD|DROP COLUMN, SET|DROP NOT NULL, SET|DROP DEFAULT, ADD|DROP|VALIDATE CONSTRAINT, SET (), RESET (), ATTACH|DETACH PARTITION and TYPE subcommands are supported.
+-- verify that we can drop the constraints on partitioned tables
+ALTER TABLE part_table DROP CONSTRAINT my_seq;
+DROP TABLE part_table, dist CASCADE;
+DROP SCHEMA test_3970;

@@ -15,7 +15,7 @@ RESET client_min_messages;
 
 -- create test tables
 CREATE TABLE citus_local_table(l1 int);
-SELECT create_citus_local_table('citus_local_table');
+SELECT citus_add_local_table_to_metadata('citus_local_table');
 CREATE TABLE reference_table(r1 int primary key);
 SELECT create_reference_table('reference_table');
 
@@ -89,7 +89,7 @@ SELECT 1 FROM master_remove_node('localhost', :worker_2_port);
 
 -- create test tables
 CREATE TABLE citus_local_table(l1 int primary key);
-SELECT create_citus_local_table('citus_local_table');
+SELECT citus_add_local_table_to_metadata('citus_local_table');
 CREATE TABLE reference_table(r1 int);
 SELECT create_reference_table('reference_table');
 
@@ -113,6 +113,15 @@ ROLLBACK;
 -- .. and we allow such foreign keys with NO ACTION behavior
 ALTER TABLE reference_table ADD CONSTRAINT fkey_ref_to_local FOREIGN KEY(r1) REFERENCES citus_local_table(l1) ON DELETE NO ACTION;
 
+-- show that adding/dropping foreign keys from reference to citus local
+-- tables works fine with remote execution too
+SET citus.enable_local_execution TO OFF;
+ALTER TABLE reference_table DROP CONSTRAINT fkey_ref_to_local;
+ALTER TABLE reference_table ADD CONSTRAINT fkey_ref_to_local FOREIGN KEY(r1) REFERENCES citus_local_table(l1) ON DELETE NO ACTION;
+SET citus.enable_local_execution TO ON;
+
+ALTER TABLE reference_table ADD CONSTRAINT fkey_ref_to_local FOREIGN KEY(r1) REFERENCES citus_local_table(l1) ON DELETE NO ACTION;
+
 -- show that we are checking for foreign key constraint after defining, this should fail
 INSERT INTO reference_table VALUES (4);
 
@@ -134,12 +143,20 @@ DROP TABLE citus_local_table CASCADE;
 BEGIN;
   CREATE TABLE citus_local_table_1(a int, b int, unique (a,b));
   CREATE TABLE citus_local_table_2(a int, b int, unique (a,b));
-  SELECT create_citus_local_table('citus_local_table_1');
-  SELECT create_citus_local_table('citus_local_table_2');
+  SELECT citus_add_local_table_to_metadata('citus_local_table_1');
+  SELECT citus_add_local_table_to_metadata('citus_local_table_2');
 
   -- show that we properly handle multi column foreign keys
   ALTER TABLE citus_local_table_1 ADD CONSTRAINT multi_fkey FOREIGN KEY (a, b) REFERENCES citus_local_table_2(a, b);
 COMMIT;
+
+-- when local execution is disabled, citus local table cannot be created
+BEGIN;
+	SET citus.enable_local_execution TO false;
+	CREATE TABLE referenced_table(id int primary key);
+	SELECT create_reference_table('referenced_table');
+	CREATE TABLE referencing_table(id int, ref_id int, FOREIGN KEY(ref_id) REFERENCES referenced_table(id) ON DELETE SET DEFAULT);
+ROLLBACK;
 
 -- cleanup at exit
 DROP SCHEMA ref_citus_local_fkeys CASCADE;

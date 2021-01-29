@@ -49,7 +49,8 @@ static void EnsureSequentialModeForSchemaDDL(void);
  * under dropped schema involved in any foreign key relationship.
  */
 List *
-PreprocessDropSchemaStmt(Node *node, const char *queryString)
+PreprocessDropSchemaStmt(Node *node, const char *queryString,
+						 ProcessUtilityContext processUtilityContext)
 {
 	DropStmt *dropStatement = castNode(DropStmt, node);
 	Relation pgClass = NULL;
@@ -133,7 +134,8 @@ PreprocessDropSchemaStmt(Node *node, const char *queryString)
  * on schemas. Only grant statements for distributed schema are propagated.
  */
 List *
-PreprocessGrantOnSchemaStmt(Node *node, const char *queryString)
+PreprocessGrantOnSchemaStmt(Node *node, const char *queryString,
+							ProcessUtilityContext processUtilityContext)
 {
 	GrantStmt *stmt = castNode(GrantStmt, node);
 	Assert(stmt->objtype == OBJECT_SCHEMA);
@@ -166,7 +168,8 @@ PreprocessGrantOnSchemaStmt(Node *node, const char *queryString)
  * is executed on all the workers to keep the schemas in sync across the cluster.
  */
 List *
-PreprocessAlterSchemaRenameStmt(Node *node, const char *queryString)
+PreprocessAlterSchemaRenameStmt(Node *node, const char *queryString,
+								ProcessUtilityContext processUtilityContext)
 {
 	ObjectAddress schemaAddress = GetObjectAddressFromParseTree(node, false);
 	if (!ShouldPropagateObject(&schemaAddress))

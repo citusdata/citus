@@ -113,17 +113,17 @@ update_distributed_table_colocation(PG_FUNCTION_ARGS)
 	CheckCitusVersion(ERROR);
 	EnsureCoordinator();
 	EnsureTableOwner(targetRelationId);
-	EnsureHashDistributedTable(targetRelationId);
 
 	char *colocateWithTableName = text_to_cstring(colocateWithTableNameText);
 	if (IsColocateWithNone(colocateWithTableName))
 	{
+		EnsureHashDistributedTable(targetRelationId);
 		BreakColocation(targetRelationId);
 	}
 	else
 	{
 		Oid colocateWithTableId = ResolveRelationId(colocateWithTableNameText, false);
-		EnsureHashDistributedTable(colocateWithTableId);
+		EnsureTableOwner(colocateWithTableId);
 		MarkTablesColocated(colocateWithTableId, targetRelationId);
 	}
 	PG_RETURN_VOID();
@@ -244,10 +244,12 @@ MarkTablesColocated(Oid sourceRelationId, Oid targetRelationId)
 	if (IsCitusTableType(sourceRelationId, CITUS_LOCAL_TABLE) ||
 		IsCitusTableType(targetRelationId, CITUS_LOCAL_TABLE))
 	{
-		ereport(ERROR, (errmsg("citus local tables cannot be colocated with "
+		ereport(ERROR, (errmsg("local tables cannot be colocated with "
 							   "other tables")));
 	}
 
+	EnsureHashDistributedTable(sourceRelationId);
+	EnsureHashDistributedTable(targetRelationId);
 	CheckReplicationModel(sourceRelationId, targetRelationId);
 	CheckDistributionColumnType(sourceRelationId, targetRelationId);
 
@@ -541,12 +543,22 @@ ColocationId(int shardCount, int replicationFactor, Oid distributionColumnType, 
 													indexOK, NULL, scanKeyCount, scanKey);
 
 	HeapTuple colocationTuple = systable_getnext(scanDescriptor);
-	if (HeapTupleIsValid(colocationTuple))
+
+	while (HeapTupleIsValid(colocationTuple))
 	{
 		Form_pg_dist_colocation colocationForm =
 			(Form_pg_dist_colocation) GETSTRUCT(colocationTuple);
 
-		colocationId = colocationForm->colocationid;
+		if (colocationId == INVALID_COLOCATION_ID || colocationId >
+			colocationForm->colocationid)
+		{
+			/*
+			 * We assign the smallest colocation id among all the matches so that we
+			 * assign the same colocation group for similar distributed tables
+			 */
+			colocationId = colocationForm->colocationid;
+		}
+		colocationTuple = systable_getnext(scanDescriptor);
 	}
 
 	systable_endscan(scanDescriptor);

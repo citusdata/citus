@@ -1,8 +1,8 @@
 /*-------------------------------------------------------------------------
  *
- * cstore_reader.c
+ * columnar_reader.c
  *
- * This file contains function definitions for reading cstore files. This
+ * This file contains function definitions for reading columnar tables. This
  * includes the logic for reading file level metadata, reading row stripes,
  * and skipping unrelated row chunks and columns.
  *
@@ -36,15 +36,16 @@
 #include "utils/lsyscache.h"
 #include "utils/rel.h"
 
-#include "columnar/cstore.h"
-#include "columnar/cstore_version_compat.h"
+#include "columnar/columnar.h"
+#include "columnar/columnar_version_compat.h"
 
 /* static function declarations */
 static StripeBuffers * LoadFilteredStripeBuffers(Relation relation,
 												 StripeMetadata *stripeMetadata,
 												 TupleDesc tupleDescriptor,
 												 List *projectedColumnList,
-												 List *whereClauseList);
+												 List *whereClauseList,
+												 int64 *chunksFiltered);
 static void ReadStripeNextRow(StripeBuffers *stripeBuffers, List *projectedColumnList,
 							  uint64 chunkIndex, uint64 chunkRowIndex,
 							  ChunkData *chunkData, Datum *columnValues,
@@ -54,7 +55,8 @@ static ColumnBuffers * LoadColumnBuffers(Relation relation,
 										 uint32 chunkCount, uint64 stripeOffset,
 										 Form_pg_attribute attributeForm);
 static bool * SelectedChunkMask(StripeSkipList *stripeSkipList,
-								List *projectedColumnList, List *whereClauseList);
+								List *projectedColumnList, List *whereClauseList,
+								int64 *chunksFiltered);
 static List * BuildRestrictInfoList(List *whereClauseList);
 static Node * BuildBaseConstraint(Var *variable);
 static OpExpr * MakeOpExpression(Var *variable, int16 strategyNumber);
@@ -78,12 +80,12 @@ static Datum ColumnDefaultValue(TupleConstr *tupleConstraints,
 								Form_pg_attribute attributeForm);
 
 /*
- * CStoreBeginRead initializes a cstore read operation. This function returns a
+ * ColumnarBeginRead initializes a columnar read operation. This function returns a
  * read handle that's used during reading rows and finishing the read operation.
  */
 TableReadState *
-CStoreBeginRead(Relation relation, TupleDesc tupleDescriptor,
-				List *projectedColumnList, List *whereClauseList)
+ColumnarBeginRead(Relation relation, TupleDesc tupleDescriptor,
+				  List *projectedColumnList, List *whereClauseList)
 {
 	List *stripeList = StripesForRelfilenode(relation->rd_node);
 
@@ -104,6 +106,7 @@ CStoreBeginRead(Relation relation, TupleDesc tupleDescriptor,
 	readState->stripeBuffers = NULL;
 	readState->readStripeCount = 0;
 	readState->stripeReadRowCount = 0;
+	readState->chunksFiltered = 0;
 	readState->tupleDescriptor = tupleDescriptor;
 	readState->stripeReadContext = stripeReadContext;
 	readState->chunkData = NULL;
@@ -114,12 +117,12 @@ CStoreBeginRead(Relation relation, TupleDesc tupleDescriptor,
 
 
 /*
- * CStoreReadNextRow tries to read a row from the cstore file. On success, it sets
+ * ColumnarReadNextRow tries to read a row from the columnar table. On success, it sets
  * column values and nulls, and returns true. If there are no more rows to read,
  * the function returns false.
  */
 bool
-CStoreReadNextRow(TableReadState *readState, Datum *columnValues, bool *columnNulls)
+ColumnarReadNextRow(TableReadState *readState, Datum *columnValues, bool *columnNulls)
 {
 	StripeMetadata *stripeMetadata = readState->currentStripeMetadata;
 	MemoryContext oldContext = NULL;
@@ -153,7 +156,9 @@ CStoreReadNextRow(TableReadState *readState, Datum *columnValues, bool *columnNu
 																 readState->
 																 projectedColumnList,
 																 readState->
-																 whereClauseList);
+																 whereClauseList,
+																 &readState->
+																 chunksFiltered);
 		readState->readStripeCount++;
 		readState->currentStripeMetadata = stripeMetadata;
 
@@ -173,18 +178,8 @@ CStoreReadNextRow(TableReadState *readState, Datum *columnValues, bool *columnNu
 
 	if (chunkIndex != readState->deserializedChunkIndex)
 	{
-		uint32 chunkRowCount = 0;
-
-		uint32 stripeRowCount = stripeMetadata->rowCount;
-		uint32 lastChunkIndex = stripeRowCount / stripeMetadata->chunkRowCount;
-		if (chunkIndex == lastChunkIndex)
-		{
-			chunkRowCount = stripeRowCount % stripeMetadata->chunkRowCount;
-		}
-		else
-		{
-			chunkRowCount = stripeMetadata->chunkRowCount;
-		}
+		uint32 chunkRowCount =
+			readState->stripeBuffers->selectedChunkRowCount[chunkIndex];
 
 		oldContext = MemoryContextSwitchTo(readState->stripeReadContext);
 
@@ -218,11 +213,11 @@ CStoreReadNextRow(TableReadState *readState, Datum *columnValues, bool *columnNu
 
 
 /*
- * CStoreRescan clears the position where we were scanning so that the next read starts at
+ * ColumnarRescan clears the position where we were scanning so that the next read starts at
  * the beginning again
  */
 void
-CStoreRescan(TableReadState *readState)
+ColumnarRescan(TableReadState *readState)
 {
 	readState->stripeBuffers = NULL;
 	readState->readStripeCount = 0;
@@ -230,9 +225,9 @@ CStoreRescan(TableReadState *readState)
 }
 
 
-/* Finishes a cstore read operation. */
+/* Finishes a columnar read operation. */
 void
-CStoreEndRead(TableReadState *readState)
+ColumnarEndRead(TableReadState *readState)
 {
 	MemoryContextDelete(readState->stripeReadContext);
 	list_free_deep(readState->stripeList);
@@ -306,9 +301,9 @@ FreeChunkData(ChunkData *chunkData)
 }
 
 
-/* CStoreTableRowCount returns the exact row count of a table using skiplists */
+/* ColumnarTableRowCount returns the exact row count of a table using skiplists */
 uint64
-CStoreTableRowCount(Relation relation)
+ColumnarTableRowCount(Relation relation)
 {
 	ListCell *stripeMetadataCell = NULL;
 	uint64 totalRowCount = 0;
@@ -332,7 +327,7 @@ CStoreTableRowCount(Relation relation)
 static StripeBuffers *
 LoadFilteredStripeBuffers(Relation relation, StripeMetadata *stripeMetadata,
 						  TupleDesc tupleDescriptor, List *projectedColumnList,
-						  List *whereClauseList)
+						  List *whereClauseList, int64 *chunksFiltered)
 {
 	uint32 columnIndex = 0;
 	uint32 columnCount = tupleDescriptor->natts;
@@ -345,11 +340,19 @@ LoadFilteredStripeBuffers(Relation relation, StripeMetadata *stripeMetadata,
 														stripeMetadata->chunkCount);
 
 	bool *selectedChunkMask = SelectedChunkMask(stripeSkipList, projectedColumnList,
-												whereClauseList);
+												whereClauseList, chunksFiltered);
 
 	StripeSkipList *selectedChunkSkipList =
 		SelectedChunkSkipList(stripeSkipList, projectedColumnMask,
 							  selectedChunkMask);
+
+	uint32 selectedChunkCount = selectedChunkSkipList->chunkCount;
+	uint32 *selectedChunkRowCount = palloc0(selectedChunkCount * sizeof(uint32));
+	for (int chunkIndex = 0; chunkIndex < selectedChunkCount; chunkIndex++)
+	{
+		selectedChunkRowCount[chunkIndex] =
+			selectedChunkSkipList->chunkSkipNodeArray[0][chunkIndex].rowCount;
+	}
 
 	/* load column data for projected columns */
 	ColumnBuffers **columnBuffersArray = palloc0(columnCount * sizeof(ColumnBuffers *));
@@ -376,6 +379,8 @@ LoadFilteredStripeBuffers(Relation relation, StripeMetadata *stripeMetadata,
 	stripeBuffers->columnCount = columnCount;
 	stripeBuffers->rowCount = StripeSkipListRowCount(selectedChunkSkipList);
 	stripeBuffers->columnBuffersArray = columnBuffersArray;
+	stripeBuffers->selectedChunks = selectedChunkCount;
+	stripeBuffers->selectedChunkRowCount = selectedChunkRowCount;
 
 	return stripeBuffers;
 }
@@ -474,7 +479,7 @@ LoadColumnBuffers(Relation relation, ColumnChunkSkipNode *chunkSkipNodeArray,
  */
 static bool *
 SelectedChunkMask(StripeSkipList *stripeSkipList, List *projectedColumnList,
-				  List *whereClauseList)
+				  List *whereClauseList, int64 *chunksFiltered)
 {
 	ListCell *columnCell = NULL;
 	uint32 chunkIndex = 0;
@@ -527,6 +532,7 @@ SelectedChunkMask(StripeSkipList *stripeSkipList, List *projectedColumnList,
 			if (predicateRefuted)
 			{
 				selectedChunkMask[chunkIndex] = false;
+				*chunksFiltered += 1;
 			}
 		}
 	}

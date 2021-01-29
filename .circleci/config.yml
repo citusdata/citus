@@ -102,7 +102,7 @@ jobs:
       image_tag:
         description: 'docker image tag to use'
         type: string
-        default: latest
+        default: 11-12-13
     docker:
       - image: '<< parameters.image >>:<< parameters.image_tag >>'
     working_directory: /home/circleci/project
@@ -310,6 +310,71 @@ jobs:
           flags: 'test_<< parameters.pg_major >>,<< parameters.make >>'
           when: always
 
+  tap-test-citus:
+    description: Runs tap tests for citus
+    parameters:
+      pg_major:
+        description: "postgres major version"
+        type: integer
+      image:
+        description: 'docker image to use as for the tests'
+        type: string
+        default: citus/exttester
+      image_tag:
+        description: 'docker image tag to use'
+        type: string
+      suite:
+        description: 'name of the tap test suite to run'
+        type: string
+      make:
+        description: "make target"
+        type: string
+        default: installcheck
+    docker:
+      - image: '<< parameters.image >>:<< parameters.image_tag >>'
+    working_directory: /home/circleci/project
+    steps:
+      - checkout
+      - attach_workspace:
+          at: .
+      - run:
+          name: 'Install Extension'
+          command: |
+            tar xfv "${CIRCLE_WORKING_DIRECTORY}/install-${PG_MAJOR}.tar" --directory /
+      - run:
+          name: 'Configure'
+          command: |
+            chown -R circleci .
+            gosu circleci ./configure
+      - run:
+          name: 'Enable core dumps'
+          command: |
+            ulimit -c unlimited
+      - run:
+          name: 'Run Test'
+          command: |
+            gosu circleci make -C src/test/<< parameters.suite >> << parameters.make >>
+          no_output_timeout: 2m
+      - run:
+          name: 'Copy coredumps'
+          command: |
+            mkdir -p /tmp/core_dumps
+            if ls core.* 1> /dev/null 2>&1; then
+                cp core.* /tmp/core_dumps
+            fi
+          when: on_fail
+      - store_artifacts:
+          name: 'Save tap logs'
+          path: /home/circleci/project/src/test/recovery/tmp_check/log
+          when: on_fail
+      - store_artifacts:
+          name: 'Save core dumps'
+          path: /tmp/core_dumps
+          when: on_fail
+      - codecov/upload:
+          flags: 'test_<< parameters.pg_major >>,tap_<< parameters.suite >>_<< parameters.make >>'
+          when: always
+
   check-merge-to-enterprise:
     docker:
       - image: citus/extbuilder:13.0
@@ -408,6 +473,12 @@ workflows:
           make: check-worker
           requires: [build-11]
       - test-citus:
+          name: 'test-11_check-operations'
+          pg_major: 11
+          image_tag: '11.9'
+          make: check-operations
+          requires: [build-11]
+      - test-citus:
           name: 'test-11_check-follower-cluster'
           pg_major: 11
           image_tag: '11.9'
@@ -452,6 +523,12 @@ workflows:
           make: check-worker
           requires: [build-12]
       - test-citus:
+          name: 'test-12_check-operations'
+          pg_major: 12
+          image_tag: '12.4'
+          make: check-operations
+          requires: [build-12]
+      - test-citus:
           name: 'test-12_check-follower-cluster'
           pg_major: 12
           image_tag: '12.4'
@@ -468,6 +545,12 @@ workflows:
           pg_major: 12
           image_tag: '12.4'
           make: check-columnar-isolation
+          requires: [build-12]
+      - tap-test-citus:
+          name: 'test_12_tap-recovery'
+          pg_major: 12
+          image_tag: '12.4'
+          suite: recovery
           requires: [build-12]
       - test-citus:
           name: 'test-12_check-failure'
@@ -508,6 +591,12 @@ workflows:
           make: check-worker
           requires: [build-13]
       - test-citus:
+          name: 'test-13_check-operations'
+          pg_major: 13
+          image_tag: '13.0'
+          make: check-operations
+          requires: [build-13]
+      - test-citus:
           name: 'test-13_check-follower-cluster'
           pg_major: 13
           image_tag: '13.0'
@@ -525,6 +614,12 @@ workflows:
           image_tag: '13.0'
           make: check-columnar-isolation
           requires: [build-13]
+      - tap-test-citus:
+          name: 'test_13_tap-recovery'
+          pg_major: 13
+          image_tag: '13.0'
+          suite: recovery
+          requires: [build-13]
       - test-citus:
           name: 'test-13_check-failure'
           pg_major: 13
@@ -537,14 +632,14 @@ workflows:
           name: 'test-11-12_check-pg-upgrade'
           old_pg_major: 11
           new_pg_major: 12
-          image_tag: latest
+          image_tag: 11-12-13
           requires: [build-11,build-12]
 
       - test-pg-upgrade:
           name: 'test-12-13_check-pg-upgrade'
           old_pg_major: 12
           new_pg_major: 13
-          image_tag: latest
+          image_tag: 11-12-13
           requires: [build-12,build-13]
 
       - test-citus-upgrade:

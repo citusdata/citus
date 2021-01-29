@@ -12,6 +12,7 @@
 #include "miscadmin.h"
 
 #include "distributed/commands/utility_hook.h"
+#include "distributed/commands.h"
 #include "distributed/metadata_utility.h"
 #include "distributed/coordinator_protocol.h"
 #include "distributed/metadata_sync.h"
@@ -30,6 +31,7 @@ static void MasterRemoveDistributedTableMetadataFromWorkers(Oid relationId,
 PG_FUNCTION_INFO_V1(master_drop_distributed_table_metadata);
 PG_FUNCTION_INFO_V1(master_remove_partition_metadata);
 PG_FUNCTION_INFO_V1(master_remove_distributed_table_metadata_from_workers);
+PG_FUNCTION_INFO_V1(notify_constraint_dropped);
 
 
 /*
@@ -147,4 +149,31 @@ MasterRemoveDistributedTableMetadataFromWorkers(Oid relationId, char *schemaName
 	/* drop the distributed table metadata on the workers */
 	char *deleteDistributionCommand = DistributionDeleteCommand(schemaName, tableName);
 	SendCommandToWorkersWithMetadata(deleteDistributionCommand);
+}
+
+
+/*
+ * notify_constraint_dropped simply calls NotifyUtilityHookConstraintDropped
+ * to set ConstraintDropped to true.
+ * This udf is designed to be called from citus_drop_trigger to tell us we
+ * dropped a table constraint.
+ */
+Datum
+notify_constraint_dropped(PG_FUNCTION_ARGS)
+{
+	CheckCitusVersion(ERROR);
+
+	/*
+	 * We reset this only in utility hook, so we should not set this flag
+	 * otherwise if we are not in utility hook.
+	 * In some cases -where dropping foreign key not issued via utility
+	 * hook-, we would not be able to undistribute such citus local tables
+	 * but we are ok with that.
+	 */
+	if (UtilityHookLevel >= 1)
+	{
+		NotifyUtilityHookConstraintDropped();
+	}
+
+	PG_RETURN_VOID();
 }

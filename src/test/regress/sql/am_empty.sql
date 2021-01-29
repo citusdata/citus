@@ -43,6 +43,10 @@ truncate t_compressed;
 alter table t_uncompressed alter column a type text;
 alter table t_compressed alter column a type text;
 
+-- verify cost of scanning an empty table is zero, not NaN
+explain table t_uncompressed;
+explain table t_compressed;
+
 -- drop
 drop table t_compressed;
 drop table t_uncompressed;

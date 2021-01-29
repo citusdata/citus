@@ -32,6 +32,25 @@ SELECT * FROM pg_dist_partition WHERE partmethod='h' AND repmodel='s';
 -- pg_dist_node entries and reference tables
 SELECT unnest(master_metadata_snapshot()) order by 1;
 
+-- this function is dropped in Citus10, added here for tests
+CREATE OR REPLACE FUNCTION pg_catalog.master_create_distributed_table(table_name regclass,
+                                                                      distribution_column text,
+                                                                      distribution_method citus.distribution_type)
+    RETURNS void
+    LANGUAGE C STRICT
+    AS 'citus', $$master_create_distributed_table$$;
+COMMENT ON FUNCTION pg_catalog.master_create_distributed_table(table_name regclass,
+                                                               distribution_column text,
+                                                               distribution_method citus.distribution_type)
+    IS 'define the table distribution functions';
+
+-- this function is dropped in Citus10, added here for tests
+CREATE OR REPLACE FUNCTION pg_catalog.master_create_worker_shards(table_name text, shard_count integer,
+                                                                  replication_factor integer DEFAULT 2)
+    RETURNS void
+    AS 'citus', $$master_create_worker_shards$$
+    LANGUAGE C STRICT;
+
 -- Create a test table with constraints and SERIAL
 CREATE TABLE mx_test_table (col_1 int UNIQUE, col_2 text NOT NULL, col_3 BIGSERIAL);
 SELECT master_create_distributed_table('mx_test_table', 'col_1', 'hash');
@@ -335,7 +354,7 @@ NOT VALID;
 \c - - - :worker_1_port
 SELECT "Constraint", "Definition" FROM table_fkeys WHERE relid='mx_test_schema_1.mx_table_1'::regclass;
 
--- Check that mark_tables_colocated call propagates the changes to the workers
+-- Check that update_distributed_table_colocation call propagates the changes to the workers
 \c - - - :master_port
 SELECT nextval('pg_catalog.pg_dist_colocationid_seq') AS last_colocation_id \gset
 ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 10000;
@@ -376,8 +395,8 @@ WHERE
 	logicalrelid = 'mx_colocation_test_1'::regclass
 	OR logicalrelid = 'mx_colocation_test_2'::regclass;
 
--- Mark tables colocated and see the changes on the master and the worker
-SELECT mark_tables_colocated('mx_colocation_test_1', ARRAY['mx_colocation_test_2']);
+-- Update colocation and see the changes on the master and the worker
+SELECT update_distributed_table_colocation('mx_colocation_test_1', colocate_with => 'mx_colocation_test_2');
 SELECT
 	logicalrelid, colocationid
 FROM

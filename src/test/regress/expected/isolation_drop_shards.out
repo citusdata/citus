@@ -8,9 +8,9 @@ step s1-begin:
 	BEGIN;
 
 step s1-drop-all-shards:
-	SELECT master_drop_all_shards('append_table', 'public', 'append_table');
+	SELECT citus_drop_all_shards('append_table', 'public', 'append_table');
 
-master_drop_all_shards
+citus_drop_all_shards
 
 16
 step s2-truncate:
@@ -29,9 +29,9 @@ step s1-begin:
 	BEGIN;
 
 step s1-drop-all-shards:
-	SELECT master_drop_all_shards('append_table', 'public', 'append_table');
+	SELECT citus_drop_all_shards('append_table', 'public', 'append_table');
 
-master_drop_all_shards
+citus_drop_all_shards
 
 16
 step s2-apply-delete-command:
@@ -53,19 +53,19 @@ step s1-begin:
 	BEGIN;
 
 step s1-drop-all-shards:
-	SELECT master_drop_all_shards('append_table', 'public', 'append_table');
+	SELECT citus_drop_all_shards('append_table', 'public', 'append_table');
 
-master_drop_all_shards
+citus_drop_all_shards
 
 16
 step s2-drop-all-shards:
-	SELECT master_drop_all_shards('append_table', 'public', 'append_table');
+	SELECT citus_drop_all_shards('append_table', 'public', 'append_table');
  <waiting ...>
 step s1-commit:
 	COMMIT;
 
 step s2-drop-all-shards: <... completed>
-master_drop_all_shards
+citus_drop_all_shards
 
 0
 
@@ -77,9 +77,9 @@ step s1-begin:
 	BEGIN;
 
 step s1-drop-all-shards:
-	SELECT master_drop_all_shards('append_table', 'public', 'append_table');
+	SELECT citus_drop_all_shards('append_table', 'public', 'append_table');
 
-master_drop_all_shards
+citus_drop_all_shards
 
 16
 step s2-select:
@@ -151,13 +151,13 @@ master_apply_delete_command
 
 16
 step s2-drop-all-shards:
-	SELECT master_drop_all_shards('append_table', 'public', 'append_table');
+	SELECT citus_drop_all_shards('append_table', 'public', 'append_table');
  <waiting ...>
 step s1-commit:
 	COMMIT;
 
 step s2-drop-all-shards: <... completed>
-master_drop_all_shards
+citus_drop_all_shards
 
 0
 
@@ -211,13 +211,13 @@ step s1-truncate:
 	TRUNCATE append_table;
 
 step s2-drop-all-shards:
-	SELECT master_drop_all_shards('append_table', 'public', 'append_table');
+	SELECT citus_drop_all_shards('append_table', 'public', 'append_table');
  <waiting ...>
 step s1-commit:
 	COMMIT;
 
 step s2-drop-all-shards: <... completed>
-master_drop_all_shards
+citus_drop_all_shards
 
 0
 

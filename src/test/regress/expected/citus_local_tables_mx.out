@@ -18,8 +18,8 @@ RESET client_min_messages;
 -- triggers --
 ---------------------------------------------------------------------
 CREATE TABLE citus_local_table (value int);
-SELECT create_citus_local_table('citus_local_table');
- create_citus_local_table
+SELECT citus_add_local_table_to_metadata('citus_local_table');
+ citus_add_local_table_to_metadata
 ---------------------------------------------------------------------
 
 (1 row)
@@ -90,8 +90,8 @@ FOR EACH STATEMENT EXECUTE FUNCTION another_dummy_function();
 -- create some test tables before next three sections
 -- and define some foreign keys between them
 CREATE TABLE citus_local_table_1(l1 int);
-SELECT create_citus_local_table('citus_local_table_1');
- create_citus_local_table
+SELECT citus_add_local_table_to_metadata('citus_local_table_1');
+ citus_add_local_table_to_metadata
 ---------------------------------------------------------------------
 
 (1 row)
@@ -106,8 +106,8 @@ SELECT create_reference_table('reference_table_1');
 ALTER TABLE citus_local_table_1 ADD CONSTRAINT fkey_local_to_ref FOREIGN KEY(l1) REFERENCES reference_table_1(r1) ON DELETE CASCADE;
 NOTICE:  executing the command locally: SELECT worker_apply_inter_shard_ddl_command (1508001, 'citus_local_tables_mx', 1508002, 'citus_local_tables_mx', 'ALTER TABLE citus_local_table_1 ADD CONSTRAINT fkey_local_to_ref FOREIGN KEY(l1) REFERENCES reference_table_1(r1) ON DELETE CASCADE;')
 CREATE TABLE citus_local_table_2(l1 int primary key);
-SELECT create_citus_local_table('citus_local_table_2');
- create_citus_local_table
+SELECT citus_add_local_table_to_metadata('citus_local_table_2');
+ citus_add_local_table_to_metadata
 ---------------------------------------------------------------------
 
 (1 row)
@@ -122,21 +122,51 @@ SELECT create_reference_table('reference_table_2');
 ALTER TABLE reference_table_2 ADD CONSTRAINT fkey_ref_to_local FOREIGN KEY(r1) REFERENCES citus_local_table_2(l1) ON DELETE RESTRICT;
 NOTICE:  executing the command locally: SELECT worker_apply_inter_shard_ddl_command (1508004, 'citus_local_tables_mx', 1508003, 'citus_local_tables_mx', 'ALTER TABLE reference_table_2 ADD CONSTRAINT fkey_ref_to_local FOREIGN KEY(r1) REFERENCES citus_local_table_2(l1) ON DELETE RESTRICT;')
 CREATE TABLE citus_local_table_3(l1 int);
-SELECT create_citus_local_table('citus_local_table_3');
- create_citus_local_table
+SELECT citus_add_local_table_to_metadata('citus_local_table_3');
+ citus_add_local_table_to_metadata
 ---------------------------------------------------------------------
 
 (1 row)
 
 CREATE TABLE citus_local_table_4(l1 int primary key);
-SELECT create_citus_local_table('citus_local_table_4');
- create_citus_local_table
+SELECT citus_add_local_table_to_metadata('citus_local_table_4');
+ citus_add_local_table_to_metadata
 ---------------------------------------------------------------------
 
 (1 row)
 
 ALTER TABLE citus_local_table_3 ADD CONSTRAINT fkey_local_to_local FOREIGN KEY(l1) REFERENCES citus_local_table_4(l1) ON UPDATE SET NULL;
 NOTICE:  executing the command locally: SELECT worker_apply_inter_shard_ddl_command (1508005, 'citus_local_tables_mx', 1508006, 'citus_local_tables_mx', 'ALTER TABLE citus_local_table_3 ADD CONSTRAINT fkey_local_to_local FOREIGN KEY(l1) REFERENCES citus_local_table_4(l1) ON UPDATE SET NULL;')
+-- check stats creation
+CREATE TABLE citus_local_table_stats(a int, b int);
+CREATE STATISTICS stx1 ON a, b FROM citus_local_table_stats;
+SELECT citus_add_local_table_to_metadata('citus_local_table_stats');
+ citus_add_local_table_to_metadata
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE STATISTICS stx2 ON a, b FROM citus_local_table_stats;
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1508007, 'citus_local_tables_mx', 'CREATE STATISTICS citus_local_tables_mx.stx2 ON a, b FROM citus_local_tables_mx.citus_local_table_stats')
+CREATE STATISTICS stx3 ON a, b FROM citus_local_table_stats;
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1508007, 'citus_local_tables_mx', 'CREATE STATISTICS citus_local_tables_mx.stx3 ON a, b FROM citus_local_tables_mx.citus_local_table_stats')
+CREATE STATISTICS stx4 ON a, b FROM citus_local_table_stats;
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1508007, 'citus_local_tables_mx', 'CREATE STATISTICS citus_local_tables_mx.stx4 ON a, b FROM citus_local_tables_mx.citus_local_table_stats')
+ALTER STATISTICS stx3 RENAME TO stx5;
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1508007, 'citus_local_tables_mx', 'ALTER STATISTICS citus_local_tables_mx.stx3 RENAME TO stx5')
+DROP STATISTICS stx4;
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1508007, 'citus_local_tables_mx', 'DROP STATISTICS citus_local_tables_mx.stx4')
+SELECT stxname FROM pg_statistic_ext ORDER BY stxname;
+   stxname
+---------------------------------------------------------------------
+ stx1
+ stx1_1508007
+ stx2
+ stx2_1508007
+ stx5
+ stx5_1508007
+(6 rows)
+
 -- and switch to worker1
 \c - - - :worker_1_port
 SET search_path TO citus_local_tables_mx;
@@ -188,6 +218,24 @@ SELECT * FROM citus_local_table_3;
 -- finally show that we do not allow defining foreign key in mx nodes
 ALTER TABLE citus_local_table_3 ADD CONSTRAINT fkey_local_to_local_2 FOREIGN KEY(l1) REFERENCES citus_local_table_4(l1);
 ERROR:  operation is not allowed on this node
+-- check stats creation
+CREATE TABLE citus_local_table_stats2(a int, b int);
+CREATE STATISTICS stx8 ON a, b FROM citus_local_table_stats2;
+SELECT citus_add_local_table_to_metadata('citus_local_table_stats2');
+ERROR:  operation is not allowed on this node
+CREATE STATISTICS stx9 ON a, b FROM citus_local_table_stats2;
+DROP STATISTICS stx8;
+DROP STATISTICS stx4;
+ERROR:  statistics object "citus_local_tables_mx.stx4" does not exist
+SELECT stxname FROM pg_statistic_ext ORDER BY stxname;
+ stxname
+---------------------------------------------------------------------
+ stx1
+ stx2
+ stx5
+ stx9
+(4 rows)
+
 \c - - - :master_port
 SET search_path TO citus_local_tables_mx;
 SELECT master_remove_distributed_table_metadata_from_workers('citus_local_table_4'::regclass::oid, 'citus_local_tables_mx', 'citus_local_table_4');
@@ -210,4 +258,4 @@ $$);
 
 -- cleanup at exit
 DROP SCHEMA citus_local_tables_mx CASCADE;
-NOTICE:  drop cascades to 17 other objects
+NOTICE:  drop cascades to 19 other objects

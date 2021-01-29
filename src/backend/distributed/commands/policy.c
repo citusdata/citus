@@ -28,7 +28,8 @@ CreatePolicyCommands(Oid relationId)
 
 /* placeholder for PreprocessCreatePolicyStmt */
 List *
-PreprocessCreatePolicyStmt(Node *node, const char *queryString)
+PreprocessCreatePolicyStmt(Node *node, const char *queryString,
+						   ProcessUtilityContext processUtilityContext)
 {
 	CreatePolicyStmt *stmt = castNode(CreatePolicyStmt, node);
 	Oid relationId = RangeVarGetRelid(stmt->table,
@@ -48,7 +49,8 @@ PreprocessCreatePolicyStmt(Node *node, const char *queryString)
 
 /* placeholder for PreprocessAlterPolicyStmt */
 List *
-PreprocessAlterPolicyStmt(Node *node, const char *queryString)
+PreprocessAlterPolicyStmt(Node *node, const char *queryString,
+						  ProcessUtilityContext processUtilityContext)
 {
 	/* placeholder for future implementation */
 	return NIL;
@@ -71,7 +73,8 @@ ErrorIfUnsupportedPolicy(Relation relation)
 
 /* placeholder for PreprocessDropPolicyStmt */
 List *
-PreprocessDropPolicyStmt(Node *node, const char *queryString)
+PreprocessDropPolicyStmt(Node *node, const char *queryString,
+						 ProcessUtilityContext processUtilityContext)
 {
 	/* placeholder for future implementation */
 	return NIL;

@@ -395,6 +395,7 @@ BEGIN;
 
   CREATE TABLE citus_local_table (a int);
   SELECT create_citus_local_table('citus_local_table');
+NOTICE:  create_citus_local_table is deprecated in favour of citus_add_local_table_to_metadata
  create_citus_local_table
 ---------------------------------------------------------------------
 
@@ -443,23 +444,75 @@ SELECT * FROM print_extension_changes();
 -- Snapshot of state at 10.0-1
 ALTER EXTENSION citus UPDATE TO '10.0-1';
 SELECT * FROM print_extension_changes();
-                previous_object                |                                current_object
+                                 previous_object                                 |                                             current_object
 ---------------------------------------------------------------------
- function citus_total_relation_size(regclass)  |
- function upgrade_to_reference_table(regclass) |
-                                               | access method columnar
-                                               | function alter_columnar_table_reset(regclass,boolean,boolean,boolean,boolean)
-                                               | function alter_columnar_table_set(regclass,integer,integer,name,integer)
-                                               | function citus_internal.columnar_ensure_objects_exist()
-                                               | function citus_total_relation_size(regclass,boolean)
-                                               | function columnar.columnar_handler(internal)
-                                               | schema columnar
-                                               | sequence columnar.storageid_seq
-                                               | table columnar.columnar_skipnodes
-                                               | table columnar.columnar_stripes
-                                               | table columnar.options
-                                               | view citus_tables
-(14 rows)
+ function citus_total_relation_size(regclass)                                    |
+ function create_citus_local_table(regclass)                                     |
+ function mark_tables_colocated(regclass,regclass[])                             |
+ function master_conninfo_cache_invalidate()                                     |
+ function master_create_distributed_table(regclass,text,citus.distribution_type) |
+ function master_create_worker_shards(text,integer,integer)                      |
+ function master_dist_local_group_cache_invalidate()                             |
+ function master_dist_node_cache_invalidate()                                    |
+ function master_dist_object_cache_invalidate()                                  |
+ function master_dist_partition_cache_invalidate()                               |
+ function master_dist_placement_cache_invalidate()                               |
+ function master_dist_shard_cache_invalidate()                                   |
+ function master_drop_all_shards(regclass,text,text)                             |
+ function master_modify_multiple_shards(text)                                    |
+ function undistribute_table(regclass)                                           |
+ function upgrade_to_reference_table(regclass)                                   |
+                                                                                 | access method columnar
+                                                                                 | function alter_columnar_table_reset(regclass,boolean,boolean,boolean,boolean)
+                                                                                 | function alter_columnar_table_set(regclass,integer,integer,name,integer)
+                                                                                 | function alter_distributed_table(regclass,text,integer,text,boolean)
+                                                                                 | function alter_old_partitions_set_access_method(regclass,timestamp with time zone,name)
+                                                                                 | function alter_table_set_access_method(regclass,text)
+                                                                                 | function citus_activate_node(text,integer)
+                                                                                 | function citus_add_inactive_node(text,integer,integer,noderole,name)
+                                                                                 | function citus_add_local_table_to_metadata(regclass,boolean)
+                                                                                 | function citus_add_node(text,integer,integer,noderole,name)
+                                                                                 | function citus_add_secondary_node(text,integer,text,integer,name)
+                                                                                 | function citus_conninfo_cache_invalidate()
+                                                                                 | function citus_copy_shard_placement(bigint,text,integer,text,integer,boolean,citus.shard_transfer_mode)
+                                                                                 | function citus_disable_node(text,integer)
+                                                                                 | function citus_dist_local_group_cache_invalidate()
+                                                                                 | function citus_dist_node_cache_invalidate()
+                                                                                 | function citus_dist_object_cache_invalidate()
+                                                                                 | function citus_dist_partition_cache_invalidate()
+                                                                                 | function citus_dist_placement_cache_invalidate()
+                                                                                 | function citus_dist_shard_cache_invalidate()
+                                                                                 | function citus_drain_node(text,integer,citus.shard_transfer_mode,name)
+                                                                                 | function citus_drop_all_shards(regclass,text,text)
+                                                                                 | function citus_internal.columnar_ensure_objects_exist()
+                                                                                 | function citus_move_shard_placement(bigint,text,integer,text,integer,citus.shard_transfer_mode)
+                                                                                 | function citus_remove_node(text,integer)
+                                                                                 | function citus_set_coordinator_host(text,integer,noderole,name)
+                                                                                 | function citus_set_node_property(text,integer,text,boolean)
+                                                                                 | function citus_shard_sizes()
+                                                                                 | function citus_total_relation_size(regclass,boolean)
+                                                                                 | function citus_unmark_object_distributed(oid,oid,integer)
+                                                                                 | function citus_update_node(integer,text,integer,boolean,integer)
+                                                                                 | function citus_update_shard_statistics(bigint)
+                                                                                 | function citus_update_table_statistics(regclass)
+                                                                                 | function columnar.columnar_handler(internal)
+                                                                                 | function fix_pre_citus10_partitioned_table_constraint_names()
+                                                                                 | function fix_pre_citus10_partitioned_table_constraint_names(regclass)
+                                                                                 | function notify_constraint_dropped()
+                                                                                 | function remove_local_tables_from_metadata()
+                                                                                 | function time_partition_range(regclass)
+                                                                                 | function undistribute_table(regclass,boolean)
+                                                                                 | function worker_change_sequence_dependency(regclass,regclass,regclass)
+                                                                                 | function worker_fix_pre_citus10_partitioned_table_constraint_names(regclass,bigint,text)
+                                                                                 | schema columnar
+                                                                                 | sequence columnar.storageid_seq
+                                                                                 | table columnar.chunk
+                                                                                 | table columnar.options
+                                                                                 | table columnar.stripe
+                                                                                 | view citus_shards
+                                                                                 | view citus_tables
+                                                                                 | view time_partitions
+(66 rows)
 
 DROP TABLE prev_objects, extension_diff;
 -- show running version

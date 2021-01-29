@@ -220,7 +220,8 @@ FilterNameListForDistributedCollations(List *objects, bool missing_ok,
 
 
 List *
-PreprocessDropCollationStmt(Node *node, const char *queryString)
+PreprocessDropCollationStmt(Node *node, const char *queryString,
+							ProcessUtilityContext processUtilityContext)
 {
 	DropStmt *stmt = castNode(DropStmt, node);
 
@@ -290,7 +291,8 @@ PreprocessDropCollationStmt(Node *node, const char *queryString)
  * the workers to keep the type in sync across the cluster.
  */
 List *
-PreprocessAlterCollationOwnerStmt(Node *node, const char *queryString)
+PreprocessAlterCollationOwnerStmt(Node *node, const char *queryString,
+								  ProcessUtilityContext processUtilityContext)
 {
 	AlterOwnerStmt *stmt = castNode(AlterOwnerStmt, node);
 	Assert(stmt->objectType == OBJECT_COLLATION);
@@ -324,7 +326,8 @@ PreprocessAlterCollationOwnerStmt(Node *node, const char *queryString)
  * executed on all the workers to keep the collation in sync across the cluster.
  */
 List *
-PreprocessRenameCollationStmt(Node *node, const char *queryString)
+PreprocessRenameCollationStmt(Node *node, const char *queryString,
+							  ProcessUtilityContext processUtilityContext)
 {
 	RenameStmt *stmt = castNode(RenameStmt, node);
 	ObjectAddress collationAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
@@ -357,7 +360,8 @@ PreprocessRenameCollationStmt(Node *node, const char *queryString)
  * In this stage we can prepare the commands that need to be run on all workers.
  */
 List *
-PreprocessAlterCollationSchemaStmt(Node *node, const char *queryString)
+PreprocessAlterCollationSchemaStmt(Node *node, const char *queryString,
+								   ProcessUtilityContext processUtilityContext)
 {
 	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
 	Assert(stmt->objectType == OBJECT_COLLATION);

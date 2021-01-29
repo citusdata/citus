@@ -19,8 +19,8 @@ teardown
 session "s1"
 
 step "s1-begin" { BEGIN; }
-step "s1-create-citus-local-table-1" { SELECT create_citus_local_table('citus_local_table_1'); }
-step "s1-create-citus-local-table-3" { SELECT create_citus_local_table('another_schema.citus_local_table_3'); }
+step "s1-create-citus-local-table-1" { SELECT citus_add_local_table_to_metadata('citus_local_table_1'); }
+step "s1-create-citus-local-table-3" { SELECT citus_add_local_table_to_metadata('another_schema.citus_local_table_3'); }
 step "s1-drop-table" { DROP TABLE citus_local_table_1; }
 step "s1-delete" { DELETE FROM citus_local_table_1 WHERE a=2; }
 step "s1-select" { SELECT * FROM citus_local_table_1; }
@@ -32,9 +32,9 @@ step "s1-rollback" { ROLLBACK; }
 session "s2"
 
 step "s2-begin" { BEGIN; }
-step "s2-create-citus-local-table-1" { SELECT create_citus_local_table('citus_local_table_1'); }
-step "s2-create-citus-local-table-2" { SELECT create_citus_local_table('citus_local_table_2'); }
-step "s2-create-citus-local-table-3" { SELECT create_citus_local_table('another_schema.citus_local_table_3'); }
+step "s2-create-citus-local-table-1" { SELECT citus_add_local_table_to_metadata('citus_local_table_1'); }
+step "s2-create-citus-local-table-2" { SELECT citus_add_local_table_to_metadata('citus_local_table_2'); }
+step "s2-create-citus-local-table-3" { SELECT citus_add_local_table_to_metadata('another_schema.citus_local_table_3'); }
 step "s2-select" { SELECT * FROM citus_local_table_1; }
 step "s2-update" { UPDATE citus_local_table_1 SET a=1 WHERE a=2; }
 step "s2-truncate" { TRUNCATE citus_local_table_1; }
@@ -43,7 +43,7 @@ step "s2-remove-coordinator" { SELECT master_remove_node('localhost', 57636); }
 step "s2-commit" { COMMIT; }
 
 
-// create_citus_local_table vs command/query //
+// citus_add_local_table_to_metadata vs command/query //
 
 // Second session should error out as the table becomes a citus local table after the first session commits ..
 permutation "s1-begin" "s2-begin" "s1-create-citus-local-table-1" "s2-create-citus-local-table-1" "s1-commit" "s2-commit"
@@ -61,14 +61,14 @@ permutation "s2-create-citus-local-table-2" "s1-begin" "s2-begin" "s1-create-cit
 permutation "s1-begin" "s2-begin" "s1-create-citus-local-table-1" "s2-remove-coordinator" "s1-commit" "s2-commit"
 
 
-// command/query vs create_citus_local_table //
+// command/query vs citus_add_local_table_to_metadata //
 
-// create_citus_local_table_1 should first block and then error out as the first session drops the table
+// citus_add_local_table_to_metadata_1 should first block and then error out as the first session drops the table
 permutation "s1-begin" "s2-begin" "s1-drop-table" "s2-create-citus-local-table-1" "s1-commit" "s2-commit"
 // Any modifying queries, DML commands and SELECT will block
 permutation "s1-begin" "s2-begin" "s1-delete" "s2-create-citus-local-table-1" "s1-commit" "s2-commit"
 permutation "s1-begin" "s2-begin" "s1-select" "s2-create-citus-local-table-1" "s1-commit" "s2-commit"
-// create_citus_local_table should block on master_remove_node and then fail
+// citus_add_local_table_to_metadata should block on master_remove_node and then fail
 permutation "s1-begin" "s2-begin" "s1-remove-coordinator" "s2-create-citus-local-table-1" "s1-commit" "s2-commit"
-// create_citus_local_table should block on master_add_node and then succeed
+// citus_add_local_table_to_metadata should block on master_add_node and then succeed
 permutation "s1-remove-coordinator" "s1-begin" "s2-begin" "s1-add-coordinator" "s2-create-citus-local-table-1" "s1-commit" "s2-commit"

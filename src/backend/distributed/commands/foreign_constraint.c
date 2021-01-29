@@ -15,6 +15,8 @@
 #include "distributed/pg_version_constants.h"
 
 #include "access/htup_details.h"
+#include "access/sysattr.h"
+#include "access/xact.h"
 #include "catalog/namespace.h"
 #include "catalog/pg_constraint.h"
 #if (PG_VERSION_NUM >= PG_VERSION_12)
@@ -23,13 +25,16 @@
 #include "catalog/pg_type.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/commands.h"
+#include "distributed/coordinator_protocol.h"
 #include "distributed/listutils.h"
 #include "distributed/coordinator_protocol.h"
 #include "distributed/multi_join_order.h"
 #include "distributed/namespace_utils.h"
 #include "distributed/reference_table_utils.h"
 #include "distributed/version_compat.h"
+#include "utils/builtins.h"
 #include "utils/fmgroids.h"
+#include "utils/inval.h"
 #include "utils/lsyscache.h"
 #include "utils/rel.h"
 #include "utils/relcache.h"
@@ -39,6 +44,12 @@
 
 #define BehaviorIsRestrictOrNoAction(x) \
 	((x) == FKCONSTR_ACTION_NOACTION || (x) == FKCONSTR_ACTION_RESTRICT)
+
+
+#define USE_CREATE_REFERENCE_TABLE_HINT \
+	"You could use SELECT create_reference_table('%s') " \
+	"to replicate the referenced table to all nodes or " \
+	"consider dropping the foreign key"
 
 
 typedef bool (*CheckRelationFunc)(Oid);
@@ -52,7 +63,8 @@ static void EnsureSupportedFKeyBetweenCitusLocalAndRefTable(Form_pg_constraint
 															char
 															referencingReplicationModel,
 															char
-															referencedReplicationModel);
+															referencedReplicationModel,
+															Oid referencedTableId);
 static bool HeapTupleOfForeignConstraintIncludesColumn(HeapTuple heapTuple,
 													   Oid relationId,
 													   int pgConstraintKey,
@@ -66,9 +78,11 @@ static void ForeignConstraintFindDistKeys(HeapTuple pgConstraintTuple,
 										  int *referencedAttrIndex);
 static List * GetForeignKeyIdsForColumn(char *columnName, Oid relationId,
 										int searchForeignKeyColumnFlags);
-static List * GetForeignConstraintCommandsInternal(Oid relationId, int flags);
 static Oid get_relation_constraint_oid_compat(HeapTuple heapTuple);
+static List * GetForeignKeysWithLocalTables(Oid relationId);
 static bool IsTableTypeIncluded(Oid relationId, int flags);
+static void UpdateConstraintIsValid(Oid constraintId, bool isValid);
+
 
 /*
  * ConstraintIsAForeignKeyToReferenceTable checks if the given constraint is a
@@ -160,8 +174,7 @@ ErrorIfUnsupportedForeignConstraintExists(Relation relation, char referencingDis
 							errdetail("To enforce foreign keys, the referencing and "
 									  "referenced rows need to be stored on the same "
 									  "node."),
-							errhint("You could use SELECT create_reference_table('%s') "
-									"to replicate the referenced table to all nodes",
+							errhint(USE_CREATE_REFERENCE_TABLE_HINT,
 									referencedTableName)));
 		}
 
@@ -194,7 +207,8 @@ ErrorIfUnsupportedForeignConstraintExists(Relation relation, char referencingDis
 		{
 			EnsureSupportedFKeyBetweenCitusLocalAndRefTable(constraintForm,
 															referencingReplicationModel,
-															referencedReplicationModel);
+															referencedReplicationModel,
+															referencedTableId);
 
 			ReleaseSysCache(heapTuple);
 			continue;
@@ -209,10 +223,11 @@ ErrorIfUnsupportedForeignConstraintExists(Relation relation, char referencingDis
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 							errmsg("cannot create foreign key constraint "
 								   "since foreign keys from reference tables "
-								   "to distributed tables are not supported"),
-							errdetail("A reference table can only have foreign "
-									  "keys to other reference tables or citus "
-									  "local tables")));
+								   "and local tables to distributed tables "
+								   "are not supported"),
+							errdetail("Reference tables and local tables "
+									  "can only have foreign keys to reference "
+									  "tables and local tables")));
 		}
 
 		/*
@@ -296,7 +311,8 @@ ErrorIfUnsupportedForeignConstraintExists(Relation relation, char referencingDis
 static void
 EnsureSupportedFKeyBetweenCitusLocalAndRefTable(Form_pg_constraint fKeyConstraintForm,
 												char referencingReplicationModel,
-												char referencedReplicationModel)
+												char referencedReplicationModel,
+												Oid referencedTableId)
 {
 	bool referencingIsReferenceTable =
 		(referencingReplicationModel == REPLICATION_MODEL_2PC);
@@ -316,11 +332,14 @@ EnsureSupportedFKeyBetweenCitusLocalAndRefTable(Form_pg_constraint fKeyConstrain
 		if (!(BehaviorIsRestrictOrNoAction(fKeyConstraintForm->confdeltype) &&
 			  BehaviorIsRestrictOrNoAction(fKeyConstraintForm->confupdtype)))
 		{
+			char *referencedTableName = get_rel_name(referencedTableId);
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 							errmsg("cannot define foreign key constraint, "
 								   "foreign keys from reference tables to "
-								   "citus local tables can only be defined "
-								   "with NO ACTION or RESTRICT behaviors")));
+								   "local tables can only be defined "
+								   "with NO ACTION or RESTRICT behaviors"),
+							errhint(USE_CREATE_REFERENCE_TABLE_HINT,
+									referencedTableName)));
 		}
 	}
 }
@@ -417,10 +436,10 @@ ErrorOutForFKeyBetweenPostgresAndCitusLocalTable(Oid localTableId)
 	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 					errmsg("cannot create foreign key constraint as \"%s\" is "
 						   "a postgres local table", localTableName),
-					errhint("first create a citus local table from the postgres "
-							"local table using SELECT create_citus_local_table('%s') "
+					errhint("first add local table to citus metadata "
+							"by using SELECT citus_add_local_table_to_metadata('%s') "
 							"and execute the ALTER TABLE command to create the "
-							"foreign key to citus local table", localTableName)));
+							"foreign key to local table", localTableName)));
 }
 
 
@@ -599,11 +618,53 @@ GetReferencingForeignConstaintCommands(Oid relationId)
 
 
 /*
+ * GetForeignConstraintToReferenceTablesCommands takes in a relationId, and
+ * returns the list of foreign constraint commands needed to reconstruct
+ * foreign key constraints that the table is involved in as the "referencing"
+ * one and the "referenced" table is a reference table.
+ */
+List *
+GetForeignConstraintToReferenceTablesCommands(Oid relationId)
+{
+	int flags = INCLUDE_REFERENCING_CONSTRAINTS | INCLUDE_REFERENCE_TABLES;
+	return GetForeignConstraintCommandsInternal(relationId, flags);
+}
+
+
+/*
+ * GetForeignConstraintToDistributedTablesCommands takes in a relationId, and
+ * returns the list of foreign constraint commands needed to reconstruct
+ * foreign key constraints that the table is involved in as the "referencing"
+ * one and the "referenced" table is a distributed table.
+ */
+List *
+GetForeignConstraintToDistributedTablesCommands(Oid relationId)
+{
+	int flags = INCLUDE_REFERENCING_CONSTRAINTS | INCLUDE_DISTRIBUTED_TABLES;
+	return GetForeignConstraintCommandsInternal(relationId, flags);
+}
+
+
+/*
+ * GetForeignConstraintFromDistributedTablesCommands takes in a relationId, and
+ * returns the list of foreign constraint commands needed to reconstruct
+ * foreign key constraints that the table is involved in as the "referenced"
+ * one and the "referencing" table is a distributed table.
+ */
+List *
+GetForeignConstraintFromDistributedTablesCommands(Oid relationId)
+{
+	int flags = INCLUDE_REFERENCED_CONSTRAINTS | INCLUDE_DISTRIBUTED_TABLES;
+	return GetForeignConstraintCommandsInternal(relationId, flags);
+}
+
+
+/*
  * GetForeignConstraintCommandsInternal is a wrapper function to get the
  * DDL commands to recreate the foreign key constraints returned by
  * GetForeignKeyOids. See more details at the underlying function.
  */
-static List *
+List *
 GetForeignConstraintCommandsInternal(Oid relationId, int flags)
 {
 	List *foreignKeyOids = GetForeignKeyOids(relationId, flags);
@@ -649,6 +710,38 @@ get_relation_constraint_oid_compat(HeapTuple heapTuple)
 #endif
 
 	return constraintOid;
+}
+
+
+/*
+ * HasForeignKeyToLocalTable returns true if relation has foreign key
+ * relationship with a local table.
+ */
+bool
+HasForeignKeyWithLocalTable(Oid relationId)
+{
+	List *foreignKeysWithLocalTables = GetForeignKeysWithLocalTables(relationId);
+	return list_length(foreignKeysWithLocalTables) > 0;
+}
+
+
+/*
+ * GetForeignKeysWithLocalTables returns a list foreign keys for foreign key
+ * relationaships that relation has with local tables.
+ */
+static List *
+GetForeignKeysWithLocalTables(Oid relationId)
+{
+	int referencingFKeysFlag = INCLUDE_REFERENCING_CONSTRAINTS |
+							   INCLUDE_LOCAL_TABLES;
+	List *referencingFKeyList = GetForeignKeyOids(relationId, referencingFKeysFlag);
+
+	/* already captured self referencing foreign keys, so use EXCLUDE_SELF_REFERENCES */
+	int referencedFKeysFlag = INCLUDE_REFERENCED_CONSTRAINTS |
+							  EXCLUDE_SELF_REFERENCES |
+							  INCLUDE_LOCAL_TABLES;
+	List *referencedFKeyList = GetForeignKeyOids(relationId, referencedFKeysFlag);
+	return list_concat(referencingFKeyList, referencedFKeyList);
 }
 
 
@@ -741,31 +834,53 @@ TableReferencing(Oid relationId)
 
 
 /*
- * ConstraintIsAForeignKey is a wrapper around GetForeignKeyOidByName that
- * returns true if the given constraint name identifies a foreign key
- * constraint defined on relation with relationId.
+ * ConstraintIsAForeignKey is a wrapper around ConstraintWithNameIsOfType that returns true
+ * if given constraint name identifies a foreign key constraint.
  */
 bool
 ConstraintIsAForeignKey(char *inputConstaintName, Oid relationId)
 {
-	Oid foreignKeyId = GetForeignKeyOidByName(inputConstaintName, relationId);
-	return OidIsValid(foreignKeyId);
+	return ConstraintWithNameIsOfType(inputConstaintName, relationId, CONSTRAINT_FOREIGN);
 }
 
 
 /*
- * GetForeignKeyOidByName returns OID of the foreign key with name and defined
- * on relation with relationId. If there is no such foreign key constraint, then
- * this function returns InvalidOid.
+ * ConstraintWithNameIsOfType is a wrapper around get_relation_constraint_oid that
+ * returns true if given constraint name identifies a valid constraint defined
+ * on relation with relationId and it's type matches the input constraint type.
  */
-Oid
-GetForeignKeyOidByName(char *inputConstaintName, Oid relationId)
+bool
+ConstraintWithNameIsOfType(char *inputConstaintName, Oid relationId,
+						   char targetConstraintType)
 {
-	int flags = INCLUDE_REFERENCING_CONSTRAINTS | INCLUDE_ALL_TABLE_TYPES;
-	List *foreignKeyOids = GetForeignKeyOids(relationId, flags);
+	bool missingOk = true;
+	Oid constraintId =
+		get_relation_constraint_oid(relationId, inputConstaintName, missingOk);
+	return ConstraintWithIdIsOfType(constraintId, targetConstraintType);
+}
 
-	Oid foreignKeyId = FindForeignKeyOidWithName(foreignKeyOids, inputConstaintName);
-	return foreignKeyId;
+
+/*
+ * ConstraintWithIdIsOfType returns true if constraint with constraintId exists
+ * and is of type targetConstraintType.
+ */
+bool
+ConstraintWithIdIsOfType(Oid constraintId, char targetConstraintType)
+{
+	HeapTuple heapTuple = SearchSysCache1(CONSTROID, ObjectIdGetDatum(constraintId));
+	if (!HeapTupleIsValid(heapTuple))
+	{
+		/* no such constraint */
+		return false;
+	}
+
+	Form_pg_constraint constraintForm = (Form_pg_constraint) GETSTRUCT(heapTuple);
+	char constraintType = constraintForm->contype;
+	bool constraintTypeMatches = (constraintType == targetConstraintType);
+
+	ReleaseSysCache(heapTuple);
+
+	return constraintTypeMatches;
 }
 
 
@@ -796,11 +911,11 @@ FindForeignKeyOidWithName(List *foreignKeyOids, const char *inputConstraintName)
 
 
 /*
- * ErrorIfTableHasExternalForeignKeys errors out if the relation with relationId
- * is involved in a foreign key relationship other than the self-referencing ones.
+ * TableHasExternalForeignKeys returns true if the relation with relationId is
+ * involved in a foreign key relationship other than the self-referencing ones.
  */
-void
-ErrorIfTableHasExternalForeignKeys(Oid relationId)
+bool
+TableHasExternalForeignKeys(Oid relationId)
 {
 	int flags = (INCLUDE_REFERENCING_CONSTRAINTS | EXCLUDE_SELF_REFERENCES |
 				 INCLUDE_ALL_TABLE_TYPES);
@@ -815,16 +930,10 @@ ErrorIfTableHasExternalForeignKeys(Oid relationId)
 
 	if (list_length(foreignKeysWithOtherTables) == 0)
 	{
-		return;
+		return false;
 	}
 
-	const char *relationName = get_rel_name(relationId);
-	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-					errmsg("relation \"%s\" is involved in a foreign key relationship "
-						   "with another table", relationName),
-					errhint("Drop foreign keys with other tables and re-define them "
-							"with ALTER TABLE commands after the current operation "
-							"is done.")));
+	return true;
 }
 
 
@@ -991,5 +1100,244 @@ IsTableTypeIncluded(Oid relationId, int flags)
 	{
 		return (flags & INCLUDE_CITUS_LOCAL_TABLES) != 0;
 	}
+	return false;
+}
+
+
+/*
+ * GetForeignConstraintCommandsToReferenceTable takes in a shardInterval, and
+ * returns the list of commands that are required to create the foreign
+ * constraints for that shardInterval.
+ *
+ * The function does the following hack:
+ *    - Create the foreign constraints as INVALID on the shards
+ *    - Manually update pg_constraint to mark the same foreign
+ *      constraints as VALID
+ *
+ * We implement the above hack because we aim to skip the validation phase
+ * of foreign keys to reference tables. The validation is pretty costly and
+ * given that the source placements already valid, the validation in the
+ * target nodes is useless.
+ *
+ * The function does not apply the same logic for the already invalid foreign
+ * constraints.
+ */
+List *
+GetForeignConstraintCommandsToReferenceTable(ShardInterval *shardInterval)
+{
+	ScanKeyData scanKey[1];
+	int scanKeyCount = 1;
+	uint64 shardId = shardInterval->shardId;
+	Oid relationId = shardInterval->relationId;
+
+	List *commandList = NIL;
+
+	/*
+	 * Set search_path to NIL so that all objects outside of pg_catalog will be
+	 * schema-prefixed. pg_catalog will be added automatically when we call
+	 * PushOverrideSearchPath(), since we set addCatalog to true;
+	 */
+	OverrideSearchPath *overridePath = GetOverrideSearchPath(CurrentMemoryContext);
+	overridePath->schemas = NIL;
+	overridePath->addCatalog = true;
+	PushOverrideSearchPath(overridePath);
+
+	/* open system catalog and scan all constraints that belong to this table */
+	Relation pgConstraint = table_open(ConstraintRelationId, AccessShareLock);
+	ScanKeyInit(&scanKey[0], Anum_pg_constraint_conrelid, BTEqualStrategyNumber, F_OIDEQ,
+				relationId);
+
+	SysScanDesc scanDescriptor = systable_beginscan(pgConstraint,
+													ConstraintRelidTypidNameIndexId,
+													true, NULL, scanKeyCount, scanKey);
+
+	HeapTuple heapTuple = systable_getnext(scanDescriptor);
+	while (HeapTupleIsValid(heapTuple))
+	{
+		Form_pg_constraint constraintForm = (Form_pg_constraint) GETSTRUCT(heapTuple);
+		char *constraintDefinition = NULL;
+
+
+		if (constraintForm->contype != CONSTRAINT_FOREIGN)
+		{
+			heapTuple = systable_getnext(scanDescriptor);
+			continue;
+		}
+
+		Oid referencedRelationId = constraintForm->confrelid;
+		if (PartitionMethod(referencedRelationId) != DISTRIBUTE_BY_NONE)
+		{
+			heapTuple = systable_getnext(scanDescriptor);
+			continue;
+		}
+
+		Oid constraintId = get_relation_constraint_oid(relationId,
+													   constraintForm->conname.data,
+													   true);
+
+		int64 referencedShardId = GetFirstShardId(referencedRelationId);
+		Oid referencedSchemaId = get_rel_namespace(referencedRelationId);
+		char *referencedSchemaName = get_namespace_name(referencedSchemaId);
+		char *escapedReferencedSchemaName = quote_literal_cstr(referencedSchemaName);
+
+		Oid schemaId = get_rel_namespace(relationId);
+		char *schemaName = get_namespace_name(schemaId);
+		char *escapedSchemaName = quote_literal_cstr(schemaName);
+
+		/*
+		 * We're first marking the constraint's valid field as invalid
+		 * and get the constraint definition. Later, we mark the constraint
+		 * as valid back with directly updating to pg_constraint.
+		 */
+		if (constraintForm->convalidated == true)
+		{
+			UpdateConstraintIsValid(constraintId, false);
+			constraintDefinition = pg_get_constraintdef_command(constraintId);
+			UpdateConstraintIsValid(constraintId, true);
+		}
+		else
+		{
+			/* if the constraint is not valid, simply do nothing special */
+			constraintDefinition = pg_get_constraintdef_command(constraintId);
+		}
+
+		StringInfo applyForeignConstraintCommand = makeStringInfo();
+		appendStringInfo(applyForeignConstraintCommand,
+						 WORKER_APPLY_INTER_SHARD_DDL_COMMAND, shardId,
+						 escapedSchemaName, referencedShardId,
+						 escapedReferencedSchemaName,
+						 quote_literal_cstr(constraintDefinition));
+		commandList = lappend(commandList, applyForeignConstraintCommand->data);
+
+		/* mark the constraint as valid again on the shard */
+		if (constraintForm->convalidated == true)
+		{
+			StringInfo markConstraintValid = makeStringInfo();
+			char *qualifiedReferencingShardName =
+				ConstructQualifiedShardName(shardInterval);
+
+			char *shardConstraintName = pstrdup(constraintForm->conname.data);
+			AppendShardIdToName(&shardConstraintName, shardId);
+
+			appendStringInfo(markConstraintValid,
+							 "UPDATE pg_constraint SET convalidated = true WHERE "
+							 "conrelid = %s::regclass AND conname = '%s'",
+							 quote_literal_cstr(qualifiedReferencingShardName),
+							 shardConstraintName);
+			commandList = lappend(commandList, markConstraintValid->data);
+		}
+
+		heapTuple = systable_getnext(scanDescriptor);
+	}
+
+	/* clean up scan and close system catalog */
+	systable_endscan(scanDescriptor);
+	table_close(pgConstraint, AccessShareLock);
+
+	/* revert back to original search_path */
+	PopOverrideSearchPath();
+
+	return commandList;
+}
+
+
+/*
+ * UpdateConstraintIsValid is a utility function with sets the
+ * pg_constraint.convalidated to the given isValid for the given
+ * constraintId.
+ *
+ * This function should be called with caution because if used wrong
+ * could lead to data inconsistencies.
+ */
+static void
+UpdateConstraintIsValid(Oid constraintId, bool isValid)
+{
+	HeapTuple heapTuple = NULL;
+	SysScanDesc scanDescriptor;
+	ScanKeyData scankey[1];
+	Relation pgConstraint = table_open(ConstraintRelationId, AccessShareLock);
+	TupleDesc tupleDescriptor = RelationGetDescr(pgConstraint);
+	Datum values[Natts_pg_constraint];
+	bool isnull[Natts_pg_constraint];
+	bool replace[Natts_pg_constraint];
+
+	ScanKeyInit(&scankey[0],
+#if PG_VERSION_NUM >= 120000
+				Anum_pg_constraint_oid,
+#else
+				ObjectIdAttributeNumber,
+#endif
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(constraintId));
+
+	scanDescriptor = systable_beginscan(pgConstraint,
+										ConstraintOidIndexId,
+										true,
+										NULL,
+										1,
+										scankey);
+	heapTuple = systable_getnext(scanDescriptor);
+	if (!HeapTupleIsValid(heapTuple))
+	{
+		elog(ERROR, "could not find tuple for constraint %u", constraintId);
+	}
+
+	memset(replace, 0, sizeof(replace));
+
+	values[Anum_pg_constraint_convalidated - 1] = BoolGetDatum(isValid);
+	isnull[Anum_pg_constraint_convalidated - 1] = false;
+	replace[Anum_pg_constraint_convalidated - 1] = true;
+
+	heapTuple = heap_modify_tuple(heapTuple, tupleDescriptor, values, isnull, replace);
+
+	CatalogTupleUpdate(pgConstraint, &heapTuple->t_self, heapTuple);
+
+	CacheInvalidateHeapTuple(pgConstraint, heapTuple, NULL);
+	CommandCounterIncrement();
+
+	systable_endscan(scanDescriptor);
+	table_close(pgConstraint, NoLock);
+}
+
+
+/*
+ * RelationInvolvedInAnyNonInheritedForeignKeys returns true if relation involved
+ * in a foreign key that is not inherited from its parent relation.
+ */
+bool
+RelationInvolvedInAnyNonInheritedForeignKeys(Oid relationId)
+{
+	List *referencingForeignKeys = GetForeignKeyOids(relationId,
+													 INCLUDE_REFERENCING_CONSTRAINTS |
+													 INCLUDE_ALL_TABLE_TYPES);
+
+	/*
+	 * We already capture self-referencing foreign keys above, so use
+	 * EXCLUDE_SELF_REFERENCES here
+	 */
+	List *referencedForeignKeys = GetForeignKeyOids(relationId,
+													INCLUDE_REFERENCED_CONSTRAINTS |
+													EXCLUDE_SELF_REFERENCES |
+													INCLUDE_ALL_TABLE_TYPES);
+	List *foreignKeysRelationInvolved = list_concat(referencingForeignKeys,
+													referencedForeignKeys);
+	Oid foreignKeyId = InvalidOid;
+	foreach_oid(foreignKeyId, foreignKeysRelationInvolved)
+	{
+		HeapTuple heapTuple = SearchSysCache1(CONSTROID, ObjectIdGetDatum(foreignKeyId));
+		if (!HeapTupleIsValid(heapTuple))
+		{
+			/* not possible but be on the safe side */
+			continue;
+		}
+
+		Form_pg_constraint constraintForm = (Form_pg_constraint) GETSTRUCT(heapTuple);
+		Oid parentConstraintId = constraintForm->conparentid;
+		if (!OidIsValid(parentConstraintId))
+		{
+			return true;
+		}
+	}
+
 	return false;
 }

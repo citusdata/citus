@@ -35,6 +35,8 @@
 #define PG_TOTAL_RELATION_SIZE_FUNCTION "pg_total_relation_size(%s)"
 #define CSTORE_TABLE_SIZE_FUNCTION "cstore_table_size(%s)"
 
+#define SHARD_SIZES_COLUMN_COUNT 2
+
 /* In-memory representation of a typed tuple in pg_dist_shard. */
 typedef struct ShardInterval
 {
@@ -88,6 +90,92 @@ typedef struct ShardPlacement
 } ShardPlacement;
 
 
+typedef enum CascadeToColocatedOption
+{
+	CASCADE_TO_COLOCATED_UNSPECIFIED,
+	CASCADE_TO_COLOCATED_YES,
+	CASCADE_TO_COLOCATED_NO,
+	CASCADE_TO_COLOCATED_NO_ALREADY_CASCADED
+}CascadeToColocatedOption;
+
+/*
+ * TableConversionParameters are the parameters that are given to
+ * table conversion UDFs: undistribute_table, alter_distributed_table,
+ * alter_table_set_access_method.
+ *
+ * When passing a TableConversionParameters object to one of the table
+ * conversion functions some of the parameters needs to be set:
+ * UndistributeTable: relationId
+ * AlterDistributedTable: relationId, distributionColumn, shardCountIsNull,
+ * shardCount, colocateWith, cascadeToColocated
+ * AlterTableSetAccessMethod: relationId, accessMethod
+ *
+ * conversionType parameter will be automatically set by the function.
+ *
+ * TableConversionState objects can be created using TableConversionParameters
+ * objects with CreateTableConversion function.
+ */
+typedef struct TableConversionParameters
+{
+	/*
+	 * Determines type of conversion: UNDISTRIBUTE_TABLE,
+	 * ALTER_DISTRIBUTED_TABLE, ALTER_TABLE_SET_ACCESS_METHOD.
+	 */
+	char conversionType;
+
+	/* Oid of the table to do conversion on */
+	Oid relationId;
+
+	/*
+	 * Options to do conversions on the table
+	 * distributionColumn is the name of the new distribution column,
+	 * shardCountIsNull is if the shardCount variable is not given
+	 * shardCount is the new shard count,
+	 * colocateWith is the name of the table to colocate with, 'none', or
+	 * 'default'
+	 * accessMethod is the name of the new accessMethod for the table
+	 */
+	char *distributionColumn;
+	bool shardCountIsNull;
+	int shardCount;
+	char *colocateWith;
+	char *accessMethod;
+
+	/*
+	 * cascadeToColocated determines whether the shardCount and
+	 * colocateWith will be cascaded to the currently colocated tables
+	 */
+	CascadeToColocatedOption cascadeToColocated;
+
+	/*
+	 * cascadeViaForeignKeys determines if the conversion operation
+	 * will be cascaded to the graph connected with foreign keys
+	 * to the table
+	 */
+	bool cascadeViaForeignKeys;
+
+	/*
+	 * suppressNoticeMessages determines if we want to suppress NOTICE
+	 * messages that we explicitly issue
+	 */
+	bool suppressNoticeMessages;
+} TableConversionParameters;
+
+typedef struct TableConversionReturn
+{
+	/*
+	 * commands to create foreign keys for the table
+	 *
+	 * When the table conversion is cascaded we can recreate
+	 * some of the foreign keys of the cascaded tables. So with this
+	 * list we can return it to the initial conversion operation so
+	 * foreign keys can be created after every colocated table is
+	 * converted.
+	 */
+	List *foreignKeyCommands;
+}TableConversionReturn;
+
+
 /* Config variable managed via guc.c */
 extern int ReplicationModel;
 
@@ -106,10 +194,12 @@ extern ShardInterval * CopyShardInterval(ShardInterval *srcInterval);
 extern uint64 ShardLength(uint64 shardId);
 extern bool NodeGroupHasShardPlacements(int32 groupId,
 										bool onlyConsiderActivePlacements);
+extern List * ActiveShardPlacementListOnGroup(uint64 shardId, int32 groupId);
 extern List * ActiveShardPlacementList(uint64 shardId);
 extern ShardPlacement * ActiveShardPlacement(uint64 shardId, bool missingOk);
 extern List * BuildShardPlacementList(ShardInterval *shardInterval);
 extern List * AllShardPlacementsOnNodeGroup(int32 groupId);
+extern List * AllShardPlacementsWithShardPlacementState(ShardState shardState);
 extern List * GroupShardPlacementsForTableOnGroup(Oid relationId, int32 groupId);
 extern StringInfo GenerateSizeQueryOnMultiplePlacements(List *shardIntervalList,
 														char *sizeQuery);
@@ -135,9 +225,10 @@ extern void MarkShardPlacementInactive(ShardPlacement *shardPlacement);
 extern void UpdateShardPlacementState(uint64 placementId, char shardState);
 extern void DeleteShardPlacementRow(uint64 placementId);
 extern void CreateDistributedTable(Oid relationId, Var *distributionColumn,
-								   char distributionMethod, char *colocateWithTableName,
-								   bool viaDeprecatedAPI);
+								   char distributionMethod, int shardCount,
+								   char *colocateWithTableName, bool viaDeprecatedAPI);
 extern void CreateTruncateTrigger(Oid relationId);
+extern TableConversionReturn * UndistributeTable(TableConversionParameters *params);
 
 extern void EnsureDependenciesExistOnAllNodes(const ObjectAddress *target);
 extern List * GetDistributableDependenciesForObject(const ObjectAddress *target);
@@ -156,6 +247,7 @@ extern void EnsureSuperUser(void);
 extern void ErrorIfTableIsACatalogTable(Relation relation);
 extern void EnsureTableNotDistributed(Oid relationId);
 extern void EnsureReplicationSettings(Oid relationId, char replicationModel);
+extern void EnsureRelationExists(Oid relationId);
 extern bool RegularTable(Oid relationId);
 extern char * ConstructQualifiedShardName(ShardInterval *shardInterval);
 extern uint64 GetFirstShardId(Oid relationId);

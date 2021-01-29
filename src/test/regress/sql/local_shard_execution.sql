@@ -372,7 +372,7 @@ BEGIN;
 	TRUNCATE distributed_table CASCADE;
 ROLLBACK;
 
--- a local query is followed by a command that cannot be executed locally
+-- a local query is followed by an INSERT..SELECT via the coordinator
 BEGIN;
 	SELECT count(*) FROM distributed_table WHERE key = 1;
 
@@ -385,11 +385,12 @@ SELECT count(*) FROM distributed_table;
 SELECT count(*) FROM distributed_table d1 join distributed_table d2 using(age);
 ROLLBACK;
 
--- a local query is followed by a command that cannot be executed locally
+-- a local query is followed by an INSERT..SELECT with re-partitioning
 BEGIN;
-	SELECT count(*) FROM distributed_table WHERE key = 1;
-
-	INSERT INTO distributed_table (key) SELECT key+1 FROM distributed_table;
+	SELECT count(*) FROM distributed_table WHERE key = 6;
+	INSERT INTO reference_table (key) SELECT -key FROM distributed_table;
+	INSERT INTO distributed_table (key) SELECT -key FROM distributed_table;
+	SELECT count(*) FROM distributed_table WHERE key = -6;
 ROLLBACK;
 
 INSERT INTO distributed_table VALUES (1, '11',21) ON CONFLICT(key) DO UPDATE SET value = '29' RETURNING *;

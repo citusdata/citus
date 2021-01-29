@@ -71,8 +71,8 @@ BEGIN
     RETURN a*a;
 END; $$ LANGUAGE PLPGSQL STABLE;
 CREATE TABLE citus_local_table(a int, b int DEFAULT square(10));
-SELECT create_citus_local_table('citus_local_table');
- create_citus_local_table
+SELECT citus_add_local_table_to_metadata('citus_local_table');
+ citus_add_local_table_to_metadata
 ---------------------------------------------------------------------
 
 (1 row)

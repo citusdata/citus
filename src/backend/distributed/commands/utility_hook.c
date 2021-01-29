@@ -46,6 +46,7 @@
 #include "distributed/commands/utility_hook.h" /* IWYU pragma: keep */
 #include "distributed/deparser.h"
 #include "distributed/deparse_shard_query.h"
+#include "distributed/foreign_key_relationship.h"
 #include "distributed/listutils.h"
 #include "distributed/local_executor.h"
 #include "distributed/maintenanced.h"
@@ -55,6 +56,7 @@
 #include "distributed/multi_executor.h"
 #include "distributed/multi_explain.h"
 #include "distributed/multi_physical_planner.h"
+#include "distributed/reference_table_utils.h"
 #include "distributed/resource_lock.h"
 #include "distributed/transmit.h"
 #include "distributed/version_compat.h"
@@ -72,25 +74,38 @@ PropSetCmdBehavior PropagateSetCommands = PROPSETCMD_NONE; /* SET prop off */
 static bool shouldInvalidateForeignKeyGraph = false;
 static int activeAlterTables = 0;
 static int activeDropSchemaOrDBs = 0;
+static bool ConstraintDropped = false;
+
+
+int UtilityHookLevel = 0;
 
 
 /* Local functions forward declarations for helper functions */
+static void ProcessUtilityInternal(PlannedStmt *pstmt,
+								   const char *queryString,
+								   ProcessUtilityContext context,
+								   ParamListInfo params,
+								   struct QueryEnvironment *queryEnv,
+								   DestReceiver *dest,
+								   QueryCompletionCompat *completionTag);
 static char * SetSearchPathToCurrentSearchPathCommand(void);
 static char * CurrentSearchPath(void);
 static void IncrementUtilityHookCountersIfNecessary(Node *parsetree);
 static void PostStandardProcessUtility(Node *parsetree);
 static void DecrementUtilityHookCountersIfNecessary(Node *parsetree);
 static bool IsDropSchemaOrDB(Node *parsetree);
+static bool ShouldUndistributeCitusLocalTables(void);
 
 
 /*
- * CitusProcessUtility is a convenience method to create a PlannedStmt out of pieces of a
- * utility statement before invoking ProcessUtility.
+ * ProcessUtilityForParseTree is a convenience method to create a PlannedStmt out of
+ * pieces of a utility statement before invoking ProcessUtility.
  */
 void
-CitusProcessUtility(Node *node, const char *queryString, ProcessUtilityContext context,
-					ParamListInfo params, DestReceiver *dest,
-					QueryCompletionCompat *completionTag)
+ProcessUtilityParseTree(Node *node, const char *queryString, ProcessUtilityContext
+						context,
+						ParamListInfo params, DestReceiver *dest,
+						QueryCompletionCompat *completionTag)
 {
 	PlannedStmt *plannedStmt = makeNode(PlannedStmt);
 	plannedStmt->commandType = CMD_UTILITY;
@@ -120,7 +135,6 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 					 QueryCompletionCompat *completionTag)
 {
 	Node *parsetree = pstmt->utilityStmt;
-	List *ddlJobs = NIL;
 
 	if (IsA(parsetree, TransactionStmt) ||
 		IsA(parsetree, LockStmt) ||
@@ -164,6 +178,129 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 
 		return;
 	}
+	else if (IsA(parsetree, CallStmt))
+	{
+		CallStmt *callStmt = (CallStmt *) parsetree;
+
+		/*
+		 * If the procedure is distributed and we are using MX then we have the
+		 * possibility of calling it on the worker. If the data is located on
+		 * the worker this can avoid making many network round trips.
+		 */
+		if (context == PROCESS_UTILITY_TOPLEVEL &&
+			CallDistributedProcedureRemotely(callStmt, dest))
+		{
+			return;
+		}
+
+		/*
+		 * Stored procedures are a bit strange in the sense that some statements
+		 * are not in a transaction block, but can be rolled back. We need to
+		 * make sure we send all statements in a transaction block. The
+		 * StoredProcedureLevel variable signals this to the router executor
+		 * and indicates how deep in the call stack we are in case of nested
+		 * stored procedures.
+		 */
+		StoredProcedureLevel += 1;
+
+		PG_TRY();
+		{
+			standard_ProcessUtility(pstmt, queryString, context,
+									params, queryEnv, dest, completionTag);
+
+			StoredProcedureLevel -= 1;
+		}
+		PG_CATCH();
+		{
+			StoredProcedureLevel -= 1;
+			PG_RE_THROW();
+		}
+		PG_END_TRY();
+
+		return;
+	}
+	else if (IsA(parsetree, DoStmt))
+	{
+		/*
+		 * All statements in a DO block are executed in a single transaciton,
+		 * so we need to keep track of whether we are inside a DO block.
+		 */
+		DoBlockLevel += 1;
+
+		PG_TRY();
+		{
+			standard_ProcessUtility(pstmt, queryString, context,
+									params, queryEnv, dest, completionTag);
+
+			DoBlockLevel -= 1;
+		}
+		PG_CATCH();
+		{
+			DoBlockLevel -= 1;
+			PG_RE_THROW();
+		}
+		PG_END_TRY();
+
+		return;
+	}
+
+	UtilityHookLevel++;
+
+	PG_TRY();
+	{
+		ProcessUtilityInternal(pstmt, queryString, context, params, queryEnv, dest,
+							   completionTag);
+
+		if (UtilityHookLevel == 1)
+		{
+			/*
+			 * When Citus local tables are disconnected from the foreign key graph, which
+			 * can happen due to various kinds of drop commands, we immediately
+			 * undistribute them at the end of the command.
+			 */
+			if (ShouldUndistributeCitusLocalTables())
+			{
+				UndistributeDisconnectedCitusLocalTables();
+			}
+			ResetConstraintDropped();
+		}
+
+		UtilityHookLevel--;
+	}
+	PG_CATCH();
+	{
+		if (UtilityHookLevel == 1)
+		{
+			ResetConstraintDropped();
+		}
+
+		UtilityHookLevel--;
+
+		PG_RE_THROW();
+	}
+	PG_END_TRY();
+}
+
+
+/*
+ * ProcessUtilityInternal is a helper function for multi_ProcessUtility where majority
+ * of the Citus specific utility statements are handled here. The distinction between
+ * both functions is that Citus_ProcessUtility does not handle CALL and DO statements.
+ * The reason for the distinction is implemented to be able to find the "top-level" DDL
+ * commands (not internal/cascading ones). UtilityHookLevel variable is used to achieve
+ * this goal.
+ */
+static void
+ProcessUtilityInternal(PlannedStmt *pstmt,
+					   const char *queryString,
+					   ProcessUtilityContext context,
+					   ParamListInfo params,
+					   struct QueryEnvironment *queryEnv,
+					   DestReceiver *dest,
+					   QueryCompletionCompat *completionTag)
+{
+	Node *parsetree = pstmt->utilityStmt;
+	List *ddlJobs = NIL;
 
 	if (IsA(parsetree, ExplainStmt) &&
 		IsA(((ExplainStmt *) parsetree)->query, Query))
@@ -211,73 +348,6 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		CreateSubscriptionStmt *createSubStmt = (CreateSubscriptionStmt *) parsetree;
 
 		parsetree = ProcessCreateSubscriptionStmt(createSubStmt);
-	}
-
-	if (IsA(parsetree, CallStmt))
-	{
-		CallStmt *callStmt = (CallStmt *) parsetree;
-
-		/*
-		 * If the procedure is distributed and we are using MX then we have the
-		 * possibility of calling it on the worker. If the data is located on
-		 * the worker this can avoid making many network round trips.
-		 */
-		if (context == PROCESS_UTILITY_TOPLEVEL &&
-			CallDistributedProcedureRemotely(callStmt, dest))
-		{
-			return;
-		}
-
-		/*
-		 * Stored procedures are a bit strange in the sense that some statements
-		 * are not in a transaction block, but can be rolled back. We need to
-		 * make sure we send all statements in a transaction block. The
-		 * StoredProcedureLevel variable signals this to the router executor
-		 * and indicates how deep in the call stack we are in case of nested
-		 * stored procedures.
-		 */
-		StoredProcedureLevel += 1;
-
-		PG_TRY();
-		{
-			standard_ProcessUtility(pstmt, queryString, context,
-									params, queryEnv, dest, completionTag);
-
-			StoredProcedureLevel -= 1;
-		}
-		PG_CATCH();
-		{
-			StoredProcedureLevel -= 1;
-			PG_RE_THROW();
-		}
-		PG_END_TRY();
-
-		return;
-	}
-
-	if (IsA(parsetree, DoStmt))
-	{
-		/*
-		 * All statements in a DO block are executed in a single transaciton,
-		 * so we need to keep track of whether we are inside a DO block.
-		 */
-		DoBlockLevel += 1;
-
-		PG_TRY();
-		{
-			standard_ProcessUtility(pstmt, queryString, context,
-									params, queryEnv, dest, completionTag);
-
-			DoBlockLevel -= 1;
-		}
-		PG_CATCH();
-		{
-			DoBlockLevel -= 1;
-			PG_RE_THROW();
-		}
-		PG_END_TRY();
-
-		return;
 	}
 
 	/* process SET LOCAL stmts of allowed GUCs in multi-stmt xacts */
@@ -384,7 +454,7 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 
 		if (ops && ops->preprocess)
 		{
-			ddlJobs = ops->preprocess(parsetree, queryString);
+			ddlJobs = ops->preprocess(parsetree, queryString, context);
 		}
 	}
 	else
@@ -416,7 +486,8 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 				 * Note validation is done on the shard level when DDL propagation
 				 * is enabled. The following eagerly executes some tasks on workers.
 				 */
-				parsetree = WorkerProcessAlterTableStmt(alterTableStmt, queryString);
+				parsetree =
+					SkipForeignKeyValidationIfConstraintIsFkey(alterTableStmt, false);
 			}
 		}
 	}
@@ -472,6 +543,8 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		 * the available version is different than the current version of Citus. In this case,
 		 * ALTER EXTENSION citus UPDATE command can actually update Citus to a new version.
 		 */
+		bool isCreateAlterExtensionUpdateCitusStmt =
+			IsCreateAlterExtensionUpdateCitusStmt(parsetree);
 		bool isAlterExtensionUpdateCitusStmt = isCreateAlterExtensionUpdateCitusStmt &&
 											   IsA(parsetree, AlterExtensionStmt);
 
@@ -615,6 +688,146 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 
 
 /*
+ * UndistributeDisconnectedCitusLocalTables undistributes citus local tables that
+ * are not connected to any reference tables via their individual foreign key
+ * subgraphs.
+ */
+void
+UndistributeDisconnectedCitusLocalTables(void)
+{
+	List *citusLocalTableIdList = CitusTableTypeIdList(CITUS_LOCAL_TABLE);
+	citusLocalTableIdList = SortList(citusLocalTableIdList, CompareOids);
+
+	Oid citusLocalTableId = InvalidOid;
+	foreach_oid(citusLocalTableId, citusLocalTableIdList)
+	{
+		/* acquire ShareRowExclusiveLock to prevent concurrent foreign key creation */
+		LOCKMODE lockMode = ShareRowExclusiveLock;
+		LockRelationOid(citusLocalTableId, lockMode);
+
+		HeapTuple heapTuple =
+			SearchSysCache1(RELOID, ObjectIdGetDatum(citusLocalTableId));
+		if (!HeapTupleIsValid(heapTuple))
+		{
+			/*
+			 * UndistributeTable drops relation, skip if already undistributed
+			 * via cascade.
+			 */
+			continue;
+		}
+		ReleaseSysCache(heapTuple);
+
+		if (ConnectedToReferenceTableViaFKey(citusLocalTableId))
+		{
+			/* still connected to a reference table, skip it */
+			UnlockRelationOid(citusLocalTableId, lockMode);
+			continue;
+		}
+
+		/*
+		 * Citus local table is not connected to any reference tables, then
+		 * undistribute it via cascade. Here, instead of first dropping foreing
+		 * keys then undistributing the table, we just set cascadeViaForeignKeys
+		 * to true for simplicity.
+		 *
+		 * We suppress notices messages not to be too verbose. On the other hand,
+		 * as UndistributeTable moves data to a new table, we want to inform user
+		 * as it might take some time.
+		 */
+		ereport(NOTICE, (errmsg("removing table %s from metadata as it is not "
+								"connected to any reference tables via foreign keys",
+								generate_qualified_relation_name(citusLocalTableId))));
+		TableConversionParameters params = {
+			.relationId = citusLocalTableId,
+			.cascadeViaForeignKeys = true,
+			.suppressNoticeMessages = true
+		};
+		UndistributeTable(&params);
+	}
+}
+
+
+/*
+ * ShouldUndistributeCitusLocalTables returns true if we might need to check
+ * citus local tables for their connectivity to reference tables.
+ */
+static bool
+ShouldUndistributeCitusLocalTables(void)
+{
+	if (!ConstraintDropped)
+	{
+		/*
+		 * citus_drop_trigger executes notify_constraint_dropped to set
+		 * ConstraintDropped to true, which means that last command dropped
+		 * a table constraint.
+		 */
+		return false;
+	}
+
+	if (!CitusHasBeenLoaded())
+	{
+		/*
+		 * If we are dropping citus, we should not try to undistribute citus
+		 * local tables as they will also be dropped.
+		 */
+		return false;
+	}
+
+	if (!InCoordinatedTransaction())
+	{
+		/* not interacting with any Citus objects */
+		return false;
+	}
+
+	if (IsCitusInitiatedRemoteBackend())
+	{
+		/* connection from the coordinator operating on a shard */
+		return false;
+	}
+
+	if (!ShouldEnableLocalReferenceForeignKeys())
+	{
+		/*
+		 * If foreign keys between reference tables and local tables are
+		 * disabled, then user might be using citus_add_local_table_to_metadata for
+		 * their own purposes. In that case, we should not undistribute
+		 * citus local tables.
+		 */
+		return false;
+	}
+
+	if (!IsCoordinator())
+	{
+		/* we should not perform this operation in worker nodes */
+		return false;
+	}
+
+	return true;
+}
+
+
+/*
+ * NotifyUtilityHookConstraintDropped sets ConstraintDropped to true to tell us
+ * last command dropped a table constraint.
+ */
+void
+NotifyUtilityHookConstraintDropped(void)
+{
+	ConstraintDropped = true;
+}
+
+
+/*
+ * ResetConstraintDropped sets ConstraintDropped to false.
+ */
+void
+ResetConstraintDropped(void)
+{
+	ConstraintDropped = false;
+}
+
+
+/*
  * IsDropSchemaOrDB returns true if parsetree represents DROP SCHEMA ...or
  * a DROP DATABASE.
  */
@@ -705,6 +918,7 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 		Assert(SavedMultiShardCommitProtocol == COMMIT_PROTOCOL_BARE);
 		SavedMultiShardCommitProtocol = MultiShardCommitProtocol;
 		MultiShardCommitProtocol = COMMIT_PROTOCOL_BARE;
+		MemoryContext savedContext = CurrentMemoryContext;
 
 		PG_TRY();
 		{
@@ -731,12 +945,33 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 		}
 		PG_CATCH();
 		{
-			ereport(ERROR,
-					(errmsg("CONCURRENTLY-enabled index command failed"),
-					 errdetail("CONCURRENTLY-enabled index commands can fail partially, "
-							   "leaving behind an INVALID index."),
-					 errhint("Use DROP INDEX CONCURRENTLY IF EXISTS to remove the "
-							 "invalid index, then retry the original command.")));
+			/* CopyErrorData() requires (CurrentMemoryContext != ErrorContext) */
+			MemoryContextSwitchTo(savedContext);
+			ErrorData *edata = CopyErrorData();
+
+			/*
+			 * In concurrent index creation, if a worker index with the same name already
+			 * exists, prompt to DROP the current index and retry the original command
+			 */
+			if (edata->sqlerrcode == ERRCODE_DUPLICATE_TABLE)
+			{
+				ereport(ERROR,
+						(errmsg("CONCURRENTLY-enabled index command failed"),
+						 errdetail(
+							 "CONCURRENTLY-enabled index commands can fail partially, "
+							 "leaving behind an INVALID index."),
+						 errhint("Use DROP INDEX CONCURRENTLY IF EXISTS to remove the "
+								 "invalid index, then retry the original command.")));
+			}
+			else
+			{
+				ereport(WARNING,
+						(errmsg(
+							 "CONCURRENTLY-enabled index commands can fail partially, "
+							 "leaving behind an INVALID index.\n Use DROP INDEX "
+							 "CONCURRENTLY IF EXISTS to remove the invalid index.")));
+				PG_RE_THROW();
+			}
 		}
 		PG_END_TRY();
 	}

@@ -228,8 +228,8 @@ ShardIndex(ShardInterval *shardInterval)
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						errmsg("finding index of a given shard is only supported for "
-							   "hash distributed tables, reference tables and citus "
-							   "local tables")));
+							   "hash distributed tables, reference tables and local "
+							   "tables that are added to citus metadata")));
 	}
 
 	/* short-circuit for reference tables */

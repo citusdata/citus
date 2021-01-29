@@ -38,6 +38,7 @@
 #include "distributed/coordinator_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
+#include "distributed/shard_cleaner.h"
 #include "distributed/statistics_collection.h"
 #include "distributed/transaction_recovery.h"
 #include "distributed/version_compat.h"
@@ -92,6 +93,7 @@ typedef struct MaintenanceDaemonDBData
 /* config variable for distributed deadlock detection timeout */
 double DistributedDeadlockDetectionTimeoutFactor = 2.0;
 int Recover2PCInterval = 60000;
+int DeferShardDeleteInterval = 60000;
 
 /* config variables for metadata sync timeout */
 int MetadataSyncInterval = 60000;
@@ -118,7 +120,6 @@ static size_t MaintenanceDaemonShmemSize(void);
 static void MaintenanceDaemonShmemInit(void);
 static void MaintenanceDaemonShmemExit(int code, Datum arg);
 static void MaintenanceDaemonErrorContext(void *arg);
-static bool LockCitusExtension(void);
 static bool MetadataSyncTriggeredCheckAndReset(MaintenanceDaemonDBData *dbData);
 static void WarnMaintenanceDaemonNotStarted(void);
 
@@ -182,9 +183,6 @@ InitializeMaintenanceDaemonBackend(void)
 		 * itself. In that case, we clearly don't need to start another maintenance
 		 * daemon.
 		 */
-		Assert(found);
-		Assert(dbData->workerPid == MyProcPid);
-
 		LWLockRelease(&MaintenanceDaemonControl->lock);
 		return;
 	}
@@ -289,7 +287,15 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 	bool retryStatsCollection USED_WITH_LIBCURL_ONLY = false;
 	ErrorContextCallback errorCallback;
 	TimestampTz lastRecoveryTime = 0;
+	TimestampTz lastShardCleanTime = 0;
 	TimestampTz nextMetadataSyncTime = 0;
+
+
+	/*
+	 * We do metadata sync in a separate background worker. We need its
+	 * handle to be able to check its status.
+	 */
+	BackgroundWorkerHandle *metadataSyncBgwHandle = NULL;
 
 	/*
 	 * Look up this worker's configuration.
@@ -371,6 +377,12 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 	/* make worker recognizable in pg_stat_activity */
 	pgstat_report_appname("Citus Maintenance Daemon");
 
+	/*
+	 * Terminate orphaned metadata sync daemons spawned from previously terminated
+	 * or crashed maintenanced instances.
+	 */
+	SignalMetadataSyncDaemon(databaseOid, SIGTERM);
+
 	/* enter main loop */
 	while (!got_SIGTERM)
 	{
@@ -450,20 +462,41 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 		}
 #endif
 
-		if (!RecoveryInProgress() &&
-			(MetadataSyncTriggeredCheckAndReset(myDbData) ||
-			 GetCurrentTimestamp() >= nextMetadataSyncTime))
+		pid_t metadataSyncBgwPid = 0;
+		BgwHandleStatus metadataSyncStatus =
+			metadataSyncBgwHandle != NULL ?
+			GetBackgroundWorkerPid(metadataSyncBgwHandle, &metadataSyncBgwPid) :
+			BGWH_STOPPED;
+
+		if (metadataSyncStatus != BGWH_STOPPED &&
+			GetCurrentTimestamp() >= nextMetadataSyncTime)
 		{
-			bool metadataSyncFailed = false;
+			/*
+			 * Metadata sync is still running, recheck in a short while.
+			 */
+			int nextTimeout = MetadataSyncRetryInterval;
+			nextMetadataSyncTime =
+				TimestampTzPlusMilliseconds(GetCurrentTimestamp(), nextTimeout);
+			timeout = Min(timeout, nextTimeout);
+		}
+		else if (!RecoveryInProgress() &&
+				 metadataSyncStatus == BGWH_STOPPED &&
+				 (MetadataSyncTriggeredCheckAndReset(myDbData) ||
+				  GetCurrentTimestamp() >= nextMetadataSyncTime))
+		{
+			if (metadataSyncBgwHandle)
+			{
+				TerminateBackgroundWorker(metadataSyncBgwHandle);
+				pfree(metadataSyncBgwHandle);
+				metadataSyncBgwHandle = NULL;
+			}
 
 			InvalidateMetadataSystemCache();
 			StartTransactionCommand();
-
-			/*
-			 * Some functions in ruleutils.c, which we use to get the DDL for
-			 * metadata propagation, require an active snapshot.
-			 */
 			PushActiveSnapshot(GetTransactionSnapshot());
+
+			int nextTimeout = MetadataSyncRetryInterval;
+			bool syncMetadata = false;
 
 			if (!LockCitusExtension())
 			{
@@ -472,25 +505,28 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 			}
 			else if (CheckCitusVersion(DEBUG1) && CitusHasBeenLoaded())
 			{
-				MetadataSyncResult result = SyncMetadataToNodes();
-				metadataSyncFailed = (result != METADATA_SYNC_SUCCESS);
+				bool lockFailure = false;
+				syncMetadata = ShouldInitiateMetadataSync(&lockFailure);
 
 				/*
-				 * Notification means we had an attempt on synchronization
-				 * without being blocked for pg_dist_node access.
+				 * If lock fails, we need to recheck in a short while. If we are
+				 * going to sync metadata, we should recheck in a short while to
+				 * see if it failed. Otherwise, we can wait longer.
 				 */
-				if (result != METADATA_SYNC_FAILED_LOCK)
-				{
-					Async_Notify(METADATA_SYNC_CHANNEL, NULL);
-				}
+				nextTimeout = (lockFailure || syncMetadata) ?
+							  MetadataSyncRetryInterval :
+							  MetadataSyncInterval;
 			}
 
 			PopActiveSnapshot();
 			CommitTransactionCommand();
-			ProcessCompletedNotifies();
 
-			int64 nextTimeout = metadataSyncFailed ? MetadataSyncRetryInterval :
-								MetadataSyncInterval;
+			if (syncMetadata)
+			{
+				metadataSyncBgwHandle =
+					SpawnSyncMetadataToNodes(MyDatabaseId, myDbData->userOid);
+			}
+
 			nextMetadataSyncTime =
 				TimestampTzPlusMilliseconds(GetCurrentTimestamp(), nextTimeout);
 			timeout = Min(timeout, nextTimeout);
@@ -586,6 +622,45 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 			timeout = Min(timeout, deadlockTimeout);
 		}
 
+		if (!RecoveryInProgress() && DeferShardDeleteInterval > 0 &&
+			TimestampDifferenceExceeds(lastShardCleanTime, GetCurrentTimestamp(),
+									   DeferShardDeleteInterval))
+		{
+			int numberOfDroppedShards = 0;
+
+			InvalidateMetadataSystemCache();
+			StartTransactionCommand();
+
+			if (!LockCitusExtension())
+			{
+				ereport(DEBUG1, (errmsg(
+									 "could not lock the citus extension, skipping shard cleaning")));
+			}
+			else if (CheckCitusVersion(DEBUG1) && CitusHasBeenLoaded())
+			{
+				/*
+				 * Record last shard clean time at start to ensure we run once per
+				 * DeferShardDeleteInterval.
+				 */
+				lastShardCleanTime = GetCurrentTimestamp();
+
+				numberOfDroppedShards = TryDropMarkedShards();
+			}
+
+			CommitTransactionCommand();
+
+			if (numberOfDroppedShards > 0)
+			{
+				ereport(LOG, (errmsg("maintenance daemon dropped %d distributed "
+									 "shards previously marked to be removed",
+									 numberOfDroppedShards)));
+			}
+
+			/* make sure we don't wait too long */
+			timeout = Min(timeout, DeferShardDeleteInterval);
+		}
+
+
 		/*
 		 * Wait until timeout, or until somebody wakes us up. Also cast the timeout to
 		 * integer where we've calculated it using double for not losing the precision.
@@ -625,6 +700,11 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 			got_SIGHUP = false;
 			ProcessConfigFile(PGC_SIGHUP);
 		}
+	}
+
+	if (metadataSyncBgwHandle)
+	{
+		TerminateBackgroundWorker(metadataSyncBgwHandle);
 	}
 }
 
@@ -786,7 +866,7 @@ MaintenanceDaemonErrorContext(void *arg)
  * LockCitusExtension acquires a lock on the Citus extension or returns
  * false if the extension does not exist or is being dropped.
  */
-static bool
+bool
 LockCitusExtension(void)
 {
 	Oid extensionOid = get_extension_oid("citus", true);

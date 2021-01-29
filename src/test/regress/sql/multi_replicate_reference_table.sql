@@ -506,7 +506,7 @@ SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 
 -- verify we cannot replicate reference tables in a transaction modifying pg_dist_node
 BEGIN;
-SELECT 1 FROM master_add_inactive_node('invalid-node-name', 9999);
+SELECT citus_set_coordinator_host('127.0.0.1');
 SELECT replicate_reference_tables();
 ROLLBACK;
 

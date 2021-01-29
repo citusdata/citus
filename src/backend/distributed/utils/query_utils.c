@@ -11,15 +11,16 @@
  */
 
 #include "postgres.h"
+#include "nodes/primnodes.h"
 
 #include "catalog/pg_class.h"
 #include "distributed/query_utils.h"
 #include "distributed/version_compat.h"
+#include "distributed/listutils.h"
 #include "nodes/nodeFuncs.h"
 
 
 static bool CitusQueryableRangeTableRelation(RangeTblEntry *rangeTableEntry);
-
 
 /*
  * ExtractRangeTableList walks over a tree to gather entries.

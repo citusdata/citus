@@ -6,7 +6,7 @@ SELECT master_add_node('localhost', :master_port, groupId => 0) AS coordinator_n
 
 
 CREATE TABLE citus_local(key int, value text);
-SELECT create_citus_local_table('citus_local');
+SELECT citus_add_local_table_to_metadata('citus_local');
 
 CREATE TABLE postgres_table (key int, value text, value_2 jsonb);
 CREATE TABLE reference_table (key int, value text, value_2 jsonb);

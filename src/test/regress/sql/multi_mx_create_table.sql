@@ -61,7 +61,7 @@ CREATE TYPE order_side_mx AS ENUM ('buy', 'sell');
 
 -- show that we do not support creating citus local tables from mx workers for now
 CREATE TABLE citus_local_table(a int);
-SELECT create_citus_local_table('citus_local_table');
+SELECT citus_add_local_table_to_metadata('citus_local_table');
 
 -- create schema to test schema support
 CREATE SCHEMA citus_mx_test_schema_join_1;
@@ -429,14 +429,15 @@ FROM pg_dist_partition NATURAL JOIN shard_counts
 ORDER BY colocationid, logicalrelid;
 
 -- check the citus_tables view
-SELECT "Name", "Citus Table Type", "Distribution Column", "Shard Count", "Owner"
+SELECT table_name, citus_table_type, distribution_column, shard_count, table_owner
 FROM citus_tables
-ORDER BY "Name"::text;
+ORDER BY table_name::text;
 
 \c - - - :worker_1_port
 
-SELECT "Name", "Citus Table Type", "Distribution Column", "Shard Count", "Owner"
+SELECT table_name, citus_table_type, distribution_column, shard_count, table_owner
 FROM citus_tables
-ORDER BY "Name"::text;
+ORDER BY table_name::text;
 
 
+SELECT shard_name, table_name, citus_table_type, shard_size FROM citus_shards ORDER BY shard_name::text;

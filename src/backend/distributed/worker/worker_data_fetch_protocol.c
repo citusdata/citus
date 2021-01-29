@@ -396,8 +396,8 @@ worker_apply_shard_ddl_command(PG_FUNCTION_ARGS)
 
 	/* extend names in ddl command and apply extended command */
 	RelayEventExtendNames(ddlCommandNode, schemaName, shardId);
-	CitusProcessUtility(ddlCommandNode, ddlCommand, PROCESS_UTILITY_TOPLEVEL, NULL,
-						None_Receiver, NULL);
+	ProcessUtilityParseTree(ddlCommandNode, ddlCommand, PROCESS_UTILITY_TOPLEVEL, NULL,
+							None_Receiver, NULL);
 
 	PG_RETURN_VOID();
 }
@@ -428,8 +428,8 @@ worker_apply_inter_shard_ddl_command(PG_FUNCTION_ARGS)
 	RelayEventExtendNamesForInterShardCommands(ddlCommandNode, leftShardId,
 											   leftShardSchemaName, rightShardId,
 											   rightShardSchemaName);
-	CitusProcessUtility(ddlCommandNode, ddlCommand, PROCESS_UTILITY_TOPLEVEL, NULL,
-						None_Receiver, NULL);
+	ProcessUtilityParseTree(ddlCommandNode, ddlCommand, PROCESS_UTILITY_TOPLEVEL, NULL,
+							None_Receiver, NULL);
 
 	PG_RETURN_VOID();
 }
@@ -461,8 +461,8 @@ worker_apply_sequence_command(PG_FUNCTION_ARGS)
 	}
 
 	/* run the CREATE SEQUENCE command */
-	CitusProcessUtility(commandNode, commandString, PROCESS_UTILITY_TOPLEVEL, NULL,
-						None_Receiver, NULL);
+	ProcessUtilityParseTree(commandNode, commandString, PROCESS_UTILITY_TOPLEVEL, NULL,
+							None_Receiver, NULL);
 	CommandCounterIncrement();
 
 	CreateSeqStmt *createSequenceStatement = (CreateSeqStmt *) commandNode;
@@ -668,8 +668,8 @@ worker_append_table_to_shard(PG_FUNCTION_ARGS)
 	GetUserIdAndSecContext(&savedUserId, &savedSecurityContext);
 	SetUserIdAndSecContext(CitusExtensionOwner(), SECURITY_LOCAL_USERID_CHANGE);
 
-	CitusProcessUtility((Node *) localCopyCommand, queryString->data,
-						PROCESS_UTILITY_TOPLEVEL, NULL, None_Receiver, NULL);
+	ProcessUtilityParseTree((Node *) localCopyCommand, queryString->data,
+							PROCESS_UTILITY_TOPLEVEL, NULL, None_Receiver, NULL);
 
 	SetUserIdAndSecContext(savedUserId, savedSecurityContext);
 
@@ -781,8 +781,8 @@ AlterSequenceMinMax(Oid sequenceId, char *schemaName, char *sequenceName,
 		SetDefElemArg(alterSequenceStatement, "restart", startFloatArg);
 
 		/* since the command is an AlterSeqStmt, a dummy command string works fine */
-		CitusProcessUtility((Node *) alterSequenceStatement, dummyString,
-							PROCESS_UTILITY_TOPLEVEL, NULL, None_Receiver, NULL);
+		ProcessUtilityParseTree((Node *) alterSequenceStatement, dummyString,
+								PROCESS_UTILITY_TOPLEVEL, NULL, None_Receiver, NULL);
 	}
 }
 

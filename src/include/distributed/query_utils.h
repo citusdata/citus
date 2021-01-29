@@ -13,6 +13,7 @@
 
 #include "postgres.h"
 #include "nodes/pg_list.h"
+#include "nodes/primnodes.h"
 
 /* Enum to define execution flow of ExtractRangeTableList */
 typedef enum ExtractRangeTableMode

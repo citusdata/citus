@@ -33,6 +33,7 @@
 #include "distributed/commands.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/multi_partitioning_utils.h"
 #include "distributed/relay_utility.h"
 #include "distributed/version_compat.h"
 #include "lib/stringinfo.h"
@@ -82,16 +83,47 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 		{
 			AlterObjectSchemaStmt *alterObjectSchemaStmt =
 				(AlterObjectSchemaStmt *) parseTree;
-			char **relationName = &(alterObjectSchemaStmt->relation->relname);
-			char **relationSchemaName = &(alterObjectSchemaStmt->relation->schemaname);
+			ObjectType objectType = alterObjectSchemaStmt->objectType;
 
-			/* prefix with schema name if it is not added already */
-			SetSchemaNameIfNotExist(relationSchemaName, schemaName);
+			if (objectType == OBJECT_STATISTIC_EXT)
+			{
+				RangeVar *stat = makeRangeVarFromNameList(
+					(List *) alterObjectSchemaStmt->object);
 
-			/* append shardId to base relation name */
-			AppendShardIdToName(relationName, shardId);
+				/* append shard id */
+				AppendShardIdToName(&stat->relname, shardId);
+
+				alterObjectSchemaStmt->object = (Node *) MakeNameListFromRangeVar(stat);
+			}
+			else
+			{
+				char **relationName = &(alterObjectSchemaStmt->relation->relname);
+				char **relationSchemaName =
+					&(alterObjectSchemaStmt->relation->schemaname);
+
+				/* prefix with schema name if it is not added already */
+				SetSchemaNameIfNotExist(relationSchemaName, schemaName);
+
+				/* append shardId to base relation name */
+				AppendShardIdToName(relationName, shardId);
+			}
+
 			break;
 		}
+
+#if PG_VERSION_NUM >= PG_VERSION_13
+		case T_AlterStatsStmt:
+		{
+			AlterStatsStmt *alterStatsStmt = (AlterStatsStmt *) parseTree;
+			RangeVar *stat = makeRangeVarFromNameList(alterStatsStmt->defnames);
+
+			AppendShardIdToName(&stat->relname, shardId);
+
+			alterStatsStmt->defnames = MakeNameListFromRangeVar(stat);
+
+			break;
+		}
+#endif
 
 		case T_AlterTableStmt:
 		{
@@ -120,6 +152,10 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 				{
 					Constraint *constraint = (Constraint *) command->def;
 					char **constraintName = &(constraint->conname);
+					const bool missingOk = false;
+					relationId = RangeVarGetRelid(alterTableStmt->relation,
+												  AccessShareLock,
+												  missingOk);
 
 					if (constraint->contype == CONSTR_PRIMARY && constraint->indexname)
 					{
@@ -127,7 +163,24 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 						AppendShardIdToName(indexName, shardId);
 					}
 
-					AppendShardIdToName(constraintName, shardId);
+					/*
+					 * Append shardId to constraint names if
+					 *  - table is not partitioned or
+					 *  - constraint is not a CHECK constraint
+					 *
+					 * We do not want to append shardId to partitioned table shards because
+					 * the names of constraints will be inherited, and the shardId will no
+					 * longer be valid for the child table.
+					 *
+					 * See MergeConstraintsIntoExisting function in Postgres that requires
+					 * inherited check constraints in child tables to have the same name
+					 * with those in parent tables.
+					 */
+					if (!PartitionedTable(relationId) ||
+						constraint->contype != CONSTR_CHECK)
+					{
+						AppendShardIdToName(constraintName, shardId);
+					}
 				}
 				else if (command->subtype == AT_DropConstraint ||
 						 command->subtype == AT_ValidateConstraint)
@@ -176,6 +229,22 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 					AppendShardIdToName(triggerName, shardId);
 				}
 			}
+
+			break;
+		}
+
+		case T_AlterOwnerStmt:
+		{
+			AlterOwnerStmt *alterOwnerStmt = castNode(AlterOwnerStmt, parseTree);
+
+			/* we currently extend names in alter owner statements only for statistics */
+			Assert(alterOwnerStmt->objectType == OBJECT_STATISTIC_EXT);
+
+			RangeVar *stat = makeRangeVarFromNameList((List *) alterOwnerStmt->object);
+
+			AppendShardIdToName(&stat->relname, shardId);
+
+			alterOwnerStmt->object = (Node *) MakeNameListFromRangeVar(stat);
 
 			break;
 		}
@@ -529,6 +598,17 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 			else if (objectType == OBJECT_POLICY)
 			{
 				RenamePolicyEventExtendNames(renameStmt, schemaName, shardId);
+			}
+			else if (objectType == OBJECT_STATISTIC_EXT)
+			{
+				RangeVar *stat = makeRangeVarFromNameList((List *) renameStmt->object);
+
+				AppendShardIdToName(&stat->relname, shardId);
+				AppendShardIdToName(&renameStmt->newname, shardId);
+
+				SetSchemaNameIfNotExist(&stat->schemaname, schemaName);
+
+				renameStmt->object = (Node *) MakeNameListFromRangeVar(stat);
 			}
 			else
 			{

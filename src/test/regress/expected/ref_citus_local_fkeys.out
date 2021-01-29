@@ -16,8 +16,8 @@ SELECT 1 FROM master_add_node('localhost', :master_port, groupId => 0);
 RESET client_min_messages;
 -- create test tables
 CREATE TABLE citus_local_table(l1 int);
-SELECT create_citus_local_table('citus_local_table');
- create_citus_local_table
+SELECT citus_add_local_table_to_metadata('citus_local_table');
+ citus_add_local_table_to_metadata
 ---------------------------------------------------------------------
 
 (1 row)
@@ -52,19 +52,22 @@ NOTICE:  executing the command locally: SELECT l1 FROM ref_citus_local_fkeys.cit
 -- show that we support drop constraint
 ALTER TABLE citus_local_table DROP CONSTRAINT fkey_local_to_ref;
 NOTICE:  executing the command locally: SELECT worker_apply_inter_shard_ddl_command (1506000, 'ref_citus_local_fkeys', 1506001, 'ref_citus_local_fkeys', 'ALTER TABLE citus_local_table DROP CONSTRAINT fkey_local_to_ref;')
+NOTICE:  removing table ref_citus_local_fkeys.citus_local_table from metadata as it is not connected to any reference tables via foreign keys
+NOTICE:  executing the command locally: SELECT l1 FROM ref_citus_local_fkeys.citus_local_table_1506000 citus_local_table
+NOTICE:  executing the command locally: DROP TABLE IF EXISTS ref_citus_local_fkeys.citus_local_table_xxxxx CASCADE
 -- we support ON UPDATE CASCADE behaviour in "ALTER TABLE ADD fkey citus_local_table (to reference table)" commands
 ALTER TABLE citus_local_table ADD CONSTRAINT fkey_local_to_ref FOREIGN KEY(l1) REFERENCES reference_table(r1) ON UPDATE CASCADE;
-NOTICE:  executing the command locally: SELECT worker_apply_inter_shard_ddl_command (1506000, 'ref_citus_local_fkeys', 1506001, 'ref_citus_local_fkeys', 'ALTER TABLE citus_local_table ADD CONSTRAINT fkey_local_to_ref FOREIGN KEY(l1) REFERENCES reference_table(r1) ON UPDATE CASCADE;')
+NOTICE:  executing the command locally: SELECT worker_apply_inter_shard_ddl_command (1506002, 'ref_citus_local_fkeys', 1506001, 'ref_citus_local_fkeys', 'ALTER TABLE citus_local_table ADD CONSTRAINT fkey_local_to_ref FOREIGN KEY(l1) REFERENCES reference_table(r1) ON UPDATE CASCADE;')
 -- show that on update cascade works
 INSERT INTO reference_table VALUES (12);
 NOTICE:  executing the command locally: INSERT INTO ref_citus_local_fkeys.reference_table_1506001 (r1) VALUES (12)
 INSERT INTO citus_local_table VALUES (12);
-NOTICE:  executing the command locally: INSERT INTO ref_citus_local_fkeys.citus_local_table_1506000 (l1) VALUES (12)
+NOTICE:  executing the command locally: INSERT INTO ref_citus_local_fkeys.citus_local_table_1506002 (l1) VALUES (12)
 UPDATE reference_table SET r1=13 WHERE r1=12;
 NOTICE:  executing the command locally: UPDATE ref_citus_local_fkeys.reference_table_1506001 reference_table SET r1 = 13 WHERE (r1 OPERATOR(pg_catalog.=) 12)
 -- should print a row with 13
 SELECT * FROM citus_local_table ORDER BY l1;
-NOTICE:  executing the command locally: SELECT l1 FROM ref_citus_local_fkeys.citus_local_table_1506000 citus_local_table ORDER BY l1
+NOTICE:  executing the command locally: SELECT l1 FROM ref_citus_local_fkeys.citus_local_table_1506002 citus_local_table ORDER BY l1
  l1
 ---------------------------------------------------------------------
  13
@@ -72,32 +75,37 @@ NOTICE:  executing the command locally: SELECT l1 FROM ref_citus_local_fkeys.cit
 
 -- drop constraint for next commands
 ALTER TABLE citus_local_table DROP CONSTRAINT fkey_local_to_ref;
-NOTICE:  executing the command locally: SELECT worker_apply_inter_shard_ddl_command (1506000, 'ref_citus_local_fkeys', 1506001, 'ref_citus_local_fkeys', 'ALTER TABLE citus_local_table DROP CONSTRAINT fkey_local_to_ref;')
+NOTICE:  executing the command locally: SELECT worker_apply_inter_shard_ddl_command (1506002, 'ref_citus_local_fkeys', 1506001, 'ref_citus_local_fkeys', 'ALTER TABLE citus_local_table DROP CONSTRAINT fkey_local_to_ref;')
+NOTICE:  removing table ref_citus_local_fkeys.citus_local_table from metadata as it is not connected to any reference tables via foreign keys
+NOTICE:  executing the command locally: SELECT l1 FROM ref_citus_local_fkeys.citus_local_table_1506002 citus_local_table
+NOTICE:  executing the command locally: DROP TABLE IF EXISTS ref_citus_local_fkeys.citus_local_table_xxxxx CASCADE
 INSERT INTO citus_local_table VALUES (2);
-NOTICE:  executing the command locally: INSERT INTO ref_citus_local_fkeys.citus_local_table_1506000 (l1) VALUES (2)
 -- show that we are checking for foreign key constraint while defining, below should fail
 ALTER TABLE citus_local_table ADD CONSTRAINT fkey_local_to_ref FOREIGN KEY(l1) REFERENCES reference_table(r1);
-NOTICE:  executing the command locally: SELECT worker_apply_inter_shard_ddl_command (1506000, 'ref_citus_local_fkeys', 1506001, 'ref_citus_local_fkeys', 'ALTER TABLE citus_local_table ADD CONSTRAINT fkey_local_to_ref FOREIGN KEY(l1) REFERENCES reference_table(r1);')
-ERROR:  insert or update on table "citus_local_table_1506000" violates foreign key constraint "fkey_local_to_ref_1506000"
+NOTICE:  executing the command locally: SELECT worker_apply_inter_shard_ddl_command (1506003, 'ref_citus_local_fkeys', 1506001, 'ref_citus_local_fkeys', 'ALTER TABLE citus_local_table ADD CONSTRAINT fkey_local_to_ref FOREIGN KEY(l1) REFERENCES reference_table(r1);')
+ERROR:  insert or update on table "citus_local_table_1506003" violates foreign key constraint "fkey_local_to_ref_1506003"
 INSERT INTO reference_table VALUES (2);
 NOTICE:  executing the command locally: INSERT INTO ref_citus_local_fkeys.reference_table_1506001 (r1) VALUES (2)
 -- this should work
 ALTER TABLE citus_local_table ADD CONSTRAINT fkey_local_to_ref FOREIGN KEY(l1) REFERENCES reference_table(r1);
-NOTICE:  executing the command locally: SELECT worker_apply_inter_shard_ddl_command (1506000, 'ref_citus_local_fkeys', 1506001, 'ref_citus_local_fkeys', 'ALTER TABLE citus_local_table ADD CONSTRAINT fkey_local_to_ref FOREIGN KEY(l1) REFERENCES reference_table(r1);')
+NOTICE:  executing the command locally: SELECT worker_apply_inter_shard_ddl_command (1506004, 'ref_citus_local_fkeys', 1506001, 'ref_citus_local_fkeys', 'ALTER TABLE citus_local_table ADD CONSTRAINT fkey_local_to_ref FOREIGN KEY(l1) REFERENCES reference_table(r1);')
 -- show that we are checking for foreign key constraint after defining, this should fail
 INSERT INTO citus_local_table VALUES (1);
-NOTICE:  executing the command locally: INSERT INTO ref_citus_local_fkeys.citus_local_table_1506000 (l1) VALUES (1)
-ERROR:  insert or update on table "citus_local_table_1506000" violates foreign key constraint "fkey_local_to_ref_1506000"
+NOTICE:  executing the command locally: INSERT INTO ref_citus_local_fkeys.citus_local_table_1506004 (l1) VALUES (1)
+ERROR:  insert or update on table "citus_local_table_1506004" violates foreign key constraint "fkey_local_to_ref_1506004"
 INSERT INTO reference_table VALUES (1);
 NOTICE:  executing the command locally: INSERT INTO ref_citus_local_fkeys.reference_table_1506001 (r1) VALUES (1)
 -- this should work
 INSERT INTO citus_local_table VALUES (1);
-NOTICE:  executing the command locally: INSERT INTO ref_citus_local_fkeys.citus_local_table_1506000 (l1) VALUES (1)
+NOTICE:  executing the command locally: INSERT INTO ref_citus_local_fkeys.citus_local_table_1506004 (l1) VALUES (1)
 -- drop and add constraint for next commands
 ALTER TABLE citus_local_table DROP CONSTRAINT fkey_local_to_ref;
-NOTICE:  executing the command locally: SELECT worker_apply_inter_shard_ddl_command (1506000, 'ref_citus_local_fkeys', 1506001, 'ref_citus_local_fkeys', 'ALTER TABLE citus_local_table DROP CONSTRAINT fkey_local_to_ref;')
+NOTICE:  executing the command locally: SELECT worker_apply_inter_shard_ddl_command (1506004, 'ref_citus_local_fkeys', 1506001, 'ref_citus_local_fkeys', 'ALTER TABLE citus_local_table DROP CONSTRAINT fkey_local_to_ref;')
+NOTICE:  removing table ref_citus_local_fkeys.citus_local_table from metadata as it is not connected to any reference tables via foreign keys
+NOTICE:  executing the command locally: SELECT l1 FROM ref_citus_local_fkeys.citus_local_table_1506004 citus_local_table
+NOTICE:  executing the command locally: DROP TABLE IF EXISTS ref_citus_local_fkeys.citus_local_table_xxxxx CASCADE
 ALTER TABLE citus_local_table ADD CONSTRAINT fkey_local_to_ref FOREIGN KEY(l1) REFERENCES reference_table(r1);
-NOTICE:  executing the command locally: SELECT worker_apply_inter_shard_ddl_command (1506000, 'ref_citus_local_fkeys', 1506001, 'ref_citus_local_fkeys', 'ALTER TABLE citus_local_table ADD CONSTRAINT fkey_local_to_ref FOREIGN KEY(l1) REFERENCES reference_table(r1);')
+NOTICE:  executing the command locally: SELECT worker_apply_inter_shard_ddl_command (1506005, 'ref_citus_local_fkeys', 1506001, 'ref_citus_local_fkeys', 'ALTER TABLE citus_local_table ADD CONSTRAINT fkey_local_to_ref FOREIGN KEY(l1) REFERENCES reference_table(r1);')
 -- show that drop table without CASCADE errors out
 DROP TABLE reference_table;
 ERROR:  cannot drop table reference_table because other objects depend on it
@@ -106,12 +114,15 @@ BEGIN;
   DROP TABLE reference_table CASCADE;
 NOTICE:  drop cascades to constraint fkey_local_to_ref on table citus_local_table
 NOTICE:  executing the command locally: DROP TABLE IF EXISTS ref_citus_local_fkeys.reference_table_xxxxx CASCADE
-NOTICE:  drop cascades to constraint fkey_local_to_ref_1506000 on table ref_citus_local_fkeys.citus_local_table_1506000
+NOTICE:  drop cascades to constraint fkey_local_to_ref_1506005 on table ref_citus_local_fkeys.citus_local_table_1506005
+NOTICE:  removing table ref_citus_local_fkeys.citus_local_table from metadata as it is not connected to any reference tables via foreign keys
+NOTICE:  executing the command locally: SELECT l1 FROM ref_citus_local_fkeys.citus_local_table_1506005 citus_local_table
+NOTICE:  executing the command locally: DROP TABLE IF EXISTS ref_citus_local_fkeys.citus_local_table_xxxxx CASCADE
 ROLLBACK;
 -- drop tables finally
 DROP TABLE citus_local_table, reference_table;
 NOTICE:  executing the command locally: DROP TABLE IF EXISTS ref_citus_local_fkeys.reference_table_xxxxx CASCADE
-NOTICE:  drop cascades to constraint fkey_local_to_ref_1506000 on table ref_citus_local_fkeys.citus_local_table_1506000
+NOTICE:  drop cascades to constraint fkey_local_to_ref_1506005 on table ref_citus_local_fkeys.citus_local_table_1506005
 NOTICE:  executing the command locally: DROP TABLE IF EXISTS ref_citus_local_fkeys.citus_local_table_xxxxx CASCADE
 ---------------------------------------------------------------------
 -- foreign key from reference table to citus local table --
@@ -127,8 +138,8 @@ SELECT 1 FROM master_remove_node('localhost', :worker_2_port);
 
 -- create test tables
 CREATE TABLE citus_local_table(l1 int primary key);
-SELECT create_citus_local_table('citus_local_table');
- create_citus_local_table
+SELECT citus_add_local_table_to_metadata('citus_local_table');
+ citus_add_local_table_to_metadata
 ---------------------------------------------------------------------
 
 (1 row)
@@ -141,38 +152,48 @@ SELECT create_reference_table('reference_table');
 (1 row)
 
 INSERT INTO reference_table VALUES (3);
-NOTICE:  executing the command locally: INSERT INTO ref_citus_local_fkeys.reference_table_1506003 (r1) VALUES (3)
+NOTICE:  executing the command locally: INSERT INTO ref_citus_local_fkeys.reference_table_1506007 (r1) VALUES (3)
 -- show that we are checking for foreign key constraint while defining, this should fail
 ALTER TABLE reference_table ADD CONSTRAINT fkey_ref_to_local FOREIGN KEY(r1) REFERENCES citus_local_table(l1);
-NOTICE:  executing the command locally: SELECT worker_apply_inter_shard_ddl_command (1506003, 'ref_citus_local_fkeys', 1506002, 'ref_citus_local_fkeys', 'ALTER TABLE reference_table ADD CONSTRAINT fkey_ref_to_local FOREIGN KEY(r1) REFERENCES citus_local_table(l1);')
-ERROR:  insert or update on table "reference_table_1506003" violates foreign key constraint "fkey_ref_to_local_1506003"
+NOTICE:  executing the command locally: SELECT worker_apply_inter_shard_ddl_command (1506007, 'ref_citus_local_fkeys', 1506006, 'ref_citus_local_fkeys', 'ALTER TABLE reference_table ADD CONSTRAINT fkey_ref_to_local FOREIGN KEY(r1) REFERENCES citus_local_table(l1);')
+ERROR:  insert or update on table "reference_table_1506007" violates foreign key constraint "fkey_ref_to_local_1506007"
 -- we do not support CASCADE / SET NULL / SET DEFAULT behavior in "ALTER TABLE ADD fkey reference_table (to citus_local_table)" commands
 ALTER TABLE reference_table ADD CONSTRAINT fkey_ref_to_local FOREIGN KEY(r1) REFERENCES citus_local_table(l1) ON DELETE CASCADE;
-ERROR:  cannot define foreign key constraint, foreign keys from reference tables to citus local tables can only be defined with NO ACTION or RESTRICT behaviors
+ERROR:  cannot define foreign key constraint, foreign keys from reference tables to local tables can only be defined with NO ACTION or RESTRICT behaviors
 ALTER TABLE reference_table ADD CONSTRAINT fkey_ref_to_local FOREIGN KEY(r1) REFERENCES citus_local_table(l1) ON DELETE SET NULL;
-ERROR:  cannot define foreign key constraint, foreign keys from reference tables to citus local tables can only be defined with NO ACTION or RESTRICT behaviors
+ERROR:  cannot define foreign key constraint, foreign keys from reference tables to local tables can only be defined with NO ACTION or RESTRICT behaviors
 ALTER TABLE reference_table ADD CONSTRAINT fkey_ref_to_local FOREIGN KEY(r1) REFERENCES citus_local_table(l1) ON DELETE SET DEFAULT;
-ERROR:  cannot define foreign key constraint, foreign keys from reference tables to citus local tables can only be defined with NO ACTION or RESTRICT behaviors
+ERROR:  cannot define foreign key constraint, foreign keys from reference tables to local tables can only be defined with NO ACTION or RESTRICT behaviors
 ALTER TABLE reference_table ADD CONSTRAINT fkey_ref_to_local FOREIGN KEY(r1) REFERENCES citus_local_table(l1) ON UPDATE CASCADE;
-ERROR:  cannot define foreign key constraint, foreign keys from reference tables to citus local tables can only be defined with NO ACTION or RESTRICT behaviors
+ERROR:  cannot define foreign key constraint, foreign keys from reference tables to local tables can only be defined with NO ACTION or RESTRICT behaviors
 ALTER TABLE reference_table ADD CONSTRAINT fkey_ref_to_local FOREIGN KEY(r1) REFERENCES citus_local_table(l1) ON UPDATE SET NULL;
-ERROR:  cannot define foreign key constraint, foreign keys from reference tables to citus local tables can only be defined with NO ACTION or RESTRICT behaviors
+ERROR:  cannot define foreign key constraint, foreign keys from reference tables to local tables can only be defined with NO ACTION or RESTRICT behaviors
 ALTER TABLE reference_table ADD CONSTRAINT fkey_ref_to_local FOREIGN KEY(r1) REFERENCES citus_local_table(l1) ON UPDATE SET DEFAULT;
-ERROR:  cannot define foreign key constraint, foreign keys from reference tables to citus local tables can only be defined with NO ACTION or RESTRICT behaviors
+ERROR:  cannot define foreign key constraint, foreign keys from reference tables to local tables can only be defined with NO ACTION or RESTRICT behaviors
 INSERT INTO citus_local_table VALUES (3);
-NOTICE:  executing the command locally: INSERT INTO ref_citus_local_fkeys.citus_local_table_1506002 (l1) VALUES (3)
+NOTICE:  executing the command locally: INSERT INTO ref_citus_local_fkeys.citus_local_table_1506006 (l1) VALUES (3)
 -- .. but we allow such foreign keys with RESTRICT behavior
 BEGIN;
   ALTER TABLE reference_table ADD CONSTRAINT fkey_ref_to_local FOREIGN KEY(r1) REFERENCES citus_local_table(l1) ON DELETE RESTRICT;
-NOTICE:  executing the command locally: SELECT worker_apply_inter_shard_ddl_command (1506003, 'ref_citus_local_fkeys', 1506002, 'ref_citus_local_fkeys', 'ALTER TABLE reference_table ADD CONSTRAINT fkey_ref_to_local FOREIGN KEY(r1) REFERENCES citus_local_table(l1) ON DELETE RESTRICT;')
+NOTICE:  executing the command locally: SELECT worker_apply_inter_shard_ddl_command (1506007, 'ref_citus_local_fkeys', 1506006, 'ref_citus_local_fkeys', 'ALTER TABLE reference_table ADD CONSTRAINT fkey_ref_to_local FOREIGN KEY(r1) REFERENCES citus_local_table(l1) ON DELETE RESTRICT;')
 ROLLBACK;
 -- .. and we allow such foreign keys with NO ACTION behavior
 ALTER TABLE reference_table ADD CONSTRAINT fkey_ref_to_local FOREIGN KEY(r1) REFERENCES citus_local_table(l1) ON DELETE NO ACTION;
-NOTICE:  executing the command locally: SELECT worker_apply_inter_shard_ddl_command (1506003, 'ref_citus_local_fkeys', 1506002, 'ref_citus_local_fkeys', 'ALTER TABLE reference_table ADD CONSTRAINT fkey_ref_to_local FOREIGN KEY(r1) REFERENCES citus_local_table(l1) ON DELETE NO ACTION;')
+NOTICE:  executing the command locally: SELECT worker_apply_inter_shard_ddl_command (1506007, 'ref_citus_local_fkeys', 1506006, 'ref_citus_local_fkeys', 'ALTER TABLE reference_table ADD CONSTRAINT fkey_ref_to_local FOREIGN KEY(r1) REFERENCES citus_local_table(l1) ON DELETE NO ACTION;')
+-- show that adding/dropping foreign keys from reference to citus local
+-- tables works fine with remote execution too
+SET citus.enable_local_execution TO OFF;
+ALTER TABLE reference_table DROP CONSTRAINT fkey_ref_to_local;
+NOTICE:  removing table ref_citus_local_fkeys.citus_local_table from metadata as it is not connected to any reference tables via foreign keys
+ALTER TABLE reference_table ADD CONSTRAINT fkey_ref_to_local FOREIGN KEY(r1) REFERENCES citus_local_table(l1) ON DELETE NO ACTION;
+ERROR:  cannot execute command because a local execution has accessed a placement in the transaction
+SET citus.enable_local_execution TO ON;
+ALTER TABLE reference_table ADD CONSTRAINT fkey_ref_to_local FOREIGN KEY(r1) REFERENCES citus_local_table(l1) ON DELETE NO ACTION;
+NOTICE:  executing the command locally: SELECT worker_apply_inter_shard_ddl_command (1506007, 'ref_citus_local_fkeys', 1506009, 'ref_citus_local_fkeys', 'ALTER TABLE reference_table ADD CONSTRAINT fkey_ref_to_local FOREIGN KEY(r1) REFERENCES citus_local_table(l1) ON DELETE NO ACTION;')
 -- show that we are checking for foreign key constraint after defining, this should fail
 INSERT INTO reference_table VALUES (4);
-NOTICE:  executing the command locally: INSERT INTO ref_citus_local_fkeys.reference_table_1506003 (r1) VALUES (4)
-ERROR:  insert or update on table "reference_table_1506003" violates foreign key constraint "fkey_ref_to_local_1506003"
+NOTICE:  executing the command locally: INSERT INTO ref_citus_local_fkeys.reference_table_1506007 (r1) VALUES (4)
+ERROR:  insert or update on table "reference_table_1506007" violates foreign key constraint "fkey_ref_to_local_1506007"
 -- enable the worker_2 to show that we don't try to set up the foreign keys
 -- between reference tables and citus local tables in worker_2 placements of
 -- the reference tables
@@ -186,7 +207,10 @@ NOTICE:  Replicating reference table "reference_table" to the node localhost:xxx
 -- show that we support drop constraint
 BEGIN;
   ALTER TABLE reference_table DROP CONSTRAINT fkey_ref_to_local;
-NOTICE:  executing the command locally: SELECT worker_apply_inter_shard_ddl_command (1506003, 'ref_citus_local_fkeys', 1506002, 'ref_citus_local_fkeys', 'ALTER TABLE reference_table DROP CONSTRAINT fkey_ref_to_local;')
+NOTICE:  executing the command locally: SELECT worker_apply_inter_shard_ddl_command (1506007, 'ref_citus_local_fkeys', 1506009, 'ref_citus_local_fkeys', 'ALTER TABLE reference_table DROP CONSTRAINT fkey_ref_to_local;')
+NOTICE:  removing table ref_citus_local_fkeys.citus_local_table from metadata as it is not connected to any reference tables via foreign keys
+NOTICE:  executing the command locally: SELECT l1 FROM ref_citus_local_fkeys.citus_local_table_1506009 citus_local_table
+NOTICE:  executing the command locally: DROP TABLE IF EXISTS ref_citus_local_fkeys.citus_local_table_xxxxx CASCADE
 ROLLBACK;
 -- show that drop table errors as expected
 DROP TABLE citus_local_table;
@@ -195,26 +219,39 @@ ERROR:  cannot drop table citus_local_table because other objects depend on it
 DROP TABLE citus_local_table CASCADE;
 NOTICE:  drop cascades to constraint fkey_ref_to_local on table reference_table
 NOTICE:  executing the command locally: DROP TABLE IF EXISTS ref_citus_local_fkeys.citus_local_table_xxxxx CASCADE
-NOTICE:  drop cascades to constraint fkey_ref_to_local_1506003 on table ref_citus_local_fkeys.reference_table_1506003
+NOTICE:  drop cascades to constraint fkey_ref_to_local_1506007 on table ref_citus_local_fkeys.reference_table_1506007
 BEGIN;
   CREATE TABLE citus_local_table_1(a int, b int, unique (a,b));
   CREATE TABLE citus_local_table_2(a int, b int, unique (a,b));
-  SELECT create_citus_local_table('citus_local_table_1');
- create_citus_local_table
+  SELECT citus_add_local_table_to_metadata('citus_local_table_1');
+ citus_add_local_table_to_metadata
 ---------------------------------------------------------------------
 
 (1 row)
 
-  SELECT create_citus_local_table('citus_local_table_2');
- create_citus_local_table
+  SELECT citus_add_local_table_to_metadata('citus_local_table_2');
+ citus_add_local_table_to_metadata
 ---------------------------------------------------------------------
 
 (1 row)
 
   -- show that we properly handle multi column foreign keys
   ALTER TABLE citus_local_table_1 ADD CONSTRAINT multi_fkey FOREIGN KEY (a, b) REFERENCES citus_local_table_2(a, b);
-NOTICE:  executing the command locally: SELECT worker_apply_inter_shard_ddl_command (1506004, 'ref_citus_local_fkeys', 1506005, 'ref_citus_local_fkeys', 'ALTER TABLE citus_local_table_1 ADD CONSTRAINT multi_fkey FOREIGN KEY (a, b) REFERENCES citus_local_table_2(a, b);')
+NOTICE:  executing the command locally: SELECT worker_apply_inter_shard_ddl_command (1506010, 'ref_citus_local_fkeys', 1506011, 'ref_citus_local_fkeys', 'ALTER TABLE citus_local_table_1 ADD CONSTRAINT multi_fkey FOREIGN KEY (a, b) REFERENCES citus_local_table_2(a, b);')
 COMMIT;
+-- when local execution is disabled, citus local table cannot be created
+BEGIN;
+	SET citus.enable_local_execution TO false;
+	CREATE TABLE referenced_table(id int primary key);
+	SELECT create_reference_table('referenced_table');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+	CREATE TABLE referencing_table(id int, ref_id int, FOREIGN KEY(ref_id) REFERENCES referenced_table(id) ON DELETE SET DEFAULT);
+ERROR:  cannot switch local execution status from local execution disabled to local execution enabled since it can cause visibility problems in the current transaction
+ROLLBACK;
 -- cleanup at exit
 DROP SCHEMA ref_citus_local_fkeys CASCADE;
 NOTICE:  drop cascades to 6 other objects
