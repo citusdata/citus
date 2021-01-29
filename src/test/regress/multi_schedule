@@ -62,7 +62,7 @@ test: ensure_no_intermediate_data_leak
 # ----------
 # Tests for partitioning support
 # ----------
-test: multi_partitioning_utils multi_partitioning replicated_partitioned_table
+test: multi_partitioning_utils multi_partitioning partitioning_issue_3970 replicated_partitioned_table
 
 # ----------
 # Tests for foreign data wrapper support
