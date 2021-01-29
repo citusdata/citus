@@ -149,7 +149,7 @@ COMMIT;
 -- and only 5 connections are used per node
 BEGIN;
 	SET LOCAL citus.max_adaptive_executor_pool_size TO 16;
-	SELECT count(*), pg_sleep(0.1) FROM test;
+	with cte_1 as (select pg_sleep(0.1) is null, a from test) SELECT a from cte_1 ORDER By 1 LIMIT 1;
 	SELECT
 		connection_count_to_node
 	FROM
