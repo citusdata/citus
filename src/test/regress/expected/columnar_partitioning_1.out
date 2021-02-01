@@ -1,0 +1,126 @@
+CREATE TABLE parent(ts timestamptz, i int, n numeric, s text)
+  PARTITION BY RANGE (ts);
+-- row partitions
+CREATE TABLE p0 PARTITION OF parent
+  FOR VALUES FROM ('2020-01-01') TO ('2020-02-01');
+CREATE TABLE p1 PARTITION OF parent
+  FOR VALUES FROM ('2020-02-01') TO ('2020-03-01');
+CREATE TABLE p2 PARTITION OF parent
+  FOR VALUES FROM ('2020-03-01') TO ('2020-04-01');
+CREATE TABLE p3 PARTITION OF parent
+  FOR VALUES FROM ('2020-04-01') TO ('2020-05-01');
+INSERT INTO parent SELECT '2020-01-15', 10, 100, 'one thousand'
+  FROM generate_series(1,100000);
+INSERT INTO parent SELECT '2020-02-15', 20, 200, 'two thousand'
+  FROM generate_series(1,100000);
+INSERT INTO parent SELECT '2020-03-15', 30, 300, 'three thousand'
+  FROM generate_series(1,100000);
+INSERT INTO parent SELECT '2020-04-15', 30, 300, 'three thousand'
+  FROM generate_series(1,100000);
+-- run parallel plans
+SET force_parallel_mode = regress;
+SET min_parallel_table_scan_size = 1;
+SET parallel_tuple_cost = 0;
+SET max_parallel_workers = 4;
+SET max_parallel_workers_per_gather = 4;
+EXPLAIN (costs off) SELECT count(*), sum(i), min(i), max(i) FROM parent;
+                   QUERY PLAN
+---------------------------------------------------------------------
+ Finalize Aggregate
+   ->  Gather
+         Workers Planned: 4
+         ->  Partial Aggregate
+               ->  Parallel Append
+                     ->  Parallel Seq Scan on p0
+                     ->  Parallel Seq Scan on p1
+                     ->  Parallel Seq Scan on p2
+                     ->  Parallel Seq Scan on p3
+(9 rows)
+
+SELECT count(*), sum(i), min(i), max(i) FROM parent;
+ count  |   sum   | min | max
+---------------------------------------------------------------------
+ 400000 | 9000000 |  10 |  30
+(1 row)
+
+-- set older partitions as columnar
+SELECT alter_table_set_access_method('p0','columnar');
+NOTICE:  creating a new table for public.p0
+NOTICE:  Moving the data of public.p0
+NOTICE:  Dropping the old public.p0
+NOTICE:  Renaming the new table to public.p0
+ alter_table_set_access_method
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT alter_table_set_access_method('p1','columnar');
+NOTICE:  creating a new table for public.p1
+NOTICE:  Moving the data of public.p1
+NOTICE:  Dropping the old public.p1
+NOTICE:  Renaming the new table to public.p1
+ alter_table_set_access_method
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT alter_table_set_access_method('p3','columnar');
+NOTICE:  creating a new table for public.p3
+NOTICE:  Moving the data of public.p3
+NOTICE:  Dropping the old public.p3
+NOTICE:  Renaming the new table to public.p3
+ alter_table_set_access_method
+---------------------------------------------------------------------
+
+(1 row)
+
+-- should also be parallel plan
+EXPLAIN (costs off) SELECT count(*), sum(i), min(i), max(i) FROM parent;
+                        QUERY PLAN
+---------------------------------------------------------------------
+ Finalize Aggregate
+   ->  Gather
+         Workers Planned: 4
+         ->  Partial Aggregate
+               ->  Parallel Append
+                     ->  Custom Scan (ColumnarScan) on p3
+                     ->  Custom Scan (ColumnarScan) on p0
+                     ->  Custom Scan (ColumnarScan) on p1
+                     ->  Parallel Seq Scan on p2
+(9 rows)
+
+SELECT count(*), sum(i), min(i), max(i) FROM parent;
+ count  |   sum   | min | max
+---------------------------------------------------------------------
+ 400000 | 9000000 |  10 |  30
+(1 row)
+
+-- and also parallel without custom scan
+SET columnar.enable_custom_scan = FALSE;
+EXPLAIN (costs off) SELECT count(*), sum(i), min(i), max(i) FROM parent;
+                   QUERY PLAN
+---------------------------------------------------------------------
+ Finalize Aggregate
+   ->  Gather
+         Workers Planned: 4
+         ->  Partial Aggregate
+               ->  Parallel Append
+                     ->  Seq Scan on p0
+                     ->  Seq Scan on p1
+                     ->  Seq Scan on p3
+                     ->  Parallel Seq Scan on p2
+(9 rows)
+
+SELECT count(*), sum(i), min(i), max(i) FROM parent;
+ count  |   sum   | min | max
+---------------------------------------------------------------------
+ 400000 | 9000000 |  10 |  30
+(1 row)
+
+SET columnar.enable_custom_scan TO DEFAULT;
+SET force_parallel_mode TO DEFAULT;
+SET min_parallel_table_scan_size TO DEFAULT;
+SET parallel_tuple_cost TO DEFAULT;
+SET max_parallel_workers TO DEFAULT;
+SET max_parallel_workers_per_gather TO DEFAULT;
+DROP TABLE parent;
