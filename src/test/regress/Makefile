@@ -212,18 +212,21 @@ check-citus-upgrade-mixed:
 		--citus-post-tar=$(citus-post-tar) \
 		--mixed
 
-check-citus-upgrade-local:
+check-citus-upgrade-local: clean-upgrade-artifacts
 	$(citus_upgrade_check) \
 		--bindir=$(bindir) \
 		--pgxsdir=$(pgxsdir) \
 		--citus-old-version=$(citus-old-version)
 
-check-citus-upgrade-mixed-local:
+check-citus-upgrade-mixed-local: clean-upgrade-artifacts
 	$(citus_upgrade_check) \
 		--bindir=$(bindir) \
 		--pgxsdir=$(pgxsdir) \
 		--citus-old-version=$(citus-old-version) \
 		--mixed
+
+clean-upgrade-artifacts:
+	rm -rf $(citus_abs_srcdir)/tmp_citus_tarballs/ $(citus_abs_srcdir)/tmp_citus_upgrade/ /tmp/citus_copy/
 
 clean distclean maintainer-clean:
 	rm -f $(output_files) $(input_files)
