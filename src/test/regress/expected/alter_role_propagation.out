@@ -223,6 +223,27 @@ SELECT run_command_on_workers('SHOW enable_hashagg');
  (localhost,57638,t,on)
 (2 rows)
 
+-- check that ALTER ROLE SET is not propagated when scoped to a different database
+-- also test case sensitivity
+CREATE DATABASE "REGRESSION";
+NOTICE:  Citus partially supports CREATE DATABASE for distributed databases
+DETAIL:  Citus does not propagate CREATE DATABASE command to workers
+HINT:  You can manually create a database and its extensions on workers.
+ALTER ROLE CURRENT_USER IN DATABASE "REGRESSION" SET public.myguc TO "Hello from coordinator only";
+SELECT d.datname, r.setconfig FROM pg_db_role_setting r LEFT JOIN pg_database d ON r.setdatabase=d.oid WHERE r.setconfig::text LIKE '%Hello from coordinator only%';
+  datname   |                  setconfig
+---------------------------------------------------------------------
+ REGRESSION | {"public.myguc=Hello from coordinator only"}
+(1 row)
+
+SELECT run_command_on_workers($$SELECT json_agg((d.datname, r.setconfig)) FROM pg_db_role_setting r LEFT JOIN pg_database d ON r.setdatabase=d.oid WHERE r.setconfig::text LIKE '%Hello from coordinator only%'$$);
+ run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,"")
+ (localhost,57638,t,"")
+(2 rows)
+
+DROP DATABASE "REGRESSION";
 -- make sure alter role set is not propagated when the feature is deliberately turned off
 SET citus.enable_alter_role_set_propagation TO off;
 -- remove 1 node to verify settings are NOT copied when the node gets added back
