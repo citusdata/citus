@@ -53,7 +53,8 @@ typedef struct ColumnarScanState
 
 static void ColumnarSetRelPathlistHook(PlannerInfo *root, RelOptInfo *rel, Index rti,
 									   RangeTblEntry *rte);
-static Path * CreateColumnarScanPath(RelOptInfo *rel, RangeTblEntry *rte);
+static Path * CreateColumnarScanPath(PlannerInfo *root, RelOptInfo *rel,
+									 RangeTblEntry *rte);
 static Cost ColumnarScanCost(RangeTblEntry *rte);
 static Plan * ColumnarScanPath_PlanCustomPath(PlannerInfo *root,
 											  RelOptInfo *rel,
@@ -182,7 +183,7 @@ ColumnarSetRelPathlistHook(PlannerInfo *root, RelOptInfo *rel, Index rti,
 							errmsg("sample scans not supported on columnar tables")));
 		}
 
-		Path *customPath = CreateColumnarScanPath(rel, rte);
+		Path *customPath = CreateColumnarScanPath(root, rel, rte);
 
 		ereport(DEBUG1, (errmsg("pathlist hook for columnar table am")));
 
@@ -195,7 +196,7 @@ ColumnarSetRelPathlistHook(PlannerInfo *root, RelOptInfo *rel, Index rti,
 
 
 static Path *
-CreateColumnarScanPath(RelOptInfo *rel, RangeTblEntry *rte)
+CreateColumnarScanPath(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 {
 	ColumnarScanPath *cspath = (ColumnarScanPath *) newNode(sizeof(ColumnarScanPath),
 															T_CustomPath);
@@ -213,6 +214,14 @@ CreateColumnarScanPath(RelOptInfo *rel, RangeTblEntry *rte)
 	path->pathtype = T_CustomScan;
 	path->parent = rel;
 	path->pathtarget = rel->reltarget;
+
+	/*
+	 * We don't support pushing join clauses into the quals of a seqscan, but
+	 * it could still have required parameterization due to LATERAL refs in
+	 * its tlist.
+	 */
+	path->param_info = get_baserel_parampathinfo(root, rel,
+												 rel->lateral_relids);
 
 	/*
 	 * Add cost estimates for a columnar table scan, row count is the rows estimated by
