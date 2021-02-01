@@ -1,6 +1,9 @@
 --
--- Test querying cstore_fdw tables.
+-- Test querying columnar tables.
 --
+
+CREATE SCHEMA columnar_join;
+SET search_path to columnar_join, public;
 
 -- Settings to make the result deterministic
 SET datestyle = "ISO, YMD";
@@ -43,3 +46,48 @@ INSERT INTO union_second SELECT a, a FROM generate_series(11, 15) a;
 (SELECT a*1, b FROM union_first) union all (SELECT a*1, b FROM union_second);
 
 DROP TABLE union_first, union_second;
+
+-- https://github.com/citusdata/citus/issues/4600
+CREATE TABLE INT8_TBL_columnar(q1 int8, q2 int8) using columnar;
+
+INSERT INTO INT8_TBL_columnar VALUES('  123   ','  456');
+INSERT INTO INT8_TBL_columnar VALUES('123   ','4567890123456789');
+INSERT INTO INT8_TBL_columnar VALUES('4567890123456789','123');
+INSERT INTO INT8_TBL_columnar VALUES(+4567890123456789,'4567890123456789');
+INSERT INTO INT8_TBL_columnar VALUES('+4567890123456789','-4567890123456789');
+
+explain (costs off, summary off) select * from
+  INT8_TBL_columnar a left join lateral
+  (select b.q1 as bq1, c.q1 as cq1, least(a.q1,b.q1,c.q1) from
+   INT8_TBL_columnar b cross join INT8_TBL_columnar c) ss
+  on a.q2 = ss.bq1;
+
+explain (costs off, summary off)
+  SELECT COUNT(*) FROM INT8_TBL_columnar t1 JOIN
+  LATERAL (SELECT * FROM INT8_TBL_columnar t2 WHERE t1.q1 = t2.q1)
+  as foo ON (true);
+
+CREATE TABLE INT8_TBL_heap (LIKE INT8_TBL_columnar) USING heap;
+INSERT INTO INT8_TBL_heap SELECT * FROM INT8_TBL_columnar;
+
+CREATE TABLE result_columnar AS
+select * from
+  INT8_TBL_columnar a left join lateral
+  (select b.q1 as bq1, c.q1 as cq1, least(a.q1,b.q1,c.q1) from
+   INT8_TBL_columnar b cross join INT8_TBL_columnar c) ss
+  on a.q2 = ss.bq1;
+
+CREATE TABLE result_regular AS
+select * from
+  INT8_TBL_heap a left join lateral
+  (select b.q1 as bq1, c.q1 as cq1, least(a.q1,b.q1,c.q1) from
+   INT8_TBL_heap b cross join INT8_TBL_heap c) ss
+  on a.q2 = ss.bq1;
+
+-- 2 results should be identical, so the following should be empty
+(table result_columnar EXCEPT table result_regular)
+UNION
+(table result_regular EXCEPT table result_columnar);
+
+SET client_min_messages TO WARNING;
+DROP SCHEMA columnar_join CASCADE;
