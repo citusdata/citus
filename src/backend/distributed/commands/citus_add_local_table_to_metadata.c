@@ -45,6 +45,8 @@
 #include "utils/syscache.h"
 
 
+static void citus_add_local_table_to_metadata_internal(Oid relationId,
+													   bool cascadeViaForeignKeys);
 static void ErrorIfUnsupportedCreateCitusLocalTable(Relation relation);
 static void ErrorIfUnsupportedCitusLocalTableKind(Oid relationId);
 static List * GetShellTableDDLEventsForCitusLocalTable(Oid relationId);
@@ -88,6 +90,22 @@ PG_FUNCTION_INFO_V1(remove_local_tables_from_metadata);
 Datum
 citus_add_local_table_to_metadata(PG_FUNCTION_ARGS)
 {
+	Oid relationId = PG_GETARG_OID(0);
+	bool cascadeViaForeignKeys = PG_GETARG_BOOL(1);
+
+	citus_add_local_table_to_metadata_internal(relationId, cascadeViaForeignKeys);
+
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * citus_add_local_table_to_metadata_internal is the internal method for
+ * citus_add_local_table_to_metadata udf.
+ */
+static void
+citus_add_local_table_to_metadata_internal(Oid relationId, bool cascadeViaForeignKeys)
+{
 	CheckCitusVersion(ERROR);
 
 	if (ShouldEnableLocalReferenceForeignKeys())
@@ -106,12 +124,7 @@ citus_add_local_table_to_metadata(PG_FUNCTION_ARGS)
 								  "to 'off' to disable this behavior")));
 	}
 
-	Oid relationId = PG_GETARG_OID(0);
-	bool cascadeViaForeignKeys = PG_GETARG_BOOL(1);
-
 	CreateCitusLocalTable(relationId, cascadeViaForeignKeys);
-
-	PG_RETURN_VOID();
 }
 
 
@@ -128,7 +141,18 @@ create_citus_local_table(PG_FUNCTION_ARGS)
 {
 	ereport(NOTICE, (errmsg("create_citus_local_table is deprecated in favour of "
 							"citus_add_local_table_to_metadata")));
-	return citus_add_local_table_to_metadata(fcinfo);
+
+	Oid relationId = PG_GETARG_OID(0);
+
+	/*
+	 * create_citus_local_table doesn't have cascadeViaForeignKeys option,
+	 * so we can't directly call citus_add_local_table_to_metadata udf itself
+	 * since create_citus_local_table doesn't specify cascadeViaForeignKeys.
+	 */
+	bool cascadeViaForeignKeys = false;
+	citus_add_local_table_to_metadata_internal(relationId, cascadeViaForeignKeys);
+
+	PG_RETURN_VOID();
 }
 
 
