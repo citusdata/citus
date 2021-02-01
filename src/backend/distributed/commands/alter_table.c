@@ -185,6 +185,8 @@ static void CreateCitusTableLike(TableConversionState *con);
 static List * GetViewCreationCommandsOfTable(Oid relationId);
 static void ReplaceTable(Oid sourceId, Oid targetId, List *justBeforeDropCommands,
 						 bool suppressNoticeMessages);
+static char * BuildInsertColumnStringForReplaceTable(Oid relationId);
+static List * GetNonGeneratedStoredColumnNameList(Oid relationId);
 static void CheckAlterDistributedTableConversionParameters(TableConversionState *con);
 static char * CreateWorkerChangeSequenceDependencyCommand(char *sequenceSchemaName,
 														  char *sequenceName,
@@ -1122,8 +1124,10 @@ ReplaceTable(Oid sourceId, Oid targetId, List *justBeforeDropCommands,
 									quote_qualified_identifier(schemaName, sourceName))));
 		}
 
-		appendStringInfo(query, "INSERT INTO %s SELECT * FROM %s",
+		char *insertColumnString = BuildInsertColumnStringForReplaceTable(sourceId);
+		appendStringInfo(query, "INSERT INTO %s (%s) SELECT %s FROM %s",
 						 quote_qualified_identifier(schemaName, targetName),
+						 insertColumnString, insertColumnString,
 						 quote_qualified_identifier(schemaName, sourceName));
 		ExecuteQueryViaSPI(query->data, SPI_OK_INSERT);
 	}
@@ -1180,6 +1184,61 @@ ReplaceTable(Oid sourceId, Oid targetId, List *justBeforeDropCommands,
 					 quote_qualified_identifier(schemaName, targetName),
 					 quote_identifier(sourceName));
 	ExecuteQueryViaSPI(query->data, SPI_OK_UTILITY);
+}
+
+
+/*
+ * BuildInsertColumnStringForReplaceTable is a helper function that returns
+ * comma seperated columns that we can insert into for ReplaceTable.
+ */
+static char *
+BuildInsertColumnStringForReplaceTable(Oid relationId)
+{
+	/*
+	 * When copying data to temp table, we skip columns having GENERATED
+	 * GENERATED ALWAYS AS (...) STORED expressions since Postgres doesn't
+	 * allow inserting into such columns. This is not bad since Postgres
+	 * would already generate such columns.
+	 */
+	List *nonStoredColumnNameList = GetNonGeneratedStoredColumnNameList(relationId);
+	return StringJoin(nonStoredColumnNameList, ',');
+}
+
+
+/*
+ * GetNonGeneratedStoredColumnNameList returns a list of column names for
+ * columns not having GENERATED ALWAYS AS (...) STORED expressions.
+ */
+static List *
+GetNonGeneratedStoredColumnNameList(Oid relationId)
+{
+	List *nonStoredColumnNameList = NIL;
+
+	Relation relation = relation_open(relationId, AccessShareLock);
+	TupleDesc tupleDescriptor = RelationGetDescr(relation);
+	for (int columnIndex = 0; columnIndex < tupleDescriptor->natts; columnIndex++)
+	{
+		Form_pg_attribute currentColumn = TupleDescAttr(tupleDescriptor, columnIndex);
+		if (currentColumn->attisdropped)
+		{
+			continue;
+		}
+
+#if PG_VERSION_NUM >= 120000
+		if (currentColumn->attgenerated == ATTRIBUTE_GENERATED_STORED)
+		{
+			continue;
+		}
+#endif
+
+		const char *quotedColumnName = quote_identifier(NameStr(currentColumn->attname));
+		nonStoredColumnNameList = lappend(nonStoredColumnNameList,
+										  pstrdup(quotedColumnName));
+	}
+
+	relation_close(relation, NoLock);
+
+	return nonStoredColumnNameList;
 }
 
 
