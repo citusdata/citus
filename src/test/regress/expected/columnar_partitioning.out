@@ -124,3 +124,240 @@ SET parallel_tuple_cost TO DEFAULT;
 SET max_parallel_workers TO DEFAULT;
 SET max_parallel_workers_per_gather TO DEFAULT;
 DROP TABLE parent;
+--
+-- Test inheritance
+--
+CREATE TABLE i_row(i int);
+INSERT INTO i_row VALUES(100);
+CREATE TABLE i_col(i int) USING columnar;
+INSERT INTO i_col VALUES(200);
+CREATE TABLE ij_row_row(j int) INHERITS(i_row);
+INSERT INTO ij_row_row VALUES(300, 1000);
+CREATE TABLE ij_row_col(j int) INHERITS(i_row) USING columnar;
+INSERT INTO ij_row_col VALUES(400, 2000);
+CREATE TABLE ij_col_row(j int) INHERITS(i_col);
+INSERT INTO ij_col_row VALUES(500, 3000);
+CREATE TABLE ij_col_col(j int) INHERITS(i_col) USING columnar;
+INSERT INTO ij_col_col VALUES(600, 4000);
+EXPLAIN (costs off) SELECT * FROM i_row;
+                       QUERY PLAN
+---------------------------------------------------------------------
+ Append
+   ->  Seq Scan on i_row i_row_1
+   ->  Seq Scan on ij_row_row i_row_2
+   ->  Custom Scan (ColumnarScan) on ij_row_col i_row_3
+(4 rows)
+
+SELECT * FROM i_row;
+  i
+---------------------------------------------------------------------
+ 100
+ 300
+ 400
+(3 rows)
+
+EXPLAIN (costs off) SELECT * FROM ONLY i_row;
+    QUERY PLAN
+---------------------------------------------------------------------
+ Seq Scan on i_row
+(1 row)
+
+SELECT * FROM ONLY i_row;
+  i
+---------------------------------------------------------------------
+ 100
+(1 row)
+
+EXPLAIN (costs off) SELECT * FROM i_col;
+                       QUERY PLAN
+---------------------------------------------------------------------
+ Append
+   ->  Custom Scan (ColumnarScan) on i_col i_col_1
+   ->  Seq Scan on ij_col_row i_col_2
+   ->  Custom Scan (ColumnarScan) on ij_col_col i_col_3
+(4 rows)
+
+SELECT * FROM i_col;
+  i
+---------------------------------------------------------------------
+ 200
+ 500
+ 600
+(3 rows)
+
+EXPLAIN (costs off) SELECT * FROM ONLY i_col;
+             QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (ColumnarScan) on i_col
+(1 row)
+
+SELECT * FROM ONLY i_col;
+  i
+---------------------------------------------------------------------
+ 200
+(1 row)
+
+EXPLAIN (costs off) SELECT * FROM ij_row_row;
+       QUERY PLAN
+---------------------------------------------------------------------
+ Seq Scan on ij_row_row
+(1 row)
+
+SELECT * FROM ij_row_row;
+  i  |  j
+---------------------------------------------------------------------
+ 300 | 1000
+(1 row)
+
+EXPLAIN (costs off) SELECT * FROM ij_row_col;
+                QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (ColumnarScan) on ij_row_col
+(1 row)
+
+SELECT * FROM ij_row_col;
+  i  |  j
+---------------------------------------------------------------------
+ 400 | 2000
+(1 row)
+
+EXPLAIN (costs off) SELECT * FROM ij_col_row;
+       QUERY PLAN
+---------------------------------------------------------------------
+ Seq Scan on ij_col_row
+(1 row)
+
+SELECT * FROM ij_col_row;
+  i  |  j
+---------------------------------------------------------------------
+ 500 | 3000
+(1 row)
+
+EXPLAIN (costs off) SELECT * FROM ij_col_col;
+                QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (ColumnarScan) on ij_col_col
+(1 row)
+
+SELECT * FROM ij_col_col;
+  i  |  j
+---------------------------------------------------------------------
+ 600 | 4000
+(1 row)
+
+SET columnar.enable_custom_scan = FALSE;
+EXPLAIN (costs off) SELECT * FROM i_row;
+              QUERY PLAN
+---------------------------------------------------------------------
+ Append
+   ->  Seq Scan on i_row i_row_1
+   ->  Seq Scan on ij_row_row i_row_2
+   ->  Seq Scan on ij_row_col i_row_3
+(4 rows)
+
+SELECT * FROM i_row;
+  i
+---------------------------------------------------------------------
+ 100
+ 300
+ 400
+(3 rows)
+
+EXPLAIN (costs off) SELECT * FROM ONLY i_row;
+    QUERY PLAN
+---------------------------------------------------------------------
+ Seq Scan on i_row
+(1 row)
+
+SELECT * FROM ONLY i_row;
+  i
+---------------------------------------------------------------------
+ 100
+(1 row)
+
+EXPLAIN (costs off) SELECT * FROM i_col;
+              QUERY PLAN
+---------------------------------------------------------------------
+ Append
+   ->  Seq Scan on i_col i_col_1
+   ->  Seq Scan on ij_col_row i_col_2
+   ->  Seq Scan on ij_col_col i_col_3
+(4 rows)
+
+SELECT * FROM i_col;
+  i
+---------------------------------------------------------------------
+ 200
+ 500
+ 600
+(3 rows)
+
+EXPLAIN (costs off) SELECT * FROM ONLY i_col;
+    QUERY PLAN
+---------------------------------------------------------------------
+ Seq Scan on i_col
+(1 row)
+
+SELECT * FROM ONLY i_col;
+  i
+---------------------------------------------------------------------
+ 200
+(1 row)
+
+EXPLAIN (costs off) SELECT * FROM ij_row_row;
+       QUERY PLAN
+---------------------------------------------------------------------
+ Seq Scan on ij_row_row
+(1 row)
+
+SELECT * FROM ij_row_row;
+  i  |  j
+---------------------------------------------------------------------
+ 300 | 1000
+(1 row)
+
+EXPLAIN (costs off) SELECT * FROM ij_row_col;
+       QUERY PLAN
+---------------------------------------------------------------------
+ Seq Scan on ij_row_col
+(1 row)
+
+SELECT * FROM ij_row_col;
+  i  |  j
+---------------------------------------------------------------------
+ 400 | 2000
+(1 row)
+
+EXPLAIN (costs off) SELECT * FROM ij_col_row;
+       QUERY PLAN
+---------------------------------------------------------------------
+ Seq Scan on ij_col_row
+(1 row)
+
+SELECT * FROM ij_col_row;
+  i  |  j
+---------------------------------------------------------------------
+ 500 | 3000
+(1 row)
+
+EXPLAIN (costs off) SELECT * FROM ij_col_col;
+       QUERY PLAN
+---------------------------------------------------------------------
+ Seq Scan on ij_col_col
+(1 row)
+
+SELECT * FROM ij_col_col;
+  i  |  j
+---------------------------------------------------------------------
+ 600 | 4000
+(1 row)
+
+SET columnar.enable_custom_scan TO DEFAULT;
+DROP TABLE i_row CASCADE;
+NOTICE:  drop cascades to 2 other objects
+DETAIL:  drop cascades to table ij_row_row
+drop cascades to table ij_row_col
+DROP TABLE i_col CASCADE;
+NOTICE:  drop cascades to 2 other objects
+DETAIL:  drop cascades to table ij_col_row
+drop cascades to table ij_col_col

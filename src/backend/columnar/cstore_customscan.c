@@ -160,7 +160,7 @@ ColumnarSetRelPathlistHook(PlannerInfo *root, RelOptInfo *rel, Index rti,
 		PreviousSetRelPathlistHook(root, rel, rti, rte);
 	}
 
-	if (!OidIsValid(rte->relid) || rte->rtekind != RTE_RELATION)
+	if (!OidIsValid(rte->relid) || rte->rtekind != RTE_RELATION || rte->inh)
 	{
 		/* some calls to the pathlist hook don't have a valid relation set. Do nothing */
 		return;
