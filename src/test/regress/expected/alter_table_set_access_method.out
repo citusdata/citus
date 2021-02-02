@@ -492,7 +492,8 @@ SELECT * FROM mat_view ORDER BY a;
  2
 (2 rows)
 
-CREATE TABLE local(a int);
+CREATE SEQUENCE c_seq;
+CREATE TABLE local(a int, b bigserial, c int default nextval('c_seq'));
 INSERT INTO local VALUES (3);
 create materialized view m_local as select * from local;
 create view v_local as select * from local;
@@ -615,9 +616,9 @@ NOTICE:  Renaming the new table to alter_table_set_access_method.dist
 (1 row)
 
 SELECT * FROM m_local;
- a
+ a | b | c
 ---------------------------------------------------------------------
- 3
+ 3 | 1 | 1
 (1 row)
 
 SELECT * FROM m_ref;
@@ -635,9 +636,9 @@ SELECT * FROM m_dist;
 (2 rows)
 
 SELECT * FROM v_local;
- a
+ a | b | c
 ---------------------------------------------------------------------
- 3
+ 3 | 1 | 1
 (1 row)
 
 SELECT * FROM v_ref;
