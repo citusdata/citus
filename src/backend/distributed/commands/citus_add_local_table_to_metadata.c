@@ -49,6 +49,7 @@ static void citus_add_local_table_to_metadata_internal(Oid relationId,
 													   bool cascadeViaForeignKeys);
 static void ErrorIfUnsupportedCreateCitusLocalTable(Relation relation);
 static void ErrorIfUnsupportedCitusLocalTableKind(Oid relationId);
+static void ErrorIfUnsupportedCitusLocalColumnDefinition(Relation relation);
 static List * GetShellTableDDLEventsForCitusLocalTable(Oid relationId);
 static uint64 ConvertLocalTableToShard(Oid relationId);
 static void RenameRelationToShardRelation(Oid shellRelationId, uint64 shardId);
@@ -338,6 +339,7 @@ ErrorIfUnsupportedCreateCitusLocalTable(Relation relation)
 	ErrorIfCoordinatorNotAddedAsWorkerNode();
 	ErrorIfUnsupportedCitusLocalTableKind(relationId);
 	EnsureTableNotDistributed(relationId);
+	ErrorIfUnsupportedCitusLocalColumnDefinition(relation);
 
 	/*
 	 * When creating other citus table types, we don't need to check that case as
@@ -401,6 +403,29 @@ ErrorIfUnsupportedCitusLocalTableKind(Oid relationId)
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						errmsg("constraints on temporary tables may reference only "
 							   "temporary tables")));
+	}
+}
+
+
+/*
+ * ErrorIfUnsupportedCitusLocalColumnDefinition errors out if given relation
+ * has unsupported column definition for citus local table creation.
+ */
+static void
+ErrorIfUnsupportedCitusLocalColumnDefinition(Relation relation)
+{
+	TupleDesc relationDesc = RelationGetDescr(relation);
+	if (RelationUsesIdentityColumns(relationDesc))
+	{
+		/*
+		 * pg_get_tableschemadef_string doesn't know how to deparse identity
+		 * columns so we cannot reflect those columns when creating shell
+		 * relation. For this reason, error out here.
+		 */
+		Oid relationId = relation->rd_id;
+		ereport(ERROR, (errmsg("cannot add %s to citus metadata since it has "
+							   "identity columns",
+							   generate_qualified_relation_name(relationId))));
 	}
 }
 
