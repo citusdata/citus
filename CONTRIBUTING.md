@@ -48,10 +48,10 @@ why we ask this as well as instructions for how to proceed, see the
   sudo apt-get update
 
   sudo apt-get install -y postgresql-server-dev-11 postgresql-11 \
-                          libreadline-dev libselinux1-dev libxslt-dev  \
-                          libpam0g-dev git flex make libssl-dev    \
-                          libicu-dev uuid-dev \
-                          libkrb5-dev libcurl4-gnutls-dev autoconf
+                          autoconf flex git libcurl4-gnutls-dev libicu-dev \
+                          libkrb5-dev liblz4-dev libpam0g-dev libreadline-dev \
+                          libselinux1-dev libssl-dev libxslt-dev libzstd-dev \
+                          make uuid-dev
   ```
 
 2. Get, build, and test the code
@@ -95,9 +95,9 @@ why we ask this as well as instructions for how to proceed, see the
   sudo yum update -y
   sudo yum groupinstall -y 'Development Tools'
   sudo yum install -y postgresql11-devel postgresql11-server     \
-                      libxml2-devel libxslt-devel openssl-devel  \
-                      pam-devel readline-devel git libcurl-devel \
-                      llvm5.0 llvm-toolset-7-clang
+                      git libcurl-devel libxml2-devel libxslt-devel \
+                      libzstd-devel llvm-toolset-7-clang llvm5.0 lz4-devel \
+                      openssl-devel pam-devel readline-devel
 
   git clone https://github.com/citusdata/citus.git
   cd citus
