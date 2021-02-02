@@ -151,13 +151,14 @@ OptionsSpecifyOwnedBy(List *optionList, Oid *ownedByTableId)
 
 
 /*
- * ExtractColumnsOwningSequences finds each column of relation with relationId
- * defaulting to an owned sequence. Then, appends the column name and id of the
- * owned sequence -that the column defaults- to the lists passed as NIL initially.
+ * ExtractDefaultColumnsAndOwnedSequences finds each column of relation with
+ * relationId that has a DEFAULT expression and each sequence owned by such
+ * columns (if any). Then, appends the column name and id of the owned sequence
+ * -that the column defaults- to the lists passed as NIL initially.
  */
 void
-ExtractColumnsOwningSequences(Oid relationId, List **columnNameList,
-							  List **ownedSequenceIdList)
+ExtractDefaultColumnsAndOwnedSequences(Oid relationId, List **columnNameList,
+									   List **ownedSequenceIdList)
 {
 	Assert(*columnNameList == NIL && *ownedSequenceIdList == NIL);
 
@@ -176,6 +177,14 @@ ExtractColumnsOwningSequences(Oid relationId, List **columnNameList,
 			 */
 			continue;
 		}
+
+#if PG_VERSION_NUM >= PG_VERSION_12
+		if (attributeForm->attgenerated == ATTRIBUTE_GENERATED_STORED)
+		{
+			/* skip columns with GENERATED AS ALWAYS expressions */
+			continue;
+		}
+#endif
 
 		char *columnName = NameStr(attributeForm->attname);
 		*columnNameList = lappend(*columnNameList, columnName);

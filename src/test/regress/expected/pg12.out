@@ -411,6 +411,52 @@ where val = 'asdf';
      3
 (1 row)
 
+-- not replicate reference tables from other test files
+SET citus.replicate_reference_tables_on_activate TO off;
+SELECT 1 FROM citus_add_node('localhost', :master_port, groupId => 0);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+BEGIN;
+  CREATE TABLE generated_stored_col_test (x int, y int generated always as (x+1) stored);
+  SELECT citus_add_local_table_to_metadata('generated_stored_col_test');
+ citus_add_local_table_to_metadata
+---------------------------------------------------------------------
+
+(1 row)
+
+  -- simply check if GENERATED ALWAYS AS (...) STORED expression works fine
+  INSERT INTO generated_stored_col_test VALUES(1), (2);
+  SELECT * FROM generated_stored_col_test ORDER BY 1,2;
+ x | y
+---------------------------------------------------------------------
+ 1 | 2
+ 2 | 3
+(2 rows)
+
+  -- show that we keep such expressions on shell relation and shard relation
+  SELECT s.relname, a.attname, a.attgenerated
+  FROM pg_class s
+  JOIN pg_attribute a ON a.attrelid=s.oid
+  WHERE s.relname LIKE 'generated_stored_col_test%' AND
+        attname = 'y'
+  ORDER BY 1,2;
+             relname             | attname | attgenerated
+---------------------------------------------------------------------
+ generated_stored_col_test       | y       | s
+ generated_stored_col_test_60040 | y       | s
+(2 rows)
+
+ROLLBACK;
+RESET citus.replicate_reference_tables_on_activate;
+SELECT citus_remove_node('localhost', :master_port);
+ citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
 \set VERBOSITY terse
 drop schema test_pg12 cascade;
 NOTICE:  drop cascades to 10 other objects
