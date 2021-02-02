@@ -788,18 +788,10 @@ CoordinatedRemoteTransactionsPrepare(void)
 		 * placement/table. If yes, we start preparing the transaction, otherwise
 		 * we skip prepare since the connection didn't perform any write (read-only)
 		 */
-		dlist_iter placementIter;
-		dlist_foreach(placementIter, &connection->referencedPlacements)
+		if (ConnectionModifiedPlacement(connection))
 		{
-			ConnectionReference *connectionReference =
-				dlist_container(ConnectionReference, connectionNode, placementIter.cur);
-
-			if (connectionReference->hadDDL || connectionReference->hadDML)
-			{
-				StartRemoteTransactionPrepare(connection);
-				connectionList = lappend(connectionList, connection);
-				break;
-			}
+			StartRemoteTransactionPrepare(connection);
+			connectionList = lappend(connectionList, connection);
 		}
 	}
 
@@ -823,17 +815,9 @@ CoordinatedRemoteTransactionsPrepare(void)
 		 * placement/table. If yes, we finish preparing the transaction, otherwise
 		 * we skip prepare since the connection didn't perform any write (read-only)
 		 */
-		dlist_iter placementIter;
-		dlist_foreach(placementIter, &connection->referencedPlacements)
+		if (ConnectionModifiedPlacement(connection))
 		{
-			ConnectionReference *connectionReference =
-				dlist_container(ConnectionReference, connectionNode, placementIter.cur);
-
-			if (connectionReference->hadDDL || connectionReference->hadDML)
-			{
-				FinishRemoteTransactionPrepare(connection);
-				break;
-			}
+			FinishRemoteTransactionPrepare(connection);
 		}
 	}
 

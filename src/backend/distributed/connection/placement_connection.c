@@ -32,6 +32,45 @@
 #include "utils/memutils.h"
 
 
+/*
+ * A connection reference is used to register that a connection has been used
+ * to read or modify either a) a shard placement as a particular user b) a
+ * group of colocated placements (which depend on whether the reference is
+ * from ConnectionPlacementHashEntry or ColocatedPlacementHashEntry).
+ */
+typedef struct ConnectionReference
+{
+	/*
+	 * The user used to read/modify the placement. We cannot reuse connections
+	 * that were performed using a different role, since it would not have the
+	 * right permissions.
+	 */
+	const char *userName;
+
+	/* the connection */
+	MultiConnection *connection;
+
+	/*
+	 * Information about what the connection is used for. There can only be
+	 * one connection executing DDL/DML for a placement to avoid deadlock
+	 * issues/read-your-own-writes violations.  The difference between DDL/DML
+	 * currently is only used to emit more precise error messages.
+	 */
+	bool hadDML;
+	bool hadDDL;
+
+	/* colocation group of the placement, if any */
+	uint32 colocationGroupId;
+	uint32 representativeValue;
+
+	/* placementId of the placement, used only for append distributed tables */
+	uint64 placementId;
+
+	/* membership in MultiConnection->referencedPlacements */
+	dlist_node connectionNode;
+} ConnectionReference;
+
+
 struct ColocatedPlacementsHashEntry;
 
 
