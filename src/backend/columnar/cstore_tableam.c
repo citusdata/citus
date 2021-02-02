@@ -164,7 +164,7 @@ columnar_beginscan(Relation relation, Snapshot snapshot,
 														 parallel_scan,
 														 flags, attr_needed, NULL);
 
-	pfree(attr_needed);
+	bms_free(attr_needed);
 
 	return scandesc;
 }
