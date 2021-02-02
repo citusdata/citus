@@ -392,16 +392,16 @@ CREATE TABLE reference_table_1 (
   col_5 int generated always as (col_4*2-col_1) stored
 );
 SELECT create_reference_table ('reference_table_1');
- create_reference_table 
-------------------------
- 
+ create_reference_table
+---------------------------------------------------------------------
+
 (1 row)
 
 INSERT INTO reference_table_1 (col_1, col_4) VALUES (1,2), (11,12);
 INSERT INTO reference_table_1 (col_1, col_2, col_4) VALUES (100,101,102), (200,201,202);
 SELECT * FROM reference_table_1 ORDER BY 1,2,3,4,5;
- col_1 | col_2 | col_3 | col_4 | col_5 
--------+-------+-------+-------+-------
+ col_1 | col_2 | col_3 | col_4 | col_5
+---------------------------------------------------------------------
      1 |       |       |     2 |     3
     11 |       |       |    12 |    13
    100 |   101 |   201 |   102 |   104
@@ -414,14 +414,14 @@ NOTICE:  creating a new table for undistribute_table.reference_table_1
 NOTICE:  Moving the data of undistribute_table.reference_table_1
 NOTICE:  Dropping the old undistribute_table.reference_table_1
 NOTICE:  Renaming the new table to undistribute_table.reference_table_1
- undistribute_table 
---------------------
- 
+ undistribute_table
+---------------------------------------------------------------------
+
 (1 row)
 
   SELECT * FROM reference_table_1 ORDER BY 1,2,3,4,5;
- col_1 | col_2 | col_3 | col_4 | col_5 
--------+-------+-------+-------+-------
+ col_1 | col_2 | col_3 | col_4 | col_5
+---------------------------------------------------------------------
      1 |       |       |     2 |     3
     11 |       |       |    12 |    13
    100 |   101 |   201 |   102 |   104
@@ -440,18 +440,18 @@ NOTICE:  creating a new table for undistribute_table.reference_table_1
 NOTICE:  Moving the data of undistribute_table.reference_table_1
 NOTICE:  Dropping the old undistribute_table.reference_table_1
 NOTICE:  Renaming the new table to undistribute_table.reference_table_1
- undistribute_table 
---------------------
- 
+ undistribute_table
+---------------------------------------------------------------------
+
 (1 row)
 
   SELECT * FROM reference_table_1 ORDER BY 1;
- col_2 
--------
+ col_2
+---------------------------------------------------------------------
    101
    201
-      
-      
+
+
 (4 rows)
 
 ROLLBACK;
