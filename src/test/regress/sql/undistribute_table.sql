@@ -159,6 +159,18 @@ BEGIN;
   SELECT * FROM reference_table_1 ORDER BY 1;
 ROLLBACK;
 
+BEGIN;
+  -- now drop all columns
+  ALTER TABLE reference_table_1 DROP COLUMN col_3;
+  ALTER TABLE reference_table_1 DROP COLUMN col_5;
+  ALTER TABLE reference_table_1 DROP COLUMN col_1;
+  ALTER TABLE reference_table_1 DROP COLUMN col_2;
+  ALTER TABLE reference_table_1 DROP COLUMN col_4;
+
+  -- show that undistribute_table works fine
+  SELECT undistribute_table('reference_table_1');
+ROLLBACK;
+
 DROP TABLE view_table CASCADE;
 
 DROP SCHEMA undistribute_table, another_schema CASCADE;

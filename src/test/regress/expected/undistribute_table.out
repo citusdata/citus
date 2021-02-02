@@ -455,6 +455,25 @@ NOTICE:  Renaming the new table to undistribute_table.reference_table_1
 (4 rows)
 
 ROLLBACK;
+BEGIN;
+  -- now drop all columns
+  ALTER TABLE reference_table_1 DROP COLUMN col_3;
+  ALTER TABLE reference_table_1 DROP COLUMN col_5;
+  ALTER TABLE reference_table_1 DROP COLUMN col_1;
+  ALTER TABLE reference_table_1 DROP COLUMN col_2;
+  ALTER TABLE reference_table_1 DROP COLUMN col_4;
+  -- show that undistribute_table works fine
+  SELECT undistribute_table('reference_table_1');
+NOTICE:  creating a new table for undistribute_table.reference_table_1
+NOTICE:  Moving the data of undistribute_table.reference_table_1
+NOTICE:  Dropping the old undistribute_table.reference_table_1
+NOTICE:  Renaming the new table to undistribute_table.reference_table_1
+ undistribute_table 
+--------------------
+ 
+(1 row)
+
+ROLLBACK;
 DROP TABLE view_table CASCADE;
 NOTICE:  drop cascades to 3 other objects
 DETAIL:  drop cascades to view undis_view1
