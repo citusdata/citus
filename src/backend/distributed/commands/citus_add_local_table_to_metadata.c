@@ -68,8 +68,8 @@ static char * GetRenameShardTriggerCommand(Oid shardRelationId, char *triggerNam
 static void DropRelationTruncateTriggers(Oid relationId);
 static char * GetDropTriggerCommand(Oid relationId, char *triggerName);
 static List * GetRenameStatsCommandList(List *statsOidList, uint64 shardId);
-static void DropAndMoveDefaultSequenceOwnerships(Oid sourceRelationId,
-												 Oid targetRelationId);
+static void DropDefaultExpressionsAndMoveOwnedSequenceOwnerships(Oid sourceRelationId,
+																 Oid targetRelationId);
 static void DropDefaultColumnDefinition(Oid relationId, char *columnName);
 static void TransferSequenceOwnership(Oid ownedSequenceId, Oid targetRelationId,
 									  char *columnName);
@@ -309,7 +309,8 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys)
 	 * DEFAULT expressions from shard relation as we should evaluate such columns
 	 * in shell table when needed.
 	 */
-	DropAndMoveDefaultSequenceOwnerships(shardRelationId, shellRelationId);
+	DropDefaultExpressionsAndMoveOwnedSequenceOwnerships(shardRelationId,
+														 shellRelationId);
 
 	InsertMetadataForCitusLocalTable(shellRelationId, shardId);
 
@@ -883,13 +884,14 @@ GetRenameStatsCommandList(List *statsOidList, uint64 shardId)
 
 
 /*
- * DropAndMoveDefaultSequenceOwnerships drops default column definitions for
- * relation with sourceRelationId. Also, for each column that defaults to an
- * owned sequence, it grants ownership to the same named column of the relation
- * with targetRelationId.
+ * DropDefaultExpressionsAndMoveOwnedSequenceOwnerships drops default column
+ * definitions for relation with sourceRelationId. Also, for each column that
+ * defaults to an owned sequence, it grants ownership to the same named column
+ * of the relation with targetRelationId.
  */
 static void
-DropAndMoveDefaultSequenceOwnerships(Oid sourceRelationId, Oid targetRelationId)
+DropDefaultExpressionsAndMoveOwnedSequenceOwnerships(Oid sourceRelationId,
+													 Oid targetRelationId)
 {
 	List *columnNameList = NIL;
 	List *ownedSequenceIdList = NIL;
