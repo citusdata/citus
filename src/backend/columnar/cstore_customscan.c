@@ -139,11 +139,12 @@ columnar_customscan_init()
 static void
 clear_paths(RelOptInfo *rel)
 {
-	rel->pathlist = NULL;
-	rel->partial_pathlist = NULL;
+	rel->pathlist = NIL;
+	rel->partial_pathlist = NIL;
 	rel->cheapest_startup_path = NULL;
 	rel->cheapest_total_path = NULL;
 	rel->cheapest_unique_path = NULL;
+	rel->cheapest_parameterized_paths = NIL;
 }
 
 
@@ -155,12 +156,6 @@ ColumnarSetRelPathlistHook(PlannerInfo *root, RelOptInfo *rel, Index rti,
 	if (PreviousSetRelPathlistHook)
 	{
 		PreviousSetRelPathlistHook(root, rel, rti, rte);
-	}
-
-	if (!EnableColumnarCustomScan)
-	{
-		/* custon scans are disabled, use normal table access method api instead */
-		return;
 	}
 
 	if (!OidIsValid(rte->relid) || rte->rtekind != RTE_RELATION)
@@ -183,13 +178,19 @@ ColumnarSetRelPathlistHook(PlannerInfo *root, RelOptInfo *rel, Index rti,
 							errmsg("sample scans not supported on columnar tables")));
 		}
 
-		Path *customPath = CreateColumnarScanPath(root, rel, rte);
+		/* columnar doesn't support parallel paths */
+		rel->partial_pathlist = NIL;
 
-		ereport(DEBUG1, (errmsg("pathlist hook for columnar table am")));
+		if (EnableColumnarCustomScan)
+		{
+			Path *customPath = CreateColumnarScanPath(root, rel, rte);
 
-		/* we propose a new path that will be the only path for scanning this relation */
-		clear_paths(rel);
-		add_path(rel, customPath);
+			ereport(DEBUG1, (errmsg("pathlist hook for columnar table am")));
+
+			/* we propose a new path that will be the only path for scanning this relation */
+			clear_paths(rel);
+			add_path(rel, customPath);
+		}
 	}
 	RelationClose(relation);
 }
