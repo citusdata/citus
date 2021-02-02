@@ -893,8 +893,8 @@ DropAndMoveDefaultSequenceOwnerships(Oid sourceRelationId, Oid targetRelationId)
 {
 	List *columnNameList = NIL;
 	List *ownedSequenceIdList = NIL;
-	ExtractColumnsOwningSequences(sourceRelationId, &columnNameList,
-								  &ownedSequenceIdList);
+	ExtractDefaultColumnsAndOwnedSequences(sourceRelationId, &columnNameList,
+										   &ownedSequenceIdList);
 
 	ListCell *columnNameCell = NULL;
 	ListCell *ownedSequenceIdCell = NULL;

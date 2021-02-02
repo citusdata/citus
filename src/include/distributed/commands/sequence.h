@@ -13,8 +13,9 @@
 #include "nodes/pg_list.h"
 
 
-extern void ExtractColumnsOwningSequences(Oid relationId, List **columnNameList,
-										  List **ownedSequenceIdList);
+extern void ExtractDefaultColumnsAndOwnedSequences(Oid relationId,
+												   List **columnNameList,
+												   List **ownedSequenceIdList);
 
 
 #endif /* CITUS_SEQUENCE_H */
