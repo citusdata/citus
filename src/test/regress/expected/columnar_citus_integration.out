@@ -1067,5 +1067,31 @@ SELECT 1 FROM master_remove_node('localhost', :master_port);
         1
 (1 row)
 
+-- verify reference table with no columns can be created
+-- https://github.com/citusdata/citus/issues/4608
+CREATE TABLE zero_col() USING columnar;
+SELECT create_reference_table('zero_col');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+select result from run_command_on_placements('zero_col', 'select count(*) from %s');
+ result
+---------------------------------------------------------------------
+ 0
+ 0
+(2 rows)
+
+-- add a column so we can ad some data
+ALTER TABLE zero_col ADD COLUMN a int;
+INSERT INTO zero_col SELECT i FROM generate_series(1, 10) i;
+select result from run_command_on_placements('zero_col', 'select count(*) from %s');
+ result
+---------------------------------------------------------------------
+ 10
+ 10
+(2 rows)
+
 SET client_min_messages TO WARNING;
 DROP SCHEMA columnar_citus_integration CASCADE;

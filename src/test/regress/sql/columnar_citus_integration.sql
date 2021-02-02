@@ -403,5 +403,15 @@ SELECT compression FROM columnar.options WHERE regclass = 'table_option_citus_lo
 DROP TABLE table_option_citus_local, table_option_citus_local_2;
 SELECT 1 FROM master_remove_node('localhost', :master_port);
 
+-- verify reference table with no columns can be created
+-- https://github.com/citusdata/citus/issues/4608
+CREATE TABLE zero_col() USING columnar;
+SELECT create_reference_table('zero_col');
+select result from run_command_on_placements('zero_col', 'select count(*) from %s');
+-- add a column so we can ad some data
+ALTER TABLE zero_col ADD COLUMN a int;
+INSERT INTO zero_col SELECT i FROM generate_series(1, 10) i;
+select result from run_command_on_placements('zero_col', 'select count(*) from %s');
+
 SET client_min_messages TO WARNING;
 DROP SCHEMA columnar_citus_integration CASCADE;

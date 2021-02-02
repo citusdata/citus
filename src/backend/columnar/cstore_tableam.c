@@ -87,7 +87,7 @@ typedef struct ColumnarScanDescData
 	 * ANALYZE requires an item pointer for sorting. We keep track of row
 	 * number so we can construct an item pointer based on that.
 	 */
-	int rowNumber;
+	uint64 rowNumber;
 } ColumnarScanDescData;
 
 typedef struct ColumnarScanDescData *ColumnarScanDesc;
@@ -164,7 +164,7 @@ columnar_beginscan(Relation relation, Snapshot snapshot,
 														 parallel_scan,
 														 flags, attr_needed, NULL);
 
-	pfree(attr_needed);
+	bms_free(attr_needed);
 
 	return scandesc;
 }
@@ -191,7 +191,7 @@ columnar_beginscan_extended(Relation relation, Snapshot snapshot,
 
 	MemoryContext oldContext = MemoryContextSwitchTo(scanContext);
 
-	ColumnarScanDesc scan = palloc(sizeof(ColumnarScanDescData));
+	ColumnarScanDesc scan = palloc0(sizeof(ColumnarScanDescData));
 	scan->cs_base.rs_rd = relation;
 	scan->cs_base.rs_snapshot = snapshot;
 	scan->cs_base.rs_nkeys = nkeys;
