@@ -384,9 +384,81 @@ SELECT * FROM another_schema.undis_view3 ORDER BY 1, 2;
  6 | 9
 (3 rows)
 
+CREATE TABLE reference_table_1 (
+  col_1 int,
+  col_2 int,
+  col_3 int generated always as (col_1+col_2) stored,
+  col_4 int,
+  col_5 int generated always as (col_4*2-col_1) stored
+);
+SELECT create_reference_table ('reference_table_1');
+ create_reference_table 
+------------------------
+ 
+(1 row)
+
+INSERT INTO reference_table_1 (col_1, col_4) VALUES (1,2), (11,12);
+INSERT INTO reference_table_1 (col_1, col_2, col_4) VALUES (100,101,102), (200,201,202);
+SELECT * FROM reference_table_1 ORDER BY 1,2,3,4,5;
+ col_1 | col_2 | col_3 | col_4 | col_5 
+-------+-------+-------+-------+-------
+     1 |       |       |     2 |     3
+    11 |       |       |    12 |    13
+   100 |   101 |   201 |   102 |   104
+   200 |   201 |   401 |   202 |   204
+(4 rows)
+
+BEGIN;
+  SELECT undistribute_table('reference_table_1');
+NOTICE:  creating a new table for undistribute_table.reference_table_1
+NOTICE:  Moving the data of undistribute_table.reference_table_1
+NOTICE:  Dropping the old undistribute_table.reference_table_1
+NOTICE:  Renaming the new table to undistribute_table.reference_table_1
+ undistribute_table 
+--------------------
+ 
+(1 row)
+
+  SELECT * FROM reference_table_1 ORDER BY 1,2,3,4,5;
+ col_1 | col_2 | col_3 | col_4 | col_5 
+-------+-------+-------+-------+-------
+     1 |       |       |     2 |     3
+    11 |       |       |    12 |    13
+   100 |   101 |   201 |   102 |   104
+   200 |   201 |   401 |   202 |   204
+(4 rows)
+
+ROLLBACK;
+BEGIN;
+  -- drop some of the columns not having "generated always as stored" expressions
+  -- this would drop generated columns too
+  ALTER TABLE reference_table_1 DROP COLUMN col_1;
+  ALTER TABLE reference_table_1 DROP COLUMN col_4;
+  -- show that undistribute_table works fine
+  SELECT undistribute_table('reference_table_1');
+NOTICE:  creating a new table for undistribute_table.reference_table_1
+NOTICE:  Moving the data of undistribute_table.reference_table_1
+NOTICE:  Dropping the old undistribute_table.reference_table_1
+NOTICE:  Renaming the new table to undistribute_table.reference_table_1
+ undistribute_table 
+--------------------
+ 
+(1 row)
+
+  SELECT * FROM reference_table_1 ORDER BY 1;
+ col_2 
+-------
+   101
+   201
+      
+      
+(4 rows)
+
+ROLLBACK;
 DROP TABLE view_table CASCADE;
 NOTICE:  drop cascades to 3 other objects
 DETAIL:  drop cascades to view undis_view1
 drop cascades to view undis_view2
 drop cascades to view another_schema.undis_view3
 DROP SCHEMA undistribute_table, another_schema CASCADE;
+NOTICE:  drop cascades to table reference_table_1
