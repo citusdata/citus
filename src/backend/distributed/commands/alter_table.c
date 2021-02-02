@@ -1216,9 +1216,11 @@ BuildInsertColumnStringForReplaceTable(Oid relationId)
 {
 	/*
 	 * When copying data to temp table, we skip columns having GENERATED
-	 * GENERATED ALWAYS AS (...) STORED expressions since Postgres doesn't
-	 * allow inserting into such columns. This is not bad since Postgres
-	 * would already generate such columns.
+	 * ALWAYS AS (...) STORED expressions since Postgres doesn't allow
+	 * inserting into such columns. This is not bad since Postgres would
+	 * already generate such columns.
+	 * Note that here we intentionally don't skip columns having DEFAULT
+	 * expressions since user might have inserted non-default values.
 	 */
 	List *nonStoredColumnNameList = GetNonGeneratedStoredColumnNameList(relationId);
 	return StringJoin(nonStoredColumnNameList, ',');
@@ -1241,6 +1243,7 @@ GetNonGeneratedStoredColumnNameList(Oid relationId)
 		Form_pg_attribute currentColumn = TupleDescAttr(tupleDescriptor, columnIndex);
 		if (currentColumn->attisdropped)
 		{
+			/* skip dropped columns */
 			continue;
 		}
 
