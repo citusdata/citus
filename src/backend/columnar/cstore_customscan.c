@@ -133,6 +133,8 @@ columnar_customscan_init()
 		PGC_USERSET,
 		GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
+
+	RegisterCustomScanMethods(&ColumnarScanScanMethods);
 }
 
 
@@ -215,6 +217,9 @@ CreateColumnarScanPath(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 	path->pathtype = T_CustomScan;
 	path->parent = rel;
 	path->pathtarget = rel->reltarget;
+
+	/* columnar scans are not parallel-aware, but they are parallel-safe */
+	path->parallel_safe = rel->consider_parallel;
 
 	/*
 	 * We don't support pushing join clauses into the quals of a seqscan, but
