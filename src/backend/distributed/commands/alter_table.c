@@ -1138,7 +1138,7 @@ ReplaceTable(Oid sourceId, Oid targetId, List *justBeforeDropCommands,
 	{
 		changeDependencyFor(RelationRelationId, sequenceOid,
 							RelationRelationId, sourceId, targetId);
-		if (IsCitusTable(sourceId) && ShouldSyncTableMetadata(sourceId))
+		if (ShouldSyncTableMetadata(sourceId))
 		{
 			Oid sequenceSchemaOid = get_rel_namespace(sequenceOid);
 			char *sequenceSchemaName = get_namespace_name(sequenceSchemaOid);

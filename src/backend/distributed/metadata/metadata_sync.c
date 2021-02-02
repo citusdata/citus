@@ -243,6 +243,11 @@ ClusterHasKnownMetadataWorkers()
 bool
 ShouldSyncTableMetadata(Oid relationId)
 {
+	if (!OidIsValid(relationId) || !IsCitusTable(relationId))
+	{
+		return false;
+	}
+
 	CitusTableCacheEntry *tableEntry = GetCitusTableCacheEntry(relationId);
 
 	bool streamingReplicated =
