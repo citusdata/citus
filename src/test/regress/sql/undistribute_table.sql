@@ -145,6 +145,7 @@ SELECT * FROM reference_table_1 ORDER BY 1,2,3,4,5;
 
 BEGIN;
   SELECT undistribute_table('reference_table_1');
+  INSERT INTO reference_table_1 (col_1, col_2, col_4) VALUES (200,201,202), (300,301,302);
   SELECT * FROM reference_table_1 ORDER BY 1,2,3,4,5;
 ROLLBACK;
 
