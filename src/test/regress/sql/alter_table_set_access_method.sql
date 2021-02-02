@@ -159,7 +159,8 @@ CREATE MATERIALIZED VIEW mat_view AS SELECT * FROM mat_view_test;
 SELECT alter_table_set_access_method('mat_view_test','columnar');
 SELECT * FROM mat_view ORDER BY a;
 
-CREATE TABLE local(a int);
+CREATE SEQUENCE c_seq;
+CREATE TABLE local(a int, b bigserial, c int default nextval('c_seq'));
 INSERT INTO local VALUES (3);
 create materialized view m_local as select * from local;
 create view v_local as select * from local;
