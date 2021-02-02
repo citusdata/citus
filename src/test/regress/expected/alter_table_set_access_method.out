@@ -453,10 +453,19 @@ SELECT c.relname, a.amname FROM pg_class c, pg_am a where c.relname SIMILAR TO '
 (4 rows)
 
 -- test when the parent of a partition has foreign key to a reference table
-create table test_pk(n int primary key);
+create table test_pk(n int primary key, stored_col int generated always as (n*n) stored);
 create table test_fk_p(i int references test_pk(n)) partition by range(i);
 create table test_fk_p0 partition of test_fk_p for values from (0) to (10);
 create table test_fk_p1 partition of test_fk_p for values from (10) to (20);
+INSERT INTO test_pk VALUES (1), (2), (3);
+SELECT * FROM test_pk ORDER BY 1,2;
+ n | stored_col
+---------------------------------------------------------------------
+ 1 |          1
+ 2 |          4
+ 3 |          9
+(3 rows)
+
 select alter_table_set_access_method('test_fk_p1', 'columnar');
 NOTICE:  creating a new table for alter_table_set_access_method.test_fk_p1
 NOTICE:  Moving the data of alter_table_set_access_method.test_fk_p1
@@ -465,6 +474,14 @@ NOTICE:  Renaming the new table to alter_table_set_access_method.test_fk_p1
 ERROR:  Foreign keys and AFTER ROW triggers are not supported for columnar tables
 HINT:  Consider an AFTER STATEMENT trigger instead.
 CONTEXT:  SQL statement "ALTER TABLE alter_table_set_access_method.test_fk_p ATTACH PARTITION alter_table_set_access_method.test_fk_p1 FOR VALUES FROM (10) TO (20);"
+SELECT * FROM test_pk ORDER BY 1,2;
+ n | stored_col
+---------------------------------------------------------------------
+ 1 |          1
+ 2 |          4
+ 3 |          9
+(3 rows)
+
 -- test changing into same access method
 CREATE TABLE same_access_method (a INT);
 SELECT alter_table_set_access_method('same_access_method', 'heap');

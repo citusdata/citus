@@ -139,11 +139,14 @@ SELECT table_name, citus_table_type, distribution_column, shard_count, access_me
 SELECT c.relname, a.amname FROM pg_class c, pg_am a where c.relname SIMILAR TO 'table_type\D*' AND c.relnamespace = 'alter_table_set_access_method'::regnamespace AND c.relam = a.oid;
 
 -- test when the parent of a partition has foreign key to a reference table
-create table test_pk(n int primary key);
+create table test_pk(n int primary key, stored_col int generated always as (n*n) stored);
 create table test_fk_p(i int references test_pk(n)) partition by range(i);
 create table test_fk_p0 partition of test_fk_p for values from (0) to (10);
 create table test_fk_p1 partition of test_fk_p for values from (10) to (20);
+INSERT INTO test_pk VALUES (1), (2), (3);
+SELECT * FROM test_pk ORDER BY 1,2;
 select alter_table_set_access_method('test_fk_p1', 'columnar');
+SELECT * FROM test_pk ORDER BY 1,2;
 
 -- test changing into same access method
 CREATE TABLE same_access_method (a INT);
