@@ -383,10 +383,11 @@ RemoveLocalNodeFromWorkerList(List *workerNodeList)
 		{
 			return list_delete_cell_compat(workerNodeList, workerNodeCell, prev);
 		}
+		#if PG_VERSION_NUM < PG_VERSION_13
+		prev = workerNodeCell;
+		#endif
 	}
-	#if PG_VERSION_NUM < PG_VERSION_13
-	prev = workerNodeCell;
-	#endif
+
 	return workerNodeList;
 }
 
