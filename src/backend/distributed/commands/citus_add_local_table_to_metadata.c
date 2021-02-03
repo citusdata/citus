@@ -423,8 +423,8 @@ ErrorIfUnsupportedCitusLocalColumnDefinition(Relation relation)
 		 * relation. For this reason, error out here.
 		 */
 		Oid relationId = relation->rd_id;
-		ereport(ERROR, (errmsg("cannot add %s to citus metadata since it has "
-							   "identity columns",
+		ereport(ERROR, (errmsg("cannot add %s to citus metadata since table "
+							   "has identity column",
 							   generate_qualified_relation_name(relationId))));
 	}
 }
