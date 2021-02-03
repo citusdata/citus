@@ -123,5 +123,60 @@ INSERT INTO test_gen_ex VALUES (1), (2), (3);
 ALTER TABLE test_gen_ex ADD COLUMN y int generated always as (x+1) stored;
 SELECT * FROM test_gen_ex;
 
+
+-- check removing all columns while having some data to simulate
+-- table with non-zero rows but zero-columns.
+-- https://github.com/citusdata/citus/issues/4626
+BEGIN;
+create table local(y int);
+insert into local values (1), (2);
+alter table local drop column y;
+
+CREATE TABLE zero_col_columnar (like local) USING COLUMNAR;
+ALTER TABLE local RENAME TO local_xxxxx;
+INSERT INTO zero_col_columnar SELECT * FROM local_xxxxx;
+COMMIT;
+
+SELECT * FROM zero_col_columnar;
+SELECT count(*) FROM zero_col_columnar;
+EXPLAIN (costs off, summary off) SELECT * FROM zero_col_columnar;
+
+INSERT INTO zero_col_columnar DEFAULT VALUES;
+INSERT INTO zero_col_columnar DEFAULT VALUES;
+INSERT INTO zero_col_columnar DEFAULT VALUES;
+SELECT * FROM zero_col_columnar;
+SELECT count(*) FROM zero_col_columnar;
+EXPLAIN (costs off, summary off) SELECT * FROM zero_col_columnar;
+
+VACUUM VERBOSE zero_col_columnar;
+ANALYZE zero_col_columnar;
+VACUUM FULL zero_col_columnar;
+
+SELECT * FROM zero_col_columnar;
+
+TRUNCATE zero_col_columnar;
+
+SELECT * FROM zero_col_columnar;
+
+DROP TABLE zero_col_columnar;
+
+CREATE TABLE zero_col_columnar(a int) USING columnar;
+INSERT INTO zero_col_columnar SELECT i FROM generate_series(1, 5) i;
+alter table zero_col_columnar drop column a;
+
+SELECT * FROM zero_col_columnar;
+
+INSERT INTO zero_col_columnar DEFAULT VALUES;
+INSERT INTO zero_col_columnar DEFAULT VALUES;
+INSERT INTO zero_col_columnar DEFAULT VALUES;
+
+SELECT * FROM zero_col_columnar;
+
+VACUUM VERBOSE zero_col_columnar;
+ANALYZE zero_col_columnar;
+VACUUM FULL zero_col_columnar;
+
+SELECT * FROM zero_col_columnar;
+
 SET client_min_messages TO WARNING;
 DROP SCHEMA columnar_alter CASCADE;

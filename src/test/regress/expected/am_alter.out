@@ -240,5 +240,99 @@ SELECT * FROM test_gen_ex;
  3 | 4
 (3 rows)
 
+-- check removing all columns while having some data to simulate
+-- table with non-zero rows but zero-columns.
+-- https://github.com/citusdata/citus/issues/4626
+BEGIN;
+create table local(y int);
+insert into local values (1), (2);
+alter table local drop column y;
+CREATE TABLE zero_col_columnar (like local) USING COLUMNAR;
+ALTER TABLE local RENAME TO local_xxxxx;
+INSERT INTO zero_col_columnar SELECT * FROM local_xxxxx;
+COMMIT;
+SELECT * FROM zero_col_columnar;
+--
+(2 rows)
+
+SELECT count(*) FROM zero_col_columnar;
+ count
+---------------------------------------------------------------------
+     2
+(1 row)
+
+EXPLAIN (costs off, summary off) SELECT * FROM zero_col_columnar;
+                   QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (ColumnarScan) on zero_col_columnar
+(1 row)
+
+INSERT INTO zero_col_columnar DEFAULT VALUES;
+INSERT INTO zero_col_columnar DEFAULT VALUES;
+INSERT INTO zero_col_columnar DEFAULT VALUES;
+SELECT * FROM zero_col_columnar;
+--
+(5 rows)
+
+SELECT count(*) FROM zero_col_columnar;
+ count
+---------------------------------------------------------------------
+     5
+(1 row)
+
+EXPLAIN (costs off, summary off) SELECT * FROM zero_col_columnar;
+                   QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (ColumnarScan) on zero_col_columnar
+(1 row)
+
+VACUUM VERBOSE zero_col_columnar;
+INFO:  statistics for "zero_col_columnar":
+storage id: xxxxx
+total file size: 16384, total data size: 0
+compression rate: 1.00x
+total row count: 5, stripe count: 4, average rows per stripe: 1
+chunk count: 0, containing data for dropped columns: 0
+
+ANALYZE zero_col_columnar;
+VACUUM FULL zero_col_columnar;
+SELECT * FROM zero_col_columnar;
+--
+(5 rows)
+
+TRUNCATE zero_col_columnar;
+SELECT * FROM zero_col_columnar;
+--
+(0 rows)
+
+DROP TABLE zero_col_columnar;
+CREATE TABLE zero_col_columnar(a int) USING columnar;
+INSERT INTO zero_col_columnar SELECT i FROM generate_series(1, 5) i;
+alter table zero_col_columnar drop column a;
+SELECT * FROM zero_col_columnar;
+--
+(5 rows)
+
+INSERT INTO zero_col_columnar DEFAULT VALUES;
+INSERT INTO zero_col_columnar DEFAULT VALUES;
+INSERT INTO zero_col_columnar DEFAULT VALUES;
+SELECT * FROM zero_col_columnar;
+--
+(8 rows)
+
+VACUUM VERBOSE zero_col_columnar;
+INFO:  statistics for "zero_col_columnar":
+storage id: xxxxx
+total file size: 49152, total data size: 60
+compression rate: 0.40x
+total row count: 8, stripe count: 4, average rows per stripe: 2
+chunk count: 4, containing data for dropped columns: 4, zstd compressed: 4
+
+ANALYZE zero_col_columnar;
+VACUUM FULL zero_col_columnar;
+SELECT * FROM zero_col_columnar;
+--
+(8 rows)
+
 SET client_min_messages TO WARNING;
 DROP SCHEMA columnar_alter CASCADE;
