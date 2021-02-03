@@ -1125,11 +1125,6 @@ ReplaceTable(Oid sourceId, Oid targetId, List *justBeforeDropCommands,
 									quote_qualified_identifier(schemaName, sourceName))));
 		}
 
-		/*
-		 * Since we wrap target columns with parenthesis, skip executing
-		 * INSERT .. SELECT if relation has no columns that require moving
-		 * data. Otherwise, postgres could error out.
-		 */
 		if (AnyColumnsRequireDataCopy(sourceId))
 		{
 			char *insertColumnString = BuildInsertColumnStringForReplaceTable(sourceId);
@@ -1137,8 +1132,20 @@ ReplaceTable(Oid sourceId, Oid targetId, List *justBeforeDropCommands,
 							 quote_qualified_identifier(schemaName, targetName),
 							 insertColumnString, insertColumnString,
 							 quote_qualified_identifier(schemaName, sourceName));
-			ExecuteQueryViaSPI(query->data, SPI_OK_INSERT);
 		}
+		else
+		{
+			/*
+			 * Even if all columns are dropped, postgres still prints "x rows"
+			 * without returning any rows. For compatibility, here we force
+			 * postgres to copy dead tuples.
+			 */
+			appendStringInfo(query, "INSERT INTO %s SELECT * FROM %s",
+							 quote_qualified_identifier(schemaName, targetName),
+							 quote_qualified_identifier(schemaName, sourceName));
+		}
+
+		ExecuteQueryViaSPI(query->data, SPI_OK_INSERT);
 	}
 
 #if PG_VERSION_NUM >= PG_VERSION_13

@@ -360,6 +360,8 @@ BEGIN;
 
   -- show that undistribute_table works fine
   SELECT undistribute_table('generated_stored_ref');
+
+  SELECT * FROM generated_stored_ref;
 ROLLBACK;
 
 RESET citus.replicate_reference_tables_on_activate;

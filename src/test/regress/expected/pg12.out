@@ -599,6 +599,10 @@ NOTICE:  Renaming the new table to test_pg12.generated_stored_ref
 
 (1 row)
 
+  SELECT * FROM generated_stored_ref;
+--
+(4 rows)
+
 ROLLBACK;
 RESET citus.replicate_reference_tables_on_activate;
 SELECT citus_remove_node('localhost', :master_port);
