@@ -80,7 +80,6 @@ extern WorkerNode * CoordinatorNodeIfAddedAsWorkerOrError(void);
 extern void ErrorIfCoordinatorNotAddedAsWorkerNode(void);
 extern List * DistributedTablePlacementNodeList(LOCKMODE lockMode);
 extern bool NodeCanHaveDistTablePlacements(WorkerNode *node);
-extern uint32 ActiveReadableNonCoordinatorNodeCount(void);
 extern List * ActiveReadableNonCoordinatorNodeList(void);
 extern List * ActiveReadableNodeList(void);
 extern WorkerNode * FindWorkerNode(const char *nodeName, int32 nodePort);
