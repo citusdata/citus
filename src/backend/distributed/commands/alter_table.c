@@ -185,7 +185,7 @@ static void CreateCitusTableLike(TableConversionState *con);
 static List * GetViewCreationCommandsOfTable(Oid relationId);
 static void ReplaceTable(Oid sourceId, Oid targetId, List *justBeforeDropCommands,
 						 bool suppressNoticeMessages);
-static bool AnyColumnsRequireDataCopy(Oid relationId);
+static bool HasAnyGeneratedStoredColumns(Oid relationId);
 static char * BuildInsertColumnStringForReplaceTable(Oid relationId);
 static List * GetNonGeneratedStoredColumnNameList(Oid relationId);
 static void CheckAlterDistributedTableConversionParameters(TableConversionState *con);
@@ -1125,8 +1125,9 @@ ReplaceTable(Oid sourceId, Oid targetId, List *justBeforeDropCommands,
 									quote_qualified_identifier(schemaName, sourceName))));
 		}
 
-		if (AnyColumnsRequireDataCopy(sourceId))
+		if (HasAnyGeneratedStoredColumns(sourceId))
 		{
+			/* see comment in BuildInsertColumnStringForReplaceTable */
 			char *insertColumnString = BuildInsertColumnStringForReplaceTable(sourceId);
 			appendStringInfo(query, "INSERT INTO %s (%s) SELECT %s FROM %s",
 							 quote_qualified_identifier(schemaName, targetName),
@@ -1204,11 +1205,11 @@ ReplaceTable(Oid sourceId, Oid targetId, List *justBeforeDropCommands,
 
 
 /*
- * AnyColumnsRequireDataCopy decides if relation has any columns that we
+ * HasAnyGeneratedStoredColumns decides if relation has any columns that we
  * might need to copy the data of when replacing table.
  */
 static bool
-AnyColumnsRequireDataCopy(Oid relationId)
+HasAnyGeneratedStoredColumns(Oid relationId)
 {
 	return list_length(GetNonGeneratedStoredColumnNameList(relationId)) > 0;
 }
