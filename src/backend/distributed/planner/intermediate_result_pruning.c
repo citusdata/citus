@@ -406,17 +406,11 @@ LogIntermediateResultMulticastSummary(IntermediateResultsHashEntry *entry,
 	/*
 	 * Log a summary of decisions made for intermediate result multicast. By default
 	 * we log at level DEBUG4. When the user has set citus.log_intermediate_results
-	 * we change the log level to DEBUG1. This is mostly useful in regression tests
-	 * where we specifically want to debug this decisions, but not all DEBUG4 messages.
+	 * we log it regardless of the log level.
 	 */
 	int logLevel = DEBUG4;
 
-	if (LogIntermediateResults)
-	{
-		logLevel = DEBUG1;
-	}
-
-	if (IsLoggableLevel(logLevel))
+	if (LogIntermediateResults || IsLoggableLevel(logLevel))
 	{
 		if (entry->writeLocalFile)
 		{
