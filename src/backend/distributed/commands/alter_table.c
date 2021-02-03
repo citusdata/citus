@@ -186,7 +186,6 @@ static List * GetViewCreationCommandsOfTable(Oid relationId);
 static void ReplaceTable(Oid sourceId, Oid targetId, List *justBeforeDropCommands,
 						 bool suppressNoticeMessages);
 static bool HasAnyGeneratedStoredColumns(Oid relationId);
-static char * BuildInsertColumnStringForReplaceTable(Oid relationId);
 static List * GetNonGeneratedStoredColumnNameList(Oid relationId);
 static void CheckAlterDistributedTableConversionParameters(TableConversionState *con);
 static char * CreateWorkerChangeSequenceDependencyCommand(char *sequenceSchemaName,
@@ -1125,24 +1124,30 @@ ReplaceTable(Oid sourceId, Oid targetId, List *justBeforeDropCommands,
 									quote_qualified_identifier(schemaName, sourceName))));
 		}
 
-		if (HasAnyGeneratedStoredColumns(sourceId))
+		if (!HasAnyGeneratedStoredColumns(sourceId))
 		{
-			/* see comment in BuildInsertColumnStringForReplaceTable */
-			char *insertColumnString = BuildInsertColumnStringForReplaceTable(sourceId);
-			appendStringInfo(query, "INSERT INTO %s (%s) SELECT %s FROM %s",
+			/*
+			 * Relation has no GENERATED STORED columns, copy the table via plain
+			 * "INSERT INTO .. SELECT *"".
+			 */
+			appendStringInfo(query, "INSERT INTO %s SELECT * FROM %s",
 							 quote_qualified_identifier(schemaName, targetName),
-							 insertColumnString, insertColumnString,
 							 quote_qualified_identifier(schemaName, sourceName));
 		}
 		else
 		{
 			/*
-			 * Even if all columns are dropped, postgres still prints "x rows"
-			 * without returning any rows. For compatibility, here we force
-			 * postgres to copy dead tuples.
+			 * Skip columns having GENERATED ALWAYS AS (...) STORED expressions
+			 * since Postgres doesn't allow inserting into such columns.
+			 * This is not bad since Postgres would already generate such columns.
+			 * Note that here we intentionally don't skip columns having DEFAULT
+			 * expressions since user might have inserted non-default values.
 			 */
-			appendStringInfo(query, "INSERT INTO %s SELECT * FROM %s",
+			List *nonStoredColumnNameList = GetNonGeneratedStoredColumnNameList(sourceId);
+			char *insertColumnString = StringJoin(nonStoredColumnNameList, ',');
+			appendStringInfo(query, "INSERT INTO %s (%s) SELECT %s FROM %s",
 							 quote_qualified_identifier(schemaName, targetName),
+							 insertColumnString, insertColumnString,
 							 quote_qualified_identifier(schemaName, sourceName));
 		}
 
@@ -1212,26 +1217,6 @@ static bool
 HasAnyGeneratedStoredColumns(Oid relationId)
 {
 	return list_length(GetNonGeneratedStoredColumnNameList(relationId)) > 0;
-}
-
-
-/*
- * BuildInsertColumnStringForReplaceTable is a helper function that returns
- * comma seperated columns that we can insert into for ReplaceTable.
- */
-static char *
-BuildInsertColumnStringForReplaceTable(Oid relationId)
-{
-	/*
-	 * When copying data to temp table, we skip columns having GENERATED
-	 * ALWAYS AS (...) STORED expressions since Postgres doesn't allow
-	 * inserting into such columns. This is not bad since Postgres would
-	 * already generate such columns.
-	 * Note that here we intentionally don't skip columns having DEFAULT
-	 * expressions since user might have inserted non-default values.
-	 */
-	List *nonStoredColumnNameList = GetNonGeneratedStoredColumnNameList(relationId);
-	return StringJoin(nonStoredColumnNameList, ',');
 }
 
 
