@@ -87,8 +87,13 @@ fix_pre_citus10_partitioned_table_constraint_names(PG_FUNCTION_ARGS)
 	}
 
 	List *taskList = CreateFixPartitionConstraintsTaskList(relationId);
-	bool localExecutionSupported = true;
-	ExecuteUtilityTaskList(taskList, localExecutionSupported);
+
+	/* do not do anything if there are no constraints that should be fixed */
+	if (taskList != NIL)
+	{
+		bool localExecutionSupported = true;
+		ExecuteUtilityTaskList(taskList, localExecutionSupported);
+	}
 
 	PG_RETURN_VOID();
 }
