@@ -907,6 +907,18 @@ CreateTableConversion(TableConversionParameters *params)
 		ereport(ERROR, (errmsg("cannot complete operation "
 							   "because no such table exists")));
 	}
+
+	TupleDesc relationDesc = RelationGetDescr(relation);
+	if (RelationUsesIdentityColumns(relationDesc))
+	{
+		/*
+		 * pg_get_tableschemadef_string doesn't know how to deparse identity
+		 * columns so we cannot reflect those columns when creating table
+		 * from scratch. For this reason, error out here.
+		 */
+		ereport(ERROR, (errmsg("cannot complete operation since table has "
+							   "identity column")));
+	}
 	relation_close(relation, NoLock);
 	con->distributionKey =
 		BuildDistributionKeyFromColumnName(relation, con->distributionColumn);
