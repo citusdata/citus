@@ -249,6 +249,7 @@ extern void EnsureTableNotDistributed(Oid relationId);
 extern void EnsureReplicationSettings(Oid relationId, char replicationModel);
 extern void EnsureRelationExists(Oid relationId);
 extern bool RegularTable(Oid relationId);
+extern bool RelationUsesIdentityColumns(TupleDesc relationDesc);
 extern char * ConstructQualifiedShardName(ShardInterval *shardInterval);
 extern uint64 GetFirstShardId(Oid relationId);
 extern Datum StringToDatum(char *inputString, Oid dataType);
