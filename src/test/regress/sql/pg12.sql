@@ -311,6 +311,22 @@ INSERT INTO generated_stored_dist VALUES (1, 'text_1'), (2, 'text_2');
 SELECT alter_distributed_table('generated_stored_dist', shard_count := 5, cascade_to_colocated := false);
 SELECT * FROM generated_stored_dist ORDER BY 1,2,3;
 
+CREATE TABLE generated_stored_local (
+  col_1 int,
+  "col\'_2" text,
+  col_3 text generated always as (UPPER("col\'_2")) stored
+);
+
+SELECT citus_add_local_table_to_metadata('generated_stored_local');
+
+INSERT INTO generated_stored_local VALUES (1, 'text_1'), (2, 'text_2');
+SELECT * FROM generated_stored_local ORDER BY 1,2,3;
+
+SELECT create_distributed_table ('generated_stored_local', 'col_1');
+
+INSERT INTO generated_stored_local VALUES (1, 'text_1'), (2, 'text_2');
+SELECT * FROM generated_stored_local ORDER BY 1,2,3;
+
 create table generated_stored_columnar(i int) partition by range(i);
 create table generated_stored_columnar_p0 partition of generated_stored_columnar for values from (0) to (10);
 create table generated_stored_columnar_p1 partition of generated_stored_columnar for values from (10) to (20);
