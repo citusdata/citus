@@ -450,6 +450,156 @@ BEGIN;
 (2 rows)
 
 ROLLBACK;
+CREATE TABLE generated_stored_dist (
+  col_1 int,
+  "col\'_2" text,
+  col_3 text generated always as (UPPER("col\'_2")) stored
+);
+SELECT create_distributed_table ('generated_stored_dist', 'col_1');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO generated_stored_dist VALUES (1, 'text_1'), (2, 'text_2');
+SELECT * FROM generated_stored_dist ORDER BY 1,2,3;
+ col_1 | col\'_2 | col_3
+---------------------------------------------------------------------
+     1 | text_1  | TEXT_1
+     2 | text_2  | TEXT_2
+(2 rows)
+
+INSERT INTO generated_stored_dist VALUES (1, 'text_1'), (2, 'text_2');
+SELECT alter_distributed_table('generated_stored_dist', shard_count := 5, cascade_to_colocated := false);
+NOTICE:  creating a new table for test_pg12.generated_stored_dist
+NOTICE:  Moving the data of test_pg12.generated_stored_dist
+NOTICE:  Dropping the old test_pg12.generated_stored_dist
+NOTICE:  Renaming the new table to test_pg12.generated_stored_dist
+ alter_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT * FROM generated_stored_dist ORDER BY 1,2,3;
+ col_1 | col\'_2 | col_3
+---------------------------------------------------------------------
+     1 | text_1  | TEXT_1
+     1 | text_1  | TEXT_1
+     2 | text_2  | TEXT_2
+     2 | text_2  | TEXT_2
+(4 rows)
+
+create table generated_stored_columnar(i int) partition by range(i);
+create table generated_stored_columnar_p0 partition of generated_stored_columnar for values from (0) to (10);
+create table generated_stored_columnar_p1 partition of generated_stored_columnar for values from (10) to (20);
+SELECT alter_table_set_access_method('generated_stored_columnar_p0', 'columnar');
+NOTICE:  creating a new table for test_pg12.generated_stored_columnar_p0
+NOTICE:  Moving the data of test_pg12.generated_stored_columnar_p0
+NOTICE:  Dropping the old test_pg12.generated_stored_columnar_p0
+NOTICE:  Renaming the new table to test_pg12.generated_stored_columnar_p0
+ alter_table_set_access_method
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE generated_stored_ref (
+  col_1 int,
+  col_2 int,
+  col_3 int generated always as (col_1+col_2) stored,
+  col_4 int,
+  col_5 int generated always as (col_4*2-col_1) stored
+);
+SELECT create_reference_table ('generated_stored_ref');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO generated_stored_ref (col_1, col_4) VALUES (1,2), (11,12);
+INSERT INTO generated_stored_ref (col_1, col_2, col_4) VALUES (100,101,102), (200,201,202);
+SELECT * FROM generated_stored_ref ORDER BY 1,2,3,4,5;
+ col_1 | col_2 | col_3 | col_4 | col_5
+---------------------------------------------------------------------
+     1 |       |       |     2 |     3
+    11 |       |       |    12 |    13
+   100 |   101 |   201 |   102 |   104
+   200 |   201 |   401 |   202 |   204
+(4 rows)
+
+BEGIN;
+  SELECT undistribute_table('generated_stored_ref');
+NOTICE:  creating a new table for test_pg12.generated_stored_ref
+NOTICE:  Moving the data of test_pg12.generated_stored_ref
+NOTICE:  Dropping the old test_pg12.generated_stored_ref
+NOTICE:  Renaming the new table to test_pg12.generated_stored_ref
+ undistribute_table
+---------------------------------------------------------------------
+
+(1 row)
+
+  INSERT INTO generated_stored_ref (col_1, col_4) VALUES (11,12), (21,22);
+  INSERT INTO generated_stored_ref (col_1, col_2, col_4) VALUES (200,201,202), (300,301,302);
+  SELECT * FROM generated_stored_ref ORDER BY 1,2,3,4,5;
+ col_1 | col_2 | col_3 | col_4 | col_5
+---------------------------------------------------------------------
+     1 |       |       |     2 |     3
+    11 |       |       |    12 |    13
+    11 |       |       |    12 |    13
+    21 |       |       |    22 |    23
+   100 |   101 |   201 |   102 |   104
+   200 |   201 |   401 |   202 |   204
+   200 |   201 |   401 |   202 |   204
+   300 |   301 |   601 |   302 |   304
+(8 rows)
+
+ROLLBACK;
+BEGIN;
+  -- drop some of the columns not having "generated always as stored" expressions
+  -- this would drop generated columns too
+  ALTER TABLE generated_stored_ref DROP COLUMN col_1;
+  ALTER TABLE generated_stored_ref DROP COLUMN col_4;
+  -- show that undistribute_table works fine
+  SELECT undistribute_table('generated_stored_ref');
+NOTICE:  creating a new table for test_pg12.generated_stored_ref
+NOTICE:  Moving the data of test_pg12.generated_stored_ref
+NOTICE:  Dropping the old test_pg12.generated_stored_ref
+NOTICE:  Renaming the new table to test_pg12.generated_stored_ref
+ undistribute_table
+---------------------------------------------------------------------
+
+(1 row)
+
+  INSERT INTO generated_stored_ref VALUES (5);
+  SELECT * FROM generated_stored_REF ORDER BY 1;
+ col_2
+---------------------------------------------------------------------
+     5
+   101
+   201
+
+
+(5 rows)
+
+ROLLBACK;
+BEGIN;
+  -- now drop all columns
+  ALTER TABLE generated_stored_ref DROP COLUMN col_3;
+  ALTER TABLE generated_stored_ref DROP COLUMN col_5;
+  ALTER TABLE generated_stored_ref DROP COLUMN col_1;
+  ALTER TABLE generated_stored_ref DROP COLUMN col_2;
+  ALTER TABLE generated_stored_ref DROP COLUMN col_4;
+  -- show that undistribute_table works fine
+  SELECT undistribute_table('generated_stored_ref');
+NOTICE:  creating a new table for test_pg12.generated_stored_ref
+NOTICE:  Moving the data of test_pg12.generated_stored_ref
+NOTICE:  Dropping the old test_pg12.generated_stored_ref
+NOTICE:  Renaming the new table to test_pg12.generated_stored_ref
+ undistribute_table
+---------------------------------------------------------------------
+
+(1 row)
+
+ROLLBACK;
 RESET citus.replicate_reference_tables_on_activate;
 SELECT citus_remove_node('localhost', :master_port);
  citus_remove_node
@@ -459,6 +609,6 @@ SELECT citus_remove_node('localhost', :master_port);
 
 \set VERBOSITY terse
 drop schema test_pg12 cascade;
-NOTICE:  drop cascades to 10 other objects
+NOTICE:  drop cascades to 14 other objects
 \set VERBOSITY default
 SET citus.shard_replication_factor to 2;

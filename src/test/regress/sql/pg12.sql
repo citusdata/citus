@@ -296,6 +296,72 @@ BEGIN;
   ORDER BY 1,2;
 ROLLBACK;
 
+CREATE TABLE generated_stored_dist (
+  col_1 int,
+  "col\'_2" text,
+  col_3 text generated always as (UPPER("col\'_2")) stored
+);
+
+SELECT create_distributed_table ('generated_stored_dist', 'col_1');
+
+INSERT INTO generated_stored_dist VALUES (1, 'text_1'), (2, 'text_2');
+SELECT * FROM generated_stored_dist ORDER BY 1,2,3;
+
+INSERT INTO generated_stored_dist VALUES (1, 'text_1'), (2, 'text_2');
+SELECT alter_distributed_table('generated_stored_dist', shard_count := 5, cascade_to_colocated := false);
+SELECT * FROM generated_stored_dist ORDER BY 1,2,3;
+
+create table generated_stored_columnar(i int) partition by range(i);
+create table generated_stored_columnar_p0 partition of generated_stored_columnar for values from (0) to (10);
+create table generated_stored_columnar_p1 partition of generated_stored_columnar for values from (10) to (20);
+SELECT alter_table_set_access_method('generated_stored_columnar_p0', 'columnar');
+
+CREATE TABLE generated_stored_ref (
+  col_1 int,
+  col_2 int,
+  col_3 int generated always as (col_1+col_2) stored,
+  col_4 int,
+  col_5 int generated always as (col_4*2-col_1) stored
+);
+
+SELECT create_reference_table ('generated_stored_ref');
+
+INSERT INTO generated_stored_ref (col_1, col_4) VALUES (1,2), (11,12);
+INSERT INTO generated_stored_ref (col_1, col_2, col_4) VALUES (100,101,102), (200,201,202);
+
+SELECT * FROM generated_stored_ref ORDER BY 1,2,3,4,5;
+
+BEGIN;
+  SELECT undistribute_table('generated_stored_ref');
+  INSERT INTO generated_stored_ref (col_1, col_4) VALUES (11,12), (21,22);
+  INSERT INTO generated_stored_ref (col_1, col_2, col_4) VALUES (200,201,202), (300,301,302);
+  SELECT * FROM generated_stored_ref ORDER BY 1,2,3,4,5;
+ROLLBACK;
+
+BEGIN;
+  -- drop some of the columns not having "generated always as stored" expressions
+  -- this would drop generated columns too
+  ALTER TABLE generated_stored_ref DROP COLUMN col_1;
+  ALTER TABLE generated_stored_ref DROP COLUMN col_4;
+
+  -- show that undistribute_table works fine
+  SELECT undistribute_table('generated_stored_ref');
+  INSERT INTO generated_stored_ref VALUES (5);
+  SELECT * FROM generated_stored_REF ORDER BY 1;
+ROLLBACK;
+
+BEGIN;
+  -- now drop all columns
+  ALTER TABLE generated_stored_ref DROP COLUMN col_3;
+  ALTER TABLE generated_stored_ref DROP COLUMN col_5;
+  ALTER TABLE generated_stored_ref DROP COLUMN col_1;
+  ALTER TABLE generated_stored_ref DROP COLUMN col_2;
+  ALTER TABLE generated_stored_ref DROP COLUMN col_4;
+
+  -- show that undistribute_table works fine
+  SELECT undistribute_table('generated_stored_ref');
+ROLLBACK;
+
 RESET citus.replicate_reference_tables_on_activate;
 SELECT citus_remove_node('localhost', :master_port);
 

@@ -837,41 +837,5 @@ SELECT * FROM mat_view ORDER BY a;
  2 | 2
 (2 rows)
 
-CREATE TABLE distributed_table_1 (
-  col_1 int,
-  "col\'_2" text,
-  col_3 text generated always as (UPPER("col\'_2")) stored
-);
-SELECT create_distributed_table ('distributed_table_1', 'col_1');
- create_distributed_table
----------------------------------------------------------------------
-
-(1 row)
-
-INSERT INTO distributed_table_1 VALUES (1, 'text_1'), (2, 'text_2');
-SELECT * FROM distributed_table_1 ORDER BY 1,2,3;
- col_1 | col\'_2 | col_3
----------------------------------------------------------------------
-     1 | text_1  | TEXT_1
-     2 | text_2  | TEXT_2
-(2 rows)
-
-SELECT alter_distributed_table('distributed_table_1', shard_count := 5, cascade_to_colocated := false);
-NOTICE:  creating a new table for alter_distributed_table.distributed_table_1
-NOTICE:  Moving the data of alter_distributed_table.distributed_table_1
-NOTICE:  Dropping the old alter_distributed_table.distributed_table_1
-NOTICE:  Renaming the new table to alter_distributed_table.distributed_table_1
- alter_distributed_table
----------------------------------------------------------------------
-
-(1 row)
-
-SELECT * FROM distributed_table_1 ORDER BY 1,2,3;
- col_1 | col\'_2 | col_3
----------------------------------------------------------------------
-     1 | text_1  | TEXT_1
-     2 | text_2  | TEXT_2
-(2 rows)
-
 SET client_min_messages TO WARNING;
 DROP SCHEMA alter_distributed_table CASCADE;

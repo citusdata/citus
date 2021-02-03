@@ -128,50 +128,6 @@ SELECT undistribute_table('view_table');
 SELECT schemaname, viewname, viewowner, definition FROM pg_views WHERE viewname LIKE 'undis\_view%' ORDER BY viewname;
 SELECT * FROM another_schema.undis_view3 ORDER BY 1, 2;
 
-CREATE TABLE reference_table_1 (
-  col_1 int,
-  col_2 int,
-  col_3 int generated always as (col_1+col_2) stored,
-  col_4 int,
-  col_5 int generated always as (col_4*2-col_1) stored
-);
-
-SELECT create_reference_table ('reference_table_1');
-
-INSERT INTO reference_table_1 (col_1, col_4) VALUES (1,2), (11,12);
-INSERT INTO reference_table_1 (col_1, col_2, col_4) VALUES (100,101,102), (200,201,202);
-
-SELECT * FROM reference_table_1 ORDER BY 1,2,3,4,5;
-
-BEGIN;
-  SELECT undistribute_table('reference_table_1');
-  INSERT INTO reference_table_1 (col_1, col_2, col_4) VALUES (200,201,202), (300,301,302);
-  SELECT * FROM reference_table_1 ORDER BY 1,2,3,4,5;
-ROLLBACK;
-
-BEGIN;
-  -- drop some of the columns not having "generated always as stored" expressions
-  -- this would drop generated columns too
-  ALTER TABLE reference_table_1 DROP COLUMN col_1;
-  ALTER TABLE reference_table_1 DROP COLUMN col_4;
-
-  -- show that undistribute_table works fine
-  SELECT undistribute_table('reference_table_1');
-  SELECT * FROM reference_table_1 ORDER BY 1;
-ROLLBACK;
-
-BEGIN;
-  -- now drop all columns
-  ALTER TABLE reference_table_1 DROP COLUMN col_3;
-  ALTER TABLE reference_table_1 DROP COLUMN col_5;
-  ALTER TABLE reference_table_1 DROP COLUMN col_1;
-  ALTER TABLE reference_table_1 DROP COLUMN col_2;
-  ALTER TABLE reference_table_1 DROP COLUMN col_4;
-
-  -- show that undistribute_table works fine
-  SELECT undistribute_table('reference_table_1');
-ROLLBACK;
-
 DROP TABLE view_table CASCADE;
 
 DROP SCHEMA undistribute_table, another_schema CASCADE;

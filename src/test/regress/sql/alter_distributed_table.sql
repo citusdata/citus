@@ -280,19 +280,5 @@ CREATE MATERIALIZED VIEW mat_view AS SELECT * FROM mat_view_test;
 SELECT alter_distributed_table('mat_view_test', shard_count := 5, cascade_to_colocated := false);
 SELECT * FROM mat_view ORDER BY a;
 
-CREATE TABLE distributed_table_1 (
-  col_1 int,
-  "col\'_2" text,
-  col_3 text generated always as (UPPER("col\'_2")) stored
-);
-
-SELECT create_distributed_table ('distributed_table_1', 'col_1');
-
-INSERT INTO distributed_table_1 VALUES (1, 'text_1'), (2, 'text_2');
-SELECT * FROM distributed_table_1 ORDER BY 1,2,3;
-
-SELECT alter_distributed_table('distributed_table_1', shard_count := 5, cascade_to_colocated := false);
-SELECT * FROM distributed_table_1 ORDER BY 1,2,3;
-
 SET client_min_messages TO WARNING;
 DROP SCHEMA alter_distributed_table CASCADE;
