@@ -918,8 +918,10 @@ CreateTableConversion(TableConversionParameters *params)
 		 * columns so we cannot reflect those columns when creating table
 		 * from scratch. For this reason, error out here.
 		 */
-		ereport(ERROR, (errmsg("cannot complete operation since table has "
-							   "identity column")));
+		ereport(ERROR, (errmsg("cannot complete command because relation "
+							   "%s has identity column",
+							   generate_qualified_relation_name(con->relationId)),
+						errhint("Drop the identity columns and re-try the command")));
 	}
 	relation_close(relation, NoLock);
 	con->distributionKey =
