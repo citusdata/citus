@@ -181,13 +181,13 @@ ChooseIndexColumnNames(List *indexElems)
 			{
 				break;          /* found nonconflicting name */
 			}
-			sprintf(nbuf, "%d", i);
+			sprintf(nbuf, "%d", i); /* lgtm[cpp/banned-api-usage-required-any] */
 
 			/* Ensure generated names are shorter than NAMEDATALEN */
 			nlen = pg_mbcliplen(origname, strlen(origname),
 								NAMEDATALEN - 1 - strlen(nbuf));
-			memcpy(buf, origname, nlen);
-			strcpy(buf + nlen, nbuf);
+			memcpy(buf, origname, nlen); /* lgtm[cpp/banned-api-usage-required-any] */
+			strcpy(buf + nlen, nbuf); /* lgtm[cpp/banned-api-usage-required-any] */
 			curname = buf;
 		}
 
