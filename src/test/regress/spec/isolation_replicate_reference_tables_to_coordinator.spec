@@ -88,8 +88,8 @@ step "s2-view-dist"
 
 step "s2-view-worker"
 {
-	SELECT query, query_hostname, query_hostport, master_query_host_name,
-           master_query_host_port, state, wait_event_type, wait_event, usename, datname
+	SELECT query, query_hostname, query_hostport, distributed_query_host_name,
+           distributed_query_host_port, state, wait_event_type, wait_event, usename, datname
     FROM citus_worker_stat_activity
     WHERE query NOT ILIKE '%pg_prepared_xacts%' AND
           query NOT ILIKE '%COMMIT%' AND
