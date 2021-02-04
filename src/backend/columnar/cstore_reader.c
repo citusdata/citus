@@ -529,7 +529,7 @@ SelectedChunkMask(StripeSkipList *stripeSkipList, List *projectedColumnList,
 #else
 			predicateRefuted = predicate_refuted_by(constraintList, restrictInfoList);
 #endif
-			if (predicateRefuted)
+			if (predicateRefuted && selectedChunkMask[chunkIndex])
 			{
 				selectedChunkMask[chunkIndex] = false;
 				*chunksFiltered += 1;
