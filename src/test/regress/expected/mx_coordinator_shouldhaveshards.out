@@ -1,0 +1,185 @@
+CREATE SCHEMA mx_coordinator_shouldhaveshards;
+SET search_path TO mx_coordinator_shouldhaveshards;
+SET citus.shard_replication_factor to 1;
+SET citus.replication_model TO streaming;
+SET client_min_messages TO WARNING;
+SELECT 1 FROM master_add_node('localhost', :master_port, groupid => 0);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+RESET client_min_messages;
+SELECT 1 FROM master_set_node_property('localhost', :master_port, 'shouldhaveshards', true);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+-- issue 4508 table_1 and table_2 are used to test some edge cases
+-- around intermediate result pruning
+CREATE TABLE table_1 (key int, value text);
+SELECT create_distributed_table('table_1', 'key', colocate_with := 'none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE table_2 (key int, value text);
+SELECT create_distributed_table('table_2', 'key', colocate_with := 'none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO table_1    VALUES (1, '1'), (2, '2'), (3, '3'), (4, '4');
+INSERT INTO table_2    VALUES (1, '1'), (2, '2'), (3, '3'), (4, '4'), (5, '5'), (6, '6');
+set citus.log_intermediate_results TO ON;
+set client_min_messages to debug1;
+WITH a AS (SELECT * FROM table_1 ORDER BY 1,2 DESC LIMIT 1)
+SELECT count(*),
+key
+FROM a JOIN table_2 USING (key)
+GROUP BY key
+HAVING (max(table_2.value) >= (SELECT value FROM a));
+DEBUG:  generating subplan XXX_1 for CTE a: SELECT key, value FROM mx_coordinator_shouldhaveshards.table_1 ORDER BY key, value DESC LIMIT 1
+DEBUG:  push down of limit count: 1
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count, a.key FROM ((SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) a JOIN mx_coordinator_shouldhaveshards.table_2 USING (key)) GROUP BY a.key HAVING (max(table_2.value) OPERATOR(pg_catalog.>=) (SELECT a_1.value FROM (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) a_1))
+DEBUG:  Subplan XXX_1 will be written to local file
+DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
+DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
+ count | key
+---------------------------------------------------------------------
+     1 |   1
+(1 row)
+
+WITH a AS (SELECT * FROM table_1 ORDER BY 1,2 DESC LIMIT 1)
+INSERT INTO table_1 SELECT count(*),
+key
+FROM a JOIN table_2 USING (key)
+GROUP BY key
+HAVING (max(table_2.value) >= (SELECT value FROM a));
+DEBUG:  Group by list without distribution column is not allowed  in distributed INSERT ... SELECT queries
+DEBUG:  generating subplan XXX_1 for CTE a: SELECT key, value FROM mx_coordinator_shouldhaveshards.table_1 ORDER BY key, value DESC LIMIT 1
+DEBUG:  push down of limit count: 1
+DEBUG:  generating subplan XXX_2 for subquery SELECT count(*) AS count, a.key FROM ((SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) a JOIN mx_coordinator_shouldhaveshards.table_2 USING (key)) GROUP BY a.key HAVING (max(table_2.value) OPERATOR(pg_catalog.>=) (SELECT a_1.value FROM (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) a_1))
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT int4(count) AS key, (key)::text AS value FROM (SELECT intermediate_result.count, intermediate_result.key FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(count bigint, key integer)) citus_insert_select_subquery
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
+DEBUG:  Subplan XXX_1 will be written to local file
+DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
+DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
+DEBUG:  Subplan XXX_2 will be written to local file
+WITH stats AS (
+  SELECT count(key) m FROM table_1
+),
+inserts AS (
+  INSERT INTO table_2
+  SELECT key, count(*)
+  FROM table_1
+  WHERE key >= (SELECT m FROM stats)
+  GROUP BY key
+  HAVING count(*) <= (SELECT m FROM stats)
+  LIMIT 1
+  RETURNING *
+) SELECT count(*) FROM inserts;
+DEBUG:  generating subplan XXX_1 for CTE stats: SELECT count(key) AS m FROM mx_coordinator_shouldhaveshards.table_1
+DEBUG:  generating subplan XXX_2 for CTE inserts: INSERT INTO mx_coordinator_shouldhaveshards.table_2 (key, value) SELECT key, count(*) AS count FROM mx_coordinator_shouldhaveshards.table_1 WHERE (key OPERATOR(pg_catalog.>=) (SELECT stats.m FROM (SELECT intermediate_result.m FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(m bigint)) stats)) GROUP BY key HAVING (count(*) OPERATOR(pg_catalog.<=) (SELECT stats.m FROM (SELECT intermediate_result.m FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(m bigint)) stats)) LIMIT 1 RETURNING table_2.key, table_2.value
+DEBUG:  LIMIT clauses are not allowed in distributed INSERT ... SELECT queries
+DEBUG:  push down of limit count: 1
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) inserts
+DEBUG:  Subplan XXX_1 will be written to local file
+DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
+DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
+DEBUG:  Subplan XXX_2 will be written to local file
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+\c - - - :worker_1_port
+SET search_path TO mx_coordinator_shouldhaveshards;
+set citus.log_intermediate_results TO ON;
+set client_min_messages to debug1;
+WITH a AS (SELECT * FROM table_1 ORDER BY 1,2 DESC LIMIT 1)
+SELECT count(*),
+key
+FROM a JOIN table_2 USING (key)
+GROUP BY key
+HAVING (max(table_2.value) >= (SELECT value FROM a));
+DEBUG:  generating subplan XXX_1 for CTE a: SELECT key, value FROM mx_coordinator_shouldhaveshards.table_1 ORDER BY key, value DESC LIMIT 1
+DEBUG:  push down of limit count: 1
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count, a.key FROM ((SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) a JOIN mx_coordinator_shouldhaveshards.table_2 USING (key)) GROUP BY a.key HAVING (max(table_2.value) OPERATOR(pg_catalog.>=) (SELECT a_1.value FROM (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) a_1))
+DEBUG:  Subplan XXX_1 will be written to local file
+DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
+DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
+ count | key
+---------------------------------------------------------------------
+     1 |   1
+(1 row)
+
+WITH a AS (SELECT * FROM table_1 ORDER BY 1,2 DESC LIMIT 1)
+INSERT INTO table_1 SELECT count(*),
+key
+FROM a JOIN table_2 USING (key)
+GROUP BY key
+HAVING (max(table_2.value) >= (SELECT value FROM a));
+DEBUG:  Group by list without distribution column is not allowed  in distributed INSERT ... SELECT queries
+DEBUG:  generating subplan XXX_1 for CTE a: SELECT key, value FROM mx_coordinator_shouldhaveshards.table_1 ORDER BY key, value DESC LIMIT 1
+DEBUG:  push down of limit count: 1
+DEBUG:  generating subplan XXX_2 for subquery SELECT count(*) AS count, a.key FROM ((SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) a JOIN mx_coordinator_shouldhaveshards.table_2 USING (key)) GROUP BY a.key HAVING (max(table_2.value) OPERATOR(pg_catalog.>=) (SELECT a_1.value FROM (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) a_1))
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT int4(count) AS key, (key)::text AS value FROM (SELECT intermediate_result.count, intermediate_result.key FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(count bigint, key integer)) citus_insert_select_subquery
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
+DEBUG:  Subplan XXX_1 will be written to local file
+DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
+DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
+DEBUG:  Subplan XXX_2 will be written to local file
+WITH stats AS (
+  SELECT count(key) m FROM table_1
+),
+inserts AS (
+  INSERT INTO table_2
+  SELECT key, count(*)
+  FROM table_1
+  WHERE key >= (SELECT m FROM stats)
+  GROUP BY key
+  HAVING count(*) <= (SELECT m FROM stats)
+  LIMIT 1
+  RETURNING *
+) SELECT count(*) FROM inserts;
+DEBUG:  generating subplan XXX_1 for CTE stats: SELECT count(key) AS m FROM mx_coordinator_shouldhaveshards.table_1
+DEBUG:  generating subplan XXX_2 for CTE inserts: INSERT INTO mx_coordinator_shouldhaveshards.table_2 (key, value) SELECT key, count(*) AS count FROM mx_coordinator_shouldhaveshards.table_1 WHERE (key OPERATOR(pg_catalog.>=) (SELECT stats.m FROM (SELECT intermediate_result.m FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(m bigint)) stats)) GROUP BY key HAVING (count(*) OPERATOR(pg_catalog.<=) (SELECT stats.m FROM (SELECT intermediate_result.m FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(m bigint)) stats)) LIMIT 1 RETURNING table_2.key, table_2.value
+DEBUG:  LIMIT clauses are not allowed in distributed INSERT ... SELECT queries
+DEBUG:  push down of limit count: 1
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) inserts
+DEBUG:  Subplan XXX_1 will be written to local file
+DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
+DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
+DEBUG:  Subplan XXX_2 will be written to local file
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+\c - - - :master_port
+SELECT 1 FROM master_set_node_property('localhost', :master_port, 'shouldhaveshards', false);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+DROP SCHEMA mx_coordinator_shouldhaveshards CASCADE;
+NOTICE:  drop cascades to 6 other objects
+DETAIL:  drop cascades to table mx_coordinator_shouldhaveshards.table_1
+drop cascades to table mx_coordinator_shouldhaveshards.table_1_1130052
+drop cascades to table mx_coordinator_shouldhaveshards.table_1_1130055
+drop cascades to table mx_coordinator_shouldhaveshards.table_2
+drop cascades to table mx_coordinator_shouldhaveshards.table_2_1130056
+drop cascades to table mx_coordinator_shouldhaveshards.table_2_1130059
+SELECT master_remove_node('localhost', :master_port);
+ master_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+

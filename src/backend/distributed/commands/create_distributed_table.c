@@ -122,7 +122,6 @@ static void DropFKeysRelationInvolvedWithTableType(Oid relationId, int tableType
 static bool LocalTableEmpty(Oid tableId);
 static void CopyLocalDataIntoShards(Oid relationId);
 static List * TupleDescColumnNameList(TupleDesc tupleDescriptor);
-static bool RelationUsesIdentityColumns(TupleDesc relationDesc);
 static bool DistributionColumnUsesGeneratedStoredColumn(TupleDesc relationDesc,
 														Var *distributionColumn);
 static bool CanUseExclusiveConnections(Oid relationId, bool localTableEmpty);
@@ -1636,7 +1635,7 @@ TupleDescColumnNameList(TupleDesc tupleDescriptor)
  * RelationUsesIdentityColumns returns whether a given relation uses
  * GENERATED ... AS IDENTITY
  */
-static bool
+bool
 RelationUsesIdentityColumns(TupleDesc relationDesc)
 {
 	for (int attributeIndex = 0; attributeIndex < relationDesc->natts; attributeIndex++)

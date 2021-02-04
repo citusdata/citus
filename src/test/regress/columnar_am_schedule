@@ -8,6 +8,7 @@ test: am_query
 test: am_analyze
 test: am_data_types
 test: am_drop
+test: am_indexes
 test: columnar_fallback_scan
 test: columnar_partitioning
 test: am_empty

@@ -105,6 +105,7 @@ static void SetUpDistributedTableDependencies(WorkerNode *workerNode);
 static WorkerNode * TupleToWorkerNode(TupleDesc tupleDescriptor, HeapTuple heapTuple);
 static void PropagateNodeWideObjects(WorkerNode *newWorkerNode);
 static WorkerNode * ModifiableWorkerNode(const char *nodeName, int32 nodePort);
+static bool NodeIsLocal(WorkerNode *worker);
 static void SetLockTimeoutLocally(int32 lock_cooldown);
 static void UpdateNodeLocation(int32 nodeId, char *newNodeName, int32 newNodePort);
 static bool UnsetMetadataSyncedForAll(void);
@@ -696,6 +697,17 @@ GroupForNode(char *nodeName, int nodePort)
 
 
 /*
+ * NodeIsPrimaryAndLocal returns whether the argument represents the local
+ * primary node.
+ */
+bool
+NodeIsPrimaryAndRemote(WorkerNode *worker)
+{
+	return NodeIsPrimary(worker) && !NodeIsLocal(worker);
+}
+
+
+/*
  * NodeIsPrimary returns whether the argument represents a primary node.
  */
 bool
@@ -710,6 +722,16 @@ NodeIsPrimary(WorkerNode *worker)
 	}
 
 	return worker->nodeRole == primaryRole;
+}
+
+
+/*
+ * NodeIsLocal returns whether the argument represents the local node.
+ */
+static bool
+NodeIsLocal(WorkerNode *worker)
+{
+	return worker->groupId == GetLocalGroupId();
 }
 
 

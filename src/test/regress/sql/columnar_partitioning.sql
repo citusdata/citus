@@ -53,3 +53,75 @@ SET max_parallel_workers TO DEFAULT;
 SET max_parallel_workers_per_gather TO DEFAULT;
 
 DROP TABLE parent;
+
+--
+-- Test inheritance
+--
+
+CREATE TABLE i_row(i int);
+INSERT INTO i_row VALUES(100);
+CREATE TABLE i_col(i int) USING columnar;
+INSERT INTO i_col VALUES(200);
+CREATE TABLE ij_row_row(j int) INHERITS(i_row);
+INSERT INTO ij_row_row VALUES(300, 1000);
+CREATE TABLE ij_row_col(j int) INHERITS(i_row) USING columnar;
+INSERT INTO ij_row_col VALUES(400, 2000);
+CREATE TABLE ij_col_row(j int) INHERITS(i_col);
+INSERT INTO ij_col_row VALUES(500, 3000);
+CREATE TABLE ij_col_col(j int) INHERITS(i_col) USING columnar;
+INSERT INTO ij_col_col VALUES(600, 4000);
+
+EXPLAIN (costs off) SELECT * FROM i_row;
+SELECT * FROM i_row;
+
+EXPLAIN (costs off) SELECT * FROM ONLY i_row;
+SELECT * FROM ONLY i_row;
+
+EXPLAIN (costs off) SELECT * FROM i_col;
+SELECT * FROM i_col;
+
+EXPLAIN (costs off) SELECT * FROM ONLY i_col;
+SELECT * FROM ONLY i_col;
+
+EXPLAIN (costs off) SELECT * FROM ij_row_row;
+SELECT * FROM ij_row_row;
+
+EXPLAIN (costs off) SELECT * FROM ij_row_col;
+SELECT * FROM ij_row_col;
+
+EXPLAIN (costs off) SELECT * FROM ij_col_row;
+SELECT * FROM ij_col_row;
+
+EXPLAIN (costs off) SELECT * FROM ij_col_col;
+SELECT * FROM ij_col_col;
+
+SET columnar.enable_custom_scan = FALSE;
+
+EXPLAIN (costs off) SELECT * FROM i_row;
+SELECT * FROM i_row;
+
+EXPLAIN (costs off) SELECT * FROM ONLY i_row;
+SELECT * FROM ONLY i_row;
+
+EXPLAIN (costs off) SELECT * FROM i_col;
+SELECT * FROM i_col;
+
+EXPLAIN (costs off) SELECT * FROM ONLY i_col;
+SELECT * FROM ONLY i_col;
+
+EXPLAIN (costs off) SELECT * FROM ij_row_row;
+SELECT * FROM ij_row_row;
+
+EXPLAIN (costs off) SELECT * FROM ij_row_col;
+SELECT * FROM ij_row_col;
+
+EXPLAIN (costs off) SELECT * FROM ij_col_row;
+SELECT * FROM ij_col_row;
+
+EXPLAIN (costs off) SELECT * FROM ij_col_col;
+SELECT * FROM ij_col_col;
+
+SET columnar.enable_custom_scan TO DEFAULT;
+
+DROP TABLE i_row CASCADE;
+DROP TABLE i_col CASCADE;

@@ -32,7 +32,7 @@ bool LogIntermediateResults = false;
 static List * FindSubPlansUsedInNode(Node *node, SubPlanAccessType accessType);
 static void AppendAllAccessedWorkerNodes(IntermediateResultsHashEntry *entry,
 										 DistributedPlan *distributedPlan,
-										 int workerNodeCount);
+										 int nodeCount);
 static void AppendAllWorkerNodes(IntermediateResultsHashEntry *entry);
 static List * FindAllRemoteWorkerNodesUsingSubplan(IntermediateResultsHashEntry *entry);
 static List * RemoveLocalNodeFromWorkerList(List *workerNodeList);
@@ -154,7 +154,7 @@ RecordSubplanExecutionsOnNodes(HTAB *intermediateResultsHash,
 	List *usedSubPlanNodeList = distributedPlan->usedSubPlanNodeList;
 	List *subPlanList = distributedPlan->subPlanList;
 	ListCell *subPlanCell = NULL;
-	int workerNodeCount = ActiveReadableNonCoordinatorNodeCount();
+	int nodeCount = list_length(ActiveReadableNodeList());
 
 	foreach(subPlanCell, usedSubPlanNodeList)
 	{
@@ -170,7 +170,7 @@ RecordSubplanExecutionsOnNodes(HTAB *intermediateResultsHash,
 		 * will be written to a local file and sent to all nodes. Note that the
 		 * remaining subplans in the distributed plan should still be traversed.
 		 */
-		if (list_length(entry->nodeIdList) == workerNodeCount && entry->writeLocalFile)
+		if (list_length(entry->nodeIdList) == nodeCount && entry->writeLocalFile)
 		{
 			elog(DEBUG4, "Subplan %s is used in all workers", resultId);
 			continue;
@@ -190,7 +190,7 @@ RecordSubplanExecutionsOnNodes(HTAB *intermediateResultsHash,
 			 * workers will be in the node list. We can improve intermediate result
 			 * pruning by deciding which reference table shard will be accessed earlier.
 			 */
-			AppendAllAccessedWorkerNodes(entry, distributedPlan, workerNodeCount);
+			AppendAllAccessedWorkerNodes(entry, distributedPlan, nodeCount);
 
 			elog(DEBUG4, "Subplan %s is used in %lu", resultId, distributedPlan->planId);
 		}
@@ -231,7 +231,7 @@ RecordSubplanExecutionsOnNodes(HTAB *intermediateResultsHash,
 static void
 AppendAllAccessedWorkerNodes(IntermediateResultsHashEntry *entry,
 							 DistributedPlan *distributedPlan,
-							 int workerNodeCount)
+							 int nodeCount)
 {
 	List *taskList = distributedPlan->workerJob->taskList;
 	ListCell *taskCell = NULL;
@@ -254,7 +254,7 @@ AppendAllAccessedWorkerNodes(IntermediateResultsHashEntry *entry,
 				list_append_unique_int(entry->nodeIdList, placement->nodeId);
 
 			/* early return if all the workers are accessed */
-			if (list_length(entry->nodeIdList) == workerNodeCount &&
+			if (list_length(entry->nodeIdList) == nodeCount &&
 				entry->writeLocalFile)
 			{
 				return;
@@ -272,7 +272,7 @@ AppendAllAccessedWorkerNodes(IntermediateResultsHashEntry *entry,
 static void
 AppendAllWorkerNodes(IntermediateResultsHashEntry *entry)
 {
-	List *workerNodeList = ActiveReadableNonCoordinatorNodeList();
+	List *workerNodeList = ActiveReadableNodeList();
 
 	WorkerNode *workerNode = NULL;
 	foreach_ptr(workerNode, workerNodeList)
@@ -383,10 +383,11 @@ RemoveLocalNodeFromWorkerList(List *workerNodeList)
 		{
 			return list_delete_cell_compat(workerNodeList, workerNodeCell, prev);
 		}
+		#if PG_VERSION_NUM < PG_VERSION_13
+		prev = workerNodeCell;
+		#endif
 	}
-	#if PG_VERSION_NUM < PG_VERSION_13
-	prev = workerNodeCell;
-	#endif
+
 	return workerNodeList;
 }
 

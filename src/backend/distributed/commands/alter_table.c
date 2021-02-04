@@ -185,6 +185,8 @@ static void CreateCitusTableLike(TableConversionState *con);
 static List * GetViewCreationCommandsOfTable(Oid relationId);
 static void ReplaceTable(Oid sourceId, Oid targetId, List *justBeforeDropCommands,
 						 bool suppressNoticeMessages);
+static bool HasAnyGeneratedStoredColumns(Oid relationId);
+static List * GetNonGeneratedStoredColumnNameList(Oid relationId);
 static void CheckAlterDistributedTableConversionParameters(TableConversionState *con);
 static char * CreateWorkerChangeSequenceDependencyCommand(char *sequenceSchemaName,
 														  char *sequenceName,
@@ -907,6 +909,20 @@ CreateTableConversion(TableConversionParameters *params)
 		ereport(ERROR, (errmsg("cannot complete operation "
 							   "because no such table exists")));
 	}
+
+	TupleDesc relationDesc = RelationGetDescr(relation);
+	if (RelationUsesIdentityColumns(relationDesc))
+	{
+		/*
+		 * pg_get_tableschemadef_string doesn't know how to deparse identity
+		 * columns so we cannot reflect those columns when creating table
+		 * from scratch. For this reason, error out here.
+		 */
+		ereport(ERROR, (errmsg("cannot complete command because relation "
+							   "%s has identity column",
+							   generate_qualified_relation_name(con->relationId)),
+						errhint("Drop the identity columns and re-try the command")));
+	}
 	relation_close(relation, NoLock);
 	con->distributionKey =
 		BuildDistributionKeyFromColumnName(relation, con->distributionColumn);
@@ -1122,9 +1138,33 @@ ReplaceTable(Oid sourceId, Oid targetId, List *justBeforeDropCommands,
 									quote_qualified_identifier(schemaName, sourceName))));
 		}
 
-		appendStringInfo(query, "INSERT INTO %s SELECT * FROM %s",
-						 quote_qualified_identifier(schemaName, targetName),
-						 quote_qualified_identifier(schemaName, sourceName));
+		if (!HasAnyGeneratedStoredColumns(sourceId))
+		{
+			/*
+			 * Relation has no GENERATED STORED columns, copy the table via plain
+			 * "INSERT INTO .. SELECT *"".
+			 */
+			appendStringInfo(query, "INSERT INTO %s SELECT * FROM %s",
+							 quote_qualified_identifier(schemaName, targetName),
+							 quote_qualified_identifier(schemaName, sourceName));
+		}
+		else
+		{
+			/*
+			 * Skip columns having GENERATED ALWAYS AS (...) STORED expressions
+			 * since Postgres doesn't allow inserting into such columns.
+			 * This is not bad since Postgres would already generate such columns.
+			 * Note that here we intentionally don't skip columns having DEFAULT
+			 * expressions since user might have inserted non-default values.
+			 */
+			List *nonStoredColumnNameList = GetNonGeneratedStoredColumnNameList(sourceId);
+			char *insertColumnString = StringJoin(nonStoredColumnNameList, ',');
+			appendStringInfo(query, "INSERT INTO %s (%s) SELECT %s FROM %s",
+							 quote_qualified_identifier(schemaName, targetName),
+							 insertColumnString, insertColumnString,
+							 quote_qualified_identifier(schemaName, sourceName));
+		}
+
 		ExecuteQueryViaSPI(query->data, SPI_OK_INSERT);
 	}
 
@@ -1180,6 +1220,55 @@ ReplaceTable(Oid sourceId, Oid targetId, List *justBeforeDropCommands,
 					 quote_qualified_identifier(schemaName, targetName),
 					 quote_identifier(sourceName));
 	ExecuteQueryViaSPI(query->data, SPI_OK_UTILITY);
+}
+
+
+/*
+ * HasAnyGeneratedStoredColumns decides if relation has any columns that we
+ * might need to copy the data of when replacing table.
+ */
+static bool
+HasAnyGeneratedStoredColumns(Oid relationId)
+{
+	return list_length(GetNonGeneratedStoredColumnNameList(relationId)) > 0;
+}
+
+
+/*
+ * GetNonGeneratedStoredColumnNameList returns a list of column names for
+ * columns not having GENERATED ALWAYS AS (...) STORED expressions.
+ */
+static List *
+GetNonGeneratedStoredColumnNameList(Oid relationId)
+{
+	List *nonStoredColumnNameList = NIL;
+
+	Relation relation = relation_open(relationId, AccessShareLock);
+	TupleDesc tupleDescriptor = RelationGetDescr(relation);
+	for (int columnIndex = 0; columnIndex < tupleDescriptor->natts; columnIndex++)
+	{
+		Form_pg_attribute currentColumn = TupleDescAttr(tupleDescriptor, columnIndex);
+		if (currentColumn->attisdropped)
+		{
+			/* skip dropped columns */
+			continue;
+		}
+
+#if PG_VERSION_NUM >= 120000
+		if (currentColumn->attgenerated == ATTRIBUTE_GENERATED_STORED)
+		{
+			continue;
+		}
+#endif
+
+		const char *quotedColumnName = quote_identifier(NameStr(currentColumn->attname));
+		nonStoredColumnNameList = lappend(nonStoredColumnNameList,
+										  pstrdup(quotedColumnName));
+	}
+
+	relation_close(relation, NoLock);
+
+	return nonStoredColumnNameList;
 }
 
 

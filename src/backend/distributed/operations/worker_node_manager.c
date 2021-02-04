@@ -319,20 +319,6 @@ ActivePrimaryNodeCount(void)
 
 
 /*
- * ActiveReadableNonCoordinatorNodeCount returns the number of groups with a node we can read from.
- * This method excludes coordinator even if it is added as a worker.
- */
-uint32
-ActiveReadableNonCoordinatorNodeCount(void)
-{
-	List *workerNodeList = ActiveReadableNonCoordinatorNodeList();
-	uint32 liveWorkerCount = list_length(workerNodeList);
-
-	return liveWorkerCount;
-}
-
-
-/*
  * NodeIsCoordinator returns true if the given node represents the coordinator.
  */
 bool
@@ -403,6 +389,18 @@ ActivePrimaryNodeList(LOCKMODE lockMode)
 {
 	EnsureModificationsCanRun();
 	return FilterActiveNodeListFunc(lockMode, NodeIsPrimary);
+}
+
+
+/*
+ * ActivePrimaryRemoteNodeList returns a list of all active primary nodes in
+ * workerNodeHash.
+ */
+List *
+ActivePrimaryRemoteNodeList(LOCKMODE lockMode)
+{
+	EnsureModificationsCanRun();
+	return FilterActiveNodeListFunc(lockMode, NodeIsPrimaryAndRemote);
 }
 
 
