@@ -849,7 +849,7 @@ InitializeTableCacheEntry(int64 shardId)
 	Oid relationId = LookupShardRelationFromCatalog(shardId, missingOk);
 
 	/* trigger building the cache for the shard id */
-	GetCitusTableCacheEntry(relationId);
+	GetCitusTableCacheEntry(relationId); /* lgtm[cpp/return-value-ignored] */
 }
 
 
