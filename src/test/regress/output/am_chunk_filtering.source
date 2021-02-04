@@ -127,7 +127,7 @@ EXPLAIN (analyze on, costs off, timing off, summary off)
  Custom Scan (ColumnarScan) on simple_chunk_filtering (actual rows=111111 loops=1)
    Filter: (i > 123456)
    Rows Removed by Filter: 3457
-   Columnar Chunks Removed by Filter: 12
+   Columnar Chunk Groups Removed by Filter: 12
 (4 rows)
 
 SET columnar.enable_qual_pushdown = false;
@@ -138,7 +138,7 @@ EXPLAIN (analyze on, costs off, timing off, summary off)
  Custom Scan (ColumnarScan) on simple_chunk_filtering (actual rows=111111 loops=1)
    Filter: (i > 123456)
    Rows Removed by Filter: 123457
-   Columnar Chunks Removed by Filter: 0
+   Columnar Chunk Groups Removed by Filter: 0
 (4 rows)
 
 SET columnar.enable_qual_pushdown TO DEFAULT;
@@ -153,7 +153,7 @@ EXPLAIN (analyze on, costs off, timing off, summary off)
  Custom Scan (ColumnarScan) on simple_chunk_filtering (actual rows=20000 loops=1)
    Filter: (i > 180000)
    Rows Removed by Filter: 1
-   Columnar Chunks Removed by Filter: 18
+   Columnar Chunk Groups Removed by Filter: 18
 (4 rows)
 
 DROP TABLE simple_chunk_filtering;
@@ -167,7 +167,7 @@ EXPLAIN (analyze on, costs off, timing off, summary off)
    ->  Custom Scan (ColumnarScan) on multi_column_chunk_filtering (actual rows=184567 loops=1)
          Filter: (a > 50000)
          Rows Removed by Filter: 1
-         Columnar Chunks Removed by Filter: 5
+         Columnar Chunk Groups Removed by Filter: 5
 (5 rows)
 
 EXPLAIN (analyze on, costs off, timing off, summary off)
@@ -178,7 +178,7 @@ EXPLAIN (analyze on, costs off, timing off, summary off)
    ->  Custom Scan (ColumnarScan) on multi_column_chunk_filtering (actual rows=184567 loops=1)
          Filter: ((a > 50000) AND (b > 50000))
          Rows Removed by Filter: 1
-         Columnar Chunks Removed by Filter: 5
+         Columnar Chunk Groups Removed by Filter: 5
 (5 rows)
 
 DROP TABLE multi_column_chunk_filtering;

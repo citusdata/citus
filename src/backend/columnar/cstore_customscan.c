@@ -490,9 +490,9 @@ ColumnarScan_ExplainCustomScan(CustomScanState *node, List *ancestors,
 
 	if (scanDesc != NULL)
 	{
-		int64 chunksFiltered = ColumnarGetChunksFiltered(scanDesc);
-		ExplainPropertyInteger("Columnar Chunks Removed by Filter", NULL,
-							   chunksFiltered, es);
+		int64 chunkGroupsFiltered = ColumnarGetChunkGroupsFiltered(scanDesc);
+		ExplainPropertyInteger("Columnar Chunk Groups Removed by Filter", NULL,
+							   chunkGroupsFiltered, es);
 	}
 }
 
