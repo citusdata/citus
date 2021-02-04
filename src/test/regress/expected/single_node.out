@@ -1591,6 +1591,11 @@ NOTICE:  executing the command locally: SELECT count(*) AS count FROM (SELECT in
      7
 (1 row)
 
+TRUNCATE another_schema_table;
+NOTICE:  executing the command locally: TRUNCATE TABLE single_node.another_schema_table_xxxxx CASCADE
+NOTICE:  executing the command locally: TRUNCATE TABLE single_node.another_schema_table_xxxxx CASCADE
+NOTICE:  executing the command locally: TRUNCATE TABLE single_node.another_schema_table_xxxxx CASCADE
+NOTICE:  executing the command locally: TRUNCATE TABLE single_node.another_schema_table_xxxxx CASCADE
 -- copy can use local execution even if there is no connection available
 COPY another_schema_table(a) FROM PROGRAM 'seq 32';
 NOTICE:  executing the copy locally for shard xxxxx
@@ -1601,6 +1606,22 @@ NOTICE:  executing the copy locally for shard xxxxx
 CONTEXT:  COPY another_schema_table, line 3: "3"
 NOTICE:  executing the copy locally for shard xxxxx
 CONTEXT:  COPY another_schema_table, line 6: "6"
+-- INSERT .. SELECT with intermediae results is slightly different such that
+-- it'll use a new connection regardless
+SET citus.log_remote_commands to false;
+CREATE UNIQUE INDEX another_schema_table_pk ON another_schema_table(a);
+-- only print local commands, and COPY would not be there
+SET citus.log_local_commands to true;
+INSERT INTO another_schema_table SELECT * FROM another_schema_table LIMIT 10000 ON CONFLICT(a) DO NOTHING;
+NOTICE:  executing the command locally: SELECT a, b FROM single_node.another_schema_table_90630511 another_schema_table WHERE true LIMIT '10000'::bigint
+NOTICE:  executing the command locally: SELECT a, b FROM single_node.another_schema_table_90630512 another_schema_table WHERE true LIMIT '10000'::bigint
+NOTICE:  executing the command locally: SELECT a, b FROM single_node.another_schema_table_90630513 another_schema_table WHERE true LIMIT '10000'::bigint
+NOTICE:  executing the command locally: SELECT a, b FROM single_node.another_schema_table_90630514 another_schema_table WHERE true LIMIT '10000'::bigint
+NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630511 AS citus_table_alias (a, b) SELECT a, b FROM read_intermediate_result('insert_select_XXX_90630511'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer) ON CONFLICT(a) DO NOTHING
+NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630512 AS citus_table_alias (a, b) SELECT a, b FROM read_intermediate_result('insert_select_XXX_90630512'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer) ON CONFLICT(a) DO NOTHING
+NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630513 AS citus_table_alias (a, b) SELECT a, b FROM read_intermediate_result('insert_select_XXX_90630513'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer) ON CONFLICT(a) DO NOTHING
+NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630514 AS citus_table_alias (a, b) SELECT a, b FROM read_intermediate_result('insert_select_XXX_90630514'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer) ON CONFLICT(a) DO NOTHING
+SET citus.log_remote_commands to true;
 -- if the local execution is disabled, we cannot failover to
 -- local execution and the queries would fail
 SET citus.enable_local_execution TO  false;

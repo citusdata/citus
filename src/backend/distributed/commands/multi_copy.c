@@ -274,7 +274,8 @@ static CopyShardState * GetShardState(uint64 shardId, HTAB *shardStateHash,
 									  copyOutState, bool isCopyToIntermediateFile);
 static MultiConnection * CopyGetPlacementConnection(HTAB *connectionStateHash,
 													ShardPlacement *placement,
-													bool stopOnFailure);
+													bool stopOnFailure,
+													bool isIntermediateResult);
 static bool HasReachedAdaptiveExecutorPoolSize(List *connectionStateHash);
 static MultiConnection * GetLeastUtilisedCopyConnection(List *connectionStateList,
 														char *nodeName, int nodePort);
@@ -3516,7 +3517,8 @@ InitializeCopyShardState(CopyShardState *shardState,
 		}
 
 		MultiConnection *connection =
-			CopyGetPlacementConnection(connectionStateHash, placement, stopOnFailure);
+			CopyGetPlacementConnection(connectionStateHash, placement,
+									   stopOnFailure, isCopyToIntermediateFile);
 		if (connection == NULL)
 		{
 			failedPlacementCount++;
@@ -3612,7 +3614,7 @@ LogLocalCopyExecution(uint64 shardId)
  */
 static MultiConnection *
 CopyGetPlacementConnection(HTAB *connectionStateHash, ShardPlacement *placement, bool
-						   stopOnFailure)
+						   stopOnFailure, bool isIntermediateResult)
 {
 	uint32 connectionFlags = FOR_DML;
 	char *nodeUser = CurrentUserName();
@@ -3669,7 +3671,16 @@ CopyGetPlacementConnection(HTAB *connectionStateHash, ShardPlacement *placement,
 		return connection;
 	}
 
-	if (IsReservationPossible())
+	/*
+	 * Citus currently doesn't know how to write intermediate results via
+	 * local execution. By-passing connection counters is slightly better
+	 * than throwing error based on shared connection counters as we might
+	 * still get a connection and successfully finish the execution. This
+	 * may especially become more relevant for local node connection
+	 * management where Citus pessimistically use only half of available
+	 * connections .
+	 */
+	if (IsReservationPossible() && !isIntermediateResult)
 	{
 		/*
 		 * Enforce the requirements for adaptive connection management

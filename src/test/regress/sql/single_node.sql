@@ -817,8 +817,20 @@ ROLLBACK;
 WITH cte_1 AS (SELECT * FROM another_schema_table LIMIT 1000)
 	SELECT count(*) FROM cte_1;
 
+TRUNCATE another_schema_table;
+
 -- copy can use local execution even if there is no connection available
 COPY another_schema_table(a) FROM PROGRAM 'seq 32';
+
+-- INSERT .. SELECT with intermediae results is slightly different such that
+-- it'll use a new connection regardless
+SET citus.log_remote_commands to false;
+CREATE UNIQUE INDEX another_schema_table_pk ON another_schema_table(a);
+-- only print local commands, and COPY would not be there
+SET citus.log_local_commands to true;
+INSERT INTO another_schema_table SELECT * FROM another_schema_table LIMIT 10000 ON CONFLICT(a) DO NOTHING;
+SET citus.log_remote_commands to true;
+
 
 -- if the local execution is disabled, we cannot failover to
 -- local execution and the queries would fail
