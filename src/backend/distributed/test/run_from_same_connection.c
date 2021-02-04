@@ -200,10 +200,14 @@ GetRemoteProcessId()
 
 	appendStringInfo(queryStringInfo, GET_PROCESS_ID);
 
-	ExecuteOptionalRemoteCommand(singleConnection, queryStringInfo->data, &result);
+	int queryResult = ExecuteOptionalRemoteCommand(singleConnection,
+												   queryStringInfo->data, &result);
+	if (queryResult != RESPONSE_OKAY)
+	{
+		PG_RETURN_VOID();
+	}
 
 	int64 rowCount = PQntuples(result);
-
 	if (rowCount != 1)
 	{
 		PG_RETURN_VOID();
