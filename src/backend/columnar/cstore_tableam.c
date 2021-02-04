@@ -93,6 +93,7 @@ typedef struct ColumnarScanDescData
 typedef struct ColumnarScanDescData *ColumnarScanDesc;
 
 static object_access_hook_type PrevObjectAccessHook = NULL;
+static ProcessUtility_hook_type PrevProcessUtilityHook = NULL;
 
 /* forward declaration for static functions */
 static void ColumnarTableDropHook(Oid tgid);
@@ -100,6 +101,13 @@ static void ColumnarTriggerCreateHook(Oid tgid);
 static void ColumnarTableAMObjectAccessHook(ObjectAccessType access, Oid classId,
 											Oid objectId, int subId,
 											void *arg);
+static void ColumnarProcessUtility(PlannedStmt *pstmt,
+								   const char *queryString,
+								   ProcessUtilityContext context,
+								   ParamListInfo params,
+								   struct QueryEnvironment *queryEnv,
+								   DestReceiver *dest,
+								   QueryCompletionCompat *completionTag);
 static bool ConditionalLockRelationWithTimeout(Relation rel, LOCKMODE lockMode,
 											   int timeout, int retryInterval);
 static void LogRelationStats(Relation rel, int elevel);
@@ -1127,6 +1135,11 @@ columnar_tableam_init()
 	PrevObjectAccessHook = object_access_hook;
 	object_access_hook = ColumnarTableAMObjectAccessHook;
 
+	PrevProcessUtilityHook = ProcessUtility_hook ?
+							 ProcessUtility_hook :
+							 standard_ProcessUtility;
+	ProcessUtility_hook = ColumnarProcessUtility;
+
 	columnar_customscan_init();
 
 	TTSOpsColumnar = TTSOpsVirtual;
@@ -1289,6 +1302,49 @@ ColumnarTableAMObjectAccessHook(ObjectAccessType access, Oid classId, Oid object
 	{
 		ColumnarTriggerCreateHook(objectId);
 	}
+}
+
+
+/*
+ * Utility hook for columnar tables.
+ */
+static void
+ColumnarProcessUtility(PlannedStmt *pstmt,
+					   const char *queryString,
+					   ProcessUtilityContext context,
+					   ParamListInfo params,
+					   struct QueryEnvironment *queryEnv,
+					   DestReceiver *dest,
+					   QueryCompletionCompat *completionTag)
+{
+	Node *parsetree = pstmt->utilityStmt;
+
+	if (IsA(parsetree, IndexStmt))
+	{
+		IndexStmt *indexStmt = (IndexStmt *) parsetree;
+
+		/*
+		 * We should reject CREATE INDEX CONCURRENTLY before DefineIndex() is
+		 * called. Erroring in callbacks called from DefineIndex() will create
+		 * the index and mark it as INVALID, which will cause segfault during
+		 * inserts.
+		 */
+		if (indexStmt->concurrent)
+		{
+			Relation rel = relation_openrv(indexStmt->relation,
+										   ShareUpdateExclusiveLock);
+			if (rel->rd_tableam == GetColumnarTableAmRoutine())
+			{
+				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+								errmsg("indexes not supported for columnar tables")));
+			}
+
+			RelationClose(rel);
+		}
+	}
+
+	PrevProcessUtilityHook(pstmt, queryString, context,
+						   params, queryEnv, dest, completionTag);
 }
 
 
