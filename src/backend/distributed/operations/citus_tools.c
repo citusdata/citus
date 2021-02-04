@@ -509,7 +509,13 @@ ExecuteRemoteQueryOrCommand(char *nodeName, uint32 nodePort, char *queryString,
 		return false;
 	}
 
-	SendRemoteCommand(connection, queryString);
+	if (!SendRemoteCommand(connection, queryString))
+	{
+		appendStringInfo(queryResultString, "failed to send query to %s:%d", nodeName,
+						 (int) nodePort);
+		return false;
+	}
+
 	PGresult *queryResult = GetRemoteCommandResult(connection, raiseInterrupts);
 	bool success = EvaluateQueryResult(connection, queryResult, queryResultString);
 
