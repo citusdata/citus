@@ -70,3 +70,98 @@ DROP FUNCTION pg_catalog.mark_tables_colocated(regclass, regclass[]);
 
 #include "udfs/fix_pre_citus10_partitioned_table_constraint_names/10.0-1.sql"
 #include "udfs/worker_fix_pre_citus10_partitioned_table_constraint_names/10.0-1.sql"
+DROP FUNCTION pg_catalog.citus_dist_stat_activity CASCADE;
+
+CREATE OR REPLACE FUNCTION pg_catalog.citus_dist_stat_activity(OUT query_hostname text, OUT query_hostport int, OUT distributed_query_host_name text, OUT distributed_query_host_port int,
+                                                    OUT transaction_number int8, OUT transaction_stamp timestamptz, OUT datid oid, OUT datname name,
+                                                    OUT pid int, OUT usesysid oid, OUT usename name, OUT application_name text, OUT client_addr INET,
+                                                    OUT client_hostname TEXT, OUT client_port int, OUT backend_start timestamptz, OUT xact_start timestamptz,
+                                                    OUT query_start timestamptz, OUT state_change timestamptz, OUT wait_event_type text, OUT wait_event text,
+                                                    OUT state text, OUT backend_xid xid, OUT backend_xmin xid, OUT query text, OUT backend_type text)
+RETURNS SETOF RECORD
+LANGUAGE C STRICT AS 'MODULE_PATHNAME',
+$$citus_dist_stat_activity$$;
+
+COMMENT ON FUNCTION pg_catalog.citus_dist_stat_activity(OUT query_hostname text, OUT query_hostport int, OUT distributed_query_host_name text, OUT distributed_query_host_port int,
+                                             OUT transaction_number int8, OUT transaction_stamp timestamptz, OUT datid oid, OUT datname name,
+                                             OUT pid int, OUT usesysid oid, OUT usename name, OUT application_name text, OUT client_addr INET,
+                                             OUT client_hostname TEXT, OUT client_port int, OUT backend_start timestamptz, OUT xact_start timestamptz,
+                                             OUT query_start timestamptz, OUT state_change timestamptz, OUT wait_event_type text, OUT wait_event text,
+                                             OUT state text, OUT backend_xid xid, OUT backend_xmin xid, OUT query text, OUT backend_type text)
+IS 'returns distributed transaction activity on distributed tables';
+
+CREATE VIEW citus.citus_dist_stat_activity AS
+SELECT * FROM pg_catalog.citus_dist_stat_activity();
+ALTER VIEW citus.citus_dist_stat_activity SET SCHEMA pg_catalog;
+GRANT SELECT ON pg_catalog.citus_dist_stat_activity TO PUBLIC;
+
+SET search_path = 'pg_catalog';
+
+CREATE VIEW citus.citus_lock_waits AS
+
+WITH
+citus_dist_stat_activity AS
+(
+  SELECT * FROM citus_dist_stat_activity
+),
+unique_global_wait_edges AS
+(
+	SELECT DISTINCT ON(waiting_node_id, waiting_transaction_num, blocking_node_id, blocking_transaction_num) * FROM dump_global_wait_edges()
+),
+citus_dist_stat_activity_with_node_id AS
+(
+  SELECT
+  citus_dist_stat_activity.*, (CASE citus_dist_stat_activity.distributed_query_host_name WHEN 'coordinator_host' THEN 0 ELSE pg_dist_node.nodeid END) as initiator_node_id
+  FROM
+  citus_dist_stat_activity LEFT JOIN pg_dist_node
+  ON
+  citus_dist_stat_activity.distributed_query_host_name = pg_dist_node.nodename AND
+  citus_dist_stat_activity.distributed_query_host_port = pg_dist_node.nodeport
+)
+SELECT
+ waiting.pid AS waiting_pid,
+ blocking.pid AS blocking_pid,
+ waiting.query AS blocked_statement,
+ blocking.query AS current_statement_in_blocking_process,
+ waiting.initiator_node_id AS waiting_node_id,
+ blocking.initiator_node_id AS blocking_node_id,
+ waiting.distributed_query_host_name AS waiting_node_name,
+ blocking.distributed_query_host_name AS blocking_node_name,
+ waiting.distributed_query_host_port AS waiting_node_port,
+ blocking.distributed_query_host_port AS blocking_node_port
+FROM
+ unique_global_wait_edges
+JOIN
+ citus_dist_stat_activity_with_node_id waiting ON (unique_global_wait_edges.waiting_transaction_num = waiting.transaction_number AND unique_global_wait_edges.waiting_node_id = waiting.initiator_node_id)
+JOIN
+ citus_dist_stat_activity_with_node_id blocking ON (unique_global_wait_edges.blocking_transaction_num = blocking.transaction_number AND unique_global_wait_edges.blocking_node_id = blocking.initiator_node_id);
+
+ALTER VIEW citus.citus_lock_waits SET SCHEMA pg_catalog;
+GRANT SELECT ON pg_catalog.citus_lock_waits TO PUBLIC;
+
+DROP FUNCTION citus_worker_stat_activity CASCADE;
+
+CREATE OR REPLACE FUNCTION citus_worker_stat_activity(OUT query_hostname text, OUT query_hostport int, OUT distributed_query_host_name text, OUT distributed_query_host_port int,
+                                                      OUT transaction_number int8, OUT transaction_stamp timestamptz, OUT datid oid, OUT datname name,
+                                                      OUT pid int, OUT usesysid oid, OUT usename name, OUT application_name text, OUT client_addr INET,
+                                                      OUT client_hostname TEXT, OUT client_port int, OUT backend_start timestamptz, OUT xact_start timestamptz,
+                                                      OUT query_start timestamptz, OUT state_change timestamptz, OUT wait_event_type text, OUT wait_event text,
+                                                      OUT state text, OUT backend_xid xid, OUT backend_xmin xid, OUT query text, OUT backend_type text)
+RETURNS SETOF RECORD
+LANGUAGE C STRICT AS 'MODULE_PATHNAME',
+$$citus_worker_stat_activity$$;
+
+COMMENT ON FUNCTION citus_worker_stat_activity(OUT query_hostname text, OUT query_hostport int, OUT distributed_query_host_name text, OUT distributed_query_host_port int,
+                                               OUT transaction_number int8, OUT transaction_stamp timestamptz, OUT datid oid, OUT datname name,
+                                               OUT pid int, OUT usesysid oid, OUT usename name, OUT application_name text, OUT client_addr INET,
+                                               OUT client_hostname TEXT, OUT client_port int, OUT backend_start timestamptz, OUT xact_start timestamptz,
+                                               OUT query_start timestamptz, OUT state_change timestamptz, OUT wait_event_type text, OUT wait_event text,
+                                               OUT state text, OUT backend_xid xid, OUT backend_xmin xid, OUT query text, OUT backend_type text)
+IS 'returns distributed transaction activity on shards of distributed tables';
+
+CREATE VIEW citus.citus_worker_stat_activity AS
+SELECT * FROM pg_catalog.citus_worker_stat_activity();
+ALTER VIEW citus.citus_worker_stat_activity SET SCHEMA pg_catalog;
+GRANT SELECT ON pg_catalog.citus_worker_stat_activity TO PUBLIC;
+
+RESET search_path;
