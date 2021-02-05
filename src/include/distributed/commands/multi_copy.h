@@ -131,8 +131,13 @@ typedef struct CitusCopyDestReceiver
 	/* if true, should copy to local placements in the current session */
 	bool shouldUseLocalCopy;
 
-	/* copy into intermediate result */
-	char *intermediateResultIdPrefix;
+	/*
+	 * Copy into colocated intermediate result. When this is set, the
+	 * COPY assumes there are hypothetical colocated shards to the
+	 * relation that are files. And, COPY writes the data to the
+	 * files as if they are shards.
+	 */
+	char *colocatedIntermediateResultIdPrefix;
 } CitusCopyDestReceiver;
 
 

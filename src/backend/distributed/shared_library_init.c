@@ -37,6 +37,7 @@
 #include "distributed/distributed_deadlock_detection.h"
 #include "distributed/insert_select_executor.h"
 #include "distributed/intermediate_result_pruning.h"
+#include "distributed/local_multi_copy.h"
 #include "distributed/local_executor.h"
 #include "distributed/local_distributed_join_planner.h"
 #include "distributed/locally_reserved_shared_connections.h"
@@ -683,6 +684,16 @@ RegisterCitusConfigVariables(void)
 		PGC_USERSET,
 		GUC_NO_SHOW_ALL,
 		NoticeIfSubqueryPushdownEnabled, NULL, NULL);
+
+	DefineCustomIntVariable(
+		"citus.local_copy_flush_threshold",
+		gettext_noop("Sets the threshold for local copy to be flushed."),
+		NULL,
+		&LocalCopyFlushThresholdByte,
+		512 * 1024, 1, INT_MAX,
+		PGC_USERSET,
+		GUC_UNIT_BYTE | GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
 		"citus.local_shared_pool_size",

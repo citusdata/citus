@@ -30,20 +30,25 @@
 
 #include "distributed/transmit.h"
 #include "distributed/commands/multi_copy.h"
+#include "distributed/intermediate_results.h"
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/local_executor.h"
 #include "distributed/local_multi_copy.h"
 #include "distributed/shard_utils.h"
 #include "distributed/version_compat.h"
 
-static int ReadFromLocalBufferCallback(void *outBuf, int minRead, int maxRead);
+/* managed via GUC, default is 512 kB */
+int LocalCopyFlushThresholdByte = 512 * 1024;
+
+
 static void AddSlotToBuffer(TupleTableSlot *slot, CitusCopyDestReceiver *copyDest,
 							CopyOutState localCopyOutState);
-
+static bool ShouldAddBinaryHeaders(StringInfo buffer, bool isBinary);
 static bool ShouldSendCopyNow(StringInfo buffer);
 static void DoLocalCopy(StringInfo buffer, Oid relationId, int64 shardId,
 						CopyStmt *copyStatement, bool isEndOfCopy);
-static bool ShouldAddBinaryHeaders(StringInfo buffer, bool isBinary);
+static int ReadFromLocalBufferCallback(void *outBuf, int minRead, int maxRead);
+
 
 /*
  * LocalCopyBuffer is used in copy callback to return the copied rows.
@@ -51,6 +56,7 @@ static bool ShouldAddBinaryHeaders(StringInfo buffer, bool isBinary);
  * argument to the copy callback.
  */
 static StringInfo LocalCopyBuffer;
+
 
 /*
  * WriteTupleToLocalShard adds the given slot and does a local copy if
@@ -95,6 +101,25 @@ WriteTupleToLocalShard(TupleTableSlot *slot, CitusCopyDestReceiver *copyDest, in
 
 
 /*
+ * WriteTupleToLocalFile adds the given slot and does a local copy to the
+ * file if the buffer size exceeds the threshold.
+ */
+void
+WriteTupleToLocalFile(TupleTableSlot *slot, CitusCopyDestReceiver *copyDest,
+					  int64 shardId, CopyOutState localFileCopyOutState,
+					  FileCompat *fileCompat)
+{
+	AddSlotToBuffer(slot, copyDest, localFileCopyOutState);
+
+	if (ShouldSendCopyNow(localFileCopyOutState->fe_msgbuf))
+	{
+		WriteToLocalFile(localFileCopyOutState->fe_msgbuf, fileCompat);
+		resetStringInfo(localFileCopyOutState->fe_msgbuf);
+	}
+}
+
+
+/*
  * FinishLocalCopyToShard finishes local copy for the given shard with the shard id.
  */
 void
@@ -109,6 +134,26 @@ FinishLocalCopyToShard(CitusCopyDestReceiver *copyDest, int64 shardId,
 	bool isEndOfCopy = true;
 	DoLocalCopy(localCopyOutState->fe_msgbuf, copyDest->distributedRelationId, shardId,
 				copyDest->copyStatement, isEndOfCopy);
+}
+
+
+/*
+ * FinishLocalCopyToFile finishes local copy for the given file.
+ */
+void
+FinishLocalCopyToFile(CopyOutState localFileCopyOutState, FileCompat *fileCompat)
+{
+	StringInfo data = localFileCopyOutState->fe_msgbuf;
+
+	bool isBinaryCopy = localFileCopyOutState->binary;
+	if (isBinaryCopy)
+	{
+		AppendCopyBinaryFooters(localFileCopyOutState);
+	}
+	WriteToLocalFile(data, fileCompat);
+	resetStringInfo(localFileCopyOutState->fe_msgbuf);
+
+	FileClose(fileCompat->fd);
 }
 
 
@@ -138,7 +183,8 @@ AddSlotToBuffer(TupleTableSlot *slot, CitusCopyDestReceiver *copyDest, CopyOutSt
 static bool
 ShouldSendCopyNow(StringInfo buffer)
 {
-	return buffer->len > LOCAL_COPY_FLUSH_THRESHOLD;
+	/* LocalCopyFlushThreshold is in bytes */
+	return buffer->len > LocalCopyFlushThresholdByte;
 }
 
 
