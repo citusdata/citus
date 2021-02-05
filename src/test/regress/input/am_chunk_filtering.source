@@ -89,3 +89,15 @@ EXPLAIN (analyze on, costs off, timing off, summary off)
   SELECT * FROM simple_chunk_filtering WHERE i > 180000;
 
 DROP TABLE simple_chunk_filtering;
+
+
+CREATE TABLE multi_column_chunk_filtering(a int, b int) USING columnar;
+INSERT INTO multi_column_chunk_filtering SELECT i,i+1 FROM generate_series(0,234567) i;
+
+EXPLAIN (analyze on, costs off, timing off, summary off)
+  SELECT count(*) FROM multi_column_chunk_filtering WHERE a > 50000;
+
+EXPLAIN (analyze on, costs off, timing off, summary off)
+  SELECT count(*) FROM multi_column_chunk_filtering WHERE a > 50000 AND b > 50000;
+
+DROP TABLE multi_column_chunk_filtering;

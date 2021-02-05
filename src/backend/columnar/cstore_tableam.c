@@ -1158,7 +1158,7 @@ columnar_tableam_finish()
  * Get the number of chunks filtered out during the given scan.
  */
 int64
-ColumnarGetChunksFiltered(TableScanDesc scanDesc)
+ColumnarGetChunkGroupsFiltered(TableScanDesc scanDesc)
 {
 	ColumnarScanDesc columnarScanDesc = (ColumnarScanDesc) scanDesc;
 	TableReadState *readState = columnarScanDesc->cs_readState;
@@ -1166,7 +1166,7 @@ ColumnarGetChunksFiltered(TableScanDesc scanDesc)
 	/* readState is initialized lazily */
 	if (readState != NULL)
 	{
-		return readState->chunksFiltered;
+		return readState->chunkGroupsFiltered;
 	}
 	else
 	{
