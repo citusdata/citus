@@ -34,6 +34,17 @@ SELECT create_distributed_table('test_propagate', 'id');
 -- Test COLLATE is pushed down
 SELECT * FROM collation_tests.test_propagate WHERE t2 < 'b';
 SELECT * FROM collation_tests.test_propagate WHERE t2 < 'b' COLLATE "C";
+SELECT * FROM collation_tests.test_propagate WHERE t2 COLLATE "C" < 'b';
+
+-- Test COLLATE is pushed down with aggregate function
+SET citus.next_shard_id TO 20060000;
+CREATE TABLE test_collate_pushed_down_aggregate (a int, b int);
+SELECT create_distributed_table('test_collate_pushed_down_aggregate', 'a');
+SELECT alter_distributed_table('test_collate_pushed_down_aggregate', shard_count := 2, cascade_to_colocated:=false);
+SET citus.log_remote_commands TO true;
+SELECT ALL MIN((lower(CAST(test_collate_pushed_down_aggregate.a AS VARCHAR)) COLLATE "C"))
+    FROM ONLY test_collate_pushed_down_aggregate;
+RESET citus.log_remote_commands;
 
 -- Test range table with collated distribution column
 CREATE TABLE test_range(key text COLLATE german_phonebook, val int);

@@ -56,6 +56,44 @@ SELECT * FROM collation_tests.test_propagate WHERE t2 < 'b' COLLATE "C";
   2 | Voẞr | Vossr
 (1 row)
 
+SELECT * FROM collation_tests.test_propagate WHERE t2 COLLATE "C" < 'b';
+ id |  t1  |  t2
+---------------------------------------------------------------------
+  2 | Voẞr | Vossr
+(1 row)
+
+-- Test COLLATE is pushed down with aggregate function
+SET citus.next_shard_id TO 20060000;
+CREATE TABLE test_collate_pushed_down_aggregate (a int, b int);
+SELECT create_distributed_table('test_collate_pushed_down_aggregate', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT alter_distributed_table('test_collate_pushed_down_aggregate', shard_count := 2, cascade_to_colocated:=false);
+NOTICE:  creating a new table for collation_tests.test_collate_pushed_down_aggregate
+NOTICE:  Moving the data of collation_tests.test_collate_pushed_down_aggregate
+NOTICE:  Dropping the old collation_tests.test_collate_pushed_down_aggregate
+NOTICE:  Renaming the new table to collation_tests.test_collate_pushed_down_aggregate
+ alter_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SET citus.log_remote_commands TO true;
+SELECT ALL MIN((lower(CAST(test_collate_pushed_down_aggregate.a AS VARCHAR)) COLLATE "C"))
+    FROM ONLY test_collate_pushed_down_aggregate;
+NOTICE:  issuing SELECT min((lower(((a)::character varying COLLATE "default")) COLLATE "C")) AS min FROM collation_tests.test_collate_pushed_down_aggregate_20060004 test_collate_pushed_down_aggregate WHERE true
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT min((lower(((a)::character varying COLLATE "default")) COLLATE "C")) AS min FROM collation_tests.test_collate_pushed_down_aggregate_20060005 test_collate_pushed_down_aggregate WHERE true
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+ min
+---------------------------------------------------------------------
+
+(1 row)
+
+RESET citus.log_remote_commands;
 -- Test range table with collated distribution column
 CREATE TABLE test_range(key text COLLATE german_phonebook, val int);
 SELECT create_distributed_table('test_range', 'key', 'range');

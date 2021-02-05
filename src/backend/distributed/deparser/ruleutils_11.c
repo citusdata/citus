@@ -5166,20 +5166,42 @@ get_rule_expr(Node *node, deparse_context *context,
 		case T_RelabelType:
 			{
 				RelabelType *relabel = (RelabelType *) node;
-				Node	   *arg = (Node *) relabel->arg;
 
-				if (relabel->relabelformat == COERCE_IMPLICIT_CAST &&
-					!showimplicit)
+				/*
+				 * This is a Citus specific modification
+				 * The planner converts CollateExpr to RelabelType
+				 * and here we convert back.
+				 */
+				if (relabel->resultcollid != InvalidOid)
 				{
-					/* don't show the implicit cast */
-					get_rule_expr_paren(arg, context, false, node);
+					CollateExpr *collate = RelabelTypeToCollateExpr(relabel);
+					Node	   *arg = (Node *) collate->arg;
+
+					if (!PRETTY_PAREN(context))
+						appendStringInfoChar(buf, '(');
+					get_rule_expr_paren(arg, context, showimplicit, node);
+					appendStringInfo(buf, " COLLATE %s",
+									generate_collation_name(collate->collOid));
+					if (!PRETTY_PAREN(context))
+						appendStringInfoChar(buf, ')');
 				}
 				else
 				{
-					get_coercion_expr(arg, context,
-									  relabel->resulttype,
-									  relabel->resulttypmod,
-									  node);
+					Node	   *arg = (Node *) relabel->arg;
+
+					if (relabel->relabelformat == COERCE_IMPLICIT_CAST &&
+						!showimplicit)
+					{
+						/* don't show the implicit cast */
+						get_rule_expr_paren(arg, context, false, node);
+					}
+					else
+					{
+						get_coercion_expr(arg, context,
+										  relabel->resulttype,
+										  relabel->resulttypmod,
+										  node);
+					}
 				}
 			}
 			break;
