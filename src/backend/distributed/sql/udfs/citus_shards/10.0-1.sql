@@ -8,7 +8,7 @@ SELECT
      colocationid AS colocation_id,
      pg_dist_node.nodename,
      pg_dist_node.nodeport,
-     (SELECT pg_size_pretty(size) FROM shard_sizes WHERE
+     (SELECT size FROM shard_sizes WHERE
        shard_name(pg_dist_shard.logicalrelid, pg_dist_shard.shardid) = table_name
        OR
        'public.' || shard_name(pg_dist_shard.logicalrelid, pg_dist_shard.shardid) = table_name
@@ -27,6 +27,8 @@ JOIN
    pg_dist_partition
 ON
    pg_dist_partition.logicalrelid = pg_dist_shard.logicalrelid
+ORDER BY
+   pg_dist_shard.logicalrelid::text, shardid
 ;
 
 ALTER VIEW citus.citus_shards SET SCHEMA pg_catalog;

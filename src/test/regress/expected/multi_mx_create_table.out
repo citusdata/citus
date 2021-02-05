@@ -549,474 +549,474 @@ ORDER BY table_name::text;
 SELECT shard_name, table_name, citus_table_type, shard_size FROM citus_shards ORDER BY shard_name::text;
                            shard_name                           |                       table_name                       | citus_table_type | shard_size
 ---------------------------------------------------------------------
- app_analytics_events_mx_1220096                                | app_analytics_events_mx                                | distributed      | 0 bytes
- app_analytics_events_mx_1220096                                | app_analytics_events_mx                                | distributed      | 0 bytes
- app_analytics_events_mx_1220096                                | app_analytics_events_mx                                | distributed      | 0 bytes
- app_analytics_events_mx_1220096                                | app_analytics_events_mx                                | distributed      | 0 bytes
- app_analytics_events_mx_1220096                                | app_analytics_events_mx                                | distributed      | 0 bytes
- app_analytics_events_mx_1220096                                | app_analytics_events_mx                                | distributed      | 0 bytes
- app_analytics_events_mx_1220096                                | app_analytics_events_mx                                | distributed      | 0 bytes
- app_analytics_events_mx_1220097                                | app_analytics_events_mx                                | distributed      | 0 bytes
- app_analytics_events_mx_1220098                                | app_analytics_events_mx                                | distributed      | 0 bytes
- app_analytics_events_mx_1220098                                | app_analytics_events_mx                                | distributed      | 0 bytes
- app_analytics_events_mx_1220098                                | app_analytics_events_mx                                | distributed      | 0 bytes
- app_analytics_events_mx_1220098                                | app_analytics_events_mx                                | distributed      | 0 bytes
- app_analytics_events_mx_1220098                                | app_analytics_events_mx                                | distributed      | 0 bytes
- app_analytics_events_mx_1220098                                | app_analytics_events_mx                                | distributed      | 0 bytes
- app_analytics_events_mx_1220098                                | app_analytics_events_mx                                | distributed      | 0 bytes
- app_analytics_events_mx_1220099                                | app_analytics_events_mx                                | distributed      | 0 bytes
- articles_hash_mx_1220104                                       | articles_hash_mx                                       | distributed      | 0 bytes
- articles_hash_mx_1220104                                       | articles_hash_mx                                       | distributed      | 0 bytes
- articles_hash_mx_1220104                                       | articles_hash_mx                                       | distributed      | 0 bytes
- articles_hash_mx_1220104                                       | articles_hash_mx                                       | distributed      | 0 bytes
- articles_hash_mx_1220104                                       | articles_hash_mx                                       | distributed      | 0 bytes
- articles_hash_mx_1220104                                       | articles_hash_mx                                       | distributed      | 0 bytes
- articles_hash_mx_1220104                                       | articles_hash_mx                                       | distributed      | 0 bytes
- articles_hash_mx_1220105                                       | articles_hash_mx                                       | distributed      | 0 bytes
- articles_single_shard_hash_mx_1220106                          | articles_single_shard_hash_mx                          | distributed      | 0 bytes
- articles_single_shard_hash_mx_1220106                          | articles_single_shard_hash_mx                          | distributed      | 0 bytes
- articles_single_shard_hash_mx_1220106                          | articles_single_shard_hash_mx                          | distributed      | 0 bytes
- articles_single_shard_hash_mx_1220106                          | articles_single_shard_hash_mx                          | distributed      | 0 bytes
- articles_single_shard_hash_mx_1220106                          | articles_single_shard_hash_mx                          | distributed      | 0 bytes
- articles_single_shard_hash_mx_1220106                          | articles_single_shard_hash_mx                          | distributed      | 0 bytes
- articles_single_shard_hash_mx_1220106                          | articles_single_shard_hash_mx                          | distributed      | 0 bytes
- citus_mx_test_schema.nation_hash_1220016                       | citus_mx_test_schema.nation_hash                       | distributed      | 0 bytes
- citus_mx_test_schema.nation_hash_1220016                       | citus_mx_test_schema.nation_hash                       | distributed      | 0 bytes
- citus_mx_test_schema.nation_hash_1220016                       | citus_mx_test_schema.nation_hash                       | distributed      | 0 bytes
- citus_mx_test_schema.nation_hash_1220016                       | citus_mx_test_schema.nation_hash                       | distributed      | 0 bytes
- citus_mx_test_schema.nation_hash_1220016                       | citus_mx_test_schema.nation_hash                       | distributed      | 0 bytes
- citus_mx_test_schema.nation_hash_1220016                       | citus_mx_test_schema.nation_hash                       | distributed      | 0 bytes
- citus_mx_test_schema.nation_hash_1220016                       | citus_mx_test_schema.nation_hash                       | distributed      | 0 bytes
- citus_mx_test_schema.nation_hash_1220017                       | citus_mx_test_schema.nation_hash                       | distributed      | 0 bytes
- citus_mx_test_schema.nation_hash_1220018                       | citus_mx_test_schema.nation_hash                       | distributed      | 0 bytes
- citus_mx_test_schema.nation_hash_1220018                       | citus_mx_test_schema.nation_hash                       | distributed      | 0 bytes
- citus_mx_test_schema.nation_hash_1220018                       | citus_mx_test_schema.nation_hash                       | distributed      | 0 bytes
- citus_mx_test_schema.nation_hash_1220018                       | citus_mx_test_schema.nation_hash                       | distributed      | 0 bytes
- citus_mx_test_schema.nation_hash_1220018                       | citus_mx_test_schema.nation_hash                       | distributed      | 0 bytes
- citus_mx_test_schema.nation_hash_1220018                       | citus_mx_test_schema.nation_hash                       | distributed      | 0 bytes
- citus_mx_test_schema.nation_hash_1220018                       | citus_mx_test_schema.nation_hash                       | distributed      | 0 bytes
- citus_mx_test_schema.nation_hash_1220019                       | citus_mx_test_schema.nation_hash                       | distributed      | 0 bytes
- citus_mx_test_schema.nation_hash_1220020                       | citus_mx_test_schema.nation_hash                       | distributed      | 0 bytes
- citus_mx_test_schema.nation_hash_1220020                       | citus_mx_test_schema.nation_hash                       | distributed      | 0 bytes
- citus_mx_test_schema.nation_hash_1220020                       | citus_mx_test_schema.nation_hash                       | distributed      | 0 bytes
- citus_mx_test_schema.nation_hash_1220020                       | citus_mx_test_schema.nation_hash                       | distributed      | 0 bytes
- citus_mx_test_schema.nation_hash_1220020                       | citus_mx_test_schema.nation_hash                       | distributed      | 0 bytes
- citus_mx_test_schema.nation_hash_1220020                       | citus_mx_test_schema.nation_hash                       | distributed      | 0 bytes
- citus_mx_test_schema.nation_hash_1220020                       | citus_mx_test_schema.nation_hash                       | distributed      | 0 bytes
- citus_mx_test_schema.nation_hash_1220021                       | citus_mx_test_schema.nation_hash                       | distributed      | 0 bytes
- citus_mx_test_schema.nation_hash_1220022                       | citus_mx_test_schema.nation_hash                       | distributed      | 0 bytes
- citus_mx_test_schema.nation_hash_1220022                       | citus_mx_test_schema.nation_hash                       | distributed      | 0 bytes
- citus_mx_test_schema.nation_hash_1220022                       | citus_mx_test_schema.nation_hash                       | distributed      | 0 bytes
- citus_mx_test_schema.nation_hash_1220022                       | citus_mx_test_schema.nation_hash                       | distributed      | 0 bytes
- citus_mx_test_schema.nation_hash_1220022                       | citus_mx_test_schema.nation_hash                       | distributed      | 0 bytes
- citus_mx_test_schema.nation_hash_1220022                       | citus_mx_test_schema.nation_hash                       | distributed      | 0 bytes
- citus_mx_test_schema.nation_hash_1220022                       | citus_mx_test_schema.nation_hash                       | distributed      | 0 bytes
- citus_mx_test_schema.nation_hash_1220023                       | citus_mx_test_schema.nation_hash                       | distributed      | 0 bytes
- citus_mx_test_schema.nation_hash_1220024                       | citus_mx_test_schema.nation_hash                       | distributed      | 0 bytes
- citus_mx_test_schema.nation_hash_1220024                       | citus_mx_test_schema.nation_hash                       | distributed      | 0 bytes
- citus_mx_test_schema.nation_hash_1220024                       | citus_mx_test_schema.nation_hash                       | distributed      | 0 bytes
- citus_mx_test_schema.nation_hash_1220024                       | citus_mx_test_schema.nation_hash                       | distributed      | 0 bytes
- citus_mx_test_schema.nation_hash_1220024                       | citus_mx_test_schema.nation_hash                       | distributed      | 0 bytes
- citus_mx_test_schema.nation_hash_1220024                       | citus_mx_test_schema.nation_hash                       | distributed      | 0 bytes
- citus_mx_test_schema.nation_hash_1220024                       | citus_mx_test_schema.nation_hash                       | distributed      | 0 bytes
- citus_mx_test_schema.nation_hash_1220025                       | citus_mx_test_schema.nation_hash                       | distributed      | 0 bytes
- citus_mx_test_schema.nation_hash_1220026                       | citus_mx_test_schema.nation_hash                       | distributed      | 0 bytes
- citus_mx_test_schema.nation_hash_1220026                       | citus_mx_test_schema.nation_hash                       | distributed      | 0 bytes
- citus_mx_test_schema.nation_hash_1220026                       | citus_mx_test_schema.nation_hash                       | distributed      | 0 bytes
- citus_mx_test_schema.nation_hash_1220026                       | citus_mx_test_schema.nation_hash                       | distributed      | 0 bytes
- citus_mx_test_schema.nation_hash_1220026                       | citus_mx_test_schema.nation_hash                       | distributed      | 0 bytes
- citus_mx_test_schema.nation_hash_1220026                       | citus_mx_test_schema.nation_hash                       | distributed      | 0 bytes
- citus_mx_test_schema.nation_hash_1220026                       | citus_mx_test_schema.nation_hash                       | distributed      | 0 bytes
- citus_mx_test_schema.nation_hash_1220027                       | citus_mx_test_schema.nation_hash                       | distributed      | 0 bytes
- citus_mx_test_schema.nation_hash_1220028                       | citus_mx_test_schema.nation_hash                       | distributed      | 0 bytes
- citus_mx_test_schema.nation_hash_1220028                       | citus_mx_test_schema.nation_hash                       | distributed      | 0 bytes
- citus_mx_test_schema.nation_hash_1220028                       | citus_mx_test_schema.nation_hash                       | distributed      | 0 bytes
- citus_mx_test_schema.nation_hash_1220028                       | citus_mx_test_schema.nation_hash                       | distributed      | 0 bytes
- citus_mx_test_schema.nation_hash_1220028                       | citus_mx_test_schema.nation_hash                       | distributed      | 0 bytes
- citus_mx_test_schema.nation_hash_1220028                       | citus_mx_test_schema.nation_hash                       | distributed      | 0 bytes
- citus_mx_test_schema.nation_hash_1220028                       | citus_mx_test_schema.nation_hash                       | distributed      | 0 bytes
- citus_mx_test_schema.nation_hash_1220029                       | citus_mx_test_schema.nation_hash                       | distributed      | 0 bytes
- citus_mx_test_schema.nation_hash_1220030                       | citus_mx_test_schema.nation_hash                       | distributed      | 0 bytes
- citus_mx_test_schema.nation_hash_1220030                       | citus_mx_test_schema.nation_hash                       | distributed      | 0 bytes
- citus_mx_test_schema.nation_hash_1220030                       | citus_mx_test_schema.nation_hash                       | distributed      | 0 bytes
- citus_mx_test_schema.nation_hash_1220030                       | citus_mx_test_schema.nation_hash                       | distributed      | 0 bytes
- citus_mx_test_schema.nation_hash_1220030                       | citus_mx_test_schema.nation_hash                       | distributed      | 0 bytes
- citus_mx_test_schema.nation_hash_1220030                       | citus_mx_test_schema.nation_hash                       | distributed      | 0 bytes
- citus_mx_test_schema.nation_hash_1220030                       | citus_mx_test_schema.nation_hash                       | distributed      | 0 bytes
- citus_mx_test_schema.nation_hash_1220031                       | citus_mx_test_schema.nation_hash                       | distributed      | 0 bytes
- citus_mx_test_schema.nation_hash_collation_search_path_1220044 | citus_mx_test_schema.nation_hash_collation_search_path | distributed      | 8192 bytes
- citus_mx_test_schema.nation_hash_collation_search_path_1220044 | citus_mx_test_schema.nation_hash_collation_search_path | distributed      | 8192 bytes
- citus_mx_test_schema.nation_hash_collation_search_path_1220044 | citus_mx_test_schema.nation_hash_collation_search_path | distributed      | 8192 bytes
- citus_mx_test_schema.nation_hash_collation_search_path_1220044 | citus_mx_test_schema.nation_hash_collation_search_path | distributed      | 8192 bytes
- citus_mx_test_schema.nation_hash_collation_search_path_1220044 | citus_mx_test_schema.nation_hash_collation_search_path | distributed      | 8192 bytes
- citus_mx_test_schema.nation_hash_collation_search_path_1220044 | citus_mx_test_schema.nation_hash_collation_search_path | distributed      | 8192 bytes
- citus_mx_test_schema.nation_hash_collation_search_path_1220044 | citus_mx_test_schema.nation_hash_collation_search_path | distributed      | 8192 bytes
- citus_mx_test_schema.nation_hash_collation_search_path_1220045 | citus_mx_test_schema.nation_hash_collation_search_path | distributed      | 8192 bytes
- citus_mx_test_schema.nation_hash_collation_search_path_1220046 | citus_mx_test_schema.nation_hash_collation_search_path | distributed      | 0 bytes
- citus_mx_test_schema.nation_hash_collation_search_path_1220046 | citus_mx_test_schema.nation_hash_collation_search_path | distributed      | 0 bytes
- citus_mx_test_schema.nation_hash_collation_search_path_1220046 | citus_mx_test_schema.nation_hash_collation_search_path | distributed      | 0 bytes
- citus_mx_test_schema.nation_hash_collation_search_path_1220046 | citus_mx_test_schema.nation_hash_collation_search_path | distributed      | 0 bytes
- citus_mx_test_schema.nation_hash_collation_search_path_1220046 | citus_mx_test_schema.nation_hash_collation_search_path | distributed      | 0 bytes
- citus_mx_test_schema.nation_hash_collation_search_path_1220046 | citus_mx_test_schema.nation_hash_collation_search_path | distributed      | 0 bytes
- citus_mx_test_schema.nation_hash_collation_search_path_1220046 | citus_mx_test_schema.nation_hash_collation_search_path | distributed      | 0 bytes
- citus_mx_test_schema.nation_hash_collation_search_path_1220047 | citus_mx_test_schema.nation_hash_collation_search_path | distributed      | 8192 bytes
- citus_mx_test_schema.nation_hash_composite_types_1220048       | citus_mx_test_schema.nation_hash_composite_types       | distributed      | 8192 bytes
- citus_mx_test_schema.nation_hash_composite_types_1220048       | citus_mx_test_schema.nation_hash_composite_types       | distributed      | 8192 bytes
- citus_mx_test_schema.nation_hash_composite_types_1220048       | citus_mx_test_schema.nation_hash_composite_types       | distributed      | 8192 bytes
- citus_mx_test_schema.nation_hash_composite_types_1220048       | citus_mx_test_schema.nation_hash_composite_types       | distributed      | 8192 bytes
- citus_mx_test_schema.nation_hash_composite_types_1220048       | citus_mx_test_schema.nation_hash_composite_types       | distributed      | 8192 bytes
- citus_mx_test_schema.nation_hash_composite_types_1220048       | citus_mx_test_schema.nation_hash_composite_types       | distributed      | 8192 bytes
- citus_mx_test_schema.nation_hash_composite_types_1220048       | citus_mx_test_schema.nation_hash_composite_types       | distributed      | 8192 bytes
- citus_mx_test_schema.nation_hash_composite_types_1220049       | citus_mx_test_schema.nation_hash_composite_types       | distributed      | 8192 bytes
- citus_mx_test_schema.nation_hash_composite_types_1220050       | citus_mx_test_schema.nation_hash_composite_types       | distributed      | 0 bytes
- citus_mx_test_schema.nation_hash_composite_types_1220050       | citus_mx_test_schema.nation_hash_composite_types       | distributed      | 0 bytes
- citus_mx_test_schema.nation_hash_composite_types_1220050       | citus_mx_test_schema.nation_hash_composite_types       | distributed      | 0 bytes
- citus_mx_test_schema.nation_hash_composite_types_1220050       | citus_mx_test_schema.nation_hash_composite_types       | distributed      | 0 bytes
- citus_mx_test_schema.nation_hash_composite_types_1220050       | citus_mx_test_schema.nation_hash_composite_types       | distributed      | 0 bytes
- citus_mx_test_schema.nation_hash_composite_types_1220050       | citus_mx_test_schema.nation_hash_composite_types       | distributed      | 0 bytes
- citus_mx_test_schema.nation_hash_composite_types_1220050       | citus_mx_test_schema.nation_hash_composite_types       | distributed      | 0 bytes
- citus_mx_test_schema.nation_hash_composite_types_1220051       | citus_mx_test_schema.nation_hash_composite_types       | distributed      | 8192 bytes
- citus_mx_test_schema_join_1.nation_hash_1220032                | citus_mx_test_schema_join_1.nation_hash                | distributed      | 0 bytes
- citus_mx_test_schema_join_1.nation_hash_1220032                | citus_mx_test_schema_join_1.nation_hash                | distributed      | 0 bytes
- citus_mx_test_schema_join_1.nation_hash_1220032                | citus_mx_test_schema_join_1.nation_hash                | distributed      | 0 bytes
- citus_mx_test_schema_join_1.nation_hash_1220032                | citus_mx_test_schema_join_1.nation_hash                | distributed      | 0 bytes
- citus_mx_test_schema_join_1.nation_hash_1220032                | citus_mx_test_schema_join_1.nation_hash                | distributed      | 0 bytes
- citus_mx_test_schema_join_1.nation_hash_1220032                | citus_mx_test_schema_join_1.nation_hash                | distributed      | 0 bytes
- citus_mx_test_schema_join_1.nation_hash_1220032                | citus_mx_test_schema_join_1.nation_hash                | distributed      | 0 bytes
- citus_mx_test_schema_join_1.nation_hash_1220033                | citus_mx_test_schema_join_1.nation_hash                | distributed      | 0 bytes
- citus_mx_test_schema_join_1.nation_hash_1220034                | citus_mx_test_schema_join_1.nation_hash                | distributed      | 0 bytes
- citus_mx_test_schema_join_1.nation_hash_1220034                | citus_mx_test_schema_join_1.nation_hash                | distributed      | 0 bytes
- citus_mx_test_schema_join_1.nation_hash_1220034                | citus_mx_test_schema_join_1.nation_hash                | distributed      | 0 bytes
- citus_mx_test_schema_join_1.nation_hash_1220034                | citus_mx_test_schema_join_1.nation_hash                | distributed      | 0 bytes
- citus_mx_test_schema_join_1.nation_hash_1220034                | citus_mx_test_schema_join_1.nation_hash                | distributed      | 0 bytes
- citus_mx_test_schema_join_1.nation_hash_1220034                | citus_mx_test_schema_join_1.nation_hash                | distributed      | 0 bytes
- citus_mx_test_schema_join_1.nation_hash_1220034                | citus_mx_test_schema_join_1.nation_hash                | distributed      | 0 bytes
- citus_mx_test_schema_join_1.nation_hash_1220035                | citus_mx_test_schema_join_1.nation_hash                | distributed      | 0 bytes
- citus_mx_test_schema_join_1.nation_hash_2_1220036              | citus_mx_test_schema_join_1.nation_hash_2              | distributed      | 0 bytes
- citus_mx_test_schema_join_1.nation_hash_2_1220036              | citus_mx_test_schema_join_1.nation_hash_2              | distributed      | 0 bytes
- citus_mx_test_schema_join_1.nation_hash_2_1220036              | citus_mx_test_schema_join_1.nation_hash_2              | distributed      | 0 bytes
- citus_mx_test_schema_join_1.nation_hash_2_1220036              | citus_mx_test_schema_join_1.nation_hash_2              | distributed      | 0 bytes
- citus_mx_test_schema_join_1.nation_hash_2_1220036              | citus_mx_test_schema_join_1.nation_hash_2              | distributed      | 0 bytes
- citus_mx_test_schema_join_1.nation_hash_2_1220036              | citus_mx_test_schema_join_1.nation_hash_2              | distributed      | 0 bytes
- citus_mx_test_schema_join_1.nation_hash_2_1220036              | citus_mx_test_schema_join_1.nation_hash_2              | distributed      | 0 bytes
- citus_mx_test_schema_join_1.nation_hash_2_1220037              | citus_mx_test_schema_join_1.nation_hash_2              | distributed      | 0 bytes
- citus_mx_test_schema_join_1.nation_hash_2_1220038              | citus_mx_test_schema_join_1.nation_hash_2              | distributed      | 0 bytes
- citus_mx_test_schema_join_1.nation_hash_2_1220038              | citus_mx_test_schema_join_1.nation_hash_2              | distributed      | 0 bytes
- citus_mx_test_schema_join_1.nation_hash_2_1220038              | citus_mx_test_schema_join_1.nation_hash_2              | distributed      | 0 bytes
- citus_mx_test_schema_join_1.nation_hash_2_1220038              | citus_mx_test_schema_join_1.nation_hash_2              | distributed      | 0 bytes
- citus_mx_test_schema_join_1.nation_hash_2_1220038              | citus_mx_test_schema_join_1.nation_hash_2              | distributed      | 0 bytes
- citus_mx_test_schema_join_1.nation_hash_2_1220038              | citus_mx_test_schema_join_1.nation_hash_2              | distributed      | 0 bytes
- citus_mx_test_schema_join_1.nation_hash_2_1220038              | citus_mx_test_schema_join_1.nation_hash_2              | distributed      | 0 bytes
- citus_mx_test_schema_join_1.nation_hash_2_1220039              | citus_mx_test_schema_join_1.nation_hash_2              | distributed      | 0 bytes
- citus_mx_test_schema_join_2.nation_hash_1220040                | citus_mx_test_schema_join_2.nation_hash                | distributed      | 0 bytes
- citus_mx_test_schema_join_2.nation_hash_1220040                | citus_mx_test_schema_join_2.nation_hash                | distributed      | 0 bytes
- citus_mx_test_schema_join_2.nation_hash_1220040                | citus_mx_test_schema_join_2.nation_hash                | distributed      | 0 bytes
- citus_mx_test_schema_join_2.nation_hash_1220040                | citus_mx_test_schema_join_2.nation_hash                | distributed      | 0 bytes
- citus_mx_test_schema_join_2.nation_hash_1220040                | citus_mx_test_schema_join_2.nation_hash                | distributed      | 0 bytes
- citus_mx_test_schema_join_2.nation_hash_1220040                | citus_mx_test_schema_join_2.nation_hash                | distributed      | 0 bytes
- citus_mx_test_schema_join_2.nation_hash_1220040                | citus_mx_test_schema_join_2.nation_hash                | distributed      | 0 bytes
- citus_mx_test_schema_join_2.nation_hash_1220041                | citus_mx_test_schema_join_2.nation_hash                | distributed      | 0 bytes
- citus_mx_test_schema_join_2.nation_hash_1220042                | citus_mx_test_schema_join_2.nation_hash                | distributed      | 0 bytes
- citus_mx_test_schema_join_2.nation_hash_1220042                | citus_mx_test_schema_join_2.nation_hash                | distributed      | 0 bytes
- citus_mx_test_schema_join_2.nation_hash_1220042                | citus_mx_test_schema_join_2.nation_hash                | distributed      | 0 bytes
- citus_mx_test_schema_join_2.nation_hash_1220042                | citus_mx_test_schema_join_2.nation_hash                | distributed      | 0 bytes
- citus_mx_test_schema_join_2.nation_hash_1220042                | citus_mx_test_schema_join_2.nation_hash                | distributed      | 0 bytes
- citus_mx_test_schema_join_2.nation_hash_1220042                | citus_mx_test_schema_join_2.nation_hash                | distributed      | 0 bytes
- citus_mx_test_schema_join_2.nation_hash_1220042                | citus_mx_test_schema_join_2.nation_hash                | distributed      | 0 bytes
- citus_mx_test_schema_join_2.nation_hash_1220043                | citus_mx_test_schema_join_2.nation_hash                | distributed      | 0 bytes
- company_employees_mx_1220107                                   | company_employees_mx                                   | distributed      | 0 bytes
- company_employees_mx_1220107                                   | company_employees_mx                                   | distributed      | 0 bytes
- company_employees_mx_1220107                                   | company_employees_mx                                   | distributed      | 0 bytes
- company_employees_mx_1220107                                   | company_employees_mx                                   | distributed      | 0 bytes
- company_employees_mx_1220107                                   | company_employees_mx                                   | distributed      | 0 bytes
- company_employees_mx_1220107                                   | company_employees_mx                                   | distributed      | 0 bytes
- company_employees_mx_1220107                                   | company_employees_mx                                   | distributed      | 0 bytes
- company_employees_mx_1220108                                   | company_employees_mx                                   | distributed      | 0 bytes
- company_employees_mx_1220109                                   | company_employees_mx                                   | distributed      | 0 bytes
- company_employees_mx_1220109                                   | company_employees_mx                                   | distributed      | 0 bytes
- company_employees_mx_1220109                                   | company_employees_mx                                   | distributed      | 0 bytes
- company_employees_mx_1220109                                   | company_employees_mx                                   | distributed      | 0 bytes
- company_employees_mx_1220109                                   | company_employees_mx                                   | distributed      | 0 bytes
- company_employees_mx_1220109                                   | company_employees_mx                                   | distributed      | 0 bytes
- company_employees_mx_1220109                                   | company_employees_mx                                   | distributed      | 0 bytes
- company_employees_mx_1220110                                   | company_employees_mx                                   | distributed      | 0 bytes
- customer_mx_1220084                                            | customer_mx                                            | reference        | 0 bytes
- customer_mx_1220084                                            | customer_mx                                            | reference        | 0 bytes
- customer_mx_1220084                                            | customer_mx                                            | reference        | 0 bytes
- customer_mx_1220084                                            | customer_mx                                            | reference        | 0 bytes
- customer_mx_1220084                                            | customer_mx                                            | reference        | 0 bytes
- customer_mx_1220084                                            | customer_mx                                            | reference        | 0 bytes
- customer_mx_1220084                                            | customer_mx                                            | reference        | 0 bytes
- customer_mx_1220084                                            | customer_mx                                            | reference        | 0 bytes
- labs_mx_1220102                                                | labs_mx                                                | distributed      | 0 bytes
- labs_mx_1220102                                                | labs_mx                                                | distributed      | 0 bytes
- labs_mx_1220102                                                | labs_mx                                                | distributed      | 0 bytes
- labs_mx_1220102                                                | labs_mx                                                | distributed      | 0 bytes
- labs_mx_1220102                                                | labs_mx                                                | distributed      | 0 bytes
- labs_mx_1220102                                                | labs_mx                                                | distributed      | 0 bytes
- labs_mx_1220102                                                | labs_mx                                                | distributed      | 0 bytes
- limit_orders_mx_1220092                                        | limit_orders_mx                                        | distributed      | 0 bytes
- limit_orders_mx_1220092                                        | limit_orders_mx                                        | distributed      | 0 bytes
- limit_orders_mx_1220092                                        | limit_orders_mx                                        | distributed      | 0 bytes
- limit_orders_mx_1220092                                        | limit_orders_mx                                        | distributed      | 0 bytes
- limit_orders_mx_1220092                                        | limit_orders_mx                                        | distributed      | 0 bytes
- limit_orders_mx_1220092                                        | limit_orders_mx                                        | distributed      | 0 bytes
- limit_orders_mx_1220092                                        | limit_orders_mx                                        | distributed      | 0 bytes
- limit_orders_mx_1220093                                        | limit_orders_mx                                        | distributed      | 0 bytes
- lineitem_mx_1220052                                            | lineitem_mx                                            | distributed      | 0 bytes
- lineitem_mx_1220052                                            | lineitem_mx                                            | distributed      | 0 bytes
- lineitem_mx_1220052                                            | lineitem_mx                                            | distributed      | 0 bytes
- lineitem_mx_1220052                                            | lineitem_mx                                            | distributed      | 0 bytes
- lineitem_mx_1220052                                            | lineitem_mx                                            | distributed      | 0 bytes
- lineitem_mx_1220052                                            | lineitem_mx                                            | distributed      | 0 bytes
- lineitem_mx_1220052                                            | lineitem_mx                                            | distributed      | 0 bytes
- lineitem_mx_1220053                                            | lineitem_mx                                            | distributed      | 0 bytes
- lineitem_mx_1220054                                            | lineitem_mx                                            | distributed      | 0 bytes
- lineitem_mx_1220054                                            | lineitem_mx                                            | distributed      | 0 bytes
- lineitem_mx_1220054                                            | lineitem_mx                                            | distributed      | 0 bytes
- lineitem_mx_1220054                                            | lineitem_mx                                            | distributed      | 0 bytes
- lineitem_mx_1220054                                            | lineitem_mx                                            | distributed      | 0 bytes
- lineitem_mx_1220054                                            | lineitem_mx                                            | distributed      | 0 bytes
- lineitem_mx_1220054                                            | lineitem_mx                                            | distributed      | 0 bytes
- lineitem_mx_1220055                                            | lineitem_mx                                            | distributed      | 0 bytes
- lineitem_mx_1220056                                            | lineitem_mx                                            | distributed      | 0 bytes
- lineitem_mx_1220056                                            | lineitem_mx                                            | distributed      | 0 bytes
- lineitem_mx_1220056                                            | lineitem_mx                                            | distributed      | 0 bytes
- lineitem_mx_1220056                                            | lineitem_mx                                            | distributed      | 0 bytes
- lineitem_mx_1220056                                            | lineitem_mx                                            | distributed      | 0 bytes
- lineitem_mx_1220056                                            | lineitem_mx                                            | distributed      | 0 bytes
- lineitem_mx_1220056                                            | lineitem_mx                                            | distributed      | 0 bytes
- lineitem_mx_1220057                                            | lineitem_mx                                            | distributed      | 0 bytes
- lineitem_mx_1220058                                            | lineitem_mx                                            | distributed      | 0 bytes
- lineitem_mx_1220058                                            | lineitem_mx                                            | distributed      | 0 bytes
- lineitem_mx_1220058                                            | lineitem_mx                                            | distributed      | 0 bytes
- lineitem_mx_1220058                                            | lineitem_mx                                            | distributed      | 0 bytes
- lineitem_mx_1220058                                            | lineitem_mx                                            | distributed      | 0 bytes
- lineitem_mx_1220058                                            | lineitem_mx                                            | distributed      | 0 bytes
- lineitem_mx_1220058                                            | lineitem_mx                                            | distributed      | 0 bytes
- lineitem_mx_1220059                                            | lineitem_mx                                            | distributed      | 0 bytes
- lineitem_mx_1220060                                            | lineitem_mx                                            | distributed      | 0 bytes
- lineitem_mx_1220060                                            | lineitem_mx                                            | distributed      | 0 bytes
- lineitem_mx_1220060                                            | lineitem_mx                                            | distributed      | 0 bytes
- lineitem_mx_1220060                                            | lineitem_mx                                            | distributed      | 0 bytes
- lineitem_mx_1220060                                            | lineitem_mx                                            | distributed      | 0 bytes
- lineitem_mx_1220060                                            | lineitem_mx                                            | distributed      | 0 bytes
- lineitem_mx_1220060                                            | lineitem_mx                                            | distributed      | 0 bytes
- lineitem_mx_1220061                                            | lineitem_mx                                            | distributed      | 0 bytes
- lineitem_mx_1220062                                            | lineitem_mx                                            | distributed      | 0 bytes
- lineitem_mx_1220062                                            | lineitem_mx                                            | distributed      | 0 bytes
- lineitem_mx_1220062                                            | lineitem_mx                                            | distributed      | 0 bytes
- lineitem_mx_1220062                                            | lineitem_mx                                            | distributed      | 0 bytes
- lineitem_mx_1220062                                            | lineitem_mx                                            | distributed      | 0 bytes
- lineitem_mx_1220062                                            | lineitem_mx                                            | distributed      | 0 bytes
- lineitem_mx_1220062                                            | lineitem_mx                                            | distributed      | 0 bytes
- lineitem_mx_1220063                                            | lineitem_mx                                            | distributed      | 0 bytes
- lineitem_mx_1220064                                            | lineitem_mx                                            | distributed      | 0 bytes
- lineitem_mx_1220064                                            | lineitem_mx                                            | distributed      | 0 bytes
- lineitem_mx_1220064                                            | lineitem_mx                                            | distributed      | 0 bytes
- lineitem_mx_1220064                                            | lineitem_mx                                            | distributed      | 0 bytes
- lineitem_mx_1220064                                            | lineitem_mx                                            | distributed      | 0 bytes
- lineitem_mx_1220064                                            | lineitem_mx                                            | distributed      | 0 bytes
- lineitem_mx_1220064                                            | lineitem_mx                                            | distributed      | 0 bytes
- lineitem_mx_1220065                                            | lineitem_mx                                            | distributed      | 0 bytes
- lineitem_mx_1220066                                            | lineitem_mx                                            | distributed      | 0 bytes
- lineitem_mx_1220066                                            | lineitem_mx                                            | distributed      | 0 bytes
- lineitem_mx_1220066                                            | lineitem_mx                                            | distributed      | 0 bytes
- lineitem_mx_1220066                                            | lineitem_mx                                            | distributed      | 0 bytes
- lineitem_mx_1220066                                            | lineitem_mx                                            | distributed      | 0 bytes
- lineitem_mx_1220066                                            | lineitem_mx                                            | distributed      | 0 bytes
- lineitem_mx_1220066                                            | lineitem_mx                                            | distributed      | 0 bytes
- lineitem_mx_1220067                                            | lineitem_mx                                            | distributed      | 0 bytes
- multiple_hash_mx_1220094                                       | multiple_hash_mx                                       | distributed      | 0 bytes
- multiple_hash_mx_1220094                                       | multiple_hash_mx                                       | distributed      | 0 bytes
- multiple_hash_mx_1220094                                       | multiple_hash_mx                                       | distributed      | 0 bytes
- multiple_hash_mx_1220094                                       | multiple_hash_mx                                       | distributed      | 0 bytes
- multiple_hash_mx_1220094                                       | multiple_hash_mx                                       | distributed      | 0 bytes
- multiple_hash_mx_1220094                                       | multiple_hash_mx                                       | distributed      | 0 bytes
- multiple_hash_mx_1220094                                       | multiple_hash_mx                                       | distributed      | 0 bytes
- multiple_hash_mx_1220095                                       | multiple_hash_mx                                       | distributed      | 0 bytes
- mx_ddl_table_1220088                                           | mx_ddl_table                                           | distributed      | 8192 bytes
- mx_ddl_table_1220088                                           | mx_ddl_table                                           | distributed      | 8192 bytes
- mx_ddl_table_1220088                                           | mx_ddl_table                                           | distributed      | 8192 bytes
- mx_ddl_table_1220088                                           | mx_ddl_table                                           | distributed      | 8192 bytes
- mx_ddl_table_1220088                                           | mx_ddl_table                                           | distributed      | 8192 bytes
- mx_ddl_table_1220088                                           | mx_ddl_table                                           | distributed      | 8192 bytes
- mx_ddl_table_1220088                                           | mx_ddl_table                                           | distributed      | 8192 bytes
- mx_ddl_table_1220089                                           | mx_ddl_table                                           | distributed      | 8192 bytes
- mx_ddl_table_1220090                                           | mx_ddl_table                                           | distributed      | 8192 bytes
- mx_ddl_table_1220090                                           | mx_ddl_table                                           | distributed      | 8192 bytes
- mx_ddl_table_1220090                                           | mx_ddl_table                                           | distributed      | 8192 bytes
- mx_ddl_table_1220090                                           | mx_ddl_table                                           | distributed      | 8192 bytes
- mx_ddl_table_1220090                                           | mx_ddl_table                                           | distributed      | 8192 bytes
- mx_ddl_table_1220090                                           | mx_ddl_table                                           | distributed      | 8192 bytes
- mx_ddl_table_1220090                                           | mx_ddl_table                                           | distributed      | 8192 bytes
- mx_ddl_table_1220091                                           | mx_ddl_table                                           | distributed      | 8192 bytes
- nation_hash_1220000                                            | nation_hash                                            | distributed      | 0 bytes
- nation_hash_1220000                                            | nation_hash                                            | distributed      | 0 bytes
- nation_hash_1220000                                            | nation_hash                                            | distributed      | 0 bytes
- nation_hash_1220000                                            | nation_hash                                            | distributed      | 0 bytes
- nation_hash_1220000                                            | nation_hash                                            | distributed      | 0 bytes
- nation_hash_1220000                                            | nation_hash                                            | distributed      | 0 bytes
- nation_hash_1220000                                            | nation_hash                                            | distributed      | 0 bytes
- nation_hash_1220001                                            | nation_hash                                            | distributed      | 0 bytes
- nation_hash_1220002                                            | nation_hash                                            | distributed      | 0 bytes
- nation_hash_1220002                                            | nation_hash                                            | distributed      | 0 bytes
- nation_hash_1220002                                            | nation_hash                                            | distributed      | 0 bytes
- nation_hash_1220002                                            | nation_hash                                            | distributed      | 0 bytes
- nation_hash_1220002                                            | nation_hash                                            | distributed      | 0 bytes
- nation_hash_1220002                                            | nation_hash                                            | distributed      | 0 bytes
- nation_hash_1220002                                            | nation_hash                                            | distributed      | 0 bytes
- nation_hash_1220003                                            | nation_hash                                            | distributed      | 0 bytes
- nation_hash_1220004                                            | nation_hash                                            | distributed      | 0 bytes
- nation_hash_1220004                                            | nation_hash                                            | distributed      | 0 bytes
- nation_hash_1220004                                            | nation_hash                                            | distributed      | 0 bytes
- nation_hash_1220004                                            | nation_hash                                            | distributed      | 0 bytes
- nation_hash_1220004                                            | nation_hash                                            | distributed      | 0 bytes
- nation_hash_1220004                                            | nation_hash                                            | distributed      | 0 bytes
- nation_hash_1220004                                            | nation_hash                                            | distributed      | 0 bytes
- nation_hash_1220005                                            | nation_hash                                            | distributed      | 0 bytes
- nation_hash_1220006                                            | nation_hash                                            | distributed      | 0 bytes
- nation_hash_1220006                                            | nation_hash                                            | distributed      | 0 bytes
- nation_hash_1220006                                            | nation_hash                                            | distributed      | 0 bytes
- nation_hash_1220006                                            | nation_hash                                            | distributed      | 0 bytes
- nation_hash_1220006                                            | nation_hash                                            | distributed      | 0 bytes
- nation_hash_1220006                                            | nation_hash                                            | distributed      | 0 bytes
- nation_hash_1220006                                            | nation_hash                                            | distributed      | 0 bytes
- nation_hash_1220007                                            | nation_hash                                            | distributed      | 0 bytes
- nation_hash_1220008                                            | nation_hash                                            | distributed      | 0 bytes
- nation_hash_1220008                                            | nation_hash                                            | distributed      | 0 bytes
- nation_hash_1220008                                            | nation_hash                                            | distributed      | 0 bytes
- nation_hash_1220008                                            | nation_hash                                            | distributed      | 0 bytes
- nation_hash_1220008                                            | nation_hash                                            | distributed      | 0 bytes
- nation_hash_1220008                                            | nation_hash                                            | distributed      | 0 bytes
- nation_hash_1220008                                            | nation_hash                                            | distributed      | 0 bytes
- nation_hash_1220009                                            | nation_hash                                            | distributed      | 0 bytes
- nation_hash_1220010                                            | nation_hash                                            | distributed      | 0 bytes
- nation_hash_1220010                                            | nation_hash                                            | distributed      | 0 bytes
- nation_hash_1220010                                            | nation_hash                                            | distributed      | 0 bytes
- nation_hash_1220010                                            | nation_hash                                            | distributed      | 0 bytes
- nation_hash_1220010                                            | nation_hash                                            | distributed      | 0 bytes
- nation_hash_1220010                                            | nation_hash                                            | distributed      | 0 bytes
- nation_hash_1220010                                            | nation_hash                                            | distributed      | 0 bytes
- nation_hash_1220011                                            | nation_hash                                            | distributed      | 0 bytes
- nation_hash_1220012                                            | nation_hash                                            | distributed      | 0 bytes
- nation_hash_1220012                                            | nation_hash                                            | distributed      | 0 bytes
- nation_hash_1220012                                            | nation_hash                                            | distributed      | 0 bytes
- nation_hash_1220012                                            | nation_hash                                            | distributed      | 0 bytes
- nation_hash_1220012                                            | nation_hash                                            | distributed      | 0 bytes
- nation_hash_1220012                                            | nation_hash                                            | distributed      | 0 bytes
- nation_hash_1220012                                            | nation_hash                                            | distributed      | 0 bytes
- nation_hash_1220013                                            | nation_hash                                            | distributed      | 0 bytes
- nation_hash_1220014                                            | nation_hash                                            | distributed      | 0 bytes
- nation_hash_1220014                                            | nation_hash                                            | distributed      | 0 bytes
- nation_hash_1220014                                            | nation_hash                                            | distributed      | 0 bytes
- nation_hash_1220014                                            | nation_hash                                            | distributed      | 0 bytes
- nation_hash_1220014                                            | nation_hash                                            | distributed      | 0 bytes
- nation_hash_1220014                                            | nation_hash                                            | distributed      | 0 bytes
- nation_hash_1220014                                            | nation_hash                                            | distributed      | 0 bytes
- nation_hash_1220015                                            | nation_hash                                            | distributed      | 0 bytes
- nation_mx_1220085                                              | nation_mx                                              | reference        | 0 bytes
- nation_mx_1220085                                              | nation_mx                                              | reference        | 0 bytes
- nation_mx_1220085                                              | nation_mx                                              | reference        | 0 bytes
- nation_mx_1220085                                              | nation_mx                                              | reference        | 0 bytes
- nation_mx_1220085                                              | nation_mx                                              | reference        | 0 bytes
- nation_mx_1220085                                              | nation_mx                                              | reference        | 0 bytes
- nation_mx_1220085                                              | nation_mx                                              | reference        | 0 bytes
- nation_mx_1220085                                              | nation_mx                                              | reference        | 0 bytes
- objects_mx_1220103                                             | objects_mx                                             | distributed      | 0 bytes
- objects_mx_1220103                                             | objects_mx                                             | distributed      | 0 bytes
- objects_mx_1220103                                             | objects_mx                                             | distributed      | 0 bytes
- objects_mx_1220103                                             | objects_mx                                             | distributed      | 0 bytes
- objects_mx_1220103                                             | objects_mx                                             | distributed      | 0 bytes
- objects_mx_1220103                                             | objects_mx                                             | distributed      | 0 bytes
- objects_mx_1220103                                             | objects_mx                                             | distributed      | 0 bytes
- orders_mx_1220068                                              | orders_mx                                              | distributed      | 0 bytes
- orders_mx_1220068                                              | orders_mx                                              | distributed      | 0 bytes
- orders_mx_1220068                                              | orders_mx                                              | distributed      | 0 bytes
- orders_mx_1220068                                              | orders_mx                                              | distributed      | 0 bytes
- orders_mx_1220068                                              | orders_mx                                              | distributed      | 0 bytes
- orders_mx_1220068                                              | orders_mx                                              | distributed      | 0 bytes
- orders_mx_1220068                                              | orders_mx                                              | distributed      | 0 bytes
- orders_mx_1220069                                              | orders_mx                                              | distributed      | 0 bytes
- orders_mx_1220070                                              | orders_mx                                              | distributed      | 0 bytes
- orders_mx_1220070                                              | orders_mx                                              | distributed      | 0 bytes
- orders_mx_1220070                                              | orders_mx                                              | distributed      | 0 bytes
- orders_mx_1220070                                              | orders_mx                                              | distributed      | 0 bytes
- orders_mx_1220070                                              | orders_mx                                              | distributed      | 0 bytes
- orders_mx_1220070                                              | orders_mx                                              | distributed      | 0 bytes
- orders_mx_1220070                                              | orders_mx                                              | distributed      | 0 bytes
- orders_mx_1220071                                              | orders_mx                                              | distributed      | 0 bytes
- orders_mx_1220072                                              | orders_mx                                              | distributed      | 0 bytes
- orders_mx_1220072                                              | orders_mx                                              | distributed      | 0 bytes
- orders_mx_1220072                                              | orders_mx                                              | distributed      | 0 bytes
- orders_mx_1220072                                              | orders_mx                                              | distributed      | 0 bytes
- orders_mx_1220072                                              | orders_mx                                              | distributed      | 0 bytes
- orders_mx_1220072                                              | orders_mx                                              | distributed      | 0 bytes
- orders_mx_1220072                                              | orders_mx                                              | distributed      | 0 bytes
- orders_mx_1220073                                              | orders_mx                                              | distributed      | 0 bytes
- orders_mx_1220074                                              | orders_mx                                              | distributed      | 0 bytes
- orders_mx_1220074                                              | orders_mx                                              | distributed      | 0 bytes
- orders_mx_1220074                                              | orders_mx                                              | distributed      | 0 bytes
- orders_mx_1220074                                              | orders_mx                                              | distributed      | 0 bytes
- orders_mx_1220074                                              | orders_mx                                              | distributed      | 0 bytes
- orders_mx_1220074                                              | orders_mx                                              | distributed      | 0 bytes
- orders_mx_1220074                                              | orders_mx                                              | distributed      | 0 bytes
- orders_mx_1220075                                              | orders_mx                                              | distributed      | 0 bytes
- orders_mx_1220076                                              | orders_mx                                              | distributed      | 0 bytes
- orders_mx_1220076                                              | orders_mx                                              | distributed      | 0 bytes
- orders_mx_1220076                                              | orders_mx                                              | distributed      | 0 bytes
- orders_mx_1220076                                              | orders_mx                                              | distributed      | 0 bytes
- orders_mx_1220076                                              | orders_mx                                              | distributed      | 0 bytes
- orders_mx_1220076                                              | orders_mx                                              | distributed      | 0 bytes
- orders_mx_1220076                                              | orders_mx                                              | distributed      | 0 bytes
- orders_mx_1220077                                              | orders_mx                                              | distributed      | 0 bytes
- orders_mx_1220078                                              | orders_mx                                              | distributed      | 0 bytes
- orders_mx_1220078                                              | orders_mx                                              | distributed      | 0 bytes
- orders_mx_1220078                                              | orders_mx                                              | distributed      | 0 bytes
- orders_mx_1220078                                              | orders_mx                                              | distributed      | 0 bytes
- orders_mx_1220078                                              | orders_mx                                              | distributed      | 0 bytes
- orders_mx_1220078                                              | orders_mx                                              | distributed      | 0 bytes
- orders_mx_1220078                                              | orders_mx                                              | distributed      | 0 bytes
- orders_mx_1220079                                              | orders_mx                                              | distributed      | 0 bytes
- orders_mx_1220080                                              | orders_mx                                              | distributed      | 0 bytes
- orders_mx_1220080                                              | orders_mx                                              | distributed      | 0 bytes
- orders_mx_1220080                                              | orders_mx                                              | distributed      | 0 bytes
- orders_mx_1220080                                              | orders_mx                                              | distributed      | 0 bytes
- orders_mx_1220080                                              | orders_mx                                              | distributed      | 0 bytes
- orders_mx_1220080                                              | orders_mx                                              | distributed      | 0 bytes
- orders_mx_1220080                                              | orders_mx                                              | distributed      | 0 bytes
- orders_mx_1220081                                              | orders_mx                                              | distributed      | 0 bytes
- orders_mx_1220082                                              | orders_mx                                              | distributed      | 0 bytes
- orders_mx_1220082                                              | orders_mx                                              | distributed      | 0 bytes
- orders_mx_1220082                                              | orders_mx                                              | distributed      | 0 bytes
- orders_mx_1220082                                              | orders_mx                                              | distributed      | 0 bytes
- orders_mx_1220082                                              | orders_mx                                              | distributed      | 0 bytes
- orders_mx_1220082                                              | orders_mx                                              | distributed      | 0 bytes
- orders_mx_1220082                                              | orders_mx                                              | distributed      | 0 bytes
- orders_mx_1220083                                              | orders_mx                                              | distributed      | 0 bytes
- part_mx_1220086                                                | part_mx                                                | reference        | 0 bytes
- part_mx_1220086                                                | part_mx                                                | reference        | 0 bytes
- part_mx_1220086                                                | part_mx                                                | reference        | 0 bytes
- part_mx_1220086                                                | part_mx                                                | reference        | 0 bytes
- part_mx_1220086                                                | part_mx                                                | reference        | 0 bytes
- part_mx_1220086                                                | part_mx                                                | reference        | 0 bytes
- part_mx_1220086                                                | part_mx                                                | reference        | 0 bytes
- part_mx_1220086                                                | part_mx                                                | reference        | 0 bytes
- researchers_mx_1220100                                         | researchers_mx                                         | distributed      | 0 bytes
- researchers_mx_1220100                                         | researchers_mx                                         | distributed      | 0 bytes
- researchers_mx_1220100                                         | researchers_mx                                         | distributed      | 0 bytes
- researchers_mx_1220100                                         | researchers_mx                                         | distributed      | 0 bytes
- researchers_mx_1220100                                         | researchers_mx                                         | distributed      | 0 bytes
- researchers_mx_1220100                                         | researchers_mx                                         | distributed      | 0 bytes
- researchers_mx_1220100                                         | researchers_mx                                         | distributed      | 0 bytes
- researchers_mx_1220101                                         | researchers_mx                                         | distributed      | 0 bytes
- supplier_mx_1220087                                            | supplier_mx                                            | reference        | 0 bytes
- supplier_mx_1220087                                            | supplier_mx                                            | reference        | 0 bytes
- supplier_mx_1220087                                            | supplier_mx                                            | reference        | 0 bytes
- supplier_mx_1220087                                            | supplier_mx                                            | reference        | 0 bytes
- supplier_mx_1220087                                            | supplier_mx                                            | reference        | 0 bytes
- supplier_mx_1220087                                            | supplier_mx                                            | reference        | 0 bytes
- supplier_mx_1220087                                            | supplier_mx                                            | reference        | 0 bytes
- supplier_mx_1220087                                            | supplier_mx                                            | reference        | 0 bytes
+ app_analytics_events_mx_1220096                                | app_analytics_events_mx                                | distributed      |          0
+ app_analytics_events_mx_1220096                                | app_analytics_events_mx                                | distributed      |          0
+ app_analytics_events_mx_1220096                                | app_analytics_events_mx                                | distributed      |          0
+ app_analytics_events_mx_1220096                                | app_analytics_events_mx                                | distributed      |          0
+ app_analytics_events_mx_1220096                                | app_analytics_events_mx                                | distributed      |          0
+ app_analytics_events_mx_1220096                                | app_analytics_events_mx                                | distributed      |          0
+ app_analytics_events_mx_1220096                                | app_analytics_events_mx                                | distributed      |          0
+ app_analytics_events_mx_1220097                                | app_analytics_events_mx                                | distributed      |          0
+ app_analytics_events_mx_1220098                                | app_analytics_events_mx                                | distributed      |          0
+ app_analytics_events_mx_1220098                                | app_analytics_events_mx                                | distributed      |          0
+ app_analytics_events_mx_1220098                                | app_analytics_events_mx                                | distributed      |          0
+ app_analytics_events_mx_1220098                                | app_analytics_events_mx                                | distributed      |          0
+ app_analytics_events_mx_1220098                                | app_analytics_events_mx                                | distributed      |          0
+ app_analytics_events_mx_1220098                                | app_analytics_events_mx                                | distributed      |          0
+ app_analytics_events_mx_1220098                                | app_analytics_events_mx                                | distributed      |          0
+ app_analytics_events_mx_1220099                                | app_analytics_events_mx                                | distributed      |          0
+ articles_hash_mx_1220104                                       | articles_hash_mx                                       | distributed      |          0
+ articles_hash_mx_1220104                                       | articles_hash_mx                                       | distributed      |          0
+ articles_hash_mx_1220104                                       | articles_hash_mx                                       | distributed      |          0
+ articles_hash_mx_1220104                                       | articles_hash_mx                                       | distributed      |          0
+ articles_hash_mx_1220104                                       | articles_hash_mx                                       | distributed      |          0
+ articles_hash_mx_1220104                                       | articles_hash_mx                                       | distributed      |          0
+ articles_hash_mx_1220104                                       | articles_hash_mx                                       | distributed      |          0
+ articles_hash_mx_1220105                                       | articles_hash_mx                                       | distributed      |          0
+ articles_single_shard_hash_mx_1220106                          | articles_single_shard_hash_mx                          | distributed      |          0
+ articles_single_shard_hash_mx_1220106                          | articles_single_shard_hash_mx                          | distributed      |          0
+ articles_single_shard_hash_mx_1220106                          | articles_single_shard_hash_mx                          | distributed      |          0
+ articles_single_shard_hash_mx_1220106                          | articles_single_shard_hash_mx                          | distributed      |          0
+ articles_single_shard_hash_mx_1220106                          | articles_single_shard_hash_mx                          | distributed      |          0
+ articles_single_shard_hash_mx_1220106                          | articles_single_shard_hash_mx                          | distributed      |          0
+ articles_single_shard_hash_mx_1220106                          | articles_single_shard_hash_mx                          | distributed      |          0
+ citus_mx_test_schema.nation_hash_1220016                       | citus_mx_test_schema.nation_hash                       | distributed      |          0
+ citus_mx_test_schema.nation_hash_1220016                       | citus_mx_test_schema.nation_hash                       | distributed      |          0
+ citus_mx_test_schema.nation_hash_1220016                       | citus_mx_test_schema.nation_hash                       | distributed      |          0
+ citus_mx_test_schema.nation_hash_1220016                       | citus_mx_test_schema.nation_hash                       | distributed      |          0
+ citus_mx_test_schema.nation_hash_1220016                       | citus_mx_test_schema.nation_hash                       | distributed      |          0
+ citus_mx_test_schema.nation_hash_1220016                       | citus_mx_test_schema.nation_hash                       | distributed      |          0
+ citus_mx_test_schema.nation_hash_1220016                       | citus_mx_test_schema.nation_hash                       | distributed      |          0
+ citus_mx_test_schema.nation_hash_1220017                       | citus_mx_test_schema.nation_hash                       | distributed      |          0
+ citus_mx_test_schema.nation_hash_1220018                       | citus_mx_test_schema.nation_hash                       | distributed      |          0
+ citus_mx_test_schema.nation_hash_1220018                       | citus_mx_test_schema.nation_hash                       | distributed      |          0
+ citus_mx_test_schema.nation_hash_1220018                       | citus_mx_test_schema.nation_hash                       | distributed      |          0
+ citus_mx_test_schema.nation_hash_1220018                       | citus_mx_test_schema.nation_hash                       | distributed      |          0
+ citus_mx_test_schema.nation_hash_1220018                       | citus_mx_test_schema.nation_hash                       | distributed      |          0
+ citus_mx_test_schema.nation_hash_1220018                       | citus_mx_test_schema.nation_hash                       | distributed      |          0
+ citus_mx_test_schema.nation_hash_1220018                       | citus_mx_test_schema.nation_hash                       | distributed      |          0
+ citus_mx_test_schema.nation_hash_1220019                       | citus_mx_test_schema.nation_hash                       | distributed      |          0
+ citus_mx_test_schema.nation_hash_1220020                       | citus_mx_test_schema.nation_hash                       | distributed      |          0
+ citus_mx_test_schema.nation_hash_1220020                       | citus_mx_test_schema.nation_hash                       | distributed      |          0
+ citus_mx_test_schema.nation_hash_1220020                       | citus_mx_test_schema.nation_hash                       | distributed      |          0
+ citus_mx_test_schema.nation_hash_1220020                       | citus_mx_test_schema.nation_hash                       | distributed      |          0
+ citus_mx_test_schema.nation_hash_1220020                       | citus_mx_test_schema.nation_hash                       | distributed      |          0
+ citus_mx_test_schema.nation_hash_1220020                       | citus_mx_test_schema.nation_hash                       | distributed      |          0
+ citus_mx_test_schema.nation_hash_1220020                       | citus_mx_test_schema.nation_hash                       | distributed      |          0
+ citus_mx_test_schema.nation_hash_1220021                       | citus_mx_test_schema.nation_hash                       | distributed      |          0
+ citus_mx_test_schema.nation_hash_1220022                       | citus_mx_test_schema.nation_hash                       | distributed      |          0
+ citus_mx_test_schema.nation_hash_1220022                       | citus_mx_test_schema.nation_hash                       | distributed      |          0
+ citus_mx_test_schema.nation_hash_1220022                       | citus_mx_test_schema.nation_hash                       | distributed      |          0
+ citus_mx_test_schema.nation_hash_1220022                       | citus_mx_test_schema.nation_hash                       | distributed      |          0
+ citus_mx_test_schema.nation_hash_1220022                       | citus_mx_test_schema.nation_hash                       | distributed      |          0
+ citus_mx_test_schema.nation_hash_1220022                       | citus_mx_test_schema.nation_hash                       | distributed      |          0
+ citus_mx_test_schema.nation_hash_1220022                       | citus_mx_test_schema.nation_hash                       | distributed      |          0
+ citus_mx_test_schema.nation_hash_1220023                       | citus_mx_test_schema.nation_hash                       | distributed      |          0
+ citus_mx_test_schema.nation_hash_1220024                       | citus_mx_test_schema.nation_hash                       | distributed      |          0
+ citus_mx_test_schema.nation_hash_1220024                       | citus_mx_test_schema.nation_hash                       | distributed      |          0
+ citus_mx_test_schema.nation_hash_1220024                       | citus_mx_test_schema.nation_hash                       | distributed      |          0
+ citus_mx_test_schema.nation_hash_1220024                       | citus_mx_test_schema.nation_hash                       | distributed      |          0
+ citus_mx_test_schema.nation_hash_1220024                       | citus_mx_test_schema.nation_hash                       | distributed      |          0
+ citus_mx_test_schema.nation_hash_1220024                       | citus_mx_test_schema.nation_hash                       | distributed      |          0
+ citus_mx_test_schema.nation_hash_1220024                       | citus_mx_test_schema.nation_hash                       | distributed      |          0
+ citus_mx_test_schema.nation_hash_1220025                       | citus_mx_test_schema.nation_hash                       | distributed      |          0
+ citus_mx_test_schema.nation_hash_1220026                       | citus_mx_test_schema.nation_hash                       | distributed      |          0
+ citus_mx_test_schema.nation_hash_1220026                       | citus_mx_test_schema.nation_hash                       | distributed      |          0
+ citus_mx_test_schema.nation_hash_1220026                       | citus_mx_test_schema.nation_hash                       | distributed      |          0
+ citus_mx_test_schema.nation_hash_1220026                       | citus_mx_test_schema.nation_hash                       | distributed      |          0
+ citus_mx_test_schema.nation_hash_1220026                       | citus_mx_test_schema.nation_hash                       | distributed      |          0
+ citus_mx_test_schema.nation_hash_1220026                       | citus_mx_test_schema.nation_hash                       | distributed      |          0
+ citus_mx_test_schema.nation_hash_1220026                       | citus_mx_test_schema.nation_hash                       | distributed      |          0
+ citus_mx_test_schema.nation_hash_1220027                       | citus_mx_test_schema.nation_hash                       | distributed      |          0
+ citus_mx_test_schema.nation_hash_1220028                       | citus_mx_test_schema.nation_hash                       | distributed      |          0
+ citus_mx_test_schema.nation_hash_1220028                       | citus_mx_test_schema.nation_hash                       | distributed      |          0
+ citus_mx_test_schema.nation_hash_1220028                       | citus_mx_test_schema.nation_hash                       | distributed      |          0
+ citus_mx_test_schema.nation_hash_1220028                       | citus_mx_test_schema.nation_hash                       | distributed      |          0
+ citus_mx_test_schema.nation_hash_1220028                       | citus_mx_test_schema.nation_hash                       | distributed      |          0
+ citus_mx_test_schema.nation_hash_1220028                       | citus_mx_test_schema.nation_hash                       | distributed      |          0
+ citus_mx_test_schema.nation_hash_1220028                       | citus_mx_test_schema.nation_hash                       | distributed      |          0
+ citus_mx_test_schema.nation_hash_1220029                       | citus_mx_test_schema.nation_hash                       | distributed      |          0
+ citus_mx_test_schema.nation_hash_1220030                       | citus_mx_test_schema.nation_hash                       | distributed      |          0
+ citus_mx_test_schema.nation_hash_1220030                       | citus_mx_test_schema.nation_hash                       | distributed      |          0
+ citus_mx_test_schema.nation_hash_1220030                       | citus_mx_test_schema.nation_hash                       | distributed      |          0
+ citus_mx_test_schema.nation_hash_1220030                       | citus_mx_test_schema.nation_hash                       | distributed      |          0
+ citus_mx_test_schema.nation_hash_1220030                       | citus_mx_test_schema.nation_hash                       | distributed      |          0
+ citus_mx_test_schema.nation_hash_1220030                       | citus_mx_test_schema.nation_hash                       | distributed      |          0
+ citus_mx_test_schema.nation_hash_1220030                       | citus_mx_test_schema.nation_hash                       | distributed      |          0
+ citus_mx_test_schema.nation_hash_1220031                       | citus_mx_test_schema.nation_hash                       | distributed      |          0
+ citus_mx_test_schema.nation_hash_collation_search_path_1220044 | citus_mx_test_schema.nation_hash_collation_search_path | distributed      |       8192
+ citus_mx_test_schema.nation_hash_collation_search_path_1220044 | citus_mx_test_schema.nation_hash_collation_search_path | distributed      |       8192
+ citus_mx_test_schema.nation_hash_collation_search_path_1220044 | citus_mx_test_schema.nation_hash_collation_search_path | distributed      |       8192
+ citus_mx_test_schema.nation_hash_collation_search_path_1220044 | citus_mx_test_schema.nation_hash_collation_search_path | distributed      |       8192
+ citus_mx_test_schema.nation_hash_collation_search_path_1220044 | citus_mx_test_schema.nation_hash_collation_search_path | distributed      |       8192
+ citus_mx_test_schema.nation_hash_collation_search_path_1220044 | citus_mx_test_schema.nation_hash_collation_search_path | distributed      |       8192
+ citus_mx_test_schema.nation_hash_collation_search_path_1220044 | citus_mx_test_schema.nation_hash_collation_search_path | distributed      |       8192
+ citus_mx_test_schema.nation_hash_collation_search_path_1220045 | citus_mx_test_schema.nation_hash_collation_search_path | distributed      |       8192
+ citus_mx_test_schema.nation_hash_collation_search_path_1220046 | citus_mx_test_schema.nation_hash_collation_search_path | distributed      |          0
+ citus_mx_test_schema.nation_hash_collation_search_path_1220046 | citus_mx_test_schema.nation_hash_collation_search_path | distributed      |          0
+ citus_mx_test_schema.nation_hash_collation_search_path_1220046 | citus_mx_test_schema.nation_hash_collation_search_path | distributed      |          0
+ citus_mx_test_schema.nation_hash_collation_search_path_1220046 | citus_mx_test_schema.nation_hash_collation_search_path | distributed      |          0
+ citus_mx_test_schema.nation_hash_collation_search_path_1220046 | citus_mx_test_schema.nation_hash_collation_search_path | distributed      |          0
+ citus_mx_test_schema.nation_hash_collation_search_path_1220046 | citus_mx_test_schema.nation_hash_collation_search_path | distributed      |          0
+ citus_mx_test_schema.nation_hash_collation_search_path_1220046 | citus_mx_test_schema.nation_hash_collation_search_path | distributed      |          0
+ citus_mx_test_schema.nation_hash_collation_search_path_1220047 | citus_mx_test_schema.nation_hash_collation_search_path | distributed      |       8192
+ citus_mx_test_schema.nation_hash_composite_types_1220048       | citus_mx_test_schema.nation_hash_composite_types       | distributed      |       8192
+ citus_mx_test_schema.nation_hash_composite_types_1220048       | citus_mx_test_schema.nation_hash_composite_types       | distributed      |       8192
+ citus_mx_test_schema.nation_hash_composite_types_1220048       | citus_mx_test_schema.nation_hash_composite_types       | distributed      |       8192
+ citus_mx_test_schema.nation_hash_composite_types_1220048       | citus_mx_test_schema.nation_hash_composite_types       | distributed      |       8192
+ citus_mx_test_schema.nation_hash_composite_types_1220048       | citus_mx_test_schema.nation_hash_composite_types       | distributed      |       8192
+ citus_mx_test_schema.nation_hash_composite_types_1220048       | citus_mx_test_schema.nation_hash_composite_types       | distributed      |       8192
+ citus_mx_test_schema.nation_hash_composite_types_1220048       | citus_mx_test_schema.nation_hash_composite_types       | distributed      |       8192
+ citus_mx_test_schema.nation_hash_composite_types_1220049       | citus_mx_test_schema.nation_hash_composite_types       | distributed      |       8192
+ citus_mx_test_schema.nation_hash_composite_types_1220050       | citus_mx_test_schema.nation_hash_composite_types       | distributed      |          0
+ citus_mx_test_schema.nation_hash_composite_types_1220050       | citus_mx_test_schema.nation_hash_composite_types       | distributed      |          0
+ citus_mx_test_schema.nation_hash_composite_types_1220050       | citus_mx_test_schema.nation_hash_composite_types       | distributed      |          0
+ citus_mx_test_schema.nation_hash_composite_types_1220050       | citus_mx_test_schema.nation_hash_composite_types       | distributed      |          0
+ citus_mx_test_schema.nation_hash_composite_types_1220050       | citus_mx_test_schema.nation_hash_composite_types       | distributed      |          0
+ citus_mx_test_schema.nation_hash_composite_types_1220050       | citus_mx_test_schema.nation_hash_composite_types       | distributed      |          0
+ citus_mx_test_schema.nation_hash_composite_types_1220050       | citus_mx_test_schema.nation_hash_composite_types       | distributed      |          0
+ citus_mx_test_schema.nation_hash_composite_types_1220051       | citus_mx_test_schema.nation_hash_composite_types       | distributed      |       8192
+ citus_mx_test_schema_join_1.nation_hash_1220032                | citus_mx_test_schema_join_1.nation_hash                | distributed      |          0
+ citus_mx_test_schema_join_1.nation_hash_1220032                | citus_mx_test_schema_join_1.nation_hash                | distributed      |          0
+ citus_mx_test_schema_join_1.nation_hash_1220032                | citus_mx_test_schema_join_1.nation_hash                | distributed      |          0
+ citus_mx_test_schema_join_1.nation_hash_1220032                | citus_mx_test_schema_join_1.nation_hash                | distributed      |          0
+ citus_mx_test_schema_join_1.nation_hash_1220032                | citus_mx_test_schema_join_1.nation_hash                | distributed      |          0
+ citus_mx_test_schema_join_1.nation_hash_1220032                | citus_mx_test_schema_join_1.nation_hash                | distributed      |          0
+ citus_mx_test_schema_join_1.nation_hash_1220032                | citus_mx_test_schema_join_1.nation_hash                | distributed      |          0
+ citus_mx_test_schema_join_1.nation_hash_1220033                | citus_mx_test_schema_join_1.nation_hash                | distributed      |          0
+ citus_mx_test_schema_join_1.nation_hash_1220034                | citus_mx_test_schema_join_1.nation_hash                | distributed      |          0
+ citus_mx_test_schema_join_1.nation_hash_1220034                | citus_mx_test_schema_join_1.nation_hash                | distributed      |          0
+ citus_mx_test_schema_join_1.nation_hash_1220034                | citus_mx_test_schema_join_1.nation_hash                | distributed      |          0
+ citus_mx_test_schema_join_1.nation_hash_1220034                | citus_mx_test_schema_join_1.nation_hash                | distributed      |          0
+ citus_mx_test_schema_join_1.nation_hash_1220034                | citus_mx_test_schema_join_1.nation_hash                | distributed      |          0
+ citus_mx_test_schema_join_1.nation_hash_1220034                | citus_mx_test_schema_join_1.nation_hash                | distributed      |          0
+ citus_mx_test_schema_join_1.nation_hash_1220034                | citus_mx_test_schema_join_1.nation_hash                | distributed      |          0
+ citus_mx_test_schema_join_1.nation_hash_1220035                | citus_mx_test_schema_join_1.nation_hash                | distributed      |          0
+ citus_mx_test_schema_join_1.nation_hash_2_1220036              | citus_mx_test_schema_join_1.nation_hash_2              | distributed      |          0
+ citus_mx_test_schema_join_1.nation_hash_2_1220036              | citus_mx_test_schema_join_1.nation_hash_2              | distributed      |          0
+ citus_mx_test_schema_join_1.nation_hash_2_1220036              | citus_mx_test_schema_join_1.nation_hash_2              | distributed      |          0
+ citus_mx_test_schema_join_1.nation_hash_2_1220036              | citus_mx_test_schema_join_1.nation_hash_2              | distributed      |          0
+ citus_mx_test_schema_join_1.nation_hash_2_1220036              | citus_mx_test_schema_join_1.nation_hash_2              | distributed      |          0
+ citus_mx_test_schema_join_1.nation_hash_2_1220036              | citus_mx_test_schema_join_1.nation_hash_2              | distributed      |          0
+ citus_mx_test_schema_join_1.nation_hash_2_1220036              | citus_mx_test_schema_join_1.nation_hash_2              | distributed      |          0
+ citus_mx_test_schema_join_1.nation_hash_2_1220037              | citus_mx_test_schema_join_1.nation_hash_2              | distributed      |          0
+ citus_mx_test_schema_join_1.nation_hash_2_1220038              | citus_mx_test_schema_join_1.nation_hash_2              | distributed      |          0
+ citus_mx_test_schema_join_1.nation_hash_2_1220038              | citus_mx_test_schema_join_1.nation_hash_2              | distributed      |          0
+ citus_mx_test_schema_join_1.nation_hash_2_1220038              | citus_mx_test_schema_join_1.nation_hash_2              | distributed      |          0
+ citus_mx_test_schema_join_1.nation_hash_2_1220038              | citus_mx_test_schema_join_1.nation_hash_2              | distributed      |          0
+ citus_mx_test_schema_join_1.nation_hash_2_1220038              | citus_mx_test_schema_join_1.nation_hash_2              | distributed      |          0
+ citus_mx_test_schema_join_1.nation_hash_2_1220038              | citus_mx_test_schema_join_1.nation_hash_2              | distributed      |          0
+ citus_mx_test_schema_join_1.nation_hash_2_1220038              | citus_mx_test_schema_join_1.nation_hash_2              | distributed      |          0
+ citus_mx_test_schema_join_1.nation_hash_2_1220039              | citus_mx_test_schema_join_1.nation_hash_2              | distributed      |          0
+ citus_mx_test_schema_join_2.nation_hash_1220040                | citus_mx_test_schema_join_2.nation_hash                | distributed      |          0
+ citus_mx_test_schema_join_2.nation_hash_1220040                | citus_mx_test_schema_join_2.nation_hash                | distributed      |          0
+ citus_mx_test_schema_join_2.nation_hash_1220040                | citus_mx_test_schema_join_2.nation_hash                | distributed      |          0
+ citus_mx_test_schema_join_2.nation_hash_1220040                | citus_mx_test_schema_join_2.nation_hash                | distributed      |          0
+ citus_mx_test_schema_join_2.nation_hash_1220040                | citus_mx_test_schema_join_2.nation_hash                | distributed      |          0
+ citus_mx_test_schema_join_2.nation_hash_1220040                | citus_mx_test_schema_join_2.nation_hash                | distributed      |          0
+ citus_mx_test_schema_join_2.nation_hash_1220040                | citus_mx_test_schema_join_2.nation_hash                | distributed      |          0
+ citus_mx_test_schema_join_2.nation_hash_1220041                | citus_mx_test_schema_join_2.nation_hash                | distributed      |          0
+ citus_mx_test_schema_join_2.nation_hash_1220042                | citus_mx_test_schema_join_2.nation_hash                | distributed      |          0
+ citus_mx_test_schema_join_2.nation_hash_1220042                | citus_mx_test_schema_join_2.nation_hash                | distributed      |          0
+ citus_mx_test_schema_join_2.nation_hash_1220042                | citus_mx_test_schema_join_2.nation_hash                | distributed      |          0
+ citus_mx_test_schema_join_2.nation_hash_1220042                | citus_mx_test_schema_join_2.nation_hash                | distributed      |          0
+ citus_mx_test_schema_join_2.nation_hash_1220042                | citus_mx_test_schema_join_2.nation_hash                | distributed      |          0
+ citus_mx_test_schema_join_2.nation_hash_1220042                | citus_mx_test_schema_join_2.nation_hash                | distributed      |          0
+ citus_mx_test_schema_join_2.nation_hash_1220042                | citus_mx_test_schema_join_2.nation_hash                | distributed      |          0
+ citus_mx_test_schema_join_2.nation_hash_1220043                | citus_mx_test_schema_join_2.nation_hash                | distributed      |          0
+ company_employees_mx_1220107                                   | company_employees_mx                                   | distributed      |          0
+ company_employees_mx_1220107                                   | company_employees_mx                                   | distributed      |          0
+ company_employees_mx_1220107                                   | company_employees_mx                                   | distributed      |          0
+ company_employees_mx_1220107                                   | company_employees_mx                                   | distributed      |          0
+ company_employees_mx_1220107                                   | company_employees_mx                                   | distributed      |          0
+ company_employees_mx_1220107                                   | company_employees_mx                                   | distributed      |          0
+ company_employees_mx_1220107                                   | company_employees_mx                                   | distributed      |          0
+ company_employees_mx_1220108                                   | company_employees_mx                                   | distributed      |          0
+ company_employees_mx_1220109                                   | company_employees_mx                                   | distributed      |          0
+ company_employees_mx_1220109                                   | company_employees_mx                                   | distributed      |          0
+ company_employees_mx_1220109                                   | company_employees_mx                                   | distributed      |          0
+ company_employees_mx_1220109                                   | company_employees_mx                                   | distributed      |          0
+ company_employees_mx_1220109                                   | company_employees_mx                                   | distributed      |          0
+ company_employees_mx_1220109                                   | company_employees_mx                                   | distributed      |          0
+ company_employees_mx_1220109                                   | company_employees_mx                                   | distributed      |          0
+ company_employees_mx_1220110                                   | company_employees_mx                                   | distributed      |          0
+ customer_mx_1220084                                            | customer_mx                                            | reference        |          0
+ customer_mx_1220084                                            | customer_mx                                            | reference        |          0
+ customer_mx_1220084                                            | customer_mx                                            | reference        |          0
+ customer_mx_1220084                                            | customer_mx                                            | reference        |          0
+ customer_mx_1220084                                            | customer_mx                                            | reference        |          0
+ customer_mx_1220084                                            | customer_mx                                            | reference        |          0
+ customer_mx_1220084                                            | customer_mx                                            | reference        |          0
+ customer_mx_1220084                                            | customer_mx                                            | reference        |          0
+ labs_mx_1220102                                                | labs_mx                                                | distributed      |          0
+ labs_mx_1220102                                                | labs_mx                                                | distributed      |          0
+ labs_mx_1220102                                                | labs_mx                                                | distributed      |          0
+ labs_mx_1220102                                                | labs_mx                                                | distributed      |          0
+ labs_mx_1220102                                                | labs_mx                                                | distributed      |          0
+ labs_mx_1220102                                                | labs_mx                                                | distributed      |          0
+ labs_mx_1220102                                                | labs_mx                                                | distributed      |          0
+ limit_orders_mx_1220092                                        | limit_orders_mx                                        | distributed      |          0
+ limit_orders_mx_1220092                                        | limit_orders_mx                                        | distributed      |          0
+ limit_orders_mx_1220092                                        | limit_orders_mx                                        | distributed      |          0
+ limit_orders_mx_1220092                                        | limit_orders_mx                                        | distributed      |          0
+ limit_orders_mx_1220092                                        | limit_orders_mx                                        | distributed      |          0
+ limit_orders_mx_1220092                                        | limit_orders_mx                                        | distributed      |          0
+ limit_orders_mx_1220092                                        | limit_orders_mx                                        | distributed      |          0
+ limit_orders_mx_1220093                                        | limit_orders_mx                                        | distributed      |          0
+ lineitem_mx_1220052                                            | lineitem_mx                                            | distributed      |          0
+ lineitem_mx_1220052                                            | lineitem_mx                                            | distributed      |          0
+ lineitem_mx_1220052                                            | lineitem_mx                                            | distributed      |          0
+ lineitem_mx_1220052                                            | lineitem_mx                                            | distributed      |          0
+ lineitem_mx_1220052                                            | lineitem_mx                                            | distributed      |          0
+ lineitem_mx_1220052                                            | lineitem_mx                                            | distributed      |          0
+ lineitem_mx_1220052                                            | lineitem_mx                                            | distributed      |          0
+ lineitem_mx_1220053                                            | lineitem_mx                                            | distributed      |          0
+ lineitem_mx_1220054                                            | lineitem_mx                                            | distributed      |          0
+ lineitem_mx_1220054                                            | lineitem_mx                                            | distributed      |          0
+ lineitem_mx_1220054                                            | lineitem_mx                                            | distributed      |          0
+ lineitem_mx_1220054                                            | lineitem_mx                                            | distributed      |          0
+ lineitem_mx_1220054                                            | lineitem_mx                                            | distributed      |          0
+ lineitem_mx_1220054                                            | lineitem_mx                                            | distributed      |          0
+ lineitem_mx_1220054                                            | lineitem_mx                                            | distributed      |          0
+ lineitem_mx_1220055                                            | lineitem_mx                                            | distributed      |          0
+ lineitem_mx_1220056                                            | lineitem_mx                                            | distributed      |          0
+ lineitem_mx_1220056                                            | lineitem_mx                                            | distributed      |          0
+ lineitem_mx_1220056                                            | lineitem_mx                                            | distributed      |          0
+ lineitem_mx_1220056                                            | lineitem_mx                                            | distributed      |          0
+ lineitem_mx_1220056                                            | lineitem_mx                                            | distributed      |          0
+ lineitem_mx_1220056                                            | lineitem_mx                                            | distributed      |          0
+ lineitem_mx_1220056                                            | lineitem_mx                                            | distributed      |          0
+ lineitem_mx_1220057                                            | lineitem_mx                                            | distributed      |          0
+ lineitem_mx_1220058                                            | lineitem_mx                                            | distributed      |          0
+ lineitem_mx_1220058                                            | lineitem_mx                                            | distributed      |          0
+ lineitem_mx_1220058                                            | lineitem_mx                                            | distributed      |          0
+ lineitem_mx_1220058                                            | lineitem_mx                                            | distributed      |          0
+ lineitem_mx_1220058                                            | lineitem_mx                                            | distributed      |          0
+ lineitem_mx_1220058                                            | lineitem_mx                                            | distributed      |          0
+ lineitem_mx_1220058                                            | lineitem_mx                                            | distributed      |          0
+ lineitem_mx_1220059                                            | lineitem_mx                                            | distributed      |          0
+ lineitem_mx_1220060                                            | lineitem_mx                                            | distributed      |          0
+ lineitem_mx_1220060                                            | lineitem_mx                                            | distributed      |          0
+ lineitem_mx_1220060                                            | lineitem_mx                                            | distributed      |          0
+ lineitem_mx_1220060                                            | lineitem_mx                                            | distributed      |          0
+ lineitem_mx_1220060                                            | lineitem_mx                                            | distributed      |          0
+ lineitem_mx_1220060                                            | lineitem_mx                                            | distributed      |          0
+ lineitem_mx_1220060                                            | lineitem_mx                                            | distributed      |          0
+ lineitem_mx_1220061                                            | lineitem_mx                                            | distributed      |          0
+ lineitem_mx_1220062                                            | lineitem_mx                                            | distributed      |          0
+ lineitem_mx_1220062                                            | lineitem_mx                                            | distributed      |          0
+ lineitem_mx_1220062                                            | lineitem_mx                                            | distributed      |          0
+ lineitem_mx_1220062                                            | lineitem_mx                                            | distributed      |          0
+ lineitem_mx_1220062                                            | lineitem_mx                                            | distributed      |          0
+ lineitem_mx_1220062                                            | lineitem_mx                                            | distributed      |          0
+ lineitem_mx_1220062                                            | lineitem_mx                                            | distributed      |          0
+ lineitem_mx_1220063                                            | lineitem_mx                                            | distributed      |          0
+ lineitem_mx_1220064                                            | lineitem_mx                                            | distributed      |          0
+ lineitem_mx_1220064                                            | lineitem_mx                                            | distributed      |          0
+ lineitem_mx_1220064                                            | lineitem_mx                                            | distributed      |          0
+ lineitem_mx_1220064                                            | lineitem_mx                                            | distributed      |          0
+ lineitem_mx_1220064                                            | lineitem_mx                                            | distributed      |          0
+ lineitem_mx_1220064                                            | lineitem_mx                                            | distributed      |          0
+ lineitem_mx_1220064                                            | lineitem_mx                                            | distributed      |          0
+ lineitem_mx_1220065                                            | lineitem_mx                                            | distributed      |          0
+ lineitem_mx_1220066                                            | lineitem_mx                                            | distributed      |          0
+ lineitem_mx_1220066                                            | lineitem_mx                                            | distributed      |          0
+ lineitem_mx_1220066                                            | lineitem_mx                                            | distributed      |          0
+ lineitem_mx_1220066                                            | lineitem_mx                                            | distributed      |          0
+ lineitem_mx_1220066                                            | lineitem_mx                                            | distributed      |          0
+ lineitem_mx_1220066                                            | lineitem_mx                                            | distributed      |          0
+ lineitem_mx_1220066                                            | lineitem_mx                                            | distributed      |          0
+ lineitem_mx_1220067                                            | lineitem_mx                                            | distributed      |          0
+ multiple_hash_mx_1220094                                       | multiple_hash_mx                                       | distributed      |          0
+ multiple_hash_mx_1220094                                       | multiple_hash_mx                                       | distributed      |          0
+ multiple_hash_mx_1220094                                       | multiple_hash_mx                                       | distributed      |          0
+ multiple_hash_mx_1220094                                       | multiple_hash_mx                                       | distributed      |          0
+ multiple_hash_mx_1220094                                       | multiple_hash_mx                                       | distributed      |          0
+ multiple_hash_mx_1220094                                       | multiple_hash_mx                                       | distributed      |          0
+ multiple_hash_mx_1220094                                       | multiple_hash_mx                                       | distributed      |          0
+ multiple_hash_mx_1220095                                       | multiple_hash_mx                                       | distributed      |          0
+ mx_ddl_table_1220088                                           | mx_ddl_table                                           | distributed      |       8192
+ mx_ddl_table_1220088                                           | mx_ddl_table                                           | distributed      |       8192
+ mx_ddl_table_1220088                                           | mx_ddl_table                                           | distributed      |       8192
+ mx_ddl_table_1220088                                           | mx_ddl_table                                           | distributed      |       8192
+ mx_ddl_table_1220088                                           | mx_ddl_table                                           | distributed      |       8192
+ mx_ddl_table_1220088                                           | mx_ddl_table                                           | distributed      |       8192
+ mx_ddl_table_1220088                                           | mx_ddl_table                                           | distributed      |       8192
+ mx_ddl_table_1220089                                           | mx_ddl_table                                           | distributed      |       8192
+ mx_ddl_table_1220090                                           | mx_ddl_table                                           | distributed      |       8192
+ mx_ddl_table_1220090                                           | mx_ddl_table                                           | distributed      |       8192
+ mx_ddl_table_1220090                                           | mx_ddl_table                                           | distributed      |       8192
+ mx_ddl_table_1220090                                           | mx_ddl_table                                           | distributed      |       8192
+ mx_ddl_table_1220090                                           | mx_ddl_table                                           | distributed      |       8192
+ mx_ddl_table_1220090                                           | mx_ddl_table                                           | distributed      |       8192
+ mx_ddl_table_1220090                                           | mx_ddl_table                                           | distributed      |       8192
+ mx_ddl_table_1220091                                           | mx_ddl_table                                           | distributed      |       8192
+ nation_hash_1220000                                            | nation_hash                                            | distributed      |          0
+ nation_hash_1220000                                            | nation_hash                                            | distributed      |          0
+ nation_hash_1220000                                            | nation_hash                                            | distributed      |          0
+ nation_hash_1220000                                            | nation_hash                                            | distributed      |          0
+ nation_hash_1220000                                            | nation_hash                                            | distributed      |          0
+ nation_hash_1220000                                            | nation_hash                                            | distributed      |          0
+ nation_hash_1220000                                            | nation_hash                                            | distributed      |          0
+ nation_hash_1220001                                            | nation_hash                                            | distributed      |          0
+ nation_hash_1220002                                            | nation_hash                                            | distributed      |          0
+ nation_hash_1220002                                            | nation_hash                                            | distributed      |          0
+ nation_hash_1220002                                            | nation_hash                                            | distributed      |          0
+ nation_hash_1220002                                            | nation_hash                                            | distributed      |          0
+ nation_hash_1220002                                            | nation_hash                                            | distributed      |          0
+ nation_hash_1220002                                            | nation_hash                                            | distributed      |          0
+ nation_hash_1220002                                            | nation_hash                                            | distributed      |          0
+ nation_hash_1220003                                            | nation_hash                                            | distributed      |          0
+ nation_hash_1220004                                            | nation_hash                                            | distributed      |          0
+ nation_hash_1220004                                            | nation_hash                                            | distributed      |          0
+ nation_hash_1220004                                            | nation_hash                                            | distributed      |          0
+ nation_hash_1220004                                            | nation_hash                                            | distributed      |          0
+ nation_hash_1220004                                            | nation_hash                                            | distributed      |          0
+ nation_hash_1220004                                            | nation_hash                                            | distributed      |          0
+ nation_hash_1220004                                            | nation_hash                                            | distributed      |          0
+ nation_hash_1220005                                            | nation_hash                                            | distributed      |          0
+ nation_hash_1220006                                            | nation_hash                                            | distributed      |          0
+ nation_hash_1220006                                            | nation_hash                                            | distributed      |          0
+ nation_hash_1220006                                            | nation_hash                                            | distributed      |          0
+ nation_hash_1220006                                            | nation_hash                                            | distributed      |          0
+ nation_hash_1220006                                            | nation_hash                                            | distributed      |          0
+ nation_hash_1220006                                            | nation_hash                                            | distributed      |          0
+ nation_hash_1220006                                            | nation_hash                                            | distributed      |          0
+ nation_hash_1220007                                            | nation_hash                                            | distributed      |          0
+ nation_hash_1220008                                            | nation_hash                                            | distributed      |          0
+ nation_hash_1220008                                            | nation_hash                                            | distributed      |          0
+ nation_hash_1220008                                            | nation_hash                                            | distributed      |          0
+ nation_hash_1220008                                            | nation_hash                                            | distributed      |          0
+ nation_hash_1220008                                            | nation_hash                                            | distributed      |          0
+ nation_hash_1220008                                            | nation_hash                                            | distributed      |          0
+ nation_hash_1220008                                            | nation_hash                                            | distributed      |          0
+ nation_hash_1220009                                            | nation_hash                                            | distributed      |          0
+ nation_hash_1220010                                            | nation_hash                                            | distributed      |          0
+ nation_hash_1220010                                            | nation_hash                                            | distributed      |          0
+ nation_hash_1220010                                            | nation_hash                                            | distributed      |          0
+ nation_hash_1220010                                            | nation_hash                                            | distributed      |          0
+ nation_hash_1220010                                            | nation_hash                                            | distributed      |          0
+ nation_hash_1220010                                            | nation_hash                                            | distributed      |          0
+ nation_hash_1220010                                            | nation_hash                                            | distributed      |          0
+ nation_hash_1220011                                            | nation_hash                                            | distributed      |          0
+ nation_hash_1220012                                            | nation_hash                                            | distributed      |          0
+ nation_hash_1220012                                            | nation_hash                                            | distributed      |          0
+ nation_hash_1220012                                            | nation_hash                                            | distributed      |          0
+ nation_hash_1220012                                            | nation_hash                                            | distributed      |          0
+ nation_hash_1220012                                            | nation_hash                                            | distributed      |          0
+ nation_hash_1220012                                            | nation_hash                                            | distributed      |          0
+ nation_hash_1220012                                            | nation_hash                                            | distributed      |          0
+ nation_hash_1220013                                            | nation_hash                                            | distributed      |          0
+ nation_hash_1220014                                            | nation_hash                                            | distributed      |          0
+ nation_hash_1220014                                            | nation_hash                                            | distributed      |          0
+ nation_hash_1220014                                            | nation_hash                                            | distributed      |          0
+ nation_hash_1220014                                            | nation_hash                                            | distributed      |          0
+ nation_hash_1220014                                            | nation_hash                                            | distributed      |          0
+ nation_hash_1220014                                            | nation_hash                                            | distributed      |          0
+ nation_hash_1220014                                            | nation_hash                                            | distributed      |          0
+ nation_hash_1220015                                            | nation_hash                                            | distributed      |          0
+ nation_mx_1220085                                              | nation_mx                                              | reference        |          0
+ nation_mx_1220085                                              | nation_mx                                              | reference        |          0
+ nation_mx_1220085                                              | nation_mx                                              | reference        |          0
+ nation_mx_1220085                                              | nation_mx                                              | reference        |          0
+ nation_mx_1220085                                              | nation_mx                                              | reference        |          0
+ nation_mx_1220085                                              | nation_mx                                              | reference        |          0
+ nation_mx_1220085                                              | nation_mx                                              | reference        |          0
+ nation_mx_1220085                                              | nation_mx                                              | reference        |          0
+ objects_mx_1220103                                             | objects_mx                                             | distributed      |          0
+ objects_mx_1220103                                             | objects_mx                                             | distributed      |          0
+ objects_mx_1220103                                             | objects_mx                                             | distributed      |          0
+ objects_mx_1220103                                             | objects_mx                                             | distributed      |          0
+ objects_mx_1220103                                             | objects_mx                                             | distributed      |          0
+ objects_mx_1220103                                             | objects_mx                                             | distributed      |          0
+ objects_mx_1220103                                             | objects_mx                                             | distributed      |          0
+ orders_mx_1220068                                              | orders_mx                                              | distributed      |          0
+ orders_mx_1220068                                              | orders_mx                                              | distributed      |          0
+ orders_mx_1220068                                              | orders_mx                                              | distributed      |          0
+ orders_mx_1220068                                              | orders_mx                                              | distributed      |          0
+ orders_mx_1220068                                              | orders_mx                                              | distributed      |          0
+ orders_mx_1220068                                              | orders_mx                                              | distributed      |          0
+ orders_mx_1220068                                              | orders_mx                                              | distributed      |          0
+ orders_mx_1220069                                              | orders_mx                                              | distributed      |          0
+ orders_mx_1220070                                              | orders_mx                                              | distributed      |          0
+ orders_mx_1220070                                              | orders_mx                                              | distributed      |          0
+ orders_mx_1220070                                              | orders_mx                                              | distributed      |          0
+ orders_mx_1220070                                              | orders_mx                                              | distributed      |          0
+ orders_mx_1220070                                              | orders_mx                                              | distributed      |          0
+ orders_mx_1220070                                              | orders_mx                                              | distributed      |          0
+ orders_mx_1220070                                              | orders_mx                                              | distributed      |          0
+ orders_mx_1220071                                              | orders_mx                                              | distributed      |          0
+ orders_mx_1220072                                              | orders_mx                                              | distributed      |          0
+ orders_mx_1220072                                              | orders_mx                                              | distributed      |          0
+ orders_mx_1220072                                              | orders_mx                                              | distributed      |          0
+ orders_mx_1220072                                              | orders_mx                                              | distributed      |          0
+ orders_mx_1220072                                              | orders_mx                                              | distributed      |          0
+ orders_mx_1220072                                              | orders_mx                                              | distributed      |          0
+ orders_mx_1220072                                              | orders_mx                                              | distributed      |          0
+ orders_mx_1220073                                              | orders_mx                                              | distributed      |          0
+ orders_mx_1220074                                              | orders_mx                                              | distributed      |          0
+ orders_mx_1220074                                              | orders_mx                                              | distributed      |          0
+ orders_mx_1220074                                              | orders_mx                                              | distributed      |          0
+ orders_mx_1220074                                              | orders_mx                                              | distributed      |          0
+ orders_mx_1220074                                              | orders_mx                                              | distributed      |          0
+ orders_mx_1220074                                              | orders_mx                                              | distributed      |          0
+ orders_mx_1220074                                              | orders_mx                                              | distributed      |          0
+ orders_mx_1220075                                              | orders_mx                                              | distributed      |          0
+ orders_mx_1220076                                              | orders_mx                                              | distributed      |          0
+ orders_mx_1220076                                              | orders_mx                                              | distributed      |          0
+ orders_mx_1220076                                              | orders_mx                                              | distributed      |          0
+ orders_mx_1220076                                              | orders_mx                                              | distributed      |          0
+ orders_mx_1220076                                              | orders_mx                                              | distributed      |          0
+ orders_mx_1220076                                              | orders_mx                                              | distributed      |          0
+ orders_mx_1220076                                              | orders_mx                                              | distributed      |          0
+ orders_mx_1220077                                              | orders_mx                                              | distributed      |          0
+ orders_mx_1220078                                              | orders_mx                                              | distributed      |          0
+ orders_mx_1220078                                              | orders_mx                                              | distributed      |          0
+ orders_mx_1220078                                              | orders_mx                                              | distributed      |          0
+ orders_mx_1220078                                              | orders_mx                                              | distributed      |          0
+ orders_mx_1220078                                              | orders_mx                                              | distributed      |          0
+ orders_mx_1220078                                              | orders_mx                                              | distributed      |          0
+ orders_mx_1220078                                              | orders_mx                                              | distributed      |          0
+ orders_mx_1220079                                              | orders_mx                                              | distributed      |          0
+ orders_mx_1220080                                              | orders_mx                                              | distributed      |          0
+ orders_mx_1220080                                              | orders_mx                                              | distributed      |          0
+ orders_mx_1220080                                              | orders_mx                                              | distributed      |          0
+ orders_mx_1220080                                              | orders_mx                                              | distributed      |          0
+ orders_mx_1220080                                              | orders_mx                                              | distributed      |          0
+ orders_mx_1220080                                              | orders_mx                                              | distributed      |          0
+ orders_mx_1220080                                              | orders_mx                                              | distributed      |          0
+ orders_mx_1220081                                              | orders_mx                                              | distributed      |          0
+ orders_mx_1220082                                              | orders_mx                                              | distributed      |          0
+ orders_mx_1220082                                              | orders_mx                                              | distributed      |          0
+ orders_mx_1220082                                              | orders_mx                                              | distributed      |          0
+ orders_mx_1220082                                              | orders_mx                                              | distributed      |          0
+ orders_mx_1220082                                              | orders_mx                                              | distributed      |          0
+ orders_mx_1220082                                              | orders_mx                                              | distributed      |          0
+ orders_mx_1220082                                              | orders_mx                                              | distributed      |          0
+ orders_mx_1220083                                              | orders_mx                                              | distributed      |          0
+ part_mx_1220086                                                | part_mx                                                | reference        |          0
+ part_mx_1220086                                                | part_mx                                                | reference        |          0
+ part_mx_1220086                                                | part_mx                                                | reference        |          0
+ part_mx_1220086                                                | part_mx                                                | reference        |          0
+ part_mx_1220086                                                | part_mx                                                | reference        |          0
+ part_mx_1220086                                                | part_mx                                                | reference        |          0
+ part_mx_1220086                                                | part_mx                                                | reference        |          0
+ part_mx_1220086                                                | part_mx                                                | reference        |          0
+ researchers_mx_1220100                                         | researchers_mx                                         | distributed      |          0
+ researchers_mx_1220100                                         | researchers_mx                                         | distributed      |          0
+ researchers_mx_1220100                                         | researchers_mx                                         | distributed      |          0
+ researchers_mx_1220100                                         | researchers_mx                                         | distributed      |          0
+ researchers_mx_1220100                                         | researchers_mx                                         | distributed      |          0
+ researchers_mx_1220100                                         | researchers_mx                                         | distributed      |          0
+ researchers_mx_1220100                                         | researchers_mx                                         | distributed      |          0
+ researchers_mx_1220101                                         | researchers_mx                                         | distributed      |          0
+ supplier_mx_1220087                                            | supplier_mx                                            | reference        |          0
+ supplier_mx_1220087                                            | supplier_mx                                            | reference        |          0
+ supplier_mx_1220087                                            | supplier_mx                                            | reference        |          0
+ supplier_mx_1220087                                            | supplier_mx                                            | reference        |          0
+ supplier_mx_1220087                                            | supplier_mx                                            | reference        |          0
+ supplier_mx_1220087                                            | supplier_mx                                            | reference        |          0
+ supplier_mx_1220087                                            | supplier_mx                                            | reference        |          0
+ supplier_mx_1220087                                            | supplier_mx                                            | reference        |          0
 (469 rows)
 
