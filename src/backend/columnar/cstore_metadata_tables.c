@@ -27,6 +27,7 @@
 #include "catalog/pg_type.h"
 #include "catalog/namespace.h"
 #include "commands/defrem.h"
+#include "commands/sequence.h"
 #include "commands/trigger.h"
 #include "distributed/metadata_cache.h"
 #include "executor/executor.h"
@@ -79,6 +80,7 @@ static void GetHighestUsedAddressAndId(uint64 storageId,
 									   uint64 *highestUsedAddress,
 									   uint64 *highestUsedId);
 static List * ReadDataFileStripeList(uint64 storageId, Snapshot snapshot);
+static Oid ColumnarStorageIdSequenceRelationId(void);
 static Oid ColumnarStripeRelationId(void);
 static Oid ColumnarStripeIndexRelationId(void);
 static Oid ColumnarOptionsRelationId(void);
@@ -96,7 +98,6 @@ static bytea * DatumToBytea(Datum value, Form_pg_attribute attrForm);
 static Datum ByteaToDatum(bytea *bytes, Form_pg_attribute attrForm);
 static ColumnarMetapage * InitMetapage(Relation relation);
 static ColumnarMetapage * ReadMetapage(RelFileNode relfilenode, bool missingOk);
-static uint64 GetNextStorageId(void);
 static bool WriteColumnarOptions(Oid regclass, ColumnarOptions *options, bool overwrite);
 
 PG_FUNCTION_INFO_V1(columnar_relation_storageid);
@@ -1049,6 +1050,17 @@ ByteaToDatum(bytea *bytes, Form_pg_attribute attrForm)
 
 
 /*
+ * ColumnarStorageIdSequenceRelationId returns relation id of columnar.stripe.
+ * TODO: should we cache this similar to citus?
+ */
+static Oid
+ColumnarStorageIdSequenceRelationId(void)
+{
+	return get_relname_relid("storageid_seq", ColumnarNamespaceId());
+}
+
+
+/*
  * ColumnarStripeRelationId returns relation id of columnar.stripe.
  * TODO: should we cache this similar to citus?
  */
@@ -1179,9 +1191,9 @@ InitMetapage(Relation relation)
 	 * invisible.
 	 */
 	Assert(!IsBinaryUpgrade);
-
 	ColumnarMetapage *metapage = palloc0(sizeof(ColumnarMetapage));
-	metapage->storageId = GetNextStorageId();
+
+	metapage->storageId = nextval_internal(ColumnarStorageIdSequenceRelationId(), false);
 	metapage->versionMajor = COLUMNAR_VERSION_MAJOR;
 	metapage->versionMinor = COLUMNAR_VERSION_MINOR;
 
@@ -1193,37 +1205,6 @@ InitMetapage(Relation relation)
 	WriteToSmgr(relation, 0, (char *) metapage, sizeof(ColumnarMetapage));
 
 	return metapage;
-}
-
-
-/*
- * GetNextStorageId returns the next value from the storage id sequence.
- */
-static uint64
-GetNextStorageId(void)
-{
-	Oid savedUserId = InvalidOid;
-	int savedSecurityContext = 0;
-	Oid sequenceId = get_relname_relid("storageid_seq", ColumnarNamespaceId());
-	Datum sequenceIdDatum = ObjectIdGetDatum(sequenceId);
-
-	/*
-	 * Not all users have update access to the sequence, so switch
-	 * security context.
-	 */
-	GetUserIdAndSecContext(&savedUserId, &savedSecurityContext);
-	SetUserIdAndSecContext(CitusExtensionOwner(), SECURITY_LOCAL_USERID_CHANGE);
-
-	/*
-	 * Generate new and unique storage id from sequence.
-	 */
-	Datum storageIdDatum = DirectFunctionCall1(nextval_oid, sequenceIdDatum);
-
-	SetUserIdAndSecContext(savedUserId, savedSecurityContext);
-
-	uint64 storageId = DatumGetInt64(storageIdDatum);
-
-	return storageId;
 }
 
 
