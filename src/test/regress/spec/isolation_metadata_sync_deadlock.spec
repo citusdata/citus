@@ -43,7 +43,7 @@ step "reset-retry-interval"
 
 step "enable-deadlock-detection"
 {
-  ALTER SYSTEM SET citus.distributed_deadlock_detection_factor TO 1.1;
+  ALTER SYSTEM SET citus.distributed_deadlock_detection_factor TO 3;
 }
 
 step "disable-deadlock-detection"
