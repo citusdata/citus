@@ -135,8 +135,8 @@ typedef FormData_columnar_options *Form_columnar_options;
 #define Anum_columnar_stripe_data_length 4
 #define Anum_columnar_stripe_column_count 5
 #define Anum_columnar_stripe_chunk_count 6
-#define Anum_columnar_stripe_chunk_group_row_limit 7
-#define Anum_columnar_stripe_row_limit 8
+#define Anum_columnar_stripe_chunk_row_count 7
+#define Anum_columnar_stripe_row_count 8
 
 /* constants for columnar.chunk */
 #define Natts_columnar_chunk 14
@@ -144,7 +144,7 @@ typedef FormData_columnar_options *Form_columnar_options;
 #define Anum_columnar_chunk_stripe 2
 #define Anum_columnar_chunk_attr 3
 #define Anum_columnar_chunk_chunk 4
-#define Anum_columnar_chunk_group_row_limit 5
+#define Anum_columnar_chunk_value_count 5
 #define Anum_columnar_chunk_minimum_value 6
 #define Anum_columnar_chunk_maximum_value 7
 #define Anum_columnar_chunk_value_stream_offset 8
@@ -524,7 +524,7 @@ ReadStripeSkipList(RelFileNode relfilenode, uint64 stripe, TupleDesc tupleDescri
 
 		ColumnChunkSkipNode *chunk =
 			&chunkList->chunkSkipNodeArray[columnIndex][chunkIndex];
-		chunk->rowCount = DatumGetInt64(datumArray[Anum_columnar_chunk_group_row_limit -
+		chunk->rowCount = DatumGetInt64(datumArray[Anum_columnar_chunk_value_count -
 												   1]);
 		chunk->valueChunkOffset =
 			DatumGetInt64(datumArray[Anum_columnar_chunk_value_stream_offset - 1]);
@@ -794,9 +794,9 @@ ReadDataFileStripeList(uint64 storageId, Snapshot snapshot)
 		stripeMetadata->chunkCount = DatumGetInt32(
 			datumArray[Anum_columnar_stripe_chunk_count - 1]);
 		stripeMetadata->chunkRowCount = DatumGetInt32(
-			datumArray[Anum_columnar_stripe_chunk_group_row_limit - 1]);
+			datumArray[Anum_columnar_stripe_chunk_row_count - 1]);
 		stripeMetadata->rowCount = DatumGetInt64(
-			datumArray[Anum_columnar_stripe_row_limit - 1]);
+			datumArray[Anum_columnar_stripe_row_count - 1]);
 
 		stripeMetadataList = lappend(stripeMetadataList, stripeMetadata);
 	}

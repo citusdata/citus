@@ -22,7 +22,7 @@ CREATE TABLE stripe (
     data_length bigint NOT NULL,
     column_count int NOT NULL,
     chunk_count int NOT NULL,
-    chunk_group_row_limit int NOT NULL,
+    chunk_row_count int NOT NULL,
     row_count bigint NOT NULL,
     PRIMARY KEY (storageid, stripeid)
 ) WITH (user_catalog_table = true);
@@ -34,7 +34,7 @@ CREATE TABLE chunk (
     stripeid bigint NOT NULL,
     attnum int NOT NULL,
     chunkid int NOT NULL,
-    row_count bigint NOT NULL,
+    value_count bigint NOT NULL,
     minimum_value bytea,
     maximum_value bytea,
     value_stream_offset bigint NOT NULL,
