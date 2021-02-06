@@ -17,7 +17,7 @@ CREATE FUNCTION top_memory_context_usage()
 		SELECT TopMemoryContext FROM column_store_memory_stats();
 	$$ LANGUAGE SQL VOLATILE;
 
-SET columnar.stripe_row_count TO 50000;
+SET columnar.stripe_row_limit TO 50000;
 SET columnar.compression TO 'pglz';
 CREATE TABLE t (a int, tag text, memusage bigint) USING columnar;
 

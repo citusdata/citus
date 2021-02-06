@@ -8,7 +8,7 @@ CREATE SEQUENCE storageid_seq MINVALUE 10000000000 NO CYCLE;
 CREATE TABLE options (
     regclass regclass NOT NULL PRIMARY KEY,
     chunk_group_row_limit int NOT NULL,
-    stripe_row_count int NOT NULL,
+    stripe_row_limit int NOT NULL,
     compression_level int NOT NULL,
     compression name NOT NULL
 ) WITH (user_catalog_table = true);

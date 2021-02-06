@@ -31,7 +31,7 @@ SELECT * FROM columnar.options
 WHERE regclass = 'table_options'::regclass;
 
 -- test changing the chunk_group_row_limit
-SELECT alter_columnar_table_set('table_options', stripe_row_count => 100);
+SELECT alter_columnar_table_set('table_options', stripe_row_limit => 100);
 
 -- show table_options settings
 SELECT * FROM columnar.options
@@ -45,7 +45,7 @@ SELECT * FROM columnar.options
 WHERE regclass = 'table_options'::regclass;
 
 -- set all settings at the same time
-SELECT alter_columnar_table_set('table_options', stripe_row_count => 1000, chunk_group_row_limit => 100, compression => 'none', compression_level => 7);
+SELECT alter_columnar_table_set('table_options', stripe_row_limit => 1000, chunk_group_row_limit => 100, compression => 'none', compression_level => 7);
 
 -- show table_options settings
 SELECT * FROM columnar.options
@@ -76,7 +76,7 @@ WHERE regclass = 'table_options'::regclass;
 
 -- reset settings one by one to the version of the GUC's
 SET columnar.chunk_group_row_limit TO 1000;
-SET columnar.stripe_row_count TO 10000;
+SET columnar.stripe_row_limit TO 10000;
 SET columnar.compression TO 'pglz';
 SET columnar.compression_level TO 11;
 
@@ -90,7 +90,7 @@ SELECT alter_columnar_table_reset('table_options', chunk_group_row_limit => true
 SELECT * FROM columnar.options
 WHERE regclass = 'table_options'::regclass;
 
-SELECT alter_columnar_table_reset('table_options', stripe_row_count => true);
+SELECT alter_columnar_table_reset('table_options', stripe_row_limit => true);
 
 -- show table_options settings
 SELECT * FROM columnar.options
@@ -110,7 +110,7 @@ WHERE regclass = 'table_options'::regclass;
 
 -- verify resetting all settings at once work
 SET columnar.chunk_group_row_limit TO 10000;
-SET columnar.stripe_row_count TO 100000;
+SET columnar.stripe_row_limit TO 100000;
 SET columnar.compression TO 'none';
 SET columnar.compression_level TO 13;
 
@@ -121,7 +121,7 @@ WHERE regclass = 'table_options'::regclass;
 SELECT alter_columnar_table_reset(
     'table_options',
     chunk_group_row_limit => true,
-    stripe_row_count => true,
+    stripe_row_limit => true,
     compression => true,
     compression_level => true);
 

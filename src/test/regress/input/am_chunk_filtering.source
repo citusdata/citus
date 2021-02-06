@@ -28,8 +28,8 @@ $$ LANGUAGE PLPGSQL;
 
 
 -- Create and load data
--- chunk_group_row_limit '1000', stripe_row_count '2000'
-set columnar.stripe_row_count = 2000;
+-- chunk_group_row_limit '1000', stripe_row_limit '2000'
+set columnar.stripe_row_limit = 2000;
 set columnar.chunk_group_row_limit = 1000;
 CREATE TABLE test_chunk_filtering (a int)
     USING columnar;
@@ -58,7 +58,7 @@ SELECT filtered_row_count('SELECT count(*) FROM test_chunk_filtering WHERE a < 2
 SELECT filtered_row_count('SELECT count(*) FROM test_chunk_filtering WHERE a < 0');
 SELECT filtered_row_count('SELECT count(*) FROM test_chunk_filtering WHERE a BETWEEN 990 AND 2010');
 
-set columnar.stripe_row_count to default;
+set columnar.stripe_row_limit to default;
 set columnar.chunk_group_row_limit to default;
 
 -- Verify that we are fine with collations which use a different alphabet order

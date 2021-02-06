@@ -95,7 +95,7 @@ SELECT :relfilenode_pre_alter <> :relfilenode_post_alter AS relfilenode_changed;
 -- Test that we retain options
 --
 
-SET columnar.stripe_row_count TO 5000;
+SET columnar.stripe_row_limit TO 5000;
 SET columnar.chunk_group_row_limit TO 1000;
 SET columnar.compression TO 'pglz';
 
@@ -105,7 +105,7 @@ INSERT INTO test_options_1 SELECT i, floor(i/1000) FROM generate_series(1, 10000
 CREATE TABLE test_options_2(a int, b int) USING columnar;
 INSERT INTO test_options_2 SELECT i, floor(i/1000) FROM generate_series(1, 10000) i;
 SELECT alter_columnar_table_set('test_options_2', chunk_group_row_limit => 2000);
-SELECT alter_columnar_table_set('test_options_2', stripe_row_count => 6000);
+SELECT alter_columnar_table_set('test_options_2', stripe_row_limit => 6000);
 SELECT alter_columnar_table_set('test_options_2', compression => 'none');
 SELECT alter_columnar_table_set('test_options_2', compression_level => 13);
 INSERT INTO test_options_2 SELECT i, floor(i/2000) FROM generate_series(1, 10000) i;

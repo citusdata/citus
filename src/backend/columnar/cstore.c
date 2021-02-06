@@ -36,7 +36,7 @@
 #endif
 
 int columnar_compression = DEFAULT_COMPRESSION_TYPE;
-int columnar_stripe_row_count = DEFAULT_STRIPE_ROW_COUNT;
+int columnar_stripe_row_limit = DEFAULT_STRIPE_ROW_COUNT;
 int columnar_chunk_group_row_limit = DEFAULT_CHUNK_ROW_COUNT;
 int columnar_compression_level = 3;
 
@@ -81,10 +81,10 @@ columnar_init_gucs()
 							NULL,
 							NULL);
 
-	DefineCustomIntVariable("columnar.stripe_row_count",
+	DefineCustomIntVariable("columnar.stripe_row_limit",
 							"Maximum number of tuples per stripe.",
 							NULL,
-							&columnar_stripe_row_count,
+							&columnar_stripe_row_limit,
 							DEFAULT_STRIPE_ROW_COUNT,
 							STRIPE_ROW_COUNT_MINIMUM,
 							STRIPE_ROW_COUNT_MAXIMUM,
