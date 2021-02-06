@@ -37,7 +37,7 @@
 
 int columnar_compression = DEFAULT_COMPRESSION_TYPE;
 int columnar_stripe_row_count = DEFAULT_STRIPE_ROW_COUNT;
-int columnar_chunk_row_count = DEFAULT_CHUNK_ROW_COUNT;
+int columnar_chunk_group_row_limit = DEFAULT_CHUNK_ROW_COUNT;
 int columnar_compression_level = 3;
 
 static const struct config_enum_entry columnar_compression_options[] =
@@ -94,10 +94,10 @@ columnar_init_gucs()
 							NULL,
 							NULL);
 
-	DefineCustomIntVariable("columnar.chunk_row_count",
+	DefineCustomIntVariable("columnar.chunk_group_row_limit",
 							"Maximum number of rows per chunk.",
 							NULL,
-							&columnar_chunk_row_count,
+							&columnar_chunk_group_row_limit,
 							DEFAULT_CHUNK_ROW_COUNT,
 							CHUNK_ROW_COUNT_MINIMUM,
 							CHUNK_ROW_COUNT_MAXIMUM,

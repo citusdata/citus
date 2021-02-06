@@ -7,7 +7,7 @@ CREATE SEQUENCE storageid_seq MINVALUE 10000000000 NO CYCLE;
 
 CREATE TABLE options (
     regclass regclass NOT NULL PRIMARY KEY,
-    chunk_row_count int NOT NULL,
+    chunk_group_row_limit int NOT NULL,
     stripe_row_count int NOT NULL,
     compression_level int NOT NULL,
     compression name NOT NULL
@@ -22,7 +22,7 @@ CREATE TABLE stripe (
     data_length bigint NOT NULL,
     column_count int NOT NULL,
     chunk_count int NOT NULL,
-    chunk_row_count int NOT NULL,
+    chunk_group_row_limit int NOT NULL,
     row_count bigint NOT NULL,
     PRIMARY KEY (storageid, stripeid)
 ) WITH (user_catalog_table = true);

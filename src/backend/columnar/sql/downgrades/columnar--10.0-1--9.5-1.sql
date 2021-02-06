@@ -9,14 +9,14 @@ IF substring(current_Setting('server_version'), '\d+')::int >= 12 THEN
   EXECUTE $$
     DROP FUNCTION pg_catalog.alter_columnar_table_reset(
         table_name regclass,
-        chunk_row_count bool,
+        chunk_group_row_limit bool,
         stripe_row_count bool,
         compression bool,
         compression_level bool);
 
     DROP FUNCTION pg_catalog.alter_columnar_table_set(
         table_name regclass,
-        chunk_row_count int,
+        chunk_group_row_limit int,
         stripe_row_count int,
         compression name,
         compression_level int);

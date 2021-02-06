@@ -17,14 +17,14 @@ SELECT alter_columnar_table_set('t_compressed', stripe_row_count => 100);
 
 (1 row)
 
-SELECT alter_columnar_table_set('t_compressed', chunk_row_count => 100);
+SELECT alter_columnar_table_set('t_compressed', chunk_group_row_limit => 100);
  alter_columnar_table_set
 ---------------------------------------------------------------------
 
 (1 row)
 
 SELECT * FROM columnar.options WHERE regclass = 't_compressed'::regclass;
-   regclass   | chunk_row_count | stripe_row_count | compression_level | compression
+   regclass   | chunk_group_row_limit | stripe_row_count | compression_level | compression
 ---------------------------------------------------------------------
  t_compressed |             100 |              100 |                 3 | pglz
 (1 row)

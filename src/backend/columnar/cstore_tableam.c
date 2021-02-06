@@ -1524,7 +1524,7 @@ CitusCreateAlterColumnarTableSet(char *qualifiedRelationName,
 
 	appendStringInfo(&buf,
 					 "SELECT alter_columnar_table_set(%s, "
-					 "chunk_row_count => %d, "
+					 "chunk_group_row_limit => %d, "
 					 "stripe_row_count => %lu, "
 					 "compression_level => %d, "
 					 "compression => %s);",
@@ -1634,7 +1634,7 @@ ColumnarGetTableOptionsDDL(Oid relationId)
  * sql syntax:
  *   pg_catalog.alter_columnar_table_set(
  *        table_name regclass,
- *        chunk_row_count int DEFAULT NULL,
+ *        chunk_group_row_limit int DEFAULT NULL,
  *        stripe_row_count int DEFAULT NULL,
  *        compression name DEFAULT null)
  *
@@ -1666,7 +1666,7 @@ alter_columnar_table_set(PG_FUNCTION_ARGS)
 		ereport(ERROR, (errmsg("unable to read current options for table")));
 	}
 
-	/* chunk_row_count => not null */
+	/* chunk_group_row_limit => not null */
 	if (!PG_ARGISNULL(1))
 	{
 		options.chunkRowCount = PG_GETARG_INT32(1);
@@ -1744,7 +1744,7 @@ alter_columnar_table_set(PG_FUNCTION_ARGS)
  *   pg_catalog.alter_columnar_table_re
  *   teset(
  *        table_name regclass,
- *        chunk_row_count bool DEFAULT FALSE,
+ *        chunk_group_row_limit bool DEFAULT FALSE,
  *        stripe_row_count bool DEFAULT FALSE,
  *        compression bool DEFAULT FALSE)
  *
@@ -1773,10 +1773,10 @@ alter_columnar_table_reset(PG_FUNCTION_ARGS)
 		ereport(ERROR, (errmsg("unable to read current options for table")));
 	}
 
-	/* chunk_row_count => true */
+	/* chunk_group_row_limit => true */
 	if (!PG_ARGISNULL(1) && PG_GETARG_BOOL(1))
 	{
-		options.chunkRowCount = columnar_chunk_row_count;
+		options.chunkRowCount = columnar_chunk_group_row_limit;
 		ereport(DEBUG1,
 				(errmsg("resetting chunk row count to %d", options.chunkRowCount)));
 	}

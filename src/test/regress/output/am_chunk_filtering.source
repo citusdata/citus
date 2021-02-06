@@ -24,9 +24,9 @@ $$
     END;
 $$ LANGUAGE PLPGSQL;
 -- Create and load data
--- chunk_row_count '1000', stripe_row_count '2000'
+-- chunk_group_row_limit '1000', stripe_row_count '2000'
 set columnar.stripe_row_count = 2000;
-set columnar.chunk_row_count = 1000;
+set columnar.chunk_group_row_limit = 1000;
 CREATE TABLE test_chunk_filtering (a int)
     USING columnar;
 COPY test_chunk_filtering FROM '@abs_srcdir@/data/chunk_filtering.csv' WITH CSV;
@@ -107,7 +107,7 @@ SELECT filtered_row_count('SELECT count(*) FROM test_chunk_filtering WHERE a BET
 (1 row)
 
 set columnar.stripe_row_count to default;
-set columnar.chunk_row_count to default;
+set columnar.chunk_group_row_limit to default;
 -- Verify that we are fine with collations which use a different alphabet order
 CREATE TABLE collation_chunk_filtering_test(A text collate "da_DK")
     USING columnar;
