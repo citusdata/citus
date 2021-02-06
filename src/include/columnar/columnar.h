@@ -26,8 +26,8 @@
 
 /* Defines for valid option names */
 #define OPTION_NAME_COMPRESSION_TYPE "compression"
-#define OPTION_NAME_STRIPE_ROW_COUNT "stripe_row_count"
-#define OPTION_NAME_CHUNK_ROW_COUNT "chunk_row_count"
+#define OPTION_NAME_STRIPE_ROW_COUNT "stripe_row_limit"
+#define OPTION_NAME_CHUNK_ROW_COUNT "chunk_group_row_limit"
 
 /* Limits for option parameters */
 #define STRIPE_ROW_COUNT_MINIMUM 1000
@@ -262,8 +262,8 @@ typedef struct TableWriteState
 } TableWriteState;
 
 extern int columnar_compression;
-extern int columnar_stripe_row_count;
-extern int columnar_chunk_row_count;
+extern int columnar_stripe_row_limit;
+extern int columnar_chunk_group_row_limit;
 extern int columnar_compression_level;
 
 extern void columnar_init_gucs(void);

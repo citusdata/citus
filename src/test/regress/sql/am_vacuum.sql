@@ -24,7 +24,7 @@ SELECT sum(a), sum(b) FROM t;
 SELECT count(*) FROM t_stripes;
 
 -- test the case when all data cannot fit into a single stripe
-SELECT alter_columnar_table_set('t', stripe_row_count => 1000);
+SELECT alter_columnar_table_set('t', stripe_row_limit => 1000);
 INSERT INTO t SELECT i, 2 * i FROM generate_series(1,2500) i;
 
 SELECT sum(a), sum(b) FROM t;
@@ -76,8 +76,8 @@ SELECT count(*) FROM t;
 
 BEGIN;
 SELECT alter_columnar_table_set('t',
-    chunk_row_count => 1000,
-    stripe_row_count => 2000,
+    chunk_group_row_limit => 1000,
+    stripe_row_limit => 2000,
     compression => 'pglz');
 SAVEPOINT s1;
 INSERT INTO t SELECT i FROM generate_series(1, 1500) i;
@@ -116,8 +116,8 @@ SELECT count(distinct storageid) - :columnar_table_count FROM columnar.stripe;
 
 -- A table with high compression ratio
 SET columnar.compression TO 'pglz';
-SET columnar.stripe_row_count TO 1000000;
-SET columnar.chunk_row_count TO 100000;
+SET columnar.stripe_row_limit TO 1000000;
+SET columnar.chunk_group_row_limit TO 100000;
 CREATE TABLE t(a int, b char, c text) USING columnar;
 INSERT INTO t SELECT 1, 'a', 'xyz' FROM generate_series(1, 1000000) i;
 

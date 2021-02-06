@@ -105,8 +105,8 @@ PG_FUNCTION_INFO_V1(columnar_relation_storageid);
 /* constants for columnar.options */
 #define Natts_columnar_options 5
 #define Anum_columnar_options_regclass 1
-#define Anum_columnar_options_chunk_row_count 2
-#define Anum_columnar_options_stripe_row_count 3
+#define Anum_columnar_options_chunk_group_row_limit 2
+#define Anum_columnar_options_stripe_row_limit 3
 #define Anum_columnar_options_compression_level 4
 #define Anum_columnar_options_compression 5
 
@@ -117,8 +117,8 @@ PG_FUNCTION_INFO_V1(columnar_relation_storageid);
 typedef struct FormData_columnar_options
 {
 	Oid regclass;
-	int32 chunk_row_count;
-	int32 stripe_row_count;
+	int32 chunk_group_row_limit;
+	int32 stripe_row_limit;
 	int32 compressionLevel;
 	NameData compression;
 
@@ -145,7 +145,7 @@ typedef FormData_columnar_options *Form_columnar_options;
 #define Anum_columnar_chunk_stripe 2
 #define Anum_columnar_chunk_attr 3
 #define Anum_columnar_chunk_chunk 4
-#define Anum_columnar_chunk_row_count 5
+#define Anum_columnar_chunk_value_count 5
 #define Anum_columnar_chunk_minimum_value 6
 #define Anum_columnar_chunk_maximum_value 7
 #define Anum_columnar_chunk_value_stream_offset 8
@@ -174,8 +174,8 @@ InitColumnarOptions(Oid regclass)
 	}
 
 	ColumnarOptions defaultOptions = {
-		.chunkRowCount = columnar_chunk_row_count,
-		.stripeRowCount = columnar_stripe_row_count,
+		.chunkRowCount = columnar_chunk_group_row_limit,
+		.stripeRowCount = columnar_stripe_row_limit,
 		.compressionType = columnar_compression,
 		.compressionLevel = columnar_compression_level
 	};
@@ -251,8 +251,8 @@ WriteColumnarOptions(Oid regclass, ColumnarOptions *options, bool overwrite)
 			/* TODO check if the options are actually different, skip if not changed */
 			/* update existing record */
 			bool update[Natts_columnar_options] = { 0 };
-			update[Anum_columnar_options_chunk_row_count - 1] = true;
-			update[Anum_columnar_options_stripe_row_count - 1] = true;
+			update[Anum_columnar_options_chunk_group_row_limit - 1] = true;
+			update[Anum_columnar_options_stripe_row_limit - 1] = true;
 			update[Anum_columnar_options_compression_level - 1] = true;
 			update[Anum_columnar_options_compression - 1] = true;
 
@@ -371,8 +371,8 @@ ReadColumnarOptions(Oid regclass, ColumnarOptions *options)
 	{
 		Form_columnar_options tupOptions = (Form_columnar_options) GETSTRUCT(heapTuple);
 
-		options->chunkRowCount = tupOptions->chunk_row_count;
-		options->stripeRowCount = tupOptions->stripe_row_count;
+		options->chunkRowCount = tupOptions->chunk_group_row_limit;
+		options->stripeRowCount = tupOptions->stripe_row_limit;
 		options->compressionLevel = tupOptions->compressionLevel;
 		options->compressionType = ParseCompressionType(NameStr(tupOptions->compression));
 	}
@@ -380,8 +380,8 @@ ReadColumnarOptions(Oid regclass, ColumnarOptions *options)
 	{
 		/* populate options with system defaults */
 		options->compressionType = columnar_compression;
-		options->stripeRowCount = columnar_stripe_row_count;
-		options->chunkRowCount = columnar_chunk_row_count;
+		options->stripeRowCount = columnar_stripe_row_limit;
+		options->chunkRowCount = columnar_chunk_group_row_limit;
 		options->compressionLevel = columnar_compression_level;
 	}
 
@@ -525,7 +525,7 @@ ReadStripeSkipList(RelFileNode relfilenode, uint64 stripe, TupleDesc tupleDescri
 
 		ColumnChunkSkipNode *chunk =
 			&chunkList->chunkSkipNodeArray[columnIndex][chunkIndex];
-		chunk->rowCount = DatumGetInt64(datumArray[Anum_columnar_chunk_row_count -
+		chunk->rowCount = DatumGetInt64(datumArray[Anum_columnar_chunk_value_count -
 												   1]);
 		chunk->valueChunkOffset =
 			DatumGetInt64(datumArray[Anum_columnar_chunk_value_stream_offset - 1]);
