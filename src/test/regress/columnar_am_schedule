@@ -11,6 +11,7 @@ test: am_drop
 test: am_indexes
 test: columnar_fallback_scan
 test: columnar_partitioning
+test: columnar_permissions
 test: am_empty
 test: am_insert
 test: am_update_delete
