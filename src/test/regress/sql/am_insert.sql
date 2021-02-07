@@ -22,6 +22,8 @@ select count(*) from test_insert_command_data;
 insert into test_insert_command select * from test_insert_command_data;
 select count(*) from test_insert_command;
 
+SELECT * FROM chunk_group_consistency;
+
 drop table test_insert_command_data;
 drop table test_insert_command;
 
@@ -42,6 +44,8 @@ USING columnar;
 
 -- store long text in cstore table
 INSERT INTO test_cstore_long_text SELECT * FROM test_long_text;
+
+SELECT * FROM chunk_group_consistency;
 
 -- drop source table to remove original text from toast
 DROP TABLE test_long_text;
@@ -94,6 +98,8 @@ SELECT
   pg_column_size(plain), pg_column_size(main),
   pg_column_size(external), pg_column_size(extended)
 FROM test_toast_columnar;
+
+SELECT * FROM chunk_group_consistency;
 
 DROP TABLE test_toast_row;
 DROP TABLE test_toast_columnar;

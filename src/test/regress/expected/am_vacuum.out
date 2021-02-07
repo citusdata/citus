@@ -27,6 +27,12 @@ SELECT count(*) FROM t_stripes;
 
 -- vacuum full should merge stripes together
 VACUUM FULL t;
+SELECT * FROM chunk_group_consistency;
+ consistent
+---------------------------------------------------------------------
+ t
+(1 row)
+
 SELECT sum(a), sum(b) FROM t;
  sum | sum
 ---------------------------------------------------------------------
@@ -60,6 +66,12 @@ SELECT count(*) FROM t_stripes;
 (1 row)
 
 VACUUM FULL t;
+SELECT * FROM chunk_group_consistency;
+ consistent
+---------------------------------------------------------------------
+ t
+(1 row)
+
 SELECT sum(a), sum(b) FROM t;
    sum   |   sum
 ---------------------------------------------------------------------
@@ -203,6 +215,12 @@ compression rate: 1.25x
 total row count: 5530, stripe count: 5, average rows per stripe: 1106
 chunk count: 7, containing data for dropped columns: 0, none compressed: 5, pglz compressed: 2
 
+SELECT * FROM chunk_group_consistency;
+ consistent
+---------------------------------------------------------------------
+ t
+(1 row)
+
 SELECT count(*) FROM t;
  count
 ---------------------------------------------------------------------
@@ -239,6 +257,12 @@ compression rate: 1.96x
 total row count: 7030, stripe count: 4, average rows per stripe: 1757
 chunk count: 8, containing data for dropped columns: 0, none compressed: 2, pglz compressed: 6
 
+SELECT * FROM chunk_group_consistency;
+ consistent
+---------------------------------------------------------------------
+ t
+(1 row)
+
 DROP TABLE t;
 DROP VIEW t_stripes;
 -- Make sure we cleaned the metadata for t too
@@ -261,5 +285,11 @@ total file size: 630784, total data size: 604480
 compression rate: 33.71x
 total row count: 1000000, stripe count: 1, average rows per stripe: 1000000
 chunk count: 30, containing data for dropped columns: 0, pglz compressed: 30
+
+SELECT * FROM chunk_group_consistency;
+ consistent
+---------------------------------------------------------------------
+ t
+(1 row)
 
 DROP TABLE t;

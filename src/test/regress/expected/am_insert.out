@@ -45,6 +45,12 @@ select count(*) from test_insert_command;
      3
 (1 row)
 
+SELECT * FROM chunk_group_consistency;
+ consistent
+---------------------------------------------------------------------
+ t
+(1 row)
+
 drop table test_insert_command_data;
 drop table test_insert_command;
 -- test long attribute value insertion
@@ -61,6 +67,12 @@ CREATE TABLE test_cstore_long_text(int_val int, text_val text)
 USING columnar;
 -- store long text in cstore table
 INSERT INTO test_cstore_long_text SELECT * FROM test_long_text;
+SELECT * FROM chunk_group_consistency;
+ consistent
+---------------------------------------------------------------------
+ t
+(1 row)
+
 -- drop source table to remove original text from toast
 DROP TABLE test_long_text;
 -- check if text data is still available in cstore table
@@ -127,6 +139,12 @@ FROM test_toast_columnar;
  pg_column_size | pg_column_size | pg_column_size | pg_column_size
 ---------------------------------------------------------------------
            5004 |           5004 |           5004 |           5004
+(1 row)
+
+SELECT * FROM chunk_group_consistency;
+ consistent
+---------------------------------------------------------------------
+ t
 (1 row)
 
 DROP TABLE test_toast_row;

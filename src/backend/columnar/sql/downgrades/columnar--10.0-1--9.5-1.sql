@@ -30,6 +30,7 @@ END IF;
 END$proc$;
 
 DROP TABLE chunk;
+DROP TABLE chunk_group;
 DROP TABLE stripe;
 DROP TABLE options;
 DROP SEQUENCE storageid_seq;

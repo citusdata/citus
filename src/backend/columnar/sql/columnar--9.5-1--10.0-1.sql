@@ -29,6 +29,17 @@ CREATE TABLE stripe (
 
 COMMENT ON TABLE stripe IS 'Columnar per stripe metadata';
 
+CREATE TABLE chunk_group (
+    storageid bigint NOT NULL,
+    stripeid bigint NOT NULL,
+    chunkid int NOT NULL,
+    row_count bigint NOT NULL,
+    PRIMARY KEY (storageid, stripeid, chunkid),
+    FOREIGN KEY (storageid, stripeid) REFERENCES stripe(storageid, stripeid) ON DELETE CASCADE
+);
+
+COMMENT ON TABLE chunk_group IS 'Columnar chunk group metadata';
+
 CREATE TABLE chunk (
     storageid bigint NOT NULL,
     stripeid bigint NOT NULL,
@@ -45,7 +56,7 @@ CREATE TABLE chunk (
     value_compression_level int NOT NULL,
     value_decompressed_length bigint NOT NULL,
     PRIMARY KEY (storageid, stripeid, attnum, chunkid),
-    FOREIGN KEY (storageid, stripeid) REFERENCES stripe(storageid, stripeid) ON DELETE CASCADE
+    FOREIGN KEY (storageid, stripeid, chunkid) REFERENCES chunk_group(storageid, stripeid, chunkid) ON DELETE CASCADE
 ) WITH (user_catalog_table = true);
 
 COMMENT ON TABLE chunk IS 'Columnar per chunk metadata';
