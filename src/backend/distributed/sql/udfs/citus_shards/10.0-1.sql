@@ -1,9 +1,9 @@
 CREATE OR REPLACE VIEW citus.citus_shards AS
 WITH shard_sizes AS (SELECT * FROM pg_catalog.citus_shard_sizes())
 SELECT
-     shard_name(pg_dist_shard.logicalrelid, pg_dist_shard.shardid) as shard_name,
-     pg_dist_shard.shardid,
      pg_dist_shard.logicalrelid AS table_name,
+     pg_dist_shard.shardid,
+     shard_name(pg_dist_shard.logicalrelid, pg_dist_shard.shardid) as shard_name,
      CASE WHEN partkey IS NOT NULL THEN 'distributed' WHEN repmodel = 't' THEN 'reference' ELSE 'local' END AS citus_table_type,
      colocationid AS colocation_id,
      pg_dist_node.nodename,
