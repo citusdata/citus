@@ -103,3 +103,41 @@ SELECT * FROM chunk_group_consistency;
 
 DROP TABLE test_toast_row;
 DROP TABLE test_toast_columnar;
+
+-- Verify metadata for zero column tables.
+-- We support writing into zero column tables, but not reading from them.
+-- We test that metadata makes sense so we can fix the read path in future.
+CREATE TABLE zero_col() USING columnar;
+SELECT alter_columnar_table_set('zero_col', chunk_group_row_limit => 10);
+
+INSERT INTO zero_col DEFAULT VALUES;
+INSERT INTO zero_col DEFAULT VALUES;
+INSERT INTO zero_col DEFAULT VALUES;
+INSERT INTO zero_col DEFAULT VALUES;
+
+CREATE TABLE zero_col_heap();
+INSERT INTO zero_col_heap DEFAULT VALUES;
+INSERT INTO zero_col_heap DEFAULT VALUES;
+INSERT INTO zero_col_heap DEFAULT VALUES;
+INSERT INTO zero_col_heap DEFAULT VALUES;
+
+INSERT INTO zero_col_heap SELECT * FROM zero_col_heap;
+INSERT INTO zero_col_heap SELECT * FROM zero_col_heap;
+INSERT INTO zero_col_heap SELECT * FROM zero_col_heap;
+INSERT INTO zero_col_heap SELECT * FROM zero_col_heap;
+
+INSERT INTO zero_col SELECT * FROM zero_col_heap;
+
+SELECT relname, stripeid, row_count FROM columnar.stripe a, pg_class b
+WHERE columnar_relation_storageid(b.oid)=a.storageid AND relname = 'zero_col'
+ORDER BY 1,2,3;
+
+SELECT relname, stripeid, value_count FROM columnar.chunk a, pg_class b
+WHERE columnar_relation_storageid(b.oid)=a.storageid AND relname = 'zero_col'
+ORDER BY 1,2,3;
+
+SELECT relname, stripeid, chunkid, row_count FROM columnar.chunk_group a, pg_class b
+WHERE columnar_relation_storageid(b.oid)=a.storageid AND relname = 'zero_col'
+ORDER BY 1,2,3,4;
+
+DROP TABLE zero_col;

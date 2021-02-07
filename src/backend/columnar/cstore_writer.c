@@ -447,7 +447,7 @@ FlushStripe(TableWriteState *writeState)
 	uint32 lastChunkIndex = stripeBuffers->rowCount / chunkRowCount;
 	uint32 lastChunkRowCount = stripeBuffers->rowCount % chunkRowCount;
 	uint64 stripeSize = 0;
-	uint64 stripeRowCount = 0;
+	uint64 stripeRowCount = stripeBuffers->rowCount;
 
 	elog(DEBUG1, "Flushing Stripe of size %d", stripeBuffers->rowCount);
 
@@ -498,12 +498,6 @@ FlushStripe(TableWriteState *writeState)
 
 			stripeSize += valueBufferSize;
 		}
-	}
-
-	for (chunkIndex = 0; chunkIndex < chunkCount; chunkIndex++)
-	{
-		stripeRowCount +=
-			stripeSkipList->chunkSkipNodeArray[0][chunkIndex].rowCount;
 	}
 
 	stripeMetadata = ReserveStripe(relation, stripeSize,
