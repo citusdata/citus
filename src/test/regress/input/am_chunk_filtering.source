@@ -28,9 +28,9 @@ $$ LANGUAGE PLPGSQL;
 
 
 -- Create and load data
--- chunk_row_count '1000', stripe_row_count '2000'
-set columnar.stripe_row_count = 2000;
-set columnar.chunk_row_count = 1000;
+-- chunk_group_row_limit '1000', stripe_row_limit '2000'
+set columnar.stripe_row_limit = 2000;
+set columnar.chunk_group_row_limit = 1000;
 CREATE TABLE test_chunk_filtering (a int)
     USING columnar;
 
@@ -58,8 +58,8 @@ SELECT filtered_row_count('SELECT count(*) FROM test_chunk_filtering WHERE a < 2
 SELECT filtered_row_count('SELECT count(*) FROM test_chunk_filtering WHERE a < 0');
 SELECT filtered_row_count('SELECT count(*) FROM test_chunk_filtering WHERE a BETWEEN 990 AND 2010');
 
-set columnar.stripe_row_count to default;
-set columnar.chunk_row_count to default;
+set columnar.stripe_row_limit to default;
+set columnar.chunk_group_row_limit to default;
 
 -- Verify that we are fine with collations which use a different alphabet order
 CREATE TABLE collation_chunk_filtering_test(A text collate "da_DK")
@@ -89,3 +89,15 @@ EXPLAIN (analyze on, costs off, timing off, summary off)
   SELECT * FROM simple_chunk_filtering WHERE i > 180000;
 
 DROP TABLE simple_chunk_filtering;
+
+
+CREATE TABLE multi_column_chunk_filtering(a int, b int) USING columnar;
+INSERT INTO multi_column_chunk_filtering SELECT i,i+1 FROM generate_series(0,234567) i;
+
+EXPLAIN (analyze on, costs off, timing off, summary off)
+  SELECT count(*) FROM multi_column_chunk_filtering WHERE a > 50000;
+
+EXPLAIN (analyze on, costs off, timing off, summary off)
+  SELECT count(*) FROM multi_column_chunk_filtering WHERE a > 50000 AND b > 50000;
+
+DROP TABLE multi_column_chunk_filtering;

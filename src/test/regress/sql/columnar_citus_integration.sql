@@ -48,54 +48,54 @@ SELECT run_command_on_placements('table_option',$cmd$
   SELECT compression_level FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 
--- setting: chunk_row_count
+-- setting: chunk_group_row_limit
 -- get baseline for setting
 SELECT run_command_on_placements('table_option',$cmd$
-  SELECT chunk_row_count FROM columnar.options WHERE regclass = '%s'::regclass;
+  SELECT chunk_group_row_limit FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 -- change setting
-SELECT alter_columnar_table_set('table_option', chunk_row_count => 100);
+SELECT alter_columnar_table_set('table_option', chunk_group_row_limit => 100);
 -- verify setting
 SELECT run_command_on_placements('table_option',$cmd$
-  SELECT chunk_row_count FROM columnar.options WHERE regclass = '%s'::regclass;
+  SELECT chunk_group_row_limit FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 -- reset setting
-SELECT alter_columnar_table_reset('table_option', chunk_row_count => true);
+SELECT alter_columnar_table_reset('table_option', chunk_group_row_limit => true);
 -- verify setting
 SELECT run_command_on_placements('table_option',$cmd$
-  SELECT chunk_row_count FROM columnar.options WHERE regclass = '%s'::regclass;
+  SELECT chunk_group_row_limit FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 
--- setting: stripe_row_count
+-- setting: stripe_row_limit
 -- get baseline for setting
 SELECT run_command_on_placements('table_option',$cmd$
-  SELECT stripe_row_count FROM columnar.options WHERE regclass = '%s'::regclass;
+  SELECT stripe_row_limit FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 -- change setting
-SELECT alter_columnar_table_set('table_option', stripe_row_count => 100);
+SELECT alter_columnar_table_set('table_option', stripe_row_limit => 100);
 -- verify setting
 SELECT run_command_on_placements('table_option',$cmd$
-  SELECT stripe_row_count FROM columnar.options WHERE regclass = '%s'::regclass;
+  SELECT stripe_row_limit FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 -- reset setting
-SELECT alter_columnar_table_reset('table_option', stripe_row_count => true);
+SELECT alter_columnar_table_reset('table_option', stripe_row_limit => true);
 -- verify setting
 SELECT run_command_on_placements('table_option',$cmd$
-  SELECT stripe_row_count FROM columnar.options WHERE regclass = '%s'::regclass;
+  SELECT stripe_row_limit FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 
 -- verify settings are propagated when creating a table
 CREATE TABLE table_option_2 (a int, b text) USING columnar;
 SELECT alter_columnar_table_set('table_option_2',
-                                chunk_row_count => 100,
-                                stripe_row_count => 1000,
+                                chunk_group_row_limit => 100,
+                                stripe_row_limit => 1000,
                                 compression => 'pglz',
                                 compression_level => 15);
 SELECT create_distributed_table('table_option_2', 'a');
 
 -- verify settings on placements
 SELECT run_command_on_placements('table_option_2',$cmd$
-  SELECT ROW(chunk_row_count, stripe_row_count, compression, compression_level) FROM columnar.options WHERE regclass = '%s'::regclass;
+  SELECT ROW(chunk_group_row_limit, stripe_row_limit, compression, compression_level) FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 
 -- verify undistribute works
@@ -148,54 +148,54 @@ SELECT run_command_on_placements('table_option',$cmd$
   SELECT compression_level FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 
--- setting: chunk_row_count
+-- setting: chunk_group_row_limit
 -- get baseline for setting
 SELECT run_command_on_placements('table_option',$cmd$
-  SELECT chunk_row_count FROM columnar.options WHERE regclass = '%s'::regclass;
+  SELECT chunk_group_row_limit FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 -- change setting
-SELECT alter_columnar_table_set('table_option', chunk_row_count => 100);
+SELECT alter_columnar_table_set('table_option', chunk_group_row_limit => 100);
 -- verify setting
 SELECT run_command_on_placements('table_option',$cmd$
-  SELECT chunk_row_count FROM columnar.options WHERE regclass = '%s'::regclass;
+  SELECT chunk_group_row_limit FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 -- reset setting
-SELECT alter_columnar_table_reset('table_option', chunk_row_count => true);
+SELECT alter_columnar_table_reset('table_option', chunk_group_row_limit => true);
 -- verify setting
 SELECT run_command_on_placements('table_option',$cmd$
-  SELECT chunk_row_count FROM columnar.options WHERE regclass = '%s'::regclass;
+  SELECT chunk_group_row_limit FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 
--- setting: stripe_row_count
+-- setting: stripe_row_limit
 -- get baseline for setting
 SELECT run_command_on_placements('table_option',$cmd$
-  SELECT stripe_row_count FROM columnar.options WHERE regclass = '%s'::regclass;
+  SELECT stripe_row_limit FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 -- change setting
-SELECT alter_columnar_table_set('table_option', stripe_row_count => 100);
+SELECT alter_columnar_table_set('table_option', stripe_row_limit => 100);
 -- verify setting
 SELECT run_command_on_placements('table_option',$cmd$
-  SELECT stripe_row_count FROM columnar.options WHERE regclass = '%s'::regclass;
+  SELECT stripe_row_limit FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 -- reset setting
-SELECT alter_columnar_table_reset('table_option', stripe_row_count => true);
+SELECT alter_columnar_table_reset('table_option', stripe_row_limit => true);
 -- verify setting
 SELECT run_command_on_placements('table_option',$cmd$
-  SELECT stripe_row_count FROM columnar.options WHERE regclass = '%s'::regclass;
+  SELECT stripe_row_limit FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 
 -- verify settings are propagated when creating a table
 CREATE TABLE table_option_2 (a int, b text) USING columnar;
 SELECT alter_columnar_table_set('table_option_2',
-                                chunk_row_count => 100,
-                                stripe_row_count => 1000,
+                                chunk_group_row_limit => 100,
+                                stripe_row_limit => 1000,
                                 compression => 'pglz',
                                 compression_level => 19);
 SELECT create_distributed_table('table_option_2', 'a');
 
 -- verify settings on placements
 SELECT run_command_on_placements('table_option_2',$cmd$
-  SELECT ROW(chunk_row_count, stripe_row_count, compression, compression_level) FROM columnar.options WHERE regclass = '%s'::regclass;
+  SELECT ROW(chunk_group_row_limit, stripe_row_limit, compression, compression_level) FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 
 -- verify undistribute works
@@ -245,54 +245,54 @@ SELECT run_command_on_placements('table_option_reference',$cmd$
   SELECT compression_level FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 
--- setting: chunk_row_count
+-- setting: chunk_group_row_limit
 -- get baseline for setting
 SELECT run_command_on_placements('table_option_reference',$cmd$
-  SELECT chunk_row_count FROM columnar.options WHERE regclass = '%s'::regclass;
+  SELECT chunk_group_row_limit FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 -- change setting
-SELECT alter_columnar_table_set('table_option_reference', chunk_row_count => 100);
+SELECT alter_columnar_table_set('table_option_reference', chunk_group_row_limit => 100);
 -- verify setting
 SELECT run_command_on_placements('table_option_reference',$cmd$
-  SELECT chunk_row_count FROM columnar.options WHERE regclass = '%s'::regclass;
+  SELECT chunk_group_row_limit FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 -- reset setting
-SELECT alter_columnar_table_reset('table_option_reference', chunk_row_count => true);
+SELECT alter_columnar_table_reset('table_option_reference', chunk_group_row_limit => true);
 -- verify setting
 SELECT run_command_on_placements('table_option_reference',$cmd$
-  SELECT chunk_row_count FROM columnar.options WHERE regclass = '%s'::regclass;
+  SELECT chunk_group_row_limit FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 
--- setting: stripe_row_count
+-- setting: stripe_row_limit
 -- get baseline for setting
 SELECT run_command_on_placements('table_option_reference',$cmd$
-  SELECT stripe_row_count FROM columnar.options WHERE regclass = '%s'::regclass;
+  SELECT stripe_row_limit FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 -- change setting
-SELECT alter_columnar_table_set('table_option_reference', stripe_row_count => 100);
+SELECT alter_columnar_table_set('table_option_reference', stripe_row_limit => 100);
 -- verify setting
 SELECT run_command_on_placements('table_option_reference',$cmd$
-  SELECT stripe_row_count FROM columnar.options WHERE regclass = '%s'::regclass;
+  SELECT stripe_row_limit FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 -- reset setting
-SELECT alter_columnar_table_reset('table_option_reference', stripe_row_count => true);
+SELECT alter_columnar_table_reset('table_option_reference', stripe_row_limit => true);
 -- verify setting
 SELECT run_command_on_placements('table_option_reference',$cmd$
-  SELECT stripe_row_count FROM columnar.options WHERE regclass = '%s'::regclass;
+  SELECT stripe_row_limit FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 
 -- verify settings are propagated when creating a table
 CREATE TABLE table_option_reference_2 (a int, b text) USING columnar;
 SELECT alter_columnar_table_set('table_option_reference_2',
-                                chunk_row_count => 100,
-                                stripe_row_count => 1000,
+                                chunk_group_row_limit => 100,
+                                stripe_row_limit => 1000,
                                 compression => 'pglz',
                                 compression_level => 9);
 SELECT create_reference_table('table_option_reference_2');
 
 -- verify settings on placements
 SELECT run_command_on_placements('table_option_reference_2',$cmd$
-  SELECT ROW(chunk_row_count, stripe_row_count, compression, compression_level) FROM columnar.options WHERE regclass = '%s'::regclass;
+  SELECT ROW(chunk_group_row_limit, stripe_row_limit, compression, compression_level) FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 
 -- verify undistribute works
@@ -345,54 +345,54 @@ SELECT run_command_on_placements('table_option_citus_local',$cmd$
   SELECT compression_level FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 
--- setting: chunk_row_count
+-- setting: chunk_group_row_limit
 -- get baseline for setting
 SELECT run_command_on_placements('table_option_citus_local',$cmd$
-  SELECT chunk_row_count FROM columnar.options WHERE regclass = '%s'::regclass;
+  SELECT chunk_group_row_limit FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 -- change setting
-SELECT alter_columnar_table_set('table_option_citus_local', chunk_row_count => 100);
+SELECT alter_columnar_table_set('table_option_citus_local', chunk_group_row_limit => 100);
 -- verify setting
 SELECT run_command_on_placements('table_option_citus_local',$cmd$
-  SELECT chunk_row_count FROM columnar.options WHERE regclass = '%s'::regclass;
+  SELECT chunk_group_row_limit FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 -- reset setting
-SELECT alter_columnar_table_reset('table_option_citus_local', chunk_row_count => true);
+SELECT alter_columnar_table_reset('table_option_citus_local', chunk_group_row_limit => true);
 -- verify setting
 SELECT run_command_on_placements('table_option_citus_local',$cmd$
-  SELECT chunk_row_count FROM columnar.options WHERE regclass = '%s'::regclass;
+  SELECT chunk_group_row_limit FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 
--- setting: stripe_row_count
+-- setting: stripe_row_limit
 -- get baseline for setting
 SELECT run_command_on_placements('table_option_citus_local',$cmd$
-  SELECT stripe_row_count FROM columnar.options WHERE regclass = '%s'::regclass;
+  SELECT stripe_row_limit FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 -- change setting
-SELECT alter_columnar_table_set('table_option_citus_local', stripe_row_count => 100);
+SELECT alter_columnar_table_set('table_option_citus_local', stripe_row_limit => 100);
 -- verify setting
 SELECT run_command_on_placements('table_option_citus_local',$cmd$
-  SELECT stripe_row_count FROM columnar.options WHERE regclass = '%s'::regclass;
+  SELECT stripe_row_limit FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 -- reset setting
-SELECT alter_columnar_table_reset('table_option_citus_local', stripe_row_count => true);
+SELECT alter_columnar_table_reset('table_option_citus_local', stripe_row_limit => true);
 -- verify setting
 SELECT run_command_on_placements('table_option_citus_local',$cmd$
-  SELECT stripe_row_count FROM columnar.options WHERE regclass = '%s'::regclass;
+  SELECT stripe_row_limit FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 
 -- verify settings are propagated when creating a table
 CREATE TABLE table_option_citus_local_2 (a int, b text) USING columnar;
 SELECT alter_columnar_table_set('table_option_citus_local_2',
-                                chunk_row_count => 100,
-                                stripe_row_count => 1000,
+                                chunk_group_row_limit => 100,
+                                stripe_row_limit => 1000,
                                 compression => 'pglz',
                                 compression_level => 9);
 SELECT citus_add_local_table_to_metadata('table_option_citus_local_2');
 
 -- verify settings on placements
 SELECT run_command_on_placements('table_option_citus_local_2',$cmd$
-  SELECT ROW(chunk_row_count, stripe_row_count, compression, compression_level) FROM columnar.options WHERE regclass = '%s'::regclass;
+  SELECT ROW(chunk_group_row_limit, stripe_row_limit, compression, compression_level) FROM columnar.options WHERE regclass = '%s'::regclass;
 $cmd$);
 
 -- verify undistribute works

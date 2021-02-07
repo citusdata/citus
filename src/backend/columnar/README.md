@@ -73,8 +73,8 @@ Set options using:
 ```sql
 alter_columnar_table_set(
     relid REGCLASS,
-    chunk_row_count INT4 DEFAULT NULL,
-    stripe_row_count INT4 DEFAULT NULL,
+    chunk_group_row_limit INT4 DEFAULT NULL,
+    stripe_row_limit INT4 DEFAULT NULL,
     compression NAME DEFAULT NULL,
     compression_level INT4)
 ```
@@ -85,7 +85,7 @@ For example:
 SELECT alter_columnar_table_set(
     'my_columnar_table',
     compression => 'none',
-    stripe_row_count => 10000);
+    stripe_row_limit => 10000);
 ```
 
 The following options are available:
@@ -98,11 +98,11 @@ The following options are available:
   settings are from 1 through 19. If the compression method does not
   support the level chosen, the closest level will be selected
   instead.
-* **stripe_row_count**: ``<integer>`` - the maximum number of rows per
+* **stripe_row_limit**: ``<integer>`` - the maximum number of rows per
   stripe for _newly-inserted_ data. Existing stripes of data will not
   be changed and may have more rows than this maximum value. The
   default value is `150000`.
-* **chunk_row_count**: ``<integer>`` - the maximum number of rows per
+* **chunk_group_row_limit**: ``<integer>`` - the maximum number of rows per
   chunk for _newly-inserted_ data. Existing chunks of data will not be
   changed and may have more rows than this maximum value. The default
   value is `10000`.
@@ -118,8 +118,8 @@ following GUCs:
 
 * `columnar.compression`
 * `columnar.compression_level`
-* `columnar.stripe_row_count`
-* `columnar.chunk_row_count`
+* `columnar.stripe_row_limit`
+* `columnar.chunk_group_row_limit`
 
 GUCs only affect newly-created *tables*, not any newly-created
 *stripes* on an existing table.

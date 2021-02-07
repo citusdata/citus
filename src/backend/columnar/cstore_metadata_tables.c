@@ -27,6 +27,7 @@
 #include "catalog/pg_type.h"
 #include "catalog/namespace.h"
 #include "commands/defrem.h"
+#include "commands/sequence.h"
 #include "commands/trigger.h"
 #include "distributed/metadata_cache.h"
 #include "executor/executor.h"
@@ -79,6 +80,7 @@ static void GetHighestUsedAddressAndId(uint64 storageId,
 									   uint64 *highestUsedAddress,
 									   uint64 *highestUsedId);
 static List * ReadDataFileStripeList(uint64 storageId, Snapshot snapshot);
+static Oid ColumnarStorageIdSequenceRelationId(void);
 static Oid ColumnarStripeRelationId(void);
 static Oid ColumnarStripeIndexRelationId(void);
 static Oid ColumnarOptionsRelationId(void);
@@ -96,7 +98,6 @@ static bytea * DatumToBytea(Datum value, Form_pg_attribute attrForm);
 static Datum ByteaToDatum(bytea *bytes, Form_pg_attribute attrForm);
 static ColumnarMetapage * InitMetapage(Relation relation);
 static ColumnarMetapage * ReadMetapage(RelFileNode relfilenode, bool missingOk);
-static uint64 GetNextStorageId(void);
 static bool WriteColumnarOptions(Oid regclass, ColumnarOptions *options, bool overwrite);
 
 PG_FUNCTION_INFO_V1(columnar_relation_storageid);
@@ -104,8 +105,8 @@ PG_FUNCTION_INFO_V1(columnar_relation_storageid);
 /* constants for columnar.options */
 #define Natts_columnar_options 5
 #define Anum_columnar_options_regclass 1
-#define Anum_columnar_options_chunk_row_count 2
-#define Anum_columnar_options_stripe_row_count 3
+#define Anum_columnar_options_chunk_group_row_limit 2
+#define Anum_columnar_options_stripe_row_limit 3
 #define Anum_columnar_options_compression_level 4
 #define Anum_columnar_options_compression 5
 
@@ -116,8 +117,8 @@ PG_FUNCTION_INFO_V1(columnar_relation_storageid);
 typedef struct FormData_columnar_options
 {
 	Oid regclass;
-	int32 chunk_row_count;
-	int32 stripe_row_count;
+	int32 chunk_group_row_limit;
+	int32 stripe_row_limit;
 	int32 compressionLevel;
 	NameData compression;
 
@@ -144,7 +145,7 @@ typedef FormData_columnar_options *Form_columnar_options;
 #define Anum_columnar_chunk_stripe 2
 #define Anum_columnar_chunk_attr 3
 #define Anum_columnar_chunk_chunk 4
-#define Anum_columnar_chunk_row_count 5
+#define Anum_columnar_chunk_value_count 5
 #define Anum_columnar_chunk_minimum_value 6
 #define Anum_columnar_chunk_maximum_value 7
 #define Anum_columnar_chunk_value_stream_offset 8
@@ -173,8 +174,8 @@ InitColumnarOptions(Oid regclass)
 	}
 
 	ColumnarOptions defaultOptions = {
-		.chunkRowCount = columnar_chunk_row_count,
-		.stripeRowCount = columnar_stripe_row_count,
+		.chunkRowCount = columnar_chunk_group_row_limit,
+		.stripeRowCount = columnar_stripe_row_limit,
 		.compressionType = columnar_compression,
 		.compressionLevel = columnar_compression_level
 	};
@@ -250,8 +251,8 @@ WriteColumnarOptions(Oid regclass, ColumnarOptions *options, bool overwrite)
 			/* TODO check if the options are actually different, skip if not changed */
 			/* update existing record */
 			bool update[Natts_columnar_options] = { 0 };
-			update[Anum_columnar_options_chunk_row_count - 1] = true;
-			update[Anum_columnar_options_stripe_row_count - 1] = true;
+			update[Anum_columnar_options_chunk_group_row_limit - 1] = true;
+			update[Anum_columnar_options_stripe_row_limit - 1] = true;
 			update[Anum_columnar_options_compression_level - 1] = true;
 			update[Anum_columnar_options_compression - 1] = true;
 
@@ -370,8 +371,8 @@ ReadColumnarOptions(Oid regclass, ColumnarOptions *options)
 	{
 		Form_columnar_options tupOptions = (Form_columnar_options) GETSTRUCT(heapTuple);
 
-		options->chunkRowCount = tupOptions->chunk_row_count;
-		options->stripeRowCount = tupOptions->stripe_row_count;
+		options->chunkRowCount = tupOptions->chunk_group_row_limit;
+		options->stripeRowCount = tupOptions->stripe_row_limit;
 		options->compressionLevel = tupOptions->compressionLevel;
 		options->compressionType = ParseCompressionType(NameStr(tupOptions->compression));
 	}
@@ -379,8 +380,8 @@ ReadColumnarOptions(Oid regclass, ColumnarOptions *options)
 	{
 		/* populate options with system defaults */
 		options->compressionType = columnar_compression;
-		options->stripeRowCount = columnar_stripe_row_count;
-		options->chunkRowCount = columnar_chunk_row_count;
+		options->stripeRowCount = columnar_stripe_row_limit;
+		options->chunkRowCount = columnar_chunk_group_row_limit;
 		options->compressionLevel = columnar_compression_level;
 	}
 
@@ -524,7 +525,7 @@ ReadStripeSkipList(RelFileNode relfilenode, uint64 stripe, TupleDesc tupleDescri
 
 		ColumnChunkSkipNode *chunk =
 			&chunkList->chunkSkipNodeArray[columnIndex][chunkIndex];
-		chunk->rowCount = DatumGetInt64(datumArray[Anum_columnar_chunk_row_count -
+		chunk->rowCount = DatumGetInt64(datumArray[Anum_columnar_chunk_value_count -
 												   1]);
 		chunk->valueChunkOffset =
 			DatumGetInt64(datumArray[Anum_columnar_chunk_value_stream_offset - 1]);
@@ -1049,6 +1050,17 @@ ByteaToDatum(bytea *bytes, Form_pg_attribute attrForm)
 
 
 /*
+ * ColumnarStorageIdSequenceRelationId returns relation id of columnar.stripe.
+ * TODO: should we cache this similar to citus?
+ */
+static Oid
+ColumnarStorageIdSequenceRelationId(void)
+{
+	return get_relname_relid("storageid_seq", ColumnarNamespaceId());
+}
+
+
+/*
  * ColumnarStripeRelationId returns relation id of columnar.stripe.
  * TODO: should we cache this similar to citus?
  */
@@ -1179,9 +1191,9 @@ InitMetapage(Relation relation)
 	 * invisible.
 	 */
 	Assert(!IsBinaryUpgrade);
-
 	ColumnarMetapage *metapage = palloc0(sizeof(ColumnarMetapage));
-	metapage->storageId = GetNextStorageId();
+
+	metapage->storageId = nextval_internal(ColumnarStorageIdSequenceRelationId(), false);
 	metapage->versionMajor = COLUMNAR_VERSION_MAJOR;
 	metapage->versionMinor = COLUMNAR_VERSION_MINOR;
 
@@ -1193,37 +1205,6 @@ InitMetapage(Relation relation)
 	WriteToSmgr(relation, 0, (char *) metapage, sizeof(ColumnarMetapage));
 
 	return metapage;
-}
-
-
-/*
- * GetNextStorageId returns the next value from the storage id sequence.
- */
-static uint64
-GetNextStorageId(void)
-{
-	Oid savedUserId = InvalidOid;
-	int savedSecurityContext = 0;
-	Oid sequenceId = get_relname_relid("storageid_seq", ColumnarNamespaceId());
-	Datum sequenceIdDatum = ObjectIdGetDatum(sequenceId);
-
-	/*
-	 * Not all users have update access to the sequence, so switch
-	 * security context.
-	 */
-	GetUserIdAndSecContext(&savedUserId, &savedSecurityContext);
-	SetUserIdAndSecContext(CitusExtensionOwner(), SECURITY_LOCAL_USERID_CHANGE);
-
-	/*
-	 * Generate new and unique storage id from sequence.
-	 */
-	Datum storageIdDatum = DirectFunctionCall1(nextval_oid, sequenceIdDatum);
-
-	SetUserIdAndSecContext(savedUserId, savedSecurityContext);
-
-	uint64 storageId = DatumGetInt64(storageIdDatum);
-
-	return storageId;
 }
 
 

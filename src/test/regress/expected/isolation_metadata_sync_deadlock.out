@@ -5,7 +5,7 @@ create_distributed_table
 
 
 step enable-deadlock-detection:
-  ALTER SYSTEM SET citus.distributed_deadlock_detection_factor TO 1.1;
+  ALTER SYSTEM SET citus.distributed_deadlock_detection_factor TO 3;
 
 step reload-conf:
     SELECT pg_reload_conf();
@@ -63,8 +63,7 @@ step s2-update-1-on-worker:
  <waiting ...>
 step s1-update-2:
   UPDATE deadlock_detection_test SET some_val = 1 WHERE user_id = 2;
- <waiting ...>
-step s1-update-2: <... completed>
+
 step s2-update-1-on-worker: <... completed>
 run_commands_on_session_level_connection_to_node
 
