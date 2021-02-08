@@ -443,7 +443,8 @@ columnar_tuple_insert(Relation relation, TupleTableSlot *slot, CommandId cid,
 	TableWriteState *writeState = columnar_init_write_state(relation,
 															RelationGetDescr(relation),
 															GetCurrentSubTransactionId());
-	MemoryContext oldContext = MemoryContextSwitchTo(writeState->perTupleContext);
+	MemoryContext oldContext = MemoryContextSwitchTo(ColumnarWritePerTupleContext(
+														 writeState));
 
 	ColumnarCheckLogicalReplication(relation);
 
@@ -455,7 +456,7 @@ columnar_tuple_insert(Relation relation, TupleTableSlot *slot, CommandId cid,
 	ColumnarWriteRow(writeState, values, slot->tts_isnull);
 
 	MemoryContextSwitchTo(oldContext);
-	MemoryContextReset(writeState->perTupleContext);
+	MemoryContextReset(ColumnarWritePerTupleContext(writeState));
 }
 
 
@@ -486,7 +487,8 @@ columnar_multi_insert(Relation relation, TupleTableSlot **slots, int ntuples,
 
 	ColumnarCheckLogicalReplication(relation);
 
-	MemoryContext oldContext = MemoryContextSwitchTo(writeState->perTupleContext);
+	MemoryContext oldContext = MemoryContextSwitchTo(ColumnarWritePerTupleContext(
+														 writeState));
 
 	for (int i = 0; i < ntuples; i++)
 	{
@@ -498,7 +500,7 @@ columnar_multi_insert(Relation relation, TupleTableSlot **slots, int ntuples,
 									   tupleSlot->tts_values, tupleSlot->tts_isnull);
 
 		ColumnarWriteRow(writeState, values, tupleSlot->tts_isnull);
-		MemoryContextReset(writeState->perTupleContext);
+		MemoryContextReset(ColumnarWritePerTupleContext(writeState));
 	}
 
 	MemoryContextSwitchTo(oldContext);
@@ -1158,7 +1160,7 @@ columnar_tableam_finish()
  * Get the number of chunks filtered out during the given scan.
  */
 int64
-ColumnarGetChunkGroupsFiltered(TableScanDesc scanDesc)
+ColumnarScanChunkGroupsFiltered(TableScanDesc scanDesc)
 {
 	ColumnarScanDesc columnarScanDesc = (ColumnarScanDesc) scanDesc;
 	TableReadState *readState = columnarScanDesc->cs_readState;
@@ -1166,7 +1168,7 @@ ColumnarGetChunkGroupsFiltered(TableScanDesc scanDesc)
 	/* readState is initialized lazily */
 	if (readState != NULL)
 	{
-		return readState->chunkGroupsFiltered;
+		return ColumnarReadChunkGroupsFiltered(readState);
 	}
 	else
 	{

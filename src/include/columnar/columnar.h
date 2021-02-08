@@ -213,53 +213,13 @@ typedef struct StripeBuffers
 
 
 /* TableReadState represents state of a columnar scan. */
-typedef struct TableReadState
-{
-	List *stripeList;
-	StripeMetadata *currentStripeMetadata;
-	TupleDesc tupleDescriptor;
-	Relation relation;
-
-	/*
-	 * List of Var pointers for columns in the query. We use this both for
-	 * getting vector of projected columns, and also when we want to build
-	 * base constraint to find selected row chunks.
-	 */
-	List *projectedColumnList;
-
-	List *whereClauseList;
-	MemoryContext stripeReadContext;
-	StripeBuffers *stripeBuffers;
-	uint32 readStripeCount;
-	uint64 stripeReadRowCount;
-	int64 chunkGroupsFiltered;
-	ChunkData *chunkData;
-	int32 deserializedChunkIndex;
-} TableReadState;
+struct TableReadState;
+typedef struct TableReadState TableReadState;
 
 
 /* TableWriteState represents state of a columnar write operation. */
-typedef struct TableWriteState
-{
-	TupleDesc tupleDescriptor;
-	FmgrInfo **comparisonFunctionArray;
-	RelFileNode relfilenode;
-
-	MemoryContext stripeWriteContext;
-	MemoryContext perTupleContext;
-	StripeBuffers *stripeBuffers;
-	StripeSkipList *stripeSkipList;
-	ColumnarOptions options;
-	ChunkData *chunkData;
-
-	/*
-	 * compressionBuffer buffer is used as temporary storage during
-	 * data value compression operation. It is kept here to minimize
-	 * memory allocations. It lives in stripeWriteContext and gets
-	 * deallocated when memory context is reset.
-	 */
-	StringInfo compressionBuffer;
-} TableWriteState;
+struct TableWriteState;
+typedef struct TableWriteState TableWriteState;
 
 extern int columnar_compression;
 extern int columnar_stripe_row_limit;
@@ -279,6 +239,7 @@ extern void ColumnarWriteRow(TableWriteState *state, Datum *columnValues,
 extern void ColumnarFlushPendingWrites(TableWriteState *state);
 extern void ColumnarEndWrite(TableWriteState *state);
 extern bool ContainsPendingWrites(TableWriteState *state);
+extern MemoryContext ColumnarWritePerTupleContext(TableWriteState *state);
 
 /* Function declarations for reading from columnar table */
 extern TableReadState * ColumnarBeginRead(Relation relation,
@@ -289,6 +250,7 @@ extern bool ColumnarReadNextRow(TableReadState *state, Datum *columnValues,
 								bool *columnNulls);
 extern void ColumnarRescan(TableReadState *readState);
 extern void ColumnarEndRead(TableReadState *state);
+extern int64 ColumnarReadChunkGroupsFiltered(TableReadState *state);
 
 /* Function declarations for common functions */
 extern FmgrInfo * GetFunctionInfoOrNull(Oid typeId, Oid accessMethodId,

@@ -39,6 +39,30 @@
 #include "columnar/columnar.h"
 #include "columnar/columnar_version_compat.h"
 
+struct TableReadState
+{
+	List *stripeList;
+	StripeMetadata *currentStripeMetadata;
+	TupleDesc tupleDescriptor;
+	Relation relation;
+
+	/*
+	 * List of Var pointers for columns in the query. We use this both for
+	 * getting vector of projected columns, and also when we want to build
+	 * base constraint to find selected row chunks.
+	 */
+	List *projectedColumnList;
+
+	List *whereClauseList;
+	MemoryContext stripeReadContext;
+	StripeBuffers *stripeBuffers;
+	uint32 readStripeCount;
+	uint64 stripeReadRowCount;
+	int64 chunkGroupsFiltered;
+	ChunkData *chunkData;
+	int32 deserializedChunkIndex;
+};
+
 /* static function declarations */
 static StripeBuffers * LoadFilteredStripeBuffers(Relation relation,
 												 StripeMetadata *stripeMetadata,
@@ -232,6 +256,18 @@ ColumnarEndRead(TableReadState *readState)
 	MemoryContextDelete(readState->stripeReadContext);
 	list_free_deep(readState->stripeList);
 	pfree(readState);
+}
+
+
+/*
+ * ColumnarReadChunkGroupsFiltered
+ *
+ * Return the number of chunk groups filtered during this read operation.
+ */
+int64
+ColumnarReadChunkGroupsFiltered(TableReadState *state)
+{
+	return state->chunkGroupsFiltered;
 }
 
 
