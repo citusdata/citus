@@ -210,7 +210,7 @@ AppendStatisticsName(StringInfo buf, CreateStatsStmt *stmt)
 static void
 AppendStatTypes(StringInfo buf, CreateStatsStmt *stmt)
 {
-	if (list_length(stmt->stat_types) == 0)
+	if (list_empty(stmt->stat_types))
 	{
 		return;
 	}

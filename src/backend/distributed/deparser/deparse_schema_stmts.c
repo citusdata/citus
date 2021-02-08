@@ -14,6 +14,7 @@
 
 #include "distributed/citus_ruleutils.h"
 #include "distributed/deparser.h"
+#include "distributed/listutils.h"
 #include "lib/stringinfo.h"
 #include "nodes/nodes.h"
 #include "utils/builtins.h"
@@ -93,7 +94,7 @@ AppendGrantOnSchemaStmt(StringInfo buf, GrantStmt *stmt)
 static void
 AppendGrantOnSchemaPrivileges(StringInfo buf, GrantStmt *stmt)
 {
-	if (list_length(stmt->privileges) == 0)
+	if (list_empty(stmt->privileges))
 	{
 		appendStringInfo(buf, "ALL PRIVILEGES");
 	}

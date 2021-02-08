@@ -608,7 +608,7 @@ PropagateNodeWideObjects(WorkerNode *newWorkerNode)
 		ddlCommands = list_concat(ddlCommands, alterRoleSetCommands);
 	}
 
-	if (list_length(ddlCommands) > 0)
+	if (!list_empty(ddlCommands))
 	{
 		/* if there are command wrap them in enable_ddl_propagation off */
 		ddlCommands = lcons(DISABLE_DDL_PROPAGATION, ddlCommands);

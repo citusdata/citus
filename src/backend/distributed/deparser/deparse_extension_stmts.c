@@ -103,7 +103,7 @@ AppendCreateExtensionStmt(StringInfo buf, CreateExtensionStmt *createExtensionSt
 static void
 AppendCreateExtensionStmtOptions(StringInfo buf, List *options)
 {
-	if (list_length(options) > 0)
+	if (!list_empty(options))
 	{
 		/* only append WITH if we actual will add options to the statement */
 		appendStringInfoString(buf, " WITH");

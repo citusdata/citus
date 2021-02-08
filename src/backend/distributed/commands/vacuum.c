@@ -85,7 +85,7 @@ PostprocessVacuumStmt(VacuumStmt *vacuumStmt, const char *vacuumCommand)
 	 * No table in the vacuum statement means vacuuming all relations
 	 * which is not supported by citus.
 	 */
-	if (list_length(vacuumStmt->rels) == 0)
+	if (list_empty(vacuumStmt->rels))
 	{
 		/* WARN for unqualified VACUUM commands */
 		ereport(WARNING, (errmsg("not propagating %s command to worker nodes", stmtName),
@@ -95,7 +95,7 @@ PostprocessVacuumStmt(VacuumStmt *vacuumStmt, const char *vacuumCommand)
 
 
 	List *citusRelationIdList = VacuumCitusRelationIdList(vacuumStmt, vacuumParams);
-	if (list_length(citusRelationIdList) == 0)
+	if (list_empty(citusRelationIdList))
 	{
 		return;
 	}

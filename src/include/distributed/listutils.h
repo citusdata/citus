@@ -33,6 +33,9 @@ typedef struct ListCellAndListWrapper
 	ListCell *listCell;
 } ListCellAndListWrapper;
 
+#define list_empty(list) (list_length(list) == 0)
+
+
 /*
  * foreach_ptr -
  *	  a convenience macro which loops through a pointer list without needing a

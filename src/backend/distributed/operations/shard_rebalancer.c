@@ -1082,7 +1082,7 @@ RebalanceTableShards(RebalanceOptions *options, Oid shardReplicationModeOid)
 	char transferMode = LookupShardTransferMode(shardReplicationModeOid);
 	EnsureReferenceTablesExistOnAllNodesExtended(transferMode);
 
-	if (list_length(options->relationIdList) == 0)
+	if (list_empty(options->relationIdList))
 	{
 		return;
 	}
@@ -1101,7 +1101,7 @@ RebalanceTableShards(RebalanceOptions *options, Oid shardReplicationModeOid)
 
 	List *placementUpdateList = GetRebalanceSteps(options);
 
-	if (list_length(placementUpdateList) == 0)
+	if (list_empty(placementUpdateList))
 	{
 		return;
 	}

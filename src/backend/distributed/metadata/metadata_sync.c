@@ -1492,7 +1492,7 @@ DetachPartitionCommandList(void)
 		}
 	}
 
-	if (list_length(detachPartitionCommandList) == 0)
+	if (list_empty(detachPartitionCommandList))
 	{
 		return NIL;
 	}

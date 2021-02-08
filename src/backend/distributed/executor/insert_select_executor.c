@@ -318,7 +318,7 @@ BuildSelectForInsertSelect(Query *insertSelectQuery)
 	 * not support CTEs and top-level set operations, we can wrap queries containing
 	 * those without breaking anything.
 	 */
-	if (list_length(insertSelectQuery->cteList) > 0)
+	if (!list_empty(insertSelectQuery->cteList))
 	{
 		selectQuery = WrapSubquery(selectRte->subquery);
 

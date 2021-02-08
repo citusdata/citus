@@ -41,7 +41,7 @@ CacheLocalPlanForShardQuery(Task *task, DistributedPlan *originalDistributedPlan
 		return;
 	}
 
-	if (list_length(task->relationShardList) == 0)
+	if (list_empty(task->relationShardList))
 	{
 		/* zero shard plan, no need to cache */
 		return;

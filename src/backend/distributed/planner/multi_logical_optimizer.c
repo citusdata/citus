@@ -981,7 +981,7 @@ SelectClauseTableIdList(List *selectClauseList)
 	{
 		List *selectColumnList = pull_var_clause_default(selectClause);
 
-		if (list_length(selectColumnList) == 0)
+		if (list_empty(selectColumnList))
 		{
 			/* filter is a constant, e.g. false or 1=0 */
 			continue;
@@ -1115,7 +1115,7 @@ TableIdListSelectClauses(List *tableIdList, List *selectClauseList)
 	foreach_ptr(selectClause, selectClauseList)
 	{
 		List *selectColumnList = pull_var_clause_default(selectClause);
-		if (list_length(selectColumnList) == 0)
+		if (list_empty(selectColumnList))
 		{
 			/* filter is a constant, e.g. false or 1=0, always include it */
 			tableSelectClauseList = lappend(tableSelectClauseList, selectClause);
@@ -3539,7 +3539,7 @@ static bool
 AggregateEnabledCustom(Aggref *aggregateExpression)
 {
 	if (aggregateExpression->aggorder != NIL ||
-		list_length(aggregateExpression->args) == 0)
+		list_empty(aggregateExpression->args))
 	{
 		return false;
 	}
@@ -5113,7 +5113,7 @@ bool
 IsGroupBySubsetOfDistinct(List *groupClauses, List *distinctClauses)
 {
 	/* There must be a group clause */
-	if (list_length(groupClauses) == 0)
+	if (list_empty(groupClauses))
 	{
 		return false;
 	}

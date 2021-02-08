@@ -991,7 +991,7 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
 	 * the CTEs are referenced then there are no subplans, but we still want
 	 * to retry the router planner.
 	 */
-	if (list_length(subPlanList) > 0 || hasCtes)
+	if (!list_empty(subPlanList) || hasCtes)
 	{
 		Query *newQuery = copyObject(originalQuery);
 		bool setPartitionedTablesInherited = false;

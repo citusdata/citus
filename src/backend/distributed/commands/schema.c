@@ -142,7 +142,7 @@ PreprocessGrantOnSchemaStmt(Node *node, const char *queryString,
 
 	List *distributedSchemas = FilterDistributedSchemas(stmt->objects);
 
-	if (list_length(distributedSchemas) == 0)
+	if (list_empty(distributedSchemas))
 	{
 		return NIL;
 	}

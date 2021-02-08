@@ -1230,7 +1230,7 @@ ReplaceTable(Oid sourceId, Oid targetId, List *justBeforeDropCommands,
 static bool
 HasAnyGeneratedStoredColumns(Oid relationId)
 {
-	return list_length(GetNonGeneratedStoredColumnNameList(relationId)) > 0;
+	return !list_empty(GetNonGeneratedStoredColumnNameList(relationId));
 }
 
 

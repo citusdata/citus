@@ -234,7 +234,7 @@ IsFirstWorkerNode()
 
 	workerNodeList = SortList(workerNodeList, CompareWorkerNodes);
 
-	if (list_length(workerNodeList) == 0)
+	if (list_empty(workerNodeList))
 	{
 		return false;
 	}
@@ -262,7 +262,7 @@ LockShardListMetadataOnWorkers(LOCKMODE lockmode, List *shardIntervalList)
 	int processedShardIntervalCount = 0;
 	int totalShardIntervalCount = list_length(shardIntervalList);
 
-	if (list_length(shardIntervalList) == 0)
+	if (list_empty(shardIntervalList))
 	{
 		return;
 	}
@@ -404,7 +404,7 @@ LockReferencedReferenceShardDistributionMetadata(uint64 shardId, LOCKMODE lockMo
 	List *referencedRelationList = cacheEntry->referencedRelationsViaForeignKey;
 	List *shardIntervalList = GetSortedReferenceShardIntervals(referencedRelationList);
 
-	if (list_length(shardIntervalList) > 0 && ClusterHasKnownMetadataWorkers())
+	if (!list_empty(shardIntervalList) && ClusterHasKnownMetadataWorkers())
 	{
 		LockShardListMetadataOnWorkers(lockMode, shardIntervalList);
 	}
@@ -440,7 +440,7 @@ LockReferencedReferenceShardResources(uint64 shardId, LOCKMODE lockMode)
 	List *referencedShardIntervalList =
 		GetSortedReferenceShardIntervals(referencedRelationList);
 
-	if (list_length(referencedShardIntervalList) > 0 &&
+	if (!list_empty(referencedShardIntervalList) &&
 		ClusterHasKnownMetadataWorkers() &&
 		!IsFirstWorkerNode())
 	{

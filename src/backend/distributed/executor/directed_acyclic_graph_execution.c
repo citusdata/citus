@@ -60,7 +60,7 @@ ExecuteTasksInDependencyOrder(List *allTasks, List *excludedTasks, List *jobIds)
 	while (true)
 	{
 		List *curTasks = FindExecutableTasks(allTasks, completedTasks);
-		if (list_length(curTasks) == 0)
+		if (list_empty(curTasks))
 		{
 			break;
 		}

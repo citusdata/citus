@@ -220,7 +220,7 @@ static bool
 JoinOnColumns(List *currentPartitionColumnList, Var *candidateColumn,
 			  List *joinClauseList)
 {
-	if (candidateColumn == NULL || list_length(currentPartitionColumnList) == 0)
+	if (candidateColumn == NULL || list_empty(currentPartitionColumnList))
 	{
 		/*
 		 * LocalJoin can only be happening if we have both a current column and a target
@@ -308,7 +308,7 @@ JoinOrderList(List *tableEntryList, List *joinClauseList)
 		}
 	}
 
-	if (list_length(candidateJoinOrderList) == 0)
+	if (list_empty(candidateJoinOrderList))
 	{
 		/* there are no plans that we can create, time to error */
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
@@ -1086,7 +1086,7 @@ SinglePartitionJoin(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 OpExpr *
 SinglePartitionJoinClause(List *partitionColumnList, List *applicableJoinClauses)
 {
-	if (list_length(partitionColumnList) == 0)
+	if (list_empty(partitionColumnList))
 	{
 		return NULL;
 	}
@@ -1210,7 +1210,7 @@ static JoinOrderNode *
 CartesianProduct(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 				 List *applicableJoinClauses, JoinType joinType)
 {
-	if (list_length(applicableJoinClauses) == 0)
+	if (list_empty(applicableJoinClauses))
 	{
 		/* Because of the cartesian product, anchor table information got lost */
 		return MakeJoinOrderNode(candidateTable, CARTESIAN_PRODUCT,

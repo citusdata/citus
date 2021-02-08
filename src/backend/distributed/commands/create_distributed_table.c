@@ -1156,7 +1156,7 @@ EnsureRelationHasNoTriggers(Oid relationId)
 {
 	List *explicitTriggerIds = GetExplicitTriggerIdList(relationId);
 
-	if (list_length(explicitTriggerIds) > 0)
+	if (!list_empty(explicitTriggerIds))
 	{
 		char *relationName = get_rel_name(relationId);
 

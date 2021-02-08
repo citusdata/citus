@@ -338,7 +338,7 @@ BlockWritesToShardList(List *shardList)
 	}
 
 	/* following code relies on the list to have at least one shard */
-	if (list_length(shardList) == 0)
+	if (list_empty(shardList))
 	{
 		return;
 	}

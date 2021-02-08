@@ -3873,7 +3873,7 @@ CitusTableTypeIdList(CitusTableType citusTableType)
 bool
 ClusterHasReferenceTable(void)
 {
-	return list_length(CitusTableTypeIdList(REFERENCE_TABLE)) > 0;
+	return !list_empty(CitusTableTypeIdList(REFERENCE_TABLE));
 }
 
 

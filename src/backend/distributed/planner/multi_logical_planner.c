@@ -1672,7 +1672,7 @@ MultiSelectNode(List *whereClauseList)
 		}
 	}
 
-	if (list_length(selectClauseList) > 0)
+	if (!list_empty(selectClauseList))
 	{
 		selectNode = CitusMakeNode(MultiSelect);
 		selectNode->selectClauseList = selectClauseList;
@@ -1696,7 +1696,7 @@ IsSelectClause(Node *clause)
 
 	/* extract columns from the clause */
 	List *columnList = pull_var_clause_default(clause);
-	if (list_length(columnList) == 0)
+	if (list_empty(columnList))
 	{
 		return true;
 	}

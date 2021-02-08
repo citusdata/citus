@@ -721,7 +721,7 @@ bool
 HasForeignKeyWithLocalTable(Oid relationId)
 {
 	List *foreignKeysWithLocalTables = GetForeignKeysWithLocalTables(relationId);
-	return list_length(foreignKeysWithLocalTables) > 0;
+	return !list_empty(foreignKeysWithLocalTables);
 }
 
 
@@ -754,7 +754,7 @@ HasForeignKeyToCitusLocalTable(Oid relationId)
 {
 	int flags = INCLUDE_REFERENCING_CONSTRAINTS | INCLUDE_CITUS_LOCAL_TABLES;
 	List *foreignKeyOidList = GetForeignKeyOids(relationId, flags);
-	return list_length(foreignKeyOidList) > 0;
+	return !list_empty(foreignKeyOidList);
 }
 
 
@@ -769,7 +769,7 @@ HasForeignKeyToReferenceTable(Oid relationId)
 	int flags = INCLUDE_REFERENCING_CONSTRAINTS | INCLUDE_REFERENCE_TABLES;
 	List *foreignKeyOids = GetForeignKeyOids(relationId, flags);
 
-	return list_length(foreignKeyOids) > 0;
+	return !list_empty(foreignKeyOids);
 }
 
 
@@ -783,7 +783,7 @@ TableReferenced(Oid relationId)
 	int flags = INCLUDE_REFERENCED_CONSTRAINTS | INCLUDE_ALL_TABLE_TYPES;
 	List *foreignKeyOids = GetForeignKeyOids(relationId, flags);
 
-	return list_length(foreignKeyOids) > 0;
+	return !list_empty(foreignKeyOids);
 }
 
 
@@ -829,7 +829,7 @@ TableReferencing(Oid relationId)
 	int flags = INCLUDE_REFERENCING_CONSTRAINTS | INCLUDE_ALL_TABLE_TYPES;
 	List *foreignKeyOids = GetForeignKeyOids(relationId, flags);
 
-	return list_length(foreignKeyOids) > 0;
+	return !list_empty(foreignKeyOids);
 }
 
 
@@ -928,7 +928,7 @@ TableHasExternalForeignKeys(Oid relationId)
 	List *foreignKeysWithOtherTables = list_concat(foreignKeyIdsTableReferencing,
 												   foreignKeyIdsTableReferenced);
 
-	if (list_length(foreignKeysWithOtherTables) == 0)
+	if (list_empty(foreignKeysWithOtherTables))
 	{
 		return false;
 	}

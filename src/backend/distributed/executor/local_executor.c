@@ -154,7 +154,7 @@ GetCurrentLocalExecutionStatus(void)
 uint64
 ExecuteLocalTaskList(List *taskList, TupleDestination *defaultTupleDest)
 {
-	if (list_length(taskList) == 0)
+	if (list_empty(taskList))
 	{
 		return 0;
 	}
@@ -174,7 +174,7 @@ ExecuteLocalTaskList(List *taskList, TupleDestination *defaultTupleDest)
 uint64
 ExecuteLocalUtilityTaskList(List *utilityTaskList)
 {
-	if (list_length(utilityTaskList) == 0)
+	if (list_empty(utilityTaskList))
 	{
 		return 0;
 	}
@@ -617,7 +617,7 @@ static void
 RecordNonDistTableAccessesForTask(Task *task)
 {
 	List *taskPlacementList = task->taskPlacementList;
-	if (list_length(taskPlacementList) == 0)
+	if (list_empty(taskPlacementList))
 	{
 		/*
 		 * We should never get here, but prefer to throw an error over crashing

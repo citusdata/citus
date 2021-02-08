@@ -802,7 +802,7 @@ AdaptiveExecutor(CitusScanState *scanState)
 	}
 
 	/* execute tasks local to the node (if any) */
-	if (list_length(execution->localTaskList) > 0)
+	if (!list_empty(execution->localTaskList))
 	{
 		/* now execute the local tasks */
 		RunLocalExecution(scanState, execution);
@@ -837,7 +837,7 @@ AdaptiveExecutor(CitusScanState *scanState)
 static bool
 HasDependentJobs(Job *mainJob)
 {
-	return list_length(mainJob->dependentJobList) > 0;
+	return !list_empty(mainJob->dependentJobList);
 }
 
 
@@ -2109,7 +2109,7 @@ FindOrCreateWorkerSession(WorkerPool *workerPool, MultiConnection *connection)
 	 * Record the first connection establishment time to the pool. We need this
 	 * to enforce NodeConnectionTimeout.
 	 */
-	if (list_length(workerPool->sessionList) == 0)
+	if (list_empty(workerPool->sessionList))
 	{
 		INSTR_TIME_SET_CURRENT(workerPool->poolStartTime);
 		workerPool->checkForPoolTimeout = true;
@@ -2293,7 +2293,7 @@ RunDistributedExecution(DistributedExecution *execution)
 		UnclaimAllSessionConnections(execution->sessionList);
 
 		/* do repartition cleanup if this is a repartition query*/
-		if (list_length(execution->jobIdList) > 0)
+		if (!list_empty(execution->jobIdList))
 		{
 			DoRepartitionCleanup(execution->jobIdList);
 		}
@@ -2660,7 +2660,7 @@ OpenNewConnections(WorkerPool *workerPool, int newConnectionCount,
 		 */
 		connection->claimedExclusively = true;
 
-		if (list_length(workerPool->sessionList) == 0)
+		if (list_empty(workerPool->sessionList))
 		{
 			/*
 			 * The worker pool has just started to establish connections. We need to

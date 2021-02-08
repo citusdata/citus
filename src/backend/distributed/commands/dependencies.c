@@ -63,7 +63,7 @@ EnsureDependenciesExistOnAllNodes(const ObjectAddress *target)
 		ddlCommands = list_concat(ddlCommands, dependencyCommands);
 
 		/* create a new list with dependencies that actually created commands */
-		if (list_length(dependencyCommands) > 0)
+		if (!list_empty(dependencyCommands))
 		{
 			dependenciesWithCommands = lappend(dependenciesWithCommands, dependency);
 		}
@@ -152,7 +152,7 @@ GetDistributableDependenciesForObject(const ObjectAddress *target)
 		List *dependencyCommands = GetDependencyCreateDDLCommands(dependency);
 
 		/* create a new list with dependencies that actually created commands */
-		if (list_length(dependencyCommands) > 0)
+		if (!list_empty(dependencyCommands))
 		{
 			distributableDependencies = lappend(distributableDependencies, dependency);
 		}

@@ -193,7 +193,7 @@ ExtractDefaultColumnsAndOwnedSequences(Oid relationId, List **columnNameList,
 			GetSequencesOwnedByColumn(relationId, attributeIndex + 1);
 
 		Oid ownedSequenceId = InvalidOid;
-		if (list_length(columnOwnedSequences) != 0)
+		if (!list_empty(columnOwnedSequences))
 		{
 			/*
 			 * A column might only own one sequence. We intentionally use

@@ -73,7 +73,7 @@ WorkerGetRandomCandidateNode(List *currentNodeList)
 	List *candidateWorkerNodeList = PrimaryNodesNotInList(currentNodeList);
 
 	/* we check if the shard has already been placed on all nodes known to us */
-	if (list_length(candidateWorkerNodeList) == 0)
+	if (list_empty(candidateWorkerNodeList))
 	{
 		return NULL;
 	}

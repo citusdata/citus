@@ -149,7 +149,7 @@ PreprocessDropTableStmt(Node *node, const char *queryString,
 		EnsureCoordinator();
 
 		List *partitionList = PartitionList(relationId);
-		if (list_length(partitionList) == 0)
+		if (list_empty(partitionList))
 		{
 			continue;
 		}
@@ -224,7 +224,7 @@ PostprocessCreateTableStmtForeignKeys(CreateStmt *createStatement)
 								INCLUDE_REFERENCE_TABLES;
 	List *nonDistTableForeignKeyIdList =
 		GetForeignKeyOids(relationId, nonDistTableFKeysFlag);
-	bool hasForeignKeyToNonDistTable = list_length(nonDistTableForeignKeyIdList) != 0;
+	bool hasForeignKeyToNonDistTable = !list_empty(nonDistTableForeignKeyIdList);
 	if (hasForeignKeyToNonDistTable)
 	{
 		/*
@@ -724,7 +724,7 @@ AlterTableDefinesFKeyBetweenPostgresAndNonDistTable(AlterTableStmt *alterTableSt
 {
 	List *foreignKeyConstraintList =
 		GetAlterTableAddFKeyConstraintList(alterTableStatement);
-	if (list_length(foreignKeyConstraintList) == 0)
+	if (list_empty(foreignKeyConstraintList))
 	{
 		/* we are not defining any foreign keys */
 		return false;

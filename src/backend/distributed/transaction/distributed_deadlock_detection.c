@@ -114,7 +114,7 @@ CheckForDistributedDeadlocks(void)
 	 * worker node which has the same group id with its master (i.e., 0),
 	 * which may erroneously decide to kill the deadlocks happening on it.
 	 */
-	if (list_length(workerNodeList) == 0)
+	if (list_empty(workerNodeList))
 	{
 		return false;
 	}

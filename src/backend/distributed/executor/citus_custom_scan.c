@@ -776,7 +776,7 @@ IsCitusCustomScan(Plan *plan)
 	}
 
 	CustomScan *customScan = (CustomScan *) plan;
-	if (list_length(customScan->custom_private) == 0)
+	if (list_empty(customScan->custom_private))
 	{
 		return false;
 	}

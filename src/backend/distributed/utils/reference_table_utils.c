@@ -119,7 +119,7 @@ EnsureReferenceTablesExistOnAllNodesExtended(char transferMode)
 	Oid referenceTableId = linitial_oid(referenceTableIdList);
 	const char *referenceTableName = get_rel_name(referenceTableId);
 	List *shardIntervalList = LoadShardIntervalList(referenceTableId);
-	if (list_length(shardIntervalList) == 0)
+	if (list_empty(shardIntervalList))
 	{
 		/* check for corrupt metadata */
 		ereport(ERROR, (errmsg("reference table \"%s\" does not have a shard",
@@ -136,7 +136,7 @@ EnsureReferenceTablesExistOnAllNodesExtended(char transferMode)
 	 */
 	List *newWorkersList = WorkersWithoutReferenceTablePlacement(shardId,
 																 AccessShareLock);
-	if (list_length(newWorkersList) == 0)
+	if (list_empty(newWorkersList))
 	{
 		/* nothing to do, no need for lock */
 		UnlockColocationId(colocationId, ExclusiveLock);
@@ -449,7 +449,7 @@ DeleteAllReferenceTablePlacementsFromNodeGroup(int32 groupId)
 	List *referenceShardIntervalList = NIL;
 
 	/* if there are no reference tables, we do not need to do anything */
-	if (list_length(referenceTableList) == 0)
+	if (list_empty(referenceTableList))
 	{
 		return;
 	}
@@ -472,7 +472,7 @@ DeleteAllReferenceTablePlacementsFromNodeGroup(int32 groupId)
 	{
 		List *placements = GroupShardPlacementsForTableOnGroup(referenceTableId,
 															   groupId);
-		if (list_length(placements) == 0)
+		if (list_empty(placements))
 		{
 			/* this happens if the node was previously disabled */
 			continue;
@@ -542,7 +542,7 @@ ReplicateAllReferenceTablesToNode(char *nodeName, int nodePort)
 	List *referenceTableList = CitusTableTypeIdList(REFERENCE_TABLE);
 
 	/* if there is no reference table, we do not need to replicate anything */
-	if (list_length(referenceTableList) > 0)
+	if (!list_empty(referenceTableList))
 	{
 		List *referenceShardIntervalList = NIL;
 

@@ -219,7 +219,7 @@ SubqueryColocated(Query *subquery, ColocatedJoinChecker *checker)
 	 * not generate the restriction information. That's the reason for
 	 * not asserting non-existence of distributed relations.
 	 */
-	if (list_length(filteredRestrictionList) == 0)
+	if (list_empty(filteredRestrictionList))
 	{
 		return true;
 	}
@@ -290,7 +290,7 @@ WrapRteRelationIntoSubquery(RangeTblEntry *rteRelation, List *requiredAttributes
 	subquery->targetList =
 		CreateFilteredTargetListForRelation(rteRelation->relid, requiredAttributes);
 
-	if (list_length(subquery->targetList) == 0)
+	if (list_empty(subquery->targetList))
 	{
 		/*
 		 * in case there is no required column, we assign one dummy NULL target entry

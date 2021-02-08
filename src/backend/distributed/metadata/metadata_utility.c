@@ -1023,7 +1023,7 @@ ActiveShardPlacement(uint64 shardId, bool missingOk)
 	List *activePlacementList = ActiveShardPlacementList(shardId);
 	ShardPlacement *shardPlacement = NULL;
 
-	if (list_length(activePlacementList) == 0)
+	if (list_empty(activePlacementList))
 	{
 		if (!missingOk)
 		{

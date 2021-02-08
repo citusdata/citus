@@ -277,11 +277,11 @@ GetConversionChoice(ConversionCandidates *conversionCandidates,
 	RangeTableEntryDetails *localRTECandidate = NULL;
 	RangeTableEntryDetails *distributedRTECandidate = NULL;
 
-	if (list_length(conversionCandidates->localTableList) > 0)
+	if (!list_empty(conversionCandidates->localTableList))
 	{
 		localRTECandidate = linitial(conversionCandidates->localTableList);
 	}
-	if (list_length(conversionCandidates->distributedTableList) > 0)
+	if (!list_empty(conversionCandidates->distributedTableList))
 	{
 		distributedRTECandidate = linitial(conversionCandidates->distributedTableList);
 	}
@@ -449,7 +449,7 @@ AppendUniqueIndexColumnsToList(Form_pg_index indexForm, List **uniqueIndexGroups
 			uniqueIndexes = list_append_unique_int(uniqueIndexes,
 												   indexForm->indkey.values[i]);
 		}
-		if (list_length(uniqueIndexes) == 0)
+		if (list_empty(uniqueIndexes))
 		{
 			return;
 		}

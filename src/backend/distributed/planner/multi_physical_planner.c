@@ -824,7 +824,7 @@ static List *
 QueryTargetList(MultiNode *multiNode)
 {
 	List *projectNodeList = FindNodesOfType(multiNode, T_MultiProject);
-	Assert(list_length(projectNodeList) > 0);
+	Assert(!list_empty(projectNodeList));
 
 	MultiProject *topProjectNode = (MultiProject *) linitial(projectNodeList);
 	List *columnList = topProjectNode->columnList;
@@ -2230,7 +2230,7 @@ QueryPushdownSqlTaskList(Query *query, uint64 jobId,
 	/* error if shards are not co-partitioned */
 	ErrorIfUnsupportedShardDistribution(query);
 
-	if (list_length(relationRestrictionContext->relationRestrictionList) == 0)
+	if (list_empty(relationRestrictionContext->relationRestrictionList))
 	{
 		*planningError = DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 									   "cannot handle complex subqueries when the "
@@ -2587,7 +2587,7 @@ QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 	Assert(anchorShardId != INVALID_SHARD_ID);
 
 	List *taskPlacementList = PlacementsForWorkersContainingAllShards(taskShardList);
-	if (list_length(taskPlacementList) == 0)
+	if (list_empty(taskPlacementList))
 	{
 		*planningError = DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 									   "cannot find a worker that has active placements for all "
@@ -3698,7 +3698,7 @@ FetchEqualityAttrNumsForList(List *nodeList)
 	{
 		List *fetchedEqualityAttrNums =
 			FetchEqualityAttrNumsForRTE(node);
-		hasAtLeastOneEquality |= list_length(fetchedEqualityAttrNums) > 0;
+		hasAtLeastOneEquality |= !list_empty(fetchedEqualityAttrNums);
 		attributeNums = list_concat(attributeNums, fetchedEqualityAttrNums);
 	}
 
@@ -3757,11 +3757,11 @@ FetchEqualityAttrNumsForRTEBoolExpr(BoolExpr *boolExpr)
 		List *attributeNumsInSubExpression = FetchEqualityAttrNumsForRTE(arg);
 		if (boolExpr->boolop == AND_EXPR)
 		{
-			hasEquality |= list_length(attributeNumsInSubExpression) > 0;
+			hasEquality |= !list_empty(attributeNumsInSubExpression);
 		}
 		else if (boolExpr->boolop == OR_EXPR)
 		{
-			hasEquality &= list_length(attributeNumsInSubExpression) > 0;
+			hasEquality &= !list_empty(attributeNumsInSubExpression);
 		}
 		attributeNums = list_concat(attributeNums, attributeNumsInSubExpression);
 	}
@@ -3793,7 +3793,7 @@ JoinSequenceArray(List *rangeTableFragmentsList, Query *jobQuery, List *dependen
 	List *joinExprList = JoinExprList(jobQuery->jointree);
 
 	/* pick first range table as starting table for the join sequence */
-	if (list_length(joinExprList) > 0)
+	if (!list_empty(joinExprList))
 	{
 		JoinExpr *firstExpr = (JoinExpr *) linitial(joinExprList);
 		RangeTblRef *leftTableRef = (RangeTblRef *) firstExpr->larg;

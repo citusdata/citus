@@ -802,7 +802,7 @@ RouterModifyTaskForShardInterval(Query *originalQuery,
 
 
 	/* ensure that we do not send queries where select is pruned away completely */
-	if (list_length(selectPlacementList) == 0)
+	if (list_empty(selectPlacementList))
 	{
 		ereport(DEBUG2, (errmsg("Skipping target shard interval " UINT64_FORMAT
 								" since SELECT query for it pruned away",

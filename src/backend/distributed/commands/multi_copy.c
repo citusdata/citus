@@ -3714,7 +3714,7 @@ CopyGetPlacementConnection(HTAB *connectionStateHash, ShardPlacement *placement,
 	connection = GetPlacementConnection(connectionFlags, placement, nodeUser);
 	if (connection == NULL)
 	{
-		if (list_length(copyConnectionStateList) > 0)
+		if (!list_empty(copyConnectionStateList))
 		{
 			/*
 			 * The connection manager throttled any new connections, so pick an existing
@@ -3838,7 +3838,7 @@ GetLeastUtilisedCopyConnection(List *connectionStateList, char *nodeName,
 	 *
 	 * Therefore there should be some connections to choose from.
 	 */
-	Assert(list_length(connectionStateList) > 0);
+	Assert(!list_empty(connectionStateList));
 
 	foreach(connectionStateCell, connectionStateList)
 	{

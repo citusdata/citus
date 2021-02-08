@@ -1743,7 +1743,7 @@ TransformFunctionRTE(RangeTblEntry *rangeTblEntry)
 			 * Use explicitly defined types in the query if they are
 			 * available
 			 * */
-			if (list_length(rangeTblFunction->funccoltypes) > 0)
+			if (!list_empty(rangeTblFunction->funccoltypes))
 			{
 				/*
 				 * A sample function join that end up here:

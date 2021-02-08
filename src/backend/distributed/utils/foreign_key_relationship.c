@@ -397,7 +397,7 @@ GetConnectedListHelper(ForeignConstraintRelationshipNode *node, bool isReferenci
 	List *connectedNodeList = NIL;
 
 	List *relationshipNodeStack = list_make1(node);
-	while (list_length(relationshipNodeStack) != 0)
+	while (!list_empty(relationshipNodeStack))
 	{
 		/*
 		 * Note that this loop considers leftmost element of
