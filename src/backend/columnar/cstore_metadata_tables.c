@@ -284,8 +284,8 @@ WriteColumnarOptions(Oid regclass, ColumnarOptions *options, bool overwrite)
 	}
 
 	systable_endscan_ordered(scanDescriptor);
-	index_close(index, NoLock);
-	relation_close(columnarOptions, NoLock);
+	index_close(index, AccessShareLock);
+	relation_close(columnarOptions, RowExclusiveLock);
 
 	return written;
 }
@@ -335,8 +335,8 @@ DeleteColumnarTableOptions(Oid regclass, bool missingOk)
 	}
 
 	systable_endscan_ordered(scanDescriptor);
-	index_close(index, NoLock);
-	relation_close(columnarOptions, NoLock);
+	index_close(index, AccessShareLock);
+	relation_close(columnarOptions, RowExclusiveLock);
 
 	return result;
 }
@@ -365,7 +365,7 @@ ReadColumnarOptions(Oid regclass, ColumnarOptions *options)
 	Relation index = try_relation_open(ColumnarOptionsIndexRegclass(), AccessShareLock);
 	if (index == NULL)
 	{
-		table_close(columnarOptions, NoLock);
+		table_close(columnarOptions, AccessShareLock);
 
 		/* extension has been dropped */
 		return false;
@@ -394,8 +394,8 @@ ReadColumnarOptions(Oid regclass, ColumnarOptions *options)
 	}
 
 	systable_endscan_ordered(scanDescriptor);
-	index_close(index, NoLock);
-	relation_close(columnarOptions, NoLock);
+	index_close(index, AccessShareLock);
+	relation_close(columnarOptions, AccessShareLock);
 
 	return true;
 }
@@ -464,7 +464,7 @@ SaveStripeSkipList(RelFileNode relfilenode, uint64 stripe, StripeSkipList *chunk
 	}
 
 	FinishModifyRelation(modifyState);
-	table_close(columnarChunk, NoLock);
+	table_close(columnarChunk, RowExclusiveLock);
 
 	CommandCounterIncrement();
 }
@@ -610,8 +610,8 @@ ReadStripeSkipList(RelFileNode relfilenode, uint64 stripe, TupleDesc tupleDescri
 	}
 
 	systable_endscan_ordered(scanDescriptor);
-	index_close(index, NoLock);
-	table_close(columnarChunk, NoLock);
+	index_close(index, AccessShareLock);
+	table_close(columnarChunk, AccessShareLock);
 
 	return chunkList;
 }
@@ -646,7 +646,7 @@ InsertStripeMetadataRow(uint64 storageId, StripeMetadata *stripe)
 
 	CommandCounterIncrement();
 
-	table_close(columnarStripes, NoLock);
+	table_close(columnarStripes, RowExclusiveLock);
 }
 
 
@@ -849,8 +849,8 @@ ReadDataFileStripeList(uint64 storageId, Snapshot snapshot)
 	}
 
 	systable_endscan_ordered(scanDescriptor);
-	index_close(index, NoLock);
-	table_close(columnarStripes, NoLock);
+	index_close(index, AccessShareLock);
+	table_close(columnarStripes, AccessShareLock);
 
 	return stripeMetadataList;
 }
@@ -911,8 +911,8 @@ DeleteMetadataRows(RelFileNode relfilenode)
 	FinishModifyRelation(modifyState);
 
 	systable_endscan_ordered(scanDescriptor);
-	index_close(index, NoLock);
-	table_close(columnarStripes, NoLock);
+	index_close(index, AccessShareLock);
+	table_close(columnarStripes, AccessShareLock);
 }
 
 
