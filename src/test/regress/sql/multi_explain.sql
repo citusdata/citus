@@ -1052,3 +1052,32 @@ EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE) select a, CASE 
 -- reset back
 reset citus.explain_analyze_sort_method;
 DROP TABLE explain_analyze_execution_time;
+
+CREATE SCHEMA multi_explain;
+SET search_path TO multi_explain;
+
+-- test EXPLAIN ANALYZE when original query returns no columns
+CREATE TABLE reference_table(a int);
+SELECT create_reference_table('reference_table');
+INSERT INTO reference_table VALUES (1);
+
+EXPLAIN :default_analyze_flags SELECT FROM reference_table;
+
+CREATE TABLE distributed_table_1(a int, b int);
+SELECT create_distributed_table('distributed_table_1','a');
+INSERT INTO distributed_table_1 values (1,1);
+
+EXPLAIN :default_analyze_flags SELECT row_number() OVER() AS r FROM distributed_table_1;
+
+CREATE TABLE distributed_table_2(a int, b int);
+SELECT create_distributed_table('distributed_table_2','a');
+INSERT INTO distributed_table_2 VALUES (1,1);
+
+EXPLAIN :default_analyze_flags
+WITH r AS (SELECT row_number() OVER () AS r FROM distributed_table_1)
+SELECT * FROM distributed_table_2
+JOIN r ON (r = distributed_table_2.b)
+LIMIT 3;
+
+SET client_min_messages TO ERROR;
+DROP SCHEMA multi_explain CASCADE;
