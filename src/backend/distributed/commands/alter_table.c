@@ -1418,8 +1418,16 @@ CheckAlterDistributedTableConversionParameters(TableConversionState *con)
 
 		Var *colocateWithPartKey = DistPartitionKey(colocateWithTableOid);
 
-		if (con->distributionColumn &&
-			colocateWithPartKey->vartype != con->distributionKey->vartype)
+		if (colocateWithPartKey == NULL)
+		{
+			/* this should never happen */
+			ereport(ERROR, (errmsg("cannot colocate %s with %s because %s doesn't have a "
+								   "distribution column",
+								   con->relationName, con->colocateWith,
+								   con->colocateWith)));
+		}
+		else if (con->distributionColumn &&
+				 colocateWithPartKey->vartype != con->distributionKey->vartype)
 		{
 			ereport(ERROR, (errmsg("cannot colocate with %s and change distribution "
 								   "column to %s because data type of column %s is "
