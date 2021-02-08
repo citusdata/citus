@@ -17,6 +17,7 @@
 #include "distributed/citus_nodefuncs.h"
 #include "distributed/coordinator_protocol.h"
 #include "distributed/errormessage.h"
+#include "distributed/listutils.h"
 #include "distributed/log_utils.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/distributed_planner.h"
@@ -117,7 +118,7 @@ SetRangeTblExtraData(RangeTblEntry *rte, CitusRTEKind rteKind, char *fragmentSch
 	tableIdListData->location = -1;
 
 	/* serialize tableIdList to a string, seems simplest that way */
-	if (tableIdList != NIL)
+	if (!list_empty(tableIdList))
 	{
 		char *serializedList = nodeToString(tableIdList);
 		tableIdListData->constisnull = false;
@@ -286,7 +287,7 @@ ModifyRangeTblExtraData(RangeTblEntry *rte, CitusRTEKind rteKind,
 	ExtractRangeTblExtraData(rte, NULL,
 							 fragmentSchemaName == NULL ? &fragmentSchemaName : NULL,
 							 fragmentTableName == NULL ? &fragmentTableName : NULL,
-							 tableIdList == NIL ? &tableIdList : NULL);
+							 list_empty(tableIdList) ? &tableIdList : NULL);
 
 	SetRangeTblExtraData(rte, rteKind,
 						 fragmentSchemaName, fragmentTableName,

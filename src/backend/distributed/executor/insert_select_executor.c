@@ -259,7 +259,7 @@ NonPushableInsertSelectExecScan(CustomScanState *node)
 				}
 			}
 
-			if (prunedTaskList != NIL)
+			if (!list_empty(prunedTaskList))
 			{
 				bool randomAccess = true;
 				bool interTransactions = false;
@@ -673,7 +673,7 @@ RedistributedInsertSelectTaskList(Query *insertSelectQuery,
 		StringInfo queryString = makeStringInfo();
 
 		/* skip empty tasks */
-		if (resultIdList == NIL)
+		if (list_empty(resultIdList))
 		{
 			continue;
 		}
@@ -789,7 +789,7 @@ IsRedistributablePlan(Plan *selectPlan)
 	}
 
 	/* don't use redistribution for repartition joins for now */
-	if (distSelectJob->dependentJobList != NIL)
+	if (!list_empty(distSelectJob->dependentJobList))
 	{
 		return false;
 	}

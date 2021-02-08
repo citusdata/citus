@@ -1103,7 +1103,7 @@ get_shard_id_for_distribution_column(PG_FUNCTION_ARGS)
 	if (IsCitusTableType(relationId, CITUS_TABLE_WITH_NO_DIST_KEY))
 	{
 		List *shardIntervalList = LoadShardIntervalList(relationId);
-		if (shardIntervalList == NIL)
+		if (list_empty(shardIntervalList))
 		{
 			PG_RETURN_INT64(0);
 		}

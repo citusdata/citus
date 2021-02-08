@@ -299,7 +299,7 @@ RecordParallelRelationAccessForTaskList(List *taskList)
 	}
 	else if (firstTask->taskType == MODIFY_TASK)
 	{
-		if (firstTask->rowValuesLists != NIL)
+		if (!list_empty(firstTask->rowValuesLists))
 		{
 			/*
 			 * We always run multi-row INSERTs in a sequential
@@ -709,7 +709,7 @@ CheckConflictingRelationAccesses(Oid relationId, ShardPlacementAccessType access
 	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
 
 	if (!(IsCitusTableTypeCacheEntry(cacheEntry, CITUS_TABLE_WITH_NO_DIST_KEY) &&
-		  cacheEntry->referencingRelationsViaForeignKey != NIL))
+		  !list_empty(cacheEntry->referencingRelationsViaForeignKey)))
 	{
 		return;
 	}
@@ -756,7 +756,7 @@ CheckConflictingRelationAccesses(Oid relationId, ShardPlacementAccessType access
 									"\'sequential\';\"")));
 		}
 	}
-	else if (cacheEntry->referencingRelationsViaForeignKey != NIL &&
+	else if (!list_empty(cacheEntry->referencingRelationsViaForeignKey) &&
 			 accessType > PLACEMENT_ACCESS_SELECT)
 	{
 		char *relationName = get_rel_name(relationId);
@@ -828,7 +828,7 @@ CheckConflictingParallelRelationAccesses(Oid relationId, ShardPlacementAccessTyp
 
 	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
 	if (!(IsCitusTableTypeCacheEntry(cacheEntry, HASH_DISTRIBUTED) &&
-		  cacheEntry->referencedRelationsViaForeignKey != NIL))
+		  !list_empty(cacheEntry->referencedRelationsViaForeignKey)))
 	{
 		return;
 	}

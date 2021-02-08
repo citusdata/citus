@@ -40,7 +40,7 @@ ExecuteSubPlans(DistributedPlan *distributedPlan)
 	uint64 planId = distributedPlan->planId;
 	List *subPlanList = distributedPlan->subPlanList;
 
-	if (subPlanList == NIL)
+	if (list_empty(subPlanList))
 	{
 		/* no subplans to execute */
 		return;

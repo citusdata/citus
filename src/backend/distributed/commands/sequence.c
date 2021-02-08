@@ -160,7 +160,7 @@ void
 ExtractDefaultColumnsAndOwnedSequences(Oid relationId, List **columnNameList,
 									   List **ownedSequenceIdList)
 {
-	Assert(*columnNameList == NIL && *ownedSequenceIdList == NIL);
+	Assert(list_empty(*columnNameList) && list_empty(*ownedSequenceIdList));
 
 	Relation relation = relation_open(relationId, AccessShareLock);
 	TupleDesc tupleDescriptor = RelationGetDescr(relation);

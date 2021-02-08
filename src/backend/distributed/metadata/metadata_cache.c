@@ -3916,7 +3916,7 @@ InvalidateLocalGroupIdRelationCacheCallback(Datum argument, Oid relationId)
 void
 CitusTableCacheFlushInvalidatedEntries()
 {
-	if (DistTableCacheHash != NULL && DistTableCacheExpired != NIL)
+	if (DistTableCacheHash != NULL && !list_empty(DistTableCacheExpired))
 	{
 		CitusTableCacheEntry *cacheEntry = NULL;
 		foreach_ptr(cacheEntry, DistTableCacheExpired)

@@ -474,13 +474,13 @@ ExtractLocalAndRemoteTasks(bool readOnly, List *taskList, List **localTaskList,
 			task->taskPlacementList, &localTaskPlacementList, &remoteTaskPlacementList);
 
 		/* either the local or the remote should be non-nil */
-		Assert(!(localTaskPlacementList == NIL && remoteTaskPlacementList == NIL));
+		Assert(!(list_empty(localTaskPlacementList) && list_empty(remoteTaskPlacementList)));
 
-		if (localTaskPlacementList == NIL)
+		if (list_empty(localTaskPlacementList))
 		{
 			*remoteTaskList = lappend(*remoteTaskList, task);
 		}
-		else if (remoteTaskPlacementList == NIL)
+		else if (list_empty(remoteTaskPlacementList))
 		{
 			*localTaskList = lappend(*localTaskList, task);
 		}
@@ -504,7 +504,7 @@ ExtractLocalAndRemoteTasks(bool readOnly, List *taskList, List **localTaskList,
 			else
 			{
 				/* since shard replication factor > 1, we should have at least 1 remote task */
-				Assert(remoteTaskPlacementList != NIL);
+				Assert(!list_empty(remoteTaskPlacementList));
 				Task *remoteTask = copyObject(task);
 				remoteTask->taskPlacementList = remoteTaskPlacementList;
 

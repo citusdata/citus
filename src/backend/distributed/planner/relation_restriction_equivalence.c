@@ -170,7 +170,7 @@ AllDistributionKeysInQueryAreEqual(Query *originalQuery,
 								   PlannerRestrictionContext *plannerRestrictionContext)
 {
 	/* we don't support distribution key equality checks for CTEs yet */
-	if (originalQuery->cteList != NIL)
+	if (!list_empty(originalQuery->cteList))
 	{
 		return false;
 	}

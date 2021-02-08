@@ -396,7 +396,7 @@ LockTruncatedRelationMetadataInWorkers(TruncateStmt *truncateStatement)
 		}
 	}
 
-	if (distributedRelationList != NIL)
+	if (!list_empty(distributedRelationList))
 	{
 		AcquireDistributedLockOnRelations(distributedRelationList, AccessExclusiveLock);
 	}

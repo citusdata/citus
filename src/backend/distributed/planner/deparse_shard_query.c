@@ -526,7 +526,7 @@ SetTaskQueryString(Task *task, char *queryString)
 void
 SetTaskQueryStringList(Task *task, List *queryStringList)
 {
-	Assert(queryStringList != NIL);
+	Assert(!list_empty(queryStringList));
 	task->taskQuery.queryType = TASK_QUERY_TEXT_LIST;
 	task->taskQuery.data.queryStringList = queryStringList;
 	task->queryCount = list_length(queryStringList);

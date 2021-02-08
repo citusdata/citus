@@ -249,7 +249,7 @@ CheckDeadlockForTransactionNode(TransactionNode *startingTransactionNode,
 								&toBeVisitedNodes);
 
 	/* traverse the graph and search for the deadlocks */
-	while (toBeVisitedNodes != NIL)
+	while (!list_empty(toBeVisitedNodes))
 	{
 		QueuedTransactionNode *queuedTransactionNode =
 			(QueuedTransactionNode *) linitial(toBeVisitedNodes);

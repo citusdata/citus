@@ -79,7 +79,7 @@ BuildExtendedOpNodeProperties(MultiExtendedOp *extendedOpNode,
 								 hasNonPartitionColumnDistinctAgg,
 								 extendedOpNode->onlyPushableWindowFunctions);
 
-	extendedOpNodeProperties.hasGroupBy = extendedOpNode->groupClauseList != NIL;
+	extendedOpNodeProperties.hasGroupBy = !list_empty(extendedOpNode->groupClauseList);
 	extendedOpNodeProperties.hasAggregate = TargetListHasAggregates(targetList);
 
 	extendedOpNodeProperties.groupedByDisjointPartitionColumn =
@@ -234,7 +234,7 @@ HasNonPartitionColumnDistinctAgg(List *targetEntryList, Node *havingQual,
 		}
 
 		Aggref *targetAgg = castNode(Aggref, targetNode);
-		if (targetAgg->aggdistinct == NIL)
+		if (list_empty(targetAgg->aggdistinct))
 		{
 			continue;
 		}

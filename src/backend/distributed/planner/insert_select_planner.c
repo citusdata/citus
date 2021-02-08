@@ -354,7 +354,7 @@ CreateDistributedInsertSelectPlan(Query *originalQuery,
 	/* and finally the multi plan */
 	distributedPlan->workerJob = workerJob;
 	distributedPlan->combineQuery = NULL;
-	distributedPlan->expectResults = originalQuery->returningList != NIL;
+	distributedPlan->expectResults = !list_empty(originalQuery->returningList);
 	distributedPlan->targetRelationId = targetRelationId;
 
 	return distributedPlan;
@@ -746,7 +746,7 @@ RouterModifyTaskForShardInterval(Query *originalQuery,
 		shardOpExpressions = ShardIntervalOpExpressions(shardInterval, rteIndex);
 
 		/* means it is a reference table and do not add any shard interval information  */
-		if (shardOpExpressions == NIL)
+		if (list_empty(shardOpExpressions))
 		{
 			continue;
 		}
@@ -1442,7 +1442,7 @@ CreateNonPushableInsertSelectPlan(uint64 planId, Query *parse, ParamListInfo bou
 	distributedPlan->insertSelectMethod = repartitioned ?
 										  INSERT_SELECT_REPARTITION :
 										  INSERT_SELECT_VIA_COORDINATOR;
-	distributedPlan->expectResults = insertSelectQuery->returningList != NIL;
+	distributedPlan->expectResults = !list_empty(insertSelectQuery->returningList);
 	distributedPlan->intermediateResultIdPrefix = InsertSelectResultIdPrefix(planId);
 	distributedPlan->targetRelationId = targetRelationId;
 

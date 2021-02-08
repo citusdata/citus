@@ -441,7 +441,7 @@ DeparseVacuumColumnNames(List *columnNameList)
 {
 	StringInfo columnNames = makeStringInfo();
 
-	if (columnNameList == NIL)
+	if (list_empty(columnNameList))
 	{
 		return columnNames->data;
 	}

@@ -716,7 +716,7 @@ deparse_shard_index_statement(IndexStmt *origStmt, Oid distrelid, int64 shardid,
 	appendStringInfoString(buffer, ") ");
 
 	/* column/expressions for INCLUDE list */
-	if (indexStmt->indexIncludingParams != NIL)
+	if (!list_empty(indexStmt->indexIncludingParams))
 	{
 		appendStringInfoString(buffer, "INCLUDE (");
 		deparse_index_columns(buffer, indexStmt->indexIncludingParams, deparseContext);
@@ -836,13 +836,13 @@ deparse_index_columns(StringInfo buffer, List *indexParameterList, List *deparse
 																false));
 		}
 
-		if (indexElement->collation != NIL)
+		if (!list_empty(indexElement->collation))
 		{
 			appendStringInfo(buffer, "COLLATE %s ",
 							 NameListToQuotedString(indexElement->collation));
 		}
 
-		if (indexElement->opclass != NIL)
+		if (!list_empty(indexElement->opclass))
 		{
 			appendStringInfo(buffer, "%s ",
 							 NameListToQuotedString(indexElement->opclass));
@@ -850,7 +850,7 @@ deparse_index_columns(StringInfo buffer, List *indexParameterList, List *deparse
 #if PG_VERSION_NUM >= PG_VERSION_13
 
 		/* Commit on postgres: 911e70207703799605f5a0e8aad9f06cff067c63*/
-		if (indexElement->opclassopts != NIL)
+		if (!list_empty(indexElement->opclassopts))
 		{
 			ereport(ERROR, errmsg(
 						"citus currently doesn't support operator class parameters in indexes"));
@@ -946,7 +946,7 @@ generate_qualified_relation_name(Oid relid)
 static void
 AppendOptionListToString(StringInfo stringBuffer, List *optionList)
 {
-	if (optionList != NIL)
+	if (!list_empty(optionList))
 	{
 		ListCell *optionCell = NULL;
 		bool firstOptionPrinted = false;
@@ -984,7 +984,7 @@ AppendStorageParametersToString(StringInfo stringBuffer, List *optionList)
 	ListCell *optionCell = NULL;
 	bool firstOptionPrinted = false;
 
-	if (optionList == NIL)
+	if (list_empty(optionList))
 	{
 		return;
 	}

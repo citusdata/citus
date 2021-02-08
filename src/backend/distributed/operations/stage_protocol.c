@@ -286,7 +286,7 @@ master_append_table_to_shard(PG_FUNCTION_ARGS)
 														  shardTableName);
 
 	List *shardPlacementList = ActiveShardPlacementList(shardId);
-	if (shardPlacementList == NIL)
+	if (list_empty(shardPlacementList))
 	{
 		ereport(ERROR, (errmsg("could not find any shard placements for shardId "
 							   UINT64_FORMAT, shardId),

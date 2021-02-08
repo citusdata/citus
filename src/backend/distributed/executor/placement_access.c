@@ -42,7 +42,7 @@ PlacementAccessListForTask(Task *task, ShardPlacement *taskPlacement)
 		addAnchorAccess = true;
 		accessType = PLACEMENT_ACCESS_DDL;
 	}
-	else if (relationShardList == NIL)
+	else if (list_empty(relationShardList))
 	{
 		/* SELECT query that does not touch any shard placements */
 		addAnchorAccess = true;

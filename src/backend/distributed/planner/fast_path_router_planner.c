@@ -38,6 +38,7 @@
 
 #include "distributed/distributed_planner.h"
 #include "distributed/insert_select_planner.h"
+#include "distributed/listutils.h"
 #include "distributed/multi_physical_planner.h" /* only to use some utility functions */
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_router_planner.h"
@@ -133,7 +134,7 @@ GeneratePlaceHolderPlannedStmt(Query *parse)
 
 	result->rtable = copyObject(parse->rtable);
 	result->planTree = (Plan *) plan;
-	result->hasReturning = (parse->returningList != NIL);
+	result->hasReturning = (!list_empty(parse->returningList));
 
 	Oid relationId = ExtractFirstCitusTableId(parse);
 	result->relationOids = list_make1_oid(relationId);
@@ -172,7 +173,7 @@ FastPathRouterQuery(Query *query, Node **distributionKeyValue)
 	 * We want to deal with only very simple queries. Some of the
 	 * checks might be too restrictive, still we prefer this way.
 	 */
-	if (query->cteList != NIL || query->hasSubLinks ||
+	if (!list_empty(query->cteList) || query->hasSubLinks ||
 		query->setOperations != NULL || query->hasTargetSRFs ||
 		query->hasModifyingCTE)
 	{

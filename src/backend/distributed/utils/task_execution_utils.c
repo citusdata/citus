@@ -77,7 +77,7 @@ CreateTaskListForJobTree(List *jobTaskList)
 	 * first queue top level tasks in the task tree.
 	 */
 	List *taskQueue = list_copy(jobTaskList);
-	while (taskQueue != NIL)
+	while (!list_empty(taskQueue))
 	{
 		/* pop first element from the task queue */
 		Task *task = (Task *) linitial(taskQueue);

@@ -485,7 +485,7 @@ PruneShards(Oid relationId, Index rangeTableId, List *whereClauseList,
 	if (IsLoggableLevel(DEBUG3))
 	{
 		char *relationName = get_rel_name(relationId);
-		if (foundRestriction && debugLoggedPruningInstances != NIL)
+		if (foundRestriction && !list_empty(debugLoggedPruningInstances))
 		{
 			List *deparseCtx = deparse_context_for("unknown", relationId);
 			foreach(pruneCell, debugLoggedPruningInstances)
@@ -659,7 +659,7 @@ SimplifyPruningTree(PruningTreeNode *node, PruningTreeNode *parent)
 	/* Boolean operator with single (recognized/unknown) constraint gets simplified */
 	if (ConstraintCount(node) <= 1)
 	{
-		Assert(node->childBooleanNodes == NIL);
+		Assert(list_empty(node->childBooleanNodes));
 		parent->validConstraints = list_concat(parent->validConstraints,
 											   node->validConstraints);
 		parent->hasInvalidConstraints = parent->hasInvalidConstraints ||
@@ -731,7 +731,7 @@ PrunableExpressions(PruningTreeNode *tree, ClauseWalkerContext *context)
 	 * calling PrunableExpressionsWalker() on the copy, continuing at the
 	 * node stored in PendingPruningInstance->continueAt.
 	 */
-	while (context->pendingInstances != NIL)
+	while (!list_empty(context->pendingInstances))
 	{
 		PendingPruningInstance *instance =
 			(PendingPruningInstance *) linitial(context->pendingInstances);

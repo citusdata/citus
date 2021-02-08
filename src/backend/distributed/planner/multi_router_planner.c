@@ -253,7 +253,7 @@ CreateModifyPlan(Query *originalQuery, Query *query,
 
 	distributedPlan->workerJob = job;
 	distributedPlan->combineQuery = NULL;
-	distributedPlan->expectResults = originalQuery->returningList != NIL;
+	distributedPlan->expectResults = !list_empty(originalQuery->returningList);
 	distributedPlan->targetRelationId = ResultRelationOidForQuery(query);
 
 	distributedPlan->fastPathRouterPlan =
@@ -551,7 +551,7 @@ ModifyPartialQuerySupported(Query *queryTree, bool multiShardQuery,
 	}
 
 	/* reject queries which include CommonTableExpr which aren't routable */
-	if (queryTree->cteList != NIL)
+	if (!list_empty(queryTree->cteList))
 	{
 		ListCell *cteCell = NULL;
 
@@ -1078,7 +1078,7 @@ ModifyQuerySupported(Query *queryTree, Query *originalQuery, bool multiShardQuer
 static DeferredErrorMessage *
 DeferErrorIfModifyView(Query *queryTree)
 {
-	if (queryTree->rtable != NIL)
+	if (!list_empty(queryTree->rtable))
 	{
 		RangeTblEntry *firstRangeTableElement = (RangeTblEntry *) linitial(
 			queryTree->rtable);
@@ -2320,7 +2320,7 @@ PlanRouterQuery(Query *originalQuery,
 												 shardsPresent,
 												 replacePrunedQueryWithDummy,
 												 hasPostgresLocalRelation);
-	if (taskPlacementList == NIL)
+	if (list_empty(taskPlacementList))
 	{
 		planningError = DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 									  "found no worker with all shard placements",
@@ -2463,7 +2463,7 @@ CreateDummyPlacement(bool hasLocalRelation)
 	}
 
 	List *workerNodeList = ActiveReadableNonCoordinatorNodeList();
-	if (workerNodeList == NIL)
+	if (list_empty(workerNodeList))
 	{
 		/*
 		 * We want to round-robin over the workers, but there are no workers.
@@ -2502,7 +2502,7 @@ RelationShardListForShardIntervalList(List *shardIntervalList, bool *shardsPrese
 		List *prunedShardIntervalList = (List *) lfirst(shardIntervalListCell);
 
 		/* no shard is present or all shards are pruned out case will be handled later */
-		if (prunedShardIntervalList == NIL)
+		if (list_empty(prunedShardIntervalList))
 		{
 			continue;
 		}
@@ -2547,7 +2547,7 @@ GetAnchorShardId(List *prunedShardIntervalListList)
 		List *prunedShardIntervalList = (List *) lfirst(prunedShardIntervalListCell);
 
 		/* no shard is present or all shards are pruned out case will be handled later */
-		if (prunedShardIntervalList == NIL)
+		if (list_empty(prunedShardIntervalList))
 		{
 			continue;
 		}
@@ -2804,7 +2804,7 @@ PlacementsForWorkersContainingAllShards(List *shardIntervalListList)
 
 	foreach_ptr(shardIntervalList, shardIntervalListList)
 	{
-		if (shardIntervalList == NIL)
+		if (list_empty(shardIntervalList))
 		{
 			continue;
 		}
@@ -2834,7 +2834,7 @@ PlacementsForWorkersContainingAllShards(List *shardIntervalListList)
 		 * containing all shards referenced by the query, hence we can not forward
 		 * this query directly to any worker.
 		 */
-		if (currentPlacementList == NIL)
+		if (list_empty(currentPlacementList))
 		{
 			break;
 		}
@@ -3379,7 +3379,7 @@ ExtractInsertValuesList(Query *query, Var *partitionColumn)
 	}
 
 	/* nothing's been found yet; this is a simple single-row INSERT */
-	if (insertValuesList == NIL)
+	if (list_empty(insertValuesList))
 	{
 		InsertValues *insertValues = (InsertValues *) palloc(sizeof(InsertValues));
 		insertValues->rowValues = NIL;

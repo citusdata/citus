@@ -357,7 +357,7 @@ AcquireExecutorShardLocksForRelationRowLockList(List *relationRowLockList)
 {
 	LOCKMODE rowLockMode = NoLock;
 
-	if (relationRowLockList == NIL)
+	if (list_empty(relationRowLockList))
 	{
 		return;
 	}

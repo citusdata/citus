@@ -128,7 +128,7 @@ CreateShardsWithRoundRobinPolicy(Oid distributedTableId, int32 shardCount,
 
 	/* validate that shards haven't already been created for this table */
 	List *existingShardList = LoadShardList(distributedTableId);
-	if (existingShardList != NIL)
+	if (!list_empty(existingShardList))
 	{
 		char *tableName = get_rel_name(distributedTableId);
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
@@ -267,7 +267,7 @@ CreateColocatedShards(Oid targetRelationId, Oid sourceRelationId, bool
 
 	/* validate that shards haven't already been created for this table */
 	List *existingShardList = LoadShardList(targetRelationId);
-	if (existingShardList != NIL)
+	if (!list_empty(existingShardList))
 	{
 		char *targetRelationName = get_rel_name(targetRelationId);
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
@@ -354,7 +354,7 @@ CreateReferenceTableShard(Oid distributedTableId)
 
 	/* validate that shards haven't already been created for this table */
 	List *existingShardList = LoadShardList(distributedTableId);
-	if (existingShardList != NIL)
+	if (!list_empty(existingShardList))
 	{
 		char *tableName = get_rel_name(distributedTableId);
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),

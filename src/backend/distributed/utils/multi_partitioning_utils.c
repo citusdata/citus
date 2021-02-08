@@ -142,7 +142,7 @@ CreateFixPartitionConstraintsTaskList(Oid relationId)
 	List *checkConstraintList = CheckConstraintNameListForRelation(relationId);
 
 	/* early exit if the relation does not have any check constraints */
-	if (checkConstraintList == NIL)
+	if (list_empty(checkConstraintList))
 	{
 		return NIL;
 	}

@@ -155,7 +155,7 @@ TryToDelegateFunctionCall(DistributedPlanningContext *planContext)
 		return NULL;
 	}
 
-	if (joinTree->fromlist != NIL)
+	if (!list_empty(joinTree->fromlist))
 	{
 #if PG_VERSION_NUM >= PG_VERSION_12
 

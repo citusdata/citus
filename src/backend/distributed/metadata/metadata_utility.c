@@ -909,7 +909,7 @@ ShardLength(uint64 shardId)
 	uint64 shardLength = 0;
 
 	List *shardPlacementList = ActiveShardPlacementList(shardId);
-	if (shardPlacementList == NIL)
+	if (list_empty(shardPlacementList))
 	{
 		ereport(ERROR, (errmsg("could not find length of shard " UINT64_FORMAT, shardId),
 						errdetail("Could not find any shard placements for the shard.")));

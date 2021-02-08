@@ -605,7 +605,7 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 
 			if (processJobs)
 			{
-				Assert(ddlJobs == NIL); /* jobs should not have been set before */
+				Assert(list_empty(ddlJobs)); /* jobs should not have been set before */
 				ddlJobs = processJobs;
 			}
 		}
@@ -639,7 +639,7 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 	}
 
 	/* after local command has completed, finish by executing worker DDLJobs, if any */
-	if (ddlJobs != NIL)
+	if (!list_empty(ddlJobs))
 	{
 		if (IsA(parsetree, AlterTableStmt))
 		{

@@ -20,6 +20,7 @@
 #include "catalog/pg_aggregate.h"
 #include "catalog/pg_proc.h"
 #include "catalog/pg_type.h"
+#include "distributed/listutils.h"
 #include "distributed/version_compat.h"
 #include "nodes/nodeFuncs.h"
 #include "utils/acl.h"
@@ -253,7 +254,7 @@ static StypeBox *
 TryCreateStypeBoxFromFcinfoAggref(FunctionCallInfo fcinfo)
 {
 	Aggref *aggref = AggGetAggref(fcinfo);
-	if (aggref == NULL || aggref->args == NIL)
+	if (aggref == NULL || list_empty(aggref->args))
 	{
 		return NULL;
 	}

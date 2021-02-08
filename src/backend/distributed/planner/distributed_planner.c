@@ -376,7 +376,7 @@ AssignRTEIdentities(List *rangeTableList, int rteIdCounter)
 		 * identifiers to those RTEs only.
 		 */
 		if (rangeTableEntry->rtekind == RTE_RELATION &&
-			rangeTableEntry->values_lists == NIL)
+			list_empty(rangeTableEntry->values_lists))
 		{
 			AssignRTEIdentity(rangeTableEntry, rteIdCounter++);
 		}
@@ -456,7 +456,7 @@ int
 GetRTEIdentity(RangeTblEntry *rte)
 {
 	Assert(rte->rtekind == RTE_RELATION);
-	Assert(rte->values_lists != NIL);
+	Assert(!list_empty(rte->values_lists));
 	Assert(IsA(rte->values_lists, IntList));
 	Assert(list_length(rte->values_lists) == 1);
 
@@ -860,7 +860,7 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
 					  PlannerRestrictionContext *plannerRestrictionContext)
 {
 	DistributedPlan *distributedPlan = NULL;
-	bool hasCtes = originalQuery->cteList != NIL;
+	bool hasCtes = !list_empty(originalQuery->cteList);
 
 	if (IsModifyCommand(originalQuery))
 	{
@@ -1048,7 +1048,7 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
 	 * referenced. We therefore also strip the CTEs from the rewritten query.
 	 */
 	query->cteList = NIL;
-	Assert(originalQuery->cteList == NIL);
+	Assert(list_empty(originalQuery->cteList));
 
 	MultiTreeRoot *logicalPlan = MultiLogicalPlanCreate(originalQuery, query,
 														plannerRestrictionContext);
@@ -2041,7 +2041,7 @@ AdjustReadIntermediateResultsCostInternal(RelOptInfo *relOptInfo, List *columnTy
 	/* cost of reading the data */
 	ioCost = seq_page_cost * totalResultSize / BLCKSZ;
 
-	Assert(pathList != NIL);
+	Assert(!list_empty(pathList));
 
 	/* tell the planner about the cost and row count of the function */
 	path = (Path *) linitial(pathList);
@@ -2150,7 +2150,7 @@ CreateAndPushPlannerRestrictionContext(void)
 static PlannerRestrictionContext *
 CurrentPlannerRestrictionContext(void)
 {
-	Assert(plannerRestrictionContextList != NIL);
+	Assert(!list_empty(plannerRestrictionContextList));
 
 	PlannerRestrictionContext *plannerRestrictionContext =
 		(PlannerRestrictionContext *) linitial(plannerRestrictionContextList);

@@ -1100,7 +1100,7 @@ ConstructCopyStatement(CopyStmt *copyStatement, int64 shardId)
 
 	appendStringInfo(command, "COPY %s ", shardQualifiedName);
 
-	if (copyStatement->attlist != NIL)
+	if (!list_empty(copyStatement->attlist))
 	{
 		ListCell *columnNameCell = NULL;
 		bool appendedFirstName = false;
@@ -1133,7 +1133,7 @@ ConstructCopyStatement(CopyStmt *copyStatement, int64 shardId)
 		appendStringInfoString(command, "TO STDOUT");
 	}
 
-	if (copyStatement->options != NIL)
+	if (!list_empty(copyStatement->options))
 	{
 		ListCell *optionCell = NULL;
 
@@ -2198,7 +2198,7 @@ CitusCopyDestReceiverStartup(DestReceiver *dest, int operation,
 
 	/* load the list of shards and verify that we have shards to copy into */
 	List *shardIntervalList = LoadShardIntervalList(tableId);
-	if (shardIntervalList == NIL)
+	if (list_empty(shardIntervalList))
 	{
 		if (IsCitusTableTypeCacheEntry(cacheEntry, HASH_DISTRIBUTED))
 		{
@@ -3223,7 +3223,7 @@ CopyGetAttnums(TupleDesc tupDesc, Relation rel, List *attnamelist)
 	/* *INDENT-OFF* */
 	List	   *attnums = NIL;
 
-	if (attnamelist == NIL)
+	if (list_empty(attnamelist))
 	{
 		/* Generate default column list */
 		int			attr_count = tupDesc->natts;

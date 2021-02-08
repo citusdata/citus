@@ -49,7 +49,7 @@ ChooseIndexName(const char *tabname, Oid namespaceId,
 									   namespaceId,
 									   true);
 	}
-	else if (exclusionOpNames != NIL)
+	else if (!list_empty(exclusionOpNames))
 	{
 		indexname = ChooseRelationName(tabname,
 									   ChooseIndexNameAddition(colnames),

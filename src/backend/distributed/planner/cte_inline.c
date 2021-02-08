@@ -17,6 +17,7 @@
 #include "distributed/pg_version_constants.h"
 
 #include "distributed/cte_inline.h"
+#include "distributed/listutils.h"
 #include "nodes/nodeFuncs.h"
 #if PG_VERSION_NUM >= PG_VERSION_12
 #include "optimizer/optimizer.h"
@@ -403,7 +404,7 @@ contain_dml_walker(Node *node, void *context)
 		Query *query = (Query *) node;
 
 		if (query->commandType != CMD_SELECT ||
-			query->rowMarks != NIL)
+			!list_empty(query->rowMarks))
 			return true;
 
 		return query_tree_walker(query, contain_dml_walker, context, 0);

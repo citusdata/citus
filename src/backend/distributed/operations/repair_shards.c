@@ -678,7 +678,7 @@ EnsureTableListSuitableForReplication(List *tableIdList)
 		List *foreignConstraintCommandList =
 			GetReferencingForeignConstaintCommands(tableId);
 
-		if (foreignConstraintCommandList != NIL &&
+		if (!list_empty(foreignConstraintCommandList) &&
 			IsCitusTableType(tableId, DISTRIBUTED_TABLE))
 		{
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
@@ -989,7 +989,7 @@ CopyShardForeignConstraintCommandListGrouped(ShardInterval *shardInterval,
 	List *commandList = GetReferencingForeignConstaintCommands(relationId);
 
 	/* we will only use shardIndex if there is a foreign constraint */
-	if (commandList != NIL)
+	if (!list_empty(commandList))
 	{
 		shardIndex = ShardIndex(shardInterval);
 	}

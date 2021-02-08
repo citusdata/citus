@@ -109,7 +109,7 @@ EnsureReferenceTablesExistOnAllNodesExtended(char transferMode)
 	LockColocationId(colocationId, ExclusiveLock);
 
 	List *referenceTableIdList = CitusTableTypeIdList(REFERENCE_TABLE);
-	if (referenceTableIdList == NIL)
+	if (list_empty(referenceTableIdList))
 	{
 		/* no reference tables exist */
 		UnlockColocationId(colocationId, ExclusiveLock);

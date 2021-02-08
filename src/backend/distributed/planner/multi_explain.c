@@ -194,7 +194,7 @@ CitusExplainScan(CustomScanState *node, List *ancestors, struct ExplainState *es
 
 	ExplainOpenGroup("Distributed Query", "Distributed Query", true, es);
 
-	if (distributedPlan->subPlanList != NIL)
+	if (!list_empty(distributedPlan->subPlanList))
 	{
 		ExplainSubPlans(distributedPlan, es);
 	}
@@ -749,7 +749,7 @@ FetchRemoteExplainFromWorkers(Task *task, ExplainState *es, ParamListInfo params
 		ExecuteCriticalRemoteCommand(connection,
 									 "ROLLBACK TO SAVEPOINT citus_explain_savepoint");
 
-		if (remotePlan->explainOutputList != NIL)
+		if (!list_empty(remotePlan->explainOutputList))
 		{
 			break;
 		}
@@ -791,7 +791,7 @@ ExplainTask(CitusScanState *scanState, Task *task, int placementIndex,
 							 es);
 	}
 
-	if (explainOutputList != NIL)
+	if (!list_empty(explainOutputList))
 	{
 		List *taskPlacementList = task->taskPlacementList;
 		ShardPlacement *taskPlacement = list_nth(taskPlacementList, placementIndex);

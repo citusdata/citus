@@ -591,7 +591,7 @@ MultiNodeTree(Query *queryTree)
 	 * add a collect node on top of the multi table node.
 	 */
 	List *subqueryEntryList = SubqueryEntryList(queryTree);
-	if (subqueryEntryList != NIL)
+	if (!list_empty(subqueryEntryList))
 	{
 		MultiCollect *subqueryCollectNode = CitusMakeNode(MultiCollect);
 		ListCell *columnCell = NULL;
@@ -1079,7 +1079,7 @@ DeferErrorIfUnsupportedSubqueryRepartition(Query *subqueryTree)
 		errorDetail = "Subqueries without aggregates are not supported yet";
 	}
 
-	if (subqueryTree->groupClause == NIL)
+	if (list_empty(subqueryTree->groupClause))
 	{
 		preconditionsSatisfied = false;
 		errorDetail = "Subqueries without group by clause are not supported yet";

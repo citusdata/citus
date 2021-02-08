@@ -120,7 +120,7 @@ JoinExprList(FromExpr *fromExpr)
 	{
 		Node *nextNode = (Node *) lfirst(fromCell);
 
-		if (joinList != NIL)
+		if (!list_empty(joinList))
 		{
 			/* multiple nodes in from clause, add an explicit join between them */
 			int nextRangeTableIndex = 0;

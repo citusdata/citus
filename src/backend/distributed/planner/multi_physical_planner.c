@@ -583,7 +583,7 @@ BuildJobQuery(MultiNode *multiNode, List *dependentJobList)
 	 * If we are building this query on a repartitioned subquery job then we
 	 * don't need to update column attributes.
 	 */
-	if (dependentJobList != NIL)
+	if (!list_empty(dependentJobList))
 	{
 		Job *job = (Job *) linitial(dependentJobList);
 		if (CitusIsA(job, MapMergeJob))
@@ -603,7 +603,7 @@ BuildJobQuery(MultiNode *multiNode, List *dependentJobList)
 	 * level in the query tree.
 	 */
 	List *extendedOpNodeList = FindNodesOfType(multiNode, T_MultiExtendedOp);
-	if (extendedOpNodeList != NIL)
+	if (!list_empty(extendedOpNodeList))
 	{
 		MultiExtendedOp *extendedOp = (MultiExtendedOp *) linitial(extendedOpNodeList);
 		targetList = copyObject(extendedOp->targetList);
@@ -628,7 +628,7 @@ BuildJobQuery(MultiNode *multiNode, List *dependentJobList)
 	}
 
 	/* extract limit count/offset and sort clauses */
-	if (extendedOpNodeList != NIL)
+	if (!list_empty(extendedOpNodeList))
 	{
 		MultiExtendedOp *extendedOp = (MultiExtendedOp *) linitial(extendedOpNodeList);
 
@@ -662,7 +662,7 @@ BuildJobQuery(MultiNode *multiNode, List *dependentJobList)
 	 * table that does not have the primary key. We therefore wrap all the
 	 * columns that do not appear in the GROUP BY in an any_value aggregate.
 	 */
-	if (groupClauseList != NIL && isRepartitionJoin)
+	if (!list_empty(groupClauseList) && isRepartitionJoin)
 	{
 		targetList = (List *) WrapUngroupedVarsInAnyValueAggregate(
 			(Node *) targetList, groupClauseList, targetList, true);
@@ -722,7 +722,7 @@ BaseRangeTableList(MultiNode *multiNode)
 	List *baseRangeTableList = NIL;
 	List *pendingNodeList = list_make1(multiNode);
 
-	while (pendingNodeList != NIL)
+	while (!list_empty(pendingNodeList))
 	{
 		MultiNode *currMultiNode = (MultiNode *) linitial(pendingNodeList);
 		CitusNodeTag nodeType = CitusNodeTag(currMultiNode);
@@ -830,7 +830,7 @@ QueryTargetList(MultiNode *multiNode)
 	List *columnList = topProjectNode->columnList;
 	List *queryTargetList = TargetEntryList(columnList);
 
-	Assert(queryTargetList != NIL);
+	Assert(!list_empty(queryTargetList));
 	return queryTargetList;
 }
 
@@ -1013,7 +1013,7 @@ QueryGroupClauseList(MultiNode *multiNode)
 	List *groupClauseList = NIL;
 	List *pendingNodeList = list_make1(multiNode);
 
-	while (pendingNodeList != NIL)
+	while (!list_empty(pendingNodeList))
 	{
 		MultiNode *currMultiNode = (MultiNode *) linitial(pendingNodeList);
 		CitusNodeTag nodeType = CitusNodeTag(currMultiNode);
@@ -1050,7 +1050,7 @@ QuerySelectClauseList(MultiNode *multiNode)
 	List *selectClauseList = NIL;
 	List *pendingNodeList = list_make1(multiNode);
 
-	while (pendingNodeList != NIL)
+	while (!list_empty(pendingNodeList))
 	{
 		MultiNode *currMultiNode = (MultiNode *) linitial(pendingNodeList);
 		CitusNodeTag nodeType = CitusNodeTag(currMultiNode);
@@ -1556,7 +1556,7 @@ BuildSubqueryJobQuery(MultiNode *multiNode)
 	 * level in the query tree.
 	 */
 	List *extendedOpNodeList = FindNodesOfType(multiNode, T_MultiExtendedOp);
-	if (extendedOpNodeList != NIL)
+	if (!list_empty(extendedOpNodeList))
 	{
 		MultiExtendedOp *extendedOp = (MultiExtendedOp *) linitial(extendedOpNodeList);
 		targetList = copyObject(extendedOp->targetList);
@@ -1567,7 +1567,7 @@ BuildSubqueryJobQuery(MultiNode *multiNode)
 	}
 
 	/* extract limit count/offset, sort and having clauses */
-	if (extendedOpNodeList != NIL)
+	if (!list_empty(extendedOpNodeList))
 	{
 		MultiExtendedOp *extendedOp = (MultiExtendedOp *) linitial(extendedOpNodeList);
 
@@ -1824,7 +1824,7 @@ JobForTableIdList(List *jobList, List *searchedTableIdList)
 		 */
 		List *lhsDiff = list_difference_int(jobTableIdList, searchedTableIdList);
 		List *rhsDiff = list_difference_int(searchedTableIdList, jobTableIdList);
-		if (lhsDiff == NIL && rhsDiff == NIL)
+		if (list_empty(lhsDiff) && list_empty(rhsDiff))
 		{
 			searchedJob = job;
 			break;
@@ -2098,7 +2098,7 @@ BuildJobTreeTaskList(Job *jobTree, PlannerRestrictionContext *plannerRestriction
 	 * depends on.
 	 */
 	List *jobStack = list_make1(jobTree);
-	while (jobStack != NIL)
+	while (!list_empty(jobStack))
 	{
 		Job *job = (Job *) llast(jobStack);
 		flattenedJobList = lappend(flattenedJobList, job);
@@ -2878,7 +2878,7 @@ SqlTaskList(Job *job)
 	List *rangeTableFragmentsList = RangeTableFragmentsList(rangeTableList,
 															whereClauseList,
 															dependentJobList);
-	if (rangeTableFragmentsList == NIL)
+	if (list_empty(rangeTableFragmentsList))
 	{
 		return NIL;
 	}
@@ -3176,7 +3176,7 @@ RangeTableFragmentsList(List *rangeTableList, List *whereClauseList,
 			 * If we prune all shards for one table, query results will be empty.
 			 * We can therefore return NIL for the task list here.
 			 */
-			if (prunedShardIntervalList == NIL)
+			if (list_empty(prunedShardIntervalList))
 			{
 				return NIL;
 			}
@@ -3209,7 +3209,7 @@ RangeTableFragmentsList(List *rangeTableList, List *whereClauseList,
 			List *mergeTaskList = dependentMapMergeJob->mergeTaskList;
 
 			/* if there are no tasks for the dependent job, just return NIL */
-			if (mergeTaskList == NIL)
+			if (list_empty(mergeTaskList))
 			{
 				return NIL;
 			}
@@ -3555,7 +3555,7 @@ FragmentCombinationList(List *rangeTableFragmentsList, Query *jobQuery,
 	 * start traversing our search space.
 	 */
 	fragmentCombinationQueue = lappend(fragmentCombinationQueue, emptyList);
-	while (fragmentCombinationQueue != NIL)
+	while (!list_empty(fragmentCombinationQueue))
 	{
 		ListCell *tableFragmentCell = NULL;
 		int32 joiningTableSequenceIndex = -1;
@@ -3831,7 +3831,7 @@ JoinSequenceArray(List *rangeTableFragmentsList, Query *jobQuery, List *dependen
 		 * between tables. We don't support this functionality for non
 		 * reference joins, and error out.
 		 */
-		if (nextJoinClauseList == NIL && !isReferenceJoin)
+		if (list_empty(nextJoinClauseList) && !isReferenceJoin)
 		{
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 							errmsg("cannot perform distributed planning on this query"),
@@ -4021,7 +4021,7 @@ FindRangeTableFragmentsList(List *rangeTableFragmentsList, int tableId)
 	foreach(rangeTableFragmentsCell, rangeTableFragmentsList)
 	{
 		List *tableFragments = (List *) lfirst(rangeTableFragmentsCell);
-		if (tableFragments != NIL)
+		if (!list_empty(tableFragments))
 		{
 			RangeTableFragment *tableFragment =
 				(RangeTableFragment *) linitial(tableFragments);
@@ -4502,7 +4502,7 @@ MapTaskList(MapMergeJob *mapMergeJob, List *filterTaskList)
 
 	uint32 partitionColumnResNo = 0;
 	List *groupClauseList = filterQuery->groupClause;
-	if (groupClauseList != NIL)
+	if (!list_empty(groupClauseList))
 	{
 		List *targetEntryList = filterQuery->targetList;
 		List *groupTargetEntryList = GroupTargetEntryList(groupClauseList,
@@ -4765,7 +4765,7 @@ MergeTaskList(MapMergeJob *mapMergeJob, List *mapTaskList, uint32 taskIdIndex)
 	List *targetEntryList = filterQuery->targetList;
 
 	/* if all map tasks were pruned away, return NIL for merge tasks */
-	if (mapTaskList == NIL)
+	if (list_empty(mapTaskList))
 	{
 		return NIL;
 	}
@@ -4961,7 +4961,7 @@ AssignTaskList(List *sqlTaskList)
 	ListCell *constrainedSqlTaskCell = NULL;
 
 	/* no tasks to assign */
-	if (sqlTaskList == NIL)
+	if (list_empty(sqlTaskList))
 	{
 		return NIL;
 	}
@@ -5027,7 +5027,7 @@ AssignTaskList(List *sqlTaskList)
 		foreach(mergeTaskCell, mergeTaskList)
 		{
 			Task *mergeTask = (Task *) lfirst(mergeTaskCell);
-			Assert(mergeTask->taskPlacementList == NIL);
+			Assert(list_empty(mergeTask->taskPlacementList));
 
 			mergeTask->taskPlacementList = list_copy(sqlTask->taskPlacementList);
 		}
@@ -5060,7 +5060,7 @@ AssignTaskList(List *sqlTaskList)
 			 * same task placement list.
 			 */
 			mergeTaskPlacementList = mergeTask->taskPlacementList;
-			Assert(mergeTaskPlacementList != NIL);
+			Assert(!list_empty(mergeTaskPlacementList));
 
 			ereport(DEBUG3, (errmsg("propagating assignment from merge task %d "
 									"to constrained sql task %d",
@@ -5197,7 +5197,7 @@ AssignAnchorShardTaskList(List *taskList)
 		assignedTaskList = RoundRobinAssignTaskList(taskList);
 	}
 
-	Assert(assignedTaskList != NIL);
+	Assert(!list_empty(assignedTaskList));
 	return assignedTaskList;
 }
 
@@ -5424,7 +5424,7 @@ ReorderAndAssignTaskList(List *taskList, ReorderFunction reorderFunction)
 	ListCell *placementListCell = NULL;
 	uint32 unAssignedTaskCount = 0;
 
-	if (taskList == NIL)
+	if (list_empty(taskList))
 	{
 		return NIL;
 	}
@@ -5524,7 +5524,7 @@ ActiveShardPlacementLists(List *taskList)
 
 		/* filter out shard placements that reside in inactive nodes */
 		List *activeShardPlacementList = ActivePlacementList(shardPlacementList);
-		if (activeShardPlacementList == NIL)
+		if (list_empty(activeShardPlacementList))
 		{
 			ereport(ERROR,
 					(errmsg("no active placements were found for shard " UINT64_FORMAT,
@@ -5752,7 +5752,7 @@ AssignDataFetchDependencies(List *taskList)
 		List *dependentTaskList = task->dependentTaskList;
 		ListCell *dependentTaskCell = NULL;
 
-		Assert(task->taskPlacementList != NIL);
+		Assert(!list_empty(task->taskPlacementList));
 		Assert(task->taskType == READ_TASK || task->taskType == MERGE_TASK);
 
 		foreach(dependentTaskCell, dependentTaskList)

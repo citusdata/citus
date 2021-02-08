@@ -231,7 +231,7 @@ JoinTreeContainsSubquery(Query *query)
 bool
 HasEmptyJoinTree(Query *query)
 {
-	if (query->rtable == NIL)
+	if (list_empty(query->rtable))
 	{
 		return true;
 	}
@@ -1633,7 +1633,7 @@ SubqueryPushdownMultiNodeTree(Query *originalQuery)
 	 * prevent that we wrap all the columns that do not appear in the
 	 * GROUP BY in an any_value aggregate.
 	 */
-	if (extendedOpNode->groupClauseList != NIL)
+	if (!list_empty(extendedOpNode->groupClauseList))
 	{
 		extendedOpNode->targetList = (List *) WrapUngroupedVarsInAnyValueAggregate(
 			(Node *) extendedOpNode->targetList,

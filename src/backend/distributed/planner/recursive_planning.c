@@ -480,7 +480,7 @@ RecursivelyPlanNonColocatedSubqueries(Query *subquery, RecursivePlanningContext 
 	 * Although this is a rare case, we weren't able to pick an anchor
 	 * range table entry, so we cannot continue.
 	 */
-	if (colocatedJoinChecker.anchorRelationRestrictionList == NIL)
+	if (list_empty(colocatedJoinChecker.anchorRelationRestrictionList))
 	{
 		return;
 	}
@@ -717,7 +717,7 @@ RecursivelyPlanCTEs(Query *query, RecursivePlanningContext *planningContext)
 	ListCell *cteCell = NULL;
 	CteReferenceWalkerContext context = { -1, NIL };
 
-	if (query->cteList == NIL)
+	if (list_empty(query->cteList))
 	{
 		/* no CTEs, nothing to do */
 		return NULL;
@@ -959,7 +959,7 @@ AllDistributionKeysInSubqueryAreEqual(Query *subquery,
 									  PlannerRestrictionContext *restrictionContext)
 {
 	/* we don't support distribution eq. checks for CTEs yet */
-	if (subquery->cteList != NIL)
+	if (!list_empty(subquery->cteList))
 	{
 		return false;
 	}

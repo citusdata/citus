@@ -60,7 +60,7 @@ SortList(List *pointerList, int (*comparisonFunction)(const void *, const void *
 
 	pfree(array);
 
-	if (sortedList != NIL)
+	if (!list_empty(sortedList))
 	{
 		sortedList->type = pointerList->type;
 	}

@@ -31,6 +31,7 @@
 #include "commands/copy.h"
 #include "commands/tablecmds.h"
 #include "common/string.h"
+#include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/version_compat.h"
@@ -350,7 +351,7 @@ ArrayObjectToCStringList(ArrayType *arrayObject)
 		cstringList = lappend(cstringList, cstring);
 	}
 
-	Assert(cstringList != NIL);
+	Assert(!list_empty(cstringList));
 	return cstringList;
 }
 

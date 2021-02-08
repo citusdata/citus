@@ -183,7 +183,7 @@ PostprocessCreateTableStmt(CreateStmt *createStatement, const char *queryString)
 {
 	PostprocessCreateTableStmtForeignKeys(createStatement);
 
-	if (createStatement->inhRelations != NIL && createStatement->partbound != NULL)
+	if (!list_empty(createStatement->inhRelations) && createStatement->partbound != NULL)
 	{
 		/* process CREATE TABLE ... PARTITION OF command */
 		PostprocessCreateTableStmtPartitionOf(createStatement, queryString);

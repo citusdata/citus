@@ -1142,7 +1142,7 @@ DecideTransactionPropertiesForTaskList(RowModifyLevel modLevel, List *taskList, 
 	xactProperties.useRemoteTransactionBlocks = TRANSACTION_BLOCKS_ALLOWED;
 	xactProperties.requires2PC = false;
 
-	if (taskList == NIL)
+	if (list_empty(taskList))
 	{
 		/* nothing to do, return defaults */
 		return xactProperties;
@@ -1361,7 +1361,7 @@ DistributedExecutionRequiresRollback(List *taskList)
 
 	Task *task = (Task *) linitial(taskList);
 
-	bool selectForUpdate = task->relationRowLockList != NIL;
+	bool selectForUpdate = !list_empty(task->relationRowLockList);
 	if (selectForUpdate)
 	{
 		/*
@@ -1434,7 +1434,7 @@ DistributedExecutionRequiresRollback(List *taskList)
 static bool
 TaskListRequires2PC(List *taskList)
 {
-	if (taskList == NIL)
+	if (list_empty(taskList))
 	{
 		return false;
 	}
@@ -2146,7 +2146,7 @@ ShouldRunTasksSequentially(List *taskList)
 
 	/* all the tasks are the same, so we only look one */
 	Task *initialTask = (Task *) linitial(taskList);
-	if (initialTask->rowValuesLists != NIL)
+	if (!list_empty(initialTask->rowValuesLists))
 	{
 		/* found a multi-row INSERT */
 		return true;
@@ -2236,7 +2236,7 @@ RunDistributedExecution(DistributedExecution *execution)
 				ManageWorkerPool(workerPool);
 			}
 
-			if (execution->remoteTaskList == NIL)
+			if (list_empty(execution->remoteTaskList))
 			{
 				/*
 				 * All the tasks are failed over to the local execution, no need

@@ -388,7 +388,7 @@ MultiLogicalPlanOptimize(MultiTreeRoot *multiLogicalPlan)
 	 * And and Or nodes. We then push down the And select node if it exists.
 	 */
 	List *selectNodeList = FindNodesOfType(logicalPlanNode, T_MultiSelect);
-	if (selectNodeList != NIL)
+	if (!list_empty(selectNodeList))
 	{
 		MultiSelect *selectNode = (MultiSelect *) linitial(selectNodeList);
 		MultiSelect *andSelectNode = AndSelectNode(selectNode);
@@ -509,7 +509,7 @@ AndSelectNode(MultiSelect *selectNode)
 
 	/* AND clauses are select clauses that are not OR clauses */
 	List *andSelectClauseList = list_difference(selectClauseList, orSelectClauseList);
-	if (andSelectClauseList != NIL)
+	if (!list_empty(andSelectClauseList))
 	{
 		andSelectNode = CitusMakeNode(MultiSelect);
 		andSelectNode->selectClauseList = andSelectClauseList;
@@ -531,7 +531,7 @@ OrSelectNode(MultiSelect *selectNode)
 	List *selectClauseList = selectNode->selectClauseList;
 	List *orSelectClauseList = OrSelectClauseList(selectClauseList);
 
-	if (orSelectClauseList != NIL)
+	if (!list_empty(orSelectClauseList))
 	{
 		orSelectNode = CitusMakeNode(MultiSelect);
 		orSelectNode->selectClauseList = orSelectClauseList;
@@ -746,7 +746,7 @@ AddressProjectSpecialConditions(MultiProject *projectNode)
 	 * If we need to include any child columns, then find the columns that are
 	 * not already in the project column list, and add them.
 	 */
-	if (childColumnList != NIL)
+	if (!list_empty(childColumnList))
 	{
 		List *projectColumnList = projectNode->columnList;
 		List *newColumnList = list_concat_unique(projectColumnList, childColumnList);
@@ -926,7 +926,7 @@ Distributive(MultiUnaryNode *parentNode, MultiBinaryNode *childNode)
 
 		/* find tables that are in select clause list, but not in child list */
 		List *diffList = list_difference_int(selectTableIdList, childTableIdList);
-		if (diffList == NIL)
+		if (list_empty(diffList))
 		{
 			pushDownStatus = PUSH_DOWN_VALID;
 		}
@@ -1048,7 +1048,7 @@ GenerateNode(MultiUnaryNode *currentNode, MultiNode *childNode)
 		List *columnList = copyObject(projectNode->columnList);
 
 		List *newColumnList = TableIdListColumns(tableIdList, columnList);
-		if (newColumnList != NIL)
+		if (!list_empty(newColumnList))
 		{
 			MultiProject *newProjectNode = CitusMakeNode(MultiProject);
 			newProjectNode->columnList = newColumnList;
@@ -1063,7 +1063,7 @@ GenerateNode(MultiUnaryNode *currentNode, MultiNode *childNode)
 
 		List *newSelectClauseList = TableIdListSelectClauses(tableIdList,
 															 selectClauseList);
-		if (newSelectClauseList != NIL)
+		if (!list_empty(newSelectClauseList))
 		{
 			MultiSelect *newSelectNode = CitusMakeNode(MultiSelect);
 			newSelectNode->selectClauseList = newSelectClauseList;
@@ -2636,14 +2636,14 @@ ProcessDistinctClauseForWorkerQuery(List *distinctClause, bool hasDistinctOn,
 {
 	*distinctPreventsLimitPushdown = false;
 
-	if (distinctClause == NIL)
+	if (list_empty(distinctClause))
 	{
 		return;
 	}
 
 	bool distinctClauseSupersetofGroupClause = false;
 
-	if (groupClauseList == NIL ||
+	if (list_empty(groupClauseList) ||
 		IsGroupBySubsetOfDistinct(groupClauseList, distinctClause))
 	{
 		distinctClauseSupersetofGroupClause = true;
@@ -2700,7 +2700,7 @@ ProcessWindowFunctionsForWorkerQuery(List *windowClauseList,
 									 QueryWindowClause *queryWindowClause,
 									 QueryTargetList *queryTargetList)
 {
-	if (windowClauseList == NIL)
+	if (list_empty(windowClauseList))
 	{
 		return;
 	}
@@ -2747,7 +2747,7 @@ static void
 ProcessWindowFunctionPullUpForWorkerQuery(List *windowClause,
 										  QueryTargetList *queryTargetList)
 {
-	if (windowClause != NIL)
+	if (!list_empty(windowClause))
 	{
 		List *columnList = pull_var_clause_default((Node *) windowClause);
 
@@ -2835,8 +2835,8 @@ BuildOrderByLimitReference(bool hasDistinctOn, bool groupedByDisjointPartitionCo
 	limitOrderByReference.onlyPushableWindowFunctions =
 		onlyPushableWindowFunctions;
 	limitOrderByReference.hasDistinctOn = hasDistinctOn;
-	limitOrderByReference.groupClauseIsEmpty = (groupClause == NIL);
-	limitOrderByReference.sortClauseIsEmpty = (sortClauseList == NIL);
+	limitOrderByReference.groupClauseIsEmpty = (list_empty(groupClause));
+	limitOrderByReference.sortClauseIsEmpty = (list_empty(sortClauseList));
 	limitOrderByReference.canApproximate =
 		CanPushDownLimitApproximate(sortClauseList, targetList);
 	limitOrderByReference.hasOrderByAggregate =
@@ -3538,7 +3538,7 @@ FirstAggregateArgument(Aggref *aggregate)
 static bool
 AggregateEnabledCustom(Aggref *aggregateExpression)
 {
-	if (aggregateExpression->aggorder != NIL ||
+	if (!list_empty(aggregateExpression->aggorder) ||
 		list_empty(aggregateExpression->args))
 	{
 		return false;
@@ -4157,7 +4157,7 @@ DeferErrorIfUnsupportedAggregateDistinct(Aggref *aggregateExpression,
 	if (aggregateType == AGGREGATE_COUNT)
 	{
 		List *aggregateVarList = pull_var_clause_default((Node *) aggregateExpression);
-		if (aggregateVarList == NIL)
+		if (list_empty(aggregateVarList))
 		{
 			distinctSupported = false;
 			errorDetail = "aggregate (distinct) with no columns is unsupported";
@@ -4165,7 +4165,7 @@ DeferErrorIfUnsupportedAggregateDistinct(Aggref *aggregateExpression,
 	}
 
 	List *repartitionNodeList = FindNodesOfType(logicalPlanNode, T_MultiPartition);
-	if (repartitionNodeList != NIL)
+	if (!list_empty(repartitionNodeList))
 	{
 		distinctSupported = false;
 		errorDetail = "aggregate (distinct) with table repartitioning is unsupported";
@@ -4783,7 +4783,7 @@ WorkerSortClauseList(Node *limitCount, List *groupClauseList, List *sortClauseLi
 	{
 		workerSortClauseList = sortClauseList;
 	}
-	else if (sortClauseList != NIL)
+	else if (!list_empty(sortClauseList))
 	{
 		bool orderByNonAggregates = !orderByLimitReference.hasOrderByAggregate;
 		bool canApproximate = orderByLimitReference.canApproximate;
@@ -4901,7 +4901,7 @@ CanPushDownLimitApproximate(List *sortClauseList, List *targetList)
 		return false;
 	}
 
-	if (sortClauseList != NIL)
+	if (!list_empty(sortClauseList))
 	{
 		bool orderByNonCommutativeAggregate =
 			HasOrderByNonCommutativeAggregate(sortClauseList, targetList);
