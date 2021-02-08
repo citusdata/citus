@@ -32,6 +32,28 @@
 #include "columnar/columnar.h"
 #include "columnar/columnar_version_compat.h"
 
+struct TableWriteState
+{
+	TupleDesc tupleDescriptor;
+	FmgrInfo **comparisonFunctionArray;
+	RelFileNode relfilenode;
+
+	MemoryContext stripeWriteContext;
+	MemoryContext perTupleContext;
+	StripeBuffers *stripeBuffers;
+	StripeSkipList *stripeSkipList;
+	ColumnarOptions options;
+	ChunkData *chunkData;
+
+	/*
+	 * compressionBuffer buffer is used as temporary storage during
+	 * data value compression operation. It is kept here to minimize
+	 * memory allocations. It lives in stripeWriteContext and gets
+	 * deallocated when memory context is reset.
+	 */
+	StringInfo compressionBuffer;
+};
+
 static StripeBuffers * CreateEmptyStripeBuffers(uint32 stripeMaxRowCount,
 												uint32 chunkRowCount,
 												uint32 columnCount);
@@ -244,6 +266,18 @@ ColumnarFlushPendingWrites(TableWriteState *writeState)
 
 		MemoryContextSwitchTo(oldContext);
 	}
+}
+
+
+/*
+ * ColumnarWritePerTupleContext
+ *
+ * Return per-tuple context for columnar write operation.
+ */
+MemoryContext
+ColumnarWritePerTupleContext(TableWriteState *state)
+{
+	return state->perTupleContext;
 }
 
 
