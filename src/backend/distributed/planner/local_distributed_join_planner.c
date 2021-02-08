@@ -237,7 +237,7 @@ ResultRTEIdentity(Query *query)
 	int resultRTEIdentity = INVALID_RTE_IDENTITY;
 	if (IsModifyCommand(query))
 	{
-		RangeTblEntry *resultRTE = ExtractResultRelationRTE(query);
+		RangeTblEntry *resultRTE = ExtractResultRelationRTEOrError(query);
 		resultRTEIdentity = GetRTEIdentity(resultRTE);
 	}
 	return resultRTEIdentity;

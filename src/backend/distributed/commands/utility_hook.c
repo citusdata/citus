@@ -682,7 +682,7 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 		 * Ensure value is valid, we can't do some checks during CREATE
 		 * EXTENSION. This is important to register some invalidation callbacks.
 		 */
-		CitusHasBeenLoaded();
+		CitusHasBeenLoaded(); /* lgtm[cpp/return-value-ignored] */
 	}
 }
 

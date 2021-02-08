@@ -68,6 +68,13 @@ CascadeOperationForConnectedRelations(Oid relationId, LOCKMODE lockMode,
 	InvalidateForeignKeyGraph();
 
 	List *fKeyConnectedRelationIdList = GetForeignKeyConnectedRelationIdList(relationId);
+
+	/* early exit if there are no connected relations */
+	if (fKeyConnectedRelationIdList == NIL)
+	{
+		return;
+	}
+
 	LockRelationsWithLockMode(fKeyConnectedRelationIdList, lockMode);
 
 	/*
