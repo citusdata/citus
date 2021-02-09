@@ -337,23 +337,81 @@ SELECT COUNT(*) FROM distributed_table JOIN local ON distributed_table.value = '
 
 --Issue 4678
 
-create table tbl (a int);
-select create_distributed_table('tbl', 'a');
+create table custom_pg_type(typdefault text);
+insert into custom_pg_type VALUES ('b');
 
-select 1 from (
-  select 1 from (
-    select 1 from
-      pg_catalog.pg_type,
+create table tbl (a int);
+insert into tbl VALUES (1);
+
+-- check result with local tables
+select typdefault from (
+  select typdefault from (
+    select typdefault from
+      custom_pg_type,
       lateral (
-        select 1 from tbl
-        where typdefault ~ null
+        select a from tbl
+        where typdefault > 'a'
         limit 1) as subq_0
     where (
-      select true from pg_catalog.pg_am
-      where typdefault > 'a'
+      select true from pg_catalog.pg_am limit 1
     )
   ) as subq_1
 ) as subq_2;
+
+select create_distributed_table('tbl', 'a');
+
+-- subplans work but we might skip the restrictions in them
+select typdefault from (
+  select typdefault from (
+    select typdefault from
+      custom_pg_type,
+      lateral (
+        select a from tbl
+        where typdefault > 'a'
+        limit 1) as subq_0
+    where (
+      select true from pg_catalog.pg_am limit 1
+    )
+  ) as subq_1
+) as subq_2;
+
+-- Not supported because of 4470
+select typdefault from (
+  select typdefault from (
+    select typdefault from
+      custom_pg_type,
+      lateral (
+        select a from tbl
+        where typdefault > 'a'
+        limit 1) as subq_0
+    where (
+      select true from pg_catalog.pg_am
+	  where typdefault = 'a' LIMIT 1
+    )
+  ) as subq_1
+) as subq_2;
+
+-- correlated sublinks are not yet supported because of #4470, unless we convert not-correlated table
+SELECT COUNT(*) FROM distributed_table d1 JOIN postgres_table using(key)
+WHERE d1.key IN (SELECT key FROM distributed_table WHERE d1.key = key and key = 5);
+
+set citus.local_table_join_policy to 'prefer-distributed';
+SELECT COUNT(*) FROM distributed_table d1 JOIN postgres_table using(key)
+WHERE d1.key IN (SELECT key FROM distributed_table WHERE d1.key = key and key = 5);
+set citus.local_table_join_policy to 'auto';
+
+-- Some more subqueries
+SELECT COUNT(*) FROM distributed_table JOIN postgres_table using(key)
+WHERE distributed_table.key IN (SELECT key FROM distributed_table WHERE key = 5);
+
+SELECT COUNT(*) FROM distributed_table JOIN postgres_table using(key)
+WHERE distributed_table.key IN (SELECT key FROM distributed_table WHERE key = 5) AND distributed_table.key = 5;
+
+SELECT COUNT(*) FROM distributed_table_pkey JOIN postgres_table using(key)
+WHERE distributed_table_pkey.key IN (SELECT key FROM distributed_table_pkey WHERE key = 5);
+
+SELECT COUNT(*) FROM distributed_table_pkey JOIN postgres_table using(key)
+WHERE distributed_table_pkey.key IN (SELECT key FROM distributed_table_pkey WHERE key = 5) AND distributed_table_pkey.key = 5;
 
 RESET client_min_messages;
 \set VERBOSITY terse
