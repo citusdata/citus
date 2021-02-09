@@ -86,7 +86,6 @@ static void RemoteFileDestReceiverStartup(DestReceiver *dest, int operation,
 										  TupleDesc inputTupleDescriptor);
 static void PrepareIntermediateResultBroadcast(RemoteFileDestReceiver *resultDest);
 static StringInfo ConstructCopyResultStatement(const char *resultId);
-static void WriteToLocalFile(StringInfo copyData, FileCompat *fileCompat);
 static bool RemoteFileDestReceiverReceive(TupleTableSlot *slot, DestReceiver *dest);
 static void BroadcastCopyData(StringInfo dataBuffer, List *connectionList);
 static void SendCopyDataOverConnection(StringInfo dataBuffer,
@@ -438,7 +437,7 @@ RemoteFileDestReceiverReceive(TupleTableSlot *slot, DestReceiver *dest)
 /*
  * WriteToLocalResultsFile writes the bytes in a StringInfo to a local file.
  */
-static void
+void
 WriteToLocalFile(StringInfo copyData, FileCompat *fileCompat)
 {
 	int bytesWritten = FileWriteCompat(fileCompat, copyData->data,
