@@ -1079,5 +1079,10 @@ SELECT * FROM distributed_table_2
 JOIN r ON (r = distributed_table_2.b)
 LIMIT 3;
 
+EXPLAIN :default_analyze_flags SELECT FROM (SELECT * FROM reference_table) subquery;
+
+PREPARE dummy_prep_stmt(int) AS SELECT FROM distributed_table_1;
+EXPLAIN :default_analyze_flags EXECUTE dummy_prep_stmt(50);
+
 SET client_min_messages TO ERROR;
 DROP SCHEMA multi_explain CASCADE;

@@ -3014,5 +3014,20 @@ Limit (actual rows=1 loops=1)
                           Join Filter: (distributed_table_2.b = intermediate_result.r)
                           ->  Function Scan on read_intermediate_result intermediate_result (actual rows=1 loops=1)
                           ->  Seq Scan on distributed_table_2_570034 distributed_table_xxx (actual rows=1 loops=1)
+EXPLAIN :default_analyze_flags SELECT FROM (SELECT * FROM reference_table) subquery;
+Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
+  Task Count: 1
+  Tasks Shown: All
+  ->  Task
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Seq Scan on reference_table_570031 reference_table (actual rows=1 loops=1)
+PREPARE dummy_prep_stmt(int) AS SELECT FROM distributed_table_1;
+EXPLAIN :default_analyze_flags EXECUTE dummy_prep_stmt(50);
+Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
+  Task Count: 2
+  Tasks Shown: One of 2
+  ->  Task
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Seq Scan on distributed_table_1_570032 distributed_table_xxx (actual rows=1 loops=1)
 SET client_min_messages TO ERROR;
 DROP SCHEMA multi_explain CASCADE;
