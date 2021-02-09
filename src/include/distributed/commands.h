@@ -140,13 +140,16 @@ extern void ErrorIfUnsupportedForeignConstraintExists(Relation relation,
 													  uint32 colocationId);
 extern void ErrorOutForFKeyBetweenPostgresAndCitusLocalTable(Oid localTableId);
 extern bool ColumnReferencedByAnyForeignKey(char *columnName, Oid relationId);
+extern bool ColumnAppearsInForeignKey(char *columnName, Oid relationId);
 extern bool ColumnAppearsInForeignKeyToReferenceTable(char *columnName, Oid
 													  relationId);
 extern List * GetReferencingForeignConstaintCommands(Oid relationOid);
+extern bool AnyForeignKeyDependsOnIndex(Oid indexId);
 extern bool HasForeignKeyToCitusLocalTable(Oid relationId);
 extern bool HasForeignKeyToReferenceTable(Oid relationOid);
 extern bool TableReferenced(Oid relationOid);
 extern bool TableReferencing(Oid relationOid);
+extern bool ConstraintIsAUniquenessConstraint(char *inputConstaintName, Oid relationId);
 extern bool ConstraintIsAForeignKey(char *inputConstaintName, Oid relationOid);
 extern bool ConstraintWithNameIsOfType(char *inputConstaintName, Oid relationId,
 									   char targetConstraintType);

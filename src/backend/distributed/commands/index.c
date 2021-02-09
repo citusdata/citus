@@ -511,6 +511,11 @@ PreprocessDropIndexStmt(Node *node, const char *dropIndexCommand)
 
 		ErrorIfUnsupportedDropIndexStmt(dropIndexStatement);
 
+		if (AnyForeignKeyDependsOnIndex(distributedIndexId))
+		{
+			MarkInvalidateForeignKeyGraph();
+		}
+
 		ddlJob->targetRelationId = distributedRelationId;
 		ddlJob->concurrentIndexCmd = dropIndexStatement->concurrent;
 

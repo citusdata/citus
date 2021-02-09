@@ -486,6 +486,21 @@ ForeignConstraintFindDistKeys(HeapTuple pgConstraintTuple,
 
 
 /*
+ * ColumnAppearsInForeignKey returns true if there is a foreign key constraint
+ * from/to given column. False otherwise.
+ */
+bool
+ColumnAppearsInForeignKey(char *columnName, Oid relationId)
+{
+	int searchForeignKeyColumnFlags = SEARCH_REFERENCING_RELATION |
+									  SEARCH_REFERENCED_RELATION;
+	List *foreignKeysColumnAppeared =
+		GetForeignKeyIdsForColumn(columnName, relationId, searchForeignKeyColumnFlags);
+	return list_length(foreignKeysColumnAppeared) > 0;
+}
+
+
+/*
  * ColumnAppearsInForeignKeyToReferenceTable checks if there is a foreign key
  * constraint from/to any reference table on the given column.
  */
@@ -797,6 +812,23 @@ TableReferencing(Oid relationId)
 	List *foreignKeyOids = GetForeignKeyOids(relationId, flags);
 
 	return list_length(foreignKeyOids) > 0;
+}
+
+
+/*
+ * ConstraintWithNameIsOfType is a wrapper around ConstraintWithNameIsOfType that returns true
+ * if given constraint name identifies a uniqueness constraint, i.e:
+ *   - primary key constraint, or
+ *   - unique constraint
+ */
+bool
+ConstraintIsAUniquenessConstraint(char *inputConstaintName, Oid relationId)
+{
+	bool isUniqueConstraint = ConstraintWithNameIsOfType(inputConstaintName, relationId,
+														 CONSTRAINT_UNIQUE);
+	bool isPrimaryConstraint = ConstraintWithNameIsOfType(inputConstaintName, relationId,
+														  CONSTRAINT_PRIMARY);
+	return isUniqueConstraint || isPrimaryConstraint;
 }
 
 

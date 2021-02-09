@@ -938,5 +938,239 @@ SELECT create_reference_table('self_referencing_reference_table');
 (1 row)
 
 ALTER TABLE self_referencing_reference_table ADD CONSTRAINT fk FOREIGN KEY(id, other_column_ref) REFERENCES self_referencing_reference_table(id, other_column);
+-- make sure that if fkey is dropped
+-- Citus can see up-to date fkey graph
+CREATE TABLE dropfkeytest1 (x int unique);
+CREATE TABLE dropfkeytest2 (x int8);
+ALTER TABLE dropfkeytest2 ADD CONSTRAINT fkey1 FOREIGN KEY (x) REFERENCES dropfkeytest1(x);
+SELECT create_distributed_table ('dropfkeytest1', 'x');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- this should error out
+SELECT create_distributed_table ('dropfkeytest2', 'x', colocate_with:='none');
+ERROR:  cannot create foreign key constraint since relations are not colocated or not referencing a reference table
+DETAIL:  A distributed table can only have foreign keys if it is referencing another colocated hash distributed table or a reference table
+ALTER TABLE dropfkeytest2 DROP CONSTRAINT fkey1;
+-- this should work
+SELECT create_distributed_table ('dropfkeytest2', 'x', colocate_with:='none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+DROP TABLE dropfkeytest1, dropfkeytest2 CASCADE;
+-- make sure that if a column that is in a fkey is dropped
+-- Citus can see up-to date fkey graph
+CREATE TABLE dropfkeytest1 (x int unique);
+CREATE TABLE dropfkeytest2 (x int8, y int8);
+ALTER TABLE dropfkeytest2 ADD CONSTRAINT fkey1 FOREIGN KEY (y) REFERENCES dropfkeytest1(x);
+SELECT create_distributed_table ('dropfkeytest1', 'x');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- this should error out
+SELECT create_distributed_table ('dropfkeytest2', 'y', colocate_with:='none');
+ERROR:  cannot create foreign key constraint since relations are not colocated or not referencing a reference table
+DETAIL:  A distributed table can only have foreign keys if it is referencing another colocated hash distributed table or a reference table
+ALTER TABLE dropfkeytest2 DROP COLUMN y;
+-- this should work
+SELECT create_distributed_table ('dropfkeytest2', 'x', colocate_with:='none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+DROP TABLE dropfkeytest1, dropfkeytest2 CASCADE;
+-- make sure that even if a column that is in a multi-column index is dropped
+-- Citus can see up-to date fkey graph
+CREATE TABLE dropfkeytest1 (x int, y int);
+CREATE UNIQUE INDEX indd ON dropfkeytest1(x, y);
+CREATE TABLE dropfkeytest2 (x int8, y int8);
+ALTER TABLE dropfkeytest2 ADD CONSTRAINT fkey1 FOREIGN KEY (x, y) REFERENCES dropfkeytest1(x, y);
+SELECT create_distributed_table ('dropfkeytest1', 'x');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- this should error out
+SELECT create_distributed_table ('dropfkeytest2', 'y', colocate_with:='none');
+ERROR:  cannot create foreign key constraint since relations are not colocated or not referencing a reference table
+DETAIL:  A distributed table can only have foreign keys if it is referencing another colocated hash distributed table or a reference table
+ALTER TABLE dropfkeytest2 DROP COLUMN y CASCADE;
+-- this should work
+SELECT create_distributed_table ('dropfkeytest2', 'x', colocate_with:='none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+DROP TABLE dropfkeytest1, dropfkeytest2 CASCADE;
+-- make sure that even if a column that is in a multi-column fkey is dropped
+-- Citus can see up-to date fkey graph
+CREATE TABLE dropfkeytest1 (x int, y int);
+CREATE UNIQUE INDEX indd ON dropfkeytest1(x, y);
+CREATE TABLE dropfkeytest2 (x int8, y int8);
+ALTER TABLE dropfkeytest2 ADD CONSTRAINT fkey1 FOREIGN KEY (x, y) REFERENCES dropfkeytest1(x, y);
+SELECT create_distributed_table ('dropfkeytest1', 'x');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- this should error out
+SELECT create_distributed_table ('dropfkeytest2', 'y', colocate_with:='none');
+ERROR:  cannot create foreign key constraint since relations are not colocated or not referencing a reference table
+DETAIL:  A distributed table can only have foreign keys if it is referencing another colocated hash distributed table or a reference table
+ALTER TABLE dropfkeytest1 DROP COLUMN y CASCADE;
+NOTICE:  drop cascades to constraint fkey1 on table dropfkeytest2
+-- this should work
+SELECT create_distributed_table ('dropfkeytest2', 'x', colocate_with:='none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+DROP TABLE dropfkeytest1, dropfkeytest2 CASCADE;
+-- make sure that even if an index which fkey relies on is dropped
+-- Citus can see up-to date fkey graph
+-- also irrelevant index drops doesn't affect this
+CREATE TABLE dropfkeytest1 (x int);
+CREATE UNIQUE INDEX i1 ON dropfkeytest1(x);
+CREATE UNIQUE INDEX unrelated_idx ON dropfkeytest1(x);
+CREATE TABLE dropfkeytest2 (x int8, y int8);
+ALTER TABLE dropfkeytest2 ADD CONSTRAINT fkey1 FOREIGN KEY (y) REFERENCES dropfkeytest1(x);
+SELECT create_distributed_table ('dropfkeytest1', 'x');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- this should error out
+SELECT create_distributed_table ('dropfkeytest2', 'y', colocate_with:='none');
+ERROR:  cannot create foreign key constraint since relations are not colocated or not referencing a reference table
+DETAIL:  A distributed table can only have foreign keys if it is referencing another colocated hash distributed table or a reference table
+DROP INDEX unrelated_idx CASCADE;
+-- should still error out since we didn't drop the index that foreign key depends on
+SELECT create_distributed_table ('dropfkeytest2', 'x', colocate_with:='none');
+ERROR:  cannot create foreign key constraint since relations are not colocated or not referencing a reference table
+DETAIL:  A distributed table can only have foreign keys if it is referencing another colocated hash distributed table or a reference table
+DROP INDEX i1 CASCADE;
+NOTICE:  drop cascades to constraint fkey1 on table dropfkeytest2
+-- this should work
+SELECT create_distributed_table ('dropfkeytest2', 'x', colocate_with:='none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+DROP TABLE dropfkeytest1, dropfkeytest2 CASCADE;
+-- make sure that even if a uniqueness constraint which fkey depends on is dropped
+-- Citus can see up-to date fkey graph
+CREATE TABLE dropfkeytest1 (x int unique);
+CREATE TABLE dropfkeytest2 (x int8, y int8);
+ALTER TABLE dropfkeytest2 ADD CONSTRAINT fkey1 FOREIGN KEY (y) REFERENCES dropfkeytest1(x);
+SELECT create_distributed_table ('dropfkeytest1', 'x');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- this should error out
+SELECT create_distributed_table ('dropfkeytest2', 'y', colocate_with:='none');
+ERROR:  cannot create foreign key constraint since relations are not colocated or not referencing a reference table
+DETAIL:  A distributed table can only have foreign keys if it is referencing another colocated hash distributed table or a reference table
+ALTER TABLE dropfkeytest1 DROP CONSTRAINT dropfkeytest1_x_key CASCADE;
+NOTICE:  drop cascades to constraint fkey1 on table dropfkeytest2
+-- this should work
+SELECT create_distributed_table ('dropfkeytest2', 'x', colocate_with:='none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+DROP TABLE dropfkeytest1, dropfkeytest2 CASCADE;
+-- make sure that even if a primary key which fkey depends on is dropped
+-- Citus can see up-to date fkey graph
+CREATE TABLE dropfkeytest1 (x int primary key);
+CREATE TABLE dropfkeytest2 (x int8, y int8);
+ALTER TABLE dropfkeytest2 ADD CONSTRAINT fkey1 FOREIGN KEY (y) REFERENCES dropfkeytest1(x);
+SELECT create_distributed_table ('dropfkeytest1', 'x');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- this should error out
+SELECT create_distributed_table ('dropfkeytest2', 'y', colocate_with:='none');
+ERROR:  cannot create foreign key constraint since relations are not colocated or not referencing a reference table
+DETAIL:  A distributed table can only have foreign keys if it is referencing another colocated hash distributed table or a reference table
+ALTER TABLE dropfkeytest1 DROP CONSTRAINT dropfkeytest1_pkey CASCADE;
+NOTICE:  drop cascades to constraint fkey1 on table dropfkeytest2
+-- this should work
+SELECT create_distributed_table ('dropfkeytest2', 'x', colocate_with:='none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+DROP TABLE dropfkeytest1, dropfkeytest2 CASCADE;
+-- make sure that even if a schema which fkey depends on is dropped
+-- Citus can see up-to date fkey graph
+CREATE SCHEMA fkeytestsc;
+CREATE TABLE fkeytestsc.dropfkeytest1 (x int unique);
+CREATE TABLE dropfkeytest2 (x int8, y int8);
+ALTER TABLE dropfkeytest2 ADD CONSTRAINT fkey1 FOREIGN KEY (y) REFERENCES fkeytestsc.dropfkeytest1(x);
+SELECT create_distributed_table ('fkeytestsc.dropfkeytest1', 'x');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- this should error out
+SELECT create_distributed_table ('dropfkeytest2', 'y', colocate_with:='none');
+ERROR:  cannot create foreign key constraint since relations are not colocated or not referencing a reference table
+DETAIL:  A distributed table can only have foreign keys if it is referencing another colocated hash distributed table or a reference table
+DROP SCHEMA fkeytestsc CASCADE;
+NOTICE:  drop cascades to 2 other objects
+DETAIL:  drop cascades to table fkeytestsc.dropfkeytest1
+drop cascades to constraint fkey1 on table dropfkeytest2
+-- this should work
+SELECT create_distributed_table ('dropfkeytest2', 'x', colocate_with:='none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+DROP TABLE dropfkeytest2 CASCADE;
+-- make sure that even if a table which fkey depends on is dropped
+-- Citus can see up-to date fkey graph
+CREATE TABLE dropfkeytest1 (x int unique);
+CREATE TABLE dropfkeytest2 (x int8, y int8);
+ALTER TABLE dropfkeytest2 ADD CONSTRAINT fkey1 FOREIGN KEY (y) REFERENCES dropfkeytest1(x);
+SELECT create_distributed_table ('dropfkeytest1', 'x');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- this should error out
+SELECT create_distributed_table ('dropfkeytest2', 'y', colocate_with:='none');
+ERROR:  cannot create foreign key constraint since relations are not colocated or not referencing a reference table
+DETAIL:  A distributed table can only have foreign keys if it is referencing another colocated hash distributed table or a reference table
+DROP TABLE dropfkeytest1 CASCADE;
+NOTICE:  drop cascades to constraint fkey1 on table dropfkeytest2
+-- this should work
+SELECT create_distributed_table ('dropfkeytest2', 'x', colocate_with:='none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
 -- we no longer need those tables
-DROP TABLE referenced_by_reference_table, references_to_reference_table, reference_table, reference_table_second, referenced_local_table, self_referencing_reference_table;
+DROP TABLE referenced_by_reference_table, references_to_reference_table, reference_table, reference_table_second, referenced_local_table, self_referencing_reference_table, dropfkeytest2;
