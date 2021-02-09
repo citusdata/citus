@@ -38,7 +38,10 @@ typedef enum AdvisoryLocktagClass
 	ADV_LOCKTAG_CLASS_CITUS_JOB = 6,
 	ADV_LOCKTAG_CLASS_CITUS_REBALANCE_COLOCATION = 7,
 	ADV_LOCKTAG_CLASS_CITUS_COLOCATED_SHARDS_METADATA = 8,
-	ADV_LOCKTAG_CLASS_CITUS_OPERATIONS = 9
+	ADV_LOCKTAG_CLASS_CITUS_OPERATIONS = 9,
+
+	/* Columnar lock types */
+	ADV_LOCKTAG_CLASS_COLUMNAR_STRIPE_RESERVATION = 10
 } AdvisoryLocktagClass;
 
 /* CitusOperations has constants for citus operations */
@@ -97,6 +100,13 @@ typedef enum CitusOperations
 						 (uint32) 0, \
 						 (uint32) operationId, \
 						 ADV_LOCKTAG_CLASS_CITUS_OPERATIONS)
+
+#define SET_LOCKTAG_COLUMNAR_STRIPE_RESERVATION(tag, relation) \
+	SET_LOCKTAG_ADVISORY(tag, \
+						 relation->rd_lockInfo.lockRelId.dbId, \
+						 relation->rd_lockInfo.lockRelId.relId, \
+						 0, \
+						 ADV_LOCKTAG_CLASS_COLUMNAR_STRIPE_RESERVATION)
 
 /* Lock shard/relation metadata for safe modifications */
 extern void LockShardDistributionMetadata(int64 shardId, LOCKMODE lockMode);
