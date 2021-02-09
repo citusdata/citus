@@ -44,3 +44,20 @@ EXCEPTION WHEN invalid_parameter_value THEN
    return false;
 END;
 $$ LANGUAGE plpgsql;
+
+
+-- are chunk groups and chunks consistent?
+CREATE view chunk_group_consistency AS
+WITH a as (
+   SELECT storageid, stripeid, chunkid, min(value_count) as row_count
+   FROM columnar.chunk
+   GROUP BY 1,2,3
+), b as (
+   SELECT storageid, stripeid, chunkid, max(value_count) as row_count
+   FROM columnar.chunk
+   GROUP BY 1,2,3
+), c as (
+   (TABLE a EXCEPT TABLE b) UNION (TABLE b EXCEPT TABLE a) UNION
+   (TABLE a EXCEPT TABLE columnar.chunk_group) UNION (TABLE columnar.chunk_group EXCEPT TABLE a)
+)
+SELECT count(*) = 0 AS consistent FROM c;

@@ -20,6 +20,8 @@ SELECT count(*) FROM t_stripes;
 -- vacuum full should merge stripes together
 VACUUM FULL t;
 
+SELECT * FROM chunk_group_consistency;
+
 SELECT sum(a), sum(b) FROM t;
 SELECT count(*) FROM t_stripes;
 
@@ -31,6 +33,8 @@ SELECT sum(a), sum(b) FROM t;
 SELECT count(*) FROM t_stripes;
 
 VACUUM FULL t;
+
+SELECT * FROM chunk_group_consistency;
 
 SELECT sum(a), sum(b) FROM t;
 SELECT count(*) FROM t_stripes;
@@ -92,6 +96,8 @@ COMMIT;
 
 VACUUM VERBOSE t;
 
+SELECT * FROM chunk_group_consistency;
+
 SELECT count(*) FROM t;
 
 -- check that we report chunks with data for dropped columns
@@ -108,6 +114,8 @@ SELECT alter_columnar_table_set('t', compression => 'pglz');
 VACUUM FULL t;
 VACUUM VERBOSE t;
 
+SELECT * FROM chunk_group_consistency;
+
 DROP TABLE t;
 DROP VIEW t_stripes;
 
@@ -122,5 +130,7 @@ CREATE TABLE t(a int, b char, c text) USING columnar;
 INSERT INTO t SELECT 1, 'a', 'xyz' FROM generate_series(1, 1000000) i;
 
 VACUUM VERBOSE t;
+
+SELECT * FROM chunk_group_consistency;
 
 DROP TABLE t;

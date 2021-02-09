@@ -507,12 +507,13 @@ SELECT * FROM print_extension_changes();
                                                                                  | schema columnar
                                                                                  | sequence columnar.storageid_seq
                                                                                  | table columnar.chunk
+                                                                                 | table columnar.chunk_group
                                                                                  | table columnar.options
                                                                                  | table columnar.stripe
                                                                                  | view citus_shards
                                                                                  | view citus_tables
                                                                                  | view time_partitions
-(66 rows)
+(67 rows)
 
 DROP TABLE prev_objects, extension_diff;
 -- show running version

@@ -72,6 +72,12 @@ SELECT * FROM t2;
  5 | 6
 (5 rows)
 
+SELECT * FROM chunk_group_consistency;
+ consistent
+---------------------------------------------------------------------
+ t
+(1 row)
+
 TRUNCATE t1;
 TRUNCATE t2;
 --
@@ -101,6 +107,12 @@ SELECT * FROM t2;
  3 | 0
 (3 rows)
 
+SELECT * FROM chunk_group_consistency;
+ consistent
+---------------------------------------------------------------------
+ t
+(1 row)
+
 TRUNCATE t1;
 TRUNCATE t2;
 --
@@ -124,6 +136,12 @@ SELECT * FROM t1 ORDER BY a, b;
  5 |  6
  5 | 10
 (10 rows)
+
+SELECT * FROM chunk_group_consistency;
+ consistent
+---------------------------------------------------------------------
+ t
+(1 row)
 
 TRUNCATE t1;
 TRUNCATE t2;
@@ -165,6 +183,12 @@ SELECT * FROM t2 ORDER BY a, b;
  5 | 5
 (5 rows)
 
+SELECT * FROM chunk_group_consistency;
+ consistent
+---------------------------------------------------------------------
+ t
+(1 row)
+
 TRUNCATE t1, t2, t3, t4;
 --
 -- INSERT into the same relation that was INSERTed into in the UDF
@@ -203,6 +227,12 @@ SELECT * FROM t3 ORDER BY a, b;
  a | b
 ---------------------------------------------------------------------
 (0 rows)
+
+SELECT * FROM chunk_group_consistency;
+ consistent
+---------------------------------------------------------------------
+ t
+(1 row)
 
 DROP FUNCTION g(int), g2(int);
 TRUNCATE t1, t2, t3, t4;
@@ -247,6 +277,12 @@ SELECT * FROM t1 ORDER BY a, b;
  22 | 44
  23 | 46
 (10 rows)
+
+SELECT * FROM chunk_group_consistency;
+ consistent
+---------------------------------------------------------------------
+ t
+(1 row)
 
 DROP FUNCTION f(int);
 DROP TABLE t1, t2, t3, t4;
