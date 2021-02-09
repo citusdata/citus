@@ -1885,6 +1885,12 @@ GetRestrictInfoListForRelation(RangeTblEntry *rangeTblEntry,
 			continue;
 		}
 
+		/* Currently we don't know how to process Subplans */
+		if (IsA(restrictionClause, SubPlan))
+		{
+			continue;
+		}
+
 		/*
 		 * If the restriction involves multiple tables, we cannot add it to
 		 * input relation's expression list.

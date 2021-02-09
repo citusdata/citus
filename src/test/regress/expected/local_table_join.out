@@ -1324,7 +1324,37 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS c
      0
 (1 row)
 
+--Issue 4678
+create table tbl (a int);
+select create_distributed_table('tbl', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+select 1 from (
+  select 1 from (
+    select 1 from
+      pg_catalog.pg_type,
+      lateral (
+        select 1 from tbl
+        where typdefault ~ null
+        limit 1) as subq_0
+    where (
+      select true from pg_catalog.pg_am
+      where typdefault > 'a'
+    )
+  ) as subq_1
+) as subq_2;
+DEBUG:  Wrapping relation "pg_type" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT typdefault FROM pg_type WHERE true
+DEBUG:  generating subplan XXX_2 for subquery SELECT 1 FROM (SELECT NULL::oid AS oid, NULL::name AS typname, NULL::oid AS typnamespace, NULL::oid AS typowner, NULL::smallint AS typlen, NULL::boolean AS typbyval, NULL::"char" AS typtype, NULL::"char" AS typcategory, NULL::boolean AS typispreferred, NULL::boolean AS typisdefined, NULL::"char" AS typdelim, NULL::oid AS typrelid, NULL::oid AS typelem, NULL::oid AS typarray, NULL::regproc AS typinput, NULL::regproc AS typoutput, NULL::regproc AS typreceive, NULL::regproc AS typsend, NULL::regproc AS typmodin, NULL::regproc AS typmodout, NULL::regproc AS typanalyze, NULL::"char" AS typalign, NULL::"char" AS typstorage, NULL::boolean AS typnotnull, NULL::oid AS typbasetype, NULL::integer AS typtypmod, NULL::integer AS typndims, NULL::oid AS typcollation, NULL::pg_node_tree COLLATE "C" AS typdefaultbin, pg_type_1.typdefault, NULL::aclitem[] AS typacl FROM (SELECT intermediate_result.typdefault FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(typdefault text COLLATE "C")) pg_type_1) pg_type, LATERAL (SELECT 1 FROM local_table_join.tbl WHERE (pg_type.typdefault OPERATOR(pg_catalog.~) NULL::text) LIMIT 1) subq_0("?column?") WHERE (SELECT true AS bool FROM pg_am WHERE (pg_type.typdefault OPERATOR(pg_catalog.>) 'a'::text))
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT 1 FROM (SELECT 1 FROM (SELECT intermediate_result."?column?" FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result("?column?" integer)) subq_1("?column?")) subq_2("?column?")
+ ?column?
+---------------------------------------------------------------------
+(0 rows)
+
 RESET client_min_messages;
 \set VERBOSITY terse
 DROP SCHEMA local_table_join CASCADE;
-NOTICE:  drop cascades to 16 other objects
+NOTICE:  drop cascades to 17 other objects

@@ -335,6 +335,25 @@ ALTER TABLE local DROP column key3;
 ALTER TABLE local DROP column key1;
 SELECT COUNT(*) FROM distributed_table JOIN local ON distributed_table.value = 'text';
 
+--Issue 4678
+
+create table tbl (a int);
+select create_distributed_table('tbl', 'a');
+
+select 1 from (
+  select 1 from (
+    select 1 from
+      pg_catalog.pg_type,
+      lateral (
+        select 1 from tbl
+        where typdefault ~ null
+        limit 1) as subq_0
+    where (
+      select true from pg_catalog.pg_am
+      where typdefault > 'a'
+    )
+  ) as subq_1
+) as subq_2;
 
 RESET client_min_messages;
 \set VERBOSITY terse
