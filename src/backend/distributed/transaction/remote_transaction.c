@@ -807,18 +807,14 @@ CoordinatedRemoteTransactionsPrepare(void)
 
 		if (transaction->transactionState != REMOTE_TRANS_PREPARING)
 		{
+			/*
+			 * Verify that the connection didn't modify any placement
+			 */
+			Assert(!ConnectionModifiedPlacement(connection));
 			continue;
 		}
 
-		/*
-		 * Check if any DML or DDL is executed over the connection on any
-		 * placement/table. If yes, we finish preparing the transaction, otherwise
-		 * we skip prepare since the connection didn't perform any write (read-only)
-		 */
-		if (ConnectionModifiedPlacement(connection))
-		{
-			FinishRemoteTransactionPrepare(connection);
-		}
+		FinishRemoteTransactionPrepare(connection);
 	}
 
 	CurrentCoordinatedTransactionState = COORD_TRANS_PREPARED;
