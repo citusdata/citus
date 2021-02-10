@@ -25,6 +25,7 @@
 #include "distributed/lock_graph.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/remote_commands.h"
+#include "distributed/resource_lock.h"
 #include "distributed/tuplestore.h"
 #include "storage/proc.h"
 #include "utils/builtins.h"
@@ -471,9 +472,18 @@ IsProcessWaitingForSafeOperations(PGPROC *proc)
 	PROCLOCK *waitProcLock = proc->waitProcLock;
 	LOCK *waitLock = waitProcLock->tag.myLock;
 
+	/*
+	 * Stripe reservation locks are temporary & don't hold until end of
+	 * transaction, so we shouldn't include them in the lock graph.
+	 */
+	bool stripeReservationLock =
+		waitLock->tag.locktag_type == LOCKTAG_ADVISORY &&
+		waitLock->tag.locktag_field4 == ADV_LOCKTAG_CLASS_COLUMNAR_STRIPE_RESERVATION;
+
 	return waitLock->tag.locktag_type == LOCKTAG_RELATION_EXTEND ||
 		   waitLock->tag.locktag_type == LOCKTAG_PAGE ||
-		   waitLock->tag.locktag_type == LOCKTAG_SPECULATIVE_TOKEN;
+		   waitLock->tag.locktag_type == LOCKTAG_SPECULATIVE_TOKEN ||
+		   stripeReservationLock;
 }
 
 
