@@ -45,7 +45,6 @@ CREATE TABLE chunk (
     stripeid bigint NOT NULL,
     attnum int NOT NULL,
     chunkid int NOT NULL,
-    value_count bigint NOT NULL,
     minimum_value bytea,
     maximum_value bytea,
     value_stream_offset bigint NOT NULL,
@@ -55,6 +54,7 @@ CREATE TABLE chunk (
     value_compression_type int NOT NULL,
     value_compression_level int NOT NULL,
     value_decompressed_length bigint NOT NULL,
+    value_count bigint NOT NULL,
     PRIMARY KEY (storageid, stripeid, attnum, chunkid),
     FOREIGN KEY (storageid, stripeid, chunkid) REFERENCES chunk_group(storageid, stripeid, chunkid) ON DELETE CASCADE
 ) WITH (user_catalog_table = true);
