@@ -6,7 +6,7 @@ CREATE TABLE t(a int, b int) USING columnar;
 
 CREATE VIEW t_stripes AS
 SELECT * FROM columnar.stripe a, pg_class b
-WHERE a.storageid = columnar_relation_storageid(b.oid) AND b.relname = 't';
+WHERE a.storage_id = columnar_relation_storageid(b.oid) AND b.relname = 't';
 
 BEGIN;
 INSERT INTO t SELECT i, i+1 FROM generate_series(1, 10) i;

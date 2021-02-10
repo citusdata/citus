@@ -49,11 +49,11 @@ $$ LANGUAGE plpgsql;
 -- are chunk groups and chunks consistent?
 CREATE view chunk_group_consistency AS
 WITH a as (
-   SELECT storageid, stripeid, chunkid, min(value_count) as row_count
+   SELECT storage_id, stripe_num, chunk_num, min(value_count) as row_count
    FROM columnar.chunk
    GROUP BY 1,2,3
 ), b as (
-   SELECT storageid, stripeid, chunkid, max(value_count) as row_count
+   SELECT storage_id, stripe_num, chunk_num, max(value_count) as row_count
    FROM columnar.chunk
    GROUP BY 1,2,3
 ), c as (

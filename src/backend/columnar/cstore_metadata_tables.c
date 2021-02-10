@@ -153,16 +153,16 @@ typedef FormData_columnar_options *Form_columnar_options;
 #define Anum_columnar_chunk_stripe 2
 #define Anum_columnar_chunk_attr 3
 #define Anum_columnar_chunk_chunk 4
-#define Anum_columnar_chunk_value_count 5
-#define Anum_columnar_chunk_minimum_value 6
-#define Anum_columnar_chunk_maximum_value 7
-#define Anum_columnar_chunk_value_stream_offset 8
-#define Anum_columnar_chunk_value_stream_length 9
-#define Anum_columnar_chunk_exists_stream_offset 10
-#define Anum_columnar_chunk_exists_stream_length 11
-#define Anum_columnar_chunk_value_compression_type 12
-#define Anum_columnar_chunk_value_compression_level 13
-#define Anum_columnar_chunk_value_decompressed_size 14
+#define Anum_columnar_chunk_minimum_value 5
+#define Anum_columnar_chunk_maximum_value 6
+#define Anum_columnar_chunk_value_stream_offset 7
+#define Anum_columnar_chunk_value_stream_length 8
+#define Anum_columnar_chunk_exists_stream_offset 9
+#define Anum_columnar_chunk_exists_stream_length 10
+#define Anum_columnar_chunk_value_compression_type 11
+#define Anum_columnar_chunk_value_compression_level 12
+#define Anum_columnar_chunk_value_decompressed_size 13
+#define Anum_columnar_chunk_value_count 14
 
 
 /*
@@ -430,7 +430,6 @@ SaveStripeSkipList(RelFileNode relfilenode, uint64 stripe, StripeSkipList *chunk
 				Int64GetDatum(stripe),
 				Int32GetDatum(columnIndex + 1),
 				Int32GetDatum(chunkIndex),
-				Int64GetDatum(chunk->rowCount),
 				0, /* to be filled below */
 				0, /* to be filled below */
 				Int64GetDatum(chunk->valueChunkOffset),
@@ -439,7 +438,8 @@ SaveStripeSkipList(RelFileNode relfilenode, uint64 stripe, StripeSkipList *chunk
 				Int64GetDatum(chunk->existsLength),
 				Int32GetDatum(chunk->valueCompressionType),
 				Int32GetDatum(chunk->valueCompressionLevel),
-				Int64GetDatum(chunk->decompressedValueSize)
+				Int64GetDatum(chunk->decompressedValueSize),
+				Int64GetDatum(chunk->rowCount)
 			};
 
 			bool nulls[Natts_columnar_chunk] = { false };
