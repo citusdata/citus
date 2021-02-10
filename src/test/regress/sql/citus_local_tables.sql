@@ -300,7 +300,7 @@ CREATE TYPE local_type AS (key int, value jsonb);
 -- create btree_gist for GiST index
 CREATE EXTENSION btree_gist;
 
-CREATE TABLE "LocalTabLE.1!?!"(
+CREATE TABLE "LocalTabLE.1!?!9012345678901234567890123456789012345678901234567890123456789"(
   id int PRIMARY KEY,
   "TeNANt_Id" int,
   "local_Type" local_type,
@@ -311,22 +311,33 @@ CREATE TABLE "LocalTabLE.1!?!"(
   EXCLUDE USING GIST (name WITH =));
 
 -- create some objects before citus_add_local_table_to_metadata
-CREATE INDEX "my!Index1" ON "LocalTabLE.1!?!"(id) WITH ( fillfactor = 80 ) WHERE  id > 10;
-CREATE UNIQUE INDEX uniqueIndex ON "LocalTabLE.1!?!" (id);
+CREATE INDEX "my!Index1" ON "LocalTabLE.1!?!9012345678901234567890123456789012345678901234567890123456789"(id) WITH ( fillfactor = 80 ) WHERE  id > 10;
+CREATE UNIQUE INDEX uniqueIndex ON "LocalTabLE.1!?!9012345678901234567890123456789012345678901234567890123456789" (id);
 
 -- ingest some data before citus_add_local_table_to_metadata
-INSERT INTO "LocalTabLE.1!?!" VALUES (1, 1, (1, row_to_json(row(1,1)))::local_type, row_to_json(row(1,1), true)),
+INSERT INTO "LocalTabLE.1!?!9012345678901234567890123456789012345678901234567890123456789" VALUES (1, 1, (1, row_to_json(row(1,1)))::local_type, row_to_json(row(1,1), true)),
                                      (2, 1, (2, row_to_json(row(2,2)))::local_type, row_to_json(row(2,2), 'false'));
 
 -- create a replica identity before citus_add_local_table_to_metadata
-ALTER TABLE "LocalTabLE.1!?!" REPLICA IDENTITY USING INDEX uniqueIndex;
+ALTER TABLE "LocalTabLE.1!?!9012345678901234567890123456789012345678901234567890123456789" REPLICA IDENTITY USING INDEX uniqueIndex;
+
+CREATE FUNCTION update_id() RETURNS trigger AS $update_id$
+BEGIN
+    UPDATE "CiTUS!LocalTables"."LocalTabLE.1!?!9012345678901234567890123456789012345678901234567890123456789" SET id=id+1;
+    RETURN NEW;
+END;
+$update_id$ LANGUAGE plpgsql;
+
+CREATE TRIGGER insert_trigger
+AFTER INSERT ON "CiTUS!LocalTables"."LocalTabLE.1!?!9012345678901234567890123456789012345678901234567890123456789"
+FOR EACH STATEMENT EXECUTE FUNCTION update_id();
 
 -- this shouldn't give any syntax errors
-SELECT citus_add_local_table_to_metadata('"LocalTabLE.1!?!"');
+SELECT citus_add_local_table_to_metadata('"LocalTabLE.1!?!9012345678901234567890123456789012345678901234567890123456789"');
 
 -- create some objects after citus_add_local_table_to_metadata
-CREATE INDEX "my!Index2" ON "LocalTabLE.1!?!"(id) WITH ( fillfactor = 90 ) WHERE id < 20;
-CREATE UNIQUE INDEX uniqueIndex2 ON "LocalTabLE.1!?!"(id);
+CREATE INDEX "my!Index2" ON "LocalTabLE.1!?!9012345678901234567890123456789012345678901234567890123456789"(id) WITH ( fillfactor = 90 ) WHERE id < 20;
+CREATE UNIQUE INDEX uniqueIndex2 ON "LocalTabLE.1!?!9012345678901234567890123456789012345678901234567890123456789"(id);
 
 -----------------------------------
 ---- utility command execution ----
@@ -355,7 +366,7 @@ ALTER TABLE citus_local_table_1 ADD CONSTRAINT fkey_to_dummy_ref FOREIGN KEY (a)
 ALTER TABLE citus_local_table_2 ADD CONSTRAINT fkey_to_dummy_ref FOREIGN KEY (a) REFERENCES dummy_reference_table(a);
 ALTER TABLE unlogged_table ADD CONSTRAINT fkey_to_dummy_ref FOREIGN KEY (a) REFERENCES dummy_reference_table(a);
 ALTER TABLE local_table_3 ADD CONSTRAINT fkey_to_dummy_ref FOREIGN KEY (a) REFERENCES dummy_reference_table(a);
-ALTER TABLE dummy_reference_table ADD CONSTRAINT fkey_from_dummy_ref FOREIGN KEY (a) REFERENCES "CiTUS!LocalTables"."LocalTabLE.1!?!"(id);
+ALTER TABLE dummy_reference_table ADD CONSTRAINT fkey_from_dummy_ref FOREIGN KEY (a) REFERENCES "CiTUS!LocalTables"."LocalTabLE.1!?!9012345678901234567890123456789012345678901234567890123456789"(id);
 
 BEGIN;
   SET client_min_messages TO ERROR;
