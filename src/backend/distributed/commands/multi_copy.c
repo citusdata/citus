@@ -121,7 +121,7 @@ static const char BinarySignature[11] = "PGCOPY\n\377\r\n\0";
  * 4MB is a good balance between memory usage and performance. Note that this
  * is irrelevant in the common case where we open one connection per placement.
  */
-#define COPY_SWITCH_OVER_THRESHOLD (4 * 1024 * 1024)
+int CopySwitchOverThresholdBytes = 4 * 1024 * 1024;
 
 #define FILE_IS_OPEN(x) (x > -1)
 
@@ -2513,7 +2513,7 @@ CitusSendTupleToPlacements(TupleTableSlot *slot, CitusCopyDestReceiver *copyDest
 			switchToCurrentPlacement = true;
 		}
 		else if (currentPlacementState != activePlacementState &&
-				 currentPlacementState->data->len > COPY_SWITCH_OVER_THRESHOLD)
+				 currentPlacementState->data->len > CopySwitchOverThresholdBytes)
 		{
 			switchToCurrentPlacement = true;
 

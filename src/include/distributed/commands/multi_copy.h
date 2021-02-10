@@ -141,6 +141,10 @@ typedef struct CitusCopyDestReceiver
 } CitusCopyDestReceiver;
 
 
+/* managed via GUC, the default is 4MB */
+extern int CopySwitchOverThresholdBytes;
+
+
 /* function declarations for copying into a distributed table */
 extern CitusCopyDestReceiver * CreateCitusCopyDestReceiver(Oid relationId,
 														   List *columnNameList,
