@@ -290,11 +290,22 @@ CREATE INDEX single_node_i1 ON test(x);
 CREATE INDEX single_node_i2 ON test(x,y);
 REINDEX SCHEMA single_node;
 
+CREATE INDEX CONCURRENTLY test_concurrent_idx_x ON test(x);
+CREATE INDEX CONCURRENTLY test_concurrent_idx_y ON test(x);
+
 -- PG 11 does not support CONCURRENTLY
 -- and we do not want to add a new output
--- file just for that. Enable the test
--- once we remove PG_VERSION_11
---REINDEX SCHEMA CONCURRENTLY single_node;
+-- file just for that. Enable REINDEX CONCURRENTLY
+-- tests only when pg version > 11:
+
+SELECT substring(current_Setting('server_version'), '\d+')::int > 11 AS server_version_above_eleven
+\gset
+\if :server_version_above_eleven
+REINDEX INDEX CONCURRENTLY test_concurrent_idx_x;
+REINDEX INDEX CONCURRENTLY test_concurrent_idx_y;
+REINDEX TABLE CONCURRENTLY test;
+REINDEX SCHEMA single_node;
+\endif
 
 -- keep one of the indexes
 -- drop w/wout tx blocks

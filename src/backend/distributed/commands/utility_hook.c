@@ -912,6 +912,20 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 		{
 			CommitTransactionCommand();
 			StartTransactionCommand();
+
+			/*
+			 * Even if we started a new transaction, now we still hold
+			 * ExclusiveLock (acquired by VirtualXactLockTableInsert) on current
+			 * vxid and it is not released yet since it is only released when
+			 * a toplevel transaction ends.
+			 * Moreover, command to be executed on shard relation would attempt
+			 * to acquire ShareLock on the same vxid since postgres calls
+			 * WaitForOlderSnapshots function when executing CREATE INDEX (or
+			 * REINDEX) CONCURRENTLY commands.
+			 * To prevent self-deadlock, we release lock on vxid by explicitly
+			 * calling VirtualXactLockTableCleanup.
+			 */
+			VirtualXactLockTableCleanup();
 		}
 
 		/* save old commit protocol to restore at xact end */
