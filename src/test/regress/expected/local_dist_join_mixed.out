@@ -1182,9 +1182,9 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS c
 
 -- w count(*) it works fine as PG ignores the  inner tables
 SELECT count(*) FROM distributed LEFT JOIN local USING (id);
-DEBUG:  Wrapping relation "distributed" to a subquery
-DEBUG:  generating subplan XXX_1 for subquery SELECT id FROM local_dist_join_mixed.distributed WHERE true
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT NULL::integer AS "dummy-1", distributed_1.id, NULL::text AS name, NULL::timestamp with time zone AS created_at FROM (SELECT intermediate_result.id FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint)) distributed_1) distributed LEFT JOIN local_dist_join_mixed.local USING (id))
+DEBUG:  Wrapping relation "local" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT NULL::integer AS "dummy-1" FROM local_dist_join_mixed.local WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (local_dist_join_mixed.distributed LEFT JOIN (SELECT NULL::integer AS "dummy-1", NULL::bigint AS id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result."dummy-1" FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result("dummy-1" integer)) local_1) local USING (id))
  count
 ---------------------------------------------------------------------
    101
@@ -1200,9 +1200,10 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS c
 (1 row)
 
 SELECT id, name FROM distributed LEFT JOIN local USING (id) ORDER BY 1 LIMIT 1;
-DEBUG:  Wrapping relation "distributed" to a subquery
-DEBUG:  generating subplan XXX_1 for subquery SELECT id, name FROM local_dist_join_mixed.distributed WHERE true
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT distributed.id, distributed.name FROM ((SELECT NULL::integer AS "dummy-1", distributed_1.id, distributed_1.name, NULL::timestamp with time zone AS created_at FROM (SELECT intermediate_result.id, intermediate_result.name FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, name text)) distributed_1) distributed LEFT JOIN local_dist_join_mixed.local USING (id)) ORDER BY distributed.id LIMIT 1
+DEBUG:  Wrapping relation "local" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT NULL::integer AS "dummy-1" FROM local_dist_join_mixed.local WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT distributed.id, distributed.name FROM (local_dist_join_mixed.distributed LEFT JOIN (SELECT NULL::integer AS "dummy-1", NULL::bigint AS id, NULL::integer AS "dummy-3", NULL::text AS title, NULL::integer AS "dummy-5" FROM (SELECT intermediate_result."dummy-1" FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result("dummy-1" integer)) local_1) local USING (id)) ORDER BY distributed.id LIMIT 1
+DEBUG:  push down of limit count: 1
  id | name
 ---------------------------------------------------------------------
   0 | 0

@@ -413,6 +413,33 @@ WHERE distributed_table_pkey.key IN (SELECT key FROM distributed_table_pkey WHER
 SELECT COUNT(*) FROM distributed_table_pkey JOIN postgres_table using(key)
 WHERE distributed_table_pkey.key IN (SELECT key FROM distributed_table_pkey WHERE key = 5) AND distributed_table_pkey.key = 5;
 
+-- issue 4682
+create table tbl1 (a int, b int, c int, d int);
+INSERT INTO tbl1 SELECT i,i,i,i FROM generate_series(1,10) i;
+
+create table custom_pg_operator(oprname text);
+INSERT INTO custom_pg_operator values('a');
+
+-- try with local tables to make sure the results are same when tbl1 is distributed
+select COUNT(*) from
+  custom_pg_operator
+  inner join tbl1 on (select 1 from custom_pg_type) >= d
+  left join pg_dist_rebalance_strategy on 'by_shard_count' = name
+where a + b + c > 0;
+
+select create_distributed_table('tbl1', 'a');
+
+-- there is a different output in pg11 and in this query the debug messages are not
+-- as important as the others so we use notice
+set client_min_messages to NOTICE;
+select COUNT(*) from
+  custom_pg_operator
+  inner join tbl1 on (select 1 from custom_pg_type) >= d
+  left join pg_dist_rebalance_strategy on 'by_shard_count' = name
+where a + b + c > 0;
+SET client_min_messages to DEBUG1;
+
+
 RESET client_min_messages;
 \set VERBOSITY terse
 DROP SCHEMA local_table_join CASCADE;
