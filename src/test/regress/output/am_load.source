@@ -39,4 +39,10 @@ SELECT * FROM famous_constants ORDER BY id, name;
     | speed of light | 2.997e+08
 (8 rows)
 
+SELECT * FROM chunk_group_consistency;
+ consistent
+---------------------------------------------------------------------
+ t
+(1 row)
+
 DROP TABLE famous_constants;

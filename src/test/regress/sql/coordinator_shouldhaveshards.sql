@@ -221,7 +221,7 @@ SELECT create_distributed_table('dist_table1', 'a');
 ROLLBACK;
 
 RESET citus.enable_cte_inlining;
-CREATE table ref_table(x int, y int);
+CREATE table ref_table(x int PRIMARY KEY, y int);
 -- this will be replicated to the coordinator because of add_coordinator test
 SELECT create_reference_table('ref_table');
 
@@ -232,6 +232,14 @@ INSERT INTO test SELECT *, * FROM generate_series(1, 100);
 INSERT INTO ref_table SELECT *, * FROM generate_series(1, 100);
 SELECT COUNT(*) FROM test JOIN ref_table USING(x);
 ROLLBACK;
+
+-- writing to local file and remote intermediate files
+-- at the same time
+INSERT INTO ref_table SELECT *, * FROM generate_series(1, 100);
+
+WITH cte_1 AS (
+INSERT INTO ref_table SELECT * FROM ref_table LIMIT 10000 ON CONFLICT (x) DO UPDATE SET y = EXCLUDED.y + 1 RETURNING *)
+SELECT count(*) FROM cte_1;
 
 -- issue #4237: preventing empty placement creation on coordinator
 CREATE TABLE test_append_table(a int);

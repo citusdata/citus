@@ -43,4 +43,6 @@ speed of light,2.997e8
 
 SELECT * FROM famous_constants ORDER BY id, name;
 
+SELECT * FROM chunk_group_consistency;
+
 DROP TABLE famous_constants;

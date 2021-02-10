@@ -45,6 +45,8 @@ struct TableWriteState
 	ColumnarOptions options;
 	ChunkData *chunkData;
 
+	List *chunkGroupRowCounts;
+
 	/*
 	 * compressionBuffer buffer is used as temporary storage during
 	 * data value compression operation. It is kept here to minimize
@@ -445,7 +447,7 @@ FlushStripe(TableWriteState *writeState)
 	uint32 lastChunkIndex = stripeBuffers->rowCount / chunkRowCount;
 	uint32 lastChunkRowCount = stripeBuffers->rowCount % chunkRowCount;
 	uint64 stripeSize = 0;
-	uint64 stripeRowCount = 0;
+	uint64 stripeRowCount = stripeBuffers->rowCount;
 
 	elog(DEBUG1, "Flushing Stripe of size %d", stripeBuffers->rowCount);
 
@@ -498,12 +500,6 @@ FlushStripe(TableWriteState *writeState)
 		}
 	}
 
-	for (chunkIndex = 0; chunkIndex < chunkCount; chunkIndex++)
-	{
-		stripeRowCount +=
-			stripeSkipList->chunkSkipNodeArray[0][chunkIndex].rowCount;
-	}
-
 	stripeMetadata = ReserveStripe(relation, stripeSize,
 								   stripeRowCount, columnCount, chunkCount,
 								   chunkRowCount);
@@ -548,10 +544,14 @@ FlushStripe(TableWriteState *writeState)
 		}
 	}
 
-	/* create skip list and footer buffers */
+	SaveChunkGroups(writeState->relfilenode,
+					stripeMetadata.id,
+					writeState->chunkGroupRowCounts);
 	SaveStripeSkipList(writeState->relfilenode,
 					   stripeMetadata.id,
 					   stripeSkipList, tupleDescriptor);
+
+	writeState->chunkGroupRowCounts = NIL;
 
 	relation_close(relation, NoLock);
 }
@@ -639,6 +639,9 @@ SerializeChunkData(TableWriteState *writeState, uint32 chunkIndex, uint32 rowCou
 	int compressionLevel = writeState->options.compressionLevel;
 	const uint32 columnCount = stripeBuffers->columnCount;
 	StringInfo compressionBuffer = writeState->compressionBuffer;
+
+	writeState->chunkGroupRowCounts =
+		lappend_int(writeState->chunkGroupRowCounts, rowCount);
 
 	/* serialize exist values, data values are already serialized */
 	for (columnIndex = 0; columnIndex < columnCount; columnIndex++)

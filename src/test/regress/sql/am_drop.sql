@@ -15,14 +15,14 @@
 -- store postgres database oid
 SELECT oid postgres_oid FROM pg_database WHERE datname = 'postgres' \gset
 
-SELECT count(distinct storageid) AS columnar_stripes_before_drop FROM columnar.stripe \gset
+SELECT count(distinct storage_id) AS columnar_stripes_before_drop FROM columnar.stripe \gset
 
 -- DROP columnar tables
 DROP TABLE contestant;
 DROP TABLE contestant_compressed;
 
 -- make sure DROP deletes metadata
-SELECT :columnar_stripes_before_drop - count(distinct storageid) FROM columnar.stripe;
+SELECT :columnar_stripes_before_drop - count(distinct storage_id) FROM columnar.stripe;
 
 -- Create a columnar table under a schema and drop it.
 CREATE SCHEMA test_schema;
@@ -31,7 +31,7 @@ INSERT INTO test_schema.test_table VALUES (1);
 
 SELECT count(*) AS columnar_stripes_before_drop FROM columnar.stripe \gset
 DROP SCHEMA test_schema CASCADE;
-SELECT :columnar_stripes_before_drop - count(distinct storageid) FROM columnar.stripe;
+SELECT :columnar_stripes_before_drop - count(distinct storage_id) FROM columnar.stripe;
 
 SELECT current_database() datname \gset
 

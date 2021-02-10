@@ -287,6 +287,8 @@ extern StripeMetadata ReserveStripe(Relation rel, uint64 size,
 extern void SaveStripeSkipList(RelFileNode relfilenode, uint64 stripe,
 							   StripeSkipList *stripeSkipList,
 							   TupleDesc tupleDescriptor);
+extern void SaveChunkGroups(RelFileNode relfilenode, uint64 stripe,
+							List *chunkGroupRowCounts);
 extern StripeSkipList * ReadStripeSkipList(RelFileNode relfilenode, uint64 stripe,
 										   TupleDesc tupleDescriptor,
 										   uint32 chunkCount);

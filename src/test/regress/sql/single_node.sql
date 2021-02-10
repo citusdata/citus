@@ -79,6 +79,10 @@ CREATE TABLE local(c int, d int);
 CREATE TABLE public.another_schema_table(a int, b int);
 SELECT create_distributed_table('public.another_schema_table', 'a');
 
+CREATE TABLE non_binary_copy_test (key int PRIMARY KEY, value new_type);
+SELECT create_distributed_table('non_binary_copy_test', 'key');
+INSERT INTO non_binary_copy_test SELECT i, (i, 'citus9.5')::new_type FROM generate_series(0,1000)i;
+
 -- Confirm the basics work
 INSERT INTO test VALUES (1, 2), (3, 4), (5, 6), (2, 7), (4, 5);
 SELECT * FROM test WHERE x = 1;
@@ -783,7 +787,6 @@ ROLLBACK;
 \c - - - :master_port
 SET search_path TO single_node;
 
-
 -- simulate that even if there is no connection slots
 -- to connect, Citus can switch to local execution
 SET citus.force_max_query_parallelization TO false;
@@ -817,9 +820,48 @@ ROLLBACK;
 WITH cte_1 AS (SELECT * FROM another_schema_table LIMIT 1000)
 	SELECT count(*) FROM cte_1;
 
+-- this is to get ready for the next tests
+TRUNCATE another_schema_table;
+
 -- copy can use local execution even if there is no connection available
 COPY another_schema_table(a) FROM PROGRAM 'seq 32';
 
+-- INSERT .. SELECT with co-located intermediate results
+SET citus.log_remote_commands to false;
+CREATE UNIQUE INDEX another_schema_table_pk ON another_schema_table(a);
+
+SET citus.log_local_commands to true;
+INSERT INTO another_schema_table SELECT * FROM another_schema_table LIMIT 10000 ON CONFLICT(a) DO NOTHING;
+INSERT INTO another_schema_table SELECT * FROM another_schema_table ORDER BY a LIMIT 10 ON CONFLICT(a) DO UPDATE SET b = EXCLUDED.b + 1 RETURNING *;
+
+-- INSERT .. SELECT with co-located intermediate result for non-binary input
+WITH cte_1 AS
+(INSERT INTO non_binary_copy_test SELECT * FROM non_binary_copy_test LIMIT 10000 ON CONFLICT (key) DO UPDATE SET value = (0, 'citus0')::new_type RETURNING value)
+SELECT count(*) FROM cte_1;
+
+-- test with NULL columns
+ALTER TABLE non_binary_copy_test ADD COLUMN z INT;
+WITH cte_1 AS
+(INSERT INTO non_binary_copy_test SELECT * FROM non_binary_copy_test LIMIT 10000 ON CONFLICT (key) DO UPDATE SET value = (0, 'citus0')::new_type RETURNING z)
+SELECT bool_and(z is null) FROM cte_1;
+
+-- test with type coersion (int -> text) and also NULL values with coersion
+WITH cte_1 AS
+(INSERT INTO non_binary_copy_test SELECT * FROM non_binary_copy_test LIMIT 10000 ON CONFLICT (key) DO UPDATE SET value = (0, 'citus0')::new_type RETURNING key, z)
+SELECT count(DISTINCT key::text), count(DISTINCT z::text) FROM cte_1;
+
+-- lets flush the copy often to make sure everyhing is fine
+SET citus.local_copy_flush_threshold TO 1;
+TRUNCATE another_schema_table;
+INSERT INTO another_schema_table(a) SELECT i from generate_Series(0,10000)i;
+WITH cte_1 AS
+(INSERT INTO another_schema_table SELECT * FROM another_schema_table ORDER BY a LIMIT 10000 ON CONFLICT(a) DO NOTHING RETURNING *)
+SELECT count(*) FROM cte_1;
+WITH cte_1 AS
+(INSERT INTO non_binary_copy_test SELECT * FROM non_binary_copy_test LIMIT 10000 ON CONFLICT (key) DO UPDATE SET value = (0, 'citus0')::new_type RETURNING z)
+SELECT bool_and(z is null) FROM cte_1;
+
+RESET citus.local_copy_flush_threshold;
 -- if the local execution is disabled, we cannot failover to
 -- local execution and the queries would fail
 SET citus.enable_local_execution TO  false;

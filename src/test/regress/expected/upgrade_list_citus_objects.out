@@ -214,6 +214,7 @@ ORDER BY 1;
  sequence pg_dist_shardid_seq
  table citus.pg_dist_object
  table columnar.chunk
+ table columnar.chunk_group
  table columnar.options
  table columnar.stripe
  table pg_dist_authinfo
@@ -241,5 +242,5 @@ ORDER BY 1;
  view citus_worker_stat_activity
  view pg_dist_shard_placement
  view time_partitions
-(225 rows)
+(226 rows)
 
