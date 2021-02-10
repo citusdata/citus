@@ -1489,8 +1489,7 @@ WrapQueryForExplainAnalyze(const char *queryString, TupleDesc tupleDesc)
 	 * column definition cannot be empty, so create a dummy column definition for
 	 * queries with no results.
 	 */
-	bool originalQueryResultHasNoColumns = (tupleDesc->natts == 0);
-	if (originalQueryResultHasNoColumns)
+	if (tupleDesc->natts == 0)
 	{
 		appendStringInfo(columnDef, "dummy_field int");
 	}
@@ -1519,7 +1518,7 @@ WrapQueryForExplainAnalyze(const char *queryString, TupleDesc tupleDesc)
 	 * Otherwise, number of columns that original query returned wouldn't match
 	 * number of columns returned by worker_save_query_explain_analyze.
 	 */
-	char *workerSaveQueryFetchCols = originalQueryResultHasNoColumns ? "" : "*";
+	char *workerSaveQueryFetchCols = (tupleDesc->natts == 0) ? "" : "*";
 	appendStringInfo(wrappedQuery,
 					 "SELECT %s FROM worker_save_query_explain_analyze(%s, %s) AS (%s)",
 					 workerSaveQueryFetchCols,
