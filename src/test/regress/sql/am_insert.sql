@@ -128,15 +128,15 @@ INSERT INTO zero_col_heap SELECT * FROM zero_col_heap;
 
 INSERT INTO zero_col SELECT * FROM zero_col_heap;
 
-SELECT relname, stripeid, row_count FROM columnar.stripe a, pg_class b
+SELECT relname, stripe_num, row_count FROM columnar.stripe a, pg_class b
 WHERE columnar_relation_storageid(b.oid)=a.storageid AND relname = 'zero_col'
 ORDER BY 1,2,3;
 
-SELECT relname, stripeid, value_count FROM columnar.chunk a, pg_class b
+SELECT relname, stripe_num, value_count FROM columnar.chunk a, pg_class b
 WHERE columnar_relation_storageid(b.oid)=a.storageid AND relname = 'zero_col'
 ORDER BY 1,2,3;
 
-SELECT relname, stripeid, chunkid, row_count FROM columnar.chunk_group a, pg_class b
+SELECT relname, stripe_num, chunk_num, row_count FROM columnar.chunk_group a, pg_class b
 WHERE columnar_relation_storageid(b.oid)=a.storageid AND relname = 'zero_col'
 ORDER BY 1,2,3,4;
 

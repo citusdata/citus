@@ -173,10 +173,10 @@ INSERT INTO zero_col_heap SELECT * FROM zero_col_heap;
 INSERT INTO zero_col_heap SELECT * FROM zero_col_heap;
 INSERT INTO zero_col_heap SELECT * FROM zero_col_heap;
 INSERT INTO zero_col SELECT * FROM zero_col_heap;
-SELECT relname, stripeid, row_count FROM columnar.stripe a, pg_class b
+SELECT relname, stripe_num, row_count FROM columnar.stripe a, pg_class b
 WHERE columnar_relation_storageid(b.oid)=a.storageid AND relname = 'zero_col'
 ORDER BY 1,2,3;
- relname  | stripeid | row_count
+ relname  | stripe_num | row_count
 ---------------------------------------------------------------------
  zero_col |        1 |         1
  zero_col |        2 |         1
@@ -185,17 +185,17 @@ ORDER BY 1,2,3;
  zero_col |        5 |        64
 (5 rows)
 
-SELECT relname, stripeid, value_count FROM columnar.chunk a, pg_class b
+SELECT relname, stripe_num, value_count FROM columnar.chunk a, pg_class b
 WHERE columnar_relation_storageid(b.oid)=a.storageid AND relname = 'zero_col'
 ORDER BY 1,2,3;
- relname | stripeid | value_count
+ relname | stripe_num | value_count
 ---------------------------------------------------------------------
 (0 rows)
 
-SELECT relname, stripeid, chunkid, row_count FROM columnar.chunk_group a, pg_class b
+SELECT relname, stripe_num, chunk_num, row_count FROM columnar.chunk_group a, pg_class b
 WHERE columnar_relation_storageid(b.oid)=a.storageid AND relname = 'zero_col'
 ORDER BY 1,2,3,4;
- relname  | stripeid | chunkid | row_count
+ relname  | stripe_num | chunk_num | row_count
 ---------------------------------------------------------------------
  zero_col |        1 |       0 |         1
  zero_col |        2 |       0 |         1
