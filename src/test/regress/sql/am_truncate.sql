@@ -13,7 +13,7 @@ CREATE TABLE columnar_truncate_test_second (a int, b int) USING columnar;
 CREATE TABLE columnar_truncate_test_compressed (a int, b int) USING columnar;
 CREATE TABLE columnar_truncate_test_regular (a int, b int);
 
-SELECT count(distinct storageid) AS columnar_data_files_before_truncate FROM columnar.stripe \gset
+SELECT count(distinct storage_id) AS columnar_data_files_before_truncate FROM columnar.stripe \gset
 
 INSERT INTO columnar_truncate_test select a, a from generate_series(1, 10) a;
 
@@ -71,7 +71,7 @@ TRUNCATE TABLE columnar_truncate_test;
 SELECT * from columnar_truncate_test;
 
 -- make sure TRUNATE deletes metadata for old relfilenode
-SELECT :columnar_data_files_before_truncate - count(distinct storageid) FROM columnar.stripe;
+SELECT :columnar_data_files_before_truncate - count(distinct storage_id) FROM columnar.stripe;
 
 -- test if truncation in the same transaction that created the table works properly
 BEGIN;
@@ -82,7 +82,7 @@ INSERT INTO columnar_same_transaction_truncate SELECT * FROM generate_series(20,
 COMMIT;
 
 -- should output "1" for the newly created relation
-SELECT count(distinct storageid) - :columnar_data_files_before_truncate FROM columnar.stripe;
+SELECT count(distinct storage_id) - :columnar_data_files_before_truncate FROM columnar.stripe;
 SELECT * FROM columnar_same_transaction_truncate;
 
 DROP TABLE columnar_same_transaction_truncate;
