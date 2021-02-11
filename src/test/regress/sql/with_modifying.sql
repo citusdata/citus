@@ -491,6 +491,20 @@ EXECUTE olu(1,ARRAY[1,2],ARRAY[1,2]);
 EXECUTE olu(1,ARRAY[1,2],ARRAY[1,2]);
 EXECUTE olu(1,ARRAY[1,2],ARRAY[1,2]);
 
+-- test insert query with insert CTE
+WITH insert_cte AS
+	(INSERT INTO with_modifying.modify_table VALUES (23, 7))
+INSERT INTO with_modifying.anchor_table VALUES (1998);
+SELECT * FROM with_modifying.modify_table WHERE id = 23 AND val = 7;
+SELECT * FROM with_modifying.anchor_table WHERE id = 1998;
+
+-- test insert query with select CTE
+WITH select_cte AS
+	(SELECT * FROM with_modifying.modify_table)
+INSERT INTO with_modifying.anchor_table VALUES (1990);
+SELECT * FROM with_modifying.anchor_table WHERE id = 1990;
+DELETE FROM with_modifying.anchor_table WHERE id IN (1990, 1998);
+
 -- Test with replication factor 2
 SET citus.shard_replication_factor to 2;
 

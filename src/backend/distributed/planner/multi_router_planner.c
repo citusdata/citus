@@ -560,16 +560,17 @@ ModifyPartialQuerySupported(Query *queryTree, bool multiShardQuery,
 			CommonTableExpr *cte = (CommonTableExpr *) lfirst(cteCell);
 			Query *cteQuery = (Query *) cte->ctequery;
 
+			/* CTEs still not supported for INSERTs. */
+			if (queryTree->commandType == CMD_INSERT)
+			{
+				return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+									 "Router planner doesn't support common table expressions with non-select queries.",
+									 NULL, NULL);
+			}
+
 			if (cteQuery->commandType != CMD_SELECT)
 			{
-				/* Modifying CTEs still not supported for INSERTs & multi shard queries. */
-				if (queryTree->commandType == CMD_INSERT)
-				{
-					return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-										 "Router planner doesn't support non-select common table expressions with non-select queries.",
-										 NULL, NULL);
-				}
-
+				/* Modifying CTEs still not supported for multi shard queries. */
 				if (multiShardQuery)
 				{
 					return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,

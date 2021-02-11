@@ -344,6 +344,10 @@ CitusBeginModifyScan(CustomScanState *node, EState *estate, int eflags)
 		 * Given that pruning is deferred always for INSERTs, we get here
 		 * !EnableFastPathRouterPlanner  as well.
 		 */
+		if (jobQuery->commandType == CMD_INSERT)
+		{
+			currentPlan->fastPathRouterPlan = true;
+		}
 		Assert(currentPlan->fastPathRouterPlan || !EnableFastPathRouterPlanner);
 
 		/*
