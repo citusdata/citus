@@ -304,7 +304,7 @@ SELECT substring(current_Setting('server_version'), '\d+')::int > 11 AS server_v
 REINDEX INDEX CONCURRENTLY test_concurrent_idx_x;
 REINDEX INDEX CONCURRENTLY test_concurrent_idx_y;
 REINDEX TABLE CONCURRENTLY test;
-REINDEX SCHEMA single_node;
+REINDEX SCHEMA CONCURRENTLY single_node;
 \endif
 
 -- keep one of the indexes
