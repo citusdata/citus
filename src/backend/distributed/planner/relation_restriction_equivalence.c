@@ -148,7 +148,7 @@ static Index RelationRestrictionPartitionKeyIndex(RelationRestriction *
 												  relationRestriction);
 static bool AllRelationsInRestrictionContextColocated(RelationRestrictionContext *
 													  restrictionContext);
-static bool IsParam(Node *node);
+static bool IsNotSafeRestrictionToRecursivelyPlan(Node *node);
 static JoinRestrictionContext * FilterJoinRestrictionContext(
 	JoinRestrictionContext *joinRestrictionContext, Relids
 	queryRteIdentities);
@@ -1879,8 +1879,12 @@ GetRestrictInfoListForRelation(RangeTblEntry *rangeTblEntry,
 	{
 		Expr *restrictionClause = restrictInfo->clause;
 
-		/* we cannot process Params beacuse they are not known at this point */
-		if (FindNodeMatchingCheckFunction((Node *) restrictionClause, IsParam))
+		/*
+		 * we cannot process some restriction clauses because they are not
+		 * safe to recursively plan.
+		 */
+		if (FindNodeMatchingCheckFunction((Node *) restrictionClause,
+										  IsNotSafeRestrictionToRecursivelyPlan))
 		{
 			continue;
 		}
@@ -1945,16 +1949,17 @@ RelationRestrictionForRelation(RangeTblEntry *rangeTableEntry,
 
 
 /*
- * IsParam determines whether the given node is a param.
+ * IsNotSafeRestrictionToRecursivelyPlan returns true if the given node
+ * is not a safe restriction to be recursivelly planned.
  */
 static bool
-IsParam(Node *node)
+IsNotSafeRestrictionToRecursivelyPlan(Node *node)
 {
-	if (IsA(node, Param))
+	if (IsA(node, Param) || IsA(node, SubLink) || IsA(node, SubPlan) || IsA(node,
+																			AlternativeSubPlan))
 	{
 		return true;
 	}
-
 	return false;
 }
 
