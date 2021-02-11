@@ -15,7 +15,7 @@ CREATE TABLE columnar_truncate_test_second (a int, b int) USING columnar;
 -- COMPRESSED
 CREATE TABLE columnar_truncate_test_compressed (a int, b int) USING columnar;
 CREATE TABLE columnar_truncate_test_regular (a int, b int);
-SELECT count(distinct storageid) AS columnar_data_files_before_truncate FROM columnar.stripe \gset
+SELECT count(distinct storage_id) AS columnar_data_files_before_truncate FROM columnar.stripe \gset
 INSERT INTO columnar_truncate_test select a, a from generate_series(1, 10) a;
 set columnar.compression = 'pglz';
 INSERT INTO columnar_truncate_test_compressed select a, a from generate_series(1, 10) a;
@@ -37,7 +37,19 @@ SELECT * FROM columnar_truncate_test;
  10 | 10
 (10 rows)
 
+SELECT * FROM chunk_group_consistency;
+ consistent
+---------------------------------------------------------------------
+ t
+(1 row)
+
 TRUNCATE TABLE columnar_truncate_test;
+SELECT * FROM chunk_group_consistency;
+ consistent
+---------------------------------------------------------------------
+ t
+(1 row)
+
 SELECT * FROM columnar_truncate_test;
  a | b
 ---------------------------------------------------------------------
@@ -118,12 +130,24 @@ SELECT * from columnar_truncate_test_regular;
  20 | 20
 (11 rows)
 
+SELECT * FROM chunk_group_consistency;
+ consistent
+---------------------------------------------------------------------
+ t
+(1 row)
+
 -- make sure multi truncate works
 -- notice that the same table might be repeated
 TRUNCATE TABLE columnar_truncate_test,
 			   columnar_truncate_test_regular,
 			   columnar_truncate_test_second,
    			   columnar_truncate_test;
+SELECT * FROM chunk_group_consistency;
+ consistent
+---------------------------------------------------------------------
+ t
+(1 row)
+
 SELECT * from columnar_truncate_test;
  a | b
 ---------------------------------------------------------------------
@@ -147,7 +171,7 @@ SELECT * from columnar_truncate_test;
 (0 rows)
 
 -- make sure TRUNATE deletes metadata for old relfilenode
-SELECT :columnar_data_files_before_truncate - count(distinct storageid) FROM columnar.stripe;
+SELECT :columnar_data_files_before_truncate - count(distinct storage_id) FROM columnar.stripe;
  ?column?
 ---------------------------------------------------------------------
         0
@@ -161,7 +185,7 @@ TRUNCATE columnar_same_transaction_truncate;
 INSERT INTO columnar_same_transaction_truncate SELECT * FROM generate_series(20, 23);
 COMMIT;
 -- should output "1" for the newly created relation
-SELECT count(distinct storageid) - :columnar_data_files_before_truncate FROM columnar.stripe;
+SELECT count(distinct storage_id) - :columnar_data_files_before_truncate FROM columnar.stripe;
  ?column?
 ---------------------------------------------------------------------
         1
@@ -267,6 +291,12 @@ SELECT count(*) FROM truncate_schema.truncate_tbl;
 (1 row)
 
 \c - :current_user
+SELECT * FROM chunk_group_consistency;
+ consistent
+---------------------------------------------------------------------
+ t
+(1 row)
+
 -- cleanup
 DROP SCHEMA truncate_schema CASCADE;
 NOTICE:  drop cascades to table truncate_schema.truncate_tbl

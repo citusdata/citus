@@ -30,6 +30,7 @@
 #include "commands/sequence.h"
 #include "commands/trigger.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/resource_lock.h"
 #include "executor/executor.h"
 #include "executor/spi.h"
 #include "miscadmin.h"
@@ -79,6 +80,8 @@ static void InsertStripeMetadataRow(uint64 storageId, StripeMetadata *stripe);
 static void GetHighestUsedAddressAndId(uint64 storageId,
 									   uint64 *highestUsedAddress,
 									   uint64 *highestUsedId);
+static void LockForStripeReservation(Relation rel, LOCKMODE mode);
+static void UnlockForStripeReservation(Relation rel, LOCKMODE mode);
 static List * ReadDataFileStripeList(uint64 storageId, Snapshot snapshot);
 static Oid ColumnarStorageIdSequenceRelationId(void);
 static Oid ColumnarStripeRelationId(void);
@@ -86,6 +89,7 @@ static Oid ColumnarStripeIndexRelationId(void);
 static Oid ColumnarOptionsRelationId(void);
 static Oid ColumnarOptionsIndexRegclass(void);
 static Oid ColumnarChunkRelationId(void);
+static Oid ColumnarChunkGroupRelationId(void);
 static Oid ColumnarChunkIndexRelationId(void);
 static Oid ColumnarNamespaceId(void);
 static ModifyState * StartModifyRelation(Relation rel);
@@ -139,22 +143,29 @@ typedef FormData_columnar_options *Form_columnar_options;
 #define Anum_columnar_stripe_chunk_row_count 7
 #define Anum_columnar_stripe_row_count 8
 
+/* constants for columnar.chunk_group */
+#define Natts_columnar_chunkgroup 4
+#define Anum_columnar_chunkgroup_storageid 1
+#define Anum_columnar_chunkgroup_stripe 2
+#define Anum_columnar_chunkgroup_chunk 3
+#define Anum_columnar_chunkgroup_row_count 4
+
 /* constants for columnar.chunk */
 #define Natts_columnar_chunk 14
 #define Anum_columnar_chunk_storageid 1
 #define Anum_columnar_chunk_stripe 2
 #define Anum_columnar_chunk_attr 3
 #define Anum_columnar_chunk_chunk 4
-#define Anum_columnar_chunk_value_count 5
-#define Anum_columnar_chunk_minimum_value 6
-#define Anum_columnar_chunk_maximum_value 7
-#define Anum_columnar_chunk_value_stream_offset 8
-#define Anum_columnar_chunk_value_stream_length 9
-#define Anum_columnar_chunk_exists_stream_offset 10
-#define Anum_columnar_chunk_exists_stream_length 11
-#define Anum_columnar_chunk_value_compression_type 12
-#define Anum_columnar_chunk_value_compression_level 13
-#define Anum_columnar_chunk_value_decompressed_size 14
+#define Anum_columnar_chunk_minimum_value 5
+#define Anum_columnar_chunk_maximum_value 6
+#define Anum_columnar_chunk_value_stream_offset 7
+#define Anum_columnar_chunk_value_stream_length 8
+#define Anum_columnar_chunk_exists_stream_offset 9
+#define Anum_columnar_chunk_exists_stream_length 10
+#define Anum_columnar_chunk_value_compression_type 11
+#define Anum_columnar_chunk_value_compression_level 12
+#define Anum_columnar_chunk_value_decompressed_size 13
+#define Anum_columnar_chunk_value_count 14
 
 
 /*
@@ -276,8 +287,8 @@ WriteColumnarOptions(Oid regclass, ColumnarOptions *options, bool overwrite)
 	}
 
 	systable_endscan_ordered(scanDescriptor);
-	index_close(index, NoLock);
-	relation_close(columnarOptions, NoLock);
+	index_close(index, AccessShareLock);
+	relation_close(columnarOptions, RowExclusiveLock);
 
 	return written;
 }
@@ -327,8 +338,8 @@ DeleteColumnarTableOptions(Oid regclass, bool missingOk)
 	}
 
 	systable_endscan_ordered(scanDescriptor);
-	index_close(index, NoLock);
-	relation_close(columnarOptions, NoLock);
+	index_close(index, AccessShareLock);
+	relation_close(columnarOptions, RowExclusiveLock);
 
 	return result;
 }
@@ -357,7 +368,7 @@ ReadColumnarOptions(Oid regclass, ColumnarOptions *options)
 	Relation index = try_relation_open(ColumnarOptionsIndexRegclass(), AccessShareLock);
 	if (index == NULL)
 	{
-		table_close(columnarOptions, NoLock);
+		table_close(columnarOptions, AccessShareLock);
 
 		/* extension has been dropped */
 		return false;
@@ -386,8 +397,8 @@ ReadColumnarOptions(Oid regclass, ColumnarOptions *options)
 	}
 
 	systable_endscan_ordered(scanDescriptor);
-	index_close(index, NoLock);
-	relation_close(columnarOptions, NoLock);
+	index_close(index, AccessShareLock);
+	relation_close(columnarOptions, AccessShareLock);
 
 	return true;
 }
@@ -422,7 +433,6 @@ SaveStripeSkipList(RelFileNode relfilenode, uint64 stripe, StripeSkipList *chunk
 				Int64GetDatum(stripe),
 				Int32GetDatum(columnIndex + 1),
 				Int32GetDatum(chunkIndex),
-				Int64GetDatum(chunk->rowCount),
 				0, /* to be filled below */
 				0, /* to be filled below */
 				Int64GetDatum(chunk->valueChunkOffset),
@@ -431,7 +441,8 @@ SaveStripeSkipList(RelFileNode relfilenode, uint64 stripe, StripeSkipList *chunk
 				Int64GetDatum(chunk->existsLength),
 				Int32GetDatum(chunk->valueCompressionType),
 				Int32GetDatum(chunk->valueCompressionLevel),
-				Int64GetDatum(chunk->decompressedValueSize)
+				Int64GetDatum(chunk->decompressedValueSize),
+				Int64GetDatum(chunk->rowCount)
 			};
 
 			bool nulls[Natts_columnar_chunk] = { false };
@@ -456,7 +467,45 @@ SaveStripeSkipList(RelFileNode relfilenode, uint64 stripe, StripeSkipList *chunk
 	}
 
 	FinishModifyRelation(modifyState);
-	table_close(columnarChunk, NoLock);
+	table_close(columnarChunk, RowExclusiveLock);
+
+	CommandCounterIncrement();
+}
+
+
+/*
+ * SaveChunkGroups saves the metadata for given chunk groups in columnar.chunk_group.
+ */
+void
+SaveChunkGroups(RelFileNode relfilenode, uint64 stripe,
+				List *chunkGroupRowCounts)
+{
+	ColumnarMetapage *metapage = ReadMetapage(relfilenode, false);
+	Oid columnarChunkGroupOid = ColumnarChunkGroupRelationId();
+	Relation columnarChunkGroup = table_open(columnarChunkGroupOid, RowExclusiveLock);
+	ModifyState *modifyState = StartModifyRelation(columnarChunkGroup);
+
+	ListCell *lc = NULL;
+	int chunkId = 0;
+
+	foreach(lc, chunkGroupRowCounts)
+	{
+		int64 rowCount = lfirst_int(lc);
+		Datum values[Natts_columnar_chunkgroup] = {
+			UInt64GetDatum(metapage->storageId),
+			Int64GetDatum(stripe),
+			Int32GetDatum(chunkId),
+			Int64GetDatum(rowCount)
+		};
+
+		bool nulls[Natts_columnar_chunkgroup] = { false };
+
+		InsertTupleAndEnforceConstraints(modifyState, values, nulls);
+		chunkId++;
+	}
+
+	FinishModifyRelation(modifyState);
+	table_close(columnarChunkGroup, NoLock);
 
 	CommandCounterIncrement();
 }
@@ -564,8 +613,8 @@ ReadStripeSkipList(RelFileNode relfilenode, uint64 stripe, TupleDesc tupleDescri
 	}
 
 	systable_endscan_ordered(scanDescriptor);
-	index_close(index, NoLock);
-	table_close(columnarChunk, NoLock);
+	index_close(index, AccessShareLock);
+	table_close(columnarChunk, AccessShareLock);
 
 	return chunkList;
 }
@@ -600,7 +649,7 @@ InsertStripeMetadataRow(uint64 storageId, StripeMetadata *stripe)
 
 	CommandCounterIncrement();
 
-	table_close(columnarStripes, NoLock);
+	table_close(columnarStripes, RowExclusiveLock);
 }
 
 
@@ -682,6 +731,35 @@ GetHighestUsedAddressAndId(uint64 storageId,
 
 
 /*
+ * LockForStripeReservation acquires a lock for stripe reservation.
+ */
+static void
+LockForStripeReservation(Relation rel, LOCKMODE mode)
+{
+	/*
+	 * We use an advisory lock here so we can easily detect these kind of
+	 * locks in IsProcessWaitingForSafeOperations() and don't include them
+	 * in the lock graph.
+	 */
+	LOCKTAG tag;
+	SET_LOCKTAG_COLUMNAR_STRIPE_RESERVATION(tag, rel);
+	LockAcquire(&tag, mode, false, false);
+}
+
+
+/*
+ * UnlockForStripeReservation releases the stripe reservation lock.
+ */
+static void
+UnlockForStripeReservation(Relation rel, LOCKMODE mode)
+{
+	LOCKTAG tag;
+	SET_LOCKTAG_COLUMNAR_STRIPE_RESERVATION(tag, rel);
+	LockRelease(&tag, mode, false);
+}
+
+
+/*
  * ReserveStripe reserves and stripe of given size for the given relation,
  * and inserts it into columnar.stripe. It is guaranteed that concurrent
  * writes won't overwrite the returned stripe.
@@ -696,15 +774,12 @@ ReserveStripe(Relation rel, uint64 sizeBytes,
 	uint64 highestId = 0;
 
 	/*
-	 * We take ShareUpdateExclusiveLock here, so two space
-	 * reservations conflict, space reservation <-> vacuum
-	 * conflict, but space reservation doesn't conflict with
-	 * reads & writes.
+	 * We take ExclusiveLock here, so two space reservations conflict.
 	 */
-	LockRelation(rel, ShareUpdateExclusiveLock);
+	LOCKMODE lockMode = ExclusiveLock;
+	LockForStripeReservation(rel, lockMode);
 
 	RelFileNode relfilenode = rel->rd_node;
-
 
 	/*
 	 * If this is the first stripe for this relation, initialize the
@@ -747,7 +822,7 @@ ReserveStripe(Relation rel, uint64 sizeBytes,
 
 	InsertStripeMetadataRow(metapage->storageId, &stripe);
 
-	UnlockRelation(rel, ShareUpdateExclusiveLock);
+	UnlockForStripeReservation(rel, lockMode);
 
 	return stripe;
 }
@@ -803,8 +878,8 @@ ReadDataFileStripeList(uint64 storageId, Snapshot snapshot)
 	}
 
 	systable_endscan_ordered(scanDescriptor);
-	index_close(index, NoLock);
-	table_close(columnarStripes, NoLock);
+	index_close(index, AccessShareLock);
+	table_close(columnarStripes, AccessShareLock);
 
 	return stripeMetadataList;
 }
@@ -865,8 +940,8 @@ DeleteMetadataRows(RelFileNode relfilenode)
 	FinishModifyRelation(modifyState);
 
 	systable_endscan_ordered(scanDescriptor);
-	index_close(index, NoLock);
-	table_close(columnarStripes, NoLock);
+	index_close(index, AccessShareLock);
+	table_close(columnarStripes, AccessShareLock);
 }
 
 
@@ -1110,6 +1185,17 @@ static Oid
 ColumnarChunkRelationId(void)
 {
 	return get_relname_relid("chunk", ColumnarNamespaceId());
+}
+
+
+/*
+ * ColumnarChunkGroupRelationId returns relation id of columnar.chunk_group.
+ * TODO: should we cache this similar to citus?
+ */
+static Oid
+ColumnarChunkGroupRelationId(void)
+{
+	return get_relname_relid("chunk_group", ColumnarNamespaceId());
 }
 
 

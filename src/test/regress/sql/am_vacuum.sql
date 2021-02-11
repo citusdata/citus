@@ -1,12 +1,12 @@
 SET columnar.compression TO 'none';
 
-SELECT count(distinct storageid) AS columnar_table_count FROM columnar.stripe \gset
+SELECT count(distinct storage_id) AS columnar_table_count FROM columnar.stripe \gset
 
 CREATE TABLE t(a int, b int) USING columnar;
 
 CREATE VIEW t_stripes AS
 SELECT * FROM columnar.stripe a, pg_class b
-WHERE a.storageid = columnar_relation_storageid(b.oid) AND b.relname='t';
+WHERE a.storage_id = columnar_relation_storageid(b.oid) AND b.relname='t';
 
 SELECT count(*) FROM t_stripes;
 
@@ -20,6 +20,8 @@ SELECT count(*) FROM t_stripes;
 -- vacuum full should merge stripes together
 VACUUM FULL t;
 
+SELECT * FROM chunk_group_consistency;
+
 SELECT sum(a), sum(b) FROM t;
 SELECT count(*) FROM t_stripes;
 
@@ -32,24 +34,26 @@ SELECT count(*) FROM t_stripes;
 
 VACUUM FULL t;
 
+SELECT * FROM chunk_group_consistency;
+
 SELECT sum(a), sum(b) FROM t;
 SELECT count(*) FROM t_stripes;
 
 -- VACUUM FULL doesn't reclaim dropped columns, but converts them to NULLs
 ALTER TABLE t DROP COLUMN a;
 
-SELECT stripeid, attnum, chunkid, minimum_value IS NULL, maximum_value IS NULL
+SELECT stripe_num, attr_num, chunk_num, minimum_value IS NULL, maximum_value IS NULL
 FROM columnar.chunk a, pg_class b
-WHERE a.storageid = columnar_relation_storageid(b.oid) AND b.relname='t' ORDER BY 1, 2, 3;
+WHERE a.storage_id = columnar_relation_storageid(b.oid) AND b.relname='t' ORDER BY 1, 2, 3;
 
 VACUUM FULL t;
 
-SELECT stripeid, attnum, chunkid, minimum_value IS NULL, maximum_value IS NULL
+SELECT stripe_num, attr_num, chunk_num, minimum_value IS NULL, maximum_value IS NULL
 FROM columnar.chunk a, pg_class b
-WHERE a.storageid = columnar_relation_storageid(b.oid) AND b.relname='t' ORDER BY 1, 2, 3;
+WHERE a.storage_id = columnar_relation_storageid(b.oid) AND b.relname='t' ORDER BY 1, 2, 3;
 
 -- Make sure we cleaned-up the transient table metadata after VACUUM FULL commands
-SELECT count(distinct storageid) - :columnar_table_count FROM columnar.stripe;
+SELECT count(distinct storage_id) - :columnar_table_count FROM columnar.stripe;
 
 -- do this in a transaction so concurrent autovacuum doesn't interfere with results
 BEGIN;
@@ -92,6 +96,8 @@ COMMIT;
 
 VACUUM VERBOSE t;
 
+SELECT * FROM chunk_group_consistency;
+
 SELECT count(*) FROM t;
 
 -- check that we report chunks with data for dropped columns
@@ -108,11 +114,13 @@ SELECT alter_columnar_table_set('t', compression => 'pglz');
 VACUUM FULL t;
 VACUUM VERBOSE t;
 
+SELECT * FROM chunk_group_consistency;
+
 DROP TABLE t;
 DROP VIEW t_stripes;
 
 -- Make sure we cleaned the metadata for t too
-SELECT count(distinct storageid) - :columnar_table_count FROM columnar.stripe;
+SELECT count(distinct storage_id) - :columnar_table_count FROM columnar.stripe;
 
 -- A table with high compression ratio
 SET columnar.compression TO 'pglz';
@@ -122,5 +130,7 @@ CREATE TABLE t(a int, b char, c text) USING columnar;
 INSERT INTO t SELECT 1, 'a', 'xyz' FROM generate_series(1, 1000000) i;
 
 VACUUM VERBOSE t;
+
+SELECT * FROM chunk_group_consistency;
 
 DROP TABLE t;

@@ -21,6 +21,7 @@
 #include "access/nbtree.h"
 #include "catalog/pg_am.h"
 #include "commands/defrem.h"
+#include "distributed/listutils.h"
 #include "nodes/makefuncs.h"
 #if PG_VERSION_NUM >= 120000
 #include "nodes/nodeFuncs.h"
@@ -45,6 +46,13 @@ struct TableReadState
 	StripeMetadata *currentStripeMetadata;
 	TupleDesc tupleDescriptor;
 	Relation relation;
+
+	/*
+	 * Following are used for tables with zero columns, or when no
+	 * columns are projected.
+	 */
+	uint64 totalRowCount;
+	uint64 readRowCount;
 
 	/*
 	 * List of Var pointers for columns in the query. We use this both for
@@ -112,6 +120,13 @@ ColumnarBeginRead(Relation relation, TupleDesc tupleDescriptor,
 				  List *projectedColumnList, List *whereClauseList)
 {
 	List *stripeList = StripesForRelfilenode(relation->rd_node);
+	StripeMetadata *stripeMetadata = NULL;
+
+	uint64 totalRowCount = 0;
+	foreach_ptr(stripeMetadata, stripeList)
+	{
+		totalRowCount += stripeMetadata->rowCount;
+	}
 
 	/*
 	 * We allocate all stripe specific data in the stripeReadContext, and reset
@@ -135,6 +150,8 @@ ColumnarBeginRead(Relation relation, TupleDesc tupleDescriptor,
 	readState->stripeReadContext = stripeReadContext;
 	readState->chunkData = NULL;
 	readState->deserializedChunkIndex = -1;
+	readState->readRowCount = 0;
+	readState->totalRowCount = totalRowCount;
 
 	return readState;
 }
@@ -150,6 +167,26 @@ ColumnarReadNextRow(TableReadState *readState, Datum *columnValues, bool *column
 {
 	StripeMetadata *stripeMetadata = readState->currentStripeMetadata;
 	MemoryContext oldContext = NULL;
+
+	/*
+	 * We rely on first column's metadata in rest of this function. So for zero
+	 * column tables we just return "true" for totalRowCount times. We do the
+	 * same when no columns are projected.
+	 */
+	if (readState->projectedColumnList == NIL)
+	{
+		if (readState->totalRowCount == readState->readRowCount)
+		{
+			return false;
+		}
+		else
+		{
+			int columnCount = readState->tupleDescriptor->natts;
+			memset(columnNulls, 1, sizeof(bool) * columnCount);
+			readState->readRowCount++;
+			return true;
+		}
+	}
 
 	/*
 	 * If no stripes are loaded, load the next non-empty stripe. Note that when
