@@ -16,6 +16,26 @@ The Citus Columnar tables work best for analytic or DW workloads:
 * Doesn't read unnecessary columns
 * Efficient `VACUUM`
 
+# Next generation of cstore_fdw
+
+Citus Columnar is the next generation of
+[cstore_fdw](https://github.com/citusdata/cstore_fdw/).
+
+Benefits of Citus Columnar over cstore_fdw:
+
+* Citus Columnar is based on the [Table Access Method
+  API](https://www.postgresql.org/docs/current/tableam.html), which
+  allows it to behave exactly like an ordinary heap (row) table for
+  most operations.
+* Supports Write-Ahead Log (WAL).
+* Supports ``ROLLBACK``.
+* Supports physical replication.
+* Supports recovery, including Point-In-Time Restore (PITR).
+* Supports ``pg_dump`` and ``pg_upgrade`` without the need for special
+  options or extra steps.
+* Better user experience; simple ``USING``clause.
+* Supports more features that work on ordinary heap (row) tables.
+
 # Limitations
 
 * Append-only (no ``UPDATE``/``DELETE`` support)
