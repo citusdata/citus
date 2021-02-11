@@ -32,9 +32,9 @@ COMMENT ON TABLE stripe IS 'Columnar per stripe metadata';
 CREATE TABLE chunk_group (
     storage_id bigint NOT NULL,
     stripe_num bigint NOT NULL,
-    chunk_num int NOT NULL,
+    chunk_group_num int NOT NULL,
     row_count bigint NOT NULL,
-    PRIMARY KEY (storage_id, stripe_num, chunk_num),
+    PRIMARY KEY (storage_id, stripe_num, chunk_group_num),
     FOREIGN KEY (storage_id, stripe_num) REFERENCES stripe(storage_id, stripe_num) ON DELETE CASCADE
 );
 
@@ -44,7 +44,7 @@ CREATE TABLE chunk (
     storage_id bigint NOT NULL,
     stripe_num bigint NOT NULL,
     attr_num int NOT NULL,
-    chunk_num int NOT NULL,
+    chunk_group_num int NOT NULL,
     minimum_value bytea,
     maximum_value bytea,
     value_stream_offset bigint NOT NULL,
@@ -55,8 +55,8 @@ CREATE TABLE chunk (
     value_compression_level int NOT NULL,
     value_decompressed_length bigint NOT NULL,
     value_count bigint NOT NULL,
-    PRIMARY KEY (storage_id, stripe_num, attr_num, chunk_num),
-    FOREIGN KEY (storage_id, stripe_num, chunk_num) REFERENCES chunk_group(storage_id, stripe_num, chunk_num) ON DELETE CASCADE
+    PRIMARY KEY (storage_id, stripe_num, attr_num, chunk_group_num),
+    FOREIGN KEY (storage_id, stripe_num, chunk_group_num) REFERENCES chunk_group(storage_id, stripe_num, chunk_group_num) ON DELETE CASCADE
 ) WITH (user_catalog_table = true);
 
 COMMENT ON TABLE chunk IS 'Columnar per chunk metadata';
