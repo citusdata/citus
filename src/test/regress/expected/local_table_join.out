@@ -1466,7 +1466,48 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS c
    100
 (1 row)
 
+-- issue 4682
+create table tbl1 (a int, b int, c int, d int);
+INSERT INTO tbl1 SELECT i,i,i,i FROM generate_series(1,10) i;
+create table custom_pg_operator(oprname text);
+INSERT INTO custom_pg_operator values('a');
+-- try with local tables to make sure the results are same when tbl1 is distributed
+select COUNT(*) from
+  custom_pg_operator
+  inner join tbl1 on (select 1 from custom_pg_type) >= d
+  left join pg_dist_rebalance_strategy on 'by_shard_count' = name
+where a + b + c > 0;
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+select create_distributed_table('tbl1', 'a');
+NOTICE:  Copying data from local table...
+DEBUG:  Copied 10 rows
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$local_table_join.tbl1$$)
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- there is a different output in pg11 and in this query the debug messages are not
+-- as important as the others so we use notice
+set client_min_messages to NOTICE;
+select COUNT(*) from
+  custom_pg_operator
+  inner join tbl1 on (select 1 from custom_pg_type) >= d
+  left join pg_dist_rebalance_strategy on 'by_shard_count' = name
+where a + b + c > 0;
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+SET client_min_messages to DEBUG1;
 RESET client_min_messages;
 \set VERBOSITY terse
 DROP SCHEMA local_table_join CASCADE;
-NOTICE:  drop cascades to 18 other objects
+NOTICE:  drop cascades to 20 other objects

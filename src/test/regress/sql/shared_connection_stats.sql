@@ -340,14 +340,16 @@ BEGIN;
 		hostname, port;
 ROLLBACK;
 
--- INSERT SELECT with RETURNING/ON CONFLICT clauses should honor shared_pool_size
+-- INSERT SELECT with RETURNING/ON CONFLICT clauses does not honor shared_pool_size
 -- in underlying COPY commands
 BEGIN;
 	SELECT pg_sleep(0.1);
-	INSERT INTO test SELECT i FROM generate_series(0,10) i RETURNING *;
+	-- make sure that we hit at least 4 shards per node, where 20 rows
+	-- is enough
+	INSERT INTO test SELECT i FROM generate_series(0,20) i RETURNING *;
 
 	SELECT
-		connection_count_to_node
+		connection_count_to_node > current_setting('citus.max_shared_pool_size')::int
 	FROM
 		citus_remote_connection_stats()
 	WHERE

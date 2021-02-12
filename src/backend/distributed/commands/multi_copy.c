@@ -121,7 +121,7 @@ static const char BinarySignature[11] = "PGCOPY\n\377\r\n\0";
  * 4MB is a good balance between memory usage and performance. Note that this
  * is irrelevant in the common case where we open one connection per placement.
  */
-#define COPY_SWITCH_OVER_THRESHOLD (4 * 1024 * 1024)
+int CopySwitchOverThresholdBytes = 4 * 1024 * 1024;
 
 #define FILE_IS_OPEN(x) (x > -1)
 
@@ -280,7 +280,8 @@ static CopyShardState * GetShardState(uint64 shardId, HTAB *shardStateHash,
 									  copyOutState, bool isColocatedIntermediateResult);
 static MultiConnection * CopyGetPlacementConnection(HTAB *connectionStateHash,
 													ShardPlacement *placement,
-													bool stopOnFailure);
+													bool stopOnFailure,
+													bool colocatedIntermediateResult);
 static bool HasReachedAdaptiveExecutorPoolSize(List *connectionStateHash);
 static MultiConnection * GetLeastUtilisedCopyConnection(List *connectionStateList,
 														char *nodeName, int nodePort);
@@ -2291,7 +2292,9 @@ CitusCopyDestReceiverStartup(DestReceiver *dest, int operation,
 	/* define the template for the COPY statement that is sent to workers */
 	CopyStmt *copyStatement = makeNode(CopyStmt);
 
-	if (copyDest->colocatedIntermediateResultIdPrefix != NULL)
+	bool colocatedIntermediateResults =
+		copyDest->colocatedIntermediateResultIdPrefix != NULL;
+	if (colocatedIntermediateResults)
 	{
 		copyStatement->relation = makeRangeVar(NULL,
 											   copyDest->
@@ -2330,19 +2333,27 @@ CitusCopyDestReceiverStartup(DestReceiver *dest, int operation,
 	RecordRelationAccessIfNonDistTable(tableId, PLACEMENT_ACCESS_DML);
 
 	/*
-	 * For all the primary (e.g., writable) remote nodes, reserve a shared
-	 * connection. We do this upfront because we cannot know which nodes
-	 * are going to be accessed. Since the order of the reservation is
-	 * important, we need to do it right here. For the details on why the
-	 * order important, see EnsureConnectionPossibilityForNodeList().
-	 *
-	 * We don't need to care about local node because we either get a
-	 * connection or use local connection, so it cannot be part of
-	 * the starvation. As an edge case, if it cannot get a connection
-	 * and cannot switch to local execution (e.g., disabled by user),
-	 * COPY would fail hinting the user to change the relevant settiing.
+	 * Colocated intermediate results do not honor citus.max_shared_pool_size,
+	 * so we don't need to reserve any connections. Each result file is sent
+	 * over a single connection.
 	 */
-	EnsureConnectionPossibilityForRemotePrimaryNodes();
+	if (!colocatedIntermediateResults)
+	{
+		/*
+		 * For all the primary (e.g., writable) remote nodes, reserve a shared
+		 * connection. We do this upfront because we cannot know which nodes
+		 * are going to be accessed. Since the order of the reservation is
+		 * important, we need to do it right here. For the details on why the
+		 * order important, see EnsureConnectionPossibilityForNodeList().
+		 *
+		 * We don't need to care about local node because we either get a
+		 * connection or use local connection, so it cannot be part of
+		 * the starvation. As an edge case, if it cannot get a connection
+		 * and cannot switch to local execution (e.g., disabled by user),
+		 * COPY would fail hinting the user to change the relevant settiing.
+		 */
+		EnsureConnectionPossibilityForRemotePrimaryNodes();
+	}
 
 	LocalCopyStatus localCopyStatus = GetLocalCopyStatus();
 	if (localCopyStatus == LOCAL_COPY_DISABLED)
@@ -2502,7 +2513,7 @@ CitusSendTupleToPlacements(TupleTableSlot *slot, CitusCopyDestReceiver *copyDest
 			switchToCurrentPlacement = true;
 		}
 		else if (currentPlacementState != activePlacementState &&
-				 currentPlacementState->data->len > COPY_SWITCH_OVER_THRESHOLD)
+				 currentPlacementState->data->len > CopySwitchOverThresholdBytes)
 		{
 			switchToCurrentPlacement = true;
 
@@ -3580,7 +3591,8 @@ InitializeCopyShardState(CopyShardState *shardState,
 		}
 
 		MultiConnection *connection =
-			CopyGetPlacementConnection(connectionStateHash, placement, stopOnFailure);
+			CopyGetPlacementConnection(connectionStateHash, placement, stopOnFailure,
+									   colocatedIntermediateResult);
 		if (connection == NULL)
 		{
 			failedPlacementCount++;
@@ -3691,11 +3703,40 @@ LogLocalCopyToFileExecution(uint64 shardId)
  * then it reuses the connection. Otherwise, it requests a connection for placement.
  */
 static MultiConnection *
-CopyGetPlacementConnection(HTAB *connectionStateHash, ShardPlacement *placement, bool
-						   stopOnFailure)
+CopyGetPlacementConnection(HTAB *connectionStateHash, ShardPlacement *placement,
+						   bool stopOnFailure, bool colocatedIntermediateResult)
 {
-	uint32 connectionFlags = FOR_DML;
-	char *nodeUser = CurrentUserName();
+	if (colocatedIntermediateResult)
+	{
+		/*
+		 * Colocated intermediate results are just files and not required to use
+		 * the same connections with their co-located shards. So, we are free to
+		 * use any connection we can get.
+		 *
+		 * Also, the current connection re-use logic does not know how to handle
+		 * intermediate results as the intermediate results always truncates the
+		 * existing files. That's why we we use one connection per intermediate
+		 * result.
+		 *
+		 * Also note that we are breaking the guarantees of citus.shared_pool_size
+		 * as we cannot rely on optional connections.
+		 */
+		uint32 connectionFlagsForIntermediateResult = 0;
+		MultiConnection *connection =
+			GetNodeConnection(connectionFlagsForIntermediateResult, placement->nodeName,
+							  placement->nodePort);
+
+		/*
+		 * As noted above, we want each intermediate file to go over
+		 * a separate connection.
+		 */
+		ClaimConnectionExclusively(connection);
+
+		/* and, we cannot afford to handle failures when anything goes wrong */
+		MarkRemoteTransactionCritical(connection);
+
+		return connection;
+	}
 
 	/*
 	 * Determine whether the task has to be assigned to a particular connection
@@ -3703,6 +3744,7 @@ CopyGetPlacementConnection(HTAB *connectionStateHash, ShardPlacement *placement,
 	 */
 	ShardPlacementAccess *placementAccess = CreatePlacementAccess(placement,
 																  PLACEMENT_ACCESS_DML);
+	uint32 connectionFlags = FOR_DML;
 	MultiConnection *connection =
 		GetConnectionIfPlacementAccessedInXact(connectionFlags,
 											   list_make1(placementAccess), NULL);
@@ -3791,6 +3833,7 @@ CopyGetPlacementConnection(HTAB *connectionStateHash, ShardPlacement *placement,
 		connectionFlags |= REQUIRE_CLEAN_CONNECTION;
 	}
 
+	char *nodeUser = CurrentUserName();
 	connection = GetPlacementConnection(connectionFlags, placement, nodeUser);
 	if (connection == NULL)
 	{

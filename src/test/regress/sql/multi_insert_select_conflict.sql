@@ -314,5 +314,24 @@ WITH cte AS(
 INSERT INTO target_table SELECT * FROM cte_2 ON CONFLICT(col_1) DO UPDATE SET col_2 = EXCLUDED.col_2 + 1;
 SELECT * FROM target_table ORDER BY 1;
 
+-- make sure that even if COPY switchover happens
+-- the results are correct
+SET citus.copy_switchover_threshold TO 1;
+TRUNCATE target_table;
+
+-- load some data to make sure copy commands switch over connections
+INSERT INTO target_table SELECT i,0 FROM generate_series(0,500)i;
+
+-- make sure that SELECT only uses 1 connection 1 node
+-- yet still COPY commands use 1 connection per co-located
+-- intermediate result file
+SET citus.max_adaptive_executor_pool_size TO 1;
+
+INSERT INTO target_table SELECT * FROM target_table LIMIT 10000 ON CONFLICT(col_1) DO UPDATE SET col_2 = EXCLUDED.col_2 + 1;
+SELECT DISTINCT col_2 FROM target_table;
+
+WITH cte_1 AS (INSERT INTO target_table SELECT * FROM target_table LIMIT 10000 ON CONFLICT(col_1) DO UPDATE SET col_2 = EXCLUDED.col_2 + 1 RETURNING *)
+SELECT DISTINCT col_2 FROM cte_1;
+
 RESET client_min_messages;
 DROP SCHEMA on_conflict CASCADE;

@@ -173,16 +173,16 @@ INSERT INTO zero_col_heap SELECT * FROM zero_col_heap;
 INSERT INTO zero_col_heap SELECT * FROM zero_col_heap;
 INSERT INTO zero_col_heap SELECT * FROM zero_col_heap;
 INSERT INTO zero_col SELECT * FROM zero_col_heap;
-SELECT relname, stripe_num, row_count FROM columnar.stripe a, pg_class b
+SELECT relname, stripe_num, chunk_group_count, row_count FROM columnar.stripe a, pg_class b
 WHERE columnar_relation_storageid(b.oid)=a.storage_id AND relname = 'zero_col'
-ORDER BY 1,2,3;
- relname  | stripe_num | row_count
+ORDER BY 1,2,3,4;
+ relname  | stripe_num | chunk_group_count | row_count
 ---------------------------------------------------------------------
- zero_col |        1 |         1
- zero_col |        2 |         1
- zero_col |        3 |         1
- zero_col |        4 |         1
- zero_col |        5 |        64
+ zero_col |          1 |                 1 |         1
+ zero_col |          2 |                 1 |         1
+ zero_col |          3 |                 1 |         1
+ zero_col |          4 |                 1 |         1
+ zero_col |          5 |                 7 |        64
 (5 rows)
 
 SELECT relname, stripe_num, value_count FROM columnar.chunk a, pg_class b
@@ -192,22 +192,22 @@ ORDER BY 1,2,3;
 ---------------------------------------------------------------------
 (0 rows)
 
-SELECT relname, stripe_num, chunk_num, row_count FROM columnar.chunk_group a, pg_class b
+SELECT relname, stripe_num, chunk_group_num, row_count FROM columnar.chunk_group a, pg_class b
 WHERE columnar_relation_storageid(b.oid)=a.storage_id AND relname = 'zero_col'
 ORDER BY 1,2,3,4;
- relname  | stripe_num | chunk_num | row_count
+ relname  | stripe_num | chunk_group_num | row_count
 ---------------------------------------------------------------------
- zero_col |        1 |       0 |         1
- zero_col |        2 |       0 |         1
- zero_col |        3 |       0 |         1
- zero_col |        4 |       0 |         1
- zero_col |        5 |       0 |        10
- zero_col |        5 |       1 |        10
- zero_col |        5 |       2 |        10
- zero_col |        5 |       3 |        10
- zero_col |        5 |       4 |        10
- zero_col |        5 |       5 |        10
- zero_col |        5 |       6 |         4
+ zero_col |          1 |               0 |         1
+ zero_col |          2 |               0 |         1
+ zero_col |          3 |               0 |         1
+ zero_col |          4 |               0 |         1
+ zero_col |          5 |               0 |        10
+ zero_col |          5 |               1 |        10
+ zero_col |          5 |               2 |        10
+ zero_col |          5 |               3 |        10
+ zero_col |          5 |               4 |        10
+ zero_col |          5 |               5 |        10
+ zero_col |          5 |               6 |         4
 (11 rows)
 
 DROP TABLE zero_col;

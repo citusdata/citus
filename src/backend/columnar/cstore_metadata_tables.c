@@ -139,9 +139,9 @@ typedef FormData_columnar_options *Form_columnar_options;
 #define Anum_columnar_stripe_file_offset 3
 #define Anum_columnar_stripe_data_length 4
 #define Anum_columnar_stripe_column_count 5
-#define Anum_columnar_stripe_chunk_count 6
-#define Anum_columnar_stripe_chunk_row_count 7
-#define Anum_columnar_stripe_row_count 8
+#define Anum_columnar_stripe_chunk_row_count 6
+#define Anum_columnar_stripe_row_count 7
+#define Anum_columnar_stripe_chunk_count 8
 
 /* constants for columnar.chunk_group */
 #define Natts_columnar_chunkgroup 4
@@ -633,9 +633,9 @@ InsertStripeMetadataRow(uint64 storageId, StripeMetadata *stripe)
 		Int64GetDatum(stripe->fileOffset),
 		Int64GetDatum(stripe->dataLength),
 		Int32GetDatum(stripe->columnCount),
-		Int32GetDatum(stripe->chunkCount),
 		Int32GetDatum(stripe->chunkRowCount),
-		Int64GetDatum(stripe->rowCount)
+		Int64GetDatum(stripe->rowCount),
+		Int32GetDatum(stripe->chunkCount)
 	};
 
 	Oid columnarStripesOid = ColumnarStripeRelationId();

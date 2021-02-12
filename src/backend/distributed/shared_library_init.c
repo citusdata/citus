@@ -575,6 +575,22 @@ RegisterCitusConfigVariables(void)
 		GUC_STANDARD,
 		NULL, NULL, NULL);
 
+	DefineCustomIntVariable(
+		"citus.copy_switchover_threshold",
+		gettext_noop("Sets the threshold for copy to be switched "
+					 "over per connection."),
+		gettext_noop("Data size threshold to switch over the active placement for "
+					 "a connection. If this is too low, overhead of starting COPY "
+					 "commands will hurt the performance. If this is too high, "
+					 "buffered data will use lots of memory. 4MB is a good balance "
+					 "between memory usage and performance. Note that this is irrelevant "
+					 "in the common case where we open one connection per placement."),
+		&CopySwitchOverThresholdBytes,
+		4 * 1024 * 1024, 1, INT_MAX,
+		PGC_USERSET,
+		GUC_UNIT_BYTE | GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
 	DefineCustomBoolVariable(
 		"citus.enable_local_execution",
 		gettext_noop("Enables queries on shards that are local to the current node "

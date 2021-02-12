@@ -42,13 +42,13 @@ SELECT count(*) FROM t_stripes;
 -- VACUUM FULL doesn't reclaim dropped columns, but converts them to NULLs
 ALTER TABLE t DROP COLUMN a;
 
-SELECT stripe_num, attr_num, chunk_num, minimum_value IS NULL, maximum_value IS NULL
+SELECT stripe_num, attr_num, chunk_group_num, minimum_value IS NULL, maximum_value IS NULL
 FROM columnar.chunk a, pg_class b
 WHERE a.storage_id = columnar_relation_storageid(b.oid) AND b.relname='t' ORDER BY 1, 2, 3;
 
 VACUUM FULL t;
 
-SELECT stripe_num, attr_num, chunk_num, minimum_value IS NULL, maximum_value IS NULL
+SELECT stripe_num, attr_num, chunk_group_num, minimum_value IS NULL, maximum_value IS NULL
 FROM columnar.chunk a, pg_class b
 WHERE a.storage_id = columnar_relation_storageid(b.oid) AND b.relname='t' ORDER BY 1, 2, 3;
 
