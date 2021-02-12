@@ -21,9 +21,9 @@ CREATE TABLE stripe (
     file_offset bigint NOT NULL,
     data_length bigint NOT NULL,
     column_count int NOT NULL,
-    chunk_count int NOT NULL,
     chunk_row_count int NOT NULL,
     row_count bigint NOT NULL,
+    chunk_group_count int NOT NULL,
     PRIMARY KEY (storage_id, stripe_num)
 ) WITH (user_catalog_table = true);
 
