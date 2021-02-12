@@ -384,8 +384,15 @@ static bool
 HasConstantFilterOnUniqueColumn(RangeTblEntry *rangeTableEntry,
 								RelationRestriction *relationRestriction)
 {
-	if (rangeTableEntry == NULL)
+	if (rangeTableEntry == NULL || relationRestriction == NULL)
 	{
+		/*
+		 * Postgres might not pass relationRestriction info with hooks if
+		 * the table doesn't contribute to the result, and in that case
+		 * relationRestriction will be NULL. Ideally it doesn't make sense
+		 * to recursively plan such tables but for the time being we don't
+		 * add any special logic for these tables as it might introduce bugs.
+		 */
 		return false;
 	}
 	List *baseRestrictionList = relationRestriction->relOptInfo->baserestrictinfo;
@@ -538,11 +545,6 @@ CreateConversionCandidates(PlannerRestrictionContext *plannerRestrictionContext,
 
 		RelationRestriction *relationRestriction =
 			RelationRestrictionForRelation(rangeTableEntry, plannerRestrictionContext);
-		if (relationRestriction == NULL)
-		{
-			continue;
-		}
-
 
 		RangeTableEntryDetails *rangeTableEntryDetails =
 			palloc0(sizeof(RangeTableEntryDetails));
