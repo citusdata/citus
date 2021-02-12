@@ -83,6 +83,8 @@ static void GetHighestUsedAddressAndId(uint64 storageId,
 static void LockForStripeReservation(Relation rel, LOCKMODE mode);
 static void UnlockForStripeReservation(Relation rel, LOCKMODE mode);
 static List * ReadDataFileStripeList(uint64 storageId, Snapshot snapshot);
+static uint32 * ReadChunkGroupRowCounts(uint64 storageId, uint64 stripe, uint32
+										chunkGroupCount);
 static Oid ColumnarStorageIdSequenceRelationId(void);
 static Oid ColumnarStripeRelationId(void);
 static Oid ColumnarStripeIndexRelationId(void);
@@ -91,6 +93,7 @@ static Oid ColumnarOptionsIndexRegclass(void);
 static Oid ColumnarChunkRelationId(void);
 static Oid ColumnarChunkGroupRelationId(void);
 static Oid ColumnarChunkIndexRelationId(void);
+static Oid ColumnarChunkGroupIndexRelationId(void);
 static Oid ColumnarNamespaceId(void);
 static ModifyState * StartModifyRelation(Relation rel);
 static void InsertTupleAndEnforceConstraints(ModifyState *state, Datum *values,
@@ -616,7 +619,65 @@ ReadStripeSkipList(RelFileNode relfilenode, uint64 stripe, TupleDesc tupleDescri
 	index_close(index, AccessShareLock);
 	table_close(columnarChunk, AccessShareLock);
 
+	chunkList->chunkRowCounts =
+		ReadChunkGroupRowCounts(metapage->storageId, stripe, chunkCount);
+
 	return chunkList;
+}
+
+
+static uint32 *
+ReadChunkGroupRowCounts(uint64 storageId, uint64 stripe, uint32 chunkGroupCount)
+{
+	Oid columnarChunkGroupOid = ColumnarChunkGroupRelationId();
+	Relation columnarChunkGroup = table_open(columnarChunkGroupOid, AccessShareLock);
+	Relation index = index_open(ColumnarChunkGroupIndexRelationId(), AccessShareLock);
+
+	ScanKeyData scanKey[2];
+	ScanKeyInit(&scanKey[0], Anum_columnar_chunkgroup_storageid,
+				BTEqualStrategyNumber, F_OIDEQ, UInt64GetDatum(storageId));
+	ScanKeyInit(&scanKey[1], Anum_columnar_chunkgroup_stripe,
+				BTEqualStrategyNumber, F_OIDEQ, Int32GetDatum(stripe));
+
+	SysScanDesc scanDescriptor =
+		systable_beginscan_ordered(columnarChunkGroup, index, NULL, 2, scanKey);
+
+	uint32 chunkGroupIndex = 0;
+	HeapTuple heapTuple = NULL;
+	uint32 *chunkGroupRowCounts = palloc0(chunkGroupCount * sizeof(uint32));
+
+	while (HeapTupleIsValid(heapTuple = systable_getnext(scanDescriptor)))
+	{
+		Datum datumArray[Natts_columnar_chunkgroup];
+		bool isNullArray[Natts_columnar_chunkgroup];
+
+		heap_deform_tuple(heapTuple,
+						  RelationGetDescr(columnarChunkGroup),
+						  datumArray, isNullArray);
+
+		uint32 tupleChunkGroupIndex =
+			DatumGetUInt32(datumArray[Anum_columnar_chunkgroup_chunk - 1]);
+		if (chunkGroupIndex >= chunkGroupCount ||
+			tupleChunkGroupIndex != chunkGroupIndex)
+		{
+			elog(ERROR, "unexpected chunk group");
+		}
+
+		chunkGroupRowCounts[chunkGroupIndex] =
+			(uint32) DatumGetUInt64(datumArray[Anum_columnar_chunkgroup_row_count - 1]);
+		chunkGroupIndex++;
+	}
+
+	if (chunkGroupIndex != chunkGroupCount)
+	{
+		elog(ERROR, "unexpected chunk group count");
+	}
+
+	systable_endscan_ordered(scanDescriptor);
+	index_close(index, AccessShareLock);
+	table_close(columnarChunkGroup, AccessShareLock);
+
+	return chunkGroupRowCounts;
 }
 
 
@@ -1207,6 +1268,17 @@ static Oid
 ColumnarChunkIndexRelationId(void)
 {
 	return get_relname_relid("chunk_pkey", ColumnarNamespaceId());
+}
+
+
+/*
+ * ColumnarChunkGroupIndexRelationId returns relation id of columnar.chunk_group_pkey.
+ * TODO: should we cache this similar to citus?
+ */
+static Oid
+ColumnarChunkGroupIndexRelationId(void)
+{
+	return get_relname_relid("chunk_group_pkey", ColumnarNamespaceId());
 }
 
 
