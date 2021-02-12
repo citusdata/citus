@@ -619,7 +619,7 @@ ReadStripeSkipList(RelFileNode relfilenode, uint64 stripe, TupleDesc tupleDescri
 	index_close(index, AccessShareLock);
 	table_close(columnarChunk, AccessShareLock);
 
-	chunkList->chunkRowCounts =
+	chunkList->chunkGroupRowCounts =
 		ReadChunkGroupRowCounts(metapage->storageId, stripe, chunkCount);
 
 	return chunkList;
@@ -695,7 +695,7 @@ InsertStripeMetadataRow(uint64 storageId, StripeMetadata *stripe)
 		Int64GetDatum(stripe->dataLength),
 		Int32GetDatum(stripe->columnCount),
 		Int32GetDatum(stripe->chunkCount),
-		Int32GetDatum(stripe->chunkRowCount),
+		Int32GetDatum(stripe->chunkGroupRowCount),
 		Int64GetDatum(stripe->rowCount)
 	};
 
@@ -828,7 +828,7 @@ UnlockForStripeReservation(Relation rel, LOCKMODE mode)
 StripeMetadata
 ReserveStripe(Relation rel, uint64 sizeBytes,
 			  uint64 rowCount, uint64 columnCount,
-			  uint64 chunkCount, uint64 chunkRowCount)
+			  uint64 chunkCount, uint64 chunkGroupRowCount)
 {
 	StripeMetadata stripe = { 0 };
 	uint64 currLogicalHigh = 0;
@@ -876,7 +876,7 @@ ReserveStripe(Relation rel, uint64 sizeBytes,
 	stripe.fileOffset = resLogicalStart;
 	stripe.dataLength = sizeBytes;
 	stripe.chunkCount = chunkCount;
-	stripe.chunkRowCount = chunkRowCount;
+	stripe.chunkGroupRowCount = chunkGroupRowCount;
 	stripe.columnCount = columnCount;
 	stripe.rowCount = rowCount;
 	stripe.id = highestId + 1;
@@ -930,7 +930,7 @@ ReadDataFileStripeList(uint64 storageId, Snapshot snapshot)
 			datumArray[Anum_columnar_stripe_column_count - 1]);
 		stripeMetadata->chunkCount = DatumGetInt32(
 			datumArray[Anum_columnar_stripe_chunk_count - 1]);
-		stripeMetadata->chunkRowCount = DatumGetInt32(
+		stripeMetadata->chunkGroupRowCount = DatumGetInt32(
 			datumArray[Anum_columnar_stripe_chunk_row_count - 1]);
 		stripeMetadata->rowCount = DatumGetInt64(
 			datumArray[Anum_columnar_stripe_row_count - 1]);

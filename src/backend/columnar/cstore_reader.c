@@ -358,7 +358,7 @@ static ChunkGroupReadState *
 BeginChunkGroupRead(StripeBuffers *stripeBuffers, int chunkIndex, TupleDesc tupleDesc,
 					List *projectedColumnList, MemoryContext cxt)
 {
-	uint32 chunkRowCount =
+	uint32 chunkGroupRowCount =
 		stripeBuffers->selectedChunkGroupRowCounts[chunkIndex];
 
 	MemoryContext oldContext = MemoryContextSwitchTo(cxt);
@@ -366,12 +366,13 @@ BeginChunkGroupRead(StripeBuffers *stripeBuffers, int chunkIndex, TupleDesc tupl
 	ChunkGroupReadState *chunkGroupReadState = palloc0(sizeof(ChunkGroupReadState));
 
 	chunkGroupReadState->currentRow = 0;
-	chunkGroupReadState->rowCount = chunkRowCount;
+	chunkGroupReadState->rowCount = chunkGroupRowCount;
 	chunkGroupReadState->columnCount = tupleDesc->natts;
 	chunkGroupReadState->projectedColumnList = projectedColumnList;
 
 	chunkGroupReadState->chunkGroupData = DeserializeChunkData(stripeBuffers, chunkIndex,
-															   chunkRowCount, tupleDesc,
+															   chunkGroupRowCount,
+															   tupleDesc,
 															   projectedColumnList);
 	MemoryContextSwitchTo(oldContext);
 
@@ -450,7 +451,7 @@ ColumnarReadChunkGroupsFiltered(TableReadState *state)
  * value arrays for requested columns in columnMask.
  */
 ChunkData *
-CreateEmptyChunkData(uint32 columnCount, bool *columnMask, uint32 chunkRowCount)
+CreateEmptyChunkData(uint32 columnCount, bool *columnMask, uint32 chunkGroupRowCount)
 {
 	uint32 columnIndex = 0;
 
@@ -459,15 +460,17 @@ CreateEmptyChunkData(uint32 columnCount, bool *columnMask, uint32 chunkRowCount)
 	chunkData->valueArray = palloc0(columnCount * sizeof(Datum *));
 	chunkData->valueBufferArray = palloc0(columnCount * sizeof(StringInfo));
 	chunkData->columnCount = columnCount;
-	chunkData->rowCount = chunkRowCount;
+	chunkData->rowCount = chunkGroupRowCount;
 
 	/* allocate chunk memory for deserialized data */
 	for (columnIndex = 0; columnIndex < columnCount; columnIndex++)
 	{
 		if (columnMask[columnIndex])
 		{
-			chunkData->existsArray[columnIndex] = palloc0(chunkRowCount * sizeof(bool));
-			chunkData->valueArray[columnIndex] = palloc0(chunkRowCount * sizeof(Datum));
+			chunkData->existsArray[columnIndex] = palloc0(chunkGroupRowCount *
+														  sizeof(bool));
+			chunkData->valueArray[columnIndex] = palloc0(chunkGroupRowCount *
+														 sizeof(Datum));
 			chunkData->valueBufferArray[columnIndex] = NULL;
 		}
 	}
@@ -581,7 +584,8 @@ LoadFilteredStripeBuffers(Relation relation, StripeMetadata *stripeMetadata,
 	stripeBuffers->columnCount = columnCount;
 	stripeBuffers->rowCount = StripeSkipListRowCount(selectedChunkSkipList);
 	stripeBuffers->columnBuffersArray = columnBuffersArray;
-	stripeBuffers->selectedChunkGroupRowCounts = selectedChunkSkipList->chunkRowCounts;
+	stripeBuffers->selectedChunkGroupRowCounts =
+		selectedChunkSkipList->chunkGroupRowCounts;
 
 	return stripeBuffers;
 }
@@ -932,13 +936,13 @@ SelectedChunkSkipList(StripeSkipList *stripeSkipList, bool *projectedColumnMask,
 	}
 
 	selectedChunkIndex = 0;
-	uint32 *chunkRowCounts = palloc0(selectedChunkCount * sizeof(uint32));
+	uint32 *chunkGroupRowCounts = palloc0(selectedChunkCount * sizeof(uint32));
 	for (chunkIndex = 0; chunkIndex < stripeSkipList->chunkCount; chunkIndex++)
 	{
 		if (selectedChunkMask[chunkIndex])
 		{
-			chunkRowCounts[selectedChunkIndex++] =
-				stripeSkipList->chunkRowCounts[chunkIndex];
+			chunkGroupRowCounts[selectedChunkIndex++] =
+				stripeSkipList->chunkGroupRowCounts[chunkIndex];
 		}
 	}
 
@@ -946,7 +950,7 @@ SelectedChunkSkipList(StripeSkipList *stripeSkipList, bool *projectedColumnMask,
 	selectedChunkSkipList->chunkSkipNodeArray = selectedChunkSkipNodeArray;
 	selectedChunkSkipList->chunkCount = selectedChunkCount;
 	selectedChunkSkipList->columnCount = stripeSkipList->columnCount;
-	selectedChunkSkipList->chunkRowCounts = chunkRowCounts;
+	selectedChunkSkipList->chunkGroupRowCounts = chunkGroupRowCounts;
 
 	return selectedChunkSkipList;
 }
@@ -962,12 +966,12 @@ StripeSkipListRowCount(StripeSkipList *stripeSkipList)
 {
 	uint32 stripeSkipListRowCount = 0;
 	uint32 chunkIndex = 0;
-	uint32 *chunkGroupRowCounts = stripeSkipList->chunkRowCounts;
+	uint32 *chunkGroupRowCounts = stripeSkipList->chunkGroupRowCounts;
 
 	for (chunkIndex = 0; chunkIndex < stripeSkipList->chunkCount; chunkIndex++)
 	{
-		uint32 chunkRowCount = chunkGroupRowCounts[chunkIndex];
-		stripeSkipListRowCount += chunkRowCount;
+		uint32 chunkGroupRowCount = chunkGroupRowCounts[chunkIndex];
+		stripeSkipListRowCount += chunkGroupRowCount;
 	}
 
 	return stripeSkipListRowCount;

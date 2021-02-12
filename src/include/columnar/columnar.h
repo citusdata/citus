@@ -96,7 +96,7 @@ typedef struct StripeMetadata
 	uint64 dataLength;
 	uint32 columnCount;
 	uint32 chunkCount;
-	uint32 chunkRowCount;
+	uint32 chunkGroupRowCount;
 	uint64 rowCount;
 	uint64 id;
 } StripeMetadata;
@@ -140,7 +140,7 @@ typedef struct ColumnChunkSkipNode
 typedef struct StripeSkipList
 {
 	ColumnChunkSkipNode **chunkSkipNodeArray;
-	uint32 *chunkRowCounts;
+	uint32 *chunkGroupRowCounts;
 	uint32 columnCount;
 	uint32 chunkCount;
 } StripeSkipList;
@@ -251,7 +251,7 @@ extern int64 ColumnarReadChunkGroupsFiltered(TableReadState *state);
 extern FmgrInfo * GetFunctionInfoOrNull(Oid typeId, Oid accessMethodId,
 										int16 procedureId);
 extern ChunkData * CreateEmptyChunkData(uint32 columnCount, bool *columnMask,
-										uint32 chunkRowCount);
+										uint32 chunkGroupRowCount);
 extern void FreeChunkData(ChunkData *chunkData);
 extern uint64 ColumnarTableRowCount(Relation relation);
 extern bool CompressBuffer(StringInfo inputBuffer,
@@ -278,7 +278,7 @@ extern List * StripesForRelfilenode(RelFileNode relfilenode);
 extern uint64 GetHighestUsedAddress(RelFileNode relfilenode);
 extern StripeMetadata ReserveStripe(Relation rel, uint64 size,
 									uint64 rowCount, uint64 columnCount,
-									uint64 chunkCount, uint64 chunkRowCount);
+									uint64 chunkCount, uint64 chunkGroupRowCount);
 extern void SaveStripeSkipList(RelFileNode relfilenode, uint64 stripe,
 							   StripeSkipList *stripeSkipList,
 							   TupleDesc tupleDescriptor);
