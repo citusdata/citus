@@ -917,13 +917,13 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 			 * Even if we started a new transaction, now we still hold
 			 * ExclusiveLock (acquired by VirtualXactLockTableInsert) on new
 			 * vxid and it is not released yet.
-
+			 *
 			 * Moreover, remote connections to localhost (that are opened by
 			 * Citus for shard level index commands) might enter into dead-lock
 			 * since they would attempt to acquire ShareLock on the same vxid
 			 * since postgres calls WaitForOlderSnapshots function when executing
 			 * CREATE INDEX (or REINDEX) CONCURRENTLY commands.
-
+			 *
 			 * To prevent self-deadlock, we release lock on vxid by explicitly
 			 * calling VirtualXactLockTableCleanup.
 			 */
