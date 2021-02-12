@@ -74,13 +74,6 @@ struct TableReadState
 	StripeReadState *stripeReadState;
 
 	/*
-	 * Following are used for tables with zero columns, or when no
-	 * columns are projected.
-	 */
-	uint64 totalRowCount;
-	uint64 readRowCount;
-
-	/*
 	 * List of Var pointers for columns in the query. We use this both for
 	 * getting vector of projected columns, and also when we want to build
 	 * base constraint to find selected row chunks.
@@ -277,39 +270,15 @@ BeginStripeRead(StripeMetadata *stripeMetadata, Relation rel, TupleDesc tupleDes
 	stripeReadState->projectedColumnList = projectedColumnList;
 	stripeReadState->stripeReadContext = stripeContext;
 
-	/*
-	 * If there are no attributes in the table at all, reading the chunk
-	 * groups will fail (because there are no chunks), so we must introduce a
-	 * special case. Also follow this special case if no attributes are
-	 * projected, so that we won't have to deal with deleted attributes,
-	 * either.
-	 *
-	 * TODO: refactor metadata so that chunk groups hold the row count; rather
-	 * than individual chunks (which is repetitive in the normal case, and
-	 * problematic in the case where there are zero columns).
-	 */
-	if (list_length(projectedColumnList) != 0)
-	{
-		stripeReadState->stripeBuffers = LoadFilteredStripeBuffers(rel,
-																   stripeMetadata,
-																   tupleDesc,
-																   projectedColumnList,
-																   whereClauseList,
-																   &stripeReadState->
-																   chunkGroupsFiltered);
+	stripeReadState->stripeBuffers = LoadFilteredStripeBuffers(rel,
+															   stripeMetadata,
+															   tupleDesc,
+															   projectedColumnList,
+															   whereClauseList,
+															   &stripeReadState->
+															   chunkGroupsFiltered);
 
-		stripeReadState->rowCount = stripeReadState->stripeBuffers->rowCount;
-	}
-	else
-	{
-		stripeReadState->stripeBuffers = NULL;
-
-		/*
-		 * If there are no projected columns, then no chunks will be filtered,
-		 * so the row count is simply the stripe's row count.
-		 */
-		stripeReadState->rowCount = stripeMetadata->rowCount;
-	}
+	stripeReadState->rowCount = stripeReadState->stripeBuffers->rowCount;
 
 	MemoryContextSwitchTo(oldContext);
 
@@ -344,23 +313,6 @@ ReadStripeNextRow(StripeReadState *stripeReadState, Datum *columnValues,
 	if (stripeReadState->currentRow >= stripeReadState->rowCount)
 	{
 		return false;
-	}
-
-	/*
-	 * If there are no attributes in the table at all, stripeBuffers won't be
-	 * loaded so we just return rowCount empty tuples.
-	 */
-	if (stripeReadState->stripeBuffers == NULL)
-	{
-		if (stripeReadState->currentRow < stripeReadState->rowCount)
-		{
-			stripeReadState->currentRow++;
-			return true;
-		}
-		else
-		{
-			return false;
-		}
 	}
 
 	while (true)
