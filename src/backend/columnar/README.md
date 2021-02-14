@@ -279,7 +279,7 @@ INSERT INTO perf_columnar SELECT * FROM perf_row;
 => SELECT pg_total_relation_size('perf_row')::numeric/pg_total_relation_size('perf_columnar') AS compression_ratio;
  compression_ratio
 --------------------
- 5.4080768380134124
+ 5.3958044063457513
 (1 row)
 ```
 
@@ -287,32 +287,12 @@ The overall compression ratio of columnar table, versus the same data
 stored with row storage, is **5.4X**.
 
 ```
-=> VACUUM VERBOSE perf_row;
-INFO:  vacuuming "public.perf_row"
-INFO:  "perf_row": found 0 removable, 10 nonremovable row versions in 1 out of 5769231 pages
-DETAIL:  0 dead row versions cannot be removed yet, oldest xmin: 3110
-There were 0 unused item identifiers.
-Skipped 0 pages due to buffer pins, 5769230 frozen pages.
-0 pages are entirely empty.
-CPU: user: 0.10 s, system: 0.05 s, elapsed: 0.26 s.
-INFO:  vacuuming "pg_toast.pg_toast_17133"
-INFO:  index "pg_toast_17133_index" now contains 0 row versions in 1 pages
-DETAIL:  0 index row versions were removed.
-0 index pages have been deleted, 0 are currently reusable.
-CPU: user: 0.00 s, system: 0.00 s, elapsed: 0.00 s.
-INFO:  "pg_toast_17133": found 0 removable, 0 nonremovable row versions in 0 out of 0 pages
-DETAIL:  0 dead row versions cannot be removed yet, oldest xmin: 3110
-There were 0 unused item identifiers.
-Skipped 0 pages due to buffer pins, 0 frozen pages.
-0 pages are entirely empty.
-CPU: user: 0.00 s, system: 0.00 s, elapsed: 0.00 s.
-
 => VACUUM VERBOSE perf_columnar;
 INFO:  statistics for "perf_columnar":
-storage id: 10000000020
-total file size: 8741486592, total data size: 8714771176
-compression rate: 4.96x
-total row count: 75000000, stripe count: 501, average rows per stripe: 149700
+storage id: 10000000000
+total file size: 8761368576, total data size: 8734266196
+compression rate: 5.01x
+total row count: 75000000, stripe count: 500, average rows per stripe: 150000
 chunk count: 60000, containing data for dropped columns: 0, zstd compressed: 60000
 ```
 
@@ -322,8 +302,13 @@ not account for the metadata savings of the columnar format.
 
 ## System
 
-* 16GB physical memory
-* 128MB PG shared buffers
+* Azure VM: Standard D2s v3 (2 vcpus, 8 GiB memory)
+* Linux (ubuntu 18.04)
+* Data Drive: Standard HDD (512GB, 500 IOPS Max, 60 MB/s Max)
+* PostgreSQL 13 (``--with-llvm``, ``--with-python``)
+* ``shared_buffers = 128MB``
+* ``max_parallel_workers_per_gather = 0``
+* ``jit = on``
 
 Note: because this was run on a system with enough physical memory to
 hold a substantial fraction of the table, the IO benefits of columnar
@@ -334,11 +319,16 @@ is substantially increased.
 
 ```sql
 -- OFFSET 1000 so that no rows are returned, and we collect only timings
+
 SELECT vendor_id, SUM(quantity) FROM perf_row GROUP BY vendor_id OFFSET 1000;
+SELECT vendor_id, SUM(quantity) FROM perf_row GROUP BY vendor_id OFFSET 1000;
+SELECT vendor_id, SUM(quantity) FROM perf_row GROUP BY vendor_id OFFSET 1000;
+SELECT vendor_id, SUM(quantity) FROM perf_columnar GROUP BY vendor_id OFFSET 1000;
+SELECT vendor_id, SUM(quantity) FROM perf_columnar GROUP BY vendor_id OFFSET 1000;
 SELECT vendor_id, SUM(quantity) FROM perf_columnar GROUP BY vendor_id OFFSET 1000;
 ```
 
 Timing (median of three runs):
- * row: 201700ms
- * columnar: 14202ms
- * speedup: **14X**
+ * row: 436s
+ * columnar: 16s
+ * speedup: **27X**
