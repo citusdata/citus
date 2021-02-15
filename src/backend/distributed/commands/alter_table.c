@@ -184,7 +184,8 @@ static void CreateDistributedTableLike(TableConversionState *con);
 static void CreateCitusTableLike(TableConversionState *con);
 static List * GetViewCreationCommandsOfTable(Oid relationId);
 static void ReplaceTable(Oid sourceId, Oid targetId, List *justBeforeDropCommands,
-						 bool suppressNoticeMessages);
+						 bool suppressNoticeMessages,
+						 bool changeSequenceDependenciesOnWorkers);
 static bool HasAnyGeneratedStoredColumns(Oid relationId);
 static List * GetNonGeneratedStoredColumnNameList(Oid relationId);
 static void CheckAlterDistributedTableConversionParameters(TableConversionState *con);
@@ -711,8 +712,15 @@ ConvertTable(TableConversionState *con)
 		CreateCitusTableLike(con);
 	}
 
+	/*
+	 * We shouldn't try to change sequence dependencies on mx workers when
+	 * undistributing table since we don't create new relation on mx worker
+	 * nodes as it is a local table.
+	 */
+	bool changeSequenceDependenciesOnWorkers =
+		(con->conversionType == UNDISTRIBUTE_TABLE) ? false : true;
 	ReplaceTable(con->relationId, con->newRelationId, justBeforeDropCommands,
-				 con->suppressNoticeMessages);
+				 con->suppressNoticeMessages, changeSequenceDependenciesOnWorkers);
 
 	TableDDLCommand *tableConstructionCommand = NULL;
 	foreach_ptr(tableConstructionCommand, postLoadCommands)
@@ -1121,7 +1129,7 @@ GetViewCreationCommandsOfTable(Oid relationId)
  */
 void
 ReplaceTable(Oid sourceId, Oid targetId, List *justBeforeDropCommands,
-			 bool suppressNoticeMessages)
+			 bool suppressNoticeMessages, bool changeSequenceDependenciesOnWorkers)
 {
 	char *sourceName = get_rel_name(sourceId);
 	char *targetName = get_rel_name(targetId);
@@ -1178,7 +1186,7 @@ ReplaceTable(Oid sourceId, Oid targetId, List *justBeforeDropCommands,
 	{
 		changeDependencyFor(RelationRelationId, sequenceOid,
 							RelationRelationId, sourceId, targetId);
-		if (ShouldSyncTableMetadata(sourceId))
+		if (changeSequenceDependenciesOnWorkers && ShouldSyncTableMetadata(sourceId))
 		{
 			Oid sequenceSchemaOid = get_rel_namespace(sequenceOid);
 			char *sequenceSchemaName = get_namespace_name(sequenceSchemaOid);
