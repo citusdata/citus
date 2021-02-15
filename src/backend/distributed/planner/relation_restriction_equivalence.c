@@ -18,6 +18,7 @@
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_logical_planner.h"
 #include "distributed/multi_logical_optimizer.h"
+#include "distributed/multi_router_planner.h"
 #include "distributed/pg_dist_partition.h"
 #include "distributed/query_utils.h"
 #include "distributed/relation_restriction_equivalence.h"
@@ -1859,11 +1860,10 @@ GetRestrictInfoListForRelation(RangeTblEntry *rangeTblEntry,
 	}
 
 	RelOptInfo *relOptInfo = relationRestriction->relOptInfo;
-	List *joinRestrictInfo = relOptInfo->joininfo;
 	List *baseRestrictInfo = relOptInfo->baserestrictinfo;
 
-	List *joinRestrictClauseList = get_all_actual_clauses(joinRestrictInfo);
-	if (ContainsFalseClause(joinRestrictClauseList))
+	bool joinConditionIsOnFalse = JoinConditionIsOnFalse(relOptInfo->joininfo);
+	if (joinConditionIsOnFalse)
 	{
 		/* found WHERE false, no need  to continue, we just return a false clause */
 		bool value = false;

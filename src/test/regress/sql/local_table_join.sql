@@ -437,7 +437,39 @@ select COUNT(*) from
   inner join tbl1 on (select 1 from custom_pg_type) >= d
   left join pg_dist_rebalance_strategy on 'by_shard_count' = name
 where a + b + c > 0;
+
+--issue 4706
+CREATE TABLE table1(a int);
+CREATE TABLE table2(a int);
+
+INSERT INTO table1 VALUES (1);
+INSERT INTO table2 VALUES (1);
+
+-- make sure all the followings give the same result as postgres tables.
+SELECT 1 AS res FROM table2 RIGHT JOIN (SELECT 1 FROM table1, table2) AS sub1 ON false;
+
 SET client_min_messages to DEBUG1;
+
+BEGIN;
+SELECT create_distributed_table('table1', 'a');
+SELECT 1 AS res FROM table2 RIGHT JOIN (SELECT 1 FROM table1, table2) AS sub1 ON false;
+ROLLBACK;
+
+BEGIN;
+SELECT create_distributed_table('table2', 'a');
+-- currently not supported
+SELECT 1 AS res FROM table2 RIGHT JOIN (SELECT 1 FROM table1, table2) AS sub1 ON false;
+ROLLBACK;
+
+BEGIN;
+SELECT create_reference_table('table1');
+SELECT 1 AS res FROM table2 RIGHT JOIN (SELECT 1 FROM table1, table2) AS sub1 ON false;
+ROLLBACK;
+
+BEGIN;
+SELECT create_reference_table('table2');
+SELECT 1 AS res FROM table2 RIGHT JOIN (SELECT 1 FROM table1, table2) AS sub1 ON false;
+ROLLBACK;
 
 
 RESET client_min_messages;

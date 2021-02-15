@@ -93,6 +93,7 @@
 #include "distributed/multi_router_planner.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_server_executor.h"
+#include "distributed/multi_router_planner.h"
 #include "distributed/query_colocation_checker.h"
 #include "distributed/query_pushdown_planning.h"
 #include "distributed/recursive_planning.h"
@@ -395,13 +396,17 @@ HasConstantFilterOnUniqueColumn(RangeTblEntry *rangeTableEntry,
 		 */
 		return false;
 	}
-	List *baseRestrictionList = relationRestriction->relOptInfo->baserestrictinfo;
-	List *restrictClauseList = get_all_actual_clauses(baseRestrictionList);
-	if (ContainsFalseClause(restrictClauseList))
+
+	bool joinOnFalse = JoinConditionIsOnFalse(relationRestriction->relOptInfo->joininfo);
+	if (joinOnFalse)
 	{
 		/* If there is a WHERE FALSE, we consider it as a constant filter. */
 		return true;
 	}
+
+	List *baseRestrictionList = relationRestriction->relOptInfo->baserestrictinfo;
+	List *restrictClauseList = get_all_actual_clauses(baseRestrictionList);
+
 	List *rteEqualityColumnsNos =
 		FetchEqualityAttrNumsForRTE((Node *) restrictClauseList);
 

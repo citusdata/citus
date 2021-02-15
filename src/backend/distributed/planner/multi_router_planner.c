@@ -2705,8 +2705,6 @@ TargetShardIntervalsForRestrictInfo(RelationRestrictionContext *restrictionConte
 		List *baseRestrictionList = relationRestriction->relOptInfo->baserestrictinfo;
 		List *restrictClauseList = get_all_actual_clauses(baseRestrictionList);
 		List *prunedShardIntervalList = NIL;
-		List *joinInfoList = relationRestriction->relOptInfo->joininfo;
-		List *pseudoRestrictionList = extract_actual_clauses(joinInfoList, true);
 
 		/*
 		 * Queries may have contradiction clauses like 'false', or '1=0' in
@@ -2714,8 +2712,9 @@ TargetShardIntervalsForRestrictInfo(RelationRestrictionContext *restrictionConte
 		 * inside relOptInfo->joininfo list. We treat such cases as if all
 		 * shards of the table are pruned out.
 		 */
-		bool whereFalseQuery = ContainsFalseClause(pseudoRestrictionList);
-		if (!whereFalseQuery && shardCount > 0)
+		bool joinFalseQuery = JoinConditionIsOnFalse(
+			relationRestriction->relOptInfo->joininfo);
+		if (!joinFalseQuery && shardCount > 0)
 		{
 			Const *restrictionPartitionValueConst = NULL;
 			prunedShardIntervalList = PruneShards(relationId, tableId, restrictClauseList,
@@ -2757,6 +2756,22 @@ TargetShardIntervalsForRestrictInfo(RelationRestrictionContext *restrictionConte
 	}
 
 	return prunedShardIntervalListList;
+}
+
+
+/*
+ * JoinConditionIsOnFalse returns true for queries that
+ * have contradiction clauses like 'false', or '1=0' in
+ * their filters. Such queries would have pseudo constant 'false'
+ * inside joininfo list.
+ */
+bool
+JoinConditionIsOnFalse(List *joinInfoList)
+{
+	List *pseudoJoinRestrictionList = extract_actual_clauses(joinInfoList, true);
+
+	bool joinFalseQuery = ContainsFalseClause(pseudoJoinRestrictionList);
+	return joinFalseQuery;
 }
 
 
