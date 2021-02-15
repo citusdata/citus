@@ -110,6 +110,10 @@ $$);
 
 SELECT alter_distributed_table ('users', shard_count=>10);
 
+-- first drop the column that has a foreign key since
+-- alter_table_set_access_method doesn't support foreign keys
+ALTER TABLE users DROP country_id;
+
 -- set access method to columnar if pg version > 11
 DO $proc$
 BEGIN
