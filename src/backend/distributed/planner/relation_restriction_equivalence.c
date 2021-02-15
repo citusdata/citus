@@ -1362,6 +1362,11 @@ AddUnionAllSetOperationsToAttributeEquivalenceClass(AttributeEquivalenceClass **
 	List *appendRelList = root->append_rel_list;
 	ListCell *appendRelCell = NULL;
 
+	if (root->simple_rel_array_size != 1)
+	{
+		return;
+	}
+
 	/* iterate on the queries that are part of UNION ALL subqueries */
 	foreach(appendRelCell, appendRelList)
 	{
