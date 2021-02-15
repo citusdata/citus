@@ -97,6 +97,7 @@ extern void GenerateSingleShardRouterTaskList(Job *job,
 extern PlannedStmt * FastPathPlanner(Query *originalQuery, Query *parse, ParamListInfo
 									 boundParams);
 extern bool FastPathRouterQuery(Query *query, Node **distributionKeyValue);
+extern bool JoinConditionIsOnFalse(List *relOptInfo);
 
 
 #endif /* MULTI_ROUTER_PLANNER_H */

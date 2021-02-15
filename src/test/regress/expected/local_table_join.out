@@ -1010,20 +1010,19 @@ UPDATE reference_table SET key = 1 FROM (SELECT * FROM postgres_table) l WHERE l
 DEBUG:  generating subplan XXX_1 for subquery SELECT key, value, value_2 FROM local_table_join.postgres_table
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: UPDATE local_table_join.reference_table SET key = 1 FROM (SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb)) l WHERE (l.key OPERATOR(pg_catalog.=) 10)
 SELECT count(*) FROM postgres_table JOIN distributed_table USING(key) WHERE FALSE;
-DEBUG:  Wrapping relation "postgres_table" to a subquery
-DEBUG:  generating subplan XXX_1 for subquery SELECT key FROM local_table_join.postgres_table WHERE false
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT postgres_table_1.key, NULL::text AS value, NULL::jsonb AS value_2 FROM (SELECT intermediate_result.key FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) postgres_table_1) postgres_table JOIN local_table_join.distributed_table USING (key)) WHERE false
+DEBUG:  Wrapping relation "distributed_table" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT key FROM local_table_join.distributed_table WHERE false
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (local_table_join.postgres_table JOIN (SELECT distributed_table_1.key, NULL::text AS value, NULL::jsonb AS value_2 FROM (SELECT intermediate_result.key FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) distributed_table_1) distributed_table USING (key)) WHERE false
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 SELECT count(*) FROM (SELECT * FROM distributed_table JOIN postgres_table USING(key) WHERE false) foo JOIN local_partitioned_table USING(key);
-DEBUG:  Wrapping relation "postgres_table" to a subquery
-DEBUG:  generating subplan XXX_1 for subquery SELECT key FROM local_table_join.postgres_table WHERE false
-DEBUG:  Wrapping relation "local_partitioned_table" to a subquery
-DEBUG:  generating subplan XXX_2 for subquery SELECT key FROM local_table_join.local_partitioned_table WHERE false
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT distributed_table.key, distributed_table.value, distributed_table.value_2, postgres_table.value, postgres_table.value_2 FROM (local_table_join.distributed_table JOIN (SELECT postgres_table_1.key, NULL::text AS value, NULL::jsonb AS value_2 FROM (SELECT intermediate_result.key FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) postgres_table_1) postgres_table USING (key)) WHERE false) foo(key, value, value_2, value_1, value_2_1) JOIN (SELECT local_partitioned_table_1.key, NULL::text AS value FROM (SELECT intermediate_result.key FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) local_partitioned_table_1) local_partitioned_table USING (key))
+DEBUG:  Wrapping relation "distributed_table" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT key FROM local_table_join.distributed_table WHERE false
+DEBUG:  generating subplan XXX_2 for subquery SELECT distributed_table.key, distributed_table.value, distributed_table.value_2, postgres_table.value, postgres_table.value_2 FROM ((SELECT distributed_table_1.key, NULL::text AS value, NULL::jsonb AS value_2 FROM (SELECT intermediate_result.key FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) distributed_table_1) distributed_table JOIN local_table_join.postgres_table USING (key)) WHERE false
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT intermediate_result.key, intermediate_result.value, intermediate_result.value_2, intermediate_result.value_1 AS value, intermediate_result.value_2_1 AS value_2 FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text, value_2 jsonb, value_1 text, value_2_1 jsonb)) foo(key, value, value_2, value_1, value_2_1) JOIN local_table_join.local_partitioned_table USING (key))
  count
 ---------------------------------------------------------------------
      0
@@ -1506,8 +1505,111 @@ where a + b + c > 0;
      1
 (1 row)
 
+--issue 4706
+CREATE TABLE table1(a int);
+CREATE TABLE table2(a int);
+INSERT INTO table1 VALUES (1);
+INSERT INTO table2 VALUES (1);
+-- make sure all the followings give the same result as postgres tables.
+SELECT 1 AS res FROM table2 RIGHT JOIN (SELECT 1 FROM table1, table2) AS sub1 ON false;
+ res
+---------------------------------------------------------------------
+   1
+(1 row)
+
 SET client_min_messages to DEBUG1;
+BEGIN;
+SELECT create_distributed_table('table1', 'a');
+NOTICE:  Copying data from local table...
+DEBUG:  Copied 1 rows
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$local_table_join.table1$$)
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT 1 AS res FROM table2 RIGHT JOIN (SELECT 1 FROM table1, table2) AS sub1 ON false;
+DEBUG:  Wrapping relation "table2" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT NULL::integer AS "dummy-1" FROM local_table_join.table2 WHERE true
+DEBUG:  Wrapping relation "table2" to a subquery
+DEBUG:  generating subplan XXX_2 for subquery SELECT NULL::integer AS "dummy-1" FROM local_table_join.table2 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT 1 AS res FROM ((SELECT NULL::integer AS a FROM (SELECT intermediate_result."dummy-1" FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result("dummy-1" integer)) table2_1) table2 RIGHT JOIN (SELECT 1 FROM local_table_join.table1, (SELECT NULL::integer AS a FROM (SELECT intermediate_result."dummy-1" FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result("dummy-1" integer)) table2_2) table2_1) sub1("?column?") ON (false))
+ res
+---------------------------------------------------------------------
+   1
+(1 row)
+
+ROLLBACK;
+BEGIN;
+SELECT create_distributed_table('table2', 'a');
+NOTICE:  Copying data from local table...
+DEBUG:  Copied 1 rows
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$local_table_join.table2$$)
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- currently not supported
+SELECT 1 AS res FROM table2 RIGHT JOIN (SELECT 1 FROM table1, table2) AS sub1 ON false;
+DEBUG:  Wrapping relation "table1" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT NULL::integer AS "dummy-1" FROM local_table_join.table1 WHERE true
+DEBUG:  generating subplan XXX_2 for subquery SELECT 1 FROM (SELECT NULL::integer AS a FROM (SELECT intermediate_result."dummy-1" FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result("dummy-1" integer)) table1_1) table1, local_table_join.table2
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT 1 AS res FROM (local_table_join.table2 RIGHT JOIN (SELECT intermediate_result."?column?" FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result("?column?" integer)) sub1("?column?") ON (false))
+ERROR:  cannot pushdown the subquery
+DETAIL:  Complex subqueries and CTEs cannot be in the outer part of the outer join
+ROLLBACK;
+BEGIN;
+SELECT create_reference_table('table1');
+NOTICE:  Copying data from local table...
+DEBUG:  Copied 1 rows
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$local_table_join.table1$$)
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT 1 AS res FROM table2 RIGHT JOIN (SELECT 1 FROM table1, table2) AS sub1 ON false;
+DEBUG:  Wrapping relation "table2" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT NULL::integer AS "dummy-1" FROM local_table_join.table2 WHERE true
+DEBUG:  Wrapping relation "table2" to a subquery
+DEBUG:  generating subplan XXX_2 for subquery SELECT NULL::integer AS "dummy-1" FROM local_table_join.table2 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT 1 AS res FROM ((SELECT NULL::integer AS a FROM (SELECT intermediate_result."dummy-1" FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result("dummy-1" integer)) table2_1) table2 RIGHT JOIN (SELECT 1 FROM local_table_join.table1, (SELECT NULL::integer AS a FROM (SELECT intermediate_result."dummy-1" FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result("dummy-1" integer)) table2_2) table2_1) sub1("?column?") ON (false))
+ res
+---------------------------------------------------------------------
+   1
+(1 row)
+
+ROLLBACK;
+BEGIN;
+SELECT create_reference_table('table2');
+NOTICE:  Copying data from local table...
+DEBUG:  Copied 1 rows
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$local_table_join.table2$$)
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT 1 AS res FROM table2 RIGHT JOIN (SELECT 1 FROM table1, table2) AS sub1 ON false;
+DEBUG:  Wrapping relation "table1" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT NULL::integer AS "dummy-1" FROM local_table_join.table1 WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT 1 AS res FROM (local_table_join.table2 RIGHT JOIN (SELECT 1 FROM (SELECT NULL::integer AS a FROM (SELECT intermediate_result."dummy-1" FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result("dummy-1" integer)) table1_1) table1, local_table_join.table2 table2_1) sub1("?column?") ON (false))
+ res
+---------------------------------------------------------------------
+   1
+(1 row)
+
+ROLLBACK;
 RESET client_min_messages;
 \set VERBOSITY terse
 DROP SCHEMA local_table_join CASCADE;
-NOTICE:  drop cascades to 20 other objects
+NOTICE:  drop cascades to 22 other objects
