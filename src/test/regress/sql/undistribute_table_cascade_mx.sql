@@ -80,7 +80,6 @@ CREATE TABLE users (
   , name text
   , created_at timestamptz default now()
   , country_id int references countries(id)
-  , score bigint generated always as (id + country_id) stored
   , primary key (org_id, id)
 );
 
