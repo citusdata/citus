@@ -1178,7 +1178,14 @@ ReplaceTable(Oid sourceId, Oid targetId, List *justBeforeDropCommands,
 	{
 		changeDependencyFor(RelationRelationId, sequenceOid,
 							RelationRelationId, sourceId, targetId);
-		if (ShouldSyncTableMetadata(sourceId))
+
+		/*
+		 * Skip if we cannot sync metadata for target table.
+		 * Checking only for the target table is sufficient since we will
+		 * anyway drop the source table even if it was a Citus table that
+		 * has metadata on MX workers.
+		 */
+		if (ShouldSyncTableMetadata(targetId))
 		{
 			Oid sequenceSchemaOid = get_rel_namespace(sequenceOid);
 			char *sequenceSchemaName = get_namespace_name(sequenceSchemaOid);

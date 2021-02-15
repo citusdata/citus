@@ -59,5 +59,89 @@ $$
 SELECT count(*) FROM pg_catalog.pg_tables WHERE schemaname='undistribute_table_cascade_mx'
 $$);
 
+-- create a reference table with an implicit sequence
+CREATE TABLE reference_table_2 (id bigserial);
+SELECT create_reference_table('reference_table_2');
+
+-- this should work fine since we won't try to change sequence dependencies on mx workers
+SELECT undistribute_table('reference_table_2');
+
+create table countries(
+  id serial primary key
+  , name text
+  , code varchar(2) collate "C" unique
+);
+insert into countries(name, code) select 'country-'||i, i::text from generate_series(10,99) i;
+select create_reference_table('countries');
+
+CREATE TABLE users (
+    id bigserial
+  , org_id bigint
+  , name text
+  , created_at timestamptz default now()
+  , country_id int references countries(id)
+  , primary key (org_id, id)
+);
+
+SET citus.replication_model to 'streaming';
+
+-- "users" table was implicitly added to citus metadata when defining foreign key,
+-- so create_distributed_table would first undistribute it.
+-- Show that it works well when changing sequence dependencies on mx workers.
+select create_distributed_table('users', 'org_id');
+
+-- count sequences that depend on "users" table's "id" column
+SELECT COUNT(*)
+FROM pg_class s
+  JOIN pg_depend d ON d.objid=s.oid AND d.classid='pg_class'::regclass AND d.refclassid='pg_class'::regclass
+  JOIN pg_class t ON t.oid=d.refobjid
+  JOIN pg_attribute a ON a.attrelid=t.oid AND a.attnum=d.refobjsubid
+WHERE s.relkind='S' AND t.relname = 'users' AND a.attname = 'id';
+
+SELECT run_command_on_workers(
+$$
+SELECT COUNT(*)
+FROM pg_class s
+  JOIN pg_depend d ON d.objid=s.oid AND d.classid='pg_class'::regclass AND d.refclassid='pg_class'::regclass
+  JOIN pg_class t ON t.oid=d.refobjid
+  JOIN pg_attribute a ON a.attrelid=t.oid AND a.attnum=d.refobjsubid
+WHERE s.relkind='S' AND t.relname = 'users' AND a.attname = 'id';
+$$);
+
+SELECT alter_distributed_table ('users', shard_count=>10);
+
+-- first drop the column that has a foreign key since
+-- alter_table_set_access_method doesn't support foreign keys
+ALTER TABLE users DROP country_id;
+
+-- set access method to columnar if pg version > 11
+DO $proc$
+BEGIN
+IF substring(current_Setting('server_version'), '\d+')::int >= 12 THEN
+  EXECUTE
+  $$
+  SELECT alter_table_set_access_method('users', 'columnar');
+  $$;
+END IF;
+END$proc$;
+
+SELECT COUNT(*)
+FROM pg_class s
+  JOIN pg_depend d ON d.objid=s.oid AND d.classid='pg_class'::regclass AND d.refclassid='pg_class'::regclass
+  JOIN pg_class t ON t.oid=d.refobjid
+  JOIN pg_attribute a ON a.attrelid=t.oid AND a.attnum=d.refobjsubid
+WHERE s.relkind='S' AND t.relname = 'users' AND a.attname = 'id';
+
+SELECT run_command_on_workers(
+$$
+SELECT COUNT(*)
+FROM pg_class s
+  JOIN pg_depend d ON d.objid=s.oid AND d.classid='pg_class'::regclass AND d.refclassid='pg_class'::regclass
+  JOIN pg_class t ON t.oid=d.refobjid
+  JOIN pg_attribute a ON a.attrelid=t.oid AND a.attnum=d.refobjsubid
+WHERE s.relkind='S' AND t.relname = 'users' AND a.attname = 'id';
+$$);
+
+
 -- cleanup at exit
 DROP SCHEMA undistribute_table_cascade_mx CASCADE;
