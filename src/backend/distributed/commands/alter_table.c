@@ -184,8 +184,7 @@ static void CreateDistributedTableLike(TableConversionState *con);
 static void CreateCitusTableLike(TableConversionState *con);
 static List * GetViewCreationCommandsOfTable(Oid relationId);
 static void ReplaceTable(Oid sourceId, Oid targetId, List *justBeforeDropCommands,
-						 bool suppressNoticeMessages,
-						 bool changeSequenceDependenciesOnWorkers);
+						 bool suppressNoticeMessages);
 static bool HasAnyGeneratedStoredColumns(Oid relationId);
 static List * GetNonGeneratedStoredColumnNameList(Oid relationId);
 static void CheckAlterDistributedTableConversionParameters(TableConversionState *con);
@@ -712,15 +711,8 @@ ConvertTable(TableConversionState *con)
 		CreateCitusTableLike(con);
 	}
 
-	/*
-	 * We shouldn't try to change sequence dependencies on mx workers when
-	 * undistributing table since we don't create new relation on mx worker
-	 * nodes as it is a local table.
-	 */
-	bool changeSequenceDependenciesOnWorkers =
-		(con->conversionType == UNDISTRIBUTE_TABLE) ? false : true;
 	ReplaceTable(con->relationId, con->newRelationId, justBeforeDropCommands,
-				 con->suppressNoticeMessages, changeSequenceDependenciesOnWorkers);
+				 con->suppressNoticeMessages);
 
 	TableDDLCommand *tableConstructionCommand = NULL;
 	foreach_ptr(tableConstructionCommand, postLoadCommands)
@@ -1129,7 +1121,7 @@ GetViewCreationCommandsOfTable(Oid relationId)
  */
 void
 ReplaceTable(Oid sourceId, Oid targetId, List *justBeforeDropCommands,
-			 bool suppressNoticeMessages, bool changeSequenceDependenciesOnWorkers)
+			 bool suppressNoticeMessages)
 {
 	char *sourceName = get_rel_name(sourceId);
 	char *targetName = get_rel_name(targetId);
@@ -1186,7 +1178,13 @@ ReplaceTable(Oid sourceId, Oid targetId, List *justBeforeDropCommands,
 	{
 		changeDependencyFor(RelationRelationId, sequenceOid,
 							RelationRelationId, sourceId, targetId);
-		if (changeSequenceDependenciesOnWorkers && ShouldSyncTableMetadata(sourceId))
+		/*
+		 * Skip if we cannot sync metadata for target table.
+		 * Checking only for the target table is sufficient since we will
+		 * anyway drop the source table even if it was a Citus table that
+		 * has metadata on MX workers.
+		 */
+		if (ShouldSyncTableMetadata(targetId))
 		{
 			Oid sequenceSchemaOid = get_rel_namespace(sequenceOid);
 			char *sequenceSchemaName = get_namespace_name(sequenceSchemaOid);
