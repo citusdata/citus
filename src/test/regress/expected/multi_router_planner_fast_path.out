@@ -41,7 +41,7 @@ SELECT create_distributed_table('articles_hash', 'author_id');
 
 (1 row)
 
-CREATE TABLE authors_reference ( name varchar(20), id bigint );
+CREATE TABLE authors_reference (id int, name text);
 SELECT create_reference_table('authors_reference');
  create_reference_table
 ---------------------------------------------------------------------
@@ -2110,6 +2110,26 @@ DEBUG:  query has a single distribution column value: 4
 ---------------------------------------------------------------------
      0
 (1 row)
+
+-- test INSERT using values from generate_series() and repeat() functions
+INSERT INTO authors_reference (id, name) VALUES (generate_series(1, 10), repeat('Migjeni', 3));
+DEBUG:  Creating router plan
+SELECT * FROM authors_reference;
+DEBUG:  Distributed planning for a fast-path router query
+DEBUG:  Creating router plan
+ id |         name
+---------------------------------------------------------------------
+  1 | MigjeniMigjeniMigjeni
+  2 | MigjeniMigjeniMigjeni
+  3 | MigjeniMigjeniMigjeni
+  4 | MigjeniMigjeniMigjeni
+  5 | MigjeniMigjeniMigjeni
+  6 | MigjeniMigjeniMigjeni
+  7 | MigjeniMigjeniMigjeni
+  8 | MigjeniMigjeniMigjeni
+  9 | MigjeniMigjeniMigjeni
+ 10 | MigjeniMigjeniMigjeni
+(10 rows)
 
 SET client_min_messages to 'NOTICE';
 DROP FUNCTION author_articles_max_id();

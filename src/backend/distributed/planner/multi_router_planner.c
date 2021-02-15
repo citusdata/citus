@@ -564,7 +564,7 @@ ModifyPartialQuerySupported(Query *queryTree, bool multiShardQuery,
 			if (queryTree->commandType == CMD_INSERT)
 			{
 				return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-									 "Router planner doesn't support common table expressions with non-select queries.",
+									 "Router planner doesn't support common table expressions with INSERT queries.",
 									 NULL, NULL);
 			}
 

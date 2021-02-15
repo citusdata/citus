@@ -342,13 +342,12 @@ CitusBeginModifyScan(CustomScanState *node, EState *estate, int eflags)
 		/*
 		 * At this point, we're about to do the shard pruning for fast-path queries.
 		 * Given that pruning is deferred always for INSERTs, we get here
-		 * !EnableFastPathRouterPlanner  as well.
+		 * !EnableFastPathRouterPlanner  as well. Given that INSERT statements with
+		 * CTEs/sublinks etc are not eligible for fast-path router plan, we get here
+		 * jobQuery->commandType == CMD_INSERT as well.
 		 */
-		if (jobQuery->commandType == CMD_INSERT)
-		{
-			currentPlan->fastPathRouterPlan = true;
-		}
-		Assert(currentPlan->fastPathRouterPlan || !EnableFastPathRouterPlanner);
+		Assert(currentPlan->fastPathRouterPlan || !EnableFastPathRouterPlanner ||
+			   jobQuery->commandType == CMD_INSERT);
 
 		/*
 		 * We can only now decide which shard to use, so we need to build a new task

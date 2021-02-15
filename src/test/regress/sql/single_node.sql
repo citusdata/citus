@@ -409,6 +409,45 @@ SELECT count(*) FROM collections_list_1 WHERE key = 11;
 ALTER TABLE collections_list DROP COLUMN ts;
 SELECT * FROM collections_list, collections_list_0 WHERE collections_list.key=collections_list_0.key  ORDER BY 1 DESC,2 DESC,3 DESC,4 DESC LIMIT 1;
 
+-- test hash distribution using INSERT with generate_series() function
+CREATE OR REPLACE FUNCTION part_hashint4_noop(value int4, seed int8)
+RETURNS int8 AS $$
+SELECT value + seed;
+$$ LANGUAGE SQL IMMUTABLE;
+
+CREATE OPERATOR CLASS part_test_int4_ops
+FOR TYPE int4
+USING HASH AS
+operator 1 =,
+function 2 part_hashint4_noop(int4, int8);
+
+CREATE TABLE hash_parted (
+	a int,
+  b int
+) PARTITION BY HASH (a part_test_int4_ops);
+CREATE TABLE hpart0 PARTITION OF hash_parted FOR VALUES WITH (modulus 4, remainder 0);
+CREATE TABLE hpart1 PARTITION OF hash_parted FOR VALUES WITH (modulus 4, remainder 1);
+CREATE TABLE hpart2 PARTITION OF hash_parted FOR VALUES WITH (modulus 4, remainder 2);
+CREATE TABLE hpart3 PARTITION OF hash_parted FOR VALUES WITH (modulus 4, remainder 3);
+
+SELECT create_distributed_table('hash_parted ', 'a');
+
+INSERT INTO hash_parted VALUES (1, generate_series(1,10));
+
+SELECT * FROM hash_parted;
+
+ALTER TABLE hash_parted DETACH PARTITION hpart0;
+ALTER TABLE hash_parted DETACH PARTITION hpart1;
+ALTER TABLE hash_parted DETACH PARTITION hpart2;
+ALTER TABLE hash_parted DETACH PARTITION hpart3;
+
+-- test range partition without creating partitions and inserting with generate_series()
+-- should error out even in plain PG since no partition of relation "parent_tab" is found for row
+-- in Citus it errors out because it fails to evaluate partition key in insert
+CREATE TABLE parent_tab (id int) PARTITION BY RANGE (id);
+SELECT create_distributed_table('parent_tab', 'id');
+INSERT INTO parent_tab VALUES (generate_series(0, 29));
+
 -- make sure that parallel accesses are good
 SET citus.force_max_query_parallelization TO ON;
 SELECT * FROM test_2 ORDER BY 1 DESC;

@@ -49,7 +49,7 @@ SET citus.shard_replication_factor TO 1;
 SET citus.shard_count TO 2;
 SELECT create_distributed_table('articles_hash', 'author_id');
 
-CREATE TABLE authors_reference ( name varchar(20), id bigint );
+CREATE TABLE authors_reference (id int, name text);
 SELECT create_reference_table('authors_reference');
 
 -- create a bunch of test data
@@ -849,6 +849,10 @@ UPDATE collections_list SET value = 15 WHERE key = 4;
 SELECT count(*) FILTER (where value = 15) FROM collections_list WHERE key = 4;
 SELECT count(*) FILTER (where value = 15) FROM collections_list_1 WHERE key = 4;
 SELECT count(*) FILTER (where value = 15) FROM collections_list_2 WHERE key = 4;
+
+-- test INSERT using values from generate_series() and repeat() functions
+INSERT INTO authors_reference (id, name) VALUES (generate_series(1, 10), repeat('Migjeni', 3));
+SELECT * FROM authors_reference;
 
 SET client_min_messages to 'NOTICE';
 
