@@ -108,5 +108,36 @@ FROM pg_class s
 WHERE s.relkind='S' AND t.relname = 'users' AND a.attname = 'id';
 $$);
 
+SELECT alter_distributed_table ('users', shard_count=>10);
+
+-- set access method to columnar if pg version > 11
+DO $proc$
+BEGIN
+IF substring(current_Setting('server_version'), '\d+')::int >= 12 THEN
+  EXECUTE
+  $$
+  SELECT alter_table_set_access_method('users', 'columnar');
+  $$;
+END IF;
+END$proc$;
+
+SELECT COUNT(*)
+FROM pg_class s
+  JOIN pg_depend d ON d.objid=s.oid AND d.classid='pg_class'::regclass AND d.refclassid='pg_class'::regclass
+  JOIN pg_class t ON t.oid=d.refobjid
+  JOIN pg_attribute a ON a.attrelid=t.oid AND a.attnum=d.refobjsubid
+WHERE s.relkind='S' AND t.relname = 'users' AND a.attname = 'id';
+
+SELECT run_command_on_workers(
+$$
+SELECT COUNT(*)
+FROM pg_class s
+  JOIN pg_depend d ON d.objid=s.oid AND d.classid='pg_class'::regclass AND d.refclassid='pg_class'::regclass
+  JOIN pg_class t ON t.oid=d.refobjid
+  JOIN pg_attribute a ON a.attrelid=t.oid AND a.attnum=d.refobjsubid
+WHERE s.relkind='S' AND t.relname = 'users' AND a.attname = 'id';
+$$);
+
+
 -- cleanup at exit
 DROP SCHEMA undistribute_table_cascade_mx CASCADE;
