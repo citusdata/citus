@@ -1178,6 +1178,7 @@ ReplaceTable(Oid sourceId, Oid targetId, List *justBeforeDropCommands,
 	{
 		changeDependencyFor(RelationRelationId, sequenceOid,
 							RelationRelationId, sourceId, targetId);
+
 		/*
 		 * Skip if we cannot sync metadata for target table.
 		 * Checking only for the target table is sufficient since we will
