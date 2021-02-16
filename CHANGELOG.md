@@ -1,3 +1,141 @@
+### citus v10.0.0 (February 16, 2021) ###
+
+* Adds support for per-table option for columnar storage
+
+* Adds `rebalance_table_shards` to rebalance the shards across the nodes
+
+* Adds `citus_drain_node` to move all shards away from any node
+
+* Enables single-node Citus for production workloads
+
+* Adds support for local table and distributed table/subquery joins
+
+* Enables foreign keys between reference tables and local tables
+  (`citus.enable_local_reference_table_foreign_keys`)
+
+* Adds support for co-located/recurring correlated subqueries
+
+* Adds support for co-located/recurring sublinks in the target list
+
+* Adds `alter_distributed_table` and `alter_table_set_access_method` UDFs
+
+* Adds `alter_old_partitions_set_access_method` UDF to compress old partitions
+
+* Adds cascade option to `undistribute_table` UDF for foreign key connected
+  relations
+
+* Allows distributed table creation immediately after CREATE EXTENSION citus
+
+* Automatically adds coordinator to the metadata before the first distributed
+  table created
+
+* Introduces adaptive connection management for local nodes
+
+* Adds support for local execution in `INSERT..SELECT` commands that perform
+  re-partitioning
+
+* Adds `public.citus_tables` view
+
+* Adds `pg_catalog.citus_shards`, `pg_catalog.citus_shards_on_worker` and
+  `pg_catalog.citus_shard_indexes_on_worker` views
+
+* Adds `pg_catalog.time_partitions` view for simple (time) partitions and their
+  access methods
+
+* Adds `remove_local_tables_from_metadata` UDF for local tables automatically
+  added to metadata when defining foreign keys with reference tables
+
+* Adds support for `CREATE INDEX` commands without index name on citus tables
+
+* Adds support for `CREATE TABLE ... USING table_access_method` statements
+
+* Propagates `ALTER TABLE .. SET LOGGED/UNLOGGED` statements
+
+* Propagates `ALTER INDEX .. SET STATISTICS` statements
+
+* Propagates `ALTER SCHEMA RENAME` statements
+
+* Propagates `CREATE STATISTICS` statements across workers.
+
+* Propagates `DROP STATISTICS` statements across the workers
+
+* Propagates all types of `ALTER STATISTICS` statements.
+
+* Avoids establishing new connections until the previous ones are finalized
+
+* Avoids re-using connections for intermediate results
+
+* Improves performance in some subquery pushdown cases
+
+* Removes unused `citus.binary_master_copy_format` GUC
+
+* Removes unused `citus.expire_cached_shards` GUC
+
+* Removes unused `citus.large_table_shard_count` GUC
+
+* Removes unused `citus.max_assign_task_batch_size` GUC
+
+* Removes unused `citus.max_running_tasks_per_node` GUC
+
+* Removes unused `citus.max_task_string_size` GUC
+
+* Removes unused `citus.max_tracked_tasks_per_node` GUC
+
+* Removes unused `citus.sslmode` GUC
+
+* Removes unused `citus.task_tracker_delay` GUC
+
+* Removes the word 'master' from Citus UDFs
+
+* Removes unused UDF `mark_tables_colocated`
+
+* Removes `upgrade_to_reference_table` UDF
+
+* Renames 'master' to 'distributed' for columns of `citus_dist_stat_activity`
+
+* Renames 'master' to 'distributed' for columns of `citus_worker_stat_activity`
+
+* Chooses the default co-location group deterministically
+
+* Deletes distributed transaction entries when removing a node
+
+* Drops support for `create_citus_local_table` in favor of
+  `citus_add_local_table_to_metadata`
+
+* Fixes `EXPLAIN ANALYZE` error when query returns no columns
+
+* Fixes a bug preventing `INSERT SELECT .. ON CONFLICT` with a constraint name
+  on local shards
+
+* Fixes a bug related to correctness of multiple joins
+
+* Fixes a bug that might cause self-deadlocks when `COPY` used in xact block
+
+* Fixes a bug with partitioned tables that block new partition creation due to
+  wrong constraint names on workers
+
+* Fixes a crash that occurs when distributing table after dropping foreign key
+
+* Fixes a crash when adding/dropping foreign keys from reference to local
+  tables added to metadata
+
+* Fixes an unexpected error when executing `CREATE TABLE IF NOT EXISTS
+  PARTITION OF` commands
+
+* Fixes deadlock issue for `CREATE INDEX` in single node
+
+* Fixes distributed deadlock detection being blocked by metadata sync
+
+* Fixes handling indexes when adding local table to metadata
+
+* Fixes `undistribute_table` when table has column with `GENERATED ALWAYS AS
+  STORED` expressions
+
+* Improves concurrent index creation failure message
+
+* Prevents empty placement creation in the coordinator when executing
+  `master_create_empty_shard()`
+
 ### citus v9.5.2 (January 26, 2021) ###
 
 * Fixes distributed deadlock detection being blocked by metadata sync
