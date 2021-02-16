@@ -1,3 +1,11 @@
+### citus v9.5.3 (February 16, 2021) ###
+
+* Avoids re-using connections for intermediate results
+
+* Fixes a bug that might cause self-deadlocks when `COPY` used in xact block
+
+* Fixes a crash that occurs when distributing table after dropping foreign key
+
 ### citus v10.0.0 (February 16, 2021) ###
 
 * Adds support for per-table option for columnar storage
