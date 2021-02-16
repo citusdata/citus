@@ -1087,7 +1087,11 @@ DatumToBytea(Datum value, Form_pg_attribute attrForm)
 	{
 		if (attrForm->attbyval)
 		{
-			store_att_byval(VARDATA(result), value, attrForm->attlen);
+			Datum tmp;
+			store_att_byval(&tmp, value, attrForm->attlen);
+
+			memcpy_s(VARDATA(result), datumLength + VARHDRSZ,
+					 &tmp, attrForm->attlen);
 		}
 		else
 		{
