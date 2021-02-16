@@ -515,12 +515,28 @@ SELECT * FROM print_extension_changes();
                                                                                  | view time_partitions
 (67 rows)
 
+-- Test downgrade to 10.0-1 from 10.1-1
+ALTER EXTENSION citus UPDATE TO '10.1-1';
+ALTER EXTENSION citus UPDATE TO '10.0-1';
+-- Should be empty result since upgrade+downgrade should be a no-op
+SELECT * FROM print_extension_changes();
+ previous_object | current_object
+---------------------------------------------------------------------
+(0 rows)
+
+-- Snapshot of state at 10.1-1
+ALTER EXTENSION citus UPDATE TO '10.1-1';
+SELECT * FROM print_extension_changes();
+ previous_object | current_object
+---------------------------------------------------------------------
+(0 rows)
+
 DROP TABLE prev_objects, extension_diff;
 -- show running version
 SHOW citus.version;
  citus.version
 ---------------------------------------------------------------------
- 10.0devel
+ 10.1devel
 (1 row)
 
 -- ensure no unexpected objects were created outside pg_catalog
@@ -543,7 +559,7 @@ RESET citus.enable_version_checks;
 DROP EXTENSION citus;
 CREATE EXTENSION citus VERSION '8.0-1';
 ERROR:  specified version incompatible with loaded Citus library
-DETAIL:  Loaded library requires 10.0, but 8.0-1 was specified.
+DETAIL:  Loaded library requires 10.1, but 8.0-1 was specified.
 HINT:  If a newer library is present, restart the database and try the command again.
 -- Test non-distributed queries work even in version mismatch
 SET citus.enable_version_checks TO 'false';
@@ -586,7 +602,7 @@ ORDER BY 1;
 -- We should not distribute table in version mistmatch
 SELECT create_distributed_table('version_mismatch_table', 'column1');
 ERROR:  loaded Citus library version differs from installed extension version
-DETAIL:  Loaded library requires 10.0, but the installed extension version is 8.1-1.
+DETAIL:  Loaded library requires 10.1, but the installed extension version is 8.1-1.
 HINT:  Run ALTER EXTENSION citus UPDATE and try again.
 -- This function will cause fail in next ALTER EXTENSION
 CREATE OR REPLACE FUNCTION pg_catalog.relation_is_a_known_shard(regclass)
