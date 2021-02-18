@@ -24,6 +24,7 @@ test: am_rollback
 test: am_truncate
 test: am_vacuum
 test: am_clean
+test: columnar_types_without_comparison
 test: am_chunk_filtering
 test: am_join
 test: am_trigger
