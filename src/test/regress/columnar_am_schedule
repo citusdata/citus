@@ -15,6 +15,7 @@ test: columnar_permissions
 test: am_empty
 test: am_insert
 test: am_update_delete
+test: columnar_cursor
 test: am_copyto
 test: am_alter
 test: am_alter_set_type

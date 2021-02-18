@@ -1,0 +1,208 @@
+--
+-- Testing cursors on columnar tables.
+--
+CREATE TABLE test_cursor (a int, b int) USING columnar;
+INSERT INTO test_cursor SELECT i, j FROM generate_series(0, 100)i, generate_series(100, 200)j;
+-- A case where the WHERE clause might filter out some chunks
+EXPLAIN (analyze on, costs off, timing off, summary off) SELECT * FROM test_cursor WHERE a = 25;
+                             QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (ColumnarScan) on test_cursor (actual rows=101 loops=1)
+   Filter: (a = 25)
+   Rows Removed by Filter: 9899
+   Columnar Chunk Groups Removed by Filter: 1
+(4 rows)
+
+BEGIN;
+DECLARE a_25 SCROLL CURSOR
+FOR SELECT * FROM test_cursor WHERE a = 25;
+FETCH 3 FROM a_25;
+ a  |  b
+---------------------------------------------------------------------
+ 25 | 100
+ 25 | 101
+ 25 | 102
+(3 rows)
+
+FETCH PRIOR FROM a_25;
+ a  |  b
+---------------------------------------------------------------------
+ 25 | 101
+(1 row)
+
+FETCH NEXT FROM a_25;
+ a  |  b
+---------------------------------------------------------------------
+ 25 | 102
+(1 row)
+
+FETCH NEXT FROM a_25;
+ a  |  b
+---------------------------------------------------------------------
+ 25 | 103
+(1 row)
+
+FETCH RELATIVE -2 FROM a_25;
+ a  |  b
+---------------------------------------------------------------------
+ 25 | 101
+(1 row)
+
+FETCH LAST FROM a_25;
+ a  |  b
+---------------------------------------------------------------------
+ 25 | 200
+(1 row)
+
+FETCH RELATIVE -25 FROM a_25;
+ a  |  b
+---------------------------------------------------------------------
+ 25 | 175
+(1 row)
+
+MOVE a_25;
+FETCH a_25;
+ a  |  b
+---------------------------------------------------------------------
+ 25 | 177
+(1 row)
+
+MOVE LAST FROM a_25;
+FETCH a_25;
+ a | b
+---------------------------------------------------------------------
+(0 rows)
+
+MOVE RELATIVE -3 FROM a_25;
+FETCH a_25;
+ a  |  b
+---------------------------------------------------------------------
+ 25 | 199
+(1 row)
+
+MOVE RELATIVE -3 FROM a_25;
+FETCH a_25;
+ a  |  b
+---------------------------------------------------------------------
+ 25 | 197
+(1 row)
+
+MOVE FORWARD 2 FROM a_25;
+FETCH a_25;
+ a  |  b
+---------------------------------------------------------------------
+ 25 | 200
+(1 row)
+
+MOVE RELATIVE -3 FROM a_25;
+FETCH a_25;
+ a  |  b
+---------------------------------------------------------------------
+ 25 | 198
+(1 row)
+
+UPDATE test_cursor SET a = 8000 WHERE CURRENT OF a_25;
+ERROR:  UPDATE and CTID scans not supported for ColumnarScan
+COMMIT;
+-- A case where the WHERE clause doesn't filter out any chunks
+EXPLAIN (analyze on, costs off, timing off, summary off) SELECT * FROM test_cursor WHERE a > 25;
+                              QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (ColumnarScan) on test_cursor (actual rows=7575 loops=1)
+   Filter: (a > 25)
+   Rows Removed by Filter: 2626
+   Columnar Chunk Groups Removed by Filter: 0
+(4 rows)
+
+BEGIN;
+DECLARE a_25 SCROLL CURSOR
+FOR SELECT * FROM test_cursor WHERE a > 25;
+FETCH 3 FROM a_25;
+ a  |  b
+---------------------------------------------------------------------
+ 26 | 100
+ 26 | 101
+ 26 | 102
+(3 rows)
+
+FETCH PRIOR FROM a_25;
+ a  |  b
+---------------------------------------------------------------------
+ 26 | 101
+(1 row)
+
+FETCH NEXT FROM a_25;
+ a  |  b
+---------------------------------------------------------------------
+ 26 | 102
+(1 row)
+
+FETCH NEXT FROM a_25;
+ a  |  b
+---------------------------------------------------------------------
+ 26 | 103
+(1 row)
+
+FETCH RELATIVE -2 FROM a_25;
+ a  |  b
+---------------------------------------------------------------------
+ 26 | 101
+(1 row)
+
+FETCH LAST FROM a_25;
+  a  |  b
+---------------------------------------------------------------------
+ 100 | 200
+(1 row)
+
+FETCH RELATIVE -25 FROM a_25;
+  a  |  b
+---------------------------------------------------------------------
+ 100 | 175
+(1 row)
+
+MOVE a_25;
+FETCH a_25;
+  a  |  b
+---------------------------------------------------------------------
+ 100 | 177
+(1 row)
+
+MOVE LAST FROM a_25;
+FETCH a_25;
+ a | b
+---------------------------------------------------------------------
+(0 rows)
+
+MOVE RELATIVE -3 FROM a_25;
+FETCH a_25;
+  a  |  b
+---------------------------------------------------------------------
+ 100 | 199
+(1 row)
+
+MOVE RELATIVE -3 FROM a_25;
+FETCH a_25;
+  a  |  b
+---------------------------------------------------------------------
+ 100 | 197
+(1 row)
+
+MOVE FORWARD 2 FROM a_25;
+FETCH a_25;
+  a  |  b
+---------------------------------------------------------------------
+ 100 | 200
+(1 row)
+
+MOVE RELATIVE -3 FROM a_25;
+FETCH a_25;
+  a  |  b
+---------------------------------------------------------------------
+ 100 | 198
+(1 row)
+
+UPDATE test_cursor SET a = 8000 WHERE CURRENT OF a_25;
+ERROR:  UPDATE and CTID scans not supported for ColumnarScan
+COMMIT;
+DROP TABLE test_cursor CASCADE;
