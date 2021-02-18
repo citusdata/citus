@@ -137,11 +137,16 @@ REINDEX SYSTEM regression;
 DROP INDEX lineitem_orderkey_index, lineitem_partial_index;
 
 -- Verify that we can succesfully drop indexes
-DROP INDEX lineitem_orderkey_index;
-DROP INDEX lineitem_orderkey_index_new;
 DROP INDEX lineitem_partkey_desc_index;
 DROP INDEX lineitem_partial_index;
 DROP INDEX lineitem_colref_index;
+
+-- Verify that we can drop distributed indexes with local indexes
+CREATE TABLE local_table(a int, b int);
+CREATE INDEX local_index ON local_table(a);
+CREATE INDEX local_index2 ON local_table(b);
+DROP INDEX lineitem_orderkey_index, local_index;
+DROP INDEX IF EXISTS lineitem_orderkey_index_new, local_index2, non_existing_index;
 
 -- Verify that we handle if exists statements correctly
 

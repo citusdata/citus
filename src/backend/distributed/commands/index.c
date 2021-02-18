@@ -73,7 +73,6 @@ static void RangeVarCallbackForReindexIndex(const RangeVar *rel, Oid relOid, Oid
 											oldRelOid,
 											void *arg);
 static void ErrorIfUnsupportedIndexStmt(IndexStmt *createIndexStatement);
-static void ErrorIfUnsupportedDropIndexStmt(DropStmt *dropIndexStatement);
 static List * DropIndexTaskList(Oid relationId, Oid indexId, DropStmt *dropStmt);
 
 
@@ -696,17 +695,27 @@ PreprocessDropIndexStmt(Node *node, const char *dropIndexCommand,
 		bool isCitusRelation = IsCitusTable(relationId);
 		if (isCitusRelation)
 		{
+			if (OidIsValid(distributedIndexId))
+			{
+				/*
+				 * We already have a distributed index in the list, and Citus
+				 * currently only support dropping a single distributed index.
+				 */
+				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+								errmsg("cannot drop multiple distributed objects in "
+									   "a single command"),
+								errhint("Try dropping each object in a separate DROP "
+										"command.")));
+			}
+
 			distributedIndexId = indexId;
 			distributedRelationId = relationId;
-			break;
 		}
 	}
 
 	if (OidIsValid(distributedIndexId))
 	{
 		DDLJob *ddlJob = palloc0(sizeof(DDLJob));
-
-		ErrorIfUnsupportedDropIndexStmt(dropIndexStatement);
 
 		if (AnyForeignKeyDependsOnIndex(distributedIndexId))
 		{
@@ -1166,26 +1175,6 @@ ErrorIfUnsupportedIndexStmt(IndexStmt *createIndexStatement)
 							errmsg("creating unique indexes on non-partition "
 								   "columns is currently unsupported")));
 		}
-	}
-}
-
-
-/*
- * ErrorIfUnsupportedDropIndexStmt checks if the corresponding drop index statement is
- * supported for distributed tables and errors out if it is not.
- */
-static void
-ErrorIfUnsupportedDropIndexStmt(DropStmt *dropIndexStatement)
-{
-	Assert(dropIndexStatement->removeType == OBJECT_INDEX);
-
-	if (list_length(dropIndexStatement->objects) > 1)
-	{
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("cannot drop multiple distributed objects in a "
-							   "single command"),
-						errhint("Try dropping each object in a separate DROP "
-								"command.")));
 	}
 }
 
