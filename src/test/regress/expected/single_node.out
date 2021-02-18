@@ -718,8 +718,8 @@ SELECT create_distributed_table('hash_parted ', 'a');
 
 (1 row)
 
-INSERT INTO hash_parted VALUES (1, generate_series(1,10));
-SELECT * FROM hash_parted;
+INSERT INTO hash_parted VALUES (1, generate_series(1, 10));
+SELECT * FROM hash_parted ORDER BY 1, 2;
  a | b
 ---------------------------------------------------------------------
  1 |  1
@@ -748,9 +748,22 @@ SELECT create_distributed_table('parent_tab', 'id');
 
 (1 row)
 
-INSERT INTO parent_tab VALUES (generate_series(0, 29));
+INSERT INTO parent_tab VALUES (generate_series(0, 3));
 ERROR:  failed to evaluate partition key in insert
 HINT:  try using constant values for partition column
+-- now it should work
+CREATE TABLE parent_tab_1_2 PARTITION OF parent_tab FOR VALUES FROM (1) to (2);
+ALTER TABLE parent_tab ADD COLUMN b int;
+INSERT INTO parent_tab VALUES (1, generate_series(0, 3));
+SELECT * FROM parent_tab ORDER BY 1, 2;
+ id | b
+---------------------------------------------------------------------
+  1 | 0
+  1 | 1
+  1 | 2
+  1 | 3
+(4 rows)
+
 -- make sure that parallel accesses are good
 SET citus.force_max_query_parallelization TO ON;
 SELECT * FROM test_2 ORDER BY 1 DESC;

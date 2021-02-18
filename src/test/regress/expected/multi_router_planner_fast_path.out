@@ -2114,7 +2114,7 @@ DEBUG:  query has a single distribution column value: 4
 -- test INSERT using values from generate_series() and repeat() functions
 INSERT INTO authors_reference (id, name) VALUES (generate_series(1, 10), repeat('Migjeni', 3));
 DEBUG:  Creating router plan
-SELECT * FROM authors_reference;
+SELECT * FROM authors_reference ORDER BY 1, 2;
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
  id |         name

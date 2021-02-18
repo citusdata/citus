@@ -432,9 +432,9 @@ CREATE TABLE hpart3 PARTITION OF hash_parted FOR VALUES WITH (modulus 4, remaind
 
 SELECT create_distributed_table('hash_parted ', 'a');
 
-INSERT INTO hash_parted VALUES (1, generate_series(1,10));
+INSERT INTO hash_parted VALUES (1, generate_series(1, 10));
 
-SELECT * FROM hash_parted;
+SELECT * FROM hash_parted ORDER BY 1, 2;
 
 ALTER TABLE hash_parted DETACH PARTITION hpart0;
 ALTER TABLE hash_parted DETACH PARTITION hpart1;
@@ -446,7 +446,12 @@ ALTER TABLE hash_parted DETACH PARTITION hpart3;
 -- in Citus it errors out because it fails to evaluate partition key in insert
 CREATE TABLE parent_tab (id int) PARTITION BY RANGE (id);
 SELECT create_distributed_table('parent_tab', 'id');
-INSERT INTO parent_tab VALUES (generate_series(0, 29));
+INSERT INTO parent_tab VALUES (generate_series(0, 3));
+-- now it should work
+CREATE TABLE parent_tab_1_2 PARTITION OF parent_tab FOR VALUES FROM (1) to (2);
+ALTER TABLE parent_tab ADD COLUMN b int;
+INSERT INTO parent_tab VALUES (1, generate_series(0, 3));
+SELECT * FROM parent_tab ORDER BY 1, 2;
 
 -- make sure that parallel accesses are good
 SET citus.force_max_query_parallelization TO ON;

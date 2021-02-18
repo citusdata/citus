@@ -852,7 +852,7 @@ SELECT count(*) FILTER (where value = 15) FROM collections_list_2 WHERE key = 4;
 
 -- test INSERT using values from generate_series() and repeat() functions
 INSERT INTO authors_reference (id, name) VALUES (generate_series(1, 10), repeat('Migjeni', 3));
-SELECT * FROM authors_reference;
+SELECT * FROM authors_reference ORDER BY 1, 2;
 
 SET client_min_messages to 'NOTICE';
 

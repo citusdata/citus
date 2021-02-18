@@ -498,12 +498,29 @@ INSERT INTO with_modifying.anchor_table VALUES (1998);
 SELECT * FROM with_modifying.modify_table WHERE id = 23 AND val = 7;
 SELECT * FROM with_modifying.anchor_table WHERE id = 1998;
 
+-- test insert query with multiple CTEs
+WITH select_cte AS (SELECT * FROM with_modifying.anchor_table),
+	modifying_cte AS (INSERT INTO with_modifying.anchor_table SELECT * FROM select_cte)
+INSERT INTO with_modifying.anchor_table VALUES (1995);
+SELECT * FROM with_modifying.anchor_table ORDER BY 1;
+
+-- test with returning
+WITH returning_cte AS (INSERT INTO with_modifying.anchor_table values (1997) RETURNING *)
+INSERT INTO with_modifying.anchor_table VALUES (1996);
+SELECT * FROM with_modifying.anchor_table WHERE id IN (1996, 1997) ORDER BY 1;
+
 -- test insert query with select CTE
 WITH select_cte AS
 	(SELECT * FROM with_modifying.modify_table)
 INSERT INTO with_modifying.anchor_table VALUES (1990);
 SELECT * FROM with_modifying.anchor_table WHERE id = 1990;
-DELETE FROM with_modifying.anchor_table WHERE id IN (1990, 1998);
+
+-- even if we do multi-row insert, it is not fast path router due to cte
+WITH select_cte AS (SELECT 1 AS col)
+INSERT INTO with_modifying.anchor_table VALUES (1991), (1992);
+SELECT * FROM with_modifying.anchor_table WHERE id IN (1991, 1992) ORDER BY 1;
+
+DELETE FROM with_modifying.anchor_table WHERE id IN (1990, 1991, 1992, 1995, 1996, 1997, 1998);
 
 -- Test with replication factor 2
 SET citus.shard_replication_factor to 2;
