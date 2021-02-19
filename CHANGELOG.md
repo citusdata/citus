@@ -1,3 +1,7 @@
+### citus v10.0.1 (February 19, 2021) ###
+
+* Fixes an issue in creation of `pg_catalog.time_partitions` view
+
 ### citus v10.0.0 (February 16, 2021) ###
 
 * Adds support for per-table option for columnar storage
