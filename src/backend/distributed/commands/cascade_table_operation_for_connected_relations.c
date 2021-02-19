@@ -510,6 +510,6 @@ ExecuteForeignKeyCreateCommand(const char *commandString, bool skip_validation)
 								"command \"%s\"", commandString)));
 	}
 
-	ProcessUtilityParseTree(parseTree, commandString, PROCESS_UTILITY_TOPLEVEL,
+	ProcessUtilityParseTree(parseTree, commandString, PROCESS_UTILITY_QUERY,
 							NULL, None_Receiver, NULL);
 }
