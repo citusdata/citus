@@ -1,3 +1,7 @@
+### citus v9.5.4 (February 19, 2021) ###
+
+* Fixes a compatibility issue with pg_audit in utility calls
+
 ### citus v9.5.3 (February 16, 2021) ###
 
 * Avoids re-using connections for intermediate results
