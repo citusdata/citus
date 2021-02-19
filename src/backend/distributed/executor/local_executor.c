@@ -406,7 +406,7 @@ ExecuteUtilityCommand(const char *taskQueryCommand)
 			 * process utility.
 			 */
 			ProcessUtilityParseTree(taskRawParseTree, taskQueryCommand,
-									PROCESS_UTILITY_TOPLEVEL, NULL, None_Receiver,
+									PROCESS_UTILITY_QUERY, NULL, None_Receiver,
 									NULL);
 		}
 	}
