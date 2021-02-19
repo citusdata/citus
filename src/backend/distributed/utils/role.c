@@ -41,7 +41,7 @@ alter_role_if_exists(PG_FUNCTION_ARGS)
 
 	Node *parseTree = ParseTreeNode(utilityQuery);
 
-	ProcessUtilityParseTree(parseTree, utilityQuery, PROCESS_UTILITY_QUERY, NULL,
+	ProcessUtilityParseTree(parseTree, utilityQuery, PROCESS_UTILITY_TOPLEVEL, NULL,
 							None_Receiver, NULL);
 
 	PG_RETURN_BOOL(true);
@@ -98,7 +98,7 @@ worker_create_or_alter_role(PG_FUNCTION_ARGS)
 
 		ProcessUtilityParseTree(parseTree,
 								createRoleUtilityQuery,
-								PROCESS_UTILITY_QUERY,
+								PROCESS_UTILITY_TOPLEVEL,
 								NULL,
 								None_Receiver, NULL);
 
@@ -126,7 +126,7 @@ worker_create_or_alter_role(PG_FUNCTION_ARGS)
 
 		ProcessUtilityParseTree(parseTree,
 								alterRoleUtilityQuery,
-								PROCESS_UTILITY_QUERY,
+								PROCESS_UTILITY_TOPLEVEL,
 								NULL,
 								None_Receiver, NULL);
 

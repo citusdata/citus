@@ -673,7 +673,7 @@ ConvertTable(TableConversionState *con)
 		Node *parseTree = ParseTreeNode(tableCreationSql);
 
 		RelayEventExtendNames(parseTree, con->schemaName, con->hashOfName);
-		ProcessUtilityParseTree(parseTree, tableCreationSql, PROCESS_UTILITY_QUERY,
+		ProcessUtilityParseTree(parseTree, tableCreationSql, PROCESS_UTILITY_TOPLEVEL,
 								NULL, None_Receiver, NULL);
 	}
 
@@ -728,7 +728,7 @@ ConvertTable(TableConversionState *con)
 		Node *parseTree = ParseTreeNode(attachPartitionCommand);
 
 		ProcessUtilityParseTree(parseTree, attachPartitionCommand,
-								PROCESS_UTILITY_QUERY,
+								PROCESS_UTILITY_TOPLEVEL,
 								NULL, None_Receiver, NULL);
 	}
 
