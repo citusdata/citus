@@ -163,13 +163,13 @@ CREATE TABLE test_pg_snapshot (a pg_snapshot) USING columnar;
 INSERT INTO test_pg_snapshot VALUES ('10:20:10,14,15');
 SELECT minimum_value, maximum_value FROM columnar.chunk;
  minimum_value | maximum_value
----------------+---------------
+---------------------------------------------------------------------
                |
 (1 row)
 
 SELECT * FROM test_pg_snapshot WHERE a::text = '10:20:10,14,15'::pg_snapshot::text;
        a
-----------------
+---------------------------------------------------------------------
  10:20:10,14,15
 (1 row)
 

@@ -209,16 +209,17 @@ SELECT * FROM t ORDER BY a;
 --
 -- Prepared statements
 --
-PREPARE p1(int) AS INSERT INTO t VALUES (8, $1), (9, $1+2);
-EXPLAIN (COSTS OFF) EXECUTE p1(16);
+-- INSERT INTO with 0 params
+PREPARE p0 AS INSERT INTO t VALUES (8, 8), (9, 9);
+EXPLAIN (COSTS OFF) EXECUTE p0;
            QUERY PLAN
 ---------------------------------------------------------------------
  Insert on t
    ->  Values Scan on "*VALUES*"
 (2 rows)
 
-EXECUTE p1(16);
-EXPLAIN (ANALYZE true, COSTS off, TIMING off, SUMMARY off) EXECUTE p1(20);
+EXECUTE p0;
+EXPLAIN (ANALYZE true, COSTS off, TIMING off, SUMMARY off) EXECUTE p0;
                        QUERY PLAN
 ---------------------------------------------------------------------
  Insert on t (actual rows=0 loops=1)
@@ -235,10 +236,248 @@ SELECT * FROM t ORDER BY a;
  5 | 10
  6 | 13
  7 | 15
- 8 | 16
- 8 | 20
- 9 | 18
- 9 | 22
+ 8 |  8
+ 8 |  8
+ 9 |  9
+ 9 |  9
 (11 rows)
+
+-- INSERT INTO with 1 param
+PREPARE p1(int) AS INSERT INTO t VALUES (10, $1), (11, $1+2);
+EXPLAIN (COSTS OFF) EXECUTE p1(16);
+           QUERY PLAN
+---------------------------------------------------------------------
+ Insert on t
+   ->  Values Scan on "*VALUES*"
+(2 rows)
+
+EXECUTE p1(16);
+EXPLAIN (ANALYZE true, COSTS off, TIMING off, SUMMARY off) EXECUTE p1(20);
+                       QUERY PLAN
+---------------------------------------------------------------------
+ Insert on t (actual rows=0 loops=1)
+   ->  Values Scan on "*VALUES*" (actual rows=2 loops=1)
+(2 rows)
+
+SELECT * FROM t ORDER BY a;
+  a | b
+---------------------------------------------------------------------
+  1 |  2
+  2 |  4
+  3 |  6
+  4 |  8
+  5 | 10
+  6 | 13
+  7 | 15
+  8 |  8
+  8 |  8
+  9 |  9
+  9 |  9
+ 10 | 16
+ 10 | 20
+ 11 | 22
+ 11 | 18
+(15 rows)
+
+-- INSERT INTO with >1 params
+PREPARE p2(int, int) AS INSERT INTO t VALUES (12, $1), (13, $1+2), (14, $2), ($1+1, $2+1);
+EXPLAIN (COSTS OFF) EXECUTE p2(30, 40);
+           QUERY PLAN
+---------------------------------------------------------------------
+ Insert on t
+   ->  Values Scan on "*VALUES*"
+(2 rows)
+
+EXECUTE p2(30, 40);
+EXPLAIN (ANALYZE true, COSTS off, TIMING off, SUMMARY off) EXECUTE p2(50, 60);
+                       QUERY PLAN
+---------------------------------------------------------------------
+ Insert on t (actual rows=0 loops=1)
+   ->  Values Scan on "*VALUES*" (actual rows=4 loops=1)
+(2 rows)
+
+SELECT * FROM t ORDER BY a;
+ a  | b
+---------------------------------------------------------------------
+  1 |  2
+  2 |  4
+  3 |  6
+  4 |  8
+  5 | 10
+  6 | 13
+  7 | 15
+  8 |  8
+  8 |  8
+  9 |  9
+  9 |  9
+ 10 | 16
+ 10 | 20
+ 11 | 22
+ 11 | 18
+ 12 | 50
+ 12 | 30
+ 13 | 52
+ 13 | 32
+ 14 | 40
+ 14 | 60
+ 31 | 41
+ 51 | 61
+(23 rows)
+
+-- SELECT with 0 params
+PREPARE p3 AS SELECT * FROM t WHERE a = 8;
+EXPLAIN (COSTS OFF) EXECUTE p3;
+           QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (ColumnarScan) on t
+   Filter: (a = 8)
+(2 rows)
+
+EXECUTE p3;
+ a | b
+---------------------------------------------------------------------
+ 8 | 8
+ 8 | 8
+(2 rows)
+
+EXPLAIN (ANALYZE true, COSTS off, TIMING off, SUMMARY off) EXECUTE p3;
+                       QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (ColumnarScan) on t (actual rows=2 loops=1)
+   Filter: (a = 8)
+   Rows Removed by Filter: 2
+   Columnar Chunk Groups Removed by Filter: 8
+(4 rows)
+
+SELECT * FROM t ORDER BY a;
+ a  | b
+---------------------------------------------------------------------
+  1 |  2
+  2 |  4
+  3 |  6
+  4 |  8
+  5 | 10
+  6 | 13
+  7 | 15
+  8 |  8
+  8 |  8
+  9 |  9
+  9 |  9
+ 10 | 16
+ 10 | 20
+ 11 | 22
+ 11 | 18
+ 12 | 50
+ 12 | 30
+ 13 | 52
+ 13 | 32
+ 14 | 40
+ 14 | 60
+ 31 | 41
+ 51 | 61
+(23 rows)
+
+-- SELECT with 1 param
+PREPARE p5(int) AS SELECT * FROM t WHERE a = $1;
+EXPLAIN (COSTS OFF) EXECUTE p5(16);
+           QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (ColumnarScan) on t
+   Filter: (a = 16)
+(2 rows)
+
+EXECUTE p5(16);
+ a | b
+---------------------------------------------------------------------
+(0 rows)
+
+EXPLAIN (ANALYZE true, COSTS off, TIMING off, SUMMARY off) EXECUTE p5(9);
+                       QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (ColumnarScan) on t (actual rows=2 loops=1)
+   Filter: (a = 9)
+   Rows Removed by Filter: 2
+   Columnar Chunk Groups Removed by Filter: 8
+(4 rows)
+
+SELECT * FROM t ORDER BY a;
+ a  | b
+---------------------------------------------------------------------
+  1 |  2
+  2 |  4
+  3 |  6
+  4 |  8
+  5 | 10
+  6 | 13
+  7 | 15
+  8 |  8
+  8 |  8
+  9 |  9
+  9 |  9
+ 10 | 16
+ 10 | 20
+ 11 | 22
+ 11 | 18
+ 12 | 50
+ 12 | 30
+ 13 | 52
+ 13 | 32
+ 14 | 40
+ 14 | 60
+ 31 | 41
+ 51 | 61
+(23 rows)
+
+-- SELECT with >1 params
+PREPARE p6(int, int) AS SELECT * FROM t WHERE a = $1+1 AND b = $2+1;
+EXPLAIN (COSTS OFF) EXECUTE p6(30, 40);
+            QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (ColumnarScan) on t
+   Filter: ((a = 31) AND (b = 41))
+(2 rows)
+
+EXECUTE p6(30, 40);
+ a  | b
+---------------------------------------------------------------------
+ 31 | 41
+(1 row)
+
+EXPLAIN (ANALYZE true, COSTS off, TIMING off, SUMMARY off) EXECUTE p6(50, 60);
+                       QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (ColumnarScan) on t (actual rows=1 loops=1)
+   Filter: ((a = 51) AND (b = 61))
+   Rows Removed by Filter: 3
+   Columnar Chunk Groups Removed by Filter: 9
+(4 rows)
+
+SELECT * FROM t ORDER BY a;
+ a  | b
+---------------------------------------------------------------------
+  1 |  2
+  2 |  4
+  3 |  6
+  4 |  8
+  5 | 10
+  6 | 13
+  7 | 15
+  8 |  8
+  8 |  8
+  9 |  9
+  9 |  9
+ 10 | 16
+ 10 | 20
+ 11 | 22
+ 11 | 18
+ 12 | 50
+ 12 | 30
+ 13 | 52
+ 13 | 32
+ 14 | 40
+ 14 | 60
+ 31 | 41
+ 51 | 61
+(23 rows)
 
 DROP TABLE t;
