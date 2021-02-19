@@ -1,3 +1,7 @@
+### citus v9.5.4 (February 19, 2021) ###
+
+* Fixes a compatibility issue with pg_audit in utility calls
+
 ### citus v10.0.1 (February 19, 2021) ###
 
 * Fixes an issue in creation of `pg_catalog.time_partitions` view
