@@ -123,5 +123,9 @@ SELECT * FROM ij_col_col;
 
 SET columnar.enable_custom_scan TO DEFAULT;
 
+-- remove the child table from the inheritance hierarchy table
+ALTER TABLE ij_row_row NO INHERIT i_row;
+DROP TABLE ij_row_row;
+
 DROP TABLE i_row CASCADE;
 DROP TABLE i_col CASCADE;

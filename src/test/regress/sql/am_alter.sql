@@ -85,7 +85,13 @@ ALTER TABLE test_alter_table ALTER COLUMN j TYPE int;
 ALTER TABLE test_alter_table ALTER COLUMN k TYPE varchar(20);
 ALTER TABLE test_alter_table ALTER COLUMN k TYPE text;
 
-DROP TABLE test_alter_table;
+-- rename column
+ALTER TABLE test_alter_table RENAME COLUMN k TO k_renamed;
+
+-- rename table
+ALTER TABLE test_alter_table RENAME TO test_alter_table_renamed;
+
+DROP TABLE test_alter_table_renamed;
 
 -- https://github.com/citusdata/citus/issues/4602
 create domain str_domain as text not null;
@@ -218,6 +224,25 @@ CREATE TABLE circles (
     c circle,
     EXCLUDE USING gist (c WITH &&)
 ) USING columnar;
+
+-- Row level security
+CREATE TABLE public.row_level_security_col (id int, pgUser CHARACTER VARYING) USING columnar;
+CREATE USER user1;
+CREATE USER user2;
+INSERT INTO public.row_level_security_col VALUES (1, 'user1'), (2, 'user2');
+GRANT SELECT, UPDATE, INSERT, DELETE ON public.row_level_security_col TO user1;
+GRANT SELECT, UPDATE, INSERT, DELETE ON public.row_level_security_col TO user2;
+CREATE POLICY policy_col ON public.row_level_security_col FOR ALL TO PUBLIC USING (pgUser = current_user);
+ALTER TABLE public.row_level_security_col ENABLE ROW LEVEL SECURITY;
+SELECT * FROM public.row_level_security_col;
+SET ROLE user1;
+SELECT * FROM public.row_level_security_col;
+SET ROLE user2;
+SELECT * FROM public.row_level_security_col;
+RESET ROLE;
+DROP TABLE public.row_level_security_col;
+DROP USER user1;
+DROP USER user2;
 
 SET client_min_messages TO WARNING;
 DROP SCHEMA columnar_alter CASCADE;
