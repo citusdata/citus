@@ -396,7 +396,7 @@ worker_apply_shard_ddl_command(PG_FUNCTION_ARGS)
 
 	/* extend names in ddl command and apply extended command */
 	RelayEventExtendNames(ddlCommandNode, schemaName, shardId);
-	ProcessUtilityParseTree(ddlCommandNode, ddlCommand, PROCESS_UTILITY_QUERY, NULL,
+	ProcessUtilityParseTree(ddlCommandNode, ddlCommand, PROCESS_UTILITY_TOPLEVEL, NULL,
 							None_Receiver, NULL);
 
 	PG_RETURN_VOID();
@@ -428,7 +428,7 @@ worker_apply_inter_shard_ddl_command(PG_FUNCTION_ARGS)
 	RelayEventExtendNamesForInterShardCommands(ddlCommandNode, leftShardId,
 											   leftShardSchemaName, rightShardId,
 											   rightShardSchemaName);
-	ProcessUtilityParseTree(ddlCommandNode, ddlCommand, PROCESS_UTILITY_QUERY, NULL,
+	ProcessUtilityParseTree(ddlCommandNode, ddlCommand, PROCESS_UTILITY_TOPLEVEL, NULL,
 							None_Receiver, NULL);
 
 	PG_RETURN_VOID();
@@ -461,7 +461,7 @@ worker_apply_sequence_command(PG_FUNCTION_ARGS)
 	}
 
 	/* run the CREATE SEQUENCE command */
-	ProcessUtilityParseTree(commandNode, commandString, PROCESS_UTILITY_QUERY, NULL,
+	ProcessUtilityParseTree(commandNode, commandString, PROCESS_UTILITY_TOPLEVEL, NULL,
 							None_Receiver, NULL);
 	CommandCounterIncrement();
 
@@ -669,7 +669,7 @@ worker_append_table_to_shard(PG_FUNCTION_ARGS)
 	SetUserIdAndSecContext(CitusExtensionOwner(), SECURITY_LOCAL_USERID_CHANGE);
 
 	ProcessUtilityParseTree((Node *) localCopyCommand, queryString->data,
-							PROCESS_UTILITY_QUERY, NULL, None_Receiver, NULL);
+							PROCESS_UTILITY_TOPLEVEL, NULL, None_Receiver, NULL);
 
 	SetUserIdAndSecContext(savedUserId, savedSecurityContext);
 
@@ -782,7 +782,7 @@ AlterSequenceMinMax(Oid sequenceId, char *schemaName, char *sequenceName,
 
 		/* since the command is an AlterSeqStmt, a dummy command string works fine */
 		ProcessUtilityParseTree((Node *) alterSequenceStatement, dummyString,
-								PROCESS_UTILITY_QUERY, NULL, None_Receiver, NULL);
+								PROCESS_UTILITY_TOPLEVEL, NULL, None_Receiver, NULL);
 	}
 }
 
