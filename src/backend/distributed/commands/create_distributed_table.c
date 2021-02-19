@@ -1658,7 +1658,7 @@ UndistributeTable(Oid relationId)
 		Node *parseTree = ParseTreeNode(tableCreationCommand);
 
 		RelayEventExtendNames(parseTree, schemaName, hashOfName);
-		CitusProcessUtility(parseTree, tableCreationCommand, PROCESS_UTILITY_TOPLEVEL,
+		CitusProcessUtility(parseTree, tableCreationCommand, PROCESS_UTILITY_QUERY,
 							NULL, None_Receiver, NULL);
 	}
 

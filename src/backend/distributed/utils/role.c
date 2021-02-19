@@ -41,7 +41,7 @@ alter_role_if_exists(PG_FUNCTION_ARGS)
 
 	Node *parseTree = ParseTreeNode(utilityQuery);
 
-	CitusProcessUtility(parseTree, utilityQuery, PROCESS_UTILITY_TOPLEVEL, NULL,
+	CitusProcessUtility(parseTree, utilityQuery, PROCESS_UTILITY_QUERY, NULL,
 						None_Receiver, NULL);
 
 	PG_RETURN_BOOL(true);
@@ -98,7 +98,7 @@ worker_create_or_alter_role(PG_FUNCTION_ARGS)
 
 		CitusProcessUtility(parseTree,
 							createRoleUtilityQuery,
-							PROCESS_UTILITY_TOPLEVEL,
+							PROCESS_UTILITY_QUERY,
 							NULL,
 							None_Receiver, NULL);
 
@@ -126,7 +126,7 @@ worker_create_or_alter_role(PG_FUNCTION_ARGS)
 
 		CitusProcessUtility(parseTree,
 							alterRoleUtilityQuery,
-							PROCESS_UTILITY_TOPLEVEL,
+							PROCESS_UTILITY_QUERY,
 							NULL,
 							None_Receiver, NULL);
 

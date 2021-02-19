@@ -409,7 +409,8 @@ LocallyExecuteUtilityTask(const char *localTaskQueryCommand)
 			 * process utility.
 			 */
 			CitusProcessUtility(localTaskRawParseTree, localTaskQueryCommand,
-								PROCESS_UTILITY_TOPLEVEL, NULL, None_Receiver, NULL);
+								PROCESS_UTILITY_QUERY, NULL, None_Receiver,
+								NULL);
 		}
 	}
 }
