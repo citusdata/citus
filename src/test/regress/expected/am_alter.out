@@ -334,5 +334,57 @@ SELECT * FROM zero_col_columnar;
 --
 (8 rows)
 
+-- Add constraints
+-- Add a CHECK constraint
+CREATE TABLE products (
+    product_no integer,
+    name text,
+    price int CONSTRAINT price_constraint CHECK (price > 0)
+) USING columnar;
+-- first insert should fail
+INSERT INTO products VALUES (1, 'bread', 0);
+ERROR:  new row for relation "products" violates check constraint "price_constraint"
+DETAIL:  Failing row contains (1, bread, 0).
+INSERT INTO products VALUES (1, 'bread', 10);
+ALTER TABLE products ADD CONSTRAINT dummy_constraint CHECK (price > product_no);
+-- first insert should fail
+INSERT INTO products VALUES (2, 'shampoo', 1);
+ERROR:  new row for relation "products" violates check constraint "dummy_constraint"
+DETAIL:  Failing row contains (2, shampoo, 1).
+INSERT INTO products VALUES (2, 'shampoo', 20);
+ALTER TABLE products DROP CONSTRAINT dummy_constraint;
+INSERT INTO products VALUES (3, 'pen', 2);
+SELECT * FROM products;
+ product_no |  name   | price
+---------------------------------------------------------------------
+          1 | bread   |    10
+          2 | shampoo |    20
+          3 | pen     |     2
+(3 rows)
+
+-- Add a UNIQUE constraint (should fail)
+CREATE TABLE products_fail (
+    product_no integer UNIQUE,
+    name text,
+    price numeric
+) USING columnar;
+ERROR:  indexes not supported for columnar tables
+ALTER TABLE products ADD COLUMN store_id text UNIQUE;
+ERROR:  indexes not supported for columnar tables
+-- Add a PRIMARY KEY constraint (should fail)
+CREATE TABLE products_fail (
+    product_no integer PRIMARY KEY,
+    name text,
+    price numeric
+) USING columnar;
+ERROR:  indexes not supported for columnar tables
+ALTER TABLE products ADD COLUMN store_id text PRIMARY KEY;
+ERROR:  indexes not supported for columnar tables
+-- Add an EXCLUSION constraint (should fail)
+CREATE TABLE circles (
+    c circle,
+    EXCLUDE USING gist (c WITH &&)
+) USING columnar;
+ERROR:  indexes not supported for columnar tables
 SET client_min_messages TO WARNING;
 DROP SCHEMA columnar_alter CASCADE;

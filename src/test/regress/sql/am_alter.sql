@@ -178,5 +178,46 @@ VACUUM FULL zero_col_columnar;
 
 SELECT * FROM zero_col_columnar;
 
+-- Add constraints
+
+-- Add a CHECK constraint
+CREATE TABLE products (
+    product_no integer,
+    name text,
+    price int CONSTRAINT price_constraint CHECK (price > 0)
+) USING columnar;
+-- first insert should fail
+INSERT INTO products VALUES (1, 'bread', 0);
+INSERT INTO products VALUES (1, 'bread', 10);
+ALTER TABLE products ADD CONSTRAINT dummy_constraint CHECK (price > product_no);
+-- first insert should fail
+INSERT INTO products VALUES (2, 'shampoo', 1);
+INSERT INTO products VALUES (2, 'shampoo', 20);
+ALTER TABLE products DROP CONSTRAINT dummy_constraint;
+INSERT INTO products VALUES (3, 'pen', 2);
+SELECT * FROM products;
+
+-- Add a UNIQUE constraint (should fail)
+CREATE TABLE products_fail (
+    product_no integer UNIQUE,
+    name text,
+    price numeric
+) USING columnar;
+ALTER TABLE products ADD COLUMN store_id text UNIQUE;
+
+-- Add a PRIMARY KEY constraint (should fail)
+CREATE TABLE products_fail (
+    product_no integer PRIMARY KEY,
+    name text,
+    price numeric
+) USING columnar;
+ALTER TABLE products ADD COLUMN store_id text PRIMARY KEY;
+
+-- Add an EXCLUSION constraint (should fail)
+CREATE TABLE circles (
+    c circle,
+    EXCLUDE USING gist (c WITH &&)
+) USING columnar;
+
 SET client_min_messages TO WARNING;
 DROP SCHEMA columnar_alter CASCADE;
