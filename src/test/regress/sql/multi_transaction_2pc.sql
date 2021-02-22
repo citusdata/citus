@@ -44,7 +44,7 @@ INSERT INTO test_reference VALUES(1);
 INSERT INTO test_reference VALUES(2);
 BEGIN;
 SET LOCAL citus.log_remote_commands TO ON;
-SELECT * FROM test_reference;
+SELECT * FROM test_reference ORDER BY 1;
 COMMIT;
 
 DROP SCHEMA multi_transaction_2pc CASCADE;
