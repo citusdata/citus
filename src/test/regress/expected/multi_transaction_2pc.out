@@ -101,10 +101,10 @@ INSERT INTO test_reference VALUES(1);
 INSERT INTO test_reference VALUES(2);
 BEGIN;
 SET LOCAL citus.log_remote_commands TO ON;
-SELECT * FROM test_reference;
+SELECT * FROM test_reference ORDER BY 1;
 NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT b FROM multi_transaction_2pc.test_reference_1410004 test_reference
+NOTICE:  issuing SELECT b FROM multi_transaction_2pc.test_reference_1410004 test_reference ORDER BY b
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
  b
 ---------------------------------------------------------------------
