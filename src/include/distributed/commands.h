@@ -27,6 +27,10 @@ extern bool EnableLocalReferenceForeignKeys;
 extern void SwitchToSequentialAndLocalExecutionIfRelationNameTooLong(Oid relationId,
 																	 char *
 																	 finalRelationName);
+extern void SwitchToSequentialAndLocalExecutionIfPartitionNameTooLong(Oid
+																	  parentRelationId,
+																	  Oid
+																	  partitionRelationId);
 
 
 /*
