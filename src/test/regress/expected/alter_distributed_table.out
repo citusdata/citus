@@ -837,5 +837,65 @@ SELECT * FROM mat_view ORDER BY a;
  2 | 2
 (2 rows)
 
+-- test long table names
+SET client_min_messages TO DEBUG1;
+CREATE TABLE abcde_0123456789012345678901234567890123456789012345678901234567890123456789 (x int, y int);
+NOTICE:  identifier "abcde_0123456789012345678901234567890123456789012345678901234567890123456789" will be truncated to "abcde_012345678901234567890123456789012345678901234567890123456"
+SELECT create_distributed_table('abcde_0123456789012345678901234567890123456789012345678901234567890123456789', 'x');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT alter_distributed_table('abcde_0123456789012345678901234567890123456789012345678901234567890123456789', distribution_column := 'y');
+NOTICE:  creating a new table for alter_distributed_table.abcde_012345678901234567890123456789012345678901234567890123456
+NOTICE:  Moving the data of alter_distributed_table.abcde_012345678901234567890123456789012345678901234567890123456
+DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
+DETAIL:  The target table's partition column should correspond to a partition column in the subquery.
+CONTEXT:  SQL statement "INSERT INTO alter_distributed_table.abcde_0123456789012345678901234567890123456_f7ff6612_4160710162 (x,y) SELECT x,y FROM alter_distributed_table.abcde_012345678901234567890123456789012345678901234567890123456"
+DEBUG:  performing repartitioned INSERT ... SELECT
+CONTEXT:  SQL statement "INSERT INTO alter_distributed_table.abcde_0123456789012345678901234567890123456_f7ff6612_4160710162 (x,y) SELECT x,y FROM alter_distributed_table.abcde_012345678901234567890123456789012345678901234567890123456"
+NOTICE:  Dropping the old alter_distributed_table.abcde_012345678901234567890123456789012345678901234567890123456
+CONTEXT:  SQL statement "DROP TABLE alter_distributed_table.abcde_012345678901234567890123456789012345678901234567890123456 CASCADE"
+NOTICE:  Renaming the new table to alter_distributed_table.abcde_012345678901234567890123456789012345678901234567890123456
+ERROR:  shard name abcde_01234567890123456789012345678901234567890_f7ff6612_361345 exceeds 63 characters
+CONTEXT:  while executing command on localhost:xxxxx
+SQL statement "ALTER TABLE alter_distributed_table.abcde_0123456789012345678901234567890123456_f7ff6612_4160710162 RENAME TO abcde_012345678901234567890123456789012345678901234567890123456"
+RESET client_min_messages;
+-- test long partitioned table names
+CREATE TABLE partition_lengths
+(
+    tenant_id integer NOT NULL,
+    timeperiod timestamp without time zone NOT NULL,
+    inserted_utc timestamp without time zone NOT NULL DEFAULT now()
+) PARTITION BY RANGE (timeperiod);
+SELECT create_distributed_table('partition_lengths', 'tenant_id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE partition_lengths_p2020_09_28_12345678901234567890123456789012345678901234567890 PARTITION OF partition_lengths FOR VALUES FROM ('2020-09-28 00:00:00') TO ('2020-09-29 00:00:00');
+NOTICE:  identifier "partition_lengths_p2020_09_28_12345678901234567890123456789012345678901234567890" will be truncated to "partition_lengths_p2020_09_28_123456789012345678901234567890123"
+-- verify alter_distributed_table works with long partition names
+SELECT alter_distributed_table('partition_lengths', shard_count := 29, cascade_to_colocated := false);
+NOTICE:  converting the partitions of alter_distributed_table.partition_lengths
+NOTICE:  creating a new table for alter_distributed_table.partition_lengths_p2020_09_28_123456789012345678901234567890123
+NOTICE:  Moving the data of alter_distributed_table.partition_lengths_p2020_09_28_123456789012345678901234567890123
+NOTICE:  Dropping the old alter_distributed_table.partition_lengths_p2020_09_28_123456789012345678901234567890123
+NOTICE:  Renaming the new table to alter_distributed_table.partition_lengths_p2020_09_28_123456789012345678901234567890123
+ERROR:  shard name partition_lengths_p2020_09_28_12345678901234567_6d0d7fee_361356 exceeds 63 characters
+CONTEXT:  while executing command on localhost:xxxxx
+SQL statement "ALTER TABLE alter_distributed_table.partition_lengths_p2020_09_28_1234567890123_6d0d7fee_1829601262 RENAME TO partition_lengths_p2020_09_28_123456789012345678901234567890123"
+-- test long partition table names
+ALTER TABLE partition_lengths_p2020_09_28_12345678901234567890123456789012345678901234567890 RENAME TO partition_lengths_p2020_09_28;
+NOTICE:  identifier "partition_lengths_p2020_09_28_12345678901234567890123456789012345678901234567890" will be truncated to "partition_lengths_p2020_09_28_123456789012345678901234567890123"
+ALTER TABLE partition_lengths RENAME TO partition_lengths_12345678901234567890123456789012345678901234567890;
+NOTICE:  identifier "partition_lengths_12345678901234567890123456789012345678901234567890" will be truncated to "partition_lengths_123456789012345678901234567890123456789012345"
+ERROR:  shard name partition_lengths_12345678901234567890123456789_f3bd8571_361348 exceeds 63 characters
+CONTEXT:  while executing command on localhost:xxxxx
+-- verify alter_distributed_table works with long partitioned table names
+SELECT alter_distributed_table('partition_lengths_12345678901234567890123456789012345678901234567890', shard_count := 17, cascade_to_colocated := false);
+ERROR:  relation "partition_lengths_123456789012345678901234567890123456789012345" does not exist
 SET client_min_messages TO WARNING;
 DROP SCHEMA alter_distributed_table CASCADE;
