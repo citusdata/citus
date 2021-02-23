@@ -621,7 +621,7 @@ SELECT name, type FROM table_attrs WHERE relid = 'partitioning_test_2010'::regcl
 -- test add PRIMARY KEY
 -- add PRIMARY KEY to partitioned table - this will error out
 ALTER TABLE partitioning_test ADD CONSTRAINT partitioning_primary PRIMARY KEY (id);
-ERROR:  insufficient columns in PRIMARY KEY constraint definition
+ERROR:  unique constraint on partitioned table must include all partitioning columns
 DETAIL:  PRIMARY KEY constraint on table "partitioning_test" lacks column "time" which is part of the partition key.
 -- ADD PRIMARY KEY to partition
 ALTER TABLE partitioning_test_2009 ADD CONSTRAINT partitioning_2009_primary PRIMARY KEY (id);
