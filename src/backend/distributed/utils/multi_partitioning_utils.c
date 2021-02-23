@@ -548,13 +548,14 @@ PartitionParentOid(Oid partitionOid)
 
 
 /*
- * LongestPartitionName is a uitility function that returns the partition
- * name which is the longest in terms of number of characters.
+ * PartitionWithLongestNameRelationId is a utility function that returns the
+ * oid of the partition table that has the longest name in terms of number of
+ * characters.
  */
-char *
-LongestPartitionName(Oid parentRelationId)
+Oid
+PartitionWithLongestNameRelationId(Oid parentRelationId)
 {
-	char *longestName = NULL;
+	Oid longestNamePartitionId = InvalidOid;
 	int longestNameLength = 0;
 	List *partitionList = PartitionList(parentRelationId);
 
@@ -565,12 +566,12 @@ LongestPartitionName(Oid parentRelationId)
 		int partitionNameLength = strnlen(partitionName, NAMEDATALEN);
 		if (partitionNameLength > longestNameLength)
 		{
-			longestName = partitionName;
+			longestNamePartitionId = partitionRelationId;
 			longestNameLength = partitionNameLength;
 		}
 	}
 
-	return longestName;
+	return longestNamePartitionId;
 }
 
 

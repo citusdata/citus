@@ -129,13 +129,13 @@ SELECT "Constraint", "Definition" FROM table_checks WHERE relid='public.name_len
 SET client_min_messages TO DEBUG1;
 SET citus.force_max_query_parallelization TO ON;
 ALTER TABLE name_lengths RENAME TO name_len_12345678901234567890123456789012345678901234567890;
-ERROR:  shard name name_len_12345678901234567890123456789012345678_fcd8ab6f_xxxxx exceeds 63 characters
-CONTEXT:  while executing command on localhost:xxxxx
+DEBUG:  the name of the shard (name_len_12345678901234567890123456789012345678_fcd8ab6f_xxxxx) for relation (name_len_12345678901234567890123456789012345678901234567890) is too long, switching to sequential and local execution mode to prevent self deadlocks
 SELECT * FROM name_len_12345678901234567890123456789012345678901234567890;
-DEBUG:  relation "name_len_12345678901234567890123456789012345678901234567890" does not exist
-ERROR:  relation "name_len_12345678901234567890123456789012345678901234567890" does not exist
+ col1 | col2 | float_col_12345678901234567890123456789012345678901234567890 | date_col_12345678901234567890123456789012345678901234567890 | int_col_12345678901234567890123456789012345678901234567890
+---------------------------------------------------------------------
+(0 rows)
+
 ALTER TABLE name_len_12345678901234567890123456789012345678901234567890 RENAME TO name_lengths;
-ERROR:  relation "name_len_12345678901234567890123456789012345678901234567890" does not exist
 SELECT * FROM name_lengths;
  col1 | col2 | float_col_12345678901234567890123456789012345678901234567890 | date_col_12345678901234567890123456789012345678901234567890 | int_col_12345678901234567890123456789012345678901234567890
 ---------------------------------------------------------------------
@@ -155,16 +155,15 @@ NOTICE:  identifier "append_zero_shard_table_12345678901234567890123456789012345
 BEGIN;
 ALTER TABLE name_lengths rename col1 to new_column_name;
 ALTER TABLE name_lengths RENAME TO name_len_12345678901234567890123456789012345678901234567890;
-ERROR:  shard name name_len_12345678901234567890123456789012345678_fcd8ab6f_xxxxx exceeds 63 characters
-CONTEXT:  while executing command on localhost:xxxxx
+ERROR:  Shard name (name_len_12345678901234567890123456789012345678_fcd8ab6f_xxxxx) for table (name_len_12345678901234567890123456789012345678901234567890) is too long and could lead to deadlocks when executed in a transaction block after a parallel query
+HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
 ROLLBACK;
 -- The same operation will work when sequential mode is set
 BEGIN;
 SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
 ALTER TABLE name_lengths rename col1 to new_column_name;
 ALTER TABLE name_lengths RENAME TO name_len_12345678901234567890123456789012345678901234567890;
-ERROR:  shard name name_len_12345678901234567890123456789012345678_fcd8ab6f_xxxxx exceeds 63 characters
-CONTEXT:  while executing command on localhost:xxxxx
+DEBUG:  the name of the shard (name_len_12345678901234567890123456789012345678_fcd8ab6f_xxxxx) for relation (name_len_12345678901234567890123456789012345678901234567890) is too long, switching to sequential and local execution mode to prevent self deadlocks
 ROLLBACK;
 RESET client_min_messages;
 -- test long partitioned table renames
@@ -184,28 +183,23 @@ CREATE TABLE partition_lengths_p2020_09_28 PARTITION OF partition_lengths FOR VA
 -- verify that we can rename partitioned tables and partitions to too-long names
 ALTER TABLE partition_lengths RENAME TO partition_lengths_12345678901234567890123456789012345678901234567890;
 NOTICE:  identifier "partition_lengths_12345678901234567890123456789012345678901234567890" will be truncated to "partition_lengths_123456789012345678901234567890123456789012345"
-ERROR:  shard name partition_lengths_12345678901234567890123456789_f3bd8571_225005 exceeds 63 characters
-CONTEXT:  while executing command on localhost:xxxxx
 -- verify that we can rename partitioned tables and partitions with too-long names
 ALTER TABLE partition_lengths_12345678901234567890123456789012345678901234567890 RENAME TO partition_lengths;
 NOTICE:  identifier "partition_lengths_12345678901234567890123456789012345678901234567890" will be truncated to "partition_lengths_123456789012345678901234567890123456789012345"
-ERROR:  relation "partition_lengths_123456789012345678901234567890123456789012345" does not exist
 -- Placeholders for unsupported operations
 \set VERBOSITY TERSE
 -- renaming distributed table partitions
 ALTER TABLE partition_lengths_p2020_09_28 RENAME TO partition_lengths_p2020_09_28_12345678901234567890123456789012345678901234567890;
 NOTICE:  identifier "partition_lengths_p2020_09_28_12345678901234567890123456789012345678901234567890" will be truncated to "partition_lengths_p2020_09_28_123456789012345678901234567890123"
-ERROR:  shard name partition_lengths_p2020_09_28_12345678901234567_6d0d7fee_225008 exceeds 63 characters
 -- creating or attaching new partitions with long names create deadlocks
 CREATE TABLE partition_lengths_p2020_09_29_12345678901234567890123456789012345678901234567890 (LIKE partition_lengths_p2020_09_28_12345678901234567890123456789012345678901234567890);
 NOTICE:  identifier "partition_lengths_p2020_09_29_12345678901234567890123456789012345678901234567890" will be truncated to "partition_lengths_p2020_09_29_123456789012345678901234567890123"
 NOTICE:  identifier "partition_lengths_p2020_09_28_12345678901234567890123456789012345678901234567890" will be truncated to "partition_lengths_p2020_09_28_123456789012345678901234567890123"
-ERROR:  relation "partition_lengths_p2020_09_28_123456789012345678901234567890123" does not exist at character 101
 ALTER TABLE partition_lengths
     ATTACH PARTITION partition_lengths_p2020_09_29_12345678901234567890123456789012345678901234567890
     FOR VALUES FROM ('2020-09-29 00:00:00') TO ('2020-09-30 00:00:00');
 NOTICE:  identifier "partition_lengths_p2020_09_29_12345678901234567890123456789012345678901234567890" will be truncated to "partition_lengths_p2020_09_29_123456789012345678901234567890123"
-ERROR:  relation "partition_lengths_p2020_09_29_123456789012345678901234567890123" does not exist
+ERROR:  canceling the transaction since it was involved in a distributed deadlock
 CREATE TABLE partition_lengths_p2020_09_30_12345678901234567890123456789012345678901234567890
     PARTITION OF partition_lengths
     FOR VALUES FROM ('2020-09-30 00:00:00') TO ('2020-10-01 00:00:00');
@@ -213,24 +207,20 @@ NOTICE:  identifier "partition_lengths_p2020_09_30_12345678901234567890123456789
 ERROR:  canceling the transaction since it was involved in a distributed deadlock
 DROP TABLE partition_lengths_p2020_09_29_12345678901234567890123456789012345678901234567890;
 NOTICE:  identifier "partition_lengths_p2020_09_29_12345678901234567890123456789012345678901234567890" will be truncated to "partition_lengths_p2020_09_29_123456789012345678901234567890123"
-ERROR:  table "partition_lengths_p2020_09_29_123456789012345678901234567890123" does not exist
 -- creating or attaching new partitions with long names work when using sequential shard modify mode
 BEGIN;
 SET LOCAL citus.multi_shard_modify_mode = sequential;
 CREATE TABLE partition_lengths_p2020_09_29_12345678901234567890123456789012345678901234567890 (LIKE partition_lengths_p2020_09_28_12345678901234567890123456789012345678901234567890);
 NOTICE:  identifier "partition_lengths_p2020_09_29_12345678901234567890123456789012345678901234567890" will be truncated to "partition_lengths_p2020_09_29_123456789012345678901234567890123"
 NOTICE:  identifier "partition_lengths_p2020_09_28_12345678901234567890123456789012345678901234567890" will be truncated to "partition_lengths_p2020_09_28_123456789012345678901234567890123"
-ERROR:  relation "partition_lengths_p2020_09_28_123456789012345678901234567890123" does not exist at character 101
 ALTER TABLE partition_lengths
     ATTACH PARTITION partition_lengths_p2020_09_29_12345678901234567890123456789012345678901234567890
     FOR VALUES FROM ('2020-09-29 00:00:00') TO ('2020-09-30 00:00:00');
 NOTICE:  identifier "partition_lengths_p2020_09_29_12345678901234567890123456789012345678901234567890" will be truncated to "partition_lengths_p2020_09_29_123456789012345678901234567890123"
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
 CREATE TABLE partition_lengths_p2020_09_30_12345678901234567890123456789012345678901234567890
     PARTITION OF partition_lengths
     FOR VALUES FROM ('2020-09-30 00:00:00') TO ('2020-10-01 00:00:00');
 NOTICE:  identifier "partition_lengths_p2020_09_30_12345678901234567890123456789012345678901234567890" will be truncated to "partition_lengths_p2020_09_30_123456789012345678901234567890123"
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
 ROLLBACK;
 -- renaming distributed table constraints are not supported
 ALTER TABLE name_lengths RENAME CONSTRAINT unique_12345678901234567890123456789012345678901234567890 TO unique2_12345678901234567890123456789012345678901234567890;
@@ -261,17 +251,15 @@ NOTICE:  identifier "tmp_idx_123456789012345678901234567890123456789012345678901
 ALTER INDEX tmp_idx_123456789012345678901234567890123456789012345678901234567890 RENAME TO tmp_idx_newname_123456789012345678901234567890123456789012345678901234567890;
 NOTICE:  identifier "tmp_idx_123456789012345678901234567890123456789012345678901234567890" will be truncated to "tmp_idx_1234567890123456789012345678901234567890123456789012345"
 NOTICE:  identifier "tmp_idx_newname_123456789012345678901234567890123456789012345678901234567890" will be truncated to "tmp_idx_newname_12345678901234567890123456789012345678901234567"
-ERROR:  shard name tmp_idx_newname_1234567890123456789012345678901_c54e849b_225002 exceeds 63 characters
-CONTEXT:  while executing command on localhost:xxxxx
 \c - - :public_worker_1_host :worker_1_port
 SELECT "relname", "Column", "Type", "Definition" FROM index_attrs WHERE
     relname LIKE 'tmp_idx_%' ORDER BY 1 DESC, 2 DESC, 3 DESC, 4 DESC;
                              relname                             | Column |  Type   | Definition
 ---------------------------------------------------------------------
+ tmp_idx_newname_1234567890123456789012345678901_c54e849b_225003 | col2   | integer | col2
+ tmp_idx_newname_1234567890123456789012345678901_c54e849b_225002 | col2   | integer | col2
  tmp_idx_123456789012345678901234567890123456789_5e470afa_225003 | col2   | integer | col2
  tmp_idx_123456789012345678901234567890123456789_5e470afa_225002 | col2   | integer | col2
- tmp_idx_123456789012345678901234567890123456789_599636aa_225003 | col2   | integer | col2
- tmp_idx_123456789012345678901234567890123456789_599636aa_225002 | col2   | integer | col2
 (4 rows)
 
 \c - - :master_host :master_port
@@ -324,13 +312,18 @@ SELECT master_create_worker_shards('sneaky_name_lengths', '2', '2');
 
 \c - - :public_worker_1_host :worker_1_port
 \di public.sneaky*225030
-          List of relations
- Schema | Name | Type | Owner | Table
+                                                    List of relations
+ Schema |                              Name                               | Type  |  Owner   |           Table
 ---------------------------------------------------------------------
-(0 rows)
+ public | sneaky_name_lengths_int_col_1234567890123456789_6402d2cd_225030 | index | postgres | sneaky_name_lengths_225030
+(1 row)
 
 SELECT "Constraint", "Definition" FROM table_checks WHERE relid='public.sneaky_name_lengths_225030'::regclass ORDER BY 1 DESC, 2 DESC;
-ERROR:  relation "public.sneaky_name_lengths_225030" does not exist
+                        Constraint                         |                                  Definition
+---------------------------------------------------------------------
+ checky_12345678901234567890123456789012345678901234567890 | CHECK (int_col_123456789012345678901234567890123456789012345678901234 > 100)
+(1 row)
+
 \c - - :master_host :master_port
 SET citus.shard_count TO 2;
 SET citus.shard_replication_factor TO 2;
@@ -350,10 +343,11 @@ SELECT create_distributed_table('sneaky_name_lengths', 'col1', 'hash');
 
 \c - - :public_worker_1_host :worker_1_port
 \di unique*225032
-          List of relations
- Schema | Name | Type | Owner | Table
+                                                    List of relations
+ Schema |                              Name                               | Type  |  Owner   |           Table
 ---------------------------------------------------------------------
-(0 rows)
+ public | unique_1234567890123456789012345678901234567890_a5986f27_225032 | index | postgres | sneaky_name_lengths_225032
+(1 row)
 
 \c - - :master_host :master_port
 SET citus.shard_count TO 2;
