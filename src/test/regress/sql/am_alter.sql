@@ -201,7 +201,7 @@ INSERT INTO products VALUES (2, 'shampoo', 1);
 INSERT INTO products VALUES (2, 'shampoo', 20);
 ALTER TABLE products DROP CONSTRAINT dummy_constraint;
 INSERT INTO products VALUES (3, 'pen', 2);
-SELECT * FROM products;
+SELECT * FROM products ORDER BY 1;
 
 -- Add a UNIQUE constraint (should fail)
 CREATE TABLE products_fail (
@@ -234,7 +234,7 @@ GRANT SELECT, UPDATE, INSERT, DELETE ON public.row_level_security_col TO user1;
 GRANT SELECT, UPDATE, INSERT, DELETE ON public.row_level_security_col TO user2;
 CREATE POLICY policy_col ON public.row_level_security_col FOR ALL TO PUBLIC USING (pgUser = current_user);
 ALTER TABLE public.row_level_security_col ENABLE ROW LEVEL SECURITY;
-SELECT * FROM public.row_level_security_col;
+SELECT * FROM public.row_level_security_col ORDER BY 1;
 SET ROLE user1;
 SELECT * FROM public.row_level_security_col;
 SET ROLE user2;

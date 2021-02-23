@@ -9,7 +9,7 @@ INSERT INTO test_cursor SELECT i, j FROM generate_series(0, 100)i, generate_seri
 EXPLAIN (analyze on, costs off, timing off, summary off) SELECT * FROM test_cursor WHERE a = 25;
 BEGIN;
 DECLARE a_25 SCROLL CURSOR
-FOR SELECT * FROM test_cursor WHERE a = 25;
+FOR SELECT * FROM test_cursor WHERE a = 25 ORDER BY 2;
 FETCH 3 FROM a_25;
 FETCH PRIOR FROM a_25;
 FETCH NEXT FROM a_25;
@@ -36,7 +36,7 @@ COMMIT;
 EXPLAIN (analyze on, costs off, timing off, summary off) SELECT * FROM test_cursor WHERE a > 25;
 BEGIN;
 DECLARE a_25 SCROLL CURSOR
-FOR SELECT * FROM test_cursor WHERE a > 25;
+FOR SELECT * FROM test_cursor WHERE a > 25 ORDER BY 1, 2;
 FETCH 3 FROM a_25;
 FETCH PRIOR FROM a_25;
 FETCH NEXT FROM a_25;
