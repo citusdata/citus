@@ -324,6 +324,9 @@ PostprocessCreateTableStmtPartitionOf(CreateStmt *createStatement, const
 		char *parentRelationName = generate_qualified_relation_name(parentRelationId);
 		bool viaDeprecatedAPI = false;
 
+		SwitchToSequentialAndLocalExecutionIfRelationNameTooLong(
+			parentRelationId, get_rel_name(relationId));
+
 		CreateDistributedTable(relationId, parentDistributionColumn,
 							   parentDistributionMethod, ShardCount,
 							   parentRelationName, viaDeprecatedAPI);
@@ -397,6 +400,9 @@ PostprocessAlterTableStmtAttachPartition(AlterTableStmt *alterTableStatement,
 				char distributionMethod = DISTRIBUTE_BY_HASH;
 				char *parentRelationName = generate_qualified_relation_name(relationId);
 				bool viaDeprecatedAPI = false;
+
+				SwitchToSequentialAndLocalExecutionIfRelationNameTooLong(
+					relationId, get_rel_name(partitionRelationId));
 
 				CreateDistributedTable(partitionRelationId, distributionColumn,
 									   distributionMethod, ShardCount,

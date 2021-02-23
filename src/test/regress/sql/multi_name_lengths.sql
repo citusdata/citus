@@ -130,14 +130,9 @@ ALTER TABLE partition_lengths RENAME TO partition_lengths_1234567890123456789012
 -- verify that we can rename partitioned tables and partitions with too-long names
 ALTER TABLE partition_lengths_12345678901234567890123456789012345678901234567890 RENAME TO partition_lengths;
 
--- Placeholders for unsupported operations
-\set VERBOSITY TERSE
 
--- renaming distributed table partitions
-ALTER TABLE partition_lengths_p2020_09_28 RENAME TO partition_lengths_p2020_09_28_12345678901234567890123456789012345678901234567890;
-
--- creating or attaching new partitions with long names create deadlocks
-CREATE TABLE partition_lengths_p2020_09_29_12345678901234567890123456789012345678901234567890 (LIKE partition_lengths_p2020_09_28_12345678901234567890123456789012345678901234567890);
+-- creating or attaching new partitions with long names
+CREATE TABLE partition_lengths_p2020_09_29_12345678901234567890123456789012345678901234567890 (LIKE partition_lengths_p2020_09_28);
 ALTER TABLE partition_lengths
     ATTACH PARTITION partition_lengths_p2020_09_29_12345678901234567890123456789012345678901234567890
     FOR VALUES FROM ('2020-09-29 00:00:00') TO ('2020-09-30 00:00:00');
@@ -146,17 +141,11 @@ CREATE TABLE partition_lengths_p2020_09_30_1234567890123456789012345678901234567
     FOR VALUES FROM ('2020-09-30 00:00:00') TO ('2020-10-01 00:00:00');
 DROP TABLE partition_lengths_p2020_09_29_12345678901234567890123456789012345678901234567890;
 
--- creating or attaching new partitions with long names work when using sequential shard modify mode
-BEGIN;
-SET LOCAL citus.multi_shard_modify_mode = sequential;
-CREATE TABLE partition_lengths_p2020_09_29_12345678901234567890123456789012345678901234567890 (LIKE partition_lengths_p2020_09_28_12345678901234567890123456789012345678901234567890);
-ALTER TABLE partition_lengths
-    ATTACH PARTITION partition_lengths_p2020_09_29_12345678901234567890123456789012345678901234567890
-    FOR VALUES FROM ('2020-09-29 00:00:00') TO ('2020-09-30 00:00:00');
-CREATE TABLE partition_lengths_p2020_09_30_12345678901234567890123456789012345678901234567890
-    PARTITION OF partition_lengths
-    FOR VALUES FROM ('2020-09-30 00:00:00') TO ('2020-10-01 00:00:00');
-ROLLBACK;
+-- Placeholders for unsupported operations
+\set VERBOSITY TERSE
+
+-- renaming distributed table partitions are not supported
+ALTER TABLE partition_lengths_p2020_09_28 RENAME TO partition_lengths_p2020_09_28_12345678901234567890123456789012345678901234567890;
 
 -- renaming distributed table constraints are not supported
 ALTER TABLE name_lengths RENAME CONSTRAINT unique_12345678901234567890123456789012345678901234567890 TO unique2_12345678901234567890123456789012345678901234567890;
@@ -215,8 +204,8 @@ SELECT master_create_distributed_table('sneaky_name_lengths', 'int_col_123456789
 SELECT master_create_worker_shards('sneaky_name_lengths', '2', '2');
 
 \c - - :public_worker_1_host :worker_1_port
-\di public.sneaky*225030
-SELECT "Constraint", "Definition" FROM table_checks WHERE relid='public.sneaky_name_lengths_225030'::regclass ORDER BY 1 DESC, 2 DESC;
+\di public.sneaky*225022
+SELECT "Constraint", "Definition" FROM table_checks WHERE relid='public.sneaky_name_lengths_225022'::regclass ORDER BY 1 DESC, 2 DESC;
 \c - - :master_host :master_port
 
 SET citus.shard_count TO 2;
@@ -234,7 +223,7 @@ CREATE TABLE sneaky_name_lengths (
 SELECT create_distributed_table('sneaky_name_lengths', 'col1', 'hash');
 
 \c - - :public_worker_1_host :worker_1_port
-\di unique*225032
+\di unique*225024
 \c - - :master_host :master_port
 
 SET citus.shard_count TO 2;
