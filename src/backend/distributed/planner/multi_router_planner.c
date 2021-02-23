@@ -555,18 +555,18 @@ ModifyPartialQuerySupported(Query *queryTree, bool multiShardQuery,
 	{
 		ListCell *cteCell = NULL;
 
+		/* CTEs still not supported for INSERTs. */
+		if (queryTree->commandType == CMD_INSERT)
+		{
+			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+								 "Router planner doesn't support common table expressions with INSERT queries.",
+								 NULL, NULL);
+		}
+
 		foreach(cteCell, queryTree->cteList)
 		{
 			CommonTableExpr *cte = (CommonTableExpr *) lfirst(cteCell);
 			Query *cteQuery = (Query *) cte->ctequery;
-
-			/* CTEs still not supported for INSERTs. */
-			if (queryTree->commandType == CMD_INSERT)
-			{
-				return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-									 "Router planner doesn't support common table expressions with INSERT queries.",
-									 NULL, NULL);
-			}
 
 			if (cteQuery->commandType != CMD_SELECT)
 			{
@@ -577,16 +577,14 @@ ModifyPartialQuerySupported(Query *queryTree, bool multiShardQuery,
 										 "Router planner doesn't support non-select common table expressions with multi shard queries.",
 										 NULL, NULL);
 				}
+				/* Modifying CTEs exclude both INSERT CTEs & INSERT queries. */
+				else if (cteQuery->commandType == CMD_INSERT)
+				{
+					return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+										 "Router planner doesn't support INSERT common table expressions.",
+										 NULL, NULL);
+				}
 			}
-
-			/* Modifying CTEs exclude both INSERT CTEs & INSERT queries. */
-			if (cteQuery->commandType == CMD_INSERT)
-			{
-				return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-									 "Router planner doesn't support INSERT common table expressions.",
-									 NULL, NULL);
-			}
-
 
 			if (cteQuery->hasForUpdate &&
 				FindNodeMatchingCheckFunctionInRangeTableList(cteQuery->rtable,
