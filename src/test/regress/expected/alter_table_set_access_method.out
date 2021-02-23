@@ -692,6 +692,7 @@ SELECT create_distributed_table('abcde_01234567890123456789012345678901234567890
 (1 row)
 
 SELECT alter_table_set_access_method('abcde_0123456789012345678901234567890123456789012345678901234567890123456789', 'columnar');
+DEBUG:  the name of the shard (abcde_01234567890123456789012345678901234567890_f7ff6612_xxxxxx) for relation (abcde_012345678901234567890123456789012345678901234567890123456) is too long, switching to sequential and local execution mode to prevent self deadlocks
 NOTICE:  creating a new table for alter_table_set_access_method.abcde_012345678901234567890123456789012345678901234567890123456
 DEBUG:  pathlist hook for columnar table am
 CONTEXT:  SQL statement "SELECT EXISTS (SELECT 1 FROM alter_table_set_access_method.abcde_0123456789012345678901234567890123456_f7ff6612_4160710162)"
@@ -699,11 +700,16 @@ NOTICE:  Moving the data of alter_table_set_access_method.abcde_0123456789012345
 NOTICE:  Dropping the old alter_table_set_access_method.abcde_012345678901234567890123456789012345678901234567890123456
 CONTEXT:  SQL statement "DROP TABLE alter_table_set_access_method.abcde_012345678901234567890123456789012345678901234567890123456 CASCADE"
 NOTICE:  Renaming the new table to alter_table_set_access_method.abcde_012345678901234567890123456789012345678901234567890123456
-ERROR:  shard name abcde_01234567890123456789012345678901234567890_f7ff6612_360901 exceeds 63 characters
-CONTEXT:  while executing command on localhost:xxxxx
-SQL statement "ALTER TABLE alter_table_set_access_method.abcde_0123456789012345678901234567890123456_f7ff6612_4160710162 RENAME TO abcde_012345678901234567890123456789012345678901234567890123456"
+DEBUG:  the name of the shard (abcde_01234567890123456789012345678901234567890_f7ff6612_xxxxxx) for relation (abcde_012345678901234567890123456789012345678901234567890123456) is too long, switching to sequential and local execution mode to prevent self deadlocks
+CONTEXT:  SQL statement "ALTER TABLE alter_table_set_access_method.abcde_0123456789012345678901234567890123456_f7ff6612_4160710162 RENAME TO abcde_012345678901234567890123456789012345678901234567890123456"
+ alter_table_set_access_method
+---------------------------------------------------------------------
+
+(1 row)
+
 SELECT * FROM abcde_0123456789012345678901234567890123456789012345678901234567890123456789;
 NOTICE:  identifier "abcde_0123456789012345678901234567890123456789012345678901234567890123456789" will be truncated to "abcde_012345678901234567890123456789012345678901234567890123456"
+DEBUG:  pathlist hook for columnar table am
  x | y
 ---------------------------------------------------------------------
 (0 rows)

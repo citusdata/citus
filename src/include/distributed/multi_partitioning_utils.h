@@ -19,7 +19,7 @@ extern bool PartitionTableNoLock(Oid relationId);
 extern bool IsChildTable(Oid relationId);
 extern bool IsParentTable(Oid relationId);
 extern Oid PartitionParentOid(Oid partitionOid);
-extern char * LongestPartitionName(Oid parentRelationId);
+extern Oid PartitionWithLongestNameRelationId(Oid parentRelationId);
 extern List * PartitionList(Oid parentRelationId);
 extern char * GenerateDetachPartitionCommand(Oid partitionTableId);
 extern char * GenerateAttachShardPartitionCommand(ShardInterval *shardInterval);

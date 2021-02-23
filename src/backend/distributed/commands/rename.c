@@ -109,6 +109,13 @@ PreprocessRenameStmt(Node *node, const char *renameCommand,
 	 */
 	ErrorIfUnsupportedRenameStmt(renameStmt);
 
+	if (renameStmt->renameType == OBJECT_TABLE ||
+		renameStmt->renameType == OBJECT_FOREIGN_TABLE)
+	{
+		SwitchToSequentialAndLocalExecutionIfRelationNameTooLong(tableRelationId,
+																 renameStmt->newname);
+	}
+
 	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
 	ddlJob->targetRelationId = tableRelationId;
 	ddlJob->concurrentIndexCmd = false;

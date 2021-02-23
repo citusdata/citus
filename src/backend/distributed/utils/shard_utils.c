@@ -12,6 +12,7 @@
 #include "postgres.h"
 
 #include "utils/lsyscache.h"
+#include "distributed/metadata_utility.h"
 #include "distributed/relay_utility.h"
 #include "distributed/shard_utils.h"
 
@@ -35,4 +36,22 @@ GetTableLocalShardOid(Oid citusTableOid, uint64 shardId)
 	Oid shardRelationOid = get_relname_relid(shardRelationName, citusTableSchemaOid);
 
 	return shardRelationOid;
+}
+
+
+/*
+ * GetLongestShardName is a utility function that returns the name of the shard of a
+ * table that has the longest name in terms of number of characters.
+ *
+ * Both the Oid and name of the table are required so we can create longest shard names
+ * after a RENAME.
+ */
+char *
+GetLongestShardName(Oid citusTableOid, char *finalRelationName)
+{
+	char *longestShardName = pstrdup(finalRelationName);
+	ShardInterval *shardInterval = LoadShardIntervalWithLongestShardName(citusTableOid);
+	AppendShardIdToName(&longestShardName, shardInterval->shardId);
+
+	return longestShardName;
 }

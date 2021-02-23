@@ -848,6 +848,7 @@ SELECT create_distributed_table('abcde_01234567890123456789012345678901234567890
 (1 row)
 
 SELECT alter_distributed_table('abcde_0123456789012345678901234567890123456789012345678901234567890123456789', distribution_column := 'y');
+DEBUG:  the name of the shard (abcde_01234567890123456789012345678901234567890_f7ff6612_xxxxxx) for relation (abcde_012345678901234567890123456789012345678901234567890123456) is too long, switching to sequential and local execution mode to prevent self deadlocks
 NOTICE:  creating a new table for alter_distributed_table.abcde_012345678901234567890123456789012345678901234567890123456
 NOTICE:  Moving the data of alter_distributed_table.abcde_012345678901234567890123456789012345678901234567890123456
 DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
@@ -858,9 +859,13 @@ CONTEXT:  SQL statement "INSERT INTO alter_distributed_table.abcde_0123456789012
 NOTICE:  Dropping the old alter_distributed_table.abcde_012345678901234567890123456789012345678901234567890123456
 CONTEXT:  SQL statement "DROP TABLE alter_distributed_table.abcde_012345678901234567890123456789012345678901234567890123456 CASCADE"
 NOTICE:  Renaming the new table to alter_distributed_table.abcde_012345678901234567890123456789012345678901234567890123456
-ERROR:  shard name abcde_01234567890123456789012345678901234567890_f7ff6612_361345 exceeds 63 characters
-CONTEXT:  while executing command on localhost:xxxxx
-SQL statement "ALTER TABLE alter_distributed_table.abcde_0123456789012345678901234567890123456_f7ff6612_4160710162 RENAME TO abcde_012345678901234567890123456789012345678901234567890123456"
+DEBUG:  the name of the shard (abcde_01234567890123456789012345678901234567890_f7ff6612_xxxxxx) for relation (abcde_012345678901234567890123456789012345678901234567890123456) is too long, switching to sequential and local execution mode to prevent self deadlocks
+CONTEXT:  SQL statement "ALTER TABLE alter_distributed_table.abcde_0123456789012345678901234567890123456_f7ff6612_4160710162 RENAME TO abcde_012345678901234567890123456789012345678901234567890123456"
+ alter_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
 RESET client_min_messages;
 -- test long partitioned table names
 CREATE TABLE partition_lengths
@@ -884,18 +889,33 @@ NOTICE:  creating a new table for alter_distributed_table.partition_lengths_p202
 NOTICE:  Moving the data of alter_distributed_table.partition_lengths_p2020_09_28_123456789012345678901234567890123
 NOTICE:  Dropping the old alter_distributed_table.partition_lengths_p2020_09_28_123456789012345678901234567890123
 NOTICE:  Renaming the new table to alter_distributed_table.partition_lengths_p2020_09_28_123456789012345678901234567890123
-ERROR:  shard name partition_lengths_p2020_09_28_12345678901234567_6d0d7fee_361356 exceeds 63 characters
-CONTEXT:  while executing command on localhost:xxxxx
-SQL statement "ALTER TABLE alter_distributed_table.partition_lengths_p2020_09_28_1234567890123_6d0d7fee_1829601262 RENAME TO partition_lengths_p2020_09_28_123456789012345678901234567890123"
+NOTICE:  creating a new table for alter_distributed_table.partition_lengths
+NOTICE:  Dropping the old alter_distributed_table.partition_lengths
+NOTICE:  Renaming the new table to alter_distributed_table.partition_lengths
+ alter_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
 -- test long partition table names
 ALTER TABLE partition_lengths_p2020_09_28_12345678901234567890123456789012345678901234567890 RENAME TO partition_lengths_p2020_09_28;
 NOTICE:  identifier "partition_lengths_p2020_09_28_12345678901234567890123456789012345678901234567890" will be truncated to "partition_lengths_p2020_09_28_123456789012345678901234567890123"
 ALTER TABLE partition_lengths RENAME TO partition_lengths_12345678901234567890123456789012345678901234567890;
 NOTICE:  identifier "partition_lengths_12345678901234567890123456789012345678901234567890" will be truncated to "partition_lengths_123456789012345678901234567890123456789012345"
-ERROR:  shard name partition_lengths_12345678901234567890123456789_f3bd8571_361348 exceeds 63 characters
-CONTEXT:  while executing command on localhost:xxxxx
 -- verify alter_distributed_table works with long partitioned table names
 SELECT alter_distributed_table('partition_lengths_12345678901234567890123456789012345678901234567890', shard_count := 17, cascade_to_colocated := false);
-ERROR:  relation "partition_lengths_123456789012345678901234567890123456789012345" does not exist
+NOTICE:  converting the partitions of alter_distributed_table.partition_lengths_123456789012345678901234567890123456789012345
+NOTICE:  creating a new table for alter_distributed_table.partition_lengths_p2020_09_28
+NOTICE:  Moving the data of alter_distributed_table.partition_lengths_p2020_09_28
+NOTICE:  Dropping the old alter_distributed_table.partition_lengths_p2020_09_28
+NOTICE:  Renaming the new table to alter_distributed_table.partition_lengths_p2020_09_28
+NOTICE:  creating a new table for alter_distributed_table.partition_lengths_123456789012345678901234567890123456789012345
+NOTICE:  Dropping the old alter_distributed_table.partition_lengths_123456789012345678901234567890123456789012345
+NOTICE:  Renaming the new table to alter_distributed_table.partition_lengths_123456789012345678901234567890123456789012345
+ alter_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
 SET client_min_messages TO WARNING;
 DROP SCHEMA alter_distributed_table CASCADE;

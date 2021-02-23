@@ -556,30 +556,6 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 
 				AppendShardIdToName(oldRelationName, shardId);
 				AppendShardIdToName(newRelationName, shardId);
-
-				/*
-				 * PostgreSQL creates array types for each ordinary table, with
-				 * the same name plus a prefix of '_'.
-				 *
-				 * ALTER TABLE ... RENAME TO ... also renames the underlying
-				 * array type, and the DDL is run in parallel connections over
-				 * all the placements and shards at once. Concurrent access
-				 * here deadlocks.
-				 *
-				 * Let's provide an easier to understand error message here
-				 * than the deadlock one.
-				 *
-				 * See also https://github.com/citusdata/citus/issues/1664
-				 */
-				int newRelationNameLength = strlen(*newRelationName);
-				if (newRelationNameLength >= (NAMEDATALEN - 1))
-				{
-					ereport(ERROR,
-							(errcode(ERRCODE_NAME_TOO_LONG),
-							 errmsg(
-								 "shard name %s exceeds %d characters",
-								 *newRelationName, NAMEDATALEN - 1)));
-				}
 			}
 			else if (objectType == OBJECT_COLUMN)
 			{

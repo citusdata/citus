@@ -411,15 +411,16 @@ static char *
 GenerateLongestShardPartitionIndexName(IndexStmt *createIndexStatement)
 {
 	Oid relationId = CreateIndexStmtGetRelationId(createIndexStatement);
-	char *longestPartitionName = LongestPartitionName(relationId);
-	if (longestPartitionName == NULL)
+	Oid longestNamePartitionId = PartitionWithLongestNameRelationId(relationId);
+	if (!OidIsValid(longestNamePartitionId))
 	{
 		/* no partitions have been created yet */
 		return NULL;
 	}
 
-	char *longestPartitionShardName = pstrdup(longestPartitionName);
-	ShardInterval *shardInterval = LoadShardIntervalWithLongestShardName(relationId);
+	char *longestPartitionShardName = get_rel_name(longestNamePartitionId);
+	ShardInterval *shardInterval = LoadShardIntervalWithLongestShardName(
+		longestNamePartitionId);
 	AppendShardIdToName(&longestPartitionShardName, shardInterval->shardId);
 
 	IndexStmt *createLongestShardIndexStmt = copyObject(createIndexStatement);
