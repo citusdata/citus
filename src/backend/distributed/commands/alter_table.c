@@ -48,6 +48,7 @@
 #include "distributed/multi_executor.h"
 #include "distributed/multi_logical_planner.h"
 #include "distributed/multi_partitioning_utils.h"
+#include "distributed/metadata/pg_dist_object.h"
 #include "distributed/reference_table_utils.h"
 #include "distributed/relation_access_tracking.h"
 #include "distributed/shard_utils.h"
@@ -56,6 +57,7 @@
 #include "executor/spi.h"
 #include "nodes/pg_list.h"
 #include "utils/builtins.h"
+#include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
 #include "utils/syscache.h"
 
@@ -717,6 +719,71 @@ ConvertTable(TableConversionState *con)
 	else if (con->conversionType == ALTER_TABLE_SET_ACCESS_METHOD)
 	{
 		CreateCitusTableLike(con);
+	}
+
+	/* preserve colocation with procedures/functions */
+	if (con->conversionType == ALTER_DISTRIBUTED_TABLE)
+	{
+		/*
+		 * Updating the colocationId of functions is always desirable for
+		 * the following scenario:
+		 *    we have shardCount or colocateWith change
+		 *    AND  entire co-location group is altered
+		 * The reason for the second condition is because we currently don't
+		 * remember the original table specified in the colocateWith when
+		 * distributing the function. We only remember the colocationId in
+		 * pg_dist_object table.
+		 */
+		if ((!con->shardCountIsNull || con->colocateWith != NULL) &&
+			(con->cascadeToColocated == CASCADE_TO_COLOCATED_YES || list_length(
+				 con->colocatedTableList) == 1) && con->distributionColumn == NULL)
+		{
+			const bool indexOK = false;
+			ScanKeyData scanKey[1];
+			Relation pgDistObjectRel = table_open(DistObjectRelationId(),
+												  RowExclusiveLock);
+			TupleDesc tupleDescriptor = RelationGetDescr(pgDistObjectRel);
+
+			/* scan pg_dist_object for colocationId equal to the one of the old relation */
+			ScanKeyInit(&scanKey[0], Anum_pg_dist_object_colocationid,
+						BTEqualStrategyNumber,
+						F_OIDEQ,
+						ObjectIdGetDatum(TableColocationId(con->relationId)));
+
+			SysScanDesc scanDescriptor = systable_beginscan(pgDistObjectRel,
+															DistObjectPrimaryKeyIndexId(),
+															indexOK,
+															NULL, 1, scanKey);
+			HeapTuple heapTuple;
+			while (HeapTupleIsValid(heapTuple = systable_getnext(scanDescriptor)))
+			{
+				Datum values[Natts_pg_dist_object];
+				bool isnull[Natts_pg_dist_object];
+				bool replace[Natts_pg_dist_object];
+
+				memset(replace, 0, sizeof(replace));
+
+				replace[Anum_pg_dist_object_colocationid - 1] = true;
+
+				/* update the colocationId to the one of the new relation for each tuple */
+				values[Anum_pg_dist_object_colocationid - 1] = Int32GetDatum(
+					TableColocationId(
+						con->
+						newRelationId));
+
+				isnull[Anum_pg_dist_object_colocationid - 1] = false;
+
+
+				heapTuple = heap_modify_tuple(heapTuple, tupleDescriptor, values, isnull,
+											  replace);
+
+				CatalogTupleUpdate(pgDistObjectRel, &heapTuple->t_self, heapTuple);
+				CitusInvalidateRelcacheByRelid(DistObjectRelationId());
+			}
+
+			systable_endscan(scanDescriptor);
+			table_close(pgDistObjectRel, NoLock);
+		}
 	}
 
 	ReplaceTable(con->relationId, con->newRelationId, justBeforeDropCommands,
