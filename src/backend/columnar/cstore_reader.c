@@ -578,7 +578,6 @@ SelectedChunkMask(StripeSkipList *stripeSkipList, List *projectedColumnList,
 		Node *baseConstraint = BuildBaseConstraint(column);
 		for (chunkIndex = 0; chunkIndex < stripeSkipList->chunkCount; chunkIndex++)
 		{
-			bool predicateRefuted = false;
 			ColumnChunkSkipNode *chunkSkipNodeArray =
 				stripeSkipList->chunkSkipNodeArray[columnIndex];
 			ColumnChunkSkipNode *chunkSkipNode = &chunkSkipNodeArray[chunkIndex];
@@ -596,12 +595,8 @@ SelectedChunkMask(StripeSkipList *stripeSkipList, List *projectedColumnList,
 							 chunkSkipNode->maximumValue);
 
 			List *constraintList = list_make1(baseConstraint);
-#if (PG_VERSION_NUM >= 100000)
-			predicateRefuted = predicate_refuted_by(constraintList, restrictInfoList,
-													false);
-#else
-			predicateRefuted = predicate_refuted_by(constraintList, restrictInfoList);
-#endif
+			bool predicateRefuted =
+				predicate_refuted_by(constraintList, restrictInfoList, false);
 			if (predicateRefuted && selectedChunkMask[chunkIndex])
 			{
 				selectedChunkMask[chunkIndex] = false;
