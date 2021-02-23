@@ -357,13 +357,13 @@ SET client_min_messages TO DEBUG1;
 CREATE INDEX ix_test_index_creation2
     ON test_index_creation1 USING btree
     (tenant_id, timeperiod);
-DEBUG:  the index name on the shards of the partition is too long, switching to sequential and local execution mode to prevent self deadlocks: test_index_creation1_p2020_09_26_10311_tenant_id_timeperiod_idx
+DEBUG:  the index name on the shards of the partition is too long, switching to sequential and local execution mode to prevent self deadlocks: test_index_creation1_p2020_09_26_xxxxxx_tenant_id_timeperiod_idx
 -- same test with schema qualified
 SET search_path TO public;
 CREATE INDEX ix_test_index_creation3
     ON multi_index_statements.test_index_creation1 USING btree
     (tenant_id, timeperiod);
-DEBUG:  the index name on the shards of the partition is too long, switching to sequential and local execution mode to prevent self deadlocks: test_index_creation1_p2020_09_26_10311_tenant_id_timeperiod_idx
+DEBUG:  the index name on the shards of the partition is too long, switching to sequential and local execution mode to prevent self deadlocks: test_index_creation1_p2020_09_26_xxxxxx_tenant_id_timeperiod_idx
 SET search_path TO multi_index_statements;
 -- we cannot switch to sequential execution
 -- after a parallel query
@@ -377,7 +377,7 @@ BEGIN;
 	CREATE INDEX ix_test_index_creation4
 	ON test_index_creation1 USING btree
 	(tenant_id, timeperiod);
-ERROR:  The index name (test_index_creation1_p2020_09_26_10311_tenant_id_timeperiod_idx) on a shard is too long and could lead to deadlocks when executed in a transaction block after a parallel query
+ERROR:  The index name (test_index_creation1_p2020_09_26_xxxxxx_tenant_id_timeperiod_idx) on a shard is too long and could lead to deadlocks when executed in a transaction block after a parallel query
 HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
 ROLLBACK;
 -- try inside a sequential block
@@ -392,7 +392,7 @@ BEGIN;
 	CREATE INDEX ix_test_index_creation4
 	ON test_index_creation1 USING btree
 	(tenant_id, timeperiod);
-DEBUG:  the index name on the shards of the partition is too long, switching to sequential and local execution mode to prevent self deadlocks: test_index_creation1_p2020_09_26_10311_tenant_id_timeperiod_idx
+DEBUG:  the index name on the shards of the partition is too long, switching to sequential and local execution mode to prevent self deadlocks: test_index_creation1_p2020_09_26_xxxxxx_tenant_id_timeperiod_idx
 ROLLBACK;
 -- should be able to create indexes with INCLUDE/WHERE
 CREATE INDEX ix_test_index_creation5 ON test_index_creation1
@@ -401,7 +401,7 @@ CREATE INDEX ix_test_index_creation5 ON test_index_creation1
 DEBUG:  the index name on the shards of the partition is too long, switching to sequential and local execution mode to prevent self deadlocks: test_index_creation1_p2020_09_2_tenant_id_timeperiod_field1_idx
 CREATE UNIQUE INDEX ix_test_index_creation6 ON test_index_creation1
 	USING btree(tenant_id, timeperiod);
-DEBUG:  the index name on the shards of the partition is too long, switching to sequential and local execution mode to prevent self deadlocks: test_index_creation1_p2020_09_26_10311_tenant_id_timeperiod_idx
+DEBUG:  the index name on the shards of the partition is too long, switching to sequential and local execution mode to prevent self deadlocks: test_index_creation1_p2020_09_26_xxxxxx_tenant_id_timeperiod_idx
 -- should be able to create short named indexes in parallel
 -- as  the table/index name is short
 CREATE INDEX f1

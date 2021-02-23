@@ -123,9 +123,9 @@ CREATE FOREIGN TABLE foreign_table (
 ) SERVER fake_fdw_server OPTIONS (encoding 'utf-8', compression 'true');
 
 SELECT create_distributed_table('foreign_table', 'id');
-ALTER FOREIGN TABLE foreign_table rename to renamed_foreign_table;
-ALTER FOREIGN TABLE renamed_foreign_table rename full_name to rename_name;
-ALTER FOREIGN TABLE renamed_foreign_table alter rename_name type char(8);
+ALTER FOREIGN TABLE foreign_table rename to renamed_foreign_table_with_long_name_12345678901234567890123456789012345678901234567890;
+ALTER FOREIGN TABLE renamed_foreign_table_with_long_name_12345678901234567890123456789012345678901234567890 rename full_name to rename_name;
+ALTER FOREIGN TABLE renamed_foreign_table_with_long_name_12345678901234567890123456789012345678901234567890 alter rename_name type char(8);
 \c - - :public_worker_1_host :worker_1_port
 select table_name, column_name, data_type
 from information_schema.columns
@@ -133,7 +133,7 @@ where table_schema='public' and table_name like 'renamed_foreign_table_%' and co
 order by table_name;
 \c - - :master_host :master_port
 
-SELECT master_get_table_ddl_events('renamed_foreign_table');
+SELECT master_get_table_ddl_events('renamed_foreign_table_with_long_name_12345678901234567890123456789012345678901234567890');
 
 -- propagating views is not supported
 CREATE VIEW local_view AS SELECT * FROM simple_table;
@@ -142,7 +142,7 @@ SELECT master_get_table_ddl_events('local_view');
 
 -- clean up
 DROP VIEW IF EXISTS local_view;
-DROP FOREIGN TABLE IF EXISTS renamed_foreign_table;
+DROP FOREIGN TABLE IF EXISTS renamed_foreign_table_with_long_name_12345678901234567890123456789012345678901234567890;
 \c - - :public_worker_1_host :worker_1_port
 select table_name, column_name, data_type
 from information_schema.columns

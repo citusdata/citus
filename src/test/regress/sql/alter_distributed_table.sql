@@ -280,5 +280,33 @@ CREATE MATERIALIZED VIEW mat_view AS SELECT * FROM mat_view_test;
 SELECT alter_distributed_table('mat_view_test', shard_count := 5, cascade_to_colocated := false);
 SELECT * FROM mat_view ORDER BY a;
 
+-- test long table names
+SET client_min_messages TO DEBUG1;
+CREATE TABLE abcde_0123456789012345678901234567890123456789012345678901234567890123456789 (x int, y int);
+SELECT create_distributed_table('abcde_0123456789012345678901234567890123456789012345678901234567890123456789', 'x');
+SELECT alter_distributed_table('abcde_0123456789012345678901234567890123456789012345678901234567890123456789', distribution_column := 'y');
+RESET client_min_messages;
+
+-- test long partitioned table names
+CREATE TABLE partition_lengths
+(
+    tenant_id integer NOT NULL,
+    timeperiod timestamp without time zone NOT NULL,
+    inserted_utc timestamp without time zone NOT NULL DEFAULT now()
+) PARTITION BY RANGE (timeperiod);
+
+SELECT create_distributed_table('partition_lengths', 'tenant_id');
+CREATE TABLE partition_lengths_p2020_09_28_12345678901234567890123456789012345678901234567890 PARTITION OF partition_lengths FOR VALUES FROM ('2020-09-28 00:00:00') TO ('2020-09-29 00:00:00');
+
+-- verify alter_distributed_table works with long partition names
+SELECT alter_distributed_table('partition_lengths', shard_count := 29, cascade_to_colocated := false);
+
+-- test long partition table names
+ALTER TABLE partition_lengths_p2020_09_28_12345678901234567890123456789012345678901234567890 RENAME TO partition_lengths_p2020_09_28;
+ALTER TABLE partition_lengths RENAME TO partition_lengths_12345678901234567890123456789012345678901234567890;
+
+-- verify alter_distributed_table works with long partitioned table names
+SELECT alter_distributed_table('partition_lengths_12345678901234567890123456789012345678901234567890', shard_count := 17, cascade_to_colocated := false);
+
 SET client_min_messages TO WARNING;
 DROP SCHEMA alter_distributed_table CASCADE;
