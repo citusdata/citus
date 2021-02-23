@@ -353,10 +353,11 @@ SELECT * FROM ij_col_col;
 (1 row)
 
 SET columnar.enable_custom_scan TO DEFAULT;
+-- remove the child table from the inheritance hierarchy table
+ALTER TABLE ij_row_row NO INHERIT i_row;
+DROP TABLE ij_row_row;
 DROP TABLE i_row CASCADE;
-NOTICE:  drop cascades to 2 other objects
-DETAIL:  drop cascades to table ij_row_row
-drop cascades to table ij_row_col
+NOTICE:  drop cascades to table ij_row_col
 DROP TABLE i_col CASCADE;
 NOTICE:  drop cascades to 2 other objects
 DETAIL:  drop cascades to table ij_col_row

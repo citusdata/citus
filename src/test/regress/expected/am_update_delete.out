@@ -90,4 +90,7 @@ SELECT * FROM parent;
  Sun Mar 15 00:00:00 2020 PDT | 32 | 300 | three thousand
 (4 rows)
 
+-- detach partition
+ALTER TABLE parent DETACH PARTITION p0;
+DROP TABLE p0;
 DROP TABLE parent;

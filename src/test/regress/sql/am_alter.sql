@@ -85,7 +85,13 @@ ALTER TABLE test_alter_table ALTER COLUMN j TYPE int;
 ALTER TABLE test_alter_table ALTER COLUMN k TYPE varchar(20);
 ALTER TABLE test_alter_table ALTER COLUMN k TYPE text;
 
-DROP TABLE test_alter_table;
+-- rename column
+ALTER TABLE test_alter_table RENAME COLUMN k TO k_renamed;
+
+-- rename table
+ALTER TABLE test_alter_table RENAME TO test_alter_table_renamed;
+
+DROP TABLE test_alter_table_renamed;
 
 -- https://github.com/citusdata/citus/issues/4602
 create domain str_domain as text not null;
@@ -177,6 +183,66 @@ ANALYZE zero_col_columnar;
 VACUUM FULL zero_col_columnar;
 
 SELECT * FROM zero_col_columnar;
+
+-- Add constraints
+
+-- Add a CHECK constraint
+CREATE TABLE products (
+    product_no integer,
+    name text,
+    price int CONSTRAINT price_constraint CHECK (price > 0)
+) USING columnar;
+-- first insert should fail
+INSERT INTO products VALUES (1, 'bread', 0);
+INSERT INTO products VALUES (1, 'bread', 10);
+ALTER TABLE products ADD CONSTRAINT dummy_constraint CHECK (price > product_no);
+-- first insert should fail
+INSERT INTO products VALUES (2, 'shampoo', 1);
+INSERT INTO products VALUES (2, 'shampoo', 20);
+ALTER TABLE products DROP CONSTRAINT dummy_constraint;
+INSERT INTO products VALUES (3, 'pen', 2);
+SELECT * FROM products ORDER BY 1;
+
+-- Add a UNIQUE constraint (should fail)
+CREATE TABLE products_fail (
+    product_no integer UNIQUE,
+    name text,
+    price numeric
+) USING columnar;
+ALTER TABLE products ADD COLUMN store_id text UNIQUE;
+
+-- Add a PRIMARY KEY constraint (should fail)
+CREATE TABLE products_fail (
+    product_no integer PRIMARY KEY,
+    name text,
+    price numeric
+) USING columnar;
+ALTER TABLE products ADD COLUMN store_id text PRIMARY KEY;
+
+-- Add an EXCLUSION constraint (should fail)
+CREATE TABLE circles (
+    c circle,
+    EXCLUDE USING gist (c WITH &&)
+) USING columnar;
+
+-- Row level security
+CREATE TABLE public.row_level_security_col (id int, pgUser CHARACTER VARYING) USING columnar;
+CREATE USER user1;
+CREATE USER user2;
+INSERT INTO public.row_level_security_col VALUES (1, 'user1'), (2, 'user2');
+GRANT SELECT, UPDATE, INSERT, DELETE ON public.row_level_security_col TO user1;
+GRANT SELECT, UPDATE, INSERT, DELETE ON public.row_level_security_col TO user2;
+CREATE POLICY policy_col ON public.row_level_security_col FOR ALL TO PUBLIC USING (pgUser = current_user);
+ALTER TABLE public.row_level_security_col ENABLE ROW LEVEL SECURITY;
+SELECT * FROM public.row_level_security_col ORDER BY 1;
+SET ROLE user1;
+SELECT * FROM public.row_level_security_col;
+SET ROLE user2;
+SELECT * FROM public.row_level_security_col;
+RESET ROLE;
+DROP TABLE public.row_level_security_col;
+DROP USER user1;
+DROP USER user2;
 
 SET client_min_messages TO WARNING;
 DROP SCHEMA columnar_alter CASCADE;

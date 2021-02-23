@@ -79,5 +79,9 @@ DELETE FROM parent WHERE n = 303;
 
 SELECT * FROM parent;
 
+-- detach partition
+ALTER TABLE parent DETACH PARTITION p0;
+DROP TABLE p0;
+
 DROP TABLE parent;
 
