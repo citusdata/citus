@@ -287,6 +287,13 @@ ERROR:  permission denied for table stripe
 -- (since citus extension has a dependency to it)
 DROP TABLE columnar.chunk;
 ERROR:  must be owner of table chunk
+-- test whether a read-only user can read from citus_tables view
+SELECT distribution_column FROM citus_tables WHERE table_name = 'test'::regclass;
+ distribution_column
+---------------------------------------------------------------------
+ id
+(1 row)
+
 -- check no permission
 SET ROLE no_access;
 EXECUTE prepare_insert(1);
