@@ -22,6 +22,7 @@
 #include "catalog/pg_am.h"
 #include "commands/defrem.h"
 #include "distributed/listutils.h"
+#include "distributed/shard_pruning.h"
 #include "nodes/makefuncs.h"
 #if PG_VERSION_NUM >= 120000
 #include "nodes/nodeFuncs.h"
@@ -122,11 +123,9 @@ static ColumnBuffers * LoadColumnBuffers(Relation relation,
 static bool * SelectedChunkMask(StripeSkipList *stripeSkipList,
 								List *projectedColumnList, List *whereClauseList,
 								int64 *chunkGroupsFiltered);
-static List * BuildRestrictInfoList(List *whereClauseList);
-static Node * BuildBaseConstraint(Var *variable);
-static OpExpr * MakeOpExpression(Var *variable, int16 strategyNumber);
-static Oid GetOperatorByType(Oid typeId, Oid accessMethodId, int16 strategyNumber);
-static void UpdateConstraint(Node *baseConstraint, Datum minValue, Datum maxValue);
+static bool CanPruneChunk(List *pruningInstances,
+						  ColumnChunkSkipNode *chunkSkipNode,
+						  FunctionCallInfo compareFunctionCall);
 static StripeSkipList * SelectedChunkSkipList(StripeSkipList *stripeSkipList,
 											  bool *projectedColumnMask,
 											  bool *selectedChunkMask);
@@ -708,7 +707,6 @@ SelectedChunkMask(StripeSkipList *stripeSkipList, List *projectedColumnList,
 {
 	ListCell *columnCell = NULL;
 	uint32 chunkIndex = 0;
-	List *restrictInfoList = BuildRestrictInfoList(whereClauseList);
 
 	bool *selectedChunkMask = palloc0(stripeSkipList->chunkCount * sizeof(bool));
 	memset(selectedChunkMask, true, stripeSkipList->chunkCount * sizeof(bool));
@@ -727,30 +725,30 @@ SelectedChunkMask(StripeSkipList *stripeSkipList, List *projectedColumnList,
 			continue;
 		}
 
-		Node *baseConstraint = BuildBaseConstraint(column);
+		FunctionCall2InfoData comparisonFunctionCall2InfoData;
+		InitFunctionCallInfoData(*(FunctionCallInfo) & comparisonFunctionCall2InfoData,
+								 comparisonFunction, 2, column->varcollid,
+								 NULL, NULL);
+
+		List *pruningInstanceList =
+			BuildPruningInstanceList(column, whereClauseList,
+									 &comparisonFunctionCall2InfoData);
+		if (list_length(pruningInstanceList) == 0)
+		{
+			/* CanPruneChunk already checks but do short-circuit here */
+			continue;
+		}
+
 		for (chunkIndex = 0; chunkIndex < stripeSkipList->chunkCount; chunkIndex++)
 		{
 			ColumnChunkSkipNode *chunkSkipNodeArray =
 				stripeSkipList->chunkSkipNodeArray[columnIndex];
 			ColumnChunkSkipNode *chunkSkipNode = &chunkSkipNodeArray[chunkIndex];
-
-			/*
-			 * A column chunk with comparable data type can miss min/max values
-			 * if all values in the chunk are NULL.
-			 */
-			if (!chunkSkipNode->hasMinMax)
+			if (selectedChunkMask[chunkIndex] &&
+				CanPruneChunk(pruningInstanceList, chunkSkipNode,
+							  (FunctionCallInfo) & comparisonFunctionCall2InfoData))
 			{
-				continue;
-			}
-
-			UpdateConstraint(baseConstraint, chunkSkipNode->minimumValue,
-							 chunkSkipNode->maximumValue);
-
-			List *constraintList = list_make1(baseConstraint);
-			bool predicateRefuted =
-				predicate_refuted_by(constraintList, restrictInfoList, false);
-			if (predicateRefuted && selectedChunkMask[chunkIndex])
-			{
+				/* TODO: mark other chunks in the group too */
 				selectedChunkMask[chunkIndex] = false;
 				*chunkGroupsFiltered += 1;
 			}
@@ -758,6 +756,57 @@ SelectedChunkMask(StripeSkipList *stripeSkipList, List *projectedColumnList,
 	}
 
 	return selectedChunkMask;
+}
+
+
+/*
+ * CanPruneChunk returns true if given list of prune instances prune given chunk.
+ */
+static bool
+CanPruneChunk(List *pruningInstances, ColumnChunkSkipNode *chunkSkipNode,
+			  FunctionCallInfo compareFunctionCall)
+{
+	/*
+	 * A column chunk with comparable data type can miss min/max values
+	 * if all values in the chunk are NULL.
+	 */
+	if (!chunkSkipNode->hasMinMax)
+	{
+		return false;
+	}
+
+	if (list_length(pruningInstances) == 0)
+	{
+		/* we have no instances that can prune the chunk */
+		return false;
+	}
+
+	PruningInstance *pruneInstance = NULL;
+	foreach_ptr(pruneInstance, pruningInstances)
+	{
+		if (pruneInstance->isPartial)
+		{
+			/* skip partial instance since a fully built one has also been added */
+			continue;
+		}
+
+		if (!pruneInstance->hasValidConstraint)
+		{
+			/* cannot prove that given instance wouldn't prune the chunk */
+			return false;
+		}
+
+		if (!ExhaustivePruneOneWithMinMax(pruneInstance, compareFunctionCall,
+										  chunkSkipNode->minimumValue,
+										  chunkSkipNode->maximumValue))
+		{
+			/* found an instance that doesn't prune the chunk */
+			return false;
+		}
+	}
+
+	/* all OR'ed prune instances prune the given chunk */
+	return true;
 }
 
 
@@ -795,135 +844,6 @@ GetFunctionInfoOrNull(Oid typeId, Oid accessMethodId, int16 procedureId)
 	}
 
 	return functionInfo;
-}
-
-
-/*
- * BuildRestrictInfoList builds restrict info list using the selection criteria,
- * and then return this list. The function is copied from CitusDB's shard pruning
- * logic.
- */
-static List *
-BuildRestrictInfoList(List *whereClauseList)
-{
-	List *restrictInfoList = NIL;
-
-	ListCell *qualCell = NULL;
-	foreach(qualCell, whereClauseList)
-	{
-		Node *qualNode = (Node *) lfirst(qualCell);
-
-		RestrictInfo *restrictInfo = make_simple_restrictinfo((Expr *) qualNode);
-		restrictInfoList = lappend(restrictInfoList, restrictInfo);
-	}
-
-	return restrictInfoList;
-}
-
-
-/*
- * BuildBaseConstraint builds and returns a base constraint. This constraint
- * implements an expression in the form of (var <= max && var >= min), where
- * min and max values represent a chunk's min and max values. These chunk
- * values are filled in after the constraint is built. This function is based
- * on a similar function from CitusDB's shard pruning logic.
- */
-static Node *
-BuildBaseConstraint(Var *variable)
-{
-	OpExpr *lessThanExpr = MakeOpExpression(variable, BTLessEqualStrategyNumber);
-	OpExpr *greaterThanExpr = MakeOpExpression(variable, BTGreaterEqualStrategyNumber);
-
-	Node *baseConstraint = make_and_qual((Node *) lessThanExpr, (Node *) greaterThanExpr);
-
-	return baseConstraint;
-}
-
-
-/*
- * MakeOpExpression builds an operator expression node. This operator expression
- * implements the operator clause as defined by the variable and the strategy
- * number. The function is copied from CitusDB's shard pruning logic.
- */
-static OpExpr *
-MakeOpExpression(Var *variable, int16 strategyNumber)
-{
-	Oid typeId = variable->vartype;
-	Oid typeModId = variable->vartypmod;
-	Oid collationId = variable->varcollid;
-
-	Oid accessMethodId = BTREE_AM_OID;
-
-	/* Load the operator from system catalogs */
-	Oid operatorId = GetOperatorByType(typeId, accessMethodId, strategyNumber);
-
-	Const *constantValue = makeNullConst(typeId, typeModId, collationId);
-
-	/* Now make the expression with the given variable and a null constant */
-	OpExpr *expression = (OpExpr *) make_opclause(operatorId,
-												  InvalidOid, /* no result type yet */
-												  false, /* no return set */
-												  (Expr *) variable,
-												  (Expr *) constantValue,
-												  InvalidOid, collationId);
-
-	/* Set implementing function id and result type */
-	expression->opfuncid = get_opcode(operatorId);
-	expression->opresulttype = get_func_rettype(expression->opfuncid);
-
-	return expression;
-}
-
-
-/*
- * GetOperatorByType returns operator Oid for the given type, access method,
- * and strategy number. Note that this function incorrectly errors out when
- * the given type doesn't have its own operator but can use another compatible
- * type's default operator. The function is copied from CitusDB's shard pruning
- * logic.
- */
-static Oid
-GetOperatorByType(Oid typeId, Oid accessMethodId, int16 strategyNumber)
-{
-	/* Get default operator class from pg_opclass */
-	Oid operatorClassId = GetDefaultOpClass(typeId, accessMethodId);
-
-	Oid operatorFamily = get_opclass_family(operatorClassId);
-
-	Oid operatorId = get_opfamily_member(operatorFamily, typeId, typeId, strategyNumber);
-
-	return operatorId;
-}
-
-
-/*
- * UpdateConstraint updates the base constraint with the given min/max values.
- * The function is copied from CitusDB's shard pruning logic.
- */
-static void
-UpdateConstraint(Node *baseConstraint, Datum minValue, Datum maxValue)
-{
-	BoolExpr *andExpr = (BoolExpr *) baseConstraint;
-	Node *lessThanExpr = (Node *) linitial(andExpr->args);
-	Node *greaterThanExpr = (Node *) lsecond(andExpr->args);
-
-	Node *minNode = get_rightop((Expr *) greaterThanExpr);
-	Node *maxNode = get_rightop((Expr *) lessThanExpr);
-
-	Assert(IsA(minNode, Const));
-	Assert(IsA(maxNode, Const));
-
-	Const *minConstant = (Const *) minNode;
-	Const *maxConstant = (Const *) maxNode;
-
-	minConstant->constvalue = minValue;
-	maxConstant->constvalue = maxValue;
-
-	minConstant->constisnull = false;
-	maxConstant->constisnull = false;
-
-	minConstant->constbyval = true;
-	maxConstant->constbyval = true;
 }
 
 
