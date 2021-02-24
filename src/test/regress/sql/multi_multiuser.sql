@@ -184,6 +184,11 @@ INSERT INTO columnar.stripe VALUES(99);
 -- (since citus extension has a dependency to it)
 DROP TABLE columnar.chunk;
 
+
+-- test whether a read-only user can read from citus_tables view
+SELECT distribution_column FROM citus_tables WHERE table_name = 'test'::regclass;
+
+
 -- check no permission
 SET ROLE no_access;
 
