@@ -373,3 +373,57 @@ GetDistributedObjectAddressList(void)
 
 	return objectAddressList;
 }
+
+
+/*
+ * UpdateDistributedObjectColocationId gets an old and a new colocationId
+ * and updates the colocationId of all tuples in citus.pg_dist_object which
+ * have the old colocationId to the new colocationId.
+ */
+void
+UpdateDistributedObjectColocationId(uint32 oldColocationId,
+									uint32 newColocationId)
+{
+	const bool indexOK = false;
+	ScanKeyData scanKey[1];
+	Relation pgDistObjectRel = table_open(DistObjectRelationId(),
+										  RowExclusiveLock);
+	TupleDesc tupleDescriptor = RelationGetDescr(pgDistObjectRel);
+
+	/* scan pg_dist_object for colocationId equal to old colocationId */
+	ScanKeyInit(&scanKey[0], Anum_pg_dist_object_colocationid,
+				BTEqualStrategyNumber,
+				F_OIDEQ,
+				ObjectIdGetDatum(oldColocationId));
+
+	SysScanDesc scanDescriptor = systable_beginscan(pgDistObjectRel,
+													DistObjectPrimaryKeyIndexId(),
+													indexOK,
+													NULL, 1, scanKey);
+	HeapTuple heapTuple;
+	while (HeapTupleIsValid(heapTuple = systable_getnext(scanDescriptor)))
+	{
+		Datum values[Natts_pg_dist_object];
+		bool isnull[Natts_pg_dist_object];
+		bool replace[Natts_pg_dist_object];
+
+		memset(replace, 0, sizeof(replace));
+
+		replace[Anum_pg_dist_object_colocationid - 1] = true;
+
+		/* update the colocationId to the new one */
+		values[Anum_pg_dist_object_colocationid - 1] = Int32GetDatum(newColocationId);
+
+		isnull[Anum_pg_dist_object_colocationid - 1] = false;
+
+
+		heapTuple = heap_modify_tuple(heapTuple, tupleDescriptor, values, isnull,
+									  replace);
+
+		CatalogTupleUpdate(pgDistObjectRel, &heapTuple->t_self, heapTuple);
+		CitusInvalidateRelcacheByRelid(DistObjectRelationId());
+	}
+
+	systable_endscan(scanDescriptor);
+	table_close(pgDistObjectRel, NoLock);
+}
