@@ -128,4 +128,20 @@ FROM
 	LEFT JOIN users_table USING (user_id)
 ORDER BY 1,2,3,4 LIMIT 5;
 
+-- we don't support cross JOINs between distributed tables
+-- and without target list entries
+CREATE TABLE dist1(c0 int);
+CREATE TABLE dist2(c0 int);
+CREATE TABLE dist3(c0 int , c1 int);
+CREATE TABLE dist4(c0 int , c1 int);
 
+SELECT create_distributed_table('dist1', 'c0');
+SELECT create_distributed_table('dist2', 'c0');
+SELECT create_distributed_table('dist3', 'c1');
+SELECT create_distributed_table('dist4', 'c1');
+
+SELECT dist2.c0 FROM dist1, dist3, dist4, dist2 WHERE (dist3.c0) IN (dist4.c0);
+SELECT 1 FROM dist3, dist4, dist2 WHERE (dist3.c0) IN (dist4.c0);
+SELECT  FROM dist3, dist4, dist2 WHERE (dist3.c0) IN (dist4.c0);
+SELECT dist2.c0 FROM dist3, dist4, dist2 WHERE (dist3.c0) IN (dist4.c0);
+SELECT dist2.* FROM dist3, dist4, dist2 WHERE (dist3.c0) IN (dist4.c0);
