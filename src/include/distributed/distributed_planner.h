@@ -222,9 +222,9 @@ extern PlannedStmt * distributed_planner(Query *parse,
 #define LOCAL_TABLE_SUBQUERY_CTE_HINT \
 	"Use CTE's or subqueries to select from local tables and use them in joins"
 
-
 extern List * ExtractRangeTableEntryList(Query *query);
 extern bool NeedsDistributedPlanning(Query *query);
+extern List * TranslatedVarsForRteIdentity(int rteIdentity);
 extern struct DistributedPlan * GetDistributedPlan(CustomScan *node);
 extern void multi_relation_restriction_hook(PlannerInfo *root, RelOptInfo *relOptInfo,
 											Index restrictionIndex, RangeTblEntry *rte);

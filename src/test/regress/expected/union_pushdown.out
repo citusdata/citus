@@ -36,6 +36,16 @@ SELECT create_distributed_table('events_table_part', 'user_id');
 (1 row)
 
 INSERT INTO events_table_part SELECT i, i %9, i %50 FROM generate_series(0, 100) i;
+CREATE TABLE events_table_ref(user_id bigint, value_1 int, value_2 int);
+SELECT create_reference_table('events_table_ref');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO events_table_ref SELECT i, i %9, i %50 FROM generate_series(0, 100) i;
+CREATE TABLE events_table_local(user_id bigint, value_1 int, value_2 int);
+INSERT INTO events_table_local SELECT i, i %9, i %50 FROM generate_series(0, 100) i;
 set client_min_messages to DEBUG1;
 -- a union all query with 2 different levels of UNION ALL
 SELECT COUNT(*)
@@ -286,8 +296,573 @@ DEBUG:  push down of limit count: 1
        0
 (1 row)
 
+-- safe to pushdown
+SELECT * FROM (
+    (SELECT user_id FROM users_table_part UNION ALL SELECT * FROM
+         (SELECT user_id FROM users_table_part UNION ALL SELECT user_id FROM users_table_part) as bar1) as foo
+    JOIN
+    (SELECT user_id FROM users_table_part UNION ALL SELECT * FROM
+        (SELECT user_id FROM users_table_part UNION ALL SELECT user_id FROM users_table_part) as bar2) as bar
+USING (user_id)
+)
+ORDER BY 1 LIMIT 1;
+DEBUG:  push down of limit count: 1
+ user_id
+---------------------------------------------------------------------
+       0
+(1 row)
+
+-- UNION ALL leaf queries deep in the subquery
+SELECT * FROM
+(
+	SELECT * FROM (SELECT * FROM (SELECT * FROM (SELECT * FROM (SELECT * FROM (SELECT * FROM users_table_part) as level_5) as level_4) as level_3) as level_2) as level_1
+	UNION ALL
+	SELECT * FROM (SELECT * FROM (SELECT * FROM (SELECT * FROM (SELECT * FROM (SELECT * FROM users_table_part) as level_5) as level_4) as level_3) as level_2) as level_1
+) as top_level ORDER BY 1 DESC LIMIT 3;
+DEBUG:  push down of limit count: 3
+ user_id | value_1 | value_2
+---------------------------------------------------------------------
+     100 |       1 |       0
+     100 |       1 |       0
+      99 |       0 |      49
+(3 rows)
+
+-- UNION ALL leaf queries deep in the subquery
+-- and random() calls prevent any pullup
+SELECT user_id FROM
+(
+	SELECT *,random() FROM (SELECT *,random() FROM (SELECT *,random() FROM (SELECT *,random() FROM (SELECT *,random() FROM (SELECT *,random() FROM users_table_part) as level_5) as level_4) as level_3) as level_2) as level_1
+	UNION ALL
+	SELECT *,random() FROM (SELECT *,random() FROM (SELECT *,random() FROM (SELECT *,random() FROM (SELECT *,random() FROM (SELECT *,random() FROM users_table_part) as level_5) as level_4) as level_3) as level_2) as level_1
+) as top_level ORDER BY 1 DESC LIMIT 3;
+DEBUG:  push down of limit count: 3
+ user_id
+---------------------------------------------------------------------
+     100
+     100
+      99
+(3 rows)
+
+-- UNION ALL leaf queries deep in the subquery
+-- joined with a table
+SELECT * FROM
+(
+	SELECT * FROM (SELECT * FROM (SELECT * FROM (SELECT * FROM (SELECT * FROM (SELECT * FROM users_table_part UNION ALL SELECT * FROM users_table_part) as level_5) as level_4) as level_3) as level_2) as level_1
+	UNION ALL
+	SELECT * FROM (SELECT * FROM (SELECT * FROM (SELECT * FROM (SELECT * FROM (SELECT * FROM users_table_part UNION ALL SELECT * FROM users_table_part) as level_5) as level_4) as level_3) as level_2) as level_1
+) as top_level
+JOIN
+events_table_part USING(user_id)
+ ORDER BY 1 DESC LIMIT 3;
+DEBUG:  push down of limit count: 3
+ user_id | value_1 | value_2 | value_1 | value_2
+---------------------------------------------------------------------
+     100 |       1 |       0 |       1 |       0
+     100 |       1 |       0 |       1 |       0
+     100 |       1 |       0 |       1 |       0
+(3 rows)
+
+-- UNION ALL leaf queries deep in the subquery
+-- and random() calls prevent any pullup
+SELECT user_id FROM
+(
+	SELECT *,random() FROM (SELECT *,random() FROM (SELECT *,random() FROM (SELECT *,random() FROM (SELECT *,random() FROM (SELECT *,random() FROM users_table_part UNION ALL SELECT *,1 FROM users_table_part) as level_5) as level_4) as level_3) as level_2) as level_1
+	UNION ALL
+	SELECT *,random() FROM (SELECT *,random() FROM (SELECT *,random() FROM (SELECT *,random() FROM (SELECT *,random() FROM (SELECT *,random() FROM users_table_part UNION ALL SELECT *,2 FROM users_table_part) as level_5) as level_4) as level_3) as level_2) as level_1
+) as top_level
+JOIN
+events_table_part USING(user_id)
+ ORDER BY 1 DESC LIMIT 3;
+DEBUG:  push down of limit count: 3
+ user_id
+---------------------------------------------------------------------
+     100
+     100
+     100
+(3 rows)
+
+-- a tree with   [Q1.1 JOIN Q1.2 UNION ALL Q2.1 JOIN Q2.2] JOIN [Q3.1 JOIN Q3.2 UNION ALL Q4.1 JOIN Q4.2]
+-- can be pushed down
+SELECT * FROM (
+	SELECT * FROM
+	(
+		(((SELECT * FROM users_table_part JOIN events_table_part USING (user_id)) UNION ALL (SELECT * FROM users_table_part JOIN events_table_part USING (user_id))) as l1
+			JOIN
+		((SELECT * FROM users_table_part JOIN events_table_part USING (user_id)) UNION ALL (SELECT * FROM users_table_part JOIN events_table_part USING (user_id))) as l2
+			USING(user_id))
+	) as left_subquery
+	UNION ALL
+	SELECT * FROM
+	(
+		(((SELECT * FROM users_table_part JOIN events_table_part USING (user_id)) UNION ALL (SELECT * FROM users_table_part JOIN events_table_part USING (user_id))) as l1
+			JOIN
+		((SELECT * FROM users_table_part JOIN events_table_part USING (user_id)) UNION ALL (SELECT * FROM users_table_part JOIN events_table_part USING (user_id))) as l2
+			USING(user_id))
+	) as right_subquery
+) as top_level_left
+	JOIN
+(
+	SELECT * FROM
+	(
+		(((SELECT * FROM users_table_part JOIN events_table_part USING (user_id)) UNION ALL (SELECT * FROM users_table_part JOIN events_table_part USING (user_id))) as l1
+			JOIN
+		((SELECT * FROM users_table_part JOIN events_table_part USING (user_id)) UNION ALL (SELECT * FROM users_table_part JOIN events_table_part USING (user_id))) as l2
+			USING(user_id))
+	) as left_subquery
+	UNION ALL
+	SELECT * FROM
+	(
+		(((SELECT * FROM users_table_part JOIN events_table_part USING (user_id)) UNION ALL (SELECT * FROM users_table_part JOIN events_table_part USING (user_id))) as l1
+			JOIN
+		((SELECT * FROM users_table_part JOIN events_table_part USING (user_id)) UNION ALL (SELECT * FROM users_table_part JOIN events_table_part USING (user_id))) as l2
+			USING(user_id))
+	) as right_subquery
+) as top_level_righy USING (user_id)
+ORDER BY user_id DESC
+LIMIT 1;
+DEBUG:  push down of limit count: 1
+ user_id | value_1 | value_2 | value_1 | value_2 | value_1 | value_2 | value_1 | value_2 | value_1 | value_2 | value_1 | value_2 | value_1 | value_2 | value_1 | value_2
+---------------------------------------------------------------------
+     100 |       1 |       0 |       1 |       0 |       1 |       0 |       1 |       0 |       1 |       0 |       1 |       0 |       1 |       0 |       1 |       0
+(1 row)
+
+-- a tree with   [Q1.1 JOIN Q1.2 UNION ALL Q2.1 JOIN Q2.2] JOIN [Q3.1 JOIN Q3.2 UNION ALL Q4.1 JOIN Q4.2]
+-- can be pushed down with reference tables
+SELECT * FROM (
+  SELECT * FROM
+  (
+    (((SELECT * FROM users_table_part JOIN events_table_ref USING (user_id)) UNION ALL (SELECT * FROM users_table_part JOIN events_table_ref USING (user_id))) as l1
+      JOIN
+    ((SELECT * FROM users_table_part JOIN events_table_ref USING (user_id)) UNION ALL (SELECT * FROM users_table_part JOIN events_table_ref USING (user_id))) as l2
+      USING(user_id))
+  ) as left_subquery
+  UNION ALL
+  SELECT * FROM
+  (
+    (((SELECT * FROM users_table_part JOIN events_table_ref USING (user_id)) UNION ALL (SELECT * FROM users_table_part JOIN events_table_ref USING (user_id))) as l1
+      JOIN
+    ((SELECT * FROM users_table_part JOIN events_table_ref USING (user_id)) UNION ALL (SELECT * FROM users_table_part JOIN events_table_ref USING (user_id))) as l2
+      USING(user_id))
+  ) as right_subquery
+) as top_level_left
+  JOIN
+(
+  SELECT * FROM
+  (
+    (((SELECT * FROM users_table_part JOIN events_table_ref USING (user_id)) UNION ALL (SELECT * FROM users_table_part JOIN events_table_ref USING (user_id))) as l1
+      JOIN
+    ((SELECT * FROM users_table_part JOIN events_table_ref USING (user_id)) UNION ALL (SELECT * FROM users_table_part JOIN events_table_ref USING (user_id))) as l2
+      USING(user_id))
+  ) as left_subquery
+  UNION ALL
+  SELECT * FROM
+  (
+    (((SELECT * FROM users_table_part JOIN events_table_ref USING (user_id)) UNION ALL (SELECT * FROM users_table_part JOIN events_table_ref USING (user_id))) as l1
+      JOIN
+    ((SELECT * FROM users_table_part JOIN events_table_ref USING (user_id)) UNION ALL (SELECT * FROM users_table_part JOIN events_table_ref USING (user_id))) as l2
+      USING(user_id))
+  ) as right_subquery
+) as top_level_righy USING (user_id)
+ORDER BY user_id DESC
+LIMIT 1;
+DEBUG:  push down of limit count: 1
+ user_id | value_1 | value_2 | value_1 | value_2 | value_1 | value_2 | value_1 | value_2 | value_1 | value_2 | value_1 | value_2 | value_1 | value_2 | value_1 | value_2
+---------------------------------------------------------------------
+     100 |       1 |       0 |       1 |       0 |       1 |       0 |       1 |       0 |       1 |       0 |       1 |       0 |       1 |       0 |       1 |       0
+(1 row)
+
+-- a tree with   [Q1.1 JOIN Q1.2 UNION ALL Q2.1 JOIN Q2.2] JOIN [Q3.1 JOIN Q3.2 UNION ALL Q4.1 JOIN Q4.2]
+-- can be pushed down with local tables after local tables have been recursively planned
+SELECT * FROM (
+  SELECT * FROM
+  (
+    (((SELECT * FROM users_table_part JOIN events_table_local USING (user_id)) UNION ALL (SELECT * FROM users_table_part JOIN events_table_local USING (user_id))) as l1
+      JOIN
+    ((SELECT * FROM users_table_part JOIN events_table_local USING (user_id)) UNION ALL (SELECT * FROM users_table_part JOIN events_table_local USING (user_id))) as l2
+      USING(user_id))
+  ) as left_subquery
+  UNION ALL
+  SELECT * FROM
+  (
+    (((SELECT * FROM users_table_part JOIN events_table_local USING (user_id)) UNION ALL (SELECT * FROM users_table_part JOIN events_table_local USING (user_id))) as l1
+      JOIN
+    ((SELECT * FROM users_table_part JOIN events_table_local USING (user_id)) UNION ALL (SELECT * FROM users_table_part JOIN events_table_local USING (user_id))) as l2
+      USING(user_id))
+  ) as right_subquery
+) as top_level_left
+  JOIN
+(
+  SELECT * FROM
+  (
+    (((SELECT * FROM users_table_part JOIN events_table_local USING (user_id)) UNION ALL (SELECT * FROM users_table_part JOIN events_table_local USING (user_id))) as l1
+      JOIN
+    ((SELECT * FROM users_table_part JOIN events_table_local USING (user_id)) UNION ALL (SELECT * FROM users_table_part JOIN events_table_local USING (user_id))) as l2
+      USING(user_id))
+  ) as left_subquery
+  UNION ALL
+  SELECT * FROM
+  (
+    (((SELECT * FROM users_table_part JOIN events_table_local USING (user_id)) UNION ALL (SELECT * FROM users_table_part JOIN events_table_local USING (user_id))) as l1
+      JOIN
+    ((SELECT * FROM users_table_part JOIN events_table_local USING (user_id)) UNION ALL (SELECT * FROM users_table_part JOIN events_table_local USING (user_id))) as l2
+      USING(user_id))
+  ) as right_subquery
+) as top_level_righy USING (user_id)
+ORDER BY user_id DESC
+LIMIT 1;
+DEBUG:  Wrapping relation "events_table_local" to a subquery
+DEBUG:  generating subplan XXX_1 for subquery SELECT user_id, value_1, value_2 FROM union_pushdown.events_table_local WHERE true
+DEBUG:  Wrapping relation "events_table_local" to a subquery
+DEBUG:  generating subplan XXX_2 for subquery SELECT user_id, value_1, value_2 FROM union_pushdown.events_table_local WHERE true
+DEBUG:  Wrapping relation "events_table_local" to a subquery
+DEBUG:  generating subplan XXX_3 for subquery SELECT user_id, value_1, value_2 FROM union_pushdown.events_table_local WHERE true
+DEBUG:  Wrapping relation "events_table_local" to a subquery
+DEBUG:  generating subplan XXX_4 for subquery SELECT user_id, value_1, value_2 FROM union_pushdown.events_table_local WHERE true
+DEBUG:  Wrapping relation "events_table_local" to a subquery
+DEBUG:  generating subplan XXX_5 for subquery SELECT user_id, value_1, value_2 FROM union_pushdown.events_table_local WHERE true
+DEBUG:  Wrapping relation "events_table_local" to a subquery
+DEBUG:  generating subplan XXX_6 for subquery SELECT user_id, value_1, value_2 FROM union_pushdown.events_table_local WHERE true
+DEBUG:  Wrapping relation "events_table_local" to a subquery
+DEBUG:  generating subplan XXX_7 for subquery SELECT user_id, value_1, value_2 FROM union_pushdown.events_table_local WHERE true
+DEBUG:  Wrapping relation "events_table_local" to a subquery
+DEBUG:  generating subplan XXX_8 for subquery SELECT user_id, value_1, value_2 FROM union_pushdown.events_table_local WHERE true
+DEBUG:  Wrapping relation "events_table_local" to a subquery
+DEBUG:  generating subplan XXX_9 for subquery SELECT user_id, value_1, value_2 FROM union_pushdown.events_table_local WHERE true
+DEBUG:  Wrapping relation "events_table_local" to a subquery
+DEBUG:  generating subplan XXX_10 for subquery SELECT user_id, value_1, value_2 FROM union_pushdown.events_table_local WHERE true
+DEBUG:  Wrapping relation "events_table_local" to a subquery
+DEBUG:  generating subplan XXX_11 for subquery SELECT user_id, value_1, value_2 FROM union_pushdown.events_table_local WHERE true
+DEBUG:  Wrapping relation "events_table_local" to a subquery
+DEBUG:  generating subplan XXX_12 for subquery SELECT user_id, value_1, value_2 FROM union_pushdown.events_table_local WHERE true
+DEBUG:  Wrapping relation "events_table_local" to a subquery
+DEBUG:  generating subplan XXX_13 for subquery SELECT user_id, value_1, value_2 FROM union_pushdown.events_table_local WHERE true
+DEBUG:  Wrapping relation "events_table_local" to a subquery
+DEBUG:  generating subplan XXX_14 for subquery SELECT user_id, value_1, value_2 FROM union_pushdown.events_table_local WHERE true
+DEBUG:  Wrapping relation "events_table_local" to a subquery
+DEBUG:  generating subplan XXX_15 for subquery SELECT user_id, value_1, value_2 FROM union_pushdown.events_table_local WHERE true
+DEBUG:  Wrapping relation "events_table_local" to a subquery
+DEBUG:  generating subplan XXX_16 for subquery SELECT user_id, value_1, value_2 FROM union_pushdown.events_table_local WHERE true
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT top_level_left.user_id, top_level_left.value_1, top_level_left.value_2, top_level_left.value_1_1 AS value_1, top_level_left.value_2_1 AS value_2, top_level_left.value_1_2 AS value_1, top_level_left.value_2_2 AS value_2, top_level_left.value_1_3 AS value_1, top_level_left.value_2_3 AS value_2, top_level_righy.value_1, top_level_righy.value_2, top_level_righy.value_1_1 AS value_1, top_level_righy.value_2_1 AS value_2, top_level_righy.value_1_2 AS value_1, top_level_righy.value_2_2 AS value_2, top_level_righy.value_1_3 AS value_1, top_level_righy.value_2_3 AS value_2 FROM ((SELECT left_subquery.user_id, left_subquery.value_1, left_subquery.value_2, left_subquery.value_1_1 AS value_1, left_subquery.value_2_1 AS value_2, left_subquery.value_1_2 AS value_1, left_subquery.value_2_2 AS value_2, left_subquery.value_1_1_1 AS value_1, left_subquery.value_2_1_1 AS value_2 FROM ((SELECT users_table_part.user_id, users_table_part.value_1, users_table_part.value_2, events_table_local.value_1, events_table_local.value_2 FROM (union_pushdown.users_table_part JOIN (SELECT events_table_local_1.user_id, events_table_local_1.value_1, events_table_local_1.value_2 FROM (SELECT intermediate_result.user_id, intermediate_result.value_1, intermediate_result.value_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id bigint, value_1 integer, value_2 integer)) events_table_local_1) events_table_local USING (user_id)) UNION ALL SELECT users_table_part.user_id, users_table_part.value_1, users_table_part.value_2, events_table_local.value_1, events_table_local.value_2 FROM (union_pushdown.users_table_part JOIN (SELECT events_table_local_1.user_id, events_table_local_1.value_1, events_table_local_1.value_2 FROM (SELECT intermediate_result.user_id, intermediate_result.value_1, intermediate_result.value_2 FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id bigint, value_1 integer, value_2 integer)) events_table_local_1) events_table_local USING (user_id))) l1(user_id, value_1, value_2, value_1_1, value_2_1) JOIN (SELECT users_table_part.user_id, users_table_part.value_1, users_table_part.value_2, events_table_local.value_1, events_table_local.value_2 FROM (union_pushdown.users_table_part JOIN (SELECT events_table_local_1.user_id, events_table_local_1.value_1, events_table_local_1.value_2 FROM (SELECT intermediate_result.user_id, intermediate_result.value_1, intermediate_result.value_2 FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(user_id bigint, value_1 integer, value_2 integer)) events_table_local_1) events_table_local USING (user_id)) UNION ALL SELECT users_table_part.user_id, users_table_part.value_1, users_table_part.value_2, events_table_local.value_1, events_table_local.value_2 FROM (union_pushdown.users_table_part JOIN (SELECT events_table_local_1.user_id, events_table_local_1.value_1, events_table_local_1.value_2 FROM (SELECT intermediate_result.user_id, intermediate_result.value_1, intermediate_result.value_2 FROM read_intermediate_result('XXX_4'::text, 'binary'::citus_copy_format) intermediate_result(user_id bigint, value_1 integer, value_2 integer)) events_table_local_1) events_table_local USING (user_id))) l2(user_id, value_1, value_2, value_1_1, value_2_1) USING (user_id)) left_subquery(user_id, value_1, value_2, value_1_1, value_2_1, value_1_2, value_2_2, value_1_1_1, value_2_1_1) UNION ALL SELECT right_subquery.user_id, right_subquery.value_1, right_subquery.value_2, right_subquery.value_1_1 AS value_1, right_subquery.value_2_1 AS value_2, right_subquery.value_1_2 AS value_1, right_subquery.value_2_2 AS value_2, right_subquery.value_1_1_1 AS value_1, right_subquery.value_2_1_1 AS value_2 FROM ((SELECT users_table_part.user_id, users_table_part.value_1, users_table_part.value_2, events_table_local.value_1, events_table_local.value_2 FROM (union_pushdown.users_table_part JOIN (SELECT events_table_local_1.user_id, events_table_local_1.value_1, events_table_local_1.value_2 FROM (SELECT intermediate_result.user_id, intermediate_result.value_1, intermediate_result.value_2 FROM read_intermediate_result('XXX_5'::text, 'binary'::citus_copy_format) intermediate_result(user_id bigint, value_1 integer, value_2 integer)) events_table_local_1) events_table_local USING (user_id)) UNION ALL SELECT users_table_part.user_id, users_table_part.value_1, users_table_part.value_2, events_table_local.value_1, events_table_local.value_2 FROM (union_pushdown.users_table_part JOIN (SELECT events_table_local_1.user_id, events_table_local_1.value_1, events_table_local_1.value_2 FROM (SELECT intermediate_result.user_id, intermediate_result.value_1, intermediate_result.value_2 FROM read_intermediate_result('XXX_6'::text, 'binary'::citus_copy_format) intermediate_result(user_id bigint, value_1 integer, value_2 integer)) events_table_local_1) events_table_local USING (user_id))) l1(user_id, value_1, value_2, value_1_1, value_2_1) JOIN (SELECT users_table_part.user_id, users_table_part.value_1, users_table_part.value_2, events_table_local.value_1, events_table_local.value_2 FROM (union_pushdown.users_table_part JOIN (SELECT events_table_local_1.user_id, events_table_local_1.value_1, events_table_local_1.value_2 FROM (SELECT intermediate_result.user_id, intermediate_result.value_1, intermediate_result.value_2 FROM read_intermediate_result('XXX_7'::text, 'binary'::citus_copy_format) intermediate_result(user_id bigint, value_1 integer, value_2 integer)) events_table_local_1) events_table_local USING (user_id)) UNION ALL SELECT users_table_part.user_id, users_table_part.value_1, users_table_part.value_2, events_table_local.value_1, events_table_local.value_2 FROM (union_pushdown.users_table_part JOIN (SELECT events_table_local_1.user_id, events_table_local_1.value_1, events_table_local_1.value_2 FROM (SELECT intermediate_result.user_id, intermediate_result.value_1, intermediate_result.value_2 FROM read_intermediate_result('XXX_8'::text, 'binary'::citus_copy_format) intermediate_result(user_id bigint, value_1 integer, value_2 integer)) events_table_local_1) events_table_local USING (user_id))) l2(user_id, value_1, value_2, value_1_1, value_2_1) USING (user_id)) right_subquery(user_id, value_1, value_2, value_1_1, value_2_1, value_1_2, value_2_2, value_1_1_1, value_2_1_1)) top_level_left(user_id, value_1, value_2, value_1_1, value_2_1, value_1_2, value_2_2, value_1_3, value_2_3) JOIN (SELECT left_subquery.user_id, left_subquery.value_1, left_subquery.value_2, left_subquery.value_1_1 AS value_1, left_subquery.value_2_1 AS value_2, left_subquery.value_1_2 AS value_1, left_subquery.value_2_2 AS value_2, left_subquery.value_1_1_1 AS value_1, left_subquery.value_2_1_1 AS value_2 FROM ((SELECT users_table_part.user_id, users_table_part.value_1, users_table_part.value_2, events_table_local.value_1, events_table_local.value_2 FROM (union_pushdown.users_table_part JOIN (SELECT events_table_local_1.user_id, events_table_local_1.value_1, events_table_local_1.value_2 FROM (SELECT intermediate_result.user_id, intermediate_result.value_1, intermediate_result.value_2 FROM read_intermediate_result('XXX_9'::text, 'binary'::citus_copy_format) intermediate_result(user_id bigint, value_1 integer, value_2 integer)) events_table_local_1) events_table_local USING (user_id)) UNION ALL SELECT users_table_part.user_id, users_table_part.value_1, users_table_part.value_2, events_table_local.value_1, events_table_local.value_2 FROM (union_pushdown.users_table_part JOIN (SELECT events_table_local_1.user_id, events_table_local_1.value_1, events_table_local_1.value_2 FROM (SELECT intermediate_result.user_id, intermediate_result.value_1, intermediate_result.value_2 FROM read_intermediate_result('XXX_10'::text, 'binary'::citus_copy_format) intermediate_result(user_id bigint, value_1 integer, value_2 integer)) events_table_local_1) events_table_local USING (user_id))) l1(user_id, value_1, value_2, value_1_1, value_2_1) JOIN (SELECT users_table_part.user_id, users_table_part.value_1, users_table_part.value_2, events_table_local.value_1, events_table_local.value_2 FROM (union_pushdown.users_table_part JOIN (SELECT events_table_local_1.user_id, events_table_local_1.value_1, events_table_local_1.value_2 FROM (SELECT intermediate_result.user_id, intermediate_result.value_1, intermediate_result.value_2 FROM read_intermediate_result('XXX_11'::text, 'binary'::citus_copy_format) intermediate_result(user_id bigint, value_1 integer, value_2 integer)) events_table_local_1) events_table_local USING (user_id)) UNION ALL SELECT users_table_part.user_id, users_table_part.value_1, users_table_part.value_2, events_table_local.value_1, events_table_local.value_2 FROM (union_pushdown.users_table_part JOIN (SELECT events_table_local_1.user_id, events_table_local_1.value_1, events_table_local_1.value_2 FROM (SELECT intermediate_result.user_id, intermediate_result.value_1, intermediate_result.value_2 FROM read_intermediate_result('XXX_12'::text, 'binary'::citus_copy_format) intermediate_result(user_id bigint, value_1 integer, value_2 integer)) events_table_local_1) events_table_local USING (user_id))) l2(user_id, value_1, value_2, value_1_1, value_2_1) USING (user_id)) left_subquery(user_id, value_1, value_2, value_1_1, value_2_1, value_1_2, value_2_2, value_1_1_1, value_2_1_1) UNION ALL SELECT right_subquery.user_id, right_subquery.value_1, right_subquery.value_2, right_subquery.value_1_1 AS value_1, right_subquery.value_2_1 AS value_2, right_subquery.value_1_2 AS value_1, right_subquery.value_2_2 AS value_2, right_subquery.value_1_1_1 AS value_1, right_subquery.value_2_1_1 AS value_2 FROM ((SELECT users_table_part.user_id, users_table_part.value_1, users_table_part.value_2, events_table_local.value_1, events_table_local.value_2 FROM (union_pushdown.users_table_part JOIN (SELECT events_table_local_1.user_id, events_table_local_1.value_1, events_table_local_1.value_2 FROM (SELECT intermediate_result.user_id, intermediate_result.value_1, intermediate_result.value_2 FROM read_intermediate_result('XXX_13'::text, 'binary'::citus_copy_format) intermediate_result(user_id bigint, value_1 integer, value_2 integer)) events_table_local_1) events_table_local USING (user_id)) UNION ALL SELECT users_table_part.user_id, users_table_part.value_1, users_table_part.value_2, events_table_local.value_1, events_table_local.value_2 FROM (union_pushdown.users_table_part JOIN (SELECT events_table_local_1.user_id, events_table_local_1.value_1, events_table_local_1.value_2 FROM (SELECT intermediate_result.user_id, intermediate_result.value_1, intermediate_result.value_2 FROM read_intermediate_result('XXX_14'::text, 'binary'::citus_copy_format) intermediate_result(user_id bigint, value_1 integer, value_2 integer)) events_table_local_1) events_table_local USING (user_id))) l1(user_id, value_1, value_2, value_1_1, value_2_1) JOIN (SELECT users_table_part.user_id, users_table_part.value_1, users_table_part.value_2, events_table_local.value_1, events_table_local.value_2 FROM (union_pushdown.users_table_part JOIN (SELECT events_table_local_1.user_id, events_table_local_1.value_1, events_table_local_1.value_2 FROM (SELECT intermediate_result.user_id, intermediate_result.value_1, intermediate_result.value_2 FROM read_intermediate_result('XXX_15'::text, 'binary'::citus_copy_format) intermediate_result(user_id bigint, value_1 integer, value_2 integer)) events_table_local_1) events_table_local USING (user_id)) UNION ALL SELECT users_table_part.user_id, users_table_part.value_1, users_table_part.value_2, events_table_local.value_1, events_table_local.value_2 FROM (union_pushdown.users_table_part JOIN (SELECT events_table_local_1.user_id, events_table_local_1.value_1, events_table_local_1.value_2 FROM (SELECT intermediate_result.user_id, intermediate_result.value_1, intermediate_result.value_2 FROM read_intermediate_result('XXX_16'::text, 'binary'::citus_copy_format) intermediate_result(user_id bigint, value_1 integer, value_2 integer)) events_table_local_1) events_table_local USING (user_id))) l2(user_id, value_1, value_2, value_1_1, value_2_1) USING (user_id)) right_subquery(user_id, value_1, value_2, value_1_1, value_2_1, value_1_2, value_2_2, value_1_1_1, value_2_1_1)) top_level_righy(user_id, value_1, value_2, value_1_1, value_2_1, value_1_2, value_2_2, value_1_3, value_2_3) USING (user_id)) ORDER BY top_level_left.user_id DESC LIMIT 1
+DEBUG:  push down of limit count: 1
+ user_id | value_1 | value_2 | value_1 | value_2 | value_1 | value_2 | value_1 | value_2 | value_1 | value_2 | value_1 | value_2 | value_1 | value_2 | value_1 | value_2
+---------------------------------------------------------------------
+     100 |       1 |       0 |       1 |       0 |       1 |       0 |       1 |       0 |       1 |       0 |       1 |       0 |       1 |       0 |       1 |       0
+(1 row)
+
+-- a subquery in WHERE clause with
+-- a tree with   [Q1.1 JOIN Q1.2 UNION ALL Q2.1 JOIN Q2.2] JOIN [Q3.1 JOIN Q3.2 UNION ALL Q4.1 JOIN Q4.2]
+-- can be pushed down with FROM tree consisting of JOINs/UNION ALLs
+SELECT * FROM
+users_table_part u1
+	JOIN
+events_table_part e1 USING (user_id)
+	JOIN
+users_table_part u2 USING (user_id)
+	JOIN
+(SELECT * FROM users_table_part UNION ALL SELECT * FROM events_table_part) as foo USING (user_id)
+WHERE user_id IN
+	(SELECT user_id FROM (
+	SELECT * FROM
+	(
+		(((SELECT * FROM users_table_part JOIN events_table_part USING (user_id)) UNION ALL (SELECT * FROM users_table_part JOIN events_table_part USING (user_id))) as l1
+			JOIN
+		((SELECT * FROM users_table_part JOIN events_table_part USING (user_id)) UNION ALL (SELECT * FROM users_table_part JOIN events_table_part USING (user_id))) as l2
+			USING(user_id))
+	) as left_subquery
+	UNION ALL
+	SELECT * FROM
+	(
+		(((SELECT * FROM users_table_part JOIN events_table_part USING (user_id)) UNION ALL (SELECT * FROM users_table_part JOIN events_table_part USING (user_id))) as l1
+			JOIN
+		((SELECT * FROM users_table_part JOIN events_table_part USING (user_id)) UNION ALL (SELECT * FROM users_table_part JOIN events_table_part USING (user_id))) as l2
+			USING(user_id))
+	) as right_subquery
+) as top_level_left
+	JOIN
+(
+	SELECT * FROM
+	(
+		(((SELECT * FROM users_table_part JOIN events_table_part USING (user_id)) UNION ALL (SELECT * FROM users_table_part JOIN events_table_part USING (user_id))) as l1
+			JOIN
+		((SELECT * FROM users_table_part JOIN events_table_part USING (user_id)) UNION ALL (SELECT * FROM users_table_part JOIN events_table_part USING (user_id))) as l2
+			USING(user_id))
+	) as left_subquery
+	UNION ALL
+	SELECT * FROM
+	(
+		(((SELECT * FROM users_table_part JOIN events_table_part USING (user_id)) UNION ALL (SELECT * FROM users_table_part JOIN events_table_part USING (user_id))) as l1
+			JOIN
+		((SELECT * FROM users_table_part JOIN events_table_part USING (user_id)) UNION ALL (SELECT * FROM users_table_part JOIN events_table_part USING (user_id))) as l2
+			USING(user_id))
+	) as right_subquery
+) as top_level_righy USING (user_id)
+ORDER BY user_id DESC
+) ORDER BY 1 LIMIT 1;
+DEBUG:  push down of limit count: 1
+ user_id | value_1 | value_2 | value_1 | value_2 | value_1 | value_2 | value_1 | value_2
+---------------------------------------------------------------------
+       0 |       0 |       0 |       0 |       0 |       0 |       0 |       0 |       0
+(1 row)
+
+---------------------------------------------------------------------
+------------ The following tests ensure that we do not accidentally pushdown
+------------ queries involving UNION ALL queries if the distribution keys do
+------------ not match or any JOIN is not on the distribution key
+------------ We used the queries that are defined above
+---------------------------------------------------------------------
+RESET client_min_messages;
+SELECT public.explain_has_distributed_subplan($$
+  EXPLAIN SELECT * FROM ((SELECT 1 FROM events_table_part) UNION ALL (SELECT 1 FROM events_table_part)) u;$$);
+ explain_has_distributed_subplan
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT public.explain_has_distributed_subplan($$
+  EXPLAIN SELECT * FROM ((SELECT random() FROM events_table_part) UNION ALL (SELECT user_id FROM events_table_part)) u;$$);
+ explain_has_distributed_subplan
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT public.explain_has_distributed_subplan($$
+  EXPLAIN SELECT * FROM ((SELECT user_id FROM events_table_part) UNION ALL (SELECT user_id - 1 FROM events_table_part)) u;$$);
+ explain_has_distributed_subplan
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT public.explain_has_distributed_subplan($$
+  EXPLAIN SELECT * FROM ((SELECT user_id FROM events_table_part) UNION ALL (SELECT user_id - 1 as user_id FROM events_table_part)) u
+  JOIN users_table_part USING(user_id);$$);
+ explain_has_distributed_subplan
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT public.explain_has_distributed_subplan($$
+EXPLAIN SELECT * FROM
+(
+  SELECT events_table_part.value_1 FROM users_table_part JOIN events_table_part USING (user_id)
+    UNION ALL
+  SELECT events_table_part.value_1 FROM users_table_part JOIN events_table_part USING (user_id)
+) as bar;$$);
+ explain_has_distributed_subplan
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT public.explain_has_distributed_subplan($$
+EXPLAIN SELECT COUNT(*)
+FROM
+  (SELECT user_id  AS user_id
+   FROM
+     (SELECT value_1  AS user_id
+      FROM users_table_part
+      UNION ALL SELECT user_id AS user_id
+      FROM users_table_part) AS bar
+   UNION ALL SELECT user_id  AS user_id
+   FROM users_table_part) AS fool$$);
+ explain_has_distributed_subplan
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT public.explain_has_distributed_subplan($$
+EXPLAIN SELECT COUNT(*)
+FROM
+  (SELECT user_id  AS user_id
+   FROM
+     (SELECT count(*)  AS user_id
+      FROM users_table_part GROUP BY user_id
+      UNION ALL SELECT user_id AS user_id
+      FROM users_table_part) AS bar
+   UNION ALL SELECT user_id  AS user_id
+   FROM users_table_part) AS fool$$);
+ explain_has_distributed_subplan
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT public.explain_has_distributed_subplan($$
+EXPLAIN SELECT * FROM
+(
+  SELECT * FROM (SELECT * FROM (SELECT * FROM (SELECT * FROM (SELECT * FROM (SELECT value_1, user_id FROM users_table_part) as level_5) as level_4) as level_3) as level_2) as level_1
+  UNION ALL
+  SELECT * FROM (SELECT * FROM (SELECT * FROM (SELECT * FROM (SELECT * FROM (SELECT user_id, value_1 FROM users_table_part) as level_5) as level_4) as level_3) as level_2) as level_1
+) as top_level$$);
+ explain_has_distributed_subplan
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT public.explain_has_distributed_subplan($$
+EXPLAIN SELECT user_id FROM
+(
+  SELECT *,random() FROM (SELECT *,random() FROM (SELECT *,random() FROM (SELECT *,random() FROM (SELECT *,random() FROM (SELECT value_1 as user_id,random() FROM users_table_part) as level_5) as level_4) as level_3) as level_2) as level_1
+  UNION ALL
+  SELECT *,random() FROM (SELECT *,random() FROM (SELECT *,random() FROM (SELECT *,random() FROM (SELECT *,random() FROM (SELECT user_id,random() FROM users_table_part) as level_5) as level_4) as level_3) as level_2) as level_1
+) as top_level
+$$);
+ explain_has_distributed_subplan
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT public.explain_has_distributed_subplan($$
+EXPLAIN SELECT * FROM
+  (
+    (((SELECT users_table_part.value_1 as user_id FROM users_table_part JOIN events_table_part USING (user_id)) UNION ALL (SELECT users_table_part.user_id as user_id FROM users_table_part JOIN events_table_part USING (user_id))) as l1
+      JOIN
+    ((SELECT users_table_part.value_1  as user_id FROM users_table_part JOIN events_table_part USING (user_id)) UNION ALL (SELECT users_table_part.user_id as user_id FROM users_table_part JOIN events_table_part USING (user_id))) as l2
+      USING(user_id))
+  ) as left_subquery
+  UNION ALL
+  SELECT * FROM
+  (
+    (((SELECT users_table_part.value_1 as user_id FROM users_table_part JOIN events_table_part USING (user_id)) UNION ALL (SELECT users_table_part.user_id as user_id FROM users_table_part JOIN events_table_part USING (user_id))) as l1
+      JOIN
+    ((SELECT users_table_part.value_1 as user_id FROM users_table_part JOIN events_table_part USING (user_id)) UNION ALL (SELECT users_table_part.user_id as user_id FROM users_table_part JOIN events_table_part USING (user_id))) as l2
+      USING(user_id))
+  ) as right_subquery
+$$);
+ explain_has_distributed_subplan
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT public.explain_has_distributed_subplan($$
+EXPLAIN SELECT * FROM
+(
+  SELECT * FROM (SELECT * FROM (SELECT * FROM (SELECT * FROM (SELECT * FROM (SELECT user_id, value_1 FROM users_table_part UNION ALL SELECT user_id, value_1 FROM users_table_part) as level_5) as level_4) as level_3) as level_2) as level_1
+  UNION ALL
+  SELECT * FROM (SELECT * FROM (SELECT * FROM (SELECT * FROM (SELECT * FROM (SELECT value_1, user_id FROM users_table_part UNION ALL SELECT value_1, user_id FROM users_table_part) as level_5) as level_4) as level_3) as level_2) as level_1
+) as top_level
+JOIN
+events_table_part USING(user_id)
+ ORDER BY 1 DESC LIMIT 3;
+$$);
+ explain_has_distributed_subplan
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- we can pushdown UNION ALL queries that are correlated and exists
+-- on the SELECT clause
+SELECT public.explain_has_distributed_subplan($$
+EXPLAIN
+ SELECT
+  (SELECT count(*) FROM users_table_part WHERE user_id = e.user_id
+      UNION ALL
+   SELECT count(*) FROM users_table_part WHERE user_id = e.user_id)
+FROM
+  (SELECT * FROM users_table_part UNION ALL SELECT * FROM users_table_part) as e;
+$$);
+ explain_has_distributed_subplan
+---------------------------------------------------------------------
+ f
+(1 row)
+
+-- even if the UNION ALL is not on the distribution key
+-- it is safe to pushdown the query because all tables are joined
+-- on the distribution keys
+SELECT public.explain_has_distributed_subplan($$
+EXPLAIN
+ SELECT
+  (SELECT user_id FROM users_table_part WHERE user_id = e.user_id
+      UNION ALL
+   SELECT value_1 FROM users_table_part WHERE user_id = e.user_id)
+FROM
+  (SELECT * FROM users_table_part UNION ALL SELECT * FROM users_table_part) as e;
+$$);
+ explain_has_distributed_subplan
+---------------------------------------------------------------------
+ f
+(1 row)
+
+-- but if the join is not on the distribution key
+-- Citus throws an error
+  EXPLAIN
+   SELECT
+    (SELECT user_id FROM users_table_part WHERE user_id = e.value_1
+        UNION ALL
+     SELECT user_id FROM users_table_part WHERE user_id = e.value_1)
+  FROM
+    (SELECT * FROM users_table_part) as e;
+ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
+-- correlated subquery should be able to pushdown
+SELECT public.explain_has_distributed_subplan($$
+EXPLAIN
+SELECT * FROM
+users_table_part e JOIN LATERAL
+(SELECT value_1 FROM users_table_part WHERE user_id = e.user_id
+      UNION ALL
+ SELECT value_1 FROM users_table_part WHERE user_id = e.user_id) as foo ON (true);
+$$);
+ explain_has_distributed_subplan
+---------------------------------------------------------------------
+ f
+(1 row)
+
+-- correlated subquery should be able to pushdown
+SELECT public.explain_has_distributed_subplan($$
+EXPLAIN
+SELECT
+  (SELECT
+    avg(count)
+  FROM
+    (SELECT count(*) as count from users_table_part where users_table_part.user_id = u_low.user_id
+      UNION ALL
+     SELECT count(*) from users_table_part where users_table_part.user_id = u_low.user_id) b)
+     FROM users_table_part u_low;
+$$);
+ explain_has_distributed_subplan
+---------------------------------------------------------------------
+ f
+(1 row)
+
+-- we cannot pushdown if one side of the UNION ALL
+-- is a reference table
+SELECT public.explain_has_distributed_subplan($$
+EXPLAIN
+SELECT *
+FROM
+  (SELECT *
+   FROM events_table_ref
+   UNION ALL SELECT events_table_ref.*
+   FROM events_table_part
+   JOIN events_table_ref USING(user_id)) AS foo
+JOIN users_table_part USING(user_id)
+LIMIT 1;
+$$);
+ explain_has_distributed_subplan
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- we cannot pushdown if one side of the UNION ALL
+-- is a local table
+SELECT public.explain_has_distributed_subplan($$
+EXPLAIN
+SELECT *
+FROM
+  (SELECT *
+   FROM events_table_local
+   UNION ALL SELECT events_table_local.*
+   FROM events_table_part
+   JOIN events_table_local USING(user_id)) AS foo
+JOIN users_table_part USING(user_id)
+LIMIT 1;
+$$);
+ explain_has_distributed_subplan
+---------------------------------------------------------------------
+ t
+(1 row)
+
 RESET client_min_messages;
 DROP SCHEMA union_pushdown CASCADE;
-NOTICE:  drop cascades to 2 other objects
+NOTICE:  drop cascades to 4 other objects
 DETAIL:  drop cascades to table users_table_part
 drop cascades to table events_table_part
+drop cascades to table events_table_ref
+drop cascades to table events_table_local
