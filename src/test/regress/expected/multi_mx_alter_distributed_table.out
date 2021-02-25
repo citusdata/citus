@@ -1,6 +1,7 @@
 CREATE SCHEMA mx_alter_distributed_table;
 SET search_path TO mx_alter_distributed_table;
 SET citus.shard_replication_factor TO 1;
+ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 1410000;
 SET citus.replication_model TO 'streaming';
 -- test alter_distributed_table UDF
 CREATE TABLE adt_table (a INT, b INT);
@@ -188,13 +189,13 @@ SELECT create_distributed_function('proc_0(float8)', 'dist_key', 'test_proc_colo
 SELECT logicalrelid, colocationid FROM pg_dist_partition WHERE logicalrelid::regclass::text IN ('test_proc_colocation_0');
       logicalrelid      | colocationid
 ---------------------------------------------------------------------
- test_proc_colocation_0 |      1390028
+ test_proc_colocation_0 |      1410002
 (1 row)
 
 SELECT proname, colocationid FROM pg_proc JOIN citus.pg_dist_object ON pg_proc.oid = citus.pg_dist_object.objid WHERE proname IN ('proc_0');
  proname | colocationid
 ---------------------------------------------------------------------
- proc_0  |      1390028
+ proc_0  |      1410002
 (1 row)
 
 SET client_min_messages TO DEBUG1;
@@ -223,13 +224,13 @@ RESET client_min_messages;
 SELECT logicalrelid, colocationid FROM pg_dist_partition WHERE logicalrelid::regclass::text IN ('test_proc_colocation_0');
       logicalrelid      | colocationid
 ---------------------------------------------------------------------
- test_proc_colocation_0 |      1390029
+ test_proc_colocation_0 |      1410003
 (1 row)
 
 SELECT proname, colocationid FROM pg_proc JOIN citus.pg_dist_object ON pg_proc.oid = citus.pg_dist_object.objid WHERE proname IN ('proc_0');
  proname | colocationid
 ---------------------------------------------------------------------
- proc_0  |      1390029
+ proc_0  |      1410003
 (1 row)
 
 -- colocatewith is not null && list_length(colocatedTableList) = 1
@@ -269,13 +270,13 @@ RESET client_min_messages;
 SELECT logicalrelid, colocationid FROM pg_dist_partition WHERE logicalrelid::regclass::text IN ('test_proc_colocation_0');
       logicalrelid      | colocationid
 ---------------------------------------------------------------------
- test_proc_colocation_0 |      1390030
+ test_proc_colocation_0 |      1410004
 (1 row)
 
 SELECT proname, colocationid FROM pg_proc JOIN citus.pg_dist_object ON pg_proc.oid = citus.pg_dist_object.objid WHERE proname IN ('proc_0');
  proname | colocationid
 ---------------------------------------------------------------------
- proc_0  |      1390030
+ proc_0  |      1410004
 (1 row)
 
 -- shardCount is not null && cascade_to_colocated is true
@@ -302,13 +303,13 @@ RESET client_min_messages;
 SELECT logicalrelid, colocationid FROM pg_dist_partition WHERE logicalrelid::regclass::text IN ('test_proc_colocation_0');
       logicalrelid      | colocationid
 ---------------------------------------------------------------------
- test_proc_colocation_0 |      1390029
+ test_proc_colocation_0 |      1410003
 (1 row)
 
 SELECT proname, colocationid FROM pg_proc JOIN citus.pg_dist_object ON pg_proc.oid = citus.pg_dist_object.objid WHERE proname IN ('proc_0');
  proname | colocationid
 ---------------------------------------------------------------------
- proc_0  |      1390029
+ proc_0  |      1410003
 (1 row)
 
 -- colocatewith is not null && cascade_to_colocated is true
@@ -356,13 +357,13 @@ RESET client_min_messages;
 SELECT logicalrelid, colocationid FROM pg_dist_partition WHERE logicalrelid::regclass::text IN ('test_proc_colocation_0');
       logicalrelid      | colocationid
 ---------------------------------------------------------------------
- test_proc_colocation_0 |      1390031
+ test_proc_colocation_0 |      1410005
 (1 row)
 
 SELECT proname, colocationid FROM pg_proc JOIN citus.pg_dist_object ON pg_proc.oid = citus.pg_dist_object.objid WHERE proname IN ('proc_0');
  proname | colocationid
 ---------------------------------------------------------------------
- proc_0  |      1390031
+ proc_0  |      1410005
 (1 row)
 
 -- try a case with more than one procedure
@@ -386,14 +387,14 @@ SELECT create_distributed_function('proc_1(float8)', 'dist_key', 'test_proc_colo
 SELECT logicalrelid, colocationid FROM pg_dist_partition WHERE logicalrelid::regclass::text IN ('test_proc_colocation_0');
       logicalrelid      | colocationid
 ---------------------------------------------------------------------
- test_proc_colocation_0 |      1390031
+ test_proc_colocation_0 |      1410005
 (1 row)
 
 SELECT proname, colocationid FROM pg_proc JOIN citus.pg_dist_object ON pg_proc.oid = citus.pg_dist_object.objid WHERE proname IN ('proc_0', 'proc_1') ORDER BY proname;
  proname | colocationid
 ---------------------------------------------------------------------
- proc_0  |      1390031
- proc_1  |      1390031
+ proc_0  |      1410005
+ proc_1  |      1410005
 (2 rows)
 
 SET client_min_messages TO DEBUG1;
@@ -437,14 +438,14 @@ RESET client_min_messages;
 SELECT logicalrelid, colocationid FROM pg_dist_partition WHERE logicalrelid::regclass::text IN ('test_proc_colocation_0');
       logicalrelid      | colocationid
 ---------------------------------------------------------------------
- test_proc_colocation_0 |      1390029
+ test_proc_colocation_0 |      1410003
 (1 row)
 
 SELECT proname, colocationid FROM pg_proc JOIN citus.pg_dist_object ON pg_proc.oid = citus.pg_dist_object.objid WHERE proname IN ('proc_0', 'proc_1') ORDER BY proname;
  proname | colocationid
 ---------------------------------------------------------------------
- proc_0  |      1390029
- proc_1  |      1390029
+ proc_0  |      1410003
+ proc_1  |      1410003
 (2 rows)
 
 -- case which shouldn't preserve colocation for now
@@ -462,14 +463,14 @@ NOTICE:  Renaming the new table to mx_alter_distributed_table.test_proc_colocati
 SELECT logicalrelid, colocationid FROM pg_dist_partition WHERE logicalrelid::regclass::text IN ('test_proc_colocation_0');
       logicalrelid      | colocationid
 ---------------------------------------------------------------------
- test_proc_colocation_0 |      1390032
+ test_proc_colocation_0 |      1410006
 (1 row)
 
 SELECT proname, colocationid FROM pg_proc JOIN citus.pg_dist_object ON pg_proc.oid = citus.pg_dist_object.objid WHERE proname IN ('proc_0', 'proc_1') ORDER BY proname;
  proname | colocationid
 ---------------------------------------------------------------------
- proc_0  |      1390029
- proc_1  |      1390029
+ proc_0  |      1410003
+ proc_1  |      1410003
 (2 rows)
 
 SET client_min_messages TO WARNING;

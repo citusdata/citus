@@ -393,8 +393,7 @@ UpdateDistributedObjectColocationId(uint32 oldColocationId,
 	/* scan pg_dist_object for colocationId equal to old colocationId */
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_object_colocationid,
 				BTEqualStrategyNumber,
-				F_OIDEQ,
-				ObjectIdGetDatum(oldColocationId));
+				F_INT4EQ, UInt32GetDatum(oldColocationId));
 
 	SysScanDesc scanDescriptor = systable_beginscan(pgDistObjectRel,
 													InvalidOid,
@@ -412,7 +411,7 @@ UpdateDistributedObjectColocationId(uint32 oldColocationId,
 		replace[Anum_pg_dist_object_colocationid - 1] = true;
 
 		/* update the colocationId to the new one */
-		values[Anum_pg_dist_object_colocationid - 1] = Int32GetDatum(newColocationId);
+		values[Anum_pg_dist_object_colocationid - 1] = UInt32GetDatum(newColocationId);
 
 		isnull[Anum_pg_dist_object_colocationid - 1] = false;
 
