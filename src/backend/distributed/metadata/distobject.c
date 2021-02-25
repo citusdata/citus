@@ -397,7 +397,7 @@ UpdateDistributedObjectColocationId(uint32 oldColocationId,
 				ObjectIdGetDatum(oldColocationId));
 
 	SysScanDesc scanDescriptor = systable_beginscan(pgDistObjectRel,
-													DistObjectPrimaryKeyIndexId(),
+													InvalidOid,
 													indexOK,
 													NULL, 1, scanKey);
 	HeapTuple heapTuple;
@@ -416,7 +416,6 @@ UpdateDistributedObjectColocationId(uint32 oldColocationId,
 
 		isnull[Anum_pg_dist_object_colocationid - 1] = false;
 
-
 		heapTuple = heap_modify_tuple(heapTuple, tupleDescriptor, values, isnull,
 									  replace);
 
@@ -426,4 +425,5 @@ UpdateDistributedObjectColocationId(uint32 oldColocationId,
 
 	systable_endscan(scanDescriptor);
 	table_close(pgDistObjectRel, NoLock);
+	CommandCounterIncrement();
 }
