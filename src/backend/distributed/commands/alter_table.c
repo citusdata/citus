@@ -43,6 +43,7 @@
 #include "distributed/listutils.h"
 #include "distributed/local_executor.h"
 #include "distributed/metadata/dependency.h"
+#include "distributed/metadata/distobject.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/multi_executor.h"
@@ -717,6 +718,32 @@ ConvertTable(TableConversionState *con)
 	else if (con->conversionType == ALTER_TABLE_SET_ACCESS_METHOD)
 	{
 		CreateCitusTableLike(con);
+	}
+
+	/* preserve colocation with procedures/functions */
+	if (con->conversionType == ALTER_DISTRIBUTED_TABLE)
+	{
+		/*
+		 * Updating the colocationId of functions is always desirable for
+		 * the following scenario:
+		 *    we have shardCount or colocateWith change
+		 *    AND  entire co-location group is altered
+		 * The reason for the second condition is because we currently don't
+		 * remember the original table specified in the colocateWith when
+		 * distributing the function. We only remember the colocationId in
+		 * pg_dist_object table.
+		 */
+		if ((!con->shardCountIsNull || con->colocateWith != NULL) &&
+			(con->cascadeToColocated == CASCADE_TO_COLOCATED_YES || list_length(
+				 con->colocatedTableList) == 1) && con->distributionColumn == NULL)
+		{
+			/*
+			 * Update the colocationId from the one of the old relation to the one
+			 * of the new relation for all tuples in citus.pg_dist_object
+			 */
+			UpdateDistributedObjectColocationId(TableColocationId(con->relationId),
+												TableColocationId(con->newRelationId));
+		}
 	}
 
 	ReplaceTable(con->relationId, con->newRelationId, justBeforeDropCommands,

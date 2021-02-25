@@ -27,5 +27,6 @@ extern bool IsObjectAddressOwnedByExtension(const ObjectAddress *target,
 											ObjectAddress *extensionAddress);
 
 extern List * GetDistributedObjectAddressList(void);
-
+extern void UpdateDistributedObjectColocationId(uint32 oldColocationId, uint32
+												newColocationId);
 #endif /* CITUS_METADATA_DISTOBJECT_H */
