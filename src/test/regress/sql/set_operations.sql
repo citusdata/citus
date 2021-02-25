@@ -74,6 +74,7 @@ SELECT * FROM ((SELECT x, y FROM test) EXCEPT (SELECT y, x FROM test)) u ORDER B
 SELECT * FROM ((SELECT * FROM test) EXCEPT (SELECT * FROM ref)) u ORDER BY 1,2;
 SELECT * FROM ((SELECT * FROM ref) EXCEPT (SELECT * FROM ref)) u ORDER BY 1,2;
 
+
 -- unions can even be pushed down within a join
 SELECT * FROM ((SELECT * FROM test) UNION (SELECT * FROM test)) u JOIN test USING (x) ORDER BY 1,2;
 SELECT * FROM ((SELECT * FROM test) UNION ALL (SELECT * FROM test)) u LEFT JOIN test USING (x) ORDER BY 1,2;
@@ -147,6 +148,28 @@ select avg(DISTINCT t.x) FROM ((SELECT avg(DISTINCT y) FROM test GROUP BY x) UNI
 
 -- other agg. distincts are not supported when group by doesn't include partition key
 select count(DISTINCT t.x) FROM ((SELECT avg(DISTINCT y) FROM test GROUP BY y) UNION (SELECT avg(DISTINCT y) FROM test GROUP BY y)) as t(x) ORDER BY 1;
+
+/* these are not safe to push down as the partition key index is different */
+SELECT x,y FROM test UNION ALL SELECT y,x FROM test ORDER BY 1,2;
+SELECT COUNT(*) FROM ((SELECT x,y FROM test) UNION ALL (SELECT y,x FROM test)) u;
+
+/* this is safe to push down since the partition key index is the same */
+SELECT COUNT(*) FROM (SELECT x,y FROM test UNION ALL SELECT x,y FROM test) foo;
+SELECT COUNT(*) FROM
+    ((SELECT x,y FROM test UNION ALL SELECT x,y FROM test)
+    UNION ALL
+    (SELECT x,y FROM test UNION ALL SELECT x,y FROM test)) foo;
+
+SELECT COUNT(*)
+FROM
+  (SELECT user_id  AS user_id
+   FROM
+     (SELECT x  AS user_id
+      FROM test
+      UNION ALL SELECT x AS user_id
+      FROM test) AS bar
+   UNION ALL SELECT x  AS user_id
+   FROM test) AS fool LIMIT 1;
 
 -- one of the leaves is a repartition join
 SET citus.enable_repartition_joins TO ON;

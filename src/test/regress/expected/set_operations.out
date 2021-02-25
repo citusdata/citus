@@ -829,6 +829,73 @@ DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  Router planner cannot handle multi-shard select queries
 ERROR:  cannot compute aggregate (distinct)
 DETAIL:  table partitioning is unsuitable for aggregate (distinct)
+/* these are not safe to push down as the partition key index is different */
+SELECT x,y FROM test UNION ALL SELECT y,x FROM test ORDER BY 1,2;
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  generating subplan XXX_1 for subquery SELECT x, y FROM recursive_union.test
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  generating subplan XXX_2 for subquery SELECT y, x FROM recursive_union.test
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer) UNION ALL SELECT intermediate_result.y, intermediate_result.x FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(y integer, x integer) ORDER BY 1, 2
+DEBUG:  Creating router plan
+ x | y
+---------------------------------------------------------------------
+ 1 | 1
+ 1 | 1
+ 2 | 2
+ 2 | 2
+(4 rows)
+
+SELECT COUNT(*) FROM ((SELECT x,y FROM test) UNION ALL (SELECT y,x FROM test)) u;
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  generating subplan XXX_1 for subquery SELECT x, y FROM recursive_union.test
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  generating subplan XXX_2 for subquery SELECT y, x FROM recursive_union.test
+DEBUG:  Creating router plan
+DEBUG:  generating subplan XXX_3 for subquery SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer) UNION ALL SELECT intermediate_result.y, intermediate_result.x FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(y integer, x integer)
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)) u
+DEBUG:  Creating router plan
+ count
+---------------------------------------------------------------------
+     4
+(1 row)
+
+/* this is safe to push down since the partition key index is the same */
+SELECT COUNT(*) FROM (SELECT x,y FROM test UNION ALL SELECT x,y FROM test) foo;
+DEBUG:  Router planner cannot handle multi-shard select queries
+ count
+---------------------------------------------------------------------
+     4
+(1 row)
+
+SELECT COUNT(*) FROM
+    ((SELECT x,y FROM test UNION ALL SELECT x,y FROM test)
+    UNION ALL
+    (SELECT x,y FROM test UNION ALL SELECT x,y FROM test)) foo;
+DEBUG:  Router planner cannot handle multi-shard select queries
+ count
+---------------------------------------------------------------------
+     8
+(1 row)
+
+SELECT COUNT(*)
+FROM
+  (SELECT user_id  AS user_id
+   FROM
+     (SELECT x  AS user_id
+      FROM test
+      UNION ALL SELECT x AS user_id
+      FROM test) AS bar
+   UNION ALL SELECT x  AS user_id
+   FROM test) AS fool LIMIT 1;
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  push down of limit count: 1
+ count
+---------------------------------------------------------------------
+     6
+(1 row)
+
 -- one of the leaves is a repartition join
 SET citus.enable_repartition_joins TO ON;
 --  repartition is recursively planned before the set operation

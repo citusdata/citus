@@ -33,7 +33,6 @@ extern List * GenerateAllAttributeEquivalences(PlannerRestrictionContext *
 											   plannerRestrictionContext);
 extern uint32 UniqueRelationCount(RelationRestrictionContext *restrictionContext,
 								  CitusTableType tableType);
-
 extern List * DistributedRelationIdList(Query *query);
 extern PlannerRestrictionContext * FilterPlannerRestrictionForQuery(
 	PlannerRestrictionContext *plannerRestrictionContext,
@@ -45,6 +44,7 @@ extern RelationRestriction * RelationRestrictionForRelation(
 	RangeTblEntry *rangeTableEntry,
 	PlannerRestrictionContext *
 	plannerRestrictionContext);
+extern int RangeTableOffsetCompat(PlannerInfo *root, AppendRelInfo *appendRelInfo);
 extern JoinRestrictionContext * RemoveDuplicateJoinRestrictions(JoinRestrictionContext *
 																joinRestrictionContext);
 
