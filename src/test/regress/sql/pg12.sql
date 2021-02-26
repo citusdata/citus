@@ -383,6 +383,20 @@ ROLLBACK;
 RESET citus.replicate_reference_tables_on_activate;
 SELECT citus_remove_node('localhost', :master_port);
 
+CREATE TABLE superuser_columnar_table (a int) USING columnar;
+
+CREATE USER read_access;
+SET ROLE read_access;
+
+-- user shouldn't be able to execute alter_columnar_table_set
+-- or alter_columnar_table_reset for a columnar table that it
+-- doesn't own
+SELECT alter_columnar_table_set('test_pg12.superuser_columnar_table', chunk_group_row_limit => 100);
+SELECT alter_columnar_table_reset('test_pg12.superuser_columnar_table');
+
+RESET ROLE;
+DROP USER read_access;
+
 \set VERBOSITY terse
 drop schema test_pg12 cascade;
 \set VERBOSITY default

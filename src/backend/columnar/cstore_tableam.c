@@ -1662,6 +1662,8 @@ alter_columnar_table_set(PG_FUNCTION_ARGS)
 							   quote_identifier(RelationGetRelationName(rel)))));
 	}
 
+	EnsureTableOwner(relationId);
+
 	ColumnarOptions options = { 0 };
 	if (!ReadColumnarOptions(relationId, &options))
 	{
@@ -1768,6 +1770,8 @@ alter_columnar_table_reset(PG_FUNCTION_ARGS)
 		ereport(ERROR, (errmsg("table %s is not a columnar table",
 							   quote_identifier(RelationGetRelationName(rel)))));
 	}
+
+	EnsureTableOwner(relationId);
 
 	ColumnarOptions options = { 0 };
 	if (!ReadColumnarOptions(relationId, &options))
