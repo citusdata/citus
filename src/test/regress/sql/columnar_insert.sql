@@ -1,101 +1,64 @@
 --
--- Testing insert on cstore_fdw tables.
+-- Testing insert on columnar tables.
 --
+
 CREATE TABLE test_insert_command (a int) USING columnar;
+
 -- test single row inserts fail
 select count(*) from test_insert_command;
- count
----------------------------------------------------------------------
-     0
-(1 row)
-
 insert into test_insert_command values(1);
 select count(*) from test_insert_command;
- count
----------------------------------------------------------------------
-     1
-(1 row)
 
 insert into test_insert_command default values;
 select count(*) from test_insert_command;
- count
----------------------------------------------------------------------
-     2
-(1 row)
 
 -- test inserting from another table succeed
 CREATE TABLE test_insert_command_data (a int);
-select count(*) from test_insert_command_data;
- count
----------------------------------------------------------------------
-     0
-(1 row)
 
+select count(*) from test_insert_command_data;
 insert into test_insert_command_data values(1);
 select count(*) from test_insert_command_data;
- count
----------------------------------------------------------------------
-     1
-(1 row)
 
 insert into test_insert_command select * from test_insert_command_data;
 select count(*) from test_insert_command;
- count
----------------------------------------------------------------------
-     3
-(1 row)
 
 SELECT * FROM chunk_group_consistency;
- consistent
----------------------------------------------------------------------
- t
-(1 row)
 
 drop table test_insert_command_data;
 drop table test_insert_command;
+
 -- test long attribute value insertion
 -- create sufficiently long text so that data is stored in toast
 CREATE TABLE test_long_text AS
 SELECT a as int_val, string_agg(random()::text, '') as text_val
 FROM generate_series(1, 10) a, generate_series(1, 1000) b
 GROUP BY a ORDER BY a;
+
 -- store hash values of text for later comparison
 CREATE TABLE test_long_text_hash AS
 SELECT int_val, md5(text_val) AS hash
 FROM test_long_text;
-CREATE TABLE test_cstore_long_text(int_val int, text_val text)
+
+CREATE TABLE test_columnar_long_text(int_val int, text_val text)
 USING columnar;
--- store long text in cstore table
-INSERT INTO test_cstore_long_text SELECT * FROM test_long_text;
+
+-- store long text in columnar table
+INSERT INTO test_columnar_long_text SELECT * FROM test_long_text;
+
 SELECT * FROM chunk_group_consistency;
- consistent
----------------------------------------------------------------------
- t
-(1 row)
 
 -- drop source table to remove original text from toast
 DROP TABLE test_long_text;
--- check if text data is still available in cstore table
+
+-- check if text data is still available in columnar table
 -- by comparing previously stored hash.
 SELECT a.int_val
-FROM  test_long_text_hash a, test_cstore_long_text c
+FROM  test_long_text_hash a, test_columnar_long_text c
 WHERE a.int_val = c.int_val AND a.hash = md5(c.text_val);
- int_val
----------------------------------------------------------------------
-       1
-       2
-       3
-       4
-       5
-       6
-       7
-       8
-       9
-      10
-(10 rows)
 
 DROP TABLE test_long_text_hash;
-DROP TABLE test_cstore_long_text;
+DROP TABLE test_columnar_long_text;
+
 CREATE TABLE test_logical_replication(i int) USING columnar;
 -- should succeed
 INSERT INTO test_logical_replication VALUES (1);
@@ -103,30 +66,29 @@ CREATE PUBLICATION test_columnar_publication
   FOR TABLE test_logical_replication;
 -- should fail; columnar does not support logical replication
 INSERT INTO test_logical_replication VALUES (2);
-ERROR:  cannot insert into columnar table that is a part of a publication
 DROP PUBLICATION test_columnar_publication;
 -- should succeed
 INSERT INTO test_logical_replication VALUES (3);
 DROP TABLE test_logical_replication;
+
 --
 -- test toast interactions
 --
+
 -- row table with data in different storage formats
 CREATE TABLE test_toast_row(plain TEXT, main TEXT, external TEXT, extended TEXT);
 ALTER TABLE test_toast_row ALTER COLUMN plain SET STORAGE plain; -- inline, uncompressed
 ALTER TABLE test_toast_row ALTER COLUMN main SET STORAGE main; -- inline, compressed
 ALTER TABLE test_toast_row ALTER COLUMN external SET STORAGE external; -- out-of-line, uncompressed
 ALTER TABLE test_toast_row ALTER COLUMN extended SET STORAGE extended; -- out-of-line, compressed
+
 INSERT INTO test_toast_row VALUES(
        repeat('w', 5000), repeat('x', 5000), repeat('y', 5000), repeat('z', 5000));
+
 SELECT
   pg_column_size(plain), pg_column_size(main),
   pg_column_size(external), pg_column_size(extended)
 FROM test_toast_row;
- pg_column_size | pg_column_size | pg_column_size | pg_column_size
----------------------------------------------------------------------
-           5004 |             69 |           5000 |             65
-(1 row)
 
 CREATE TABLE test_toast_columnar(plain TEXT, main TEXT, external TEXT, extended TEXT)
   USING columnar;
@@ -136,78 +98,46 @@ SELECT
   pg_column_size(plain), pg_column_size(main),
   pg_column_size(external), pg_column_size(extended)
 FROM test_toast_columnar;
- pg_column_size | pg_column_size | pg_column_size | pg_column_size
----------------------------------------------------------------------
-           5004 |           5004 |           5004 |           5004
-(1 row)
 
 SELECT * FROM chunk_group_consistency;
- consistent
----------------------------------------------------------------------
- t
-(1 row)
 
 DROP TABLE test_toast_row;
 DROP TABLE test_toast_columnar;
+
 -- Verify metadata for zero column tables.
 -- We support writing into zero column tables, but not reading from them.
 -- We test that metadata makes sense so we can fix the read path in future.
 CREATE TABLE zero_col() USING columnar;
 SELECT alter_columnar_table_set('zero_col', chunk_group_row_limit => 10);
- alter_columnar_table_set
----------------------------------------------------------------------
-
-(1 row)
 
 INSERT INTO zero_col DEFAULT VALUES;
 INSERT INTO zero_col DEFAULT VALUES;
 INSERT INTO zero_col DEFAULT VALUES;
 INSERT INTO zero_col DEFAULT VALUES;
+
 CREATE TABLE zero_col_heap();
 INSERT INTO zero_col_heap DEFAULT VALUES;
 INSERT INTO zero_col_heap DEFAULT VALUES;
 INSERT INTO zero_col_heap DEFAULT VALUES;
 INSERT INTO zero_col_heap DEFAULT VALUES;
+
 INSERT INTO zero_col_heap SELECT * FROM zero_col_heap;
 INSERT INTO zero_col_heap SELECT * FROM zero_col_heap;
 INSERT INTO zero_col_heap SELECT * FROM zero_col_heap;
 INSERT INTO zero_col_heap SELECT * FROM zero_col_heap;
+
 INSERT INTO zero_col SELECT * FROM zero_col_heap;
+
 SELECT relname, stripe_num, chunk_group_count, row_count FROM columnar.stripe a, pg_class b
 WHERE columnar_relation_storageid(b.oid)=a.storage_id AND relname = 'zero_col'
 ORDER BY 1,2,3,4;
- relname  | stripe_num | chunk_group_count | row_count
----------------------------------------------------------------------
- zero_col |          1 |                 1 |         1
- zero_col |          2 |                 1 |         1
- zero_col |          3 |                 1 |         1
- zero_col |          4 |                 1 |         1
- zero_col |          5 |                 7 |        64
-(5 rows)
 
 SELECT relname, stripe_num, value_count FROM columnar.chunk a, pg_class b
 WHERE columnar_relation_storageid(b.oid)=a.storage_id AND relname = 'zero_col'
 ORDER BY 1,2,3;
- relname | stripe_num | value_count
----------------------------------------------------------------------
-(0 rows)
 
 SELECT relname, stripe_num, chunk_group_num, row_count FROM columnar.chunk_group a, pg_class b
 WHERE columnar_relation_storageid(b.oid)=a.storage_id AND relname = 'zero_col'
 ORDER BY 1,2,3,4;
- relname  | stripe_num | chunk_group_num | row_count
----------------------------------------------------------------------
- zero_col |          1 |               0 |         1
- zero_col |          2 |               0 |         1
- zero_col |          3 |               0 |         1
- zero_col |          4 |               0 |         1
- zero_col |          5 |               0 |        10
- zero_col |          5 |               1 |        10
- zero_col |          5 |               2 |        10
- zero_col |          5 |               3 |        10
- zero_col |          5 |               4 |        10
- zero_col |          5 |               5 |        10
- zero_col |          5 |               6 |         4
-(11 rows)
 
 DROP TABLE zero_col;
