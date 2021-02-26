@@ -511,9 +511,25 @@ SELECT * FROM print_extension_changes();
                                                                                  | view time_partitions
 (63 rows)
 
--- Test downgrade to 10.0-1 from 10.1-1
-ALTER EXTENSION citus UPDATE TO '10.1-1';
+-- Test downgrade to 10.0-1 from 10.0-2
+ALTER EXTENSION citus UPDATE TO '10.0-2';
 ALTER EXTENSION citus UPDATE TO '10.0-1';
+-- Should be empty result since upgrade+downgrade should be a no-op
+SELECT * FROM print_extension_changes();
+ previous_object | current_object
+---------------------------------------------------------------------
+(0 rows)
+
+-- Snapshot of state at 10.0-2
+ALTER EXTENSION citus UPDATE TO '10.0-2';
+SELECT * FROM print_extension_changes();
+ previous_object | current_object
+---------------------------------------------------------------------
+(0 rows)
+
+-- Test downgrade to 10.0-2 from 10.1-1
+ALTER EXTENSION citus UPDATE TO '10.1-1';
+ALTER EXTENSION citus UPDATE TO '10.0-2';
 -- Should be empty result since upgrade+downgrade should be a no-op
 SELECT * FROM print_extension_changes();
  previous_object | current_object

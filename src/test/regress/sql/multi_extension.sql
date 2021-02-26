@@ -198,9 +198,19 @@ SELECT * FROM print_extension_changes();
 ALTER EXTENSION citus UPDATE TO '10.0-1';
 SELECT * FROM print_extension_changes();
 
--- Test downgrade to 10.0-1 from 10.1-1
-ALTER EXTENSION citus UPDATE TO '10.1-1';
+-- Test downgrade to 10.0-1 from 10.0-2
+ALTER EXTENSION citus UPDATE TO '10.0-2';
 ALTER EXTENSION citus UPDATE TO '10.0-1';
+-- Should be empty result since upgrade+downgrade should be a no-op
+SELECT * FROM print_extension_changes();
+
+-- Snapshot of state at 10.0-2
+ALTER EXTENSION citus UPDATE TO '10.0-2';
+SELECT * FROM print_extension_changes();
+
+-- Test downgrade to 10.0-2 from 10.1-1
+ALTER EXTENSION citus UPDATE TO '10.1-1';
+ALTER EXTENSION citus UPDATE TO '10.0-2';
 -- Should be empty result since upgrade+downgrade should be a no-op
 SELECT * FROM print_extension_changes();
 
