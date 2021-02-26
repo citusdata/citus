@@ -12,6 +12,7 @@
 #define SHARD_PRUNING_H_
 
 #include "distributed/metadata_cache.h"
+#include "distributed/pg_version_constants.h"
 #include "nodes/primnodes.h"
 
 #define INVALID_SHARD_INDEX -1
@@ -65,6 +66,17 @@ typedef struct PruningInstance
 	bool isPartial;
 } PruningInstance;
 
+#if PG_VERSION_NUM >= PG_VERSION_12
+typedef union \
+{ \
+	FunctionCallInfoBaseData fcinfo; \
+	/* ensure enough space for nargs args is available */ \
+	char fcinfo_data[SizeForFunctionCallInfo(2)]; \
+} FunctionCall2InfoData;
+#else
+typedef FunctionCallInfoData FunctionCall2InfoData;
+#endif
+
 /* Function declarations for shard pruning */
 extern List * PruneShards(Oid relationId, Index rangeTableId, List *whereClauseList,
 						  Const **partitionValueConst);
@@ -77,5 +89,7 @@ bool VarConstOpExprClause(OpExpr *opClause, Var **varClause, Const **constantCla
 extern bool ExhaustivePruneOneWithMinMax(PruningInstance *prune,
 										 FunctionCallInfo compareFunctionCall,
 										 Datum minimumValue, Datum maximumValue);
+extern List * BuildPruningInstanceList(Var *column, List *whereClauseList,
+									   FunctionCall2InfoData *compareValueFunctionCall);
 
 #endif /* SHARD_PRUNING_H_ */

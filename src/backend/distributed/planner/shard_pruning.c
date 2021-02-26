@@ -138,17 +138,6 @@ typedef struct PendingPruningInstance
 	PruningTreeNode *continueAt;
 } PendingPruningInstance;
 
-#if PG_VERSION_NUM >= PG_VERSION_12
-typedef union \
-{ \
-	FunctionCallInfoBaseData fcinfo; \
-	/* ensure enough space for nargs args is available */ \
-	char fcinfo_data[SizeForFunctionCallInfo(2)]; \
-} FunctionCall2InfoData;
-#else
-typedef FunctionCallInfoData FunctionCall2InfoData;
-#endif
-
 /*
  * We also ignore this warning in ./configure, but that's not always enough.
  * The flags that are used during compilation by ./configure are determined by
@@ -172,7 +161,6 @@ typedef FunctionCallInfoData FunctionCall2InfoData;
 typedef struct ClauseWalkerContext
 {
 	Var *partitionColumn;
-	char partitionMethod;
 
 	/* ORed list of pruning targets */
 	List *pruningInstances;
@@ -192,9 +180,11 @@ typedef struct ClauseWalkerContext
 	 * cheaper.
 	 */
 	FunctionCall2InfoData compareValueFunctionCall;
-	FunctionCall2InfoData compareIntervalFunctionCall;
 } ClauseWalkerContext;
 
+static ClauseWalkerContext * CreateClauseWalkerContext(Var *column, List *whereClauseList,
+													   FunctionCall2InfoData *
+													   compareValueFunctionCall);
 static bool BuildPruningTree(Node *node, PruningTreeBuildContext *context);
 static void SimplifyPruningTree(PruningTreeNode *node, PruningTreeNode *parent);
 static void PrunableExpressions(PruningTreeNode *node, ClauseWalkerContext *context);
@@ -223,17 +213,18 @@ static int PerformValueCompare(FunctionCallInfo compareFunctionCall, Datum a,
 							   Datum b);
 static int PerformCompare(FunctionCallInfo compareFunctionCall);
 
-static List * PruneOne(CitusTableCacheEntry *cacheEntry, ClauseWalkerContext *context,
-					   PruningInstance *prune);
+static List * PruneOne(CitusTableCacheEntry *cacheEntry, PruningInstance *prune,
+					   FunctionCall2InfoData *compareIntervalFunctionCall,
+					   char partitionMethod);
 static List * PruneWithBoundaries(CitusTableCacheEntry *cacheEntry,
-								  ClauseWalkerContext *context,
-								  PruningInstance *prune);
+								  PruningInstance *prune,
+								  FunctionCall2InfoData *compareIntervalFunctionCall);
 static List * ExhaustivePrune(CitusTableCacheEntry *cacheEntry,
-							  ClauseWalkerContext *context,
-							  PruningInstance *prune);
+							  PruningInstance *prune,
+							  FunctionCall2InfoData *compareIntervalFunctionCall);
 static bool ExhaustivePruneOne(ShardInterval *curInterval,
-							   ClauseWalkerContext *context,
-							   PruningInstance *prune);
+							   PruningInstance *prune,
+							   FunctionCall2InfoData *compareIntervalFunctionCall);
 static int UpperShardBoundary(Datum partitionColumnValue,
 							  ShardInterval **shardIntervalCache,
 							  int shardCount, FunctionCallInfo compareFunction,
@@ -267,7 +258,6 @@ PruneShards(Oid relationId, Index rangeTableId, List *whereClauseList,
 	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
 	int shardCount = cacheEntry->shardIntervalArrayLength;
 	char partitionMethod = cacheEntry->partitionMethod;
-	ClauseWalkerContext context = { 0 };
 	ListCell *pruneCell;
 	List *prunedList = NIL;
 	bool foundRestriction = false;
@@ -294,16 +284,11 @@ PruneShards(Oid relationId, Index rangeTableId, List *whereClauseList,
 		return DeepCopyShardIntervalList(prunedList);
 	}
 
-
-	context.partitionMethod = partitionMethod;
-	context.partitionColumn = PartitionColumn(relationId, rangeTableId);
-	context.currentPruningInstance = palloc0(sizeof(PruningInstance));
-
+	FunctionCall2InfoData compareIntervalFunctionCall;
 	if (cacheEntry->shardIntervalCompareFunction)
 	{
 		/* initiate function call info once (allows comparators to cache metadata) */
-		InitFunctionCallInfoData(*(FunctionCallInfo) &
-								 context.compareIntervalFunctionCall,
+		InitFunctionCallInfoData(*(FunctionCallInfo) & compareIntervalFunctionCall,
 								 cacheEntry->shardIntervalCompareFunction,
 								 2, cacheEntry->partitionColumn->varcollid, NULL, NULL);
 	}
@@ -313,11 +298,11 @@ PruneShards(Oid relationId, Index rangeTableId, List *whereClauseList,
 							   "a shard interval comparator")));
 	}
 
+	FunctionCall2InfoData compareValueFunctionCall;
 	if (cacheEntry->shardColumnCompareFunction)
 	{
 		/* initiate function call info once (allows comparators to cache metadata) */
-		InitFunctionCallInfoData(*(FunctionCallInfo) &
-								 context.compareValueFunctionCall,
+		InitFunctionCallInfoData(*(FunctionCallInfo) & compareValueFunctionCall,
 								 cacheEntry->shardColumnCompareFunction,
 								 2, cacheEntry->partitionColumn->varcollid, NULL, NULL);
 	}
@@ -327,28 +312,18 @@ PruneShards(Oid relationId, Index rangeTableId, List *whereClauseList,
 							   "a partition column comparator")));
 	}
 
-	PruningTreeNode *tree = CreatePruningNode(AND_EXPR);
 
-	PruningTreeBuildContext treeBuildContext = { 0 };
-	treeBuildContext.current = tree;
-	treeBuildContext.partitionColumn = PartitionColumn(relationId, rangeTableId);
-
-	/* Build logical tree of prunable restrictions and invalid restrictions */
-	BuildPruningTree((Node *) whereClauseList, &treeBuildContext);
-
-	/* Simplify logic tree of prunable restrictions */
-	SimplifyPruningTree(tree, NULL);
-
-	/* Figure out what we can prune on */
-	PrunableExpressions(tree, &context);
-
+	Var *partitionColumn = PartitionColumn(relationId, rangeTableId);
+	List *pruningInstanceList = BuildPruningInstanceList(partitionColumn,
+														 whereClauseList,
+														 &compareValueFunctionCall);
 	List *debugLoggedPruningInstances = NIL;
 
 	/*
 	 * Prune using each of the PrunableInstances we found, and OR results
 	 * together.
 	 */
-	foreach(pruneCell, context.pruningInstances)
+	foreach(pruneCell, pruningInstanceList)
 	{
 		PruningInstance *prune = (PruningInstance *) lfirst(pruneCell);
 
@@ -371,7 +346,7 @@ PruneShards(Oid relationId, Index rangeTableId, List *whereClauseList,
 			break;
 		}
 
-		if (context.partitionMethod == DISTRIBUTE_BY_HASH)
+		if (partitionMethod == DISTRIBUTE_BY_HASH)
 		{
 			if (!prune->evaluatesToFalse && !prune->equalConsts &&
 				!prune->hashedEqualConsts)
@@ -400,7 +375,9 @@ PruneShards(Oid relationId, Index rangeTableId, List *whereClauseList,
 			}
 		}
 
-		List *pruneOneList = PruneOne(cacheEntry, &context, prune);
+		List *pruneOneList = PruneOne(cacheEntry, prune,
+									  &compareIntervalFunctionCall,
+									  partitionMethod);
 
 		if (prunedList)
 		{
@@ -472,6 +449,53 @@ PruneShards(Oid relationId, Index rangeTableId, List *whereClauseList,
 	 * contents.
 	 */
 	return DeepCopyShardIntervalList(prunedList);
+}
+
+
+/*
+ * BuildPruningInstanceList builds and returns a list of prune instances for
+ * given column by using given from given where clause list and function call
+ * object.
+ */
+List *
+BuildPruningInstanceList(Var *column, List *whereClauseList,
+						 FunctionCall2InfoData *compareValueFunctionCall)
+{
+	PruningTreeNode *tree = CreatePruningNode(AND_EXPR);
+
+	PruningTreeBuildContext *treeBuildContext = palloc0(sizeof(PruningTreeBuildContext));
+	treeBuildContext->current = tree;
+	treeBuildContext->partitionColumn = column;
+
+	/* Build logical tree of prunable restrictions and invalid restrictions */
+	BuildPruningTree((Node *) whereClauseList, treeBuildContext);
+
+	/* Simplify logic tree of prunable restrictions */
+	SimplifyPruningTree(tree, NULL);
+
+	ClauseWalkerContext *clauseWalkerContext =
+		CreateClauseWalkerContext(column, whereClauseList, compareValueFunctionCall);
+
+	/* Figure out what we can prune on */
+	PrunableExpressions(tree, clauseWalkerContext);
+
+	return clauseWalkerContext->pruningInstances;
+}
+
+
+/*
+ * CreateClauseWalkerContext creates a ClauseWalkerContext object initialized
+ * by given arguments.
+ */
+static ClauseWalkerContext *
+CreateClauseWalkerContext(Var *column, List *whereClauseList,
+						  FunctionCall2InfoData *compareValueFunctionCall)
+{
+	ClauseWalkerContext *clauseWalkerContext = palloc0(sizeof(ClauseWalkerContext));
+	clauseWalkerContext->partitionColumn = column;
+	clauseWalkerContext->currentPruningInstance = palloc0(sizeof(PruningInstance));
+	clauseWalkerContext->compareValueFunctionCall = *compareValueFunctionCall;
+	return clauseWalkerContext;
 }
 
 
@@ -1360,8 +1384,8 @@ DeepCopyShardIntervalList(List *originalShardIntervalList)
  * PruningInstance.
  */
 static List *
-PruneOne(CitusTableCacheEntry *cacheEntry, ClauseWalkerContext *context,
-		 PruningInstance *prune)
+PruneOne(CitusTableCacheEntry *cacheEntry, PruningInstance *prune,
+		 FunctionCall2InfoData *compareIntervalFunctionCall, char partitionMethod)
 {
 	ShardInterval *shardInterval = NULL;
 
@@ -1401,7 +1425,7 @@ PruneOne(CitusTableCacheEntry *cacheEntry, ClauseWalkerContext *context,
 	{
 		ShardInterval **sortedShardIntervalArray = cacheEntry->sortedShardIntervalArray;
 
-		Assert(context->partitionMethod == DISTRIBUTE_BY_HASH);
+		Assert(partitionMethod == DISTRIBUTE_BY_HASH);
 
 		int shardIndex = FindShardIntervalIndex(prune->hashedEqualConsts->constvalue,
 												cacheEntry);
@@ -1438,8 +1462,9 @@ PruneOne(CitusTableCacheEntry *cacheEntry, ClauseWalkerContext *context,
 	 */
 	if (shardInterval)
 	{
-		if (context->partitionMethod != DISTRIBUTE_BY_HASH &&
-			ExhaustivePruneOne(shardInterval, context, prune))
+		if (partitionMethod != DISTRIBUTE_BY_HASH &&
+			ExhaustivePruneOne(shardInterval, prune,
+							   compareIntervalFunctionCall))
 		{
 			return NIL;
 		}
@@ -1454,7 +1479,7 @@ PruneOne(CitusTableCacheEntry *cacheEntry, ClauseWalkerContext *context,
 	 * Should never get here for hashing, we've filtered down to either zero
 	 * or one shard, and returned.
 	 */
-	Assert(context->partitionMethod != DISTRIBUTE_BY_HASH);
+	Assert(partitionMethod != DISTRIBUTE_BY_HASH);
 
 	/*
 	 * Next method: binary search with fuzzy boundaries. Can't trivially do so
@@ -1467,13 +1492,14 @@ PruneOne(CitusTableCacheEntry *cacheEntry, ClauseWalkerContext *context,
 			prune->greaterConsts || prune->greaterEqualConsts ||
 			prune->lessConsts || prune->lessEqualConsts))
 	{
-		return PruneWithBoundaries(cacheEntry, context, prune);
+		return PruneWithBoundaries(cacheEntry, prune,
+								   compareIntervalFunctionCall);
 	}
 
 	/*
 	 * Brute force: Check each shard.
 	 */
-	return ExhaustivePrune(cacheEntry, context, prune);
+	return ExhaustivePrune(cacheEntry, prune, compareIntervalFunctionCall);
 }
 
 
@@ -1667,8 +1693,8 @@ UpperShardBoundary(Datum partitionColumnValue, ShardInterval **shardIntervalCach
  * list of surviving shards.
  */
 static List *
-PruneWithBoundaries(CitusTableCacheEntry *cacheEntry, ClauseWalkerContext *context,
-					PruningInstance *prune)
+PruneWithBoundaries(CitusTableCacheEntry *cacheEntry, PruningInstance *prune,
+					FunctionCall2InfoData *compareIntervalFunctionCall)
 {
 	List *remainingShardList = NIL;
 	int shardCount = cacheEntry->shardIntervalArrayLength;
@@ -1681,8 +1707,7 @@ PruneWithBoundaries(CitusTableCacheEntry *cacheEntry, ClauseWalkerContext *conte
 	bool upperBoundInclusive = false;
 	int lowerBoundIdx = -1;
 	int upperBoundIdx = -1;
-	FunctionCallInfo compareFunctionCall = (FunctionCallInfo) &
-										   context->compareIntervalFunctionCall;
+	FunctionCallInfo compareFunctionCall = (FunctionCallInfo) compareIntervalFunctionCall;
 
 	if (prune->greaterEqualConsts)
 	{
@@ -1782,8 +1807,8 @@ PruneWithBoundaries(CitusTableCacheEntry *cacheEntry, ClauseWalkerContext *conte
  * constraints, by simply checking them for each individual shard.
  */
 static List *
-ExhaustivePrune(CitusTableCacheEntry *cacheEntry, ClauseWalkerContext *context,
-				PruningInstance *prune)
+ExhaustivePrune(CitusTableCacheEntry *cacheEntry, PruningInstance *prune,
+				FunctionCall2InfoData *compareIntervalFunctionCall)
 {
 	List *remainingShardList = NIL;
 	int shardCount = cacheEntry->shardIntervalArrayLength;
@@ -1793,7 +1818,7 @@ ExhaustivePrune(CitusTableCacheEntry *cacheEntry, ClauseWalkerContext *context,
 	{
 		ShardInterval *curInterval = sortedShardIntervalArray[curIdx];
 
-		if (!ExhaustivePruneOne(curInterval, context, prune))
+		if (!ExhaustivePruneOne(curInterval, prune, compareIntervalFunctionCall))
 		{
 			remainingShardList = lappend(remainingShardList, curInterval);
 		}
@@ -1807,12 +1832,10 @@ ExhaustivePrune(CitusTableCacheEntry *cacheEntry, ClauseWalkerContext *context,
  * ExhaustivePruneOne returns whether curInterval is pruned away.
  */
 static bool
-ExhaustivePruneOne(ShardInterval *curInterval,
-				   ClauseWalkerContext *context,
-				   PruningInstance *prune)
+ExhaustivePruneOne(ShardInterval *curInterval, PruningInstance *prune,
+				   FunctionCall2InfoData *compareIntervalFunctionCall)
 {
-	FunctionCallInfo compareFunctionCall = (FunctionCallInfo) &
-										   context->compareIntervalFunctionCall;
+	FunctionCallInfo compareFunctionCall = (FunctionCallInfo) compareIntervalFunctionCall;
 
 	/* NULL boundaries can't be compared to */
 	if (!curInterval->minValueExists || !curInterval->maxValueExists)
