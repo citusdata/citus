@@ -72,7 +72,7 @@ test: multi_create_fdw
 # ----------
 # Tests for recursive subquery planning
 # ----------
-# NOTE: The next 6 were in parallel originally, but we got "too many
+# NOTE: The next 7 were in parallel originally, but we got "too many
 # connection" errors on CI. Requires investigation before doing them in
 # parallel again.
 test: subquery_basics
@@ -80,6 +80,7 @@ test: subquery_local_tables
 test: subquery_executors
 test: subquery_and_cte
 test: set_operations
+test: union_pushdown
 test: set_operation_and_local_tables
 
 test: subqueries_deep subquery_view subquery_partitioning subqueries_not_supported

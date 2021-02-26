@@ -191,8 +191,8 @@ s/relation with OID [0-9]+ does not exist/relation with OID XXXX does not exist/
 # ignore JIT related messages
 /^DEBUG:  probing availability of JIT.*/d
 /^DEBUG:  provider not available, disabling JIT for current session.*/d
-
-
+/^DEBUG:  time to inline:.*/d
+/^DEBUG:  successfully loaded JIT.*/d
 
 # ignore timing statistics for VACUUM VERBOSE
 /CPU: user: .*s, system: .*s, elapsed: .*s/d

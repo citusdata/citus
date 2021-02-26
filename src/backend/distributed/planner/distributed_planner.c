@@ -49,6 +49,7 @@
 #include "executor/executor.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
+#include "nodes/pg_list.h"
 #include "parser/parsetree.h"
 #include "parser/parse_type.h"
 #if PG_VERSION_NUM >= PG_VERSION_12
@@ -98,6 +99,7 @@ static PlannedStmt * FinalizeNonRouterPlan(PlannedStmt *localPlan,
 										   DistributedPlan *distributedPlan,
 										   CustomScan *customScan);
 static PlannedStmt * FinalizeRouterPlan(PlannedStmt *localPlan, CustomScan *customScan);
+static AppendRelInfo * FindTargetAppendRelInfo(PlannerInfo *root, int relationRteIndex);
 static List * makeTargetListFromCustomScanList(List *custom_scan_tlist);
 static List * makeCustomScanTargetlistFromExistingTargetList(List *existingTargetlist);
 static int32 BlessRecordExpressionList(List *exprs);
@@ -124,6 +126,7 @@ static PlannedStmt * PlanFastPathDistributedStmt(DistributedPlanningContext *pla
 static PlannedStmt * PlanDistributedStmt(DistributedPlanningContext *planContext,
 										 int rteIdCounter);
 static RTEListProperties * GetRTEListProperties(List *rangeTableList);
+static List * TranslatedVars(PlannerInfo *root, int relationIndex);
 
 
 /* Distributed planner hook */
@@ -1814,6 +1817,8 @@ multi_relation_restriction_hook(PlannerInfo *root, RelOptInfo *relOptInfo,
 
 	/* see comments on GetVarFromAssignedParam() */
 	relationRestriction->outerPlanParamsList = OuterPlanParamsList(root);
+	relationRestriction->translatedVars = TranslatedVars(root,
+														 relationRestriction->index);
 
 	RelationRestrictionContext *relationRestrictionContext =
 		plannerRestrictionContext->relationRestrictionContext;
@@ -1834,6 +1839,61 @@ multi_relation_restriction_hook(PlannerInfo *root, RelOptInfo *relOptInfo,
 		lappend(relationRestrictionContext->relationRestrictionList, relationRestriction);
 
 	MemoryContextSwitchTo(oldMemoryContext);
+}
+
+
+/*
+ * TranslatedVars deep copies the translated vars for the given relation index
+ * if there is any append rel list.
+ */
+static List *
+TranslatedVars(PlannerInfo *root, int relationIndex)
+{
+	List *translatedVars = NIL;
+
+	if (root->append_rel_list != NIL)
+	{
+		AppendRelInfo *targetAppendRelInfo =
+			FindTargetAppendRelInfo(root, relationIndex);
+		if (targetAppendRelInfo != NULL)
+		{
+			/* postgres deletes translated_vars after pg13, hence we deep copy them here */
+			Node *targetNode = NULL;
+			foreach_ptr(targetNode, targetAppendRelInfo->translated_vars)
+			{
+				translatedVars =
+					lappend(translatedVars, copyObject(targetNode));
+			}
+		}
+	}
+	return translatedVars;
+}
+
+
+/*
+ * FindTargetAppendRelInfo finds the target append rel info for the given
+ * relation rte index.
+ */
+static AppendRelInfo *
+FindTargetAppendRelInfo(PlannerInfo *root, int relationRteIndex)
+{
+	AppendRelInfo *appendRelInfo = NULL;
+
+	/* iterate on the queries that are part of UNION ALL subselects */
+	foreach_ptr(appendRelInfo, root->append_rel_list)
+	{
+		/*
+		 * We're only interested in the child rel that is equal to the
+		 * relation we're investigating. Here we don't need to find the offset
+		 * because postgres adds an offset to child_relid and parent_relid after
+		 * calling multi_relation_restriction_hook.
+		 */
+		if (appendRelInfo->child_relid == relationRteIndex)
+		{
+			return appendRelInfo;
+		}
+	}
+	return NULL;
 }
 
 
