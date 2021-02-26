@@ -83,7 +83,8 @@ typedef struct AttributeEquivalenceClassMember
 
 
 static bool ContextContainsLocalRelation(RelationRestrictionContext *restrictionContext);
-static Var * FindUnionAllVar(PlannerInfo *root, List *appendRelList, Oid relationOid,
+static int RangeTableOffsetCompat(PlannerInfo *root, AppendRelInfo *appendRelInfo);
+static Var * FindUnionAllVar(PlannerInfo *root, List *translatedVars, Oid relationOid,
 							 Index relationRteIndex, Index *partitionKeyIndex);
 static bool ContainsMultipleDistributedRelations(PlannerRestrictionContext *
 												 plannerRestrictionContext);
@@ -156,8 +157,11 @@ static JoinRestrictionContext * FilterJoinRestrictionContext(
 static bool RangeTableArrayContainsAnyRTEIdentities(RangeTblEntry **rangeTableEntries, int
 													rangeTableArrayLength, Relids
 													queryRteIdentities);
-static int RangeTableOffsetCompat(PlannerInfo *root, AppendRelInfo *appendRelInfo);
 static Relids QueryRteIdentities(Query *queryTree);
+
+#if PG_VERSION_NUM >= PG_VERSION_13
+static int ParentCountPriorToAppendRel(List *appendRelList, AppendRelInfo *appendRelInfo);
+#endif
 
 /*
  * AllDistributionKeysInQueryAreEqual returns true if either
@@ -279,7 +283,8 @@ SafeToPushdownUnionSubquery(PlannerRestrictionContext *plannerRestrictionContext
 		 */
 		if (appendRelList != NULL)
 		{
-			varToBeAdded = FindUnionAllVar(relationPlannerRoot, appendRelList,
+			varToBeAdded = FindUnionAllVar(relationPlannerRoot,
+										   relationRestriction->translatedVars,
 										   relationRestriction->relationId,
 										   relationRestriction->index,
 										   &partitionKeyIndex);
@@ -374,62 +379,64 @@ SafeToPushdownUnionSubquery(PlannerRestrictionContext *plannerRestrictionContext
 
 
 /*
+ * RangeTableOffsetCompat returns the range table offset(in glob->finalrtable) for the appendRelInfo.
+ * For PG < 13 this is a no op.
+ */
+static int
+RangeTableOffsetCompat(PlannerInfo *root, AppendRelInfo *appendRelInfo)
+{
+	#if PG_VERSION_NUM >= PG_VERSION_13
+	int parentCount = ParentCountPriorToAppendRel(root->append_rel_list, appendRelInfo);
+	int skipParentCount = parentCount - 1;
+
+	int i = 1;
+	for (; i < root->simple_rel_array_size; i++)
+	{
+		RangeTblEntry *rte = root->simple_rte_array[i];
+		if (rte->inh)
+		{
+			/*
+			 * We skip the previous parents because we want to find the offset
+			 * for the given append rel info.
+			 */
+			if (skipParentCount > 0)
+			{
+				skipParentCount--;
+				continue;
+			}
+			break;
+		}
+	}
+	int indexInRtable = (i - 1);
+
+	/*
+	 * Postgres adds the global rte array size to parent_relid as an offset.
+	 * Here we do the reverse operation: Commit on postgres side:
+	 * 6ef77cf46e81f45716ec981cb08781d426181378
+	 */
+	int parentRelIndex = appendRelInfo->parent_relid - 1;
+	return parentRelIndex - indexInRtable;
+	#else
+	return 0;
+	#endif
+}
+
+
+/*
  * FindUnionAllVar finds the variable used in union all for the side that has
  * relationRteIndex as its index and the same varattno as the partition key of
  * the given relation with relationOid.
  */
 static Var *
-FindUnionAllVar(PlannerInfo *root, List *appendRelList, Oid relationOid,
+FindUnionAllVar(PlannerInfo *root, List *translatedVars, Oid relationOid,
 				Index relationRteIndex, Index *partitionKeyIndex)
 {
-	ListCell *appendRelCell = NULL;
-	AppendRelInfo *targetAppendRelInfo = NULL;
-	AttrNumber childAttrNumber = 0;
-
-	*partitionKeyIndex = 0;
-
-	/* iterate on the queries that are part of UNION ALL subselects */
-	foreach(appendRelCell, appendRelList)
-	{
-		AppendRelInfo *appendRelInfo = (AppendRelInfo *) lfirst(appendRelCell);
-
-
-		int rtoffset = RangeTableOffsetCompat(root, appendRelInfo);
-
-		/*
-		 * We're only interested in the child rel that is equal to the
-		 * relation we're investigating.
-		 */
-		if (appendRelInfo->child_relid - rtoffset == relationRteIndex)
-		{
-			targetAppendRelInfo = appendRelInfo;
-			break;
-		}
-	}
-
-	if (!targetAppendRelInfo)
-	{
-		return NULL;
-	}
-
 	Var *relationPartitionKey = DistPartitionKeyOrError(relationOid);
 
-	#if PG_VERSION_NUM >= PG_VERSION_13
-	for (; childAttrNumber < targetAppendRelInfo->num_child_cols; childAttrNumber++)
-	{
-		int curAttNo = targetAppendRelInfo->parent_colnos[childAttrNumber];
-		if (curAttNo == relationPartitionKey->varattno)
-		{
-			*partitionKeyIndex = (childAttrNumber + 1);
-			int rtoffset = RangeTableOffsetCompat(root, targetAppendRelInfo);
-			relationPartitionKey->varno = targetAppendRelInfo->child_relid - rtoffset;
-			return relationPartitionKey;
-		}
-	}
-	#else
+	AttrNumber childAttrNumber = 0;
+	*partitionKeyIndex = 0;
 	ListCell *translatedVarCell;
-	List *translaterVars = targetAppendRelInfo->translated_vars;
-	foreach(translatedVarCell, translaterVars)
+	foreach(translatedVarCell, translatedVars)
 	{
 		Node *targetNode = (Node *) lfirst(translatedVarCell);
 
@@ -449,7 +456,6 @@ FindUnionAllVar(PlannerInfo *root, List *appendRelList, Oid relationOid,
 			return targetVar;
 		}
 	}
-	#endif
 	return NULL;
 }
 
@@ -1387,30 +1393,31 @@ AddUnionAllSetOperationsToAttributeEquivalenceClass(AttributeEquivalenceClass **
 }
 
 
+#if PG_VERSION_NUM >= PG_VERSION_13
+
 /*
- * RangeTableOffsetCompat returns the range table offset(in glob->finalrtable) for the appendRelInfo.
- * For PG < 13 this is a no op.
+ * ParentCountPriorToAppendRel returns the number of parents that come before
+ * the given append rel info.
  */
 static int
-RangeTableOffsetCompat(PlannerInfo *root, AppendRelInfo *appendRelInfo)
+ParentCountPriorToAppendRel(List *appendRelList, AppendRelInfo *targetAppendRelInfo)
 {
-	#if PG_VERSION_NUM >= PG_VERSION_13
-	int i = 1;
-	for (; i < root->simple_rel_array_size; i++)
+	int targetParentIndex = targetAppendRelInfo->parent_relid;
+	Bitmapset *parent_ids = NULL;
+	AppendRelInfo *appendRelInfo = NULL;
+	foreach_ptr(appendRelInfo, appendRelList)
 	{
-		RangeTblEntry *rte = root->simple_rte_array[i];
-		if (rte->inh)
+		int curParentIndex = appendRelInfo->parent_relid;
+		if (curParentIndex <= targetParentIndex)
 		{
-			break;
+			parent_ids = bms_add_member(parent_ids, curParentIndex);
 		}
 	}
-	int indexInRtable = (i - 1);
-	return appendRelInfo->parent_relid - 1 - (indexInRtable);
-	#else
-	return 0;
-	#endif
+	return bms_num_members(parent_ids);
 }
 
+
+#endif
 
 /*
  * AddUnionSetOperationsToAttributeEquivalenceClass recursively iterates on all the

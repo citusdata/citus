@@ -67,6 +67,9 @@ typedef struct RelationRestriction
 
 	/* list of RootPlanParams for all outer nodes */
 	List *outerPlanParamsList;
+
+	/* list of translated vars, this is copied from postgres since it gets deleted on postgres*/
+	List *translatedVars;
 } RelationRestriction;
 
 typedef struct JoinRestrictionContext
