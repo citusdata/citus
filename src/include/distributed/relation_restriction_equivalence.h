@@ -44,7 +44,6 @@ extern RelationRestriction * RelationRestrictionForRelation(
 	RangeTblEntry *rangeTableEntry,
 	PlannerRestrictionContext *
 	plannerRestrictionContext);
-extern int RangeTableOffsetCompat(PlannerInfo *root, AppendRelInfo *appendRelInfo);
 extern JoinRestrictionContext * RemoveDuplicateJoinRestrictions(JoinRestrictionContext *
 																joinRestrictionContext);
 

@@ -830,22 +830,6 @@ DEBUG:  Router planner cannot handle multi-shard select queries
 ERROR:  cannot compute aggregate (distinct)
 DETAIL:  table partitioning is unsuitable for aggregate (distinct)
 /* these are not safe to push down as the partition key index is different */
-SELECT x,y FROM test UNION ALL SELECT y,x FROM test ORDER BY 1,2;
-DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  generating subplan XXX_1 for subquery SELECT x, y FROM recursive_union.test
-DEBUG:  Router planner cannot handle multi-shard select queries
-DEBUG:  generating subplan XXX_2 for subquery SELECT y, x FROM recursive_union.test
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer) UNION ALL SELECT intermediate_result.y, intermediate_result.x FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(y integer, x integer) ORDER BY 1, 2
-DEBUG:  Creating router plan
- x | y
----------------------------------------------------------------------
- 1 | 1
- 1 | 1
- 2 | 2
- 2 | 2
-(4 rows)
-
 SELECT COUNT(*) FROM ((SELECT x,y FROM test) UNION ALL (SELECT y,x FROM test)) u;
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  Router planner cannot handle multi-shard select queries

@@ -1858,10 +1858,9 @@ TranslatedVars(PlannerInfo *root, int relationIndex)
 		if (targetAppendRelInfo != NULL)
 		{
 			/* postgres deletes translated_vars after pg13, hence we deep copy them here */
-			ListCell *translatedVarCell = NULL;
-			foreach(translatedVarCell, targetAppendRelInfo->translated_vars)
+			Node *targetNode = NULL;
+			foreach_ptr(targetNode, targetAppendRelInfo->translated_vars)
 			{
-				Node *targetNode = (Node *) lfirst(translatedVarCell);
 				translatedVars =
 					lappend(translatedVars, copyObject(targetNode));
 			}

@@ -83,6 +83,7 @@ typedef struct AttributeEquivalenceClassMember
 
 
 static bool ContextContainsLocalRelation(RelationRestrictionContext *restrictionContext);
+static int RangeTableOffsetCompat(PlannerInfo *root, AppendRelInfo *appendRelInfo);
 static Var * FindUnionAllVar(PlannerInfo *root, List *translatedVars, Oid relationOid,
 							 Index relationRteIndex, Index *partitionKeyIndex);
 static bool ContainsMultipleDistributedRelations(PlannerRestrictionContext *
@@ -157,6 +158,10 @@ static bool RangeTableArrayContainsAnyRTEIdentities(RangeTblEntry **rangeTableEn
 													rangeTableArrayLength, Relids
 													queryRteIdentities);
 static Relids QueryRteIdentities(Query *queryTree);
+
+#if PG_VERSION_NUM >= PG_VERSION_13
+static int ParentCountPriorToAppendRel(List *appendRelList, AppendRelInfo *appendRelInfo);
+#endif
 
 /*
  * AllDistributionKeysInQueryAreEqual returns true if either
@@ -377,21 +382,40 @@ SafeToPushdownUnionSubquery(PlannerRestrictionContext *plannerRestrictionContext
  * RangeTableOffsetCompat returns the range table offset(in glob->finalrtable) for the appendRelInfo.
  * For PG < 13 this is a no op.
  */
-int
+static int
 RangeTableOffsetCompat(PlannerInfo *root, AppendRelInfo *appendRelInfo)
 {
 	#if PG_VERSION_NUM >= PG_VERSION_13
+	int parentCount = ParentCountPriorToAppendRel(root->append_rel_list, appendRelInfo);
+	int skipParentCount = parentCount - 1;
+
 	int i = 1;
 	for (; i < root->simple_rel_array_size; i++)
 	{
 		RangeTblEntry *rte = root->simple_rte_array[i];
 		if (rte->inh)
 		{
+			/*
+			 * We skip the previous parents because we want to find the offset
+			 * for the given append rel info.
+			 */
+			if (skipParentCount > 0)
+			{
+				skipParentCount--;
+				continue;
+			}
 			break;
 		}
 	}
 	int indexInRtable = (i - 1);
-	return appendRelInfo->parent_relid - 1 - (indexInRtable);
+
+	/*
+	 * Postgres adds the global rte array size to parent_relid as an offset.
+	 * Here we do the reverse operation: Commit on postgres side:
+	 * 6ef77cf46e81f45716ec981cb08781d426181378
+	 */
+	int parentRelIndex = appendRelInfo->parent_relid - 1;
+	return parentRelIndex - indexInRtable;
 	#else
 	return 0;
 	#endif
@@ -1368,6 +1392,32 @@ AddUnionAllSetOperationsToAttributeEquivalenceClass(AttributeEquivalenceClass **
 	}
 }
 
+
+#if PG_VERSION_NUM >= PG_VERSION_13
+
+/*
+ * ParentCountPriorToAppendRel returns the number of parents that come before
+ * the given append rel info.
+ */
+static int
+ParentCountPriorToAppendRel(List *appendRelList, AppendRelInfo *targetAppendRelInfo)
+{
+	int targetParentIndex = targetAppendRelInfo->parent_relid;
+	Bitmapset *parent_ids = NULL;
+	AppendRelInfo *appendRelInfo = NULL;
+	foreach_ptr(appendRelInfo, appendRelList)
+	{
+		int curParentIndex = appendRelInfo->parent_relid;
+		if (curParentIndex <= targetParentIndex)
+		{
+			parent_ids = bms_add_member(parent_ids, curParentIndex);
+		}
+	}
+	return bms_num_members(parent_ids);
+}
+
+
+#endif
 
 /*
  * AddUnionSetOperationsToAttributeEquivalenceClass recursively iterates on all the

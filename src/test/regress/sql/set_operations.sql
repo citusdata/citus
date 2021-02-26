@@ -150,7 +150,6 @@ select avg(DISTINCT t.x) FROM ((SELECT avg(DISTINCT y) FROM test GROUP BY x) UNI
 select count(DISTINCT t.x) FROM ((SELECT avg(DISTINCT y) FROM test GROUP BY y) UNION (SELECT avg(DISTINCT y) FROM test GROUP BY y)) as t(x) ORDER BY 1;
 
 /* these are not safe to push down as the partition key index is different */
-SELECT x,y FROM test UNION ALL SELECT y,x FROM test ORDER BY 1,2;
 SELECT COUNT(*) FROM ((SELECT x,y FROM test) UNION ALL (SELECT y,x FROM test)) u;
 
 /* this is safe to push down since the partition key index is the same */
