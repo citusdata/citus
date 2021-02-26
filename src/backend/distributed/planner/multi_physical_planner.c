@@ -824,7 +824,21 @@ static List *
 QueryTargetList(MultiNode *multiNode)
 {
 	List *projectNodeList = FindNodesOfType(multiNode, T_MultiProject);
-	Assert(list_length(projectNodeList) > 0);
+	if (list_length(projectNodeList) == 0)
+	{
+		/*
+		 * The physical planner assumes that all worker queries would have
+		 * target list entries based on the fact that at least the column
+		 * on the JOINs have to be on the target list. However, there is
+		 * an exception to that if there is a cartesian product join and
+		 * there is no additional target list entries belong to one side
+		 * of the JOIN. Once we support cartesian product join, we should
+		 * remove this error.
+		 */
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("cannot perform distributed planning on this query"),
+						errdetail("Cartesian products are currently unsupported")));
+	}
 
 	MultiProject *topProjectNode = (MultiProject *) linitial(projectNodeList);
 	List *columnList = topProjectNode->columnList;
