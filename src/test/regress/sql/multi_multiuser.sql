@@ -155,6 +155,34 @@ SELECT lock_relation_if_exists('test', 'ACCESS SHARE');
 SELECT lock_relation_if_exists('test', 'EXCLUSIVE');
 ABORT;
 
+-- test creating columnar tables and accessing to columnar metadata tables via unprivileged user
+
+-- all below 5 commands should throw no permission errors
+-- read columnar metadata table
+SELECT * FROM columnar.stripe;
+-- alter a columnar setting
+SET columnar.chunk_group_row_limit = 1050;
+
+DO $proc$
+BEGIN
+IF substring(current_Setting('server_version'), '\d+')::int >= 12 THEN
+  EXECUTE $$
+    -- create columnar table
+    CREATE TABLE columnar_table (a int) USING columnar;
+    -- alter a columnar table that is created by that unprivileged user
+    SELECT alter_columnar_table_set('columnar_table', chunk_group_row_limit => 100);
+    -- and drop it
+    DROP TABLE columnar_table;
+  $$;
+END IF;
+END$proc$;
+
+-- cannot modify columnar metadata table as unprivileged user
+INSERT INTO columnar.stripe VALUES(99);
+-- Cannot drop columnar metadata table as unprivileged user.
+-- Privileged user also cannot drop but with a different error message.
+-- (since citus extension has a dependency to it)
+DROP TABLE columnar.chunk;
 
 -- check no permission
 SET ROLE no_access;
