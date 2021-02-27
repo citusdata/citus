@@ -52,7 +52,6 @@
 #include "distributed/resource_lock.h"
 #include "distributed/remote_commands.h"
 #include "distributed/tuplestore.h"
-#include "distributed/worker_manager.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/version_compat.h"
 #include "nodes/makefuncs.h"
@@ -78,12 +77,10 @@ static bool DistributedTableSize(Oid relationId, char *sizeQuery, bool failOnErr
 static bool DistributedTableSizeOnWorker(WorkerNode *workerNode, Oid relationId,
 										 char *sizeQuery, bool failOnError,
 										 uint64 *tableSize);
-static List * ShardIntervalsOnWorkerGroup(WorkerNode *workerNode, Oid relationId);
 static char * GenerateShardNameAndSizeQueryForShardList(List *shardIntervalList);
 static char * GenerateAllShardNameAndSizeQueryForNode(WorkerNode *workerNode);
 static List * GenerateShardSizesQueryList(List *workerNodeList);
 static void ErrorIfNotSuitableToGetSize(Oid relationId);
-static List * OpenConnectionToNodes(List *workerNodeList);
 static void ReceiveShardNameAndSizeResults(List *connectionList,
 										   Tuplestorestate *tupleStore,
 										   TupleDesc tupleDescriptor);
@@ -229,7 +226,7 @@ citus_relation_size(PG_FUNCTION_ARGS)
  * OpenConnectionToNodes opens a single connection per node
  * for the given workerNodeList.
  */
-static List *
+List *
 OpenConnectionToNodes(List *workerNodeList)
 {
 	List *connectionList = NIL;
@@ -498,7 +495,7 @@ GroupShardPlacementsForTableOnGroup(Oid relationId, int32 groupId)
  * ShardIntervalsOnWorkerGroup accepts a WorkerNode and returns a list of the shard
  * intervals of the given table which are placed on the group the node is a part of.
  */
-static List *
+List *
 ShardIntervalsOnWorkerGroup(WorkerNode *workerNode, Oid relationId)
 {
 	CitusTableCacheEntry *distTableCacheEntry = GetCitusTableCacheEntry(relationId);

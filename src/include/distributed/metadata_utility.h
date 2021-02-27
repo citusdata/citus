@@ -23,6 +23,7 @@
 #include "catalog/objectaddress.h"
 #include "distributed/citus_nodes.h"
 #include "distributed/relay_utility.h"
+#include "distributed/worker_manager.h"
 #include "utils/acl.h"
 #include "utils/relcache.h"
 
@@ -36,6 +37,7 @@
 #define CSTORE_TABLE_SIZE_FUNCTION "cstore_table_size(%s)"
 
 #define SHARD_SIZES_COLUMN_COUNT 2
+#define SHARD_SIZES_MIN_MAX_COLUMN_COUNT 4
 
 /* In-memory representation of a typed tuple in pg_dist_shard. */
 typedef struct ShardInterval
@@ -264,5 +266,7 @@ extern ShardInterval * DeformedDistShardTupleToShardInterval(Datum *datumArray,
 															 int32 intervalTypeMod);
 extern void GetIntervalTypeInfo(char partitionMethod, Var *partitionColumn,
 								Oid *intervalTypeId, int32 *intervalTypeMod);
+extern List * OpenConnectionToNodes(List *workerNodeList);
+extern List * ShardIntervalsOnWorkerGroup(WorkerNode *workerNode, Oid relationId);
 
 #endif   /* METADATA_UTILITY_H */
