@@ -69,7 +69,7 @@ static MemoryContext WriteStateContext = NULL;
 typedef struct SubXidWriteState
 {
 	SubTransactionId subXid;
-	TableWriteState *writeState;
+	ColumnarWriteState *writeState;
 
 	struct SubXidWriteState *next;
 } SubXidWriteState;
@@ -115,7 +115,7 @@ CleanupWriteStateMap(void *arg)
 }
 
 
-TableWriteState *
+ColumnarWriteState *
 columnar_init_write_state(Relation relation, TupleDesc tupdesc,
 						  SubTransactionId currentSubXid)
 {

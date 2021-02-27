@@ -212,14 +212,14 @@ typedef struct StripeBuffers
 } StripeBuffers;
 
 
-/* TableReadState represents state of a columnar scan. */
-struct TableReadState;
-typedef struct TableReadState TableReadState;
+/* ColumnarReadState represents state of a columnar scan. */
+struct ColumnarReadState;
+typedef struct ColumnarReadState ColumnarReadState;
 
 
-/* TableWriteState represents state of a columnar write operation. */
-struct TableWriteState;
-typedef struct TableWriteState TableWriteState;
+/* ColumnarWriteState represents state of a columnar write operation. */
+struct ColumnarWriteState;
+typedef struct ColumnarWriteState ColumnarWriteState;
 
 extern int columnar_compression;
 extern int columnar_stripe_row_limit;
@@ -231,26 +231,26 @@ extern void columnar_init_gucs(void);
 extern CompressionType ParseCompressionType(const char *compressionTypeString);
 
 /* Function declarations for writing to a columnar table */
-extern TableWriteState * ColumnarBeginWrite(RelFileNode relfilenode,
-											ColumnarOptions options,
-											TupleDesc tupleDescriptor);
-extern void ColumnarWriteRow(TableWriteState *state, Datum *columnValues,
+extern ColumnarWriteState * ColumnarBeginWrite(RelFileNode relfilenode,
+											   ColumnarOptions options,
+											   TupleDesc tupleDescriptor);
+extern void ColumnarWriteRow(ColumnarWriteState *state, Datum *columnValues,
 							 bool *columnNulls);
-extern void ColumnarFlushPendingWrites(TableWriteState *state);
-extern void ColumnarEndWrite(TableWriteState *state);
-extern bool ContainsPendingWrites(TableWriteState *state);
-extern MemoryContext ColumnarWritePerTupleContext(TableWriteState *state);
+extern void ColumnarFlushPendingWrites(ColumnarWriteState *state);
+extern void ColumnarEndWrite(ColumnarWriteState *state);
+extern bool ContainsPendingWrites(ColumnarWriteState *state);
+extern MemoryContext ColumnarWritePerTupleContext(ColumnarWriteState *state);
 
 /* Function declarations for reading from columnar table */
-extern TableReadState * ColumnarBeginRead(Relation relation,
-										  TupleDesc tupleDescriptor,
-										  List *projectedColumnList,
-										  List *qualConditions);
-extern bool ColumnarReadNextRow(TableReadState *state, Datum *columnValues,
+extern ColumnarReadState * ColumnarBeginRead(Relation relation,
+											 TupleDesc tupleDescriptor,
+											 List *projectedColumnList,
+											 List *qualConditions);
+extern bool ColumnarReadNextRow(ColumnarReadState *state, Datum *columnValues,
 								bool *columnNulls);
-extern void ColumnarRescan(TableReadState *readState);
-extern void ColumnarEndRead(TableReadState *state);
-extern int64 ColumnarReadChunkGroupsFiltered(TableReadState *state);
+extern void ColumnarRescan(ColumnarReadState *readState);
+extern void ColumnarEndRead(ColumnarReadState *state);
+extern int64 ColumnarReadChunkGroupsFiltered(ColumnarReadState *state);
 
 /* Function declarations for common functions */
 extern FmgrInfo * GetFunctionInfoOrNull(Oid typeId, Oid accessMethodId,
@@ -296,9 +296,9 @@ extern Datum columnar_relation_storageid(PG_FUNCTION_ARGS);
 
 
 /* write_state_management.c */
-extern TableWriteState * columnar_init_write_state(Relation relation, TupleDesc
-												   tupdesc,
-												   SubTransactionId currentSubXid);
+extern ColumnarWriteState * columnar_init_write_state(Relation relation, TupleDesc
+													  tupdesc,
+													  SubTransactionId currentSubXid);
 extern void FlushWriteStateForRelfilenode(Oid relfilenode, SubTransactionId
 										  currentSubXid);
 extern void FlushWriteStateForAllRels(SubTransactionId currentSubXid, SubTransactionId
