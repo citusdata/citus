@@ -289,9 +289,9 @@ COMMIT;
 -- to test citus local tables
 select undistribute_table('upsert_test');
 NOTICE:  creating a new table for single_node.upsert_test
-NOTICE:  Moving the data of single_node.upsert_test
-NOTICE:  Dropping the old single_node.upsert_test
-NOTICE:  Renaming the new table to single_node.upsert_test
+NOTICE:  moving the data of single_node.upsert_test
+NOTICE:  dropping the old single_node.upsert_test
+NOTICE:  renaming the new table to single_node.upsert_test
  undistribute_table
 ---------------------------------------------------------------------
 
@@ -1195,9 +1195,9 @@ RESET citus.task_executor_type;
 ALTER TABLE test DROP CONSTRAINT foreign_key;
 SELECT undistribute_table('test_2');
 NOTICE:  creating a new table for single_node.test_2
-NOTICE:  Moving the data of single_node.test_2
-NOTICE:  Dropping the old single_node.test_2
-NOTICE:  Renaming the new table to single_node.test_2
+NOTICE:  moving the data of single_node.test_2
+NOTICE:  dropping the old single_node.test_2
+NOTICE:  renaming the new table to single_node.test_2
  undistribute_table
 ---------------------------------------------------------------------
 
@@ -1246,28 +1246,28 @@ ALTER TABLE partitioned_table_1 ADD CONSTRAINT fkey_5 FOREIGN KEY (col_1) REFERE
 SELECT undistribute_table('partitioned_table_1', cascade_via_foreign_keys=>true);
 NOTICE:  converting the partitions of single_node.partitioned_table_1
 NOTICE:  creating a new table for single_node.partitioned_table_1_100_200
-NOTICE:  Moving the data of single_node.partitioned_table_1_100_200
-NOTICE:  Dropping the old single_node.partitioned_table_1_100_200
-NOTICE:  Renaming the new table to single_node.partitioned_table_1_100_200
+NOTICE:  moving the data of single_node.partitioned_table_1_100_200
+NOTICE:  dropping the old single_node.partitioned_table_1_100_200
+NOTICE:  renaming the new table to single_node.partitioned_table_1_100_200
 NOTICE:  creating a new table for single_node.partitioned_table_1_200_300
-NOTICE:  Moving the data of single_node.partitioned_table_1_200_300
-NOTICE:  Dropping the old single_node.partitioned_table_1_200_300
-NOTICE:  Renaming the new table to single_node.partitioned_table_1_200_300
+NOTICE:  moving the data of single_node.partitioned_table_1_200_300
+NOTICE:  dropping the old single_node.partitioned_table_1_200_300
+NOTICE:  renaming the new table to single_node.partitioned_table_1_200_300
 NOTICE:  creating a new table for single_node.partitioned_table_1
-NOTICE:  Dropping the old single_node.partitioned_table_1
-NOTICE:  Renaming the new table to single_node.partitioned_table_1
+NOTICE:  dropping the old single_node.partitioned_table_1
+NOTICE:  renaming the new table to single_node.partitioned_table_1
 NOTICE:  creating a new table for single_node.reference_table_1
-NOTICE:  Moving the data of single_node.reference_table_1
-NOTICE:  Dropping the old single_node.reference_table_1
-NOTICE:  Renaming the new table to single_node.reference_table_1
+NOTICE:  moving the data of single_node.reference_table_1
+NOTICE:  dropping the old single_node.reference_table_1
+NOTICE:  renaming the new table to single_node.reference_table_1
 NOTICE:  creating a new table for single_node.distributed_table_1
-NOTICE:  Moving the data of single_node.distributed_table_1
-NOTICE:  Dropping the old single_node.distributed_table_1
-NOTICE:  Renaming the new table to single_node.distributed_table_1
+NOTICE:  moving the data of single_node.distributed_table_1
+NOTICE:  dropping the old single_node.distributed_table_1
+NOTICE:  renaming the new table to single_node.distributed_table_1
 NOTICE:  creating a new table for single_node.citus_local_table_1
-NOTICE:  Moving the data of single_node.citus_local_table_1
-NOTICE:  Dropping the old single_node.citus_local_table_1
-NOTICE:  Renaming the new table to single_node.citus_local_table_1
+NOTICE:  moving the data of single_node.citus_local_table_1
+NOTICE:  dropping the old single_node.citus_local_table_1
+NOTICE:  renaming the new table to single_node.citus_local_table_1
  undistribute_table
 ---------------------------------------------------------------------
 

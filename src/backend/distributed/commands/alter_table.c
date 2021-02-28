@@ -1169,7 +1169,7 @@ ReplaceTable(Oid sourceId, Oid targetId, List *justBeforeDropCommands,
 	{
 		if (!suppressNoticeMessages)
 		{
-			ereport(NOTICE, (errmsg("Moving the data of %s",
+			ereport(NOTICE, (errmsg("moving the data of %s",
 									quote_qualified_identifier(schemaName, sourceName))));
 		}
 
@@ -1242,7 +1242,7 @@ ReplaceTable(Oid sourceId, Oid targetId, List *justBeforeDropCommands,
 
 	if (!suppressNoticeMessages)
 	{
-		ereport(NOTICE, (errmsg("Dropping the old %s",
+		ereport(NOTICE, (errmsg("dropping the old %s",
 								quote_qualified_identifier(schemaName, sourceName))));
 	}
 
@@ -1253,7 +1253,7 @@ ReplaceTable(Oid sourceId, Oid targetId, List *justBeforeDropCommands,
 
 	if (!suppressNoticeMessages)
 	{
-		ereport(NOTICE, (errmsg("Renaming the new table to %s",
+		ereport(NOTICE, (errmsg("renaming the new table to %s",
 								quote_qualified_identifier(schemaName, sourceName))));
 	}
 

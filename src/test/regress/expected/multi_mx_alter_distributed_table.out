@@ -82,9 +82,9 @@ SELECT conrelid::regclass::text AS "Referencing Table", pg_get_constraintdef(oid
 
 SELECT alter_distributed_table('adt_table', distribution_column:='b', colocate_with:='none');
 NOTICE:  creating a new table for mx_alter_distributed_table.adt_table
-NOTICE:  Moving the data of mx_alter_distributed_table.adt_table
-NOTICE:  Dropping the old mx_alter_distributed_table.adt_table
-NOTICE:  Renaming the new table to mx_alter_distributed_table.adt_table
+NOTICE:  moving the data of mx_alter_distributed_table.adt_table
+NOTICE:  dropping the old mx_alter_distributed_table.adt_table
+NOTICE:  renaming the new table to mx_alter_distributed_table.adt_table
  alter_distributed_table
 ---------------------------------------------------------------------
 
@@ -140,9 +140,9 @@ BEGIN;
 INSERT INTO adt_table SELECT x, x+1 FROM generate_series(1, 1000) x;
 SELECT alter_distributed_table('adt_table', distribution_column:='a');
 NOTICE:  creating a new table for mx_alter_distributed_table.adt_table
-NOTICE:  Moving the data of mx_alter_distributed_table.adt_table
-NOTICE:  Dropping the old mx_alter_distributed_table.adt_table
-NOTICE:  Renaming the new table to mx_alter_distributed_table.adt_table
+NOTICE:  moving the data of mx_alter_distributed_table.adt_table
+NOTICE:  dropping the old mx_alter_distributed_table.adt_table
+NOTICE:  renaming the new table to mx_alter_distributed_table.adt_table
  alter_distributed_table
 ---------------------------------------------------------------------
 
@@ -207,9 +207,9 @@ RESET client_min_messages;
 -- shardCount is not null && list_length(colocatedTableList) = 1
 SELECT alter_distributed_table('test_proc_colocation_0', shard_count:= 8);
 NOTICE:  creating a new table for mx_alter_distributed_table.test_proc_colocation_0
-NOTICE:  Moving the data of mx_alter_distributed_table.test_proc_colocation_0
-NOTICE:  Dropping the old mx_alter_distributed_table.test_proc_colocation_0
-NOTICE:  Renaming the new table to mx_alter_distributed_table.test_proc_colocation_0
+NOTICE:  moving the data of mx_alter_distributed_table.test_proc_colocation_0
+NOTICE:  dropping the old mx_alter_distributed_table.test_proc_colocation_0
+NOTICE:  renaming the new table to mx_alter_distributed_table.test_proc_colocation_0
  alter_distributed_table
 ---------------------------------------------------------------------
 
@@ -236,9 +236,9 @@ SELECT proname, colocationid FROM pg_proc JOIN citus.pg_dist_object ON pg_proc.o
 -- colocatewith is not null && list_length(colocatedTableList) = 1
 SELECT alter_distributed_table('test_proc_colocation_0', shard_count:= 4);
 NOTICE:  creating a new table for mx_alter_distributed_table.test_proc_colocation_0
-NOTICE:  Moving the data of mx_alter_distributed_table.test_proc_colocation_0
-NOTICE:  Dropping the old mx_alter_distributed_table.test_proc_colocation_0
-NOTICE:  Renaming the new table to mx_alter_distributed_table.test_proc_colocation_0
+NOTICE:  moving the data of mx_alter_distributed_table.test_proc_colocation_0
+NOTICE:  dropping the old mx_alter_distributed_table.test_proc_colocation_0
+NOTICE:  renaming the new table to mx_alter_distributed_table.test_proc_colocation_0
  alter_distributed_table
 ---------------------------------------------------------------------
 
@@ -253,9 +253,9 @@ SELECT create_distributed_table('test_proc_colocation_1', 'a', colocate_with := 
 
 SELECT alter_distributed_table('test_proc_colocation_0', colocate_with := 'test_proc_colocation_1');
 NOTICE:  creating a new table for mx_alter_distributed_table.test_proc_colocation_0
-NOTICE:  Moving the data of mx_alter_distributed_table.test_proc_colocation_0
-NOTICE:  Dropping the old mx_alter_distributed_table.test_proc_colocation_0
-NOTICE:  Renaming the new table to mx_alter_distributed_table.test_proc_colocation_0
+NOTICE:  moving the data of mx_alter_distributed_table.test_proc_colocation_0
+NOTICE:  dropping the old mx_alter_distributed_table.test_proc_colocation_0
+NOTICE:  renaming the new table to mx_alter_distributed_table.test_proc_colocation_0
  alter_distributed_table
 ---------------------------------------------------------------------
 
@@ -282,13 +282,13 @@ SELECT proname, colocationid FROM pg_proc JOIN citus.pg_dist_object ON pg_proc.o
 -- shardCount is not null && cascade_to_colocated is true
 SELECT alter_distributed_table('test_proc_colocation_0', shard_count:= 8, cascade_to_colocated := true);
 NOTICE:  creating a new table for mx_alter_distributed_table.test_proc_colocation_0
-NOTICE:  Moving the data of mx_alter_distributed_table.test_proc_colocation_0
-NOTICE:  Dropping the old mx_alter_distributed_table.test_proc_colocation_0
-NOTICE:  Renaming the new table to mx_alter_distributed_table.test_proc_colocation_0
+NOTICE:  moving the data of mx_alter_distributed_table.test_proc_colocation_0
+NOTICE:  dropping the old mx_alter_distributed_table.test_proc_colocation_0
+NOTICE:  renaming the new table to mx_alter_distributed_table.test_proc_colocation_0
 NOTICE:  creating a new table for mx_alter_distributed_table.test_proc_colocation_1
-NOTICE:  Moving the data of mx_alter_distributed_table.test_proc_colocation_1
-NOTICE:  Dropping the old mx_alter_distributed_table.test_proc_colocation_1
-NOTICE:  Renaming the new table to mx_alter_distributed_table.test_proc_colocation_1
+NOTICE:  moving the data of mx_alter_distributed_table.test_proc_colocation_1
+NOTICE:  dropping the old mx_alter_distributed_table.test_proc_colocation_1
+NOTICE:  renaming the new table to mx_alter_distributed_table.test_proc_colocation_1
  alter_distributed_table
 ---------------------------------------------------------------------
 
@@ -315,13 +315,13 @@ SELECT proname, colocationid FROM pg_proc JOIN citus.pg_dist_object ON pg_proc.o
 -- colocatewith is not null && cascade_to_colocated is true
 SELECT alter_distributed_table('test_proc_colocation_0', shard_count:= 4, cascade_to_colocated := true);
 NOTICE:  creating a new table for mx_alter_distributed_table.test_proc_colocation_0
-NOTICE:  Moving the data of mx_alter_distributed_table.test_proc_colocation_0
-NOTICE:  Dropping the old mx_alter_distributed_table.test_proc_colocation_0
-NOTICE:  Renaming the new table to mx_alter_distributed_table.test_proc_colocation_0
+NOTICE:  moving the data of mx_alter_distributed_table.test_proc_colocation_0
+NOTICE:  dropping the old mx_alter_distributed_table.test_proc_colocation_0
+NOTICE:  renaming the new table to mx_alter_distributed_table.test_proc_colocation_0
 NOTICE:  creating a new table for mx_alter_distributed_table.test_proc_colocation_1
-NOTICE:  Moving the data of mx_alter_distributed_table.test_proc_colocation_1
-NOTICE:  Dropping the old mx_alter_distributed_table.test_proc_colocation_1
-NOTICE:  Renaming the new table to mx_alter_distributed_table.test_proc_colocation_1
+NOTICE:  moving the data of mx_alter_distributed_table.test_proc_colocation_1
+NOTICE:  dropping the old mx_alter_distributed_table.test_proc_colocation_1
+NOTICE:  renaming the new table to mx_alter_distributed_table.test_proc_colocation_1
  alter_distributed_table
 ---------------------------------------------------------------------
 
@@ -336,13 +336,13 @@ SELECT create_distributed_table('test_proc_colocation_2', 'a', colocate_with := 
 
 SELECT alter_distributed_table('test_proc_colocation_0', colocate_with := 'test_proc_colocation_2', cascade_to_colocated := true);
 NOTICE:  creating a new table for mx_alter_distributed_table.test_proc_colocation_0
-NOTICE:  Moving the data of mx_alter_distributed_table.test_proc_colocation_0
-NOTICE:  Dropping the old mx_alter_distributed_table.test_proc_colocation_0
-NOTICE:  Renaming the new table to mx_alter_distributed_table.test_proc_colocation_0
+NOTICE:  moving the data of mx_alter_distributed_table.test_proc_colocation_0
+NOTICE:  dropping the old mx_alter_distributed_table.test_proc_colocation_0
+NOTICE:  renaming the new table to mx_alter_distributed_table.test_proc_colocation_0
 NOTICE:  creating a new table for mx_alter_distributed_table.test_proc_colocation_1
-NOTICE:  Moving the data of mx_alter_distributed_table.test_proc_colocation_1
-NOTICE:  Dropping the old mx_alter_distributed_table.test_proc_colocation_1
-NOTICE:  Renaming the new table to mx_alter_distributed_table.test_proc_colocation_1
+NOTICE:  moving the data of mx_alter_distributed_table.test_proc_colocation_1
+NOTICE:  dropping the old mx_alter_distributed_table.test_proc_colocation_1
+NOTICE:  renaming the new table to mx_alter_distributed_table.test_proc_colocation_1
  alter_distributed_table
 ---------------------------------------------------------------------
 
@@ -409,17 +409,17 @@ DETAIL:  from localhost:xxxxx
 RESET client_min_messages;
 SELECT alter_distributed_table('test_proc_colocation_0', shard_count:= 8, cascade_to_colocated := true);
 NOTICE:  creating a new table for mx_alter_distributed_table.test_proc_colocation_0
-NOTICE:  Moving the data of mx_alter_distributed_table.test_proc_colocation_0
-NOTICE:  Dropping the old mx_alter_distributed_table.test_proc_colocation_0
-NOTICE:  Renaming the new table to mx_alter_distributed_table.test_proc_colocation_0
+NOTICE:  moving the data of mx_alter_distributed_table.test_proc_colocation_0
+NOTICE:  dropping the old mx_alter_distributed_table.test_proc_colocation_0
+NOTICE:  renaming the new table to mx_alter_distributed_table.test_proc_colocation_0
 NOTICE:  creating a new table for mx_alter_distributed_table.test_proc_colocation_2
-NOTICE:  Moving the data of mx_alter_distributed_table.test_proc_colocation_2
-NOTICE:  Dropping the old mx_alter_distributed_table.test_proc_colocation_2
-NOTICE:  Renaming the new table to mx_alter_distributed_table.test_proc_colocation_2
+NOTICE:  moving the data of mx_alter_distributed_table.test_proc_colocation_2
+NOTICE:  dropping the old mx_alter_distributed_table.test_proc_colocation_2
+NOTICE:  renaming the new table to mx_alter_distributed_table.test_proc_colocation_2
 NOTICE:  creating a new table for mx_alter_distributed_table.test_proc_colocation_1
-NOTICE:  Moving the data of mx_alter_distributed_table.test_proc_colocation_1
-NOTICE:  Dropping the old mx_alter_distributed_table.test_proc_colocation_1
-NOTICE:  Renaming the new table to mx_alter_distributed_table.test_proc_colocation_1
+NOTICE:  moving the data of mx_alter_distributed_table.test_proc_colocation_1
+NOTICE:  dropping the old mx_alter_distributed_table.test_proc_colocation_1
+NOTICE:  renaming the new table to mx_alter_distributed_table.test_proc_colocation_1
  alter_distributed_table
 ---------------------------------------------------------------------
 
@@ -452,9 +452,9 @@ SELECT proname, colocationid FROM pg_proc JOIN citus.pg_dist_object ON pg_proc.o
 -- shardCount is not null && cascade_to_colocated is false
 SELECT alter_distributed_table('test_proc_colocation_0', shard_count:= 18, cascade_to_colocated := false);
 NOTICE:  creating a new table for mx_alter_distributed_table.test_proc_colocation_0
-NOTICE:  Moving the data of mx_alter_distributed_table.test_proc_colocation_0
-NOTICE:  Dropping the old mx_alter_distributed_table.test_proc_colocation_0
-NOTICE:  Renaming the new table to mx_alter_distributed_table.test_proc_colocation_0
+NOTICE:  moving the data of mx_alter_distributed_table.test_proc_colocation_0
+NOTICE:  dropping the old mx_alter_distributed_table.test_proc_colocation_0
+NOTICE:  renaming the new table to mx_alter_distributed_table.test_proc_colocation_0
  alter_distributed_table
 ---------------------------------------------------------------------
 

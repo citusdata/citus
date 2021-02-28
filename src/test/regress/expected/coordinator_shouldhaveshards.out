@@ -718,9 +718,9 @@ SELECT conrelid::regclass::text AS "Referencing Table", pg_get_constraintdef(oid
 
 SELECT alter_distributed_table('adt_table', distribution_column:='b', colocate_with:='none');
 NOTICE:  creating a new table for coordinator_shouldhaveshards.adt_table
-NOTICE:  Moving the data of coordinator_shouldhaveshards.adt_table
-NOTICE:  Dropping the old coordinator_shouldhaveshards.adt_table
-NOTICE:  Renaming the new table to coordinator_shouldhaveshards.adt_table
+NOTICE:  moving the data of coordinator_shouldhaveshards.adt_table
+NOTICE:  dropping the old coordinator_shouldhaveshards.adt_table
+NOTICE:  renaming the new table to coordinator_shouldhaveshards.adt_table
  alter_distributed_table
 ---------------------------------------------------------------------
 
