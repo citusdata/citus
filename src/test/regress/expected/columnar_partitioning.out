@@ -46,9 +46,9 @@ SELECT count(*), sum(i), min(i), max(i) FROM parent;
 -- set older partitions as columnar
 SELECT alter_table_set_access_method('p0','columnar');
 NOTICE:  creating a new table for public.p0
-NOTICE:  Moving the data of public.p0
-NOTICE:  Dropping the old public.p0
-NOTICE:  Renaming the new table to public.p0
+NOTICE:  moving the data of public.p0
+NOTICE:  dropping the old public.p0
+NOTICE:  renaming the new table to public.p0
  alter_table_set_access_method
 ---------------------------------------------------------------------
 
@@ -56,9 +56,9 @@ NOTICE:  Renaming the new table to public.p0
 
 SELECT alter_table_set_access_method('p1','columnar');
 NOTICE:  creating a new table for public.p1
-NOTICE:  Moving the data of public.p1
-NOTICE:  Dropping the old public.p1
-NOTICE:  Renaming the new table to public.p1
+NOTICE:  moving the data of public.p1
+NOTICE:  dropping the old public.p1
+NOTICE:  renaming the new table to public.p1
  alter_table_set_access_method
 ---------------------------------------------------------------------
 
@@ -66,9 +66,9 @@ NOTICE:  Renaming the new table to public.p1
 
 SELECT alter_table_set_access_method('p3','columnar');
 NOTICE:  creating a new table for public.p3
-NOTICE:  Moving the data of public.p3
-NOTICE:  Dropping the old public.p3
-NOTICE:  Renaming the new table to public.p3
+NOTICE:  moving the data of public.p3
+NOTICE:  dropping the old public.p3
+NOTICE:  renaming the new table to public.p3
  alter_table_set_access_method
 ---------------------------------------------------------------------
 
