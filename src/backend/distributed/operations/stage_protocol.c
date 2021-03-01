@@ -66,11 +66,10 @@ static List * RelationShardListForShardCreate(ShardInterval *shardInterval);
 static bool WorkerShardStats(ShardPlacement *placement, Oid relationId,
 							 const char *shardName, uint64 *shardSize,
 							 text **shardMinValue, text **shardMaxValue);
-static void UpdateTableStatistics(List *colocatedTableList);
-static List * GenerateShardSizesMinMaxQueryList(List *workerNodeList,
-												List *colocatedTableList);
-static char * GenerateAllShardNameAndSizeAndMinMaxQueryForNode(WorkerNode *workerNode,
-															   List *colocatedTableList);
+static void UpdateTableStatistics(Oid relationId);
+static List * GenerateShardSizesMinMaxQueryList(List *workerNodeList, Oid relationId);
+static char * GenerateAllShardNameAndSizeAndMinMaxQueryForNode(WorkerNode *workerNode, Oid
+															   relationId);
 static char * GenerateShardNameAndSizeAndMinMaxQueryForShardList(List *shardIntervalList);
 static void UpdateShardNameAndSizeAndMinMax(List *connectionList);
 
@@ -372,7 +371,7 @@ citus_update_shard_statistics(PG_FUNCTION_ARGS)
 
 /*
  * citus_update_table_statistics updates metadata (shard size and shard min/max
- * values) of the shards of the given table and its colocated tables
+ * values) of the shards of the given table
  */
 Datum
 citus_update_table_statistics(PG_FUNCTION_ARGS)
@@ -381,9 +380,7 @@ citus_update_table_statistics(PG_FUNCTION_ARGS)
 
 	CheckCitusVersion(ERROR);
 
-	List *colocatedTableList = ColocatedTableList(distributedTableId);
-
-	UpdateTableStatistics(colocatedTableList);
+	UpdateTableStatistics(distributedTableId);
 
 	PG_RETURN_VOID();
 }
@@ -888,15 +885,14 @@ UpdateShardStatistics(int64 shardId)
 
 /*
  * UpdateTableStatistics updates metadata (shard size and shard min/max values)
- * of the shards of the given list of colocated tables. Follows a similar
- * logic to citus_shard_sizes function.
+ * of the shards of the given table. Follows a similar logic to citus_shard_sizes function.
  */
 static void
-UpdateTableStatistics(List *colocatedTableList)
+UpdateTableStatistics(Oid relationId)
 {
 	List *workerNodeList = ActivePrimaryNodeList(NoLock);
 	List *shardSizesQueryList = GenerateShardSizesMinMaxQueryList(workerNodeList,
-																  colocatedTableList);
+																  relationId);
 	List *connectionList = OpenConnectionToNodes(workerNodeList);
 	FinishConnectionListEstablishment(connectionList);
 
@@ -919,17 +915,17 @@ UpdateTableStatistics(List *colocatedTableList)
 /*
  * GenerateShardSizesMinMaxQueryList generates a query per node that
  * will return all shard_name, shard_minvalue, shard_maxvalue, shard_size
- * quartuples of the tables in colocatedTableList from the node.
+ * quartuples of the given table from the node.
  */
 static List *
-GenerateShardSizesMinMaxQueryList(List *workerNodeList, List *colocatedTableList)
+GenerateShardSizesMinMaxQueryList(List *workerNodeList, Oid relationId)
 {
 	List *shardSizesQueryList = NIL;
 	WorkerNode *workerNode = NULL;
 	foreach_ptr(workerNode, workerNodeList)
 	{
 		char *shardSizesQuery = GenerateAllShardNameAndSizeAndMinMaxQueryForNode(
-			workerNode, colocatedTableList);
+			workerNode, relationId);
 		shardSizesQueryList = lappend(shardSizesQueryList, shardSizesQuery);
 	}
 	return shardSizesQueryList;
@@ -938,18 +934,15 @@ GenerateShardSizesMinMaxQueryList(List *workerNodeList, List *colocatedTableList
 
 /*
  * GenerateAllShardNameAndSizeAndMinMaxQueryForNode generates a query that returns all
- * shard_name, shard_minvalue, shard_maxvalue, shard_size quartuples of the tables
- * in colocatedTableList for the given node.
+ * shard_name, shard_minvalue, shard_maxvalue, shard_size quartuples of the given
+ * table for the given node.
  */
 static char *
-GenerateAllShardNameAndSizeAndMinMaxQueryForNode(WorkerNode *workerNode,
-												 List *colocatedTableList)
+GenerateAllShardNameAndSizeAndMinMaxQueryForNode(WorkerNode *workerNode, Oid relationId)
 {
 	StringInfo allShardNameAndSizeAndMinMaxQuery = makeStringInfo();
 
-	Oid relationId = InvalidOid;
-
-	foreach_oid(relationId, colocatedTableList)
+	if (relationId != InvalidOid)
 	{
 		List *shardIntervalsOnNode = ShardIntervalsOnWorkerGroup(workerNode, relationId);
 		char *shardNameAndSizeAndMinMaxQuery =
