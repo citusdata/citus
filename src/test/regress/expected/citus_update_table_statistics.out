@@ -1,0 +1,157 @@
+--
+-- citus_update_table_statistics.sql
+--
+-- Test citus_update_table_statistics function on both
+-- hash and append distributed tables
+-- This function updates shardlength, shardminvalue and shardmaxvalue
+--
+SET citus.next_shard_id TO 981000;
+SET client_min_messages TO WARNING;
+SET citus.shard_count TO 8;
+SET citus.shard_replication_factor TO 2;
+-- test with a hash-distributed table
+-- here we update only shardlength, not shardminvalue and shardmaxvalue
+CREATE TABLE test_table_statistics_hash (id int);
+SELECT create_distributed_table('test_table_statistics_hash', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- populate table
+INSERT INTO test_table_statistics_hash SELECT i FROM generate_series(0, 10000)i;
+-- originally shardlength (size of the shard) is zero
+SELECT
+    ds.logicalrelid::regclass::text AS tablename,
+    ds.shardid AS shardid,
+    dsp.placementid AS placementid,
+    shard_name(ds.logicalrelid, ds.shardid) AS shardname,
+    dsp.shardlength AS shardsize,
+    ds.shardminvalue AS shardminvalue,
+    ds.shardmaxvalue AS shardmaxvalue
+FROM pg_dist_shard ds JOIN pg_dist_shard_placement dsp USING (shardid)
+WHERE ds.logicalrelid::regclass::text in ('test_table_statistics_hash')
+ORDER BY 2, 3;
+         tablename          | shardid | placementid |             shardname             | shardsize | shardminvalue | shardmaxvalue
+---------------------------------------------------------------------
+ test_table_statistics_hash |  981000 |        2197 | test_table_statistics_hash_981000 |         0 | -2147483648   | -1610612737
+ test_table_statistics_hash |  981000 |        2198 | test_table_statistics_hash_981000 |         0 | -2147483648   | -1610612737
+ test_table_statistics_hash |  981001 |        2199 | test_table_statistics_hash_981001 |         0 | -1610612736   | -1073741825
+ test_table_statistics_hash |  981001 |        2200 | test_table_statistics_hash_981001 |         0 | -1610612736   | -1073741825
+ test_table_statistics_hash |  981002 |        2201 | test_table_statistics_hash_981002 |         0 | -1073741824   | -536870913
+ test_table_statistics_hash |  981002 |        2202 | test_table_statistics_hash_981002 |         0 | -1073741824   | -536870913
+ test_table_statistics_hash |  981003 |        2203 | test_table_statistics_hash_981003 |         0 | -536870912    | -1
+ test_table_statistics_hash |  981003 |        2204 | test_table_statistics_hash_981003 |         0 | -536870912    | -1
+ test_table_statistics_hash |  981004 |        2205 | test_table_statistics_hash_981004 |         0 | 0             | 536870911
+ test_table_statistics_hash |  981004 |        2206 | test_table_statistics_hash_981004 |         0 | 0             | 536870911
+ test_table_statistics_hash |  981005 |        2207 | test_table_statistics_hash_981005 |         0 | 536870912     | 1073741823
+ test_table_statistics_hash |  981005 |        2208 | test_table_statistics_hash_981005 |         0 | 536870912     | 1073741823
+ test_table_statistics_hash |  981006 |        2209 | test_table_statistics_hash_981006 |         0 | 1073741824    | 1610612735
+ test_table_statistics_hash |  981006 |        2210 | test_table_statistics_hash_981006 |         0 | 1073741824    | 1610612735
+ test_table_statistics_hash |  981007 |        2211 | test_table_statistics_hash_981007 |         0 | 1610612736    | 2147483647
+ test_table_statistics_hash |  981007 |        2212 | test_table_statistics_hash_981007 |         0 | 1610612736    | 2147483647
+(16 rows)
+
+-- update table statistics and then check that shardlength has changed
+-- but shardminvalue and shardmaxvalue stay the same because this is
+-- a hash distributed table
+SELECT citus_update_table_statistics('test_table_statistics_hash');
+ citus_update_table_statistics
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT
+    ds.logicalrelid::regclass::text AS tablename,
+    ds.shardid AS shardid,
+    dsp.placementid AS placementid,
+    shard_name(ds.logicalrelid, ds.shardid) AS shardname,
+    dsp.shardlength as shardsize,
+    ds.shardminvalue as shardminvalue,
+    ds.shardmaxvalue as shardmaxvalue
+FROM pg_dist_shard ds JOIN pg_dist_shard_placement dsp USING (shardid)
+WHERE ds.logicalrelid::regclass::text in ('test_table_statistics_hash')
+ORDER BY 2, 3;
+         tablename          | shardid | placementid |             shardname             | shardsize | shardminvalue | shardmaxvalue
+---------------------------------------------------------------------
+ test_table_statistics_hash |  981000 |        2197 | test_table_statistics_hash_981000 |     49152 | -2147483648   | -1610612737
+ test_table_statistics_hash |  981000 |        2198 | test_table_statistics_hash_981000 |     49152 | -2147483648   | -1610612737
+ test_table_statistics_hash |  981001 |        2199 | test_table_statistics_hash_981001 |     49152 | -1610612736   | -1073741825
+ test_table_statistics_hash |  981001 |        2200 | test_table_statistics_hash_981001 |     49152 | -1610612736   | -1073741825
+ test_table_statistics_hash |  981002 |        2201 | test_table_statistics_hash_981002 |     49152 | -1073741824   | -536870913
+ test_table_statistics_hash |  981002 |        2202 | test_table_statistics_hash_981002 |     49152 | -1073741824   | -536870913
+ test_table_statistics_hash |  981003 |        2203 | test_table_statistics_hash_981003 |     49152 | -536870912    | -1
+ test_table_statistics_hash |  981003 |        2204 | test_table_statistics_hash_981003 |     49152 | -536870912    | -1
+ test_table_statistics_hash |  981004 |        2205 | test_table_statistics_hash_981004 |     49152 | 0             | 536870911
+ test_table_statistics_hash |  981004 |        2206 | test_table_statistics_hash_981004 |     49152 | 0             | 536870911
+ test_table_statistics_hash |  981005 |        2207 | test_table_statistics_hash_981005 |     49152 | 536870912     | 1073741823
+ test_table_statistics_hash |  981005 |        2208 | test_table_statistics_hash_981005 |     49152 | 536870912     | 1073741823
+ test_table_statistics_hash |  981006 |        2209 | test_table_statistics_hash_981006 |     49152 | 1073741824    | 1610612735
+ test_table_statistics_hash |  981006 |        2210 | test_table_statistics_hash_981006 |     49152 | 1073741824    | 1610612735
+ test_table_statistics_hash |  981007 |        2211 | test_table_statistics_hash_981007 |     49152 | 1610612736    | 2147483647
+ test_table_statistics_hash |  981007 |        2212 | test_table_statistics_hash_981007 |     49152 | 1610612736    | 2147483647
+(16 rows)
+
+-- check with an append-distributed table
+-- here we update shardlength, shardminvalue and shardmaxvalue
+CREATE TABLE test_table_statistics_append (id int);
+SELECT create_distributed_table('test_table_statistics_append', 'id', 'append');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+COPY test_table_statistics_append FROM PROGRAM 'echo 0 && echo 1 && echo 2 && echo 3' WITH CSV;
+COPY test_table_statistics_append FROM PROGRAM 'echo 4 && echo 5 && echo 6 && echo 7' WITH CSV;
+-- originally shardminvalue and shardmaxvalue will be 0,3 and 4, 7
+SELECT
+    ds.logicalrelid::regclass::text AS tablename,
+    ds.shardid AS shardid,
+    dsp.placementid AS placementid,
+    shard_name(ds.logicalrelid, ds.shardid) AS shardname,
+    dsp.shardlength as shardsize,
+    ds.shardminvalue as shardminvalue,
+    ds.shardmaxvalue as shardmaxvalue
+FROM pg_dist_shard ds JOIN pg_dist_shard_placement dsp USING (shardid)
+WHERE ds.logicalrelid::regclass::text in ('test_table_statistics_append')
+ORDER BY 2, 3;
+          tablename           | shardid | placementid |              shardname              | shardsize | shardminvalue | shardmaxvalue
+---------------------------------------------------------------------
+ test_table_statistics_append |  981008 |        2213 | test_table_statistics_append_981008 |      8192 | 0             | 3
+ test_table_statistics_append |  981008 |        2214 | test_table_statistics_append_981008 |      8192 | 0             | 3
+ test_table_statistics_append |  981009 |        2215 | test_table_statistics_append_981009 |      8192 | 4             | 7
+ test_table_statistics_append |  981009 |        2216 | test_table_statistics_append_981009 |      8192 | 4             | 7
+(4 rows)
+
+-- delete some data to change shardminvalues of a shards
+DELETE FROM test_table_statistics_append WHERE id = 0 OR id = 4;
+-- update table statistics and then check that shardminvalue has changed
+-- shardlength (shardsize) is still 8192 since there is very few data
+SELECT citus_update_table_statistics('test_table_statistics_append');
+ citus_update_table_statistics
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT
+    ds.logicalrelid::regclass::text AS tablename,
+    ds.shardid AS shardid,
+    dsp.placementid AS placementid,
+    shard_name(ds.logicalrelid, ds.shardid) AS shardname,
+    dsp.shardlength as shardsize,
+    ds.shardminvalue as shardminvalue,
+    ds.shardmaxvalue as shardmaxvalue
+FROM pg_dist_shard ds JOIN pg_dist_shard_placement dsp USING (shardid)
+WHERE ds.logicalrelid::regclass::text in ('test_table_statistics_append')
+ORDER BY 2, 3;
+          tablename           | shardid | placementid |              shardname              | shardsize | shardminvalue | shardmaxvalue
+---------------------------------------------------------------------
+ test_table_statistics_append |  981008 |        2213 | test_table_statistics_append_981008 |      8192 | 1             | 3
+ test_table_statistics_append |  981008 |        2214 | test_table_statistics_append_981008 |      8192 | 1             | 3
+ test_table_statistics_append |  981009 |        2215 | test_table_statistics_append_981009 |      8192 | 5             | 7
+ test_table_statistics_append |  981009 |        2216 | test_table_statistics_append_981009 |      8192 | 5             | 7
+(4 rows)
+
+DROP TABLE test_table_statistics_hash, test_table_statistics_append;
+ALTER SYSTEM RESET citus.shard_count;
+ALTER SYSTEM RESET citus.shard_replication_factor;
