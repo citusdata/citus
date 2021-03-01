@@ -6,7 +6,7 @@
 -- This function updates shardlength, shardminvalue and shardmaxvalue
 --
 SET citus.next_shard_id TO 981000;
-SET client_min_messages TO WARNING;
+SET citus.next_placement_id TO 982000;
 SET citus.shard_count TO 8;
 SET citus.shard_replication_factor TO 2;
 -- test with a hash-distributed table
@@ -26,70 +26,89 @@ SELECT
     ds.shardid AS shardid,
     dsp.placementid AS placementid,
     shard_name(ds.logicalrelid, ds.shardid) AS shardname,
-    dsp.shardlength AS shardsize,
     ds.shardminvalue AS shardminvalue,
     ds.shardmaxvalue AS shardmaxvalue
 FROM pg_dist_shard ds JOIN pg_dist_shard_placement dsp USING (shardid)
-WHERE ds.logicalrelid::regclass::text in ('test_table_statistics_hash')
+WHERE ds.logicalrelid::regclass::text in ('test_table_statistics_hash') AND dsp.shardlength = 0
 ORDER BY 2, 3;
-         tablename          | shardid | placementid |             shardname             | shardsize | shardminvalue | shardmaxvalue
+         tablename          | shardid | placementid |             shardname             | shardminvalue | shardmaxvalue
 ---------------------------------------------------------------------
- test_table_statistics_hash |  981000 |        2197 | test_table_statistics_hash_981000 |         0 | -2147483648   | -1610612737
- test_table_statistics_hash |  981000 |        2198 | test_table_statistics_hash_981000 |         0 | -2147483648   | -1610612737
- test_table_statistics_hash |  981001 |        2199 | test_table_statistics_hash_981001 |         0 | -1610612736   | -1073741825
- test_table_statistics_hash |  981001 |        2200 | test_table_statistics_hash_981001 |         0 | -1610612736   | -1073741825
- test_table_statistics_hash |  981002 |        2201 | test_table_statistics_hash_981002 |         0 | -1073741824   | -536870913
- test_table_statistics_hash |  981002 |        2202 | test_table_statistics_hash_981002 |         0 | -1073741824   | -536870913
- test_table_statistics_hash |  981003 |        2203 | test_table_statistics_hash_981003 |         0 | -536870912    | -1
- test_table_statistics_hash |  981003 |        2204 | test_table_statistics_hash_981003 |         0 | -536870912    | -1
- test_table_statistics_hash |  981004 |        2205 | test_table_statistics_hash_981004 |         0 | 0             | 536870911
- test_table_statistics_hash |  981004 |        2206 | test_table_statistics_hash_981004 |         0 | 0             | 536870911
- test_table_statistics_hash |  981005 |        2207 | test_table_statistics_hash_981005 |         0 | 536870912     | 1073741823
- test_table_statistics_hash |  981005 |        2208 | test_table_statistics_hash_981005 |         0 | 536870912     | 1073741823
- test_table_statistics_hash |  981006 |        2209 | test_table_statistics_hash_981006 |         0 | 1073741824    | 1610612735
- test_table_statistics_hash |  981006 |        2210 | test_table_statistics_hash_981006 |         0 | 1073741824    | 1610612735
- test_table_statistics_hash |  981007 |        2211 | test_table_statistics_hash_981007 |         0 | 1610612736    | 2147483647
- test_table_statistics_hash |  981007 |        2212 | test_table_statistics_hash_981007 |         0 | 1610612736    | 2147483647
+ test_table_statistics_hash |  981000 |      982000 | test_table_statistics_hash_981000 | -2147483648   | -1610612737
+ test_table_statistics_hash |  981000 |      982001 | test_table_statistics_hash_981000 | -2147483648   | -1610612737
+ test_table_statistics_hash |  981001 |      982002 | test_table_statistics_hash_981001 | -1610612736   | -1073741825
+ test_table_statistics_hash |  981001 |      982003 | test_table_statistics_hash_981001 | -1610612736   | -1073741825
+ test_table_statistics_hash |  981002 |      982004 | test_table_statistics_hash_981002 | -1073741824   | -536870913
+ test_table_statistics_hash |  981002 |      982005 | test_table_statistics_hash_981002 | -1073741824   | -536870913
+ test_table_statistics_hash |  981003 |      982006 | test_table_statistics_hash_981003 | -536870912    | -1
+ test_table_statistics_hash |  981003 |      982007 | test_table_statistics_hash_981003 | -536870912    | -1
+ test_table_statistics_hash |  981004 |      982008 | test_table_statistics_hash_981004 | 0             | 536870911
+ test_table_statistics_hash |  981004 |      982009 | test_table_statistics_hash_981004 | 0             | 536870911
+ test_table_statistics_hash |  981005 |      982010 | test_table_statistics_hash_981005 | 536870912     | 1073741823
+ test_table_statistics_hash |  981005 |      982011 | test_table_statistics_hash_981005 | 536870912     | 1073741823
+ test_table_statistics_hash |  981006 |      982012 | test_table_statistics_hash_981006 | 1073741824    | 1610612735
+ test_table_statistics_hash |  981006 |      982013 | test_table_statistics_hash_981006 | 1073741824    | 1610612735
+ test_table_statistics_hash |  981007 |      982014 | test_table_statistics_hash_981007 | 1610612736    | 2147483647
+ test_table_statistics_hash |  981007 |      982015 | test_table_statistics_hash_981007 | 1610612736    | 2147483647
 (16 rows)
 
+-- setting this to on in order to verify that we use a distributed transaction id
+-- to run the size queries from different connections
+-- this is going to help detect deadlocks
+SET citus.log_remote_commands TO ON;
+-- setting this to sequential in order to have a deterministic order
+-- in the output of citus.log_remote_commands
+SET citus.multi_shard_modify_mode TO sequential;
 -- update table statistics and then check that shardlength has changed
 -- but shardminvalue and shardmaxvalue stay the same because this is
 -- a hash distributed table
 SELECT citus_update_table_statistics('test_table_statistics_hash');
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT 981000 AS shard_id, NULL::text AS shard_minvalue, NULL::text AS shard_maxvalue, pg_relation_size('public.test_table_statistics_hash_981000') AS shard_size  UNION ALL SELECT 981001 AS shard_id, NULL::text AS shard_minvalue, NULL::text AS shard_maxvalue, pg_relation_size('public.test_table_statistics_hash_981001') AS shard_size  UNION ALL SELECT 981002 AS shard_id, NULL::text AS shard_minvalue, NULL::text AS shard_maxvalue, pg_relation_size('public.test_table_statistics_hash_981002') AS shard_size  UNION ALL SELECT 981003 AS shard_id, NULL::text AS shard_minvalue, NULL::text AS shard_maxvalue, pg_relation_size('public.test_table_statistics_hash_981003') AS shard_size  UNION ALL SELECT 981004 AS shard_id, NULL::text AS shard_minvalue, NULL::text AS shard_maxvalue, pg_relation_size('public.test_table_statistics_hash_981004') AS shard_size  UNION ALL SELECT 981005 AS shard_id, NULL::text AS shard_minvalue, NULL::text AS shard_maxvalue, pg_relation_size('public.test_table_statistics_hash_981005') AS shard_size  UNION ALL SELECT 981006 AS shard_id, NULL::text AS shard_minvalue, NULL::text AS shard_maxvalue, pg_relation_size('public.test_table_statistics_hash_981006') AS shard_size  UNION ALL SELECT 981007 AS shard_id, NULL::text AS shard_minvalue, NULL::text AS shard_maxvalue, pg_relation_size('public.test_table_statistics_hash_981007') AS shard_size  UNION ALL SELECT 0::bigint, NULL::text, NULL::text, 0::bigint;
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT 981000 AS shard_id, NULL::text AS shard_minvalue, NULL::text AS shard_maxvalue, pg_relation_size('public.test_table_statistics_hash_981000') AS shard_size  UNION ALL SELECT 981001 AS shard_id, NULL::text AS shard_minvalue, NULL::text AS shard_maxvalue, pg_relation_size('public.test_table_statistics_hash_981001') AS shard_size  UNION ALL SELECT 981002 AS shard_id, NULL::text AS shard_minvalue, NULL::text AS shard_maxvalue, pg_relation_size('public.test_table_statistics_hash_981002') AS shard_size  UNION ALL SELECT 981003 AS shard_id, NULL::text AS shard_minvalue, NULL::text AS shard_maxvalue, pg_relation_size('public.test_table_statistics_hash_981003') AS shard_size  UNION ALL SELECT 981004 AS shard_id, NULL::text AS shard_minvalue, NULL::text AS shard_maxvalue, pg_relation_size('public.test_table_statistics_hash_981004') AS shard_size  UNION ALL SELECT 981005 AS shard_id, NULL::text AS shard_minvalue, NULL::text AS shard_maxvalue, pg_relation_size('public.test_table_statistics_hash_981005') AS shard_size  UNION ALL SELECT 981006 AS shard_id, NULL::text AS shard_minvalue, NULL::text AS shard_maxvalue, pg_relation_size('public.test_table_statistics_hash_981006') AS shard_size  UNION ALL SELECT 981007 AS shard_id, NULL::text AS shard_minvalue, NULL::text AS shard_maxvalue, pg_relation_size('public.test_table_statistics_hash_981007') AS shard_size  UNION ALL SELECT 0::bigint, NULL::text, NULL::text, 0::bigint;
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
  citus_update_table_statistics
 ---------------------------------------------------------------------
 
 (1 row)
 
+RESET citus.log_remote_commands;
+RESET citus.multi_shard_modify_mode;
 SELECT
     ds.logicalrelid::regclass::text AS tablename,
     ds.shardid AS shardid,
     dsp.placementid AS placementid,
     shard_name(ds.logicalrelid, ds.shardid) AS shardname,
-    dsp.shardlength as shardsize,
     ds.shardminvalue as shardminvalue,
     ds.shardmaxvalue as shardmaxvalue
 FROM pg_dist_shard ds JOIN pg_dist_shard_placement dsp USING (shardid)
-WHERE ds.logicalrelid::regclass::text in ('test_table_statistics_hash')
+WHERE ds.logicalrelid::regclass::text in ('test_table_statistics_hash') AND dsp.shardlength > 0
 ORDER BY 2, 3;
-         tablename          | shardid | placementid |             shardname             | shardsize | shardminvalue | shardmaxvalue
+         tablename          | shardid | placementid |             shardname             | shardminvalue | shardmaxvalue
 ---------------------------------------------------------------------
- test_table_statistics_hash |  981000 |        2197 | test_table_statistics_hash_981000 |     49152 | -2147483648   | -1610612737
- test_table_statistics_hash |  981000 |        2198 | test_table_statistics_hash_981000 |     49152 | -2147483648   | -1610612737
- test_table_statistics_hash |  981001 |        2199 | test_table_statistics_hash_981001 |     49152 | -1610612736   | -1073741825
- test_table_statistics_hash |  981001 |        2200 | test_table_statistics_hash_981001 |     49152 | -1610612736   | -1073741825
- test_table_statistics_hash |  981002 |        2201 | test_table_statistics_hash_981002 |     49152 | -1073741824   | -536870913
- test_table_statistics_hash |  981002 |        2202 | test_table_statistics_hash_981002 |     49152 | -1073741824   | -536870913
- test_table_statistics_hash |  981003 |        2203 | test_table_statistics_hash_981003 |     49152 | -536870912    | -1
- test_table_statistics_hash |  981003 |        2204 | test_table_statistics_hash_981003 |     49152 | -536870912    | -1
- test_table_statistics_hash |  981004 |        2205 | test_table_statistics_hash_981004 |     49152 | 0             | 536870911
- test_table_statistics_hash |  981004 |        2206 | test_table_statistics_hash_981004 |     49152 | 0             | 536870911
- test_table_statistics_hash |  981005 |        2207 | test_table_statistics_hash_981005 |     49152 | 536870912     | 1073741823
- test_table_statistics_hash |  981005 |        2208 | test_table_statistics_hash_981005 |     49152 | 536870912     | 1073741823
- test_table_statistics_hash |  981006 |        2209 | test_table_statistics_hash_981006 |     49152 | 1073741824    | 1610612735
- test_table_statistics_hash |  981006 |        2210 | test_table_statistics_hash_981006 |     49152 | 1073741824    | 1610612735
- test_table_statistics_hash |  981007 |        2211 | test_table_statistics_hash_981007 |     49152 | 1610612736    | 2147483647
- test_table_statistics_hash |  981007 |        2212 | test_table_statistics_hash_981007 |     49152 | 1610612736    | 2147483647
+ test_table_statistics_hash |  981000 |      982000 | test_table_statistics_hash_981000 | -2147483648   | -1610612737
+ test_table_statistics_hash |  981000 |      982001 | test_table_statistics_hash_981000 | -2147483648   | -1610612737
+ test_table_statistics_hash |  981001 |      982002 | test_table_statistics_hash_981001 | -1610612736   | -1073741825
+ test_table_statistics_hash |  981001 |      982003 | test_table_statistics_hash_981001 | -1610612736   | -1073741825
+ test_table_statistics_hash |  981002 |      982004 | test_table_statistics_hash_981002 | -1073741824   | -536870913
+ test_table_statistics_hash |  981002 |      982005 | test_table_statistics_hash_981002 | -1073741824   | -536870913
+ test_table_statistics_hash |  981003 |      982006 | test_table_statistics_hash_981003 | -536870912    | -1
+ test_table_statistics_hash |  981003 |      982007 | test_table_statistics_hash_981003 | -536870912    | -1
+ test_table_statistics_hash |  981004 |      982008 | test_table_statistics_hash_981004 | 0             | 536870911
+ test_table_statistics_hash |  981004 |      982009 | test_table_statistics_hash_981004 | 0             | 536870911
+ test_table_statistics_hash |  981005 |      982010 | test_table_statistics_hash_981005 | 536870912     | 1073741823
+ test_table_statistics_hash |  981005 |      982011 | test_table_statistics_hash_981005 | 536870912     | 1073741823
+ test_table_statistics_hash |  981006 |      982012 | test_table_statistics_hash_981006 | 1073741824    | 1610612735
+ test_table_statistics_hash |  981006 |      982013 | test_table_statistics_hash_981006 | 1073741824    | 1610612735
+ test_table_statistics_hash |  981007 |      982014 | test_table_statistics_hash_981007 | 1610612736    | 2147483647
+ test_table_statistics_hash |  981007 |      982015 | test_table_statistics_hash_981007 | 1610612736    | 2147483647
 (16 rows)
 
 -- check with an append-distributed table
@@ -109,47 +128,61 @@ SELECT
     ds.shardid AS shardid,
     dsp.placementid AS placementid,
     shard_name(ds.logicalrelid, ds.shardid) AS shardname,
-    dsp.shardlength as shardsize,
     ds.shardminvalue as shardminvalue,
     ds.shardmaxvalue as shardmaxvalue
 FROM pg_dist_shard ds JOIN pg_dist_shard_placement dsp USING (shardid)
 WHERE ds.logicalrelid::regclass::text in ('test_table_statistics_append')
 ORDER BY 2, 3;
-          tablename           | shardid | placementid |              shardname              | shardsize | shardminvalue | shardmaxvalue
+          tablename           | shardid | placementid |              shardname              | shardminvalue | shardmaxvalue
 ---------------------------------------------------------------------
- test_table_statistics_append |  981008 |        2213 | test_table_statistics_append_981008 |      8192 | 0             | 3
- test_table_statistics_append |  981008 |        2214 | test_table_statistics_append_981008 |      8192 | 0             | 3
- test_table_statistics_append |  981009 |        2215 | test_table_statistics_append_981009 |      8192 | 4             | 7
- test_table_statistics_append |  981009 |        2216 | test_table_statistics_append_981009 |      8192 | 4             | 7
+ test_table_statistics_append |  981008 |      982016 | test_table_statistics_append_981008 | 0             | 3
+ test_table_statistics_append |  981008 |      982017 | test_table_statistics_append_981008 | 0             | 3
+ test_table_statistics_append |  981009 |      982018 | test_table_statistics_append_981009 | 4             | 7
+ test_table_statistics_append |  981009 |      982019 | test_table_statistics_append_981009 | 4             | 7
 (4 rows)
 
 -- delete some data to change shardminvalues of a shards
 DELETE FROM test_table_statistics_append WHERE id = 0 OR id = 4;
+SET citus.log_remote_commands TO ON;
+SET citus.multi_shard_modify_mode TO sequential;
 -- update table statistics and then check that shardminvalue has changed
 -- shardlength (shardsize) is still 8192 since there is very few data
 SELECT citus_update_table_statistics('test_table_statistics_append');
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT 981008 AS shard_id, min(id)::text AS shard_minvalue, max(id)::text AS shard_maxvalue, pg_relation_size('public.test_table_statistics_append_981008') AS shard_size FROM test_table_statistics_append_981008  UNION ALL SELECT 981009 AS shard_id, min(id)::text AS shard_minvalue, max(id)::text AS shard_maxvalue, pg_relation_size('public.test_table_statistics_append_981009') AS shard_size FROM test_table_statistics_append_981009  UNION ALL SELECT 0::bigint, NULL::text, NULL::text, 0::bigint;
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT 981008 AS shard_id, min(id)::text AS shard_minvalue, max(id)::text AS shard_maxvalue, pg_relation_size('public.test_table_statistics_append_981008') AS shard_size FROM test_table_statistics_append_981008  UNION ALL SELECT 981009 AS shard_id, min(id)::text AS shard_minvalue, max(id)::text AS shard_maxvalue, pg_relation_size('public.test_table_statistics_append_981009') AS shard_size FROM test_table_statistics_append_981009  UNION ALL SELECT 0::bigint, NULL::text, NULL::text, 0::bigint;
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
  citus_update_table_statistics
 ---------------------------------------------------------------------
 
 (1 row)
 
+RESET citus.log_remote_commands;
+RESET citus.multi_shard_modify_mode;
 SELECT
     ds.logicalrelid::regclass::text AS tablename,
     ds.shardid AS shardid,
     dsp.placementid AS placementid,
     shard_name(ds.logicalrelid, ds.shardid) AS shardname,
-    dsp.shardlength as shardsize,
     ds.shardminvalue as shardminvalue,
     ds.shardmaxvalue as shardmaxvalue
 FROM pg_dist_shard ds JOIN pg_dist_shard_placement dsp USING (shardid)
 WHERE ds.logicalrelid::regclass::text in ('test_table_statistics_append')
 ORDER BY 2, 3;
-          tablename           | shardid | placementid |              shardname              | shardsize | shardminvalue | shardmaxvalue
+          tablename           | shardid | placementid |              shardname              | shardminvalue | shardmaxvalue
 ---------------------------------------------------------------------
- test_table_statistics_append |  981008 |        2213 | test_table_statistics_append_981008 |      8192 | 1             | 3
- test_table_statistics_append |  981008 |        2214 | test_table_statistics_append_981008 |      8192 | 1             | 3
- test_table_statistics_append |  981009 |        2215 | test_table_statistics_append_981009 |      8192 | 5             | 7
- test_table_statistics_append |  981009 |        2216 | test_table_statistics_append_981009 |      8192 | 5             | 7
+ test_table_statistics_append |  981008 |      982016 | test_table_statistics_append_981008 | 1             | 3
+ test_table_statistics_append |  981008 |      982017 | test_table_statistics_append_981008 | 1             | 3
+ test_table_statistics_append |  981009 |      982018 | test_table_statistics_append_981009 | 5             | 7
+ test_table_statistics_append |  981009 |      982019 | test_table_statistics_append_981009 | 5             | 7
 (4 rows)
 
 DROP TABLE test_table_statistics_hash, test_table_statistics_append;

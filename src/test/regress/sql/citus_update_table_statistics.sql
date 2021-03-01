@@ -6,7 +6,7 @@
 -- This function updates shardlength, shardminvalue and shardmaxvalue
 --
 SET citus.next_shard_id TO 981000;
-SET client_min_messages TO WARNING;
+SET citus.next_placement_id TO 982000;
 SET citus.shard_count TO 8;
 SET citus.shard_replication_factor TO 2;
 
@@ -24,28 +24,39 @@ SELECT
 	ds.shardid AS shardid,
     dsp.placementid AS placementid,
 	shard_name(ds.logicalrelid, ds.shardid) AS shardname,
-    dsp.shardlength AS shardsize,
     ds.shardminvalue AS shardminvalue,
     ds.shardmaxvalue AS shardmaxvalue
 FROM pg_dist_shard ds JOIN pg_dist_shard_placement dsp USING (shardid)
-WHERE ds.logicalrelid::regclass::text in ('test_table_statistics_hash')
+WHERE ds.logicalrelid::regclass::text in ('test_table_statistics_hash') AND dsp.shardlength = 0
 ORDER BY 2, 3;
+
+-- setting this to on in order to verify that we use a distributed transaction id
+-- to run the size queries from different connections
+-- this is going to help detect deadlocks
+SET citus.log_remote_commands TO ON;
+
+-- setting this to sequential in order to have a deterministic order
+-- in the output of citus.log_remote_commands
+SET citus.multi_shard_modify_mode TO sequential;
 
 -- update table statistics and then check that shardlength has changed
 -- but shardminvalue and shardmaxvalue stay the same because this is
 -- a hash distributed table
 
 SELECT citus_update_table_statistics('test_table_statistics_hash');
+
+RESET citus.log_remote_commands;
+RESET citus.multi_shard_modify_mode;
+
 SELECT
 	ds.logicalrelid::regclass::text AS tablename,
 	ds.shardid AS shardid,
     dsp.placementid AS placementid,
 	shard_name(ds.logicalrelid, ds.shardid) AS shardname,
-    dsp.shardlength as shardsize,
     ds.shardminvalue as shardminvalue,
     ds.shardmaxvalue as shardmaxvalue
 FROM pg_dist_shard ds JOIN pg_dist_shard_placement dsp USING (shardid)
-WHERE ds.logicalrelid::regclass::text in ('test_table_statistics_hash')
+WHERE ds.logicalrelid::regclass::text in ('test_table_statistics_hash') AND dsp.shardlength > 0
 ORDER BY 2, 3;
 
 -- check with an append-distributed table
@@ -61,7 +72,6 @@ SELECT
 	ds.shardid AS shardid,
     dsp.placementid AS placementid,
 	shard_name(ds.logicalrelid, ds.shardid) AS shardname,
-    dsp.shardlength as shardsize,
     ds.shardminvalue as shardminvalue,
     ds.shardmaxvalue as shardmaxvalue
 FROM pg_dist_shard ds JOIN pg_dist_shard_placement dsp USING (shardid)
@@ -71,16 +81,21 @@ ORDER BY 2, 3;
 -- delete some data to change shardminvalues of a shards
 DELETE FROM test_table_statistics_append WHERE id = 0 OR id = 4;
 
+SET citus.log_remote_commands TO ON;
+SET citus.multi_shard_modify_mode TO sequential;
+
 -- update table statistics and then check that shardminvalue has changed
 -- shardlength (shardsize) is still 8192 since there is very few data
-
 SELECT citus_update_table_statistics('test_table_statistics_append');
+
+RESET citus.log_remote_commands;
+RESET citus.multi_shard_modify_mode;
+
 SELECT
 	ds.logicalrelid::regclass::text AS tablename,
 	ds.shardid AS shardid,
     dsp.placementid AS placementid,
 	shard_name(ds.logicalrelid, ds.shardid) AS shardname,
-    dsp.shardlength as shardsize,
     ds.shardminvalue as shardminvalue,
     ds.shardmaxvalue as shardmaxvalue
 FROM pg_dist_shard ds JOIN pg_dist_shard_placement dsp USING (shardid)
