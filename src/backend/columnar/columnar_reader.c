@@ -64,7 +64,7 @@ typedef struct StripeReadState
 	ChunkGroupReadState *chunkGroupReadState; /* owned */
 } StripeReadState;
 
-struct TableReadState
+struct ColumnarReadState
 {
 	List *stripeList;
 	TupleDesc tupleDescriptor;
@@ -148,7 +148,7 @@ static Datum ColumnDefaultValue(TupleConstr *tupleConstraints,
  * ColumnarBeginRead initializes a columnar read operation. This function returns a
  * read handle that's used during reading rows and finishing the read operation.
  */
-TableReadState *
+ColumnarReadState *
 ColumnarBeginRead(Relation relation, TupleDesc tupleDescriptor,
 				  List *projectedColumnList, List *whereClauseList)
 {
@@ -170,7 +170,7 @@ ColumnarBeginRead(Relation relation, TupleDesc tupleDescriptor,
 															"Stripe Read Memory Context",
 															ALLOCSET_DEFAULT_SIZES);
 
-	TableReadState *readState = palloc0(sizeof(TableReadState));
+	ColumnarReadState *readState = palloc0(sizeof(ColumnarReadState));
 	readState->relation = relation;
 	readState->stripeList = stripeList;
 	readState->projectedColumnList = projectedColumnList;
@@ -190,7 +190,7 @@ ColumnarBeginRead(Relation relation, TupleDesc tupleDescriptor,
  * the function returns false.
  */
 bool
-ColumnarReadNextRow(TableReadState *readState, Datum *columnValues, bool *columnNulls)
+ColumnarReadNextRow(ColumnarReadState *readState, Datum *columnValues, bool *columnNulls)
 {
 	while (true)
 	{
@@ -238,7 +238,7 @@ ColumnarReadNextRow(TableReadState *readState, Datum *columnValues, bool *column
  * the beginning again
  */
 void
-ColumnarRescan(TableReadState *readState)
+ColumnarRescan(ColumnarReadState *readState)
 {
 	readState->stripeReadState = NULL;
 	readState->currentStripe = 0;
@@ -250,7 +250,7 @@ ColumnarRescan(TableReadState *readState)
  * Finishes a columnar read operation.
  */
 void
-ColumnarEndRead(TableReadState *readState)
+ColumnarEndRead(ColumnarReadState *readState)
 {
 	MemoryContextDelete(readState->stripeReadContext);
 	list_free_deep(readState->stripeList);
@@ -484,7 +484,7 @@ ReadChunkGroupNextRow(ChunkGroupReadState *chunkGroupReadState, Datum *columnVal
  * Return the number of chunk groups filtered during this read operation.
  */
 int64
-ColumnarReadChunkGroupsFiltered(TableReadState *state)
+ColumnarReadChunkGroupsFiltered(ColumnarReadState *state)
 {
 	return state->chunkGroupsFiltered;
 }

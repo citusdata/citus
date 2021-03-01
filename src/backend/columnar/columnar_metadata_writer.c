@@ -32,7 +32,7 @@
 #include "columnar/columnar.h"
 #include "columnar/columnar_version_compat.h"
 
-struct TableWriteState
+struct ColumnarWriteState
 {
 	TupleDesc tupleDescriptor;
 	FmgrInfo **comparisonFunctionArray;
@@ -62,12 +62,12 @@ static StripeBuffers * CreateEmptyStripeBuffers(uint32 stripeMaxRowCount,
 static StripeSkipList * CreateEmptyStripeSkipList(uint32 stripeMaxRowCount,
 												  uint32 chunkRowCount,
 												  uint32 columnCount);
-static void FlushStripe(TableWriteState *writeState);
+static void FlushStripe(ColumnarWriteState *writeState);
 static StringInfo SerializeBoolArray(bool *boolArray, uint32 boolArrayLength);
 static void SerializeSingleDatum(StringInfo datumBuffer, Datum datum,
 								 bool datumTypeByValue, int datumTypeLength,
 								 char datumTypeAlign);
-static void SerializeChunkData(TableWriteState *writeState, uint32 chunkIndex,
+static void SerializeChunkData(ColumnarWriteState *writeState, uint32 chunkIndex,
 							   uint32 rowCount);
 static void UpdateChunkSkipNodeMinMax(ColumnChunkSkipNode *chunkSkipNode,
 									  Datum columnValue, bool columnTypeByValue,
@@ -81,7 +81,7 @@ static StringInfo CopyStringInfo(StringInfo sourceString);
  * handle. This handle should be used for adding the row values and finishing the
  * data load operation.
  */
-TableWriteState *
+ColumnarWriteState *
 ColumnarBeginWrite(RelFileNode relfilenode,
 				   ColumnarOptions options,
 				   TupleDesc tupleDescriptor)
@@ -121,7 +121,7 @@ ColumnarBeginWrite(RelFileNode relfilenode,
 	ChunkData *chunkData = CreateEmptyChunkData(columnCount, columnMaskArray,
 												options.chunkRowCount);
 
-	TableWriteState *writeState = palloc0(sizeof(TableWriteState));
+	ColumnarWriteState *writeState = palloc0(sizeof(ColumnarWriteState));
 	writeState->relfilenode = relfilenode;
 	writeState->options = options;
 	writeState->tupleDescriptor = CreateTupleDescCopy(tupleDescriptor);
@@ -148,7 +148,7 @@ ColumnarBeginWrite(RelFileNode relfilenode,
  * the stripe, and add its metadata to the table footer.
  */
 void
-ColumnarWriteRow(TableWriteState *writeState, Datum *columnValues, bool *columnNulls)
+ColumnarWriteRow(ColumnarWriteState *writeState, Datum *columnValues, bool *columnNulls)
 {
 	uint32 columnIndex = 0;
 	StripeBuffers *stripeBuffers = writeState->stripeBuffers;
@@ -240,7 +240,7 @@ ColumnarWriteRow(TableWriteState *writeState, Datum *columnValues, bool *columnN
  * stripe, we flush it.
  */
 void
-ColumnarEndWrite(TableWriteState *writeState)
+ColumnarEndWrite(ColumnarWriteState *writeState)
 {
 	ColumnarFlushPendingWrites(writeState);
 
@@ -252,7 +252,7 @@ ColumnarEndWrite(TableWriteState *writeState)
 
 
 void
-ColumnarFlushPendingWrites(TableWriteState *writeState)
+ColumnarFlushPendingWrites(ColumnarWriteState *writeState)
 {
 	StripeBuffers *stripeBuffers = writeState->stripeBuffers;
 	if (stripeBuffers != NULL)
@@ -277,7 +277,7 @@ ColumnarFlushPendingWrites(TableWriteState *writeState)
  * Return per-tuple context for columnar write operation.
  */
 MemoryContext
-ColumnarWritePerTupleContext(TableWriteState *state)
+ColumnarWritePerTupleContext(ColumnarWriteState *state)
 {
 	return state->perTupleContext;
 }
@@ -432,7 +432,7 @@ WriteToSmgr(Relation rel, uint64 logicalOffset, char *data, uint32 dataLength)
  * flushes the skip list, data, and footer buffers to the file.
  */
 static void
-FlushStripe(TableWriteState *writeState)
+FlushStripe(ColumnarWriteState *writeState)
 {
 	StripeMetadata stripeMetadata = { 0 };
 	uint32 columnIndex = 0;
@@ -630,7 +630,7 @@ SerializeSingleDatum(StringInfo datumBuffer, Datum datum, bool datumTypeByValue,
  * compression type for every column.
  */
 static void
-SerializeChunkData(TableWriteState *writeState, uint32 chunkIndex, uint32 rowCount)
+SerializeChunkData(ColumnarWriteState *writeState, uint32 chunkIndex, uint32 rowCount)
 {
 	uint32 columnIndex = 0;
 	StripeBuffers *stripeBuffers = writeState->stripeBuffers;
@@ -804,7 +804,7 @@ CopyStringInfo(StringInfo sourceString)
 
 
 bool
-ContainsPendingWrites(TableWriteState *state)
+ContainsPendingWrites(ColumnarWriteState *state)
 {
 	return state->stripeBuffers != NULL && state->stripeBuffers->rowCount != 0;
 }

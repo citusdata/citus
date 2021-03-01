@@ -1,0 +1,2 @@
+test: columnar_write_concurrency
+test: columnar_vacuum_vs_insert
