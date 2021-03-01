@@ -1384,16 +1384,34 @@ AddNodeMetadata(char *nodeName, int32 nodePort,
 	*nodeAlreadyExists = false;
 
 	/*
-	 * Take an exclusive lock on pg_dist_node to serialize node changes.
+	 * Prevent / wait for concurrent modification before checking whether
+	 * the worker already exists in pg_dist_node.
+	 */
+	LockRelationOid(DistNodeRelationId(), RowShareLock);
+
+	WorkerNode *workerNode = FindWorkerNodeAnyCluster(nodeName, nodePort);
+	if (workerNode != NULL)
+	{
+		/* return early without holding locks when the node already exists */
+		*nodeAlreadyExists = true;
+
+		return workerNode->nodeId;
+	}
+
+	/*
+	 * We are going to change pg_dist_node, prevent any concurrent reads that
+	 * are not tolerant to concurrent node addition by taking an exclusive
+	 * lock (conflicts with all but AccessShareLock).
+	 *
 	 * We may want to relax or have more fine-grained locking in the future
 	 * to allow users to add multiple nodes concurrently.
 	 */
 	LockRelationOid(DistNodeRelationId(), ExclusiveLock);
 
-	WorkerNode *workerNode = FindWorkerNodeAnyCluster(nodeName, nodePort);
+	/* recheck in case 2 node additions pass the first check concurrently */
+	workerNode = FindWorkerNodeAnyCluster(nodeName, nodePort);
 	if (workerNode != NULL)
 	{
-		/* fill return data and return */
 		*nodeAlreadyExists = true;
 
 		return workerNode->nodeId;
