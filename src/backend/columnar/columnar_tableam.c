@@ -552,10 +552,10 @@ columnar_relation_set_new_filenode(Relation rel,
 								   TransactionId *freezeXid,
 								   MultiXactId *minmulti)
 {
-	if (persistence != RELPERSISTENCE_PERMANENT)
+	if (persistence == RELPERSISTENCE_UNLOGGED)
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("only permanent columnar tables are supported")));
+						errmsg("unlogged columnar tables are not supported")));
 	}
 
 	Oid oldRelfilenode = rel->rd_node.relNode;
