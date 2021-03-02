@@ -627,8 +627,10 @@ POSTGRES_BUILDDIR
 POSTGRES_SRCDIR
 CITUS_LDFLAGS
 CITUS_CPPFLAGS
+CITUS_BITCODE_CFLAGS
 CITUS_CFLAGS
 GIT_BIN
+with_security_flags
 EGREP
 GREP
 CPP
@@ -691,6 +693,7 @@ with_extra_version
 enable_coverage
 with_libcurl
 with_reports_hostname
+with_security_flags
 '
       ac_precious_vars='build_alias
 host_alias
@@ -1335,6 +1338,8 @@ Optional Packages:
   --with-reports-hostname=HOSTNAME
                           Use HOSTNAME as hostname for statistics collection
                           and update checks
+  --without-security-flags
+                          do not use security flags
 
 Some influential environment variables:
   PG_CONFIG   Location to find pg_config for target PostgreSQL instalation
@@ -4339,6 +4344,48 @@ if test x"$citusac_cv_prog_cc_cflags__Werror_return_type" = x"yes"; then
   CITUS_CFLAGS="$CITUS_CFLAGS -Werror=return-type"
 fi
 
+# Security flags
+# Flags taken from: https://liquid.microsoft.com/Web/Object/Read/ms.security/Requirements/Microsoft.Security.SystemsADM.10203#guide
+# We do not enforce the following flag because it is only available on GCC>=8
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking whether $CC supports -fstack-clash-protection" >&5
+$as_echo_n "checking whether $CC supports -fstack-clash-protection... " >&6; }
+if ${citusac_cv_prog_cc_cflags__fstack_clash_protection+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  citusac_save_CFLAGS=$CFLAGS
+flag=-fstack-clash-protection
+case $flag in -Wno*)
+	 flag=-W$(echo $flag | cut -c 6-)
+esac
+CFLAGS="$citusac_save_CFLAGS $flag"
+ac_save_c_werror_flag=$ac_c_werror_flag
+ac_c_werror_flag=yes
+cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+int
+main ()
+{
+
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_compile "$LINENO"; then :
+  citusac_cv_prog_cc_cflags__fstack_clash_protection=yes
+else
+  citusac_cv_prog_cc_cflags__fstack_clash_protection=no
+fi
+rm -f core conftest.err conftest.$ac_objext conftest.$ac_ext
+ac_c_werror_flag=$ac_save_c_werror_flag
+CFLAGS="$citusac_save_CFLAGS"
+fi
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $citusac_cv_prog_cc_cflags__fstack_clash_protection" >&5
+$as_echo "$citusac_cv_prog_cc_cflags__fstack_clash_protection" >&6; }
+if test x"$citusac_cv_prog_cc_cflags__fstack_clash_protection" = x"yes"; then
+  CITUS_CFLAGS="$CITUS_CFLAGS -fstack-clash-protection"
+fi
+
 
 #
 # --enable-coverage enables generation of code coverage metrics with gcov
@@ -4480,6 +4527,55 @@ cat >>confdefs.h <<_ACEOF
 _ACEOF
 
 
+
+
+
+
+# Check whether --with-security-flags was given.
+if test "${with_security_flags+set}" = set; then :
+  withval=$with_security_flags;
+  case $withval in
+    yes)
+      :
+      ;;
+    no)
+      :
+      ;;
+    *)
+      as_fn_error $? "no argument expected for --with-security-flags option" "$LINENO" 5
+      ;;
+  esac
+
+else
+  with_security_flags=yes
+
+fi
+
+
+
+
+if test "$with_security_flags" = yes; then
+# Flags taken from: https://liquid.microsoft.com/Web/Object/Read/ms.security/Requirements/Microsoft.Security.SystemsADM.10203#guide
+
+# We always want to have some compiler flags for security concerns.
+SECURITY_CFLAGS="-fstack-protector-strong -D_FORTIFY_SOURCE=2 -O2 -z noexecstack -fpic -shared -Wl,-z,relro -Wl,-z,now -Wformat -Wformat-security -Werror=format-security"
+CITUS_CFLAGS="$CITUS_CFLAGS $SECURITY_CFLAGS"
+{ $as_echo "$as_me:${as_lineno-$LINENO}: Blindly added security flags for linker: $SECURITY_CFLAGS" >&5
+$as_echo "$as_me: Blindly added security flags for linker: $SECURITY_CFLAGS" >&6;}
+
+# We always want to have some clang flags for security concerns.
+# This doesn't include "-Wl,-z,relro -Wl,-z,now" on purpuse, because bitcode is not linked.
+# This doesn't include -fsanitize=cfi because it breaks builds on many distros including
+# Debian/Buster, Debian/Stretch, Ubuntu/Bionic, Ubuntu/Xenial and EL7.
+SECURITY_BITCODE_CFLAGS="-fsanitize=safe-stack -fstack-protector-strong -flto -fPIC -Wformat -Wformat-security -Werror=format-security"
+CITUS_BITCODE_CFLAGS="$CITUS_BITCODE_CFLAGS $SECURITY_BITCODE_CFLAGS"
+{ $as_echo "$as_me:${as_lineno-$LINENO}: Blindly added security flags for llvm: $SECURITY_BITCODE_CFLAGS" >&5
+$as_echo "$as_me: Blindly added security flags for llvm: $SECURITY_BITCODE_CFLAGS" >&6;}
+
+{ $as_echo "$as_me:${as_lineno-$LINENO}: WARNING: If you run into issues during linking or bitcode compilation, you can use --without-security-flags." >&5
+$as_echo "$as_me: WARNING: If you run into issues during linking or bitcode compilation, you can use --without-security-flags." >&2;}
+fi
+
 # Check if git is installed, when installed the gitref of the checkout will be baked in the application
 # Extract the first word of "git", so it can be a program name with args.
 set dummy git; ac_word=$2
@@ -4544,6 +4640,8 @@ fi
 
 
 CITUS_CFLAGS="$CITUS_CFLAGS"
+
+CITUS_BITCODE_CFLAGS="$CITUS_BITCODE_CFLAGS"
 
 CITUS_CPPFLAGS="$CITUS_CPPFLAGS"
 
