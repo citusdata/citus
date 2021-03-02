@@ -1029,9 +1029,10 @@ DeleteStorageFromColumnarMetadataTable(Oid metadataTableId,
 		heapTuple = systable_getnext(scanDescriptor);
 	}
 
+	systable_endscan_ordered(scanDescriptor);
+
 	FinishModifyRelation(modifyState);
 
-	systable_endscan_ordered(scanDescriptor);
 	index_close(index, AccessShareLock);
 	table_close(metadataTable, AccessShareLock);
 }
