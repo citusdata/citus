@@ -83,6 +83,8 @@ static void GetHighestUsedAddressAndId(uint64 storageId,
 static void LockForStripeReservation(Relation rel, LOCKMODE mode);
 static void UnlockForStripeReservation(Relation rel, LOCKMODE mode);
 static List * ReadDataFileStripeList(uint64 storageId, Snapshot snapshot);
+static uint32 * ReadChunkGroupRowCounts(uint64 storageId, uint64 stripe, uint32
+										chunkGroupCount);
 static Oid ColumnarStorageIdSequenceRelationId(void);
 static Oid ColumnarStripeRelationId(void);
 static Oid ColumnarStripeIndexRelationId(void);
@@ -91,6 +93,7 @@ static Oid ColumnarOptionsIndexRegclass(void);
 static Oid ColumnarChunkRelationId(void);
 static Oid ColumnarChunkGroupRelationId(void);
 static Oid ColumnarChunkIndexRelationId(void);
+static Oid ColumnarChunkGroupIndexRelationId(void);
 static Oid ColumnarNamespaceId(void);
 static ModifyState * StartModifyRelation(Relation rel);
 static void InsertTupleAndEnforceConstraints(ModifyState *state, Datum *values,
@@ -616,7 +619,69 @@ ReadStripeSkipList(RelFileNode relfilenode, uint64 stripe, TupleDesc tupleDescri
 	index_close(index, AccessShareLock);
 	table_close(columnarChunk, AccessShareLock);
 
+	chunkList->chunkGroupRowCounts =
+		ReadChunkGroupRowCounts(metapage->storageId, stripe, chunkCount);
+
 	return chunkList;
+}
+
+
+/*
+ * ReadChunkGroupRowCounts returns an array of row counts of chunk groups for the
+ * given stripe.
+ */
+static uint32 *
+ReadChunkGroupRowCounts(uint64 storageId, uint64 stripe, uint32 chunkGroupCount)
+{
+	Oid columnarChunkGroupOid = ColumnarChunkGroupRelationId();
+	Relation columnarChunkGroup = table_open(columnarChunkGroupOid, AccessShareLock);
+	Relation index = index_open(ColumnarChunkGroupIndexRelationId(), AccessShareLock);
+
+	ScanKeyData scanKey[2];
+	ScanKeyInit(&scanKey[0], Anum_columnar_chunkgroup_storageid,
+				BTEqualStrategyNumber, F_OIDEQ, UInt64GetDatum(storageId));
+	ScanKeyInit(&scanKey[1], Anum_columnar_chunkgroup_stripe,
+				BTEqualStrategyNumber, F_OIDEQ, Int32GetDatum(stripe));
+
+	SysScanDesc scanDescriptor =
+		systable_beginscan_ordered(columnarChunkGroup, index, NULL, 2, scanKey);
+
+	uint32 chunkGroupIndex = 0;
+	HeapTuple heapTuple = NULL;
+	uint32 *chunkGroupRowCounts = palloc0(chunkGroupCount * sizeof(uint32));
+
+	while (HeapTupleIsValid(heapTuple = systable_getnext(scanDescriptor)))
+	{
+		Datum datumArray[Natts_columnar_chunkgroup];
+		bool isNullArray[Natts_columnar_chunkgroup];
+
+		heap_deform_tuple(heapTuple,
+						  RelationGetDescr(columnarChunkGroup),
+						  datumArray, isNullArray);
+
+		uint32 tupleChunkGroupIndex =
+			DatumGetUInt32(datumArray[Anum_columnar_chunkgroup_chunk - 1]);
+		if (chunkGroupIndex >= chunkGroupCount ||
+			tupleChunkGroupIndex != chunkGroupIndex)
+		{
+			elog(ERROR, "unexpected chunk group");
+		}
+
+		chunkGroupRowCounts[chunkGroupIndex] =
+			(uint32) DatumGetUInt64(datumArray[Anum_columnar_chunkgroup_row_count - 1]);
+		chunkGroupIndex++;
+	}
+
+	if (chunkGroupIndex != chunkGroupCount)
+	{
+		elog(ERROR, "unexpected chunk group count");
+	}
+
+	systable_endscan_ordered(scanDescriptor);
+	index_close(index, AccessShareLock);
+	table_close(columnarChunkGroup, AccessShareLock);
+
+	return chunkGroupRowCounts;
 }
 
 
@@ -633,7 +698,7 @@ InsertStripeMetadataRow(uint64 storageId, StripeMetadata *stripe)
 		Int64GetDatum(stripe->fileOffset),
 		Int64GetDatum(stripe->dataLength),
 		Int32GetDatum(stripe->columnCount),
-		Int32GetDatum(stripe->chunkRowCount),
+		Int32GetDatum(stripe->chunkGroupRowCount),
 		Int64GetDatum(stripe->rowCount),
 		Int32GetDatum(stripe->chunkCount)
 	};
@@ -767,7 +832,7 @@ UnlockForStripeReservation(Relation rel, LOCKMODE mode)
 StripeMetadata
 ReserveStripe(Relation rel, uint64 sizeBytes,
 			  uint64 rowCount, uint64 columnCount,
-			  uint64 chunkCount, uint64 chunkRowCount)
+			  uint64 chunkCount, uint64 chunkGroupRowCount)
 {
 	StripeMetadata stripe = { 0 };
 	uint64 currLogicalHigh = 0;
@@ -815,7 +880,7 @@ ReserveStripe(Relation rel, uint64 sizeBytes,
 	stripe.fileOffset = resLogicalStart;
 	stripe.dataLength = sizeBytes;
 	stripe.chunkCount = chunkCount;
-	stripe.chunkRowCount = chunkRowCount;
+	stripe.chunkGroupRowCount = chunkGroupRowCount;
 	stripe.columnCount = columnCount;
 	stripe.rowCount = rowCount;
 	stripe.id = highestId + 1;
@@ -869,7 +934,7 @@ ReadDataFileStripeList(uint64 storageId, Snapshot snapshot)
 			datumArray[Anum_columnar_stripe_column_count - 1]);
 		stripeMetadata->chunkCount = DatumGetInt32(
 			datumArray[Anum_columnar_stripe_chunk_count - 1]);
-		stripeMetadata->chunkRowCount = DatumGetInt32(
+		stripeMetadata->chunkGroupRowCount = DatumGetInt32(
 			datumArray[Anum_columnar_stripe_chunk_row_count - 1]);
 		stripeMetadata->rowCount = DatumGetInt64(
 			datumArray[Anum_columnar_stripe_row_count - 1]);
@@ -1211,6 +1276,17 @@ static Oid
 ColumnarChunkIndexRelationId(void)
 {
 	return get_relname_relid("chunk_pkey", ColumnarNamespaceId());
+}
+
+
+/*
+ * ColumnarChunkGroupIndexRelationId returns relation id of columnar.chunk_group_pkey.
+ * TODO: should we cache this similar to citus?
+ */
+static Oid
+ColumnarChunkGroupIndexRelationId(void)
+{
+	return get_relname_relid("chunk_group_pkey", ColumnarNamespaceId());
 }
 
 
