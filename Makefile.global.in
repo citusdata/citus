@@ -79,6 +79,7 @@ endif
 
 # Add options passed to configure or computed therein, to CFLAGS/CPPFLAGS/...
 override CFLAGS += @CFLAGS@ @CITUS_CFLAGS@
+override BITCODE_CFLAGS := $(BITCODE_CFLAGS) @CITUS_BITCODE_CFLAGS@
 ifneq ($(GIT_VERSION),)
     override CFLAGS += -DGIT_VERSION=\"$(GIT_VERSION)\"
 endif
