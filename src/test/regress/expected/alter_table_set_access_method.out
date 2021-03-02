@@ -3,9 +3,9 @@
 CREATE TABLE alter_am_pg_version_table (a INT);
 SELECT alter_table_set_access_method('alter_am_pg_version_table', 'columnar');
 NOTICE:  creating a new table for public.alter_am_pg_version_table
-NOTICE:  Moving the data of public.alter_am_pg_version_table
-NOTICE:  Dropping the old public.alter_am_pg_version_table
-NOTICE:  Renaming the new table to public.alter_am_pg_version_table
+NOTICE:  moving the data of public.alter_am_pg_version_table
+NOTICE:  dropping the old public.alter_am_pg_version_table
+NOTICE:  renaming the new table to public.alter_am_pg_version_table
  alter_table_set_access_method
 ---------------------------------------------------------------------
 
@@ -51,9 +51,9 @@ SELECT table_name, access_method FROM public.citus_tables WHERE table_name::text
 
 SELECT alter_table_set_access_method('dist_table', 'columnar');
 NOTICE:  creating a new table for alter_table_set_access_method.dist_table
-NOTICE:  Moving the data of alter_table_set_access_method.dist_table
-NOTICE:  Dropping the old alter_table_set_access_method.dist_table
-NOTICE:  Renaming the new table to alter_table_set_access_method.dist_table
+NOTICE:  moving the data of alter_table_set_access_method.dist_table
+NOTICE:  dropping the old alter_table_set_access_method.dist_table
+NOTICE:  renaming the new table to alter_table_set_access_method.dist_table
  alter_table_set_access_method
 ---------------------------------------------------------------------
 
@@ -131,9 +131,9 @@ ERROR:  you cannot alter access method of a partitioned table
 -- test altering the partition's access method
 SELECT alter_table_set_access_method('partitioned_table_1_5', 'columnar');
 NOTICE:  creating a new table for alter_table_set_access_method.partitioned_table_1_5
-NOTICE:  Moving the data of alter_table_set_access_method.partitioned_table_1_5
-NOTICE:  Dropping the old alter_table_set_access_method.partitioned_table_1_5
-NOTICE:  Renaming the new table to alter_table_set_access_method.partitioned_table_1_5
+NOTICE:  moving the data of alter_table_set_access_method.partitioned_table_1_5
+NOTICE:  dropping the old alter_table_set_access_method.partitioned_table_1_5
+NOTICE:  renaming the new table to alter_table_set_access_method.partitioned_table_1_5
  alter_table_set_access_method
 ---------------------------------------------------------------------
 
@@ -228,14 +228,14 @@ SELECT event FROM time_partitioned ORDER BY 1;
 CALL alter_old_partitions_set_access_method('time_partitioned', '2021-01-01', 'columnar');
 NOTICE:  converting time_partitioned_d00 with start time Sat Jan 01 00:00:00 2000 and end time Thu Dec 31 00:00:00 2009
 NOTICE:  creating a new table for alter_table_set_access_method.time_partitioned_d00
-NOTICE:  Moving the data of alter_table_set_access_method.time_partitioned_d00
-NOTICE:  Dropping the old alter_table_set_access_method.time_partitioned_d00
-NOTICE:  Renaming the new table to alter_table_set_access_method.time_partitioned_d00
+NOTICE:  moving the data of alter_table_set_access_method.time_partitioned_d00
+NOTICE:  dropping the old alter_table_set_access_method.time_partitioned_d00
+NOTICE:  renaming the new table to alter_table_set_access_method.time_partitioned_d00
 NOTICE:  converting time_partitioned_d10 with start time Fri Jan 01 00:00:00 2010 and end time Tue Dec 31 00:00:00 2019
 NOTICE:  creating a new table for alter_table_set_access_method.time_partitioned_d10
-NOTICE:  Moving the data of alter_table_set_access_method.time_partitioned_d10
-NOTICE:  Dropping the old alter_table_set_access_method.time_partitioned_d10
-NOTICE:  Renaming the new table to alter_table_set_access_method.time_partitioned_d10
+NOTICE:  moving the data of alter_table_set_access_method.time_partitioned_d10
+NOTICE:  dropping the old alter_table_set_access_method.time_partitioned_d10
+NOTICE:  renaming the new table to alter_table_set_access_method.time_partitioned_d10
 SELECT partition, access_method FROM time_partitions WHERE parent_table = 'time_partitioned'::regclass ORDER BY partition::text;
       partition       | access_method
 ---------------------------------------------------------------------
@@ -274,14 +274,14 @@ SELECT event FROM time_partitioned ORDER BY 1;
 CALL alter_old_partitions_set_access_method('time_partitioned', '2021-01-01', 'heap');
 NOTICE:  converting time_partitioned_d00 with start time Sat Jan 01 00:00:00 2000 and end time Thu Dec 31 00:00:00 2009
 NOTICE:  creating a new table for alter_table_set_access_method.time_partitioned_d00
-NOTICE:  Moving the data of alter_table_set_access_method.time_partitioned_d00
-NOTICE:  Dropping the old alter_table_set_access_method.time_partitioned_d00
-NOTICE:  Renaming the new table to alter_table_set_access_method.time_partitioned_d00
+NOTICE:  moving the data of alter_table_set_access_method.time_partitioned_d00
+NOTICE:  dropping the old alter_table_set_access_method.time_partitioned_d00
+NOTICE:  renaming the new table to alter_table_set_access_method.time_partitioned_d00
 NOTICE:  converting time_partitioned_d10 with start time Fri Jan 01 00:00:00 2010 and end time Tue Dec 31 00:00:00 2019
 NOTICE:  creating a new table for alter_table_set_access_method.time_partitioned_d10
-NOTICE:  Moving the data of alter_table_set_access_method.time_partitioned_d10
-NOTICE:  Dropping the old alter_table_set_access_method.time_partitioned_d10
-NOTICE:  Renaming the new table to alter_table_set_access_method.time_partitioned_d10
+NOTICE:  moving the data of alter_table_set_access_method.time_partitioned_d10
+NOTICE:  dropping the old alter_table_set_access_method.time_partitioned_d10
+NOTICE:  renaming the new table to alter_table_set_access_method.time_partitioned_d10
 SELECT partition, access_method FROM time_partitions WHERE parent_table = 'time_partitioned'::regclass ORDER BY partition::text;
       partition       | access_method
 ---------------------------------------------------------------------
@@ -324,9 +324,9 @@ SELECT alter_table_set_access_method('index_table', 'columnar');
 NOTICE:  the index idx1 on table alter_table_set_access_method.index_table will be dropped, because columnar tables cannot have indexes
 NOTICE:  the index idx2 on table alter_table_set_access_method.index_table will be dropped, because columnar tables cannot have indexes
 NOTICE:  creating a new table for alter_table_set_access_method.index_table
-NOTICE:  Moving the data of alter_table_set_access_method.index_table
-NOTICE:  Dropping the old alter_table_set_access_method.index_table
-NOTICE:  Renaming the new table to alter_table_set_access_method.index_table
+NOTICE:  moving the data of alter_table_set_access_method.index_table
+NOTICE:  dropping the old alter_table_set_access_method.index_table
+NOTICE:  renaming the new table to alter_table_set_access_method.index_table
  alter_table_set_access_method
 ---------------------------------------------------------------------
 
@@ -395,9 +395,9 @@ NOTICE:  creating a new table for alter_table_set_access_method.table_type_dist
 WARNING:  fake_scan_getnextslot
 CONTEXT:  SQL statement "SELECT EXISTS (SELECT 1 FROM alter_table_set_access_method.table_type_dist_1533505599)"
 WARNING:  fake_scan_getnextslot
-NOTICE:  Moving the data of alter_table_set_access_method.table_type_dist
-NOTICE:  Dropping the old alter_table_set_access_method.table_type_dist
-NOTICE:  Renaming the new table to alter_table_set_access_method.table_type_dist
+NOTICE:  moving the data of alter_table_set_access_method.table_type_dist
+NOTICE:  dropping the old alter_table_set_access_method.table_type_dist
+NOTICE:  renaming the new table to alter_table_set_access_method.table_type_dist
  alter_table_set_access_method
 ---------------------------------------------------------------------
 
@@ -408,9 +408,9 @@ NOTICE:  creating a new table for alter_table_set_access_method.table_type_ref
 WARNING:  fake_scan_getnextslot
 CONTEXT:  SQL statement "SELECT EXISTS (SELECT 1 FROM alter_table_set_access_method.table_type_ref_1037855087)"
 WARNING:  fake_scan_getnextslot
-NOTICE:  Moving the data of alter_table_set_access_method.table_type_ref
-NOTICE:  Dropping the old alter_table_set_access_method.table_type_ref
-NOTICE:  Renaming the new table to alter_table_set_access_method.table_type_ref
+NOTICE:  moving the data of alter_table_set_access_method.table_type_ref
+NOTICE:  dropping the old alter_table_set_access_method.table_type_ref
+NOTICE:  renaming the new table to alter_table_set_access_method.table_type_ref
  alter_table_set_access_method
 ---------------------------------------------------------------------
 
@@ -418,9 +418,9 @@ NOTICE:  Renaming the new table to alter_table_set_access_method.table_type_ref
 
 SELECT alter_table_set_access_method('table_type_pg_local', 'fake_am');
 NOTICE:  creating a new table for alter_table_set_access_method.table_type_pg_local
-NOTICE:  Moving the data of alter_table_set_access_method.table_type_pg_local
-NOTICE:  Dropping the old alter_table_set_access_method.table_type_pg_local
-NOTICE:  Renaming the new table to alter_table_set_access_method.table_type_pg_local
+NOTICE:  moving the data of alter_table_set_access_method.table_type_pg_local
+NOTICE:  dropping the old alter_table_set_access_method.table_type_pg_local
+NOTICE:  renaming the new table to alter_table_set_access_method.table_type_pg_local
  alter_table_set_access_method
 ---------------------------------------------------------------------
 
@@ -428,9 +428,9 @@ NOTICE:  Renaming the new table to alter_table_set_access_method.table_type_pg_l
 
 SELECT alter_table_set_access_method('table_type_citus_local', 'fake_am');
 NOTICE:  creating a new table for alter_table_set_access_method.table_type_citus_local
-NOTICE:  Moving the data of alter_table_set_access_method.table_type_citus_local
-NOTICE:  Dropping the old alter_table_set_access_method.table_type_citus_local
-NOTICE:  Renaming the new table to alter_table_set_access_method.table_type_citus_local
+NOTICE:  moving the data of alter_table_set_access_method.table_type_citus_local
+NOTICE:  dropping the old alter_table_set_access_method.table_type_citus_local
+NOTICE:  renaming the new table to alter_table_set_access_method.table_type_citus_local
  alter_table_set_access_method
 ---------------------------------------------------------------------
 
@@ -459,9 +459,9 @@ create table test_fk_p0 partition of test_fk_p for values from (0) to (10);
 create table test_fk_p1 partition of test_fk_p for values from (10) to (20);
 select alter_table_set_access_method('test_fk_p1', 'columnar');
 NOTICE:  creating a new table for alter_table_set_access_method.test_fk_p1
-NOTICE:  Moving the data of alter_table_set_access_method.test_fk_p1
-NOTICE:  Dropping the old alter_table_set_access_method.test_fk_p1
-NOTICE:  Renaming the new table to alter_table_set_access_method.test_fk_p1
+NOTICE:  moving the data of alter_table_set_access_method.test_fk_p1
+NOTICE:  dropping the old alter_table_set_access_method.test_fk_p1
+NOTICE:  renaming the new table to alter_table_set_access_method.test_fk_p1
 ERROR:  Foreign keys and AFTER ROW triggers are not supported for columnar tables
 HINT:  Consider an AFTER STATEMENT trigger instead.
 CONTEXT:  SQL statement "ALTER TABLE alter_table_set_access_method.test_fk_p ATTACH PARTITION alter_table_set_access_method.test_fk_p1 FOR VALUES FROM (10) TO (20);"
@@ -475,11 +475,11 @@ INSERT INTO mat_view_test VALUES (1), (2);
 CREATE MATERIALIZED VIEW mat_view AS SELECT * FROM mat_view_test;
 SELECT alter_table_set_access_method('mat_view_test','columnar');
 NOTICE:  creating a new table for alter_table_set_access_method.mat_view_test
-NOTICE:  Moving the data of alter_table_set_access_method.mat_view_test
-NOTICE:  Dropping the old alter_table_set_access_method.mat_view_test
+NOTICE:  moving the data of alter_table_set_access_method.mat_view_test
+NOTICE:  dropping the old alter_table_set_access_method.mat_view_test
 NOTICE:  drop cascades to materialized view mat_view
 CONTEXT:  SQL statement "DROP TABLE alter_table_set_access_method.mat_view_test CASCADE"
-NOTICE:  Renaming the new table to alter_table_set_access_method.mat_view_test
+NOTICE:  renaming the new table to alter_table_set_access_method.mat_view_test
  alter_table_set_access_method
 ---------------------------------------------------------------------
 
@@ -519,13 +519,13 @@ create materialized view m_dist as select * from dist;
 create view v_dist as select * from dist;
 select alter_table_set_access_method('local','columnar');
 NOTICE:  creating a new table for alter_table_set_access_method.local
-NOTICE:  Moving the data of alter_table_set_access_method.local
-NOTICE:  Dropping the old alter_table_set_access_method.local
+NOTICE:  moving the data of alter_table_set_access_method.local
+NOTICE:  dropping the old alter_table_set_access_method.local
 NOTICE:  drop cascades to 2 other objects
 DETAIL:  drop cascades to materialized view m_local
 drop cascades to view v_local
 CONTEXT:  SQL statement "DROP TABLE alter_table_set_access_method.local CASCADE"
-NOTICE:  Renaming the new table to alter_table_set_access_method.local
+NOTICE:  renaming the new table to alter_table_set_access_method.local
  alter_table_set_access_method
 ---------------------------------------------------------------------
 
@@ -533,13 +533,13 @@ NOTICE:  Renaming the new table to alter_table_set_access_method.local
 
 select alter_table_set_access_method('ref','columnar');
 NOTICE:  creating a new table for alter_table_set_access_method.ref
-NOTICE:  Moving the data of alter_table_set_access_method.ref
-NOTICE:  Dropping the old alter_table_set_access_method.ref
+NOTICE:  moving the data of alter_table_set_access_method.ref
+NOTICE:  dropping the old alter_table_set_access_method.ref
 NOTICE:  drop cascades to 2 other objects
 DETAIL:  drop cascades to materialized view m_ref
 drop cascades to view v_ref
 CONTEXT:  SQL statement "DROP TABLE alter_table_set_access_method.ref CASCADE"
-NOTICE:  Renaming the new table to alter_table_set_access_method.ref
+NOTICE:  renaming the new table to alter_table_set_access_method.ref
  alter_table_set_access_method
 ---------------------------------------------------------------------
 
@@ -547,13 +547,13 @@ NOTICE:  Renaming the new table to alter_table_set_access_method.ref
 
 select alter_table_set_access_method('dist','columnar');
 NOTICE:  creating a new table for alter_table_set_access_method.dist
-NOTICE:  Moving the data of alter_table_set_access_method.dist
-NOTICE:  Dropping the old alter_table_set_access_method.dist
+NOTICE:  moving the data of alter_table_set_access_method.dist
+NOTICE:  dropping the old alter_table_set_access_method.dist
 NOTICE:  drop cascades to 2 other objects
 DETAIL:  drop cascades to materialized view m_dist
 drop cascades to view v_dist
 CONTEXT:  SQL statement "DROP TABLE alter_table_set_access_method.dist CASCADE"
-NOTICE:  Renaming the new table to alter_table_set_access_method.dist
+NOTICE:  renaming the new table to alter_table_set_access_method.dist
  alter_table_set_access_method
 ---------------------------------------------------------------------
 
@@ -561,13 +561,13 @@ NOTICE:  Renaming the new table to alter_table_set_access_method.dist
 
 SELECT alter_distributed_table('dist', shard_count:=1, cascade_to_colocated:=false);
 NOTICE:  creating a new table for alter_table_set_access_method.dist
-NOTICE:  Moving the data of alter_table_set_access_method.dist
-NOTICE:  Dropping the old alter_table_set_access_method.dist
+NOTICE:  moving the data of alter_table_set_access_method.dist
+NOTICE:  dropping the old alter_table_set_access_method.dist
 NOTICE:  drop cascades to 2 other objects
 DETAIL:  drop cascades to materialized view m_dist
 drop cascades to view v_dist
 CONTEXT:  SQL statement "DROP TABLE alter_table_set_access_method.dist CASCADE"
-NOTICE:  Renaming the new table to alter_table_set_access_method.dist
+NOTICE:  renaming the new table to alter_table_set_access_method.dist
  alter_distributed_table
 ---------------------------------------------------------------------
 
@@ -575,13 +575,13 @@ NOTICE:  Renaming the new table to alter_table_set_access_method.dist
 
 select alter_table_set_access_method('local','heap');
 NOTICE:  creating a new table for alter_table_set_access_method.local
-NOTICE:  Moving the data of alter_table_set_access_method.local
-NOTICE:  Dropping the old alter_table_set_access_method.local
+NOTICE:  moving the data of alter_table_set_access_method.local
+NOTICE:  dropping the old alter_table_set_access_method.local
 NOTICE:  drop cascades to 2 other objects
 DETAIL:  drop cascades to materialized view m_local
 drop cascades to view v_local
 CONTEXT:  SQL statement "DROP TABLE alter_table_set_access_method.local CASCADE"
-NOTICE:  Renaming the new table to alter_table_set_access_method.local
+NOTICE:  renaming the new table to alter_table_set_access_method.local
  alter_table_set_access_method
 ---------------------------------------------------------------------
 
@@ -589,13 +589,13 @@ NOTICE:  Renaming the new table to alter_table_set_access_method.local
 
 select alter_table_set_access_method('ref','heap');
 NOTICE:  creating a new table for alter_table_set_access_method.ref
-NOTICE:  Moving the data of alter_table_set_access_method.ref
-NOTICE:  Dropping the old alter_table_set_access_method.ref
+NOTICE:  moving the data of alter_table_set_access_method.ref
+NOTICE:  dropping the old alter_table_set_access_method.ref
 NOTICE:  drop cascades to 2 other objects
 DETAIL:  drop cascades to materialized view m_ref
 drop cascades to view v_ref
 CONTEXT:  SQL statement "DROP TABLE alter_table_set_access_method.ref CASCADE"
-NOTICE:  Renaming the new table to alter_table_set_access_method.ref
+NOTICE:  renaming the new table to alter_table_set_access_method.ref
  alter_table_set_access_method
 ---------------------------------------------------------------------
 
@@ -603,13 +603,13 @@ NOTICE:  Renaming the new table to alter_table_set_access_method.ref
 
 select alter_table_set_access_method('dist','heap');
 NOTICE:  creating a new table for alter_table_set_access_method.dist
-NOTICE:  Moving the data of alter_table_set_access_method.dist
-NOTICE:  Dropping the old alter_table_set_access_method.dist
+NOTICE:  moving the data of alter_table_set_access_method.dist
+NOTICE:  dropping the old alter_table_set_access_method.dist
 NOTICE:  drop cascades to 2 other objects
 DETAIL:  drop cascades to materialized view m_dist
 drop cascades to view v_dist
 CONTEXT:  SQL statement "DROP TABLE alter_table_set_access_method.dist CASCADE"
-NOTICE:  Renaming the new table to alter_table_set_access_method.dist
+NOTICE:  renaming the new table to alter_table_set_access_method.dist
  alter_table_set_access_method
 ---------------------------------------------------------------------
 
@@ -696,10 +696,10 @@ DEBUG:  the name of the shard (abcde_01234567890123456789012345678901234567890_f
 NOTICE:  creating a new table for alter_table_set_access_method.abcde_012345678901234567890123456789012345678901234567890123456
 DEBUG:  pathlist hook for columnar table am
 CONTEXT:  SQL statement "SELECT EXISTS (SELECT 1 FROM alter_table_set_access_method.abcde_0123456789012345678901234567890123456_f7ff6612_4160710162)"
-NOTICE:  Moving the data of alter_table_set_access_method.abcde_012345678901234567890123456789012345678901234567890123456
-NOTICE:  Dropping the old alter_table_set_access_method.abcde_012345678901234567890123456789012345678901234567890123456
+NOTICE:  moving the data of alter_table_set_access_method.abcde_012345678901234567890123456789012345678901234567890123456
+NOTICE:  dropping the old alter_table_set_access_method.abcde_012345678901234567890123456789012345678901234567890123456
 CONTEXT:  SQL statement "DROP TABLE alter_table_set_access_method.abcde_012345678901234567890123456789012345678901234567890123456 CASCADE"
-NOTICE:  Renaming the new table to alter_table_set_access_method.abcde_012345678901234567890123456789012345678901234567890123456
+NOTICE:  renaming the new table to alter_table_set_access_method.abcde_012345678901234567890123456789012345678901234567890123456
 DEBUG:  the name of the shard (abcde_01234567890123456789012345678901234567890_f7ff6612_xxxxxx) for relation (abcde_012345678901234567890123456789012345678901234567890123456) is too long, switching to sequential and local execution mode to prevent self deadlocks
 CONTEXT:  SQL statement "ALTER TABLE alter_table_set_access_method.abcde_0123456789012345678901234567890123456_f7ff6612_4160710162 RENAME TO abcde_012345678901234567890123456789012345678901234567890123456"
  alter_table_set_access_method

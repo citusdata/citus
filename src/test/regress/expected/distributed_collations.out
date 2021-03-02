@@ -73,9 +73,9 @@ SELECT create_distributed_table('test_collate_pushed_down_aggregate', 'a');
 
 SELECT alter_distributed_table('test_collate_pushed_down_aggregate', shard_count := 2, cascade_to_colocated:=false);
 NOTICE:  creating a new table for collation_tests.test_collate_pushed_down_aggregate
-NOTICE:  Moving the data of collation_tests.test_collate_pushed_down_aggregate
-NOTICE:  Dropping the old collation_tests.test_collate_pushed_down_aggregate
-NOTICE:  Renaming the new table to collation_tests.test_collate_pushed_down_aggregate
+NOTICE:  moving the data of collation_tests.test_collate_pushed_down_aggregate
+NOTICE:  dropping the old collation_tests.test_collate_pushed_down_aggregate
+NOTICE:  renaming the new table to collation_tests.test_collate_pushed_down_aggregate
  alter_distributed_table
 ---------------------------------------------------------------------
 

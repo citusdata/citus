@@ -35,15 +35,15 @@ SELECT * FROM dist_table ORDER BY 1, 2, 3;
 -- the name->OID conversion happens at parse time.
 SELECT undistribute_table('dist_table'), create_distributed_table('dist_table', 'a');
 NOTICE:  creating a new table for undistribute_table.dist_table
-NOTICE:  Moving the data of undistribute_table.dist_table
-NOTICE:  Dropping the old undistribute_table.dist_table
-NOTICE:  Renaming the new table to undistribute_table.dist_table
+NOTICE:  moving the data of undistribute_table.dist_table
+NOTICE:  dropping the old undistribute_table.dist_table
+NOTICE:  renaming the new table to undistribute_table.dist_table
 ERROR:  relation with OID XXXX does not exist
 SELECT undistribute_table('dist_table');
 NOTICE:  creating a new table for undistribute_table.dist_table
-NOTICE:  Moving the data of undistribute_table.dist_table
-NOTICE:  Dropping the old undistribute_table.dist_table
-NOTICE:  Renaming the new table to undistribute_table.dist_table
+NOTICE:  moving the data of undistribute_table.dist_table
+NOTICE:  dropping the old undistribute_table.dist_table
+NOTICE:  renaming the new table to undistribute_table.dist_table
  undistribute_table
 ---------------------------------------------------------------------
 
@@ -88,9 +88,9 @@ SELECT * FROM pg_indexes WHERE tablename = 'dist_table';
 
 SELECT undistribute_table('dist_table');
 NOTICE:  creating a new table for undistribute_table.dist_table
-NOTICE:  Moving the data of undistribute_table.dist_table
-NOTICE:  Dropping the old undistribute_table.dist_table
-NOTICE:  Renaming the new table to undistribute_table.dist_table
+NOTICE:  moving the data of undistribute_table.dist_table
+NOTICE:  dropping the old undistribute_table.dist_table
+NOTICE:  renaming the new table to undistribute_table.dist_table
  undistribute_table
 ---------------------------------------------------------------------
 
@@ -204,16 +204,16 @@ HINT:  the parent table is "partitioned_table"
 SELECT undistribute_table('partitioned_table');
 NOTICE:  converting the partitions of undistribute_table.partitioned_table
 NOTICE:  creating a new table for undistribute_table.partitioned_table_1_5
-NOTICE:  Moving the data of undistribute_table.partitioned_table_1_5
-NOTICE:  Dropping the old undistribute_table.partitioned_table_1_5
-NOTICE:  Renaming the new table to undistribute_table.partitioned_table_1_5
+NOTICE:  moving the data of undistribute_table.partitioned_table_1_5
+NOTICE:  dropping the old undistribute_table.partitioned_table_1_5
+NOTICE:  renaming the new table to undistribute_table.partitioned_table_1_5
 NOTICE:  creating a new table for undistribute_table.partitioned_table_6_10
-NOTICE:  Moving the data of undistribute_table.partitioned_table_6_10
-NOTICE:  Dropping the old undistribute_table.partitioned_table_6_10
-NOTICE:  Renaming the new table to undistribute_table.partitioned_table_6_10
+NOTICE:  moving the data of undistribute_table.partitioned_table_6_10
+NOTICE:  dropping the old undistribute_table.partitioned_table_6_10
+NOTICE:  renaming the new table to undistribute_table.partitioned_table_6_10
 NOTICE:  creating a new table for undistribute_table.partitioned_table
-NOTICE:  Dropping the old undistribute_table.partitioned_table
-NOTICE:  Renaming the new table to undistribute_table.partitioned_table
+NOTICE:  dropping the old undistribute_table.partitioned_table
+NOTICE:  renaming the new table to undistribute_table.partitioned_table
  undistribute_table
 ---------------------------------------------------------------------
 
@@ -283,9 +283,9 @@ SELECT * FROM seq_table ORDER BY a;
 
 SELECT undistribute_table('seq_table');
 NOTICE:  creating a new table for undistribute_table.seq_table
-NOTICE:  Moving the data of undistribute_table.seq_table
-NOTICE:  Dropping the old undistribute_table.seq_table
-NOTICE:  Renaming the new table to undistribute_table.seq_table
+NOTICE:  moving the data of undistribute_table.seq_table
+NOTICE:  dropping the old undistribute_table.seq_table
+NOTICE:  renaming the new table to undistribute_table.seq_table
  undistribute_table
 ---------------------------------------------------------------------
 
@@ -348,14 +348,14 @@ SELECT * FROM another_schema.undis_view3 ORDER BY 1, 2;
 
 SELECT undistribute_table('view_table');
 NOTICE:  creating a new table for undistribute_table.view_table
-NOTICE:  Moving the data of undistribute_table.view_table
-NOTICE:  Dropping the old undistribute_table.view_table
+NOTICE:  moving the data of undistribute_table.view_table
+NOTICE:  dropping the old undistribute_table.view_table
 NOTICE:  drop cascades to 3 other objects
 DETAIL:  drop cascades to view undis_view1
 drop cascades to view undis_view2
 drop cascades to view another_schema.undis_view3
 CONTEXT:  SQL statement "DROP TABLE undistribute_table.view_table CASCADE"
-NOTICE:  Renaming the new table to undistribute_table.view_table
+NOTICE:  renaming the new table to undistribute_table.view_table
  undistribute_table
 ---------------------------------------------------------------------
 
