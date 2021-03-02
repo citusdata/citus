@@ -565,7 +565,6 @@ columnar_relation_set_new_filenode(Relation rel,
 	/* delete old relfilenode metadata */
 	DeleteMetadataRows(rel->rd_node);
 
-	Assert(persistence == RELPERSISTENCE_PERMANENT);
 	*freezeXid = RecentXmin;
 	*minmulti = GetOldestMultiXactId();
 	SMgrRelation srel = RelationCreateStorage(*newrnode, persistence);
