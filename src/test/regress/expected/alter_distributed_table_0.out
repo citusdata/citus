@@ -53,9 +53,9 @@ SELECT STRING_AGG(table_name::text, ', ' ORDER BY 1) AS "Colocation Groups" FROM
 -- test altering distribution column
 SELECT alter_distributed_table('dist_table', distribution_column := 'b');
 NOTICE:  creating a new table for alter_distributed_table.dist_table
-NOTICE:  Moving the data of alter_distributed_table.dist_table
-NOTICE:  Dropping the old alter_distributed_table.dist_table
-NOTICE:  Renaming the new table to alter_distributed_table.dist_table
+NOTICE:  moving the data of alter_distributed_table.dist_table
+NOTICE:  dropping the old alter_distributed_table.dist_table
+NOTICE:  renaming the new table to alter_distributed_table.dist_table
  alter_distributed_table
 ---------------------------------------------------------------------
 
@@ -82,9 +82,9 @@ SELECT STRING_AGG(table_name::text, ', ' ORDER BY 1) AS "Colocation Groups" FROM
 -- test altering shard count
 SELECT alter_distributed_table('dist_table', shard_count := 6);
 NOTICE:  creating a new table for alter_distributed_table.dist_table
-NOTICE:  Moving the data of alter_distributed_table.dist_table
-NOTICE:  Dropping the old alter_distributed_table.dist_table
-NOTICE:  Renaming the new table to alter_distributed_table.dist_table
+NOTICE:  moving the data of alter_distributed_table.dist_table
+NOTICE:  dropping the old alter_distributed_table.dist_table
+NOTICE:  renaming the new table to alter_distributed_table.dist_table
  alter_distributed_table
 ---------------------------------------------------------------------
 
@@ -111,9 +111,9 @@ SELECT STRING_AGG(table_name::text, ', ' ORDER BY 1) AS "Colocation Groups" FROM
 -- test altering colocation, note that shard count will also change
 SELECT alter_distributed_table('dist_table', colocate_with := 'alter_distributed_table.colocation_table');
 NOTICE:  creating a new table for alter_distributed_table.dist_table
-NOTICE:  Moving the data of alter_distributed_table.dist_table
-NOTICE:  Dropping the old alter_distributed_table.dist_table
-NOTICE:  Renaming the new table to alter_distributed_table.dist_table
+NOTICE:  moving the data of alter_distributed_table.dist_table
+NOTICE:  dropping the old alter_distributed_table.dist_table
+NOTICE:  renaming the new table to alter_distributed_table.dist_table
  alter_distributed_table
 ---------------------------------------------------------------------
 
@@ -139,13 +139,13 @@ SELECT STRING_AGG(table_name::text, ', ' ORDER BY 1) AS "Colocation Groups" FROM
 -- test altering shard count with cascading, note that the colocation will be kept
 SELECT alter_distributed_table('dist_table', shard_count := 8, cascade_to_colocated := true);
 NOTICE:  creating a new table for alter_distributed_table.dist_table
-NOTICE:  Moving the data of alter_distributed_table.dist_table
-NOTICE:  Dropping the old alter_distributed_table.dist_table
-NOTICE:  Renaming the new table to alter_distributed_table.dist_table
+NOTICE:  moving the data of alter_distributed_table.dist_table
+NOTICE:  dropping the old alter_distributed_table.dist_table
+NOTICE:  renaming the new table to alter_distributed_table.dist_table
 NOTICE:  creating a new table for alter_distributed_table.colocation_table
-NOTICE:  Moving the data of alter_distributed_table.colocation_table
-NOTICE:  Dropping the old alter_distributed_table.colocation_table
-NOTICE:  Renaming the new table to alter_distributed_table.colocation_table
+NOTICE:  moving the data of alter_distributed_table.colocation_table
+NOTICE:  dropping the old alter_distributed_table.colocation_table
+NOTICE:  renaming the new table to alter_distributed_table.colocation_table
  alter_distributed_table
 ---------------------------------------------------------------------
 
@@ -171,9 +171,9 @@ SELECT STRING_AGG(table_name::text, ', ' ORDER BY 1) AS "Colocation Groups" FROM
 -- test altering shard count without cascading, note that the colocation will be broken
 SELECT alter_distributed_table('dist_table', shard_count := 10, cascade_to_colocated := false);
 NOTICE:  creating a new table for alter_distributed_table.dist_table
-NOTICE:  Moving the data of alter_distributed_table.dist_table
-NOTICE:  Dropping the old alter_distributed_table.dist_table
-NOTICE:  Renaming the new table to alter_distributed_table.dist_table
+NOTICE:  moving the data of alter_distributed_table.dist_table
+NOTICE:  dropping the old alter_distributed_table.dist_table
+NOTICE:  renaming the new table to alter_distributed_table.dist_table
  alter_distributed_table
 ---------------------------------------------------------------------
 
@@ -261,16 +261,16 @@ SELECT * FROM partitioned_table_6_10 ORDER BY 1, 2;
 SELECT alter_distributed_table('partitioned_table', shard_count := 10, distribution_column := 'a');
 NOTICE:  converting the partitions of alter_distributed_table.partitioned_table
 NOTICE:  creating a new table for alter_distributed_table.partitioned_table_1_5
-NOTICE:  Moving the data of alter_distributed_table.partitioned_table_1_5
-NOTICE:  Dropping the old alter_distributed_table.partitioned_table_1_5
-NOTICE:  Renaming the new table to alter_distributed_table.partitioned_table_1_5
+NOTICE:  moving the data of alter_distributed_table.partitioned_table_1_5
+NOTICE:  dropping the old alter_distributed_table.partitioned_table_1_5
+NOTICE:  renaming the new table to alter_distributed_table.partitioned_table_1_5
 NOTICE:  creating a new table for alter_distributed_table.partitioned_table_6_10
-NOTICE:  Moving the data of alter_distributed_table.partitioned_table_6_10
-NOTICE:  Dropping the old alter_distributed_table.partitioned_table_6_10
-NOTICE:  Renaming the new table to alter_distributed_table.partitioned_table_6_10
+NOTICE:  moving the data of alter_distributed_table.partitioned_table_6_10
+NOTICE:  dropping the old alter_distributed_table.partitioned_table_6_10
+NOTICE:  renaming the new table to alter_distributed_table.partitioned_table_6_10
 NOTICE:  creating a new table for alter_distributed_table.partitioned_table
-NOTICE:  Dropping the old alter_distributed_table.partitioned_table
-NOTICE:  Renaming the new table to alter_distributed_table.partitioned_table
+NOTICE:  dropping the old alter_distributed_table.partitioned_table
+NOTICE:  renaming the new table to alter_distributed_table.partitioned_table
  alter_distributed_table
 ---------------------------------------------------------------------
 
@@ -637,12 +637,12 @@ ALTER TABLE par_table ATTACH PARTITION par_table_1 FOR VALUES FROM (1) TO (5);
 SELECT alter_distributed_table('par_table', distribution_column:='b', colocate_with:='col_table');
 NOTICE:  converting the partitions of alter_distributed_table.par_table
 NOTICE:  creating a new table for alter_distributed_table.par_table_1
-NOTICE:  Moving the data of alter_distributed_table.par_table_1
-NOTICE:  Dropping the old alter_distributed_table.par_table_1
-NOTICE:  Renaming the new table to alter_distributed_table.par_table_1
+NOTICE:  moving the data of alter_distributed_table.par_table_1
+NOTICE:  dropping the old alter_distributed_table.par_table_1
+NOTICE:  renaming the new table to alter_distributed_table.par_table_1
 NOTICE:  creating a new table for alter_distributed_table.par_table
-NOTICE:  Dropping the old alter_distributed_table.par_table
-NOTICE:  Renaming the new table to alter_distributed_table.par_table
+NOTICE:  dropping the old alter_distributed_table.par_table
+NOTICE:  renaming the new table to alter_distributed_table.par_table
  alter_distributed_table
 ---------------------------------------------------------------------
 
@@ -664,9 +664,9 @@ HINT:  check citus_tables view to see current properties of the table
 -- first colocate the tables, then try to re-colococate
 SELECT alter_distributed_table('dist_table', colocate_with := 'colocation_table');
 NOTICE:  creating a new table for alter_distributed_table.dist_table
-NOTICE:  Moving the data of alter_distributed_table.dist_table
-NOTICE:  Dropping the old alter_distributed_table.dist_table
-NOTICE:  Renaming the new table to alter_distributed_table.dist_table
+NOTICE:  moving the data of alter_distributed_table.dist_table
+NOTICE:  dropping the old alter_distributed_table.dist_table
+NOTICE:  renaming the new table to alter_distributed_table.dist_table
  alter_distributed_table
 ---------------------------------------------------------------------
 
@@ -680,9 +680,9 @@ HINT:  check citus_tables view to see current properties of the table
 SELECT alter_distributed_table('dist_table', distribution_column:='b', shard_count:=4, cascade_to_colocated:=false);
 NOTICE:  table is already distributed by b
 NOTICE:  creating a new table for alter_distributed_table.dist_table
-NOTICE:  Moving the data of alter_distributed_table.dist_table
-NOTICE:  Dropping the old alter_distributed_table.dist_table
-NOTICE:  Renaming the new table to alter_distributed_table.dist_table
+NOTICE:  moving the data of alter_distributed_table.dist_table
+NOTICE:  dropping the old alter_distributed_table.dist_table
+NOTICE:  renaming the new table to alter_distributed_table.dist_table
  alter_distributed_table
 ---------------------------------------------------------------------
 
@@ -691,9 +691,9 @@ NOTICE:  Renaming the new table to alter_distributed_table.dist_table
 SELECT alter_distributed_table('dist_table', shard_count:=4, colocate_with:='colocation_table_2');
 NOTICE:  shard count of the table is already 4
 NOTICE:  creating a new table for alter_distributed_table.dist_table
-NOTICE:  Moving the data of alter_distributed_table.dist_table
-NOTICE:  Dropping the old alter_distributed_table.dist_table
-NOTICE:  Renaming the new table to alter_distributed_table.dist_table
+NOTICE:  moving the data of alter_distributed_table.dist_table
+NOTICE:  dropping the old alter_distributed_table.dist_table
+NOTICE:  renaming the new table to alter_distributed_table.dist_table
  alter_distributed_table
 ---------------------------------------------------------------------
 
@@ -702,9 +702,9 @@ NOTICE:  Renaming the new table to alter_distributed_table.dist_table
 SELECT alter_distributed_table('dist_table', colocate_with:='colocation_table_2', distribution_column:='a');
 NOTICE:  table is already colocated with colocation_table_2
 NOTICE:  creating a new table for alter_distributed_table.dist_table
-NOTICE:  Moving the data of alter_distributed_table.dist_table
-NOTICE:  Dropping the old alter_distributed_table.dist_table
-NOTICE:  Renaming the new table to alter_distributed_table.dist_table
+NOTICE:  moving the data of alter_distributed_table.dist_table
+NOTICE:  dropping the old alter_distributed_table.dist_table
+NOTICE:  renaming the new table to alter_distributed_table.dist_table
  alter_distributed_table
 ---------------------------------------------------------------------
 
@@ -729,9 +729,9 @@ HINT:  cascade_to_colocated := false will break the current colocation, cascade_
 -- test changing shard count of a non-colocated table without cascade_to_colocated, shouldn't error
 SELECT alter_distributed_table('dist_table', colocate_with := 'none');
 NOTICE:  creating a new table for alter_distributed_table.dist_table
-NOTICE:  Moving the data of alter_distributed_table.dist_table
-NOTICE:  Dropping the old alter_distributed_table.dist_table
-NOTICE:  Renaming the new table to alter_distributed_table.dist_table
+NOTICE:  moving the data of alter_distributed_table.dist_table
+NOTICE:  dropping the old alter_distributed_table.dist_table
+NOTICE:  renaming the new table to alter_distributed_table.dist_table
  alter_distributed_table
 ---------------------------------------------------------------------
 
@@ -739,9 +739,9 @@ NOTICE:  Renaming the new table to alter_distributed_table.dist_table
 
 SELECT alter_distributed_table('dist_table', shard_count := 14);
 NOTICE:  creating a new table for alter_distributed_table.dist_table
-NOTICE:  Moving the data of alter_distributed_table.dist_table
-NOTICE:  Dropping the old alter_distributed_table.dist_table
-NOTICE:  Renaming the new table to alter_distributed_table.dist_table
+NOTICE:  moving the data of alter_distributed_table.dist_table
+NOTICE:  dropping the old alter_distributed_table.dist_table
+NOTICE:  renaming the new table to alter_distributed_table.dist_table
  alter_distributed_table
 ---------------------------------------------------------------------
 
@@ -799,11 +799,11 @@ INSERT INTO mat_view_test VALUES (1,1), (2,2);
 CREATE MATERIALIZED VIEW mat_view AS SELECT * FROM mat_view_test;
 SELECT alter_distributed_table('mat_view_test', shard_count := 5, cascade_to_colocated := false);
 NOTICE:  creating a new table for alter_distributed_table.mat_view_test
-NOTICE:  Moving the data of alter_distributed_table.mat_view_test
-NOTICE:  Dropping the old alter_distributed_table.mat_view_test
+NOTICE:  moving the data of alter_distributed_table.mat_view_test
+NOTICE:  dropping the old alter_distributed_table.mat_view_test
 NOTICE:  drop cascades to materialized view mat_view
 CONTEXT:  SQL statement "DROP TABLE alter_distributed_table.mat_view_test CASCADE"
-NOTICE:  Renaming the new table to alter_distributed_table.mat_view_test
+NOTICE:  renaming the new table to alter_distributed_table.mat_view_test
  alter_distributed_table
 ---------------------------------------------------------------------
 
@@ -829,15 +829,15 @@ SELECT create_distributed_table('abcde_01234567890123456789012345678901234567890
 SELECT alter_distributed_table('abcde_0123456789012345678901234567890123456789012345678901234567890123456789', distribution_column := 'y');
 DEBUG:  the name of the shard (abcde_01234567890123456789012345678901234567890_f7ff6612_xxxxxx) for relation (abcde_012345678901234567890123456789012345678901234567890123456) is too long, switching to sequential and local execution mode to prevent self deadlocks
 NOTICE:  creating a new table for alter_distributed_table.abcde_012345678901234567890123456789012345678901234567890123456
-NOTICE:  Moving the data of alter_distributed_table.abcde_012345678901234567890123456789012345678901234567890123456
+NOTICE:  moving the data of alter_distributed_table.abcde_012345678901234567890123456789012345678901234567890123456
 DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
 DETAIL:  The target table's partition column should correspond to a partition column in the subquery.
 CONTEXT:  SQL statement "INSERT INTO alter_distributed_table.abcde_0123456789012345678901234567890123456_f7ff6612_4160710162 (x,y) SELECT x,y FROM alter_distributed_table.abcde_012345678901234567890123456789012345678901234567890123456"
 DEBUG:  performing repartitioned INSERT ... SELECT
 CONTEXT:  SQL statement "INSERT INTO alter_distributed_table.abcde_0123456789012345678901234567890123456_f7ff6612_4160710162 (x,y) SELECT x,y FROM alter_distributed_table.abcde_012345678901234567890123456789012345678901234567890123456"
-NOTICE:  Dropping the old alter_distributed_table.abcde_012345678901234567890123456789012345678901234567890123456
+NOTICE:  dropping the old alter_distributed_table.abcde_012345678901234567890123456789012345678901234567890123456
 CONTEXT:  SQL statement "DROP TABLE alter_distributed_table.abcde_012345678901234567890123456789012345678901234567890123456 CASCADE"
-NOTICE:  Renaming the new table to alter_distributed_table.abcde_012345678901234567890123456789012345678901234567890123456
+NOTICE:  renaming the new table to alter_distributed_table.abcde_012345678901234567890123456789012345678901234567890123456
 DEBUG:  the name of the shard (abcde_01234567890123456789012345678901234567890_f7ff6612_xxxxxx) for relation (abcde_012345678901234567890123456789012345678901234567890123456) is too long, switching to sequential and local execution mode to prevent self deadlocks
 CONTEXT:  SQL statement "ALTER TABLE alter_distributed_table.abcde_0123456789012345678901234567890123456_f7ff6612_4160710162 RENAME TO abcde_012345678901234567890123456789012345678901234567890123456"
  alter_distributed_table
@@ -865,12 +865,12 @@ NOTICE:  identifier "partition_lengths_p2020_09_28_12345678901234567890123456789
 SELECT alter_distributed_table('partition_lengths', shard_count := 29, cascade_to_colocated := false);
 NOTICE:  converting the partitions of alter_distributed_table.partition_lengths
 NOTICE:  creating a new table for alter_distributed_table.partition_lengths_p2020_09_28_123456789012345678901234567890123
-NOTICE:  Moving the data of alter_distributed_table.partition_lengths_p2020_09_28_123456789012345678901234567890123
-NOTICE:  Dropping the old alter_distributed_table.partition_lengths_p2020_09_28_123456789012345678901234567890123
-NOTICE:  Renaming the new table to alter_distributed_table.partition_lengths_p2020_09_28_123456789012345678901234567890123
+NOTICE:  moving the data of alter_distributed_table.partition_lengths_p2020_09_28_123456789012345678901234567890123
+NOTICE:  dropping the old alter_distributed_table.partition_lengths_p2020_09_28_123456789012345678901234567890123
+NOTICE:  renaming the new table to alter_distributed_table.partition_lengths_p2020_09_28_123456789012345678901234567890123
 NOTICE:  creating a new table for alter_distributed_table.partition_lengths
-NOTICE:  Dropping the old alter_distributed_table.partition_lengths
-NOTICE:  Renaming the new table to alter_distributed_table.partition_lengths
+NOTICE:  dropping the old alter_distributed_table.partition_lengths
+NOTICE:  renaming the new table to alter_distributed_table.partition_lengths
  alter_distributed_table
 ---------------------------------------------------------------------
 
@@ -885,12 +885,12 @@ NOTICE:  identifier "partition_lengths_12345678901234567890123456789012345678901
 SELECT alter_distributed_table('partition_lengths_12345678901234567890123456789012345678901234567890', shard_count := 17, cascade_to_colocated := false);
 NOTICE:  converting the partitions of alter_distributed_table.partition_lengths_123456789012345678901234567890123456789012345
 NOTICE:  creating a new table for alter_distributed_table.partition_lengths_p2020_09_28
-NOTICE:  Moving the data of alter_distributed_table.partition_lengths_p2020_09_28
-NOTICE:  Dropping the old alter_distributed_table.partition_lengths_p2020_09_28
-NOTICE:  Renaming the new table to alter_distributed_table.partition_lengths_p2020_09_28
+NOTICE:  moving the data of alter_distributed_table.partition_lengths_p2020_09_28
+NOTICE:  dropping the old alter_distributed_table.partition_lengths_p2020_09_28
+NOTICE:  renaming the new table to alter_distributed_table.partition_lengths_p2020_09_28
 NOTICE:  creating a new table for alter_distributed_table.partition_lengths_123456789012345678901234567890123456789012345
-NOTICE:  Dropping the old alter_distributed_table.partition_lengths_123456789012345678901234567890123456789012345
-NOTICE:  Renaming the new table to alter_distributed_table.partition_lengths_123456789012345678901234567890123456789012345
+NOTICE:  dropping the old alter_distributed_table.partition_lengths_123456789012345678901234567890123456789012345
+NOTICE:  renaming the new table to alter_distributed_table.partition_lengths_123456789012345678901234567890123456789012345
  alter_distributed_table
 ---------------------------------------------------------------------
 

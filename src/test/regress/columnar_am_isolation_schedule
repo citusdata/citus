@@ -1,2 +1,0 @@
-test: am_write_concurrency
-test: am_vacuum_vs_insert

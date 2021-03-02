@@ -472,9 +472,9 @@ SELECT * FROM generated_stored_dist ORDER BY 1,2,3;
 INSERT INTO generated_stored_dist VALUES (1, 'text_1'), (2, 'text_2');
 SELECT alter_distributed_table('generated_stored_dist', shard_count := 5, cascade_to_colocated := false);
 NOTICE:  creating a new table for test_pg12.generated_stored_dist
-NOTICE:  Moving the data of test_pg12.generated_stored_dist
-NOTICE:  Dropping the old test_pg12.generated_stored_dist
-NOTICE:  Renaming the new table to test_pg12.generated_stored_dist
+NOTICE:  moving the data of test_pg12.generated_stored_dist
+NOTICE:  dropping the old test_pg12.generated_stored_dist
+NOTICE:  renaming the new table to test_pg12.generated_stored_dist
  alter_distributed_table
 ---------------------------------------------------------------------
 
@@ -533,9 +533,9 @@ create table generated_stored_columnar_p0 partition of generated_stored_columnar
 create table generated_stored_columnar_p1 partition of generated_stored_columnar for values from (10) to (20);
 SELECT alter_table_set_access_method('generated_stored_columnar_p0', 'columnar');
 NOTICE:  creating a new table for test_pg12.generated_stored_columnar_p0
-NOTICE:  Moving the data of test_pg12.generated_stored_columnar_p0
-NOTICE:  Dropping the old test_pg12.generated_stored_columnar_p0
-NOTICE:  Renaming the new table to test_pg12.generated_stored_columnar_p0
+NOTICE:  moving the data of test_pg12.generated_stored_columnar_p0
+NOTICE:  dropping the old test_pg12.generated_stored_columnar_p0
+NOTICE:  renaming the new table to test_pg12.generated_stored_columnar_p0
  alter_table_set_access_method
 ---------------------------------------------------------------------
 
@@ -568,9 +568,9 @@ SELECT * FROM generated_stored_ref ORDER BY 1,2,3,4,5;
 BEGIN;
   SELECT undistribute_table('generated_stored_ref');
 NOTICE:  creating a new table for test_pg12.generated_stored_ref
-NOTICE:  Moving the data of test_pg12.generated_stored_ref
-NOTICE:  Dropping the old test_pg12.generated_stored_ref
-NOTICE:  Renaming the new table to test_pg12.generated_stored_ref
+NOTICE:  moving the data of test_pg12.generated_stored_ref
+NOTICE:  dropping the old test_pg12.generated_stored_ref
+NOTICE:  renaming the new table to test_pg12.generated_stored_ref
  undistribute_table
 ---------------------------------------------------------------------
 
@@ -600,9 +600,9 @@ BEGIN;
   -- show that undistribute_table works fine
   SELECT undistribute_table('generated_stored_ref');
 NOTICE:  creating a new table for test_pg12.generated_stored_ref
-NOTICE:  Moving the data of test_pg12.generated_stored_ref
-NOTICE:  Dropping the old test_pg12.generated_stored_ref
-NOTICE:  Renaming the new table to test_pg12.generated_stored_ref
+NOTICE:  moving the data of test_pg12.generated_stored_ref
+NOTICE:  dropping the old test_pg12.generated_stored_ref
+NOTICE:  renaming the new table to test_pg12.generated_stored_ref
  undistribute_table
 ---------------------------------------------------------------------
 
@@ -630,9 +630,9 @@ BEGIN;
   -- show that undistribute_table works fine
   SELECT undistribute_table('generated_stored_ref');
 NOTICE:  creating a new table for test_pg12.generated_stored_ref
-NOTICE:  Moving the data of test_pg12.generated_stored_ref
-NOTICE:  Dropping the old test_pg12.generated_stored_ref
-NOTICE:  Renaming the new table to test_pg12.generated_stored_ref
+NOTICE:  moving the data of test_pg12.generated_stored_ref
+NOTICE:  dropping the old test_pg12.generated_stored_ref
+NOTICE:  renaming the new table to test_pg12.generated_stored_ref
  undistribute_table
 ---------------------------------------------------------------------
 

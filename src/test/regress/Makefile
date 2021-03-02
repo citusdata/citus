@@ -175,11 +175,11 @@ check-operations: all
 
 check-columnar:
 	$(pg_regress_multi_check) --load-extension=citus \
-	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/columnar_am_schedule $(EXTRA_TESTS)
+	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/columnar_schedule $(EXTRA_TESTS)
 
 check-columnar-isolation: all  $(isolation_test_files)
 	$(pg_regress_multi_check) --load-extension=citus --isolationtester \
-	-- $(MULTI_REGRESS_OPTS) --inputdir=$(citus_abs_srcdir)/build --schedule=$(citus_abs_srcdir)/columnar_am_isolation_schedule $(EXTRA_TESTS)
+	-- $(MULTI_REGRESS_OPTS) --inputdir=$(citus_abs_srcdir)/build --schedule=$(citus_abs_srcdir)/columnar_isolation_schedule $(EXTRA_TESTS)
 
 check-failure: all
 	$(pg_regress_multi_check) --load-extension=citus --mitmproxy \

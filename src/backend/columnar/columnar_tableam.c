@@ -73,7 +73,7 @@
 typedef struct ColumnarScanDescData
 {
 	TableScanDescData cs_base;
-	TableReadState *cs_readState;
+	ColumnarReadState *cs_readState;
 
 	/*
 	 * We initialize cs_readState lazily in the first getnextslot() call. We
@@ -237,7 +237,7 @@ columnar_beginscan_extended(Relation relation, Snapshot snapshot,
  * init_columnar_read_state initializes a column store table read and returns the
  * state.
  */
-static TableReadState *
+static ColumnarReadState *
 init_columnar_read_state(Relation relation, TupleDesc tupdesc, Bitmapset *attr_needed,
 						 List *scanQual)
 {
@@ -256,8 +256,8 @@ init_columnar_read_state(Relation relation, TupleDesc tupdesc, Bitmapset *attr_n
 		}
 	}
 
-	TableReadState *readState = ColumnarBeginRead(relation, tupdesc, neededColumnList,
-												  scanQual);
+	ColumnarReadState *readState = ColumnarBeginRead(relation, tupdesc, neededColumnList,
+													 scanQual);
 
 	return readState;
 }
@@ -440,9 +440,9 @@ columnar_tuple_insert(Relation relation, TupleTableSlot *slot, CommandId cid,
 	 * columnar_init_write_state allocates the write state in a longer
 	 * lasting context, so no need to worry about it.
 	 */
-	TableWriteState *writeState = columnar_init_write_state(relation,
-															RelationGetDescr(relation),
-															GetCurrentSubTransactionId());
+	ColumnarWriteState *writeState = columnar_init_write_state(relation,
+															   RelationGetDescr(relation),
+															   GetCurrentSubTransactionId());
 	MemoryContext oldContext = MemoryContextSwitchTo(ColumnarWritePerTupleContext(
 														 writeState));
 
@@ -481,9 +481,9 @@ static void
 columnar_multi_insert(Relation relation, TupleTableSlot **slots, int ntuples,
 					  CommandId cid, int options, BulkInsertState bistate)
 {
-	TableWriteState *writeState = columnar_init_write_state(relation,
-															RelationGetDescr(relation),
-															GetCurrentSubTransactionId());
+	ColumnarWriteState *writeState = columnar_init_write_state(relation,
+															   RelationGetDescr(relation),
+															   GetCurrentSubTransactionId());
 
 	ColumnarCheckLogicalReplication(relation);
 
@@ -645,12 +645,13 @@ columnar_relation_copy_for_cluster(Relation OldHeap, Relation NewHeap,
 	ColumnarOptions columnarOptions = { 0 };
 	ReadColumnarOptions(OldHeap->rd_id, &columnarOptions);
 
-	TableWriteState *writeState = ColumnarBeginWrite(NewHeap->rd_node,
-													 columnarOptions,
-													 targetDesc);
+	ColumnarWriteState *writeState = ColumnarBeginWrite(NewHeap->rd_node,
+														columnarOptions,
+														targetDesc);
 
-	TableReadState *readState = ColumnarBeginRead(OldHeap, sourceDesc,
-												  RelationColumnList(sourceDesc), NULL);
+	ColumnarReadState *readState = ColumnarBeginRead(OldHeap, sourceDesc,
+													 RelationColumnList(sourceDesc),
+													 NULL);
 
 	Datum *values = palloc0(sourceDesc->natts * sizeof(Datum));
 	bool *nulls = palloc0(sourceDesc->natts * sizeof(bool));
@@ -1163,7 +1164,7 @@ int64
 ColumnarScanChunkGroupsFiltered(TableScanDesc scanDesc)
 {
 	ColumnarScanDesc columnarScanDesc = (ColumnarScanDesc) scanDesc;
-	TableReadState *readState = columnarScanDesc->cs_readState;
+	ColumnarReadState *readState = columnarScanDesc->cs_readState;
 
 	/* readState is initialized lazily */
 	if (readState != NULL)
