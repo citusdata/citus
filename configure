@@ -1345,8 +1345,7 @@ Optional Packages:
                           and update checks
   --without-lz4           do not use lz4
   --without-zstd          do not use zstd
-  --without-security-flags
-                          do not use security flags
+  --with-security-flags   use security flags
 
 Some influential environment variables:
   PG_CONFIG   Location to find pg_config for target PostgreSQL instalation
@@ -4754,7 +4753,7 @@ if test "${with_security_flags+set}" = set; then :
   esac
 
 else
-  with_security_flags=yes
+  with_security_flags=no
 
 fi
 
