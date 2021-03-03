@@ -36,6 +36,7 @@
 #define CSTORE_TABLE_SIZE_FUNCTION "cstore_table_size(%s)"
 
 #define SHARD_SIZES_COLUMN_COUNT 2
+#define UPDATE_SHARD_STATISTICS_COLUMN_COUNT 4
 
 /* In-memory representation of a typed tuple in pg_dist_shard. */
 typedef struct ShardInterval
@@ -206,7 +207,6 @@ extern StringInfo GenerateSizeQueryOnMultiplePlacements(List *shardIntervalList,
 extern List * RemoveCoordinatorPlacementIfNotSingleNode(List *placementList);
 extern ShardPlacement * ShardPlacementOnGroup(uint64 shardId, int groupId);
 
-
 /* Function declarations to modify shard and shard placement data */
 extern void InsertShardRow(Oid relationId, uint64 shardId, char storageType,
 						   text *shardMinValue, text *shardMaxValue);
@@ -264,5 +264,8 @@ extern ShardInterval * DeformedDistShardTupleToShardInterval(Datum *datumArray,
 															 int32 intervalTypeMod);
 extern void GetIntervalTypeInfo(char partitionMethod, Var *partitionColumn,
 								Oid *intervalTypeId, int32 *intervalTypeMod);
+extern List * SendShardStatisticsQueriesInParallel(List *citusTableIds, bool
+												   useDistributedTransaction, bool
+												   useShardMinMaxQuery);
 
 #endif   /* METADATA_UTILITY_H */
