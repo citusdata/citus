@@ -48,6 +48,21 @@ BEGIN
   RETURN false;
 END; $$ language plpgsql;
 
+-- helper function that returns true if output of given explain has "is not null" (case in-sensitive)
+CREATE OR REPLACE FUNCTION explain_has_distributed_subplan(explain_commmand text)
+RETURNS BOOLEAN AS $$
+DECLARE
+  query_plan text;
+BEGIN
+  FOR query_plan IN EXECUTE explain_commmand LOOP
+    IF query_plan ILIKE '%Distributed Subplan %_%'
+    THEN
+        RETURN true;
+    END IF;
+  END LOOP;
+  RETURN false;
+END; $$ language plpgsql;
+
 -- helper function to quickly run SQL on the whole cluster
 CREATE OR REPLACE FUNCTION run_command_on_coordinator_and_workers(p_sql text)
 RETURNS void LANGUAGE plpgsql AS $$

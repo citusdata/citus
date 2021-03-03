@@ -2204,6 +2204,33 @@ CreateAndPushPlannerRestrictionContext(void)
 
 
 /*
+ * TranslatedVarsForRteIdentity gets an rteIdentity and returns the
+ * translatedVars that belong to the range table relation. If no
+ * translatedVars found, the function returns NIL;
+ */
+List *
+TranslatedVarsForRteIdentity(int rteIdentity)
+{
+	PlannerRestrictionContext *currentPlannerRestrictionContext =
+		CurrentPlannerRestrictionContext();
+
+	List *relationRestrictionList =
+		currentPlannerRestrictionContext->relationRestrictionContext->
+		relationRestrictionList;
+	RelationRestriction *relationRestriction = NULL;
+	foreach_ptr(relationRestriction, relationRestrictionList)
+	{
+		if (GetRTEIdentity(relationRestriction->rte) == rteIdentity)
+		{
+			return relationRestriction->translatedVars;
+		}
+	}
+
+	return NIL;
+}
+
+
+/*
  * CurrentRestrictionContext returns the most recently added
  * PlannerRestrictionContext from the plannerRestrictionContextList list.
  */
