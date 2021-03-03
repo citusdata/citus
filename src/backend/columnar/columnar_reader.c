@@ -74,13 +74,6 @@ struct ColumnarReadState
 	StripeReadState *stripeReadState;
 
 	/*
-	 * Following are used for tables with zero columns, or when no
-	 * columns are projected.
-	 */
-	uint64 totalRowCount;
-	uint64 readRowCount;
-
-	/*
 	 * List of Var pointers for columns in the query. We use this both for
 	 * getting vector of projected columns, and also when we want to build
 	 * base constraint to find selected row chunks.
@@ -277,39 +270,15 @@ BeginStripeRead(StripeMetadata *stripeMetadata, Relation rel, TupleDesc tupleDes
 	stripeReadState->projectedColumnList = projectedColumnList;
 	stripeReadState->stripeReadContext = stripeReadContext;
 
-	/*
-	 * If there are no attributes in the table at all, reading the chunk
-	 * groups will fail (because there are no chunks), so we must introduce a
-	 * special case. Also follow this special case if no attributes are
-	 * projected, so that we won't have to deal with deleted attributes,
-	 * either.
-	 *
-	 * TODO: refactor metadata so that chunk groups hold the row count; rather
-	 * than individual chunks (which is repetitive in the normal case, and
-	 * problematic in the case where there are zero columns).
-	 */
-	if (list_length(projectedColumnList) != 0)
-	{
-		stripeReadState->stripeBuffers = LoadFilteredStripeBuffers(rel,
-																   stripeMetadata,
-																   tupleDesc,
-																   projectedColumnList,
-																   whereClauseList,
-																   &stripeReadState->
-																   chunkGroupsFiltered);
+	stripeReadState->stripeBuffers = LoadFilteredStripeBuffers(rel,
+															   stripeMetadata,
+															   tupleDesc,
+															   projectedColumnList,
+															   whereClauseList,
+															   &stripeReadState->
+															   chunkGroupsFiltered);
 
-		stripeReadState->rowCount = stripeReadState->stripeBuffers->rowCount;
-	}
-	else
-	{
-		stripeReadState->stripeBuffers = NULL;
-
-		/*
-		 * If there are no projected columns, then no chunks will be filtered,
-		 * so the row count is simply the stripe's row count.
-		 */
-		stripeReadState->rowCount = stripeMetadata->rowCount;
-	}
+	stripeReadState->rowCount = stripeReadState->stripeBuffers->rowCount;
 
 	MemoryContextSwitchTo(oldContext);
 
@@ -344,23 +313,6 @@ ReadStripeNextRow(StripeReadState *stripeReadState, Datum *columnValues,
 	{
 		Assert(stripeReadState->currentRow == stripeReadState->rowCount);
 		return false;
-	}
-
-	/*
-	 * If there are no attributes in the table at all, stripeBuffers won't be
-	 * loaded so we just return rowCount empty tuples.
-	 */
-	if (stripeReadState->stripeBuffers == NULL)
-	{
-		if (stripeReadState->currentRow < stripeReadState->rowCount)
-		{
-			stripeReadState->currentRow++;
-			return true;
-		}
-		else
-		{
-			return false;
-		}
 	}
 
 	while (true)
@@ -405,19 +357,21 @@ static ChunkGroupReadState *
 BeginChunkGroupRead(StripeBuffers *stripeBuffers, int chunkIndex, TupleDesc tupleDesc,
 					List *projectedColumnList, MemoryContext cxt)
 {
-	uint32 chunkRowCount = stripeBuffers->selectedChunkRowCount[chunkIndex];
+	uint32 chunkGroupRowCount =
+		stripeBuffers->selectedChunkGroupRowCounts[chunkIndex];
 
 	MemoryContext oldContext = MemoryContextSwitchTo(cxt);
 
 	ChunkGroupReadState *chunkGroupReadState = palloc0(sizeof(ChunkGroupReadState));
 
 	chunkGroupReadState->currentRow = 0;
-	chunkGroupReadState->rowCount = chunkRowCount;
+	chunkGroupReadState->rowCount = chunkGroupRowCount;
 	chunkGroupReadState->columnCount = tupleDesc->natts;
 	chunkGroupReadState->projectedColumnList = projectedColumnList;
 
 	chunkGroupReadState->chunkGroupData = DeserializeChunkData(stripeBuffers, chunkIndex,
-															   chunkRowCount, tupleDesc,
+															   chunkGroupRowCount,
+															   tupleDesc,
 															   projectedColumnList);
 	MemoryContextSwitchTo(oldContext);
 
@@ -495,7 +449,7 @@ ColumnarReadChunkGroupsFiltered(ColumnarReadState *state)
  * value arrays for requested columns in columnMask.
  */
 ChunkData *
-CreateEmptyChunkData(uint32 columnCount, bool *columnMask, uint32 chunkRowCount)
+CreateEmptyChunkData(uint32 columnCount, bool *columnMask, uint32 chunkGroupRowCount)
 {
 	uint32 columnIndex = 0;
 
@@ -504,15 +458,17 @@ CreateEmptyChunkData(uint32 columnCount, bool *columnMask, uint32 chunkRowCount)
 	chunkData->valueArray = palloc0(columnCount * sizeof(Datum *));
 	chunkData->valueBufferArray = palloc0(columnCount * sizeof(StringInfo));
 	chunkData->columnCount = columnCount;
-	chunkData->rowCount = chunkRowCount;
+	chunkData->rowCount = chunkGroupRowCount;
 
 	/* allocate chunk memory for deserialized data */
 	for (columnIndex = 0; columnIndex < columnCount; columnIndex++)
 	{
 		if (columnMask[columnIndex])
 		{
-			chunkData->existsArray[columnIndex] = palloc0(chunkRowCount * sizeof(bool));
-			chunkData->valueArray[columnIndex] = palloc0(chunkRowCount * sizeof(Datum));
+			chunkData->existsArray[columnIndex] = palloc0(chunkGroupRowCount *
+														  sizeof(bool));
+			chunkData->valueArray[columnIndex] = palloc0(chunkGroupRowCount *
+														 sizeof(Datum));
 			chunkData->valueBufferArray[columnIndex] = NULL;
 		}
 	}
@@ -601,14 +557,6 @@ LoadFilteredStripeBuffers(Relation relation, StripeMetadata *stripeMetadata,
 		SelectedChunkSkipList(stripeSkipList, projectedColumnMask,
 							  selectedChunkMask);
 
-	uint32 selectedChunkCount = selectedChunkSkipList->chunkCount;
-	uint32 *selectedChunkRowCount = palloc0(selectedChunkCount * sizeof(uint32));
-	for (int chunkIndex = 0; chunkIndex < selectedChunkCount; chunkIndex++)
-	{
-		selectedChunkRowCount[chunkIndex] =
-			selectedChunkSkipList->chunkSkipNodeArray[0][chunkIndex].rowCount;
-	}
-
 	/* load column data for projected columns */
 	ColumnBuffers **columnBuffersArray = palloc0(columnCount * sizeof(ColumnBuffers *));
 
@@ -634,8 +582,8 @@ LoadFilteredStripeBuffers(Relation relation, StripeMetadata *stripeMetadata,
 	stripeBuffers->columnCount = columnCount;
 	stripeBuffers->rowCount = StripeSkipListRowCount(selectedChunkSkipList);
 	stripeBuffers->columnBuffersArray = columnBuffersArray;
-	stripeBuffers->selectedChunks = selectedChunkCount;
-	stripeBuffers->selectedChunkRowCount = selectedChunkRowCount;
+	stripeBuffers->selectedChunkGroupRowCounts =
+		selectedChunkSkipList->chunkGroupRowCounts;
 
 	return stripeBuffers;
 }
@@ -939,6 +887,7 @@ SelectedChunkSkipList(StripeSkipList *stripeSkipList, bool *projectedColumnMask,
 	uint32 chunkIndex = 0;
 	uint32 columnIndex = 0;
 	uint32 columnCount = stripeSkipList->columnCount;
+	uint32 selectedChunkIndex = 0;
 
 	for (chunkIndex = 0; chunkIndex < stripeSkipList->chunkCount; chunkIndex++)
 	{
@@ -948,13 +897,13 @@ SelectedChunkSkipList(StripeSkipList *stripeSkipList, bool *projectedColumnMask,
 		}
 	}
 
-	ColumnChunkSkipNode **selectedChunkSkipNodeArray = palloc0(columnCount *
-															   sizeof(ColumnChunkSkipNode
-																	  *));
+	ColumnChunkSkipNode **selectedChunkSkipNodeArray =
+		palloc0(columnCount * sizeof(ColumnChunkSkipNode *));
+
 	for (columnIndex = 0; columnIndex < columnCount; columnIndex++)
 	{
-		uint32 selectedChunkIndex = 0;
 		bool firstColumn = columnIndex == 0;
+		selectedChunkIndex = 0;
 
 		/* first column's chunk skip node is always read */
 		if (!projectedColumnMask[columnIndex] && !firstColumn)
@@ -979,12 +928,24 @@ SelectedChunkSkipList(StripeSkipList *stripeSkipList, bool *projectedColumnMask,
 		}
 	}
 
-	StripeSkipList *SelectedChunkSkipList = palloc0(sizeof(StripeSkipList));
-	SelectedChunkSkipList->chunkSkipNodeArray = selectedChunkSkipNodeArray;
-	SelectedChunkSkipList->chunkCount = selectedChunkCount;
-	SelectedChunkSkipList->columnCount = stripeSkipList->columnCount;
+	selectedChunkIndex = 0;
+	uint32 *chunkGroupRowCounts = palloc0(selectedChunkCount * sizeof(uint32));
+	for (chunkIndex = 0; chunkIndex < stripeSkipList->chunkCount; chunkIndex++)
+	{
+		if (selectedChunkMask[chunkIndex])
+		{
+			chunkGroupRowCounts[selectedChunkIndex++] =
+				stripeSkipList->chunkGroupRowCounts[chunkIndex];
+		}
+	}
 
-	return SelectedChunkSkipList;
+	StripeSkipList *selectedChunkSkipList = palloc0(sizeof(StripeSkipList));
+	selectedChunkSkipList->chunkSkipNodeArray = selectedChunkSkipNodeArray;
+	selectedChunkSkipList->chunkCount = selectedChunkCount;
+	selectedChunkSkipList->columnCount = stripeSkipList->columnCount;
+	selectedChunkSkipList->chunkGroupRowCounts = chunkGroupRowCounts;
+
+	return selectedChunkSkipList;
 }
 
 
@@ -998,13 +959,12 @@ StripeSkipListRowCount(StripeSkipList *stripeSkipList)
 {
 	uint32 stripeSkipListRowCount = 0;
 	uint32 chunkIndex = 0;
-	ColumnChunkSkipNode *firstColumnSkipNodeArray =
-		stripeSkipList->chunkSkipNodeArray[0];
+	uint32 *chunkGroupRowCounts = stripeSkipList->chunkGroupRowCounts;
 
 	for (chunkIndex = 0; chunkIndex < stripeSkipList->chunkCount; chunkIndex++)
 	{
-		uint32 chunkRowCount = firstColumnSkipNodeArray[chunkIndex].rowCount;
-		stripeSkipListRowCount += chunkRowCount;
+		uint32 chunkGroupRowCount = chunkGroupRowCounts[chunkIndex];
+		stripeSkipListRowCount += chunkGroupRowCount;
 	}
 
 	return stripeSkipListRowCount;
