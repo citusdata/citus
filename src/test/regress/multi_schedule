@@ -98,6 +98,11 @@ test: propagate_statistics
 test: pg13_propagate_statistics
 
 # ----------
+# Test for updating table statistics
+# ----------
+test: citus_update_table_statistics
+
+# ----------
 # Miscellaneous tests to check our query planning behavior
 # ----------
 test: multi_deparse_shard_query multi_distributed_transaction_id intermediate_results limit_intermediate_size rollback_to_savepoint
