@@ -274,7 +274,7 @@ if test "$with_security_flags" = yes; then
 # Flags taken from: https://liquid.microsoft.com/Web/Object/Read/ms.security/Requirements/Microsoft.Security.SystemsADM.10203#guide
 
 # We always want to have some compiler flags for security concerns.
-SECURITY_CFLAGS="-fstack-protector-strong -D_FORTIFY_SOURCE=2 -O2 -z noexecstack -fpic -shared -Wl,-z,relro -Wl,-z,now -Wformat -Wformat-security -Werror=format-security"
+SECURITY_CFLAGS="-fstack-protector-strong -D_FORTIFY_SOURCE=2 -O2 -z noexecstack -fpic -Wl,-z,relro -Wl,-z,now -Wformat -Wformat-security -Werror=format-security"
 CITUS_CFLAGS="$CITUS_CFLAGS $SECURITY_CFLAGS"
 AC_MSG_NOTICE([Blindly added security flags for linker: $SECURITY_CFLAGS])
 
