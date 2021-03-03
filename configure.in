@@ -217,8 +217,8 @@ AC_DEFINE_UNQUOTED(REPORTS_BASE_URL, "$REPORTS_BASE_URL",
                    [Base URL for statistics collection and update checks])
 
 
-PGAC_ARG_BOOL(with, security-flags, yes,
-              [do not use security flags])
+PGAC_ARG_BOOL(with, security-flags, no,
+              [use security flags])
 AC_SUBST(with_security_flags)
 
 if test "$with_security_flags" = yes; then

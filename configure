@@ -1338,8 +1338,7 @@ Optional Packages:
   --with-reports-hostname=HOSTNAME
                           Use HOSTNAME as hostname for statistics collection
                           and update checks
-  --without-security-flags
-                          do not use security flags
+  --with-security-flags   use security flags
 
 Some influential environment variables:
   PG_CONFIG   Location to find pg_config for target PostgreSQL instalation
@@ -4547,7 +4546,7 @@ if test "${with_security_flags+set}" = set; then :
   esac
 
 else
-  with_security_flags=yes
+  with_security_flags=no
 
 fi
 
