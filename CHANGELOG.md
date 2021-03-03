@@ -1,3 +1,29 @@
+### citus v10.0.2 (March 3, 2021) ###
+
+* Adds a configure flag to enforce security
+
+* Fixes a bug due to cross join without target list
+
+* Fixes a bug with `UNION ALL` on PG 13
+
+* Fixes a compatibility issue with pg_audit in utility calls
+
+* Fixes insert query with CTEs/sublinks/subqueries etc
+
+* Grants `SELECT` permission on `citus_tables` view to `public`
+
+* Grants `SELECT` permission on columnar metadata tables to `public`
+
+* Improves `citus_update_table_statistics` and provides distributed deadlock
+  detection
+
+* Preserves colocation with procedures in `alter_distributed_table`
+
+* Prevents using `alter_columnar_table_set` and `alter_columnar_table_reset`
+  on a columnar table not owned by the user
+
+* Removes limits around long table names
+
 ### citus v10.0.1 (February 19, 2021) ###
 
 * Fixes an issue in creation of `pg_catalog.time_partitions` view
