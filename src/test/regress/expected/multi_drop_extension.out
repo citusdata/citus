@@ -49,6 +49,32 @@ BEGIN;
   drop schema public cascade;
 ROLLBACK;
 CREATE EXTENSION citus;
+CREATE SCHEMA test_schema;
+SET search_path TO test_schema;
+CREATE TABLE ref(x int, y int);
+SELECT create_reference_table('ref');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE INDEX CONCURRENTLY ref_concurrent_idx_x ON ref(x);
+CREATE INDEX CONCURRENTLY ref_concurrent_idx_y ON ref(x);
+SELECT substring(current_Setting('server_version'), '\d+')::int > 11 AS server_version_above_eleven
+\gset
+\if :server_version_above_eleven
+REINDEX INDEX CONCURRENTLY ref_concurrent_idx_x;
+REINDEX INDEX CONCURRENTLY ref_concurrent_idx_y;
+REINDEX TABLE CONCURRENTLY ref;
+REINDEX SCHEMA CONCURRENTLY test_schema;
+\endif
+SET search_path TO public;
+\set VERBOSITY TERSE
+DROP SCHEMA test_schema CASCADE;
+NOTICE:  drop cascades to 2 other objects
+DROP EXTENSION citus CASCADE;
+\set VERBOSITY DEFAULT
+CREATE EXTENSION citus;
 -- this function is dropped in Citus10, added here for tests
 CREATE OR REPLACE FUNCTION pg_catalog.master_create_worker_shards(table_name text, shard_count integer,
                                                                   replication_factor integer DEFAULT 2)
