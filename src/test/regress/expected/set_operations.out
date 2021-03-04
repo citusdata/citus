@@ -317,6 +317,14 @@ DEBUG:  Router planner cannot handle multi-shard select queries
 
 SELECT * FROM ((SELECT x, y FROM test) UNION ALL (SELECT y, x FROM test)) u ORDER BY 1,2;
 DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  generating subplan XXX_1 for subquery SELECT x, y FROM recursive_union.test
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  generating subplan XXX_2 for subquery SELECT y, x FROM recursive_union.test
+DEBUG:  Creating router plan
+DEBUG:  generating subplan XXX_3 for subquery SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer) UNION ALL SELECT intermediate_result.y, intermediate_result.x FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(y integer, x integer)
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT x, y FROM (SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)) u ORDER BY x, y
+DEBUG:  Creating router plan
  x | y
 ---------------------------------------------------------------------
  1 | 1

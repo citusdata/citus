@@ -1394,22 +1394,11 @@ COMMENT ON FUNCTION master_update_node(node_id int, new_node_name text, new_node
 
 -- shard statistics
 CREATE OR REPLACE FUNCTION master_update_table_statistics(relation regclass)
-RETURNS VOID AS $$
-DECLARE
-	colocated_tables regclass[];
-BEGIN
-	SELECT get_colocated_table_array(relation) INTO colocated_tables;
-
-	PERFORM
-		master_update_shard_statistics(shardid)
-	FROM
-		pg_dist_shard
-	WHERE
-		logicalrelid = ANY (colocated_tables);
-END;
-$$ LANGUAGE 'plpgsql';
-COMMENT ON FUNCTION master_update_table_statistics(regclass)
-	IS 'updates shard statistics of the given table and its colocated tables';
+RETURNS VOID
+    LANGUAGE C STRICT
+    AS 'MODULE_PATHNAME', $$citus_update_table_statistics$$;
+COMMENT ON FUNCTION pg_catalog.master_update_table_statistics(regclass)
+	IS 'updates shard statistics of the given table';
 
 CREATE OR REPLACE FUNCTION get_colocated_shard_array(bigint)
 	RETURNS BIGINT[]
