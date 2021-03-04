@@ -64,7 +64,7 @@
  *     - All multi-shard modifications (DDLs, COPY, UPDATE, DELETE, INSERT .. SELECT)
  *     - All multi-shard queries with CTEs (modifying CTEs, read-only CTEs)
  *     - All recursively planned subqueries
- *     - All queries within transaction blocks (BEGIN; query; COMMMIT;)
+ *     - All queries within transaction blocks (BEGIN; query; COMMIT;)
  *
  *  In other words, the following types of queries won't be observed in these
  *  views:

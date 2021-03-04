@@ -15,7 +15,7 @@
  *     executes "unassigned" tasks from a queue.
  * - WorkerSession:
  *     Connection to a worker that is used to execute "assigned" tasks
- *     from a queue and may execute unasssigned tasks from the WorkerPool.
+ *     from a queue and may execute unassigned tasks from the WorkerPool.
  * - ShardCommandExecution:
  *     Execution of a Task across a list of placements.
  * - TaskPlacementExecution:

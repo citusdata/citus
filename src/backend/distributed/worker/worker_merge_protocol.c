@@ -3,7 +3,7 @@
  * worker_merge_protocol.c
  *
  * Routines for merging partitioned files into a single file or table. Merging
- * files is one of the threee distributed execution primitives that we apply on
+ * files is one of the three distributed execution primitives that we apply on
  * worker nodes.
  *
  * Copyright (c) Citus Data, Inc.

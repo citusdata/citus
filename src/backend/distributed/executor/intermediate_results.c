@@ -268,7 +268,7 @@ RemoteFileDestReceiverStartup(DestReceiver *dest, int operation,
 
 /*
  * PrepareIntermediateResultBroadcast gets a RemoteFileDestReceiver and does
- * the necessary initilizations including initiating the remote connnections
+ * the necessary initilizations including initiating the remote connections
  * and creating the local file, which is necessary (it might be both).
  */
 static void

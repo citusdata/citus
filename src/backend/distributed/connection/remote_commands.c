@@ -219,7 +219,7 @@ ClearResultsIfReady(MultiConnection *connection)
 		if (!(resultStatus == PGRES_SINGLE_TUPLE || resultStatus == PGRES_TUPLES_OK ||
 			  resultStatus == PGRES_COMMAND_OK))
 		{
-			/* an error occcurred just when we were aborting */
+			/* an error occurred just when we were aborting */
 			return false;
 		}
 
