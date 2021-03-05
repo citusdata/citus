@@ -370,7 +370,7 @@ StartNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port,
 		 * remote node as it might not have any space in
 		 * max_connections for this connection establishment.
 		 *
-		 * Still, we keep track of the connnection counter.
+		 * Still, we keep track of the connection counter.
 		 */
 		IncrementSharedConnectionCounter(hostname, port);
 	}
