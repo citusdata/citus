@@ -1,154 +1,372 @@
-![Citus Banner](/github-banner.png)
+![Citus Banner](/citus-readme-banner.png)
 
 [![Slack Status](http://slack.citusdata.com/badge.svg)](https://slack.citusdata.com)
 [![Latest Docs](https://img.shields.io/badge/docs-latest-brightgreen.svg)](https://docs.citusdata.com/)
-[![Circleci Status](https://circleci.com/gh/citusdata/citus.svg?style=svg)](https://circleci.com/gh/citusdata/citus.svg?style=svg)
 [![Code Coverage](https://codecov.io/gh/citusdata/citus/branch/master/graph/badge.svg)](https://codecov.io/gh/citusdata/citus/branch/master/graph/badge.svg)
 
-### What is Citus?
+## What is Citus?
 
-* **Open-source** PostgreSQL extension (not a fork)
-* **Built to scale out** across multiple nodes
-* **Distributed** engine for query parallelization
-* **Database** designed to scale out multi-tenant applications, real-time analytics dashboards, and high-throughput transactional workloads
+Citus is a [PostgreSQL extension](https://www.citusdata.com/blog/2017/10/25/what-it-means-to-be-a-postgresql-extension/) that transforms Postgres into a distributed database—so you can achieve high performance at any scale.
 
-Citus is an open source extension to Postgres that distributes your data and your queries across multiple nodes. Because Citus is an extension to Postgres, and not a fork, Citus gives developers and enterprises a scale-out database while keeping the power and familiarity of a relational database. As an extension, Citus supports new PostgreSQL releases, and allows you to benefit from new features while maintaining compatibility with existing PostgreSQL tools.
+With Citus, you extend your PostgreSQL database with new superpowers:
 
-Citus serves many use cases. Three common ones are:
+- **Distributed tables** are sharded across a cluster of PostgreSQL nodes to combine their CPU, memory, storage and I/O capacity.
+- **References tables** are replicated to all nodes for joins and foreign keys from distributed tables and maximum read performance.
+- **Distributed query engine** routes and parallelizes SELECT, DML, and other operations on distributed tables across the cluster.
+- **Columnar storage** compresses data, speeds up scans, and supports fast projections, both on regular and distributed tables.
 
-1. [Multi-tenant & SaaS applications](https://www.citusdata.com/blog/2016/10/03/designing-your-saas-database-for-high-scalability):
-Most B2B applications already have the notion of a tenant /
-customer / account built into their data model. Citus allows you to scale out your
-transactional relational database to 100K+ tenants with minimal changes to your
-application.
+You can use these Citus superpowers to make your Postgres database scale-out ready on a single Citus node. Or you can build a large cluster capable of handling **high transaction throughputs**, especially in **multi-tenant apps**, run **fast analytical queries**, and process large amounts of **time series** or **IoT data** for **real-time analytics**. When your data size and volume grow, you can easily add more worker nodes to the cluster and rebalance the shards.
 
-2. [Real-time analytics](https://www.citusdata.com/blog/2017/12/27/real-time-analytics-dashboards-with-citus/):
-Citus enables ingesting large volumes of data and running
-analytical queries on that data in human real-time. Example applications include analytic
-dashboards with sub-second response times and exploratory queries on unfolding events.
+![Citus scales out from a single node](/citus-scale-out.png)
 
-3. High-throughput transactional workloads:
-By distributing your workload across a database cluster, Citus ensures low latency and high performance even with a large number of concurrent users and high volumes of transactions.
+Since Citus is an extension to Postgres, you can use Citus with the latest Postgres versions. And Citus works seamlessly with the PostgreSQL tools and extensions you are already familiar with.
 
-To learn more, visit [citusdata.com](https://www.citusdata.com) and join
-the [Citus slack](https://slack.citusdata.com/) to
-stay on top of the latest developments.
+- [Why Citus?](#why-citus)
+- [Getting Started](#getting-started)
+- [Using Citus](#using-citus)
+- [Documentation](#documentation)
+- [Architecture](#architecture)
+- [Performance](#performance)
+- [When to Use Citus](#when-to-use-citus)
+- [Need Help?](#need-help)
+- [Contributing](#contributing)
+- [Stay Connected](#stay-connected)
 
-### Getting started with Citus
+## Why Citus?
 
-The fastest way to get up and running is to deploy Citus in the cloud. You can also setup a local Citus database cluster with Docker.
+Developers choose Citus for two reasons:
 
-#### Hyperscale (Citus) on Azure Database for PostgreSQL
+1. Your application is outgrowing a single PostgreSQL node
 
-Hyperscale (Citus) is a deployment option on Azure Database for PostgreSQL, a fully-managed database as a service. Hyperscale (Citus) employs the Citus open source extension so you can scale out across multiple nodes. To get started with Hyperscale (Citus), [learn more](https://www.citusdata.com/product/hyperscale-citus/) on the Citus website or use the [Hyperscale (Citus) Quickstart](https://docs.microsoft.com/en-us/azure/postgresql/quickstart-create-hyperscale-portal) in the Azure docs.
+If the size and volume of your data increases over time, you may start seeing any number of performance and scalability problems on a single PostgreSQL node. For example: High CPU utilization and I/O wait times slow down your queries, SQL queries return out of memory errors, autovacuum cannot keep up and increases table bloat, etc.
 
-#### Citus Cloud
+With Citus you can distribute and optionally compress your tables to always have enough memory, CPU, and I/O capacity to achieve high performance at scale. The distributed query engine can efficiently route transactions across the cluster, while parallelizing analytical queries and batch operations across all cores. Moreover, you can still use the PostgreSQL features and tools you know and love.
 
-Citus Cloud runs on top of AWS as a fully managed database as a service. You can provision a Citus Cloud account at [https://console.citusdata.com](https://console.citusdata.com/users/sign_up) and get started with just a few clicks.
+2. PostgreSQL can do things other systems can’t
 
-#### Local Citus Cluster
+There are many data processing systems that are built to scale out, but few have as many powerful capabilities as PostgreSQL, including: Advanced joins and subqueries, user-defined functions, update/delete/upsert, constraints and foreign keys, powerful extensions (e.g. PostGIS, HyperLogLog), many types of indexes, time-partitioning, and sophisticated JSON support.
 
-If you're looking to get started locally, you can follow the following steps to get up and running.
+Citus makes PostgreSQL’s most powerful capabilities work at any scale, allowing you to handle complex data-intensive workloads on a single database system.
 
-1. Install Docker Community Edition and Docker Compose
-  * Mac:
-    1. [Download](https://www.docker.com/community-edition#/download) and install Docker.
-    2. Start Docker by clicking on the application’s icon.
-  * Linux:
-    ```bash
-    curl -sSL https://get.docker.com/ | sh
-    sudo usermod -aG docker $USER && exec sg docker newgrp `id -gn`
-    sudo systemctl start docker
+## Getting Started
 
-    sudo curl -sSL https://github.com/docker/compose/releases/download/1.11.2/docker-compose-`uname -s`-`uname -m` -o /usr/local/bin/docker-compose
-    sudo chmod +x /usr/local/bin/docker-compose
-    ```
-    The above version of Docker Compose is sufficient for running Citus, or you can install the [latest version](https://github.com/docker/compose/releases/latest).
+The quickest way to get started with Citus is to use the [Hyperscale (Citus)](https://docs.microsoft.com/azure/postgresql/quickstart-create-hyperscale-portal) deployment option in the Azure Database for PostgreSQL managed service—or [set up Citus locally](https://docs.citusdata.com/en/stable/installation/single_node.html).
 
-2. Pull and start the Docker images
-  ```bash
-  curl -sSLO https://raw.githubusercontent.com/citusdata/docker/master/docker-compose.yml
-  docker-compose -p citus up -d
-  ```
+### Hyperscale (Citus) on Azure Database for PostgreSQL
 
-3. Connect to the master database
-  ```bash
-  docker exec -it citus_master psql -U postgres
-  ```
+You can get a fully-managed Citus cluster in minutes through the Hyperscale (Citus) deployment option in the [Azure Database for PostgreSQL](https://azure.microsoft.com/services/postgresql/) portal. Azure will manage your backups, high availability through auto-failover, software updates, monitoring, and more for all of your servers. To get started with Hyperscale (Citus), use the [Hyperscale (Citus) Quickstart](https://docs.microsoft.com/azure/postgresql/quickstart-create-hyperscale-portal) in the Azure docs.
 
-4. Follow the [first tutorial][tutorial] instructions
-5. To shut the cluster down, run
+### Running Citus using Docker
 
-  ```bash
-  docker-compose -p citus down
-  ```
+The smallest possible Citus cluster is a single PostgreSQL node with the Citus extension, which means you can try out Citus by running a single Docker container.
 
-### Talk to Contributors and Learn More
+```sql
+# run PostgreSQL with Citus on port 5500
+docker run -d --name citus -p 5500:5432 -e POSTGRES_PASSWORD=mypassword citusdata/citus
 
-<table class="tg">
-<col width="45%">
-<col width="65%">
-<tr>
-  <td>Documentation</td>
-  <td>Try the <a
-  href="https://docs.citusdata.com/en/stable/tutorials/multi-tenant-tutorial.html">Citus
-  tutorial</a> for a hands-on introduction or <br/>the <a
-  href="https://docs.citusdata.com">documentation</a> for
-  a more comprehensive reference.</td>
-</tr>
-<tr>
-  <td>Slack</td>
-  <td>Chat with us in our community <a
-  href="https://slack.citusdata.com">Slack channel</a>.</td>
-</tr>
-<tr>
-  <td>Github Issues</td>
-  <td>We track specific bug reports and feature requests on our <a
-  href="https://github.com/citusdata/citus/issues">project
-  issues</a>.</td>
-</tr>
-<tr>
-  <td>Twitter</td>
-  <td>Follow <a href="https://twitter.com/citusdata">@citusdata</a>
-  for general updates and PostgreSQL scaling tips.</td>
-</tr>
-<tr>
-  <td>Citus Blog</td>
-  <td>Read our <a href="https://www.citusdata.com/blog/">Citus Data Blog</a>
-  for posts on Postgres, Citus, and scaling your database.</td>
-</tr>
-</table>
+# connect using psql within the Docker container
+docker exec -it citus psql -U postgres
 
-### Contributing
+# or, connect using local psql
+psql -U postgres -d postgres -h localhost -p 5500
+```
 
-Citus is built on and of open source, and we welcome your contributions.
-The [CONTRIBUTING.md](CONTRIBUTING.md) file explains how to get started
-developing the Citus extension itself and our code quality guidelines.
+### Install Citus locally
 
-### Who is Using Citus?
+If you already have a local PostgreSQL installation, the easiest way to install Citus is to use our packaging repo
 
-Citus is deployed in production by many customers, ranging from
-technology start-ups to large enterprises. Here are some examples:
+Install packages on Ubuntu / Debian:
 
-* [Algolia](https://www.algolia.com/) uses Citus to provide real-time analytics for over 1B searches per day. For faster insights, they also use TopN and HLL extensions. [User Story](https://www.citusdata.com/customers/algolia)
-* [Heap](https://heapanalytics.com/) uses Citus to run dynamic
-funnel, segmentation, and cohort queries across billions of users
-and has more than 700B events in their Citus database cluster. [Watch Video](https://www.youtube.com/watch?v=NVl9_6J1G60&list=PLixnExCn6lRpP10ZlpJwx6AuU3XIgNWpL)
-* [Pex](https://pex.com/) uses Citus to ingest 80B data points per day and analyze that data in real-time. They use a 20+ node cluster on Google Cloud. [User Story](https://www.citusdata.com/customers/pex)
-* [MixRank](https://mixrank.com/) uses Citus to efficiently collect
-and analyze vast amounts of data to allow inside B2B sales teams
-to find new customers. [User Story](https://www.citusdata.com/customers/mixrank)
-* [Agari](https://www.agari.com/) uses Citus to secure more than
-85 percent of U.S. consumer emails on two 6-8 TB clusters. [User
-Story](https://www.citusdata.com/customers/agari)
-* [Copper (formerly ProsperWorks)](https://copper.com/) powers a cloud CRM service with Citus. [User Story](https://www.citusdata.com/customers/copper)
+```bash
+curl https://install.citusdata.com/community/deb.sh > add-citus-repo.sh
+sudo bash add-citus-repo.sh
+sudo apt-get -y install postgresql-13-citus-10.0
+```
+
+Install packages on CentOS / Fedora / Red Hat:
+```bash
+curl https://install.citusdata.com/community/rpm.sh > add-citus-repo.sh
+sudo bash add-citus-repo.sh
+sudo yum install -y citus100_13
+```
+
+To add Citus to your local PostgreSQL database, add the following to `postgresql.conf`:
+
+```sql
+shared_preload_libraries = 'citus'
+```
+
+After restarting PostgreSQL, connect using `psql` and run:
+
+```sql
+CREATE EXTENSION citus;
+````
+You’re now ready to get started and use Citus tables on a single node.
+
+### Install Citus on multiple nodes
+
+If you want to set up a multi-node cluster, you can also set up additional PostgreSQL nodes with the Citus extensions and add them to form a Citus cluster:
+
+```sql
+-- before adding the first worker node, tell future worker nodes how to reach the coordinator
+-- SELECT citus_set_coordinator_host('10.0.0.1', 5432);
+
+-- add worker nodes
+SELECT citus_add_node('10.0.0.2', 5432);
+SELECT citus_add_node('10.0.0.3', 5432);
+
+-- rebalance the shards over the new worker nodes
+SELECT rebalance_table_shards();
+```
+
+For more details, see our [documentation on how to set up a multi-node Citus cluster](https://docs.citusdata.com/en/stable/installation/multi_node.html) on various operating systems.
+
+## Using Citus
+
+Once you have your Citus cluster, you can start creating distributed tables, reference tables and use columnar storage.
+
+### Creating Distributed Tables
+
+The `create_distributed_table` UDF will transparently shard your table locally or across the worker nodes:
+
+```sql
+CREATE TABLE events (
+  device_id bigint,
+  event_id bigserial,
+  event_time timestamptz default now(),
+  data jsonb not null,
+  PRIMARY KEY (device_id, event_id)
+);
+
+-- distribute the events table across shards placed locally or on the worker nodes
+SELECT create_distributed_table('events', 'device_id');
+```
+
+After this operation, queries for a specific device ID will be efficiently routed to a single worker node, while queries across device IDs will be parallelized across the cluster.
+
+```sql
+-- insert some events
+INSERT INTO events (device_id, data)
+SELECT s % 100, ('{"measurement":'||random()||'}')::jsonb FROM generate_series(1,1000000) s;
+
+-- get the last 3 events for device 1, routed to a single node
+SELECT * FROM events WHERE device_id = 1 ORDER BY event_time DESC, event_id DESC LIMIT 3;
+┌───────────┬──────────┬───────────────────────────────┬───────────────────────────────────────┐
+│ device_id │ event_id │          event_time           │                 data                  │
+├───────────┼──────────┼───────────────────────────────┼───────────────────────────────────────┤
+│         1 │  1999901 │ 2021-03-04 16:00:31.189963+00 │ {"measurement": 0.88722643925054}     │
+│         1 │  1999801 │ 2021-03-04 16:00:31.189963+00 │ {"measurement": 0.6512231304621992}   │
+│         1 │  1999701 │ 2021-03-04 16:00:31.189963+00 │ {"measurement": 0.019368766051897524} │
+└───────────┴──────────┴───────────────────────────────┴───────────────────────────────────────┘
+(3 rows)
+
+Time: 4.588 ms
+
+-- explain plan for a query that is parallelized across shards, which shows the plan for
+-- a query one of the shards and how the aggregation across shards is done
+EXPLAIN (VERBOSE ON) SELECT count(*) FROM events;
+┌────────────────────────────────────────────────────────────────────────────────────┐
+│                                     QUERY PLAN                                     │
+├────────────────────────────────────────────────────────────────────────────────────┤
+│ Aggregate                                                                          │
+│   Output: COALESCE((pg_catalog.sum(remote_scan.count))::bigint, '0'::bigint)       │
+│   ->  Custom Scan (Citus Adaptive)                                                 │
+│         ...                                                                        │
+│         ->  Task                                                                   │
+│               Query: SELECT count(*) AS count FROM events_102008 events WHERE true │
+│               Node: host=localhost port=5432 dbname=postgres                       │
+│               ->  Aggregate                                                        │
+│                     ->  Seq Scan on public.events_102008 events                    │
+└────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Creating Distributed Tables with Co-location
+
+Distributed tables that have the same distribution column can be co-located to enable high performance distributed joins and foreign keys between distributed tables.
+By default, distributed tables will be co-located based on the type of the distribution column, but you define co-location explicitly with the `colocate_with` argument in `create_distributed_table`.
+
+```sql
+CREATE TABLE devices (
+  device_id bigint primary key,
+  device_name text,
+  device_type_id int
+);
+CREATE INDEX ON devices (device_type_id);
+
+-- co-locate the devices table with the events table
+SELECT create_distributed_table('devices', 'device_id', colocate_with := 'events');
+
+-- insert device metadata
+INSERT INTO devices (device_id, device_name, device_type_id)
+SELECT s, 'device-'||s, 55 FROM generate_series(0, 99) s;
+
+-- optionally: make sure the application can only insert events for a known device
+ALTER TABLE events ADD CONSTRAINT device_id_fk
+FOREIGN KEY (device_id) REFERENCES devices (device_id);
+
+-- get the average measurement across all devices of type 55, parallelized across shards
+SELECT avg((data->>'measurement')::double precision)
+FROM events JOIN devices USING (device_id)
+WHERE device_type_id = 55;
+
+┌────────────────────┐
+│        avg         │
+├────────────────────┤
+│ 0.5000191877513974 │
+└────────────────────┘
+(1 row)
+
+Time: 209.961 ms
+```
+
+Co-location also helps you scale [INSERT..SELECT]( https://docs.citusdata.com/en/stable/articles/aggregation.html), [stored procedures]( https://www.citusdata.com/blog/2020/11/21/making-postgres-stored-procedures-9x-faster-in-citus/), and [distributed transactions](https://www.citusdata.com/blog/2017/06/02/scaling-complex-sql-transactions/).
+
+### Creating Reference Tables
+
+When you need fast joins or foreign keys that do not include the distribution column, you can use `create_reference_table` to replicate a table across all nodes in the cluster.
+
+```sql
+CREATE TABLE device_types (
+  device_type_id int primary key,
+  device_type_name text not null unique
+);
+
+-- replicate the table across all nodes to enable foreign keys and joins on any column
+SELECT create_reference_table('device_types');
+
+-- insert a device type
+INSERT INTO device_types (device_type_id, device_type_name) VALUES (55, 'laptop');
+
+-- optionally: make sure the application can only insert devices with known types
+ALTER TABLE devices ADD CONSTRAINT device_type_fk
+FOREIGN KEY (device_type_id) REFERENCES device_types (device_type_id);
+
+-- get the last 3 events for devices whose type name starts with laptop, parallelized across shards
+SELECT device_id, event_time, data->>'measurement' AS value, device_name, device_type_name
+FROM events JOIN devices USING (device_id) JOIN device_types USING (device_type_id)
+WHERE device_type_name LIKE 'laptop%' ORDER BY event_time DESC LIMIT 3;
+
+┌───────────┬───────────────────────────────┬─────────────────────┬─────────────┬──────────────────┐
+│ device_id │          event_time           │        value        │ device_name │ device_type_name │
+├───────────┼───────────────────────────────┼─────────────────────┼─────────────┼──────────────────┤
+│        60 │ 2021-03-04 16:00:31.189963+00 │ 0.28902084163415864 │ device-60   │ laptop           │
+│         8 │ 2021-03-04 16:00:31.189963+00 │ 0.8723803076285073  │ device-8    │ laptop           │
+│        20 │ 2021-03-04 16:00:31.189963+00 │ 0.8177634801548557  │ device-20   │ laptop           │
+└───────────┴───────────────────────────────┴─────────────────────┴─────────────┴──────────────────┘
+(3 rows)
+
+Time: 146.063 ms
+```
+
+Reference tables enable you to scale out complex data models and take full advantage of relational database features.
+
+### Creating Tables with Columnar Storage
+
+To use columnar storage in your PostgreSQL database, all you need to do is add `USING columnar` to your `CREATE TABLE` statements and your data will be automatically compressed using the columnar access method.
+
+```sql
+CREATE TABLE events_columnar (
+  device_id bigint,
+  event_id bigserial,
+  event_time timestamptz default now(),
+  data jsonb not null
+)
+USING columnar;
+
+-- insert some data
+INSERT INTO events_columnar (device_id, data)
+SELECT d, '{"hello":"columnar"}' FROM generate_series(1,10000000) d;
+
+-- create a row-based table to compare
+CREATE TABLE events_row AS SELECT * FROM events_columnar;
+
+-- see the huge size difference!
+\d+
+                                          List of relations
+┌────────┬──────────────────────────────┬──────────┬───────┬─────────────┬────────────┬─────────────┐
+│ Schema │             Name             │   Type   │ Owner │ Persistence │    Size    │ Description │
+├────────┼──────────────────────────────┼──────────┼───────┼─────────────┼────────────┼─────────────┤
+│ public │ events_columnar              │ table    │ marco │ permanent   │ 25 MB      │             │
+│ public │ events_row                   │ table    │ marco │ permanent   │ 651 MB     │             │
+└────────┴──────────────────────────────┴──────────┴───────┴─────────────┴────────────┴─────────────┘
+(2 rows)
+```
+
+You can use columnar storage by itself, or in a distributed table to combine the benefits of compression and the distributed query engine.
+
+When using columnar storage, you should only load data in batch using `COPY` or `INSERT..SELECT` to achieve good  compression. Update, delete, indexes, and foreign keys are currently unsupported on columnar tables. However, you can use partitioned tables in which newer partitions use row-based storage, and older partitions are compressed using columnar storage.
+
+To learn more about columnar storage, check out the [columnar storage README](https://github.com/citusdata/citus/blob/master/src/backend/columnar/README.md).
+
+## Documentation
+
+If you’re ready to get started with Citus or want to know more, we recommend reading the [Citus open source documentation](https://docs.citusdata.com/en/stable/). Or, if you are using Citus on Azure, then the [Hyperscale (Citus) documentation](https://docs.microsoft.com/azure/postgresql/hyperscale/) is online and available as part of the Azure Database for PostgreSQL docs.
+
+Our Citus docs contain comprehensive use case guides on how to build a [multi-tenant SaaS application]( https://docs.citusdata.com/en/stable/use_cases/multi_tenant.html), [real-time analytics dashboard]( https://docs.citusdata.com/en/stable/use_cases/realtime_analytics.html), or work with [time series data]( https://docs.citusdata.com/en/stable/use_cases/timeseries.html).
+
+## Architecture
+
+A Citus database cluster grows from a single PostgreSQL node into a cluster by adding worker nodes. In a Citus cluster, the original node to which the application connects is referred to as the coordinator node. The Citus coordinator contains both the metadata of distributed tables and reference tables, as well as regular (local) tables, sequences, and other database objects (e.g. foreign tables).
+
+Data in distributed tables is stored in “shards”, which are actually just regular PostgreSQL tables on the worker nodes. When querying a distributed table on the coordinator node, Citus will send regular SQL queries to the worker nodes. That way, all the usual PostgreSQL optimizations and extensions can automatically be used with Citus.
+
+![Citus architecture](/citus-architecture.png)
+
+When you send a query in which all (co-located) distributed tables have the same filter on the distribution column, Citus will automatically detect that and send the whole query to the worker node that stores the data. That way, arbitrarily complex queries are supported with minimal routing overhead, which is especially useful for scaling transactional workloads. If queries do not have a specific filter, each shard is queried in parallel, which is especially useful in analytical workloads. The Citus distributed executor is adaptive and is designed to handle both query types at the same time on the same system under high concurrency, which enables large-scale mixed workloads.
 
 
-You can read more user stories about how they employ Citus to scale Postgres for both multi-tenant SaaS applications as well as real-time analytics dashboards [here](https://www.citusdata.com/customers/).
+## When to use Citus
+
+Citus is uniquely capable of scaling both analytical and transactional workloads with up to petabytes of data. Use cases in which Citus is commonly used:
+
+- **[Customer-facing analytics dashboards](http://docs.citusdata.com/en/stable/use_cases/realtime_analytics.html)**:
+  Citus enables you to build analytics dashboards that simultaneously ingest and process large amounts of data in the database and give sub-second response times even with a large number of concurrent users.
+
+  The advanced parallel, distributed query engine in Citus combined with PostgreSQL features such as [array types](https://www.postgresql.org/docs/current/arrays.html), [JSONB](https://www.postgresql.org/docs/current/datatype-json.html), [lateral joins](https://heap.io/blog/engineering/postgresqls-powerful-new-join-type-lateral), and extensions like [HyperLogLog](https://github.com/citusdata/postgresql-hll) and [TopN](https://github.com/citusdata/postgresql-topn) allow you to build responsive analytics dashboards no matter how many customers or how much data you have.
+
+  Example real-time analytics users: [Algolia](https://www.citusdata.com/customers/algolia), [Heap](https://www.citusdata.com/customers/heap)
+
+- **[Time series data](http://docs.citusdata.com/en/stable/use_cases/timeseries.html)**:
+  Citus enables you to process and analyze very large amounts of time series data. The biggest Citus clusters store well over a petabyte of time series data and ingest terabytes per day.
+
+  Citus integrates seamlessly with [Postgres table partitioning](https://www.postgresql.org/docs/current/ddl-partitioning.html) and [pg_partman](https://www.citusdata.com/blog/2018/01/24/citus-and-pg-partman-creating-a-scalable-time-series-database-on-PostgreSQL/), which can speed up queries and writes on time series tables. You can take advantage of Citus’s parallel, distributed query engine for fast analytical queries, and use the built-in *columnar storage* to compress old partitions.
+
+  Example users: [MixRank](https://www.citusdata.com/customers/mixrank), [Windows team](https://techcommunity.microsoft.com/t5/azure-database-for-postgresql/architecting-petabyte-scale-analytics-by-scaling-out-postgres-on/ba-p/969685)
+
+- **[Software-as-a-service (SaaS) applications](http://docs.citusdata.com/en/stable/use_cases/multi_tenant.html)**:
+  SaaS and other multi-tenant applications need to be able to scale their database as the number of tenants/customers grows. Citus enables you to transparently shard a complex data model by the tenant dimension, so your database can grow along with your business.
+
+  By distributing tables along a tenant ID column and co-locating data for the same tenant, Citus can horizontally scale complex (tenant-scoped) queries, transactions, and foreign key graphs. Reference tables and distributed DDL commands make database management a breeze compared to manual sharding. On top of that, you have a built-in distributed query engine for doing cross-tenant analytics inside the database.
+
+  Example multi-tenant SaaS users: [Copper](https://www.citusdata.com/customers/copper), [Salesloft](https://fivetran.com/case-studies/replicating-sharded-databases-a-case-study-of-salesloft-citus-data-and-fivetran), [ConvertFlow](https://www.citusdata.com/customers/convertflow)
+
+- **Geospatial**:
+  Because of the powerful [PostGIS](https://postgis.net/) extension to Postgres that adds support for geographic objects into Postgres, many people run spatial/GIS applications on top of Postgres. And since spatial location information has become part of our daily life, well, there are more geospatial applications than ever. When your Postgres database needs to scale out to handle an increased workload, Citus is a good fit.
+
+  Example geospatial users: [Helsinki Regional Transportation Authority (HSL)](https://customers.microsoft.com/en-us/story/845146-transit-authority-improves-traffic-monitoring-with-azure-database-for-postgresql-hyperscale), [MobilityDB]( https://www.citusdata.com/blog/2020/11/09/analyzing-gps-trajectories-at-scale-with-postgres-mobilitydb/).
+
+## Need Help?
+
+- **Slack**: Ask questions in our Citus community [Slack channel](https://slack.citusdata.com).
+- **GitHub issues**: Please submit issues via [GitHub issues](https://github.com/citusdata/citus/issues).
+- **Documentation**: Our [Citus docs](https://docs.citusdata.com ) have a wealth of resources, including sections on [query performance tuning](https://docs.citusdata.com/en/stable/performance/performance_tuning.html), [useful diagnostic queries](https://docs.citusdata.com/en/stable/admin_guide/diagnostic_queries.html), and [common error messages](https://docs.citusdata.com/en/stable/reference/common_errors.html).
+- **Docs issues**: You can also submit documentation issues via [GitHub
+  issues for our Citus docs](https://github.com/citusdata/citus_docs/issues).
+
+## Contributing
+
+Citus is built on and of open source, and we welcome your contributions. The [CONTRIBUTING.md](CONTRIBUTING.md) file explains how to get started developing the Citus extension itself and our code quality guidelines.
+
+## Stay Connected
+
+- **Twitter**: Follow us [@citusdata](https://twitter.com/citusdata) to track the latest posts & updates on what’s happening.
+- **Citus Blog**: Read our popular [Citus Blog](https://www.citusdata.com/blog/) for useful & informative posts about PostgreSQL and Citus.
+- **Citus Newsletter**: Subscribe to our monthly technical [Citus Newsletter](https://www.citusdata.com/join-newsletter) to get a curated collection of our favorite posts, videos, docs, talks, & other Postgres goodies.
+- **Slack**: Our [Citus Public slack]( https://slack.citusdata.com/) is a good way to stay connected, not just with us but with other Citus users.
+- **Sister Blog**: Read our Azure Database for PostgreSQL [sister blog on Microsoft TechCommunity](https://techcommunity.microsoft.com/t5/azure-database-for-postgresql/bg-p/ADforPostgreSQL) for posts relating to Postgres (and Citus) on Azure.
+- **Videos**: Check out this [YouTube playlist](https://www.youtube.com/playlist?list=PLixnExCn6lRq261O0iwo4ClYxHpM9qfVy) of some of our favorite Citus videos and demos. If you want to deep dive into how Citus extends PostgreSQL, you might want to check out Marco Slot’s talk at Carnegie Mellon titled [Citus: Distributed PostgreSQL as an Extension](https://youtu.be/X-aAgXJZRqM) that was part of Andy Pavlo’s Vaccination Database Talks series at CMUDB.
+- **Our other Postgres projects**: Our team also works on other awesome PostgreSQL open source extensions & projects, including: [pg_cron]( https://github.com/citusdata/pg_cron), [HyperLogLog](https://github.com/citusdata/postgresql-hll), [TopN](https://github.com/citusdata/postgresql-topn), [pg_auto_failover](https://github.com/citusdata/pg_auto_failover), [activerecord-multi-tenant](https://github.com/citusdata/activerecord-multi-tenant), and [django-multitenant](https://github.com/citusdata/django-multitenant).
 
 ___
 
 Copyright © Citus Data, Inc.
-
-[faq]: https://www.citusdata.com/frequently-asked-questions
-[tutorial]: https://docs.citusdata.com/en/stable/tutorials/multi-tenant-tutorial.html
