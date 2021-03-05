@@ -234,7 +234,7 @@ ExecuteLocalTaskListExtended(List *taskList,
 		 */
 		if (task->anchorShardId != INVALID_SHARD_ID)
 		{
-			SetLocalExecutionStatus(LOCAL_EXECUTION_REQUIRED);
+			SetLocalExecutionStatus(LOCAL_EXECUTION_REQUIRED_MODIFY);
 		}
 		LogLocalCommand(task);
 
@@ -684,7 +684,7 @@ static void
 EnsureTransitionPossible(LocalExecutionStatus from, LocalExecutionStatus
 						 to)
 {
-	if (from == LOCAL_EXECUTION_REQUIRED && to == LOCAL_EXECUTION_DISABLED)
+	if (from == LOCAL_EXECUTION_REQUIRED_MODIFY && to == LOCAL_EXECUTION_DISABLED)
 	{
 		ereport(ERROR,
 				(errmsg(
@@ -692,7 +692,7 @@ EnsureTransitionPossible(LocalExecutionStatus from, LocalExecutionStatus
 					 "to local execution disabled since it can cause "
 					 "visibility problems in the current transaction")));
 	}
-	if (from == LOCAL_EXECUTION_DISABLED && to == LOCAL_EXECUTION_REQUIRED)
+	if (from == LOCAL_EXECUTION_DISABLED && to == LOCAL_EXECUTION_REQUIRED_MODIFY)
 	{
 		ereport(ERROR,
 				(errmsg(
@@ -725,7 +725,7 @@ ShouldExecuteTasksLocally(List *taskList)
 		return false;
 	}
 
-	if (GetCurrentLocalExecutionStatus() == LOCAL_EXECUTION_REQUIRED)
+	if (GetCurrentLocalExecutionStatus() == LOCAL_EXECUTION_REQUIRED_MODIFY)
 	{
 		/*
 		 * If we already used local execution for a previous command
@@ -839,7 +839,7 @@ TaskAccessesLocalNode(Task *task)
 void
 ErrorIfTransactionAccessedPlacementsLocally(void)
 {
-	if (GetCurrentLocalExecutionStatus() == LOCAL_EXECUTION_REQUIRED)
+	if (GetCurrentLocalExecutionStatus() == LOCAL_EXECUTION_REQUIRED_MODIFY)
 	{
 		ereport(ERROR,
 				(errmsg("cannot execute command because a local execution has "

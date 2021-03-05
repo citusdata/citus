@@ -21,9 +21,9 @@ extern bool LogLocalCommands;
 
 typedef enum LocalExecutionStatus
 {
-	LOCAL_EXECUTION_REQUIRED,
+	LOCAL_EXECUTION_DISABLED = 0,
 	LOCAL_EXECUTION_OPTIONAL,
-	LOCAL_EXECUTION_DISABLED
+	LOCAL_EXECUTION_REQUIRED_MODIFY
 } LocalExecutionStatus;
 
 /* extern function declarations */

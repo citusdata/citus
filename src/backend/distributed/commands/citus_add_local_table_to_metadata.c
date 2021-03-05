@@ -205,7 +205,7 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys)
 	 * we don't teach those functions to access shards remotely, we
 	 * cannot relax this check.
 	 */
-	SetLocalExecutionStatus(LOCAL_EXECUTION_REQUIRED);
+	SetLocalExecutionStatus(LOCAL_EXECUTION_REQUIRED_MODIFY);
 
 	/*
 	 * Lock target relation with an AccessExclusiveLock as we don't want

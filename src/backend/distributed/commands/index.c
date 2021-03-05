@@ -395,7 +395,7 @@ SwitchToSequentialAndLocalExecutionIfIndexNameTooLong(IndexStmt *createIndexStat
 						 "mode to prevent self deadlocks: %s", indexName);
 
 			SetLocalMultiShardModifyModeToSequential();
-			SetLocalExecutionStatus(LOCAL_EXECUTION_REQUIRED);
+			SetLocalExecutionStatus(LOCAL_EXECUTION_REQUIRED_MODIFY);
 		}
 	}
 }

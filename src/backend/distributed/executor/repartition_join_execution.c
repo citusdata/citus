@@ -86,7 +86,7 @@ EnsureCompatibleLocalExecutionState(List *taskList)
 	 * We have LOCAL_EXECUTION_REQUIRED check here to avoid unnecessarily
 	 * iterating the task list in AnyTaskAccessesLocalNode.
 	 */
-	if (GetCurrentLocalExecutionStatus() == LOCAL_EXECUTION_REQUIRED &&
+	if (GetCurrentLocalExecutionStatus() == LOCAL_EXECUTION_REQUIRED_MODIFY &&
 		AnyTaskAccessesLocalNode(taskList))
 	{
 		ErrorIfTransactionAccessedPlacementsLocally();

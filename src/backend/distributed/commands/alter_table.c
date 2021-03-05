@@ -1700,7 +1700,7 @@ SwitchToSequentialAndLocalExecutionIfShardNameTooLong(char *relationName,
 				 longestShardName, relationName);
 
 			SetLocalMultiShardModifyModeToSequential();
-			SetLocalExecutionStatus(LOCAL_EXECUTION_REQUIRED);
+			SetLocalExecutionStatus(LOCAL_EXECUTION_REQUIRED_MODIFY);
 
 			return true;
 		}

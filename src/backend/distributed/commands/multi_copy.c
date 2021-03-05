@@ -2114,7 +2114,7 @@ GetLocalCopyStatus(void)
 	{
 		return LOCAL_COPY_DISABLED;
 	}
-	else if (GetCurrentLocalExecutionStatus() == LOCAL_EXECUTION_REQUIRED)
+	else if (GetCurrentLocalExecutionStatus() == LOCAL_EXECUTION_REQUIRED_MODIFY)
 	{
 		/*
 		 * For various reasons, including the transaction visibility

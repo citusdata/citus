@@ -984,7 +984,7 @@ ExecuteTaskListExtended(ExecutionParams *executionParams)
 	 * remote connection and local execution.
 	 */
 	List *remoteTaskList = execution->remoteTaskList;
-	if (GetCurrentLocalExecutionStatus() == LOCAL_EXECUTION_REQUIRED &&
+	if (GetCurrentLocalExecutionStatus() == LOCAL_EXECUTION_REQUIRED_MODIFY &&
 		AnyTaskAccessesLocalNode(remoteTaskList))
 	{
 		ErrorIfTransactionAccessedPlacementsLocally();
@@ -1165,7 +1165,7 @@ DecideTransactionPropertiesForTaskList(RowModifyLevel modLevel, List *taskList, 
 		return xactProperties;
 	}
 
-	if (GetCurrentLocalExecutionStatus() == LOCAL_EXECUTION_REQUIRED)
+	if (GetCurrentLocalExecutionStatus() == LOCAL_EXECUTION_REQUIRED_MODIFY)
 	{
 		/*
 		 * In case localExecutionHappened, we force the executor to use 2PC.
@@ -4341,7 +4341,7 @@ PlacementExecutionDone(TaskPlacementExecution *placementExecution, bool succeede
 		 * As we decided to failover this task to local execution, we cannot
 		 * allow remote execution to this pool during this distributedExecution.
 		 */
-		SetLocalExecutionStatus(LOCAL_EXECUTION_REQUIRED);
+		SetLocalExecutionStatus(LOCAL_EXECUTION_REQUIRED_MODIFY);
 		workerPool->failureState = WORKER_POOL_FAILED_OVER_TO_LOCAL;
 
 		ereport(DEBUG4, (errmsg("Task %d execution is failed over to local execution",
