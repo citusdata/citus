@@ -984,7 +984,7 @@ ExecuteTaskListExtended(ExecutionParams *executionParams)
 	 * remote connection and local execution.
 	 */
 	List *remoteTaskList = execution->remoteTaskList;
-	if (GetCurrentLocalExecutionStatus() == LOCAL_EXECUTION_REQUIRED_MODIFY &&
+	if (GetCurrentLocalExecutionStatus() >= LOCAL_EXECUTION_REQUIRED_READONLY &&
 		AnyTaskAccessesLocalNode(remoteTaskList))
 	{
 		ErrorIfTransactionAccessedPlacementsLocally();
@@ -1168,13 +1168,13 @@ DecideTransactionPropertiesForTaskList(RowModifyLevel modLevel, List *taskList, 
 	if (GetCurrentLocalExecutionStatus() == LOCAL_EXECUTION_REQUIRED_MODIFY)
 	{
 		/*
-		 * In case localExecutionHappened, we force the executor to use 2PC.
-		 * The primary motivation is that at this point we're definitely expanding
-		 * the nodes participated in the transaction. And, by re-generating the
-		 * remote task lists during local query execution, we might prevent the adaptive
-		 * executor to kick-in 2PC (or even start coordinated transaction, that's why
-		 * we prefer adding this check here instead of
-		 * Activate2PCIfModifyingTransactionExpandsToNewNode()).
+		 * In case a local execution with modification happened, we force the
+		 * executor to use 2PC. The primary motivation is that at this point
+		 * we're definitely expanding the nodes participated in the transaction.
+		 * Once more than one node involved in a transaction, we use 2PC to
+		 * provide atomicity of the transaction. The similar approach for remote
+		 * nodes only is implemented in
+		 * Activate2PCIfModifyingTransactionExpandsToNewNode().
 		 */
 		xactProperties.errorOnAnyFailure = true;
 		xactProperties.useRemoteTransactionBlocks = TRANSACTION_BLOCKS_REQUIRED;
@@ -4341,7 +4341,11 @@ PlacementExecutionDone(TaskPlacementExecution *placementExecution, bool succeede
 		 * As we decided to failover this task to local execution, we cannot
 		 * allow remote execution to this pool during this distributedExecution.
 		 */
-		SetLocalExecutionStatus(LOCAL_EXECUTION_REQUIRED_MODIFY);
+		LocalExecutionStatus status =
+			ReadOnlyTask(task->taskType) ? LOCAL_EXECUTION_REQUIRED_READONLY :
+			LOCAL_EXECUTION_REQUIRED_MODIFY;
+
+		SetLocalExecutionStatus(status);
 		workerPool->failureState = WORKER_POOL_FAILED_OVER_TO_LOCAL;
 
 		ereport(DEBUG4, (errmsg("Task %d execution is failed over to local execution",
