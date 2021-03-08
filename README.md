@@ -26,7 +26,6 @@ Since Citus is an extension to Postgres, you can use Citus with the latest Postg
 - [Using Citus](#using-citus)
 - [Documentation](#documentation)
 - [Architecture](#architecture)
-- [Performance](#performance)
 - [When to Use Citus](#when-to-use-citus)
 - [Need Help?](#need-help)
 - [Contributing](#contributing)
