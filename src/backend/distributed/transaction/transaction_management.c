@@ -195,6 +195,17 @@ CoordinatedTransactionUse2PC(void)
 }
 
 
+/*
+ * GetCoordinatedTransactionUses2PC is a wrapper function to read the value
+ * of CoordinatedTransactionUses2PC.
+ */
+bool
+GetCoordinatedTransactionUses2PC(void)
+{
+	return CoordinatedTransactionUses2PC;
+}
+
+
 void
 InitializeTransactionManagement(void)
 {

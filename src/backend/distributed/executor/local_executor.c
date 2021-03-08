@@ -235,8 +235,8 @@ ExecuteLocalTaskListExtended(List *taskList,
 		if (task->anchorShardId != INVALID_SHARD_ID)
 		{
 			LocalExecutionStatus status =
-				ReadOnlyTask(task->taskType) ? LOCAL_EXECUTION_REQUIRED_READONLY :
-				LOCAL_EXECUTION_REQUIRED_MODIFY;
+				ReadOnlyTask(task->taskType) ? LOCAL_EXECUTION_PERFORMED_READONLY :
+				LOCAL_EXECUTION_PERFORMED_MODIFICATION;
 
 			SetLocalExecutionStatus(status);
 		}
@@ -676,6 +676,16 @@ SetLocalExecutionStatus(LocalExecutionStatus newStatus)
 {
 	EnsureTransitionPossible(GetCurrentLocalExecutionStatus(), newStatus);
 
+	if (CurrentLocalExecutionStatus == LOCAL_EXECUTION_PERFORMED_MODIFICATION &&
+		newStatus == LOCAL_EXECUTION_PERFORMED_READONLY)
+	{
+		/*
+		 * After a modify happened, we should not override the
+		 * state with read-only access.
+		 */
+		return;
+	}
+
 	CurrentLocalExecutionStatus = newStatus;
 }
 
@@ -688,7 +698,10 @@ static void
 EnsureTransitionPossible(LocalExecutionStatus from, LocalExecutionStatus
 						 to)
 {
-	if (from >= LOCAL_EXECUTION_REQUIRED_READONLY && to == LOCAL_EXECUTION_DISABLED)
+	bool fromLocalExecutionRequired =
+		(from == LOCAL_EXECUTION_PERFORMED_READONLY ||
+		 from == LOCAL_EXECUTION_PERFORMED_MODIFICATION);
+	if (fromLocalExecutionRequired && to == LOCAL_EXECUTION_DISABLED)
 	{
 		ereport(ERROR,
 				(errmsg(
@@ -696,7 +709,11 @@ EnsureTransitionPossible(LocalExecutionStatus from, LocalExecutionStatus
 					 "to local execution disabled since it can cause "
 					 "visibility problems in the current transaction")));
 	}
-	if (from == LOCAL_EXECUTION_DISABLED && to >= LOCAL_EXECUTION_REQUIRED_READONLY)
+
+	bool toLocalExecutionRequired =
+		(to == LOCAL_EXECUTION_PERFORMED_READONLY ||
+		 to == LOCAL_EXECUTION_PERFORMED_MODIFICATION);
+	if (from == LOCAL_EXECUTION_DISABLED && toLocalExecutionRequired)
 	{
 		ereport(ERROR,
 				(errmsg(
@@ -720,7 +737,8 @@ ShouldExecuteTasksLocally(List *taskList)
 		return false;
 	}
 
-	if (GetCurrentLocalExecutionStatus() == LOCAL_EXECUTION_DISABLED)
+	LocalExecutionStatus localExecutionStatus = GetCurrentLocalExecutionStatus();
+	if (localExecutionStatus == LOCAL_EXECUTION_DISABLED)
 	{
 		/*
 		 * if the current transaction accessed the local node over a connection
@@ -729,7 +747,7 @@ ShouldExecuteTasksLocally(List *taskList)
 		return false;
 	}
 
-	if (GetCurrentLocalExecutionStatus() >= LOCAL_EXECUTION_REQUIRED_READONLY)
+	if (LocalExecutionRequired(localExecutionStatus))
 	{
 		/*
 		 * If we already used local execution for a previous command
@@ -843,7 +861,8 @@ TaskAccessesLocalNode(Task *task)
 void
 ErrorIfTransactionAccessedPlacementsLocally(void)
 {
-	if (GetCurrentLocalExecutionStatus() >= LOCAL_EXECUTION_REQUIRED_READONLY)
+	LocalExecutionStatus localExecutionStatus = GetCurrentLocalExecutionStatus();
+	if (LocalExecutionRequired(localExecutionStatus))
 	{
 		ereport(ERROR,
 				(errmsg("cannot execute command because a local execution has "

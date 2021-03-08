@@ -372,8 +372,58 @@ inserts AS (
   RETURNING *
 ) SELECT count(*) FROM inserts;
 
-RESET client_min_messages;
 
+-- a helper function which return true if the coordinated trannsaction uses
+-- 2PC
+CREATE OR REPLACE FUNCTION coordinated_transaction_uses_2PC()
+RETURNS BOOL LANGUAGE C STRICT VOLATILE AS 'citus',
+$$coordinated_transaction_uses_2PC$$;
+
+-- a local SELECT followed by remote SELECTs
+-- does not trigger 2PC
+BEGIN;
+  SELECT y FROM test WHERE x = 1;
+  WITH cte_1 AS (SELECT y FROM test WHERE x = 1 LIMIT 5) SELECT count(*) FROM test;
+  SELECT count(*) FROM test;
+  WITH cte_1 as (SELECT * FROM test LIMIT 5) SELECT count(*) FROM test;
+  SELECT coordinated_transaction_uses_2PC();
+COMMIT;
+
+-- remote SELECTs followed by local SELECTs
+-- does not trigger 2PC
+BEGIN;
+  SELECT count(*) FROM test;
+  WITH cte_1 as (SELECT * FROM test LIMIT 5) SELECT count(*) FROM test;
+  SELECT y FROM test WHERE x = 1;
+  WITH cte_1 AS (SELECT y FROM test WHERE x = 1 LIMIT 5) SELECT count(*) FROM test;
+  SELECT coordinated_transaction_uses_2PC();
+COMMIT;
+
+-- a local SELECT followed by a remote Modify
+-- triggers 2PC
+BEGIN;
+  SELECT y FROM test WHERE x = 1;
+  UPDATE test SET y = y +1;
+  SELECT coordinated_transaction_uses_2PC();
+COMMIT;
+
+-- a local modify followed by a remote SELECT
+-- triggers 2PC
+BEGIN;
+  INSERT INTO test VALUES (1,1);
+  SELECT count(*) FROM test;
+  SELECT coordinated_transaction_uses_2PC();
+COMMIT;
+
+-- a local modify followed by a remote MODIFY
+-- triggers 2PC
+BEGIN;
+  INSERT INTO test VALUES (1,1);
+  UPDATE test SET y = y +1;
+  SELECT coordinated_transaction_uses_2PC();
+COMMIT;
+
+RESET client_min_messages;
 
 \set VERBOSITY terse
 DROP TABLE ref_table;

@@ -394,7 +394,7 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 		 * creation doesn't use remote execution and we don't error out
 		 * in CreateCitusLocalTable.
 		 */
-		SetLocalExecutionStatus(LOCAL_EXECUTION_REQUIRED_MODIFY);
+		SetLocalExecutionStatus(LOCAL_EXECUTION_PERFORMED_MODIFICATION);
 
 		DropFKeysRelationInvolvedWithTableType(relationId, INCLUDE_LOCAL_TABLES);
 	}

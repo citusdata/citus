@@ -984,7 +984,8 @@ ExecuteTaskListExtended(ExecutionParams *executionParams)
 	 * remote connection and local execution.
 	 */
 	List *remoteTaskList = execution->remoteTaskList;
-	if (GetCurrentLocalExecutionStatus() >= LOCAL_EXECUTION_REQUIRED_READONLY &&
+	LocalExecutionStatus localExecutionStatus = GetCurrentLocalExecutionStatus();
+	if (LocalExecutionRequired(localExecutionStatus) &&
 		AnyTaskAccessesLocalNode(remoteTaskList))
 	{
 		ErrorIfTransactionAccessedPlacementsLocally();
@@ -1165,7 +1166,8 @@ DecideTransactionPropertiesForTaskList(RowModifyLevel modLevel, List *taskList, 
 		return xactProperties;
 	}
 
-	if (GetCurrentLocalExecutionStatus() == LOCAL_EXECUTION_REQUIRED_MODIFY)
+	if (GetCurrentLocalExecutionStatus() == LOCAL_EXECUTION_PERFORMED_MODIFICATION &&
+		modLevel != ROW_MODIFY_READONLY)
 	{
 		/*
 		 * In case a local execution with modification happened, we force the
@@ -4342,8 +4344,8 @@ PlacementExecutionDone(TaskPlacementExecution *placementExecution, bool succeede
 		 * allow remote execution to this pool during this distributedExecution.
 		 */
 		LocalExecutionStatus status =
-			ReadOnlyTask(task->taskType) ? LOCAL_EXECUTION_REQUIRED_READONLY :
-			LOCAL_EXECUTION_REQUIRED_MODIFY;
+			ReadOnlyTask(task->taskType) ? LOCAL_EXECUTION_PERFORMED_READONLY :
+			LOCAL_EXECUTION_PERFORMED_MODIFICATION;
 
 		SetLocalExecutionStatus(status);
 		workerPool->failureState = WORKER_POOL_FAILED_OVER_TO_LOCAL;

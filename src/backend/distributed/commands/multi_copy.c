@@ -2109,12 +2109,13 @@ CreateCitusCopyDestReceiver(Oid tableId, List *columnNameList, int partitionColu
 static LocalCopyStatus
 GetLocalCopyStatus(void)
 {
+	LocalExecutionStatus localExecutionStatus = GetCurrentLocalExecutionStatus();
 	if (!EnableLocalExecution ||
-		GetCurrentLocalExecutionStatus() == LOCAL_EXECUTION_DISABLED)
+		localExecutionStatus == LOCAL_EXECUTION_DISABLED)
 	{
 		return LOCAL_COPY_DISABLED;
 	}
-	else if (GetCurrentLocalExecutionStatus() >= LOCAL_EXECUTION_REQUIRED_READONLY)
+	else if (LocalExecutionRequired(localExecutionStatus))
 	{
 		/*
 		 * For various reasons, including the transaction visibility

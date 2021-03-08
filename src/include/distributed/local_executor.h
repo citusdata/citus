@@ -21,11 +21,16 @@ extern bool LogLocalCommands;
 
 typedef enum LocalExecutionStatus
 {
-	LOCAL_EXECUTION_DISABLED = 0,
+	LOCAL_EXECUTION_DISABLED,
 	LOCAL_EXECUTION_OPTIONAL,
-	LOCAL_EXECUTION_REQUIRED_READONLY,
-	LOCAL_EXECUTION_REQUIRED_MODIFY
+	LOCAL_EXECUTION_PERFORMED_READONLY,
+	LOCAL_EXECUTION_PERFORMED_MODIFICATION
 } LocalExecutionStatus;
+
+#define LocalExecutionRequired(status) \
+	(status == LOCAL_EXECUTION_PERFORMED_READONLY || \
+	 status == LOCAL_EXECUTION_PERFORMED_MODIFICATION) \
+
 
 /* extern function declarations */
 extern LocalExecutionStatus GetCurrentLocalExecutionStatus(void);

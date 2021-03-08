@@ -71,7 +71,7 @@ WriteTupleToLocalShard(TupleTableSlot *slot, CitusCopyDestReceiver *copyDest, in
 	 * Since we are doing a local copy, the following statements should
 	 * use local execution to see the changes
 	 */
-	SetLocalExecutionStatus(LOCAL_EXECUTION_REQUIRED_MODIFY);
+	SetLocalExecutionStatus(LOCAL_EXECUTION_PERFORMED_MODIFICATION);
 
 	bool isBinaryCopy = localCopyOutState->binary;
 	if (ShouldAddBinaryHeaders(localCopyOutState->fe_msgbuf, isBinaryCopy))
