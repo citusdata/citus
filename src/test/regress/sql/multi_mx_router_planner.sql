@@ -147,6 +147,16 @@ WITH id_author AS ( SELECT id, author_id FROM articles_hash_mx WHERE author_id =
 id_title AS (SELECT id, title from articles_hash_mx WHERE author_id = 2)
 SELECT * FROM id_author, id_title WHERE id_author.id = id_title.id;
 
+WITH update_article AS (
+    UPDATE articles_hash_mx SET word_count = 11 WHERE id = 1 AND word_count = 10 RETURNING *
+)
+SELECT coalesce(1,random());
+
+WITH update_article AS (
+    UPDATE articles_hash_mx SET word_count = 10 WHERE author_id = 1 AND id = 1 AND word_count = 11 RETURNING *
+)
+SELECT coalesce(1,random());
+
 -- recursive CTEs are supported when filtered on partition column
 
 INSERT INTO company_employees_mx values(1, 1, 0);
