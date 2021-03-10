@@ -1223,7 +1223,7 @@ StartDistributedExecution(DistributedExecution *execution)
 
 	if (xactProperties->requires2PC)
 	{
-		CoordinatedTransactionUse2PC();
+		CoordinatedTransactionShouldUse2PC();
 	}
 
 	/*
@@ -3180,7 +3180,7 @@ Activate2PCIfModifyingTransactionExpandsToNewNode(WorkerSession *session)
 		 * just opened, which means we're now going to make modifications
 		 * over multiple connections. Activate 2PC!
 		 */
-		CoordinatedTransactionUse2PC();
+		CoordinatedTransactionShouldUse2PC();
 	}
 }
 

@@ -332,7 +332,7 @@ DropShards(Oid relationId, char *schemaName, char *relationName,
 	 */
 	if (MultiShardCommitProtocol == COMMIT_PROTOCOL_2PC)
 	{
-		CoordinatedTransactionUse2PC();
+		CoordinatedTransactionShouldUse2PC();
 	}
 
 	List *dropTaskList = DropTaskList(relationId, schemaName, relationName,

@@ -96,9 +96,16 @@ MemoryContext CommitContext = NULL;
 /*
  * Should this coordinated transaction use 2PC? Set by
  * CoordinatedTransactionUse2PC(), e.g. if DDL was issued and
- * MultiShardCommitProtocol was set to 2PC.
+ * MultiShardCommitProtocol was set to 2PC. But, even if this
+ * flag is set, the transaction manager is smart enough to only
+ * do 2PC on the remote connections that did a modification.
+ *
+ * As a variable name ShouldCoordinatedTransactionUse2PC could
+ * be improved. We use CoordinatedTransactionShouldUse2PC() as the
+ * public API function, hence couldn't come up with a better name
+ * for the underlying variable at the moment.
  */
-bool CoordinatedTransactionUses2PC = false;
+bool ShouldCoordinatedTransactionUse2PC = false;
 
 /* if disabled, distributed statements in a function may run as separate transactions */
 bool FunctionOpensTransactionBlock = true;
@@ -183,26 +190,29 @@ InCoordinatedTransaction(void)
 
 
 /*
- * CoordinatedTransactionUse2PC() signals that the current coordinated
+ * CoordinatedTransactionShouldUse2PC() signals that the current coordinated
  * transaction should use 2PC to commit.
+ *
+ * Note that even if 2PC is enabled, it is only used for connections that make
+ * modification (DML or DDL).
  */
 void
-CoordinatedTransactionUse2PC(void)
+CoordinatedTransactionShouldUse2PC(void)
 {
 	Assert(InCoordinatedTransaction());
 
-	CoordinatedTransactionUses2PC = true;
+	ShouldCoordinatedTransactionUse2PC = true;
 }
 
 
 /*
- * GetCoordinatedTransactionUses2PC is a wrapper function to read the value
- * of CoordinatedTransactionUses2PC.
+ * GetCoordinatedTransactionShouldUse2PC is a wrapper function to read the value
+ * of CoordinatedTransactionShouldUse2PCFlag.
  */
 bool
-GetCoordinatedTransactionUses2PC(void)
+GetCoordinatedTransactionShouldUse2PC(void)
 {
-	return CoordinatedTransactionUses2PC;
+	return ShouldCoordinatedTransactionUse2PC;
 }
 
 
@@ -436,7 +446,7 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			 */
 			MarkFailedShardPlacements();
 
-			if (CoordinatedTransactionUses2PC)
+			if (ShouldCoordinatedTransactionUse2PC)
 			{
 				CoordinatedRemoteTransactionsPrepare();
 				CurrentCoordinatedTransactionState = COORD_TRANS_PREPARED;
@@ -464,7 +474,7 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			 * Check again whether shards/placement successfully
 			 * committed. This handles failure at COMMIT/PREPARE time.
 			 */
-			PostCommitMarkFailedShardPlacements(CoordinatedTransactionUses2PC);
+			PostCommitMarkFailedShardPlacements(ShouldCoordinatedTransactionUse2PC);
 			break;
 		}
 
@@ -496,7 +506,7 @@ ResetGlobalVariables()
 	FreeSavedExplainPlan();
 	dlist_init(&InProgressTransactions);
 	activeSetStmts = NULL;
-	CoordinatedTransactionUses2PC = false;
+	ShouldCoordinatedTransactionUse2PC = false;
 	TransactionModifiedNodeMetadata = false;
 	MetadataSyncOnCommit = false;
 	ResetWorkerErrorIndication();
