@@ -1,0 +1,121 @@
+--
+-- MULTI_TRANSACTION_2PC
+--
+-- Tests that check 2PC is used only for connections that perform a write
+SET citus.next_shard_id TO 1410000;
+SET citus.force_max_query_parallelization TO ON;
+CREATE SCHEMA multi_transaction_2pc;
+SET search_path = 'multi_transaction_2pc';
+SET citus.shard_replication_factor TO 1;
+-- check that read-only participants skip prepare
+-- only two of the connections will perform a write (INSERT)
+CREATE TABLE test (a int);
+SELECT create_distributed_table('test', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO test SELECT i FROM generate_series(0, 5)i;
+BEGIN;
+SET LOCAL citus.log_remote_commands TO ON;
+-- these inserts use two connections
+INSERT INTO test VALUES (6);
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing INSERT INTO multi_transaction_2pc.test_1410002 (a) VALUES (6)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+INSERT INTO test VALUES (7);
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing INSERT INTO multi_transaction_2pc.test_1410001 (a) VALUES (7)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+SET LOCAL citus.log_remote_commands TO OFF;
+-- we know this will use more than two connections
+SELECT count(*) FROM test;
+ count
+---------------------------------------------------------------------
+     8
+(1 row)
+
+SET LOCAL citus.log_remote_commands TO ON;
+COMMIT;
+NOTICE:  issuing PREPARE TRANSACTION 'citus_x_yyyyyy_zzz_w'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing PREPARE TRANSACTION 'citus_x_yyyyyy_zzz_w'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT PREPARED 'citus_x_yyyyyy_zzz_w'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT PREPARED 'citus_x_yyyyyy_zzz_w'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+-- check that read-only participants skip prepare
+-- only two of the connections will perform a write (INSERT)
+BEGIN;
+SET LOCAL citus.log_remote_commands TO ON;
+-- this insert uses two connections
+INSERT INTO test SELECT i FROM generate_series(8, 10)i;
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COPY multi_transaction_2pc.test_1410000 (a) FROM STDIN WITH (format 'binary')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COPY multi_transaction_2pc.test_1410003 (a) FROM STDIN WITH (format 'binary')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+SET LOCAL citus.log_remote_commands TO OFF;
+-- we know this will use more than two connections
+SELECT COUNT(*) FROM test;
+ count
+---------------------------------------------------------------------
+    11
+(1 row)
+
+SET LOCAL citus.log_remote_commands TO ON;
+COMMIT;
+NOTICE:  issuing PREPARE TRANSACTION 'citus_x_yyyyyy_zzz_w'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing PREPARE TRANSACTION 'citus_x_yyyyyy_zzz_w'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT PREPARED 'citus_x_yyyyyy_zzz_w'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT PREPARED 'citus_x_yyyyyy_zzz_w'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+-- check that reads from a reference table don't trigger 2PC
+-- despite repmodel being 2PC
+CREATE TABLE test_reference (b int);
+SELECT create_reference_table('test_reference');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO test_reference VALUES(1);
+INSERT INTO test_reference VALUES(2);
+BEGIN;
+SET LOCAL citus.log_remote_commands TO ON;
+SELECT * FROM test_reference ORDER BY 1;
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT b FROM multi_transaction_2pc.test_reference_1410004 test_reference ORDER BY b
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+ b
+---------------------------------------------------------------------
+ 1
+ 2
+(2 rows)
+
+COMMIT;
+NOTICE:  issuing COMMIT
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+DROP SCHEMA multi_transaction_2pc CASCADE;
+NOTICE:  drop cascades to 2 other objects
+DETAIL:  drop cascades to table test
+drop cascades to table test_reference
