@@ -2,7 +2,6 @@ CREATE SCHEMA recursive_dml_queries_mx;
 SET search_path TO recursive_dml_queries_mx, public;
 
 SET citus.shard_replication_factor TO 1;
-SET citus.replication_model TO streaming;
 
 CREATE TABLE recursive_dml_queries_mx.distributed_table (tenant_id text, dept int, info jsonb);
 SELECT create_distributed_table('distributed_table', 'tenant_id');
@@ -156,4 +155,3 @@ SET search_path TO recursive_dml_queries_mx, public;
 RESET client_min_messages;
 DROP SCHEMA recursive_dml_queries_mx CASCADE;
 RESET citus.shard_replication_factor;
-RESET citus.replication_model;

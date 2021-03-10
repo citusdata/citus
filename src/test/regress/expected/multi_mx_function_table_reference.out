@@ -9,7 +9,6 @@ CREATE SCHEMA function_table_reference;
 SET search_path TO function_table_reference;
 SET citus.shard_count TO 4;
 SET citus.shard_replication_factor TO 1;
-SET citus.replication_model TO streaming;
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
  start_metadata_sync_to_node
 ---------------------------------------------------------------------

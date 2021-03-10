@@ -1,5 +1,4 @@
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1640000;
-SET citus.replication_model TO streaming;
 SET citus.shard_replication_factor to 1;
 SET citus.shard_count to 4;
 CREATE SCHEMA ch_bench_having;
@@ -292,7 +291,6 @@ having   (select max(s_order_cnt) > 2 as having_query from stock where s_i_id = 
 order by s_i_id;
 ERROR:  Subqueries in HAVING cannot refer to outer query
 \c - - - :master_port
-SET citus.replication_model TO streaming;
 SET citus.shard_replication_factor to 1;
 SET citus.shard_count to 4;
 SET search_path = ch_bench_having, public;

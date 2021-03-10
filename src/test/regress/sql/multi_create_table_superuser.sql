@@ -1,37 +1,9 @@
-
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 360005;
 ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 100000;
 
--- Since we're superuser, we can set the replication model to 'streaming' to
--- create a one-off MX table... but if we forget to set the replication factor to one,
--- we should see an error reminding us to fix that
-SET citus.replication_model TO 'streaming';
-SELECT create_distributed_table('mx_table_test', 'col1');
-
--- ok, so now actually create the one-off MX table
 SET citus.shard_replication_factor TO 1;
-SELECT create_distributed_table('mx_table_test', 'col1');
-SELECT repmodel FROM pg_dist_partition WHERE logicalrelid='mx_table_test'::regclass;
-DROP TABLE mx_table_test;
 
--- Show that master_create_distributed_table ignores citus.replication_model GUC
-CREATE TABLE s_table(a int);
-SELECT master_create_distributed_table('s_table', 'a', 'hash');
-SELECT repmodel FROM pg_dist_partition WHERE logicalrelid='s_table'::regclass;
-
--- Show that master_create_worker_shards complains when RF>1 and replication model is streaming
-UPDATE pg_dist_partition SET repmodel = 's' WHERE logicalrelid='s_table'::regclass;
-SELECT master_create_worker_shards('s_table', 4, 2);
-
-DROP TABLE s_table;
-
-RESET citus.replication_model;
-
--- Show that create_distributed_table with append and range distributions ignore
--- citus.replication_model GUC
-SET citus.shard_replication_factor TO 2;
-SET citus.replication_model TO streaming;
-
+-- test that range and append distributed tables have coordinator replication
 CREATE TABLE repmodel_test (a int);
 SELECT create_distributed_table('repmodel_test', 'a', 'append');
 SELECT repmodel FROM pg_dist_partition WHERE logicalrelid='repmodel_test'::regclass;
@@ -42,9 +14,7 @@ SELECT create_distributed_table('repmodel_test', 'a', 'range');
 SELECT repmodel FROM pg_dist_partition WHERE logicalrelid='repmodel_test'::regclass;
 DROP TABLE repmodel_test;
 
--- Show that master_create_distributed_table created statement replicated tables no matter
--- what citus.replication_model set to
-
+-- test that deprecated api creates distributed tables with coordinator replication
 CREATE TABLE repmodel_test (a int);
 SELECT master_create_distributed_table('repmodel_test', 'a', 'hash');
 SELECT repmodel FROM pg_dist_partition WHERE logicalrelid='repmodel_test'::regclass;
@@ -60,35 +30,7 @@ SELECT master_create_distributed_table('repmodel_test', 'a', 'range');
 SELECT repmodel FROM pg_dist_partition WHERE logicalrelid='repmodel_test'::regclass;
 DROP TABLE repmodel_test;
 
--- Check that the replication_model overwrite behavior is the same with RF=1
-SET citus.shard_replication_factor TO 1;
-
-CREATE TABLE repmodel_test (a int);
-SELECT create_distributed_table('repmodel_test', 'a', 'append');
-SELECT repmodel FROM pg_dist_partition WHERE logicalrelid='repmodel_test'::regclass;
-DROP TABLE repmodel_test;
-
-CREATE TABLE repmodel_test (a int);
-SELECT create_distributed_table('repmodel_test', 'a', 'range');
-SELECT repmodel FROM pg_dist_partition WHERE logicalrelid='repmodel_test'::regclass;
-DROP TABLE repmodel_test;
-
-CREATE TABLE repmodel_test (a int);
-SELECT master_create_distributed_table('repmodel_test', 'a', 'hash');
-SELECT repmodel FROM pg_dist_partition WHERE logicalrelid='repmodel_test'::regclass;
-DROP TABLE repmodel_test;
-
-CREATE TABLE repmodel_test (a int);
-SELECT master_create_distributed_table('repmodel_test', 'a', 'append');
-SELECT repmodel FROM pg_dist_partition WHERE logicalrelid='repmodel_test'::regclass;
-DROP TABLE repmodel_test;
-
-CREATE TABLE repmodel_test (a int);
-SELECT master_create_distributed_table('repmodel_test', 'a', 'range');
-SELECT repmodel FROM pg_dist_partition WHERE logicalrelid='repmodel_test'::regclass;
-DROP TABLE repmodel_test;
-
-RESET citus.replication_model;
+RESET citus.shard_replication_factor;
 
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 360025;
 

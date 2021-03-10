@@ -99,6 +99,9 @@ PG_MODULE_MAGIC;
 #define DUMMY_REAL_TIME_EXECUTOR_ENUM_VALUE 9999999
 static char *CitusVersion = CITUS_VERSION;
 
+/* deprecated GUC value that should not be used anywhere outside this file */
+static int ReplicationModel = REPLICATION_MODEL_STREAMING;
+
 
 void _PG_init(void);
 void _PG_fini(void);
@@ -115,6 +118,7 @@ static void RegisterCitusConfigVariables(void);
 static bool ErrorIfNotASuitableDeadlockFactor(double *newval, void **extra,
 											  GucSource source);
 static bool WarnIfDeprecatedExecutorUsed(int *newval, void **extra, GucSource source);
+static bool WarnIfReplicationModelIsSet(int *newval, void **extra, GucSource source);
 static bool NoticeIfSubqueryPushdownEnabled(bool *newval, void **extra, GucSource source);
 static bool NodeConninfoGucCheckHook(char **newval, void **extra, GucSource source);
 static void NodeConninfoGucAssignHook(const char *newval, void *extra);
@@ -1487,17 +1491,16 @@ RegisterCitusConfigVariables(void)
 
 	DefineCustomEnumVariable(
 		"citus.replication_model",
-		gettext_noop("Sets the replication model to be used for distributed tables."),
-		gettext_noop("Depending upon the execution environment, statement- or streaming-"
-					 "based replication modes may be employed. Though most Citus deploy-"
-					 "ments will simply use statement replication, hosted and MX-style"
-					 "deployments should set this parameter to 'streaming'."),
+		gettext_noop("Deprecated. Please use citus.shard_replication_factor instead"),
+		gettext_noop(
+			"Shard replication model is determined by the shard replication factor."
+			"'statement' replication is used only when the replication factor is one."),
 		&ReplicationModel,
-		REPLICATION_MODEL_COORDINATOR,
+		REPLICATION_MODEL_STREAMING,
 		replication_model_options,
 		PGC_SUSET,
-		GUC_SUPERUSER_ONLY,
-		NULL, NULL, NULL);
+		GUC_NO_SHOW_ALL,
+		WarnIfReplicationModelIsSet, NULL, NULL);
 
 	DefineCustomBoolVariable(
 		"citus.running_under_isolation_test",
@@ -1810,6 +1813,32 @@ NoticeIfSubqueryPushdownEnabled(bool *newval, void **extra, GucSource source)
 							 "compatibility, no new users are supposed to use it. The planner "
 							 "is capable of pushing down as much computation as possible to the "
 							 "shards depending on the query.")));
+	}
+
+	return true;
+}
+
+
+/*
+ * WarnIfReplicationModelIsSet prints a warning when a user sets
+ * citus.replication_model.
+ */
+static bool
+WarnIfReplicationModelIsSet(int *newval, void **extra, GucSource source)
+{
+	/* print a warning only when user sets the guc */
+	if (source == PGC_S_SESSION)
+	{
+		ereport(NOTICE, (errcode(ERRCODE_WARNING_DEPRECATED_FEATURE),
+						 errmsg(
+							 "Setting citus.replication_model has no effect. Please use "
+							 "citus.shard_replication_factor instead."),
+						 errdetail(
+							 "Citus determines the replication model based on the "
+							 "replication factor and the replication models of the colocated "
+							 "shards. If a colocated table is present, the replication model "
+							 "is inherited. Otherwise 'streaming' replication is preferred if "
+							 "supported by the replication factor.")));
 	}
 
 	return true;

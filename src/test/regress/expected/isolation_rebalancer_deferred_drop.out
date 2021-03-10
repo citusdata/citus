@@ -81,11 +81,12 @@ run_commands_on_session_level_connection_to_node
 run_commands_on_session_level_connection_to_node
 
 
-s1: WARNING:  canceling statement due to lock timeout
-s1: WARNING:  Failed to drop 1 old shards out of 1
 step s1-drop-marked-shards:
     SELECT public.master_defer_delete_shards();
-
+ <waiting ...>
+s1: WARNING:  canceling statement due to lock timeout
+s1: WARNING:  Failed to drop 1 old shards out of 1
+step s1-drop-marked-shards: <... completed>
 master_defer_delete_shards
 
 0

@@ -12,7 +12,7 @@ step s1-print-distributed-objects:
     SELECT count(*) FROM pg_namespace where nspname = 'myschema';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
     -- print if the type has been created
-	SELECT count(*) FROM pg_type where typname = 'tt1';
+ SELECT count(*) FROM pg_type where typname = 'tt1';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
     -- print if the function has been created
     SELECT count(*) FROM pg_proc WHERE proname='add';
@@ -55,7 +55,7 @@ step s1-begin:
     BEGIN;
 
 step s1-add-worker:
-	SELECT 1 FROM master_add_node('localhost', 57638);
+ SELECT 1 FROM master_add_node('localhost', 57638);
 
 ?column?
 
@@ -64,13 +64,12 @@ step s2-public-schema:
     SET search_path TO public;
 
 step s2-create-table:
-	CREATE TABLE t1 (a int, b int);
+ CREATE TABLE t1 (a int, b int);
     -- session needs to have replication factor set to 1, can't do in setup
-	SET citus.replication_model TO 'streaming';
-	SET citus.shard_replication_factor TO 1;
-	SELECT create_distributed_table('t1', 'a');
+ SET citus.shard_replication_factor TO 1;
+ SELECT create_distributed_table('t1', 'a');
  <waiting ...>
-step s1-commit:
+step s1-commit: 
     COMMIT;
 
 step s2-create-table: <... completed>
@@ -84,7 +83,7 @@ step s2-print-distributed-objects:
     SELECT count(*) FROM pg_namespace where nspname = 'myschema';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
     -- print if the type has been created
-	SELECT count(*) FROM pg_type where typname = 'tt1';
+ SELECT count(*) FROM pg_type where typname = 'tt1';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
     -- print if the function has been created
     SELECT count(*) FROM pg_proc WHERE proname='add';
@@ -133,7 +132,7 @@ step s1-print-distributed-objects:
     SELECT count(*) FROM pg_namespace where nspname = 'myschema';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
     -- print if the type has been created
-	SELECT count(*) FROM pg_type where typname = 'tt1';
+ SELECT count(*) FROM pg_type where typname = 'tt1';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
     -- print if the function has been created
     SELECT count(*) FROM pg_proc WHERE proname='add';
@@ -176,10 +175,10 @@ step s1-begin:
     BEGIN;
 
 step s2-begin:
-	BEGIN;
+ BEGIN;
 
 step s1-add-worker:
-	SELECT 1 FROM master_add_node('localhost', 57638);
+ SELECT 1 FROM master_add_node('localhost', 57638);
 
 ?column?
 
@@ -188,13 +187,12 @@ step s2-public-schema:
     SET search_path TO public;
 
 step s2-create-table:
-	CREATE TABLE t1 (a int, b int);
+ CREATE TABLE t1 (a int, b int);
     -- session needs to have replication factor set to 1, can't do in setup
-	SET citus.replication_model TO 'streaming';
-	SET citus.shard_replication_factor TO 1;
-	SELECT create_distributed_table('t1', 'a');
+ SET citus.shard_replication_factor TO 1;
+ SELECT create_distributed_table('t1', 'a');
  <waiting ...>
-step s1-commit:
+step s1-commit: 
     COMMIT;
 
 step s2-create-table: <... completed>
@@ -202,7 +200,7 @@ create_distributed_table
 
 
 step s2-commit:
-	COMMIT;
+ COMMIT;
 
 step s2-print-distributed-objects:
     -- print an overview of all distributed objects
@@ -211,7 +209,7 @@ step s2-print-distributed-objects:
     SELECT count(*) FROM pg_namespace where nspname = 'myschema';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
     -- print if the type has been created
-	SELECT count(*) FROM pg_type where typname = 'tt1';
+ SELECT count(*) FROM pg_type where typname = 'tt1';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
     -- print if the function has been created
     SELECT count(*) FROM pg_proc WHERE proname='add';
@@ -260,7 +258,7 @@ step s1-print-distributed-objects:
     SELECT count(*) FROM pg_namespace where nspname = 'myschema';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
     -- print if the type has been created
-	SELECT count(*) FROM pg_type where typname = 'tt1';
+ SELECT count(*) FROM pg_type where typname = 'tt1';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
     -- print if the function has been created
     SELECT count(*) FROM pg_proc WHERE proname='add';
@@ -303,26 +301,25 @@ step s1-begin:
     BEGIN;
 
 step s2-begin:
-	BEGIN;
+ BEGIN;
 
 step s2-public-schema:
     SET search_path TO public;
 
 step s2-create-table:
-	CREATE TABLE t1 (a int, b int);
+ CREATE TABLE t1 (a int, b int);
     -- session needs to have replication factor set to 1, can't do in setup
-	SET citus.replication_model TO 'streaming';
-	SET citus.shard_replication_factor TO 1;
-	SELECT create_distributed_table('t1', 'a');
+ SET citus.shard_replication_factor TO 1;
+ SELECT create_distributed_table('t1', 'a');
 
 create_distributed_table
 
 
 step s1-add-worker:
-	SELECT 1 FROM master_add_node('localhost', 57638);
+ SELECT 1 FROM master_add_node('localhost', 57638);
  <waiting ...>
-step s2-commit:
-	COMMIT;
+step s2-commit: 
+ COMMIT;
 
 step s1-add-worker: <... completed>
 ?column?
@@ -338,7 +335,7 @@ step s2-print-distributed-objects:
     SELECT count(*) FROM pg_namespace where nspname = 'myschema';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
     -- print if the type has been created
-	SELECT count(*) FROM pg_type where typname = 'tt1';
+ SELECT count(*) FROM pg_type where typname = 'tt1';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
     -- print if the function has been created
     SELECT count(*) FROM pg_proc WHERE proname='add';
@@ -387,7 +384,7 @@ step s1-print-distributed-objects:
     SELECT count(*) FROM pg_namespace where nspname = 'myschema';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
     -- print if the type has been created
-	SELECT count(*) FROM pg_type where typname = 'tt1';
+ SELECT count(*) FROM pg_type where typname = 'tt1';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
     -- print if the function has been created
     SELECT count(*) FROM pg_proc WHERE proname='add';
@@ -430,7 +427,7 @@ step s1-begin:
     BEGIN;
 
 step s1-add-worker:
-	SELECT 1 FROM master_add_node('localhost', 57638);
+ SELECT 1 FROM master_add_node('localhost', 57638);
 
 ?column?
 
@@ -440,13 +437,12 @@ step s2-create-schema:
     SET search_path TO myschema;
 
 step s2-create-table:
-	CREATE TABLE t1 (a int, b int);
+ CREATE TABLE t1 (a int, b int);
     -- session needs to have replication factor set to 1, can't do in setup
-	SET citus.replication_model TO 'streaming';
-	SET citus.shard_replication_factor TO 1;
-	SELECT create_distributed_table('t1', 'a');
+ SET citus.shard_replication_factor TO 1;
+ SELECT create_distributed_table('t1', 'a');
  <waiting ...>
-step s1-commit:
+step s1-commit: 
     COMMIT;
 
 step s2-create-table: <... completed>
@@ -460,7 +456,7 @@ step s2-print-distributed-objects:
     SELECT count(*) FROM pg_namespace where nspname = 'myschema';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
     -- print if the type has been created
-	SELECT count(*) FROM pg_type where typname = 'tt1';
+ SELECT count(*) FROM pg_type where typname = 'tt1';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
     -- print if the function has been created
     SELECT count(*) FROM pg_proc WHERE proname='add';
@@ -510,7 +506,7 @@ step s1-print-distributed-objects:
     SELECT count(*) FROM pg_namespace where nspname = 'myschema';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
     -- print if the type has been created
-	SELECT count(*) FROM pg_type where typname = 'tt1';
+ SELECT count(*) FROM pg_type where typname = 'tt1';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
     -- print if the function has been created
     SELECT count(*) FROM pg_proc WHERE proname='add';
@@ -553,10 +549,10 @@ step s1-begin:
     BEGIN;
 
 step s2-begin:
-	BEGIN;
+ BEGIN;
 
 step s1-add-worker:
-	SELECT 1 FROM master_add_node('localhost', 57638);
+ SELECT 1 FROM master_add_node('localhost', 57638);
 
 ?column?
 
@@ -566,13 +562,12 @@ step s2-create-schema:
     SET search_path TO myschema;
 
 step s2-create-table:
-	CREATE TABLE t1 (a int, b int);
+ CREATE TABLE t1 (a int, b int);
     -- session needs to have replication factor set to 1, can't do in setup
-	SET citus.replication_model TO 'streaming';
-	SET citus.shard_replication_factor TO 1;
-	SELECT create_distributed_table('t1', 'a');
+ SET citus.shard_replication_factor TO 1;
+ SELECT create_distributed_table('t1', 'a');
  <waiting ...>
-step s1-commit:
+step s1-commit: 
     COMMIT;
 
 step s2-create-table: <... completed>
@@ -580,7 +575,7 @@ create_distributed_table
 
 
 step s2-commit:
-	COMMIT;
+ COMMIT;
 
 step s2-print-distributed-objects:
     -- print an overview of all distributed objects
@@ -589,7 +584,7 @@ step s2-print-distributed-objects:
     SELECT count(*) FROM pg_namespace where nspname = 'myschema';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
     -- print if the type has been created
-	SELECT count(*) FROM pg_type where typname = 'tt1';
+ SELECT count(*) FROM pg_type where typname = 'tt1';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
     -- print if the function has been created
     SELECT count(*) FROM pg_proc WHERE proname='add';
@@ -639,7 +634,7 @@ step s1-print-distributed-objects:
     SELECT count(*) FROM pg_namespace where nspname = 'myschema';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
     -- print if the type has been created
-	SELECT count(*) FROM pg_type where typname = 'tt1';
+ SELECT count(*) FROM pg_type where typname = 'tt1';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
     -- print if the function has been created
     SELECT count(*) FROM pg_proc WHERE proname='add';
@@ -682,27 +677,26 @@ step s1-begin:
     BEGIN;
 
 step s2-begin:
-	BEGIN;
+ BEGIN;
 
 step s2-create-schema:
     CREATE SCHEMA myschema;
     SET search_path TO myschema;
 
 step s2-create-table:
-	CREATE TABLE t1 (a int, b int);
+ CREATE TABLE t1 (a int, b int);
     -- session needs to have replication factor set to 1, can't do in setup
-	SET citus.replication_model TO 'streaming';
-	SET citus.shard_replication_factor TO 1;
-	SELECT create_distributed_table('t1', 'a');
+ SET citus.shard_replication_factor TO 1;
+ SELECT create_distributed_table('t1', 'a');
 
 create_distributed_table
 
 
 step s1-add-worker:
-	SELECT 1 FROM master_add_node('localhost', 57638);
+ SELECT 1 FROM master_add_node('localhost', 57638);
  <waiting ...>
-step s2-commit:
-	COMMIT;
+step s2-commit: 
+ COMMIT;
 
 step s1-add-worker: <... completed>
 ?column?
@@ -718,7 +712,7 @@ step s2-print-distributed-objects:
     SELECT count(*) FROM pg_namespace where nspname = 'myschema';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
     -- print if the type has been created
-	SELECT count(*) FROM pg_type where typname = 'tt1';
+ SELECT count(*) FROM pg_type where typname = 'tt1';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
     -- print if the function has been created
     SELECT count(*) FROM pg_proc WHERE proname='add';
@@ -768,7 +762,7 @@ step s1-print-distributed-objects:
     SELECT count(*) FROM pg_namespace where nspname = 'myschema';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
     -- print if the type has been created
-	SELECT count(*) FROM pg_type where typname = 'tt1';
+ SELECT count(*) FROM pg_type where typname = 'tt1';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
     -- print if the function has been created
     SELECT count(*) FROM pg_proc WHERE proname='add';
@@ -815,34 +809,33 @@ step s1-begin:
     BEGIN;
 
 step s2-begin:
-	BEGIN;
+ BEGIN;
 
 step s3-begin:
-	BEGIN;
+ BEGIN;
 
 step s1-add-worker:
-	SELECT 1 FROM master_add_node('localhost', 57638);
+ SELECT 1 FROM master_add_node('localhost', 57638);
 
 ?column?
 
 1
 step s2-create-table:
-	CREATE TABLE t1 (a int, b int);
+ CREATE TABLE t1 (a int, b int);
     -- session needs to have replication factor set to 1, can't do in setup
-	SET citus.replication_model TO 'streaming';
-	SET citus.shard_replication_factor TO 1;
-	SELECT create_distributed_table('t1', 'a');
+ SET citus.shard_replication_factor TO 1;
+ SELECT create_distributed_table('t1', 'a');
  <waiting ...>
-step s3-use-schema:
+step s3-use-schema: 
     SET search_path TO myschema;
 
 step s3-create-table:
-	CREATE TABLE t2 (a int, b int);
+ CREATE TABLE t2 (a int, b int);
     -- session needs to have replication factor set to 1, can't do in setup
-	SET citus.shard_replication_factor TO 1;
-	SELECT create_distributed_table('t2', 'a');
+ SET citus.shard_replication_factor TO 1;
+ SELECT create_distributed_table('t2', 'a');
  <waiting ...>
-step s1-commit:
+step s1-commit: 
     COMMIT;
 
 step s2-create-table: <... completed>
@@ -850,14 +843,14 @@ create_distributed_table
 
 
 step s2-commit:
-	COMMIT;
+ COMMIT;
 
 step s3-create-table: <... completed>
 create_distributed_table
 
 
 step s3-commit:
-	COMMIT;
+ COMMIT;
 
 step s2-print-distributed-objects:
     -- print an overview of all distributed objects
@@ -866,7 +859,7 @@ step s2-print-distributed-objects:
     SELECT count(*) FROM pg_namespace where nspname = 'myschema';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
     -- print if the type has been created
-	SELECT count(*) FROM pg_type where typname = 'tt1';
+ SELECT count(*) FROM pg_type where typname = 'tt1';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
     -- print if the function has been created
     SELECT count(*) FROM pg_proc WHERE proname='add';
@@ -916,7 +909,7 @@ step s1-print-distributed-objects:
     SELECT count(*) FROM pg_namespace where nspname = 'myschema';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
     -- print if the type has been created
-	SELECT count(*) FROM pg_type where typname = 'tt1';
+ SELECT count(*) FROM pg_type where typname = 'tt1';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
     -- print if the function has been created
     SELECT count(*) FROM pg_proc WHERE proname='add';
@@ -956,7 +949,7 @@ master_remove_node
 
 
 step s1-add-worker:
-	SELECT 1 FROM master_add_node('localhost', 57638);
+ SELECT 1 FROM master_add_node('localhost', 57638);
 
 ?column?
 
@@ -966,39 +959,38 @@ step s2-create-schema:
     SET search_path TO myschema;
 
 step s2-begin:
-	BEGIN;
+ BEGIN;
 
 step s3-begin:
-	BEGIN;
+ BEGIN;
 
 step s3-use-schema:
     SET search_path TO myschema;
 
 step s2-create-table:
-	CREATE TABLE t1 (a int, b int);
+ CREATE TABLE t1 (a int, b int);
     -- session needs to have replication factor set to 1, can't do in setup
-	SET citus.replication_model TO 'streaming';
-	SET citus.shard_replication_factor TO 1;
-	SELECT create_distributed_table('t1', 'a');
+ SET citus.shard_replication_factor TO 1;
+ SELECT create_distributed_table('t1', 'a');
 
 create_distributed_table
 
 
 step s3-create-table:
-	CREATE TABLE t2 (a int, b int);
+ CREATE TABLE t2 (a int, b int);
     -- session needs to have replication factor set to 1, can't do in setup
-	SET citus.shard_replication_factor TO 1;
-	SELECT create_distributed_table('t2', 'a');
+ SET citus.shard_replication_factor TO 1;
+ SELECT create_distributed_table('t2', 'a');
  <waiting ...>
-step s2-commit:
-	COMMIT;
+step s2-commit: 
+ COMMIT;
 
 step s3-create-table: <... completed>
 create_distributed_table
 
 
 step s3-commit:
-	COMMIT;
+ COMMIT;
 
 step s2-print-distributed-objects:
     -- print an overview of all distributed objects
@@ -1007,7 +999,7 @@ step s2-print-distributed-objects:
     SELECT count(*) FROM pg_namespace where nspname = 'myschema';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
     -- print if the type has been created
-	SELECT count(*) FROM pg_type where typname = 'tt1';
+ SELECT count(*) FROM pg_type where typname = 'tt1';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
     -- print if the function has been created
     SELECT count(*) FROM pg_proc WHERE proname='add';
@@ -1057,7 +1049,7 @@ step s1-print-distributed-objects:
     SELECT count(*) FROM pg_namespace where nspname = 'myschema';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
     -- print if the type has been created
-	SELECT count(*) FROM pg_type where typname = 'tt1';
+ SELECT count(*) FROM pg_type where typname = 'tt1';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
     -- print if the function has been created
     SELECT count(*) FROM pg_proc WHERE proname='add';
@@ -1100,13 +1092,13 @@ step s1-begin:
     BEGIN;
 
 step s2-begin:
-	BEGIN;
+ BEGIN;
 
 step s3-begin:
-	BEGIN;
+ BEGIN;
 
 step s1-add-worker:
-	SELECT 1 FROM master_add_node('localhost', 57638);
+ SELECT 1 FROM master_add_node('localhost', 57638);
 
 ?column?
 
@@ -1120,19 +1112,18 @@ step s3-create-schema2:
     SET search_path TO myschema2;
 
 step s2-create-table:
-	CREATE TABLE t1 (a int, b int);
+ CREATE TABLE t1 (a int, b int);
     -- session needs to have replication factor set to 1, can't do in setup
-	SET citus.replication_model TO 'streaming';
-	SET citus.shard_replication_factor TO 1;
-	SELECT create_distributed_table('t1', 'a');
+ SET citus.shard_replication_factor TO 1;
+ SELECT create_distributed_table('t1', 'a');
  <waiting ...>
-step s3-create-table:
-	CREATE TABLE t2 (a int, b int);
+step s3-create-table: 
+ CREATE TABLE t2 (a int, b int);
     -- session needs to have replication factor set to 1, can't do in setup
-	SET citus.shard_replication_factor TO 1;
-	SELECT create_distributed_table('t2', 'a');
+ SET citus.shard_replication_factor TO 1;
+ SELECT create_distributed_table('t2', 'a');
  <waiting ...>
-step s1-commit:
+step s1-commit: 
     COMMIT;
 
 step s2-create-table: <... completed>
@@ -1144,10 +1135,10 @@ create_distributed_table
 
 
 step s3-commit:
-	COMMIT;
+ COMMIT;
 
 step s2-commit:
-	COMMIT;
+ COMMIT;
 
 step s2-print-distributed-objects:
     -- print an overview of all distributed objects
@@ -1156,7 +1147,7 @@ step s2-print-distributed-objects:
     SELECT count(*) FROM pg_namespace where nspname = 'myschema';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
     -- print if the type has been created
-	SELECT count(*) FROM pg_type where typname = 'tt1';
+ SELECT count(*) FROM pg_type where typname = 'tt1';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
     -- print if the function has been created
     SELECT count(*) FROM pg_proc WHERE proname='add';
@@ -1207,7 +1198,7 @@ step s1-print-distributed-objects:
     SELECT count(*) FROM pg_namespace where nspname = 'myschema';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
     -- print if the type has been created
-	SELECT count(*) FROM pg_type where typname = 'tt1';
+ SELECT count(*) FROM pg_type where typname = 'tt1';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
     -- print if the function has been created
     SELECT count(*) FROM pg_proc WHERE proname='add';
@@ -1250,7 +1241,7 @@ step s1-begin:
     BEGIN;
 
 step s1-add-worker:
-	SELECT 1 FROM master_add_node('localhost', 57638);
+ SELECT 1 FROM master_add_node('localhost', 57638);
 
 ?column?
 
@@ -1259,9 +1250,9 @@ step s2-public-schema:
     SET search_path TO public;
 
 step s2-create-type:
-	CREATE TYPE tt1 AS (a int, b int);
+ CREATE TYPE tt1 AS (a int, b int);
  <waiting ...>
-step s1-commit:
+step s1-commit: 
     COMMIT;
 
 step s2-create-type: <... completed>
@@ -1272,7 +1263,7 @@ step s2-print-distributed-objects:
     SELECT count(*) FROM pg_namespace where nspname = 'myschema';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
     -- print if the type has been created
-	SELECT count(*) FROM pg_type where typname = 'tt1';
+ SELECT count(*) FROM pg_type where typname = 'tt1';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
     -- print if the function has been created
     SELECT count(*) FROM pg_proc WHERE proname='add';
@@ -1322,7 +1313,7 @@ step s1-print-distributed-objects:
     SELECT count(*) FROM pg_namespace where nspname = 'myschema';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
     -- print if the type has been created
-	SELECT count(*) FROM pg_type where typname = 'tt1';
+ SELECT count(*) FROM pg_type where typname = 'tt1';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
     -- print if the function has been created
     SELECT count(*) FROM pg_proc WHERE proname='add';
@@ -1368,10 +1359,10 @@ step s2-public-schema:
     SET search_path TO public;
 
 step s2-create-type:
-	CREATE TYPE tt1 AS (a int, b int);
+ CREATE TYPE tt1 AS (a int, b int);
 
 step s1-add-worker:
-	SELECT 1 FROM master_add_node('localhost', 57638);
+ SELECT 1 FROM master_add_node('localhost', 57638);
 
 ?column?
 
@@ -1386,7 +1377,7 @@ step s2-print-distributed-objects:
     SELECT count(*) FROM pg_namespace where nspname = 'myschema';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
     -- print if the type has been created
-	SELECT count(*) FROM pg_type where typname = 'tt1';
+ SELECT count(*) FROM pg_type where typname = 'tt1';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
     -- print if the function has been created
     SELECT count(*) FROM pg_proc WHERE proname='add';
@@ -1436,7 +1427,7 @@ step s1-print-distributed-objects:
     SELECT count(*) FROM pg_namespace where nspname = 'myschema';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
     -- print if the type has been created
-	SELECT count(*) FROM pg_type where typname = 'tt1';
+ SELECT count(*) FROM pg_type where typname = 'tt1';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
     -- print if the function has been created
     SELECT count(*) FROM pg_proc WHERE proname='add';
@@ -1479,30 +1470,29 @@ step s1-begin:
     BEGIN;
 
 step s2-begin:
-	BEGIN;
+ BEGIN;
 
 step s2-create-schema:
     CREATE SCHEMA myschema;
     SET search_path TO myschema;
 
 step s2-create-type:
-	CREATE TYPE tt1 AS (a int, b int);
+ CREATE TYPE tt1 AS (a int, b int);
 
 step s2-create-table-with-type:
-	CREATE TABLE t1 (a int, b tt1);
+ CREATE TABLE t1 (a int, b tt1);
     -- session needs to have replication factor set to 1, can't do in setup
-	SET citus.replication_model TO 'streaming';
-	SET citus.shard_replication_factor TO 1;
-	SELECT create_distributed_table('t1', 'a');
+ SET citus.shard_replication_factor TO 1;
+ SELECT create_distributed_table('t1', 'a');
 
 create_distributed_table
 
 
 step s1-add-worker:
-	SELECT 1 FROM master_add_node('localhost', 57638);
+ SELECT 1 FROM master_add_node('localhost', 57638);
  <waiting ...>
-step s2-commit:
-	COMMIT;
+step s2-commit: 
+ COMMIT;
 
 step s1-add-worker: <... completed>
 ?column?
@@ -1518,7 +1508,7 @@ step s2-print-distributed-objects:
     SELECT count(*) FROM pg_namespace where nspname = 'myschema';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
     -- print if the type has been created
-	SELECT count(*) FROM pg_type where typname = 'tt1';
+ SELECT count(*) FROM pg_type where typname = 'tt1';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
     -- print if the function has been created
     SELECT count(*) FROM pg_proc WHERE proname='add';
@@ -1569,7 +1559,7 @@ step s1-print-distributed-objects:
     SELECT count(*) FROM pg_namespace where nspname = 'myschema';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
     -- print if the type has been created
-	SELECT count(*) FROM pg_type where typname = 'tt1';
+ SELECT count(*) FROM pg_type where typname = 'tt1';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
     -- print if the function has been created
     SELECT count(*) FROM pg_proc WHERE proname='add';
@@ -1612,7 +1602,7 @@ step s1-begin:
     BEGIN;
 
 step s1-add-worker:
-	SELECT 1 FROM master_add_node('localhost', 57638);
+ SELECT 1 FROM master_add_node('localhost', 57638);
 
 ?column?
 
@@ -1624,7 +1614,7 @@ step s2-distribute-function:
     CREATE OR REPLACE FUNCTION add (INT,INT) RETURNS INT AS $$ SELECT $1 + $2 $$ LANGUAGE SQL;
     SELECT create_distributed_function('add(INT,INT)', '$1');
  <waiting ...>
-step s1-commit:
+step s1-commit: 
     COMMIT;
 
 step s2-distribute-function: <... completed>
@@ -1632,10 +1622,10 @@ create_distributed_function
 
 
 step s2-begin:
-	BEGIN;
+ BEGIN;
 
 step s2-commit:
-	COMMIT;
+ COMMIT;
 
 step s3-wait-for-metadata-sync:
     SELECT public.wait_until_metadata_sync(5000);
@@ -1650,7 +1640,7 @@ step s2-print-distributed-objects:
     SELECT count(*) FROM pg_namespace where nspname = 'myschema';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
     -- print if the type has been created
-	SELECT count(*) FROM pg_type where typname = 'tt1';
+ SELECT count(*) FROM pg_type where typname = 'tt1';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
     -- print if the function has been created
     SELECT count(*) FROM pg_proc WHERE proname='add';
@@ -1700,7 +1690,7 @@ step s1-print-distributed-objects:
     SELECT count(*) FROM pg_namespace where nspname = 'myschema';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
     -- print if the type has been created
-	SELECT count(*) FROM pg_type where typname = 'tt1';
+ SELECT count(*) FROM pg_type where typname = 'tt1';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
     -- print if the function has been created
     SELECT count(*) FROM pg_proc WHERE proname='add';
@@ -1753,10 +1743,10 @@ create_distributed_function
 
 
 step s2-begin:
-	BEGIN;
+ BEGIN;
 
 step s2-commit:
-	COMMIT;
+ COMMIT;
 
 step s3-wait-for-metadata-sync:
     SELECT public.wait_until_metadata_sync(5000);
@@ -1765,7 +1755,7 @@ wait_until_metadata_sync
 
 
 step s1-add-worker:
-	SELECT 1 FROM master_add_node('localhost', 57638);
+ SELECT 1 FROM master_add_node('localhost', 57638);
 
 ?column?
 
@@ -1786,7 +1776,7 @@ step s2-print-distributed-objects:
     SELECT count(*) FROM pg_namespace where nspname = 'myschema';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
     -- print if the type has been created
-	SELECT count(*) FROM pg_type where typname = 'tt1';
+ SELECT count(*) FROM pg_type where typname = 'tt1';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
     -- print if the function has been created
     SELECT count(*) FROM pg_proc WHERE proname='add';
@@ -1836,7 +1826,7 @@ step s1-print-distributed-objects:
     SELECT count(*) FROM pg_namespace where nspname = 'myschema';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
     -- print if the type has been created
-	SELECT count(*) FROM pg_type where typname = 'tt1';
+ SELECT count(*) FROM pg_type where typname = 'tt1';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
     -- print if the function has been created
     SELECT count(*) FROM pg_proc WHERE proname='add';
@@ -1876,7 +1866,7 @@ master_remove_node
 
 
 step s2-begin:
-	BEGIN;
+ BEGIN;
 
 step s2-create-schema:
     CREATE SCHEMA myschema;
@@ -1890,7 +1880,7 @@ create_distributed_function
 
 
 step s2-commit:
-	COMMIT;
+ COMMIT;
 
 step s3-wait-for-metadata-sync:
     SELECT public.wait_until_metadata_sync(5000);
@@ -1902,7 +1892,7 @@ step s1-begin:
     BEGIN;
 
 step s1-add-worker:
-	SELECT 1 FROM master_add_node('localhost', 57638);
+ SELECT 1 FROM master_add_node('localhost', 57638);
 
 ?column?
 
@@ -1923,7 +1913,7 @@ step s2-print-distributed-objects:
     SELECT count(*) FROM pg_namespace where nspname = 'myschema';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
     -- print if the type has been created
-	SELECT count(*) FROM pg_type where typname = 'tt1';
+ SELECT count(*) FROM pg_type where typname = 'tt1';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
     -- print if the function has been created
     SELECT count(*) FROM pg_proc WHERE proname='add';

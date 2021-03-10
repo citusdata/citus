@@ -171,10 +171,6 @@ master_create_empty_shard(PG_FUNCTION_ARGS)
 								  "on local tables")));
 	}
 
-	char replicationModel = TableReplicationModel(relationId);
-
-	EnsureReplicationSettings(relationId, replicationModel);
-
 	/* generate new and unique shardId from sequence */
 	uint64 shardId = GetNextShardId();
 

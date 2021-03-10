@@ -179,7 +179,7 @@ remove_local_tables_from_metadata(PG_FUNCTION_ARGS)
  * properties:
  *  - it will have only one shard,
  *  - its distribution method will be DISTRIBUTE_BY_NONE,
- *  - its replication model will be ReplicationModel,
+ *  - its replication model will be REPLICATION_MODEL_STREAMING,
  *  - its replication factor will be set to 1.
  * Similar to reference tables, it has only 1 placement. In addition to that, that
  * single placement is only allowed to be on the coordinator.
@@ -996,9 +996,7 @@ InsertMetadataForCitusLocalTable(Oid citusLocalTableId, uint64 shardId)
 	Assert(shardId != INVALID_SHARD_ID);
 
 	char distributionMethod = DISTRIBUTE_BY_NONE;
-	char replicationModel = ReplicationModel;
-
-	Assert(replicationModel != REPLICATION_MODEL_2PC);
+	char replicationModel = REPLICATION_MODEL_STREAMING;
 
 	uint32 colocationId = INVALID_COLOCATION_ID;
 	Var *distributionColumn = NULL;

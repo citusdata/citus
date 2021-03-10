@@ -196,9 +196,6 @@ typedef enum SizeQueryType
 } SizeQueryType;
 
 
-/* Config variable managed via guc.c */
-extern int ReplicationModel;
-
 /* Size functions */
 extern Datum citus_table_size(PG_FUNCTION_ARGS);
 extern Datum citus_total_relation_size(PG_FUNCTION_ARGS);
@@ -267,7 +264,6 @@ extern void EnsureFunctionOwner(Oid functionId);
 extern void EnsureSuperUser(void);
 extern void ErrorIfTableIsACatalogTable(Relation relation);
 extern void EnsureTableNotDistributed(Oid relationId);
-extern void EnsureReplicationSettings(Oid relationId, char replicationModel);
 extern void EnsureRelationExists(Oid relationId);
 extern bool RegularTable(Oid relationId);
 extern bool RelationUsesIdentityColumns(TupleDesc relationDesc);

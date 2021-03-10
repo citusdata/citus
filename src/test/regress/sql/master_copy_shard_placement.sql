@@ -3,7 +3,6 @@ CREATE SCHEMA mcsp;
 SET search_path TO mcsp;
 SET citus.next_shard_id TO 8139000;
 SET citus.shard_replication_factor TO 1;
-SET citus.replication_model TO 'statement';
 
 CREATE TABLE ref_table(a int, b text unique);
 SELECT create_reference_table('ref_table');
@@ -24,6 +23,10 @@ CREATE TABLE history (
 CREATE TABLE history_p1 PARTITION OF history FOR VALUES FROM ('2019-01-01') TO ('2020-01-01');
 CREATE TABLE history_p2 PARTITION OF history FOR VALUES FROM ('2020-01-01') TO ('2021-01-01');
 SELECT create_distributed_table('history','key');
+
+-- Mark tables as non-mx tables, in order to be able to test master_copy_shard_placement
+UPDATE pg_dist_partition SET repmodel='c' WHERE logicalrelid IN
+	('data'::regclass, 'history'::regclass);
 
 INSERT INTO data VALUES ('key-1', 'value-1');
 INSERT INTO data VALUES ('key-2', 'value-2');
@@ -88,8 +91,13 @@ SELECT count(*) FROM history;
 
 -- test we can not replicate MX tables
 SET citus.shard_replication_factor TO 1;
-SET citus.replication_model TO 'streaming';
 
+-- metadata sync will fail as we have a statement replicated table
+SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+
+-- use streaming replication to enable metadata syncing
+UPDATE pg_dist_partition SET repmodel='s' WHERE logicalrelid IN
+	('history'::regclass);
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 
 CREATE TABLE mx_table(a int);

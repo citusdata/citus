@@ -136,6 +136,7 @@ CREATE FOREIGN TABLE foreign_table (
 ) SERVER fake_fdw_server OPTIONS (encoding 'utf-8', compression 'true');
 SELECT create_distributed_table('foreign_table', 'id');
 NOTICE:  foreign-data wrapper "fake_fdw" does not have an extension defined
+NOTICE:  foreign-data wrapper "fake_fdw" does not have an extension defined
  create_distributed_table
 ---------------------------------------------------------------------
 

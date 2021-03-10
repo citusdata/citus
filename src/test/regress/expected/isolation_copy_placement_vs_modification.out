@@ -1,9 +1,6 @@
 Parsed test spec with 2 sessions
 
 starting permutation: s1-load-cache s1-insert s1-begin s1-select s2-set-placement-inactive s2-begin s2-repair-placement s1-update s2-commit s1-commit s2-print-content
-create_distributed_table
-
-
 step s1-load-cache:
  TRUNCATE test_repair_placement_vs_modification;
 
@@ -35,7 +32,7 @@ master_copy_shard_placement
 step s1-update:
  UPDATE test_repair_placement_vs_modification SET y = 5 WHERE x = 5;
  <waiting ...>
-step s2-commit:
+step s2-commit: 
  COMMIT;
 
 step s1-update: <... completed>
@@ -58,9 +55,6 @@ nodeport       success        result
 57638          t              5
 
 starting permutation: s1-load-cache s1-insert s1-begin s1-select s2-set-placement-inactive s2-begin s2-repair-placement s1-delete s2-commit s1-commit s2-print-content
-create_distributed_table
-
-
 step s1-load-cache:
  TRUNCATE test_repair_placement_vs_modification;
 
@@ -92,7 +86,7 @@ master_copy_shard_placement
 step s1-delete:
  DELETE FROM test_repair_placement_vs_modification WHERE x = 5;
  <waiting ...>
-step s2-commit:
+step s2-commit: 
  COMMIT;
 
 step s1-delete: <... completed>
@@ -115,9 +109,6 @@ nodeport       success        result
 57638          t
 
 starting permutation: s1-load-cache s1-begin s1-select s2-set-placement-inactive s2-begin s2-repair-placement s1-insert s2-commit s1-commit s2-print-content
-create_distributed_table
-
-
 step s1-load-cache:
  TRUNCATE test_repair_placement_vs_modification;
 
@@ -146,7 +137,7 @@ master_copy_shard_placement
 step s1-insert:
  INSERT INTO test_repair_placement_vs_modification VALUES (5, 10);
  <waiting ...>
-step s2-commit:
+step s2-commit: 
  COMMIT;
 
 step s1-insert: <... completed>
@@ -169,9 +160,6 @@ nodeport       success        result
 57638          t              10
 
 starting permutation: s1-load-cache s1-begin s1-select s2-set-placement-inactive s2-begin s2-repair-placement s1-copy s2-commit s1-commit s2-print-content
-create_distributed_table
-
-
 step s1-load-cache:
  TRUNCATE test_repair_placement_vs_modification;
 
@@ -200,7 +188,7 @@ master_copy_shard_placement
 step s1-copy:
  COPY test_repair_placement_vs_modification FROM PROGRAM 'echo 1,1 && echo 2,2 && echo 3,3 && echo 4,4 && echo 5,5' WITH CSV;
  <waiting ...>
-step s2-commit:
+step s2-commit: 
  COMMIT;
 
 step s1-copy: <... completed>
@@ -223,9 +211,6 @@ nodeport       success        result
 57638          t              5
 
 starting permutation: s1-load-cache s1-begin s1-select s2-set-placement-inactive s2-begin s2-repair-placement s1-ddl s2-commit s1-commit s2-print-index-count
-create_distributed_table
-
-
 step s1-load-cache:
  TRUNCATE test_repair_placement_vs_modification;
 
@@ -254,7 +239,7 @@ master_copy_shard_placement
 step s1-ddl:
  CREATE INDEX test_repair_placement_vs_modification_index ON test_repair_placement_vs_modification(x);
  <waiting ...>
-step s2-commit:
+step s2-commit: 
  COMMIT;
 
 step s1-ddl: <... completed>
@@ -277,9 +262,6 @@ nodeport       success        result
 57638          t              1
 
 starting permutation: s1-insert s1-begin s1-select s2-set-placement-inactive s2-begin s2-repair-placement s1-update s2-commit s1-commit s2-print-content
-create_distributed_table
-
-
 step s1-insert:
  INSERT INTO test_repair_placement_vs_modification VALUES (5, 10);
 
@@ -308,7 +290,7 @@ master_copy_shard_placement
 step s1-update:
  UPDATE test_repair_placement_vs_modification SET y = 5 WHERE x = 5;
  <waiting ...>
-step s2-commit:
+step s2-commit: 
  COMMIT;
 
 step s1-update: <... completed>
@@ -331,9 +313,6 @@ nodeport       success        result
 57638          t              5
 
 starting permutation: s1-insert s1-begin s1-select s2-set-placement-inactive s2-begin s2-repair-placement s1-delete s2-commit s1-commit s2-print-content
-create_distributed_table
-
-
 step s1-insert:
  INSERT INTO test_repair_placement_vs_modification VALUES (5, 10);
 
@@ -362,7 +341,7 @@ master_copy_shard_placement
 step s1-delete:
  DELETE FROM test_repair_placement_vs_modification WHERE x = 5;
  <waiting ...>
-step s2-commit:
+step s2-commit: 
  COMMIT;
 
 step s1-delete: <... completed>
@@ -385,9 +364,6 @@ nodeport       success        result
 57638          t
 
 starting permutation: s1-begin s1-select s2-set-placement-inactive s2-begin s2-repair-placement s1-insert s2-commit s1-commit s2-print-content
-create_distributed_table
-
-
 step s1-begin:
     BEGIN;
  SET LOCAL citus.select_opens_transaction_block TO off;
@@ -413,7 +389,7 @@ master_copy_shard_placement
 step s1-insert:
  INSERT INTO test_repair_placement_vs_modification VALUES (5, 10);
  <waiting ...>
-step s2-commit:
+step s2-commit: 
  COMMIT;
 
 step s1-insert: <... completed>
@@ -436,9 +412,6 @@ nodeport       success        result
 57638          t              10
 
 starting permutation: s1-begin s1-select s2-set-placement-inactive s2-begin s2-repair-placement s1-copy s2-commit s1-commit s2-print-content
-create_distributed_table
-
-
 step s1-begin:
     BEGIN;
  SET LOCAL citus.select_opens_transaction_block TO off;
@@ -464,7 +437,7 @@ master_copy_shard_placement
 step s1-copy:
  COPY test_repair_placement_vs_modification FROM PROGRAM 'echo 1,1 && echo 2,2 && echo 3,3 && echo 4,4 && echo 5,5' WITH CSV;
  <waiting ...>
-step s2-commit:
+step s2-commit: 
  COMMIT;
 
 step s1-copy: <... completed>
@@ -487,9 +460,6 @@ nodeport       success        result
 57638          t              5
 
 starting permutation: s1-begin s1-select s2-set-placement-inactive s2-begin s2-repair-placement s1-ddl s2-commit s1-commit s2-print-index-count
-create_distributed_table
-
-
 step s1-begin:
     BEGIN;
  SET LOCAL citus.select_opens_transaction_block TO off;
@@ -515,7 +485,7 @@ master_copy_shard_placement
 step s1-ddl:
  CREATE INDEX test_repair_placement_vs_modification_index ON test_repair_placement_vs_modification(x);
  <waiting ...>
-step s2-commit:
+step s2-commit: 
  COMMIT;
 
 step s1-ddl: <... completed>
@@ -536,367 +506,3 @@ nodeport       success        result
 57637          t              1
 57638          t              1
 57638          t              1
-
-starting permutation: s1-begin s2-begin s2-copy-placement s1-update-copy-table s2-commit s1-commit
-create_distributed_table
-
-
-step s1-begin:
-    BEGIN;
- SET LOCAL citus.select_opens_transaction_block TO off;
-
-step s2-begin:
- BEGIN;
-
-step s2-copy-placement:
- SELECT master_copy_shard_placement((SELECT get_shard_id_for_distribution_column('test_copy_placement_vs_modification', 5)),
-            'localhost', 57637, 'localhost', 57638,
-            do_repair := false, transfer_mode := 'block_writes');
-
-master_copy_shard_placement
-
-
-step s1-update-copy-table:
- UPDATE test_copy_placement_vs_modification SET y = 5 WHERE x = 5;
- <waiting ...>
-step s2-commit:
- COMMIT;
-
-step s1-update-copy-table: <... completed>
-step s1-commit:
- COMMIT;
-
-
-starting permutation: s1-begin s2-begin s2-copy-placement s1-delete-copy-table s2-commit s1-commit
-create_distributed_table
-
-
-step s1-begin:
-    BEGIN;
- SET LOCAL citus.select_opens_transaction_block TO off;
-
-step s2-begin:
- BEGIN;
-
-step s2-copy-placement:
- SELECT master_copy_shard_placement((SELECT get_shard_id_for_distribution_column('test_copy_placement_vs_modification', 5)),
-            'localhost', 57637, 'localhost', 57638,
-            do_repair := false, transfer_mode := 'block_writes');
-
-master_copy_shard_placement
-
-
-step s1-delete-copy-table:
- DELETE FROM test_copy_placement_vs_modification WHERE x = 5;
- <waiting ...>
-step s2-commit:
- COMMIT;
-
-step s1-delete-copy-table: <... completed>
-step s1-commit:
- COMMIT;
-
-
-starting permutation: s1-begin s2-begin s2-copy-placement s1-insert-copy-table s2-commit s1-commit
-create_distributed_table
-
-
-step s1-begin:
-    BEGIN;
- SET LOCAL citus.select_opens_transaction_block TO off;
-
-step s2-begin:
- BEGIN;
-
-step s2-copy-placement:
- SELECT master_copy_shard_placement((SELECT get_shard_id_for_distribution_column('test_copy_placement_vs_modification', 5)),
-            'localhost', 57637, 'localhost', 57638,
-            do_repair := false, transfer_mode := 'block_writes');
-
-master_copy_shard_placement
-
-
-step s1-insert-copy-table:
- INSERT INTO test_copy_placement_vs_modification VALUES (5, 10);
- <waiting ...>
-step s2-commit:
- COMMIT;
-
-step s1-insert-copy-table: <... completed>
-step s1-commit:
- COMMIT;
-
-
-starting permutation: s1-begin s2-begin s2-copy-placement s1-copy-copy-table s2-commit s1-commit
-create_distributed_table
-
-
-step s1-begin:
-    BEGIN;
- SET LOCAL citus.select_opens_transaction_block TO off;
-
-step s2-begin:
- BEGIN;
-
-step s2-copy-placement:
- SELECT master_copy_shard_placement((SELECT get_shard_id_for_distribution_column('test_copy_placement_vs_modification', 5)),
-            'localhost', 57637, 'localhost', 57638,
-            do_repair := false, transfer_mode := 'block_writes');
-
-master_copy_shard_placement
-
-
-step s1-copy-copy-table:
- COPY test_copy_placement_vs_modification FROM PROGRAM 'echo 1,1 && echo 2,2 && echo 3,3 && echo 4,4 && echo 5,5' WITH CSV;
- <waiting ...>
-step s2-commit:
- COMMIT;
-
-step s1-copy-copy-table: <... completed>
-step s1-commit:
- COMMIT;
-
-
-starting permutation: s1-begin s2-begin s2-copy-placement s1-ddl-copy-table s2-commit s1-commit
-create_distributed_table
-
-
-step s1-begin:
-    BEGIN;
- SET LOCAL citus.select_opens_transaction_block TO off;
-
-step s2-begin:
- BEGIN;
-
-step s2-copy-placement:
- SELECT master_copy_shard_placement((SELECT get_shard_id_for_distribution_column('test_copy_placement_vs_modification', 5)),
-            'localhost', 57637, 'localhost', 57638,
-            do_repair := false, transfer_mode := 'block_writes');
-
-master_copy_shard_placement
-
-
-step s1-ddl-copy-table:
- CREATE INDEX test_copy_placement_vs_modification_index ON test_copy_placement_vs_modification(x);
- <waiting ...>
-step s2-commit:
- COMMIT;
-
-step s1-ddl-copy-table: <... completed>
-step s1-commit:
- COMMIT;
-
-
-starting permutation: s1-begin s2-begin s2-copy-placement s1-select-copy-table s2-commit s1-commit
-create_distributed_table
-
-
-step s1-begin:
-    BEGIN;
- SET LOCAL citus.select_opens_transaction_block TO off;
-
-step s2-begin:
- BEGIN;
-
-step s2-copy-placement:
- SELECT master_copy_shard_placement((SELECT get_shard_id_for_distribution_column('test_copy_placement_vs_modification', 5)),
-            'localhost', 57637, 'localhost', 57638,
-            do_repair := false, transfer_mode := 'block_writes');
-
-master_copy_shard_placement
-
-
-step s1-select-copy-table:
- SELECT count(*) FROM test_copy_placement_vs_modification WHERE x = 5;
-
-count
-
-0
-step s2-commit:
- COMMIT;
-
-step s1-commit:
- COMMIT;
-
-
-starting permutation: s1-begin s2-begin s1-update-copy-table s2-copy-placement s1-commit s2-commit
-create_distributed_table
-
-
-step s1-begin:
-    BEGIN;
- SET LOCAL citus.select_opens_transaction_block TO off;
-
-step s2-begin:
- BEGIN;
-
-step s1-update-copy-table:
- UPDATE test_copy_placement_vs_modification SET y = 5 WHERE x = 5;
-
-step s2-copy-placement:
- SELECT master_copy_shard_placement((SELECT get_shard_id_for_distribution_column('test_copy_placement_vs_modification', 5)),
-            'localhost', 57637, 'localhost', 57638,
-            do_repair := false, transfer_mode := 'block_writes');
- <waiting ...>
-step s1-commit:
- COMMIT;
-
-step s2-copy-placement: <... completed>
-master_copy_shard_placement
-
-
-step s2-commit:
- COMMIT;
-
-
-starting permutation: s1-begin s2-begin s1-delete-copy-table s2-copy-placement s1-commit s2-commit
-create_distributed_table
-
-
-step s1-begin:
-    BEGIN;
- SET LOCAL citus.select_opens_transaction_block TO off;
-
-step s2-begin:
- BEGIN;
-
-step s1-delete-copy-table:
- DELETE FROM test_copy_placement_vs_modification WHERE x = 5;
-
-step s2-copy-placement:
- SELECT master_copy_shard_placement((SELECT get_shard_id_for_distribution_column('test_copy_placement_vs_modification', 5)),
-            'localhost', 57637, 'localhost', 57638,
-            do_repair := false, transfer_mode := 'block_writes');
- <waiting ...>
-step s1-commit:
- COMMIT;
-
-step s2-copy-placement: <... completed>
-master_copy_shard_placement
-
-
-step s2-commit:
- COMMIT;
-
-
-starting permutation: s1-begin s2-begin s1-insert-copy-table s2-copy-placement s1-commit s2-commit
-create_distributed_table
-
-
-step s1-begin:
-    BEGIN;
- SET LOCAL citus.select_opens_transaction_block TO off;
-
-step s2-begin:
- BEGIN;
-
-step s1-insert-copy-table:
- INSERT INTO test_copy_placement_vs_modification VALUES (5, 10);
-
-step s2-copy-placement:
- SELECT master_copy_shard_placement((SELECT get_shard_id_for_distribution_column('test_copy_placement_vs_modification', 5)),
-            'localhost', 57637, 'localhost', 57638,
-            do_repair := false, transfer_mode := 'block_writes');
- <waiting ...>
-step s1-commit:
- COMMIT;
-
-step s2-copy-placement: <... completed>
-master_copy_shard_placement
-
-
-step s2-commit:
- COMMIT;
-
-
-starting permutation: s1-begin s2-begin s1-copy-copy-table s2-copy-placement s1-commit s2-commit
-create_distributed_table
-
-
-step s1-begin:
-    BEGIN;
- SET LOCAL citus.select_opens_transaction_block TO off;
-
-step s2-begin:
- BEGIN;
-
-step s1-copy-copy-table:
- COPY test_copy_placement_vs_modification FROM PROGRAM 'echo 1,1 && echo 2,2 && echo 3,3 && echo 4,4 && echo 5,5' WITH CSV;
-
-step s2-copy-placement:
- SELECT master_copy_shard_placement((SELECT get_shard_id_for_distribution_column('test_copy_placement_vs_modification', 5)),
-            'localhost', 57637, 'localhost', 57638,
-            do_repair := false, transfer_mode := 'block_writes');
- <waiting ...>
-step s1-commit:
- COMMIT;
-
-step s2-copy-placement: <... completed>
-master_copy_shard_placement
-
-
-step s2-commit:
- COMMIT;
-
-
-starting permutation: s1-begin s2-begin s1-ddl-copy-table s2-copy-placement s1-commit s2-commit
-create_distributed_table
-
-
-step s1-begin:
-    BEGIN;
- SET LOCAL citus.select_opens_transaction_block TO off;
-
-step s2-begin:
- BEGIN;
-
-step s1-ddl-copy-table:
- CREATE INDEX test_copy_placement_vs_modification_index ON test_copy_placement_vs_modification(x);
-
-step s2-copy-placement:
- SELECT master_copy_shard_placement((SELECT get_shard_id_for_distribution_column('test_copy_placement_vs_modification', 5)),
-            'localhost', 57637, 'localhost', 57638,
-            do_repair := false, transfer_mode := 'block_writes');
- <waiting ...>
-step s1-commit:
- COMMIT;
-
-step s2-copy-placement: <... completed>
-master_copy_shard_placement
-
-
-step s2-commit:
- COMMIT;
-
-
-starting permutation: s1-begin s2-begin s1-select-copy-table s2-copy-placement s1-commit s2-commit
-create_distributed_table
-
-
-step s1-begin:
-    BEGIN;
- SET LOCAL citus.select_opens_transaction_block TO off;
-
-step s2-begin:
- BEGIN;
-
-step s1-select-copy-table:
- SELECT count(*) FROM test_copy_placement_vs_modification WHERE x = 5;
-
-count
-
-0
-step s2-copy-placement:
- SELECT master_copy_shard_placement((SELECT get_shard_id_for_distribution_column('test_copy_placement_vs_modification', 5)),
-            'localhost', 57637, 'localhost', 57638,
-            do_repair := false, transfer_mode := 'block_writes');
-
-master_copy_shard_placement
-
-
-step s1-commit:
- COMMIT;
-
-step s2-commit:
- COMMIT;
-

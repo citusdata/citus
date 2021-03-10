@@ -83,8 +83,6 @@ CREATE TABLE users (
   , primary key (org_id, id)
 );
 
-SET citus.replication_model to 'streaming';
-
 -- "users" table was implicitly added to citus metadata when defining foreign key,
 -- so create_distributed_table would first undistribute it.
 -- Show that it works well when changing sequence dependencies on mx workers.

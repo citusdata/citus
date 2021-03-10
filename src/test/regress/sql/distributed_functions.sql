@@ -167,13 +167,11 @@ SET citus.enable_ddl_propagation TO on;
 
 -- use an unusual type to force a new colocation group
 CREATE TABLE statement_table(id int2);
-SET citus.replication_model TO 'statement';
-SET citus.shard_replication_factor TO 1;
+SET citus.shard_replication_factor TO 2;
 SELECT create_distributed_table('statement_table','id');
 
 -- create a table uses streaming-based replication (can be synced)
 CREATE TABLE streaming_table(id macaddr);
-SET citus.replication_model TO 'streaming';
 SET citus.shard_replication_factor TO 1;
 SELECT create_distributed_table('streaming_table','id');
 
@@ -198,7 +196,6 @@ select bool_or(hasmetadata) from pg_dist_node WHERE isactive AND  noderole = 'pr
 SELECT create_distributed_function('increment(int2)', '$1');
 SELECT create_distributed_function('increment(int2)', '$1', colocate_with := 'statement_table');
 BEGIN;
-SET LOCAL citus.replication_model TO 'statement';
 DROP TABLE statement_table;
 SELECT create_distributed_function('increment(int2)', '$1');
 END;
@@ -377,7 +374,6 @@ SELECT create_distributed_function('eq_with_param_names(macaddr, macaddr)','$1')
 -- a function cannot be colocated with a table that is not "streaming" replicated
 SET citus.shard_replication_factor TO 2;
 CREATE TABLE replicated_table_func_test (a macaddr);
-SET citus.replication_model TO "statement";
 SELECT create_distributed_table('replicated_table_func_test', 'a');
 SELECT create_distributed_function('eq_with_param_names(macaddr, macaddr)', '$1', colocate_with:='replicated_table_func_test');
 
@@ -387,7 +383,6 @@ SELECT public.wait_until_metadata_sync(30000);
 -- as long as there is a coercion path
 SET citus.shard_replication_factor TO 1;
 CREATE TABLE replicated_table_func_test_2 (a macaddr8);
-SET citus.replication_model TO "streaming";
 SELECT create_distributed_table('replicated_table_func_test_2', 'a');
 SELECT create_distributed_function('eq_with_param_names(macaddr, macaddr)', 'val1', colocate_with:='replicated_table_func_test_2');
 
@@ -401,7 +396,6 @@ SELECT create_distributed_function('eq_with_param_names(macaddr, macaddr)', 'val
 -- finally, colocate the function with a distributed table
 SET citus.shard_replication_factor TO 1;
 CREATE TABLE replicated_table_func_test_4 (a macaddr);
-SET citus.replication_model TO "streaming";
 SELECT create_distributed_table('replicated_table_func_test_4', 'a');
 SELECT create_distributed_function('eq_with_param_names(macaddr, macaddr)', '$1', colocate_with:='replicated_table_func_test_4');
 
