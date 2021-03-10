@@ -234,11 +234,17 @@ ExecuteLocalTaskListExtended(List *taskList,
 		 */
 		if (task->anchorShardId != INVALID_SHARD_ID)
 		{
+			bool readOnlyTask = ReadOnlyTask(task->taskType);
 			LocalExecutionStatus status =
-				ReadOnlyTask(task->taskType) ? LOCAL_EXECUTION_PERFORMED_READONLY :
+				readOnlyTask ? LOCAL_EXECUTION_PERFORMED_READONLY :
 				LOCAL_EXECUTION_PERFORMED_MODIFICATION;
 
 			SetLocalExecutionStatus(status);
+
+			if (!readOnlyTask)
+			{
+				CoordinatedTransactionUse2PC();
+			}
 		}
 		LogLocalCommand(task);
 

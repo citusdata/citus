@@ -1166,24 +1166,6 @@ DecideTransactionPropertiesForTaskList(RowModifyLevel modLevel, List *taskList, 
 		return xactProperties;
 	}
 
-	if (GetCurrentLocalExecutionStatus() == LOCAL_EXECUTION_PERFORMED_MODIFICATION &&
-		modLevel != ROW_MODIFY_READONLY)
-	{
-		/*
-		 * In case a local execution with modification happened, we force the
-		 * executor to use 2PC. The primary motivation is that at this point
-		 * we're definitely expanding the nodes participated in the transaction.
-		 * Once more than one node involved in a transaction, we use 2PC to
-		 * provide atomicity of the transaction. The similar approach for remote
-		 * nodes only is implemented in
-		 * Activate2PCIfModifyingTransactionExpandsToNewNode().
-		 */
-		xactProperties.errorOnAnyFailure = true;
-		xactProperties.useRemoteTransactionBlocks = TRANSACTION_BLOCKS_REQUIRED;
-		xactProperties.requires2PC = true;
-		return xactProperties;
-	}
-
 	if (DistributedExecutionRequiresRollback(taskList))
 	{
 		/* transaction blocks are required if the task list needs to roll back */
