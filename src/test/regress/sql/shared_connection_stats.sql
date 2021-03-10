@@ -511,6 +511,7 @@ SELECT pg_reload_conf();
 SELECT pg_sleep(0.1);
 
 -- cache connections to the nodes
+SET citus.force_max_query_parallelization TO ON;
 SELECT count(*) FROM test;
 BEGIN;
 	-- we should not have any reserved connections
@@ -518,6 +519,21 @@ BEGIN;
 	COPY test FROM PROGRAM 'seq 32';
 	SELECT * FROM citus_reserved_connection_stats() ORDER BY 1,2;
 COMMIT;
+
+-- should close all connections
+SET citus.max_cached_connection_lifetime TO '0s';
+SELECT count(*) FROM test;
+
+-- show that no connections are cached
+SELECT
+	connection_count_to_node
+FROM
+	citus_remote_connection_stats()
+WHERE
+	port IN (SELECT node_port FROM master_get_active_worker_nodes()) AND
+	database_name = 'regression'
+ORDER BY
+	hostname, port;
 
 -- in case other tests relies on these setting, reset them
 ALTER SYSTEM RESET citus.distributed_deadlock_detection_factor;
