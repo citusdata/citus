@@ -18,9 +18,14 @@
 #include "miscadmin.h"
 #include "pgstat.h"
 
+#include "distributed/transaction_management.h"
+
+
 static Size MemoryContextTotalSpace(MemoryContext context);
 
 PG_FUNCTION_INFO_V1(top_transaction_context_size);
+PG_FUNCTION_INFO_V1(coordinated_transaction_uses_2PC);
+
 
 /*
  * top_transaction_context_size returns current size of TopTransactionContext.
@@ -53,4 +58,21 @@ MemoryContextTotalSpace(MemoryContext context)
 	}
 
 	return totalSpace;
+}
+
+
+/*
+ * coordinated_transaction_uses_2PC returns true if the transaction is in a
+ * coordinated transaction and uses 2PC. If the transaction is nott in a
+ * coordinated transaction, the function throws an error.
+ */
+Datum
+coordinated_transaction_uses_2PC(PG_FUNCTION_ARGS)
+{
+	if (!InCoordinatedTransaction())
+	{
+		ereport(ERROR, (errmsg("The transaction is not a coordinated transaction")));
+	}
+
+	PG_RETURN_BOOL(GetCoordinatedTransactionUses2PC());
 }
