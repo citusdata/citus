@@ -372,11 +372,11 @@ inserts AS (
   RETURNING *
 ) SELECT count(*) FROM inserts;
 
--- a helper function which return true if the coordinated trannsaction uses
--- 2PC
-CREATE OR REPLACE FUNCTION coordinated_transaction_uses_2PC()
+-- a helper function which return true if the coordinated
+-- trannsaction uses 2PC
+CREATE OR REPLACE FUNCTION coordinated_transaction_should_use_2PC()
 RETURNS BOOL LANGUAGE C STRICT VOLATILE AS 'citus',
-$$coordinated_transaction_uses_2PC$$;
+$$coordinated_transaction_should_use_2PC$$;
 
 -- a local SELECT followed by remote SELECTs
 -- does not trigger 2PC
@@ -385,7 +385,7 @@ BEGIN;
   WITH cte_1 AS (SELECT y FROM test WHERE x = 1 LIMIT 5) SELECT count(*) FROM test;
   SELECT count(*) FROM test;
   WITH cte_1 as (SELECT * FROM test LIMIT 5) SELECT count(*) FROM test;
-  SELECT coordinated_transaction_uses_2PC();
+  SELECT coordinated_transaction_should_use_2PC();
 COMMIT;
 
 -- remote SELECTs followed by local SELECTs
@@ -395,7 +395,7 @@ BEGIN;
   WITH cte_1 as (SELECT * FROM test LIMIT 5) SELECT count(*) FROM test;
   SELECT y FROM test WHERE x = 1;
   WITH cte_1 AS (SELECT y FROM test WHERE x = 1 LIMIT 5) SELECT count(*) FROM test;
-  SELECT coordinated_transaction_uses_2PC();
+  SELECT coordinated_transaction_should_use_2PC();
 COMMIT;
 
 -- a local SELECT followed by a remote Modify
@@ -403,7 +403,7 @@ COMMIT;
 BEGIN;
   SELECT y FROM test WHERE x = 1;
   UPDATE test SET y = y +1;
-  SELECT coordinated_transaction_uses_2PC();
+  SELECT coordinated_transaction_should_use_2PC();
 COMMIT;
 
 -- a local modify followed by a remote SELECT
@@ -411,7 +411,7 @@ COMMIT;
 BEGIN;
   INSERT INTO test VALUES (1,1);
   SELECT count(*) FROM test;
-  SELECT coordinated_transaction_uses_2PC();
+  SELECT coordinated_transaction_should_use_2PC();
 COMMIT;
 
 -- a local modify followed by a remote MODIFY
@@ -419,7 +419,7 @@ COMMIT;
 BEGIN;
   INSERT INTO test VALUES (1,1);
   UPDATE test SET y = y +1;
-  SELECT coordinated_transaction_uses_2PC();
+  SELECT coordinated_transaction_should_use_2PC();
 COMMIT;
 
 -- a local modify followed by a remote single shard MODIFY
@@ -427,7 +427,7 @@ COMMIT;
 BEGIN;
   INSERT INTO test VALUES (1,1);
   INSERT INTO test VALUES (3,3);
-  SELECT coordinated_transaction_uses_2PC();
+  SELECT coordinated_transaction_should_use_2PC();
 COMMIT;
 
 -- a remote single shard modify followed by a local single
@@ -435,7 +435,7 @@ COMMIT;
 BEGIN;
   INSERT INTO test VALUES (3,3);
   INSERT INTO test VALUES (1,1);
-  SELECT coordinated_transaction_uses_2PC();
+  SELECT coordinated_transaction_should_use_2PC();
 COMMIT;
 
 -- a remote single shard select followed by a local single
@@ -445,7 +445,7 @@ COMMIT;
 BEGIN;
   SELECT count(*) FROM test WHERE x = 3;
   INSERT INTO test VALUES (1,1);
-  SELECT coordinated_transaction_uses_2PC();
+  SELECT coordinated_transaction_should_use_2PC();
   SET LOCAL citus.log_remote_commands TO ON;
 COMMIT;
 
@@ -454,7 +454,7 @@ COMMIT;
 BEGIN;
   SELECT count(*) FROM test WHERE x = 1;
   INSERT INTO test VALUES (3,3);
-  SELECT coordinated_transaction_uses_2PC();
+  SELECT coordinated_transaction_should_use_2PC();
   SET LOCAL citus.log_remote_commands TO ON;
 COMMIT;
 

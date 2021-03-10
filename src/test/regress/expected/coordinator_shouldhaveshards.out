@@ -895,11 +895,11 @@ NOTICE:  executing the command locally: SELECT count(*) AS count FROM (SELECT in
      0
 (1 row)
 
--- a helper function which return true if the coordinated trannsaction uses
--- 2PC
-CREATE OR REPLACE FUNCTION coordinated_transaction_uses_2PC()
+-- a helper function which return true if the coordinated
+-- trannsaction uses 2PC
+CREATE OR REPLACE FUNCTION coordinated_transaction_should_use_2PC()
 RETURNS BOOL LANGUAGE C STRICT VOLATILE AS 'citus',
-$$coordinated_transaction_uses_2PC$$;
+$$coordinated_transaction_should_use_2PC$$;
 -- a local SELECT followed by remote SELECTs
 -- does not trigger 2PC
 BEGIN;
@@ -933,8 +933,8 @@ NOTICE:  executing the command locally: SELECT count(*) AS count FROM coordinato
      0
 (1 row)
 
-  SELECT coordinated_transaction_uses_2PC();
- coordinated_transaction_uses_2pc
+  SELECT coordinated_transaction_should_use_2PC();
+ coordinated_transaction_should_use_2pc
 ---------------------------------------------------------------------
  f
 (1 row)
@@ -973,8 +973,8 @@ NOTICE:  executing the command locally: SELECT count(*) AS count FROM coordinato
      0
 (1 row)
 
-  SELECT coordinated_transaction_uses_2PC();
- coordinated_transaction_uses_2pc
+  SELECT coordinated_transaction_should_use_2PC();
+ coordinated_transaction_should_use_2pc
 ---------------------------------------------------------------------
  f
 (1 row)
@@ -992,8 +992,8 @@ NOTICE:  executing the command locally: SELECT y FROM coordinator_shouldhaveshar
   UPDATE test SET y = y +1;
 NOTICE:  executing the command locally: UPDATE coordinator_shouldhaveshards.test_1503000 test SET y = (y OPERATOR(pg_catalog.+) 1)
 NOTICE:  executing the command locally: UPDATE coordinator_shouldhaveshards.test_1503003 test SET y = (y OPERATOR(pg_catalog.+) 1)
-  SELECT coordinated_transaction_uses_2PC();
- coordinated_transaction_uses_2pc
+  SELECT coordinated_transaction_should_use_2PC();
+ coordinated_transaction_should_use_2pc
 ---------------------------------------------------------------------
  t
 (1 row)
@@ -1012,8 +1012,8 @@ NOTICE:  executing the command locally: SELECT count(*) AS count FROM coordinato
      1
 (1 row)
 
-  SELECT coordinated_transaction_uses_2PC();
- coordinated_transaction_uses_2pc
+  SELECT coordinated_transaction_should_use_2PC();
+ coordinated_transaction_should_use_2pc
 ---------------------------------------------------------------------
  t
 (1 row)
@@ -1027,8 +1027,8 @@ NOTICE:  executing the command locally: INSERT INTO coordinator_shouldhaveshards
   UPDATE test SET y = y +1;
 NOTICE:  executing the command locally: UPDATE coordinator_shouldhaveshards.test_1503000 test SET y = (y OPERATOR(pg_catalog.+) 1)
 NOTICE:  executing the command locally: UPDATE coordinator_shouldhaveshards.test_1503003 test SET y = (y OPERATOR(pg_catalog.+) 1)
-  SELECT coordinated_transaction_uses_2PC();
- coordinated_transaction_uses_2pc
+  SELECT coordinated_transaction_should_use_2PC();
+ coordinated_transaction_should_use_2pc
 ---------------------------------------------------------------------
  t
 (1 row)
@@ -1040,8 +1040,8 @@ BEGIN;
   INSERT INTO test VALUES (1,1);
 NOTICE:  executing the command locally: INSERT INTO coordinator_shouldhaveshards.test_1503000 (x, y) VALUES (1, 1)
   INSERT INTO test VALUES (3,3);
-  SELECT coordinated_transaction_uses_2PC();
- coordinated_transaction_uses_2pc
+  SELECT coordinated_transaction_should_use_2PC();
+ coordinated_transaction_should_use_2pc
 ---------------------------------------------------------------------
  t
 (1 row)
@@ -1053,8 +1053,8 @@ BEGIN;
   INSERT INTO test VALUES (3,3);
   INSERT INTO test VALUES (1,1);
 NOTICE:  executing the command locally: INSERT INTO coordinator_shouldhaveshards.test_1503000 (x, y) VALUES (1, 1)
-  SELECT coordinated_transaction_uses_2PC();
- coordinated_transaction_uses_2pc
+  SELECT coordinated_transaction_should_use_2PC();
+ coordinated_transaction_should_use_2pc
 ---------------------------------------------------------------------
  t
 (1 row)
@@ -1073,8 +1073,8 @@ BEGIN;
 
   INSERT INTO test VALUES (1,1);
 NOTICE:  executing the command locally: INSERT INTO coordinator_shouldhaveshards.test_1503000 (x, y) VALUES (1, 1)
-  SELECT coordinated_transaction_uses_2PC();
- coordinated_transaction_uses_2pc
+  SELECT coordinated_transaction_should_use_2PC();
+ coordinated_transaction_should_use_2pc
 ---------------------------------------------------------------------
  t
 (1 row)
@@ -1094,8 +1094,8 @@ NOTICE:  executing the command locally: SELECT count(*) AS count FROM coordinato
 (1 row)
 
   INSERT INTO test VALUES (3,3);
-  SELECT coordinated_transaction_uses_2PC();
- coordinated_transaction_uses_2pc
+  SELECT coordinated_transaction_should_use_2PC();
+ coordinated_transaction_should_use_2pc
 ---------------------------------------------------------------------
  f
 (1 row)

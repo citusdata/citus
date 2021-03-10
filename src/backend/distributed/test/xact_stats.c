@@ -24,7 +24,7 @@
 static Size MemoryContextTotalSpace(MemoryContext context);
 
 PG_FUNCTION_INFO_V1(top_transaction_context_size);
-PG_FUNCTION_INFO_V1(coordinated_transaction_uses_2PC);
+PG_FUNCTION_INFO_V1(coordinated_transaction_should_use_2PC);
 
 
 /*
@@ -62,17 +62,17 @@ MemoryContextTotalSpace(MemoryContext context)
 
 
 /*
- * coordinated_transaction_uses_2PC returns true if the transaction is in a
+ * coordinated_transaction_should_use_2PC returns true if the transaction is in a
  * coordinated transaction and uses 2PC. If the transaction is nott in a
  * coordinated transaction, the function throws an error.
  */
 Datum
-coordinated_transaction_uses_2PC(PG_FUNCTION_ARGS)
+coordinated_transaction_should_use_2PC(PG_FUNCTION_ARGS)
 {
 	if (!InCoordinatedTransaction())
 	{
 		ereport(ERROR, (errmsg("The transaction is not a coordinated transaction")));
 	}
 
-	PG_RETURN_BOOL(GetCoordinatedTransactionUses2PC());
+	PG_RETURN_BOOL(GetCoordinatedTransactionShouldUse2PC());
 }

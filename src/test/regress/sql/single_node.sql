@@ -909,9 +909,9 @@ RESET citus.local_copy_flush_threshold;
 
 RESET citus.local_copy_flush_threshold;
 
-CREATE OR REPLACE FUNCTION coordinated_transaction_uses_2PC()
+CREATE OR REPLACE FUNCTION coordinated_transaction_should_use_2PC()
 RETURNS BOOL LANGUAGE C STRICT VOLATILE AS 'citus',
-$$coordinated_transaction_uses_2PC$$;
+$$coordinated_transaction_should_use_2PC$$;
 
 -- a multi-shard/single-shard select that is failed over to local
 -- execution doesn't start a 2PC
@@ -922,19 +922,19 @@ BEGIN;
 		SELECT count(*) FROM cte_1;
 	WITH cte_1 as (SELECT * FROM another_schema_table WHERE a = 1 LIMIT 10)
 		SELECT count(*) FROM cte_1;
-	SELECT coordinated_transaction_uses_2PC();
+	SELECT coordinated_transaction_should_use_2PC();
 ROLLBACK;
 
 -- same without a transaction block
 WITH cte_1 AS (SELECT count(*) as cnt FROM another_schema_table LIMIT 1000),
-	 cte_2 AS (SELECT coordinated_transaction_uses_2PC() as enabled_2pc)
+	 cte_2 AS (SELECT coordinated_transaction_should_use_2PC() as enabled_2pc)
 SELECT cnt, enabled_2pc FROM cte_1, cte_2;
 
 -- a multi-shard modification that is failed over to local
 -- execution starts a 2PC
 BEGIN;
 	UPDATE another_schema_table SET b = b + 1;
-	SELECT coordinated_transaction_uses_2PC();
+	SELECT coordinated_transaction_should_use_2PC();
 ROLLBACK;
 
 -- a multi-shard modification that is failed over to local
@@ -942,23 +942,23 @@ ROLLBACK;
 BEGIN;
 	WITH cte_1 AS (UPDATE another_schema_table SET b = b + 1 RETURNING *)
 		SELECT count(*) FROM cte_1;
-	SELECT coordinated_transaction_uses_2PC();
+	SELECT coordinated_transaction_should_use_2PC();
 ROLLBACK;
 
 -- same without transaction block
 WITH cte_1 AS (UPDATE another_schema_table SET b = b + 1 RETURNING *)
-SELECT coordinated_transaction_uses_2PC();
+SELECT coordinated_transaction_should_use_2PC();
 
 -- a single-shard modification that is failed over to local
 -- starts 2PC execution
 BEGIN;
 	UPDATE another_schema_table SET b = b + 1 WHERE a = 1;
-	SELECT coordinated_transaction_uses_2PC();
+	SELECT coordinated_transaction_should_use_2PC();
 ROLLBACK;
 
 -- same without transaction block
 WITH cte_1 AS (UPDATE another_schema_table SET b = b + 1 WHERE a = 1 RETURNING *)
-SELECT coordinated_transaction_uses_2PC() FROM cte_1;
+SELECT coordinated_transaction_should_use_2PC() FROM cte_1;
 
 -- if the local execution is disabled, we cannot failover to
 -- local execution and the queries would fail
