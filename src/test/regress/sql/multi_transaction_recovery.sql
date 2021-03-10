@@ -186,6 +186,52 @@ INSERT INTO test_recovery_single VALUES ('hello-2');
 COMMIT;
 SELECT count(*) FROM pg_dist_transaction;
 
+-- check that read-only participants skip prepare
+SET citus.shard_count TO 4;
+CREATE TABLE test_2pcskip (a int);
+SELECT create_distributed_table('test_2pcskip', 'a');
+INSERT INTO test_2pcskip SELECT i FROM generate_series(0, 5)i;
+SELECT recover_prepared_transactions();
+
+-- for the following test, ensure that 6 and 7 go to different shards on different workers
+SELECT count(DISTINCT nodeport) FROM pg_dist_shard_placement WHERE shardid IN (get_shard_id_for_distribution_column('test_2pcskip', 6),get_shard_id_for_distribution_column('test_2pcskip', 7));
+-- only two of the connections will perform a write (INSERT)
+SET citus.force_max_query_parallelization TO ON;
+BEGIN;
+-- these inserts use two connections
+INSERT INTO test_2pcskip VALUES (6);
+INSERT INTO test_2pcskip VALUES (7);
+-- we know this will use more than two connections
+SELECT count(*) FROM test_2pcskip;
+COMMIT;
+
+SELECT count(*) FROM pg_dist_transaction;
+SELECT recover_prepared_transactions();
+
+-- only two of the connections will perform a write (INSERT)
+BEGIN;
+-- this insert uses two connections
+INSERT INTO test_2pcskip SELECT i FROM generate_series(6, 7)i;
+-- we know this will use more than two connections
+SELECT COUNT(*) FROM test_2pcskip;
+COMMIT;
+
+SELECT count(*) FROM pg_dist_transaction;
+
+-- check that reads from a reference table don't trigger 2PC
+-- despite repmodel being 2PC
+CREATE TABLE test_reference (b int);
+SELECT create_reference_table('test_reference');
+INSERT INTO test_reference VALUES(1);
+INSERT INTO test_reference VALUES(2);
+SELECT recover_prepared_transactions();
+
+BEGIN;
+SELECT * FROM test_reference ORDER BY 1;
+COMMIT;
+
+SELECT count(*) FROM pg_dist_transaction;
+SELECT recover_prepared_transactions();
 
 -- Test whether auto-recovery runs
 ALTER SYSTEM SET citus.recover_2pc_interval TO 10;
@@ -200,5 +246,7 @@ SELECT pg_reload_conf();
 DROP TABLE test_recovery_ref;
 DROP TABLE test_recovery;
 DROP TABLE test_recovery_single;
+DROP TABLE test_2pcskip;
+DROP TABLE test_reference;
 
 SELECT 1 FROM master_remove_node('localhost', :master_port);
