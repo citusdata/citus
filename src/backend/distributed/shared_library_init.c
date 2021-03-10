@@ -1239,6 +1239,16 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
+		"citus.max_cached_connection_lifetime",
+		gettext_noop("Sets the maximum lifetime of cached connections to other nodes."),
+		NULL,
+		&MaxCachedConnectionLifetime,
+		10 * MS_PER_MINUTE, -1, INT_MAX,
+		PGC_USERSET,
+		GUC_UNIT_MS | GUC_STANDARD,
+		NULL, NULL, NULL);
+
+	DefineCustomIntVariable(
 		"citus.repartition_join_bucket_count_per_node",
 		gettext_noop("Sets the bucket size for repartition joins per node"),
 		gettext_noop("Repartition joins create buckets in each node and "

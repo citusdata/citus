@@ -32,6 +32,7 @@
 #include "distributed/shared_connection_stats.h"
 #include "distributed/cancel_utils.h"
 #include "distributed/remote_commands.h"
+#include "distributed/time_constants.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_log_messages.h"
 #include "mb/pg_wchar.h"
@@ -43,6 +44,7 @@
 
 int NodeConnectionTimeout = 30000;
 int MaxCachedConnectionsPerWorker = 1;
+int MaxCachedConnectionLifetime = 10 * MS_PER_MINUTE;
 
 HTAB *ConnectionHash = NULL;
 HTAB *ConnParamsHash = NULL;
@@ -1288,6 +1290,7 @@ AfterXactHostConnectionHandling(ConnectionHashEntry *entry, bool isCommit)
  * - Connection is forced to close at the end of transaction
  * - Connection is not in OK state
  * - A transaction is still in progress (usually because we are cancelling a distributed transaction)
+ * - A connection reached its maximum lifetime
  */
 static bool
 ShouldShutdownConnection(MultiConnection *connection, const int cachedConnectionCount)
@@ -1303,7 +1306,10 @@ ShouldShutdownConnection(MultiConnection *connection, const int cachedConnection
 		   cachedConnectionCount >= MaxCachedConnectionsPerWorker ||
 		   connection->forceCloseAtTransactionEnd ||
 		   PQstatus(connection->pgConn) != CONNECTION_OK ||
-		   !RemoteTransactionIdle(connection);
+		   !RemoteTransactionIdle(connection) ||
+		   (MaxCachedConnectionLifetime >= 0 &&
+			TimestampDifferenceExceeds(connection->connectionStart, GetCurrentTimestamp(),
+									   MaxCachedConnectionLifetime));
 }
 
 
