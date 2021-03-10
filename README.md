@@ -59,7 +59,7 @@ You can get a fully-managed Citus cluster in minutes through the Hyperscale (Cit
 
 The smallest possible Citus cluster is a single PostgreSQL node with the Citus extension, which means you can try out Citus by running a single Docker container.
 
-```sql
+```bash
 # run PostgreSQL with Citus on port 5500
 docker run -d --name citus -p 5500:5432 -e POSTGRES_PASSWORD=mypassword citusdata/citus
 
@@ -91,7 +91,7 @@ sudo yum install -y citus100_13
 
 To add Citus to your local PostgreSQL database, add the following to `postgresql.conf`:
 
-```sql
+```
 shared_preload_libraries = 'citus'
 ```
 
