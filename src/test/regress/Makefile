@@ -88,64 +88,64 @@ isolation_test_files=$(generated_isolation_files) create-symbolic-link
 
 # using pg_regress_multi_check unnecessarily starts up multiple nodes, which isn't needed
 # for check-worker. But that's harmless besides a few cycles.
-check-worker: all
+check-worker: all install-downgrades
 	$(pg_regress_multi_check) --load-extension=citus \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/worker_schedule $(EXTRA_TESTS)
 
 # check-base only sets up a testing environment so you can specify all your tests using EXTRA_TESTS
-check-base: all
+check-base: all install-downgrades
 	$(pg_regress_multi_check) --load-extension=citus \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/base_schedule $(EXTRA_TESTS)
 
 # check-minimal only sets up the cluster
-check-minimal: all
+check-minimal: all install-downgrades
 	$(pg_regress_multi_check) --load-extension=citus \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/minimal_schedule $(EXTRA_TESTS)
 
-check-base-vg: all
+check-base-vg: all install-downgrades
 	$(pg_regress_multi_check) --load-extension=citus \
 	--valgrind --pg_ctl-timeout=360 --connection-timeout=500000 --valgrind-path=valgrind --valgrind-log-file=$(VALGRIND_LOG_FILE) \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/base_schedule $(EXTRA_TESTS)
 
-check-base-mx: all
+check-base-mx: all install-downgrades
 	$(pg_regress_multi_check) --load-extension=citus \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/mx_base_schedule $(EXTRA_TESTS)
 
-check-minimal-mx: all
+check-minimal-mx: all install-downgrades
 	$(pg_regress_multi_check) --load-extension=citus \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/mx_minimal_schedule $(EXTRA_TESTS)
 
 
-check-empty: all
+check-empty: all install-downgrades
 	$(pg_regress_multi_check) --load-extension=citus \
 	-- $(MULTI_REGRESS_OPTS) $(EXTRA_TESTS)
 
-check-multi: all
+check-multi: all install-downgrades
 	$(pg_regress_multi_check) --load-extension=citus \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/multi_schedule $(EXTRA_TESTS)
 
-check-multi-hyperscale: all
+check-multi-hyperscale: all install-downgrades
 	$(pg_regress_multi_check) --conninfo="$(conninfo)" --load-extension=citus \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/multi_schedule_hyperscale $(EXTRA_TESTS)
 
-check-multi-hyperscale-superuser: all
+check-multi-hyperscale-superuser: all install-downgrades
 	$(pg_regress_multi_check) --conninfo="$(conninfo)" --worker-1-public-hostname="$(worker_1_public_hostname)" --worker-2-public-hostname="$(worker_2_public_hostname)" --load-extension=citus \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/multi_schedule_hyperscale_superuser $(EXTRA_TESTS)
 
-check-multi-vg: all
+check-multi-vg: all install-downgrades
 	$(pg_regress_multi_check) --load-extension=citus --valgrind \
 	--pg_ctl-timeout=360 --connection-timeout=500000 --valgrind-path=valgrind --valgrind-log-file=$(VALGRIND_LOG_FILE) \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/multi_schedule $(EXTRA_TESTS)
 
-check-isolation: all  $(isolation_test_files)
+check-isolation: all install-downgrades  $(isolation_test_files)
 	$(pg_regress_multi_check) --load-extension=citus --isolationtester \
 	-- $(MULTI_REGRESS_OPTS) --inputdir=$(citus_abs_srcdir)/build --schedule=$(citus_abs_srcdir)/isolation_schedule $(EXTRA_TESTS)
 
-check-isolation-base: all  $(isolation_test_files)
+check-isolation-base: all install-downgrades  $(isolation_test_files)
 	$(pg_regress_multi_check) --load-extension=citus --isolationtester \
 	-- $(MULTI_REGRESS_OPTS) --inputdir=$(citus_abs_srcdir)/build --schedule=$(citus_abs_srcdir)/base_isolation_schedule $(EXTRA_TESTS)
 
-check-vanilla: all
+check-vanilla: all install-downgrades
 	# it is possible that sometimes vanilla tests will fail, which is related to postgres.
 	# So we try it once more if it fails to prevent some failures in our CI.
 	${MAKE} check-vanilla-internal  || ${MAKE} check-vanilla-internal
@@ -153,15 +153,15 @@ check-vanilla: all
 check-vanilla-internal:
 	$(pg_regress_multi_check) --load-extension=citus --vanillatest
 
-check-multi-mx: all
+check-multi-mx: all install-downgrades
 	$(pg_regress_multi_check) --load-extension=citus \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/multi_mx_schedule $(EXTRA_TESTS)
 
-check-follower-cluster: all
+check-follower-cluster: all install-downgrades
 	$(pg_regress_multi_check) --load-extension=citus --follower-cluster \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/multi_follower_schedule $(EXTRA_TESTS)
 
-check-operations: all
+check-operations: all install-downgrades
 	$(pg_regress_multi_check) --load-extension=citus \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/operations_schedule $(EXTRA_TESTS)
 
@@ -169,15 +169,15 @@ check-columnar:
 	$(pg_regress_multi_check) --load-extension=citus \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/columnar_am_schedule $(EXTRA_TESTS)
 
-check-columnar-isolation: all  $(isolation_test_files)
+check-columnar-isolation: all install-downgrades  $(isolation_test_files)
 	$(pg_regress_multi_check) --load-extension=citus --isolationtester \
 	-- $(MULTI_REGRESS_OPTS) --inputdir=$(citus_abs_srcdir)/build --schedule=$(citus_abs_srcdir)/columnar_am_isolation_schedule $(EXTRA_TESTS)
 
-check-failure: all
+check-failure: all install-downgrades
 	$(pg_regress_multi_check) --load-extension=citus --mitmproxy \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/failure_schedule $(EXTRA_TESTS)
 
-check-failure-base: all
+check-failure-base: all install-downgrades
 	$(pg_regress_multi_check) --load-extension=citus --mitmproxy \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/failure_base_schedule $(EXTRA_TESTS)
 
@@ -215,3 +215,6 @@ check-citus-upgrade-mixed-local:
 clean distclean maintainer-clean:
 	rm -f $(output_files) $(input_files)
 	rm -rf tmp_check/
+
+install-downgrades:
+	$(MAKE) -C ../../backend/distributed/ install-downgrades
