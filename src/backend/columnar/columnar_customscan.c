@@ -25,8 +25,8 @@
 #include "optimizer/restrictinfo.h"
 #include "utils/relcache.h"
 
-#include "columnar/columnar.h"
 #include "columnar/columnar_customscan.h"
+#include "columnar/columnar_metadata.h"
 #include "columnar/columnar_tableam.h"
 
 typedef struct ColumnarScanPath
