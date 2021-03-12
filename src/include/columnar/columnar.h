@@ -4,9 +4,7 @@
  *
  * Type and function declarations for Columnar
  *
- * Copyright (c) 2016, Citus Data, Inc.
- *
- * $Id$
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */
@@ -25,6 +23,7 @@
 #include "utils/snapmgr.h"
 
 #include "columnar/columnar_compression.h"
+#include "columnar/columnar_metadata.h"
 
 /* Defines for valid option names */
 #define OPTION_NAME_COMPRESSION_TYPE "compression"
@@ -73,22 +72,6 @@ typedef struct ColumnarTableDDLContext
 	char *relationName;
 	ColumnarOptions options;
 } ColumnarTableDDLContext;
-
-
-/*
- * StripeMetadata represents information about a stripe. This information is
- * stored in the metadata table "columnar.stripe".
- */
-typedef struct StripeMetadata
-{
-	uint64 fileOffset;
-	uint64 dataLength;
-	uint32 columnCount;
-	uint32 chunkCount;
-	uint32 chunkGroupRowCount;
-	uint64 rowCount;
-	uint64 id;
-} StripeMetadata;
 
 
 /* ColumnChunkSkipNode contains statistics for a ColumnChunkData. */
@@ -257,7 +240,6 @@ extern bool IsColumnarTableAmTable(Oid relationId);
 
 /* columnar_metadata_tables.c */
 extern void DeleteMetadataRows(RelFileNode relfilenode);
-extern List * StripesForRelfilenode(RelFileNode relfilenode);
 extern uint64 GetHighestUsedAddress(RelFileNode relfilenode);
 extern StripeMetadata ReserveStripe(Relation rel, uint64 size,
 									uint64 rowCount, uint64 columnCount,
