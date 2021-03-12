@@ -705,7 +705,7 @@ USING HASH AS
 operator 1 =,
 function 2 part_hashint4_noop(int4, int8);
 CREATE TABLE hash_parted (
-       a int,
+	a int,
   b int
 ) PARTITION BY HASH (a part_test_int4_ops);
 CREATE TABLE hpart0 PARTITION OF hash_parted FOR VALUES WITH (modulus 4, remainder 0);
@@ -1855,6 +1855,138 @@ NOTICE:  executing the command locally: SELECT bool_and((z IS NULL)) AS bool_and
 (1 row)
 
 RESET citus.local_copy_flush_threshold;
+RESET citus.local_copy_flush_threshold;
+CREATE OR REPLACE FUNCTION coordinated_transaction_should_use_2PC()
+RETURNS BOOL LANGUAGE C STRICT VOLATILE AS 'citus',
+$$coordinated_transaction_should_use_2PC$$;
+-- a multi-shard/single-shard select that is failed over to local
+-- execution doesn't start a 2PC
+BEGIN;
+	SELECT count(*) FROM another_schema_table;
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM single_node.another_schema_table_90630511 another_schema_table WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM single_node.another_schema_table_90630512 another_schema_table WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM single_node.another_schema_table_90630513 another_schema_table WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM single_node.another_schema_table_90630514 another_schema_table WHERE true
+ count
+---------------------------------------------------------------------
+ 10001
+(1 row)
+
+	SELECT count(*) FROM another_schema_table WHERE a = 1;
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM single_node.another_schema_table_90630511 another_schema_table WHERE (a OPERATOR(pg_catalog.=) 1)
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+	WITH cte_1 as (SELECT * FROM another_schema_table LIMIT 10)
+		SELECT count(*) FROM cte_1;
+NOTICE:  executing the command locally: SELECT a, b FROM single_node.another_schema_table_90630511 another_schema_table WHERE true LIMIT '10'::bigint
+NOTICE:  executing the command locally: SELECT a, b FROM single_node.another_schema_table_90630512 another_schema_table WHERE true LIMIT '10'::bigint
+NOTICE:  executing the command locally: SELECT a, b FROM single_node.another_schema_table_90630513 another_schema_table WHERE true LIMIT '10'::bigint
+NOTICE:  executing the command locally: SELECT a, b FROM single_node.another_schema_table_90630514 another_schema_table WHERE true LIMIT '10'::bigint
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) cte_1
+ count
+---------------------------------------------------------------------
+    10
+(1 row)
+
+	WITH cte_1 as (SELECT * FROM another_schema_table WHERE a = 1 LIMIT 10)
+		SELECT count(*) FROM cte_1;
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM (SELECT another_schema_table.a, another_schema_table.b FROM single_node.another_schema_table_90630511 another_schema_table WHERE (another_schema_table.a OPERATOR(pg_catalog.=) 1) LIMIT 10) cte_1
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+	SELECT coordinated_transaction_should_use_2PC();
+ coordinated_transaction_should_use_2pc
+---------------------------------------------------------------------
+ f
+(1 row)
+
+ROLLBACK;
+-- same without a transaction block
+WITH cte_1 AS (SELECT count(*) as cnt FROM another_schema_table LIMIT 1000),
+	 cte_2 AS (SELECT coordinated_transaction_should_use_2PC() as enabled_2pc)
+SELECT cnt, enabled_2pc FROM cte_1, cte_2;
+NOTICE:  executing the command locally: SELECT count(*) AS cnt FROM single_node.another_schema_table_90630511 another_schema_table WHERE true LIMIT '1000'::bigint
+NOTICE:  executing the command locally: SELECT count(*) AS cnt FROM single_node.another_schema_table_90630512 another_schema_table WHERE true LIMIT '1000'::bigint
+NOTICE:  executing the command locally: SELECT count(*) AS cnt FROM single_node.another_schema_table_90630513 another_schema_table WHERE true LIMIT '1000'::bigint
+NOTICE:  executing the command locally: SELECT count(*) AS cnt FROM single_node.another_schema_table_90630514 another_schema_table WHERE true LIMIT '1000'::bigint
+NOTICE:  executing the command locally: SELECT cte_1.cnt, cte_2.enabled_2pc FROM (SELECT intermediate_result.cnt FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(cnt bigint)) cte_1, (SELECT intermediate_result.enabled_2pc FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(enabled_2pc boolean)) cte_2
+  cnt  | enabled_2pc
+---------------------------------------------------------------------
+ 10001 | f
+(1 row)
+
+-- a multi-shard modification that is failed over to local
+-- execution starts a 2PC
+BEGIN;
+	UPDATE another_schema_table SET b = b + 1;
+NOTICE:  executing the command locally: UPDATE single_node.another_schema_table_90630511 another_schema_table SET b = (b OPERATOR(pg_catalog.+) 1)
+NOTICE:  executing the command locally: UPDATE single_node.another_schema_table_90630512 another_schema_table SET b = (b OPERATOR(pg_catalog.+) 1)
+NOTICE:  executing the command locally: UPDATE single_node.another_schema_table_90630513 another_schema_table SET b = (b OPERATOR(pg_catalog.+) 1)
+NOTICE:  executing the command locally: UPDATE single_node.another_schema_table_90630514 another_schema_table SET b = (b OPERATOR(pg_catalog.+) 1)
+	SELECT coordinated_transaction_should_use_2PC();
+ coordinated_transaction_should_use_2pc
+---------------------------------------------------------------------
+ t
+(1 row)
+
+ROLLBACK;
+-- a multi-shard modification that is failed over to local
+-- execution starts a 2PC
+BEGIN;
+	WITH cte_1 AS (UPDATE another_schema_table SET b = b + 1 RETURNING *)
+		SELECT count(*) FROM cte_1;
+NOTICE:  executing the command locally: UPDATE single_node.another_schema_table_90630511 another_schema_table SET b = (b OPERATOR(pg_catalog.+) 1) RETURNING a, b
+NOTICE:  executing the command locally: UPDATE single_node.another_schema_table_90630512 another_schema_table SET b = (b OPERATOR(pg_catalog.+) 1) RETURNING a, b
+NOTICE:  executing the command locally: UPDATE single_node.another_schema_table_90630513 another_schema_table SET b = (b OPERATOR(pg_catalog.+) 1) RETURNING a, b
+NOTICE:  executing the command locally: UPDATE single_node.another_schema_table_90630514 another_schema_table SET b = (b OPERATOR(pg_catalog.+) 1) RETURNING a, b
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) cte_1
+ count
+---------------------------------------------------------------------
+ 10001
+(1 row)
+
+	SELECT coordinated_transaction_should_use_2PC();
+ coordinated_transaction_should_use_2pc
+---------------------------------------------------------------------
+ t
+(1 row)
+
+ROLLBACK;
+-- same without transaction block
+WITH cte_1 AS (UPDATE another_schema_table SET b = b + 1 RETURNING *)
+SELECT coordinated_transaction_should_use_2PC();
+NOTICE:  executing the command locally: UPDATE single_node.another_schema_table_90630511 another_schema_table SET b = (b OPERATOR(pg_catalog.+) 1) RETURNING a, b
+NOTICE:  executing the command locally: UPDATE single_node.another_schema_table_90630512 another_schema_table SET b = (b OPERATOR(pg_catalog.+) 1) RETURNING a, b
+NOTICE:  executing the command locally: UPDATE single_node.another_schema_table_90630513 another_schema_table SET b = (b OPERATOR(pg_catalog.+) 1) RETURNING a, b
+NOTICE:  executing the command locally: UPDATE single_node.another_schema_table_90630514 another_schema_table SET b = (b OPERATOR(pg_catalog.+) 1) RETURNING a, b
+NOTICE:  executing the command locally: SELECT single_node.coordinated_transaction_should_use_2pc() AS coordinated_transaction_should_use_2pc
+ coordinated_transaction_should_use_2pc
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- a single-shard modification that is failed over to local
+-- starts 2PC execution
+BEGIN;
+	UPDATE another_schema_table SET b = b + 1 WHERE a = 1;
+NOTICE:  executing the command locally: UPDATE single_node.another_schema_table_90630511 another_schema_table SET b = (b OPERATOR(pg_catalog.+) 1) WHERE (a OPERATOR(pg_catalog.=) 1)
+	SELECT coordinated_transaction_should_use_2PC();
+ coordinated_transaction_should_use_2pc
+---------------------------------------------------------------------
+ t
+(1 row)
+
+ROLLBACK;
+-- same without transaction block
+WITH cte_1 AS (UPDATE another_schema_table SET b = b + 1 WHERE a = 1 RETURNING *)
+SELECT coordinated_transaction_should_use_2PC() FROM cte_1;
+NOTICE:  executing the command locally: WITH cte_1 AS (UPDATE single_node.another_schema_table_90630511 another_schema_table SET b = (another_schema_table.b OPERATOR(pg_catalog.+) 1) WHERE (another_schema_table.a OPERATOR(pg_catalog.=) 1) RETURNING another_schema_table.a, another_schema_table.b) SELECT single_node.coordinated_transaction_should_use_2pc() AS coordinated_transaction_should_use_2pc FROM cte_1
+ERROR:  The transaction is not a coordinated transaction
 -- if the local execution is disabled, we cannot failover to
 -- local execution and the queries would fail
 SET citus.enable_local_execution TO  false;

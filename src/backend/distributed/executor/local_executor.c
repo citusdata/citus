@@ -236,6 +236,17 @@ ExecuteLocalTaskListExtended(List *taskList,
 		{
 			SetLocalExecutionStatus(LOCAL_EXECUTION_REQUIRED);
 		}
+
+		if (!ReadOnlyTask(task->taskType))
+		{
+			/*
+			 * Any modification on the local execution should enable 2PC. If remote
+			 * queries are also ReadOnly, our 2PC logic is smart enough to skip sending
+			 * PREPARE to those connections.
+			 */
+			CoordinatedTransactionShouldUse2PC();
+		}
+
 		LogLocalCommand(task);
 
 		if (isUtilityCommand)
