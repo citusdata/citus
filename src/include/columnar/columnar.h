@@ -24,6 +24,8 @@
 #include "utils/relcache.h"
 #include "utils/snapmgr.h"
 
+#include "columnar/columnar_compression.h"
+
 /* Defines for valid option names */
 #define OPTION_NAME_COMPRESSION_TYPE "compression"
 #define OPTION_NAME_STRIPE_ROW_COUNT "stripe_row_limit"
@@ -46,19 +48,6 @@
 #define COLUMNAR_POSTSCRIPT_SIZE_LENGTH 1
 #define COLUMNAR_POSTSCRIPT_SIZE_MAX 256
 #define COLUMNAR_BYTES_PER_PAGE (BLCKSZ - SizeOfPageHeaderData)
-
-/* Enumaration for columnar table's compression method */
-typedef enum
-{
-	COMPRESSION_TYPE_INVALID = -1,
-	COMPRESSION_NONE = 0,
-	COMPRESSION_PG_LZ = 1,
-	COMPRESSION_LZ4 = 2,
-	COMPRESSION_ZSTD = 3,
-
-	COMPRESSION_COUNT
-} CompressionType;
-
 
 /*
  * ColumnarOptions holds the option values to be used when reading or writing
@@ -254,12 +243,6 @@ extern ChunkData * CreateEmptyChunkData(uint32 columnCount, bool *columnMask,
 										uint32 chunkGroupRowCount);
 extern void FreeChunkData(ChunkData *chunkData);
 extern uint64 ColumnarTableRowCount(Relation relation);
-extern bool CompressBuffer(StringInfo inputBuffer,
-						   StringInfo outputBuffer,
-						   CompressionType compressionType,
-						   int compressionLevel);
-extern StringInfo DecompressBuffer(StringInfo buffer, CompressionType compressionType,
-								   uint64 decompressedSize);
 extern const char * CompressionTypeStr(CompressionType type);
 
 /* columnar_metadata_tables.c */
