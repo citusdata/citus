@@ -25,7 +25,11 @@
 #include "utils/palloc.h"
 
 
-#define MAX_PUT_COPY_DATA_BUFFER_SIZE (8 * 1024 * 1024)
+/*
+ * Setting that controls how many bytes of COPY data libpq is allowed to buffer
+ * internally before we force a flush.
+ */
+int RemoteCopyFlushThreshold = 8 * 1024 * 1024;
 
 
 /* GUC, determining whether statements sent to remote nodes are logged */
@@ -620,7 +624,7 @@ PutRemoteCopyData(MultiConnection *connection, const char *buffer, int nbytes)
 	 */
 
 	connection->copyBytesWrittenSinceLastFlush += nbytes;
-	if (connection->copyBytesWrittenSinceLastFlush > MAX_PUT_COPY_DATA_BUFFER_SIZE)
+	if (connection->copyBytesWrittenSinceLastFlush > RemoteCopyFlushThreshold)
 	{
 		connection->copyBytesWrittenSinceLastFlush = 0;
 		return FinishConnectionIO(connection, allowInterrupts);
