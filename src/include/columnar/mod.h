@@ -4,9 +4,7 @@
  *
  * Type and function declarations for columnar
  *
- * Copyright (c) 2016, Citus Data, Inc.
- *
- * $Id$
+ * Copyright (c) Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */
