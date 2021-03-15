@@ -318,28 +318,8 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			/* stop propagating notices from workers, we know the query is failed */
 			DisableWorkerMessagePropagation();
 
-			/*
-			 * FIXME: Add warning for the COORD_TRANS_COMMITTED case. That
-			 * can be reached if this backend fails after the
-			 * XACT_EVENT_PRE_COMMIT state.
-			 */
+			RemoveIntermediateResultsDirectory();
 
-			/*
-			 * Call other parts of citus that need to integrate into
-			 * transaction management. Do so before doing other work, so the
-			 * callbacks still can perform work if needed.
-			 */
-			{
-				/*
-				 * On Windows it's not possible to delete a file before you've closed all
-				 * handles to it (rmdir will return success but not take effect). Since
-				 * we're in an ABORT handler it's very likely that not all handles have
-				 * been closed; force them closed here before running
-				 * RemoveIntermediateResultsDirectory.
-				 */
-				AtEOXact_Files(false);
-				RemoveIntermediateResultsDirectory();
-			}
 			ResetShardPlacementTransactionState();
 
 			/* handles both already prepared and open transactions */
