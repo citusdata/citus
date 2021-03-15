@@ -702,6 +702,19 @@ RegisterCitusConfigVariables(void)
 		NoticeIfSubqueryPushdownEnabled, NULL, NULL);
 
 	DefineCustomIntVariable(
+		"citus.remote_copy_flush_threshold",
+		gettext_noop("Sets the threshold for remote copy to be flushed."),
+		gettext_noop("When sending data over remote connections via the COPY protocol, "
+					 "bytes are first buffered internally by libpq. If the number of "
+					 "bytes buffered exceeds the threshold, Citus waits for all the "
+					 "bytes to flush."),
+		&RemoteCopyFlushThreshold,
+		8 * 1024 * 1024, 0, INT_MAX,
+		PGC_USERSET,
+		GUC_UNIT_BYTE | GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
+	DefineCustomIntVariable(
 		"citus.local_copy_flush_threshold",
 		gettext_noop("Sets the threshold for local copy to be flushed."),
 		NULL,

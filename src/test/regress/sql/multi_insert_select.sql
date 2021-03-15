@@ -2251,6 +2251,14 @@ DO UPDATE
    SET    user_id = 42
 RETURNING user_id, value_1_agg;
 
+-- test a small citus.remote_copy_flush_threshold
+BEGIN;
+SET LOCAL citus.remote_copy_flush_threshold TO 1;
+INSERT INTO raw_events_first
+SELECT * FROM raw_events_first OFFSET 0
+ON CONFLICT DO NOTHING;
+ABORT;
+
 -- wrap in a transaction to improve performance
 BEGIN;
 DROP TABLE coerce_events;
