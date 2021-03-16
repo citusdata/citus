@@ -86,8 +86,13 @@ endif
 
 isolation_test_files=$(generated_isolation_files) create-symbolic-link
 
-CITUS_VALGRIND_LOG_FILE=citus_valgrind_test_log.txt
-COLUMNAR_VALGRIND_LOG_FILE=columnar_valgrind_test_log.txt
+ifndef CITUS_VALGRIND_LOG_FILE
+CITUS_VALGRIND_LOG_FILE := citus_valgrind_test_log.txt
+endif
+
+ifndef COLUMNAR_VALGRIND_LOG_FILE
+COLUMNAR_VALGRIND_LOG_FILE := columnar_valgrind_test_log.txt
+endif
 
 # using pg_regress_multi_check unnecessarily starts up multiple nodes, which isn't needed
 # for check-worker. But that's harmless besides a few cycles.
