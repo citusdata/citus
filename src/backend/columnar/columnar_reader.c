@@ -87,6 +87,7 @@ struct ColumnarReadState
 
 /* static function declarations */
 static bool StripeReadInProgress(ColumnarReadState *readState);
+static bool HasUnreadStripe(ColumnarReadState *readState);
 static StripeReadState * BeginStripeRead(StripeMetadata *stripeMetadata, Relation rel,
 										 TupleDesc tupleDesc, List *projectedColumnList,
 										 List *whereClauseList, MemoryContext
@@ -190,9 +191,7 @@ ColumnarReadNextRow(ColumnarReadState *readState, Datum *columnValues, bool *col
 	{
 		if (!StripeReadInProgress(readState))
 		{
-			uint32 stripeCount = list_length(readState->stripeList);
-
-			if (readState->currentStripe >= stripeCount)
+			if (!HasUnreadStripe(readState))
 			{
 				return false;
 			}
@@ -228,6 +227,18 @@ static bool
 StripeReadInProgress(ColumnarReadState *readState)
 {
 	return readState->stripeReadState != NULL;
+}
+
+
+/*
+ * HasUnreadStripe return true if we still have stripes to read during current
+ * read operation.
+ */
+static bool
+HasUnreadStripe(ColumnarReadState *readState)
+{
+	uint32 stripeCount = list_length(readState->stripeList);
+	return readState->currentStripe < stripeCount;
 }
 
 
