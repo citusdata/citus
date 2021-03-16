@@ -272,7 +272,7 @@ GetConnParams(ConnectionHashKey *key, char ***keywords, char ***values,
 	/*
 	 * Declare local params for readability;
 	 *
-	 * assignment is done directly to not loose the pointers if any of the later
+	 * assignment is done directly to not lose the pointers if any of the later
 	 * allocations cause an error. FreeConnParamsHashEntryFields knows about the
 	 * possibility of half initialized keywords or values and correctly reclaims them when
 	 * the cache is reused.

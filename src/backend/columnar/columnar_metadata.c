@@ -95,6 +95,10 @@ static Oid ColumnarChunkGroupRelationId(void);
 static Oid ColumnarChunkIndexRelationId(void);
 static Oid ColumnarChunkGroupIndexRelationId(void);
 static Oid ColumnarNamespaceId(void);
+static void DeleteStorageFromColumnarMetadataTable(Oid metadataTableId,
+												   AttrNumber storageIdAtrrNumber,
+												   Oid storageIdIndexId,
+												   uint64 storageId);
 static ModifyState * StartModifyRelation(Relation rel);
 static void InsertTupleAndEnforceConstraints(ModifyState *state, Datum *values,
 											 bool *nulls);
@@ -951,13 +955,12 @@ ReadDataFileStripeList(uint64 storageId, Snapshot snapshot)
 
 
 /*
- * DeleteMetadataRows removes the rows with given relfilenode from columnar.stripe.
+ * DeleteMetadataRows removes the rows with given relfilenode from columnar
+ * metadata tables.
  */
 void
 DeleteMetadataRows(RelFileNode relfilenode)
 {
-	ScanKeyData scanKey[1];
-
 	/*
 	 * During a restore for binary upgrade, metadata tables and indexes may or
 	 * may not exist.
@@ -977,23 +980,47 @@ DeleteMetadataRows(RelFileNode relfilenode)
 		return;
 	}
 
-	ScanKeyInit(&scanKey[0], Anum_columnar_stripe_storageid,
-				BTEqualStrategyNumber, F_INT8EQ, UInt64GetDatum(metapage->storageId));
+	DeleteStorageFromColumnarMetadataTable(ColumnarStripeRelationId(),
+										   Anum_columnar_stripe_storageid,
+										   ColumnarStripeIndexRelationId(),
+										   metapage->storageId);
+	DeleteStorageFromColumnarMetadataTable(ColumnarChunkGroupRelationId(),
+										   Anum_columnar_chunkgroup_storageid,
+										   ColumnarChunkGroupIndexRelationId(),
+										   metapage->storageId);
+	DeleteStorageFromColumnarMetadataTable(ColumnarChunkRelationId(),
+										   Anum_columnar_chunk_storageid,
+										   ColumnarChunkIndexRelationId(),
+										   metapage->storageId);
+}
 
-	Oid columnarStripesOid = ColumnarStripeRelationId();
-	Relation columnarStripes = try_relation_open(columnarStripesOid, AccessShareLock);
-	if (columnarStripes == NULL)
+
+/*
+ * DeleteStorageFromColumnarMetadataTable removes the rows with given
+ * storageId from given columnar metadata table.
+ */
+static void
+DeleteStorageFromColumnarMetadataTable(Oid metadataTableId,
+									   AttrNumber storageIdAtrrNumber,
+									   Oid storageIdIndexId, uint64 storageId)
+{
+	ScanKeyData scanKey[1];
+	ScanKeyInit(&scanKey[0], storageIdAtrrNumber, BTEqualStrategyNumber,
+				F_INT8EQ, UInt64GetDatum(storageId));
+
+	Relation metadataTable = try_relation_open(metadataTableId, AccessShareLock);
+	if (metadataTable == NULL)
 	{
 		/* extension has been dropped */
 		return;
 	}
 
-	Relation index = index_open(ColumnarStripeIndexRelationId(), AccessShareLock);
+	Relation index = index_open(storageIdIndexId, AccessShareLock);
 
-	SysScanDesc scanDescriptor = systable_beginscan_ordered(columnarStripes, index, NULL,
+	SysScanDesc scanDescriptor = systable_beginscan_ordered(metadataTable, index, NULL,
 															1, scanKey);
 
-	ModifyState *modifyState = StartModifyRelation(columnarStripes);
+	ModifyState *modifyState = StartModifyRelation(metadataTable);
 
 	HeapTuple heapTuple = systable_getnext(scanDescriptor);
 	while (HeapTupleIsValid(heapTuple))
@@ -1002,11 +1029,12 @@ DeleteMetadataRows(RelFileNode relfilenode)
 		heapTuple = systable_getnext(scanDescriptor);
 	}
 
+	systable_endscan_ordered(scanDescriptor);
+
 	FinishModifyRelation(modifyState);
 
-	systable_endscan_ordered(scanDescriptor);
 	index_close(index, AccessShareLock);
-	table_close(columnarStripes, AccessShareLock);
+	table_close(metadataTable, AccessShareLock);
 }
 
 

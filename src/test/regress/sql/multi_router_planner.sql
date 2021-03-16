@@ -280,6 +280,21 @@ WITH update_article AS (
 )
 SELECT * FROM update_article;
 
+WITH update_article AS (
+    UPDATE articles_hash SET word_count = 11 WHERE id = 1 AND word_count = 10 RETURNING *
+)
+SELECT coalesce(1,random());
+
+WITH update_article AS (
+    UPDATE articles_hash SET word_count = 10 WHERE author_id = 1 AND id = 1 AND word_count = 11 RETURNING *
+)
+SELECT coalesce(1,random());
+
+WITH update_article AS (
+    UPDATE authors_reference SET name = '' WHERE id = 0 RETURNING *
+)
+SELECT coalesce(1,random());
+
 WITH delete_article AS (
     DELETE FROM articles_hash WHERE id = 1 AND word_count = 10 RETURNING *
 )

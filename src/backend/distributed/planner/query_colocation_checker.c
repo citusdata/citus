@@ -331,7 +331,7 @@ CreateAllTargetListForRelation(Oid relationId, List *requiredAttributes)
 			/*
 			 * For dropped columns, we generate a dummy null column because
 			 * varattno in relation and subquery are different things, however if
-			 * we put the NULL columns to the subquery for the droppped columns,
+			 * we put the NULL columns to the subquery for the dropped columns,
 			 * they will point to the same variable.
 			 */
 			TargetEntry *nullTargetEntry = CreateUnusedTargetEntry(resNo);

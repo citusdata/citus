@@ -29,3 +29,7 @@
 /fdw_create.sql
 /fdw_data_types.sql
 /fdw_load.sql
+/columnar_chunk_filtering.sql
+/columnar_copyto.sql
+/columnar_data_types.sql
+/columnar_load.sql

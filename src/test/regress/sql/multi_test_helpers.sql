@@ -20,10 +20,10 @@ END;
 $$LANGUAGE plpgsql;
 
 -- Create a function to ignore worker plans in explain output
-CREATE OR REPLACE FUNCTION coordinator_plan(explain_commmand text, out query_plan text)
+CREATE OR REPLACE FUNCTION coordinator_plan(explain_command text, out query_plan text)
 RETURNS SETOF TEXT AS $$
 BEGIN
-  FOR query_plan IN execute explain_commmand LOOP
+  FOR query_plan IN execute explain_command LOOP
     RETURN next;
     IF query_plan LIKE '%Task Count:%'
     THEN
@@ -34,12 +34,12 @@ BEGIN
 END; $$ language plpgsql;
 
 -- helper function that returns true if output of given explain has "is not null" (case in-sensitive)
-CREATE OR REPLACE FUNCTION explain_has_is_not_null(explain_commmand text)
+CREATE OR REPLACE FUNCTION explain_has_is_not_null(explain_command text)
 RETURNS BOOLEAN AS $$
 DECLARE
   query_plan text;
 BEGIN
-  FOR query_plan IN EXECUTE explain_commmand LOOP
+  FOR query_plan IN EXECUTE explain_command LOOP
     IF query_plan ILIKE '%is not null%'
     THEN
         RETURN true;
@@ -49,12 +49,12 @@ BEGIN
 END; $$ language plpgsql;
 
 -- helper function that returns true if output of given explain has "is not null" (case in-sensitive)
-CREATE OR REPLACE FUNCTION explain_has_distributed_subplan(explain_commmand text)
+CREATE OR REPLACE FUNCTION explain_has_distributed_subplan(explain_command text)
 RETURNS BOOLEAN AS $$
 DECLARE
   query_plan text;
 BEGIN
-  FOR query_plan IN EXECUTE explain_commmand LOOP
+  FOR query_plan IN EXECUTE explain_command LOOP
     IF query_plan ILIKE '%Distributed Subplan %_%'
     THEN
         RETURN true;

@@ -507,6 +507,45 @@ DEBUG:  Creating router plan
   1 |         1 | arsenous |         10
 (1 row)
 
+WITH update_article AS (
+    UPDATE articles_hash SET word_count = 11 WHERE id = 1 AND word_count = 10 RETURNING *
+)
+SELECT coalesce(1,random());
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  generating subplan XXX_1 for CTE update_article: UPDATE public.articles_hash SET word_count = 11 WHERE ((id OPERATOR(pg_catalog.=) 1) AND (word_count OPERATOR(pg_catalog.=) 10)) RETURNING id, author_id, title, word_count
+DEBUG:  Creating router plan
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT COALESCE((1)::double precision, random()) AS "coalesce"
+DEBUG:  Creating router plan
+ coalesce
+---------------------------------------------------------------------
+        1
+(1 row)
+
+WITH update_article AS (
+    UPDATE articles_hash SET word_count = 10 WHERE author_id = 1 AND id = 1 AND word_count = 11 RETURNING *
+)
+SELECT coalesce(1,random());
+DEBUG:  Creating router plan
+DEBUG:  query has a single distribution column value: 1
+ coalesce
+---------------------------------------------------------------------
+        1
+(1 row)
+
+WITH update_article AS (
+    UPDATE authors_reference SET name = '' WHERE id = 0 RETURNING *
+)
+SELECT coalesce(1,random());
+DEBUG:  cannot router plan modification of a non-distributed table
+DEBUG:  generating subplan XXX_1 for CTE update_article: UPDATE public.authors_reference SET name = ''::character varying WHERE (id OPERATOR(pg_catalog.=) 0) RETURNING name, id
+DEBUG:  Creating router plan
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT COALESCE((1)::double precision, random()) AS "coalesce"
+DEBUG:  Creating router plan
+ coalesce
+---------------------------------------------------------------------
+        1
+(1 row)
+
 WITH delete_article AS (
     DELETE FROM articles_hash WHERE id = 1 AND word_count = 10 RETURNING *
 )

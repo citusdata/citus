@@ -96,9 +96,16 @@ MemoryContext CommitContext = NULL;
 /*
  * Should this coordinated transaction use 2PC? Set by
  * CoordinatedTransactionUse2PC(), e.g. if DDL was issued and
- * MultiShardCommitProtocol was set to 2PC.
+ * MultiShardCommitProtocol was set to 2PC. But, even if this
+ * flag is set, the transaction manager is smart enough to only
+ * do 2PC on the remote connections that did a modification.
+ *
+ * As a variable name ShouldCoordinatedTransactionUse2PC could
+ * be improved. We use CoordinatedTransactionShouldUse2PC() as the
+ * public API function, hence couldn't come up with a better name
+ * for the underlying variable at the moment.
  */
-bool CoordinatedTransactionUses2PC = false;
+bool ShouldCoordinatedTransactionUse2PC = false;
 
 /* if disabled, distributed statements in a function may run as separate transactions */
 bool FunctionOpensTransactionBlock = true;
@@ -183,15 +190,29 @@ InCoordinatedTransaction(void)
 
 
 /*
- * CoordinatedTransactionUse2PC() signals that the current coordinated
+ * CoordinatedTransactionShouldUse2PC() signals that the current coordinated
  * transaction should use 2PC to commit.
+ *
+ * Note that even if 2PC is enabled, it is only used for connections that make
+ * modification (DML or DDL).
  */
 void
-CoordinatedTransactionUse2PC(void)
+CoordinatedTransactionShouldUse2PC(void)
 {
 	Assert(InCoordinatedTransaction());
 
-	CoordinatedTransactionUses2PC = true;
+	ShouldCoordinatedTransactionUse2PC = true;
+}
+
+
+/*
+ * GetCoordinatedTransactionShouldUse2PC is a wrapper function to read the value
+ * of CoordinatedTransactionShouldUse2PCFlag.
+ */
+bool
+GetCoordinatedTransactionShouldUse2PC(void)
+{
+	return ShouldCoordinatedTransactionUse2PC;
 }
 
 
@@ -297,28 +318,8 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			/* stop propagating notices from workers, we know the query is failed */
 			DisableWorkerMessagePropagation();
 
-			/*
-			 * FIXME: Add warning for the COORD_TRANS_COMMITTED case. That
-			 * can be reached if this backend fails after the
-			 * XACT_EVENT_PRE_COMMIT state.
-			 */
+			RemoveIntermediateResultsDirectory();
 
-			/*
-			 * Call other parts of citus that need to integrate into
-			 * transaction management. Do so before doing other work, so the
-			 * callbacks still can perform work if needed.
-			 */
-			{
-				/*
-				 * On Windows it's not possible to delete a file before you've closed all
-				 * handles to it (rmdir will return success but not take effect). Since
-				 * we're in an ABORT handler it's very likely that not all handles have
-				 * been closed; force them closed here before running
-				 * RemoveIntermediateResultsDirectory.
-				 */
-				AtEOXact_Files(false);
-				RemoveIntermediateResultsDirectory();
-			}
 			ResetShardPlacementTransactionState();
 
 			/* handles both already prepared and open transactions */
@@ -425,7 +426,7 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			 */
 			MarkFailedShardPlacements();
 
-			if (CoordinatedTransactionUses2PC)
+			if (ShouldCoordinatedTransactionUse2PC)
 			{
 				CoordinatedRemoteTransactionsPrepare();
 				CurrentCoordinatedTransactionState = COORD_TRANS_PREPARED;
@@ -453,7 +454,7 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			 * Check again whether shards/placement successfully
 			 * committed. This handles failure at COMMIT/PREPARE time.
 			 */
-			PostCommitMarkFailedShardPlacements(CoordinatedTransactionUses2PC);
+			PostCommitMarkFailedShardPlacements(ShouldCoordinatedTransactionUse2PC);
 			break;
 		}
 
@@ -485,7 +486,7 @@ ResetGlobalVariables()
 	FreeSavedExplainPlan();
 	dlist_init(&InProgressTransactions);
 	activeSetStmts = NULL;
-	CoordinatedTransactionUses2PC = false;
+	ShouldCoordinatedTransactionUse2PC = false;
 	TransactionModifiedNodeMetadata = false;
 	MetadataSyncOnCommit = false;
 	ResetWorkerErrorIndication();

@@ -20,6 +20,7 @@
 #include "distributed/connection_management.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/placement_connection.h"
 #include "distributed/remote_commands.h"
 #include "distributed/remote_transaction.h"
 #include "distributed/transaction_identifier.h"
@@ -782,8 +783,16 @@ CoordinatedRemoteTransactionsPrepare(void)
 			continue;
 		}
 
-		StartRemoteTransactionPrepare(connection);
-		connectionList = lappend(connectionList, connection);
+		/*
+		 * Check if any DML or DDL is executed over the connection on any
+		 * placement/table. If yes, we start preparing the transaction, otherwise
+		 * we skip prepare since the connection didn't perform any write (read-only)
+		 */
+		if (ConnectionModifiedPlacement(connection))
+		{
+			StartRemoteTransactionPrepare(connection);
+			connectionList = lappend(connectionList, connection);
+		}
 	}
 
 	bool raiseInterrupts = true;
@@ -798,6 +807,10 @@ CoordinatedRemoteTransactionsPrepare(void)
 
 		if (transaction->transactionState != REMOTE_TRANS_PREPARING)
 		{
+			/*
+			 * Verify that the connection didn't modify any placement
+			 */
+			Assert(!ConnectionModifiedPlacement(connection));
 			continue;
 		}
 

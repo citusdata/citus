@@ -111,7 +111,8 @@ extern bool TransactionModifiedNodeMetadata;
  */
 extern void UseCoordinatedTransaction(void);
 extern bool InCoordinatedTransaction(void);
-extern void CoordinatedTransactionUse2PC(void);
+extern void CoordinatedTransactionShouldUse2PC(void);
+extern bool GetCoordinatedTransactionShouldUse2PC(void);
 extern bool IsMultiStatementTransaction(void);
 extern void EnsureDistributedTransactionId(void);
 
