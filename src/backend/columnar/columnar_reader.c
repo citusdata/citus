@@ -90,7 +90,7 @@ static StripeReadState * BeginStripeRead(StripeMetadata *stripeMetadata, Relatio
 										 TupleDesc tupleDesc, List *projectedColumnList,
 										 List *whereClauseList, MemoryContext
 										 stripeReadContext);
-static void EndStripeRead(StripeReadState *stripeReadState);
+static void EndStripeRead(ColumnarReadState *readState);
 static bool ReadStripeNextRow(StripeReadState *stripeReadState, Datum *columnValues,
 							  bool *columnNulls);
 static ChunkGroupReadState * BeginChunkGroupRead(StripeBuffers *stripeBuffers, int
@@ -196,9 +196,9 @@ ColumnarReadNextRow(ColumnarReadState *readState, Datum *columnValues, bool *col
 				return false;
 			}
 
+			/* EndStripeRead had set currentStripe for next stripe read */
 			StripeMetadata *stripeMetadata = list_nth(readState->stripeList,
 													  readState->currentStripe);
-
 			readState->stripeReadState = BeginStripeRead(stripeMetadata,
 														 readState->relation,
 														 readState->tupleDescriptor,
@@ -209,13 +209,7 @@ ColumnarReadNextRow(ColumnarReadState *readState, Datum *columnValues, bool *col
 
 		if (!ReadStripeNextRow(readState->stripeReadState, columnValues, columnNulls))
 		{
-			readState->chunkGroupsFiltered +=
-				readState->stripeReadState->chunkGroupsFiltered;
-			readState->currentStripe++;
-			EndStripeRead(readState->stripeReadState);
-			readState->stripeReadState = NULL;
-			MemoryContextReset(readState->stripeReadContext);
-
+			EndStripeRead(readState);
 			continue;
 		}
 
@@ -288,12 +282,19 @@ BeginStripeRead(StripeMetadata *stripeMetadata, Relation rel, TupleDesc tupleDes
 
 
 /*
- * EndStripeRead finishes a stripe read.
+ * EndStripeRead finishes current stripe read and increments currentStripe for
+ * next one.
  */
 static void
-EndStripeRead(StripeReadState *stripeReadState)
+EndStripeRead(ColumnarReadState *readState)
 {
-	pfree(stripeReadState);
+	readState->chunkGroupsFiltered +=
+		readState->stripeReadState->chunkGroupsFiltered;
+	pfree(readState->stripeReadState);
+	readState->stripeReadState = NULL;
+	MemoryContextReset(readState->stripeReadContext);
+
+	readState->currentStripe++;
 }
 
 
