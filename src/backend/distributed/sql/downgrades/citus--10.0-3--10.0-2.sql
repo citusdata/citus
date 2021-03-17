@@ -22,3 +22,5 @@ END;
 $$ LANGUAGE 'plpgsql';
 COMMENT ON FUNCTION master_update_table_statistics(regclass)
 	IS 'updates shard statistics of the given table and its colocated tables';
+
+DROP FUNCTION pg_catalog.citus_get_active_worker_nodes(OUT text, OUT bigint);
