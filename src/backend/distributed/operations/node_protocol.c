@@ -85,6 +85,7 @@ PG_FUNCTION_INFO_V1(master_get_table_ddl_events);
 PG_FUNCTION_INFO_V1(master_get_new_shardid);
 PG_FUNCTION_INFO_V1(master_get_new_placementid);
 PG_FUNCTION_INFO_V1(master_get_active_worker_nodes);
+PG_FUNCTION_INFO_V1(citus_get_active_worker_nodes);
 PG_FUNCTION_INFO_V1(master_get_round_robin_candidate_nodes);
 PG_FUNCTION_INFO_V1(master_stage_shard_row);
 PG_FUNCTION_INFO_V1(master_stage_shard_placement_row);
@@ -442,12 +443,12 @@ master_stage_shard_placement_row(PG_FUNCTION_ARGS)
 
 
 /*
- * master_get_active_worker_nodes returns a set of active worker host names and
+ * citus_get_active_worker_nodes returns a set of active worker host names and
  * port numbers in deterministic order. Currently we assume that all worker
  * nodes in pg_dist_node are active.
  */
 Datum
-master_get_active_worker_nodes(PG_FUNCTION_ARGS)
+citus_get_active_worker_nodes(PG_FUNCTION_ARGS)
 {
 	FuncCallContext *functionContext = NULL;
 	uint32 workerNodeIndex = 0;
@@ -509,6 +510,16 @@ master_get_active_worker_nodes(PG_FUNCTION_ARGS)
 	{
 		SRF_RETURN_DONE(functionContext);
 	}
+}
+
+
+/*
+ * master_get_active_worker_nodes is a wrapper function for old UDF name.
+ */
+Datum
+master_get_active_worker_nodes(PG_FUNCTION_ARGS)
+{
+	return citus_get_active_worker_nodes(fcinfo);
 }
 
 
