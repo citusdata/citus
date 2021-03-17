@@ -52,6 +52,7 @@ ORDER BY 1;
  function citus_executor_name(integer)
  function citus_extradata_container(internal)
  function citus_finish_pg_upgrade()
+ function citus_get_active_worker_nodes()
  function citus_internal.columnar_ensure_objects_exist()
  function citus_internal.find_groupid_for_node(text,integer)
  function citus_internal.pg_dist_node_trigger_func()
@@ -238,5 +239,5 @@ ORDER BY 1;
  view citus_worker_stat_activity
  view pg_dist_shard_placement
  view time_partitions
-(222 rows)
+(223 rows)
 
