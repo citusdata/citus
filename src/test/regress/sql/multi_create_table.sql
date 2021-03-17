@@ -224,3 +224,45 @@ END;
 -- distributing catalog tables is not supported
 SELECT create_distributed_table('pg_class', 'relname');
 SELECT create_reference_table('pg_class');
+
+
+-- test shard_count parameter
+-- first set citus.shard_count so we know the parameter works
+SET citus.shard_count TO 10;
+
+CREATE TABLE shard_count_table (a INT, b TEXT);
+CREATE TABLE shard_count_table_2 (a INT, b TEXT);
+
+SELECT create_distributed_table('shard_count_table', 'a', shard_count:=5);
+SELECT shard_count FROM citus_tables WHERE table_name::text = 'shard_count_table';
+
+SELECT create_distributed_table('shard_count_table_2', 'a', shard_count:=0);
+SELECT create_distributed_table('shard_count_table_2', 'a', shard_count:=-100);
+SELECT create_distributed_table('shard_count_table_2', 'a', shard_count:=64001);
+
+-- shard count with colocate with table should error
+SELECT create_distributed_table('shard_count_table_2', 'a', shard_count:=12, colocate_with:='shard_count');
+
+-- none should not error
+SELECT create_distributed_table('shard_count_table_2', 'a', shard_count:=12, colocate_with:='none');
+
+DROP TABLE shard_count_table, shard_count_table_2;
+
+-- test a shard count with an empty default colocation group
+-- ensure there is no colocation group with 13 shards
+SELECT count(*) FROM pg_dist_colocation WHERE shardcount = 13;
+SET citus.shard_count TO 13;
+
+CREATE TABLE shard_count_drop_table (a int);
+SELECT create_distributed_table('shard_count_drop_table', 'a');
+DROP TABLE shard_count_drop_table;
+
+CREATE TABLE shard_count_table_3 (a int);
+SELECT create_distributed_table('shard_count_table_3', 'a', shard_count:=13);
+
+SELECT shardcount FROM pg_dist_colocation WHERE colocationid IN
+(
+	SELECT colocation_id FROM citus_tables WHERE table_name = 'shard_count_table_3'::regclass
+);
+
+DROP TABLE shard_count_table_3;
