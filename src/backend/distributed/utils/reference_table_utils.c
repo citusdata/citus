@@ -17,6 +17,7 @@
 #include "access/genam.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/commands.h"
+#include "distributed/intermediate_result_pruning.h"
 #include "distributed/listutils.h"
 #include "distributed/coordinator_protocol.h"
 #include "distributed/metadata_utility.h"
@@ -193,7 +194,7 @@ EnsureReferenceTablesExistOnAllNodesExtended(char transferMode)
 		int connectionFlags = OUTSIDE_TRANSACTION;
 
 		MultiConnection *connection = GetNodeUserDatabaseConnection(
-			connectionFlags, "localhost", PostPortNumber,
+			connectionFlags, LOCAL_HOST_NAME, PostPortNumber,
 			userName, NULL);
 
 		if (PQstatus(connection->pgConn) == CONNECTION_OK)

@@ -29,6 +29,7 @@
 #include "distributed/connection_management.h"
 #include "distributed/maintenanced.h"
 #include "distributed/coordinator_protocol.h"
+#include "distributed/intermediate_result_pruning.h"
 #include "distributed/metadata_utility.h"
 #include "distributed/metadata/distobject.h"
 #include "distributed/metadata_cache.h"
@@ -1818,7 +1819,7 @@ InsertPlaceholderCoordinatorRecord(void)
 	bool nodeAlreadyExists = false;
 
 	/* as long as there is a single node, localhost should be ok */
-	AddNodeMetadata("localhost", PostPortNumber, &nodeMetadata, &nodeAlreadyExists);
+	AddNodeMetadata(LOCAL_HOST_NAME, PostPortNumber, &nodeMetadata, &nodeAlreadyExists);
 }
 
 
