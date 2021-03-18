@@ -4622,7 +4622,7 @@ else
   as_fn_error $? "lz4 library not found
   If you have lz4 installed, see config.log for details on the
   failure.  It is possible the compiler isn't looking in the proper directory.
-  Use --without-lz4 to disable zlib support." "$LINENO" 5
+  Use --without-lz4 to disable lz4 support." "$LINENO" 5
 fi
 
     ac_fn_c_check_header_mongrel "$LINENO" "lz4.h" "ac_cv_header_lz4_h" "$ac_includes_default"
@@ -4715,7 +4715,7 @@ else
   as_fn_error $? "zstd library not found
   If you have zstd installed, see config.log for details on the
   failure.  It is possible the compiler isn't looking in the proper directory.
-  Use --without-zstd to disable zlib support." "$LINENO" 5
+  Use --without-zstd to disable zstd support." "$LINENO" 5
 fi
 
     ac_fn_c_check_header_mongrel "$LINENO" "zstd.h" "ac_cv_header_zstd_h" "$ac_includes_default"
@@ -4725,7 +4725,7 @@ else
   as_fn_error $? "zstd header not found
   If you have zstd already installed, see config.log for details on the
   failure.  It is possible the compiler isn't looking in the proper directory.
-  Use --without-zstd to disable zlib support." "$LINENO" 5
+  Use --without-zstd to disable zstd support." "$LINENO" 5
 fi
 
 
