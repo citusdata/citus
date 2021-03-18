@@ -237,7 +237,7 @@ if test "$HAS_TABLEAM" == 'yes'; then
                 [AC_MSG_ERROR([lz4 library not found
   If you have lz4 installed, see config.log for details on the
   failure.  It is possible the compiler isn't looking in the proper directory.
-  Use --without-lz4 to disable zlib support.])])
+  Use --without-lz4 to disable lz4 support.])])
     AC_CHECK_HEADER(lz4.h, [], [AC_MSG_ERROR([lz4 header not found
   If you have lz4 already installed, see config.log for details on the
   failure.  It is possible the compiler isn't looking in the proper directory.
@@ -256,11 +256,11 @@ if test "$HAS_TABLEAM" == 'yes'; then
                 [AC_MSG_ERROR([zstd library not found
   If you have zstd installed, see config.log for details on the
   failure.  It is possible the compiler isn't looking in the proper directory.
-  Use --without-zstd to disable zlib support.])])
+  Use --without-zstd to disable zstd support.])])
     AC_CHECK_HEADER(zstd.h, [], [AC_MSG_ERROR([zstd header not found
   If you have zstd already installed, see config.log for details on the
   failure.  It is possible the compiler isn't looking in the proper directory.
-  Use --without-zstd to disable zlib support.])])
+  Use --without-zstd to disable zstd support.])])
   fi
 
 fi # test "$HAS_TABLEAM" == 'yes'
