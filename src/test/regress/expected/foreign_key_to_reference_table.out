@@ -1615,21 +1615,21 @@ CREATE TABLE t1 (a int PRIMARY KEY, b text);
 CREATE TABLE t2 (a bigint PRIMARY KEY, b text);
 CREATE TABLE r1 (a int PRIMARY KEY, b text);
 SELECT create_distributed_table('t1', 'a');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 SELECT create_distributed_table('t2', 'a');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 SELECT create_reference_table('r1');
- create_reference_table 
-------------------------
- 
+ create_reference_table
+---------------------------------------------------------------------
+
 (1 row)
 
 -- this always fails as it should be
