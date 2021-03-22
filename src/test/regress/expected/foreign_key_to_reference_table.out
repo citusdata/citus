@@ -1917,6 +1917,8 @@ DETAIL:  A distributed table can only have foreign keys if it is referencing ano
 -- we would have been able to create a FK to non-colocated tables
 ALTER TABLE t1 ADD CONSTRAINT c2 FOREIGN KEY (a) REFERENCES r1(a);
 ALTER TABLE t1 ADD CONSTRAINT c3 FOREIGN KEY (a) REFERENCES t2(a);
+ERROR:  cannot create foreign key constraint since relations are not colocated or not referencing a reference table
+DETAIL:  A distributed table can only have foreign keys if it is referencing another colocated hash distributed table or a reference table
 DROP SCHEMA fkey_reference_table CASCADE;
 NOTICE:  drop cascades to 6 other objects
 DETAIL:  drop cascades to type foreign_details
