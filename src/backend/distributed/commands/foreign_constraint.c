@@ -136,7 +136,6 @@ ErrorIfUnsupportedForeignConstraint(Relation relation, char distributionMethod,
 	int attrIdx = 0;
 	bool foreignConstraintOnPartitionColumn = false;
 	bool selfReferencingTable = false;
-	bool referencedTableIsAReferenceTable = false;
 	bool referencingColumnsIncludeDistKey = false;
 
 	pgConstraint = heap_open(ConstraintRelationId, AccessShareLock);
@@ -148,6 +147,7 @@ ErrorIfUnsupportedForeignConstraint(Relation relation, char distributionMethod,
 	heapTuple = systable_getnext(scanDescriptor);
 	while (HeapTupleIsValid(heapTuple))
 	{
+		bool referencedTableIsAReferenceTable = false;
 		Form_pg_constraint constraintForm = (Form_pg_constraint) GETSTRUCT(heapTuple);
 		bool singleReplicatedTable = true;
 
@@ -196,10 +196,8 @@ ErrorIfUnsupportedForeignConstraint(Relation relation, char distributionMethod,
 			 * tables. This is why we make this check under !selfReferencingTable
 			 * and after !IsDistributedTable(referencedTableId).
 			 */
-			if (PartitionMethod(referencedTableId) == DISTRIBUTE_BY_NONE)
-			{
-				referencedTableIsAReferenceTable = true;
-			}
+			referencedTableIsAReferenceTable =
+				(PartitionMethod(referencedTableId) == DISTRIBUTE_BY_NONE);
 
 			/*
 			 * To enforce foreign constraints, tables must be co-located unless a
