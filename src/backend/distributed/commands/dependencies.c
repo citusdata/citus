@@ -191,6 +191,12 @@ GetDependencyCreateDDLCommands(const ObjectAddress *dependency)
 			return CreateCollationDDLsIdempotent(dependency->objectId);
 		}
 
+		case OCLASS_DATABASE:
+		{
+			List *ownerDDLCommands = DatabaseOwnerDDLCommands(dependency);
+			return ownerDDLCommands;
+		}
+
 		case OCLASS_PROC:
 		{
 			return CreateFunctionDDLCommandsIdempotent(dependency);

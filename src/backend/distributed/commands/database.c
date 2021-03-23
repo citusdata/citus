@@ -11,11 +11,14 @@
 
 #include "postgres.h"
 
+#include "access/htup_details.h"
 #include "catalog/objectaddress.h"
 #include "catalog/pg_database.h"
 #include "commands/dbcommands.h"
 #include "nodes/parsenodes.h"
 #include "server/access/xact.h"
+#include "server/miscadmin.h"
+#include "utils/syscache.h"
 
 #include "distributed/commands.h"
 #include "distributed/commands/utility_hook.h"
@@ -27,7 +30,8 @@
 #include "distributed/worker_transaction.h"
 
 static void EnsureSequentialModeForDatabaseDDL(void);
-
+static AlterOwnerStmt * RecreateAlterDatabaseOwnerStmt(Oid databaseOid);
+static Oid get_database_owner(Oid db_oid);
 
 List *
 PreprocessAlterDatabaseOwnerStmt(Node *node, const char *queryString,
@@ -88,6 +92,56 @@ AlterDatabaseOwnerObjectAddress(Node *node, bool missing_ok)
 	ObjectAddressSet(address, DatabaseRelationId, databaseOid);
 
 	return address;
+}
+
+
+List *
+DatabaseOwnerDDLCommands(const ObjectAddress *address)
+{
+	Node *stmt = (Node *) RecreateAlterDatabaseOwnerStmt(address->objectId);
+	return list_make1(DeparseTreeNode(stmt));
+}
+
+
+/*
+ * RecreateAlterDatabaseOwnerStmt creates an AlterOwnerStmt that represents the operation
+ * of changing the owner of the database to its current owner.
+ */
+static AlterOwnerStmt *
+RecreateAlterDatabaseOwnerStmt(Oid databaseOid)
+{
+	AlterOwnerStmt *stmt = makeNode(AlterOwnerStmt);
+
+	stmt->objectType = OBJECT_DATABASE;
+	stmt->object = (Node *) makeString(get_database_name(databaseOid));
+
+	Oid ownerOid = get_database_owner(databaseOid);
+	stmt->newowner = makeNode(RoleSpec);
+	stmt->newowner->roletype = ROLESPEC_CSTRING;
+	stmt->newowner->rolename = GetUserNameFromId(ownerOid, false);
+
+	return stmt;
+}
+
+
+/*
+ * get_database_owner returns the Oid of the role owning the database
+ */
+static Oid
+get_database_owner(Oid db_oid)
+{
+	HeapTuple tuple = SearchSysCache1(DATABASEOID, ObjectIdGetDatum(db_oid));
+	if (!HeapTupleIsValid(tuple))
+	{
+		ereport(ERROR, (errcode(ERRCODE_UNDEFINED_DATABASE),
+						errmsg("database with OID %u does not exist", db_oid)));
+	}
+
+	Oid dba = ((Form_pg_database) GETSTRUCT(tuple))->datdba;
+
+	ReleaseSysCache(tuple);
+
+	return dba;
 }
 
 

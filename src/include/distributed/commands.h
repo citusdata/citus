@@ -154,6 +154,7 @@ extern List * PreprocessAlterDatabaseOwnerStmt(Node *node, const char *queryStri
 											   ProcessUtilityContext processUtilityContext);
 extern List * PostprocessAlterDatabaseOwnerStmt(Node *node, const char *queryString);
 extern ObjectAddress AlterDatabaseOwnerObjectAddress(Node *node, bool missing_ok);
+extern List * DatabaseOwnerDDLCommands(const ObjectAddress *address);
 
 /* extension.c - forward declarations */
 extern bool IsDropCitusExtensionStmt(Node *parsetree);
