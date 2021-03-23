@@ -1,3 +1,13 @@
+### citus v8.3.3 (March 23, 2021) ###
+
+* Fixes a bug that leads to various issues when a connection is lost
+
+* Fixes a bug where one could create a foreign key between non-colocated tables
+
+* Fixes a deadlock during transaction recovery
+
+* Fixes a memory leak in adaptive executor when query returns many columns
+
 ### citus v8.3.2 (August 09, 2019) ###
 
 * Fixes performance issues by skipping unnecessary relation access recordings
