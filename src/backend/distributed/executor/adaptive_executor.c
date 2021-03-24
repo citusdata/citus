@@ -746,6 +746,12 @@ AdaptiveExecutor(CitusScanState *scanState)
 	/* we should only call this once before the scan finished */
 	Assert(!scanState->finishedRemoteScan);
 
+	MemoryContext localContext = AllocSetContextCreate(CurrentMemoryContext,
+													   "AdaptiveExecutor",
+													   ALLOCSET_DEFAULT_SIZES);
+	MemoryContext oldContext = MemoryContextSwitchTo(localContext);
+
+
 	/* Reset Task fields that are only valid for a single execution */
 	ResetExplainAnalyzeData(taskList);
 
@@ -833,6 +839,8 @@ AdaptiveExecutor(CitusScanState *scanState)
 	{
 		SortTupleStore(scanState);
 	}
+
+	MemoryContextSwitchTo(oldContext);
 
 	return resultSlot;
 }

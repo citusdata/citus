@@ -229,9 +229,19 @@ ExecuteLocalTaskListExtended(List *taskList,
 		numParams = paramListInfo->numParams;
 	}
 
+	/*
+	 * Use a new memory context that gets reset after every task to free
+	 * the deparsed query string and query plan.
+	 */
+	MemoryContext loopContext = AllocSetContextCreate(CurrentMemoryContext,
+													  "ExecuteLocalTaskListExtended",
+													  ALLOCSET_DEFAULT_SIZES);
+
 	Task *task = NULL;
 	foreach_ptr(task, taskList)
 	{
+		MemoryContext oldContext = MemoryContextSwitchTo(loopContext);
+
 		TupleDestination *tupleDest = task->tupleDest ?
 									  task->tupleDest :
 									  defaultTupleDest;
@@ -261,6 +271,9 @@ ExecuteLocalTaskListExtended(List *taskList,
 		if (isUtilityCommand)
 		{
 			ExecuteUtilityCommand(TaskQueryString(task));
+
+			MemoryContextSwitchTo(oldContext);
+			MemoryContextReset(loopContext);
 			continue;
 		}
 
@@ -308,6 +321,9 @@ ExecuteLocalTaskListExtended(List *taskList,
 				totalRowsProcessed +=
 					LocallyPlanAndExecuteMultipleQueries(queryStringList, tupleDest,
 														 task);
+
+				MemoryContextSwitchTo(oldContext);
+				MemoryContextReset(loopContext);
 				continue;
 			}
 
@@ -343,6 +359,9 @@ ExecuteLocalTaskListExtended(List *taskList,
 		totalRowsProcessed +=
 			ExecuteLocalTaskPlan(localPlan, shardQueryString,
 								 tupleDest, task, paramListInfo);
+
+		MemoryContextSwitchTo(oldContext);
+		MemoryContextReset(loopContext);
 	}
 
 	return totalRowsProcessed;
@@ -582,6 +601,12 @@ ExecuteLocalTaskPlan(PlannedStmt *taskPlan, char *queryString,
 
 	RecordNonDistTableAccessesForTask(task);
 
+	MemoryContext localContext = AllocSetContextCreate(CurrentMemoryContext,
+													   "ExecuteLocalTaskPlan",
+													   ALLOCSET_DEFAULT_SIZES);
+
+	MemoryContext oldContext = MemoryContextSwitchTo(localContext);
+
 	/*
 	 * Some tuple destinations look at task->taskPlacementList to determine
 	 * where the result came from using the placement index. Since a local
@@ -624,6 +649,9 @@ ExecuteLocalTaskPlan(PlannedStmt *taskPlan, char *queryString,
 	ExecutorEnd(queryDesc);
 
 	FreeQueryDesc(queryDesc);
+
+	MemoryContextSwitchTo(oldContext);
+	MemoryContextDelete(localContext);
 
 	return totalRowsProcessed;
 }
