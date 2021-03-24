@@ -1155,15 +1155,21 @@ columnar_index_build_range_scan(Relation heapRelation,
 					   values,
 					   isnull);
 
+	#if PG_VERSION_NUM < 130000
+		HeapTuple	heapTuple = ExecCopySlotHeapTuple(slot);
+		heapTuple->t_self = slot->tts_tid;
+		callback(indexRelation, heapTuple, values, isnull, tupleIsAlive, callback_state);
+		pfree(heapTuple);
+	#else
 		/*
 		 * You'd think we should go ahead and build the index tuple here, but
 		 * some index AMs want to do further processing on the data first.  So
 		 * pass the values[] and isnull[] arrays, instead.
 		 */
-
 		/* Call the AM's callback routine to process the tuple */
 		callback(indexRelation, &slot->tts_tid, values, isnull, tupleIsAlive,
 				 callback_state);
+	#endif
 	}
 
 
