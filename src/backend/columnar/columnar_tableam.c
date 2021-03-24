@@ -986,8 +986,204 @@ columnar_index_build_range_scan(Relation heapRelation,
 								void *callback_state,
 								TableScanDesc scan)
 {
-	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-					errmsg("indexes not supported for columnar tables")));
+	ColumnarScanDesc columnarScanDesc;
+	bool checking_uniqueness;
+	Datum values[INDEX_MAX_KEYS];
+	bool isnull[INDEX_MAX_KEYS];
+	double reltuples;
+	ExprState *predicate;
+	TupleTableSlot *slot;
+	EState *estate;
+	ExprContext *econtext;
+	Snapshot snapshot;
+	bool need_unregister_snapshot = false;
+	TransactionId OldestXmin;
+
+	/*
+	 * sanity checks
+	 */
+	Assert(OidIsValid(indexRelation->rd_rel->relam));
+
+	/* Remember if it's a system catalog */
+	Assert(!IsSystemRelation(heapRelation));
+
+	/* See whether we're verifying uniqueness/exclusion properties */
+	checking_uniqueness = (indexInfo->ii_Unique ||
+						   indexInfo->ii_ExclusionOps != NULL);
+
+	/*
+	 * "Any visible" mode is not compatible with uniqueness checks; make sure
+	 * only one of those is requested.
+	 */
+	Assert(!(anyvisible && checking_uniqueness));
+	(void) checking_uniqueness;
+
+	/*
+	 * Need an EState for evaluation of index expressions and partial-index
+	 * predicates.  Also a slot to hold the current tuple.
+	 */
+	estate = CreateExecutorState();
+	econtext = GetPerTupleExprContext(estate);
+	slot = table_slot_create(heapRelation, NULL);
+
+	/* Arrange for econtext's scan tuple to be the tuple under test */
+	econtext->ecxt_scantuple = slot;
+
+	/* Set up execution state for predicate, if any. */
+	predicate = ExecPrepareQual(indexInfo->ii_Predicate, estate);
+
+	/*
+	 * Prepare for scan of the base relation.  In a normal index build, we use
+	 * SnapshotAny because we must retrieve all tuples and do our own time
+	 * qual checks (because we have to index RECENTLY_DEAD tuples). In a
+	 * concurrent build, or during bootstrap, we take a regular MVCC snapshot
+	 * and index whatever's live according to that.
+	 */
+	OldestXmin = InvalidTransactionId;
+
+	/* okay to ignore lazy VACUUMs here */
+	if (!IsBootstrapProcessingMode() && !indexInfo->ii_Concurrent)
+	{
+		OldestXmin = GetOldestXmin(heapRelation, PROCARRAY_FLAGS_VACUUM);
+	}
+
+	if (!scan)
+	{
+		/*
+		 * Serial index build.
+		 *
+		 * Must begin our own heap scan in this case.  We may also need to
+		 * register a snapshot whose lifetime is under our direct control.
+		 */
+		if (!TransactionIdIsValid(OldestXmin))
+		{
+			snapshot = RegisterSnapshot(GetTransactionSnapshot());
+			need_unregister_snapshot = true;
+		}
+		else
+		{
+			snapshot = SnapshotAny;
+		}
+
+		scan = table_beginscan_strat(heapRelation,  /* relation */
+									 snapshot,  /* snapshot */
+									 0, /* number of keys */
+									 NULL,  /* scan key */
+									 true,  /* buffer access strategy OK */
+									 allow_sync);   /* syncscan OK? */
+	}
+	else
+	{
+		/*
+		 * Parallel index build.
+		 *
+		 * Parallel case never registers/unregisters own snapshot.  Snapshot
+		 * is taken from parallel heap scan, and is SnapshotAny or an MVCC
+		 * snapshot, based on same criteria as serial case.
+		 */
+		Assert(!IsBootstrapProcessingMode());
+		Assert(allow_sync);
+		snapshot = scan->rs_snapshot;
+	}
+
+	columnarScanDesc = (ColumnarScanDesc) scan;
+
+	/*
+	 * Must call GetOldestXmin() with SnapshotAny.  Should never call
+	 * GetOldestXmin() with MVCC snapshot. (It's especially worth checking
+	 * this for parallel builds, since ambuild routines that support parallel
+	 * builds must work these details out for themselves.)
+	 */
+	Assert(snapshot == SnapshotAny || IsMVCCSnapshot(snapshot));
+	Assert(snapshot == SnapshotAny ? TransactionIdIsValid(OldestXmin) :
+		   !TransactionIdIsValid(OldestXmin));
+	Assert(snapshot == SnapshotAny || !anyvisible);
+
+	/* set our scan endpoints */
+	if (!allow_sync)
+	{ }
+	else
+	{
+		/* syncscan can only be requested on whole relation */
+		Assert(start_blockno == 0);
+		Assert(numblocks == InvalidBlockNumber);
+	}
+
+	reltuples = 0;
+
+	/*
+	 * Scan all tuples in the base relation.
+	 */
+	while (columnar_getnextslot(&columnarScanDesc->cs_base, ForwardScanDirection, slot))
+	{
+		bool tupleIsAlive;
+
+		CHECK_FOR_INTERRUPTS();
+
+		if (ItemPointerGetBlockNumber(&slot->tts_tid) < start_blockno ||
+			(numblocks != InvalidBlockNumber && ItemPointerGetBlockNumber(
+				 &slot->tts_tid) >= numblocks))
+		{
+			continue;
+		}
+
+		tupleIsAlive = true;
+		reltuples += 1;
+
+		MemoryContextReset(econtext->ecxt_per_tuple_memory);
+
+		/*
+		 * In a partial index, discard tuples that don't satisfy the
+		 * predicate.
+		 */
+		if (predicate != NULL)
+		{
+			if (!ExecQual(predicate, econtext))
+			{
+				continue;
+			}
+		}
+
+		/*
+		 * For the current heap tuple, extract all the attributes we use in
+		 * this index, and note which are null.  This also performs evaluation
+		 * of any expressions needed.
+		 */
+		FormIndexDatum(indexInfo,
+					   slot,
+					   estate,
+					   values,
+					   isnull);
+
+		/*
+		 * You'd think we should go ahead and build the index tuple here, but
+		 * some index AMs want to do further processing on the data first.  So
+		 * pass the values[] and isnull[] arrays, instead.
+		 */
+
+		/* Call the AM's callback routine to process the tuple */
+		callback(indexRelation, &slot->tts_tid, values, isnull, tupleIsAlive,
+				 callback_state);
+	}
+
+
+	table_endscan(scan);
+
+	/* we can now forget our snapshot, if set and registered by us */
+	if (need_unregister_snapshot)
+	{
+		UnregisterSnapshot(snapshot);
+	}
+
+	ExecDropSingleTupleTableSlot(slot);
+
+	FreeExecutorState(estate);
+
+	/* These may have been pointing to the now-gone estate */
+	indexInfo->ii_ExpressionsState = NIL;
+	indexInfo->ii_PredicateState = NULL;
+
+	return reltuples;
 }
 
 

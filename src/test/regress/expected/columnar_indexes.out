@@ -35,13 +35,14 @@ SELECT * FROM t;
 -- create index without the concurrent option. We should
 -- error out during index creation.
 create index t_idx on t(a, b);
-ERROR:  indexes not supported for columnar tables
 \d t
             Table "columnar_indexes.t"
  Column |  Type   | Collation | Nullable | Default
 ---------------------------------------------------------------------
  a      | integer |           |          |
  b      | integer |           |          |
+ Indexes:
+    "t_idx" btree (a, b)
 
 explain insert into t values (1, 2);
                    QUERY PLAN

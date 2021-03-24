@@ -231,7 +231,6 @@ insert into atacc1 values(1);
 alter table atacc1
   add column b float8 not null default random(),
   add primary key(a);
-ERROR:  indexes not supported for columnar tables
 -- Add a generate column with an expression value
 create table test_gen_ex (x int) using columnar;
 INSERT INTO test_gen_ex VALUES (1), (2), (3);
@@ -366,30 +365,24 @@ SELECT * FROM products ORDER BY 1;
           3 | pen     |     2
 (3 rows)
 
--- Add a UNIQUE constraint (should fail)
-CREATE TABLE products_fail (
+-- Add a UNIQUE constraint (should ok)
+CREATE TABLE products_ok1 (
     product_no integer UNIQUE,
     name text,
     price numeric
 ) USING columnar;
-ERROR:  indexes not supported for columnar tables
 ALTER TABLE products ADD COLUMN store_id text UNIQUE;
-ERROR:  indexes not supported for columnar tables
--- Add a PRIMARY KEY constraint (should fail)
-CREATE TABLE products_fail (
+-- Add a PRIMARY KEY constraint (should ok)
+CREATE TABLE products_ok2 (
     product_no integer PRIMARY KEY,
     name text,
     price numeric
 ) USING columnar;
-ERROR:  indexes not supported for columnar tables
-ALTER TABLE products ADD COLUMN store_id text PRIMARY KEY;
-ERROR:  indexes not supported for columnar tables
--- Add an EXCLUSION constraint (should fail)
+-- Add an EXCLUSION constraint (should ok)
 CREATE TABLE circles (
     c circle,
     EXCLUDE USING gist (c WITH &&)
 ) USING columnar;
-ERROR:  indexes not supported for columnar tables
 -- Row level security
 CREATE TABLE public.row_level_security_col (id int, pgUser CHARACTER VARYING) USING columnar;
 CREATE USER user1;
