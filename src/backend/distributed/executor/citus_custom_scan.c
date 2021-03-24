@@ -189,6 +189,12 @@ CitusBeginScan(CustomScanState *node, EState *estate, int eflags)
 	{
 		CitusBeginModifyScan(node, estate, eflags);
 	}
+
+	/*
+	 * In case of a prepared statement, we will see this distributed plan again
+	 * on the next execution with a higher usage counter.
+	 */
+	distributedPlan->numberOfTimesExecuted++;
 }
 
 
