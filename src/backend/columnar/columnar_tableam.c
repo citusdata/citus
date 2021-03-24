@@ -552,12 +552,6 @@ columnar_relation_set_new_filenode(Relation rel,
 								   TransactionId *freezeXid,
 								   MultiXactId *minmulti)
 {
-	if (persistence == RELPERSISTENCE_UNLOGGED)
-	{
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("unlogged columnar tables are not supported")));
-	}
-
 	Oid oldRelfilenode = rel->rd_node.relNode;
 
 	MarkRelfilenodeDropped(oldRelfilenode, GetCurrentSubTransactionId());
@@ -571,9 +565,17 @@ columnar_relation_set_new_filenode(Relation rel,
 
 	InitColumnarOptions(rel->rd_id);
 
-	smgrclose(srel);
-
 	/* we will lazily initialize metadata in first stripe reservation */
+	if (persistence == RELPERSISTENCE_UNLOGGED)
+	{
+		Assert(rel->rd_rel->relkind == RELKIND_RELATION ||
+				rel->rd_rel->relkind == RELKIND_MATVIEW ||
+				rel->rd_rel->relkind == RELKIND_TOASTVALUE);
+		smgrcreate(srel, INIT_FORKNUM, false);
+		log_smgrcreate(newrnode, INIT_FORKNUM);
+		smgrimmedsync(srel, INIT_FORKNUM);
+	}
+	smgrclose(srel);
 }
 
 
