@@ -30,7 +30,6 @@
 #include "optimizer/clauses.h"
 #include "optimizer/predtest.h"
 #endif
-#include "optimizer/restrictinfo.h"
 #include "storage/fd.h"
 #include "utils/guc.h"
 #include "utils/memutils.h"
@@ -115,7 +114,6 @@ static ColumnBuffers * LoadColumnBuffers(Relation relation,
 static bool * SelectedChunkMask(StripeSkipList *stripeSkipList,
 								List *projectedColumnList, List *whereClauseList,
 								int64 *chunkGroupsFiltered);
-static List * BuildRestrictInfoList(List *whereClauseList);
 static Node * BuildBaseConstraint(Var *variable);
 static OpExpr * MakeOpExpression(Var *variable, int16 strategyNumber);
 static Oid GetOperatorByType(Oid typeId, Oid accessMethodId, int16 strategyNumber);
@@ -656,7 +654,6 @@ SelectedChunkMask(StripeSkipList *stripeSkipList, List *projectedColumnList,
 {
 	ListCell *columnCell = NULL;
 	uint32 chunkIndex = 0;
-	List *restrictInfoList = BuildRestrictInfoList(whereClauseList);
 
 	bool *selectedChunkMask = palloc0(stripeSkipList->chunkCount * sizeof(bool));
 	memset(selectedChunkMask, true, stripeSkipList->chunkCount * sizeof(bool));
@@ -696,7 +693,7 @@ SelectedChunkMask(StripeSkipList *stripeSkipList, List *projectedColumnList,
 
 			List *constraintList = list_make1(baseConstraint);
 			bool predicateRefuted =
-				predicate_refuted_by(constraintList, restrictInfoList, false);
+				predicate_refuted_by(constraintList, whereClauseList, false);
 			if (predicateRefuted && selectedChunkMask[chunkIndex])
 			{
 				selectedChunkMask[chunkIndex] = false;
@@ -743,29 +740,6 @@ GetFunctionInfoOrNull(Oid typeId, Oid accessMethodId, int16 procedureId)
 	}
 
 	return functionInfo;
-}
-
-
-/*
- * BuildRestrictInfoList builds restrict info list using the selection criteria,
- * and then return this list. The function is copied from CitusDB's shard pruning
- * logic.
- */
-static List *
-BuildRestrictInfoList(List *whereClauseList)
-{
-	List *restrictInfoList = NIL;
-
-	ListCell *qualCell = NULL;
-	foreach(qualCell, whereClauseList)
-	{
-		Node *qualNode = (Node *) lfirst(qualCell);
-
-		RestrictInfo *restrictInfo = make_simple_restrictinfo((Expr *) qualNode);
-		restrictInfoList = lappend(restrictInfoList, restrictInfo);
-	}
-
-	return restrictInfoList;
 }
 
 
