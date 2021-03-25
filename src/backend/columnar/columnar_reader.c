@@ -226,7 +226,7 @@ StripeReadInProgress(ColumnarReadState *readState)
 
 
 /*
- * HasUnreadStripe return true if we still have stripes to read during current
+ * HasUnreadStripe returns true if we still have stripes to read during current
  * read operation.
  */
 static bool
