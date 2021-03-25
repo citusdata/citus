@@ -147,7 +147,6 @@ INSERT INTO local VALUES (1,2);
 SELECT * FROM ref JOIN local ON (a = x);
 ROLLBACK;
 
-set citus.enable_cte_inlining to off;
 
 BEGIN;
 SELECT count(*) FROM test;
@@ -220,7 +219,6 @@ CREATE TABLE dist_table1(a int);
 SELECT create_distributed_table('dist_table1', 'a');
 ROLLBACK;
 
-RESET citus.enable_cte_inlining;
 CREATE table ref_table(x int PRIMARY KEY, y int);
 -- this will be replicated to the coordinator because of add_coordinator test
 SELECT create_reference_table('ref_table');

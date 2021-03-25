@@ -14,9 +14,7 @@
 
 #include "access/heapam.h"
 #include "access/htup_details.h"
-#if PG_VERSION_NUM >= PG_VERSION_12
 #include "access/table.h"
-#endif
 #include "catalog/catalog.h"
 #include "catalog/pg_auth_members.h"
 #include "catalog/pg_authid.h"
@@ -543,11 +541,7 @@ GenerateAlterRoleSetCommandForRole(Oid roleid)
 	List *commands = NIL;
 
 
-#if PG_VERSION_NUM >= PG_VERSION_12
 	TableScanDesc scan = table_beginscan_catalog(DbRoleSetting, 0, NULL);
-#else
-	HeapScanDesc scan = heap_beginscan_catalog(DbRoleSetting, 0, NULL);
-#endif
 
 	while ((tuple = heap_getnext(scan, ForwardScanDirection)) != NULL)
 	{

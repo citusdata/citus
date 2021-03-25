@@ -77,11 +77,7 @@
 #include "distributed/version_compat.h"
 #include "lib/stringinfo.h"
 #include "optimizer/clauses.h"
-#if PG_VERSION_NUM >= PG_VERSION_12
 #include "optimizer/optimizer.h"
-#else
-#include "optimizer/var.h"
-#endif
 #include "optimizer/planner.h"
 #include "optimizer/prep.h"
 #include "parser/parsetree.h"
@@ -91,11 +87,7 @@
 #include "nodes/nodeFuncs.h"
 #include "nodes/pg_list.h"
 #include "nodes/primnodes.h"
-#if PG_VERSION_NUM >= PG_VERSION_12
 #include "nodes/pathnodes.h"
-#else
-#include "nodes/relation.h"
-#endif
 #include "utils/builtins.h"
 #include "utils/guc.h"
 #include "utils/lsyscache.h"

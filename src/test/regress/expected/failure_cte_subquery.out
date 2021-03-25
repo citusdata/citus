@@ -5,7 +5,7 @@ SET citus.shard_replication_factor to 1;
 SET citus.next_shard_id TO 16000000;
 -- CTE inlining should not happen because
 -- the tests rely on intermediate results
-SET citus.enable_cte_inlining TO false;
+-- That's why we use MATERIALIZED CTEs in the test file
 -- prevent using locally executing the intermediate results
 SET citus.task_assignment_policy TO "round-robin";
 SELECT pg_backend_pid() as pid \gset
@@ -31,11 +31,11 @@ SELECT citus.mitmproxy('conn.onQuery(query="^COPY").kill()');
 
 (1 row)
 
-WITH cte AS (
-	WITH local_cte AS (
+WITH cte AS MATERIALIZED (
+	WITH local_cte AS MATERIALIZED (
 		SELECT * FROM users_table_local
 	),
-	dist_cte AS (
+	dist_cte AS MATERIALIZED (
 		SELECT user_id FROM events_table
 	)
 	SELECT dist_cte.user_id FROM local_cte join dist_cte on dist_cte.user_id=local_cte.user_id
@@ -65,11 +65,11 @@ SELECT citus.mitmproxy('conn.onQuery(query="SELECT user_id FROM cte_failure.even
 
 (1 row)
 
-WITH cte AS (
-	WITH local_cte AS (
+WITH cte AS MATERIALIZED (
+	WITH local_cte AS MATERIALIZED (
 		SELECT * FROM users_table_local
 	),
-	dist_cte AS (
+	dist_cte AS MATERIALIZED (
 		SELECT user_id FROM events_table
 	)
 	SELECT dist_cte.user_id FROM local_cte join dist_cte on dist_cte.user_id=local_cte.user_id
@@ -98,11 +98,11 @@ SELECT citus.mitmproxy('conn.onQuery(query="SELECT DISTINCT users_table.user").k
 
 (1 row)
 
-WITH cte AS (
-	WITH local_cte AS (
+WITH cte AS MATERIALIZED (
+	WITH local_cte AS MATERIALIZED (
 		SELECT * FROM users_table_local
 	),
-	dist_cte AS (
+	dist_cte AS MATERIALIZED (
 		SELECT user_id FROM events_table
 	)
 	SELECT dist_cte.user_id FROM local_cte join dist_cte on dist_cte.user_id=local_cte.user_id
@@ -131,11 +131,11 @@ SELECT citus.mitmproxy('conn.onQuery(query="^COPY").cancel(' || :pid || ')');
 
 (1 row)
 
-WITH cte AS (
-	WITH local_cte AS (
+WITH cte AS MATERIALIZED (
+	WITH local_cte AS MATERIALIZED (
 		SELECT * FROM users_table_local
 	),
-	dist_cte AS (
+	dist_cte AS MATERIALIZED (
 		SELECT user_id FROM events_table
 	)
 	SELECT dist_cte.user_id FROM local_cte join dist_cte on dist_cte.user_id=local_cte.user_id
@@ -162,11 +162,11 @@ SELECT citus.mitmproxy('conn.onQuery(query="SELECT user_id FROM").cancel(' || :p
 
 (1 row)
 
-WITH cte AS (
-	WITH local_cte AS (
+WITH cte AS MATERIALIZED (
+	WITH local_cte AS MATERIALIZED (
 		SELECT * FROM users_table_local
 	),
-	dist_cte AS (
+	dist_cte AS MATERIALIZED (
 		SELECT user_id FROM events_table
 	)
 	SELECT dist_cte.user_id FROM local_cte join dist_cte on dist_cte.user_id=local_cte.user_id
@@ -193,11 +193,11 @@ SELECT citus.mitmproxy('conn.onQuery(query="SELECT DISTINCT users_table.user").c
 
 (1 row)
 
-WITH cte AS (
-	WITH local_cte AS (
+WITH cte AS MATERIALIZED (
+	WITH local_cte AS MATERIALIZED (
 		SELECT * FROM users_table_local
 	),
-	dist_cte AS (
+	dist_cte AS MATERIALIZED (
 		SELECT user_id FROM events_table
 	)
 	SELECT dist_cte.user_id FROM local_cte join dist_cte on dist_cte.user_id=local_cte.user_id
@@ -238,7 +238,7 @@ SELECT * FROM users_table ORDER BY 1, 2;
 (5 rows)
 
 -- following will delete and insert the same rows
-WITH cte_delete as (DELETE FROM users_table WHERE user_name in ('A', 'D') RETURNING *)
+WITH cte_delete AS MATERIALIZED (DELETE FROM users_table WHERE user_name in ('A', 'D') RETURNING *)
 INSERT INTO users_table SELECT * FROM cte_delete;
 -- verify contents are the same
 SELECT * FROM users_table ORDER BY 1, 2;
@@ -258,7 +258,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="^DELETE FROM").kill()');
 
 (1 row)
 
-WITH cte_delete as (DELETE FROM users_table WHERE user_name in ('A', 'D') RETURNING *)
+WITH cte_delete AS MATERIALIZED (DELETE FROM users_table WHERE user_name in ('A', 'D') RETURNING *)
 INSERT INTO users_table SELECT * FROM cte_delete;
 ERROR:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
 	This probably means the server terminated abnormally
@@ -287,7 +287,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="^COPY").kill()');
 
 (1 row)
 
-WITH cte_delete as (DELETE FROM users_table WHERE user_name in ('A', 'D') RETURNING *)
+WITH cte_delete AS MATERIALIZED (DELETE FROM users_table WHERE user_name in ('A', 'D') RETURNING *)
 INSERT INTO users_table SELECT * FROM cte_delete;
 ERROR:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
@@ -317,7 +317,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="^DELETE FROM").cancel(' || :pid || '
 
 (1 row)
 
-WITH cte_delete as (DELETE FROM users_table WHERE user_name in ('A', 'D') RETURNING *)
+WITH cte_delete AS MATERIALIZED (DELETE FROM users_table WHERE user_name in ('A', 'D') RETURNING *)
 INSERT INTO users_table SELECT * FROM cte_delete;
 ERROR:  canceling statement due to user request
 -- verify contents are the same
@@ -344,7 +344,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="^COPY").cancel(' || :pid || ')');
 
 (1 row)
 
-WITH cte_delete as (DELETE FROM users_table WHERE user_name in ('A', 'D') RETURNING *)
+WITH cte_delete AS MATERIALIZED (DELETE FROM users_table WHERE user_name in ('A', 'D') RETURNING *)
 INSERT INTO users_table SELECT * FROM cte_delete;
 ERROR:  canceling statement due to user request
 -- verify contents are the same
@@ -373,7 +373,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="^DELETE FROM").kill()');
 
 BEGIN;
 SET LOCAL citus.multi_shard_modify_mode = 'sequential';
-WITH cte_delete as (DELETE FROM users_table WHERE user_name in ('A', 'D') RETURNING *)
+WITH cte_delete AS MATERIALIZED (DELETE FROM users_table WHERE user_name in ('A', 'D') RETURNING *)
 INSERT INTO users_table SELECT * FROM cte_delete;
 ERROR:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
 	This probably means the server terminated abnormally

@@ -10,10 +10,6 @@ SET citus.next_shard_id TO 840000;
 -- other tests that triggers fast-path-router planner
 SET citus.enable_fast_path_router_planner TO false;
 
--- prevent PG 11 - PG 12 outputs to diverge
--- and CTE inlining is not relevant to router plannery anyway
-SET citus.enable_cte_inlining TO false;
-
 CREATE TABLE articles_hash (
 	id bigint NOT NULL,
 	author_id bigint NOT NULL,
@@ -167,12 +163,12 @@ SELECT * FROM articles_hash WHERE author_id IN (1, 3) ORDER BY id;
 SELECT * FROM articles_hash WHERE author_id IN (1, NULL) ORDER BY id;
 
 -- queries with CTEs are supported
-WITH first_author AS ( SELECT id FROM articles_hash WHERE author_id = 1)
+WITH first_author AS MATERIALIZED ( SELECT id FROM articles_hash WHERE author_id = 1)
 SELECT * FROM first_author;
 
 -- SELECT FOR UPDATE is supported if not involving reference table
 BEGIN;
-WITH first_author AS (
+WITH first_author AS MATERIALIZED (
     SELECT articles_hash.id, auref.name FROM articles_hash, authors_reference auref
     WHERE author_id = 2 AND auref.id = author_id
     FOR UPDATE
@@ -180,7 +176,7 @@ WITH first_author AS (
 UPDATE articles_hash SET title = first_author.name
 FROM first_author WHERE articles_hash.author_id = 2 AND articles_hash.id = first_author.id;
 
-WITH first_author AS (
+WITH first_author AS MATERIALIZED (
     SELECT id, word_count FROM articles_hash WHERE author_id = 2
     FOR UPDATE
 )
@@ -188,7 +184,7 @@ UPDATE articles_hash SET title = first_author.word_count::text
 FROM first_author WHERE articles_hash.author_id = 2 AND articles_hash.id = first_author.id;
 
 -- Without FOR UPDATE this is router plannable
-WITH first_author AS (
+WITH first_author AS  MATERIALIZED (
     SELECT articles_hash.id, auref.name FROM articles_hash, authors_reference auref
     WHERE author_id = 2 AND auref.id = author_id
 )
@@ -197,21 +193,21 @@ FROM first_author WHERE articles_hash.author_id = 2 AND articles_hash.id = first
 ROLLBACK;
 
 -- queries with CTEs are supported even if CTE is not referenced inside query
-WITH first_author AS ( SELECT id FROM articles_hash WHERE author_id = 1)
+WITH first_author AS MATERIALIZED ( SELECT id FROM articles_hash WHERE author_id = 1)
 SELECT title FROM articles_hash WHERE author_id = 1;
 
 -- two CTE joins are supported if they go to the same worker
-WITH id_author AS ( SELECT id, author_id FROM articles_hash WHERE author_id = 1),
-id_title AS (SELECT id, title from articles_hash WHERE author_id = 1)
+WITH id_author AS MATERIALIZED ( SELECT id, author_id FROM articles_hash WHERE author_id = 1),
+id_title AS MATERIALIZED (SELECT id, title from articles_hash WHERE author_id = 1)
 SELECT * FROM id_author, id_title WHERE id_author.id = id_title.id;
 
-WITH id_author AS ( SELECT id, author_id FROM articles_hash WHERE author_id = 1),
-id_title AS (SELECT id, title from articles_hash WHERE author_id = 3)
+WITH id_author AS MATERIALIZED ( SELECT id, author_id FROM articles_hash WHERE author_id = 1),
+id_title AS MATERIALIZED (SELECT id, title from articles_hash WHERE author_id = 3)
 SELECT * FROM id_author, id_title WHERE id_author.id = id_title.id;
 
 -- CTE joins are supported because they are both planned recursively
-WITH id_author AS ( SELECT id, author_id FROM articles_hash WHERE author_id = 1),
-id_title AS (SELECT id, title from articles_hash WHERE author_id = 2)
+WITH id_author AS MATERIALIZED ( SELECT id, author_id FROM articles_hash WHERE author_id = 1),
+id_title AS MATERIALIZED (SELECT id, title from articles_hash WHERE author_id = 2)
 SELECT * FROM id_author, id_title WHERE id_author.id = id_title.id;
 
 -- recursive CTEs are supported when filtered on partition column
@@ -230,7 +226,7 @@ INSERT INTO company_employees values(3, 15, 1);
 INSERT INTO company_employees values(3, 3, 1);
 
 -- find employees at top 2 level within company hierarchy
-WITH RECURSIVE hierarchy as (
+WITH RECURSIVE hierarchy as MATERIALIZED (
 	SELECT *, 1 AS level
 		FROM company_employees
 		WHERE company_id = 1 and manager_id = 0
@@ -244,7 +240,7 @@ SELECT * FROM hierarchy WHERE LEVEL <= 2;
 
 -- query becomes not router plannble and gets rejected
 -- if filter on company is dropped
-WITH RECURSIVE hierarchy as (
+WITH RECURSIVE hierarchy as MATERIALIZED (
 	SELECT *, 1 AS level
 		FROM company_employees
 		WHERE company_id = 1 and manager_id = 0
@@ -257,7 +253,7 @@ SELECT * FROM hierarchy WHERE LEVEL <= 2;
 
 -- logically wrong query, query involves different shards
 -- from the same table
-WITH RECURSIVE hierarchy as (
+WITH RECURSIVE hierarchy as MATERIALIZED (
 	SELECT *, 1 AS level
 		FROM company_employees
 		WHERE company_id = 3 and manager_id = 0
@@ -270,39 +266,39 @@ WITH RECURSIVE hierarchy as (
 SELECT * FROM hierarchy WHERE LEVEL <= 2;
 
 -- Test router modifying CTEs
-WITH new_article AS (
+WITH new_article AS MATERIALIZED(
     INSERT INTO articles_hash VALUES (1,  1, 'arsenous', 9) RETURNING *
 )
 SELECT * FROM new_article;
 
-WITH update_article AS (
+WITH update_article AS MATERIALIZED(
     UPDATE articles_hash SET word_count = 10 WHERE id = 1 AND word_count = 9 RETURNING *
 )
 SELECT * FROM update_article;
 
-WITH update_article AS (
+WITH update_article AS MATERIALIZED (
     UPDATE articles_hash SET word_count = 11 WHERE id = 1 AND word_count = 10 RETURNING *
 )
 SELECT coalesce(1,random());
 
-WITH update_article AS (
+WITH update_article AS MATERIALIZED (
     UPDATE articles_hash SET word_count = 10 WHERE author_id = 1 AND id = 1 AND word_count = 11 RETURNING *
 )
 SELECT coalesce(1,random());
 
-WITH update_article AS (
+WITH update_article AS MATERIALIZED (
     UPDATE authors_reference SET name = '' WHERE id = 0 RETURNING *
 )
 SELECT coalesce(1,random());
 
-WITH delete_article AS (
+WITH delete_article AS MATERIALIZED (
     DELETE FROM articles_hash WHERE id = 1 AND word_count = 10 RETURNING *
 )
 SELECT * FROM delete_article;
 
 -- Modifying statement in nested CTE case is covered by PostgreSQL itself
-WITH new_article AS (
-    WITH nested_cte AS (
+WITH new_article AS MATERIALIZED(
+    WITH nested_cte AS MATERIALIZED(
         INSERT INTO articles_hash VALUES (1,  1, 'arsenous', 9572) RETURNING *
     )
     SELECT * FROM nested_cte
@@ -311,7 +307,7 @@ SELECT * FROM new_article;
 
 -- Modifying statement in a CTE in subquery is also covered by PostgreSQL
 SELECT * FROM (
-    WITH new_article AS (
+    WITH new_article AS MATERIALIZED (
         INSERT INTO articles_hash VALUES (1,  1, 'arsenous', 9572) RETURNING *
     )
     SELECT * FROM new_article
@@ -399,7 +395,7 @@ SELECT a.author_id as first_author, b.word_count as second_word_count
 -- following join is not router plannable since there are no
 -- workers containing both shards, but will work through recursive
 -- planning
-WITH single_shard as (SELECT * FROM articles_single_shard_hash)
+WITH single_shard as MATERIALIZED(SELECT * FROM articles_single_shard_hash)
 SELECT a.author_id as first_author, b.word_count as second_word_count
 	FROM articles_hash a, single_shard b
 	WHERE a.author_id = 2 and a.author_id = b.author_id
@@ -747,14 +743,14 @@ SELECT s.datid FROM number1() s LEFT JOIN pg_database d ON s.datid = d.oid;
 SELECT 1 FROM authors_reference r JOIN num_db ON (r.id = num_db.datid) LIMIT 1;
 
 -- with a CTE in a view
-WITH cte AS (SELECT * FROM num_db)
+WITH cte AS MATERIALIZED (SELECT * FROM num_db)
 SELECT 1 FROM authors_reference r JOIN cte ON (r.id = cte.datid) LIMIT 1;
 
 -- hide changes between major versions
 RESET client_min_messages;
 
 -- with pg_stat_activity view
-WITH pg_stat_activity AS (
+WITH pg_stat_activity AS MATERIALIZED(
   SELECT
     pg_stat_activity.datid,
     pg_stat_activity.application_name,
@@ -770,18 +766,18 @@ SET client_min_messages TO DEBUG2;
 \set VERBOSITY terse
 RESET client_min_messages;
 
-WITH id_author AS ( SELECT id, author_id FROM articles_hash WHERE author_id = 1),
-id_title AS (SELECT id, title from articles_hash WHERE author_id = 1 and 1=0)
+WITH id_author AS MATERIALIZED ( SELECT id, author_id FROM articles_hash WHERE author_id = 1),
+id_title AS MATERIALIZED (SELECT id, title from articles_hash WHERE author_id = 1 and 1=0)
 SELECT * FROM id_author, id_title WHERE id_author.id = id_title.id;
 
-WITH id_author AS ( SELECT id, author_id FROM articles_hash WHERE author_id = 1),
-id_title AS (SELECT id, title from articles_hash WHERE author_id = 1)
+WITH id_author AS MATERIALIZED ( SELECT id, author_id FROM articles_hash WHERE author_id = 1),
+id_title AS MATERIALIZED (SELECT id, title from articles_hash WHERE author_id = 1)
 SELECT * FROM id_author, id_title WHERE id_author.id = id_title.id and 1=0;
 
 SET client_min_messages TO DEBUG2;
 \set VERBOSITY DEFAULT
 
-WITH RECURSIVE hierarchy as (
+WITH RECURSIVE hierarchy as MATERIALIZED (
 	SELECT *, 1 AS level
 		FROM company_employees
 		WHERE company_id = 1 and manager_id = 0
@@ -793,7 +789,7 @@ WITH RECURSIVE hierarchy as (
 				ce.company_id = 1))
 SELECT * FROM hierarchy WHERE LEVEL <= 2 and 1=0;
 
-WITH RECURSIVE hierarchy as (
+WITH RECURSIVE hierarchy as MATERIALIZED (
 	SELECT *, 1 AS level
 		FROM company_employees
 		WHERE company_id = 1 and manager_id = 0
@@ -805,7 +801,7 @@ WITH RECURSIVE hierarchy as (
 				ce.company_id = 1 AND 1=0))
 SELECT * FROM hierarchy WHERE LEVEL <= 2;
 
-WITH RECURSIVE hierarchy as (
+WITH RECURSIVE hierarchy as MATERIALIZED (
 	SELECT *, 1 AS level
 		FROM company_employees
 		WHERE company_id = 1 and manager_id = 0 AND 1=0

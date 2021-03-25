@@ -50,35 +50,21 @@ static void EnsureSequentialModeForCollationDDL(void);
 static char *
 CreateCollationDDLInternal(Oid collationId, Oid *collowner, char **quotedCollationName)
 {
-	char *schemaName = NULL;
 	StringInfoData collationNameDef;
-	const char *providerString = NULL;
-	HeapTuple heapTuple = NULL;
-	Form_pg_collation collationForm = NULL;
-	char collprovider;
-	const char *collcollate;
-	const char *collctype;
-	const char *collname;
-	Oid collnamespace;
-#if PG_VERSION_NUM >= PG_VERSION_12
-	bool collisdeterministic;
-#endif
 
-	heapTuple = SearchSysCache1(COLLOID, ObjectIdGetDatum(collationId));
+	HeapTuple heapTuple = SearchSysCache1(COLLOID, ObjectIdGetDatum(collationId));
 	if (!HeapTupleIsValid(heapTuple))
 	{
 		elog(ERROR, "citus cache lookup failed for collation %u", collationId);
 	}
 
-	collationForm = (Form_pg_collation) GETSTRUCT(heapTuple);
-	collprovider = collationForm->collprovider;
-	collcollate = NameStr(collationForm->collcollate);
-	collctype = NameStr(collationForm->collctype);
-	collnamespace = collationForm->collnamespace;
-	collname = NameStr(collationForm->collname);
-#if PG_VERSION_NUM >= PG_VERSION_12
-	collisdeterministic = collationForm->collisdeterministic;
-#endif
+	Form_pg_collation collationForm = (Form_pg_collation) GETSTRUCT(heapTuple);
+	char collprovider = collationForm->collprovider;
+	const char *collcollate = NameStr(collationForm->collcollate);
+	const char *collctype = NameStr(collationForm->collctype);
+	Oid collnamespace = collationForm->collnamespace;
+	const char *collname = NameStr(collationForm->collname);
+	bool collisdeterministic = collationForm->collisdeterministic;
 
 	if (collowner != NULL)
 	{
@@ -86,9 +72,9 @@ CreateCollationDDLInternal(Oid collationId, Oid *collowner, char **quotedCollati
 	}
 
 	ReleaseSysCache(heapTuple);
-	schemaName = get_namespace_name(collnamespace);
+	char *schemaName = get_namespace_name(collnamespace);
 	*quotedCollationName = quote_qualified_identifier(schemaName, collname);
-	providerString =
+	const char *providerString =
 		collprovider == COLLPROVIDER_DEFAULT ? "default" :
 		collprovider == COLLPROVIDER_ICU ? "icu" :
 		collprovider == COLLPROVIDER_LIBC ? "libc" : NULL;
@@ -117,12 +103,10 @@ CreateCollationDDLInternal(Oid collationId, Oid *collowner, char **quotedCollati
 						 quote_literal_cstr(collctype));
 	}
 
-#if PG_VERSION_NUM >= PG_VERSION_12
 	if (!collisdeterministic)
 	{
 		appendStringInfoString(&collationNameDef, ", deterministic = false");
 	}
-#endif
 
 
 	appendStringInfoChar(&collationNameDef, ')');

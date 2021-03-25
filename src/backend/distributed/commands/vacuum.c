@@ -12,9 +12,7 @@
 
 #include "distributed/pg_version_constants.h"
 
-#if PG_VERSION_NUM >= PG_VERSION_12
 #include "commands/defrem.h"
-#endif
 #include "commands/vacuum.h"
 #include "distributed/adaptive_executor.h"
 #include "distributed/commands.h"
@@ -41,14 +39,12 @@
 typedef struct CitusVacuumParams
 {
 	int options;
-#if PG_VERSION_NUM >= PG_VERSION_12
 	VacOptTernaryValue truncate;
 	VacOptTernaryValue index_cleanup;
-#endif
 
-#if PG_VERSION_NUM >= PG_VERSION_13
+	#if PG_VERSION_NUM >= PG_VERSION_13
 	int nworkers;
-#endif
+	#endif
 } CitusVacuumParams;
 
 /* Local functions forward declarations for processing distributed table commands */
@@ -349,11 +345,9 @@ DeparseVacuumStmtPrefix(CitusVacuumParams vacuumParams)
 	}
 
 	/* if no flags remain, exit early */
-	if (vacuumFlags == 0
-#if PG_VERSION_NUM >= PG_VERSION_12
-		&& vacuumParams.truncate == VACOPT_TERNARY_DEFAULT &&
+	if (vacuumFlags == 0 &&
+		vacuumParams.truncate == VACOPT_TERNARY_DEFAULT &&
 		vacuumParams.index_cleanup == VACOPT_TERNARY_DEFAULT
-#endif
 #if PG_VERSION_NUM >= PG_VERSION_13
 		&& vacuumParams.nworkers == VACUUM_PARALLEL_NOTSET
 #endif
@@ -390,7 +384,6 @@ DeparseVacuumStmtPrefix(CitusVacuumParams vacuumParams)
 		appendStringInfoString(vacuumPrefix, "VERBOSE,");
 	}
 
-#if PG_VERSION_NUM >= PG_VERSION_12
 	if (vacuumFlags & VACOPT_SKIP_LOCKED)
 	{
 		appendStringInfoString(vacuumPrefix, "SKIP_LOCKED,");
@@ -411,7 +404,6 @@ DeparseVacuumStmtPrefix(CitusVacuumParams vacuumParams)
 							   "INDEX_CLEANUP," : "INDEX_CLEANUP false,"
 							   );
 	}
-#endif
 
 #if PG_VERSION_NUM >= PG_VERSION_13
 	if (vacuumParams.nworkers != VACUUM_PARALLEL_NOTSET)
@@ -496,7 +488,6 @@ ExtractVacuumTargetRels(VacuumStmt *vacuumStmt)
 /*
  * VacuumStmtParams returns a CitusVacuumParams based on the supplied VacuumStmt.
  */
-#if PG_VERSION_NUM >= PG_VERSION_12
 
 /*
  * This is mostly ExecVacuum from Postgres's commands/vacuum.c
@@ -611,16 +602,3 @@ VacuumStmtParams(VacuumStmt *vacstmt)
 					 (disable_page_skipping ? VACOPT_DISABLE_PAGE_SKIPPING : 0);
 	return params;
 }
-
-
-#else
-static CitusVacuumParams
-VacuumStmtParams(VacuumStmt *vacuumStmt)
-{
-	CitusVacuumParams params;
-	params.options = vacuumStmt->options;
-	return params;
-}
-
-
-#endif

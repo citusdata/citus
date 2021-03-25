@@ -37,8 +37,5 @@ SELECT create_reference_table('another_dist_table');
 CREATE SCHEMA fooschema;
 CREATE TYPE fooschema.footype AS (x int, y int);
 
-SELECT run_command_on_workers($$CREATE SCHEMA fooschema;$$);
-SELECT run_command_on_workers($$CREATE TYPE fooschema.footype AS (x int, y int);$$);
-
 CREATE TABLE fooschema.footable (f fooschema.footype);
 SELECT create_reference_table('fooschema.footable');

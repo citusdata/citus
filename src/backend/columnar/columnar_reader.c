@@ -23,13 +23,10 @@
 #include "commands/defrem.h"
 #include "distributed/listutils.h"
 #include "nodes/makefuncs.h"
-#if PG_VERSION_NUM >= 120000
 #include "nodes/nodeFuncs.h"
 #include "optimizer/optimizer.h"
-#else
 #include "optimizer/clauses.h"
-#include "optimizer/predtest.h"
-#endif
+#include "optimizer/restrictinfo.h"
 #include "storage/fd.h"
 #include "utils/guc.h"
 #include "utils/memutils.h"

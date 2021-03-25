@@ -23,11 +23,7 @@
 
 #include "distributed/pg_version_constants.h"
 
-#if PG_VERSION_NUM >= PG_VERSION_12
 #include "access/relation.h"
-#else
-#include "access/heapam.h"
-#endif
 #include "distributed/multi_logical_planner.h"
 #include "distributed/query_colocation_checker.h"
 #include "distributed/pg_dist_partition.h"

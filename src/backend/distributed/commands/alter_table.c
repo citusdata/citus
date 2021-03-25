@@ -435,11 +435,6 @@ AlterDistributedTable(TableConversionParameters *params)
 TableConversionReturn *
 AlterTableSetAccessMethod(TableConversionParameters *params)
 {
-#if PG_VERSION_NUM < PG_VERSION_12
-	ereport(ERROR, (errmsg("table access methods are not supported "
-						   "for Postgres versions earlier than 12")));
-#endif
-
 	EnsureRelationExists(params->relationId);
 	EnsureTableOwner(params->relationId);
 
@@ -963,7 +958,6 @@ CreateTableConversion(TableConversionParameters *params)
 		BuildDistributionKeyFromColumnName(relation, con->distributionColumn);
 
 	con->originalAccessMethod = NULL;
-#if PG_VERSION_NUM >= PG_VERSION_12
 	if (!PartitionedTable(con->relationId))
 	{
 		HeapTuple amTuple = SearchSysCache1(AMOID, ObjectIdGetDatum(
@@ -977,7 +971,6 @@ CreateTableConversion(TableConversionParameters *params)
 		con->originalAccessMethod = NameStr(amForm->amname);
 		ReleaseSysCache(amTuple);
 	}
-#endif
 
 
 	con->colocatedTableList = NIL;
@@ -1296,12 +1289,10 @@ GetNonGeneratedStoredColumnNameList(Oid relationId)
 			continue;
 		}
 
-#if PG_VERSION_NUM >= 120000
 		if (currentColumn->attgenerated == ATTRIBUTE_GENERATED_STORED)
 		{
 			continue;
 		}
-#endif
 
 		const char *quotedColumnName = quote_identifier(NameStr(currentColumn->attname));
 		nonStoredColumnNameList = lappend(nonStoredColumnNameList,

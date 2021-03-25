@@ -43,12 +43,6 @@ s/"citus_local_table_([0-9]+)_[0-9]+"/"citus_local_table_\1_xxxxxxx"/g
 # normalize relation oid suffix for the truncate triggers created by citus
 s/truncate_trigger_[0-9]+/truncate_trigger_xxxxxxx/g
 
-# (citus_table_triggers.sql)
-# postgres generates create trigger commands for triggers with:
-# "EXECUTE FUNCTION" in pg12
-# "EXECUTE PROCEDURE" in pg11
-s/FOR EACH (ROW|STATEMENT)(.*)EXECUTE PROCEDURE/FOR EACH \1\2EXECUTE FUNCTION/g
-
 # In foreign_key_restriction_enforcement, normalize shard names
 s/"(on_update_fkey_table_|fkey_)[0-9]+"/"\1xxxxxxx"/g
 
@@ -116,9 +110,6 @@ s/partition ".*" would be violated by some row/partition would be violated by so
 /.*Peak Memory Usage:.*$/d
 s/of relation ".*" contains null values/contains null values/g
 s/of relation "t1" is violated by some row/is violated by some row/g
-# can be removed when we remove PG_VERSION_NUM >= 120000
-s/(.*)Output:.*$/\1Output: xxxxxx/g
-
 
 # intermediate_results
 s/(ERROR.*)pgsql_job_cache\/([0-9]+_[0-9]+_[0-9]+)\/(.*).data/\1pgsql_job_cache\/xx_x_xxx\/\3.data/g
@@ -144,10 +135,6 @@ s/repartitioned_results_[0-9]+/repartitioned_results_xxxxx/g
 
 # ignore job id in worker_hash_partition_table
 s/worker_hash_partition_table  \([0-9]+/worker_hash_partition_table  \(xxxxxxx/g
-
-# ignore first parameter for citus_extradata_container due to differences between pg11 and pg12
-# can be removed when we remove PG_VERSION_NUM >= 120000
-s/pg_catalog.citus_extradata_container\([0-9]+/pg_catalog.citus_extradata_container\(XXX/g
 
 # ignore referene table replication messages
 /replicating reference table.*$/d

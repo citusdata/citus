@@ -62,7 +62,7 @@ static DistributeObjectOps Any_AlterEnum = {
 	.deparse = DeparseAlterEnumStmt,
 	.qualify = QualifyAlterEnumStmt,
 	.preprocess = PreprocessAlterEnumStmt,
-	.postprocess = PostprocessAlterEnumStmt,
+	.postprocess = NULL,
 	.address = AlterEnumStmtObjectAddress,
 };
 static DistributeObjectOps Any_AlterExtension = {

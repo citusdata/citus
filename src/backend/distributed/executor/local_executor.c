@@ -100,11 +100,7 @@
 #include "distributed/worker_protocol.h"
 #include "executor/tstoreReceiver.h"
 #include "executor/tuptable.h"
-#if PG_VERSION_NUM >= PG_VERSION_12
 #include "optimizer/optimizer.h"
-#else
-#include "optimizer/planner.h"
-#endif
 #include "nodes/params.h"
 #include "utils/snapmgr.h"
 

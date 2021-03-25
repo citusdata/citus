@@ -285,18 +285,18 @@ Sort
 EXPLAIN (COSTS FALSE, VERBOSE TRUE)
 	SELECT sum(l_quantity) / avg(l_quantity) FROM lineitem_mx;
 Aggregate
-  Output: xxxxxx
+  Output: (sum(remote_scan."?column?") / (sum(remote_scan."?column?_1") / pg_catalog.sum(remote_scan."?column?_2")))
   ->  Custom Scan (Citus Adaptive)
-        Output: xxxxxx
+        Output: remote_scan."?column?", remote_scan."?column?_1", remote_scan."?column?_2"
         Task Count: 16
         Tasks Shown: One of 16
         ->  Task
               Query: SELECT sum(l_quantity), sum(l_quantity), count(l_quantity) FROM lineitem_mx_1220052 lineitem_mx WHERE true
               Node: host=localhost port=xxxxx dbname=regression
               ->  Aggregate
-                    Output: xxxxxx
+                    Output: sum(l_quantity), sum(l_quantity), count(l_quantity)
                     ->  Seq Scan on public.lineitem_mx_1220052 lineitem_mx
-                          Output: xxxxxx
+                          Output: l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment
 -- Test join
 EXPLAIN (COSTS FALSE)
 	SELECT * FROM lineitem_mx

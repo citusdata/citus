@@ -11,9 +11,7 @@
 #include "postgres.h"
 
 #include "distributed/pg_version_constants.h"
-#if PG_VERSION_NUM >= PG_VERSION_12
 #include "access/genam.h"
-#endif
 #include "access/htup_details.h"
 #include "access/xact.h"
 #include "catalog/catalog.h"
@@ -93,9 +91,7 @@ struct DropRelationCallbackState
  */
 struct ReindexIndexCallbackState
 {
-#if PG_VERSION_NUM >= PG_VERSION_12
 	bool concurrent;
-#endif
 	Oid locked_table_oid;
 };
 
@@ -544,13 +540,8 @@ PreprocessReindexStmt(Node *node, const char *reindexCommand,
 	{
 		Relation relation = NULL;
 		Oid relationId = InvalidOid;
-		bool isCitusRelation = false;
-#if PG_VERSION_NUM >= PG_VERSION_12
 		LOCKMODE lockmode = reindexStatement->concurrent ? ShareUpdateExclusiveLock :
 							AccessExclusiveLock;
-#else
-		LOCKMODE lockmode = AccessExclusiveLock;
-#endif
 		MemoryContext relationContext = NULL;
 
 		Assert(reindexStatement->kind == REINDEX_OBJECT_INDEX ||
@@ -558,17 +549,14 @@ PreprocessReindexStmt(Node *node, const char *reindexCommand,
 
 		if (reindexStatement->kind == REINDEX_OBJECT_INDEX)
 		{
-			Oid indOid;
 			struct ReindexIndexCallbackState state;
-#if PG_VERSION_NUM >= PG_VERSION_12
 			state.concurrent = reindexStatement->concurrent;
-#endif
 			state.locked_table_oid = InvalidOid;
 
-			indOid = RangeVarGetRelidExtended(reindexStatement->relation,
-											  lockmode, 0,
-											  RangeVarCallbackForReindexIndex,
-											  &state);
+			Oid indOid = RangeVarGetRelidExtended(reindexStatement->relation,
+												  lockmode, 0,
+												  RangeVarCallbackForReindexIndex,
+												  &state);
 			relation = index_open(indOid, NoLock);
 			relationId = IndexGetRelation(indOid, false);
 		}
@@ -581,7 +569,7 @@ PreprocessReindexStmt(Node *node, const char *reindexCommand,
 			relationId = RelationGetRelid(relation);
 		}
 
-		isCitusRelation = IsCitusTable(relationId);
+		bool isCitusRelation = IsCitusTable(relationId);
 
 		if (reindexStatement->relation->schemaname == NULL)
 		{
@@ -613,12 +601,8 @@ PreprocessReindexStmt(Node *node, const char *reindexCommand,
 		{
 			DDLJob *ddlJob = palloc0(sizeof(DDLJob));
 			ddlJob->targetRelationId = relationId;
-#if PG_VERSION_NUM >= PG_VERSION_12
 			ddlJob->concurrentIndexCmd = reindexStatement->concurrent;
 			ddlJob->startNewTransaction = reindexStatement->concurrent;
-#else
-			ddlJob->concurrentIndexCmd = false;
-#endif
 			ddlJob->commandString = reindexCommand;
 			ddlJob->taskList = CreateReindexTaskList(relationId, reindexStatement);
 
@@ -1053,11 +1037,7 @@ RangeVarCallbackForReindexIndex(const RangeVar *relation, Oid relId, Oid oldRelI
 	 * non-concurrent case and table locks used by index_concurrently_*() for
 	 * concurrent case.
 	 */
-#if PG_VERSION_NUM >= PG_VERSION_12
 	table_lockmode = state->concurrent ? ShareUpdateExclusiveLock : ShareLock;
-#else
-	table_lockmode = ShareLock;
-#endif
 
 	/*
 	 * If we previously locked some other index's heap, and the name we're

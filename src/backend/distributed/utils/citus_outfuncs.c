@@ -34,11 +34,7 @@
 #include "distributed/metadata_utility.h"
 #include "lib/stringinfo.h"
 #include "nodes/plannodes.h"
-#if PG_VERSION_NUM >= PG_VERSION_12
 #include "nodes/pathnodes.h"
-#else
-#include "nodes/relation.h"
-#endif
 #include "utils/datum.h"
 
 

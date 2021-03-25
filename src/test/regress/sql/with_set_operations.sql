@@ -4,8 +4,6 @@
 
 SET client_min_messages TO DEBUG1;
 
--- prevent PG 11 - PG 12 outputs to diverge
-SET citus.enable_cte_inlining TO false;
 
 -- use ctes inside unions on the top level
 WITH

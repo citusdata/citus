@@ -32,9 +32,7 @@
 #include "distributed/tuplestore.h"
 #include "nodes/execnodes.h"
 #include "postmaster/autovacuum.h" /* to access autovacuum_max_workers */
-#if PG_VERSION_NUM >= PG_VERSION_12
 #include "replication/walsender.h"
-#endif
 #include "storage/ipc.h"
 #include "storage/lmgr.h"
 #include "storage/lwlock.h"
@@ -598,9 +596,7 @@ TotalProcCount(void)
 	 */
 	totalProcs = maxBackends + NUM_AUXILIARY_PROCS + max_prepared_xacts;
 
-#if PG_VERSION_NUM >= PG_VERSION_12
 	totalProcs += max_wal_senders;
-#endif
 
 	return totalProcs;
 }

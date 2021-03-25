@@ -18,11 +18,7 @@
 #include "distributed/citus_ruleutils.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/version_compat.h"
-#if PG_VERSION_NUM >= PG_VERSION_12
 #include "optimizer/optimizer.h"
-#else
-#include "optimizer/planner.h"
-#endif
 #include "optimizer/clauses.h"
 
 
