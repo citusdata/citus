@@ -200,6 +200,9 @@ extern int NodeConnectionTimeout;
 /* maximum number of connections to cache per worker per session */
 extern int MaxCachedConnectionsPerWorker;
 
+/* maximum lifetime of connections in miliseconds */
+extern int MaxCachedConnectionLifetime;
+
 /* parameters used for outbound connections */
 extern char *NodeConninfo;
 

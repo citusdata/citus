@@ -116,6 +116,14 @@ GetOptions(
     'worker-2-public-hostname=s' => \$publicWorker2Host,
     'help' => sub { Usage() });
 
+my $fixopen = "$bindir/postgres.fixopen";
+my @pg_ctl_args = ();
+if (-e $fixopen)
+{
+	push(@pg_ctl_args, "-p");
+	push(@pg_ctl_args, $fixopen);
+}
+
 # Update environment to include [DY]LD_LIBRARY_PATH/LIBDIR/etc -
 # pointing to the libdir - that's required so the right version of
 # libpq, citus et al is being picked up.
@@ -665,26 +673,26 @@ sub ShutdownServers()
     if (!$conninfo && $serversAreShutdown eq "FALSE")
     {
         system(catfile("$bindir", "pg_ctl"),
-               ('stop', '-w', '-D', catfile($TMP_CHECKDIR, $MASTERDIR, 'data'))) == 0
+               (@pg_ctl_args, 'stop', '-w', '-D', catfile($TMP_CHECKDIR, $MASTERDIR, 'data'))) == 0
             or warn "Could not shutdown worker server";
 
         for my $port (@workerPorts)
         {
             system(catfile("$bindir", "pg_ctl"),
-                   ('stop', '-w', '-D', catfile($TMP_CHECKDIR, "worker.$port", "data"))) == 0
+                   (@pg_ctl_args, 'stop', '-w', '-D', catfile($TMP_CHECKDIR, "worker.$port", "data"))) == 0
                 or warn "Could not shutdown worker server";
         }
 
         if ($followercluster)
         {
             system(catfile("$bindir", "pg_ctl"),
-                   ('stop', '-w', '-D', catfile($TMP_CHECKDIR, $MASTER_FOLLOWERDIR, 'data'))) == 0
+                   (@pg_ctl_args, 'stop', '-w', '-D', catfile($TMP_CHECKDIR, $MASTER_FOLLOWERDIR, 'data'))) == 0
                 or warn "Could not shutdown worker server";
 
             for my $port (@followerWorkerPorts)
             {
                 system(catfile("$bindir", "pg_ctl"),
-                       ('stop', '-w', '-D', catfile($TMP_CHECKDIR, "follower.$port", "data"))) == 0
+                       (@pg_ctl_args, 'stop', '-w', '-D', catfile($TMP_CHECKDIR, "follower.$port", "data"))) == 0
                     or warn "Could not shutdown worker server";
             }
         }
@@ -793,7 +801,7 @@ if (!$conninfo)
 {
     write_settings_to_postgres_conf(\@pgOptions, catfile($TMP_CHECKDIR, $MASTERDIR, "data/postgresql.conf"));
     if(system(catfile("$bindir", "pg_ctl"),
-        ('start', '-w',
+        (@pg_ctl_args, 'start', '-w',
             '-o', " -c port=$masterPort $synchronousReplication",
         '-D', catfile($TMP_CHECKDIR, $MASTERDIR, 'data'), '-l', catfile($TMP_CHECKDIR, $MASTERDIR, 'log', 'postmaster.log'))) != 0)
     {
@@ -805,7 +813,7 @@ if (!$conninfo)
     {
         write_settings_to_postgres_conf(\@pgOptions, catfile($TMP_CHECKDIR, "worker.$port", "data/postgresql.conf"));
         if(system(catfile("$bindir", "pg_ctl"),
-            ('start', '-w',
+            (@pg_ctl_args, 'start', '-w',
                 '-o', " -c port=$port $synchronousReplication",
                 '-D', catfile($TMP_CHECKDIR, "worker.$port", "data"),
                 '-l', catfile($TMP_CHECKDIR, "worker.$port", "log", "postmaster.log"))) != 0)
@@ -836,7 +844,7 @@ if ($followercluster)
 
     write_settings_to_postgres_conf(\@pgOptions, catfile($TMP_CHECKDIR, $MASTER_FOLLOWERDIR, "data/postgresql.conf"));
     if(system(catfile("$bindir", "pg_ctl"),
-           ('start', '-w',
+           (@pg_ctl_args, 'start', '-w',
             '-o', " -c port=$followerCoordPort",
            '-D', catfile($TMP_CHECKDIR, $MASTER_FOLLOWERDIR, 'data'), '-l', catfile($TMP_CHECKDIR, $MASTER_FOLLOWERDIR, 'log', 'postmaster.log'))) != 0)
     {
@@ -848,7 +856,7 @@ if ($followercluster)
     {
         write_settings_to_postgres_conf(\@pgOptions, catfile($TMP_CHECKDIR, "follower.$port", "data/postgresql.conf"));
         if(system(catfile("$bindir", "pg_ctl"),
-               ('start', '-w',
+               (@pg_ctl_args, 'start', '-w',
                 '-o', " -c port=$port",
                 '-D', catfile($TMP_CHECKDIR, "follower.$port", "data"),
                 '-l', catfile($TMP_CHECKDIR, "follower.$port", "log", "postmaster.log"))) != 0)
