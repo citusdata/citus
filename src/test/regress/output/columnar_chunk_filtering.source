@@ -182,3 +182,25 @@ EXPLAIN (analyze on, costs off, timing off, summary off)
 (5 rows)
 
 DROP TABLE multi_column_chunk_filtering;
+--
+-- https://github.com/citusdata/citus/issues/4780
+--
+create table part_table (id int) partition by range (id);
+create table part_1_row partition of part_table for values from (150000) to (160000);
+create table part_2_columnar partition of part_table for values from (0) to (150000) using columnar;
+insert into part_table select generate_series(1,159999);
+explain (analyze, costs off, timing off, summary off)
+  select count(*) from part_table where id > 75000;
+                                             QUERY PLAN
+---------------------------------------------------------------------
+ Aggregate (actual rows=1 loops=1)
+   ->  Append (actual rows=84999 loops=1)
+         ->  Custom Scan (ColumnarScan) on part_2_columnar part_table_1 (actual rows=74999 loops=1)
+               Filter: (id > 75000)
+               Rows Removed by Filter: 5000
+               Columnar Chunk Groups Removed by Filter: 7
+         ->  Seq Scan on part_1_row part_table_2 (actual rows=10000 loops=1)
+               Filter: (id > 75000)
+(8 rows)
+
+drop table part_table;
