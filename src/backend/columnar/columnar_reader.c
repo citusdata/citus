@@ -115,6 +115,7 @@ static bool * SelectedChunkMask(StripeSkipList *stripeSkipList,
 								List *whereClauseList, List *clauseVars,
 								int64 *chunkGroupsFiltered);
 static Node * BuildBaseConstraint(Var *variable);
+static List * GetClauseVars(List *clauses, int natts);
 static OpExpr * MakeOpExpression(Var *variable, int16 strategyNumber);
 static Oid GetOperatorByType(Oid typeId, Oid accessMethodId, int16 strategyNumber);
 static void UpdateConstraint(Node *baseConstraint, Datum minValue, Datum maxValue);
@@ -152,10 +153,6 @@ ColumnarBeginRead(Relation relation, TupleDesc tupleDescriptor,
 		totalRowCount += stripeMetadata->rowCount;
 	}
 
-	int flags = PVC_RECURSE_AGGREGATES |
-				PVC_RECURSE_WINDOWFUNCS | PVC_RECURSE_PLACEHOLDERS;
-	List *clauseVars = pull_var_clause((Node *) whereClauseList, flags);
-
 	/*
 	 * We allocate all stripe specific data in the stripeReadContext, and reset
 	 * this memory context before loading a new stripe. This is to avoid memory
@@ -170,7 +167,7 @@ ColumnarBeginRead(Relation relation, TupleDesc tupleDescriptor,
 	readState->stripeList = stripeList;
 	readState->projectedColumnList = projectedColumnList;
 	readState->whereClauseList = whereClauseList;
-	readState->clauseVars = clauseVars;
+	readState->clauseVars = GetClauseVars(whereClauseList, tupleDescriptor->natts);
 	readState->chunkGroupsFiltered = 0;
 	readState->tupleDescriptor = tupleDescriptor;
 	readState->stripeReadContext = stripeReadContext;
@@ -769,6 +766,48 @@ BuildBaseConstraint(Var *variable)
 	return baseConstraint;
 }
 
+
+/*
+ * GetClauseVars extracts the Vars from the given clauses. It also
+ * deduplicates and sorts them.
+ */
+static List *
+GetClauseVars(List *clauses, int natts)
+{
+	int flags = PVC_RECURSE_AGGREGATES |
+				PVC_RECURSE_WINDOWFUNCS | PVC_RECURSE_PLACEHOLDERS;
+	List *vars = pull_var_clause((Node *) clauses, flags);
+	Var **deduplicate = palloc0(sizeof(Var *) * natts);
+
+	ListCell *lc;
+	foreach(lc, vars)
+	{
+		Var *var = (Var *)lfirst(lc);
+		int idx = var->varattno - 1;
+
+		if (deduplicate[idx] != NULL)
+		{
+			/* if they have the same varattno, the rest should be identical */
+			Assert(equal(var, deduplicate[idx]));
+		}
+
+		deduplicate[idx] = var;
+	}
+
+	List *clauseVars = NIL;
+	for (int i = 0; i < natts; i++)
+	{
+		Var *var = deduplicate[i];
+		if (var != NULL)
+		{
+			clauseVars = lappend(clauseVars, var);
+		}
+	}
+
+	pfree(deduplicate);
+
+	return clauseVars;
+}
 
 /*
  * MakeOpExpression builds an operator expression node. This operator expression
