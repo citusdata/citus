@@ -21,9 +21,7 @@
 #include "nodes/nodes.h"
 #include "nodes/primnodes.h"
 #include "optimizer/clauses.h"
-#if PG_VERSION_NUM >= PG_VERSION_12
 #include "optimizer/optimizer.h"
-#endif
 #include "optimizer/planmain.h"
 #include "utils/datum.h"
 #include "utils/lsyscache.h"

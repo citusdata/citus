@@ -34,14 +34,12 @@ INSERT INTO table_2    VALUES                     (3, '3'), (4, '4'), (5, '5'), 
 INSERT INTO ref_table  VALUES (1, '1'), (2, '2'), (3, '3'), (4, '4'), (5, '5'), (6, '6');
 NOTICE:  executing the command locally: INSERT INTO locally_execute_intermediate_results.ref_table_1580008 AS citus_table_alias (key, value) VALUES (1,'1'::text), (2,'2'::text), (3,'3'::text), (4,'4'::text), (5,'5'::text), (6,'6'::text)
 INSERT INTO local_table VALUES                    (3, '3'), (4, '4'), (5, '5'), (6, '6');
--- prevent PG 11 - PG 12 outputs to diverge
 -- and have a lot more CTEs recursively planned for the
 -- sake of increasing the test coverage
-SET citus.enable_cte_inlining TO false;
 SET client_min_messages TO DEBUG1;
 -- the query cannot be executed locally, but still because of
 -- HAVING the intermediate result is written to local file as well
-WITH cte_1 AS (SELECT max(value) FROM table_1)
+WITH cte_1 AS MATERIALIZED (SELECT max(value) FROM table_1)
 SELECT
 count(*)
 FROM
@@ -58,7 +56,7 @@ DEBUG:  Subplan XXX_1 will be written to local file
 (2 rows)
 
 -- in this case, the HAVING Is also pushed down
-WITH cte_1 AS (SELECT max(value) FROM table_1)
+WITH cte_1 AS MATERIALIZED (SELECT max(value) FROM table_1)
 SELECT
 count(*)
 FROM
@@ -76,8 +74,8 @@ DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
 (2 rows)
 
 -- subquery in the WHERE part of the query can be executed locally
-WITH cte_1 AS (SELECT max(value) FROM table_1),
-cte_2 AS (SELECT * FROM table_2)
+WITH cte_1 AS MATERIALIZED (SELECT max(value) FROM table_1),
+cte_2 AS MATERIALIZED (SELECT * FROM table_2)
 SELECT
 count(*)
 FROM
@@ -104,8 +102,8 @@ NOTICE:  executing the command locally: SELECT key FROM (SELECT intermediate_res
 
 -- subquery in the WHERE part of the query should not be executed locally
 -- because it can be pushed down with the jointree
-WITH cte_1 AS (SELECT max(value) FROM table_1),
-cte_2 AS (SELECT max(key) FROM table_2)
+WITH cte_1 AS MATERIALIZED (SELECT max(value) FROM table_1),
+cte_2 AS MATERIALIZED (SELECT max(key) FROM table_2)
 SELECT
 count(*)
 FROM
@@ -126,9 +124,9 @@ DEBUG:  Subplan XXX_2 will be sent to localhost:xxxxx
 (0 rows)
 
 -- now all the intermediate results are safe to be in local files
-WITH cte_1 AS (SELECT max(value) FROM table_1),
-cte_2 AS (SELECT max(key) FROM table_2),
-cte_3 AS (SELECT * FROM table_2)
+WITH cte_1 AS MATERIALIZED (SELECT max(value) FROM table_1),
+cte_2 AS MATERIALIZED (SELECT max(key) FROM table_2),
+cte_3 AS MATERIALIZED (SELECT * FROM table_2)
 SELECT
 count(*)
 FROM
@@ -151,8 +149,8 @@ NOTICE:  executing the command locally: SELECT count(*) AS count FROM (SELECT in
 
 -- multiple CTEs are joined inside HAVING, so written to file
 -- locally, but nothing executed locally
-WITH cte_1 AS (SELECT max(value) FROM table_1),
-cte_2 AS (SELECT max(value) FROM table_1)
+WITH cte_1 AS MATERIALIZED (SELECT max(value) FROM table_1),
+cte_2 AS MATERIALIZED (SELECT max(value) FROM table_1)
 SELECT
 count(*)
 FROM
@@ -171,8 +169,8 @@ DEBUG:  Subplan XXX_2 will be written to local file
 (2 rows)
 
 -- same as above, but HAVING pushed down to workers
-WITH cte_1 AS (SELECT max(value) FROM table_1),
-cte_2 AS (SELECT max(value) FROM table_1)
+WITH cte_1 AS MATERIALIZED (SELECT max(value) FROM table_1),
+cte_2 AS MATERIALIZED (SELECT max(value) FROM table_1)
 SELECT
 count(*)
 FROM
@@ -195,9 +193,9 @@ DEBUG:  Subplan XXX_2 will be sent to localhost:xxxxx
 -- multiple CTEs are joined inside HAVING, so written to file
 -- locally, also the join tree contains only another CTE, so should be
 -- executed locally
-WITH cte_1 AS (SELECT max(value) FROM table_1),
-cte_2 AS (SELECT max(value) FROM table_1),
-cte_3 AS (SELECT * FROM table_2)
+WITH cte_1 AS MATERIALIZED (SELECT max(value) FROM table_1),
+cte_2 AS MATERIALIZED (SELECT max(value) FROM table_1),
+cte_3 AS MATERIALIZED (SELECT * FROM table_2)
 SELECT
 count(*)
 FROM
@@ -221,7 +219,7 @@ NOTICE:  executing the command locally: SELECT count(*) AS count FROM (SELECT in
 -- now, the CTE is going to be written locally,
 -- plus that is going to be read locally because
 -- of the aggragate over the cte in HAVING
-WITH cte_1 AS (SELECT max(value) FROM table_1)
+WITH cte_1 AS MATERIALIZED (SELECT max(value) FROM table_1)
 SELECT
 count(*)
 FROM
@@ -241,7 +239,7 @@ NOTICE:  executing the command locally: SELECT max(max) AS max FROM (SELECT inte
 (2 rows)
 
 -- same as above, but with HAVING pushed down
-WITH cte_1 AS (SELECT max(value) FROM table_1)
+WITH cte_1 AS MATERIALIZED (SELECT max(value) FROM table_1)
 SELECT
 count(*)
 FROM
@@ -262,8 +260,8 @@ NOTICE:  executing the command locally: SELECT max(max) AS max FROM (SELECT inte
 (2 rows)
 
 -- two ctes are going to be written locally and executed locally
-WITH cte_1 AS (SELECT max(value) FROM table_1),
-cte_2 AS (SELECT * FROM table_1)
+WITH cte_1 AS MATERIALIZED (SELECT max(value) FROM table_1),
+cte_2 AS MATERIALIZED (SELECT * FROM table_1)
 SELECT
 count(*)
 FROM
@@ -288,7 +286,7 @@ NOTICE:  executing the command locally: SELECT count(*) AS count FROM (SELECT in
 
 -- this time the same CTE is both joined with a distributed
 -- table and used in HAVING
-WITH a AS (SELECT * FROM table_1 ORDER BY 1,2 DESC LIMIT 1)
+WITH a AS MATERIALIZED (SELECT * FROM table_1 ORDER BY 1,2 DESC LIMIT 1)
 SELECT count(*),
 key
 FROM a JOIN table_2 USING (key)
@@ -307,7 +305,7 @@ DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
 -- this time the same CTE is both joined with a distributed
 -- table and used in HAVING -- but used in another subquery/aggregate
 -- so one more level of recursive planning
-WITH a AS (SELECT * FROM table_1)
+WITH a AS MATERIALIZED (SELECT * FROM table_1)
 SELECT count(*),
 key
 FROM a JOIN table_2 USING (key)
@@ -327,13 +325,13 @@ NOTICE:  executing the command locally: SELECT max(value) AS max FROM (SELECT in
 (1 row)
 
 -- same query as the above, without the aggragate
-WITH a AS (SELECT max(key) as key, max(value) as value FROM ref_table)
+WITH a AS MATERIALIZED (SELECT max(key) as key, max(value) as value FROM ref_table)
 SELECT count(*),
 key
 FROM a JOIN ref_table USING (key)
 GROUP BY key
 HAVING (max(ref_table.value) <= (SELECT value FROM a));
-NOTICE:  executing the command locally: WITH a AS (SELECT max(ref_table_1.key) AS key, max(ref_table_1.value) AS value FROM locally_execute_intermediate_results.ref_table_1580008 ref_table_1) SELECT count(*) AS count, a.key FROM (a JOIN locally_execute_intermediate_results.ref_table_1580008 ref_table(key, value) USING (key)) GROUP BY a.key HAVING (max(ref_table.value) OPERATOR(pg_catalog.<=) (SELECT a_1.value FROM a a_1))
+NOTICE:  executing the command locally: WITH a AS MATERIALIZED (SELECT max(ref_table_1.key) AS key, max(ref_table_1.value) AS value FROM locally_execute_intermediate_results.ref_table_1580008 ref_table_1) SELECT count(*) AS count, a.key FROM (a JOIN locally_execute_intermediate_results.ref_table_1580008 ref_table(key, value) USING (key)) GROUP BY a.key HAVING (max(ref_table.value) OPERATOR(pg_catalog.<=) (SELECT a_1.value FROM a a_1))
  count | key
 ---------------------------------------------------------------------
      1 |   6
@@ -341,9 +339,9 @@ NOTICE:  executing the command locally: WITH a AS (SELECT max(ref_table_1.key) A
 
 -- some edge cases around CTEs used inside other CTEs
 -- everything can be executed locally
-WITH cte_1 as (SELECT * FROM table_1),
-cte_2 AS (SELECT * FROM cte_1),
-cte_3 AS (SELECT max(key) FROM cte_2)
+WITH cte_1 as MATERIALIZED (SELECT * FROM table_1),
+cte_2 AS MATERIALIZED (SELECT * FROM cte_1),
+cte_3 AS MATERIALIZED (SELECT max(key) FROM cte_2)
 SELECT * FROM cte_3;
 DEBUG:  generating subplan XXX_1 for CTE cte_1: SELECT key, value FROM locally_execute_intermediate_results.table_1
 DEBUG:  generating subplan XXX_2 for CTE cte_2: SELECT key, value FROM (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) cte_1
@@ -361,9 +359,9 @@ NOTICE:  executing the command locally: SELECT max FROM (SELECT intermediate_res
 (1 row)
 
 -- the join between cte_3 and table_2 has to happen remotely
-WITH cte_1 as (SELECT * FROM table_1),
-cte_2 AS (SELECT * FROM cte_1),
-cte_3 AS (SELECT max(key) as key FROM cte_2)
+WITH cte_1 as MATERIALIZED (SELECT * FROM table_1),
+cte_2 AS MATERIALIZED (SELECT * FROM cte_1),
+cte_3 AS MATERIALIZED (SELECT max(key) as key FROM cte_2)
 SELECT * FROM cte_3 JOIN table_2 USING (key) WHERE table_2.key = 1;
 DEBUG:  generating subplan XXX_1 for CTE cte_1: SELECT key, value FROM locally_execute_intermediate_results.table_1
 DEBUG:  generating subplan XXX_2 for CTE cte_2: SELECT key, value FROM (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) cte_1
@@ -379,9 +377,9 @@ NOTICE:  executing the command locally: SELECT max(key) AS key FROM (SELECT inte
 (0 rows)
 
 -- the join between cte_3 and table_2 has to happen remotely
-WITH cte_1 as (SELECT * FROM table_1),
-cte_2 AS (SELECT * FROM cte_1),
-cte_3 AS (SELECT max(key) as key FROM cte_2)
+WITH cte_1 as MATERIALIZED (SELECT * FROM table_1),
+cte_2 AS MATERIALIZED (SELECT * FROM cte_1),
+cte_3 AS MATERIALIZED (SELECT max(key) as key FROM cte_2)
 SELECT * FROM cte_3 JOIN ref_table USING (key);
 DEBUG:  generating subplan XXX_1 for CTE cte_1: SELECT key, value FROM locally_execute_intermediate_results.table_1
 DEBUG:  generating subplan XXX_2 for CTE cte_2: SELECT key, value FROM (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) cte_1
@@ -402,9 +400,9 @@ NOTICE:  executing the command locally: SELECT cte_3.key, ref_table.value FROM (
 
 -- some cases around router queries
 -- a router query, but the having has two cte joins
-WITH cte_1 AS (SELECT max(value) FROM table_1),
-     cte_2 AS (SELECT max(value) FROM table_1),
-     cte_3 AS (SELECT * FROM table_2)
+WITH cte_1 AS MATERIALIZED (SELECT max(value) FROM table_1),
+     cte_2 AS MATERIALIZED (SELECT max(value) FROM table_1),
+     cte_3 AS MATERIALIZED (SELECT * FROM table_2)
 SELECT count(*)
 FROM table_2
 WHERE KEY = 3
@@ -422,9 +420,9 @@ DEBUG:  Subplan XXX_2 will be sent to localhost:xxxxx
 
 -- a router query, but the having has two cte joins
 -- and the jointree has a join with another cte
-WITH cte_1 AS (SELECT max(value) FROM table_1),
-     cte_2 AS (SELECT max(value) FROM table_1),
-     cte_3 AS (SELECT * FROM table_2)
+WITH cte_1 AS MATERIALIZED (SELECT max(value) FROM table_1),
+     cte_2 AS MATERIALIZED (SELECT max(value) FROM table_1),
+     cte_3 AS MATERIALIZED (SELECT * FROM table_2)
 SELECT count(*)
 FROM table_2 JOIN cte_3 USING(key)
 WHERE KEY = 3
@@ -444,9 +442,9 @@ DEBUG:  Subplan XXX_3 will be sent to localhost:xxxxx
 
 -- a router query, but the having has two cte joins
 -- and the jointree has a join with the same CTEs
-WITH cte_1 AS (SELECT max(value) FROM table_1),
-     cte_2 AS (SELECT max(value) FROM table_1),
-     cte_3 AS (SELECT * FROM table_2)
+WITH cte_1 AS MATERIALIZED (SELECT max(value) FROM table_1),
+     cte_2 AS MATERIALIZED (SELECT max(value) FROM table_1),
+     cte_3 AS MATERIALIZED (SELECT * FROM table_2)
 SELECT count(*)
 FROM table_2 JOIN cte_3 USING(key) JOIN cte_2 ON (key = MAX::int) JOIN cte_1 USING(MAX)
 WHERE KEY = 3
@@ -465,8 +463,8 @@ DEBUG:  Subplan XXX_3 will be sent to localhost:xxxxx
 (0 rows)
 
 -- subPlans needed remotely as the subquery is pushed down
-WITH cte_1 AS (SELECT max(value) FROM table_1),
-     cte_2 AS (SELECT max(value) FROM table_2)
+WITH cte_1 AS MATERIALIZED (SELECT max(value) FROM table_1),
+     cte_2 AS MATERIALIZED (SELECT max(value) FROM table_2)
 SELECT * FROM
   (SELECT key FROM table_1 GROUP BY key HAVING max(value) > (SELECT * FROM cte_1)) as foo,
   (SELECT key FROM table_2 GROUP BY key HAVING max(value) > (SELECT * FROM cte_2)) as bar
@@ -484,8 +482,8 @@ DEBUG:  Subplan XXX_2 will be sent to localhost:xxxxx
 
 -- the second subquery needs to be recursively planned due to non-colocated subquery join
 -- so cte_2 becomes part of master query of that recursive subquery planning
-WITH cte_1 AS (SELECT max(value) FROM table_1),
-     cte_2 AS (SELECT max(value) FROM table_2)
+WITH cte_1 AS MATERIALIZED (SELECT max(value) FROM table_1),
+     cte_2 AS MATERIALIZED (SELECT max(value) FROM table_2)
 SELECT * FROM
   (SELECT value AS key FROM table_1 GROUP BY value HAVING max(value) > (SELECT * FROM cte_1)) as foo,
   (SELECT value AS key FROM table_2 GROUP BY value HAVING max(value) > (SELECT * FROM cte_2)) as bar
@@ -505,8 +503,8 @@ NOTICE:  executing the command locally: SELECT foo.key, bar.key FROM (SELECT int
 (0 rows)
 
 -- similar to above, but having pushed down
-WITH cte_1 AS (SELECT max(value) FROM table_1),
-     cte_2 AS (SELECT max(value) FROM table_2)
+WITH cte_1 AS MATERIALIZED (SELECT max(value) FROM table_1),
+     cte_2 AS MATERIALIZED (SELECT max(value) FROM table_2)
 SELECT * FROM
   (SELECT key FROM table_1 GROUP BY key HAVING max(value) > (SELECT * FROM cte_1)) as foo,
   (SELECT key FROM table_2 GROUP BY key HAVING max(value) > (SELECT * FROM cte_2)) as bar
@@ -526,8 +524,8 @@ DEBUG:  Subplan XXX_3 will be sent to localhost:xxxxx
 (0 rows)
 
 -- now, forcing all subqueries to be on the local node
-WITH cte_1 AS (SELECT max(value) FROM table_1),
-     cte_2 AS (SELECT max(value) FROM table_2)
+WITH cte_1 AS MATERIALIZED (SELECT max(value) FROM table_1),
+     cte_2 AS MATERIALIZED (SELECT max(value) FROM table_2)
 SELECT * FROM
   (SELECT value AS key FROM table_1 GROUP BY value HAVING max(value) > (SELECT * FROM cte_1) LIMIT 1) as foo,
   (SELECT value AS key FROM table_2 GROUP BY value HAVING max(value) > (SELECT * FROM cte_2) LIMIT 1) as bar
@@ -547,7 +545,7 @@ NOTICE:  executing the command locally: SELECT foo.key, bar.key FROM (SELECT int
 (0 rows)
 
 -- queries in which the last step has only CTEs can use local tables
-WITH cte_1 AS (SELECT max(value) FROM table_1)
+WITH cte_1 AS MATERIALIZED (SELECT max(value) FROM table_1)
 SELECT
 count(*)
 FROM
@@ -564,8 +562,8 @@ NOTICE:  executing the command locally: SELECT count(*) AS count FROM locally_ex
      1
 (2 rows)
 
-WITH cte_1 AS (SELECT max(value) FROM table_1),
-cte_2 AS (SELECT * FROM table_2)
+WITH cte_1 AS MATERIALIZED (SELECT max(value) FROM table_1),
+cte_2 AS MATERIALIZED (SELECT * FROM table_2)
 SELECT
 count(*)
 FROM
@@ -595,13 +593,9 @@ SET search_path TO locally_execute_intermediate_results;
 SET citus.log_intermediate_results TO TRUE;
 SET citus.log_local_commands TO TRUE;
 SET client_min_messages TO DEBUG1;
--- prevent PG 11 - PG 12 outputs to diverge
--- and have a lot more CTEs recursively planned for the
--- sake of increasing the test coverage
-SET citus.enable_cte_inlining TO false;
 -- the query cannot be executed locally, but still because of
 -- HAVING the intermediate result is written to local file as well
-WITH cte_1 AS (SELECT max(value) FROM table_1)
+WITH cte_1 AS MATERIALIZED (SELECT max(value) FROM table_1)
 SELECT
 count(*)
 FROM
@@ -623,8 +617,8 @@ NOTICE:  executing the command locally: SELECT count(*) AS count, worker_column_
 
 -- On non-mx case the subquery in the WHERE part of the query can be executed locally
 -- however, on Citus MX we have this limitation where the query cannot be executed locally
-WITH cte_1 AS (SELECT max(value) FROM table_1),
-cte_2 AS (SELECT * FROM table_2)
+WITH cte_1 AS MATERIALIZED (SELECT max(value) FROM table_1),
+cte_2 AS MATERIALIZED (SELECT * FROM table_2)
 SELECT
 count(*)
 FROM
@@ -656,8 +650,8 @@ NOTICE:  executing the command locally: SELECT count(*) AS count, worker_column_
 
 -- subquery in the WHERE part of the query should not be executed locally
 -- because it can be pushed down with the jointree
-WITH cte_1 AS (SELECT max(value) FROM table_1),
-cte_2 AS (SELECT max(key) FROM table_2)
+WITH cte_1 AS MATERIALIZED (SELECT max(value) FROM table_1),
+cte_2 AS MATERIALIZED (SELECT max(key) FROM table_2)
 SELECT
 count(*)
 FROM
@@ -685,9 +679,9 @@ NOTICE:  executing the command locally: SELECT count(*) AS count, worker_column_
 
 -- although all the intermediate results are safe to be in local files
 -- we currently do not support it on Citus MX
-WITH cte_1 AS (SELECT max(value) FROM table_1),
-cte_2 AS (SELECT max(key) FROM table_2),
-cte_3 AS (SELECT * FROM table_2)
+WITH cte_1 AS MATERIALIZED (SELECT max(value) FROM table_1),
+cte_2 AS MATERIALIZED (SELECT max(key) FROM table_2),
+cte_3 AS MATERIALIZED (SELECT * FROM table_2)
 SELECT
 count(*)
 FROM
@@ -716,8 +710,8 @@ NOTICE:  executing the command locally: SELECT count(*) AS count FROM (SELECT in
 
 -- multiple CTEs are joined inside HAVING, so written to file
 -- locally, but nothing executed locally
-WITH cte_1 AS (SELECT max(value) FROM table_1),
-cte_2 AS (SELECT max(value) FROM table_1)
+WITH cte_1 AS MATERIALIZED (SELECT max(value) FROM table_1),
+cte_2 AS MATERIALIZED (SELECT max(value) FROM table_1)
 SELECT
 count(*)
 FROM
@@ -744,9 +738,9 @@ NOTICE:  executing the command locally: SELECT count(*) AS count, worker_column_
 -- multiple CTEs are joined inside HAVING, so written to file
 -- locally, also the join tree contains only another CTE, so should be
 -- executed locally, but not on an Citus MX worker
-WITH cte_1 AS (SELECT max(value) FROM table_1),
-cte_2 AS (SELECT max(value) FROM table_1),
-cte_3 AS (SELECT * FROM table_2)
+WITH cte_1 AS MATERIALIZED (SELECT max(value) FROM table_1),
+cte_2 AS MATERIALIZED (SELECT max(value) FROM table_1),
+cte_3 AS MATERIALIZED (SELECT * FROM table_2)
 SELECT
 count(*)
 FROM
@@ -777,7 +771,7 @@ NOTICE:  executing the command locally: SELECT count(*) AS count FROM (SELECT in
 -- plus that could have been read locally on the coordinator
 -- because of the aggragate over the cte in HAVING
 -- but not on Citus MX
-WITH cte_1 AS (SELECT max(value) FROM table_1)
+WITH cte_1 AS MATERIALIZED (SELECT max(value) FROM table_1)
 SELECT
 count(*)
 FROM
@@ -802,8 +796,8 @@ NOTICE:  executing the command locally: SELECT count(*) AS count, worker_column_
 
 -- two could have been written locally and executed locally
 -- on the coordinator, but not on the workers
-WITH cte_1 AS (SELECT max(value) FROM table_1),
-cte_2 AS (SELECT * FROM table_1)
+WITH cte_1 AS MATERIALIZED (SELECT max(value) FROM table_1),
+cte_2 AS MATERIALIZED (SELECT * FROM table_1)
 SELECT
 count(*)
 FROM
@@ -832,7 +826,7 @@ NOTICE:  executing the command locally: SELECT count(*) AS count FROM (SELECT in
 
 -- this time the same CTE is both joined with a distributed
 -- table and used in HAVING
-WITH a AS (SELECT * FROM table_1 ORDER BY 1,2 DESC LIMIT 1)
+WITH a AS MATERIALIZED (SELECT * FROM table_1 ORDER BY 1,2 DESC LIMIT 1)
 SELECT count(*),
 key
 FROM a JOIN table_2 USING (key)
@@ -854,7 +848,7 @@ NOTICE:  executing the command locally: SELECT count(*) AS count, worker_column_
 -- this time the same CTE is both joined with a distributed
 -- table and used in HAVING -- but used in another subquery/aggregate
 -- so one more level of recursive planning
-WITH a AS (SELECT * FROM table_1)
+WITH a AS MATERIALIZED (SELECT * FROM table_1)
 SELECT count(*),
 key
 FROM a JOIN table_2 USING (key)
@@ -877,13 +871,13 @@ NOTICE:  executing the command locally: SELECT count(*) AS count, worker_column_
 (1 row)
 
 -- same query as the above, without the aggragate
-WITH a AS (SELECT max(key) as key, max(value) as value FROM ref_table)
+WITH a AS MATERIALIZED (SELECT max(key) as key, max(value) as value FROM ref_table)
 SELECT count(*),
 key
 FROM a JOIN ref_table USING (key)
 GROUP BY key
 HAVING (max(ref_table.value) <= (SELECT value FROM a));
-NOTICE:  executing the command locally: WITH a AS (SELECT max(ref_table_1.key) AS key, max(ref_table_1.value) AS value FROM locally_execute_intermediate_results.ref_table_1580008 ref_table_1) SELECT count(*) AS count, a.key FROM (a JOIN locally_execute_intermediate_results.ref_table_1580008 ref_table(key, value) USING (key)) GROUP BY a.key HAVING (max(ref_table.value) OPERATOR(pg_catalog.<=) (SELECT a_1.value FROM a a_1))
+NOTICE:  executing the command locally: WITH a AS MATERIALIZED (SELECT max(ref_table_1.key) AS key, max(ref_table_1.value) AS value FROM locally_execute_intermediate_results.ref_table_1580008 ref_table_1) SELECT count(*) AS count, a.key FROM (a JOIN locally_execute_intermediate_results.ref_table_1580008 ref_table(key, value) USING (key)) GROUP BY a.key HAVING (max(ref_table.value) OPERATOR(pg_catalog.<=) (SELECT a_1.value FROM a a_1))
  count | key
 ---------------------------------------------------------------------
      1 |   6
@@ -892,9 +886,9 @@ NOTICE:  executing the command locally: WITH a AS (SELECT max(ref_table_1.key) A
 -- some edge cases around CTEs used inside other CTEs
 -- everything could be executed locally on the coordinator,
 -- but not on the worker
-WITH cte_1 as (SELECT * FROM table_1),
-cte_2 AS (SELECT * FROM cte_1),
-cte_3 AS (SELECT max(key) FROM cte_2)
+WITH cte_1 as MATERIALIZED (SELECT * FROM table_1),
+cte_2 AS MATERIALIZED (SELECT * FROM cte_1),
+cte_3 AS MATERIALIZED (SELECT max(key) FROM cte_2)
 SELECT * FROM cte_3;
 DEBUG:  generating subplan XXX_1 for CTE cte_1: SELECT key, value FROM locally_execute_intermediate_results.table_1
 DEBUG:  generating subplan XXX_2 for CTE cte_2: SELECT key, value FROM (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) cte_1
@@ -916,9 +910,9 @@ NOTICE:  executing the command locally: SELECT max FROM (SELECT intermediate_res
 -- the join between cte_3 and table_2 has to could have happened
 -- locally since the key = 1 resides on this node
 -- but because of the current implementation limitations we can't
-WITH cte_1 as (SELECT * FROM table_1),
-cte_2 AS (SELECT * FROM cte_1),
-cte_3 AS (SELECT max(key) as key FROM cte_2)
+WITH cte_1 as MATERIALIZED (SELECT * FROM table_1),
+cte_2 AS MATERIALIZED (SELECT * FROM cte_1),
+cte_3 AS MATERIALIZED (SELECT max(key) as key FROM cte_2)
 SELECT * FROM cte_3 JOIN table_2 USING (key) WHERE table_2.key = 1;
 DEBUG:  generating subplan XXX_1 for CTE cte_1: SELECT key, value FROM locally_execute_intermediate_results.table_1
 DEBUG:  generating subplan XXX_2 for CTE cte_2: SELECT key, value FROM (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) cte_1
@@ -938,9 +932,9 @@ NOTICE:  executing the command locally: SELECT cte_3.key, table_2.value FROM ((S
 
 -- the join between cte_3 and table_2 has to cannot happen
 -- locally because the key = 2 resides on a remote node
-WITH cte_1 as (SELECT * FROM table_1),
-cte_2 AS (SELECT * FROM cte_1),
-cte_3 AS (SELECT max(key) as key FROM cte_2)
+WITH cte_1 as MATERIALIZED (SELECT * FROM table_1),
+cte_2 AS MATERIALIZED (SELECT * FROM cte_1),
+cte_3 AS MATERIALIZED (SELECT max(key) as key FROM cte_2)
 SELECT * FROM cte_3 JOIN table_2 USING (key) WHERE table_2.key = 2;
 DEBUG:  generating subplan XXX_1 for CTE cte_1: SELECT key, value FROM locally_execute_intermediate_results.table_1
 DEBUG:  generating subplan XXX_2 for CTE cte_2: SELECT key, value FROM (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) cte_1
@@ -959,9 +953,9 @@ NOTICE:  executing the command locally: SELECT max(key) AS key FROM (SELECT inte
 
 -- the join between cte_3 and ref can could have happened locally
 -- but because of the current implementation limitations we can't
-WITH cte_1 as (SELECT * FROM table_1),
-cte_2 AS (SELECT * FROM cte_1),
-cte_3 AS (SELECT max(key) as key FROM cte_2)
+WITH cte_1 as MATERIALIZED (SELECT * FROM table_1),
+cte_2 AS MATERIALIZED (SELECT * FROM cte_1),
+cte_3 AS MATERIALIZED (SELECT max(key) as key FROM cte_2)
 SELECT * FROM cte_3 JOIN ref_table USING (key);
 DEBUG:  generating subplan XXX_1 for CTE cte_1: SELECT key, value FROM locally_execute_intermediate_results.table_1
 DEBUG:  generating subplan XXX_2 for CTE cte_2: SELECT key, value FROM (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) cte_1
@@ -984,9 +978,9 @@ NOTICE:  executing the command locally: SELECT cte_3.key, ref_table.value FROM (
 
 -- some cases around router queries
 -- a router query, but the having has two cte joins
-WITH cte_1 AS (SELECT max(value) FROM table_1),
-     cte_2 AS (SELECT max(value) FROM table_1),
-     cte_3 AS (SELECT * FROM table_2)
+WITH cte_1 AS MATERIALIZED (SELECT max(value) FROM table_1),
+     cte_2 AS MATERIALIZED (SELECT max(value) FROM table_1),
+     cte_3 AS MATERIALIZED (SELECT * FROM table_2)
 SELECT count(*)
 FROM table_2
 WHERE KEY = 3
@@ -1008,9 +1002,9 @@ NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_ex
 
 -- a router query, but the having has two cte joins
 -- and the jointree has a join with another cte
-WITH cte_1 AS (SELECT max(value) FROM table_1),
-     cte_2 AS (SELECT max(value) FROM table_1),
-     cte_3 AS (SELECT * FROM table_2)
+WITH cte_1 AS MATERIALIZED (SELECT max(value) FROM table_1),
+     cte_2 AS MATERIALIZED (SELECT max(value) FROM table_1),
+     cte_3 AS MATERIALIZED (SELECT * FROM table_2)
 SELECT count(*)
 FROM table_2 JOIN cte_3 USING(key)
 WHERE KEY = 3
@@ -1036,9 +1030,9 @@ NOTICE:  executing the command locally: SELECT key, value FROM locally_execute_i
 
 -- a router query, but the having has two cte joins
 -- and the jointree has a join with the same CTEs
-WITH cte_1 AS (SELECT max(value) FROM table_1),
-     cte_2 AS (SELECT max(value) FROM table_1),
-     cte_3 AS (SELECT * FROM table_2)
+WITH cte_1 AS MATERIALIZED (SELECT max(value) FROM table_1),
+     cte_2 AS MATERIALIZED (SELECT max(value) FROM table_1),
+     cte_3 AS MATERIALIZED (SELECT * FROM table_2)
 SELECT count(*)
 FROM table_2 JOIN cte_3 USING(key) JOIN cte_2 ON (key = MAX::int) JOIN cte_1 USING(MAX)
 WHERE KEY = 3
@@ -1062,8 +1056,8 @@ NOTICE:  executing the command locally: SELECT key, value FROM locally_execute_i
 (0 rows)
 
 -- subPlans needed remotely as the subquery is pushed down
-WITH cte_1 AS (SELECT max(value) FROM table_1),
-     cte_2 AS (SELECT max(value) FROM table_2)
+WITH cte_1 AS MATERIALIZED (SELECT max(value) FROM table_1),
+     cte_2 AS MATERIALIZED (SELECT max(value) FROM table_2)
 SELECT * FROM
   (SELECT key FROM table_1 GROUP BY key HAVING max(value) > (SELECT * FROM cte_1)) as foo,
   (SELECT key FROM table_2 GROUP BY key HAVING max(value) > (SELECT * FROM cte_2)) as bar
@@ -1087,8 +1081,8 @@ NOTICE:  executing the command locally: SELECT worker_column_1 AS key, worker_co
 
 -- the second subquery needs to be recursively planned due to non-colocated subquery join
 -- so cte_2 becomes part of master query of that recursive subquery planning
-WITH cte_1 AS (SELECT max(value) FROM table_1),
-     cte_2 AS (SELECT max(value) FROM table_2)
+WITH cte_1 AS MATERIALIZED (SELECT max(value) FROM table_1),
+     cte_2 AS MATERIALIZED (SELECT max(value) FROM table_2)
 SELECT * FROM
   (SELECT value AS key FROM table_1 GROUP BY value HAVING max(value) > (SELECT * FROM cte_1)) as foo,
   (SELECT value AS key FROM table_2 GROUP BY value HAVING max(value) > (SELECT * FROM cte_2)) as bar
@@ -1116,8 +1110,8 @@ NOTICE:  executing the command locally: SELECT foo.key, bar.key FROM (SELECT int
 (0 rows)
 
 -- now, forcing all subqueries to be on the local node
-WITH cte_1 AS (SELECT max(value) FROM table_1),
-     cte_2 AS (SELECT max(value) FROM table_2)
+WITH cte_1 AS MATERIALIZED (SELECT max(value) FROM table_1),
+     cte_2 AS MATERIALIZED (SELECT max(value) FROM table_2)
 SELECT * FROM
   (SELECT value AS key FROM table_1 GROUP BY value HAVING max(value) > (SELECT * FROM cte_1) LIMIT 1) as foo,
   (SELECT value AS key FROM table_2 GROUP BY value HAVING max(value) > (SELECT * FROM cte_2) LIMIT 1) as bar
@@ -1148,7 +1142,7 @@ NOTICE:  executing the command locally: SELECT foo.key, bar.key FROM (SELECT int
 set citus.task_assignment_policy TO "round-robin" ;
 -- the query cannot be executed locally, but still because of
 -- HAVING the intermediate result is written to local file as well
-WITH cte_1 AS (SELECT max(value) FROM table_1)
+WITH cte_1 AS MATERIALIZED (SELECT max(value) FROM table_1)
 SELECT
 count(*)
 FROM
@@ -1170,8 +1164,8 @@ NOTICE:  executing the command locally: SELECT count(*) AS count, worker_column_
 
 -- On non-mx case the subquery in the WHERE part of the query can be executed locally
 -- however, on Citus MX we have this limitation where the query cannot be executed locally
-WITH cte_1 AS (SELECT max(value) FROM table_1),
-cte_2 AS (SELECT * FROM table_2)
+WITH cte_1 AS MATERIALIZED (SELECT max(value) FROM table_1),
+cte_2 AS MATERIALIZED (SELECT * FROM table_2)
 SELECT
 count(*)
 FROM
@@ -1203,8 +1197,8 @@ NOTICE:  executing the command locally: SELECT count(*) AS count, worker_column_
 
 -- subquery in the WHERE part of the query should not be executed locally
 -- because it can be pushed down with the jointree
-WITH cte_1 AS (SELECT max(value) FROM table_1),
-cte_2 AS (SELECT max(key) FROM table_2)
+WITH cte_1 AS MATERIALIZED (SELECT max(value) FROM table_1),
+cte_2 AS MATERIALIZED (SELECT max(key) FROM table_2)
 SELECT
 count(*)
 FROM
@@ -1232,9 +1226,9 @@ NOTICE:  executing the command locally: SELECT count(*) AS count, worker_column_
 
 -- although all the intermediate results are safe to be in local files
 -- we currently do not support it on Citus MX
-WITH cte_1 AS (SELECT max(value) FROM table_1),
-cte_2 AS (SELECT max(key) FROM table_2),
-cte_3 AS (SELECT * FROM table_2)
+WITH cte_1 AS MATERIALIZED (SELECT max(value) FROM table_1),
+cte_2 AS MATERIALIZED (SELECT max(key) FROM table_2),
+cte_3 AS MATERIALIZED (SELECT * FROM table_2)
 SELECT
 count(*)
 FROM
@@ -1263,8 +1257,8 @@ NOTICE:  executing the command locally: SELECT count(*) AS count FROM (SELECT in
 
 -- multiple CTEs are joined inside HAVING, so written to file
 -- locally, but nothing executed locally
-WITH cte_1 AS (SELECT max(value) FROM table_1),
-cte_2 AS (SELECT max(value) FROM table_1)
+WITH cte_1 AS MATERIALIZED (SELECT max(value) FROM table_1),
+cte_2 AS MATERIALIZED (SELECT max(value) FROM table_1)
 SELECT
 count(*)
 FROM
@@ -1293,9 +1287,9 @@ NOTICE:  executing the command locally: SELECT count(*) AS count, worker_column_
 -- multiple CTEs are joined inside HAVING, so written to file
 -- locally, also the join tree contains only another CTE, so should be
 -- executed locally, but not on an Citus MX worker
-WITH cte_1 AS (SELECT max(value) FROM table_1),
-cte_2 AS (SELECT max(value) FROM table_1),
-cte_3 AS (SELECT * FROM table_2)
+WITH cte_1 AS MATERIALIZED (SELECT max(value) FROM table_1),
+cte_2 AS MATERIALIZED (SELECT max(value) FROM table_1),
+cte_3 AS MATERIALIZED (SELECT * FROM table_2)
 SELECT
 count(*)
 FROM
@@ -1325,7 +1319,7 @@ NOTICE:  executing the command locally: SELECT key, value FROM locally_execute_i
 -- plus that could have been read locally on the coordinator
 -- because of the aggragate over the cte in HAVING
 -- but not on Citus MX
-WITH cte_1 AS (SELECT max(value) FROM table_1)
+WITH cte_1 AS MATERIALIZED (SELECT max(value) FROM table_1)
 SELECT
 count(*)
 FROM
@@ -1350,8 +1344,8 @@ NOTICE:  executing the command locally: SELECT count(*) AS count, worker_column_
 
 -- two could have been written locally and executed locally
 -- on the coordinator, but not on the workers
-WITH cte_1 AS (SELECT max(value) FROM table_1),
-cte_2 AS (SELECT * FROM table_1)
+WITH cte_1 AS MATERIALIZED (SELECT max(value) FROM table_1),
+cte_2 AS MATERIALIZED (SELECT * FROM table_1)
 SELECT
 count(*)
 FROM
@@ -1379,7 +1373,7 @@ NOTICE:  executing the command locally: SELECT count(*) AS count FROM (SELECT in
 
 -- this time the same CTE is both joined with a distributed
 -- table and used in HAVING
-WITH a AS (SELECT * FROM table_1 ORDER BY 1,2 DESC LIMIT 1)
+WITH a AS MATERIALIZED (SELECT * FROM table_1 ORDER BY 1,2 DESC LIMIT 1)
 SELECT count(*),
 key
 FROM a JOIN table_2 USING (key)
@@ -1401,7 +1395,7 @@ NOTICE:  executing the command locally: SELECT count(*) AS count, worker_column_
 -- this time the same CTE is both joined with a distributed
 -- table and used in HAVING -- but used in another subquery/aggregate
 -- so one more level of recursive planning
-WITH a AS (SELECT * FROM table_1)
+WITH a AS MATERIALIZED (SELECT * FROM table_1)
 SELECT count(*),
 key
 FROM a JOIN table_2 USING (key)
@@ -1423,13 +1417,13 @@ NOTICE:  executing the command locally: SELECT count(*) AS count, worker_column_
 (1 row)
 
 -- same query as the above, without the aggragate
-WITH a AS (SELECT max(key) as key, max(value) as value FROM ref_table)
+WITH a AS MATERIALIZED (SELECT max(key) as key, max(value) as value FROM ref_table)
 SELECT count(*),
 key
 FROM a JOIN ref_table USING (key)
 GROUP BY key
 HAVING (max(ref_table.value) <= (SELECT value FROM a));
-NOTICE:  executing the command locally: WITH a AS (SELECT max(ref_table_1.key) AS key, max(ref_table_1.value) AS value FROM locally_execute_intermediate_results.ref_table_1580008 ref_table_1) SELECT count(*) AS count, a.key FROM (a JOIN locally_execute_intermediate_results.ref_table_1580008 ref_table(key, value) USING (key)) GROUP BY a.key HAVING (max(ref_table.value) OPERATOR(pg_catalog.<=) (SELECT a_1.value FROM a a_1))
+NOTICE:  executing the command locally: WITH a AS MATERIALIZED (SELECT max(ref_table_1.key) AS key, max(ref_table_1.value) AS value FROM locally_execute_intermediate_results.ref_table_1580008 ref_table_1) SELECT count(*) AS count, a.key FROM (a JOIN locally_execute_intermediate_results.ref_table_1580008 ref_table(key, value) USING (key)) GROUP BY a.key HAVING (max(ref_table.value) OPERATOR(pg_catalog.<=) (SELECT a_1.value FROM a a_1))
  count | key
 ---------------------------------------------------------------------
      1 |   6
@@ -1439,20 +1433,18 @@ NOTICE:  executing the command locally: WITH a AS (SELECT max(ref_table_1.key) A
 -- everything could be executed locally on the coordinator,
 -- but not on the worker
 WITH cte_1 as (SELECT * FROM table_1),
-cte_2 AS (SELECT * FROM cte_1),
-cte_3 AS (SELECT max(key) FROM cte_2)
+cte_2 AS MATERIALIZED (SELECT * FROM cte_1),
+cte_3 AS MATERIALIZED (SELECT max(key) FROM cte_2)
 SELECT * FROM cte_3;
-DEBUG:  generating subplan XXX_1 for CTE cte_1: SELECT key, value FROM locally_execute_intermediate_results.table_1
-DEBUG:  generating subplan XXX_2 for CTE cte_2: SELECT key, value FROM (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) cte_1
-DEBUG:  generating subplan XXX_3 for CTE cte_3: SELECT max(key) AS max FROM (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) cte_2
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT max FROM (SELECT intermediate_result.max FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(max integer)) cte_3
+DEBUG:  CTE cte_1 is going to be inlined via distributed planning
+DEBUG:  generating subplan XXX_1 for CTE cte_2: SELECT key, value FROM (SELECT table_1.key, table_1.value FROM locally_execute_intermediate_results.table_1) cte_1
+DEBUG:  generating subplan XXX_2 for CTE cte_3: SELECT max(key) AS max FROM (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) cte_2
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT max FROM (SELECT intermediate_result.max FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(max integer)) cte_3
 DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
 NOTICE:  executing the command locally: SELECT key, value FROM locally_execute_intermediate_results.table_1_1580000 table_1 WHERE true
 NOTICE:  executing the command locally: SELECT key, value FROM locally_execute_intermediate_results.table_1_1580002 table_1 WHERE true
 DEBUG:  Subplan XXX_2 will be sent to localhost:xxxxx
-NOTICE:  executing the command locally: SELECT key, value FROM (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) cte_1
-DEBUG:  Subplan XXX_3 will be sent to localhost:xxxxx
-NOTICE:  executing the command locally: SELECT max FROM (SELECT intermediate_result.max FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(max integer)) cte_3
+NOTICE:  executing the command locally: SELECT max(key) AS max FROM (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) cte_2
  max
 ---------------------------------------------------------------------
    4
@@ -1462,20 +1454,19 @@ NOTICE:  executing the command locally: SELECT max FROM (SELECT intermediate_res
 -- locally since the key = 1 resides on this node
 -- but because of the current implementation limitations we can't
 WITH cte_1 as (SELECT * FROM table_1),
-cte_2 AS (SELECT * FROM cte_1),
-cte_3 AS (SELECT max(key) as key FROM cte_2)
+cte_2 AS MATERIALIZED (SELECT * FROM cte_1),
+cte_3 AS MATERIALIZED (SELECT max(key) as key FROM cte_2)
 SELECT * FROM cte_3 JOIN table_2 USING (key) WHERE table_2.key = 1;
-DEBUG:  generating subplan XXX_1 for CTE cte_1: SELECT key, value FROM locally_execute_intermediate_results.table_1
-DEBUG:  generating subplan XXX_2 for CTE cte_2: SELECT key, value FROM (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) cte_1
-DEBUG:  generating subplan XXX_3 for CTE cte_3: SELECT max(key) AS key FROM (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) cte_2
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT cte_3.key, table_2.value FROM ((SELECT intermediate_result.key FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) cte_3 JOIN locally_execute_intermediate_results.table_2 USING (key)) WHERE (table_2.key OPERATOR(pg_catalog.=) 1)
+DEBUG:  CTE cte_1 is going to be inlined via distributed planning
+DEBUG:  generating subplan XXX_1 for CTE cte_2: SELECT key, value FROM (SELECT table_1.key, table_1.value FROM locally_execute_intermediate_results.table_1) cte_1
+DEBUG:  generating subplan XXX_2 for CTE cte_3: SELECT max(key) AS key FROM (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) cte_2
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT cte_3.key, table_2.value FROM ((SELECT intermediate_result.key FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) cte_3 JOIN locally_execute_intermediate_results.table_2 USING (key)) WHERE (table_2.key OPERATOR(pg_catalog.=) 1)
 DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
 NOTICE:  executing the command locally: SELECT key, value FROM locally_execute_intermediate_results.table_1_1580000 table_1 WHERE true
 NOTICE:  executing the command locally: SELECT key, value FROM locally_execute_intermediate_results.table_1_1580002 table_1 WHERE true
 DEBUG:  Subplan XXX_2 will be sent to localhost:xxxxx
-DEBUG:  Subplan XXX_3 will be sent to localhost:xxxxx
-NOTICE:  executing the command locally: SELECT max(key) AS key FROM (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) cte_2
-NOTICE:  executing the command locally: SELECT cte_3.key, table_2.value FROM ((SELECT intermediate_result.key FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) cte_3 JOIN locally_execute_intermediate_results.table_2_1580004 table_2(key, value) USING (key)) WHERE (table_2.key OPERATOR(pg_catalog.=) 1)
+NOTICE:  executing the command locally: SELECT max(key) AS key FROM (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) cte_2
+NOTICE:  executing the command locally: SELECT cte_3.key, table_2.value FROM ((SELECT intermediate_result.key FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) cte_3 JOIN locally_execute_intermediate_results.table_2_1580004 table_2(key, value) USING (key)) WHERE (table_2.key OPERATOR(pg_catalog.=) 1)
  key | value
 ---------------------------------------------------------------------
 (0 rows)
@@ -1483,19 +1474,17 @@ NOTICE:  executing the command locally: SELECT cte_3.key, table_2.value FROM ((S
 -- the join between cte_3 and table_2 has to cannot happen
 -- locally because the key = 2 resides on a remote node
 WITH cte_1 as (SELECT * FROM table_1),
-cte_2 AS (SELECT * FROM cte_1),
-cte_3 AS (SELECT max(key) as key FROM cte_2)
+cte_2 AS MATERIALIZED (SELECT * FROM cte_1),
+cte_3 AS MATERIALIZED (SELECT max(key) as key FROM cte_2)
 SELECT * FROM cte_3 JOIN table_2 USING (key) WHERE table_2.key = 2;
-DEBUG:  generating subplan XXX_1 for CTE cte_1: SELECT key, value FROM locally_execute_intermediate_results.table_1
-DEBUG:  generating subplan XXX_2 for CTE cte_2: SELECT key, value FROM (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) cte_1
-DEBUG:  generating subplan XXX_3 for CTE cte_3: SELECT max(key) AS key FROM (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) cte_2
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT cte_3.key, table_2.value FROM ((SELECT intermediate_result.key FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) cte_3 JOIN locally_execute_intermediate_results.table_2 USING (key)) WHERE (table_2.key OPERATOR(pg_catalog.=) 2)
+DEBUG:  CTE cte_1 is going to be inlined via distributed planning
+DEBUG:  generating subplan XXX_1 for CTE cte_2: SELECT key, value FROM (SELECT table_1.key, table_1.value FROM locally_execute_intermediate_results.table_1) cte_1
+DEBUG:  generating subplan XXX_2 for CTE cte_3: SELECT max(key) AS key FROM (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) cte_2
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT cte_3.key, table_2.value FROM ((SELECT intermediate_result.key FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) cte_3 JOIN locally_execute_intermediate_results.table_2 USING (key)) WHERE (table_2.key OPERATOR(pg_catalog.=) 2)
 DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
 NOTICE:  executing the command locally: SELECT key, value FROM locally_execute_intermediate_results.table_1_1580000 table_1 WHERE true
 NOTICE:  executing the command locally: SELECT key, value FROM locally_execute_intermediate_results.table_1_1580002 table_1 WHERE true
 DEBUG:  Subplan XXX_2 will be sent to localhost:xxxxx
-DEBUG:  Subplan XXX_3 will be sent to localhost:xxxxx
-NOTICE:  executing the command locally: SELECT max(key) AS key FROM (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) cte_2
  key | value
 ---------------------------------------------------------------------
 (0 rows)
@@ -1503,21 +1492,20 @@ NOTICE:  executing the command locally: SELECT max(key) AS key FROM (SELECT inte
 -- the join between cte_3 and ref can could have happened locally
 -- but because of the current implementation limitations we can't
 WITH cte_1 as (SELECT * FROM table_1),
-cte_2 AS (SELECT * FROM cte_1),
-cte_3 AS (SELECT max(key) as key FROM cte_2)
+cte_2 AS MATERIALIZED (SELECT * FROM cte_1),
+cte_3 AS MATERIALIZED (SELECT max(key) as key FROM cte_2)
 SELECT * FROM cte_3 JOIN ref_table USING (key);
-DEBUG:  generating subplan XXX_1 for CTE cte_1: SELECT key, value FROM locally_execute_intermediate_results.table_1
-DEBUG:  generating subplan XXX_2 for CTE cte_2: SELECT key, value FROM (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) cte_1
-DEBUG:  generating subplan XXX_3 for CTE cte_3: SELECT max(key) AS key FROM (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) cte_2
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT cte_3.key, ref_table.value FROM ((SELECT intermediate_result.key FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) cte_3 JOIN locally_execute_intermediate_results.ref_table USING (key))
+DEBUG:  CTE cte_1 is going to be inlined via distributed planning
+DEBUG:  generating subplan XXX_1 for CTE cte_2: SELECT key, value FROM (SELECT table_1.key, table_1.value FROM locally_execute_intermediate_results.table_1) cte_1
+DEBUG:  generating subplan XXX_2 for CTE cte_3: SELECT max(key) AS key FROM (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) cte_2
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT cte_3.key, ref_table.value FROM ((SELECT intermediate_result.key FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) cte_3 JOIN locally_execute_intermediate_results.ref_table USING (key))
 DEBUG:  Subplan XXX_1 will be sent to localhost:xxxxx
 NOTICE:  executing the command locally: SELECT key, value FROM locally_execute_intermediate_results.table_1_1580000 table_1 WHERE true
 NOTICE:  executing the command locally: SELECT key, value FROM locally_execute_intermediate_results.table_1_1580002 table_1 WHERE true
 DEBUG:  Subplan XXX_2 will be sent to localhost:xxxxx
-DEBUG:  Subplan XXX_3 will be sent to localhost:xxxxx
-DEBUG:  Subplan XXX_3 will be sent to localhost:xxxxx
-NOTICE:  executing the command locally: SELECT max(key) AS key FROM (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) cte_2
-NOTICE:  executing the command locally: SELECT cte_3.key, ref_table.value FROM ((SELECT intermediate_result.key FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) cte_3 JOIN locally_execute_intermediate_results.ref_table_1580008 ref_table(key, value) USING (key))
+DEBUG:  Subplan XXX_2 will be sent to localhost:xxxxx
+NOTICE:  executing the command locally: SELECT max(key) AS key FROM (SELECT intermediate_result.key, intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, value text)) cte_2
+NOTICE:  executing the command locally: SELECT cte_3.key, ref_table.value FROM ((SELECT intermediate_result.key FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(key integer)) cte_3 JOIN locally_execute_intermediate_results.ref_table_1580008 ref_table(key, value) USING (key))
  key | value
 ---------------------------------------------------------------------
    4 | 4
@@ -1525,9 +1513,9 @@ NOTICE:  executing the command locally: SELECT cte_3.key, ref_table.value FROM (
 
 -- some cases around router queries
 -- a router query, but the having has two cte joins
-WITH cte_1 AS (SELECT max(value) FROM table_1),
-     cte_2 AS (SELECT max(value) FROM table_1),
-     cte_3 AS (SELECT * FROM table_2)
+WITH cte_1 AS MATERIALIZED (SELECT max(value) FROM table_1),
+     cte_2 AS MATERIALIZED (SELECT max(value) FROM table_1),
+     cte_3 AS MATERIALIZED (SELECT * FROM table_2)
 SELECT count(*)
 FROM table_2
 WHERE KEY = 3
@@ -1549,9 +1537,9 @@ NOTICE:  executing the command locally: SELECT max(value) AS max FROM locally_ex
 
 -- a router query, but the having has two cte joins
 -- and the jointree has a join with another cte
-WITH cte_1 AS (SELECT max(value) FROM table_1),
-     cte_2 AS (SELECT max(value) FROM table_1),
-     cte_3 AS (SELECT * FROM table_2)
+WITH cte_1 AS MATERIALIZED (SELECT max(value) FROM table_1),
+     cte_2 AS MATERIALIZED (SELECT max(value) FROM table_1),
+     cte_3 AS MATERIALIZED (SELECT * FROM table_2)
 SELECT count(*)
 FROM table_2 JOIN cte_3 USING(key)
 WHERE KEY = 3
@@ -1576,9 +1564,9 @@ NOTICE:  executing the command locally: SELECT key, value FROM locally_execute_i
 (0 rows)
 
 -- the same query as above, try to hit local node with either of the queries
-WITH cte_1 AS (SELECT max(value) FROM table_1),
-     cte_2 AS (SELECT max(value) FROM table_1),
-     cte_3 AS (SELECT * FROM table_2)
+WITH cte_1 AS MATERIALIZED (SELECT max(value) FROM table_1),
+     cte_2 AS MATERIALIZED (SELECT max(value) FROM table_1),
+     cte_3 AS MATERIALIZED (SELECT * FROM table_2)
 SELECT count(*)
 FROM table_2 JOIN cte_3 USING(key)
 WHERE KEY = 3
@@ -1604,9 +1592,9 @@ NOTICE:  executing the command locally: SELECT key, value FROM locally_execute_i
 
 -- a router query, but the having has two cte joins
 -- and the jointree has a join with the same CTEs
-WITH cte_1 AS (SELECT max(value) FROM table_1),
-     cte_2 AS (SELECT max(value) FROM table_1),
-     cte_3 AS (SELECT * FROM table_2)
+WITH cte_1 AS MATERIALIZED (SELECT max(value) FROM table_1),
+     cte_2 AS MATERIALIZED (SELECT max(value) FROM table_1),
+     cte_3 AS MATERIALIZED (SELECT * FROM table_2)
 SELECT count(*)
 FROM table_2 JOIN cte_3 USING(key) JOIN cte_2 ON (key = MAX::int) JOIN cte_1 USING(MAX)
 WHERE KEY = 3
@@ -1631,8 +1619,8 @@ NOTICE:  executing the command locally: SELECT key, value FROM locally_execute_i
 (0 rows)
 
 - subPlans needed remotely as the subquery is pushed down
-WITH cte_1 AS (SELECT max(value) FROM table_1),
-     cte_2 AS (SELECT max(value) FROM table_2)
+WITH cte_1 AS MATERIALIZED (SELECT max(value) FROM table_1),
+     cte_2 AS MATERIALIZED (SELECT max(value) FROM table_2)
 SELECT * FROM
   (SELECT key FROM table_1 GROUP BY key HAVING max(value) > (SELECT * FROM cte_1)) as foo,
   (SELECT key FROM table_2 GROUP BY key HAVING max(value) > (SELECT * FROM cte_2)) as bar
@@ -1640,8 +1628,8 @@ SELECT * FROM
 ERROR:  syntax error at or near "-"
 -- the second subquery needs to be recursively planned due to non-colocated subquery join
 -- so cte_2 becomes part of master query of that recursive subquery planning
-WITH cte_1 AS (SELECT max(value) FROM table_1),
-     cte_2 AS (SELECT max(value) FROM table_2)
+WITH cte_1 AS MATERIALIZED (SELECT max(value) FROM table_1),
+     cte_2 AS MATERIALIZED (SELECT max(value) FROM table_2)
 SELECT * FROM
   (SELECT value AS key FROM table_1 GROUP BY value HAVING max(value) > (SELECT * FROM cte_1)) as foo,
   (SELECT value AS key FROM table_2 GROUP BY value HAVING max(value) > (SELECT * FROM cte_2)) as bar
@@ -1668,8 +1656,8 @@ NOTICE:  executing the command locally: SELECT worker_column_1 AS key, max(worke
 (0 rows)
 
 -- now, forcing all subqueries to be on the local node
-WITH cte_1 AS (SELECT max(value) FROM table_1),
-     cte_2 AS (SELECT max(value) FROM table_2)
+WITH cte_1 AS MATERIALIZED (SELECT max(value) FROM table_1),
+     cte_2 AS MATERIALIZED (SELECT max(value) FROM table_2)
 SELECT * FROM
   (SELECT value AS key FROM table_1 GROUP BY value HAVING max(value) > (SELECT * FROM cte_1) LIMIT 1) as foo,
   (SELECT value AS key FROM table_2 GROUP BY value HAVING max(value) > (SELECT * FROM cte_2) LIMIT 1) as bar

@@ -12,7 +12,6 @@ SELECT 1 FROM master_add_node('localhost', :master_port, groupId => 0);
 RESET client_min_messages;
 
 -- make results consistent
-SET citus.enable_cte_inlining TO OFF;
 
 -- create test tables
 CREATE TABLE postgres_local_table (a int);
@@ -156,16 +155,16 @@ SELECT COUNT(*) FROM unlogged_distributed_table u1 JOIN partitioned_distributed_
 RESET citus.enable_repartition_joins;
 
 -- joins with cte's
-WITH cte_1 AS (SELECT * FROM partitioned_distributed_table)
+WITH cte_1 AS MATERIALIZED (SELECT * FROM partitioned_distributed_table)
   SELECT COUNT(*) FROM cte_1;
 
-WITH cte_1 AS (SELECT * FROM partitioned_distributed_table)
+WITH cte_1 AS MATERIALIZED (SELECT * FROM partitioned_distributed_table)
   SELECT COUNT(*) FROM cte_1 JOIN partitioned_distributed_table USING (a);
 
-WITH cte_1 AS (SELECT * FROM foreign_distributed_table)
+WITH cte_1 AS MATERIALIZED (SELECT * FROM foreign_distributed_table)
   SELECT COUNT(*) FROM cte_1 JOIN foreign_distributed_table USING (a);
 
-WITH cte_1 AS (SELECT * FROM partitioned_distributed_table)
+WITH cte_1 AS MATERIALIZED (SELECT * FROM partitioned_distributed_table)
   SELECT COUNT(*) FROM cte_1 JOIN partitioned_distributed_table USING (b);
 
 -- multi shard colocated update
@@ -182,8 +181,8 @@ FROM (SELECT * FROM unlogged_distributed_table WHERE b = 1) AS sub1,
 WHERE sub1.a = sub2.a AND sub1.a = dt.a AND dt.a > 1;
 
 -- multi shard non-colocated update
-WITH cte1 AS (SELECT * FROM partitioned_distributed_table WHERE b = 1),
-     cte2 AS (SELECT * FROM partitioned_distributed_table WHERE b = 2)
+WITH cte1 AS MATERIALIZED (SELECT * FROM partitioned_distributed_table WHERE b = 1),
+     cte2 AS MATERIALIZED (SELECT * FROM partitioned_distributed_table WHERE b = 2)
 UPDATE partitioned_distributed_table dt SET b = cte1.a + cte2.a
 FROM cte1, cte2 WHERE cte1.a != cte2.a AND cte1.a = dt.a AND dt.a > 1;
 

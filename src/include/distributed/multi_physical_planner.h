@@ -58,9 +58,7 @@ typedef enum CitusRTEKind
 	CITUS_RTE_VALUES = RTE_VALUES,      /* VALUES (<exprlist>), (<exprlist>), ... */
 	CITUS_RTE_CTE = RTE_CTE,            /* common table expr (WITH list element) */
 	CITUS_RTE_NAMEDTUPLESTORE = RTE_NAMEDTUPLESTORE, /* tuplestore, e.g. for triggers */
-#if (PG_VERSION_NUM >= PG_VERSION_12)
 	CITUS_RTE_RESULT = RTE_RESULT,      /* RTE represents an empty FROM clause */
-#endif
 	CITUS_RTE_SHARD,
 	CITUS_RTE_REMOTE_QUERY
 } CitusRTEKind;

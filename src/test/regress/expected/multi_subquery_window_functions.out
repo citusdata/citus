@@ -712,68 +712,68 @@ EXPLAIN (COSTS FALSE, VERBOSE TRUE)
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       QUERY PLAN
 ---------------------------------------------------------------------
  Limit
-   Output: xxxxxx
+   Output: remote_scan.user_id, remote_scan.sum
    ->  Sort
-         Output: xxxxxx
+         Output: remote_scan.user_id, remote_scan.sum
          Sort Key: remote_scan.sum DESC, remote_scan.user_id DESC
          ->  Custom Scan (Citus Adaptive)
-               Output: xxxxxx
+               Output: remote_scan.user_id, remote_scan.sum
                Task Count: 4
                Tasks Shown: One of 4
                ->  Task
                      Query: SELECT worker_column_1 AS user_id, worker_column_2 AS sum FROM (SELECT ftop.user_id AS worker_column_1, ftop.sum AS worker_column_2 FROM (SELECT user_id_1.user_id, sum(user_id_1.counter) AS sum FROM (SELECT users_table.user_id, sum(users_table.value_2) OVER (PARTITION BY users_table.user_id) AS counter FROM public.users_table_1400256 users_table UNION SELECT events_table.user_id, sum(events_table.value_2) OVER (PARTITION BY events_table.user_id) AS counter FROM public.events_table_1400260 events_table) user_id_1 GROUP BY user_id_1.user_id UNION SELECT user_id_2.user_id, sum(user_id_2.counter) AS sum FROM (SELECT users_table.user_id, sum(users_table.value_2) OVER (PARTITION BY users_table.user_id) AS counter FROM public.users_table_1400256 users_table UNION SELECT events_table.user_id, sum(events_table.value_2) OVER (PARTITION BY events_table.user_id) AS counter FROM public.events_table_1400260 events_table) user_id_2 GROUP BY user_id_2.user_id) ftop) worker_subquery ORDER BY worker_column_2 DESC, worker_column_1 DESC LIMIT '5'::bigint
                      Node: host=localhost port=xxxxx dbname=regression
                      ->  Limit
-                           Output: xxxxxx
+                           Output: users_table.user_id, (sum((sum(users_table.value_2) OVER (?))))
                            ->  Sort
-                                 Output: xxxxxx
+                                 Output: users_table.user_id, (sum((sum(users_table.value_2) OVER (?))))
                                  Sort Key: (sum((sum(users_table.value_2) OVER (?)))) DESC, users_table.user_id DESC
                                  ->  HashAggregate
-                                       Output: xxxxxx
+                                       Output: users_table.user_id, (sum((sum(users_table.value_2) OVER (?))))
                                        Group Key: users_table.user_id, (sum((sum(users_table.value_2) OVER (?))))
                                        ->  Append
                                              ->  HashAggregate
-                                                   Output: xxxxxx
+                                                   Output: users_table.user_id, sum((sum(users_table.value_2) OVER (?)))
                                                    Group Key: users_table.user_id
                                                    ->  HashAggregate
-                                                         Output: xxxxxx
+                                                         Output: users_table.user_id, (sum(users_table.value_2) OVER (?))
                                                          Group Key: users_table.user_id, (sum(users_table.value_2) OVER (?))
                                                          ->  Append
                                                                ->  WindowAgg
-                                                                     Output: xxxxxx
+                                                                     Output: users_table.user_id, sum(users_table.value_2) OVER (?)
                                                                      ->  Sort
-                                                                           Output: xxxxxx
+                                                                           Output: users_table.user_id, users_table.value_2
                                                                            Sort Key: users_table.user_id
                                                                            ->  Seq Scan on public.users_table_1400256 users_table
-                                                                                 Output: xxxxxx
+                                                                                 Output: users_table.user_id, users_table.value_2
                                                                ->  WindowAgg
-                                                                     Output: xxxxxx
+                                                                     Output: events_table.user_id, sum(events_table.value_2) OVER (?)
                                                                      ->  Sort
-                                                                           Output: xxxxxx
+                                                                           Output: events_table.user_id, events_table.value_2
                                                                            Sort Key: events_table.user_id
                                                                            ->  Seq Scan on public.events_table_1400260 events_table
-                                                                                 Output: xxxxxx
+                                                                                 Output: events_table.user_id, events_table.value_2
                                              ->  HashAggregate
-                                                   Output: xxxxxx
+                                                   Output: users_table_1.user_id, sum((sum(users_table_1.value_2) OVER (?)))
                                                    Group Key: users_table_1.user_id
                                                    ->  HashAggregate
-                                                         Output: xxxxxx
+                                                         Output: users_table_1.user_id, (sum(users_table_1.value_2) OVER (?))
                                                          Group Key: users_table_1.user_id, (sum(users_table_1.value_2) OVER (?))
                                                          ->  Append
                                                                ->  WindowAgg
-                                                                     Output: xxxxxx
+                                                                     Output: users_table_1.user_id, sum(users_table_1.value_2) OVER (?)
                                                                      ->  Sort
-                                                                           Output: xxxxxx
+                                                                           Output: users_table_1.user_id, users_table_1.value_2
                                                                            Sort Key: users_table_1.user_id
                                                                            ->  Seq Scan on public.users_table_1400256 users_table_1
-                                                                                 Output: xxxxxx
+                                                                                 Output: users_table_1.user_id, users_table_1.value_2
                                                                ->  WindowAgg
-                                                                     Output: xxxxxx
+                                                                     Output: events_table_1.user_id, sum(events_table_1.value_2) OVER (?)
                                                                      ->  Sort
-                                                                           Output: xxxxxx
+                                                                           Output: events_table_1.user_id, events_table_1.value_2
                                                                            Sort Key: events_table_1.user_id
                                                                            ->  Seq Scan on public.events_table_1400260 events_table_1
-                                                                                 Output: xxxxxx
+                                                                                 Output: events_table_1.user_id, events_table_1.value_2
 (63 rows)
 
 -- test with window functions which aren't pushed down

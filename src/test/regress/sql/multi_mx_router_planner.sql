@@ -6,9 +6,7 @@
 
 -- run all the router queries from the one of the workers
 
--- prevent PG 11 - PG 12 outputs to diverge
 -- and CTE inlining is not relevant to router plannery anyway
-SET citus.enable_cte_inlining TO false;
 
 \c - - - :worker_1_port
 -- this table is used in a CTE test

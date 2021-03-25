@@ -100,11 +100,7 @@
 #include "distributed/worker_protocol.h"
 #include "executor/tstoreReceiver.h"
 #include "executor/tuptable.h"
-#if PG_VERSION_NUM >= PG_VERSION_12
 #include "optimizer/optimizer.h"
-#else
-#include "optimizer/planner.h"
-#endif
 #include "nodes/params.h"
 #include "utils/snapmgr.h"
 
@@ -208,6 +204,19 @@ ExecuteLocalTaskListExtended(List *taskList,
 	int numParams = 0;
 	Oid *parameterTypes = NULL;
 	uint64 totalRowsProcessed = 0;
+
+	/*
+	 * Even if we are executing local tasks, we still enable
+	 * coordinated transaction. This is because
+	 *  (a) we might be in a transaction, and the next commands may
+	 *      require coordinated transaction
+	 *  (b) we might be executing some tasks locally and the others
+	 *      via remote execution
+	 *
+	 * Also, there is no harm enabling coordinated transaction even if
+	 * we only deal with local tasks in the transaction.
+	 */
+	UseCoordinatedTransaction();
 
 	if (paramListInfo != NULL)
 	{

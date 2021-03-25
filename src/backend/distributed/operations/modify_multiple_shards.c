@@ -48,12 +48,7 @@
 #include "distributed/worker_protocol.h"
 #include "distributed/worker_transaction.h"
 #include "optimizer/clauses.h"
-#if PG_VERSION_NUM >= PG_VERSION_12
 #include "optimizer/optimizer.h"
-#else
-#include "optimizer/predtest.h"
-#include "optimizer/var.h"
-#endif
 #include "optimizer/restrictinfo.h"
 #include "nodes/makefuncs.h"
 #include "tcop/tcopprot.h"

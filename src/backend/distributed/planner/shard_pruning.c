@@ -188,16 +188,12 @@ typedef struct PendingPruningInstance
 	PruningTreeNode *continueAt;
 } PendingPruningInstance;
 
-#if PG_VERSION_NUM >= PG_VERSION_12
 typedef union \
 { \
 	FunctionCallInfoBaseData fcinfo; \
 	/* ensure enough space for nargs args is available */ \
 	char fcinfo_data[SizeForFunctionCallInfo(2)]; \
 } FunctionCall2InfoData;
-#else
-typedef FunctionCallInfoData FunctionCall2InfoData;
-#endif
 
 /*
  * We also ignore this warning in ./configure, but that's not always enough.

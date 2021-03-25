@@ -554,10 +554,10 @@ $$);
                                                                                    coordinator_plan
 ---------------------------------------------------------------------
  Sort
-   Output: xxxxxx
+   Output: remote_scan.k1, remote_scan.k2, remote_scan.k3, remote_scan.v1, remote_scan.v2, remote_scan.v3, remote_scan.va1, remote_scan.va2, remote_scan.va3, remote_scan.count
    Sort Key: remote_scan.k1
    ->  Custom Scan (Citus Adaptive)
-         Output: xxxxxx
+         Output: remote_scan.k1, remote_scan.k2, remote_scan.k3, remote_scan.v1, remote_scan.v2, remote_scan.v3, remote_scan.va1, remote_scan.va2, remote_scan.va3, remote_scan.count
          Task Count: 4
 (6 rows)
 

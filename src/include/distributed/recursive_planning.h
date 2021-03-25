@@ -16,11 +16,7 @@
 #include "distributed/relation_restriction_equivalence.h"
 #include "nodes/pg_list.h"
 #include "nodes/primnodes.h"
-#if PG_VERSION_NUM >= PG_VERSION_12
 #include "nodes/pathnodes.h"
-#else
-#include "nodes/relation.h"
-#endif
 
 typedef struct RecursivePlanningContextInternal RecursivePlanningContext;
 

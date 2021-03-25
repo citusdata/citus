@@ -346,11 +346,7 @@ FindCitusExtradataContainerRTE(Node *node, RangeTblEntry **result)
 	}
 	else if (IsA(node, Query))
 	{
-#if PG_VERSION_NUM >= PG_VERSION_12
 		const int flags = QTW_EXAMINE_RTES_BEFORE;
-#else
-		const int flags = QTW_EXAMINE_RTES;
-#endif
 		return query_tree_walker((Query *) node, FindCitusExtradataContainerRTE, result,
 								 flags);
 	}

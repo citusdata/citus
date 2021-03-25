@@ -342,7 +342,7 @@ BEGIN;
   $update_value$ LANGUAGE plpgsql;
   CREATE TRIGGER update_value_dist
   AFTER INSERT ON citus_local_table_6
-  FOR EACH ROW EXECUTE FUNCTION update_value();
+  FOR EACH ROW EXECUTE PROCEDURE update_value();
   -- show that we error out as we don't supprt triggers on distributed tables
   SELECT create_distributed_table('citus_local_table_6', 'col_1');
 ERROR:  cannot distribute relation "citus_local_table_6" because it has triggers

@@ -423,21 +423,13 @@ CopyToExistingShards(CopyStmt *copyStatement, QueryCompletionCompat *completionT
 {
 	Oid tableId = RangeVarGetRelid(copyStatement->relation, NoLock, false);
 
-	CitusCopyDestReceiver *copyDest = NULL;
-	DestReceiver *dest = NULL;
 
-	Relation copiedDistributedRelation = NULL;
-	Form_pg_class copiedDistributedRelationTuple = NULL;
 	List *columnNameList = NIL;
 	int partitionColumnIndex = INVALID_PARTITION_COLUMN_INDEX;
 
-	EState *executorState = NULL;
-	MemoryContext executorTupleContext = NULL;
-	ExprContext *executorExpressionContext = NULL;
 
 	bool stopOnFailure = false;
 
-	CopyState copyState = NULL;
 	uint64 processedRowCount = 0;
 
 	ErrorContextCallback errorCallback;
@@ -469,10 +461,8 @@ CopyToExistingShards(CopyStmt *copyStatement, QueryCompletionCompat *completionT
 		Form_pg_attribute currentColumn = TupleDescAttr(tupleDescriptor, columnIndex);
 		char *columnName = NameStr(currentColumn->attname);
 
-		if (currentColumn->attisdropped
-#if PG_VERSION_NUM >= PG_VERSION_12
-			|| currentColumn->attgenerated == ATTRIBUTE_GENERATED_STORED
-#endif
+		if (currentColumn->attisdropped ||
+			currentColumn->attgenerated == ATTRIBUTE_GENERATED_STORED
 			)
 		{
 			continue;
@@ -481,9 +471,9 @@ CopyToExistingShards(CopyStmt *copyStatement, QueryCompletionCompat *completionT
 		columnNameList = lappend(columnNameList, columnName);
 	}
 
-	executorState = CreateExecutorState();
-	executorTupleContext = GetPerTupleMemoryContext(executorState);
-	executorExpressionContext = GetPerTupleExprContext(executorState);
+	EState *executorState = CreateExecutorState();
+	MemoryContext executorTupleContext = GetPerTupleMemoryContext(executorState);
+	ExprContext *executorExpressionContext = GetPerTupleExprContext(executorState);
 
 	if (IsCitusTableType(tableId, REFERENCE_TABLE))
 	{
@@ -491,9 +481,11 @@ CopyToExistingShards(CopyStmt *copyStatement, QueryCompletionCompat *completionT
 	}
 
 	/* set up the destination for the COPY */
-	copyDest = CreateCitusCopyDestReceiver(tableId, columnNameList, partitionColumnIndex,
-										   executorState, stopOnFailure, NULL);
-	dest = (DestReceiver *) copyDest;
+	CitusCopyDestReceiver *copyDest = CreateCitusCopyDestReceiver(tableId, columnNameList,
+																  partitionColumnIndex,
+																  executorState,
+																  stopOnFailure, NULL);
+	DestReceiver *dest = (DestReceiver *) copyDest;
 	dest->rStartup(dest, 0, tupleDescriptor);
 
 	/*
@@ -501,8 +493,9 @@ CopyToExistingShards(CopyStmt *copyStatement, QueryCompletionCompat *completionT
 	 * of BeginCopyFrom. However, we obviously should not do this in relcache
 	 * and therefore make a copy of the Relation.
 	 */
-	copiedDistributedRelation = (Relation) palloc(sizeof(RelationData));
-	copiedDistributedRelationTuple = (Form_pg_class) palloc(CLASS_TUPLE_SIZE);
+	Relation copiedDistributedRelation = (Relation) palloc(sizeof(RelationData));
+	Form_pg_class copiedDistributedRelationTuple =
+		(Form_pg_class) palloc(CLASS_TUPLE_SIZE);
 
 	/*
 	 * There is no need to deep copy everything. We will just deep copy of the fields
@@ -527,13 +520,13 @@ CopyToExistingShards(CopyStmt *copyStatement, QueryCompletionCompat *completionT
 	}
 
 	/* initialize copy state to read from COPY data source */
-	copyState = BeginCopyFrom(NULL,
-							  copiedDistributedRelation,
-							  copyStatement->filename,
-							  copyStatement->is_program,
-							  NULL,
-							  copyStatement->attlist,
-							  copyStatement->options);
+	CopyState copyState = BeginCopyFrom(NULL,
+										copiedDistributedRelation,
+										copyStatement->filename,
+										copyStatement->is_program,
+										NULL,
+										copyStatement->attlist,
+										copyStatement->options);
 
 	/* set up callback to identify error line number */
 	errorCallback.callback = CopyFromErrorCallback;
@@ -945,18 +938,15 @@ CanUseBinaryCopyFormat(TupleDesc tupleDescription)
 	for (int columnIndex = 0; columnIndex < totalColumnCount; columnIndex++)
 	{
 		Form_pg_attribute currentColumn = TupleDescAttr(tupleDescription, columnIndex);
-		Oid typeId = InvalidOid;
 
-		if (currentColumn->attisdropped
-#if PG_VERSION_NUM >= PG_VERSION_12
-			|| currentColumn->attgenerated == ATTRIBUTE_GENERATED_STORED
-#endif
+		if (currentColumn->attisdropped ||
+			currentColumn->attgenerated == ATTRIBUTE_GENERATED_STORED
 			)
 		{
 			continue;
 		}
 
-		typeId = currentColumn->atttypid;
+		Oid typeId = currentColumn->atttypid;
 		if (!CanUseBinaryCopyFormatForType(typeId))
 		{
 			useBinaryCopyFormat = false;
@@ -1417,10 +1407,8 @@ TypeArrayFromTupleDescriptor(TupleDesc tupleDescriptor)
 	for (int columnIndex = 0; columnIndex < columnCount; columnIndex++)
 	{
 		Form_pg_attribute attr = TupleDescAttr(tupleDescriptor, columnIndex);
-		if (attr->attisdropped
-#if PG_VERSION_NUM >= PG_VERSION_12
-			|| attr->attgenerated == ATTRIBUTE_GENERATED_STORED
-#endif
+		if (attr->attisdropped ||
+			attr->attgenerated == ATTRIBUTE_GENERATED_STORED
 			)
 		{
 			typeArray[columnIndex] = InvalidOid;
@@ -1589,10 +1577,8 @@ AppendCopyRowData(Datum *valueArray, bool *isNullArray, TupleDesc rowDescriptor,
 			value = CoerceColumnValue(value, &columnCoercionPaths[columnIndex]);
 		}
 
-		if (currentColumn->attisdropped
-#if PG_VERSION_NUM >= PG_VERSION_12
-			|| currentColumn->attgenerated == ATTRIBUTE_GENERATED_STORED
-#endif
+		if (currentColumn->attisdropped ||
+			currentColumn->attgenerated == ATTRIBUTE_GENERATED_STORED
 			)
 		{
 			continue;
@@ -1712,10 +1698,8 @@ AvailableColumnCount(TupleDesc tupleDescriptor)
 	{
 		Form_pg_attribute currentColumn = TupleDescAttr(tupleDescriptor, columnIndex);
 
-		if (!currentColumn->attisdropped
-#if PG_VERSION_NUM >= PG_VERSION_12
-			&& currentColumn->attgenerated != ATTRIBUTE_GENERATED_STORED
-#endif
+		if (!currentColumn->attisdropped &&
+			currentColumn->attgenerated != ATTRIBUTE_GENERATED_STORED
 			)
 		{
 			columnCount++;
@@ -2993,13 +2977,11 @@ ProcessCopyStmt(CopyStmt *copyStatement, QueryCompletionCompat *completionTag, c
 		{
 			if (copyStatement->is_from)
 			{
-#if PG_VERSION_NUM >= PG_VERSION_12
 				if (copyStatement->whereClause)
 				{
 					ereport(ERROR, (errmsg(
 										"Citus does not support COPY FROM with WHERE")));
 				}
-#endif
 
 				/* check permissions, we're bypassing postgres' normal checks */
 				CheckCopyPermissions(copyStatement);
@@ -3054,10 +3036,8 @@ CitusCopySelect(CopyStmt *copyStatement)
 	{
 		Form_pg_attribute attr = &tupleDescriptor->attrs[i];
 
-		if (attr->attisdropped
-#if PG_VERSION_NUM >= PG_VERSION_12
-			|| attr->attgenerated
-#endif
+		if (attr->attisdropped ||
+			attr->attgenerated
 			)
 		{
 			continue;
@@ -3312,10 +3292,8 @@ CopyGetAttnums(TupleDesc tupDesc, Relation rel, List *attnamelist)
 		{
 			if (TupleDescAttr(tupDesc, i)->attisdropped)
 				continue;
-#if PG_VERSION_NUM >= PG_VERSION_12
 			if (TupleDescAttr(tupDesc, i)->attgenerated)
 				continue;
-#endif
 			attnums = lappend_int(attnums, i + 1);
 		}
 	}
@@ -3340,14 +3318,12 @@ CopyGetAttnums(TupleDesc tupDesc, Relation rel, List *attnamelist)
 					continue;
 				if (namestrcmp(&(att->attname), name) == 0)
 				{
-#if PG_VERSION_NUM >= PG_VERSION_12
 					if (att->attgenerated)
 						ereport(ERROR,
 								(errcode(ERRCODE_INVALID_COLUMN_REFERENCE),
 								 errmsg("column \"%s\" is a generated column",
 										name),
 								 errdetail("Generated columns cannot be used in COPY.")));
-#endif
 					attnum = att->attnum;
 					break;
 				}

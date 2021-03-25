@@ -408,7 +408,6 @@ extern List * PreprocessCreateEnumStmt(Node *stmt, const char *queryString,
 extern List * PostprocessCreateEnumStmt(Node *stmt, const char *queryString);
 extern List * PreprocessAlterEnumStmt(Node *stmt, const char *queryString,
 									  ProcessUtilityContext processUtilityContext);
-extern List * PostprocessAlterEnumStmt(Node *stmt, const char *queryString);
 extern List * PreprocessDropTypeStmt(Node *stmt, const char *queryString,
 									 ProcessUtilityContext processUtilityContext);
 extern List * PreprocessRenameTypeStmt(Node *stmt, const char *queryString,

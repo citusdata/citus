@@ -2556,7 +2556,7 @@ if test -z "$version_num"; then
   as_fn_error $? "Could not detect PostgreSQL version from pg_config." "$LINENO" 5
 fi
 
-if test "$version_num" != '11' -a "$version_num" != '12' -a "$version_num" != '13'; then
+if test "$version_num" != '12' -a "$version_num" != '13'; then
    as_fn_error $? "Citus is not compatible with the detected PostgreSQL version ${version_num}." "$LINENO" 5
 else
    { $as_echo "$as_me:${as_lineno-$LINENO}: building against PostgreSQL $version_num" >&5
@@ -4533,15 +4533,8 @@ cat >>confdefs.h <<_ACEOF
 _ACEOF
 
 
-if test "$version_num" != '11'; then
-   HAS_TABLEAM=yes
-
+HAS_TABLEAM=yes
 $as_echo "#define HAS_TABLEAM 1" >>confdefs.h
-
-else
-   { $as_echo "$as_me:${as_lineno-$LINENO}: postgres version does not support table access methods" >&5
-$as_echo "$as_me: postgres version does not support table access methods" >&6;}
-fi;
 
 # Require lz4 & zstd only if we are compiling columnar
 if test "$HAS_TABLEAM" == 'yes'; then
@@ -4622,7 +4615,7 @@ else
   as_fn_error $? "lz4 library not found
   If you have lz4 installed, see config.log for details on the
   failure.  It is possible the compiler isn't looking in the proper directory.
-  Use --without-lz4 to disable zlib support." "$LINENO" 5
+  Use --without-lz4 to disable lz4 support." "$LINENO" 5
 fi
 
     ac_fn_c_check_header_mongrel "$LINENO" "lz4.h" "ac_cv_header_lz4_h" "$ac_includes_default"
@@ -4715,7 +4708,7 @@ else
   as_fn_error $? "zstd library not found
   If you have zstd installed, see config.log for details on the
   failure.  It is possible the compiler isn't looking in the proper directory.
-  Use --without-zstd to disable zlib support." "$LINENO" 5
+  Use --without-zstd to disable zstd support." "$LINENO" 5
 fi
 
     ac_fn_c_check_header_mongrel "$LINENO" "zstd.h" "ac_cv_header_zstd_h" "$ac_includes_default"
@@ -4725,7 +4718,7 @@ else
   as_fn_error $? "zstd header not found
   If you have zstd already installed, see config.log for details on the
   failure.  It is possible the compiler isn't looking in the proper directory.
-  Use --without-zstd to disable zlib support." "$LINENO" 5
+  Use --without-zstd to disable zstd support." "$LINENO" 5
 fi
 
 

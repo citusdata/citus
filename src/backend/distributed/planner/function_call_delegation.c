@@ -43,9 +43,7 @@
 #include "nodes/primnodes.h"
 #include "optimizer/clauses.h"
 #include "parser/parse_coerce.h"
-#if PG_VERSION_NUM >= PG_VERSION_12
 #include "parser/parsetree.h"
-#endif
 #include "miscadmin.h"
 #include "tcop/dest.h"
 #include "utils/lsyscache.h"
@@ -102,18 +100,8 @@ contain_param_walker(Node *node, void *context)
 PlannedStmt *
 TryToDelegateFunctionCall(DistributedPlanningContext *planContext)
 {
-	List *targetList = NIL;
-	TargetEntry *targetEntry = NULL;
-	FuncExpr *funcExpr = NULL;
-	DistObjectCacheEntry *procedure = NULL;
-	Oid colocatedRelationId = InvalidOid;
 	bool colocatedWithReferenceTable = false;
-	CitusTableCacheEntry *distTable = NULL;
-	Var *partitionColumn = NULL;
 	ShardPlacement *placement = NULL;
-	WorkerNode *workerNode = NULL;
-	Task *task = NULL;
-	Job *job = NULL;
 	DistributedPlan *distributedPlan = CitusMakeNode(DistributedPlan);
 	struct ParamWalkerContext walkerParamContext = { 0 };
 
@@ -157,8 +145,6 @@ TryToDelegateFunctionCall(DistributedPlanningContext *planContext)
 
 	if (joinTree->fromlist != NIL)
 	{
-#if PG_VERSION_NUM >= PG_VERSION_12
-
 		/*
 		 * In pg12's planning phase empty FROMs are represented with an RTE_RESULT.
 		 * When we arrive here, standard_planner has already been called which calls
@@ -194,29 +180,25 @@ TryToDelegateFunctionCall(DistributedPlanningContext *planContext)
 			Assert(list_length(joinTree->fromlist) > 1);
 			return NULL;
 		}
-#else
-
-		/* query has a FROM section */
-		return NULL;
-#endif
 	}
 
-	targetList = planContext->query->targetList;
+	List *targetList = planContext->query->targetList;
 	if (list_length(planContext->query->targetList) != 1)
 	{
 		/* multiple target list items */
 		return NULL;
 	}
 
-	targetEntry = (TargetEntry *) linitial(targetList);
+	TargetEntry *targetEntry = (TargetEntry *) linitial(targetList);
 	if (!IsA(targetEntry->expr, FuncExpr))
 	{
 		/* target list item is not a function call */
 		return NULL;
 	}
 
-	funcExpr = (FuncExpr *) targetEntry->expr;
-	procedure = LookupDistObjectCacheEntry(ProcedureRelationId, funcExpr->funcid, 0);
+	FuncExpr *funcExpr = (FuncExpr *) targetEntry->expr;
+	DistObjectCacheEntry *procedure = LookupDistObjectCacheEntry(ProcedureRelationId,
+																 funcExpr->funcid, 0);
 	if (procedure == NULL || !procedure->isDistributed)
 	{
 		/* not a distributed function call */
@@ -252,15 +234,15 @@ TryToDelegateFunctionCall(DistributedPlanningContext *planContext)
 		return NULL;
 	}
 
-	colocatedRelationId = ColocatedTableId(procedure->colocationId);
+	Oid colocatedRelationId = ColocatedTableId(procedure->colocationId);
 	if (colocatedRelationId == InvalidOid)
 	{
 		ereport(DEBUG1, (errmsg("function does not have co-located tables")));
 		return NULL;
 	}
 
-	distTable = GetCitusTableCacheEntry(colocatedRelationId);
-	partitionColumn = distTable->partitionColumn;
+	CitusTableCacheEntry *distTable = GetCitusTableCacheEntry(colocatedRelationId);
+	Var *partitionColumn = distTable->partitionColumn;
 	if (partitionColumn == NULL)
 	{
 		colocatedWithReferenceTable = true;
@@ -295,7 +277,7 @@ TryToDelegateFunctionCall(DistributedPlanningContext *planContext)
 		return false;
 	}
 
-	workerNode = FindWorkerNode(placement->nodeName, placement->nodePort);
+	WorkerNode *workerNode = FindWorkerNode(placement->nodeName, placement->nodePort);
 
 	if (workerNode == NULL || !workerNode->hasMetadata || !workerNode->metadataSynced)
 	{
@@ -334,14 +316,14 @@ TryToDelegateFunctionCall(DistributedPlanningContext *planContext)
 
 	ereport(DEBUG1, (errmsg("pushing down the function call")));
 
-	task = CitusMakeNode(Task);
+	Task *task = CitusMakeNode(Task);
 	task->taskType = READ_TASK;
 	task->taskPlacementList = list_make1(placement);
 	SetTaskQueryIfShouldLazyDeparse(task, planContext->query);
 	task->anchorShardId = placement->shardId;
 	task->replicationModel = distTable->replicationModel;
 
-	job = CitusMakeNode(Job);
+	Job *job = CitusMakeNode(Job);
 	job->jobId = UniqueJobId();
 	job->jobQuery = planContext->query;
 	job->taskList = list_make1(task);

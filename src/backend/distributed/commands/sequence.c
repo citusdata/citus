@@ -178,13 +178,11 @@ ExtractDefaultColumnsAndOwnedSequences(Oid relationId, List **columnNameList,
 			continue;
 		}
 
-#if PG_VERSION_NUM >= PG_VERSION_12
 		if (attributeForm->attgenerated == ATTRIBUTE_GENERATED_STORED)
 		{
 			/* skip columns with GENERATED AS ALWAYS expressions */
 			continue;
 		}
-#endif
 
 		char *columnName = NameStr(attributeForm->attname);
 		*columnNameList = lappend(*columnNameList, columnName);

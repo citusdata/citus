@@ -61,13 +61,8 @@
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
 #include "optimizer/clauses.h"
-#if PG_VERSION_NUM >= PG_VERSION_12
 #include "nodes/pathnodes.h"
 #include "optimizer/optimizer.h"
-#else
-#include "nodes/relation.h"
-#include "optimizer/var.h"
-#endif
 #include "optimizer/restrictinfo.h"
 #include "optimizer/tlist.h"
 #include "parser/parse_relation.h"

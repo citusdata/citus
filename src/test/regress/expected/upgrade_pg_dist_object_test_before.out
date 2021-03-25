@@ -51,22 +51,8 @@ SELECT create_reference_table('another_dist_table');
 -- This is because tracking the dependencies will hit to the schema for two times
 CREATE SCHEMA fooschema;
 CREATE TYPE fooschema.footype AS (x int, y int);
-SELECT run_command_on_workers($$CREATE SCHEMA fooschema;$$);
-       run_command_on_workers
----------------------------------------------------------------------
-  (localhost,57636,t,"CREATE SCHEMA")
-  (localhost,57637,t,"CREATE SCHEMA")
- (2 rows)
-
- SELECT run_command_on_workers($$CREATE TYPE fooschema.footype AS (x int, y int);$$);
-      run_command_on_workers
----------------------------------------------------------------------
-  (localhost,57636,t,"CREATE TYPE")
-  (localhost,57637,t,"CREATE TYPE")
- (2 rows)
-
- CREATE TABLE fooschema.footable (f fooschema.footype);
- SELECT create_reference_table('fooschema.footable');
+CREATE TABLE fooschema.footable (f fooschema.footype);
+SELECT create_reference_table('fooschema.footable');
  create_reference_table
 ---------------------------------------------------------------------
 

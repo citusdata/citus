@@ -1,3 +1,46 @@
+### citus v8.3.3 (March 23, 2021) ###
+
+* Fixes a bug that leads to various issues when a connection is lost
+
+* Fixes a bug where one could create a foreign key between non-colocated tables
+
+* Fixes a deadlock during transaction recovery
+
+* Fixes a memory leak in adaptive executor when query returns many columns
+
+### citus v10.0.3 (March 16, 2021) ###
+
+* Prevents infinite recursion for queries that involve `UNION ALL`
+  below `JOIN`
+
+* Fixes a crash in queries with a modifying `CTE` and a `SELECT`
+  without `FROM`
+
+* Fixes upgrade and downgrade paths for `citus_update_table_statistics`
+
+* Fixes a bug that causes `SELECT` queries to use 2PC unnecessarily
+
+* Fixes a bug that might cause self-deadlocks with
+  `CREATE INDEX` / `REINDEX CONCURRENTLY` commands
+
+* Adds `citus.max_cached_connection_lifetime` GUC to set maximum connection
+  lifetime
+
+* Adds `citus.remote_copy_flush_threshold` GUC that controls
+  per-shard memory usages by `COPY`
+
+* Adds `citus_get_active_worker_nodes` UDF to deprecate
+  `master_get_active_worker_nodes`
+
+* Skips 2PC for readonly connections in a transaction
+
+* Makes sure that local execution starts coordinated transaction
+
+* Removes open temporary file warning when cancelling a query with
+  an open tuple store
+
+* Relaxes the locks when adding an existing node
+
 ### citus v10.0.2 (March 3, 2021) ###
 
 * Adds a configure flag to enforce security

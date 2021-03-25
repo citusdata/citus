@@ -17,9 +17,7 @@
 
 #include "distributed/pg_version_constants.h"
 
-#if PG_VERSION_NUM >= PG_VERSION_12
 #include "access/genam.h"
-#endif
 #include "access/htup_details.h"
 #include "access/sysattr.h"
 #include "access/xact.h"

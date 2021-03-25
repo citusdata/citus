@@ -515,11 +515,8 @@ INSERT INTO agg_events (value_1_agg, user_id)
 SELECT user_id, value_1_agg FROM agg_events ORDER BY 1,2;
 
 -- We support CTEs
--- but prefer to prevent inlining of the CTE
--- in order not to diverge from pg 11 vs pg 12
 BEGIN;
-SET LOCAL citus.enable_cte_inlining TO false;
-WITH fist_table_agg AS
+WITH fist_table_agg AS MATERIALIZED
   (SELECT max(value_1)+1 as v1_agg, user_id FROM raw_events_first GROUP BY user_id)
 INSERT INTO agg_events
             (value_1_agg, user_id)
@@ -2250,6 +2247,14 @@ ON conflict (user_id, value_1_agg)
 DO UPDATE
    SET    user_id = 42
 RETURNING user_id, value_1_agg;
+
+-- test a small citus.remote_copy_flush_threshold
+BEGIN;
+SET LOCAL citus.remote_copy_flush_threshold TO 1;
+INSERT INTO raw_events_first
+SELECT * FROM raw_events_first OFFSET 0
+ON CONFLICT DO NOTHING;
+ABORT;
 
 -- wrap in a transaction to improve performance
 BEGIN;

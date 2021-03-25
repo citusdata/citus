@@ -74,7 +74,7 @@ if test -z "$version_num"; then
   AC_MSG_ERROR([Could not detect PostgreSQL version from pg_config.])
 fi
 
-if test "$version_num" != '11' -a "$version_num" != '12' -a "$version_num" != '13'; then
+if test "$version_num" != '12' -a "$version_num" != '13'; then
    AC_MSG_ERROR([Citus is not compatible with the detected PostgreSQL version ${version_num}.])
 else
    AC_MSG_NOTICE([building against PostgreSQL $version_num])
@@ -216,12 +216,8 @@ PGAC_ARG_REQ(with, reports-hostname, [HOSTNAME],
 AC_DEFINE_UNQUOTED(REPORTS_BASE_URL, "$REPORTS_BASE_URL",
                    [Base URL for statistics collection and update checks])
 
-if test "$version_num" != '11'; then
-   HAS_TABLEAM=yes
-   AC_DEFINE([HAS_TABLEAM], 1, [Define to 1 to build with table access method support, pg12 and up])
-else
-   AC_MSG_NOTICE([postgres version does not support table access methods])
-fi;
+HAS_TABLEAM=yes
+AC_DEFINE([HAS_TABLEAM], 1, [Define to 1 to build with table access method support, pg12 and up])
 
 # Require lz4 & zstd only if we are compiling columnar
 if test "$HAS_TABLEAM" == 'yes'; then
@@ -237,7 +233,7 @@ if test "$HAS_TABLEAM" == 'yes'; then
                 [AC_MSG_ERROR([lz4 library not found
   If you have lz4 installed, see config.log for details on the
   failure.  It is possible the compiler isn't looking in the proper directory.
-  Use --without-lz4 to disable zlib support.])])
+  Use --without-lz4 to disable lz4 support.])])
     AC_CHECK_HEADER(lz4.h, [], [AC_MSG_ERROR([lz4 header not found
   If you have lz4 already installed, see config.log for details on the
   failure.  It is possible the compiler isn't looking in the proper directory.
@@ -256,11 +252,11 @@ if test "$HAS_TABLEAM" == 'yes'; then
                 [AC_MSG_ERROR([zstd library not found
   If you have zstd installed, see config.log for details on the
   failure.  It is possible the compiler isn't looking in the proper directory.
-  Use --without-zstd to disable zlib support.])])
+  Use --without-zstd to disable zstd support.])])
     AC_CHECK_HEADER(zstd.h, [], [AC_MSG_ERROR([zstd header not found
   If you have zstd already installed, see config.log for details on the
   failure.  It is possible the compiler isn't looking in the proper directory.
-  Use --without-zstd to disable zlib support.])])
+  Use --without-zstd to disable zstd support.])])
   fi
 
 fi # test "$HAS_TABLEAM" == 'yes'

@@ -280,11 +280,7 @@ TupleDestDestReceiverReceive(TupleTableSlot *slot,
 	Assert(task->queryCount == 1);
 	int queryNumber = 0;
 
-#if PG_VERSION_NUM >= PG_VERSION_12
 	HeapTuple heapTuple = ExecFetchSlotHeapTuple(slot, true, NULL);
-#else
-	HeapTuple heapTuple = ExecFetchSlotTuple(slot);
-#endif
 
 	uint64 tupleLibpqSize = 0;
 

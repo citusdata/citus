@@ -81,7 +81,6 @@ PG_FUNCTION_INFO_V1(worker_append_table_to_shard);
  * Following UDFs are stub functions, you can check their comments for more
  * detail.
  */
-PG_FUNCTION_INFO_V1(worker_fetch_query_results_file);
 PG_FUNCTION_INFO_V1(worker_fetch_regular_table);
 PG_FUNCTION_INFO_V1(worker_fetch_foreign_file);
 PG_FUNCTION_INFO_V1(master_expire_table_cache);
@@ -811,20 +810,6 @@ SetDefElemArg(AlterSeqStmt *statement, const char *name, Node *arg)
 	defElem = makeDefElem((char *) name, arg, -1);
 
 	statement->options = lappend(statement->options, defElem);
-}
-
-
-/*
- * worker_fetch_query_results_file is a stub UDF to allow the function object
- * to be re-created during upgrades. We should keep this around until we drop
- * support for Postgres 11, since Postgres 11 is the highest version for which
- * this object may have been created.
- */
-Datum
-worker_fetch_query_results_file(PG_FUNCTION_ARGS)
-{
-	ereport(DEBUG2, (errmsg("this function is deprecated and no longer is used")));
-	PG_RETURN_VOID();
 }
 
 

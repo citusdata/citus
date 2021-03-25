@@ -1067,15 +1067,10 @@ InsertTupleAndEnforceConstraints(ModifyState *state, Datum *values, bool *nulls)
 	TupleDesc tupleDescriptor = RelationGetDescr(state->rel);
 	HeapTuple tuple = heap_form_tuple(tupleDescriptor, values, nulls);
 
-#if PG_VERSION_NUM >= 120000
 	TupleTableSlot *slot = ExecInitExtraTupleSlot(state->estate, tupleDescriptor,
 												  &TTSOpsHeapTuple);
 
 	ExecStoreHeapTuple(tuple, slot, false);
-#else
-	TupleTableSlot *slot = ExecInitExtraTupleSlot(state->estate, tupleDescriptor);
-	ExecStoreTuple(tuple, slot, InvalidBuffer, false);
-#endif
 
 	/* use ExecSimpleRelationInsert to enforce constraints */
 	ExecSimpleRelationInsert(state->estate, slot);
@@ -1127,20 +1122,16 @@ FinishModifyRelation(ModifyState *state)
 static EState *
 create_estate_for_relation(Relation rel)
 {
-	ResultRelInfo *resultRelInfo;
-
 	EState *estate = CreateExecutorState();
 
 	RangeTblEntry *rte = makeNode(RangeTblEntry);
 	rte->rtekind = RTE_RELATION;
 	rte->relid = RelationGetRelid(rel);
 	rte->relkind = rel->rd_rel->relkind;
-#if PG_VERSION_NUM >= 120000
 	rte->rellockmode = AccessShareLock;
 	ExecInitRangeTable(estate, list_make1(rte));
-#endif
 
-	resultRelInfo = makeNode(ResultRelInfo);
+	ResultRelInfo *resultRelInfo = makeNode(ResultRelInfo);
 	InitResultRelInfo(resultRelInfo, rel, 1, NULL, 0);
 
 	estate->es_result_relations = resultRelInfo;
@@ -1148,15 +1139,6 @@ create_estate_for_relation(Relation rel)
 	estate->es_result_relation_info = resultRelInfo;
 
 	estate->es_output_cid = GetCurrentCommandId(true);
-
-#if PG_VERSION_NUM < 120000
-
-	/* Triggers might need a slot */
-	if (resultRelInfo->ri_TrigDesc)
-	{
-		estate->es_trig_tuple_slot = ExecInitExtraTupleSlot(estate, NULL);
-	}
-#endif
 
 	/* Prepare to catch AFTER triggers. */
 	AfterTriggerBeginQuery();

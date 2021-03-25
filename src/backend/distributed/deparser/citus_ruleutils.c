@@ -125,22 +125,17 @@ get_extension_schema(Oid ext_oid)
 	/* *INDENT-OFF* */
 	Oid			result;
 	Relation	rel;
-	SysScanDesc scandesc;
 	HeapTuple	tuple;
 	ScanKeyData entry[1];
 
 	rel = table_open(ExtensionRelationId, AccessShareLock);
 
 	ScanKeyInit(&entry[0],
-#if PG_VERSION_NUM >= PG_VERSION_12
 				Anum_pg_extension_oid,
-#else
-				ObjectIdAttributeNumber,
-#endif
 				BTEqualStrategyNumber, F_OIDEQ,
 				ObjectIdGetDatum(ext_oid));
 
-	scandesc = systable_beginscan(rel, ExtensionOidIndexId, true,
+	SysScanDesc scandesc = systable_beginscan(rel, ExtensionOidIndexId, true,
 								  NULL, 1, entry);
 
 	tuple = systable_getnext(scandesc);
@@ -251,7 +246,6 @@ char *
 pg_get_tableschemadef_string(Oid tableRelationId, bool includeSequenceDefaults,
 							 char *accessMethod)
 {
-	char relationKind = 0;
 	bool firstAttributePrinted = false;
 	AttrNumber defaultValueIndex = 0;
 	AttrNumber constraintIndex = 0;
@@ -361,7 +355,6 @@ pg_get_tableschemadef_string(Oid tableRelationId, bool includeSequenceDefaults,
 					defaultString = deparse_expression(defaultNode, defaultContext,
 													   false, false);
 
-#if PG_VERSION_NUM >= PG_VERSION_12
 					if (attributeForm->attgenerated == ATTRIBUTE_GENERATED_STORED)
 					{
 						appendStringInfo(&buffer, " GENERATED ALWAYS AS (%s) STORED",
@@ -371,9 +364,6 @@ pg_get_tableschemadef_string(Oid tableRelationId, bool includeSequenceDefaults,
 					{
 						appendStringInfo(&buffer, " DEFAULT %s", defaultString);
 					}
-#else
-					appendStringInfo(&buffer, " DEFAULT %s", defaultString);
-#endif
 				}
 			}
 
@@ -436,7 +426,7 @@ pg_get_tableschemadef_string(Oid tableRelationId, bool includeSequenceDefaults,
 	 * If the relation is a foreign table, append the server name and options to
 	 * the create table statement.
 	 */
-	relationKind = relation->rd_rel->relkind;
+	char relationKind = relation->rd_rel->relkind;
 	if (relationKind == RELKIND_FOREIGN_TABLE)
 	{
 		ForeignTable *foreignTable = GetForeignTable(tableRelationId);
@@ -451,8 +441,6 @@ pg_get_tableschemadef_string(Oid tableRelationId, bool includeSequenceDefaults,
 		char *partitioningInformation = GeneratePartitioningInformation(tableRelationId);
 		appendStringInfo(&buffer, " PARTITION BY %s ", partitioningInformation);
 	}
-
-#if PG_VERSION_NUM >= 120000
 
 	/*
 	 * Add table access methods for pg12 and higher when the table is configured with an
@@ -475,7 +463,6 @@ pg_get_tableschemadef_string(Oid tableRelationId, bool includeSequenceDefaults,
 		appendStringInfo(&buffer, " USING %s", quote_identifier(NameStr(amForm->amname)));
 		ReleaseSysCache(amTup);
 	}
-#endif
 
 	/*
 	 * Add any reloptions (storage parameters) defined on the table in a WITH
@@ -745,11 +732,7 @@ deparse_shard_reindex_statement(ReindexStmt *origStmt, Oid distrelid, int64 shar
 {
 	ReindexStmt *reindexStmt = copyObject(origStmt); /* copy to avoid modifications */
 	char *relationName = NULL;
-#if PG_VERSION_NUM >= PG_VERSION_12
 	const char *concurrentlyString = reindexStmt->concurrent ? "CONCURRENTLY " : "";
-#else
-	const char *concurrentlyString = "";
-#endif
 
 
 	if (reindexStmt->kind == REINDEX_OBJECT_INDEX ||

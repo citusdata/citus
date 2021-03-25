@@ -44,3 +44,10 @@ lib*.pc
 
 # vscode
 .vscode/*
+
+# output from diff normalization that shouldn't be commited
+*.unmodified
+*.modified
+
+# style related temporary outputs
+*.uncrustify

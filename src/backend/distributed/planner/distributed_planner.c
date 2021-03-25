@@ -52,12 +52,8 @@
 #include "nodes/pg_list.h"
 #include "parser/parsetree.h"
 #include "parser/parse_type.h"
-#if PG_VERSION_NUM >= PG_VERSION_12
 #include "optimizer/optimizer.h"
 #include "optimizer/plancat.h"
-#else
-#include "optimizer/cost.h"
-#endif
 #include "optimizer/pathnode.h"
 #include "optimizer/planner.h"
 #include "optimizer/planmain.h"
@@ -751,24 +747,6 @@ InlineCtesAndCreateDistributedPlannedStmt(uint64 planId,
 	/* after inlining, we shouldn't have any inlinable CTEs */
 	Assert(!QueryTreeContainsInlinableCTE(copyOfOriginalQuery));
 
-#if PG_VERSION_NUM < PG_VERSION_12
-	Query *query = planContext->query;
-
-	/*
-	 * We had to implement this hack because on Postgres11 and below, the originalQuery
-	 * and the query would have significant differences in terms of CTEs where CTEs
-	 * would not be inlined on the query (as standard_planner() wouldn't inline CTEs
-	 * on PG 11 and below).
-	 *
-	 * Instead, we prefer to pass the inlined query to the distributed planning. We rely
-	 * on the fact that the query includes subqueries, and it'd definitely go through
-	 * query pushdown planning. During query pushdown planning, the only relevant query
-	 * tree is the original query.
-	 */
-	planContext->query = copyObject(copyOfOriginalQuery);
-#endif
-
-
 	/* simply recurse into CreateDistributedPlannedStmt() in a PG_TRY() block */
 	PlannedStmt *result = TryCreateDistributedPlannedStmt(planContext->plan,
 														  copyOfOriginalQuery,
@@ -776,15 +754,6 @@ InlineCtesAndCreateDistributedPlannedStmt(uint64 planId,
 														  planContext->boundParams,
 														  planContext->
 														  plannerRestrictionContext);
-
-#if PG_VERSION_NUM < PG_VERSION_12
-
-	/*
-	 * Set back the original query, in case the planning failed and we need to go
-	 * into distributed planning again.
-	 */
-	planContext->query = query;
-#endif
 
 	return result;
 }
@@ -1509,15 +1478,10 @@ BlessRecordExpression(Expr *expr)
 		 * Handle row expressions, e.g. SELECT (1,2);
 		 */
 		RowExpr *rowExpr = (RowExpr *) expr;
-		TupleDesc rowTupleDesc = NULL;
 		ListCell *argCell = NULL;
 		int currentResno = 1;
 
-#if PG_VERSION_NUM >= PG_VERSION_12
-		rowTupleDesc = CreateTemplateTupleDesc(list_length(rowExpr->args));
-#else
-		rowTupleDesc = CreateTemplateTupleDesc(list_length(rowExpr->args), false);
-#endif
+		TupleDesc rowTupleDesc = CreateTemplateTupleDesc(list_length(rowExpr->args));
 
 		foreach(argCell, rowExpr->args)
 		{
@@ -2015,16 +1979,11 @@ AdjustReadIntermediateResultsCostInternal(RelOptInfo *relOptInfo, List *columnTy
 {
 	PathTarget *reltarget = relOptInfo->reltarget;
 	List *pathList = relOptInfo->pathlist;
-	Path *path = NULL;
 	double rowCost = 0.;
 	double rowSizeEstimate = 0;
 	double rowCountEstimate = 0.;
 	double ioCost = 0.;
-#if PG_VERSION_NUM >= PG_VERSION_12
 	QualCost funcCost = { 0., 0. };
-#else
-	double funcCost = 0.;
-#endif
 	int64 totalResultSize = 0;
 	ListCell *typeCell = NULL;
 
@@ -2083,17 +2042,9 @@ AdjustReadIntermediateResultsCostInternal(RelOptInfo *relOptInfo, List *columnTy
 
 
 		/* add the cost of parsing a column */
-#if PG_VERSION_NUM >= PG_VERSION_12
 		add_function_cost(NULL, inputFunctionId, NULL, &funcCost);
-#else
-		funcCost += get_func_cost(inputFunctionId);
-#endif
 	}
-#if PG_VERSION_NUM >= PG_VERSION_12
 	rowCost += funcCost.per_tuple;
-#else
-	rowCost += funcCost * cpu_operator_cost;
-#endif
 
 	/* estimate the number of rows based on the file size and estimated row size */
 	rowCountEstimate = Max(1, (double) totalResultSize / rowSizeEstimate);
@@ -2104,13 +2055,11 @@ AdjustReadIntermediateResultsCostInternal(RelOptInfo *relOptInfo, List *columnTy
 	Assert(pathList != NIL);
 
 	/* tell the planner about the cost and row count of the function */
-	path = (Path *) linitial(pathList);
+	Path *path = (Path *) linitial(pathList);
 	path->rows = rowCountEstimate;
 	path->total_cost = rowCountEstimate * rowCost + ioCost;
 
-#if PG_VERSION_NUM >= PG_VERSION_12
 	path->startup_cost = funcCost.startup + relOptInfo->baserestrictcost.startup;
-#endif
 }
 
 

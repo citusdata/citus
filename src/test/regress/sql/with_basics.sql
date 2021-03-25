@@ -613,13 +613,12 @@ LEFT JOIN
         WHERE d1.user_id = d2.user_id )) AS bar USING (user_id);
 
 
--- should work fine with cte inlinig disabled
-SET citus.enable_cte_inlining TO false;
-WITH distinct_undistribured AS (
+-- should work fine with materialized ctes
+WITH distinct_undistribured AS MATERIALIZED (
     SELECT DISTINCT user_id
     FROM test_cte
 ),
-     exsist_in_distributed AS (
+     exsist_in_distributed AS MATERIALIZED (
          SELECT DISTINCT user_id
          FROM test_cte_distributed
          WHERE EXISTS(SELECT *
@@ -633,7 +632,7 @@ FROM
   ON distinct_undistribured.user_id = exsist_in_distributed.user_id
 ORDER BY 2 DESC, 1 DESC;
 
-WITH distinct_undistribured AS
+WITH distinct_undistribured AS MATERIALIZED
   (SELECT DISTINCT user_id
    FROM test_cte)
 SELECT *
@@ -648,7 +647,7 @@ LEFT JOIN
   ON distinct_undistribured.user_id = exsist_in_distributed.user_id
 ORDER BY 2 DESC, 1 DESC;
 
-WITH distinct_undistribured AS
+WITH distinct_undistribured AS MATERIALIZED
   (SELECT DISTINCT user_id
    FROM test_cte)
 SELECT *
@@ -662,11 +661,11 @@ LEFT JOIN
         WHERE distinct_undistribured.user_id = test_cte_distributed.user_id)) exsist_in_distributed ON distinct_undistribured.user_id = exsist_in_distributed.user_id;
 
 -- NOT EXISTS struct, with cte inlining disabled
-WITH distinct_undistribured AS (
+WITH distinct_undistribured AS MATERIALIZED(
     SELECT DISTINCT user_id
     FROM test_cte
 ),
-     not_exsist_in_distributed AS (
+     not_exsist_in_distributed AS MATERIALIZED (
          SELECT DISTINCT user_id
          FROM test_cte_distributed
          WHERE NOT EXISTS(SELECT NULL
@@ -682,7 +681,7 @@ ORDER BY 2 DESC, 1 DESC;
 
 -- similar query, but this time the second
 -- part of the query is not inside a CTE
-WITH distinct_undistribured AS (
+WITH distinct_undistribured AS MATERIALIZED (
     SELECT DISTINCT user_id
     FROM test_cte
 )
@@ -698,10 +697,9 @@ LEFT JOIN
         WHERE d1.user_id = d2.user_id )) AS bar USING (user_id);
 
 -- some test  with failures
-WITH a AS (SELECT * FROM users_table LIMIT 10)
+WITH a AS MATERIALIZED (SELECT * FROM users_table LIMIT 10)
 	SELECT user_id/0 FROM users_table JOIN a USING (user_id);
 
-RESET citus.enable_cte_inlining;
 
 DROP VIEW basic_view;
 DROP VIEW cte_view;

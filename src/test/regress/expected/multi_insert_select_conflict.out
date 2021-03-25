@@ -172,10 +172,8 @@ DEBUG:  Collecting INSERT ... SELECT results on coordinator
     10 |     0
 (10 rows)
 
--- prevent PG 11 - PG 12 outputs to diverge
-SET citus.enable_cte_inlining TO false;
 -- Get the select part from cte and do nothing on conflict
-WITH cte AS(
+WITH cte AS MATERIALIZED (
 	SELECT col_1, col_2 FROM source_table_1
 )
 INSERT INTO target_table SELECT * FROM cte ON CONFLICT DO NOTHING;
@@ -184,7 +182,7 @@ DEBUG:  generating subplan XXX_1 for CTE cte: SELECT col_1, col_2 FROM on_confli
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT col_1, col_2 FROM (SELECT cte.col_1, cte.col_2 FROM (SELECT intermediate_result.col_1, intermediate_result.col_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(col_1 integer, col_2 integer)) cte) citus_insert_select_subquery
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 -- Get the select part from cte and update on conflict
-WITH cte AS(
+WITH cte AS MATERIALIZED (
 	SELECT col_1, col_2 FROM source_table_1
 )
 INSERT INTO target_table SELECT * FROM cte ON CONFLICT(col_1) DO UPDATE SET col_2 = EXCLUDED.col_2 + 1;
@@ -207,7 +205,6 @@ SELECT * FROM target_table ORDER BY 1;
     10 |     0
 (10 rows)
 
-SET citus.enable_cte_inlining TO true;
 -- Test with multiple CTEs
 WITH cte AS(
 	SELECT col_1, col_2 FROM source_table_1
@@ -234,17 +231,15 @@ SELECT * FROM target_table ORDER BY 1;
     10 |    11
 (10 rows)
 
--- prevent PG 11 - PG 12 outputs to diverge
-SET citus.enable_cte_inlining TO false;
-WITH inserted_table AS (
-	WITH cte AS(
+WITH inserted_table AS MATERIALIZED (
+	WITH cte AS MATERIALIZED (
 		SELECT col_1, col_2, col_3 FROM source_table_1
-	), cte_2 AS(
+	), cte_2 AS MATERIALIZED (
 		SELECT col_1, col_2 FROM cte
 	)
 	INSERT INTO target_table SELECT * FROM cte_2 ON CONFLICT(col_1) DO UPDATE SET col_2 = EXCLUDED.col_2 + 1 RETURNING *
 ) SELECT * FROM inserted_table ORDER BY 1;
-DEBUG:  generating subplan XXX_1 for CTE inserted_table: WITH cte AS (SELECT source_table_1.col_1, source_table_1.col_2, source_table_1.col_3 FROM on_conflict.source_table_1), cte_2 AS (SELECT cte.col_1, cte.col_2 FROM cte) INSERT INTO on_conflict.target_table (col_1, col_2) SELECT col_1, col_2 FROM cte_2 ON CONFLICT(col_1) DO UPDATE SET col_2 = (excluded.col_2 OPERATOR(pg_catalog.+) 1) RETURNING target_table.col_1, target_table.col_2
+DEBUG:  generating subplan XXX_1 for CTE inserted_table: WITH cte AS MATERIALIZED (SELECT source_table_1.col_1, source_table_1.col_2, source_table_1.col_3 FROM on_conflict.source_table_1), cte_2 AS MATERIALIZED (SELECT cte.col_1, cte.col_2 FROM cte) INSERT INTO on_conflict.target_table (col_1, col_2) SELECT col_1, col_2 FROM cte_2 ON CONFLICT(col_1) DO UPDATE SET col_2 = (excluded.col_2 OPERATOR(pg_catalog.+) 1) RETURNING target_table.col_1, target_table.col_2
 DEBUG:  distributed INSERT ... SELECT can only select from distributed tables
 DEBUG:  generating subplan XXX_1 for CTE cte: SELECT col_1, col_2, col_3 FROM on_conflict.source_table_1
 DEBUG:  generating subplan XXX_2 for CTE cte_2: SELECT col_1, col_2 FROM (SELECT intermediate_result.col_1, intermediate_result.col_2, intermediate_result.col_3 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(col_1 integer, col_2 integer, col_3 integer)) cte
@@ -260,14 +255,14 @@ DEBUG:  Collecting INSERT ... SELECT results on coordinator
      5 |     6
 (5 rows)
 
-WITH cte AS (
-	WITH basic AS (
+WITH cte AS MATERIALIZED (
+	WITH basic AS MATERIALIZED (
 		SELECT col_1, col_2 FROM source_table_1
 	)
 	INSERT INTO target_table (SELECT * FROM basic) ON CONFLICT DO NOTHING RETURNING *
 )
 UPDATE target_table SET col_2 = 4 WHERE col_1 IN (SELECT col_1 FROM cte);
-DEBUG:  generating subplan XXX_1 for CTE cte: WITH basic AS (SELECT source_table_1.col_1, source_table_1.col_2 FROM on_conflict.source_table_1) INSERT INTO on_conflict.target_table (col_1, col_2) SELECT col_1, col_2 FROM basic ON CONFLICT DO NOTHING RETURNING target_table.col_1, target_table.col_2
+DEBUG:  generating subplan XXX_1 for CTE cte: WITH basic AS MATERIALIZED (SELECT source_table_1.col_1, source_table_1.col_2 FROM on_conflict.source_table_1) INSERT INTO on_conflict.target_table (col_1, col_2) SELECT col_1, col_2 FROM basic ON CONFLICT DO NOTHING RETURNING target_table.col_1, target_table.col_2
 DEBUG:  distributed INSERT ... SELECT can only select from distributed tables
 DEBUG:  generating subplan XXX_1 for CTE basic: SELECT col_1, col_2 FROM on_conflict.source_table_1
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT col_1, col_2 FROM (SELECT basic.col_1, basic.col_2 FROM (SELECT intermediate_result.col_1, intermediate_result.col_2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(col_1 integer, col_2 integer)) basic) citus_insert_select_subquery
@@ -290,17 +285,14 @@ SELECT
 FROM cte, source_table_1
 WHERE cte.col_1 = source_table_1.col_1 ON CONFLICT DO NOTHING;
 $Q$);
-                coordinator_plan
+           coordinator_plan
 ---------------------------------------------------------------------
  Custom Scan (Citus INSERT ... SELECT)
    INSERT/SELECT method: repartition
    ->  Custom Scan (Citus Adaptive)
-         ->  Distributed Subplan XXX_1
-               ->  Custom Scan (Citus Adaptive)
-                     Task Count: 4
-(6 rows)
+         Task Count: 4
+(4 rows)
 
-SET citus.enable_cte_inlining TO true;
 -- Tests with foreign key to reference table
 CREATE TABLE test_ref_table (key int PRIMARY KEY);
 SELECT create_reference_table('test_ref_table');
@@ -515,11 +507,9 @@ SELECT * FROM target_table ORDER BY 1;
     10 |     0
 (10 rows)
 
--- prevent PG 11 - PG 12 outputs to diverge
-SET citus.enable_cte_inlining TO false;
-WITH cte AS(
+WITH cte AS MATERIALIZED(
 	SELECT col_1, col_2, col_3 FROM source_table_1
-), cte_2 AS(
+), cte_2 AS MATERIALIZED(
 	SELECT col_1, col_2 FROM cte
 )
 INSERT INTO target_table SELECT * FROM cte_2 ON CONFLICT(col_1) DO UPDATE SET col_2 = EXCLUDED.col_2 + 1;

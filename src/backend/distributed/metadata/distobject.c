@@ -114,15 +114,11 @@ ObjectExists(const ObjectAddress *address)
 
 	if (is_objectclass_supported(address->classId))
 	{
-		HeapTuple objtup;
 		Relation catalog = table_open(address->classId, AccessShareLock);
 
-#if PG_VERSION_NUM >= PG_VERSION_12
-		objtup = get_catalog_object_by_oid(catalog, get_object_attnum_oid(
-											   address->classId), address->objectId);
-#else
-		objtup = get_catalog_object_by_oid(catalog, address->objectId);
-#endif
+		HeapTuple objtup = get_catalog_object_by_oid(catalog, get_object_attnum_oid(
+														 address->classId),
+													 address->objectId);
 		table_close(catalog, AccessShareLock);
 		if (objtup != NULL)
 		{

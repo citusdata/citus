@@ -39,14 +39,9 @@ PG_FUNCTION_INFO_V1(column_store_memory_stats);
 Datum
 column_store_memory_stats(PG_FUNCTION_ARGS)
 {
-	TupleDesc tupleDescriptor = NULL;
 	const int resultColumnCount = 3;
 
-#if PG_VERSION_NUM >= PG_VERSION_12
-	tupleDescriptor = CreateTemplateTupleDesc(resultColumnCount);
-#else
-	tupleDescriptor = CreateTemplateTupleDesc(resultColumnCount, false);
-#endif
+	TupleDesc tupleDescriptor = CreateTemplateTupleDesc(resultColumnCount);
 
 	TupleDescInitEntry(tupleDescriptor, (AttrNumber) 1, "TopMemoryContext",
 					   INT8OID, -1, 0);

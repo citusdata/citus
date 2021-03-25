@@ -918,6 +918,25 @@ ROLLBACK;
 DROP TABLE referenced_table CASCADE;
 DROP TABLE referencing_table;
 
+-- tests specific to an edgecase in citus 8.x where it was possible to create foreign keys
+-- in between colocation groups due to a bug of foreign key to reference tables
+CREATE TABLE t1 (a int PRIMARY KEY, b text);
+CREATE TABLE t2 (a bigint PRIMARY KEY, b text);
+CREATE TABLE r1 (a int PRIMARY KEY, b text);
+
+SELECT create_distributed_table('t1', 'a');
+SELECT create_distributed_table('t2', 'a');
+SELECT create_reference_table('r1');
+
+-- this always fails as it should be
+ALTER TABLE t1 ADD CONSTRAINT c1 FOREIGN KEY (a) REFERENCES t2(a);
+
+-- after we create a foreign key to the reference table, that has a lower order by name,
+-- we would have been able to create a FK to non-colocated tables
+ALTER TABLE t1 ADD CONSTRAINT c2 FOREIGN KEY (a) REFERENCES r1(a);
+ALTER TABLE t1 ADD CONSTRAINT c3 FOREIGN KEY (a) REFERENCES t2(a);
+
+
 DROP SCHEMA fkey_reference_table CASCADE;
 SET search_path TO DEFAULT;
 RESET client_min_messages;

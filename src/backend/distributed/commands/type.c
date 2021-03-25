@@ -322,8 +322,6 @@ List *
 PreprocessAlterEnumStmt(Node *node, const char *queryString,
 						ProcessUtilityContext processUtilityContext)
 {
-	List *commands = NIL;
-
 	ObjectAddress typeAddress = GetObjectAddressFromParseTree(node, false);
 	if (!ShouldPropagateObject(&typeAddress))
 	{
@@ -352,95 +350,12 @@ PreprocessAlterEnumStmt(Node *node, const char *queryString,
 	 * creating a DDLTaksList we won't return anything here. During the processing phase
 	 * we directly connect to workers and execute the commands remotely.
 	 */
-#if PG_VERSION_NUM < PG_VERSION_12
-	if (AlterEnumIsAddValue(castNode(AlterEnumStmt, node)))
-	{
-		/*
-		 * a plan cannot be made as it will be committed via 2PC when ran through the
-		 * executor, instead we directly distributed during processing phase
-		 */
-		return NIL;
-	}
-#endif
 
-	commands = list_make3(DISABLE_DDL_PROPAGATION,
-						  (void *) alterEnumStmtSql,
-						  ENABLE_DDL_PROPAGATION);
+	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
+								(void *) alterEnumStmtSql,
+								ENABLE_DDL_PROPAGATION);
 
 	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
-}
-
-
-/*
- * PostprocessAlterEnumStmt is called after the AlterEnumStmt has been applied locally.
- *
- * This function is used for ALTER ENUM ... ADD VALUE for postgres versions lower than 12
- * to distribute the call. Before pg12 these statements could not be called in a
- * transaction. If we would plan the distirbution of these statements the same as we do
- * with the other statements they would get executed in a transaction to perform 2PC, that
- * would error out.
- *
- * If it would error on some workers we provide a warning to the user that the statement
- * failed to distributed with some detail on what to call after the cluster has been
- * repaired.
- *
- * For pg12 the statements can be called in a transaction but will only become visible
- * when the transaction commits. This is behaviour that is ok to perform in a 2PC.
- */
-List *
-PostprocessAlterEnumStmt(Node *node, const char *queryString)
-{
-	/*
-	 * Before pg12 ALTER ENUM ... ADD VALUE could not be within a xact block. Normally we
-	 * would propagate the statements in a xact block to perform 2pc on changes via ddl.
-	 * Instead we need to connect directly to the workers here and execute the command.
-	 *
-	 * From pg12 and up we use the normal infrastructure and create the ddl jobs during
-	 * planning.
-	 */
-#if PG_VERSION_NUM < PG_VERSION_12
-	AlterEnumStmt *stmt = castNode(AlterEnumStmt, node);
-	ObjectAddress typeAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
-	if (!ShouldPropagateObject(&typeAddress))
-	{
-		return NIL;
-	}
-
-	if (AlterEnumIsAddValue(stmt))
-	{
-		/*
-		 * ADD VALUE can't be executed in a transaction, we will execute optimistically
-		 * and on an error we will advise to fix the issue with the worker and rerun the
-		 * query with the IF NOT EXTISTS modifier. The modifier is needed as the value
-		 * might already be added to some nodes, but not all.
-		 */
-
-
-		/* qualification of the stmt happened during planning */
-		const char *alterEnumStmtSql = DeparseTreeNode((Node *) stmt);
-
-		List *commands = list_make2(DISABLE_DDL_PROPAGATION, (void *) alterEnumStmtSql);
-
-		int result = SendBareOptionalCommandListToAllWorkersAsUser(commands, NULL);
-
-		if (result != RESPONSE_OKAY)
-		{
-			bool oldSkipIfNewValueExists = stmt->skipIfNewValExists;
-
-			/* deparse the query with IF NOT EXISTS */
-			stmt->skipIfNewValExists = true;
-			const char *alterEnumStmtIfNotExistsSql = DeparseTreeNode((Node *) stmt);
-			stmt->skipIfNewValExists = oldSkipIfNewValueExists;
-
-			ereport(WARNING, (errmsg("not all workers applied change to enum"),
-							  errdetail("retry with: %s", alterEnumStmtIfNotExistsSql),
-							  errhint("make sure the coordinators can communicate with "
-									  "all workers")));
-		}
-	}
-#endif
-
-	return NIL;
 }
 
 

@@ -28,14 +28,8 @@
 #include "nodes/nodeFuncs.h"
 #include "nodes/pg_list.h"
 #include "nodes/primnodes.h"
-#if PG_VERSION_NUM >= PG_VERSION_12
 #include "nodes/pathnodes.h"
 #include "optimizer/optimizer.h"
-#else
-#include "optimizer/cost.h"
-#include "nodes/relation.h"
-#include "optimizer/var.h"
-#endif
 #include "nodes/makefuncs.h"
 #include "optimizer/paths.h"
 #include "parser/parsetree.h"

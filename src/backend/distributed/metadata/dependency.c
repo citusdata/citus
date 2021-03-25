@@ -548,7 +548,6 @@ SupportedDependencyByCitus(const ObjectAddress *address)
 	 */
 	switch (getObjectClass(address))
 	{
-#if PG_VERSION_NUM >= 120000
 		case OCLASS_AM:
 		{
 			/*
@@ -559,7 +558,6 @@ SupportedDependencyByCitus(const ObjectAddress *address)
 			 */
 			return IsObjectAddressOwnedByExtension(address, NULL);
 		}
-#endif
 
 		case OCLASS_COLLATION:
 		case OCLASS_SCHEMA:
@@ -1188,17 +1186,10 @@ GetDependingView(Form_pg_depend pg_depend)
 	Relation rewriteRel = table_open(RewriteRelationId, AccessShareLock);
 	ScanKeyData rkey[1];
 
-#if PG_VERSION_NUM >= PG_VERSION_12
 	ScanKeyInit(&rkey[0],
 				Anum_pg_rewrite_oid,
 				BTEqualStrategyNumber, F_OIDEQ,
 				ObjectIdGetDatum(pg_depend->objid));
-#else
-	ScanKeyInit(&rkey[0],
-				ObjectIdAttributeNumber,
-				BTEqualStrategyNumber, F_OIDEQ,
-				ObjectIdGetDatum(pg_depend->objid));
-#endif
 
 	SysScanDesc rscan = systable_beginscan(rewriteRel, RewriteOidIndexId,
 										   true, NULL, 1, rkey);

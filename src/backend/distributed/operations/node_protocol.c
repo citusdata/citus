@@ -85,6 +85,7 @@ PG_FUNCTION_INFO_V1(master_get_table_ddl_events);
 PG_FUNCTION_INFO_V1(master_get_new_shardid);
 PG_FUNCTION_INFO_V1(master_get_new_placementid);
 PG_FUNCTION_INFO_V1(master_get_active_worker_nodes);
+PG_FUNCTION_INFO_V1(citus_get_active_worker_nodes);
 PG_FUNCTION_INFO_V1(master_get_round_robin_candidate_nodes);
 PG_FUNCTION_INFO_V1(master_stage_shard_row);
 PG_FUNCTION_INFO_V1(master_stage_shard_placement_row);
@@ -442,23 +443,20 @@ master_stage_shard_placement_row(PG_FUNCTION_ARGS)
 
 
 /*
- * master_get_active_worker_nodes returns a set of active worker host names and
+ * citus_get_active_worker_nodes returns a set of active worker host names and
  * port numbers in deterministic order. Currently we assume that all worker
  * nodes in pg_dist_node are active.
  */
 Datum
-master_get_active_worker_nodes(PG_FUNCTION_ARGS)
+citus_get_active_worker_nodes(PG_FUNCTION_ARGS)
 {
 	FuncCallContext *functionContext = NULL;
-	uint32 workerNodeIndex = 0;
 	uint32 workerNodeCount = 0;
 
 	CheckCitusVersion(ERROR);
 
 	if (SRF_IS_FIRSTCALL())
 	{
-		TupleDesc tupleDescriptor = NULL;
-
 		/* create a function context for cross-call persistence */
 		functionContext = SRF_FIRSTCALL_INIT();
 
@@ -476,11 +474,7 @@ master_get_active_worker_nodes(PG_FUNCTION_ARGS)
 		 * This tuple descriptor must match the output parameters declared for
 		 * the function in pg_proc.
 		 */
-#if PG_VERSION_NUM < PG_VERSION_12
-		tupleDescriptor = CreateTemplateTupleDesc(WORKER_NODE_FIELDS, false);
-#else
-		tupleDescriptor = CreateTemplateTupleDesc(WORKER_NODE_FIELDS);
-#endif
+		TupleDesc tupleDescriptor = CreateTemplateTupleDesc(WORKER_NODE_FIELDS);
 		TupleDescInitEntry(tupleDescriptor, (AttrNumber) 1, "node_name",
 						   TEXTOID, -1, 0);
 		TupleDescInitEntry(tupleDescriptor, (AttrNumber) 2, "node_port",
@@ -492,7 +486,7 @@ master_get_active_worker_nodes(PG_FUNCTION_ARGS)
 	}
 
 	functionContext = SRF_PERCALL_SETUP();
-	workerNodeIndex = functionContext->call_cntr;
+	uint32 workerNodeIndex = functionContext->call_cntr;
 	workerNodeCount = functionContext->max_calls;
 
 	if (workerNodeIndex < workerNodeCount)
@@ -509,6 +503,16 @@ master_get_active_worker_nodes(PG_FUNCTION_ARGS)
 	{
 		SRF_RETURN_DONE(functionContext);
 	}
+}
+
+
+/*
+ * master_get_active_worker_nodes is a wrapper function for old UDF name.
+ */
+Datum
+master_get_active_worker_nodes(PG_FUNCTION_ARGS)
+{
+	return citus_get_active_worker_nodes(fcinfo);
 }
 
 
@@ -657,7 +661,6 @@ GetPreLoadTableCreationCommands(Oid relationId, bool includeSequenceDefaults,
 										tableColumnOptionsDef));
 	}
 
-#if PG_VERSION_NUM >= 120000
 
 	/* add columnar options for cstore tables */
 	if (accessMethod == NULL && IsColumnarTableAmTable(relationId))
@@ -668,7 +671,6 @@ GetPreLoadTableCreationCommands(Oid relationId, bool includeSequenceDefaults,
 			tableDDLEventList = lappend(tableDDLEventList, cstoreOptionsDDL);
 		}
 	}
-#endif
 
 	char *tableOwnerDef = TableOwnerResetCommand(relationId);
 	if (tableOwnerDef != NULL)

@@ -38,13 +38,8 @@
 #include "distributed/version_compat.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
-#if PG_VERSION_NUM >= PG_VERSION_12
 #include "nodes/pathnodes.h"
 #include "optimizer/optimizer.h"
-#else
-#include "nodes/relation.h"
-#include "optimizer/var.h"
-#endif
 #include "optimizer/clauses.h"
 #include "optimizer/prep.h"
 #include "optimizer/tlist.h"
