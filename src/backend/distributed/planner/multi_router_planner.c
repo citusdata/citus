@@ -65,12 +65,7 @@
 #include "optimizer/joininfo.h"
 #include "optimizer/pathnode.h"
 #include "optimizer/paths.h"
-#if PG_VERSION_NUM >= PG_VERSION_12
 #include "optimizer/optimizer.h"
-#else
-#include "optimizer/var.h"
-#include "optimizer/predtest.h"
-#endif
 #include "optimizer/restrictinfo.h"
 #include "parser/parsetree.h"
 #include "parser/parse_oper.h"
@@ -967,10 +962,8 @@ ModifyQuerySupported(Query *queryTree, Query *originalQuery, bool multiShardQuer
 
 			queryTableCount++;
 		}
-		else if (rangeTableEntry->rtekind == RTE_VALUES
-#if PG_VERSION_NUM >= PG_VERSION_12
-				 || rangeTableEntry->rtekind == RTE_RESULT
-#endif
+		else if (rangeTableEntry->rtekind == RTE_VALUES ||
+				 rangeTableEntry->rtekind == RTE_RESULT
 				 )
 		{
 			/* do nothing, this type is supported */

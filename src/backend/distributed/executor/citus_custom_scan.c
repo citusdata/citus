@@ -36,11 +36,7 @@
 #include "distributed/worker_protocol.h"
 #include "executor/executor.h"
 #include "nodes/makefuncs.h"
-#if PG_VERSION_NUM >= PG_VERSION_12
 #include "optimizer/optimizer.h"
-#else
-#include "optimizer/planner.h"
-#endif
 #include "optimizer/clauses.h"
 #include "utils/memutils.h"
 #include "utils/rel.h"
@@ -157,7 +153,6 @@ CitusBeginScan(CustomScanState *node, EState *estate, int eflags)
 	 */
 	EnableWorkerMessagePropagation();
 
-#if PG_VERSION_NUM >= PG_VERSION_12
 
 	/*
 	 * Since we are using a tuplestore we cannot use the virtual tuples postgres had
@@ -176,7 +171,6 @@ CitusBeginScan(CustomScanState *node, EState *estate, int eflags)
 	ExecAssignScanProjectionInfoWithVarno(&node->ss, INDEX_VAR);
 
 	node->ss.ps.qual = ExecInitQual(node->ss.ps.plan->qual, (PlanState *) node);
-#endif
 
 	DistributedPlan *distributedPlan = scanState->distributedPlan;
 	if (distributedPlan->insertSelectQuery != NULL)

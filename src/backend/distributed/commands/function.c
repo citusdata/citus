@@ -21,9 +21,7 @@
 
 #include "distributed/pg_version_constants.h"
 
-#if PG_VERSION_NUM >= PG_VERSION_12
 #include "access/genam.h"
-#endif
 #include "access/htup_details.h"
 #include "access/xact.h"
 #include "catalog/pg_aggregate.h"
@@ -736,9 +734,6 @@ static char *
 GetAggregateDDLCommand(const RegProcedure funcOid, bool useCreateOrReplace)
 {
 	StringInfoData buf = { 0 };
-	HeapTuple aggtup = NULL;
-	Form_pg_aggregate agg = NULL;
-	int numargs = 0;
 	int i = 0;
 	Oid *argtypes = NULL;
 	char **argnames = NULL;
@@ -762,7 +757,6 @@ GetAggregateDDLCommand(const RegProcedure funcOid, bool useCreateOrReplace)
 	const char *name = NameStr(proc->proname);
 	const char *nsp = get_namespace_name(proc->pronamespace);
 
-#if PG_VERSION_NUM >= PG_VERSION_12
 	if (useCreateOrReplace)
 	{
 		appendStringInfo(&buf, "CREATE OR REPLACE AGGREGATE %s(",
@@ -773,20 +767,16 @@ GetAggregateDDLCommand(const RegProcedure funcOid, bool useCreateOrReplace)
 		appendStringInfo(&buf, "CREATE AGGREGATE %s(",
 						 quote_qualified_identifier(nsp, name));
 	}
-#else
-	appendStringInfo(&buf, "CREATE AGGREGATE %s(",
-					 quote_qualified_identifier(nsp, name));
-#endif
 
 	/* Parameters, borrows heavily from print_function_arguments in postgres */
-	numargs = get_func_arg_info(proctup, &argtypes, &argnames, &argmodes);
+	int numargs = get_func_arg_info(proctup, &argtypes, &argnames, &argmodes);
 
-	aggtup = SearchSysCache1(AGGFNOID, funcOid);
+	HeapTuple aggtup = SearchSysCache1(AGGFNOID, funcOid);
 	if (!HeapTupleIsValid(aggtup))
 	{
 		elog(ERROR, "cache lookup failed for %d", funcOid);
 	}
-	agg = (Form_pg_aggregate) GETSTRUCT(aggtup);
+	Form_pg_aggregate agg = (Form_pg_aggregate) GETSTRUCT(aggtup);
 
 	if (AGGKIND_IS_ORDERED_SET(agg->aggkind))
 	{
@@ -1066,12 +1056,6 @@ GetAggregateDDLCommand(const RegProcedure funcOid, bool useCreateOrReplace)
 	ReleaseSysCache(aggtup);
 	ReleaseSysCache(proctup);
 
-#if PG_VERSION_NUM < PG_VERSION_12
-	if (useCreateOrReplace)
-	{
-		return WrapCreateOrReplace(buf.data);
-	}
-#endif
 	return buf.data;
 }
 

@@ -16,11 +16,7 @@
 
 #include "nodes/plannodes.h"
 
-#if PG_VERSION_NUM >= PG_VERSION_12
 #include "nodes/pathnodes.h"
-#else
-#include "nodes/relation.h"
-#endif
 
 #include "distributed/citus_nodes.h"
 #include "distributed/errormessage.h"

@@ -1273,11 +1273,7 @@ CreateExplainAnlyzeDestination(Task *task, TupleDestination *taskDest)
 	tupleDestination->originalTask = task;
 	tupleDestination->originalTaskDestination = taskDest;
 
-#if PG_VERSION_NUM >= PG_VERSION_12
 	TupleDesc lastSavedExplainAnalyzeTupDesc = CreateTemplateTupleDesc(2);
-#else
-	TupleDesc lastSavedExplainAnalyzeTupDesc = CreateTemplateTupleDesc(2, false);
-#endif
 
 	TupleDescInitEntry(lastSavedExplainAnalyzeTupDesc, 1, "explain analyze", TEXTOID, 0,
 					   0);

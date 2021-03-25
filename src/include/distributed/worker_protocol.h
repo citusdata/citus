@@ -144,7 +144,6 @@ extern Node * ParseTreeRawStmt(const char *ddlCommand);
 
 /* Function declarations for applying distributed execution primitives */
 extern Datum worker_fetch_partition_file(PG_FUNCTION_ARGS);
-extern Datum worker_fetch_query_results_file(PG_FUNCTION_ARGS);
 extern Datum worker_apply_shard_ddl_command(PG_FUNCTION_ARGS);
 extern Datum worker_range_partition_table(PG_FUNCTION_ARGS);
 extern Datum worker_hash_partition_table(PG_FUNCTION_ARGS);

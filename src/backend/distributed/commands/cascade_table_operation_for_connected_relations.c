@@ -14,9 +14,6 @@
 
 #include "distributed/pg_version_constants.h"
 
-#if (PG_VERSION_NUM < PG_VERSION_12)
-#include "access/htup_details.h"
-#endif
 #include "access/xact.h"
 #include "catalog/pg_constraint.h"
 #include "distributed/commands/utility_hook.h"

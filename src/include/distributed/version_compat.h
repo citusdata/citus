@@ -24,9 +24,7 @@
 #include "executor/tuptable.h"
 #include "nodes/parsenodes.h"
 #include "parser/parse_func.h"
-#if (PG_VERSION_NUM >= PG_VERSION_12)
 #include "optimizer/optimizer.h"
-#endif
 
 #if (PG_VERSION_NUM >= PG_VERSION_13)
 #include "tcop/tcopprot.h"
@@ -122,87 +120,6 @@ FileCompatFromFileStart(File fileDesc)
 	fc.offset = 0;
 
 	return fc;
-}
-
-
-#else /* pre PG12 */
-#define CreateTableSlotForRel(rel) MakeSingleTupleTableSlot(RelationGetDescr(rel))
-#define table_open(r, l) heap_open(r, l)
-#define table_openrv(r, l) heap_openrv(r, l)
-#define table_openrv_extended(r, l, m) heap_openrv_extended(r, l, m)
-#define table_close(r, l) heap_close(r, l)
-#define QTW_EXAMINE_RTES_BEFORE QTW_EXAMINE_RTES
-#define MakeSingleTupleTableSlotCompat(tupleDesc, tts_opts) \
-	MakeSingleTupleTableSlot(tupleDesc)
-#define NextCopyFromCompat(cstate, econtext, values, nulls) \
-	NextCopyFrom(cstate, econtext, values, nulls, NULL)
-
-/*
- * In PG12 GetSysCacheOid requires an oid column,
- * whereas beforehand the oid column was implicit with WITH OIDS
- */
-#define GetSysCacheOid1Compat(cacheId, oidcol, key1) \
-	GetSysCacheOid1(cacheId, key1)
-#define GetSysCacheOid2Compat(cacheId, oidcol, key1, key2) \
-	GetSysCacheOid2(cacheId, key1, key2)
-#define GetSysCacheOid3Compat(cacheId, oidcol, key1, key2, key3) \
-	GetSysCacheOid3(cacheId, key1, key2, key3)
-#define GetSysCacheOid4Compat(cacheId, oidcol, key1, key2, key3, key4) \
-	GetSysCacheOid4(cacheId, key1, key2, key3, key4)
-
-#define LOCAL_FCINFO(name, nargs) \
-	FunctionCallInfoData name ## data; \
-	FunctionCallInfoData *name = &name ## data
-
-#define fcGetArgValue(fc, n) ((fc)->arg[n])
-#define fcGetArgNull(fc, n) ((fc)->argnull[n])
-#define fcSetArgExt(fc, n, val, is_null) \
-	(((fc)->argnull[n] = (is_null)), ((fc)->arg[n] = (val)))
-
-typedef struct
-{
-	File fd;
-} FileCompat;
-
-static inline int
-FileWriteCompat(FileCompat *file, char *buffer, int amount, uint32 wait_event_info)
-{
-	return FileWrite(file->fd, buffer, amount, wait_event_info);
-}
-
-
-static inline int
-FileReadCompat(FileCompat *file, char *buffer, int amount, uint32 wait_event_info)
-{
-	return FileRead(file->fd, buffer, amount, wait_event_info);
-}
-
-
-static inline FileCompat
-FileCompatFromFileStart(File fileDesc)
-{
-	FileCompat fc = {
-		.fd = fileDesc,
-	};
-
-	return fc;
-}
-
-
-/*
- * postgres 11 equivalent for a function with the same name in postgres 12+.
- */
-static inline bool
-table_scan_getnextslot(HeapScanDesc scan, ScanDirection dir, TupleTableSlot *slot)
-{
-	HeapTuple tuple = heap_getnext(scan, ForwardScanDirection);
-	if (tuple == NULL)
-	{
-		return false;
-	}
-
-	ExecStoreTuple(tuple, slot, InvalidBuffer, false);
-	return true;
 }
 
 

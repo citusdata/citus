@@ -290,11 +290,7 @@ CREATE INDEX single_node_i1 ON test(x);
 CREATE INDEX single_node_i2 ON test(x,y);
 REINDEX SCHEMA single_node;
 
--- PG 11 does not support CONCURRENTLY
--- and we do not want to add a new output
--- file just for that. Enable the test
--- once we remove PG_VERSION_11
---REINDEX SCHEMA CONCURRENTLY single_node;
+REINDEX SCHEMA CONCURRENTLY single_node;
 
 -- keep one of the indexes
 -- drop w/wout tx blocks
@@ -474,7 +470,6 @@ SELECT * FROM test_2 WHERE z = (83, 'citus8.3')::new_type OR z = (82, 'citus8.2'
 -- final query is only intermediate result
 
 -- we want PG 11/12/13 behave consistently, the CTEs should be MATERIALIZED
-SET citus.enable_cte_inlining TO FALSE;
 WITH cte_1 AS (SELECT * FROM test_2) SELECT * FROM cte_1 ORDER BY 1,2;
 
 -- final query is router query

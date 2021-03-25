@@ -23,17 +23,7 @@
 #include "distributed/citus_safe_lib.h"
 #include "lib/stringinfo.h"
 
-/*
- * In PG 11 pg_vsnprintf is not exported and compiled in most cases, in that
- * case use the copied one from pg11_snprintf.c
- * NOTE: Whenever removing this section also remove pg11_snprintf.c
- */
-#if PG_VERSION_NUM < PG_VERSION_12
-extern int pg11_vsnprintf(char *str, size_t count, const char *fmt, va_list args);
-#define citus_vsnprintf pg11_vsnprintf
-#else
 #define citus_vsnprintf pg_vsnprintf
-#endif
 
 
 /*

@@ -174,7 +174,7 @@ INSERT INTO composite_type_partitioned_table VALUES (123, '(123, 456)'::other_co
          Node: host=localhost port=xxxxx dbname=regression
          ->  Insert on public.composite_type_partitioned_table_530003 (actual rows=0 loops=1)
                ->  Result (actual rows=1 loops=1)
-                     Output: xxxxxx
+                     Output: 123, '(123,456)'::test_composite_type
 (9 rows)
 
 SELECT run_command_on_coordinator_and_workers($cf$
@@ -218,7 +218,7 @@ INSERT INTO composite_type_partitioned_table VALUES (123, '(456, 678)'::other_co
          Node: host=localhost port=xxxxx dbname=regression
          ->  Insert on public.composite_type_partitioned_table_530000 (actual rows=0 loops=1)
                ->  Result (actual rows=1 loops=1)
-                     Output: xxxxxx
+                     Output: 123, '(456,678)'::test_composite_type
 (9 rows)
 
 -- create and distribute a table on enum type column

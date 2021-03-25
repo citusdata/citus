@@ -44,7 +44,7 @@ WITH non_colocated_1 AS (
   WHERE
     users_table.user_id = events_table.value_2 AND event_type IN (1, 2, 3)
 ),
-non_colocated_2 AS (
+non_colocated_2 AS MATERIALIZED (
   SELECT
     users_table.user_id
   FROM
@@ -67,8 +67,8 @@ ORDER BY
 -- Subqueries in WHERE and FROM are mixed
 -- In this query, only subquery in WHERE is not a colocated join
 -- but we're able to recursively plan that as well
-WITH users_events AS (
-  WITH colocated_join AS (
+WITH users_events AS MATERIALIZED (
+  WITH colocated_join AS MATERIALIZED (
     SELECT
       users_table.user_id as uid, event_type
     FROM
@@ -79,7 +79,7 @@ WITH users_events AS (
     WHERE
       events_table.event_type IN (1, 2, 3)
   ),
-  colocated_join_2 AS (
+  colocated_join_2 AS MATERIALIZED (
     SELECT
       users_table.user_id, event_type
     FROM
@@ -98,7 +98,7 @@ WITH users_events AS (
   WHERE
     colocated_join.uid = colocated_join_2.user_id AND
     colocated_join.event_type IN (
-    WITH some_events AS (
+    WITH some_events AS MATERIALIZED (
       SELECT
         event_type
       FROM
@@ -128,9 +128,7 @@ LIMIT
 
 -- cte LEFT JOIN distributed_table should error out
 -- as long as the CTE is recursively planned
--- prevent PG 11 - PG 12 outputs to diverge
-SET citus.enable_cte_inlining TO false;
-WITH cte AS (
+WITH cte AS MATERIALIZED (
   SELECT * FROM users_table WHERE user_id = 1 ORDER BY value_1
 )
 SELECT
@@ -144,10 +142,9 @@ ORDER BY
 LIMIT
   5;
 
-SET citus.enable_cte_inlining TO true;
 
 -- cte RIGHT JOIN distributed_table should work
-WITH cte AS (
+WITH cte AS MATERIALIZED (
   SELECT * FROM users_table WHERE user_id = 1 ORDER BY value_1
 )
 SELECT
@@ -162,7 +159,7 @@ LIMIT
   5;
 
 -- distributed_table LEFT JOIN cte should work
-WITH cte AS (
+WITH cte AS MATERIALIZED (
   SELECT * FROM users_table WHERE value_1 = 1 ORDER BY value_1
 )
 SELECT
@@ -177,9 +174,7 @@ LIMIT
   5;
 
 -- distributed_table RIGHT JOIN cte should error out
--- prevent PG 11 - PG 12 outputs to diverge
-SET citus.enable_cte_inlining TO false;
-WITH cte AS (
+WITH cte AS MATERIALIZED (
   SELECT * FROM users_table WHERE value_1 = 1 ORDER BY value_1
 )
 SELECT
@@ -194,7 +189,7 @@ LIMIT
   5;
 
 -- cte FULL JOIN distributed_table should error out
-WITH cte AS (
+WITH cte AS MATERIALIZED (
   SELECT * FROM users_table WHERE user_id = 1 ORDER BY value_1
 )
 SELECT
@@ -208,10 +203,9 @@ ORDER BY
 LIMIT
   5;
 
-SET citus.enable_cte_inlining TO false;
 
 -- Joins with reference tables are planned as router queries
-WITH cte AS (
+WITH cte AS MATERIALIZED (
   SELECT value_2, max(user_id) AS user_id FROM users_table WHERE value_2 = 1 GROUP BY value_2 HAVING count(*) > 1
 )
 SELECT
@@ -248,19 +242,19 @@ LEFT JOIN reference_1 AS r1 ON d1.col2=r1.col2
 LEFT JOIN reference_2 AS r2 ON r2.col1 = r1.col1
 join (select distrib_col,count(*) from distributed_2 group by distrib_col) d2 ON d2.distrib_col=d1.distrib_col;
 
-with d2 AS (select distrib_col,count(*) from distributed_2 group by distrib_col)
+with d2 AS MATERIALIZED (select distrib_col,count(*) from distributed_2 group by distrib_col)
 select count(*) from distributed_1 AS d1
 LEFT JOIN reference_1 AS r1 ON d1.col2=r1.col2
 LEFT JOIN reference_2 AS r2 ON r2.col1 = r1.col1
 join d2 ON d2.distrib_col=d1.distrib_col;
 
-with d2 AS (select distrib_col,col1 from distributed_2)
+with d2 AS MATERIALIZED (select distrib_col,col1 from distributed_2)
 select count(*) from distributed_1 AS d1
 LEFT JOIN reference_1 AS r1 ON d1.col2=r1.col2
 LEFT JOIN reference_2 AS r2 ON r2.col1 = r1.col1
 join d2 ON d2.distrib_col=d1.distrib_col;
 
-with cte_1 AS (select col1 from reference_1)
+with cte_1 AS MATERIALIZED (select col1 from reference_1)
 select count(*) from distributed_1 AS d1
 LEFT JOIN reference_1 AS r1 ON d1.col2=r1.col2
 LEFT JOIN reference_2 AS r2 ON r2.col1 = r1.col1

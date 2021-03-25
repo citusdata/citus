@@ -20,10 +20,8 @@
 #include "funcapi.h"
 #include "miscadmin.h"
 
-#if PG_VERSION_NUM >= PG_VERSION_12
 #include "access/genam.h"
 #include "access/table.h"
-#endif
 #include "access/htup_details.h"
 #include "access/xact.h"
 #include "catalog/dependency.h"
@@ -266,26 +264,16 @@ worker_merge_files_and_run_query(PG_FUNCTION_ARGS)
 Datum
 worker_cleanup_job_schema_cache(PG_FUNCTION_ARGS)
 {
-	Relation pgNamespace = NULL;
-#if PG_VERSION_NUM >= PG_VERSION_12
-	TableScanDesc scanDescriptor = NULL;
-#else
-	HeapScanDesc scanDescriptor = NULL;
-#endif
 	ScanKey scanKey = NULL;
 	int scanKeyCount = 0;
-	HeapTuple heapTuple = NULL;
 
 	CheckCitusVersion(ERROR);
 
-	pgNamespace = table_open(NamespaceRelationId, AccessExclusiveLock);
-#if PG_VERSION_NUM >= PG_VERSION_12
-	scanDescriptor = table_beginscan_catalog(pgNamespace, scanKeyCount, scanKey);
-#else
-	scanDescriptor = heap_beginscan_catalog(pgNamespace, scanKeyCount, scanKey);
-#endif
+	Relation pgNamespace = table_open(NamespaceRelationId, AccessExclusiveLock);
+	TableScanDesc scanDescriptor = table_beginscan_catalog(pgNamespace, scanKeyCount,
+														   scanKey);
 
-	heapTuple = heap_getnext(scanDescriptor, ForwardScanDirection);
+	HeapTuple heapTuple = heap_getnext(scanDescriptor, ForwardScanDirection);
 	while (HeapTupleIsValid(heapTuple))
 	{
 		Form_pg_namespace schemaForm = (Form_pg_namespace) GETSTRUCT(heapTuple);

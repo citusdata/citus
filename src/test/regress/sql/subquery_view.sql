@@ -319,11 +319,11 @@ LIMIT 5;
 CREATE VIEW subquery_and_ctes_second AS
 SELECT time, event_type, value_2, value_3 FROM
 (
-	WITH cte AS (
-		WITH local_cte AS (
+	WITH cte AS MATERIALIZED (
+		WITH local_cte AS MATERIALIZED (
 			SELECT * FROM users_table_local
 		),
-		dist_cte AS (
+		dist_cte AS MATERIALIZED (
 			SELECT user_id FROM events_table
 		)
 		SELECT dist_cte.user_id FROM local_cte join dist_cte on dist_cte.user_id=local_cte.user_id
@@ -340,13 +340,10 @@ SELECT time, event_type, value_2, value_3 FROM
 		WHERE
 			foo.user_id = events_table.value_2;
 
--- prevent PG 11 - PG 12 outputs to diverge
-SET citus.enable_cte_inlining TO false;
 SELECT * FROM subquery_and_ctes_second
 ORDER BY 3 DESC, 2 DESC, 1 DESC
 LIMIT 5;
 
-SET citus.enable_cte_inlining TO true;
 
 CREATE VIEW deep_subquery AS
 SELECT count(*)

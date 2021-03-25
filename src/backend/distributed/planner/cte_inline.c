@@ -7,8 +7,6 @@
  *	  planning, the query pushdown planning, kicks in and the CTEs can actually
  *	  be pushed down as long as it is safe to pushdown as a subquery.
  *
- *	  Most of the logic in this function is inspired (and some is copy & pasted)
- *	  from PostgreSQL 12's CTE inlining feature.
  *
  * Copyright (c) Citus Data, Inc.
  *-------------------------------------------------------------------------
@@ -18,28 +16,8 @@
 
 #include "distributed/cte_inline.h"
 #include "nodes/nodeFuncs.h"
-#if PG_VERSION_NUM >= PG_VERSION_12
 #include "optimizer/optimizer.h"
-#else
-#include "optimizer/cost.h"
-#include "optimizer/clauses.h"
-#endif
 #include "rewrite/rewriteManip.h"
-
-#if PG_VERSION_NUM < PG_VERSION_12
-
-/* copy & paste from PG 12 */
-#define PG_12_QTW_EXAMINE_RTES_BEFORE 0x10
-#define PG_12_QTW_EXAMINE_RTES_AFTER 0x20
-bool pg_12_query_tree_walker(Query *query,
-							 bool (*walker)(),
-							 void *context,
-							 int flags);
-bool pg_12_range_table_walker(List *rtable,
-							  bool (*walker)(),
-							  void *context,
-							  int flags);
-#endif
 
 typedef struct inline_cte_walker_context
 {
@@ -233,18 +211,9 @@ PostgreSQLCTEInlineCondition(CommonTableExpr *cte, CmdType cmdType)
 	 * will be inlined even if multiply referenced.
 	 */
 	if (
-#if PG_VERSION_NUM >= PG_VERSION_12
 		(cte->ctematerialized == CTEMaterializeNever ||
 		 (cte->ctematerialized == CTEMaterializeDefault &&
 		  cte->cterefcount == 1)) &&
-#else
-
-		/*
-		 * If referenced only once inlining would probably perform
-		 * better, so for pg < 12, try inlining
-		 */
-		cte->cterefcount == 1 &&
-#endif
 		!cte->cterecursive &&
 		cmdType == CMD_SELECT &&
 		!contain_dml(cte->ctequery) &&
@@ -294,18 +263,8 @@ inline_cte_walker(Node *node, inline_cte_walker_context *context)
 
 		context->levelsup++;
 
-		/*
-		 * Visit the query's RTE nodes after their contents; otherwise
-		 * query_tree_walker would descend into the newly inlined CTE query,
-		 * which we don't want.
-		 */
-#if PG_VERSION_NUM < PG_VERSION_12
-		(void) pg_12_query_tree_walker(query, inline_cte_walker, context,
-									   PG_12_QTW_EXAMINE_RTES_AFTER);
-#else
 		(void) query_tree_walker(query, inline_cte_walker, context,
 								 QTW_EXAMINE_RTES_AFTER);
-#endif
 		context->levelsup--;
 
 		return false;
@@ -410,124 +369,5 @@ contain_dml_walker(Node *node, void *context)
 	}
 	return expression_tree_walker(node, contain_dml_walker, context);
 }
-
-
-#if PG_VERSION_NUM < PG_VERSION_12
-/*
- * pg_12_query_tree_walker is copied from Postgres 12's source
- * code. The only difference between query_tree_walker the new
- * two flags added in range_table_walker: QTW_EXAMINE_RTES_AFTER
- * and QTW_EXAMINE_RTES_BEFORE.
- */
-bool
-pg_12_query_tree_walker(Query *query,
-				  bool (*walker) (),
-				  void *context,
-				  int flags)
-{
-	Assert(query != NULL && IsA(query, Query));
-
-	if (walker((Node *) query->targetList, context))
-		return true;
-	if (walker((Node *) query->withCheckOptions, context))
-		return true;
-	if (walker((Node *) query->onConflict, context))
-		return true;
-	if (walker((Node *) query->returningList, context))
-		return true;
-	if (walker((Node *) query->jointree, context))
-		return true;
-	if (walker(query->setOperations, context))
-		return true;
-	if (walker(query->havingQual, context))
-		return true;
-	if (walker(query->limitOffset, context))
-		return true;
-	if (walker(query->limitCount, context))
-		return true;
-	if (!(flags & QTW_IGNORE_CTE_SUBQUERIES))
-	{
-		if (walker((Node *) query->cteList, context))
-			return true;
-	}
-	if (!(flags & QTW_IGNORE_RANGE_TABLE))
-	{
-		if (pg_12_range_table_walker(query->rtable, walker, context, flags))
-			return true;
-	}
-	return false;
-}
-
-/*
- * pg_12_range_table_walker is copied from Postgres 12's source
- * code. The only difference between range_table_walker the new
- * two flags added in range_table_walker: QTW_EXAMINE_RTES_AFTER
- * and QTW_EXAMINE_RTES_BEFORE.
- */
-bool
-pg_12_range_table_walker(List *rtable,
-				   bool (*walker) (),
-				   void *context,
-				   int flags)
-{
-	ListCell   *rt;
-
-	foreach(rt, rtable)
-	{
-		RangeTblEntry *rte = (RangeTblEntry *) lfirst(rt);
-
-		/*
-		 * Walkers might need to examine the RTE node itself either before or
-		 * after visiting its contents (or, conceivably, both).  Note that if
-		 * you specify neither flag, the walker won't visit the RTE at all.
-		 */
-		if (flags & PG_12_QTW_EXAMINE_RTES_BEFORE)
-			if (walker(rte, context))
-				return true;
-
-		switch (rte->rtekind)
-		{
-			case RTE_RELATION:
-				if (walker(rte->tablesample, context))
-					return true;
-				break;
-			case RTE_CTE:
-			case RTE_NAMEDTUPLESTORE:
-				/* nothing to do */
-				break;
-			case RTE_SUBQUERY:
-				if (!(flags & QTW_IGNORE_RT_SUBQUERIES))
-					if (walker(rte->subquery, context))
-						return true;
-				break;
-			case RTE_JOIN:
-				if (!(flags & QTW_IGNORE_JOINALIASES))
-					if (walker(rte->joinaliasvars, context))
-						return true;
-				break;
-			case RTE_FUNCTION:
-				if (walker(rte->functions, context))
-					return true;
-				break;
-			case RTE_TABLEFUNC:
-				if (walker(rte->tablefunc, context))
-					return true;
-				break;
-			case RTE_VALUES:
-				if (walker(rte->values_lists, context))
-					return true;
-				break;
-		}
-
-		if (walker(rte->securityQuals, context))
-			return true;
-
-		if (flags & PG_12_QTW_EXAMINE_RTES_AFTER)
-			if (walker(rte, context))
-				return true;
-	}
-	return false;
-}
-#endif
 
 /* *INDENT-ON* */

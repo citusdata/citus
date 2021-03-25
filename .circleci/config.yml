@@ -199,7 +199,7 @@ jobs:
                 make -C src/test/regress \
                   check-citus-upgrade \
                   bindir=/usr/lib/postgresql/${PG_MAJOR}/bin \
-                  citus-pre-tar=/install-pg11-citus${citus_version}.tar \
+                  citus-pre-tar=/install-pg${PG_MAJOR}-citus${citus_version}.tar \
                   citus-post-tar=/home/circleci/project/install-$PG_MAJOR.tar; \
             done;
 
@@ -210,7 +210,7 @@ jobs:
                 make -C src/test/regress \
                   check-citus-upgrade-mixed \
                   bindir=/usr/lib/postgresql/${PG_MAJOR}/bin \
-                  citus-pre-tar=/install-pg11-citus${citus_version}.tar \
+                  citus-pre-tar=/install-pg${PG_MAJOR}-citus${citus_version}.tar \
                   citus-post-tar=/home/circleci/project/install-$PG_MAJOR.tar; \
             done;
           no_output_timeout: 2m
@@ -427,10 +427,6 @@ workflows:
                 - /release-[0-9]+\.[0-9]+.*/ # match with releaseX.Y.*
 
       - build:
-          name: build-11
-          pg_major: 11
-          image_tag: '11.9'
-      - build:
           name: build-12
           pg_major: 12
           image_tag: '12.4'
@@ -441,56 +437,6 @@ workflows:
 
       - check-style
       - check-sql-snapshots
-
-      - test-citus:
-          name: 'test-11_check-multi'
-          pg_major: 11
-          image_tag: '11.9'
-          make: check-multi
-          requires: [build-11]
-      - test-citus:
-          name: 'test-11_check-mx'
-          pg_major: 11
-          image_tag: '11.9'
-          make: check-multi-mx
-          requires: [build-11]
-      - test-citus:
-          name: 'test-11_check-vanilla'
-          pg_major: 11
-          image_tag: '11.9'
-          make: check-vanilla
-          requires: [build-11]
-      - test-citus:
-          name: 'test-11_check-isolation'
-          pg_major: 11
-          image_tag: '11.9'
-          make: check-isolation
-          requires: [build-11]
-      - test-citus:
-          name: 'test-11_check-worker'
-          pg_major: 11
-          image_tag: '11.9'
-          make: check-worker
-          requires: [build-11]
-      - test-citus:
-          name: 'test-11_check-operations'
-          pg_major: 11
-          image_tag: '11.9'
-          make: check-operations
-          requires: [build-11]
-      - test-citus:
-          name: 'test-11_check-follower-cluster'
-          pg_major: 11
-          image_tag: '11.9'
-          make: check-follower-cluster
-          requires: [build-11]
-      - test-citus:
-          name: 'test-11_check-failure'
-          pg_major: 11
-          image: citus/failtester
-          image_tag: '11.9'
-          make: check-failure
-          requires: [build-11]
 
       - test-citus:
           name: 'test-12_check-multi'
@@ -629,13 +575,6 @@ workflows:
           requires: [build-13]
 
       - test-pg-upgrade:
-          name: 'test-11-12_check-pg-upgrade'
-          old_pg_major: 11
-          new_pg_major: 12
-          image_tag: 11-12-13
-          requires: [build-11,build-12]
-
-      - test-pg-upgrade:
           name: 'test-12-13_check-pg-upgrade'
           old_pg_major: 12
           new_pg_major: 13
@@ -643,10 +582,10 @@ workflows:
           requires: [build-12,build-13]
 
       - test-citus-upgrade:
-          name: test-11_check-citus-upgrade
-          pg_major: 11
-          image_tag: '11.9'
-          requires: [build-11]
+          name: test-12_check-citus-upgrade
+          pg_major: 12
+          image_tag: '12.4'
+          requires: [build-12]
 
       - ch_benchmark:
           requires: [build-13]

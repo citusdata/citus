@@ -907,13 +907,12 @@ LEFT JOIN
         WHERE d1.user_id = d2.user_id )) AS bar USING (user_id);
 ERROR:  cannot pushdown the subquery
 DETAIL:  Complex subqueries and CTEs cannot be in the outer part of the outer join
--- should work fine with cte inlinig disabled
-SET citus.enable_cte_inlining TO false;
-WITH distinct_undistribured AS (
+-- should work fine with materialized ctes
+WITH distinct_undistribured AS MATERIALIZED (
     SELECT DISTINCT user_id
     FROM test_cte
 ),
-     exsist_in_distributed AS (
+     exsist_in_distributed AS MATERIALIZED (
          SELECT DISTINCT user_id
          FROM test_cte_distributed
          WHERE EXISTS(SELECT *
@@ -938,7 +937,7 @@ ORDER BY 2 DESC, 1 DESC;
  1       | 1
 (8 rows)
 
-WITH distinct_undistribured AS
+WITH distinct_undistribured AS MATERIALIZED
   (SELECT DISTINCT user_id
    FROM test_cte)
 SELECT *
@@ -954,7 +953,7 @@ LEFT JOIN
 ORDER BY 2 DESC, 1 DESC;
 ERROR:  cannot pushdown the subquery
 DETAIL:  Complex subqueries and CTEs cannot be in the outer part of the outer join
-WITH distinct_undistribured AS
+WITH distinct_undistribured AS MATERIALIZED
   (SELECT DISTINCT user_id
    FROM test_cte)
 SELECT *
@@ -969,11 +968,11 @@ LEFT JOIN
 ERROR:  cannot pushdown the subquery
 DETAIL:  Complex subqueries and CTEs cannot be in the outer part of the outer join
 -- NOT EXISTS struct, with cte inlining disabled
-WITH distinct_undistribured AS (
+WITH distinct_undistribured AS MATERIALIZED(
     SELECT DISTINCT user_id
     FROM test_cte
 ),
-     not_exsist_in_distributed AS (
+     not_exsist_in_distributed AS MATERIALIZED (
          SELECT DISTINCT user_id
          FROM test_cte_distributed
          WHERE NOT EXISTS(SELECT NULL
@@ -1000,7 +999,7 @@ ORDER BY 2 DESC, 1 DESC;
 
 -- similar query, but this time the second
 -- part of the query is not inside a CTE
-WITH distinct_undistribured AS (
+WITH distinct_undistribured AS MATERIALIZED (
     SELECT DISTINCT user_id
     FROM test_cte
 )
@@ -1017,11 +1016,10 @@ LEFT JOIN
 ERROR:  cannot pushdown the subquery
 DETAIL:  Complex subqueries and CTEs cannot be in the outer part of the outer join
 -- some test  with failures
-WITH a AS (SELECT * FROM users_table LIMIT 10)
+WITH a AS MATERIALIZED (SELECT * FROM users_table LIMIT 10)
 	SELECT user_id/0 FROM users_table JOIN a USING (user_id);
 ERROR:  division by zero
 CONTEXT:  while executing command on localhost:xxxxx
-RESET citus.enable_cte_inlining;
 DROP VIEW basic_view;
 DROP VIEW cte_view;
 DROP SCHEMA with_basics CASCADE;

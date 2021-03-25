@@ -14,14 +14,10 @@
 
 #include "distributed/pg_version_constants.h"
 
-#if PG_VERSION_NUM >= PG_VERSION_12
 #include "access/genam.h"
-#endif
 #include "access/htup_details.h"
 #include "access/stratnum.h"
-#if PG_VERSION_NUM >= PG_VERSION_12
 #include "access/table.h"
-#endif
 #include "catalog/pg_constraint.h"
 #include "distributed/commands.h"
 #include "distributed/foreign_key_relationship.h"
@@ -37,9 +33,6 @@
 #include "common/hashfn.h"
 #endif
 #include "utils/memutils.h"
-#if PG_VERSION_NUM < PG_VERSION_12
-#include "utils/rel.h"
-#endif
 
 
 /*

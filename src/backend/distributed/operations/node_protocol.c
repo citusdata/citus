@@ -451,15 +451,12 @@ Datum
 citus_get_active_worker_nodes(PG_FUNCTION_ARGS)
 {
 	FuncCallContext *functionContext = NULL;
-	uint32 workerNodeIndex = 0;
 	uint32 workerNodeCount = 0;
 
 	CheckCitusVersion(ERROR);
 
 	if (SRF_IS_FIRSTCALL())
 	{
-		TupleDesc tupleDescriptor = NULL;
-
 		/* create a function context for cross-call persistence */
 		functionContext = SRF_FIRSTCALL_INIT();
 
@@ -477,11 +474,7 @@ citus_get_active_worker_nodes(PG_FUNCTION_ARGS)
 		 * This tuple descriptor must match the output parameters declared for
 		 * the function in pg_proc.
 		 */
-#if PG_VERSION_NUM < PG_VERSION_12
-		tupleDescriptor = CreateTemplateTupleDesc(WORKER_NODE_FIELDS, false);
-#else
-		tupleDescriptor = CreateTemplateTupleDesc(WORKER_NODE_FIELDS);
-#endif
+		TupleDesc tupleDescriptor = CreateTemplateTupleDesc(WORKER_NODE_FIELDS);
 		TupleDescInitEntry(tupleDescriptor, (AttrNumber) 1, "node_name",
 						   TEXTOID, -1, 0);
 		TupleDescInitEntry(tupleDescriptor, (AttrNumber) 2, "node_port",
@@ -493,7 +486,7 @@ citus_get_active_worker_nodes(PG_FUNCTION_ARGS)
 	}
 
 	functionContext = SRF_PERCALL_SETUP();
-	workerNodeIndex = functionContext->call_cntr;
+	uint32 workerNodeIndex = functionContext->call_cntr;
 	workerNodeCount = functionContext->max_calls;
 
 	if (workerNodeIndex < workerNodeCount)
@@ -668,7 +661,6 @@ GetPreLoadTableCreationCommands(Oid relationId, bool includeSequenceDefaults,
 										tableColumnOptionsDef));
 	}
 
-#if PG_VERSION_NUM >= 120000
 
 	/* add columnar options for cstore tables */
 	if (accessMethod == NULL && IsColumnarTableAmTable(relationId))
@@ -679,7 +671,6 @@ GetPreLoadTableCreationCommands(Oid relationId, bool includeSequenceDefaults,
 			tableDDLEventList = lappend(tableDDLEventList, cstoreOptionsDDL);
 		}
 	}
-#endif
 
 	char *tableOwnerDef = TableOwnerResetCommand(relationId);
 	if (tableOwnerDef != NULL)

@@ -38,12 +38,8 @@
 #include "distributed/relation_restriction_equivalence.h"
 #include "distributed/version_compat.h"
 #include "nodes/nodeFuncs.h"
-#if PG_VERSION_NUM >= PG_VERSION_12
 #include "nodes/makefuncs.h"
 #include "optimizer/optimizer.h"
-#else
-#include "optimizer/var.h"
-#endif
 #include "nodes/pg_list.h"
 #include "optimizer/clauses.h"
 #include "parser/parsetree.h"
@@ -235,8 +231,6 @@ HasEmptyJoinTree(Query *query)
 	{
 		return true;
 	}
-
-#if PG_VERSION_NUM >= PG_VERSION_12
 	else if (list_length(query->rtable) == 1)
 	{
 		RangeTblEntry *rte = (RangeTblEntry *) linitial(query->rtable);
@@ -245,7 +239,6 @@ HasEmptyJoinTree(Query *query)
 			return true;
 		}
 	}
-#endif
 
 	return false;
 }
@@ -1153,10 +1146,8 @@ DeferErrorIfUnsupportedTableCombination(Query *queryTree)
 		 * subquery, or immutable function.
 		 */
 		if (rangeTableEntry->rtekind == RTE_RELATION ||
-			rangeTableEntry->rtekind == RTE_SUBQUERY
-#if PG_VERSION_NUM >= PG_VERSION_12
-			|| rangeTableEntry->rtekind == RTE_RESULT
-#endif
+			rangeTableEntry->rtekind == RTE_SUBQUERY ||
+			rangeTableEntry->rtekind == RTE_RESULT
 			)
 		{
 			/* accepted */
@@ -1472,13 +1463,11 @@ HasRecurringTuples(Node *node, RecurringTuplesType *recurType)
 			 */
 			return true;
 		}
-#if PG_VERSION_NUM >= PG_VERSION_12
 		else if (rangeTableEntry->rtekind == RTE_RESULT)
 		{
 			*recurType = RECURRING_TUPLES_EMPTY_JOIN_TREE;
 			return true;
 		}
-#endif
 
 		return false;
 	}

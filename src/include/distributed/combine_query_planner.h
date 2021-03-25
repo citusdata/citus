@@ -16,11 +16,7 @@
 #include "nodes/parsenodes.h"
 #include "nodes/plannodes.h"
 
-#if PG_VERSION_NUM >= PG_VERSION_12
 #include "nodes/pathnodes.h"
-#else
-#include "nodes/relation.h"
-#endif
 
 
 /* Function declarations for building local plans on the coordinator node */

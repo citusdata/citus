@@ -21,7 +21,6 @@
 
 #include "distributed/pg_version_constants.h"
 
-#if PG_VERSION_NUM >= PG_VERSION_12
 
 #include "access/amapi.h"
 #include "access/heapam.h"
@@ -586,6 +585,3 @@ fake_am_handler(PG_FUNCTION_ARGS)
 {
 	PG_RETURN_POINTER(&fake_methods);
 }
-
-
-#endif
