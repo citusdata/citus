@@ -1,4 +1,4 @@
--- citus--10.1-1--10.0-2
+-- citus--10.1-1--10.0-3
 
 #include "../../../columnar/sql/downgrades/columnar--10.1-1--10.0-3.sql"
 
@@ -15,3 +15,4 @@ COMMENT ON FUNCTION create_distributed_table(table_name regclass,
 											 distribution_type citus.distribution_type,
 											 colocate_with text)
     IS 'creates a distributed table';
+DROP FUNCTION pg_catalog.citus_partitioned_shard_total_size(text);

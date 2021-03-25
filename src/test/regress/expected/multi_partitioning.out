@@ -417,6 +417,31 @@ SELECT * FROM partitioning_test WHERE id = 1 OR id = 2 ORDER BY 1;
   2 | 07-07-2010
 (2 rows)
 
+-- check the shard size
+SELECT * FROM citus_shard_cost_by_disk_size(1660000);
+ citus_shard_cost_by_disk_size
+---------------------------------------------------------------------
+                        499712
+(1 row)
+
+SELECT * FROM citus_shard_cost_by_disk_size(1660001);
+ citus_shard_cost_by_disk_size
+---------------------------------------------------------------------
+                        557056
+(1 row)
+
+SELECT * FROM citus_shard_cost_by_disk_size(1660002);
+ citus_shard_cost_by_disk_size
+---------------------------------------------------------------------
+                        270336
+(1 row)
+
+SELECT * FROM citus_shard_cost_by_disk_size(1660003);
+ citus_shard_cost_by_disk_size
+---------------------------------------------------------------------
+                        368640
+(1 row)
+
 -- test DELETE
 -- DELETE from partitioned table
 DELETE FROM partitioning_test WHERE id = 9;

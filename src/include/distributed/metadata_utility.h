@@ -203,7 +203,8 @@ extern List * AllShardPlacementsOnNodeGroup(int32 groupId);
 extern List * AllShardPlacementsWithShardPlacementState(ShardState shardState);
 extern List * GroupShardPlacementsForTableOnGroup(Oid relationId, int32 groupId);
 extern StringInfo GenerateSizeQueryOnMultiplePlacements(List *shardIntervalList,
-														char *sizeQuery);
+														char *sizeQuery, bool
+														skipPartitions);
 extern List * RemoveCoordinatorPlacementIfNotSingleNode(List *placementList);
 extern ShardPlacement * ShardPlacementOnGroup(uint64 shardId, int groupId);
 

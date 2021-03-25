@@ -560,11 +560,12 @@ SELECT * FROM print_extension_changes();
 -- Snapshot of state at 10.1-1
 ALTER EXTENSION citus UPDATE TO '10.1-1';
 SELECT * FROM print_extension_changes();
- previous_object |              current_object
+                                previous_object                                |                                    current_object
 ---------------------------------------------------------------------
  function create_distributed_table(regclass,text,citus.distribution_type,text) |
+                                                                               | function citus_partitioned_shard_total_size(text)
                                                                                | function create_distributed_table(regclass,text,citus.distribution_type,text,integer)
-(2 rows)
+(3 rows)
 
 DROP TABLE prev_objects, extension_diff;
 -- show running version

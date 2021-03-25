@@ -469,9 +469,10 @@ DistributedTableSizeOnWorker(WorkerNode *workerNode, Oid relationId, char *sizeQ
 
 	List *shardIntervalsOnNode = ShardIntervalsOnWorkerGroup(workerNode, relationId);
 
+	bool optimizePartitionCalculations = true;
 	StringInfo tableSizeQuery = GenerateSizeQueryOnMultiplePlacements(
 		shardIntervalsOnNode,
-		sizeQuery);
+		sizeQuery, optimizePartitionCalculations);
 
 	MultiConnection *connection = GetNodeConnection(connectionFlag, workerNodeName,
 													workerNodePort);
@@ -594,9 +595,12 @@ ShardIntervalsOnWorkerGroup(WorkerNode *workerNode, Oid relationId)
  * are also supported by this function changing the size query given as the
  * last parameter to function.  Format of sizeQuery is pg_*_size(%s). Examples
  * of it can be found in the coordinator_protocol.h
+ * This functions uses the UDF citus_partitioned_shard_total_size() for partitioned
+ * tables, if the parameter skipPartitions is true.
  */
 StringInfo
-GenerateSizeQueryOnMultiplePlacements(List *shardIntervalList, char *sizeQuery)
+GenerateSizeQueryOnMultiplePlacements(List *shardIntervalList, char *sizeQuery, bool
+									  optimizePartitionCalculations)
 {
 	StringInfo selectQuery = makeStringInfo();
 
@@ -614,7 +618,16 @@ GenerateSizeQueryOnMultiplePlacements(List *shardIntervalList, char *sizeQuery)
 		char *shardQualifiedName = quote_qualified_identifier(schemaName, shardName);
 		char *quotedShardName = quote_literal_cstr(shardQualifiedName);
 
-		appendStringInfo(selectQuery, sizeQuery, quotedShardName);
+		if (optimizePartitionCalculations && PartitionedTable(shardInterval->relationId))
+		{
+			appendStringInfo(selectQuery, "citus_partitioned_shard_total_size(%s)",
+							 quotedShardName);
+		}
+		else
+		{
+			appendStringInfo(selectQuery, sizeQuery, quotedShardName);
+		}
+
 		appendStringInfo(selectQuery, " + ");
 	}
 

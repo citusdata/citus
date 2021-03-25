@@ -35,6 +35,7 @@
 #include "distributed/coordinator_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_client_executor.h"
+#include "distributed/multi_partitioning_utils.h"
 #include "distributed/multi_progress.h"
 #include "distributed/multi_server_executor.h"
 #include "distributed/pg_dist_rebalance_strategy.h"
@@ -44,6 +45,7 @@
 #include "distributed/shard_rebalancer.h"
 #include "distributed/tuplestore.h"
 #include "distributed/worker_protocol.h"
+#include "executor/spi.h"
 #include "funcapi.h"
 #include "miscadmin.h"
 #include "postmaster/postmaster.h"
@@ -158,6 +160,7 @@ PG_FUNCTION_INFO_V1(get_rebalance_table_shards_plan);
 PG_FUNCTION_INFO_V1(get_rebalance_progress);
 PG_FUNCTION_INFO_V1(citus_drain_node);
 PG_FUNCTION_INFO_V1(master_drain_node);
+PG_FUNCTION_INFO_V1(citus_partitioned_shard_total_size);
 PG_FUNCTION_INFO_V1(citus_shard_cost_by_disk_size);
 PG_FUNCTION_INFO_V1(citus_validate_rebalance_strategy_functions);
 PG_FUNCTION_INFO_V1(pg_dist_rebalance_strategy_enterprise_check);
@@ -430,6 +433,67 @@ GetShardCost(uint64 shardId, void *voidContext)
 
 
 /*
+ * citus_partitioned_shard_total_size returns the total size of a partitioned table with
+ * its partitions, using the function pg_partition_tree.
+ */
+Datum
+citus_partitioned_shard_total_size(PG_FUNCTION_ARGS)
+{
+	char *shardName = text_to_cstring(PG_GETARG_TEXT_P(0));
+	uint64 size = 0;
+	const int paramCount = 1;
+	Oid paramTypes[1] = { TEXTOID };
+	Datum paramValues[1] = { CStringGetTextDatum(shardName) };
+
+	/* pg_partition_tree finds the partitions recursively and returns them */
+	char *queryText = "SELECT sum(pg_total_relation_size(relid))::bigint AS total_size "
+					  "FROM (SELECT relid from pg_partition_tree($1)) partition_tree;";
+
+	int spiResult = SPI_connect();
+	if (spiResult != SPI_OK_CONNECT)
+	{
+		ereport(ERROR, (errmsg("could not connect to SPI manager"),
+						errdetail("couldn't get the size of partitioned shard named: %s",
+								  shardName)));
+	}
+
+	spiResult = SPI_execute_with_args(queryText, paramCount, paramTypes,
+									  paramValues,
+									  NULL, false, 0);
+
+	if (spiResult == SPI_OK_SELECT)
+	{
+		Assert(SPI_processed <= 1);
+		if (SPI_processed == 1)
+		{
+			bool isnull = false;
+
+			size = DatumGetInt64(SPI_getbinval(SPI_tuptable->vals[0],
+											   SPI_tuptable->tupdesc,
+											   1, &isnull));
+		}
+	}
+	else
+	{
+		ereport(ERROR, (errmsg("could not run SPI query"),
+						errdetail(
+							"couldn't get the size of partitioned shard named: %s\nSPI response was not OK.",
+							shardName)));
+	}
+
+	spiResult = SPI_finish();
+	if (spiResult != SPI_OK_FINISH)
+	{
+		ereport(ERROR, (errmsg("could not finish SPI connection"),
+						errdetail("couldn't get the size of partitioned shard named: %s",
+								  shardName)));
+	}
+
+	PG_RETURN_UINT64(size);
+}
+
+
+/*
  * citus_shard_cost_by_disk_size gets the cost for a shard based on the disk
  * size of the shard on a worker. The worker to check the disk size is
  * determined by choosing the first active placement for the shard. The disk
@@ -449,11 +513,14 @@ citus_shard_cost_by_disk_size(PG_FUNCTION_ARGS)
 	uint32 connectionFlag = 0;
 	PGresult *result = NULL;
 	bool raiseErrors = true;
+	bool skipPartitions = true;
 	char *sizeQuery = PG_TOTAL_RELATION_SIZE_FUNCTION;
 	ShardInterval *shardInterval = LoadShardInterval(shardId);
-	List *colocatedShardList = ColocatedShardIntervalList(shardInterval);
+
+	List *colocatedShardList = ColocatedNonPartitionShardIntervalList(shardInterval);
 	StringInfo tableSizeQuery = GenerateSizeQueryOnMultiplePlacements(colocatedShardList,
-																	  sizeQuery);
+																	  sizeQuery,
+																	  skipPartitions);
 
 	MultiConnection *connection = GetNodeConnection(connectionFlag, workerNodeName,
 													workerNodePort);
