@@ -89,6 +89,7 @@ static StripeReadState * BeginStripeRead(StripeMetadata *stripeMetadata, Relatio
 										 List *whereClauseList, MemoryContext
 										 stripeReadContext);
 static void EndStripeRead(ColumnarReadState *readState);
+static void AdvanceStripeRead(ColumnarReadState *readState);
 static bool ReadStripeNextRow(StripeReadState *stripeReadState, Datum *columnValues,
 							  bool *columnNulls);
 static ChunkGroupReadState * BeginChunkGroupRead(StripeBuffers *stripeBuffers, int
@@ -204,6 +205,7 @@ ColumnarReadNextRow(ColumnarReadState *readState, Datum *columnValues, bool *col
 
 		if (!ReadStripeNextRow(readState->stripeReadState, columnValues, columnNulls))
 		{
+			AdvanceStripeRead(readState);
 			EndStripeRead(readState);
 			continue;
 		}
@@ -299,18 +301,26 @@ BeginStripeRead(StripeMetadata *stripeMetadata, Relation rel, TupleDesc tupleDes
 
 
 /*
- * EndStripeRead finishes current stripe read and increments currentStripe for
- * next one.
+ * EndStripeRead finishes current stripe read.
  */
 static void
 EndStripeRead(ColumnarReadState *readState)
 {
-	readState->chunkGroupsFiltered +=
-		readState->stripeReadState->chunkGroupsFiltered;
 	pfree(readState->stripeReadState);
 	readState->stripeReadState = NULL;
 	MemoryContextReset(readState->stripeReadContext);
+}
 
+
+/*
+ * AdvanceStripeRead updates chunkGroupsFiltered and increments currentStripe
+ * for next stripe read.
+ */
+static void
+AdvanceStripeRead(ColumnarReadState *readState)
+{
+	readState->chunkGroupsFiltered +=
+		readState->stripeReadState->chunkGroupsFiltered;
 	readState->currentStripe++;
 }
 
