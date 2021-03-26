@@ -77,7 +77,7 @@ struct ColumnarReadState
 	List *projectedColumnList;
 
 	List *whereClauseList;
-	List *clauseVars;
+	List *whereClauseVars;
 
 	MemoryContext stripeReadContext;
 	int64 chunkGroupsFiltered;
@@ -86,7 +86,7 @@ struct ColumnarReadState
 /* static function declarations */
 static StripeReadState * BeginStripeRead(StripeMetadata *stripeMetadata, Relation rel,
 										 TupleDesc tupleDesc, List *projectedColumnList,
-										 List *whereClauseList, List *clauseVars,
+										 List *whereClauseList, List *whereClauseVars,
 										 MemoryContext stripeReadContext);
 static void EndStripeRead(StripeReadState *stripeReadState);
 static bool ReadStripeNextRow(StripeReadState *stripeReadState, Datum *columnValues,
@@ -105,14 +105,14 @@ static StripeBuffers * LoadFilteredStripeBuffers(Relation relation,
 												 TupleDesc tupleDescriptor,
 												 List *projectedColumnList,
 												 List *whereClauseList,
-												 List *clauseVars,
+												 List *whereClauseVars,
 												 int64 *chunkGroupsFiltered);
 static ColumnBuffers * LoadColumnBuffers(Relation relation,
 										 ColumnChunkSkipNode *chunkSkipNodeArray,
 										 uint32 chunkCount, uint64 stripeOffset,
 										 Form_pg_attribute attributeForm);
 static bool * SelectedChunkMask(StripeSkipList *stripeSkipList,
-								List *whereClauseList, List *clauseVars,
+								List *whereClauseList, List *whereClauseVars,
 								int64 *chunkGroupsFiltered);
 static Node * BuildBaseConstraint(Var *variable);
 static List * GetClauseVars(List *clauses, int natts);
@@ -167,7 +167,7 @@ ColumnarBeginRead(Relation relation, TupleDesc tupleDescriptor,
 	readState->stripeList = stripeList;
 	readState->projectedColumnList = projectedColumnList;
 	readState->whereClauseList = whereClauseList;
-	readState->clauseVars = GetClauseVars(whereClauseList, tupleDescriptor->natts);
+	readState->whereClauseVars = GetClauseVars(whereClauseList, tupleDescriptor->natts);
 	readState->chunkGroupsFiltered = 0;
 	readState->tupleDescriptor = tupleDescriptor;
 	readState->stripeReadContext = stripeReadContext;
@@ -204,7 +204,7 @@ ColumnarReadNextRow(ColumnarReadState *readState, Datum *columnValues, bool *col
 														 readState->tupleDescriptor,
 														 readState->projectedColumnList,
 														 readState->whereClauseList,
-														 readState->clauseVars,
+														 readState->whereClauseVars,
 														 readState->stripeReadContext);
 		}
 
@@ -257,7 +257,7 @@ ColumnarEndRead(ColumnarReadState *readState)
  */
 static StripeReadState *
 BeginStripeRead(StripeMetadata *stripeMetadata, Relation rel, TupleDesc tupleDesc,
-				List *projectedColumnList, List *whereClauseList, List *clauseVars,
+				List *projectedColumnList, List *whereClauseList, List *whereClauseVars,
 				MemoryContext stripeReadContext)
 {
 	MemoryContext oldContext = MemoryContextSwitchTo(stripeReadContext);
@@ -276,7 +276,7 @@ BeginStripeRead(StripeMetadata *stripeMetadata, Relation rel, TupleDesc tupleDes
 															   tupleDesc,
 															   projectedColumnList,
 															   whereClauseList,
-															   clauseVars,
+															   whereClauseVars,
 															   &stripeReadState->
 															   chunkGroupsFiltered);
 
@@ -540,7 +540,7 @@ ColumnarTableRowCount(Relation relation)
 static StripeBuffers *
 LoadFilteredStripeBuffers(Relation relation, StripeMetadata *stripeMetadata,
 						  TupleDesc tupleDescriptor, List *projectedColumnList,
-						  List *whereClauseList, List *clauseVars,
+						  List *whereClauseList, List *whereClauseVars,
 						  int64 *chunkGroupsFiltered)
 {
 	uint32 columnIndex = 0;
@@ -554,7 +554,7 @@ LoadFilteredStripeBuffers(Relation relation, StripeMetadata *stripeMetadata,
 														stripeMetadata->chunkCount);
 
 	bool *selectedChunkMask = SelectedChunkMask(stripeSkipList, whereClauseList,
-												clauseVars, chunkGroupsFiltered);
+												whereClauseVars, chunkGroupsFiltered);
 
 	StripeSkipList *selectedChunkSkipList =
 		SelectedChunkSkipList(stripeSkipList, projectedColumnMask,
@@ -655,7 +655,7 @@ LoadColumnBuffers(Relation relation, ColumnChunkSkipNode *chunkSkipNodeArray,
  */
 static bool *
 SelectedChunkMask(StripeSkipList *stripeSkipList, List *whereClauseList,
-				  List *clauseVars, int64 *chunkGroupsFiltered)
+				  List *whereClauseVars, int64 *chunkGroupsFiltered)
 {
 	ListCell *columnCell = NULL;
 	uint32 chunkIndex = 0;
@@ -663,7 +663,7 @@ SelectedChunkMask(StripeSkipList *stripeSkipList, List *whereClauseList,
 	bool *selectedChunkMask = palloc0(stripeSkipList->chunkCount * sizeof(bool));
 	memset(selectedChunkMask, true, stripeSkipList->chunkCount * sizeof(bool));
 
-	foreach(columnCell, clauseVars)
+	foreach(columnCell, whereClauseVars)
 	{
 		Var *column = lfirst(columnCell);
 		uint32 columnIndex = column->varattno - 1;
@@ -772,11 +772,11 @@ BuildBaseConstraint(Var *variable)
  * deduplicates and sorts them.
  */
 static List *
-GetClauseVars(List *clauses, int natts)
+GetClauseVars(List *whereClauseList, int natts)
 {
 	int flags = PVC_RECURSE_AGGREGATES |
 				PVC_RECURSE_WINDOWFUNCS | PVC_RECURSE_PLACEHOLDERS;
-	List *vars = pull_var_clause((Node *) clauses, flags);
+	List *vars = pull_var_clause((Node *) whereClauseList, flags);
 	Var **deduplicate = palloc0(sizeof(Var *) * natts);
 
 	ListCell *lc;
@@ -794,19 +794,19 @@ GetClauseVars(List *clauses, int natts)
 		deduplicate[idx] = var;
 	}
 
-	List *clauseVars = NIL;
+	List *whereClauseVars = NIL;
 	for (int i = 0; i < natts; i++)
 	{
 		Var *var = deduplicate[i];
 		if (var != NULL)
 		{
-			clauseVars = lappend(clauseVars, var);
+			whereClauseVars = lappend(whereClauseVars, var);
 		}
 	}
 
 	pfree(deduplicate);
 
-	return clauseVars;
+	return whereClauseVars;
 }
 
 /*
