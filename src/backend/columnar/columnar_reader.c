@@ -768,21 +768,30 @@ BuildBaseConstraint(Var *variable)
 
 
 /*
- * GetClauseVars extracts the Vars from the given clauses. It also
+ * GetClauseVars extracts the Vars from the given clauses for the purpose of
+ * building constraints that can be refuted by predicate_refuted_by(). It also
  * deduplicates and sorts them.
  */
 static List *
 GetClauseVars(List *whereClauseList, int natts)
 {
-	int flags = PVC_RECURSE_AGGREGATES |
-				PVC_RECURSE_WINDOWFUNCS | PVC_RECURSE_PLACEHOLDERS;
+	/*
+	 * We don't recurse into or include aggregates, window functions, or
+	 * PHVs. We don't expect any PHVs during execution; and Vars found inside
+	 * an aggregate or window function aren't going to be useful in forming
+	 * constraints that can be refuted.
+	 */
+	int flags = 0;
 	List *vars = pull_var_clause((Node *) whereClauseList, flags);
 	Var **deduplicate = palloc0(sizeof(Var *) * natts);
 
 	ListCell *lc;
 	foreach(lc, vars)
 	{
-		Var *var = (Var *)lfirst(lc);
+		Node *node = lfirst(lc);
+		Assert(IsA(node, Var));
+
+		Var *var = (Var *) node;
 		int idx = var->varattno - 1;
 
 		if (deduplicate[idx] != NULL)
@@ -808,6 +817,7 @@ GetClauseVars(List *whereClauseList, int natts)
 
 	return whereClauseVars;
 }
+
 
 /*
  * MakeOpExpression builds an operator expression node. This operator expression
