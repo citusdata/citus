@@ -109,6 +109,5 @@ create table part_table (id int) partition by range (id);
 create table part_1_row partition of part_table for values from (150000) to (160000);
 create table part_2_columnar partition of part_table for values from (0) to (150000) using columnar;
 insert into part_table select generate_series(1,159999);
-explain (analyze, costs off, timing off, summary off)
-  select count(*) from part_table where id > 75000;
+select filtered_row_count('select count(*) from part_table where id > 75000');
 drop table part_table;
