@@ -58,7 +58,6 @@ Benefits of Citus Columnar over cstore_fdw:
 * No support for intra-node parallel scans
 * No support for ``AFTER ... FOR EACH ROW`` triggers
 * No `UNLOGGED` columnar tables
-* No `TEMPORARY` columnar tables
 
 Future iterations will incrementally lift the limitations listed above.
 
