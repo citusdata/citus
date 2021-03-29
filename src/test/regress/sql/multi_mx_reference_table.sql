@@ -562,10 +562,10 @@ SET citus.log_multi_join_order TO FALSE;
 -- issue 3766
 CREATE TABLE numbers(a int);
 SELECT create_reference_table('numbers');
-SET client_min_messages TO debug4;
+SET log_min_messages TO debug4;
 INSERT INTO numbers VALUES (1), (2), (3), (4);
 SELECT count(*) FROM numbers;
-RESET client_min_messages;
+RESET log_min_messages;
 
 -- clean up tables
 DROP TABLE reference_table_test, reference_table_test_second, reference_table_test_third, numbers;
