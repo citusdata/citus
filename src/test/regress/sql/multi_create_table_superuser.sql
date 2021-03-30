@@ -436,3 +436,28 @@ DROP SCHEMA sc3 CASCADE;
 DROP SCHEMA sc4 CASCADE;
 DROP SCHEMA sc5 CASCADE;
 DROP SCHEMA sc6 CASCADE;
+
+CREATE TABLE shard_col_table (a INT, b INT);
+CREATE TABLE shard_col_table_2 (a INT, b INT);
+
+SELECT create_distributed_table('shard_col_table', 'a');
+
+-- ensure there are no colocation group with 11 shards
+SELECT count(*) FROM pg_dist_colocation WHERE shardcount = 11;
+UPDATE pg_dist_colocation SET shardcount = 11 WHERE colocationid IN
+(
+	SELECT colocation_id FROM citus_tables WHERE table_name = 'shard_col_table'::regclass
+);
+
+SELECT create_distributed_table('shard_col_table_2', 'a', shard_count:=11);
+
+-- ensure shard_col_table and shard_col_table_2 are not colocated
+SELECT a.colocation_id = b.colocation_id FROM citus_tables a, citus_tables b
+	WHERE a.table_name = 'shard_col_table'::regclass AND b.table_name = 'shard_col_table_2'::regclass;
+
+UPDATE pg_dist_colocation SET shardcount = 12 WHERE colocationid IN
+(
+	SELECT colocation_id FROM citus_tables WHERE table_name = 'shard_col_table'::regclass
+);
+
+DROP TABLE shard_col_table, shard_col_table_2;

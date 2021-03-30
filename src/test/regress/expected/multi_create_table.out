@@ -339,3 +339,71 @@ SELECT create_distributed_table('pg_class', 'relname');
 ERROR:  cannot create a citus table from a catalog table
 SELECT create_reference_table('pg_class');
 ERROR:  cannot create a citus table from a catalog table
+-- test shard_count parameter
+-- first set citus.shard_count so we know the parameter works
+SET citus.shard_count TO 10;
+CREATE TABLE shard_count_table (a INT, b TEXT);
+CREATE TABLE shard_count_table_2 (a INT, b TEXT);
+SELECT create_distributed_table('shard_count_table', 'a', shard_count:=5);
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT shard_count FROM citus_tables WHERE table_name::text = 'shard_count_table';
+ shard_count
+---------------------------------------------------------------------
+           5
+(1 row)
+
+SELECT create_distributed_table('shard_count_table_2', 'a', shard_count:=0);
+ERROR:  0 is outside the valid range for parameter "shard_count" (1 .. 64000)
+SELECT create_distributed_table('shard_count_table_2', 'a', shard_count:=-100);
+ERROR:  -100 is outside the valid range for parameter "shard_count" (1 .. 64000)
+SELECT create_distributed_table('shard_count_table_2', 'a', shard_count:=64001);
+ERROR:  64001 is outside the valid range for parameter "shard_count" (1 .. 64000)
+-- shard count with colocate with table should error
+SELECT create_distributed_table('shard_count_table_2', 'a', shard_count:=12, colocate_with:='shard_count');
+ERROR:  Cannot use colocate_with with a table and shard_count at the same time
+-- none should not error
+SELECT create_distributed_table('shard_count_table_2', 'a', shard_count:=12, colocate_with:='none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+DROP TABLE shard_count_table, shard_count_table_2;
+-- test a shard count with an empty default colocation group
+-- ensure there is no colocation group with 13 shards
+SELECT count(*) FROM pg_dist_colocation WHERE shardcount = 13;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+SET citus.shard_count TO 13;
+CREATE TABLE shard_count_drop_table (a int);
+SELECT create_distributed_table('shard_count_drop_table', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+DROP TABLE shard_count_drop_table;
+CREATE TABLE shard_count_table_3 (a int);
+SELECT create_distributed_table('shard_count_table_3', 'a', shard_count:=13);
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT shardcount FROM pg_dist_colocation WHERE colocationid IN
+(
+	SELECT colocation_id FROM citus_tables WHERE table_name = 'shard_count_table_3'::regclass
+);
+ shardcount
+---------------------------------------------------------------------
+         13
+(1 row)
+
+DROP TABLE shard_count_table_3;
