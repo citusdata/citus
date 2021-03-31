@@ -7115,9 +7115,10 @@ get_from_clause_item(Node *jtnode, Query *query, deparse_context *context)
 					ExtractRangeTblExtraData(rte, NULL, &fragmentSchemaName, &fragmentTableName, NULL);
 
 					/* use schema and table name from the remote alias */
-					appendStringInfoString(buf,
-										   generate_fragment_name(fragmentSchemaName,
-																  fragmentTableName));
+					appendStringInfo(buf, "%s%s",
+									 only_marker(rte),
+									 generate_fragment_name(fragmentSchemaName,
+															fragmentTableName));
 					break;
 				}
 
