@@ -1,5 +1,4 @@
 #include "citus_version.h"
-#if HAS_TABLEAM
 
 #include "postgres.h"
 #include "fmgr.h"
@@ -22,4 +21,3 @@ extern int64 ColumnarScanChunkGroupsFiltered(TableScanDesc scanDesc);
 extern bool IsColumnarTableAmTable(Oid relationId);
 extern TableDDLCommand * ColumnarGetTableOptionsDDL(Oid relationId);
 extern char * GetShardedTableDDLCommandColumnar(uint64 shardId, void *context);
-#endif

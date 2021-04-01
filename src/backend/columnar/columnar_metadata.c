@@ -1393,7 +1393,6 @@ columnar_relation_storageid(PG_FUNCTION_ARGS)
 {
 	uint64 storageId = -1;
 
-#if HAS_TABLEAM
 	Oid relationId = PG_GETARG_OID(0);
 	Relation relation = relation_open(relationId, AccessShareLock);
 	if (IsColumnarTableAmTable(relationId))
@@ -1406,7 +1405,6 @@ columnar_relation_storageid(PG_FUNCTION_ARGS)
 	}
 
 	relation_close(relation, AccessShareLock);
-#endif
 
 	PG_RETURN_INT64(storageId);
 }

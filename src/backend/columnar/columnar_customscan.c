@@ -11,7 +11,6 @@
  */
 
 #include "citus_version.h"
-#if HAS_TABLEAM
 
 #include "postgres.h"
 
@@ -495,6 +494,3 @@ ColumnarScan_ExplainCustomScan(CustomScanState *node, List *ancestors,
 							   chunkGroupsFiltered, es);
 	}
 }
-
-
-#endif /* HAS_TABLEAM */

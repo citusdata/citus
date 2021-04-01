@@ -216,50 +216,43 @@ PGAC_ARG_REQ(with, reports-hostname, [HOSTNAME],
 AC_DEFINE_UNQUOTED(REPORTS_BASE_URL, "$REPORTS_BASE_URL",
                    [Base URL for statistics collection and update checks])
 
-HAS_TABLEAM=yes
-AC_DEFINE([HAS_TABLEAM], 1, [Define to 1 to build with table access method support, pg12 and up])
+#
+# LZ4
+#
+PGAC_ARG_BOOL(with, lz4, yes,
+              [do not use lz4])
+AC_SUBST(with_lz4)
 
-# Require lz4 & zstd only if we are compiling columnar
-if test "$HAS_TABLEAM" == 'yes'; then
-  #
-  # LZ4
-  #
-  PGAC_ARG_BOOL(with, lz4, yes,
-                [do not use lz4])
-  AC_SUBST(with_lz4)
+if test "$with_lz4" = yes; then
+  AC_CHECK_LIB(lz4, LZ4_compress_default, [],
+              [AC_MSG_ERROR([lz4 library not found
+If you have lz4 installed, see config.log for details on the
+failure.  It is possible the compiler isn't looking in the proper directory.
+Use --without-lz4 to disable lz4 support.])])
+  AC_CHECK_HEADER(lz4.h, [], [AC_MSG_ERROR([lz4 header not found
+If you have lz4 already installed, see config.log for details on the
+failure.  It is possible the compiler isn't looking in the proper directory.
+Use --without-lz4 to disable lz4 support.])])
+fi
 
-  if test "$with_lz4" = yes; then
-    AC_CHECK_LIB(lz4, LZ4_compress_default, [],
-                [AC_MSG_ERROR([lz4 library not found
-  If you have lz4 installed, see config.log for details on the
-  failure.  It is possible the compiler isn't looking in the proper directory.
-  Use --without-lz4 to disable lz4 support.])])
-    AC_CHECK_HEADER(lz4.h, [], [AC_MSG_ERROR([lz4 header not found
-  If you have lz4 already installed, see config.log for details on the
-  failure.  It is possible the compiler isn't looking in the proper directory.
-  Use --without-lz4 to disable lz4 support.])])
-  fi
+#
+# ZSTD
+#
+PGAC_ARG_BOOL(with, zstd, yes,
+              [do not use zstd])
+AC_SUBST(with_zstd)
 
-  #
-  # ZSTD
-  #
-  PGAC_ARG_BOOL(with, zstd, yes,
-                [do not use zstd])
-  AC_SUBST(with_zstd)
-
-  if test "$with_zstd" = yes; then
-    AC_CHECK_LIB(zstd, ZSTD_decompress, [],
-                [AC_MSG_ERROR([zstd library not found
-  If you have zstd installed, see config.log for details on the
-  failure.  It is possible the compiler isn't looking in the proper directory.
-  Use --without-zstd to disable zstd support.])])
-    AC_CHECK_HEADER(zstd.h, [], [AC_MSG_ERROR([zstd header not found
-  If you have zstd already installed, see config.log for details on the
-  failure.  It is possible the compiler isn't looking in the proper directory.
-  Use --without-zstd to disable zstd support.])])
-  fi
-
-fi # test "$HAS_TABLEAM" == 'yes'
+if test "$with_zstd" = yes; then
+  AC_CHECK_LIB(zstd, ZSTD_decompress, [],
+              [AC_MSG_ERROR([zstd library not found
+If you have zstd installed, see config.log for details on the
+failure.  It is possible the compiler isn't looking in the proper directory.
+Use --without-zstd to disable zstd support.])])
+  AC_CHECK_HEADER(zstd.h, [], [AC_MSG_ERROR([zstd header not found
+If you have zstd already installed, see config.log for details on the
+failure.  It is possible the compiler isn't looking in the proper directory.
+Use --without-zstd to disable zstd support.])])
+fi
 
 
 PGAC_ARG_BOOL(with, security-flags, no,
@@ -296,7 +289,6 @@ AC_SUBST(CITUS_LDFLAGS, "$LIBS $CITUS_LDFLAGS")
 AC_SUBST(POSTGRES_SRCDIR, "$POSTGRES_SRCDIR")
 AC_SUBST(POSTGRES_BUILDDIR, "$POSTGRES_BUILDDIR")
 AC_SUBST(HAS_DOTGIT, "$HAS_DOTGIT")
-AC_SUBST(HAS_TABLEAM, "$HAS_TABLEAM")
 
 AC_CONFIG_FILES([Makefile.global])
 AC_CONFIG_HEADERS([src/include/citus_config.h] [src/include/citus_version.h])

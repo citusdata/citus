@@ -4,7 +4,6 @@
 #include "postgres.h"
 #include "columnar/columnar.h"
 
-#if HAS_TABLEAM
 
 #include <math.h>
 
@@ -378,8 +377,6 @@ PendingWritesInUpperTransactions(Oid relfilenode, SubTransactionId currentSubXid
 }
 
 
-#endif
-
 /*
  * GetWriteContextForDebug exposes WriteStateContext for debugging
  * purposes.
@@ -387,9 +384,5 @@ PendingWritesInUpperTransactions(Oid relfilenode, SubTransactionId currentSubXid
 extern MemoryContext
 GetWriteContextForDebug(void)
 {
-#if HAS_TABLEAM
 	return WriteStateContext;
-#else
-	return NULL;
-#endif
 }
