@@ -70,9 +70,8 @@ struct ColumnarReadState
 	StripeReadState *stripeReadState;
 
 	/*
-	 * List of Var pointers for columns in the query. We use this both for
-	 * getting vector of projected columns, and also when we want to build
-	 * base constraint to find selected row chunks.
+	 * Integer list of attribute numbers (1-indexed) for columns needed by the
+	 * query.
 	 */
 	List *projectedColumnList;
 
@@ -139,6 +138,8 @@ static Datum ColumnDefaultValue(TupleConstr *tupleConstraints,
 /*
  * ColumnarBeginRead initializes a columnar read operation. This function returns a
  * read handle that's used during reading rows and finishing the read operation.
+ *
+ * projectedColumnList is an integer list of attribute numbers (1-indexed).
  */
 ColumnarReadState *
 ColumnarBeginRead(Relation relation, TupleDesc tupleDescriptor,
@@ -415,12 +416,14 @@ ReadChunkGroupNextRow(ChunkGroupReadState *chunkGroupReadState, Datum *columnVal
 	 */
 	memset(columnNulls, true, sizeof(bool) * chunkGroupReadState->columnCount);
 
-	Var *projectedColumn = NULL;
-	foreach_ptr(projectedColumn, chunkGroupReadState->projectedColumnList)
+	int attno;
+	foreach_int(attno, chunkGroupReadState->projectedColumnList)
 	{
 		const ChunkData *chunkGroupData = chunkGroupReadState->chunkGroupData;
 		const int rowIndex = chunkGroupReadState->currentRow;
-		uint32 columnIndex = projectedColumn->varattno - 1;
+
+		/* attno is 1-indexed; existsArray is 0-indexed */
+		const uint32 columnIndex = attno - 1;
 
 		if (chunkGroupData->existsArray[columnIndex][rowIndex])
 		{
@@ -1010,12 +1013,12 @@ static bool *
 ProjectedColumnMask(uint32 columnCount, List *projectedColumnList)
 {
 	bool *projectedColumnMask = palloc0(columnCount * sizeof(bool));
-	ListCell *columnCell = NULL;
+	int attno;
 
-	foreach(columnCell, projectedColumnList)
+	foreach_int(attno, projectedColumnList)
 	{
-		Var *column = (Var *) lfirst(columnCell);
-		uint32 columnIndex = column->varattno - 1;
+		/* attno is 1-indexed; projectedColumnMask is 0-indexed */
+		int columnIndex = attno - 1;
 		projectedColumnMask[columnIndex] = true;
 	}
 
