@@ -2945,8 +2945,6 @@ ConnectionStateMachine(WorkerSession *session)
 					HandleMultiConnectionSuccess(session);
 					UpdateConnectionWaitFlags(session,
 											  WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE);
-
-					connection->connectionState = MULTI_CONNECTION_CONNECTED;
 					break;
 				}
 				else if (status == CONNECTION_BAD)
@@ -2987,8 +2985,6 @@ ConnectionStateMachine(WorkerSession *session)
 					HandleMultiConnectionSuccess(session);
 					UpdateConnectionWaitFlags(session,
 											  WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE);
-
-					connection->connectionState = MULTI_CONNECTION_CONNECTED;
 
 					/* we should have a valid socket */
 					Assert(PQsocket(connection->pgConn) != -1);
@@ -3116,7 +3112,8 @@ ConnectionStateMachine(WorkerSession *session)
 
 
 /*
- * HandleMultiConnectionSuccess logs the established connection and updates connection's state.
+ * HandleMultiConnectionSuccess logs the established connection and updates
+ * connection's state.
  */
 static void
 HandleMultiConnectionSuccess(WorkerSession *session)
@@ -3124,10 +3121,15 @@ HandleMultiConnectionSuccess(WorkerSession *session)
 	MultiConnection *connection = session->connection;
 	WorkerPool *workerPool = session->workerPool;
 
+	MarkConnectionConnected(connection);
+
 	ereport(DEBUG4, (errmsg("established connection to %s:%d for "
-							"session %ld",
+							"session %ld in %ld msecs",
 							connection->hostname, connection->port,
-							session->sessionId)));
+							session->sessionId,
+							MillisecondsBetweenTimestamps(
+								connection->connectionEstablishmentStart,
+								connection->connectionEstablishmentEnd))));
 
 	workerPool->activeConnectionCount++;
 	workerPool->idleConnectionCount++;
