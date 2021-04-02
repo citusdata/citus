@@ -562,7 +562,9 @@ ALTER EXTENSION citus UPDATE TO '10.1-1';
 SELECT * FROM print_extension_changes();
  previous_object |              current_object
 ---------------------------------------------------------------------
-(0 rows)
+ function create_distributed_table(regclass,text,citus.distribution_type,text) |
+                                                                               | function create_distributed_table(regclass,text,citus.distribution_type,text,integer)
+(2 rows)
 
 DROP TABLE prev_objects, extension_diff;
 -- show running version
