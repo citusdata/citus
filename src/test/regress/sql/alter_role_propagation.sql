@@ -90,4 +90,13 @@ SELECT run_command_on_workers('SHOW enable_hashjoin');
 ALTER ROLE ALL RESET enable_hashjoin;
 SELECT run_command_on_workers('SHOW enable_hashjoin');
 
-DROP SCHEMA alter_role, ",CitUs,.TeeN!?" CASCADE;
+-- check altering search path won't cause public shards being not found
+CREATE TABLE test_search_path(a int);
+SELECT create_distributed_table('test_search_path', 'a');
+CREATE SCHEMA test_sp;
+ALTER USER current_user SET search_path TO test_sp;
+SELECT COUNT(*) FROM public.test_search_path;
+ALTER USER current_user RESET search_path;
+
+DROP TABLE test_search_path;
+DROP SCHEMA alter_role, ",CitUs,.TeeN!?", test_sp CASCADE;
