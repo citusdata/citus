@@ -77,6 +77,8 @@ struct ColumnarReadState
 	List *projectedColumnList;
 
 	List *whereClauseList;
+	List *whereClauseVars;
+
 	MemoryContext stripeReadContext;
 	int64 chunkGroupsFiltered;
 };
@@ -84,8 +86,8 @@ struct ColumnarReadState
 /* static function declarations */
 static StripeReadState * BeginStripeRead(StripeMetadata *stripeMetadata, Relation rel,
 										 TupleDesc tupleDesc, List *projectedColumnList,
-										 List *whereClauseList, MemoryContext
-										 stripeReadContext);
+										 List *whereClauseList, List *whereClauseVars,
+										 MemoryContext stripeReadContext);
 static void EndStripeRead(StripeReadState *stripeReadState);
 static bool ReadStripeNextRow(StripeReadState *stripeReadState, Datum *columnValues,
 							  bool *columnNulls);
@@ -103,15 +105,17 @@ static StripeBuffers * LoadFilteredStripeBuffers(Relation relation,
 												 TupleDesc tupleDescriptor,
 												 List *projectedColumnList,
 												 List *whereClauseList,
+												 List *whereClauseVars,
 												 int64 *chunkGroupsFiltered);
 static ColumnBuffers * LoadColumnBuffers(Relation relation,
 										 ColumnChunkSkipNode *chunkSkipNodeArray,
 										 uint32 chunkCount, uint64 stripeOffset,
 										 Form_pg_attribute attributeForm);
 static bool * SelectedChunkMask(StripeSkipList *stripeSkipList,
-								List *projectedColumnList, List *whereClauseList,
+								List *whereClauseList, List *whereClauseVars,
 								int64 *chunkGroupsFiltered);
 static Node * BuildBaseConstraint(Var *variable);
+static List * GetClauseVars(List *clauses, int natts);
 static OpExpr * MakeOpExpression(Var *variable, int16 strategyNumber);
 static Oid GetOperatorByType(Oid typeId, Oid accessMethodId, int16 strategyNumber);
 static void UpdateConstraint(Node *baseConstraint, Datum minValue, Datum maxValue);
@@ -163,6 +167,7 @@ ColumnarBeginRead(Relation relation, TupleDesc tupleDescriptor,
 	readState->stripeList = stripeList;
 	readState->projectedColumnList = projectedColumnList;
 	readState->whereClauseList = whereClauseList;
+	readState->whereClauseVars = GetClauseVars(whereClauseList, tupleDescriptor->natts);
 	readState->chunkGroupsFiltered = 0;
 	readState->tupleDescriptor = tupleDescriptor;
 	readState->stripeReadContext = stripeReadContext;
@@ -199,6 +204,7 @@ ColumnarReadNextRow(ColumnarReadState *readState, Datum *columnValues, bool *col
 														 readState->tupleDescriptor,
 														 readState->projectedColumnList,
 														 readState->whereClauseList,
+														 readState->whereClauseVars,
 														 readState->stripeReadContext);
 		}
 
@@ -251,8 +257,8 @@ ColumnarEndRead(ColumnarReadState *readState)
  */
 static StripeReadState *
 BeginStripeRead(StripeMetadata *stripeMetadata, Relation rel, TupleDesc tupleDesc,
-				List *projectedColumnList, List *whereClauseList, MemoryContext
-				stripeReadContext)
+				List *projectedColumnList, List *whereClauseList, List *whereClauseVars,
+				MemoryContext stripeReadContext)
 {
 	MemoryContext oldContext = MemoryContextSwitchTo(stripeReadContext);
 
@@ -270,6 +276,7 @@ BeginStripeRead(StripeMetadata *stripeMetadata, Relation rel, TupleDesc tupleDes
 															   tupleDesc,
 															   projectedColumnList,
 															   whereClauseList,
+															   whereClauseVars,
 															   &stripeReadState->
 															   chunkGroupsFiltered);
 
@@ -533,7 +540,8 @@ ColumnarTableRowCount(Relation relation)
 static StripeBuffers *
 LoadFilteredStripeBuffers(Relation relation, StripeMetadata *stripeMetadata,
 						  TupleDesc tupleDescriptor, List *projectedColumnList,
-						  List *whereClauseList, int64 *chunkGroupsFiltered)
+						  List *whereClauseList, List *whereClauseVars,
+						  int64 *chunkGroupsFiltered)
 {
 	uint32 columnIndex = 0;
 	uint32 columnCount = tupleDescriptor->natts;
@@ -545,8 +553,8 @@ LoadFilteredStripeBuffers(Relation relation, StripeMetadata *stripeMetadata,
 														tupleDescriptor,
 														stripeMetadata->chunkCount);
 
-	bool *selectedChunkMask = SelectedChunkMask(stripeSkipList, projectedColumnList,
-												whereClauseList, chunkGroupsFiltered);
+	bool *selectedChunkMask = SelectedChunkMask(stripeSkipList, whereClauseList,
+												whereClauseVars, chunkGroupsFiltered);
 
 	StripeSkipList *selectedChunkSkipList =
 		SelectedChunkSkipList(stripeSkipList, projectedColumnMask,
@@ -646,8 +654,8 @@ LoadColumnBuffers(Relation relation, ColumnChunkSkipNode *chunkSkipNodeArray,
  * the chunk can be refuted by the given qualifier conditions.
  */
 static bool *
-SelectedChunkMask(StripeSkipList *stripeSkipList, List *projectedColumnList,
-				  List *whereClauseList, int64 *chunkGroupsFiltered)
+SelectedChunkMask(StripeSkipList *stripeSkipList, List *whereClauseList,
+				  List *whereClauseVars, int64 *chunkGroupsFiltered)
 {
 	ListCell *columnCell = NULL;
 	uint32 chunkIndex = 0;
@@ -655,7 +663,7 @@ SelectedChunkMask(StripeSkipList *stripeSkipList, List *projectedColumnList,
 	bool *selectedChunkMask = palloc0(stripeSkipList->chunkCount * sizeof(bool));
 	memset(selectedChunkMask, true, stripeSkipList->chunkCount * sizeof(bool));
 
-	foreach(columnCell, projectedColumnList)
+	foreach(columnCell, whereClauseVars)
 	{
 		Var *column = lfirst(columnCell);
 		uint32 columnIndex = column->varattno - 1;
@@ -756,6 +764,58 @@ BuildBaseConstraint(Var *variable)
 	Node *baseConstraint = make_and_qual((Node *) lessThanExpr, (Node *) greaterThanExpr);
 
 	return baseConstraint;
+}
+
+
+/*
+ * GetClauseVars extracts the Vars from the given clauses for the purpose of
+ * building constraints that can be refuted by predicate_refuted_by(). It also
+ * deduplicates and sorts them.
+ */
+static List *
+GetClauseVars(List *whereClauseList, int natts)
+{
+	/*
+	 * We don't recurse into or include aggregates, window functions, or
+	 * PHVs. We don't expect any PHVs during execution; and Vars found inside
+	 * an aggregate or window function aren't going to be useful in forming
+	 * constraints that can be refuted.
+	 */
+	int flags = 0;
+	List *vars = pull_var_clause((Node *) whereClauseList, flags);
+	Var **deduplicate = palloc0(sizeof(Var *) * natts);
+
+	ListCell *lc;
+	foreach(lc, vars)
+	{
+		Node *node = lfirst(lc);
+		Assert(IsA(node, Var));
+
+		Var *var = (Var *) node;
+		int idx = var->varattno - 1;
+
+		if (deduplicate[idx] != NULL)
+		{
+			/* if they have the same varattno, the rest should be identical */
+			Assert(equal(var, deduplicate[idx]));
+		}
+
+		deduplicate[idx] = var;
+	}
+
+	List *whereClauseVars = NIL;
+	for (int i = 0; i < natts; i++)
+	{
+		Var *var = deduplicate[i];
+		if (var != NULL)
+		{
+			whereClauseVars = lappend(whereClauseVars, var);
+		}
+	}
+
+	pfree(deduplicate);
+
+	return whereClauseVars;
 }
 
 
