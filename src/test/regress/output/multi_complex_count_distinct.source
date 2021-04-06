@@ -73,7 +73,7 @@ SELECT
                Task Count: 8
                Tasks Shown: One of 8
                ->  Task
-                     Query: SELECT l_orderkey, count(DISTINCT l_partkey) AS count FROM lineitem_hash_240000 lineitem_hash WHERE true GROUP BY l_orderkey ORDER BY (count(DISTINCT l_partkey)) DESC, l_orderkey DESC LIMIT '10'::bigint
+                     Query: SELECT l_orderkey, count(DISTINCT l_partkey) AS count FROM public.lineitem_hash_240000 lineitem_hash WHERE true GROUP BY l_orderkey ORDER BY (count(DISTINCT l_partkey)) DESC, l_orderkey DESC LIMIT '10'::bigint
                      Node: host=localhost port=xxxxx dbname=regression
                      ->  Limit
                            Output: l_orderkey, (count(DISTINCT l_partkey))
@@ -118,7 +118,7 @@ SELECT
                      Task Count: 8
                      Tasks Shown: One of 8
                      ->  Task
-                           Query: SELECT l_partkey AS count FROM lineitem_hash_240000 lineitem_hash WHERE true GROUP BY l_partkey
+                           Query: SELECT l_partkey AS count FROM public.lineitem_hash_240000 lineitem_hash WHERE true GROUP BY l_partkey
                            Node: host=localhost port=xxxxx dbname=regression
                            ->  HashAggregate
                                  Output: l_partkey
@@ -169,7 +169,7 @@ SELECT
                            Task Count: 8
                            Tasks Shown: One of 8
                            ->  Task
-                                 Query: SELECT l_shipmode, l_partkey AS count FROM lineitem_hash_240000 lineitem_hash WHERE true GROUP BY l_shipmode, l_partkey
+                                 Query: SELECT l_shipmode, l_partkey AS count FROM public.lineitem_hash_240000 lineitem_hash WHERE true GROUP BY l_shipmode, l_partkey
                                  Node: host=localhost port=xxxxx dbname=regression
                                  ->  HashAggregate
                                        Output: l_shipmode, l_partkey
@@ -218,7 +218,7 @@ SELECT
                Task Count: 8
                Tasks Shown: One of 8
                ->  Task
-                     Query: SELECT l_orderkey, count(DISTINCT l_partkey) AS count, count(DISTINCT l_shipmode) AS count FROM lineitem_hash_240000 lineitem_hash WHERE true GROUP BY l_orderkey ORDER BY (count(DISTINCT l_shipmode)) DESC, (count(DISTINCT l_partkey)) DESC, l_orderkey LIMIT '10'::bigint
+                     Query: SELECT l_orderkey, count(DISTINCT l_partkey) AS count, count(DISTINCT l_shipmode) AS count FROM public.lineitem_hash_240000 lineitem_hash WHERE true GROUP BY l_orderkey ORDER BY (count(DISTINCT l_shipmode)) DESC, (count(DISTINCT l_partkey)) DESC, l_orderkey LIMIT '10'::bigint
                      Node: host=localhost port=xxxxx dbname=regression
                      ->  Limit
                            Output: l_orderkey, (count(DISTINCT l_partkey)), (count(DISTINCT l_shipmode))
@@ -254,7 +254,7 @@ SELECT
          Task Count: 8
          Tasks Shown: One of 8
          ->  Task
-               Query: SELECT l_orderkey AS count, l_partkey AS count, l_shipmode AS count FROM lineitem_hash_240000 lineitem_hash WHERE true GROUP BY l_orderkey, l_partkey, l_shipmode
+               Query: SELECT l_orderkey AS count, l_partkey AS count, l_shipmode AS count FROM public.lineitem_hash_240000 lineitem_hash WHERE true GROUP BY l_orderkey, l_partkey, l_shipmode
                Node: host=localhost port=xxxxx dbname=regression
                ->  HashAggregate
                      Output: l_orderkey, l_partkey, l_shipmode
@@ -422,7 +422,7 @@ SELECT *
                      Task Count: 8
                      Tasks Shown: One of 8
                      ->  Task
-                           Query: SELECT l_partkey, count(DISTINCT l_orderkey) AS count FROM lineitem_hash_240000 lineitem_hash WHERE true GROUP BY l_partkey
+                           Query: SELECT l_partkey, count(DISTINCT l_orderkey) AS count FROM public.lineitem_hash_240000 lineitem_hash WHERE true GROUP BY l_partkey
                            Node: host=localhost port=xxxxx dbname=regression
                            ->  GroupAggregate
                                  Output: l_partkey, count(DISTINCT l_orderkey)
@@ -491,7 +491,7 @@ SELECT
                Task Count: 8
                Tasks Shown: One of 8
                ->  Task
-                     Query: SELECT l_orderkey, count(DISTINCT l_suppkey) FILTER (WHERE (l_shipmode OPERATOR(pg_catalog.=) 'AIR'::bpchar)) AS count, count(DISTINCT l_suppkey) AS count FROM lineitem_hash_240000 lineitem_hash WHERE true GROUP BY l_orderkey ORDER BY (count(DISTINCT l_suppkey) FILTER (WHERE (l_shipmode OPERATOR(pg_catalog.=) 'AIR'::bpchar))) DESC, (count(DISTINCT l_suppkey)) DESC, l_orderkey LIMIT '10'::bigint
+                     Query: SELECT l_orderkey, count(DISTINCT l_suppkey) FILTER (WHERE (l_shipmode OPERATOR(pg_catalog.=) 'AIR'::bpchar)) AS count, count(DISTINCT l_suppkey) AS count FROM public.lineitem_hash_240000 lineitem_hash WHERE true GROUP BY l_orderkey ORDER BY (count(DISTINCT l_suppkey) FILTER (WHERE (l_shipmode OPERATOR(pg_catalog.=) 'AIR'::bpchar))) DESC, (count(DISTINCT l_suppkey)) DESC, l_orderkey LIMIT '10'::bigint
                      Node: host=localhost port=xxxxx dbname=regression
                      ->  Limit
                            Output: l_orderkey, (count(DISTINCT l_suppkey) FILTER (WHERE (l_shipmode = 'AIR'::bpchar))), (count(DISTINCT l_suppkey))
@@ -552,7 +552,7 @@ SELECT
                            Task Count: 8
                            Tasks Shown: One of 8
                            ->  Task
-                                 Query: SELECT l_suppkey, l_partkey AS count, l_shipmode AS count FROM lineitem_hash_240000 lineitem_hash WHERE true GROUP BY l_suppkey, l_partkey, l_shipmode
+                                 Query: SELECT l_suppkey, l_partkey AS count, l_shipmode AS count FROM public.lineitem_hash_240000 lineitem_hash WHERE true GROUP BY l_suppkey, l_partkey, l_shipmode
                                  Node: host=localhost port=xxxxx dbname=regression
                                  ->  HashAggregate
                                        Output: l_suppkey, l_partkey, l_shipmode
