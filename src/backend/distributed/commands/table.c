@@ -194,7 +194,7 @@ PostprocessCreateTableStmt(CreateStmt *createStatement, const char *queryString)
 		else
 		{
 			/* process CREATE TABLE ... INHERITS ... */
-			RangeVar *parentRelation;
+			RangeVar *parentRelation = NULL;
 			foreach_ptr(parentRelation, createStatement->inhRelations)
 			{
 				bool missingOk = false;
@@ -202,9 +202,9 @@ PostprocessCreateTableStmt(CreateStmt *createStatement, const char *queryString)
 														missingOk);
 				Assert(parentRelationId != InvalidOid);
 
-				/* here we error out if inheriting a distributed table */
 				if (IsCitusTable(parentRelationId))
 				{
+					/* here we error out if inheriting a distributed table */
 					ereport(ERROR, (errmsg("non-distributed tables cannot inherit "
 										   "distributed tables")));
 				}

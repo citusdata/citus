@@ -2067,6 +2067,17 @@ SELECT * FROM time_partition_range('list_partitioned_p1');
 ERROR:  relation "list_partitioned_p1" is not a range partition
 DETAIL:  time_partition_range can only be used for partitions of range-partitioned tables with a single partition column
 DROP TABLE list_partitioned;
+-- error out when inheriting a distributed table
+CREATE TABLE test_inheritance(a int, b int);
+SELECT create_distributed_table('test_inheritance','a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE local_inheritance (k int) INHERITS (test_inheritance);
+ERROR:  non-distributed tables cannot inherit distributed tables
+DROP TABLE test_inheritance;
 DROP SCHEMA partitioning_schema CASCADE;
 NOTICE:  drop cascades to table partitioning_schema."schema-test"
 DROP TABLE IF EXISTS
