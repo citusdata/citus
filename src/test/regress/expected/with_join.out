@@ -167,7 +167,7 @@ ORDER BY
 LIMIT
   5;
 ERROR:  cannot pushdown the subquery
-DETAIL:  Complex subqueries and CTEs cannot be in the outer part of the outer join
+DETAIL:  Complex subqueries, CTEs and local tables cannot be in the outer part of an outer join with a distributed table
 -- cte RIGHT JOIN distributed_table should work
 WITH cte AS MATERIALIZED (
   SELECT * FROM users_table WHERE user_id = 1 ORDER BY value_1
@@ -229,7 +229,7 @@ ORDER BY
 LIMIT
   5;
 ERROR:  cannot pushdown the subquery
-DETAIL:  Complex subqueries and CTEs cannot be in the outer part of the outer join
+DETAIL:  Complex subqueries, CTEs and local tables cannot be in the outer part of an outer join with a distributed table
 -- cte FULL JOIN distributed_table should error out
 WITH cte AS MATERIALIZED (
   SELECT * FROM users_table WHERE user_id = 1 ORDER BY value_1
@@ -245,7 +245,7 @@ ORDER BY
 LIMIT
   5;
 ERROR:  cannot pushdown the subquery
-DETAIL:  Complex subqueries and CTEs cannot be in the outer part of the outer join
+DETAIL:  Complex subqueries, CTEs and local tables cannot be in the outer part of an outer join with a distributed table
 -- Joins with reference tables are planned as router queries
 WITH cte AS MATERIALIZED (
   SELECT value_2, max(user_id) AS user_id FROM users_table WHERE value_2 = 1 GROUP BY value_2 HAVING count(*) > 1

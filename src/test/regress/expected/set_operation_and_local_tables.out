@@ -253,7 +253,7 @@ DEBUG:  generating subplan XXX_3 for subquery SELECT intermediate_result.x, inte
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT u.x, u.y, test.y FROM ((SELECT intermediate_result.x, intermediate_result.y FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(x integer, y integer)) u LEFT JOIN recursive_set_local.test USING (x)) ORDER BY u.x, u.y
 DEBUG:  Router planner cannot handle multi-shard select queries
 ERROR:  cannot pushdown the subquery
-DETAIL:  Complex subqueries and CTEs cannot be in the outer part of the outer join
+DETAIL:  Complex subqueries, CTEs and local tables cannot be in the outer part of an outer join with a distributed table
 -- we replace some queries including the local query, the intermediate result is on the inner part of an outer join
 SELECT * FROM ((SELECT * FROM local_test) INTERSECT (SELECT * FROM test ORDER BY x LIMIT 1)) u RIGHT JOIN test USING (x) ORDER BY 1,2;
 DEBUG:  Local tables cannot be used in distributed queries.
