@@ -87,6 +87,7 @@ static WaitEventSet * WaitEventSetFromMultiConnectionStates(List *connections,
 static void CloseNotReadyMultiConnectionStates(List *connectionStates);
 static uint32 MultiConnectionStateEventMask(MultiConnectionPollState *connectionState);
 static void CitusPQFinish(MultiConnection *connection);
+static ConnParamsHashEntry * FindOrCreateConnParamsEntry(ConnectionHashKey *key);
 
 /*
  * Initialize per-backend connection management infrastructure.
@@ -1129,8 +1130,61 @@ ConnectionHashCompare(const void *a, const void *b, Size keysize)
 static void
 StartConnectionEstablishment(MultiConnection *connection, ConnectionHashKey *key)
 {
-	bool found = false;
 	static uint64 connectionId = 1;
+
+	ConnParamsHashEntry *entry = FindOrCreateConnParamsEntry(key);
+
+	strlcpy(connection->hostname, key->hostname, MAX_NODE_LENGTH);
+	connection->port = key->port;
+	strlcpy(connection->database, key->database, NAMEDATALEN);
+	strlcpy(connection->user, key->user, NAMEDATALEN);
+
+	connection->pgConn = PQconnectStartParams((const char **) entry->keywords,
+											  (const char **) entry->values,
+											  false);
+	connection->connectionStart = GetCurrentTimestamp();
+	connection->connectionId = connectionId++;
+
+	/*
+	 * To avoid issues with interrupts not getting caught all our connections
+	 * are managed in a non-blocking manner. remote_commands.c provides
+	 * wrappers emulating blocking behaviour.
+	 */
+	PQsetnonblocking(connection->pgConn, true);
+
+	SetCitusNoticeReceiver(connection);
+}
+
+
+/*
+ * WarmUpConnParamsHash warms up the ConnParamsHash by loading all the
+ * conn params for active primary nodes.
+ */
+void
+WarmUpConnParamsHash(void)
+{
+	List *workerNodeList = ActivePrimaryNodeList(AccessShareLock);
+	WorkerNode *workerNode = NULL;
+	foreach_ptr(workerNode, workerNodeList)
+	{
+		ConnectionHashKey key;
+		strlcpy(key.hostname, workerNode->workerName, MAX_NODE_LENGTH);
+		key.port = workerNode->workerPort;
+		strlcpy(key.database, CurrentDatabaseName(), NAMEDATALEN);
+		strlcpy(key.user, CurrentUserName(), NAMEDATALEN);
+		FindOrCreateConnParamsEntry(&key);
+	}
+}
+
+
+/*
+ * FindOrCreateConnParamsEntry searches ConnParamsHash for the given key,
+ * if it is not found, it is created.
+ */
+static ConnParamsHashEntry *
+FindOrCreateConnParamsEntry(ConnectionHashKey *key)
+{
+	bool found = false;
 
 	/* search our cache for precomputed connection settings */
 	ConnParamsHashEntry *entry = hash_search(ConnParamsHash, key, HASH_ENTER, &found);
@@ -1159,25 +1213,7 @@ StartConnectionEstablishment(MultiConnection *connection, ConnectionHashKey *key
 		entry->isValid = true;
 	}
 
-	strlcpy(connection->hostname, key->hostname, MAX_NODE_LENGTH);
-	connection->port = key->port;
-	strlcpy(connection->database, key->database, NAMEDATALEN);
-	strlcpy(connection->user, key->user, NAMEDATALEN);
-
-	connection->pgConn = PQconnectStartParams((const char **) entry->keywords,
-											  (const char **) entry->values,
-											  false);
-	connection->connectionStart = GetCurrentTimestamp();
-	connection->connectionId = connectionId++;
-
-	/*
-	 * To avoid issues with interrupts not getting caught all our connections
-	 * are managed in a non-blocking manner. remote_commands.c provides
-	 * wrappers emulating blocking behaviour.
-	 */
-	PQsetnonblocking(connection->pgConn, true);
-
-	SetCitusNoticeReceiver(connection);
+	return entry;
 }
 
 
