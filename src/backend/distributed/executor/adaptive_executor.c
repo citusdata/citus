@@ -2454,6 +2454,9 @@ ManageWorkerPool(WorkerPool *workerPool)
 		return;
 	}
 
+	/* increase the open rate every cycle (like TCP slow start) */
+	workerPool->maxNewConnectionsPerCycle += 1;
+
 	OpenNewConnections(workerPool, newConnectionCount, execution->transactionProperties);
 
 	/*
@@ -2641,10 +2644,7 @@ CalculateNewConnectionCount(WorkerPool *workerPool)
 		 */
 		newConnectionCount = Min(newConnectionsForReadyTasks, maxNewConnectionCount);
 		if (newConnectionCount > 0)
-		{
-			/* increase the open rate every cycle (like TCP slow start) */
-			workerPool->maxNewConnectionsPerCycle += 1;
-		}
+		{ }
 	}
 	return newConnectionCount;
 }
