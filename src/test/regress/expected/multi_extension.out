@@ -571,7 +571,7 @@ DROP TABLE prev_objects, extension_diff;
 SHOW citus.version;
  citus.version
 ---------------------------------------------------------------------
- 10.1devel
+ 10.2devel
 (1 row)
 
 -- ensure no unexpected objects were created outside pg_catalog
