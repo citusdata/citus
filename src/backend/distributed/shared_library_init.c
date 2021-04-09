@@ -966,6 +966,18 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
+		"citus.enable_cost_based_connection_establishment",
+		gettext_noop("When enabled the connection establishment times "
+					 "and task execution times into account for deciding "
+					 "whether or not to establish new connections."),
+		NULL,
+		&EnableCostBasedConnectionEstablishment,
+		true,
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
 		"citus.explain_distributed_queries",
 		gettext_noop("Enables Explain for distributed queries."),
 		gettext_noop("When enabled, the Explain command shows remote and local "
