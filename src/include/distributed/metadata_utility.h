@@ -177,6 +177,16 @@ typedef struct TableConversionReturn
 }TableConversionReturn;
 
 
+/* Size queries for PG and Citus*/
+typedef enum SizeQueryType
+{
+	RELATION_SIZE,
+	TOTAL_RELATION_SIZE,
+	TABLE_SIZE,
+	CSTORE_TABLE_SIZE
+} SizeQueryType;
+
+
 /* Config variable managed via guc.c */
 extern int ReplicationModel;
 
@@ -203,7 +213,7 @@ extern List * AllShardPlacementsOnNodeGroup(int32 groupId);
 extern List * AllShardPlacementsWithShardPlacementState(ShardState shardState);
 extern List * GroupShardPlacementsForTableOnGroup(Oid relationId, int32 groupId);
 extern StringInfo GenerateSizeQueryOnMultiplePlacements(List *shardIntervalList,
-														char *sizeQuery);
+														SizeQueryType sizeQueryType);
 extern List * RemoveCoordinatorPlacementIfNotSingleNode(List *placementList);
 extern ShardPlacement * ShardPlacementOnGroup(uint64 shardId, int groupId);
 

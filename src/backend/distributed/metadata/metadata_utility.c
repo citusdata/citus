@@ -71,10 +71,10 @@ static uint64 * AllocateUint64(uint64 value);
 static void RecordDistributedRelationDependencies(Oid distributedRelationId);
 static GroupShardPlacement * TupleToGroupShardPlacement(TupleDesc tupleDesc,
 														HeapTuple heapTuple);
-static bool DistributedTableSize(Oid relationId, char *sizeQuery, bool failOnError,
-								 uint64 *tableSize);
+static bool DistributedTableSize(Oid relationId, SizeQueryType sizeQueryType,
+								 bool failOnError, uint64 *tableSize);
 static bool DistributedTableSizeOnWorker(WorkerNode *workerNode, Oid relationId,
-										 char *sizeQuery, bool failOnError,
+										 SizeQueryType sizeQueryType, bool failOnError,
 										 uint64 *tableSize);
 static List * ShardIntervalsOnWorkerGroup(WorkerNode *workerNode, Oid relationId);
 static char * GenerateShardStatisticsQueryForShardList(List *shardIntervalList, bool
@@ -143,18 +143,18 @@ citus_total_relation_size(PG_FUNCTION_ARGS)
 	Oid relationId = PG_GETARG_OID(0);
 	bool failOnError = PG_GETARG_BOOL(1);
 
-	char *tableSizeFunction = PG_TOTAL_RELATION_SIZE_FUNCTION;
+	SizeQueryType sizeQueryType = TOTAL_RELATION_SIZE;
 
 	CheckCitusVersion(ERROR);
 
 	if (CStoreTable(relationId))
 	{
-		tableSizeFunction = CSTORE_TABLE_SIZE_FUNCTION;
+		sizeQueryType = CSTORE_TABLE_SIZE;
 	}
 
 	uint64 tableSize = 0;
 
-	if (!DistributedTableSize(relationId, tableSizeFunction, failOnError, &tableSize))
+	if (!DistributedTableSize(relationId, sizeQueryType, failOnError, &tableSize))
 	{
 		Assert(!failOnError);
 		PG_RETURN_NULL();
@@ -173,18 +173,18 @@ citus_table_size(PG_FUNCTION_ARGS)
 {
 	Oid relationId = PG_GETARG_OID(0);
 	bool failOnError = true;
-	char *tableSizeFunction = PG_TABLE_SIZE_FUNCTION;
+	SizeQueryType sizeQueryType = TABLE_SIZE;
 
 	CheckCitusVersion(ERROR);
 
 	if (CStoreTable(relationId))
 	{
-		tableSizeFunction = CSTORE_TABLE_SIZE_FUNCTION;
+		sizeQueryType = CSTORE_TABLE_SIZE;
 	}
 
 	uint64 tableSize = 0;
 
-	if (!DistributedTableSize(relationId, tableSizeFunction, failOnError, &tableSize))
+	if (!DistributedTableSize(relationId, sizeQueryType, failOnError, &tableSize))
 	{
 		Assert(!failOnError);
 		PG_RETURN_NULL();
@@ -203,18 +203,18 @@ citus_relation_size(PG_FUNCTION_ARGS)
 {
 	Oid relationId = PG_GETARG_OID(0);
 	bool failOnError = true;
-	char *tableSizeFunction = PG_RELATION_SIZE_FUNCTION;
+	SizeQueryType sizeQueryType = RELATION_SIZE;
 
 	CheckCitusVersion(ERROR);
 
 	if (CStoreTable(relationId))
 	{
-		tableSizeFunction = CSTORE_TABLE_SIZE_FUNCTION;
+		sizeQueryType = CSTORE_TABLE_SIZE;
 	}
 
 	uint64 relationSize = 0;
 
-	if (!DistributedTableSize(relationId, tableSizeFunction, failOnError, &relationSize))
+	if (!DistributedTableSize(relationId, sizeQueryType, failOnError, &relationSize))
 	{
 		Assert(!failOnError);
 		PG_RETURN_NULL();
@@ -389,7 +389,8 @@ ReceiveShardNameAndSizeResults(List *connectionList, Tuplestorestate *tupleStore
  * it. Connection to each node has to be established to get the size of the table.
  */
 static bool
-DistributedTableSize(Oid relationId, char *sizeQuery, bool failOnError, uint64 *tableSize)
+DistributedTableSize(Oid relationId, SizeQueryType sizeQueryType, bool failOnError,
+					 uint64 *tableSize)
 {
 	int logLevel = WARNING;
 
@@ -430,7 +431,7 @@ DistributedTableSize(Oid relationId, char *sizeQuery, bool failOnError, uint64 *
 	{
 		uint64 relationSizeOnNode = 0;
 
-		bool gotSize = DistributedTableSizeOnWorker(workerNode, relationId, sizeQuery,
+		bool gotSize = DistributedTableSizeOnWorker(workerNode, relationId, sizeQueryType,
 													failOnError, &relationSizeOnNode);
 		if (!gotSize)
 		{
@@ -452,7 +453,8 @@ DistributedTableSize(Oid relationId, char *sizeQuery, bool failOnError, uint64 *
  * shard placement.
  */
 static bool
-DistributedTableSizeOnWorker(WorkerNode *workerNode, Oid relationId, char *sizeQuery,
+DistributedTableSizeOnWorker(WorkerNode *workerNode, Oid relationId, SizeQueryType
+							 sizeQueryType,
 							 bool failOnError, uint64 *tableSize)
 {
 	int logLevel = WARNING;
@@ -471,7 +473,7 @@ DistributedTableSizeOnWorker(WorkerNode *workerNode, Oid relationId, char *sizeQ
 
 	StringInfo tableSizeQuery = GenerateSizeQueryOnMultiplePlacements(
 		shardIntervalsOnNode,
-		sizeQuery);
+		sizeQueryType);
 
 	MultiConnection *connection = GetNodeConnection(connectionFlag, workerNodeName,
 													workerNodePort);
@@ -591,12 +593,13 @@ ShardIntervalsOnWorkerGroup(WorkerNode *workerNode, Oid relationId)
 /*
  * GenerateSizeQueryOnMultiplePlacements generates a select size query to get
  * size of multiple tables. Note that, different size functions supported by PG
- * are also supported by this function changing the size query given as the
- * last parameter to function.  Format of sizeQuery is pg_*_size(%s). Examples
- * of it can be found in the coordinator_protocol.h
+ * are also supported by this function changing the size query type given as the
+ * last parameter to function. Depending on the sizeQueryType enum parameter, the
+ * generated query will be pg_relation_size or pg_total_relation_size.
  */
 StringInfo
-GenerateSizeQueryOnMultiplePlacements(List *shardIntervalList, char *sizeQuery)
+GenerateSizeQueryOnMultiplePlacements(List *shardIntervalList,
+									  SizeQueryType sizeQueryType)
 {
 	StringInfo selectQuery = makeStringInfo();
 
@@ -614,7 +617,24 @@ GenerateSizeQueryOnMultiplePlacements(List *shardIntervalList, char *sizeQuery)
 		char *shardQualifiedName = quote_qualified_identifier(schemaName, shardName);
 		char *quotedShardName = quote_literal_cstr(shardQualifiedName);
 
-		appendStringInfo(selectQuery, sizeQuery, quotedShardName);
+		if (sizeQueryType == RELATION_SIZE)
+		{
+			appendStringInfo(selectQuery, PG_RELATION_SIZE_FUNCTION, quotedShardName);
+		}
+		else if (sizeQueryType == TOTAL_RELATION_SIZE)
+		{
+			appendStringInfo(selectQuery, PG_TOTAL_RELATION_SIZE_FUNCTION,
+							 quotedShardName);
+		}
+		else if (sizeQueryType == CSTORE_TABLE_SIZE)
+		{
+			appendStringInfo(selectQuery, CSTORE_TABLE_SIZE_FUNCTION, quotedShardName);
+		}
+		else if (sizeQueryType == TABLE_SIZE)
+		{
+			appendStringInfo(selectQuery, PG_TABLE_SIZE_FUNCTION, quotedShardName);
+		}
+
 		appendStringInfo(selectQuery, " + ");
 	}
 
