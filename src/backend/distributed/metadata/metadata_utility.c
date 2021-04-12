@@ -79,6 +79,7 @@ static bool DistributedTableSizeOnWorker(WorkerNode *workerNode, Oid relationId,
 static List * ShardIntervalsOnWorkerGroup(WorkerNode *workerNode, Oid relationId);
 static char * GenerateShardStatisticsQueryForShardList(List *shardIntervalList, bool
 													   useShardMinMaxQuery);
+static char * GetSizeQueryBySizeQueryType(SizeQueryType sizeQueryType);
 static char * GenerateAllShardStatisticsQueryForNode(WorkerNode *workerNode,
 													 List *citusTableIds, bool
 													 useShardMinMaxQuery);
@@ -453,8 +454,8 @@ DistributedTableSize(Oid relationId, SizeQueryType sizeQueryType, bool failOnErr
  * shard placement.
  */
 static bool
-DistributedTableSizeOnWorker(WorkerNode *workerNode, Oid relationId, SizeQueryType
-							 sizeQueryType,
+DistributedTableSizeOnWorker(WorkerNode *workerNode, Oid relationId,
+							 SizeQueryType sizeQueryType,
 							 bool failOnError, uint64 *tableSize)
 {
 	int logLevel = WARNING;
@@ -617,23 +618,8 @@ GenerateSizeQueryOnMultiplePlacements(List *shardIntervalList,
 		char *shardQualifiedName = quote_qualified_identifier(schemaName, shardName);
 		char *quotedShardName = quote_literal_cstr(shardQualifiedName);
 
-		if (sizeQueryType == RELATION_SIZE)
-		{
-			appendStringInfo(selectQuery, PG_RELATION_SIZE_FUNCTION, quotedShardName);
-		}
-		else if (sizeQueryType == TOTAL_RELATION_SIZE)
-		{
-			appendStringInfo(selectQuery, PG_TOTAL_RELATION_SIZE_FUNCTION,
-							 quotedShardName);
-		}
-		else if (sizeQueryType == CSTORE_TABLE_SIZE)
-		{
-			appendStringInfo(selectQuery, CSTORE_TABLE_SIZE_FUNCTION, quotedShardName);
-		}
-		else if (sizeQueryType == TABLE_SIZE)
-		{
-			appendStringInfo(selectQuery, PG_TABLE_SIZE_FUNCTION, quotedShardName);
-		}
+		appendStringInfo(selectQuery, GetSizeQueryBySizeQueryType(sizeQueryType),
+						 quotedShardName);
 
 		appendStringInfo(selectQuery, " + ");
 	}
@@ -645,6 +631,43 @@ GenerateSizeQueryOnMultiplePlacements(List *shardIntervalList,
 	appendStringInfo(selectQuery, "0;");
 
 	return selectQuery;
+}
+
+
+/*
+ * GetSizeQueryBySizeQueryType returns the corresponding size query for given query type.
+ * Errors out for an invalid query type.
+ */
+static char *
+GetSizeQueryBySizeQueryType(SizeQueryType sizeQueryType)
+{
+	switch (sizeQueryType)
+	{
+		case RELATION_SIZE:
+		{
+			return PG_RELATION_SIZE_FUNCTION;
+		}
+
+		case TOTAL_RELATION_SIZE:
+		{
+			return PG_TOTAL_RELATION_SIZE_FUNCTION;
+		}
+
+		case CSTORE_TABLE_SIZE:
+		{
+			return CSTORE_TABLE_SIZE_FUNCTION;
+		}
+
+		case TABLE_SIZE:
+		{
+			return PG_TABLE_SIZE_FUNCTION;
+		}
+
+		default:
+		{
+			elog(ERROR, "Size query type couldn't be found.");
+		}
+	}
 }
 
 

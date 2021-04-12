@@ -177,13 +177,17 @@ typedef struct TableConversionReturn
 }TableConversionReturn;
 
 
-/* Size queries for PG and Citus*/
+/*
+ * Size query types for PG and Citus
+ * For difference details, please see:
+ * https://www.postgresql.org/docs/13/functions-admin.html#FUNCTIONS-ADMIN-DBSIZE
+ */
 typedef enum SizeQueryType
 {
-	RELATION_SIZE,
-	TOTAL_RELATION_SIZE,
-	TABLE_SIZE,
-	CSTORE_TABLE_SIZE
+	RELATION_SIZE, /* pg_relation_size() */
+	TOTAL_RELATION_SIZE, /* pg_total_relation_size() */
+	TABLE_SIZE, /* pg_table_size() */
+	CSTORE_TABLE_SIZE /* cstore_table_size() */
 } SizeQueryType;
 
 
