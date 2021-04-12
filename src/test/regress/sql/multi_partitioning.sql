@@ -1225,6 +1225,21 @@ SELECT create_distributed_table('test_inheritance','a');
 CREATE TABLE local_inheritance (k int) INHERITS (test_inheritance);
 DROP TABLE test_inheritance;
 
+-- test worker partitioned table size functions
+CREATE TABLE "events.Energy Added" (user_id int, time timestamp with time zone, data jsonb, PRIMARY KEY (user_id, time )) PARTITION BY RANGE ("time");
+ CREATE INDEX idx_btree_hobbies ON "events.Energy Added" USING BTREE ((data->>'location'));
+ SELECT create_distributed_table('"events.Energy Added"', 'user_id');
+CREATE TABLE "Energy Added_17634"  PARTITION OF "events.Energy Added" FOR VALUES  FROM ('2018-04-13 00:00:00+00') TO ('2018-04-14 00:00:00+00');
+ \c - - - :worker_1_port
+-- should not be zero because of TOAST, vm, fms
+SELECT worker_partitioned_table_size('"events.Energy Added_1660207"');
+-- should be zero since no data
+SELECT worker_partitioned_relation_size('"events.Energy Added_1660207"');
+-- should not be zero because of indexes + pg_table_size()
+SELECT worker_partitioned_relation_total_size('"events.Energy Added_1660207"');
+ \c - - - :master_port
+DROP TABLE "events.Energy Added";
+
 DROP SCHEMA partitioning_schema CASCADE;
 DROP TABLE IF EXISTS
 	partitioning_hash_test,
