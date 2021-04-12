@@ -178,6 +178,10 @@ PreprocessDropTableStmt(Node *node, const char *queryString,
  *
  * This function also processes CREATE TABLE ... PARTITION OF statements via
  * PostprocessCreateTableStmtPartitionOf function.
+ *
+ * Also CREATE TABLE ... INHERITS ... commands are filtered here. If the inherited
+ * table is a distributed table, this function errors out, as we currently don't
+ * support local tables inheriting a distributed table.
  */
 void
 PostprocessCreateTableStmt(CreateStmt *createStatement, const char *queryString)
