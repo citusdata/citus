@@ -923,6 +923,13 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 			 */
 			(void) CurrentDatabaseName();
 
+			/*
+			 * ConnParams (AuthInfo and PoolInfo) gets a snapshot, which
+			 * will blocks the remote connections to localhost. Hence we warm up
+			 * the cache here so that after we start a new transaction, the entries
+			 * will already be in the hash table, hence we won't be holding any snapshots.
+			 */
+			WarmUpConnParamsHash();
 			CommitTransactionCommand();
 			StartTransactionCommand();
 		}
