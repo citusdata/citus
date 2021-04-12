@@ -563,9 +563,12 @@ SELECT * FROM print_extension_changes();
                                 previous_object                                |                                    current_object
 ---------------------------------------------------------------------
  function citus_internal.columnar_ensure_objects_exist()                       |
- function create_distributed_table(regclass,text,citus.distribution_type,text) |
+ function create_distributed_table(regclass,text,citus.distribution_type,text) | 
                                                                                | function create_distributed_table(regclass,text,citus.distribution_type,text,integer)
-(3 rows)
+                                                                               | function worker_partitioned_relation_size(text)
+                                                                               | function worker_partitioned_relation_total_size(text)
+                                                                               | function worker_partitioned_table_size(text)
+(6 rows)
 
 DROP TABLE prev_objects, extension_diff;
 -- show running version
