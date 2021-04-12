@@ -177,6 +177,20 @@ typedef struct TableConversionReturn
 }TableConversionReturn;
 
 
+/*
+ * Size query types for PG and Citus
+ * For difference details, please see:
+ * https://www.postgresql.org/docs/13/functions-admin.html#FUNCTIONS-ADMIN-DBSIZE
+ */
+typedef enum SizeQueryType
+{
+	RELATION_SIZE, /* pg_relation_size() */
+	TOTAL_RELATION_SIZE, /* pg_total_relation_size() */
+	TABLE_SIZE, /* pg_table_size() */
+	CSTORE_TABLE_SIZE /* cstore_table_size() */
+} SizeQueryType;
+
+
 /* Config variable managed via guc.c */
 extern int ReplicationModel;
 
@@ -203,7 +217,7 @@ extern List * AllShardPlacementsOnNodeGroup(int32 groupId);
 extern List * AllShardPlacementsWithShardPlacementState(ShardState shardState);
 extern List * GroupShardPlacementsForTableOnGroup(Oid relationId, int32 groupId);
 extern StringInfo GenerateSizeQueryOnMultiplePlacements(List *shardIntervalList,
-														char *sizeQuery);
+														SizeQueryType sizeQueryType);
 extern List * RemoveCoordinatorPlacementIfNotSingleNode(List *placementList);
 extern ShardPlacement * ShardPlacementOnGroup(uint64 shardId, int groupId);
 
