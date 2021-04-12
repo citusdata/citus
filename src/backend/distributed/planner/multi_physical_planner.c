@@ -4361,16 +4361,8 @@ FragmentAlias(RangeTblEntry *rangeTableEntry, RangeTableFragment *fragment)
 		Oid relationId = rangeTableEntry->relid;
 		char *relationName = get_rel_name(relationId);
 
-		/*
-		 * If the table is not in the default namespace (public), we include it in
-		 * the fragment alias.
-		 */
 		Oid schemaId = get_rel_namespace(relationId);
 		schemaName = get_namespace_name(schemaId);
-		if (strncmp(schemaName, "public", NAMEDATALEN) == 0)
-		{
-			schemaName = NULL;
-		}
 
 		aliasName = relationName;
 

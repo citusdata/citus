@@ -357,7 +357,7 @@ Sort (actual rows=50 loops=1)
               Tuple data received from nodes: 780 bytes
               Tasks Shown: One of 2
               ->  Task
-                    Query: SELECT l_quantity, count(*) AS count_quantity FROM lineitem_290000 lineitem WHERE true GROUP BY l_quantity
+                    Query: SELECT l_quantity, count(*) AS count_quantity FROM public.lineitem_290000 lineitem WHERE true GROUP BY l_quantity
                     Tuple data received from node: 390 bytes
                     Node: host=localhost port=xxxxx dbname=regression
                     ->  HashAggregate (actual rows=50 loops=1)
@@ -380,7 +380,7 @@ Sort
               Task Count: 2
               Tasks Shown: One of 2
               ->  Task
-                    Query: SELECT l_quantity, count(*) AS count_quantity FROM lineitem_290000 lineitem WHERE true GROUP BY l_quantity
+                    Query: SELECT l_quantity, count(*) AS count_quantity FROM public.lineitem_290000 lineitem WHERE true GROUP BY l_quantity
                     Node: host=localhost port=xxxxx dbname=regression
                     ->  HashAggregate
                           Output: l_quantity, count(*)
@@ -397,7 +397,7 @@ Aggregate
         Task Count: 2
         Tasks Shown: One of 2
         ->  Task
-              Query: SELECT sum(l_quantity), sum(l_quantity), count(l_quantity) FROM lineitem_290000 lineitem WHERE true
+              Query: SELECT sum(l_quantity), sum(l_quantity), count(l_quantity) FROM public.lineitem_290000 lineitem WHERE true
               Node: host=localhost port=xxxxx dbname=regression
               ->  Aggregate
                     Output: sum(l_quantity), sum(l_quantity), count(l_quantity)
@@ -532,7 +532,7 @@ Aggregate
         Task Count: 2
         Tasks Shown: One of 2
         ->  Task
-              Query: SELECT sum(l_quantity), sum(l_quantity), count(l_quantity), sum(l_quantity) AS worker_column_4 FROM lineitem_290000 lineitem WHERE true
+              Query: SELECT sum(l_quantity), sum(l_quantity), count(l_quantity), sum(l_quantity) AS worker_column_4 FROM public.lineitem_290000 lineitem WHERE true
               Node: host=localhost port=xxxxx dbname=regression
               ->  Aggregate
                     Output: sum(l_quantity), sum(l_quantity), count(l_quantity), sum(l_quantity)
@@ -552,7 +552,7 @@ HashAggregate
         Task Count: 2
         Tasks Shown: One of 2
         ->  Task
-              Query: SELECT l_quantity, l_quantity AS worker_column_2 FROM lineitem_290000 lineitem WHERE true GROUP BY l_quantity
+              Query: SELECT l_quantity, l_quantity AS worker_column_2 FROM public.lineitem_290000 lineitem WHERE true GROUP BY l_quantity
               Node: host=localhost port=xxxxx dbname=regression
               ->  HashAggregate
                     Output: l_quantity, l_quantity
@@ -1405,7 +1405,7 @@ Custom Scan (Citus Adaptive)
                     Task Count: 4
                     Tasks Shown: One of 4
                     ->  Task
-                          Query: SELECT DISTINCT l_orderkey FROM lineitem_hash_part_360041 lineitem_hash_part WHERE true
+                          Query: SELECT DISTINCT l_orderkey FROM public.lineitem_hash_part_360041 lineitem_hash_part WHERE true
                           Node: host=localhost port=xxxxx dbname=regression
                           ->  HashAggregate
                                 Output: l_orderkey

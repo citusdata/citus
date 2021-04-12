@@ -1219,6 +1219,12 @@ SELECT parent_table, partition_column, partition, from_value, to_value FROM time
 SELECT * FROM time_partition_range('list_partitioned_p1');
 DROP TABLE list_partitioned;
 
+-- error out when inheriting a distributed table
+CREATE TABLE test_inheritance(a int, b int);
+SELECT create_distributed_table('test_inheritance','a');
+CREATE TABLE local_inheritance (k int) INHERITS (test_inheritance);
+DROP TABLE test_inheritance;
+
 DROP SCHEMA partitioning_schema CASCADE;
 DROP TABLE IF EXISTS
 	partitioning_hash_test,
