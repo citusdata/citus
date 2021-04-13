@@ -181,7 +181,7 @@ SELECT count(*) FROM distributed_table a
 LEFT JOIN (SELECT * FROM reference_table OFFSET 0) b ON (true)
 RIGHT JOIN (SELECT * FROM reference_table OFFSET 0) c ON (true);
 ERROR:  cannot pushdown the subquery
-DETAIL:  Complex subqueries and CTEs cannot be in the outer part of the outer join
+DETAIL:  Complex subqueries, CTEs and local tables cannot be in the outer part of an outer join with a distributed table
 SELECT count(*) FROM distributed_table a
 LEFT JOIN reference_table b ON (true)
 RIGHT JOIN reference_table c ON (c.id > 0);
@@ -191,7 +191,7 @@ SELECT count(*) FROM distributed_table a
 LEFT JOIN (SELECT * FROM reference_table OFFSET 0) b ON (true)
 RIGHT JOIN (SELECT * FROM reference_table OFFSET 0) c ON (c.id > 0);
 ERROR:  cannot pushdown the subquery
-DETAIL:  Complex subqueries and CTEs cannot be in the outer part of the outer join
+DETAIL:  Complex subqueries, CTEs and local tables cannot be in the outer part of an outer join with a distributed table
 -- drop existing sqlancer tables before next tests
 DROP TABLE t0, t1, t2, t3, t4 CASCADE;
 CREATE TABLE IF NOT EXISTS t0(c0 TEXT CHECK (TRUE), c1 money ) WITH (autovacuum_vacuum_threshold=1180014707, autovacuum_freeze_table_age=13771154, autovacuum_vacuum_cost_delay=23, autovacuum_analyze_threshold=1935153914, autovacuum_freeze_min_age=721733768, autovacuum_enabled=0, autovacuum_vacuum_cost_limit=9983);
@@ -303,7 +303,7 @@ JOIN
    ) AS unsupported_join
 ON (true);
 ERROR:  cannot pushdown the subquery
-DETAIL:  Complex subqueries and CTEs cannot be in the outer part of the outer join
+DETAIL:  Complex subqueries, CTEs and local tables cannot be in the outer part of an outer join with a distributed table
 -- unsupported outer JOIN in a sublevel INNER JOIN
 SELECT
  unsupported_join.*
@@ -341,7 +341,7 @@ LEFT JOIN
    )
 ON (true);
 ERROR:  cannot pushdown the subquery
-DETAIL:  Complex subqueries and CTEs cannot be in the outer part of the outer join
+DETAIL:  Complex subqueries, CTEs and local tables cannot be in the outer part of an outer join with a distributed table
 -- unsupported outer JOIN in a sublevel RIGHT JOIN
 SELECT
  unsupported_join.*
@@ -368,7 +368,7 @@ RIGHT JOIN
    )
 ON (true);
 ERROR:  cannot pushdown the subquery
-DETAIL:  Complex subqueries and CTEs cannot be in the outer part of the outer join
+DETAIL:  Complex subqueries, CTEs and local tables cannot be in the outer part of an outer join with a distributed table
 EXPLAIN SELECT
   unsupported_join.*
 FROM

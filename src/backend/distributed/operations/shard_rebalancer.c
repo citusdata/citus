@@ -449,11 +449,10 @@ citus_shard_cost_by_disk_size(PG_FUNCTION_ARGS)
 	uint32 connectionFlag = 0;
 	PGresult *result = NULL;
 	bool raiseErrors = true;
-	char *sizeQuery = PG_TOTAL_RELATION_SIZE_FUNCTION;
 	ShardInterval *shardInterval = LoadShardInterval(shardId);
 	List *colocatedShardList = ColocatedShardIntervalList(shardInterval);
 	StringInfo tableSizeQuery = GenerateSizeQueryOnMultiplePlacements(colocatedShardList,
-																	  sizeQuery);
+																	  TOTAL_RELATION_SIZE);
 
 	MultiConnection *connection = GetNodeConnection(connectionFlag, workerNodeName,
 													workerNodePort);

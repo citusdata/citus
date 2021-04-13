@@ -535,7 +535,7 @@ GROUP BY user_id
 HAVING count(*) > 1 AND sum(value_2) > 29
 ORDER BY 1;
 ERROR:  cannot pushdown the subquery
-DETAIL:  Complex subqueries and CTEs cannot be in the outer part of the outer join
+DETAIL:  Complex subqueries, CTEs and local tables cannot be in the outer part of an outer join with a distributed table
 -- NOT EXISTS query has non-equi join
 SELECT user_id, array_length(events_table, 1)
 FROM (

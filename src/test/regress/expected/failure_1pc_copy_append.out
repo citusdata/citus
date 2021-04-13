@@ -52,7 +52,7 @@ SELECT citus.dump_network_traffic();
  (0,worker,"[""RowDescription(fieldcount=2,fields=['F(name=min,tableoid=0,colattrnum=0,typoid=23,typlen=4,typmod=-1,format_code=0)', 'F(name=max,tableoid=0,colattrnum=0,typoid=23,typlen=4,typmod=-1,format_code=0)'])"", 'DataRow(columncount=2,columns=[""C(length=0,value=b\\'\\')"", ""C(length=1,value=b\\'0\\')""])', 'CommandComplete(command=SELECT 1)', 'ReadyForQuery(state=in_transaction_block)']")
  (0,coordinator,"['Query(query=COMMIT)']")
  (0,worker,"['CommandComplete(command=COMMIT)', 'ReadyForQuery(state=idle)']")
- (0,coordinator,"['Query(query=SELECT count(1) AS count FROM copy_test_100400 copy_test WHERE true)']")
+ (0,coordinator,"['Query(query=SELECT count(1) AS count FROM public.copy_test_XXXXXX copy_test WHERE true)']")
  (0,worker,"[""RowDescription(fieldcount=1,fields=['F(name=count,tableoid=0,colattrnum=0,typoid=20,typlen=8,typmod=-1,format_code=0)'])"", 'DataRow(columncount=1,columns=[""C(length=0,value=b\\'\\')""])', 'CommandComplete(command=SELECT 1)', 'ReadyForQuery(state=idle)']")
 (20 rows)
 

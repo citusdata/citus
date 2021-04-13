@@ -861,8 +861,9 @@ DeferredErrorIfUnsupportedRecurringTuplesJoin(
 	{
 		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 							 "cannot pushdown the subquery",
-							 "Complex subqueries and CTEs cannot be in the outer "
-							 "part of the outer join", NULL);
+							 "Complex subqueries, CTEs and local tables cannot be in "
+							 "the outer part of an outer join with a distributed table",
+							 NULL);
 	}
 
 	return NULL;

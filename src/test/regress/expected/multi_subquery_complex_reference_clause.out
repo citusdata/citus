@@ -1530,7 +1530,7 @@ count(*) AS cnt, "generated_group_field"
 DEBUG:  generating subplan XXX_1 for subquery SELECT user_id, value_2 AS generated_group_field FROM public.users_table users
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS cnt, generated_group_field FROM (SELECT "eventQuery".user_id, random() AS random, "eventQuery".generated_group_field FROM (SELECT multi_group_wrapper_1."time", multi_group_wrapper_1.event_user_id, multi_group_wrapper_1.user_id, left_group_by_1.generated_group_field, random() AS random FROM ((SELECT temp_data_queries."time", temp_data_queries.event_user_id, user_filters_1.user_id FROM ((SELECT events."time", events.user_id AS event_user_id FROM public.events_table events WHERE (events.user_id OPERATOR(pg_catalog.>) 2)) temp_data_queries JOIN (SELECT users.user_id FROM public.users_reference_table users WHERE ((users.user_id OPERATOR(pg_catalog.>) 2) AND (users.value_2 OPERATOR(pg_catalog.=) 5))) user_filters_1 ON ((temp_data_queries.event_user_id OPERATOR(pg_catalog.<) user_filters_1.user_id)))) multi_group_wrapper_1 RIGHT JOIN (SELECT intermediate_result.user_id, intermediate_result.generated_group_field FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, generated_group_field integer)) left_group_by_1 ON ((left_group_by_1.user_id OPERATOR(pg_catalog.>) multi_group_wrapper_1.event_user_id)))) "eventQuery") "pushedDownQuery" GROUP BY generated_group_field ORDER BY (count(*)) DESC, generated_group_field LIMIT 10
 ERROR:  cannot pushdown the subquery
-DETAIL:  Complex subqueries and CTEs cannot be in the outer part of the outer join
+DETAIL:  Complex subqueries, CTEs and local tables cannot be in the outer part of an outer join with a distributed table
 RESET client_min_messages;
 -- two hash partitioned relations are not joined
 -- on partiton keys although reference table is fine
@@ -2027,7 +2027,7 @@ DETAIL:  There exist a reference table in the outer part of the outer join
 -- Postgres generates a LEFT JOIN alternative among those tables
 SELECT count(*) FROM (SELECT ref1.*, random() FROM users_ref_test_table ref1 INNER JOIN user_buy_test_table u1 on ref1.id = u1.user_id) as foo LEFT JOIN user_buy_test_table ON (foo.id = user_buy_test_table.user_id);
 ERROR:  cannot pushdown the subquery
-DETAIL:  Complex subqueries and CTEs cannot be in the outer part of the outer join
+DETAIL:  Complex subqueries, CTEs and local tables cannot be in the outer part of an outer join with a distributed table
 -- same as the above query, but this time LEFT JOIN condition is between distributed tables
 -- so Postgres doesn't generate join restriction between reference and distributed tables
 SELECT count(*) FROM (SELECT u1.*, random() FROM users_ref_test_table ref1 INNER JOIN user_buy_test_table u1 on ref1.id = u1.user_id) as foo LEFT JOIN user_buy_test_table ON (foo.user_id = user_buy_test_table.user_id);
@@ -2039,7 +2039,7 @@ SELECT count(*) FROM (SELECT u1.*, random() FROM users_ref_test_table ref1 INNER
 -- outer part of the LEFT JOIN consists only intermediate result due to LIMIT, so we cannot push down
 SELECT count(*) FROM (SELECT ref1.* FROM users_ref_test_table ref1 INNER JOIN users_ref_test_table ref2 on ref1.id = ref2.id LIMIT 5) as foo LEFT JOIN user_buy_test_table ON true;
 ERROR:  cannot pushdown the subquery
-DETAIL:  Complex subqueries and CTEs cannot be in the outer part of the outer join
+DETAIL:  Complex subqueries, CTEs and local tables cannot be in the outer part of an outer join with a distributed table
 -- should be fine as OUTER part is the distributed table
 SELECT count(*) FROM users_ref_test_table ref1 INNER JOIN users_ref_test_table ref2 on ref1.id = ref2.id RIGHT JOIN user_buy_test_table ON true;
  count
