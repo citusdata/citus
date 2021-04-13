@@ -4,4 +4,4 @@ RETURNS bigint AS $$
 					  FROM (SELECT relid from pg_partition_tree(relation)) partition_tree;
 $$ LANGUAGE SQL;
 COMMENT ON FUNCTION worker_partitioned_relation_total_size(text)
-	IS 'updates shard statistics of the given table and its colocated tables';
+	IS 'Calculates and returns the total size of a partitioned relation';
