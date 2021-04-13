@@ -44,7 +44,6 @@
 #include "distributed/shard_rebalancer.h"
 #include "distributed/tuplestore.h"
 #include "distributed/worker_protocol.h"
-#include "executor/spi.h"
 #include "funcapi.h"
 #include "miscadmin.h"
 #include "postmaster/postmaster.h"
@@ -141,7 +140,6 @@ static int CompareDisallowedPlacementDesc(const void *void1, const void *void2);
 static bool ShardAllowedOnNode(uint64 shardId, WorkerNode *workerNode, void *context);
 static float4 NodeCapacity(WorkerNode *workerNode, void *context);
 static ShardCost GetShardCost(uint64 shardId, void *context);
-static int64 ExecSizeQueryWithRelName(char *sizeQuery, char *relname);
 static List * NonColocatedDistRelationIdList(void);
 static void RebalanceTableShards(RebalanceOptions *options, Oid shardReplicationModeOid);
 static void AcquireColocationLock(Oid relationId, const char *operationName);
@@ -160,9 +158,6 @@ PG_FUNCTION_INFO_V1(get_rebalance_table_shards_plan);
 PG_FUNCTION_INFO_V1(get_rebalance_progress);
 PG_FUNCTION_INFO_V1(citus_drain_node);
 PG_FUNCTION_INFO_V1(master_drain_node);
-PG_FUNCTION_INFO_V1(worker_partitioned_relation_total_size);
-PG_FUNCTION_INFO_V1(worker_partitioned_relation_size);
-PG_FUNCTION_INFO_V1(worker_partitioned_table_size);
 PG_FUNCTION_INFO_V1(citus_shard_cost_by_disk_size);
 PG_FUNCTION_INFO_V1(citus_validate_rebalance_strategy_functions);
 PG_FUNCTION_INFO_V1(pg_dist_rebalance_strategy_enterprise_check);
@@ -431,123 +426,6 @@ GetShardCost(uint64 shardId, void *voidContext)
 	Datum shardCostDatum = FunctionCall1(&context->shardCostUDF, UInt64GetDatum(shardId));
 	shardCost.cost = DatumGetFloat4(shardCostDatum);
 	return shardCost;
-}
-
-
-/*
- * worker_partitioned_relation_total_size returns the total size (including indexes) of
- * a partitioned relation with its partitions, using the function pg_partition_tree.
- */
-Datum
-worker_partitioned_relation_total_size(PG_FUNCTION_ARGS)
-{
-	char *relname = text_to_cstring(PG_GETARG_TEXT_P(0));
-
-	/* pg_partition_tree finds the partitions recursively and returns them */
-	char *queryText = "SELECT sum(pg_total_relation_size(relid))::bigint AS total_size "
-					  "FROM (SELECT relid from pg_partition_tree($1)) partition_tree;";
-
-	int64 size = ExecSizeQueryWithRelName(queryText, relname);
-
-	PG_RETURN_INT64(size);
-}
-
-
-/*
- * worker_partitioned_relation_size returns the size (excluding indexes) of
- * a partitioned relation with its partitions, using the function pg_partition_tree.
- */
-Datum
-worker_partitioned_relation_size(PG_FUNCTION_ARGS)
-{
-	char *relname = text_to_cstring(PG_GETARG_TEXT_P(0));
-
-	/* pg_partition_tree finds the partitions recursively and returns them */
-	char *queryText = "SELECT sum(pg_relation_size(relid))::bigint AS total_size "
-					  "FROM (SELECT relid from pg_partition_tree($1)) partition_tree;";
-
-	int64 size = ExecSizeQueryWithRelName(queryText, relname);
-
-	PG_RETURN_INT64(size);
-}
-
-
-/*
- * worker_partitioned_table_size returns the size (excluding indexes) of
- * a partitioned table with its partitions, using the function pg_partition_tree.
- * Unlike worker_partitioned_relation_size, this function includes the sizes of
- * TOAST, vm and fsm for the given table. For further details, please see:
- * https://www.postgresql.org/docs/13/functions-admin.html#FUNCTIONS-ADMIN-DBSIZE
- */
-Datum
-worker_partitioned_table_size(PG_FUNCTION_ARGS)
-{
-	char *relname = text_to_cstring(PG_GETARG_TEXT_P(0));
-
-	/* pg_partition_tree finds the partitions recursively and returns them */
-	char *queryText = "SELECT sum(pg_table_size(relid))::bigint AS total_size "
-					  "FROM (SELECT relid from pg_partition_tree($1)) partition_tree;";
-
-	int64 size = ExecSizeQueryWithRelName(queryText, relname);
-
-	PG_RETURN_INT64(size);
-}
-
-
-/*
- * ExecSizeQueryWithRelName is a helper function that executes the given size query
- * using SPI, for the given relname parameter. Returns the size result.
- * Errors out if any connection problem occurs with SPI.
- */
-static int64
-ExecSizeQueryWithRelName(char *sizeQuery, char *relname)
-{
-	int64 size = 0;
-	const int paramCount = 1;
-	Oid paramTypes[1] = { TEXTOID };
-	Datum paramValues[1] = { CStringGetTextDatum(relname) };
-
-	int spiResult = SPI_connect();
-	if (spiResult != SPI_OK_CONNECT)
-	{
-		ereport(ERROR, (errmsg("could not connect to SPI manager"),
-						errdetail("couldn't get the size of partitioned shard named: %s",
-								  relname)));
-	}
-
-	spiResult = SPI_execute_with_args(sizeQuery, paramCount, paramTypes,
-									  paramValues,
-									  NULL, false, 0);
-
-	if (spiResult == SPI_OK_SELECT)
-	{
-		Assert(SPI_processed <= 1);
-		if (SPI_processed == 1)
-		{
-			bool isnull = false;
-
-			size = DatumGetInt64(SPI_getbinval(SPI_tuptable->vals[0],
-											   SPI_tuptable->tupdesc,
-											   1, &isnull));
-		}
-	}
-	else
-	{
-		ereport(ERROR, (errmsg("could not run SPI query"),
-						errdetail(
-							"couldn't get the size of partitioned shard named: %s\nSPI response was not OK.",
-							relname)));
-	}
-
-	spiResult = SPI_finish();
-	if (spiResult != SPI_OK_FINISH)
-	{
-		ereport(ERROR, (errmsg("could not finish SPI connection"),
-						errdetail("couldn't get the size of partitioned shard named: %s",
-								  relname)));
-	}
-
-	return size;
 }
 
 
