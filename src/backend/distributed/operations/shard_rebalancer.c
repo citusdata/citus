@@ -1102,6 +1102,7 @@ RebalanceTableShards(RebalanceOptions *options, Oid shardReplicationModeOid)
 
 	if (list_length(placementUpdateList) == 0)
 	{
+		ereport(NOTICE, (errmsg("There are no rebalance moves for your current cluster.")));
 		return;
 	}
 
