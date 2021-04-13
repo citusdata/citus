@@ -596,7 +596,8 @@ ShardIntervalsOnWorkerGroup(WorkerNode *workerNode, Oid relationId)
  * size of multiple tables. Note that, different size functions supported by PG
  * are also supported by this function changing the size query type given as the
  * last parameter to function. Depending on the sizeQueryType enum parameter, the
- * generated query will be pg_relation_size or pg_total_relation_size.
+ * generated query will call one of the functions: pg_relation_size,
+ * pg_total_relation_size, pg_table_size and cstore_table_size.
  */
 StringInfo
 GenerateSizeQueryOnMultiplePlacements(List *shardIntervalList,

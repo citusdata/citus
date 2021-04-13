@@ -199,6 +199,9 @@ ORDER BY 1;
  function worker_partial_agg_ffunc(internal)
  function worker_partial_agg_sfunc(internal,oid,anyelement)
  function worker_partition_query_result(text,text,integer,citus.distribution_type,text[],text[],boolean)
+ function worker_partitioned_relation_size(text)
+ function worker_partitioned_relation_total_size(text)
+ function worker_partitioned_table_size(text)
  function worker_range_partition_table(bigint,integer,text,text,oid,anyarray)
  function worker_record_sequence_dependency(regclass,regclass,name)
  function worker_repartition_cleanup(bigint)
@@ -242,5 +245,5 @@ ORDER BY 1;
  view citus_worker_stat_activity
  view pg_dist_shard_placement
  view time_partitions
-(226 rows)
+(229 rows)
 

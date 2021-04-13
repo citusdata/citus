@@ -1,4 +1,4 @@
--- citus--10.1-1--10.0-2
+-- citus--10.1-1--10.0-3
 
 #include "../../../columnar/sql/downgrades/columnar--10.1-1--10.0-3.sql"
 
@@ -15,5 +15,9 @@ COMMENT ON FUNCTION create_distributed_table(table_name regclass,
 											 distribution_type citus.distribution_type,
 											 colocate_with text)
     IS 'creates a distributed table';
+
+DROP FUNCTION pg_catalog.worker_partitioned_relation_total_size(text);
+DROP FUNCTION pg_catalog.worker_partitioned_relation_size(text);
+DROP FUNCTION pg_catalog.worker_partitioned_table_size(text);
 
 #include "../udfs/citus_finish_pg_upgrade/10.0-1.sql"
