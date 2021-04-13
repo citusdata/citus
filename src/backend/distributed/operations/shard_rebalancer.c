@@ -141,7 +141,7 @@ static int CompareDisallowedPlacementDesc(const void *void1, const void *void2);
 static bool ShardAllowedOnNode(uint64 shardId, WorkerNode *workerNode, void *context);
 static float4 NodeCapacity(WorkerNode *workerNode, void *context);
 static ShardCost GetShardCost(uint64 shardId, void *context);
-static uint64 ExecSizeQueryWithRelName(char *sizeQuery, char *relname);
+static int64 ExecSizeQueryWithRelName(char *sizeQuery, char *relname);
 static List * NonColocatedDistRelationIdList(void);
 static void RebalanceTableShards(RebalanceOptions *options, Oid shardReplicationModeOid);
 static void AcquireColocationLock(Oid relationId, const char *operationName);
@@ -447,9 +447,9 @@ worker_partitioned_relation_total_size(PG_FUNCTION_ARGS)
 	char *queryText = "SELECT sum(pg_total_relation_size(relid))::bigint AS total_size "
 					  "FROM (SELECT relid from pg_partition_tree($1)) partition_tree;";
 
-	uint64 size = ExecSizeQueryWithRelName(queryText, relname);
+	int64 size = ExecSizeQueryWithRelName(queryText, relname);
 
-	PG_RETURN_UINT64(size);
+	PG_RETURN_INT64(size);
 }
 
 
@@ -466,9 +466,9 @@ worker_partitioned_relation_size(PG_FUNCTION_ARGS)
 	char *queryText = "SELECT sum(pg_relation_size(relid))::bigint AS total_size "
 					  "FROM (SELECT relid from pg_partition_tree($1)) partition_tree;";
 
-	uint64 size = ExecSizeQueryWithRelName(queryText, relname);
+	int64 size = ExecSizeQueryWithRelName(queryText, relname);
 
-	PG_RETURN_UINT64(size);
+	PG_RETURN_INT64(size);
 }
 
 
@@ -488,9 +488,9 @@ worker_partitioned_table_size(PG_FUNCTION_ARGS)
 	char *queryText = "SELECT sum(pg_table_size(relid))::bigint AS total_size "
 					  "FROM (SELECT relid from pg_partition_tree($1)) partition_tree;";
 
-	uint64 size = ExecSizeQueryWithRelName(queryText, relname);
+	int64 size = ExecSizeQueryWithRelName(queryText, relname);
 
-	PG_RETURN_UINT64(size);
+	PG_RETURN_INT64(size);
 }
 
 
@@ -499,10 +499,10 @@ worker_partitioned_table_size(PG_FUNCTION_ARGS)
  * using SPI, for the given relname parameter. Returns the size result.
  * Errors out if any connection problem occurs with SPI.
  */
-static uint64
+static int64
 ExecSizeQueryWithRelName(char *sizeQuery, char *relname)
 {
-	uint64 size = 0;
+	int64 size = 0;
 	const int paramCount = 1;
 	Oid paramTypes[1] = { TEXTOID };
 	Datum paramValues[1] = { CStringGetTextDatum(relname) };
