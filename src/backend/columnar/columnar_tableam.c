@@ -109,6 +109,7 @@ static void ColumnarProcessUtility(PlannedStmt *pstmt,
 								   QueryCompletionCompat *completionTag);
 static bool ConditionalLockRelationWithTimeout(Relation rel, LOCKMODE lockMode,
 											   int timeout, int retryInterval);
+static List * RelationColumnList(TupleDesc tupdesc, Bitmapset *attr_needed);
 static void LogRelationStats(Relation rel, int elevel);
 static void TruncateColumnar(Relation rel, int elevel);
 static HeapTuple ColumnarSlotCopyHeapTuple(TupleTableSlot *slot);
@@ -212,17 +213,7 @@ static ColumnarReadState *
 init_columnar_read_state(Relation relation, TupleDesc tupdesc, Bitmapset *attr_needed,
 						 List *scanQual)
 {
-	List *neededColumnList = NIL;
-
-	for (int i = 0; i < tupdesc->natts; i++)
-	{
-		if (bms_is_member(i, attr_needed) && !tupdesc->attrs[i].attisdropped)
-		{
-			/* attr_needed is 0-indexed; neededColumnList is 1-indexed */
-			neededColumnList = lappend_int(neededColumnList, i + 1);
-		}
-	}
-
+	List *neededColumnList = RelationColumnList(tupdesc, attr_needed);
 	ColumnarReadState *readState = ColumnarBeginRead(relation, tupdesc, neededColumnList,
 													 scanQual);
 
@@ -615,16 +606,10 @@ columnar_relation_copy_for_cluster(Relation OldHeap, Relation NewHeap,
 														columnarOptions,
 														targetDesc);
 
-	List *projectedColumnList = NIL;
-	for (int i = 0; i < sourceDesc->natts; i++)
-	{
-		if (!sourceDesc->attrs[i].attisdropped)
-		{
-			/* projectedColumnList is 1-indexed */
-			projectedColumnList = lappend_int(projectedColumnList, i + 1);
-		}
-	}
-
+	/* we need all columns */
+	int natts = OldHeap->rd_att->natts;
+	Bitmapset *attr_needed = bms_add_range(NULL, 0, natts - 1);
+	List *projectedColumnList = RelationColumnList(sourceDesc, attr_needed);
 	ColumnarReadState *readState = ColumnarBeginRead(OldHeap, sourceDesc,
 													 projectedColumnList,
 													 NULL);
@@ -644,6 +629,34 @@ columnar_relation_copy_for_cluster(Relation OldHeap, Relation NewHeap,
 
 	ColumnarEndWrite(writeState);
 	ColumnarEndRead(readState);
+}
+
+
+/*
+ * RelationColumnList returns a list of AttrNumber's for the columns that
+ * are not dropped and specified by attr_needed.
+ */
+static List *
+RelationColumnList(TupleDesc tupdesc, Bitmapset *attr_needed)
+{
+	List *columnList = NIL;
+
+	for (int i = 0; i < tupdesc->natts; i++)
+	{
+		if (tupdesc->attrs[i].attisdropped)
+		{
+			continue;
+		}
+
+		/* attr_needed is 0-indexed but columnList is 1-indexed */
+		if (bms_is_member(i, attr_needed))
+		{
+			AttrNumber varattno = i + 1;
+			columnList = lappend_int(columnList, varattno);
+		}
+	}
+
+	return columnList;
 }
 
 
