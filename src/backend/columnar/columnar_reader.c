@@ -83,11 +83,14 @@ struct ColumnarReadState
 };
 
 /* static function declarations */
+static bool StripeReadInProgress(ColumnarReadState *readState);
+static bool HasUnreadStripe(ColumnarReadState *readState);
 static StripeReadState * BeginStripeRead(StripeMetadata *stripeMetadata, Relation rel,
 										 TupleDesc tupleDesc, List *projectedColumnList,
 										 List *whereClauseList, List *whereClauseVars,
 										 MemoryContext stripeReadContext);
 static void EndStripeRead(StripeReadState *stripeReadState);
+static void AdvanceStripeRead(ColumnarReadState *readState);
 static bool ReadStripeNextRow(StripeReadState *stripeReadState, Datum *columnValues,
 							  bool *columnNulls);
 static ChunkGroupReadState * BeginChunkGroupRead(StripeBuffers *stripeBuffers, int
@@ -188,18 +191,15 @@ ColumnarReadNextRow(ColumnarReadState *readState, Datum *columnValues, bool *col
 {
 	while (true)
 	{
-		if (readState->stripeReadState == NULL)
+		if (!StripeReadInProgress(readState))
 		{
-			uint32 stripeCount = list_length(readState->stripeList);
-
-			if (readState->currentStripe >= stripeCount)
+			if (!HasUnreadStripe(readState))
 			{
 				return false;
 			}
 
 			StripeMetadata *stripeMetadata = list_nth(readState->stripeList,
 													  readState->currentStripe);
-
 			readState->stripeReadState = BeginStripeRead(stripeMetadata,
 														 readState->relation,
 														 readState->tupleDescriptor,
@@ -211,13 +211,8 @@ ColumnarReadNextRow(ColumnarReadState *readState, Datum *columnValues, bool *col
 
 		if (!ReadStripeNextRow(readState->stripeReadState, columnValues, columnNulls))
 		{
-			readState->chunkGroupsFiltered +=
-				readState->stripeReadState->chunkGroupsFiltered;
-			readState->currentStripe++;
 			EndStripeRead(readState->stripeReadState);
-			readState->stripeReadState = NULL;
-			MemoryContextReset(readState->stripeReadContext);
-
+			AdvanceStripeRead(readState);
 			continue;
 		}
 
@@ -225,6 +220,28 @@ ColumnarReadNextRow(ColumnarReadState *readState, Datum *columnValues, bool *col
 	}
 
 	return false;
+}
+
+
+/*
+ * StripeReadInProgress returns true if we already started reading a stripe.
+ */
+static bool
+StripeReadInProgress(ColumnarReadState *readState)
+{
+	return readState->stripeReadState != NULL;
+}
+
+
+/*
+ * HasUnreadStripe returns true if we still have stripes to read during current
+ * read operation.
+ */
+static bool
+HasUnreadStripe(ColumnarReadState *readState)
+{
+	uint32 stripeCount = list_length(readState->stripeList);
+	return readState->currentStripe < stripeCount;
 }
 
 
@@ -297,6 +314,21 @@ static void
 EndStripeRead(StripeReadState *stripeReadState)
 {
 	pfree(stripeReadState);
+}
+
+
+/*
+ * AdvanceStripeRead updates chunkGroupsFiltered and increments currentStripe
+ * for next stripe read.
+ */
+static void
+AdvanceStripeRead(ColumnarReadState *readState)
+{
+	readState->chunkGroupsFiltered +=
+		readState->stripeReadState->chunkGroupsFiltered;
+	readState->currentStripe++;
+	readState->stripeReadState = NULL;
+	MemoryContextReset(readState->stripeReadContext);
 }
 
 
