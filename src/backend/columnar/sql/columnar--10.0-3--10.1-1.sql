@@ -16,3 +16,7 @@ ALTER TABLE columnar.chunk_group DROP CONSTRAINT chunk_group_storage_id_fkey;
   $$;
 END IF;
 END$proc$;
+
+-- since we dropped pg11 support, we don't need to worry about missing
+-- columnar objects when upgrading postgres
+DROP FUNCTION citus_internal.columnar_ensure_objects_exist();

@@ -622,7 +622,6 @@ ac_includes_default="\
 
 ac_subst_vars='LTLIBOBJS
 LIBOBJS
-HAS_TABLEAM
 HAS_DOTGIT
 POSTGRES_BUILDDIR
 POSTGRES_SRCDIR
@@ -4533,14 +4532,9 @@ cat >>confdefs.h <<_ACEOF
 _ACEOF
 
 
-HAS_TABLEAM=yes
-$as_echo "#define HAS_TABLEAM 1" >>confdefs.h
-
-# Require lz4 & zstd only if we are compiling columnar
-if test "$HAS_TABLEAM" == 'yes'; then
-  #
-  # LZ4
-  #
+#
+# LZ4
+#
 
 
 
@@ -4567,8 +4561,8 @@ fi
 
 
 
-  if test "$with_lz4" = yes; then
-    { $as_echo "$as_me:${as_lineno-$LINENO}: checking for LZ4_compress_default in -llz4" >&5
+if test "$with_lz4" = yes; then
+  { $as_echo "$as_me:${as_lineno-$LINENO}: checking for LZ4_compress_default in -llz4" >&5
 $as_echo_n "checking for LZ4_compress_default in -llz4... " >&6; }
 if ${ac_cv_lib_lz4_LZ4_compress_default+:} false; then :
   $as_echo_n "(cached) " >&6
@@ -4613,27 +4607,27 @@ _ACEOF
 
 else
   as_fn_error $? "lz4 library not found
-  If you have lz4 installed, see config.log for details on the
-  failure.  It is possible the compiler isn't looking in the proper directory.
-  Use --without-lz4 to disable lz4 support." "$LINENO" 5
+If you have lz4 installed, see config.log for details on the
+failure.  It is possible the compiler isn't looking in the proper directory.
+Use --without-lz4 to disable lz4 support." "$LINENO" 5
 fi
 
-    ac_fn_c_check_header_mongrel "$LINENO" "lz4.h" "ac_cv_header_lz4_h" "$ac_includes_default"
+  ac_fn_c_check_header_mongrel "$LINENO" "lz4.h" "ac_cv_header_lz4_h" "$ac_includes_default"
 if test "x$ac_cv_header_lz4_h" = xyes; then :
 
 else
   as_fn_error $? "lz4 header not found
-  If you have lz4 already installed, see config.log for details on the
-  failure.  It is possible the compiler isn't looking in the proper directory.
-  Use --without-lz4 to disable lz4 support." "$LINENO" 5
+If you have lz4 already installed, see config.log for details on the
+failure.  It is possible the compiler isn't looking in the proper directory.
+Use --without-lz4 to disable lz4 support." "$LINENO" 5
 fi
 
 
-  fi
+fi
 
-  #
-  # ZSTD
-  #
+#
+# ZSTD
+#
 
 
 
@@ -4660,8 +4654,8 @@ fi
 
 
 
-  if test "$with_zstd" = yes; then
-    { $as_echo "$as_me:${as_lineno-$LINENO}: checking for ZSTD_decompress in -lzstd" >&5
+if test "$with_zstd" = yes; then
+  { $as_echo "$as_me:${as_lineno-$LINENO}: checking for ZSTD_decompress in -lzstd" >&5
 $as_echo_n "checking for ZSTD_decompress in -lzstd... " >&6; }
 if ${ac_cv_lib_zstd_ZSTD_decompress+:} false; then :
   $as_echo_n "(cached) " >&6
@@ -4706,25 +4700,23 @@ _ACEOF
 
 else
   as_fn_error $? "zstd library not found
-  If you have zstd installed, see config.log for details on the
-  failure.  It is possible the compiler isn't looking in the proper directory.
-  Use --without-zstd to disable zstd support." "$LINENO" 5
+If you have zstd installed, see config.log for details on the
+failure.  It is possible the compiler isn't looking in the proper directory.
+Use --without-zstd to disable zstd support." "$LINENO" 5
 fi
 
-    ac_fn_c_check_header_mongrel "$LINENO" "zstd.h" "ac_cv_header_zstd_h" "$ac_includes_default"
+  ac_fn_c_check_header_mongrel "$LINENO" "zstd.h" "ac_cv_header_zstd_h" "$ac_includes_default"
 if test "x$ac_cv_header_zstd_h" = xyes; then :
 
 else
   as_fn_error $? "zstd header not found
-  If you have zstd already installed, see config.log for details on the
-  failure.  It is possible the compiler isn't looking in the proper directory.
-  Use --without-zstd to disable zstd support." "$LINENO" 5
+If you have zstd already installed, see config.log for details on the
+failure.  It is possible the compiler isn't looking in the proper directory.
+Use --without-zstd to disable zstd support." "$LINENO" 5
 fi
 
 
-  fi
-
-fi # test "$HAS_TABLEAM" == 'yes'
+fi
 
 
 
@@ -4851,8 +4843,6 @@ POSTGRES_SRCDIR="$POSTGRES_SRCDIR"
 POSTGRES_BUILDDIR="$POSTGRES_BUILDDIR"
 
 HAS_DOTGIT="$HAS_DOTGIT"
-
-HAS_TABLEAM="$HAS_TABLEAM"
 
 
 ac_config_files="$ac_config_files Makefile.global"

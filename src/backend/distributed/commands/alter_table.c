@@ -682,7 +682,6 @@ ConvertTable(TableConversionState *con)
 	}
 
 	/* set columnar options */
-#if HAS_TABLEAM
 	if (con->accessMethod == NULL && con->originalAccessMethod &&
 		strcmp(con->originalAccessMethod, "columnar") == 0)
 	{
@@ -702,7 +701,6 @@ ConvertTable(TableConversionState *con)
 
 		ExecuteQueryViaSPI(columnarOptionsSql, SPI_OK_SELECT);
 	}
-#endif
 
 	con->newRelationId = get_relname_relid(con->tempName, con->schemaId);
 

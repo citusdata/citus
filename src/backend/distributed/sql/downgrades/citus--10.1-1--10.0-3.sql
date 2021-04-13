@@ -15,3 +15,5 @@ COMMENT ON FUNCTION create_distributed_table(table_name regclass,
 											 distribution_type citus.distribution_type,
 											 colocate_with text)
     IS 'creates a distributed table';
+
+#include "../udfs/citus_finish_pg_upgrade/10.0-1.sql"

@@ -1,5 +1,4 @@
 #include "citus_version.h"
-#if HAS_TABLEAM
 
 #include "postgres.h"
 
@@ -1810,6 +1809,3 @@ alter_columnar_table_reset(PG_FUNCTION_ARGS)
 
 	PG_RETURN_VOID();
 }
-
-
-#endif
