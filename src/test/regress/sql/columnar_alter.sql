@@ -215,21 +215,25 @@ ALTER TABLE products DROP CONSTRAINT dummy_constraint;
 INSERT INTO products VALUES (3, 'pen', 2);
 SELECT * FROM products ORDER BY 1;
 
--- Add a UNIQUE constraint (should fail)
-CREATE TABLE products_fail (
+-- Add a UNIQUE constraint
+CREATE TABLE products_unique (
     product_no integer UNIQUE,
     name text,
     price numeric
 ) USING columnar;
 ALTER TABLE products ADD COLUMN store_id text UNIQUE;
 
--- Add a PRIMARY KEY constraint (should fail)
-CREATE TABLE products_fail (
+-- Add a PRIMARY KEY constraint
+CREATE TABLE products_primary (
     product_no integer PRIMARY KEY,
     name text,
     price numeric
 ) USING columnar;
-ALTER TABLE products ADD COLUMN store_id text PRIMARY KEY;
+
+BEGIN;
+  ALTER TABLE products DROP COLUMN store_id;
+  ALTER TABLE products ADD COLUMN store_id text PRIMARY KEY;
+ROLLBACK;
 
 -- Add an EXCLUSION constraint (should fail)
 CREATE TABLE circles (

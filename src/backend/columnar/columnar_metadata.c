@@ -12,7 +12,7 @@
  *     min/max values (used for Chunk Group Filtering)
  *   * useful for fast VACUUM operations (e.g. reporting with VACUUM VERBOSE)
  *   * useful for stats/costing
- *   * TODO: maps logical row numbers to stripe IDs
+ *   * maps logical row numbers to stripe IDs
  *   * TODO: visibility information
  *
  *-------------------------------------------------------------------------
@@ -77,6 +77,7 @@ static uint32 * ReadChunkGroupRowCounts(uint64 storageId, uint64 stripe, uint32
 static Oid ColumnarStorageIdSequenceRelationId(void);
 static Oid ColumnarStripeRelationId(void);
 static Oid ColumnarStripePKeyIndexRelationId(void);
+static Oid ColumnarStripeFirstRowNumberIndexRelationId(void);
 static Oid ColumnarOptionsRelationId(void);
 static Oid ColumnarOptionsIndexRegclass(void);
 static Oid ColumnarChunkRelationId(void);
@@ -621,6 +622,53 @@ ReadStripeSkipList(RelFileNode relfilenode, uint64 stripe, TupleDesc tupleDescri
 
 
 /*
+ * FindStripeByRowNumber returns StripeMetadata for the stripe that has the
+ * row with rowNumber by doing backward index scan on
+ * stripe_first_row_number_idx. If no such row exists, then returns NULL.
+ */
+StripeMetadata *
+FindStripeByRowNumber(Relation relation, uint64 rowNumber, Snapshot snapshot)
+{
+	StripeMetadata *foundStripeMetadata = NULL;
+
+	uint64 storageId = ColumnarStorageGetStorageId(relation, false);
+	ScanKeyData scanKey[2];
+	ScanKeyInit(&scanKey[0], Anum_columnar_stripe_storageid,
+				BTEqualStrategyNumber, F_OIDEQ, Int32GetDatum(storageId));
+	ScanKeyInit(&scanKey[1], Anum_columnar_stripe_first_row_number,
+				BTLessEqualStrategyNumber, F_INT8LE, UInt64GetDatum(rowNumber));
+
+	Relation columnarStripes = table_open(ColumnarStripeRelationId(), AccessShareLock);
+	Relation index = index_open(ColumnarStripeFirstRowNumberIndexRelationId(),
+								AccessShareLock);
+	SysScanDesc scanDescriptor = systable_beginscan_ordered(columnarStripes, index,
+															snapshot, 2,
+															scanKey);
+
+	HeapTuple heapTuple = systable_getnext_ordered(scanDescriptor, BackwardScanDirection);
+	if (HeapTupleIsValid(heapTuple))
+	{
+		TupleDesc tupleDescriptor = RelationGetDescr(columnarStripes);
+		Datum datumArray[Natts_columnar_stripe];
+		bool isNullArray[Natts_columnar_stripe];
+		heap_deform_tuple(heapTuple, tupleDescriptor, datumArray, isNullArray);
+
+		StripeMetadata *stripeMetadata = BuildStripeMetadata(datumArray);
+		if (rowNumber < stripeMetadata->firstRowNumber + stripeMetadata->rowCount)
+		{
+			foundStripeMetadata = stripeMetadata;
+		}
+	}
+
+	systable_endscan_ordered(scanDescriptor);
+	index_close(index, AccessShareLock);
+	table_close(columnarStripes, AccessShareLock);
+
+	return foundStripeMetadata;
+}
+
+
+/*
  * ReadChunkGroupRowCounts returns an array of row counts of chunk groups for the
  * given stripe.
  */
@@ -1150,6 +1198,18 @@ static Oid
 ColumnarStripePKeyIndexRelationId(void)
 {
 	return get_relname_relid("stripe_pkey", ColumnarNamespaceId());
+}
+
+
+/*
+ * ColumnarStripeFirstRowNumberIndexRelationId returns relation id of
+ * columnar.stripe_first_row_number_idx.
+ * TODO: should we cache this similar to citus?
+ */
+static Oid
+ColumnarStripeFirstRowNumberIndexRelationId(void)
+{
+	return get_relname_relid("stripe_first_row_number_idx", ColumnarNamespaceId());
 }
 
 
