@@ -22,7 +22,7 @@ select count(*) from test_insert_command_data;
 insert into test_insert_command select * from test_insert_command_data;
 select count(*) from test_insert_command;
 
-SELECT * FROM chunk_group_consistency;
+SELECT * FROM columnar_test_helpers.chunk_group_consistency;
 
 drop table test_insert_command_data;
 drop table test_insert_command;
@@ -45,7 +45,7 @@ USING columnar;
 -- store long text in columnar table
 INSERT INTO test_columnar_long_text SELECT * FROM test_long_text;
 
-SELECT * FROM chunk_group_consistency;
+SELECT * FROM columnar_test_helpers.chunk_group_consistency;
 
 -- drop source table to remove original text from toast
 DROP TABLE test_long_text;
@@ -99,7 +99,7 @@ SELECT
   pg_column_size(external), pg_column_size(extended)
 FROM test_toast_columnar;
 
-SELECT * FROM chunk_group_consistency;
+SELECT * FROM columnar_test_helpers.chunk_group_consistency;
 
 DROP TABLE test_toast_row;
 DROP TABLE test_toast_columnar;
@@ -129,15 +129,15 @@ INSERT INTO zero_col_heap SELECT * FROM zero_col_heap;
 INSERT INTO zero_col SELECT * FROM zero_col_heap;
 
 SELECT relname, stripe_num, chunk_group_count, row_count FROM columnar.stripe a, pg_class b
-WHERE columnar_relation_storageid(b.oid)=a.storage_id AND relname = 'zero_col'
+WHERE columnar_test_helpers.columnar_relation_storageid(b.oid)=a.storage_id AND relname = 'zero_col'
 ORDER BY 1,2,3,4;
 
 SELECT relname, stripe_num, value_count FROM columnar.chunk a, pg_class b
-WHERE columnar_relation_storageid(b.oid)=a.storage_id AND relname = 'zero_col'
+WHERE columnar_test_helpers.columnar_relation_storageid(b.oid)=a.storage_id AND relname = 'zero_col'
 ORDER BY 1,2,3;
 
 SELECT relname, stripe_num, chunk_group_num, row_count FROM columnar.chunk_group a, pg_class b
-WHERE columnar_relation_storageid(b.oid)=a.storage_id AND relname = 'zero_col'
+WHERE columnar_test_helpers.columnar_relation_storageid(b.oid)=a.storage_id AND relname = 'zero_col'
 ORDER BY 1,2,3,4;
 
 DROP TABLE zero_col;

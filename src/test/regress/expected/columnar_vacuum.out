@@ -3,7 +3,7 @@ SELECT count(distinct storage_id) AS columnar_table_count FROM columnar.stripe \
 CREATE TABLE t(a int, b int) USING columnar;
 CREATE VIEW t_stripes AS
 SELECT * FROM columnar.stripe a, pg_class b
-WHERE a.storage_id = columnar_relation_storageid(b.oid) AND b.relname='t';
+WHERE a.storage_id = columnar_test_helpers.columnar_relation_storageid(b.oid) AND b.relname='t';
 SELECT count(*) FROM t_stripes;
  count
 ---------------------------------------------------------------------
@@ -27,7 +27,7 @@ SELECT count(*) FROM t_stripes;
 
 -- vacuum full should merge stripes together
 VACUUM FULL t;
-SELECT * FROM chunk_group_consistency;
+SELECT * FROM columnar_test_helpers.chunk_group_consistency;
  consistent
 ---------------------------------------------------------------------
  t
@@ -66,7 +66,7 @@ SELECT count(*) FROM t_stripes;
 (1 row)
 
 VACUUM FULL t;
-SELECT * FROM chunk_group_consistency;
+SELECT * FROM columnar_test_helpers.chunk_group_consistency;
  consistent
 ---------------------------------------------------------------------
  t
@@ -88,7 +88,7 @@ SELECT count(*) FROM t_stripes;
 ALTER TABLE t DROP COLUMN a;
 SELECT stripe_num, attr_num, chunk_group_num, minimum_value IS NULL, maximum_value IS NULL
 FROM columnar.chunk a, pg_class b
-WHERE a.storage_id = columnar_relation_storageid(b.oid) AND b.relname='t' ORDER BY 1, 2, 3;
+WHERE a.storage_id = columnar_test_helpers.columnar_relation_storageid(b.oid) AND b.relname='t' ORDER BY 1, 2, 3;
  stripe_num | attr_num | chunk_group_num | ?column? | ?column?
 ---------------------------------------------------------------------
         1 |      1 |       0 | f        | f
@@ -102,7 +102,7 @@ WHERE a.storage_id = columnar_relation_storageid(b.oid) AND b.relname='t' ORDER 
 VACUUM FULL t;
 SELECT stripe_num, attr_num, chunk_group_num, minimum_value IS NULL, maximum_value IS NULL
 FROM columnar.chunk a, pg_class b
-WHERE a.storage_id = columnar_relation_storageid(b.oid) AND b.relname='t' ORDER BY 1, 2, 3;
+WHERE a.storage_id = columnar_test_helpers.columnar_relation_storageid(b.oid) AND b.relname='t' ORDER BY 1, 2, 3;
  stripe_num | attr_num | chunk_group_num | ?column? | ?column?
 ---------------------------------------------------------------------
         1 |      1 |       0 | t        | t
@@ -215,7 +215,7 @@ compression rate: 1.25x
 total row count: 5530, stripe count: 5, average rows per stripe: 1106
 chunk count: 7, containing data for dropped columns: 0, none compressed: 5, pglz compressed: 2
 
-SELECT * FROM chunk_group_consistency;
+SELECT * FROM columnar_test_helpers.chunk_group_consistency;
  consistent
 ---------------------------------------------------------------------
  t
@@ -257,7 +257,7 @@ compression rate: 1.96x
 total row count: 7030, stripe count: 4, average rows per stripe: 1757
 chunk count: 8, containing data for dropped columns: 0, none compressed: 2, pglz compressed: 6
 
-SELECT * FROM chunk_group_consistency;
+SELECT * FROM columnar_test_helpers.chunk_group_consistency;
  consistent
 ---------------------------------------------------------------------
  t
@@ -286,7 +286,7 @@ compression rate: 33.71x
 total row count: 1000000, stripe count: 1, average rows per stripe: 1000000
 chunk count: 30, containing data for dropped columns: 0, pglz compressed: 30
 
-SELECT * FROM chunk_group_consistency;
+SELECT * FROM columnar_test_helpers.chunk_group_consistency;
  consistent
 ---------------------------------------------------------------------
  t

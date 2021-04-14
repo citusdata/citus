@@ -27,7 +27,7 @@ CREATE TABLE famous_constants (id int, name text, value real)
 COPY famous_constants (value, name, id) FROM STDIN WITH CSV;
 COPY famous_constants (name, value) FROM STDIN WITH CSV;
 SELECT * FROM famous_constants ORDER BY id, name;
- id |      name      |   value   
+ id |      name      |   value
 ----+----------------+-----------
   1 | pi             |     3.141
   2 | e              |     2.718
@@ -39,7 +39,7 @@ SELECT * FROM famous_constants ORDER BY id, name;
     | speed of light | 2.997e+08
 (8 rows)
 
-SELECT * FROM chunk_group_consistency;
+SELECT * FROM columnar_test_helpers.chunk_group_consistency;
  consistent
 ---------------------------------------------------------------------
  t

@@ -1,4 +1,4 @@
-SELECT compression_type_supported('lz4') AS lz4_supported \gset
+SELECT columnar_test_helpers.compression_type_supported('lz4') AS lz4_supported \gset
 \if :lz4_supported
 \else
 \q

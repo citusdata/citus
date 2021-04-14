@@ -25,11 +25,11 @@ set columnar.compression to default;
 -- query rows
 SELECT * FROM columnar_truncate_test;
 
-SELECT * FROM chunk_group_consistency;
+SELECT * FROM columnar_test_helpers.chunk_group_consistency;
 
 TRUNCATE TABLE columnar_truncate_test;
 
-SELECT * FROM chunk_group_consistency;
+SELECT * FROM columnar_test_helpers.chunk_group_consistency;
 
 SELECT * FROM columnar_truncate_test;
 
@@ -51,7 +51,7 @@ SELECT * from columnar_truncate_test_second;
 
 SELECT * from columnar_truncate_test_regular;
 
-SELECT * FROM chunk_group_consistency;
+SELECT * FROM columnar_test_helpers.chunk_group_consistency;
 
 -- make sure multi truncate works
 -- notice that the same table might be repeated
@@ -60,7 +60,7 @@ TRUNCATE TABLE columnar_truncate_test,
 			   columnar_truncate_test_second,
    			   columnar_truncate_test;
 
-SELECT * FROM chunk_group_consistency;
+SELECT * FROM columnar_test_helpers.chunk_group_consistency;
 
 SELECT * from columnar_truncate_test;
 SELECT * from columnar_truncate_test_second;
@@ -144,7 +144,7 @@ TRUNCATE TABLE truncate_schema.truncate_tbl;
 SELECT count(*) FROM truncate_schema.truncate_tbl;
 \c - :current_user
 
-SELECT * FROM chunk_group_consistency;
+SELECT * FROM columnar_test_helpers.chunk_group_consistency;
 
 -- cleanup
 DROP SCHEMA truncate_schema CASCADE;

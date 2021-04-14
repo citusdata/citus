@@ -1,4 +1,4 @@
-SELECT compression_type_supported('zstd') AS zstd_supported \gset
+SELECT columnar_test_helpers.compression_type_supported('zstd') AS zstd_supported \gset
 \if :zstd_supported
 \else
 \q
