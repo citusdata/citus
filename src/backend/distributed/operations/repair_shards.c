@@ -700,6 +700,11 @@ CopyShardTables(List *shardIntervalList, char *sourceNodeName, int32 sourceNodeP
 {
 	ShardInterval *shardInterval = NULL;
 
+	MemoryContext localContext = AllocSetContextCreate(CurrentMemoryContext,
+													   "CopyShardTables",
+													   ALLOCSET_DEFAULT_SIZES);
+	MemoryContext oldContext = MemoryContextSwitchTo(localContext);
+
 	/* iterate through the colocated shards and copy each */
 	foreach_ptr(shardInterval, shardIntervalList)
 	{
@@ -718,6 +723,8 @@ CopyShardTables(List *shardIntervalList, char *sourceNodeName, int32 sourceNodeP
 		SendCommandListToWorkerInSingleTransaction(targetNodeName, targetNodePort,
 												   tableOwner, ddlCommandList);
 	}
+
+	MemoryContextReset(localContext);
 
 
 	/*
@@ -750,7 +757,10 @@ CopyShardTables(List *shardIntervalList, char *sourceNodeName, int32 sourceNodeP
 
 		SendCommandListToWorkerInSingleTransaction(targetNodeName, targetNodePort,
 												   tableOwner, commandList);
+		MemoryContextReset(localContext);
 	}
+
+	MemoryContextSwitchTo(oldContext);
 }
 
 
