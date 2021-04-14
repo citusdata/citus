@@ -11,9 +11,7 @@ SELECT alter_columnar_table_set('contestant', compression => 'none');
 
 (1 row)
 
--- should fail
 CREATE INDEX contestant_idx on contestant(handle);
-ERROR:  indexes not supported for columnar tables
 -- Create zstd compressed table
 CREATE TABLE contestant_compressed (handle TEXT, birthdate DATE, rating INT,
 	percentile FLOAT, country CHAR(3), achievements TEXT[])

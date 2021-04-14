@@ -216,6 +216,9 @@ extern ColumnarReadState * ColumnarBeginRead(Relation relation,
 extern bool ColumnarReadNextRow(ColumnarReadState *state, Datum *columnValues,
 								bool *columnNulls, uint64 *rowNumber);
 extern void ColumnarRescan(ColumnarReadState *readState);
+extern bool ColumnarReadRowByRowNumber(Relation relation, uint64 rowNumber,
+									   List *neededColumnList, Datum *columnValues,
+									   bool *columnNulls, Snapshot snapshot);
 extern void ColumnarEndRead(ColumnarReadState *state);
 extern int64 ColumnarReadChunkGroupsFiltered(ColumnarReadState *state);
 
@@ -251,6 +254,8 @@ extern void SaveChunkGroups(RelFileNode relfilenode, uint64 stripe,
 extern StripeSkipList * ReadStripeSkipList(RelFileNode relfilenode, uint64 stripe,
 										   TupleDesc tupleDescriptor,
 										   uint32 chunkCount);
+extern StripeMetadata * FindStripeByRowNumber(Relation relation, uint64 rowNumber,
+											  Snapshot snapshot);
 extern Datum columnar_relation_storageid(PG_FUNCTION_ARGS);
 
 

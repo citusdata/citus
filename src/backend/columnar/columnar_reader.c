@@ -35,6 +35,7 @@
 
 #include "columnar/columnar.h"
 #include "columnar/columnar_storage.h"
+#include "columnar/columnar_tableam.h"
 #include "columnar/columnar_version_compat.h"
 
 typedef struct ChunkGroupReadState
@@ -85,6 +86,14 @@ struct ColumnarReadState
 
 /* static function declarations */
 static MemoryContext CreateStripeReadMemoryContext(void);
+static void ReadStripeRowByRowNumber(StripeReadState *stripeReadState,
+									 StripeMetadata *stripeMetadata,
+									 uint64 rowNumber, Datum *columnValues,
+									 bool *columnNulls);
+static void ReadChunkGroupRowByRowOffset(ChunkGroupReadState *chunkGroupReadState,
+										 StripeMetadata *stripeMetadata,
+										 uint64 stripeRowOffset, Datum *columnValues,
+										 bool *columnNulls);
 static bool StripeReadInProgress(ColumnarReadState *readState);
 static bool HasUnreadStripe(ColumnarReadState *readState);
 static StripeReadState * BeginStripeRead(StripeMetadata *stripeMetadata, Relation rel,
@@ -240,6 +249,104 @@ ColumnarReadNextRow(ColumnarReadState *readState, Datum *columnValues, bool *col
 	}
 
 	return false;
+}
+
+
+/*
+ * ColumnarReadRowByRowNumber reads row with rowNumber from given relation
+ * into columnValues and columnNulls, and returns true. If not such row
+ * exists, then returns false.
+ */
+bool
+ColumnarReadRowByRowNumber(Relation relation, uint64 rowNumber,
+						   List *neededColumnList, Datum *columnValues,
+						   bool *columnNulls, Snapshot snapshot)
+{
+	StripeMetadata *stripeMetadata = FindStripeByRowNumber(relation, rowNumber, snapshot);
+	if (stripeMetadata == NULL)
+	{
+		/* no such row exists */
+		return false;
+	}
+
+	TupleDesc relationTupleDesc = RelationGetDescr(relation);
+	List *whereClauseList = NIL;
+	List *whereClauseVars = NIL;
+	MemoryContext stripeReadContext = CreateStripeReadMemoryContext();
+	StripeReadState *stripeReadState = BeginStripeRead(stripeMetadata,
+													   relation,
+													   relationTupleDesc,
+													   neededColumnList,
+													   whereClauseList,
+													   whereClauseVars,
+													   stripeReadContext);
+
+	ReadStripeRowByRowNumber(stripeReadState, stripeMetadata, rowNumber,
+							 columnValues, columnNulls);
+
+	EndStripeRead(stripeReadState);
+	MemoryContextReset(stripeReadContext);
+
+	return true;
+}
+
+
+/*
+ * ReadStripeRowByRowNumber reads row with rowNumber from given
+ * stripeReadState into columnValues and columnNulls.
+ * Errors out if no such row exists in the stripe being read.
+ */
+static void
+ReadStripeRowByRowNumber(StripeReadState *stripeReadState,
+						 StripeMetadata *stripeMetadata,
+						 uint64 rowNumber, Datum *columnValues,
+						 bool *columnNulls)
+{
+	if (rowNumber < stripeMetadata->firstRowNumber)
+	{
+		/* not expected but be on the safe side */
+		ereport(ERROR, (errmsg("row offset cannot be negative")));
+	}
+
+	/* find the exact chunk group to be read */
+	uint64 stripeRowOffset = rowNumber - stripeMetadata->firstRowNumber;
+	stripeReadState->chunkGroupIndex = stripeRowOffset /
+									   stripeMetadata->chunkGroupRowCount;
+	stripeReadState->chunkGroupReadState = BeginChunkGroupRead(
+		stripeReadState->stripeBuffers,
+		stripeReadState->chunkGroupIndex,
+		stripeReadState->tupleDescriptor,
+		stripeReadState->projectedColumnList,
+		stripeReadState->stripeReadContext);
+
+	ReadChunkGroupRowByRowOffset(stripeReadState->chunkGroupReadState,
+								 stripeMetadata, stripeRowOffset,
+								 columnValues, columnNulls);
+
+	EndChunkGroupRead(stripeReadState->chunkGroupReadState);
+	stripeReadState->chunkGroupReadState = NULL;
+}
+
+
+/*
+ * ReadChunkGroupRowByRowOffset reads row with stripeRowOffset from given
+ * chunkGroupReadState into columnValues and columnNulls.
+ * Errors out if no such row exists in the chunk group being read.
+ */
+static void
+ReadChunkGroupRowByRowOffset(ChunkGroupReadState *chunkGroupReadState,
+							 StripeMetadata *stripeMetadata,
+							 uint64 stripeRowOffset, Datum *columnValues,
+							 bool *columnNulls)
+{
+	/* set the exact row number to be read from given chunk roup */
+	chunkGroupReadState->currentRow = stripeRowOffset %
+									  stripeMetadata->chunkGroupRowCount;
+	if (!ReadChunkGroupNextRow(chunkGroupReadState, columnValues, columnNulls))
+	{
+		/* not expected but be on the safe side */
+		ereport(ERROR, (errmsg("could not find the row in stripe")));
+	}
 }
 
 
