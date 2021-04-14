@@ -1996,7 +1996,7 @@ SELECT fix_pre_citus10_partitioned_table_constraint_names('partitioning_test');
 (1 row)
 
 SELECT fix_pre_citus10_partitioned_table_constraint_names();
-     fix_pre_citus10_partitioned_table_constraint_names
+ fix_pre_citus10_partitioned_table_constraint_names
 ---------------------------------------------------------------------
  partitioning_test
  "schema-test"
