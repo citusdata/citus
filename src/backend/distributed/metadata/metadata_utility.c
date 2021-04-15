@@ -473,7 +473,11 @@ DistributedTableSizeOnWorker(WorkerNode *workerNode, Oid relationId,
 
 	List *shardIntervalsOnNode = ShardIntervalsOnWorkerGroup(workerNode, relationId);
 
-	bool optimizePartitionCalculations = true;
+	/*
+	 * We pass false here, because if we optimize this, we would include child tables.
+	 * But citus size functions shouldn't include them, like PG.
+	 */
+	bool optimizePartitionCalculations = false;
 	StringInfo tableSizeQuery = GenerateSizeQueryOnMultiplePlacements(
 		shardIntervalsOnNode,
 		sizeQueryType,
@@ -620,8 +624,12 @@ GenerateSizeQueryOnMultiplePlacements(List *shardIntervalList,
 		if (optimizePartitionCalculations && PartitionTable(shardInterval->relationId))
 		{
 			/*
-			 * skip child tables of a partitioned table as they are already counted in
-			 * worker_partitioned_*_size UDFs, if optimizePartitionCalculations is true
+			 * Skip child tables of a partitioned table as they are already counted in
+			 * worker_partitioned_*_size UDFs, if optimizePartitionCalculations is true.
+			 * We don't expect this case to happen, since we don't send the child tables
+			 * to this function. Because they are all eliminated in
+			 * ColocatedNonPartitionShardIntervalList. Therefore we can't cover here with
+			 * a test currently. This is added for possible future usages.
 			 */
 			continue;
 		}
@@ -662,6 +670,9 @@ GenerateSizeQueryOnMultiplePlacements(List *shardIntervalList,
  * GetWorkerPartitionedSizeUDFNameBySizeQueryType returns the corresponding worker
  * partitioned size query for given query type.
  * Errors out for an invalid query type.
+ * Currently this function is only called with the type TOTAL_RELATION_SIZE.
+ * The others are added for possible future usages. Since they are not used anywhere,
+ * currently we can't cover them with tests.
  */
 static char *
 GetWorkerPartitionedSizeUDFNameBySizeQueryType(SizeQueryType sizeQueryType)

@@ -1005,8 +1005,10 @@ ColocatedNonPartitionShardIntervalList(ShardInterval *shardInterval)
 	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(distributedTableId);
 
 	/*
-	 * If distribution type of the table is append or range, each shard of
-	 * the shard is only co-located with itself.
+	 * If distribution type of the table is append or range, each shard of the shard
+	 * is only co-located with itself. We don't expect this case to happen, since
+	 * distributing partitioned tables in only supported for hash-distributed tables.
+	 * Therefore, currently we can't cover here with a test.
 	 */
 	if (IsCitusTableTypeCacheEntry(cacheEntry, APPEND_DISTRIBUTED) ||
 		IsCitusTableTypeCacheEntry(cacheEntry, RANGE_DISTRIBUTED))
