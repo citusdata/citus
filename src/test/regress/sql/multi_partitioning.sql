@@ -269,7 +269,6 @@ WHERE
 SELECT * FROM partitioning_test WHERE id = 1 OR id = 2 ORDER BY 1;
 
 -- check shard size calculation
-VACUUM FULL partitioning_test;
 SELECT * FROM citus_shard_cost_by_disk_size(1660000);
 SELECT * FROM citus_shard_cost_by_disk_size(1660001);
 SELECT * FROM citus_shard_cost_by_disk_size(1660002);

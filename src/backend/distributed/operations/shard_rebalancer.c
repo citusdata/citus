@@ -449,6 +449,8 @@ citus_shard_cost_by_disk_size(PG_FUNCTION_ARGS)
 	uint32 connectionFlag = 0;
 	PGresult *result = NULL;
 	bool raiseErrors = true;
+
+	/* we skip child tables of a partitioned table if this boolean variable is true */
 	bool optimizePartitionCalculations = true;
 	ShardInterval *shardInterval = LoadShardInterval(shardId);
 	List *colocatedShardList = ColocatedNonPartitionShardIntervalList(shardInterval);

@@ -619,6 +619,10 @@ GenerateSizeQueryOnMultiplePlacements(List *shardIntervalList,
 	{
 		if (optimizePartitionCalculations && PartitionTable(shardInterval->relationId))
 		{
+			/*
+			 * skip child tables of a partitioned table as they are already counted in
+			 * worker_partitioned_*_size UDFs, if optimizePartitionCalculations is true
+			 */
 			continue;
 		}
 		uint64 shardId = shardInterval->shardId;
@@ -632,12 +636,13 @@ GenerateSizeQueryOnMultiplePlacements(List *shardIntervalList,
 
 		if (optimizePartitionCalculations && PartitionedTable(shardInterval->relationId))
 		{
-			appendStringInfo(selectQuery, GetWorkerPartitionedSizeUDFNameBySizeQueryType(sizeQueryType), quotedShardName);
+			appendStringInfo(selectQuery, GetWorkerPartitionedSizeUDFNameBySizeQueryType(
+								 sizeQueryType), quotedShardName);
 		}
 		else
 		{
 			appendStringInfo(selectQuery, GetSizeQueryBySizeQueryType(sizeQueryType),
-							quotedShardName);
+							 quotedShardName);
 		}
 
 		appendStringInfo(selectQuery, " + ");

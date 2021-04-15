@@ -36,7 +36,8 @@
 #define CSTORE_TABLE_SIZE_FUNCTION "cstore_table_size(%s)"
 #define WORKER_PARTITIONED_TABLE_SIZE_FUNCTION "worker_partitioned_table_size(%s)"
 #define WORKER_PARTITIONED_RELATION_SIZE_FUNCTION "worker_partitioned_relation_size(%s)"
-#define WORKER_PARTITIONED_RELATION_TOTAL_SIZE_FUNCTION "worker_partitioned_relation_total_size(%s)"
+#define WORKER_PARTITIONED_RELATION_TOTAL_SIZE_FUNCTION \
+	"worker_partitioned_relation_total_size(%s)"
 
 #define SHARD_SIZES_COLUMN_COUNT 2
 #define UPDATE_SHARD_STATISTICS_COLUMN_COUNT 4
