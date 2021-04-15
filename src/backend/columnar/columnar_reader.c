@@ -211,7 +211,6 @@ ColumnarReadNextRow(ColumnarReadState *readState, Datum *columnValues, bool *col
 
 		if (!ReadStripeNextRow(readState->stripeReadState, columnValues, columnNulls))
 		{
-			EndStripeRead(readState->stripeReadState);
 			AdvanceStripeRead(readState);
 			continue;
 		}
@@ -326,6 +325,8 @@ AdvanceStripeRead(ColumnarReadState *readState)
 {
 	readState->chunkGroupsFiltered +=
 		readState->stripeReadState->chunkGroupsFiltered;
+	EndStripeRead(readState->stripeReadState);
+
 	readState->currentStripe++;
 	readState->stripeReadState = NULL;
 	MemoryContextReset(readState->stripeReadContext);
