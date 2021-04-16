@@ -61,3 +61,15 @@ BEGIN
    RETURN false;
 END;
 $$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION column_store_memory_stats()
+    RETURNS TABLE(TopMemoryContext BIGINT,
+				  TopTransactionContext BIGINT,
+				  WriteStateContext BIGINT)
+    LANGUAGE C STRICT VOLATILE
+    AS 'citus', $$column_store_memory_stats$$;
+
+CREATE FUNCTION top_memory_context_usage()
+	RETURNS BIGINT AS $$
+		SELECT TopMemoryContext FROM columnar_test_helpers.column_store_memory_stats();
+	$$ LANGUAGE SQL VOLATILE;

@@ -5,18 +5,6 @@
 CREATE SCHEMA columnar_memory;
 SET search_path TO 'columnar_memory';
 
-CREATE OR REPLACE FUNCTION column_store_memory_stats()
-    RETURNS TABLE(TopMemoryContext BIGINT,
-				  TopTransactionContext BIGINT,
-				  WriteStateContext BIGINT)
-    LANGUAGE C STRICT VOLATILE
-    AS 'citus', $$column_store_memory_stats$$;
-
-CREATE FUNCTION top_memory_context_usage()
-	RETURNS BIGINT AS $$
-		SELECT TopMemoryContext FROM column_store_memory_stats();
-	$$ LANGUAGE SQL VOLATILE;
-
 SET columnar.stripe_row_limit TO 50000;
 SET columnar.compression TO 'pglz';
 CREATE TABLE t (a int, tag text, memusage bigint) USING columnar;
@@ -24,7 +12,7 @@ CREATE TABLE t (a int, tag text, memusage bigint) USING columnar;
 -- measure memory before doing writes
 SELECT TopMemoryContext as top_pre,
 	   WriteStateContext write_pre
-FROM column_store_memory_stats() \gset
+FROM columnar_test_helpers.column_store_memory_stats() \gset
 
 BEGIN;
 SET LOCAL client_min_messages TO DEBUG1;
@@ -33,12 +21,12 @@ SET LOCAL client_min_messages TO DEBUG1;
 INSERT INTO t
  SELECT i, 'first batch',
         -- sample memusage instead of recording everyr row for speed
-        CASE WHEN i % 100 = 0 THEN top_memory_context_usage() ELSE 0 END
+        CASE WHEN i % 100 = 0 THEN columnar_test_helpers.top_memory_context_usage() ELSE 0 END
  FROM generate_series(1, 49999) i;
 SELECT TopMemoryContext as top0,
        TopTransactionContext xact0,
 	   WriteStateContext write0
-FROM column_store_memory_stats() \gset
+FROM columnar_test_helpers.column_store_memory_stats() \gset
 
 -- flush 1st stripe, and measure memory just before flushing 2nd stripe
 INSERT INTO t
@@ -47,7 +35,7 @@ INSERT INTO t
 SELECT TopMemoryContext as top1,
        TopTransactionContext xact1,
 	   WriteStateContext write1
-FROM column_store_memory_stats() \gset
+FROM columnar_test_helpers.column_store_memory_stats() \gset
 
 -- flush 2nd stripe, and measure memory just before flushing 3rd stripe
 INSERT INTO t
@@ -56,13 +44,13 @@ INSERT INTO t
 SELECT TopMemoryContext as top2,
        TopTransactionContext xact2,
 	   WriteStateContext write2
-FROM column_store_memory_stats() \gset
+FROM columnar_test_helpers.column_store_memory_stats() \gset
 
 -- insert a large batch
 INSERT INTO t
  SELECT i, 'large batch',
         -- sample memusage instead of recording everyr row for speed
-        CASE WHEN i % 100 = 0 THEN top_memory_context_usage() ELSE 0 END
+        CASE WHEN i % 100 = 0 THEN columnar_test_helpers.top_memory_context_usage() ELSE 0 END
  FROM generate_series(1, 100000) i;
 
 COMMIT;
@@ -70,7 +58,7 @@ COMMIT;
 -- measure memory after doing writes
 SELECT TopMemoryContext as top_post,
 	   WriteStateContext write_post
-FROM column_store_memory_stats() \gset
+FROM columnar_test_helpers.column_store_memory_stats() \gset
 
 \x
 SELECT (1.0 * :top2/:top1 BETWEEN 0.99 AND 1.01) AS top_growth_ok,
@@ -86,7 +74,7 @@ INSERT INTO t
  FROM generate_series(1, 50000) i;
 
 SELECT 1.0 * TopMemoryContext / :top_post BETWEEN 0.98 AND 1.02 AS top_growth_ok
-FROM column_store_memory_stats();
+FROM columnar_test_helpers.column_store_memory_stats();
 
 -- before this change, max mem usage while executing inserts was 28MB and
 -- with this change it's less than 8MB.
