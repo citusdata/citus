@@ -29,15 +29,15 @@
 
 static void MemoryContextTotals(MemoryContext context, MemoryContextCounters *counters);
 
-PG_FUNCTION_INFO_V1(column_store_memory_stats);
+PG_FUNCTION_INFO_V1(columnar_store_memory_stats);
 
 
 /*
- * column_store_memory_stats returns a record of 3 values: size of
+ * columnar_store_memory_stats returns a record of 3 values: size of
  * TopMemoryContext, TopTransactionContext, and Write State context.
  */
 Datum
-column_store_memory_stats(PG_FUNCTION_ARGS)
+columnar_store_memory_stats(PG_FUNCTION_ARGS)
 {
 	const int resultColumnCount = 3;
 
