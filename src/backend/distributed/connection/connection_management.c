@@ -940,8 +940,7 @@ FinishConnectionListEstablishment(List *multiConnectionList)
 				 */
 				if (connectionState->phase == MULTI_CONNECTION_PHASE_CONNECTED)
 				{
-					connectionState->connection->connectionState =
-						MULTI_CONNECTION_CONNECTED;
+					MarkConnectionConnected(connectionState->connection);
 				}
 			}
 		}
@@ -1142,7 +1141,7 @@ StartConnectionEstablishment(MultiConnection *connection, ConnectionHashKey *key
 	connection->pgConn = PQconnectStartParams((const char **) entry->keywords,
 											  (const char **) entry->values,
 											  false);
-	connection->connectionStart = GetCurrentTimestamp();
+	INSTR_TIME_SET_CURRENT(connection->connectionEstablishmentStart);
 	connection->connectionId = connectionId++;
 
 	/*
@@ -1344,8 +1343,8 @@ ShouldShutdownConnection(MultiConnection *connection, const int cachedConnection
 		   PQstatus(connection->pgConn) != CONNECTION_OK ||
 		   !RemoteTransactionIdle(connection) ||
 		   (MaxCachedConnectionLifetime >= 0 &&
-			TimestampDifferenceExceeds(connection->connectionStart, GetCurrentTimestamp(),
-									   MaxCachedConnectionLifetime));
+			MillisecondsToTimeout(connection->connectionEstablishmentStart,
+								  MaxCachedConnectionLifetime) <= 0);
 }
 
 
@@ -1399,4 +1398,21 @@ RemoteTransactionIdle(MultiConnection *connection)
 	}
 
 	return PQtransactionStatus(connection->pgConn) == PQTRANS_IDLE;
+}
+
+
+/*
+ * MarkConnectionConnected is a helper function which sets the  connection
+ * connectionState to MULTI_CONNECTION_CONNECTED, and also updates connection
+ * establishment time when necessary.
+ */
+void
+MarkConnectionConnected(MultiConnection *connection)
+{
+	connection->connectionState = MULTI_CONNECTION_CONNECTED;
+
+	if (INSTR_TIME_IS_ZERO(connection->connectionEstablishmentEnd))
+	{
+		INSTR_TIME_SET_CURRENT(connection->connectionEstablishmentEnd);
+	}
 }
