@@ -37,14 +37,14 @@ SELECT * FROM columnar_truncate_test;
  10 | 10
 (10 rows)
 
-SELECT * FROM chunk_group_consistency;
+SELECT * FROM columnar_test_helpers.chunk_group_consistency;
  consistent
 ---------------------------------------------------------------------
  t
 (1 row)
 
 TRUNCATE TABLE columnar_truncate_test;
-SELECT * FROM chunk_group_consistency;
+SELECT * FROM columnar_test_helpers.chunk_group_consistency;
  consistent
 ---------------------------------------------------------------------
  t
@@ -130,7 +130,7 @@ SELECT * from columnar_truncate_test_regular;
  20 | 20
 (11 rows)
 
-SELECT * FROM chunk_group_consistency;
+SELECT * FROM columnar_test_helpers.chunk_group_consistency;
  consistent
 ---------------------------------------------------------------------
  t
@@ -142,7 +142,7 @@ TRUNCATE TABLE columnar_truncate_test,
 			   columnar_truncate_test_regular,
 			   columnar_truncate_test_second,
    			   columnar_truncate_test;
-SELECT * FROM chunk_group_consistency;
+SELECT * FROM columnar_test_helpers.chunk_group_consistency;
  consistent
 ---------------------------------------------------------------------
  t
@@ -291,7 +291,7 @@ SELECT count(*) FROM truncate_schema.truncate_tbl;
 (1 row)
 
 \c - :current_user
-SELECT * FROM chunk_group_consistency;
+SELECT * FROM columnar_test_helpers.chunk_group_consistency;
  consistent
 ---------------------------------------------------------------------
  t

@@ -16,7 +16,7 @@ INSERT INTO t2 SELECT i, f(i) FROM generate_series(1, 5) i;
 -- there are no subtransactions, so above statement should batch
 -- INSERTs inside the UDF and create on stripe per table.
 SELECT relname, count(*) FROM columnar.stripe a, pg_class b
-WHERE columnar_relation_storageid(b.oid)=a.storage_id AND relname IN ('t1', 't2')
+WHERE columnar_test_helpers.columnar_relation_storageid(b.oid)=a.storage_id AND relname IN ('t1', 't2')
 GROUP BY relname
 ORDER BY relname;
 
@@ -39,7 +39,7 @@ INSERT INTO t2 SELECT t.a, t.a+1 FROM t;
 SELECT * FROM t1;
 SELECT * FROM t2;
 
-SELECT * FROM chunk_group_consistency;
+SELECT * FROM columnar_test_helpers.chunk_group_consistency;
 
 TRUNCATE t1;
 TRUNCATE t2;
@@ -57,7 +57,7 @@ INSERT INTO t2 SELECT i, (select count(*) from t1) FROM generate_series(1, 3) i;
 SELECT * FROM t1;
 SELECT * FROM t2;
 
-SELECT * FROM chunk_group_consistency;
+SELECT * FROM columnar_test_helpers.chunk_group_consistency;
 
 TRUNCATE t1;
 TRUNCATE t2;
@@ -72,7 +72,7 @@ INSERT INTO t1 SELECT t.a, t.a+1 FROM t;
 
 SELECT * FROM t1 ORDER BY a, b;
 
-SELECT * FROM chunk_group_consistency;
+SELECT * FROM columnar_test_helpers.chunk_group_consistency;
 
 TRUNCATE t1;
 TRUNCATE t2;
@@ -105,7 +105,7 @@ INSERT INTO t4 SELECT i, g2(i) FROM generate_series(1, 5) i;
 
 SELECT * FROM t2 ORDER BY a, b;
 
-SELECT * FROM chunk_group_consistency;
+SELECT * FROM columnar_test_helpers.chunk_group_consistency;
 
 TRUNCATE t1, t2, t3, t4;
 
@@ -121,7 +121,7 @@ SELECT * FROM t3 ORDER BY a, b;
 ((table t1) except (table t3)) union ((table t3) except (table t1));
 ((table t2) except (table t4)) union ((table t4) except (table t2));
 
-SELECT * FROM chunk_group_consistency;
+SELECT * FROM columnar_test_helpers.chunk_group_consistency;
 
 DROP FUNCTION g(int), g2(int);
 TRUNCATE t1, t2, t3, t4;
@@ -148,7 +148,7 @@ SELECT f(0), f(20);
 
 SELECT * FROM t1 ORDER BY a, b;
 
-SELECT * FROM chunk_group_consistency;
+SELECT * FROM columnar_test_helpers.chunk_group_consistency;
 
 DROP FUNCTION f(int);
 DROP TABLE t1, t2, t3, t4;

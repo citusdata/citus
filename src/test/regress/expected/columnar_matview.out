@@ -66,7 +66,7 @@ SELECT * FROM t_view a ORDER BY a;
 (6 rows)
 
 -- verify that we have created metadata entries for the materialized view
-SELECT columnar_relation_storageid(oid) AS storageid
+SELECT columnar_test_helpers.columnar_relation_storageid(oid) AS storageid
 FROM pg_class WHERE relname='t_view' \gset
 SELECT count(*) FROM columnar.stripe WHERE storage_id=:storageid;
  count
