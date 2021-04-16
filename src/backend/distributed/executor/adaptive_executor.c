@@ -586,6 +586,10 @@ typedef struct TaskPlacementExecution
 
 	/* index in array of placement executions in a ShardCommandExecution */
 	int placementExecutionIndex;
+
+	/* execution time statistics for this placement execution */
+	instr_time startTime;
+	instr_time endTime;
 } TaskPlacementExecution;
 
 
@@ -1763,6 +1767,8 @@ AssignTasksToConnectionsOrWorkerPool(DistributedExecution *execution)
 			placementExecution->workerPool = workerPool;
 			placementExecution->placementExecutionIndex = placementExecutionIndex;
 			placementExecution->queryIndex = 0;
+			INSTR_TIME_SET_ZERO(placementExecution->startTime);
+			INSTR_TIME_SET_ZERO(placementExecution->endTime);
 
 			if (placementExecutionReady)
 			{
@@ -2939,8 +2945,6 @@ ConnectionStateMachine(WorkerSession *session)
 					HandleMultiConnectionSuccess(session);
 					UpdateConnectionWaitFlags(session,
 											  WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE);
-
-					connection->connectionState = MULTI_CONNECTION_CONNECTED;
 					break;
 				}
 				else if (status == CONNECTION_BAD)
@@ -2981,8 +2985,6 @@ ConnectionStateMachine(WorkerSession *session)
 					HandleMultiConnectionSuccess(session);
 					UpdateConnectionWaitFlags(session,
 											  WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE);
-
-					connection->connectionState = MULTI_CONNECTION_CONNECTED;
 
 					/* we should have a valid socket */
 					Assert(PQsocket(connection->pgConn) != -1);
@@ -3110,7 +3112,8 @@ ConnectionStateMachine(WorkerSession *session)
 
 
 /*
- * HandleMultiConnectionSuccess logs the established connection and updates connection's state.
+ * HandleMultiConnectionSuccess logs the established connection and updates
+ * connection's state.
  */
 static void
 HandleMultiConnectionSuccess(WorkerSession *session)
@@ -3118,10 +3121,15 @@ HandleMultiConnectionSuccess(WorkerSession *session)
 	MultiConnection *connection = session->connection;
 	WorkerPool *workerPool = session->workerPool;
 
+	MarkConnectionConnected(connection);
+
 	ereport(DEBUG4, (errmsg("established connection to %s:%d for "
-							"session %ld",
+							"session %ld in %ld msecs",
 							connection->hostname, connection->port,
-							session->sessionId)));
+							session->sessionId,
+							MillisecondsBetweenTimestamps(
+								connection->connectionEstablishmentStart,
+								connection->connectionEstablishmentEnd))));
 
 	workerPool->activeConnectionCount++;
 	workerPool->idleConnectionCount++;
@@ -3634,7 +3642,6 @@ StartPlacementExecutionOnSession(TaskPlacementExecution *placementExecution,
 	ShardPlacement *taskPlacement = placementExecution->shardPlacement;
 	List *placementAccessList = PlacementAccessListForTask(task, taskPlacement);
 
-
 	if (execution->transactionProperties->useRemoteTransactionBlocks !=
 		TRANSACTION_BLOCKS_DISALLOWED)
 	{
@@ -3655,6 +3662,17 @@ StartPlacementExecutionOnSession(TaskPlacementExecution *placementExecution,
 	workerPool->idleConnectionCount--;
 	session->currentTask = placementExecution;
 	placementExecution->executionState = PLACEMENT_EXECUTION_RUNNING;
+
+	Assert(INSTR_TIME_IS_ZERO(placementExecution->startTime));
+
+	/*
+	 * The same TaskPlacementExecution can be used to have
+	 * call SendNextQuery() several times if queryIndex is
+	 * non-zero. Still, all are executed under the current
+	 * placementExecution, so we can start the timer right
+	 * now.
+	 */
+	INSTR_TIME_SET_CURRENT(placementExecution->startTime);
 
 	bool querySent = SendNextQuery(placementExecution, session);
 	if (querySent)
@@ -4249,6 +4267,24 @@ PlacementExecutionDone(TaskPlacementExecution *placementExecution, bool succeede
 	{
 		/* mark the placement execution as finished */
 		placementExecution->executionState = PLACEMENT_EXECUTION_FINISHED;
+
+		Assert(INSTR_TIME_IS_ZERO(placementExecution->endTime));
+		INSTR_TIME_SET_CURRENT(placementExecution->endTime);
+
+		if (IsLoggableLevel(DEBUG4))
+		{
+			long durationMillisecs =
+				MillisecondsBetweenTimestamps(placementExecution->startTime,
+											  placementExecution->endTime);
+
+			ereport(DEBUG4, (errmsg("task execution (%d) for placement (%ld) on anchor "
+									"shard (%ld) finished in %ld msecs on worker "
+									"node %s:%d", shardCommandExecution->task->taskId,
+									placementExecution->shardPlacement->placementId,
+									shardCommandExecution->task->anchorShardId,
+									durationMillisecs, workerPool->nodeName,
+									workerPool->nodePort)));
+		}
 	}
 	else if (CanFailoverPlacementExecutionToLocalExecution(placementExecution))
 	{
