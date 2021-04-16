@@ -3,16 +3,6 @@
 --
 CREATE SCHEMA columnar_memory;
 SET search_path TO 'columnar_memory';
-CREATE OR REPLACE FUNCTION columnar_test_helpers.columnar_store_memory_stats()
-    RETURNS TABLE(TopMemoryContext BIGINT,
-				  TopTransactionContext BIGINT,
-				  WriteStateContext BIGINT)
-    LANGUAGE C STRICT VOLATILE
-    AS 'citus', $$columnar_test_helpers.columnar_store_memory_stats$$;
-CREATE FUNCTION columnar_test_helpers.top_memory_context_usage()
-	RETURNS BIGINT AS $$
-		SELECT TopMemoryContext FROM columnar_test_helpers.columnar_store_memory_stats();
-	$$ LANGUAGE SQL VOLATILE;
 SET columnar.stripe_row_limit TO 50000;
 SET columnar.compression TO 'pglz';
 CREATE TABLE t (a int, tag text, memusage bigint) USING columnar;
