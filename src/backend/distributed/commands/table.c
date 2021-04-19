@@ -36,6 +36,7 @@
 #include "distributed/version_compat.h"
 #include "lib/stringinfo.h"
 #include "nodes/parsenodes.h"
+#include "parser/parse_expr.h"
 #include "storage/lmgr.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
@@ -586,6 +587,8 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 	 * anyway.
 	 */
 	List *commandList = alterTableStatement->cmds;
+	bool deparseAT = false;
+	bool skipColumnDefault = false;
 
 	AlterTableCmd *command = NULL;
 	foreach_ptr(command, commandList)
@@ -665,6 +668,48 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 					constraint->skip_validation = true;
 					break;
 				}
+				else if (constraint->contype == CONSTR_DEFAULT)
+				{
+					if (constraint->raw_expr != NULL)
+					{
+						ParseState *pstate = make_parsestate(NULL);
+						Node *expr = transformExpr(pstate, constraint->raw_expr,
+												   EXPR_KIND_COLUMN_DEFAULT);
+
+						if (contain_funcexpr_walker(expr, NULL))
+						{
+							deparseAT = true;
+						}
+					}
+				}
+			}
+
+			if (columnDefinition->typeName && list_length(
+					columnDefinition->typeName->names) == 1 &&
+				!columnDefinition->typeName->pct_type)
+			{
+				char *typeName = strVal(linitial(columnDefinition->typeName->names));
+
+				if (strcmp(typeName, "smallserial") == 0 ||
+					strcmp(typeName, "serial2") == 0 ||
+					strcmp(typeName, "serial") == 0 ||
+					strcmp(typeName, "serial4") == 0 ||
+					strcmp(typeName, "bigserial") == 0 ||
+					strcmp(typeName, "serial8") == 0)
+				{
+					deparseAT = true;
+				}
+			}
+		}
+		else if (alterTableType == AT_ColumnDefault)
+		{
+			ParseState *pstate = make_parsestate(NULL);
+			Node *expr = transformExpr(pstate, command->def,
+									   EXPR_KIND_COLUMN_DEFAULT);
+
+			if (contain_funcexpr_walker(expr, NULL))
+			{
+				skipColumnDefault = true;
 			}
 		}
 		else if (alterTableType == AT_AttachPartition)
@@ -727,11 +772,24 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 		SetLocalMultiShardModifyModeToSequential();
 	}
 
+	if (skipColumnDefault)
+	{
+		/*maybe do SET NOT NULL */
+		return NIL;
+	}
+
 	/* fill them here as it is possible to use them in some conditional blocks below */
 	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
 	ddlJob->targetRelationId = leftRelationId;
 	ddlJob->concurrentIndexCmd = false;
-	ddlJob->commandString = alterTableCommand;
+
+	char *sql = (char *) alterTableCommand;
+	if (deparseAT)
+	{
+		sql = DeparseTreeNode((Node *) alterTableStatement);
+	}
+
+	ddlJob->commandString = sql;
 
 	if (OidIsValid(rightRelationId))
 	{
@@ -744,13 +802,13 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 		{
 			/* if foreign key related, use specialized task list function ... */
 			ddlJob->taskList = InterShardDDLTaskList(leftRelationId, rightRelationId,
-													 alterTableCommand);
+													 sql);
 		}
 	}
 	else
 	{
 		/* ... otherwise use standard DDL task list function */
-		ddlJob->taskList = DDLTaskList(leftRelationId, alterTableCommand);
+		ddlJob->taskList = DDLTaskList(leftRelationId, sql);
 	}
 
 	List *ddlJobs = list_make1(ddlJob);
@@ -1417,6 +1475,11 @@ PostprocessAlterTableStmt(AlterTableStmt *alterTableStatement)
 		EnsureDependenciesExistOnAllNodes(&tableAddress);
 	}
 
+	/* if (ShouldSyncTableMetadata(relationId)) */
+	/* { */
+	/* 	CreateTableMetadataOnWorkers(relationId); */
+	/* } */
+
 	List *commandList = alterTableStatement->cmds;
 	AlterTableCmd *command = NULL;
 	foreach_ptr(command, commandList)
@@ -1736,9 +1799,50 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 							strcmp(typeName, "bigserial") == 0 ||
 							strcmp(typeName, "serial8") == 0)
 						{
-							ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-											errmsg("cannot execute ADD COLUMN commands "
-												   "involving serial pseudotypes")));
+							if (commandList->length > 1)
+							{
+								ereport(ERROR, (errcode(
+													ERRCODE_FEATURE_NOT_SUPPORTED),
+												errmsg(
+													"cannot execute ADD COLUMN commands involving "
+													"serial pseudotypes with other subcommands"),
+												errhint(
+													"You can issue each subcommand separately")));
+							}
+
+							/* ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED), */
+							/* 				errmsg("cannot execute ADD COLUMN commands " */
+							/* 					   "involving serial pseudotypes"))); */
+						}
+					}
+
+					List *columnConstraints = column->constraints;
+
+					Constraint *constraint = NULL;
+					foreach_ptr(constraint, columnConstraints)
+					{
+						if (constraint->contype == CONSTR_DEFAULT)
+						{
+							if (constraint->raw_expr != NULL)
+							{
+								ParseState *pstate = make_parsestate(NULL);
+								Node *expr = transformExpr(pstate, constraint->raw_expr,
+														   EXPR_KIND_COLUMN_DEFAULT);
+
+								if (contain_funcexpr_walker(expr, NULL))
+								{
+									if (commandList->length > 1)
+									{
+										ereport(ERROR, (errcode(
+															ERRCODE_FEATURE_NOT_SUPPORTED),
+														errmsg(
+															"cannot execute ADD COLUMN .. DEFAULT "
+															"non_const command with other subcommands"),
+														errhint(
+															"You can issue each subcommand separately")));
+									}
+								}
+							}
 						}
 					}
 				}
@@ -1746,8 +1850,36 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 				break;
 			}
 
-			case AT_DropColumn:
 			case AT_ColumnDefault:
+			{
+				if (AlterInvolvesPartitionColumn(alterTableStatement, command))
+				{
+					ereport(ERROR, (errmsg("cannot execute ALTER TABLE command "
+										   "involving partition column")));
+				}
+
+				ParseState *pstate = make_parsestate(NULL);
+				Node *expr = transformExpr(pstate, command->def,
+										   EXPR_KIND_COLUMN_DEFAULT);
+
+				if (contain_funcexpr_walker(expr, NULL))
+				{
+					if (commandList->length > 1)
+					{
+						ereport(ERROR, (errcode(
+											ERRCODE_FEATURE_NOT_SUPPORTED),
+										errmsg(
+											"cannot execute ALTER COLUMN COLUMN .. SET DEFAULT "
+											"non_const command with other subcommands"),
+										errhint(
+											"You can issue each subcommand separately")));
+					}
+				}
+
+				break;
+			}
+
+			case AT_DropColumn:
 			case AT_AlterColumnType:
 			case AT_DropNotNull:
 			{

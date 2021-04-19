@@ -347,7 +347,8 @@ pg_get_tableschemadef_string(Oid tableRelationId, bool includeSequenceDefaults,
 				 * this column.
 				 */
 				if (includeSequenceDefaults ||
-					!contain_nextval_expression_walker(defaultNode, NULL))
+					(!contain_nextval_expression_walker(defaultNode, NULL) &&
+					 !contain_funcexpr_walker(defaultNode, NULL)))
 				{
 					defaultContext = deparse_context_for(relationName, tableRelationId);
 
@@ -1017,6 +1018,26 @@ contain_nextval_expression_walker(Node *node, void *context)
 		}
 	}
 	return expression_tree_walker(node, contain_nextval_expression_walker, context);
+}
+
+
+/*
+ * contain_funcexpr_walker walks over expression tree and returns
+ * true if it contains call to a function.
+ */
+bool
+contain_funcexpr_walker(Node *node, void *context)
+{
+	if (node == NULL)
+	{
+		return false;
+	}
+
+	if (IsA(node, FuncExpr))
+	{
+		return true;
+	}
+	return expression_tree_walker(node, contain_funcexpr_walker, context);
 }
 
 

@@ -29,6 +29,7 @@
 #include "catalog/pg_depend.h"
 #include "catalog/pg_foreign_server.h"
 #include "catalog/pg_namespace.h"
+#include "catalog/pg_proc.h"
 #include "catalog/pg_type.h"
 #include "commands/async.h"
 #include "distributed/citus_ruleutils.h"
@@ -87,7 +88,7 @@ static char * GenerateSetRoleQuery(Oid roleOid);
 static void MetadataSyncSigTermHandler(SIGNAL_ARGS);
 static void MetadataSyncSigAlrmHandler(SIGNAL_ARGS);
 
-static List * GetDependentSequencesWithRelation(Oid relationId);
+/*static List * GetDependentSequencesWithRelation(Oid relationId); */
 static List * GetSequencesFromAttrDef(Oid attrdefOid);
 
 PG_FUNCTION_INFO_V1(start_metadata_sync_to_node);
@@ -379,6 +380,7 @@ MetadataCreateCommands(void)
 		}
 
 		List *workerSequenceDDLCommands = SequenceDDLCommandsForTable(relationId);
+
 		List *ddlCommandList = GetFullTableCreationCommands(relationId,
 															includeSequenceDefaults);
 		char *tableOwnerResetCommand = TableOwnerResetCommand(relationId);
@@ -1048,7 +1050,7 @@ SequenceDDLCommandsForTable(Oid relationId)
 	List *sequenceDDLList = NIL;
 
 	/* List *ownedSequences = GetSequencesOwnedByRelation(relationId); */
-	List *ownedSequences = GetDependentSequencesWithRelation(relationId);
+	List *ownedSequences = GetDependentSequencesWithRelation(relationId, 0);
 	char *ownerName = TableOwner(relationId);
 
 	Oid sequenceOid = InvalidOid;
@@ -1084,11 +1086,11 @@ SequenceDDLCommandsForTable(Oid relationId)
 /*
  * GetDependentSequencesWithRelation
  */
-static List *
-GetDependentSequencesWithRelation(Oid relationId)
+List *
+GetDependentSequencesWithRelation(Oid relationId, AttrNumber attnum)
 {
 	List *attrdefResult = NIL;
-	ScanKeyData key[2];
+	ScanKeyData key[3];
 	HeapTuple tup;
 
 	Relation depRel = table_open(DependRelationId, AccessShareLock);
@@ -1101,9 +1103,16 @@ GetDependentSequencesWithRelation(Oid relationId)
 				Anum_pg_depend_refobjid,
 				BTEqualStrategyNumber, F_OIDEQ,
 				ObjectIdGetDatum(relationId));
+	if (attnum)
+	{
+		ScanKeyInit(&key[2],
+					Anum_pg_depend_refobjsubid,
+					BTEqualStrategyNumber, F_INT4EQ,
+					Int32GetDatum(attnum));
+	}
 
 	SysScanDesc scan = systable_beginscan(depRel, DependReferenceIndexId, true,
-										  NULL, 2, key);
+										  NULL, attnum ? 3 : 2, key);
 
 	while (HeapTupleIsValid(tup = systable_getnext(scan)))
 	{

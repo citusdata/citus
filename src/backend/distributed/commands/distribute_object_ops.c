@@ -460,7 +460,7 @@ static DistributeObjectOps Statistics_Rename = {
 	.address = NULL,
 };
 static DistributeObjectOps Table_AlterTable = {
-	.deparse = NULL,
+	.deparse = DeparseAlterTableStmt,
 	.qualify = NULL,
 	.preprocess = PreprocessAlterTableStmt,
 	.postprocess = NULL,

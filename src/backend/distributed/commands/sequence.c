@@ -18,6 +18,7 @@
 #include "distributed/commands/sequence.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/metadata_sync.h"
 #include "nodes/parsenodes.h"
 
 /* Local functions forward declarations for helper functions */
@@ -92,15 +93,19 @@ ErrorIfDistributedAlterSeqOwnedBy(AlterSeqStmt *alterSeqStmt)
 							errmsg("cannot alter OWNED BY option of a sequence "
 								   "already owned by a distributed table")));
 		}
-		else if (!hasDistributedOwner && IsCitusTable(newOwnedByTableId))
-		{
-			/* and don't let local sequences get a distributed OWNED BY */
-			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("cannot associate an existing sequence with a "
-								   "distributed table"),
-							errhint("Use a sequence in a distributed table by specifying "
-									"a serial column type before creating any shards.")));
-		}
+
+		/* this part should not be commented out */
+		/* need to figure out if this is coming from serial */
+
+		/* else if (!hasDistributedOwner && IsCitusTable(newOwnedByTableId)) */
+		/* { */
+		/* 	/ * and don't let local sequences get a distributed OWNED BY * / */
+		/* 	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED), */
+		/* 					errmsg("cannot associate an existing sequence with a " */
+		/* 						   "distributed table"), */
+		/* 					errhint("Use a sequence in a distributed table by specifying " */
+		/* 							"a serial column type before creating any shards."))); */
+		/* } */
 	}
 }
 
@@ -188,7 +193,7 @@ ExtractDefaultColumnsAndOwnedSequences(Oid relationId, List **columnNameList,
 		*columnNameList = lappend(*columnNameList, columnName);
 
 		List *columnOwnedSequences =
-			GetSequencesOwnedByColumn(relationId, attributeIndex + 1);
+			GetDependentSequencesWithRelation(relationId, attributeIndex + 1);
 
 		Oid ownedSequenceId = InvalidOid;
 		if (list_length(columnOwnedSequences) != 0)
