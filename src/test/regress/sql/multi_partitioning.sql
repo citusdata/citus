@@ -38,7 +38,6 @@ INSERT INTO partitioning_hash_test VALUES (4, 4);
 
 -- distribute partitioned table
 SELECT create_distributed_table('partitioning_test', 'id');
-
 SELECT create_distributed_table('partitioning_hash_test', 'id');
 
 -- see the data is loaded to shards
@@ -1227,9 +1226,12 @@ DROP TABLE test_inheritance;
 
 -- test worker partitioned table size functions
 CREATE TABLE "events.Energy Added" (user_id int, time timestamp with time zone, data jsonb, PRIMARY KEY (user_id, time )) PARTITION BY RANGE ("time");
- CREATE INDEX idx_btree_hobbies ON "events.Energy Added" USING BTREE ((data->>'location'));
- SELECT create_distributed_table('"events.Energy Added"', 'user_id');
+SELECT create_distributed_table('"events.Energy Added"', 'user_id', colocate_with:='none');
 CREATE TABLE "Energy Added_17634"  PARTITION OF "events.Energy Added" FOR VALUES  FROM ('2018-04-13 00:00:00+00') TO ('2018-04-14 00:00:00+00');
+
+-- test shard cost by disk size function
+SELECT citus_shard_cost_by_disk_size(1660207);
+CREATE INDEX idx_btree_hobbies ON "events.Energy Added" USING BTREE ((data->>'location'));
  \c - - - :worker_1_port
 -- should not be zero because of TOAST, vm, fms
 SELECT worker_partitioned_table_size('"events.Energy Added_1660207"');

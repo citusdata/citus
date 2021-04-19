@@ -34,6 +34,10 @@
 #define PG_RELATION_SIZE_FUNCTION "pg_relation_size(%s)"
 #define PG_TOTAL_RELATION_SIZE_FUNCTION "pg_total_relation_size(%s)"
 #define CSTORE_TABLE_SIZE_FUNCTION "cstore_table_size(%s)"
+#define WORKER_PARTITIONED_TABLE_SIZE_FUNCTION "worker_partitioned_table_size(%s)"
+#define WORKER_PARTITIONED_RELATION_SIZE_FUNCTION "worker_partitioned_relation_size(%s)"
+#define WORKER_PARTITIONED_RELATION_TOTAL_SIZE_FUNCTION \
+	"worker_partitioned_relation_total_size(%s)"
 
 #define SHARD_SIZES_COLUMN_COUNT 2
 #define UPDATE_SHARD_STATISTICS_COLUMN_COUNT 4
@@ -217,7 +221,8 @@ extern List * AllShardPlacementsOnNodeGroup(int32 groupId);
 extern List * AllShardPlacementsWithShardPlacementState(ShardState shardState);
 extern List * GroupShardPlacementsForTableOnGroup(Oid relationId, int32 groupId);
 extern StringInfo GenerateSizeQueryOnMultiplePlacements(List *shardIntervalList,
-														SizeQueryType sizeQueryType);
+														SizeQueryType sizeQueryType,
+														bool optimizePartitionCalculations);
 extern List * RemoveCoordinatorPlacementIfNotSingleNode(List *placementList);
 extern ShardPlacement * ShardPlacementOnGroup(uint64 shardId, int groupId);
 

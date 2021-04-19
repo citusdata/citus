@@ -79,6 +79,7 @@ static bool DistributedTableSizeOnWorker(WorkerNode *workerNode, Oid relationId,
 static List * ShardIntervalsOnWorkerGroup(WorkerNode *workerNode, Oid relationId);
 static char * GenerateShardStatisticsQueryForShardList(List *shardIntervalList, bool
 													   useShardMinMaxQuery);
+static char * GetWorkerPartitionedSizeUDFNameBySizeQueryType(SizeQueryType sizeQueryType);
 static char * GetSizeQueryBySizeQueryType(SizeQueryType sizeQueryType);
 static char * GenerateAllShardStatisticsQueryForNode(WorkerNode *workerNode,
 													 List *citusTableIds, bool
@@ -472,9 +473,15 @@ DistributedTableSizeOnWorker(WorkerNode *workerNode, Oid relationId,
 
 	List *shardIntervalsOnNode = ShardIntervalsOnWorkerGroup(workerNode, relationId);
 
+	/*
+	 * We pass false here, because if we optimize this, we would include child tables.
+	 * But citus size functions shouldn't include them, like PG.
+	 */
+	bool optimizePartitionCalculations = false;
 	StringInfo tableSizeQuery = GenerateSizeQueryOnMultiplePlacements(
 		shardIntervalsOnNode,
-		sizeQueryType);
+		sizeQueryType,
+		optimizePartitionCalculations);
 
 	MultiConnection *connection = GetNodeConnection(connectionFlag, workerNodeName,
 													workerNodePort);
@@ -598,10 +605,14 @@ ShardIntervalsOnWorkerGroup(WorkerNode *workerNode, Oid relationId)
  * last parameter to function. Depending on the sizeQueryType enum parameter, the
  * generated query will call one of the functions: pg_relation_size,
  * pg_total_relation_size, pg_table_size and cstore_table_size.
+ * This function uses UDFs named worker_partitioned_*_size for partitioned tables,
+ * if the parameter optimizePartitionCalculations is true. The UDF to be called is
+ * determined by the parameter sizeQueryType.
  */
 StringInfo
 GenerateSizeQueryOnMultiplePlacements(List *shardIntervalList,
-									  SizeQueryType sizeQueryType)
+									  SizeQueryType sizeQueryType,
+									  bool optimizePartitionCalculations)
 {
 	StringInfo selectQuery = makeStringInfo();
 
@@ -610,6 +621,18 @@ GenerateSizeQueryOnMultiplePlacements(List *shardIntervalList,
 	ShardInterval *shardInterval = NULL;
 	foreach_ptr(shardInterval, shardIntervalList)
 	{
+		if (optimizePartitionCalculations && PartitionTable(shardInterval->relationId))
+		{
+			/*
+			 * Skip child tables of a partitioned table as they are already counted in
+			 * worker_partitioned_*_size UDFs, if optimizePartitionCalculations is true.
+			 * We don't expect this case to happen, since we don't send the child tables
+			 * to this function. Because they are all eliminated in
+			 * ColocatedNonPartitionShardIntervalList. Therefore we can't cover here with
+			 * a test currently. This is added for possible future usages.
+			 */
+			continue;
+		}
 		uint64 shardId = shardInterval->shardId;
 		Oid schemaId = get_rel_namespace(shardInterval->relationId);
 		char *schemaName = get_namespace_name(schemaId);
@@ -619,8 +642,16 @@ GenerateSizeQueryOnMultiplePlacements(List *shardIntervalList,
 		char *shardQualifiedName = quote_qualified_identifier(schemaName, shardName);
 		char *quotedShardName = quote_literal_cstr(shardQualifiedName);
 
-		appendStringInfo(selectQuery, GetSizeQueryBySizeQueryType(sizeQueryType),
-						 quotedShardName);
+		if (optimizePartitionCalculations && PartitionedTable(shardInterval->relationId))
+		{
+			appendStringInfo(selectQuery, GetWorkerPartitionedSizeUDFNameBySizeQueryType(
+								 sizeQueryType), quotedShardName);
+		}
+		else
+		{
+			appendStringInfo(selectQuery, GetSizeQueryBySizeQueryType(sizeQueryType),
+							 quotedShardName);
+		}
 
 		appendStringInfo(selectQuery, " + ");
 	}
@@ -632,6 +663,42 @@ GenerateSizeQueryOnMultiplePlacements(List *shardIntervalList,
 	appendStringInfo(selectQuery, "0;");
 
 	return selectQuery;
+}
+
+
+/*
+ * GetWorkerPartitionedSizeUDFNameBySizeQueryType returns the corresponding worker
+ * partitioned size query for given query type.
+ * Errors out for an invalid query type.
+ * Currently this function is only called with the type TOTAL_RELATION_SIZE.
+ * The others are added for possible future usages. Since they are not used anywhere,
+ * currently we can't cover them with tests.
+ */
+static char *
+GetWorkerPartitionedSizeUDFNameBySizeQueryType(SizeQueryType sizeQueryType)
+{
+	switch (sizeQueryType)
+	{
+		case RELATION_SIZE:
+		{
+			return WORKER_PARTITIONED_RELATION_SIZE_FUNCTION;
+		}
+
+		case TOTAL_RELATION_SIZE:
+		{
+			return WORKER_PARTITIONED_RELATION_TOTAL_SIZE_FUNCTION;
+		}
+
+		case TABLE_SIZE:
+		{
+			return WORKER_PARTITIONED_TABLE_SIZE_FUNCTION;
+		}
+
+		default:
+		{
+			elog(ERROR, "Size query type couldn't be found.");
+		}
+	}
 }
 
 

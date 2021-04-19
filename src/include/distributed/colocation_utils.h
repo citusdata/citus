@@ -23,6 +23,7 @@ extern bool ShardsColocated(ShardInterval *leftShardInterval,
 							ShardInterval *rightShardInterval);
 extern List * ColocatedTableList(Oid distributedTableId);
 extern List * ColocatedShardIntervalList(ShardInterval *shardInterval);
+extern List * ColocatedNonPartitionShardIntervalList(ShardInterval *shardInterval);
 extern Oid ColocatedTableId(Oid colocationId);
 extern uint64 ColocatedShardIdInRelation(Oid relationId, int shardIndex);
 uint32 ColocationId(int shardCount, int replicationFactor, Oid distributionColumnType,
