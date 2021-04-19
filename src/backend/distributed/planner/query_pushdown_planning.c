@@ -57,17 +57,18 @@ typedef enum RecurringTuplesType
 	RECURRING_TUPLES_REFERENCE_TABLE,
 	RECURRING_TUPLES_FUNCTION,
 	RECURRING_TUPLES_EMPTY_JOIN_TREE,
-	RECURRING_TUPLES_RESULT_FUNCTION
+	RECURRING_TUPLES_RESULT_FUNCTION,
+	RECURRING_TUPLES_VALUES
 } RecurringTuplesType;
 
 
 /* Config variable managed via guc.c */
 bool SubqueryPushdown = false; /* is subquery pushdown enabled */
-
+int ValuesMaterializationThreshold = 100;
 
 /* Local functions forward declarations */
 static bool JoinTreeContainsSubqueryWalker(Node *joinTreeNode, void *context);
-static bool IsFunctionRTE(Node *node);
+static bool IsFunctionOrValuesRTE(Node *node);
 static bool IsOuterJoinExpr(Node *node);
 static bool WindowPartitionOnDistributionColumn(Query *query);
 static DeferredErrorMessage * DeferErrorIfFromClauseRecurs(Query *queryTree);
@@ -154,10 +155,10 @@ ShouldUseSubqueryPushDown(Query *originalQuery, Query *rewrittenQuery,
 
 
 	/*
-	 * We process function RTEs as subqueries, since the join order planner
+	 * We process function and VALUES RTEs as subqueries, since the join order planner
 	 * does not know how to handle them.
 	 */
-	if (FindNodeMatchingCheckFunction((Node *) originalQuery, IsFunctionRTE))
+	if (FindNodeMatchingCheckFunction((Node *) originalQuery, IsFunctionOrValuesRTE))
 	{
 		return true;
 	}
@@ -317,13 +318,14 @@ TargetListContainsSubquery(List *targetList)
  * IsFunctionRTE determines whether the given node is a function RTE.
  */
 static bool
-IsFunctionRTE(Node *node)
+IsFunctionOrValuesRTE(Node *node)
 {
 	if (IsA(node, RangeTblEntry))
 	{
 		RangeTblEntry *rangeTblEntry = (RangeTblEntry *) node;
 
-		if (rangeTblEntry->rtekind == RTE_FUNCTION)
+		if (rangeTblEntry->rtekind == RTE_FUNCTION ||
+			rangeTblEntry->rtekind == RTE_VALUES)
 		{
 			return true;
 		}
@@ -689,6 +691,14 @@ DeferErrorIfFromClauseRecurs(Query *queryTree)
 							 "the FROM clause contains a subquery without FROM", NULL,
 							 NULL);
 	}
+	else if (recurType == RECURRING_TUPLES_VALUES)
+	{
+		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+							 "correlated subqueries are not supported when "
+							 "the FROM clause contains VALUES", NULL,
+							 NULL);
+	}
+
 
 	/*
 	 * We get here when there is neither a distributed table, nor recurring tuples.
@@ -864,6 +874,13 @@ DeferredErrorIfUnsupportedRecurringTuplesJoin(
 							 "Complex subqueries, CTEs and local tables cannot be in "
 							 "the outer part of an outer join with a distributed table",
 							 NULL);
+	}
+	else if (recurType == RECURRING_TUPLES_VALUES)
+	{
+		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+							 "cannot pushdown the subquery",
+							 "There exist a VALUES clause in the outer "
+							 "part of the outer join", NULL);
 	}
 
 	return NULL;
@@ -1148,10 +1165,32 @@ DeferErrorIfUnsupportedTableCombination(Query *queryTree)
 		 */
 		if (rangeTableEntry->rtekind == RTE_RELATION ||
 			rangeTableEntry->rtekind == RTE_SUBQUERY ||
-			rangeTableEntry->rtekind == RTE_RESULT
-			)
+			rangeTableEntry->rtekind == RTE_RESULT)
 		{
 			/* accepted */
+		}
+		else if (rangeTableEntry->rtekind == RTE_VALUES)
+		{
+			/*
+			 * When GUC is set to -1, we disable materialization, when set to 0,
+			 * we materialize everything. Other values are compared against the
+			 * length of the values_lists.
+			 */
+			int valuesRowCount = list_length(rangeTableEntry->values_lists);
+			if (ValuesMaterializationThreshold >= 0 &&
+				valuesRowCount > ValuesMaterializationThreshold)
+			{
+				unsupportedTableCombination = true;
+				errorDetail = "VALUES has more than "
+							  "\"citus.values_materialization_threshold\" "
+							  "entries, so it is materialized";
+			}
+			else if (contain_mutable_functions((Node *) rangeTableEntry->values_lists))
+			{
+				/* VALUES should not contain mutable functions */
+				unsupportedTableCombination = true;
+				errorDetail = "Only immutable functions can be used in VALUES";
+			}
 		}
 		else if (rangeTableEntry->rtekind == RTE_FUNCTION)
 		{
@@ -1181,12 +1220,6 @@ DeferErrorIfUnsupportedTableCombination(Query *queryTree)
 		{
 			unsupportedTableCombination = true;
 			errorDetail = "CTEs in subqueries are currently unsupported";
-			break;
-		}
-		else if (rangeTableEntry->rtekind == RTE_VALUES)
-		{
-			unsupportedTableCombination = true;
-			errorDetail = "VALUES in multi-shard queries is currently unsupported";
 			break;
 		}
 		else
@@ -1293,7 +1326,13 @@ DeferErrorIfUnsupportedUnionQuery(Query *subqueryTree)
 							 "Complex subqueries and CTEs are not supported within a "
 							 "UNION", NULL);
 	}
-
+	else if (recurType == RECURRING_TUPLES_VALUES)
+	{
+		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+							 "cannot push down this subquery",
+							 "VALUES is not supported within a "
+							 "UNION", NULL);
+	}
 
 	return NULL;
 }
@@ -1467,6 +1506,11 @@ HasRecurringTuples(Node *node, RecurringTuplesType *recurType)
 		else if (rangeTableEntry->rtekind == RTE_RESULT)
 		{
 			*recurType = RECURRING_TUPLES_EMPTY_JOIN_TREE;
+			return true;
+		}
+		else if (rangeTableEntry->rtekind == RTE_VALUES)
+		{
+			*recurType = RECURRING_TUPLES_VALUES;
 			return true;
 		}
 

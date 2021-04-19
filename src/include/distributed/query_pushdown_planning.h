@@ -21,6 +21,8 @@
 
 /* Config variables managed via guc.c */
 extern bool SubqueryPushdown;
+extern int ValuesMaterializationThreshold;
+
 
 extern bool CanPushdownSubquery(Query *subqueryTree, bool outerMostQueryHasLimit);
 extern bool ShouldUseSubqueryPushDown(Query *originalQuery, Query *rewrittenQuery,

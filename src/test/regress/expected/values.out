@@ -1,0 +1,626 @@
+CREATE SCHEMA values_subquery;
+SET search_path TO values_subquery;
+CREATE TABLE test_values (key int, value text, data jsonb);
+SELECT create_distributed_table('test_values', 'key');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO test_values SELECT i, i::text,  ('{"value":"' ||  i::text ||  '"}')::jsonb FROM generate_series(0,100)i;
+CREATE TABLE test_values_ref (key int);
+SELECT create_reference_table('test_values_ref');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO test_values_ref SELECT i FROM generate_series(0,100)i;
+-- the aim of this test is to show when Citus can pushdown
+-- VALUES and when it cannot. With DEBUG1, we can see the
+-- recursive planning, so we can detect the pushdown
+SET client_min_messages TO DEBUG1;
+-- values in WHERE clause
+WITH cte_1 (num,letter) AS (VALUES (1, 'one'), (2, 'two'), (3, 'three'))
+SELECT
+	count(*)
+FROM
+	test_values
+WHERE key IN (SELECT num FROM cte_1);
+DEBUG:  CTE cte_1 is going to be inlined via distributed planning
+ count
+---------------------------------------------------------------------
+     3
+(1 row)
+
+-- values in WHERE clause with DISTINCT
+WITH cte_1 (num,letter) AS (VALUES (1, 'one'), (2, 'two'), (3, 'three'))
+SELECT
+	count(*)
+FROM
+	test_values
+WHERE key IN (SELECT DISTINCT num FROM cte_1);
+DEBUG:  CTE cte_1 is going to be inlined via distributed planning
+ count
+---------------------------------------------------------------------
+     3
+(1 row)
+
+-- we can control the materialization threshold via GUC
+-- we set it 2, and the query has 3 tuples, so the planner
+-- decides to materialize the VALUES clause
+BEGIN;
+	SET LOCAL citus.values_materialization_threshold TO 2;
+	WITH cte_1 (num,letter) AS (VALUES (1, 'one'), (2, 'two'), (3, 'three'))
+	SELECT
+		count(*)
+	FROM
+		test_values
+	WHERE key IN (SELECT DISTINCT num FROM cte_1);
+DEBUG:  CTE cte_1 is going to be inlined via distributed planning
+DEBUG:  generating subplan XXX_1 for subquery SELECT column1 AS num, column2 AS letter FROM (VALUES (1,'one'::text), (2,'two'::text), (3,'three'::text)) "*VALUES*"
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM values_subquery.test_values WHERE (key OPERATOR(pg_catalog.=) ANY (SELECT DISTINCT cte_1.num FROM (SELECT intermediate_result.num, intermediate_result.letter FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(num integer, letter text)) cte_1))
+ count
+---------------------------------------------------------------------
+     3
+(1 row)
+
+COMMIT;
+-- we can control the materialization threshold via GUC
+-- we set it -1, and the query is never materialized
+-- decides to materialize the VALUES clause
+BEGIN;
+	SET LOCAL citus.values_materialization_threshold TO -1;
+	WITH cte_1 (num,letter) AS (VALUES (1, 'one'), (2, 'two'), (3, 'three'))
+	SELECT
+		count(*)
+	FROM
+		test_values
+	WHERE key IN (SELECT DISTINCT num FROM cte_1);
+DEBUG:  CTE cte_1 is going to be inlined via distributed planning
+ count
+---------------------------------------------------------------------
+     3
+(1 row)
+
+COMMIT;
+-- values with repeat can be pushed down
+WITH cte_1 (letter) AS (VALUES (repeat('1',10)))
+SELECT
+	count(*)
+FROM
+	test_values
+WHERE value IN (SELECT DISTINCT letter FROM cte_1);
+DEBUG:  CTE cte_1 is going to be inlined via distributed planning
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+-- values in WHERE clause with DISTINCT, and CTE defined in subquery
+SELECT
+	count(*)
+FROM
+	test_values
+WHERE key
+	IN
+	(WITH cte_1 (num,letter) AS (VALUES (1, 'one'), (2, 'two'), (3, 'three'))
+	 SELECT DISTINCT num FROM cte_1);
+DEBUG:  CTE cte_1 is going to be inlined via distributed planning
+ count
+---------------------------------------------------------------------
+     3
+(1 row)
+
+-- values in WHERE clause within a subquery
+WITH cte_1 (num,letter) AS (VALUES (1, '1'), (2, '2'), (3, '3'))
+SELECT
+	count(*)
+FROM
+	test_values
+WHERE key
+	IN
+(SELECT key FROM test_values WHERE value NOT IN (SELECT letter FROM cte_1) GROUP BY key);
+DEBUG:  CTE cte_1 is going to be inlined via distributed planning
+ count
+---------------------------------------------------------------------
+    98
+(1 row)
+
+-- VALUES nested multiple CTEs
+WITH cte_1 (num,letter) AS (VALUES (1, '1'), (2, '2'), (3, '3')),
+	 cte_2 (num, letter) AS (SELECT * FROM cte_1)
+SELECT count(DISTINCT key) FROM test_values WHERE key >ANY(SELECT num FROM cte_2);
+DEBUG:  CTE cte_1 is going to be inlined via distributed planning
+DEBUG:  CTE cte_2 is going to be inlined via distributed planning
+ count
+---------------------------------------------------------------------
+    99
+(1 row)
+
+-- values with set operations can be pushed down as long as
+-- they are JOINed with a distributed table
+SELECT count(*) FROM
+(
+	(WITH cte_1 (num,letter) AS (VALUES (1, '1'), (2, '2'))
+	SELECT key FROM test_values WHERE key >ANY(SELECT num FROM cte_1))
+	UNION
+	(WITH cte_1 (num,letter) AS (VALUES (2, '2'), (3, '3'))
+	SELECT key FROM test_values WHERE key >ANY(SELECT num FROM cte_1))
+) as foo;
+DEBUG:  CTE cte_1 is going to be inlined via distributed planning
+DEBUG:  CTE cte_1 is going to be inlined via distributed planning
+ count
+---------------------------------------------------------------------
+    99
+(1 row)
+
+-- values with set operations can be pushed down as long as
+-- they are JOINed with a distributed table
+SELECT count(*) FROM
+(
+	(WITH cte_1 (num,letter) AS (VALUES (1, '1'), (2, '2'))
+	SELECT key FROM test_values WHERE key >ANY(SELECT num FROM cte_1))
+	UNION ALL
+	(WITH cte_1 (num,letter) AS (VALUES (2, '2'), (3, '3'))
+	SELECT key FROM test_values WHERE key >ANY(SELECT num FROM cte_1))
+) as foo GROUP BY key ORDER BY 1 DESC LIMIT 3;
+DEBUG:  CTE cte_1 is going to be inlined via distributed planning
+DEBUG:  CTE cte_1 is going to be inlined via distributed planning
+DEBUG:  push down of limit count: 3
+ count
+---------------------------------------------------------------------
+     2
+     2
+     2
+(3 rows)
+
+-- values with set operations cannot be pushed along with
+-- distributed tables
+SELECT count(*) FROM
+(
+	(WITH cte_1 (num,letter) AS (VALUES (1, '1'), (2, '2'))
+	SELECT num FROM cte_1)
+	UNION
+	(SELECT key FROM test_values)
+) as foo;
+DEBUG:  CTE cte_1 is going to be inlined via distributed planning
+DEBUG:  generating subplan XXX_1 for subquery SELECT key FROM values_subquery.test_values
+DEBUG:  generating subplan XXX_2 for subquery SELECT cte_1.num FROM (SELECT "*VALUES*".column1 AS num, "*VALUES*".column2 AS letter FROM (VALUES (1,'1'::text), (2,'2'::text)) "*VALUES*") cte_1 UNION SELECT intermediate_result.key FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer)
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.num FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(num integer)) foo
+ count
+---------------------------------------------------------------------
+   101
+(1 row)
+
+-- values with set operations cannot be pushed along with
+-- distributed tables
+SELECT count(*) FROM
+(
+	(WITH cte_1 (num,letter) AS (VALUES (1, '1'), (2, '2'))
+	SELECT num FROM cte_1)
+	UNION ALL
+	(SELECT key FROM test_values)
+) as foo;
+DEBUG:  CTE cte_1 is going to be inlined via distributed planning
+DEBUG:  generating subplan XXX_1 for subquery SELECT key FROM values_subquery.test_values
+DEBUG:  generating subplan XXX_2 for subquery SELECT cte_1.num FROM (SELECT "*VALUES*".column1 AS num, "*VALUES*".column2 AS letter FROM (VALUES (1,'1'::text), (2,'2'::text)) "*VALUES*") cte_1 UNION ALL SELECT intermediate_result.key FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer)
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.num FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(num integer)) foo
+ count
+---------------------------------------------------------------------
+   103
+(1 row)
+
+-- values in WHERE clause with a subquery can be pushed down
+SELECT
+	count(*)
+FROM
+	test_values
+WHERE key IN (SELECT num FROM (VALUES (1, 'one'), (2, 'two'), (3, 'three')) as t(num, v));
+ count
+---------------------------------------------------------------------
+     3
+(1 row)
+
+-- values with INNER JOIN
+SELECT
+	count(*)
+FROM
+	test_values
+		JOIN
+	(SELECT a,b FROM (VALUES (1, 'one'), (2, 'two'), (3, 'three')) as t(a,b) ) as foo (num,letter)
+ON (key = num);
+ count
+---------------------------------------------------------------------
+     3
+(1 row)
+
+-- values with supported OUTER JOIN
+SELECT
+	count(*)
+FROM
+	test_values
+		LEFT JOIN
+	(SELECT a,b FROM (VALUES (1, 'one'), (2, 'two'), (3, 'three')) as t(a,b) ) as foo (num,letter)
+ON (key = num);
+ count
+---------------------------------------------------------------------
+   101
+(1 row)
+
+-- VALUES with unsupported OUTER join
+SELECT
+	count(*)
+FROM
+	test_values
+		RIGHT JOIN
+	(SELECT a,b FROM (VALUES (1, 'one'), (2, 'two'), (3, 'three')) as t(a,b) ) as foo (num,letter)
+ON (key = num);
+ERROR:  cannot pushdown the subquery
+DETAIL:  There exist a VALUES clause in the outer part of the outer join
+-- values with router queries
+SELECT
+	count(*)
+FROM
+	test_values
+		LEFT JOIN
+	(SELECT a,b FROM (VALUES (1, 'one'), (2, 'two'), (3, 'three')) as t(a,b) ) as foo (num,letter)
+ON (key = num) WHERE key = 1;
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+-- values with reference tables
+SELECT
+	count(*)
+FROM
+	test_values_ref
+		LEFT JOIN
+	(SELECT a,b FROM (VALUES (1, 'one'), (2, 'two'), (3, 'three')) as t(a,b) ) as foo (num,letter)
+ON (key = num);
+ count
+---------------------------------------------------------------------
+   101
+(1 row)
+
+-- values with non-coloated subquery join
+-- VALUES can still be pushed down, the recursive planning
+-- happens for non-colocated join between tables
+SELECT
+	count(*)
+FROM
+	test_values WHERE key
+		NOT IN
+	(WITH cte_1 (num,letter) AS (VALUES (1, 'one'), (2, 'two'), (3, 'three'))
+	 SELECT key FROM test_values WHERE value NOT IN (SELECT letter FROM cte_1));
+DEBUG:  CTE cte_1 is going to be inlined via distributed planning
+DEBUG:  generating subplan XXX_1 for subquery SELECT key FROM values_subquery.test_values WHERE (NOT (value OPERATOR(pg_catalog.=) ANY (SELECT cte_1.letter FROM (SELECT "*VALUES*".column1 AS num, "*VALUES*".column2 AS letter FROM (VALUES (1,'one'::text), (2,'two'::text), (3,'three'::text)) "*VALUES*") cte_1)))
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM values_subquery.test_values WHERE (NOT (key OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.key FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer))))
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+-- values can be recursively planned if merge step is required
+WITH cte_1 (num,letter) AS NOT MATERIALIZED (VALUES (1, 'one'), (2, 'two'), (3, 'three')),
+cte_2 (num,letter) AS NOT MATERIALIZED  (VALUES (1, 'one'), (2, 'two'), (3, 'three'))
+SELECT
+	count(*)
+FROM
+	test_values
+		WHERE
+			key IN (SELECT count(DISTINCT num) FROM cte_1)
+				AND
+			key IN (SELECT num FROM cte_2 ORDER BY letter LIMIT 1)
+				AND
+			key IN (SELECT max(num) FROM cte_1 JOIN cte_2 USING (num));
+DEBUG:  CTE cte_1 is going to be inlined via distributed planning
+DEBUG:  CTE cte_2 is going to be inlined via distributed planning
+DEBUG:  generating subplan XXX_1 for subquery SELECT count(DISTINCT num) AS count FROM (SELECT "*VALUES*".column1 AS num, "*VALUES*".column2 AS letter FROM (VALUES (1,'one'::text), (2,'two'::text), (3,'three'::text)) "*VALUES*") cte_1
+DEBUG:  generating subplan XXX_2 for subquery SELECT num FROM (SELECT "*VALUES*".column1 AS num, "*VALUES*".column2 AS letter FROM (VALUES (1,'one'::text), (2,'two'::text), (3,'three'::text)) "*VALUES*") cte_2 ORDER BY letter LIMIT 1
+DEBUG:  generating subplan XXX_3 for subquery SELECT max(cte_1.num) AS max FROM ((SELECT "*VALUES*".column1 AS num, "*VALUES*".column2 AS letter FROM (VALUES (1,'one'::text), (2,'two'::text), (3,'three'::text)) "*VALUES*") cte_1 JOIN (SELECT "*VALUES*".column1 AS num, "*VALUES*".column2 AS letter FROM (VALUES (1,'one'::text), (2,'two'::text), (3,'three'::text)) "*VALUES*") cte_2 USING (num))
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM values_subquery.test_values WHERE ((key OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.count FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(count bigint))) AND (key OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.num FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(num integer))) AND (key OPERATOR(pg_catalog.=) ANY (SELECT intermediate_result.max FROM read_intermediate_result('XXX_3'::text, 'binary'::citus_copy_format) intermediate_result(max integer))))
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+-- some more complex joins
+-- in theory we can pushdown the VALUES here as well
+-- but to behave consistently with other recurring tuples
+-- we prefer recursive planning
+SELECT count(*) as subquery_count
+FROM (
+  SELECT
+    key
+  FROM
+    test_values
+  WHERE
+    (value = '5' OR value = '13')
+  GROUP BY key HAVING count(distinct value) < 2) as a
+  LEFT JOIN (
+  SELECT
+    (SELECT a FROM (VALUES (1, 'one')) as t(a,b))
+  ) AS foo (num)
+  ON a.key = foo.num
+WHERE foo.num IS NULL
+GROUP BY a.key;
+DEBUG:  generating subplan XXX_1 for subquery SELECT (SELECT t.a FROM (VALUES (1,'one'::text)) t(a, b)) AS a
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS subquery_count FROM ((SELECT test_values.key FROM values_subquery.test_values WHERE ((test_values.value OPERATOR(pg_catalog.=) '5'::text) OR (test_values.value OPERATOR(pg_catalog.=) '13'::text)) GROUP BY test_values.key HAVING (count(DISTINCT test_values.value) OPERATOR(pg_catalog.<) 2)) a LEFT JOIN (SELECT intermediate_result.a FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer)) foo(num) ON ((a.key OPERATOR(pg_catalog.=) foo.num))) WHERE (foo.num IS NULL) GROUP BY a.key
+ subquery_count
+---------------------------------------------------------------------
+              1
+              1
+(2 rows)
+
+-- only immutable functions can be pushed down
+WITH cte_1 (num,letter) AS (VALUES (random(), 'one'), (2, 'two'), (3, 'three'))
+SELECT
+	count(*) > 0
+FROM
+	test_values
+WHERE key IN (SELECT num FROM cte_1);
+DEBUG:  generating subplan XXX_1 for CTE cte_1: VALUES (random(),'one'::text), (2,'two'::text), (3,'three'::text)
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT (count(*) OPERATOR(pg_catalog.>) 0) FROM values_subquery.test_values WHERE ((key)::double precision OPERATOR(pg_catalog.=) ANY (SELECT cte_1.num FROM (SELECT intermediate_result.column1 AS num, intermediate_result.column2 AS letter FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(column1 double precision, column2 text)) cte_1))
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- only immutable functions can be pushed down
+SELECT
+	count(*)
+FROM
+	test_values
+WHERE key IN (SELECT num FROM (VALUES (random(), 'one'), (2, 'two'), (3, 'three')) as t(num, v));
+DEBUG:  generating subplan XXX_1 for subquery VALUES (random(),'one'::text), (2,'two'::text), (3,'three'::text)
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM values_subquery.test_values WHERE ((key)::double precision OPERATOR(pg_catalog.=) ANY (SELECT t.num FROM (SELECT intermediate_result.column1, intermediate_result.column2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(column1 double precision, column2 text)) t(num, v)))
+ count
+---------------------------------------------------------------------
+     2
+(1 row)
+
+-- only immutable functions can be pushed down
+SELECT
+	count(*)
+FROM
+	test_values
+		JOIN
+	(SELECT a,b FROM (VALUES (1, 'one'), (2, 'two'), (random(), 'three')) as t(a,b) ) as foo (num,letter)
+ON (key = num);
+DEBUG:  generating subplan XXX_1 for subquery VALUES (1,'one'::text), (2,'two'::text), (random(),'three'::text)
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (values_subquery.test_values JOIN (SELECT t.a, t.b FROM (SELECT intermediate_result.column1, intermediate_result.column2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(column1 double precision, column2 text)) t(a, b)) foo(num, letter) ON (((test_values.key)::double precision OPERATOR(pg_catalog.=) foo.num)))
+ count
+---------------------------------------------------------------------
+     2
+(1 row)
+
+-- materialized CTEs are recursively planned always
+WITH cte_1 (num,letter) AS MATERIALIZED (VALUES (1, 'one'), (2, 'two'), (3, 'three'))
+SELECT
+	count(*) > 0
+FROM
+	test_values
+WHERE key IN (SELECT num FROM cte_1);
+DEBUG:  generating subplan XXX_1 for CTE cte_1: VALUES (1,'one'::text), (2,'two'::text), (3,'three'::text)
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT (count(*) OPERATOR(pg_catalog.>) 0) FROM values_subquery.test_values WHERE (key OPERATOR(pg_catalog.=) ANY (SELECT cte_1.num FROM (SELECT intermediate_result.column1 AS num, intermediate_result.column2 AS letter FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(column1 integer, column2 text)) cte_1))
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- because the FROM clause recurs, the subquery in WHERE
+-- clause is recursively planned
+SELECT
+	num
+FROM
+	(VALUES (1, 'one'), (2, 'two'), (3, 'three')) as t(num, v)
+WHERE num > (SELECT max(key) FROM test_values);
+DEBUG:  generating subplan XXX_1 for subquery SELECT max(key) AS max FROM values_subquery.test_values
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT num FROM (VALUES (1,'one'::text), (2,'two'::text), (3,'three'::text)) t(num, v) WHERE (num OPERATOR(pg_catalog.>) (SELECT intermediate_result.max FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(max integer)))
+ num
+---------------------------------------------------------------------
+(0 rows)
+
+-- but, we cannot recursively plan if the subquery that VALUEs is correlated
+SELECT
+	*
+FROM
+	test_values as t1
+		JOIN LATERAL (
+			SELECT
+				t1.key
+			FROM
+				(VALUES (1, 'one'), (2, 'two'), (3, 'three')) as t(num, v)
+				  WHERE num > (SELECT max(key) FROM test_values)) as foo
+	ON (true);
+DEBUG:  generating subplan XXX_1 for subquery SELECT max(key) AS max FROM values_subquery.test_values
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT t1.key, t1.value, t1.data, foo.key FROM (values_subquery.test_values t1 JOIN LATERAL (SELECT t1.key FROM (VALUES (1,'one'::text), (2,'two'::text), (3,'three'::text)) t(num, v) WHERE (t.num OPERATOR(pg_catalog.>) (SELECT intermediate_result.max FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(max integer)))) foo ON (true))
+ERROR:  correlated subqueries are not supported when the FROM clause contains VALUES
+-- VALUES can be the inner relationship in a join
+SELECT count(*) FROM
+  (SELECT random() FROM test_values JOIN (SELECT a, b FROM (VALUES (1, 'one'), (2, 'two'), (3, 'three')) as t(a,b)) as values_data(a,b)
+  ON test_values.key > values_data.a) subquery_1;
+ count
+---------------------------------------------------------------------
+   294
+(1 row)
+
+-- VALUES can be the left relationship in a join
+SELECT count(*) FROM
+  (SELECT random() FROM test_values LEFT JOIN (SELECT a, b FROM (VALUES (1, 'one'), (2, 'two'), (3, 'three')) as t(a,b)) as values_data(a,b)
+  ON test_values.key > values_data.a) subquery_1;
+ count
+---------------------------------------------------------------------
+   296
+(1 row)
+
+-- VALUES cannot be the right relationship in a join
+SELECT count(*) FROM
+  (SELECT random() FROM test_values RIGHT JOIN (SELECT a, b FROM (VALUES (1, 'one'), (2, 'two'), (3, 'three')) as t(a,b)) as values_data(a,b)
+  ON test_values.key > values_data.a) subquery_1;
+ERROR:  cannot pushdown the subquery
+DETAIL:  There exist a VALUES clause in the outer part of the outer join
+-- subquery IN WHERE clause need to be recursively planned
+-- but it is correlated so cannot be pushed down
+SELECT
+  count(*)
+FROM
+ (SELECT a, b FROM (VALUES (1, 'one'), (2, 'two'), (3, 'three')) as t(a,b)) as values_data(a,b)
+WHERE
+  NOT EXISTS
+      (SELECT
+          value
+       FROM
+          test_values
+       WHERE
+          test_values.key = values_data.a
+      );
+ERROR:  correlated subqueries are not supported when the FROM clause contains VALUES
+-- we can pushdown as long as GROUP BY on dist key
+SELECT
+  count(*)
+FROM
+  test_values
+WHERE
+  key IN
+          (
+          	SELECT a FROM (VALUES (1, 'one'), (2, 'two'), (3, 'three')) as values_data(a,b)
+          )
+GROUP BY key
+ORDER BY 1 DESC
+LIMIT 3;
+DEBUG:  push down of limit count: 3
+ count
+---------------------------------------------------------------------
+     1
+     1
+     1
+(3 rows)
+
+-- CTEs are not inlined for modification queries
+-- so always recursively planned
+WITH cte_1 (num,letter) AS (VALUES (1, 'one'), (2, 'two'), (3, 'three'))
+UPDATE test_values SET value = '1' WHERE key IN (SELECT num FROM cte_1);
+DEBUG:  generating subplan XXX_1 for CTE cte_1: VALUES (1,'one'::text), (2,'two'::text), (3,'three'::text)
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: UPDATE values_subquery.test_values SET value = '1'::text WHERE (key OPERATOR(pg_catalog.=) ANY (SELECT cte_1.num FROM (SELECT intermediate_result.column1 AS num, intermediate_result.column2 AS letter FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(column1 integer, column2 text)) cte_1))
+-- we can pushdown modification queries with VALUEs
+UPDATE
+	test_values
+SET
+	value = '1'
+WHERE
+	key IN (SELECT num FROM (VALUES (1, 'one'), (2, 'two'), (3, 'three')) as t(num, v));
+-- we can pushdown modification queries with VALUEs as long as they contain immutable functions
+UPDATE
+	test_values
+SET
+	value = '1'
+WHERE
+	key IN (SELECT num FROM (VALUES (random(), 'one'), (2, 'two'), (3, 'three')) as t(num, v));
+DEBUG:  generating subplan XXX_1 for subquery VALUES (random(),'one'::text), (2,'two'::text), (3,'three'::text)
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: UPDATE values_subquery.test_values SET value = '1'::text WHERE ((key)::double precision OPERATOR(pg_catalog.=) ANY (SELECT t.num FROM (SELECT intermediate_result.column1, intermediate_result.column2 FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(column1 double precision, column2 text)) t(num, v)))
+-- prepared statements should be fine to pushdown
+PREPARE test_values_pushdown(int, int,int) AS
+WITH cte_1 (num,letter) AS (VALUES ($1, 'one'), ($2, 'two'), ($3, 'three'))
+SELECT
+	count(*)
+FROM
+	test_values
+WHERE key IN (SELECT num FROM cte_1);
+EXECUTE test_values_pushdown(1,2,3);
+DEBUG:  CTE cte_1 is going to be inlined via distributed planning
+ count
+---------------------------------------------------------------------
+     3
+(1 row)
+
+EXECUTE test_values_pushdown(1,2,3);
+DEBUG:  CTE cte_1 is going to be inlined via distributed planning
+ count
+---------------------------------------------------------------------
+     3
+(1 row)
+
+EXECUTE test_values_pushdown(1,2,3);
+DEBUG:  CTE cte_1 is going to be inlined via distributed planning
+ count
+---------------------------------------------------------------------
+     3
+(1 row)
+
+EXECUTE test_values_pushdown(1,2,3);
+DEBUG:  CTE cte_1 is going to be inlined via distributed planning
+ count
+---------------------------------------------------------------------
+     3
+(1 row)
+
+EXECUTE test_values_pushdown(1,2,3);
+DEBUG:  CTE cte_1 is going to be inlined via distributed planning
+ count
+---------------------------------------------------------------------
+     3
+(1 row)
+
+EXECUTE test_values_pushdown(1,2,3);
+DEBUG:  CTE cte_1 is going to be inlined via distributed planning
+DEBUG:  CTE cte_1 is going to be inlined via distributed planning
+ count
+---------------------------------------------------------------------
+     3
+(1 row)
+
+EXECUTE test_values_pushdown(1,2,3);
+DEBUG:  CTE cte_1 is going to be inlined via distributed planning
+ count
+---------------------------------------------------------------------
+     3
+(1 row)
+
+-- prepared statements with volatile functtions should be still pushed down
+-- because the function is evaluated on the coordinator
+CREATE OR REPLACE FUNCTION fixed_volatile_value() RETURNS integer VOLATILE AS $$
+        BEGIN
+                RAISE NOTICE 'evaluated on the coordinator';
+                RETURN 1;
+        END;
+$$ LANGUAGE plpgsql;
+EXECUTE test_values_pushdown(fixed_volatile_value(),2,3);
+NOTICE:  evaluated on the coordinator
+CONTEXT:  PL/pgSQL function fixed_volatile_value() line 3 at RAISE
+DEBUG:  CTE cte_1 is going to be inlined via distributed planning
+ count
+---------------------------------------------------------------------
+     3
+(1 row)
+
+-- threshold should trigger materialization of VALUES in the first
+-- statement and pushdown in the second as -1 disables materialization
+BEGIN;
+	SET LOCAL citus.values_materialization_threshold TO 0;
+	EXECUTE test_values_pushdown(1,2,3);
+DEBUG:  CTE cte_1 is going to be inlined via distributed planning
+DEBUG:  generating subplan XXX_1 for subquery SELECT column1 AS num, column2 AS letter FROM (VALUES (1,'one'::text), (2,'two'::text), (3,'three'::text)) "*VALUES*"
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM values_subquery.test_values WHERE (key OPERATOR(pg_catalog.=) ANY (SELECT cte_1.num FROM (SELECT intermediate_result.num, intermediate_result.letter FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(num integer, letter text)) cte_1))
+ count
+---------------------------------------------------------------------
+     3
+(1 row)
+
+	SET LOCAL citus.values_materialization_threshold TO -1;
+	EXECUTE test_values_pushdown(1,2,3);
+DEBUG:  CTE cte_1 is going to be inlined via distributed planning
+ count
+---------------------------------------------------------------------
+     3
+(1 row)
+
+COMMIT;
+RESET client_min_messages;
+DROP SCHEMA values_subquery CASCADE;
+NOTICE:  drop cascades to 3 other objects
+DETAIL:  drop cascades to table test_values
+drop cascades to table test_values_ref
+drop cascades to function fixed_volatile_value()
