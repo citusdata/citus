@@ -51,8 +51,9 @@ CREATE OR REPLACE FUNCTION pg_catalog.master_create_worker_shards(table_name tex
     AS 'citus', $$master_create_worker_shards$$
     LANGUAGE C STRICT;
 
--- Create a test table with constraints and SERIAL
-CREATE TABLE mx_test_table (col_1 int UNIQUE, col_2 text NOT NULL, col_3 BIGSERIAL);
+-- Create a test table with constraints and SERIAL and default from user defined sequence
+CREATE SEQUENCE user_defined_seq;
+CREATE TABLE mx_test_table (col_1 int UNIQUE, col_2 text NOT NULL, col_3 BIGSERIAL, col_4 BIGINT DEFAULT nextval('user_defined_seq'));
 SELECT master_create_distributed_table('mx_test_table', 'col_1', 'hash');
 SELECT master_create_worker_shards('mx_test_table', 8, 1);
 

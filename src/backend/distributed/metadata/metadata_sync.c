@@ -25,6 +25,7 @@
 #include "access/xact.h"
 #include "catalog/dependency.h"
 #include "catalog/indexing.h"
+#include "catalog/pg_attrdef.h"
 #include "catalog/pg_depend.h"
 #include "catalog/pg_foreign_server.h"
 #include "catalog/pg_namespace.h"
@@ -85,6 +86,9 @@ static GrantStmt * GenerateGrantOnSchemaStmtForRights(Oid roleOid,
 static char * GenerateSetRoleQuery(Oid roleOid);
 static void MetadataSyncSigTermHandler(SIGNAL_ARGS);
 static void MetadataSyncSigAlrmHandler(SIGNAL_ARGS);
+
+static List * GetDependentSequencesWithRelation(Oid relationId);
+static List * GetSequencesFromAttrDef(Oid attrdefOid);
 
 PG_FUNCTION_INFO_V1(start_metadata_sync_to_node);
 PG_FUNCTION_INFO_V1(stop_metadata_sync_to_node);
@@ -1042,7 +1046,9 @@ List *
 SequenceDDLCommandsForTable(Oid relationId)
 {
 	List *sequenceDDLList = NIL;
-	List *ownedSequences = GetSequencesOwnedByRelation(relationId);
+
+	/* List *ownedSequences = GetSequencesOwnedByRelation(relationId); */
+	List *ownedSequences = GetDependentSequencesWithRelation(relationId);
 	char *ownerName = TableOwner(relationId);
 
 	Oid sequenceOid = InvalidOid;
@@ -1072,6 +1078,103 @@ SequenceDDLCommandsForTable(Oid relationId)
 	}
 
 	return sequenceDDLList;
+}
+
+
+/*
+ * GetDependentSequencesWithRelation
+ */
+static List *
+GetDependentSequencesWithRelation(Oid relationId)
+{
+	List *attrdefResult = NIL;
+	ScanKeyData key[2];
+	HeapTuple tup;
+
+	Relation depRel = table_open(DependRelationId, AccessShareLock);
+
+	ScanKeyInit(&key[0],
+				Anum_pg_depend_refclassid,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(RelationRelationId));
+	ScanKeyInit(&key[1],
+				Anum_pg_depend_refobjid,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(relationId));
+
+	SysScanDesc scan = systable_beginscan(depRel, DependReferenceIndexId, true,
+										  NULL, 2, key);
+
+	while (HeapTupleIsValid(tup = systable_getnext(scan)))
+	{
+		Form_pg_depend deprec = (Form_pg_depend) GETSTRUCT(tup);
+
+		if (deprec->classid == AttrDefaultRelationId &&
+			deprec->objsubid == 0 &&
+			deprec->refobjsubid != 0 &&
+			deprec->deptype == DEPENDENCY_AUTO)
+		{
+			attrdefResult = lappend_oid(attrdefResult, deprec->objid);
+		}
+	}
+
+	systable_endscan(scan);
+
+	table_close(depRel, AccessShareLock);
+
+	List *sequencesResult = NIL;
+	Oid attrdefOid = InvalidOid;
+	foreach_oid(attrdefOid, attrdefResult)
+	{
+		sequencesResult = list_concat(sequencesResult, GetSequencesFromAttrDef(
+										  attrdefOid));
+	}
+
+	return sequencesResult;
+}
+
+
+/*
+ * GetSequencesFromAttrDef
+ */
+static List *
+GetSequencesFromAttrDef(Oid attrdefOid)
+{
+	List *sequencesResult = NIL;
+	ScanKeyData key[2];
+	HeapTuple tup;
+
+	Relation depRel = table_open(DependRelationId, AccessShareLock);
+
+	ScanKeyInit(&key[0],
+				Anum_pg_depend_classid,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(AttrDefaultRelationId));
+	ScanKeyInit(&key[1],
+				Anum_pg_depend_objid,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(attrdefOid));
+
+	SysScanDesc scan = systable_beginscan(depRel, DependDependerIndexId, true,
+										  NULL, 2, key);
+
+	while (HeapTupleIsValid(tup = systable_getnext(scan)))
+	{
+		Form_pg_depend deprec = (Form_pg_depend) GETSTRUCT(tup);
+
+		if (deprec->refclassid == RelationRelationId &&
+			deprec->deptype == DEPENDENCY_NORMAL && get_rel_relkind(deprec->refobjid) ==
+			RELKIND_SEQUENCE)
+		{
+			sequencesResult = lappend_oid(sequencesResult, deprec->refobjid);
+		}
+	}
+
+	systable_endscan(scan);
+
+	table_close(depRel, AccessShareLock);
+
+	return sequencesResult;
 }
 
 
