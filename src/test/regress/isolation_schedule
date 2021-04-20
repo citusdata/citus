@@ -72,6 +72,7 @@ test: isolation_blocking_move_multi_shard_commands
 test: isolation_blocking_move_single_shard_commands_on_mx
 test: isolation_blocking_move_multi_shard_commands_on_mx
 test: isolation_shard_rebalancer
+test: isolation_rebalancer_deferred_drop
 
 # MX tests
 test: isolation_reference_on_mx
