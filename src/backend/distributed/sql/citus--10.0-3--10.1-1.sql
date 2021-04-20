@@ -6,3 +6,4 @@
 #include "udfs/worker_partitioned_relation_size/10.1-1.sql"
 #include "udfs/worker_partitioned_table_size/10.1-1.sql"
 #include "udfs/citus_finish_pg_upgrade/10.1-1.sql"
+#include "udfs/citus_delete_marked_shards/10.1-1.sql"

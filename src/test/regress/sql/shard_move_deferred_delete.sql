@@ -28,7 +28,7 @@ SELECT run_command_on_workers($cmd$
 $cmd$);
 
 -- execute delayed removal
-SELECT public.master_defer_delete_shards();
+SELECT public.citus_delete_marked_shards();
 
 -- we expect the shard to be on only the second worker
 SELECT run_command_on_workers($cmd$

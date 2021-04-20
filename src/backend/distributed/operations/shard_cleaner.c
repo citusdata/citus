@@ -20,14 +20,14 @@
 
 
 /* declarations for dynamic loading */
-PG_FUNCTION_INFO_V1(master_defer_delete_shards);
+PG_FUNCTION_INFO_V1(citus_delete_marked_shards);
 
 
 static int DropMarkedShards(void);
 
 
 /*
- * master_defer_delete_shards implements a user-facing UDF to deleter orphaned shards that
+ * citus_delete_marked_shards implements a user-facing UDF to deleter orphaned shards that
  * are still haning around in the system. These shards are orphaned by previous actions
  * that were not directly able to delete the placements eg. shard moving or dropping of a
  * distributed table while one of the data nodes was not online.
@@ -39,7 +39,7 @@ static int DropMarkedShards(void);
  * The function takes no arguments and runs cluster wide
  */
 Datum
-master_defer_delete_shards(PG_FUNCTION_ARGS)
+citus_delete_marked_shards(PG_FUNCTION_ARGS)
 {
 	CheckCitusVersion(ERROR);
 	EnsureCoordinator();

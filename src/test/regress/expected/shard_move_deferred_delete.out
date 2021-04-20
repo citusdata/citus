@@ -42,8 +42,8 @@ $cmd$);
 (2 rows)
 
 -- execute delayed removal
-SELECT public.master_defer_delete_shards();
- master_defer_delete_shards
+SELECT public.citus_delete_marked_shards();
+ citus_delete_marked_shards
 ---------------------------------------------------------------------
                           1
 (1 row)
