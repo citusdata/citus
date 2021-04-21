@@ -16,6 +16,7 @@
 #include "distributed/coordinator_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/shard_cleaner.h"
+#include "distributed/resource_lock.h"
 #include "distributed/worker_transaction.h"
 
 
@@ -23,7 +24,7 @@
 PG_FUNCTION_INFO_V1(master_defer_delete_shards);
 
 
-static int DropMarkedShards(void);
+static int DropMarkedShards(bool waitForCleanupLock);
 
 
 /*
@@ -44,7 +45,8 @@ master_defer_delete_shards(PG_FUNCTION_ARGS)
 	CheckCitusVersion(ERROR);
 	EnsureCoordinator();
 
-	int droppedShardCount = DropMarkedShards();
+	bool waitForCleanupLock = true;
+	int droppedShardCount = DropMarkedShards(waitForCleanupLock);
 
 	PG_RETURN_INT32(droppedShardCount);
 }
@@ -55,14 +57,14 @@ master_defer_delete_shards(PG_FUNCTION_ARGS)
  * any errors to make it safe to use in the maintenance daemon.
  */
 int
-TryDropMarkedShards(void)
+TryDropMarkedShards(bool waitForCleanupLock)
 {
 	int droppedShardCount = 0;
 	MemoryContext savedContext = CurrentMemoryContext;
 
 	PG_TRY();
 	{
-		droppedShardCount = DropMarkedShards();
+		droppedShardCount = DropMarkedShards(waitForCleanupLock);
 	}
 	PG_CATCH();
 	{
@@ -88,9 +90,15 @@ TryDropMarkedShards(void)
  * group and continues with others. The group that has been skipped will be
  * removed at a later time when there are no locks held anymore on those
  * placements.
+ *
+ * Before doing any of this it will take an exclusive PlacementCleanup lock.
+ * This is to ensure that this function is not being run concurrently.
+ * Otherwise really bad race conditions are possible, such as removing all
+ * placements of a shard. waitForCleanupLock indicates if this function should
+ * wait for this lock or returns with a warning.
  */
 static int
-DropMarkedShards(void)
+DropMarkedShards(bool waitForCleanupLock)
 {
 	int removedShardCount = 0;
 	ListCell *shardPlacementCell = NULL;
@@ -98,6 +106,16 @@ DropMarkedShards(void)
 	if (!IsCoordinator())
 	{
 		return removedShardCount;
+	}
+
+	if (waitForCleanupLock)
+	{
+		LockPlacementCleanup();
+	}
+	else if (!TryLockPlacementCleanup())
+	{
+		ereport(WARNING, (errmsg("could not acquire lock to cleanup placements")));
+		return 0;
 	}
 
 	List *shardPlacementList = AllShardPlacementsWithShardPlacementState(
