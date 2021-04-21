@@ -1163,6 +1163,27 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
+		"citus.values_materialization_threshold",
+		gettext_noop("Sets the maximum number of rows allowed for pushing down "
+					 "VALUES clause in multi-shard queries. If the number of "
+					 "rows exceeds the threshold, the VALUES is materialized "
+					 "via pull-push execution. When set to -1, materialization "
+					 "is disabled. When set to 0, all VALUES are materialized."),
+		gettext_noop("When the VALUES is pushed down (i.e., not materialized), "
+					 "the VALUES clause needs to be deparsed for every shard on "
+					 "the coordinator - and parsed on the workers. As this "
+					 "setting increased, the associated overhead is multiplied "
+					 "by the shard count. When materialized, the VALUES is "
+					 "deparsed and parsed once. The downside of materialization "
+					 "is that Postgres may choose a poor plan when joining "
+					 "the materialized result with tables."),
+		&ValuesMaterializationThreshold,
+		100, -1, INT_MAX,
+		PGC_USERSET,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
+
+	DefineCustomIntVariable(
 		"citus.max_intermediate_result_size",
 		gettext_noop("Sets the maximum size of the intermediate results in KB for "
 					 "CTEs and complex subqueries."),

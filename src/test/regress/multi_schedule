@@ -87,7 +87,7 @@ test: subqueries_deep subquery_view subquery_partitioning subqueries_not_support
 test: subquery_in_targetlist subquery_in_where subquery_complex_target_list
 test: subquery_prepared_statements
 test: non_colocated_leaf_subquery_joins non_colocated_subquery_joins non_colocated_join_order
-test: cte_inline recursive_view_local_table
+test: cte_inline recursive_view_local_table values
 test: pg13 pg12
 test: tableam
 
