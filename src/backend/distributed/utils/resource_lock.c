@@ -388,6 +388,37 @@ SetLocktagForShardDistributionMetadata(int64 shardId, LOCKTAG *tag)
 
 
 /*
+ * LockPlacementCleanup takes an exclusive lock to ensure that only one process
+ * can cleanup placements at the same time.
+ */
+void
+LockPlacementCleanup(void)
+{
+	LOCKTAG tag;
+	const bool sessionLock = false;
+	const bool dontWait = false;
+	SET_LOCKTAG_PLACEMENT_CLEANUP(tag);
+	(void) LockAcquire(&tag, ExclusiveLock, sessionLock, dontWait);
+}
+
+
+/*
+ * TryLockPlacementCleanup takes an exclusive lock to ensure that only one
+ * process can cleanup placements at the same time.
+ */
+bool
+TryLockPlacementCleanup(void)
+{
+	LOCKTAG tag;
+	const bool sessionLock = false;
+	const bool dontWait = true;
+	SET_LOCKTAG_PLACEMENT_CLEANUP(tag);
+	bool lockAcquired = LockAcquire(&tag, ExclusiveLock, sessionLock, dontWait);
+	return lockAcquired;
+}
+
+
+/*
  * LockReferencedReferenceShardDistributionMetadata acquires shard distribution
  * metadata locks with the given lock mode on the reference tables which has a
  * foreign key from the given relation.
