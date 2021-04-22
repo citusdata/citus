@@ -1387,6 +1387,21 @@ RegisterCitusConfigVariables(void)
 		GUC_UNIT_KB | GUC_STANDARD,
 		NULL, NULL, NULL);
 
+	DefineCustomBoolVariable(
+		"citus.prevent_incomplete_connection_establishment",
+		gettext_noop("When enabled, the executor waits until all the connections "
+					 "are successfully established."),
+		gettext_noop("Under some load, the executor may decide to establish some "
+					 "extra connections to further parallelize the execution. However,"
+					 "before the connection establishment is done, the execution might "
+					 "have already finished. When this GUC is set to true, the execution "
+					 "waits for such connections to be established."),
+		&PreventIncompleteConnectionEstablishment,
+		true,
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
 	DefineCustomEnumVariable(
 		"citus.propagate_set_commands",
 		gettext_noop("Sets which SET commands are propagated to workers."),
