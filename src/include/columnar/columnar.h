@@ -233,9 +233,6 @@ extern void InitColumnarOptions(Oid regclass);
 extern void SetColumnarOptions(Oid regclass, ColumnarOptions *options);
 extern bool DeleteColumnarTableOptions(Oid regclass, bool missingOk);
 extern bool ReadColumnarOptions(Oid regclass, ColumnarOptions *options);
-extern void WriteToSmgr(Relation relation, uint64 logicalOffset,
-						char *data, uint32 dataLength);
-extern StringInfo ReadFromSmgr(Relation rel, uint64 offset, uint32 size);
 extern bool IsColumnarTableAmTable(Oid relationId);
 
 /* columnar_metadata_tables.c */
@@ -271,52 +268,6 @@ extern void NonTransactionDropWriteState(Oid relfilenode);
 extern bool PendingWritesInUpperTransactions(Oid relfilenode,
 											 SubTransactionId currentSubXid);
 extern MemoryContext GetWriteContextForDebug(void);
-
-typedef struct SmgrAddr
-{
-	BlockNumber blockno;
-	uint32 offset;
-} SmgrAddr;
-
-/*
- * Map logical offsets (as tracked in the metadata) to a physical page and
- * offset where the data is kept.
- */
-static inline SmgrAddr
-logical_to_smgr(uint64 logicalOffset)
-{
-	SmgrAddr addr;
-
-	addr.blockno = logicalOffset / COLUMNAR_BYTES_PER_PAGE;
-	addr.offset = SizeOfPageHeaderData + (logicalOffset % COLUMNAR_BYTES_PER_PAGE);
-
-	return addr;
-}
-
-
-/*
- * Map a physical page adnd offset address to a logical address.
- */
-static inline uint64
-smgr_to_logical(SmgrAddr addr)
-{
-	return COLUMNAR_BYTES_PER_PAGE * addr.blockno + addr.offset - SizeOfPageHeaderData;
-}
-
-
-/*
- * Get the first usable address of next block.
- */
-static inline SmgrAddr
-next_block_start(SmgrAddr addr)
-{
-	SmgrAddr result = {
-		.blockno = addr.blockno + 1,
-		.offset = SizeOfPageHeaderData
-	};
-
-	return result;
-}
 
 
 #endif /* COLUMNAR_H */
