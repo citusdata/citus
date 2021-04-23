@@ -34,6 +34,7 @@
 #include "utils/rel.h"
 
 #include "columnar/columnar.h"
+#include "columnar/columnar_storage.h"
 #include "columnar/columnar_version_compat.h"
 
 typedef struct ChunkGroupReadState
@@ -656,8 +657,12 @@ LoadColumnBuffers(Relation relation, ColumnChunkSkipNode *chunkSkipNodeArray,
 	{
 		ColumnChunkSkipNode *chunkSkipNode = &chunkSkipNodeArray[chunkIndex];
 		uint64 existsOffset = stripeOffset + chunkSkipNode->existsChunkOffset;
-		StringInfo rawExistsBuffer = ReadFromSmgr(relation, existsOffset,
-												  chunkSkipNode->existsLength);
+		StringInfo rawExistsBuffer = makeStringInfo();
+
+		enlargeStringInfo(rawExistsBuffer, chunkSkipNode->existsLength);
+		rawExistsBuffer->len = chunkSkipNode->existsLength;
+		ColumnarStorageRead(relation, existsOffset, rawExistsBuffer->data,
+							chunkSkipNode->existsLength);
 
 		chunkBuffersArray[chunkIndex]->existsBuffer = rawExistsBuffer;
 	}
@@ -668,8 +673,12 @@ LoadColumnBuffers(Relation relation, ColumnChunkSkipNode *chunkSkipNodeArray,
 		ColumnChunkSkipNode *chunkSkipNode = &chunkSkipNodeArray[chunkIndex];
 		CompressionType compressionType = chunkSkipNode->valueCompressionType;
 		uint64 valueOffset = stripeOffset + chunkSkipNode->valueChunkOffset;
-		StringInfo rawValueBuffer = ReadFromSmgr(relation, valueOffset,
-												 chunkSkipNode->valueLength);
+		StringInfo rawValueBuffer = makeStringInfo();
+
+		enlargeStringInfo(rawValueBuffer, chunkSkipNode->valueLength);
+		rawValueBuffer->len = chunkSkipNode->valueLength;
+		ColumnarStorageRead(relation, valueOffset, rawValueBuffer->data,
+							chunkSkipNode->valueLength);
 
 		chunkBuffersArray[chunkIndex]->valueBuffer = rawValueBuffer;
 		chunkBuffersArray[chunkIndex]->valueCompressionType = compressionType;
@@ -1257,31 +1266,4 @@ ColumnDefaultValue(TupleConstr *tupleConstraints, Form_pg_attribute attributeFor
 						errhint("Expression is either mutable or "
 								"does not evaluate to constant value")));
 	}
-}
-
-
-StringInfo
-ReadFromSmgr(Relation rel, uint64 offset, uint32 size)
-{
-	StringInfo resultBuffer = makeStringInfo();
-	uint64 read = 0;
-
-	enlargeStringInfo(resultBuffer, size);
-	resultBuffer->len = size;
-
-	while (read < size)
-	{
-		SmgrAddr addr = logical_to_smgr(offset + read);
-
-		Buffer buffer = ReadBuffer(rel, addr.blockno);
-		Page page = BufferGetPage(buffer);
-		PageHeader phdr = (PageHeader) page;
-
-		uint32 to_read = Min(size - read, phdr->pd_upper - addr.offset);
-		memcpy_s(resultBuffer->data + read, size - read, page + addr.offset, to_read);
-		ReleaseBuffer(buffer);
-		read += to_read;
-	}
-
-	return resultBuffer;
 }
