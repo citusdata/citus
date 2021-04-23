@@ -181,6 +181,9 @@ RESET citus.shard_count;
 RESET citus.shard_replication_factor;
 RESET citus.replication_model;
 -- Create a user to test multiuser usage of rebalancer functions
+-- We explicitely don't create this user on worker nodes yet, so we can
+-- test some more error handling. We create them later there.
+SET citus.enable_create_role_propagation TO OFF;
 CREATE USER testrole;
 NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
 HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
@@ -624,17 +627,48 @@ SELECT * FROM table_placements_per_node;
 
 -- Check that max_shard_moves limits number of move operations
 -- First check that we error if not table owner
+-- Turn on NOTICE messages
+SET ROLE testrole;
+-- Make sure that rebalance is stopped if source or target nodes are
+-- unresponsive.
+SELECT rebalance_table_shards('rebalance_test_table',
+    shard_transfer_mode:='block_writes');
+ERROR:  target node localhost:xxxxx is not responsive
+\c - - - :worker_1_port
+SET citus.enable_create_role_propagation TO OFF;
+CREATE USER testrole;
+NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
+HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
+GRANT ALL ON SCHEMA public TO testrole;
+\c - - - :master_port
+SET client_min_messages TO WARNING;
 SET ROLE testrole;
 SELECT rebalance_table_shards('rebalance_test_table',
-    threshold := 0, max_shard_moves := 1,
     shard_transfer_mode:='block_writes');
-WARNING:  localhost:xxxxx is not responsive
- rebalance_table_shards
----------------------------------------------------------------------
-
-(1 row)
-
+ERROR:  source node localhost:xxxxx is not responsive
+\c - - - :worker_2_port
+SET citus.enable_create_role_propagation TO OFF;
+CREATE USER testrole;
+NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
+HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
+GRANT ALL ON SCHEMA public TO testrole;
+\c - - - :master_port
+SET client_min_messages TO WARNING;
+SET citus.next_shard_id TO 123010;
+SET ROLE testrole;
+SELECT rebalance_table_shards('rebalance_test_table',
+    shard_transfer_mode:='block_writes');
+ERROR:  must be owner of table rebalance_test_table
+CONTEXT:  while executing command on localhost:xxxxx
 RESET ROLE;
+-- Confirm no moves took place at all during these errors
+SELECT * FROM table_placements_per_node;
+ nodeport |     logicalrelid     | count
+---------------------------------------------------------------------
+    57637 | rebalance_test_table |     1
+    57638 | rebalance_test_table |     5
+(2 rows)
+
 SELECT rebalance_table_shards('rebalance_test_table',
     threshold := 0, max_shard_moves := 1,
     shard_transfer_mode:='block_writes');
@@ -1002,7 +1036,7 @@ SELECT * FROM get_rebalance_table_shards_plan('colocated_rebalance_test', rebala
 
 -- Check that we can call this function
 SELECT * FROM get_rebalance_progress();
- sessionid | table_name | shardid | shard_size | sourcename | sourceport | targetname | targetport | progress
+ sessionid | table_name | shardid | shard_size | sourcename | sourceport | targetname | targetport | progress | source_shard_size | target_shard_size
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -1015,7 +1049,7 @@ SELECT * FROM rebalance_table_shards('colocated_rebalance_test', threshold := 0,
 
 -- Check that we can call this function without a crash
 SELECT * FROM get_rebalance_progress();
- sessionid | table_name | shardid | shard_size | sourcename | sourceport | targetname | targetport | progress
+ sessionid | table_name | shardid | shard_size | sourcename | sourceport | targetname | targetport | progress | source_shard_size | target_shard_size
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -1314,8 +1348,6 @@ RESET search_path;
 DROP SCHEMA test_schema_support CASCADE;
 \set VERBOSITY default
 REVOKE ALL ON SCHEMA public FROM testrole;
-ERROR:  role "testrole" does not exist
-CONTEXT:  while executing command on localhost:xxxxx
 DROP USER testrole;
 -- Test costs
 set citus.shard_count = 4;

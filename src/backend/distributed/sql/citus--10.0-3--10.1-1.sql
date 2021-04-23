@@ -22,3 +22,5 @@ ON CONFLICT DO NOTHING;
 
 ALTER TABLE pg_catalog.pg_dist_rebalance_strategy ADD COLUMN improvement_threshold float4 NOT NULL default 0;
 UPDATE pg_catalog.pg_dist_rebalance_strategy SET improvement_threshold = 0.5 WHERE name = 'by_disk_size';
+
+#include "udfs/get_rebalance_progress/10.1-1.sql"

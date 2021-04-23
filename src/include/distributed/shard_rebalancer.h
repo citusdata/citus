@@ -105,7 +105,6 @@ typedef struct PlacementUpdateEventProgress
 	int sourcePort;
 	char targetName[255];
 	int targetPort;
-	uint64 shardSize;
 	uint64 progress;
 } PlacementUpdateEventProgress;
 
@@ -172,6 +171,7 @@ typedef struct RebalancePlanFunctions
 } RebalancePlanFunctions;
 
 extern int MaxRebalancerLoggedIgnoredMoves;
+extern bool RunningUnderIsolationTest;
 
 /* External function declarations */
 extern Datum shard_placement_rebalance_array(PG_FUNCTION_ARGS);

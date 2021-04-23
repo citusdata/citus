@@ -36,3 +36,8 @@ DROP FUNCTION pg_catalog.citus_add_rebalance_strategy;
 #include "../udfs/citus_add_rebalance_strategy/9.2-1.sql"
 
 ALTER TABLE pg_catalog.pg_dist_rebalance_strategy DROP COLUMN improvement_threshold;
+
+-- the migration for get_rebalance_progress from 9.0-1 was the first one,
+-- so it doesn't have a DROP. This is why we DROP manually here.
+DROP FUNCTION pg_catalog.get_rebalance_progress;
+#include "../udfs/get_rebalance_progress/9.0-1.sql"

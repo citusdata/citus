@@ -83,24 +83,7 @@ DROP EXTENSION IF EXISTS shard_rebalancer;
 #include "udfs/get_rebalance_table_shards_plan/9.0-1.sql"
 #include "udfs/replicate_table_shards/9.0-1.sql"
 #include "udfs/rebalance_table_shards/9.0-1.sql"
-
--- get_rebalance_progress returns the list of shard placement move operations along with
--- their progressions for ongoing rebalance operations.
---
-CREATE OR REPLACE FUNCTION get_rebalance_progress()
-  RETURNS TABLE(sessionid integer,
-                table_name regclass,
-                shardid bigint,
-                shard_size bigint,
-                sourcename text,
-                sourceport int,
-                targetname text,
-                targetport int,
-                progress bigint)
-  AS 'MODULE_PATHNAME'
-  LANGUAGE C STRICT;
-COMMENT ON FUNCTION get_rebalance_progress()
-    IS 'provides progress information about the ongoing rebalance operations';
+#include "udfs/get_rebalance_progress/9.0-1.sql"
 
 DROP FUNCTION master_add_node(text, integer, integer, noderole, name);
 CREATE FUNCTION master_add_node(nodename text,
