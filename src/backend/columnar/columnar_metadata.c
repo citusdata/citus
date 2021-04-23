@@ -816,8 +816,6 @@ ReserveStripe(Relation rel, uint64 sizeBytes,
 			  uint64 chunkCount, uint64 chunkGroupRowCount)
 {
 	StripeMetadata stripe = { 0 };
-	uint64 currLogicalHigh = 0;
-	uint64 highestId = 0;
 
 	/*
 	 * We take ExclusiveLock here, so two space reservations conflict.
@@ -827,26 +825,13 @@ ReserveStripe(Relation rel, uint64 sizeBytes,
 
 	uint64 storageId = ColumnarStorageGetStorageId(rel, false);
 
-	GetHighestUsedAddressAndId(storageId, &currLogicalHigh, &highestId);
-	SmgrAddr currSmgrHigh = logical_to_smgr(currLogicalHigh);
-
-	SmgrAddr resSmgrStart = next_block_start(currSmgrHigh);
-	uint64 resLogicalStart = smgr_to_logical(resSmgrStart);
-
-	uint64 resLogicalEnd = resLogicalStart + sizeBytes - 1;
-	SmgrAddr resSmgrEnd = logical_to_smgr(resLogicalEnd);
-
-	RelationOpenSmgr(rel);
-	uint64 nblocks = smgrnblocks(rel->rd_smgr, MAIN_FORKNUM);
-
-	while (resSmgrEnd.blockno >= nblocks)
-	{
-		Buffer newBuffer = ReadBuffer(rel, P_NEW);
-		ReleaseBuffer(newBuffer);
-		nblocks = smgrnblocks(rel->rd_smgr, MAIN_FORKNUM);
-	}
-
-	RelationCloseSmgr(rel);
+	/*
+	 * TODO: For now, we don't use row number reservation at all, so just use
+	 * dummy values.
+	 */
+	uint64 firstReservedRow;
+	uint64 stripeId = ColumnarStorageReserveStripe(rel, 0, &firstReservedRow);
+	uint64 resLogicalStart = ColumnarStorageReserveData(rel, sizeBytes);
 
 	stripe.fileOffset = resLogicalStart;
 	stripe.dataLength = sizeBytes;
@@ -854,7 +839,7 @@ ReserveStripe(Relation rel, uint64 sizeBytes,
 	stripe.chunkGroupRowCount = chunkGroupRowCount;
 	stripe.columnCount = columnCount;
 	stripe.rowCount = rowCount;
-	stripe.id = highestId + 1;
+	stripe.id = stripeId;
 
 	InsertStripeMetadataRow(storageId, &stripe);
 
