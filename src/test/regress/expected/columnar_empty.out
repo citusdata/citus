@@ -26,7 +26,7 @@ SELECT alter_columnar_table_set('t_compressed', chunk_group_row_limit => 100);
 SELECT * FROM columnar.options WHERE regclass = 't_compressed'::regclass;
    regclass   | chunk_group_row_limit | stripe_row_limit | compression_level | compression
 ---------------------------------------------------------------------
- t_compressed |             100 |              100 |                 3 | pglz
+ t_compressed |                   100 |              100 |                 3 | pglz
 (1 row)
 
 -- select
@@ -68,16 +68,16 @@ explain (costs off, summary off, timing off) select * from t_compressed;
 -- vacuum
 vacuum verbose t_compressed;
 INFO:  statistics for "t_compressed":
-storage id: -1
-total file size: 0, total data size: 0
+storage id: xxxxx
+total file size: 16384, total data size: 0
 compression rate: 1.00x
 total row count: 0, stripe count: 0, average rows per stripe: 0
 chunk count: 0, containing data for dropped columns: 0
 
 vacuum verbose t_uncompressed;
 INFO:  statistics for "t_uncompressed":
-storage id: -1
-total file size: 0, total data size: 0
+storage id: xxxxx
+total file size: 16384, total data size: 0
 compression rate: 1.00x
 total row count: 0, stripe count: 0, average rows per stripe: 0
 chunk count: 0, containing data for dropped columns: 0

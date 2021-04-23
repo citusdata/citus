@@ -39,8 +39,8 @@
 #define COMPRESSION_LEVEL_MAX 19
 
 /* Columnar file signature */
-#define COLUMNAR_VERSION_MAJOR 1
-#define COLUMNAR_VERSION_MINOR 7
+#define COLUMNAR_VERSION_MAJOR 2
+#define COLUMNAR_VERSION_MINOR 0
 
 /* miscellaneous defines */
 #define COLUMNAR_TUPLE_COST_MULTIPLIER 10

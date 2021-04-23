@@ -77,7 +77,7 @@ SELECT count(*) FROM columnar_truncate_test_compressed;
 SELECT pg_relation_size('columnar_truncate_test_compressed');
  pg_relation_size
 ---------------------------------------------------------------------
-                0
+            16384
 (1 row)
 
 INSERT INTO columnar_truncate_test select a, a from generate_series(1, 10) a;

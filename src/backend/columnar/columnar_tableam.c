@@ -51,6 +51,7 @@
 
 #include "columnar/columnar.h"
 #include "columnar/columnar_customscan.h"
+#include "columnar/columnar_storage.h"
 #include "columnar/columnar_tableam.h"
 #include "columnar/columnar_version_compat.h"
 #include "distributed/commands.h"
@@ -525,17 +526,24 @@ columnar_relation_set_new_filenode(Relation rel,
 						errmsg("unlogged columnar tables are not supported")));
 	}
 
-	Oid oldRelfilenode = rel->rd_node.relNode;
+	/*
+	 * If existing and new relfilenode are different, that means the existing
+	 * storage was dropped and we also need to clean up the metadata and
+	 * state. If they are equal, this is a new relation object and we don't
+	 * need to clean anything.
+	 */
+	if (rel->rd_node.relNode != newrnode->relNode)
+	{
+		MarkRelfilenodeDropped(rel->rd_node.relNode, GetCurrentSubTransactionId());
 
-	MarkRelfilenodeDropped(oldRelfilenode, GetCurrentSubTransactionId());
-
-	/* delete old relfilenode metadata */
-	DeleteMetadataRows(rel->rd_node);
+		DeleteMetadataRows(rel->rd_node);
+	}
 
 	*freezeXid = RecentXmin;
 	*minmulti = GetOldestMultiXactId();
 	SMgrRelation srel = RelationCreateStorage(*newrnode, persistence);
 
+	ColumnarStorageInit(srel, ColumnarMetadataNewStorageId());
 	InitColumnarOptions(rel->rd_id);
 
 	smgrclose(srel);
@@ -563,7 +571,9 @@ columnar_relation_nontransactional_truncate(Relation rel)
 	 */
 	RelationTruncate(rel, 0);
 
-	/* we will lazily initialize new metadata in first stripe reservation */
+	uint64 storageId = ColumnarMetadataNewStorageId();
+	RelationOpenSmgr(rel);
+	ColumnarStorageInit(rel->rd_smgr, storageId);
 }
 
 
