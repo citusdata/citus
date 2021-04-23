@@ -14,6 +14,7 @@
 
 #include "citus_version.h"
 #include "columnar/columnar.h"
+#include "columnar/columnar_storage.h"
 #include "columnar/columnar_version_compat.h"
 
 #include <sys/stat.h>
@@ -1418,4 +1419,40 @@ columnar_relation_storageid(PG_FUNCTION_ARGS)
 	relation_close(relation, AccessShareLock);
 
 	PG_RETURN_INT64(storageId);
+}
+
+
+/*
+ * ColumnarStorageUpdateIfNeeded - upgrade columnar storage to the current version by
+ * using information from the metadata tables.
+ */
+void
+ColumnarStorageUpdateIfNeeded(Relation rel, bool isUpgrade)
+{
+	if (ColumnarStorageIsCurrent(rel))
+	{
+		return;
+	}
+
+	RelationOpenSmgr(rel);
+	BlockNumber nblocks = smgrnblocks(rel->rd_smgr, MAIN_FORKNUM);
+	if (nblocks < 2)
+	{
+		ColumnarStorageInit(rel->rd_smgr, ColumnarMetadataNewStorageId());
+		return;
+	}
+
+	uint64 storageId = ColumnarStorageGetStorageId(rel, true);
+
+	uint64 highestId;
+	uint64 highestOffset;
+	GetHighestUsedAddressAndId(storageId, &highestOffset, &highestId);
+
+	uint64 reservedStripeId = highestId + 1;
+
+	/* XXX: should be set properly */
+	uint64 reservedRowNumber = 0;
+	uint64 reservedOffset = highestOffset + 1;
+	ColumnarStorageUpdateCurrent(rel, isUpgrade, reservedStripeId,
+								 reservedRowNumber, reservedOffset);
 }

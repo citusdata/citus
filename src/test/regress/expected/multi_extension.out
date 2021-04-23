@@ -555,7 +555,9 @@ ALTER EXTENSION citus UPDATE TO '10.0-3';
 SELECT * FROM print_extension_changes();
  previous_object | current_object
 ---------------------------------------------------------------------
-(0 rows)
+                 | function citus_internal.downgrade_columnar_storage(regclass)
+                 | function citus_internal.upgrade_columnar_storage(regclass)
+(2 rows)
 
 -- Snapshot of state at 10.1-1
 ALTER EXTENSION citus UPDATE TO '10.1-1';
