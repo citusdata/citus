@@ -1356,6 +1356,17 @@ ReadMetapage(RelFileNode relfilenode, bool missingOk)
 
 
 /*
+ * ColumnarMetadataNewStorageId - create a new, unique storage id and return
+ * it.
+ */
+uint64
+ColumnarMetadataNewStorageId()
+{
+	return nextval_internal(ColumnarStorageIdSequenceRelationId(), false);
+}
+
+
+/*
  * InitMetapage initializes metapage for the given relation.
  */
 static ColumnarMetapage *
