@@ -1,8 +1,19 @@
 /*-------------------------------------------------------------------------
  *
- * columnar_metadata_tables.c
+ * columnar_metadata.c
  *
- * Copyright (c), Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
+ *
+ * Manages metadata for columnar relations in separate, shared metadata tables
+ * in the "columnar" schema.
+ *
+ *   * holds basic stripe information including data size and row counts
+ *   * holds basic chunk and chunk group information like data offsets and
+ *     min/max values (used for Chunk Group Filtering)
+ *   * useful for fast VACUUM operations (e.g. reporting with VACUUM VERBOSE)
+ *   * useful for stats/costing
+ *   * TODO: maps logical row numbers to stripe IDs
+ *   * TODO: visibility information
  *
  *-------------------------------------------------------------------------
  */
