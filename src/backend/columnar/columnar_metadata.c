@@ -60,28 +60,6 @@
 #include "utils/relfilenodemap.h"
 
 
-/*
- * Content of the first page in main fork, which stores metadata at file
- * level.
- */
-typedef struct ColumnarMetapage
-{
-	/*
-	 * Store version of file format used, so we can detect files from
-	 * previous versions if we change file format.
-	 */
-	int versionMajor;
-	int versionMinor;
-
-	/*
-	 * Each of the metadata table rows are identified by a storageId.
-	 * We store it also in the main fork so we can link metadata rows
-	 * with data files.
-	 */
-	uint64 storageId;
-} ColumnarMetapage;
-
-
 typedef struct
 {
 	Relation rel;
@@ -107,6 +85,7 @@ static Oid ColumnarChunkGroupRelationId(void);
 static Oid ColumnarChunkIndexRelationId(void);
 static Oid ColumnarChunkGroupIndexRelationId(void);
 static Oid ColumnarNamespaceId(void);
+static uint64 LookupStorageId(RelFileNode relfilenode);
 static void DeleteStorageFromColumnarMetadataTable(Oid metadataTableId,
 												   AttrNumber storageIdAtrrNumber,
 												   Oid storageIdIndexId,
@@ -119,8 +98,6 @@ static void FinishModifyRelation(ModifyState *state);
 static EState * create_estate_for_relation(Relation rel);
 static bytea * DatumToBytea(Datum value, Form_pg_attribute attrForm);
 static Datum ByteaToDatum(bytea *bytes, Form_pg_attribute attrForm);
-static ColumnarMetapage * InitMetapage(Relation relation);
-static ColumnarMetapage * ReadMetapage(RelFileNode relfilenode, bool missingOk);
 static bool WriteColumnarOptions(Oid regclass, ColumnarOptions *options, bool overwrite);
 
 PG_FUNCTION_INFO_V1(columnar_relation_storageid);
@@ -435,7 +412,7 @@ SaveStripeSkipList(RelFileNode relfilenode, uint64 stripe, StripeSkipList *chunk
 	uint32 chunkIndex = 0;
 	uint32 columnCount = chunkList->columnCount;
 
-	ColumnarMetapage *metapage = ReadMetapage(relfilenode, false);
+	uint64 storageId = LookupStorageId(relfilenode);
 	Oid columnarChunkOid = ColumnarChunkRelationId();
 	Relation columnarChunk = table_open(columnarChunkOid, RowExclusiveLock);
 	ModifyState *modifyState = StartModifyRelation(columnarChunk);
@@ -448,7 +425,7 @@ SaveStripeSkipList(RelFileNode relfilenode, uint64 stripe, StripeSkipList *chunk
 				&chunkList->chunkSkipNodeArray[columnIndex][chunkIndex];
 
 			Datum values[Natts_columnar_chunk] = {
-				UInt64GetDatum(metapage->storageId),
+				UInt64GetDatum(storageId),
 				Int64GetDatum(stripe),
 				Int32GetDatum(columnIndex + 1),
 				Int32GetDatum(chunkIndex),
@@ -499,7 +476,7 @@ void
 SaveChunkGroups(RelFileNode relfilenode, uint64 stripe,
 				List *chunkGroupRowCounts)
 {
-	ColumnarMetapage *metapage = ReadMetapage(relfilenode, false);
+	uint64 storageId = LookupStorageId(relfilenode);
 	Oid columnarChunkGroupOid = ColumnarChunkGroupRelationId();
 	Relation columnarChunkGroup = table_open(columnarChunkGroupOid, RowExclusiveLock);
 	ModifyState *modifyState = StartModifyRelation(columnarChunkGroup);
@@ -511,7 +488,7 @@ SaveChunkGroups(RelFileNode relfilenode, uint64 stripe,
 	{
 		int64 rowCount = lfirst_int(lc);
 		Datum values[Natts_columnar_chunkgroup] = {
-			UInt64GetDatum(metapage->storageId),
+			UInt64GetDatum(storageId),
 			Int64GetDatum(stripe),
 			Int32GetDatum(chunkId),
 			Int64GetDatum(rowCount)
@@ -542,14 +519,14 @@ ReadStripeSkipList(RelFileNode relfilenode, uint64 stripe, TupleDesc tupleDescri
 	uint32 columnCount = tupleDescriptor->natts;
 	ScanKeyData scanKey[2];
 
-	ColumnarMetapage *metapage = ReadMetapage(relfilenode, false);
+	uint64 storageId = LookupStorageId(relfilenode);
 
 	Oid columnarChunkOid = ColumnarChunkRelationId();
 	Relation columnarChunk = table_open(columnarChunkOid, AccessShareLock);
 	Relation index = index_open(ColumnarChunkIndexRelationId(), AccessShareLock);
 
 	ScanKeyInit(&scanKey[0], Anum_columnar_chunk_storageid,
-				BTEqualStrategyNumber, F_OIDEQ, UInt64GetDatum(metapage->storageId));
+				BTEqualStrategyNumber, F_OIDEQ, UInt64GetDatum(storageId));
 	ScanKeyInit(&scanKey[1], Anum_columnar_chunk_stripe,
 				BTEqualStrategyNumber, F_OIDEQ, Int32GetDatum(stripe));
 
@@ -636,7 +613,7 @@ ReadStripeSkipList(RelFileNode relfilenode, uint64 stripe, TupleDesc tupleDescri
 	table_close(columnarChunk, AccessShareLock);
 
 	chunkList->chunkGroupRowCounts =
-		ReadChunkGroupRowCounts(metapage->storageId, stripe, chunkCount);
+		ReadChunkGroupRowCounts(storageId, stripe, chunkCount);
 
 	return chunkList;
 }
@@ -741,15 +718,9 @@ InsertStripeMetadataRow(uint64 storageId, StripeMetadata *stripe)
 List *
 StripesForRelfilenode(RelFileNode relfilenode)
 {
-	ColumnarMetapage *metapage = ReadMetapage(relfilenode, true);
-	if (metapage == NULL)
-	{
-		/* empty relation */
-		return NIL;
-	}
+	uint64 storageId = LookupStorageId(relfilenode);
 
-
-	return ReadDataFileStripeList(metapage->storageId, GetTransactionSnapshot());
+	return ReadDataFileStripeList(storageId, GetTransactionSnapshot());
 }
 
 
@@ -764,17 +735,11 @@ StripesForRelfilenode(RelFileNode relfilenode)
 uint64
 GetHighestUsedAddress(RelFileNode relfilenode)
 {
+	uint64 storageId = LookupStorageId(relfilenode);
+
 	uint64 highestUsedAddress = 0;
 	uint64 highestUsedId = 0;
-	ColumnarMetapage *metapage = ReadMetapage(relfilenode, true);
-
-	/* empty data file? */
-	if (metapage == NULL)
-	{
-		return 0;
-	}
-
-	GetHighestUsedAddressAndId(metapage->storageId, &highestUsedAddress, &highestUsedId);
+	GetHighestUsedAddressAndId(storageId, &highestUsedAddress, &highestUsedId);
 
 	return highestUsedAddress;
 }
@@ -860,19 +825,9 @@ ReserveStripe(Relation rel, uint64 sizeBytes,
 	LOCKMODE lockMode = ExclusiveLock;
 	LockForStripeReservation(rel, lockMode);
 
-	RelFileNode relfilenode = rel->rd_node;
+	uint64 storageId = ColumnarStorageGetStorageId(rel, false);
 
-	/*
-	 * If this is the first stripe for this relation, initialize the
-	 * metapage, otherwise use the previously initialized metapage.
-	 */
-	ColumnarMetapage *metapage = ReadMetapage(relfilenode, true);
-	if (metapage == NULL)
-	{
-		metapage = InitMetapage(rel);
-	}
-
-	GetHighestUsedAddressAndId(metapage->storageId, &currLogicalHigh, &highestId);
+	GetHighestUsedAddressAndId(storageId, &currLogicalHigh, &highestId);
 	SmgrAddr currSmgrHigh = logical_to_smgr(currLogicalHigh);
 
 	SmgrAddr resSmgrStart = next_block_start(currSmgrHigh);
@@ -901,7 +856,7 @@ ReserveStripe(Relation rel, uint64 sizeBytes,
 	stripe.rowCount = rowCount;
 	stripe.id = highestId + 1;
 
-	InsertStripeMetadataRow(metapage->storageId, &stripe);
+	InsertStripeMetadataRow(storageId, &stripe);
 
 	UnlockForStripeReservation(rel, lockMode);
 
@@ -982,28 +937,20 @@ DeleteMetadataRows(RelFileNode relfilenode)
 		return;
 	}
 
-	ColumnarMetapage *metapage = ReadMetapage(relfilenode, true);
-	if (metapage == NULL)
-	{
-		/*
-		 * No data has been written to this storage yet, so there is no
-		 * associated metadata yet.
-		 */
-		return;
-	}
+	uint64 storageId = LookupStorageId(relfilenode);
 
 	DeleteStorageFromColumnarMetadataTable(ColumnarStripeRelationId(),
 										   Anum_columnar_stripe_storageid,
 										   ColumnarStripeIndexRelationId(),
-										   metapage->storageId);
+										   storageId);
 	DeleteStorageFromColumnarMetadataTable(ColumnarChunkGroupRelationId(),
 										   Anum_columnar_chunkgroup_storageid,
 										   ColumnarChunkGroupIndexRelationId(),
-										   metapage->storageId);
+										   storageId);
 	DeleteStorageFromColumnarMetadataTable(ColumnarChunkRelationId(),
 										   Anum_columnar_chunk_storageid,
 										   ColumnarChunkIndexRelationId(),
-										   metapage->storageId);
+										   storageId);
 }
 
 
@@ -1324,46 +1271,20 @@ ColumnarNamespaceId(void)
 
 
 /*
- * ReadMetapage reads metapage for the given relfilenode. It returns
+ * LookupStorageId reads storage metapage to find the storage ID for the given relfilenode. It returns
  * false if the relation doesn't have a meta page yet.
  */
-static ColumnarMetapage *
-ReadMetapage(RelFileNode relfilenode, bool missingOk)
+static uint64
+LookupStorageId(RelFileNode relfilenode)
 {
-	StringInfo metapageBuffer = NULL;
 	Oid relationId = RelidByRelfilenode(relfilenode.spcNode,
 										relfilenode.relNode);
-	if (OidIsValid(relationId))
-	{
-		Relation relation = relation_open(relationId, NoLock);
 
-		RelationOpenSmgr(relation);
-		int nblocks = smgrnblocks(relation->rd_smgr, MAIN_FORKNUM);
-		RelationCloseSmgr(relation);
+	Relation relation = relation_open(relationId, AccessShareLock);
+	uint64 storageId = ColumnarStorageGetStorageId(relation, false);
+	table_close(relation, AccessShareLock);
 
-		if (nblocks != 0)
-		{
-			metapageBuffer = ReadFromSmgr(relation, 0, sizeof(ColumnarMetapage));
-		}
-
-		relation_close(relation, NoLock);
-	}
-
-	if (metapageBuffer == NULL)
-	{
-		if (!missingOk)
-		{
-			elog(ERROR, "columnar metapage was not found");
-		}
-
-		return NULL;
-	}
-
-	ColumnarMetapage *metapage = palloc0(sizeof(ColumnarMetapage));
-	memcpy_s((void *) metapage, sizeof(ColumnarMetapage),
-			 metapageBuffer->data, sizeof(ColumnarMetapage));
-
-	return metapage;
+	return storageId;
 }
 
 
@@ -1379,53 +1300,21 @@ ColumnarMetadataNewStorageId()
 
 
 /*
- * InitMetapage initializes metapage for the given relation.
- */
-static ColumnarMetapage *
-InitMetapage(Relation relation)
-{
-	/*
-	 * If we init metapage during upgrade, we might override the
-	 * pre-upgrade storage id which will render pre-upgrade data
-	 * invisible.
-	 */
-	Assert(!IsBinaryUpgrade);
-	ColumnarMetapage *metapage = palloc0(sizeof(ColumnarMetapage));
-
-	metapage->storageId = nextval_internal(ColumnarStorageIdSequenceRelationId(), false);
-	metapage->versionMajor = COLUMNAR_VERSION_MAJOR;
-	metapage->versionMinor = COLUMNAR_VERSION_MINOR;
-
-	/* create the first block */
-	Buffer newBuffer = ReadBuffer(relation, P_NEW);
-	ReleaseBuffer(newBuffer);
-
-	Assert(sizeof(ColumnarMetapage) <= BLCKSZ - SizeOfPageHeaderData);
-	WriteToSmgr(relation, 0, (char *) metapage, sizeof(ColumnarMetapage));
-
-	return metapage;
-}
-
-
-/*
  * columnar_relation_storageid returns storage id associated with the
  * given relation id, or -1 if there is no associated storage id yet.
  */
 Datum
 columnar_relation_storageid(PG_FUNCTION_ARGS)
 {
-	uint64 storageId = -1;
-
 	Oid relationId = PG_GETARG_OID(0);
 	Relation relation = relation_open(relationId, AccessShareLock);
-	if (IsColumnarTableAmTable(relationId))
+	if (!IsColumnarTableAmTable(relationId))
 	{
-		ColumnarMetapage *metadata = ReadMetapage(relation->rd_node, true);
-		if (metadata != NULL)
-		{
-			storageId = metadata->storageId;
-		}
+		elog(ERROR, "relation \"%s\" is not a columnar table",
+			 RelationGetRelationName(relation));
 	}
+
+	uint64 storageId = ColumnarStorageGetStorageId(relation, false);
 
 	relation_close(relation, AccessShareLock);
 
