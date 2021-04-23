@@ -837,34 +837,25 @@ TruncateColumnar(Relation rel, int elevel)
 		return;
 	}
 
-	RelationOpenSmgr(rel);
-	BlockNumber old_rel_pages = smgrnblocks(rel->rd_smgr, MAIN_FORKNUM);
-	RelationCloseSmgr(rel);
-
 	/*
 	 * Due to the AccessExclusive lock there's no danger that
 	 * new stripes be added beyond highestPhysicalAddress while
 	 * we're truncating.
 	 */
-	SmgrAddr highestPhysicalAddress =
-		logical_to_smgr(GetHighestUsedAddress(rel->rd_node));
+	uint64 newDataReservation = Max(GetHighestUsedAddress(rel->rd_node) + 1,
+									ColumnarFirstLogicalOffset);
 
-	/*
-	 * Unlock and return if truncation won't reduce data file's size.
-	 */
-	BlockNumber new_rel_pages = Min(old_rel_pages,
-									highestPhysicalAddress.blockno + 1);
-	if (new_rel_pages == old_rel_pages)
+	RelationOpenSmgr(rel);
+	BlockNumber old_rel_pages = smgrnblocks(rel->rd_smgr, MAIN_FORKNUM);
+
+	if (!ColumnarStorageTruncate(rel, newDataReservation))
 	{
 		UnlockRelation(rel, AccessExclusiveLock);
 		return;
 	}
 
-	/*
-	 * Truncate the storage. Note that RelationTruncate() takes care of
-	 * Write Ahead Logging.
-	 */
-	RelationTruncate(rel, new_rel_pages);
+	RelationOpenSmgr(rel);
+	BlockNumber new_rel_pages = smgrnblocks(rel->rd_smgr, MAIN_FORKNUM);
 
 	/*
 	 * We can release the exclusive lock as soon as we have truncated.
