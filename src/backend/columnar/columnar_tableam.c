@@ -1819,3 +1819,75 @@ alter_columnar_table_reset(PG_FUNCTION_ARGS)
 
 	PG_RETURN_VOID();
 }
+
+
+/*
+ * upgrade_columnar_storage - upgrade columnar storage to the current
+ * version.
+ *
+ * DDL:
+ *   CREATE OR REPLACE FUNCTION upgrade_columnar_storage(rel regclass)
+ *     RETURNS VOID
+ *     STRICT
+ *     LANGUAGE c AS 'MODULE_PATHNAME', 'upgrade_columnar_storage';
+ */
+PG_FUNCTION_INFO_V1(upgrade_columnar_storage);
+Datum
+upgrade_columnar_storage(PG_FUNCTION_ARGS)
+{
+	Oid relid = PG_GETARG_OID(0);
+
+	/*
+	 * ACCESS EXCLUSIVE LOCK is not required by the low-level routines, so we
+	 * can take only an ACCESS SHARE LOCK. But all access to non-current
+	 * columnar tables will fail anyway, so it's better to take ACCESS
+	 * EXLUSIVE LOCK now.
+	 */
+	Relation rel = table_open(relid, AccessExclusiveLock);
+	if (!IsColumnarTableAmTable(relid))
+	{
+		ereport(ERROR, (errmsg("table %s is not a columnar table",
+							   quote_identifier(RelationGetRelationName(rel)))));
+	}
+
+	ColumnarStorageUpdateIfNeeded(rel, true);
+
+	table_close(rel, AccessExclusiveLock);
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * downgrade_columnar_storage - downgrade columnar storage to the
+ * current version.
+ *
+ * DDL:
+ *   CREATE OR REPLACE FUNCTION downgrade_columnar_storage(rel regclass)
+ *     RETURNS VOID
+ *     STRICT
+ *     LANGUAGE c AS 'MODULE_PATHNAME', 'downgrade_columnar_storage';
+ */
+PG_FUNCTION_INFO_V1(downgrade_columnar_storage);
+Datum
+downgrade_columnar_storage(PG_FUNCTION_ARGS)
+{
+	Oid relid = PG_GETARG_OID(0);
+
+	/*
+	 * ACCESS EXCLUSIVE LOCK is not required by the low-level routines, so we
+	 * can take only an ACCESS SHARE LOCK. But all access to non-current
+	 * columnar tables will fail anyway, so it's better to take ACCESS
+	 * EXLUSIVE LOCK now.
+	 */
+	Relation rel = table_open(relid, AccessExclusiveLock);
+	if (!IsColumnarTableAmTable(relid))
+	{
+		ereport(ERROR, (errmsg("table %s is not a columnar table",
+							   quote_identifier(RelationGetRelationName(rel)))));
+	}
+
+	ColumnarStorageUpdateIfNeeded(rel, false);
+
+	table_close(rel, AccessExclusiveLock);
+	PG_RETURN_VOID();
+}

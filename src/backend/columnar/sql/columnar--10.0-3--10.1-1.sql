@@ -20,3 +20,10 @@ END$proc$;
 -- since we dropped pg11 support, we don't need to worry about missing
 -- columnar objects when upgrading postgres
 DROP FUNCTION citus_internal.columnar_ensure_objects_exist();
+
+#include "udfs/upgrade_columnar_storage/10.1-1.sql"
+#include "udfs/downgrade_columnar_storage/10.1-1.sql"
+
+-- upgrade storage for all columnar relations
+SELECT citus_internal.upgrade_columnar_storage(c.oid) FROM pg_class c, pg_am a
+  WHERE c.relam = a.oid AND amname = 'columnar';
