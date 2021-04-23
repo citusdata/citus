@@ -3,7 +3,8 @@ CREATE OR REPLACE FUNCTION shard_placement_rebalance_array(
     shard_placement_list json[],
     threshold float4 DEFAULT 0,
     max_shard_moves int DEFAULT 1000000,
-    drain_only bool DEFAULT false
+    drain_only bool DEFAULT false,
+    improvement_threshold float4 DEFAULT 0.5
 )
 RETURNS json[]
 AS 'citus'
@@ -499,4 +500,245 @@ NOTICE:  Stopped searching before we were out of moves. Please rerun the rebalan
  {"updatetype":1,"shardid":3,"sourcename":"hostname2","sourceport":5432,"targetname":"hostname3","targetport":5432}
  {"updatetype":1,"shardid":8,"sourcename":"hostname2","sourceport":5432,"targetname":"hostname3","targetport":5432}
 (5 rows)
+
+-- Don't move a big shards if it doesn't improve the utilization balance much.
+SELECT unnest(shard_placement_rebalance_array(
+    ARRAY['{"node_name": "a"}',
+          '{"node_name": "b"}']::json[],
+    ARRAY['{"shardid":1, "cost":20,  "nodename":"a"}',
+          '{"shardid":2, "cost":20,  "nodename":"a"}',
+          '{"shardid":3, "cost":100, "nodename":"b"}',
+          '{"shardid":4, "cost":50,  "nodename":"b"}'
+        ]::json[]
+));
+NOTICE:  Ignoring move of shard xxxxx from b:5432 to a:5432, because the move only brings a small improvement relative to the shard its size
+DETAIL:  The overall balance improvement this move results in is 0.1 of the size that a move with this shard could result in
+NOTICE:  Ignored 1 moves, all of which are shown in notices above
+HINT:  If you do want these moves to happen, try changing improvement_threshold to a lower value than what it is now (0.5).
+                                               unnest
+---------------------------------------------------------------------
+ {"updatetype":1,"shardid":4,"sourcename":"b","sourceport":5432,"targetname":"a","targetport":5432}
+(1 row)
+
+SELECT unnest(shard_placement_rebalance_array(
+    ARRAY['{"node_name": "a"}',
+          '{"node_name": "b"}']::json[],
+    ARRAY['{"shardid":1, "cost":40,  "nodename":"a"}',
+          '{"shardid":2, "cost":40,  "nodename":"a"}',
+          '{"shardid":3, "cost":100, "nodename":"b"}',
+          '{"shardid":4, "cost":100,  "nodename":"b"}'
+        ]::json[]
+));
+NOTICE:  Ignoring move of shard xxxxx from b:5432 to a:5432, because the move only brings a small improvement relative to the shard its size
+DETAIL:  The overall balance improvement this move results in is 0.2 of the size that a move with this shard could result in
+NOTICE:  Ignoring move of shard xxxxx from b:5432 to a:5432, because the move only brings a small improvement relative to the shard its size
+DETAIL:  The overall balance improvement this move results in is 0.2 of the size that a move with this shard could result in
+NOTICE:  Ignored 2 moves, all of which are shown in notices above
+HINT:  If you do want these moves to happen, try changing improvement_threshold to a lower value than what it is now (0.5).
+ unnest
+---------------------------------------------------------------------
+(0 rows)
+
+-- improvement_threshold can be used to force a move of big shards
+-- if needed.
+SELECT unnest(shard_placement_rebalance_array(
+    ARRAY['{"node_name": "a"}',
+          '{"node_name": "b"}']::json[],
+    ARRAY['{"shardid":1, "cost":20,  "nodename":"a"}',
+          '{"shardid":2, "cost":20,  "nodename":"a"}',
+          '{"shardid":3, "cost":100, "nodename":"b"}',
+          '{"shardid":4, "cost":50,  "nodename":"b"}'
+        ]::json[],
+    improvement_threshold := 0.1
+));
+                                               unnest
+---------------------------------------------------------------------
+ {"updatetype":1,"shardid":3,"sourcename":"b","sourceport":5432,"targetname":"a","targetport":5432}
+ {"updatetype":1,"shardid":1,"sourcename":"a","sourceport":5432,"targetname":"b","targetport":5432}
+ {"updatetype":1,"shardid":2,"sourcename":"a","sourceport":5432,"targetname":"b","targetport":5432}
+(3 rows)
+
+SELECT unnest(shard_placement_rebalance_array(
+    ARRAY['{"node_name": "a"}',
+          '{"node_name": "b"}']::json[],
+    ARRAY['{"shardid":1, "cost":40,  "nodename":"a"}',
+          '{"shardid":2, "cost":40,  "nodename":"a"}',
+          '{"shardid":3, "cost":100, "nodename":"b"}',
+          '{"shardid":4, "cost":100,  "nodename":"b"}'
+        ]::json[],
+    improvement_threshold := 0.2
+));
+                                               unnest
+---------------------------------------------------------------------
+ {"updatetype":1,"shardid":3,"sourcename":"b","sourceport":5432,"targetname":"a","targetport":5432}
+ {"updatetype":1,"shardid":1,"sourcename":"a","sourceport":5432,"targetname":"b","targetport":5432}
+(2 rows)
+
+-- limits notices about ignored moves
+SELECT unnest(shard_placement_rebalance_array(
+    ARRAY['{"node_name": "a"}',
+          '{"node_name": "b"}',
+          '{"node_name": "c"}',
+          '{"node_name": "d"}',
+          '{"node_name": "e"}',
+          '{"node_name": "f"}',
+          '{"node_name": "g"}'
+        ]::json[],
+    ARRAY['{"shardid":1, "cost":39,  "nodename":"a"}',
+          '{"shardid":2, "cost":39,  "nodename":"b"}',
+          '{"shardid":3, "cost":39,  "nodename":"c"}',
+          '{"shardid":4, "cost":39,  "nodename":"d"}',
+          '{"shardid":5, "cost":39,  "nodename":"e"}',
+          '{"shardid":6, "cost":39,  "nodename":"f"}',
+          '{"shardid":7, "cost":40,  "nodename":"g"}',
+          '{"shardid":8, "cost":39,  "nodename":"g"}'
+        ]::json[],
+    improvement_threshold := 0.1
+));
+NOTICE:  Ignoring move of shard xxxxx from g:5432 to a:5432, because the move only brings a small improvement relative to the shard its size
+DETAIL:  The overall balance improvement this move results in is 0.025641 of the size that a move with this shard could result in
+NOTICE:  Ignoring move of shard xxxxx from g:5432 to b:5432, because the move only brings a small improvement relative to the shard its size
+DETAIL:  The overall balance improvement this move results in is 0.025641 of the size that a move with this shard could result in
+NOTICE:  Ignoring move of shard xxxxx from g:5432 to c:5432, because the move only brings a small improvement relative to the shard its size
+DETAIL:  The overall balance improvement this move results in is 0.025641 of the size that a move with this shard could result in
+NOTICE:  Ignoring move of shard xxxxx from g:5432 to d:5432, because the move only brings a small improvement relative to the shard its size
+DETAIL:  The overall balance improvement this move results in is 0.025641 of the size that a move with this shard could result in
+NOTICE:  Ignoring move of shard xxxxx from g:5432 to e:5432, because the move only brings a small improvement relative to the shard its size
+DETAIL:  The overall balance improvement this move results in is 0.025641 of the size that a move with this shard could result in
+NOTICE:  Ignored 6 moves, 5 of which are shown in notices above
+HINT:  If you do want these moves to happen, try changing improvement_threshold to a lower value than what it is now (0.1).
+ unnest
+---------------------------------------------------------------------
+(0 rows)
+
+-- limits notices based on GUC
+set citus.max_rebalancer_logged_ignored_moves = 1;
+SELECT unnest(shard_placement_rebalance_array(
+    ARRAY['{"node_name": "a"}',
+          '{"node_name": "b"}',
+          '{"node_name": "c"}',
+          '{"node_name": "d"}',
+          '{"node_name": "e"}',
+          '{"node_name": "f"}',
+          '{"node_name": "g"}'
+        ]::json[],
+    ARRAY['{"shardid":1, "cost":39,  "nodename":"a"}',
+          '{"shardid":2, "cost":39,  "nodename":"b"}',
+          '{"shardid":3, "cost":39,  "nodename":"c"}',
+          '{"shardid":4, "cost":39,  "nodename":"d"}',
+          '{"shardid":5, "cost":39,  "nodename":"e"}',
+          '{"shardid":6, "cost":39,  "nodename":"f"}',
+          '{"shardid":7, "cost":40,  "nodename":"g"}',
+          '{"shardid":8, "cost":39,  "nodename":"g"}'
+        ]::json[],
+    improvement_threshold := 0.1
+));
+NOTICE:  Ignoring move of shard xxxxx from g:5432 to a:5432, because the move only brings a small improvement relative to the shard its size
+DETAIL:  The overall balance improvement this move results in is 0.025641 of the size that a move with this shard could result in
+NOTICE:  Ignored 6 moves, 1 of which are shown in notices above
+HINT:  If you do want these moves to happen, try changing improvement_threshold to a lower value than what it is now (0.1).
+ unnest
+---------------------------------------------------------------------
+(0 rows)
+
+set citus.max_rebalancer_logged_ignored_moves = 10;
+SELECT unnest(shard_placement_rebalance_array(
+    ARRAY['{"node_name": "a"}',
+          '{"node_name": "b"}',
+          '{"node_name": "c"}',
+          '{"node_name": "d"}',
+          '{"node_name": "e"}',
+          '{"node_name": "f"}',
+          '{"node_name": "g"}'
+        ]::json[],
+    ARRAY['{"shardid":1, "cost":39,  "nodename":"a"}',
+          '{"shardid":2, "cost":39,  "nodename":"b"}',
+          '{"shardid":3, "cost":39,  "nodename":"c"}',
+          '{"shardid":4, "cost":39,  "nodename":"d"}',
+          '{"shardid":5, "cost":39,  "nodename":"e"}',
+          '{"shardid":6, "cost":39,  "nodename":"f"}',
+          '{"shardid":7, "cost":40,  "nodename":"g"}',
+          '{"shardid":8, "cost":39,  "nodename":"g"}'
+        ]::json[],
+    improvement_threshold := 0.1
+));
+NOTICE:  Ignoring move of shard xxxxx from g:5432 to a:5432, because the move only brings a small improvement relative to the shard its size
+DETAIL:  The overall balance improvement this move results in is 0.025641 of the size that a move with this shard could result in
+NOTICE:  Ignoring move of shard xxxxx from g:5432 to b:5432, because the move only brings a small improvement relative to the shard its size
+DETAIL:  The overall balance improvement this move results in is 0.025641 of the size that a move with this shard could result in
+NOTICE:  Ignoring move of shard xxxxx from g:5432 to c:5432, because the move only brings a small improvement relative to the shard its size
+DETAIL:  The overall balance improvement this move results in is 0.025641 of the size that a move with this shard could result in
+NOTICE:  Ignoring move of shard xxxxx from g:5432 to d:5432, because the move only brings a small improvement relative to the shard its size
+DETAIL:  The overall balance improvement this move results in is 0.025641 of the size that a move with this shard could result in
+NOTICE:  Ignoring move of shard xxxxx from g:5432 to e:5432, because the move only brings a small improvement relative to the shard its size
+DETAIL:  The overall balance improvement this move results in is 0.025641 of the size that a move with this shard could result in
+NOTICE:  Ignoring move of shard xxxxx from g:5432 to f:5432, because the move only brings a small improvement relative to the shard its size
+DETAIL:  The overall balance improvement this move results in is 0.025641 of the size that a move with this shard could result in
+NOTICE:  Ignored 6 moves, all of which are shown in notices above
+HINT:  If you do want these moves to happen, try changing improvement_threshold to a lower value than what it is now (0.1).
+ unnest
+---------------------------------------------------------------------
+(0 rows)
+
+set citus.max_rebalancer_logged_ignored_moves = -1;
+SELECT unnest(shard_placement_rebalance_array(
+    ARRAY['{"node_name": "a"}',
+          '{"node_name": "b"}',
+          '{"node_name": "c"}',
+          '{"node_name": "d"}',
+          '{"node_name": "e"}',
+          '{"node_name": "f"}',
+          '{"node_name": "g"}'
+        ]::json[],
+    ARRAY['{"shardid":1, "cost":39,  "nodename":"a"}',
+          '{"shardid":2, "cost":39,  "nodename":"b"}',
+          '{"shardid":3, "cost":39,  "nodename":"c"}',
+          '{"shardid":4, "cost":39,  "nodename":"d"}',
+          '{"shardid":5, "cost":39,  "nodename":"e"}',
+          '{"shardid":6, "cost":39,  "nodename":"f"}',
+          '{"shardid":7, "cost":40,  "nodename":"g"}',
+          '{"shardid":8, "cost":39,  "nodename":"g"}'
+        ]::json[],
+    improvement_threshold := 0.1
+));
+NOTICE:  Ignoring move of shard xxxxx from g:5432 to a:5432, because the move only brings a small improvement relative to the shard its size
+DETAIL:  The overall balance improvement this move results in is 0.025641 of the size that a move with this shard could result in
+NOTICE:  Ignoring move of shard xxxxx from g:5432 to b:5432, because the move only brings a small improvement relative to the shard its size
+DETAIL:  The overall balance improvement this move results in is 0.025641 of the size that a move with this shard could result in
+NOTICE:  Ignoring move of shard xxxxx from g:5432 to c:5432, because the move only brings a small improvement relative to the shard its size
+DETAIL:  The overall balance improvement this move results in is 0.025641 of the size that a move with this shard could result in
+NOTICE:  Ignoring move of shard xxxxx from g:5432 to d:5432, because the move only brings a small improvement relative to the shard its size
+DETAIL:  The overall balance improvement this move results in is 0.025641 of the size that a move with this shard could result in
+NOTICE:  Ignoring move of shard xxxxx from g:5432 to e:5432, because the move only brings a small improvement relative to the shard its size
+DETAIL:  The overall balance improvement this move results in is 0.025641 of the size that a move with this shard could result in
+NOTICE:  Ignoring move of shard xxxxx from g:5432 to f:5432, because the move only brings a small improvement relative to the shard its size
+DETAIL:  The overall balance improvement this move results in is 0.025641 of the size that a move with this shard could result in
+NOTICE:  Ignored 6 moves, all of which are shown in notices above
+HINT:  If you do want these moves to happen, try changing improvement_threshold to a lower value than what it is now (0.1).
+ unnest
+---------------------------------------------------------------------
+(0 rows)
+
+-- Combining improvement_threshold and capacity works as expected.
+SELECT unnest(shard_placement_rebalance_array(
+    ARRAY['{"node_name": "a"}',
+          '{"node_name": "b", "capacity": 2}']::json[],
+    ARRAY['{"shardid":1, "cost":20,  "nodename":"a"}',
+          '{"shardid":2, "cost":10,  "nodename":"a"}',
+          '{"shardid":3, "cost":10,  "nodename":"a"}',
+          '{"shardid":4, "cost":100, "nodename":"b"}',
+          '{"shardid":5, "cost":50,  "nodename":"b"}',
+          '{"shardid":6, "cost":50,  "nodename":"b"}'
+        ]::json[],
+    improvement_threshold := 0.6
+));
+NOTICE:  Ignoring move of shard xxxxx from a:5432 to b:5432, because the move only brings a small improvement relative to the shard its size
+DETAIL:  The overall balance improvement this move results in is 0.5 of the size that a move with this shard could result in
+NOTICE:  Ignored 1 moves, all of which are shown in notices above
+HINT:  If you do want these moves to happen, try changing improvement_threshold to a lower value than what it is now (0.6).
+                                               unnest
+---------------------------------------------------------------------
+ {"updatetype":1,"shardid":5,"sourcename":"b","sourceport":5432,"targetname":"a","targetport":5432}
+ {"updatetype":1,"shardid":2,"sourcename":"a","sourceport":5432,"targetname":"b","targetport":5432}
+(2 rows)
 

@@ -21,4 +21,13 @@ DROP FUNCTION pg_catalog.worker_partitioned_relation_size(regclass);
 DROP FUNCTION pg_catalog.worker_partitioned_table_size(regclass);
 DROP FUNCTION pg_catalog.citus_local_disk_space_stats();
 
+#include "../udfs/citus_prepare_pg_upgrade/9.5-1.sql"
 #include "../udfs/citus_finish_pg_upgrade/10.0-1.sql"
+#include "../udfs/get_rebalance_table_shards_plan/9.2-1.sql"
+
+-- the migration for citus_add_rebalance_strategy from 9.2-1 was the first one,
+-- so it doesn't have a DROP. This is why we DROP manually here.
+DROP FUNCTION pg_catalog.citus_add_rebalance_strategy;
+#include "../udfs/citus_add_rebalance_strategy/9.2-1.sql"
+
+ALTER TABLE pg_catalog.pg_dist_rebalance_strategy DROP COLUMN improvement_threshold;

@@ -560,16 +560,20 @@ SELECT * FROM print_extension_changes();
 -- Snapshot of state at 10.1-1
 ALTER EXTENSION citus UPDATE TO '10.1-1';
 SELECT * FROM print_extension_changes();
-                                previous_object                                |                                    current_object
+                                    previous_object                                    |                                       current_object
 ---------------------------------------------------------------------
- function citus_internal.columnar_ensure_objects_exist()                       |
- function create_distributed_table(regclass,text,citus.distribution_type,text) |
-                                                                               | function citus_local_disk_space_stats()
-                                                                               | function create_distributed_table(regclass,text,citus.distribution_type,text,integer)
-                                                                               | function worker_partitioned_relation_size(regclass)
-                                                                               | function worker_partitioned_relation_total_size(regclass)
-                                                                               | function worker_partitioned_table_size(regclass)
-(7 rows)
+ function citus_add_rebalance_strategy(name,regproc,regproc,regproc,real,real)         |
+ function citus_internal.columnar_ensure_objects_exist()                               |
+ function create_distributed_table(regclass,text,citus.distribution_type,text)         |
+ function get_rebalance_table_shards_plan(regclass,real,integer,bigint[],boolean,name) |
+                                                                                       | function citus_add_rebalance_strategy(name,regproc,regproc,regproc,real,real,real)
+                                                                                       | function citus_local_disk_space_stats()
+                                                                                       | function create_distributed_table(regclass,text,citus.distribution_type,text,integer)
+                                                                                       | function get_rebalance_table_shards_plan(regclass,real,integer,bigint[],boolean,name,real)
+                                                                                       | function worker_partitioned_relation_size(regclass)
+                                                                                       | function worker_partitioned_relation_total_size(regclass)
+                                                                                       | function worker_partitioned_table_size(regclass)
+(11 rows)
 
 DROP TABLE prev_objects, extension_diff;
 -- show running version

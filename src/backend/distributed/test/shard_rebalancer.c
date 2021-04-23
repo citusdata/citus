@@ -89,6 +89,7 @@ shard_placement_rebalance_array(PG_FUNCTION_ARGS)
 	float threshold = PG_GETARG_FLOAT4(2);
 	int32 maxShardMoves = PG_GETARG_INT32(3);
 	bool drainOnly = PG_GETARG_BOOL(4);
+	float utilizationImproventThreshold = PG_GETARG_FLOAT4(5);
 
 	List *workerNodeList = NIL;
 	List *shardPlacementListList = NIL;
@@ -143,6 +144,7 @@ shard_placement_rebalance_array(PG_FUNCTION_ARGS)
 														  threshold,
 														  maxShardMoves,
 														  drainOnly,
+														  utilizationImproventThreshold,
 														  &rebalancePlanFunctions);
 	ArrayType *placementUpdateJsonArray = PlacementUpdateListToJsonArray(
 		placementUpdateList);

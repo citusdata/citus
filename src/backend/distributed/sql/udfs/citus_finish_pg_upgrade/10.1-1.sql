@@ -31,7 +31,8 @@ BEGIN
         node_capacity_function::regprocedure::regproc,
         shard_allowed_on_node_function::regprocedure::regproc,
         default_threshold,
-        minimum_threshold
+        minimum_threshold,
+        improvement_threshold
     FROM public.pg_dist_rebalance_strategy;
     ALTER TABLE pg_catalog.pg_dist_rebalance_strategy ENABLE TRIGGER pg_dist_rebalance_strategy_enterprise_check_trigger;
 

@@ -65,7 +65,8 @@ CREATE OR REPLACE FUNCTION shard_placement_rebalance_array(
     shard_placement_list json[],
     threshold float4 DEFAULT 0,
     max_shard_moves int DEFAULT 1000000,
-    drain_only bool DEFAULT false
+    drain_only bool DEFAULT false,
+    improvement_threshold float4 DEFAULT 0.5
 )
 RETURNS json[]
 AS 'citus'
@@ -647,6 +648,7 @@ DROP USER testrole;
 
 -- Test costs
 set citus.shard_count = 4;
+SET citus.next_shard_id TO 123040;
 CREATE TABLE tab (x int);
 SELECT create_distributed_table('tab','x');
 -- The following numbers are chosen such that they are placed on different
@@ -655,6 +657,7 @@ INSERT INTO tab SELECT 1 from generate_series(1, 30000);
 INSERT INTO tab SELECT 2 from generate_series(1, 10000);
 INSERT INTO tab SELECT 3 from generate_series(1, 10000);
 INSERT INTO tab SELECT 6 from generate_series(1, 10000);
+VACUUM FULL tab;
 ANALYZE tab;
 
 \c - - - :worker_1_port
@@ -712,6 +715,7 @@ INSERT INTO tab2 SELECT 1 from generate_series(1, 0);
 INSERT INTO tab2 SELECT 2 from generate_series(1, 60000);
 INSERT INTO tab2 SELECT 3 from generate_series(1, 10000);
 INSERT INTO tab2 SELECT 6 from generate_series(1, 10000);
+VACUUM FULL tab, tab2;
 ANALYZE tab, tab2;
 
 \c - - - :worker_1_port
@@ -747,6 +751,8 @@ WHERE table_schema = 'public'
 
 \c - - - :master_port
 SELECT * FROM get_rebalance_table_shards_plan('tab', rebalance_strategy := 'by_disk_size');
+-- supports improvement_threshold
+SELECT * FROM get_rebalance_table_shards_plan('tab', rebalance_strategy := 'by_disk_size', improvement_threshold := 0);
 SELECT * FROM rebalance_table_shards('tab', rebalance_strategy := 'by_disk_size', shard_transfer_mode:='block_writes');
 SELECT * FROM public.table_placements_per_node;
 ANALYZE tab, tab2;
@@ -785,46 +791,46 @@ WHERE table_schema = 'public'
 
 DROP TABLE tab2;
 
-CREATE OR REPLACE FUNCTION capacity_high_worker_1(nodeidarg int)
+CREATE OR REPLACE FUNCTION capacity_high_worker_2(nodeidarg int)
     RETURNS real AS $$
     SELECT
-        (CASE WHEN nodeport = 57637 THEN 1000 ELSE 1 END)::real
+        (CASE WHEN nodeport = 57638 THEN 1000 ELSE 1 END)::real
     FROM pg_dist_node where nodeid = nodeidarg
     $$ LANGUAGE sql;
 
 SELECT citus_add_rebalance_strategy(
-        'capacity_high_worker_1',
+        'capacity_high_worker_2',
         'citus_shard_cost_1',
-        'capacity_high_worker_1',
+        'capacity_high_worker_2',
         'citus_shard_allowed_on_node_true',
         0
     );
 
-SELECT * FROM get_rebalance_table_shards_plan('tab', rebalance_strategy := 'capacity_high_worker_1');
-SELECT * FROM rebalance_table_shards('tab', rebalance_strategy := 'capacity_high_worker_1', shard_transfer_mode:='block_writes');
+SELECT * FROM get_rebalance_table_shards_plan('tab', rebalance_strategy := 'capacity_high_worker_2');
+SELECT * FROM rebalance_table_shards('tab', rebalance_strategy := 'capacity_high_worker_2', shard_transfer_mode:='block_writes');
 SELECT * FROM public.table_placements_per_node;
 
-SELECT citus_set_default_rebalance_strategy('capacity_high_worker_1');
+SELECT citus_set_default_rebalance_strategy('capacity_high_worker_2');
 SELECT * FROM get_rebalance_table_shards_plan('tab');
 SELECT * FROM rebalance_table_shards('tab', shard_transfer_mode:='block_writes');
 SELECT * FROM public.table_placements_per_node;
 
-CREATE FUNCTION only_worker_2(shardid bigint, nodeidarg int)
+CREATE FUNCTION only_worker_1(shardid bigint, nodeidarg int)
     RETURNS boolean AS $$
     SELECT
-        (CASE WHEN nodeport = 57638 THEN TRUE ELSE FALSE END)
+        (CASE WHEN nodeport = 57637 THEN TRUE ELSE FALSE END)
     FROM pg_dist_node where nodeid = nodeidarg
     $$ LANGUAGE sql;
 
 SELECT citus_add_rebalance_strategy(
-        'only_worker_2',
+        'only_worker_1',
         'citus_shard_cost_1',
         'citus_node_capacity_1',
-        'only_worker_2',
+        'only_worker_1',
         0
     );
 
-SELECT citus_set_default_rebalance_strategy('only_worker_2');
+SELECT citus_set_default_rebalance_strategy('only_worker_1');
 SELECT * FROM get_rebalance_table_shards_plan('tab');
 SELECT * FROM rebalance_table_shards('tab', shard_transfer_mode:='block_writes');
 SELECT * FROM public.table_placements_per_node;
@@ -1012,7 +1018,7 @@ UPDATE pg_dist_rebalance_strategy SET default_strategy=true WHERE name='by_shard
 SELECT citus_add_rebalance_strategy(
         'default_threshold_too_low',
         'citus_shard_cost_1',
-        'capacity_high_worker_1',
+        'capacity_high_worker_2',
         'citus_shard_allowed_on_node_true',
         0,
         0.1
