@@ -3,6 +3,16 @@ SET search_path TO columnar_test_helpers;
 CREATE FUNCTION columnar_relation_storageid(relid oid) RETURNS bigint
     LANGUAGE C STABLE STRICT
     AS 'citus', $$columnar_relation_storageid$$;
+CREATE OR REPLACE FUNCTION columnar_storage_info(
+    rel regclass,
+    version_major OUT int4,
+    version_minor OUT int4,
+    storage_id OUT int8,
+    reserved_stripe_id OUT int8,
+    reserved_row_number OUT int8,
+    reserved_offset OUT int8)
+  STRICT
+  LANGUAGE c AS 'citus', $$columnar_storage_info$$;
 CREATE FUNCTION compression_type_supported(type text) RETURNS boolean
 AS $$
 BEGIN
