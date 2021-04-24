@@ -785,16 +785,7 @@ ReserveStripe(Relation rel, uint64 sizeBytes,
 {
 	StripeMetadata stripe = { 0 };
 
-	/*
-	 * We take ShareUpdateExclusiveLock here, so two space
-	 * reservations conflict, space reservation <-> vacuum
-	 * conflict, but space reservation doesn't conflict with
-	 * reads & writes.
-	 */
-	LockRelation(rel, ShareUpdateExclusiveLock);
-
 	uint64 storageId = ColumnarStorageGetStorageId(rel, false);
-
 
 	/*
 	 * TODO: For now, we don't use row number reservation at all, so just use
@@ -813,8 +804,6 @@ ReserveStripe(Relation rel, uint64 sizeBytes,
 	stripe.id = stripeId;
 
 	InsertStripeMetadataRow(storageId, &stripe);
-
-	UnlockRelation(rel, ShareUpdateExclusiveLock);
 
 	return stripe;
 }
