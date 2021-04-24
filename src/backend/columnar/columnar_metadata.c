@@ -42,7 +42,6 @@
 #include "commands/sequence.h"
 #include "commands/trigger.h"
 #include "distributed/metadata_cache.h"
-#include "distributed/resource_lock.h"
 #include "executor/executor.h"
 #include "executor/spi.h"
 #include "miscadmin.h"
@@ -70,8 +69,6 @@ static void InsertStripeMetadataRow(uint64 storageId, StripeMetadata *stripe);
 static void GetHighestUsedAddressAndId(uint64 storageId,
 									   uint64 *highestUsedAddress,
 									   uint64 *highestUsedId);
-static void LockForStripeReservation(Relation rel, LOCKMODE mode);
-static void UnlockForStripeReservation(Relation rel, LOCKMODE mode);
 static List * ReadDataFileStripeList(uint64 storageId, Snapshot snapshot);
 static uint32 * ReadChunkGroupRowCounts(uint64 storageId, uint64 stripe, uint32
 										chunkGroupCount);
@@ -777,35 +774,6 @@ GetHighestUsedAddressAndId(uint64 storageId,
 
 
 /*
- * LockForStripeReservation acquires a lock for stripe reservation.
- */
-static void
-LockForStripeReservation(Relation rel, LOCKMODE mode)
-{
-	/*
-	 * We use an advisory lock here so we can easily detect these kind of
-	 * locks in IsProcessWaitingForSafeOperations() and don't include them
-	 * in the lock graph.
-	 */
-	LOCKTAG tag;
-	SET_LOCKTAG_COLUMNAR_STRIPE_RESERVATION(tag, rel);
-	LockAcquire(&tag, mode, false, false);
-}
-
-
-/*
- * UnlockForStripeReservation releases the stripe reservation lock.
- */
-static void
-UnlockForStripeReservation(Relation rel, LOCKMODE mode)
-{
-	LOCKTAG tag;
-	SET_LOCKTAG_COLUMNAR_STRIPE_RESERVATION(tag, rel);
-	LockRelease(&tag, mode, false);
-}
-
-
-/*
  * ReserveStripe reserves and stripe of given size for the given relation,
  * and inserts it into columnar.stripe. It is guaranteed that concurrent
  * writes won't overwrite the returned stripe.
@@ -818,12 +786,15 @@ ReserveStripe(Relation rel, uint64 sizeBytes,
 	StripeMetadata stripe = { 0 };
 
 	/*
-	 * We take ExclusiveLock here, so two space reservations conflict.
+	 * We take ShareUpdateExclusiveLock here, so two space
+	 * reservations conflict, space reservation <-> vacuum
+	 * conflict, but space reservation doesn't conflict with
+	 * reads & writes.
 	 */
-	LOCKMODE lockMode = ExclusiveLock;
-	LockForStripeReservation(rel, lockMode);
+	LockRelation(rel, ShareUpdateExclusiveLock);
 
 	uint64 storageId = ColumnarStorageGetStorageId(rel, false);
+
 
 	/*
 	 * TODO: For now, we don't use row number reservation at all, so just use
@@ -843,7 +814,7 @@ ReserveStripe(Relation rel, uint64 sizeBytes,
 
 	InsertStripeMetadataRow(storageId, &stripe);
 
-	UnlockForStripeReservation(rel, lockMode);
+	UnlockRelation(rel, ShareUpdateExclusiveLock);
 
 	return stripe;
 }
