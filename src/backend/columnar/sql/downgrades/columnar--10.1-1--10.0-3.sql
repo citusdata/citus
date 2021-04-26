@@ -15,3 +15,6 @@ REFERENCES columnar.stripe(storage_id, stripe_num) ON DELETE CASCADE;
 -- upgrade storage for all columnar relations
 SELECT citus_internal.downgrade_columnar_storage(c.oid) FROM pg_class c, pg_am a
   WHERE c.relam = a.oid AND amname = 'columnar';
+
+DROP FUNCTION citus_internal.upgrade_columnar_storage(regclass);
+DROP FUNCTION citus_internal.downgrade_columnar_storage(regclass);
