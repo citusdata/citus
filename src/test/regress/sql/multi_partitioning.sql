@@ -1230,15 +1230,15 @@ SELECT create_distributed_table('"events.Energy Added"', 'user_id', colocate_wit
 CREATE TABLE "Energy Added_17634"  PARTITION OF "events.Energy Added" FOR VALUES  FROM ('2018-04-13 00:00:00+00') TO ('2018-04-14 00:00:00+00');
 
 -- test shard cost by disk size function
-SELECT citus_shard_cost_by_disk_size(1660207);
+SELECT citus_shard_cost_by_disk_size(shardid) FROM pg_dist_shard WHERE logicalrelid = '"events.Energy Added"'::regclass ORDER BY shardid LIMIT 1;
 CREATE INDEX idx_btree_hobbies ON "events.Energy Added" USING BTREE ((data->>'location'));
  \c - - - :worker_1_port
 -- should not be zero because of TOAST, vm, fms
-SELECT worker_partitioned_table_size('"events.Energy Added_1660207"');
+SELECT worker_partitioned_table_size(oid) FROM pg_class WHERE relname LIKE '%events.Energy Added%' ORDER BY relname LIMIT 1;
 -- should be zero since no data
-SELECT worker_partitioned_relation_size('"events.Energy Added_1660207"');
+SELECT worker_partitioned_relation_size(oid) FROM pg_class WHERE relname LIKE '%events.Energy Added%' ORDER BY relname LIMIT 1;
 -- should not be zero because of indexes + pg_table_size()
-SELECT worker_partitioned_relation_total_size('"events.Energy Added_1660207"');
+SELECT worker_partitioned_relation_total_size(oid) FROM pg_class WHERE relname LIKE '%events.Energy Added%' ORDER BY relname LIMIT 1;
  \c - - - :master_port
 DROP TABLE "events.Energy Added";
 
