@@ -41,7 +41,7 @@ def main():
 		regexpipeline.append(re.compile(rule.group('rule')))
 
 	def sed(line):
-		if any(regex.match(line) for regex in regexpipeline):
+		if any(regex.search(line) for regex in regexpipeline):
 			return None
 		return line
 
