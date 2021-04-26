@@ -555,9 +555,7 @@ ALTER EXTENSION citus UPDATE TO '10.0-3';
 SELECT * FROM print_extension_changes();
  previous_object | current_object
 ---------------------------------------------------------------------
-                 | function citus_internal.downgrade_columnar_storage(regclass)
-                 | function citus_internal.upgrade_columnar_storage(regclass)
-(2 rows)
+(0 rows)
 
 -- Snapshot of state at 10.1-1
 ALTER EXTENSION citus UPDATE TO '10.1-1';
@@ -566,11 +564,13 @@ SELECT * FROM print_extension_changes();
 ---------------------------------------------------------------------
  function citus_internal.columnar_ensure_objects_exist()                       |
  function create_distributed_table(regclass,text,citus.distribution_type,text) |
+                                                                               | function citus_internal.downgrade_columnar_storage(regclass)
+                                                                               | function citus_internal.upgrade_columnar_storage(regclass)
                                                                                | function create_distributed_table(regclass,text,citus.distribution_type,text,integer)
                                                                                | function worker_partitioned_relation_size(regclass)
                                                                                | function worker_partitioned_relation_total_size(regclass)
                                                                                | function worker_partitioned_table_size(regclass)
-(6 rows)
+(8 rows)
 
 DROP TABLE prev_objects, extension_diff;
 -- show running version
