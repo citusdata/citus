@@ -43,3 +43,17 @@ FROM pg_class c, pg_am a
 WHERE c.relam = a.oid AND amname = 'columnar' and relname = 'columnar_table_2';
 
 SELECT columnar_storage_info('columnar_table_2');
+
+-- show that we populated first_row_number column when ugrading citus
+SELECT columnar_table_storageids.relname,
+       columnar.stripe.stripe_num,
+       columnar.stripe.row_count,
+       columnar.stripe.first_row_number
+FROM columnar.stripe,
+(
+  SELECT c.oid relid, c.relname relname, (columnar_storage_info(c.oid)).storage_id relstorageid
+  FROM pg_class c, pg_am a
+  WHERE c.relam = a.oid AND amname = 'columnar'
+) columnar_table_storageids
+WHERE relstorageid = columnar.stripe.storage_id
+ORDER BY 1,2;

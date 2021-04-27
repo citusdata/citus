@@ -27,6 +27,24 @@ DROP FUNCTION citus_internal.columnar_ensure_objects_exist();
 ALTER TABLE columnar.stripe ADD COLUMN first_row_number bigint;
 CREATE INDEX stripe_first_row_number_idx ON columnar.stripe USING BTREE(storage_id, first_row_number);
 
+-- Populate first_row_number column of columnar.stripe table.
+--
+-- For simplicity, we calculate MAX(row_count) value across all the stripes
+-- of all the columanar tables and then use it to populate first_row_number
+-- column. This would introduce some gaps however we are okay with that since
+-- it's already the case with regular INSERT/COPY's.
+DO $$
+DECLARE
+  max_row_count bigint;
+  -- this should be equal to columnar_storage.h/COLUMNAR_FIRST_ROW_NUMBER
+  COLUMNAR_FIRST_ROW_NUMBER constant bigint := 1;
+BEGIN
+  SELECT MAX(row_count) INTO max_row_count FROM columnar.stripe;
+  UPDATE columnar.stripe SET first_row_number = COLUMNAR_FIRST_ROW_NUMBER +
+                                                (stripe_num - 1) * max_row_count;
+END;
+$$;
+
 #include "udfs/upgrade_columnar_storage/10.1-1.sql"
 #include "udfs/downgrade_columnar_storage/10.1-1.sql"
 
