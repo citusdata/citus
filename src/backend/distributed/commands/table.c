@@ -28,6 +28,7 @@
 #include "distributed/coordinator_protocol.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/metadata/dependency.h"
+#include "distributed/metadata/distobject.h"
 #include "distributed/multi_executor.h"
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/reference_table_utils.h"
@@ -698,6 +699,25 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 					strcmp(typeName, "serial8") == 0)
 				{
 					deparseAT = true;
+					/* Oid snamespaceid; */
+					/* char *snamespace; */
+					/* char *sname; */
+
+					/* if (cxt->rel) */
+					/* { */
+					/* 	snamespaceid = RelationGetNamespace(cxt->rel); */
+					/* } */
+					/* else */
+					/* { */
+					/* 	snamespaceid = RangeVarGetCreationNamespace(cxt->relation); */
+					/* 	RangeVarAdjustRelationPersistence(cxt->relation, snamespaceid); */
+					/* } */
+					/* snamespace = get_namespace_name(snamespaceid); */
+					/* sname = ChooseRelationName(cxt->relation->relname, */
+					/* 						   column->colname, */
+					/* 						   "seq", */
+					/* 						   snamespaceid, */
+					/* 						   false); */
 				}
 			}
 		}
@@ -783,13 +803,13 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 	ddlJob->targetRelationId = leftRelationId;
 	ddlJob->concurrentIndexCmd = false;
 
-	char *sql = (char *) alterTableCommand;
+	const char *sqlForTaskList = alterTableCommand;
 	if (deparseAT)
 	{
-		sql = DeparseTreeNode((Node *) alterTableStatement);
+		sqlForTaskList = DeparseTreeNode((Node *) alterTableStatement);
 	}
 
-	ddlJob->commandString = sql;
+	ddlJob->commandString = alterTableCommand;
 
 	if (OidIsValid(rightRelationId))
 	{
@@ -802,13 +822,13 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 		{
 			/* if foreign key related, use specialized task list function ... */
 			ddlJob->taskList = InterShardDDLTaskList(leftRelationId, rightRelationId,
-													 sql);
+													 sqlForTaskList);
 		}
 	}
 	else
 	{
 		/* ... otherwise use standard DDL task list function */
-		ddlJob->taskList = DDLTaskList(leftRelationId, sql);
+		ddlJob->taskList = DDLTaskList(leftRelationId, sqlForTaskList);
 	}
 
 	List *ddlJobs = list_make1(ddlJob);
@@ -1475,11 +1495,6 @@ PostprocessAlterTableStmt(AlterTableStmt *alterTableStatement)
 		EnsureDependenciesExistOnAllNodes(&tableAddress);
 	}
 
-	/* if (ShouldSyncTableMetadata(relationId)) */
-	/* { */
-	/* 	CreateTableMetadataOnWorkers(relationId); */
-	/* } */
-
 	List *commandList = alterTableStatement->cmds;
 	AlterTableCmd *command = NULL;
 	foreach_ptr(command, commandList)
@@ -1530,6 +1545,36 @@ PostprocessAlterTableStmt(AlterTableStmt *alterTableStatement)
 														constraint);
 				}
 			}
+		}
+	}
+
+	/* for the new sequences coming with this ALTER TABLE statement */
+	if (ShouldSyncTableMetadata(relationId))
+	{
+		List *sequenceCommandList = NIL;
+
+		/* if the table is owned by an extension we only propagate pg_dist_* records */
+		bool tableOwnedByExtension = IsTableOwnedByExtension(relationId);
+		if (!tableOwnedByExtension)
+		{
+			/* commands to create sequences */
+			List *sequenceDDLCommands = SequenceDDLCommandsForTable(relationId);
+			sequenceCommandList = list_concat(sequenceCommandList, sequenceDDLCommands);
+
+			/* command to associate sequences with table */
+			/* List *sequenceDependencyCommandList = SequenceDependencyCommandList( */
+			/* 	relationId); */
+			/* sequenceCommandList = list_concat(sequenceCommandList, sequenceDependencyCommandList); */
+		}
+
+		/* prevent recursive propagation */
+		SendCommandToWorkersWithMetadata(DISABLE_DDL_PROPAGATION);
+
+		/* send the commands one by one */
+		const char *sequenceCommand = NULL;
+		foreach_ptr(sequenceCommand, sequenceCommandList)
+		{
+			SendCommandToWorkersWithMetadata(sequenceCommand);
 		}
 	}
 }

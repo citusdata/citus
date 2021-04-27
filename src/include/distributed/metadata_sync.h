@@ -55,6 +55,8 @@ extern void SyncMetadataToNodesMain(Datum main_arg);
 extern void SignalMetadataSyncDaemon(Oid database, int sig);
 extern bool ShouldInitiateMetadataSync(bool *lockFailure);
 
+extern List * SequenceDDLCommandsForTable(Oid relationId);
+extern List * SequenceDependencyCommandList(Oid relationId);
 extern List * GetDependentSequencesWithRelation(Oid relationId, AttrNumber attnum);
 
 #define DELETE_ALL_NODES "TRUNCATE pg_dist_node CASCADE"

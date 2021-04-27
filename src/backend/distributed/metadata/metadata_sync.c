@@ -69,8 +69,6 @@ static List * GetDistributedTableDDLEvents(Oid relationId);
 static char * LocalGroupIdUpdateCommand(int32 groupId);
 static void UpdateDistNodeBoolAttr(const char *nodeName, int32 nodePort,
 								   int attrNum, bool value);
-static List * SequenceDDLCommandsForTable(Oid relationId);
-static List * SequenceDependencyCommandList(Oid relationId);
 static char * TruncateTriggerCreateCommand(Oid relationId);
 static char * SchemaOwnerName(Oid objectId);
 static bool HasMetadataWorkers(void);
@@ -1194,7 +1192,7 @@ GetSequencesFromAttrDef(Oid attrdefOid)
  * necessary to ensure that the sequence is dropped when the table is
  * dropped.
  */
-static List *
+List *
 SequenceDependencyCommandList(Oid relationId)
 {
 	List *sequenceCommandList = NIL;
