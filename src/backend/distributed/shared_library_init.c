@@ -931,7 +931,7 @@ RegisterCitusConfigVariables(void)
 		gettext_noop(
 			"Free disk space will be checked when this setting is enabled before each shard move."
 			"See citus.delete_old_shards_sleep_time and citus.delete_old_shards_max_tries"),
-		&CheckAvailableSpace,
+		&CheckAvailableSpaceBeforeMove,
 		true,
 		PGC_USERSET,
 		0,
@@ -1004,7 +1004,7 @@ RegisterCitusConfigVariables(void)
 					 "changes that and its value will always interpreted as the"
 					 "size available on the worker. If it's -1 the actual size"
 					 "of the worker will be used. "),
-		&ForceDiskAvailable,
+		&ForceDiskAvailableInBytes,
 		-1, -1, INT_MAX,
 		PGC_USERSET,
 		GUC_NO_SHOW_ALL,
@@ -1017,7 +1017,7 @@ RegisterCitusConfigVariables(void)
 					 "changes that and its value will always interpreted as the"
 					 "size available on the worker. If it's -1 the actual size"
 					 "of the worker will be used. "),
-		&ForceDiskSize,
+		&ForceDiskSizeInBytes,
 		-1, -1, INT_MAX,
 		PGC_USERSET,
 		GUC_NO_SHOW_ALL,

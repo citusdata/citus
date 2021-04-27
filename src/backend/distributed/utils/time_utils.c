@@ -12,7 +12,8 @@
  * WaitForMiliseconds waits for given timeout and then checks for some
  * interrupts.
  */
-void WaitForMiliseconds(long timeout)
+void
+WaitForMiliseconds(long timeout)
 {
 	int latchFlags = WL_LATCH_SET | WL_TIMEOUT | WL_POSTMASTER_DEATH;
 

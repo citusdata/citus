@@ -88,7 +88,7 @@ static void UpdateColocatedShardPlacementMetadataOnWorkers(int64 shardId,
 														   char *targetNodeName,
 														   int32 targetNodePort);
 static DeferredErrorMessage * CheckSpaceConstraints(MultiConnection *connection,
-													int64 colocationSize);
+													int64 colocationSizeInBytes);
 static void EnsureEnoughDiskSpaceForShardMove(List *colocatedShardList,
 											  char *sourceNodeName, uint32 sourceNodePort,
 											  char *targetNodeName, uint32
@@ -102,15 +102,16 @@ PG_FUNCTION_INFO_V1(master_move_shard_placement);
 PG_FUNCTION_INFO_V1(citus_disk_available);
 PG_FUNCTION_INFO_V1(citus_disk_size);
 
+#define NOT_SET -1
 
 bool DeferShardDeleteOnMove = false;
-int ForceDiskAvailable = -1;
-int ForceDiskSize = -1;
+int ForceDiskAvailableInBytes = NOT_SET;
+int ForceDiskSizeInBytes = NOT_SET;
 
 int WaitForDeferShardRetryTimeInSec = 30;
 int WaitForDeferShardsMaxTries = 5;
 double DesiredPercentFreeAfterMove = 5;
-bool CheckAvailableSpace = true;
+bool CheckAvailableSpaceBeforeMove = true;
 
 
 /*
@@ -178,10 +179,11 @@ master_copy_shard_placement(PG_FUNCTION_ARGS)
 
 
 /*
- * ColocationSize returns the size in bytes of a set of colocated tables.
+ * ColocationSizeInBytes returns the size in bytes of a set of colocated tables.
  */
 int64
-ColocationSize(List *colocatedShardList, char *workerNodeName, uint32 workerNodePort)
+ColocationSizeInBytes(List *colocatedShardList, char *workerNodeName, uint32
+					  workerNodePort)
 {
 	uint32 connectionFlag = 0;
 
@@ -229,49 +231,62 @@ ColocationSize(List *colocatedShardList, char *workerNodeName, uint32 workerNode
  */
 static
 DeferredErrorMessage *
-CheckSpaceConstraints(MultiConnection *connection, int64 colocationSize)
+CheckSpaceConstraints(MultiConnection *connection, int64 colocationSizeInBytes)
 {
-	if (!CheckAvailableSpace)
+	if (!CheckAvailableSpaceBeforeMove)
 	{
 		return NULL;
 	}
-	int64 diskAvailable = 0;
-	int64 diskSize = 0;
+	int64 diskAvailableInBytes = 0;
+	int64 diskSizeInBytes = 0;
 	StringInfo errorDetail = makeStringInfo();
-	if (ForceDiskAvailable != -1)
+	if (ForceDiskAvailableInBytes != NOT_SET)
 	{
-		diskAvailable = ForceDiskAvailable;
+		diskAvailableInBytes = ForceDiskAvailableInBytes;
 	}
 	else
 	{
-		diskAvailable = ExecuteRemoteInt64Command(connection,
-												  "select pg_catalog.citus_disk_available()");
+		diskAvailableInBytes = ExecuteRemoteInt64Command(connection,
+														 "select pg_catalog.citus_disk_available()");
 	}
-	if (ForceDiskSize != -1)
+	if (ForceDiskSizeInBytes != NOT_SET)
 	{
-		diskSize = ForceDiskSize;
+		diskSizeInBytes = ForceDiskSizeInBytes;
 	}
 	else
 	{
-		diskSize = ExecuteRemoteInt64Command(connection,
-											 "select pg_catalog.citus_disk_size()");
+		diskSizeInBytes = ExecuteRemoteInt64Command(connection,
+													"select pg_catalog.citus_disk_size()");
 	}
 
-	if (diskAvailable < colocationSize)
+	if (diskAvailableInBytes < colocationSizeInBytes)
 	{
-		appendStringInfo(errorDetail, "actual space %ld, required space %ld",
-						 diskAvailable, colocationSize);
+		bool isAvailableSpaceForced = (ForceDiskAvailableInBytes != NOT_SET);
+		if (isAvailableSpaceForced)
+		{
+			appendStringInfo(errorDetail,
+							 "actual space %ld bytes (forced), required space %ld bytes",
+							 diskAvailableInBytes, colocationSizeInBytes);
+		}
+		else
+		{
+			appendStringInfo(errorDetail,
+							 "actual space %ld bytes, required space %ld bytes",
+							 diskAvailableInBytes, colocationSizeInBytes);
+		}
+
 		return DeferredError(ERRCODE_INSUFFICIENT_RESOURCES,
 							 "not enough space to move shard",
 							 errorDetail->data, NULL);
 	}
-	int64 newDiskAvailable = diskAvailable - colocationSize;
-	int64 desiredNewDiskAvailable = diskSize * (DesiredPercentFreeAfterMove / 100);
-	if (newDiskAvailable < desiredNewDiskAvailable)
+	int64 newDiskAvailableInBytes = diskAvailableInBytes - colocationSizeInBytes;
+	int64 desiredNewDiskAvailableInBytes = diskSizeInBytes *
+										   (DesiredPercentFreeAfterMove / 100);
+	if (newDiskAvailableInBytes < desiredNewDiskAvailableInBytes)
 	{
-		appendStringInfo(errorDetail, "actual available space after move %ld, "
-									  "desired available space after move %ld",
-						 newDiskAvailable, desiredNewDiskAvailable);
+		appendStringInfo(errorDetail, "actual available space after move %ld bytes, "
+									  "desired available space after move %ld bytes",
+						 newDiskAvailableInBytes, desiredNewDiskAvailableInBytes);
 		return DeferredError(ERRCODE_INSUFFICIENT_RESOURCES,
 							 "not enough empty space on node after move",
 							 errorDetail->data,
@@ -423,8 +438,9 @@ EnsureEnoughDiskSpaceForShardMove(List *colocatedShardList,
 								  char *sourceNodeName, uint32 sourceNodePort,
 								  char *targetNodeName, uint32 targetNodePort)
 {
-	int64 colocationSize = ColocationSize(colocatedShardList, sourceNodeName,
-										  sourceNodePort);
+	int64 colocationSizeInBytes = ColocationSizeInBytes(colocatedShardList,
+														sourceNodeName,
+														sourceNodePort);
 
 	uint32 connectionFlag = 0;
 	MultiConnection *connection = GetNodeConnection(connectionFlag, targetNodeName,
@@ -432,7 +448,7 @@ EnsureEnoughDiskSpaceForShardMove(List *colocatedShardList,
 	int checkSpaceTries = 0;
 	while (true)
 	{
-		bool droppedAllShards = false;
+		bool droppedAllOldShards = false;
 		if (checkSpaceTries > 0)
 		{
 			/*
@@ -445,11 +461,11 @@ EnsureEnoughDiskSpaceForShardMove(List *colocatedShardList,
 			ereport(NOTICE, (errmsg("trying to drop shards to resolve issue...")));
 
 			bool waitForCleanupLock = true;
-			droppedAllShards = DropMarkedShards(waitForCleanupLock, NULL);
+			droppedAllOldShards = DropMarkedShards(waitForCleanupLock, NULL);
 
 			/*
 			 * NOTE: It actually doesn't make sense to wait in some cases where
-			 * it does droppedAllShards is false. Most importantly the case
+			 * it does droppedAllOldShards is false. Most importantly the case
 			 * where there are no shards marked for removal on the target
 			 * shard. It's not a big issue though, since in this case we simply
 			 * error out after a couple of more rounds of trying to drop the
@@ -458,13 +474,13 @@ EnsureEnoughDiskSpaceForShardMove(List *colocatedShardList,
 		}
 
 		DeferredErrorMessage *temporaryError = CheckSpaceConstraints(connection,
-																	 colocationSize);
+																	 colocationSizeInBytes);
 		if (temporaryError == NULL)
 		{
 			break;
 		}
 
-		if (droppedAllShards)
+		if (droppedAllOldShards)
 		{
 			/*
 			 * If we dropped all shards but still don't have enough space for shard move

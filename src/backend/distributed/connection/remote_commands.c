@@ -420,6 +420,9 @@ ExecuteCriticalRemoteCommandWithResult(MultiConnection *connection, const char *
 }
 
 
+/*
+ * ExecuteRemoteInt64Command executes the given command and expects an int result.
+ */
 int64
 ExecuteRemoteInt64Command(MultiConnection *connection, const char *command)
 {

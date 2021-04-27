@@ -11,7 +11,7 @@
 
 #include "nodes/pg_list.h"
 
-extern int ForceDiskAvailable;
-extern int ForceDiskSize;
-extern int64 ColocationSize(List *colocatedShardList,
-							char *workerNodeName, uint32 workerNodePort);
+extern int ForceDiskAvailableInBytes;
+extern int ForceDiskSizeInBytes;
+extern int64 ColocationSizeInBytes(List *colocatedShardList,
+								   char *workerNodeName, uint32 workerNodePort);

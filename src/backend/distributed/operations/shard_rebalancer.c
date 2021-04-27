@@ -448,16 +448,16 @@ citus_shard_cost_by_disk_size(PG_FUNCTION_ARGS)
 	ShardInterval *shardInterval = LoadShardInterval(shardId);
 	List *colocatedShardList = ColocatedShardIntervalList(shardInterval);
 
-	uint64 colocationSize = ColocationSize(colocatedShardList,
-										   shardPlacement->nodeName,
-										   shardPlacement->nodePort);
+	uint64 colocationSizeInBytes = ColocationSizeInBytes(colocatedShardList,
+														 shardPlacement->nodeName,
+														 shardPlacement->nodePort);
 
-	if (colocationSize <= 0)
+	if (colocationSizeInBytes <= 0)
 	{
 		PG_RETURN_FLOAT4(1);
 	}
 
-	PG_RETURN_FLOAT4(colocationSize);
+	PG_RETURN_FLOAT4(colocationSizeInBytes);
 }
 
 

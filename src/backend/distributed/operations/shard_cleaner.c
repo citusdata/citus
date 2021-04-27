@@ -43,8 +43,8 @@ master_defer_delete_shards(PG_FUNCTION_ARGS)
 
 	bool waitForCleanupLock = true;
 	int droppedShardCount = 0;
-	bool droppedAll = DropMarkedShards(waitForCleanupLock, &droppedShardCount);
-	if (!droppedAll)
+	bool droppedAllOldShards = DropMarkedShards(waitForCleanupLock, &droppedShardCount);
+	if (!droppedAllOldShards)
 	{
 		ereport(WARNING, (errmsg("not all shards could be dropped")));
 	}

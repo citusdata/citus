@@ -86,6 +86,12 @@ SELECT citus_shard_cost_by_disk_size(20000001);
 -- When there's not enough space the move should fail
 SELECT master_move_shard_placement(20000001, 'localhost', :worker_2_port, 'localhost', :worker_1_port);
 
+BEGIN;
+-- when we disable the setting, the move should not give "not enough space" error
+set citus.check_available_space_before_move to false;
+SELECT master_move_shard_placement(20000001, 'localhost', :worker_2_port, 'localhost', :worker_1_port);
+ROLLBACK;
+
 -- we expect shard 0 to be on only the second worker now, since
 -- master_move_shard_placement will try to drop marked shards
 SELECT run_command_on_workers($cmd$
