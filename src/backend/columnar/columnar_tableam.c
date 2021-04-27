@@ -82,12 +82,6 @@ typedef struct ColumnarScanDescData
 	MemoryContext scanContext;
 	Bitmapset *attr_needed;
 	List *scanQual;
-
-	/*
-	 * ANALYZE requires an item pointer for sorting. We keep track of row
-	 * number so we can construct an item pointer based on that.
-	 */
-	uint64 rowNumber;
 } ColumnarScanDescData;
 
 typedef struct ColumnarScanDescData *ColumnarScanDesc;
@@ -116,6 +110,7 @@ static void TruncateColumnar(Relation rel, int elevel);
 static HeapTuple ColumnarSlotCopyHeapTuple(TupleTableSlot *slot);
 static void ColumnarCheckLogicalReplication(Relation rel);
 static Datum * detoast_values(TupleDesc tupleDesc, Datum *orig_values, bool *isnull);
+static ItemPointerData row_number_to_tid(uint64 rowNumber);
 
 /* Custom tuple slot ops used for columnar. Initialized in columnar_tableam_init(). */
 static TupleTableSlotOps TTSOpsColumnar;
@@ -265,8 +260,9 @@ columnar_getnextslot(TableScanDesc sscan, ScanDirection direction, TupleTableSlo
 
 	ExecClearTuple(slot);
 
+	uint64 rowNumber;
 	bool nextRowFound = ColumnarReadNextRow(scan->cs_readState, slot->tts_values,
-											slot->tts_isnull);
+											slot->tts_isnull, &rowNumber);
 
 	if (!nextRowFound)
 	{
@@ -275,20 +271,38 @@ columnar_getnextslot(TableScanDesc sscan, ScanDirection direction, TupleTableSlo
 
 	ExecStoreVirtualTuple(slot);
 
-	/*
-	 * Set slot's item pointer block & offset to non-zero. These are
-	 * used just for sorting in acquire_sample_rows(), so rowNumber
-	 * is good enough. See ColumnarSlotCopyHeapTuple for more info.
-	 *
-	 * offset is 16-bits, so use the first 15 bits for offset and
-	 * rest as block number.
-	 */
-	ItemPointerSetBlockNumber(&(slot->tts_tid), scan->rowNumber / (32 * 1024) + 1);
-	ItemPointerSetOffsetNumber(&(slot->tts_tid), scan->rowNumber % (32 * 1024) + 1);
-
-	scan->rowNumber++;
+	slot->tts_tid = row_number_to_tid(rowNumber);
 
 	return true;
+}
+
+
+/*
+ * row_number_to_tid maps given rowNumber to ItemPointerData.
+ */
+static ItemPointerData
+row_number_to_tid(uint64 rowNumber)
+{
+	if (rowNumber == COLUMNAR_INVALID_ROW_NUMBER)
+	{
+		/* not expected but be on the safe side */
+		ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
+						errmsg("unexpected row number for columnar table")));
+	}
+	else if (rowNumber > COLUMNAR_MAX_ROW_NUMBER)
+	{
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("columnar tables can't have row numbers "
+							   "greater than " UINT64_FORMAT,
+							   (uint64) COLUMNAR_MAX_ROW_NUMBER),
+						errhint("Consider using VACUUM FULL for your table")));
+	}
+
+	ItemPointerData tid = { 0 };
+	ItemPointerSetBlockNumber(&tid, rowNumber / VALID_ITEMPOINTER_OFFSETS);
+	ItemPointerSetOffsetNumber(&tid, rowNumber % VALID_ITEMPOINTER_OFFSETS +
+							   FirstOffsetNumber);
+	return tid;
 }
 
 
@@ -412,7 +426,8 @@ columnar_tuple_insert(Relation relation, TupleTableSlot *slot, CommandId cid,
 	Datum *values = detoast_values(slot->tts_tupleDescriptor,
 								   slot->tts_values, slot->tts_isnull);
 
-	ColumnarWriteRow(writeState, values, slot->tts_isnull);
+	uint64 writtenRowNumber = ColumnarWriteRow(writeState, values, slot->tts_isnull);
+	slot->tts_tid = row_number_to_tid(writtenRowNumber);
 
 	MemoryContextSwitchTo(oldContext);
 	MemoryContextReset(ColumnarWritePerTupleContext(writeState));
@@ -458,7 +473,10 @@ columnar_multi_insert(Relation relation, TupleTableSlot **slots, int ntuples,
 		Datum *values = detoast_values(tupleSlot->tts_tupleDescriptor,
 									   tupleSlot->tts_values, tupleSlot->tts_isnull);
 
-		ColumnarWriteRow(writeState, values, tupleSlot->tts_isnull);
+		uint64 writtenRowNumber = ColumnarWriteRow(writeState, values,
+												   tupleSlot->tts_isnull);
+		tupleSlot->tts_tid = row_number_to_tid(writtenRowNumber);
+
 		MemoryContextReset(ColumnarWritePerTupleContext(writeState));
 	}
 
@@ -629,7 +647,8 @@ columnar_relation_copy_for_cluster(Relation OldHeap, Relation NewHeap,
 
 	*num_tuples = 0;
 
-	while (ColumnarReadNextRow(readState, values, nulls))
+	/* we don't need to know rowNumber here */
+	while (ColumnarReadNextRow(readState, values, nulls, NULL))
 	{
 		ColumnarWriteRow(writeState, values, nulls);
 		(*num_tuples)++;
@@ -1180,13 +1199,7 @@ ColumnarSlotCopyHeapTuple(TupleTableSlot *slot)
 									  slot->tts_values,
 									  slot->tts_isnull);
 
-	/*
-	 * We need to set item pointer, since implementation of ANALYZE
-	 * requires it. See the qsort in acquire_sample_rows() and
-	 * also compare_rows in backend/commands/analyze.c.
-	 *
-	 * slot->tts_tid is filled in columnar_getnextslot.
-	 */
+	/* slot->tts_tid is filled in columnar_getnextslot */
 	tuple->t_self = slot->tts_tid;
 
 	return tuple;
