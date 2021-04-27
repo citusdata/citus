@@ -43,6 +43,7 @@ struct ColumnarWriteState
 	MemoryContext perTupleContext;
 	StripeBuffers *stripeBuffers;
 	StripeSkipList *stripeSkipList;
+	uint64 stripeFirstRowNumber;
 	ColumnarOptions options;
 	ChunkData *chunkData;
 
@@ -129,6 +130,7 @@ ColumnarBeginWrite(RelFileNode relfilenode,
 	writeState->comparisonFunctionArray = comparisonFunctionArray;
 	writeState->stripeBuffers = NULL;
 	writeState->stripeSkipList = NULL;
+	writeState->stripeFirstRowNumber = COLUMNAR_INVALID_ROW_NUMBER;
 	writeState->stripeWriteContext = stripeWriteContext;
 	writeState->chunkData = chunkData;
 	writeState->compressionBuffer = NULL;
@@ -147,8 +149,10 @@ ColumnarBeginWrite(RelFileNode relfilenode,
  * corresponding skip nodes. Then, whole chunk data is compressed at every
  * rowChunkCount insertion. Then, if row count exceeds stripeMaxRowCount, we flush
  * the stripe, and add its metadata to the table footer.
+ *
+ * Returns the "row number" assigned to written row.
  */
-void
+uint64
 ColumnarWriteRow(ColumnarWriteState *writeState, Datum *columnValues, bool *columnNulls)
 {
 	uint32 columnIndex = 0;
@@ -169,6 +173,14 @@ ColumnarWriteRow(ColumnarWriteState *writeState, Datum *columnValues, bool *colu
 		writeState->stripeBuffers = stripeBuffers;
 		writeState->stripeSkipList = stripeSkipList;
 		writeState->compressionBuffer = makeStringInfo();
+
+		Oid relationId = RelidByRelfilenode(writeState->relfilenode.spcNode,
+											writeState->relfilenode.relNode);
+		Relation relation = relation_open(relationId, NoLock);
+		writeState->stripeFirstRowNumber =
+			ColumnarStorageReserveRowNumber(relation,
+											options->stripeRowCount);
+		relation_close(relation, NoLock);
 
 		/*
 		 * serializedValueBuffer lives in stripe write memory context so it needs to be
@@ -226,6 +238,7 @@ ColumnarWriteRow(ColumnarWriteState *writeState, Datum *columnValues, bool *colu
 		SerializeChunkData(writeState, chunkIndex, chunkRowCount);
 	}
 
+	uint64 writtenRowNumber = writeState->stripeFirstRowNumber + stripeBuffers->rowCount;
 	stripeBuffers->rowCount++;
 	if (stripeBuffers->rowCount >= options->stripeRowCount)
 	{
@@ -233,6 +246,8 @@ ColumnarWriteRow(ColumnarWriteState *writeState, Datum *columnValues, bool *colu
 	}
 
 	MemoryContextSwitchTo(oldContext);
+
+	return writtenRowNumber;
 }
 
 
@@ -429,7 +444,7 @@ FlushStripe(ColumnarWriteState *writeState)
 
 	stripeMetadata = ReserveStripe(relation, stripeSize,
 								   stripeRowCount, columnCount, chunkCount,
-								   chunkRowCount);
+								   chunkRowCount, writeState->stripeFirstRowNumber);
 
 	uint64 currentFileOffset = stripeMetadata.fileOffset;
 

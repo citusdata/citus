@@ -15,7 +15,10 @@ CREATE TABLE columnar_table_1(a INT, b INT) USING columnar;
 INSERT INTO columnar_table_1 SELECT i FROM generate_series(160001, 320000) i;
 
 CREATE TABLE columnar_table_2(b INT) USING columnar;
-INSERT INTO columnar_table_2 VALUES (160);
+SELECT alter_columnar_table_set('columnar_table_2',
+                                chunk_group_row_limit => 100,
+                                stripe_row_limit => 1000);
+INSERT INTO columnar_table_2 SELECT i FROM generate_series(1600, 3500) i;
 
 CREATE TABLE columnar_table_3(b INT) USING columnar;
 INSERT INTO columnar_table_3 VALUES (1), (2);

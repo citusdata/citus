@@ -201,8 +201,8 @@ extern CompressionType ParseCompressionType(const char *compressionTypeString);
 extern ColumnarWriteState * ColumnarBeginWrite(RelFileNode relfilenode,
 											   ColumnarOptions options,
 											   TupleDesc tupleDescriptor);
-extern void ColumnarWriteRow(ColumnarWriteState *state, Datum *columnValues,
-							 bool *columnNulls);
+extern uint64 ColumnarWriteRow(ColumnarWriteState *state, Datum *columnValues,
+							   bool *columnNulls);
 extern void ColumnarFlushPendingWrites(ColumnarWriteState *state);
 extern void ColumnarEndWrite(ColumnarWriteState *state);
 extern bool ContainsPendingWrites(ColumnarWriteState *state);
@@ -214,7 +214,7 @@ extern ColumnarReadState * ColumnarBeginRead(Relation relation,
 											 List *projectedColumnList,
 											 List *qualConditions);
 extern bool ColumnarReadNextRow(ColumnarReadState *state, Datum *columnValues,
-								bool *columnNulls);
+								bool *columnNulls, uint64 *rowNumber);
 extern void ColumnarRescan(ColumnarReadState *readState);
 extern void ColumnarEndRead(ColumnarReadState *state);
 extern int64 ColumnarReadChunkGroupsFiltered(ColumnarReadState *state);
@@ -241,7 +241,8 @@ extern uint64 ColumnarMetadataNewStorageId(void);
 extern uint64 GetHighestUsedAddress(RelFileNode relfilenode);
 extern StripeMetadata ReserveStripe(Relation rel, uint64 size,
 									uint64 rowCount, uint64 columnCount,
-									uint64 chunkCount, uint64 chunkGroupRowCount);
+									uint64 chunkCount, uint64 chunkGroupRowCount,
+									uint64 stripeFirstRowNumber);
 extern void SaveStripeSkipList(RelFileNode relfilenode, uint64 stripe,
 							   StripeSkipList *stripeSkipList,
 							   TupleDesc tupleDescriptor);

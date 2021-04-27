@@ -25,6 +25,7 @@ typedef struct StripeMetadata
 	uint32 chunkGroupRowCount;
 	uint64 rowCount;
 	uint64 id;
+	uint64 firstRowNumber;
 } StripeMetadata;
 
 extern List * StripesForRelfilenode(RelFileNode relfilenode);

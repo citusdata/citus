@@ -260,7 +260,7 @@ ABORT;
 -- all below 5 commands should throw no permission errors
 -- read columnar metadata table
 SELECT * FROM columnar.stripe;
- storage_id | stripe_num | file_offset | data_length | column_count | chunk_row_count | row_count | chunk_group_count
+ storage_id | stripe_num | file_offset | data_length | column_count | chunk_row_count | row_count | chunk_group_count | first_row_number
 ---------------------------------------------------------------------
 (0 rows)
 

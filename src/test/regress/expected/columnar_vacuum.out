@@ -30,7 +30,7 @@ select
   from columnar_test_helpers.columnar_storage_info('t');
  version_major | version_minor | reserved_stripe_id | reserved_row_number | reserved_offset
 ---------------------------------------------------------------------
-             2 |             0 |                  4 |                   1 |           32756
+             2 |             0 |                  4 |              450001 |           32756
 (1 row)
 
 -- vacuum full should merge stripes together
@@ -58,7 +58,7 @@ select
   from columnar_test_helpers.columnar_storage_info('t');
  version_major | version_minor | reserved_stripe_id | reserved_row_number | reserved_offset
 ---------------------------------------------------------------------
-             2 |             0 |                  2 |                   1 |           16584
+             2 |             0 |                  2 |              150001 |           16584
 (1 row)
 
 -- test the case when all data cannot fit into a single stripe
@@ -87,7 +87,7 @@ select
   from columnar_test_helpers.columnar_storage_info('t');
  version_major | version_minor | reserved_stripe_id | reserved_row_number | reserved_offset
 ---------------------------------------------------------------------
-             2 |             0 |                  4 |                   1 |           53382
+             2 |             0 |                  4 |                3001 |           53382
 (1 row)
 
 SELECT * FROM columnar_test_helpers.chunk_group_consistency;
@@ -244,7 +244,7 @@ select
   from columnar_test_helpers.columnar_storage_info('t');
  version_major | version_minor | reserved_stripe_id | reserved_row_number | reserved_offset
 ---------------------------------------------------------------------
-             2 |             0 |                 16 |                   1 |           50686
+             2 |             0 |                 16 |               21001 |           50686
 (1 row)
 
 SELECT * FROM columnar_test_helpers.chunk_group_consistency;

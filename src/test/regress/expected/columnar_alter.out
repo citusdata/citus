@@ -17,7 +17,7 @@ select
   from columnar_test_helpers.columnar_storage_info('test_alter_table');
  version_major | version_minor | reserved_stripe_id | reserved_row_number | reserved_offset
 ---------------------------------------------------------------------
-             2 |             0 |                  2 |                   1 |           16402
+             2 |             0 |                  2 |              150001 |           16402
 (1 row)
 
 -- test analyze
@@ -72,7 +72,7 @@ select
   from columnar_test_helpers.columnar_storage_info('test_alter_table');
  version_major | version_minor | reserved_stripe_id | reserved_row_number | reserved_offset
 ---------------------------------------------------------------------
-             2 |             0 |                  4 |                   1 |           32724
+             2 |             0 |                  4 |              450001 |           32724
 (1 row)
 
 -- add a fixed-length column with default value
@@ -104,7 +104,7 @@ select
   from columnar_test_helpers.columnar_storage_info('test_alter_table');
  version_major | version_minor | reserved_stripe_id | reserved_row_number | reserved_offset
 ---------------------------------------------------------------------
-             2 |             0 |                  5 |                   1 |           40906
+             2 |             0 |                  5 |              600001 |           40906
 (1 row)
 
 -- add a variable-length column with default value
