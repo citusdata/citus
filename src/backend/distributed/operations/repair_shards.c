@@ -36,6 +36,7 @@
 #include "distributed/reference_table_utils.h"
 #include "distributed/remote_commands.h"
 #include "distributed/resource_lock.h"
+#include "distributed/time_utils.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/worker_transaction.h"
@@ -485,7 +486,7 @@ EnsureEnoughDiskSpaceForShardMove(List *colocatedShardList,
 		}
 
 		/* wait the timeout and try again*/
-		pg_usleep(WaitForDeferShardRetryTimeInSec * 1000 * 1000);
+		WaitForMiliseconds(WaitForDeferShardRetryTimeInSec * 1000);
 	}
 }
 
