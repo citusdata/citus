@@ -17,9 +17,15 @@
 #include "storage/smgr.h"
 #include "utils/rel.h"
 
+#include "columnar/columnar_tableam.h"
 
-#define COLUMNAR_INVALID_ROW_NUMBER 0
-#define COLUMNAR_FIRST_ROW_NUMBER 1
+
+#define COLUMNAR_INVALID_ROW_NUMBER ((uint64) 0)
+#define COLUMNAR_FIRST_ROW_NUMBER ((uint64) 1)
+#define COLUMNAR_MAX_ROW_NUMBER ((uint64) \
+								 (COLUMNAR_FIRST_ROW_NUMBER + \
+								  (uint64) VALID_ITEMPOINTER_OFFSETS * \
+								  (uint64) VALID_BLOCKNUMBERS))
 
 
 /*
@@ -46,8 +52,8 @@ extern uint64 ColumnarStorageGetReservedRowNumber(Relation rel, bool force);
 extern uint64 ColumnarStorageGetReservedOffset(Relation rel, bool force);
 
 extern uint64 ColumnarStorageReserveData(Relation rel, uint64 amount);
-extern uint64 ColumnarStorageReserveStripe(Relation rel, uint64 nrows,
-										   uint64 *firstRowNumber);
+extern uint64 ColumnarStorageReserveRowNumber(Relation rel, uint64 nrows);
+extern uint64 ColumnarStorageReserveStripe(Relation rel);
 
 extern void ColumnarStorageRead(Relation rel, uint64 logicalOffset,
 								char *data, uint32 amount);

@@ -184,11 +184,12 @@ ColumnarBeginRead(Relation relation, TupleDesc tupleDescriptor,
 
 /*
  * ColumnarReadNextRow tries to read a row from the columnar table. On success, it sets
- * column values and nulls, and returns true. If there are no more rows to read,
- * the function returns false.
+ * column values, column nulls and rowNumber (if passed to be non-NULL), and returns true.
+ * If there are no more rows to read, the function returns false.
  */
 bool
-ColumnarReadNextRow(ColumnarReadState *readState, Datum *columnValues, bool *columnNulls)
+ColumnarReadNextRow(ColumnarReadState *readState, Datum *columnValues, bool *columnNulls,
+					uint64 *rowNumber)
 {
 	while (true)
 	{
@@ -214,6 +215,14 @@ ColumnarReadNextRow(ColumnarReadState *readState, Datum *columnValues, bool *col
 		{
 			AdvanceStripeRead(readState);
 			continue;
+		}
+
+		if (rowNumber)
+		{
+			StripeMetadata *stripeMetadata = list_nth(readState->stripeList,
+													  readState->currentStripe);
+			*rowNumber = stripeMetadata->firstRowNumber +
+						 readState->stripeReadState->currentRow - 1;
 		}
 
 		return true;

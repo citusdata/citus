@@ -126,7 +126,7 @@ typedef FormData_columnar_options *Form_columnar_options;
 
 
 /* constants for columnar.stripe */
-#define Natts_columnar_stripe 8
+#define Natts_columnar_stripe 9
 #define Anum_columnar_stripe_storageid 1
 #define Anum_columnar_stripe_stripe 2
 #define Anum_columnar_stripe_file_offset 3
@@ -135,6 +135,7 @@ typedef FormData_columnar_options *Form_columnar_options;
 #define Anum_columnar_stripe_chunk_row_count 6
 #define Anum_columnar_stripe_row_count 7
 #define Anum_columnar_stripe_chunk_count 8
+#define Anum_columnar_stripe_first_row_number 9
 
 /* constants for columnar.chunk_group */
 #define Natts_columnar_chunkgroup 4
@@ -690,7 +691,8 @@ InsertStripeMetadataRow(uint64 storageId, StripeMetadata *stripe)
 		Int32GetDatum(stripe->columnCount),
 		Int32GetDatum(stripe->chunkGroupRowCount),
 		Int64GetDatum(stripe->rowCount),
-		Int32GetDatum(stripe->chunkCount)
+		Int32GetDatum(stripe->chunkCount),
+		UInt64GetDatum(stripe->firstRowNumber)
 	};
 
 	Oid columnarStripesOid = ColumnarStripeRelationId();
@@ -781,18 +783,14 @@ GetHighestUsedAddressAndId(uint64 storageId,
 StripeMetadata
 ReserveStripe(Relation rel, uint64 sizeBytes,
 			  uint64 rowCount, uint64 columnCount,
-			  uint64 chunkCount, uint64 chunkGroupRowCount)
+			  uint64 chunkCount, uint64 chunkGroupRowCount,
+			  uint64 stripeFirstRowNumber)
 {
 	StripeMetadata stripe = { 0 };
 
 	uint64 storageId = ColumnarStorageGetStorageId(rel, false);
 
-	/*
-	 * TODO: For now, we don't use row number reservation at all, so just use
-	 * dummy values.
-	 */
-	uint64 firstReservedRow;
-	uint64 stripeId = ColumnarStorageReserveStripe(rel, 0, &firstReservedRow);
+	uint64 stripeId = ColumnarStorageReserveStripe(rel);
 	uint64 resLogicalStart = ColumnarStorageReserveData(rel, sizeBytes);
 
 	stripe.fileOffset = resLogicalStart;
@@ -802,6 +800,7 @@ ReserveStripe(Relation rel, uint64 sizeBytes,
 	stripe.columnCount = columnCount;
 	stripe.rowCount = rowCount;
 	stripe.id = stripeId;
+	stripe.firstRowNumber = stripeFirstRowNumber;
 
 	InsertStripeMetadataRow(storageId, &stripe);
 
@@ -854,6 +853,8 @@ ReadDataFileStripeList(uint64 storageId, Snapshot snapshot)
 			datumArray[Anum_columnar_stripe_chunk_row_count - 1]);
 		stripeMetadata->rowCount = DatumGetInt64(
 			datumArray[Anum_columnar_stripe_row_count - 1]);
+		stripeMetadata->firstRowNumber = DatumGetUInt64(
+			datumArray[Anum_columnar_stripe_first_row_number - 1]);
 
 		stripeMetadataList = lappend(stripeMetadataList, stripeMetadata);
 	}

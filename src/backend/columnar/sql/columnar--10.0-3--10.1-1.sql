@@ -21,6 +21,12 @@ END$proc$;
 -- columnar objects when upgrading postgres
 DROP FUNCTION citus_internal.columnar_ensure_objects_exist();
 
+-- For a proper mapping between tid & (stripe, row_num), add a new column to
+-- columnar.stripe and define a BTREE index on this column.
+-- Also include storage_id column for per-relation scans.
+ALTER TABLE columnar.stripe ADD COLUMN first_row_number bigint;
+CREATE INDEX stripe_first_row_number_idx ON columnar.stripe USING BTREE(storage_id, first_row_number);
+
 #include "udfs/upgrade_columnar_storage/10.1-1.sql"
 #include "udfs/downgrade_columnar_storage/10.1-1.sql"
 

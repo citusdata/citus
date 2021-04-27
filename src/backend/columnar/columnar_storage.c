@@ -345,10 +345,37 @@ ColumnarStorageIsCurrent(Relation rel)
 
 
 /*
- * ColumnarStorageReserveStripe - reserve stripe ID and row numbers.
+ * ColumnarStorageReserveRowNumber returns reservedRowNumber and advances
+ * it for next row number reservation.
  */
 uint64
-ColumnarStorageReserveStripe(Relation rel, uint64 nrows, uint64 *firstRowNumber)
+ColumnarStorageReserveRowNumber(Relation rel, uint64 nrows)
+{
+	LockRelationForExtension(rel, ExclusiveLock);
+
+	ColumnarMetapage metapage = ColumnarMetapageRead(rel, false);
+
+	uint64 firstRowNumber = metapage.reservedRowNumber;
+	metapage.reservedRowNumber += nrows;
+
+	ColumnarOverwriteMetapage(rel, metapage);
+
+	UnlockRelationForExtension(rel, ExclusiveLock);
+
+	return firstRowNumber;
+}
+
+
+/*
+ * ColumnarStorageReserveStripe returns stripeId and advances it for next
+ * stripeId reservation.
+ * Note that this function doesn't handle row number reservation.
+ * This is because, unlike stripeId reservation, we immediately reserve
+ * row number during writes, not when flushing stripes to disk.
+ * See ColumnarStorageReserveRowNumber function.
+ */
+uint64
+ColumnarStorageReserveStripe(Relation rel)
 {
 	LockRelationForExtension(rel, ExclusiveLock);
 
@@ -356,9 +383,6 @@ ColumnarStorageReserveStripe(Relation rel, uint64 nrows, uint64 *firstRowNumber)
 
 	uint64 stripeId = metapage.reservedStripeId;
 	metapage.reservedStripeId++;
-
-	*firstRowNumber = metapage.reservedRowNumber;
-	metapage.reservedRowNumber += nrows;
 
 	ColumnarOverwriteMetapage(rel, metapage);
 

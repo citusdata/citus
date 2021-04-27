@@ -42,7 +42,7 @@ WHERE t.version_major != 2 and t.version_minor != 0;
 SELECT columnar_storage_info('columnar_table_1');
     columnar_storage_info
 ---------------------------------------------------------------------
- (2,0,10000000000,4,0,481936)
+ (2,0,10000000000,4,150000,481936)
 (1 row)
 
 SELECT columnar_storage_info('columnar_table_2');
