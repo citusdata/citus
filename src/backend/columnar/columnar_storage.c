@@ -114,6 +114,8 @@ PhysicalToLogical(PhysicalAddr addr)
 }
 
 
+static void ColumnarOverwriteMetapage(Relation relation,
+									  ColumnarMetapage columnarMetapage);
 static ColumnarMetapage ColumnarMetapageRead(Relation rel, bool force);
 static void ReadFromBlock(Relation rel, BlockNumber blockno, uint32 offset,
 						  char *buf, uint32 len, bool force);
@@ -226,9 +228,7 @@ ColumnarStorageUpdateCurrent(Relation rel, bool upgrade, uint64 reservedStripeId
 	metapage.reservedRowNumber = reservedRowNumber;
 	metapage.reservedOffset = reservedOffset;
 
-	WriteToBlock(rel, COLUMNAR_METAPAGE_BLOCKNO, SizeOfPageHeaderData,
-				 (char *) &metapage, sizeof(ColumnarMetapage),
-				 true /* clear because we are overwriting */);
+	ColumnarOverwriteMetapage(rel, metapage);
 
 	UnlockRelationForExtension(rel, ExclusiveLock);
 }
@@ -362,9 +362,7 @@ ColumnarStorageReserveStripe(Relation rel, uint64 nrows, uint64 *firstRowNumber)
 	*firstRowNumber = metapage.reservedRowNumber;
 	metapage.reservedRowNumber += nrows;
 
-	WriteToBlock(rel, COLUMNAR_METAPAGE_BLOCKNO, SizeOfPageHeaderData,
-				 (char *) &metapage, sizeof(ColumnarMetapage),
-				 true /* clear because we are overwriting */);
+	ColumnarOverwriteMetapage(rel, metapage);
 
 	UnlockRelationForExtension(rel, ExclusiveLock);
 
@@ -392,9 +390,7 @@ ColumnarStorageReserveData(Relation rel, uint64 amount)
 	metapage.reservedOffset = nextReservation;
 
 	/* write new reservation */
-	WriteToBlock(rel, COLUMNAR_METAPAGE_BLOCKNO, SizeOfPageHeaderData,
-				 (char *) &metapage, sizeof(ColumnarMetapage),
-				 true /* clear because we are overwriting */);
+	ColumnarOverwriteMetapage(rel, metapage);
 
 	/* last used PhysicalAddr of new reservation */
 	PhysicalAddr final = LogicalToPhysical(nextReservation - 1);
@@ -538,9 +534,7 @@ ColumnarStorageTruncate(Relation rel, uint64 newDataReservation)
 	metapage.reservedOffset = newDataReservation;
 
 	/* write new reservation */
-	WriteToBlock(rel, COLUMNAR_METAPAGE_BLOCKNO, SizeOfPageHeaderData,
-				 (char *) &metapage, sizeof(ColumnarMetapage),
-				 true /* clear because we are overwriting */);
+	ColumnarOverwriteMetapage(rel, metapage);
 
 	UnlockRelationForExtension(rel, ExclusiveLock);
 
@@ -559,6 +553,20 @@ ColumnarStorageTruncate(Relation rel, uint64 newDataReservation)
 	}
 
 	return false;
+}
+
+
+/*
+ * ColumnarOverwriteMetapage writes given columnarMetapage back to metapage
+ * for given relation.
+ */
+static void
+ColumnarOverwriteMetapage(Relation relation, ColumnarMetapage columnarMetapage)
+{
+	/* clear metapage because we are overwriting */
+	bool clear = true;
+	WriteToBlock(relation, COLUMNAR_METAPAGE_BLOCKNO, SizeOfPageHeaderData,
+				 (char *) &columnarMetapage, sizeof(ColumnarMetapage), clear);
 }
 
 
