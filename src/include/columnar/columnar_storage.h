@@ -18,6 +18,10 @@
 #include "utils/rel.h"
 
 
+#define COLUMNAR_INVALID_ROW_NUMBER 0
+#define COLUMNAR_FIRST_ROW_NUMBER 1
+
+
 /*
  * Logical offsets never fall on the first two physical pages. See
  * comments in columnar_storage.c.
