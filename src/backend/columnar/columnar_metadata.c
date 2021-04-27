@@ -27,6 +27,7 @@
 #include "columnar/columnar.h"
 #include "columnar/columnar_storage.h"
 #include "columnar/columnar_version_compat.h"
+#include "distributed/listutils.h"
 
 #include <sys/stat.h>
 #include "access/heapam.h"
@@ -83,6 +84,7 @@ static Oid ColumnarChunkIndexRelationId(void);
 static Oid ColumnarChunkGroupIndexRelationId(void);
 static Oid ColumnarNamespaceId(void);
 static uint64 LookupStorageId(RelFileNode relfilenode);
+static uint64 GetHighestUsedFirstRowNumber(uint64 storageId);
 static void DeleteStorageFromColumnarMetadataTable(Oid metadataTableId,
 												   AttrNumber storageIdAtrrNumber,
 												   Oid storageIdIndexId,
@@ -1295,10 +1297,42 @@ ColumnarStorageUpdateIfNeeded(Relation rel, bool isUpgrade)
 	GetHighestUsedAddressAndId(storageId, &highestOffset, &highestId);
 
 	uint64 reservedStripeId = highestId + 1;
-
-	/* XXX: should be set properly */
-	uint64 reservedRowNumber = 0;
 	uint64 reservedOffset = highestOffset + 1;
+	uint64 reservedRowNumber = GetHighestUsedFirstRowNumber(storageId) + 1;
 	ColumnarStorageUpdateCurrent(rel, isUpgrade, reservedStripeId,
 								 reservedRowNumber, reservedOffset);
+}
+
+
+/*
+ * GetHighestUsedFirstRowNumber returns the highest used first_row_number
+ * for given storageId. Returns COLUMNAR_INVALID_ROW_NUMBER if storage with
+ * storageId has no stripes.
+ * Note that normally we would use ColumnarStorageGetReservedRowNumber
+ * to decide that. However, this function is designed to be used when
+ * building the metapage itself during upgrades.
+ */
+static uint64
+GetHighestUsedFirstRowNumber(uint64 storageId)
+{
+	List *stripeMetadataList = ReadDataFileStripeList(storageId,
+													  GetTransactionSnapshot());
+	if (list_length(stripeMetadataList) == 0)
+	{
+		return COLUMNAR_INVALID_ROW_NUMBER;
+	}
+
+	/* XXX: Better to have an invalid value for StripeMetadata.rowCount too */
+	uint64 stripeRowCount = -1;
+	uint64 highestFirstRowNumber = COLUMNAR_INVALID_ROW_NUMBER;
+
+	StripeMetadata *stripeMetadata = NULL;
+	foreach_ptr(stripeMetadata, stripeMetadataList)
+	{
+		highestFirstRowNumber = Max(highestFirstRowNumber,
+									stripeMetadata->firstRowNumber);
+		stripeRowCount = stripeMetadata->rowCount;
+	}
+
+	return highestFirstRowNumber + stripeRowCount - 1;
 }
