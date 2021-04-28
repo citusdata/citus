@@ -90,11 +90,11 @@ install: cleanup-before-install
 
 # install and install-downgrades should be run sequentially
 install-all: install
-	make install-downgrades
+	$(MAKE) install-downgrades
 
 install-downgrades: $(generated_downgrade_sql_files)
 	$(INSTALL_DATA) $(generated_downgrade_sql_files) '$(DESTDIR)$(datadir)/$(datamoduledir)/'
 
 clean-full:
-	make clean
+	$(MAKE) clean
 	rm -rf $(safestringlib_builddir)
