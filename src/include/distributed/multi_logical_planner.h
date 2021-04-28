@@ -76,7 +76,7 @@ typedef struct MultiTreeRoot
 
 
 /*
- * MultiTable represents a partitioned table in a logical query plan. Note that
+ * MultiTable represents a distributed table in a logical query plan. Note that
  * this node does not represent a query operator, and differs from the nodes
  * that follow in that sense.
  */
@@ -89,6 +89,7 @@ typedef struct MultiTable
 	Alias *alias;
 	Alias *referenceNames;
 	Query *subquery; /* this field is only valid for non-relation subquery types */
+	bool includePartitions;
 } MultiTable;
 
 

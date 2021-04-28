@@ -164,30 +164,29 @@ distributed_planner(Query *parse,
 		.boundParams = boundParams,
 	};
 
-	if (fastPathRouterQuery)
-	{
-		/*
-		 *  We need to copy the parse tree because the FastPathPlanner modifies
-		 *  it. In the next branch we do the same for other distributed queries
-		 *  too, but for those it needs to be done AFTER calling
-		 *  AssignRTEIdentities.
-		 */
-		planContext.originalQuery = copyObject(parse);
-	}
-	else if (needsDistributedPlanning)
+	if (needsDistributedPlanning)
 	{
 		/*
 		 * standard_planner scribbles on it's input, but for deparsing we need the
-		 * unmodified form. Note that before copying we call
-		 * AssignRTEIdentities, which is needed because these identities need
-		 * to be present in the copied query too.
+		 * unmodified form. Before copying we call AssignRTEIdentities to be able
+		 * to match RTEs in the rewritten query tree with those in the original
+		 * tree.
 		 */
 		rteIdCounter = AssignRTEIdentities(rangeTableList, rteIdCounter);
+
 		planContext.originalQuery = copyObject(parse);
 
-		bool setPartitionedTablesInherited = false;
-		AdjustPartitioningForDistributedPlanning(rangeTableList,
-												 setPartitionedTablesInherited);
+		/*
+		 * When there are partitioned tables (not applicable to fast path),
+		 * pretend that they are regular tables to avoid unnecessary work
+		 * in standard_planner.
+		 */
+		if (!fastPathRouterQuery)
+		{
+			bool setPartitionedTablesInherited = false;
+			AdjustPartitioningForDistributedPlanning(rangeTableList,
+													 setPartitionedTablesInherited);
+		}
 	}
 
 	/*
@@ -446,7 +445,7 @@ AssignRTEIdentity(RangeTblEntry *rangeTableEntry, int rteIdentifier)
 {
 	Assert(rangeTableEntry->rtekind == RTE_RELATION);
 
-	rangeTableEntry->values_lists = list_make1_int(rteIdentifier);
+	rangeTableEntry->values_lists = list_make2_int(rteIdentifier, rangeTableEntry->inh);
 }
 
 
@@ -457,9 +456,21 @@ GetRTEIdentity(RangeTblEntry *rte)
 	Assert(rte->rtekind == RTE_RELATION);
 	Assert(rte->values_lists != NIL);
 	Assert(IsA(rte->values_lists, IntList));
-	Assert(list_length(rte->values_lists) == 1);
+	Assert(list_length(rte->values_lists) == 2);
 
 	return linitial_int(rte->values_lists);
+}
+
+
+/*
+ * GetOriginalInh gets the original value of the inheritance flag set by
+ * AssignRTEIdentity. The planner resets this flag in the rewritten query,
+ * but we need it during deparsing.
+ */
+bool
+GetOriginalInh(RangeTblEntry *rte)
+{
+	return lsecond_int(rte->values_lists);
 }
 
 
