@@ -52,6 +52,10 @@ AppendAlterTableSchemaStmt(StringInfo buf, AlterObjectSchemaStmt *stmt)
 }
 
 
+/*
+ * DeparseAlterTableStmt builds and returns a string representing the
+ * AlterTableStmt where the object acted upon is of kind OBJECT_TABLE
+ */
 char *
 DeparseAlterTableStmt(Node *node)
 {
@@ -66,6 +70,11 @@ DeparseAlterTableStmt(Node *node)
 }
 
 
+/*
+ * AppendAlterTableStmt builds and returns an SQL command representing an
+ * ALTER TABLE statement from given AlterTableStmt object where the object
+ * acted upon is of kind OBJECT_TABLE
+ */
 static void
 AppendAlterTableStmt(StringInfo buf, AlterTableStmt *stmt)
 {
@@ -91,6 +100,11 @@ AppendAlterTableStmt(StringInfo buf, AlterTableStmt *stmt)
 }
 
 
+/*
+ * AppendAlterTableCmd builds and appends to the given buffer a command
+ * from given AlterTableCmd object. Currently supported commands are of type
+ * AT_AddColumn and AT_SetNotNull
+ */
 static void
 AppendAlterTableCmd(StringInfo buf, AlterTableCmd *alterTableCmd)
 {
@@ -111,6 +125,10 @@ AppendAlterTableCmd(StringInfo buf, AlterTableCmd *alterTableCmd)
 }
 
 
+/*
+ * AppendAlterTableCmd builds and appends to the given buffer an AT_AddColumn command
+ * from given AlterTableCmd object in the form ADD COLUMN ...
+ */
 static void
 AppendAlterTableCmdAddColumn(StringInfo buf, AlterTableCmd *alterTableCmd)
 {
@@ -128,44 +146,13 @@ AppendAlterTableCmdAddColumn(StringInfo buf, AlterTableCmd *alterTableCmd)
 	int32 typmod = 0;
 	Oid typeOid = InvalidOid;
 	bits16 formatFlags = FORMAT_TYPE_TYPEMOD_GIVEN | FORMAT_TYPE_FORCE_QUALIFY;
-
-	/*
-	 * Check for SERIAL pseudo-types. The structure of this
-	 * check is copied from transformColumnDefinition.
-	 */
-	if (columnDefinition->typeName && list_length(columnDefinition->typeName->names) ==
-		1 &&
-		!columnDefinition->typeName->pct_type)
+	typenameTypeIdAndMod(NULL, columnDefinition->typeName, &typeOid, &typmod);
+	appendStringInfo(buf, "%s", format_type_extended(typeOid, typmod,
+													 formatFlags));
+	if (columnDefinition->is_not_null)
 	{
-		char *typeName = strVal(linitial(columnDefinition->typeName->names));
-
-		if (strcmp(typeName, "smallserial") || strcmp(typeName, "serial2"))
-		{
-			appendStringInfoString(buf, "smallint");
-		}
-		else if (strcmp(typeName, "serial") || strcmp(typeName, "serial4"))
-		{
-			appendStringInfoString(buf, "integer");
-		}
-		else if (strcmp(typeName, "bigserial") || strcmp(typeName, "serial8"))
-		{
-			appendStringInfoString(buf, "bigint");
-		}
-		else
-		{
-			typenameTypeIdAndMod(NULL, columnDefinition->typeName, &typeOid, &typmod);
-			appendStringInfo(buf, "%s", format_type_extended(typeOid, typmod,
-															 formatFlags));
-		}
+		appendStringInfoString(buf, " NOT NULL");
 	}
-	else
-	{
-		typenameTypeIdAndMod(NULL, columnDefinition->typeName, &typeOid, &typmod);
-		appendStringInfo(buf, "%s", format_type_extended(typeOid, typmod,
-														 formatFlags));
-	}
-
-	appendStringInfoString(buf, " NOT NULL");
 
 	Oid collationOid = GetColumnDefCollation(NULL, columnDefinition, typeOid);
 	if (OidIsValid(collationOid))

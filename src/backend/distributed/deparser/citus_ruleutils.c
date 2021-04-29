@@ -34,6 +34,7 @@
 #include "catalog/pg_extension.h"
 #include "catalog/pg_foreign_data_wrapper.h"
 #include "catalog/pg_index.h"
+#include "catalog/pg_namespace.h"
 #include "catalog/pg_type.h"
 #include "commands/defrem.h"
 #include "commands/extension.h"
@@ -343,8 +344,8 @@ pg_get_tableschemadef_string(Oid tableRelationId, bool includeSequenceDefaults,
 
 				/*
 				 * if column default value is explicitly requested, or it is
-				 * not set from a sequence then we include DEFAULT clause for
-				 * this column.
+				 * not set from a sequence or a user-defined function,
+				 * then we include DEFAULT clause for this column.
 				 */
 				if (includeSequenceDefaults ||
 					(!contain_nextval_expression_walker(defaultNode, NULL) &&
@@ -1023,7 +1024,7 @@ contain_nextval_expression_walker(Node *node, void *context)
 
 /*
  * contain_funcexpr_walker walks over expression tree and returns
- * true if it contains call to a function.
+ * true if it contains call to a function defined by the user
  */
 bool
 contain_funcexpr_walker(Node *node, void *context)
@@ -1035,7 +1036,20 @@ contain_funcexpr_walker(Node *node, void *context)
 
 	if (IsA(node, FuncExpr))
 	{
-		return true;
+		FuncExpr *funcExpr = (FuncExpr *) node;
+		Oid nspoid = get_func_namespace(funcExpr->funcid);
+		char *nspname = get_namespace_name(nspoid);
+
+		/*
+		 * These schemas belong to the system:
+		 * pg_catalog, information_schema, citus, columnar
+		 * Functions in other schemas will be treated as user-defined functions
+		 */
+		if (!(nspoid == PG_CATALOG_NAMESPACE || strcmp(nspname, "information_schema") ==
+			  0 || strcmp(nspname, "citus") == 0 || strcmp(nspname, "columnar") == 0))
+		{
+			return true;
+		}
 	}
 	return expression_tree_walker(node, contain_funcexpr_walker, context);
 }

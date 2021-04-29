@@ -2,6 +2,8 @@
 -- MULTI_TABLE_DDL
 --
 -- Tests around changing the schema and dropping of a distributed table
+-- Test DEFAULTS coming from serial prototypes, user-defined sequences
+-- and functions
 SET citus.next_shard_id TO 870000;
 CREATE TABLE testtableddl(somecol int, distributecol text NOT NULL);
 SELECT create_distributed_table('testtableddl', 'distributecol', 'append');
@@ -100,7 +102,6 @@ SELECT create_distributed_table('testserialtable', 'group_id', 'hash');
 
 -- should not be able to add additional serial columns
 ALTER TABLE testserialtable ADD COLUMN other_id serial;
-ERROR:  cannot execute ADD COLUMN commands involving serial pseudotypes
 -- and we shouldn't be able to change a distributed sequence's owner
 ALTER SEQUENCE testserialtable_id_seq OWNED BY NONE;
 ERROR:  cannot alter OWNED BY option of a sequence already owned by a distributed table
@@ -126,3 +127,39 @@ DROP TABLE testserialtable;
 ---------------------------------------------------------------------
 (0 rows)
 
+\c - - - :master_port
+-- test DEFAULT coming from serial prototypes, user-defined sequences and functions
+CREATE FUNCTION dummy(int) RETURNS INT
+    AS $$ SELECT $1 + $1 $$
+    LANGUAGE SQL;
+CREATE TABLE test_table (id int DEFAULT dummy(1));
+SELECT create_distributed_table('test_table', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+ALTER TABLE test_table ADD COLUMN id1 int DEFAULT dummy(2);
+ALTER TABLE test_table ALTER COLUMN id1 DROP DEFAULT;
+ALTER TABLE test_table ALTER COLUMN id1 SET DEFAULT dummy(2);
+CREATE SEQUENCE test_sequence;
+ALTER TABLE test_table ADD COLUMN id2 int DEFAULT nextval('test_sequence');
+ALTER TABLE test_table ALTER COLUMN id2 DROP DEFAULT;
+ALTER TABLE test_table ALTER COLUMN id2 SET DEFAULT nextval('test_sequence');
+ALTER TABLE test_table ADD COLUMN id3 bigserial;
+-- shouldn't work since the above operations should be the only subcommands
+ALTER TABLE test_table ADD COLUMN id4 int DEFAULT nextval('test_sequence') CHECK (id4 > 0);
+ERROR:  cannot execute ADD COLUMN .. DEFAULT non_const command with other subcommands/constraints
+HINT:  You can issue each subcommand separately
+ALTER TABLE test_table ADD COLUMN id4 int, ADD COLUMN id5 int DEFAULT nextval('test_sequence');
+ERROR:  cannot execute ADD COLUMN .. DEFAULT non_const command with other subcommands/constraints
+HINT:  You can issue each subcommand separately
+ALTER TABLE test_table ALTER COLUMN id1 SET DEFAULT nextval('test_sequence'), ALTER COLUMN id2 DROP DEFAULT;
+ERROR:  cannot execute ALTER COLUMN COLUMN .. SET DEFAULT non_const command with other subcommands
+HINT:  You can issue each subcommand separately
+ALTER TABLE test_table ADD COLUMN id4 bigserial CHECK (id4 > 0);
+ERROR:  cannot execute ADD COLUMN commands involving serial pseudotypes with other subcommands/constraints
+HINT:  You can issue each subcommand separately
+DROP TABLE test_table CASCADE;
+DROP SEQUENCE test_sequence;
+DROP FUNCTION dummy;

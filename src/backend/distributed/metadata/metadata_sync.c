@@ -29,7 +29,6 @@
 #include "catalog/pg_depend.h"
 #include "catalog/pg_foreign_server.h"
 #include "catalog/pg_namespace.h"
-#include "catalog/pg_proc.h"
 #include "catalog/pg_type.h"
 #include "commands/async.h"
 #include "distributed/citus_ruleutils.h"
@@ -69,6 +68,7 @@ static List * GetDistributedTableDDLEvents(Oid relationId);
 static char * LocalGroupIdUpdateCommand(int32 groupId);
 static void UpdateDistNodeBoolAttr(const char *nodeName, int32 nodePort,
 								   int attrNum, bool value);
+static List * SequenceDependencyCommandList(Oid relationId);
 static char * TruncateTriggerCreateCommand(Oid relationId);
 static char * SchemaOwnerName(Oid objectId);
 static bool HasMetadataWorkers(void);
@@ -86,7 +86,7 @@ static char * GenerateSetRoleQuery(Oid roleOid);
 static void MetadataSyncSigTermHandler(SIGNAL_ARGS);
 static void MetadataSyncSigAlrmHandler(SIGNAL_ARGS);
 
-/*static List * GetDependentSequencesWithRelation(Oid relationId); */
+static List * GetDependentSequencesWithRelation(Oid relationId, AttrNumber attnum);
 static List * GetSequencesFromAttrDef(Oid attrdefOid);
 
 PG_FUNCTION_INFO_V1(start_metadata_sync_to_node);
@@ -377,12 +377,9 @@ MetadataCreateCommands(void)
 			continue;
 		}
 
-		List *workerSequenceDDLCommands = SequenceDDLCommandsForTable(relationId);
-
 		List *ddlCommandList = GetFullTableCreationCommands(relationId,
 															includeSequenceDefaults);
 		char *tableOwnerResetCommand = TableOwnerResetCommand(relationId);
-		List *sequenceDependencyCommandList = SequenceDependencyCommandList(relationId);
 
 		/*
 		 * Tables might have dependencies on different objects, since we create shards for
@@ -392,8 +389,12 @@ MetadataCreateCommands(void)
 		ObjectAddressSet(tableAddress, RelationRelationId, relationId);
 		EnsureDependenciesExistOnAllNodes(&tableAddress);
 
-		metadataSnapshotCommandList = list_concat(metadataSnapshotCommandList,
-												  workerSequenceDDLCommands);
+		if (!PartitionTable(relationId))
+		{
+			List *workerSequenceDDLCommands = SequenceDDLCommandsForTable(relationId);
+			metadataSnapshotCommandList = list_concat(metadataSnapshotCommandList,
+													  workerSequenceDDLCommands);
+		}
 
 		/* ddlCommandList contains TableDDLCommand information, need to materialize */
 		TableDDLCommand *tableDDLCommand = NULL;
@@ -406,8 +407,14 @@ MetadataCreateCommands(void)
 
 		metadataSnapshotCommandList = lappend(metadataSnapshotCommandList,
 											  tableOwnerResetCommand);
-		metadataSnapshotCommandList = list_concat(metadataSnapshotCommandList,
-												  sequenceDependencyCommandList);
+
+		if (!PartitionTable(relationId))
+		{
+			List *sequenceDependencyCommandList = SequenceDependencyCommandList(
+				relationId);
+			metadataSnapshotCommandList = list_concat(metadataSnapshotCommandList,
+													  sequenceDependencyCommandList);
+		}
 	}
 
 	/* construct the foreign key constraints after all tables are created */
@@ -495,9 +502,12 @@ GetDistributedTableDDLEvents(Oid relationId)
 	bool tableOwnedByExtension = IsTableOwnedByExtension(relationId);
 	if (!tableOwnedByExtension)
 	{
-		/* commands to create sequences */
-		List *sequenceDDLCommands = SequenceDDLCommandsForTable(relationId);
-		commandList = list_concat(commandList, sequenceDDLCommands);
+		if (!PartitionTable(relationId))
+		{
+			/* commands to create sequences */
+			List *sequenceDDLCommands = SequenceDDLCommandsForTable(relationId);
+			commandList = list_concat(commandList, sequenceDDLCommands);
+		}
 
 		/*
 		 * Commands to create the table, these commands are TableDDLCommands so lets
@@ -512,9 +522,13 @@ GetDistributedTableDDLEvents(Oid relationId)
 			commandList = lappend(commandList, GetTableDDLCommand(tableDDLCommand));
 		}
 
-		/* command to associate sequences with table */
-		List *sequenceDependencyCommandList = SequenceDependencyCommandList(relationId);
-		commandList = list_concat(commandList, sequenceDependencyCommandList);
+		if (!PartitionTable(relationId))
+		{
+			/* command to associate sequences with table */
+			List *sequenceDependencyCommandList = SequenceDependencyCommandList(
+				relationId);
+			commandList = list_concat(commandList, sequenceDependencyCommandList);
+		}
 	}
 
 	/* command to insert pg_dist_partition entry */
@@ -1047,12 +1061,11 @@ SequenceDDLCommandsForTable(Oid relationId)
 {
 	List *sequenceDDLList = NIL;
 
-	/* List *ownedSequences = GetSequencesOwnedByRelation(relationId); */
-	List *ownedSequences = GetDependentSequencesWithRelation(relationId, 0);
+	List *dependentSequences = GetDependentSequencesWithRelation(relationId, 0);
 	char *ownerName = TableOwner(relationId);
 
 	Oid sequenceOid = InvalidOid;
-	foreach_oid(sequenceOid, ownedSequences)
+	foreach_oid(sequenceOid, dependentSequences)
 	{
 		char *sequenceDef = pg_get_sequencedef_string(sequenceOid);
 		char *escapedSequenceDef = quote_literal_cstr(sequenceDef);
@@ -1082,9 +1095,13 @@ SequenceDDLCommandsForTable(Oid relationId)
 
 
 /*
- * GetDependentSequencesWithRelation
+ * GetDependentSequencesWithRelation returns a list of sequence OIDs that have
+ * direct (owned sequences) or indirect dependency with the given relationId.
+ * For both cases, we use the intermediate AttrDefault object from pg_depend
+ * If attnum is specified, we only return the sequences related to that
+ * attribute of the relationId
  */
-List *
+static List *
 GetDependentSequencesWithRelation(Oid relationId, AttrNumber attnum)
 {
 	List *attrdefResult = NIL;
@@ -1142,7 +1159,8 @@ GetDependentSequencesWithRelation(Oid relationId, AttrNumber attnum)
 
 
 /*
- * GetSequencesFromAttrDef
+ * GetSequencesFromAttrDef returns a list of sequence OIDs that have
+ * dependency with the given attrdefOid in pg_depend
  */
 static List *
 GetSequencesFromAttrDef(Oid attrdefOid)
@@ -1170,8 +1188,8 @@ GetSequencesFromAttrDef(Oid attrdefOid)
 		Form_pg_depend deprec = (Form_pg_depend) GETSTRUCT(tup);
 
 		if (deprec->refclassid == RelationRelationId &&
-			deprec->deptype == DEPENDENCY_NORMAL && get_rel_relkind(deprec->refobjid) ==
-			RELKIND_SEQUENCE)
+			deprec->deptype == DEPENDENCY_NORMAL && get_rel_relkind(
+				deprec->refobjid) == RELKIND_SEQUENCE)
 		{
 			sequencesResult = lappend_oid(sequencesResult, deprec->refobjid);
 		}
@@ -1192,7 +1210,7 @@ GetSequencesFromAttrDef(Oid attrdefOid)
  * necessary to ensure that the sequence is dropped when the table is
  * dropped.
  */
-List *
+static List *
 SequenceDependencyCommandList(Oid relationId)
 {
 	List *sequenceCommandList = NIL;

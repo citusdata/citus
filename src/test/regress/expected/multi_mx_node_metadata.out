@@ -64,6 +64,14 @@ SELECT create_distributed_table('dist_table_1', 'a');
 
 (1 row)
 
+CREATE SEQUENCE sequence;
+CREATE TABLE reference_table (a int default nextval('sequence'));
+SELECT create_reference_table('reference_table');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
 -- update the node
 SELECT 1 FROM master_update_node((SELECT nodeid FROM pg_dist_node),
                                  'localhost', :worker_2_port);
@@ -805,6 +813,8 @@ SELECT datname FROM pg_stat_activity WHERE application_name LIKE 'Citus Met%';
 
 -- cleanup
 DROP TABLE ref_table;
+DROP TABLE reference_table;
+DROP SEQUENCE sequence;
 TRUNCATE pg_dist_colocation;
 SELECT count(*) FROM (SELECT master_remove_node(nodename, nodeport) FROM pg_dist_node) t;
  count

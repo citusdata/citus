@@ -272,7 +272,7 @@ SELECT * FROM pg_dist_node ORDER BY nodeid;
 (4 rows)
 
 SELECT * FROM pg_dist_partition ORDER BY logicalrelid;
-          logicalrelid           | partmethod |                                                        partkey                                                         | colocationid | repmodel
+          logicalrelid           | partmethod |                                                         partkey                                                          | colocationid | repmodel
 ---------------------------------------------------------------------
  mx_testing_schema.mx_test_table | h          | {VAR :varno 1 :varattno 1 :vartype 23 :vartypmod -1 :varcollid 0 :varlevelsup 0 :varnoold 1 :varoattno 1 :location -1} |            0 | s
 (1 row)
@@ -409,7 +409,7 @@ SELECT * FROM pg_dist_node ORDER BY nodeid;
 (4 rows)
 
 SELECT * FROM pg_dist_partition ORDER BY logicalrelid;
-          logicalrelid           | partmethod |                                                        partkey                                                         | colocationid | repmodel
+          logicalrelid           | partmethod |                                                         partkey                                                          | colocationid | repmodel
 ---------------------------------------------------------------------
  mx_testing_schema.mx_test_table | h          | {VAR :varno 1 :varattno 1 :vartype 23 :vartypmod -1 :varcollid 0 :varlevelsup 0 :varnoold 1 :varoattno 1 :location -1} |            0 | s
 (1 row)
@@ -1609,6 +1609,118 @@ SELECT pg_reload_conf();
 (1 row)
 
 UPDATE pg_dist_node SET metadatasynced=true WHERE nodeport=:worker_1_port;
+SET citus.replication_model TO streaming;
+CREATE FUNCTION dummy(int) RETURNS INT
+    AS $$ SELECT $1 + $1 $$
+    LANGUAGE SQL;
+CREATE SEQUENCE mx_test_sequence;
+-- should all work
+CREATE TABLE test_table (id int DEFAULT nextval('mx_test_sequence'));
+SELECT create_distributed_table('test_table', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+ALTER TABLE test_table ADD COLUMN id2 int DEFAULT nextval('mx_test_sequence');
+ALTER TABLE test_table ALTER COLUMN id2 DROP DEFAULT;
+ALTER TABLE test_table ALTER COLUMN id2 SET DEFAULT nextval('mx_test_sequence');
+SELECT unnest(master_metadata_snapshot()) order by 1;
+                                                                                                                                                                                                                                                                                                                                                                                                         unnest
+---------------------------------------------------------------------
+ ALTER SEQUENCE mx_testing_schema.mx_test_table_col_3_seq OWNER TO postgres
+ ALTER SEQUENCE public.mx_test_sequence OWNER TO postgres
+ ALTER SEQUENCE public.mx_test_sequence OWNER TO postgres
+ ALTER SEQUENCE public.user_defined_seq OWNER TO postgres
+ ALTER TABLE mx_test_schema_1.mx_table_1 ADD CONSTRAINT mx_fk_constraint_2 FOREIGN KEY (col1) REFERENCES mx_test_schema_2.mx_table_2(col1) NOT VALID
+ ALTER TABLE mx_test_schema_1.mx_table_1 ADD CONSTRAINT mx_table_1_col1_key UNIQUE (col1)
+ ALTER TABLE mx_test_schema_1.mx_table_1 OWNER TO postgres
+ ALTER TABLE mx_test_schema_1.mx_table_1 OWNER TO postgres
+ ALTER TABLE mx_test_schema_2.mx_table_2 ADD CONSTRAINT mx_fk_constraint FOREIGN KEY (col1) REFERENCES mx_test_schema_1.mx_table_1(col1)
+ ALTER TABLE mx_test_schema_2.mx_table_2 ADD CONSTRAINT mx_table_2_col1_key UNIQUE (col1)
+ ALTER TABLE mx_test_schema_2.mx_table_2 OWNER TO postgres
+ ALTER TABLE mx_test_schema_2.mx_table_2 OWNER TO postgres
+ ALTER TABLE mx_testing_schema.mx_test_table ADD CONSTRAINT mx_test_table_col_1_key UNIQUE (col_1)
+ ALTER TABLE mx_testing_schema.mx_test_table OWNER TO postgres
+ ALTER TABLE mx_testing_schema.mx_test_table OWNER TO postgres
+ ALTER TABLE public.dist_table_1 OWNER TO postgres
+ ALTER TABLE public.dist_table_1 OWNER TO postgres
+ ALTER TABLE public.mx_ref OWNER TO postgres
+ ALTER TABLE public.mx_ref OWNER TO postgres
+ ALTER TABLE public.test_table OWNER TO postgres
+ ALTER TABLE public.test_table OWNER TO postgres
+ CREATE INDEX mx_index ON mx_testing_schema.mx_test_table USING btree (col_2)
+ CREATE INDEX mx_index_1 ON mx_test_schema_1.mx_table_1 USING btree (col1)
+ CREATE INDEX mx_index_2 ON mx_test_schema_2.mx_table_2 USING btree (col2)
+ CREATE TABLE mx_test_schema_1.mx_table_1 (col1 integer, col2 text, col3 integer)
+ CREATE TABLE mx_test_schema_2.mx_table_2 (col1 integer, col2 text)
+ CREATE TABLE mx_testing_schema.mx_test_table (col_1 integer, col_2 text NOT NULL, col_3 bigint DEFAULT nextval('mx_testing_schema.mx_test_table_col_3_seq'::regclass) NOT NULL, col_4 bigint DEFAULT nextval('public.user_defined_seq'::regclass))
+ CREATE TABLE public.dist_table_1 (a integer)
+ CREATE TABLE public.mx_ref (col_1 integer, col_2 text)
+ CREATE TABLE public.test_table (id integer DEFAULT nextval('public.mx_test_sequence'::regclass), id2 integer DEFAULT nextval('public.mx_test_sequence'::regclass))
+ INSERT INTO pg_dist_node (nodeid, groupid, nodename, nodeport, noderack, hasmetadata, metadatasynced, isactive, noderole, nodecluster) VALUES (4, 1, 'localhost', 8888, 'default', FALSE, FALSE, TRUE, 'secondary'::noderole, 'default'),(5, 1, 'localhost', 8889, 'default', FALSE, FALSE, TRUE, 'secondary'::noderole, 'second-cluster'),(1, 1, 'localhost', 57637, 'default', TRUE, TRUE, TRUE, 'primary'::noderole, 'default'),(7, 5, 'localhost', 57638, 'default', FALSE, FALSE, TRUE, 'primary'::noderole, 'default')
+ INSERT INTO pg_dist_partition (logicalrelid, partmethod, partkey, colocationid, repmodel) VALUES ('mx_test_schema_1.mx_table_1'::regclass, 'h', column_name_to_column('mx_test_schema_1.mx_table_1','col1'), 3, 's')
+ INSERT INTO pg_dist_partition (logicalrelid, partmethod, partkey, colocationid, repmodel) VALUES ('mx_test_schema_2.mx_table_2'::regclass, 'h', column_name_to_column('mx_test_schema_2.mx_table_2','col1'), 3, 's')
+ INSERT INTO pg_dist_partition (logicalrelid, partmethod, partkey, colocationid, repmodel) VALUES ('mx_testing_schema.mx_test_table'::regclass, 'h', column_name_to_column('mx_testing_schema.mx_test_table','col_1'), 0, 's')
+ INSERT INTO pg_dist_partition (logicalrelid, partmethod, partkey, colocationid, repmodel) VALUES ('public.dist_table_1'::regclass, 'h', column_name_to_column('public.dist_table_1','a'), 10004, 's')
+ INSERT INTO pg_dist_partition (logicalrelid, partmethod, partkey, colocationid, repmodel) VALUES ('public.mx_ref'::regclass, 'n', NULL, 10002, 't')
+ INSERT INTO pg_dist_partition (logicalrelid, partmethod, partkey, colocationid, repmodel) VALUES ('public.test_table'::regclass, 'h', column_name_to_column('public.test_table','id'), 10004, 's')
+ INSERT INTO pg_dist_placement (shardid, shardstate, shardlength, groupid, placementid) VALUES (1310000, 1, 0, 1, 100000),(1310001, 1, 0, 5, 100001),(1310002, 1, 0, 1, 100002),(1310003, 1, 0, 5, 100003),(1310004, 1, 0, 1, 100004),(1310005, 1, 0, 5, 100005),(1310006, 1, 0, 1, 100006),(1310007, 1, 0, 5, 100007)
+ INSERT INTO pg_dist_placement (shardid, shardstate, shardlength, groupid, placementid) VALUES (1310020, 1, 0, 1, 100020),(1310021, 1, 0, 5, 100021),(1310022, 1, 0, 1, 100022),(1310023, 1, 0, 5, 100023),(1310024, 1, 0, 1, 100024)
+ INSERT INTO pg_dist_placement (shardid, shardstate, shardlength, groupid, placementid) VALUES (1310025, 1, 0, 1, 100025),(1310026, 1, 0, 5, 100026),(1310027, 1, 0, 1, 100027),(1310028, 1, 0, 5, 100028),(1310029, 1, 0, 1, 100029)
+ INSERT INTO pg_dist_placement (shardid, shardstate, shardlength, groupid, placementid) VALUES (1310073, 1, 0, 1, 100074),(1310073, 1, 0, 5, 100075)
+ INSERT INTO pg_dist_placement (shardid, shardstate, shardlength, groupid, placementid) VALUES (1310074, 1, 0, 1, 100076),(1310075, 1, 0, 5, 100077),(1310076, 1, 0, 1, 100078),(1310077, 1, 0, 5, 100079)
+ INSERT INTO pg_dist_placement (shardid, shardstate, shardlength, groupid, placementid) VALUES (1310083, 1, 0, 1, 100086),(1310084, 1, 0, 5, 100087),(1310085, 1, 0, 1, 100088),(1310086, 1, 0, 5, 100089)
+ INSERT INTO pg_dist_shard (logicalrelid, shardid, shardstorage, shardminvalue, shardmaxvalue) VALUES ('mx_test_schema_1.mx_table_1'::regclass, 1310020, 't', '-2147483648', '-1288490190'),('mx_test_schema_1.mx_table_1'::regclass, 1310021, 't', '-1288490189', '-429496731'),('mx_test_schema_1.mx_table_1'::regclass, 1310022, 't', '-429496730', '429496728'),('mx_test_schema_1.mx_table_1'::regclass, 1310023, 't', '429496729', '1288490187'),('mx_test_schema_1.mx_table_1'::regclass, 1310024, 't', '1288490188', '2147483647')
+ INSERT INTO pg_dist_shard (logicalrelid, shardid, shardstorage, shardminvalue, shardmaxvalue) VALUES ('mx_test_schema_2.mx_table_2'::regclass, 1310025, 't', '-2147483648', '-1288490190'),('mx_test_schema_2.mx_table_2'::regclass, 1310026, 't', '-1288490189', '-429496731'),('mx_test_schema_2.mx_table_2'::regclass, 1310027, 't', '-429496730', '429496728'),('mx_test_schema_2.mx_table_2'::regclass, 1310028, 't', '429496729', '1288490187'),('mx_test_schema_2.mx_table_2'::regclass, 1310029, 't', '1288490188', '2147483647')
+ INSERT INTO pg_dist_shard (logicalrelid, shardid, shardstorage, shardminvalue, shardmaxvalue) VALUES ('mx_testing_schema.mx_test_table'::regclass, 1310000, 't', '-2147483648', '-1610612737'),('mx_testing_schema.mx_test_table'::regclass, 1310001, 't', '-1610612736', '-1073741825'),('mx_testing_schema.mx_test_table'::regclass, 1310002, 't', '-1073741824', '-536870913'),('mx_testing_schema.mx_test_table'::regclass, 1310003, 't', '-536870912', '-1'),('mx_testing_schema.mx_test_table'::regclass, 1310004, 't', '0', '536870911'),('mx_testing_schema.mx_test_table'::regclass, 1310005, 't', '536870912', '1073741823'),('mx_testing_schema.mx_test_table'::regclass, 1310006, 't', '1073741824', '1610612735'),('mx_testing_schema.mx_test_table'::regclass, 1310007, 't', '1610612736', '2147483647')
+ INSERT INTO pg_dist_shard (logicalrelid, shardid, shardstorage, shardminvalue, shardmaxvalue) VALUES ('public.dist_table_1'::regclass, 1310074, 't', '-2147483648', '-1073741825'),('public.dist_table_1'::regclass, 1310075, 't', '-1073741824', '-1'),('public.dist_table_1'::regclass, 1310076, 't', '0', '1073741823'),('public.dist_table_1'::regclass, 1310077, 't', '1073741824', '2147483647')
+ INSERT INTO pg_dist_shard (logicalrelid, shardid, shardstorage, shardminvalue, shardmaxvalue) VALUES ('public.mx_ref'::regclass, 1310073, 't', NULL, NULL)
+ INSERT INTO pg_dist_shard (logicalrelid, shardid, shardstorage, shardminvalue, shardmaxvalue) VALUES ('public.test_table'::regclass, 1310083, 't', '-2147483648', '-1073741825'),('public.test_table'::regclass, 1310084, 't', '-1073741824', '-1'),('public.test_table'::regclass, 1310085, 't', '0', '1073741823'),('public.test_table'::regclass, 1310086, 't', '1073741824', '2147483647')
+ SELECT pg_catalog.worker_record_sequence_dependency('mx_testing_schema.mx_test_table_col_3_seq'::regclass,'mx_testing_schema.mx_test_table'::regclass,'col_3')
+ SELECT worker_apply_sequence_command ('CREATE SEQUENCE IF NOT EXISTS mx_testing_schema.mx_test_table_col_3_seq INCREMENT BY 1 MINVALUE 1 MAXVALUE 9223372036854775807 START WITH 1 NO CYCLE','bigint')
+ SELECT worker_apply_sequence_command ('CREATE SEQUENCE IF NOT EXISTS public.mx_test_sequence INCREMENT BY 1 MINVALUE 1 MAXVALUE 9223372036854775807 START WITH 1 NO CYCLE','bigint')
+ SELECT worker_apply_sequence_command ('CREATE SEQUENCE IF NOT EXISTS public.mx_test_sequence INCREMENT BY 1 MINVALUE 1 MAXVALUE 9223372036854775807 START WITH 1 NO CYCLE','bigint')
+ SELECT worker_apply_sequence_command ('CREATE SEQUENCE IF NOT EXISTS public.user_defined_seq INCREMENT BY 1 MINVALUE 1 MAXVALUE 9223372036854775807 START WITH 1 NO CYCLE','bigint')
+ SELECT worker_create_truncate_trigger('mx_test_schema_1.mx_table_1')
+ SELECT worker_create_truncate_trigger('mx_test_schema_2.mx_table_2')
+ SELECT worker_create_truncate_trigger('mx_testing_schema.mx_test_table')
+ SELECT worker_create_truncate_trigger('public.dist_table_1')
+ SELECT worker_create_truncate_trigger('public.mx_ref')
+ SELECT worker_create_truncate_trigger('public.test_table')
+ SELECT worker_drop_distributed_table(logicalrelid::regclass::text) FROM pg_dist_partition
+ TRUNCATE pg_dist_node CASCADE
+(62 rows)
+
+-- shouldn't work since dummy is not found in workers
+-- user should distribute dummy first
+ALTER TABLE test_table ADD COLUMN id1 int DEFAULT dummy(2);
+ERROR:  function dummy(integer) does not exist
+HINT:  No function matches the given name and argument types. You might need to add explicit type casts.
+CONTEXT:  while executing command on localhost:xxxxx
+ALTER TABLE test_table ALTER COLUMN id1 DROP DEFAULT;
+ERROR:  column "id1" of relation "test_table" does not exist
+ALTER TABLE test_table ALTER COLUMN id1 SET DEFAULT dummy(2);
+ERROR:  column "id1" of relation "test_table" does not exist
+-- shouldn't work since test_table is MX
+ALTER TABLE test_table ADD COLUMN id3 bigserial;
+ERROR:  cannot execute ADD COLUMN commands involving serial pseudotypes with MX tables
+-- shouldn't work since the above operations should be the only subcommands
+ALTER TABLE test_table ADD COLUMN id4 int DEFAULT nextval('mx_test_sequence') CHECK (id4 > 0);
+ERROR:  cannot execute ADD COLUMN .. DEFAULT non_const command with other subcommands/constraints
+HINT:  You can issue each subcommand separately
+ALTER TABLE test_table ADD COLUMN id4 int, ADD COLUMN id5 int DEFAULT nextval('mx_test_sequence');
+ERROR:  cannot execute ADD COLUMN .. DEFAULT non_const command with other subcommands/constraints
+HINT:  You can issue each subcommand separately
+ALTER TABLE test_table ALTER COLUMN id1 SET DEFAULT nextval('mx_test_sequence'), ALTER COLUMN id2 DROP DEFAULT;
+ERROR:  cannot execute ALTER COLUMN COLUMN .. SET DEFAULT non_const command with other subcommands
+HINT:  You can issue each subcommand separately
+ALTER TABLE test_table ADD COLUMN id4 bigserial CHECK (id4 > 0);
+ERROR:  cannot execute ADD COLUMN commands involving serial pseudotypes with other subcommands/constraints
+HINT:  You can issue each subcommand separately
+DROP TABLE test_table CASCADE;
+DROP SEQUENCE mx_test_sequence;
+DROP FUNCTION dummy;
 -- Cleanup
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
  stop_metadata_sync_to_node
