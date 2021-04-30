@@ -452,6 +452,11 @@ citus_shard_cost_by_disk_size(PG_FUNCTION_ARGS)
 
 	/* we skip child tables of a partitioned table if this boolean variable is true */
 	bool optimizePartitionCalculations = true;
+
+	MemoryContext localContext = AllocSetContextCreate(CurrentMemoryContext,
+													   "CostByDiscSizeContext",
+													   ALLOCSET_DEFAULT_SIZES);
+	MemoryContext oldContext = MemoryContextSwitchTo(localContext);
 	ShardInterval *shardInterval = LoadShardInterval(shardId);
 	List *colocatedShardList = ColocatedNonPartitionShardIntervalList(shardInterval);
 	StringInfo tableSizeQuery = GenerateSizeQueryOnMultiplePlacements(colocatedShardList,
@@ -465,6 +470,7 @@ citus_shard_cost_by_disk_size(PG_FUNCTION_ARGS)
 
 	if (queryResult != RESPONSE_OKAY)
 	{
+		MemoryContextSwitchTo(oldContext);
 		ereport(ERROR, (errcode(ERRCODE_CONNECTION_FAILURE),
 						errmsg("cannot get the size because of a connection error")));
 	}
@@ -477,12 +483,17 @@ citus_shard_cost_by_disk_size(PG_FUNCTION_ARGS)
 							list_length(sizeList))));
 	}
 
+
 	StringInfo tableSizeStringInfo = (StringInfo) linitial(sizeList);
 	char *tableSizeString = tableSizeStringInfo->data;
 	uint64 tableSize = SafeStringToUint64(tableSizeString);
 
+	MemoryContextSwitchTo(oldContext);
+	MemoryContextReset(localContext);
+
 	PQclear(result);
 	ClearResults(connection, raiseErrors);
+
 	if (tableSize <= 0)
 	{
 		PG_RETURN_FLOAT4(1);
@@ -601,6 +612,12 @@ ExecutePlacementUpdates(List *placementUpdateList, Oid shardReplicationModeOid,
 						char *noticeOperation)
 {
 	List *responsiveWorkerList = GetResponsiveWorkerList();
+
+	MemoryContext localContext = AllocSetContextCreate(CurrentMemoryContext,
+													   "ExecutePlacementLoopContext",
+													   ALLOCSET_DEFAULT_SIZES);
+	MemoryContext oldContext = MemoryContextSwitchTo(localContext);
+
 	ListCell *placementUpdateCell = NULL;
 
 	char shardReplicationMode = LookupShardTransferMode(shardReplicationModeOid);
@@ -625,7 +642,9 @@ ExecutePlacementUpdates(List *placementUpdateList, Oid shardReplicationModeOid,
 							 )));
 		UpdateShardPlacement(placementUpdate, responsiveWorkerList,
 							 shardReplicationModeOid);
+		MemoryContextReset(localContext);
 	}
+	MemoryContextSwitchTo(oldContext);
 }
 
 
