@@ -445,12 +445,20 @@ citus_shard_cost_by_disk_size(PG_FUNCTION_ARGS)
 	uint64 shardId = PG_GETARG_INT64(0);
 	bool missingOk = false;
 	ShardPlacement *shardPlacement = ActiveShardPlacement(shardId, missingOk);
+
+	MemoryContext localContext = AllocSetContextCreate(CurrentMemoryContext,
+													   "CostByDiscSizeContext",
+													   ALLOCSET_DEFAULT_SIZES);
+	MemoryContext oldContext = MemoryContextSwitchTo(localContext);
 	ShardInterval *shardInterval = LoadShardInterval(shardId);
 	List *colocatedShardList = ColocatedShardIntervalList(shardInterval);
 
 	uint64 colocationSizeInBytes = ColocationSizeInBytes(colocatedShardList,
 														 shardPlacement->nodeName,
 														 shardPlacement->nodePort);
+
+	MemoryContextSwitchTo(oldContext);
+	MemoryContextReset(localContext);
 
 	if (colocationSizeInBytes <= 0)
 	{
@@ -570,6 +578,12 @@ ExecutePlacementUpdates(List *placementUpdateList, Oid shardReplicationModeOid,
 						char *noticeOperation)
 {
 	List *responsiveWorkerList = GetResponsiveWorkerList();
+
+	MemoryContext localContext = AllocSetContextCreate(CurrentMemoryContext,
+													   "ExecutePlacementLoopContext",
+													   ALLOCSET_DEFAULT_SIZES);
+	MemoryContext oldContext = MemoryContextSwitchTo(localContext);
+
 	ListCell *placementUpdateCell = NULL;
 
 	char shardReplicationMode = LookupShardTransferMode(shardReplicationModeOid);
@@ -594,7 +608,9 @@ ExecutePlacementUpdates(List *placementUpdateList, Oid shardReplicationModeOid,
 							 )));
 		UpdateShardPlacement(placementUpdate, responsiveWorkerList,
 							 shardReplicationModeOid);
+		MemoryContextReset(localContext);
 	}
+	MemoryContextSwitchTo(oldContext);
 }
 
 

@@ -16,9 +16,9 @@ COMMENT ON FUNCTION create_distributed_table(table_name regclass,
 											 colocate_with text)
     IS 'creates a distributed table';
 
-DROP FUNCTION pg_catalog.worker_partitioned_relation_total_size(text);
-DROP FUNCTION pg_catalog.worker_partitioned_relation_size(text);
-DROP FUNCTION pg_catalog.worker_partitioned_table_size(text);
+DROP FUNCTION pg_catalog.worker_partitioned_relation_total_size(regclass);
+DROP FUNCTION pg_catalog.worker_partitioned_relation_size(regclass);
+DROP FUNCTION pg_catalog.worker_partitioned_table_size(regclass);
 DROP FUNCTION pg_catalog.citus_disk_available();
 DROP FUNCTION pg_catalog.citus_disk_size();
 

@@ -23,6 +23,8 @@
 /* declarations for dynamic loading */
 PG_FUNCTION_INFO_V1(master_defer_delete_shards);
 
+static bool TryDropShard(GroupShardPlacement *placement);
+
 /*
  * master_defer_delete_shards implements a user-facing UDF to deleter orphaned shards that
  * are still haning around in the system. These shards are orphaned by previous actions
@@ -90,11 +92,11 @@ TryDropMarkedShards(bool waitForCleanupLock)
 /*
  * DropMarkedShards removes shards that were marked SHARD_STATE_TO_DELETE before.
  *
- * It does so by taking an exclusive lock on the shard and its colocated
- * placements before removing. If the lock cannot be obtained it skips the
- * group and continues with others. The group that has been skipped will be
- * removed at a later time when there are no locks held anymore on those
- * placements.
+ * It does so by trying to take an exclusive lock on the shard and its
+ * colocated placements before removing. If the lock cannot be obtained it
+ * skips the group and continues with others. The group that has been skipped
+ * will be removed at a later time when there are no locks held anymore on
+ * those placements.
  *
  * Before doing any of this it will take an exclusive PlacementCleanup lock.
  * This is to ensure that this function is not being run concurrently.
@@ -129,6 +131,7 @@ DropMarkedShards(bool waitForCleanupLock, int *removedShardCount)
 		return false;
 	}
 
+	int failedShardDropCount = 0;
 	List *shardPlacementList = AllShardPlacementsWithShardPlacementState(
 		SHARD_STATE_TO_DELETE);
 	foreach(shardPlacementCell, shardPlacementList)
@@ -142,35 +145,70 @@ DropMarkedShards(bool waitForCleanupLock, int *removedShardCount)
 			continue;
 		}
 
-		ShardPlacement *shardPlacement = LoadShardPlacement(placement->shardId,
-															placement->placementId);
-		ShardInterval *shardInterval = LoadShardInterval(shardPlacement->shardId);
-
-		ereport(LOG, (errmsg("dropping shard placement " INT64_FORMAT " of shard "
-							 INT64_FORMAT " on %s:%d after it was moved away",
-							 shardPlacement->placementId, shardPlacement->shardId,
-							 shardPlacement->nodeName, shardPlacement->nodePort)));
-
-		/* prepare sql query to execute to drop the shard */
-		StringInfo dropQuery = makeStringInfo();
-		char *qualifiedTableName = ConstructQualifiedShardName(shardInterval);
-		appendStringInfo(dropQuery, DROP_REGULAR_TABLE_COMMAND, qualifiedTableName);
-
-		List *dropCommandList = list_make2("SET LOCAL lock_timeout TO '1s'",
-										   dropQuery->data);
-
-		/* remove the shard from the node and the placement information */
-		SendCommandListToWorkerInSingleTransaction(shardPlacement->nodeName,
-												   shardPlacement->nodePort,
-												   NULL, dropCommandList);
-
-		DeleteShardPlacementRow(placement->placementId);
-
-		if (removedShardCount != NULL)
+		if (TryDropShard(placement))
 		{
-			(*removedShardCount)++;
+			removedShardCount++;
+		}
+		else
+		{
+			failedShardDropCount++;
 		}
 	}
 
-	return true;
+	if (failedShardDropCount > 0)
+	{
+		ereport(WARNING, (errmsg("Failed to drop %d old shards out of %d",
+								 failedShardDropCount, list_length(shardPlacementList))));
+	}
+
+	return removedShardCount;
+}
+
+
+/*
+ * TryDropShard tries to drop the given shard placement and returns
+ * true on success. On failure, this method swallows errors and emits them
+ * as WARNINGs.
+ */
+static bool
+TryDropShard(GroupShardPlacement *placement)
+{
+	ShardPlacement *shardPlacement = LoadShardPlacement(placement->shardId,
+														placement->placementId);
+	ShardInterval *shardInterval = LoadShardInterval(shardPlacement->shardId);
+
+	ereport(LOG, (errmsg("dropping shard placement " INT64_FORMAT " of shard "
+						 INT64_FORMAT " on %s:%d after it was moved away",
+						 shardPlacement->placementId, shardPlacement->shardId,
+						 shardPlacement->nodeName, shardPlacement->nodePort)));
+
+	/* prepare sql query to execute to drop the shard */
+	StringInfo dropQuery = makeStringInfo();
+	char *qualifiedTableName = ConstructQualifiedShardName(shardInterval);
+	appendStringInfo(dropQuery, DROP_REGULAR_TABLE_COMMAND, qualifiedTableName);
+
+	/*
+	 * We set a lock_timeout here so that if there are running queries on the
+	 * shards we won't get blocked more than 1s and fail.
+	 *
+	 * The lock timeout also avoids getting stuck in a distributed deadlock, which
+	 * can occur because we might be holding pg_dist_placement locks while also
+	 * taking locks on the shard placements, and this code interrupts the
+	 * distributed deadlock detector.
+	 */
+	List *dropCommandList = list_make2("SET LOCAL lock_timeout TO '1s'",
+									   dropQuery->data);
+
+	/* remove the shard from the node */
+	bool success =
+		SendOptionalCommandListToWorkerInTransaction(shardPlacement->nodeName,
+													 shardPlacement->nodePort,
+													 NULL, dropCommandList);
+	if (success)
+	{
+		/* delete the actual placement */
+		DeleteShardPlacementRow(placement->placementId);
+	}
+
+	return success;
 }

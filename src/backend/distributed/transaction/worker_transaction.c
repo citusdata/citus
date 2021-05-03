@@ -510,6 +510,53 @@ SendCommandListToWorkerInSingleTransaction(const char *nodeName, int32 nodePort,
 
 
 /*
+ * SendOptionalCommandListToWorkerInTransaction sends the given command list to
+ * the given worker in a single transaction. If any of the commands fail, it
+ * rollbacks the transaction, and otherwise commits.
+ */
+bool
+SendOptionalCommandListToWorkerInTransaction(const char *nodeName, int32 nodePort,
+											 const char *nodeUser, List *commandList)
+{
+	int connectionFlags = FORCE_NEW_CONNECTION;
+	bool failed = false;
+
+	MultiConnection *workerConnection = GetNodeUserDatabaseConnection(connectionFlags,
+																	  nodeName, nodePort,
+																	  nodeUser, NULL);
+	if (PQstatus(workerConnection->pgConn) != CONNECTION_OK)
+	{
+		return false;
+	}
+	RemoteTransactionBegin(workerConnection);
+
+	/* iterate over the commands and execute them in the same connection */
+	const char *commandString = NULL;
+	foreach_ptr(commandString, commandList)
+	{
+		if (ExecuteOptionalRemoteCommand(workerConnection, commandString, NULL) != 0)
+		{
+			failed = true;
+			break;
+		}
+	}
+
+	if (failed)
+	{
+		RemoteTransactionAbort(workerConnection);
+	}
+	else
+	{
+		RemoteTransactionCommit(workerConnection);
+	}
+
+	CloseConnection(workerConnection);
+
+	return !failed;
+}
+
+
+/*
  * ErrorIfAnyMetadataNodeOutOfSync raises an error if any of the given
  * metadata nodes are out of sync. It is safer to avoid metadata changing
  * commands (e.g. DDL or node addition) until all metadata nodes have

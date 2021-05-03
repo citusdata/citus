@@ -46,8 +46,8 @@ check-style:
 	cd ${citus_abs_top_srcdir} && citus_indent --quiet --check
 .PHONY: reindent check-style
 
-# depend on install for now
-check: all install
+# depend on install-all so that downgrade scripts are installed as well
+check: all install-all
 	$(MAKE) -C src/test/regress check-full
 
 .PHONY: all check clean install install-downgrades install-all

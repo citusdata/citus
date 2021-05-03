@@ -567,9 +567,9 @@ SELECT * FROM print_extension_changes();
                                                                                | function citus_disk_available()
                                                                                | function citus_disk_size()
                                                                                | function create_distributed_table(regclass,text,citus.distribution_type,text,integer)
-                                                                               | function worker_partitioned_relation_size(text)
-                                                                               | function worker_partitioned_relation_total_size(text)
-                                                                               | function worker_partitioned_table_size(text)
+                                                                               | function worker_partitioned_relation_size(regclass)
+                                                                               | function worker_partitioned_relation_total_size(regclass)
+                                                                               | function worker_partitioned_table_size(regclass)
 (8 rows)
 
 DROP TABLE prev_objects, extension_diff;

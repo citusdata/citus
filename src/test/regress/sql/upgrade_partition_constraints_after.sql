@@ -1,3 +1,14 @@
+-- run this test only when old citus version is 9.0
+\set upgrade_test_old_citus_version `echo "$upgrade_test_old_citus_version"`
+SELECT substring(:'upgrade_test_old_citus_version', 'v(\d+)\.\d+\.\d+')::int = 9 AND
+       substring(:'upgrade_test_old_citus_version', 'v\d+\.(\d+)\.\d+')::int = 0
+AS upgrade_test_old_citus_version_e_9_0;
+\gset
+\if :upgrade_test_old_citus_version_e_9_0
+\else
+\q
+\endif
+
 -- test cases for #3970
 SET search_path = test_3970;
 

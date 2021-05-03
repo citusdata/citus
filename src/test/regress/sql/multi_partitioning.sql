@@ -45,6 +45,11 @@ SELECT * FROM partitioning_test ORDER BY 1;
 
 SELECT * FROM partitioning_hash_test ORDER BY 1;
 
+-- should not return results when only querying parent
+SELECT * FROM ONLY partitioning_test ORDER BY 1;
+SELECT * FROM ONLY partitioning_test WHERE id = 1;
+SELECT * FROM ONLY partitioning_test a JOIN partitioning_hash_test b ON (a.id = b.subid) ORDER BY 1;
+
 -- see partitioned table and its partitions are distributed
 SELECT
 	logicalrelid
@@ -236,13 +241,19 @@ INSERT INTO partitioning_test_2012 SELECT * FROM partitioning_test WHERE time >=
 SELECT * FROM partitioning_test WHERE time >= '2011-01-01' AND time < '2013-01-01' ORDER BY 1;
 
 -- test UPDATE
--- UPDATE partitioned table
+-- (1) UPDATE partitioned table
 UPDATE partitioning_test SET time = '2013-07-07' WHERE id = 7;
 
--- UPDATE partition directly
+-- (2) UPDATE partition directly
 UPDATE partitioning_test_2013 SET time = '2013-08-08' WHERE id = 8;
 
--- see the data is updated
+-- (3) UPDATE only the parent (noop)
+UPDATE ONLY partitioning_test SET time = '2013-09-09' WHERE id = 7;
+
+-- (4) DELETE from only the parent (noop)
+DELETE FROM ONLY partitioning_test WHERE id = 7;
+
+-- see that only (1) and (2) had an effect
 SELECT * FROM partitioning_test WHERE id = 7 OR id = 8 ORDER BY 1;
 
 -- UPDATE that tries to move a row to a non-existing partition (this should fail)
@@ -673,6 +684,50 @@ FROM
 ) AS final_query
 GROUP BY types
 ORDER BY types;
+
+-- subquery with UNIONs on partitioned table, but only scan (empty) parent for some
+SELECT ("final_query"."event_types") as types, count(*) AS sumOfEventType
+FROM
+  (SELECT *, random()
+   FROM
+     (SELECT
+        "t"."user_id", "t"."time", unnest("t"."collected_events") AS "event_types"
+      FROM
+        (SELECT
+            "t1"."user_id", min("t1"."time") AS "time", array_agg(("t1"."event") ORDER BY TIME ASC, event DESC) AS collected_events
+         FROM(
+                  (SELECT
+                    "events"."user_id", "events"."time", 0 AS event
+                   FROM
+                    partitioned_events_table as  "events"
+                   WHERE
+                    event_type IN (1, 2) )
+               UNION
+                    (SELECT
+                        "events"."user_id", "events"."time", 1 AS event
+                     FROM
+                        partitioned_events_table as "events"
+                     WHERE
+                        event_type IN (3, 4) )
+               UNION
+                    (SELECT
+                        "events"."user_id", "events"."time", 2 AS event
+                     FROM
+                        ONLY partitioned_events_table as  "events"
+                     WHERE
+                        event_type IN (5, 6) )
+               UNION
+                    (SELECT
+                        "events"."user_id", "events"."time", 3 AS event
+                     FROM
+                        ONLY partitioned_events_table as "events"
+                     WHERE
+                        event_type IN (1, 6))) t1
+         GROUP BY "t1"."user_id") AS t) "q"
+) AS final_query
+GROUP BY types
+ORDER BY types;
+
 
 -- UNION and JOIN on both partitioned and regular tables
 SELECT ("final_query"."event_types") as types, count(*) AS sumOfEventType
@@ -1230,15 +1285,15 @@ SELECT create_distributed_table('"events.Energy Added"', 'user_id', colocate_wit
 CREATE TABLE "Energy Added_17634"  PARTITION OF "events.Energy Added" FOR VALUES  FROM ('2018-04-13 00:00:00+00') TO ('2018-04-14 00:00:00+00');
 
 -- test shard cost by disk size function
-SELECT citus_shard_cost_by_disk_size(1660207);
+SELECT citus_shard_cost_by_disk_size(shardid) FROM pg_dist_shard WHERE logicalrelid = '"events.Energy Added"'::regclass ORDER BY shardid LIMIT 1;
 CREATE INDEX idx_btree_hobbies ON "events.Energy Added" USING BTREE ((data->>'location'));
  \c - - - :worker_1_port
 -- should not be zero because of TOAST, vm, fms
-SELECT worker_partitioned_table_size('"events.Energy Added_1660207"');
+SELECT worker_partitioned_table_size(oid) FROM pg_class WHERE relname LIKE '%events.Energy Added%' ORDER BY relname LIMIT 1;
 -- should be zero since no data
-SELECT worker_partitioned_relation_size('"events.Energy Added_1660207"');
+SELECT worker_partitioned_relation_size(oid) FROM pg_class WHERE relname LIKE '%events.Energy Added%' ORDER BY relname LIMIT 1;
 -- should not be zero because of indexes + pg_table_size()
-SELECT worker_partitioned_relation_total_size('"events.Energy Added_1660207"');
+SELECT worker_partitioned_relation_total_size(oid) FROM pg_class WHERE relname LIKE '%events.Energy Added%' ORDER BY relname LIMIT 1;
  \c - - - :master_port
 DROP TABLE "events.Energy Added";
 
