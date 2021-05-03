@@ -34,9 +34,12 @@
 static List * JsonArrayToShardPlacementTestInfoList(
 	ArrayType *shardPlacementJsonArrayObject);
 static List * JsonArrayToWorkerTestInfoList(ArrayType *workerNodeJsonArrayObject);
-static bool JsonFieldValueBool(Datum jsonDocument, const char *key);
-static uint32 JsonFieldValueUInt32(Datum jsonDocument, const char *key);
-static uint64 JsonFieldValueUInt64(Datum jsonDocument, const char *key);
+static bool JsonFieldValueBoolDefault(Datum jsonDocument, const char *key,
+									  bool defaultValue);
+static uint32 JsonFieldValueUInt32Default(Datum jsonDocument, const char *key,
+										  uint32 defaultValue);
+static uint64 JsonFieldValueUInt64Default(Datum jsonDocument, const char *key,
+										  uint64 defaultValue);
 static char * JsonFieldValueString(Datum jsonDocument, const char *key);
 static ArrayType * PlacementUpdateListToJsonArray(List *placementUpdateList);
 static bool ShardAllowedOnNode(uint64 shardId, WorkerNode *workerNode, void *context);
@@ -319,12 +322,25 @@ JsonArrayToShardPlacementTestInfoList(ArrayType *shardPlacementJsonArrayObject)
 
 		MemoryContext oldContext = MemoryContextSwitchTo(functionCallContext);
 
-		uint64 shardId = JsonFieldValueUInt64(placementJson, FIELD_NAME_SHARD_ID);
-		uint64 shardLength = JsonFieldValueUInt64(placementJson, FIELD_NAME_SHARD_LENGTH);
-		int shardState = JsonFieldValueUInt32(placementJson, FIELD_NAME_SHARD_STATE);
+		uint64 shardId = JsonFieldValueUInt64Default(
+			placementJson, FIELD_NAME_SHARD_ID, placementIndex + 1);
+		uint64 shardLength = JsonFieldValueUInt64Default(
+			placementJson, FIELD_NAME_SHARD_LENGTH, 1);
+		int shardState = JsonFieldValueUInt32Default(
+			placementJson, FIELD_NAME_SHARD_STATE, SHARD_STATE_ACTIVE);
 		char *nodeName = JsonFieldValueString(placementJson, FIELD_NAME_NODE_NAME);
-		int nodePort = JsonFieldValueUInt32(placementJson, FIELD_NAME_NODE_PORT);
-		uint64 placementId = JsonFieldValueUInt64(placementJson, FIELD_NAME_PLACEMENT_ID);
+		if (nodeName == NULL)
+		{
+			ereport(ERROR, (errmsg(FIELD_NAME_NODE_NAME " needs be set")));
+		}
+		int nodePort = JsonFieldValueUInt32Default(
+			placementJson, FIELD_NAME_NODE_PORT, 5432);
+		uint64 placementId = JsonFieldValueUInt64Default(
+			placementJson, FIELD_NAME_PLACEMENT_ID, placementIndex + 1);
+
+		uint64 cost = JsonFieldValueUInt64Default(placementJson, "cost", 1);
+		bool nextColocationGroup =
+			JsonFieldValueBoolDefault(placementJson, "next_colocation", false);
 
 		MemoryContextSwitchTo(oldContext);
 
@@ -335,6 +351,8 @@ JsonArrayToShardPlacementTestInfoList(ArrayType *shardPlacementJsonArrayObject)
 		placementTestInfo->placement->nodeName = pstrdup(nodeName);
 		placementTestInfo->placement->nodePort = nodePort;
 		placementTestInfo->placement->placementId = placementId;
+		placementTestInfo->cost = cost;
+		placementTestInfo->nextColocationGroup = nextColocationGroup;
 
 		/*
 		 * We have copied whatever we needed from the UDF calls, so we can free
@@ -345,33 +363,6 @@ JsonArrayToShardPlacementTestInfoList(ArrayType *shardPlacementJsonArrayObject)
 
 		shardPlacementTestInfoList = lappend(shardPlacementTestInfoList,
 											 placementTestInfo);
-
-		PG_TRY();
-		{
-			placementTestInfo->cost = JsonFieldValueUInt64(placementJson,
-														   "cost");
-		}
-		PG_CATCH();
-		{
-			/* Ignore errors about not being able to find the key in that case cost is 1 */
-			FlushErrorState();
-			MemoryContextSwitchTo(oldContext);
-			placementTestInfo->cost = 1;
-		}
-		PG_END_TRY();
-
-		PG_TRY();
-		{
-			placementTestInfo->nextColocationGroup = JsonFieldValueBool(
-				placementJson, "next_colocation");
-		}
-		PG_CATCH();
-		{
-			/* Ignore errors about not being able to find the key in that case cost is 1 */
-			FlushErrorState();
-			MemoryContextSwitchTo(oldContext);
-		}
-		PG_END_TRY();
 	}
 
 	pfree(shardPlacementJsonArray);
@@ -398,11 +389,13 @@ JsonArrayToWorkerTestInfoList(ArrayType *workerNodeJsonArrayObject)
 	{
 		Datum workerNodeJson = workerNodeJsonArray[workerNodeIndex];
 		char *workerName = JsonFieldValueString(workerNodeJson, FIELD_NAME_WORKER_NAME);
-		uint32 workerPort = JsonFieldValueUInt32(workerNodeJson,
-												 FIELD_NAME_WORKER_PORT);
+		if (workerName == NULL)
+		{
+			ereport(ERROR, (errmsg(FIELD_NAME_WORKER_NAME " needs be set")));
+		}
+		uint32 workerPort = JsonFieldValueUInt32Default(workerNodeJson,
+														FIELD_NAME_WORKER_PORT, 5432);
 		List *disallowedShardIdList = NIL;
-		char *disallowedShardsString = NULL;
-		MemoryContext savedContext = CurrentMemoryContext;
 
 
 		WorkerTestInfo *workerTestInfo = palloc0(sizeof(WorkerTestInfo));
@@ -415,35 +408,12 @@ JsonArrayToWorkerTestInfoList(ArrayType *workerNodeJsonArrayObject)
 		workerNode->nodeRole = PrimaryNodeRoleId();
 		workerTestInfo->node = workerNode;
 
-		PG_TRY();
-		{
-			workerTestInfo->capacity = JsonFieldValueUInt64(workerNodeJson,
-															"capacity");
-		}
-		PG_CATCH();
-		{
-			/* Ignore errors about not being able to find the key in that case capacity is 1 */
-			FlushErrorState();
-			MemoryContextSwitchTo(savedContext);
-			workerTestInfo->capacity = 1;
-		}
-		PG_END_TRY();
-
+		workerTestInfo->capacity = JsonFieldValueUInt64Default(workerNodeJson,
+															   "capacity", 1);
 
 		workerTestInfoList = lappend(workerTestInfoList, workerTestInfo);
-		PG_TRY();
-		{
-			disallowedShardsString = JsonFieldValueString(workerNodeJson,
-														  "disallowed_shards");
-		}
-		PG_CATCH();
-		{
-			/* Ignore errors about not being able to find the key in that case all shards are allowed */
-			FlushErrorState();
-			MemoryContextSwitchTo(savedContext);
-			disallowedShardsString = NULL;
-		}
-		PG_END_TRY();
+		char *disallowedShardsString = JsonFieldValueString(
+			workerNodeJson, "disallowed_shards");
 
 		if (disallowedShardsString == NULL)
 		{
@@ -467,13 +437,18 @@ JsonArrayToWorkerTestInfoList(ArrayType *workerNodeJsonArrayObject)
 
 
 /*
- * JsonFieldValueBool gets the value of the given key in the given json
- * document and returns it as a boolean.
+ * JsonFieldValueBoolDefault gets the value of the given key in the given json
+ * document and returns it as a boolean. If the field does not exist in the
+ * JSON it returns defaultValue.
  */
 static bool
-JsonFieldValueBool(Datum jsonDocument, const char *key)
+JsonFieldValueBoolDefault(Datum jsonDocument, const char *key, bool defaultValue)
 {
 	char *valueString = JsonFieldValueString(jsonDocument, key);
+	if (valueString == NULL)
+	{
+		return defaultValue;
+	}
 	Datum valueBoolDatum = DirectFunctionCall1(boolin, CStringGetDatum(valueString));
 
 	return DatumGetBool(valueBoolDatum);
@@ -481,13 +456,18 @@ JsonFieldValueBool(Datum jsonDocument, const char *key)
 
 
 /*
- * JsonFieldValueUInt32 gets the value of the given key in the given json
- * document and returns it as an unsigned 32-bit integer.
+ * JsonFieldValueUInt32Default gets the value of the given key in the given json
+ * document and returns it as an unsigned 32-bit integer. If the field does not
+ * exist in the JSON it returns defaultValue.
  */
 static uint32
-JsonFieldValueUInt32(Datum jsonDocument, const char *key)
+JsonFieldValueUInt32Default(Datum jsonDocument, const char *key, uint32 defaultValue)
 {
 	char *valueString = JsonFieldValueString(jsonDocument, key);
+	if (valueString == NULL)
+	{
+		return defaultValue;
+	}
 	Datum valueInt4Datum = DirectFunctionCall1(int4in, CStringGetDatum(valueString));
 
 	uint32 valueUInt32 = DatumGetInt32(valueInt4Datum);
@@ -497,12 +477,17 @@ JsonFieldValueUInt32(Datum jsonDocument, const char *key)
 
 /*
  * JsonFieldValueUInt64 gets the value of the given key in the given json
- * document and returns it as an unsigned 64-bit integer.
+ * document and returns it as an unsigned 64-bit integer. If the field does not
+ * exist in the JSON it returns defaultValue.
  */
 static uint64
-JsonFieldValueUInt64(Datum jsonDocument, const char *key)
+JsonFieldValueUInt64Default(Datum jsonDocument, const char *key, uint64 defaultValue)
 {
 	char *valueString = JsonFieldValueString(jsonDocument, key);
+	if (valueString == NULL)
+	{
+		return defaultValue;
+	}
 	Datum valueInt8Datum = DirectFunctionCall1(int8in, CStringGetDatum(valueString));
 
 	uint64 valueUInt64 = DatumGetInt64(valueInt8Datum);
@@ -511,37 +496,49 @@ JsonFieldValueUInt64(Datum jsonDocument, const char *key)
 
 
 /*
+ * DirectFunctionalCall2Null is a version of DirectFunctionCall2 that can
+ * return NULL. It still does not support NULL arguments though.
+ */
+static Datum
+DirectFunctionCall2Null(PGFunction func, bool *isnull, Datum arg1, Datum arg2)
+{
+	LOCAL_FCINFO(fcinfo, 2);
+
+	InitFunctionCallInfoData(*fcinfo, NULL, 2, InvalidOid, NULL, NULL);
+
+	fcinfo->args[0].value = arg1;
+	fcinfo->args[0].isnull = false;
+	fcinfo->args[1].value = arg2;
+	fcinfo->args[1].isnull = false;
+
+	Datum result = (*func)(fcinfo);
+	if (fcinfo->isnull)
+	{
+		*isnull = true;
+		return 0;
+	}
+
+	*isnull = false;
+	return result;
+}
+
+
+/*
  * JsonFieldValueString gets the value of the given key in the given json
- * document and returns it as a string.
+ * document and returns it as a string. If the field does not exist in the JSON
+ * it returns NULL.
  */
 static char *
 JsonFieldValueString(Datum jsonDocument, const char *key)
 {
-	Datum valueTextDatum = 0;
-	bool valueFetched = false;
+	bool isnull = false;
 	Datum keyDatum = PointerGetDatum(cstring_to_text(key));
 
-	/*
-	 * json_object_field_text can return NULL, but DirectFunctionalCall2 raises
-	 * cryptic errors when the function returns NULL. We catch this error and
-	 * raise a more meaningful error.
-	 */
-	PG_TRY();
+	Datum valueTextDatum = DirectFunctionCall2Null(
+		json_object_field_text, &isnull, jsonDocument, keyDatum);
+	if (isnull)
 	{
-		valueTextDatum = DirectFunctionCall2(json_object_field_text,
-											 jsonDocument, keyDatum);
-		valueFetched = true;
-	}
-	PG_CATCH();
-	{
-		FlushErrorState();
-		valueFetched = false;
-	}
-	PG_END_TRY();
-
-	if (!valueFetched)
-	{
-		ereport(ERROR, (errmsg("could not get value for '%s'", key)));
+		return NULL;
 	}
 
 	char *valueString = text_to_cstring(DatumGetTextP(valueTextDatum));
