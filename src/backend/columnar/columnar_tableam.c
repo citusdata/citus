@@ -110,6 +110,7 @@ static HeapTuple ColumnarSlotCopyHeapTuple(TupleTableSlot *slot);
 static void ColumnarCheckLogicalReplication(Relation rel);
 static Datum * detoast_values(TupleDesc tupleDesc, Datum *orig_values, bool *isnull);
 static ItemPointerData row_number_to_tid(uint64 rowNumber);
+static void ErrorIfInvalidRowNumber(uint64 rowNumber);
 
 /* Custom tuple slot ops used for columnar. Initialized in columnar_tableam_init(). */
 static TupleTableSlotOps TTSOpsColumnar;
@@ -292,6 +293,22 @@ columnar_getnextslot(TableScanDesc sscan, ScanDirection direction, TupleTableSlo
 static ItemPointerData
 row_number_to_tid(uint64 rowNumber)
 {
+	ErrorIfInvalidRowNumber(rowNumber);
+
+	ItemPointerData tid = { 0 };
+	ItemPointerSetBlockNumber(&tid, rowNumber / VALID_ITEMPOINTER_OFFSETS);
+	ItemPointerSetOffsetNumber(&tid, rowNumber % VALID_ITEMPOINTER_OFFSETS +
+							   FirstOffsetNumber);
+	return tid;
+}
+
+
+/*
+ * ErrorIfInvalidRowNumber errors out if given rowNumber is invalid.
+ */
+static void
+ErrorIfInvalidRowNumber(uint64 rowNumber)
+{
 	if (rowNumber == COLUMNAR_INVALID_ROW_NUMBER)
 	{
 		/* not expected but be on the safe side */
@@ -306,12 +323,6 @@ row_number_to_tid(uint64 rowNumber)
 							   (uint64) COLUMNAR_MAX_ROW_NUMBER),
 						errhint("Consider using VACUUM FULL for your table")));
 	}
-
-	ItemPointerData tid = { 0 };
-	ItemPointerSetBlockNumber(&tid, rowNumber / VALID_ITEMPOINTER_OFFSETS);
-	ItemPointerSetOffsetNumber(&tid, rowNumber % VALID_ITEMPOINTER_OFFSETS +
-							   FirstOffsetNumber);
-	return tid;
 }
 
 
