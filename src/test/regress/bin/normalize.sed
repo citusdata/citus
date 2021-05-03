@@ -111,6 +111,9 @@ s/partition ".*" would be violated by some row/partition would be violated by so
 s/of relation ".*" contains null values/contains null values/g
 s/of relation "t1" is violated by some row/is violated by some row/g
 
+# pg13.1 changes
+s/^ERROR:  insufficient columns in PRIMARY KEY constraint definition$/ERROR:  unique constraint on partitioned table must include all partitioning columns/g
+
 # intermediate_results
 s/(ERROR.*)pgsql_job_cache\/([0-9]+_[0-9]+_[0-9]+)\/(.*).data/\1pgsql_job_cache\/xx_x_xxx\/\3.data/g
 
