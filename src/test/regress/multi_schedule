@@ -238,6 +238,7 @@ test: local_dist_join_modifications
 test: local_table_join
 test: local_dist_join_mixed
 test: citus_local_dist_joins
+test: local_table_join_vars
 
 # ---------
 # multi_copy creates hash and range-partitioned tables and performs COPY

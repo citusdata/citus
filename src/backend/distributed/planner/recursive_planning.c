@@ -74,6 +74,7 @@
 #include "distributed/relation_restriction_equivalence.h"
 #include "distributed/log_utils.h"
 #include "distributed/shard_pruning.h"
+#include "distributed/var_utils.h"
 #include "distributed/version_compat.h"
 #include "lib/stringinfo.h"
 #include "optimizer/clauses.h"
@@ -103,6 +104,7 @@ struct RecursivePlanningContextInternal
 	uint64 planId;
 	bool allDistributionKeysInQueryAreEqual; /* used for some optimizations */
 	List *subPlanList;
+	List *rtableList; /* list of rtables */
 	PlannerRestrictionContext *plannerRestrictionContext;
 };
 
@@ -136,6 +138,10 @@ static DeferredErrorMessage * RecursivelyPlanSubqueriesAndCTEs(Query *query,
 static bool ShouldRecursivelyPlanNonColocatedSubqueries(Query *subquery,
 														RecursivePlanningContext *
 														context);
+static bool ShouldConvertLocalTableJoinsToSubqueries(List *rangeTableList,
+													 List *referencedRteList,
+													 List *rtableList);
+
 static bool ContainsSubquery(Query *query);
 static void RecursivelyPlanNonColocatedSubqueries(Query *subquery,
 												  RecursivePlanningContext *context);
@@ -187,6 +193,7 @@ static Query * CreateOuterSubquery(RangeTblEntry *rangeTableEntry,
 								   List *outerSubqueryTargetList);
 static List * GenerateRequiredColNamesFromTargetList(List *targetList);
 static char * GetRelationNameAndAliasName(RangeTblEntry *rangeTablentry);
+static bool ContainsDistributedTable(List *rteList);
 
 /*
  * GenerateSubplansForSubqueriesAndCTEs is a wrapper around RecursivelyPlanSubqueriesAndCTEs.
@@ -211,6 +218,7 @@ GenerateSubplansForSubqueriesAndCTEs(uint64 planId, Query *originalQuery,
 	context.planId = planId;
 	context.subPlanList = NIL;
 	context.plannerRestrictionContext = plannerRestrictionContext;
+	context.rtableList = NIL;
 
 	/*
 	 * Calculating the distribution key equality upfront is a trade-off for us.
@@ -268,6 +276,8 @@ GenerateSubplansForSubqueriesAndCTEs(uint64 planId, Query *originalQuery,
 static DeferredErrorMessage *
 RecursivelyPlanSubqueriesAndCTEs(Query *query, RecursivePlanningContext *context)
 {
+	context->rtableList = lcons(query->rtable, context->rtableList);
+
 	DeferredErrorMessage *error = RecursivelyPlanCTEs(query, context);
 	if (error != NULL)
 	{
@@ -348,8 +358,9 @@ RecursivelyPlanSubqueriesAndCTEs(Query *query, RecursivePlanningContext *context
 		RecursivelyPlanNonColocatedSubqueries(query, context);
 	}
 
-
-	if (ShouldConvertLocalTableJoinsToSubqueries(query->rtable))
+	List *rteList = PullAllRangeTablesEntries(query, context->rtableList);
+	if (ShouldConvertLocalTableJoinsToSubqueries(query->rtable, rteList,
+												 context->rtableList))
 	{
 		/*
 		 * Logical planner cannot handle "local_table" [OUTER] JOIN "dist_table", or
@@ -359,8 +370,69 @@ RecursivelyPlanSubqueriesAndCTEs(Query *query, RecursivePlanningContext *context
 		RecursivelyPlanLocalTableJoins(query, context);
 	}
 
-
+	context->rtableList = list_delete_first(context->rtableList);
 	return NULL;
+}
+
+
+/*
+ * ShouldConvertLocalTableJoinsToSubqueries returns true if we should
+ * convert local-dist table joins to subqueries.
+ */
+static bool
+ShouldConvertLocalTableJoinsToSubqueries(List *rangeTableList, List *referencedRteList,
+										 List *rtableList)
+{
+	if (LocalTableJoinPolicy == LOCAL_JOIN_POLICY_NEVER)
+	{
+		/* user doesn't want Citus to enable local table joins */
+		return false;
+	}
+
+	bool containsDistributedTable = false;
+	bool containsLocalTable = false;
+
+	if (ContainsLocalTableDistributedTableJoin(rangeTableList, &containsLocalTable,
+											   &containsDistributedTable))
+	{
+		return true;
+	}
+
+	if (!containsLocalTable)
+	{
+		/* if there is no local table, we don't need to do any conversion */
+		return false;
+	}
+
+	/*
+	 * if referenced table list of this query contains a distributed table
+	 * we need to do a convertion
+	 */
+	if (ContainsDistributedTable(referencedRteList))
+	{
+		return true;
+	}
+
+	return false;
+}
+
+
+/*
+ * ContainsDistributedTable returns true if the given rteList contains
+ * a distributed table rte.
+ */
+static bool
+ContainsDistributedTable(List *rteList)
+{
+	RangeTblEntry *rte = NULL;
+	foreach_ptr(rte, rteList)
+	{
+		if (IsDistributedOrReferenceTableRTE((Node *) rte))
+		{
+			return true;
+		}
+	}
+	return false;
 }
 
 
@@ -1559,7 +1631,8 @@ IsRecursivelyPlannableRelation(RangeTblEntry *rangeTableEntry)
  * or reference table.
  */
 bool
-ContainsLocalTableDistributedTableJoin(List *rangeTableList)
+ContainsLocalTableDistributedTableJoin(List *rangeTableList, bool *containsLocalTableOut,
+									   bool *containsDistributedTableOut)
 {
 	bool containsLocalTable = false;
 	bool containsDistributedTable = false;
@@ -1579,7 +1652,14 @@ ContainsLocalTableDistributedTableJoin(List *rangeTableList)
 			containsLocalTable = true;
 		}
 	}
-
+	if (containsLocalTableOut)
+	{
+		*containsLocalTableOut = containsLocalTable;
+	}
+	if (containsDistributedTableOut)
+	{
+		*containsDistributedTableOut = containsDistributedTable;
+	}
 	return containsLocalTable && containsDistributedTable;
 }
 
@@ -1707,7 +1787,6 @@ TransformFunctionRTE(RangeTblEntry *rangeTblEntry)
 			subquery->targetList = lappend(subquery->targetList, targetEntry);
 		}
 	}
-
 	/*
 	 * If tupleDesc is NULL we have 2 different cases:
 	 *
@@ -1757,7 +1836,6 @@ TransformFunctionRTE(RangeTblEntry *rangeTblEntry)
 				columnType = list_nth_oid(rangeTblFunction->funccoltypes,
 										  targetColumnIndex);
 			}
-
 			/* use the types in the function definition otherwise */
 			else
 			{

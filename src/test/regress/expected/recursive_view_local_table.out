@@ -149,8 +149,11 @@ SELECT ref_table.* FROM ref_table JOIN (SELECT * FROM recursive_defined_non_recu
 (3 rows)
 
 SELECT ref_table.* FROM ref_table WHERE EXISTS (SELECT * FROM local_table l WHERE l.a = ref_table.a);
-ERROR:  direct joins between distributed and local tables are not supported
-HINT:  Use CTE's or subqueries to select from local tables and use them in joins
+ a | b
+---------------------------------------------------------------------
+ 1 | 1
+(1 row)
+
 SELECT ref_table.* FROM ref_table WHERE EXISTS (SELECT * FROM local_table l WHERE l.a = ref_table.a) AND false;
  a | b
 ---------------------------------------------------------------------
