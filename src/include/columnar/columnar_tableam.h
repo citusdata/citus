@@ -29,7 +29,7 @@
  * For this reason, we restrict itemPointer.offsetNumber
  * to the following interval: [FirstOffsetNumber, MaxOffsetNumber).
  */
-#define VALID_ITEMPOINTER_OFFSETS (MaxOffsetNumber - FirstOffsetNumber)
+#define VALID_ITEMPOINTER_OFFSETS ((uint64) (MaxOffsetNumber - FirstOffsetNumber))
 
 /*
  * Number of valid ItemPointer BlockNumber's for "row number" <> "ItemPointer"
@@ -43,7 +43,7 @@
  * For this reason, we restrict itemPointer.blockNumber
  * to the following interval: [0, MaxBlockNumber].
  */
-#define VALID_BLOCKNUMBERS (MaxBlockNumber + 1)
+#define VALID_BLOCKNUMBERS ((uint64) (MaxBlockNumber + 1))
 
 
 const TableAmRoutine * GetColumnarTableAmRoutine(void);

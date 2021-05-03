@@ -24,8 +24,8 @@
 #define COLUMNAR_FIRST_ROW_NUMBER ((uint64) 1)
 #define COLUMNAR_MAX_ROW_NUMBER ((uint64) \
 								 (COLUMNAR_FIRST_ROW_NUMBER + \
-								  (uint64) VALID_ITEMPOINTER_OFFSETS * \
-								  (uint64) VALID_BLOCKNUMBERS))
+								  VALID_ITEMPOINTER_OFFSETS * \
+								  VALID_BLOCKNUMBERS))
 
 
 /*
