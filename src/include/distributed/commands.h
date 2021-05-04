@@ -342,6 +342,8 @@ extern List * PreprocessAlterSchemaRenameStmt(Node *node, const char *queryStrin
 extern ObjectAddress AlterSchemaRenameStmtObjectAddress(Node *node, bool missing_ok);
 
 /* sequence.c - forward declarations */
+extern List * PreprocessDropSequenceStmt(Node *stmt, const char *queryString,
+										 ProcessUtilityContext processUtilityContext);
 extern void ErrorIfUnsupportedSeqStmt(CreateSeqStmt *createSeqStmt);
 extern void ErrorIfDistributedAlterSeqOwnedBy(AlterSeqStmt *alterSeqStmt);
 

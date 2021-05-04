@@ -14,10 +14,15 @@
 #include "catalog/dependency.h"
 #include "catalog/namespace.h"
 #include "commands/defrem.h"
+#include "commands/extension.h"
 #include "distributed/commands.h"
 #include "distributed/commands/sequence.h"
+#include "distributed/commands/utility_hook.h"
+#include "distributed/deparser.h"
 #include "distributed/listutils.h"
+#include "distributed/metadata/distobject.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/metadata_sync.h"
 #include "nodes/parsenodes.h"
 
 /* Local functions forward declarations for helper functions */
@@ -208,4 +213,109 @@ ExtractDefaultColumnsAndOwnedSequences(Oid relationId, List **columnNameList,
 	}
 
 	relation_close(relation, NoLock);
+}
+
+
+/*
+ * PreprocessDropSequenceStmt gets called during the planning phase of a DROP SEQUENCE statement
+ * and returns a list of DDLJob's that will drop any distributed sequences from the
+ * workers.
+ *
+ * The DropStmt could have multiple objects to drop, the list of objects will be filtered
+ * to only keep the distributed sequences for deletion on the workers. Non-distributed
+ * sequences will still be dropped locally but not on the workers.
+ */
+List *
+PreprocessDropSequenceStmt(Node *node, const char *queryString,
+						   ProcessUtilityContext processUtilityContext)
+{
+	DropStmt *stmt = castNode(DropStmt, node);
+	List *deletingSequencesList = stmt->objects;
+	List *distributedSequencesList = NIL;
+	List *distributedSequenceAddresses = NIL;
+
+	Assert(stmt->removeType == OBJECT_SEQUENCE);
+
+	if (creating_extension)
+	{
+		/*
+		 * extensions should be created separately on the workers, types cascading from an
+		 * extension should therefor not be propagated here.
+		 */
+		return NIL;
+	}
+
+	if (!EnableDependencyCreation)
+	{
+		/*
+		 * we are configured to disable object propagation, should not propagate anything
+		 */
+		return NIL;
+	}
+
+	/*
+	 * Our statements need to be fully qualified so we can drop them from the right schema
+	 * on the workers
+	 */
+	QualifyTreeNode((Node *) stmt);
+
+	/*
+	 * iterate over all sequences to be dropped and filter to keep only distributed
+	 * sequences.
+	 */
+	List *objectNameList = NULL;
+	foreach_ptr(objectNameList, deletingSequencesList)
+	{
+		RangeVar *seq = makeRangeVarFromNameList(objectNameList);
+
+		Oid seqOid = RangeVarGetRelid(seq, NoLock, stmt->missing_ok);
+
+		ObjectAddress sequenceAddress = { 0 };
+		ObjectAddressSet(sequenceAddress, RelationRelationId, seqOid);
+
+		if (!IsObjectDistributed(&sequenceAddress))
+		{
+			continue;
+		}
+
+		/* collect information for all distributed sequences */
+		ObjectAddress *addressp = palloc(sizeof(ObjectAddress));
+		*addressp = sequenceAddress;
+		distributedSequenceAddresses = lappend(distributedSequenceAddresses, addressp);
+		distributedSequencesList = lappend(distributedSequencesList, objectNameList);
+	}
+
+	if (list_length(distributedSequencesList) <= 0)
+	{
+		/* no distributed functions to drop */
+		return NIL;
+	}
+
+	/*
+	 * managing types can only be done on the coordinator if ddl propagation is on. when
+	 * it is off we will never get here. MX workers don't have a notion of distributed
+	 * types, so we block the call.
+	 */
+	EnsureCoordinator();
+
+	/* remove the entries for the distributed objects on dropping */
+	ObjectAddress *address = NULL;
+	foreach_ptr(address, distributedSequenceAddresses)
+	{
+		UnmarkObjectDistributed(address);
+	}
+
+	/*
+	 * Swap the list of objects before deparsing and restore the old list after. This
+	 * ensures we only have distributed sequences in the deparsed drop statement.
+	 */
+	DropStmt *stmtCopy = copyObject(stmt);
+	stmtCopy->objects = distributedSequencesList;
+	const char *dropStmtSql = DeparseTreeNode((Node *) stmtCopy);
+
+	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
+								(void *) dropStmtSql,
+								ENABLE_DDL_PROPAGATION);
+
+	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
 }

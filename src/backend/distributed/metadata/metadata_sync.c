@@ -1088,6 +1088,10 @@ SequenceDDLCommandsForTable(Oid relationId)
 
 		sequenceDDLList = lappend(sequenceDDLList, wrappedSequenceDef->data);
 		sequenceDDLList = lappend(sequenceDDLList, sequenceGrantStmt->data);
+
+		ObjectAddress sequenceAddress = { 0 };
+		ObjectAddressSet(sequenceAddress, RelationRelationId, sequenceOid);
+		MarkObjectDistributed(&sequenceAddress);
 	}
 
 	return sequenceDDLList;

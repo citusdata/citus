@@ -366,6 +366,13 @@ static DistributeObjectOps Routine_AlterObjectDepends = {
 	.postprocess = NULL,
 	.address = AlterFunctionDependsStmtObjectAddress,
 };
+static DistributeObjectOps Sequence_Drop = {
+	.deparse = DeparseDropSequenceStmt,
+	.qualify = NULL,
+	.preprocess = PreprocessDropSequenceStmt,
+	.postprocess = NULL,
+	.address = NULL,
+};
 static DistributeObjectOps Trigger_AlterObjectDepends = {
 	.deparse = NULL,
 	.qualify = NULL,
@@ -891,6 +898,11 @@ GetDistributeObjectOps(Node *node)
 				case OBJECT_TRIGGER:
 				{
 					return &Trigger_Drop;
+				}
+
+				case OBJECT_SEQUENCE:
+				{
+					return &Sequence_Drop;
 				}
 
 				default:
