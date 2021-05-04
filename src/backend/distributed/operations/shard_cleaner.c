@@ -44,12 +44,7 @@ master_defer_delete_shards(PG_FUNCTION_ARGS)
 	EnsureCoordinator();
 
 	bool waitForCleanupLock = true;
-	int droppedShardCount = 0;
-	bool droppedAllOldShards = DropMarkedShards(waitForCleanupLock, &droppedShardCount);
-	if (!droppedAllOldShards)
-	{
-		ereport(WARNING, (errmsg("not all shards could be dropped")));
-	}
+	int droppedShardCount = DropMarkedShards(waitForCleanupLock);
 
 	PG_RETURN_INT32(droppedShardCount);
 }
@@ -65,12 +60,11 @@ master_defer_delete_shards(PG_FUNCTION_ARGS)
 int
 TryDropMarkedShards(bool waitForCleanupLock)
 {
-	int droppedShardCount = 0;
 	MemoryContext savedContext = CurrentMemoryContext;
-
+	int droppedShardCount = 0;
 	PG_TRY();
 	{
-		DropMarkedShards(waitForCleanupLock, &droppedShardCount);
+		droppedShardCount = DropMarkedShards(waitForCleanupLock);
 	}
 	PG_CATCH();
 	{
@@ -104,16 +98,11 @@ TryDropMarkedShards(bool waitForCleanupLock)
  * placements of a shard. waitForCleanupLock indicates if this function should
  * wait for this lock or error out.
  *
- * The function returns true if all shards were successfuly dropped and fills
- * removedShardCount with the number of shards that were dropped.
  */
-bool
-DropMarkedShards(bool waitForCleanupLock, int *removedShardCount)
+int
+DropMarkedShards(bool waitForCleanupLock)
 {
-	if (removedShardCount != NULL)
-	{
-		*removedShardCount = 0;
-	}
+	int removedShardCount = 0;
 	ListCell *shardPlacementCell = NULL;
 
 	if (!IsCoordinator())

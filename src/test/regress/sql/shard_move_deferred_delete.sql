@@ -7,21 +7,12 @@ SET citus.next_shard_id TO 20000000;
 SET citus.shard_count TO 6;
 SET citus.shard_replication_factor TO 1;
 SET citus.defer_drop_after_shard_move TO on;
-SET citus.delete_old_shards_sleep_time TO 0;
 
 CREATE SCHEMA shard_move_deferred_delete;
 SET search_path TO shard_move_deferred_delete;
 
 CREATE TABLE t1 ( id int PRIMARY KEY);
 SELECT create_distributed_table('t1', 'id');
-
--- check that citus_available_disk returns somewhat sane results (the exact
--- number differs per machine, but it's probably a safe bet that everyone
--- has 100 bytes of free disk)
-select citus_disk_available() > 100;
--- It's also reasonable to assume that not the entire disk is empty
-select citus_disk_available() < citus_disk_size();
-
 
 -- by counting how ofter we see the specific shard on all workers we can verify is the shard is there
 SELECT run_command_on_workers($cmd$
@@ -86,11 +77,13 @@ SELECT citus_shard_cost_by_disk_size(20000001);
 -- When there's not enough space the move should fail
 SELECT master_move_shard_placement(20000001, 'localhost', :worker_2_port, 'localhost', :worker_1_port);
 
+
 BEGIN;
 -- when we disable the setting, the move should not give "not enough space" error
 set citus.check_available_space_before_move to false;
 SELECT master_move_shard_placement(20000001, 'localhost', :worker_2_port, 'localhost', :worker_1_port);
 ROLLBACK;
+
 
 -- we expect shard 0 to be on only the second worker now, since
 -- master_move_shard_placement will try to drop marked shards

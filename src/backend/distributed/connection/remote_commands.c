@@ -373,20 +373,6 @@ ExecuteCriticalRemoteCommandList(MultiConnection *connection, List *commandList)
 void
 ExecuteCriticalRemoteCommand(MultiConnection *connection, const char *command)
 {
-	ExecuteCriticalRemoteCommandWithResult(connection, command, NULL);
-}
-
-
-/*
- * ExecuteCriticalRemoteCommandWithResult executes a remote command that is
- * critical to the transaction. If the command fails then the transaction
- * aborts. This function also allows you to get the result of the query back.
- * If NULL is passed as the result, the result will be automatically cleared.
- */
-void
-ExecuteCriticalRemoteCommandWithResult(MultiConnection *connection, const char *command,
-									   PGresult **result)
-{
 	bool raiseInterrupts = true;
 
 	int querySent = SendRemoteCommand(connection, command);
@@ -395,53 +381,14 @@ ExecuteCriticalRemoteCommandWithResult(MultiConnection *connection, const char *
 		ReportConnectionError(connection, ERROR);
 	}
 
-	PGresult *localResult = GetRemoteCommandResult(connection, raiseInterrupts);
-	if (!IsResponseOK(localResult))
+	PGresult *result = GetRemoteCommandResult(connection, raiseInterrupts);
+	if (!IsResponseOK(result))
 	{
-		ReportResultError(connection, localResult, ERROR);
-		PQclear(localResult);
-		ForgetResults(connection);
-		return;
+		ReportResultError(connection, result, ERROR);
 	}
 
-	/*
-	 * store result if result has been set, when the user is not interested in the result
-	 * a NULL pointer could be passed and the result will be cleared.
-	 */
-	if (result != NULL)
-	{
-		*result = localResult;
-	}
-	else
-	{
-		PQclear(localResult);
-		ForgetResults(connection);
-	}
-}
-
-
-/*
- * ExecuteRemoteInt64Command executes the given command and expects an int result.
- */
-int64
-ExecuteRemoteInt64Command(MultiConnection *connection, const char *command)
-{
-	PGresult *result = NULL;
-	ExecuteCriticalRemoteCommandWithResult(connection, command, &result);
-	List *availableSpaceList = ReadFirstColumnAsText(result);
-	if (list_length(availableSpaceList) != 1)
-	{
-		ereport(ERROR, (errmsg(
-							"received wrong number of rows from worker, expected 1 received %d",
-							list_length(availableSpaceList))));
-	}
-
-	StringInfo resultStringInfo = (StringInfo) linitial(
-		availableSpaceList);
-	int64 resultInt = SafeStringToInt64(resultStringInfo->data);
 	PQclear(result);
 	ForgetResults(connection);
-	return resultInt;
 }
 
 

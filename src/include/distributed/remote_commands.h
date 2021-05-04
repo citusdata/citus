@@ -49,7 +49,6 @@ extern void ExecuteCriticalRemoteCommand(MultiConnection *connection,
 extern void ExecuteCriticalRemoteCommandWithResult(MultiConnection *connection,
 												   const char *command,
 												   PGresult **result);
-extern int64 ExecuteRemoteInt64Command(MultiConnection *connection, const char *command);
 extern int ExecuteOptionalRemoteCommand(MultiConnection *connection,
 										const char *command,
 										PGresult **result);

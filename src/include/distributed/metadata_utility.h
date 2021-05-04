@@ -22,6 +22,7 @@
 #include "catalog/indexing.h"
 #include "catalog/objectaddress.h"
 #include "distributed/citus_nodes.h"
+#include "distributed/connection_management.h"
 #include "distributed/relay_utility.h"
 #include "utils/acl.h"
 #include "utils/relcache.h"
@@ -287,5 +288,7 @@ extern void GetIntervalTypeInfo(char partitionMethod, Var *partitionColumn,
 extern List * SendShardStatisticsQueriesInParallel(List *citusTableIds, bool
 												   useDistributedTransaction, bool
 												   useShardMinMaxQuery);
-
+extern bool GetNodeDiskSpaceStatsForConnection(MultiConnection *connection,
+											   uint64 *availableBytes,
+											   uint64 *totalBytes);
 #endif   /* METADATA_UTILITY_H */

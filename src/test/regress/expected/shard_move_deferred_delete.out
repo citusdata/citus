@@ -5,7 +5,6 @@ SET citus.next_shard_id TO 20000000;
 SET citus.shard_count TO 6;
 SET citus.shard_replication_factor TO 1;
 SET citus.defer_drop_after_shard_move TO on;
-SET citus.delete_old_shards_sleep_time TO 0;
 CREATE SCHEMA shard_move_deferred_delete;
 SET search_path TO shard_move_deferred_delete;
 CREATE TABLE t1 ( id int PRIMARY KEY);
@@ -13,22 +12,6 @@ SELECT create_distributed_table('t1', 'id');
  create_distributed_table
 ---------------------------------------------------------------------
 
-(1 row)
-
--- check that citus_available_disk returns somewhat sane results (the exact
--- number differs per machine, but it's probably a safe bet that everyone
--- has 100 bytes of free disk)
-select citus_disk_available() > 100;
- ?column?
----------------------------------------------------------------------
- t
-(1 row)
-
--- It's also reasonable to assume that not the entire disk is empty
-select citus_disk_available() < citus_disk_size();
- ?column?
----------------------------------------------------------------------
- t
 (1 row)
 
 -- by counting how ofter we see the specific shard on all workers we can verify is the shard is there
@@ -161,7 +144,7 @@ SELECT citus_shard_cost_by_disk_size(20000001);
 SELECT master_move_shard_placement(20000001, 'localhost', :worker_2_port, 'localhost', :worker_1_port);
 WARNING:  not enough space to move shard
 DETAIL:  actual space 20 bytes (forced), required space 8192 bytes
-NOTICE:  trying to drop shards to resolve issue...
+NOTICE:  trying to drop old shards to resolve issue...
 ERROR:  not enough space to move shard
 DETAIL:  actual space 20 bytes (forced), required space 8192 bytes
 BEGIN;
@@ -192,7 +175,7 @@ SELECT master_move_shard_placement(20000001, 'localhost', :worker_2_port, 'local
 WARNING:  not enough empty space on node after move
 DETAIL:  actual available space after move 108 bytes, desired available space after move 425 bytes
 HINT:  try changing citus.desired_percent_disk_available_after_move
-NOTICE:  trying to drop shards to resolve issue...
+NOTICE:  trying to drop old shards to resolve issue...
 ERROR:  not enough empty space on node after move
 DETAIL:  actual available space after move 108 bytes, desired available space after move 425 bytes
 HINT:  try changing citus.desired_percent_disk_available_after_move

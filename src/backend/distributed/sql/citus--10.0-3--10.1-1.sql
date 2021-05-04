@@ -6,5 +6,4 @@
 #include "udfs/worker_partitioned_relation_size/10.1-1.sql"
 #include "udfs/worker_partitioned_table_size/10.1-1.sql"
 #include "udfs/citus_finish_pg_upgrade/10.1-1.sql"
-#include "udfs/citus_disk_size/10.1-1.sql"
-#include "udfs/citus_disk_available/10.1-1.sql"
+#include "udfs/citus_local_disk_space_stats/10.1-1.sql"

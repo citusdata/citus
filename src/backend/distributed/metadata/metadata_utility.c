@@ -10,6 +10,8 @@
  *-------------------------------------------------------------------------
  */
 
+#include <sys/statvfs.h>
+
 #include "postgres.h"
 #include "funcapi.h"
 #include "libpq-fe.h"
@@ -98,11 +100,137 @@ static void AppendShardSizeMinMaxQuery(StringInfo selectQuery, uint64 shardId,
 static void AppendShardSizeQuery(StringInfo selectQuery, ShardInterval *shardInterval,
 								 char *quotedShardName);
 
+static HeapTuple CreateDiskSpaceTuple(TupleDesc tupleDesc, uint64 availableBytes,
+									  uint64 totalBytes);
+static bool GetLocalDiskSpaceStats(uint64 *availableBytes, uint64 *totalBytes);
+
 /* exports for SQL callable functions */
+PG_FUNCTION_INFO_V1(citus_local_disk_space_stats);
 PG_FUNCTION_INFO_V1(citus_table_size);
 PG_FUNCTION_INFO_V1(citus_total_relation_size);
 PG_FUNCTION_INFO_V1(citus_relation_size);
 PG_FUNCTION_INFO_V1(citus_shard_sizes);
+
+
+/*
+ * CreateDiskSpaceTuple creates a tuple that is used as the return value
+ * for citus_local_disk_space_stats.
+ */
+static HeapTuple
+CreateDiskSpaceTuple(TupleDesc tupleDescriptor, uint64 availableBytes, uint64 totalBytes)
+{
+	Datum values[TABLE_METADATA_FIELDS];
+	bool isNulls[TABLE_METADATA_FIELDS];
+
+	/* form heap tuple for remote disk space statistics */
+	memset(values, 0, sizeof(values));
+	memset(isNulls, false, sizeof(isNulls));
+
+	values[0] = UInt64GetDatum(availableBytes);
+	values[1] = UInt64GetDatum(totalBytes);
+
+	HeapTuple diskSpaceTuple = heap_form_tuple(tupleDescriptor, values, isNulls);
+
+	return diskSpaceTuple;
+}
+
+
+/*
+ * citus_local_disk_space_stats returns total disk space and available disk
+ * space for the disk that contains PGDATA.
+ */
+Datum
+citus_local_disk_space_stats(PG_FUNCTION_ARGS)
+{
+	uint64 availableBytes = 0;
+	uint64 totalBytes = 0;
+
+	if (!GetLocalDiskSpaceStats(&availableBytes, &totalBytes))
+	{
+		ereport(WARNING, (errmsg("could not get disk space")));
+	}
+
+	TupleDesc tupleDescriptor = NULL;
+
+	TypeFuncClass resultTypeClass = get_call_result_type(fcinfo, NULL,
+														 &tupleDescriptor);
+	if (resultTypeClass != TYPEFUNC_COMPOSITE)
+	{
+		ereport(ERROR, (errmsg("return type must be a row type")));
+	}
+
+	HeapTuple diskSpaceTuple = CreateDiskSpaceTuple(tupleDescriptor, availableBytes,
+													totalBytes);
+
+	PG_RETURN_DATUM(HeapTupleGetDatum(diskSpaceTuple));
+}
+
+
+/*
+ * GetLocalDiskSpaceStats returns total and available disk space for the disk containing
+ * PGDATA (not considering tablespaces, quota).
+ */
+static bool
+GetLocalDiskSpaceStats(uint64 *availableBytes, uint64 *totalBytes)
+{
+	struct statvfs buffer;
+	if (statvfs(DataDir, &buffer) != 0)
+	{
+		return false;
+	}
+
+	/*
+	 * f_bfree: number of free blocks
+	 * f_frsize: fragment size, same as f_bsize usually
+	 * f_blocks: Size of fs in f_frsize units
+	 */
+	*availableBytes = buffer.f_bfree * buffer.f_frsize;
+	*totalBytes = buffer.f_blocks * buffer.f_frsize;
+
+	return true;
+}
+
+
+/*
+ * GetNodeDiskSpaceStatsForConnection fetches the disk space statistics for the node
+ * that is on the given connection, or returns false if unsuccessful.
+ */
+bool
+GetNodeDiskSpaceStatsForConnection(MultiConnection *connection, uint64 *availableBytes,
+								   uint64 *totalBytes)
+{
+	PGresult *result = NULL;
+	bool raiseErrors = true;
+
+	char *sizeQuery = "SELECT available_disk_size, total_disk_size "
+					  "FROM pg_catalog.citus_local_disk_space_stats()";
+
+
+	int queryResult = ExecuteOptionalRemoteCommand(connection, sizeQuery, &result);
+	if (queryResult != 0 || !IsResponseOK(result) || PQntuples(result) != 1)
+	{
+		ereport(WARNING, (errcode(ERRCODE_CONNECTION_FAILURE),
+						  errmsg("cannot get the disk space statistics for node %s:%d",
+								 connection->hostname, connection->port)));
+
+		PQclear(result);
+		ClearResults(connection, raiseErrors);
+
+		return false;
+	}
+
+	char *availableBytesString = PQgetvalue(result, 0, 0);
+	char *totalBytesString = PQgetvalue(result, 0, 1);
+
+	*availableBytes = SafeStringToUint64(availableBytesString);
+	*totalBytes = SafeStringToUint64(totalBytesString);
+
+	PQclear(result);
+	ClearResults(connection, raiseErrors);
+
+	return true;
+}
+
 
 /*
  * citus_shard_sizes returns all shard names and their sizes.

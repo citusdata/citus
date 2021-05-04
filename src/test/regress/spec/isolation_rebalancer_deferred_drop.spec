@@ -57,7 +57,6 @@ step "s1-begin"
 step "s1-move-placement"
 {
         SET citus.defer_drop_after_shard_move TO ON;
-        SET citus.delete_old_shards_sleep_time TO 0;
     	SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
 }
 
@@ -98,7 +97,6 @@ step "s2-move-placement"
 {
         SET citus.defer_drop_after_shard_move TO ON;
         SET citus.force_disk_available = 20;
-        SET citus.delete_old_shards_sleep_time TO 0;
     	SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
 }
 

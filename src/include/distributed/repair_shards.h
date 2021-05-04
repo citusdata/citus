@@ -13,5 +13,5 @@
 
 extern int ForceDiskAvailableInBytes;
 extern int ForceDiskSizeInBytes;
-extern int64 ColocationSizeInBytes(List *colocatedShardList,
+extern uint64 ShardListSizeInBytes(List *colocatedShardList,
 								   char *workerNodeName, uint32 workerNodePort);

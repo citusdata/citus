@@ -943,43 +943,11 @@ RegisterCitusConfigVariables(void)
 		"citus.check_available_space_before_move",
 		gettext_noop("When enabled will check free disk space before a shard move"),
 		gettext_noop(
-			"Free disk space will be checked when this setting is enabled before each shard move."
-			"See citus.delete_old_shards_sleep_time and citus.delete_old_shards_max_tries"),
+			"Free disk space will be checked when this setting is enabled before each shard move."),
 		&CheckAvailableSpaceBeforeMove,
 		true,
 		PGC_USERSET,
 		0,
-		NULL, NULL, NULL);
-
-	DefineCustomIntVariable(
-		"citus.delete_old_shards_max_tries",
-		gettext_noop(
-			"Sets how many times deleting old shards will be retried before moving a shard"),
-		gettext_noop(
-			"When shard deletion is deferred, old shards will be there using some storage."
-			"When moving a shard, citus will try to delete the old shards to create "
-			"some more free space so that there is enough space for the shard move."
-			"This setting determines how many times the deletion operation will be tried."
-			"In between the tries, there will be delete_old_shards_sleep_time second sleeps."),
-		&WaitForDeferShardsMaxTries,
-		5, 0, INT_MAX,
-		PGC_USERSET,
-		0,
-		NULL, NULL, NULL);
-
-	DefineCustomIntVariable(
-		"citus.delete_old_shards_sleep_time",
-		gettext_noop(
-			"Sets sleep time between old shard delete operations prior to shard move"),
-		gettext_noop(
-			"When shard deletion is deferred, old shards will be there using some storage."
-			"When moving a shard, citus will try to delete the old shards to create "
-			"some more free space so that there is enough space for the shard move."
-			"This setting determines the duration of sleep (in second) between the deletion operations."),
-		&WaitForDeferShardRetryTimeInSec,
-		30, 0, INT_MAX,
-		PGC_USERSET,
-		GUC_UNIT_S,
 		NULL, NULL, NULL);
 
 	DefineCustomRealVariable(

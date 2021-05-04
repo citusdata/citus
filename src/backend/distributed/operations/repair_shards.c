@@ -36,7 +36,6 @@
 #include "distributed/reference_table_utils.h"
 #include "distributed/remote_commands.h"
 #include "distributed/resource_lock.h"
-#include "distributed/time_utils.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/worker_transaction.h"
@@ -99,8 +98,6 @@ PG_FUNCTION_INFO_V1(citus_copy_shard_placement);
 PG_FUNCTION_INFO_V1(master_copy_shard_placement);
 PG_FUNCTION_INFO_V1(citus_move_shard_placement);
 PG_FUNCTION_INFO_V1(master_move_shard_placement);
-PG_FUNCTION_INFO_V1(citus_disk_available);
-PG_FUNCTION_INFO_V1(citus_disk_size);
 
 #define NOT_SET -1
 
@@ -108,8 +105,6 @@ bool DeferShardDeleteOnMove = false;
 int ForceDiskAvailableInBytes = NOT_SET;
 int ForceDiskSizeInBytes = NOT_SET;
 
-int WaitForDeferShardRetryTimeInSec = 30;
-int WaitForDeferShardsMaxTries = 5;
 double DesiredPercentFreeAfterMove = 5;
 bool CheckAvailableSpaceBeforeMove = true;
 
@@ -179,17 +174,17 @@ master_copy_shard_placement(PG_FUNCTION_ARGS)
 
 
 /*
- * ColocationSizeInBytes returns the size in bytes of a set of colocated tables.
+ * ShardListSizeInBytes returns the size in bytes of a set of shard tables.
  */
-int64
-ColocationSizeInBytes(List *colocatedShardList, char *workerNodeName, uint32
-					  workerNodePort)
+uint64
+ShardListSizeInBytes(List *shardList, char *workerNodeName, uint32
+					 workerNodePort)
 {
 	uint32 connectionFlag = 0;
 
 	/* we skip child tables of a partitioned table if this boolean variable is true */
 	bool optimizePartitionCalculations = true;
-	StringInfo tableSizeQuery = GenerateSizeQueryOnMultiplePlacements(colocatedShardList,
+	StringInfo tableSizeQuery = GenerateSizeQueryOnMultiplePlacements(shardList,
 																	  TOTAL_RELATION_SIZE,
 																	  optimizePartitionCalculations);
 
@@ -233,32 +228,27 @@ static
 DeferredErrorMessage *
 CheckSpaceConstraints(MultiConnection *connection, int64 colocationSizeInBytes)
 {
-	if (!CheckAvailableSpaceBeforeMove)
+	uint64 diskAvailableInBytes = 0;
+	uint64 diskSizeInBytes = 0;
+	bool success =
+		GetNodeDiskSpaceStatsForConnection(connection, &diskAvailableInBytes,
+										   &diskSizeInBytes);
+	if (!success)
 	{
-		return NULL;
+		ereport(ERROR, (errmsg("Could not fetch disk stats for a node")));
 	}
-	int64 diskAvailableInBytes = 0;
-	int64 diskSizeInBytes = 0;
-	StringInfo errorDetail = makeStringInfo();
+
 	if (ForceDiskAvailableInBytes != NOT_SET)
 	{
 		diskAvailableInBytes = ForceDiskAvailableInBytes;
 	}
-	else
-	{
-		diskAvailableInBytes = ExecuteRemoteInt64Command(connection,
-														 "select pg_catalog.citus_disk_available()");
-	}
+
 	if (ForceDiskSizeInBytes != NOT_SET)
 	{
 		diskSizeInBytes = ForceDiskSizeInBytes;
 	}
-	else
-	{
-		diskSizeInBytes = ExecuteRemoteInt64Command(connection,
-													"select pg_catalog.citus_disk_size()");
-	}
 
+	StringInfo errorDetail = makeStringInfo();
 	if (diskAvailableInBytes < colocationSizeInBytes)
 	{
 		bool isAvailableSpaceForced = (ForceDiskAvailableInBytes != NOT_SET);
@@ -438,106 +428,43 @@ EnsureEnoughDiskSpaceForShardMove(List *colocatedShardList,
 								  char *sourceNodeName, uint32 sourceNodePort,
 								  char *targetNodeName, uint32 targetNodePort)
 {
-	int64 colocationSizeInBytes = ColocationSizeInBytes(colocatedShardList,
+	if (!CheckAvailableSpaceBeforeMove)
+	{
+		return;
+	}
+	uint64 colocationSizeInBytes = ShardListSizeInBytes(colocatedShardList,
 														sourceNodeName,
 														sourceNodePort);
 
 	uint32 connectionFlag = 0;
 	MultiConnection *connection = GetNodeConnection(connectionFlag, targetNodeName,
 													targetNodePort);
-	int checkSpaceTries = 0;
-	while (true)
+	DeferredErrorMessage *temporaryError =
+		CheckSpaceConstraints(connection, colocationSizeInBytes);
+	if (temporaryError == NULL)
 	{
-		bool droppedAllOldShards = false;
-		if (checkSpaceTries > 0)
-		{
-			/*
-			 * Only run shard cleanup when the first round of checks has failed
-			 * otherwise simply let the automatic cleanup do its job.
-			 *
-			 * NOTE: this tries to drop all marked shards, not only on the shard
-			 * that we're trying to move to.
-			 */
-			ereport(NOTICE, (errmsg("trying to drop shards to resolve issue...")));
-
-			bool waitForCleanupLock = true;
-			droppedAllOldShards = DropMarkedShards(waitForCleanupLock, NULL);
-
-			/*
-			 * NOTE: It actually doesn't make sense to wait in some cases where
-			 * it does droppedAllOldShards is false. Most importantly the case
-			 * where there are no shards marked for removal on the target
-			 * shard. It's not a big issue though, since in this case we simply
-			 * error out after a couple of more rounds of trying to drop the
-			 * left over shards.
-			 */
-		}
-
-		DeferredErrorMessage *temporaryError = CheckSpaceConstraints(connection,
-																	 colocationSizeInBytes);
-		if (temporaryError == NULL)
-		{
-			break;
-		}
-
-		if (droppedAllOldShards)
-		{
-			/*
-			 * If we dropped all shards but still don't have enough space for shard move
-			 * then we don't have any choice but error
-			 */
-			RaiseDeferredError(temporaryError, ERROR);
-		}
-
-		RaiseDeferredError(temporaryError, WARNING);
-		checkSpaceTries++;
-		if (checkSpaceTries >= WaitForDeferShardsMaxTries)
-		{
-			ereport(ERROR, (
-						errmsg(
-							"shards were not removed after trying %d times, giving up",
-							checkSpaceTries),
-						errhint("Try increasing citus.move_shard_defer_drop_tries")
-						));
-		}
-
-		/* wait the timeout and try again*/
-		WaitForMiliseconds(WaitForDeferShardRetryTimeInSec * 1000);
+		return;
 	}
-}
+	RaiseDeferredError(temporaryError, WARNING);
+
+	/*
+	 * Only run shard cleanup when the first round of checks has failed
+	 * otherwise simply let the automatic cleanup do its job.
+	 *
+	 * NOTE: this tries to drop all marked shards, not only on the shard
+	 * that we're trying to move to.
+	 */
+	ereport(NOTICE, (errmsg("trying to drop old shards to resolve issue...")));
+
+	bool waitForCleanupLock = true;
+	DropMarkedShards(waitForCleanupLock);
 
 
-/*
- * citus_disk_available returns the number of bytes of available diskspace that
- * are on the given tablespace.
- */
-Datum
-citus_disk_available(PG_FUNCTION_ARGS)
-{
-	struct statvfs diskstats;
-	int error = statvfs("base/", &diskstats);
-	if (error != 0)
+	temporaryError = CheckSpaceConstraints(connection, colocationSizeInBytes);
+	if (temporaryError != NULL)
 	{
-		ereport(ERROR, (errmsg("failed to get available diskspace")));
+		RaiseDeferredError(temporaryError, ERROR);
 	}
-	PG_RETURN_INT64(diskstats.f_bsize * diskstats.f_bavail);
-}
-
-
-/*
- * citus_disk_size returns the number of bytes of available diskspace that
- * are on the given tablespace.
- */
-Datum
-citus_disk_size(PG_FUNCTION_ARGS)
-{
-	struct statvfs diskstats;
-	int error = statvfs("base/", &diskstats);
-	if (error != 0)
-	{
-		ereport(ERROR, (errmsg("failed to get size of disk")));
-	}
-	PG_RETURN_INT64(diskstats.f_bsize * diskstats.f_blocks);
 }
 
 

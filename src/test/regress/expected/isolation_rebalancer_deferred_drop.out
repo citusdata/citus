@@ -6,7 +6,6 @@ step s1-begin:
 
 step s1-move-placement:
         SET citus.defer_drop_after_shard_move TO ON;
-        SET citus.delete_old_shards_sleep_time TO 0;
      SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
 
 master_move_shard_placement
@@ -17,7 +16,7 @@ step s1-drop-marked-shards:
 
 master_defer_delete_shards
 
-0
+1
 step s2-drop-marked-shards:
     SELECT public.master_defer_delete_shards();
  <waiting ...>
@@ -35,7 +34,6 @@ step s1-begin:
 
 step s1-move-placement:
         SET citus.defer_drop_after_shard_move TO ON;
-        SET citus.delete_old_shards_sleep_time TO 0;
      SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
 
 master_move_shard_placement
@@ -52,7 +50,7 @@ step s1-drop-marked-shards:
 
 master_defer_delete_shards
 
-0
+1
 step s1-commit:
     COMMIT;
 
@@ -63,7 +61,6 @@ step s1-begin:
 
 step s1-move-placement:
         SET citus.defer_drop_after_shard_move TO ON;
-        SET citus.delete_old_shards_sleep_time TO 0;
      SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
 
 master_move_shard_placement
@@ -72,7 +69,6 @@ master_move_shard_placement
 step s2-move-placement:
         SET citus.defer_drop_after_shard_move TO ON;
         SET citus.force_disk_available = 20;
-        SET citus.delete_old_shards_sleep_time TO 0;
      SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
  <waiting ...>
 step s1-commit: 
@@ -87,7 +83,6 @@ step s1-begin:
 
 step s1-move-placement:
         SET citus.defer_drop_after_shard_move TO ON;
-        SET citus.delete_old_shards_sleep_time TO 0;
      SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
 
 master_move_shard_placement

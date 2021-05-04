@@ -42,8 +42,6 @@ ORDER BY 1;
  function citus_copy_shard_placement(bigint,text,integer,text,integer,boolean,citus.shard_transfer_mode)
  function citus_create_restore_point(text)
  function citus_disable_node(text,integer)
- function citus_disk_available()
- function citus_disk_size()
  function citus_dist_local_group_cache_invalidate()
  function citus_dist_node_cache_invalidate()
  function citus_dist_object_cache_invalidate()
@@ -71,6 +69,7 @@ ORDER BY 1;
  function citus_json_concatenate_final(json)
  function citus_jsonb_concatenate(jsonb,jsonb)
  function citus_jsonb_concatenate_final(jsonb)
+ function citus_local_disk_space_stats()
  function citus_move_shard_placement(bigint,text,integer,text,integer,citus.shard_transfer_mode)
  function citus_node_capacity_1(integer)
  function citus_prepare_pg_upgrade()
@@ -247,5 +246,5 @@ ORDER BY 1;
  view citus_worker_stat_activity
  view pg_dist_shard_placement
  view time_partitions
-(231 rows)
+(230 rows)
 
