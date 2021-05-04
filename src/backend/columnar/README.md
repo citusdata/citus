@@ -41,7 +41,7 @@ Benefits of Citus Columnar over cstore_fdw:
 * Append-only (no ``UPDATE``/``DELETE`` support)
 * No space reclamation (e.g. rolled-back transactions may still
   consume disk space)
-* No index support, index scans, or bitmap index scans
+* No bitmap index scans
 * No tidscans
 * No sample scans
 * No TOAST support (large values supported inline)
@@ -187,10 +187,14 @@ operations that are supported on row tables but not columnar
   data to be updated only affects row tables (e.g. ``UPDATE parent SET
   i = i + 1 WHERE n = 300``).
 
-Because columnar tables do not support indexes, it's impossible to
-create indexes on the partitioned table if some partitions are
-columnar. Instead, you must create indexes on the individual row
-partitions. Similarly for constraints that require indexes, e.g.:
+Note that Citus Columnar supports `btree` and `hash `indexes (and
+the constraints requiring them) but does not support `gist`, `gin`,
+`spgist` and `brin` indexes.
+For this reason, if some partitions are columnar and if the index is
+not supported by Citus Columnar, then it's impossible to create indexes
+on the partitioned (parent) table directly. In that case, you need to
+create the index on the individual row partitions. Similarly for the
+constraints that require indexes, e.g.:
 
 ```sql
 CREATE INDEX p2_ts_idx ON p2 (ts);
