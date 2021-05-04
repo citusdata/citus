@@ -2006,7 +2006,7 @@ RelationRestrictionForRelation(RangeTblEntry *rangeTableEntry,
 	List *filteredRelationRestrictionList =
 		filteredRelationRestrictionContext->relationRestrictionList;
 
-	if (list_length(filteredRelationRestrictionList) != 1)
+	if (list_length(filteredRelationRestrictionList) < 1)
 	{
 		return NULL;
 	}
