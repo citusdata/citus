@@ -358,9 +358,9 @@ DROP DATABASE db_to_drop;
 SELECT datname FROM pg_stat_activity WHERE application_name LIKE 'Citus Met%';
 
 -- cleanup
+DROP SEQUENCE sequence CASCADE;
 DROP TABLE ref_table;
 DROP TABLE reference_table;
-DROP SEQUENCE sequence;
 TRUNCATE pg_dist_colocation;
 SELECT count(*) FROM (SELECT master_remove_node(nodename, nodeport) FROM pg_dist_node) t;
 ALTER SEQUENCE pg_catalog.pg_dist_groupid_seq RESTART :last_group_id;

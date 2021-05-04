@@ -168,6 +168,8 @@ PreprocessDropTableStmt(Node *node, const char *queryString,
 
 			SendCommandToWorkersWithMetadata(detachPartitionCommand);
 		}
+
+		SendCommandToWorkersWithMetadata(ENABLE_DDL_PROPAGATION);
 	}
 
 	return NIL;
@@ -593,12 +595,12 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 	 *    we also set skip_validation to true to prevent PostgreSQL to verify validity
 	 *    of the foreign constraint in master. Validity will be checked in workers
 	 *    anyway.
-	 *  - an ADD COLUMN .. DEFAULT non_const_expression OR
+	 *  - an ADD COLUMN .. DEFAULT nextval('..') OR
 	 *    an ADD COLUMN .. serial_prototype OR
-	 *    an ALTER COLUMN .. SET DEFAULT non_const_expression. If there is we set
+	 *    an ALTER COLUMN .. SET DEFAULT nextval('..'). If there is we set
 	 *    deparseAT variable to true which means we will deparse the statement
 	 *    before we propagate the command to shards. For shards, all the defaults
-	 *    coming from a user-defined sequence or function will be replaced by
+	 *    coming from a user-defined sequence will be replaced by
 	 *    NOT NULL constraint.
 	 */
 	List *commandList = alterTableStatement->cmds;
@@ -708,7 +710,7 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 
 			/*
 			 * We check for ADD COLUMN .. DEFAULT expr
-			 * if expr contains nextval('user_defined_seq') or a user-defined function
+			 * if expr contains nextval('user_defined_seq')
 			 * we should deparse the statement
 			 */
 			constraint = NULL;
@@ -722,8 +724,7 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 						Node *expr = transformExpr(pstate, constraint->raw_expr,
 												   EXPR_KIND_COLUMN_DEFAULT);
 
-						if (contain_nextval_expression_walker(expr, NULL) ||
-							contain_funcexpr_walker(expr, NULL))
+						if (contain_nextval_expression_walker(expr, NULL))
 						{
 							deparseAT = true;
 							newCmd->subtype = command->subtype;
@@ -801,8 +802,7 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 			Node *expr = transformExpr(pstate, command->def,
 									   EXPR_KIND_COLUMN_DEFAULT);
 
-			if (contain_nextval_expression_walker(expr, NULL) || contain_funcexpr_walker(
-					expr, NULL))
+			if (contain_nextval_expression_walker(expr, NULL))
 			{
 				doNothing = true;
 			}
@@ -1909,6 +1909,18 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 							strcmp(typeName, "serial8") == 0)
 						{
 							/*
+							 * We currently don't support adding a serial column for an MX table
+							 * TODO: record the dependency in the workers
+							 */
+							if (ShouldSyncTableMetadata(relationId))
+							{
+								ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+												errmsg(
+													"cannot execute ADD COLUMN commands involving serial"
+													" pseudotypes when metadata is synchronized to workers")));
+							}
+
+							/*
 							 * we only allow adding a serial column if it is the only subcommand
 							 * and it has no constraints
 							 */
@@ -1921,18 +1933,6 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 													"serial pseudotypes with other subcommands/constraints"),
 												errhint(
 													"You can issue each subcommand separately")));
-							}
-
-							/*
-							 * We currently don't support adding a serial column for an MX table
-							 * TODO: record the dependency in the workers
-							 */
-							if (ShouldSyncTableMetadata(relationId))
-							{
-								ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-												errmsg(
-													"cannot execute ADD COLUMN commands "
-													"involving serial pseudotypes with MX tables")));
 							}
 						}
 					}
@@ -1950,8 +1950,7 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 								Node *expr = transformExpr(pstate, constraint->raw_expr,
 														   EXPR_KIND_COLUMN_DEFAULT);
 
-								if (contain_nextval_expression_walker(expr, NULL) ||
-									contain_funcexpr_walker(expr, NULL))
+								if (contain_nextval_expression_walker(expr, NULL))
 								{
 									/*
 									 * we only allow adding a column with non_const default
@@ -1963,7 +1962,7 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 										ereport(ERROR, (errcode(
 															ERRCODE_FEATURE_NOT_SUPPORTED),
 														errmsg(
-															"cannot execute ADD COLUMN .. DEFAULT non_const"
+															"cannot execute ADD COLUMN .. DEFAULT nextval('..')"
 															" command with other subcommands/constraints"),
 														errhint(
 															"You can issue each subcommand separately")));
@@ -1989,8 +1988,7 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 				Node *expr = transformExpr(pstate, command->def,
 										   EXPR_KIND_COLUMN_DEFAULT);
 
-				if (contain_nextval_expression_walker(expr, NULL) ||
-					contain_funcexpr_walker(expr, NULL))
+				if (contain_nextval_expression_walker(expr, NULL))
 				{
 					/*
 					 * we only allow altering a column's default to non_const expr
@@ -2002,7 +2000,7 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 											ERRCODE_FEATURE_NOT_SUPPORTED),
 										errmsg(
 											"cannot execute ALTER COLUMN COLUMN .. SET DEFAULT "
-											"non_const command with other subcommands"),
+											"nextval('..') command with other subcommands"),
 										errhint(
 											"You can issue each subcommand separately")));
 					}

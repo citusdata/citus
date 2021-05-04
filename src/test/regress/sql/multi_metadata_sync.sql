@@ -762,40 +762,51 @@ SELECT pg_reload_conf();
 
 UPDATE pg_dist_node SET metadatasynced=true WHERE nodeport=:worker_1_port;
 
+SELECT master_add_node('localhost', :worker_2_port);
+SELECT start_metadata_sync_to_node('localhost', :worker_2_port);
 SET citus.replication_model TO streaming;
-CREATE FUNCTION dummy(int) RETURNS INT
-    AS $$ SELECT $1 + $1 $$
-    LANGUAGE SQL;
 
-CREATE SEQUENCE mx_test_sequence;
+CREATE SEQUENCE mx_test_sequence_0;
+CREATE SEQUENCE mx_test_sequence_1;
 
--- should all work
-CREATE TABLE test_table (id int DEFAULT nextval('mx_test_sequence'));
+-- test create_distributed_table
+CREATE TABLE test_table (id int DEFAULT nextval('mx_test_sequence_0'));
 SELECT create_distributed_table('test_table', 'id');
-ALTER TABLE test_table ADD COLUMN id2 int DEFAULT nextval('mx_test_sequence');
+
+-- shouldn't work since it's partition column
+ALTER TABLE test_table ALTER COLUMN id SET DEFAULT nextval('mx_test_sequence_1');
+
+-- test different plausible commands
+ALTER TABLE test_table ADD COLUMN id2 int DEFAULT nextval('mx_test_sequence_1');
 ALTER TABLE test_table ALTER COLUMN id2 DROP DEFAULT;
-ALTER TABLE test_table ALTER COLUMN id2 SET DEFAULT nextval('mx_test_sequence');
+ALTER TABLE test_table ALTER COLUMN id2 SET DEFAULT nextval('mx_test_sequence_1');
 
 SELECT unnest(master_metadata_snapshot()) order by 1;
-
--- shouldn't work since dummy is not found in workers
--- user should distribute dummy first
-ALTER TABLE test_table ADD COLUMN id1 int DEFAULT dummy(2);
-ALTER TABLE test_table ALTER COLUMN id1 DROP DEFAULT;
-ALTER TABLE test_table ALTER COLUMN id1 SET DEFAULT dummy(2);
 
 -- shouldn't work since test_table is MX
 ALTER TABLE test_table ADD COLUMN id3 bigserial;
 
 -- shouldn't work since the above operations should be the only subcommands
-ALTER TABLE test_table ADD COLUMN id4 int DEFAULT nextval('mx_test_sequence') CHECK (id4 > 0);
-ALTER TABLE test_table ADD COLUMN id4 int, ADD COLUMN id5 int DEFAULT nextval('mx_test_sequence');
-ALTER TABLE test_table ALTER COLUMN id1 SET DEFAULT nextval('mx_test_sequence'), ALTER COLUMN id2 DROP DEFAULT;
+ALTER TABLE test_table ADD COLUMN id4 int DEFAULT nextval('mx_test_sequence_1') CHECK (id4 > 0);
+ALTER TABLE test_table ADD COLUMN id4 int, ADD COLUMN id5 int DEFAULT nextval('mx_test_sequence_1');
+ALTER TABLE test_table ALTER COLUMN id1 SET DEFAULT nextval('mx_test_sequence_1'), ALTER COLUMN id2 DROP DEFAULT;
 ALTER TABLE test_table ADD COLUMN id4 bigserial CHECK (id4 > 0);
 
+\c - - - :worker_1_port
+\ds
+
+\c - - - :master_port
+CREATE SEQUENCE local_sequence;
+
+-- verify that DROP SEQUENCE will propagate the command to workers for
+-- the distributed sequences mx_test_sequence_0 and mx_test_sequence_1
+DROP SEQUENCE mx_test_sequence_0, mx_test_sequence_1, local_sequence CASCADE;
+
+\c - - - :worker_1_port
+\ds
+
+\c - - - :master_port
 DROP TABLE test_table CASCADE;
-DROP SEQUENCE mx_test_sequence;
-DROP FUNCTION dummy;
 
 -- Cleanup
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);

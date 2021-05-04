@@ -3,7 +3,7 @@
 --
 -- Tests around changing the schema and dropping of a distributed table
 -- Test DEFAULTS coming from serial prototypes, user-defined sequences
--- and functions
+--
 
 
 SET citus.next_shard_id TO 870000;
@@ -94,30 +94,29 @@ DROP TABLE testserialtable;
 
 \c - - - :master_port
 
--- test DEFAULT coming from serial prototypes, user-defined sequences and functions
-CREATE FUNCTION dummy(int) RETURNS INT
-    AS $$ SELECT $1 + $1 $$
-    LANGUAGE SQL;
+-- test DEFAULT coming from serial prototypes and user-defined sequences
+CREATE SEQUENCE test_sequence_0;
+CREATE SEQUENCE test_sequence_1;
 
-CREATE TABLE test_table (id int DEFAULT dummy(1));
+CREATE TABLE test_table (id int DEFAULT nextval('test_sequence_0'));
 SELECT create_distributed_table('test_table', 'id');
-ALTER TABLE test_table ADD COLUMN id1 int DEFAULT dummy(2);
-ALTER TABLE test_table ALTER COLUMN id1 DROP DEFAULT;
-ALTER TABLE test_table ALTER COLUMN id1 SET DEFAULT dummy(2);
 
-CREATE SEQUENCE test_sequence;
-ALTER TABLE test_table ADD COLUMN id2 int DEFAULT nextval('test_sequence');
+-- shouldn't work since it's partition column
+ALTER TABLE test_table ALTER COLUMN id1 SET DEFAULT nextval('test_sequence_1');
+
+-- test different plausible commands
+ALTER TABLE test_table ADD COLUMN id2 int DEFAULT nextval('test_sequence_1');
 ALTER TABLE test_table ALTER COLUMN id2 DROP DEFAULT;
-ALTER TABLE test_table ALTER COLUMN id2 SET DEFAULT nextval('test_sequence');
+ALTER TABLE test_table ALTER COLUMN id2 SET DEFAULT nextval('test_sequence_1');
 
 ALTER TABLE test_table ADD COLUMN id3 bigserial;
 
 -- shouldn't work since the above operations should be the only subcommands
-ALTER TABLE test_table ADD COLUMN id4 int DEFAULT nextval('test_sequence') CHECK (id4 > 0);
-ALTER TABLE test_table ADD COLUMN id4 int, ADD COLUMN id5 int DEFAULT nextval('test_sequence');
-ALTER TABLE test_table ALTER COLUMN id1 SET DEFAULT nextval('test_sequence'), ALTER COLUMN id2 DROP DEFAULT;
+ALTER TABLE test_table ADD COLUMN id4 int DEFAULT nextval('test_sequence_1') CHECK (id4 > 0);
+ALTER TABLE test_table ADD COLUMN id4 int, ADD COLUMN id5 int DEFAULT nextval('test_sequence_1');
+ALTER TABLE test_table ALTER COLUMN id1 SET DEFAULT nextval('test_sequence_1'), ALTER COLUMN id2 DROP DEFAULT;
 ALTER TABLE test_table ADD COLUMN id4 bigserial CHECK (id4 > 0);
 
 DROP TABLE test_table CASCADE;
-DROP SEQUENCE test_sequence;
-DROP FUNCTION dummy;
+DROP SEQUENCE test_sequence_0;
+DROP SEQUENCE test_sequence_1;
