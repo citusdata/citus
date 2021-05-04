@@ -18,18 +18,14 @@
  * for columnar tables to the following interval:
  * [FirstOffsetNumber, MaxOffsetNumber].
  *
- * However, for GIN indexes, Postgres also asserts the following in
- * itemptr_to_uint64 function:
- * "GinItemPointerGetOffsetNumber(iptr) < (1 << MaxHeapTuplesPerPageBits)",
- * where MaxHeapTuplesPerPageBits = 11.
- * That means, offsetNumber for columnar tables can't be equal to
- * 2**11 = 2048 = MaxOffsetNumber.
- * Hence we can't use MaxOffsetNumber as offsetNumber too.
+ * However, bitmap scan logic assumes that itemPointer.offsetNumber cannot
+ * be larger than MaxHeapTuplesPerPage (see tbm_add_tuples).
  *
  * For this reason, we restrict itemPointer.offsetNumber
- * to the following interval: [FirstOffsetNumber, MaxOffsetNumber).
+ * to the following interval: [FirstOffsetNumber, MaxHeapTuplesPerPage].
  */
-#define VALID_ITEMPOINTER_OFFSETS ((uint64) (MaxOffsetNumber - FirstOffsetNumber))
+#define VALID_ITEMPOINTER_OFFSETS \
+	((uint64) (MaxHeapTuplesPerPage - FirstOffsetNumber + 1))
 
 /*
  * Number of valid ItemPointer BlockNumber's for "row number" <> "ItemPointer"
