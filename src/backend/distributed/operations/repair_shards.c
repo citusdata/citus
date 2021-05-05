@@ -99,13 +99,9 @@ PG_FUNCTION_INFO_V1(master_copy_shard_placement);
 PG_FUNCTION_INFO_V1(citus_move_shard_placement);
 PG_FUNCTION_INFO_V1(master_move_shard_placement);
 
-#define NOT_SET -1
-
 bool DeferShardDeleteOnMove = false;
-int ForceDiskAvailableInBytes = NOT_SET;
-int ForceDiskSizeInBytes = NOT_SET;
 
-double DesiredPercentFreeAfterMove = 5;
+double DesiredPercentFreeAfterMove = 10;
 bool CheckAvailableSpaceBeforeMove = true;
 
 
@@ -238,49 +234,34 @@ CheckSpaceConstraints(MultiConnection *connection, int64 colocationSizeInBytes)
 		ereport(ERROR, (errmsg("Could not fetch disk stats for a node")));
 	}
 
-	if (ForceDiskAvailableInBytes != NOT_SET)
-	{
-		diskAvailableInBytes = ForceDiskAvailableInBytes;
-	}
-
-	if (ForceDiskSizeInBytes != NOT_SET)
-	{
-		diskSizeInBytes = ForceDiskSizeInBytes;
-	}
-
-	StringInfo errorDetail = makeStringInfo();
+	StringInfo errorMsg = makeStringInfo();
 	if (diskAvailableInBytes < colocationSizeInBytes)
 	{
-		bool isAvailableSpaceForced = (ForceDiskAvailableInBytes != NOT_SET);
-		if (isAvailableSpaceForced)
-		{
-			appendStringInfo(errorDetail,
-							 "actual space %ld bytes (forced), required space %ld bytes",
-							 diskAvailableInBytes, colocationSizeInBytes);
-		}
-		else
-		{
-			appendStringInfo(errorDetail,
-							 "actual space %ld bytes, required space %ld bytes",
-							 diskAvailableInBytes, colocationSizeInBytes);
-		}
+		appendStringInfo(errorMsg, "not enough space to move shard ");
+		appendStringInfo(errorMsg,
+						 "actual space %ld bytes, required space %ld bytes",
+						 diskAvailableInBytes, colocationSizeInBytes);
 
 		return DeferredError(ERRCODE_INSUFFICIENT_RESOURCES,
-							 "not enough space to move shard",
-							 errorDetail->data, NULL);
+							 errorMsg->data, NULL, NULL);
 	}
-	int64 newDiskAvailableInBytes = diskAvailableInBytes - colocationSizeInBytes;
+	int64 diskAvailableInBytesAfterShardMove = diskAvailableInBytes -
+											   colocationSizeInBytes;
 	int64 desiredNewDiskAvailableInBytes = diskSizeInBytes *
 										   (DesiredPercentFreeAfterMove / 100);
-	if (newDiskAvailableInBytes < desiredNewDiskAvailableInBytes)
+	if (diskAvailableInBytesAfterShardMove < desiredNewDiskAvailableInBytes)
 	{
-		appendStringInfo(errorDetail, "actual available space after move %ld bytes, "
-									  "desired available space after move %ld bytes",
-						 newDiskAvailableInBytes, desiredNewDiskAvailableInBytes);
+		appendStringInfo(errorMsg,
+						 "not enough empty space on node if the shard is moved, "
+						 "actual available space after move will be %ld bytes, "
+						 "desired available space after move is %ld bytes,"
+						 "estimated size increase on node after move is %ld bytes.",
+						 diskAvailableInBytesAfterShardMove,
+						 desiredNewDiskAvailableInBytes, colocationSizeInBytes);
 		return DeferredError(ERRCODE_INSUFFICIENT_RESOURCES,
-							 "not enough empty space on node after move",
-							 errorDetail->data,
-							 "try changing citus.desired_percent_disk_available_after_move"
+							 errorMsg->data,
+							 NULL,
+							 "try lowering citus.desired_percent_disk_available_after_move."
 							 );
 	}
 	return NULL;
@@ -445,6 +426,17 @@ EnsureEnoughDiskSpaceForShardMove(List *colocatedShardList,
 	{
 		return;
 	}
+	List *shardPlacementList = AllShardPlacementsWithShardPlacementState(
+		SHARD_STATE_TO_DELETE);
+	int numOfShardsToBeDeleted = list_length(shardPlacementList);
+	if (numOfShardsToBeDeleted == 0)
+	{
+		/*
+		 * We don't have any shards to delete hence we can give the space error now
+		 */
+		RaiseDeferredError(temporaryError, ERROR);
+		return;
+	}
 	RaiseDeferredError(temporaryError, WARNING);
 
 	/*
@@ -454,11 +446,21 @@ EnsureEnoughDiskSpaceForShardMove(List *colocatedShardList,
 	 * NOTE: this tries to drop all marked shards, not only on the shard
 	 * that we're trying to move to.
 	 */
-	ereport(NOTICE, (errmsg("trying to drop old shards to resolve issue...")));
+	ereport(NOTICE, (errmsg(
+						 "found %d old shard(s), trying to drop them to allow the shard move operation to continue",
+						 numOfShardsToBeDeleted)));
 
 	bool waitForCleanupLock = true;
-	DropMarkedShards(waitForCleanupLock);
-
+	int numOfDroppedShards = DropMarkedShards(waitForCleanupLock);
+	if (numOfDroppedShards == 0)
+	{
+		ereport(NOTICE, errmsg("could not drop any old shards"));
+		RaiseDeferredError(temporaryError, ERROR);
+	}
+	else
+	{
+		ereport(NOTICE, errmsg("Dropped %d old shard(s).", numOfDroppedShards));
+	}
 
 	temporaryError = CheckSpaceConstraints(connection, colocationSizeInBytes);
 	if (temporaryError != NULL)

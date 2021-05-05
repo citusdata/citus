@@ -133,7 +133,22 @@ $cmd$);
  (localhost,57638,t,1)
 (2 rows)
 
-SET citus.force_disk_available = 20;
+SELECT run_command_on_workers($cmd$
+    -- override the function for testing purpose
+    create or replace function pg_catalog.citus_local_disk_space_stats(OUT available_disk_size bigint, OUT total_disk_size bigint)
+    as $BODY$
+    begin
+        select 20 into available_disk_size;
+        select 8500 into total_disk_size;
+    end
+    $BODY$ language plpgsql;
+$cmd$);
+        run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,"CREATE FUNCTION")
+ (localhost,57638,t,"CREATE FUNCTION")
+(2 rows)
+
 SELECT citus_shard_cost_by_disk_size(20000001);
  citus_shard_cost_by_disk_size
 ---------------------------------------------------------------------
@@ -142,11 +157,10 @@ SELECT citus_shard_cost_by_disk_size(20000001);
 
 -- When there's not enough space the move should fail
 SELECT master_move_shard_placement(20000001, 'localhost', :worker_2_port, 'localhost', :worker_1_port);
-WARNING:  not enough space to move shard
-DETAIL:  actual space 20 bytes (forced), required space 8192 bytes
-NOTICE:  trying to drop old shards to resolve issue...
-ERROR:  not enough space to move shard
-DETAIL:  actual space 20 bytes (forced), required space 8192 bytes
+WARNING:  not enough space to move shard actual space 20 bytes, required space 8192 bytes
+NOTICE:  found 1 old shard(s), trying to drop them to allow the shard move operation to continue
+NOTICE:  Dropped 1 old shard(s).
+ERROR:  not enough space to move shard actual space 20 bytes, required space 8192 bytes
 BEGIN;
 -- when we disable the setting, the move should not give "not enough space" error
 set citus.check_available_space_before_move to false;
@@ -168,16 +182,46 @@ $cmd$);
  (localhost,57638,t,1)
 (2 rows)
 
-SET citus.force_disk_available = 8300;
-SET citus.force_disk_size = 8500;
+SELECT run_command_on_workers($cmd$
+    -- override the function for testing purpose
+    create or replace function pg_catalog.citus_local_disk_space_stats(OUT available_disk_size bigint, OUT total_disk_size bigint)
+    as $BODY$
+    begin
+        select 8300 into available_disk_size;
+        select 8500 into total_disk_size;
+    end
+    $BODY$ language plpgsql;
+$cmd$);
+        run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,"CREATE FUNCTION")
+ (localhost,57638,t,"CREATE FUNCTION")
+(2 rows)
+
 -- When there would not be enough free space left after the move, the move should fail
 SELECT master_move_shard_placement(20000001, 'localhost', :worker_2_port, 'localhost', :worker_1_port);
-WARNING:  not enough empty space on node after move
-DETAIL:  actual available space after move 108 bytes, desired available space after move 425 bytes
-HINT:  try changing citus.desired_percent_disk_available_after_move
-NOTICE:  trying to drop old shards to resolve issue...
-ERROR:  not enough empty space on node after move
-DETAIL:  actual available space after move 108 bytes, desired available space after move 425 bytes
-HINT:  try changing citus.desired_percent_disk_available_after_move
+WARNING:  not enough empty space on node if the shard is moved, actual available space after move will be 108 bytes, desired available space after move is 850 bytes,estimated size increase on node after move is 8192 bytes.
+HINT:  try lowering citus.desired_percent_disk_available_after_move.
+NOTICE:  found 1 old shard(s), trying to drop them to allow the shard move operation to continue
+NOTICE:  Dropped 1 old shard(s).
+ERROR:  not enough empty space on node if the shard is moved, actual available space after move will be 108 bytes, desired available space after move is 850 bytes,estimated size increase on node after move is 8192 bytes.
+HINT:  try lowering citus.desired_percent_disk_available_after_move.
+-- Restore the original function
+SELECT run_command_on_workers($cmd$
+    CREATE OR REPLACE FUNCTION pg_catalog.citus_local_disk_space_stats(
+    OUT available_disk_size bigint,
+    OUT total_disk_size bigint)
+    RETURNS record
+    LANGUAGE C STRICT
+    AS 'citus', $$citus_local_disk_space_stats$$;
+    COMMENT ON FUNCTION pg_catalog.citus_local_disk_space_stats()
+    IS 'returns statistics on available disk space on the local node';
+$cmd$);
+        run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,"CREATE FUNCTION")
+ (localhost,57638,t,"CREATE FUNCTION")
+(2 rows)
+
 DROP SCHEMA shard_move_deferred_delete CASCADE;
 NOTICE:  drop cascades to table t1

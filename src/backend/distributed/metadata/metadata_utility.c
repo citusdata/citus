@@ -200,7 +200,6 @@ GetNodeDiskSpaceStatsForConnection(MultiConnection *connection, uint64 *availabl
 								   uint64 *totalBytes)
 {
 	PGresult *result = NULL;
-	bool raiseErrors = true;
 
 	char *sizeQuery = "SELECT available_disk_size, total_disk_size "
 					  "FROM pg_catalog.citus_local_disk_space_stats()";
@@ -214,6 +213,7 @@ GetNodeDiskSpaceStatsForConnection(MultiConnection *connection, uint64 *availabl
 								 connection->hostname, connection->port)));
 
 		PQclear(result);
+		bool raiseErrors = true;
 		ClearResults(connection, raiseErrors);
 
 		return false;
@@ -226,6 +226,7 @@ GetNodeDiskSpaceStatsForConnection(MultiConnection *connection, uint64 *availabl
 	*totalBytes = SafeStringToUint64(totalBytesString);
 
 	PQclear(result);
+	bool raiseErrors = true;
 	ClearResults(connection, raiseErrors);
 
 	return true;

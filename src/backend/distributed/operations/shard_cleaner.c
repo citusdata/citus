@@ -107,7 +107,7 @@ DropMarkedShards(bool waitForCleanupLock)
 
 	if (!IsCoordinator())
 	{
-		return false;
+		return 0;
 	}
 
 	if (waitForCleanupLock)
@@ -117,7 +117,7 @@ DropMarkedShards(bool waitForCleanupLock)
 	else if (!TryLockPlacementCleanup())
 	{
 		ereport(WARNING, (errmsg("could not acquire lock to cleanup placements")));
-		return false;
+		return 0;
 	}
 
 	int failedShardDropCount = 0;

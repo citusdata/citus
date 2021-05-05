@@ -70,7 +70,18 @@ SELECT run_command_on_workers($cmd$
     SELECT count(*) FROM pg_class WHERE relname = 't1_20000000';
 $cmd$);
 
-SET citus.force_disk_available = 20;
+
+SELECT run_command_on_workers($cmd$
+    -- override the function for testing purpose
+    create or replace function pg_catalog.citus_local_disk_space_stats(OUT available_disk_size bigint, OUT total_disk_size bigint)
+    as $BODY$
+    begin
+        select 20 into available_disk_size;
+        select 8500 into total_disk_size;
+    end
+    $BODY$ language plpgsql;
+$cmd$);
+
 
 SELECT citus_shard_cost_by_disk_size(20000001);
 
@@ -91,11 +102,31 @@ SELECT run_command_on_workers($cmd$
     SELECT count(*) FROM pg_class WHERE relname = 't1_20000000';
 $cmd$);
 
-SET citus.force_disk_available = 8300;
-SET citus.force_disk_size = 8500;
+SELECT run_command_on_workers($cmd$
+    -- override the function for testing purpose
+    create or replace function pg_catalog.citus_local_disk_space_stats(OUT available_disk_size bigint, OUT total_disk_size bigint)
+    as $BODY$
+    begin
+        select 8300 into available_disk_size;
+        select 8500 into total_disk_size;
+    end
+    $BODY$ language plpgsql;
+$cmd$);
 
 -- When there would not be enough free space left after the move, the move should fail
 SELECT master_move_shard_placement(20000001, 'localhost', :worker_2_port, 'localhost', :worker_1_port);
+
+-- Restore the original function
+SELECT run_command_on_workers($cmd$
+    CREATE OR REPLACE FUNCTION pg_catalog.citus_local_disk_space_stats(
+    OUT available_disk_size bigint,
+    OUT total_disk_size bigint)
+    RETURNS record
+    LANGUAGE C STRICT
+    AS 'citus', $$citus_local_disk_space_stats$$;
+    COMMENT ON FUNCTION pg_catalog.citus_local_disk_space_stats()
+    IS 'returns statistics on available disk space on the local node';
+$cmd$);
 
 
 DROP SCHEMA shard_move_deferred_delete CASCADE;

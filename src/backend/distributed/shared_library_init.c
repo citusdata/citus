@@ -947,7 +947,7 @@ RegisterCitusConfigVariables(void)
 		&CheckAvailableSpaceBeforeMove,
 		true,
 		PGC_USERSET,
-		0,
+		GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
 
 	DefineCustomRealVariable(
@@ -959,37 +959,10 @@ RegisterCitusConfigVariables(void)
 			"If the free disk space will be lower than this parameter, then shard move will result in"
 			"an error."),
 		&DesiredPercentFreeAfterMove,
-		5.0, 0.0, 100.0,
+		10.0, 0.0, 100.0,
 		PGC_USERSET,
 		GUC_STANDARD,
 		NULL, NULL, NULL);
-
-	DefineCustomIntVariable(
-		"citus.force_disk_available",
-		gettext_noop("Set the amount of disk space that is available in bytes"),
-		gettext_noop("Available disk is normally read from the worker. This setting"
-					 "changes that and its value will always interpreted as the"
-					 "size available on the worker. If it's -1 the actual size"
-					 "of the worker will be used. "),
-		&ForceDiskAvailableInBytes,
-		-1, -1, INT_MAX,
-		PGC_USERSET,
-		GUC_NO_SHOW_ALL,
-		NULL, NULL, NULL);
-
-	DefineCustomIntVariable(
-		"citus.force_disk_size",
-		gettext_noop("Set the disk size in bytes"),
-		gettext_noop("Disk size is normally read from the worker. This setting"
-					 "changes that and its value will always interpreted as the"
-					 "size available on the worker. If it's -1 the actual size"
-					 "of the worker will be used. "),
-		&ForceDiskSizeInBytes,
-		-1, -1, INT_MAX,
-		PGC_USERSET,
-		GUC_NO_SHOW_ALL,
-		NULL, NULL, NULL);
-
 
 	DefineCustomBoolVariable(
 		"citus.explain_distributed_queries",
