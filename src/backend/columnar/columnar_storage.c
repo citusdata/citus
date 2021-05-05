@@ -329,7 +329,7 @@ ColumnarStorageGetReservedOffset(Relation rel, bool force)
 
 
 /*
- * ColumnarMetapageNeedsUpgrade - return true if metapage exists and is not
+ * ColumnarStorageIsCurrent - return true if metapage exists and is not
  * the current version.
  */
 bool
