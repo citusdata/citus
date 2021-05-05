@@ -73,6 +73,7 @@ def run_pg_regress(pg_path, pg_srcdir, port, schedule):
         '--use-existing'
     ]
     exit_code = subprocess.call(command)
+    subprocess.run('bin/copy_modified', check=True)
     if exit_code != 0:
         sys.exit(exit_code)
 
