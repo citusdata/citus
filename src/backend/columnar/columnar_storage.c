@@ -626,9 +626,15 @@ ColumnarMetapageRead(Relation rel, bool force)
 						errhint(OLD_METAPAGE_VERSION_HINT)));
 	}
 
+	/*
+	 * Regardless of "force" parameter, always force read metapage block.
+	 * We will check metapage version in ColumnarMetapageCheckVersion
+	 * depending on "force".
+	 */
+	bool forceReadBlock = true;
 	ColumnarMetapage metapage;
 	ReadFromBlock(rel, COLUMNAR_METAPAGE_BLOCKNO, SizeOfPageHeaderData,
-				  (char *) &metapage, sizeof(ColumnarMetapage), force);
+				  (char *) &metapage, sizeof(ColumnarMetapage), forceReadBlock);
 
 	if (!force)
 	{
