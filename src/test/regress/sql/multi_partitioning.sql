@@ -1285,7 +1285,9 @@ SELECT create_distributed_table('"events.Energy Added"', 'user_id', colocate_wit
 CREATE TABLE "Energy Added_17634"  PARTITION OF "events.Energy Added" FOR VALUES  FROM ('2018-04-13 00:00:00+00') TO ('2018-04-14 00:00:00+00');
 
 -- test shard cost by disk size function
+SET client_min_messages TO DEBUG1;
 SELECT citus_shard_cost_by_disk_size(shardid) FROM pg_dist_shard WHERE logicalrelid = '"events.Energy Added"'::regclass ORDER BY shardid LIMIT 1;
+RESET client_min_messages;
 CREATE INDEX idx_btree_hobbies ON "events.Energy Added" USING BTREE ((data->>'location'));
  \c - - - :worker_1_port
 -- should not be zero because of TOAST, vm, fms
