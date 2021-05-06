@@ -19,7 +19,7 @@ select
   from columnar_test_helpers.columnar_storage_info('contestant');
  version_major | version_minor | reserved_stripe_id | reserved_row_number | reserved_offset
 ---------------------------------------------------------------------
-             2 |             0 |                  3 |                   1 |           24742
+             2 |             0 |                  3 |              300001 |           24742
 (1 row)
 
 -- COPY into compressed table
@@ -32,7 +32,7 @@ select
   from columnar_test_helpers.columnar_storage_info('contestant_compressed');
  version_major | version_minor | reserved_stripe_id | reserved_row_number | reserved_offset
 ---------------------------------------------------------------------
-             2 |             0 |                  3 |                   1 |           24704
+             2 |             0 |                  3 |              300001 |           24704
 (1 row)
 
 -- Test column list

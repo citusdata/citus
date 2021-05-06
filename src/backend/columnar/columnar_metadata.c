@@ -27,6 +27,7 @@
 #include "columnar/columnar.h"
 #include "columnar/columnar_storage.h"
 #include "columnar/columnar_version_compat.h"
+#include "distributed/listutils.h"
 
 #include <sys/stat.h>
 #include "access/heapam.h"
@@ -83,6 +84,7 @@ static Oid ColumnarChunkIndexRelationId(void);
 static Oid ColumnarChunkGroupIndexRelationId(void);
 static Oid ColumnarNamespaceId(void);
 static uint64 LookupStorageId(RelFileNode relfilenode);
+static uint64 GetHighestUsedFirstRowNumber(uint64 storageId);
 static void DeleteStorageFromColumnarMetadataTable(Oid metadataTableId,
 												   AttrNumber storageIdAtrrNumber,
 												   Oid storageIdIndexId,
@@ -126,7 +128,7 @@ typedef FormData_columnar_options *Form_columnar_options;
 
 
 /* constants for columnar.stripe */
-#define Natts_columnar_stripe 8
+#define Natts_columnar_stripe 9
 #define Anum_columnar_stripe_storageid 1
 #define Anum_columnar_stripe_stripe 2
 #define Anum_columnar_stripe_file_offset 3
@@ -135,6 +137,7 @@ typedef FormData_columnar_options *Form_columnar_options;
 #define Anum_columnar_stripe_chunk_row_count 6
 #define Anum_columnar_stripe_row_count 7
 #define Anum_columnar_stripe_chunk_count 8
+#define Anum_columnar_stripe_first_row_number 9
 
 /* constants for columnar.chunk_group */
 #define Natts_columnar_chunkgroup 4
@@ -690,7 +693,8 @@ InsertStripeMetadataRow(uint64 storageId, StripeMetadata *stripe)
 		Int32GetDatum(stripe->columnCount),
 		Int32GetDatum(stripe->chunkGroupRowCount),
 		Int64GetDatum(stripe->rowCount),
-		Int32GetDatum(stripe->chunkCount)
+		Int32GetDatum(stripe->chunkCount),
+		UInt64GetDatum(stripe->firstRowNumber)
 	};
 
 	Oid columnarStripesOid = ColumnarStripeRelationId();
@@ -781,18 +785,14 @@ GetHighestUsedAddressAndId(uint64 storageId,
 StripeMetadata
 ReserveStripe(Relation rel, uint64 sizeBytes,
 			  uint64 rowCount, uint64 columnCount,
-			  uint64 chunkCount, uint64 chunkGroupRowCount)
+			  uint64 chunkCount, uint64 chunkGroupRowCount,
+			  uint64 stripeFirstRowNumber)
 {
 	StripeMetadata stripe = { 0 };
 
 	uint64 storageId = ColumnarStorageGetStorageId(rel, false);
 
-	/*
-	 * TODO: For now, we don't use row number reservation at all, so just use
-	 * dummy values.
-	 */
-	uint64 firstReservedRow;
-	uint64 stripeId = ColumnarStorageReserveStripe(rel, 0, &firstReservedRow);
+	uint64 stripeId = ColumnarStorageReserveStripe(rel);
 	uint64 resLogicalStart = ColumnarStorageReserveData(rel, sizeBytes);
 
 	stripe.fileOffset = resLogicalStart;
@@ -802,6 +802,7 @@ ReserveStripe(Relation rel, uint64 sizeBytes,
 	stripe.columnCount = columnCount;
 	stripe.rowCount = rowCount;
 	stripe.id = stripeId;
+	stripe.firstRowNumber = stripeFirstRowNumber;
 
 	InsertStripeMetadataRow(storageId, &stripe);
 
@@ -854,6 +855,8 @@ ReadDataFileStripeList(uint64 storageId, Snapshot snapshot)
 			datumArray[Anum_columnar_stripe_chunk_row_count - 1]);
 		stripeMetadata->rowCount = DatumGetInt64(
 			datumArray[Anum_columnar_stripe_row_count - 1]);
+		stripeMetadata->firstRowNumber = DatumGetUInt64(
+			datumArray[Anum_columnar_stripe_first_row_number - 1]);
 
 		stripeMetadataList = lappend(stripeMetadataList, stripeMetadata);
 	}
@@ -1294,10 +1297,42 @@ ColumnarStorageUpdateIfNeeded(Relation rel, bool isUpgrade)
 	GetHighestUsedAddressAndId(storageId, &highestOffset, &highestId);
 
 	uint64 reservedStripeId = highestId + 1;
-
-	/* XXX: should be set properly */
-	uint64 reservedRowNumber = 0;
 	uint64 reservedOffset = highestOffset + 1;
+	uint64 reservedRowNumber = GetHighestUsedFirstRowNumber(storageId) + 1;
 	ColumnarStorageUpdateCurrent(rel, isUpgrade, reservedStripeId,
 								 reservedRowNumber, reservedOffset);
+}
+
+
+/*
+ * GetHighestUsedFirstRowNumber returns the highest used first_row_number
+ * for given storageId. Returns COLUMNAR_INVALID_ROW_NUMBER if storage with
+ * storageId has no stripes.
+ * Note that normally we would use ColumnarStorageGetReservedRowNumber
+ * to decide that. However, this function is designed to be used when
+ * building the metapage itself during upgrades.
+ */
+static uint64
+GetHighestUsedFirstRowNumber(uint64 storageId)
+{
+	List *stripeMetadataList = ReadDataFileStripeList(storageId,
+													  GetTransactionSnapshot());
+	if (list_length(stripeMetadataList) == 0)
+	{
+		return COLUMNAR_INVALID_ROW_NUMBER;
+	}
+
+	/* XXX: Better to have an invalid value for StripeMetadata.rowCount too */
+	uint64 stripeRowCount = -1;
+	uint64 highestFirstRowNumber = COLUMNAR_INVALID_ROW_NUMBER;
+
+	StripeMetadata *stripeMetadata = NULL;
+	foreach_ptr(stripeMetadata, stripeMetadataList)
+	{
+		highestFirstRowNumber = Max(highestFirstRowNumber,
+									stripeMetadata->firstRowNumber);
+		stripeRowCount = stripeMetadata->rowCount;
+	}
+
+	return highestFirstRowNumber + stripeRowCount - 1;
 }

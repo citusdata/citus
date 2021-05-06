@@ -140,3 +140,45 @@ a              b
 11
 12
 13
+
+starting permutation: s1-truncate s1-begin s1-insert-10000-rows s2-begin s2-insert s2-commit s1-commit s1-verify-metadata
+step s1-truncate:
+    TRUNCATE test_insert_concurrency;
+
+step s1-begin:
+    BEGIN;
+
+step s1-insert-10000-rows:
+    INSERT INTO test_insert_concurrency SELECT i, 2 * i FROM generate_series(1, 10000) i;
+
+step s2-begin:
+    BEGIN;
+
+step s2-insert:
+    INSERT INTO test_insert_concurrency SELECT i, 2 * i FROM generate_series(4, 6) i;
+
+step s2-commit:
+    COMMIT;
+
+step s1-commit:
+    COMMIT;
+
+step s1-verify-metadata:
+    WITH test_insert_concurrency_stripes AS (
+      SELECT first_row_number, stripe_num, row_count
+      FROM columnar.stripe a, pg_class b
+      WHERE columnar_relation_storageid(b.oid)=a.storage_id AND
+            relname = 'test_insert_concurrency'
+    )
+    SELECT
+      -- verify that table has two stripes ..
+      count(*) = 2 AND
+      -- .. and those stripes look like:
+      sum(case when stripe_num = 1 AND first_row_number = 150001 AND row_count = 3 then 1 end) = 1 AND
+      sum(case when stripe_num = 2 AND first_row_number = 1 AND row_count = 10000 then 1 end) = 1
+      AS stripe_metadata_for_test_insert_concurrency_ok
+    FROM test_insert_concurrency_stripes;
+
+stripe_metadata_for_test_insert_concurrency_ok
+
+t
