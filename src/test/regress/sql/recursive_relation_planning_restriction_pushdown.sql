@@ -260,6 +260,36 @@ JOIN LATERAL
 WHERE (u2.value > 2
        AND FALSE);
 
+-- Test Nested Select Query with Union, with Reference Tables
+CREATE TABLE tbl1(a int);
+CREATE TABLE tbl2(b int);
+INSERT INTO tbl1 VALUES (1);
+INSERT INTO tbl2 VALUES (1);
+SELECT create_reference_table('tbl1');
+SELECT MAX(x) FROM (
+	SELECT 1 as x FROM (SELECT 1 FROM tbl1, tbl2 WHERE b > 0) AS s1 WHERE true
+	UNION ALL
+	SELECT 1 as x FROM (SELECT 1 FROM tbl1, tbl2 WHERE b > 0) AS s1 WHERE false
+) as res;
+DROP TABLE tbl1, tbl2;
+CREATE table tbl2(a int, b int, d int);
+CREATE table tbl1(a int, b int, c int);
+INSERT INTO tbl1 VALUES (1,1,1);
+INSERT INTO tbl2 VALUES (1,1,1);
+SELECT create_distributed_table('tbl1', 'a');
+SELECT MAX(x) FROM (
+SELECT 1 as x FROM (SELECT 1 FROM tbl1, tbl2 WHERE tbl2.b > 0) AS s1 WHERE true
+UNION ALL
+SELECT 1 as x FROM (SELECT 1 FROM tbl1, tbl2 WHERE tbl2.b > 0) AS s1 WHERE false
+) as res;
+SELECT undistribute_table('tbl1');
+SELECT create_reference_table('tbl1');
+SELECT MAX(x) FROM (
+SELECT 1 as x FROM (SELECT 1 FROM tbl1, tbl2 WHERE tbl2.b > 0) AS s1 WHERE true
+UNION ALL
+SELECT 1 as x FROM (SELECT 1 FROM tbl1, tbl2 WHERE tbl2.b > 0) AS s1 WHERE false
+) as res;
+
 \set VERBOSITY terse
 RESET client_min_messages;
 DROP SCHEMA push_down_filters CASCADE;

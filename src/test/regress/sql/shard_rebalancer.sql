@@ -124,14 +124,14 @@ SELECT worker_node_responsive('localhost', 1);
 -- moves to make the cluster completely balanced.
 
 SELECT unnest(shard_placement_rebalance_array(
-    ARRAY['{"node_name": "hostname1", "node_port": 5432}',
-          '{"node_name": "hostname2", "node_port": 5432}']::json[],
-    ARRAY['{"placementid":1, "shardid":1, "shardstate":1, "shardlength":1, "nodename":"hostname1", "nodeport":5432}',
-          '{"placementid":2, "shardid":2, "shardstate":1, "shardlength":1, "nodename":"hostname1", "nodeport":5432}',
-          '{"placementid":3, "shardid":3, "shardstate":1, "shardlength":1, "nodename":"hostname1", "nodeport":5432}',
-          '{"placementid":4, "shardid":4, "shardstate":1, "shardlength":1, "nodename":"hostname1", "nodeport":5432}',
-          '{"placementid":5, "shardid":5, "shardstate":1, "shardlength":1, "nodename":"hostname1", "nodeport":5432}',
-          '{"placementid":6, "shardid":6, "shardstate":1, "shardlength":1, "nodename":"hostname2", "nodeport":5432}']::json[],
+    ARRAY['{"node_name": "hostname1"}',
+          '{"node_name": "hostname2"}']::json[],
+    ARRAY['{"shardid":1, "nodename":"hostname1"}',
+          '{"shardid":2, "nodename":"hostname1"}',
+          '{"shardid":3, "nodename":"hostname1"}',
+          '{"shardid":4, "nodename":"hostname1"}',
+          '{"shardid":5, "nodename":"hostname1"}',
+          '{"shardid":6, "nodename":"hostname2"}']::json[],
     0.0
 ));
 
@@ -139,24 +139,24 @@ SELECT unnest(shard_placement_rebalance_array(
 -- doesn't return any moves, even if it is completely unbalanced.
 
 SELECT unnest(shard_placement_rebalance_array(
-    ARRAY['{"node_name": "hostname1", "node_port": 5432}',
-          '{"node_name": "hostname2", "node_port": 5432}']::json[],
-    ARRAY['{"placementid":1, "shardid":1, "shardstate":1, "shardlength":1, "nodename":"hostname1", "nodeport":5432}',
-          '{"placementid":2, "shardid":2, "shardstate":1, "shardlength":1, "nodename":"hostname1", "nodeport":5432}',
-          '{"placementid":3, "shardid":3, "shardstate":1, "shardlength":1, "nodename":"hostname1", "nodeport":5432}']::json[],
+    ARRAY['{"node_name": "hostname1"}',
+          '{"node_name": "hostname2"}']::json[],
+    ARRAY['{"shardid":1, "nodename":"hostname1"}',
+          '{"shardid":2, "nodename":"hostname1"}',
+          '{"shardid":3, "nodename":"hostname1"}']::json[],
     1.0
 ));
 
 -- Check that with three nodes and threshold=1.0
 -- shard_placement_rebalance_array returns moves when it is completely unbalanced
 SELECT unnest(shard_placement_rebalance_array(
-    ARRAY['{"node_name": "hostname1", "node_port": 5432}',
-          '{"node_name": "hostname2", "node_port": 5432}',
-          '{"node_name": "hostname3", "node_port": 5432}'
+    ARRAY['{"node_name": "hostname1"}',
+          '{"node_name": "hostname2"}',
+          '{"node_name": "hostname3"}'
         ]::json[],
-    ARRAY['{"placementid":1, "shardid":1, "shardstate":1, "shardlength":1, "nodename":"hostname1", "nodeport":5432}',
-          '{"placementid":2, "shardid":2, "shardstate":1, "shardlength":1, "nodename":"hostname1", "nodeport":5432}',
-          '{"placementid":3, "shardid":3, "shardstate":1, "shardlength":1, "nodename":"hostname1", "nodeport":5432}']::json[],
+    ARRAY['{"shardid":1, "nodename":"hostname1"}',
+          '{"shardid":2, "nodename":"hostname1"}',
+          '{"shardid":3, "nodename":"hostname1"}']::json[],
     1.0
 ));
 
@@ -167,13 +167,13 @@ SELECT unnest(shard_placement_rebalance_array(
 
 
 SELECT unnest(shard_placement_rebalance_array(
-    ARRAY['{"node_name": "hostname1", "node_port": 5432}',
-          '{"node_name": "hostname2", "node_port": 5432}',
-          '{"node_name": "hostname3", "node_port": 5432}'
+    ARRAY['{"node_name": "hostname1"}',
+          '{"node_name": "hostname2"}',
+          '{"node_name": "hostname3"}'
         ]::json[],
-    ARRAY['{"placementid":1, "shardid":1, "shardstate":1, "shardlength":1, "nodename":"hostname1", "nodeport":5432}',
-          '{"placementid":2, "shardid":2, "shardstate":1, "shardlength":1, "nodename":"hostname1", "nodeport":5432}',
-          '{"placementid":3, "shardid":3, "shardstate":1, "shardlength":1, "nodename":"hostname1", "nodeport":5432}']::json[],
+    ARRAY['{"shardid":1, "nodename":"hostname1"}',
+          '{"shardid":2, "nodename":"hostname1"}',
+          '{"shardid":3, "nodename":"hostname1"}']::json[],
     2.0
 ));
 
@@ -181,14 +181,14 @@ SELECT unnest(shard_placement_rebalance_array(
 -- any moves if the cluster is already balanced.
 
 SELECT unnest(shard_placement_rebalance_array(
-    ARRAY['{"node_name": "hostname1", "node_port": 5432}',
-          '{"node_name": "hostname2", "node_port": 5432}']::json[],
-    ARRAY['{"placementid":1, "shardid":1, "shardstate":1, "shardlength":1, "nodename":"hostname1", "nodeport":5432}',
-          '{"placementid":2, "shardid":2, "shardstate":1, "shardlength":1, "nodename":"hostname1", "nodeport":5432}',
-          '{"placementid":3, "shardid":3, "shardstate":1, "shardlength":1, "nodename":"hostname1", "nodeport":5432}',
-          '{"placementid":4, "shardid":4, "shardstate":1, "shardlength":1, "nodename":"hostname2", "nodeport":5432}',
-          '{"placementid":5, "shardid":5, "shardstate":1, "shardlength":1, "nodename":"hostname2", "nodeport":5432}',
-          '{"placementid":6, "shardid":6, "shardstate":1, "shardlength":1, "nodename":"hostname2", "nodeport":5432}']::json[],
+    ARRAY['{"node_name": "hostname1"}',
+          '{"node_name": "hostname2"}']::json[],
+    ARRAY['{"shardid":1, "nodename":"hostname1"}',
+          '{"shardid":2, "nodename":"hostname1"}',
+          '{"shardid":3, "nodename":"hostname1"}',
+          '{"shardid":4, "nodename":"hostname2"}',
+          '{"shardid":5, "nodename":"hostname2"}',
+          '{"shardid":6, "nodename":"hostname2"}']::json[],
     0.0
 ));
 
@@ -196,12 +196,12 @@ SELECT unnest(shard_placement_rebalance_array(
 -- for each of the shards in an inactive node.
 
 SELECT unnest(shard_placement_replication_array(
-    ARRAY['{"node_name": "hostname1", "node_port": 5432}',
-          '{"node_name": "hostname2", "node_port": 5432}']::json[],
-    ARRAY['{"placementid":1, "shardid":1, "shardstate":1, "shardlength":1, "nodename":"hostname1", "nodeport":5432}',
-          '{"placementid":2, "shardid":2, "shardstate":1, "shardlength":1, "nodename":"hostname2", "nodeport":5432}',
-          '{"placementid":3, "shardid":1, "shardstate":1, "shardlength":1, "nodename":"hostname3", "nodeport":5432}',
-          '{"placementid":4, "shardid":2, "shardstate":1, "shardlength":1, "nodename":"hostname3", "nodeport":5432}']::json[],
+    ARRAY['{"node_name": "hostname1"}',
+          '{"node_name": "hostname2"}']::json[],
+    ARRAY['{"shardid":1, "nodename":"hostname1"}',
+          '{"shardid":2, "nodename":"hostname2"}',
+          '{"shardid":1, "nodename":"hostname3"}',
+          '{"shardid":2, "nodename":"hostname3"}']::json[],
     2
 ));
 
@@ -209,12 +209,12 @@ SELECT unnest(shard_placement_replication_array(
 -- for each of the inactive shards.
 
 SELECT unnest(shard_placement_replication_array(
-    ARRAY['{"node_name": "hostname1", "node_port": 5432}',
-          '{"node_name": "hostname2", "node_port": 5432}']::json[],
-    ARRAY['{"placementid":1, "shardid":1, "shardstate":1, "shardlength":1, "nodename":"hostname1", "nodeport":5432}',
-          '{"placementid":2, "shardid":2, "shardstate":3, "shardlength":1, "nodename":"hostname1", "nodeport":5432}',
-          '{"placementid":3, "shardid":1, "shardstate":3, "shardlength":1, "nodename":"hostname2", "nodeport":5432}',
-          '{"placementid":4, "shardid":2, "shardstate":1, "shardlength":1, "nodename":"hostname2", "nodeport":5432}']::json[],
+    ARRAY['{"node_name": "hostname1"}',
+          '{"node_name": "hostname2"}']::json[],
+    ARRAY['{"shardid":1, "nodename":"hostname1"}',
+          '{"shardid":2, "shardstate":3, "nodename":"hostname1"}',
+          '{"shardid":1, "shardstate":3, "nodename":"hostname2"}',
+          '{"shardid":2, "nodename":"hostname2"}']::json[],
     2
 ));
 
@@ -222,9 +222,9 @@ SELECT unnest(shard_placement_replication_array(
 -- a shard are placed on inactive nodes.
 
 SELECT unnest(shard_placement_replication_array(
-    ARRAY['{"node_name": "hostname1", "node_port": 5432}']::json[],
-    ARRAY['{"placementid":1, "shardid":1, "shardstate":1, "shardlength":1, "nodename":"hostname2", "nodeport":5432}',
-          '{"placementid":2, "shardid":1, "shardstate":1, "shardlength":1, "nodename":"hostname3", "nodeport":5432}']::json[],
+    ARRAY['{"node_name": "hostname1"}']::json[],
+    ARRAY['{"shardid":1, "nodename":"hostname2"}',
+          '{"shardid":1, "nodename":"hostname3"}']::json[],
     2
 ));
 
@@ -232,8 +232,8 @@ SELECT unnest(shard_placement_replication_array(
 -- is more than number of active nodes.
 
 SELECT unnest(shard_placement_replication_array(
-    ARRAY['{"node_name": "hostname1", "node_port": 5432}']::json[],
-    ARRAY['{"placementid":1, "shardid":1, "shardstate":1, "shardlength":1, "nodename":"hostname1", "nodeport":5432}']::json[],
+    ARRAY['{"node_name": "hostname1"}']::json[],
+    ARRAY['{"shardid":1, "nodename":"hostname1"}']::json[],
     2
 ));
 
