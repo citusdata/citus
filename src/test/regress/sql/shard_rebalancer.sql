@@ -388,6 +388,25 @@ WHERE logicalrelid = 'rebalance_test_table'::regclass;
 
 SELECT * FROM table_placements_per_node;
 
+-- check rebalances use the localhost guc by seeing it fail when the GUC is set to a non-existing host
+ALTER SYSTEM SET citus.local_hostname TO 'foobar';
+SELECT pg_reload_conf();
+SELECT pg_sleep(1); -- wait to make sure the config has changed before running the GUC
+
+SELECT rebalance_table_shards('rebalance_test_table',
+                              excluded_shard_list := excluded_shard_list,
+                              threshold := 0,
+                              shard_transfer_mode:='block_writes')
+FROM (
+         SELECT (array_agg(DISTINCT shardid ORDER BY shardid))[1:4] AS excluded_shard_list
+         FROM pg_dist_shard
+         WHERE logicalrelid = 'rebalance_test_table'::regclass
+     ) T;
+
+ALTER SYSTEM RESET citus.local_hostname;
+SELECT pg_reload_conf();
+SELECT pg_sleep(1); -- wait to make sure the config has changed before running the GUC
+
 -- Check excluded_shard_list by excluding four shards with smaller ids
 
 SELECT rebalance_table_shards('rebalance_test_table',
