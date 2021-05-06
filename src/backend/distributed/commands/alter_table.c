@@ -199,6 +199,7 @@ static char * CreateWorkerChangeSequenceDependencyCommand(char *sequenceSchemaNa
 														  char *sourceName,
 														  char *targetSchemaName,
 														  char *targetName);
+static char * GetUsingClauseWithAccessMethodIfExists(Oid viewOid);
 static bool WillRecreateForeignKeyToReferenceTable(Oid relationId,
 												   CascadeToColocatedOption cascadeOption);
 static void WarningsForDroppingForeignKeysWithDistributedTables(Oid relationId);
@@ -1126,10 +1127,14 @@ GetViewCreationCommandsOfTable(Oid relationId)
 		char *qualifiedViewName = quote_qualified_identifier(schemaName, viewName);
 		bool isMatView = get_rel_relkind(viewOid) == RELKIND_MATVIEW;
 
+		/* here we need to get the access method of the view to recreate it */
+		char *usingAccessMethod = GetUsingClauseWithAccessMethodIfExists(viewOid);
+
 		appendStringInfo(query,
-						 "CREATE %s VIEW %s AS %s",
+						 "CREATE %s VIEW %s %s AS %s",
 						 isMatView ? "MATERIALIZED" : "",
 						 qualifiedViewName,
+						 usingAccessMethod,
 						 viewDefinition);
 		commands = lappend(commands, makeTableDDLCommandString(query->data));
 	}
@@ -1514,6 +1519,41 @@ CreateWorkerChangeSequenceDependencyCommand(char *sequenceSchemaName, char *sequ
 					 quote_qualified_identifier(sourceSchemaName, sourceName),
 					 quote_qualified_identifier(targetSchemaName, targetName));
 	return query->data;
+}
+
+
+/*
+ * GetUsingClauseWithAccessMethodIfExists generates and returns "USING ..." string
+ * if there's an access method set to the view with the given oid.
+ */
+static char *
+GetUsingClauseWithAccessMethodIfExists(Oid viewOid)
+{
+	StringInfo usingClause = makeStringInfo();
+	Relation relation = try_relation_open(viewOid, AccessShareLock);
+	if (relation == NULL)
+	{
+		ereport(ERROR, (errmsg("cannot complete operation "
+							   "because no such view exists")));
+	}
+
+	Oid accessMethodOid = relation->rd_rel->relam;
+	if (OidIsValid(accessMethodOid))
+	{
+		HeapTuple amTuple = SearchSysCache1(AMOID,
+											ObjectIdGetDatum(accessMethodOid));
+
+		if (HeapTupleIsValid(amTuple))
+		{
+			Form_pg_am amForm = (Form_pg_am) GETSTRUCT(amTuple);
+			appendStringInfo(usingClause, "USING %s", NameStr(amForm->amname));
+		}
+
+		ReleaseSysCache(amTuple);
+	}
+	relation_close(relation, NoLock);
+
+	return usingClause->data;
 }
 
 
