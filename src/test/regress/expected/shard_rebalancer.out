@@ -67,6 +67,35 @@ SELECT count(*) FROM citus_local_table;
      1
 (1 row)
 
+-- verify drain_node uses the localhostname guc by seeing it fail to connect to a non-existing name
+ALTER SYSTEM SET citus.local_hostname TO 'foobar';
+SELECT pg_reload_conf();
+ pg_reload_conf
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT pg_sleep(1); -- wait to make sure the config has changed before running the GUC
+ pg_sleep
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT master_drain_node('localhost', :master_port);
+ERROR:  connection to the remote node foobar:57636 failed with the following error: could not translate host name "foobar" to address: nodename nor servname provided, or not known
+ALTER SYSTEM RESET citus.local_hostname;
+SELECT pg_reload_conf();
+ pg_reload_conf
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT pg_sleep(1); -- wait to make sure the config has changed before running the GUC
+ pg_sleep
+---------------------------------------------------------------------
+
+(1 row)
+
 SELECT master_drain_node('localhost', :master_port);
  master_drain_node
 ---------------------------------------------------------------------

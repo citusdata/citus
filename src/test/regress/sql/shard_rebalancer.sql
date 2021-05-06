@@ -28,6 +28,17 @@ SELECT tablename FROM pg_catalog.pg_tables where tablename like 'citus_local_tab
 -- also check that we still can access shard relation, not the shell table
 SELECT count(*) FROM citus_local_table;
 
+-- verify drain_node uses the localhostname guc by seeing it fail to connect to a non-existing name
+ALTER SYSTEM SET citus.local_hostname TO 'foobar';
+SELECT pg_reload_conf();
+SELECT pg_sleep(1); -- wait to make sure the config has changed before running the GUC
+
+SELECT master_drain_node('localhost', :master_port);
+
+ALTER SYSTEM RESET citus.local_hostname;
+SELECT pg_reload_conf();
+SELECT pg_sleep(1); -- wait to make sure the config has changed before running the GUC
+
 SELECT master_drain_node('localhost', :master_port);
 
 -- show that citus local table shard is still on the coordinator
