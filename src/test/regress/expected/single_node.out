@@ -75,6 +75,42 @@ SELECT master_remove_node(nodename, nodeport) FROM pg_dist_node WHERE groupid = 
 
 (1 row)
 
+-- verify the coordinator gets auto added with the localhost guc
+ALTER SYSTEM SET citus.local_hostname TO '127.0.0.1'; --although not a hostname, should work for connecting locally
+SELECT pg_reload_conf();
+ pg_reload_conf
+---------------------------------------------------------------------
+ t
+(1 row)
+
+CREATE TABLE test(x int, y int);
+SELECT create_distributed_table('test','x');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT groupid, nodename, nodeport, isactive, shouldhaveshards, hasmetadata, metadatasynced FROM pg_dist_node;
+ groupid | nodename  | nodeport | isactive | shouldhaveshards | hasmetadata | metadatasynced
+---------------------------------------------------------------------
+       0 | 127.0.0.1 |    57636 | t        | t                | t           | t
+(1 row)
+
+DROP TABLE test;
+-- remove the coordinator to try again
+SELECT master_remove_node(nodename, nodeport) FROM pg_dist_node WHERE groupid = 0;
+ master_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+ALTER SYSTEM RESET citus.local_hostname;
+SELECT pg_reload_conf();
+ pg_reload_conf
+---------------------------------------------------------------------
+ t
+(1 row)
+
 CREATE TABLE test(x int, y int);
 SELECT create_distributed_table('test','x');
  create_distributed_table
@@ -244,21 +280,21 @@ INSERT INTO upsert_test (part_key, other_col) VALUES (1, 1), (2, 2) RETURNING *;
 SET citus.log_remote_commands to true;
 -- observe that there is a conflict and the following query does nothing
 INSERT INTO upsert_test (part_key, other_col) VALUES (1, 1) ON CONFLICT DO NOTHING RETURNING *;
-NOTICE:  executing the command locally: INSERT INTO single_node.upsert_test_90630519 AS citus_table_alias (part_key, other_col) VALUES (1, 1) ON CONFLICT DO NOTHING RETURNING part_key, other_col, third_col
+NOTICE:  executing the command locally: INSERT INTO single_node.upsert_test_90630523 AS citus_table_alias (part_key, other_col) VALUES (1, 1) ON CONFLICT DO NOTHING RETURNING part_key, other_col, third_col
  part_key | other_col | third_col
 ---------------------------------------------------------------------
 (0 rows)
 
 -- same as the above with different syntax
 INSERT INTO upsert_test (part_key, other_col) VALUES (1, 1) ON CONFLICT (part_key) DO NOTHING RETURNING *;
-NOTICE:  executing the command locally: INSERT INTO single_node.upsert_test_90630519 AS citus_table_alias (part_key, other_col) VALUES (1, 1) ON CONFLICT(part_key) DO NOTHING RETURNING part_key, other_col, third_col
+NOTICE:  executing the command locally: INSERT INTO single_node.upsert_test_90630523 AS citus_table_alias (part_key, other_col) VALUES (1, 1) ON CONFLICT(part_key) DO NOTHING RETURNING part_key, other_col, third_col
  part_key | other_col | third_col
 ---------------------------------------------------------------------
 (0 rows)
 
 -- again the same query with another syntax
 INSERT INTO upsert_test (part_key, other_col) VALUES (1, 1) ON CONFLICT ON CONSTRAINT upsert_test_part_key_key DO NOTHING RETURNING *;
-NOTICE:  executing the command locally: INSERT INTO single_node.upsert_test_90630519 AS citus_table_alias (part_key, other_col) VALUES (1, 1) ON CONFLICT ON CONSTRAINT upsert_test_part_key_key_90630519 DO NOTHING RETURNING part_key, other_col, third_col
+NOTICE:  executing the command locally: INSERT INTO single_node.upsert_test_90630523 AS citus_table_alias (part_key, other_col) VALUES (1, 1) ON CONFLICT ON CONSTRAINT upsert_test_part_key_key_90630523 DO NOTHING RETURNING part_key, other_col, third_col
  part_key | other_col | third_col
 ---------------------------------------------------------------------
 (0 rows)
@@ -266,7 +302,7 @@ NOTICE:  executing the command locally: INSERT INTO single_node.upsert_test_9063
 BEGIN;
 -- force local execution
 SELECT count(*) FROM upsert_test WHERE part_key = 1;
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM single_node.upsert_test_90630519 upsert_test WHERE (part_key OPERATOR(pg_catalog.=) 1)
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM single_node.upsert_test_90630523 upsert_test WHERE (part_key OPERATOR(pg_catalog.=) 1)
  count
 ---------------------------------------------------------------------
      1
@@ -352,10 +388,10 @@ SET search_path TO single_node;
 DROP SCHEMA  "Quoed.Schema" CASCADE;
 NOTICE:  drop cascades to 5 other objects
 DETAIL:  drop cascades to table "Quoed.Schema".simple_table_name
-drop cascades to table "Quoed.Schema".simple_table_name_90630524
-drop cascades to table "Quoed.Schema".simple_table_name_90630525
-drop cascades to table "Quoed.Schema".simple_table_name_90630526
-drop cascades to table "Quoed.Schema".simple_table_name_90630527
+drop cascades to table "Quoed.Schema".simple_table_name_90630528
+drop cascades to table "Quoed.Schema".simple_table_name_90630529
+drop cascades to table "Quoed.Schema".simple_table_name_90630530
+drop cascades to table "Quoed.Schema".simple_table_name_90630531
 -- test partitioned index creation with long name
 CREATE TABLE test_index_creation1
 (
@@ -538,7 +574,7 @@ EXPLAIN (COSTS FALSE, ANALYZE TRUE, TIMING FALSE, SUMMARY FALSE)
    ->  Task
          Tuple data received from node: 4 bytes
          Node: host=localhost port=xxxxx dbname=regression
-         ->  Seq Scan on test_90630502 test (actual rows=2 loops=1)
+         ->  Seq Scan on test_90630506 test (actual rows=2 loops=1)
 (8 rows)
 
 -- common utility command
@@ -1287,7 +1323,7 @@ END;$$;
 SELECT * FROM pg_dist_node;
  nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive | noderole | nodecluster | metadatasynced | shouldhaveshards
 ---------------------------------------------------------------------
-      4 |       0 | localhost |    57636 | default  | t           | t        | primary  | default     | t              | t
+      5 |       0 | localhost |    57636 | default  | t           | t        | primary  | default     | t              | t
 (1 row)
 
 SELECT create_distributed_function('call_delegation(int)', '$1', 'test');
@@ -1594,56 +1630,56 @@ SELECT pg_sleep(0.1);
 
 SET citus.executor_slow_start_interval TO 10;
 SELECT count(*) from another_schema_table;
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM single_node.another_schema_table_90630511 another_schema_table WHERE true
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM single_node.another_schema_table_90630512 another_schema_table WHERE true
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM single_node.another_schema_table_90630513 another_schema_table WHERE true
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM single_node.another_schema_table_90630514 another_schema_table WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM single_node.another_schema_table_90630515 another_schema_table WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM single_node.another_schema_table_90630516 another_schema_table WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM single_node.another_schema_table_90630517 another_schema_table WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM single_node.another_schema_table_90630518 another_schema_table WHERE true
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
 UPDATE another_schema_table SET b = b;
-NOTICE:  executing the command locally: UPDATE single_node.another_schema_table_90630511 another_schema_table SET b = b
-NOTICE:  executing the command locally: UPDATE single_node.another_schema_table_90630512 another_schema_table SET b = b
-NOTICE:  executing the command locally: UPDATE single_node.another_schema_table_90630513 another_schema_table SET b = b
-NOTICE:  executing the command locally: UPDATE single_node.another_schema_table_90630514 another_schema_table SET b = b
+NOTICE:  executing the command locally: UPDATE single_node.another_schema_table_90630515 another_schema_table SET b = b
+NOTICE:  executing the command locally: UPDATE single_node.another_schema_table_90630516 another_schema_table SET b = b
+NOTICE:  executing the command locally: UPDATE single_node.another_schema_table_90630517 another_schema_table SET b = b
+NOTICE:  executing the command locally: UPDATE single_node.another_schema_table_90630518 another_schema_table SET b = b
 -- INSERT .. SELECT pushdown and INSERT .. SELECT via repartitioning
 -- not that we ignore INSERT .. SELECT via coordinator as it relies on
 -- COPY command
 INSERT INTO another_schema_table SELECT * FROM another_schema_table;
-NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630511 AS citus_table_alias (a, b) SELECT a, b FROM single_node.another_schema_table_90630511 another_schema_table WHERE (a IS NOT NULL)
-NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630512 AS citus_table_alias (a, b) SELECT a, b FROM single_node.another_schema_table_90630512 another_schema_table WHERE (a IS NOT NULL)
-NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630513 AS citus_table_alias (a, b) SELECT a, b FROM single_node.another_schema_table_90630513 another_schema_table WHERE (a IS NOT NULL)
-NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630514 AS citus_table_alias (a, b) SELECT a, b FROM single_node.another_schema_table_90630514 another_schema_table WHERE (a IS NOT NULL)
+NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630515 AS citus_table_alias (a, b) SELECT a, b FROM single_node.another_schema_table_90630515 another_schema_table WHERE (a IS NOT NULL)
+NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630516 AS citus_table_alias (a, b) SELECT a, b FROM single_node.another_schema_table_90630516 another_schema_table WHERE (a IS NOT NULL)
+NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630517 AS citus_table_alias (a, b) SELECT a, b FROM single_node.another_schema_table_90630517 another_schema_table WHERE (a IS NOT NULL)
+NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630518 AS citus_table_alias (a, b) SELECT a, b FROM single_node.another_schema_table_90630518 another_schema_table WHERE (a IS NOT NULL)
 INSERT INTO another_schema_table SELECT b::int, a::int FROM another_schema_table;
-NOTICE:  executing the command locally: SELECT partition_index, 'repartitioned_results_xxxxx_from_90630511_to' || '_' || partition_index::text , rows_written FROM worker_partition_query_result('repartitioned_results_xxxxx_from_90630511_to','SELECT b AS a, a AS b FROM single_node.another_schema_table_90630511 another_schema_table WHERE true',0,'hash','{-2147483648,-1073741824,0,1073741824}'::text[],'{-1073741825,-1,1073741823,2147483647}'::text[],true) WHERE rows_written > 0
-NOTICE:  executing the command locally: SELECT partition_index, 'repartitioned_results_xxxxx_from_90630512_to' || '_' || partition_index::text , rows_written FROM worker_partition_query_result('repartitioned_results_xxxxx_from_90630512_to','SELECT b AS a, a AS b FROM single_node.another_schema_table_90630512 another_schema_table WHERE true',0,'hash','{-2147483648,-1073741824,0,1073741824}'::text[],'{-1073741825,-1,1073741823,2147483647}'::text[],true) WHERE rows_written > 0
-NOTICE:  executing the command locally: SELECT partition_index, 'repartitioned_results_xxxxx_from_90630513_to' || '_' || partition_index::text , rows_written FROM worker_partition_query_result('repartitioned_results_xxxxx_from_90630513_to','SELECT b AS a, a AS b FROM single_node.another_schema_table_90630513 another_schema_table WHERE true',0,'hash','{-2147483648,-1073741824,0,1073741824}'::text[],'{-1073741825,-1,1073741823,2147483647}'::text[],true) WHERE rows_written > 0
-NOTICE:  executing the command locally: SELECT partition_index, 'repartitioned_results_xxxxx_from_90630514_to' || '_' || partition_index::text , rows_written FROM worker_partition_query_result('repartitioned_results_xxxxx_from_90630514_to','SELECT b AS a, a AS b FROM single_node.another_schema_table_90630514 another_schema_table WHERE true',0,'hash','{-2147483648,-1073741824,0,1073741824}'::text[],'{-1073741825,-1,1073741823,2147483647}'::text[],true) WHERE rows_written > 0
+NOTICE:  executing the command locally: SELECT partition_index, 'repartitioned_results_xxxxx_from_90630515_to' || '_' || partition_index::text , rows_written FROM worker_partition_query_result('repartitioned_results_xxxxx_from_90630515_to','SELECT b AS a, a AS b FROM single_node.another_schema_table_90630515 another_schema_table WHERE true',0,'hash','{-2147483648,-1073741824,0,1073741824}'::text[],'{-1073741825,-1,1073741823,2147483647}'::text[],true) WHERE rows_written > 0
+NOTICE:  executing the command locally: SELECT partition_index, 'repartitioned_results_xxxxx_from_90630516_to' || '_' || partition_index::text , rows_written FROM worker_partition_query_result('repartitioned_results_xxxxx_from_90630516_to','SELECT b AS a, a AS b FROM single_node.another_schema_table_90630516 another_schema_table WHERE true',0,'hash','{-2147483648,-1073741824,0,1073741824}'::text[],'{-1073741825,-1,1073741823,2147483647}'::text[],true) WHERE rows_written > 0
+NOTICE:  executing the command locally: SELECT partition_index, 'repartitioned_results_xxxxx_from_90630517_to' || '_' || partition_index::text , rows_written FROM worker_partition_query_result('repartitioned_results_xxxxx_from_90630517_to','SELECT b AS a, a AS b FROM single_node.another_schema_table_90630517 another_schema_table WHERE true',0,'hash','{-2147483648,-1073741824,0,1073741824}'::text[],'{-1073741825,-1,1073741823,2147483647}'::text[],true) WHERE rows_written > 0
+NOTICE:  executing the command locally: SELECT partition_index, 'repartitioned_results_xxxxx_from_90630518_to' || '_' || partition_index::text , rows_written FROM worker_partition_query_result('repartitioned_results_xxxxx_from_90630518_to','SELECT b AS a, a AS b FROM single_node.another_schema_table_90630518 another_schema_table WHERE true',0,'hash','{-2147483648,-1073741824,0,1073741824}'::text[],'{-1073741825,-1,1073741823,2147483647}'::text[],true) WHERE rows_written > 0
 -- multi-row INSERTs
 INSERT INTO another_schema_table VALUES (1,1), (2,2), (3,3), (4,4), (5,5),(6,6),(7,7);
-NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630511 AS citus_table_alias (a, b) VALUES (1,1), (5,5)
-NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630512 AS citus_table_alias (a, b) VALUES (3,3), (4,4), (7,7)
-NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630513 AS citus_table_alias (a, b) VALUES (6,6)
-NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630514 AS citus_table_alias (a, b) VALUES (2,2)
+NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630515 AS citus_table_alias (a, b) VALUES (1,1), (5,5)
+NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630516 AS citus_table_alias (a, b) VALUES (3,3), (4,4), (7,7)
+NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630517 AS citus_table_alias (a, b) VALUES (6,6)
+NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630518 AS citus_table_alias (a, b) VALUES (2,2)
 -- INSERT..SELECT with re-partitioning when using local execution
 BEGIN;
 INSERT INTO another_schema_table VALUES (1,100);
-NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630511 (a, b) VALUES (1, 100)
+NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630515 (a, b) VALUES (1, 100)
 INSERT INTO another_schema_table VALUES (2,100);
-NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630514 (a, b) VALUES (2, 100)
+NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630518 (a, b) VALUES (2, 100)
 INSERT INTO another_schema_table SELECT b::int, a::int FROM another_schema_table;
-NOTICE:  executing the command locally: SELECT partition_index, 'repartitioned_results_xxxxx_from_90630511_to' || '_' || partition_index::text , rows_written FROM worker_partition_query_result('repartitioned_results_xxxxx_from_90630511_to','SELECT b AS a, a AS b FROM single_node.another_schema_table_90630511 another_schema_table WHERE true',0,'hash','{-2147483648,-1073741824,0,1073741824}'::text[],'{-1073741825,-1,1073741823,2147483647}'::text[],true) WHERE rows_written > 0
-NOTICE:  executing the command locally: SELECT partition_index, 'repartitioned_results_xxxxx_from_90630512_to' || '_' || partition_index::text , rows_written FROM worker_partition_query_result('repartitioned_results_xxxxx_from_90630512_to','SELECT b AS a, a AS b FROM single_node.another_schema_table_90630512 another_schema_table WHERE true',0,'hash','{-2147483648,-1073741824,0,1073741824}'::text[],'{-1073741825,-1,1073741823,2147483647}'::text[],true) WHERE rows_written > 0
-NOTICE:  executing the command locally: SELECT partition_index, 'repartitioned_results_xxxxx_from_90630513_to' || '_' || partition_index::text , rows_written FROM worker_partition_query_result('repartitioned_results_xxxxx_from_90630513_to','SELECT b AS a, a AS b FROM single_node.another_schema_table_90630513 another_schema_table WHERE true',0,'hash','{-2147483648,-1073741824,0,1073741824}'::text[],'{-1073741825,-1,1073741823,2147483647}'::text[],true) WHERE rows_written > 0
-NOTICE:  executing the command locally: SELECT partition_index, 'repartitioned_results_xxxxx_from_90630514_to' || '_' || partition_index::text , rows_written FROM worker_partition_query_result('repartitioned_results_xxxxx_from_90630514_to','SELECT b AS a, a AS b FROM single_node.another_schema_table_90630514 another_schema_table WHERE true',0,'hash','{-2147483648,-1073741824,0,1073741824}'::text[],'{-1073741825,-1,1073741823,2147483647}'::text[],true) WHERE rows_written > 0
-NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630511 AS citus_table_alias (a, b) SELECT a, b FROM read_intermediate_results('{repartitioned_results_xxxxx_from_90630511_to_0}'::text[], 'binary'::citus_copy_format) intermediate_result(a integer, b integer)
-NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630512 AS citus_table_alias (a, b) SELECT a, b FROM read_intermediate_results('{repartitioned_results_xxxxx_from_90630512_to_1}'::text[], 'binary'::citus_copy_format) intermediate_result(a integer, b integer)
-NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630513 AS citus_table_alias (a, b) SELECT a, b FROM read_intermediate_results('{repartitioned_results_xxxxx_from_90630511_to_2,repartitioned_results_xxxxx_from_90630513_to_2,repartitioned_results_xxxxx_from_90630514_to_2}'::text[], 'binary'::citus_copy_format) intermediate_result(a integer, b integer)
-NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630514 AS citus_table_alias (a, b) SELECT a, b FROM read_intermediate_results('{repartitioned_results_xxxxx_from_90630514_to_3}'::text[], 'binary'::citus_copy_format) intermediate_result(a integer, b integer)
+NOTICE:  executing the command locally: SELECT partition_index, 'repartitioned_results_xxxxx_from_90630515_to' || '_' || partition_index::text , rows_written FROM worker_partition_query_result('repartitioned_results_xxxxx_from_90630515_to','SELECT b AS a, a AS b FROM single_node.another_schema_table_90630515 another_schema_table WHERE true',0,'hash','{-2147483648,-1073741824,0,1073741824}'::text[],'{-1073741825,-1,1073741823,2147483647}'::text[],true) WHERE rows_written > 0
+NOTICE:  executing the command locally: SELECT partition_index, 'repartitioned_results_xxxxx_from_90630516_to' || '_' || partition_index::text , rows_written FROM worker_partition_query_result('repartitioned_results_xxxxx_from_90630516_to','SELECT b AS a, a AS b FROM single_node.another_schema_table_90630516 another_schema_table WHERE true',0,'hash','{-2147483648,-1073741824,0,1073741824}'::text[],'{-1073741825,-1,1073741823,2147483647}'::text[],true) WHERE rows_written > 0
+NOTICE:  executing the command locally: SELECT partition_index, 'repartitioned_results_xxxxx_from_90630517_to' || '_' || partition_index::text , rows_written FROM worker_partition_query_result('repartitioned_results_xxxxx_from_90630517_to','SELECT b AS a, a AS b FROM single_node.another_schema_table_90630517 another_schema_table WHERE true',0,'hash','{-2147483648,-1073741824,0,1073741824}'::text[],'{-1073741825,-1,1073741823,2147483647}'::text[],true) WHERE rows_written > 0
+NOTICE:  executing the command locally: SELECT partition_index, 'repartitioned_results_xxxxx_from_90630518_to' || '_' || partition_index::text , rows_written FROM worker_partition_query_result('repartitioned_results_xxxxx_from_90630518_to','SELECT b AS a, a AS b FROM single_node.another_schema_table_90630518 another_schema_table WHERE true',0,'hash','{-2147483648,-1073741824,0,1073741824}'::text[],'{-1073741825,-1,1073741823,2147483647}'::text[],true) WHERE rows_written > 0
+NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630515 AS citus_table_alias (a, b) SELECT a, b FROM read_intermediate_results('{repartitioned_results_xxxxx_from_90630515_to_0}'::text[], 'binary'::citus_copy_format) intermediate_result(a integer, b integer)
+NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630516 AS citus_table_alias (a, b) SELECT a, b FROM read_intermediate_results('{repartitioned_results_xxxxx_from_90630516_to_1}'::text[], 'binary'::citus_copy_format) intermediate_result(a integer, b integer)
+NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630517 AS citus_table_alias (a, b) SELECT a, b FROM read_intermediate_results('{repartitioned_results_xxxxx_from_90630515_to_2,repartitioned_results_xxxxx_from_90630517_to_2,repartitioned_results_xxxxx_from_90630518_to_2}'::text[], 'binary'::citus_copy_format) intermediate_result(a integer, b integer)
+NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630518 AS citus_table_alias (a, b) SELECT a, b FROM read_intermediate_results('{repartitioned_results_xxxxx_from_90630518_to_3}'::text[], 'binary'::citus_copy_format) intermediate_result(a integer, b integer)
 SELECT * FROM another_schema_table WHERE a = 100 ORDER BY b;
-NOTICE:  executing the command locally: SELECT a, b FROM single_node.another_schema_table_90630513 another_schema_table WHERE (a OPERATOR(pg_catalog.=) 100) ORDER BY b
+NOTICE:  executing the command locally: SELECT a, b FROM single_node.another_schema_table_90630517 another_schema_table WHERE (a OPERATOR(pg_catalog.=) 100) ORDER BY b
   a  | b
 ---------------------------------------------------------------------
  100 | 1
@@ -1654,10 +1690,10 @@ ROLLBACK;
 -- intermediate results
 WITH cte_1 AS (SELECT * FROM another_schema_table LIMIT 1000)
 	SELECT count(*) FROM cte_1;
-NOTICE:  executing the command locally: SELECT a, b FROM single_node.another_schema_table_90630511 another_schema_table WHERE true LIMIT '1000'::bigint
-NOTICE:  executing the command locally: SELECT a, b FROM single_node.another_schema_table_90630512 another_schema_table WHERE true LIMIT '1000'::bigint
-NOTICE:  executing the command locally: SELECT a, b FROM single_node.another_schema_table_90630513 another_schema_table WHERE true LIMIT '1000'::bigint
-NOTICE:  executing the command locally: SELECT a, b FROM single_node.another_schema_table_90630514 another_schema_table WHERE true LIMIT '1000'::bigint
+NOTICE:  executing the command locally: SELECT a, b FROM single_node.another_schema_table_90630515 another_schema_table WHERE true LIMIT '1000'::bigint
+NOTICE:  executing the command locally: SELECT a, b FROM single_node.another_schema_table_90630516 another_schema_table WHERE true LIMIT '1000'::bigint
+NOTICE:  executing the command locally: SELECT a, b FROM single_node.another_schema_table_90630517 another_schema_table WHERE true LIMIT '1000'::bigint
+NOTICE:  executing the command locally: SELECT a, b FROM single_node.another_schema_table_90630518 another_schema_table WHERE true LIMIT '1000'::bigint
 NOTICE:  executing the command locally: SELECT count(*) AS count FROM (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) cte_1
  count
 ---------------------------------------------------------------------
@@ -1685,31 +1721,31 @@ SET citus.log_remote_commands to false;
 CREATE UNIQUE INDEX another_schema_table_pk ON another_schema_table(a);
 SET citus.log_local_commands to true;
 INSERT INTO another_schema_table SELECT * FROM another_schema_table LIMIT 10000 ON CONFLICT(a) DO NOTHING;
-NOTICE:  executing the command locally: SELECT a, b FROM single_node.another_schema_table_90630511 another_schema_table WHERE true LIMIT '10000'::bigint
-NOTICE:  executing the command locally: SELECT a, b FROM single_node.another_schema_table_90630512 another_schema_table WHERE true LIMIT '10000'::bigint
-NOTICE:  executing the command locally: SELECT a, b FROM single_node.another_schema_table_90630513 another_schema_table WHERE true LIMIT '10000'::bigint
-NOTICE:  executing the command locally: SELECT a, b FROM single_node.another_schema_table_90630514 another_schema_table WHERE true LIMIT '10000'::bigint
+NOTICE:  executing the command locally: SELECT a, b FROM single_node.another_schema_table_90630515 another_schema_table WHERE true LIMIT '10000'::bigint
+NOTICE:  executing the command locally: SELECT a, b FROM single_node.another_schema_table_90630516 another_schema_table WHERE true LIMIT '10000'::bigint
+NOTICE:  executing the command locally: SELECT a, b FROM single_node.another_schema_table_90630517 another_schema_table WHERE true LIMIT '10000'::bigint
+NOTICE:  executing the command locally: SELECT a, b FROM single_node.another_schema_table_90630518 another_schema_table WHERE true LIMIT '10000'::bigint
 NOTICE:  executing the copy locally for colocated file with shard xxxxx
 NOTICE:  executing the copy locally for colocated file with shard xxxxx
 NOTICE:  executing the copy locally for colocated file with shard xxxxx
 NOTICE:  executing the copy locally for colocated file with shard xxxxx
-NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630511 AS citus_table_alias (a, b) SELECT a, b FROM read_intermediate_result('insert_select_XXX_90630511'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer) ON CONFLICT(a) DO NOTHING
-NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630512 AS citus_table_alias (a, b) SELECT a, b FROM read_intermediate_result('insert_select_XXX_90630512'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer) ON CONFLICT(a) DO NOTHING
-NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630513 AS citus_table_alias (a, b) SELECT a, b FROM read_intermediate_result('insert_select_XXX_90630513'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer) ON CONFLICT(a) DO NOTHING
-NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630514 AS citus_table_alias (a, b) SELECT a, b FROM read_intermediate_result('insert_select_XXX_90630514'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer) ON CONFLICT(a) DO NOTHING
+NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630515 AS citus_table_alias (a, b) SELECT a, b FROM read_intermediate_result('insert_select_XXX_90630515'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer) ON CONFLICT(a) DO NOTHING
+NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630516 AS citus_table_alias (a, b) SELECT a, b FROM read_intermediate_result('insert_select_XXX_90630516'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer) ON CONFLICT(a) DO NOTHING
+NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630517 AS citus_table_alias (a, b) SELECT a, b FROM read_intermediate_result('insert_select_XXX_90630517'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer) ON CONFLICT(a) DO NOTHING
+NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630518 AS citus_table_alias (a, b) SELECT a, b FROM read_intermediate_result('insert_select_XXX_90630518'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer) ON CONFLICT(a) DO NOTHING
 INSERT INTO another_schema_table SELECT * FROM another_schema_table ORDER BY a LIMIT 10 ON CONFLICT(a) DO UPDATE SET b = EXCLUDED.b + 1 RETURNING *;
-NOTICE:  executing the command locally: SELECT a, b FROM single_node.another_schema_table_90630511 another_schema_table WHERE true ORDER BY a LIMIT '10'::bigint
-NOTICE:  executing the command locally: SELECT a, b FROM single_node.another_schema_table_90630512 another_schema_table WHERE true ORDER BY a LIMIT '10'::bigint
-NOTICE:  executing the command locally: SELECT a, b FROM single_node.another_schema_table_90630513 another_schema_table WHERE true ORDER BY a LIMIT '10'::bigint
-NOTICE:  executing the command locally: SELECT a, b FROM single_node.another_schema_table_90630514 another_schema_table WHERE true ORDER BY a LIMIT '10'::bigint
+NOTICE:  executing the command locally: SELECT a, b FROM single_node.another_schema_table_90630515 another_schema_table WHERE true ORDER BY a LIMIT '10'::bigint
+NOTICE:  executing the command locally: SELECT a, b FROM single_node.another_schema_table_90630516 another_schema_table WHERE true ORDER BY a LIMIT '10'::bigint
+NOTICE:  executing the command locally: SELECT a, b FROM single_node.another_schema_table_90630517 another_schema_table WHERE true ORDER BY a LIMIT '10'::bigint
+NOTICE:  executing the command locally: SELECT a, b FROM single_node.another_schema_table_90630518 another_schema_table WHERE true ORDER BY a LIMIT '10'::bigint
 NOTICE:  executing the copy locally for colocated file with shard xxxxx
 NOTICE:  executing the copy locally for colocated file with shard xxxxx
 NOTICE:  executing the copy locally for colocated file with shard xxxxx
 NOTICE:  executing the copy locally for colocated file with shard xxxxx
-NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630511 AS citus_table_alias (a, b) SELECT a, b FROM read_intermediate_result('insert_select_XXX_90630511'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer) ON CONFLICT(a) DO UPDATE SET b = (excluded.b OPERATOR(pg_catalog.+) 1) RETURNING citus_table_alias.a, citus_table_alias.b
-NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630512 AS citus_table_alias (a, b) SELECT a, b FROM read_intermediate_result('insert_select_XXX_90630512'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer) ON CONFLICT(a) DO UPDATE SET b = (excluded.b OPERATOR(pg_catalog.+) 1) RETURNING citus_table_alias.a, citus_table_alias.b
-NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630513 AS citus_table_alias (a, b) SELECT a, b FROM read_intermediate_result('insert_select_XXX_90630513'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer) ON CONFLICT(a) DO UPDATE SET b = (excluded.b OPERATOR(pg_catalog.+) 1) RETURNING citus_table_alias.a, citus_table_alias.b
-NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630514 AS citus_table_alias (a, b) SELECT a, b FROM read_intermediate_result('insert_select_XXX_90630514'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer) ON CONFLICT(a) DO UPDATE SET b = (excluded.b OPERATOR(pg_catalog.+) 1) RETURNING citus_table_alias.a, citus_table_alias.b
+NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630515 AS citus_table_alias (a, b) SELECT a, b FROM read_intermediate_result('insert_select_XXX_90630515'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer) ON CONFLICT(a) DO UPDATE SET b = (excluded.b OPERATOR(pg_catalog.+) 1) RETURNING citus_table_alias.a, citus_table_alias.b
+NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630516 AS citus_table_alias (a, b) SELECT a, b FROM read_intermediate_result('insert_select_XXX_90630516'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer) ON CONFLICT(a) DO UPDATE SET b = (excluded.b OPERATOR(pg_catalog.+) 1) RETURNING citus_table_alias.a, citus_table_alias.b
+NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630517 AS citus_table_alias (a, b) SELECT a, b FROM read_intermediate_result('insert_select_XXX_90630517'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer) ON CONFLICT(a) DO UPDATE SET b = (excluded.b OPERATOR(pg_catalog.+) 1) RETURNING citus_table_alias.a, citus_table_alias.b
+NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630518 AS citus_table_alias (a, b) SELECT a, b FROM read_intermediate_result('insert_select_XXX_90630518'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer) ON CONFLICT(a) DO UPDATE SET b = (excluded.b OPERATOR(pg_catalog.+) 1) RETURNING citus_table_alias.a, citus_table_alias.b
  a  | b
 ---------------------------------------------------------------------
   1 |
@@ -1728,18 +1764,18 @@ NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_t
 WITH cte_1 AS
 (INSERT INTO non_binary_copy_test SELECT * FROM non_binary_copy_test LIMIT 10000 ON CONFLICT (key) DO UPDATE SET value = (0, 'citus0')::new_type RETURNING value)
 SELECT count(*) FROM cte_1;
-NOTICE:  executing the command locally: SELECT key, value FROM single_node.non_binary_copy_test_90630515 non_binary_copy_test WHERE true LIMIT '10000'::bigint
-NOTICE:  executing the command locally: SELECT key, value FROM single_node.non_binary_copy_test_90630516 non_binary_copy_test WHERE true LIMIT '10000'::bigint
-NOTICE:  executing the command locally: SELECT key, value FROM single_node.non_binary_copy_test_90630517 non_binary_copy_test WHERE true LIMIT '10000'::bigint
-NOTICE:  executing the command locally: SELECT key, value FROM single_node.non_binary_copy_test_90630518 non_binary_copy_test WHERE true LIMIT '10000'::bigint
+NOTICE:  executing the command locally: SELECT key, value FROM single_node.non_binary_copy_test_90630519 non_binary_copy_test WHERE true LIMIT '10000'::bigint
+NOTICE:  executing the command locally: SELECT key, value FROM single_node.non_binary_copy_test_90630520 non_binary_copy_test WHERE true LIMIT '10000'::bigint
+NOTICE:  executing the command locally: SELECT key, value FROM single_node.non_binary_copy_test_90630521 non_binary_copy_test WHERE true LIMIT '10000'::bigint
+NOTICE:  executing the command locally: SELECT key, value FROM single_node.non_binary_copy_test_90630522 non_binary_copy_test WHERE true LIMIT '10000'::bigint
 NOTICE:  executing the copy locally for colocated file with shard xxxxx
 NOTICE:  executing the copy locally for colocated file with shard xxxxx
 NOTICE:  executing the copy locally for colocated file with shard xxxxx
 NOTICE:  executing the copy locally for colocated file with shard xxxxx
-NOTICE:  executing the command locally: INSERT INTO single_node.non_binary_copy_test_90630515 AS citus_table_alias (key, value) SELECT key, value FROM read_intermediate_result('insert_select_XXX_90630515'::text, 'text'::citus_copy_format) intermediate_result(key integer, value single_node.new_type) ON CONFLICT(key) DO UPDATE SET value = ROW(0, 'citus0'::text)::single_node.new_type RETURNING citus_table_alias.value
-NOTICE:  executing the command locally: INSERT INTO single_node.non_binary_copy_test_90630516 AS citus_table_alias (key, value) SELECT key, value FROM read_intermediate_result('insert_select_XXX_90630516'::text, 'text'::citus_copy_format) intermediate_result(key integer, value single_node.new_type) ON CONFLICT(key) DO UPDATE SET value = ROW(0, 'citus0'::text)::single_node.new_type RETURNING citus_table_alias.value
-NOTICE:  executing the command locally: INSERT INTO single_node.non_binary_copy_test_90630517 AS citus_table_alias (key, value) SELECT key, value FROM read_intermediate_result('insert_select_XXX_90630517'::text, 'text'::citus_copy_format) intermediate_result(key integer, value single_node.new_type) ON CONFLICT(key) DO UPDATE SET value = ROW(0, 'citus0'::text)::single_node.new_type RETURNING citus_table_alias.value
-NOTICE:  executing the command locally: INSERT INTO single_node.non_binary_copy_test_90630518 AS citus_table_alias (key, value) SELECT key, value FROM read_intermediate_result('insert_select_XXX_90630518'::text, 'text'::citus_copy_format) intermediate_result(key integer, value single_node.new_type) ON CONFLICT(key) DO UPDATE SET value = ROW(0, 'citus0'::text)::single_node.new_type RETURNING citus_table_alias.value
+NOTICE:  executing the command locally: INSERT INTO single_node.non_binary_copy_test_90630519 AS citus_table_alias (key, value) SELECT key, value FROM read_intermediate_result('insert_select_XXX_90630519'::text, 'text'::citus_copy_format) intermediate_result(key integer, value single_node.new_type) ON CONFLICT(key) DO UPDATE SET value = ROW(0, 'citus0'::text)::single_node.new_type RETURNING citus_table_alias.value
+NOTICE:  executing the command locally: INSERT INTO single_node.non_binary_copy_test_90630520 AS citus_table_alias (key, value) SELECT key, value FROM read_intermediate_result('insert_select_XXX_90630520'::text, 'text'::citus_copy_format) intermediate_result(key integer, value single_node.new_type) ON CONFLICT(key) DO UPDATE SET value = ROW(0, 'citus0'::text)::single_node.new_type RETURNING citus_table_alias.value
+NOTICE:  executing the command locally: INSERT INTO single_node.non_binary_copy_test_90630521 AS citus_table_alias (key, value) SELECT key, value FROM read_intermediate_result('insert_select_XXX_90630521'::text, 'text'::citus_copy_format) intermediate_result(key integer, value single_node.new_type) ON CONFLICT(key) DO UPDATE SET value = ROW(0, 'citus0'::text)::single_node.new_type RETURNING citus_table_alias.value
+NOTICE:  executing the command locally: INSERT INTO single_node.non_binary_copy_test_90630522 AS citus_table_alias (key, value) SELECT key, value FROM read_intermediate_result('insert_select_XXX_90630522'::text, 'text'::citus_copy_format) intermediate_result(key integer, value single_node.new_type) ON CONFLICT(key) DO UPDATE SET value = ROW(0, 'citus0'::text)::single_node.new_type RETURNING citus_table_alias.value
 NOTICE:  executing the command locally: SELECT count(*) AS count FROM (SELECT intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'text'::citus_copy_format) intermediate_result(value single_node.new_type)) cte_1
  count
 ---------------------------------------------------------------------
@@ -1748,25 +1784,25 @@ NOTICE:  executing the command locally: SELECT count(*) AS count FROM (SELECT in
 
 -- test with NULL columns
 ALTER TABLE non_binary_copy_test ADD COLUMN z INT;
-NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (90630515, 'single_node', 'ALTER TABLE non_binary_copy_test ADD COLUMN z INT;')
-NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (90630516, 'single_node', 'ALTER TABLE non_binary_copy_test ADD COLUMN z INT;')
-NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (90630517, 'single_node', 'ALTER TABLE non_binary_copy_test ADD COLUMN z INT;')
-NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (90630518, 'single_node', 'ALTER TABLE non_binary_copy_test ADD COLUMN z INT;')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (90630519, 'single_node', 'ALTER TABLE non_binary_copy_test ADD COLUMN z INT;')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (90630520, 'single_node', 'ALTER TABLE non_binary_copy_test ADD COLUMN z INT;')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (90630521, 'single_node', 'ALTER TABLE non_binary_copy_test ADD COLUMN z INT;')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (90630522, 'single_node', 'ALTER TABLE non_binary_copy_test ADD COLUMN z INT;')
 WITH cte_1 AS
 (INSERT INTO non_binary_copy_test SELECT * FROM non_binary_copy_test LIMIT 10000 ON CONFLICT (key) DO UPDATE SET value = (0, 'citus0')::new_type RETURNING z)
 SELECT bool_and(z is null) FROM cte_1;
-NOTICE:  executing the command locally: SELECT key, value, z FROM single_node.non_binary_copy_test_90630515 non_binary_copy_test WHERE true LIMIT '10000'::bigint
-NOTICE:  executing the command locally: SELECT key, value, z FROM single_node.non_binary_copy_test_90630516 non_binary_copy_test WHERE true LIMIT '10000'::bigint
-NOTICE:  executing the command locally: SELECT key, value, z FROM single_node.non_binary_copy_test_90630517 non_binary_copy_test WHERE true LIMIT '10000'::bigint
-NOTICE:  executing the command locally: SELECT key, value, z FROM single_node.non_binary_copy_test_90630518 non_binary_copy_test WHERE true LIMIT '10000'::bigint
+NOTICE:  executing the command locally: SELECT key, value, z FROM single_node.non_binary_copy_test_90630519 non_binary_copy_test WHERE true LIMIT '10000'::bigint
+NOTICE:  executing the command locally: SELECT key, value, z FROM single_node.non_binary_copy_test_90630520 non_binary_copy_test WHERE true LIMIT '10000'::bigint
+NOTICE:  executing the command locally: SELECT key, value, z FROM single_node.non_binary_copy_test_90630521 non_binary_copy_test WHERE true LIMIT '10000'::bigint
+NOTICE:  executing the command locally: SELECT key, value, z FROM single_node.non_binary_copy_test_90630522 non_binary_copy_test WHERE true LIMIT '10000'::bigint
 NOTICE:  executing the copy locally for colocated file with shard xxxxx
 NOTICE:  executing the copy locally for colocated file with shard xxxxx
 NOTICE:  executing the copy locally for colocated file with shard xxxxx
 NOTICE:  executing the copy locally for colocated file with shard xxxxx
-NOTICE:  executing the command locally: INSERT INTO single_node.non_binary_copy_test_90630515 AS citus_table_alias (key, value, z) SELECT key, value, z FROM read_intermediate_result('insert_select_XXX_90630515'::text, 'text'::citus_copy_format) intermediate_result(key integer, value single_node.new_type, z integer) ON CONFLICT(key) DO UPDATE SET value = ROW(0, 'citus0'::text)::single_node.new_type RETURNING citus_table_alias.z
-NOTICE:  executing the command locally: INSERT INTO single_node.non_binary_copy_test_90630516 AS citus_table_alias (key, value, z) SELECT key, value, z FROM read_intermediate_result('insert_select_XXX_90630516'::text, 'text'::citus_copy_format) intermediate_result(key integer, value single_node.new_type, z integer) ON CONFLICT(key) DO UPDATE SET value = ROW(0, 'citus0'::text)::single_node.new_type RETURNING citus_table_alias.z
-NOTICE:  executing the command locally: INSERT INTO single_node.non_binary_copy_test_90630517 AS citus_table_alias (key, value, z) SELECT key, value, z FROM read_intermediate_result('insert_select_XXX_90630517'::text, 'text'::citus_copy_format) intermediate_result(key integer, value single_node.new_type, z integer) ON CONFLICT(key) DO UPDATE SET value = ROW(0, 'citus0'::text)::single_node.new_type RETURNING citus_table_alias.z
-NOTICE:  executing the command locally: INSERT INTO single_node.non_binary_copy_test_90630518 AS citus_table_alias (key, value, z) SELECT key, value, z FROM read_intermediate_result('insert_select_XXX_90630518'::text, 'text'::citus_copy_format) intermediate_result(key integer, value single_node.new_type, z integer) ON CONFLICT(key) DO UPDATE SET value = ROW(0, 'citus0'::text)::single_node.new_type RETURNING citus_table_alias.z
+NOTICE:  executing the command locally: INSERT INTO single_node.non_binary_copy_test_90630519 AS citus_table_alias (key, value, z) SELECT key, value, z FROM read_intermediate_result('insert_select_XXX_90630519'::text, 'text'::citus_copy_format) intermediate_result(key integer, value single_node.new_type, z integer) ON CONFLICT(key) DO UPDATE SET value = ROW(0, 'citus0'::text)::single_node.new_type RETURNING citus_table_alias.z
+NOTICE:  executing the command locally: INSERT INTO single_node.non_binary_copy_test_90630520 AS citus_table_alias (key, value, z) SELECT key, value, z FROM read_intermediate_result('insert_select_XXX_90630520'::text, 'text'::citus_copy_format) intermediate_result(key integer, value single_node.new_type, z integer) ON CONFLICT(key) DO UPDATE SET value = ROW(0, 'citus0'::text)::single_node.new_type RETURNING citus_table_alias.z
+NOTICE:  executing the command locally: INSERT INTO single_node.non_binary_copy_test_90630521 AS citus_table_alias (key, value, z) SELECT key, value, z FROM read_intermediate_result('insert_select_XXX_90630521'::text, 'text'::citus_copy_format) intermediate_result(key integer, value single_node.new_type, z integer) ON CONFLICT(key) DO UPDATE SET value = ROW(0, 'citus0'::text)::single_node.new_type RETURNING citus_table_alias.z
+NOTICE:  executing the command locally: INSERT INTO single_node.non_binary_copy_test_90630522 AS citus_table_alias (key, value, z) SELECT key, value, z FROM read_intermediate_result('insert_select_XXX_90630522'::text, 'text'::citus_copy_format) intermediate_result(key integer, value single_node.new_type, z integer) ON CONFLICT(key) DO UPDATE SET value = ROW(0, 'citus0'::text)::single_node.new_type RETURNING citus_table_alias.z
 NOTICE:  executing the command locally: SELECT bool_and((z IS NULL)) AS bool_and FROM (SELECT intermediate_result.z FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(z integer)) cte_1
  bool_and
 ---------------------------------------------------------------------
@@ -1777,18 +1813,18 @@ NOTICE:  executing the command locally: SELECT bool_and((z IS NULL)) AS bool_and
 WITH cte_1 AS
 (INSERT INTO non_binary_copy_test SELECT * FROM non_binary_copy_test LIMIT 10000 ON CONFLICT (key) DO UPDATE SET value = (0, 'citus0')::new_type RETURNING key, z)
 SELECT count(DISTINCT key::text), count(DISTINCT z::text) FROM cte_1;
-NOTICE:  executing the command locally: SELECT key, value, z FROM single_node.non_binary_copy_test_90630515 non_binary_copy_test WHERE true LIMIT '10000'::bigint
-NOTICE:  executing the command locally: SELECT key, value, z FROM single_node.non_binary_copy_test_90630516 non_binary_copy_test WHERE true LIMIT '10000'::bigint
-NOTICE:  executing the command locally: SELECT key, value, z FROM single_node.non_binary_copy_test_90630517 non_binary_copy_test WHERE true LIMIT '10000'::bigint
-NOTICE:  executing the command locally: SELECT key, value, z FROM single_node.non_binary_copy_test_90630518 non_binary_copy_test WHERE true LIMIT '10000'::bigint
+NOTICE:  executing the command locally: SELECT key, value, z FROM single_node.non_binary_copy_test_90630519 non_binary_copy_test WHERE true LIMIT '10000'::bigint
+NOTICE:  executing the command locally: SELECT key, value, z FROM single_node.non_binary_copy_test_90630520 non_binary_copy_test WHERE true LIMIT '10000'::bigint
+NOTICE:  executing the command locally: SELECT key, value, z FROM single_node.non_binary_copy_test_90630521 non_binary_copy_test WHERE true LIMIT '10000'::bigint
+NOTICE:  executing the command locally: SELECT key, value, z FROM single_node.non_binary_copy_test_90630522 non_binary_copy_test WHERE true LIMIT '10000'::bigint
 NOTICE:  executing the copy locally for colocated file with shard xxxxx
 NOTICE:  executing the copy locally for colocated file with shard xxxxx
 NOTICE:  executing the copy locally for colocated file with shard xxxxx
 NOTICE:  executing the copy locally for colocated file with shard xxxxx
-NOTICE:  executing the command locally: INSERT INTO single_node.non_binary_copy_test_90630515 AS citus_table_alias (key, value, z) SELECT key, value, z FROM read_intermediate_result('insert_select_XXX_90630515'::text, 'text'::citus_copy_format) intermediate_result(key integer, value single_node.new_type, z integer) ON CONFLICT(key) DO UPDATE SET value = ROW(0, 'citus0'::text)::single_node.new_type RETURNING citus_table_alias.key, citus_table_alias.z
-NOTICE:  executing the command locally: INSERT INTO single_node.non_binary_copy_test_90630516 AS citus_table_alias (key, value, z) SELECT key, value, z FROM read_intermediate_result('insert_select_XXX_90630516'::text, 'text'::citus_copy_format) intermediate_result(key integer, value single_node.new_type, z integer) ON CONFLICT(key) DO UPDATE SET value = ROW(0, 'citus0'::text)::single_node.new_type RETURNING citus_table_alias.key, citus_table_alias.z
-NOTICE:  executing the command locally: INSERT INTO single_node.non_binary_copy_test_90630517 AS citus_table_alias (key, value, z) SELECT key, value, z FROM read_intermediate_result('insert_select_XXX_90630517'::text, 'text'::citus_copy_format) intermediate_result(key integer, value single_node.new_type, z integer) ON CONFLICT(key) DO UPDATE SET value = ROW(0, 'citus0'::text)::single_node.new_type RETURNING citus_table_alias.key, citus_table_alias.z
-NOTICE:  executing the command locally: INSERT INTO single_node.non_binary_copy_test_90630518 AS citus_table_alias (key, value, z) SELECT key, value, z FROM read_intermediate_result('insert_select_XXX_90630518'::text, 'text'::citus_copy_format) intermediate_result(key integer, value single_node.new_type, z integer) ON CONFLICT(key) DO UPDATE SET value = ROW(0, 'citus0'::text)::single_node.new_type RETURNING citus_table_alias.key, citus_table_alias.z
+NOTICE:  executing the command locally: INSERT INTO single_node.non_binary_copy_test_90630519 AS citus_table_alias (key, value, z) SELECT key, value, z FROM read_intermediate_result('insert_select_XXX_90630519'::text, 'text'::citus_copy_format) intermediate_result(key integer, value single_node.new_type, z integer) ON CONFLICT(key) DO UPDATE SET value = ROW(0, 'citus0'::text)::single_node.new_type RETURNING citus_table_alias.key, citus_table_alias.z
+NOTICE:  executing the command locally: INSERT INTO single_node.non_binary_copy_test_90630520 AS citus_table_alias (key, value, z) SELECT key, value, z FROM read_intermediate_result('insert_select_XXX_90630520'::text, 'text'::citus_copy_format) intermediate_result(key integer, value single_node.new_type, z integer) ON CONFLICT(key) DO UPDATE SET value = ROW(0, 'citus0'::text)::single_node.new_type RETURNING citus_table_alias.key, citus_table_alias.z
+NOTICE:  executing the command locally: INSERT INTO single_node.non_binary_copy_test_90630521 AS citus_table_alias (key, value, z) SELECT key, value, z FROM read_intermediate_result('insert_select_XXX_90630521'::text, 'text'::citus_copy_format) intermediate_result(key integer, value single_node.new_type, z integer) ON CONFLICT(key) DO UPDATE SET value = ROW(0, 'citus0'::text)::single_node.new_type RETURNING citus_table_alias.key, citus_table_alias.z
+NOTICE:  executing the command locally: INSERT INTO single_node.non_binary_copy_test_90630522 AS citus_table_alias (key, value, z) SELECT key, value, z FROM read_intermediate_result('insert_select_XXX_90630522'::text, 'text'::citus_copy_format) intermediate_result(key integer, value single_node.new_type, z integer) ON CONFLICT(key) DO UPDATE SET value = ROW(0, 'citus0'::text)::single_node.new_type RETURNING citus_table_alias.key, citus_table_alias.z
 NOTICE:  executing the command locally: SELECT count(DISTINCT (key)::text) AS count, count(DISTINCT (z)::text) AS count FROM (SELECT intermediate_result.key, intermediate_result.z FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(key integer, z integer)) cte_1
  count | count
 ---------------------------------------------------------------------
@@ -1810,18 +1846,18 @@ NOTICE:  executing the copy locally for shard xxxxx
 WITH cte_1 AS
 (INSERT INTO another_schema_table SELECT * FROM another_schema_table ORDER BY a LIMIT 10000 ON CONFLICT(a) DO NOTHING RETURNING *)
 SELECT count(*) FROM cte_1;
-NOTICE:  executing the command locally: SELECT a, b FROM single_node.another_schema_table_90630511 another_schema_table WHERE true ORDER BY a LIMIT '10000'::bigint
-NOTICE:  executing the command locally: SELECT a, b FROM single_node.another_schema_table_90630512 another_schema_table WHERE true ORDER BY a LIMIT '10000'::bigint
-NOTICE:  executing the command locally: SELECT a, b FROM single_node.another_schema_table_90630513 another_schema_table WHERE true ORDER BY a LIMIT '10000'::bigint
-NOTICE:  executing the command locally: SELECT a, b FROM single_node.another_schema_table_90630514 another_schema_table WHERE true ORDER BY a LIMIT '10000'::bigint
+NOTICE:  executing the command locally: SELECT a, b FROM single_node.another_schema_table_90630515 another_schema_table WHERE true ORDER BY a LIMIT '10000'::bigint
+NOTICE:  executing the command locally: SELECT a, b FROM single_node.another_schema_table_90630516 another_schema_table WHERE true ORDER BY a LIMIT '10000'::bigint
+NOTICE:  executing the command locally: SELECT a, b FROM single_node.another_schema_table_90630517 another_schema_table WHERE true ORDER BY a LIMIT '10000'::bigint
+NOTICE:  executing the command locally: SELECT a, b FROM single_node.another_schema_table_90630518 another_schema_table WHERE true ORDER BY a LIMIT '10000'::bigint
 NOTICE:  executing the copy locally for colocated file with shard xxxxx
 NOTICE:  executing the copy locally for colocated file with shard xxxxx
 NOTICE:  executing the copy locally for colocated file with shard xxxxx
 NOTICE:  executing the copy locally for colocated file with shard xxxxx
-NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630511 AS citus_table_alias (a, b) SELECT a, b FROM read_intermediate_result('insert_select_XXX_90630511'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer) ON CONFLICT(a) DO NOTHING RETURNING citus_table_alias.a, citus_table_alias.b
-NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630512 AS citus_table_alias (a, b) SELECT a, b FROM read_intermediate_result('insert_select_XXX_90630512'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer) ON CONFLICT(a) DO NOTHING RETURNING citus_table_alias.a, citus_table_alias.b
-NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630513 AS citus_table_alias (a, b) SELECT a, b FROM read_intermediate_result('insert_select_XXX_90630513'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer) ON CONFLICT(a) DO NOTHING RETURNING citus_table_alias.a, citus_table_alias.b
-NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630514 AS citus_table_alias (a, b) SELECT a, b FROM read_intermediate_result('insert_select_XXX_90630514'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer) ON CONFLICT(a) DO NOTHING RETURNING citus_table_alias.a, citus_table_alias.b
+NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630515 AS citus_table_alias (a, b) SELECT a, b FROM read_intermediate_result('insert_select_XXX_90630515'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer) ON CONFLICT(a) DO NOTHING RETURNING citus_table_alias.a, citus_table_alias.b
+NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630516 AS citus_table_alias (a, b) SELECT a, b FROM read_intermediate_result('insert_select_XXX_90630516'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer) ON CONFLICT(a) DO NOTHING RETURNING citus_table_alias.a, citus_table_alias.b
+NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630517 AS citus_table_alias (a, b) SELECT a, b FROM read_intermediate_result('insert_select_XXX_90630517'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer) ON CONFLICT(a) DO NOTHING RETURNING citus_table_alias.a, citus_table_alias.b
+NOTICE:  executing the command locally: INSERT INTO single_node.another_schema_table_90630518 AS citus_table_alias (a, b) SELECT a, b FROM read_intermediate_result('insert_select_XXX_90630518'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer) ON CONFLICT(a) DO NOTHING RETURNING citus_table_alias.a, citus_table_alias.b
 NOTICE:  executing the command locally: SELECT count(*) AS count FROM (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) cte_1
  count
 ---------------------------------------------------------------------
@@ -1831,18 +1867,18 @@ NOTICE:  executing the command locally: SELECT count(*) AS count FROM (SELECT in
 WITH cte_1 AS
 (INSERT INTO non_binary_copy_test SELECT * FROM non_binary_copy_test LIMIT 10000 ON CONFLICT (key) DO UPDATE SET value = (0, 'citus0')::new_type RETURNING z)
 SELECT bool_and(z is null) FROM cte_1;
-NOTICE:  executing the command locally: SELECT key, value, z FROM single_node.non_binary_copy_test_90630515 non_binary_copy_test WHERE true LIMIT '10000'::bigint
-NOTICE:  executing the command locally: SELECT key, value, z FROM single_node.non_binary_copy_test_90630516 non_binary_copy_test WHERE true LIMIT '10000'::bigint
-NOTICE:  executing the command locally: SELECT key, value, z FROM single_node.non_binary_copy_test_90630517 non_binary_copy_test WHERE true LIMIT '10000'::bigint
-NOTICE:  executing the command locally: SELECT key, value, z FROM single_node.non_binary_copy_test_90630518 non_binary_copy_test WHERE true LIMIT '10000'::bigint
+NOTICE:  executing the command locally: SELECT key, value, z FROM single_node.non_binary_copy_test_90630519 non_binary_copy_test WHERE true LIMIT '10000'::bigint
+NOTICE:  executing the command locally: SELECT key, value, z FROM single_node.non_binary_copy_test_90630520 non_binary_copy_test WHERE true LIMIT '10000'::bigint
+NOTICE:  executing the command locally: SELECT key, value, z FROM single_node.non_binary_copy_test_90630521 non_binary_copy_test WHERE true LIMIT '10000'::bigint
+NOTICE:  executing the command locally: SELECT key, value, z FROM single_node.non_binary_copy_test_90630522 non_binary_copy_test WHERE true LIMIT '10000'::bigint
 NOTICE:  executing the copy locally for colocated file with shard xxxxx
 NOTICE:  executing the copy locally for colocated file with shard xxxxx
 NOTICE:  executing the copy locally for colocated file with shard xxxxx
 NOTICE:  executing the copy locally for colocated file with shard xxxxx
-NOTICE:  executing the command locally: INSERT INTO single_node.non_binary_copy_test_90630515 AS citus_table_alias (key, value, z) SELECT key, value, z FROM read_intermediate_result('insert_select_XXX_90630515'::text, 'text'::citus_copy_format) intermediate_result(key integer, value single_node.new_type, z integer) ON CONFLICT(key) DO UPDATE SET value = ROW(0, 'citus0'::text)::single_node.new_type RETURNING citus_table_alias.z
-NOTICE:  executing the command locally: INSERT INTO single_node.non_binary_copy_test_90630516 AS citus_table_alias (key, value, z) SELECT key, value, z FROM read_intermediate_result('insert_select_XXX_90630516'::text, 'text'::citus_copy_format) intermediate_result(key integer, value single_node.new_type, z integer) ON CONFLICT(key) DO UPDATE SET value = ROW(0, 'citus0'::text)::single_node.new_type RETURNING citus_table_alias.z
-NOTICE:  executing the command locally: INSERT INTO single_node.non_binary_copy_test_90630517 AS citus_table_alias (key, value, z) SELECT key, value, z FROM read_intermediate_result('insert_select_XXX_90630517'::text, 'text'::citus_copy_format) intermediate_result(key integer, value single_node.new_type, z integer) ON CONFLICT(key) DO UPDATE SET value = ROW(0, 'citus0'::text)::single_node.new_type RETURNING citus_table_alias.z
-NOTICE:  executing the command locally: INSERT INTO single_node.non_binary_copy_test_90630518 AS citus_table_alias (key, value, z) SELECT key, value, z FROM read_intermediate_result('insert_select_XXX_90630518'::text, 'text'::citus_copy_format) intermediate_result(key integer, value single_node.new_type, z integer) ON CONFLICT(key) DO UPDATE SET value = ROW(0, 'citus0'::text)::single_node.new_type RETURNING citus_table_alias.z
+NOTICE:  executing the command locally: INSERT INTO single_node.non_binary_copy_test_90630519 AS citus_table_alias (key, value, z) SELECT key, value, z FROM read_intermediate_result('insert_select_XXX_90630519'::text, 'text'::citus_copy_format) intermediate_result(key integer, value single_node.new_type, z integer) ON CONFLICT(key) DO UPDATE SET value = ROW(0, 'citus0'::text)::single_node.new_type RETURNING citus_table_alias.z
+NOTICE:  executing the command locally: INSERT INTO single_node.non_binary_copy_test_90630520 AS citus_table_alias (key, value, z) SELECT key, value, z FROM read_intermediate_result('insert_select_XXX_90630520'::text, 'text'::citus_copy_format) intermediate_result(key integer, value single_node.new_type, z integer) ON CONFLICT(key) DO UPDATE SET value = ROW(0, 'citus0'::text)::single_node.new_type RETURNING citus_table_alias.z
+NOTICE:  executing the command locally: INSERT INTO single_node.non_binary_copy_test_90630521 AS citus_table_alias (key, value, z) SELECT key, value, z FROM read_intermediate_result('insert_select_XXX_90630521'::text, 'text'::citus_copy_format) intermediate_result(key integer, value single_node.new_type, z integer) ON CONFLICT(key) DO UPDATE SET value = ROW(0, 'citus0'::text)::single_node.new_type RETURNING citus_table_alias.z
+NOTICE:  executing the command locally: INSERT INTO single_node.non_binary_copy_test_90630522 AS citus_table_alias (key, value, z) SELECT key, value, z FROM read_intermediate_result('insert_select_XXX_90630522'::text, 'text'::citus_copy_format) intermediate_result(key integer, value single_node.new_type, z integer) ON CONFLICT(key) DO UPDATE SET value = ROW(0, 'citus0'::text)::single_node.new_type RETURNING citus_table_alias.z
 NOTICE:  executing the command locally: SELECT bool_and((z IS NULL)) AS bool_and FROM (SELECT intermediate_result.z FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(z integer)) cte_1
  bool_and
 ---------------------------------------------------------------------
@@ -1858,17 +1894,17 @@ $$coordinated_transaction_should_use_2PC$$;
 -- execution doesn't start a 2PC
 BEGIN;
 	SELECT count(*) FROM another_schema_table;
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM single_node.another_schema_table_90630511 another_schema_table WHERE true
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM single_node.another_schema_table_90630512 another_schema_table WHERE true
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM single_node.another_schema_table_90630513 another_schema_table WHERE true
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM single_node.another_schema_table_90630514 another_schema_table WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM single_node.another_schema_table_90630515 another_schema_table WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM single_node.another_schema_table_90630516 another_schema_table WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM single_node.another_schema_table_90630517 another_schema_table WHERE true
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM single_node.another_schema_table_90630518 another_schema_table WHERE true
  count
 ---------------------------------------------------------------------
  10001
 (1 row)
 
 	SELECT count(*) FROM another_schema_table WHERE a = 1;
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM single_node.another_schema_table_90630511 another_schema_table WHERE (a OPERATOR(pg_catalog.=) 1)
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM single_node.another_schema_table_90630515 another_schema_table WHERE (a OPERATOR(pg_catalog.=) 1)
  count
 ---------------------------------------------------------------------
      1
@@ -1876,10 +1912,10 @@ NOTICE:  executing the command locally: SELECT count(*) AS count FROM single_nod
 
 	WITH cte_1 as (SELECT * FROM another_schema_table LIMIT 10)
 		SELECT count(*) FROM cte_1;
-NOTICE:  executing the command locally: SELECT a, b FROM single_node.another_schema_table_90630511 another_schema_table WHERE true LIMIT '10'::bigint
-NOTICE:  executing the command locally: SELECT a, b FROM single_node.another_schema_table_90630512 another_schema_table WHERE true LIMIT '10'::bigint
-NOTICE:  executing the command locally: SELECT a, b FROM single_node.another_schema_table_90630513 another_schema_table WHERE true LIMIT '10'::bigint
-NOTICE:  executing the command locally: SELECT a, b FROM single_node.another_schema_table_90630514 another_schema_table WHERE true LIMIT '10'::bigint
+NOTICE:  executing the command locally: SELECT a, b FROM single_node.another_schema_table_90630515 another_schema_table WHERE true LIMIT '10'::bigint
+NOTICE:  executing the command locally: SELECT a, b FROM single_node.another_schema_table_90630516 another_schema_table WHERE true LIMIT '10'::bigint
+NOTICE:  executing the command locally: SELECT a, b FROM single_node.another_schema_table_90630517 another_schema_table WHERE true LIMIT '10'::bigint
+NOTICE:  executing the command locally: SELECT a, b FROM single_node.another_schema_table_90630518 another_schema_table WHERE true LIMIT '10'::bigint
 NOTICE:  executing the command locally: SELECT count(*) AS count FROM (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) cte_1
  count
 ---------------------------------------------------------------------
@@ -1888,7 +1924,7 @@ NOTICE:  executing the command locally: SELECT count(*) AS count FROM (SELECT in
 
 	WITH cte_1 as (SELECT * FROM another_schema_table WHERE a = 1 LIMIT 10)
 		SELECT count(*) FROM cte_1;
-NOTICE:  executing the command locally: SELECT count(*) AS count FROM (SELECT another_schema_table.a, another_schema_table.b FROM single_node.another_schema_table_90630511 another_schema_table WHERE (another_schema_table.a OPERATOR(pg_catalog.=) 1) LIMIT 10) cte_1
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM (SELECT another_schema_table.a, another_schema_table.b FROM single_node.another_schema_table_90630515 another_schema_table WHERE (another_schema_table.a OPERATOR(pg_catalog.=) 1) LIMIT 10) cte_1
  count
 ---------------------------------------------------------------------
      1
@@ -1905,10 +1941,10 @@ ROLLBACK;
 WITH cte_1 AS (SELECT count(*) as cnt FROM another_schema_table LIMIT 1000),
 	 cte_2 AS (SELECT coordinated_transaction_should_use_2PC() as enabled_2pc)
 SELECT cnt, enabled_2pc FROM cte_1, cte_2;
-NOTICE:  executing the command locally: SELECT count(*) AS cnt FROM single_node.another_schema_table_90630511 another_schema_table WHERE true LIMIT '1000'::bigint
-NOTICE:  executing the command locally: SELECT count(*) AS cnt FROM single_node.another_schema_table_90630512 another_schema_table WHERE true LIMIT '1000'::bigint
-NOTICE:  executing the command locally: SELECT count(*) AS cnt FROM single_node.another_schema_table_90630513 another_schema_table WHERE true LIMIT '1000'::bigint
-NOTICE:  executing the command locally: SELECT count(*) AS cnt FROM single_node.another_schema_table_90630514 another_schema_table WHERE true LIMIT '1000'::bigint
+NOTICE:  executing the command locally: SELECT count(*) AS cnt FROM single_node.another_schema_table_90630515 another_schema_table WHERE true LIMIT '1000'::bigint
+NOTICE:  executing the command locally: SELECT count(*) AS cnt FROM single_node.another_schema_table_90630516 another_schema_table WHERE true LIMIT '1000'::bigint
+NOTICE:  executing the command locally: SELECT count(*) AS cnt FROM single_node.another_schema_table_90630517 another_schema_table WHERE true LIMIT '1000'::bigint
+NOTICE:  executing the command locally: SELECT count(*) AS cnt FROM single_node.another_schema_table_90630518 another_schema_table WHERE true LIMIT '1000'::bigint
 NOTICE:  executing the command locally: SELECT cte_1.cnt, cte_2.enabled_2pc FROM (SELECT intermediate_result.cnt FROM read_intermediate_result('XXX_2'::text, 'binary'::citus_copy_format) intermediate_result(cnt bigint)) cte_1, (SELECT intermediate_result.enabled_2pc FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(enabled_2pc boolean)) cte_2
   cnt  | enabled_2pc
 ---------------------------------------------------------------------
@@ -1919,10 +1955,10 @@ NOTICE:  executing the command locally: SELECT cte_1.cnt, cte_2.enabled_2pc FROM
 -- execution starts a 2PC
 BEGIN;
 	UPDATE another_schema_table SET b = b + 1;
-NOTICE:  executing the command locally: UPDATE single_node.another_schema_table_90630511 another_schema_table SET b = (b OPERATOR(pg_catalog.+) 1)
-NOTICE:  executing the command locally: UPDATE single_node.another_schema_table_90630512 another_schema_table SET b = (b OPERATOR(pg_catalog.+) 1)
-NOTICE:  executing the command locally: UPDATE single_node.another_schema_table_90630513 another_schema_table SET b = (b OPERATOR(pg_catalog.+) 1)
-NOTICE:  executing the command locally: UPDATE single_node.another_schema_table_90630514 another_schema_table SET b = (b OPERATOR(pg_catalog.+) 1)
+NOTICE:  executing the command locally: UPDATE single_node.another_schema_table_90630515 another_schema_table SET b = (b OPERATOR(pg_catalog.+) 1)
+NOTICE:  executing the command locally: UPDATE single_node.another_schema_table_90630516 another_schema_table SET b = (b OPERATOR(pg_catalog.+) 1)
+NOTICE:  executing the command locally: UPDATE single_node.another_schema_table_90630517 another_schema_table SET b = (b OPERATOR(pg_catalog.+) 1)
+NOTICE:  executing the command locally: UPDATE single_node.another_schema_table_90630518 another_schema_table SET b = (b OPERATOR(pg_catalog.+) 1)
 	SELECT coordinated_transaction_should_use_2PC();
  coordinated_transaction_should_use_2pc
 ---------------------------------------------------------------------
@@ -1935,10 +1971,10 @@ ROLLBACK;
 BEGIN;
 	WITH cte_1 AS (UPDATE another_schema_table SET b = b + 1 RETURNING *)
 		SELECT count(*) FROM cte_1;
-NOTICE:  executing the command locally: UPDATE single_node.another_schema_table_90630511 another_schema_table SET b = (b OPERATOR(pg_catalog.+) 1) RETURNING a, b
-NOTICE:  executing the command locally: UPDATE single_node.another_schema_table_90630512 another_schema_table SET b = (b OPERATOR(pg_catalog.+) 1) RETURNING a, b
-NOTICE:  executing the command locally: UPDATE single_node.another_schema_table_90630513 another_schema_table SET b = (b OPERATOR(pg_catalog.+) 1) RETURNING a, b
-NOTICE:  executing the command locally: UPDATE single_node.another_schema_table_90630514 another_schema_table SET b = (b OPERATOR(pg_catalog.+) 1) RETURNING a, b
+NOTICE:  executing the command locally: UPDATE single_node.another_schema_table_90630515 another_schema_table SET b = (b OPERATOR(pg_catalog.+) 1) RETURNING a, b
+NOTICE:  executing the command locally: UPDATE single_node.another_schema_table_90630516 another_schema_table SET b = (b OPERATOR(pg_catalog.+) 1) RETURNING a, b
+NOTICE:  executing the command locally: UPDATE single_node.another_schema_table_90630517 another_schema_table SET b = (b OPERATOR(pg_catalog.+) 1) RETURNING a, b
+NOTICE:  executing the command locally: UPDATE single_node.another_schema_table_90630518 another_schema_table SET b = (b OPERATOR(pg_catalog.+) 1) RETURNING a, b
 NOTICE:  executing the command locally: SELECT count(*) AS count FROM (SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) cte_1
  count
 ---------------------------------------------------------------------
@@ -1955,10 +1991,10 @@ ROLLBACK;
 -- same without transaction block
 WITH cte_1 AS (UPDATE another_schema_table SET b = b + 1 RETURNING *)
 SELECT coordinated_transaction_should_use_2PC();
-NOTICE:  executing the command locally: UPDATE single_node.another_schema_table_90630511 another_schema_table SET b = (b OPERATOR(pg_catalog.+) 1) RETURNING a, b
-NOTICE:  executing the command locally: UPDATE single_node.another_schema_table_90630512 another_schema_table SET b = (b OPERATOR(pg_catalog.+) 1) RETURNING a, b
-NOTICE:  executing the command locally: UPDATE single_node.another_schema_table_90630513 another_schema_table SET b = (b OPERATOR(pg_catalog.+) 1) RETURNING a, b
-NOTICE:  executing the command locally: UPDATE single_node.another_schema_table_90630514 another_schema_table SET b = (b OPERATOR(pg_catalog.+) 1) RETURNING a, b
+NOTICE:  executing the command locally: UPDATE single_node.another_schema_table_90630515 another_schema_table SET b = (b OPERATOR(pg_catalog.+) 1) RETURNING a, b
+NOTICE:  executing the command locally: UPDATE single_node.another_schema_table_90630516 another_schema_table SET b = (b OPERATOR(pg_catalog.+) 1) RETURNING a, b
+NOTICE:  executing the command locally: UPDATE single_node.another_schema_table_90630517 another_schema_table SET b = (b OPERATOR(pg_catalog.+) 1) RETURNING a, b
+NOTICE:  executing the command locally: UPDATE single_node.another_schema_table_90630518 another_schema_table SET b = (b OPERATOR(pg_catalog.+) 1) RETURNING a, b
 NOTICE:  executing the command locally: SELECT single_node.coordinated_transaction_should_use_2pc() AS coordinated_transaction_should_use_2pc
  coordinated_transaction_should_use_2pc
 ---------------------------------------------------------------------
@@ -1969,7 +2005,7 @@ NOTICE:  executing the command locally: SELECT single_node.coordinated_transacti
 -- starts 2PC execution
 BEGIN;
 	UPDATE another_schema_table SET b = b + 1 WHERE a = 1;
-NOTICE:  executing the command locally: UPDATE single_node.another_schema_table_90630511 another_schema_table SET b = (b OPERATOR(pg_catalog.+) 1) WHERE (a OPERATOR(pg_catalog.=) 1)
+NOTICE:  executing the command locally: UPDATE single_node.another_schema_table_90630515 another_schema_table SET b = (b OPERATOR(pg_catalog.+) 1) WHERE (a OPERATOR(pg_catalog.=) 1)
 	SELECT coordinated_transaction_should_use_2PC();
  coordinated_transaction_should_use_2pc
 ---------------------------------------------------------------------
@@ -1980,7 +2016,7 @@ ROLLBACK;
 -- same without transaction block
 WITH cte_1 AS (UPDATE another_schema_table SET b = b + 1 WHERE a = 1 RETURNING *)
 SELECT coordinated_transaction_should_use_2PC() FROM cte_1;
-NOTICE:  executing the command locally: WITH cte_1 AS (UPDATE single_node.another_schema_table_90630511 another_schema_table SET b = (another_schema_table.b OPERATOR(pg_catalog.+) 1) WHERE (another_schema_table.a OPERATOR(pg_catalog.=) 1) RETURNING another_schema_table.a, another_schema_table.b) SELECT single_node.coordinated_transaction_should_use_2pc() AS coordinated_transaction_should_use_2pc FROM cte_1
+NOTICE:  executing the command locally: WITH cte_1 AS (UPDATE single_node.another_schema_table_90630515 another_schema_table SET b = (another_schema_table.b OPERATOR(pg_catalog.+) 1) WHERE (another_schema_table.a OPERATOR(pg_catalog.=) 1) RETURNING another_schema_table.a, another_schema_table.b) SELECT single_node.coordinated_transaction_should_use_2pc() AS coordinated_transaction_should_use_2pc FROM cte_1
  coordinated_transaction_should_use_2pc
 ---------------------------------------------------------------------
  t
