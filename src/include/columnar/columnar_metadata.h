@@ -28,5 +28,6 @@ typedef struct StripeMetadata
 } StripeMetadata;
 
 extern List * StripesForRelfilenode(RelFileNode relfilenode);
+extern void ColumnarStorageUpdateIfNeeded(Relation rel, bool isUpgrade);
 
 #endif /* COLUMNAR_METADATA_H */

@@ -51,6 +51,7 @@
 
 #include "columnar/columnar.h"
 #include "columnar/columnar_customscan.h"
+#include "columnar/columnar_storage.h"
 #include "columnar/columnar_tableam.h"
 #include "columnar/columnar_version_compat.h"
 #include "distributed/commands.h"
@@ -516,17 +517,24 @@ columnar_relation_set_new_filenode(Relation rel,
 						errmsg("unlogged columnar tables are not supported")));
 	}
 
-	Oid oldRelfilenode = rel->rd_node.relNode;
+	/*
+	 * If existing and new relfilenode are different, that means the existing
+	 * storage was dropped and we also need to clean up the metadata and
+	 * state. If they are equal, this is a new relation object and we don't
+	 * need to clean anything.
+	 */
+	if (rel->rd_node.relNode != newrnode->relNode)
+	{
+		MarkRelfilenodeDropped(rel->rd_node.relNode, GetCurrentSubTransactionId());
 
-	MarkRelfilenodeDropped(oldRelfilenode, GetCurrentSubTransactionId());
-
-	/* delete old relfilenode metadata */
-	DeleteMetadataRows(rel->rd_node);
+		DeleteMetadataRows(rel->rd_node);
+	}
 
 	*freezeXid = RecentXmin;
 	*minmulti = GetOldestMultiXactId();
 	SMgrRelation srel = RelationCreateStorage(*newrnode, persistence);
 
+	ColumnarStorageInit(srel, ColumnarMetadataNewStorageId());
 	InitColumnarOptions(rel->rd_id);
 
 	smgrclose(srel);
@@ -554,7 +562,9 @@ columnar_relation_nontransactional_truncate(Relation rel)
 	 */
 	RelationTruncate(rel, 0);
 
-	/* we will lazily initialize new metadata in first stripe reservation */
+	uint64 storageId = ColumnarMetadataNewStorageId();
+	RelationOpenSmgr(rel);
+	ColumnarStorageInit(rel->rd_smgr, storageId);
 }
 
 
@@ -840,34 +850,25 @@ TruncateColumnar(Relation rel, int elevel)
 		return;
 	}
 
-	RelationOpenSmgr(rel);
-	BlockNumber old_rel_pages = smgrnblocks(rel->rd_smgr, MAIN_FORKNUM);
-	RelationCloseSmgr(rel);
-
 	/*
 	 * Due to the AccessExclusive lock there's no danger that
 	 * new stripes be added beyond highestPhysicalAddress while
 	 * we're truncating.
 	 */
-	SmgrAddr highestPhysicalAddress =
-		logical_to_smgr(GetHighestUsedAddress(rel->rd_node));
+	uint64 newDataReservation = Max(GetHighestUsedAddress(rel->rd_node) + 1,
+									ColumnarFirstLogicalOffset);
 
-	/*
-	 * Unlock and return if truncation won't reduce data file's size.
-	 */
-	BlockNumber new_rel_pages = Min(old_rel_pages,
-									highestPhysicalAddress.blockno + 1);
-	if (new_rel_pages == old_rel_pages)
+	RelationOpenSmgr(rel);
+	BlockNumber old_rel_pages = smgrnblocks(rel->rd_smgr, MAIN_FORKNUM);
+
+	if (!ColumnarStorageTruncate(rel, newDataReservation))
 	{
 		UnlockRelation(rel, AccessExclusiveLock);
 		return;
 	}
 
-	/*
-	 * Truncate the storage. Note that RelationTruncate() takes care of
-	 * Write Ahead Logging.
-	 */
-	RelationTruncate(rel, new_rel_pages);
+	RelationOpenSmgr(rel);
+	BlockNumber new_rel_pages = smgrnblocks(rel->rd_smgr, MAIN_FORKNUM);
 
 	/*
 	 * We can release the exclusive lock as soon as we have truncated.
@@ -1820,5 +1821,77 @@ alter_columnar_table_reset(PG_FUNCTION_ARGS)
 
 	table_close(rel, NoLock);
 
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * upgrade_columnar_storage - upgrade columnar storage to the current
+ * version.
+ *
+ * DDL:
+ *   CREATE OR REPLACE FUNCTION upgrade_columnar_storage(rel regclass)
+ *     RETURNS VOID
+ *     STRICT
+ *     LANGUAGE c AS 'MODULE_PATHNAME', 'upgrade_columnar_storage';
+ */
+PG_FUNCTION_INFO_V1(upgrade_columnar_storage);
+Datum
+upgrade_columnar_storage(PG_FUNCTION_ARGS)
+{
+	Oid relid = PG_GETARG_OID(0);
+
+	/*
+	 * ACCESS EXCLUSIVE LOCK is not required by the low-level routines, so we
+	 * can take only an ACCESS SHARE LOCK. But all access to non-current
+	 * columnar tables will fail anyway, so it's better to take ACCESS
+	 * EXLUSIVE LOCK now.
+	 */
+	Relation rel = table_open(relid, AccessExclusiveLock);
+	if (!IsColumnarTableAmTable(relid))
+	{
+		ereport(ERROR, (errmsg("table %s is not a columnar table",
+							   quote_identifier(RelationGetRelationName(rel)))));
+	}
+
+	ColumnarStorageUpdateIfNeeded(rel, true);
+
+	table_close(rel, AccessExclusiveLock);
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * downgrade_columnar_storage - downgrade columnar storage to the
+ * current version.
+ *
+ * DDL:
+ *   CREATE OR REPLACE FUNCTION downgrade_columnar_storage(rel regclass)
+ *     RETURNS VOID
+ *     STRICT
+ *     LANGUAGE c AS 'MODULE_PATHNAME', 'downgrade_columnar_storage';
+ */
+PG_FUNCTION_INFO_V1(downgrade_columnar_storage);
+Datum
+downgrade_columnar_storage(PG_FUNCTION_ARGS)
+{
+	Oid relid = PG_GETARG_OID(0);
+
+	/*
+	 * ACCESS EXCLUSIVE LOCK is not required by the low-level routines, so we
+	 * can take only an ACCESS SHARE LOCK. But all access to non-current
+	 * columnar tables will fail anyway, so it's better to take ACCESS
+	 * EXLUSIVE LOCK now.
+	 */
+	Relation rel = table_open(relid, AccessExclusiveLock);
+	if (!IsColumnarTableAmTable(relid))
+	{
+		ereport(ERROR, (errmsg("table %s is not a columnar table",
+							   quote_identifier(RelationGetRelationName(rel)))));
+	}
+
+	ColumnarStorageUpdateIfNeeded(rel, false);
+
+	table_close(rel, AccessExclusiveLock);
 	PG_RETURN_VOID();
 }

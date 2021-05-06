@@ -22,6 +22,10 @@ select count(*) from test_insert_command_data;
 insert into test_insert_command select * from test_insert_command_data;
 select count(*) from test_insert_command;
 
+select
+  version_major, version_minor, reserved_stripe_id, reserved_row_number, reserved_offset
+  from columnar_test_helpers.columnar_storage_info('test_insert_command');
+
 SELECT * FROM columnar_test_helpers.chunk_group_consistency;
 
 drop table test_insert_command_data;
@@ -99,6 +103,10 @@ SELECT
   pg_column_size(external), pg_column_size(extended)
 FROM test_toast_columnar;
 
+select
+  version_major, version_minor, reserved_stripe_id, reserved_row_number, reserved_offset
+  from columnar_test_helpers.columnar_storage_info('test_toast_columnar');
+
 SELECT * FROM columnar_test_helpers.chunk_group_consistency;
 
 DROP TABLE test_toast_row;
@@ -127,6 +135,10 @@ INSERT INTO zero_col_heap SELECT * FROM zero_col_heap;
 INSERT INTO zero_col_heap SELECT * FROM zero_col_heap;
 
 INSERT INTO zero_col SELECT * FROM zero_col_heap;
+
+select
+  version_major, version_minor, reserved_stripe_id, reserved_row_number, reserved_offset
+  from columnar_test_helpers.columnar_storage_info('zero_col');
 
 SELECT relname, stripe_num, chunk_group_count, row_count FROM columnar.stripe a, pg_class b
 WHERE columnar_test_helpers.columnar_relation_storageid(b.oid)=a.storage_id AND relname = 'zero_col'
