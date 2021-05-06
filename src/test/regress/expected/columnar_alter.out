@@ -12,6 +12,14 @@ WITH sample_data AS (VALUES
 INSERT INTO test_alter_table SELECT * FROM sample_data;
 -- drop a column
 ALTER TABLE test_alter_table DROP COLUMN a;
+select
+  version_major, version_minor, reserved_stripe_id, reserved_row_number, reserved_offset
+  from columnar_test_helpers.columnar_storage_info('test_alter_table');
+ version_major | version_minor | reserved_stripe_id | reserved_row_number | reserved_offset
+---------------------------------------------------------------------
+             2 |             0 |                  2 |                   1 |           16402
+(1 row)
+
 -- test analyze
 ANALYZE test_alter_table;
 -- verify select queries run as expected
@@ -59,6 +67,14 @@ SELECT * FROM test_alter_table;
  3 | 5 | 8
 (5 rows)
 
+select
+  version_major, version_minor, reserved_stripe_id, reserved_row_number, reserved_offset
+  from columnar_test_helpers.columnar_storage_info('test_alter_table');
+ version_major | version_minor | reserved_stripe_id | reserved_row_number | reserved_offset
+---------------------------------------------------------------------
+             2 |             0 |                  4 |                   1 |           32724
+(1 row)
+
 -- add a fixed-length column with default value
 ALTER TABLE test_alter_table ADD COLUMN e int default 3;
 SELECT * from test_alter_table;
@@ -82,6 +98,14 @@ SELECT * from test_alter_table;
  3 | 5 | 8 | 3
  1 | 2 | 4 | 8
 (6 rows)
+
+select
+  version_major, version_minor, reserved_stripe_id, reserved_row_number, reserved_offset
+  from columnar_test_helpers.columnar_storage_info('test_alter_table');
+ version_major | version_minor | reserved_stripe_id | reserved_row_number | reserved_offset
+---------------------------------------------------------------------
+             2 |             0 |                  5 |                   1 |           40906
+(1 row)
 
 -- add a variable-length column with default value
 ALTER TABLE test_alter_table ADD COLUMN f text DEFAULT 'TEXT ME';

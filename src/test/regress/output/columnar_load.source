@@ -14,13 +14,27 @@ DETAIL:  command not found
 COPY contestant FROM '@abs_srcdir@/data/contestants.1.csv' WITH CSV;
 -- COPY into uncompressed table from program
 COPY contestant FROM PROGRAM 'cat @abs_srcdir@/data/contestants.2.csv' WITH CSV;
+select
+  version_major, version_minor, reserved_stripe_id, reserved_row_number, reserved_offset
+  from columnar_test_helpers.columnar_storage_info('contestant');
+ version_major | version_minor | reserved_stripe_id | reserved_row_number | reserved_offset
+---------------------------------------------------------------------
+             2 |             0 |                  3 |                   1 |           24742
+(1 row)
+
 -- COPY into compressed table
-set columnar.compression = 'pglz';
 COPY contestant_compressed FROM '@abs_srcdir@/data/contestants.1.csv' WITH CSV;
 -- COPY into uncompressed table from program
 COPY contestant_compressed FROM PROGRAM 'cat @abs_srcdir@/data/contestants.2.csv'
 	WITH CSV;
-set columnar.compression to default;
+select
+  version_major, version_minor, reserved_stripe_id, reserved_row_number, reserved_offset
+  from columnar_test_helpers.columnar_storage_info('contestant_compressed');
+ version_major | version_minor | reserved_stripe_id | reserved_row_number | reserved_offset
+---------------------------------------------------------------------
+             2 |             0 |                  3 |                   1 |           24704
+(1 row)
+
 -- Test column list
 CREATE TABLE famous_constants (id int, name text, value real)
     USING columnar;
