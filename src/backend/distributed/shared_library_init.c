@@ -60,6 +60,7 @@
 #include "distributed/recursive_planning.h"
 #include "distributed/reference_table_utils.h"
 #include "distributed/relation_access_tracking.h"
+#include "distributed/repair_shards.h"
 #include "distributed/run_from_same_connection.h"
 #include "distributed/shard_cleaner.h"
 #include "distributed/shared_connection_stats.h"
@@ -935,7 +936,32 @@ RegisterCitusConfigVariables(void)
 		&ExplainAnalyzeSortMethod,
 		EXPLAIN_ANALYZE_SORT_BY_TIME, explain_analyze_sort_method_options,
 		PGC_USERSET,
+		0,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		"citus.check_available_space_before_move",
+		gettext_noop("When enabled will check free disk space before a shard move"),
+		gettext_noop(
+			"Free disk space will be checked when this setting is enabled before each shard move."),
+		&CheckAvailableSpaceBeforeMove,
+		true,
+		PGC_USERSET,
 		GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
+	DefineCustomRealVariable(
+		"citus.desired_percent_disk_available_after_move",
+		gettext_noop(
+			"Sets how many percentage of free disk space should be after a shard move"),
+		gettext_noop(
+			"This setting controls how much free space should be available after a shard move."
+			"If the free disk space will be lower than this parameter, then shard move will result in"
+			"an error."),
+		&DesiredPercentFreeAfterMove,
+		10.0, 0.0, 100.0,
+		PGC_SIGHUP,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(

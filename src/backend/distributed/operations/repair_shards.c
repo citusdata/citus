@@ -15,6 +15,7 @@
 #include "miscadmin.h"
 
 #include <string.h>
+#include <sys/statvfs.h>
 
 #include "access/htup_details.h"
 #include "catalog/pg_class.h"
@@ -27,11 +28,13 @@
 #include "distributed/listutils.h"
 #include "distributed/shard_cleaner.h"
 #include "distributed/coordinator_protocol.h"
+#include "distributed/repair_shards.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/multi_join_order.h"
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/reference_table_utils.h"
+#include "distributed/remote_commands.h"
 #include "distributed/resource_lock.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_protocol.h"
@@ -83,6 +86,12 @@ static void UpdateColocatedShardPlacementMetadataOnWorkers(int64 shardId,
 														   int32 sourceNodePort,
 														   char *targetNodeName,
 														   int32 targetNodePort);
+static void CheckSpaceConstraints(MultiConnection *connection,
+								  uint64 colocationSizeInBytes);
+static void EnsureEnoughDiskSpaceForShardMove(List *colocatedShardList,
+											  char *sourceNodeName, uint32 sourceNodePort,
+											  char *targetNodeName, uint32
+											  targetNodePort);
 
 /* declarations for dynamic loading */
 PG_FUNCTION_INFO_V1(citus_copy_shard_placement);
@@ -90,8 +99,10 @@ PG_FUNCTION_INFO_V1(master_copy_shard_placement);
 PG_FUNCTION_INFO_V1(citus_move_shard_placement);
 PG_FUNCTION_INFO_V1(master_move_shard_placement);
 
-
 bool DeferShardDeleteOnMove = false;
+
+double DesiredPercentFreeAfterMove = 10;
+bool CheckAvailableSpaceBeforeMove = true;
 
 
 /*
@@ -155,6 +166,98 @@ Datum
 master_copy_shard_placement(PG_FUNCTION_ARGS)
 {
 	return citus_copy_shard_placement(fcinfo);
+}
+
+
+/*
+ * ShardListSizeInBytes returns the size in bytes of a set of shard tables.
+ */
+uint64
+ShardListSizeInBytes(List *shardList, char *workerNodeName, uint32
+					 workerNodePort)
+{
+	uint32 connectionFlag = 0;
+
+	/* we skip child tables of a partitioned table if this boolean variable is true */
+	bool optimizePartitionCalculations = true;
+	StringInfo tableSizeQuery = GenerateSizeQueryOnMultiplePlacements(shardList,
+																	  TOTAL_RELATION_SIZE,
+																	  optimizePartitionCalculations);
+
+	MultiConnection *connection = GetNodeConnection(connectionFlag, workerNodeName,
+													workerNodePort);
+	PGresult *result = NULL;
+	int queryResult = ExecuteOptionalRemoteCommand(connection, tableSizeQuery->data,
+												   &result);
+
+	if (queryResult != RESPONSE_OKAY)
+	{
+		ereport(ERROR, (errcode(ERRCODE_CONNECTION_FAILURE),
+						errmsg("cannot get the size because of a connection error")));
+	}
+
+	List *sizeList = ReadFirstColumnAsText(result);
+	if (list_length(sizeList) != 1)
+	{
+		ereport(ERROR, (errmsg(
+							"received wrong number of rows from worker, expected 1 received %d",
+							list_length(sizeList))));
+	}
+
+	StringInfo totalSizeStringInfo = (StringInfo) linitial(sizeList);
+	char *totalSizeString = totalSizeStringInfo->data;
+	uint64 totalSize = SafeStringToUint64(totalSizeString);
+
+	PQclear(result);
+	ForgetResults(connection);
+
+	return totalSize;
+}
+
+
+/*
+ * CheckSpaceConstraints checks there is enough space to place the colocation
+ * on the node that the connection is connected to.
+ */
+static void
+CheckSpaceConstraints(MultiConnection *connection, uint64 colocationSizeInBytes)
+{
+	uint64 diskAvailableInBytes = 0;
+	uint64 diskSizeInBytes = 0;
+	bool success =
+		GetNodeDiskSpaceStatsForConnection(connection, &diskAvailableInBytes,
+										   &diskSizeInBytes);
+	if (!success)
+	{
+		ereport(ERROR, (errmsg("Could not fetch disk stats for node: %s-%d",
+							   connection->hostname, connection->port)));
+	}
+
+	uint64 diskAvailableInBytesAfterShardMove = 0;
+	if (diskAvailableInBytes < colocationSizeInBytes)
+	{
+		/*
+		 * even though the space will be less than "0", we set it to 0 for convenience.
+		 */
+		diskAvailableInBytes = 0;
+	}
+	else
+	{
+		diskAvailableInBytesAfterShardMove = diskAvailableInBytes - colocationSizeInBytes;
+	}
+	uint64 desiredNewDiskAvailableInBytes = diskSizeInBytes *
+											(DesiredPercentFreeAfterMove / 100);
+	if (diskAvailableInBytesAfterShardMove < desiredNewDiskAvailableInBytes)
+	{
+		ereport(ERROR, (errmsg("not enough empty space on node if the shard is moved, "
+							   "actual available space after move will be %ld bytes, "
+							   "desired available space after move is %ld bytes,"
+							   "estimated size increase on node after move is %ld bytes.",
+							   diskAvailableInBytesAfterShardMove,
+							   desiredNewDiskAvailableInBytes, colocationSizeInBytes),
+						errhint(
+							"consider lowering citus.desired_percent_disk_available_after_move.")));
+	}
 }
 
 
@@ -247,6 +350,9 @@ citus_move_shard_placement(PG_FUNCTION_ARGS)
 							   "unsupported")));
 	}
 
+	EnsureEnoughDiskSpaceForShardMove(colocatedShardList, sourceNodeName, sourceNodePort,
+									  targetNodeName, targetNodePort);
+
 	BlockWritesToShardList(colocatedShardList);
 
 	/*
@@ -287,7 +393,32 @@ citus_move_shard_placement(PG_FUNCTION_ARGS)
 
 
 /*
- * master_move_shard_placement is a wrapper function for old UDF name.
+ * EnsureEnoughDiskSpaceForShardMove checks that there is enough space for
+ * shard moves of the given colocated shard list from source node to target node.
+ * It tries to clean up old shard placements to ensure there is enough space.
+ */
+static void
+EnsureEnoughDiskSpaceForShardMove(List *colocatedShardList,
+								  char *sourceNodeName, uint32 sourceNodePort,
+								  char *targetNodeName, uint32 targetNodePort)
+{
+	if (!CheckAvailableSpaceBeforeMove)
+	{
+		return;
+	}
+	uint64 colocationSizeInBytes = ShardListSizeInBytes(colocatedShardList,
+														sourceNodeName,
+														sourceNodePort);
+
+	uint32 connectionFlag = 0;
+	MultiConnection *connection = GetNodeConnection(connectionFlag, targetNodeName,
+													targetNodePort);
+	CheckSpaceConstraints(connection, colocationSizeInBytes);
+}
+
+
+/*
+ * master_move_shard_placement is a wrapper around citus_move_shard_placement.
  */
 Datum
 master_move_shard_placement(PG_FUNCTION_ARGS)

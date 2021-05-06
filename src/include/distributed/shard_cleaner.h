@@ -14,7 +14,10 @@
 /* GUC to configure deferred shard deletion */
 extern int DeferShardDeleteInterval;
 extern bool DeferShardDeleteOnMove;
+extern double DesiredPercentFreeAfterMove;
+extern bool CheckAvailableSpaceBeforeMove;
 
 extern int TryDropMarkedShards(bool waitForCleanupLock);
+extern int DropMarkedShards(bool waitForCleanupLock);
 
 #endif /*CITUS_SHARD_CLEANER_H */

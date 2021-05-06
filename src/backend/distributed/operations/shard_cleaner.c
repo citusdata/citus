@@ -23,8 +23,6 @@
 /* declarations for dynamic loading */
 PG_FUNCTION_INFO_V1(master_defer_delete_shards);
 
-
-static int DropMarkedShards(bool waitForCleanupLock);
 static bool TryDropShard(GroupShardPlacement *placement);
 
 /*
@@ -55,13 +53,15 @@ master_defer_delete_shards(PG_FUNCTION_ARGS)
 /*
  * TryDropMarkedShards is a wrapper around DropMarkedShards that catches
  * any errors to make it safe to use in the maintenance daemon.
+ *
+ * If dropping any of the shards failed this function returns -1, otherwise it
+ * returns the number of dropped shards.
  */
 int
 TryDropMarkedShards(bool waitForCleanupLock)
 {
 	int droppedShardCount = 0;
 	MemoryContext savedContext = CurrentMemoryContext;
-
 	PG_TRY();
 	{
 		droppedShardCount = DropMarkedShards(waitForCleanupLock);
@@ -95,9 +95,10 @@ TryDropMarkedShards(bool waitForCleanupLock)
  * This is to ensure that this function is not being run concurrently.
  * Otherwise really bad race conditions are possible, such as removing all
  * placements of a shard. waitForCleanupLock indicates if this function should
- * wait for this lock or returns with a warning.
+ * wait for this lock or error out.
+ *
  */
-static int
+int
 DropMarkedShards(bool waitForCleanupLock)
 {
 	int removedShardCount = 0;
@@ -105,7 +106,7 @@ DropMarkedShards(bool waitForCleanupLock)
 
 	if (!IsCoordinator())
 	{
-		return removedShardCount;
+		return 0;
 	}
 
 	if (waitForCleanupLock)
