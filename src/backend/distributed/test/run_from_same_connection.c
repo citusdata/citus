@@ -17,9 +17,10 @@
 
 #include "access/xact.h"
 #include "distributed/connection_management.h"
-#include "distributed/function_utils.h"
-#include "distributed/lock_graph.h"
 #include "distributed/coordinator_protocol.h"
+#include "distributed/function_utils.h"
+#include "distributed/intermediate_result_pruning.h"
+#include "distributed/lock_graph.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/remote_commands.h"
 #include "distributed/run_from_same_connection.h"
@@ -134,7 +135,7 @@ run_commands_on_session_level_connection_to_node(PG_FUNCTION_ARGS)
 
 	StringInfo processStringInfo = makeStringInfo();
 	StringInfo workerProcessStringInfo = makeStringInfo();
-	MultiConnection *localConnection = GetNodeConnection(0, LocalHostName,
+	MultiConnection *localConnection = GetNodeConnection(0, LOCAL_HOST_NAME,
 														 PostPortNumber);
 
 	if (!singleConnection)
