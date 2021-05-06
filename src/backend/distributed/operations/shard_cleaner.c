@@ -60,8 +60,8 @@ master_defer_delete_shards(PG_FUNCTION_ARGS)
 int
 TryDropMarkedShards(bool waitForCleanupLock)
 {
-	MemoryContext savedContext = CurrentMemoryContext;
 	int droppedShardCount = 0;
+	MemoryContext savedContext = CurrentMemoryContext;
 	PG_TRY();
 	{
 		droppedShardCount = DropMarkedShards(waitForCleanupLock);
@@ -75,7 +75,6 @@ TryDropMarkedShards(bool waitForCleanupLock)
 		/* rethrow as WARNING */
 		edata->elevel = WARNING;
 		ThrowErrorData(edata);
-		return -1;
 	}
 	PG_END_TRY();
 

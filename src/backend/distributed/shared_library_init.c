@@ -960,7 +960,7 @@ RegisterCitusConfigVariables(void)
 			"an error."),
 		&DesiredPercentFreeAfterMove,
 		10.0, 0.0, 100.0,
-		PGC_USERSET,
+		PGC_SIGHUP,
 		GUC_STANDARD,
 		NULL, NULL, NULL);
 

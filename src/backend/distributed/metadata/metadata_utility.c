@@ -67,6 +67,7 @@
 #include "utils/rel.h"
 #include "utils/syscache.h"
 
+#define DISK_SPACE_FIELDS 2
 
 /* Local functions forward declarations */
 static uint64 * AllocateUint64(uint64 value);
@@ -119,8 +120,8 @@ PG_FUNCTION_INFO_V1(citus_shard_sizes);
 static HeapTuple
 CreateDiskSpaceTuple(TupleDesc tupleDescriptor, uint64 availableBytes, uint64 totalBytes)
 {
-	Datum values[TABLE_METADATA_FIELDS];
-	bool isNulls[TABLE_METADATA_FIELDS];
+	Datum values[DISK_SPACE_FIELDS];
+	bool isNulls[DISK_SPACE_FIELDS];
 
 	/* form heap tuple for remote disk space statistics */
 	memset(values, 0, sizeof(values));
@@ -206,15 +207,14 @@ GetNodeDiskSpaceStatsForConnection(MultiConnection *connection, uint64 *availabl
 
 
 	int queryResult = ExecuteOptionalRemoteCommand(connection, sizeQuery, &result);
-	if (queryResult != 0 || !IsResponseOK(result) || PQntuples(result) != 1)
+	if (queryResult != RESPONSE_OKAY || !IsResponseOK(result) || PQntuples(result) != 1)
 	{
 		ereport(WARNING, (errcode(ERRCODE_CONNECTION_FAILURE),
 						  errmsg("cannot get the disk space statistics for node %s:%d",
 								 connection->hostname, connection->port)));
 
 		PQclear(result);
-		bool raiseErrors = true;
-		ClearResults(connection, raiseErrors);
+		ForgetResults(connection);
 
 		return false;
 	}
@@ -226,8 +226,7 @@ GetNodeDiskSpaceStatsForConnection(MultiConnection *connection, uint64 *availabl
 	*totalBytes = SafeStringToUint64(totalBytesString);
 
 	PQclear(result);
-	bool raiseErrors = true;
-	ClearResults(connection, raiseErrors);
+	ForgetResults(connection);
 
 	return true;
 }

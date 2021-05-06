@@ -451,7 +451,7 @@ citus_shard_cost_by_disk_size(PG_FUNCTION_ARGS)
 													   ALLOCSET_DEFAULT_SIZES);
 	MemoryContext oldContext = MemoryContextSwitchTo(localContext);
 	ShardInterval *shardInterval = LoadShardInterval(shardId);
-	List *colocatedShardList = ColocatedShardIntervalList(shardInterval);
+	List *colocatedShardList = ColocatedNonPartitionShardIntervalList(shardInterval);
 
 	uint64 colocationSizeInBytes = ShardListSizeInBytes(colocatedShardList,
 														shardPlacement->nodeName,
