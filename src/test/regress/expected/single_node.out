@@ -83,6 +83,12 @@ SELECT pg_reload_conf();
  t
 (1 row)
 
+SELECT pg_sleep(1); -- wait to make sure the config has changed before running the GUC
+ pg_sleep
+---------------------------------------------------------------------
+
+(1 row)
+
 CREATE TABLE test(x int, y int);
 SELECT create_distributed_table('test','x');
  create_distributed_table
@@ -109,6 +115,12 @@ SELECT pg_reload_conf();
  pg_reload_conf
 ---------------------------------------------------------------------
  t
+(1 row)
+
+SELECT pg_sleep(1); -- wait to make sure the config has changed before running the GUC
+ pg_sleep
+---------------------------------------------------------------------
+
 (1 row)
 
 CREATE TABLE test(x int, y int);
