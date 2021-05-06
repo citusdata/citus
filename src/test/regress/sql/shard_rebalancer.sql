@@ -58,6 +58,18 @@ SET citus.shard_replication_factor TO 1;
 SET citus.replication_model TO "statement";
 SELECT create_distributed_table('dist_table_test_2', 'a');
 
+-- replicate_table_shards should fail when the hostname GUC is set to a non-reachable node
+ALTER SYSTEM SET citus.local_hostname TO 'foobar';
+SELECT pg_reload_conf();
+SELECT pg_sleep(1); -- wait to make sure the config has changed before running the GUC
+
+SET citus.shard_replication_factor TO 2;
+SELECT replicate_table_shards('dist_table_test_2',  max_shard_copies := 4,  shard_transfer_mode:='block_writes');
+
+ALTER SYSTEM RESET citus.local_hostname;
+SELECT pg_reload_conf();
+SELECT pg_sleep(1); -- wait to make sure the config has changed before running the GUC
+
 -- replicate reference table should ignore the coordinator
 SET citus.shard_replication_factor TO 2;
 SELECT replicate_table_shards('dist_table_test_2',  max_shard_copies := 4,  shard_transfer_mode:='block_writes');
