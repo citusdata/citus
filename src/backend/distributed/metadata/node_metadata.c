@@ -422,7 +422,7 @@ citus_disable_node(PG_FUNCTION_ARGS)
 	char *nodeName = text_to_cstring(nodeNameText);
 	WorkerNode *workerNode = ModifiableWorkerNode(nodeName, nodePort);
 	bool isActive = false;
-	bool onlyConsiderActivePlacements = false;
+	bool onlyConsiderActivePlacements = true;
 	MemoryContext savedContext = CurrentMemoryContext;
 
 	PG_TRY();
@@ -1291,7 +1291,7 @@ RemoveNodeFromCluster(char *nodeName, int32 nodePort)
 			 */
 			DeleteAllReferenceTablePlacementsFromNodeGroup(workerNode->groupId);
 		}
-		bool onlyConsiderActivePlacements = false;
+		bool onlyConsiderActivePlacements = true;
 		if (NodeGroupHasShardPlacements(workerNode->groupId,
 										onlyConsiderActivePlacements))
 		{
