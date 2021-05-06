@@ -1020,6 +1020,9 @@ ColocatedNonPartitionShardIntervalList(ShardInterval *shardInterval)
 		return colocatedShardList;
 	}
 
+	ereport(DEBUG1, (errmsg("skipping child tables for relation named: %s",
+							get_rel_name(distributedTableId))));
+
 	int shardIntervalIndex = ShardIndex(shardInterval);
 	List *colocatedTableList = ColocatedTableList(distributedTableId);
 
