@@ -87,6 +87,10 @@ typedef struct PhysicalAddr
 #define COLUMNAR_FIRST_STRIPE_ID 1
 
 
+#define OLD_METAPAGE_VERSION_HINT "Use \"VACUUM\" to upgrade the columnar table format " \
+								  "version or run \"ALTER EXTENSION citus UPDATE\"."
+
+
 /*
  * Map logical offsets to a physical page and offset where the data is kept.
  */
@@ -325,7 +329,7 @@ ColumnarStorageGetReservedOffset(Relation rel, bool force)
 
 
 /*
- * ColumnarMetapageNeedsUpgrade - return true if metapage exists and is not
+ * ColumnarStorageIsCurrent - return true if metapage exists and is not
  * the current version.
  */
 bool
@@ -610,13 +614,27 @@ ColumnarMetapageRead(Relation rel, bool force)
 	BlockNumber nblocks = smgrnblocks(rel->rd_smgr, MAIN_FORKNUM);
 	if (nblocks == 0)
 	{
-		elog(ERROR, "columnar metapage for relation \"%s\" does not exist",
-			 RelationGetRelationName(rel));
+		/*
+		 * We only expect this to happen during binary ugrades. This is because,
+		 * in current version of columnar, we immediately create the metapage
+		 * for columnar tables, i.e right after creating the table.
+		 * However in older versions, we were creating metapages lazily, i.e
+		 * when ingesting data to columnar table.
+		 */
+		ereport(ERROR, (errmsg("columnar metapage for relation \"%s\" does not exist",
+							   RelationGetRelationName(rel)),
+						errhint(OLD_METAPAGE_VERSION_HINT)));
 	}
 
+	/*
+	 * Regardless of "force" parameter, always force read metapage block.
+	 * We will check metapage version in ColumnarMetapageCheckVersion
+	 * depending on "force".
+	 */
+	bool forceReadBlock = true;
 	ColumnarMetapage metapage;
 	ReadFromBlock(rel, COLUMNAR_METAPAGE_BLOCKNO, SizeOfPageHeaderData,
-				  (char *) &metapage, sizeof(ColumnarMetapage), force);
+				  (char *) &metapage, sizeof(ColumnarMetapage), forceReadBlock);
 
 	if (!force)
 	{
@@ -786,7 +804,6 @@ ColumnarMetapageCheckVersion(Relation rel, ColumnarMetapage *metapage)
 							COLUMNAR_VERSION_MAJOR, COLUMNAR_VERSION_MINOR,
 							RelationGetRelationName(rel),
 							metapage->versionMajor, metapage->versionMinor),
-						errhint(
-							"Use VACUUM to upgrade the columnar table format version.")));
+						errhint(OLD_METAPAGE_VERSION_HINT)));
 	}
 }

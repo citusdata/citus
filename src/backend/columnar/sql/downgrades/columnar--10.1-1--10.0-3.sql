@@ -12,7 +12,7 @@ REFERENCES columnar.stripe(storage_id, stripe_num) ON DELETE CASCADE;
 -- define columnar_ensure_objects_exist again
 #include "../udfs/columnar_ensure_objects_exist/10.0-1.sql"
 
--- upgrade storage for all columnar relations
+-- downgrade storage for all columnar relations
 SELECT citus_internal.downgrade_columnar_storage(c.oid) FROM pg_class c, pg_am a
   WHERE c.relam = a.oid AND amname = 'columnar';
 
