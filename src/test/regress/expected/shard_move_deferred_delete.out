@@ -169,13 +169,12 @@ SELECT master_move_shard_placement(20000001, 'localhost', :worker_2_port, 'local
 (1 row)
 
 ROLLBACK;
--- we expect shard xxxxx to be on both of the workers
 SELECT run_command_on_workers($cmd$
     SELECT count(*) FROM pg_class WHERE relname = 't1_20000000';
 $cmd$);
  run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,1)
+ (localhost,57637,t,0)
  (localhost,57638,t,1)
 (2 rows)
 

@@ -11,9 +11,10 @@ step s2-insert:
     INSERT INTO logical_replicate_placement VALUES (15, 15);
 
 step s1-move-placement:
-     SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638, shard_transfer_mode:='block_writes');
+    SET citus.defer_drop_after_shard_move to off;
+    SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638, shard_transfer_mode:='block_writes');
  <waiting ...>
-step s2-end:
+step s2-end: 
    COMMIT;
 
 step s1-move-placement: <... completed>
@@ -30,7 +31,7 @@ x              y
 
 15             15
 step s1-get-shard-distribution:
-  select nodeport from pg_dist_placement inner join pg_dist_node on(pg_dist_placement.groupid = pg_dist_node.groupid) where shardid in (SELECT * FROM selected_shard) order by nodeport;
+  select nodeport from pg_dist_placement inner join pg_dist_node on(pg_dist_placement.groupid = pg_dist_node.groupid) where shardstate != 4 and shardid in (SELECT * FROM selected_shard) order by nodeport;
 
 nodeport
 
@@ -48,9 +49,10 @@ step s2-upsert:
     INSERT INTO logical_replicate_placement VALUES (15, 15) ON CONFLICT (x) DO UPDATE SET y = logical_replicate_placement.y + 1;
 
 step s1-move-placement:
-     SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638, shard_transfer_mode:='block_writes');
+    SET citus.defer_drop_after_shard_move to off;
+    SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638, shard_transfer_mode:='block_writes');
  <waiting ...>
-step s2-end:
+step s2-end: 
    COMMIT;
 
 step s1-move-placement: <... completed>
@@ -67,7 +69,7 @@ x              y
 
 15             16
 step s1-get-shard-distribution:
-  select nodeport from pg_dist_placement inner join pg_dist_node on(pg_dist_placement.groupid = pg_dist_node.groupid) where shardid in (SELECT * FROM selected_shard) order by nodeport;
+  select nodeport from pg_dist_placement inner join pg_dist_node on(pg_dist_placement.groupid = pg_dist_node.groupid) where shardstate != 4 and shardid in (SELECT * FROM selected_shard) order by nodeport;
 
 nodeport
 
@@ -87,9 +89,10 @@ step s2-update:
     UPDATE logical_replicate_placement SET y = y + 1 WHERE x = 15;
 
 step s1-move-placement:
-     SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638, shard_transfer_mode:='block_writes');
+    SET citus.defer_drop_after_shard_move to off;
+    SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638, shard_transfer_mode:='block_writes');
  <waiting ...>
-step s2-end:
+step s2-end: 
    COMMIT;
 
 step s1-move-placement: <... completed>
@@ -106,7 +109,7 @@ x              y
 
 15             16
 step s1-get-shard-distribution:
-  select nodeport from pg_dist_placement inner join pg_dist_node on(pg_dist_placement.groupid = pg_dist_node.groupid) where shardid in (SELECT * FROM selected_shard) order by nodeport;
+  select nodeport from pg_dist_placement inner join pg_dist_node on(pg_dist_placement.groupid = pg_dist_node.groupid) where shardstate != 4 and shardid in (SELECT * FROM selected_shard) order by nodeport;
 
 nodeport
 
@@ -126,9 +129,10 @@ step s2-delete:
     DELETE FROM logical_replicate_placement WHERE x = 15;
 
 step s1-move-placement:
-     SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638, shard_transfer_mode:='block_writes');
+    SET citus.defer_drop_after_shard_move to off;
+    SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638, shard_transfer_mode:='block_writes');
  <waiting ...>
-step s2-end:
+step s2-end: 
    COMMIT;
 
 step s1-move-placement: <... completed>
@@ -144,7 +148,7 @@ step s1-select:
 x              y
 
 step s1-get-shard-distribution:
-  select nodeport from pg_dist_placement inner join pg_dist_node on(pg_dist_placement.groupid = pg_dist_node.groupid) where shardid in (SELECT * FROM selected_shard) order by nodeport;
+  select nodeport from pg_dist_placement inner join pg_dist_node on(pg_dist_placement.groupid = pg_dist_node.groupid) where shardstate != 4 and shardid in (SELECT * FROM selected_shard) order by nodeport;
 
 nodeport
 
@@ -167,9 +171,10 @@ x              y
 
 15             15
 step s1-move-placement:
-     SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638, shard_transfer_mode:='block_writes');
+    SET citus.defer_drop_after_shard_move to off;
+    SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638, shard_transfer_mode:='block_writes');
  <waiting ...>
-step s2-end:
+step s2-end: 
    COMMIT;
 
 step s1-move-placement: <... completed>
@@ -180,7 +185,7 @@ step s1-end:
  COMMIT;
 
 step s1-get-shard-distribution:
-  select nodeport from pg_dist_placement inner join pg_dist_node on(pg_dist_placement.groupid = pg_dist_node.groupid) where shardid in (SELECT * FROM selected_shard) order by nodeport;
+  select nodeport from pg_dist_placement inner join pg_dist_node on(pg_dist_placement.groupid = pg_dist_node.groupid) where shardstate != 4 and shardid in (SELECT * FROM selected_shard) order by nodeport;
 
 nodeport
 
@@ -203,9 +208,10 @@ x              y
 
 15             15
 step s1-move-placement:
-     SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638, shard_transfer_mode:='block_writes');
+    SET citus.defer_drop_after_shard_move to off;
+    SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638, shard_transfer_mode:='block_writes');
  <waiting ...>
-step s2-end:
+step s2-end: 
    COMMIT;
 
 step s1-move-placement: <... completed>
@@ -216,7 +222,7 @@ step s1-end:
  COMMIT;
 
 step s1-get-shard-distribution:
-  select nodeport from pg_dist_placement inner join pg_dist_node on(pg_dist_placement.groupid = pg_dist_node.groupid) where shardid in (SELECT * FROM selected_shard) order by nodeport;
+  select nodeport from pg_dist_placement inner join pg_dist_node on(pg_dist_placement.groupid = pg_dist_node.groupid) where shardstate != 4 and shardid in (SELECT * FROM selected_shard) order by nodeport;
 
 nodeport
 

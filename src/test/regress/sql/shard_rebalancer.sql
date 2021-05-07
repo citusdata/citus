@@ -286,6 +286,7 @@ SELECT master_create_distributed_table('replication_test_table', 'int_column', '
 CREATE VIEW replication_test_table_placements_per_node AS
     SELECT count(*) FROM pg_dist_shard_placement NATURAL JOIN pg_dist_shard
     WHERE logicalrelid = 'replication_test_table'::regclass
+    AND shardstate != 4
     GROUP BY nodename, nodeport
     ORDER BY nodename, nodeport;
 
@@ -364,6 +365,7 @@ SELECT master_create_distributed_table('rebalance_test_table', 'int_column', 'ap
 CREATE VIEW table_placements_per_node AS
 SELECT nodeport, logicalrelid::regclass, count(*)
 FROM pg_dist_shard_placement NATURAL JOIN pg_dist_shard
+WHERE shardstate != 4
 GROUP BY logicalrelid::regclass, nodename, nodeport
 ORDER BY logicalrelid::regclass, nodename, nodeport;
 

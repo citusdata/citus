@@ -404,6 +404,7 @@ SELECT master_create_distributed_table('replication_test_table', 'int_column', '
 CREATE VIEW replication_test_table_placements_per_node AS
     SELECT count(*) FROM pg_dist_shard_placement NATURAL JOIN pg_dist_shard
     WHERE logicalrelid = 'replication_test_table'::regclass
+    AND shardstate != 4
     GROUP BY nodename, nodeport
     ORDER BY nodename, nodeport;
 -- Create four shards with replication factor 2, and delete the placements
@@ -526,6 +527,7 @@ SELECT master_create_distributed_table('rebalance_test_table', 'int_column', 'ap
 CREATE VIEW table_placements_per_node AS
 SELECT nodeport, logicalrelid::regclass, count(*)
 FROM pg_dist_shard_placement NATURAL JOIN pg_dist_shard
+WHERE shardstate != 4
 GROUP BY logicalrelid::regclass, nodename, nodeport
 ORDER BY logicalrelid::regclass, nodename, nodeport;
 -- Create six shards with replication factor 1 and move them to the same
@@ -1506,7 +1508,8 @@ WHERE table_schema = 'public'
 ---------------------------------------------------------------------
  public       | tab2_123050 |            0 |           0
  public       | tab_123040  |        30000 |     1089536
-(2 rows)
+ public       | tab_123042  |        10000 |      368640
+(3 rows)
 
 \c - - - :worker_2_port
 SELECT table_schema, table_name, row_estimate, total_bytes
@@ -1621,9 +1624,11 @@ WHERE table_schema = 'public'
 ) a ORDER BY table_name;
  table_schema | table_name  | row_estimate | total_bytes
 ---------------------------------------------------------------------
+ public       | tab2_123052 |        10000 |      368640
  public       | tab2_123053 |        60000 |     2179072
+ public       | tab_123042  |        10000 |      368640
  public       | tab_123043  |        10000 |      368640
-(2 rows)
+(4 rows)
 
 \c - - - :master_port
 DROP TABLE tab2;

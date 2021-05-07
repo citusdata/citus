@@ -7,7 +7,8 @@ setup
   SELECT citus_internal.refresh_isolation_tester_prepared_statement();
 
   SET citus.shard_count TO 8;
-	SET citus.shard_replication_factor TO 1;
+  SET citus.shard_replication_factor TO 1;
+
 	CREATE TABLE logical_replicate_placement (x int PRIMARY KEY, y int);
 	SELECT create_distributed_table('logical_replicate_placement', 'x');
 
@@ -33,7 +34,8 @@ step "s1-begin"
 
 step "s1-move-placement"
 {
-    	SELECT master_move_shard_placement(get_shard_id_for_distribution_column, 'localhost', 57637, 'localhost', 57638, shard_transfer_mode:='block_writes') FROM selected_shard;
+  SET citus.defer_drop_after_shard_move to off;
+  SELECT master_move_shard_placement(get_shard_id_for_distribution_column, 'localhost', 57637, 'localhost', 57638, shard_transfer_mode:='block_writes') FROM selected_shard;
 }
 
 step "s1-end"
@@ -53,7 +55,7 @@ step "s1-insert"
 
 step "s1-get-shard-distribution"
 {
-    select nodeport from pg_dist_placement inner join pg_dist_node on(pg_dist_placement.groupid = pg_dist_node.groupid) where shardid in (SELECT * FROM selected_shard) order by nodeport;
+    select nodeport from pg_dist_placement inner join pg_dist_node on(pg_dist_placement.groupid = pg_dist_node.groupid) where shardstate != 4 and shardid in (SELECT * FROM selected_shard) order by nodeport;
 }
 
 session "s2"

@@ -43,11 +43,8 @@ master_move_shard_placement
 step s2-drop-marked-shards:
     SET client_min_messages to DEBUG1;
     SELECT public.master_defer_delete_shards();
-
-master_defer_delete_shards
-
-0
-step s1-drop-marked-shards:
+ <waiting ...>
+step s1-drop-marked-shards: 
     SELECT public.master_defer_delete_shards();
 
 master_defer_delete_shards
@@ -56,6 +53,10 @@ master_defer_delete_shards
 step s1-commit:
     COMMIT;
 
+step s2-drop-marked-shards: <... completed>
+master_defer_delete_shards
+
+0
 
 starting permutation: s1-begin s1-move-placement s2-start-session-level-connection s2-lock-table-on-worker s1-drop-marked-shards s1-commit s2-stop-connection
 step s1-begin:

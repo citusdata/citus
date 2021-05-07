@@ -4,6 +4,7 @@
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 13000000;
 SET citus.shard_count TO 6;
 SET citus.shard_replication_factor TO 1;
+SET citus.defer_drop_after_shard_move to off;
 -- create distributed tables
 CREATE TABLE table1_group1 ( id int PRIMARY KEY);
 SELECT create_distributed_table('table1_group1', 'id', 'hash');
@@ -125,6 +126,7 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.table2_
 (1 row)
 
 \c - - - :master_port
+SET citus.defer_drop_after_shard_move to off;
 -- copy colocated shards again to see error message
 SELECT master_copy_shard_placement(13000000, 'localhost', :worker_1_port, 'localhost', :worker_2_port, false, 'force_logical');
 ERROR:  the force_logical transfer mode is currently unsupported
@@ -294,6 +296,7 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.table2_
 (1 row)
 
 \c - - - :master_port
+SET citus.defer_drop_after_shard_move to off;
 -- test moving NOT colocated shard
 -- status before shard move
 SELECT s.shardid, s.logicalrelid::regclass, sp.nodeport
@@ -493,6 +496,7 @@ SELECT  "Constraint", "Definition" FROM table_fkeys
 (4 rows)
 
 \c - - - :master_port
+SET citus.defer_drop_after_shard_move to off;
 -- test shard copy with foreign constraints
 -- we expect it to error out because we do not support foreign constraints with replication factor > 1
 SELECT master_copy_shard_placement(13000022, 'localhost', :worker_2_port, 'localhost', :worker_1_port, false);

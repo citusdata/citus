@@ -6,6 +6,7 @@ CREATE SCHEMA fkey_to_reference_shard_rebalance;
 SET search_path to fkey_to_reference_shard_rebalance;
 SET citus.shard_replication_factor TO 1;
 SET citus.shard_count to 8;
+SET citus.defer_drop_after_shard_move to off;
 CREATE TYPE foreign_details AS (name text, relid text, refd_relid text);
 CREATE VIEW table_fkeys_in_workers AS
 SELECT

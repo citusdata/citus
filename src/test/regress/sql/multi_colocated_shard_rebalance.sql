@@ -7,6 +7,8 @@ ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 13000000;
 SET citus.shard_count TO 6;
 SET citus.shard_replication_factor TO 1;
 
+SET citus.defer_drop_after_shard_move to off;
+
 -- create distributed tables
 CREATE TABLE table1_group1 ( id int PRIMARY KEY);
 SELECT create_distributed_table('table1_group1', 'id', 'hash');
@@ -58,6 +60,8 @@ ORDER BY s.shardid, sp.nodeport;
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.table1_group1_13000000'::regclass;
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.table2_group1_13000006'::regclass;
 \c - - - :master_port
+
+SET citus.defer_drop_after_shard_move to off;
 
 -- copy colocated shards again to see error message
 SELECT master_copy_shard_placement(13000000, 'localhost', :worker_1_port, 'localhost', :worker_2_port, false, 'force_logical');
@@ -147,6 +151,8 @@ ORDER BY s.shardid, sp.nodeport;
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.table1_group1_13000001'::regclass;
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.table2_group1_13000007'::regclass;
 \c - - - :master_port
+
+SET citus.defer_drop_after_shard_move to off;
 
 
 -- test moving NOT colocated shard
@@ -252,6 +258,8 @@ SELECT  "Constraint", "Definition" FROM table_fkeys
   WHERE "Constraint" LIKE 'table2_group%' OR "Constraint" LIKE 'table1_group%';
 
 \c - - - :master_port
+
+SET citus.defer_drop_after_shard_move to off;
 
 
 -- test shard copy with foreign constraints

@@ -95,8 +95,6 @@ set citus.check_available_space_before_move to false;
 SELECT master_move_shard_placement(20000001, 'localhost', :worker_2_port, 'localhost', :worker_1_port);
 ROLLBACK;
 
-
--- we expect shard 0 to be on both of the workers
 SELECT run_command_on_workers($cmd$
     SELECT count(*) FROM pg_class WHERE relname = 't1_20000000';
 $cmd$);
