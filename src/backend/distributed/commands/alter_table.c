@@ -34,6 +34,7 @@
 #include "catalog/pg_am.h"
 #include "columnar/columnar.h"
 #include "columnar/columnar_tableam.h"
+#include "commands/defrem.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/commands.h"
 #include "distributed/commands/utility_hook.h"
@@ -199,7 +200,7 @@ static char * CreateWorkerChangeSequenceDependencyCommand(char *sequenceSchemaNa
 														  char *sourceName,
 														  char *targetSchemaName,
 														  char *targetName);
-static char * GetUsingClauseWithAccessMethodIfExists(Oid viewOid);
+static char * CreateUsingAccessMethodClauseForMatViewIfExists(Oid viewOid);
 static bool WillRecreateForeignKeyToReferenceTable(Oid relationId,
 												   CascadeToColocatedOption cascadeOption);
 static void WarningsForDroppingForeignKeysWithDistributedTables(Oid relationId);
@@ -1128,13 +1129,14 @@ GetViewCreationCommandsOfTable(Oid relationId)
 		bool isMatView = get_rel_relkind(viewOid) == RELKIND_MATVIEW;
 
 		/* here we need to get the access method of the view to recreate it */
-		char *usingAccessMethod = GetUsingClauseWithAccessMethodIfExists(viewOid);
+		char *usingAccessMethod = CreateUsingAccessMethodClauseForMatViewIfExists(
+			viewOid);
 
 		appendStringInfo(query,
 						 "CREATE %s VIEW %s %s AS %s",
 						 isMatView ? "MATERIALIZED" : "",
 						 qualifiedViewName,
-						 usingAccessMethod,
+						 usingAccessMethod ? usingAccessMethod : "",
 						 viewDefinition);
 		commands = lappend(commands, makeTableDDLCommandString(query->data));
 	}
@@ -1523,11 +1525,11 @@ CreateWorkerChangeSequenceDependencyCommand(char *sequenceSchemaName, char *sequ
 
 
 /*
- * GetUsingClauseWithAccessMethodIfExists generates and returns "USING ..." string
+ * CreateUsingAccessMethodClauseForMatViewIfExists generates and returns "USING ..." string
  * if there's an access method set to the view with the given oid.
  */
 static char *
-GetUsingClauseWithAccessMethodIfExists(Oid viewOid)
+CreateUsingAccessMethodClauseForMatViewIfExists(Oid viewOid)
 {
 	StringInfo usingClause = makeStringInfo();
 	Relation relation = try_relation_open(viewOid, AccessShareLock);
@@ -1540,16 +1542,11 @@ GetUsingClauseWithAccessMethodIfExists(Oid viewOid)
 	Oid accessMethodOid = relation->rd_rel->relam;
 	if (OidIsValid(accessMethodOid))
 	{
-		HeapTuple amTuple = SearchSysCache1(AMOID,
-											ObjectIdGetDatum(accessMethodOid));
-
-		if (HeapTupleIsValid(amTuple))
+		char *accessMethodName = get_am_name(accessMethodOid);
+		if (accessMethodName != NULL)
 		{
-			Form_pg_am amForm = (Form_pg_am) GETSTRUCT(amTuple);
-			appendStringInfo(usingClause, "USING %s", NameStr(amForm->amname));
+			appendStringInfo(usingClause, "USING %s", accessMethodName);
 		}
-
-		ReleaseSysCache(amTuple);
 	}
 	relation_close(relation, NoLock);
 
