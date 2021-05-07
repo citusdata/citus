@@ -696,6 +696,14 @@ static void
 columnar_vacuum_rel(Relation rel, VacuumParams *params,
 					BufferAccessStrategy bstrategy)
 {
+	/*
+	 * If metapage version of relation is older, then we hint users to VACUUM
+	 * the relation in ColumnarMetapageCheckVersion. So if needed, upgrade
+	 * the metapage before doing anything.
+	 */
+	bool isUpgrade = true;
+	ColumnarStorageUpdateIfNeeded(rel, isUpgrade);
+
 	int elevel = (params->options & VACOPT_VERBOSE) ? INFO : DEBUG2;
 
 	/* this should have been resolved by vacuum.c until now */
