@@ -43,3 +43,4 @@ SET repmodel = 's'
 WHERE repmodel = 'c'
     AND partmethod = 'h'
     AND logicalrelid NOT IN (SELECT * FROM replicated_relations);
+#include "udfs/citus_shards/10.1-1.sql"
