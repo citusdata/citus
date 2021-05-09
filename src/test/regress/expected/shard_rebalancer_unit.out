@@ -108,7 +108,7 @@ SELECT unnest(shard_placement_rebalance_array(
           '{"shardid":4, "nodename":"hostname2"}'
         ]::json[]
 ));
-WARNING:  Not allowed to move shard xxxxx anywhere from hostname2:5432
+WARNING:  There is not any node to move shard xxxxx from hostname2:5432
                                                        unnest
 ---------------------------------------------------------------------
  {"updatetype":1,"shardid":2,"sourcename":"hostname1","sourceport":5432,"targetname":"hostname2","targetport":5432}

@@ -1523,8 +1523,8 @@ MoveShardsAwayFromDisallowedNodes(RebalanceState *state)
 		if (targetFillState == NULL)
 		{
 			ereport(WARNING, (errmsg(
-								  "Not allowed to move shard " UINT64_FORMAT
-								  " anywhere from %s:%d",
+								  "There is not any node to move shard " UINT64_FORMAT
+								  " from %s:%d",
 								  disallowedPlacement->shardCost->shardId,
 								  disallowedPlacement->fillState->node->workerName,
 								  disallowedPlacement->fillState->node->workerPort
