@@ -1305,6 +1305,10 @@ CreateFunctionStmtObjectAddress(Node *node, bool missing_ok)
 	FunctionParameter *funcParam = NULL;
 	foreach_ptr(funcParam, stmt->parameters)
 	{
+		if (funcParam->mode == FUNC_PARAM_OUT || funcParam->mode == FUNC_PARAM_TABLE)
+		{
+			continue;
+		}
 		objectWithArgs->objargs = lappend(objectWithArgs->objargs, funcParam->argType);
 	}
 

@@ -168,6 +168,29 @@ SELECT insert_twice();
 
 SELECT * FROM table_with_unique_constraint ORDER BY a;
 
+create schema args_test_function;
+set search_path to public, args_test_function;
+
+CREATE OR REPLACE FUNCTION args_test_function(
+IN in1 integer,  IN in2 integer, IN in3 integer, IN in4 integer, IN in5 integer, IN in6 integer, IN in7 integer, IN in8 integer, IN in9 integer, IN in10 integer,
+IN in11 integer,  IN in12 integer, IN in13 integer, IN in14 integer, IN in15 integer, IN in16 integer, IN in17 integer, IN in18 integer, IN in19 integer, IN in20 integer,
+IN in21 integer,  IN in22 integer, IN in23 integer, IN in24 integer, IN in25 integer, IN in26 integer, IN in27 integer, IN in28 integer, IN in29 integer, IN in30 integer,
+IN in31 integer,  IN in32 integer, IN in33 integer, IN in34 integer, IN in35 integer, IN in36 integer, IN in37 integer, IN in38 integer, IN in39 integer, IN in40 integer,
+IN in41 integer,  IN in42 integer, IN in43 integer, IN in44 integer, IN in45 integer, IN in46 integer, IN in47 integer, IN in48 integer, IN in49 integer, IN in50 integer,
+IN in51 integer,  IN in52 integer, IN in53 integer, IN in54 integer, IN in55 integer, IN in56 integer, IN in57 integer, IN in58 integer, IN in59 integer, IN in60 integer,
+IN in61 integer,  IN in62 integer, IN in63 integer, IN in64 integer, IN in65 integer, IN in66 integer, IN in67 integer, IN in68 integer, IN in69 integer, IN in70 integer,
+IN in71 integer,  IN in72 integer, IN in73 integer, IN in74 integer, IN in75 integer, IN in76 integer, IN in77 integer, IN in78 integer, IN in79 integer, IN in80 integer,
+IN in81 integer,  IN in82 integer, IN in83 integer, IN in84 integer, IN in85 integer, IN in86 integer, IN in87 integer, IN in88 integer, IN in89 integer, IN in90 integer,
+IN in91 integer,  IN in92 integer, IN in93 integer, IN in94 integer, IN in95 integer, IN in96 integer, IN in97 integer, IN in98 integer, IN in99 integer, IN in100 integer,
+OUT out1 integer)
+    LANGUAGE 'plpgsql'
+AS $BODY$
+begin
+   out1 = 1;
+end $BODY$;
+
+drop schema args_test_function cascade;
+
 DROP TABLE temp_table, test_parameterized_sql, table_with_unique_constraint;
 
 -- clean-up functions
@@ -181,3 +204,4 @@ DROP FUNCTION non_partition_parameter_update_sql(int, int);
 DROP FUNCTION non_partition_parameter_delete_sql(int);
 DROP FUNCTION test_parameterized_sql_function(int);
 DROP FUNCTION test_parameterized_sql_function_in_subquery_where(int);
+
