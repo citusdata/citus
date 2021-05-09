@@ -142,6 +142,7 @@
 #include "distributed/deparse_shard_query.h"
 #include "distributed/shared_connection_stats.h"
 #include "distributed/distributed_execution_locks.h"
+#include "distributed/intermediate_result_pruning.h"
 #include "distributed/listutils.h"
 #include "distributed/local_executor.h"
 #include "distributed/multi_client_executor.h"
@@ -684,6 +685,9 @@ static AttInMetadata * TupleDescGetAttBinaryInMetadata(TupleDesc tupdesc);
 static int WorkerPoolCompare(const void *lhsKey, const void *rhsKey);
 static void SetAttributeInputMetadata(DistributedExecution *execution,
 									  ShardCommandExecution *shardCommandExecution);
+static void LookupTaskPlacementHostAndPort(ShardPlacement *taskPlacement, char **nodeName,
+										   int *nodePort);
+static bool IsDummyPlacement(ShardPlacement *taskPlacement);
 
 /*
  * AdaptiveExecutorPreExecutorRun gets called right before postgres starts its executor
@@ -1751,8 +1755,10 @@ AssignTasksToConnectionsOrWorkerPool(DistributedExecution *execution)
 		foreach_ptr(taskPlacement, task->taskPlacementList)
 		{
 			int connectionFlags = 0;
-			char *nodeName = taskPlacement->nodeName;
-			int nodePort = taskPlacement->nodePort;
+			char *nodeName = NULL;
+			int nodePort = 0;
+			LookupTaskPlacementHostAndPort(taskPlacement, &nodeName, &nodePort);
+
 			WorkerPool *workerPool = FindOrCreateWorkerPool(execution, nodeName,
 															nodePort);
 
@@ -1897,6 +1903,48 @@ AssignTasksToConnectionsOrWorkerPool(DistributedExecution *execution)
 
 		ClaimConnectionExclusively(connection);
 	}
+}
+
+
+/*
+ * LookupTaskPlacementHostAndPort sets the nodename and nodeport for the given task placement
+ * with a lookup.
+ */
+static void
+LookupTaskPlacementHostAndPort(ShardPlacement *taskPlacement, char **nodeName,
+							   int *nodePort)
+{
+	if (IsDummyPlacement(taskPlacement))
+	{
+		/*
+		 * If we create a dummy placement for the local node, it is possible
+		 * that the entry doesn't exist in pg_dist_node, hence a lookup will fail.
+		 * In that case we want to use the dummy placements values.
+		 */
+		*nodeName = taskPlacement->nodeName;
+		*nodePort = taskPlacement->nodePort;
+	}
+	else
+	{
+		/*
+		 * We want to lookup the node information again since it is possible that
+		 * there were changes in pg_dist_node and we will get those invalidations
+		 * in LookupNodeForGroup.
+		 */
+		WorkerNode *workerNode = LookupNodeForGroup(taskPlacement->groupId);
+		*nodeName = workerNode->workerName;
+		*nodePort = workerNode->workerPort;
+	}
+}
+
+
+/*
+ * IsDummyPlacement returns true if the given placement is a dummy placement.
+ */
+static bool
+IsDummyPlacement(ShardPlacement *taskPlacement)
+{
+	return taskPlacement->nodeId == LOCAL_NODE_ID;
 }
 
 
