@@ -849,6 +849,14 @@ CopyShardTables(List *shardIntervalList, char *sourceNodeName, int32 sourceNodeP
 
 		List *ddlCommandList = CopyShardCommandList(shardInterval, sourceNodeName,
 													sourceNodePort, includeDataCopy);
+
+		if (PartitionTable(shardInterval->relationId))
+		{
+			char *attachPartitionCommand =
+				GenerateAttachShardPartitionCommand(shardInterval);
+
+			ddlCommandList = lappend(ddlCommandList, attachPartitionCommand);
+		}													
 		char *tableOwner = TableOwner(shardInterval->relationId);
 
 		SendCommandListToWorkerInSingleTransaction(targetNodeName, targetNodePort,
@@ -877,14 +885,6 @@ CopyShardTables(List *shardIntervalList, char *sourceNodeName, int32 sourceNodeP
 
 		List *commandList = list_concat(shardForeignConstraintCommandList,
 										referenceTableForeignConstraintList);
-
-		if (PartitionTable(shardInterval->relationId))
-		{
-			char *attachPartitionCommand =
-				GenerateAttachShardPartitionCommand(shardInterval);
-
-			commandList = lappend(commandList, attachPartitionCommand);
-		}
 
 		SendCommandListToWorkerInSingleTransaction(targetNodeName, targetNodePort,
 												   tableOwner, commandList);
