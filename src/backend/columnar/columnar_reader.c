@@ -83,6 +83,7 @@ struct ColumnarReadState
 };
 
 /* static function declarations */
+static MemoryContext CreateStripeReadMemoryContext(void);
 static bool StripeReadInProgress(ColumnarReadState *readState);
 static bool HasUnreadStripe(ColumnarReadState *readState);
 static StripeReadState * BeginStripeRead(StripeMetadata *stripeMetadata, Relation rel,
@@ -162,9 +163,7 @@ ColumnarBeginRead(Relation relation, TupleDesc tupleDescriptor,
 	 * this memory context before loading a new stripe. This is to avoid memory
 	 * leaks.
 	 */
-	MemoryContext stripeReadContext = AllocSetContextCreate(CurrentMemoryContext,
-															"Stripe Read Memory Context",
-															ALLOCSET_DEFAULT_SIZES);
+	MemoryContext stripeReadContext = CreateStripeReadMemoryContext();
 
 	ColumnarReadState *readState = palloc0(sizeof(ColumnarReadState));
 	readState->relation = relation;
@@ -178,6 +177,18 @@ ColumnarBeginRead(Relation relation, TupleDesc tupleDescriptor,
 	readState->stripeReadState = NULL;
 
 	return readState;
+}
+
+
+/*
+ * CreateStripeReadMemoryContext creates a memory context to be used when
+ * reading a stripe.
+ */
+static MemoryContext
+CreateStripeReadMemoryContext()
+{
+	return AllocSetContextCreate(CurrentMemoryContext, "Stripe Read Memory Context",
+								 ALLOCSET_DEFAULT_SIZES);
 }
 
 
