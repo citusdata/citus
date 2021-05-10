@@ -120,7 +120,7 @@ extern List * PreprocessClusterStmt(Node *node, const char *clusterCommand,
 									ProcessUtilityContext processUtilityContext);
 
 /* index.c */
-typedef void (*PGIndexProcessor)(Form_pg_index, List **);
+typedef void (*PGIndexProcessor)(Form_pg_index, List **, int);
 
 
 /* call.c */
@@ -277,7 +277,7 @@ extern List * PostprocessIndexStmt(Node *node,
 extern void ErrorIfUnsupportedAlterIndexStmt(AlterTableStmt *alterTableStatement);
 extern void MarkIndexValid(IndexStmt *indexStmt);
 extern List * ExecuteFunctionOnEachTableIndex(Oid relationId, PGIndexProcessor
-											  pgIndexProcessor);
+											  pgIndexProcessor, int flags);
 
 /* objectaddress.c - forward declarations */
 extern ObjectAddress CreateExtensionStmtObjectAddress(Node *stmt, bool missing_ok);

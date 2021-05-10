@@ -558,8 +558,11 @@ ConvertTable(TableConversionState *con)
 
 		includeIndexes = false;
 	}
+
+	bool includeReplicaIdentity = true;
 	List *postLoadCommands = GetPostLoadTableCreationCommands(con->relationId,
-															  includeIndexes);
+															  includeIndexes,
+															  includeReplicaIdentity);
 	List *justBeforeDropCommands = NIL;
 	List *attachPartitionCommands = NIL;
 
