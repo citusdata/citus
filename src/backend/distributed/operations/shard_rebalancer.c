@@ -1117,7 +1117,6 @@ UpdateShardPlacement(PlacementUpdateEvent *placementUpdateEvent,
 	WorkerNode *sourceNode = placementUpdateEvent->sourceNode;
 	WorkerNode *targetNode = placementUpdateEvent->targetNode;
 	const char *doRepair = "false";
-	int connectionFlag = FORCE_NEW_CONNECTION;
 
 	Datum shardTranferModeLabelDatum =
 		DirectFunctionCall1(enum_out, shardReplicationModeOid);
@@ -1189,6 +1188,7 @@ UpdateShardPlacement(PlacementUpdateEvent *placementUpdateEvent,
 										  sourceNode->workerPort,
 										  REBALANCE_PROGRESS_MOVING);
 
+	int connectionFlag = FORCE_NEW_CONNECTION;
 	MultiConnection *connection = GetNodeConnection(connectionFlag, LOCAL_HOST_NAME,
 													PostPortNumber);
 
@@ -1202,6 +1202,7 @@ UpdateShardPlacement(PlacementUpdateEvent *placementUpdateEvent,
 										  sourceNode->workerName,
 										  sourceNode->workerPort,
 										  REBALANCE_PROGRESS_MOVED);
+	CloseConnection(connection);
 
 	return true;
 }
