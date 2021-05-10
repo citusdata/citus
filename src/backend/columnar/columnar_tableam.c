@@ -109,7 +109,7 @@ static void ColumnarProcessUtility(PlannedStmt *pstmt,
 								   QueryCompletionCompat *completionTag);
 static bool ConditionalLockRelationWithTimeout(Relation rel, LOCKMODE lockMode,
 											   int timeout, int retryInterval);
-static List * RelationColumnList(TupleDesc tupdesc, Bitmapset *attr_needed);
+static List * NeededColumnsList(TupleDesc tupdesc, Bitmapset *attr_needed);
 static void LogRelationStats(Relation rel, int elevel);
 static void TruncateColumnar(Relation rel, int elevel);
 static HeapTuple ColumnarSlotCopyHeapTuple(TupleTableSlot *slot);
@@ -213,7 +213,7 @@ static ColumnarReadState *
 init_columnar_read_state(Relation relation, TupleDesc tupdesc, Bitmapset *attr_needed,
 						 List *scanQual)
 {
-	List *neededColumnList = RelationColumnList(tupdesc, attr_needed);
+	List *neededColumnList = NeededColumnsList(tupdesc, attr_needed);
 	ColumnarReadState *readState = ColumnarBeginRead(relation, tupdesc, neededColumnList,
 													 scanQual);
 
@@ -609,7 +609,7 @@ columnar_relation_copy_for_cluster(Relation OldHeap, Relation NewHeap,
 	/* we need all columns */
 	int natts = OldHeap->rd_att->natts;
 	Bitmapset *attr_needed = bms_add_range(NULL, 0, natts - 1);
-	List *projectedColumnList = RelationColumnList(sourceDesc, attr_needed);
+	List *projectedColumnList = NeededColumnsList(sourceDesc, attr_needed);
 	ColumnarReadState *readState = ColumnarBeginRead(OldHeap, sourceDesc,
 													 projectedColumnList,
 													 NULL);
@@ -633,11 +633,11 @@ columnar_relation_copy_for_cluster(Relation OldHeap, Relation NewHeap,
 
 
 /*
- * RelationColumnList returns a list of AttrNumber's for the columns that
+ * NeededColumnsList returns a list of AttrNumber's for the columns that
  * are not dropped and specified by attr_needed.
  */
 static List *
-RelationColumnList(TupleDesc tupdesc, Bitmapset *attr_needed)
+NeededColumnsList(TupleDesc tupdesc, Bitmapset *attr_needed)
 {
 	List *columnList = NIL;
 
