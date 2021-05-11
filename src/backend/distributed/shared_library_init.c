@@ -68,6 +68,7 @@
 #include "distributed/time_constants.h"
 #include "distributed/query_stats.h"
 #include "distributed/remote_commands.h"
+#include "distributed/shard_rebalancer.h"
 #include "distributed/shared_library_init.h"
 #include "distributed/statistics_collection.h"
 #include "distributed/subplan_execution.h"
@@ -1188,6 +1189,16 @@ RegisterCitusConfigVariables(void)
 		1048576, -1, MAX_KILOBYTES,
 		PGC_USERSET,
 		GUC_UNIT_KB | GUC_STANDARD,
+		NULL, NULL, NULL);
+
+	DefineCustomIntVariable(
+		"citus.max_rebalancer_logged_ignored_moves",
+		gettext_noop("Sets the maximum number of ignored moves the rebalance logs"),
+		NULL,
+		&MaxRebalancerLoggedIgnoredMoves,
+		5, -1, INT_MAX,
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(

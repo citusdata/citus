@@ -70,6 +70,7 @@ typedef struct RebalanceOptions
 	int32 maxShardMoves;
 	ArrayType *excludedShardArray;
 	bool drainOnly;
+	float4 improvementThreshold;
 	Form_pg_dist_rebalance_strategy rebalanceStrategy;
 } RebalanceOptions;
 
@@ -80,14 +81,54 @@ typedef struct RebalanceOptions
  */
 typedef struct RebalanceState
 {
+	/*
+	 * placementsHash contains the current state of all shard placements, it
+	 * is initialized from pg_dist_placement and is then modified based on the
+	 * found shard moves.
+	 */
 	HTAB *placementsHash;
+
+	/*
+	 * placementUpdateList contains all of the updates that have been done to
+	 * reach the current state of placementsHash.
+	 */
 	List *placementUpdateList;
 	RebalancePlanFunctions *functions;
+
+	/*
+	 * fillStateListDesc contains all NodeFillStates ordered from full nodes to
+	 * empty nodes.
+	 */
 	List *fillStateListDesc;
+
+	/*
+	 * fillStateListAsc contains all NodeFillStates ordered from empty nodes to
+	 * full nodes.
+	 */
 	List *fillStateListAsc;
+
+	/*
+	 * disallowedPlacementList contains all placements that currently exist,
+	 * but are not allowed according to the shardAllowedOnNode function.
+	 */
 	List *disallowedPlacementList;
+
+	/*
+	 * totalCost is the cost of all the shards in the cluster added together.
+	 */
 	float4 totalCost;
+
+	/*
+	 * totalCapacity is the capacity of all the nodes in the cluster added
+	 * together.
+	 */
 	float4 totalCapacity;
+
+	/*
+	 * ignoredMoves is the number of moves that were ignored. This is used to
+	 * limit the amount of loglines we send.
+	 */
+	int64 ignoredMoves;
 } RebalanceState;
 
 
@@ -128,6 +169,7 @@ static RebalanceState * InitRebalanceState(List *workerNodeList, List *shardPlac
 static void MoveShardsAwayFromDisallowedNodes(RebalanceState *state);
 static bool FindAndMoveShardCost(float4 utilizationLowerBound,
 								 float4 utilizationUpperBound,
+								 float4 improvementThreshold,
 								 RebalanceState *state);
 static NodeFillState * FindAllowedTargetFillState(RebalanceState *state, uint64 shardId);
 static void MoveShardCost(NodeFillState *sourceFillState, NodeFillState *targetFillState,
@@ -162,6 +204,8 @@ PG_FUNCTION_INFO_V1(master_drain_node);
 PG_FUNCTION_INFO_V1(citus_shard_cost_by_disk_size);
 PG_FUNCTION_INFO_V1(citus_validate_rebalance_strategy_functions);
 PG_FUNCTION_INFO_V1(pg_dist_rebalance_strategy_enterprise_check);
+
+int MaxRebalancerLoggedIgnoredMoves = 5;
 
 
 #ifdef USE_ASSERT_CHECKING
@@ -369,6 +413,7 @@ GetRebalanceSteps(RebalanceOptions *options)
 									 options->threshold,
 									 options->maxShardMoves,
 									 options->drainOnly,
+									 options->improvementThreshold,
 									 &rebalancePlanFunctions);
 }
 
@@ -711,6 +756,7 @@ rebalance_table_shards(PG_FUNCTION_ARGS)
 		.excludedShardArray = PG_GETARG_ARRAYTYPE_P(3),
 		.drainOnly = PG_GETARG_BOOL(5),
 		.rebalanceStrategy = strategy,
+		.improvementThreshold = strategy->improvementThreshold,
 	};
 	Oid shardTransferModeOid = PG_GETARG_OID(4);
 	RebalanceTableShards(&options, shardTransferModeOid);
@@ -911,6 +957,8 @@ get_rebalance_table_shards_plan(PG_FUNCTION_ARGS)
 		.excludedShardArray = PG_GETARG_ARRAYTYPE_P(3),
 		.drainOnly = PG_GETARG_BOOL(4),
 		.rebalanceStrategy = strategy,
+		.improvementThreshold = PG_GETARG_FLOAT4_OR_DEFAULT(
+			6, strategy->improvementThreshold),
 	};
 
 
@@ -1228,6 +1276,7 @@ RebalancePlacementUpdates(List *workerNodeList, List *shardPlacementListList,
 						  double threshold,
 						  int32 maxShardMoves,
 						  bool drainOnly,
+						  float4 improvementThreshold,
 						  RebalancePlanFunctions *functions)
 {
 	List *rebalanceStates = NIL;
@@ -1264,9 +1313,11 @@ RebalancePlacementUpdates(List *workerNodeList, List *shardPlacementListList,
 			while (list_length(state->placementUpdateList) < maxShardMoves &&
 				   moreMovesAvailable)
 			{
-				moreMovesAvailable = FindAndMoveShardCost(utilizationLowerBound,
-														  utilizationUpperBound,
-														  state);
+				moreMovesAvailable = FindAndMoveShardCost(
+					utilizationLowerBound,
+					utilizationUpperBound,
+					improvementThreshold,
+					state);
 			}
 			placementUpdateList = state->placementUpdateList;
 
@@ -1286,6 +1337,36 @@ RebalancePlacementUpdates(List *workerNodeList, List *shardPlacementListList,
 		hash_destroy(state->placementsHash);
 	}
 
+
+	if (state->ignoredMoves > 0)
+	{
+		if (MaxRebalancerLoggedIgnoredMoves == -1 ||
+			state->ignoredMoves <= MaxRebalancerLoggedIgnoredMoves)
+		{
+			ereport(NOTICE, (
+						errmsg(
+							"Ignored %ld moves, all of which are shown in notices above",
+							state->ignoredMoves
+							),
+						errhint(
+							"If you do want these moves to happen, try changing improvement_threshold to a lower value than what it is now (%g).",
+							improvementThreshold)
+						));
+		}
+		else
+		{
+			ereport(NOTICE, (
+						errmsg(
+							"Ignored %ld moves, %d of which are shown in notices above",
+							state->ignoredMoves,
+							MaxRebalancerLoggedIgnoredMoves
+							),
+						errhint(
+							"If you do want these moves to happen, try changing improvement_threshold to a lower value than what it is now (%g).",
+							improvementThreshold)
+						));
+		}
+	}
 	return placementUpdateList;
 }
 
@@ -1314,8 +1395,8 @@ InitRebalanceState(List *workerNodeList, List *shardPlacementList,
 		fillState->capacity = functions->nodeCapacity(workerNode, functions->context);
 
 		/*
-		 * Set the utilization here although the totalCost is not set yet. This is
-		 * important to set the utilization to INFINITY when the capacity is 0.
+		 * Set the utilization here although the totalCost is not set yet. This
+		 * is needed to set the utilization to INFINITY when the capacity is 0.
 		 */
 		fillState->utilization = CalculateUtilization(fillState->totalCost,
 													  fillState->capacity);
@@ -1648,13 +1729,39 @@ MoveShardCost(NodeFillState *sourceFillState,
  * current state and returns a list with a new move appended that improves the
  * balance of shards. The algorithm is greedy and will use the first new move
  * that improves the balance. It finds nodes by trying to move a shard from the
- * fullest node to the emptiest node. If no moves are possible it will try the
- * second emptiest node until it tried all of them. Then it wil try the second
- * fullest node. If it was able to find a move it will return true and false if
- * it couldn't.
+ * most utilized node (highest utilization) to the emptiest node (lowest
+ * utilization). If no moves are possible it will try the second emptiest node
+ * until it tried all of them. Then it wil try the second fullest node. If it
+ * was able to find a move it will return true and false if it couldn't.
+ *
+ * This algorithm won't necessarily result in the best possible balance. Getting
+ * the best balance is an NP problem, so it's not feasible to go for the best
+ * balance. This algorithm was chosen because of the following reasons:
+ * 1. Literature research showed that similar problems would get within 2X of
+ *    the optimal balance with a greedy algoritm.
+ * 2. Every move will always improve the balance. So if the user stops a
+ *    rebalance midway through, they will never be in a worse situation than
+ *    before.
+ * 3. It's pretty easy to reason about.
+ * 4. It's simple to implement.
+ *
+ * utilizationLowerBound and utilizationUpperBound are used to indicate what
+ * the target utilization range of all nodes is. If they are within this range,
+ * then balance is good enough. If all nodes are in this range then the cluster
+ * is considered balanced and no more moves are done. This is mostly useful for
+ * the by_disk_size rebalance strategy. If we wouldn't have this then the
+ * rebalancer could become flappy in certain cases.
+ *
+ * improvementThreshold is a threshold that can be used to ignore moves when
+ * they only improve the balance a little relative to the cost of the shard.
+ * Again this is mostly useful for the by_disk_size rebalance strategy.
+ * Without this threshold the rebalancer would move a shard of 1TB when this
+ * move only improves the cluster by 10GB.
  */
 static bool
-FindAndMoveShardCost(float4 utilizationLowerBound, float4 utilizationUpperBound,
+FindAndMoveShardCost(float4 utilizationLowerBound,
+					 float4 utilizationUpperBound,
+					 float4 improvementThreshold,
 					 RebalanceState *state)
 {
 	NodeFillState *sourceFillState = NULL;
@@ -1727,11 +1834,24 @@ FindAndMoveShardCost(float4 utilizationLowerBound, float4 utilizationUpperBound,
 				}
 
 				/*
-				 * Ensure that the cost distrubition is actually better
-				 * after the move, i.e. the new highest utilization of
-				 * source and target is lower than the previous highest, or
-				 * the highest utilization is the same, but the lowest
-				 * increased.
+				 * If the target is still less utilized than the source, then
+				 * this is clearly a good move. And if they are equally
+				 * utilized too.
+				 */
+				if (newTargetUtilization <= newSourceUtilization)
+				{
+					MoveShardCost(sourceFillState, targetFillState,
+								  shardCost, state);
+					return true;
+				}
+
+				/*
+				 * The target is now more utilized than the source. So we need
+				 * to determine if the move is a net positive for the overall
+				 * cost distribution. This means that the new highest
+				 * utilization of source and target is lower than the previous
+				 * highest, or the highest utilization is the same, but the
+				 * lowest increased.
 				 */
 				if (newTargetUtilization > sourceFillState->utilization)
 				{
@@ -1750,6 +1870,58 @@ FindAndMoveShardCost(float4 utilizationLowerBound, float4 utilizationUpperBound,
 					 * Best distribution would be 2 shards on node with
 					 * capacity 3 and one on node with capacity 1
 					 */
+					continue;
+				}
+
+				/*
+				 * fmaxf and fminf here are only needed for cases when nodes
+				 * have different capacities. If they are the same, then both
+				 * arguments are equal.
+				 */
+				float4 utilizationImprovement = fmaxf(
+					sourceFillState->utilization - newTargetUtilization,
+					newSourceUtilization - targetFillState->utilization
+					);
+				float4 utilizationAddedByShard = fminf(
+					newTargetUtilization - targetFillState->utilization,
+					sourceFillState->utilization - newSourceUtilization
+					);
+
+				/*
+				 * If the shard causes a lot of utilization, but the
+				 * improvement which is gained by moving it is small, then we
+				 * ignore the move. Probably there are other shards that are
+				 * better candidates, and in any case it's probably not worth
+				 * the effort to move the this shard.
+				 *
+				 * One of the main cases this tries to avoid is the rebalancer
+				 * moving a very large shard with the "by_disk_size" strategy
+				 * when that only gives a small benefit in data distribution.
+				 */
+				float4 normalizedUtilizationImprovement = utilizationImprovement /
+														  utilizationAddedByShard;
+				if (normalizedUtilizationImprovement < improvementThreshold)
+				{
+					state->ignoredMoves++;
+					if (MaxRebalancerLoggedIgnoredMoves == -1 ||
+						state->ignoredMoves <= MaxRebalancerLoggedIgnoredMoves)
+					{
+						ereport(NOTICE, (
+									errmsg(
+										"Ignoring move of shard %ld from %s:%d to %s:%d, because the move only brings a small improvement relative to the shard its size",
+										shardCost->shardId,
+										sourceFillState->node->workerName,
+										sourceFillState->node->workerPort,
+										targetFillState->node->workerName,
+										targetFillState->node->workerPort
+										),
+									errdetail(
+										"The balance improvement of %g is lower than the improvement_threshold of %g",
+										normalizedUtilizationImprovement,
+										improvementThreshold
+										)
+									));
+					}
 					continue;
 				}
 				MoveShardCost(sourceFillState, targetFillState,

@@ -132,7 +132,8 @@ CREATE OR REPLACE FUNCTION shard_placement_rebalance_array(
     shard_placement_list json[],
     threshold float4 DEFAULT 0,
     max_shard_moves int DEFAULT 1000000,
-    drain_only bool DEFAULT false
+    drain_only bool DEFAULT false,
+    improvement_threshold float4 DEFAULT 0.5
 )
 RETURNS json[]
 AS 'citus'
@@ -1180,6 +1181,7 @@ CONTEXT:  while executing command on localhost:xxxxx
 DROP USER testrole;
 -- Test costs
 set citus.shard_count = 4;
+SET citus.next_shard_id TO 123040;
 CREATE TABLE tab (x int);
 SELECT create_distributed_table('tab','x');
  create_distributed_table
@@ -1193,6 +1195,7 @@ INSERT INTO tab SELECT 1 from generate_series(1, 30000);
 INSERT INTO tab SELECT 2 from generate_series(1, 10000);
 INSERT INTO tab SELECT 3 from generate_series(1, 10000);
 INSERT INTO tab SELECT 6 from generate_series(1, 10000);
+VACUUM FULL tab;
 ANALYZE tab;
 \c - - - :worker_1_port
 SELECT table_schema, table_name, row_estimate, total_bytes
@@ -1211,8 +1214,8 @@ WHERE table_schema = 'public'
 ) a ORDER BY table_name;
  table_schema | table_name | row_estimate | total_bytes
 ---------------------------------------------------------------------
- public       | tab_123033 |        30000 |     1114112
- public       | tab_123035 |        10000 |      393216
+ public       | tab_123040 |        30000 |     1089536
+ public       | tab_123042 |        10000 |      368640
 (2 rows)
 
 \c - - - :worker_2_port
@@ -1232,8 +1235,8 @@ WHERE table_schema = 'public'
 ) a ORDER BY table_name;
  table_schema | table_name | row_estimate | total_bytes
 ---------------------------------------------------------------------
- public       | tab_123034 |        10000 |      393216
- public       | tab_123036 |        10000 |      393216
+ public       | tab_123041 |        10000 |      368640
+ public       | tab_123043 |        10000 |      368640
 (2 rows)
 
 \c - - - :master_port
@@ -1245,7 +1248,7 @@ SELECT * FROM get_rebalance_table_shards_plan('tab');
 SELECT * FROM get_rebalance_table_shards_plan('tab', rebalance_strategy := 'by_disk_size');
  table_name | shardid | shard_size | sourcename | sourceport | targetname | targetport
 ---------------------------------------------------------------------
- tab        |  123035 |          0 | localhost  |      57637 | localhost  |      57638
+ tab        |  123042 |          0 | localhost  |      57637 | localhost  |      57638
 (1 row)
 
 SELECT * FROM get_rebalance_table_shards_plan('tab', rebalance_strategy := 'by_disk_size', threshold := 0);
@@ -1253,7 +1256,7 @@ WARNING:  the given threshold is lower than the minimum threshold allowed by the
 DETAIL:  Using threshold of 0.01
  table_name | shardid | shard_size | sourcename | sourceport | targetname | targetport
 ---------------------------------------------------------------------
- tab        |  123035 |          0 | localhost  |      57637 | localhost  |      57638
+ tab        |  123042 |          0 | localhost  |      57637 | localhost  |      57638
 (1 row)
 
 SELECT * FROM rebalance_table_shards('tab', shard_transfer_mode:='block_writes');
@@ -1312,6 +1315,7 @@ INSERT INTO tab2 SELECT 1 from generate_series(1, 0);
 INSERT INTO tab2 SELECT 2 from generate_series(1, 60000);
 INSERT INTO tab2 SELECT 3 from generate_series(1, 10000);
 INSERT INTO tab2 SELECT 6 from generate_series(1, 10000);
+VACUUM FULL tab, tab2;
 ANALYZE tab, tab2;
 \c - - - :worker_1_port
 SELECT table_schema, table_name, row_estimate, total_bytes
@@ -1331,7 +1335,7 @@ WHERE table_schema = 'public'
  table_schema | table_name  | row_estimate | total_bytes
 ---------------------------------------------------------------------
  public       | tab2_123050 |            0 |           0
- public       | tab_123033  |        30000 |     1114112
+ public       | tab_123040  |        30000 |     1089536
 (2 rows)
 
 \c - - - :worker_2_port
@@ -1351,25 +1355,43 @@ WHERE table_schema = 'public'
 ) a ORDER BY table_name;
  table_schema | table_name  | row_estimate | total_bytes
 ---------------------------------------------------------------------
- public       | tab2_123051 |        10000 |      393216
- public       | tab2_123052 |        10000 |      393216
- public       | tab2_123053 |        60000 |     2203648
- public       | tab_123034  |        10000 |      393216
- public       | tab_123035  |        10000 |      368640
- public       | tab_123036  |        10000 |      393216
+ public       | tab2_123051 |        10000 |      368640
+ public       | tab2_123052 |        10000 |      368640
+ public       | tab2_123053 |        60000 |     2179072
+ public       | tab_123041  |        10000 |      368640
+ public       | tab_123042  |        10000 |      368640
+ public       | tab_123043  |        10000 |      368640
 (6 rows)
 
 \c - - - :master_port
 SELECT * FROM get_rebalance_table_shards_plan('tab', rebalance_strategy := 'by_disk_size');
+NOTICE:  Ignoring move of shard xxxxx from localhost:xxxxx to localhost:xxxxx, because the move only brings a small improvement relative to the shard its size
+DETAIL:  The balance improvement of 0.151125 is lower than the improvement_threshold of 0.5
+NOTICE:  Ignored 1 moves, all of which are shown in notices above
+HINT:  If you do want these moves to happen, try changing improvement_threshold to a lower value than what it is now (0.5).
  table_name | shardid | shard_size | sourcename | sourceport | targetname | targetport
 ---------------------------------------------------------------------
- tab        |  123036 |          0 | localhost  |      57638 | localhost  |      57637
+ tab        |  123041 |          0 | localhost  |      57638 | localhost  |      57637
+ tab2       |  123051 |          0 | localhost  |      57638 | localhost  |      57637
+ tab        |  123042 |          0 | localhost  |      57638 | localhost  |      57637
+ tab2       |  123052 |          0 | localhost  |      57638 | localhost  |      57637
+(4 rows)
+
+-- supports improvement_threshold
+SELECT * FROM get_rebalance_table_shards_plan('tab', rebalance_strategy := 'by_disk_size', improvement_threshold := 0);
+ table_name | shardid | shard_size | sourcename | sourceport | targetname | targetport
+---------------------------------------------------------------------
+ tab        |  123043 |          0 | localhost  |      57638 | localhost  |      57637
  tab2       |  123053 |          0 | localhost  |      57638 | localhost  |      57637
- tab        |  123033 |          0 | localhost  |      57637 | localhost  |      57638
+ tab        |  123040 |          0 | localhost  |      57637 | localhost  |      57638
  tab2       |  123050 |          0 | localhost  |      57637 | localhost  |      57638
 (4 rows)
 
 SELECT * FROM rebalance_table_shards('tab', rebalance_strategy := 'by_disk_size', shard_transfer_mode:='block_writes');
+NOTICE:  Ignoring move of shard xxxxx from localhost:xxxxx to localhost:xxxxx, because the move only brings a small improvement relative to the shard its size
+DETAIL:  The balance improvement of 0.151125 is lower than the improvement_threshold of 0.5
+NOTICE:  Ignored 1 moves, all of which are shown in notices above
+HINT:  If you do want these moves to happen, try changing improvement_threshold to a lower value than what it is now (0.5).
 NOTICE:  Moving shard xxxxx from localhost:xxxxx to localhost:xxxxx ...
 NOTICE:  Moving shard xxxxx from localhost:xxxxx to localhost:xxxxx ...
  rebalance_table_shards
@@ -1380,14 +1402,39 @@ NOTICE:  Moving shard xxxxx from localhost:xxxxx to localhost:xxxxx ...
 SELECT * FROM public.table_placements_per_node;
  nodeport | logicalrelid | count
 ---------------------------------------------------------------------
-    57637 | tab          |     1
-    57638 | tab          |     3
-    57637 | tab2         |     1
-    57638 | tab2         |     3
+    57637 | tab          |     3
+    57638 | tab          |     1
+    57637 | tab2         |     3
+    57638 | tab2         |     1
 (4 rows)
 
 ANALYZE tab, tab2;
 \c - - - :worker_1_port
+SELECT table_schema, table_name, row_estimate, total_bytes
+  FROM (
+  SELECT *, total_bytes-index_bytes-COALESCE(toast_bytes,0) AS table_bytes FROM (
+      SELECT c.oid,nspname AS table_schema, relname AS TABLE_NAME
+              , c.reltuples AS row_estimate
+              , pg_total_relation_size(c.oid) AS total_bytes
+              , pg_indexes_size(c.oid) AS index_bytes
+              , pg_total_relation_size(reltoastrelid) AS toast_bytes
+          FROM pg_class c
+          LEFT JOIN pg_namespace n ON n.oid = c.relnamespace
+          WHERE relkind = 'r'
+  ) a
+WHERE table_schema = 'public'
+) a ORDER BY table_name;
+ table_schema | table_name  | row_estimate | total_bytes
+---------------------------------------------------------------------
+ public       | tab2_123050 |            0 |           0
+ public       | tab2_123051 |        10000 |      368640
+ public       | tab2_123052 |        10000 |      368640
+ public       | tab_123040  |        30000 |     1089536
+ public       | tab_123041  |        10000 |      368640
+ public       | tab_123042  |        10000 |      368640
+(6 rows)
+
+\c - - - :worker_2_port
 SELECT table_schema, table_name, row_estimate, total_bytes
   FROM (
   SELECT *, total_bytes-index_bytes-COALESCE(toast_bytes,0) AS table_bytes FROM (
@@ -1405,46 +1452,21 @@ WHERE table_schema = 'public'
  table_schema | table_name  | row_estimate | total_bytes
 ---------------------------------------------------------------------
  public       | tab2_123053 |        60000 |     2179072
- public       | tab_123036  |        10000 |      368640
+ public       | tab_123043  |        10000 |      368640
 (2 rows)
-
-\c - - - :worker_2_port
-SELECT table_schema, table_name, row_estimate, total_bytes
-  FROM (
-  SELECT *, total_bytes-index_bytes-COALESCE(toast_bytes,0) AS table_bytes FROM (
-      SELECT c.oid,nspname AS table_schema, relname AS TABLE_NAME
-              , c.reltuples AS row_estimate
-              , pg_total_relation_size(c.oid) AS total_bytes
-              , pg_indexes_size(c.oid) AS index_bytes
-              , pg_total_relation_size(reltoastrelid) AS toast_bytes
-          FROM pg_class c
-          LEFT JOIN pg_namespace n ON n.oid = c.relnamespace
-          WHERE relkind = 'r'
-  ) a
-WHERE table_schema = 'public'
-) a ORDER BY table_name;
- table_schema | table_name  | row_estimate | total_bytes
----------------------------------------------------------------------
- public       | tab2_123050 |            0 |           0
- public       | tab2_123051 |        10000 |      393216
- public       | tab2_123052 |        10000 |      393216
- public       | tab_123033  |        30000 |     1089536
- public       | tab_123034  |        10000 |      393216
- public       | tab_123035  |        10000 |      368640
-(6 rows)
 
 \c - - - :master_port
 DROP TABLE tab2;
-CREATE OR REPLACE FUNCTION capacity_high_worker_1(nodeidarg int)
+CREATE OR REPLACE FUNCTION capacity_high_worker_2(nodeidarg int)
     RETURNS real AS $$
     SELECT
-        (CASE WHEN nodeport = 57637 THEN 1000 ELSE 1 END)::real
+        (CASE WHEN nodeport = 57638 THEN 1000 ELSE 1 END)::real
     FROM pg_dist_node where nodeid = nodeidarg
     $$ LANGUAGE sql;
 SELECT citus_add_rebalance_strategy(
-        'capacity_high_worker_1',
+        'capacity_high_worker_2',
         'citus_shard_cost_1',
-        'capacity_high_worker_1',
+        'capacity_high_worker_2',
         'citus_shard_allowed_on_node_true',
         0
     );
@@ -1453,15 +1475,15 @@ SELECT citus_add_rebalance_strategy(
 
 (1 row)
 
-SELECT * FROM get_rebalance_table_shards_plan('tab', rebalance_strategy := 'capacity_high_worker_1');
+SELECT * FROM get_rebalance_table_shards_plan('tab', rebalance_strategy := 'capacity_high_worker_2');
  table_name | shardid | shard_size | sourcename | sourceport | targetname | targetport
 ---------------------------------------------------------------------
- tab        |  123033 |          0 | localhost  |      57638 | localhost  |      57637
- tab        |  123034 |          0 | localhost  |      57638 | localhost  |      57637
- tab        |  123035 |          0 | localhost  |      57638 | localhost  |      57637
+ tab        |  123040 |          0 | localhost  |      57637 | localhost  |      57638
+ tab        |  123041 |          0 | localhost  |      57637 | localhost  |      57638
+ tab        |  123042 |          0 | localhost  |      57637 | localhost  |      57638
 (3 rows)
 
-SELECT * FROM rebalance_table_shards('tab', rebalance_strategy := 'capacity_high_worker_1', shard_transfer_mode:='block_writes');
+SELECT * FROM rebalance_table_shards('tab', rebalance_strategy := 'capacity_high_worker_2', shard_transfer_mode:='block_writes');
 NOTICE:  Moving shard xxxxx from localhost:xxxxx to localhost:xxxxx ...
 NOTICE:  Moving shard xxxxx from localhost:xxxxx to localhost:xxxxx ...
 NOTICE:  Moving shard xxxxx from localhost:xxxxx to localhost:xxxxx ...
@@ -1473,10 +1495,10 @@ NOTICE:  Moving shard xxxxx from localhost:xxxxx to localhost:xxxxx ...
 SELECT * FROM public.table_placements_per_node;
  nodeport | logicalrelid | count
 ---------------------------------------------------------------------
-    57637 | tab          |     4
+    57638 | tab          |     4
 (1 row)
 
-SELECT citus_set_default_rebalance_strategy('capacity_high_worker_1');
+SELECT citus_set_default_rebalance_strategy('capacity_high_worker_2');
  citus_set_default_rebalance_strategy
 ---------------------------------------------------------------------
 
@@ -1496,20 +1518,20 @@ SELECT * FROM rebalance_table_shards('tab', shard_transfer_mode:='block_writes')
 SELECT * FROM public.table_placements_per_node;
  nodeport | logicalrelid | count
 ---------------------------------------------------------------------
-    57637 | tab          |     4
+    57638 | tab          |     4
 (1 row)
 
-CREATE FUNCTION only_worker_2(shardid bigint, nodeidarg int)
+CREATE FUNCTION only_worker_1(shardid bigint, nodeidarg int)
     RETURNS boolean AS $$
     SELECT
-        (CASE WHEN nodeport = 57638 THEN TRUE ELSE FALSE END)
+        (CASE WHEN nodeport = 57637 THEN TRUE ELSE FALSE END)
     FROM pg_dist_node where nodeid = nodeidarg
     $$ LANGUAGE sql;
 SELECT citus_add_rebalance_strategy(
-        'only_worker_2',
+        'only_worker_1',
         'citus_shard_cost_1',
         'citus_node_capacity_1',
-        'only_worker_2',
+        'only_worker_1',
         0
     );
  citus_add_rebalance_strategy
@@ -1517,7 +1539,7 @@ SELECT citus_add_rebalance_strategy(
 
 (1 row)
 
-SELECT citus_set_default_rebalance_strategy('only_worker_2');
+SELECT citus_set_default_rebalance_strategy('only_worker_1');
  citus_set_default_rebalance_strategy
 ---------------------------------------------------------------------
 
@@ -1526,10 +1548,10 @@ SELECT citus_set_default_rebalance_strategy('only_worker_2');
 SELECT * FROM get_rebalance_table_shards_plan('tab');
  table_name | shardid | shard_size | sourcename | sourceport | targetname | targetport
 ---------------------------------------------------------------------
- tab        |  123033 |          0 | localhost  |      57637 | localhost  |      57638
- tab        |  123034 |          0 | localhost  |      57637 | localhost  |      57638
- tab        |  123035 |          0 | localhost  |      57637 | localhost  |      57638
- tab        |  123036 |          0 | localhost  |      57637 | localhost  |      57638
+ tab        |  123040 |          0 | localhost  |      57638 | localhost  |      57637
+ tab        |  123041 |          0 | localhost  |      57638 | localhost  |      57637
+ tab        |  123042 |          0 | localhost  |      57638 | localhost  |      57637
+ tab        |  123043 |          0 | localhost  |      57638 | localhost  |      57637
 (4 rows)
 
 SELECT * FROM rebalance_table_shards('tab', shard_transfer_mode:='block_writes');
@@ -1545,7 +1567,7 @@ NOTICE:  Moving shard xxxxx from localhost:xxxxx to localhost:xxxxx ...
 SELECT * FROM public.table_placements_per_node;
  nodeport | logicalrelid | count
 ---------------------------------------------------------------------
-    57638 | tab          |     4
+    57637 | tab          |     4
 (1 row)
 
 SELECT citus_set_default_rebalance_strategy('by_shard_count');
@@ -1557,8 +1579,8 @@ SELECT citus_set_default_rebalance_strategy('by_shard_count');
 SELECT * FROM get_rebalance_table_shards_plan('tab');
  table_name | shardid | shard_size | sourcename | sourceport | targetname | targetport
 ---------------------------------------------------------------------
- tab        |  123033 |          0 | localhost  |      57638 | localhost  |      57637
- tab        |  123034 |          0 | localhost  |      57638 | localhost  |      57637
+ tab        |  123040 |          0 | localhost  |      57637 | localhost  |      57638
+ tab        |  123041 |          0 | localhost  |      57637 | localhost  |      57638
 (2 rows)
 
 -- Check all the error handling cases
@@ -1849,7 +1871,7 @@ UPDATE pg_dist_rebalance_strategy SET default_strategy=true WHERE name='by_shard
 SELECT citus_add_rebalance_strategy(
         'default_threshold_too_low',
         'citus_shard_cost_1',
-        'capacity_high_worker_1',
+        'capacity_high_worker_2',
         'citus_shard_allowed_on_node_true',
         0,
         0.1
