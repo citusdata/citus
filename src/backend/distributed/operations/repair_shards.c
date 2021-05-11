@@ -63,7 +63,10 @@ static void ReplicateColocatedShardPlacement(int64 shardId, char *sourceNodeName
 											 char shardReplicationMode);
 static void CopyShardTables(List *shardIntervalList, char *sourceNodeName,
 							int32 sourceNodePort, char *targetNodeName,
-							int32 targetNodePort);
+							int32 targetNodePort, bool useLogicalReplication);
+static void CopyShardTablesViaBlockWrites(List *shardIntervalList, char *sourceNodeName,
+										  int32 sourceNodePort,
+										  char *targetNodeName, int32 targetNodePort);
 static List * CopyPartitionShardsCommandList(ShardInterval *shardInterval,
 											 const char *sourceNodeName,
 											 int32 sourceNodePort);
@@ -359,8 +362,9 @@ citus_move_shard_placement(PG_FUNCTION_ARGS)
 	 * CopyColocatedShardPlacement function copies given shard with its co-located
 	 * shards.
 	 */
+	bool useLogicalReplication = false;
 	CopyShardTables(colocatedShardList, sourceNodeName, sourceNodePort, targetNodeName,
-					targetNodePort);
+					targetNodePort, useLogicalReplication);
 
 	ShardInterval *colocatedShard = NULL;
 	foreach_ptr(colocatedShard, colocatedShardList)
@@ -741,8 +745,9 @@ ReplicateColocatedShardPlacement(int64 shardId, char *sourceNodeName,
 		EnsureReferenceTablesExistOnAllNodesExtended(shardReplicationMode);
 	}
 
+	bool useLogicalReplication = false;
 	CopyShardTables(colocatedShardList, sourceNodeName, sourceNodePort,
-					targetNodeName, targetNodePort);
+					targetNodeName, targetNodePort, useLogicalReplication);
 
 	/*
 	 * Finally insert the placements to pg_dist_placement and sync it to the
@@ -820,32 +825,51 @@ EnsureTableListSuitableForReplication(List *tableIdList)
 
 
 /*
- * CopyColocatedShardPlacement copies a shard along with its co-located shards
- * from a source node to target node. It does not make any checks about state
- * of the shards. It is caller's responsibility to make those checks if they are
- * necessary.
+ * CopyShardTables copies a shard along with its co-located shards from a source
+ * node to target node. It does not make any checks about state of the shards.
+ * It is caller's responsibility to make those checks if they are necessary.
  */
 static void
 CopyShardTables(List *shardIntervalList, char *sourceNodeName, int32 sourceNodePort,
-				char *targetNodeName, int32 targetNodePort)
+				char *targetNodeName, int32 targetNodePort, bool useLogicalReplication)
 {
-	ShardInterval *shardInterval = NULL;
+	if (list_length(shardIntervalList) < 1)
+	{
+		return;
+	}
 
+	if (useLogicalReplication)
+	{
+		/* only supported in Citus enterprise */
+	}
+	else
+	{
+		CopyShardTablesViaBlockWrites(shardIntervalList, sourceNodeName, sourceNodePort,
+									  targetNodeName, targetNodePort);
+	}
+}
+
+
+/*
+ * CopyShardTablesViaBlockWrites copies a shard along with its co-located shards
+ * from a source node to target node via COPY command. While the command is in
+ * progress, the modifications on the source node is blocked.
+ */
+static void
+CopyShardTablesViaBlockWrites(List *shardIntervalList, char *sourceNodeName,
+							  int32 sourceNodePort, char *targetNodeName,
+							  int32 targetNodePort)
+{
 	MemoryContext localContext = AllocSetContextCreate(CurrentMemoryContext,
-													   "CopyShardTables",
+													   "CopyShardTablesViaBlockWrites",
 													   ALLOCSET_DEFAULT_SIZES);
 	MemoryContext oldContext = MemoryContextSwitchTo(localContext);
 
 	/* iterate through the colocated shards and copy each */
+	ShardInterval *shardInterval = NULL;
 	foreach_ptr(shardInterval, shardIntervalList)
 	{
-		bool includeDataCopy = true;
-
-		if (PartitionedTable(shardInterval->relationId))
-		{
-			/* partitioned tables contain no data */
-			includeDataCopy = false;
-		}
+		bool includeDataCopy = !PartitionedTable(shardInterval->relationId);
 
 		List *ddlCommandList = CopyShardCommandList(shardInterval, sourceNodeName,
 													sourceNodePort, includeDataCopy);
@@ -853,10 +877,9 @@ CopyShardTables(List *shardIntervalList, char *sourceNodeName, int32 sourceNodeP
 
 		SendCommandListToWorkerInSingleTransaction(targetNodeName, targetNodePort,
 												   tableOwner, ddlCommandList);
+
+		MemoryContextReset(localContext);
 	}
-
-	MemoryContextReset(localContext);
-
 
 	/*
 	 * Once all shards are created, we can recreate relationships between shards.
@@ -868,15 +891,14 @@ CopyShardTables(List *shardIntervalList, char *sourceNodeName, int32 sourceNodeP
 	{
 		List *shardForeignConstraintCommandList = NIL;
 		List *referenceTableForeignConstraintList = NIL;
-
-		char *tableOwner = TableOwner(shardInterval->relationId);
+		List *commandList = NIL;
 
 		CopyShardForeignConstraintCommandListGrouped(shardInterval,
 													 &shardForeignConstraintCommandList,
 													 &referenceTableForeignConstraintList);
 
-		List *commandList = list_concat(shardForeignConstraintCommandList,
-										referenceTableForeignConstraintList);
+		commandList = list_concat(commandList, shardForeignConstraintCommandList);
+		commandList = list_concat(commandList, referenceTableForeignConstraintList);
 
 		if (PartitionTable(shardInterval->relationId))
 		{
@@ -886,8 +908,10 @@ CopyShardTables(List *shardIntervalList, char *sourceNodeName, int32 sourceNodeP
 			commandList = lappend(commandList, attachPartitionCommand);
 		}
 
+		char *tableOwner = TableOwner(shardInterval->relationId);
 		SendCommandListToWorkerInSingleTransaction(targetNodeName, targetNodePort,
 												   tableOwner, commandList);
+
 		MemoryContextReset(localContext);
 	}
 
@@ -1079,7 +1103,9 @@ CopyShardCommandList(ShardInterval *shardInterval, const char *sourceNodeName,
 											  copyShardDataCommand->data);
 	}
 
-	List *indexCommandList = GetPostLoadTableCreationCommands(relationId, true);
+	bool includeReplicaIdentity = true;
+	List *indexCommandList =
+		GetPostLoadTableCreationCommands(relationId, true, includeReplicaIdentity);
 	indexCommandList = WorkerApplyShardDDLCommandList(indexCommandList, shardId);
 
 	copyShardToNodeCommandsList = list_concat(copyShardToNodeCommandsList,
