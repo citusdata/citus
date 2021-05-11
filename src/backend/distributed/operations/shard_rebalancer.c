@@ -1898,8 +1898,9 @@ FindAndMoveShardCost(float4 utilizationLowerBound,
 				 * moving a very large shard with the "by_disk_size" strategy
 				 * when that only gives a small benefit in data distribution.
 				 */
-				if (utilizationImprovement < utilizationAddedByShard *
-					improvementThreshold)
+				float4 normalizedUtilizationImprovement = utilizationImprovement /
+														  utilizationAddedByShard;
+				if (normalizedUtilizationImprovement < improvementThreshold)
 				{
 					state->ignoredMoves++;
 					if (MaxRebalancerLoggedIgnoredMoves == -1 ||
@@ -1915,8 +1916,9 @@ FindAndMoveShardCost(float4 utilizationLowerBound,
 										targetFillState->node->workerPort
 										),
 									errdetail(
-										"The overall balance improvement this move results in is %g of the size that a move with this shard could result in",
-										utilizationImprovement / utilizationAddedByShard
+										"The balance improvement of %g is lower than the improvement_threshold of %g",
+										normalizedUtilizationImprovement,
+										improvementThreshold
 										)
 									));
 					}

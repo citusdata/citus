@@ -512,7 +512,7 @@ SELECT unnest(shard_placement_rebalance_array(
         ]::json[]
 ));
 NOTICE:  Ignoring move of shard xxxxx from b:5432 to a:5432, because the move only brings a small improvement relative to the shard its size
-DETAIL:  The overall balance improvement this move results in is 0.1 of the size that a move with this shard could result in
+DETAIL:  The balance improvement of 0.1 is lower than the improvement_threshold of 0.5
 NOTICE:  Ignored 1 moves, all of which are shown in notices above
 HINT:  If you do want these moves to happen, try changing improvement_threshold to a lower value than what it is now (0.5).
                                                unnest
@@ -530,9 +530,9 @@ SELECT unnest(shard_placement_rebalance_array(
         ]::json[]
 ));
 NOTICE:  Ignoring move of shard xxxxx from b:5432 to a:5432, because the move only brings a small improvement relative to the shard its size
-DETAIL:  The overall balance improvement this move results in is 0.2 of the size that a move with this shard could result in
+DETAIL:  The balance improvement of 0.2 is lower than the improvement_threshold of 0.5
 NOTICE:  Ignoring move of shard xxxxx from b:5432 to a:5432, because the move only brings a small improvement relative to the shard its size
-DETAIL:  The overall balance improvement this move results in is 0.2 of the size that a move with this shard could result in
+DETAIL:  The balance improvement of 0.2 is lower than the improvement_threshold of 0.5
 NOTICE:  Ignored 2 moves, all of which are shown in notices above
 HINT:  If you do want these moves to happen, try changing improvement_threshold to a lower value than what it is now (0.5).
  unnest
@@ -596,15 +596,15 @@ SELECT unnest(shard_placement_rebalance_array(
     improvement_threshold := 0.1
 ));
 NOTICE:  Ignoring move of shard xxxxx from g:5432 to a:5432, because the move only brings a small improvement relative to the shard its size
-DETAIL:  The overall balance improvement this move results in is 0.025641 of the size that a move with this shard could result in
+DETAIL:  The balance improvement of 0.025641 is lower than the improvement_threshold of 0.1
 NOTICE:  Ignoring move of shard xxxxx from g:5432 to b:5432, because the move only brings a small improvement relative to the shard its size
-DETAIL:  The overall balance improvement this move results in is 0.025641 of the size that a move with this shard could result in
+DETAIL:  The balance improvement of 0.025641 is lower than the improvement_threshold of 0.1
 NOTICE:  Ignoring move of shard xxxxx from g:5432 to c:5432, because the move only brings a small improvement relative to the shard its size
-DETAIL:  The overall balance improvement this move results in is 0.025641 of the size that a move with this shard could result in
+DETAIL:  The balance improvement of 0.025641 is lower than the improvement_threshold of 0.1
 NOTICE:  Ignoring move of shard xxxxx from g:5432 to d:5432, because the move only brings a small improvement relative to the shard its size
-DETAIL:  The overall balance improvement this move results in is 0.025641 of the size that a move with this shard could result in
+DETAIL:  The balance improvement of 0.025641 is lower than the improvement_threshold of 0.1
 NOTICE:  Ignoring move of shard xxxxx from g:5432 to e:5432, because the move only brings a small improvement relative to the shard its size
-DETAIL:  The overall balance improvement this move results in is 0.025641 of the size that a move with this shard could result in
+DETAIL:  The balance improvement of 0.025641 is lower than the improvement_threshold of 0.1
 NOTICE:  Ignored 6 moves, 5 of which are shown in notices above
 HINT:  If you do want these moves to happen, try changing improvement_threshold to a lower value than what it is now (0.1).
  unnest
@@ -634,7 +634,7 @@ SELECT unnest(shard_placement_rebalance_array(
     improvement_threshold := 0.1
 ));
 NOTICE:  Ignoring move of shard xxxxx from g:5432 to a:5432, because the move only brings a small improvement relative to the shard its size
-DETAIL:  The overall balance improvement this move results in is 0.025641 of the size that a move with this shard could result in
+DETAIL:  The balance improvement of 0.025641 is lower than the improvement_threshold of 0.1
 NOTICE:  Ignored 6 moves, 1 of which are shown in notices above
 HINT:  If you do want these moves to happen, try changing improvement_threshold to a lower value than what it is now (0.1).
  unnest
@@ -663,17 +663,17 @@ SELECT unnest(shard_placement_rebalance_array(
     improvement_threshold := 0.1
 ));
 NOTICE:  Ignoring move of shard xxxxx from g:5432 to a:5432, because the move only brings a small improvement relative to the shard its size
-DETAIL:  The overall balance improvement this move results in is 0.025641 of the size that a move with this shard could result in
+DETAIL:  The balance improvement of 0.025641 is lower than the improvement_threshold of 0.1
 NOTICE:  Ignoring move of shard xxxxx from g:5432 to b:5432, because the move only brings a small improvement relative to the shard its size
-DETAIL:  The overall balance improvement this move results in is 0.025641 of the size that a move with this shard could result in
+DETAIL:  The balance improvement of 0.025641 is lower than the improvement_threshold of 0.1
 NOTICE:  Ignoring move of shard xxxxx from g:5432 to c:5432, because the move only brings a small improvement relative to the shard its size
-DETAIL:  The overall balance improvement this move results in is 0.025641 of the size that a move with this shard could result in
+DETAIL:  The balance improvement of 0.025641 is lower than the improvement_threshold of 0.1
 NOTICE:  Ignoring move of shard xxxxx from g:5432 to d:5432, because the move only brings a small improvement relative to the shard its size
-DETAIL:  The overall balance improvement this move results in is 0.025641 of the size that a move with this shard could result in
+DETAIL:  The balance improvement of 0.025641 is lower than the improvement_threshold of 0.1
 NOTICE:  Ignoring move of shard xxxxx from g:5432 to e:5432, because the move only brings a small improvement relative to the shard its size
-DETAIL:  The overall balance improvement this move results in is 0.025641 of the size that a move with this shard could result in
+DETAIL:  The balance improvement of 0.025641 is lower than the improvement_threshold of 0.1
 NOTICE:  Ignoring move of shard xxxxx from g:5432 to f:5432, because the move only brings a small improvement relative to the shard its size
-DETAIL:  The overall balance improvement this move results in is 0.025641 of the size that a move with this shard could result in
+DETAIL:  The balance improvement of 0.025641 is lower than the improvement_threshold of 0.1
 NOTICE:  Ignored 6 moves, all of which are shown in notices above
 HINT:  If you do want these moves to happen, try changing improvement_threshold to a lower value than what it is now (0.1).
  unnest
@@ -702,17 +702,17 @@ SELECT unnest(shard_placement_rebalance_array(
     improvement_threshold := 0.1
 ));
 NOTICE:  Ignoring move of shard xxxxx from g:5432 to a:5432, because the move only brings a small improvement relative to the shard its size
-DETAIL:  The overall balance improvement this move results in is 0.025641 of the size that a move with this shard could result in
+DETAIL:  The balance improvement of 0.025641 is lower than the improvement_threshold of 0.1
 NOTICE:  Ignoring move of shard xxxxx from g:5432 to b:5432, because the move only brings a small improvement relative to the shard its size
-DETAIL:  The overall balance improvement this move results in is 0.025641 of the size that a move with this shard could result in
+DETAIL:  The balance improvement of 0.025641 is lower than the improvement_threshold of 0.1
 NOTICE:  Ignoring move of shard xxxxx from g:5432 to c:5432, because the move only brings a small improvement relative to the shard its size
-DETAIL:  The overall balance improvement this move results in is 0.025641 of the size that a move with this shard could result in
+DETAIL:  The balance improvement of 0.025641 is lower than the improvement_threshold of 0.1
 NOTICE:  Ignoring move of shard xxxxx from g:5432 to d:5432, because the move only brings a small improvement relative to the shard its size
-DETAIL:  The overall balance improvement this move results in is 0.025641 of the size that a move with this shard could result in
+DETAIL:  The balance improvement of 0.025641 is lower than the improvement_threshold of 0.1
 NOTICE:  Ignoring move of shard xxxxx from g:5432 to e:5432, because the move only brings a small improvement relative to the shard its size
-DETAIL:  The overall balance improvement this move results in is 0.025641 of the size that a move with this shard could result in
+DETAIL:  The balance improvement of 0.025641 is lower than the improvement_threshold of 0.1
 NOTICE:  Ignoring move of shard xxxxx from g:5432 to f:5432, because the move only brings a small improvement relative to the shard its size
-DETAIL:  The overall balance improvement this move results in is 0.025641 of the size that a move with this shard could result in
+DETAIL:  The balance improvement of 0.025641 is lower than the improvement_threshold of 0.1
 NOTICE:  Ignored 6 moves, all of which are shown in notices above
 HINT:  If you do want these moves to happen, try changing improvement_threshold to a lower value than what it is now (0.1).
  unnest
@@ -733,7 +733,7 @@ SELECT unnest(shard_placement_rebalance_array(
     improvement_threshold := 0.6
 ));
 NOTICE:  Ignoring move of shard xxxxx from a:5432 to b:5432, because the move only brings a small improvement relative to the shard its size
-DETAIL:  The overall balance improvement this move results in is 0.5 of the size that a move with this shard could result in
+DETAIL:  The balance improvement of 0.5 is lower than the improvement_threshold of 0.6
 NOTICE:  Ignored 1 moves, all of which are shown in notices above
 HINT:  If you do want these moves to happen, try changing improvement_threshold to a lower value than what it is now (0.6).
                                                unnest

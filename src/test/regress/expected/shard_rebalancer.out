@@ -1366,7 +1366,7 @@ WHERE table_schema = 'public'
 \c - - - :master_port
 SELECT * FROM get_rebalance_table_shards_plan('tab', rebalance_strategy := 'by_disk_size');
 NOTICE:  Ignoring move of shard xxxxx from localhost:xxxxx to localhost:xxxxx, because the move only brings a small improvement relative to the shard its size
-DETAIL:  The overall balance improvement this move results in is 0.151125 of the size that a move with this shard could result in
+DETAIL:  The balance improvement of 0.151125 is lower than the improvement_threshold of 0.5
 NOTICE:  Ignored 1 moves, all of which are shown in notices above
 HINT:  If you do want these moves to happen, try changing improvement_threshold to a lower value than what it is now (0.5).
  table_name | shardid | shard_size | sourcename | sourceport | targetname | targetport
@@ -1389,7 +1389,7 @@ SELECT * FROM get_rebalance_table_shards_plan('tab', rebalance_strategy := 'by_d
 
 SELECT * FROM rebalance_table_shards('tab', rebalance_strategy := 'by_disk_size', shard_transfer_mode:='block_writes');
 NOTICE:  Ignoring move of shard xxxxx from localhost:xxxxx to localhost:xxxxx, because the move only brings a small improvement relative to the shard its size
-DETAIL:  The overall balance improvement this move results in is 0.151125 of the size that a move with this shard could result in
+DETAIL:  The balance improvement of 0.151125 is lower than the improvement_threshold of 0.5
 NOTICE:  Ignored 1 moves, all of which are shown in notices above
 HINT:  If you do want these moves to happen, try changing improvement_threshold to a lower value than what it is now (0.5).
 NOTICE:  Moving shard xxxxx from localhost:xxxxx to localhost:xxxxx ...
