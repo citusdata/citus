@@ -17,7 +17,7 @@ extern bool DeferShardDeleteOnMove;
 extern double DesiredPercentFreeAfterMove;
 extern bool CheckAvailableSpaceBeforeMove;
 
-extern int TryDropMarkedShards(bool waitForCleanupLock);
-extern int DropMarkedShards(bool waitForCleanupLock);
+extern int TryDropMarkedShards(bool waitForLocks);
+extern int DropMarkedShards(bool waitForLocks);
 
 #endif /*CITUS_SHARD_CLEANER_H */

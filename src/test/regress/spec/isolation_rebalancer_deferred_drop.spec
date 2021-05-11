@@ -3,6 +3,11 @@
 setup
 {
 
+    CREATE OR REPLACE FUNCTION run_try_drop_marked_shards()
+    RETURNS VOID
+    AS 'citus'
+    LANGUAGE C STRICT VOLATILE;
+
     CREATE OR REPLACE FUNCTION start_session_level_connection_to_node(text, integer)
         RETURNS void
         LANGUAGE C STRICT VOLATILE
@@ -65,12 +70,20 @@ step "s1-drop-marked-shards"
     SELECT public.master_defer_delete_shards();
 }
 
+step "s1-lock-pg-dist-placement" {
+    LOCK TABLE pg_dist_placement IN SHARE ROW EXCLUSIVE MODE;
+}
+
 step "s1-commit"
 {
     COMMIT;
 }
 
 session "s2"
+
+step "s2-drop-old-shards" {
+    SELECT run_try_drop_marked_shards();
+}
 
 step "s2-start-session-level-connection"
 {
@@ -90,9 +103,13 @@ step "s2-lock-table-on-worker"
 
 step "s2-drop-marked-shards"
 {
+    SET client_min_messages to DEBUG1;
     SELECT public.master_defer_delete_shards();
 }
+
 
 permutation "s1-begin" "s1-move-placement" "s1-drop-marked-shards" "s2-drop-marked-shards" "s1-commit"
 permutation "s1-begin" "s1-move-placement" "s2-drop-marked-shards" "s1-drop-marked-shards" "s1-commit"
 permutation "s1-begin" "s1-move-placement" "s2-start-session-level-connection" "s2-lock-table-on-worker" "s1-drop-marked-shards" "s1-commit" "s2-stop-connection"
+// make sure we error if we cannot get the lock on pg_dist_placement
+permutation "s1-begin" "s1-lock-pg-dist-placement" "s2-drop-old-shards" "s1-commit"
