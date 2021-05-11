@@ -4457,8 +4457,6 @@ ScheduleNextPlacementExecution(TaskPlacementExecution *placementExecution, bool 
 		executionOrder == EXECUTION_ORDER_SEQUENTIAL)
 	{
 		TaskPlacementExecution *nextPlacementExecution = NULL;
-		int placementExecutionCount PG_USED_FOR_ASSERTS_ONLY =
-			shardCommandExecution->placementExecutionCount;
 
 		/* find a placement execution that is not yet marked as failed */
 		do {
@@ -4469,6 +4467,7 @@ ScheduleNextPlacementExecution(TaskPlacementExecution *placementExecution, bool 
 			 * If all tasks failed then we should already have errored out.
 			 * Still, be defensive and throw error instead of crashes.
 			 */
+			int placementExecutionCount = shardCommandExecution->placementExecutionCount;
 			if (nextPlacementExecutionIndex >= placementExecutionCount)
 			{
 				WorkerPool *workerPool = placementExecution->workerPool;
