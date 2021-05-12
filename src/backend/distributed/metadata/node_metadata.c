@@ -1818,7 +1818,7 @@ InsertPlaceholderCoordinatorRecord(void)
 	bool nodeAlreadyExists = false;
 
 	/* as long as there is a single node, localhost should be ok */
-	AddNodeMetadata("localhost", PostPortNumber, &nodeMetadata, &nodeAlreadyExists);
+	AddNodeMetadata(LocalHostName, PostPortNumber, &nodeMetadata, &nodeAlreadyExists);
 }
 
 

@@ -193,7 +193,7 @@ EnsureReferenceTablesExistOnAllNodesExtended(char transferMode)
 		int connectionFlags = OUTSIDE_TRANSACTION;
 
 		MultiConnection *connection = GetNodeUserDatabaseConnection(
-			connectionFlags, "localhost", PostPortNumber,
+			connectionFlags, LocalHostName, PostPortNumber,
 			userName, NULL);
 
 		if (PQstatus(connection->pgConn) == CONNECTION_OK)

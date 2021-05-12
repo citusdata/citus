@@ -1664,6 +1664,19 @@ RegisterCitusConfigVariables(void)
 		GUC_STANDARD,
 		NULL, NULL, NULL);
 
+	DefineCustomStringVariable(
+		"citus.local_hostname",
+		gettext_noop("Sets the hostname when connecting back to itself."),
+		gettext_noop("For some operations nodes, mostly the coordinator, connect back to "
+					 "itself. When configuring SSL certificates it sometimes is required "
+					 "to use a specific hostname to match the CN of the certificate when "
+					 "verify-full is used."),
+		&LocalHostName,
+		"localhost",
+		PGC_SUSET,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
+
 	DefineCustomBoolVariable(
 		"citus.writable_standby_coordinator",
 		gettext_noop("Enables simple DML via a streaming replica of the coordinator"),

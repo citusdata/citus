@@ -1078,6 +1078,21 @@ DO UPDATE SET response = EXCLUDED.response RETURNING *;
 
 \c - - - :master_port
 
+-- verify the local_hostname guc is used for local executions that should connect to the
+-- local host
+ALTER SYSTEM SET citus.local_hostname TO 'foobar';
+SELECT pg_reload_conf();
+SELECT pg_sleep(0.1); -- wait to make sure the config has changed before running the GUC
+SET citus.enable_local_execution TO false; -- force a connection to the dummy placements
+
+-- run queries that use dummy placements for local execution
+SELECT * FROM event_responses WHERE FALSE;
+WITH cte_1 AS (SELECT * FROM event_responses LIMIT 1) SELECT count(*) FROM cte_1;
+
+ALTER SYSTEM RESET citus.local_hostname;
+SELECT pg_reload_conf();
+SELECT pg_sleep(.1); -- wait to make sure the config has changed before running the GUC
+
 SET client_min_messages TO ERROR;
 SET search_path TO public;
 DROP SCHEMA local_shard_execution CASCADE;
