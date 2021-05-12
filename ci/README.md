@@ -346,3 +346,15 @@ foo = 2
 #endif
 ```
 This was deemed to be error prone and not worth the effort.
+
+## `fix_gitignore.sh`
+
+This script checks and fixes issues with `.gitignore` rules:
+
+1. Makes sure git ignores the `.sql` files and expected output files that are generated
+   from `.source` template files. If you created or deleted a `.source` file in a commit,
+   git ignore rules should be updated to reflect this change.
+
+2. Makes sure we do not commit any generated files that should be ignored. If there is an
+   ignored file in the git tree, the user is expected to review the files that are removed
+   from the git tree and commit them.
