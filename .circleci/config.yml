@@ -432,6 +432,7 @@ workflows:
             branches:
               ignore:
                 - /release-[0-9]+\.[0-9]+.*/ # match with releaseX.Y.*
+                - master
 
       - build:
           name: build-12
