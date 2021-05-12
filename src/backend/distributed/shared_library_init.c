@@ -1673,7 +1673,7 @@ RegisterCitusConfigVariables(void)
 					 "verify-full is used."),
 		&LocalHostName,
 		"localhost",
-		PGC_SIGHUP,
+		PGC_SUSET,
 		GUC_STANDARD,
 		NULL, NULL, NULL);
 
