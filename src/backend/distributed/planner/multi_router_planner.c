@@ -2432,7 +2432,7 @@ CreateLocalDummyPlacement()
 {
 	ShardPlacement *dummyPlacement = CitusMakeNode(ShardPlacement);
 	dummyPlacement->nodeId = LOCAL_NODE_ID;
-	dummyPlacement->nodeName = LOCAL_HOST_NAME;
+	dummyPlacement->nodeName = LocalHostName;
 	dummyPlacement->nodePort = PostPortNumber;
 	dummyPlacement->groupId = GetLocalGroupId();
 	return dummyPlacement;

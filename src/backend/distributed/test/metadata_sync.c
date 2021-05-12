@@ -15,6 +15,7 @@
 
 #include "catalog/pg_type.h"
 #include "distributed/connection_management.h"
+#include "distributed/intermediate_result_pruning.h"
 #include "distributed/listutils.h"
 #include "distributed/maintenanced.h"
 #include "distributed/metadata_sync.h"
@@ -104,7 +105,7 @@ wait_until_metadata_sync(PG_FUNCTION_ARGS)
 	}
 
 	MultiConnection *connection = GetNodeConnection(FORCE_NEW_CONNECTION,
-													"localhost", PostPortNumber);
+													LOCAL_HOST_NAME, PostPortNumber);
 	ExecuteCriticalRemoteCommand(connection, "LISTEN " METADATA_SYNC_CHANNEL);
 
 	int waitFlags = WL_SOCKET_READABLE | WL_TIMEOUT | WL_POSTMASTER_DEATH;

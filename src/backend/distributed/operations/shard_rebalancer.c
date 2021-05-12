@@ -30,7 +30,6 @@
 #include "distributed/connection_management.h"
 #include "distributed/enterprise.h"
 #include "distributed/hash_helpers.h"
-#include "distributed/intermediate_result_pruning.h"
 #include "distributed/listutils.h"
 #include "distributed/coordinator_protocol.h"
 #include "distributed/metadata_cache.h"
@@ -814,7 +813,7 @@ citus_drain_node(PG_FUNCTION_ARGS)
 
 	char *nodeName = text_to_cstring(nodeNameText);
 	int connectionFlag = FORCE_NEW_CONNECTION;
-	MultiConnection *connection = GetNodeConnection(connectionFlag, LOCAL_HOST_NAME,
+	MultiConnection *connection = GetNodeConnection(connectionFlag, LocalHostName,
 													PostPortNumber);
 
 	/*
@@ -1201,7 +1200,7 @@ UpdateShardPlacement(PlacementUpdateEvent *placementUpdateEvent,
 										  sourceNode->workerPort,
 										  REBALANCE_PROGRESS_MOVING);
 
-	MultiConnection *connection = GetNodeConnection(connectionFlag, LOCAL_HOST_NAME,
+	MultiConnection *connection = GetNodeConnection(connectionFlag, LocalHostName,
 													PostPortNumber);
 
 	/*

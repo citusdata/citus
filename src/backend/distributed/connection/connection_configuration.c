@@ -21,6 +21,7 @@
 
 /* stores the string representation of our node connection GUC */
 char *NodeConninfo = "";
+char *LocalHostName = "localhost";
 
 /* represents a list of libpq parameter settings */
 typedef struct ConnParamsInfo

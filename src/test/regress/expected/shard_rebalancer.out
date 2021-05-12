@@ -67,6 +67,35 @@ SELECT count(*) FROM citus_local_table;
      1
 (1 row)
 
+-- verify drain_node uses the localhostname guc by seeing it fail to connect to a non-existing name
+ALTER SYSTEM SET citus.local_hostname TO 'foobar';
+SELECT pg_reload_conf();
+ pg_reload_conf
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT pg_sleep(.1); -- wait to make sure the config has changed before running the GUC
+ pg_sleep
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT master_drain_node('localhost', :master_port);
+ERROR:  connection to the remote node foobar:57636 failed with the following error: could not translate host name "foobar" to address: <system specific error>
+ALTER SYSTEM RESET citus.local_hostname;
+SELECT pg_reload_conf();
+ pg_reload_conf
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT pg_sleep(.1); -- wait to make sure the config has changed before running the GUC
+ pg_sleep
+---------------------------------------------------------------------
+
+(1 row)
+
 SELECT master_drain_node('localhost', :master_port);
  master_drain_node
 ---------------------------------------------------------------------
@@ -100,6 +129,37 @@ SET citus.shard_replication_factor TO 1;
 SET citus.replication_model TO "statement";
 SELECT create_distributed_table('dist_table_test_2', 'a');
  create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- replicate_table_shards should fail when the hostname GUC is set to a non-reachable node
+ALTER SYSTEM SET citus.local_hostname TO 'foobar';
+SELECT pg_reload_conf();
+ pg_reload_conf
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT pg_sleep(.1); -- wait to make sure the config has changed before running the GUC
+ pg_sleep
+---------------------------------------------------------------------
+
+(1 row)
+
+SET citus.shard_replication_factor TO 2;
+SELECT replicate_table_shards('dist_table_test_2',  max_shard_copies := 4,  shard_transfer_mode:='block_writes');
+NOTICE:  Copying shard xxxxx from localhost:xxxxx to localhost:xxxxx ...
+ERROR:  connection to the remote node foobar:57636 failed with the following error: could not translate host name "foobar" to address: <system specific error>
+ALTER SYSTEM RESET citus.local_hostname;
+SELECT pg_reload_conf();
+ pg_reload_conf
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT pg_sleep(.1); -- wait to make sure the config has changed before running the GUC
+ pg_sleep
 ---------------------------------------------------------------------
 
 (1 row)
@@ -500,6 +560,43 @@ SELECT * FROM table_placements_per_node;
  nodeport |     logicalrelid     | count
 ---------------------------------------------------------------------
     57638 | rebalance_test_table |     6
+(1 row)
+
+-- check rebalances use the localhost guc by seeing it fail when the GUC is set to a non-existing host
+ALTER SYSTEM SET citus.local_hostname TO 'foobar';
+SELECT pg_reload_conf();
+ pg_reload_conf
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT pg_sleep(.1); -- wait to make sure the config has changed before running the GUC
+ pg_sleep
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT rebalance_table_shards('rebalance_test_table',
+                              excluded_shard_list := excluded_shard_list,
+                              threshold := 0,
+                              shard_transfer_mode:='block_writes')
+FROM (
+         SELECT (array_agg(DISTINCT shardid ORDER BY shardid))[1:4] AS excluded_shard_list
+         FROM pg_dist_shard
+         WHERE logicalrelid = 'rebalance_test_table'::regclass
+     ) T;
+ERROR:  connection to the remote node foobar:57636 failed with the following error: could not translate host name "foobar" to address: <system specific error>
+ALTER SYSTEM RESET citus.local_hostname;
+SELECT pg_reload_conf();
+ pg_reload_conf
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT pg_sleep(.1); -- wait to make sure the config has changed before running the GUC
+ pg_sleep
+---------------------------------------------------------------------
+
 (1 row)
 
 -- Check excluded_shard_list by excluding four shards with smaller ids

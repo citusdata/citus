@@ -43,6 +43,23 @@ DROP TABLE loc;
 -- remove the coordinator to try again with create_distributed_table
 SELECT master_remove_node(nodename, nodeport) FROM pg_dist_node WHERE groupid = 0;
 
+-- verify the coordinator gets auto added with the localhost guc
+ALTER SYSTEM SET citus.local_hostname TO '127.0.0.1'; --although not a hostname, should work for connecting locally
+SELECT pg_reload_conf();
+SELECT pg_sleep(.1); -- wait to make sure the config has changed before running the GUC
+
+CREATE TABLE test(x int, y int);
+SELECT create_distributed_table('test','x');
+
+SELECT groupid, nodename, nodeport, isactive, shouldhaveshards, hasmetadata, metadatasynced FROM pg_dist_node;
+DROP TABLE test;
+-- remove the coordinator to try again
+SELECT master_remove_node(nodename, nodeport) FROM pg_dist_node WHERE groupid = 0;
+
+ALTER SYSTEM RESET citus.local_hostname;
+SELECT pg_reload_conf();
+SELECT pg_sleep(.1); -- wait to make sure the config has changed before running the GUC
+
 CREATE TABLE test(x int, y int);
 SELECT create_distributed_table('test','x');
 
